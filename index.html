@@ -28,7 +28,7 @@ body{background:var(--bg);color:var(--text);font-family:'Montserrat',sans-serif;
   #ch-sidebar{width:200px;min-width:200px;background:#040404;border-right:1px solid #1a0000;display:flex;flex-direction:column;flex-shrink:0}
   #ch-main-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
   .ct-panel-wrap{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
-  #coach-tabs-bar{display:none}
+  #coach-tabs-bar{display:flex}
 }
 
 /* ====== GRAIN TEXTURE GLOBAL ====== */
@@ -334,10 +334,10 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
       <p style="font-size:12px;color:#aaa;line-height:1.6;margin-bottom:12px">Génère un lien d'invitation à envoyer par WhatsApp ou SMS. L'athlète le colle dans le champ code.</p>
       <button class="btn btn-outline" style="font-size:11px;letter-spacing:1px" onclick="copyCoachInviteLink()">📋 Copier le lien d'invitation</button>
     </div>
-    <button class="btn btn-red" style="margin-top:20px" onclick="go('<div id="s-coach-home" class="screen" style="flex-direction:row;height:100vh;overflow:hidden">
+    <button class="btn btn-red" style="margin-top:20px" onclick="go('<div id="s-coach-home" class="screen" style="flex-direction:column">
 
   <!-- SIDEBAR (desktop only) -->
-  <div id="ch-sidebar" style="flex-direction:column;background:#040404;border-right:1px solid #1a0000">
+  <div id="ch-sidebar" style="display:none;flex-direction:column;background:#040404;border-right:1px solid #1a0000">
     <div style="padding:20px 16px;border-bottom:1px solid #1a0000">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
         <div style="width:36px;height:36px;border-radius:8px;background:#0f0000;border:1.5px solid #C60F08;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:12px;font-weight:900;font-family:Impact,sans-serif;color:#C60F08;letter-spacing:-1px">RC</span></div>
@@ -366,7 +366,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
   </div>
 
   <!-- MAIN AREA -->
-  <div id="ch-main-area" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0">
+  <div id="ch-main-area" style="display:flex;flex:1;flex-direction:column;overflow:hidden">
 
     <!-- Mobile header (hidden on desktop via CSS) -->
     <div id="ch-mobile-header" style="background:linear-gradient(135deg,#0f0000,#160000);border-bottom:1px solid #2a0000;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
@@ -1346,16 +1346,10 @@ function loadCoachHome(){
   const sidebar=document.getElementById('ch-sidebar');
   const mobileHeader=document.getElementById('ch-mobile-header');
   const tabsBar=document.getElementById('coach-tabs-bar');
-  const isDesktop=window.innerWidth>=800;
-  if(sidebar) sidebar.style.display=isDesktop?'flex':'none';
-  if(mobileHeader) mobileHeader.style.display=isDesktop?'none':'flex';
-  if(tabsBar) tabsBar.style.display=isDesktop?'none':'flex';
-  window.onresize=()=>{
-    const w=window.innerWidth>=800;
-    if(sidebar) sidebar.style.display=w?'flex':'none';
-    if(mobileHeader) mobileHeader.style.display=w?'none':'flex';
-    if(tabsBar) tabsBar.style.display=w?'none':'flex';
-  };
+  // Always show tab bar and mobile header
+  if(sidebar) sidebar.style.display='none';
+  if(mobileHeader) mobileHeader.style.display='flex';
+  if(tabsBar) tabsBar.style.display='flex';
   const clients=getClients();
   document.getElementById('ch-total').textContent=clients.length;
   document.getElementById('ch-active').textContent=clients.filter(c=>isActive(c)).length;
