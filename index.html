@@ -188,6 +188,14 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
 input[type=file]{display:none}
 .done-anim{text-align:center;padding:48px 20px}
 .done-anim .done-icon{font-size:72px;margin-bottom:16px;animation:pulse 2s infinite}
+
+/* ═══ COACH TABS - CLASSES ABSOLUES ═══ */
+.coach-panel{display:none!important;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column}
+.coach-panel.active{display:flex!important}
+#coach-tabs-bar{display:flex!important;flex-shrink:0;position:relative;z-index:10}
+#coach-tabs-bar button{cursor:pointer!important;pointer-events:auto!important;position:relative;z-index:10}
+#s-coach-home{height:100vh!important;overflow:hidden!important;display:flex;flex-direction:column}
+#ch-main-area{display:flex!important;flex-direction:column!important;flex:1!important;min-height:0!important;overflow:hidden!important}
 </style>
 <script>
 const LOGO_BADGE = '';
@@ -436,7 +444,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
     </div>
 
     <!-- Tab panels -->
-    <div id="ct-dashboard" style="display:flex;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
+    <div id="ct-dashboard" class="coach-panel active" style="flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
       <div class="pad">
         <div style="display:flex;gap:10px;margin-bottom:20px;padding-top:4px">
           <div class="metric-box"><div class="metric-val" id="ch-total">0</div><div class="metric-label">Athletes</div></div>
@@ -452,7 +460,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
       </div>
     </div>
 
-    <div id="ct-codes" style="display:none;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
+    <div id="ct-codes" class="coach-panel" style="flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
       <div class="pad">
         <div style="width:20px;height:2px;background:var(--red);margin-bottom:8px;margin-top:4px"></div>
         <h2 style="margin-bottom:4px">Codes acces eleves</h2>
@@ -494,7 +502,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
       </div>
     </div>
 
-    <div id="ct-monetisation" style="display:none;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
+    <div id="ct-monetisation" class="coach-panel" style="flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
       <div class="pad">
         <div style="width:20px;height:2px;background:var(--red);margin-bottom:8px;margin-top:4px"></div>
         <h2 style="margin-bottom:4px">Monetisation</h2>
@@ -3570,22 +3578,21 @@ document.addEventListener('DOMContentLoaded',initLogos);
 // MONETISATION — Coach tabs
 // ═══════════════════════════════════════════════════
 function coachTab(tab){
-  var IDS=['dashboard','codes','monetisation'];
-  for(var i=0;i<IDS.length;i++){
-    var id=IDS[i];
-    // Panel
+  // Use CSS classes - impossible to override
+  ['dashboard','codes','monetisation'].forEach(function(id){
     var p=document.getElementById('ct-'+id);
-    if(p) p.style.display=(id===tab)?'flex':'none';
-    // Tab button  
+    if(p){
+      p.classList.remove('active');
+      if(id===tab) p.classList.add('active');
+    }
     var b=document.getElementById('ct-tab-'+id);
     if(b){
       b.style.borderBottom=(id===tab)?'2px solid #C60F08':'2px solid transparent';
-      b.style.color=(id===tab)?'#ffffff':'#666666';
-      b.style.fontWeight=(id===tab)?'900':'700';
+      b.style.color=(id===tab)?'#fff':'#555';
     }
-  }
-  if(tab==='codes')try{loadStudentCodes();}catch(e){}
-  if(tab==='monetisation')try{loadMonetisationTab();}catch(e){}
+  });
+  if(tab==='codes')try{loadStudentCodes();}catch(e){console.error('codes:',e);}
+  if(tab==='monetisation')try{loadMonetisationTab();}catch(e){console.error('monet:',e);}
 }
 
 function loadMonetisationTab(){
