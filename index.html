@@ -23,13 +23,10 @@ body{background:var(--bg);color:var(--text);font-family:'Montserrat',sans-serif;
   body{border-left:1px solid #1a0000;border-right:1px solid #1a0000;box-shadow:0 0 100px rgba(198,15,8,.12);min-height:100vh}
 }
 /* ── DESKTOP COACH DASHBOARD ── */
-@media(min-width:800px){
-  #s-coach-home{flex-direction:row!important;height:100vh;min-height:100vh}
-  #ch-sidebar{width:200px;min-width:200px;background:#040404;border-right:1px solid #1a0000;display:flex;flex-direction:column;flex-shrink:0}
-  #ch-main-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
-  .ct-panel-wrap{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
-  #coach-tabs-bar{display:flex}
-}
+/* Desktop coach: simple column layout, sidebar hidden */
+#ch-sidebar{display:none!important}
+#coach-tabs-bar{display:flex!important}
+#s-coach-home{height:100vh;overflow:hidden}
 
 /* ====== GRAIN TEXTURE GLOBAL ====== */
 body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;opacity:1;
@@ -382,7 +379,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
       <p style="font-size:12px;color:#aaa;line-height:1.6;margin-bottom:12px">Génère un lien d'invitation à envoyer par WhatsApp ou SMS. L'athlète le colle dans le champ code.</p>
       <button class="btn btn-outline" style="font-size:11px;letter-spacing:1px" onclick="copyCoachInviteLink()">📋 Copier le lien d'invitation</button>
     </div>
-    <button class="btn btn-red" style="margin-top:20px" onclick="go('<div id="s-coach-home" class="screen" style="flex-direction:column">
+    <button class="btn btn-red" style="margin-top:20px" onclick="go('<div id="s-coach-home" class="screen" style="flex-direction:column;height:100vh;overflow:hidden">
 
   <!-- SIDEBAR (desktop only) -->
   <div id="ch-sidebar" style="display:none;flex-direction:column;background:#040404;border-right:1px solid #1a0000">
@@ -414,7 +411,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
   </div>
 
   <!-- MAIN AREA -->
-  <div id="ch-main-area" style="display:flex;flex:1;flex-direction:column;overflow:hidden">
+  <div id="ch-main-area" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden">
 
     <!-- Mobile header (hidden on desktop via CSS) -->
     <div id="ch-mobile-header" style="background:linear-gradient(135deg,#0f0000,#160000);border-bottom:1px solid #2a0000;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
@@ -439,7 +436,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
     </div>
 
     <!-- Tab panels -->
-    <div id="ct-dashboard" style="display:flex;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
+    <div id="ct-dashboard" style="display:flex;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
       <div class="pad">
         <div style="display:flex;gap:10px;margin-bottom:20px;padding-top:4px">
           <div class="metric-box"><div class="metric-val" id="ch-total">0</div><div class="metric-label">Athletes</div></div>
@@ -455,7 +452,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
       </div>
     </div>
 
-    <div id="ct-codes" style="display:none;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
+    <div id="ct-codes" style="display:none;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
       <div class="pad">
         <div style="width:20px;height:2px;background:var(--red);margin-bottom:8px;margin-top:4px"></div>
         <h2 style="margin-bottom:4px">Codes acces eleves</h2>
@@ -497,7 +494,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
       </div>
     </div>
 
-    <div id="ct-monetisation" style="display:none;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
+    <div id="ct-monetisation" style="display:none;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
       <div class="pad">
         <div style="width:20px;height:2px;background:var(--red);margin-bottom:8px;margin-top:4px"></div>
         <h2 style="margin-bottom:4px">Monetisation</h2>
@@ -1427,10 +1424,10 @@ function loadCoachHome(){
   const sidebar=document.getElementById('ch-sidebar');
   const mobileHeader=document.getElementById('ch-mobile-header');
   const tabsBar=document.getElementById('coach-tabs-bar');
-  // Always show tab bar and mobile header
+  // Sidebar always hidden, tabs always visible
   if(sidebar) sidebar.style.display='none';
   if(mobileHeader) mobileHeader.style.display='flex';
-  if(tabsBar) tabsBar.style.display='flex';
+  if(tabsBar){tabsBar.style.display='flex';tabsBar.style.visibility='visible';}
   const clients=getClients();
   document.getElementById('ch-total').textContent=clients.length;
   document.getElementById('ch-active').textContent=clients.filter(c=>isActive(c)).length;
@@ -3573,24 +3570,22 @@ document.addEventListener('DOMContentLoaded',initLogos);
 // MONETISATION — Coach tabs
 // ═══════════════════════════════════════════════════
 function coachTab(tab){
-  // Show/hide panels
-  var panels={dashboard:'ct-dashboard',codes:'ct-codes',monetisation:'ct-monetisation'};
-  for(var k in panels){
-    var el=document.getElementById(panels[k]);
-    if(el) el.style.display=(k===tab)?'flex':'none';
-  }
-  // Update tab bar buttons
-  var tabBtns={dashboard:'ct-tab-dashboard',codes:'ct-tab-codes',monetisation:'ct-tab-monetisation'};
-  for(var k in tabBtns){
-    var b=document.getElementById(tabBtns[k]);
+  var IDS=['dashboard','codes','monetisation'];
+  for(var i=0;i<IDS.length;i++){
+    var id=IDS[i];
+    // Panel
+    var p=document.getElementById('ct-'+id);
+    if(p) p.style.display=(id===tab)?'flex':'none';
+    // Tab button  
+    var b=document.getElementById('ct-tab-'+id);
     if(b){
-      b.style.borderBottom=(k===tab)?'2px solid #C60F08':'2px solid transparent';
-      b.style.color=(k===tab)?'#fff':'#666';
+      b.style.borderBottom=(id===tab)?'2px solid #C60F08':'2px solid transparent';
+      b.style.color=(id===tab)?'#ffffff':'#666666';
+      b.style.fontWeight=(id===tab)?'900':'700';
     }
   }
-  // Load content
-  if(tab==='codes'){try{loadStudentCodes();}catch(e){}}
-  if(tab==='monetisation'){try{loadMonetisationTab();}catch(e){}}
+  if(tab==='codes')try{loadStudentCodes();}catch(e){}
+  if(tab==='monetisation')try{loadMonetisationTab();}catch(e){}
 }
 
 function loadMonetisationTab(){
