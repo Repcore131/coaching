@@ -1209,12 +1209,12 @@ function loadAccessGate(){
     block.innerHTML='<div style="font-size:12px;color:#888;line-height:1.8">Statut: <span style="color:#f87171">EXPIRE</span><br>Expire le: <strong>'+d.toLocaleDateString('fr-FR')+'</strong><br>Coach: <strong>'+(u.coachName||'?')+'</strong><br><br>Contacte ton coach pour prolonger ton acces.</div>';
   } else if(u.status==='AUTONOMIE_PREMIUM'&&u.paymentStatus!=='active'){
     title.textContent='Abonnement inactif';
-    sub.textContent='Ton abonnement mensuel n'est plus actif.';
-    block.innerHTML='<div style="font-size:12px;color:#888;line-height:1.8">Statut: <span style="color:#f87171">'+( u.paymentStatus||'INACTIF')+'</span><br>Abonnement ID: <span style="font-family:monospace;font-size:11px">'+(u.paypalSubscriptionId||'N/A')+'</span><br><br>Renouvelle ton abonnement pour retrouver l'acces.</div>';
+    sub.textContent='Ton abonnement mensuel nest plus actif.';
+    block.innerHTML=`<div style="font-size:12px;color:#888;line-height:1.8">Statut: <span style="color:#f87171">${u.paymentStatus||'INACTIF'}</span><br>Abonnement ID: <span style="font-family:monospace;font-size:11px">${u.paypalSubscriptionId||'N/A'}</span><br><br>Renouvelle ton abonnement pour retrouver l'acces.</div>`;
   } else {
     title.textContent='Acces requis';
     sub.textContent='Tu dois activer un acces pour utiliser RepCore.';
-    block.innerHTML='<div style="font-size:12px;color:#888;line-height:1.8">Tu n'as pas encore d'acces actif.<br>Entre un code fourni par ton coach, ou souscris a l'abonnement autonomie a 9,99EUR/mois.</div>';
+    block.innerHTML='<div style="font-size:12px;color:#888;line-height:1.8">Tu n&#39;as pas encore d&#39;acces actif.<br>Entre un code fourni par ton coach, ou souscris a l&#39;abonnement autonomie a 9,99EUR/mois.</div>';
   }
 }
 
@@ -1348,7 +1348,7 @@ function doLinkCoach(){
       users[currentUser.email]=currentUser;
       DB.set('users',users);DB.set('session',currentUser);
       const exp=new Date(payload.expiry).toLocaleDateString('fr-FR');
-      toast('Acces active jusqu'au '+exp);
+      toast('Acces active jusqu&#39;au '+exp);
       openBilan('depart');return;
     }catch(e){return showErr('cc-err','Code invalide ou corrompu. Contacte ton coach.');}
   }
@@ -1454,11 +1454,11 @@ function loadCoachHome(){
   document.getElementById('ch-total').textContent=clients.length;
   document.getElementById('ch-active').textContent=clients.filter(c=>isActive(c)).length;
   document.getElementById('ch-alerts').textContent=clients.filter(c=>needsAlert(c)).length;
-  const el=document.getElementById('ch-clients-list');
+  const elList=document.getElementById('ch-clients-list');
   if(!clients.length){
-    el.innerHTML=`<div class="empty-state"><div class="es-icon">👥</div><div>Aucun athlète encore.<br>Partage ton code: <strong style="color:var(--red)">${u.code}</strong></div></div>`;return;
+    elList.innerHTML=`<div class="empty-state"><div class="es-icon">👥</div><div>Aucun athlète encore.<br>Partage ton code: <strong style="color:var(--red)">${u.code}</strong></div></div>`;return;
   }
-  el.innerHTML=clients.map(c=>{
+  elList.innerHTML=clients.map(c=>{
     const badge=needsAlert(c)?'<span class="badge badge-red">⚠ Alerte</span>':isActive(c)?'<span class="badge badge-green">✓ Actif</span>':'<span class="badge badge-gray">Inactif</span>';
     const ls=c.sessions?.length?'Dernière séance: '+ago(c.sessions[c.sessions.length-1].date):'Aucune séance';
     return `<div class="client-row" onclick="openClientDetail('${c.id}')">
@@ -1746,7 +1746,7 @@ function openHomePdf(){
   if(badge) badge.style.display='none';
   if(freshU.programPdf){
     const w=window.open();
-    if(w){w.document.write('<html><body style="margin:0;background:#000"><iframe src="'+freshU.programPdf+'" style="width:100%;height:100vh;border:none"></iframe>
+    if(w){w.document.write(`<html><body style="margin:0;background:#000"><iframe src="${freshU.programPdf}" style="width:100%;height:100vh;border:none"></iframe>
 <!-- ══════ ACCESS GATE ══════ -->
 <div id="s-access-gate" class="screen" style="background:#060606;justify-content:center;padding:32px 24px;position:relative;overflow:hidden">
   <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(-55deg,transparent,transparent 18px,rgba(198,15,8,.025) 18px,rgba(198,15,8,.025) 19px);pointer-events:none"></div>
@@ -1815,7 +1815,7 @@ function openHomePdf(){
   </div>
 </div>
 
-</body></html>');w.document.close();}
+</body></html>`);w.document.close();}
   } else if(freshU.programPdfLink){
     window.open(freshU.programPdfLink,'_blank');
   }
@@ -3627,10 +3627,10 @@ function loadMonetisationTab(){
   document.getElementById('pp-mrr').textContent=(active.length*9.99).toFixed(2)+'EUR';
   document.getElementById('pp-cancelled').textContent=cancelled.length;
   const el=document.getElementById('pp-subs-list');
-  if(!subs.length){el.innerHTML='<div class="empty-state"><div class="es-icon">💳</div><div>Aucun abonne autonomie pour l'instant.</div></div>';return;}
+  if(!subs.length){el.innerHTML='<div class="empty-state"><div class="es-icon">💳</div><div>Aucun abonn&#233; autonomie pour l&#39;instant.</div></div>';return;}
   el.innerHTML=subs.map(s=>{
     const st=s.paymentStatus==='active'?'<span class="badge badge-green">Actif</span>':'<span class="badge badge-red">'+( s.paymentStatus||'Inactif')+'</span>';
-    return '<div class="client-row"><div class="avatar" style="width:36px;height:36px;font-size:13px">'+ini(s.fname,s.lname)+'</div><div style="flex:1"><div style="font-weight:700">'+s.fname+' '+s.lname+'</div><div class="sub" style="font-size:11px;font-family:monospace">'+(s.paypalSubscriptionId||'no sub id')+'</div></div><div>'+st+'<button onclick="toggleSubStatus(''+s.email+'')" style="margin-top:4px;font-size:10px;background:none;border:1px solid var(--border);color:var(--sub);border-radius:6px;padding:3px 8px;cursor:pointer;font-family:Montserrat,sans-serif">'+(s.paymentStatus==='active'?'Suspendre':'Activer')+'</button></div></div>';
+    return '<div class="client-row"><div class="avatar" style="width:36px;height:36px;font-size:13px">'+ini(s.fname,s.lname)+'</div><div style="flex:1"><div style="font-weight:700">'+s.fname+' '+s.lname+'</div><div class="sub" style="font-size:11px;font-family:monospace">'+(s.paypalSubscriptionId||'no sub id')+'</div></div><div>'+st+'<button onclick="toggleSubStatus(\''+s.email+'\')" style="margin-top:4px;font-size:10px;background:none;border:1px solid var(--border);color:var(--sub);border-radius:6px;padding:3px 8px;cursor:pointer;font-family:Montserrat,sans-serif">'+(s.paymentStatus==='active'?'Suspendre':'Activer')+'</button></div></div>';
   }).join('');
 }
 
@@ -3665,7 +3665,7 @@ let lastGeneratedCode=null;
 function generateStudentCode(){
   const name=document.getElementById('sc-name').value.trim();
   const months=parseInt(document.getElementById('sc-duration').value)||3;
-  if(!name){toast('Entre le nom de l'eleve');return;}
+  if(!name){toast('Entre le nom de l&#39;&#233;l&#232;ve');return;}
   const expiry=Date.now()+(months*30*24*60*60*1000);
   const payload={
     coachId:currentUser.id,
@@ -3694,7 +3694,7 @@ function generateStudentCode(){
 function copyStudentCode(){
   if(!lastGeneratedCode) return;
   if(navigator.clipboard){
-    navigator.clipboard.writeText(lastGeneratedCode).then(()=>toast('Code copie. Envoie-le a l'eleve par WhatsApp/SMS'));
+    navigator.clipboard.writeText(lastGeneratedCode).then(()=>toast('Code copie. Envoie-le a l&#39;&#233;l&#232;ve par WhatsApp/SMS'));
   } else {
     const t=document.createElement('textarea');t.value=lastGeneratedCode;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();
     toast('Code copie');
