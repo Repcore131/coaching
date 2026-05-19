@@ -15,7 +15,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Montserrat:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-:root{--bg:#080808;--red:#C60F08;--red2:#9b0c07;--dark:#0f0f0f;--card:#131313;--card2:#1a1a1a;--border:#222;--sub:#666;--text:#f0f0f0;--green:#22c55e;--orange:#f97316}
+:root{--bg:#080808;--red:#E02020;--red2:#b81515;--dark:#0f0f0f;--card:#131313;--card2:#1a1a1a;--border:#222;--sub:#666;--text:#f0f0f0;--green:#22c55e;--orange:#f97316}
 body{background:var(--bg);color:var(--text);font-family:'Montserrat',sans-serif;min-height:100vh;max-width:480px;margin:0 auto;overflow-x:hidden;position:relative}
 /* ── DESKTOP: fond brande autour de l'app ── */
 @media(min-width:600px){
@@ -196,6 +196,13 @@ input[type=file]{display:none}
 #coach-tabs-bar button{cursor:pointer!important;pointer-events:auto!important;position:relative;z-index:10}
 #s-coach-home{height:100vh!important;overflow:hidden!important;display:flex;flex-direction:column}
 #ch-main-area{display:flex!important;flex-direction:column!important;flex:1!important;min-height:0!important;overflow:hidden!important}
+
+/* ====== WELCOME / SPLASH ANIMATIONS ====== */
+@keyframes splashRCIn{from{opacity:0;transform:scale(.7) translateY(20px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes splashLineIn{from{opacity:0;transform:scaleX(0)}to{opacity:1;transform:scaleX(1)}}
+@keyframes splashTextIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes wFadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+@keyframes wSlideUp{from{opacity:0;transform:translateY(48px)}to{opacity:1;transform:translateY(0)}}
 </style>
 <script>
 const LOGO_BADGE = '';
@@ -206,108 +213,66 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
 <body>
 
 <!-- SPLASH -->
-<div id="s-splash" class="screen active" style="align-items:center;justify-content:center;position:relative;overflow:hidden;background:#000000">
-  <!-- Content -->
-  <div style="text-align:center;z-index:1;display:flex;flex-direction:column;align-items:center">
-    <img src="./icons/icon-512x512.png" style="width:180px;height:180px;border-radius:32px;animation:fadeInScale 0.8s ease-out both" alt="RepCore">
-    <div style="font-size:28px;font-family:Impact,'Arial Black',sans-serif;color:#ffffff;letter-spacing:8px;margin-top:24px;animation:fadeInUp 0.6s ease-out 0.6s both">REPCORE</div>
-    <div style="font-size:10px;color:#C60F08;letter-spacing:6px;font-weight:700;margin-top:8px;text-transform:uppercase;animation:fadeInUp 0.6s ease-out 0.9s both">COACHING PREMIUM</div>
+<div id="s-splash" class="screen active" style="background:#000;align-items:center;justify-content:center;position:relative;overflow:hidden">
+  <div style="text-align:center;z-index:1" class="splash-anim-in">
+    <div style="font-size:88px;font-weight:900;font-family:Impact,'Arial Black',sans-serif;color:#fff;letter-spacing:-4px;line-height:1;animation:splashRCIn 0.9s cubic-bezier(.16,1,.3,1) both">RC</div>
+    <div style="width:48px;height:2px;background:#E02020;margin:18px auto;animation:splashLineIn 0.6s ease 0.5s both;opacity:0"></div>
+    <div style="font-size:9px;letter-spacing:8px;color:#E02020;font-weight:700;text-transform:uppercase;animation:splashTextIn 0.6s ease 0.7s both;opacity:0">REPCORE</div>
+    <div style="font-size:8px;letter-spacing:4px;color:#333;font-weight:600;text-transform:uppercase;margin-top:6px;animation:splashTextIn 0.6s ease 0.9s both;opacity:0">COACHING PROFESSIONNEL</div>
   </div>
+  <!-- subtle red glow -->
+  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-60%);width:400px;height:400px;border-radius:50%;background:radial-gradient(circle,rgba(224,32,32,.1) 0%,transparent 70%);pointer-events:none"></div>
 </div>
 
 <!-- WELCOME -->
-<div id="s-welcome" class="screen" style="background:#060606;flex-direction:column;height:100vh">
-  <!-- Top section -->
-  <div style="flex:0 0 60%;position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(180deg,#0a0000 0%,#050000 50%,#080808 100%)">
-    <!-- diagonal brand stripes -->
-    <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(-55deg,transparent,transparent 18px,rgba(198,15,8,.028) 18px,rgba(198,15,8,.028) 19px);pointer-events:none"></div>
-    <!-- Red glow -->
-    <div style="position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);width:320px;height:320px;border-radius:50%;background:radial-gradient(circle,rgba(198,15,8,.18) 0%,transparent 65%);pointer-events:none"></div>
-    <!-- App icon -->
-    <img src="./icons/icon-512x512.png" style="width:160px;height:160px;border-radius:24px;box-shadow:0 0 40px rgba(198,15,8,.5),0 0 80px rgba(198,15,8,.2);z-index:1;margin-bottom:20px" alt="RepCore">
-    <!-- Brand name -->
-    <div style="z-index:1;text-align:center;margin-bottom:16px">
-      <div style="font-size:12px;letter-spacing:4px;color:#C60F08;font-weight:800;text-transform:uppercase;margin-bottom:6px">GUELLEC.COACHING PRO</div>
-      <div style="font-size:10px;letter-spacing:3px;color:#444;font-weight:700;text-transform:uppercase">DISCIPLINE · TRAVAIL · RÉSULTATS</div>
+<div id="s-welcome" class="screen" style="background:#000;flex-direction:column;height:100vh;position:relative;overflow:hidden">
+
+  <!-- Subtle red radial glow top-center -->
+  <div style="position:absolute;top:-60px;left:50%;transform:translateX(-50%);width:500px;height:400px;background:radial-gradient(ellipse at 50% 0%,rgba(224,32,32,.12) 0%,transparent 65%);pointer-events:none;z-index:0"></div>
+
+  <!-- Thin diagonal brand lines overlay -->
+  <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(-55deg,transparent,transparent 28px,rgba(255,255,255,.012) 28px,rgba(255,255,255,.012) 29px);pointer-events:none;z-index:0"></div>
+
+  <!-- TOP: Logo zone -->
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1;padding-top:60px">
+    <!-- RC wordmark -->
+    <div style="font-size:96px;font-weight:900;font-family:Impact,'Arial Black',sans-serif;color:#fff;letter-spacing:-5px;line-height:1;animation:wFadeUp 0.8s cubic-bezier(.16,1,.3,1) 0.1s both">RC</div>
+    <div style="display:flex;align-items:center;gap:12px;margin-top:12px;animation:wFadeUp 0.6s ease 0.35s both;opacity:0">
+      <div style="width:24px;height:1px;background:#333"></div>
+      <div style="font-size:8px;letter-spacing:7px;color:#E02020;font-weight:700">REPCORE</div>
+      <div style="width:24px;height:1px;background:#333"></div>
     </div>
-    <!-- Coach photo bottom -->
-    <div style="position:absolute;bottom:20px;display:flex;flex-direction:column;align-items:center;gap:6px;z-index:2">
-      <div style="width:60px;height:60px;border-radius:50%;border:2px solid #C60F08;box-shadow:0 0 16px rgba(198,15,8,.4);overflow:hidden;flex-shrink:0">
-        <img id="welcome-photo" style="width:100%;height:100%;object-fit:cover;display:block" alt="">
-      </div>
-      <div id="welcome-coach-name" style="font-size:9px;color:#888;letter-spacing:1px;text-align:center"></div>
+
+    <!-- Tagline -->
+    <div style="margin-top:48px;text-align:center;padding:0 32px;animation:wFadeUp 0.7s ease 0.5s both;opacity:0">
+      <div style="font-size:32px;font-weight:900;line-height:1.1;letter-spacing:-1.5px;color:#fff">Entraîne-toi<br>comme un<br><span style="color:#E02020">pro.</span></div>
     </div>
-    <!-- Bottom fade -->
-    <div style="position:absolute;bottom:0;left:0;right:0;height:40px;background:linear-gradient(180deg,transparent,#080808)"></div>
+
+    <!-- Descriptor -->
+    <div style="margin-top:20px;animation:wFadeUp 0.6s ease 0.65s both;opacity:0">
+      <div style="font-size:11px;color:#444;letter-spacing:2px;text-align:center;font-weight:500">COACHING &nbsp;·&nbsp; SUIVI &nbsp;·&nbsp; PERFORMANCE</div>
+    </div>
   </div>
 
-  <!-- Bottom section -->
-  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:32px 24px;background:#080808">
-    <div style="font-size:9px;letter-spacing:3px;color:#C60F08;font-weight:800;text-transform:uppercase;margin-bottom:24px;text-align:center">BIENVENUE SUR REPCORE</div>
-    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:auto">
-      <button class="btn btn-red" onclick="go('s-login')" style="letter-spacing:2px">
-        🏋️ ESPACE COACH
-      </button>
-      <button class="btn btn-outline" onclick="go('s-athlete-entry')" style="letter-spacing:2px">
-        💪 ESPACE ATHLÈTE / CODE
-      </button>
+  <!-- BOTTOM: CTA buttons -->
+  <div style="padding:32px 28px 48px;z-index:1;animation:wSlideUp 0.7s cubic-bezier(.16,1,.3,1) 0.55s both;opacity:0">
+    <button onclick="go('s-login')" style="width:100%;padding:20px;background:#E02020;color:#fff;border:none;font-family:'Montserrat',sans-serif;font-size:12px;font-weight:800;letter-spacing:4px;cursor:pointer;text-transform:uppercase;margin-bottom:12px;transition:.15s" onmouseover="this.style.background='#c91a1a'" onmouseout="this.style.background='#E02020'">ESPACE COACH</button>
+    <button onclick="go('s-athlete-entry')" style="width:100%;padding:20px;background:transparent;color:#fff;border:1px solid rgba(255,255,255,.15);font-family:'Montserrat',sans-serif;font-size:12px;font-weight:800;letter-spacing:4px;cursor:pointer;text-transform:uppercase;transition:.15s" onmouseover="this.style.borderColor='rgba(224,32,32,.6)';this.style.color='#E02020'" onmouseout="this.style.borderColor='rgba(255,255,255,.15)';this.style.color='#fff'">ESPACE ATHLÈTE</button>
+    <div style="margin-top:28px;text-align:center">
+      <div style="font-size:9px;letter-spacing:2px;color:#222;font-weight:600;text-transform:uppercase">Kevin Guellec &nbsp;·&nbsp; Coach Diplômé d'État</div>
     </div>
-    <div style="margin-top:32px;text-align:center">
-      <div style="font-size:9px;letter-spacing:2px;color:#2a2a2a;text-transform:uppercase;font-weight:600">Kevin Guellec · Coach Diplômé d’État</div>
-    </div>
-  </div>
-    <!-- Brand name -->
-    <div style="z-index:1;text-align:center">
-      <div style="font-size:8px;letter-spacing:6px;color:var(--red);font-weight:800;text-transform:uppercase;margin-bottom:4px">GUELLEC.COACHING PRO</div>
-      <div style="width:60px;height:1px;background:#2a0000;margin:0 auto"></div>
-    </div>
-    <!-- Coach photo — small decorative portrait bottom-left -->
-    <div style="position:absolute;bottom:36px;left:20px;display:flex;align-items:center;gap:8px;z-index:2">
-      <div style="width:44px;height:44px;border-radius:50%;border:1.5px solid rgba(198,15,8,0.6);box-shadow:0 0 12px rgba(198,15,8,.3);overflow:hidden;flex-shrink:0">
-        <img id="welcome-photo" style="width:100%;height:100%;object-fit:cover;display:block">
-      </div>
-      <div>
-        <div style="font-size:9px;font-weight:800;color:#ccc;letter-spacing:0.5px">Kevin Guellec</div>
-        <div style="font-size:8px;color:var(--red);letter-spacing:0.5px">Coach Diplômé d'État</div>
-      </div>
-    </div>
-    <!-- Bottom cut diagonal -->
-    <div style="position:absolute;bottom:-1px;left:0;right:0;height:30px;background:linear-gradient(180deg,transparent,#080808)"></div>
   </div>
 
-  <!-- Bottom: copy + CTA -->
-  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:28px 24px 32px">
-    <div style="margin-bottom:10px">
-      <div style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--red);font-weight:800;margin-bottom:10px">RepCore Coaching</div>
-      <div style="font-size:22px;font-weight:900;line-height:1.15;letter-spacing:-0.5px;margin-bottom:14px">Un coaching <span style="color:var(--red)">humain</span> et à l'écoute,<br>pour te dépasser et<br><span style="color:#fff">atteindre tes objectifs.</span></div>
-      <div style="width:36px;height:2px;background:var(--red);margin-bottom:14px"></div>
-      <div style="font-size:12px;color:#555;line-height:1.7;font-style:italic">"Le meilleur investissement que tu puisses faire, c'est en toi-même."</div>
-    </div>
-    <div class="gap" style="margin-top:20px">
-      <button class="btn btn-red" onclick="go('s-login')" style="margin-bottom:10px;letter-spacing:2px">
-        🏋️ ESPACE COACH
-      </button>
-      <button class="btn btn-outline" onclick="go('s-athlete-entry')" style="letter-spacing:2px">
-        💪 ESPACE ATHLÈTE
-      </button>
-    </div>
-    <div style="margin-top:20px;text-align:center">
-      <div style="font-size:9px;letter-spacing:3px;color:#333;text-transform:uppercase;font-weight:700">Kevin Guellec · Coach Diplômé d'État</div>
-      
-    </div>
-  </div>
-  
 </div>
-
 <!-- ATHLETE ENTRY -->
 <div id="s-athlete-entry" class="screen">
   <div class="topbar" style="border-bottom:1px solid var(--border)">
     <button class="back-btn" onclick="go('s-welcome')">←</button>
     <div style="height:32px;display:flex;align-items:center;gap:6px">
-      <div style="width:28px;height:28px;border-radius:6px;background:#0f0000;border:1.5px solid #C60F08;display:flex;align-items:center;justify-content:center">
-        <span style="font-size:10px;font-weight:900;font-family:Impact,sans-serif;color:#C60F08">RC</span>
+      <div style="width:28px;height:28px;border-radius:6px;background:#0f0000;border:1.5px solid #E02020;display:flex;align-items:center;justify-content:center">
+        <span style="font-size:10px;font-weight:900;font-family:Impact,sans-serif;color:#E02020">RC</span>
       </div>
-      <span style="font-size:11px;font-weight:800;letter-spacing:2px;color:#C60F08">REPCORE</span>
+      <span style="font-size:11px;font-weight:800;letter-spacing:2px;color:#E02020">REPCORE</span>
     </div>
     <span></span>
   </div>
@@ -346,7 +311,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
 <div id="s-login" class="screen">
   <div class="topbar" style="border-bottom:1px solid var(--border)">
     <button class="back-btn" onclick="go('s-welcome')">←</button>
-    <div style="height:32px;display:flex;align-items:center;gap:6px"><div style="width:28px;height:28px;border-radius:6px;background:#0f0000;border:1.5px solid #C60F08;display:flex;align-items:center;justify-content:center"><span style="font-size:10px;font-weight:900;font-family:Impact,sans-serif;color:#C60F08">RC</span></div><span style="font-size:11px;font-weight:800;letter-spacing:2px;color:#C60F08">REPCORE</span></div>
+    <div style="height:32px;display:flex;align-items:center;gap:6px"><div style="width:28px;height:28px;border-radius:6px;background:#0f0000;border:1.5px solid #E02020;display:flex;align-items:center;justify-content:center"><span style="font-size:10px;font-weight:900;font-family:Impact,sans-serif;color:#E02020">RC</span></div><span style="font-size:11px;font-weight:800;letter-spacing:2px;color:#E02020">REPCORE</span></div>
     <span></span>
   </div>
   <div class="pad scroll-area gap" style="justify-content:center;flex:1">
@@ -379,8 +344,8 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
     <div class="divider"></div>
     <label style="margin:0">Je suis :</label>
     <div class="row2">
-      <div class="role-card" id="role-coach" onclick="selectRole('coach')"><div class="role-icon">🎯</div><div style="font-weight:800;font-size:15px">COACH</div><div class="sub" style="font-size:11px;margin-top:4px">Gérer mes athlètes</div></div>
-      <div class="role-card" id="role-athlete" onclick="selectRole('athlete')"><div class="role-icon">💪</div><div style="font-weight:800;font-size:15px">ATHLÈTE</div><div class="sub" style="font-size:11px;margin-top:4px">Suivre ma progression</div></div>
+      <div class="role-card" id="role-coach" onclick="selectRole('coach')"><div class="role-icon"></div><div style="font-weight:800;font-size:15px">COACH</div><div class="sub" style="font-size:11px;margin-top:4px">Gérer mes athlètes</div></div>
+      <div class="role-card" id="role-athlete" onclick="selectRole('athlete')"><div class="role-icon"></div><div style="font-weight:800;font-size:15px">ATHLÈTE</div><div class="sub" style="font-size:11px;margin-top:4px">Suivre ma progression</div></div>
     </div>
     <div id="r-err" style="color:#f87171;font-size:13px;display:none"></div>
     <button class="btn btn-red" onclick="doRegister()">Créer mon compte</button>
@@ -391,15 +356,15 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
 <!-- COACH CODE DISPLAY -->
 <div id="s-coach-code" class="screen" style="justify-content:center;padding:32px 24px">
   <div class="anim-in" style="text-align:center">
-    <div style="font-size:52px;margin-bottom:16px">🎯</div>
+    <div style="font-size:52px;margin-bottom:16px"></div>
     <h1 style="margin-bottom:8px">Ton code coach</h1>
     <p class="sub" style="margin-bottom:16px;line-height:1.6">Partage ce code à tes athlètes pour qu'ils se connectent à toi.</p>
     <div class="code-display" id="coach-code-val">——</div>
     <p class="sub" style="margin-top:12px;font-size:11px">Code unique et personnel</p>
     <div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:12px;padding:14px 16px;margin-top:20px;text-align:left">
-      <div style="font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:8px">📱 Athlète sur un autre appareil ?</div>
+      <div style="font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:8px"> Athlète sur un autre appareil ?</div>
       <p style="font-size:12px;color:#aaa;line-height:1.6;margin-bottom:12px">Génère un lien d'invitation à envoyer par WhatsApp ou SMS. L'athlète le colle dans le champ code.</p>
-      <button class="btn btn-outline" style="font-size:11px;letter-spacing:1px" onclick="copyCoachInviteLink()">📋 Copier le lien d'invitation</button>
+      <button class="btn btn-outline" style="font-size:11px;letter-spacing:1px" onclick="copyCoachInviteLink()"> Copier le lien d'invitation</button>
     </div>
     <button class="btn btn-red" style="margin-top:20px" onclick="go('s-coach-home');loadCoachHome()">Espace Coach &rarr;</button>
   </div>
@@ -410,7 +375,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
   <div id="ch-sidebar" style="display:none;flex-direction:column;background:#040404;border-right:1px solid #1a0000">
     <div style="padding:20px 16px;border-bottom:1px solid #1a0000">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-        <div style="width:36px;height:36px;border-radius:8px;background:#0f0000;border:1.5px solid #C60F08;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:12px;font-weight:900;font-family:Impact,sans-serif;color:#C60F08;letter-spacing:-1px">RC</span></div>
+        <div style="width:36px;height:36px;border-radius:8px;background:#0f0000;border:1.5px solid #E02020;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:12px;font-weight:900;font-family:Impact,sans-serif;color:#E02020;letter-spacing:-1px">RC</span></div>
         <div>
           <div style="font-size:8px;color:var(--red);letter-spacing:2px;font-weight:800">COACH</div>
           <div style="font-size:13px;font-weight:900" id="ch-name-sidebar"></div>
@@ -420,13 +385,13 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
     </div>
     <div style="padding:12px 8px;flex:1">
       <button id="sb-tab-dashboard" onclick="coachTab('dashboard')" style="width:100%;text-align:left;padding:12px 14px;background:var(--card);border:none;border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
-        <span style="font-size:16px">👥</span> ATHLETES
+        <span style="font-size:16px"></span> ATHLETES
       </button>
       <button id="sb-tab-codes" onclick="coachTab('codes')" style="width:100%;text-align:left;padding:12px 14px;background:none;border:none;border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
-        <span style="font-size:16px">🎫</span> CODES ACCES
+        <span style="font-size:16px"></span> CODES ACCES
       </button>
       <button id="sb-tab-monetisation" onclick="coachTab('monetisation')" style="width:100%;text-align:left;padding:12px 14px;background:none;border:none;border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
-        <span style="font-size:16px">💳</span> PAIEMENTS
+        <span style="font-size:16px"></span> PAIEMENTS
       </button>
     </div>
     <div style="padding:16px">
@@ -441,7 +406,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
     <!-- Mobile header (hidden on desktop via CSS) -->
     <div id="ch-mobile-header" style="background:linear-gradient(135deg,#0f0000,#160000);border-bottom:1px solid #2a0000;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
       <div style="display:flex;align-items:center;gap:12px">
-        <div style="width:40px;height:40px;border-radius:8px;background:#0f0000;border:1.5px solid #C60F08;display:flex;align-items:center;justify-content:center"><span style="font-size:13px;font-weight:900;font-family:Impact,sans-serif;color:#C60F08;letter-spacing:-1px">RC</span></div>
+        <div style="width:40px;height:40px;border-radius:8px;background:#0f0000;border:1.5px solid #E02020;display:flex;align-items:center;justify-content:center"><span style="font-size:13px;font-weight:900;font-family:Impact,sans-serif;color:#E02020;letter-spacing:-1px">RC</span></div>
         <div>
           <div style="font-size:9px;color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase">COACH</div>
           <div style="font-size:15px;font-weight:900" id="ch-name"></div>
@@ -511,7 +476,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
           </div>
           <div id="sc-list">
             <div style="text-align:center;padding:40px 20px;color:#444">
-              <div style="font-size:36px;margin-bottom:12px;opacity:0.4">🎫</div>
+              <div style="font-size:36px;margin-bottom:12px;opacity:0.4"></div>
               <div style="font-size:13px">Aucun code genere encore.<br>Utilise le formulaire ci-dessus.</div>
             </div>
           </div>
@@ -528,7 +493,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
         <!-- PayPal config -->
         <div style="background:#0f0f0f;border:1px solid #2a0000;border-radius:14px;padding:18px;margin-bottom:20px">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-            <div style="width:36px;height:36px;background:#0a3a0a;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🏦</div>
+            <div style="width:36px;height:36px;background:#0a3a0a;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0"></div>
             <div>
               <div style="font-size:11px;font-weight:800;color:var(--red);letter-spacing:2px">CONFIGURATION PAYPAL</div>
               <div id="pp-config-status" style="font-size:11px;color:#666">Non configure</div>
@@ -567,7 +532,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
           </div>
           <div id="pp-subs-list">
             <div style="text-align:center;padding:40px 20px;color:#444">
-              <div style="font-size:36px;margin-bottom:12px;opacity:0.4">💳</div>
+              <div style="font-size:36px;margin-bottom:12px;opacity:0.4"></div>
               <div style="font-size:13px">Aucun abonne encore.<br>Configure PayPal ci-dessus, puis partage la page d'abonnement a tes eleves.</div>
             </div>
           </div>
@@ -591,13 +556,13 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
         </div>
       </div>
       <div style="display:flex;gap:10px;margin-bottom:16px">
-        <div class="metric-box"><div class="metric-val" id="ccd-streak">0🔥</div><div class="metric-label">Streak</div></div>
+        <div class="metric-box"><div class="metric-val" id="ccd-streak">0</div><div class="metric-label">Streak</div></div>
         <div class="metric-box"><div class="metric-val" id="ccd-sessions">0</div><div class="metric-label">Séances</div></div>
         <div class="metric-box"><div class="metric-val" id="ccd-weight">—</div><div class="metric-label">Poids</div></div>
       </div>
       <div class="gap" style="margin-bottom:20px">
-        <button class="btn btn-red" onclick="openCoachProgram()">📋 Gérer le programme</button>
-        <button class="btn btn-outline" onclick="viewClientBilans()">📊 Bilans complets</button>
+        <button class="btn btn-red" onclick="openCoachProgram()"> Gérer le programme</button>
+        <button class="btn btn-outline" onclick="viewClientBilans()"> Bilans complets</button>
       </div>
       <h3 style="margin-bottom:12px">Bilans récents</h3>
       <div id="ccd-bilans"></div>
@@ -634,12 +599,12 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
         <!-- Fichier actuel -->
         <div id="prog-pdf-current" style="display:none;background:#151515;border:1px solid #2a2a2a;border-radius:4px;padding:12px;margin-bottom:12px">
           <div style="display:flex;align-items:center;gap:10px">
-            <div style="width:36px;height:36px;background:#1a0000;border:1px solid #3a0a0a;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📄</div>
+            <div style="width:36px;height:36px;background:#1a0000;border:1px solid #3a0a0a;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0"></div>
             <div style="flex:1;min-width:0">
               <div style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="prog-pdf-name">—</div>
               <div style="font-size:10px;color:var(--sub);margin-top:2px" id="prog-pdf-info">—</div>
             </div>
-            <button onclick="removeCoachPdf()" style="background:none;border:none;color:#555;font-size:16px;cursor:pointer;padding:4px;flex-shrink:0">✕</button>
+            <button onclick="removeCoachPdf()" style="background:none;border:none;color:#555;font-size:16px;cursor:pointer;padding:4px;flex-shrink:0"></button>
           </div>
         </div>
 
@@ -675,7 +640,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
           <input type="file" id="prog-photo-input" accept="image/*" onchange="loadProgPhoto(this)" style="display:none">
           <img id="prog-photo-preview" style="display:none;width:100%;border-radius:10px;margin-bottom:10px">
           <div id="prog-photo-ph">
-            <div style="font-size:32px;margin-bottom:8px">📋</div>
+            <div style="font-size:32px;margin-bottom:8px"></div>
             <div style="font-weight:700;font-size:13px">Importe ta fiche programme</div>
             <div class="sub" style="font-size:11px;margin-top:4px">Photo de ton Google Sheet, PDF ou tableau papier<br>Elle s'affichera en référence pendant la création</div>
           </div>
@@ -701,8 +666,8 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
 <div id="calc-modal" style="display:none;position:fixed;inset:0;background:#000c;z-index:2000;overflow-y:auto">
   <div style="background:#161616;border-radius:20px 20px 0 0;padding:24px 20px;margin-top:60px;min-height:calc(100vh - 60px)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-      <h2>💡 Calculateur RIR</h2>
-      <button onclick="document.getElementById('calc-modal').style.display='none'" style="background:none;border:none;color:var(--sub);font-size:24px;cursor:pointer">✕</button>
+      <h2> Calculateur RIR</h2>
+      <button onclick="document.getElementById('calc-modal').style.display='none'" style="background:none;border:none;color:var(--sub);font-size:24px;cursor:pointer"></button>
     </div>
     <p class="sub" style="font-size:12px;margin-bottom:20px;line-height:1.5">Basé sur ta dernière performance. Le système calcule ta charge optimale pour chaque combinaison reps/RIR.</p>
     <div style="background:var(--card2);border-radius:12px;padding:14px;margin-bottom:16px">
@@ -710,7 +675,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
         <div><label>Charge précédente (kg)</label><input type="number" id="calc-pw" placeholder="100" oninput="updateCalcTable()"></div>
         <div><label>Reps réalisées</label><input type="number" id="calc-pr" placeholder="8" oninput="updateCalcTable()"></div>
         <div><label>RIR réel</label><input type="number" id="calc-prir" placeholder="2" min="0" max="5" oninput="updateCalcTable()"></div>
-        <div id="calc-cycle-adj" style="display:none"><label>🌙 Ajust. cycle (−5%)</label>
+        <div id="calc-cycle-adj" style="display:none"><label> Ajust. cycle (−5%)</label>
           <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
             <label style="margin:0;text-transform:none;letter-spacing:0;font-size:13px;color:#fff;cursor:pointer">
               <input type="checkbox" id="calc-cycle-check" onchange="updateCalcTable()" style="width:auto;margin-right:6px">Phase menstruelle (J1-J5)
@@ -746,9 +711,9 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
 <div id="s-client-home" class="screen">
   <!-- Brand header athlete -->
   <div style="background:linear-gradient(135deg,#0f0000,#160000);border-bottom:1px solid #2a0000;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:relative;overflow:hidden">
-    <div style="position:absolute;right:0;top:0;width:80px;height:100%;background:linear-gradient(135deg,transparent 40%,#C60F0810 40%,#C60F0818 60%,transparent 61%);pointer-events:none"></div>
+    <div style="position:absolute;right:0;top:0;width:80px;height:100%;background:linear-gradient(135deg,transparent 40%,#E0202010 40%,#E0202018 60%,transparent 61%);pointer-events:none"></div>
     <div style="display:flex;align-items:center;gap:12px">
-      <div style="width:36px;height:36px;border-radius:8px;background:#0f0000;border:1.5px solid #C60F08;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:12px;font-weight:900;font-family:Impact,sans-serif;color:#C60F08;letter-spacing:-1px">RC</span></div>
+      <div style="width:36px;height:36px;border-radius:8px;background:#0f0000;border:1.5px solid #E02020;display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:12px;font-weight:900;font-family:Impact,sans-serif;color:#E02020;letter-spacing:-1px">RC</span></div>
       <div>
         <div style="font-size:9px;color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase">ATHLÈTE</div>
         <div style="font-size:15px;font-weight:900;letter-spacing:-0.3px" id="clh-name"></div>
@@ -759,7 +724,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
         <div style="font-size:9px;color:var(--sub);letter-spacing:1px;text-transform:uppercase;font-weight:600">STREAK</div>
         <div style="font-size:18px;font-weight:900;color:var(--red);line-height:1" id="clh-streak-val">0</div>
       </div>
-      <button onclick="logout()" style="background:none;border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:7px 10px;font-family:Montserrat,sans-serif;font-size:12px;cursor:pointer">✕</button>
+      <button onclick="logout()" style="background:none;border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:7px 10px;font-family:Montserrat,sans-serif;font-size:12px;cursor:pointer"></button>
     </div>
   </div>
   
@@ -874,7 +839,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
   <div class="topbar"><button class="back-btn" onclick="go('s-client-home')">←</button><span class="topbar-title">Mes séances</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
-      <p class="sub" style="font-size:12px;margin-bottom:20px;line-height:1.6">📸 Uploade la photo de ta fiche programme → l'IA détecte automatiquement les exercices, séries, reps et temps de repos.</p>
+      <p class="sub" style="font-size:12px;margin-bottom:20px;line-height:1.6"> Uploade la photo de ta fiche programme → l'IA détecte automatiquement les exercices, séries, reps et temps de repos.</p>
       <div id="session-slots"></div>
       <div style="height:20px"></div>
     </div>
@@ -886,7 +851,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
   <div style="background:#161616;border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <h2>Quelle séance aujourd'hui ?</h2>
-      <button onclick="document.getElementById('session-picker').style.display='none'" style="background:none;border:none;color:var(--sub);font-size:24px;cursor:pointer">✕</button>
+      <button onclick="document.getElementById('session-picker').style.display='none'" style="background:none;border:none;color:var(--sub);font-size:24px;cursor:pointer"></button>
     </div>
     <div id="session-picker-list"></div>
     <div style="height:20px"></div>
@@ -896,7 +861,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
 <!-- CYCLE SELECTOR (modal, femmes) -->
 <div id="cycle-modal" style="display:none;position:fixed;inset:0;background:#000c;z-index:2100;align-items:flex-end;justify-content:center">
   <div style="background:#161616;border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px">
-    <h2 style="margin-bottom:6px">🌙 Phase du cycle</h2>
+    <h2 style="margin-bottom:6px"> Phase du cycle</h2>
     <p class="sub" style="font-size:12px;margin-bottom:20px;line-height:1.5">Indique où tu en es dans ton cycle. Les charges et séries seront ajustées automatiquement.</p>
     <div style="display:flex;flex-direction:column;gap:10px" id="cycle-options">
       <div class="obj-opt" onclick="setCyclePhase('j1_difficile',this)">
@@ -946,7 +911,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
             <div style="font-size:14px;font-weight:900" id="pv-pdf-title">—</div>
             <div style="font-size:10px;color:var(--sub);margin-top:2px" id="pv-pdf-meta"></div>
           </div>
-          <div style="width:40px;height:48px;background:linear-gradient(180deg,#1a0000,#120000);border:1px solid #3a0a0a;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">📄</div>
+          <div style="width:40px;height:48px;background:linear-gradient(180deg,#1a0000,#120000);border:1px solid #3a0a0a;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0"></div>
         </div>
         <!-- Boutons PDF -->
         <div id="pv-pdf-btns" style="display:flex;gap:8px"></div>
@@ -963,7 +928,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
 
 <!-- WORKOUT SESSION -->
 <div id="s-workout" class="screen">
-  <div class="topbar" style="flex-shrink:0"><button class="back-btn" onclick="confirmStopWorkout()">✕</button><span class="topbar-title" id="wo-title">Séance</span><span style="font-size:13px;font-weight:700;color:var(--sub)" id="wo-timer">00:00</span></div>
+  <div class="topbar" style="flex-shrink:0"><button class="back-btn" onclick="confirmStopWorkout()"></button><span class="topbar-title" id="wo-title">Séance</span><span style="font-size:13px;font-weight:700;color:var(--sub)" id="wo-timer">00:00</span></div>
   <div style="padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:12px">
     <div style="flex:1"><div class="progress-bar"><div class="progress-fill" id="wo-progress" style="width:0%"></div></div></div>
     <span style="font-size:12px;font-weight:700;color:var(--sub)" id="wo-ex-count">0/0</span>
@@ -980,7 +945,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
   <div class="scroll-area" style="flex:1">
     <div class="done-anim anim-in pad">
       <div style="text-align:center;padding:24px 0 20px;border-bottom:1px solid #181818;margin-bottom:20px">
-        <div style="font-size:48px;margin-bottom:12px;filter:drop-shadow(0 0 20px rgba(198,15,8,.4))">🏆</div>
+        <div style="font-size:48px;margin-bottom:12px;filter:drop-shadow(0 0 20px rgba(198,15,8,.4))"></div>
         <h1 style="text-align:center;font-size:36px;margin-bottom:6px;color:#fff">SÉANCE TERMINÉE</h1>
         <p style="text-align:center;font-size:11px;color:var(--sub);letter-spacing:1px;text-transform:uppercase" id="wd-msg"></p>
       </div>
@@ -996,7 +961,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
           <!-- Fatigue -->
           <div style="background:#0f0f0f;border:1px solid #1c1c1c;border-radius:3px;padding:12px 10px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-              <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px">😴 Fatigue</div>
+              <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Fatigue</div>
               <div style="font-size:18px;font-weight:900;color:var(--red)" id="ps-fatigue-val">5</div>
             </div>
             <input type="range" id="ps-fatigue" min="0" max="10" value="5" oninput="document.getElementById('ps-fatigue-val').textContent=this.value" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
@@ -1004,7 +969,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
           <!-- Intensité -->
           <div style="background:#0f0f0f;border:1px solid #1c1c1c;border-radius:3px;padding:12px 10px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-              <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px">⚡ Intensité</div>
+              <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Intensité</div>
               <div style="font-size:18px;font-weight:900;color:var(--red)" id="ps-intensite-val">5</div>
             </div>
             <input type="range" id="ps-intensite" min="0" max="10" value="5" oninput="document.getElementById('ps-intensite-val').textContent=this.value" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
@@ -1012,7 +977,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
           <!-- Satisfaction -->
           <div style="background:#0f0f0f;border:1px solid #1c1c1c;border-radius:3px;padding:12px 10px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-              <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px">😊 Satisfaction</div>
+              <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Satisfaction</div>
               <div style="font-size:18px;font-weight:900;color:var(--red)" id="ps-satisfaction-val">5</div>
             </div>
             <input type="range" id="ps-satisfaction" min="0" max="10" value="5" oninput="document.getElementById('ps-satisfaction-val').textContent=this.value" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
@@ -1020,7 +985,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
           <!-- Sensation musculaire -->
           <div style="background:#0f0f0f;border:1px solid #1c1c1c;border-radius:3px;padding:12px 10px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-              <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px">💪 Sensation</div>
+              <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Sensation</div>
               <div style="font-size:18px;font-weight:900;color:var(--red)" id="ps-sensation-val">5</div>
             </div>
             <input type="range" id="ps-sensation" min="0" max="10" value="5" oninput="document.getElementById('ps-sensation-val').textContent=this.value" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
@@ -1028,7 +993,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
           <!-- Hydratation -->
           <div style="background:#0f0f0f;border:1px solid #1c1c1c;border-radius:3px;padding:12px 10px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-              <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px">💧 Hydratation</div>
+              <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Hydratation</div>
               <div style="font-size:18px;font-weight:900;color:var(--red)" id="ps-hydratation-val">5</div>
             </div>
             <input type="range" id="ps-hydratation" min="0" max="10" value="5" oninput="document.getElementById('ps-hydratation-val').textContent=this.value" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
@@ -1036,7 +1001,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
           <!-- Motivation -->
           <div style="background:#0f0f0f;border:1px solid #1c1c1c;border-radius:3px;padding:12px 10px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-              <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px">🔥 Motivation</div>
+              <div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Motivation</div>
               <div style="font-size:18px;font-weight:900;color:var(--red)" id="ps-motivation-val">5</div>
             </div>
             <input type="range" id="ps-motivation" min="0" max="10" value="5" oninput="document.getElementById('ps-motivation-val').textContent=this.value" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
@@ -1049,7 +1014,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
-        <button class="btn btn-red" onclick="savePostSession()">Valider et terminer ✓</button>
+        <button class="btn btn-red" onclick="savePostSession()">Valider et terminer </button>
         <button class="btn btn-outline" onclick="go('s-client-home');loadClientHome()">Passer</button>
       </div>
       <div style="height:30px"></div>
@@ -1061,17 +1026,17 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
 <div id="s-bilan-choice" class="screen" style="justify-content:center;padding:32px 24px">
   <div class="anim-in">
     <div style="text-align:center;margin-bottom:32px">
-      <div style="font-size:52px;margin-bottom:12px">📊</div>
+      <div style="font-size:52px;margin-bottom:12px"></div>
       <h1 style="margin-bottom:8px">Quel bilan ?</h1>
     </div>
     <div id="bilan-choice-first" style="display:none;margin-bottom:12px">
       <div onclick="openBilan('depart')" style="background:linear-gradient(135deg,#1a0000,#2a0000);border:1px solid var(--red);border-radius:16px;padding:20px;cursor:pointer">
-        <div style="font-weight:900;font-size:16px;margin-bottom:6px">🏁 Bilan de départ</div>
+        <div style="font-weight:900;font-size:16px;margin-bottom:6px"> Bilan de départ</div>
         <div class="sub" style="font-size:12px;line-height:1.5">Premier bilan complet — Point de départ, objectifs, historique, mensurations initiales.</div>
       </div>
     </div>
     <div onclick="openBilan('coaching')" style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;cursor:pointer;margin-bottom:12px">
-      <div style="font-weight:900;font-size:16px;margin-bottom:6px">📈 Bilan coaching</div>
+      <div style="font-weight:900;font-size:16px;margin-bottom:6px"> Bilan coaching</div>
       <div class="sub" style="font-size:12px;line-height:1.5">Bilan toutes les 2 semaines — Poids, mensurations, ressenti, photos.</div>
     </div>
     <button class="btn btn-outline" onclick="go('s-client-home')">Annuler</button>
@@ -1098,11 +1063,11 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div style="display:flex;gap:6px;margin-bottom:20px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch" id="prog-tabs">
-        <button class="btn btn-red btn-sm" onclick="showProgressTab('poids',this)" style="white-space:nowrap">⚖️ Poids</button>
-        <button class="btn btn-outline btn-sm" onclick="showProgressTab('mensus',this)" style="white-space:nowrap">📏 Mensurations</button>
-        <button class="btn btn-outline btn-sm" onclick="showProgressTab('masseGrasse',this)" style="white-space:nowrap">💪 Masse Grasse</button>
-        <button class="btn btn-outline btn-sm" onclick="showProgressTab('perf',this)" style="white-space:nowrap">🏋️ Perfs</button>
-        <button class="btn btn-outline btn-sm" onclick="showProgressTab('photos',this)" style="white-space:nowrap">📸 Photos</button>
+        <button class="btn btn-red btn-sm" onclick="showProgressTab('poids',this)" style="white-space:nowrap">️ Poids</button>
+        <button class="btn btn-outline btn-sm" onclick="showProgressTab('mensus',this)" style="white-space:nowrap"> Mensurations</button>
+        <button class="btn btn-outline btn-sm" onclick="showProgressTab('masseGrasse',this)" style="white-space:nowrap"> Masse Grasse</button>
+        <button class="btn btn-outline btn-sm" onclick="showProgressTab('perf',this)" style="white-space:nowrap">️ Perfs</button>
+        <button class="btn btn-outline btn-sm" onclick="showProgressTab('photos',this)" style="white-space:nowrap"> Photos</button>
       </div>
       <div id="progress-content"></div>
     </div>
@@ -1116,7 +1081,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
     <div class="pad">
       <div style="display:flex;gap:10px;margin-bottom:24px">
         <div class="metric-box"><div class="metric-val" id="nut-score" style="color:var(--green)">—</div><div class="metric-label">Score semaine</div></div>
-        <div class="metric-box"><div class="metric-val" id="nut-streak">0🔥</div><div class="metric-label">Jours consécutifs</div></div>
+        <div class="metric-box"><div class="metric-val" id="nut-streak">0</div><div class="metric-label">Jours consécutifs</div></div>
       </div>
       <h3 style="margin-bottom:14px">Cette semaine</h3>
       <div id="nut-week"></div>
@@ -1134,7 +1099,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
     <div class="pad">
       <div class="upload-zone" onclick="document.getElementById('vid-upload').click()">
         <input type="file" id="vid-upload" accept="video/*" onchange="uploadVideo(this)">
-        <div style="font-size:40px;margin-bottom:10px">🎥</div>
+        <div style="font-size:40px;margin-bottom:10px"></div>
         <div style="font-weight:700;margin-bottom:4px">Envoyer une vidéo</div>
         <div class="sub" style="font-size:12px">Max 2 min • Technique, posture, exécution</div>
       </div>
@@ -1148,7 +1113,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
 <div id="s-steps" class="screen">
   <div class="topbar" style="border-bottom:1px solid #1a1a1a">
     <button class="back-btn" onclick="go('s-client-home');loadClientHome()">←</button>
-    <span class="topbar-title">Mes pas 👟</span>
+    <span class="topbar-title">Mes pas </span>
     <span></span>
   </div>
   <div class="scroll-area" style="flex:1">
@@ -1164,14 +1129,14 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
 <div id="s-access-gate" class="screen" style="background:#060606;justify-content:center;padding:32px 24px;position:relative;overflow:hidden">
   <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(-55deg,transparent,transparent 18px,rgba(198,15,8,.025) 18px,rgba(198,15,8,.025) 19px);pointer-events:none"></div>
   <div class="anim-in" style="text-align:center;z-index:1;width:100%">
-    <div style="font-size:56px;margin-bottom:16px">🔒</div>
+    <div style="font-size:56px;margin-bottom:16px"></div>
     <h1 style="margin-bottom:8px" id="ag-title">Accès expiré</h1>
     <p class="sub" style="line-height:1.6;margin-bottom:32px" id="ag-sub">Ton accès à RepCore n'est plus actif.</p>
     <div style="background:#0f0f0f;border:1px solid #2a0000;border-radius:16px;padding:20px;margin-bottom:24px;text-align:left">
       <div id="ag-status-block"></div>
     </div>
     <div class="gap">
-      <button class="btn btn-red" onclick="go('s-subscribe');loadSubscribePage()">🔑 Renouveler mon accès</button>
+      <button class="btn btn-red" onclick="go('s-subscribe');loadSubscribePage()"> Renouveler mon accès</button>
       <button class="btn btn-outline" onclick="go('s-client-code')">Entrer un nouveau code</button>
     </div>
     <button onclick="logout()" style="margin-top:24px;background:none;border:none;color:var(--sub);font-size:12px;cursor:pointer;font-family:Montserrat,sans-serif">Se déconnecter</button>
@@ -1190,7 +1155,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
     <!-- Option 1: Code coach -->
     <div style="border:1px solid #2a0000;border-radius:16px;padding:20px;margin-bottom:16px;background:#0a0000">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-        <div style="width:40px;height:40px;border-radius:10px;background:#1a0000;display:flex;align-items:center;justify-content:center;font-size:20px">🎯</div>
+        <div style="width:40px;height:40px;border-radius:10px;background:#1a0000;display:flex;align-items:center;justify-content:center;font-size:20px"></div>
         <div>
           <div style="font-weight:800;font-size:15px">Coaching avec suivi</div>
           <div style="font-size:11px;color:var(--sub)">Code fourni par ton coach</div>
@@ -1204,18 +1169,18 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
     <div style="border:2px solid var(--red);border-radius:16px;padding:20px;margin-bottom:16px;background:#0a0000;position:relative;overflow:hidden">
       <div style="position:absolute;top:12px;right:12px;background:var(--red);color:#fff;font-size:9px;font-weight:800;padding:3px 8px;border-radius:20px;letter-spacing:1px">POPULAIRE</div>
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-        <div style="width:40px;height:40px;border-radius:10px;background:#1a0000;display:flex;align-items:center;justify-content:center;font-size:20px">💪</div>
+        <div style="width:40px;height:40px;border-radius:10px;background:#1a0000;display:flex;align-items:center;justify-content:center;font-size:20px"></div>
         <div>
           <div style="font-weight:800;font-size:15px">Coaching en autonomie</div>
           <div style="font-size:11px;color:var(--red);font-weight:700">9,99 € / mois</div>
         </div>
       </div>
       <ul style="font-size:12px;color:#aaa;line-height:1.9;margin-bottom:16px;padding-left:0;list-style:none">
-        <li>✅ Accès complet à l'application</li>
-        <li>✅ Programmes d'entraînement</li>
-        <li>✅ Suivi nutrition & bilans</li>
-        <li>✅ Vidéos techniques</li>
-        <li>✅ Sans engagement — annulation facile</li>
+        <li> Accès complet à l'application</li>
+        <li> Programmes d'entraînement</li>
+        <li> Suivi nutrition & bilans</li>
+        <li> Vidéos techniques</li>
+        <li> Sans engagement — annulation facile</li>
       </ul>
       <div style="width:36px;height:2px;background:var(--red);margin-bottom:16px"></div>
       <div id="paypal-btn-container" style="min-height:48px">
@@ -1247,10 +1212,14 @@ let qStep=0;
 // ======= BOOT =======
 window.onload=()=>{
   setTimeout(()=>{
-    const sess=DB.get('session');
-    if(sess){currentUser=sess;routeUser();}
-    else go('s-welcome');
-  },2500);
+    const splash=document.getElementById('s-splash');
+    if(splash){splash.style.transition='opacity 0.5s ease';splash.style.opacity='0';}
+    setTimeout(()=>{
+      const sess=DB.get('session');
+      if(sess){currentUser=sess;routeUser();}
+      else go('s-welcome');
+    },500);
+  },2200);
 };
 function routeUser(){
   if(!currentUser) return go('s-welcome');
@@ -1357,10 +1326,10 @@ function copyCoachInviteLink(){
   const payload={c:currentUser.code,f:currentUser.fname,l:currentUser.lname,i:currentUser.id};
   const token='RCLINK:'+btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
   if(navigator.clipboard){
-    navigator.clipboard.writeText(token).then(()=>toast('📋 Lien copié ! Envoie-le à ton athlète par WhatsApp ou SMS.'));
+    navigator.clipboard.writeText(token).then(()=>toast(' Lien copié ! Envoie-le à ton athlète par WhatsApp ou SMS.'));
   } else {
     const ta=document.createElement('textarea');ta.value=token;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();
-    toast('📋 Lien copié !');
+    toast(' Lien copié !');
   }
 }
 
@@ -1485,7 +1454,7 @@ function renderQ(){
   const s=QS[qStep];
   document.getElementById('q-step-label').textContent=(qStep+1)+'/'+QS.length;
   document.getElementById('q-prev').style.display=qStep>0?'':'none';
-  document.getElementById('q-next').textContent=qStep===QS.length-1?'Terminer ✓':'Suivant →';
+  document.getElementById('q-next').textContent=qStep===QS.length-1?'Terminer ':'Suivant →';
   const c=document.getElementById('q-content');
   if(s.type==='choice'){
     c.innerHTML=`<h2 style="margin-bottom:20px">${s.title}</h2>`+
@@ -1503,7 +1472,7 @@ function qNext(){
   const s=QS[qStep];
   if(s.type==='form') s.fields.forEach(f=>{const el=document.getElementById(f.id);if(el)currentUser[f.id]=el.value;});
   if(qStep<QS.length-1){qStep++;renderQ();}
-  else{currentUser.questionnaireComplete=true;saveUser();toast('✅ Profil complété !');loadClientHome();}
+  else{currentUser.questionnaireComplete=true;saveUser();toast(' Profil complété !');loadClientHome();}
 }
 function qPrev(){if(qStep>0){qStep--;renderQ();}}
 
@@ -1530,15 +1499,15 @@ function loadCoachHome(){
   document.getElementById('ch-alerts').textContent=clients.filter(c=>needsAlert(c)).length;
   const elList=document.getElementById('ch-clients-list');
   if(!clients.length){
-    elList.innerHTML=`<div class="empty-state"><div class="es-icon">👥</div><div>Aucun athlète encore.<br>Partage ton code: <strong style="color:var(--red)">${u.code}</strong></div></div>`;return;
+    elList.innerHTML=`<div class="empty-state"><div class="es-icon"></div><div>Aucun athlète encore.<br>Partage ton code: <strong style="color:var(--red)">${u.code}</strong></div></div>`;return;
   }
   elList.innerHTML=clients.map(c=>{
-    const badge=needsAlert(c)?'<span class="badge badge-red">⚠ Alerte</span>':isActive(c)?'<span class="badge badge-green">✓ Actif</span>':'<span class="badge badge-gray">Inactif</span>';
+    const badge=needsAlert(c)?'<span class="badge badge-red"> Alerte</span>':isActive(c)?'<span class="badge badge-green"> Actif</span>':'<span class="badge badge-gray">Inactif</span>';
     const ls=c.sessions?.length?'Dernière séance: '+ago(c.sessions[c.sessions.length-1].date):'Aucune séance';
     return `<div class="client-row" onclick="openClientDetail('${c.id}')">
       <div class="avatar" style="width:38px;height:38px;font-size:14px">${ini(c.fname,c.lname)}</div>
       <div style="flex:1"><div style="font-weight:700">${c.fname} ${c.lname}</div><div class="sub" style="font-size:11px">${ls}</div></div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">${badge}<span style="font-size:11px;color:var(--sub)">${c.streak||0}🔥</span></div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">${badge}<span style="font-size:11px;color:var(--sub)">${c.streak||0}</span></div>
     </div>`;
   }).join('');
   // Initialize default tab
@@ -1561,8 +1530,8 @@ function openClientDetail(cid){
   document.getElementById('ccd-avatar').textContent=ini(c.fname,c.lname);
   document.getElementById('ccd-name').textContent=c.fname+' '+c.lname;
   document.getElementById('ccd-info').textContent=(c.objective||'Objectif non défini')+' • '+(c.level||'Niveau ?');
-  document.getElementById('ccd-badge').innerHTML=needsAlert(c)?'<span class="badge badge-red">⚠ Bilan en retard</span>':isActive(c)?'<span class="badge badge-green">✓ Actif</span>':'<span class="badge badge-gray">Inactif</span>';
-  document.getElementById('ccd-streak').textContent=(c.streak||0)+'🔥';
+  document.getElementById('ccd-badge').innerHTML=needsAlert(c)?'<span class="badge badge-red"> Bilan en retard</span>':isActive(c)?'<span class="badge badge-green"> Actif</span>':'<span class="badge badge-gray">Inactif</span>';
+  document.getElementById('ccd-streak').textContent=(c.streak||0)+'';
   document.getElementById('ccd-sessions').textContent=(c.sessions||[]).length;
   const lb=c.bilans?.length?c.bilans[c.bilans.length-1]:null;
   document.getElementById('ccd-weight').textContent=lb?lb.weight+'kg':'—';
@@ -1641,7 +1610,7 @@ function uploadCoachPdf(input){
     c.programPdfVersion=(c.programPdfVersion||0)+1;
     users[c.email]=c;DB.set('users',users);
     refreshPdfUI(c);
-    toast('✅ PDF v'+c.programPdfVersion+' importé — '+c.programPdfName);
+    toast(' PDF v'+c.programPdfVersion+' importé — '+c.programPdfName);
   };r.readAsDataURL(f);
 }
 
@@ -1663,7 +1632,7 @@ function saveCoachPdfLink(){
   c.programPdfVersion=(c.programPdfVersion||0)+1;
   users[c.email]=c;DB.set('users',users);
   refreshPdfUI(c);
-  toast('✅ Lien v'+c.programPdfVersion+' enregistré !');
+  toast(' Lien v'+c.programPdfVersion+' enregistré !');
 }
 
 function removeCoachPdf(){
@@ -1699,7 +1668,7 @@ function renderProgEx(){
           <span style="background:#fff2;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0">${i+1}</span>
           <input value="${ex.name||''}" onchange="progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase()" placeholder="NOM DE L'EXERCICE (MATÉRIELS)" style="background:transparent;border:none;color:#fff;font-family:Montserrat,sans-serif;font-weight:800;font-size:13px;outline:none;text-transform:uppercase;flex:1">
         </div>
-        <button onclick="progEx.splice(${i},1);renderProgEx()" style="background:#fff2;border:none;color:#fff;font-size:14px;cursor:pointer;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center">✕</button>
+        <button onclick="progEx.splice(${i},1);renderProgEx()" style="background:#fff2;border:none;color:#fff;font-size:14px;cursor:pointer;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center"></button>
       </div>
       <div style="padding:12px">
         <!-- Description technique -->
@@ -1722,7 +1691,7 @@ function renderProgEx(){
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:0">
             <input type="file" accept="image/*" style="display:none" onchange="loadExImage(${i},this)">
             ${ex.image?`<img src="${ex.image}" style="width:60px;height:60px;border-radius:8px;object-fit:cover"><span class="sub" style="font-size:11px">Changer l'image</span>`:
-            `<div style="width:60px;height:60px;border-radius:8px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed var(--border)">📸</div><span class="sub" style="font-size:11px">Ajouter image exercice</span>`}
+            `<div style="width:60px;height:60px;border-radius:8px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed var(--border)"></div><span class="sub" style="font-size:11px">Ajouter image exercice</span>`}
           </label>
         </div>
       </div>
@@ -1752,7 +1721,7 @@ function saveProgram(){
     if(progPhotoData) currentUser.sessions_config[idx].photo=progPhotoData;
     saveUser();
     window._editingSessionIdx=null;
-    toast('✅ Séance sauvegardée !');
+    toast(' Séance sauvegardée !');
     loadSessionManager();return;
   }
   // Sinon: coach édite le programme d'un athlète
@@ -1765,7 +1734,7 @@ function saveProgram(){
   c.programUpdatedAt=Date.now();
   if(progPhotoData) c.programPhoto=progPhotoData;
   users[c.email]=c;DB.set('users',users);
-  toast('✅ Programme sauvegardé !');go('s-coach-client');
+  toast(' Programme sauvegardé !');go('s-coach-client');
 }
 
 // ======= CLIENT HOME =======
@@ -1862,10 +1831,10 @@ function renderNutriDots(){
 }
 function renderNotifs(){
   const notifs=[];
-  if(!currentUser.sessions?.length) notifs.push({icon:'💪',msg:'Lance ta première séance dès maintenant !',c:'var(--red)'});
+  if(!currentUser.sessions?.length) notifs.push({icon:'',msg:'Lance ta première séance dès maintenant !',c:'var(--red)'});
   else{const days=Math.floor((Date.now()-currentUser.sessions[currentUser.sessions.length-1].date)/864e5);
-    if(days>=2) notifs.push({icon:'⚡',msg:`${days} jours sans séance. Maintiens ton streak !`,c:'var(--orange)'});}
-  if((currentUser.streak||0)>=7) notifs.push({icon:'🏅',msg:`${currentUser.streak} jours de streak — Continue !`,c:'var(--green)'});
+    if(days>=2) notifs.push({icon:'',msg:`${days} jours sans séance. Maintiens ton streak !`,c:'var(--orange)'});}
+  if((currentUser.streak||0)>=7) notifs.push({icon:'',msg:`${currentUser.streak} jours de streak — Continue !`,c:'var(--green)'});
   document.getElementById('clh-notifs').innerHTML=notifs.map(n=>`<div class="notification" style="border-color:${n.c}">${n.icon} ${n.msg}</div>`).join('');
 }
 function clientTab(tab,btn){
@@ -1921,26 +1890,26 @@ function loadSessionManager(){
 
         <!-- Upload photo -->
         <div style="margin-bottom:12px">
-          <label style="margin-top:0">📸 Capture d'écran de ta fiche programme</label>
+          <label style="margin-top:0"> Capture d'écran de ta fiche programme</label>
           ${s.photo?`
             <div style="position:relative;margin-top:6px">
               <img src="${s.photo}" style="width:100%;border-radius:10px;max-height:220px;object-fit:cover;border:1px solid var(--border)">
               <div style="position:absolute;top:8px;right:8px;display:flex;gap:6px">
                 <label style="cursor:pointer;background:rgba(0,0,0,.7);color:#fff;padding:6px 10px;border-radius:8px;font-size:11px;font-weight:700">
-                  📷 Changer<input type="file" accept="image/*" style="display:none" onchange="uploadSessionPhoto(${i},this)">
+                   Changer<input type="file" accept="image/*" style="display:none" onchange="uploadSessionPhoto(${i},this)">
                 </label>
-                <button onclick="removeSessionPhoto(${i})" style="background:rgba(198,15,8,.8);color:#fff;border:none;padding:6px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">✕</button>
+                <button onclick="removeSessionPhoto(${i})" style="background:rgba(198,15,8,.8);color:#fff;border:none;padding:6px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer"></button>
               </div>
             </div>
             <button id="analyze-btn-${i}" onclick="analyzePhotoWithClaude(${i})" style="width:100%;margin-top:8px;padding:12px;background:linear-gradient(180deg,#1a0000,#110000);border:1px solid #3a0a0a;border-radius:3px;color:#f87171;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:1.5px;text-transform:uppercase">
-              🤖 Lire & importer les exercices (IA)
+               Lire & importer les exercices (IA)
             </button>`:
             `<label style="display:block;margin-top:6px;cursor:pointer">
               <input type="file" accept="image/*" style="display:none" onchange="uploadSessionPhoto(${i},this)">
               <div style="border:2px dashed var(--border);border-radius:12px;padding:20px;text-align:center;transition:.2s" onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='var(--border)'">
-                <div style="font-size:28px;margin-bottom:6px">📋</div>
+                <div style="font-size:28px;margin-bottom:6px"></div>
                 <div style="font-weight:700;font-size:13px">Ajouter ma fiche programme</div>
-                <div class="sub" style="font-size:11px;margin-top:3px">📸 Photo → 🤖 IA lit et importe les exercices automatiquement</div>
+                <div class="sub" style="font-size:11px;margin-top:3px"> Photo →  IA lit et importe les exercices automatiquement</div>
               </div>
             </label>`
           }
@@ -1948,7 +1917,7 @@ function loadSessionManager(){
 
         <!-- Exercices + actions -->
         <div style="display:flex;gap:8px">
-          <button class="btn btn-outline btn-sm" style="flex:1" onclick="openSessionExercises(${i})">✏️ Exercices (${s.exercises?.length||0})</button>
+          <button class="btn btn-outline btn-sm" style="flex:1" onclick="openSessionExercises(${i})">️ Exercices (${s.exercises?.length||0})</button>
           <button class="btn btn-red btn-sm" style="flex:1" onclick="startWorkoutSession(${i})">▶ Démarrer</button>
         </div>
       </div>`:
@@ -1987,7 +1956,7 @@ function uploadSessionPhoto(idx,input){
   r.onload=e=>{
     if(!currentUser.sessions_config) initSessionsConfig();
     currentUser.sessions_config[idx].photo=e.target.result;
-    saveUser();loadSessionManager();toast('✅ Photo enregistrée !');
+    saveUser();loadSessionManager();toast(' Photo enregistrée !');
   };r.readAsDataURL(f);
 }
 
@@ -2065,10 +2034,10 @@ function getCycleFactor(){
 
 function getCycleLabel(){
   const p=currentUser.currentCycle||'ignore';
-  if(p==='j1_difficile') return{text:'🌙 J1-5 difficile — −20%',color:'#c4b5fd'};
-  if(p==='j1_supportable') return{text:'🌙 J1-5 supportable — −5%',color:var_orange};
-  if(p==='j6_14') return{text:'✅ J6-14 — Objectif normal',color:'var(--green)'};
-  if(p==='j15_28') return{text:'🌙 J15-28 — −1 série',color:var_orange};
+  if(p==='j1_difficile') return{text:' J1-5 difficile — −20%',color:'#c4b5fd'};
+  if(p==='j1_supportable') return{text:' J1-5 supportable — −5%',color:var_orange};
+  if(p==='j6_14') return{text:' J6-14 — Objectif normal',color:'var(--green)'};
+  if(p==='j15_28') return{text:' J15-28 — −1 série',color:var_orange};
   return null;
 }
 const var_orange='var(--orange)';
@@ -2195,7 +2164,7 @@ function renderWoEx(){
   document.getElementById('wo-progress').style.width=(woState.currentEx/total*100)+'%';
   document.getElementById('wo-ex-count').textContent=(woState.currentEx+1)+'/'+total;
   document.getElementById('wo-prev-btn').style.opacity=woState.currentEx===0?'0.3':'1';
-  document.getElementById('wo-next-btn').textContent=woState.currentEx===total-1?'Terminer la séance 🏆':'Exercice suivant →';
+  document.getElementById('wo-next-btn').textContent=woState.currentEx===total-1?'Terminer la séance ':'Exercice suivant →';
   const pr=parseReps(ex.reps);
   if(!woState.sessionData[woState.currentEx]) woState.sessionData[woState.currentEx]={sets:Array.from({length:ex.series},(_,si)=>({weight:'',weight2:'',reps:pr.type==='degressive'?pr.p1:ex.reps,rir:'',pain:'',done:false,degressive:pr.type==='degressive',p2reps:pr.p2}))};
   const data=woState.sessionData[woState.currentEx];
@@ -2211,7 +2180,7 @@ function renderWoEx(){
 
   // Photo programme en haut si disponible
   const photoHtml=woState.sessionPhoto?`<div style="margin-bottom:14px;border-radius:12px;overflow:hidden;border:1px solid var(--border)">
-    <div style="font-size:10px;color:var(--sub);padding:6px 10px;background:var(--card2)">📋 Ta fiche programme (référence)</div>
+    <div style="font-size:10px;color:var(--sub);padding:6px 10px;background:var(--card2)"> Ta fiche programme (référence)</div>
     <img src="${woState.sessionPhoto}" style="width:100%;max-height:160px;object-fit:cover;cursor:pointer" onclick="this.style.maxHeight=this.style.maxHeight==='none'?'160px':'none'">
   </div>`:'';
 
@@ -2223,23 +2192,23 @@ function renderWoEx(){
           <div class="ex-name" style="font-size:15px">${ex.name}</div>
           <div class="sub" style="font-size:12px;margin-top:3px">${ex.series} séries × ${ex.reps} reps${ex._cycleAdjusted?' <span style="color:var(--orange)">(−1 série cycle)</span>':''}</div>
         </div>
-        <button onclick="openCalc('${sug||''}','${ex.reps}','0','${currentUser.gender||''}')" style="background:var(--card2);border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:11px;padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap">📊 Table</button>
+        <button onclick="openCalc('${sug||''}','${ex.reps}','0','${currentUser.gender||''}')" style="background:var(--card2);border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:11px;padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap"> Table</button>
       </div>
 
       ${cycleLabel&&isFemme?`<div style="background:#0f0f0f;border:1px solid #2a2a2a;border-radius:3px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#888;letter-spacing:.5px">${cycleLabel.text}</div>`:''}
 
       ${sug?`<div class="suggest-box">
-        <div class="s-title">💡 Charge suggérée (basée sur dernier RIR 0)</div>
+        <div class="s-title"> Charge suggérée (basée sur dernier RIR 0)</div>
         <div style="display:flex;gap:16px;align-items:flex-end;margin:6px 0">
           <div><div style="font-size:10px;color:#fca5a5">Base</div><div style="font-size:24px;font-weight:900">${sug}kg</div></div>
           ${showCycleCol?`<div><div style="font-size:10px;color:#c4b5fd">Cycle ajusté</div><div style="font-size:24px;font-weight:900;color:#c4b5fd">${cycleWeight}kg</div></div>`:''}
         </div>
         <div class="s-note">${baseWeight?'Dernière séance à RIR 0: '+baseWeight+'kg':prev?'Calculé depuis perf précédente: '+prev.weight+'kg':'Première séance'}</div>
       </div>`:
-      `<div style="background:var(--card2);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px;color:var(--sub)">💡 Première fois — Remplis tes séries et vise le RIR 0 sur ta dernière série.</div>`}
+      `<div style="background:var(--card2);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px;color:var(--sub)"> Première fois — Remplis tes séries et vise le RIR 0 sur ta dernière série.</div>`}
 
       ${ex.description?`<div style="background:var(--card2);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#ccc;line-height:1.6">${ex.description}</div>`:''}
-      ${ex.note?`<div style="background:#1a1a1a;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#fca5a5">💡 ${ex.note}</div>`:''}
+      ${ex.note?`<div style="background:#1a1a1a;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#fca5a5"> ${ex.note}</div>`:''}
 
       ${pr.type==='degressive'?`<div style="background:#7c2d1222;border:1px solid #9a3412;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#fca5a5">
         <strong>Dégressive :</strong> Phase 1 → <strong>${pr.p1} reps</strong> lourd · Phase 2 → <strong>${pr.p2} reps</strong> léger (sans poser la charge)
@@ -2254,7 +2223,7 @@ function renderWoEx(){
             ${showCycleCol?`<th style="color:#c4b5fd">Cycle</th>`:''}
             <th>RIR</th>
             <th style="font-size:9px">Douleur</th>
-            <th>✓</th>
+            <th></th>
           </tr>
         </thead>
         <tbody id="sets-body"></tbody>
@@ -2262,7 +2231,7 @@ function renderWoEx(){
       </div>
       ${ex.repos?`<div style="margin-top:10px;display:flex;align-items:center;gap:8px;color:var(--sub);font-size:12px">⏱️ <strong>Repos :</strong> ${ex.repos}</div>`:''}
       <div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between">
-        <label style="font-size:11px;cursor:pointer;color:var(--sub)"><input type="checkbox" id="film-ex" style="width:auto;margin-right:4px"> 🎥 Filmer cet exercice</label>
+        <label style="font-size:11px;cursor:pointer;color:var(--sub)"><input type="checkbox" id="film-ex" style="width:auto;margin-right:4px">  Filmer cet exercice</label>
         <span style="font-size:10px;color:var(--sub)">→ Vise RIR 0 sur ta dernière série</span>
       </div>
     </div>`;
@@ -2320,7 +2289,7 @@ function renderSets(ex,data){
     // RIR dropdown
     const rirSelect=`<select class="set-input" onchange="${onChR}" ${dis} style="padding:4px 2px;font-size:11px;min-width:64px">
       <option value="">RIR</option>
-      ${RIR_OPTS.map(v=>`<option value="${v}" ${String(s.rir)===v?'selected':''}>${v==='echec'?'Échec':v==='0'?'0 ✓':v}</option>`).join('')}
+      ${RIR_OPTS.map(v=>`<option value="${v}" ${String(s.rir)===v?'selected':''}>${v==='echec'?'Échec':v==='0'?'0 ':v}</option>`).join('')}
     </select>`;
 
     // Pain dropdown
@@ -2340,7 +2309,7 @@ function renderSets(ex,data){
       ${cycleCell}
       <td>${rirSelect}</td>
       <td>${painSelect}</td>
-      <td><button onclick="toggleSet(${i})" style="width:32px;height:32px;border-radius:50%;border:2px solid ${doneClr};background:${doneBg};color:${doneC};cursor:pointer;font-size:14px">${s.done?'✓':'○'}</button></td>
+      <td><button onclick="toggleSet(${i})" style="width:32px;height:32px;border-radius:50%;border:2px solid ${doneClr};background:${doneBg};color:${doneC};cursor:pointer;font-size:14px">${s.done?'':'○'}</button></td>
     </tr>`;
   }).join('');
 }
@@ -2381,7 +2350,7 @@ function finishWorkout(incomplete=false){
   document.getElementById('wd-time').textContent=mins+'min';
   document.getElementById('wd-sets').textContent=sets;
   document.getElementById('wd-vol').textContent=Math.round(vol)+'kg';
-  document.getElementById('wd-msg').textContent=incomplete?'Séance interrompue. Continue demain !':'Excellent travail ! Chaque séance compte 💪';
+  document.getElementById('wd-msg').textContent=incomplete?'Séance interrompue. Continue demain !':'Excellent travail ! Chaque séance compte ';
   // Reset sliders post-séance
   ['fatigue','intensite','satisfaction','sensation','hydratation','motivation'].forEach(m=>{
     const el=document.getElementById('ps-'+m);const vl=document.getElementById('ps-'+m+'-val');
@@ -2406,7 +2375,7 @@ function savePostSession(){
     if(metrics.steps) currentUser.sessions[currentUser.sessions.length-1].steps=parseInt(metrics.steps);
   }
   saveUser();
-  toast('✅ Super séance enregistrée !');
+  toast(' Super séance enregistrée !');
   go('s-client-home');loadClientHome();
 }
 function updateStreak(){
@@ -2460,7 +2429,7 @@ function renderBilStep(){
   document.getElementById('bil-title').textContent=bilType==='depart'?'Questionnaire de début':'Bilan Coaching';
   document.getElementById('bil-step-label').textContent=(bilStep+1)+'/'+total;
   document.getElementById('bil-progress').style.width=((bilStep+1)/total*100)+'%';
-  document.getElementById('bil-next-btn').textContent=bilStep===total-1?'Valider ✓':'Suivant →';
+  document.getElementById('bil-next-btn').textContent=bilStep===total-1?'Valider ':'Suivant →';
   document.getElementById('bil-back-btn').style.visibility='visible';
   document.getElementById('bil-content').innerHTML='<div class="pad">'+steps[bilStep]()+'</div>';
 }
@@ -2486,16 +2455,16 @@ function bMeas(id,label,unit){return`<div class="bil-row"><span class="bil-row-l
 function bLbl(txt){return`<div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;margin-top:14px">${txt}</div>`;}
 function loadBilPhoto(input,key){
   const f=input.files[0];if(!f)return;
-  if(f.size>800000){toast('⚠️ Photo trop lourde (max 800kb)');return;}
+  if(f.size>800000){toast('️ Photo trop lourde (max 800kb)');return;}
   const r=new FileReader();
-  r.onload=e=>{bilData[key]=e.target.result;const lbl=input.closest('label');if(lbl){lbl.style.background='#001a00';lbl.style.borderColor='#22c55e';lbl.style.color='#22c55e';lbl.innerHTML='✓ Ajoutée';}};
+  r.onload=e=>{bilData[key]=e.target.result;const lbl=input.closest('label');if(lbl){lbl.style.background='#001a00';lbl.style.borderColor='#22c55e';lbl.style.color='#22c55e';lbl.innerHTML=' Ajoutée';}};
   r.readAsDataURL(f);
 }
 
 // ===== BIL STEPS (Bilan coaching toutes les 2 semaines) =====
 const BIL_STEPS=[
   // Step 1 : Mensurations
-  ()=>bSec('Mensurations 📏',
+  ()=>bSec('Mensurations ',
     `<div style="display:flex;flex-direction:column">${[
       bMeas('bil-weight','Poids actuel','kg'),
       bMeas('bil-bicep-r','Tour de Biceps droit','cm'),
@@ -2517,17 +2486,17 @@ const BIL_STEPS=[
     bLbl("As tu éprouvé des difficultés récentes en séance ou avec l'alimentation ?")+
     `<div>${bC('bil-diff-type',["Oui, avec les séances","Oui, avec l'alimentation","Oui, avec les deux","Non, aucune difficulté particulière"])}</div>`+
     bLbl('Si oui, détaille les difficultés rencontrées :')+bTA('bil-diff-detail','Décris tes difficultés...')+
-    bLbl('Combien as tu fais de Cheat Meals ou de repas hors programme cette semaine ? 🍕')+
+    bLbl('Combien as tu fais de Cheat Meals ou de repas hors programme cette semaine ? ')+
     `<div>${bC('bil-cheat-meals',['Aucun','1','2','3','4 ou plus'])}</div>`+
     bLbl('Expliques moi les raisons (repas de famille, sorties professionnelles...) :')+bTA('bil-cheat-reasons','Repas de famille, sorties professionnelles...')
   ),
   // Step 3 : Ressenti & Modifications
   ()=>bSec('Ressenti & Modifications',
-    bLbl('Quel est ton ressenti vis-à-vis de ton évolution durant ces deux dernières semaines 🏆 ?')+
+    bLbl('Quel est ton ressenti vis-à-vis de ton évolution durant ces deux dernières semaines  ?')+
     `<div>${bC('bil-ressenti',["J'ai donné le maximum, je suis content(e) de mon évolution","J'ai fait de mon mieux malgré un emploi du temps chargé","J'aurais pu faire mieux dans les séances et l'alimentation","J'ai manqué des séances et dévié pour la diète"])}</div>`+
     bLbl('Quel est ton niveau de motivation en ce moment (sur une échelle de 1 à 10) :')+
     `<div>${bC('bil-motivation',['Moins de 2/10','Entre 3 et 4/10','Entre 5 et 6/10','Entre 7 et 8/10','9 ou 10/10'])}</div>`+
-    bLbl("Y'a t-il des changements que tu souhaiterais faire dans le programme alimentaire ? 🍎")+
+    bLbl("Y'a t-il des changements que tu souhaiterais faire dans le programme alimentaire ? ")+
     `<div>${bC('bil-diet-change',['Oui','Non'])}</div>`+
     bLbl('Si oui, précisez les ajustements que vous souhaitez :')+bTA('bil-diet-detail','Décris les changements souhaités...')+
     bLbl('Y a-t-il des exercices que vous souhaitez retirer ou modifier ?')+
@@ -2550,7 +2519,7 @@ const BIL_STEPS=[
     bLbl('Si oui, peux-tu préciser comment cela t\'impacte ?')+bT('bil-stress-impact','Comment ça t\'impacte...')
   ),
   // Step 5 : Objectifs
-  ()=>bSec('Objectifs à venir 🎯',
+  ()=>bSec('Objectifs à venir ',
     bLbl('Tes objectifs pour les semaines à venir :')+bTA('bil-goals-next','Décris tes objectifs (facultatif)...')+
     bLbl('As-tu de nouveaux objectifs ou des priorités spécifiques ?')+
     `<div>${bC('bil-new-goals',['Oui','Non'])}</div>`+
@@ -2558,17 +2527,17 @@ const BIL_STEPS=[
     bLbl('Des défis à surmonter ou des ajustements spécifiques que tu souhaites pour avancer ?')+bTA('bil-challenges','Tes défis et ajustements souhaités...')
   ),
   // Step 6 : Photos de progression
-  ()=>`<div style="margin-bottom:22px"><div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">Photos de progression 📸</div>`+
+  ()=>`<div style="margin-bottom:22px"><div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">Photos de progression </div>`+
     `<div style="background:#0f0f0f;border:1px solid #1c1c1c;border-radius:8px;padding:16px;margin-bottom:14px;text-align:center">`+
-    `<div style="font-size:28px;margin-bottom:8px">📷</div>`+
+    `<div style="font-size:28px;margin-bottom:8px"></div>`+
     `<div style="font-weight:700;font-size:13px;margin-bottom:6px;color:#fff">Photos de progression</div>`+
     `<div style="font-size:11px;color:var(--sub);line-height:1.6">Pour visualiser tes progrès, envoie les mêmes poses qu'au début :<br><strong style="color:var(--red)">Face · Dos · Profil</strong></div></div>`+
     bLbl('Photo de face')+
-    `<div class="bil-row"><span class="bil-row-label">📸 Photo de face</span><label style="background:#1a0000;border:1px solid var(--red);color:var(--red);padding:6px 14px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Ajouter <input type="file" accept="image/*" style="display:none" onchange="loadBilPhoto(this,'bil-photo-face')"></label></div>`+
+    `<div class="bil-row"><span class="bil-row-label"> Photo de face</span><label style="background:#1a0000;border:1px solid var(--red);color:var(--red);padding:6px 14px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Ajouter <input type="file" accept="image/*" style="display:none" onchange="loadBilPhoto(this,'bil-photo-face')"></label></div>`+
     bLbl('Photo de dos')+
-    `<div class="bil-row"><span class="bil-row-label">📸 Photo de dos</span><label style="background:#1a0000;border:1px solid var(--red);color:var(--red);padding:6px 14px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Ajouter <input type="file" accept="image/*" style="display:none" onchange="loadBilPhoto(this,'bil-photo-back')"></label></div>`+
+    `<div class="bil-row"><span class="bil-row-label"> Photo de dos</span><label style="background:#1a0000;border:1px solid var(--red);color:var(--red);padding:6px 14px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Ajouter <input type="file" accept="image/*" style="display:none" onchange="loadBilPhoto(this,'bil-photo-back')"></label></div>`+
     bLbl('Photo de profil')+
-    `<div class="bil-row"><span class="bil-row-label">📸 Photo de profil</span><label style="background:#1a0000;border:1px solid var(--red);color:var(--red);padding:6px 14px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Ajouter <input type="file" accept="image/*" style="display:none" onchange="loadBilPhoto(this,'bil-photo-side')"></label></div>`+
+    `<div class="bil-row"><span class="bil-row-label"> Photo de profil</span><label style="background:#1a0000;border:1px solid var(--red);color:var(--red);padding:6px 14px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Ajouter <input type="file" accept="image/*" style="display:none" onchange="loadBilPhoto(this,'bil-photo-side')"></label></div>`+
     `</div>`
 ];
 
@@ -2576,20 +2545,20 @@ const BIL_STEPS=[
 const DEB_STEPS=[
   // Step 1 : Informations personnelles
   ()=>bSec('Informations personnelles',
-    bLbl('Quel âge as-tu ? 🎂')+bQ('deb-age')+
-    bLbl('Quel est ton poids actuel ? ⚖️ (en kg)')+bQ('deb-weight')+
-    bLbl('Quelle est ta taille ? 📏 (en cm)')+bQ('deb-height')+
-    bLbl('Quels sont tes objectifs principaux ? 🎯')+
+    bLbl('Quel âge as-tu ? ')+bQ('deb-age')+
+    bLbl('Quel est ton poids actuel ? ️ (en kg)')+bQ('deb-weight')+
+    bLbl('Quelle est ta taille ?  (en cm)')+bQ('deb-height')+
+    bLbl('Quels sont tes objectifs principaux ? ')+
     `<div>${bC('deb-goals',['Perte de poids','Prise de muscle','Rééquilibrage corporel','Amélioration des performances','Bien-être général'],true)}</div>`+
-    bLbl('Quelle est ta profession ? 👔')+bT('deb-job','Ex: Infirmier, Comptable...')+
+    bLbl('Quelle est ta profession ? ')+bT('deb-job','Ex: Infirmier, Comptable...')+
     bLbl('Et ton rythme de travail ?')+
     `<div>${bC('deb-work-rhythm',['Plein temps','Partiel','En arrêt'])}</div>`+
-    bLbl('As-tu des problèmes de santé ou des blessures ? 🚑 (Si oui, précise)')+bT('deb-health','Ex: Hernie discale, entorse...')+
-    bLbl('Quelle est ta préférence pour communiquer ? 📱')+
+    bLbl('As-tu des problèmes de santé ou des blessures ?  (Si oui, précise)')+bT('deb-health','Ex: Hernie discale, entorse...')+
+    bLbl('Quelle est ta préférence pour communiquer ? ')+
     `<div>${bC('deb-comm',['WhatsApp','Instagram','Email','SMS'])}</div>`
   ),
   // Step 2 : Mensurations initiales
-  ()=>bSec('Mensurations initiales 📏',
+  ()=>bSec('Mensurations initiales ',
     `<div style="font-size:12px;color:var(--sub);margin-bottom:14px;line-height:1.5">Indique ici tes mesures pour suivre ton évolution !</div>`+
     `<div style="display:flex;flex-direction:column">${[
       bMeas('deb-bicep-r','Tour de Biceps droit','cm'),
@@ -2607,65 +2576,65 @@ const DEB_STEPS=[
     ].join('')}</div>`
   ),
   // Step 3 : Entraînement
-  ()=>bSec('Entraînement 🏋️',
-    bLbl("Où t'entraînes tu habituellement ? 🏟")+
+  ()=>bSec('Entraînement ️',
+    bLbl("Où t'entraînes tu habituellement ? ")+
     `<div>${bC('deb-location',["En salle","Chez toi","Park de Street Workout"],true)}</div>`+
     bLbl("Si tu t'entraines en salle, dans laquelle vas-tu?")+bT('deb-gym','Nom de la salle...')+
     bLbl('Combien de séances souhaites tu faire par semaine ?')+
     `<div>${bC('deb-sessions-week',['2 séances','3 séances','4 séances','5 séances','6 séances ou plus'])}</div>`+
     bLbl('Quelle est la durée de séance que tu préfères ? ⏱')+bT('deb-session-duration','Ex: 45min, 1h30...')+
-    bLbl("Pratiques tu d'autres sports ? 🏃 (si oui le/lesquels et combien d'heure par semaine?)")+bTA('deb-other-sports',"Ex: Football 3h/semaine, natation...")+
+    bLbl("Pratiques tu d'autres sports ?  (si oui le/lesquels et combien d'heure par semaine?)")+bTA('deb-other-sports',"Ex: Football 3h/semaine, natation...")+
     bLbl("A quel niveau estime tu l'intensité de ta pratique sportive 1")+
     `<div>${bC('deb-intensity-1',['Faible intensité','Intensité Modérée','Haute intensité'])}</div>`+
     bLbl("A quel niveau estime tu l'intensité de ta pratique sportive 2")+
     `<div>${bC('deb-intensity-2',['Faible intensité','Intensité Modérée','Haute intensité'])}</div>`+
     bLbl("A quel niveau estime tu l'intensité de ta pratique sportive 3")+
     `<div>${bC('deb-intensity-3',['Faible intensité','Intensité Modérée','Haute intensité'])}</div>`+
-    bLbl('As-tu des antécédents sportifs ? 🏅')+bT('deb-history','Ex: Football 5 ans, boxe 2 ans...')+
+    bLbl('As-tu des antécédents sportifs ? ')+bT('deb-history','Ex: Football 5 ans, boxe 2 ans...')+
     bLbl("Quels formats d'entraînement as-tu déjà testés ?")+
     `<div>${bC('deb-formats',['Full-body','Half-body','Push-pull-leg','Split','Aucun','Autre'],true)}</div>`+
-    bLbl('D\'après toi, quels sont tes muscles en points forts ? 💪')+bT('deb-strong-muscles','Ex: Quadriceps, dos...')+
-    bLbl('Et ceux en points faibles ? 👇')+bT('deb-weak-muscles','Ex: Épaules, mollets...')+
+    bLbl('D\'après toi, quels sont tes muscles en points forts ? ')+bT('deb-strong-muscles','Ex: Quadriceps, dos...')+
+    bLbl('Et ceux en points faibles ? ')+bT('deb-weak-muscles','Ex: Épaules, mollets...')+
     bLbl('As-tu des difficultés à ressentir certains muscles ? (Si oui, lesquels)')+bT('deb-muscle-feel','Ex: Pectoraux, dorsaux...')+
     bLbl('Quand souhaites tu t\'entraîner ? ⏰')+
     `<div>${bC('deb-training-time',['Matin','Après-midi','Soir'],true)}</div>`
   ),
   // Step 4 : Nutrition
-  ()=>bSec('Nutrition 🥗',
-    bLbl('As-tu des allergies ou régimes alimentaires spécifiques ? 🌱')+bT('deb-allergies','Ex: Intolérance lactose, végétarien...')+
+  ()=>bSec('Nutrition ',
+    bLbl('As-tu des allergies ou régimes alimentaires spécifiques ? ')+bT('deb-allergies','Ex: Intolérance lactose, végétarien...')+
     bLbl('Présences de troubles du comportement alimentaire (TCA) ? (Si oui, précise)')+bT('deb-tca','Précise si oui...')+
-    bLbl('Quel type de suivi nutritionnel préfères tu ? 🍽')+
+    bLbl('Quel type de suivi nutritionnel préfères tu ? ')+
     `<div>${bC('deb-nutrition-type',['Diet strict : Plan alimentaire détaillé avec quantités précises','Diet flexible : Conseils personnalisés + calcul via application'])}</div>`+
-    bLbl('Nombre de repas par jour que tu préfères ? 🍽')+
+    bLbl('Nombre de repas par jour que tu préfères ? ')+
     `<div>${bC('deb-meals-day',['3','4','5','6'])}</div>`+
-    bLbl('Aliments que tu adores ? 😍')+bT('deb-food-love','Ex: Riz, poulet, banane...')+
-    bLbl('Aliments que tu détestes? 🤢')+bT('deb-food-hate','Ex: Brocolis, poivrons...')+
+    bLbl('Aliments que tu adores ? ')+bT('deb-food-love','Ex: Riz, poulet, banane...')+
+    bLbl('Aliments que tu détestes? ')+bT('deb-food-hate','Ex: Brocolis, poivrons...')+
     bLbl("Prépares tu tes repas à l'avance dans des Tupperware? Si non, pourquoi?")+bT('deb-meal-prep','Oui / Non, parce que...')+
     bLbl('Combien de repas à l\'extérieur de chez toi par semaine ? (repas au travail ou en famille)')+bT('deb-outside-meals','Ex: 3 repas...')+
-    bLbl('Nombre de portions de fruits et légumes consommées par jour ? 🍎')+
+    bLbl('Nombre de portions de fruits et légumes consommées par jour ? ')+
     `<div>${bC('deb-fruits-veg',['0','1 à 2','3 à 4','5 et plus'])}</div>`+
-    bLbl('Quantité d\'eau bue quotidiennement ? 💧 (en litres)')+
+    bLbl('Quantité d\'eau bue quotidiennement ?  (en litres)')+
     `<div>${bC('deb-water',['Moins de 1L','Entre 1 à 2L','Entre 3 à 4L','5L et plus'])}</div>`+
-    bLbl('Est-ce que tu suis tes calories et macronutriments au quotidien ? 📊')+
+    bLbl('Est-ce que tu suis tes calories et macronutriments au quotidien ? ')+
     `<div>${bC('deb-track-macros',['Oui','Non'])}</div>`+
     bLbl('Si oui, combien de calories consommes-tu chaque jour, et dans quel but ? (ex. sèche, prise de masse, maintien)')+bT('deb-calories','Ex: 2200 kcal sèche...')+
-    bLbl('Budget courses par semaine ? 💰 (Inclut repas pris à l\'extérieur)')+bT('deb-budget','Ex: 80€/semaine...')+
+    bLbl('Budget courses par semaine ?  (Inclut repas pris à l\'extérieur)')+bT('deb-budget','Ex: 80€/semaine...')+
     bLbl('Souhaites tu consommer des compléments alimentaires ?')+
     `<div>${bC('deb-supplements',['Oui','Non'])}</div>`+
     bLbl('Si tu en consommes déjà, lesquels prends tu et pourquoi?')+bT('deb-supps-detail','Ex: Whey, créatine...')
   ),
   // Step 5 : Photos de départ
-  ()=>`<div style="margin-bottom:22px"><div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">Photos de départ 📸</div>`+
+  ()=>`<div style="margin-bottom:22px"><div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">Photos de départ </div>`+
     `<div style="background:#0f0f0f;border:1px solid #1c1c1c;border-radius:8px;padding:16px;margin-bottom:14px;text-align:center">`+
-    `<div style="font-size:28px;margin-bottom:8px">📷</div>`+
+    `<div style="font-size:28px;margin-bottom:8px"></div>`+
     `<div style="font-weight:700;font-size:13px;margin-bottom:6px;color:#fff">Photos de départ</div>`+
     `<div style="font-size:11px;color:var(--sub);line-height:1.6">Envoie par WhatsApp / Instagram les 3 poses :<br><strong style="color:var(--red)">Face · Dos · Profil</strong><br>Tenue légère, lumière naturelle.</div></div>`+
     bLbl('Photo de face')+
-    `<div class="bil-row"><span class="bil-row-label">📸 Photo de face</span><label style="background:#1a0000;border:1px solid var(--red);color:var(--red);padding:6px 14px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Ajouter <input type="file" accept="image/*" style="display:none" onchange="loadBilPhoto(this,'deb-photo-face')"></label></div>`+
+    `<div class="bil-row"><span class="bil-row-label"> Photo de face</span><label style="background:#1a0000;border:1px solid var(--red);color:var(--red);padding:6px 14px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Ajouter <input type="file" accept="image/*" style="display:none" onchange="loadBilPhoto(this,'deb-photo-face')"></label></div>`+
     bLbl('Photo de dos')+
-    `<div class="bil-row"><span class="bil-row-label">📸 Photo de dos</span><label style="background:#1a0000;border:1px solid var(--red);color:var(--red);padding:6px 14px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Ajouter <input type="file" accept="image/*" style="display:none" onchange="loadBilPhoto(this,'deb-photo-back')"></label></div>`+
+    `<div class="bil-row"><span class="bil-row-label"> Photo de dos</span><label style="background:#1a0000;border:1px solid var(--red);color:var(--red);padding:6px 14px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Ajouter <input type="file" accept="image/*" style="display:none" onchange="loadBilPhoto(this,'deb-photo-back')"></label></div>`+
     bLbl('Photo de profil')+
-    `<div class="bil-row"><span class="bil-row-label">📸 Photo de profil</span><label style="background:#1a0000;border:1px solid var(--red);color:var(--red);padding:6px 14px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Ajouter <input type="file" accept="image/*" style="display:none" onchange="loadBilPhoto(this,'deb-photo-side')"></label></div>`+
+    `<div class="bil-row"><span class="bil-row-label"> Photo de profil</span><label style="background:#1a0000;border:1px solid var(--red);color:var(--red);padding:6px 14px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Ajouter <input type="file" accept="image/*" style="display:none" onchange="loadBilPhoto(this,'deb-photo-side')"></label></div>`+
     `</div>`
 ];
 
@@ -2679,7 +2648,7 @@ function saveBilanFinal(){
   if(!currentUser.bilans) currentUser.bilans=[];
   currentUser.bilans.push(bi);
   saveUser();
-  toast('✅ Bilan n°'+n+' enregistré !');
+  toast(' Bilan n°'+n+' enregistré !');
   go('s-client-home');loadClientHome();
   // Propose notifications après le 1er bilan
   const totalBilans=(currentUser.bilans||[]).length;
@@ -2724,8 +2693,8 @@ function checkBilanNotifToday(){
   showBilanNotifBanner();
   if(Notification.permission==='granted'){
     try{
-      new Notification('RepCore — Bilan bimensuel 📊',{
-        body:"C'est le moment de remplir ton bilan coaching ! Lance l'app pour suivre ton évolution 💪",
+      new Notification('RepCore — Bilan bimensuel ',{
+        body:"C'est le moment de remplir ton bilan coaching ! Lance l'app pour suivre ton évolution ",
         icon:'',tag:'bilan-reminder',requireInteraction:true
       });
     }catch(e){}
@@ -2737,31 +2706,31 @@ function showBilanNotifBanner(){
   b.id='bilan-notif-banner';
   b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:5000;animation:slideDown .35s ease';
   b.innerHTML=`<div style="background:linear-gradient(135deg,#1a0000,#280000);border-bottom:2px solid var(--red);padding:14px 18px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openBilanChoice();document.getElementById('bilan-notif-banner')?.remove()">
-    <div style="font-size:26px;flex-shrink:0">📊</div>
+    <div style="font-size:26px;flex-shrink:0"></div>
     <div style="flex:1;min-width:0">
       <div style="font-size:10px;font-weight:900;color:var(--red);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px">Bilan bimensuel · Ce samedi</div>
       <div style="font-size:12px;color:#ddd;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Remplis ton bilan coaching pour suivre ton évolution !</div>
     </div>
-    <button onclick="event.stopPropagation();document.getElementById('bilan-notif-banner')?.remove()" style="background:none;border:none;color:#555;font-size:22px;cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1">✕</button>
+    <button onclick="event.stopPropagation();document.getElementById('bilan-notif-banner')?.remove()" style="background:none;border:none;color:#555;font-size:22px;cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1"></button>
   </div>`;
   document.body.appendChild(b);
   setTimeout(()=>b?.remove(),60000); // auto-dismiss après 60s
 }
 function requestBilanNotifPermission(){
   if(!('Notification' in window)){
-    toast('⚠️ Notifications non supportées par ce navigateur');return;
+    toast('️ Notifications non supportées par ce navigateur');return;
   }
   if(Notification.permission==='granted'){
     currentUser._notifEnabled=true;saveUser();
-    toast('🔔 Rappels déjà activés !');return;
+    toast(' Rappels déjà activés !');return;
   }
   if(Notification.permission==='denied'){
-    toast('⚠️ Notifications bloquées — autorise-les dans les réglages du navigateur');return;
+    toast('️ Notifications bloquées — autorise-les dans les réglages du navigateur');return;
   }
   Notification.requestPermission().then(p=>{
     if(p==='granted'){
       currentUser._notifEnabled=true;saveUser();
-      toast('🔔 Rappels activés ! Tu seras notifié chaque samedi de bilan à 7h.');
+      toast(' Rappels activés ! Tu seras notifié chaque samedi de bilan à 7h.');
     } else {
       toast('Rappels non activés.');
     }
@@ -2774,7 +2743,7 @@ function showBilanNotifPrompt(){
   m.id='notif-perm-modal';
   m.style.cssText='position:fixed;inset:0;background:#000b;z-index:8000;display:flex;align-items:flex-end;justify-content:center';
   m.innerHTML=`<div style="background:#161616;border-radius:20px 20px 0 0;padding:28px 24px 40px;width:100%;max-width:480px;animation:slideUp .35s ease">
-    <div style="text-align:center;font-size:40px;margin-bottom:12px">🔔</div>
+    <div style="text-align:center;font-size:40px;margin-bottom:12px"></div>
     <h2 style="text-align:center;margin-bottom:8px;font-size:17px;font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px">Active les rappels bilan</h2>
     <p style="text-align:center;color:var(--sub);font-size:12px;line-height:1.7;margin-bottom:24px">
       Reçois une notification <strong style="color:#fff">tous les 2 samedis à 7h00</strong><br>pour ne jamais oublier ton bilan coaching.
@@ -2829,7 +2798,7 @@ function drawPie(id,slices){
 }
 
 const MEAS=[
-  {k:'bicep-r',l:'Tour de Biceps D',color:'#C60F08'},
+  {k:'bicep-r',l:'Tour de Biceps D',color:'#E02020'},
   {k:'bicep-l',l:'Tour de Biceps G',color:'#f97316'},
   {k:'chest',l:'Tour de Poitrine',color:'#eab308'},
   {k:'waist',l:'Tour de Taille',color:'#3b82f6'},
@@ -2856,7 +2825,7 @@ function showProgressTab(tab,btn){
   const bilLabels=bl.map((_,i)=>'Bilan '+(i+1));
 
   if(tab==='poids'){
-    if(!bl.length){c.innerHTML='<div class="empty-state"><div class="es-icon">📊</div><div>Aucun bilan enregistré.</div></div>';return;}
+    if(!bl.length){c.innerHTML='<div class="empty-state"><div class="es-icon"></div><div>Aucun bilan enregistré.</div></div>';return;}
     const vals=bl.map(b=>getBW(b));
     const fb=vals[0],lb=vals[vals.length-1];
     const diff=parseFloat((lb-fb).toFixed(1)),col=diff<=0?'var(--green)':'var(--red)';
@@ -2872,10 +2841,10 @@ function showProgressTab(tab,btn){
       </div>
       ${progTblWrap(progHdr(bilLabels)+progRow('Poids (kg)',vals.map(String)))}
     `;
-    setTimeout(()=>lineChart('w-chart',bilLabels,vals,'#C60F08'),50);
+    setTimeout(()=>lineChart('w-chart',bilLabels,vals,'#E02020'),50);
 
   } else if(tab==='mensus'){
-    if(!bl.length){c.innerHTML='<div class="empty-state"><div class="es-icon">📏</div><div>Aucune mensuration.</div></div>';return;}
+    if(!bl.length){c.innerHTML='<div class="empty-state"><div class="es-icon"></div><div>Aucune mensuration.</div></div>';return;}
     const tableRows=MEAS.map(m=>progRow(m.l,bl.map(b=>{const v=getBM(b,m.k);return v?String(v):'';}),'#e0e0e0')).join('');
     // Mini charts grid
     let miniCharts='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">';
@@ -2904,7 +2873,7 @@ function showProgressTab(tab,btn){
     },60);
 
   } else if(tab==='masseGrasse'){
-    if(!bl.length){c.innerHTML='<div class="empty-state"><div class="es-icon">💪</div><div>Aucun bilan enregistré.</div></div>';return;}
+    if(!bl.length){c.innerHTML='<div class="empty-state"><div class="es-icon"></div><div>Aucun bilan enregistré.</div></div>';return;}
     const deb=(currentUser.bilans||[]).find(b=>b.type==='depart');
     const storedH=parseFloat(currentUser._evol_height||deb?.['deb-height']||currentUser['init-height']||0);
     const storedAge=parseFloat(currentUser._evol_age||deb?.['deb-age']||0);
@@ -2919,7 +2888,7 @@ function showProgressTab(tab,btn){
     const pieSec=(idx,title)=>{
       const mg=mgKgs[idx]??0,mm=mmKgs[idx]??0;
       if(!mg&&!mm) return '';
-      const mgC=idx===0?'#C60F08':'#3b82f6';
+      const mgC=idx===0?'#E02020':'#3b82f6';
       return `<div style="flex:1;text-align:center">
         <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:6px">${title}</div>
         <canvas id="pie-${idx}" style="max-width:110px;margin:0 auto;display:block"></canvas>
@@ -2960,7 +2929,7 @@ function showProgressTab(tab,btn){
       </div>`:''}
       ${progTblWrap(
         progHdr(bilLabels)+
-        progRow('% Masse grasse',bfPcts.map(v=>v!==null?v+'%':''),'#C60F08','#0f0f0f')+
+        progRow('% Masse grasse',bfPcts.map(v=>v!==null?v+'%':''),'#E02020','#0f0f0f')+
         progRow('Masse grasse (kg)',mgKgs.map(v=>v!==null?String(v):''),'#f97316','#0a0a0a')+
         progRow('Masse musculaire (kg)',mmKgs.map(v=>v!==null?String(v):''),'#22c55e','#0f0f0f')
       )}
@@ -2971,9 +2940,9 @@ function showProgressTab(tab,btn){
     `;
     setTimeout(()=>{
       const chartVals=bfPcts.map(v=>v??0);
-      if(chartVals.some(v=>v)) lineChart('mg-chart',bilLabels,chartVals,'#C60F08');
+      if(chartVals.some(v=>v)) lineChart('mg-chart',bilLabels,chartVals,'#E02020');
       const mg0=mgKgs[0]??0,mm0=mmKgs[0]??0;
-      if(mg0&&mm0) drawPie('pie-0',[{val:mg0,color:'#C60F08'},{val:mm0,color:'#22c55e'}]);
+      if(mg0&&mm0) drawPie('pie-0',[{val:mg0,color:'#E02020'},{val:mm0,color:'#22c55e'}]);
       if(bl.length>1){
         const mgL=mgKgs[bl.length-1]??0,mmL=mmKgs[bl.length-1]??0;
         if(mgL&&mmL) drawPie('pie-'+(bl.length-1),[{val:mgL,color:'#3b82f6'},{val:mmL,color:'#22c55e'}]);
@@ -2981,11 +2950,11 @@ function showProgressTab(tab,btn){
     },60);
 
   } else if(tab==='perf'){
-    if(!ss.length){c.innerHTML='<div class="empty-state"><div class="es-icon">🏋️</div><div>Aucune séance enregistrée.</div></div>';return;}
+    if(!ss.length){c.innerHTML='<div class="empty-state"><div class="es-icon">️</div><div>Aucune séance enregistrée.</div></div>';return;}
     const sl=ss.slice(-8);
     c.innerHTML=`<div style="display:flex;gap:10px;margin-bottom:16px">
       <div class="metric-box"><div class="metric-val">${ss.length}</div><div class="metric-label">Total</div></div>
-      <div class="metric-box"><div class="metric-val">${currentUser.streak||0}🔥</div><div class="metric-label">Streak</div></div>
+      <div class="metric-box"><div class="metric-val">${currentUser.streak||0}</div><div class="metric-label">Streak</div></div>
       <div class="metric-box"><div class="metric-val">${ss.length?Math.round(ss.reduce((s,x)=>s+(x.duration||0),0)/ss.length):0}min</div><div class="metric-label">Durée moy.</div></div>
     </div><div class="card"><canvas id="v-chart" height="140"></canvas></div>`;
     setTimeout(()=>barChart('v-chart',sl.map(s=>new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})),sl.map(s=>s.volume||0)),50);
@@ -2993,7 +2962,7 @@ function showProgressTab(tab,btn){
   } else if(tab==='photos'){
     const getP=(b,t)=>b['bil-photo-'+t]||b['deb-photo-'+t]||(b.photos&&b.photos[t])||null;
     const ph=bl.filter(b=>getP(b,'face')||getP(b,'back')||getP(b,'side'));
-    if(!ph.length){c.innerHTML='<div class="empty-state"><div class="es-icon">📸</div><div>Aucune photo de bilan.<br>Ajoute des photos lors de ton prochain bilan.</div></div>';return;}
+    if(!ph.length){c.innerHTML='<div class="empty-state"><div class="es-icon"></div><div>Aucune photo de bilan.<br>Ajoute des photos lors de ton prochain bilan.</div></div>';return;}
     c.innerHTML=ph.map((b,i)=>{
       const face=getP(b,'face'),back=getP(b,'back'),side=getP(b,'side');
       const idx=bl.indexOf(b);
@@ -3001,7 +2970,7 @@ function showProgressTab(tab,btn){
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
           <div style="font-size:11px;font-weight:900;color:var(--red);text-transform:uppercase;letter-spacing:1px">Bilan ${idx+1}</div>
           <div style="display:flex;gap:14px;align-items:center">
-            <span style="font-size:11px;color:var(--sub)">⚖️ <strong style="color:#fff">${getBW(b)||'—'}kg</strong></span>
+            <span style="font-size:11px;color:var(--sub)">️ <strong style="color:#fff">${getBW(b)||'—'}kg</strong></span>
             <span style="font-size:11px;color:#555">${new Date(b.date).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'2-digit'})}</span>
           </div>
         </div>
@@ -3011,7 +2980,7 @@ function showProgressTab(tab,btn){
             return `<div style="flex:1;text-align:center">
               <div style="font-size:8px;color:var(--sub);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">${lbl}</div>
               ${src?`<div style="aspect-ratio:.65;border-radius:6px;overflow:hidden;background:#111"><img src="${src}" style="width:100%;height:100%;object-fit:cover"></div>`
-                  :`<div style="aspect-ratio:.65;border-radius:6px;background:#0a0a0a;border:1px dashed #1c1c1c;display:flex;align-items:center;justify-content:center"><span style="font-size:16px;opacity:.2">📷</span></div>`}
+                  :`<div style="aspect-ratio:.65;border-radius:6px;background:#0a0a0a;border:1px dashed #1c1c1c;display:flex;align-items:center;justify-content:center"><span style="font-size:16px;opacity:.2"></span></div>`}
             </div>`;
           }).join('')}
         </div>
@@ -3045,17 +3014,17 @@ function loadNutrition(){
     const isToday=key===today.toISOString().slice(0,10);
     return `<div class="nutrition-day" style="border:1.5px solid ${isToday?'var(--red)':'transparent'}">
       <div><div style="font-weight:700">${d} <span class="sub" style="font-size:11px">${dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})}</span></div>
-      <div style="font-size:12px;color:${val===true?'var(--green)':val===false?'var(--red)':'var(--sub)'};margin-top:2px">${val===true?'✓ Calories respectées':val===false?'✗ Calories dépassées':'— Non renseigné'}</div></div>
+      <div style="font-size:12px;color:${val===true?'var(--green)':val===false?'var(--red)':'var(--sub)'};margin-top:2px">${val===true?' Calories respectées':val===false?' Calories dépassées':'— Non renseigné'}</div></div>
       <div style="display:flex;gap:8px">
-        <button onclick="setNutri('${key}',true)" style="width:36px;height:36px;border-radius:50%;border:2px solid var(--green);background:${val===true?'var(--green)':'transparent'};color:${val===true?'#fff':'var(--green)'};cursor:pointer;font-size:16px">✓</button>
-        <button onclick="setNutri('${key}',false)" style="width:36px;height:36px;border-radius:50%;border:2px solid var(--red);background:${val===false?'var(--red)':'transparent'};color:${val===false?'#fff':'var(--red)'};cursor:pointer;font-size:16px">✗</button>
+        <button onclick="setNutri('${key}',true)" style="width:36px;height:36px;border-radius:50%;border:2px solid var(--green);background:${val===true?'var(--green)':'transparent'};color:${val===true?'#fff':'var(--green)'};cursor:pointer;font-size:16px"></button>
+        <button onclick="setNutri('${key}',false)" style="width:36px;height:36px;border-radius:50%;border:2px solid var(--red);background:${val===false?'var(--red)':'transparent'};color:${val===false?'#fff':'var(--red)'};cursor:pointer;font-size:16px"></button>
       </div>
     </div>`;
   }).join('');
   const score=Object.values(nut).filter(v=>v===true).length;
   let streak=0;for(let i=0;i<30;i++){const d=new Date(today);d.setDate(today.getDate()-i);if(nut[d.toISOString().slice(0,10)]===true)streak++;else break;}
   document.getElementById('nut-score').textContent=score+'/7';
-  document.getElementById('nut-streak').textContent=streak+'🔥';
+  document.getElementById('nut-streak').textContent=streak+'';
   setTimeout(()=>{
     const canvas=document.getElementById('nut-chart');if(!canvas) return;
     canvas.width=canvas.offsetWidth||380;canvas.height=140;
@@ -3065,7 +3034,7 @@ function loadNutrition(){
       const d=new Date(today);d.setDate(today.getDate()-27+i);
       const key=d.toISOString().slice(0,10),v2=nut[key];
       const bw=(w-20)/28,x=10+i*bw,bh=v2===true?80:v2===false?30:5;
-      ctx.fillStyle=v2===true?'#22c55e':v2===false?'#C60F08':'#2a2a2a';
+      ctx.fillStyle=v2===true?'#22c55e':v2===false?'#E02020':'#2a2a2a';
       ctx.beginPath();if(ctx.roundRect)ctx.roundRect(x,h-10-bh,bw-2,bh,3);else ctx.rect(x,h-10-bh,bw-2,bh);ctx.fill();
     });
   },50);
@@ -3081,11 +3050,11 @@ function loadVideos(){
   go('s-videos');
   const vids=currentUser.videos||[];
   document.getElementById('vid-list').innerHTML=!vids.length?
-    '<div class="empty-state"><div class="es-icon">🎥</div><div>Aucune vidéo envoyée.<br>Envoie ta technique pour recevoir les corrections de ton coach.</div></div>':
+    '<div class="empty-state"><div class="es-icon"></div><div>Aucune vidéo envoyée.<br>Envoie ta technique pour recevoir les corrections de ton coach.</div></div>':
     vids.map(v=>`<div class="video-card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
         <div style="font-weight:700">${v.name}</div>
-        <span class="badge ${v.feedback?'badge-green':'badge-orange'}">${v.feedback?'✓ Corrigée':'En attente'}</span>
+        <span class="badge ${v.feedback?'badge-green':'badge-orange'}">${v.feedback?' Corrigée':'En attente'}</span>
       </div>
       <div class="sub" style="font-size:11px">${new Date(v.date).toLocaleDateString('fr-FR')} • ${v.size}</div>
       ${v.feedback?`<div style="background:var(--card2);border-radius:8px;padding:10px;margin-top:10px;font-size:12px"><span style="color:var(--sub);font-size:10px;font-weight:700">FEEDBACK COACH</span><p style="margin-top:6px;line-height:1.5">${v.feedback}</p></div>`:''}</div>`).join('');
@@ -3094,7 +3063,7 @@ function uploadVideo(input){
   const f=input.files[0];if(!f) return;
   if(!currentUser.videos) currentUser.videos=[];
   currentUser.videos.push({id:'v_'+Date.now(),name:f.name,size:(f.size/1048576).toFixed(1)+'MB',date:Date.now(),feedback:null});
-  saveUser();toast('✅ Vidéo envoyée !');loadVideos();
+  saveUser();toast(' Vidéo envoyée !');loadVideos();
 }
 // ======= STEPS =======
 function getStepsWeek(){
@@ -3151,7 +3120,7 @@ function loadSteps(){
       const d=new Date(e.date);
       const lbl=d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
       const col=stepColor(e.count);
-      const badge=e.count>=10000?'✓ Objectif':'';
+      const badge=e.count>=10000?' Objectif':'';
       return `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #111">
         <div style="font-size:12px;font-weight:600;color:#aaa;text-transform:capitalize">${lbl}</div>
         <div style="display:flex;align-items:center;gap:8px">
@@ -3201,14 +3170,14 @@ function loadSteps(){
 function saveSteps(){
   const input=document.getElementById('steps-today-input');
   const count=parseInt(input.value);
-  if(!count||count<0||count>99999){toast('⚠️ Saisis un nombre de pas valide');return;}
+  if(!count||count<0||count>99999){toast('️ Saisis un nombre de pas valide');return;}
   const todayStr=new Date().toISOString().split('T')[0];
   if(!currentUser.stepsLog) currentUser.stepsLog=[];
   const idx=currentUser.stepsLog.findIndex(e=>e.date===todayStr);
   if(idx>=0) currentUser.stepsLog[idx].count=count;
   else currentUser.stepsLog.push({date:todayStr,count});
   saveUser();
-  toast('👟 '+count.toLocaleString('fr-FR')+' pas enregistrés !');
+  toast(' '+count.toLocaleString('fr-FR')+' pas enregistrés !');
   loadSteps();
 }
 
@@ -3240,7 +3209,7 @@ function barChart(id,labels,data){
   const bw=(w-p*2)/data.length*.7,gap=(w-p*2)/data.length;
   data.forEach((v,i)=>{
     const x=p+i*gap+(gap-bw)/2,bh=(v/mx)*(h-p*2),y=h-p-bh;
-    const g=ctx.createLinearGradient(0,y,0,h-p);g.addColorStop(0,'#C60F08');g.addColorStop(1,'#7f1d1d');
+    const g=ctx.createLinearGradient(0,y,0,h-p);g.addColorStop(0,'#E02020');g.addColorStop(1,'#7f1d1d');
     ctx.fillStyle=g;ctx.beginPath();if(ctx.roundRect)ctx.roundRect(x,y,bw,bh,4);else ctx.rect(x,y,bw,bh);ctx.fill();
     ctx.fillStyle='#555';ctx.font='9px sans-serif';ctx.textAlign='center';ctx.fillText(labels[i],x+bw/2,h-4);
   });
@@ -3341,7 +3310,7 @@ async function analyzePhotoWithClaude(idx){
   const photo=cfg[idx].photo;
   if(!photo) return;
   const btn=document.getElementById('analyze-btn-'+idx);
-  const resetBtn=()=>{if(btn){btn.innerHTML='🤖 Lire & importer les exercices';btn.disabled=false;btn.style.opacity='1';}};
+  const resetBtn=()=>{if(btn){btn.innerHTML=' Lire & importer les exercices';btn.disabled=false;btn.style.opacity='1';}};
   if(btn){btn.innerHTML='⏳ Lecture OCR en cours...';btn.disabled=true;btn.style.opacity='0.7';}
   try{
     // OCR via ocr.space (service gratuit, clé démo intégrée)
@@ -3483,18 +3452,18 @@ function showOcrReviewModal(exercises,idx){
           <input value="${ex.repos}" id="ocr-repos-${i}" style="text-align:center;padding:8px" placeholder="01 min">
         </div>
       </div>
-      <button onclick="this.closest('#ocr-ex-${i}').remove()" style="margin-top:8px;background:none;border:none;color:#f87171;font-size:11px;cursor:pointer;font-family:Montserrat,sans-serif">✕ Supprimer</button>
+      <button onclick="this.closest('#ocr-ex-${i}').remove()" style="margin-top:8px;background:none;border:none;color:#f87171;font-size:11px;cursor:pointer;font-family:Montserrat,sans-serif"> Supprimer</button>
     </div>`).join('');
 
   const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
   <div style="background:#161616;border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-      <h2>✅ ${exercises.length} exercices lus</h2>
-      <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:22px;cursor:pointer">✕</button>
+      <h2> ${exercises.length} exercices lus</h2>
+      <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:22px;cursor:pointer"></button>
     </div>
     <p class="sub" style="font-size:12px;margin-bottom:16px;line-height:1.6">Vérifie et corrige si besoin, puis importe.</p>
     <div id="ocr-rows">${rows}</div>
-    <button class="btn btn-red" style="margin-top:4px" onclick="importOcrExercises(${idx},${exercises.length})">✅ Importer dans la séance</button>
+    <button class="btn btn-red" style="margin-top:4px" onclick="importOcrExercises(${idx},${exercises.length})"> Importer dans la séance</button>
     <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Annuler</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
@@ -3514,7 +3483,7 @@ function importOcrExercises(idx,maxN){
   if(!result.length){toast('Aucun exercice à importer.','var(--orange)');return;}
   currentUser.sessions_config[idx].exercises=result;
   saveUser();closeModal();
-  toast('✅ '+result.length+' exercices importés !');
+  toast(' '+result.length+' exercices importés !');
   loadSessionManager();
 }
 
@@ -3522,7 +3491,7 @@ function importOcrExercises(idx,maxN){
 function openAddAthlete(){
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:#161616;border-radius:20px 20px 0 0;padding:28px 24px;width:100%;max-width:480px;animation:fadeIn .3s ease">
-    <h2 style="margin-bottom:6px">➕ Ajouter un athlète</h2>
+    <h2 style="margin-bottom:6px"> Ajouter un athlète</h2>
     <p class="sub" style="margin-bottom:20px;font-size:12px">Crée le compte de ton athlète directement depuis ton dashboard.</p>
     <div><label>Prénom</label><input id="aa-fname" placeholder="Prénom de l'athlète"></div>
     <div><label>Nom</label><input id="aa-lname" placeholder="Nom de l'athlète"></div>
@@ -3556,7 +3525,7 @@ function createAthlete(){
   DB.set('users',users);
   DB.set('session',currentUser);
   closeModal();
-  toast('✅ Athlète '+fn+' créé ! Email: '+em+' / MDP: '+pw);
+  toast(' Athlète '+fn+' créé ! Email: '+em+' / MDP: '+pw);
   loadCoachHome();
 }
 
@@ -3568,7 +3537,7 @@ window.addEventListener('beforeinstallprompt',(e)=>{
 });
 window.addEventListener('appinstalled',()=>{
   document.getElementById('install-btn').style.display='none';
-  toast('✅ RepCore installé sur ton téléphone !');
+  toast(' RepCore installé sur ton téléphone !');
 });
 function installApp(){
   if(deferredPrompt){deferredPrompt.prompt();deferredPrompt.userChoice.then(()=>{deferredPrompt=null;});}
@@ -3608,7 +3577,7 @@ function coachTab(tab){
     }
     var b=document.getElementById('ct-tab-'+id);
     if(b){
-      b.style.borderBottom=(id===tab)?'2px solid #C60F08':'2px solid transparent';
+      b.style.borderBottom=(id===tab)?'2px solid #E02020':'2px solid transparent';
       b.style.color=(id===tab)?'#fff':'#555';
     }
   });
@@ -3632,7 +3601,7 @@ function loadMonetisationTab(){
   document.getElementById('pp-mrr').textContent=(active.length*9.99).toFixed(2)+'EUR';
   document.getElementById('pp-cancelled').textContent=cancelled.length;
   const el=document.getElementById('pp-subs-list');
-  if(!subs.length){el.innerHTML='<div class="empty-state"><div class="es-icon">💳</div><div>Aucun abonn&#233; autonomie pour l&#39;instant.</div></div>';return;}
+  if(!subs.length){el.innerHTML='<div class="empty-state"><div class="es-icon"></div><div>Aucun abonn&#233; autonomie pour l&#39;instant.</div></div>';return;}
   el.innerHTML=subs.map(s=>{
     const st=s.paymentStatus==='active'?'<span class="badge badge-green">Actif</span>':'<span class="badge badge-red">'+( s.paymentStatus||'Inactif')+'</span>';
     return '<div class="client-row"><div class="avatar" style="width:36px;height:36px;font-size:13px">'+ini(s.fname,s.lname)+'</div><div style="flex:1"><div style="font-weight:700">'+s.fname+' '+s.lname+'</div><div class="sub" style="font-size:11px;font-family:monospace">'+(s.paypalSubscriptionId||'no sub id')+'</div></div><div>'+st+'<button onclick="toggleSubStatus(\''+s.email+'\')" style="margin-top:4px;font-size:10px;background:none;border:1px solid var(--border);color:var(--sub);border-radius:6px;padding:3px 8px;cursor:pointer;font-family:Montserrat,sans-serif">'+(s.paymentStatus==='active'?'Suspendre':'Activer')+'</button></div></div>';
@@ -3708,7 +3677,7 @@ function copyStudentCode(){
 function loadStudentCodes(){
   const codes=currentUser.studentCodes||[];
   const el=document.getElementById('sc-list');
-  if(!codes.length){el.innerHTML='<div class="empty-state"><div class="es-icon">🎫</div><div>Aucun code genere encore.</div></div>';return;}
+  if(!codes.length){el.innerHTML='<div class="empty-state"><div class="es-icon"></div><div>Aucun code genere encore.</div></div>';return;}
   const now=Date.now();
   el.innerHTML=[...codes].reverse().map((c,ri)=>{
     const i=codes.length-1-ri;
