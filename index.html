@@ -12,7 +12,7 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192x192.png">
 <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js');}</script>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Montserrat:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@700;800;900&family=Montserrat:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{--bg:#080808;--red:#E02020;--red2:#b81515;--dark:#0f0f0f;--card:#131313;--card2:#1a1a1a;--border:#222;--sub:#666;--text:#f0f0f0;--green:#22c55e;--orange:#f97316}
@@ -197,8 +197,59 @@ input[type=file]{display:none}
 #s-coach-home{height:100vh!important;overflow:hidden!important;display:flex;flex-direction:column}
 #ch-main-area{display:flex!important;flex-direction:column!important;flex:1!important;min-height:0!important;overflow:hidden!important}
 
+/* ====== ANTON FONT — TITRES ====== */
+h1,h2,h3,.metric-val,.topbar-title{font-family:'Anton',Impact,'Arial Black',sans-serif!important;letter-spacing:0.5px}
+h1{font-size:26px;text-transform:uppercase}
+h2{font-size:20px;text-transform:uppercase}
+h3{font-size:16px;text-transform:uppercase}
+
+/* ====== CARBON FIBER PATTERN ====== */
+.carbon-bg{
+  background-color:#050505;
+  background-image:
+    repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,255,255,.025) 3px,rgba(255,255,255,.025) 4px),
+    repeating-linear-gradient(-45deg,transparent,transparent 3px,rgba(255,255,255,.025) 3px,rgba(255,255,255,.025) 4px);
+  background-size:8px 8px;
+}
+
 /* ====== WELCOME / SPLASH ANIMATIONS ====== */
-@keyframes splashRCIn{from{opacity:0;transform:scale(.7) translateY(20px)}to{opacity:1;transform:scale(1) translateY(0)}}
+/* Lightning strike on RC */
+@keyframes rcStrike{
+  0%  {opacity:0;transform:scale(0.4) translateY(30px);text-shadow:none;filter:brightness(1)}
+  8%  {opacity:1;transform:scale(1.12) translateY(-4px);
+       text-shadow:0 0 8px #fff,0 0 30px #fff,0 0 60px #7df,0 0 100px #7df,0 0 160px #48f;
+       filter:brightness(3)}
+  12% {transform:scale(1.06);
+       text-shadow:0 0 4px #fff,0 0 15px #e0e,0 0 40px #e0e,0 0 80px #a0f;
+       filter:brightness(2)}
+  18% {transform:scale(1.14);
+       text-shadow:0 0 20px #fff,0 0 50px #7df,0 0 90px #48f,0 0 140px #E02020;
+       filter:brightness(2.5)}
+  22% {transform:scale(1.02);text-shadow:0 0 3px #fff;filter:brightness(1.2)}
+  28% {transform:scale(1.08);
+       text-shadow:0 0 15px #fff,0 0 35px #E02020,0 0 70px #E02020;
+       filter:brightness(1.8)}
+  35% {transform:scale(1);text-shadow:0 0 8px rgba(224,32,32,.6);filter:brightness(1)}
+  70% {text-shadow:0 0 6px rgba(224,32,32,.4);filter:brightness(1)}
+  100%{text-shadow:0 0 4px rgba(224,32,32,.2);filter:brightness(1)}
+}
+/* Screen flash at strike */
+@keyframes screenFlash{
+  0%  {opacity:0}
+  8%  {opacity:0.18}
+  14% {opacity:0.05}
+  20% {opacity:0.14}
+  28% {opacity:0}
+  100%{opacity:0}
+}
+/* Electric arcs around RC */
+@keyframes arcPulse{
+  0%,100%{opacity:0}
+  8%  {opacity:1}
+  15% {opacity:0.4}
+  20% {opacity:0.9}
+  30% {opacity:0}
+}
 @keyframes splashLineIn{from{opacity:0;transform:scaleX(0)}to{opacity:1;transform:scaleX(1)}}
 @keyframes splashTextIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes wFadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
@@ -213,19 +264,36 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
 <body>
 
 <!-- SPLASH -->
-<div id="s-splash" class="screen active" style="background:#000;align-items:center;justify-content:center;position:relative;overflow:hidden">
-  <div style="text-align:center;z-index:1" class="splash-anim-in">
-    <div style="font-size:88px;font-weight:900;font-family:Impact,'Arial Black',sans-serif;color:#fff;letter-spacing:-4px;line-height:1;animation:splashRCIn 0.9s cubic-bezier(.16,1,.3,1) both">RC</div>
-    <div style="width:48px;height:2px;background:#E02020;margin:18px auto;animation:splashLineIn 0.6s ease 0.5s both;opacity:0"></div>
-    <div style="font-size:9px;letter-spacing:8px;color:#E02020;font-weight:700;text-transform:uppercase;animation:splashTextIn 0.6s ease 0.7s both;opacity:0">REPCORE</div>
-    <div style="font-size:8px;letter-spacing:4px;color:#333;font-weight:600;text-transform:uppercase;margin-top:6px;animation:splashTextIn 0.6s ease 0.9s both;opacity:0">COACHING PROFESSIONNEL</div>
+<div id="s-splash" class="screen active carbon-bg" style="align-items:center;justify-content:center;position:relative;overflow:hidden">
+  <!-- Screen flash overlay (lightning illuminates everything) -->
+  <div id="splash-flash" style="position:absolute;inset:0;background:#fff;pointer-events:none;animation:screenFlash 1.4s ease 0.3s both;opacity:0;z-index:0"></div>
+
+  <!-- Electric arcs — pure CSS lightning bolts -->
+  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:260px;height:120px;pointer-events:none;z-index:2;animation:arcPulse 1.4s ease 0.3s both;opacity:0">
+    <!-- arc gauche -->
+    <div style="position:absolute;left:0;top:50%;width:60px;height:2px;background:linear-gradient(90deg,transparent,#7df,transparent);transform:rotate(-30deg) translateX(-20px);filter:blur(1px)"></div>
+    <div style="position:absolute;left:10px;top:30%;width:40px;height:1px;background:linear-gradient(90deg,transparent,#fff,transparent);transform:rotate(-50deg);filter:blur(0.5px)"></div>
+    <!-- arc droit -->
+    <div style="position:absolute;right:0;top:50%;width:60px;height:2px;background:linear-gradient(270deg,transparent,#E02020,transparent);transform:rotate(30deg) translateX(20px);filter:blur(1px)"></div>
+    <div style="position:absolute;right:10px;top:30%;width:40px;height:1px;background:linear-gradient(270deg,transparent,#fff,transparent);transform:rotate(50deg);filter:blur(0.5px)"></div>
+    <!-- arc haut -->
+    <div style="position:absolute;top:0;left:50%;width:1px;height:40px;background:linear-gradient(180deg,transparent,#7df,transparent);transform:translateX(-50%) rotate(10deg);filter:blur(0.5px)"></div>
   </div>
-  <!-- subtle red glow -->
-  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-60%);width:400px;height:400px;border-radius:50%;background:radial-gradient(circle,rgba(224,32,32,.1) 0%,transparent 70%);pointer-events:none"></div>
+
+  <!-- RC Logo avec effet foudre -->
+  <div style="text-align:center;z-index:3;position:relative">
+    <div style="font-size:104px;font-family:'Anton',Impact,'Arial Black',sans-serif;color:#fff;letter-spacing:-3px;line-height:1;animation:rcStrike 2s cubic-bezier(.16,1,.3,1) 0.3s both;opacity:0">RC</div>
+    <div style="width:56px;height:2px;background:#E02020;margin:16px auto 0;animation:splashLineIn 0.5s ease 1.2s both;opacity:0;box-shadow:0 0 12px #E02020"></div>
+    <div style="font-size:8px;letter-spacing:9px;color:#E02020;font-weight:700;text-transform:uppercase;margin-top:14px;animation:splashTextIn 0.5s ease 1.4s both;opacity:0">REPCORE</div>
+    <div style="font-size:7px;letter-spacing:4px;color:#333;font-weight:600;text-transform:uppercase;margin-top:7px;animation:splashTextIn 0.5s ease 1.6s both;opacity:0">COACHING PROFESSIONNEL</div>
+  </div>
+
+  <!-- Vignette bords -->
+  <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 50% 50%,transparent 40%,rgba(0,0,0,.85) 100%);pointer-events:none;z-index:1"></div>
 </div>
 
 <!-- WELCOME -->
-<div id="s-welcome" class="screen" style="background:#000;flex-direction:column;height:100vh;position:relative;overflow:hidden">
+<div id="s-welcome" class="screen carbon-bg" style="flex-direction:column;height:100vh;position:relative;overflow:hidden">
 
   <!-- Subtle red radial glow top-center -->
   <div style="position:absolute;top:-60px;left:50%;transform:translateX(-50%);width:500px;height:400px;background:radial-gradient(ellipse at 50% 0%,rgba(224,32,32,.12) 0%,transparent 65%);pointer-events:none;z-index:0"></div>
