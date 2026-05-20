@@ -1,5 +1,5 @@
-const CACHE = 'repcore-v24';
-const FILES = ['./index.html', './manifest.json', './icons/icon-192x192.png', './icons/icon-512x512.png'];
+const CACHE = 'repcore-v25';
+const FILES = ['./index.html', './manifest.json', './icons/icon-192x192.png', './icons/icon-512x512.png', './icons/logo.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));
