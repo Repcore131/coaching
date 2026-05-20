@@ -246,10 +246,19 @@ h3{font-size:16px;text-transform:uppercase}
 /* Electric arcs around RC */
 @keyframes arcPulse{
   0%,100%{opacity:0}
-  8%  {opacity:1}
-  15% {opacity:0.4}
-  20% {opacity:0.9}
-  30% {opacity:0}
+  6%  {opacity:1}
+  12% {opacity:0.3}
+  16% {opacity:1}
+  25% {opacity:0}
+}
+@keyframes boltFlash{
+  0%  {opacity:0;filter:brightness(1)}
+  5%  {opacity:1;filter:brightness(3)}
+  12% {opacity:0.2;filter:brightness(1)}
+  16% {opacity:1;filter:brightness(4)}
+  28% {opacity:0.5;filter:brightness(1.5)}
+  45% {opacity:0;filter:brightness(1)}
+  100%{opacity:0}
 }
 @keyframes splashLineIn{from{opacity:0;transform:scaleX(0)}to{opacity:1;transform:scaleX(1)}}
 @keyframes splashTextIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
@@ -311,22 +320,45 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
   <!-- Screen flash overlay (lightning illuminates everything) -->
   <div id="splash-flash" style="position:absolute;inset:0;background:#fff;pointer-events:none;animation:screenFlash 0.7s ease 0.15s both;opacity:0;z-index:0"></div>
 
-  <!-- Electric arcs — pure CSS lightning bolts -->
-  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:260px;height:120px;pointer-events:none;z-index:2;animation:arcPulse 0.7s ease 0.15s both;opacity:0">
-    <!-- arc gauche -->
-    <div style="position:absolute;left:0;top:50%;width:60px;height:2px;background:linear-gradient(90deg,transparent,#7df,transparent);transform:rotate(-30deg) translateX(-20px);filter:blur(1px)"></div>
-    <div style="position:absolute;left:10px;top:30%;width:40px;height:1px;background:linear-gradient(90deg,transparent,#fff,transparent);transform:rotate(-50deg);filter:blur(0.5px)"></div>
-    <!-- arc droit -->
-    <div style="position:absolute;right:0;top:50%;width:60px;height:2px;background:linear-gradient(270deg,transparent,#E02020,transparent);transform:rotate(30deg) translateX(20px);filter:blur(1px)"></div>
-    <div style="position:absolute;right:10px;top:30%;width:40px;height:1px;background:linear-gradient(270deg,transparent,#fff,transparent);transform:rotate(50deg);filter:blur(0.5px)"></div>
-    <!-- arc haut -->
-    <div style="position:absolute;top:0;left:50%;width:1px;height:40px;background:linear-gradient(180deg,transparent,#7df,transparent);transform:translateX(-50%) rotate(10deg);filter:blur(0.5px)"></div>
+  <!-- SVG Lightning bolts + arcs -->
+  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:320px;height:280px;pointer-events:none;z-index:4;overflow:visible">
+    <svg width="320" height="280" viewBox="0 0 320 280" xmlns="http://www.w3.org/2000/svg" overflow="visible" style="animation:boltFlash 0.9s ease 0.15s both;opacity:0">
+      <!-- Bolt gauche principal -->
+      <polyline points="42,80 28,112 52,104 35,142" stroke="#7df" stroke-width="3" fill="none" stroke-linecap="round" filter="url(#glow-b)"/>
+      <polyline points="38,72 18,110 46,100 24,140" stroke="#fff" stroke-width="1.2" fill="none" stroke-linecap="round" opacity="0.8"/>
+      <!-- Bolt gauche petit -->
+      <polyline points="68,55 58,75 72,70 60,92" stroke="#7df" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+      <!-- Bolt droit principal -->
+      <polyline points="278,80 292,112 268,104 285,142" stroke="#E02020" stroke-width="3" fill="none" stroke-linecap="round" filter="url(#glow-r)"/>
+      <polyline points="282,72 302,110 274,100 296,140" stroke="#fff" stroke-width="1.2" fill="none" stroke-linecap="round" opacity="0.8"/>
+      <!-- Bolt droit petit -->
+      <polyline points="252,55 262,75 248,70 260,92" stroke="#E02020" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+      <!-- Bolt haut -->
+      <polyline points="160,8 154,28 164,22 157,46" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <!-- Sparks -->
+      <circle cx="28" cy="68" r="4" fill="#7df" opacity="0.95"/>
+      <circle cx="20" cy="82" r="2" fill="#fff" opacity="0.7"/>
+      <circle cx="292" cy="68" r="4" fill="#E02020" opacity="0.95"/>
+      <circle cx="300" cy="82" r="2" fill="#fff" opacity="0.7"/>
+      <circle cx="160" cy="4" r="3" fill="#fff" opacity="0.9"/>
+      <!-- Glow filters -->
+      <defs>
+        <filter id="glow-b" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="4" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="glow-r" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="4" result="blur"/>
+          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+    </svg>
   </div>
 
-  <!-- RC Logo avec effet foudre -->
-  <div style="text-align:center;z-index:3;position:relative;mix-blend-mode:screen">
+  <!-- RC Logo avec effet foudre — PNG transparent, pas de mix-blend-mode -->
+  <div style="text-align:center;z-index:3;position:relative">
     <div style="animation:rcStrike 0.9s cubic-bezier(.2,0,.4,1) 0.15s both;opacity:0">
-      <img src="./icons/logo.png" style="mix-blend-mode:screen;display:block;width:220px;height:220px">
+      <img src="./icons/logo.png" style="display:block;width:220px;height:220px">
     </div>
   </div>
 
@@ -347,7 +379,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
   <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1;padding-top:60px">
     <!-- RC wordmark -->
     <div style="animation:wFadeUp 0.8s cubic-bezier(.16,1,.3,1) 0.1s both">
-      <img src="./icons/logo.png" style="mix-blend-mode:screen;display:block;width:200px;height:200px">
+      <img src="./icons/logo.png" style="display:block;width:200px;height:200px">
     </div>
     <div style="display:flex;align-items:center;gap:12px;margin-top:12px;animation:wFadeUp 0.6s ease 0.35s both;opacity:0">
       <div style="width:24px;height:1px;background:#333"></div>
@@ -381,7 +413,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
   <div class="topbar" style="border-bottom:1px solid var(--border)">
     <button class="back-btn" onclick="go('s-welcome')">←</button>
     <div style="height:32px;display:flex;align-items:center;gap:6px">
-      <img src="./icons/logo.png" style="mix-blend-mode:screen;display:block;width:52px;height:52px;margin:-8px 0">
+      <img src="./icons/logo.png" style="display:block;width:52px;height:52px;margin:-8px 0">
     </div>
     <span></span>
   </div>
@@ -420,7 +452,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
 <div id="s-login" class="screen">
   <div class="topbar" style="border-bottom:1px solid var(--border)">
     <button class="back-btn" onclick="go('s-welcome')">←</button>
-    <div style="height:32px;display:flex;align-items:center;gap:6px"><img src="./icons/logo.png" style="mix-blend-mode:screen;display:block;width:52px;height:52px;margin:-8px 0"></div>
+    <div style="height:32px;display:flex;align-items:center;gap:6px"><img src="./icons/logo.png" style="display:block;width:52px;height:52px;margin:-8px 0"></div>
     <span></span>
   </div>
   <div class="pad scroll-area gap" style="justify-content:center;flex:1">
@@ -484,7 +516,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
   <div id="ch-sidebar" style="display:none;flex-direction:column;background:#040404;border-right:1px solid #1a0000">
     <div style="padding:20px 16px;border-bottom:1px solid #1a0000">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-        <img src="./icons/logo.png" style="mix-blend-mode:screen;display:block;width:56px;height:56px;margin:-10px -4px;flex-shrink:0">
+        <img src="./icons/logo.png" style="display:block;width:56px;height:56px;margin:-10px -4px;flex-shrink:0">
         <div>
           <div style="font-size:8px;color:var(--red);letter-spacing:2px;font-weight:800">COACH</div>
           <div style="font-size:13px;font-weight:900" id="ch-name-sidebar"></div>
@@ -515,7 +547,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
     <!-- Mobile header -->
     <div id="ch-mobile-header" style="background:#090909;border-bottom:1px solid var(--red);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
       <div style="display:flex;align-items:center;gap:10px">
-        <img src="./icons/logo.png" style="mix-blend-mode:screen;display:block;width:56px;height:56px;margin:-10px -4px;flex-shrink:0">
+        <img src="./icons/logo.png" style="display:block;width:56px;height:56px;margin:-10px -4px;flex-shrink:0">
         <div>
           <div style="font-size:7px;color:var(--red);letter-spacing:4px;font-weight:700;text-transform:uppercase;margin-bottom:2px">COACH</div>
           <div style="font-size:14px;font-family:'Bebas Neue',Impact,sans-serif;letter-spacing:1px;line-height:1" id="ch-name"></div>
@@ -824,7 +856,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
   <!-- Brand header athlete -->
   <div style="background:#090909;border-bottom:1px solid var(--red);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
     <div style="display:flex;align-items:center;gap:10px">
-      <img src="./icons/logo.png" style="mix-blend-mode:screen;display:block;width:56px;height:56px;margin:-10px -4px;flex-shrink:0">
+      <img src="./icons/logo.png" style="display:block;width:56px;height:56px;margin:-10px -4px;flex-shrink:0">
       <div>
         <div style="font-size:7px;color:var(--red);letter-spacing:4px;font-weight:700;text-transform:uppercase;margin-bottom:2px">ATHLETE</div>
         <div style="font-size:14px;font-family:'Bebas Neue',Impact,sans-serif;letter-spacing:1px;line-height:1" id="clh-name"></div>
