@@ -219,29 +219,28 @@ h3{font-size:16px;text-transform:uppercase}
 }
 
 /* ====== WELCOME / SPLASH ANIMATIONS ====== */
-/* Lightning strike on RC */
+/* Lightning strike — court, violent, premium */
 @keyframes rcStrike{
-  0%  {opacity:0;transform:scale(0.4) translateY(30px);filter:brightness(1)}
-  8%  {opacity:1;transform:scale(1.12) translateY(-4px);
-       filter:brightness(3) drop-shadow(0 0 8px #fff) drop-shadow(0 0 30px #7df) drop-shadow(0 0 60px #48f)}
-  12% {transform:scale(1.06);
-       filter:brightness(2) drop-shadow(0 0 10px #e0e) drop-shadow(0 0 30px #a0f)}
-  18% {transform:scale(1.14);
-       filter:brightness(2.5) drop-shadow(0 0 16px #7df) drop-shadow(0 0 40px #E02020)}
-  22% {transform:scale(1.02);filter:brightness(1.2) drop-shadow(0 0 4px #fff)}
-  28% {transform:scale(1.08);
-       filter:brightness(1.8) drop-shadow(0 0 12px #E02020) drop-shadow(0 0 28px #E02020)}
-  35% {transform:scale(1);filter:brightness(1) drop-shadow(0 0 6px rgba(224,32,32,.5))}
-  70% {filter:brightness(1) drop-shadow(0 0 4px rgba(224,32,32,.3))}
-  100%{filter:brightness(1) drop-shadow(0 0 2px rgba(224,32,32,.15))}
+  0%   {opacity:0;transform:scale(0.5) translateY(20px);filter:brightness(1)}
+  6%   {opacity:1;transform:scale(1.18) translateY(-6px);
+        filter:brightness(6) drop-shadow(0 0 20px #fff) drop-shadow(0 0 50px #fff) drop-shadow(0 0 80px #7df)}
+  9%   {transform:scale(0.97);filter:brightness(1.5) drop-shadow(0 0 6px #fff)}
+  13%  {transform:scale(1.1);
+        filter:brightness(5) drop-shadow(0 0 16px #fff) drop-shadow(0 0 40px #E02020) drop-shadow(0 0 70px #E02020)}
+  17%  {transform:scale(1);filter:brightness(1.2) drop-shadow(0 0 4px rgba(224,32,32,.6))}
+  22%  {transform:scale(1.04);
+        filter:brightness(3) drop-shadow(0 0 12px #E02020) drop-shadow(0 0 30px #E02020)}
+  28%  {transform:scale(1);filter:brightness(1) drop-shadow(0 0 8px rgba(224,32,32,.5))}
+  60%  {filter:brightness(1) drop-shadow(0 0 5px rgba(224,32,32,.3))}
+  100% {filter:brightness(1) drop-shadow(0 0 3px rgba(224,32,32,.15))}
 }
 /* Screen flash at strike */
 @keyframes screenFlash{
   0%  {opacity:0}
-  8%  {opacity:0.18}
-  14% {opacity:0.05}
-  20% {opacity:0.14}
-  28% {opacity:0}
+  6%  {opacity:0.45}
+  10% {opacity:0.05}
+  13% {opacity:0.35}
+  18% {opacity:0}
   100%{opacity:0}
 }
 /* Electric arcs around RC */
@@ -310,10 +309,10 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
 <!-- SPLASH -->
 <div id="s-splash" class="screen active carbon-bg" style="align-items:center;justify-content:center;position:relative;overflow:hidden">
   <!-- Screen flash overlay (lightning illuminates everything) -->
-  <div id="splash-flash" style="position:absolute;inset:0;background:#fff;pointer-events:none;animation:screenFlash 1.4s ease 0.3s both;opacity:0;z-index:0"></div>
+  <div id="splash-flash" style="position:absolute;inset:0;background:#fff;pointer-events:none;animation:screenFlash 0.7s ease 0.15s both;opacity:0;z-index:0"></div>
 
   <!-- Electric arcs — pure CSS lightning bolts -->
-  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:260px;height:120px;pointer-events:none;z-index:2;animation:arcPulse 1.4s ease 0.3s both;opacity:0">
+  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:260px;height:120px;pointer-events:none;z-index:2;animation:arcPulse 0.7s ease 0.15s both;opacity:0">
     <!-- arc gauche -->
     <div style="position:absolute;left:0;top:50%;width:60px;height:2px;background:linear-gradient(90deg,transparent,#7df,transparent);transform:rotate(-30deg) translateX(-20px);filter:blur(1px)"></div>
     <div style="position:absolute;left:10px;top:30%;width:40px;height:1px;background:linear-gradient(90deg,transparent,#fff,transparent);transform:rotate(-50deg);filter:blur(0.5px)"></div>
@@ -326,7 +325,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
 
   <!-- RC Logo avec effet foudre -->
   <div style="text-align:center;z-index:3;position:relative;mix-blend-mode:screen">
-    <div style="animation:rcStrike 2s cubic-bezier(.16,1,.3,1) 0.3s both;opacity:0">
+    <div style="animation:rcStrike 0.9s cubic-bezier(.2,0,.4,1) 0.15s both;opacity:0">
       <img src="./icons/logo.png" style="mix-blend-mode:screen;display:block;width:220px;height:220px">
     </div>
   </div>
