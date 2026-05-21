@@ -355,9 +355,9 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
     </svg>
   </div>
 
-  <!-- RC Logo avec effet foudre — mix-blend-mode:screen sur wrapper animé pour effacer fond -->
+  <!-- RC Logo — déclenché par JS après 2 frames pour éviter le flash (FOUC mobile) -->
   <div style="display:flex;justify-content:center;align-items:center">
-    <div style="animation:rcStrike 0.9s cubic-bezier(.2,0,.4,1) 0.15s both;opacity:0;mix-blend-mode:screen">
+    <div id="splash-logo-anim" style="opacity:0">
       <img src="./icons/logo.png" style="display:block;width:240px;height:240px">
     </div>
   </div>
@@ -378,7 +378,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
   <!-- TOP: Logo zone -->
   <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1;padding-top:60px">
     <!-- RC wordmark -->
-    <div style="animation:wFadeUp 0.8s cubic-bezier(.16,1,.3,1) 0.1s both;mix-blend-mode:screen">
+    <div style="animation:wFadeUp 0.8s cubic-bezier(.16,1,.3,1) 0.1s both">
       <img src="./icons/logo.png" style="display:block;width:200px;height:200px">
     </div>
 
@@ -408,7 +408,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
   <div class="topbar" style="border-bottom:1px solid var(--border)">
     <button class="back-btn" onclick="go('s-welcome')">←</button>
     <div style="height:32px;display:flex;align-items:center;gap:6px">
-      <img src="./icons/logo.png" style="display:block;height:52px;width:52px;margin:-8px 0;mix-blend-mode:screen">
+      <img src="./icons/logo.png" style="display:block;height:52px;width:52px;margin:-8px 0">
     </div>
     <span></span>
   </div>
@@ -447,7 +447,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
 <div id="s-login" class="screen">
   <div class="topbar" style="border-bottom:1px solid var(--border)">
     <button class="back-btn" onclick="go('s-welcome')">←</button>
-    <div style="height:32px;display:flex;align-items:center;gap:6px"><img src="./icons/logo.png" style="display:block;height:52px;width:52px;margin:-8px 0;mix-blend-mode:screen"></div>
+    <div style="height:32px;display:flex;align-items:center;gap:6px"><img src="./icons/logo.png" style="display:block;height:52px;width:52px;margin:-8px 0"></div>
     <span></span>
   </div>
   <div class="pad scroll-area gap" style="justify-content:center;flex:1">
@@ -511,7 +511,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
   <div id="ch-sidebar" style="display:none;flex-direction:column;background:#040404;border-right:1px solid #1a0000">
     <div style="padding:20px 16px;border-bottom:1px solid #1a0000">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-        <img src="./icons/logo.png" style="display:block;width:52px;height:52px;flex-shrink:0;mix-blend-mode:screen">
+        <img src="./icons/logo.png" style="display:block;width:52px;height:52px;flex-shrink:0">
         <div>
           <div style="font-size:8px;color:var(--red);letter-spacing:2px;font-weight:800">COACH</div>
           <div style="font-size:13px;font-weight:900" id="ch-name-sidebar"></div>
@@ -542,7 +542,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
     <!-- Mobile header -->
     <div id="ch-mobile-header" style="background:#090909;border-bottom:1px solid var(--red);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
       <div style="display:flex;align-items:center;gap:10px">
-        <img src="./icons/logo.png" style="display:block;width:52px;height:52px;flex-shrink:0;mix-blend-mode:screen">
+        <img src="./icons/logo.png" style="display:block;width:52px;height:52px;flex-shrink:0">
         <div>
           <div style="font-size:7px;color:var(--red);letter-spacing:4px;font-weight:700;text-transform:uppercase;margin-bottom:2px">COACH</div>
           <div style="font-size:14px;font-family:'Bebas Neue',Impact,sans-serif;letter-spacing:1px;line-height:1" id="ch-name"></div>
@@ -851,7 +851,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
   <!-- Brand header athlete -->
   <div style="background:#090909;border-bottom:1px solid var(--red);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
     <div style="display:flex;align-items:center;gap:10px">
-      <img src="./icons/logo.png" style="display:block;width:52px;height:52px;flex-shrink:0;mix-blend-mode:screen">
+      <img src="./icons/logo.png" style="display:block;width:52px;height:52px;flex-shrink:0">
       <div>
         <div style="font-size:7px;color:var(--red);letter-spacing:4px;font-weight:700;text-transform:uppercase;margin-bottom:2px">ATHLETE</div>
         <div style="font-size:14px;font-family:'Bebas Neue',Impact,sans-serif;letter-spacing:1px;line-height:1" id="clh-name"></div>
@@ -1354,6 +1354,14 @@ let qStep=0;
 
 // ======= BOOT =======
 window.onload=()=>{
+  // Déclenche l'animation du logo APRÈS que le navigateur a composité la première frame
+  // → élimine le flash/cadre visible avant animation (FOUC sur mobile)
+  const logoAnim=document.getElementById('splash-logo-anim');
+  if(logoAnim){
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      logoAnim.style.animation='rcStrike 0.9s cubic-bezier(.2,0,.4,1) both';
+    }));
+  }
   setTimeout(()=>{
     const splash=document.getElementById('s-splash');
     if(splash){splash.style.transition='opacity 0.5s ease';splash.style.opacity='0';}
