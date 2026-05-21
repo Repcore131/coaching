@@ -395,14 +395,63 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
 
   <!-- BOTTOM: CTA buttons -->
   <div style="padding:32px 28px 48px;z-index:1;animation:wSlideUp 0.7s cubic-bezier(.16,1,.3,1) 0.55s both;opacity:0">
-    <button onclick="go('s-login')" style="width:100%;padding:20px;background:#E02020;color:#fff;border:none;font-family:'Montserrat',sans-serif;font-size:13px;font-weight:800;letter-spacing:4px;cursor:pointer;text-transform:uppercase;margin-bottom:12px;transition:.15s;font-family:'Bebas Neue','Anton',sans-serif" onmouseover="this.style.background='#c91a1a'" onmouseout="this.style.background='#E02020'">ESPACE COACH</button>
-    <button onclick="go('s-athlete-entry')" style="width:100%;padding:20px;background:transparent;color:#fff;border:1px solid rgba(255,255,255,.15);font-family:'Montserrat',sans-serif;font-size:13px;font-weight:800;letter-spacing:4px;cursor:pointer;text-transform:uppercase;transition:.15s;font-family:'Bebas Neue','Anton',sans-serif" onmouseover="this.style.borderColor='rgba(224,32,32,.6)';this.style.color='#E02020'" onmouseout="this.style.borderColor='rgba(255,255,255,.15)';this.style.color='#fff'">ESPACE ATHLETE</button>
+    <button onclick="go('s-coach-entry')" style="width:100%;padding:20px;background:#E02020;color:#fff;border:none;font-family:'Bebas Neue','Anton',sans-serif;font-size:13px;font-weight:800;letter-spacing:4px;cursor:pointer;text-transform:uppercase;margin-bottom:12px;transition:.15s" onmouseover="this.style.background='#c91a1a'" onmouseout="this.style.background='#E02020'">ESPACE COACH</button>
+    <button onclick="go('s-athlete-entry')" style="width:100%;padding:20px;background:transparent;color:#fff;border:1px solid rgba(255,255,255,.15);font-family:'Bebas Neue','Anton',sans-serif;font-size:13px;font-weight:800;letter-spacing:4px;cursor:pointer;text-transform:uppercase;transition:.15s" onmouseover="this.style.borderColor='rgba(224,32,32,.6)';this.style.color='#E02020'" onmouseout="this.style.borderColor='rgba(255,255,255,.15)';this.style.color='#fff'">ESPACE ATHLETE</button>
     <div style="margin-top:28px;text-align:center">
       <div style="font-size:9px;letter-spacing:2px;color:#222;font-weight:600;text-transform:uppercase">Kevin Guellec &nbsp;·&nbsp; Coach Diplômé d'État</div>
     </div>
   </div>
 
 </div>
+
+<!-- COACH ENTRY -->
+<div id="s-coach-entry" class="screen">
+  <div class="topbar" style="border-bottom:1px solid var(--border)">
+    <button class="back-btn" onclick="go('s-welcome')">←</button>
+    <div style="height:32px;display:flex;align-items:center;gap:6px">
+      <img src="./icons/logo.png" style="display:block;height:52px;width:52px;margin:-8px 0">
+    </div>
+    <span></span>
+  </div>
+  <div class="pad scroll-area" style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:16px">
+
+    <div style="margin-bottom:8px">
+      <div style="width:24px;height:2px;background:var(--red);margin-bottom:14px"></div>
+      <div style="font-size:26px;font-weight:900;letter-spacing:-0.5px">Espace Coach</div>
+      <div class="sub" style="font-size:12px;margin-top:6px">Accès réservé aux coachs RepCore</div>
+    </div>
+
+    <!-- Connexion coach existant -->
+    <div onclick="go('s-login')" style="background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="width:44px;height:44px;border-radius:10px;background:#1a0000;border:1px solid #3a0000;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🔐</div>
+        <div>
+          <div style="font-weight:800;font-size:15px;letter-spacing:.5px">SE CONNECTER</div>
+          <div class="sub" style="font-size:11px;margin-top:3px">J'ai déjà un compte coach</div>
+        </div>
+        <div style="margin-left:auto;color:var(--sub);font-size:18px">›</div>
+      </div>
+    </div>
+
+    <!-- Créer compte coach -->
+    <div onclick="goRegisterCoach()" style="background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="width:44px;height:44px;border-radius:10px;background:#0d0d0d;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">✚</div>
+        <div>
+          <div style="font-weight:800;font-size:15px;letter-spacing:.5px">CRÉER MON COMPTE</div>
+          <div class="sub" style="font-size:11px;margin-top:3px">Nouveau coach — inscription gratuite</div>
+        </div>
+        <div style="margin-left:auto;color:var(--sub);font-size:18px">›</div>
+      </div>
+    </div>
+
+    <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:10px;padding:14px 16px;margin-top:4px">
+      <div style="font-size:10px;letter-spacing:1.5px;color:#333;font-weight:700;margin-bottom:6px">ℹ️ ESPACE COACH</div>
+      <div style="font-size:11px;color:#2a2a2a;line-height:1.6">Aucun code ni abonnement requis. Tu génères ton propre code à donner à tes athlètes.</div>
+    </div>
+  </div>
+</div>
+
 <!-- ATHLETE ENTRY -->
 <div id="s-athlete-entry" class="screen">
   <div class="topbar" style="border-bottom:1px solid var(--border)">
@@ -1296,10 +1345,13 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
       <div id="ag-status-block"></div>
     </div>
     <div class="gap">
-      <button class="btn btn-red" onclick="go('s-subscribe');loadSubscribePage()"> Renouveler mon accès</button>
-      <button class="btn btn-outline" onclick="go('s-client-code')">Entrer un nouveau code</button>
+      <button class="btn btn-red" onclick="go('s-subscribe');loadSubscribePage()">Renouveler mon accès</button>
+      <button class="btn btn-outline" onclick="go('s-client-code')">Entrer un nouveau code coach</button>
     </div>
-    <button onclick="logout()" style="margin-top:24px;background:none;border:none;color:var(--sub);font-size:12px;cursor:pointer;font-family:Montserrat,sans-serif">Se déconnecter</button>
+    <div style="margin-top:20px;display:flex;flex-direction:column;gap:10px;align-items:center">
+      <button onclick="silentLogout();go('s-welcome')" style="background:none;border:none;color:var(--sub);font-size:12px;cursor:pointer;font-family:Montserrat,sans-serif">← Retour à l'accueil</button>
+      <button onclick="logout()" style="background:none;border:none;color:#2a2a2a;font-size:11px;cursor:pointer;font-family:Montserrat,sans-serif">Se déconnecter</button>
+    </div>
   </div>
 </div>
 
@@ -1364,6 +1416,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
 const DB={
   get(k){try{return JSON.parse(localStorage.getItem('rc_'+k))}catch{return null}},
   set(k,v){localStorage.setItem('rc_'+k,JSON.stringify(v))},
+  del(k){localStorage.removeItem('rc_'+k)},
 };
 let currentUser=null,currentClientId=null;
 let woState={exercises:[],currentEx:0,startTime:null,timerInterval:null,sessionData:{}};
@@ -1392,7 +1445,10 @@ window.onload=()=>{
 function routeUser(){
   if(!currentUser) return go('s-welcome');
   if(currentUser.role==='coach'){loadCoachHome();return;}
-  // Check athlete access
+  // Athlète : vérifier l'accès
+  const s=currentUser.status||'FREE';
+  // Si FREE = jamais eu d'accès → pas d'access-gate, retour à l'accueil proprement
+  if(s==='FREE'){silentLogout();return go('s-welcome');}
   if(!checkAccess(currentUser)){go('s-access-gate');loadAccessGate();return;}
   loadClientHome();
 }
@@ -1484,6 +1540,11 @@ function doLogin(){
   currentUser=users[em];DB.set('session',currentUser);routeUser();
 }
 function showErr(id,msg){const e=document.getElementById(id);e.textContent=msg;e.style.display='block';}
+function goRegisterCoach(){
+  go('s-register');
+  // Pré-sélectionner le rôle coach
+  setTimeout(()=>selectRole('coach'),50);
+}
 function aeToggleCode(){
   const zone=document.getElementById('ae-code-zone');
   const arrow=document.getElementById('ae-arrow');
@@ -3400,9 +3461,10 @@ function saveUser(){
   const users=DB.get('users')||{};
   users[currentUser.email]=currentUser;DB.set('users',users);DB.set('session',currentUser);
 }
+function silentLogout(){DB.del('session');currentUser=null;}
 function logout(){
   if(!confirm('Se déconnecter ?')) return;
-  DB.del('session');currentUser=null;go('s-welcome');
+  silentLogout();go('s-welcome');
 }
 
 // ======= PHOTO PROGRAMME =======
