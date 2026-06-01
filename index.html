@@ -1608,7 +1608,14 @@ function doLogin(){
   const em=v('l-email').toLowerCase(),pw=v('l-pwd');
   const users=DB.get('users')||{};
   if(!users[em]||users[em].pwd!==pw) return showErr('l-err','Email ou mot de passe incorrect.');
-  currentUser=users[em];DB.set('session',currentUser);routeUser();
+  currentUser=users[em];DB.set('session',currentUser);
+  // Athlète FREE = compte créé mais pas encore activé → écran d'activation
+  // (le silentLogout FREE ne s'applique qu'au démarrage automatique, pas au login manuel)
+  if(currentUser.role!=='coach'&&(currentUser.status||'FREE')==='FREE'){
+    go('s-client-code');
+    return;
+  }
+  routeUser();
 }
 function showErr(id,msg){const e=document.getElementById(id);e.textContent=msg;e.style.display='block';}
 function goRegisterCoach(){
