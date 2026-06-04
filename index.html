@@ -1921,7 +1921,33 @@ function loadCoachHome(){
 }
 function getClients(){
   const users=DB.get('users')||{};
-  return Object.values(users).filter(u=>u.role==='athlete'&&u.coachId===currentUser.id);
+  const allUsers=Object.values(users);
+
+  // 1. Athlètes enregistrés sur cet appareil liés à ce coach
+  const registered=allUsers.filter(u=>u.role==='athlete'&&u.coachId===currentUser.id);
+  const registeredNames=new Set(registered.map(u=>(u.fname+' '+u.lname).toLowerCase().trim()));
+
+  // 2. Élèves issus des codes (même si pas encore enregistrés / autre appareil)
+  const codes=currentUser.studentCodes||[];
+  codes.filter(c=>c.active).forEach(c=>{
+    const name=(c.studentName||'').toLowerCase().trim();
+    if(name&&!registeredNames.has(name)){
+      // Créer un profil minimal depuis le code
+      registered.push({
+        id:'_code_'+c.codeId,
+        fname:(c.studentName||'Élève').split(' ')[0],
+        lname:(c.studentName||'').split(' ').slice(1).join(' '),
+        role:'athlete',
+        coachId:currentUser.id,
+        status:'COACHING_SUIVI',
+        sessions:[],bilans:[],streak:0,
+        _fromCode:true,
+        _codeInfo:c
+      });
+    }
+  });
+
+  return registered;
 }
 // Génère un lien que l'athlète envoie au coach pour apparaître dans sa liste
 function copyAthleteProfileLink(){
@@ -1946,23 +1972,55 @@ function needsAlert(c){
 function openClientDetail(cid){
   currentClientId=cid;
   const users=DB.get('users')||{};
-  const c=Object.values(users).find(u=>u.id===cid);if(!c) return;
+
+  // Chercher d'abord dans les users enregistrés
+  let c=Object.values(users).find(u=>u.id===cid);
+
+  // Si pas trouvé → profil depuis code (autre appareil)
+  if(!c&&cid.startsWith('_code_')){
+    const codeId=cid.replace('_code_','');
+    const code=(currentUser.studentCodes||[]).find(x=>x.codeId===codeId);
+    if(!code) return;
+    c={
+      id:cid,
+      fname:code.studentName.split(' ')[0],
+      lname:code.studentName.split(' ').slice(1).join(' '),
+      role:'athlete',status:'COACHING_SUIVI',
+      sessions:[],bilans:[],streak:0,
+      _fromCode:true,_codeInfo:code
+    };
+  }
+  if(!c) return;
+
   document.getElementById('ccd-title').textContent=c.fname;
   document.getElementById('ccd-avatar').textContent=ini(c.fname,c.lname);
   document.getElementById('ccd-name').textContent=c.fname+' '+c.lname;
-  document.getElementById('ccd-info').textContent=(c.objective||'Objectif non défini')+' • '+(c.level||'Niveau ?');
-  document.getElementById('ccd-badge').innerHTML=needsAlert(c)?'<span class="badge badge-red"> Bilan en retard</span>':isActive(c)?'<span class="badge badge-green"> Actif</span>':'<span class="badge badge-gray">Inactif</span>';
+  document.getElementById('ccd-info').textContent=c._fromCode
+    ?'Code généré le '+new Date(c._codeInfo.createdAt).toLocaleDateString('fr-FR')+' · Expire le '+new Date(c._codeInfo.expiry).toLocaleDateString('fr-FR')
+    :(c.objective||'Objectif non défini')+' • '+(c.level||'Niveau ?');
+  document.getElementById('ccd-badge').innerHTML=c._fromCode
+    ?'<span class="badge badge-orange">⏳ En attente d\'inscription</span>'
+    :needsAlert(c)?'<span class="badge badge-red"> Bilan en retard</span>':isActive(c)?'<span class="badge badge-green"> Actif</span>':'<span class="badge badge-gray">Inactif</span>';
   document.getElementById('ccd-streak').textContent=(c.streak||0)+'';
   document.getElementById('ccd-sessions').textContent=(c.sessions||[]).length;
   const lb=c.bilans?.length?c.bilans[c.bilans.length-1]:null;
   document.getElementById('ccd-weight').textContent=lb?lb.weight+'kg':'—';
   const be=document.getElementById('ccd-bilans');
-  if(!c.bilans?.length){be.innerHTML='<div class="empty-state" style="padding:20px"><div>Aucun bilan.</div></div>';}
-  else{be.innerHTML=c.bilans.slice(-3).reverse().map(b=>`<div class="card" style="margin-bottom:10px">
-    <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700">${new Date(b.date).toLocaleDateString('fr-FR')}</span><span class="badge badge-green">Complété</span></div>
-    <div style="display:flex;gap:16px"><span class="sub">Poids: <strong style="color:#fff">${b.weight||'—'}kg</strong></span><span class="sub">MG: <strong style="color:#fff">${b.fat||'—'}%</strong></span><span class="sub">Tour taille: <strong style="color:#fff">${b.waist||'—'}cm</strong></span></div>
-    ${b.comment?`<div style="margin-top:8px;font-size:12px;color:var(--sub)">"${b.comment.slice(0,80)}..."</div>`:''}
-  </div>`).join('');}
+  if(c._fromCode){
+    be.innerHTML=`<div style="background:#111;border:1px solid #1a1a1a;border-radius:12px;padding:16px;text-align:center">
+      <div style="font-size:32px;margin-bottom:10px">📱</div>
+      <div style="font-weight:700;margin-bottom:6px">${c.fname} n'a pas encore partagé son profil</div>
+      <div class="sub" style="font-size:12px;line-height:1.6">Demande-lui d'appuyer sur<br><strong style="color:var(--red)">"📋 Partager mon profil avec le coach"</strong><br>depuis son espace athlète.<br>Ses données apparaîtront ici automatiquement.</div>
+    </div>`;
+  } else if(!c.bilans?.length){
+    be.innerHTML='<div class="empty-state" style="padding:20px"><div>Aucun bilan.</div></div>';
+  } else {
+    be.innerHTML=c.bilans.slice(-3).reverse().map(b=>`<div class="card" style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700">${new Date(b.date).toLocaleDateString('fr-FR')}</span><span class="badge badge-green">Complété</span></div>
+      <div style="display:flex;gap:16px"><span class="sub">Poids: <strong style="color:#fff">${b.weight||'—'}kg</strong></span><span class="sub">MG: <strong style="color:#fff">${b.fat||'—'}%</strong></span><span class="sub">Tour taille: <strong style="color:#fff">${b.waist||'—'}cm</strong></span></div>
+      ${b.comment?`<div style="margin-top:8px;font-size:12px;color:var(--sub)">"${b.comment.slice(0,80)}..."</div>`:''}
+    </div>`).join('');
+  }
   go('s-coach-client');
 }
 function viewClientBilans(){go('s-coach-client');}
@@ -1979,7 +2037,8 @@ const defEx=[
 let progEx=[];
 function openCoachProgram(){
   const users=DB.get('users')||{};
-  const c=Object.values(users).find(u=>u.id===currentClientId);
+  let c=Object.values(users).find(u=>u.id===currentClientId);
+  if(!c&&currentClientId?.startsWith('_code_')){toast('Cet athlète n\'a pas encore créé son compte. Le programme sera disponible après son inscription.','var(--orange)');return;}
   progEx=c?.program?JSON.parse(JSON.stringify(c.program)):[...defEx.map(e=>({...e}))];
   document.getElementById('prog-name').value=c?.programName||'SÉANCE 1 : DOS & ABDOS';
   document.getElementById('prog-notes').value=c?.programNotes||'';
