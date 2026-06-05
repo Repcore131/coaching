@@ -1617,10 +1617,12 @@ const DB={
         toast('✓ Athlète '+athlete.fname+' '+athlete.lname+' importé dans votre liste.');
       }
     }
-    // Auto-configure sync on first boot if not already set
+    // Auto-configure sync on first boot (token injected at build time)
     if(!CLOUD.ok()){
       const st=params.get('s');
       if(st) CLOUD.configure(atob(st));
+      // Fallback: token baked in by CI/CD
+      else if(typeof __RC_ST__!=='undefined'&&__RC_ST__&&__RC_ST__!=='%%ST%%') CLOUD.configure(__RC_ST__);
     }
     if(cpkg||apkg||st) window.history.replaceState({},'',window.location.pathname);
   }catch(e){}
@@ -4534,4 +4536,5 @@ function renderPaypalButton(planId,coachId){
 // ATHLETE: link coach with RCACCESS token (extend doLinkCoach)
 // ═══════════════════════════════════════════════════
 
+var __RC_ST__='%%ST%%';
 </script>
