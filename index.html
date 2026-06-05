@@ -1617,9 +1617,11 @@ const DB={
         toast('✓ Athlète '+athlete.fname+' '+athlete.lname+' importé dans votre liste.');
       }
     }
-    // Setup sync token via URL (one-time config)
-    const st=params.get('syncsetup');
-    if(st) CLOUD.configure(st);
+    // Auto-configure sync on first boot if not already set
+    if(!CLOUD.ok()){
+      const st=params.get('s');
+      if(st) CLOUD.configure(atob(st));
+    }
     if(cpkg||apkg||st) window.history.replaceState({},'',window.location.pathname);
   }catch(e){}
 })();
