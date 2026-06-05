@@ -722,6 +722,32 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
     <div id="ct-monetisation" style="display:none;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
       <div class="pad">
         <div style="width:20px;height:2px;background:var(--red);margin-bottom:8px;margin-top:4px"></div>
+
+        <!-- 🔥 Firebase Sync -->
+        <div style="background:#0a0f1a;border:1px solid #1a2a4a;border-radius:14px;padding:18px;margin-bottom:24px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+            <div style="width:36px;height:36px;background:#0a1a3a;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🔥</div>
+            <div>
+              <div style="font-weight:800;font-size:14px">Synchronisation Cloud</div>
+              <div id="cloud-status" style="font-size:11px;margin-top:2px;color:var(--sub)">Non configurée</div>
+            </div>
+          </div>
+          <p class="sub" style="font-size:11px;line-height:1.6;margin-bottom:14px">Permet à tous tes appareils et ceux de tes athlètes de partager les données en temps réel. Utilise Firebase (gratuit).</p>
+          <label>URL Firebase Realtime Database</label>
+          <input id="firebase-url" type="url" placeholder="https://TON-PROJET-default-rtdb.firebaseio.com"
+            style="margin-bottom:10px;font-size:12px"
+            value="">
+          <button class="btn btn-red btn-sm" onclick="saveFirebaseUrl()" style="margin-bottom:12px">Connecter →</button>
+          <div style="background:#0d0d0d;border:1px solid #1a1a1a;border-radius:8px;padding:10px;font-size:11px;color:#666;line-height:1.7">
+            <strong style="color:#888">Comment configurer (2 min) :</strong><br>
+            1. Va sur <span style="color:#4a9eff">console.firebase.google.com</span><br>
+            2. "Créer un projet" → nom libre<br>
+            3. "Realtime Database" → Créer en mode test<br>
+            4. Copie l'URL (ex: https://xxx-rtdb.firebaseio.com)<br>
+            5. Colle-la ici et clique "Connecter"
+          </div>
+        </div>
+
         <h2 style="margin-bottom:4px">Monetisation</h2>
         <p class="sub" style="font-size:12px;margin-bottom:20px">Configure ton compte PayPal pour recevoir les abonnements 9,99EUR/mois de tes eleves en autonomie.</p>
 
@@ -1490,9 +1516,45 @@ function compressImage(file, maxPx, quality, cb){
   reader.readAsDataURL(file);
 }
 
+// ── Cloud sync (Firebase Realtime Database) ──────────────────────────
+const CLOUD={
+  _url:localStorage.getItem('rc_cloud_url')||'',
+  ok(){return!!this._url;},
+  configure(url){
+    this._url=(url||'').replace(/\/+$/,'');
+    localStorage.setItem('rc_cloud_url',this._url);
+  },
+  _path(k){return`${this._url}/rc/${k}.json`;},
+  async pull(k){
+    if(!this.ok())return null;
+    try{const r=await fetch(this._path(k));if(!r.ok)return null;return await r.json();}catch{return null;}
+  },
+  push(k,v){
+    if(!this.ok())return;
+    fetch(this._path(k),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(v)}).catch(()=>{});
+  },
+  async syncUsers(){
+    if(!this.ok())return;
+    const cloud=await this.pull('users');
+    if(!cloud)return;
+    const local=JSON.parse(localStorage.getItem('rc_users')||'{}');
+    // Merge: cloud wins pour les champs mis à jour plus récemment
+    const merged=Object.assign({},local);
+    for(const [email,u] of Object.entries(cloud)){
+      if(!merged[email]||((u.updatedAt||0)>=(merged[email].updatedAt||0))){
+        merged[email]=u;
+      }
+    }
+    localStorage.setItem('rc_users',JSON.stringify(merged));
+  }
+};
+
 const DB={
   get(k){try{return JSON.parse(localStorage.getItem('rc_'+k))}catch{return null}},
-  set(k,v){localStorage.setItem('rc_'+k,JSON.stringify(v))},
+  set(k,v){
+    localStorage.setItem('rc_'+k,JSON.stringify(v));
+    if(k==='users') CLOUD.push('users',v);
+  },
   del(k){localStorage.removeItem('rc_'+k)},
 };
 // ── Import depuis URL (coachpkg ou athletepkg) ──
@@ -1543,11 +1605,17 @@ window.onload=()=>{
   setTimeout(()=>{
     const splash=document.getElementById('s-splash');
     if(splash){splash.style.transition='opacity 0.5s ease';splash.style.opacity='0';}
-    setTimeout(()=>{
+    setTimeout(async ()=>{
+      // Sync depuis le cloud avant de router (si Firebase configuré)
+      if(CLOUD.ok()){
+        try{ await CLOUD.syncUsers(); }catch(e){}
+      }
       const sess=DB.get('session');
       if(sess){
         currentUser=sess;
-        // Session FREE = pas encore activée → toujours revenir à l'accueil
+        // Rafraîchir currentUser depuis la DB (données à jour après sync cloud)
+        const users=DB.get('users')||{};
+        if(users[currentUser.email]) currentUser=users[currentUser.email];
         if((currentUser.status||'FREE')==='FREE'){
           silentLogout();
           go('s-welcome');
@@ -1562,6 +1630,18 @@ window.onload=()=>{
       } else {
         go('s-welcome');
       }
+      // Sync périodique toutes les 30 secondes
+      setInterval(async()=>{
+        if(!CLOUD.ok()||!currentUser) return;
+        await CLOUD.syncUsers();
+        // Rafraîchir currentUser
+        const u2=(DB.get('users')||{})[currentUser.email];
+        if(u2){currentUser=u2;DB.set('session',currentUser);}
+        // Rafraîchir la liste des athlètes si le coach est sur son dashboard
+        if(currentUser.role==='coach'&&document.getElementById('s-coach-home')?.classList.contains('active')){
+          loadCoachHome();
+        }
+      },30000);
     },500);
   },1600);
 };
@@ -3810,8 +3890,11 @@ function barChart(id,labels,data){
 function ini(f,l){return((f||'?')[0]+(l||'?')[0]).toUpperCase();}
 function ago(ts){const d=Math.floor((Date.now()-ts)/864e5);return d===0?"aujourd'hui":d===1?"hier":"il y a "+d+"j";}
 function saveUser(){
+  currentUser.updatedAt=Date.now();
   const users=DB.get('users')||{};
-  users[currentUser.email]=currentUser;DB.set('users',users);DB.set('session',currentUser);
+  users[currentUser.email]=currentUser;
+  DB.set('users',users); // writes to localStorage + pushes to Firebase
+  DB.set('session',currentUser);
 }
 function silentLogout(){DB.del('session');currentUser=null;}
 function logout(){
@@ -4176,7 +4259,34 @@ function coachTab(tab){
   if(tab==='monetisation')try{loadMonetisationTab();}catch(e){console.error(e);}
 }
 
+function saveFirebaseUrl(){
+  const url=(document.getElementById('firebase-url')?.value||'').trim();
+  if(!url){toast('Entre l\'URL Firebase','var(--orange)');return;}
+  CLOUD.configure(url);
+  // Sync immédiat
+  CLOUD.syncUsers().then(()=>{
+    updateCloudStatus();
+    toast('🔥 Firebase connecté ! Synchronisation en cours...');
+    // Push les données locales vers le cloud
+    const users=DB.get('users');
+    if(users) CLOUD.push('users',users);
+  }).catch(()=>toast('Erreur de connexion. Vérifie l\'URL.','var(--red)'));
+}
+function updateCloudStatus(){
+  const el=document.getElementById('cloud-status');
+  const inp=document.getElementById('firebase-url');
+  if(!el) return;
+  if(CLOUD.ok()){
+    el.textContent='✅ Connecté — '+CLOUD._url.replace('https://','').split('/')[0];
+    el.style.color='var(--green)';
+    if(inp) inp.value=CLOUD._url;
+  } else {
+    el.textContent='Non configurée';
+    el.style.color='var(--sub)';
+  }
+}
 function loadMonetisationTab(){
+  updateCloudStatus();
   const u=currentUser;
   const cidEl=document.getElementById('pp-client-id');if(cidEl&&u.paypalClientId) cidEl.value=u.paypalClientId;
   const pidEl=document.getElementById('pp-plan-id');if(pidEl&&u.paypalPlanId) pidEl.value=u.paypalPlanId;
