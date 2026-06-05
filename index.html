@@ -1567,9 +1567,10 @@ const CLOUD={
     const merged=Object.assign({},local);
     for(const[email,u] of Object.entries(cloud)){
       if(!merged[email]||((u.updatedAt||0)>=(merged[email].updatedAt||0))){
+        const localPwd=local[email]?.pwd; // toujours préserver le mot de passe local
         merged[email]={...u};
-        if(merged[email].pwd&&local[email]?.pwd) merged[email].pwd=local[email].pwd;
-        else delete merged[email].pwd;
+        delete merged[email].pwd;
+        if(localPwd) merged[email].pwd=localPwd;
       }
     }
     localStorage.setItem('rc_users',JSON.stringify(merged));
