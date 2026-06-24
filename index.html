@@ -1327,6 +1327,7 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
         <button class="btn btn-outline btn-sm" onclick="showProgressTab('masseGrasse',this)" style="white-space:nowrap"> Masse Grasse</button>
         <button class="btn btn-outline btn-sm" onclick="showProgressTab('perf',this)" style="white-space:nowrap">️ Perfs</button>
         <button class="btn btn-outline btn-sm" onclick="showProgressTab('photos',this)" style="white-space:nowrap"> Photos</button>
+        <button class="btn btn-outline btn-sm" onclick="showProgressTab('notes',this)" style="white-space:nowrap">📋 Notes</button>
       </div>
       <div id="progress-content"></div>
     </div>
@@ -1563,11 +1564,17 @@ const CLOUD={
   async syncUsers(){
     const cloud=await this.pull();
     if(!cloud)return;
+    // Auto-configurer le token depuis n'importe quel profil cloud qui l'a
+    if(!this.canWrite()){
+      for(const u of Object.values(cloud)){
+        if(u._st){this.configure(u._st);break;}
+      }
+    }
     const local=JSON.parse(localStorage.getItem('rc_users')||'{}');
     const merged=Object.assign({},local);
     for(const[email,u] of Object.entries(cloud)){
       if(!merged[email]||((u.updatedAt||0)>=(merged[email].updatedAt||0))){
-        const localPwd=local[email]?.pwd; // toujours préserver le mot de passe local
+        const localPwd=local[email]?.pwd;
         merged[email]={...u};
         delete merged[email].pwd;
         if(localPwd) merged[email].pwd=localPwd;
@@ -1599,7 +1606,7 @@ const DB={
   get(k){try{return JSON.parse(localStorage.getItem('rc_'+k))}catch{return null}},
   set(k,v){
     localStorage.setItem('rc_'+k,JSON.stringify(v));
-    if(k==='users') CLOUD.push('users',v);
+    if(k==='users') CLOUD.push(v);
   },
   del(k){localStorage.removeItem('rc_'+k)},
 };
@@ -1617,7 +1624,7 @@ const DB={
         DB.set('users',users);
         window._importedCoach=coach;
         // Auto-configure sync token if included
-        if(coach._st&&!CLOUD.ok()) CLOUD.configure(coach._st);
+        if(coach._st&&!CLOUD.canWrite()) CLOUD.configure(coach._st);
       }
     }
     // Athlete profile → coach device
@@ -1626,14 +1633,24 @@ const DB={
       const athlete=JSON.parse(decodeURIComponent(escape(atob(apkg))));
       if(athlete.id&&athlete.role==='athlete'&&athlete.email){
         const users=DB.get('users')||{};
-        users[athlete.email]=Object.assign(users[athlete.email]||{},athlete);
+        const existing=users[athlete.email]||{};
+        // Fusionner les bilans : ajouter les nouveaux sans écraser les existants
+        const exBilans=existing.bilans||[];
+        const newBilans=athlete.bilans||[];
+        const merged=[...exBilans];
+        newBilans.forEach(nb=>{
+          if(!merged.find(eb=>eb.date===nb.date&&eb.type===nb.type)) merged.push(nb);
+        });
+        merged.sort((a,b)=>a.date-b.date);
+        users[athlete.email]=Object.assign({},existing,athlete,{bilans:merged,_fromCode:false});
         DB.set('users',users);
         window._importedAthlete=athlete;
-        toast('✓ Athlète '+athlete.fname+' '+athlete.lname+' importé dans votre liste.');
+        const nb=newBilans.filter(nb=>!exBilans.find(eb=>eb.date===nb.date&&eb.type===nb.type)).length;
+        toast('✓ '+athlete.fname+' '+athlete.lname+' mis à jour'+(nb?' — '+nb+' nouveau'+(nb>1?'x':'')+' bilan'+(nb>1?'s':''):'')+'.');
       }
     }
     // Auto-configure sync on first boot (token injected at build time)
-    if(!CLOUD.ok()){
+    if(!CLOUD.canWrite()){
       const st=params.get('s');
       if(st) CLOUD.configure(atob(st));
       // Fallback: token baked in by CI/CD
@@ -1661,9 +1678,11 @@ window.onload=()=>{
     const splash=document.getElementById('s-splash');
     if(splash){splash.style.transition='opacity 0.5s ease';splash.style.opacity='0';}
     setTimeout(async ()=>{
-      // Sync depuis le cloud avant de router (si Firebase configuré)
+      // Sync depuis le cloud avant de router
       if(CLOUD.ok()){
         try{ await CLOUD.syncUsers(); }catch(e){}
+        // Push local → cloud au démarrage (couvre les bilans jamais envoyés)
+        if(CLOUD.canWrite()){const lu=DB.get('users');if(lu) CLOUD.push(lu);}
       }
       const sess=DB.get('session');
       if(sess){
@@ -1770,6 +1789,12 @@ function selectRole(r){
   document.getElementById('role-coach').classList.toggle('sel',r==='coach');
   document.getElementById('role-athlete').classList.toggle('sel',r==='athlete');
 }
+// Hash simple du mot de passe (synchro, pas crypto — évite le plain text dans le cloud)
+function hashPwd(pwd){
+  let h=0x811c9dc5;
+  for(let i=0;i<pwd.length;i++){h^=pwd.charCodeAt(i);h=(h*0x01000193)>>>0;}
+  return 'rch_'+h.toString(36)+'_'+(pwd.length*7+13).toString(36);
+}
 function doRegister(){
   const fn=v('r-fname'),ln=v('r-lname'),em=v('r-email').toLowerCase(),pw=v('r-pwd'),pw2=v('r-pwd2'),gn=v('r-gender');
   const err=document.getElementById('r-err');err.style.display='none';
@@ -1780,7 +1805,10 @@ function doRegister(){
   const users=DB.get('users')||{};
   if(users[em]) return showErr('r-err','Email déjà utilisé.');
   const uid='u_'+Date.now();
-  const user={id:uid,fname:fn,lname:ln,email:em,pwd:pw,role:selRole,gender:gn,
+  const user={id:uid,fname:fn,lname:ln,email:em,
+    pwd:pw,         // stocké localement uniquement
+    pwdHash:hashPwd(pw), // hash synchronisé dans le cloud
+    role:selRole,gender:gn,
     createdAt:Date.now(),streak:0,lastSession:null,sessions:[],bilans:[],nutrition:{},videos:[],coachId:null,coachName:null,
     status:'FREE',accessExpiry:null,paymentStatus:null,paypalSubscriptionId:null};
   if(selRole==='coach'){user.code=genCode();user.clients=[];}
@@ -1803,7 +1831,13 @@ function doRegister(){
 function doLogin(){
   const em=v('l-email').toLowerCase(),pw=v('l-pwd');
   const users=DB.get('users')||{};
-  if(!users[em]||users[em].pwd!==pw) return showErr('l-err','Email ou mot de passe incorrect.');
+  const u=users[em];
+  if(!u) return showErr('l-err','Email ou mot de passe incorrect.');
+  // Accepter pwd local OU pwdHash (pour comptes importés du cloud)
+  const pwdOk=(u.pwd&&u.pwd===pw)||(u.pwdHash&&u.pwdHash===hashPwd(pw));
+  if(!pwdOk) return showErr('l-err','Email ou mot de passe incorrect.');
+  // Si on avait seulement le hash, stocker le pwd local maintenant
+  if(!u.pwd){u.pwd=pw;users[em]=u;DB.set('users',users);}
   currentUser=users[em];DB.set('session',currentUser);
   // Athlète FREE = compte créé mais pas encore activé → écran d'activation
   // (le silentLogout FREE ne s'applique qu'au démarrage automatique, pas au login manuel)
@@ -1925,6 +1959,7 @@ function doLinkCoach(){
       const payload=JSON.parse(decodeURIComponent(escape(atob(raw.slice(9)))));
       if(!payload.coachId||!payload.expiry) throw new Error('invalid');
       if(Date.now()>payload.expiry){return showErr('cc-err','Ce code a expiré. Demande un nouveau code à ton coach.');}
+      if(payload._st&&!CLOUD.canWrite()) CLOUD.configure(payload._st);
       currentUser.coachId=payload.coachId;
       currentUser.coachName=payload.coachName||'Coach';
       currentUser.status='COACHING_SUIVI';
@@ -2085,22 +2120,12 @@ function getClients(){
 
   return registered;
 }
-// Génère un lien que l'athlète envoie au coach pour apparaître dans sa liste
-function copyAthleteProfileLink(){
-  if(!currentUser||currentUser.role!=='athlete') return;
-  const payload={
-    id:currentUser.id,fname:currentUser.fname,lname:currentUser.lname,
-    email:currentUser.email,role:'athlete',coachId:currentUser.coachId,
-    status:currentUser.status,createdAt:currentUser.createdAt,
-    streak:currentUser.streak||0,sessions:currentUser.sessions||[],
-    objective:currentUser.objective||'',level:currentUser.level||''
-  };
-  const encoded=btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
-  const url='https://kevin79000.github.io/repcore/?athletepkg='+encoded;
-  if(navigator.clipboard){navigator.clipboard.writeText(url).then(()=>toast('✓ Lien copié ! Envoie-le à ton coach.'));}
-  else{const t=document.createElement('textarea');t.value=url;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();toast('✓ Lien copié !');}
+function isActive(c){
+  const lastSession=c.sessions?.length?c.sessions[c.sessions.length-1].date:0;
+  const lastBilan=c.bilans?.length?c.bilans[c.bilans.length-1].date:0;
+  const lastActivity=Math.max(lastSession,lastBilan,c.createdAt||0);
+  return Date.now()-lastActivity<14*864e5;
 }
-function isActive(c){if(!c.sessions?.length) return false;return Date.now()-c.sessions[c.sessions.length-1].date<7*864e5;}
 function needsAlert(c){
   if(!c.bilans?.length) return !!c.questionnaireComplete;
   return Date.now()-c.bilans[c.bilans.length-1].date>14*864e5;
@@ -2145,16 +2170,19 @@ function openClientDetail(cid){
   if(c._fromCode){
     be.innerHTML=`<div style="background:#111;border:1px solid #1a1a1a;border-radius:12px;padding:16px;text-align:center">
       <div style="font-size:32px;margin-bottom:10px">📱</div>
-      <div style="font-weight:700;margin-bottom:6px">${c.fname} n'a pas encore partagé son profil</div>
-      <div class="sub" style="font-size:12px;line-height:1.6">Demande-lui d'appuyer sur<br><strong style="color:var(--red)">"📋 Partager mon profil avec le coach"</strong><br>depuis son espace athlète.<br>Ses données apparaîtront ici automatiquement.</div>
+      <div style="font-weight:700;margin-bottom:6px">${c.fname} n'a pas encore créé son compte</div>
+      <div class="sub" style="font-size:12px;line-height:1.6">Envoie-lui le code d'accès pour qu'elle s'inscrive.<br>Ses données apparaîtront ici automatiquement dès qu'elle aura complété son premier bilan.</div>
     </div>`;
   } else if(!c.bilans?.length){
     be.innerHTML='<div class="empty-state" style="padding:20px"><div>Aucun bilan.</div></div>';
   } else {
-    be.innerHTML=c.bilans.slice(-3).reverse().map(b=>`<div class="card" style="margin-bottom:10px">
+    be.innerHTML=c.bilans.slice(-3).reverse().map(b=>{
+      const bw=getBW(b)||0,bWaist=getBM(b,'waist')||0,bNeck=getBM(b,'neck')||0,bHips=getBM(b,'hips')||0;
+      const bfPct=calcBF(bWaist,bNeck,bHips,parseFloat(c._evol_height||c['init-height']||c['deb-height']||0),c.gender||'H');
+      return `<div class="card" style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700">${new Date(b.date).toLocaleDateString('fr-FR')}</span><span class="badge badge-green">Complété</span></div>
-      <div style="display:flex;gap:16px"><span class="sub">Poids: <strong style="color:#fff">${b.weight||'—'}kg</strong></span><span class="sub">MG: <strong style="color:#fff">${b.fat||'—'}%</strong></span><span class="sub">Tour taille: <strong style="color:#fff">${b.waist||'—'}cm</strong></span></div>
-      ${b.comment?`<div style="margin-top:8px;font-size:12px;color:var(--sub)">"${b.comment.slice(0,80)}..."</div>`:''}
+      <div style="display:flex;gap:16px;flex-wrap:wrap"><span class="sub">Poids: <strong style="color:#fff">${bw||'—'}kg</strong></span><span class="sub">MG: <strong style="color:#fff">${bfPct!==null?bfPct+'%':'—'}</strong></span><span class="sub">Taille: <strong style="color:#fff">${bWaist||'—'}cm</strong></span></div>
+      ${b['bil-ressenti']?`<div style="margin-top:8px;font-size:11px;color:var(--sub);font-style:italic">"${String(b['bil-ressenti']).slice(0,80)}"</div>`:''}
     </div>`).join('');
   }
   go('s-coach-client');
@@ -2362,7 +2390,7 @@ function loadClientHome(){
   document.getElementById('clh-name').textContent=u.fname+' '+u.lname;
   const coachEl=document.getElementById('clh-coach');
   if(u.coachName){
-    coachEl.innerHTML=`Coach: ${u.coachName} · <button onclick="copyAthleteProfileLink()" style="background:none;border:none;color:var(--red);font-size:11px;cursor:pointer;font-family:Montserrat,sans-serif;padding:0;letter-spacing:.5px;text-transform:uppercase;font-weight:700">📋 Partager mon profil avec le coach</button>`;
+    coachEl.innerHTML=`Coach: ${u.coachName}`;
   } else {
     coachEl.textContent='Sans coach assigné';
   }
@@ -3096,11 +3124,11 @@ function bQ(id){return`<input type="number" id="${id}" placeholder="—" value="
 function bT(id,ph){return`<input type="text" id="${id}" placeholder="${ph||''}" value="${bilData[id]||''}" oninput="bilData['${id}']=this.value">`;}
 function bTA(id,ph){return`<textarea id="${id}" rows="3" placeholder="${ph||''}" oninput="bilData['${id}']=this.value" style="resize:none">${bilData[id]||''}</textarea>`;}
 function bC(gid,choices,multi){
-  return choices.map(c=>`<div class="choice-opt${bilData[gid]&&(multi?bilData[gid].includes(c):bilData[gid]===c)?' sel':''}" data-grp="${gid}" data-val="${c}" onclick="pickBilChoice('${gid}','${c}',${!!multi})">${c}</div>`).join('');
+  return choices.map(c=>`<div class="choice-opt${bilData[gid]&&(multi?bilData[gid].includes(c):bilData[gid]===c)?' sel':''}" data-grp="${gid}" data-val="${c}" onclick="pickBilChoice('${gid}',this.dataset.val,${!!multi})">${c}</div>`).join('');
 }
 function bSec(title,html){return`<div style="margin-bottom:22px"><div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">${title}</div>${html}</div>`;}
 function bMeas(id,label,unit){return`<div class="bil-row"><span class="bil-row-label">${label}</span><div style="display:flex;align-items:center;gap:6px">${bQ(id)}<span class="bil-unit">${unit}</span></div></div>`;}
-function bLbl(txt){return`<div style="font-size:11px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;margin-top:14px">${txt}</div>`;}
+function bLbl(txt){return`<div style="font-size:11px;font-weight:700;color:#e0e0e0;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;margin-top:14px">${txt}</div>`;}
 function loadBilPhoto(input,key){
   const f=input.files[0];if(!f)return;
   compressImage(f,1200,0.75,data=>{
@@ -3420,11 +3448,21 @@ function loadProgress(){
 /* --- helpers --- */
 function getBW(b){return parseFloat(b['bil-weight']||b['deb-weight']||b.weight)||0;}
 function getBM(b,k){return parseFloat(b['bil-'+k]||b['deb-'+k]||b[k])||0;}
-function calcBF(wt,ht,age,gender){
-  if(!wt||!ht||!age) return null;
-  const bmi=wt/Math.pow(ht/100,2);
-  const male=!/^[fF]/.test(String(gender||'H'));
-  return Math.max(0,Math.round((1.20*bmi+0.23*Number(age)-(male?10.8:0)-5.4)*10)/10);
+function calcBF(waist,neck,hips,height,gender){
+  // Formule US Navy (mesures en cm)
+  if(!waist||!neck||!height) return null;
+  const female=/^[fF]/.test(String(gender||'H'));
+  try{
+    let bf;
+    if(female){
+      if(!hips) return null;
+      bf=495/(1.29579-0.35004*Math.log10(waist+hips-neck)+0.22100*Math.log10(height))-450;
+    } else {
+      if(waist<=neck) return null;
+      bf=495/(1.0324-0.19077*Math.log10(waist-neck)+0.15456*Math.log10(height))-450;
+    }
+    return Math.max(2,Math.min(60,Math.round(bf*10)/10));
+  }catch{return null;}
 }
 function drawPie(id,slices){
   const cv=document.getElementById(id);if(!cv)return;
@@ -3494,29 +3532,49 @@ function showProgressTab(tab,btn){
   } else if(tab==='mensus'){
     if(!bl.length){c.innerHTML='<div class="empty-state"><div class="es-icon"></div><div>Aucune mensuration.</div></div>';return;}
     const tableRows=MEAS.map(m=>progRow(m.l,bl.map(b=>{const v=getBM(b,m.k);return v?String(v):'';}),'#e0e0e0')).join('');
-    // Mini charts grid
+    const GROUPS=[
+      {label:'Biceps (D / G)',items:[{k:'bicep-r',l:'Droit',color:'#E02020'},{k:'bicep-l',l:'Gauche',color:'#f97316'}]},
+      {label:'Cuisses (D / G)',items:[{k:'thigh-r',l:'Droit',color:'#06b6d4'},{k:'thigh-l',l:'Gauche',color:'#14b8a6'}]},
+      {label:'Mollets (D / G)',items:[{k:'calf-r',l:'Droit',color:'#f472b6'},{k:'calf-l',l:'Gauche',color:'#a78bfa'}]},
+      {label:'Tour de Poitrine',items:[{k:'chest',l:'',color:'#eab308'}]},
+      {label:'Tour de Taille',items:[{k:'waist',l:'',color:'#3b82f6'}]},
+      {label:'Tour de Hanche',items:[{k:'hips',l:'',color:'#8b5cf6'}]},
+      {label:'Fessier',items:[{k:'glutes',l:'',color:'#22c55e'}]},
+      {label:'Buste',items:[{k:'bust',l:'',color:'#fb923c'}]},
+      {label:'Tour de Cou',items:[{k:'neck',l:'',color:'#94a3b8'}]},
+    ];
     let miniCharts='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">';
-    MEAS.forEach(m=>{
-      const vals=bl.map(b=>getBM(b,m.k));
-      if(!vals.some(v=>v)){return;}
-      const filtered=vals.filter(v=>v);
-      const mn=Math.min(...filtered),mx=Math.max(...filtered);
-      const diff=parseFloat((filtered[filtered.length-1]-filtered[0]).toFixed(1));
-      const col=diff<=0?'var(--green)':diff>0?'var(--red)':'var(--sub)';
+    const groupsToRender=[];
+    GROUPS.forEach(g=>{
+      const hasData=g.items.some(it=>bl.some(b=>getBM(b,it.k)));
+      if(!hasData) return;
+      const isGroup=g.items.length>1;
+      const mainVals=bl.map(b=>getBM(b,g.items[0].k));
+      const filtered=mainVals.filter(v=>v);
+      const diff=filtered.length>1?parseFloat((filtered[filtered.length-1]-filtered[0]).toFixed(1)):null;
+      const col=diff===null?'var(--sub)':diff<=0?'var(--green)':'var(--red)';
       miniCharts+=`<div style="background:#0f0f0f;border:1px solid #1c1c1c;border-radius:10px;padding:12px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-          <div style="font-size:9px;font-weight:800;color:${m.color};letter-spacing:.5px;text-transform:uppercase">${m.l}</div>
-          <div style="font-size:10px;font-weight:700;color:${col}">${diff>0?'+':''}${diff}cm</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div style="font-size:9px;font-weight:800;color:${g.items[0].color};letter-spacing:.5px;text-transform:uppercase">${g.label}</div>
+          ${diff!==null?`<div style="font-size:10px;font-weight:700;color:${col}">${diff>0?'+':''}${diff}cm</div>`:''}
         </div>
-        <canvas id="mc-${m.k}" height="65"></canvas>
+        ${isGroup?`<div style="display:flex;gap:8px;margin-bottom:4px">${g.items.map(it=>`<span style="font-size:8px;color:${it.color};font-weight:700">● ${it.l}</span>`).join('')}</div>`:''}
+        <canvas id="mc-${g.items.map(i=>i.k).join('-')}" height="65"></canvas>
       </div>`;
+      groupsToRender.push(g);
     });
     miniCharts+='</div>';
     c.innerHTML=progTblWrap(progHdr(bilLabels)+tableRows)+miniCharts;
     setTimeout(()=>{
-      MEAS.forEach(m=>{
-        const vals=bl.map(b=>getBM(b,m.k));
-        if(vals.filter(v=>v).length>1) lineChart('mc-'+m.k,bilLabels,vals,m.color);
+      groupsToRender.forEach(g=>{
+        const canvasId='mc-'+g.items.map(i=>i.k).join('-');
+        if(g.items.length===1){
+          const vals=bl.map(b=>getBM(b,g.items[0].k));
+          if(vals.filter(v=>v).length>1) lineChart(canvasId,bilLabels,vals,g.items[0].color);
+        } else {
+          const series=g.items.map(it=>({data:bl.map(b=>getBM(b,it.k)),color:it.color,label:it.l}));
+          if(series.some(s=>s.data.filter(v=>v).length>1)) multiLineChart(canvasId,bilLabels,series);
+        }
       });
     },60);
 
@@ -3524,15 +3582,19 @@ function showProgressTab(tab,btn){
     if(!bl.length){c.innerHTML='<div class="empty-state"><div class="es-icon"></div><div>Aucun bilan enregistré.</div></div>';return;}
     const deb=(currentUser.bilans||[]).find(b=>b.type==='depart');
     const storedH=parseFloat(currentUser._evol_height||deb?.['deb-height']||currentUser['init-height']||0);
-    const storedAge=parseFloat(currentUser._evol_age||deb?.['deb-age']||0);
     const storedG=currentUser._evol_gender||currentUser.gender||'H';
-    const bfPcts=bl.map(b=>calcBF(getBW(b),storedH,storedAge,storedG));
+    const female=/^[fF]/.test(String(storedG));
+    const bfPcts=bl.map(b=>{
+      const waist=getBM(b,'waist'),neck=getBM(b,'neck'),hips=getBM(b,'hips');
+      return calcBF(waist,neck,hips,storedH,storedG);
+    });
     const mgKgs=bl.map((b,i)=>{const w=getBW(b),p=bfPcts[i];return(p!==null&&w)?Math.round(w*(p/100)*10)/10:null;});
     const mmKgs=bl.map((b,i)=>{const w=getBW(b),mg=mgKgs[i];return(mg!==null&&w)?Math.round((w-mg)*10)/10:null;});
     const valid=bfPcts.filter(v=>v!==null);
     const fb=valid[0]??null,lb=valid[valid.length-1]??null;
     const diff=fb!==null&&lb!==null?parseFloat((lb-fb).toFixed(1)):null;
     const col=diff!==null?(diff<=0?'var(--green)':'var(--red)'):'var(--sub)';
+    const missingMeas=bl.some(b=>!getBM(b,'neck')||!getBM(b,'waist')||(female&&!getBM(b,'hips')));
     const pieSec=(idx,title)=>{
       const mg=mgKgs[idx]??0,mm=mmKgs[idx]??0;
       if(!mg&&!mm) return '';
@@ -3548,19 +3610,19 @@ function showProgressTab(tab,btn){
     };
     c.innerHTML=`
       <div style="background:#0f0f0f;border:1px solid #1c1c1c;border-radius:12px;padding:14px;margin-bottom:14px">
-        <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px">Paramètres — Formule Deurenberg</div>
+        <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px">Paramètres — Formule US Navy</div>
         <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
           <div style="flex:1;min-width:70px"><label style="font-size:9px">Taille (cm)</label><input type="number" id="evol-height" value="${storedH||''}" placeholder="176" style="padding:8px;font-size:14px;font-weight:700;text-align:center"></div>
-          <div style="flex:1;min-width:70px"><label style="font-size:9px">Âge</label><input type="number" id="evol-age" value="${storedAge||''}" placeholder="28" style="padding:8px;font-size:14px;font-weight:700;text-align:center"></div>
           <div style="flex:1;min-width:80px">
             <label style="font-size:9px">Sexe</label>
             <div style="display:flex;gap:4px;margin-top:6px">
-              <button onclick="setEvolGender('H')" style="flex:1;padding:9px;border-radius:4px;border:1px solid ${storedG!=='F'?'var(--red)':'#2a2a2a'};background:${storedG!=='F'?'#1a0000':'#111'};color:${storedG!=='F'?'var(--red)':'#555'};font-size:13px;font-weight:900;cursor:pointer;letter-spacing:1px">H</button>
-              <button onclick="setEvolGender('F')" style="flex:1;padding:9px;border-radius:4px;border:1px solid ${storedG==='F'?'var(--red)':'#2a2a2a'};background:${storedG==='F'?'#1a0000':'#111'};color:${storedG==='F'?'var(--red)':'#555'};font-size:13px;font-weight:900;cursor:pointer;letter-spacing:1px">F</button>
+              <button onclick="setEvolGender('H')" style="flex:1;padding:9px;border-radius:4px;border:1px solid ${!female?'var(--red)':'#2a2a2a'};background:${!female?'#1a0000':'#111'};color:${!female?'var(--red)':'#555'};font-size:13px;font-weight:900;cursor:pointer;letter-spacing:1px">H</button>
+              <button onclick="setEvolGender('F')" style="flex:1;padding:9px;border-radius:4px;border:1px solid ${female?'var(--red)':'#2a2a2a'};background:${female?'#1a0000':'#111'};color:${female?'var(--red)':'#555'};font-size:13px;font-weight:900;cursor:pointer;letter-spacing:1px">F</button>
             </div>
           </div>
-          <button class="btn btn-red btn-sm" onclick="refreshMG()" style="height:40px;padding:0 16px;align-self:flex-end;letter-spacing:1px">Calculer</button>
+          <button class="btn btn-red btn-sm" onclick="refreshMG()" style="height:40px;padding:0 16px;align-self:flex-end;letter-spacing:1px">Appliquer</button>
         </div>
+        ${missingMeas?`<div style="margin-top:10px;padding:8px 10px;background:#1a0a00;border:1px solid #3a1500;border-radius:6px;font-size:10px;color:#f97316;line-height:1.5">⚠ Certains bilans manquent : <strong>Tour de Cou</strong>${female?' + <strong>Tour de Hanche</strong>':''} + <strong>Tour de Taille</strong>. Renseigne ces mesures dans ton prochain bilan.</div>`:''}
       </div>
       <div style="display:flex;gap:8px;margin-bottom:14px">
         <div class="metric-box"><div class="metric-val">${fb!==null?fb+'%':'—'}</div><div class="metric-label">MG départ</div></div>
@@ -3582,7 +3644,7 @@ function showProgressTab(tab,btn){
         progRow('Masse musculaire (kg)',mmKgs.map(v=>v!==null?String(v):''),'#22c55e','#0f0f0f')
       )}
       <div style="font-size:9px;color:#333;text-align:center;margin-top:8px;line-height:1.6">
-        Formule Deurenberg (1991) · % MG = 1,20 × IMC + 0,23 × âge − ${storedG!=='F'?'10,8 (homme)':'0 (femme)'} − 5,4<br>
+        Formule US Navy · Basée sur tour de cou, tour de taille${female?' et tour de hanche':''} + taille<br>
         Masse grasse = Poids × (% MG / 100) · Masse musculaire = Poids − Masse grasse
       </div>
     `;
@@ -3609,31 +3671,75 @@ function showProgressTab(tab,btn){
 
   } else if(tab==='photos'){
     const getP=(b,t)=>b['bil-photo-'+t]||b['deb-photo-'+t]||(b.photos&&b.photos[t])||null;
-    const ph=bl.filter(b=>getP(b,'face')||getP(b,'back')||getP(b,'side'));
-    if(!ph.length){c.innerHTML='<div class="empty-state"><div class="es-icon"></div><div>Aucune photo de bilan.<br>Ajoute des photos lors de ton prochain bilan.</div></div>';return;}
-    c.innerHTML=ph.map((b,i)=>{
-      const face=getP(b,'face'),back=getP(b,'back'),side=getP(b,'side');
-      const idx=bl.indexOf(b);
-      return `<div style="background:#0f0f0f;border:1px solid #1c1c1c;border-radius:12px;padding:14px;margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <div style="font-size:11px;font-weight:900;color:var(--red);text-transform:uppercase;letter-spacing:1px">Bilan ${idx+1}</div>
-          <div style="display:flex;gap:14px;align-items:center">
-            <span style="font-size:11px;color:var(--sub)">️ <strong style="color:#fff">${getBW(b)||'—'}kg</strong></span>
-            <span style="font-size:11px;color:#555">${new Date(b.date).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'2-digit'})}</span>
-          </div>
-        </div>
-        <div style="display:flex;gap:5px">
-          ${[['face','Face'],['back','Dos'],['side','Profil']].map(([k,lbl])=>{
-            const src=getP(b,k);
-            return `<div style="flex:1;text-align:center">
-              <div style="font-size:8px;color:var(--sub);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">${lbl}</div>
-              ${src?`<div style="aspect-ratio:.65;border-radius:6px;overflow:hidden;background:#111"><img src="${src}" style="width:100%;height:100%;object-fit:cover"></div>`
-                  :`<div style="aspect-ratio:.65;border-radius:6px;background:#0a0a0a;border:1px dashed #1c1c1c;display:flex;align-items:center;justify-content:center"><span style="font-size:16px;opacity:.2"></span></div>`}
-            </div>`;
+    const hasSome=bl.some(b=>getP(b,'face')||getP(b,'back')||getP(b,'side'));
+    if(!hasSome){c.innerHTML='<div class="empty-state"><div class="es-icon"></div><div>Aucune photo de bilan.<br>Ajoute des photos lors de ton prochain bilan.</div></div>';return;}
+    // Fresque : lignes = pose (Face/Dos/Profil), colonnes = bilans
+    const poses=[['face','FACE'],['back','DOS'],['side','PROFIL']];
+    const cellW=Math.max(72,Math.min(110,Math.floor((window.innerWidth||360)-40)/(bl.length+1)));
+    let html=`<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:8px">
+      <table style="border-collapse:collapse;min-width:100%">
+        <thead><tr>
+          <td style="padding:6px 8px;font-size:8px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:1px;min-width:44px"></td>
+          ${bl.map((_,i)=>`<td style="padding:6px 4px;text-align:center;font-size:8px;font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;min-width:${cellW}px">
+            B${i+1}<br><span style="color:#444;font-weight:600;font-size:7px">${getBW(bl[i])?getBW(bl[i])+'kg':''}</span>
+          </td>`).join('')}
+        </tr></thead>
+        <tbody>
+        ${poses.map(([key,lbl])=>`<tr>
+          <td style="padding:6px 8px;font-size:8px;font-weight:900;color:#aaa;text-transform:uppercase;letter-spacing:.5px;vertical-align:middle">${lbl}</td>
+          ${bl.map((b,i)=>{
+            const src=getP(b,key);
+            return `<td style="padding:3px 4px;vertical-align:top">
+              ${src
+                ?`<div style="width:${cellW}px;aspect-ratio:.65;border-radius:6px;overflow:hidden;background:#111;cursor:pointer" onclick="openPhotoFull(this.querySelector('img').src,'Bilan ${i+1} — ${lbl}')"><img src="${src}" style="width:100%;height:100%;object-fit:cover"></div>`
+                :`<div style="width:${cellW}px;aspect-ratio:.65;border-radius:6px;background:#0a0a0a;border:1px dashed #1e1e1e;display:flex;align-items:center;justify-content:center"><span style="font-size:14px;opacity:.15"></span></div>`}
+            </td>`;
           }).join('')}
+        </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top:10px;font-size:9px;color:#2a2a2a;text-align:center">Touche une photo pour l'agrandir · ${bl.length} bilan${bl.length>1?'s':''} enregistré${bl.length>1?'s':''}</div>`;
+    c.innerHTML=html;
+  } else if(tab==='notes'){
+    if(!bl.length){c.innerHTML='<div class="empty-state"><div class="es-icon">📋</div><div>Aucun bilan enregistré.</div></div>';return;}
+    const bilQ=[
+      {k:'bil-ressenti',lbl:'Ressenti évolution',emoji:'💭'},
+      {k:'bil-motivation',lbl:'Motivation',emoji:'🔥'},
+      {k:'bil-diff-type',lbl:'Difficultés',emoji:'⚠️'},
+      {k:'bil-diff-detail',lbl:'Détail difficultés',emoji:'📝'},
+      {k:'bil-cheat-meals',lbl:'Cheat meals',emoji:'🍕'},
+      {k:'bil-cheat-reasons',lbl:'Raisons écarts',emoji:'💬'},
+      {k:'bil-sleep-quality',lbl:'Qualité du sommeil',emoji:'😴'},
+      {k:'bil-stress',lbl:'Niveau de stress',emoji:'😤'},
+      {k:'bil-stress-detail',lbl:'Source du stress',emoji:'📌'},
+      {k:'bil-goals-next',lbl:'Objectifs à venir',emoji:'🎯'},
+      {k:'bil-new-goals-detail',lbl:'Nouveaux objectifs',emoji:'🚀'},
+      {k:'bil-exo-change',lbl:'Changements programme',emoji:'🏋️'},
+      {k:'bil-exo-detail',lbl:'Exercices à modifier',emoji:'✏️'},
+    ];
+    c.innerHTML=bl.slice().reverse().map((b,ri)=>{
+      const i=bl.length-1-ri;
+      const d=new Date(b.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
+      const w=getBW(b);
+      const answers=bilQ.map(q=>{
+        const val=b[q.k];
+        if(!val) return '';
+        const txt=Array.isArray(val)?val.join(', '):String(val);
+        return `<div style="padding:8px 0;border-bottom:1px solid #141414">
+          <div style="font-size:9px;color:var(--sub);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">${q.emoji} ${q.lbl}</div>
+          <div style="font-size:12px;color:#ddd;line-height:1.5">${txt}</div>
+        </div>`;
+      }).filter(Boolean).join('');
+      if(!answers) return '';
+      return `<div style="background:#0f0f0f;border:1px solid #1c1c1c;border-radius:12px;padding:16px;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div style="font-size:9px;font-weight:900;color:var(--red);text-transform:uppercase;letter-spacing:1.5px">Bilan ${i+1}${b.type==='depart'?' · Départ':''}</div>
+          <div style="text-align:right"><div style="font-size:10px;color:#555">${d}</div>${w?`<div style="font-size:12px;font-weight:700;color:#fff;margin-top:2px">⚖️ ${w}kg</div>`:''}</div>
         </div>
+        ${answers}
       </div>`;
-    }).join('');
+    }).filter(Boolean).join('')||'<div class="empty-state"><div>Les réponses de tes prochains bilans apparaîtront ici.</div></div>';
   }
 }
 
@@ -3643,9 +3749,7 @@ function setEvolGender(g){
 }
 function refreshMG(){
   const h=parseFloat(document.getElementById('evol-height')?.value);
-  const age=parseFloat(document.getElementById('evol-age')?.value);
   if(h&&h>100&&h<250) currentUser._evol_height=h;
-  if(age&&age>5&&age<120) currentUser._evol_age=age;
   saveUser();
   showProgressTab('masseGrasse',document.querySelector('#prog-tabs .btn-red'));
 }
@@ -3942,14 +4046,47 @@ function barChart(id,labels,data){
   });
 }
 
+function multiLineChart(id,labels,series){
+  const cv=document.getElementById(id);if(!cv)return;
+  const ctx=cv.getContext('2d');cv.width=cv.offsetWidth||300;cv.height=parseInt(cv.getAttribute('height'))||100;
+  ctx.clearRect(0,0,cv.width,cv.height);
+  const allVals=series.flatMap(s=>s.data.filter(v=>v));if(!allVals.length)return;
+  const w=cv.width,h=cv.height,p=32;
+  const mn=Math.min(...allVals)*0.98,mx=Math.max(...allVals)*1.02;
+  const xs=(w-p*2)/(labels.length-1||1),ys=(h-p*2)/(mx-mn||1);
+  ctx.strokeStyle='#2a2a2a';ctx.lineWidth=1;
+  [0,.5,1].forEach(t=>{const y=h-p-t*(h-p*2);ctx.beginPath();ctx.moveTo(p,y);ctx.lineTo(w-p,y);ctx.stroke();ctx.fillStyle='#555';ctx.font='9px sans-serif';ctx.fillText((mn+t*(mx-mn)).toFixed(1),0,y+4);});
+  series.forEach(s=>{
+    if(!s.data.some(v=>v))return;
+    ctx.strokeStyle=s.color;ctx.lineWidth=2;ctx.setLineDash([]);ctx.beginPath();
+    let first=true;
+    s.data.forEach((v,i)=>{if(!v)return;const x=p+i*xs,y=h-p-(v-mn)*ys;first?(ctx.moveTo(x,y),first=false):ctx.lineTo(x,y);});
+    ctx.stroke();
+    ctx.fillStyle=s.color;
+    s.data.forEach((v,i)=>{if(!v)return;const x=p+i*xs,y=h-p-(v-mn)*ys;ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fill();});
+  });
+  ctx.fillStyle='#555';ctx.font='9px sans-serif';ctx.textAlign='center';
+  labels.forEach((l,i)=>ctx.fillText(l,p+i*xs,h-4));
+}
+function openPhotoFull(src,title){
+  const m=document.createElement('div');
+  m.style.cssText='position:fixed;inset:0;background:#000e;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer';
+  m.onclick=()=>m.remove();
+  m.innerHTML=`<div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:12px">${title}</div>
+    <img src="${src}" style="max-width:94vw;max-height:80vh;object-fit:contain;border-radius:8px">
+    <div style="font-size:11px;color:#444;margin-top:12px">Touche pour fermer</div>`;
+  document.body.appendChild(m);
+}
+
 // ======= HELPERS =======
 function ini(f,l){return((f||'?')[0]+(l||'?')[0]).toUpperCase();}
 function ago(ts){const d=Math.floor((Date.now()-ts)/864e5);return d===0?"aujourd'hui":d===1?"hier":"il y a "+d+"j";}
 function saveUser(){
   currentUser.updatedAt=Date.now();
+  if(CLOUD.canWrite()) currentUser._st=CLOUD._token();
   const users=DB.get('users')||{};
   users[currentUser.email]=currentUser;
-  DB.set('users',users); // writes to localStorage + pushes to Firebase
+  DB.set('users',users);
   DB.set('session',currentUser);
 }
 function silentLogout(){DB.del('session');currentUser=null;}
@@ -4408,7 +4545,8 @@ function generateStudentCode(){
     studentName:name,
     expiry:expiry,
     months:months,
-    codeId:'sc_'+Date.now()
+    codeId:'sc_'+Date.now(),
+    _st:CLOUD._token()||undefined
   };
   const token='RCACCESS:'+btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
   // Store in coach's studentCodes
@@ -4472,7 +4610,7 @@ function extendStudentCode(i){
   c.expiry=base+(3*30*24*60*60*1000);
   c.months=(c.months||0)+3;
   // Rebuild token with new expiry
-  const payload={coachId:currentUser.id,coachName:currentUser.fname+' '+currentUser.lname,coachCode:currentUser.code,studentName:c.studentName,expiry:c.expiry,months:c.months,codeId:c.codeId};
+  const payload={coachId:currentUser.id,coachName:currentUser.fname+' '+currentUser.lname,coachCode:currentUser.code,studentName:c.studentName,expiry:c.expiry,months:c.months,codeId:c.codeId,_st:CLOUD._token()||undefined};
   c.token='RCACCESS:'+btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
   const users=DB.get('users')||{};users[currentUser.email]=currentUser;
   DB.set('users',users);DB.set('session',currentUser);
