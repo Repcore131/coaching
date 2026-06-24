@@ -1681,8 +1681,6 @@ window.onload=()=>{
       // Sync depuis le cloud avant de router
       if(CLOUD.ok()){
         try{ await CLOUD.syncUsers(); }catch(e){}
-        // Push local → cloud au démarrage (couvre les bilans jamais envoyés)
-        if(CLOUD.canWrite()){const lu=DB.get('users');if(lu) CLOUD.push(lu);}
       }
       const sess=DB.get('session');
       if(sess){
@@ -1694,6 +1692,8 @@ window.onload=()=>{
           silentLogout();
           go('s-welcome');
         } else {
+          // Push avec _st au démarrage → tous les appareils reçoivent le token via cloud
+          if(CLOUD.canWrite()) saveUser();
           routeUser();
         }
       } else if(window._importedCoach){
@@ -2165,7 +2165,7 @@ function openClientDetail(cid){
   document.getElementById('ccd-streak').textContent=(c.streak||0)+'';
   document.getElementById('ccd-sessions').textContent=(c.sessions||[]).length;
   const lb=c.bilans?.length?c.bilans[c.bilans.length-1]:null;
-  document.getElementById('ccd-weight').textContent=lb?lb.weight+'kg':'—';
+  document.getElementById('ccd-weight').textContent=lb&&getBW(lb)?getBW(lb)+'kg':'—';
   const be=document.getElementById('ccd-bilans');
   if(c._fromCode){
     be.innerHTML=`<div style="background:#111;border:1px solid #1a1a1a;border-radius:12px;padding:16px;text-align:center">
