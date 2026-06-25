@@ -1511,57 +1511,44 @@ function compressImage(file, maxPx, quality, cb){
   reader.readAsDataURL(file);
 }
 
-// ── Cloud sync (repcore-db GitHub public repo) ───────────────────────
-// Lectures publiques (pas de token requis sur aucun appareil)
-// Écritures via token GitHub (coach uniquement, stocké dans localStorage)
+// ── Cloud sync (Firebase Realtime Database — public read/write, no token needed) ──
 const CLOUD={
-  _repo:'kevin79000/repcore-db',
-  _sha:null,
+  _fbUrl:'https://repcore-sync-default-rtdb.firebaseio.com/users.json',
   _pushTimer:null,
-  _token(){return localStorage.getItem('rc_sync_token')||'';},
-  ok(){return true;}, // lectures toujours disponibles (repo public)
-  canWrite(){return!!this._token();},
-  configure(token){localStorage.setItem('rc_sync_token',(token||'').trim());},
+  ok(){return true;},
+  canWrite(){return true;}, // Firebase: toujours inscriptible sans token
+  configure(){}, // no-op conservé pour compatibilité RCACCESS
 
-  // Lecture publique via raw.githubusercontent.com (no auth needed)
   async pull(){
     try{
       const ctrl=new AbortController();
       setTimeout(()=>ctrl.abort(),5000);
-      const r=await fetch('https://raw.githubusercontent.com/'+this._repo+'/main/users.json?t='+Date.now(),{signal:ctrl.signal});
+      const r=await fetch(this._fbUrl+'?t='+Date.now(),{signal:ctrl.signal});
       if(!r.ok)return null;
-      return await r.json();
+      const d=await r.json();
+      return d||{};
     }catch{return null;}
   },
 
-  // Écriture via GitHub API (token requis, debouncée 2s, sans mots de passe)
   push(users){
-    if(!this.canWrite())return;
     clearTimeout(this._pushTimer);
     this._pushTimer=setTimeout(()=>this._doPush(users),2000);
   },
   async _doPush(users){
-    if(!this.canWrite())return;
     try{
       const safe={};
       for(const[email,u] of Object.entries(users)){
-        safe[email]={...u};delete safe[email].pwd;delete safe[email]._st;delete safe[email]._stb64;delete safe[email]._sk;
+        safe[email]={...u};
+        delete safe[email].pwd;delete safe[email]._st;delete safe[email]._stb64;delete safe[email]._sk;
         if(safe[email].bilans) safe[email].bilans=safe[email].bilans.map(b=>{
           const c={...b};Object.keys(c).forEach(k=>{if(k.includes('photo'))delete c[k];});return c;
         });
+        // Firebase n'accepte pas les clés avec '.' — encoder l'email
+        const safeKey=email.replace(/\./g,',');
+        safe[safeKey]=safe[email];
+        if(safeKey!==email) delete safe[email];
       }
-      const apiUrl='https://api.github.com/repos/'+this._repo+'/contents/users.json';
-      const headers={'Authorization':'Bearer '+this._token(),'Accept':'application/vnd.github.v3+json','Content-Type':'application/json'};
-      if(!this._sha){
-        const r=await fetch(apiUrl,{headers});
-        if(r.ok){const d=await r.json();this._sha=d.sha;}
-      }
-      const content=btoa(unescape(encodeURIComponent(JSON.stringify(safe))));
-      const body={message:'sync',content};
-      if(this._sha) body.sha=this._sha;
-      const r=await fetch(apiUrl,{method:'PUT',headers,body:JSON.stringify(body)});
-      const d=await r.json();
-      if(d.content?.sha)this._sha=d.content.sha;
+      await fetch(this._fbUrl,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(safe)});
     }catch{}
   },
 
@@ -1569,17 +1556,12 @@ const CLOUD={
   async syncUsers(){
     const cloud=await this.pull();
     if(!cloud)return;
-    // Auto-configurer le token depuis n'importe quel profil cloud qui l'a
-    const hadToken=this.canWrite();
-    if(!hadToken){
-      for(const u of Object.values(cloud)){
-        const tok=u._st||(u._stb64?atob(u._stb64):null);
-        if(tok){this.configure(tok);break;}
-      }
-    }
+    // Décoder les clés Firebase (virgule → point pour l'email)
+    const decoded={};
+    for(const[k,v] of Object.entries(cloud)) decoded[k.replace(/,/g,'.')]=v;
     const local=JSON.parse(localStorage.getItem('rc_users')||'{}');
     const merged=Object.assign({},local);
-    for(const[email,u] of Object.entries(cloud)){
+    for(const[email,u] of Object.entries(decoded)){
       const loc=merged[email];
       const cloudBilans=u.bilans||[];
       const localBilans=loc?.bilans||[];
@@ -1598,16 +1580,11 @@ const CLOUD={
       merged[email].bilans=allBilans;
     }
     localStorage.setItem('rc_users',JSON.stringify(merged));
-    // Token tout juste obtenu → pousser immédiatement les données locales vers le cloud
-    if(!hadToken&&this.canWrite()) this.push(merged);
   },
 
-  // Générer le QR code de configuration pour de nouveaux appareils
+  // Générer le QR code pour ouvrir l'app sur un autre appareil (sync Firebase auto)
   showQR(){
-    if(!this.canWrite()){toast('Active la sync d\'abord (onglet PAIEMENTS)','var(--orange)');return;}
-    const token=this._token();
-    const b64=btoa(token);
-    const url='https://kevin79000.github.io/repcore/?s='+b64;
+    const url='https://kevin79000.github.io/repcore/';
     const qrUrl='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(url);
     const modal=document.createElement('div');
     modal.style.cssText='position:fixed;inset:0;background:#000c;z-index:9999;display:flex;align-items:center;justify-content:center';
@@ -1901,7 +1878,7 @@ function copyCoachInviteLink(){
     email:currentUser.email,
     code:currentUser.code,
     role:'coach',
-    _st:CLOUD._token()||undefined  // sync token → auto-configure on athlete's device
+    _st:undefined
   };
   const encoded=btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
   const url='https://kevin79000.github.io/repcore/?coachpkg='+encoded;
@@ -4503,7 +4480,7 @@ function updateCloudStatus(){
   if(CLOUD.canWrite()){
     el.textContent='✅ Sync active (lecture + écriture)';
     el.style.color='var(--green)';
-    if(inp) inp.value=CLOUD._token();
+    if(inp) inp.value='Firebase (sync auto)';
     if(qrBtn) qrBtn.style.display='block';
   } else {
     el.textContent='📖 Lecture seule (sync automatique au démarrage)';
@@ -4576,7 +4553,7 @@ function generateStudentCode(){
     expiry:expiry,
     months:months,
     codeId:'sc_'+Date.now(),
-    _st:CLOUD._token()||undefined
+    _st:undefined
   };
   const token='RCACCESS:'+btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
   // Store in coach's studentCodes
@@ -4640,7 +4617,7 @@ function extendStudentCode(i){
   c.expiry=base+(3*30*24*60*60*1000);
   c.months=(c.months||0)+3;
   // Rebuild token with new expiry
-  const payload={coachId:currentUser.id,coachName:currentUser.fname+' '+currentUser.lname,coachCode:currentUser.code,studentName:c.studentName,expiry:c.expiry,months:c.months,codeId:c.codeId,_st:CLOUD._token()||undefined};
+  const payload={coachId:currentUser.id,coachName:currentUser.fname+' '+currentUser.lname,coachCode:currentUser.code,studentName:c.studentName,expiry:c.expiry,months:c.months,codeId:c.codeId};
   c.token='RCACCESS:'+btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
   const users=DB.get('users')||{};users[currentUser.email]=currentUser;
   DB.set('users',users);DB.set('session',currentUser);
