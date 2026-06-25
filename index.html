@@ -1578,12 +1578,22 @@ const CLOUD={
     const local=JSON.parse(localStorage.getItem('rc_users')||'{}');
     const merged=Object.assign({},local);
     for(const[email,u] of Object.entries(cloud)){
-      if(!merged[email]||((u.updatedAt||0)>=(merged[email].updatedAt||0))){
-        const localPwd=local[email]?.pwd;
+      const loc=merged[email];
+      const cloudBilans=u.bilans||[];
+      const localBilans=loc?.bilans||[];
+      // Fusionner bilans des deux sources (union par date+type, jamais écraser)
+      const allBilans=[...cloudBilans];
+      for(const lb of localBilans){
+        if(!allBilans.find(cb=>cb.date===lb.date&&cb.type===lb.type)) allBilans.push(lb);
+      }
+      allBilans.sort((a,b)=>a.date-b.date);
+      if(!loc||((u.updatedAt||0)>=(loc.updatedAt||0))){
+        const localPwd=loc?.pwd;
         merged[email]={...u};
         delete merged[email].pwd;
         if(localPwd) merged[email].pwd=localPwd;
       }
+      merged[email].bilans=allBilans;
     }
     localStorage.setItem('rc_users',JSON.stringify(merged));
   },
@@ -2135,7 +2145,7 @@ function needsAlert(c){
   if(!c.bilans?.length) return !!c.questionnaireComplete;
   return Date.now()-c.bilans[c.bilans.length-1].date>14*864e5;
 }
-function openClientDetail(cid){
+function openClientDetail(cid,_refresh){
   currentClientId=cid;
   const users=DB.get('users')||{};
 
@@ -2190,7 +2200,13 @@ function openClientDetail(cid){
       ${b['bil-ressenti']?`<div style="margin-top:8px;font-size:11px;color:var(--sub);font-style:italic">"${String(b['bil-ressenti']).slice(0,80)}"</div>`:''}
     </div>`}).join('');
   }
-  go('s-coach-client');
+  if(!_refresh) go('s-coach-client');
+  // Sync immédiat puis rafraîchi automatique (sans bouton)
+  if(!_refresh && CLOUD.ok()){
+    CLOUD.syncUsers().then(()=>{
+      if(currentClientId===cid) openClientDetail(cid,true);
+    }).catch(()=>{});
+  }
 }
 function viewClientBilans(){go('s-coach-client');}
 
