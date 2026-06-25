@@ -1693,7 +1693,7 @@ window.onload=()=>{
           go('s-welcome');
         } else {
           // Push avec _st au démarrage → tous les appareils reçoivent le token via cloud
-          if(CLOUD.canWrite()) saveUser();
+          try{if(CLOUD.canWrite()) saveUser();}catch(e){}
           routeUser();
         }
       } else if(window._importedCoach){
