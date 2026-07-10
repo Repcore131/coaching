@@ -1544,15 +1544,42 @@ const CLOUD={
     clearTimeout(this._pushTimer);
     this._pushTimer=setTimeout(()=>this._doPush(users),2000);
   },
+  async _compressPhoto(dataURL){
+    // Compresse à max 220×300px JPEG ~15-25 KB pour pouvoir synchroniser vers Firebase
+    return new Promise(resolve=>{
+      try{
+        const img=new Image();
+        img.onload=()=>{
+          const MAX_W=220,MAX_H=300;
+          const r=Math.min(MAX_W/img.width,MAX_H/img.height,1);
+          const cv=document.createElement('canvas');
+          cv.width=Math.round(img.width*r);
+          cv.height=Math.round(img.height*r);
+          cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+          resolve(cv.toDataURL('image/jpeg',0.72));
+        };
+        img.onerror=()=>resolve(null);
+        img.src=dataURL;
+      }catch{resolve(null);}
+    });
+  },
   async _doPush(users){
     try{
       const safe={};
       for(const[email,u] of Object.entries(users)){
         safe[email]={...u};
         delete safe[email].pwd;delete safe[email]._st;delete safe[email]._stb64;delete safe[email]._sk;
-        if(safe[email].bilans) safe[email].bilans=safe[email].bilans.map(b=>{
-          const c={...b};Object.keys(c).forEach(k=>{if(k.includes('photo'))delete c[k];});return c;
-        });
+        if(safe[email].bilans) safe[email].bilans=await Promise.all(safe[email].bilans.map(async b=>{
+          const c={...b};
+          // Compresser les photos au lieu de les supprimer
+          for(const k of Object.keys(c)){
+            if(k.includes('photo')&&c[k]&&typeof c[k]==='string'&&c[k].startsWith('data:')){
+              c[k]=await this._compressPhoto(c[k])||undefined;
+              if(!c[k]) delete c[k];
+            }
+          }
+          return c;
+        }));
         // Firebase n'accepte pas les clés avec '.' — encoder l'email
         const safeKey=email.replace(/\./g,',');
         safe[safeKey]=safe[email];
