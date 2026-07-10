@@ -2393,7 +2393,8 @@ function renderBilanEvolution(c){
       let td=`<td style="${tdStyle}color:#e53935;background:#1a1a1a;">${label}</td>`;
       for(let i=0;i<maxB;i++){
         const v=bfVals[i]?fn(bfVals[i]):null;
-        td+=`<td style="${tdStyle}color:${v!==null?'#fff':'#333'}">${v!==null?v+unit:'—'}</td>`;
+        const ok=v!==null&&v!==undefined&&!isNaN(v);
+        td+=`<td style="${tdStyle}color:${ok?'#fff':'#333'}">${ok?v+unit:'—'}</td>`;
       }
       return `<tr>${td}</tr>`;
     };
@@ -3774,6 +3775,7 @@ function calcBF(waist,neck,hips,height,gender){
       if(waist<=neck) return null;
       bf=495/(1.0324-0.19077*Math.log10(waist-neck)+0.15456*Math.log10(height))-450;
     }
+    if(!isFinite(bf)||isNaN(bf)) return null;
     return Math.max(2,Math.min(60,Math.round(bf*10)/10));
   }catch{return null;}
 }
