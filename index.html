@@ -1576,9 +1576,15 @@ const CLOUD={
       const cloudBilans=u.bilans||[];
       const localBilans=loc?.bilans||[];
       // Fusionner bilans des deux sources (union par date+type, jamais écraser)
+      // Les photos sont supprimées côté cloud — on les restaure depuis le local
       const allBilans=[...cloudBilans];
       for(const lb of localBilans){
-        if(!allBilans.find(cb=>cb.date===lb.date&&cb.type===lb.type)) allBilans.push(lb);
+        const idx=allBilans.findIndex(cb=>cb.date===lb.date&&cb.type===lb.type);
+        if(idx===-1){
+          allBilans.push(lb);
+        } else {
+          Object.keys(lb).filter(k=>k.includes('photo')).forEach(k=>{allBilans[idx][k]=lb[k];});
+        }
       }
       allBilans.sort((a,b)=>a.date-b.date);
       if(!loc||((u.updatedAt||0)>=(loc.updatedAt||0))){
