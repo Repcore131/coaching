@@ -2263,7 +2263,9 @@ function addBilanPhoto(bilanDate,bilanType,view,inputEl){
     const bil=cl.bilans?.find(b=>b.date===bilanDate&&b.type===bilanType);
     if(!bil)return;
     const prefix=bilanType==='depart'?'deb':'bil';
-    bil[prefix+'-photo-'+view]=e.target.result;
+    const photoKey=prefix+'-photo-'+view;
+    bil[photoKey]=e.target.result;
+    try{localStorage.setItem('rc_photo_'+bilanDate+'_'+photoKey,e.target.result);}catch(ex){}
     users[cl.email]=cl;
     DB.set('users',users);
     CLOUD.push(users);
@@ -2481,7 +2483,7 @@ function renderBilanEvolution(c){
 
   // ── Photos évolution ──────────────────────────────────────────────
   const buildPhotos=()=>{
-    const getP=(b,t)=>b['bil-photo-'+t]||b['deb-photo-'+t]||(b.photos&&b.photos[t])||null;
+    const getP=(b,t)=>b['bil-photo-'+t]||b['deb-photo-'+t]||(b.photos&&b.photos[t])||localStorage.getItem('rc_photo_'+b.date+'_bil-photo-'+t)||localStorage.getItem('rc_photo_'+b.date+'_deb-photo-'+t)||null;
     const VIEWS=[
       {k:'face',label:'De Face',icon:'🧍'},
       {k:'back',label:'De Dos',icon:'🔙'},
@@ -3530,6 +3532,8 @@ function loadBilPhoto(input,key){
   const f=input.files[0];if(!f)return;
   compressImage(f,1200,0.75,data=>{
     bilData[key]=data;
+    // Backup dans clé séparée — survit aux écrasements de sync
+    try{localStorage.setItem('rc_pendingphoto_'+key,data);}catch(e){}
     const lbl=input.closest('label');
     if(lbl){lbl.style.background='#001a00';lbl.style.borderColor='#22c55e';lbl.style.color='#22c55e';lbl.innerHTML=' Ajoutée';}
   });
@@ -3725,6 +3729,11 @@ function saveBilanFinal(){
   if(bilData['deb-gender']&&!currentUser._evol_gender) currentUser._evol_gender=bilData['deb-gender'];
   if(!currentUser.bilans) currentUser.bilans=[];
   currentUser.bilans.push(bi);
+  // Ancrer photos dans clés séparées (survivent au sync Firebase)
+  Object.keys(bi).filter(k=>k.includes('photo')&&bi[k]).forEach(k=>{
+    try{localStorage.setItem('rc_photo_'+bi.date+'_'+k,bi[k]);}catch(e){}
+    try{localStorage.removeItem('rc_pendingphoto_'+k);}catch(e){}
+  });
   saveUser();
   toast(' Bilan n°'+n+' enregistré !');
   go('s-client-home');loadClientHome();
@@ -4072,7 +4081,7 @@ function showProgressTab(tab,btn){
     setTimeout(()=>barChart('v-chart',sl.map(s=>new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})),sl.map(s=>s.volume||0)),50);
 
   } else if(tab==='photos'){
-    const getP=(b,t)=>b['bil-photo-'+t]||b['deb-photo-'+t]||(b.photos&&b.photos[t])||null;
+    const getP=(b,t)=>b['bil-photo-'+t]||b['deb-photo-'+t]||(b.photos&&b.photos[t])||localStorage.getItem('rc_photo_'+b.date+'_bil-photo-'+t)||localStorage.getItem('rc_photo_'+b.date+'_deb-photo-'+t)||null;
     const hasSome=bl.some(b=>getP(b,'face')||getP(b,'back')||getP(b,'side'));
     if(!hasSome){c.innerHTML='<div class="empty-state"><div class="es-icon"></div><div>Aucune photo de bilan.<br>Ajoute des photos lors de ton prochain bilan.</div></div>';return;}
     // Fresque : lignes = pose (Face/Dos/Profil), colonnes = bilans
