@@ -1141,9 +1141,13 @@ const COACH_PHOTO='data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1
         <div style="font-weight:800">J6→J14 — Phase folliculaire</div>
         <div class="sub" style="font-size:11px;margin-top:3px">Énergie optimale, bonne récupération</div>
       </div>
-      <div class="obj-opt" onclick="setCyclePhase('j15_28',this)">
-        <div style="font-weight:800">J15→J28 — Phase lutéale</div>
-        <div class="sub" style="font-size:11px;margin-top:3px">Fatigue légère, rétention possible</div>
+      <div class="obj-opt" onclick="setCyclePhase('j15_21',this)">
+        <div style="font-weight:800">J15→J21 — Phase lutéale (début)</div>
+        <div class="sub" style="font-size:11px;margin-top:3px">Légère fatigue, entraînement normal</div>
+      </div>
+      <div class="obj-opt" onclick="setCyclePhase('j22_28',this)">
+        <div style="font-weight:800">J22→J28 — Phase lutéale (fin)</div>
+        <div class="sub" style="font-size:11px;margin-top:3px">Fatigue, rétention — volume réduit (−1 série/exercice)</div>
       </div>
     </div>
     <button class="btn btn-outline" style="margin-top:16px" onclick="setCyclePhase('ignore',null)">Ignorer / Pas applicable</button>
@@ -2966,7 +2970,8 @@ function getCycleFactor(){
   if(p==='j1_difficile') return{factor:0.80,seriesReduce:0};
   if(p==='j1_supportable') return{factor:0.95,seriesReduce:0};
   if(p==='j6_14') return{factor:1.00,seriesReduce:0};
-  if(p==='j15_28') return{factor:1.00,seriesReduce:1};
+  if(p==='j15_21') return{factor:1.00,seriesReduce:0};
+  if(p==='j22_28') return{factor:1.00,seriesReduce:1};
   return{factor:1.00,seriesReduce:0};
 }
 
@@ -2975,7 +2980,8 @@ function getCycleLabel(){
   if(p==='j1_difficile') return{text:' Phase menstruelle — Difficile',color:'#c4b5fd'};
   if(p==='j1_supportable') return{text:' Phase menstruelle — Supportable',color:var_orange};
   if(p==='j6_14') return{text:' Phase folliculaire — Énergie optimale',color:'var(--green)'};
-  if(p==='j15_28') return{text:' Phase lutéale — Fatigue légère',color:var_orange};
+  if(p==='j15_21') return{text:' Phase lutéale J15-21 — Normal',color:'var(--green)'};
+  if(p==='j22_28') return{text:' Phase lutéale J22-28 — Volume réduit',color:var_orange};
   return null;
 }
 const var_orange='var(--orange)';
