@@ -2438,16 +2438,18 @@ function renderBilanEvolution(c){
     const viewSections=VIEWS.map(v=>{
       const cards=bilanPhotos.map(({b,i,date,photos})=>{
         const img=photos[v.k];
+        const safeCap=(c.fname||'').replace(/'/g,'').replace(/"/g,'')+'  B'+(i+1);
         return img
-          ?`<div onclick="openPhotoFull(this.querySelector('img').src,'${c.fname} — ${v.label} — Bilan ${i+1} (${date})')"
-              style="flex-shrink:0;cursor:pointer;position:relative;border-radius:10px;overflow:hidden;background:#111;border:1px solid #222;width:110px">
+          ?`<div data-cap="${safeCap}" onclick="openPhotoFull(this.querySelector('img').src,this.dataset.cap)"
+              style="flex-shrink:0;cursor:pointer;position:relative;border-radius:10px;overflow:hidden;background:#111;border:1px solid #333;width:110px">
               <div style="position:absolute;top:6px;left:6px;background:#000b;color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:20px;letter-spacing:1px;z-index:1">B${i+1}</div>
               <img src="${img}" style="width:110px;height:160px;object-fit:cover;display:block">
-              <div style="padding:5px 6px;font-size:9px;color:#666;font-weight:700;text-align:center">${date}</div>
+              <div style="padding:5px 6px;font-size:9px;color:#888;font-weight:700;text-align:center">${date}</div>
             </div>`
-          :`<div style="flex-shrink:0;width:110px;border-radius:10px;background:#0a0a0a;border:1px dashed #1e1e1e;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:180px">
-              <div style="font-size:22px;opacity:.15">📷</div>
-              <div style="font-size:9px;color:#333;font-weight:700">B${i+1}</div>
+          :`<div style="flex-shrink:0;width:110px;border-radius:10px;background:#1a1a1a;border:1px dashed #444;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;height:180px">
+              <div style="font-size:22px;opacity:.4">📷</div>
+              <div style="font-size:10px;color:#666;font-weight:700">B${i+1}</div>
+              <div style="font-size:9px;color:#555">${date}</div>
             </div>`;
       }).join('');
       return `<div style="margin-bottom:20px">
@@ -2470,6 +2472,7 @@ function renderBilanEvolution(c){
 
   // ── Assemble HTML ─────────────────────────────────────────────────
   const html=`<div class="pad" style="padding-bottom:40px">
+    ${buildPhotos()}
     <h3 style="margin-bottom:16px;text-align:center">Mensurations</h3>
     ${buildMeasTable()}
     <h3 style="margin-bottom:12px;text-align:center">Évolution par groupe</h3>
@@ -2477,7 +2480,6 @@ function renderBilanEvolution(c){
     ${buildWeightSection()}
     <h3 style="margin-bottom:12px;text-align:center">Composition corporelle</h3>
     ${buildFatSection()}
-    ${buildPhotos()}
   </div>`;
   document.getElementById('evo-content').innerHTML=html;
 
