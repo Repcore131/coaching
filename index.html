@@ -11,7 +11,12 @@
 <title>RepCore — Guellec Coaching Pro</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192x192.png">
-<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js');}</script>
+<script>if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('./sw.js').then(reg=>{
+    reg.update();
+    navigator.serviceWorker.addEventListener('controllerchange',()=>location.reload());
+  });
+}</script>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
