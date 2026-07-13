@@ -731,11 +731,11 @@ const COACH_PHOTO='icons/coach.jpg';
           </div>
         </div>
 
-        <h2 style="margin-bottom:4px">Monetisation</h2>
-        <p class="sub" style="font-size:12px;margin-bottom:20px">Configure ton compte PayPal pour recevoir les abonnements 9,99EUR/mois de tes eleves en autonomie.</p>
+        <h2 style="margin-bottom:4px">Monétisation</h2>
+        <p class="sub" style="font-size:12px;margin-bottom:20px">Tes élèves avec un code affilié paient 9,99€/mois à RepCore. Tu peux suivre leur statut d'abonnement ici.</p>
 
         <!-- PayPal config -->
-        <div style="background:#0f0f0f;border:1px solid #2a0000;border-radius:14px;padding:18px;margin-bottom:20px">
+        <div id="pp-config-section" style="background:#0f0f0f;border:1px solid #2a0000;border-radius:14px;padding:18px;margin-bottom:20px">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
             <div style="width:36px;height:36px;background:#0a3a0a;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0"></div>
             <div>
@@ -1493,7 +1493,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area pad">
 
     <!-- Option 1: Code coach -->
-    <div style="border:1px solid #2a0000;border-radius:16px;padding:20px;margin-bottom:16px;background:#0a0000">
+    <div id="sub-code-option" style="border:1px solid #2a0000;border-radius:16px;padding:20px;margin-bottom:16px;background:#0a0000">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
         <div style="width:40px;height:40px;border-radius:10px;background:#1a0000;display:flex;align-items:center;justify-content:center;font-size:20px"></div>
         <div>
@@ -1523,6 +1523,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <li> Sans engagement — annulation facile</li>
       </ul>
       <div style="width:36px;height:2px;background:var(--red);margin-bottom:16px"></div>
+      <div id="sub-pending-info" style="display:none"></div>
       <div id="paypal-btn-container" style="min-height:48px">
         <button class="btn btn-red" onclick="initPaypalSubscription()" id="paypal-loading-btn">Souscrire pour 9,99€/mois →</button>
       </div>
@@ -1537,6 +1538,9 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <script>
 
+const CREATOR_EMAIL='guellec.coachingpro@gmail.com';
+const PAYPAL_CLIENT_ID='AS9pdM1fxqdyzKzvuiQB3mTPAIHZW12rW_KWAOKB8XkalJXV8kEyWWBzwHPUxCBZtMMzqjJNnAjfa1f1';
+const PAYPAL_PLAN_ID='P-95N51603RD882780YNJKS2QA';
 
 // ======= DATA =======
 // ── Compression image universelle ──
@@ -2191,23 +2195,32 @@ async function doLinkCoach(){
       return showErr('cc-err',e.message||'Code invalide ou corrompu. Contacte ton coach.');
     }
     const payload=result.payload;
-    currentUser.coachId=payload.coachId;
-    currentUser.coachName=payload.coachName||'Coach';
-    currentUser.status='COACHING_SUIVI';
-    currentUser.accessExpiry=payload.expiry;
     const users=DB.get('users')||{};
     const coach=Object.values(users).find(u=>u.id===payload.coachId);
-    if(coach&&coach.studentCodes){
-      const sc=coach.studentCodes.find(cc=>cc.codeId===payload.codeId);
-      if(sc){sc.usedBy=currentUser.fname+' '+currentUser.lname;sc.athleteEmail=currentUser.email;sc.redeemed=true;}
+    if(coach){
       if(!coach.clients) coach.clients=[];
       if(!coach.clients.includes(currentUser.id)) coach.clients.push(currentUser.id);
       users[coach.email]=coach;
     }
-    users[currentUser.email]=currentUser;
-    DB.set('users',users);DB.set('session',currentUser);
-    toast('Accès activé ✓');
-    openBilan('depart');return;
+    if(payload.creatorFree){
+      // Code créateur : accès gratuit immédiat
+      currentUser.coachId=payload.coachId;
+      currentUser.coachName=payload.coachName||'Coach';
+      currentUser.status='COACHING_SUIVI';
+      currentUser.accessExpiry=payload.expiry;
+      users[currentUser.email]=currentUser;
+      DB.set('users',users);DB.set('session',currentUser);
+      toast('Accès activé ✓');
+      openBilan('depart');
+    } else {
+      // Code affilié : paiement 9,99€/mois requis
+      sessionStorage.setItem('pendingCodePayload',JSON.stringify(payload));
+      users[currentUser.email]=currentUser;
+      DB.set('users',users);
+      go('s-subscribe');
+      loadSubscribePage('pending-code',payload);
+    }
+    return;
   }
 
   // Case 3: RCLINK token (legacy)
@@ -5655,24 +5668,36 @@ function updateCloudStatus(){
 function loadMonetisationTab(){
   updateCloudStatus();
   const u=currentUser;
-  const cidEl=document.getElementById('pp-client-id');if(cidEl&&u.paypalClientId) cidEl.value=u.paypalClientId;
-  const pidEl=document.getElementById('pp-plan-id');if(pidEl&&u.paypalPlanId) pidEl.value=u.paypalPlanId;
-  const cfgSt=document.getElementById('pp-config-status');
-  if(cfgSt) cfgSt.textContent=(u.paypalClientId&&u.paypalPlanId)?'Configure (PayPal actif)':'Non configure';
-  if(cfgSt&&u.paypalClientId&&u.paypalPlanId) cfgSt.style.color='var(--green)';
-  // Calc stats from all users
+  const isCreator=u.email===CREATOR_EMAIL;
+  // PayPal config block : visible uniquement pour le créateur
+  const cfgSection=document.getElementById('pp-config-section');
+  if(cfgSection) cfgSection.style.display=isCreator?'':'none';
+  if(isCreator){
+    const cidEl=document.getElementById('pp-client-id');if(cidEl&&u.paypalClientId) cidEl.value=u.paypalClientId;
+    const pidEl=document.getElementById('pp-plan-id');if(pidEl&&u.paypalPlanId) pidEl.value=u.paypalPlanId;
+    const cfgSt=document.getElementById('pp-config-status');
+    if(cfgSt) cfgSt.textContent=(u.paypalClientId&&u.paypalPlanId)?'Configuré (PayPal actif)':'Non configuré';
+    if(cfgSt&&u.paypalClientId&&u.paypalPlanId) cfgSt.style.color='var(--green)';
+  }
   const users=DB.get('users')||{};
-  const subs=Object.values(users).filter(x=>x.status==='AUTONOMIE_PREMIUM'&&x.coachId===u.id);
+  // Créateur : tous les abonnés payants globaux. Autre coach : ses propres élèves payants.
+  const subs=isCreator
+    ? Object.values(users).filter(x=>x.status==='AUTONOMIE_PREMIUM')
+    : Object.values(users).filter(x=>x.status==='AUTONOMIE_PREMIUM'&&x.coachId===u.id);
   const active=subs.filter(x=>x.paymentStatus==='active');
   const cancelled=subs.filter(x=>x.paymentStatus==='cancelled');
   document.getElementById('pp-total-subs').textContent=active.length;
-  document.getElementById('pp-mrr').textContent=(active.length*9.99).toFixed(2)+'EUR';
+  document.getElementById('pp-mrr').textContent=(active.length*9.99).toFixed(2)+'€';
   document.getElementById('pp-cancelled').textContent=cancelled.length;
   const el=document.getElementById('pp-subs-list');
-  if(!subs.length){el.innerHTML='<div class="empty-state"><div class="es-icon"></div><div>Aucun abonn&#233; autonomie pour l&#39;instant.</div></div>';return;}
+  if(!subs.length){
+    const msg=isCreator?'Aucun abonné pour l\'instant.':'Aucun de tes élèves n\'a encore souscrit.';
+    el.innerHTML='<div class="empty-state"><div class="es-icon"></div><div>'+msg+'</div></div>';return;
+  }
   el.innerHTML=subs.map(s=>{
-    const st=s.paymentStatus==='active'?'<span class="badge badge-green">Actif</span>':'<span class="badge badge-red">'+( s.paymentStatus||'Inactif')+'</span>';
-    return '<div class="client-row"><div class="avatar" style="width:36px;height:36px;font-size:13px">'+ini(s.fname,s.lname)+'</div><div style="flex:1"><div style="font-weight:700">'+s.fname+' '+s.lname+'</div><div class="sub" style="font-size:11px;font-family:monospace">'+(s.paypalSubscriptionId||'no sub id')+'</div></div><div>'+st+'<button onclick="toggleSubStatus(\''+s.email+'\')" style="margin-top:4px;font-size:10px;background:none;border:1px solid var(--border);color:var(--sub);border-radius:6px;padding:3px 8px;cursor:pointer;font-family:Montserrat,sans-serif">'+(s.paymentStatus==='active'?'Suspendre':'Activer')+'</button></div></div>';
+    const st=s.paymentStatus==='active'?'<span class="badge badge-green">Actif</span>':'<span class="badge badge-red">'+(s.paymentStatus||'Inactif')+'</span>';
+    const coachInfo=isCreator&&s.coachName?'<div class="sub" style="font-size:10px">Coach : '+s.coachName+'</div>':'';
+    return '<div class="client-row"><div class="avatar" style="width:36px;height:36px;font-size:13px">'+ini(s.fname,s.lname)+'</div><div style="flex:1"><div style="font-weight:700">'+s.fname+' '+s.lname+'</div>'+coachInfo+'<div class="sub" style="font-size:11px;font-family:monospace">'+(s.paypalSubscriptionId||'no sub id')+'</div></div><div>'+st+'<button onclick="toggleSubStatus(\''+s.email+'\')" style="margin-top:4px;font-size:10px;background:none;border:1px solid var(--border);color:var(--sub);border-radius:6px;padding:3px 8px;cursor:pointer;font-family:Montserrat,sans-serif">'+(s.paymentStatus==='active'?'Suspendre':'Activer')+'</button></div></div>';
   }).join('');
 }
 
@@ -5722,11 +5747,13 @@ async function _genAccessCode(studentName,months){
   const expiry=Date.now()+months*_MONTH_MS;
   const codeId='sc_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
   const code=_rcRandCode();
+  const isCreator=currentUser.email===CREATOR_EMAIL;
   const payload={
     coachId:currentUser.id,
     coachName:(currentUser.fname||'')+' '+(currentUser.lname||''),
     coachCode:currentUser.code||null,
-    studentName,expiry,months,codeId
+    studentName,expiry,months,codeId,
+    creatorFree:isCreator
   };
   const url=_rcCodesUrl(code)+(fbTok?'?auth='+fbTok:'');
   const r=await fetch(url,{method:'PUT',headers:{'Content-Type':'application/json'},
@@ -5871,26 +5898,26 @@ function copyExistingCode(i){
 // ═══════════════════════════════════════════════════
 // ATHLETE: Subscribe page
 // ═══════════════════════════════════════════════════
-function loadSubscribePage(){
-  document.getElementById('paypal-btn-container').innerHTML='<button class="btn btn-red" onclick="initPaypalSubscription()" id="paypal-loading-btn">Souscrire pour 9,99EUR/mois</button>';
+function loadSubscribePage(mode,payload){
+  document.getElementById('paypal-btn-container').innerHTML='<button class="btn btn-red" onclick="initPaypalSubscription()" id="paypal-loading-btn">Souscrire pour 9,99€/mois →</button>';
+  const codeOpt=document.getElementById('sub-code-option');
+  const pendingInfo=document.getElementById('sub-pending-info');
+  if(mode==='pending-code'&&payload){
+    if(codeOpt) codeOpt.style.display='none';
+    if(pendingInfo){
+      pendingInfo.style.display='';
+      pendingInfo.innerHTML='<div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:12px;padding:14px;margin-bottom:14px;font-size:12px;line-height:1.7"><strong style="color:var(--green)">Code validé ✓</strong><br>Coach : <strong>'+(payload.coachName||'Coach')+'</strong><br><br>Souscris pour activer ton accès RepCore (9,99€/mois).</div>';
+    }
+  } else {
+    if(codeOpt) codeOpt.style.display='';
+    if(pendingInfo) pendingInfo.style.display='none';
+    sessionStorage.removeItem('pendingCodePayload');
+  }
 }
 function initPaypalSubscription(){
-  // Find the coach's PayPal settings (use coachId if linked, else search for any coach with PayPal)
-  const users=DB.get('users')||{};
-  let coach=null;
-  if(currentUser.coachId){
-    coach=Object.values(users).find(u=>u.id===currentUser.coachId);
-  }
-  if(!coach){
-    coach=Object.values(users).find(u=>u.role==='coach'&&u.paypalClientId&&u.paypalPlanId);
-  }
-  if(!coach||!coach.paypalClientId||!coach.paypalPlanId){
-    toast('PayPal non configure par le coach. Contacte ton coach.');
-    return;
-  }
-  const clientId=coach.paypalClientId;
-  const planId=coach.paypalPlanId;
-  const coachId=coach.id;
+  const clientId=PAYPAL_CLIENT_ID;
+  const planId=PAYPAL_PLAN_ID;
+  const coachId=CREATOR_EMAIL;
   const btn=document.getElementById('paypal-loading-btn');
   if(btn){btn.textContent='Chargement PayPal...';btn.disabled=true;}
   // Load PayPal SDK dynamically
@@ -5914,15 +5941,20 @@ function renderPaypalButton(planId,coachId){
       return actions.subscription.create({'plan_id':planId});
     },
     onApprove:function(data){
-      // Subscription approved!
+      const pendingStr=sessionStorage.getItem('pendingCodePayload');
+      const pending=pendingStr?JSON.parse(pendingStr):null;
       currentUser.status='AUTONOMIE_PREMIUM';
       currentUser.paymentStatus='active';
       currentUser.paypalSubscriptionId=data.subscriptionID;
-      currentUser.coachId=coachId;
+      if(pending){
+        currentUser.coachId=pending.coachId||null;
+        currentUser.coachName=pending.coachName||'';
+        sessionStorage.removeItem('pendingCodePayload');
+      }
       const users=DB.get('users')||{};
       users[currentUser.email]=currentUser;
       DB.set('users',users);DB.set('session',currentUser);
-      toast('Abonnement active ! Bienvenue sur RepCore Premium');
+      toast('Abonnement activé ! Bienvenue sur RepCore ✓');
       setTimeout(()=>{loadClientHome();},1500);
     },
     onError:function(err){
