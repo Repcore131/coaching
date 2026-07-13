@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v111';
+const CACHE = 'repcore-v112';
 const SW_DATA = 'repcore-sw-data'; // persistent across updates — not wiped by activate
 const ASSETS = ['./manifest.json', './icons/icon-192x192.png', './icons/icon-512x512.png', './icons/logo.png'];
 
@@ -16,6 +16,10 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const url = e.request.url;
+  // Ne jamais intercepter les requêtes cross-origin (Firebase, Cloud Functions, Realtime DB…)
+  // Sinon le SW renverrait index.html (HTML) en fallback offline, ce qui fait planter
+  // tout appel fetch() qui attend du JSON — notamment generateAccessToken.
+  if (!url.startsWith(self.location.origin)) return;
   // index.html : network-first (toujours à jour), fallback cache si offline
   if (url.includes('index.html') || url.endsWith('/') || url.endsWith('/repcore/')) {
     e.respondWith(
@@ -27,9 +31,9 @@ self.addEventListener('fetch', e => {
     );
     return;
   }
-  // Assets : cache-first
+  // Assets same-origin : cache-first, sans fallback HTML (évite de servir HTML à la place d'un asset)
   e.respondWith(
-    caches.match(e.request).then(r => r || fetch(e.request).catch(() => caches.match('./index.html')))
+    caches.match(e.request).then(r => r || fetch(e.request))
   );
 });
 
