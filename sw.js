@@ -1,4 +1,5 @@
-const CACHE = 'repcore-v85';
+const CACHE = 'repcore-v102';
+const SW_DATA = 'repcore-sw-data'; // persistent across updates — not wiped by activate
 const ASSETS = ['./manifest.json', './icons/icon-192x192.png', './icons/icon-512x512.png', './icons/logo.png', './icons/dumbbell.png'];
 
 self.addEventListener('install', e => {
@@ -8,7 +9,7 @@ self.addEventListener('install', e => {
 
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys =>
-    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+    Promise.all(keys.filter(k => k !== CACHE && k !== SW_DATA).map(k => caches.delete(k)))
   ));
   self.clients.claim();
 });
@@ -30,4 +31,68 @@ self.addEventListener('fetch', e => {
   e.respondWith(
     caches.match(e.request).then(r => r || fetch(e.request).catch(() => caches.match('./index.html')))
   );
+});
+
+// ─── SW data store (Cache API key/value, survives SW updates) ───────────────
+async function swGet(key) {
+  try {
+    const c = await caches.open(SW_DATA);
+    const r = await c.match(key);
+    return r ? r.json() : null;
+  } catch(e) { return null; }
+}
+async function swSet(key, val) {
+  try {
+    const c = await caches.open(SW_DATA);
+    await c.put(key, new Response(JSON.stringify(val), { headers: { 'Content-Type': 'application/json' } }));
+  } catch(e) {}
+}
+
+// ─── Periodic background sync — fires even when app is closed (Chrome/Android) ─
+self.addEventListener('periodicsync', e => {
+  if (e.tag === 'bilan-reminder') e.waitUntil(swCheckAndNotify());
+});
+
+async function swCheckAndNotify() {
+  const sched = await swGet('/bilan-schedule');
+  if (!sched?.nextDate) return;
+  if (Date.now() < sched.nextDate) return;
+  const today = new Date().toISOString().slice(0, 10);
+  if (await swGet('/bilan-last-notif') === today) return;
+  await swSet('/bilan-last-notif', today);
+  // Advance schedule by 14 days for the next cycle
+  await swSet('/bilan-schedule', { ...sched, nextDate: sched.nextDate + 14 * 24 * 3600 * 1000 });
+  const pref = sched.fname ? sched.fname + ', c' : 'C';
+  await self.registration.showNotification('RepCore — Bilan bimensuel 📊', {
+    body: pref + '\'est le moment de remplir ton bilan coaching ! Suis ton évolution 📈',
+    icon: './icons/icon-192x192.png',
+    badge: './icons/icon-192x192.png',
+    tag: 'bilan-reminder',
+    requireInteraction: true,
+    data: { url: './?bilan=1' }
+  });
+}
+
+// ─── Notification click → open / focus app at bilan screen ─────────────────
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = e.notification.data?.url || './';
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(ws => {
+      const w = ws.find(c => c.url.startsWith(self.registration.scope));
+      return w ? w.focus() : clients.openWindow(url);
+    })
+  );
+});
+
+// ─── Server push (future backend / VAPID integration) ──────────────────────
+self.addEventListener('push', e => {
+  const d = e.data?.json() || {};
+  e.waitUntil(self.registration.showNotification(d.title || 'RepCore 💪', {
+    body: d.body || 'Rappel RepCore.',
+    icon: './icons/icon-192x192.png',
+    badge: './icons/icon-192x192.png',
+    tag: d.tag || 'repcore',
+    data: { url: d.url || './' }
+  }));
 });

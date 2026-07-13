@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Politique de confidentialité — RepCore</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#0d0d0d;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:15px;line-height:1.7;padding:0}
+    a{color:#E02020;text-decoration:underline}
+    .wrap{max-width:700px;margin:0 auto;padding:40px 24px 80px}
+    .logo{display:flex;align-items:center;gap:12px;margin-bottom:40px}
+    .logo img{width:40px;height:40px}
+    .logo-name{font-size:20px;font-weight:900;letter-spacing:-0.5px;color:#fff}
+    h1{font-size:26px;font-weight:900;color:#fff;margin-bottom:6px;line-height:1.2}
+    .date{font-size:12px;color:#555;margin-bottom:36px}
+    h2{font-size:13px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#E02020;margin:36px 0 12px;padding-bottom:6px;border-bottom:1px solid #1c1c1c}
+    p{margin-bottom:12px;color:#bbb}
+    ul{margin:0 0 12px 20px;color:#bbb}
+    ul li{margin-bottom:6px}
+    .badge{display:inline-block;background:#1a0000;color:#E02020;border:1px solid #3a0000;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:1px;padding:2px 7px;text-transform:uppercase;vertical-align:middle}
+    .card{background:#141414;border:1px solid #1c1c1c;border-radius:10px;padding:16px 20px;margin-bottom:16px}
+    .card-title{font-size:12px;font-weight:700;color:#fff;margin-bottom:6px}
+    .contact{background:#0f0f0f;border:1px solid #E02020;border-radius:10px;padding:20px;margin-top:36px}
+    .contact p{margin:0;color:#ccc}
+    .contact a{font-weight:700}
+    footer{margin-top:48px;font-size:11px;color:#333;text-align:center;line-height:1.8}
+    @media(max-width:480px){h1{font-size:22px}.wrap{padding:28px 16px 60px}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="logo">
+    <img src="./icons/logo.png" alt="RepCore">
+    <span class="logo-name">RepCore</span>
+  </div>
+
+  <h1>Politique de confidentialité</h1>
+  <div class="date">Dernière mise à jour : juillet 2026</div>
+
+  <p>Cette politique explique quelles données personnelles sont collectées par l'application RepCore, pourquoi elles le sont, comment elles sont protégées, et comment vous pouvez exercer vos droits. Elle est rédigée conformément au Règlement Général sur la Protection des Données (RGPD — UE 2016/679) et à la loi Informatique et Libertés.</p>
+
+  <h2>1. Responsable du traitement</h2>
+  <div class="card">
+    <div class="card-title">Kevin Guellec — Coach sportif diplômé d'État</div>
+    <p style="margin:0;font-size:13px">Contact : <a href="mailto:guellec.coachingpro@gmail.com">guellec.coachingpro@gmail.com</a></p>
+  </div>
+
+  <h2>2. Données collectées</h2>
+  <p>RepCore collecte trois catégories de données :</p>
+
+  <div class="card">
+    <div class="card-title">Données d'identification et de compte</div>
+    <ul>
+      <li>Prénom, nom, adresse email</li>
+      <li>Mot de passe (stocké de façon sécurisée via Firebase Authentication)</li>
+      <li>Genre, rôle dans l'application (coach / athlète)</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Données de santé <span class="badge">catégorie particulière — Art. 9 RGPD</span></div>
+    <ul>
+      <li>Poids corporel (évolution dans le temps)</li>
+      <li>Mensurations : tour de cou, taille, hanches, cuisses, bras, mollets, poitrine, fessier</li>
+      <li>Pourcentage de masse grasse et masse musculaire estimés (formule US Navy)</li>
+      <li>Photos de bilan corporel (prises et stockées par l'utilisateur)</li>
+      <li>Données nutritionnelles : apports caloriques cibles et réels par jour</li>
+      <li>Données d'entraînement : séances réalisées, exercices, charges, répétitions, RIR</li>
+    </ul>
+    <p style="font-size:12px;color:#666;margin:8px 0 0">Le traitement de ces données de santé repose sur votre consentement explicite recueilli lors de l'inscription (Art. 6.1.a et Art. 9.2.a du RGPD).</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Données de paiement</div>
+    <p style="margin:0">Les paiements sont traités exclusivement via <strong>PayPal</strong>. RepCore ne collecte ni ne stocke aucune coordonnée bancaire ou numéro de carte. L'identifiant d'abonnement PayPal est conservé pour vérifier le statut de votre accès.</p>
+  </div>
+
+  <h2>3. Finalités du traitement</h2>
+  <ul>
+    <li><strong>Suivi sportif personnalisé</strong> — permettre au coach de suivre la progression de l'athlète et d'adapter le programme</li>
+    <li><strong>Fonctionnement de l'application</strong> — authentification, synchronisation multi-appareils, notifications</li>
+    <li><strong>Facturation</strong> — gestion des abonnements via PayPal</li>
+  </ul>
+  <p>Les données ne sont utilisées à aucune fin commerciale, publicitaire ou statistique externe.</p>
+
+  <h2>4. Base légale</h2>
+  <ul>
+    <li><strong>Consentement explicite</strong> (Art. 6.1.a + Art. 9.2.a) — pour les données de santé. Vous pouvez retirer votre consentement à tout moment en demandant la suppression de votre compte.</li>
+    <li><strong>Exécution du contrat</strong> (Art. 6.1.b) — pour les données nécessaires à la fourniture du service de coaching.</li>
+  </ul>
+
+  <h2>5. Hébergement et sous-traitants</h2>
+  <div class="card">
+    <div class="card-title">Firebase (Google LLC)</div>
+    <p style="margin:0;font-size:13px">Les données sont synchronisées sur Firebase Realtime Database et Firebase Storage, services de Google LLC. Google agit en qualité de sous-traitant et est soumis aux clauses contractuelles types de la Commission européenne. Pour plus d'informations : <a href="https://firebase.google.com/support/privacy" target="_blank" rel="noopener">firebase.google.com/support/privacy</a>.</p>
+  </div>
+  <div class="card">
+    <div class="card-title">Stockage local (localStorage)</div>
+    <p style="margin:0;font-size:13px">Une copie des données est conservée localement sur votre appareil via le mécanisme localStorage du navigateur. Ces données restent sur votre appareil et ne sont pas accessibles à des tiers.</p>
+  </div>
+
+  <h2>6. Durée de conservation</h2>
+  <ul>
+    <li>Les données sont conservées pendant toute la durée du suivi actif.</li>
+    <li>En cas de résiliation ou d'absence d'activité, les données sont supprimées dans un délai de <strong>12 mois</strong> sur demande expresse, ou automatiquement après 36 mois d'inactivité.</li>
+    <li>Les données de paiement (identifiant abonnement) sont conservées 5 ans conformément aux obligations comptables légales.</li>
+  </ul>
+
+  <h2>7. Vos droits</h2>
+  <p>Conformément au RGPD, vous disposez des droits suivants :</p>
+  <ul>
+    <li><strong>Droit d'accès</strong> — obtenir une copie de vos données</li>
+    <li><strong>Droit de rectification</strong> — corriger des données inexactes</li>
+    <li><strong>Droit à l'effacement</strong> — demander la suppression complète de votre compte et de toutes vos données</li>
+    <li><strong>Droit à la portabilité</strong> — recevoir vos données dans un format structuré (JSON)</li>
+    <li><strong>Droit d'opposition et de retrait du consentement</strong> — cesser tout traitement de vos données de santé</li>
+  </ul>
+  <p>Pour exercer ces droits, contactez : <a href="mailto:guellec.coachingpro@gmail.com">guellec.coachingpro@gmail.com</a>. Réponse sous 30 jours.</p>
+
+  <h2>8. Sécurité</h2>
+  <p>Les mots de passe sont transmis via HTTPS et gérés par Firebase Authentication. Les données de santé sont stockées dans une base Firebase dont l'accès est restreint par règles de sécurité. Aucune donnée n'est partagée avec des tiers à des fins commerciales.</p>
+
+  <h2>9. Réclamation</h2>
+  <p>Si vous estimez que vos droits ne sont pas respectés, vous pouvez introduire une réclamation auprès de la <strong>Commission Nationale de l'Informatique et des Libertés (CNIL)</strong> :</p>
+  <ul>
+    <li>En ligne : <a href="https://www.cnil.fr/fr/plaintes" target="_blank" rel="noopener">www.cnil.fr/fr/plaintes</a></li>
+    <li>Par courrier : CNIL, 3 Place de Fontenoy, TSA 80715, 75334 Paris Cedex 07</li>
+  </ul>
+
+  <div class="contact">
+    <p><strong style="color:#fff">Contact responsable du traitement</strong><br>
+    Kevin Guellec — Coach diplômé d'État<br>
+    <a href="mailto:guellec.coachingpro@gmail.com">guellec.coachingpro@gmail.com</a><br>
+    Pour toute demande d'accès, rectification ou suppression de vos données.</p>
+  </div>
+
+  <footer>
+    RepCore · Application de suivi sportif · Mise à jour juillet 2026<br>
+    Cette politique peut être mise à jour. La version en vigueur est toujours disponible à cette adresse.
+  </footer>
+
+</div>
+</body>
+</html>
