@@ -474,7 +474,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- Zone code (masquée par défaut) -->
       <div id="ae-code-zone" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
         <div style="font-size:10px;letter-spacing:2px;color:var(--red);font-weight:800;margin-bottom:8px">ENTRE TON CODE D'ACCÈS</div>
-        <input id="ae-code" type="text" placeholder="Ex: RCACCESS..." style="text-transform:uppercase;letter-spacing:2px;font-family:monospace" onclick="event.stopPropagation()">
+        <input id="ae-code" type="text" placeholder="Ex: RC-XXXX-XXXX" style="text-transform:uppercase;letter-spacing:2px;font-family:monospace" onclick="event.stopPropagation()">
         <div id="ae-err" style="color:var(--red);font-size:11px;margin-top:6px;display:none"></div>
         <button class="btn btn-red" onclick="event.stopPropagation();doAthleteCode()" style="margin-top:12px">VALIDER LE CODE</button>
       </div>
@@ -2195,6 +2195,13 @@ function doAthleteCode(){
   // Try RCACCESS token (starts with "RCACCESS:")
   if(raw.startsWith('RCACCESS:')){
     // Pass to s-client-code after registration — go register first
+    localStorage.setItem('pendingCode', raw);
+    go('s-register');
+    setTimeout(()=>selectRole('athlete'),50);
+    return;
+  }
+  // Code RC-XXXX-XXXX (codes Firebase) — passer à l'inscription d'abord
+  if(/^RC-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(raw)){
     localStorage.setItem('pendingCode', raw);
     go('s-register');
     setTimeout(()=>selectRole('athlete'),50);
