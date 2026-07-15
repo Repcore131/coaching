@@ -2132,8 +2132,26 @@ function doRegister(){
 async function doLogin(){
   const em=v('l-email').toLowerCase(),pw=v('l-pwd');
   const users=DB.get('users')||{};
-  const u=users[em];
-  if(!u) return showErr('l-err','Email ou mot de passe incorrect.');
+  let u=users[em];
+
+  if(!u){
+    // Compte inconnu localement → essayer Firebase Auth puis sync RTDB
+    const btn=document.querySelector('#s-login .btn-red');
+    if(btn){btn.textContent='Connexion…';btn.disabled=true;}
+    const ok=await CLOUD.signIn(em,pw);
+    if(btn){btn.textContent='SE CONNECTER';btn.disabled=false;}
+    if(!ok) return showErr('l-err','Email ou mot de passe incorrect.');
+    toast('Récupération du compte…');
+    await CLOUD.syncUser(em);
+    const synced=DB.get('users')||{};
+    u=synced[em];
+    if(!u) return showErr('l-err','Compte introuvable. Vérifie ton email ou crée un compte.');
+    u.pwd=pw;synced[em]=u;DB.set('users',synced);
+    currentUser=u;DB.set('session',currentUser);
+    if(currentUser.role!=='coach'&&(currentUser.status||'FREE')==='FREE'){go('s-client-code');return;}
+    return routeUser();
+  }
+
   if(u.pwd){
     if(u.pwd!==pw) return showErr('l-err','Email ou mot de passe incorrect.');
   } else {
