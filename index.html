@@ -1119,17 +1119,11 @@ const COACH_PHOTO='icons/coach.jpg';
     <button class="tab-btn" onclick="clientTab('nutrition',this)">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z"/></svg>Nutrition
     </button>
-    <button class="tab-btn" onclick="clientTab('caffeine',this)">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 3H4v10c0 2.21 1.79 4 4 4h6c2.21 0 4-1.79 4-4v-3h2c1.11 0 2-.89 2-2V5c0-1.11-.89-2-2-2zm0 5h-2V5h2v3zM4 19h16v2H4z"/></svg>Caféine
-    </button>
     <button class="tab-btn" onclick="clientTab('videos',this)">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/></svg>Vidéos
     </button>
-    <button class="tab-btn" onclick="clientTab('steps',this)">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/></svg>Steps
-    </button>
-    <button class="tab-btn" onclick="clientTab('sleep',this)">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.389 5.389 0 0 1-4.4 2.26 5.403 5.403 0 0 1-3.14-9.8c-.44-.06-.9-.1-1.36-.1z"/></svg>Sommeil
+    <button class="tab-btn" onclick="clientTab('lifestyle',this)">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 4a3 3 0 1 1-3 3 3 3 0 0 1 3-3zm0 14.2a7.2 7.2 0 0 1-6-3.22c.03-1.99 4-3.08 6-3.08s5.97 1.09 6 3.08a7.2 7.2 0 0 1-6 3.22z"/></svg>Lifestyle
     </button>
     <button class="tab-btn" onclick="clientTab('evolution',this)">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>Évolution
@@ -1421,6 +1415,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="metric-box"><div class="metric-val" id="nut-streak">0</div><div class="metric-label">Consécutifs</div></div>
       </div>
       <div class="card"><canvas id="nut-chart" height="140"></canvas></div>
+      <div id="caff-embedded" style="margin-top:24px"></div>
     </div>
   </div>
 </div>
@@ -1459,7 +1454,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- CAFÉINE AJOUT -->
 <div id="s-caffeine-add" class="screen">
-  <div class="topbar"><button class="back-btn" onclick="loadCaffeine()">←</button><span class="topbar-title">Ajouter une prise</span><span></span></div>
+  <div class="topbar"><button class="back-btn" onclick="loadNutrition()">←</button><span class="topbar-title">Ajouter une prise</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div id="caff-add-tabs" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-bottom:16px">
@@ -1536,6 +1531,30 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad" id="sleep-content"></div>
+  </div>
+</div>
+
+<!-- LIFESTYLE (Steps + Sommeil) -->
+<div id="s-lifestyle" class="screen">
+  <div class="topbar" style="border-bottom:1px solid #1a1a1a">
+    <button class="back-btn" onclick="go('s-client-home')">←</button>
+    <span class="topbar-title">Lifestyle</span>
+    <span></span>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+        <div style="width:3px;height:20px;background:var(--red);border-radius:2px"></div>
+        <h3>👟 Mes pas</h3>
+      </div>
+      <div id="lifestyle-steps-content"></div>
+      <div class="divider" style="margin:28px 0"></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+        <div style="width:3px;height:20px;background:var(--red);border-radius:2px"></div>
+        <h3>🌙 Mon sommeil</h3>
+      </div>
+      <div id="lifestyle-sleep-content"></div>
+    </div>
   </div>
 </div>
 
@@ -3387,10 +3406,8 @@ function clientTab(tab,btn){
   else if(tab==='program') loadProgramView();
   else if(tab==='bilan') openBilanChoice();
   else if(tab==='nutrition') loadNutrition();
-  else if(tab==='caffeine') loadCaffeine();
   else if(tab==='videos') loadVideos();
-  else if(tab==='steps') loadSteps();
-  else if(tab==='sleep') loadSleep();
+  else if(tab==='lifestyle') loadLifestyle();
   else if(tab==='evolution') loadProgress();
 }
 
@@ -4884,6 +4901,7 @@ function loadNutrition(){
       ctx.beginPath();if(ctx.roundRect)ctx.roundRect(x,h-10-bh,bw-2,bh,3);else ctx.rect(x,h-10-bh,bw-2,bh);ctx.fill();
     });
   },50);
+  loadCaffeineEmbedded();
 }
 function setNutri(key,val){
   // Legacy compat
@@ -5008,8 +5026,76 @@ function loadCaffeine(){
   }
   requestAnimationFrame(()=>_drawCaffeineHistory(wKg));
 }
-function _drawCaffeineHistory(wKg){
-  const canvas=document.getElementById('caff-history-chart');
+function deleteCaffeineEntryEmbedded(dateStr,idx){
+  const days=_caffStore();
+  if(!days[dateStr]) return;
+  days[dateStr].splice(idx,1);
+  if(!days[dateStr].length) delete days[dateStr];
+  saveUser();
+  loadNutrition();
+}
+function loadCaffeineEmbedded(){
+  const el=document.getElementById('caff-embedded');
+  if(!el) return;
+  const today=localISODate(new Date());
+  const entries=getCaffeineDay(today);
+  const totalMg=entries.reduce((s,e)=>s+(e.mg||0),0);
+  const wKg=getUserWeight();
+  const thr=caffeineThresholds(wKg);
+  const pct=Math.min(totalMg/thr.red,1);
+  const color=_caffeineColor(pct);
+  let alertHtml='';
+  if(totalMg>=thr.red)
+    alertHtml='<div class="caff-alert-banner" style="background:#1a0000;border-color:#ef4444;color:#ef4444">🚨 Dose maximale dépassée — évite toute nouvelle prise aujourd\'hui.</div>';
+  else if(totalMg>=thr.orange)
+    alertHtml='<div class="caff-alert-banner" style="background:#1a0800;border-color:#f97316;color:#f97316">⚠️ Niveau élevé — surveille ton sommeil et ta fréquence cardiaque.</div>';
+  else if(totalMg>=thr.yellow)
+    alertHtml='<div class="caff-alert-banner" style="background:#1a1400;border-color:#eab308;color:#eab308">⚡ Attention — proche de ta limite recommandée ('+thr.yellow+'mg).</div>';
+  const listHtml=!entries.length
+    ?'<p style="color:var(--sub);font-size:13px;padding:12px 0">Aucune prise enregistrée aujourd\'hui.</p>'
+    :entries.map((e,i)=>`<div class="caff-entry-row">
+        <span style="font-size:24px">${e.icon||'☕'}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:13px">${e.name}</div>
+          <div style="font-size:11px;color:var(--sub)">${e.time||''}${e.volume?' · '+e.volume:''}</div>
+        </div>
+        <span style="font-weight:900;color:var(--red);font-size:15px;min-width:48px;text-align:right">${e.mg}mg</span>
+        <button onclick="deleteCaffeineEntryEmbedded('${today}',${i})" style="background:none;border:none;color:var(--sub);font-size:20px;cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent">×</button>
+      </div>`).join('');
+  el.innerHTML=`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <div style="width:3px;height:20px;background:var(--red);border-radius:2px"></div>
+      <h3>☕ Caféine</h3>
+    </div>
+    <div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:14px;padding:16px;margin-bottom:16px">
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px">
+        <span style="font-size:36px;font-family:'Bebas Neue',cursive;color:var(--red)">${totalMg}mg</span>
+        <span style="font-size:12px;color:var(--sub)">${caffeineEquiv(totalMg)}</span>
+      </div>
+      <div style="height:10px;background:#1a1a1a;border-radius:5px;overflow:hidden;margin-bottom:8px">
+        <div style="height:100%;width:${pct*100}%;border-radius:5px;background:${color};transition:width .4s ease,background .4s ease"></div>
+      </div>
+      <div style="font-size:10px;color:var(--sub)">Seuils : vert &lt;${thr.green}mg · jaune &lt;${thr.yellow}mg · orange &lt;${thr.orange}mg · rouge ${thr.red}mg</div>
+    </div>
+    ${alertHtml}
+    <button class="btn btn-red" onclick="openCaffeineAdd()" style="margin-bottom:20px">+ Enregistrer une prise</button>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <div style="width:20px;height:2px;background:var(--red)"></div>
+      <h3>Aujourd'hui</h3>
+    </div>
+    ${listHtml}
+    <div class="divider"></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <div style="width:20px;height:2px;background:var(--red)"></div>
+      <h3>Historique 28 jours</h3>
+    </div>
+    <div class="card"><canvas id="emb-caff-history-chart" height="140"></canvas></div>
+    <div style="height:16px"></div>
+  `;
+  requestAnimationFrame(()=>_drawCaffeineHistory(wKg,'emb-caff-history-chart'));
+}
+function _drawCaffeineHistory(wKg,canvasId='caff-history-chart'){
+  const canvas=document.getElementById(canvasId);
   if(!canvas) return;
   const ctx=canvas.getContext('2d');
   canvas.width=canvas.offsetWidth||340;
@@ -5403,8 +5489,8 @@ function getStepsWeek(){
     return localISODate(d);
   });
 }
-function loadSteps(){
-  go('s-steps');
+function loadSteps(containerId='steps-content'){
+  if(containerId==='steps-content') go('s-steps');
   const log=currentUser.stepsLog||[];
   const todayStr=localISODate(new Date());
   const dayNames=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
@@ -5463,7 +5549,7 @@ function loadSteps(){
     </div>`;
   }
 
-  document.getElementById('steps-content').innerHTML=`
+  document.getElementById(containerId).innerHTML=`
     <div style="background:linear-gradient(135deg,#0f0000,#1a0000);border:1px solid #2a0000;border-radius:14px;padding:20px;margin-bottom:18px;text-align:center">
       <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px">Moyenne hebdomadaire</div>
       <div style="font-size:48px;font-family:'Bebas Neue',sans-serif;font-weight:900;color:${avgColor};letter-spacing:-1px;line-height:1">${fmt(weekAvg)}</div>
@@ -5506,7 +5592,7 @@ function saveSteps(){
   else currentUser.stepsLog.push({date:todayStr,count});
   saveUser();
   toast(' '+count.toLocaleString('fr-FR')+' pas enregistrés !');
-  loadSteps();
+  loadLifestyle();
 }
 
 
@@ -5540,8 +5626,8 @@ function updateSleepPreview(){
   const el=document.getElementById('sleep-preview');
   if(el) el.innerHTML=dur!=null?`<span style="font-weight:800;font-size:18px;color:${sleepColor(dur)}">${dur}h</span> de sommeil`:'';
 }
-function loadSleep(){
-  go('s-sleep');
+function loadSleep(containerId='sleep-content'){
+  if(containerId==='sleep-content') go('s-sleep');
   const log=currentUser.sleepLog||[];
   const todayStr=localISODate(new Date());
   const dayNames=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
@@ -5593,7 +5679,7 @@ function loadSleep(){
     histHtml=`<div style="background:#0f0f0f;border:1px solid #1c1c1c;border-radius:12px;padding:16px"><div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:4px">Historique</div>${rows}</div>`;
   }
 
-  document.getElementById('sleep-content').innerHTML=`
+  document.getElementById(containerId).innerHTML=`
     <div style="background:linear-gradient(135deg,#06001a,#0d0027);border:1px solid #1a0060;border-radius:14px;padding:20px;margin-bottom:18px;text-align:center">
       <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px">Moyenne hebdomadaire</div>
       <div style="font-size:48px;font-family:'Bebas Neue',sans-serif;font-weight:900;color:${avgColor};letter-spacing:-1px;line-height:1">${weekAvg?weekAvg+'h':'—'}</div>
@@ -5638,7 +5724,13 @@ function saveSleep(){
   else currentUser.sleepLog.push(entry);
   saveUser();
   toast(duration+'h enregistrées !','var(--green)');
-  loadSleep();
+  loadLifestyle();
+}
+
+function loadLifestyle(){
+  go('s-lifestyle');
+  loadSteps('lifestyle-steps-content');
+  loadSleep('lifestyle-sleep-content');
 }
 
 // ======= CHARTS =======
