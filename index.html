@@ -129,6 +129,14 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
 
 /* ====== CODE DISPLAY ====== */
 .code-display{background:#0f0f0f;border-radius:4px;padding:24px;text-align:center;letter-spacing:8px;font-size:28px;font-weight:900;color:var(--red);border:1px solid #2a0a0a;font-family:monospace}
+/* ====== CAFFEINE ====== */
+.caff-alert-banner{border:1px solid;border-radius:10px;padding:12px 14px;font-size:12px;font-weight:700;margin-bottom:8px;line-height:1.5}
+.caff-entry-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)}
+.caff-entry-row:last-child{border-bottom:none}
+.caff-product-tile{background:#0f0f0f;border:1px solid var(--border);border-radius:12px;padding:14px;cursor:pointer;transition:.15s;text-align:center;-webkit-tap-highlight-color:transparent}
+.caff-product-tile:active{background:#1a0000;border-color:var(--red)}
+.caff-type-btn{flex:0 0 auto;padding:8px 14px;border:1px solid var(--border);border-radius:20px;background:none;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;cursor:pointer;transition:.15s;white-space:nowrap}
+.caff-type-btn.active{background:#1a0000;border-color:var(--red);color:#fff}
 
 /* ====== BILAN ====== */
 .bilan-section{background:var(--card);border-radius:4px;padding:16px;margin-bottom:12px;border:1px solid var(--border)}
@@ -1094,6 +1102,9 @@ const COACH_PHOTO='icons/coach.jpg';
     <button class="tab-btn" onclick="clientTab('nutrition',this)">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z"/></svg>Nutrition
     </button>
+    <button class="tab-btn" onclick="clientTab('caffeine',this)">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 3H4v10c0 2.21 1.79 4 4 4h6c2.21 0 4-1.79 4-4v-3h2c1.11 0 2-.89 2-2V5c0-1.11-.89-2-2-2zm0 5h-2V5h2v3zM4 19h16v2H4z"/></svg>Caféine
+    </button>
     <button class="tab-btn" onclick="clientTab('videos',this)">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z"/></svg>Vidéos
     </button>
@@ -1393,6 +1404,59 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="metric-box"><div class="metric-val" id="nut-streak">0</div><div class="metric-label">Consécutifs</div></div>
       </div>
       <div class="card"><canvas id="nut-chart" height="140"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- CAFÉINE JOURNAL -->
+<div id="s-caffeine" class="screen">
+  <div class="topbar"><button class="back-btn" onclick="go('s-client-home')">←</button><span class="topbar-title">☕ Caféine</span><span></span></div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:14px;padding:16px;margin-bottom:16px">
+        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px">
+          <span id="caff-total-mg" style="font-size:36px;font-family:'Bebas Neue',cursive;color:var(--red)">0mg</span>
+          <span id="caff-equiv" style="font-size:12px;color:var(--sub)"></span>
+        </div>
+        <div style="height:10px;background:#1a1a1a;border-radius:5px;overflow:hidden;margin-bottom:8px">
+          <div id="caff-gauge-bar" style="height:100%;width:0%;border-radius:5px;transition:width .4s ease,background .4s ease"></div>
+        </div>
+        <div id="caff-thresholds" style="font-size:10px;color:var(--sub)"></div>
+      </div>
+      <div id="caff-alerts"></div>
+      <button class="btn btn-red" onclick="openCaffeineAdd()" style="margin-bottom:20px">+ Enregistrer une prise</button>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <div style="width:20px;height:2px;background:var(--red)"></div>
+        <h3>Aujourd'hui</h3>
+      </div>
+      <div id="caff-list"></div>
+      <div class="divider"></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <div style="width:20px;height:2px;background:var(--red)"></div>
+        <h3>Historique 28 jours</h3>
+      </div>
+      <div class="card"><canvas id="caff-history-chart" height="140"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- CAFÉINE AJOUT -->
+<div id="s-caffeine-add" class="screen">
+  <div class="topbar"><button class="back-btn" onclick="loadCaffeine()">←</button><span class="topbar-title">Ajouter une prise</span><span></span></div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <div id="caff-add-tabs" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none;margin-bottom:16px">
+        <button class="caff-type-btn active" onclick="switchCaffeineType('coffee',this)">☕ Café</button>
+        <button class="caff-type-btn" onclick="switchCaffeineType('tea',this)">🍵 Thé</button>
+        <button class="caff-type-btn" onclick="switchCaffeineType('energy_drink',this)">⚡ Énergie</button>
+        <button class="caff-type-btn" onclick="switchCaffeineType('preworkout',this)">💪 Pré-workout</button>
+        <button class="caff-type-btn" onclick="switchCaffeineType('custom',this)">✏️ Autre</button>
+      </div>
+      <div id="caff-products-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
+      <div id="caff-preworkout-info" style="display:none;background:#0a0a1a;border:1px solid #1a1a3a;border-radius:10px;padding:12px;margin-top:16px;font-size:12px;color:#aab;line-height:1.7">
+        <strong style="color:#818cf8">💡 Timing recommandé</strong><br>
+        Prends ton pré-workout <strong>30 à 45 min avant</strong> ta séance pour un effet optimal.
+      </div>
     </div>
   </div>
 </div>
@@ -3201,6 +3265,7 @@ function clientTab(tab,btn){
   else if(tab==='program') loadProgramView();
   else if(tab==='bilan') openBilanChoice();
   else if(tab==='nutrition') loadNutrition();
+  else if(tab==='caffeine') loadCaffeine();
   else if(tab==='videos') loadVideos();
   else if(tab==='steps') loadSteps();
   else if(tab==='sleep') loadSleep();
@@ -4669,6 +4734,230 @@ function setNutri(key,val){
   if(!currentUser.nutrition) currentUser.nutrition={};
   if(!currentUser.nutrition.days) currentUser.nutrition.days={};
   saveUser();loadNutrition();
+}
+
+// ======= CAFFEINE =======
+const CAFFEINE_DB=[
+  {id:'espresso',    type:'coffee',       name:'Espresso',              icon:'☕',mg:63,  volume:'30ml'},
+  {id:'cafe_filtre', type:'coffee',       name:'Café filtre',           icon:'☕',mg:95,  volume:'240ml'},
+  {id:'americano',   type:'coffee',       name:'Americano',             icon:'☕',mg:120, volume:'240ml'},
+  {id:'latte',       type:'coffee',       name:'Latte',                 icon:'☕',mg:63,  volume:'240ml'},
+  {id:'cappuccino',  type:'coffee',       name:'Cappuccino',            icon:'☕',mg:63,  volume:'180ml'},
+  {id:'double_esp',  type:'coffee',       name:'Double espresso',       icon:'☕',mg:126, volume:'60ml'},
+  {id:'the_noir',    type:'tea',          name:'Thé noir',              icon:'🍵',mg:47,  volume:'240ml'},
+  {id:'the_vert',    type:'tea',          name:'Thé vert',              icon:'🍵',mg:28,  volume:'240ml'},
+  {id:'matcha',      type:'tea',          name:'Matcha',                icon:'🍵',mg:70,  volume:'240ml'},
+  {id:'the_blanc',   type:'tea',          name:'Thé blanc',             icon:'🍵',mg:15,  volume:'240ml'},
+  {id:'the_oolong',  type:'tea',          name:'Thé oolong',            icon:'🍵',mg:37,  volume:'240ml'},
+  {id:'yerba',       type:'tea',          name:'Yerba Maté',            icon:'🍵',mg:80,  volume:'240ml'},
+  {id:'redbull',     type:'energy_drink', name:'Red Bull',              icon:'⚡',mg:80,  volume:'250ml'},
+  {id:'monster',     type:'energy_drink', name:'Monster 500ml',         icon:'⚡',mg:160, volume:'500ml'},
+  {id:'monster_355', type:'energy_drink', name:'Monster 355ml',         icon:'⚡',mg:114, volume:'355ml'},
+  {id:'rockstar',    type:'energy_drink', name:'Rockstar',              icon:'⚡',mg:160, volume:'500ml'},
+  {id:'burn',        type:'energy_drink', name:'Burn Energy',           icon:'⚡',mg:80,  volume:'250ml'},
+  {id:'hell',        type:'energy_drink', name:'Hell Energy',           icon:'⚡',mg:80,  volume:'250ml'},
+  {id:'c4_original', type:'preworkout',   name:'C4 Original',           icon:'💪',mg:150, volume:'1 dose'},
+  {id:'c4_extreme',  type:'preworkout',   name:'C4 Extreme',            icon:'💪',mg:200, volume:'1 dose'},
+  {id:'ghost',       type:'preworkout',   name:'Ghost Legend',          icon:'💪',mg:200, volume:'1 dose'},
+  {id:'animal_pump', type:'preworkout',   name:'Animal Pump',           icon:'💪',mg:180, volume:'1 dose'},
+  {id:'hyde',        type:'preworkout',   name:'Mr Hyde',               icon:'💪',mg:325, volume:'1 dose'},
+  {id:'preworkout_g',type:'preworkout',   name:'Pré-workout générique', icon:'💪',mg:150, volume:'1 dose'},
+];
+
+function caffeineThresholds(wKg){
+  const w=wKg||75;
+  return {green:Math.round(w*2),yellow:Math.round(w*4),orange:Math.round(w*6),red:400};
+}
+function caffeineEquiv(mg){
+  const n=Math.round(mg/63);
+  return n<=0?'':`≈ ${n===1?'1 espresso':n+' expressos'}`;
+}
+function _caffeineColor(pct){
+  if(pct<0.5) return '#22c55e';
+  if(pct<0.75) return '#eab308';
+  if(pct<1.0) return '#f97316';
+  return '#ef4444';
+}
+function getUserWeight(){
+  if(!currentUser) return 75;
+  if(currentUser.weight) return parseFloat(currentUser.weight)||75;
+  const bilans=Object.values(currentUser.bilans||{});
+  if(bilans.length){
+    const last=bilans.sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0];
+    return parseFloat(last['bil-weight']||last['deb-weight']||last.weight||75)||75;
+  }
+  return 75;
+}
+function _caffStore(){
+  if(!currentUser.nutrition) currentUser.nutrition={};
+  if(!currentUser.nutrition.caffeine) currentUser.nutrition.caffeine={days:{}};
+  if(!currentUser.nutrition.caffeine.days) currentUser.nutrition.caffeine.days={};
+  return currentUser.nutrition.caffeine.days;
+}
+function getCaffeineDay(dateStr){return(_caffStore()[dateStr]||[]);}
+function addCaffeineEntry(entry){
+  const days=_caffStore();
+  const d=localISODate(new Date());
+  if(!days[d]) days[d]=[];
+  days[d].push(entry);
+  saveUser();
+}
+function deleteCaffeineEntry(dateStr,idx){
+  const days=_caffStore();
+  if(!days[dateStr]) return;
+  days[dateStr].splice(idx,1);
+  if(!days[dateStr].length) delete days[dateStr];
+  saveUser();
+  loadCaffeine();
+}
+function loadCaffeine(){
+  go('s-caffeine');
+  const today=localISODate(new Date());
+  const entries=getCaffeineDay(today);
+  const totalMg=entries.reduce((s,e)=>s+(e.mg||0),0);
+  const wKg=getUserWeight();
+  const thr=caffeineThresholds(wKg);
+  const pct=Math.min(totalMg/thr.red,1);
+  const color=_caffeineColor(pct);
+  document.getElementById('caff-total-mg').textContent=totalMg+'mg';
+  document.getElementById('caff-equiv').textContent=caffeineEquiv(totalMg);
+  const bar=document.getElementById('caff-gauge-bar');
+  bar.style.width=(pct*100)+'%';
+  bar.style.background=color;
+  document.getElementById('caff-thresholds').textContent=
+    `Seuils : vert <${thr.green}mg · jaune <${thr.yellow}mg · orange <${thr.orange}mg · rouge ${thr.red}mg`;
+  const alertEl=document.getElementById('caff-alerts');
+  if(totalMg>=thr.red)
+    alertEl.innerHTML='<div class="caff-alert-banner" style="background:#1a0000;border-color:#ef4444;color:#ef4444">🚨 Dose maximale dépassée — évite toute nouvelle prise aujourd\'hui.</div>';
+  else if(totalMg>=thr.orange)
+    alertEl.innerHTML='<div class="caff-alert-banner" style="background:#1a0800;border-color:#f97316;color:#f97316">⚠️ Niveau élevé — surveille ton sommeil et ta fréquence cardiaque.</div>';
+  else if(totalMg>=thr.yellow)
+    alertEl.innerHTML='<div class="caff-alert-banner" style="background:#1a1400;border-color:#eab308;color:#eab308">⚡ Attention — proche de ta limite recommandée (${thr.yellow}mg).</div>';
+  else
+    alertEl.innerHTML='';
+  const listEl=document.getElementById('caff-list');
+  if(!entries.length){
+    listEl.innerHTML='<p style="color:var(--sub);font-size:13px;padding:12px 0">Aucune prise enregistrée aujourd\'hui.</p>';
+  } else {
+    listEl.innerHTML=entries.map((e,i)=>`
+      <div class="caff-entry-row">
+        <span style="font-size:24px">${e.icon||'☕'}</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:13px">${e.name}</div>
+          <div style="font-size:11px;color:var(--sub)">${e.time||''}${e.volume?' · '+e.volume:''}</div>
+        </div>
+        <span style="font-weight:900;color:var(--red);font-size:15px;min-width:48px;text-align:right">${e.mg}mg</span>
+        <button onclick="deleteCaffeineEntry('${today}',${i})" style="background:none;border:none;color:var(--sub);font-size:20px;cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent">×</button>
+      </div>`).join('');
+  }
+  requestAnimationFrame(()=>_drawCaffeineHistory(wKg));
+}
+function _drawCaffeineHistory(wKg){
+  const canvas=document.getElementById('caff-history-chart');
+  if(!canvas) return;
+  const ctx=canvas.getContext('2d');
+  canvas.width=canvas.offsetWidth||340;
+  const W=canvas.width,H=canvas.height||140;
+  ctx.clearRect(0,0,W,H);
+  const days=_caffStore();
+  const thr=caffeineThresholds(wKg);
+  const labels=[],data=[];
+  for(let i=27;i>=0;i--){
+    const d=new Date();d.setDate(d.getDate()-i);
+    const key=localISODate(d);
+    const total=(days[key]||[]).reduce((s,e)=>s+(e.mg||0),0);
+    labels.push(i===0?'Auj':d.getDate()+'');
+    data.push(total);
+  }
+  const maxVal=Math.max(thr.red*1.1,...data,1);
+  const PAD={t:10,b:24,l:8,r:8};
+  const chartW=W-PAD.l-PAD.r,chartH=H-PAD.t-PAD.b;
+  const slotW=chartW/28;
+  const barW=Math.max(4,slotW-3);
+  const yRed=PAD.t+chartH*(1-thr.red/maxVal);
+  ctx.save();ctx.setLineDash([4,4]);ctx.strokeStyle='#ef4444';ctx.lineWidth=1;ctx.globalAlpha=0.45;
+  ctx.beginPath();ctx.moveTo(PAD.l,yRed);ctx.lineTo(W-PAD.r,yRed);ctx.stroke();
+  ctx.globalAlpha=1;ctx.setLineDash([]);ctx.restore();
+  data.forEach((v,i)=>{
+    if(!v) return;
+    const barH=Math.max(2,(v/maxVal)*chartH);
+    const x=PAD.l+i*slotW+(slotW-barW)/2;
+    const y=PAD.t+chartH-barH;
+    ctx.fillStyle=_caffeineColor(v/thr.red);
+    if(ctx.roundRect){ctx.beginPath();ctx.roundRect(x,y,barW,barH,2);ctx.fill();}
+    else{ctx.fillRect(x,y,barW,barH);}
+  });
+  ctx.fillStyle='#555';ctx.font='9px sans-serif';ctx.textAlign='center';
+  [0,7,14,21,27].forEach(i=>{
+    ctx.fillText(labels[i]||'',PAD.l+i*slotW+slotW/2,H-6);
+  });
+}
+function openCaffeineAdd(){
+  go('s-caffeine-add');
+  document.querySelectorAll('.caff-type-btn').forEach(b=>b.classList.remove('active'));
+  const first=document.querySelector('.caff-type-btn');
+  if(first) first.classList.add('active');
+  switchCaffeineType('coffee',null);
+}
+function switchCaffeineType(type,btn){
+  if(btn){
+    document.querySelectorAll('.caff-type-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+  const pw=document.getElementById('caff-preworkout-info');
+  if(pw) pw.style.display=(type==='preworkout')?'':'none';
+  renderCaffeineProducts(type);
+}
+function renderCaffeineProducts(type){
+  const grid=document.getElementById('caff-products-grid');
+  if(!grid) return;
+  if(type==='custom'){
+    grid.innerHTML=`<div style="grid-column:1/-1">
+      <div class="form-group" style="margin-bottom:10px">
+        <label class="form-label">Nom de la boisson</label>
+        <input class="form-input" id="caff-custom-name" placeholder="Ex: Thé glacé maison"/>
+      </div>
+      <div class="form-group" style="margin-bottom:10px">
+        <label class="form-label">Caféine (mg)</label>
+        <input class="form-input" id="caff-custom-mg" type="number" min="1" max="1000" placeholder="Ex: 80"/>
+      </div>
+      <div class="form-group" style="margin-bottom:16px">
+        <label class="form-label">Volume / portion (optionnel)</label>
+        <input class="form-input" id="caff-custom-volume" placeholder="Ex: 330ml"/>
+      </div>
+      <button class="btn btn-red" onclick="saveCaffeineCustom()">Enregistrer</button>
+    </div>`;
+    return;
+  }
+  const products=CAFFEINE_DB.filter(p=>p.type===type);
+  grid.innerHTML=products.map(p=>{
+    const safe=encodeURIComponent(JSON.stringify(p));
+    return `<div class="caff-product-tile" onclick="confirmCaffeineAdd(decodeURIComponent('${safe}'))">
+      <div style="font-size:28px;margin-bottom:6px">${p.icon}</div>
+      <div style="font-weight:800;font-size:12px;line-height:1.3;margin-bottom:4px">${p.name}</div>
+      <div style="color:var(--red);font-weight:900;font-size:14px">${p.mg}mg</div>
+      <div style="color:var(--sub);font-size:10px">${p.volume}</div>
+    </div>`;
+  }).join('');
+}
+function confirmCaffeineAdd(pRaw){
+  const p=typeof pRaw==='string'?JSON.parse(pRaw):pRaw;
+  const now=new Date();
+  const hhmm=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+  addCaffeineEntry({id:p.id,name:p.name,icon:p.icon,mg:p.mg,volume:p.volume||'',type:p.type,time:hhmm,ts:Date.now()});
+  toast(p.name+' ajouté ✓');
+  loadCaffeine();
+}
+function saveCaffeineCustom(){
+  const name=(document.getElementById('caff-custom-name')||{}).value?.trim();
+  const mg=parseInt((document.getElementById('caff-custom-mg')||{}).value||'0');
+  const volume=(document.getElementById('caff-custom-volume')||{}).value?.trim()||'';
+  if(!name||mg<1){toast('Remplis le nom et la dose en mg');return;}
+  const now=new Date();
+  const hhmm=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+  addCaffeineEntry({id:'custom',name,icon:'☕',mg,volume,type:'custom',time:hhmm,ts:Date.now()});
+  toast(name+' ajouté ✓');
+  loadCaffeine();
 }
 
 // ======= VIDEOS =======
