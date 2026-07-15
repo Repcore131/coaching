@@ -105,6 +105,8 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
 
 /* ====== EXERCISE / SERIES TABLE ====== */
 .exercise-card{background:var(--card);border-radius:4px;margin-bottom:12px;overflow:hidden;border:1px solid var(--border)}
+.exo-chip{background:var(--card2);border:1.5px solid var(--border);color:var(--sub);font-size:12px;font-weight:800;width:32px;height:32px;border-radius:50%;cursor:pointer;font-family:Montserrat,sans-serif;transition:.15s;display:inline-flex;align-items:center;justify-content:center;padding:0}
+.exo-chip.active{background:var(--red);color:#fff;border-color:var(--red)}
 .ex-name{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:1px}
 .ex-detail{font-size:11px;color:var(--sub);margin-top:3px;letter-spacing:.3px}
 .series-table{width:100%;border-collapse:collapse}
@@ -926,9 +928,24 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
       </div>
 
-      <div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 12px">
-        <h3>Exercices</h3>
-        <button class="btn btn-red btn-sm" onclick="addExercise()">+ Ajouter</button>
+      <div style="margin:20px 0 12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <h3>Exercices</h3>
+          <button class="btn btn-red btn-sm" onclick="addExercise()">+ Ajouter</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-size:9px;color:var(--sub);font-weight:700;text-transform:uppercase;letter-spacing:1.5px;margin-right:2px">Nombre :</span>
+          <button id="exo-chip-1"  class="exo-chip" onclick="setExerciseCount(1)">1</button>
+          <button id="exo-chip-2"  class="exo-chip" onclick="setExerciseCount(2)">2</button>
+          <button id="exo-chip-3"  class="exo-chip" onclick="setExerciseCount(3)">3</button>
+          <button id="exo-chip-4"  class="exo-chip" onclick="setExerciseCount(4)">4</button>
+          <button id="exo-chip-5"  class="exo-chip" onclick="setExerciseCount(5)">5</button>
+          <button id="exo-chip-6"  class="exo-chip" onclick="setExerciseCount(6)">6</button>
+          <button id="exo-chip-7"  class="exo-chip" onclick="setExerciseCount(7)">7</button>
+          <button id="exo-chip-8"  class="exo-chip" onclick="setExerciseCount(8)">8</button>
+          <button id="exo-chip-9"  class="exo-chip" onclick="setExerciseCount(9)">9</button>
+          <button id="exo-chip-10" class="exo-chip" onclick="setExerciseCount(10)">10</button>
+        </div>
       </div>
       <div id="prog-exercises"></div>
       <div><label for="prog-notes">Notes pour l'athlète</label><textarea id="prog-notes" rows="3" placeholder="Conseils, focus, intensité..."></textarea></div>
@@ -3059,7 +3076,22 @@ function parseReps(r){
   return{type:'normal',label:s};
 }
 
+function setExerciseCount(n){
+  const cur=progEx.length;
+  if(n===cur) return;
+  if(n>cur){
+    for(let i=cur;i<n;i++) progEx.push({name:'',series:3,reps:'10',repos:'01 min',description:'',image:null});
+  } else {
+    const toRemove=progEx.slice(n);
+    const hasContent=toRemove.some(ex=>ex.name||ex.description);
+    if(hasContent && !confirm('Supprimer les '+(cur-n)+' dernier(s) exercice(s) ?')) return;
+    progEx=progEx.slice(0,n);
+  }
+  renderProgEx();
+}
 function renderProgEx(){
+  // Sync chips
+  for(let n=1;n<=10;n++){const c=document.getElementById('exo-chip-'+n);if(c)c.classList.toggle('active',n===progEx.length);}
   document.getElementById('prog-exercises').innerHTML=progEx.map((ex,i)=>{
     const pr=parseReps(ex.reps);
     const badge=pr.type==='degressive'?`<span style="background:#7c2d12;color:#fca5a5;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">DÉGRESSIVE</span>`:
