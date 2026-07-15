@@ -460,44 +460,40 @@ const COACH_PHOTO='icons/coach.jpg';
     <div style="margin-bottom:8px">
       <div style="width:24px;height:2px;background:var(--red);margin-bottom:14px"></div>
       <div style="font-size:26px;font-weight:900;letter-spacing:-0.5px">Espace Athlète</div>
-      <div class="sub" style="font-size:12px;margin-top:6px">Comment souhaites-tu accéder à l'application&nbsp;?</div>
+      <div class="sub" style="font-size:12px;margin-top:6px">Première visite ou retour&nbsp;?</div>
     </div>
 
-    <!-- Choix 1 : Première connexion — j'ai un code coach -->
-    <div id="ae-card-new" onclick="aeToggleCode()" style="background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s">
+    <!-- Carte A : nouveau — j'ai un code, ça crée mon compte et active l'accès -->
+    <div id="ae-card-new" onclick="aeToggleCode()" style="background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'">
       <div style="display:flex;align-items:center;gap:14px">
         <div style="width:44px;height:44px;border-radius:10px;background:#1a0000;border:1px solid #3a0000;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🔑</div>
         <div>
-          <div style="font-weight:800;font-size:15px;letter-spacing:.5px">PREMIÈRE CONNEXION</div>
-          <div class="sub" style="font-size:11px;margin-top:3px">J'ai reçu un code de mon coach</div>
+          <div style="font-weight:800;font-size:15px;letter-spacing:.5px">J'AI UN CODE D'ACCÈS</div>
+          <div class="sub" style="font-size:11px;margin-top:3px">Créer mon compte et activer l'accès avec mon code</div>
         </div>
         <div id="ae-arrow" style="margin-left:auto;color:var(--sub);font-size:18px;transition:transform .25s">›</div>
       </div>
-      <!-- Zone code (masquée par défaut) -->
+      <!-- Zone code -->
       <div id="ae-code-zone" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
-        <div style="font-size:10px;letter-spacing:2px;color:var(--red);font-weight:800;margin-bottom:8px">ENTRE TON CODE D'ACCÈS</div>
-        <input id="ae-code" type="text" placeholder="Ex: RC-XXXX-XXXX" style="text-transform:uppercase;letter-spacing:2px;font-family:monospace" onclick="event.stopPropagation()">
+        <div style="font-size:10px;letter-spacing:2px;color:var(--red);font-weight:800;margin-bottom:8px">ENTRE TON CODE (RC-XXXX-XXXX)</div>
+        <input id="ae-code" type="text" placeholder="Ex: RC-A3KZ-W9MX" style="text-transform:uppercase;letter-spacing:2px;font-family:monospace" onclick="event.stopPropagation()">
         <div id="ae-err" style="color:var(--red);font-size:11px;margin-top:6px;display:none"></div>
-        <button class="btn btn-red" onclick="event.stopPropagation();doAthleteCode()" style="margin-top:12px">VALIDER LE CODE</button>
+        <button class="btn btn-red" onclick="event.stopPropagation();doAthleteCode()" style="margin-top:12px">VALIDER → CRÉER MON COMPTE</button>
       </div>
     </div>
 
-    <!-- Choix 2 : Déjà inscrit -->
+    <!-- Carte B : déjà inscrit — juste se reconnecter -->
     <div onclick="go('s-login')" style="background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'">
       <div style="display:flex;align-items:center;gap:14px">
         <div style="width:44px;height:44px;border-radius:10px;background:#0d0d0d;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">👤</div>
         <div>
-          <div style="font-weight:800;font-size:15px;letter-spacing:.5px">J'AI DÉJÀ UN COMPTE</div>
-          <div class="sub" style="font-size:11px;margin-top:3px">Me connecter avec mon email</div>
+          <div style="font-weight:800;font-size:15px;letter-spacing:.5px">JE REVIENS</div>
+          <div class="sub" style="font-size:11px;margin-top:3px">Me connecter et reprendre ma progression</div>
         </div>
         <div style="margin-left:auto;color:var(--sub);font-size:18px">›</div>
       </div>
     </div>
 
-    <div style="text-align:center;padding-top:4px">
-      <span style="font-size:11px;color:#333">Pas encore de compte ?</span>
-      <span onclick="go('s-register')" style="font-size:11px;color:var(--red);font-weight:700;cursor:pointer;margin-left:6px">Créer un compte →</span>
-    </div>
   </div>
 </div>
 
