@@ -4933,7 +4933,8 @@ const CAFFEINE_DB=[
 
 function caffeineThresholds(wKg){
   const w=wKg||75;
-  return {green:Math.round(w*2),yellow:Math.round(w*4),orange:Math.round(w*6),red:400};
+  // Ratios 2:4:6:8 garantissent green<yellow<orange<red pour tout poids (40-150 kg)
+  return {green:Math.round(w*2),yellow:Math.round(w*4),orange:Math.round(w*6),red:Math.round(w*8)};
 }
 function caffeineEquiv(mg){
   const n=Math.round(mg/63);
