@@ -2,6 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<link rel="icon" type="image/png" href="icons/icon-192x192.png">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <meta name="theme-color" content="#0A0A0A">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -91,9 +92,10 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
 
 
 /* ====== TABS ====== */
-.tab-bar{display:flex;background:#0c0c0c;border-top:1px solid #1a1a1a;padding:6px 0 10px;flex-shrink:0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.tab-bar{display:flex;background:#0c0c0c;border-top:1px solid #1a1a1a;padding:6px 0 10px;flex-shrink:0;scrollbar-width:none}
 .tab-bar::-webkit-scrollbar{display:none}
-.tab-btn{flex:0 0 auto;min-width:58px;background:none;border:none;color:var(--sub);display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:6px 8px;font-family:'Montserrat',sans-serif;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;transition:.2s}
+.tab-btn{flex:1 1 0;min-width:0;background:none;border:none;color:var(--sub);display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:6px 5px;font-family:'Montserrat',sans-serif;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;transition:.2s}
+@media(max-width:400px){.tab-btn{font-size:7px;letter-spacing:.3px;padding:6px 2px}}
 .tab-btn.active{color:var(--red)}.tab-btn svg{width:19px;height:19px}
 
 
@@ -728,6 +730,69 @@ const COACH_PHOTO='icons/coach.jpg';
       <div class="pad">
         <div style="width:20px;height:2px;background:var(--red);margin-bottom:8px;margin-top:4px"></div>
 
+        <!-- 📱 WhatsApp coach -->
+        <div style="background:#071a07;border:1px solid #1a3a1a;border-radius:14px;padding:18px;margin-bottom:18px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+            <div style="width:36px;height:36px;background:#0a2a0a;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">💬</div>
+            <div>
+              <div style="font-weight:800;font-size:14px">Contact WhatsApp</div>
+              <div style="font-size:11px;color:var(--sub);margin-top:2px">Bouton visible par tes athlètes sur leur accueil</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <input id="coach-phone-input" type="tel" placeholder="+33 6 12 34 56 78" style="flex:1;font-size:14px;padding:11px 14px">
+            <button onclick="saveCoachPhone()" style="background:#22c55e;border:none;color:#000;border-radius:3px;padding:11px 18px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;white-space:nowrap">ENREGISTRER</button>
+          </div>
+          <div id="coach-phone-preview" style="font-size:10px;color:var(--sub)"></div>
+        </div>
+
+        <!-- 🎙️ Message de bienvenue -->
+        <div style="background:#0a1400;border:1px solid #1a3000;border-radius:14px;padding:18px;margin-bottom:18px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+            <div style="width:36px;height:36px;background:#0a2000;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🎙️</div>
+            <div>
+              <div style="font-weight:800;font-size:14px">Message de bienvenue</div>
+              <div style="font-size:11px;color:var(--sub);margin-top:2px">Un seul enregistrement, joué à la première connexion de chaque athlète</div>
+            </div>
+          </div>
+          <div id="wm-current" style="display:none;margin-bottom:10px">
+            <audio id="wm-preview" controls style="width:100%;height:36px;margin-bottom:8px"></audio>
+            <button onclick="deleteWelcomeMessage()" style="width:100%;background:none;border:1px solid #3a1a1a;border-radius:3px;padding:8px;font-size:11px;color:var(--red);font-family:Montserrat,sans-serif;cursor:pointer;font-weight:700;letter-spacing:1px">SUPPRIMER</button>
+          </div>
+          <div id="wm-recorder">
+            <button id="wm-rec-btn" onclick="toggleWelcomeRec()" style="width:100%;background:var(--red);border:none;color:#fff;border-radius:3px;padding:10px 18px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;margin-bottom:8px">🎤 ENREGISTRER</button>
+            <div id="wm-rec-status" style="font-size:10px;color:var(--sub);min-height:14px;text-align:center;margin-bottom:8px"></div>
+            <div id="wm-preview-row" style="display:none;margin-bottom:8px">
+              <audio id="wm-rec-preview" controls style="width:100%;height:36px;margin-bottom:8px"></audio>
+              <div style="display:flex;gap:8px">
+                <button onclick="confirmWelcomeAudio()" style="flex:1;background:var(--red);border:none;color:#fff;border-radius:3px;padding:9px;font-size:11px;font-weight:800;font-family:Montserrat,sans-serif;cursor:pointer">✓ ENREGISTRER</button>
+                <button onclick="cancelWelcomeRec()" style="flex:1;background:none;border:1px solid var(--border);border-radius:3px;padding:9px;font-size:11px;color:var(--sub);font-family:Montserrat,sans-serif;cursor:pointer">✗ RECOMMENCER</button>
+              </div>
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--sub);cursor:pointer;margin:0;border-top:1px solid #1a1a1a;padding-top:10px">
+              <input type="file" accept="audio/*" style="display:none" onchange="importWelcomeAudio(this)">
+              📁 Ou importe un fichier audio existant
+            </label>
+          </div>
+        </div>
+
+        <!-- 🎥 Cloudinary vidéos -->
+        <div style="background:#0a0014;border:1px solid #2a0a3a;border-radius:14px;padding:18px;margin-bottom:18px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+            <div style="width:36px;height:36px;background:#1a0a2a;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🎥</div>
+            <div>
+              <div style="font-weight:800;font-size:14px">Upload vidéos (Cloudinary)</div>
+              <div style="font-size:11px;color:var(--sub);margin-top:2px">Tes athlètes envoient leurs vidéos directement dans l'app — gratuit jusqu'à 25 Go/mois</div>
+            </div>
+          </div>
+          <label style="font-size:11px;color:var(--sub);margin-bottom:4px;display:block">Cloud Name</label>
+          <input id="cld-cloud-name" placeholder="ex: dxyz12abc" style="margin-bottom:10px">
+          <label style="font-size:11px;color:var(--sub);margin-bottom:4px;display:block">Upload Preset <span style="font-weight:400;color:#555">(non signé)</span></label>
+          <input id="cld-preset" placeholder="ex: repcore_videos" style="margin-bottom:10px">
+          <button onclick="saveCloudinaryConfig()" style="background:var(--red);border:none;color:#fff;border-radius:3px;padding:10px 18px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;width:100%">ENREGISTRER</button>
+          <div style="font-size:10px;color:#555;margin-top:8px;line-height:1.5">Créer un compte sur <b>cloudinary.com</b> → Settings → Upload → Add upload preset → choisir <b>Unsigned</b></div>
+        </div>
+
         <!-- ☁️ Sync Cloud -->
         <div style="background:#0a0f1a;border:1px solid #1a2a4a;border-radius:14px;padding:18px;margin-bottom:24px">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
@@ -793,6 +858,13 @@ const COACH_PHOTO='icons/coach.jpg';
         <button class="btn btn-red" onclick="openCoachProgram()"> Gérer le programme</button>
         <button class="btn btn-outline" onclick="viewClientBilans()"> Bilans complets</button>
       </div>
+
+      <!-- PDF PROGRAMME — dépôt direct sans passer par l'éditeur -->
+      <div style="background:#0f0f0f;border:1px solid #1c1c1c;border-radius:12px;padding:16px;margin-bottom:20px">
+        <div style="font-size:9px;color:var(--red);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:12px">Programme PDF</div>
+        <div id="ccc-pdf-content"></div>
+      </div>
+
       <h3 style="margin-bottom:12px">Bilans récents</h3>
       <div id="ccd-bilans"></div>
       <div id="ccd-videos"></div>
@@ -1004,9 +1076,9 @@ const COACH_PHOTO='icons/coach.jpg';
         <a id="clh-contact-link" href="#" target="_blank" rel="noopener" style="display:none;font-size:11px;color:var(--red);font-weight:700;letter-spacing:.5px;margin-top:6px;text-decoration:none;align-items:center;gap:5px">💬 Un souci ? Contacte ton coach</a>
       </div>
 
-      <!-- LANCER LA SEANCE — action principale -->
+      <!-- VOIR MON PROGRAMME — accès rapide PDF -->
       <div style="margin-bottom:20px">
-        <button class="btn btn-red" onclick="clientTab('sessions',this)" style="font-size:14px;letter-spacing:3px;padding:20px;font-family:'Bebas Neue',Impact,sans-serif;box-shadow:0 8px 32px rgba(224,32,32,.4)">LANCER LA SEANCE</button>
+        <button class="btn btn-red" onclick="openHomePdf()" style="font-size:14px;letter-spacing:3px;padding:20px;font-family:'Bebas Neue',Impact,sans-serif;box-shadow:0 8px 32px rgba(224,32,32,.4)">VOIR MON PROGRAMME</button>
       </div>
 
       <!-- STATS -->
@@ -1071,6 +1143,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <button class="btn btn-outline" onclick="loadSessionManager()" style="font-size:11px;padding:11px;letter-spacing:1.5px">GÉRER MES SÉANCES</button>
       </div>
 
+      <div id="clh-wo-reminder-row"></div>
       <div id="clh-notifs"></div>
 
       <!-- NUTRITION WEEK -->
@@ -1230,6 +1303,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="metric-box"><div class="metric-val" id="wd-sets">—</div><div class="metric-label">Séries</div></div>
         <div class="metric-box"><div class="metric-val" id="wd-vol">—</div><div class="metric-label">Volume</div></div>
       </div>
+      <div id="wd-comparison"></div>
       <!-- RESSENTI POST-SÉANCE -->
       <div style="margin-bottom:16px">
         <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px">Ressenti post-séance</div>
@@ -1478,7 +1552,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </label>
         <div id="vid-upload-progress" style="display:none;margin-top:10px;font-size:13px;font-weight:700;color:var(--green);text-align:center"></div>
         <div id="vid-upload-error" style="display:none;margin-top:10px;font-size:12px;color:var(--red)"></div>
-        <div class="sub" style="font-size:11px;margin-top:10px;line-height:1.5">Stockage Firebase sécurisé · max 200 Mo · accessible depuis tous tes appareils</div>
+        <div class="sub" style="font-size:11px;margin-top:10px;line-height:1.5">Upload direct via Cloudinary · aucun stockage sur Firebase · vidéo visible dans l'app dès l'envoi</div>
       </div>
       <div style="margin-top:20px" id="vid-list"></div>
     </div>
@@ -1703,7 +1777,10 @@ const CLOUD={
     if(d.idToken){
       this._idToken=d.idToken;this._refreshToken=d.refreshToken;
       this._tokenExpiry=Date.now()+(parseInt(d.expiresIn)||3600)*1000;
-      this._saveAuth();return true;
+      this._saveAuth();
+      // Envoie immédiatement les données locales en attente après chaque auth réussie
+      setTimeout(()=>{try{const u=DB.get('users');if(u) this._doPush(u);}catch{}},300);
+      return true;
     }
     return false;
   },
@@ -1794,7 +1871,13 @@ const CLOUD={
   },
   async _doPush(users){
     try{
-      const token=await this._getToken();
+      let token=await this._getToken();
+      if(!token){
+        // _getToken() a échoué (pas de refresh token valide) — re-auth avec le mot de passe stocké
+        const entry=currentUser?.email&&(DB.get('users')||{})[currentUser.email];
+        if(entry?.pwd) await this.signIn(entry.email||currentUser.email,entry.pwd).catch(()=>{});
+        token=await this._getToken();
+      }
       if(!token) return;
       const safe={};
       for(const[email,u] of Object.entries(users)){
@@ -1821,6 +1904,7 @@ const CLOUD={
   // Fusionner un seul utilisateur cloud → localStorage
   _mergeUser(merged,email,cloudUser){
     const loc=merged[email];
+    // Merge bilans (union par date+type)
     const cloudBilans=cloudUser.bilans||[];
     const localBilans=loc?.bilans||[];
     const allBilans=[...cloudBilans];
@@ -1830,6 +1914,12 @@ const CLOUD={
       else{Object.keys(lb).filter(k=>k.includes('photo')).forEach(k=>{allBilans[idx][k]=lb[k];});}
     }
     allBilans.sort((a,b)=>a.date-b.date);
+    // Merge sessions (union par id — évite qu'un syncUsers coach écrase des séances locales)
+    const cloudSessions=cloudUser.sessions||[];
+    const localSessions=loc?.sessions||[];
+    const sessMap=new Map();
+    [...cloudSessions,...localSessions].forEach(s=>{if(s?.id&&!sessMap.has(s.id))sessMap.set(s.id,s);});
+    const allSessions=[...sessMap.values()].sort((a,b)=>(a.date||0)-(b.date||0));
     if(!loc||((cloudUser.updatedAt||0)>=(loc.updatedAt||0))){
       const localPwd=loc?.pwd;
       merged[email]={...cloudUser};
@@ -1837,6 +1927,7 @@ const CLOUD={
       if(localPwd) merged[email].pwd=localPwd;
     }
     merged[email].bilans=allBilans;
+    merged[email].sessions=allSessions;
   },
   async pullUser(email){
     try{
@@ -1967,7 +2058,9 @@ const DB={
     if(!CLOUD.canWrite()&&st) CLOUD.configure(atob(st));
     const _bilanDeepLink=params.get('bilan')==='1';
     if(_bilanDeepLink) window._pendingBilanOpen=true;
-    if(cpkg||apkg||st||_bilanDeepLink) window.history.replaceState({},'',window.location.pathname);
+    const _woDeepLink=params.get('wo')==='1';
+    if(_woDeepLink) window._pendingWoOpen=true;
+    if(cpkg||apkg||st||_bilanDeepLink||_woDeepLink) window.history.replaceState({},'',window.location.pathname);
   }catch(e){}
 })();
 
@@ -2048,6 +2141,7 @@ function routeUser(){
   if(!checkAccess(currentUser)){go('s-access-gate');loadAccessGate();return;}
   loadClientHome();
   if(window._pendingBilanOpen){window._pendingBilanOpen=false;setTimeout(()=>openBilanChoice(),800);}
+  if(window._pendingWoOpen){window._pendingWoOpen=false;setTimeout(()=>openSessionPicker(),900);}
 }
 function checkAccess(u){
   if(!u||u.role==='coach') return true;
@@ -2571,8 +2665,8 @@ function loadCoachHome(){
     const badge=hasNewBilan(c)?'<span class="badge badge-orange"> Nouveau bilan</span>':needsAlert(c)?'<span class="badge badge-red"> Alerte</span>':isActive(c)?'<span class="badge badge-green"> Actif</span>':'<span class="badge badge-gray">Inactif</span>';
     const ls=c.sessions?.length?'Dernière séance: '+ago(c.sessions[c.sessions.length-1].date):'Aucune séance';
     return `<div class="client-row" onclick="openClientDetail('${c.id}')">
-      <div class="avatar" style="width:38px;height:38px;font-size:14px">${ini(c.fname,c.lname)}</div>
-      <div style="flex:1"><div style="font-weight:700">${c.fname} ${c.lname}</div><div class="sub" style="font-size:11px">${ls}</div></div>
+      <div class="avatar" style="width:38px;height:38px;font-size:14px">${escapeHtml(ini(c.fname,c.lname))}</div>
+      <div style="flex:1"><div style="font-weight:700">${escapeHtml(c.fname)} ${escapeHtml(c.lname)}</div><div class="sub" style="font-size:11px">${ls}</div></div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">${badge}<span style="font-size:11px;color:var(--sub)">${c.streak||0}</span></div>
     </div>`;
   }).join('');
@@ -2684,7 +2778,7 @@ function openClientDetail(cid,_refresh){
       return `<div class="card" style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700">${new Date(b.date).toLocaleDateString('fr-FR')}</span><span class="badge ${b.date>_oldSeen?'badge-orange':'badge-green'}">${b.date>_oldSeen?'Nouveau ✦':'Complété'}</span></div>
       <div style="display:flex;gap:16px;flex-wrap:wrap"><span class="sub">Poids: <strong style="color:#fff">${bw||'—'}kg</strong></span><span class="sub">MG: <strong style="color:#fff">${bfPct!==null?bfPct+'%':'—'}</strong></span><span class="sub">Taille: <strong style="color:#fff">${bWaist||'—'}cm</strong></span></div>
-      ${b['bil-ressenti']?`<div style="margin-top:8px;font-size:11px;color:var(--sub);font-style:italic">"${String(b['bil-ressenti']).slice(0,80)}"</div>`:''}
+      ${b['bil-ressenti']?`<div style="margin-top:8px;font-size:11px;color:var(--sub);font-style:italic">"${escapeHtml(String(b['bil-ressenti']).slice(0,80))}"</div>`:''}
     </div>`}).join('');
   }
   // Section vidéos
@@ -2695,13 +2789,14 @@ function openClientDetail(cid,_refresh){
     <h3 style="margin:20px 0 12px">Vidéos <span class="badge ${_pendingVids.length?'badge-orange':'badge-green'}" style="font-size:10px">${_pendingVids.length?_pendingVids.length+' à corriger':'Tout corrigé'}</span></h3>
     ${_vids.map(v=>`<div class="card" style="margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <div style="font-weight:700;font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.name}</div>
+        <div style="font-weight:700;font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(v.name)}</div>
         <span class="badge ${(v.feedback||v.feedbackTimestamps?.length)?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${(v.feedback||v.feedbackTimestamps?.length)?'✓ Corrigée':'À corriger'}</span>
       </div>
       <div class="sub" style="font-size:11px;margin-bottom:8px">${new Date(v.date).toLocaleDateString('fr-FR')}</div>
       <button class="btn btn-outline btn-sm" onclick="openVideoCorrection('${c.email}','${v.id}')">${(v.feedback||v.feedbackTimestamps?.length)?'✏️ Modifier':'✏️ Corriger'}</button>
     </div>`).join('')}`);
 
+  renderClientPdfCard(c);
   if(!_refresh) go('s-coach-client');
   // Sync immédiat puis rafraîchi automatique (sans bouton)
   if(!_refresh && CLOUD.ok()){
@@ -3160,7 +3255,76 @@ function removeCoachPdf(){
   c.programPdf=null;c.programPdfLink=null;c.programPdfName=null;c.programPdfDate=null;c.programPdfSize=null;
   users[c.email]=c;DB.set('users',users);
   refreshPdfUI(c);
+  openClientDetail(currentClientId,true);
   toast('PDF supprimé.');
+}
+function renderClientPdfCard(c){
+  const el=document.getElementById('ccc-pdf-content');
+  if(!el) return;
+  if(c._fromCode){
+    el.innerHTML=`<div style="text-align:center;padding:12px 0;font-size:12px;color:var(--sub)">${c.fname} n'a pas encore créé son compte.<br>Le PDF sera disponible après son inscription.</div>`;
+    return;
+  }
+  const hasPdf=!!(c.programPdf||c.programPdfLink);
+  const name=c.programPdfName||(c.programPdfLink?'Lien Drive':'Programme.pdf');
+  const dt=c.programPdfDate?new Date(c.programPdfDate).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})+' · v'+(c.programPdfVersion||1):'';
+  const existHtml=hasPdf?`<div style="background:#151515;border:1px solid #2a2a2a;border-radius:8px;padding:12px;margin-bottom:10px;display:flex;align-items:center;gap:10px">
+    <div style="width:34px;height:40px;background:#1a0000;border:1px solid #3a0a0a;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:var(--red);letter-spacing:.5px;flex-shrink:0">PDF</div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</div>
+      <div style="font-size:10px;color:var(--sub);margin-top:2px">${dt}</div>
+    </div>
+    <button onclick="removeCoachPdf()" style="background:none;border:none;color:#444;font-size:18px;cursor:pointer;padding:4px;flex-shrink:0">×</button>
+  </div>`:'';
+  el.innerHTML=`${existHtml}
+    <label style="display:block;cursor:pointer;margin-bottom:10px">
+      <input type="file" accept=".pdf,application/pdf" onchange="uploadCoachPdfInline(this)" style="display:none">
+      <div style="border:1px dashed #2a2a2a;border-radius:8px;padding:14px;text-align:center" onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='#2a2a2a'">
+        <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--sub);font-weight:700;margin-bottom:3px">${hasPdf?'Remplacer le PDF':'Importer un PDF'}</div>
+        <div style="font-size:11px;color:#444">Clique ou glisse — max 4 Mo</div>
+      </div>
+    </label>
+    <div style="display:flex;gap:8px">
+      <input id="ccc-pdf-link" placeholder="Lien Google Drive ou Dropbox..." value="${c.programPdfLink||''}" style="flex:1;font-size:12px;padding:9px 12px">
+      <button onclick="saveCoachPdfLinkInline()" style="background:var(--red);border:none;color:#fff;border-radius:3px;padding:9px 14px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;white-space:nowrap;text-transform:uppercase">Lier</button>
+    </div>`;
+}
+function uploadCoachPdfInline(input){
+  const f=input.files[0];if(!f) return;
+  if(f.size>4*1024*1024){toast('PDF trop lourd (max 4 Mo). Utilise un lien Drive.','var(--orange)');return;}
+  const r=new FileReader();
+  r.onload=e=>{
+    const users=DB.get('users')||{};
+    const c=Object.values(users).find(u=>u.id===currentClientId);
+    if(!c) return;
+    c.programPdf=e.target.result;
+    c.programPdfLink=null;
+    c.programPdfName=f.name.replace(/\.pdf$/i,'');
+    c.programPdfSize=f.size>1024*1024?(f.size/1024/1024).toFixed(1)+' Mo':(f.size/1024).toFixed(0)+' Ko';
+    c.programPdfDate=Date.now();
+    c.programPdfVersion=(c.programPdfVersion||0)+1;
+    users[c.email]=c;DB.set('users',users);
+    toast('PDF v'+c.programPdfVersion+' importé — '+c.programPdfName);
+    openClientDetail(currentClientId,true);
+  };r.readAsDataURL(f);
+}
+function saveCoachPdfLinkInline(){
+  const link=(document.getElementById('ccc-pdf-link').value||'').trim();
+  if(!link){toast('Entre un lien valide.','var(--red)');return;}
+  let url=link;
+  const driveMatch=link.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  if(driveMatch) url=`https://drive.google.com/file/d/${driveMatch[1]}/preview`;
+  const users=DB.get('users')||{};
+  const c=Object.values(users).find(u=>u.id===currentClientId);
+  if(!c) return;
+  c.programPdfLink=url;
+  c.programPdf=null;
+  c.programPdfName='Programme (Drive)';
+  c.programPdfDate=Date.now();
+  c.programPdfVersion=(c.programPdfVersion||0)+1;
+  users[c.email]=c;DB.set('users',users);
+  toast('Lien v'+c.programPdfVersion+' enregistré !');
+  openClientDetail(currentClientId,true);
 }
 // Parse reps string : "10 PUIS 20", "6-8", "15 Par Jambe", "8"
 function parseReps(r){
@@ -3198,7 +3362,7 @@ function renderProgEx(){
       <div style="background:var(--red);padding:8px 14px;display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:8px">
           <span style="background:#fff2;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0">${i+1}</span>
-          <input value="${ex.name||''}" onchange="progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase()" placeholder="NOM DE L'EXERCICE (MATÉRIELS)" style="background:transparent;border:none;color:#fff;font-family:Montserrat,sans-serif;font-weight:800;font-size:13px;outline:none;text-transform:uppercase;flex:1">
+          <input value="${escapeHtml(ex.name||'')}" onchange="progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase()" placeholder="NOM DE L'EXERCICE (MATÉRIELS)" style="background:transparent;border:none;color:#fff;font-family:Montserrat,sans-serif;font-weight:800;font-size:13px;outline:none;text-transform:uppercase;flex:1">
         </div>
         <button onclick="progEx.splice(${i},1);renderProgEx()" style="background:#fff2;border:none;color:#fff;font-size:14px;cursor:pointer;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center"></button>
       </div>
@@ -3206,25 +3370,32 @@ function renderProgEx(){
         <!-- Description technique -->
         <div style="margin-bottom:10px">
           <label style="margin-top:0">Description / Technique</label>
-          <textarea rows="3" placeholder="Ex: Faire 10 répétitions lourdes buste droit puis diminuer la charge..." onchange="progEx[${i}].description=this.value" style="margin-top:4px;font-size:12px;line-height:1.5">${ex.description||''}</textarea>
+          <textarea rows="3" placeholder="Ex: Faire 10 répétitions lourdes buste droit puis diminuer la charge..." onchange="progEx[${i}].description=this.value" style="margin-top:4px;font-size:12px;line-height:1.5">${escapeHtml(ex.description||'')}</textarea>
         </div>
         <!-- Séries / Reps / Repos -->
         <div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:8px;margin-bottom:10px">
           <div><label>Séries</label><input type="number" value="${ex.series||3}" onchange="progEx[${i}].series=+this.value" style="text-align:center"></div>
           <div>
             <label>Reps <span style="font-size:9px;color:var(--sub);text-transform:none">(ex: 10 PUIS 20 / 6-8 / 15 Par Jambe)</span></label>
-            <input value="${ex.reps||''}" onchange="progEx[${i}].reps=this.value" placeholder="10 PUIS 20" style="text-align:center">
+            <input value="${escapeHtml(ex.reps||'')}" onchange="progEx[${i}].reps=this.value" placeholder="10 PUIS 20" style="text-align:center">
             <div style="margin-top:4px">${badge}</div>
           </div>
-          <div><label>Repos</label><input value="${ex.repos||'01 min'}" onchange="progEx[${i}].repos=this.value" placeholder="01 min" style="text-align:center;font-size:12px"></div>
+          <div><label>Repos</label><input value="${escapeHtml(ex.repos||'01 min')}" onchange="progEx[${i}].repos=this.value" placeholder="01 min" style="text-align:center;font-size:12px"></div>
         </div>
-        <!-- Image exercice (optionnel) -->
-        <div>
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:0">
+        <!-- Image + Vidéo exercice -->
+        <div style="display:flex;align-items:flex-start;gap:10px;margin-top:4px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-shrink:0">
             <input type="file" accept="image/*" style="display:none" onchange="loadExImage(${i},this)">
-            ${ex.image?`<img src="${ex.image}" style="width:60px;height:60px;border-radius:8px;object-fit:cover"><span class="sub" style="font-size:11px">Changer l'image</span>`:
-            `<div style="width:60px;height:60px;border-radius:8px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed var(--border)"></div><span class="sub" style="font-size:11px">Ajouter image exercice</span>`}
+            ${ex.image?`<img src="${ex.image}" style="width:60px;height:60px;border-radius:8px;object-fit:cover">`:
+            `<div style="width:60px;height:60px;border-radius:8px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed var(--border)"></div>`}
           </label>
+          <div style="flex:1">
+            <label style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--sub);font-weight:700">Lien vidéo YouTube (technique)</label>
+            <div style="display:flex;gap:6px;margin-top:4px">
+              <input value="${escapeHtml(ex.videoUrl||'')}" onchange="progEx[${i}].videoUrl=this.value.trim()" placeholder="https://youtu.be/..." style="flex:1;font-size:11px;padding:7px 10px">
+              ${ex.videoUrl?`<a href="${safeUrl(ex.videoUrl)}" target="_blank" rel="noopener" style="background:var(--card2);border:1px solid var(--border);border-radius:3px;padding:7px 10px;font-size:12px;text-decoration:none;display:flex;align-items:center">▶</a>`:''}
+            </div>
+          </div>
         </div>
       </div>
     </div>`;
@@ -3237,7 +3408,7 @@ function loadExImage(idx,input){
 }
 
 function addExercise(){
-  progEx.push({name:'',series:3,reps:'10',repos:'01 min',description:'',image:null});
+  progEx.push({name:'',series:3,reps:'10',repos:'01 min',description:'',image:null,videoUrl:''});
   renderProgEx();
   // Scroll vers le nouvel exercice
   setTimeout(()=>{const el=document.getElementById('prog-exercises');if(el)el.lastElementChild?.scrollIntoView({behavior:'smooth'});},100);
@@ -3288,6 +3459,8 @@ function loadClientHome(){
   go('s-client-home');
   // Vérification rappel bilan (samedi toutes les 2 semaines, 7h)
   setTimeout(checkBilanNotifToday, 800);
+  setTimeout(checkWoReminderToday, 1100);
+  setTimeout(checkWelcomeMessage, 1500);
   const u=currentUser;
   // clh-avatar replaced by logo badge
   document.getElementById('clh-name').textContent=u.fname+' '+u.lname;
@@ -3307,7 +3480,7 @@ function loadClientHome(){
   document.getElementById('clh-sessions').textContent=(u.sessions||[]).length;
   const lb=u.bilans?.length?u.bilans[u.bilans.length-1]:null;
   document.getElementById('clh-weight').textContent=lb&&getBW(lb)!==null?getBW(lb)+'kg':'—';
-  renderNutriDots();renderNotifs();
+  renderNutriDots();renderNotifs();renderWoReminderCard();
   // PDF card
   const users=DB.get('users')||{};
   const freshU=users[currentUser.email]||currentUser;
@@ -3714,12 +3887,12 @@ function loadProgramView(){
       <div style="border:1px dashed var(--border);border-radius:12px;padding:16px 20px;margin:0 0 16px">
         <div style="font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px">Aperçu — programme exemple</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-          <span style="font-weight:900;font-size:14px">${prog.name}</span>
+          <span style="font-weight:900;font-size:14px">${escapeHtml(prog.name)}</span>
           <span class="badge badge-orange">EXEMPLE</span>
         </div>
         ${prog.exercises.map((ex,idx)=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #111;opacity:.55">
           <div style="width:22px;height:22px;background:#222;border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;flex-shrink:0;color:#666">${idx+1}</div>
-          <div style="flex:1"><div style="font-size:12px;font-weight:700">${ex.name}</div><div style="font-size:11px;color:var(--sub)">${ex.series} séries · ${ex.reps} reps</div></div>
+          <div style="flex:1"><div style="font-size:12px;font-weight:700">${escapeHtml(ex.name)}</div><div style="font-size:11px;color:var(--sub)">${ex.series} séries · ${escapeHtml(ex.reps)} reps</div></div>
         </div>`).join('')}
       </div>`;
     return;
@@ -3727,8 +3900,8 @@ function loadProgramView(){
   document.getElementById('pv-content').innerHTML=`
     <div style="margin-bottom:20px">
       <span class="accent-line"></span>
-      <div style="font-size:18px;font-weight:900;letter-spacing:-0.3px">${prog.name}</div>
-      ${prog.notes?`<p class="sub" style="margin-top:6px;font-size:12px;line-height:1.6">${prog.notes}</p>`:''}
+      <div style="font-size:18px;font-weight:900;letter-spacing:-0.3px">${escapeHtml(prog.name)}</div>
+      ${prog.notes?`<p class="sub" style="margin-top:6px;font-size:12px;line-height:1.6">${escapeHtml(prog.notes)}</p>`:''}
     </div>
     ${prog.exercises.map((ex,idx)=>{
       const pr=parseReps(ex.reps);
@@ -3738,10 +3911,10 @@ function loadProgramView(){
         <div style="padding:12px 14px;display:flex;align-items:flex-start;gap:10px;border-bottom:1px solid #181818">
           <div style="width:28px;height:28px;background:var(--red);border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;flex-shrink:0;color:#fff">${idx+1}</div>
           <div style="flex:1">
-            <div class="ex-name">${ex.name}</div>
-            <div class="ex-detail" style="margin-top:3px">${ex.series} séries · ${ex.reps} reps${ex.repos?' · '+ex.repos:''}</div>
+            <div class="ex-name">${escapeHtml(ex.name)}</div>
+            <div class="ex-detail" style="margin-top:3px">${ex.series} séries · ${escapeHtml(ex.reps)} reps${ex.repos?' · '+escapeHtml(ex.repos):''}</div>
             ${badge?`<div style="margin-top:5px">${badge}</div>`:''}
-            ${ex.description?`<div style="font-size:11px;color:#444;margin-top:6px;line-height:1.5;border-left:2px solid #2a2a2a;padding-left:8px">${ex.description}</div>`:''}
+            ${ex.description?`<div style="font-size:11px;color:#444;margin-top:6px;line-height:1.5;border-left:2px solid #2a2a2a;padding-left:8px">${escapeHtml(ex.description)}</div>`:''}
           </div>
         </div>
       </div>`;
@@ -3808,10 +3981,10 @@ function renderWoEx(){
       ${photoHtml}
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <div>
-          <div class="ex-name" style="font-size:15px">${ex.name}</div>
-          <div class="sub" style="font-size:12px;margin-top:3px">${ex.series} séries × ${ex.reps} reps${ex._cycleAdjusted?' <span style="color:var(--orange)">(−1 série cycle)</span>':''}</div>
+          <div class="ex-name" style="font-size:15px">${escapeHtml(ex.name)}</div>
+          <div class="sub" style="font-size:12px;margin-top:3px">${ex.series} séries × ${escapeHtml(ex.reps)} reps${ex._cycleAdjusted?' <span style="color:var(--orange)">(−1 série cycle)</span>':''}</div>
         </div>
-        <button onclick="openCalc('${sug||''}','${ex.reps}','0','${currentUser.gender||''}')" style="background:var(--card2);border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:11px;padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap"> Table</button>
+        <button onclick="openCalc('${sug||''}','${escapeHtml(ex.reps)}','0','${currentUser.gender||''}')" style="background:var(--card2);border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:11px;padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap"> Table</button>
       </div>
 
       ${cycleLabel&&isFemme?`<div style="background:#0f0f0f;border:1px solid #2a2a2a;border-radius:3px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#888;letter-spacing:.5px">${cycleLabel.text}</div>`:''}
@@ -3819,7 +3992,7 @@ function renderWoEx(){
       ${isCardio(ex)?
         `<div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:10px;padding:14px;margin-bottom:12px;text-align:center">
           <div style="font-size:32px;margin-bottom:6px">🏃</div>
-          <div style="font-size:20px;font-weight:900;color:var(--green)">${ex.reps}</div>
+          <div style="font-size:20px;font-weight:900;color:var(--green)">${escapeHtml(ex.reps)}</div>
           <div style="font-size:11px;color:var(--sub);margin-top:4px">Durée · Cardio</div>
         </div>`
       :sug?`<div class="suggest-box">
@@ -3832,8 +4005,17 @@ function renderWoEx(){
       </div>`:
       `<div style="background:var(--card2);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px;color:var(--sub)"> Première fois — Remplis tes séries et vise le RIR 0 sur ta dernière série.</div>`}
 
-      ${ex.description?`<div style="background:var(--card2);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#ccc;line-height:1.6">${ex.description}</div>`:''}
-      ${ex.note?`<div style="background:#1a1a1a;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#fca5a5"> ${ex.note}</div>`:''}
+      ${ex.description?`<div style="background:var(--card2);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#ccc;line-height:1.6">${escapeHtml(ex.description)}</div>`:''}
+      ${ex.note?`<div style="background:#1a1a1a;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#fca5a5"> ${escapeHtml(ex.note)}</div>`:''}
+
+      ${ex.videoUrl?`<a href="${safeUrl(ex.videoUrl)}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:12px;background:#08081a;border:1px solid #2a2a5a;border-radius:10px;padding:11px 14px;margin-bottom:12px;text-decoration:none;color:#7799ff">
+        <div style="width:32px;height:32px;background:#1a1a3a;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">▶</div>
+        <div style="flex:1">
+          <div style="font-size:11px;font-weight:800;letter-spacing:.5px;color:#99aaff">VIDÉO TECHNIQUE</div>
+          <div style="font-size:10px;color:#4466aa;margin-top:2px">Regarder la technique d'exécution</div>
+        </div>
+        <span style="font-size:14px;color:#3355aa">→</span>
+      </a>`:''}
 
       ${!isCardio(ex)&&pr.type==='degressive'?`<div style="background:#7c2d1222;border:1px solid #9a3412;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#fca5a5">
         <strong>Dégressive :</strong> Phase 1 → <strong>${pr.p1} reps</strong> lourd · Phase 2 → <strong>${pr.p2} reps</strong> léger (sans poser la charge)
@@ -3856,10 +4038,28 @@ function renderWoEx(){
         <tbody id="sets-body"></tbody>
       </table>
       </div>`}
-      ${ex.repos&&!isCardio(ex)?`<div style="margin-top:10px;display:flex;align-items:center;gap:8px;color:var(--sub);font-size:12px">⏱️ <strong>Repos :</strong> ${ex.repos}</div>`:''}
-      ${!isCardio(ex)?`<div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between">
-        <label style="font-size:11px;cursor:pointer;color:var(--sub)"><input type="checkbox" id="film-ex" style="width:auto;margin-right:4px">  Filmer cet exercice</label>
-        <span style="font-size:10px;color:var(--sub)">→ Vise RIR 0 sur ta dernière série</span>
+      ${ex.repos&&!isCardio(ex)?`<div style="margin-top:10px;display:flex;align-items:center;gap:8px;color:var(--sub);font-size:12px">⏱️ <strong>Repos :</strong> ${escapeHtml(ex.repos)}</div>`:''}
+      ${!isCardio(ex)?`<div style="margin-top:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <label style="font-size:11px;cursor:pointer;color:var(--sub)"><input type="checkbox" id="film-ex" style="width:auto;margin-right:4px">  Filmer cet exercice</label>
+          <span style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:10px;color:var(--sub)">→ Vise RIR 0 sur ta dernière série</span>
+            <button onclick="toggleRirExplain()" style="background:none;border:1px solid #2a2a2a;border-radius:50%;width:18px;height:18px;color:var(--sub);font-size:10px;font-weight:800;cursor:pointer;line-height:1;padding:0;flex-shrink:0">?</button>
+          </span>
+        </div>
+        <div id="rir-explain" style="display:none;margin-top:10px;background:#08080f;border:1px solid #1e1e3a;border-radius:10px;padding:14px;font-size:12px;line-height:1.7">
+          <div style="font-weight:800;color:#aaa;letter-spacing:.5px;margin-bottom:8px">RIR — Répétitions En Réserve</div>
+          <div style="color:var(--sub);font-size:11px;margin-bottom:10px">Le nombre de répétitions que tu pourrais encore réaliser <em>après</em> ta dernière rep, avant l'échec musculaire total.</div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:10px;font-weight:900;min-width:40px;padding-top:1px;color:#ef4444">RIR 0</span><span style="color:#aaa;font-size:11px">Échec — impossible de faire 1 rep de plus</span></div>
+            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:10px;font-weight:900;min-width:40px;padding-top:1px;color:#f97316">RIR 1</span><span style="color:#aaa;font-size:11px">1 rep encore dans le réservoir</span></div>
+            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:10px;font-weight:900;min-width:40px;padding-top:1px;color:#eab308">RIR 2</span><span style="color:#aaa;font-size:11px">2 reps encore possibles — effort intense mais contrôlé</span></div>
+            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:10px;font-weight:900;min-width:40px;padding-top:1px;color:#22c55e">RIR 3+</span><span style="color:#aaa;font-size:11px">Encore loin de l'échec — échauffement ou séance légère</span></div>
+          </div>
+          <div style="border-top:1px solid #1a1a2a;padding-top:10px;color:#666;font-size:11px;line-height:1.6">
+            💡 <strong style="color:#aaa">En pratique :</strong> vise <strong style="color:#eab308">RIR 2</strong> sur tes premières séries pour préserver l'énergie, puis pousse à <strong style="color:#ef4444">RIR 0–1</strong> sur ta <strong style="color:#fff">dernière série</strong> pour maximiser le stimulus musculaire.
+          </div>
+        </div>
       </div>`:''}
     </div>`;
   renderSets(ex,data);
@@ -3956,6 +4156,10 @@ function renderSets(ex,data){
 }
 
 
+function toggleRirExplain(){
+  const el=document.getElementById('rir-explain');
+  if(el) el.style.display=el.style.display==='none'?'block':'none';
+}
 // Récupère la dernière charge enregistrée à RIR 0 pour un exercice
 function getLastZeroRIRWeight(exName){
   if(!currentUser.sessions?.length) return null;
@@ -3996,6 +4200,7 @@ function finishWorkout(incomplete=false){
   document.getElementById('wd-sets').textContent=sets;
   document.getElementById('wd-vol').textContent=Math.round(vol)+'kg';
   document.getElementById('wd-msg').textContent=incomplete?'Séance interrompue. Continue demain !':'Excellent travail ! Chaque séance compte ';
+  document.getElementById('wd-comparison').innerHTML=buildSessionComparison(vol,data);
   // Reset sliders post-séance
   ['fatigue','intensite','satisfaction','sensation','hydratation','motivation'].forEach(m=>{
     const el=document.getElementById('ps-'+m);const vl=document.getElementById('ps-'+m+'-val');
@@ -4003,6 +4208,30 @@ function finishWorkout(incomplete=false){
   });
   document.getElementById('ps-steps').value='';
   go('s-workout-done');
+}
+function buildSessionComparison(vol,data){
+  const prev=currentUser.sessions.slice(0,-1);
+  const prevSame=[...prev].reverse().find(s=>s.name===woState.progName);
+  const items=[];
+  if(prevSame?.volume>0){
+    const delta=Math.round(vol)-prevSame.volume;
+    if(delta>0) items.push({icon:'🔥',color:'#4ade80',text:'+'+delta+'kg de volume vs dernière séance'});
+    else if(delta<0) items.push({icon:'📉',color:'#666',text:delta+'kg de volume vs dernière séance'});
+  }
+  Object.entries(data).forEach(([nm,d])=>{
+    const curMax=d.sets.filter(s=>s.done&&parseFloat(s.weight||0)>0).reduce((m,s)=>Math.max(m,parseFloat(s.weight)),0);
+    if(!curMax) return;
+    let histMax=0;
+    prev.forEach(s=>{(s.data?.[nm]?.sets||[]).filter(x=>x.done).forEach(x=>{const w=parseFloat(x.weight||0);if(w>histMax)histMax=w;});});
+    if(curMax>histMax){
+      const suf=histMax>0?' (était '+histMax+'kg)':'';
+      items.push({icon:'🏆',color:'#fbbf24',text:'Record : '+curMax+'kg au '+nm+suf});
+    }
+  });
+  if(!items.length) return '';
+  return `<div style="margin-bottom:16px;display:flex;flex-direction:column;gap:6px">`
+    +items.map(it=>`<div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px"><span style="font-size:18px;flex-shrink:0">${it.icon}</span><span style="font-size:12px;font-weight:700;color:${it.color}">${escapeHtml(it.text)}</span></div>`).join('')
+    +'</div>';
 }
 function savePostSession(){
   const metrics={
@@ -4093,8 +4322,8 @@ function pickBilChoice(groupId,val,multi){
   }
 }
 function bQ(id){return`<input type="number" id="${id}" placeholder="—" value="${bilData[id]||''}" step="any" oninput="bilData['${id}']=this.value" style="width:68px;text-align:right;padding:6px 8px;font-size:15px;font-weight:800;margin:0;background:#080808;border:1px solid #222;border-radius:2px">`;}
-function bT(id,ph){return`<input type="text" id="${id}" placeholder="${ph||''}" value="${bilData[id]||''}" oninput="bilData['${id}']=this.value">`;}
-function bTA(id,ph){return`<textarea id="${id}" rows="3" placeholder="${ph||''}" oninput="bilData['${id}']=this.value" style="resize:none">${bilData[id]||''}</textarea>`;}
+function bT(id,ph){return`<input type="text" id="${id}" placeholder="${ph||''}" value="${escapeHtml(bilData[id]||'')}" oninput="bilData['${id}']=this.value">`;}
+function bTA(id,ph){return`<textarea id="${id}" rows="3" placeholder="${ph||''}" oninput="bilData['${id}']=this.value" style="resize:none">${escapeHtml(bilData[id]||'')}</textarea>`;}
 function bC(gid,choices,multi){
   return choices.map(c=>`<div class="choice-opt${bilData[gid]&&(multi?bilData[gid].includes(c):bilData[gid]===c)?' sel':''}" data-grp="${gid}" data-val="${c}" onclick="pickBilChoice('${gid}',this.dataset.val,${!!multi})">${c}</div>`).join('');
 }
@@ -4449,6 +4678,171 @@ function showBilanNotifPrompt(){
   document.body.appendChild(m);
 }
 
+// ======= WORKOUT REMINDER =======
+async function scheduleWoNotif(){
+  if(!('serviceWorker' in navigator))return;
+  const u=currentUser;
+  try{
+    const c=await caches.open('repcore-sw-data');
+    await c.put('/wo-reminder',new Response(JSON.stringify({
+      enabled:true,
+      hour:u._woReminderHour??18,
+      days:u._woReminderDays||[],
+      fname:u.fname||'',
+      lastNotifDate:null
+    }),{headers:{'Content-Type':'application/json'}}));
+    const reg=await navigator.serviceWorker.ready;
+    if('periodicSync' in reg){
+      try{await reg.periodicSync.register('wo-reminder',{minInterval:8*3600*1000});}catch(e){}
+    }
+  }catch(e){}
+}
+function renderWoReminderCard(){
+  const el=document.getElementById('clh-wo-reminder-row');if(!el)return;
+  const u=currentUser;
+  if(!u._woReminderEnabled){
+    el.innerHTML=`<button onclick="openWoReminderConfig()" style="width:100%;background:transparent;border:1px dashed var(--border);border-radius:10px;padding:11px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;font-family:Montserrat,sans-serif;color:var(--sub);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">
+      <span style="font-size:18px">🔔</span><span>Configurer un rappel séance</span>
+    </button>`;
+    return;
+  }
+  const DS=['L','Ma','Me','J','V','S','D'];
+  const days=(u._woReminderDays||[]).map(i=>DS[i]).join(' · ');
+  const hh=String(u._woReminderHour??18).padStart(2,'0');
+  const mm=String(u._woReminderMin??0).padStart(2,'0');
+  el.innerHTML=`<div style="background:#08100a;border:1px solid #1a3020;border-radius:10px;padding:11px 16px;margin-bottom:10px;display:flex;align-items:center;gap:10px">
+    <span style="font-size:18px;flex-shrink:0">🔔</span>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:11px;font-weight:800;color:#4ade80;text-transform:uppercase;letter-spacing:.8px">Rappel séance activé</div>
+      <div style="font-size:11px;color:var(--sub);margin-top:2px">${hh}:${mm} · ${days||'—'}</div>
+    </div>
+    <button onclick="openWoReminderConfig()" style="background:none;border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--sub);font-size:11px;cursor:pointer;font-family:Montserrat,sans-serif">⚙️</button>
+  </div>`;
+}
+function checkWoReminderToday(){
+  if(!currentUser||currentUser.role!=='athlete')return;
+  if(!currentUser._woReminderEnabled)return;
+  const days=currentUser._woReminderDays||[];if(!days.length)return;
+  const now=new Date();
+  const todayJS=now.getDay();
+  const todayApp=todayJS===0?6:todayJS-1;
+  if(!days.includes(todayApp))return;
+  if(now.getHours()<(currentUser._woReminderHour??18))return;
+  const todayStr=localISODate(now);
+  if(currentUser._lastWoNotif===todayStr)return;
+  currentUser._lastWoNotif=todayStr;saveUser();
+  showWoReminderBanner();
+  if(Notification.permission==='granted'){
+    navigator.serviceWorker.ready.then(reg=>reg.showNotification('RepCore — Séance du jour 💪',{
+      body:"C'est l'heure de t'entraîner ! Lance ta séance maintenant.",
+      icon:'./icons/icon-192x192.png',badge:'./icons/icon-192x192.png',
+      tag:'wo-reminder',requireInteraction:true,data:{url:'./?wo=1'}
+    })).catch(()=>{});
+  }
+}
+function showWoReminderBanner(){
+  document.getElementById('wo-reminder-banner')?.remove();
+  const b=document.createElement('div');
+  b.id='wo-reminder-banner';
+  b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:5000;animation:slideDown .35s ease';
+  b.innerHTML=`<div style="background:linear-gradient(135deg,#001a06,#002810);border-bottom:2px solid #4ade80;padding:14px 18px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openSessionPicker();document.getElementById('wo-reminder-banner')?.remove()">
+    <div style="font-size:26px;flex-shrink:0">💪</div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:10px;font-weight:900;color:#4ade80;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px">Séance du jour</div>
+      <div style="font-size:12px;color:#ddd;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">C'est l'heure de t'entraîner ! Clique pour démarrer.</div>
+    </div>
+    <button onclick="event.stopPropagation();document.getElementById('wo-reminder-banner')?.remove()" style="background:none;border:none;color:#555;font-size:22px;cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1">✕</button>
+  </div>`;
+  document.body.appendChild(b);
+  setTimeout(()=>b?.remove(),60000);
+}
+function openWoReminderConfig(){
+  const u=currentUser;
+  const curH=u._woReminderHour??18;
+  const curM=u._woReminderMin??0;
+  const curDays=u._woReminderDays||(
+    (u.sessions_config||[]).reduce((a,s,i)=>{if(s.active)a.push(i);return a;},[])
+  );
+  const DS=['L','Ma','Me','J','V','S','D'];
+  const dayBtns=DS.map((d,i)=>`<button id="wrd-day-${i}" onclick="wrdToggleDay(${i})" style="flex:1;min-width:0;border:1px solid ${curDays.includes(i)?'var(--red)':'var(--border)'};border-radius:6px;padding:9px 2px;background:${curDays.includes(i)?'#1a0000':'transparent'};color:${curDays.includes(i)?'var(--red)':'var(--sub)'};font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer">${d}</button>`).join('');
+  const hourOpts=Array.from({length:17},(_,i)=>i+6).map(h=>`<option value="${h}" ${h===curH?'selected':''}>${String(h).padStart(2,'0')}h</option>`).join('');
+  document.getElementById('wo-reminder-config')?.remove();
+  document.body.insertAdjacentHTML('beforeend',`<div id="wo-reminder-config" style="position:fixed;inset:0;background:#000b;z-index:3000;display:flex;align-items:flex-end;justify-content:center" onclick="if(event.target===this)this.remove()">
+  <div onclick="event.stopPropagation()" style="background:#161616;border-radius:20px 20px 0 0;padding:24px 20px 36px;width:100%;max-width:480px;animation:slideUp .3s ease">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <h2 style="margin:0;font-size:16px">🔔 Rappel séance</h2>
+      <button onclick="document.getElementById('wo-reminder-config').remove()" style="background:none;border:none;color:var(--sub);font-size:22px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <label style="font-size:11px;display:block;margin-bottom:6px">Heure du rappel</label>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+      <select id="wrd-hour" style="flex:1;font-size:16px;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;padding:10px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px">${hourOpts}</select>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <button id="wrd-min-0" onclick="wrdSetMin(0)" style="border-radius:4px;padding:6px 12px;font-size:11px;font-weight:800;font-family:Montserrat,sans-serif;cursor:pointer;background:${curM===0?'var(--red)':'transparent'};border:1px solid ${curM===0?'var(--red)':'var(--border)'};color:${curM===0?'#fff':'var(--sub)'}">:00</button>
+        <button id="wrd-min-30" onclick="wrdSetMin(30)" style="border-radius:4px;padding:6px 12px;font-size:11px;font-weight:800;font-family:Montserrat,sans-serif;cursor:pointer;background:${curM===30?'var(--red)':'transparent'};border:1px solid ${curM===30?'var(--red)':'var(--border)'};color:${curM===30?'#fff':'var(--sub)'}">:30</button>
+      </div>
+    </div>
+    <label style="font-size:11px;display:block;margin-bottom:6px">Jours d'entraînement</label>
+    <div style="display:flex;gap:5px;margin-bottom:22px">${dayBtns}</div>
+    <button class="btn btn-red" onclick="saveWoReminderConfig()" style="margin-bottom:10px;letter-spacing:1.5px">Activer le rappel</button>
+    ${u._woReminderEnabled?`<button class="btn btn-outline" onclick="disableWoReminder()" style="font-size:11px;color:var(--sub)">Désactiver les rappels</button>`:''}
+  </div></div>`);
+  window._wrdDays=[...curDays];
+  window._wrdMin=curM;
+}
+function wrdToggleDay(i){
+  if(!window._wrdDays)window._wrdDays=[];
+  const idx=window._wrdDays.indexOf(i);
+  if(idx>=0)window._wrdDays.splice(idx,1);else window._wrdDays.push(i);
+  const btn=document.getElementById('wrd-day-'+i);if(!btn)return;
+  const on=window._wrdDays.includes(i);
+  btn.style.border='1px solid '+(on?'var(--red)':'var(--border)');
+  btn.style.background=on?'#1a0000':'transparent';
+  btn.style.color=on?'var(--red)':'var(--sub)';
+}
+function wrdSetMin(m){
+  window._wrdMin=m;
+  ['wrd-min-0','wrd-min-30'].forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    const on=id==='wrd-min-'+m;
+    el.style.background=on?'var(--red)':'transparent';
+    el.style.border='1px solid '+(on?'var(--red)':'var(--border)');
+    el.style.color=on?'#fff':'var(--sub)';
+  });
+}
+async function saveWoReminderConfig(){
+  const h=+(document.getElementById('wrd-hour')?.value||18);
+  const m=window._wrdMin??0;
+  const days=window._wrdDays||[];
+  if(!days.length){toast("Sélectionne au moins un jour d'entraînement",'var(--orange)');return;}
+  const doSave=async()=>{
+    currentUser._woReminderEnabled=true;
+    currentUser._woReminderHour=h;
+    currentUser._woReminderMin=m;
+    currentUser._woReminderDays=[...days];
+    saveUser();
+    await scheduleWoNotif();
+    toast('Rappel activé à '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+' ✓');
+    document.getElementById('wo-reminder-config')?.remove();
+    renderWoReminderCard();
+  };
+  if(!('Notification' in window)){toast('Notifications non supportées','var(--orange)');return;}
+  if(Notification.permission==='granted'){await doSave();return;}
+  if(Notification.permission==='denied'){toast('Notifications bloquées — autorise-les dans les réglages du navigateur','var(--orange)');return;}
+  const p=await Notification.requestPermission();
+  if(p==='granted') await doSave();
+  else toast('Permission refusée — rappel non activé');
+}
+async function disableWoReminder(){
+  currentUser._woReminderEnabled=false;saveUser();
+  try{
+    const c=await caches.open('repcore-sw-data');
+    const r=await c.match('/wo-reminder');
+    if(r){const d=await r.json();await c.put('/wo-reminder',new Response(JSON.stringify({...d,enabled:false}),{headers:{'Content-Type':'application/json'}}));}
+  }catch(e){}
+  toast('Rappels désactivés');
+  document.getElementById('wo-reminder-config')?.remove();
+  renderWoReminderCard();
+}
 function loadPhoto(input,imgId){
   const f=input.files[0];if(!f) return;
   compressImage(f,1200,0.75,data=>{
@@ -4458,6 +4852,112 @@ function loadPhoto(input,imgId){
   });
 }
 
+// ======= WELCOME MESSAGE =======
+let _wcRec=null,_wcStream=null,_wcChunks=[],_wcBlob=null,_wcTimer=null;
+
+function renderWelcomeMessagePreview(){
+  const curr=document.getElementById('wm-current');
+  const rec=document.getElementById('wm-recorder');
+  const prev=document.getElementById('wm-preview');
+  if(!curr||!rec) return;
+  if(currentUser.welcomeAudio){
+    curr.style.display='block';rec.style.display='none';
+    if(prev) prev.src=currentUser.welcomeAudio;
+  } else {
+    curr.style.display='none';rec.style.display='block';
+  }
+}
+function toggleWelcomeRec(){
+  if(_wcRec&&_wcRec.state==='recording'){
+    _wcRec.stop();_wcStream?.getTracks().forEach(t=>t.stop());
+    clearInterval(_wcTimer);
+    const btn=document.getElementById('wm-rec-btn');
+    if(btn){btn.textContent='🎤 ENREGISTRER';btn.style.background='var(--red)';}
+    const st=document.getElementById('wm-rec-status');if(st) st.textContent='';
+    return;
+  }
+  _wcChunks=[];
+  navigator.mediaDevices.getUserMedia({audio:true}).then(stream=>{
+    _wcStream=stream;
+    _wcRec=new MediaRecorder(stream);
+    _wcRec.ondataavailable=e=>{if(e.data.size>0)_wcChunks.push(e.data);};
+    _wcRec.onstop=()=>{
+      _wcBlob=new Blob(_wcChunks,{type:'audio/webm'});
+      const url=URL.createObjectURL(_wcBlob);
+      const rp=document.getElementById('wm-rec-preview');if(rp) rp.src=url;
+      const pr=document.getElementById('wm-preview-row');if(pr) pr.style.display='block';
+    };
+    _wcRec.start();
+    let secs=0;
+    _wcTimer=setInterval(()=>{
+      secs++;
+      const st=document.getElementById('wm-rec-status');
+      if(st) st.textContent='● '+Math.floor(secs/60)+':'+(secs%60<10?'0':'')+secs%60;
+    },1000);
+    const btn=document.getElementById('wm-rec-btn');
+    if(btn){btn.textContent='⏹ ARRÊTER';btn.style.background='#991b1b';}
+    const st=document.getElementById('wm-rec-status');if(st) st.textContent='● 0:00';
+  }).catch(()=>toast('Microphone non accessible','var(--orange)'));
+}
+function cancelWelcomeRec(){
+  _wcBlob=null;
+  const pr=document.getElementById('wm-preview-row');if(pr) pr.style.display='none';
+  const rp=document.getElementById('wm-rec-preview');if(rp) rp.src='';
+}
+async function confirmWelcomeAudio(){
+  if(!_wcBlob){toast('Aucun enregistrement','var(--orange)');return;}
+  const btn=document.getElementById('wm-rec-btn');
+  if(btn){btn.textContent='⏳ Upload...';btn.disabled=true;}
+  try{
+    const file=new File([_wcBlob],'welcome.webm',{type:'audio/webm'});
+    const url=await _cloudinaryUpload(file);
+    currentUser.welcomeAudio=url;saveUser();
+    toast('Message de bienvenue enregistré ✓');
+    cancelWelcomeRec();renderWelcomeMessagePreview();
+  }catch(e){toast('Erreur upload : '+e.message,'var(--orange)');}
+  finally{if(btn){btn.textContent='🎤 ENREGISTRER';btn.disabled=false;}}
+}
+async function importWelcomeAudio(input){
+  const file=input.files[0];if(!file)return;
+  toast('Upload en cours...');
+  try{
+    const url=await _cloudinaryUpload(file);
+    currentUser.welcomeAudio=url;saveUser();
+    toast('Message importé ✓');renderWelcomeMessagePreview();
+  }catch(e){toast('Erreur : '+e.message,'var(--orange)');}
+  input.value='';
+}
+function deleteWelcomeMessage(){
+  if(!confirm('Supprimer le message de bienvenue ? Les athlètes déjà connectés ne verront plus rien au prochain chargement.')) return;
+  currentUser.welcomeAudio=null;saveUser();
+  toast('Message supprimé');renderWelcomeMessagePreview();
+}
+function checkWelcomeMessage(){
+  if(!currentUser||currentUser.role!=='athlete') return;
+  if(currentUser._welcomePlayed) return;
+  if(!currentUser.coachId) return;
+  const users=DB.get('users')||{};
+  const coach=Object.values(users).find(u=>u.id===currentUser.coachId);
+  if(!coach?.welcomeAudio) return;
+  showWelcomeModal(coach);
+}
+function showWelcomeModal(coach){
+  document.getElementById('wm-athlete-overlay')?.remove();
+  const coachName=([coach.fname,coach.lname].filter(Boolean).join(' '))||'ton coach';
+  document.body.insertAdjacentHTML('beforeend',`<div id="wm-athlete-overlay" style="position:fixed;inset:0;background:#000e;z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:24px;padding:32px 24px;width:100%;max-width:420px;text-align:center;animation:fadeIn .4s ease">
+    <div style="font-size:52px;margin-bottom:16px">👋</div>
+    <h2 style="font-size:24px;margin-bottom:8px;font-family:'Bebas Neue',sans-serif;letter-spacing:.5px">Bienvenue, ${escapeHtml(currentUser.fname||'')} !</h2>
+    <p style="color:var(--sub);font-size:12px;margin-bottom:20px;line-height:1.6">${escapeHtml(coachName)} a enregistré un message pour toi</p>
+    <audio id="wm-athlete-audio" controls src="${coach.welcomeAudio}" style="width:100%;height:40px;margin-bottom:24px" preload="auto"></audio>
+    <button onclick="dismissWelcomeModal()" class="btn btn-red" style="width:100%;letter-spacing:1.5px;font-size:13px">C'est parti ! 💪</button>
+  </div></div>`);
+  setTimeout(()=>document.getElementById('wm-athlete-audio')?.play().catch(()=>{}),500);
+}
+function dismissWelcomeModal(){
+  document.getElementById('wm-athlete-overlay')?.remove();
+  currentUser._welcomePlayed=true;saveUser();
+}
 // ======= PROGRESS =======
 function loadProgress(){
   go('s-progress');showProgressTab('poids',document.querySelector('#prog-tabs button'));
@@ -4752,7 +5252,7 @@ function showProgressTab(tab,btn){
         const txt=Array.isArray(val)?val.join(', '):String(val);
         return `<div style="padding:8px 0;border-bottom:1px solid #141414">
           <div style="font-size:9px;color:var(--sub);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">${q.emoji} ${q.lbl}</div>
-          <div style="font-size:12px;color:#ddd;line-height:1.5">${txt}</div>
+          <div style="font-size:12px;color:#ddd;line-height:1.5">${escapeHtml(txt)}</div>
         </div>`;
       }).filter(Boolean).join('');
       if(!answers) return '';
@@ -4940,10 +5440,10 @@ function caffeineEquiv(mg){
   const n=Math.round(mg/63);
   return n<=0?'':`≈ ${n===1?'1 espresso':n+' expressos'}`;
 }
-function _caffeineColor(pct){
-  if(pct<0.5) return '#22c55e';
-  if(pct<0.75) return '#eab308';
-  if(pct<1.0) return '#f97316';
+function _caffeineColor(mg,thr){
+  if(mg<thr.green)  return '#22c55e';
+  if(mg<thr.yellow) return '#eab308';
+  if(mg<thr.orange) return '#f97316';
   return '#ef4444';
 }
 function getUserWeight(){
@@ -4986,7 +5486,7 @@ function loadCaffeine(){
   const wKg=getUserWeight();
   const thr=caffeineThresholds(wKg);
   const pct=Math.min(totalMg/thr.red,1);
-  const color=_caffeineColor(pct);
+  const color=_caffeineColor(totalMg,thr);
   document.getElementById('caff-total-mg').textContent=totalMg+'mg';
   document.getElementById('caff-equiv').textContent=caffeineEquiv(totalMg);
   const bar=document.getElementById('caff-gauge-bar');
@@ -5037,7 +5537,7 @@ function loadCaffeineEmbedded(){
   const wKg=getUserWeight();
   const thr=caffeineThresholds(wKg);
   const pct=Math.min(totalMg/thr.red,1);
-  const color=_caffeineColor(pct);
+  const color=_caffeineColor(totalMg,thr);
   let alertHtml='';
   if(totalMg>=thr.red)
     alertHtml='<div class="caff-alert-banner" style="background:#1a0000;border-color:#ef4444;color:#ef4444">🚨 Dose maximale dépassée — évite toute nouvelle prise aujourd\'hui.</div>';
@@ -5119,7 +5619,7 @@ function _drawCaffeineHistory(wKg,canvasId='caff-history-chart'){
     const barH=Math.max(2,(v/maxVal)*chartH);
     const x=PAD.l+i*slotW+(slotW-barW)/2;
     const y=PAD.t+chartH-barH;
-    ctx.fillStyle=_caffeineColor(v/thr.red);
+    ctx.fillStyle=_caffeineColor(v,thr);
     if(ctx.roundRect){ctx.beginPath();ctx.roundRect(x,y,barW,barH,2);ctx.fill();}
     else{ctx.fillRect(x,y,barW,barH);}
   });
@@ -5215,10 +5715,10 @@ function loadVideos(){
         ?`<div style="margin-top:8px">${[...v.feedbackTimestamps].sort((a,b)=>tsToSecs(a.ts)-tsToSecs(b.ts)).map(t=>{const isA=!!t.audioUrl;return`<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid #111;align-items:${isA?'flex-start':'center'}"><span style="font-family:'Bebas Neue',sans-serif;font-size:13px;color:var(--red);flex-shrink:0;min-width:36px;margin-top:${isA?'3px':'0'}">${t.ts}</span>${isA?`<audio src="${t.audioUrl}" controls style="flex:1;height:32px"></audio>`:`<span style="font-size:12px;color:#ccc">${t.note}</span>`}</div>`;}).join('')}</div>`:'';
       const fbBlock=hasFb?`<div style="background:var(--card2);border-radius:8px;padding:10px;margin-top:10px;font-size:12px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span style="color:var(--sub);font-size:10px;font-weight:700">FEEDBACK COACH</span>${v.feedbackDate?`<span style="font-size:10px;color:#444">${new Date(v.feedbackDate).toLocaleDateString('fr-FR')}</span>`:''}</div>
-        ${v.feedback?`<p style="margin:0;line-height:1.5">${v.feedback}</p>`:''}${tsBlock}</div>`:'';
+        ${v.feedback?`<p style="margin:0;line-height:1.5">${escapeHtml(v.feedback)}</p>`:''}${tsBlock}</div>`:'';
       return `<div class="video-card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <div style="font-weight:700;font-size:13px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${v.name}</div>
+        <div style="font-weight:700;font-size:13px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div>
         <span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?'✓ Corrigée':'En attente'}</span>
       </div>
       <div class="sub" style="font-size:11px">${new Date(v.date).toLocaleDateString('fr-FR')}</div>
@@ -5245,26 +5745,153 @@ function addVideoLink(){
 }
 async function uploadVideoFile(input){
   const file=input.files[0];if(!file) return;
-  if(file.size>200*1024*1024){toast('Fichier trop lourd (max 200 Mo)','var(--orange)');input.value='';return;}
   const progEl=document.getElementById('vid-upload-progress');
   const errEl=document.getElementById('vid-upload-error');
-  if(progEl){progEl.style.display='block';progEl.textContent='Connexion...';}
   if(errEl) errEl.style.display='none';
+
+  // Cherche la config Cloudinary du coach (ou de l'utilisateur lui-même si solo)
+  const users=DB.get('users')||{};
+  const coach=currentUser.coachId?Object.values(users).find(u=>u.id===currentUser.coachId):null;
+  const cloudName=coach?.cloudinaryName||currentUser.cloudinaryName||'dntu57ml';
+  const uploadPreset=coach?.cloudinaryPreset||currentUser.cloudinaryPreset||'repcore_videos';
+
+  if(progEl){progEl.style.display='block';progEl.textContent='Upload en cours...';}
+
+  const fd=new FormData();
+  fd.append('file',file);
+  fd.append('upload_preset',uploadPreset);
+  fd.append('folder','repcore/'+(currentUser.id||currentUser.email));
+
   try{
-    const url=await CLOUD.uploadVideo(file,currentUser.id||currentUser.email);
+    const res=await fetch('https://api.cloudinary.com/v1_1/'+cloudName+'/video/upload',{method:'POST',body:fd});
+    if(!res.ok) throw new Error('Erreur serveur '+res.status);
+    const data=await res.json();
+    if(data.error) throw new Error(data.error.message);
+    const url=data.secure_url;
     const name=file.name.replace(/\.(mp4|mov|webm|mkv|avi)$/i,'');
     if(!currentUser.videos) currentUser.videos=[];
     currentUser.videos.push({id:'v_'+Date.now(),name,url,date:Date.now(),size:Math.round(file.size/1024/1024*10)/10+' Mo',feedback:null});
     saveUser();
     if(progEl) progEl.style.display='none';
     input.value='';
-    toast('Vidéo uploadée !','var(--green)');
+    toast('Vidéo envoyée au coach !','var(--green)');
     loadVideos();
   }catch(e){
     if(progEl) progEl.style.display='none';
     if(errEl){errEl.style.display='block';errEl.textContent='Erreur : '+e.message;}
     input.value='';
   }
+}
+// ======= QUICK COMMENTS =======
+const QC_DEFAULTS=[
+  {label:'Dos droit',text:"Garde le dos droit"},
+  {label:'Descends plus bas',text:"Descends plus bas"},
+  {label:'Souffle',text:"Souffle sur l'effort"},
+  {label:'Genoux',text:"Attention aux genoux qui rentrent vers l'intérieur"},
+  {label:'Beau travail !',text:"Beau travail"},
+  {label:'Belle progression',text:"Belle progression depuis la dernière séance"},
+];
+function _getQC(){
+  if(!currentUser.quickComments?.length){
+    currentUser.quickComments=QC_DEFAULTS.map((c,i)=>({id:'qcd'+i,label:c.label,text:c.text,pos:i}));
+    saveUser();
+  }
+  return currentUser.quickComments.slice().sort((a,b)=>(a.pos??99)-(b.pos??99));
+}
+function _renderQuickCommentChips(){
+  const el=document.getElementById('qc-chips');if(!el)return;
+  const qcs=_getQC();
+  el.innerHTML=(qcs.length?qcs.map(c=>`<button data-qc="${escapeHtml(c.text)}" onclick="insertQC(this.dataset.qc)" style="flex-shrink:0;background:var(--card2);border:1px solid var(--border);border-radius:20px;padding:0 14px;height:44px;color:var(--text);font-family:Montserrat,sans-serif;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.label)}</button>`).join(''):'')
+    +`<button onclick="openQCManager()" style="flex-shrink:0;background:transparent;border:1px dashed var(--border);border-radius:20px;padding:0 14px;height:44px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;cursor:pointer;white-space:nowrap">✏️ Gérer</button>`;
+}
+function insertQC(text){
+  const ta=document.getElementById('vc-general');if(!ta)return;
+  const s=ta.selectionStart,e=ta.selectionEnd;
+  const before=ta.value.substring(0,s),after=ta.value.substring(e);
+  const sep=(before&&!/[\s\n]$/.test(before))?'. ':'';
+  const ins=sep+text;
+  ta.value=before+ins+after;
+  const p=s+ins.length;ta.setSelectionRange(p,p);ta.focus();
+}
+function openQCManager(){
+  const qcs=_getQC();
+  const rows=qcs.map((c,i)=>`<div id="qcr-${c.id}" style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid #1a1a1a">
+    <div style="flex:1;min-width:0">
+      <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.label)}</div>
+      ${c.text!==c.label?`<div style="font-size:10px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.text)}</div>`:''}
+    </div>
+    <button data-i="${i}" onclick="qcUp(+this.dataset.i)" ${i===0?'disabled':''} style="background:none;border:none;font-size:16px;cursor:pointer;padding:4px;min-width:28px;color:var(--sub);${i===0?'opacity:.3':''}">↑</button>
+    <button data-i="${i}" onclick="qcDown(+this.dataset.i)" ${i===qcs.length-1?'disabled':''} style="background:none;border:none;font-size:16px;cursor:pointer;padding:4px;min-width:28px;color:var(--sub);${i===qcs.length-1?'opacity:.3':''}">↓</button>
+    <button data-id="${c.id}" onclick="qcEditRow(this.dataset.id)" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--sub);font-size:11px;cursor:pointer;padding:5px 9px">✏️</button>
+    <button data-id="${c.id}" onclick="qcDel(this.dataset.id)" style="background:none;border:1px solid #3a1a1a;border-radius:4px;color:var(--red);font-size:11px;cursor:pointer;padding:5px 9px">✕</button>
+  </div>`).join('');
+  document.getElementById('qcm-overlay')?.remove();
+  document.body.insertAdjacentHTML('beforeend',`<div id="qcm-overlay" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
+  <div style="background:#161616;border-radius:20px 20px 0 0;padding:20px 20px 32px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <h2 style="margin:0;font-size:16px">✏️ Commentaires-types</h2>
+      <button onclick="document.getElementById('qcm-overlay').remove()" style="background:none;border:none;color:var(--sub);font-size:22px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div id="qcm-list">${rows||'<div class="sub" style="padding:12px 0;text-align:center">Aucun commentaire — ajoute-en ci-dessous.</div>'}</div>
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid #1a1a1a">
+      <label style="margin:0 0 6px;font-size:11px;display:block">Ajouter un commentaire</label>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <input id="qc-new-label" placeholder="Texte de la chip (max 40 car.)" maxlength="40" style="flex:1;font-size:12px">
+        <button onclick="qcAdd()" style="background:var(--red);border:none;color:#fff;border-radius:3px;padding:9px 14px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap">+ Ajouter</button>
+      </div>
+      <input id="qc-new-text" placeholder="Texte inséré si différent du label (facultatif)" maxlength="120" style="width:100%;box-sizing:border-box;font-size:11px;margin-top:6px">
+    </div>
+    <button onclick="qcReset()" style="margin-top:10px;background:none;border:1px solid #2a2a2a;border-radius:3px;color:#555;font-size:11px;padding:8px;cursor:pointer;font-family:Montserrat,sans-serif;width:100%">Réinitialiser aux 6 valeurs par défaut</button>
+  </div></div>`);
+}
+function qcAdd(){
+  const label=(document.getElementById('qc-new-label')?.value||'').trim();
+  const text=(document.getElementById('qc-new-text')?.value||'').trim()||label;
+  if(!label){toast('Entre un texte pour la chip','var(--orange)');return;}
+  if(!currentUser.quickComments)currentUser.quickComments=[];
+  const maxPos=currentUser.quickComments.reduce((m,c)=>Math.max(m,c.pos??0),0);
+  currentUser.quickComments.push({id:'qc'+Date.now(),label:label.slice(0,40),text:text.slice(0,120),pos:maxPos+1});
+  saveUser();toast('Commentaire ajouté ✓');
+  openQCManager();_renderQuickCommentChips();
+}
+function qcEditRow(id){
+  const c=(currentUser.quickComments||[]).find(x=>x.id===id);if(!c)return;
+  const row=document.getElementById('qcr-'+id);if(!row)return;
+  row.innerHTML=`<div style="flex:1;min-width:0">
+    <input id="qce-lbl-${c.id}" value="${escapeHtml(c.label)}" maxlength="40" style="width:100%;box-sizing:border-box;margin-bottom:4px;font-size:12px">
+    <input id="qce-txt-${c.id}" value="${escapeHtml(c.text)}" maxlength="120" style="width:100%;box-sizing:border-box;font-size:11px">
+  </div>
+  <button data-id="${c.id}" onclick="qcSaveEdit(this.dataset.id)" style="background:var(--red);border:none;color:#fff;border-radius:3px;padding:7px 11px;font-size:11px;font-weight:800;cursor:pointer;font-family:Montserrat,sans-serif">OK</button>
+  <button onclick="openQCManager()" style="background:none;border:1px solid var(--border);border-radius:3px;padding:7px 10px;font-size:12px;cursor:pointer;color:var(--sub)">✕</button>`;
+  document.getElementById('qce-lbl-'+c.id)?.focus();
+}
+function qcSaveEdit(id){
+  const c=(currentUser.quickComments||[]).find(x=>x.id===id);if(!c)return;
+  const label=(document.getElementById('qce-lbl-'+id)?.value||'').trim();
+  const text=(document.getElementById('qce-txt-'+id)?.value||'').trim();
+  if(!label){toast('Le label ne peut pas être vide','var(--orange)');return;}
+  c.label=label.slice(0,40);c.text=(text||label).slice(0,120);
+  saveUser();openQCManager();_renderQuickCommentChips();
+}
+function qcDel(id){
+  if(!confirm('Supprimer ce commentaire-type ?'))return;
+  currentUser.quickComments=(currentUser.quickComments||[]).filter(c=>c.id!==id);
+  saveUser();openQCManager();_renderQuickCommentChips();
+}
+function qcUp(idx){
+  const qcs=_getQC();if(idx===0)return;
+  [qcs[idx-1].pos,qcs[idx].pos]=[qcs[idx].pos,qcs[idx-1].pos];
+  currentUser.quickComments=qcs;saveUser();openQCManager();_renderQuickCommentChips();
+}
+function qcDown(idx){
+  const qcs=_getQC();if(idx===qcs.length-1)return;
+  [qcs[idx].pos,qcs[idx+1].pos]=[qcs[idx+1].pos,qcs[idx].pos];
+  currentUser.quickComments=qcs;saveUser();openQCManager();_renderQuickCommentChips();
+}
+function qcReset(){
+  if(!confirm('Réinitialiser aux 6 commentaires par défaut ?'))return;
+  currentUser.quickComments=QC_DEFAULTS.map((c,i)=>({id:'qcd'+Date.now()+i,label:c.label,text:c.text,pos:i}));
+  saveUser();toast('Liste réinitialisée ✓');openQCManager();_renderQuickCommentChips();
 }
 // ======= VIDEO CORRECTION =======
 function tsToSecs(ts){
@@ -5281,7 +5908,7 @@ function _renderTsAnnotations(){
           <span style="font-family:'Bebas Neue',sans-serif;font-size:13px;color:var(--red);flex-shrink:0;min-width:36px;margin-top:${isAudio?'3px':'0'}">${t.ts}</span>
           ${isAudio
             ?`<div style="flex:1"><audio src="${t.audioUrl}" controls style="height:32px;width:100%;margin-bottom:2px"></audio><div style="font-size:10px;color:var(--sub)">🎤 message audio</div></div>`
-            :`<span style="flex:1;font-size:12px">${t.note}</span>`}
+            :`<span style="flex:1;font-size:12px">${escapeHtml(t.note)}</span>`}
           <button onclick="removeTsAnnotation(${i})" style="background:none;border:none;color:#555;cursor:pointer;font-size:18px;line-height:1;padding:0;flex-shrink:0;margin-top:${isAudio?'3px':'0'}">×</button>
         </div>`;
       }).join('')
@@ -5314,11 +5941,12 @@ function openVideoCorrection(email,videoId){
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:#161616;border-radius:20px 20px 0 0;padding:16px 20px 24px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:92vh;overflow-y:auto">
     <h2 style="margin-bottom:2px">✏️ Corriger</h2>
-    <p class="sub" style="font-size:12px;margin-bottom:12px">${v.name} · ${new Date(v.date).toLocaleDateString('fr-FR')}</p>
+    <p class="sub" style="font-size:12px;margin-bottom:12px">${escapeHtml(v.name)} · ${new Date(v.date).toLocaleDateString('fr-FR')}</p>
     ${_videoEmbed(v.url)}
     <div style="margin-top:14px">
       <label style="margin-top:0">Commentaire général</label>
-      <textarea id="vc-general" rows="3" placeholder="Impression globale sur l'exécution...">${v.feedback||''}</textarea>
+      <div id="qc-chips" style="display:flex;gap:6px;overflow-x:auto;padding:6px 0 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin-bottom:4px"></div>
+      <textarea id="vc-general" rows="3" placeholder="Impression globale sur l'exécution...">${escapeHtml(v.feedback||'')}</textarea>
     </div>
     <div style="margin-top:12px">
       <label style="margin-top:0">Repères par timestamp <span class="badge badge-gray" style="font-size:9px;margin-left:4px">optionnel</span></label>
@@ -5357,6 +5985,7 @@ function openVideoCorrection(email,videoId){
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
   _renderTsAnnotations();
+  _renderQuickCommentChips();
 }
 function saveVideoCorrection(){
   const general=(document.getElementById('vc-general')?.value||'').trim();
@@ -5431,7 +6060,7 @@ async function confirmAudioAnnotation(){
   try{
     const ext=_audioBlob.type.includes('ogg')?'.ogg':'.webm';
     const file=new File([_audioBlob],'audio_'+Date.now()+ext,{type:_audioBlob.type});
-    const url=await CLOUD.uploadVideo(file,window._vcEmail||currentUser.email);
+    const url=await _cloudinaryUpload(file);
     if(!window._tsAnnotations)window._tsAnnotations=[];
     window._tsAnnotations.push({ts,note:'🎤 message audio',audioUrl:url});
     _renderTsAnnotations();
@@ -5451,7 +6080,7 @@ async function uploadAudioFile(input){
   const status=document.getElementById('vc-audio-status');
   if(status)status.textContent='⏳ Envoi…';
   try{
-    const url=await CLOUD.uploadVideo(file,window._vcEmail||currentUser.email);
+    const url=await _cloudinaryUpload(file);
     if(!window._tsAnnotations)window._tsAnnotations=[];
     window._tsAnnotations.push({ts,note:'🎤 message audio',audioUrl:url});
     _renderTsAnnotations();
@@ -5486,29 +6115,40 @@ function getStepsWeek(){
 function loadSteps(containerId='steps-content'){
   if(containerId==='steps-content') go('s-steps');
   const log=currentUser.stepsLog||[];
+  const goals=currentUser.stepsGoals||{on:10000,off:7000};
+  const dayTypes=currentUser.stepsDayType||{};
   const todayStr=localISODate(new Date());
   const dayNames=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
   const weekDates=getStepsWeek();
   const weekData=weekDates.map((d,i)=>({
     date:d,label:dayNames[i],
     count:(log.find(e=>e.date===d)||{}).count??null,
+    type:dayTypes[d]??null,
     isToday:d===todayStr
   }));
   const withData=weekData.filter(d=>d.count!==null);
   const weekAvg=withData.length?Math.round(withData.reduce((s,d)=>s+d.count,0)/withData.length):0;
   const maxVal=Math.max(...weekData.map(d=>d.count||0),1);
   const todayEntry=weekData.find(d=>d.isToday);
-  const stepColor=n=>n>=10000?'var(--green)':n>=7000?'var(--orange)':n>0?'#e05050':'#2a2a2a';
+  const todayType=dayTypes[todayStr]??null;
+  const stepColor=(n,type)=>{
+    if(!n) return '#2a2a2a';
+    const goal=type==='on'?goals.on:type==='off'?goals.off:10000;
+    if(n>=goal) return 'var(--green)';
+    if(n>=goal*0.6) return 'var(--orange)';
+    return '#e05050';
+  };
   const fmt=n=>n?n.toLocaleString('fr-FR'):'—';
-  const avgColor=weekAvg>=10000?'var(--green)':weekAvg>=7000?'var(--orange)':weekAvg>0?'var(--red)':'var(--sub)';
+  const avgColor=weekAvg>=goals.on?'var(--green)':weekAvg>=goals.on*0.6?'var(--orange)':weekAvg>0?'var(--red)':'var(--sub)';
 
   let bars='';
   weekData.forEach(d=>{
     const pct=d.count?Math.max(6,Math.round(d.count/maxVal*100)):6;
-    const col=stepColor(d.count||0);
+    const col=stepColor(d.count||0,d.type);
     const glow=d.isToday?';box-shadow:0 0 10px '+col+'66':'';
+    const typeAccent=d.type==='on'?'var(--red)':d.type==='off'?'#4488ff':'transparent';
     bars+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">
-      <div style="width:85%;height:${pct}%;background:${col};border-radius:3px 3px 0 0;min-height:5px${glow};transition:.4s"></div>
+      <div style="width:85%;height:${pct}%;background:${col};border-radius:3px 3px 0 0;min-height:5px${glow};transition:.4s;border-bottom:2px solid ${typeAccent}"></div>
     </div>`;
   });
 
@@ -5516,25 +6156,28 @@ function loadSteps(containerId='steps-content'){
   weekData.forEach(d=>{
     labels+=`<div style="flex:1;text-align:center;font-size:9px;font-weight:800;color:${d.isToday?'var(--red)':'var(--sub)'};text-transform:uppercase;letter-spacing:.5px">${d.label}</div>`;
   });
-
   let counts='';
   weekData.forEach(d=>{
-    counts+=`<div style="flex:1;text-align:center;font-size:9px;font-weight:700;color:${d.count?stepColor(d.count):'#2a2a2a'};margin-top:3px">${d.count?Math.round(d.count/100)/10+'k':'·'}</div>`;
+    counts+=`<div style="flex:1;text-align:center;font-size:9px;font-weight:700;color:${d.count?stepColor(d.count,d.type):'#2a2a2a'};margin-top:3px">${d.count?Math.round(d.count/100)/10+'k':'·'}</div>`;
   });
 
   let histHtml='';
   if(log.length){
     const rows=[...log].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,21).map(e=>{
+      const type=dayTypes[e.date]??null;
       const d=new Date(e.date);
       const lbl=d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
-      const col=stepColor(e.count);
-      const badge=e.count>=10000?' Objectif':'';
-      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #111">
-        <div style="font-size:12px;font-weight:600;color:#aaa;text-transform:capitalize">${lbl}</div>
-        <div style="display:flex;align-items:center;gap:8px">
-          ${badge?`<span style="font-size:9px;font-weight:800;color:var(--green);letter-spacing:.5px">${badge}</span>`:''}
+      const goal=type==='on'?goals.on:type==='off'?goals.off:null;
+      const col=stepColor(e.count,type);
+      const pctBar=goal?Math.min(100,Math.round(e.count/goal*100)):null;
+      const typeBadge=type?`<span style="font-size:8px;font-weight:900;padding:2px 6px;border-radius:4px;background:${type==='on'?'#2a0000':'#001a2a'};color:${type==='on'?'var(--red)':'#4488ff'};letter-spacing:.5px">${type.toUpperCase()}</span>`:'';
+      const goalLine=goal?`<div style="font-size:9px;color:var(--sub);margin-top:4px">${e.count.toLocaleString('fr-FR')} / ${goal.toLocaleString('fr-FR')} pas${e.count>=goal?' <span style="color:var(--green)">✓</span>':''}</div><div style="height:3px;background:#1a1a1a;border-radius:2px;margin-top:5px;overflow:hidden"><div style="height:100%;width:${pctBar}%;background:${col};border-radius:2px"></div></div>`:'';
+      return `<div style="padding:10px 0;border-bottom:1px solid #111">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:8px">${typeBadge}<div style="font-size:12px;font-weight:600;color:#aaa;text-transform:capitalize">${lbl}</div></div>
           <div style="font-size:14px;font-weight:800;color:${col}">${fmt(e.count)}</div>
         </div>
+        ${goalLine}
       </div>`;
     }).join('');
     histHtml=`<div style="background:#0f0f0f;border:1px solid #1c1c1c;border-radius:12px;padding:16px">
@@ -5543,13 +6186,44 @@ function loadSteps(containerId='steps-content'){
     </div>`;
   }
 
+  const todayGoal=todayType==='on'?goals.on:todayType==='off'?goals.off:null;
+  const todayCount=todayEntry?.count??0;
+  const todayPct=todayGoal&&todayCount?Math.min(100,Math.round(todayCount/todayGoal*100)):0;
+  const todayProgressHtml=todayGoal&&todayCount?`<div style="margin-top:12px">
+    <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:4px">
+      <span style="color:var(--sub)">${todayCount.toLocaleString('fr-FR')} / ${todayGoal.toLocaleString('fr-FR')} pas</span>
+      <span style="color:${stepColor(todayCount,todayType)};font-weight:800">${todayPct}%</span>
+    </div>
+    <div style="height:6px;background:#1a1a1a;border-radius:3px;overflow:hidden">
+      <div style="height:100%;width:${todayPct}%;background:${stepColor(todayCount,todayType)};border-radius:3px;transition:.4s"></div>
+    </div>
+  </div>`:'';
+  const todayGoalHintHtml=todayType?`<div style="text-align:center;font-size:10px;color:var(--sub);margin-bottom:10px">Objectif : <strong style="color:${todayType==='on'?'var(--red)':'#4488ff'}">${(todayType==='on'?goals.on:goals.off).toLocaleString('fr-FR')} pas</strong></div>`:'';
+
   document.getElementById(containerId).innerHTML=`
+    <div style="background:#0f0f0f;border:1px solid #1c1c1c;border-radius:12px;padding:16px;margin-bottom:18px">
+      <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:14px">Objectifs de pas</div>
+      <div style="display:flex;gap:10px;margin-bottom:12px">
+        <div style="flex:1">
+          <div style="font-size:10px;font-weight:800;color:var(--red);letter-spacing:.5px;margin-bottom:6px">JOUR ON <span style="font-size:9px;font-weight:400;color:var(--sub)">(entraînement)</span></div>
+          <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:18px;font-weight:900;text-align:center;padding:10px;background:#080808;border:1px solid #2a0000;border-radius:8px;color:#fff;font-family:'Bebas Neue',sans-serif">
+        </div>
+        <div style="flex:1">
+          <div style="font-size:10px;font-weight:800;color:#4488ff;letter-spacing:.5px;margin-bottom:6px">JOUR OFF <span style="font-size:9px;font-weight:400;color:var(--sub)">(repos)</span></div>
+          <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:18px;font-weight:900;text-align:center;padding:10px;background:#080808;border:1px solid #001a3a;border-radius:8px;color:#fff;font-family:'Bebas Neue',sans-serif">
+        </div>
+      </div>
+      <button class="btn btn-red" onclick="saveStepsGoals()" style="width:100%;font-size:11px;letter-spacing:1.5px;padding:10px">ENREGISTRER LES OBJECTIFS</button>
+    </div>
+
     <div style="background:linear-gradient(135deg,#0f0000,#1a0000);border:1px solid #2a0000;border-radius:14px;padding:20px;margin-bottom:18px;text-align:center">
       <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px">Moyenne hebdomadaire</div>
       <div style="font-size:48px;font-family:'Bebas Neue',sans-serif;font-weight:900;color:${avgColor};letter-spacing:-1px;line-height:1">${fmt(weekAvg)}</div>
       <div style="font-size:11px;color:var(--sub);margin-top:6px">pas / jour &nbsp;·&nbsp; ${withData.length} / 7 jours renseignés</div>
       <div style="margin-top:12px;display:flex;justify-content:center;gap:18px">
-        <div style="text-align:center"><div style="font-size:10px;color:var(--sub);letter-spacing:1px;font-weight:700">OBJECTIF</div><div style="font-size:16px;font-weight:900;color:#555">10 000</div></div>
+        <div style="text-align:center"><div style="font-size:10px;color:var(--sub);letter-spacing:1px;font-weight:700">OBJECTIF ON</div><div style="font-size:16px;font-weight:900;color:var(--red)">${goals.on.toLocaleString('fr-FR')}</div></div>
+        <div style="width:1px;background:#2a0000"></div>
+        <div style="text-align:center"><div style="font-size:10px;color:var(--sub);letter-spacing:1px;font-weight:700">OBJECTIF OFF</div><div style="font-size:16px;font-weight:900;color:#4488ff">${goals.off.toLocaleString('fr-FR')}</div></div>
         <div style="width:1px;background:#2a0000"></div>
         <div style="text-align:center"><div style="font-size:10px;color:var(--sub);letter-spacing:1px;font-weight:700">TOTAL SEMAINE</div><div style="font-size:16px;font-weight:900;color:${avgColor}">${fmt(withData.reduce((s,d)=>s+d.count,0))}</div></div>
       </div>
@@ -5557,16 +6231,22 @@ function loadSteps(containerId='steps-content'){
 
     <div style="background:#0f0f0f;border:1px solid #1c1c1c;border-radius:12px;padding:16px;margin-bottom:18px">
       <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px">Aujourd'hui — ${new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button onclick="stepsToggleType('on')" style="flex:1;padding:9px;border-radius:8px;border:2px solid ${todayType==='on'?'var(--red)':'#2a2a2a'};background:${todayType==='on'?'#2a0000':'#080808'};color:${todayType==='on'?'var(--red)':'#555'};font-size:12px;font-weight:900;letter-spacing:1px;cursor:pointer">JOUR ON</button>
+        <button onclick="stepsToggleType('off')" style="flex:1;padding:9px;border-radius:8px;border:2px solid ${todayType==='off'?'#4488ff':'#2a2a2a'};background:${todayType==='off'?'#001a2a':'#080808'};color:${todayType==='off'?'#4488ff':'#555'};font-size:12px;font-weight:900;letter-spacing:1px;cursor:pointer">JOUR OFF</button>
+      </div>
+      ${todayGoalHintHtml}
       <div style="display:flex;align-items:center;gap:10px">
         <input type="number" id="steps-today-input" placeholder="Ex: 8 500" min="0" max="99999"
           value="${todayEntry&&todayEntry.count!=null?todayEntry.count:''}"
           style="flex:1;font-size:20px;font-weight:900;text-align:center;padding:13px;background:#080808;border:1px solid #2a2a2a;border-radius:8px;color:#fff;font-family:'Bebas Neue',sans-serif;letter-spacing:.5px">
         <button class="btn btn-red" onclick="saveSteps()" style="flex:none;padding:13px 20px;font-size:13px;letter-spacing:1.5px;border-radius:8px">SAUVER</button>
       </div>
+      ${todayProgressHtml}
     </div>
 
     <div style="background:#0f0f0f;border:1px solid #1c1c1c;border-radius:12px;padding:16px;margin-bottom:18px">
-      <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:16px">Cette semaine</div>
+      <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:16px">Cette semaine &nbsp;<span style="font-size:8px;font-weight:400"><span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--red);vertical-align:middle"></span> ON &nbsp;<span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:#4488ff;vertical-align:middle"></span> OFF</span></div>
       <div style="display:flex;align-items:flex-end;gap:3px;height:75px;margin-bottom:6px">${bars}</div>
       <div style="display:flex;gap:3px">${labels}</div>
       <div style="display:flex;gap:3px">${counts}</div>
@@ -5586,6 +6266,23 @@ function saveSteps(){
   else currentUser.stepsLog.push({date:todayStr,count});
   saveUser();
   toast(' '+count.toLocaleString('fr-FR')+' pas enregistrés !');
+  loadLifestyle();
+}
+function saveStepsGoals(){
+  const onVal=parseInt(document.getElementById('steps-goal-on').value,10);
+  const offVal=parseInt(document.getElementById('steps-goal-off').value,10);
+  if(isNaN(onVal)||onVal<500||isNaN(offVal)||offVal<500){toast('Objectifs invalides');return;}
+  currentUser.stepsGoals={on:onVal,off:offVal};
+  saveUser();
+  toast('Objectifs enregistrés ✓');
+  loadLifestyle();
+}
+function stepsToggleType(type){
+  const todayStr=localISODate(new Date());
+  if(!currentUser.stepsDayType) currentUser.stepsDayType={};
+  if(currentUser.stepsDayType[todayStr]===type) delete currentUser.stepsDayType[todayStr];
+  else currentUser.stepsDayType[todayStr]=type;
+  saveUser();
   loadLifestyle();
 }
 
@@ -5797,6 +6494,8 @@ function openPhotoFull(src,title){
 
 // ======= HELPERS =======
 function ini(f,l){return((f||'?')[0]+(l||'?')[0]).toUpperCase();}
+function escapeHtml(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function safeUrl(u){if(!u)return'#';return/^https?:\/\//i.test(u)?u:'#';}
 function ago(ts){const d=Math.floor((Date.now()-ts)/864e5);return d===0?"aujourd'hui":d===1?"hier":"il y a "+d+"j";}
 function saveUser(){
   currentUser.updatedAt=Date.now();
@@ -5806,6 +6505,13 @@ function saveUser(){
   users[currentUser.email]=currentUser;
   DB.set('users',users);
   DB.set('session',currentUser);
+  // Si le token Firebase a expiré ou n'existe pas, re-authentifier silencieusement
+  // avant que _doPush (debounced 2s) ne s'exécute, pour garantir l'envoi des données
+  if(!CLOUD.canWrite()&&currentUser.pwd){
+    CLOUD.signIn(currentUser.email,currentUser.pwd)
+      .then(()=>{if(CLOUD.canWrite()) CLOUD.push(DB.get('users')||{});})
+      .catch(()=>{});
+  }
 }
 function silentLogout(){DB.del('session');currentUser=null;CLOUD.signOut();}
 function logout(){
@@ -6196,9 +6902,54 @@ function updateCloudStatus(){
     if(qrBtn) qrBtn.style.display='none';
   }
 }
+function saveCoachPhone(){
+  const raw=(document.getElementById('coach-phone-input').value||'').trim();
+  const digits=raw.replace(/\D/g,'');
+  if(!digits){toast('Entre un numéro avec indicatif, ex: +33612345678','var(--orange)');return;}
+  currentUser.phone=raw;
+  saveUser();
+  toast('Numéro WhatsApp enregistré ✓');
+  _renderCoachPhonePreview(raw);
+}
+function _renderCoachPhonePreview(raw){
+  const digits=(raw||'').replace(/\D/g,'');
+  const el=document.getElementById('coach-phone-preview');
+  if(!el) return;
+  el.innerHTML=digits?'→ Lien : <a href="https://wa.me/'+digits+'" target="_blank" rel="noopener" style="color:#22c55e;text-decoration:none">wa.me/'+digits+'</a>'+'<span style="margin-left:8px;color:#555">(tes athlètes verront ce bouton)</span>':'';
+}
+async function _cloudinaryUpload(file){
+  const cloudName=currentUser.cloudinaryName||'dntu57ml';
+  const uploadPreset=currentUser.cloudinaryPreset||'repcore_videos';
+  const fd=new FormData();
+  fd.append('file',file);
+  fd.append('upload_preset',uploadPreset);
+  fd.append('folder','repcore/'+(currentUser.id||currentUser.email));
+  const res=await fetch('https://api.cloudinary.com/v1_1/'+cloudName+'/video/upload',{method:'POST',body:fd});
+  if(!res.ok) throw new Error('Erreur serveur '+res.status);
+  const data=await res.json();
+  if(data.error) throw new Error(data.error.message);
+  return data.secure_url;
+}
+function saveCloudinaryConfig(){
+  const name=(document.getElementById('cld-cloud-name')?.value||'').trim();
+  const preset=(document.getElementById('cld-preset')?.value||'').trim();
+  if(!name||!preset){toast('Renseigne les deux champs','var(--orange)');return;}
+  currentUser.cloudinaryName=name;
+  currentUser.cloudinaryPreset=preset;
+  saveUser();
+  toast('Configuration Cloudinary enregistrée ✓');
+}
 function loadMonetisationTab(){
   updateCloudStatus();
   const u=currentUser;
+  const phoneInput=document.getElementById('coach-phone-input');
+  if(phoneInput) phoneInput.value=u.phone||'';
+  _renderCoachPhonePreview(u.phone||'');
+  renderWelcomeMessagePreview();
+  const cldName=document.getElementById('cld-cloud-name');
+  const cldPreset=document.getElementById('cld-preset');
+  if(cldName) cldName.value=u.cloudinaryName||'';
+  if(cldPreset) cldPreset.value=u.cloudinaryPreset||'';
   const isCreator=u.email===CREATOR_EMAIL;
   const users=DB.get('users')||{};
   // Créateur : voit tous les abonnés PayPal de l'application.

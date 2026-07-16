@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v125';
+const CACHE = 'repcore-v137';
 const SW_DATA = 'repcore-sw-data'; // persistent across updates — not wiped by activate
 const ASSETS = ['./manifest.json', './icons/icon-192x192.png', './icons/icon-512x512.png', './icons/logo.png'];
 
@@ -55,6 +55,7 @@ async function swSet(key, val) {
 // ─── Periodic background sync — fires even when app is closed (Chrome/Android) ─
 self.addEventListener('periodicsync', e => {
   if (e.tag === 'bilan-reminder') e.waitUntil(swCheckAndNotify());
+  if (e.tag === 'wo-reminder') e.waitUntil(swCheckWoReminder());
 });
 
 async function swCheckAndNotify() {
@@ -88,6 +89,36 @@ self.addEventListener('notificationclick', e => {
     })
   );
 });
+
+// ─── Workout reminder ───────────────────────────────────────────────────────
+async function swCheckWoReminder() {
+  const sched = await swGet('/wo-reminder');
+  if (!sched?.enabled) return;
+
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+  if (sched.lastNotifDate === todayStr) return;
+
+  const todayJS = now.getDay();                          // 0=Sun … 6=Sat
+  const todayApp = todayJS === 0 ? 6 : todayJS - 1;     // 0=Lun … 6=Dim
+  if (!(sched.days || []).includes(todayApp)) return;
+
+  const h = now.getHours();
+  if (h < (sched.hour ?? 18)) return;       // trop tôt
+  if (h >= (sched.hour ?? 18) + 3) return;  // plus de 3h après l'heure cible
+
+  await swSet('/wo-reminder', { ...sched, lastNotifDate: todayStr });
+
+  const pref = sched.fname ? sched.fname + ', c' : 'C';
+  await self.registration.showNotification('RepCore — Séance du jour 💪', {
+    body: pref + "'est l'heure de t'entraîner ! Lance ta séance maintenant.",
+    icon: './icons/icon-192x192.png',
+    badge: './icons/icon-192x192.png',
+    tag: 'wo-reminder',
+    requireInteraction: true,
+    data: { url: './?wo=1' }
+  });
+}
 
 // ─── Server push (future backend / VAPID integration) ──────────────────────
 self.addEventListener('push', e => {
