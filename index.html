@@ -6423,7 +6423,7 @@ function loadSubscribePage(mode,payload){
     if(codeOpt) codeOpt.style.display='none';
     if(pendingInfo){
       pendingInfo.style.display='';
-      pendingInfo.innerHTML='<div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:12px;padding:14px;margin-bottom:14px;font-size:12px;line-height:1.7"><strong style="color:var(--green)">Code validé ✓</strong><br>Coach : <strong>'+(payload.coachName||'Coach')+'</strong><br><br>Souscris pour activer ton accès RepCore (9,95€/mois).</div>';
+      pendingInfo.innerHTML='<div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:12px;padding:14px;margin-bottom:14px;font-size:12px;line-height:1.7">Code de <strong>'+(payload.coachName||'ton coach')+'</strong> reconnu ✓<br><br>Pour finaliser ton accès à l\'app, souscris à l\'abonnement à <strong>9,95€/mois</strong> ci-dessous.</div>';
     }
   } else {
     if(codeOpt) codeOpt.style.display='';
