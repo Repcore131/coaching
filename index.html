@@ -1848,8 +1848,43 @@ const CLOUD={
   },
 
   push(users){
+    // Ne pousse que currentUser — évite d'écraser les données d'autres utilisateurs
+    // avec des copies obsolètes présentes en cache chez le coach
     clearTimeout(this._pushTimer);
     this._pushTimer=setTimeout(()=>this._doPush(users),2000);
+  },
+  // Push ciblé d'un seul utilisateur (modifications coach sur profil athlète)
+  pushOne(email,user){
+    const key='_one_'+email;
+    clearTimeout(this._pushTimers?.[key]);
+    if(!this._pushTimers) this._pushTimers={};
+    this._pushTimers[key]=setTimeout(()=>this._doPushOne(email,user),2000);
+  },
+  async _doPushOne(email,user){
+    try{
+      let token=await this._getToken();
+      if(!token){
+        const entry=currentUser?.email&&(DB.get('users')||{})[currentUser.email];
+        if(entry?.pwd) await this.signIn(currentUser.email,entry.pwd).catch(()=>{});
+        token=await this._getToken();
+      }
+      if(!token) return;
+      const safeKey=email.replace(/\./g,',');
+      const safe={...user};
+      delete safe.pwd;delete safe.pwdHash;delete safe._st;delete safe._stb64;delete safe._sk;
+      if(safe.bilans) safe.bilans=await Promise.all(safe.bilans.map(async b=>{
+        const cl={...b};
+        for(const k of Object.keys(cl)){
+          if(k.includes('photo')&&cl[k]&&typeof cl[k]==='string'&&cl[k].startsWith('data:')){
+            cl[k]=await this._compressPhoto(cl[k])||undefined;
+            if(!cl[k]) delete cl[k];
+          }
+        }
+        return cl;
+      }));
+      const url=this._fbUrl.replace('users.json','users/'+safeKey+'.json');
+      await fetch(url+'?auth='+token,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(safe)});
+    }catch{}
   },
   async _compressPhoto(dataURL){
     return new Promise(resolve=>{
@@ -1870,35 +1905,9 @@ const CLOUD={
     });
   },
   async _doPush(users){
-    try{
-      let token=await this._getToken();
-      if(!token){
-        // _getToken() a échoué (pas de refresh token valide) — re-auth avec le mot de passe stocké
-        const entry=currentUser?.email&&(DB.get('users')||{})[currentUser.email];
-        if(entry?.pwd) await this.signIn(entry.email||currentUser.email,entry.pwd).catch(()=>{});
-        token=await this._getToken();
-      }
-      if(!token) return;
-      const safe={};
-      for(const[email,u] of Object.entries(users)){
-        safe[email]={...u};
-        delete safe[email].pwd;delete safe[email].pwdHash;delete safe[email]._st;delete safe[email]._stb64;delete safe[email]._sk;
-        if(safe[email].bilans) safe[email].bilans=await Promise.all(safe[email].bilans.map(async b=>{
-          const c={...b};
-          for(const k of Object.keys(c)){
-            if(k.includes('photo')&&c[k]&&typeof c[k]==='string'&&c[k].startsWith('data:')){
-              c[k]=await this._compressPhoto(c[k])||undefined;
-              if(!c[k]) delete c[k];
-            }
-          }
-          return c;
-        }));
-        const safeKey=email.replace(/\./g,',');
-        safe[safeKey]=safe[email];
-        if(safeKey!==email) delete safe[email];
-      }
-      await fetch(this._fbUrl+'?auth='+token,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(safe)});
-    }catch{}
+    // Ne pousse QUE currentUser — évite d'écraser les données d'athlètes avec des copies obsolètes
+    if(!currentUser?.email) return;
+    await this._doPushOne(currentUser.email, users[currentUser.email]||currentUser);
   },
 
   // Fusionner un seul utilisateur cloud → localStorage
@@ -2048,7 +2057,7 @@ const DB={
         });
         merged.sort((a,b)=>a.date-b.date);
         users[athlete.email]=Object.assign({},existing,athlete,{bilans:merged,_fromCode:false});
-        DB.set('users',users);
+        DB.set('users',users);CLOUD.pushOne(athlete.email,users[athlete.email]);
         window._importedAthlete=athlete;
         const nb=newBilans.filter(nb=>!exBilans.find(eb=>eb.date===nb.date&&eb.type===nb.type)).length;
         toast('✓ '+athlete.fname+' '+athlete.lname+' mis à jour'+(nb?' — '+nb+' nouveau'+(nb>1?'x':'')+' bilan'+(nb>1?'s':''):'')+'.');
@@ -2829,8 +2838,7 @@ function addBilanPhoto(bilanDate,bilanType,view,inputEl){
     bil[photoKey]=e.target.result;
     try{localStorage.setItem('rc_photo_'+bilanDate+'_'+photoKey,e.target.result);}catch(ex){}
     users[cl.email]=cl;
-    DB.set('users',users);
-    CLOUD.push(users);
+    DB.set('users',users);CLOUD.pushOne(cl.email,cl);
     toast('Photo ajoutée','var(--green)');
     renderBilanEvolution(cl);
   };
@@ -2891,7 +2899,7 @@ function renderBilanEvolution(c){
   if(height&&!c._evol_height&&!c['init-height']){
     const users=DB.get('users')||{};
     const at=Object.values(users).find(u=>u.id===c.id);
-    if(at&&!at._evol_height){at._evol_height=height;users[at.email]=at;DB.set('users',users);}
+    if(at&&!at._evol_height){at._evol_height=height;users[at.email]=at;DB.set('users',users);CLOUD.pushOne(at.email,at);}
   }
   // Gender: 'femme' / 'homme' / 'H' / 'F'
   const gender=c._evol_gender||c.gender||'H';
@@ -3220,7 +3228,7 @@ function uploadCoachPdf(input){
     c.programPdfSize=f.size>1024*1024?(f.size/1024/1024).toFixed(1)+' Mo':(f.size/1024).toFixed(0)+' Ko';
     c.programPdfDate=Date.now();
     c.programPdfVersion=(c.programPdfVersion||0)+1;
-    users[c.email]=c;DB.set('users',users);
+    users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
     refreshPdfUI(c);
     toast(' PDF v'+c.programPdfVersion+' importé — '+c.programPdfName);
   };r.readAsDataURL(f);
@@ -3242,7 +3250,7 @@ function saveCoachPdfLink(){
   c.programPdfSize='Lien externe';
   c.programPdfDate=Date.now();
   c.programPdfVersion=(c.programPdfVersion||0)+1;
-  users[c.email]=c;DB.set('users',users);
+  users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
   refreshPdfUI(c);
   toast(' Lien v'+c.programPdfVersion+' enregistré !');
 }
@@ -3253,7 +3261,7 @@ function removeCoachPdf(){
   const c=Object.values(users).find(u=>u.id===currentClientId);
   if(!c) return;
   c.programPdf=null;c.programPdfLink=null;c.programPdfName=null;c.programPdfDate=null;c.programPdfSize=null;
-  users[c.email]=c;DB.set('users',users);
+  users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
   refreshPdfUI(c);
   openClientDetail(currentClientId,true);
   toast('PDF supprimé.');
@@ -3303,7 +3311,7 @@ function uploadCoachPdfInline(input){
     c.programPdfSize=f.size>1024*1024?(f.size/1024/1024).toFixed(1)+' Mo':(f.size/1024).toFixed(0)+' Ko';
     c.programPdfDate=Date.now();
     c.programPdfVersion=(c.programPdfVersion||0)+1;
-    users[c.email]=c;DB.set('users',users);
+    users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
     toast('PDF v'+c.programPdfVersion+' importé — '+c.programPdfName);
     openClientDetail(currentClientId,true);
   };r.readAsDataURL(f);
@@ -3322,7 +3330,7 @@ function saveCoachPdfLinkInline(){
   c.programPdfName='Programme (Drive)';
   c.programPdfDate=Date.now();
   c.programPdfVersion=(c.programPdfVersion||0)+1;
-  users[c.email]=c;DB.set('users',users);
+  users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
   toast('Lien v'+c.programPdfVersion+' enregistré !');
   openClientDetail(currentClientId,true);
 }
@@ -3440,7 +3448,7 @@ function saveProgram(){
   c.programCooldown=document.getElementById('prog-cooldown').value;
   c.programUpdatedAt=Date.now();
   if(progPhotoData) c.programPhoto=progPhotoData;
-  users[c.email]=c;DB.set('users',users);
+  users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
   toast(' Programme sauvegardé !');go('s-coach-client');
 }
 
@@ -5998,7 +6006,7 @@ function saveVideoCorrection(){
   c.videos[idx].feedbackTimestamps=tss;
   c.videos[idx].feedbackDate=Date.now();
   users[window._vcEmail]=c;
-  DB.set('users',users);
+  DB.set('users',users);CLOUD.pushOne(window._vcEmail,c);
   closeModal();
   toast('Correction enregistrée !','var(--green)');
   openClientDetail(currentClientId,true);
@@ -6834,7 +6842,7 @@ async function createAthlete(){
   currentUser.clients.push(uid);
   users[em]=athlete;
   users[currentUser.email]=currentUser;
-  DB.set('users',users);
+  DB.set('users',users);CLOUD.pushOne(em,athlete);
   DB.set('session',currentUser);
   closeModal();
   // Copy token to clipboard for convenience
@@ -6981,7 +6989,7 @@ function toggleSubStatus(email){
   if(u.paymentStatus==='active'&&!confirm('Suspendre l\'abonnement de '+u.fname+' ? Il perdra l\'accès immédiatement.')) return;
   u.paymentStatus=u.paymentStatus==='active'?'cancelled':'active';
   users[email]=u;
-  DB.set('users',users);
+  DB.set('users',users);CLOUD.pushOne(email,u);
   toast(u.fname+': '+u.paymentStatus);
   loadMonetisationTab();
 }
