@@ -3569,11 +3569,19 @@ function loadClientHome(){
   }
   const contactLink=document.getElementById('clh-contact-link');
   if(contactLink&&u.coachId){
-    const coachUser=Object.values(users).find(x=>x.id===u.coachId);
-    const coachEmail=coachUser?Object.keys(users).find(k=>users[k]&&users[k].id===u.coachId):null;
-    const phone=(coachUser?.phone||'').replace(/\D/g,'');
-    const href=phone?'https://wa.me/'+phone:(coachEmail?'mailto:'+coachEmail:'');
-    if(href){contactLink.href=href;contactLink.style.display='inline-flex';}
+    const _applyCoachLink=(usrs)=>{
+      const coachUser=Object.values(usrs).find(x=>x.id===u.coachId);
+      const coachEmail=Object.keys(usrs).find(k=>usrs[k]?.id===u.coachId);
+      const phone=(coachUser?.phone||'').replace(/\D/g,'');
+      const href=phone?'https://wa.me/'+phone:(coachEmail?'mailto:'+coachEmail:'');
+      if(href){contactLink.href=href;contactLink.style.display='inline-flex';}
+    };
+    _applyCoachLink(users);
+    // Sync coach profile in background to get fresh phone number
+    if(CLOUD.ok()){
+      const coachEmail=Object.keys(users).find(k=>users[k]?.id===u.coachId);
+      if(coachEmail) CLOUD.syncUser(coachEmail).then(()=>_applyCoachLink(DB.get('users')||{})).catch(()=>{});
+    }
   }
   const progEl=document.getElementById('clh-prog-exercises');
   if(progEl) _renderProgExercisesInto(progEl);
