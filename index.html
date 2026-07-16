@@ -867,6 +867,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
       <h3 style="margin-bottom:12px">Bilans récents</h3>
       <div id="ccd-bilans"></div>
+      <div id="ccd-sessions-recap" style="margin-top:24px"></div>
       <div id="ccd-videos"></div>
     </div>
   </div>
@@ -2727,6 +2728,72 @@ function hasNewBilan(c){
   const seen=(currentUser.seenBilans||{})[c.email]||0;
   return c.bilans.some(b=>b.date>seen);
 }
+// ======= RÉCAP SÉANCES COACH =======
+let _coachSessions=[];
+function renderCoachSessionRecap(c){
+  const el=document.getElementById('ccd-sessions-recap');
+  if(!el) return;
+  _coachSessions=(c.sessions||[]).slice().reverse();
+  if(!_coachSessions.length){el.innerHTML='';return;}
+  el.innerHTML=`<h3 style="margin-bottom:12px">Séances</h3>
+    <div id="ccd-sr-list"></div>
+    <button id="ccd-sr-more" onclick="showMoreCoachSessions()"
+      style="display:none;width:100%;padding:10px;background:none;border:1px solid #222;border-radius:8px;color:var(--sub);font-size:12px;cursor:pointer;margin-bottom:4px"></button>`;
+  _renderSessionBatch(0,5);
+}
+function _renderSessionBatch(from,count){
+  const list=document.getElementById('ccd-sr-list');
+  const btn=document.getElementById('ccd-sr-more');
+  if(!list) return;
+  list.innerHTML+=_coachSessions.slice(from,from+count).map(s=>_buildSessionCard(s)).join('');
+  const shown=from+count;
+  const more=_coachSessions.length-shown;
+  if(btn){
+    if(more>0){btn.textContent=`Voir ${more} séance${more>1?'s':''} de plus`;btn.style.display='block';}
+    else btn.style.display='none';
+  }
+}
+function showMoreCoachSessions(){
+  const shown=document.getElementById('ccd-sr-list').children.length;
+  _renderSessionBatch(shown,5);
+}
+function _buildSessionCard(s){
+  const dt=new Date(s.date).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
+  const complete=s.complete!==false;
+  const rows=Object.entries(s.data||{}).map(([nm,d])=>{
+    const done=(d.sets||[]).filter(x=>x.done&&(x.weight||x.reps));
+    if(!done.length) return '';
+    const line=done.map(x=>x.degressive
+      ?`${x.weight||'?'}kg×${x.reps||'?'} / ${x.weight2||'?'}kg×${x.p2reps||'?'}`
+      :`${x.weight||'?'}kg×${x.reps||'?'}`
+    ).join(' · ');
+    return `<div style="padding:7px 0;border-top:1px solid #141414">
+      <div style="font-size:11px;font-weight:700;color:#ccc;margin-bottom:2px">${escapeHtml(nm)}</div>
+      <div style="font-size:11px;color:var(--sub);line-height:1.6">${escapeHtml(line)}</div>
+    </div>`;
+  }).filter(Boolean).join('');
+  return `<div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:10px;margin-bottom:10px;overflow:hidden">
+    <div onclick="toggleSCard(this)" style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(s.name||'Séance')}</div>
+        <div style="font-size:11px;color:var(--sub)">${dt} · ${s.duration||0} min · ${s.sets||0} séries · ${s.volume||0} kg</div>
+      </div>
+      <span style="font-size:11px;font-weight:700;flex-shrink:0;color:${complete?'var(--green)':'#555'}">${complete?'✓':'✗'}</span>
+      <span class="sc-arr" style="color:#444;font-size:11px;flex-shrink:0">▶</span>
+    </div>
+    <div class="sc-body" style="display:none;padding:0 14px 14px">
+      ${rows||'<div style="font-size:11px;color:#444;padding-top:8px">Aucune série enregistrée.</div>'}
+    </div>
+  </div>`;
+}
+function toggleSCard(hdr){
+  const body=hdr.nextElementSibling;
+  const arr=hdr.querySelector('.sc-arr');
+  const opening=body.style.display==='none';
+  body.style.display=opening?'block':'none';
+  arr.textContent=opening?'▼':'▶';
+}
+// ======= FIN RÉCAP SÉANCES COACH =======
 function openClientDetail(cid,_refresh){
   currentClientId=cid;
   const users=DB.get('users')||{};
@@ -2806,6 +2873,7 @@ function openClientDetail(cid,_refresh){
     </div>`).join('')}`);
 
   renderClientPdfCard(c);
+  renderCoachSessionRecap(c);
   if(!_refresh) go('s-coach-client');
   // Sync immédiat puis rafraîchi automatique (sans bouton)
   if(!_refresh && CLOUD.ok()){
