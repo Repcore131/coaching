@@ -1077,11 +1077,6 @@ const COACH_PHOTO='icons/coach.jpg';
         <a id="clh-contact-link" href="#" target="_blank" rel="noopener" style="display:none;font-size:11px;color:var(--red);font-weight:700;letter-spacing:.5px;margin-top:6px;text-decoration:none;align-items:center;gap:5px">💬 Un souci ? Contacte ton coach</a>
       </div>
 
-      <!-- VOIR MON PROGRAMME — accès rapide PDF -->
-      <div style="margin-bottom:20px">
-        <button class="btn btn-red" onclick="openHomePdf()" style="font-size:14px;letter-spacing:3px;padding:20px;font-family:'Bebas Neue',Impact,sans-serif;box-shadow:0 8px 32px rgba(224,32,32,.4)">VOIR MON PROGRAMME</button>
-      </div>
-
       <!-- STATS -->
       <div style="display:flex;gap:8px;margin-bottom:20px">
         <div class="metric-box"><div class="metric-val" id="clh-sessions">0</div><div class="metric-label">Seances</div></div>
@@ -1135,6 +1130,8 @@ const COACH_PHOTO='icons/coach.jpg';
           </label>
         </div>
       </div>
+      <!-- EXERCICES DU PROGRAMME (inline dans Accueil) -->
+      <div id="clh-prog-exercises" style="margin-bottom:14px"></div>
 
       <!-- DÉMARRER SÉANCE — hero card -->
       <div style="background:linear-gradient(135deg,#0f0000,#160000);border:1px solid #2a0000;border-radius:4px;padding:20px;margin-bottom:14px;position:relative;overflow:hidden">
@@ -1158,9 +1155,6 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="tab-bar" id="client-tabbar">
     <button class="tab-btn active" onclick="clientTab('home',this)">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>Accueil
-    </button>
-    <button class="tab-btn" onclick="clientTab('program',this)">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 5v14M18 5v14M2 9h4M18 9h4M2 15h4M18 15h4"/></svg>Programme
     </button>
     <button class="tab-btn" onclick="clientTab('bilan',this)">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4zM5 19h14v2H5z"/></svg>Bilan
@@ -3581,6 +3575,8 @@ function loadClientHome(){
     const href=phone?'https://wa.me/'+phone:(coachEmail?'mailto:'+coachEmail:'');
     if(href){contactLink.href=href;contactLink.style.display='inline-flex';}
   }
+  const progEl=document.getElementById('clh-prog-exercises');
+  if(progEl) _renderProgExercisesInto(progEl);
 }
 function openHomePdf(){
   const users=DB.get('users')||{};
@@ -3645,7 +3641,6 @@ function clientTab(tab,btn){
   document.querySelectorAll('#client-tabbar .tab-btn').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
   if(tab==='home') loadClientHome();
-  else if(tab==='program') loadProgramView();
   else if(tab==='bilan') openBilanChoice();
   else if(tab==='nutrition') loadNutrition();
   else if(tab==='videos') loadVideos();
@@ -3911,73 +3906,22 @@ function launchWorkout(sessConfig){
 }
 
 // ======= PROGRAM VIEW =======
-function loadProgramView(){
-  // Re-lire depuis la DB pour avoir les données les plus récentes (coach peut avoir mis à jour)
-  const users=DB.get('users')||{};
-  const freshUser=users[currentUser.email];
-  if(freshUser){Object.assign(currentUser,freshUser);saveUser();}
+function _renderProgExercisesInto(el){
   const prog=getProgram();
-  // ---- PDF section ----
-  const hasPdf=currentUser.programPdf||currentUser.programPdfLink;
-  const pdfZone=document.getElementById('pv-pdf-zone');
-  if(hasPdf){
-    pdfZone.style.display='block';
-    document.getElementById('pv-pdf-title').textContent=currentUser.programPdfName||'Fiche programme';
-    const dt=currentUser.programPdfDate?new Date(currentUser.programPdfDate).toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'}):'—';
-    document.getElementById('pv-pdf-meta').textContent='Mise à jour le '+dt;
-    document.getElementById('pv-pdf-version-label').textContent='Version '+( currentUser.programPdfVersion||1);
-    document.getElementById('pv-pdf-size').textContent=currentUser.programPdfSize||'';
-    // Update banner si nouveau depuis la dernière fois
-    const lastSeen=currentUser.pdfLastSeen||0;
-    const pdfDate=currentUser.programPdfDate||0;
-    const banner=document.getElementById('pv-pdf-update-banner');
-    if(pdfDate>lastSeen&&lastSeen>0){
-      banner.style.display='flex';
-      document.getElementById('pv-pdf-update-date').textContent='Modifié le '+dt;
-    } else {banner.style.display='none';}
-    // Marquer comme vu
-    currentUser.pdfLastSeen=Date.now();saveUser();
-    // Boutons
-    const btns=document.getElementById('pv-pdf-btns');
-    if(currentUser.programPdf){
-      // Base64 PDF → ouvrir dans nouvel onglet
-      btns.innerHTML=`
-        <button class="btn btn-red" style="flex:1;padding:12px;font-size:11px" onclick="openPdfNewTab()">VOIR LE PDF</button>
-        <button onclick="downloadPdf()" style="background:#131313;border:1px solid #2a2a2a;border-radius:3px;color:var(--sub);padding:12px 14px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:1px;text-transform:uppercase;flex-shrink:0">DL</button>`;
-    } else if(currentUser.programPdfLink){
-      btns.innerHTML=`<a href="${currentUser.programPdfLink}" target="_blank" style="flex:1;display:block"><button class="btn btn-red" style="width:100%;padding:12px;font-size:11px">OUVRIR LE PDF →</button></a>`;
-    }
-    document.getElementById('pv-version').textContent='v'+(currentUser.programPdfVersion||1);
-  } else {
-    pdfZone.style.display='none';
-    document.getElementById('pv-version').textContent='';
-  }
-  // ---- Exercices ----
   if(prog._isDefault){
-    document.getElementById('pv-content').innerHTML=`
-      <div style="text-align:center;padding:48px 24px 32px">
-        <div style="font-size:48px;margin-bottom:16px">⏳</div>
-        <div style="font-weight:900;font-size:16px;margin-bottom:10px">Programme en cours de création</div>
-        <div style="color:var(--sub);font-size:13px;line-height:1.7">Ton coach n'a pas encore publié<br>ton programme personnalisé.<br><br>Il sera disponible ici dès qu'il sera prêt.</div>
-      </div>
-      <div style="border:1px dashed var(--border);border-radius:12px;padding:16px 20px;margin:0 0 16px">
-        <div style="font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px">Aperçu — programme exemple</div>
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-          <span style="font-weight:900;font-size:14px">${escapeHtml(prog.name)}</span>
-          <span class="badge badge-orange">EXEMPLE</span>
-        </div>
-        ${prog.exercises.map((ex,idx)=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #111;opacity:.55">
-          <div style="width:22px;height:22px;background:#222;border-radius:2px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;flex-shrink:0;color:#666">${idx+1}</div>
-          <div style="flex:1"><div style="font-size:12px;font-weight:700">${escapeHtml(ex.name)}</div><div style="font-size:11px;color:var(--sub)">${ex.series} séries · ${escapeHtml(ex.reps)} reps</div></div>
-        </div>`).join('')}
+    el.innerHTML=`
+      <div style="text-align:center;padding:32px 24px 16px">
+        <div style="font-size:36px;margin-bottom:12px">⏳</div>
+        <div style="font-weight:900;font-size:15px;margin-bottom:8px">Programme en cours de création</div>
+        <div style="color:var(--sub);font-size:12px;line-height:1.7">Ton coach n'a pas encore publié<br>ton programme personnalisé.</div>
       </div>`;
     return;
   }
-  document.getElementById('pv-content').innerHTML=`
-    <div style="margin-bottom:20px">
-      <span class="accent-line"></span>
-      <div style="font-size:18px;font-weight:900;letter-spacing:-0.3px">${escapeHtml(prog.name)}</div>
-      ${prog.notes?`<p class="sub" style="margin-top:6px;font-size:12px;line-height:1.6">${escapeHtml(prog.notes)}</p>`:''}
+  el.innerHTML=`
+    <div style="margin-bottom:14px">
+      <div style="font-size:9px;color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Mon programme</div>
+      <div style="font-size:16px;font-weight:900;letter-spacing:-0.3px">${escapeHtml(prog.name)}</div>
+      ${prog.notes?`<p class="sub" style="margin-top:5px;font-size:12px;line-height:1.6">${escapeHtml(prog.notes)}</p>`:''}
     </div>
     ${prog.exercises.map((ex,idx)=>{
       const pr=parseReps(ex.reps);
@@ -3994,9 +3938,13 @@ function loadProgramView(){
           </div>
         </div>
       </div>`;
-    }).join('')}
-    <button class="btn btn-red" style="margin-top:20px" onclick="startWorkout()">DÉMARRER CETTE SÉANCE</button>
-    <div style="height:30px"></div>`;
+    }).join('')}`;
+}
+function loadProgramView(){
+  const users=DB.get('users')||{};
+  const freshUser=users[currentUser.email];
+  if(freshUser){Object.assign(currentUser,freshUser);}
+  _renderProgExercisesInto(document.getElementById('pv-content'));
   go('s-program-view');
 }
 
