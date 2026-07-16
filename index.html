@@ -4999,7 +4999,7 @@ function loadCaffeine(){
   else if(totalMg>=thr.orange)
     alertEl.innerHTML='<div class="caff-alert-banner" style="background:#1a0800;border-color:#f97316;color:#f97316">⚠️ Niveau élevé — surveille ton sommeil et ta fréquence cardiaque.</div>';
   else if(totalMg>=thr.yellow)
-    alertEl.innerHTML='<div class="caff-alert-banner" style="background:#1a1400;border-color:#eab308;color:#eab308">⚡ Attention — proche de ta limite recommandée (${thr.yellow}mg).</div>';
+    alertEl.innerHTML=`<div class="caff-alert-banner" style="background:#1a1400;border-color:#eab308;color:#eab308">⚡ Attention — proche de ta limite recommandée (${thr.yellow}mg).</div>`;
   else
     alertEl.innerHTML='';
   const listEl=document.getElementById('caff-list');
