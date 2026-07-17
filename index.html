@@ -3685,23 +3685,27 @@ function loadClientHome(){
       const phone=(coachUser?.phone||'').replace(/\D/g,'');
       const href=phone?'https://wa.me/'+phone:(coachEmail?'mailto:'+coachEmail:'');
       if(href){contactLink.href=href;contactLink.style.display='inline-flex';}
-      _renderCoachBanner(coachUser);
+      _renderCoachBanner(coachUser, u.coachName);
     };
     _applyCoachData(users);
     if(CLOUD.ok()){
       const coachEmail=Object.keys(users).find(k=>users[k]?.id===u.coachId);
-      if(coachEmail) CLOUD.syncUser(coachEmail).then(()=>_applyCoachData(DB.get('users')||{})).catch(()=>{});
+      if(coachEmail){
+        CLOUD.syncUser(coachEmail).then(()=>_applyCoachData(DB.get('users')||{})).catch(()=>{});
+      } else {
+        // Coach absent du cache local — sync de tous les utilisateurs
+        CLOUD.syncUsers().then(()=>_applyCoachData(DB.get('users')||{})).catch(()=>{});
+      }
     }
   }
-  function _renderCoachBanner(coach){
+  function _renderCoachBanner(coach, fallbackName){
     const el=document.getElementById('clh-coach-banner');
     if(!el) return;
-    if(!coach){el.style.display='none';return;}
-    const team=coach.teamName||'';
-    const name=(coach.fname||'')+' '+(coach.lname||'');
-    const phrase=coach.catchphrase||'';
-    const photo=coach.coachPhoto||'';
-    if(!team&&!phrase&&!photo){el.style.display='none';return;}
+    const team=coach?.teamName||'';
+    const name=((coach?.fname||'')+' '+(coach?.lname||'')).trim()||fallbackName||'';
+    const phrase=coach?.catchphrase||'';
+    const photo=coach?.coachPhoto||'';
+    if(!name){el.style.display='none';return;}
     el.style.display='block';
     el.innerHTML=`<div style="background:#0d0a14;border:1px solid #2a1a4a;border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:14px">
       ${photo?`<img src="${photo}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid #3a1a5a">`
