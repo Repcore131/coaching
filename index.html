@@ -1126,6 +1126,14 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="metric-box"><div class="metric-val" id="clh-weight">—</div><div class="metric-label">Poids kg</div></div>
       </div>
 
+      <!-- DÉMARRER SÉANCE — hero card -->
+      <div style="background:linear-gradient(135deg,#0f0000,#160000);border:1px solid #2a0000;border-radius:4px;padding:20px;margin-bottom:14px;position:relative;overflow:hidden">
+        <div style="position:absolute;right:0;top:0;width:3px;height:100%;background:var(--red)"></div>
+        <div style="font-size:9px;color:var(--red);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:14px">Entraînement</div>
+        <button class="btn btn-red" onclick="openSessionPicker()" style="margin-bottom:10px;letter-spacing:1.5px;font-size:13px">DÉMARRER MA SÉANCE</button>
+        <button class="btn btn-outline" onclick="loadSessionManager()" style="font-size:11px;padding:11px;letter-spacing:1.5px">GÉRER MES SÉANCES</button>
+      </div>
+
       <!-- REPRISE SÉANCE EN COURS -->
       <div id="clh-resume-workout" style="display:none;background:linear-gradient(135deg,#0a1a0a,#051005);border:1px solid #1a4a1a;border-radius:12px;padding:14px 16px;margin-bottom:14px;cursor:pointer" onclick="woResumeAndGo()">
         <div style="font-size:9px;color:var(--green);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:5px">⚡ Séance en pause</div>
@@ -1188,14 +1196,6 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
       <!-- EXERCICES DU PROGRAMME (inline dans Accueil) -->
       <div id="clh-prog-exercises" style="margin-bottom:14px"></div>
-
-      <!-- DÉMARRER SÉANCE — hero card -->
-      <div style="background:linear-gradient(135deg,#0f0000,#160000);border:1px solid #2a0000;border-radius:4px;padding:20px;margin-bottom:14px;position:relative;overflow:hidden">
-        <div style="position:absolute;right:0;top:0;width:3px;height:100%;background:var(--red)"></div>
-        <div style="font-size:9px;color:var(--red);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:14px">Entraînement</div>
-        <button class="btn btn-red" onclick="openSessionPicker()" style="margin-bottom:10px;letter-spacing:1.5px;font-size:13px">DÉMARRER MA SÉANCE</button>
-        <button class="btn btn-outline" onclick="loadSessionManager()" style="font-size:11px;padding:11px;letter-spacing:1.5px">GÉRER MES SÉANCES</button>
-      </div>
 
       <div id="clh-wo-reminder-row"></div>
       <div id="clh-notifs"></div>
