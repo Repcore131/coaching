@@ -2192,6 +2192,8 @@ window.onload=()=>{
             if(stored?.pwd) CLOUD.signIn(currentUser.email,stored.pwd).then(()=>{if(CLOUD.canWrite())saveUser();}).catch(()=>{});
           } else {
             try{saveUser();}catch(e){}
+            // Push immédiat non-debounced pour garantir l'envoi des données locales (profil coach pré-v144)
+            setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},800);
           }
           routeUser();
         }
@@ -2210,13 +2212,24 @@ window.onload=()=>{
         // Rafraîchir currentUser
         const u2=(DB.get('users')||{})[currentUser.email];
         if(u2){currentUser=u2;DB.set('session',currentUser);}
-        // Rafraîchir la liste des athlètes si le coach est sur son dashboard
+        // Coach : rafraîchir dashboard et fiche athlète
         if(currentUser.role==='coach'&&document.getElementById('s-coach-home')?.classList.contains('active')){
           loadCoachHome();
         }
-        // Rafraîchir le profil athlète si ouvert (bilans qui arrivent du cloud)
         if(currentUser.role==='coach'&&document.getElementById('s-coach-client')?.classList.contains('active')&&currentClientId){
           openClientDetail(currentClientId,true);
+        }
+        // Athlète : sync les données du coach pour mettre à jour le banner
+        if(currentUser.role==='athlete'&&currentUser.coachId){
+          const _uu=DB.get('users')||{};
+          const _ce=Object.keys(_uu).find(k=>_uu[k]?.id===currentUser.coachId);
+          if(_ce){
+            await CLOUD.syncUser(_ce).catch(()=>{});
+            // Rafraîchir le banner si l'athlète est sur son accueil
+            if(document.getElementById('s-client-home')?.classList.contains('active')){
+              loadClientHome();
+            }
+          }
         }
       },30000);
     },500);
@@ -2727,6 +2740,8 @@ function renderTodoBlock(clients){
 }
 function loadCoachHome(){
   go('s-coach-home');
+  // Pousser les données locales vers Firebase dès l'ouverture (récupère les saves pré-v144)
+  if(CLOUD.canWrite()) CLOUD.push(DB.get('users')||{});
   const u=currentUser;
   const fullName=u.fname+' '+u.lname;
   const el=document.getElementById('ch-name');if(el)el.textContent=fullName;
@@ -2755,10 +2770,20 @@ function loadCoachHome(){
   elList.innerHTML=clients.map(c=>{
     const badge=hasNewBilan(c)?'<span class="badge badge-orange"> Nouveau bilan</span>':needsAlert(c)?'<span class="badge badge-red"> Alerte</span>':isActive(c)?'<span class="badge badge-green"> Actif</span>':'<span class="badge badge-gray">Inactif</span>';
     const ls=c.sessions?.length?'Dernière séance: '+ago(c.sessions[c.sessions.length-1].date):'Aucune séance';
+    const avatarHtml=c.athletePhoto
+      ?`<img src="${c.athletePhoto}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+      :escapeHtml(ini(c.fname,c.lname));
+    const metaParts=[
+      c.gender?(c.gender==='M'?'Homme':'Femme'):null,
+      c.profileWeight?c.profileWeight+' kg':null,
+      c.age?c.age+' ans':null,
+    ].filter(Boolean).join(' · ');
+    const objLine=c.objective?`<div style="font-size:10px;color:var(--red);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.objective)}</div>`:'';
+    const metaLine=metaParts?`<div style="font-size:10px;color:var(--sub);margin-top:1px">${metaParts}</div>`:'';
     return `<div class="client-row" onclick="openClientDetail('${c.id}')">
-      <div class="avatar" style="width:38px;height:38px;font-size:14px">${escapeHtml(ini(c.fname,c.lname))}</div>
-      <div style="flex:1"><div style="font-weight:700">${escapeHtml(c.fname)} ${escapeHtml(c.lname)}</div><div class="sub" style="font-size:11px">${ls}</div></div>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">${badge}<span style="font-size:11px;color:var(--sub)">${c.streak||0}</span></div>
+      <div class="avatar" style="width:44px;height:44px;font-size:15px;overflow:hidden;flex-shrink:0">${avatarHtml}</div>
+      <div style="flex:1;min-width:0"><div style="font-weight:700">${escapeHtml(c.fname)} ${escapeHtml(c.lname)}</div><div class="sub" style="font-size:11px">${ls}</div>${objLine}${metaLine}</div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">${badge}<span style="font-size:11px;color:var(--sub)">${c.streak||0}</span></div>
     </div>`;
   }).join('');
   // Initialize default tab
@@ -3690,11 +3715,36 @@ function loadClientHome(){
     _applyCoachData(users);
     if(CLOUD.ok()){
       const coachEmail=Object.keys(users).find(k=>users[k]?.id===u.coachId);
+      // Snapshot des données coach AVANT le sync (pour récupérer les champs que le sync pourrait écraser)
+      const _preSync=coachEmail?(JSON.parse(localStorage.getItem('rc_users')||'{}')[coachEmail]||null):null;
+      // Après sync : fusionner les champs de profil locaux manquants et pousser vers Firebase
+      const _afterCoachSync=()=>{
+        const mu=DB.get('users')||{};
+        const ce=Object.keys(mu).find(k=>mu[k]?.id===u.coachId);
+        if(ce){
+          const mc=mu[ce]||{};
+          // Si le sync a écrasé des champs de profil présents avant, les restaurer depuis le snapshot
+          if(_preSync){
+            if(!mc.coachPhoto&&_preSync.coachPhoto) mc.coachPhoto=_preSync.coachPhoto;
+            if(!mc.teamName&&_preSync.teamName) mc.teamName=_preSync.teamName;
+            if(!mc.catchphrase&&_preSync.catchphrase) mc.catchphrase=_preSync.catchphrase;
+            if(!mc.phone&&_preSync.phone) mc.phone=_preSync.phone;
+            // Sauvegarder la version fusionnée et pousser vers Firebase
+            if(mc.coachPhoto||mc.teamName||mc.catchphrase){
+              mu[ce]=mc;
+              localStorage.setItem('rc_users',JSON.stringify(mu));
+              CLOUD.pushOne(ce,mc);
+            }
+          } else if(mc.coachPhoto||mc.teamName||mc.catchphrase){
+            CLOUD.pushOne(ce,mc);
+          }
+        }
+        _applyCoachData(DB.get('users')||{});
+      };
       if(coachEmail){
-        CLOUD.syncUser(coachEmail).then(()=>_applyCoachData(DB.get('users')||{})).catch(()=>{});
+        CLOUD.syncUser(coachEmail).then(_afterCoachSync).catch(()=>{});
       } else {
-        // Coach absent du cache local — sync de tous les utilisateurs
-        CLOUD.syncUsers().then(()=>_applyCoachData(DB.get('users')||{})).catch(()=>{});
+        CLOUD.syncUsers().then(_afterCoachSync).catch(()=>{});
       }
     }
   }
@@ -7162,6 +7212,8 @@ function uploadCoachPhoto(input){
     if(!b64) return;
     currentUser.coachPhoto=b64;
     saveUser();
+    // Push immédiat non-debounced pour que les athlètes voient la photo immédiatement
+    setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},300);
     const el=document.getElementById('coach-photo-circle');
     if(el) el.innerHTML=`<img src="${b64}" style="width:100%;height:100%;object-fit:cover">`;
     toast('Photo enregistrée ✓');
@@ -7173,6 +7225,8 @@ function saveCoachIdentity(){
   currentUser.teamName=name;
   currentUser.catchphrase=phrase;
   saveUser();
+  // Push immédiat non-debounced pour que les athlètes voient les données immédiatement
+  setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},300);
   toast('Identité de la team enregistrée ✓');
 }
 function uploadAthletePhoto(input){
