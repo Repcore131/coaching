@@ -1119,6 +1119,13 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="font-size:11px;color:var(--sub)">Reprendre là où tu t'es arrêté →</div>
       </div>
 
+      <!-- 1er BILAN EN ATTENTE -->
+      <div id="clh-first-bilan-card" style="display:none;background:#0b0b1e;border:1px solid #2a2a6a;border-radius:12px;padding:14px 16px;margin-bottom:14px;cursor:pointer" onclick="openBilan('depart')">
+        <div style="font-size:9px;color:#818cf8;letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:5px">📋 À compléter</div>
+        <div style="font-size:13px;font-weight:800;margin-bottom:4px;color:#fff">Questionnaire de départ</div>
+        <div style="font-size:11px;color:var(--sub);line-height:1.5">Remplis ton bilan initial pour permettre à ton coach de suivre ta progression →</div>
+      </div>
+
       <!-- BILAN ALERT -->
       <div id="clh-bilan-alert" style="display:none;background:#7c2d1222;border:1px solid var(--orange);border-radius:12px;padding:14px;margin-bottom:16px;cursor:pointer" onclick="openBilanChoice()">
         <div style="font-weight:700;color:var(--orange);font-size:13px;text-transform:uppercase;letter-spacing:.5px">Bilan bimensuel à compléter</div>
@@ -1478,6 +1485,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1" id="bil-content"></div>
   <div style="padding:14px 20px;border-top:1px solid #181818;background:var(--bg);flex-shrink:0">
     <button class="btn btn-red" id="bil-next-btn" onclick="bilNext()">Suivant →</button>
+    <button id="bil-skip-depart" onclick="skipFirstBilan()" style="display:none;width:100%;margin-top:10px;background:none;border:none;color:var(--sub);font-size:11px;font-family:Montserrat,sans-serif;cursor:pointer;padding:6px;letter-spacing:.3px;text-decoration:underline">Remplir mon 1er bilan plus tard</button>
   </div>
 </div>
 
@@ -3645,6 +3653,9 @@ function loadClientHome(){
   const lb=u.bilans?.length?u.bilans[u.bilans.length-1]:null;
   document.getElementById('clh-weight').textContent=lb&&getBW(lb)!==null?getBW(lb)+'kg':'—';
   renderNutriDots();renderNotifs();renderWoReminderCard();
+  const _hasDepart=(currentUser.bilans||[]).some(b=>b.type==='depart');
+  const _firstCard=document.getElementById('clh-first-bilan-card');
+  if(_firstCard) _firstCard.style.display=(!_hasDepart&&currentUser._firstBilanPending)?'block':'none';
   const _snap=_woLoadSnap();
   const _resumeEl=document.getElementById('clh-resume-workout');
   const _resumeName=document.getElementById('clh-resume-name');
@@ -4482,6 +4493,12 @@ function getPrevPerf(name){
 // ======= BILAN MULTI-STEP =======
 let bilStep=0,bilType='coaching',bilData={},_bilPhotoLoading=0;
 
+function skipFirstBilan(){
+  currentUser._firstBilanPending=true;
+  saveUser();
+  go('s-client-home');
+  loadClientHome();
+}
 function openBilanChoice(){
   const hasDepart=currentUser.bilans?.some(b=>b.type==='depart');
   document.getElementById('bilan-choice-first').style.display=hasDepart?'none':'block';
@@ -4512,6 +4529,8 @@ function renderBilStep(){
   document.getElementById('bil-next-btn').textContent=bilStep===total-1?'Valider ':'Suivant →';
   document.getElementById('bil-back-btn').style.visibility='visible';
   document.getElementById('bil-content').innerHTML='<div class="pad">'+steps[bilStep]()+'</div>';
+  const skipBtn=document.getElementById('bil-skip-depart');
+  if(skipBtn) skipBtn.style.display=(bilType==='depart'&&!currentUser?.bilans?.some(b=>b.type==='depart'))?'block':'none';
 }
 function pickBilChoice(groupId,val,multi){
   if(multi){
@@ -4749,6 +4768,7 @@ function saveBilanFinal(){
   if(bilData['deb-gender']&&!currentUser._evol_gender) currentUser._evol_gender=bilData['deb-gender'];
   if(!currentUser.bilans) currentUser.bilans=[];
   currentUser.bilans.push(bi);
+  if(bi.type==='depart') delete currentUser._firstBilanPending;
   // Ancrer photos dans clés séparées (survivent au sync Firebase)
   Object.keys(bi).filter(k=>k.includes('photo')&&bi[k]).forEach(k=>{
     try{localStorage.setItem('rc_photo_'+bi.date+'_'+k,bi[k]);}catch(e){}
