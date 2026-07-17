@@ -7340,7 +7340,7 @@ function _renderPromoBanners(coach){
   el.innerHTML=`<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 0.5cm 4px">
     <div style="display:flex;justify-content:center;gap:10px;min-width:min-content">
       ${banners.map(b=>{
-        const inner=`<img src="${escapeHtml(b.imageUrl)}" style="width:260px;height:120px;object-fit:cover;border-radius:8px;display:block;border:1px solid #2a2a2a" onerror="this.style.display='none'">`;
+        const inner=`<img src="${escapeHtml(b.imageUrl)}" style="width:calc(100vw - 1cm);max-width:100%;height:auto;display:block;border-radius:8px;border:1px solid #2a2a2a" onerror="this.style.display='none'">`;
         return b.linkUrl
           ?`<a href="${escapeHtml(b.linkUrl)}" target="_blank" rel="noopener" style="flex-shrink:0;display:block">${inner}</a>`
           :`<div style="flex-shrink:0">${inner}</div>`;
