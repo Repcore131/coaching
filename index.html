@@ -2790,6 +2790,27 @@ function loadCoachHome(){
   }).join('');
   // Initialize default tab
   coachTab('dashboard');
+  // Sync athlètes depuis Firebase puis re-render pour afficher photos/objectifs à jour
+  if(CLOUD.ok()) CLOUD.syncUsers().then(()=>{
+    const freshClients=getClients();
+    freshClients.sort((a,b)=>urgencyScore(b)-urgencyScore(a));
+    renderTodoBlock(freshClients);
+    const el2=document.getElementById('ch-clients-list');
+    if(!el2||!freshClients.length) return;
+    el2.innerHTML=freshClients.map(c=>{
+      const badge=hasNewBilan(c)?'<span class="badge badge-orange"> Nouveau bilan</span>':needsAlert(c)?'<span class="badge badge-red"> Alerte</span>':isActive(c)?'<span class="badge badge-green"> Actif</span>':'<span class="badge badge-gray">Inactif</span>';
+      const ls=c.sessions?.length?'Dernière séance: '+ago(c.sessions[c.sessions.length-1].date):'Aucune séance';
+      const avatarHtml=c.athletePhoto?`<img src="${c.athletePhoto}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:escapeHtml(ini(c.fname,c.lname));
+      const metaParts=[c.gender?(c.gender==='M'?'Homme':'Femme'):null,c.profileWeight?c.profileWeight+' kg':null,c.age?c.age+' ans':null].filter(Boolean).join(' · ');
+      const objLine=c.objective?`<div style="font-size:10px;color:var(--red);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.objective)}</div>`:'';
+      const metaLine=metaParts?`<div style="font-size:10px;color:var(--sub);margin-top:1px">${metaParts}</div>`:'';
+      return `<div class="client-row" onclick="openClientDetail('${c.id}')">
+        <div class="avatar" style="width:44px;height:44px;font-size:15px;overflow:hidden;flex-shrink:0">${avatarHtml}</div>
+        <div style="flex:1;min-width:0"><div style="font-weight:700">${escapeHtml(c.fname)} ${escapeHtml(c.lname)}</div><div class="sub" style="font-size:11px">${ls}</div>${objLine}${metaLine}</div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">${badge}<span style="font-size:11px;color:var(--sub)">${c.streak||0}</span></div>
+      </div>`;
+    }).join('');
+  }).catch(()=>{});
 }
 function getClients(){
   const users=DB.get('users')||{};
