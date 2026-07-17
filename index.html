@@ -4293,7 +4293,7 @@ function renderWoEx(){
         </div>
         <div class="s-note">${baseWeight?'Dernière séance à RIR 0: '+baseWeight+'kg':prev?'Calculé depuis perf précédente: '+prev.weight+'kg':'Première séance'}</div>
       </div>`:
-      `<div style="background:var(--card2);border-radius:10px;padding:12px;margin-bottom:12px;font-size:12px;color:var(--sub)"> Première fois — Remplis tes séries et vise le RIR 0 sur ta dernière série.</div>`}
+      ``}
 
       ${ex.description?`<div style="background:var(--card2);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#ccc;line-height:1.6">${escapeHtml(ex.description)}</div>`:''}
       ${ex.note?`<div style="background:#1a1a1a;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#fca5a5"> ${escapeHtml(ex.note)}</div>`:''}
@@ -4317,12 +4317,12 @@ function renderWoEx(){
       <table class="series-table" style="width:100%;min-width:${pr.type==='degressive'?(showCycleCol?'600px':'500px'):(showCycleCol?'480px':'360px')}">
         <thead>
           <tr>
-            <th>#</th>
-            ${pr.type==='degressive'?`<th style="color:#fca5a5">P1 (kg)</th><th style="color:#fdba74">P2 (kg)</th>`:`<th>Charge (kg)</th>`}
+            <th style="color:var(--red)">#</th>
+            ${pr.type==='degressive'?`<th style="color:var(--red)">P1 (kg)</th><th style="color:var(--red)">P2 (kg)</th>`:`<th style="color:var(--red)">Charge (kg)</th>`}
             ${showCycleCol?`<th style="color:#c4b5fd">Cycle</th>`:''}
-            <th>RIR</th>
-            <th style="font-size:9px">Douleur</th>
-            <th></th>
+            <th style="color:var(--red)">RIR</th>
+            <th style="font-size:9px;color:var(--red)">Douleur</th>
+            <th style="color:var(--red);font-size:9px">Validé</th>
           </tr>
         </thead>
         <tbody id="sets-body"></tbody>
@@ -4333,7 +4333,7 @@ function renderWoEx(){
         <div style="display:flex;align-items:center;justify-content:space-between">
           <label style="font-size:11px;cursor:pointer;color:var(--sub)"><input type="checkbox" id="film-ex" style="width:auto;margin-right:4px">  Filmer cet exercice</label>
           <span style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:10px;color:var(--sub)">→ Vise RIR 0 sur ta dernière série</span>
+            <span style="font-size:10px;color:var(--red);font-weight:700">→ Vise RIR 0 sur ta dernière série</span>
             <button onclick="toggleRirExplain()" style="background:none;border:1px solid #2a2a2a;border-radius:50%;width:18px;height:18px;color:var(--sub);font-size:10px;font-weight:800;cursor:pointer;line-height:1;padding:0;flex-shrink:0">?</button>
           </span>
         </div>
@@ -4436,12 +4436,15 @@ function renderSets(ex,data){
     const doneC=s.done?'#fff':'var(--sub)';
 
     return `<tr class="${rowCls}">
-      <td style="font-weight:800;color:${String(s.rir)==='0'?'var(--green)':'inherit'}">${i+1}<br><span style="font-size:9px;color:var(--sub);font-weight:400">${s.reps||ex.reps}</span></td>
+      <td style="text-align:center;padding:4px 6px">
+        <span style="display:block;font-size:9px;font-weight:800;color:var(--red);line-height:1">${i+1}</span>
+        <span style="font-size:15px;font-weight:900;line-height:1.2"><span style="font-size:9px;font-weight:600">×</span>${s.reps||ex.reps}</span>
+      </td>
       ${weightCell}
       ${cycleCell}
       <td>${rirSelect}</td>
       <td>${painSelect}</td>
-      <td><button onclick="toggleSet(${i})" style="width:32px;height:32px;border-radius:50%;border:2px solid ${doneClr};background:${doneBg};color:${doneC};cursor:pointer;font-size:14px">${s.done?'':'○'}</button></td>
+      <td><button onclick="toggleSet(${i})" style="width:34px;height:34px;border-radius:50%;border:2px solid ${doneClr};background:${doneBg};color:${doneC};cursor:pointer;font-size:${s.done?'16':'14'}px">${s.done?'✅':'○'}</button></td>
     </tr>`;
   }).join('');
 }
