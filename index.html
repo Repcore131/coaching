@@ -752,6 +752,15 @@ const COACH_PHOTO='icons/coach.jpg';
           <button onclick="saveCoachIdentity()" style="width:100%;background:var(--red);border:none;color:#fff;border-radius:3px;padding:12px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px">ENREGISTRER</button>
         </div>
 
+        <!-- 🖼️ Bannières publicitaires -->
+        <div style="background:#0a0a1a;border:1px solid #1a1a3a;border-radius:14px;padding:18px;margin-bottom:18px">
+          <div style="font-size:9px;color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Bannières pub</div>
+          <div style="font-size:11px;color:var(--sub);margin-bottom:14px;line-height:1.5">Affiché en bas de l'accueil de tes athlètes.<br>Format bannière cliquable (photo + lien).</div>
+          <div id="coach-banners-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px"></div>
+          <button onclick="addCoachBannerRow()" style="width:100%;background:transparent;border:1px dashed #3a3a5a;color:#818cf8;border-radius:3px;padding:10px;font-family:Montserrat,sans-serif;font-size:11px;cursor:pointer;margin-bottom:12px">+ Ajouter une bannière</button>
+          <button onclick="saveCoachBanners()" style="width:100%;background:var(--red);border:none;color:#fff;border-radius:3px;padding:12px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px">ENREGISTRER</button>
+        </div>
+
         <!-- 📱 WhatsApp coach -->
         <div style="background:#071a07;border:1px solid #1a3a1a;border-radius:14px;padding:18px;margin-bottom:18px">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
@@ -1192,6 +1201,9 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="display:flex;gap:6px" id="clh-nutri-dots"></div>
         <div style="margin-top:10px;font-size:12px">Score: <span style="font-weight:800;color:var(--green)" id="clh-nutri-score">—</span></div>
       </div>
+
+      <!-- BANNIÈRES PUB COACH -->
+      <div id="clh-promo-banners" style="display:none;margin-bottom:8px"></div>
     </div>
   </div>
   <div class="tab-bar" id="client-tabbar">
@@ -3734,6 +3746,7 @@ function loadClientHome(){
       const href=phone?'https://wa.me/'+phone:(coachEmail?'mailto:'+coachEmail:'');
       if(href){contactLink.href=href;contactLink.style.display='inline-flex';}
       _renderCoachBanner(coachUser, u.coachName);
+      _renderPromoBanners(coachUser);
     };
     _applyCoachData(users);
     if(CLOUD.ok()){
@@ -7255,6 +7268,52 @@ function saveCoachIdentity(){
   setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},300);
   toast('Identité de la team enregistrée ✓');
 }
+function addCoachBannerRow(imageUrl, linkUrl){
+  const list=document.getElementById('coach-banners-list');
+  if(!list) return;
+  if(list.children.length>=5){toast('Maximum 5 bannières','var(--orange)');return;}
+  const row=document.createElement('div');
+  row.style.cssText='background:#0f0f1f;border:1px solid #2a2a4a;border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:6px';
+  row.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+    <span style="font-size:10px;font-weight:800;color:#818cf8;letter-spacing:1px">BANNIÈRE ${list.children.length+1}</span>
+    <button onclick="this.closest('div[style]').remove()" style="background:none;border:none;color:#444;font-size:16px;cursor:pointer;line-height:1">✕</button>
+  </div>
+  <input type="url" placeholder="URL image (jpg, png…)" value="${escapeHtml(imageUrl||'')}" style="width:100%;font-size:12px;padding:8px 10px;box-sizing:border-box;border-radius:3px">
+  <input type="url" placeholder="URL du lien (https://…)" value="${escapeHtml(linkUrl||'')}" style="width:100%;font-size:12px;padding:8px 10px;box-sizing:border-box;border-radius:3px">`;
+  list.appendChild(row);
+}
+function saveCoachBanners(){
+  const list=document.getElementById('coach-banners-list');
+  if(!list) return;
+  const banners=[];
+  Array.from(list.children).forEach(row=>{
+    const inputs=row.querySelectorAll('input[type=url]');
+    const img=(inputs[0]?.value||'').trim();
+    const url=(inputs[1]?.value||'').trim();
+    if(img||url) banners.push({imageUrl:img,linkUrl:url});
+  });
+  currentUser.promoBanners=banners;
+  saveUser();
+  setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},300);
+  toast('Bannières enregistrées ✓');
+}
+function _renderPromoBanners(coach){
+  const el=document.getElementById('clh-promo-banners');
+  if(!el) return;
+  const banners=(coach?.promoBanners||[]).filter(b=>b.imageUrl);
+  if(!banners.length){el.style.display='none';return;}
+  el.style.display='block';
+  el.innerHTML=`<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px">
+    <div style="display:flex;gap:10px;width:max-content">
+      ${banners.map(b=>{
+        const inner=`<img src="${escapeHtml(b.imageUrl)}" style="width:260px;height:120px;object-fit:cover;border-radius:8px;display:block;border:1px solid #2a2a2a" onerror="this.style.display='none'">`;
+        return b.linkUrl
+          ?`<a href="${escapeHtml(b.linkUrl)}" target="_blank" rel="noopener" style="flex-shrink:0;display:block">${inner}</a>`
+          :`<div style="flex-shrink:0">${inner}</div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
 function uploadAthletePhoto(input){
   const f=input.files[0];if(!f) return;
   if(f.size>3*1024*1024){toast('Image trop lourde (max 3 Mo)','var(--orange)');return;}
@@ -7339,6 +7398,8 @@ function loadMonetisationTab(){
   if(teamNameEl) teamNameEl.value=u.teamName||'';
   const catchEl=document.getElementById('coach-catchphrase');
   if(catchEl) catchEl.value=u.catchphrase||'';
+  const bannerList=document.getElementById('coach-banners-list');
+  if(bannerList){bannerList.innerHTML='';(u.promoBanners||[]).forEach(b=>addCoachBannerRow(b.imageUrl,b.linkUrl));}
   const phoneInput=document.getElementById('coach-phone-input');
   if(phoneInput) phoneInput.value=u.phone||'';
   _renderCoachPhonePreview(u.phone||'');
