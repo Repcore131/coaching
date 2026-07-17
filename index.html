@@ -115,7 +115,7 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
 .series-table th{background:#0f0f0f;color:var(--sub);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:8px 10px;text-align:center;border-bottom:1px solid var(--border)}
 select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 3px;cursor:pointer}
 .series-table td{padding:10px;text-align:center;border-top:1px solid #181818;font-size:13px;font-weight:600}
-.series-table tr.done td{background:#16532210;color:var(--green)}
+.series-table tr.done td{background:#E0202010;color:var(--red)}
 .set-input{width:56px;background:#0f0f0f;border:1px solid #2a2a2a;border-radius:3px;color:#fff;text-align:center;padding:7px 4px;font-family:'Montserrat',sans-serif;font-size:13px;font-weight:800}
 .set-input:focus{border-color:var(--red);outline:none;box-shadow:0 0 0 2px rgba(198,15,8,.15)}
 
@@ -4316,13 +4316,13 @@ function renderWoEx(){
       :`<div style="overflow-x:auto">
       <table class="series-table" style="width:100%;min-width:${pr.type==='degressive'?(showCycleCol?'600px':'500px'):(showCycleCol?'480px':'360px')}">
         <thead>
-          <tr>
-            <th style="color:var(--red)">#</th>
-            ${pr.type==='degressive'?`<th style="color:var(--red)">P1 (kg)</th><th style="color:var(--red)">P2 (kg)</th>`:`<th style="color:var(--red)">Charge (kg)</th>`}
-            ${showCycleCol?`<th style="color:#c4b5fd">Cycle</th>`:''}
-            <th style="color:var(--red)">RIR</th>
-            <th style="font-size:9px;color:var(--red)">Douleur</th>
-            <th style="color:var(--red);font-size:9px">Validé</th>
+          <tr style="background:var(--red)">
+            <th style="color:#fff">#</th>
+            ${pr.type==='degressive'?`<th style="color:#fff">P1 (kg)</th><th style="color:#fff">P2 (kg)</th>`:`<th style="color:#fff">Charge (kg)</th>`}
+            ${showCycleCol?`<th style="color:#ffd0d0">Cycle</th>`:''}
+            <th style="color:#fff">RIR</th>
+            <th style="font-size:9px;color:#fff">Douleur</th>
+            <th style="color:#fff;font-size:9px">Validé</th>
           </tr>
         </thead>
         <tbody id="sets-body"></tbody>
