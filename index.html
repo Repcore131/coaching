@@ -909,6 +909,8 @@ const COACH_PHOTO='icons/coach.jpg';
         <div id="ccc-pdf-content"></div>
       </div>
 
+      <!-- Nutrition coach -->
+      <div id="ccd-nutrition" style="margin-bottom:20px"></div>
       <h3 style="margin-bottom:12px">Bilans récents</h3>
       <div id="ccd-bilans"></div>
       <div id="ccd-sessions-recap" style="margin-top:24px"></div>
@@ -1534,43 +1536,21 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar"><button class="back-btn" onclick="go('s-client-home')">←</button><span class="topbar-title">Nutrition</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
-      <!-- JOURNAL DU JOUR -->
-      <div id="fj-today-section" style="margin-bottom:24px"></div>
-      <!-- Objectifs calories -->
-      <div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:14px;padding:16px;margin-bottom:20px">
-        <div style="font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:14px">🎯 Objectifs caloriques</div>
-        <div style="display:flex;gap:12px">
-          <div style="flex:1">
-            <label style="font-size:10px;color:var(--red);letter-spacing:1.5px">JOUR ENTRAÎNEMENT</label>
-            <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
-              <input type="number" id="nut-on-kcal" placeholder="ex: 2500" min="0" max="9999"
-                style="flex:1;padding:10px;background:#1a1a1a;border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:14px;font-weight:700"
-                onchange="saveNutriObjectives()">
-              <span style="font-size:11px;color:var(--sub)">kcal</span>
-            </div>
-          </div>
-          <div style="flex:1">
-            <label style="font-size:10px;color:#888;letter-spacing:1.5px">JOUR OFF</label>
-            <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
-              <input type="number" id="nut-off-kcal" placeholder="ex: 2000" min="0" max="9999"
-                style="flex:1;padding:10px;background:#1a1a1a;border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:14px;font-weight:700"
-                onchange="saveNutriObjectives()">
-              <span style="font-size:11px;color:var(--sub)">kcal</span>
-            </div>
-          </div>
-        </div>
+      <!-- Sélecteur type de diet -->
+      <div style="position:relative;margin-bottom:22px">
+        <select id="nut-diet-select" onchange="setNutriDietType(this.value)"
+          style="width:100%;padding:13px 40px 13px 16px;background:#1a1a1a;border:1.5px solid var(--border);border-radius:12px;color:#fff;font-family:Montserrat,sans-serif;font-size:13px;font-weight:700;appearance:none;-webkit-appearance:none;cursor:pointer;outline:none">
+          <option value="strict">🥩  Diète Stricte</option>
+          <option value="flexible">⚖️  Diète Flexible — Journal Yazio</option>
+        </select>
+        <span style="position:absolute;right:14px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--sub);font-size:12px">▼</span>
       </div>
-      <!-- Semaine -->
-      <h3 style="margin-bottom:14px">Cette semaine</h3>
-      <div id="nut-week"></div>
-      <div class="divider"></div>
-      <!-- Stats -->
-      <div style="display:flex;gap:10px;margin-bottom:16px">
-        <div class="metric-box"><div class="metric-val" id="nut-score" style="color:var(--green)">—</div><div class="metric-label">Jours atteints</div></div>
-        <div class="metric-box"><div class="metric-val" id="nut-streak">0</div><div class="metric-label">Consécutifs</div></div>
-      </div>
-      <div class="card"><canvas id="nut-chart" height="140"></canvas></div>
-      <div id="caff-embedded" style="margin-top:24px"></div>
+      <!-- Contenu dynamique -->
+      <div id="nut-diet-content"></div>
+      <!-- Journal Yazio (flexible) -->
+      <div id="fj-today-section" style="display:none;margin-bottom:24px"></div>
+      <!-- Caféine -->
+      <div id="caff-embedded" style="margin-top:8px"></div>
     </div>
   </div>
 </div>
@@ -3105,6 +3085,7 @@ function openClientDetail(cid,_refresh){
 
   renderClientPdfCard(c);
   renderCoachSessionRecap(c);
+  renderCoachNutriSection(c);
   if(!_refresh) go('s-coach-client');
   // Sync immédiat puis rafraîchi automatique (sans bouton)
   if(!_refresh && CLOUD.ok()){
@@ -5688,20 +5669,117 @@ function nutIsOnDay(dateStr){
   const idx=(d.getDay()+6)%7; // lundi=0
   return cfg[idx]?.active===true;
 }
-function saveNutriObjectives(){
+function setNutriDietType(type){
   if(!currentUser.nutrition) currentUser.nutrition={};
-  const on=parseInt(document.getElementById('nut-on-kcal')?.value)||0;
-  const off=parseInt(document.getElementById('nut-off-kcal')?.value)||0;
-  currentUser.nutrition.on_kcal=on;
-  currentUser.nutrition.off_kcal=off;
-  saveUser();loadNutrition();
+  currentUser.nutrition.dietType=type;
+  saveUser();
+  const sel=document.getElementById('nut-diet-select');
+  if(sel) sel.value=type;
+  _renderNutriContent(type);
 }
-function setNutriConsumed(key,val){
+
+function _renderNutriContent(type){
+  const contentEl=document.getElementById('nut-diet-content');
+  const fjSec=document.getElementById('fj-today-section');
+  if(!contentEl) return;
+  if(type==='flexible'){
+    contentEl.innerHTML='';
+    if(fjSec){fjSec.style.display='block';_renderFjDaySummary(localISODate(new Date()));}
+  } else {
+    if(fjSec) fjSec.style.display='none';
+    _renderStrictDiet();
+  }
+}
+
+function _renderStrictDiet(){
+  const el=document.getElementById('nut-diet-content');
+  if(!el) return;
+  const nut=currentUser.nutrition||{};
+  const isCoach=currentUser.role==='coach';
+  const photos=nut.strictPhotos||[];
+  const days_data=nut.days||{};
+  const today=new Date();
+  const todayKey=localISODate(today);
+  const resp=days_data[todayKey]?.respected;
+  const respYes=resp===true;
+  const respNo=resp===false;
+  const wk=new Date(today);wk.setDate(today.getDate()-((today.getDay()+6)%7));
+  const weekKeys=Array.from({length:7},(_,i)=>{const d=new Date(wk);d.setDate(wk.getDate()+i);return localISODate(d);});
+  const weekScore=weekKeys.filter(k=>days_data[k]?.respected===true).length;
+  const answered=weekKeys.filter(k=>days_data[k]?.respected===true||days_data[k]?.respected===false).length;
+  let streak=0;
+  for(let i=0;i<60;i++){
+    const d=new Date(today);d.setDate(today.getDate()-i);
+    const k=localISODate(d);
+    if(days_data[k]?.respected===true) streak++;
+    else if(days_data[k]?.respected===false) break;
+    else if(i>0) break;
+  }
+  el.innerHTML=`
+    <div style="margin-bottom:24px">
+      ${photos.length===0&&!isCoach?`<div style="background:#0f0f0f;border:1px dashed #2a2a2a;border-radius:12px;padding:32px 16px;text-align:center;color:#333;font-size:12px"><div style="font-size:32px;margin-bottom:8px;opacity:.3">📋</div>Plan alimentaire à venir</div>`:''}
+      ${photos.map((src,i)=>`<div style="margin-bottom:10px;position:relative"><img src="${src}" style="width:100%;border-radius:12px;display:block;border:1px solid #1a1a1a" onclick="viewNutriPhoto(${i})">${isCoach?`<button onclick="deleteStrictPhoto(${i})" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.8);border:none;color:#fff;border-radius:50%;width:28px;height:28px;font-size:14px;cursor:pointer;line-height:1;padding:0">✕</button>`:''}</div>`).join('')}
+      ${isCoach?`<label style="display:flex;align-items:center;justify-content:center;gap:10px;padding:14px;background:#111;border:1.5px dashed #2a2a2a;border-radius:12px;cursor:pointer;margin-top:${photos.length?'6':'0'}px"><span style="font-size:18px">📷</span><span style="font-size:11px;font-weight:700;color:var(--sub);letter-spacing:1px">AJOUTER UNE PHOTO</span><input type="file" accept="image/*" capture="environment" style="display:none" onchange="addStrictPhoto(this)"></label>`:''}
+    </div>
+    <div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:14px;padding:18px;margin-bottom:20px">
+      <div style="font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:14px">J'ai respecté mon plan aujourd'hui</div>
+      <div style="display:flex;gap:10px">
+        <button onclick="setNutriRespected('${todayKey}',true)" style="flex:1;padding:14px 0;border:none;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;letter-spacing:1px;cursor:pointer;background:${respYes?'#15803d':'#111'};color:${respYes?'#fff':'#555'};border:2px solid ${respYes?'#22c55e':'#222'}">✓ OUI</button>
+        <button onclick="setNutriRespected('${todayKey}',false)" style="flex:1;padding:14px 0;border:none;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;letter-spacing:1px;cursor:pointer;background:${respNo?'#7f1d1d':'#111'};color:${respNo?'#fff':'#555'};border:2px solid ${respNo?'var(--red)':'#222'}">✗ NON</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:8px">
+      <div style="flex:1;background:#0f0f0f;border:1px solid #1a1a1a;border-radius:12px;padding:14px;text-align:center">
+        <div style="font-size:32px;font-family:'Bebas Neue',Impact,sans-serif;color:var(--green);line-height:1">${streak}</div>
+        <div style="font-size:9px;color:var(--sub);letter-spacing:1.5px;margin-top:4px">JOURS CONSÉCUTIFS</div>
+      </div>
+      <div style="flex:1;background:#0f0f0f;border:1px solid #1a1a1a;border-radius:12px;padding:14px;text-align:center">
+        <div style="font-size:32px;font-family:'Bebas Neue',Impact,sans-serif;color:#60a5fa;line-height:1">${weekScore}<span style="font-size:16px;color:var(--sub)">/${answered||7}</span></div>
+        <div style="font-size:9px;color:var(--sub);letter-spacing:1.5px;margin-top:4px">CETTE SEMAINE</div>
+      </div>
+    </div>`;
+}
+
+function addStrictPhoto(input){
+  const file=input?.files?.[0];
+  if(!file) return;
+  compressImage(file,1400,0.85,b64=>{
+    if(!currentUser.nutrition) currentUser.nutrition={};
+    if(!Array.isArray(currentUser.nutrition.strictPhotos)) currentUser.nutrition.strictPhotos=[];
+    currentUser.nutrition.strictPhotos.push(b64);
+    saveUser();
+    _renderStrictDiet();
+  });
+}
+
+function deleteStrictPhoto(index){
+  const arr=currentUser.nutrition?.strictPhotos;
+  if(!arr) return;
+  arr.splice(index,1);
+  saveUser();
+  _renderStrictDiet();
+}
+
+function viewNutriPhoto(index){
+  const src=currentUser.nutrition?.strictPhotos?.[index];
+  if(!src) return;
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;display:flex;align-items:center;justify-content:center';
+  ov.onclick=()=>ov.remove();
+  ov.innerHTML=`<img src="${src}" style="max-width:96%;max-height:90vh;border-radius:8px;object-fit:contain">`;
+  document.body.appendChild(ov);
+}
+
+function setNutriRespected(key,val){
   if(!currentUser.nutrition) currentUser.nutrition={};
   if(!currentUser.nutrition.days) currentUser.nutrition.days={};
-  currentUser.nutrition.days[key]={consumed:parseInt(val)||0};
-  saveUser();loadNutrition();
+  if(!currentUser.nutrition.days[key]) currentUser.nutrition.days[key]={};
+  currentUser.nutrition.days[key].respected=val;
+  saveUser();
+  const dt=currentUser.nutrition.dietType||'strict';
+  if(dt==='strict') _renderStrictDiet();
 }
+
 // ======= JOURNAL ALIMENTAIRE (Ciqual 2025) =======
 let _ciqualDB=null;
 let _fjFood=null;   // aliment sélectionné
@@ -5862,14 +5940,10 @@ function _renderFjDaySummary(date){
   if(!el) return;
   const nut=currentUser.nutrition||{};
   const entries=(nut.log?.[date]?.entries)||[];
-  const isOn=nutIsOnDay(date);
-  const targetKcal=isOn?(nut.on_kcal||0):(nut.off_kcal||0);
+  const m=nut.macros||{};
   const tot=entries.reduce((a,e)=>({
     kcal:a.kcal+(e.kcal||0),p:a.p+(e.p||0),c:a.c+(e.c||0),l:a.l+(e.l||0)
   }),{kcal:0,p:0,c:0,l:0});
-  const pct=targetKcal>0?Math.min(100,Math.round(tot.kcal/targetKcal*100)):0;
-  const rem=targetKcal>0?targetKcal-tot.kcal:null;
-  const barColor=rem!==null&&rem<0?'var(--red)':'#22c55e';
   const repasOrder=['matin','dejeuner','diner','collation'];
   const repasLabels={matin:'Petit-déjeuner',dejeuner:'Déjeuner',diner:'Dîner',collation:'Collation'};
   const grouped={};
@@ -5880,21 +5954,26 @@ function _renderFjDaySummary(date){
       <h3 style="margin:0;font-size:16px">Journal du jour</h3>
       <button onclick="openFoodSearch('${date}')" style="background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:1.5px;padding:8px 14px;border-radius:8px;cursor:pointer">+ AJOUTER</button>
     </div>
-    ${targetKcal>0?`
     <div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:12px;padding:14px;margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
-        <span style="font-size:32px;font-family:'Bebas Neue',Impact,sans-serif;color:var(--red);line-height:1">${tot.kcal} <span style="font-size:13px;color:var(--sub);font-family:Montserrat,sans-serif;font-weight:400">kcal</span></span>
-        <span style="font-size:11px;color:var(--sub)">${rem!==null?(rem>=0?rem+' restantes':Math.abs(rem)+' dépassées'):'/ '+targetKcal+' kcal'}</span>
-      </div>
-      <div style="height:8px;background:#1a1a1a;border-radius:4px;overflow:hidden;margin-bottom:12px">
-        <div style="height:100%;width:${pct}%;background:${barColor};border-radius:4px;transition:width .4s"></div>
-      </div>
       <div style="display:flex;gap:8px">
-        <div style="flex:1;background:#111;border-radius:8px;padding:8px;text-align:center"><div style="font-size:16px;font-weight:800;color:#60a5fa">${parseFloat(tot.p.toFixed(1))}<span style="font-size:9px;color:var(--sub);font-weight:400"> g</span></div><div style="font-size:8px;color:var(--sub);letter-spacing:1px;margin-top:2px">PROTÉINES</div></div>
-        <div style="flex:1;background:#111;border-radius:8px;padding:8px;text-align:center"><div style="font-size:16px;font-weight:800;color:#4ade80">${parseFloat(tot.c.toFixed(1))}<span style="font-size:9px;color:var(--sub);font-weight:400"> g</span></div><div style="font-size:8px;color:var(--sub);letter-spacing:1px;margin-top:2px">GLUCIDES</div></div>
-        <div style="flex:1;background:#111;border-radius:8px;padding:8px;text-align:center"><div style="font-size:16px;font-weight:800;color:#fb923c">${parseFloat(tot.l.toFixed(1))}<span style="font-size:9px;color:var(--sub);font-weight:400"> g</span></div><div style="font-size:8px;color:var(--sub);letter-spacing:1px;margin-top:2px">LIPIDES</div></div>
+        <div style="flex:1;background:#111;border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:20px;font-weight:800;color:var(--red)">${Math.round(tot.kcal)}<span style="font-size:9px;color:var(--sub);font-weight:400"> kcal</span></div>
+          ${m.kcal?`<div style="font-size:8px;color:var(--sub);letter-spacing:1px;margin-top:2px">/ ${m.kcal} kcal</div>`:`<div style="font-size:8px;color:var(--sub);letter-spacing:1px;margin-top:2px">CALORIES</div>`}
+        </div>
+        <div style="flex:1;background:#111;border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:20px;font-weight:800;color:#60a5fa">${parseFloat(tot.p.toFixed(1))}<span style="font-size:9px;color:var(--sub);font-weight:400"> g</span></div>
+          ${m.p?`<div style="font-size:8px;color:var(--sub);letter-spacing:1px;margin-top:2px">/ ${m.p}g PROT</div>`:`<div style="font-size:8px;color:var(--sub);letter-spacing:1px;margin-top:2px">PROTÉINES</div>`}
+        </div>
+        <div style="flex:1;background:#111;border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:20px;font-weight:800;color:#4ade80">${parseFloat(tot.c.toFixed(1))}<span style="font-size:9px;color:var(--sub);font-weight:400"> g</span></div>
+          ${m.g?`<div style="font-size:8px;color:var(--sub);letter-spacing:1px;margin-top:2px">/ ${m.g}g GLUC</div>`:`<div style="font-size:8px;color:var(--sub);letter-spacing:1px;margin-top:2px">GLUCIDES</div>`}
+        </div>
+        <div style="flex:1;background:#111;border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:20px;font-weight:800;color:#fb923c">${parseFloat(tot.l.toFixed(1))}<span style="font-size:9px;color:var(--sub);font-weight:400"> g</span></div>
+          ${m.l?`<div style="font-size:8px;color:var(--sub);letter-spacing:1px;margin-top:2px">/ ${m.l}g LIP</div>`:`<div style="font-size:8px;color:var(--sub);letter-spacing:1px;margin-top:2px">LIPIDES</div>`}
+        </div>
       </div>
-    </div>`:''}
+    </div>
     ${entries.length===0?`<div style="text-align:center;padding:18px 0 8px;color:#333;font-size:12px">Aucun aliment enregistré — appuie sur + AJOUTER</div>`:''}
     ${repasOrder.filter(r=>grouped[r]).map(r=>`
       <div style="margin-bottom:14px">
@@ -5905,7 +5984,7 @@ function _renderFjDaySummary(date){
             <div style="font-size:10px;color:var(--sub);margin-top:2px">${e.qty}g · P ${e.p??'—'}g · G ${e.c??'—'}g · L ${e.l??'—'}g</div>
           </div>
           <div style="flex-shrink:0;margin-left:8px;text-align:right">
-            <div style="font-size:14px;font-weight:800;color:var(--red)">${e.kcal??'—'} <span style="font-size:9px;color:var(--sub);font-weight:400">kcal</span></div>
+            <div style="font-size:13px;font-weight:800;color:var(--red)">${e.kcal??'—'}<span style="font-size:9px;color:var(--sub);font-weight:400"> kcal</span></div>
             <button onclick="deleteFoodEntry('${date}',${e.id})" style="background:none;border:none;color:#333;font-size:14px;cursor:pointer;padding:2px 4px;margin-top:2px">✕</button>
           </div>
         </div>`).join('')}
@@ -5914,102 +5993,82 @@ function _renderFjDaySummary(date){
 function loadNutrition(){
   go('s-nutrition');
   const nut=currentUser.nutrition||{};
-  const days_data=nut.days||{};
-  const on_kcal=nut.on_kcal||0;
-  const off_kcal=nut.off_kcal||0;
-  // Pré-remplir les objectifs
-  const onEl=document.getElementById('nut-on-kcal');
-  const offEl=document.getElementById('nut-off-kcal');
-  if(onEl&&on_kcal) onEl.value=on_kcal;
-  if(offEl&&off_kcal) offEl.value=off_kcal;
-
-  const today=new Date();
-  const wk=new Date(today);
-  wk.setDate(today.getDate()-((today.getDay()+6)%7)); // lundi de la semaine
-  const dayNames=['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
-
-  document.getElementById('nut-week').innerHTML=dayNames.map((d,i)=>{
-    const dt=new Date(wk);dt.setDate(wk.getDate()+i);
-    const key=localISODate(dt);
-    const isToday=key===localISODate(today);
-    const isOn=nutIsOnDay(key);
-    const target=isOn?on_kcal:off_kcal;
-    const entry=days_data[key];
-    const consumed=entry?.consumed||0;
-    const pct=target>0?Math.min(100,Math.round(consumed/target*100)):0;
-    const reached=target>0&&consumed>=target;
-    const hasData=consumed>0;
-    const barColor=reached?'var(--green)':hasData?'var(--orange)':'#2a2a2a';
-    const statusText=!hasData?'— Non renseigné':reached?'✓ Objectif atteint':'⚡ '+pct+'% de l\'objectif';
-    const statusColor=!hasData?'var(--sub)':reached?'var(--green)':'var(--orange)';
-    return `<div class="nutrition-day" style="flex-direction:column;align-items:stretch;gap:10px;border:1.5px solid ${isToday?'var(--red)':'transparent'}">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <div>
-          <span style="font-weight:700">${d}</span>
-          <span class="sub" style="font-size:11px;margin-left:6px">${dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})}</span>
-          <span style="margin-left:8px;font-size:9px;font-weight:800;letter-spacing:1px;padding:2px 7px;border-radius:20px;background:${isOn?'#1a0000':'#111'};color:${isOn?'var(--red)':'#555'}">${isOn?'ON':'OFF'}</span>
-        </div>
-        ${target>0?`<span style="font-size:10px;color:var(--sub)">${target} kcal</span>`:''}
-      </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <input type="number" placeholder="0" min="0" max="9999" value="${consumed||''}"
-          style="width:80px;padding:8px;background:#1a1a1a;border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:14px;font-weight:700;text-align:center"
-          onchange="setNutriConsumed('${key}',this.value)">
-        <span style="font-size:11px;color:var(--sub)">kcal consommées</span>
-      </div>
-      ${target>0?`<div>
-        <div style="height:6px;background:#1a1a1a;border-radius:3px;overflow:hidden">
-          <div style="height:100%;width:${pct}%;background:${barColor};border-radius:3px;transition:width .4s ease"></div>
-        </div>
-        <div style="font-size:11px;color:${statusColor};margin-top:4px">${statusText}</div>
-      </div>`:''}
-    </div>`;
-  }).join('');
-
-  // Stats
-  const thisWeekKeys=Array.from({length:7},(_,i)=>{const d=new Date(wk);d.setDate(wk.getDate()+i);return localISODate(d);});
-  const score=thisWeekKeys.filter(k=>{
-    const t=nutIsOnDay(k)?(on_kcal||0):(off_kcal||0);
-    const c=days_data[k]?.consumed||0;
-    return t>0&&c>=t;
-  }).length;
-  let streak=0;
-  for(let i=1;i<30;i++){
-    const d=new Date(today);d.setDate(today.getDate()-i);
-    const k=localISODate(d);
-    const t=nutIsOnDay(k)?(on_kcal||0):(off_kcal||0);
-    const c=days_data[k]?.consumed||0;
-    if(t>0&&c>=t)streak++;else break;
-  }
-  const _todayK=localISODate(today),_todayT=nutIsOnDay(_todayK)?(on_kcal||0):(off_kcal||0);
-  if(_todayT>0&&(days_data[_todayK]?.consumed||0)>=_todayT) streak++;
-  document.getElementById('nut-score').textContent=score+'/7';
-  document.getElementById('nut-streak').textContent=streak+'';
-
-  setTimeout(()=>{
-    const canvas=document.getElementById('nut-chart');if(!canvas) return;
-    canvas.width=canvas.offsetWidth||380;canvas.height=140;
-    const ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height;
-    ctx.clearRect(0,0,w,h);
-    Array.from({length:28},(_,i)=>{
-      const d=new Date(today);d.setDate(today.getDate()-27+i);
-      const k=localISODate(d);
-      const t=nutIsOnDay(k)?(on_kcal||0):(off_kcal||0);
-      const c=days_data[k]?.consumed||0;
-      const pct2=t>0?Math.min(1,c/t):0;
-      const bw=(w-20)/28,x=10+i*bw,bh=t>0?Math.max(5,Math.round(pct2*80)):5;
-      ctx.fillStyle=t>0&&c>=t?'#22c55e':t>0&&c>0?'#f97316':'#2a2a2a';
-      ctx.beginPath();if(ctx.roundRect)ctx.roundRect(x,h-10-bh,bw-2,bh,3);else ctx.rect(x,h-10-bh,bw-2,bh);ctx.fill();
-    });
-  },50);
+  const dt=nut.dietType||'strict';
+  const sel=document.getElementById('nut-diet-select');
+  if(sel) sel.value=dt;
+  _renderNutriContent(dt);
   loadCaffeineEmbedded();
-  _renderFjDaySummary(localISODate(new Date()));
 }
-function setNutri(key,val){
-  // Legacy compat
-  if(!currentUser.nutrition) currentUser.nutrition={};
-  if(!currentUser.nutrition.days) currentUser.nutrition.days={};
-  saveUser();loadNutrition();
+
+// ======= NUTRITION COACH (gestion plan client) =======
+function renderCoachNutriSection(c){
+  const el=document.getElementById('ccd-nutrition');
+  if(!el||!c) return;
+  const nut=c.nutrition||{};
+  const dt=nut.dietType||'strict';
+  const photos=nut.strictPhotos||[];
+  el.innerHTML=`
+    <div style="background:#0f0f0f;border:1px solid #1c1c1c;border-radius:12px;padding:16px">
+      <div style="font-size:9px;color:var(--red);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:14px">🍎 Nutrition</div>
+      <div style="position:relative;margin-bottom:${dt==='strict'?'16':'0'}px">
+        <select id="ccd-diet-sel" onchange="saveClientNutriDiet(this.value)"
+          style="width:100%;padding:11px 36px 11px 14px;background:#1a1a1a;border:1.5px solid var(--border);border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:12px;font-weight:700;appearance:none;-webkit-appearance:none;cursor:pointer;outline:none">
+          <option value="strict" ${dt==='strict'?'selected':''}>🥩 Diète Stricte</option>
+          <option value="flexible" ${dt==='flexible'?'selected':''}>⚖️ Diète Flexible</option>
+        </select>
+        <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--sub);font-size:11px">▼</span>
+      </div>
+      ${dt==='strict'?`
+        <div>
+          ${photos.map((src,i)=>`
+            <div style="position:relative;margin-bottom:8px">
+              <img src="${src}" style="width:100%;border-radius:8px;display:block;border:1px solid #1a1a1a">
+              <button onclick="deleteClientStrictPhoto(${i})" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.8);border:none;color:#fff;border-radius:50%;width:26px;height:26px;font-size:13px;cursor:pointer;line-height:1;padding:0">✕</button>
+            </div>`).join('')}
+          <label style="display:flex;align-items:center;justify-content:center;gap:10px;padding:13px;background:#111;border:1.5px dashed #2a2a2a;border-radius:10px;cursor:pointer;margin-top:${photos.length?'4':'0'}px">
+            <span style="font-size:16px">📷</span>
+            <span style="font-size:11px;font-weight:700;color:var(--sub);letter-spacing:1px">AJOUTER UNE PHOTO</span>
+            <input type="file" accept="image/*" capture="environment" style="display:none" onchange="addClientStrictPhoto(this)">
+          </label>
+        </div>`
+      :`<div style="font-size:11px;color:#444;text-align:center;margin-top:8px">Journal libre — pas de plan à configurer</div>`}
+    </div>`;
+}
+
+function saveClientNutriDiet(type){
+  const users=DB.get('users')||{};
+  const c=Object.values(users).find(u=>u.id===currentClientId);
+  if(!c) return;
+  if(!c.nutrition) c.nutrition={};
+  c.nutrition.dietType=type;
+  users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
+  toast('Type de diète enregistré ✓');
+  renderCoachNutriSection(c);
+}
+
+function addClientStrictPhoto(input){
+  const file=input?.files?.[0];
+  if(!file) return;
+  compressImage(file,1400,0.85,b64=>{
+    const users=DB.get('users')||{};
+    const c=Object.values(users).find(u=>u.id===currentClientId);
+    if(!c) return;
+    if(!c.nutrition) c.nutrition={};
+    if(!Array.isArray(c.nutrition.strictPhotos)) c.nutrition.strictPhotos=[];
+    c.nutrition.strictPhotos.push(b64);
+    users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
+    toast('Photo ajoutée ✓');
+    renderCoachNutriSection(c);
+  });
+}
+
+function deleteClientStrictPhoto(index){
+  const users=DB.get('users')||{};
+  const c=Object.values(users).find(u=>u.id===currentClientId);
+  if(!c||!c.nutrition?.strictPhotos) return;
+  c.nutrition.strictPhotos.splice(index,1);
+  users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
+  renderCoachNutriSection(c);
 }
 
 // ======= CAFFEINE =======
