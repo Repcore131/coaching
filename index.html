@@ -7337,16 +7337,10 @@ function _renderPromoBanners(coach){
   const banners=(coach?.promoBanners||[]).filter(b=>b.imageUrl);
   if(!banners.length){el.style.display='none';return;}
   el.style.display='block';
-  el.innerHTML=`<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -20px">
-    <div style="display:flex;gap:10px;padding:0 20px 4px">
-      ${banners.map(b=>{
-        const inner=`<img src="${escapeHtml(b.imageUrl)}" style="width:calc(100vw - 40px);height:auto;flex-shrink:0;display:block;border-radius:8px;border:1px solid #2a2a2a" onerror="this.style.display='none'">`;
-        return b.linkUrl
-          ?`<a href="${escapeHtml(b.linkUrl)}" target="_blank" rel="noopener" style="flex-shrink:0;display:block">${inner}</a>`
-          :`<div style="flex-shrink:0">${inner}</div>`;
-      }).join('')}
-    </div>
-  </div>`;
+  el.innerHTML=banners.map(b=>{
+    const img=`<img src="${escapeHtml(b.imageUrl)}" style="width:100%;height:auto;display:block;border-radius:8px;border:1px solid #2a2a2a" onerror="this.style.display='none'">`;
+    return `<div style="margin:0 0 8px">${b.linkUrl?`<a href="${escapeHtml(b.linkUrl)}" target="_blank" rel="noopener" style="display:block">${img}</a>`:img}</div>`;
+  }).join('');
 }
 function uploadAthletePhoto(input){
   const f=input.files[0];if(!f) return;
