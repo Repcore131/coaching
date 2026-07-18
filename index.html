@@ -5859,7 +5859,7 @@ function _renderNutriContent(type){
         <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px">⚖️ Diète Flexible</div>
         <p style="margin:0;font-size:12px;color:#aaa;line-height:1.65">La diète flexible, c'est la liberté de manger ce que tu veux — à condition d'atteindre tes objectifs de macros sur la journée. Protéines, glucides, lipides : tant que tu es dans les clous en fin de journée, tu progresses. Tu gardes ta liberté au quotidien, avec des résultats au rendez-vous.</p>
       </div>
-      ${_renderMacroTargets(nut)}`;
+      ${_renderStrictMacroRings(nut)}`;
     if(fjSec){fjSec.style.display='block';_renderFjDaySummary(localISODate(new Date()));}
   } else {
     if(fjSec) fjSec.style.display='none';
@@ -5902,8 +5902,6 @@ function _renderStrictDiet(){
         <p style="margin:0;font-size:12px;color:#aaa;line-height:1.65">Ton programme alimentaire est 100&nbsp;% défini par ton coach — chaque repas, chaque apport. L'avantage&nbsp;: zéro prise de tête. Tu sais exactement quoi manger, quand, et en quelle quantité. Le cadre strict te permet de t'organiser au maximum et de progresser sans improviser.</p>
       </div>
     </div>
-    <!-- Objectifs macro -->
-    ${_renderStrictMacroRings(nut)}
     <!-- Plan photos -->
     <div style="margin-bottom:20px">
       <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px">📋 Plan alimentaire</div>
