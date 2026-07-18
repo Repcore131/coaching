@@ -408,6 +408,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <button onclick="go('s-coach-entry')" style="width:100%;padding:20px;background:#E02020;color:#fff;border:none;font-family:'Bebas Neue','Anton',sans-serif;font-size:13px;font-weight:800;letter-spacing:4px;cursor:pointer;text-transform:uppercase;margin-bottom:12px;transition:.15s" onmouseover="this.style.background='#c91a1a'" onmouseout="this.style.background='#E02020'">ESPACE COACH</button>
     <button onclick="go('s-athlete-entry')" style="width:100%;padding:20px;background:transparent;color:#fff;border:1px solid rgba(255,255,255,.15);font-family:'Bebas Neue','Anton',sans-serif;font-size:13px;font-weight:800;letter-spacing:4px;cursor:pointer;text-transform:uppercase;transition:.15s" onmouseover="this.style.borderColor='rgba(224,32,32,.6)';this.style.color='#E02020'" onmouseout="this.style.borderColor='rgba(255,255,255,.15)';this.style.color='#fff'">ESPACE ATHLETE</button>
     <button id="install-btn" onclick="installApp()" style="display:none;width:100%;margin-top:12px;padding:14px;background:transparent;color:#E02020;border:1px solid rgba(224,32,32,.35);font-family:'Bebas Neue','Anton',sans-serif;font-size:12px;font-weight:800;letter-spacing:3px;cursor:pointer;text-transform:uppercase;align-items:center;justify-content:center;gap:8px;transition:.15s" onmouseover="this.style.background='rgba(224,32,32,.08)'" onmouseout="this.style.background='transparent'">⬇ Installer l'app sur ce téléphone</button>
+    <button id="ios-install-btn" onclick="showIosInstallGuide()" style="display:none;width:100%;margin-top:12px;padding:14px;background:transparent;color:#E02020;border:1px solid rgba(224,32,32,.35);font-family:'Bebas Neue','Anton',sans-serif;font-size:12px;font-weight:800;letter-spacing:3px;cursor:pointer;text-transform:uppercase;align-items:center;justify-content:center;gap:8px;transition:.15s" onmouseover="this.style.background='rgba(224,32,32,.08)'" onmouseout="this.style.background='transparent'">📲 Installer l'app</button>
     <div style="margin-top:28px;text-align:center">
       <div style="font-size:9px;letter-spacing:2px;color:#222;font-weight:600;text-transform:uppercase">Kevin Guellec &nbsp;·&nbsp; Coach Diplômé d'État</div>
     </div>
@@ -1388,6 +1389,39 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
+<!-- iOS INSTALL GUIDE MODAL -->
+<div id="ios-install-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:4000;align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeIosInstallGuide()">
+  <div onclick="event.stopPropagation()" style="background:#161616;border-radius:20px 20px 0 0;padding:24px 20px 36px;width:100%;max-width:480px;animation:slideUp .3s ease">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div style="font-size:15px;font-weight:800;letter-spacing:.3px">📲 Installer l'app</div>
+      <button onclick="closeIosInstallGuide()" style="background:none;border:none;color:#555;font-size:22px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:28px">
+      <div id="ios-step-safari" style="display:flex;align-items:flex-start;gap:12px">
+        <div style="width:28px;height:28px;background:#1a0000;border:1px solid #3a0000;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--red);flex-shrink:0">1</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;margin-bottom:2px">Ouvre ce lien dans <span style="color:var(--red)">Safari</span></div>
+          <div style="font-size:11px;color:#555;line-height:1.5">L'installation ne fonctionne que depuis Safari — pas Chrome ni Firefox.</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:12px">
+        <div id="ios-step2-num" style="width:28px;height:28px;background:#1a0000;border:1px solid #3a0000;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--red);flex-shrink:0">2</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;margin-bottom:2px">Appuie sur le bouton <span style="color:var(--red)">Partager</span> <span style="font-size:15px">⎙</span></div>
+          <div style="font-size:11px;color:#555;line-height:1.5">L'icône carré avec une flèche vers le haut — en bas de l'écran Safari.</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:12px">
+        <div id="ios-step3-num" style="width:28px;height:28px;background:#1a0000;border:1px solid #3a0000;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--red);flex-shrink:0">3</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;margin-bottom:2px">Sélectionne <span style="color:var(--red)">"Sur l'écran d'accueil"</span></div>
+          <div style="font-size:11px;color:#555;line-height:1.5">Fais défiler les options du menu Partager puis appuie sur "Ajouter".</div>
+        </div>
+      </div>
+    </div>
+    <button onclick="closeIosInstallGuide()" style="width:100%;padding:14px;background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:2px;border-radius:10px;cursor:pointer">COMPRIS !</button>
+  </div>
+</div>
 <!-- PAUSE / CANCEL WORKOUT MODAL -->
 <div id="wo-pause-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:3000;align-items:flex-end;justify-content:center">
   <div style="background:#161616;border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px">
@@ -8152,6 +8186,30 @@ window.addEventListener('appinstalled',()=>{
 });
 function installApp(){
   if(deferredPrompt){deferredPrompt.prompt();deferredPrompt.userChoice.then(()=>{deferredPrompt=null;});}
+}
+// iOS : beforeinstallprompt ne se déclenche jamais — guide manuel
+(function(){
+  const isIos=/iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isStandalone=window.navigator.standalone===true;
+  if(!isIos||isStandalone) return;
+  const btn=document.getElementById('ios-install-btn');
+  if(btn) btn.style.display='flex';
+  // Si pas dans Safari : laisser l'étape 1 visible ; si déjà dans Safari : la masquer
+  const notSafari=/CriOS|FxiOS|OPiOS|EdgiOS/i.test(navigator.userAgent);
+  if(!notSafari){
+    const s=document.getElementById('ios-step-safari');
+    if(s) s.style.display='none';
+    const n2=document.getElementById('ios-step2-num');if(n2) n2.textContent='1';
+    const n3=document.getElementById('ios-step3-num');if(n3) n3.textContent='2';
+  }
+})();
+function showIosInstallGuide(){
+  const m=document.getElementById('ios-install-modal');
+  if(m){m.style.display='flex';}
+}
+function closeIosInstallGuide(){
+  const m=document.getElementById('ios-install-modal');
+  if(m){m.style.display='none';}
 }
 
 function initLogos(){
