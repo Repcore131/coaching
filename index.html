@@ -2078,7 +2078,9 @@ const CLOUD={
     this._idToken=null;this._refreshToken=null;this._tokenExpiry=0;
     try{localStorage.removeItem('rc_fb_auth');}catch{}
   },
+  _resetErr:null,
   async resetPassword(email){
+    this._resetErr=null;
     if(!this._fbKey) return false;
     try{
       const r=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key='+this._fbKey,{
@@ -2086,8 +2088,9 @@ const CLOUD={
         body:JSON.stringify({requestType:'PASSWORD_RESET',email})
       });
       const d=await r.json();
-      return !d.error;
-    }catch{return false;}
+      if(d.error){this._resetErr=d.error.message||'error';return false;}
+      return true;
+    }catch{this._resetErr='network';return false;}
   },
   // ──────────────────────────────────────────────────────────────
 
@@ -2678,9 +2681,23 @@ function doRescue(em,pwEnc,role){
 async function forgotPassword(){
   const em=(document.getElementById('l-email')?.value||'').trim().toLowerCase();
   if(!em) return toast('Saisis ton email ci-dessus d\'abord','var(--orange)');
+  const btn=document.querySelector('#s-login [onclick="forgotPassword()"]');
+  if(btn){btn.textContent='Envoi…';btn.style.pointerEvents='none';}
   const ok=await CLOUD.resetPassword(em);
-  if(ok) toast('Email de réinitialisation envoyé à '+em,'var(--green)');
-  else toast('Impossible d\'envoyer l\'email — vérifie l\'adresse saisie','var(--orange)');
+  if(btn){btn.textContent='Mot de passe oublié ?';btn.style.pointerEvents='';}
+  if(ok){
+    showErr('l-err','✅ Email envoyé à '+em+'. Vérifie aussi les spams / courriers indésirables.');
+    document.getElementById('l-err').style.color='#86efac';
+    return;
+  }
+  const err=CLOUD._resetErr||'';
+  if(err.includes('EMAIL_NOT_FOUND')||err.includes('USER_NOT_FOUND')){
+    showErr('l-err','Cet email n\'est pas enregistré dans notre système. Essaie de te connecter directement avec ton mot de passe — un compte sera créé automatiquement.');
+  } else if(err==='network'){
+    showErr('l-err','Erreur réseau — vérifie ta connexion et réessaie.');
+  } else {
+    showErr('l-err','Impossible d\'envoyer l\'email. Vérifie l\'adresse saisie.');
+  }
 }
 function showErr(id,msg){const e=document.getElementById(id);e.textContent=msg;e.style.display='block';}
 function goRegisterCoach(){
