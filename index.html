@@ -530,11 +530,14 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="font-size:20px;font-weight:900">Connexion</div>
       <div class="sub" style="font-size:12px;margin-top:4px">Continu ton parcours</div>
     </div>
+    <div style="background:#0d1f0d;border:1px solid #1a3a1a;border-radius:10px;padding:10px 12px;font-size:11px;color:#86efac;line-height:1.6">
+      📍 Le site a une nouvelle adresse — connecte-toi avec ton email et mot de passe habituels. Si tu as oublié ton mot de passe, utilise le lien ci-dessous.
+    </div>
     <div><label for="l-email">Email</label><input type="email" id="l-email" placeholder="ton@email.com"></div>
     <div><label for="l-pwd">Mot de passe</label><input type="password" id="l-pwd" placeholder="••••••••"></div>
     <div id="l-err" style="color:#f87171;font-size:13px;display:none"></div>
     <button class="btn btn-red" style="margin-top:8px;letter-spacing:2px" onclick="doLogin()">SE CONNECTER</button>
-    <p class="sub" style="text-align:center;margin-top:12px"><span style="cursor:pointer;font-size:12px;color:#555;text-decoration:underline;text-decoration-color:#333" onclick="forgotPassword()">Mot de passe oublié ?</span></p>
+    <p class="sub" style="text-align:center;margin-top:12px"><span style="cursor:pointer;font-size:13px;color:#f97316;font-weight:700;text-decoration:underline;text-decoration-color:#f97316" onclick="forgotPassword()">Mot de passe oublié ?</span></p>
     <p class="sub" style="text-align:center;margin-top:8px">Pas de compte ? <span class="red" style="cursor:pointer;font-weight:700" onclick="goRegisterAthlete()">Créer un compte</span></p>
   </div>
   
@@ -2037,7 +2040,9 @@ const CLOUD={
     }catch{}
     this._idToken=null;return null;
   },
+  _signInErr:null,
   async signIn(email,password){
+    this._signInErr=null;
     if(!this._fbKey||this._fbKey==='REPLACE_WITH_FIREBASE_WEB_API_KEY') return false;
     const call=async ep=>{
       try{
@@ -2045,12 +2050,20 @@ const CLOUD={
           method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify({email,password,returnSecureToken:true})
         });
-        return r.json();
-      }catch{return {};}
+        const json=await r.json();
+        return json;
+      }catch{this._signInErr='network';return {};}
     };
     let d=await call('signInWithPassword');
-    // Si le compte n'existe pas encore dans Firebase Auth → créer
-    if(!d.idToken) d=await call('signUp');
+    if(!d.idToken){
+      const errCode=d.error?.message||'';
+      // Mauvais mot de passe : ne pas tenter signUp (ne pas créer un nouveau compte)
+      if(errCode.includes('INVALID_PASSWORD')||errCode.includes('INVALID_LOGIN_CREDENTIALS')){
+        this._signInErr='wrong_password';return false;
+      }
+      // Compte inconnu dans Firebase Auth → créer
+      if(!this._signInErr) d=await call('signUp');
+    }
     if(d.idToken){
       this._idToken=d.idToken;this._refreshToken=d.refreshToken;
       this._tokenExpiry=Date.now()+(parseInt(d.expiresIn)||3600)*1000;
@@ -2577,7 +2590,13 @@ async function doLogin(){
     if(btn){btn.textContent='Connexion…';btn.disabled=true;}
     const ok=await CLOUD.signIn(em,pw);
     if(btn){btn.textContent='SE CONNECTER';btn.disabled=false;}
-    if(!ok) return showErr('l-err','Email ou mot de passe incorrect.');
+    if(!ok){
+      if(CLOUD._signInErr==='network')
+        return showErr('l-err','Erreur réseau — vérifiez votre connexion et réessayez.');
+      if(CLOUD._signInErr==='wrong_password')
+        return showErr('l-err','Mot de passe incorrect. Utilisez "Mot de passe oublié ?" pour le réinitialiser par email.');
+      return showErr('l-err','Impossible de se connecter. Essayez "Mot de passe oublié ?" ou vérifiez votre connexion.');
+    }
     toast('Récupération du compte…');
     await CLOUD.syncUser(em);
     let synced=DB.get('users')||{};
@@ -2622,7 +2641,7 @@ function rescueLogin(em,pw){
     <div style="background:#161616;border:1px solid #2a2a2a;border-radius:20px;padding:28px 24px;max-width:340px;width:100%;text-align:center">
       <div style="font-size:28px;margin-bottom:12px">✅</div>
       <div style="font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px">Mot de passe reconnu</div>
-      <p style="font-size:12px;color:#888;line-height:1.6;margin-bottom:20px">Tes données cloud ne sont pas encore synchronisées. Indique ton rôle pour continuer — elles se restaureront automatiquement à la prochaine ouverture sur ton appareil habituel.</p>
+      <p style="font-size:12px;color:#888;line-height:1.6;margin-bottom:20px">Le site a changé d'adresse et tes données locales n'ont pas encore été retrouvées dans le cloud. Indique ton rôle pour continuer provisoirement — si tu te reconnectes depuis ton appareil ou navigateur habituel, ton profil complet sera restauré.</p>
       <div style="display:flex;gap:10px;margin-bottom:16px">
         <button onclick="doRescue('${em}','${encodeURIComponent(pw)}','coach')"
           style="flex:1;background:#1a0000;border:1.5px solid var(--red);color:#fff;padding:14px 8px;border-radius:10px;cursor:pointer;font-family:Montserrat,sans-serif;font-weight:800;font-size:12px;letter-spacing:1px">
