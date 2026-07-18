@@ -4415,9 +4415,24 @@ function renderWoEx(){
   const prev=getPrevPerf(ex.name);
   const cycle=getCycleFactor();
   const cycleLabel=getCycleLabel();
-  // Calcul charge suggérée = last 0-RIR weight de la séance précédente
-  const baseWeight=getLastZeroRIRWeight(ex.name);
-  const sug=baseWeight?Math.round(baseWeight/2.5)*2.5:prev?calcSug(prev.weight,prev.reps,prev.rir,ex.reps,ex.rir):null;
+  // Charge suggérée : +2.5 si RIR≤2, +5 si RIR≥3 ; e1RM seulement si la cible reps change
+  const _pRIR=parseFloat(prev?.rir);
+  const _pReps=parseFloat(prev?.reps);
+  const _tReps=parseFloat(ex.reps)||_pReps;
+  let sug=null,sugNote='';
+  if(prev?.weight){
+    const _pW=parseFloat(prev.weight);
+    if(!isNaN(_pW)&&_pW>0){
+      if(isNaN(_tReps)||Math.abs(_tReps-_pReps)<=1){
+        const _inc=(!isNaN(_pRIR)&&_pRIR>=3)?5:2.5;
+        sug=Math.round((_pW+_inc)/2.5)*2.5;
+        sugNote=isNaN(_pRIR)?`Perf précédente: ${_pW}kg`:`RIR ${_pRIR} → +${_inc}kg (base ${_pW}kg)`;
+      } else {
+        sug=calcSug(prev.weight,prev.reps,prev.rir,ex.reps,ex.rir);
+        sugNote=`Calculé depuis ${_pW}kg (${_pReps}→${_tReps} reps)`;
+      }
+    }
+  }
   const cycleWeight=sug?Math.round(sug*cycle.factor/2.5)*2.5:null;
   const isFemme=currentUser.gender==='femme';
   const showCycleCol=isFemme&&cycle.factor!==1.0;
@@ -4448,12 +4463,12 @@ function renderWoEx(){
           <div style="font-size:11px;color:var(--sub);margin-top:4px">Durée · Cardio</div>
         </div>`
       :sug?`<div class="suggest-box">
-        <div class="s-title"> Charge suggérée (basée sur dernier RIR 0)</div>
+        <div class="s-title">Charge suggérée</div>
         <div style="display:flex;gap:16px;align-items:flex-end;margin:6px 0">
           <div><div style="font-size:10px;color:#fca5a5">Base</div><div style="font-size:24px;font-weight:900">${sug}kg</div></div>
           ${showCycleCol?`<div><div style="font-size:10px;color:#c4b5fd">Cycle ajusté</div><div style="font-size:24px;font-weight:900;color:#c4b5fd">${cycleWeight}kg</div></div>`:''}
         </div>
-        <div class="s-note">${baseWeight?'Dernière séance à RIR 0: '+baseWeight+'kg':prev?'Calculé depuis perf précédente: '+prev.weight+'kg':'Première séance'}</div>
+        <div class="s-note">${sugNote}</div>
       </div>`:
       ``}
 
