@@ -4726,16 +4726,18 @@ function buildSessionComparison(vol,data){
     if(delta>0) items.push({icon:'🔥',color:'#4ade80',text:'+'+delta+'kg de volume vs dernière séance'});
     else if(delta<0) items.push({icon:'📉',color:'#666',text:delta+'kg de volume vs dernière séance'});
   }
+  let firstSession=false;
   Object.entries(data).forEach(([nm,d])=>{
     const curMax=d.sets.filter(s=>s.done&&parseFloat(s.weight||0)>0).reduce((m,s)=>Math.max(m,parseFloat(s.weight)),0);
     if(!curMax) return;
     let histMax=0;
     prev.forEach(s=>{(s.data?.[nm]?.sets||[]).filter(x=>x.done).forEach(x=>{const w=parseFloat(x.weight||0);if(w>histMax)histMax=w;});});
-    if(curMax>histMax){
-      const suf=histMax>0?' (était '+histMax+'kg)':'';
-      items.push({icon:'🏆',color:'#fbbf24',text:'Record : '+curMax+'kg au '+nm+suf});
-    }
+    if(histMax===0){firstSession=true;return;}
+    if(curMax>histMax)
+      items.push({icon:'🏆',color:'#fbbf24',text:'Record : '+curMax+'kg au '+nm+' (était '+histMax+'kg)'});
   });
+  if(firstSession&&!items.length)
+    items.push({icon:'📝',color:'var(--sub)',text:'Première séance enregistrée — tes prochains records apparaîtront ici'});
   if(!items.length) return '';
   return `<div style="margin-bottom:16px;display:flex;flex-direction:column;gap:6px">`
     +items.map(it=>`<div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px"><span style="font-size:18px;flex-shrink:0">${it.icon}</span><span style="font-size:12px;font-weight:700;color:${it.color}">${escapeHtml(it.text)}</span></div>`).join('')
