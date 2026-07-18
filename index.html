@@ -8321,6 +8321,18 @@ async function _pdfPageToText(page){
   return lines.map(l=>l.text.trim()).filter(l=>l).join('\n');
 }
 
+function _isDriveLink(s){
+  return typeof s==='string'&&(s.includes('drive.google.com')||s.includes('docs.google.com')||s.includes('dropbox.com'));
+}
+function _driveOpenUrl(s){
+  // Transforme n'importe quel lien Drive/Dropbox en lien d'ouverture direct
+  if(s.includes('drive.google.com')){
+    const m=s.match(/\/d\/([a-zA-Z0-9_-]{15,})/)||s.match(/[?&]id=([a-zA-Z0-9_-]{15,})/);
+    if(m) return'https://drive.google.com/file/d/'+m[1]+'/view';
+  }
+  return s;
+}
+
 async function parsePdfProgramme(source){
   await _loadPdfJs();
   let data;
@@ -8331,6 +8343,10 @@ async function parsePdfProgramme(source){
     const bin=atob(b64),bytes=new Uint8Array(bin.length);
     for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
     data=bytes.buffer;
+  } else if(_isDriveLink(source)){
+    // Google Drive / Dropbox bloquent le fetch cross-origin (CORS)
+    // → modale guidée pour télécharger et réimporter
+    throw new Error('DRIVE_CORS:'+source);
   } else {
     const r=await fetch(source);
     if(!r.ok) throw new Error('Impossible de télécharger le PDF ('+r.status+').');
@@ -8360,7 +8376,10 @@ async function triggerPdfProgrammeImport(email){
     const seances=await parsePdfProgramme(source);
     if(!seances.length){toast('Aucune séance "SÉANCE X :" trouvée dans ce PDF.','var(--orange)');return;}
     showPdfSeancesModal(seances,email);
-  }catch(e){toast('Erreur lecture PDF : '+(e.message||'Réessaie.'),'var(--red)');}
+  }catch(e){
+    if(e.message?.startsWith('DRIVE_CORS:')){showDrivePdfModal(e.message.slice(11),email);}
+    else toast('Erreur lecture PDF : '+(e.message||'Réessaie.'),'var(--red)');
+  }
 }
 
 async function triggerAthletePdfParse(){
@@ -8373,7 +8392,10 @@ async function triggerAthletePdfParse(){
     const seances=await parsePdfProgramme(source);
     if(!seances.length){toast('Aucune séance "SÉANCE X :" trouvée dans ce PDF.','var(--orange)');return;}
     showPdfSeancesModal(seances,currentUser.email);
-  }catch(e){toast('Erreur lecture PDF : '+(e.message||'Réessaie.'),'var(--red)');}
+  }catch(e){
+    if(e.message?.startsWith('DRIVE_CORS:')){showDrivePdfModal(e.message.slice(11),currentUser.email);}
+    else toast('Erreur lecture PDF : '+(e.message||'Réessaie.'),'var(--red)');
+  }
 }
 
 function showPdfSeancesModal(seances,targetEmail){
@@ -8411,6 +8433,44 @@ function showPdfSeancesModal(seances,targetEmail){
     <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Annuler</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
+}
+
+function showDrivePdfModal(driveUrl,targetEmail){
+  _pendingPdfTarget=targetEmail;
+  document.getElementById('modal-overlay')?.remove();
+  const openUrl=_driveOpenUrl(driveUrl);
+  const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:#161616;border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h2 style="font-size:15px"> PDF Google Drive</h2>
+      <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:22px;cursor:pointer">✕</button>
+    </div>
+    <p style="font-size:12px;color:var(--sub);line-height:1.8;margin-bottom:18px">Google Drive bloque la lecture directe depuis l'app (restriction navigateur).<br>
+    <span style="color:#fff;font-weight:700">Étape 1 —</span> Ouvre le PDF sur Drive ↓<br>
+    <span style="color:#fff;font-weight:700">Étape 2 —</span> Télécharge-le (icône ↓ en haut à droite de Drive)<br>
+    <span style="color:#fff;font-weight:700">Étape 3 —</span> Sélectionne le fichier téléchargé ↓</p>
+    <a href="${openUrl}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px;text-align:center;background:linear-gradient(180deg,#0a2a1a,#061508);border:1px solid #1a4a2a;border-radius:8px;color:#4ade80;font-size:11px;font-weight:800;text-decoration:none;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">
+       Ouvrir sur Google Drive
+    </a>
+    <label style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px;background:var(--red);border:none;border-radius:8px;color:#fff;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px;text-transform:uppercase">
+       Sélectionner le fichier téléchargé
+      <input type="file" accept=".pdf" style="display:none" onchange="_parsePdfFromDriveFile(this)">
+    </label>
+    <button onclick="closeModal()" style="display:block;width:100%;padding:11px;background:none;border:1px solid #2a2a2a;border-radius:8px;color:var(--sub);font-size:12px;margin-top:10px;cursor:pointer;font-family:Montserrat,sans-serif">Annuler</button>
+  </div></div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+
+async function _parsePdfFromDriveFile(input){
+  const f=input.files[0];if(!f) return;
+  const targetEmail=_pendingPdfTarget;
+  closeModal();
+  toast('Lecture du PDF en cours…');
+  try{
+    const seances=await parsePdfProgramme(f);
+    if(!seances.length){toast('Aucune séance "SÉANCE X :" trouvée dans ce PDF.','var(--orange)');return;}
+    showPdfSeancesModal(seances,targetEmail);
+  }catch(e){toast('Erreur lecture PDF : '+(e.message||'Réessaie.'),'var(--red)');}
 }
 
 function importPdfSeances(){
