@@ -5055,9 +5055,10 @@ function saveBilanFinal(){
   }
   if(bilData['bil-weight']) currentUser.weight=bilData['bil-weight'];
   if(bilData['deb-weight']) currentUser.weight=bilData['deb-weight'];
-  // Propager hauteur et genre vers le profil pour les calculs de composition
+  // Propager hauteur, âge et genre vers le profil pour les calculs de composition
   const _h=parseFloat(bilData['deb-height']||bilData['bil-height']||0);
   if(_h>100&&_h<250) currentUser._evol_height=_h;
+  if(bilData['deb-age']) currentUser.age=bilData['deb-age']||currentUser.age;
   if(bilData['deb-gender']&&!currentUser._evol_gender) currentUser._evol_gender=bilData['deb-gender'];
   if(!currentUser.bilans) currentUser.bilans=[];
   currentUser.bilans.push(bi);
