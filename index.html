@@ -6080,11 +6080,12 @@ function _renderFjRecent(){
 }
 
 function _fjResultHtml(f){
-  const kcal=f.k!=null?f.k+' kcal/100g':'—';
+  const _kvBadge=`<span style="font-size:8px;font-weight:800;color:#fb923c;background:#1a0e00;border:1px solid #3a1e00;border-radius:4px;padding:1px 5px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`;
+  const kcalSpan=f.k!=null?`<span style="color:var(--red);font-weight:700">${f.k} kcal/100g</span>`:_kvBadge;
   return `<div class="fj-result" onclick="selectFjFood(${f.id})">
     <div style="font-weight:700;font-size:13px">${escapeHtml(f.n)}</div>
     <div style="font-size:10px;color:var(--sub);margin-top:2px;display:flex;gap:10px;align-items:center">
-      <span style="color:var(--red);font-weight:700">${kcal}</span>
+      ${kcalSpan}
       <span>${escapeHtml(f.g)}</span>
     </div>
   </div>`;
@@ -6240,7 +6241,7 @@ function _renderFjDaySummary(date){
             <div style="font-size:10px;color:var(--sub);margin-top:2px">${e.qty}g · P ${e.p??'—'}g · G ${e.c??'—'}g · L ${e.l??'—'}g</div>
           </div>
           <div style="flex-shrink:0;margin-left:8px;text-align:right">
-            <div style="font-size:13px;font-weight:800;color:var(--red)">${e.kcal??'—'}<span style="font-size:9px;color:var(--sub);font-weight:400"> kcal</span></div>
+            ${e.kcal!=null?`<div style="font-size:13px;font-weight:800;color:var(--red)">${e.kcal}<span style="font-size:9px;color:var(--sub);font-weight:400"> kcal</span></div>`:`<span style="font-size:8px;font-weight:800;color:#fb923c;background:#1a0e00;border:1px solid #3a1e00;border-radius:4px;padding:1px 5px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`}
             <button onclick="deleteFoodEntry('${date}',${e.id})" style="background:none;border:none;color:#333;font-size:14px;cursor:pointer;padding:2px 4px;margin-top:2px">✕</button>
           </div>
         </div>`).join('')}
