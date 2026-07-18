@@ -1386,6 +1386,19 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
+<!-- PAUSE / CANCEL WORKOUT MODAL -->
+<div id="wo-pause-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:3000;align-items:flex-end;justify-content:center">
+  <div style="background:#161616;border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px">
+    <div style="font-size:14px;font-weight:800;letter-spacing:.5px;margin-bottom:4px">Séance en cours</div>
+    <div style="font-size:12px;color:#666;margin-bottom:20px">Que veux-tu faire ?</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button onclick="document.getElementById('wo-pause-modal').style.display='none'" style="padding:14px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;cursor:pointer;letter-spacing:.5px">▶ Continuer la séance</button>
+      <button onclick="confirmPauseWorkout()" style="padding:14px;background:#111;border:1px solid #2a2a2a;border-radius:10px;color:#aaa;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;cursor:pointer;letter-spacing:.5px">⏸ Mettre en pause</button>
+      <button onclick="cancelWorkout()" style="padding:14px;background:#1a0000;border:1px solid var(--red);border-radius:10px;color:#fca5a5;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;cursor:pointer;letter-spacing:.5px">✕ Annuler la séance</button>
+    </div>
+  </div>
+</div>
+
 <!-- WORKOUT SESSION -->
 <div id="s-workout" class="screen">
   <div class="topbar" style="flex-shrink:0"><button class="back-btn" onclick="pauseWorkout()"></button><span class="topbar-title" id="wo-title">Séance</span><span style="font-size:13px;font-weight:700;color:var(--sub)" id="wo-timer">00:00</span></div>
@@ -4298,8 +4311,24 @@ function woResumeAndGo(){
   renderWoEx();
 }
 function pauseWorkout(){
+  const m=document.getElementById('wo-pause-modal');
+  if(m) m.style.display='flex';
+}
+function confirmPauseWorkout(){
+  const m=document.getElementById('wo-pause-modal');
+  if(m) m.style.display='none';
   woPersist();
   clearInterval(woState.timerInterval);
+  go('s-client-home');
+  loadClientHome();
+}
+function cancelWorkout(){
+  const m=document.getElementById('wo-pause-modal');
+  if(m) m.style.display='none';
+  if(!confirm('Annuler la séance ? Aucune donnée ne sera enregistrée.')) return;
+  localStorage.removeItem('rc_wo_state');
+  clearInterval(woState.timerInterval);
+  woState={};
   go('s-client-home');
   loadClientHome();
 }
