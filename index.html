@@ -1541,7 +1541,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <select id="nut-diet-select" onchange="setNutriDietType(this.value)"
           style="width:100%;padding:13px 40px 13px 16px;background:#1a1a1a;border:1.5px solid var(--border);border-radius:12px;color:#fff;font-family:Montserrat,sans-serif;font-size:13px;font-weight:700;appearance:none;-webkit-appearance:none;cursor:pointer;outline:none">
           <option value="strict">🥩  Diète Stricte</option>
-          <option value="flexible">⚖️  Diète Flexible — Journal Yazio</option>
+          <option value="flexible">⚖️  Diète Flexible</option>
         </select>
         <span style="position:absolute;right:14px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--sub);font-size:12px">▼</span>
       </div>
@@ -5678,12 +5678,50 @@ function setNutriDietType(type){
   _renderNutriContent(type);
 }
 
+function _renderMacroTargets(nut){
+  const mon=nut.macros?.on||{};
+  const moff=nut.macros?.off||{};
+  const hasData=mon.kcal||mon.p||mon.g||mon.l||moff.kcal||moff.p||moff.g||moff.l;
+  if(!hasData) return '';
+  const macros=[
+    {k:'kcal',label:'KCAL',unit:'',color:'var(--red)'},
+    {k:'p',label:'PROT',unit:'g',color:'#60a5fa'},
+    {k:'g',label:'GLUC',unit:'g',color:'#4ade80'},
+    {k:'l',label:'LIP',unit:'g',color:'#fb923c'},
+    {k:'s',label:'SUCRE ℹ',unit:'g',color:'#a78bfa'},
+    {k:'f',label:'FIBRES ℹ',unit:'g',color:'#94a3b8'},
+  ];
+  const col=(m)=>macros.map(x=>`<div style="background:#0a0a0a;border-radius:8px;padding:8px 4px;text-align:center">
+    <div style="font-size:14px;font-weight:800;color:${x.color};line-height:1">${m[x.k]||'—'}${m[x.k]?`<span style="font-size:8px;color:var(--sub);font-weight:400">${x.unit?'&thinsp;'+x.unit:''}</span>`:''}</div>
+    <div style="font-size:7px;color:var(--sub);letter-spacing:1px;margin-top:3px;text-transform:uppercase">${x.label}</div>
+  </div>`).join('');
+  return `<div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:14px;padding:14px;margin-bottom:18px">
+    <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px">🎯 Objectifs nutritionnels</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div>
+        <div style="font-size:8px;font-weight:800;color:#22c55e;letter-spacing:1.5px;padding:4px 8px;background:#021007;border:1px solid #052a10;border-radius:6px;text-align:center;margin-bottom:6px">⚡ JOUR ON</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">${col(mon)}</div>
+      </div>
+      <div>
+        <div style="font-size:8px;font-weight:800;color:#60a5fa;letter-spacing:1.5px;padding:4px 8px;background:#020a1a;border:1px solid #0a1a35;border-radius:6px;text-align:center;margin-bottom:6px">💤 JOUR OFF</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">${col(moff)}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
 function _renderNutriContent(type){
   const contentEl=document.getElementById('nut-diet-content');
   const fjSec=document.getElementById('fj-today-section');
   if(!contentEl) return;
+  const nut=currentUser.nutrition||{};
   if(type==='flexible'){
-    contentEl.innerHTML='';
+    contentEl.innerHTML=`
+      <div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:14px;padding:16px;margin-bottom:18px">
+        <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px">⚖️ Diète Flexible</div>
+        <p style="margin:0;font-size:12px;color:#aaa;line-height:1.65">La diète flexible, c'est la liberté de manger ce que tu veux — à condition d'atteindre tes objectifs de macros sur la journée. Protéines, glucides, lipides : tant que tu es dans les clous en fin de journée, tu progresses. Tu gardes ta liberté au quotidien, avec des résultats au rendez-vous.</p>
+      </div>
+      ${_renderMacroTargets(nut)}`;
     if(fjSec){fjSec.style.display='block';_renderFjDaySummary(localISODate(new Date()));}
   } else {
     if(fjSec) fjSec.style.display='none';
@@ -5715,27 +5753,43 @@ function _renderStrictDiet(){
     else if(days_data[k]?.respected===false) break;
     else if(i>0) break;
   }
+  // Coach photo (optionnel — from currentUser.coachRef or stored coachPhoto)
+  const coachPhoto=nut.coachPhoto||'';
   el.innerHTML=`
-    <div style="margin-bottom:24px">
-      ${photos.length===0&&!isCoach?`<div style="background:#0f0f0f;border:1px dashed #2a2a2a;border-radius:12px;padding:32px 16px;text-align:center;color:#333;font-size:12px"><div style="font-size:32px;margin-bottom:8px;opacity:.3">📋</div>Plan alimentaire à venir</div>`:''}
-      ${photos.map((src,i)=>`<div style="margin-bottom:10px;position:relative"><img src="${src}" style="width:100%;border-radius:12px;display:block;border:1px solid #1a1a1a" onclick="viewNutriPhoto(${i})">${isCoach?`<button onclick="deleteStrictPhoto(${i})" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.8);border:none;color:#fff;border-radius:50%;width:28px;height:28px;font-size:14px;cursor:pointer;line-height:1;padding:0">✕</button>`:''}</div>`).join('')}
-      ${isCoach?`<label style="display:flex;align-items:center;justify-content:center;gap:10px;padding:14px;background:#111;border:1.5px dashed #2a2a2a;border-radius:12px;cursor:pointer;margin-top:${photos.length?'6':'0'}px"><span style="font-size:18px">📷</span><span style="font-size:11px;font-weight:700;color:var(--sub);letter-spacing:1px">AJOUTER UNE PHOTO</span><input type="file" accept="image/*" capture="environment" style="display:none" onchange="addStrictPhoto(this)"></label>`:''}
+    <!-- Définition diète stricte -->
+    <div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:14px;padding:16px;margin-bottom:18px;display:flex;gap:14px;align-items:flex-start">
+      ${coachPhoto?`<img src="${coachPhoto}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid #2a2a2a">`:``}
+      <div style="flex:1">
+        <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:8px">🥩 Diète Stricte</div>
+        <p style="margin:0;font-size:12px;color:#aaa;line-height:1.65">Ton programme alimentaire est 100&nbsp;% défini par ton coach — chaque repas, chaque apport. L'avantage&nbsp;: zéro prise de tête. Tu sais exactement quoi manger, quand, et en quelle quantité. Le cadre strict te permet de t'organiser au maximum et de progresser sans improviser.</p>
+      </div>
     </div>
-    <div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:14px;padding:18px;margin-bottom:20px">
+    <!-- Objectifs macro -->
+    ${_renderMacroTargets(nut)}
+    <!-- Plan photos -->
+    <div style="margin-bottom:20px">
+      <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px">📋 Plan alimentaire</div>
+      ${photos.length===0&&!isCoach?`<div style="background:#0a0a0a;border:1px dashed #2a2a2a;border-radius:12px;padding:32px 16px;text-align:center;color:#333;font-size:12px"><div style="font-size:32px;margin-bottom:8px;opacity:.3">📋</div>Plan alimentaire à venir</div>`:''}
+      ${photos.map((src,i)=>`<div style="margin-bottom:10px;position:relative"><img src="${src}" style="width:100%;border-radius:12px;display:block;border:1px solid #1a1a1a" onclick="viewNutriPhoto(${i})">${isCoach?`<button onclick="deleteStrictPhoto(${i})" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.85);border:none;color:#fff;border-radius:50%;width:28px;height:28px;font-size:14px;cursor:pointer;line-height:1;padding:0">✕</button>`:''}</div>`).join('')}
+      ${isCoach?`<label style="display:flex;align-items:center;justify-content:center;gap:10px;padding:14px;background:#111;border:1.5px dashed #2a2a2a;border-radius:12px;cursor:pointer;margin-top:${photos.length?'8':'0'}px"><span style="font-size:18px">📷</span><span style="font-size:11px;font-weight:700;color:var(--sub);letter-spacing:1px">AJOUTER UNE PHOTO</span><input type="file" accept="image/*" capture="environment" style="display:none" onchange="addStrictPhoto(this)"></label>`:''}
+    </div>
+    <!-- Suivi du jour -->
+    <div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:14px;padding:18px;margin-bottom:16px">
       <div style="font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:14px">J'ai respecté mon plan aujourd'hui</div>
       <div style="display:flex;gap:10px">
         <button onclick="setNutriRespected('${todayKey}',true)" style="flex:1;padding:14px 0;border:none;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;letter-spacing:1px;cursor:pointer;background:${respYes?'#15803d':'#111'};color:${respYes?'#fff':'#555'};border:2px solid ${respYes?'#22c55e':'#222'}">✓ OUI</button>
         <button onclick="setNutriRespected('${todayKey}',false)" style="flex:1;padding:14px 0;border:none;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;letter-spacing:1px;cursor:pointer;background:${respNo?'#7f1d1d':'#111'};color:${respNo?'#fff':'#555'};border:2px solid ${respNo?'var(--red)':'#222'}">✗ NON</button>
       </div>
     </div>
+    <!-- Scores -->
     <div style="display:flex;gap:10px;margin-bottom:8px">
-      <div style="flex:1;background:#0f0f0f;border:1px solid #1a1a1a;border-radius:12px;padding:14px;text-align:center">
-        <div style="font-size:32px;font-family:'Bebas Neue',Impact,sans-serif;color:var(--green);line-height:1">${streak}</div>
-        <div style="font-size:9px;color:var(--sub);letter-spacing:1.5px;margin-top:4px">JOURS CONSÉCUTIFS</div>
+      <div style="flex:1;background:#0f0f0f;border:1px solid #1a1a1a;border-radius:12px;padding:16px;text-align:center">
+        <div style="font-size:38px;font-family:'Bebas Neue',Impact,sans-serif;color:var(--green);line-height:1">${streak}</div>
+        <div style="font-size:9px;color:var(--sub);letter-spacing:1.5px;margin-top:4px;text-transform:uppercase">Jours consécutifs</div>
       </div>
-      <div style="flex:1;background:#0f0f0f;border:1px solid #1a1a1a;border-radius:12px;padding:14px;text-align:center">
-        <div style="font-size:32px;font-family:'Bebas Neue',Impact,sans-serif;color:#60a5fa;line-height:1">${weekScore}<span style="font-size:16px;color:var(--sub)">/${answered||7}</span></div>
-        <div style="font-size:9px;color:var(--sub);letter-spacing:1.5px;margin-top:4px">CETTE SEMAINE</div>
+      <div style="flex:1;background:#0f0f0f;border:1px solid #1a1a1a;border-radius:12px;padding:16px;text-align:center">
+        <div style="font-size:38px;font-family:'Bebas Neue',Impact,sans-serif;color:#60a5fa;line-height:1">${weekScore}<span style="font-size:18px;color:var(--sub)">/${answered||7}</span></div>
+        <div style="font-size:9px;color:var(--sub);letter-spacing:1.5px;margin-top:4px;text-transform:uppercase">Cette semaine</div>
       </div>
     </div>`;
 }
@@ -5940,40 +5994,43 @@ function _renderFjDaySummary(date){
   if(!el) return;
   const nut=currentUser.nutrition||{};
   const entries=(nut.log?.[date]?.entries)||[];
-  const m=nut.macros||{};
+  const isOn=nutIsOnDay(date);
+  const m=(isOn ? nut.macros?.on : nut.macros?.off)||{};
   const tot=entries.reduce((a,e)=>({
-    kcal:a.kcal+(e.kcal||0),p:a.p+(e.p||0),c:a.c+(e.c||0),l:a.l+(e.l||0)
-  }),{kcal:0,p:0,c:0,l:0});
+    kcal:a.kcal+(e.kcal||0),p:a.p+(e.p||0),c:a.c+(e.c||0),l:a.l+(e.l||0),
+    s:a.s+(e.s||0),fi:a.fi+(e.fi||0)
+  }),{kcal:0,p:0,c:0,l:0,s:0,fi:0});
   const repasOrder=['matin','dejeuner','diner','collation'];
   const repasLabels={matin:'Petit-déjeuner',dejeuner:'Déjeuner',diner:'Dîner',collation:'Collation'};
   const grouped={};
   entries.forEach(e=>{const r=e.repas||'dejeuner';if(!grouped[r])grouped[r]=[];grouped[r].push(e);});
+  const dayBadge=isOn
+    ? `<span style="font-size:8px;font-weight:800;color:#22c55e;background:#021007;border:1px solid #052a10;border-radius:5px;padding:2px 7px;letter-spacing:1px">⚡ JOUR ON</span>`
+    : `<span style="font-size:8px;font-weight:800;color:#60a5fa;background:#020a1a;border:1px solid #0a1a35;border-radius:5px;padding:2px 7px;letter-spacing:1px">💤 JOUR OFF</span>`;
+  const tile=(val,tgt,label,color)=>`<div style="flex:1;background:#111;border-radius:8px;padding:10px;text-align:center;min-width:0">
+    <div style="font-size:18px;font-weight:800;color:${color};line-height:1">${typeof val==='number'?parseFloat(val.toFixed(1)):val}${tgt?`<span style="font-size:8px;color:var(--sub);font-weight:400">/${tgt}</span>`:''}</div>
+    <div style="font-size:8px;color:var(--sub);letter-spacing:1px;margin-top:3px;text-transform:uppercase">${label}</div>
+  </div>`;
 
   el.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <h3 style="margin:0;font-size:16px">Journal du jour</h3>
+      <div style="display:flex;align-items:center;gap:8px"><h3 style="margin:0;font-size:15px">Journal du jour</h3>${dayBadge}</div>
       <button onclick="openFoodSearch('${date}')" style="background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:1.5px;padding:8px 14px;border-radius:8px;cursor:pointer">+ AJOUTER</button>
     </div>
-    <div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:12px;padding:14px;margin-bottom:14px">
-      <div style="display:flex;gap:8px">
-        <div style="flex:1;background:#111;border-radius:8px;padding:10px;text-align:center">
-          <div style="font-size:20px;font-weight:800;color:var(--red)">${Math.round(tot.kcal)}<span style="font-size:9px;color:var(--sub);font-weight:400"> kcal</span></div>
-          ${m.kcal?`<div style="font-size:8px;color:var(--sub);letter-spacing:1px;margin-top:2px">/ ${m.kcal} kcal</div>`:`<div style="font-size:8px;color:var(--sub);letter-spacing:1px;margin-top:2px">CALORIES</div>`}
-        </div>
-        <div style="flex:1;background:#111;border-radius:8px;padding:10px;text-align:center">
-          <div style="font-size:20px;font-weight:800;color:#60a5fa">${parseFloat(tot.p.toFixed(1))}<span style="font-size:9px;color:var(--sub);font-weight:400"> g</span></div>
-          ${m.p?`<div style="font-size:8px;color:var(--sub);letter-spacing:1px;margin-top:2px">/ ${m.p}g PROT</div>`:`<div style="font-size:8px;color:var(--sub);letter-spacing:1px;margin-top:2px">PROTÉINES</div>`}
-        </div>
-        <div style="flex:1;background:#111;border-radius:8px;padding:10px;text-align:center">
-          <div style="font-size:20px;font-weight:800;color:#4ade80">${parseFloat(tot.c.toFixed(1))}<span style="font-size:9px;color:var(--sub);font-weight:400"> g</span></div>
-          ${m.g?`<div style="font-size:8px;color:var(--sub);letter-spacing:1px;margin-top:2px">/ ${m.g}g GLUC</div>`:`<div style="font-size:8px;color:var(--sub);letter-spacing:1px;margin-top:2px">GLUCIDES</div>`}
-        </div>
-        <div style="flex:1;background:#111;border-radius:8px;padding:10px;text-align:center">
-          <div style="font-size:20px;font-weight:800;color:#fb923c">${parseFloat(tot.l.toFixed(1))}<span style="font-size:9px;color:var(--sub);font-weight:400"> g</span></div>
-          ${m.l?`<div style="font-size:8px;color:var(--sub);letter-spacing:1px;margin-top:2px">/ ${m.l}g LIP</div>`:`<div style="font-size:8px;color:var(--sub);letter-spacing:1px;margin-top:2px">LIPIDES</div>`}
-        </div>
+    <div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:12px;padding:14px;margin-bottom:6px">
+      <div style="display:flex;gap:6px;margin-bottom:6px">
+        ${tile(Math.round(tot.kcal),m.kcal?m.kcal+' kcal':'','kcal','var(--red)')}
+        ${tile(tot.p,m.p?m.p+'g':'','prot','#60a5fa')}
+        ${tile(tot.c,m.g?m.g+'g':'','gluc','#4ade80')}
+        ${tile(tot.l,m.l?m.l+'g':'','lip','#fb923c')}
+      </div>
+      <div style="display:flex;gap:6px">
+        ${tile(tot.s,m.s?m.s+'g':'','sucre ℹ','#a78bfa')}
+        ${tile(tot.fi,m.f?m.f+'g':'','fibres ℹ','#94a3b8')}
+        <div style="flex:2"></div>
       </div>
     </div>
+    <div style="font-size:9px;color:#333;text-align:right;margin-bottom:12px;padding-right:2px">ℹ sucre & fibres — indicatif</div>
     ${entries.length===0?`<div style="text-align:center;padding:18px 0 8px;color:#333;font-size:12px">Aucun aliment enregistré — appuie sur + AJOUTER</div>`:''}
     ${repasOrder.filter(r=>grouped[r]).map(r=>`
       <div style="margin-bottom:14px">
@@ -6007,10 +6064,29 @@ function renderCoachNutriSection(c){
   const nut=c.nutrition||{};
   const dt=nut.dietType||'strict';
   const photos=nut.strictPhotos||[];
+  const mon=nut.macros?.on||{};
+  const moff=nut.macros?.off||{};
+  const fields=[
+    {k:'kcal',label:'KCAL',color:'var(--red)',ph:'ex : 2200 / 1900'},
+    {k:'p',label:'PROT g',color:'#60a5fa',ph:'ex : 180 / 160'},
+    {k:'g',label:'GLUC g',color:'#4ade80',ph:'ex : 250 / 180'},
+    {k:'l',label:'LIP g',color:'#fb923c',ph:'ex : 70 / 65'},
+    {k:'s',label:'SUCRE g ℹ',color:'#a78bfa',ph:'indicatif'},
+    {k:'f',label:'FIBRES g ℹ',color:'#94a3b8',ph:'indicatif'},
+  ];
+  const macroRows=fields.map(f=>`
+    <div style="display:grid;grid-template-columns:90px 1fr 1fr;align-items:center;gap:6px;margin-bottom:7px">
+      <div style="font-size:9px;font-weight:800;color:${f.color};letter-spacing:1px">${f.label}</div>
+      <input id="ccd-on-${f.k}" type="number" min="0" placeholder="${f.ph}" value="${mon[f.k]||''}"
+        style="padding:7px 10px;background:#111;border:1px solid #2a2a2a;border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:12px;font-weight:600;outline:none;width:100%;box-sizing:border-box">
+      <input id="ccd-off-${f.k}" type="number" min="0" placeholder="${f.ph}" value="${moff[f.k]||''}"
+        style="padding:7px 10px;background:#111;border:1px solid #2a2a2a;border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:12px;font-weight:600;outline:none;width:100%;box-sizing:border-box">
+    </div>`).join('');
   el.innerHTML=`
-    <div style="background:#0f0f0f;border:1px solid #1c1c1c;border-radius:12px;padding:16px">
+    <div style="background:#0f0f0f;border:1px solid #1c1c1c;border-radius:12px;padding:16px;margin-bottom:16px">
       <div style="font-size:9px;color:var(--red);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:14px">🍎 Nutrition</div>
-      <div style="position:relative;margin-bottom:${dt==='strict'?'16':'0'}px">
+      <!-- Type de diète -->
+      <div style="position:relative;margin-bottom:20px">
         <select id="ccd-diet-sel" onchange="saveClientNutriDiet(this.value)"
           style="width:100%;padding:11px 36px 11px 14px;background:#1a1a1a;border:1.5px solid var(--border);border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:12px;font-weight:700;appearance:none;-webkit-appearance:none;cursor:pointer;outline:none">
           <option value="strict" ${dt==='strict'?'selected':''}>🥩 Diète Stricte</option>
@@ -6018,8 +6094,21 @@ function renderCoachNutriSection(c){
         </select>
         <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--sub);font-size:11px">▼</span>
       </div>
+      <!-- Objectifs macro -->
+      <div style="margin-bottom:16px">
+        <div style="font-size:9px;color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:10px">🎯 Objectifs nutritionnels</div>
+        <div style="display:grid;grid-template-columns:90px 1fr 1fr;gap:6px;margin-bottom:8px">
+          <div></div>
+          <div style="font-size:8px;font-weight:800;color:#22c55e;letter-spacing:1px;text-align:center;background:#021007;border:1px solid #052a10;border-radius:6px;padding:4px">⚡ JOUR ON</div>
+          <div style="font-size:8px;font-weight:800;color:#60a5fa;letter-spacing:1px;text-align:center;background:#020a1a;border:1px solid #0a1a35;border-radius:6px;padding:4px">💤 JOUR OFF</div>
+        </div>
+        ${macroRows}
+        <button onclick="saveClientNutriMacros()" style="width:100%;margin-top:6px;padding:11px 0;background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer">💾 ENREGISTRER LES OBJECTIFS</button>
+      </div>
+      <!-- Plan photos (stricte uniquement) -->
       ${dt==='strict'?`
         <div>
+          <div style="font-size:9px;color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:10px">📋 Plan alimentaire</div>
           ${photos.map((src,i)=>`
             <div style="position:relative;margin-bottom:8px">
               <img src="${src}" style="width:100%;border-radius:8px;display:block;border:1px solid #1a1a1a">
@@ -6031,7 +6120,7 @@ function renderCoachNutriSection(c){
             <input type="file" accept="image/*" capture="environment" style="display:none" onchange="addClientStrictPhoto(this)">
           </label>
         </div>`
-      :`<div style="font-size:11px;color:#444;text-align:center;margin-top:8px">Journal libre — pas de plan à configurer</div>`}
+      :`<div style="font-size:11px;color:#444;text-align:center;margin-top:4px">Journal libre — pas de plan photo à configurer</div>`}
     </div>`;
 }
 
@@ -6044,6 +6133,20 @@ function saveClientNutriDiet(type){
   users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
   toast('Type de diète enregistré ✓');
   renderCoachNutriSection(c);
+}
+
+function saveClientNutriMacros(){
+  const users=DB.get('users')||{};
+  const c=Object.values(users).find(u=>u.id===currentClientId);
+  if(!c) return;
+  if(!c.nutrition) c.nutrition={};
+  const g=id=>{const v=parseFloat(document.getElementById(id)?.value);return isNaN(v)?undefined:v;};
+  c.nutrition.macros={
+    on:{kcal:g('ccd-on-kcal'),p:g('ccd-on-p'),g:g('ccd-on-g'),l:g('ccd-on-l'),s:g('ccd-on-s'),f:g('ccd-on-f')},
+    off:{kcal:g('ccd-off-kcal'),p:g('ccd-off-p'),g:g('ccd-off-g'),l:g('ccd-off-l'),s:g('ccd-off-s'),f:g('ccd-off-f')},
+  };
+  users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
+  toast('Objectifs enregistrés ✓');
 }
 
 function addClientStrictPhoto(input){
