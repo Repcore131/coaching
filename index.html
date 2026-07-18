@@ -539,8 +539,20 @@ const COACH_PHOTO='icons/coach.jpg';
     <button class="btn btn-red" style="margin-top:8px;letter-spacing:2px" onclick="doLogin()">SE CONNECTER</button>
     <p class="sub" style="text-align:center;margin-top:12px"><span style="cursor:pointer;font-size:13px;color:#f97316;font-weight:700;text-decoration:underline;text-decoration-color:#f97316" onclick="forgotPassword()">Mot de passe oublié ?</span></p>
     <p class="sub" style="text-align:center;margin-top:8px">Pas de compte ? <span class="red" style="cursor:pointer;font-weight:700" onclick="goRegisterAthlete()">Créer un compte</span></p>
+    <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:16px">
+      <p class="sub" style="text-align:center;font-size:11px;margin-bottom:10px;color:#555">Tu as changé de navigateur ou d'appareil ?</p>
+      <button class="btn" style="width:100%;background:var(--card2);border:1px solid var(--border);color:var(--sub);font-size:12px;letter-spacing:1px" onclick="showNewPwdRecovery()">RÉCUPÉRER AVEC UN NOUVEAU MOT DE PASSE</button>
+    </div>
+    <div id="new-pwd-recovery" style="display:none;margin-top:12px;background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:16px">
+      <div style="font-size:12px;font-weight:800;letter-spacing:1px;margin-bottom:10px">RÉCUPÉRATION DU COMPTE</div>
+      <p style="font-size:11px;color:#888;line-height:1.6;margin-bottom:12px">Entre ton email et choisis un nouveau mot de passe. Tes données seront restaurées depuis le cloud si elles y sont.</p>
+      <div style="margin-bottom:8px"><label style="font-size:11px">Email</label><input id="rec-email" type="email" placeholder="ton@email.com"></div>
+      <div style="margin-bottom:8px"><label style="font-size:11px">Nouveau mot de passe</label><input id="rec-pwd" type="password" placeholder="Min. 6 caractères"></div>
+      <div id="rec-err" style="color:#f87171;font-size:12px;display:none;margin-bottom:8px"></div>
+      <button class="btn btn-red" style="width:100%;font-size:12px;letter-spacing:1px" onclick="doNewPwdRecovery()">RÉCUPÉRER MON COMPTE</button>
+    </div>
   </div>
-  
+
 </div>
 
 <!-- REGISTER -->
@@ -2252,14 +2264,21 @@ const CLOUD={
     merged[email].sessions=allSessions;
   },
   async pullUser(email){
+    const key=email.replace(/\./g,',');
+    const base='https://repcore-sync-default-rtdb.firebaseio.com/users/'+key+'.json';
+    const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),6000);
     try{
-      const token=await this._getToken();if(!token) return null;
-      const key=email.replace(/\./g,',');
-      const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),5000);
-      const r=await fetch('https://repcore-sync-default-rtdb.firebaseio.com/users/'+key+'.json?auth='+token+'&t='+Date.now(),{signal:ctrl.signal});
-      if(!r.ok) return null;
-      return await r.json()||null;
-    }catch{return null;}
+      const token=await this._getToken();
+      const url=token?base+'?auth='+token+'&t='+Date.now():base+'?t='+Date.now();
+      const r=await fetch(url,{signal:ctrl.signal});
+      if(r.ok){const d=await r.json();if(d) return d;}
+      // Fallback lecture sans auth (si règles RTDB publiques)
+      if(token){
+        const r2=await fetch(base+'?t='+Date.now());
+        if(r2.ok) return await r2.json()||null;
+      }
+    }catch{}
+    return null;
   },
   async syncUser(email){
     const cloudUser=await this.pullUser(email);
@@ -2697,6 +2716,63 @@ async function forgotPassword(){
     showErr('l-err','Erreur réseau — vérifie ta connexion et réessaie.');
   } else {
     showErr('l-err','Impossible d\'envoyer l\'email. Vérifie l\'adresse saisie.');
+  }
+}
+function showNewPwdRecovery(){
+  const el=document.getElementById('new-pwd-recovery');
+  if(el) el.style.display=el.style.display==='none'?'block':'none';
+}
+async function doNewPwdRecovery(){
+  const em=(document.getElementById('rec-email')?.value||'').trim().toLowerCase();
+  const pw=document.getElementById('rec-pwd')?.value||'';
+  const errEl=document.getElementById('rec-err');
+  const show=msg=>{if(errEl){errEl.textContent=msg;errEl.style.display='block';}};
+  if(!em||!pw) return show('Remplis les deux champs.');
+  if(pw.length<6) return show('Le mot de passe doit faire au moins 6 caractères.');
+  const btn=document.querySelector('#new-pwd-recovery .btn-red');
+  if(btn){btn.textContent='Récupération…';btn.disabled=true;}
+  // Tenter signUp — crée un compte Firebase Auth si l'email n'y est pas encore
+  const r=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key='+CLOUD._fbKey,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({email:em,password:pw,returnSecureToken:true})
+  }).then(r=>r.json()).catch(()=>({}));
+  if(btn){btn.textContent='RÉCUPÉRER MON COMPTE';btn.disabled=false;}
+  if(r.idToken){
+    // Nouveau compte Firebase créé → essayer de récupérer les données RTDB
+    CLOUD._idToken=r.idToken;CLOUD._refreshToken=r.refreshToken;
+    CLOUD._tokenExpiry=Date.now()+(parseInt(r.expiresIn)||3600)*1000;
+    CLOUD._saveAuth();
+    toast('Compte créé — récupération des données…');
+    await CLOUD.syncUser(em);
+    const users=DB.get('users')||{};
+    let u=users[em];
+    if(!u){await CLOUD.syncUsers();u=(DB.get('users')||{})[em];}
+    if(u){
+      u.pwd=pw;users[em]=u;DB.set('users',users);
+      currentUser=u;DB.set('session',currentUser);
+      if(currentUser.role!=='coach'&&(currentUser.status||'FREE')==='FREE'){go('s-client-code');return;}
+      return routeUser();
+    }
+    return rescueLogin(em,pw);
+  }
+  const code=r.error?.message||'';
+  if(code.includes('EMAIL_EXISTS')){
+    // Email déjà dans Firebase Auth → le compte existe avec un autre mot de passe
+    // Essayer de tirer les données RTDB en lecture publique (sans token)
+    const key=em.replace(/\./g,',');
+    const rtdbData=await fetch('https://repcore-sync-default-rtdb.firebaseio.com/users/'+key+'.json?t='+Date.now())
+      .then(r=>r.ok?r.json():null).catch(()=>null);
+    if(rtdbData){
+      show('Compte trouvé ('+( rtdbData.fname||em )+') — entre le BON mot de passe ci-dessus ou utilise "Mot de passe oublié ?" (vérifie les spams venant de noreply@repcore-sync.firebaseapp.com).');
+    } else {
+      show('Ce compte existe déjà dans notre système. Utilise ton ancien mot de passe ou "Mot de passe oublié ?" et vérifie les spams (expéditeur : noreply@repcore-sync.firebaseapp.com).');
+    }
+  } else if(code.includes('WEAK_PASSWORD')){
+    show('Mot de passe trop faible — utilise au moins 6 caractères.');
+  } else if(!code){
+    show('Erreur réseau — vérifie ta connexion.');
+  } else {
+    show('Erreur : '+code);
   }
 }
 function showErr(id,msg){const e=document.getElementById(id);e.textContent=msg;e.style.display='block';}
