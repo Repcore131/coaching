@@ -5853,11 +5853,20 @@ function _renderNutriContent(type){
   const fjSec=document.getElementById('fj-today-section');
   if(!contentEl) return;
   const nut=currentUser.nutrition||{};
+  const _cuu=DB.get('users')||{};
+  const _cflx=Object.values(_cuu).find(x=>x.id===currentUser.coachId);
+  const _flxPhoto=_cflx?.coachPhoto||'';
+  const _flxCircle=_flxPhoto
+    ?`<img src="${_flxPhoto}" style="width:54px;height:54px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(210,0,0,0.45);box-shadow:0 0 0 4px rgba(200,0,0,0.07)">`
+    :`<div style="width:54px;height:54px;border-radius:50%;background:#1a1a1a;border:2px solid #2a2a2a;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🏋️</div>`;
   if(type==='flexible'){
     contentEl.innerHTML=`
-      <div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:14px;padding:16px;margin-bottom:18px">
-        <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px">⚖️ Diète Flexible</div>
-        <p style="margin:0;font-size:12px;color:#aaa;line-height:1.65">La diète flexible, c'est la liberté de manger ce que tu veux — à condition d'atteindre tes objectifs de macros sur la journée. Protéines, glucides, lipides : tant que tu es dans les clous en fin de journée, tu progresses. Tu gardes ta liberté au quotidien, avec des résultats au rendez-vous.</p>
+      <div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:14px;padding:16px;margin-bottom:18px;display:flex;gap:14px;align-items:flex-start">
+        ${_flxCircle}
+        <div style="flex:1">
+          <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px">⚖️ Diète Flexible</div>
+          <p style="margin:0;font-size:12px;color:#aaa;line-height:1.65">La diète flexible, c'est la liberté de manger ce que tu veux — à condition d'atteindre tes objectifs de macros sur la journée. Protéines, glucides, lipides : tant que tu es dans les clous en fin de journée, tu progresses. Tu gardes ta liberté au quotidien, avec des résultats au rendez-vous.</p>
+        </div>
       </div>
       ${_renderStrictMacroRings(nut)}`;
     if(fjSec){fjSec.style.display='block';_renderFjDaySummary(localISODate(new Date()));}
@@ -5891,12 +5900,16 @@ function _renderStrictDiet(){
     else if(days_data[k]?.respected===false) break;
     else if(i>0) break;
   }
-  // Coach photo (optionnel — from currentUser.coachRef or stored coachPhoto)
-  const coachPhoto=nut.coachPhoto||'';
+  const _cu=DB.get('users')||{};
+  const _cuser=Object.values(_cu).find(x=>x.id===currentUser.coachId);
+  const coachPhoto=_cuser?.coachPhoto||'';
+  const coachCircle=coachPhoto
+    ?`<img src="${coachPhoto}" style="width:54px;height:54px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(210,0,0,0.45);box-shadow:0 0 0 4px rgba(200,0,0,0.07)">`
+    :`<div style="width:54px;height:54px;border-radius:50%;background:#1a1a1a;border:2px solid #2a2a2a;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0">🏋️</div>`;
   el.innerHTML=`
     <!-- Définition diète stricte -->
     <div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:14px;padding:16px;margin-bottom:18px;display:flex;gap:14px;align-items:flex-start">
-      ${coachPhoto?`<img src="${coachPhoto}" style="width:52px;height:52px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid #2a2a2a">`:``}
+      ${coachCircle}
       <div style="flex:1">
         <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:8px">🥩 Diète Stricte</div>
         <p style="margin:0;font-size:12px;color:#aaa;line-height:1.65">Ton programme alimentaire est 100&nbsp;% défini par ton coach — chaque repas, chaque apport. L'avantage&nbsp;: zéro prise de tête. Tu sais exactement quoi manger, quand, et en quelle quantité. Le cadre strict te permet de t'organiser au maximum et de progresser sans improviser.</p>
