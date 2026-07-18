@@ -5795,6 +5795,59 @@ function _renderMacroTargets(nut){
   </div>`;
 }
 
+function _renderStrictMacroRings(nut){
+  const today=localISODate(new Date());
+  const isOn=nutIsOnDay(today);
+  const m=(isOn?nut.macros?.on:nut.macros?.off)||{};
+  if(!m.kcal&&!m.p&&!m.g&&!m.l) return '';
+  const entries=(nut.log?.[today]?.entries)||[];
+  const tot=entries.reduce((a,e)=>({
+    kcal:a.kcal+(e.kcal||0),p:a.p+(e.p||0),c:a.c+(e.c||0),l:a.l+(e.l||0)
+  }),{kcal:0,p:0,c:0,l:0});
+  const R=32,cx=44,cy=44,sw=9;
+  const circ=+(2*Math.PI*R).toFixed(2);
+  const ring=(val,tgt,color,label)=>{
+    const pct=tgt&&val?Math.min(val/tgt,1):0;
+    const d=+(pct*circ).toFixed(2);
+    const gap=+(circ-d).toFixed(2);
+    return `<div style="flex:1;text-align:center">
+      <svg width="88" height="88" viewBox="0 0 88 88">
+        <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#1c1c1c" stroke-width="${sw}"/>
+        <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${color}" stroke-width="${sw}"
+          stroke-dasharray="${d} ${gap}" stroke-linecap="${d>0?'round':'butt'}"
+          transform="rotate(-90 ${cx} ${cy})"/>
+        <text x="${cx}" y="${cy}" dominant-baseline="middle" text-anchor="middle"
+          font-family="Montserrat,sans-serif" font-size="13" font-weight="900" fill="#fff">${tgt||'—'}</text>
+        <text x="${cx}" y="${cy+14}" text-anchor="middle"
+          font-family="Montserrat,sans-serif" font-size="8" fill="#555">g</text>
+      </svg>
+      <div style="font-size:8px;color:#888;letter-spacing:1px;font-weight:700;text-transform:uppercase;margin-top:-4px">${label}</div>
+    </div>`;
+  };
+  const kcalPct=m.kcal?Math.min((tot.kcal||0)/m.kcal,1):0;
+  const dayBadge=isOn
+    ?`<span style="font-size:8px;font-weight:800;color:#22c55e;background:#021007;border:1px solid #052a10;border-radius:5px;padding:3px 10px;letter-spacing:1px">⚡ JOUR ON</span>`
+    :`<span style="font-size:8px;font-weight:800;color:#60a5fa;background:#020a1a;border:1px solid #0a1a35;border-radius:5px;padding:3px 10px;letter-spacing:1px">💤 JOUR OFF</span>`;
+  return `<div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:14px;padding:16px;margin-bottom:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700">🎯 Objectifs du jour</div>
+      ${dayBadge}
+    </div>
+    <div style="display:flex;justify-content:space-around;margin-bottom:16px">
+      ${ring(tot.p,m.p,'#60a5fa','Protéines')}
+      ${ring(tot.l,m.l,'#fb923c','Lipides')}
+      ${ring(tot.c,m.g,'#4ade80','Glucides')}
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <span style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700">Calories</span>
+      <span style="font-size:11px;font-weight:800;color:var(--red)">${Math.round(tot.kcal||0)}<span style="font-size:9px;color:var(--sub);font-weight:400"> / ${m.kcal||'—'} kcal</span></span>
+    </div>
+    <div style="height:10px;background:#1a1a1a;border-radius:5px;overflow:hidden">
+      <div style="height:100%;width:${(kcalPct*100).toFixed(1)}%;background:linear-gradient(90deg,var(--red),#ff4444);border-radius:5px;transition:width .4s ease"></div>
+    </div>
+  </div>`;
+}
+
 function _renderNutriContent(type){
   const contentEl=document.getElementById('nut-diet-content');
   const fjSec=document.getElementById('fj-today-section');
@@ -5850,7 +5903,7 @@ function _renderStrictDiet(){
       </div>
     </div>
     <!-- Objectifs macro -->
-    ${_renderMacroTargets(nut)}
+    ${_renderStrictMacroRings(nut)}
     <!-- Plan photos -->
     <div style="margin-bottom:20px">
       <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px">📋 Plan alimentaire</div>
