@@ -143,6 +143,11 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
 
 /* ====== CODE DISPLAY ====== */
 .code-display{background:#0f0f0f;border-radius:4px;padding:24px;text-align:center;letter-spacing:8px;font-size:28px;font-weight:900;color:var(--red);border:1px solid #2a0a0a;font-family:monospace}
+/* ====== SUPPLEMENTS ====== */
+.supp-timing-chip{display:inline-flex;align-items:center;padding:5px 11px;border:1px solid #2a2a2a;border-radius:20px;background:none;color:var(--sub);font-family:Montserrat,sans-serif;font-size:10px;font-weight:700;cursor:pointer;transition:.15s;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+.supp-timing-chip.active{background:#1a0000;border-color:var(--red);color:#fff}
+.supp-row{display:flex;align-items:flex-start;gap:10px;padding:11px 0;border-bottom:1px solid #111}
+.supp-row:last-child{border-bottom:none}
 /* ====== CAFFEINE ====== */
 .caff-alert-banner{border:1px solid;border-radius:10px;padding:12px 14px;font-size:12px;font-weight:700;margin-bottom:8px;line-height:1.5}
 .caff-entry-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)}
@@ -911,6 +916,8 @@ const COACH_PHOTO='icons/coach.jpg';
 
       <!-- Nutrition coach -->
       <div id="ccd-nutrition" style="margin-bottom:20px"></div>
+      <!-- Compléments coach -->
+      <div id="ccd-supplements" style="margin-bottom:20px"></div>
       <h3 style="margin-bottom:12px">Bilans récents</h3>
       <div id="ccd-bilans"></div>
       <div id="ccd-sessions-recap" style="margin-top:24px"></div>
@@ -1549,8 +1556,83 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="nut-diet-content"></div>
       <!-- Journal Yazio (flexible) -->
       <div id="fj-today-section" style="display:none;margin-bottom:24px"></div>
+      <!-- Compléments alimentaires -->
+      <div id="supp-embedded" style="margin-bottom:8px"></div>
       <!-- Caféine -->
       <div id="caff-embedded" style="margin-top:8px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- COMPLÉMENTS ALIMENTAIRES -->
+<div id="s-supplements" class="screen">
+  <div class="topbar"><button class="back-btn" onclick="loadNutrition()">←</button><span class="topbar-title">💊 Compléments</span><span></span></div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <div id="supp-table-content"></div>
+    </div>
+  </div>
+</div>
+
+<!-- COMPLÉMENT — FORMULAIRE AJOUT/ÉDITION -->
+<div id="s-supplement-edit" class="screen">
+  <div class="topbar"><button class="back-btn" onclick="loadSupplements()">←</button><span id="supp-edit-title" class="topbar-title">Nouveau complément</span><span></span></div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <!-- Nom -->
+      <div class="form-group">
+        <label class="form-label">Nom du complément</label>
+        <input class="form-input" id="supp-name" list="supp-name-list" placeholder="Ex: Créatine monohydrate" autocomplete="off" oninput="checkSuppCaffeineRedirect(this.value)">
+        <datalist id="supp-name-list"></datalist>
+        <div id="supp-caff-warning" style="display:none;margin-top:8px;background:#1a0800;border:1px solid #f97316;border-radius:8px;padding:10px 12px;font-size:11px;color:#f97316">☕ La caféine a son propre module dédié — utilise la section <strong>Caféine</strong> pour la traquer avec précision (mg, équivalents, historique).</div>
+      </div>
+      <!-- Dosage -->
+      <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label class="form-label">Quantité</label>
+          <input class="form-input" id="supp-qty" type="number" min="0" step="any" placeholder="Ex: 5">
+        </div>
+        <div>
+          <label class="form-label">Unité</label>
+          <div style="position:relative">
+            <select class="form-input" id="supp-unit" style="appearance:none;-webkit-appearance:none;padding-right:32px">
+              <option value="g">g</option>
+              <option value="mg">mg</option>
+              <option value="mcg">mcg</option>
+              <option value="ml">ml</option>
+              <option value="gélule(s)">gélule(s)</option>
+              <option value="comprimé(s)">comprimé(s)</option>
+              <option value="scoop(s)">scoop(s)</option>
+              <option value="cuillère(s)">cuillère(s)</option>
+            </select>
+            <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--sub);font-size:11px">▼</span>
+          </div>
+        </div>
+      </div>
+      <!-- Moments de prise -->
+      <div class="form-group">
+        <label class="form-label">Moment(s) de prise <span style="color:var(--red)">*</span></label>
+        <div id="supp-timings-grid" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px"></div>
+        <div id="supp-timings-err" style="display:none;color:var(--red);font-size:11px;margin-top:6px">Sélectionne au moins un moment.</div>
+      </div>
+      <!-- Notes -->
+      <div class="form-group">
+        <label class="form-label">Notes du coach <span style="color:var(--sub);font-weight:400">(optionnel)</span></label>
+        <textarea class="form-input" id="supp-notes" rows="2" placeholder="Ex: À prendre à jeun, avec un repas gras…" style="resize:none"></textarea>
+      </div>
+      <!-- Actif -->
+      <div class="form-group" style="display:flex;align-items:center;justify-content:space-between">
+        <label class="form-label" style="margin:0">Complément actif</label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="supp-active" checked style="width:18px;height:18px;accent-color:var(--red)">
+          <span id="supp-active-label" style="font-size:12px;color:var(--sub)">Oui</span>
+        </label>
+      </div>
+      <input type="hidden" id="supp-edit-idx" value="-1">
+      <button class="btn btn-red" onclick="saveSuppEntry()" style="margin-top:8px">Enregistrer</button>
+      <div id="supp-edit-delete-row" style="display:none;margin-top:10px">
+        <button class="btn btn-outline" onclick="deleteSuppEntry(parseInt(document.getElementById('supp-edit-idx').value))" style="width:100%;color:#ef4444;border-color:#ef4444">Supprimer ce complément</button>
+      </div>
     </div>
   </div>
 </div>
@@ -3086,6 +3168,7 @@ function openClientDetail(cid,_refresh){
   renderClientPdfCard(c);
   renderCoachSessionRecap(c);
   renderCoachNutriSection(c);
+  renderCoachSuppSection(c);
   if(!_refresh) go('s-coach-client');
   // Sync immédiat puis rafraîchi automatique (sans bouton)
   if(!_refresh && CLOUD.ok()){
@@ -6054,6 +6137,7 @@ function loadNutrition(){
   const sel=document.getElementById('nut-diet-select');
   if(sel) sel.value=dt;
   _renderNutriContent(dt);
+  loadSuppEmbedded();
   loadCaffeineEmbedded();
 }
 
@@ -6172,6 +6256,293 @@ function deleteClientStrictPhoto(index){
   c.nutrition.strictPhotos.splice(index,1);
   users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
   renderCoachNutriSection(c);
+}
+
+// ======= SUPPLEMENTS =======
+const SUPPLEMENTS_LIST=[
+  'Créatine monohydrate','Whey / Protéine en poudre','BCAA','EAA',
+  'Oméga-3','Vitamine D3','Magnésium','ZMA','Multivitamines',
+  'Glutamine','Bêta-alanine','Citrulline malate','Ashwagandha',
+  'Collagène','Probiotiques',
+];
+
+const TIMINGS_LIST=[
+  {id:'matin',          label:'Matin'},
+  {id:'midi',           label:'Midi'},
+  {id:'apres-midi',     label:'Après-midi'},
+  {id:'soir',           label:'Soir'},
+  {id:'coucher',        label:'Au coucher'},
+  {id:'avant-entrainement', label:'Avant entraînement'},
+  {id:'apres-entrainement', label:'Après entraînement'},
+  {id:'intra',          label:'Intra (pendant)'},
+  {id:'jeun',           label:'À jeun'},
+  {id:'toutes-4h',      label:'Toutes les 4h'},
+];
+
+function _suppStore(){
+  if(!currentUser.nutrition) currentUser.nutrition={};
+  if(!Array.isArray(currentUser.nutrition.supplements)) currentUser.nutrition.supplements=[];
+  return currentUser.nutrition.supplements;
+}
+
+function _suppTimingOrder(supp){
+  const first=supp.timings?.[0];
+  const idx=TIMINGS_LIST.findIndex(t=>t.id===first);
+  return idx===-1?99:idx;
+}
+
+function _suppTimingTags(timings,small){
+  if(!timings?.length) return '<span style="color:#333;font-size:10px">—</span>';
+  return timings.map(id=>{
+    const t=TIMINGS_LIST.find(x=>x.id===id);
+    const label=t?t.label:id;
+    return `<span style="display:inline-block;background:#1a0000;border:1px solid #3a0000;border-radius:12px;padding:${small?'2px 7px':'3px 9px'};font-size:${small?'9':'10'}px;font-weight:700;color:var(--red);margin:2px 2px 2px 0;white-space:nowrap">${label}</span>`;
+  }).join('');
+}
+
+function _renderSuppTable(list, isCoach, editFn){
+  if(!list.length) return `<div style="text-align:center;padding:28px 0;color:#333;font-size:12px">
+    <div style="font-size:36px;margin-bottom:10px;opacity:.3">💊</div>
+    Aucun complément renseigné
+  </div>`;
+  const sorted=[...list].sort((a,b)=>_suppTimingOrder(a)-_suppTimingOrder(b)||a.name.localeCompare(b.name,'fr'));
+  return `
+    <div style="display:grid;grid-template-columns:1fr auto auto;align-items:center;padding:6px 0 8px;border-bottom:1px solid #222">
+      <div style="font-size:8px;color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase">Complément</div>
+      <div style="font-size:8px;color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;text-align:right;padding-right:12px">Dosage</div>
+      <div style="font-size:8px;color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase">Moment(s)</div>
+    </div>
+    ${sorted.map((s,i)=>{
+      const realIdx=list.indexOf(s);
+      const inactive=s.active===false;
+      return `<div class="supp-row" style="opacity:${inactive?.45:1}" onclick="${editFn}(${realIdx})">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;color:${inactive?'#444':'#fff'}">${escapeHtml(s.name)}${inactive?'<span style="font-size:9px;color:#444;margin-left:6px">désactivé</span>':''}</div>
+          <div style="font-size:10px;color:var(--sub);margin-top:2px">${s.dosage_quantity||'—'} ${s.dosage_unit||''}</div>
+          ${s.notes?`<div style="font-size:10px;color:#555;margin-top:2px;font-style:italic">${escapeHtml(s.notes)}</div>`:''}
+        </div>
+        <div style="flex-shrink:0;text-align:right;padding-right:10px;padding-top:2px">
+          <div style="font-size:14px;font-weight:800;color:var(--red)">${s.dosage_quantity||'—'}<span style="font-size:9px;color:var(--sub);font-weight:400">${s.dosage_quantity?' '+s.dosage_unit:''}</span></div>
+        </div>
+        <div style="flex-shrink:0;max-width:130px">${_suppTimingTags(s.timings,true)}</div>
+      </div>`;
+    }).join('')}`;
+}
+
+function loadSupplements(){
+  go('s-supplements');
+  const list=_suppStore();
+  const el=document.getElementById('supp-table-content');
+  if(!el) return;
+  el.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="width:3px;height:20px;background:var(--red);border-radius:2px"></div>
+        <h3 style="margin:0">Mes compléments</h3>
+      </div>
+      <button onclick="openSuppEdit(-1)" style="background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:1.5px;padding:8px 14px;border-radius:8px;cursor:pointer">+ AJOUTER</button>
+    </div>
+    <div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:14px;padding:14px">
+      ${_renderSuppTable(list,false,'openSuppEdit')}
+    </div>
+    <div style="height:20px"></div>`;
+}
+
+function loadSuppEmbedded(){
+  const el=document.getElementById('supp-embedded');
+  if(!el) return;
+  const list=_suppStore().filter(s=>s.active!==false);
+  el.innerHTML=`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      <div style="width:3px;height:20px;background:var(--red);border-radius:2px"></div>
+      <h3>💊 Compléments</h3>
+    </div>
+    <div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:14px;padding:14px;margin-bottom:12px">
+      ${_renderSuppTable(list,false,'openSuppEdit')}
+    </div>
+    <button onclick="openSuppEdit(-1)" style="background:none;border:1px dashed #2a2a2a;border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;padding:10px 0;width:100%;cursor:pointer;margin-bottom:4px">+ Ajouter un complément</button>
+    <div style="height:4px"></div>`;
+}
+
+function openSuppEdit(idx){
+  go('s-supplement-edit');
+  const list=_suppStore();
+  const s=idx>=0?list[idx]:null;
+  document.getElementById('supp-edit-title').textContent=s?'Modifier le complément':'Nouveau complément';
+  document.getElementById('supp-edit-idx').value=idx;
+  document.getElementById('supp-name').value=s?s.name:'';
+  document.getElementById('supp-qty').value=s?(s.dosage_quantity||''):'';
+  document.getElementById('supp-unit').value=s?(s.dosage_unit||'g'):'g';
+  document.getElementById('supp-notes').value=s?(s.notes||''):'';
+  const activeChk=document.getElementById('supp-active');
+  activeChk.checked=s?s.active!==false:true;
+  document.getElementById('supp-active-label').textContent=activeChk.checked?'Oui':'Non';
+  activeChk.onchange=()=>{document.getElementById('supp-active-label').textContent=activeChk.checked?'Oui':'Non';};
+  document.getElementById('supp-edit-delete-row').style.display=s?'block':'none';
+  document.getElementById('supp-timings-err').style.display='none';
+  document.getElementById('supp-caff-warning').style.display='none';
+  // Remplir la datalist
+  const dl=document.getElementById('supp-name-list');
+  if(dl) dl.innerHTML=SUPPLEMENTS_LIST.map(n=>`<option value="${escapeHtml(n)}">`).join('');
+  // Grille timings
+  const selected=s?s.timings||[]:[];
+  const grid=document.getElementById('supp-timings-grid');
+  if(grid) grid.innerHTML=TIMINGS_LIST.map(t=>`
+    <button type="button" class="supp-timing-chip${selected.includes(t.id)?' active':''}"
+      onclick="toggleSuppTimingChip(this,'${t.id}')">${t.label}</button>`).join('');
+}
+
+function checkSuppCaffeineRedirect(val){
+  const w=document.getElementById('supp-caff-warning');
+  if(!w) return;
+  w.style.display=/caf[eé]/i.test(val)?'block':'none';
+}
+
+function toggleSuppTimingChip(btn,id){
+  btn.classList.toggle('active');
+  document.getElementById('supp-timings-err').style.display='none';
+}
+
+function saveSuppEntry(){
+  const name=(document.getElementById('supp-name').value||'').trim();
+  const qty=document.getElementById('supp-qty').value;
+  const unit=document.getElementById('supp-unit').value;
+  const notes=(document.getElementById('supp-notes').value||'').trim();
+  const active=document.getElementById('supp-active').checked;
+  const idx=parseInt(document.getElementById('supp-edit-idx').value);
+  const timings=Array.from(document.querySelectorAll('#supp-timings-grid .supp-timing-chip.active')).map(b=>{
+    const txt=b.textContent.trim();
+    return (TIMINGS_LIST.find(t=>t.label===txt)||{id:txt}).id;
+  });
+  if(!name){toast('Saisis un nom','var(--orange)');document.getElementById('supp-name').focus();return;}
+  if(!qty||parseFloat(qty)<=0){toast('Saisis un dosage','var(--orange)');document.getElementById('supp-qty').focus();return;}
+  if(!timings.length){document.getElementById('supp-timings-err').style.display='block';return;}
+  const entry={id:Date.now(),name,dosage_quantity:parseFloat(qty),dosage_unit:unit,timings,notes,active};
+  const list=_suppStore();
+  if(idx>=0&&idx<list.length){list[idx]={...list[idx],...entry,id:list[idx].id};}
+  else{list.push(entry);}
+  saveUser();
+  toast(idx>=0?'Complément mis à jour ✓':'Complément ajouté ✓');
+  loadSupplements();
+}
+
+function deleteSuppEntry(idx){
+  const list=_suppStore();
+  if(idx<0||idx>=list.length) return;
+  list.splice(idx,1);
+  saveUser();
+  toast('Complément supprimé');
+  loadSupplements();
+}
+
+// ======= SUPPLEMENTS COACH =======
+function renderCoachSuppSection(c){
+  const el=document.getElementById('ccd-supplements');
+  if(!el||!c) return;
+  const list=(c.nutrition?.supplements)||[];
+  const sorted=[...list].sort((a,b)=>_suppTimingOrder(a)-_suppTimingOrder(b)||a.name.localeCompare(b.name,'fr'));
+  el.innerHTML=`
+    <div style="background:#0f0f0f;border:1px solid #1c1c1c;border-radius:12px;padding:16px">
+      <div style="font-size:9px;color:var(--red);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:14px">💊 Compléments alimentaires</div>
+      <div style="margin-bottom:12px">
+        ${!list.length
+          ?`<div style="text-align:center;padding:16px 0;color:#333;font-size:12px">Aucun complément renseigné</div>`
+          :`<div style="display:grid;grid-template-columns:1fr auto auto;align-items:center;padding:4px 0 8px;border-bottom:1px solid #1c1c1c;margin-bottom:2px">
+              <div style="font-size:8px;color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase">Complément</div>
+              <div style="font-size:8px;color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;padding-right:10px">Dosage</div>
+              <div style="font-size:8px;color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase">Moment(s)</div>
+            </div>
+            ${sorted.map((s,i)=>{
+              const realIdx=list.indexOf(s);
+              return `<div class="supp-row" style="opacity:${s.active===false?.45:1}">
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:12px;font-weight:700;color:${s.active===false?'#444':'#fff'}">${escapeHtml(s.name)}</div>
+                  ${s.notes?`<div style="font-size:10px;color:#555;margin-top:1px;font-style:italic">${escapeHtml(s.notes)}</div>`:''}
+                </div>
+                <div style="flex-shrink:0;text-align:right;padding-right:8px;padding-top:2px">
+                  <div style="font-size:12px;font-weight:800;color:var(--red)">${s.dosage_quantity||'—'}<span style="font-size:8px;color:var(--sub);font-weight:400">${s.dosage_quantity?' '+s.dosage_unit:''}</span></div>
+                </div>
+                <div style="flex-shrink:0;max-width:110px">${_suppTimingTags(s.timings,true)}</div>
+                <button onclick="deleteClientSuppEntry(${realIdx})" style="flex-shrink:0;background:none;border:none;color:#333;font-size:18px;cursor:pointer;padding:0 4px;margin-left:4px">×</button>
+              </div>`;
+            }).join('')}`
+        }
+      </div>
+      <!-- Ajout rapide coach -->
+      <div style="border-top:1px solid #1c1c1c;padding-top:12px">
+        <div style="font-size:9px;color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin-bottom:10px">Ajouter un complément</div>
+        <div style="display:grid;grid-template-columns:1fr 60px auto;gap:8px;margin-bottom:10px;align-items:end">
+          <div>
+            <div style="font-size:9px;color:var(--sub);margin-bottom:4px">Nom</div>
+            <input id="ccd-supp-name" list="ccd-supp-name-list" class="form-input" style="padding:8px 10px;font-size:12px" placeholder="Créatine…" autocomplete="off">
+            <datalist id="ccd-supp-name-list">${SUPPLEMENTS_LIST.map(n=>`<option value="${escapeHtml(n)}">`).join('')}</datalist>
+          </div>
+          <div>
+            <div style="font-size:9px;color:var(--sub);margin-bottom:4px">Qté</div>
+            <input id="ccd-supp-qty" type="number" min="0" step="any" class="form-input" style="padding:8px 10px;font-size:12px" placeholder="5">
+          </div>
+          <div>
+            <div style="font-size:9px;color:var(--sub);margin-bottom:4px">Unité</div>
+            <div style="position:relative">
+              <select id="ccd-supp-unit" class="form-input" style="padding:8px 28px 8px 10px;font-size:12px;appearance:none;-webkit-appearance:none">
+                <option value="g">g</option>
+                <option value="mg">mg</option>
+                <option value="mcg">mcg</option>
+                <option value="ml">ml</option>
+                <option value="gélule(s)">gél.</option>
+                <option value="comprimé(s)">cpr.</option>
+                <option value="scoop(s)">scoop</option>
+                <option value="cuillère(s)">c.à.s</option>
+              </select>
+              <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--sub);font-size:10px">▼</span>
+            </div>
+          </div>
+        </div>
+        <div style="margin-bottom:10px">
+          <div style="font-size:9px;color:var(--sub);margin-bottom:6px">Moment(s) <span style="color:var(--red)">*</span></div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px" id="ccd-supp-timings">
+            ${TIMINGS_LIST.map(t=>`<button type="button" class="supp-timing-chip" onclick="this.classList.toggle('active')">${t.label}</button>`).join('')}
+          </div>
+        </div>
+        <div style="margin-bottom:10px">
+          <div style="font-size:9px;color:var(--sub);margin-bottom:4px">Notes (optionnel)</div>
+          <input id="ccd-supp-notes" class="form-input" style="padding:8px 10px;font-size:12px" placeholder="Ex: à jeun, avec repas…">
+        </div>
+        <button onclick="saveClientSuppEntry()" style="width:100%;padding:11px 0;background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer">+ AJOUTER AU PROGRAMME</button>
+      </div>
+    </div>`;
+}
+
+function saveClientSuppEntry(){
+  const users=DB.get('users')||{};
+  const c=Object.values(users).find(u=>u.id===currentClientId);
+  if(!c) return;
+  const name=(document.getElementById('ccd-supp-name').value||'').trim();
+  const qty=parseFloat(document.getElementById('ccd-supp-qty').value);
+  const unit=document.getElementById('ccd-supp-unit').value;
+  const notes=(document.getElementById('ccd-supp-notes').value||'').trim();
+  const timings=Array.from(document.querySelectorAll('#ccd-supp-timings .supp-timing-chip.active')).map(b=>{
+    const txt=b.textContent.trim();
+    return (TIMINGS_LIST.find(t=>t.label===txt)||{id:txt}).id;
+  });
+  if(!name){toast('Saisis un nom','var(--orange)');return;}
+  if(!qty||qty<=0){toast('Saisis un dosage','var(--orange)');return;}
+  if(!timings.length){toast('Sélectionne au moins un moment','var(--orange)');return;}
+  if(!c.nutrition) c.nutrition={};
+  if(!Array.isArray(c.nutrition.supplements)) c.nutrition.supplements=[];
+  c.nutrition.supplements.push({id:Date.now(),name,dosage_quantity:qty,dosage_unit:unit,timings,notes,active:true});
+  users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
+  toast('Complément ajouté ✓');
+  renderCoachSuppSection(c);
+}
+
+function deleteClientSuppEntry(index){
+  const users=DB.get('users')||{};
+  const c=Object.values(users).find(u=>u.id===currentClientId);
+  if(!c||!Array.isArray(c.nutrition?.supplements)) return;
+  c.nutrition.supplements.splice(index,1);
+  users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
+  renderCoachSuppSection(c);
 }
 
 // ======= CAFFEINE =======
