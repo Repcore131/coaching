@@ -565,7 +565,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <div><label for="r-pwd">Mot de passe</label><input type="password" id="r-pwd" placeholder="Min. 6 caractères"></div>
     <div><label for="r-pwd2">Confirmer</label><input type="password" id="r-pwd2" placeholder="••••••••"></div>
     <div><label for="r-gender">Genre</label>
-      <select id="r-gender"><option value="">-- Sélectionner --</option><option value="homme">Homme</option><option value="femme">Femme</option></select>
+      <select id="r-gender"><option value="">-- Sélectionner --</option><option value="H">Homme</option><option value="F">Femme</option></select>
     </div>
     <div class="divider"></div>
     <label style="margin:0">Je suis :</label>
@@ -1298,7 +1298,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div>
           <label style="font-size:10px;color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Sexe</label>
           <div style="display:flex;gap:8px">
-            <button id="atp-btn-m" onclick="setAthleteGender('M')" style="flex:1;padding:11px;border:1px solid var(--border);background:none;border-radius:3px;font-family:Montserrat,sans-serif;font-size:12px;font-weight:700;cursor:pointer;color:#fff;transition:.15s">Homme</button>
+            <button id="atp-btn-m" onclick="setAthleteGender('H')" style="flex:1;padding:11px;border:1px solid var(--border);background:none;border-radius:3px;font-family:Montserrat,sans-serif;font-size:12px;font-weight:700;cursor:pointer;color:#fff;transition:.15s">Homme</button>
             <button id="atp-btn-f" onclick="setAthleteGender('F')" style="flex:1;padding:11px;border:1px solid var(--border);background:none;border-radius:3px;font-family:Montserrat,sans-serif;font-size:12px;font-weight:700;cursor:pointer;color:#fff;transition:.15s">Femme</button>
           </div>
         </div>
@@ -2795,6 +2795,8 @@ function aeToggleCode(){
   if(open) setTimeout(()=>document.getElementById('ae-code')?.focus(),100);
 }
 function v(id){return document.getElementById(id)?.value?.trim()||'';}
+// Normalise toutes les conventions historiques ('femme','F','f') → booléen
+function isFemale(g){const s=String(g||'');return s==='F'||s==='f'||s.toLowerCase()==='femme';}
 function genCode(){
   const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   return 'GCP-'+Array.from({length:6},()=>c[Math.floor(Math.random()*c.length)]).join('');
@@ -3110,7 +3112,7 @@ function loadCoachHome(){
       ?`<img src="${c.athletePhoto}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
       :escapeHtml(ini(c.fname,c.lname));
     const metaParts=[
-      c.gender?(c.gender==='M'?'Homme':'Femme'):null,
+      c.gender?(isFemale(c.gender)?'Femme':'Homme'):null,
       c.profileWeight?c.profileWeight+' kg':null,
       c.age?c.age+' ans':null,
     ].filter(Boolean).join(' · ');
@@ -3137,7 +3139,7 @@ function loadCoachHome(){
       const badge=hasNewBilan(c)?'<span class="badge badge-orange"> Nouveau bilan</span>':needsAlert(c)?'<span class="badge badge-red"> Alerte</span>':isActive(c)?'<span class="badge badge-green"> Actif</span>':'<span class="badge badge-gray">Inactif</span>';
       const ls=c.sessions?.length?'Dernière séance: '+ago(c.sessions[c.sessions.length-1].date):'Aucune séance';
       const avatarHtml=c.athletePhoto?`<img src="${c.athletePhoto}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`:escapeHtml(ini(c.fname,c.lname));
-      const metaParts=[c.gender?(c.gender==='M'?'Homme':'Femme'):null,c.profileWeight?c.profileWeight+' kg':null,c.age?c.age+' ans':null].filter(Boolean).join(' · ');
+      const metaParts=[c.gender?(isFemale(c.gender)?'Femme':'Homme'):null,c.profileWeight?c.profileWeight+' kg':null,c.age?c.age+' ans':null].filter(Boolean).join(' · ');
       const _objDisplay=c.objective||c.bilanGoals||'';const objLine=_objDisplay?`<div style="font-size:10px;color:var(--red);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(_objDisplay)}</div>`:'';
       const metaLine=metaParts?`<div style="font-size:10px;color:var(--sub);margin-top:1px">${metaParts}</div>`:'';
       return `<div class="client-row" onclick="openClientDetail('${c.id}')">
@@ -3305,7 +3307,7 @@ function openClientDetail(cid,_refresh){
   if(_pd){
     const _bits=[];
     if(c.age) _bits.push(`<div style="font-size:11px"><span style="color:var(--sub)">Âge</span><br><strong>${c.age} ans</strong></div>`);
-    if(c.gender) _bits.push(`<div style="font-size:11px"><span style="color:var(--sub)">Sexe</span><br><strong>${c.gender==='M'?'Homme':'Femme'}</strong></div>`);
+    if(c.gender) _bits.push(`<div style="font-size:11px"><span style="color:var(--sub)">Sexe</span><br><strong>${isFemale(c.gender)?'Femme':'Homme'}</strong></div>`);
     if(c.profileWeight) _bits.push(`<div style="font-size:11px"><span style="color:var(--sub)">Poids</span><br><strong>${c.profileWeight} kg</strong></div>`);
     if(c.objective) _bits.push(`<div style="font-size:11px;flex-basis:100%"><span style="color:var(--sub)">Objectif profil</span><br><strong>${escapeHtml(c.objective)}</strong></div>`);
     if(c.bilanGoals) _bits.push(`<div style="font-size:11px;flex-basis:100%"><span style="color:var(--sub)">Objectifs bilan départ</span><br><strong>${escapeHtml(c.bilanGoals)}</strong></div>`);
@@ -3474,9 +3476,8 @@ function renderBilanEvolution(c){
     const at=Object.values(users).find(u=>u.id===c.id);
     if(at&&!at._evol_height){at._evol_height=height;at.updatedAt=Date.now();users[at.email]=at;DB.set('users',users);CLOUD.pushOne(at.email,at);}
   }
-  // Gender: 'femme' / 'homme' / 'H' / 'F'
   const gender=c._evol_gender||c.gender||'H';
-  const isFemale=/^[fFf]/.test(String(gender))||String(gender).toLowerCase()==='femme';
+  const female=isFemale(gender);
 
   // Measurements list
   const MEAS=[
@@ -3579,8 +3580,8 @@ function renderBilanEvolution(c){
     });
     // Formula note
     const formulaNote=`<div style="background:#111;border:1px solid #222;border-radius:8px;padding:12px;margin-bottom:14px;font-size:10px;line-height:1.8">
-      <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:2px;color:#e53935;margin-bottom:6px">Formule US Navy ${isFemale?'(Femme)':'(Homme)'} — Calcul automatique</div>
-      ${isFemale
+      <div style="font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:2px;color:#e53935;margin-bottom:6px">Formule US Navy ${female?'(Femme)':'(Homme)'} — Calcul automatique</div>
+      ${female
         ?`<div style="color:#aaa;font-family:monospace;font-size:10px">%MG = 495 / [1,29579 − 0,35004 × log(<b style="color:#fff">taille</b> + <b style="color:#69f0ae">hanches</b> − <b style="color:#ffd600">cou</b>) + 0,22100 × log(<b style="color:#4fc3f7">hauteur</b>)] − 450</div>
          <div style="color:#555;font-size:9px;margin-top:4px">taille = tour de taille · hanches = tour de hanches · cou = tour de cou · hauteur = taille en cm</div>`
         :`<div style="color:#aaa;font-family:monospace;font-size:10px">%MG = 495 / [1,0324 − 0,19077 × log(<b style="color:#fff">taille</b> − <b style="color:#ffd600">cou</b>) + 0,15456 × log(<b style="color:#4fc3f7">hauteur</b>)] − 450</div>
@@ -4420,7 +4421,7 @@ function startWorkoutSession(idx){
   const cfg=currentUser.sessions_config||initSessionsConfig();
   const sess=cfg[idx];
   // Pour les femmes, montrer le sélecteur de cycle
-  if(currentUser.gender==='femme'){
+  if(isFemale(currentUser.gender)){
     window._pendingWorkoutIdx=idx;
     document.getElementById('cycle-modal').style.display='flex';
   } else {
@@ -4645,7 +4646,7 @@ function renderWoEx(){
   const baseWeight=getLastZeroRIRWeight(ex.name);
   const sug=baseWeight?roundWeight(baseWeight+2.5):prev?calcSug(prev.weight,prev.reps,prev.rir,ex.reps,ex.rir):null;
   const cycleWeight=sug?roundWeight(sug*cycle.factor):null;
-  const isFemme=currentUser.gender==='femme';
+  const isFemme=isFemale(currentUser.gender);
   const showCycleCol=isFemme&&cycle.factor!==1.0;
 
   // Photo programme en haut si disponible
@@ -4760,7 +4761,7 @@ function renderSets(ex,data){
     return;
   }
   const cycle=getCycleFactor();
-  const isFemme=currentUser.gender==='femme';
+  const isFemme=isFemale(currentUser.gender);
   const showCycleCol=isFemme&&cycle.factor!==1.0;
   const isDeg=data.sets[0]?.degressive||false;
 
@@ -5681,7 +5682,7 @@ function getBM(b,k){const v=parseFloat(b['bil-'+k]||b['deb-'+k]||b[k]);return is
 function calcBF(waist,neck,hips,height,gender){
   // Formule US Navy (mesures en cm)
   if(!waist||!neck||!height) return null;
-  const female=/^[fF]/.test(String(gender||'H'));
+  const female=isFemale(gender);
   try{
     let bf;
     if(female){
@@ -5818,7 +5819,7 @@ function showProgressTab(tab,btn){
     const deb=(currentUser.bilans||[]).find(b=>b.type==='depart');
     const storedH=parseFloat(currentUser._evol_height||deb?.['deb-height']||currentUser['init-height']||0);
     const storedG=currentUser._evol_gender||currentUser.gender||'H';
-    const female=/^[fF]/.test(String(storedG));
+    const female=isFemale(storedG);
     const bfPcts=bl.map(b=>{
       const waist=getBM(b,'waist'),neck=getBM(b,'neck'),hips=getBM(b,'hips');
       return calcBF(waist,neck,hips,storedH,storedG);
@@ -8023,7 +8024,7 @@ function openCalc(pw,pr,prir,gender){
   document.getElementById('calc-pw').value=pw||'';
   document.getElementById('calc-pr').value=pr||'';
   document.getElementById('calc-prir').value=prir||'';
-  document.getElementById('calc-cycle-adj').style.display=gender==='femme'?'block':'none';
+  document.getElementById('calc-cycle-adj').style.display=isFemale(gender)?'block':'none';
   document.getElementById('calc-modal').style.display='block';
   updateCalcTable();
 }
@@ -8258,7 +8259,7 @@ function openAddAthlete(){
     <div><label style="margin-top:10px" for="aa-lname">Nom</label><input id="aa-lname" placeholder="Nom de l'athlète"></div>
     <div><label style="margin-top:10px" for="aa-email">Email</label><input type="email" id="aa-email" placeholder="email@exemple.com"></div>
     <div><label style="margin-top:10px" for="aa-pwd">Mot de passe (provisoire)</label><input type="text" id="aa-pwd" placeholder="Ex: repcore123"></div>
-    <div><label style="margin-top:10px" for="aa-gender">Genre</label><select id="aa-gender"><option value="homme">Homme</option><option value="femme">Femme</option></select></div>
+    <div><label style="margin-top:10px" for="aa-gender">Genre</label><select id="aa-gender"><option value="H">Homme</option><option value="F">Femme</option></select></div>
     <div><label style="margin-top:10px" for="aa-duration">Durée d'accès</label><select id="aa-duration" style="width:100%;background:#1a1a1a;border:1px solid var(--border);color:#fff;padding:12px 14px;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;cursor:pointer">
       <option value="1">1 mois</option>
       <option value="3" selected>3 mois (recommandé)</option>
@@ -8526,7 +8527,7 @@ function setAthleteGender(g){
   _atpGender=g;
   const bm=document.getElementById('atp-btn-m');
   const bf=document.getElementById('atp-btn-f');
-  if(bm){bm.style.background=g==='M'?'var(--red)':'none';bm.style.borderColor=g==='M'?'var(--red)':'var(--border)';}
+  if(bm){bm.style.background=g==='H'?'var(--red)':'none';bm.style.borderColor=g==='H'?'var(--red)':'var(--border)';}
   if(bf){bf.style.background=g==='F'?'var(--red)':'none';bf.style.borderColor=g==='F'?'var(--red)':'var(--border)';}
 }
 function openAthleteProfile(){
@@ -8539,7 +8540,7 @@ function openAthleteProfile(){
   if(wtEl) wtEl.value=u.profileWeight||'';
   const objEl=document.getElementById('atp-objective');
   if(objEl) objEl.value=u.objective||'';
-  _atpGender=u.gender||'';
+  _atpGender=isFemale(u.gender)?'F':(u.gender?'H':'');
   setAthleteGender(_atpGender);
   go('s-athlete-profile');
 }
