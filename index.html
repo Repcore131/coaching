@@ -2101,6 +2101,7 @@ const CLOUD={
     this._pushTimers[key]=setTimeout(()=>this._doPushOne(email,user),2000);
   },
   async _doPushOne(email,user){
+    this._setSyncStatus('pending');
     try{
       let token=await this._getToken();
       if(!token){
@@ -2151,16 +2152,16 @@ const CLOUD={
       }catch{resolve(null);}
     });
   },
-  _setSyncStatus(ok){
-    this._lastSync={ok,ts:Date.now()};
+  _setSyncStatus(state){
+    this._lastSync={state,ts:Date.now()};
     this._updateSyncBadge();
   },
   _updateSyncBadge(){
     const s=this._lastSync;if(!s) return;
-    const age=Math.round((Date.now()-s.ts)/1000);
-    const timeLabel=age<5?'à l\'instant':age<60?age+'s':Math.round(age/60)+'min';
-    const text=s.ok?'● '+timeLabel:'● échec synchro';
-    const color=s.ok?'#22c55e':'#f97316';
+    let text,color;
+    if(s.state==='pending'){text='● Synchronisation en cours';color='#60a5fa';}
+    else if(s.state===true){text='● Synchronisé';color='#22c55e';}
+    else{text='● Échec — réessaie';color='#f97316';}
     document.querySelectorAll('.coach-sync-badge').forEach(el=>{el.textContent=text;el.style.color=color;});
   },
   async _doPush(users){
