@@ -925,6 +925,9 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="ccd-bilans"></div>
       <div id="ccd-sessions-recap" style="margin-top:24px"></div>
       <div id="ccd-videos"></div>
+      <div style="margin-top:36px;padding-top:20px;border-top:1px solid #1a1a1a">
+        <button onclick="confirmDeleteClient()" style="width:100%;padding:12px;background:transparent;border:1px solid #3a1500;color:#f97316;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer">Retirer cet élève du suivi</button>
+      </div>
     </div>
   </div>
 </div>
@@ -3246,6 +3249,31 @@ function openClientDetail(cid,_refresh){
       if(currentClientId===cid) openClientDetail(cid,true);
     }).catch(()=>{});
   }
+}
+function confirmDeleteClient(){
+  if(!confirm('Retirer cet élève de ton suivi ?\nSon compte reste actif mais il ne sera plus associé à ton coaching.')) return;
+  const users=DB.get('users')||{};
+  if(currentClientId.startsWith('_code_')){
+    // Élève code uniquement → supprimer le code
+    const codeId=currentClientId.replace('_code_','');
+    currentUser.studentCodes=(currentUser.studentCodes||[]).filter(c=>c.codeId!==codeId);
+    saveUser();
+  } else {
+    // Élève enregistré → détacher du coach
+    const athlete=Object.values(users).find(u=>u.id===currentClientId);
+    if(athlete){
+      athlete.coachId=null;athlete.coachName=null;athlete.coachCode=null;
+      users[athlete.email]=athlete;
+      DB.set('users',users);
+      CLOUD.pushOne(athlete.email,athlete);
+    }
+    // Nettoyer les refs côté coach
+    if(currentUser.clients) currentUser.clients=currentUser.clients.filter(id=>id!==currentClientId);
+    if(currentUser.seenBilans) delete currentUser.seenBilans[Object.values(users).find(u=>u.id===currentClientId)?.email];
+    saveUser();
+  }
+  toast('Élève retiré du suivi');
+  go('s-coach-home');loadCoachHome();
 }
 function viewClientBilans(){
   const users=DB.get('users')||{};
