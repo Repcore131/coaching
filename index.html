@@ -3553,12 +3553,12 @@ function renderBilanEvolution(c){
 
 // ======= COACH PROGRAM EDITOR =======
 const defEx=[
-  {name:'Pull Over sur Banc Incliné',series:3,reps:'20',repos:'90 sec',description:'Amplitude maximale, expiration à la montée. Bras tendus, descendre jusqu\'à l\'étirement complet des dorsaux.',note:'Amplitude maximale, expiration à la montée',image:null},
-  {name:'Tirage Poitrine Largeur Épaule',series:4,reps:'5+',repos:'2 min',description:'Prise légèrement plus large que les épaules. Coudes vers le bas, omoplates en rétraction en fin de mouvement.',note:'Coudes vers le bas, omoplates en rétraction',image:null},
-  {name:'Row en Unilatéral',series:4,reps:'8 Par Bras',repos:'75 sec',description:'Un genou et une main sur le banc. Rotation du tronc légère, coude haut en fin de mouvement.',note:'Rotation du tronc légère, coude haut',image:null},
-  {name:'Rowing Planche Barre',series:4,reps:'8',repos:'2 min',description:'Corps parallèle au sol, prise neutre. Dos plat, amener la barre vers le nombril.',note:'Dos plat, barre vers le nombril',image:null},
-  {name:'Tirage Unilatéral sur Banc',series:4,reps:'10 Par Bras',repos:'75 sec',description:'Assis de côté sur le banc. Étirement complet en bas, contraction maximale en haut.',note:'Étirement complet en bas',image:null},
-  {name:'Oblique Abdominal Crunch',series:5,reps:'15',repos:'60 sec',description:'En décubitus dorsal, mains derrière la nuque. Rotation et contraction maximale des obliques.',note:'Rotation et contraction maximale',image:null}
+  {name:'Pull Over sur Banc Incliné',series:3,reps:'20',repos:'90 sec',description:'Amplitude maximale, expiration à la montée. Bras tendus, descendre jusqu\'à l\'étirement complet des dorsaux.',note:'',image:null},
+  {name:'Tirage Poitrine Largeur Épaule',series:4,reps:'5+',repos:'2 min',description:'Prise légèrement plus large que les épaules. Coudes vers le bas, omoplates en rétraction en fin de mouvement.',note:'',image:null},
+  {name:'Row en Unilatéral',series:4,reps:'8 Par Bras',repos:'75 sec',description:'Un genou et une main sur le banc. Rotation du tronc légère, coude haut en fin de mouvement.',note:'',image:null},
+  {name:'Rowing Planche Barre',series:4,reps:'8',repos:'2 min',description:'Corps parallèle au sol, prise neutre. Dos plat, amener la barre vers le nombril.',note:'',image:null},
+  {name:'Tirage Unilatéral sur Banc',series:4,reps:'10 Par Bras',repos:'75 sec',description:'Assis de côté sur le banc. Étirement complet en bas, contraction maximale en haut.',note:'',image:null},
+  {name:'Oblique Abdominal Crunch',series:5,reps:'15',repos:'60 sec',description:'En décubitus dorsal, mains derrière la nuque. Rotation et contraction maximale des obliques.',note:'',image:null}
 ];
 let progEx=[];
 function openCoachProgram(){
@@ -4506,7 +4506,7 @@ function renderWoEx(){
       ``}
 
       ${ex.description?`<div style="background:var(--card2);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#ccc;line-height:1.6">${escapeHtml(ex.description)}</div>`:''}
-      ${ex.note?`<div style="background:#1a1a1a;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#fca5a5"> ${escapeHtml(ex.note)}</div>`:''}
+      ${ex.note&&!(ex.description||'').includes(ex.note)?`<div style="background:#1a1a1a;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#fca5a5"> ${escapeHtml(ex.note)}</div>`:''}
 
       ${ex.videoUrl?`<a href="${safeUrl(ex.videoUrl)}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:12px;background:#08081a;border:1px solid #2a2a5a;border-radius:10px;padding:11px 14px;margin-bottom:12px;text-decoration:none;color:#7799ff">
         <div style="width:32px;height:32px;background:#1a1a3a;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">▶</div>
