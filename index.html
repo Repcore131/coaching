@@ -8193,12 +8193,25 @@ async function importVideoLinksFromPdf(input){
     const buf=await file.arrayBuffer();
     const pdf=await pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise;
     let allText='';
+    const annotUrls=[];
     for(let p=1;p<=pdf.numPages;p++){
       const page=await pdf.getPage(p);
+      // 1. Texte visible
       const content=await page.getTextContent();
       allText+=content.items.map(it=>it.str).join(' ')+'\n';
+      // 2. Annotations hyperlien (les liens cliquables rouges dans le PDF)
+      try{
+        const anns=await page.getAnnotations();
+        for(const a of anns){
+          const u=a.url||(a.action&&a.action.url)||'';
+          if(u) annotUrls.push(u);
+        }
+      }catch{}
     }
-    const links=parseVideoLinks(allText);
+    // Cherche d'abord dans les annotations (plus fiable), puis dans le texte
+    const fromText=parseVideoLinks(allText);
+    const fromAnnot=annotUrls.filter(u=>u.includes('youtu.be')||u.includes('youtube.com'));
+    const links=[...new Set([...fromAnnot,...fromText])];
     if(links.length){
       _pdfVideoLinks=links;
       progPhoto2Data='pdf';
@@ -8208,7 +8221,7 @@ async function importVideoLinksFromPdf(input){
       if(lbl) lbl.textContent='✓ '+links.length+' lien(s) YouTube trouvé(s) dans le PDF';
       toast(links.length+' lien(s) YouTube importé(s) ✓');
     } else {
-      toast('Aucun lien YouTube trouvé dans ce PDF — vérifie que les liens sont du texte (pas des images).','var(--orange)');
+      toast('Aucun lien YouTube dans ce PDF (ni texte ni hyperlien).','var(--orange)');
     }
   }catch(e){
     toast('Erreur lecture PDF : '+(e.message||'réessaie'),'var(--red)');
