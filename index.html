@@ -1034,24 +1034,38 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
       </div>
 
-      <!-- LIENS YOUTUBE : photo OU pdf (cachés des athlètes) -->
+      <!-- LIENS YOUTUBE : coller / photo / pdf (cachés des athlètes) -->
       <div style="margin-top:10px">
         <div style="font-size:9px;color:#4ade80;letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin-bottom:6px"> Liens YouTube <span style="opacity:.5;font-size:8px">(cachés — IA seulement)</span></div>
         <div id="prog-photo2-ph" style="display:flex;gap:6px">
+          <!-- Coller les liens — option principale -->
+          <div onclick="togglePasteLiens()" id="prog-paste-btn"
+            style="flex:1.2;border:1px dashed #4ade80;border-radius:8px;padding:10px;text-align:center;cursor:pointer;background:#0a1a00"
+            onmouseover="this.style.borderColor='#86efac'" onmouseout="this.style.borderColor='#4ade80'">
+            <div style="font-size:22px;margin-bottom:3px">✏️</div>
+            <div style="font-size:10px;color:#4ade80;font-weight:700">Coller liens</div>
+          </div>
           <div onclick="document.getElementById('prog-photo2-input').click()"
             style="flex:1;border:1px dashed #2a2a2a;border-radius:8px;padding:10px;text-align:center;cursor:pointer"
-            onmouseover="this.style.borderColor='#4ade80'" onmouseout="this.style.borderColor='#2a2a2a'">
+            onmouseover="this.style.borderColor='#555'" onmouseout="this.style.borderColor='#2a2a2a'">
             <input type="file" id="prog-photo2-input" accept="image/*" style="display:none" onchange="loadProgPhoto2(this)">
             <div style="font-size:22px;margin-bottom:3px">📷</div>
-            <div style="font-size:10px;color:var(--sub);font-weight:700">Photo page</div>
+            <div style="font-size:10px;color:var(--sub);font-weight:700">Photo</div>
           </div>
           <div onclick="document.getElementById('prog-pdf-links-input').click()"
             style="flex:1;border:1px dashed #2a2a2a;border-radius:8px;padding:10px;text-align:center;cursor:pointer"
-            onmouseover="this.style.borderColor='#4ade80'" onmouseout="this.style.borderColor='#2a2a2a'">
+            onmouseover="this.style.borderColor='#555'" onmouseout="this.style.borderColor='#2a2a2a'">
             <input type="file" id="prog-pdf-links-input" accept="application/pdf" style="display:none" onchange="importVideoLinksFromPdf(this)">
             <div style="font-size:22px;margin-bottom:3px">📄</div>
-            <div style="font-size:10px;color:var(--sub);font-weight:700">Fichier PDF</div>
+            <div style="font-size:10px;color:var(--sub);font-weight:700">PDF</div>
           </div>
+        </div>
+        <!-- Zone coller les liens -->
+        <div id="prog-paste-zone" style="display:none;margin-top:6px;background:#0a1a00;border:1px solid #1a3a0a;border-radius:8px;padding:10px">
+          <div style="font-size:10px;color:#4ade80;font-weight:700;margin-bottom:6px">Colle tes liens YouTube (un par ligne) :</div>
+          <textarea id="prog-paste-input" rows="4" placeholder="https://youtu.be/...&#10;https://youtu.be/...&#10;https://youtu.be/..."
+            style="width:100%;font-size:11px;padding:8px;background:#060f00;border:1px solid #2a3a2a;border-radius:6px;color:#ccc;font-family:monospace;box-sizing:border-box;resize:vertical"></textarea>
+          <button onclick="savePastedLinks()" style="margin-top:6px;width:100%;padding:8px;background:#166534;border:none;border-radius:6px;color:#4ade80;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;cursor:pointer"> Valider les liens</button>
         </div>
         <div id="prog-photo2-ready" style="display:none;margin-top:4px;background:#0a1a00;border:1px solid #1a3a0a;border-radius:8px;padding:8px 12px">
           <div style="display:flex;align-items:center;gap:8px">
@@ -8181,6 +8195,28 @@ function clearProgPhoto2(){
   _pdfVideoLinks=null;
   document.getElementById('prog-photo2-ph').style.display='flex';
   document.getElementById('prog-photo2-ready').style.display='none';
+  const pz=document.getElementById('prog-paste-zone');
+  const pi=document.getElementById('prog-paste-input');
+  if(pz) pz.style.display='none';
+  if(pi) pi.value='';
+}
+function togglePasteLiens(){
+  const pz=document.getElementById('prog-paste-zone');
+  if(!pz) return;
+  pz.style.display=pz.style.display==='none'?'block':'none';
+}
+function savePastedLinks(){
+  const raw=document.getElementById('prog-paste-input')?.value||'';
+  const links=[...new Set(raw.split(/[\n,\s]+/).map(s=>s.trim()).filter(s=>s.includes('youtu')))];
+  if(!links.length){toast('Aucun lien YouTube reconnu — vérifie le format.','var(--orange)');return;}
+  _pdfVideoLinks=links;
+  progPhoto2Data='pdf';
+  document.getElementById('prog-photo2-ph').style.display='none';
+  document.getElementById('prog-paste-zone').style.display='none';
+  document.getElementById('prog-photo2-ready').style.display='block';
+  const lbl=document.getElementById('prog-photo2-label');
+  if(lbl) lbl.textContent='✓ '+links.length+' lien(s) YouTube prêts';
+  toast(links.length+' lien(s) enregistrés ✓');
 }
 
 async function importVideoLinksFromPdf(input){
