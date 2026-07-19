@@ -8301,12 +8301,13 @@ async function analyzeProgPhotos(){
     } else if(progPhoto2Data&&progPhoto2Data!=='pdf'){
       if(btn) btn.innerHTML='⏳ Lecture liens vidéos...';
       try{
-        // 3 passes en parallèle : original×2 moteurs + image prétraitée (rouge→noir, fond→blanc)
-        const preproc=await scaleImage2x(progPhoto2Data).catch(()=>progPhoto2Data);
+        // 3 passes : image compressée <900KB (limite ocr.space=1MB), deux résolutions
+        const r1=await resizeForOcr(progPhoto2Data,1500).catch(()=>progPhoto2Data);
+        const r2=await resizeForOcr(progPhoto2Data,800).catch(()=>r1);
         const [t1,t2,t3]=await Promise.all([
-          _ocrImage(progPhoto2Data,{isTable:false,engine:1,language:'eng'}).catch(()=>''),
-          _ocrImage(progPhoto2Data,{isTable:false,engine:2,language:'eng'}).catch(()=>''),
-          _ocrImage(preproc,{isTable:false,engine:2,language:'eng'}).catch(()=>'')
+          _ocrImage(r1,{isTable:false,engine:1,language:'eng'}).catch(()=>''),
+          _ocrImage(r1,{isTable:false,engine:2,language:'eng'}).catch(()=>''),
+          _ocrImage(r2,{isTable:false,engine:2,language:'eng'}).catch(()=>'')
         ]);
         const combined=t1+'\n'+t2+'\n'+t3;
         videoLinks=parseVideoLinks(combined);
@@ -8380,17 +8381,22 @@ function updateCalcTable(){
 
 // ======= OCR AUTOMATIQUE : LECTURE PHOTO PROGRAMME =======
 
-// Préprocessing : image binaire pure (texte→noir, fond→blanc)
-function scaleImage2x(dataUrl){
+// Redimensionne + compresse pour respecter la limite 1MB d'ocr.space
+function resizeForOcr(dataUrl,maxPx=1500){
   return new Promise(resolve=>{
     const img=new Image();
     img.onload=()=>{
+      let w=img.width,h=img.height;
+      if(w>maxPx||h>maxPx){const r=Math.min(maxPx/w,maxPx/h);w=Math.round(w*r);h=Math.round(h*r);}
       const c=document.createElement('canvas');
-      c.width=img.width*2; c.height=img.height*2;
+      c.width=w;c.height=h;
       const ctx=c.getContext('2d');
-      ctx.imageSmoothingEnabled=false;
-      ctx.drawImage(img,0,0,c.width,c.height);
-      resolve(c.toDataURL('image/jpeg',0.92));
+      ctx.imageSmoothingEnabled=true;
+      ctx.imageSmoothingQuality='high';
+      ctx.drawImage(img,0,0,w,h);
+      let q=0.85,out=c.toDataURL('image/jpeg',q);
+      while(out.length*0.75>900000&&q>0.4){q-=0.1;out=c.toDataURL('image/jpeg',q);}
+      resolve(out);
     };
     img.onerror=()=>resolve(dataUrl);
     img.src=dataUrl;
@@ -8438,11 +8444,12 @@ async function analyzePhotoWithClaude(idx){
       try{
         if(btn) btn.innerHTML='⏳ Lecture liens vidéos...';
         const p2=cfg[idx].photo2;
-        const preproc=await scaleImage2x(p2).catch(()=>p2);
+        const r1=await resizeForOcr(p2,1500).catch(()=>p2);
+        const r2=await resizeForOcr(p2,800).catch(()=>r1);
         const [t1,t2,t3]=await Promise.all([
-          _ocrImage(p2,{isTable:false,engine:1,language:'eng'}).catch(()=>''),
-          _ocrImage(p2,{isTable:false,engine:2,language:'eng'}).catch(()=>''),
-          _ocrImage(preproc,{isTable:false,engine:2,language:'eng'}).catch(()=>'')
+          _ocrImage(r1,{isTable:false,engine:1,language:'eng'}).catch(()=>''),
+          _ocrImage(r1,{isTable:false,engine:2,language:'eng'}).catch(()=>''),
+          _ocrImage(r2,{isTable:false,engine:2,language:'eng'}).catch(()=>'')
         ]);
         videoLinks=parseVideoLinks(t1+'\n'+t2+'\n'+t3);
       }catch{}
