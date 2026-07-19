@@ -697,6 +697,10 @@ const COACH_PHOTO='icons/coach.jpg';
           <div class="metric-box"><div class="metric-val" id="ch-alerts" style="color:var(--red)">0</div><div class="metric-label">Alertes</div></div>
         </div>
         <div id="ch-todo"></div>
+        <button onclick="openCoachPrograms()" style="width:100%;margin-bottom:16px;padding:13px 16px;background:linear-gradient(135deg,#0d0d0d,#1a0000);border:1px solid #2a0000;border-left:3px solid var(--red);border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px;text-align:left;display:flex;align-items:center;justify-content:space-between">
+          <span>🗂️ MES PROGRAMMES (H/F)</span>
+          <span style="color:var(--red);font-size:13px">→</span>
+        </button>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
           <div class="section-header" style="margin-bottom:0">
             <div class="sh-line"></div>
@@ -956,6 +960,58 @@ const COACH_PHOTO='icons/coach.jpg';
     <div class="pad">
       <p class="sub" style="font-size:12px;margin-bottom:20px;line-height:1.6">Active/désactive les jours et modifie chaque séance. Le Programme Fondation est pré-chargé jusqu'à personnalisation.</p>
       <div id="coach-session-slots"></div>
+    </div>
+  </div>
+</div>
+
+<!-- COACH PROGRAMMES LIST -->
+<div id="s-coach-programs" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="go('s-coach-home');loadCoachHome()">←</button>
+    <span class="topbar-title">Mes programmes</span>
+    <button onclick="createCoachProgTemplate()" style="background:var(--red);border:none;color:#fff;padding:7px 14px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:3px">+ CRÉER</button>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <p class="sub" style="font-size:12px;margin-bottom:20px;line-height:1.6">Crée des templates avec une version Homme et une version Femme. Assigne-les à tes athlètes en un clic.</p>
+      <div id="cpl-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- COACH PROGRAMME TEMPLATE EDITOR -->
+<div id="s-coach-prog-template" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="go('s-coach-programs');loadCoachProgramsList()">←</button>
+    <input id="cpt-name" placeholder="Nom du programme" style="flex:1;background:transparent;border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:14px;font-weight:800;outline:none;min-width:0;margin:0 8px" onchange="saveCoachProgTemplateName()">
+    <button onclick="saveCoachProgTemplate()" style="background:var(--red);border:none;color:#fff;padding:7px 14px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:3px">SAUVEGARDER</button>
+  </div>
+  <div style="display:flex;border-bottom:1px solid #1a0000;flex-shrink:0;background:#080808">
+    <button id="cpt-tab-h" onclick="loadProgTemplateSlots('H')" style="flex:1;padding:11px 4px;background:none;border:none;border-bottom:2px solid var(--red);color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1px;cursor:pointer">HOMME</button>
+    <button id="cpt-tab-f" onclick="loadProgTemplateSlots('F')" style="flex:1;padding:11px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1px;cursor:pointer">FEMME</button>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad" style="padding-top:16px">
+      <div id="cpt-session-slots"></div>
+    </div>
+  </div>
+</div>
+
+<!-- COACH PROGRAMME ASSIGN -->
+<div id="s-coach-prog-assign" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="go('s-coach-programs');loadCoachProgramsList()">←</button>
+    <span class="topbar-title" id="cpa-title">Assigner</span>
+    <button onclick="confirmAssignProgram()" style="background:var(--red);border:none;color:#fff;padding:7px 14px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:3px">ASSIGNER</button>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <p class="sub" style="font-size:12px;margin-bottom:4px;line-height:1.6">Sélectionne les athlètes qui recevront ce programme. La version H ou F est choisie automatiquement selon leur genre.</p>
+      <div style="display:flex;gap:8px;margin-bottom:16px;margin-top:12px">
+        <button onclick="cpaSelectAll(true)" class="btn btn-outline btn-sm" style="flex:1">Tout sélectionner</button>
+        <button onclick="cpaSelectAll(false)" class="btn btn-outline btn-sm" style="flex:1">Tout décocher</button>
+      </div>
+      <div id="cpa-athletes"></div>
     </div>
   </div>
 </div>
@@ -3887,6 +3943,204 @@ const defEx=[
   {name:'Oblique Abdominal Crunch',series:5,reps:'15',repos:'60 sec',description:'En décubitus dorsal, mains derrière la nuque. Rotation et contraction maximale des obliques.',note:'',image:null}
 ];
 let progEx=[];
+// ======= COACH PROGRAMME TEMPLATES =======
+let _editProgTemplateIdx=null, _editProgTemplateGender='H', _editProgTemplateSessionIdx=null, _assigningProgIdx=null;
+
+function openCoachPrograms(){go('s-coach-programs');loadCoachProgramsList();}
+
+function loadCoachProgramsList(){
+  const progs=currentUser.coachPrograms||[];
+  const container=document.getElementById('cpl-list');if(!container)return;
+  if(!progs.length){
+    container.innerHTML=`<div style="text-align:center;padding:40px 16px;color:var(--sub)">
+      <div style="font-size:40px;margin-bottom:12px">🗂️</div>
+      <div style="font-weight:800;font-size:15px;margin-bottom:8px">Aucun programme créé</div>
+      <div style="font-size:12px;line-height:1.6">Clique sur + CRÉER pour commencer ton premier template Homme/Femme.</div>
+    </div>`;return;
+  }
+  container.innerHTML=progs.map((p,i)=>`
+    <div style="background:var(--card);border-radius:14px;padding:16px;margin-bottom:12px;border:1px solid var(--border)">
+      <div style="font-weight:800;font-size:14px;margin-bottom:4px">${escapeHtml(p.name||'Sans nom')}</div>
+      <div class="sub" style="font-size:11px;margin-bottom:12px">
+        ${_cptCount(p.sessions_H)} séances H · ${_cptCount(p.sessions_F)} séances F
+        · créé le ${new Date(p.createdAt||Date.now()).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})}
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline btn-sm" style="flex:1" onclick="editCoachProgTemplate(${i})">✏️ Modifier</button>
+        <button class="btn btn-red btn-sm" style="flex:1" onclick="openAssignProgram(${i})">▶ Assigner</button>
+        <button onclick="deleteCoachProgTemplate(${i})" style="background:none;border:1px solid #333;color:#666;border-radius:8px;padding:7px 10px;font-size:14px;cursor:pointer;line-height:1">🗑</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function _cptCount(sessions){return sessions?sessions.filter(s=>s.active&&s.exercises?.length).length:0;}
+
+function createCoachProgTemplate(){
+  if(!currentUser.coachPrograms) currentUser.coachPrograms=[];
+  const p={id:Date.now().toString(36),name:'Nouveau programme',createdAt:Date.now(),
+    sessions_H:FONDATION_H.map(s=>({...s,exercises:s.exercises.map(e=>({...e}))})),
+    sessions_F:FONDATION_F.map(s=>({...s,exercises:s.exercises.map(e=>({...e}))}))};
+  currentUser.coachPrograms.push(p);
+  saveUser();
+  editCoachProgTemplate(currentUser.coachPrograms.length-1);
+}
+
+function editCoachProgTemplate(idx){
+  _editProgTemplateIdx=idx;
+  _editProgTemplateGender='H';
+  const p=currentUser.coachPrograms[idx];
+  const inp=document.getElementById('cpt-name');
+  if(inp) inp.value=p.name||'';
+  go('s-coach-prog-template');
+  loadProgTemplateSlots('H');
+}
+
+function saveCoachProgTemplateName(){
+  if(_editProgTemplateIdx===null) return;
+  const v=document.getElementById('cpt-name')?.value||'';
+  currentUser.coachPrograms[_editProgTemplateIdx].name=v;
+}
+
+function saveCoachProgTemplate(){
+  saveCoachProgTemplateName();
+  saveUser();
+  toast(' Programme sauvegardé !');
+}
+
+function deleteCoachProgTemplate(idx){
+  if(!confirm('Supprimer ce programme ?')) return;
+  currentUser.coachPrograms.splice(idx,1);
+  saveUser();toast('Programme supprimé.');loadCoachProgramsList();
+}
+
+function loadProgTemplateSlots(gender){
+  _editProgTemplateGender=gender;
+  if(_editProgTemplateIdx===null) return;
+  const p=currentUser.coachPrograms[_editProgTemplateIdx];
+  const sessions=gender==='H'?p.sessions_H:p.sessions_F;
+  DAYS.forEach((day,i)=>{
+    if(!sessions[i]) sessions[i]={day,name:'',active:false,photo:null,exercises:[],notes:'',warmup:''};
+    if(!Array.isArray(sessions[i].exercises)) sessions[i].exercises=[];
+  });
+  const tH=document.getElementById('cpt-tab-h'),tF=document.getElementById('cpt-tab-f');
+  if(tH){tH.style.color=gender==='H'?'var(--red)':'var(--sub)';tH.style.borderBottomColor=gender==='H'?'var(--red)':'transparent';}
+  if(tF){tF.style.color=gender==='F'?'var(--red)':'var(--sub)';tF.style.borderBottomColor=gender==='F'?'var(--red)':'transparent';}
+  const container=document.getElementById('cpt-session-slots');if(!container)return;
+  container.innerHTML=sessions.map((s,i)=>`
+    <div style="background:var(--card);border-radius:16px;margin-bottom:14px;overflow:hidden;border:1.5px solid ${s.active?'var(--red)':'var(--border)'}">
+      <div style="background:${s.active?'linear-gradient(135deg,#1a0000,#2a0000)':'var(--card2)'};padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:32px;height:32px;background:${s.active?'var(--red)':'#1a1a1a'};border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;flex-shrink:0">${DAY_ICONS[i]}</div>
+          <div>
+            <div style="font-weight:800;font-size:15px">${s.day}</div>
+            <div class="sub" style="font-size:11px;margin-top:1px">${s.active?(escapeHtml(s.name)||'Séance sans nom'):'Jour de repos'}</div>
+          </div>
+        </div>
+        <div onclick="cptToggleDay(${i})" style="width:44px;height:24px;border-radius:12px;background:${s.active?'var(--red)':'var(--border)'};position:relative;cursor:pointer;flex-shrink:0">
+          <div style="position:absolute;width:18px;height:18px;border-radius:9px;background:#fff;top:3px;left:${s.active?'23px':'3px'}"></div>
+        </div>
+      </div>
+      ${s.active?`
+      <div style="padding:14px 16px">
+        <div style="margin-bottom:12px">
+          <label style="margin-top:0">Nom de la séance</label>
+          <input value="${escapeHtml(s.name||'')}" placeholder="Ex: PECS & TRICEPS" onchange="cptRenameSession(${i},this.value)" style="margin-top:4px">
+        </div>
+        <button class="btn btn-red btn-sm" style="width:100%" onclick="openProgTemplateSessionExercises(${i})"> Modifier les exercices (${s.exercises?.length||0})</button>
+      </div>`:''}
+    </div>
+  `).join('');
+}
+
+function cptToggleDay(i){
+  if(_editProgTemplateIdx===null) return;
+  const p=currentUser.coachPrograms[_editProgTemplateIdx];
+  const sessions=_editProgTemplateGender==='H'?p.sessions_H:p.sessions_F;
+  sessions[i].active=!sessions[i].active;
+  loadProgTemplateSlots(_editProgTemplateGender);
+}
+function cptRenameSession(i,val){
+  if(_editProgTemplateIdx===null) return;
+  const p=currentUser.coachPrograms[_editProgTemplateIdx];
+  const sessions=_editProgTemplateGender==='H'?p.sessions_H:p.sessions_F;
+  sessions[i].name=val;
+}
+
+function openProgTemplateSessionExercises(idx){
+  if(_editProgTemplateIdx===null) return;
+  const p=currentUser.coachPrograms[_editProgTemplateIdx];
+  const sessions=_editProgTemplateGender==='H'?p.sessions_H:p.sessions_F;
+  const s=sessions[idx];
+  progEx=JSON.parse(JSON.stringify(s.exercises||[]));
+  document.getElementById('prog-name').value=s.name||'';
+  document.getElementById('prog-notes').value=s.notes||'';
+  document.getElementById('prog-warmup').value=s.warmup||'';
+  document.getElementById('prog-cooldown').value=s.cooldown||'';
+  progPhotoData=null;progPhoto2Data=null;_pdfVideoLinks=null;
+  const img=document.getElementById('prog-photo-preview');
+  img.style.display='none';document.getElementById('prog-photo-ph').style.display='block';
+  ['prog-session-sel-wrap','prog-pdf-wrap'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+  window._editingSessionIdx=null;window._editingCoachSessionIdx=null;
+  _editProgTemplateSessionIdx=idx;
+  const backBtn=document.querySelector('#s-coach-program .back-btn');
+  if(backBtn) backBtn.onclick=()=>{go('s-coach-prog-template');loadProgTemplateSlots(_editProgTemplateGender);};
+  const title=document.querySelector('#s-coach-program .topbar-title');
+  if(title) title.textContent=(s.name||DAYS[idx])+' ('+_editProgTemplateGender+') — Exercices';
+  renderProgEx();go('s-coach-program');
+}
+
+// ─── Assignation ───
+function openAssignProgram(idx){
+  _assigningProgIdx=idx;
+  const p=currentUser.coachPrograms[idx];
+  const title=document.getElementById('cpa-title');
+  if(title) title.textContent='Assigner — '+escapeHtml(p.name||'Programme');
+  go('s-coach-prog-assign');
+  loadAssignAthletes();
+}
+
+function loadAssignAthletes(){
+  const users=DB.get('users')||{};
+  const athletes=Object.values(users).filter(u=>u.coachId===currentUser.id&&u.role!=='coach');
+  const container=document.getElementById('cpa-athletes');if(!container)return;
+  if(!athletes.length){container.innerHTML=`<div style="text-align:center;padding:24px;color:var(--sub);font-size:12px">Aucun athlète lié à ton compte.</div>`;return;}
+  container.innerHTML=athletes.map(a=>`
+    <div style="display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid #181818">
+      <input type="checkbox" id="cpa-cb-${a.id}" value="${a.id}" style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
+      <label for="cpa-cb-${a.id}" style="flex:1;cursor:pointer">
+        <div style="font-weight:700;font-size:13px">${escapeHtml((a.fname||'')+' '+(a.lname||''))}</div>
+        <div class="sub" style="font-size:10px;margin-top:2px">${a._evol_gender==='H'?'♂ Homme':a._evol_gender==='F'?'♀ Femme':'Genre non renseigné — version H par défaut'}</div>
+      </label>
+    </div>
+  `).join('');
+}
+
+function cpaSelectAll(v){document.querySelectorAll('#cpa-athletes input[type=checkbox]').forEach(cb=>cb.checked=v);}
+
+function confirmAssignProgram(){
+  const checked=[...document.querySelectorAll('#cpa-athletes input[type=checkbox]:checked')];
+  if(!checked.length){toast('Sélectionne au moins un athlète','var(--orange)');return;}
+  const prog=currentUser.coachPrograms[_assigningProgIdx];
+  const users=DB.get('users')||{};
+  let count=0;
+  checked.forEach(cb=>{
+    const emailKey=Object.keys(users).find(k=>users[k]?.id===cb.value);
+    if(!emailKey) return;
+    const a=users[emailKey];
+    const g=a._evol_gender;
+    const base=g==='F'?prog.sessions_F:prog.sessions_H;
+    a.sessions_config=base.map(s=>({...s,exercises:s.exercises.map(e=>({...e}))}));
+    a.updatedAt=Date.now();
+    users[emailKey]=a;
+    CLOUD.pushOne(emailKey,a);
+    count++;
+  });
+  DB.set('users',users);
+  toast(` Programme assigné à ${count} athlète${count>1?'s':''} !`);
+  go('s-coach-programs');loadCoachProgramsList();
+}
+
 // ======= COACH SESSION MANAGER =======
 let _coachEditClient=null;
 function openCoachSessions(){
@@ -4269,6 +4523,21 @@ function addExercise(){
   setTimeout(()=>{const el=document.getElementById('prog-exercises');if(el)el.lastElementChild?.scrollIntoView({behavior:'smooth'});},100);
 }
 function saveProgram(){
+  // Cas 0 : coach édite une séance d'un template programme H/F
+  if(_editProgTemplateSessionIdx!==null&&_editProgTemplateIdx!==null){
+    const p=currentUser.coachPrograms[_editProgTemplateIdx];
+    const sessions=_editProgTemplateGender==='H'?p.sessions_H:p.sessions_F;
+    const s=sessions[_editProgTemplateSessionIdx];
+    s.exercises=progEx;
+    s.name=document.getElementById('prog-name').value;
+    s.notes=document.getElementById('prog-notes').value;
+    s.warmup=document.getElementById('prog-warmup').value;
+    s.cooldown=document.getElementById('prog-cooldown').value;
+    _editProgTemplateSessionIdx=null;
+    saveUser();
+    toast(' Séance sauvegardée !');
+    go('s-coach-prog-template');loadProgTemplateSlots(_editProgTemplateGender);return;
+  }
   // Cas 1 : coach édite une séance d'un athlète via openCoachSessions
   if(typeof window._editingCoachSessionIdx==='number'&&_coachEditClient){
     const idx=window._editingCoachSessionIdx;
