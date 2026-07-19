@@ -4105,15 +4105,32 @@ function loadAssignAthletes(){
   const athletes=Object.values(users).filter(u=>u.coachId===currentUser.id&&u.role!=='coach');
   const container=document.getElementById('cpa-athletes');if(!container)return;
   if(!athletes.length){container.innerHTML=`<div style="text-align:center;padding:24px;color:var(--sub);font-size:12px">Aucun athlète lié à ton compte.</div>`;return;}
-  container.innerHTML=athletes.map(a=>`
+  container.innerHTML=athletes.map(a=>{
+    // Detect gender from _evol_gender first, then fall back to gender field
+    const gRaw=a._evol_gender||a.gender||'';
+    const detectedF=isFemale(gRaw);
+    const defG=detectedF?'F':'H';
+    return `
     <div style="display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid #181818">
-      <input type="checkbox" id="cpa-cb-${a.id}" value="${a.id}" style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
+      <input type="checkbox" id="cpa-cb-${a.id}" value="${a.id}" data-gender="${defG}" style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <label for="cpa-cb-${a.id}" style="flex:1;cursor:pointer">
         <div style="font-weight:700;font-size:13px">${escapeHtml((a.fname||'')+' '+(a.lname||''))}</div>
-        <div class="sub" style="font-size:10px;margin-top:2px">${a._evol_gender==='H'?'♂ Homme':a._evol_gender==='F'?'♀ Femme':'Genre non renseigné — version H par défaut'}</div>
       </label>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button onclick="cpaSwitchGender('${a.id}','H')" id="cpa-g-H-${a.id}" style="padding:4px 10px;border-radius:3px;border:none;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;background:${defG==='H'?'var(--red)':'#222'};color:${defG==='H'?'#fff':'var(--sub)'}">♂ H</button>
+        <button onclick="cpaSwitchGender('${a.id}','F')" id="cpa-g-F-${a.id}" style="padding:4px 10px;border-radius:3px;border:none;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;background:${defG==='F'?'var(--red)':'#222'};color:${defG==='F'?'#fff':'var(--sub)'}">♀ F</button>
+      </div>
     </div>
-  `).join('');
+  `;}).join('');
+}
+function cpaSwitchGender(id,g){
+  const bH=document.getElementById('cpa-g-H-'+id);
+  const bF=document.getElementById('cpa-g-F-'+id);
+  const cb=document.getElementById('cpa-cb-'+id);
+  if(!bH||!bF)return;
+  bH.style.background=g==='H'?'var(--red)':'#222';bH.style.color=g==='H'?'#fff':'var(--sub)';
+  bF.style.background=g==='F'?'var(--red)':'#222';bF.style.color=g==='F'?'#fff':'var(--sub)';
+  if(cb) cb.dataset.gender=g;
 }
 
 function cpaSelectAll(v){document.querySelectorAll('#cpa-athletes input[type=checkbox]').forEach(cb=>cb.checked=v);}
@@ -4128,8 +4145,7 @@ function confirmAssignProgram(){
     const emailKey=Object.keys(users).find(k=>users[k]?.id===cb.value);
     if(!emailKey) return;
     const a=users[emailKey];
-    const g=a._evol_gender;
-    const base=g==='F'?prog.sessions_F:prog.sessions_H;
+    const base=cb.dataset.gender==='F'?prog.sessions_F:prog.sessions_H;
     a.sessions_config=base.map(s=>({...s,exercises:s.exercises.map(e=>({...e}))}));
     a.updatedAt=Date.now();
     users[emailKey]=a;
