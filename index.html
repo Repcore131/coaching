@@ -8191,32 +8191,33 @@ async function importVideoLinksFromPdf(input){
   try{
     const buf=await file.arrayBuffer();
 
-    // Méthode 1 : lecture brute des octets PDF
-    // Les URLs dans les annotations PDF sont stockées en texte clair non compressé
+    // Méthode 1 : octets bruts (latin1)
     const rawText=new TextDecoder('latin1').decode(buf);
     const fromRaw=parseVideoLinks(rawText);
 
-    // Méthode 2 : PDF.js — texte visible + annotations hyperlien
+    // Méthode 2 : PDF.js
     await _loadPdfJs();
     const pdf=await pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise;
-    let pdfText='';
+    let pdfJoined='', pdfNoSp='';
     const annotUrls=[];
     for(let p=1;p<=pdf.numPages;p++){
       const page=await pdf.getPage(p);
       const content=await page.getTextContent();
-      pdfText+=content.items.map(it=>it.str).join(' ')+'\n';
+      const strs=content.items.map(it=>it.str);
+      pdfJoined+=strs.join(' ')+'\n';
+      pdfNoSp+=strs.join('')+'\n'; // join sans espace (URLs fragmentées)
       try{
         const anns=await page.getAnnotations();
         for(const a of anns){
-          const u=a.url||a.unsafeUrl||(a.action&&(a.action.url||a.action.URI))||'';
+          const u=a.url||a.unsafeUrl||(a.action&&(a.action.url||a.action.URI||a.action.uri))||'';
           if(u) annotUrls.push(u);
         }
       }catch{}
     }
-    const fromText=parseVideoLinks(pdfText);
+    const fromText=parseVideoLinks(pdfJoined);
+    const fromNoSp=parseVideoLinks(pdfNoSp);
     const fromAnnot=annotUrls.filter(u=>u&&(u.includes('youtu.be')||u.includes('youtube.com')));
-
-    const links=[...new Set([...fromRaw,...fromAnnot,...fromText])];
+    const links=[...new Set([...fromRaw,...fromAnnot,...fromText,...fromNoSp])];
 
     if(links.length){
       _pdfVideoLinks=links;
@@ -8227,9 +8228,23 @@ async function importVideoLinksFromPdf(input){
       if(lbl) lbl.textContent='✓ '+links.length+' lien(s) YouTube trouvé(s)';
       toast(links.length+' lien(s) YouTube importé(s) ✓');
     } else {
-      // Debug : aide au diagnostic
-      const dbg='brut:'+fromRaw.length+' annot:'+fromAnnot.length+'('+annotUrls.length+') txt:'+fromText.length;
-      toast('Aucun lien trouvé — '+dbg,'var(--orange)');
+      // Modale diagnostic — montre le texte brut extrait
+      const preview=t=>t.replace(/</g,'&lt;').slice(0,400);
+      const html=`<div id="modal-overlay" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
+      <div style="background:#161616;border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:500px;max-height:80vh;overflow-y:auto">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <b style="color:#f87171">Aucun lien trouvé — Diagnostic</b>
+          <button onclick="document.getElementById('modal-overlay').remove()" style="background:none;border:none;color:var(--sub);font-size:22px;cursor:pointer">✕</button>
+        </div>
+        <p style="font-size:11px;color:var(--sub);margin-bottom:8px">Copie ce texte et envoie-le pour qu'on diagnostique :</p>
+        <div style="font-size:10px;margin-bottom:6px;color:#4ade80">Annotations trouvées (${annotUrls.length}) :</div>
+        <textarea style="width:100%;height:60px;font-size:10px;font-family:monospace;background:#0a0a0a;border:1px solid var(--border);color:#ccc;padding:6px;border-radius:6px" readonly>${annotUrls.join('\n')||'(aucune)'}</textarea>
+        <div style="font-size:10px;margin:8px 0 4px;color:#4ade80">Texte PDF extrait (début) :</div>
+        <textarea style="width:100%;height:100px;font-size:10px;font-family:monospace;background:#0a0a0a;border:1px solid var(--border);color:#ccc;padding:6px;border-radius:6px" readonly>${preview(pdfJoined)||'(vide)'}</textarea>
+        <div style="font-size:10px;margin:8px 0 4px;color:#4ade80">Octets bruts (début) :</div>
+        <textarea style="width:100%;height:60px;font-size:10px;font-family:monospace;background:#0a0a0a;border:1px solid var(--border);color:#ccc;padding:6px;border-radius:6px" readonly>${preview(rawText)}</textarea>
+      </div></div>`;
+      document.body.insertAdjacentHTML('beforeend',html);
     }
   }catch(e){
     toast('Erreur : '+(e.message||'réessaie'),'var(--red)');
