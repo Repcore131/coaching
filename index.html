@@ -4475,18 +4475,17 @@ function removeSessionPhoto2(i){
   saveUser();loadSessionManager();
 }
 function parseVideoLinks(text){
-  // Corrige les artéfacts OCR courants dans les URLs
   let t=text
-    .replace(/•|·|‐|‑|–|—/g,'-')   // tirets/puces OCR → tiret réel (ex: ngL42UPPf•w → ngL42UPPf-w)
+    .replace(/•|·|‐|‑|–|—|−/g,'-')
+    .replace(/\\/g,'/')
     .replace(/https?\s*:\s*\/\s*\//gi,'https://')
     .replace(/youtu\s*[.,]\s*be/gi,'youtu.be')
     .replace(/youtube\s*[.,]\s*com/gi,'youtube.com')
-    .replace(/watch\s*\?\s*v\s*=/gi,'watch?v=');
+    .replace(/watch\s*\?\s*v\s*=/gi,'watch?v=')
+    .replace(/(youtu\.be\/|watch\?v=)\s+/gi,(m,p)=>p);
   const urls=[];
-  // Youtu.be et youtube.com avec protocole
-  const p1=t.match(/https?:\/\/(?:www\.)?(?:youtu\.be|youtube\.com\/(?:watch\?v=|shorts\/))[a-zA-Z0-9_\-]{5,}/gi)||[];
+  const p1=t.match(/https?:\/\/(?:www\.)?(?:youtu\.be\/[a-zA-Z0-9_\-]{5,}|youtube\.com\/(?:watch\?v=|shorts\/)[a-zA-Z0-9_\-]{5,})/gi)||[];
   urls.push(...p1);
-  // youtu.be sans protocole (OCR a mangé "https://")
   const p2=t.match(/(?<![a-zA-Z0-9\/])youtu\.be\/([a-zA-Z0-9_\-]{5,})/gi)||[];
   for(const m of p2){
     const id=m.split('/').pop();
@@ -8304,29 +8303,31 @@ async function analyzeProgPhotos(){
     } else if(progPhoto2Data&&progPhoto2Data!=='pdf'){
       if(btn) btn.innerHTML='⏳ Lecture liens vidéos...';
       try{
-        // Image originale directe (tests: OCR lit mieux sans preprocessing sur fond sombre)
-        // Les deux moteurs en parallèle, langue eng pour les URLs YouTube
-        const [t1,t2]=await Promise.all([
+        // 3 passes en parallèle : original×2 moteurs + image prétraitée (rouge→noir, fond→blanc)
+        const preproc=await preprocessPhoto2ForOcr(progPhoto2Data).catch(()=>progPhoto2Data);
+        const [t1,t2,t3]=await Promise.all([
           _ocrImage(progPhoto2Data,{isTable:false,engine:1,language:'eng'}).catch(()=>''),
-          _ocrImage(progPhoto2Data,{isTable:false,engine:2,language:'eng'}).catch(()=>'')
+          _ocrImage(progPhoto2Data,{isTable:false,engine:2,language:'eng'}).catch(()=>''),
+          _ocrImage(preproc,{isTable:false,engine:1,language:'eng'}).catch(()=>'')
         ]);
-        const combined=t1+'\n'+t2;
+        const combined=t1+'\n'+t2+'\n'+t3;
         videoLinks=parseVideoLinks(combined);
         if(!videoLinks.length){
-          // Modale diagnostic : montre ce que l'OCR a lu
-          const esc=s=>s.replace(/</g,'&lt;').slice(0,500);
+          const esc=s=>s.replace(/</g,'&lt;').slice(0,600);
           document.body.insertAdjacentHTML('beforeend',`
           <div id="modal-overlay" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
           <div style="background:#161616;border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:500px;max-height:85vh;overflow-y:auto">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-              <b style="color:#f87171">OCR — texte brut extrait</b>
+              <b style="color:#f87171">OCR — texte brut (v221)</b>
               <button onclick="document.getElementById('modal-overlay').remove()" style="background:none;border:none;color:var(--sub);font-size:22px;cursor:pointer">✕</button>
             </div>
-            <p style="font-size:11px;color:var(--sub);margin-bottom:8px">Fais une capture d'écran de ce texte et envoie-la :</p>
-            <div style="font-size:10px;color:#4ade80;margin-bottom:4px">Moteur 1 :</div>
-            <textarea readonly style="width:100%;height:80px;font-size:10px;font-family:monospace;background:#0a0a0a;border:1px solid #333;color:#ccc;padding:6px;border-radius:6px;box-sizing:border-box">${esc(t1)||'(vide)'}</textarea>
-            <div style="font-size:10px;color:#4ade80;margin:8px 0 4px">Moteur 2 :</div>
-            <textarea readonly style="width:100%;height:80px;font-size:10px;font-family:monospace;background:#0a0a0a;border:1px solid #333;color:#ccc;padding:6px;border-radius:6px;box-sizing:border-box">${esc(t2)||'(vide)'}</textarea>
+            <p style="font-size:11px;color:var(--sub);margin-bottom:8px">Envoie-moi ce texte :</p>
+            <div style="font-size:10px;color:#4ade80;margin-bottom:4px">M1 original :</div>
+            <textarea readonly style="width:100%;height:70px;font-size:10px;font-family:monospace;background:#0a0a0a;border:1px solid #333;color:#ccc;padding:6px;border-radius:6px;box-sizing:border-box">${esc(t1)||'(vide)'}</textarea>
+            <div style="font-size:10px;color:#4ade80;margin:6px 0 4px">M2 original :</div>
+            <textarea readonly style="width:100%;height:70px;font-size:10px;font-family:monospace;background:#0a0a0a;border:1px solid #333;color:#ccc;padding:6px;border-radius:6px;box-sizing:border-box">${esc(t2)||'(vide)'}</textarea>
+            <div style="font-size:10px;color:#4ade80;margin:6px 0 4px">M1 prétraité :</div>
+            <textarea readonly style="width:100%;height:70px;font-size:10px;font-family:monospace;background:#0a0a0a;border:1px solid #333;color:#ccc;padding:6px;border-radius:6px;box-sizing:border-box">${esc(t3)||'(vide)'}</textarea>
           </div></div>`);
         }
       }catch(e){
