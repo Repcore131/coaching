@@ -4783,9 +4783,9 @@ function _migrateFoundationIfNeeded(){
   const g=currentUser._evol_gender;
   if(g!=='H'&&g!=='F') return;
   const sc=currentUser.sessions_config;
-  if(!sc||sc.some(s=>s._foundation)) return;
-  const fa=sc.find(s=>s.active&&s.exercises?.length);
-  if(!fa||fa.name||fa.exercises[0]?.name!==defEx[0]?.name) return;
+  if(sc&&sc.some(s=>s._foundation)) return; // déjà sur fondation
+  // Ne pas écraser si le coach a nommé une séance active (signe de personalisation)
+  if(sc&&sc.filter(s=>s.active).some(s=>s.name&&!s._foundation)) return;
   currentUser.sessions_config=null;initSessionsConfig();
 }
 function _renderExCard(ex,idx){
@@ -4806,62 +4806,68 @@ function _renderExCard(ex,idx){
     </div>
   </div></div>`;
 }
-function _renderProgExercisesInto(el){
-  const prog=getProgram();
-  if(prog._isDefault){
-    const u=(DB.get('users')||{})[currentUser.email]||currentUser;
-    if(u.programPdf||u.programPdfLink||u.programPdfStorageUrl){el.innerHTML='';return;}
-    const sc=currentUser.sessions_config;
-    const hasActive=sc&&sc.some(s=>s.active&&s.exercises?.length);
-    if(hasActive){
-      window._weekProgEl=el;
-      const today=new Date().getDay();
-      const todayIdx=today===0?6:today-1;
-      let sel=_selDay!=null?_selDay:-1;
-      if(sel===-1) sel=sc.findIndex((s,i)=>i===todayIdx&&s.active&&s.exercises?.length);
-      if(sel===-1) sel=sc.findIndex(s=>s.active&&s.exercises?.length);
-      _selDay=sel;
-      const isFoundation=sc.some(s=>s._foundation);
-      const selS=sel>=0?sc[sel]:{};
-      el.innerHTML=`
-        <div style="margin-bottom:14px">
-          <div style="font-size:9px;color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Mon programme</div>
-          <div style="font-size:16px;font-weight:900;letter-spacing:-0.3px">${isFoundation?'Programme Fondation':'Semaine d\'entraînement'}</div>
-          ${(selS.notes&&isFoundation)?`<p class="sub" style="margin-top:5px;font-size:12px;line-height:1.6">${escapeHtml(selS.notes)}</p>`:''}
-        </div>
-        <div style="display:flex;gap:6px;margin-bottom:16px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch">
-          ${sc.map((s,i)=>{
-            const isToday=i===todayIdx;
-            const isSel=i===sel;
-            const bg=isSel?'var(--red)':s.active?'#2a0000':'#141414';
-            const col=isSel||s.active?'#fff':'#555';
-            const bord=isToday?'2px solid '+(isSel?'#fff':'var(--red)'):'2px solid transparent';
-            return `<div onclick="_setWeekDay(${i})" style="flex-shrink:0;width:36px;height:36px;border-radius:3px;background:${bg};border:${bord};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;cursor:pointer;color:${col}">${DAY_ICONS[i]}</div>`;
-          }).join('')}
-        </div>
-        <div style="font-size:11px;color:var(--sub);font-weight:700;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px">${selS.active&&selS.exercises?.length?DAYS[sel]+(selS.name?' — '+escapeHtml(selS.name):''):DAYS[sel]||''} ${(!selS.active||!selS.exercises?.length)?'— Repos':''}
-        </div>
-        ${selS.active&&selS.exercises?.length
-          ?selS.exercises.map((ex,idx)=>_renderExCard(ex,idx)).join('')
-          :`<div style="text-align:center;padding:24px 16px;color:var(--sub);font-size:13px">Jour de repos</div>`}
-      `;
-      return;
-    }
-    el.innerHTML=`
-      <div style="text-align:center;padding:32px 24px 16px">
-        <div style="font-size:36px;margin-bottom:12px">⏳</div>
-        <div style="font-weight:900;font-size:15px;margin-bottom:8px">Programme en cours de création</div>
-        <div style="color:var(--sub);font-size:12px;line-height:1.7">Ton coach n'a pas encore publié<br>ton programme personnalisé.</div>
-      </div>`;
-    return;
-  }
+function _renderWeeklyInto(el,sc){
+  window._weekProgEl=el;
+  const today=new Date().getDay();
+  const todayIdx=today===0?6:today-1;
+  let sel=_selDay!=null?_selDay:-1;
+  if(sel===-1) sel=sc.findIndex((s,i)=>i===todayIdx&&s.active&&s.exercises?.length);
+  if(sel===-1) sel=sc.findIndex(s=>s.active&&s.exercises?.length);
+  _selDay=sel;
+  const isFoundation=sc.some(s=>s._foundation);
+  const selS=sel>=0?sc[sel]:{};
+  const progNote=sc.find(s=>s.notes&&s._foundation)?.notes||'';
   el.innerHTML=`
     <div style="margin-bottom:14px">
       <div style="font-size:9px;color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Mon programme</div>
-      <div style="font-size:16px;font-weight:900;letter-spacing:-0.3px">${escapeHtml(prog.name)}</div>
-      ${prog.notes?`<p class="sub" style="margin-top:5px;font-size:12px;line-height:1.6">${escapeHtml(prog.notes)}</p>`:''}
+      <div style="font-size:16px;font-weight:900;letter-spacing:-0.3px">${isFoundation?'Programme Fondation':'Semaine d\'entraînement'}</div>
+      ${progNote?`<p class="sub" style="margin-top:5px;font-size:12px;line-height:1.6">${escapeHtml(progNote)}</p>`:''}
     </div>
-    ${prog.exercises.map((ex,idx)=>_renderExCard(ex,idx)).join('')}`;
+    <div style="display:flex;gap:6px;margin-bottom:16px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch">
+      ${sc.map((s,i)=>{
+        const isToday=i===todayIdx;const isSel=i===sel;
+        const bg=isSel?'var(--red)':s.active?'#2a0000':'#141414';
+        const col=isSel||s.active?'#fff':'#555';
+        const bord=isToday?'2px solid '+(isSel?'#fff':'var(--red)'):'2px solid transparent';
+        return `<div onclick="_setWeekDay(${i})" style="flex-shrink:0;width:36px;height:36px;border-radius:3px;background:${bg};border:${bord};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;cursor:pointer;color:${col}">${DAY_ICONS[i]}</div>`;
+      }).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--sub);font-weight:700;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px">
+      ${selS.active&&selS.exercises?.length
+        ?DAYS[sel]+(selS.name?' — '+escapeHtml(selS.name):'')
+        :(DAYS[sel]||'')+' — Repos'}
+    </div>
+    ${selS.active&&selS.exercises?.length
+      ?selS.exercises.map((ex,idx)=>_renderExCard(ex,idx)).join('')
+      :`<div style="text-align:center;padding:24px 16px;color:var(--sub);font-size:13px">Jour de repos</div>`}
+  `;
+}
+function _renderProgExercisesInto(el){
+  // sessions_config est toujours prioritaire (fondation ou séances modifiées par le coach)
+  const sc=currentUser.sessions_config;
+  const hasActive=sc&&sc.some(s=>s.active&&s.exercises?.length);
+  if(hasActive){_renderWeeklyInto(el,sc);return;}
+
+  // Fallback : ancien programme unique assigné par le coach
+  const u=(DB.get('users')||{})[currentUser.email]||currentUser;
+  if(u.programPdf||u.programPdfLink||u.programPdfStorageUrl){el.innerHTML='';return;}
+  const prog=getProgram();
+  if(!prog._isDefault){
+    el.innerHTML=`
+      <div style="margin-bottom:14px">
+        <div style="font-size:9px;color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Mon programme</div>
+        <div style="font-size:16px;font-weight:900;letter-spacing:-0.3px">${escapeHtml(prog.name)}</div>
+        ${prog.notes?`<p class="sub" style="margin-top:5px;font-size:12px;line-height:1.6">${escapeHtml(prog.notes)}</p>`:''}
+      </div>
+      ${prog.exercises.map((ex,idx)=>_renderExCard(ex,idx)).join('')}`;
+    return;
+  }
+  el.innerHTML=`
+    <div style="text-align:center;padding:32px 24px 16px">
+      <div style="font-size:36px;margin-bottom:12px">⏳</div>
+      <div style="font-weight:900;font-size:15px;margin-bottom:8px">Programme en cours de création</div>
+      <div style="color:var(--sub);font-size:12px;line-height:1.7">Ton coach n'a pas encore publié<br>ton programme personnalisé.</div>
+    </div>`;
 }
 function loadProgramView(){
   const users=DB.get('users')||{};
