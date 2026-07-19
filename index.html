@@ -8185,9 +8185,10 @@ async function analyzeProgPhotos(){
     if(progPhoto2Data){
       if(btn) btn.innerHTML='⏳ Lecture liens vidéos...';
       try{
-        const vidText=await _ocrImage(progPhoto2Data);
+        // Engine 1 + pas de mode tableau : meilleur pour les liens colorés sur fond sombre
+        const vidText=await _ocrImage(progPhoto2Data,{isTable:false,engine:1});
         videoLinks=parseVideoLinks(vidText);
-        if(!videoLinks.length) toast('Photo vidéos : aucun lien YouTube reconnu — vérifie que les URLs sont lisibles sur la photo.','var(--orange)');
+        if(!videoLinks.length) toast('Photo vidéos : aucun lien YouTube reconnu — '+(vidText.length>5?vidText.slice(0,80)+'…':'photo illisible ?'),'var(--orange)');
       }catch(e){
         toast('Erreur lecture photo vidéos : '+(e.message||'réessaie'),'var(--red)');
       }
@@ -8246,15 +8247,15 @@ function dataURLtoBlob(dataURL){
   return new Blob([u8],{type:mime});
 }
 
-async function _ocrImage(dataUrl){
+async function _ocrImage(dataUrl,opts={}){
   const blob=dataURLtoBlob(dataUrl);
   const fd=new FormData();
   fd.append('file',blob,'img.jpg');
   fd.append('apikey','K81774208988957');
   fd.append('language','fre');
-  fd.append('isTable','true');
+  fd.append('isTable', opts.isTable===false?'false':'true');
   fd.append('scale','true');
-  fd.append('OCREngine','2');
+  fd.append('OCREngine', String(opts.engine||2));
   fd.append('isCreateSearchablePDF','false');
   const res=await fetch('https://api.ocr.space/parse/image',{method:'POST',body:fd});
   if(!res.ok) throw new Error('Service OCR indisponible ('+res.status+')');
