@@ -3800,6 +3800,69 @@ function renderBilanEvolution(c){
 }
 
 // ======= COACH PROGRAM EDITOR =======
+// ===== PROGRAMME FONDATION — données extraites du PDF =====
+const FONDATION_F=[
+  {day:'Lundi',name:'SÉANCE A — JAMBES & CUISSES',active:true,photo:null,photo2:null,warmup:'Échauffement 8-12 min : mobilisation articulaire, vélo ou tapis 5 min, quelques squats sans charge.',notes:'Programme Fondation · 8-12 semaines · 3 séances/semaine · 1 jour de repos min entre 2 séances',_foundation:true,exercises:[
+    {name:'SQUAT GOBLET',series:4,reps:'10-12',repos:'2 min',description:'Debout, pieds écartés et surélevés avec des steps, un haltère tenu à 2 mains, bras relâchés. Dos droit et faire une flexion des cuisses. Descendre puis faire une extension pour revenir à la position de départ.',videoUrl:'https://youtu.be/lUuPEpfdgrs',videoUrl2:''},
+    {name:'PRESSE À CUISSE INCLINÉE PIEDS EN HAUT',series:4,reps:'10-12',repos:'2 min',description:'Installé dos callé sur le dossier pieds en haut de la plateforme suffisamment écartée. Débloquer la sécurité et fléchir les jambes au maximum puis revenir en position de départ.',videoUrl:'https://youtu.be/MYC-woyTDjY',videoUrl2:''},
+    {name:'FENTES HALTÈRE',series:3,reps:'10 par jambe',repos:'2 min',description:'Debout, jambes légèrement écartées, bras semis tendus. Effectuer un pas en avant en gardant le dos droit, la cuisse en avant doit se stabiliser à l\'horizontale et le genou opposé à quelques cm du sol. Réaliser ensuite la même chose avec l\'autre jambe.',videoUrl:'https://youtu.be/hvfdPZgQIL8',videoUrl2:''},
+    {name:'LEG CURL ASSIS',series:3,reps:'12-15',repos:'1 min 30',description:'Installé dos callé sur le dossier chevilles callées sous le boudin. Faire une flexion des jambes en essayant de ramener les talons le plus en arrière possible puis revenir en position de départ.',videoUrl:'https://youtu.be/RhyYQ8t8wnQ',videoUrl2:''},
+    {name:'LEG EXTENSION',series:3,reps:'12-15',repos:'1 min 30',description:'Installé dos callé sur le dossier, chevilles callées sous le boudin pointe de pieds vers soi. Effectuer une extension de jambes jusqu\'à l\'horizontal, marquer 1 seconde puis revenir en position initiale.',videoUrl:'https://youtu.be/6iwU5rNMPyY',videoUrl2:''},
+    {name:'MOLLETS À LA SMITH MACHINE',series:3,reps:'15-20',repos:'1 min',description:'Debout, dos droit, l\'avant des pieds sur la cale. Monter le talon le plus haut possible puis descendre le plus bas possible.',videoUrl:'https://youtu.be/lD4CUFENxUw',videoUrl2:''}
+  ]},
+  {day:'Mardi',name:'',active:false,photo:null,photo2:null,warmup:'',notes:'',_foundation:true,exercises:[]},
+  {day:'Mercredi',name:'SÉANCE B — HAUT DU CORPS',active:true,photo:null,photo2:null,warmup:'Échauffement 8-12 min : rotations des épaules, rotations de poignets, quelques pompes légères.',notes:'',_foundation:true,exercises:[
+    {name:'TIRAGE POITRINE NEUTRE',series:4,reps:'10-12',repos:'2 min',description:'Prise largeur épaules et mains neutres (pouce vers soi). Effectuer un tirage et emmener le menton au-dessus de la barre puis tendre les bras.',videoUrl:'https://youtu.be/T--lg679EZM',videoUrl2:''},
+    {name:'TIRAGE HORIZONTAL SERRÉ',series:3,reps:'12',repos:'2 min',description:'Assis, face à l\'appareil, torse bombé et dos droit. Ramener les coudes le plus en arrière possible et la poignée vers le sternum puis revenir en position de départ.',videoUrl:'https://youtu.be/br_sJJabsoY',videoUrl2:''},
+    {name:'DÉVELOPPÉ À LA MACHINE ASSIS',series:3,reps:'10-12',repos:'2 min',description:'La prise des poignées est en pronation (pouces vers l\'intérieur). Dos collé au siège et poitrine en avant. Pousser la pédale avec les jambes pour avancer les prises puis pousser jusqu\'à ce que les bras soient tendus, puis revenir.',videoUrl:'https://youtu.be/T--lg679EZM',videoUrl2:''},
+    {name:'ÉLÉVATION LATÉRALE HALTÈRE',series:3,reps:'15',repos:'1 min 30',description:'Prise neutre (paumes vers l\'intérieur). Réaliser une élévation simultanée des deux bras vers l\'extérieur jusqu\'à ce qu\'ils soient parallèles au sol. Les coudes sont légèrement fléchis et ne doivent pas être plus bas que les poignets.',videoUrl:'https://youtu.be/D0cB-ZHzv18',videoUrl2:''},
+    {name:'CURL À LA POULIE',series:3,reps:'12-15',repos:'1 min 30',description:'Se tenir droit, dos à la poulie les coudes fixes, monter la charge le plus haut possible sans basculer le dos en arrière puis la redescendre en contrôlant la descente.',videoUrl:'https://youtu.be/vii41RdW4PM',videoUrl2:''},
+    {name:'TRICEPS À LA POULIE HAUTE CORDE',series:3,reps:'12-15',repos:'1 min 30',description:'Face à la poulie saisir la corde en prise neutre (pouce vers le haut), effectuer une extension des avant-bras en gardant les coudes près du corps. En fin du mouvement écarter les poignets vers l\'extérieur.',videoUrl:'https://youtu.be/vzfUXQdMKdg',videoUrl2:''}
+  ]},
+  {day:'Jeudi',name:'',active:false,photo:null,photo2:null,warmup:'',notes:'',_foundation:true,exercises:[]},
+  {day:'Vendredi',name:'SÉANCE C — FESSIERS & CUISSES',active:true,photo:null,photo2:null,warmup:'Échauffement 8-12 min : fentes légères, ponts fessiers au sol, mobilisation des hanches.',notes:'',_foundation:true,exercises:[
+    {name:'HIP THRUST MACHINE OU À LA BARRE',series:4,reps:'10-12',repos:'2 min',description:'Placer les pieds sur la plateforme, les talons ancrés et les genoux à environ 90°. Positionner la barre sur le bassin, puis pousser avec les talons pour soulever les hanches en contractant les fessiers. Redescendre lentement.',videoUrl:'https://youtu.be/npL42UPPf-w',videoUrl2:'https://youtu.be/33V0XER5Msw'},
+    {name:'SQUAT SMITH MACHINE',series:3,reps:'12',repos:'2 min',description:'Debout, pieds légèrement écartés, la barre repose sur les trapèzes. Dos droit et faire une flexion des cuisses. Descendre puis faire une extension pour revenir à la position de départ.',videoUrl:'https://youtu.be/r9S7bn3AQB8',videoUrl2:''},
+    {name:'SOULEVÉ DE TERRE ROUMAIN HALTÈRES',series:3,reps:'10-12',repos:'2 min',description:'Se pencher le buste et garder les jambes légèrement fléchies et le dos droit. Prendre les haltères en pronation, puis se redresser en utilisant un mouvement de bassin en gardant les haltères près des jambes.',videoUrl:'https://youtu.be/KZXyPNBJZ1c',videoUrl2:''},
+    {name:'SQUAT BULGARE HALTÈRE',series:3,reps:'8-10 par jambe',repos:'1 min 30',description:'Debout, bras semis tendus. Effectuer un pas en avant en gardant le dos droit et le pied arrière sur un banc, la cuisse en avant doit se stabiliser à l\'horizontale et le genou opposé à quelques cm du sol.',videoUrl:'https://youtu.be/QqhYbQ8JV9s',videoUrl2:''},
+    {name:'ABDUCTEURS À LA MACHINE',series:3,reps:'15-20',repos:'1 min 30',description:'Assis sur la machine, jambes proches. Écarter les cuisses puis revenir en position de départ en contrôlant le mouvement.',videoUrl:'https://youtu.be/R_1BY8RDQu8',videoUrl2:''},
+    {name:'EXTENSION DE HANCHE POULIE BASSE',series:3,reps:'12-15',repos:'1 min 30',description:'Debout, face à l\'appareil, bassin incliné vers l\'avant, une jambe en appui l\'autre reliée à la poulie. Effectuer une extension de hanche en poussant avec le pied vers l\'arrière puis revenir en position de départ.',videoUrl:'https://youtu.be/74GuQRTF9Dg',videoUrl2:''}
+  ]},
+  {day:'Samedi',name:'',active:false,photo:null,photo2:null,warmup:'',notes:'',_foundation:true,exercises:[]},
+  {day:'Dimanche',name:'',active:false,photo:null,photo2:null,warmup:'',notes:'',_foundation:true,exercises:[]}
+];
+const FONDATION_H=[
+  {day:'Lundi',name:'SÉANCE A — PECS, ÉPAULES & TRICEPS',active:true,photo:null,photo2:null,warmup:'Échauffement 8-12 min : rotations des épaules, rotations de poignets, pompes légères, élévations frontales légères.',notes:'Programme Fondation · 8-12 semaines · 3 séances/semaine · 1 jour de repos min entre 2 séances',_foundation:true,exercises:[
+    {name:'DÉVELOPPÉ COUCHÉ HALTÈRE',series:4,reps:'8-10',repos:'2 min',description:'La prise des haltères est en pronation (les pouces sont à l\'intérieur). Les pieds servent d\'appuis au sol. Descendre les haltères le plus bas possible puis revenir en position initiale.',videoUrl:'https://youtu.be/eRglSFbnRro',videoUrl2:''},
+    {name:'DÉVELOPPÉ MACHINE HAUT DE PECS OU À LA SMITH',series:3,reps:'10-12',repos:'2 min',description:'La prise des poignées est en pronation (pouces vers l\'intérieur). Dos collé au siège et poitrine en avant. Pousser jusqu\'à ce que les bras soient tendus puis revenir à la position de départ.',videoUrl:'https://youtu.be/DVQ6nW2o7K4',videoUrl2:'https://youtu.be/Wku24QRTfIk'},
+    {name:'ÉLÉVATION LATÉRALE HALTÈRE',series:4,reps:'12-15',repos:'1 min 30',description:'Prise neutre (paumes vers l\'intérieur). Réaliser une élévation simultanée des deux bras vers l\'extérieur jusqu\'à ce qu\'ils soient parallèles au sol. Les coudes sont légèrement fléchis et ne doivent pas être plus bas que les poignets.',videoUrl:'https://youtu.be/D0cB-ZHzv18',videoUrl2:''},
+    {name:'SHOULDER PRESS',series:3,reps:'10-12',repos:'1 min 30',description:'S\'asseoir sur le siège, les pieds ancrés au sol et le dos contre le dossier sans cambrer. Prendre les poignées à hauteur des épaules, les coudes légèrement fléchis. Pousser vers le haut sans verrouiller les coudes, puis redescendre lentement.',videoUrl:'https://youtu.be/SSJHA6FsMrA',videoUrl2:''},
+    {name:'TRICEPS À LA POULIE HAUTE CORDE',series:3,reps:'12-15',repos:'1 min 30',description:'Face à la poulie saisir la corde en prise neutre (pouce vers le haut), effectuer une extension des avant-bras en gardant les coudes près du corps. En fin du mouvement écarter les poignets vers l\'extérieur.',videoUrl:'https://youtu.be/vzfUXQdMKdg',videoUrl2:''},
+    {name:'DIPS ASSISTÉ',series:2,reps:'MAX',repos:'1 min',description:'Réaliser une flexion de coudes vers l\'arrière jusqu\'à ce que les épaules soient à la même hauteur que les coudes. Tendre les bras sans verrouiller les coudes. Barres assez proches, ne pas trop se pencher en avant.',videoUrl:'https://youtu.be/0cVzj1QY22A',videoUrl2:''}
+  ]},
+  {day:'Mardi',name:'',active:false,photo:null,photo2:null,warmup:'',notes:'',_foundation:true,exercises:[]},
+  {day:'Mercredi',name:'SÉANCE B — DOS & BICEPS',active:true,photo:null,photo2:null,warmup:'Échauffement 8-12 min : mobilisation des épaules, rotations du buste, band pull-aparts ou tractions légères.',notes:'',_foundation:true,exercises:[
+    {name:'TIRAGE POITRINE NEUTRE',series:4,reps:'8-10',repos:'2 min',description:'Prise largeur épaules et mains neutres (pouce vers soi). Effectuer un tirage et emmener le menton au-dessus de la barre puis tendre les bras.',videoUrl:'https://youtu.be/T--lg679EZM',videoUrl2:''},
+    {name:'TIRAGE HORIZONTAL SERRÉ',series:4,reps:'10-12',repos:'2 min',description:'Assis, face à l\'appareil, torse bombé et dos droit. Ramener les coudes le plus en arrière possible et la poignée vers le sternum puis revenir en position de départ.',videoUrl:'https://youtu.be/br_sJJabsoY',videoUrl2:''},
+    {name:'ROWING HALTÈRE UNILATÉRAL SUR BANC',series:3,reps:'10-12',repos:'2 min',description:'La main et le genou opposé en appui sur le banc, dos droit. Monter le coude le plus en arrière possible en le gardant près du corps. Puis revenir dans la position initiale.',videoUrl:'',videoUrl2:''},
+    {name:'FACE PULL ASSIS',series:3,reps:'12-15',repos:'1 min 30',description:'Régler la poulie en hauteur, buste droit et poitrine sortie, assis au sol. Saisir la corde par le dessus, la boule de blocage vers le pouce. Tirer l\'épaule vers l\'arrière en rapprochant les omoplates, puis la corde vers le visage en finissant en position de double biceps.',videoUrl:'',videoUrl2:''},
+    {name:'CURL BARRE',series:3,reps:'10-12',repos:'1 min 30',description:'Se tenir droit les coudes fixes, monter la charge le plus haut possible sans basculer le dos en arrière puis la redescendre en contrôlant la descente.',videoUrl:'https://youtu.be/6iwU5rNMPyY',videoUrl2:''},
+    {name:'CURL LARRY SCOTT MACHINE GUIDÉE OU PUPITRE',series:3,reps:'12-15',repos:'1 min 30',description:'Réaliser une flexion de coudes pour amener les poignées vers les épaules à la force des biceps. L\'écartement des mains est légèrement supérieur à la largeur des épaules.',videoUrl:'https://youtu.be/vzfUXQdMKdg',videoUrl2:''}
+  ]},
+  {day:'Jeudi',name:'',active:false,photo:null,photo2:null,warmup:'',notes:'',_foundation:true,exercises:[]},
+  {day:'Vendredi',name:'SÉANCE C — JAMBES',active:true,photo:null,photo2:null,warmup:'Échauffement 8-12 min : vélo ou tapis 5 min, fentes légères, squats sans charge, mobilisation des hanches.',notes:'',_foundation:true,exercises:[
+    {name:'PRESSE À CUISSE INCLINÉE',series:4,reps:'10-12',repos:'2 min',description:'Installé dos callé sur le dossier pieds au centre de la plateforme. Débloquer la sécurité et fléchir les jambes au maximum puis revenir en position de départ.',videoUrl:'https://youtu.be/1GMcszqB5nU',videoUrl2:''},
+    {name:'SQUAT SMITH MACHINE',series:3,reps:'10-12',repos:'2 min',description:'Debout, pieds légèrement écartés, la barre repose sur les trapèzes. Dos droit et faire une flexion des cuisses. Descendre puis faire une extension pour revenir à la position de départ.',videoUrl:'https://youtu.be/r9S7bn3AQB8',videoUrl2:''},
+    {name:'HIP THRUST MACHINE OU À LA BARRE',series:3,reps:'10-12',repos:'2 min',description:'Placer les pieds sur la plateforme, les talons ancrés et les genoux à environ 90°. Positionner la barre sur le bassin, puis pousser avec les talons pour soulever les hanches en contractant les fessiers. Redescendre lentement.',videoUrl:'https://youtu.be/npL42UPPf-w',videoUrl2:'https://youtu.be/33V0XER5Msw'},
+    {name:'LEG CURL ALLONGÉ',series:3,reps:'12-15',repos:'1 min 30',description:'À plat ventre sur la machine, chevilles callées sous le boudin. Faire une flexion des jambes en essayant de toucher les fesses avec les talons puis revenir en position de départ.',videoUrl:'https://youtu.be/E6BljjBe75o',videoUrl2:''},
+    {name:'LEG EXTENSION',series:3,reps:'12-15',repos:'1 min 30',description:'Installé dos callé sur le dossier, chevilles callées sous le boudin pointe de pieds vers soi. Effectuer une extension de jambes jusqu\'à l\'horizontal, marquer 1 seconde puis revenir en position initiale.',videoUrl:'https://youtu.be/vii41RdW4PM',videoUrl2:''},
+    {name:'MOLLETS À LA SMITH MACHINE',series:3,reps:'15-20',repos:'1 min',description:'Debout, dos droit, l\'avant des pieds sur la cale. Monter le talon le plus haut possible puis descendre le plus bas possible.',videoUrl:'https://youtu.be/lD4CUFENxUw',videoUrl2:''}
+  ]},
+  {day:'Samedi',name:'',active:false,photo:null,photo2:null,warmup:'',notes:'',_foundation:true,exercises:[]},
+  {day:'Dimanche',name:'',active:false,photo:null,photo2:null,warmup:'',notes:'',_foundation:true,exercises:[]}
+];
+// ===== fin PROGRAMME FONDATION =====
+
 const defEx=[
   {name:'Pull Over sur Banc Incliné',series:3,reps:'20',repos:'90 sec',description:'Amplitude maximale, expiration à la montée. Bras tendus, descendre jusqu\'à l\'étirement complet des dorsaux.',note:'',image:null},
   {name:'Tirage Poitrine Largeur Épaule',series:4,reps:'5+',repos:'2 min',description:'Prise légèrement plus large que les épaules. Coudes vers le bas, omoplates en rétraction en fin de mouvement.',note:'',image:null},
@@ -4445,9 +4508,16 @@ function removeSessionPhoto(i){
 }
 
 function initSessionsConfig(){
-  const cfg=DAYS.map((day,i)=>({
-    day,name:'',photo:null,exercises:i<5?defEx.map(e=>({...e})):[],active:i<5,notes:''
-  }));
+  const g=currentUser._evol_gender;
+  const base=g==='F'?FONDATION_F:g==='H'?FONDATION_H:null;
+  let cfg;
+  if(base){
+    cfg=base.map(s=>({...s,exercises:s.exercises.map(e=>({...e}))}));
+  } else {
+    cfg=DAYS.map((day,i)=>({
+      day,name:'',photo:null,photo2:null,exercises:i<5?defEx.map(e=>({...e})):[],active:i<5,notes:'',warmup:''
+    }));
+  }
   currentUser.sessions_config=cfg;saveUser();return cfg;
 }
 
@@ -5265,6 +5335,8 @@ const BIL_STEPS=[
 const DEB_STEPS=[
   // Step 1 : Informations personnelles
   ()=>bSec('Informations personnelles',
+    bLbl('Tu es ?')+
+    `<div>${bC('deb-gender',['Homme','Femme'])}</div>`+
     bLbl('Quel âge as-tu ? ')+bQ('deb-age')+
     bLbl('Quel est ton poids actuel ? ️ (en kg)')+bQ('deb-weight')+
     bLbl('Quelle est ta taille ?  (en cm)')+bQ('deb-height')+
@@ -5368,10 +5440,18 @@ function saveBilanFinal(){
   const _h=parseFloat(bilData['deb-height']||bilData['bil-height']||0);
   if(_h>100&&_h<250) currentUser._evol_height=_h;
   if(bilData['deb-age']) currentUser.age=bilData['deb-age']||currentUser.age;
-  if(bilData['deb-gender']&&!currentUser._evol_gender) currentUser._evol_gender=bilData['deb-gender'];
+  if(bilData['deb-gender']){
+    const _gMap={'Homme':'H','Femme':'F'};
+    const _g=_gMap[bilData['deb-gender']]||bilData['deb-gender'];
+    if(!currentUser._evol_gender) currentUser._evol_gender=_g;
+  }
   if(!currentUser.bilans) currentUser.bilans=[];
   currentUser.bilans.push(bi);
-  if(bi.type==='depart') delete currentUser._firstBilanPending;
+  if(bi.type==='depart'){
+    delete currentUser._firstBilanPending;
+    currentUser.sessions_config=null;
+    initSessionsConfig();
+  }
   // Ancrer photos dans clés séparées (survivent au sync Firebase)
   Object.keys(bi).filter(k=>k.includes('photo')&&bi[k]).forEach(k=>{
     try{localStorage.setItem('rc_photo_'+bi.date+'_'+k,bi[k]);}catch(e){}
