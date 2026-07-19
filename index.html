@@ -4477,6 +4477,7 @@ function removeSessionPhoto2(i){
 function parseVideoLinks(text){
   // Corrige les artéfacts OCR courants dans les URLs
   let t=text
+    .replace(/•|·|‐|‑|–|—/g,'-')   // tirets/puces OCR → tiret réel (ex: ngL42UPPf•w → ngL42UPPf-w)
     .replace(/https?\s*:\s*\/\s*\//gi,'https://')
     .replace(/youtu\s*[.,]\s*be/gi,'youtu.be')
     .replace(/youtube\s*[.,]\s*com/gi,'youtube.com')
@@ -8303,11 +8304,11 @@ async function analyzeProgPhotos(){
     } else if(progPhoto2Data&&progPhoto2Data!=='pdf'){
       if(btn) btn.innerHTML='⏳ Lecture liens vidéos...';
       try{
-        const photo2Proc=await preprocessPhoto2ForOcr(progPhoto2Data);
-        // Moteur 1 et moteur 2 en parallèle
+        // Image originale directe (tests: OCR lit mieux sans preprocessing sur fond sombre)
+        // Les deux moteurs en parallèle, langue eng pour les URLs YouTube
         const [t1,t2]=await Promise.all([
-          _ocrImage(photo2Proc,{isTable:false,engine:1}).catch(()=>''),
-          _ocrImage(photo2Proc,{isTable:false,engine:2}).catch(()=>'')
+          _ocrImage(progPhoto2Data,{isTable:false,engine:1,language:'eng'}).catch(()=>''),
+          _ocrImage(progPhoto2Data,{isTable:false,engine:2,language:'eng'}).catch(()=>'')
         ]);
         const combined=t1+'\n'+t2;
         videoLinks=parseVideoLinks(combined);
@@ -8419,7 +8420,7 @@ async function _ocrImage(dataUrl,opts={}){
   const fd=new FormData();
   fd.append('file',blob,'img.jpg');
   fd.append('apikey','K81774208988957');
-  fd.append('language','fre');
+  fd.append('language', opts.language||'fre');
   fd.append('isTable', opts.isTable===false?'false':'true');
   fd.append('scale','true');
   fd.append('OCREngine', String(opts.engine||2));
