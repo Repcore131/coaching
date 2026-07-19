@@ -920,7 +920,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="metric-box"><div class="metric-val" id="ccd-weight">—</div><div class="metric-label">Poids</div></div>
       </div>
       <div class="gap" style="margin-bottom:20px">
-        <button class="btn btn-red" onclick="openCoachProgram()"> Gérer le programme</button>
+        <button class="btn btn-red" onclick="openCoachSessions()"> Gérer le programme</button>
         <button class="btn btn-outline" onclick="viewClientBilans()"> Bilans complets</button>
       </div>
 
@@ -941,6 +941,21 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="margin-top:36px;padding-top:20px;border-top:1px solid #1a1a1a">
         <button onclick="confirmDeleteClient()" style="width:100%;padding:12px;background:transparent;border:1px solid #3a1500;color:#f97316;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer">Retirer cet élève du suivi</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- COACH SESSION MANAGER -->
+<div id="s-coach-sessions" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="go('s-coach-client')">←</button>
+    <span class="topbar-title" id="csm-title">Séances</span>
+    <button onclick="saveCoachSessions()" style="background:var(--red);border:none;color:#fff;padding:7px 16px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:3px">SAUVEGARDER</button>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <p class="sub" style="font-size:12px;margin-bottom:20px;line-height:1.6">Active/désactive les jours et modifie chaque séance. Le Programme Fondation est pré-chargé jusqu'à personnalisation.</p>
+      <div id="coach-session-slots"></div>
     </div>
   </div>
 </div>
@@ -3872,6 +3887,121 @@ const defEx=[
   {name:'Oblique Abdominal Crunch',series:5,reps:'15',repos:'60 sec',description:'En décubitus dorsal, mains derrière la nuque. Rotation et contraction maximale des obliques.',note:'',image:null}
 ];
 let progEx=[];
+// ======= COACH SESSION MANAGER =======
+let _coachEditClient=null;
+function openCoachSessions(){
+  const users=DB.get('users')||{};
+  const c=Object.values(users).find(u=>u.id===currentClientId);
+  if(!c){
+    if(currentClientId?.startsWith('_code_')) toast('Cet athlète n\'a pas encore créé son compte.','var(--orange)');
+    return;
+  }
+  _coachEditClient=JSON.parse(JSON.stringify(c));
+  const sc=_coachEditClient.sessions_config;
+  const g=_coachEditClient._evol_gender;
+  // Init sessions_config si absent
+  if(!_coachEditClient.sessions_config){
+    const base=g==='F'?FONDATION_F:g==='H'?FONDATION_H:null;
+    _coachEditClient.sessions_config=base
+      ?base.map(s=>({...s,exercises:s.exercises.map(e=>({...e}))}))
+      :DAYS.map((day,i)=>({day,name:'',photo:null,photo2:null,exercises:i<5?defEx.map(e=>({...e})):[],active:i<5,notes:'',warmup:''}));
+  }
+  // Migration vers Fondation si genre connu et séances non personnalisées
+  if((g==='H'||g==='F')&&sc&&!sc.some(s=>s._foundation)){
+    if(!sc.filter(s=>s.active).some(s=>s.name&&!s._foundation)){
+      const base=g==='F'?FONDATION_F:g==='H'?FONDATION_H:null;
+      if(base) _coachEditClient.sessions_config=base.map(s=>({...s,exercises:s.exercises.map(e=>({...e}))}));
+    }
+  }
+  const title=document.getElementById('csm-title');
+  if(title) title.textContent=(_coachEditClient.fname||'Athlète')+' — Séances';
+  go('s-coach-sessions');
+  loadCoachSessionSlots();
+}
+
+function loadCoachSessionSlots(){
+  const c=_coachEditClient;
+  if(!c?.sessions_config) return;
+  const sessions=c.sessions_config;
+  DAYS.forEach((day,i)=>{
+    if(!sessions[i]) sessions[i]={day,name:'',photo:null,exercises:[],active:false,notes:'',warmup:''};
+    if(!Array.isArray(sessions[i].exercises)) sessions[i].exercises=[];
+  });
+  const container=document.getElementById('coach-session-slots');
+  if(!container) return;
+  container.innerHTML=sessions.map((s,i)=>`
+    <div style="background:var(--card);border-radius:16px;margin-bottom:14px;overflow:hidden;border:1.5px solid ${s.active?'var(--red)':'var(--border)'}">
+      <div style="background:${s.active?'linear-gradient(135deg,#1a0000,#2a0000)':'var(--card2)'};padding:14px 16px;display:flex;align-items:center;justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:32px;height:32px;background:${s.active?'var(--red)':'#1a1a1a'};border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;letter-spacing:.5px;flex-shrink:0">${DAY_ICONS[i]}</div>
+          <div>
+            <div style="font-weight:800;font-size:15px">${s.day}</div>
+            <div class="sub" style="font-size:11px;margin-top:1px" id="csm-sub-${i}">${s.active?(escapeHtml(s.name)||'Séance sans nom'):'Jour de repos'}</div>
+          </div>
+        </div>
+        <div onclick="coachToggleDay(${i})" style="width:44px;height:24px;border-radius:12px;background:${s.active?'var(--red)':'var(--border)'};position:relative;cursor:pointer;transition:.3s;flex-shrink:0">
+          <div style="position:absolute;width:18px;height:18px;border-radius:9px;background:#fff;top:3px;transition:.3s;left:${s.active?'23px':'3px'}"></div>
+        </div>
+      </div>
+      ${s.active?`
+      <div style="padding:14px 16px">
+        <div style="margin-bottom:12px">
+          <label style="margin-top:0">Nom de la séance</label>
+          <input value="${escapeHtml(s.name||'')}" placeholder="Ex: DOS & BICEPS" onchange="coachRenameSession(${i},this.value)" style="margin-top:4px">
+        </div>
+        <button class="btn btn-red btn-sm" style="width:100%" onclick="openCoachSessionExercises(${i})"> Modifier les exercices (${s.exercises?.length||0})</button>
+      </div>`:''}
+    </div>
+  `).join('');
+}
+
+function coachToggleDay(i){
+  if(!_coachEditClient?.sessions_config) return;
+  _coachEditClient.sessions_config[i].active=!_coachEditClient.sessions_config[i].active;
+  loadCoachSessionSlots();
+}
+function coachRenameSession(i,val){
+  if(!_coachEditClient?.sessions_config) return;
+  _coachEditClient.sessions_config[i].name=val;
+  const sub=document.getElementById('csm-sub-'+i);
+  if(sub) sub.textContent=val||'Séance sans nom';
+}
+function openCoachSessionExercises(idx){
+  const c=_coachEditClient;
+  if(!c?.sessions_config?.[idx]) return;
+  const s=c.sessions_config[idx];
+  progEx=JSON.parse(JSON.stringify(s.exercises||[]));
+  document.getElementById('prog-name').value=s.name||'';
+  document.getElementById('prog-notes').value=s.notes||'';
+  document.getElementById('prog-warmup').value=s.warmup||'';
+  document.getElementById('prog-cooldown').value=s.cooldown||currentUser._defaultCooldown||'';
+  progPhotoData=null;progPhoto2Data=null;_pdfVideoLinks=null;
+  const img=document.getElementById('prog-photo-preview');
+  img.style.display='none';document.getElementById('prog-photo-ph').style.display='block';
+  ['prog-session-sel-wrap','prog-pdf-wrap'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+  window._editingSessionIdx=null;
+  window._editingCoachSessionIdx=idx;
+  const backBtn=document.querySelector('#s-coach-program .back-btn');
+  if(backBtn) backBtn.onclick=()=>{go('s-coach-sessions');loadCoachSessionSlots();};
+  const title=document.querySelector('#s-coach-program .topbar-title');
+  if(title) title.textContent=(s.name||DAYS[idx])+' — Exercices';
+  ['prog-session-sel-wrap','prog-pdf-wrap'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+  renderProgEx();go('s-coach-program');
+}
+function saveCoachSessions(){
+  const c=_coachEditClient;
+  if(!c) return;
+  const users=DB.get('users')||{};
+  const emailKey=Object.keys(users).find(k=>users[k]?.id===currentClientId);
+  if(!emailKey){toast('Athlète introuvable','var(--orange)');return;}
+  c.updatedAt=Date.now();
+  users[emailKey]=c;
+  DB.set('users',users);
+  CLOUD.pushOne(emailKey,c);
+  toast(' Séances sauvegardées !');
+  go('s-coach-client');
+}
+
 function openCoachProgram(){
   const users=DB.get('users')||{};
   let c=Object.values(users).find(u=>u.id===currentClientId);
@@ -4139,7 +4269,20 @@ function addExercise(){
   setTimeout(()=>{const el=document.getElementById('prog-exercises');if(el)el.lastElementChild?.scrollIntoView({behavior:'smooth'});},100);
 }
 function saveProgram(){
-  // Si on édite depuis le session manager athlète
+  // Cas 1 : coach édite une séance d'un athlète via openCoachSessions
+  if(typeof window._editingCoachSessionIdx==='number'&&_coachEditClient){
+    const idx=window._editingCoachSessionIdx;
+    if(!_coachEditClient.sessions_config[idx]) return;
+    _coachEditClient.sessions_config[idx].exercises=progEx;
+    _coachEditClient.sessions_config[idx].name=document.getElementById('prog-name').value;
+    _coachEditClient.sessions_config[idx].notes=document.getElementById('prog-notes').value;
+    _coachEditClient.sessions_config[idx].warmup=document.getElementById('prog-warmup').value;
+    _coachEditClient.sessions_config[idx].cooldown=document.getElementById('prog-cooldown').value;
+    window._editingCoachSessionIdx=null;
+    toast(' Séance sauvegardée !');
+    go('s-coach-sessions');loadCoachSessionSlots();return;
+  }
+  // Cas 2 : athlète édite depuis le session manager
   if(typeof window._editingSessionIdx==='number'){
     if(!currentUser.sessions_config) initSessionsConfig();
     const idx=window._editingSessionIdx;
