@@ -5228,16 +5228,11 @@ const BIL_STEPS=[
   ),
   // Step 3 : Ressenti & Modifications
   ()=>bSec('Ressenti & Modifications',
-    bLbl('Quel est ton ressenti vis-à-vis de ton évolution durant ces deux dernières semaines  ?')+
-    `<div>${bC('bil-ressenti',["J'ai donné le maximum, je suis content(e) de mon évolution","J'ai fait de mon mieux malgré un emploi du temps chargé","J'aurais pu faire mieux dans les séances et l'alimentation","J'ai manqué des séances et dévié pour la diète"])}</div>`+
     bLbl('Quel est ton niveau de motivation en ce moment (sur une échelle de 1 à 10) :')+
     `<div>${bC('bil-motivation',['Moins de 2/10','Entre 3 et 4/10','Entre 5 et 6/10','Entre 7 et 8/10','9 ou 10/10'])}</div>`+
     bLbl("Y'a t-il des changements que tu souhaiterais faire dans le programme alimentaire ? ")+
     `<div>${bC('bil-diet-change',['Oui','Non'])}</div>`+
     bLbl('Si oui, précisez les ajustements que vous souhaitez :')+bTA('bil-diet-detail','Décris les changements souhaités...')+
-    bLbl('Y a-t-il des exercices que vous souhaitez retirer ou modifier ?')+
-    `<div>${bC('bil-exo-change',['Oui','Non'])}</div>`+
-    bLbl('Si oui, lesquels et pourquoi ?')+bTA('bil-exo-detail','Précise les exercices et les raisons...')+
     bLbl("As tu des difficulté à ressentir certains muscles pendant l'entraînement ?")+
     `<div>${bC('bil-muscle-feel',['Oui','Non'])}</div>`+
     bLbl('Si oui, lesquels ?')+bT('bil-muscle-feel-which','Ex: Dorsaux, pectoraux...')
