@@ -20,6 +20,7 @@ const TOKEN_SECRET = defineSecret("RCACCESS_TOKEN_SECRET");
 const PAYPAL_CLIENT_SECRET = defineSecret("PAYPAL_CLIENT_SECRET");
 
 const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
+const CREATOR_EMAIL = "guellec.coachingpro@gmail.com";
 
 // ── Constantes PayPal (valeurs publiques — déjà présentes dans index.html) ───
 const PAYPAL_CLIENT_ID = "AS9pdM1fxqdyzKzvuiQB3mTPAIHZW12rW_KWAOKB8XkalJXV8kEyWWBzwHPUxCBZtMMzqjJNnAjfa1f1";
@@ -90,6 +91,8 @@ exports.generateAccessToken = onCall({ secrets: [TOKEN_SECRET] }, async (request
   const studentName = String(request.data && request.data.studentName || "").trim().slice(0, 100);
   if (!studentName) throw new HttpsError("invalid-argument", "Nom de l'élève requis.");
   const months = Math.min(Math.max(parseInt(request.data && request.data.months) || 3, 1), 24);
+  const freeCode = !!(request.data && request.data.freeCode) &&
+    request.auth.token.email.toLowerCase() === CREATOR_EMAIL;
 
   const expiry = Date.now() + months * MONTH_MS;
   const codeId = "sc_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
@@ -103,6 +106,7 @@ exports.generateAccessToken = onCall({ secrets: [TOKEN_SECRET] }, async (request
     months,
     codeId,
   };
+  if (freeCode) payload.creatorFree = true;
   return { token: buildToken(payload, TOKEN_SECRET.value()), payload };
 });
 

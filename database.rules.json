@@ -23,6 +23,11 @@
     "deleted_accounts": {
       ".read": false,
       ".write": false
+    },
+
+    "rc_codes": {
+      ".read": false,
+      ".write": false
     }
   }
 }

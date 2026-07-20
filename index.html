@@ -3074,11 +3074,11 @@ async function doLinkCoach(){
     }
   }catch(e){}
 
-  // Case 2: code RC-XXXX-XXXX — vérifié via Firebase RTDB directement
-  if(/^RC-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(raw)){
+  // Case 2: code RCACCESS (HMAC signé côté serveur)
+  if(raw.startsWith('RCACCESS:')){
     let result;
     try{
-      result=await _verifyAccessCode(raw,(currentUser.fname||'')+' '+(currentUser.lname||''));
+      result=await CLOUD._callFn('verifyAccessToken',{token:raw,athleteName:(currentUser.fname||'')+' '+(currentUser.lname||'')});
     }catch(e){
       return showErr('cc-err',e.message||'Code invalide ou corrompu. Contacte ton coach.');
     }
@@ -3109,6 +3109,11 @@ async function doLinkCoach(){
       loadSubscribePage('pending-code',payload);
     }
     return;
+  }
+
+  // Ancien format RC-XXXX-XXXX (plus compatible — règle RTDB bloque /rc_codes/*)
+  if(/^RC-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(raw)){
+    return showErr('cc-err','Ce code n\'est plus compatible. Demande un nouveau code à ton coach.');
   }
 
   // Case 3: RCLINK token (legacy)
@@ -9971,7 +9976,7 @@ async function createAthlete(){
   const uid='u_'+Date.now();
   let gen;
   try{
-    gen=await _genAccessCode(fn+' '+ln,months);
+    gen=await CLOUD._callFn('generateAccessToken',{studentName:fn+' '+ln,months});
   }catch(e){
     document.getElementById('aa-err').textContent=e.message||'Impossible de générer le code d\'accès — réessaie.';
     document.getElementById('aa-err').style.display='block';
@@ -10462,75 +10467,6 @@ function _adminOffboardSelected(){
   offboardCoach(id);
 }
 
-// ── Access codes via Firebase RTDB (sans Cloud Functions) ────────────────
-// Format: RC-XXXX-XXXX stocké dans /rc_codes/{code} du RTDB
-const _MONTH_MS=30*24*60*60*1000;
-function _rcRandCode(){
-  const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let s='RC-';
-  for(let i=0;i<4;i++) s+=c[Math.floor(Math.random()*c.length)];
-  s+='-';
-  for(let i=0;i<4;i++) s+=c[Math.floor(Math.random()*c.length)];
-  return s;
-}
-function _rcCodesUrl(code){
-  return CLOUD._fbUrl.replace('/users.json','/rc_codes/'+encodeURIComponent(code)+'.json');
-}
-async function _genAccessCode(studentName,months){
-  const fbTok=await CLOUD._getToken();
-  const expiry=Date.now()+months*_MONTH_MS;
-  const codeId='sc_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
-  const code=_rcRandCode();
-  const isCreator=currentUser.email===CREATOR_EMAIL;
-  const payload={
-    coachId:currentUser.id,
-    coachName:(currentUser.fname||'')+' '+(currentUser.lname||''),
-    coachCode:currentUser.code||null,
-    studentName,expiry,months,codeId,
-    creatorFree:isCreator
-  };
-  const url=_rcCodesUrl(code)+(fbTok?'?auth='+fbTok:'');
-  const r=await fetch(url,{method:'PUT',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({...payload,token:code,active:true,redeemed:false,createdAt:Date.now()})});
-  if(!r.ok) throw new Error('Erreur sauvegarde du code ('+r.status+') — vérifie ta connexion.');
-  return {token:code,payload};
-}
-async function _verifyAccessCode(raw,athleteName){
-  const fbTok=await CLOUD._getToken();
-  const url=_rcCodesUrl(raw)+(fbTok?'?auth='+fbTok:'');
-  let data;
-  try{const r=await fetch(url);if(!r.ok)throw new Error(r.status);data=await r.json();}
-  catch(e){throw new Error('Impossible de vérifier le code — vérifie ta connexion.');}
-  if(!data) throw new Error('Code invalide ou introuvable. Vérifie avec ton coach.');
-  if(!data.active) throw new Error('Ce code a été désactivé par ton coach.');
-  if(Date.now()>data.expiry) throw new Error('Ce code a expiré. Demande un nouveau code à ton coach.');
-  if(data.redeemed&&data.athleteEmail&&data.athleteEmail!==currentUser.email)
-    throw new Error('Ce code a déjà été utilisé par un autre compte.');
-  if(!data.redeemed&&currentUser.email){
-    await fetch(url,{method:'PATCH',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({redeemed:true,athleteEmail:currentUser.email,usedBy:athleteName||data.studentName})});
-  }
-  return {valid:true,payload:data};
-}
-async function _extendAccessCode(codeId,addMonths,token){
-  if(!token) throw new Error('Token du code introuvable — recopie le code depuis la liste.');
-  const fbTok=await CLOUD._getToken();
-  const url=_rcCodesUrl(token)+(fbTok?'?auth='+fbTok:'');
-  const r=await fetch(url); const data=r.ok?await r.json():null;
-  const base=Math.max((data&&data.expiry)||0,Date.now());
-  const newExpiry=base+addMonths*_MONTH_MS;
-  const newMonths=((data&&data.months)||0)+addMonths;
-  await fetch(url,{method:'PATCH',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({expiry:newExpiry,months:newMonths})});
-  const payload={...(data||{}),expiry:newExpiry,months:newMonths};
-  let appliedImmediately=false;
-  if(data&&data.athleteEmail){
-    const users=DB.get('users')||{};
-    const ath=users[data.athleteEmail];
-    if(ath){ath.accessExpiry=newExpiry;users[data.athleteEmail]=ath;DB.set('users',users);appliedImmediately=true;}
-  }
-  return {token,payload,appliedImmediately};
-}
 
 // ── Coach: generate student access code ──
 let lastGeneratedCode=null;
@@ -10545,7 +10481,7 @@ async function generateStudentCode(){
   if(!name){toast('Entre le nom de l&#39;&#233;l&#232;ve');return;}
   let gen;
   try{
-    gen=await _genAccessCode(name,months);
+    gen=await CLOUD._callFn('generateAccessToken',{studentName:name,months,freeCode:true});
   }catch(e){
     toast(e.message||'Impossible de générer le code — réessaie.','var(--red)');
     return;
@@ -10558,6 +10494,7 @@ async function generateStudentCode(){
   const users=DB.get('users')||{};
   users[currentUser.email]=currentUser;
   DB.set('users',users);DB.set('session',currentUser);
+  CLOUD.pushOne(currentUser.email,currentUser);
   // Display
   lastGeneratedCode=token;
   document.getElementById('sc-code-val').textContent=token;
@@ -10616,7 +10553,7 @@ async function extendStudentCode(i){
   const c=currentUser.studentCodes[i];
   let res;
   try{
-    res=await _extendAccessCode(c.codeId,3,c.token);
+    res=await CLOUD._callFn('extendAccessToken',{codeId:c.codeId,months:3});
   }catch(e){
     toast(e.message||'Impossible de prolonger le code — réessaie.','var(--red)');
     return;
