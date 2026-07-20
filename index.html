@@ -8263,6 +8263,20 @@ function addVideoLink(){
   toast('Vidéo ajoutée !','var(--green)');
   loadVideos();
 }
+function _cloudinaryUserMsg(e,kind){
+  const m=(e.message||'').toLowerCase();
+  if(/file size too large|exceeds.*maximum|too large|erreur serveur 413/.test(m))
+    return 'Fichier trop volumineux — réduis la taille'+(kind==='video'?' ou la durée de la vidéo':'');
+  if(/upload preset not found|unknown api key|invalid upload preset|erreur serveur 401/.test(m))
+    return "Preset Cloudinary invalide — vérifie ta config dans tes paramètres";
+  if(/not allowed|unsupported format|invalid.*file|file type/.test(m))
+    return kind==='audio'
+      ?'Format non supporté — utilise MP3, M4A ou WebM'
+      :'Format non supporté — utilise MP4, MOV, WebM ou MKV';
+  if(/erreur serveur 5/.test(m))
+    return 'Service Cloudinary indisponible — réessaie dans quelques instants';
+  return "Erreur d'envoi — vérifie ta connexion et réessaie";
+}
 async function uploadVideoFile(input){
   const file=input.files[0];if(!file) return;
   const targetEmail=currentUser.email; // capturé avant tout await
@@ -8312,8 +8326,9 @@ async function uploadVideoFile(input){
     toast('Vidéo envoyée au coach !','var(--green)');
     loadVideos();
   }catch(e){
+    console.error('[uploadVideoFile]',e);
     if(progEl) progEl.style.display='none';
-    if(errEl){errEl.style.display='block';errEl.textContent='Erreur : '+e.message;}
+    if(errEl){errEl.style.display='block';errEl.textContent=_cloudinaryUserMsg(e,'video');}
     input.value='';
   }
 }
@@ -8608,8 +8623,9 @@ async function confirmAudioAnnotation(){
     document.getElementById('vc-audio-ts').value='';
     if(status)status.textContent='✓ Message audio ajouté';
   }catch(e){
+    console.error('[confirmAudioAnnotation]',e);
     if(status)status.textContent='';
-    toast('Erreur d\'envoi — vérifie ta connexion','var(--orange)');
+    toast(_cloudinaryUserMsg(e,'audio'),'var(--orange)');
   }
 }
 async function uploadAudioFile(input){
@@ -8633,8 +8649,9 @@ async function uploadAudioFile(input){
     input.value='';
     if(status)status.textContent='✓ Message audio ajouté';
   }catch(e){
+    console.error('[uploadAudioFile]',e);
     if(status)status.textContent='';
-    toast('Erreur d\'envoi','var(--orange)');
+    toast(_cloudinaryUserMsg(e,'audio'),'var(--orange)');
   }
 }
 function cancelAudioAnnotation(){
