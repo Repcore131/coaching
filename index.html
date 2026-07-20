@@ -8190,27 +8190,40 @@ function _videoEmbed(url,vidId='vc-video'){
   if(/\.(mp4|mov|webm|mkv)(\?|$)/i.test(url)) return `<video id="${vidId}" src="${url}" controls preload="none" style="width:100%;border-radius:8px;margin-top:8px;max-height:220px;background:#000"></video>`;
   return `<a href="${url}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:10px 14px;background:var(--card2);border-radius:8px;color:var(--red);font-size:12px;font-weight:700;text-decoration:none">▶ Voir la vidéo</a>`;
 }
+let _vidsSorted=[];
 function loadVideos(){
   go('s-videos');
-  const vids=currentUser.videos||[];
-  document.getElementById('vid-list').innerHTML=!vids.length?
-    '<div class="empty-state"><div class="es-icon">🎥</div><div>Aucune vidéo partagée.<br>Colle un lien YouTube ou Google Drive pour recevoir les corrections de ton coach.</div></div>':
-    vids.map(v=>{
-      const hasFb=v.feedback||v.feedbackTimestamps?.length;
-      const tsBlock=v.feedbackTimestamps?.length
-        ?`<div style="margin-top:8px">${[...v.feedbackTimestamps].sort((a,b)=>tsToSecs(a.ts)-tsToSecs(b.ts)).map(t=>{const isA=!!t.audioUrl;return`<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid #111;align-items:${isA?'flex-start':'center'}"><span onclick="const _v=document.getElementById('vc-video-${v.id}');if(_v)_v.currentTime=tsToSecs('${t.ts}')" style="font-family:'Bebas Neue',sans-serif;font-size:13px;color:var(--red);flex-shrink:0;min-width:36px;margin-top:${isA?'3px':'0'};cursor:pointer" title="▶ ${t.ts}">${t.ts}</span>${isA?`<audio src="${t.audioUrl}" controls style="flex:1;height:32px"></audio>`:`<span style="font-size:12px;color:#ccc">${t.note}</span>`}</div>`;}).join('')}</div>`:'';
-      const fbBlock=hasFb?`<div style="background:var(--card2);border-radius:8px;padding:10px;margin-top:10px;font-size:12px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span style="color:var(--sub);font-size:10px;font-weight:700">FEEDBACK COACH</span>${v.feedbackDate?`<span style="font-size:10px;color:#444">${new Date(v.feedbackDate).toLocaleDateString('fr-FR')}</span>`:''}</div>
-        ${v.feedback?`<p style="margin:0;line-height:1.5">${escapeHtml(v.feedback)}</p>`:''}${tsBlock}</div>`:'';
-      return `<div class="video-card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <div style="font-weight:700;font-size:13px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div>
-        <span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?'✓ Corrigée':'En attente'}</span>
-        <button onclick="if(confirm('Supprimer cette vidéo ?'))deleteVideo('${currentUser.email}','${v.id}')" style="background:none;border:none;color:#555;cursor:pointer;font-size:18px;line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button>
-      </div>
-      <div class="sub" style="font-size:11px">${new Date(v.date).toLocaleDateString('fr-FR')}</div>
-      ${_videoEmbed(v.url,'vc-video-'+v.id)}${fbBlock}</div>`;
-    }).join('');
+  _vidsSorted=(currentUser.videos||[]).slice().sort((a,b)=>b.date-a.date);
+  const el=document.getElementById('vid-list');
+  if(!_vidsSorted.length){
+    el.innerHTML='<div class="empty-state"><div class="es-icon">🎥</div><div>Aucune vidéo partagée.<br>Colle un lien YouTube ou Google Drive pour recevoir les corrections de ton coach.</div></div>';
+    return;
+  }
+  el.innerHTML='<div id="vid-card-list"></div>'
+    +'<button id="vid-more-btn" onclick="loadMoreVideos()" style="display:none;width:100%;margin-top:10px;padding:10px;background:none;border:1px solid #222;border-radius:8px;color:var(--sub);font-size:12px;cursor:pointer;font-family:Montserrat,sans-serif;font-weight:700;letter-spacing:.5px"></button>';
+  _renderVideoBatch(0,20);
+}
+function _renderVideoBatch(from,count){
+  const list=document.getElementById('vid-card-list');
+  const btn=document.getElementById('vid-more-btn');
+  if(!list) return;
+  list.insertAdjacentHTML('beforeend',_vidsSorted.slice(from,from+count).map(_buildVideoCard).join(''));
+  const more=_vidsSorted.length-(from+count);
+  if(btn){
+    if(more>0){btn.textContent='Voir '+(more>20?20:more)+' vidéo'+(more!==1?'s':'')+' de plus';btn.style.display='block';}
+    else btn.style.display='none';
+  }
+}
+function loadMoreVideos(){
+  const shown=document.getElementById('vid-card-list')?.children.length||0;
+  _renderVideoBatch(shown,20);
+}
+function _buildVideoCard(v){
+  const hasFb=v.feedback||v.feedbackTimestamps?.length;
+  const tsBlock=v.feedbackTimestamps?.length
+    ?`<div style="margin-top:8px">${[...v.feedbackTimestamps].sort((a,b)=>tsToSecs(a.ts)-tsToSecs(b.ts)).map(t=>{const isA=!!t.audioUrl;return`<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid #111;align-items:${isA?'flex-start':'center'}"><span onclick="const _v=document.getElementById('vc-video-${v.id}');if(_v)_v.currentTime=tsToSecs('${t.ts}')" style="font-family:'Bebas Neue',sans-serif;font-size:13px;color:var(--red);flex-shrink:0;min-width:36px;margin-top:${isA?'3px':'0'};cursor:pointer" title="▶ ${t.ts}">${t.ts}</span>${isA?`<audio src="${t.audioUrl}" controls style="flex:1;height:32px"></audio>`:`<span style="font-size:12px;color:#ccc">${t.note}</span>`}</div>`;}).join('')}</div>`:'';
+  const fbBlock=hasFb?`<div style="background:var(--card2);border-radius:8px;padding:10px;margin-top:10px;font-size:12px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span style="color:var(--sub);font-size:10px;font-weight:700">FEEDBACK COACH</span>${v.feedbackDate?`<span style="font-size:10px;color:#444">${new Date(v.feedbackDate).toLocaleDateString('fr-FR')}</span>`:''}</div>${v.feedback?`<p style="margin:0;line-height:1.5">${escapeHtml(v.feedback)}</p>`:''}${tsBlock}</div>`:'';
+  return `<div class="video-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:13px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?'✓ Corrigée':'En attente'}</span><button onclick="if(confirm('Supprimer cette vidéo ?'))deleteVideo('${currentUser.email}','${v.id}')" style="background:none;border:none;color:#555;cursor:pointer;font-size:18px;line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button></div><div class="sub" style="font-size:11px">${new Date(v.date).toLocaleDateString('fr-FR')}</div>${_videoEmbed(v.url,'vc-video-'+v.id)}${fbBlock}</div>`;
 }
 async function deleteVideo(email,videoId){
   const users=DB.get('users')||{};
