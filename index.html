@@ -4486,6 +4486,16 @@ function parseReps(r){
   if(/jambe|bras|côté|cote|par/i.test(s)){return{type:'unilateral',label:s};}
   return{type:'normal',label:s};
 }
+// Valeur numérique de reps pour le calcul de volume.
+// Plage "6-8" → moyenne (7). Formats textuels ("15 Par Jambe", "10 PUIS 20") →
+// premier nombre trouvé : approximation, le volume réel peut différer.
+function repsToNumber(reps){
+  const s=String(reps||'').trim();
+  const range=s.match(/^(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)$/);
+  if(range) return (parseFloat(range[1])+parseFloat(range[2]))/2;
+  const n=parseFloat(s);
+  return isNaN(n)?0:n;
+}
 
 function setExerciseCount(n){
   const cur=progEx.length;
@@ -5612,7 +5622,7 @@ function finishWorkout(incomplete=false){
   clearInterval(woState.timerInterval);
   const mins=Math.floor((Date.now()-woState.startTime)/60000);
   let sets=0,vol=0;
-  Object.values(woState.sessionData).forEach(d=>d.sets.forEach(s=>{sets++;if(s.weight&&s.reps){const r1=parseFloat(s.reps||0),w1=parseFloat(s.weight||0);vol+=w1*r1;if(s.degressive&&s.weight2)vol+=parseFloat(s.weight2||0)*parseFloat(s.p2reps||0);}}));
+  Object.values(woState.sessionData).forEach(d=>d.sets.forEach(s=>{sets++;if(s.weight&&s.reps){const r1=repsToNumber(s.reps),w1=parseFloat(s.weight||0);vol+=w1*r1;if(s.degressive&&s.weight2)vol+=parseFloat(s.weight2||0)*parseFloat(s.p2reps||0);}}));
   // Sauvegarder les données par NOM d'exercice (pas par index) pour permettre les lookups cross-séances
   const data={};
   Object.entries(woState.sessionData).forEach(([idx,d])=>{
