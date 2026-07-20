@@ -7804,14 +7804,16 @@ function _caffeineColor(mg,thr){
   return '#ef4444';
 }
 function getUserWeight(){
-  if(!currentUser) return 75;
-  if(currentUser.weight) return parseFloat(currentUser.weight)||75;
+  if(!currentUser) return {weight:75,estimated:true};
+  const w0=parseFloat(currentUser.weight);
+  if(w0>0) return {weight:w0,estimated:false};
   const bilans=Object.values(currentUser.bilans||{});
   if(bilans.length){
     const last=bilans.sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0];
-    return parseFloat(last['bil-weight']||last['deb-weight']||last.weight||75)||75;
+    const w1=parseFloat(last['bil-weight']||last['deb-weight']||last.weight||0);
+    if(w1>0) return {weight:w1,estimated:false};
   }
-  return 75;
+  return {weight:75,estimated:true};
 }
 function _caffStore(){
   if(!currentUser.nutrition) currentUser.nutrition={};
@@ -7840,7 +7842,7 @@ function loadCaffeine(){
   const today=localISODate(new Date());
   const entries=getCaffeineDay(today);
   const totalMg=entries.reduce((s,e)=>s+(e.mg||0),0);
-  const wKg=getUserWeight();
+  const {weight:wKg,estimated:_wEst}=getUserWeight();
   const thr=caffeineThresholds(wKg);
   const pct=Math.min(totalMg/thr.red,1);
   const color=_caffeineColor(totalMg,thr);
@@ -7849,8 +7851,9 @@ function loadCaffeine(){
   const bar=document.getElementById('caff-gauge-bar');
   bar.style.width=(pct*100)+'%';
   bar.style.background=color;
-  document.getElementById('caff-thresholds').textContent=
-    `Seuils : vert <${thr.green}mg · jaune <${thr.yellow}mg · orange <${thr.orange}mg · rouge ${thr.red}mg`;
+  document.getElementById('caff-thresholds').innerHTML=
+    `Seuils : vert &lt;${thr.green}mg · jaune &lt;${thr.yellow}mg · orange &lt;${thr.orange}mg · rouge ${thr.red}mg`+
+    (_wEst?' <span style="display:block;margin-top:4px;color:#f97316;font-size:9px">⚖️ Poids estimé (75 kg) — renseigne ton poids réel pour des seuils précis</span>' : '');
   const alertEl=document.getElementById('caff-alerts');
   if(totalMg>=thr.red)
     alertEl.innerHTML='<div class="caff-alert-banner" style="background:#1a0000;border-color:#ef4444;color:#ef4444">🚨 Dose maximale dépassée — évite toute nouvelle prise aujourd\'hui.</div>';
@@ -7891,7 +7894,7 @@ function loadCaffeineEmbedded(){
   const today=localISODate(new Date());
   const entries=getCaffeineDay(today);
   const totalMg=entries.reduce((s,e)=>s+(e.mg||0),0);
-  const wKg=getUserWeight();
+  const {weight:wKg,estimated:_wEst}=getUserWeight();
   const thr=caffeineThresholds(wKg);
   const pct=Math.min(totalMg/thr.red,1);
   const color=_caffeineColor(totalMg,thr);
@@ -7926,7 +7929,7 @@ function loadCaffeineEmbedded(){
       <div style="height:10px;background:#1a1a1a;border-radius:5px;overflow:hidden;margin-bottom:8px">
         <div style="height:100%;width:${pct*100}%;border-radius:5px;background:${color};transition:width .4s ease,background .4s ease"></div>
       </div>
-      <div style="font-size:10px;color:var(--sub)">Seuils : vert &lt;${thr.green}mg · jaune &lt;${thr.yellow}mg · orange &lt;${thr.orange}mg · rouge ${thr.red}mg</div>
+      <div style="font-size:10px;color:var(--sub)">Seuils : vert &lt;${thr.green}mg · jaune &lt;${thr.yellow}mg · orange &lt;${thr.orange}mg · rouge ${thr.red}mg${_wEst?'<span style="display:block;margin-top:4px;color:#f97316;font-size:9px">⚖️ Poids estimé (75 kg) — renseigne ton poids réel pour des seuils précis</span>':''}</div>
     </div>
     ${alertHtml}
     <button class="btn btn-red" onclick="openCaffeineAdd()" style="margin-bottom:20px">+ Enregistrer une prise</button>
