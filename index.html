@@ -4136,17 +4136,39 @@ function cpaSwitchGender(id,g){
 
 function cpaSelectAll(v){document.querySelectorAll('#cpa-athletes input[type=checkbox]').forEach(cb=>cb.checked=v);}
 
+// LIMITE CONNUE : chaque athlète n'a qu'un seul sessions_config actif à la fois.
+// Un système multi-programmes (ex : programme A le lundi, programme B en décharge)
+// n'est pas prévu ; sessions_config_history permet uniquement un rollback unitaire.
+const _SESSIONS_HISTORY_MAX=5;
+function _pushSessionsHistory(a){
+  if(!a.sessions_config) return;
+  if(!a.sessions_config_history) a.sessions_config_history=[];
+  a.sessions_config_history.unshift({ts:Date.now(),sessions_config:JSON.parse(JSON.stringify(a.sessions_config))});
+  if(a.sessions_config_history.length>_SESSIONS_HISTORY_MAX) a.sessions_config_history.length=_SESSIONS_HISTORY_MAX;
+}
+
 function confirmAssignProgram(){
   const checked=[...document.querySelectorAll('#cpa-athletes input[type=checkbox]:checked')];
   if(!checked.length){toast('Sélectionne au moins un athlète','var(--orange)');return;}
   const prog=currentUser.coachPrograms[_assigningProgIdx];
   const users=DB.get('users')||{};
-  let count=0;
-  checked.forEach(cb=>{
+  // Construire la liste des noms pour le confirm()
+  const targets=checked.map(cb=>{
     const emailKey=Object.keys(users).find(k=>users[k]?.id===cb.value);
-    if(!emailKey) return;
+    if(!emailKey) return null;
     const a=users[emailKey];
-    const base=cb.dataset.gender==='F'?prog.sessions_F:prog.sessions_H;
+    return {emailKey,a,gender:cb.dataset.gender,name:((a.fname||'')+(a.lname?' '+a.lname:'')).trim()||a.email};
+  }).filter(Boolean);
+  if(!targets.length){toast('Aucun athlète trouvé','var(--orange)');return;}
+  const hasExisting=targets.some(t=>t.a.sessions_config);
+  const msg=`Assigner "${prog.name||'Ce programme'}" à ${targets.length} athlète${targets.length>1?'s':''} ?\n\n`
+    +targets.map(t=>t.name+(t.a.sessions_config?' (programme existant remplacé)':'')).join('\n')
+    +(hasExisting?'\n\nL\'ancien programme sera sauvegardé dans l\'historique (rollback possible).':'');
+  if(!confirm(msg)) return;
+  let count=0;
+  targets.forEach(({emailKey,a,gender})=>{
+    const base=gender==='F'?prog.sessions_F:prog.sessions_H;
+    _pushSessionsHistory(a); // sauvegarde avant écrasement
     a.sessions_config=base.map(s=>({...s,exercises:s.exercises.map(e=>({...e}))}));
     a.updatedAt=Date.now();
     users[emailKey]=a;
@@ -4265,6 +4287,7 @@ function saveCoachSessions(){
   const users=DB.get('users')||{};
   const emailKey=Object.keys(users).find(k=>users[k]?.id===currentClientId);
   if(!emailKey){toast('Athlète introuvable','var(--orange)');return;}
+  _pushSessionsHistory(users[emailKey]); // snapshot avant écrasement
   c.updatedAt=Date.now();
   users[emailKey]=c;
   DB.set('users',users);
