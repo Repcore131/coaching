@@ -2286,19 +2286,6 @@ const CLOUD={
   },
   // ──────────────────────────────────────────────────────────────
 
-  async pull(){
-    try{
-      const token=await this._getToken();
-      if(!token) return null;
-      const ctrl=new AbortController();
-      setTimeout(()=>ctrl.abort(),5000);
-      const r=await fetch(this._fbUrl+'?auth='+token+'&t='+Date.now(),{signal:ctrl.signal});
-      if(!r.ok)return null;
-      const d=await r.json();
-      return d||{};
-    }catch{return null;}
-  },
-
   push(users){
     // Ne pousse que currentUser — évite d'écraser les données d'autres utilisateurs
     // avec des copies obsolètes présentes en cache chez le coach
@@ -2328,6 +2315,8 @@ const CLOUD={
       // seenBilans uses email addresses as keys (dots/@ invalid in Firebase) — strip before push
       delete safe.seenBilans;
       delete safe.programPdf; // base64 blob — stocké dans Firebase Storage, pas dans RTDB
+      // Permettre aux règles RTDB de vérifier qui est le coach de cet athlète
+      if(safe.coachId){const coach=Object.values(DB.get('users')||{}).find(u=>u.id===safe.coachId);if(coach?.email)safe.coachEmailKey=coach.email.replace(/\./g,',');}
       // Supprimer photo2 (base64 temporaire pour OCR) de chaque session avant push RTDB
       if(safe.sessions_config) safe.sessions_config=safe.sessions_config.map(s=>{
         if(!s.photo2) return s;
@@ -2419,7 +2408,7 @@ const CLOUD={
       else{Object.keys(lb).filter(k=>k.includes('photo')).forEach(k=>{allBilans[idx][k]=lb[k];});}
     }
     allBilans.sort((a,b)=>a.date-b.date);
-    // Merge sessions (union par id — évite qu'un syncUsers coach écrase des séances locales)
+    // Merge sessions (union par id — évite qu'un sync écrase des séances locales)
     const cloudSessions=cloudUser.sessions||[];
     const localSessions=loc?.sessions||[];
     const sessMap=new Map();
@@ -2443,11 +2432,6 @@ const CLOUD={
       const url=token?base+'?auth='+token+'&t='+Date.now():base+'?t='+Date.now();
       const r=await fetch(url,{signal:ctrl.signal});
       if(r.ok){const d=await r.json();if(d) return d;}
-      // Fallback lecture sans auth (si règles RTDB publiques)
-      if(token){
-        const r2=await fetch(base+'?t='+Date.now());
-        if(r2.ok) return await r2.json()||null;
-      }
     }catch{}
     return null;
   },
@@ -2459,16 +2443,22 @@ const CLOUD={
     this._mergeUser(merged,email,cloudUser);
     localStorage.setItem('rc_users',JSON.stringify(merged));
   },
-  // Sync complète (coach : besoin des données de tous les athlètes)
-  async syncUsers(){
-    const cloud=await this.pull();
-    if(!cloud)return;
-    const decoded={};
-    for(const[k,v] of Object.entries(cloud)) decoded[k.replace(/,/g,'.')]=v;
-    const local=JSON.parse(localStorage.getItem('rc_users')||'{}');
-    const merged=Object.assign({},local);
-    for(const[email,u] of Object.entries(decoded)) this._mergeUser(merged,email,u);
-    localStorage.setItem('rc_users',JSON.stringify(merged));
+  // Sync ciblée — coach : lui-même + ses athlètes uniquement ; athlète : lui-même + son coach
+  async syncRelevantUsers(){
+    if(!currentUser) return;
+    const users=DB.get('users')||{};
+    const pulls=[];
+    if(currentUser.role==='coach'){
+      pulls.push(this.syncUser(currentUser.email));
+      const athletes=Object.values(users).filter(u=>u.coachId===currentUser.id&&u.email);
+      for(const a of athletes) pulls.push(this.syncUser(a.email));
+    } else {
+      pulls.push(this.syncUser(currentUser.email));
+      const coachEmail=Object.keys(users).find(k=>users[k]?.id===currentUser.coachId)
+        ||currentUser.coachEmailKey?.replace(/,/g,'.');
+      if(coachEmail) pulls.push(this.syncUser(coachEmail));
+    }
+    await Promise.all(pulls);
   },
 
   // Upload vidéo vers Firebase Storage
@@ -2806,12 +2796,7 @@ async function doLogin(){
     await CLOUD.syncUser(em);
     let synced=DB.get('users')||{};
     u=synced[em];
-    if(!u){
-      // Fallback : tirer toute la table (cas où la clé individuelle n'existe pas encore en RTDB)
-      await CLOUD.syncUsers();
-      synced=DB.get('users')||{};
-      u=synced[em];
-    }
+    if(!u){synced=DB.get('users')||{};u=synced[em];}
     if(!u) return rescueLogin(em,pw);
     u.pwd=pw;synced[em]=u;DB.set('users',synced);
     currentUser=u;DB.set('session',currentUser);
@@ -2929,7 +2914,7 @@ async function doNewPwdRecovery(){
     await CLOUD.syncUser(em);
     const users=DB.get('users')||{};
     let u=users[em];
-    if(!u){await CLOUD.syncUsers();u=(DB.get('users')||{})[em];}
+    if(!u){u=(DB.get('users')||{})[em];}
     if(u){
       u.pwd=pw;users[em]=u;DB.set('users',users);
       currentUser=u;DB.set('session',currentUser);
@@ -3312,7 +3297,7 @@ function loadCoachHome(){
   const _activeTab=_alreadyHere?(['dashboard','codes','monetisation'].find(t=>{const e=document.getElementById('ct-'+t);return e&&e.style.display!=='none';})||'dashboard'):'dashboard';
   coachTab(_activeTab);
   // Sync athlètes depuis Firebase puis re-render pour afficher photos/objectifs à jour
-  if(CLOUD.ok()) CLOUD.syncUsers().then(()=>{
+  if(CLOUD.ok()) CLOUD.syncRelevantUsers().then(()=>{
     const freshClients=getClients();
     freshClients.sort((a,b)=>urgencyScore(b)-urgencyScore(a));
     renderTodoBlock(freshClients);
@@ -3543,7 +3528,7 @@ function openClientDetail(cid,_refresh){
   if(!_refresh) go('s-coach-client');
   // Sync immédiat puis rafraîchi automatique (sans bouton)
   if(!_refresh && CLOUD.ok()){
-    CLOUD.syncUsers().then(()=>{
+    CLOUD.syncRelevantUsers().then(()=>{
       if(currentClientId===cid) openClientDetail(cid,true);
     }).catch(()=>{});
   }
@@ -4787,7 +4772,7 @@ function loadClientHome(){
       if(coachEmail){
         CLOUD.syncUser(coachEmail).then(_afterCoachSync).catch(()=>{});
       } else {
-        CLOUD.syncUsers().then(_afterCoachSync).catch(()=>{});
+        _afterCoachSync();
       }
     }
   }
