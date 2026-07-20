@@ -897,6 +897,34 @@ const COACH_PHOTO='icons/coach.jpg';
             </div>
           </div>
         </div>
+
+        <!-- Admin : offboarding d'un coach tiers — visible créateur seulement -->
+        <div id="coach-admin-offboard" style="display:none;background:#0d0d00;border:1px solid #3a3a00;border-radius:14px;padding:18px;margin-top:24px">
+          <div style="font-size:9px;color:#a3a300;letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:10px">⚙ Admin — Offboarding coach</div>
+          <div style="font-size:11px;color:var(--sub);margin-bottom:12px;line-height:1.5">Réassigner les athlètes d'un coach avant de désactiver son compte.</div>
+          <select id="admin-offboard-select" style="width:100%;margin-bottom:10px;padding:10px;background:#1a1a08;border:1px solid #3a3a00;border-radius:6px;color:#fff;font-size:12px;font-family:Montserrat,sans-serif">
+            <option value="">— Sélectionne un coach —</option>
+          </select>
+          <button onclick="_adminOffboardSelected()" style="width:100%;background:#a3a300;border:none;border-radius:6px;padding:10px;color:#000;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px">OFFBOARDER CE COACH →</button>
+        </div>
+
+        <!-- Zone dangereuse : self-service -->
+        <div style="background:#0f0000;border:1px solid #2a0000;border-radius:14px;padding:18px;margin-top:24px;margin-bottom:8px">
+          <div style="font-size:9px;color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:14px">⚠ Zone dangereuse</div>
+
+          <div style="margin-bottom:16px">
+            <div style="font-weight:700;font-size:13px;margin-bottom:4px">Réassigner mes athlètes</div>
+            <div style="font-size:11px;color:var(--sub);margin-bottom:10px;line-height:1.5">Transférer tous tes athlètes à un autre coach ou au créateur avant de fermer ton compte.</div>
+            <button onclick="offboardCoach(currentUser?.id)" style="width:100%;background:none;border:1px solid var(--red);border-radius:6px;padding:10px;color:var(--red);font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:1px">RÉASSIGNER MES ATHLÈTES</button>
+          </div>
+
+          <div style="border-top:1px solid #2a0000;padding-top:16px">
+            <div style="font-weight:700;font-size:13px;margin-bottom:4px">Supprimer mon compte</div>
+            <div style="font-size:11px;color:var(--sub);margin-bottom:10px;line-height:1.5">Action irréversible. Conformément au RGPD (Art. 17), toutes tes données personnelles seront effacées. Les données financières sont conservées 5 ans (obligation légale).</div>
+            <button onclick="requestAccountDeletion()" style="width:100%;background:none;border:1px solid #600000;border-radius:6px;padding:10px;color:#cc0000;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:1px">SUPPRIMER MON COMPTE DÉFINITIVEMENT</button>
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -10252,6 +10280,22 @@ function loadMonetisationTab(){
     const coachInfo=isCreator&&s.coachName?'<div class="sub" style="font-size:10px">Coach : '+s.coachName+'</div>':'';
     return '<div class="client-row"><div class="avatar" style="width:36px;height:36px;font-size:13px">'+ini(s.fname,s.lname)+'</div><div style="flex:1"><div style="font-weight:700">'+s.fname+' '+s.lname+'</div>'+coachInfo+'<div class="sub" style="font-size:11px;font-family:monospace">'+(s.paypalSubscriptionId||'no sub id')+'</div></div><div>'+st+'<button onclick="toggleSubStatus(\''+s.email+'\')" style="margin-top:4px;font-size:10px;background:none;border:1px solid var(--border);color:var(--sub);border-radius:6px;padding:3px 8px;cursor:pointer;font-family:Montserrat,sans-serif">'+(s.paymentStatus==='active'?'Suspendre':'Activer')+'</button></div></div>';
   }).join('');
+  // Section admin offboarding — visible créateur seulement
+  const adminSection=document.getElementById('coach-admin-offboard');
+  const adminSel=document.getElementById('admin-offboard-select');
+  if(adminSection&&adminSel){
+    if(isCreator){
+      adminSection.style.display='block';
+      const coaches=Object.values(users).filter(c=>c.role==='coach'&&c.email!==CREATOR_EMAIL);
+      adminSel.innerHTML='<option value="">— Sélectionne un coach —</option>'+coaches.map(c=>{
+        const n=Object.values(users).filter(a=>a.coachId===c.id).length;
+        return '<option value="'+c.id+'">'+escapeHtml((c.fname||'')+' '+(c.lname||''))
+          +' ('+n+' athlète'+(n>1?'s':'')+')</option>';
+      }).join('');
+    }else{
+      adminSection.style.display='none';
+    }
+  }
 }
 
 function toggleSubStatus(email){
@@ -10266,6 +10310,129 @@ function toggleSubStatus(email){
   loadMonetisationTab();
 }
 
+// ── Offboarding & suppression de compte coach (RGPD Art. 17) ─────────────────
+function offboardCoach(coachId){
+  if(!coachId) return;
+  document.getElementById('modal-overlay')?.remove();
+  const users=DB.get('users')||{};
+  const coach=Object.values(users).find(u=>u.id===coachId);
+  if(!coach){toast('Coach introuvable','var(--orange)');return;}
+  const athletes=Object.values(users).filter(u=>u.coachId===coachId&&u.role!=='coach');
+  const creator=Object.values(users).find(u=>u.email===CREATOR_EMAIL);
+  const isCreatorSelf=coach.email===CREATOR_EMAIL;
+  const otherCoaches=Object.values(users).filter(u=>u.role==='coach'&&u.id!==coachId&&u.email!==CREATOR_EMAIL);
+  if(!athletes.length){
+    toast('Aucun athlète rattaché à ce coach.','var(--sub)');
+    return;
+  }
+  const athListHtml=athletes.slice(0,10).map(a=>
+    '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #1a1a1a;font-size:12px">'
+    +'<div style="width:26px;height:26px;border-radius:50%;background:#1a1a1a;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">'+((a.fname||'?')[0]).toUpperCase()+'</div>'
+    +'<div style="flex:1">'+escapeHtml((a.fname||'')+' '+(a.lname||''))+'</div></div>'
+  ).join('')+(athletes.length>10?'<div style="font-size:11px;color:var(--sub);padding:6px 0">… et '+(athletes.length-10)+' autre(s)</div>':'');
+  const coachOptsHtml=otherCoaches.map(c=>
+    '<option value="'+c.id+'">'+escapeHtml((c.fname||'')+' '+(c.lname||'')+' — '+(c.email||''))+'</option>'
+  ).join('');
+  const reassignBlock=otherCoaches.length
+    ?'<label style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:#0a0a0a;border:1px solid var(--border);border-radius:8px;cursor:pointer">'
+      +'<input type="radio" name="ob-action" value="reassign" checked style="margin-top:3px;flex-shrink:0">'
+      +'<div style="width:100%"><div style="font-weight:700;font-size:12px">Réassigner à un autre coach</div>'
+      +'<select id="ob-target" style="margin-top:8px;width:100%;padding:9px;background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#fff;font-size:12px;font-family:Montserrat,sans-serif">'+coachOptsHtml+'</select>'
+      +'</div></label>'
+    :'';
+  const creatorBlock=(!isCreatorSelf&&creator)
+    ?'<label style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:#0a0a0a;border:1px solid var(--border);border-radius:8px;cursor:pointer">'
+      +'<input type="radio" name="ob-action" value="creator" '+(otherCoaches.length?'':'checked')+' style="margin-top:3px;flex-shrink:0">'
+      +'<div><div style="font-weight:700;font-size:12px">Transférer au créateur</div>'
+      +'<div style="font-size:11px;color:var(--sub);margin-top:2px">'+escapeHtml((creator.fname||'')+' '+(creator.lname||''))+' · '+CREATOR_EMAIL+'</div></div></label>'
+    :'';
+  const freeBlock='<label style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:#0a0a0a;border:1px solid var(--border);border-radius:8px;cursor:pointer">'
+    +'<input type="radio" name="ob-action" value="free" '+((!otherCoaches.length&&isCreatorSelf)?'checked':'')+' style="margin-top:3px;flex-shrink:0">'
+    +'<div><div style="font-weight:700;font-size:12px">Libérer (sans coach assigné)</div>'
+    +'<div style="font-size:11px;color:var(--sub);margin-top:2px">Les athlètes conservent leur compte mais n\'ont plus de coach</div></div></label>';
+  const ov=document.createElement('div');
+  ov.id='modal-overlay';ov.onclick=closeModal;
+  ov.style.cssText='position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center';
+  ov.innerHTML='<div onclick="event.stopPropagation()" style="background:#161616;border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-sizing:border-box">'
+    +'<div style="width:40px;height:4px;background:#333;border-radius:2px;margin:0 auto 18px"></div>'
+    +'<div style="font-size:9px;color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Réassignation des athlètes</div>'
+    +'<div style="font-size:15px;font-weight:800;margin-bottom:4px">'+escapeHtml((coach.fname||'')+' '+(coach.lname||''))+'</div>'
+    +'<div style="font-size:12px;color:var(--sub);margin-bottom:14px">'+athletes.length+' athlète'+(athletes.length>1?'s':'')+' à traiter avant désactivation</div>'
+    +'<div style="background:#0a0a0a;border-radius:8px;padding:8px 10px;margin-bottom:16px;max-height:140px;overflow-y:auto">'+athListHtml+'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">'+reassignBlock+creatorBlock+freeBlock+'</div>'
+    +'<div style="display:flex;gap:10px">'
+    +'<button onclick="closeModal()" style="flex:1;background:none;border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;cursor:pointer;font-weight:700">Annuler</button>'
+    +'<button onclick="executeOffboard(\''+coachId+'\')" style="flex:2;background:var(--red);border:none;border-radius:8px;padding:12px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px">RÉASSIGNER '+athletes.length+' ATHLÈTE'+(athletes.length>1?'S':'')+' →</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+}
+
+function executeOffboard(coachId){
+  const action=document.querySelector('input[name="ob-action"]:checked')?.value;
+  if(!action){toast('Choisis une option','var(--orange)');return;}
+  const users=DB.get('users')||{};
+  const athletes=Object.values(users).filter(u=>u.coachId===coachId&&u.role!=='coach');
+  if(!athletes.length){closeModal();toast('Aucun athlète à réassigner.','var(--sub)');return;}
+  let targetId=null,targetName='';
+  if(action==='reassign'){
+    targetId=document.getElementById('ob-target')?.value;
+    if(!targetId){toast('Sélectionne un coach cible','var(--orange)');return;}
+    const tc=Object.values(users).find(u=>u.id===targetId);
+    if(!tc){toast('Coach cible introuvable','var(--orange)');return;}
+    targetName=(tc.fname||'')+' '+(tc.lname||'');
+  }else if(action==='creator'){
+    const cr=Object.values(users).find(u=>u.email===CREATOR_EMAIL);
+    if(!cr){toast('Compte créateur introuvable','var(--orange)');return;}
+    targetId=cr.id;targetName=(cr.fname||'')+' '+(cr.lname||'');
+  }
+  // action==='free' → targetId reste null
+  athletes.forEach(a=>{
+    a.coachId=targetId;
+    a.coachName=targetId?targetName:null;
+    a.coachCode=targetId?a.coachCode||null:null;
+    a.updatedAt=Date.now();
+    users[a.email]=a;
+    CLOUD.pushOne(a.email,a);
+  });
+  DB.set('users',users);
+  const label=action==='free'?'libérés':'transférés vers '+(targetName.trim()||'le créateur');
+  closeModal();
+  toast(athletes.length+' athlète'+(athletes.length>1?'s':'')+' '+label+' ✓','var(--green)');
+}
+
+async function requestAccountDeletion(){
+  if(!currentUser||currentUser.role!=='coach') return;
+  const users=DB.get('users')||{};
+  const remaining=Object.values(users).filter(u=>u.coachId===currentUser.id&&u.role!=='coach');
+  if(remaining.length>0){
+    toast(remaining.length+' athlète'+(remaining.length>1?'s':'')+' encore rattaché'+(remaining.length>1?'s':'')+' — réassigne-les d\'abord','var(--orange)');
+    offboardCoach(currentUser.id);
+    return;
+  }
+  const ok=confirm(
+    'SUPPRIMER DÉFINITIVEMENT MON COMPTE ?\n\n'
+    +'Cette action est irréversible.\n'
+    +'Toutes tes données personnelles (profil, programmes, codes d\'accès, messages audio)\n'
+    +'seront effacées conformément au RGPD (Art. 17).\n\n'
+    +'Les données financières sont conservées 5 ans (obligation légale).'
+  );
+  if(!ok) return;
+  toast('Suppression en cours…','var(--sub)');
+  try{
+    await CLOUD._callFn('anonymizeCoach',{});
+    silentLogout();
+    go('s-welcome');
+    setTimeout(()=>toast('Compte supprimé. Au revoir.','var(--sub)'),400);
+  }catch(e){
+    toast('Erreur : '+(e.message||String(e)),'var(--red)');
+  }
+}
+
+function _adminOffboardSelected(){
+  const id=document.getElementById('admin-offboard-select')?.value;
+  if(!id){toast('Sélectionne un coach','var(--orange)');return;}
+  offboardCoach(id);
+}
 
 // ── Access codes via Firebase RTDB (sans Cloud Functions) ────────────────
 // Format: RC-XXXX-XXXX stocké dans /rc_codes/{code} du RTDB

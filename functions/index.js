@@ -222,6 +222,87 @@ exports.verifyAccessToken = onCall({ secrets: [TOKEN_SECRET] }, async (request) 
   return { valid: true, payload };
 });
 
+// ── anonymizeCoach ───────────────────────────────────────────────────────────
+// Appelée en self-service par un coach voulant supprimer son compte, ou par le
+// créateur (CREATOR_EMAIL) pour offboarder un coach tiers via targetEmail.
+//
+// ── Choix RGPD — suppression dure avec archivage financier minimal ──────────
+// Art. 17 RGPD (droit à l'effacement) :
+//   • Données personnelles (fname, lname, phone, photo, programmes, codes…) :
+//     SUPPRIMÉES — la clé users/{emailKey} est effacée intégralement.
+//   • Compte Firebase Auth : SUPPRIMÉ via Admin SDK.
+//   • Données financières (paypalSubscriptionId, paymentStatus, status) :
+//     ARCHIVÉES 5 ans sans PII sous /deleted_accounts/{anonId}, obligation
+//     légale de conservation des preuves contractuelles (art. L. 110-4 C. com.).
+//   • Alternative "stub" rejetée : conserver l'email en clair sous users/
+//     aurait maintenu une PII en base, contraire à l'esprit de l'Art. 17.
+//   • Les coachId orphelins chez les athlètes sont tolérés : le code client
+//     gère déjà find()===undefined sans planter ; offboardCoach() garantit
+//     l'absence d'athlètes restants avant d'appeler cette fonction.
+exports.anonymizeCoach = onCall(async (request) => {
+  if (!request.auth || !request.auth.token || !request.auth.token.email) {
+    throw new HttpsError("unauthenticated", "Connexion requise.");
+  }
+  const callerEmail = request.auth.token.email.toLowerCase();
+  const CREATOR = "guellec.coachingpro@gmail.com";
+  const isCreator = callerEmail === CREATOR;
+
+  const rawTarget = request.data && request.data.targetEmail
+    ? String(request.data.targetEmail).trim().toLowerCase()
+    : callerEmail;
+
+  if (rawTarget !== callerEmail && !isCreator) {
+    throw new HttpsError("permission-denied", "Tu ne peux supprimer que ton propre compte.");
+  }
+
+  const key = emailKey(rawTarget);
+  const snap = await db.ref("users/" + key).get();
+  const user = snap.val();
+  if (!user) throw new HttpsError("not-found", "Compte introuvable.");
+  if (user.role === "deleted") throw new HttpsError("failed-precondition", "Ce compte a déjà été supprimé.");
+  if (user.role !== "coach") throw new HttpsError("permission-denied", "Cette action concerne uniquement les comptes coach.");
+
+  // Sécurité serveur : vérifier l'absence d'athlètes encore rattachés.
+  const athSnap = await db.ref("users").orderByChild("coachId").equalTo(user.id).get();
+  const remaining = [];
+  athSnap.forEach((c) => remaining.push(c.key));
+  if (remaining.length > 0) {
+    throw new HttpsError(
+      "failed-precondition",
+      `${remaining.length} athlète(s) encore rattaché(s) à ce coach. Réassigne-les avant de supprimer le compte.`
+    );
+  }
+
+  const anonId = "del_" + (user.id || key.slice(0, 16)) + "_" + Date.now();
+  const now = Date.now();
+
+  // Archive financière sans PII (conservation légale 5 ans).
+  const financialArchive = {
+    anonId,
+    originalId: user.id || null,
+    paypalSubscriptionId: user.paypalSubscriptionId || null,
+    paymentStatus: user.paymentStatus || null,
+    status: user.status || null,
+    deletedAt: now,
+    retainUntil: now + 5 * 365 * 24 * 60 * 60 * 1000,
+  };
+
+  const updates = {};
+  updates["users/" + key] = null;
+  updates["deleted_accounts/" + anonId] = financialArchive;
+  await db.ref().update(updates);
+
+  // Suppression du compte Firebase Auth (Admin SDK — ne plante pas si absent).
+  try {
+    const authUser = await admin.auth().getUserByEmail(rawTarget);
+    await admin.auth().deleteUser(authUser.uid);
+  } catch (e) {
+    console.warn("anonymizeCoach: Auth deletion skipped for", rawTarget, "—", e.message);
+  }
+
+  return { ok: true, anonId };
+});
+
 // ── verifyPaypalSubscription ─────────────────────────────────────────────────
 // Appelée par onApprove() dans index.html après que PayPal a approuvé l'abonnement.
 // Le statut AUTONOMIE_PREMIUM n'est écrit dans la base QUE si PayPal confirme
