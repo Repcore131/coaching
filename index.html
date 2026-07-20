@@ -2665,6 +2665,15 @@ function routeUser(){
   if(window._pendingBilanOpen){window._pendingBilanOpen=false;setTimeout(()=>openBilanChoice(),800);}
   if(window._pendingWoOpen){window._pendingWoOpen=false;setTimeout(()=>openSessionPicker(),900);}
 }
+// SÉCURITÉ — champs contrôlés exclusivement par le serveur (Cloud Functions Admin SDK).
+// Ne JAMAIS écrire ces valeurs depuis le client — les règles RTDB (database.rules.json)
+// bloquent toute tentative de self-upgrade :
+//   status            : seul verifyPaypalSubscription peut écrire 'AUTONOMIE_PREMIUM'
+//   paymentStatus     : seul verifyPaypalSubscription peut écrire 'active' (downgrade →
+//                       'cancelled' autorisé depuis client ; réactivation = CF uniquement)
+//   paypalSubscriptionId : gel total dès qu'une valeur est écrite par la CF
+// Lire ces champs côté client reste nécessaire pour l'UI, mais saveUser() / CLOUD.pushOne()
+// ne doivent jamais en modifier la valeur vers un état plus privilégié.
 function checkAccess(u){
   if(!u||u.role==='coach') return true;
   const s=u.status||'FREE';
