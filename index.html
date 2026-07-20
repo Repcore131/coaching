@@ -7050,13 +7050,14 @@ function setFjaQty(v){
 function updateFjaCalc(){
   const f=_fjFood;if(!f) return;
   const qty=parseFloat(document.getElementById('fja-qty')?.value)||0;
+  const el=document.getElementById('fja-calc');
+  if(!el) return;
+  if(qty<=0||qty>9999){el.innerHTML='';return;}
   const r=qty/100;
   const kcal=f.k!=null?Math.round(f.k*r):null;
   const p=f.p!=null?parseFloat((f.p*r).toFixed(1)):null;
   const c=f.c!=null?parseFloat((f.c*r).toFixed(1)):null;
   const l=f.l!=null?parseFloat((f.l*r).toFixed(1)):null;
-  const el=document.getElementById('fja-calc');
-  if(!el) return;
   el.innerHTML=`<div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:12px;padding:14px;display:flex;justify-content:space-around;text-align:center">
     <div><div style="font-size:26px;font-family:'Bebas Neue',Impact,sans-serif;color:var(--red);line-height:1">${kcal??'—'}</div><div style="font-size:8px;color:var(--sub);letter-spacing:1.5px;margin-top:2px">KCAL</div></div>
     <div><div style="font-size:26px;font-family:'Bebas Neue',Impact,sans-serif;line-height:1">${p??'—'}</div><div style="font-size:8px;color:var(--sub);letter-spacing:1.5px;margin-top:2px">PROT g</div></div>
@@ -7068,7 +7069,7 @@ function updateFjaCalc(){
 function saveFoodEntry(){
   const f=_fjFood;if(!f) return;
   const qty=parseFloat(document.getElementById('fja-qty')?.value)||0;
-  if(qty<=0){toast('Saisis une quantité','var(--orange)');return;}
+  if(qty<=0||qty>9999){toast('Quantité invalide (1-9999g)','var(--orange)');return;}
   const r=qty/100;
   const entry={
     id:Date.now(),alim_id:f.id,nom:f.n,groupe:f.g||'',qty,repas:_fjRepas,
