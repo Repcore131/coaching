@@ -7914,6 +7914,7 @@ function addVideoLink(){
 }
 async function uploadVideoFile(input){
   const file=input.files[0];if(!file) return;
+  const targetEmail=currentUser.email; // capturé avant tout await
   const progEl=document.getElementById('vid-upload-progress');
   const errEl=document.getElementById('vid-upload-error');
   if(errEl) errEl.style.display='none';
@@ -7938,9 +7939,23 @@ async function uploadVideoFile(input){
     if(data.error) throw new Error(data.error.message);
     const url=data.secure_url;
     const name=file.name.replace(/\.(mp4|mov|webm|mkv|avi)$/i,'');
-    if(!currentUser.videos) currentUser.videos=[];
-    currentUser.videos.push({id:'v_'+Date.now(),name,url,date:Date.now(),size:Math.round(file.size/1024/1024*10)/10+' Mo',feedback:null});
-    saveUser();
+    const entry={id:'v_'+Date.now(),name,url,date:Date.now(),size:Math.round(file.size/1024/1024*10)/10+' Mo',feedback:null};
+    if(currentUser?.email!==targetEmail){
+      // Session changée pendant l'upload — écrire directement dans le compte cible
+      const allUsers=DB.get('users')||{};
+      const target=allUsers[targetEmail];
+      if(!target){toast('Session expirée — vidéo non sauvegardée.','var(--orange)');if(progEl)progEl.style.display='none';input.value='';return;}
+      if(!target.videos) target.videos=[];
+      target.videos.push(entry);
+      target.updatedAt=Date.now();
+      allUsers[targetEmail]=target;
+      DB.set('users',allUsers);
+      CLOUD.pushOne(targetEmail,target);
+    }else{
+      if(!currentUser.videos) currentUser.videos=[];
+      currentUser.videos.push(entry);
+      saveUser();
+    }
     if(progEl) progEl.style.display='none';
     input.value='';
     toast('Vidéo envoyée au coach !','var(--green)');
@@ -8224,12 +8239,17 @@ async function confirmAudioAnnotation(){
   const ts=(document.getElementById('vc-audio-ts')?.value||'').trim();
   if(!ts)return toast('Renseigne le timestamp avant d\'ajouter','var(--orange)');
   if(!/^\d+:\d{2}$/.test(ts))return toast('Format invalide — utilise m:ss (ex: 0:45)','var(--orange)');
+  const targetEmail=currentUser.email; // capturé avant tout await
   const status=document.getElementById('vc-audio-status');
   if(status)status.textContent='⏳ Envoi…';
   try{
     const ext=_audioBlob.type.includes('ogg')?'.ogg':'.webm';
     const file=new File([_audioBlob],'audio_'+Date.now()+ext,{type:_audioBlob.type});
     const url=await _cloudinaryUpload(file);
+    if(currentUser?.email!==targetEmail){
+      const allUsers=DB.get('users')||{};
+      if(!allUsers[targetEmail]){toast('Session expirée — audio non sauvegardé.','var(--orange)');return;}
+    }
     if(!window._tsAnnotations)window._tsAnnotations=[];
     window._tsAnnotations.push({ts,note:'🎤 message audio',audioUrl:url});
     _renderTsAnnotations();
@@ -8246,10 +8266,15 @@ async function uploadAudioFile(input){
   const ts=(document.getElementById('vc-audio-ts')?.value||'').trim();
   if(!ts){toast('Renseigne le timestamp d\'abord','var(--orange)');input.value='';return;}
   if(!/^\d+:\d{2}$/.test(ts)){toast('Format invalide — utilise m:ss','var(--orange)');input.value='';return;}
+  const targetEmail=currentUser.email; // capturé avant tout await
   const status=document.getElementById('vc-audio-status');
   if(status)status.textContent='⏳ Envoi…';
   try{
     const url=await _cloudinaryUpload(file);
+    if(currentUser?.email!==targetEmail){
+      const allUsers=DB.get('users')||{};
+      if(!allUsers[targetEmail]){toast('Session expirée — audio non sauvegardé.','var(--orange)');input.value='';return;}
+    }
     if(!window._tsAnnotations)window._tsAnnotations=[];
     window._tsAnnotations.push({ts,note:'🎤 message audio',audioUrl:url});
     _renderTsAnnotations();
