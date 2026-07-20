@@ -3987,6 +3987,7 @@ const defEx=[
   {name:'Oblique Abdominal Crunch',series:5,reps:'15',repos:'60 sec',description:'En décubitus dorsal, mains derrière la nuque. Rotation et contraction maximale des obliques.',note:'',image:null}
 ];
 let progEx=[];
+let _progExDirty=false;
 // ======= COACH PROGRAMME TEMPLATES =======
 let _editProgTemplateIdx=null, _editProgTemplateGender='H', _editProgTemplateSessionIdx=null, _assigningProgIdx=null;
 
@@ -4318,11 +4319,12 @@ function openCoachSessionExercises(idx){
   window._editingSessionIdx=null;
   window._editingCoachSessionIdx=idx;
   const backBtn=document.querySelector('#s-coach-program .back-btn');
-  if(backBtn) backBtn.onclick=()=>{go('s-coach-sessions');loadCoachSessionSlots();};
+  if(backBtn) backBtn.onclick=()=>{if(_progExDirty&&!confirm('Modifications non enregistrées — quitter quand même ?'))return;go('s-coach-sessions');loadCoachSessionSlots();};
   const title=document.querySelector('#s-coach-program .topbar-title');
   if(title) title.textContent=(s.name||DAYS[idx])+' — Exercices';
   ['prog-session-sel-wrap','prog-pdf-wrap'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
   renderProgEx();go('s-coach-program');
+  _progExDirty=false;
 }
 function saveCoachSessions(){
   const c=_coachEditClient;
@@ -4360,12 +4362,13 @@ function openCoachProgram(){
     const el=document.getElementById(id);if(el) el.style.display='';
   });
   const backBtn=document.querySelector('#s-coach-program .back-btn');
-  if(backBtn) backBtn.onclick=()=>go('s-coach-client');
+  if(backBtn) backBtn.onclick=()=>{if(_progExDirty&&!confirm('Modifications non enregistrées — quitter quand même ?'))return;go('s-coach-client');};
   const title=document.querySelector('#s-coach-program .topbar-title');
   if(title) title.textContent='Programme';
   // PDF programme
   refreshPdfUI(c);
   renderProgEx();go('s-coach-program');
+  _progExDirty=false;
 }
 
 function refreshPdfUI(c){
@@ -4564,37 +4567,37 @@ function renderProgEx(){
       <div style="background:var(--red);padding:8px 14px;display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:8px">
           <span style="background:#fff2;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0">${i+1}</span>
-          <input value="${escapeHtml(ex.name||'')}" onchange="progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase()" placeholder="NOM DE L'EXERCICE (MATÉRIELS)" style="background:transparent;border:none;color:#fff;font-family:Montserrat,sans-serif;font-weight:800;font-size:13px;outline:none;text-transform:uppercase;flex:1">
+          <input value="${escapeHtml(ex.name||'')}" onchange="_progExDirty=true;progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase()" placeholder="NOM DE L'EXERCICE (MATÉRIELS)" style="background:transparent;border:none;color:#fff;font-family:Montserrat,sans-serif;font-weight:800;font-size:13px;outline:none;text-transform:uppercase;flex:1">
         </div>
-        <button onclick="progEx.splice(${i},1);renderProgEx()" style="background:#fff2;border:none;color:#fff;font-size:14px;cursor:pointer;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center"></button>
+        <button onclick="_progExDirty=true;progEx.splice(${i},1);renderProgEx()" style="background:#fff2;border:none;color:#fff;font-size:14px;cursor:pointer;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center"></button>
       </div>
       <div style="padding:12px">
         <!-- Description technique -->
         <div style="margin-bottom:10px">
           <label style="margin-top:0">Description / Technique</label>
-          <textarea rows="3" placeholder="Ex: Faire 10 répétitions lourdes buste droit puis diminuer la charge..." onchange="progEx[${i}].description=this.value" style="margin-top:4px;font-size:12px;line-height:1.5">${escapeHtml(ex.description||'')}</textarea>
+          <textarea rows="3" placeholder="Ex: Faire 10 répétitions lourdes buste droit puis diminuer la charge..." onchange="_progExDirty=true;progEx[${i}].description=this.value" style="margin-top:4px;font-size:12px;line-height:1.5">${escapeHtml(ex.description||'')}</textarea>
         </div>
         <!-- Séries / Reps / Repos -->
         <div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:8px;margin-bottom:10px">
-          <div><label>Séries</label><input type="number" min="0" value="${ex.series||3}" onchange="this.value=Math.max(0,+this.value);progEx[${i}].series=+this.value" style="text-align:center"></div>
+          <div><label>Séries</label><input type="number" min="0" value="${ex.series||3}" onchange="_progExDirty=true;this.value=Math.max(0,+this.value);progEx[${i}].series=+this.value" style="text-align:center"></div>
           <div>
             <label>Reps <span style="font-size:9px;color:var(--sub);text-transform:none">(ex: 10 PUIS 20 / 6-8 / 15 Par Jambe)</span></label>
-            <input value="${escapeHtml(ex.reps||'')}" onchange="if(/^-\\d+$/.test(this.value.trim())){toast('Reps invalides — valeur négative non autorisée','var(--orange)');this.value=progEx[${i}].reps||'';return;}progEx[${i}].reps=this.value" placeholder="10 PUIS 20" style="text-align:center">
+            <input value="${escapeHtml(ex.reps||'')}" onchange="if(/^-\\d+$/.test(this.value.trim())){toast('Reps invalides — valeur négative non autorisée','var(--orange)');this.value=progEx[${i}].reps||'';return;}_progExDirty=true;progEx[${i}].reps=this.value" placeholder="10 PUIS 20" style="text-align:center">
             <div style="margin-top:4px">${badge}</div>
           </div>
-          <div><label>Repos</label><input value="${escapeHtml(ex.repos||'01 min')}" onchange="progEx[${i}].repos=this.value" placeholder="01 min" style="text-align:center;font-size:12px"></div>
+          <div><label>Repos</label><input value="${escapeHtml(ex.repos||'01 min')}" onchange="_progExDirty=true;progEx[${i}].repos=this.value" placeholder="01 min" style="text-align:center;font-size:12px"></div>
         </div>
         <!-- Image + Vidéo exercice -->
         <div style="display:flex;align-items:flex-start;gap:10px;margin-top:4px">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-shrink:0">
-            <input type="file" accept="image/*" style="display:none" onchange="loadExImage(${i},this)">
+            <input type="file" accept="image/*" style="display:none" onchange="_progExDirty=true;loadExImage(${i},this)">
             ${ex.image?`<img src="${ex.image}" style="width:60px;height:60px;border-radius:8px;object-fit:cover">`:
             `<div style="width:60px;height:60px;border-radius:8px;background:var(--card2);display:flex;align-items:center;justify-content:center;font-size:22px;border:2px dashed var(--border)"></div>`}
           </label>
           <div style="flex:1">
             <label style="font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--sub);font-weight:700">Lien vidéo YouTube (technique)</label>
             <div style="display:flex;gap:6px;margin-top:4px">
-              <input value="${escapeHtml(ex.videoUrl||'')}" onchange="progEx[${i}].videoUrl=this.value.trim()" placeholder="https://youtu.be/..." style="flex:1;font-size:11px;padding:7px 10px">
+              <input value="${escapeHtml(ex.videoUrl||'')}" onchange="_progExDirty=true;progEx[${i}].videoUrl=this.value.trim()" placeholder="https://youtu.be/..." style="flex:1;font-size:11px;padding:7px 10px">
               ${ex.videoUrl?`<a href="${safeUrl(ex.videoUrl)}" target="_blank" rel="noopener" style="background:var(--card2);border:1px solid var(--border);border-radius:3px;padding:7px 10px;font-size:12px;text-decoration:none;display:flex;align-items:center">▶</a>`:''}
             </div>
           </div>
@@ -4611,11 +4614,13 @@ function loadExImage(idx,input){
 
 function addExercise(){
   progEx.push({name:'',series:3,reps:'10',repos:'01 min',description:'',image:null,videoUrl:''});
+  _progExDirty=true;
   renderProgEx();
   // Scroll vers le nouvel exercice
   setTimeout(()=>{const el=document.getElementById('prog-exercises');if(el)el.lastElementChild?.scrollIntoView({behavior:'smooth'});},100);
 }
 function saveProgram(){
+  _progExDirty=false;
   // Cas 0 : coach édite une séance d'un template programme H/F
   if(_editProgTemplateSessionIdx!==null&&_editProgTemplateIdx!==null){
     const p=currentUser.coachPrograms[_editProgTemplateIdx];
@@ -5097,7 +5102,7 @@ function openSessionExercises(idx){
 
   // Adapter le screen pour la vue athlète
   const backBtn=document.querySelector('#s-coach-program .back-btn');
-  if(backBtn) backBtn.onclick=()=>go('s-session-manager');
+  if(backBtn) backBtn.onclick=()=>{if(_progExDirty&&!confirm('Modifications non enregistrées — quitter quand même ?'))return;go('s-session-manager');};
   const title=document.querySelector('#s-coach-program .topbar-title');
   if(title) title.textContent=(cfg[idx].name||'Séance')+' — Exercices';
   // Masquer sections réservées au coach
@@ -5107,6 +5112,7 @@ function openSessionExercises(idx){
 
   renderProgEx();
   go('s-coach-program');
+  _progExDirty=false;
   // Scroll immédiat sur la section Exercices
   setTimeout(()=>{
     const scrollArea=document.querySelector('#s-coach-program .scroll-area');
