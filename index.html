@@ -938,6 +938,8 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="ccd-nutrition" style="margin-bottom:20px"></div>
       <!-- Compléments coach -->
       <div id="ccd-supplements" style="margin-bottom:20px"></div>
+      <!-- Caféine coach (lecture seule) -->
+      <div id="ccd-caffeine" style="margin-bottom:20px"></div>
       <h3 style="margin-bottom:12px">Bilans récents</h3>
       <div id="ccd-bilans"></div>
       <div id="ccd-sessions-recap" style="margin-top:24px"></div>
@@ -3497,6 +3499,7 @@ function openClientDetail(cid,_refresh){
   renderCoachSessionRecap(c);
   renderCoachNutriSection(c);
   renderCoachSuppSection(c);
+  renderCoachCaffeineSection(c);
   if(!_refresh) go('s-coach-client');
   // Sync immédiat puis rafraîchi automatique (sans bouton)
   if(!_refresh && CLOUD.ok()){
@@ -7600,6 +7603,63 @@ function deleteClientSuppEntry(index){
   renderCoachSuppSection(c);
 }
 
+function renderCoachCaffeineSection(c){
+  const el=document.getElementById('ccd-caffeine');
+  if(!el||!c) return;
+  const days=c.nutrition?.caffeine?.days||{};
+  const wKg=parseFloat(c.weight)||75;
+  const thr=caffeineThresholds(wKg);
+  // Construire les 28 jours
+  const today=new Date();
+  const totals28=[];
+  let peakMg=0,peakDate=null;
+  for(let i=27;i>=0;i--){
+    const d=new Date(today);d.setDate(today.getDate()-i);
+    const key=localISODate(d);
+    const total=(days[key]||[]).reduce((s,e)=>s+(e.mg||0),0);
+    totals28.push({key,total,d});
+    if(total>peakMg){peakMg=total;peakDate=d;}
+  }
+  const withData=totals28.filter(x=>x.total>0);
+  const avg28=withData.length?Math.round(withData.reduce((s,x)=>s+x.total,0)/withData.length):0;
+  const data7=totals28.slice(-7).filter(x=>x.total>0);
+  const avg7=data7.length?Math.round(data7.reduce((s,x)=>s+x.total,0)/data7.length):0;
+  const peakStr=peakDate&&peakMg>0?peakDate.toLocaleDateString('fr-FR',{day:'numeric',month:'short'}):'—';
+  const col7=avg7>0?_caffeineColor(avg7,thr):'#555';
+  const col28=avg28>0?_caffeineColor(avg28,thr):'#555';
+  const colPeak=peakMg>0?_caffeineColor(peakMg,thr):'#555';
+  el.innerHTML=`
+    <div style="background:#0f0f0f;border:1px solid #1c1c1c;border-radius:12px;padding:16px">
+      <div style="font-size:9px;color:var(--red);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:14px">☕ Caféine</div>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <div style="flex:1;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:8px;color:var(--sub);letter-spacing:1.5px;font-weight:700;margin-bottom:5px">MOY. 7J</div>
+          <div style="font-size:24px;font-family:'Bebas Neue',sans-serif;color:${col7};line-height:1">${avg7||'—'}</div>
+          <div style="font-size:8px;color:var(--sub);margin-top:2px">mg/j</div>
+        </div>
+        <div style="flex:1;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:8px;color:var(--sub);letter-spacing:1.5px;font-weight:700;margin-bottom:5px">MOY. 28J</div>
+          <div style="font-size:24px;font-family:'Bebas Neue',sans-serif;color:${col28};line-height:1">${avg28||'—'}</div>
+          <div style="font-size:8px;color:var(--sub);margin-top:2px">mg/j</div>
+        </div>
+        <div style="flex:1;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:8px;color:var(--sub);letter-spacing:1.5px;font-weight:700;margin-bottom:5px">PIC 28J</div>
+          <div style="font-size:${peakMg>999?'18':'24'}px;font-family:'Bebas Neue',sans-serif;color:${colPeak};line-height:1">${peakMg||'—'}</div>
+          <div style="font-size:8px;color:var(--sub);margin-top:2px">${peakMg?peakStr:'—'}</div>
+        </div>
+      </div>
+      ${!withData.length
+        ?`<div style="text-align:center;padding:14px 0;color:#333;font-size:12px">Aucune prise enregistrée sur 28 jours</div>`
+        :`<div style="font-size:9px;color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin-bottom:8px">Historique 28 jours</div>
+          <canvas id="ccd-caff-history" height="100" style="width:100%;display:block;border-radius:6px"></canvas>
+          <div style="font-size:9px;color:#444;margin-top:6px">Seuils (pour ${wKg}kg) : vert &lt;${thr.green}mg · jaune &lt;${thr.yellow}mg · orange &lt;${thr.orange}mg · rouge ${thr.red}mg</div>`
+      }
+    </div>`;
+  if(withData.length){
+    requestAnimationFrame(()=>_drawCaffeineHistory(wKg,'ccd-caff-history',days));
+  }
+}
+
 // ======= CAFFEINE =======
 const CAFFEINE_DB=[
   {id:'espresso',    type:'coffee',       name:'Espresso',              icon:'☕',mg:63,  volume:'30ml'},
@@ -7785,14 +7845,14 @@ function loadCaffeineEmbedded(){
   `;
   requestAnimationFrame(()=>_drawCaffeineHistory(wKg,'emb-caff-history-chart'));
 }
-function _drawCaffeineHistory(wKg,canvasId='caff-history-chart'){
+function _drawCaffeineHistory(wKg,canvasId='caff-history-chart',daysOverride){
   const canvas=document.getElementById(canvasId);
   if(!canvas) return;
   const ctx=canvas.getContext('2d');
   canvas.width=canvas.offsetWidth||340;
   const W=canvas.width,H=canvas.height||140;
   ctx.clearRect(0,0,W,H);
-  const days=_caffStore();
+  const days=daysOverride!==undefined?daysOverride:_caffStore();
   const thr=caffeineThresholds(wKg);
   const labels=[],data=[];
   for(let i=27;i>=0;i--){
