@@ -4417,6 +4417,7 @@ function saveCoachPdfLink(){
   let url=link;
   const driveMatch=link.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
   if(driveMatch) url=`https://drive.google.com/file/d/${driveMatch[1]}/preview`;
+  if(safeUrl(url)==='#'){toast('Lien invalide — seuls les liens https:// sont acceptés.','var(--red)');return;}
   const users=DB.get('users')||{};
   const c=getOwnedClient(currentClientId,users);
   if(!c) return;
@@ -4504,6 +4505,7 @@ function saveCoachPdfLinkInline(){
   let url=link;
   const driveMatch=link.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
   if(driveMatch) url=`https://drive.google.com/file/d/${driveMatch[1]}/preview`;
+  if(safeUrl(url)==='#'){toast('Lien invalide — seuls les liens https:// sont acceptés.','var(--red)');return;}
   const users=DB.get('users')||{};
   const c=getOwnedClient(currentClientId,users);
   if(!c) return;
@@ -4820,8 +4822,8 @@ function openHomePdf(){
   currentUser.pdfLastSeen=Date.now();saveUser();
   const badge=document.getElementById('clh-pdf-new-badge');
   if(badge) badge.style.display='none';
-  const src=freshU.programPdfStorageUrl||freshU.programPdfLink||freshU.programPdf;
-  if(src){
+  const src=safeUrl(freshU.programPdfStorageUrl||freshU.programPdfLink||freshU.programPdf);
+  if(src!=='#'){
     const w=window.open();
     if(w){w.document.write(`<html><body style="margin:0;background:#000"><iframe src="${src}" style="width:100%;height:100vh;border:none"></iframe></body></html>`);w.document.close();}
   }
@@ -5390,8 +5392,8 @@ function loadProgramView(){
 }
 
 function openPdfNewTab(){
-  const src=currentUser.programPdfStorageUrl||currentUser.programPdfLink||currentUser.programPdf;
-  if(!src) return;
+  const src=safeUrl(currentUser.programPdfStorageUrl||currentUser.programPdfLink||currentUser.programPdf);
+  if(src==='#') return;
   const w=window.open();
   if(w){w.document.write(`<html><body style="margin:0;background:#000"><iframe src="${src}" style="width:100%;height:100vh;border:none"></iframe></body></html>`);w.document.close();}
 }
