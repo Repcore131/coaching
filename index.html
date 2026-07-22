@@ -111,7 +111,7 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
 
 
 /* ====== METRIC BOXES ====== */
-.metric-box{background:linear-gradient(135deg,var(--card2),var(--surface-2));border-radius:2px;padding:16px 12px;text-align:center;flex:1;border:1px solid var(--border);border-left:3px solid var(--red);position:relative;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.metric-box{background:linear-gradient(135deg,var(--card2),var(--surface-2));border-radius:2px;padding:16px 12px;text-align:center;flex:1;border:1px solid var(--border);border-left:3px solid var(--red);position:relative;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.04),0 0 0 1px rgba(224,32,32,.06)}
 .metric-box::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--red) var(--pct,0%),transparent var(--pct,0%))}
 .metric-val{font-size:32px;font-family:'Bebas Neue',Impact,sans-serif;letter-spacing:0;line-height:1}
 .metric-label{font-size:8px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;margin-top:6px;font-weight:700}
@@ -1314,9 +1314,9 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- CLIENT HOME -->
-<div id="s-client-home" class="screen">
+<div id="s-client-home" class="screen carbon-bg">
   <!-- Brand header athlete -->
-  <div style="background:#090909;border-bottom:1px solid var(--red);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+  <div style="background:#090909;border-bottom:1px solid rgba(255,255,255,.22);box-shadow:0 4px 20px rgba(0,0,0,.9);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:relative;z-index:2;flex-shrink:0">
     <div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="openAthleteProfile()">
       <div id="clh-athlete-avatar" style="width:48px;height:48px;border-radius:50%;background:var(--surface-2);border:2px solid #2a2a2a;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
       <div>
@@ -1324,11 +1324,11 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="font-size:14px;font-family:'Bebas Neue',Impact,sans-serif;letter-spacing:1px;line-height:1" id="clh-name"></div>
       </div>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;background:#160000;border:1px solid #2a0000;border-radius:12px;padding:8px 14px">
-      <svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="20" height="20" style="flex-shrink:0"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg>
+    <div style="display:flex;align-items:center;gap:10px;background:#1e0000;border:1px solid rgba(224,32,32,.5);border-radius:12px;padding:9px 16px;box-shadow:0 0 22px rgba(224,32,32,.2),inset 0 0 14px rgba(224,32,32,.06)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" style="flex-shrink:0;filter:drop-shadow(0 0 6px rgba(224,32,32,.85))"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg>
       <div>
-        <div class="txt-stat" style="color:var(--red);line-height:1" id="clh-streak-val">0</div>
-        <div style="font-size:7px;color:var(--sub);letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-top:1px">jours</div>
+        <div class="txt-stat" style="color:var(--red);line-height:1;font-size:30px;text-shadow:0 0 8px rgba(224,32,32,.95),0 0 22px rgba(224,32,32,.5)" id="clh-streak-val">0</div>
+        <div style="font-size:7px;color:rgba(224,32,32,.7);letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-top:1px">jours</div>
       </div>
     </div>
   </div>
@@ -1357,7 +1357,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="background:linear-gradient(135deg,#0f0000,#160000);border:1px solid #2a0000;border-radius:4px;padding:20px;margin-bottom:14px;position:relative;overflow:hidden">
         <div style="position:absolute;right:0;top:0;width:3px;height:100%;background:var(--red)"></div>
         <div style="font-size:9px;color:var(--red);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:14px">Entraînement</div>
-        <button class="btn btn-red" onclick="openSessionPicker()" style="margin-bottom:10px;letter-spacing:1.5px;font-size:13px">DÉMARRER MA SÉANCE</button>
+        <button class="btn btn-red" onclick="openSessionPicker()" style="margin-bottom:10px;letter-spacing:1.5px;font-size:13px;box-shadow:inset 0 2px 0 rgba(255,255,255,.22),inset 0 -3px 0 rgba(0,0,0,.45),0 4px 20px rgba(224,32,32,.35)">DÉMARRER MA SÉANCE</button>
         <button class="btn btn-outline" onclick="loadSessionManager()" style="font-size:11px;padding:11px;letter-spacing:1.5px">GÉRER MES SÉANCES</button>
       </div>
 
@@ -1436,7 +1436,7 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
 
       <!-- BANNIÈRES PUB COACH -->
-      <div id="clh-promo-banners" style="display:none;margin-bottom:8px"></div>
+      <div id="clh-promo-banners" style="display:none;margin-top:18px;margin-bottom:8px"></div>
     </div>
   </div>
   <div class="tab-bar" id="client-tabbar">
@@ -4849,7 +4849,8 @@ function loadClientHome(){
   document.getElementById('clh-streak-nb').textContent=s;
   const h=new Date().getHours();
   document.getElementById('clh-greeting').textContent=(h<12?'Bonjour,':'Bonsoir,')+' '+u.fname+'.';
-  document.getElementById('clh-date').textContent=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+  const _dStr=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
+  document.getElementById('clh-date').textContent=_dStr.charAt(0).toUpperCase()+_dStr.slice(1);
   document.getElementById('clh-sessions').textContent=(u.sessions||[]).length;
   const lb=u.bilans?.length?u.bilans[u.bilans.length-1]:null;
   document.getElementById('clh-weight').textContent=lb&&getBW(lb)!==null?getBW(lb)+'kg':'—';
@@ -5466,29 +5467,29 @@ function _renderWeeklyInto(el,sc){
   const isFoundation=sc.some(s=>s._foundation);
   const selS=sel>=0?sc[sel]:{};
   const progNote=sc.find(s=>s.notes&&s._foundation)?.notes||'';
+  const dayLabel=selS.active&&selS.exercises?.length
+    ?(DAYS[sel]||'')+(selS.name?' — '+escapeHtml(selS.name):'')
+    :(DAYS[sel]||'')+' — Repos';
   el.innerHTML=`
-    <div style="margin-bottom:14px">
-      <div style="font-size:9px;color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Mon programme</div>
-      <div style="font-size:16px;font-weight:900;letter-spacing:-0.3px">${isFoundation?'Programme Fondation':'Semaine d\'entraînement'}</div>
-      ${progNote?`<p class="sub" style="margin-top:5px;font-size:12px;line-height:1.6">${escapeHtml(progNote)}</p>`:''}
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div>
+        <div style="font-size:9px;color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:3px">Séance du jour</div>
+        <div style="font-size:13px;font-weight:800;letter-spacing:.3px;text-transform:uppercase">${dayLabel}</div>
+      </div>
+      <div style="display:flex;gap:5px">
+        ${sc.map((s,i)=>{
+          const isToday=i===todayIdx;const isSel=i===sel;
+          const bg=isSel?'var(--red)':s.active?'#2a0000':'#141414';
+          const col=isSel||s.active?'#fff':'#444';
+          const bord=isToday?'2px solid '+(isSel?'#fff':'var(--red)'):'2px solid transparent';
+          return `<div onclick="_setWeekDay(${i})" style="flex-shrink:0;width:30px;height:30px;border-radius:3px;background:${bg};border:${bord};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;cursor:pointer;color:${col}">${DAY_ICONS[i]}</div>`;
+        }).join('')}
+      </div>
     </div>
-    <div style="display:flex;gap:6px;margin-bottom:16px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch">
-      ${sc.map((s,i)=>{
-        const isToday=i===todayIdx;const isSel=i===sel;
-        const bg=isSel?'var(--red)':s.active?'#2a0000':'#141414';
-        const col=isSel||s.active?'#fff':'#555';
-        const bord=isToday?'2px solid '+(isSel?'#fff':'var(--red)'):'2px solid transparent';
-        return `<div onclick="_setWeekDay(${i})" style="flex-shrink:0;width:36px;height:36px;border-radius:3px;background:${bg};border:${bord};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;cursor:pointer;color:${col}">${DAY_ICONS[i]}</div>`;
-      }).join('')}
-    </div>
-    <div style="font-size:11px;color:var(--sub);font-weight:700;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px">
-      ${selS.active&&selS.exercises?.length
-        ?DAYS[sel]+(selS.name?' — '+escapeHtml(selS.name):'')
-        :(DAYS[sel]||'')+' — Repos'}
-    </div>
+    ${progNote?`<p class="sub" style="font-size:11px;margin-bottom:8px;line-height:1.5">${escapeHtml(progNote)}</p>`:''}
     ${selS.active&&selS.exercises?.length
       ?selS.exercises.map((ex,idx)=>_renderExCard(ex,idx)).join('')
-      :`<div style="text-align:center;padding:24px 16px;color:var(--sub);font-size:13px">Jour de repos</div>`}
+      :`<div style="text-align:center;padding:20px 16px;color:var(--sub);font-size:13px">Jour de repos 💤</div>`}
   `;
 }
 function _renderProgExercisesInto(el){
@@ -6357,7 +6358,7 @@ function renderWoReminderCard(){
   const u=currentUser;
   if(!u._woReminderEnabled){
     el.innerHTML=`<button onclick="openWoReminderConfig()" style="width:100%;background:transparent;border:1px dashed var(--border);border-radius:10px;padding:11px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;font-family:Montserrat,sans-serif;color:var(--sub);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Configurer un rappel séance</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Configurer un rappel séance</span>
     </button>`;
     return;
   }
