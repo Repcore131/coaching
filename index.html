@@ -1738,20 +1738,40 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- BILAN CHOICE -->
 <div id="s-bilan-choice" class="screen" style="justify-content:center;padding:32px 24px">
   <div class="anim-in">
-    <div style="text-align:center;margin-bottom:32px">
-      <div style="font-size:52px;margin-bottom:12px"></div>
-      <h1 style="margin-bottom:8px">Quel bilan ?</h1>
+    <div style="text-align:center;margin-bottom:28px">
+      <h1 style="margin-bottom:0;font-size:26px;letter-spacing:3px">QUEL BILAN ?</h1>
     </div>
+
+    <!-- Bilan de départ (1ère visite) -->
     <div id="bilan-choice-first" style="display:none;margin-bottom:12px">
       <div onclick="openBilan('depart')" style="background:linear-gradient(135deg,#1a0000,#2a0000);border:1px solid var(--red);border-radius:16px;padding:20px;cursor:pointer">
-        <div style="font-weight:900;font-size:16px;margin-bottom:6px"> Bilan de départ</div>
-        <div class="sub" style="font-size:12px;line-height:1.5">Premier bilan complet — Point de départ, objectifs, historique, mensurations initiales.</div>
+        <div style="font-weight:900;font-size:15px;margin-bottom:6px;letter-spacing:.5px;text-transform:uppercase">🏁 Bilan de départ</div>
+        <div class="sub" style="font-size:12px;line-height:1.5">Premier bilan complet : point de départ, objectifs, historique, mensurations initiales.</div>
       </div>
     </div>
-    <div onclick="openBilan('coaching')" style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;cursor:pointer;margin-bottom:12px">
-      <div style="font-weight:900;font-size:16px;margin-bottom:6px"> Bilan coaching</div>
-      <div class="sub" style="font-size:12px;line-height:1.5">Bilan toutes les 2 semaines — Poids, mensurations, ressenti, photos.</div>
+
+    <!-- Bilan coaching -->
+    <div onclick="openBilan('coaching')" style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;cursor:pointer;margin-bottom:14px">
+      <div style="font-weight:900;font-size:15px;margin-bottom:6px;letter-spacing:.5px;text-transform:uppercase">📊 BILAN COACHING</div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px;color:#ddd">Bilan toutes les <span id="bilan-freq-display">2 semaines</span> :</div>
+      <div class="sub" style="font-size:12px;line-height:1.5">Poids, mensurations, ressenti, photos.</div>
+      <div style="font-size:11px;color:#666;margin-top:10px;line-height:1.65;border-top:1px solid #1e1e1e;padding-top:10px">
+        Cela me permet de voir ton évolution, de structurer ta pratique et d'ajuster tes programmes au besoin.
+      </div>
     </div>
+
+    <!-- Sélecteur fréquence -->
+    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px">
+      <div style="font-size:9px;letter-spacing:2px;font-weight:800;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Fréquence des bilans</div>
+      <div style="display:flex;gap:8px">
+        <button id="bilan-freq-btn-1" onclick="setBilanFreq(1);event.stopPropagation()" style="flex:1;padding:10px;border-radius:8px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;transition:all .2s">Chaque semaine</button>
+        <button id="bilan-freq-btn-2" onclick="setBilanFreq(2);event.stopPropagation()" style="flex:1;padding:10px;border-radius:8px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;transition:all .2s">Toutes les 2 sem.</button>
+      </div>
+    </div>
+
+    <!-- Countdown prochain bilan -->
+    <div id="bilan-countdown" style="display:none;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:12px;color:var(--sub);text-align:center;line-height:1.7"></div>
+
     <button class="btn btn-outline" onclick="go('s-client-home')">Annuler</button>
   </div>
 </div>
@@ -5970,6 +5990,41 @@ function openBilanChoice(){
   const hasDepart=currentUser.bilans?.some(b=>b.type==='depart');
   document.getElementById('bilan-choice-first').style.display=hasDepart?'none':'block';
   go('s-bilan-choice');
+  _renderBilanChoiceUI();
+}
+function setBilanFreq(weeks){
+  currentUser._bilanFreq=weeks;
+  saveUser();
+  _renderBilanChoiceUI();
+}
+function _renderBilanChoiceUI(){
+  const freq=currentUser._bilanFreq||2;
+  const fd=document.getElementById('bilan-freq-display');
+  if(fd) fd.textContent=freq===1?'semaine':'2 semaines';
+  [1,2].forEach(v=>{
+    const btn=document.getElementById('bilan-freq-btn-'+v);
+    if(!btn) return;
+    const active=freq===v;
+    btn.style.background=active?'var(--red)':'transparent';
+    btn.style.color=active?'#fff':'var(--sub)';
+    btn.style.border=active?'1px solid var(--red)':'1px solid var(--border)';
+  });
+  const cd=document.getElementById('bilan-countdown');
+  if(!cd) return;
+  const bilans=(currentUser.bilans||[]).filter(b=>b.type==='coaching');
+  if(!bilans.length){cd.style.display='none';return;}
+  const last=bilans.slice().sort((a,b)=>a.date-b.date).pop();
+  const lastDate=new Date(last.date);lastDate.setHours(0,0,0,0);
+  const nextDue=new Date(lastDate);
+  nextDue.setDate(nextDue.getDate()+freq*7);
+  const today=new Date();today.setHours(0,0,0,0);
+  const days=Math.round((nextDue.getTime()-today.getTime())/86400000);
+  cd.style.display='block';
+  if(days<=0){
+    cd.innerHTML='⏰ <strong style="color:var(--red)">C\'est le moment !</strong> Ton bilan est disponible — complète-le maintenant.';
+  } else {
+    cd.innerHTML=`⏱ Il te reste <strong style="color:#fff">${days} jour${days>1?'s':''}</strong> pour compléter ton prochain bilan.`;
+  }
 }
 function openBilan(type){
   bilType=type;bilStep=0;bilData={};_bilPhotoLoading=0;
@@ -6237,12 +6292,11 @@ function saveBilanFinal(){
 function getNextBilanSaturday(){
   const bilans=currentUser.bilans||[];
   if(!bilans.length) return null;
+  const freq=currentUser._bilanFreq||2;
   const sorted=bilans.slice().sort((a,b)=>a.date-b.date);
-  const firstDate=new Date(sorted[0].date);
-  // First notification saturday = first saturday at least 14 days after first bilan
-  const base=new Date(firstDate);
-  base.setDate(base.getDate()+14);
-  const dow=base.getDay(); // 0=Sun,6=Sat
+  const base=new Date(sorted[0].date);
+  base.setDate(base.getDate()+freq*7);
+  const dow=base.getDay();
   const toSat=dow===6?0:(6-dow);
   base.setDate(base.getDate()+toSat);
   base.setHours(0,0,0,0);
@@ -6253,11 +6307,12 @@ function isBilanNotifDay(){
   if(!start) return false;
   const today=new Date();today.setHours(0,0,0,0);
   const now=new Date();
-  if(now.getHours()<7) return false; // avant 7h
+  if(now.getHours()<7) return false;
   const diff=today.getTime()-start.getTime();
   if(diff<0) return false;
-  const cycle=14*24*3600*1000;
-  return Math.round(diff/cycle)*cycle===diff; // exactement un multiple de 14j
+  const freq=currentUser._bilanFreq||2;
+  const cycle=freq*7*24*3600*1000;
+  return Math.round(diff/cycle)*cycle===diff;
 }
 function checkBilanNotifToday(){
   if(!currentUser||currentUser.role!=='athlete') return;
