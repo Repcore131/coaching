@@ -490,23 +490,29 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- COACH ENTRY -->
-<div id="s-coach-entry" class="screen">
-  <div class="topbar" style="border-bottom:1px solid var(--border)">
+<div id="s-coach-entry" class="screen carbon-bg" style="position:relative">
+
+  <!-- Topbar — bandeau uni, ombre portée vers le bas pour séparation visuelle -->
+  <div class="topbar" style="border-bottom:1px solid var(--red);box-shadow:0 6px 28px rgba(0,0,0,.9);position:relative;z-index:2;background:#090909">
     <button class="back-btn" onclick="go('s-welcome')">←</button>
     <div style="height:32px;display:flex;align-items:center;gap:6px">
       <img src="./icons/logo.png" style="display:block;height:52px;width:52px;margin:-8px 0">
     </div>
     <span></span>
   </div>
-  <div class="pad scroll-area" style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:16px">
+
+  <!-- Vignette bords corps de page -->
+  <div style="position:absolute;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse 90% 78% at 50% 58%,transparent 22%,rgba(0,0,0,.48) 62%,rgba(0,0,0,.88) 100%)"></div>
+
+  <div class="pad scroll-area" style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:16px;position:relative;z-index:1">
 
     <div style="margin-bottom:8px">
       <div style="width:24px;height:2px;background:var(--red);margin-bottom:14px"></div>
-      <div style="font-size:26px;font-weight:900;letter-spacing:-0.5px">Espace Coach</div>
-      <div class="sub" style="font-size:12px;margin-top:6px">Accès réservé aux coachs RepCore</div>
+      <div style="font-size:26px;font-weight:900;letter-spacing:-0.5px;text-transform:uppercase;color:var(--red)">ESPACE COACH</div>
+      <div class="sub" style="font-size:12px;margin-top:6px">Accès réservé aux coachs de l'application RepCore.</div>
     </div>
 
-    <!-- Connexion coach existant -->
+    <!-- SE CONNECTER -->
     <div onclick="go('s-login')" style="background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'">
       <div style="display:flex;align-items:center;gap:14px">
         <div style="width:44px;height:44px;border-radius:10px;background:#1a0000;border:1px solid #3a0000;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
@@ -518,21 +524,22 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
     </div>
 
-    <!-- Créer compte coach -->
+    <!-- CRÉER MON COMPTE -->
     <div onclick="goRegisterCoach()" style="background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'">
       <div style="display:flex;align-items:center;gap:14px">
         <div style="width:44px;height:44px;border-radius:10px;background:#0d0d0d;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></div>
         <div>
           <div style="font-weight:800;font-size:15px;letter-spacing:.5px">CRÉER MON COMPTE</div>
-          <div class="sub" style="font-size:11px;margin-top:3px">Nouveau coach — inscription gratuite</div>
+          <div class="sub" style="font-size:11px;margin-top:3px">Nouveau coach : inscription gratuite</div>
         </div>
         <div style="margin-left:auto;color:var(--sub);font-size:18px">›</div>
       </div>
     </div>
 
-    <div style="background:var(--surface-1);border:1px solid var(--surface-2);border-radius:10px;padding:14px 16px;margin-top:4px">
-      <div style="font-size:10px;letter-spacing:1.5px;color:#333;font-weight:700;margin-bottom:6px">ℹ️ ESPACE COACH</div>
-      <div style="font-size:11px;color:#2a2a2a;line-height:1.6">Aucun code ni abonnement requis. Tu génères ton propre code à donner à tes athlètes.</div>
+    <!-- Info box rouge -->
+    <div style="background:rgba(224,32,32,.07);border:1px solid rgba(224,32,32,.24);border-radius:10px;padding:14px 16px;margin-top:4px">
+      <div style="font-size:10px;letter-spacing:1.5px;color:var(--red);font-weight:700;margin-bottom:6px">ℹ️ ESPACE COACH</div>
+      <div style="font-size:11px;color:rgba(224,32,32,.72);line-height:1.6">Aucun code ni abonnement requis. Tu génères ton propre code à donner à tes athlètes.</div>
     </div>
   </div>
 </div>
