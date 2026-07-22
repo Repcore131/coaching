@@ -5585,8 +5585,16 @@ function renderWoEx(){
   const cycle=getCycleFactor();
   const cycleLabel=getCycleLabel();
   // Calcul charge suggérée = last 0-RIR weight de la séance précédente
+  // Contrepoids (DIPS/TRACTIONS assistés|guidés) : progression = MOINS de charge
+  const isCW=isCounterweightEx(ex.name);
   const baseWeight=getLastZeroRIRWeight(ex.name);
-  const sug=baseWeight?roundWeight(baseWeight+2.5):prev?calcSug(prev.weight,prev.reps,prev.rir,ex.reps,ex.rir):null;
+  const _calcSug=prev?calcSug(prev.weight,prev.reps,prev.rir,ex.reps,ex.rir):null;
+  const _rawSug=baseWeight
+    ?roundWeight(baseWeight+(isCW?-2.5:2.5))
+    :_calcSug!=null
+      ?(isCW?roundWeight(2*parseFloat(prev.weight)-_calcSug):_calcSug)
+      :null;
+  const sug=_rawSug!=null&&_rawSug>0?_rawSug:null;
   const cycleWeight=sug?roundWeight(sug*cycle.factor):null;
   const isFemme=isFemale(currentUser.gender);
   const showCycleCol=isFemme&&cycle.factor!==1.0;
@@ -5618,12 +5626,12 @@ function renderWoEx(){
           <div style="font-size:11px;color:var(--sub);margin-top:4px">Durée · Cardio</div>
         </div>`
       :sug?`<div class="suggest-box">
-        <div class="s-title"> Charge suggérée (basée sur dernier RIR 0)</div>
+        <div class="s-title">${isCW?'↓ Contrepoids — progresser = réduire l\'assistance':'Charge suggérée (basée sur dernier RIR 0)'}</div>
         <div style="display:flex;gap:16px;align-items:flex-end;margin:6px 0">
-          <div><div style="font-size:10px;color:#fca5a5">Base</div><div style="font-size:24px;font-weight:900">${sug}kg</div></div>
+          <div><div style="font-size:10px;color:#fca5a5">${isCW?'Assistance suggérée':'Base'}</div><div style="font-size:24px;font-weight:900">${sug}kg</div></div>
           ${showCycleCol?`<div><div style="font-size:10px;color:var(--cycle-accent)">Cycle ajusté</div><div style="font-size:24px;font-weight:900;color:var(--cycle-accent)">${cycleWeight}kg</div></div>`:''}
         </div>
-        <div class="s-note">${baseWeight?'Dernière séance à RIR 0: '+baseWeight+'kg':prev?'Calculé depuis perf précédente: '+prev.weight+'kg':'Première séance'}</div>
+        <div class="s-note">${isCW?'Contrepoids: RIR élevé → diminuer la charge. ':''}${baseWeight?'Dernière séance à RIR 0 : '+baseWeight+'kg':prev?'Calculé depuis perf précédente : '+prev.weight+'kg':'Première séance'}</div>
       </div>`:
       ``}
 
@@ -5706,13 +5714,16 @@ function renderSets(ex,data){
 
   // ── RIR multipliers ──────────────────────────────────────────────
   const RIR_MULT={'echec':0.95,'0':1.0,'1':1.025,'2':1.05,'3':1.075,'4':1.1,'5':1.125};
+  // Contrepoids: RIR élevé → suggère MOINS de charge (assistance réduite = progression)
+  const RIR_MULT_CW={'echec':1.05,'0':1.0,'1':0.975,'2':0.95,'3':0.925,'4':0.9,'5':0.875};
+  const _isCW=isCounterweightEx(ex.name);
 
   // ── Auto-fill next set weight from previous weight × RIR ─────────
   for(let i=0;i<data.sets.length-1;i++){
     const s=data.sets[i];
     const w=parseFloat(s.weight);
     if(w>0 && s.rir!==''&&s.rir!==undefined&&s.rir!==null){
-      const mult=RIR_MULT[String(s.rir)]??1.0;
+      const mult=(_isCW?RIR_MULT_CW:RIR_MULT)[String(s.rir)]??1.0;
       const _raw=w*mult;
       const nextW=mult>1?(_raw<20?Math.ceil(_raw/1.25)*1.25:Math.ceil(_raw/2.5)*2.5):roundWeight(_raw);
       if(!data.sets[i+1].done&&!data.sets[i+1].userEdited){
@@ -5922,6 +5933,13 @@ function updateStreak(){
   currentUser.lastSession=Date.now();
 }
 function roundWeight(w){return w<20?Math.ceil(w/1.25)*1.25:Math.round(w/2.5)*2.5;}
+// Détecte les exercices à contrepoids (DIPS/TRACTIONS assistés ou guidés)
+// Sur ces machines: progression = MOINS de charge (moins d'assistance)
+function isCounterweightEx(name){
+  if(!name) return false;
+  const n=name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  return /(dips?|traction[s]?)\s+(assiste[es]?|guide[es]?)/i.test(n);
+}
 function calcSug(pw,pr,prr,tr,trir){
   const pW=parseFloat(pw),pR=parseFloat(pr),pRIR=parseFloat(prr),tR=parseFloat(tr)||pR,tRIR=parseFloat(trir)||0;
   if(!pW||pW<=0) return null;
