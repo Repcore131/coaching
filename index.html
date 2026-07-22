@@ -6324,35 +6324,35 @@ function saveBilanFinal(){
 }
 
 // ======= NOTIFICATIONS BILAN (toutes les 2 semaines, samedi 7h) =======
+function _bilanAnchorSat(dateMs,freqWeeks){
+  // Remonte au samedi de la semaine du bilan, puis ajoute freqWeeks*7 jours
+  // → retourne toujours un samedi, jamais plus de freqWeeks*7 jours dans le futur
+  const d=new Date(dateMs);d.setHours(0,0,0,0);
+  const dow=d.getDay(); // 0=dim ... 6=sam
+  const daysSinceSat=dow===6?0:dow+1;
+  d.setDate(d.getDate()-daysSinceSat+freqWeeks*7);
+  return d;
+}
 function getNextBilanSaturday(){
   const bilans=currentUser.bilans||[];
   if(!bilans.length) return null;
   const freq=currentUser._bilanFreq||2;
   const sorted=bilans.slice().sort((a,b)=>a.date-b.date);
-  // Ancre sur le DERNIER bilan (pas le premier)
-  const anchor=new Date(sorted[sorted.length-1].date);
-  anchor.setDate(anchor.getDate()+freq*7);
-  const dow=anchor.getDay();
-  anchor.setDate(anchor.getDate()+(dow===6?0:6-dow));
-  anchor.setHours(0,0,0,0);
+  const anchor=_bilanAnchorSat(sorted[sorted.length-1].date,freq);
   const today=new Date();today.setHours(0,0,0,0);
   const cycleMs=freq*7*24*3600*1000;
   while(anchor.getTime()<today.getTime()) anchor.setTime(anchor.getTime()+cycleMs);
   return anchor;
 }
 function isBilanNotifDay(){
-  // Vérifie si AUJOURD'HUI est un samedi de bilan planifié
   const bilans=currentUser.bilans||[];
   if(!bilans.length) return false;
   const now=new Date();
   if(now.getHours()<7) return false;
-  if(now.getDay()!==6) return false; // doit être un samedi
+  if(now.getDay()!==6) return false;
   const freq=currentUser._bilanFreq||2;
   const sorted=bilans.slice().sort((a,b)=>a.date-b.date);
-  const anchor=new Date(sorted[sorted.length-1].date);
-  anchor.setDate(anchor.getDate()+freq*7);
-  const dow=anchor.getDay();
-  anchor.setDate(anchor.getDate()+(dow===6?0:6-dow));
+  const anchor=_bilanAnchorSat(sorted[sorted.length-1].date,freq);
   anchor.setHours(0,0,0,0);
   const today=new Date();today.setHours(0,0,0,0);
   const diff=today.getTime()-anchor.getTime();
