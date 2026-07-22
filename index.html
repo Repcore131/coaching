@@ -433,38 +433,57 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- WELCOME -->
 <div id="s-welcome" class="screen carbon-bg" style="flex-direction:column;height:100vh;position:relative;overflow:hidden">
 
-  <!-- Subtle red radial glow top-center -->
-  <div style="position:absolute;top:-60px;left:50%;transform:translateX(-50%);width:500px;height:400px;background:radial-gradient(ellipse at 50% 0%,rgba(224,32,32,.12) 0%,transparent 65%);pointer-events:none;z-index:0"></div>
+  <!-- Rougeur subtile haut-centre -->
+  <div style="position:absolute;top:-60px;left:50%;transform:translateX(-50%);width:500px;height:400px;background:radial-gradient(ellipse at 50% 0%,rgba(224,32,32,.18) 0%,transparent 65%);pointer-events:none;z-index:0"></div>
 
-  <!-- Thin diagonal brand lines overlay -->
+  <!-- Diagonales de texture -->
   <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(-55deg,transparent,transparent 28px,rgba(255,255,255,.012) 28px,rgba(255,255,255,.012) 29px);pointer-events:none;z-index:0"></div>
 
-  <!-- TOP: Logo zone -->
+  <!-- VIGNETTE BORDS — ligne noire large qui absorbe vers les contours -->
+  <div style="position:absolute;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse 88% 78% at 50% 42%,transparent 22%,rgba(0,0,0,.5) 58%,rgba(0,0,0,.92) 100%)"></div>
+
+  <!-- Mention légale verticale — bord droit -->
+  <div style="position:absolute;right:0;top:0;bottom:0;width:18px;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:1">
+    <span style="writing-mode:vertical-rl;text-orientation:mixed;font-size:6.5px;color:rgba(255,255,255,.1);letter-spacing:1.8px;font-family:Montserrat,sans-serif;font-weight:500;text-transform:uppercase;white-space:nowrap">© Kevin Guellec · RepCore · Données &amp; idées protégées</span>
+  </div>
+
+  <!-- TOP: Logo + texte -->
   <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1;padding-top:60px">
-    <!-- Logo haltère -->
+
+    <!-- Logo avec ombre directionnelle droite + bas -->
     <div style="animation:wFadeUp 0.8s cubic-bezier(.16,1,.3,1) 0.1s both">
-      <img src="./icons/logo.png" style="display:block;width:200px;height:200px">
+      <img src="./icons/logo.png" style="display:block;width:200px;height:200px;filter:drop-shadow(5px 8px 16px rgba(0,0,0,.95)) drop-shadow(2px 4px 6px rgba(0,0,0,.7))">
     </div>
 
-    <!-- Tagline -->
+    <!-- Tagline avec text-shadow pour faire ressortir -->
     <div style="margin-top:48px;text-align:center;padding:0 32px;animation:wFadeUp 0.7s ease 0.5s both;opacity:0">
-      <div style="font-size:32px;font-weight:900;line-height:1.1;letter-spacing:-1.5px;color:#fff">Entraîne-toi<br>comme un<br><span style="color:#E02020">pro.</span></div>
+      <div style="font-size:32px;font-weight:900;line-height:1.1;letter-spacing:-1.5px;color:#fff;text-shadow:0 2px 20px rgba(0,0,0,.95),0 0 50px rgba(0,0,0,.8),0 4px 8px rgba(0,0,0,.6)">Entraîne-toi<br>comme un<br><span style="color:#E02020;text-shadow:0 0 30px rgba(224,32,32,.5),0 2px 14px rgba(0,0,0,.9)">pro.</span></div>
     </div>
 
-    <!-- Descriptor -->
+    <!-- Descriptor — DISCIPLINE · TRAVAIL · RÉSULTAT -->
     <div style="margin-top:20px;animation:wFadeUp 0.6s ease 0.65s both;opacity:0">
-      <div style="font-size:11px;color:#444;letter-spacing:2px;text-align:center;font-weight:500">COACHING &nbsp;·&nbsp; SUIVI &nbsp;·&nbsp; PERFORMANCE</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.38);letter-spacing:2px;text-align:center;font-weight:500">DISCIPLINE &nbsp;·&nbsp; TRAVAIL &nbsp;·&nbsp; RÉSULTAT</div>
     </div>
   </div>
 
   <!-- BOTTOM: CTA buttons -->
   <div style="padding:32px 28px 48px;z-index:1;animation:wSlideUp 0.7s cubic-bezier(.16,1,.3,1) 0.55s both;opacity:0">
-    <button onclick="go('s-coach-entry')" style="width:100%;padding:20px;background:#E02020;color:#fff;border:none;font-family:'Bebas Neue','Anton',sans-serif;font-size:13px;font-weight:800;letter-spacing:4px;cursor:pointer;text-transform:uppercase;margin-bottom:12px;transition:.15s" onmouseover="this.style.background='#c91a1a'" onmouseout="this.style.background='#E02020'">ESPACE COACH</button>
-    <button onclick="go('s-athlete-entry')" style="width:100%;padding:20px;background:transparent;color:#fff;border:1px solid rgba(255,255,255,.15);font-family:'Bebas Neue','Anton',sans-serif;font-size:13px;font-weight:800;letter-spacing:4px;cursor:pointer;text-transform:uppercase;transition:.15s" onmouseover="this.style.borderColor='rgba(224,32,32,.6)';this.style.color='#E02020'" onmouseout="this.style.borderColor='rgba(255,255,255,.15)';this.style.color='#fff'">ESPACE ATHLETE</button>
-    <button id="install-btn" onclick="installApp()" style="display:none;width:100%;margin-top:12px;padding:14px;background:transparent;color:#E02020;border:1px solid rgba(224,32,32,.35);font-family:'Bebas Neue','Anton',sans-serif;font-size:12px;font-weight:800;letter-spacing:3px;cursor:pointer;text-transform:uppercase;align-items:center;justify-content:center;gap:8px;transition:.15s" onmouseover="this.style.background='rgba(224,32,32,.08)'" onmouseout="this.style.background='transparent'">⬇ Installer l'app sur ce téléphone</button>
-    <button id="ios-install-btn" onclick="showIosInstallGuide()" style="display:none;width:100%;margin-top:12px;padding:14px;background:transparent;color:#E02020;border:1px solid rgba(224,32,32,.35);font-family:'Bebas Neue','Anton',sans-serif;font-size:12px;font-weight:800;letter-spacing:3px;cursor:pointer;text-transform:uppercase;align-items:center;justify-content:center;gap:8px;transition:.15s" onmouseover="this.style.background='rgba(224,32,32,.08)'" onmouseout="this.style.background='transparent'">📲 Installer l'app</button>
+    <!-- ESPACE COACH — bevel 3D inset + glow rouge -->
+    <button onclick="go('s-coach-entry')"
+      style="width:100%;padding:20px;background:#E02020;color:#fff;border:none;font-family:'Bebas Neue','Anton',sans-serif;font-size:13px;font-weight:800;letter-spacing:4px;cursor:pointer;text-transform:uppercase;margin-bottom:12px;transition:.15s;box-shadow:inset 0 2px 0 rgba(255,255,255,.24),inset 0 -3px 0 rgba(0,0,0,.45),0 6px 28px rgba(224,32,32,.5)"
+      onmouseover="this.style.background='#c91a1a'" onmouseout="this.style.background='#E02020'">ESPACE COACH</button>
+    <!-- ESPACE ATHLETE — bevel subtil -->
+    <button onclick="go('s-athlete-entry')"
+      style="width:100%;padding:20px;background:rgba(255,255,255,.04);color:#fff;border:1px solid rgba(255,255,255,.15);font-family:'Bebas Neue','Anton',sans-serif;font-size:13px;font-weight:800;letter-spacing:4px;cursor:pointer;text-transform:uppercase;transition:.15s;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),inset 0 -2px 0 rgba(0,0,0,.4),0 4px 18px rgba(0,0,0,.55)"
+      onmouseover="this.style.borderColor='rgba(224,32,32,.6)';this.style.color='#E02020'" onmouseout="this.style.borderColor='rgba(255,255,255,.15)';this.style.color='#fff'">ESPACE ATHLETE</button>
+    <button id="install-btn" onclick="installApp()"
+      style="display:none;width:100%;margin-top:12px;padding:14px;background:transparent;color:#E02020;border:1px solid rgba(224,32,32,.35);font-family:'Bebas Neue','Anton',sans-serif;font-size:12px;font-weight:800;letter-spacing:3px;cursor:pointer;text-transform:uppercase;align-items:center;justify-content:center;gap:8px;transition:.15s;box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 4px 14px rgba(0,0,0,.4)"
+      onmouseover="this.style.background='rgba(224,32,32,.08)'" onmouseout="this.style.background='transparent'">⬇ Installer l'app sur ce téléphone</button>
+    <button id="ios-install-btn" onclick="showIosInstallGuide()"
+      style="display:none;width:100%;margin-top:12px;padding:14px;background:transparent;color:#E02020;border:1px solid rgba(224,32,32,.35);font-family:'Bebas Neue','Anton',sans-serif;font-size:12px;font-weight:800;letter-spacing:3px;cursor:pointer;text-transform:uppercase;align-items:center;justify-content:center;gap:8px;transition:.15s;box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 4px 14px rgba(0,0,0,.4)"
+      onmouseover="this.style.background='rgba(224,32,32,.08)'" onmouseout="this.style.background='transparent'">📲 Installer l'app</button>
     <div style="margin-top:28px;text-align:center">
-      <div style="font-size:9px;letter-spacing:2px;color:#222;font-weight:600;text-transform:uppercase">Kevin Guellec &nbsp;·&nbsp; Coach Diplômé d'État</div>
+      <div style="font-size:9px;letter-spacing:2px;color:#2a2a2a;font-weight:600;text-transform:uppercase">Kevin Guellec &nbsp;·&nbsp; Coach Diplômé d'État</div>
     </div>
   </div>
 
