@@ -27,7 +27,7 @@
 <style>
 html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{--bg:#080808;--red:#E02020;--red2:#b81515;--red-bg:#0d0000;--red-glow:#FF3345;--red-light:color-mix(in srgb,var(--red) 70%,white);--dark:#0f0f0f;--card:#111;--card2:#181818;--surface-1:#111111;--surface-2:#181818;--surface-3:#1e1e1e;--border:#1e1e1e;--sub:#777777;--text:#efefef;--green:#22c55e;--orange:#f97316;--success:#22c55e;--success-bg:#021007;--success-border:#052a10;--info:#d4a017;--info-bg:#160d00;--info-border:#2a1a00;--warning:#f97316;--warning-bg:#1a0800;--warning-border:#3a1500;--danger:#E02020;--danger-bg:#1a0000;--danger-border:#3a0000;--cycle-accent:#A78BFA;--glow-sm:0 0 12px rgba(224,32,32,.25);--glow-md:0 0 28px rgba(255,51,69,.4);--glow-lg:0 0 56px rgba(255,51,69,.5)}
-body{background:var(--bg);color:var(--text);font-family:'Montserrat',sans-serif;min-height:100vh;max-width:480px;margin:0 auto;overflow-x:hidden;position:relative}
+body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;min-height:100vh;max-width:480px;margin:0 auto;overflow-x:hidden;position:relative}
 /* ── DESKTOP: fond brande autour de l'app ── */
 @media(min-width:600px){
   html{background:radial-gradient(ellipse at 50% 0%,#1a0000 0%,#060606 50%,#030303 100%);min-height:100vh}
@@ -53,7 +53,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;o
 /* .screen.active handled above */
 
 /* ====== BUTTONS ====== */
-.btn{width:100%;padding:16px;border:none;border-radius:2px;font-family:'Montserrat',sans-serif;font-size:12px;font-weight:800;cursor:pointer;transition:transform .1s,box-shadow .15s,background .15s;text-transform:uppercase;letter-spacing:2.5px;-webkit-tap-highlight-color:transparent}
+.btn{width:100%;padding:16px;border:none;border-radius:2px;font-family:Montserrat,sans-serif;font-size:12px;font-weight:800;cursor:pointer;transition:transform .1s,box-shadow .15s,background .15s;text-transform:uppercase;letter-spacing:2.5px;-webkit-tap-highlight-color:transparent}
 .btn-red{background:#E02020;color:#fff;box-shadow:var(--glow-md)}
 .btn-red:hover{background:#c91a1a;box-shadow:var(--glow-lg)}
 .btn-red:active{transform:scale(.97);box-shadow:0 1px 6px rgba(224,32,32,.3)}
@@ -65,7 +65,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;o
 .celebrate{animation:celebratePulse 1.2s ease}
 
 /* ====== INPUTS ====== */
-input,select,textarea{width:100%;padding:13px 16px;background:#0c0c0c;border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:'Montserrat',sans-serif;font-size:13px;outline:none;transition:.2s}
+input,select,textarea{width:100%;padding:13px 16px;background:#0c0c0c;border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:Montserrat,sans-serif;font-size:13px;outline:none;transition:.2s}
 input:focus,select:focus,textarea:focus{border-color:var(--red);background:#0d0000;box-shadow:0 0 0 2px rgba(224,32,32,.15)}
 select option{background:#111}
 label{display:block;font-size:10px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;margin-top:16px}
@@ -105,7 +105,7 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
 /* ====== TABS ====== */
 .tab-bar{display:flex;background:#0c0c0c;border-top:1px solid var(--surface-2);padding:6px 0 10px;flex-shrink:0;scrollbar-width:none}
 .tab-bar::-webkit-scrollbar{display:none}
-.tab-btn{flex:1 1 0;min-width:0;background:none;border:none;color:var(--sub);display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:6px 5px;font-family:'Montserrat',sans-serif;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;transition:.2s}
+.tab-btn{flex:1 1 0;min-width:0;background:none;border:none;color:var(--sub);display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:6px 5px;font-family:Montserrat,sans-serif;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;transition:.2s}
 @media(max-width:400px){.tab-btn{font-size:7px;letter-spacing:.3px;padding:6px 2px}}
 .tab-btn.active{color:var(--red)}.tab-btn svg{width:19px;height:19px}
 
@@ -118,7 +118,7 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
 
 /* ====== EXERCISE / SERIES TABLE ====== */
 .exercise-card{background:var(--card);border-radius:4px;margin-bottom:12px;overflow:hidden;border:1px solid var(--border)}
-.exo-chip{background:var(--card2);border:1.5px solid var(--border);color:var(--sub);font-size:12px;font-weight:800;width:32px;height:32px;border-radius:50%;cursor:pointer;font-family:'Montserrat',sans-serif;transition:.15s;display:inline-flex;align-items:center;justify-content:center;padding:0}
+.exo-chip{background:var(--card2);border:1.5px solid var(--border);color:var(--sub);font-size:12px;font-weight:800;width:32px;height:32px;border-radius:50%;cursor:pointer;font-family:Montserrat,sans-serif;transition:.15s;display:inline-flex;align-items:center;justify-content:center;padding:0}
 .exo-chip.active{background:var(--red);color:#fff;border-color:var(--red)}
 .ex-name{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:1px}
 .ex-detail{font-size:11px;color:var(--sub);margin-top:3px;letter-spacing:.3px}
@@ -129,7 +129,7 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
 .series-table td{padding:10px;text-align:center;border-top:1px solid #181818;font-size:13px;font-weight:600}
 .series-table tr.done td{background:#E0202010;color:var(--red)}
 .series-table-wo td{padding:8px 4px}.series-table-wo th{padding:7px 4px}
-.set-input{width:56px;background:var(--dark);border:1px solid #2a2a2a;border-radius:3px;color:#fff;text-align:center;padding:7px 4px;font-family:'Montserrat',sans-serif;font-size:13px;font-weight:800}
+.set-input{width:56px;background:var(--dark);border:1px solid #2a2a2a;border-radius:3px;color:#fff;text-align:center;padding:7px 4px;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800}
 .set-input:focus{border-color:var(--red);outline:none;box-shadow:0 0 0 2px rgba(198,15,8,.15)}
 
 /* ====== SUGGEST BOX ====== */
@@ -146,19 +146,19 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
 .fj-entry{background:var(--card);border-radius:8px;padding:10px 12px;display:flex;align-items:center;margin-bottom:6px;border:1px solid var(--border);gap:8px}
 .fj-result{padding:12px 16px;border-bottom:1px solid #111;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .fj-result:active{background:var(--surface-2)}
-.fj-repas-btn{flex:1;padding:10px 6px;background:#111;border:1px solid #222;border-radius:8px;color:var(--sub);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;cursor:pointer;text-align:center;transition:all .15s}
+.fj-repas-btn{flex:1;padding:10px 6px;background:#111;border:1px solid #222;border-radius:8px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;cursor:pointer;text-align:center;transition:all .15s}
 .fj-repas-btn.active{background:#1a0000;border-color:var(--red);color:#fff}
 
 /* ====== CODE DISPLAY ====== */
 .code-display{background:var(--dark);border-radius:4px;padding:24px;text-align:center;letter-spacing:8px;font-size:28px;font-weight:900;color:var(--red);border:1px solid #2a0a0a;font-family:monospace}
 /* ====== SUPPLEMENTS ====== */
-.supp-timing-chip{display:inline-flex;align-items:center;padding:8px 14px;min-height:40px;border:1px solid #2a2a2a;border-radius:20px;background:none;color:var(--sub);font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;cursor:pointer;transition:.15s;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+.supp-timing-chip{display:inline-flex;align-items:center;padding:8px 14px;min-height:40px;border:1px solid #2a2a2a;border-radius:20px;background:none;color:var(--sub);font-family:Montserrat,sans-serif;font-size:10px;font-weight:700;cursor:pointer;transition:.15s;white-space:nowrap;-webkit-tap-highlight-color:transparent}
 .supp-timing-chip.active{background:#1a0000;border-color:var(--red);color:#fff}
 /* ====== CAFFEINE ====== */
 .caff-alert-banner{border:1px solid;border-radius:10px;padding:12px 14px;font-size:12px;font-weight:700;margin-bottom:8px;line-height:1.5}
 .caff-product-tile{background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:14px;cursor:pointer;transition:.15s;text-align:center;-webkit-tap-highlight-color:transparent}
 .caff-product-tile:active{background:#1a0000;border-color:var(--red)}
-.caff-type-btn{flex:0 0 auto;padding:8px 14px;border:1px solid var(--border);border-radius:20px;background:none;color:var(--sub);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;cursor:pointer;transition:.15s;white-space:nowrap}
+.caff-type-btn{flex:0 0 auto;padding:8px 14px;border:1px solid var(--border);border-radius:20px;background:none;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;cursor:pointer;transition:.15s;white-space:nowrap}
 .caff-type-btn.active{background:#1a0000;border-color:var(--red);color:#fff}
 
 /* ====== BILAN ====== */
@@ -291,7 +291,7 @@ h3{font-size:16px;text-transform:uppercase}
 /* ====== COACH TABS PREMIUM ====== */
 #coach-tabs-bar{background:#080808;border-bottom:1px solid var(--red);gap:0}
 #coach-tabs-bar button{flex:1;padding:14px 4px;background:none;border:none;
-  font-family:'Montserrat',sans-serif;font-size:9px;font-weight:800;letter-spacing:2px;
+  font-family:Montserrat,sans-serif;font-size:9px;font-weight:800;letter-spacing:2px;
   cursor:pointer;text-transform:uppercase;color:var(--sub);
   border-bottom:2px solid transparent;transition:all .2s;position:relative}
 #coach-tabs-bar button:active{transform:scale(.96)}
@@ -299,7 +299,7 @@ h3{font-size:16px;text-transform:uppercase}
 /* ====== SECTION HEADERS (Anton + trait rouge) ====== */
 .section-header{display:flex;align-items:center;gap:0;margin-bottom:12px;margin-top:4px}
 .section-header .sh-line{display:none}
-.section-header h2,.section-header h3{margin:0;font-family:'Montserrat',sans-serif;font-size:10px!important;font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--sub)}
+.section-header h2,.section-header h3{margin:0;font-family:Montserrat,sans-serif;font-size:10px!important;font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--sub)}
 
 /* ====== PROGRESS BAR REDESIGN ====== */
 .progress-bar{height:3px;background:rgba(255,255,255,.06);border-radius:0;overflow:hidden}
@@ -617,7 +617,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="s-client-code" class="screen" style="justify-content:center;padding:32px 24px">
   <div class="anim-in" style="max-width:400px;width:100%">
     <!-- Bouton retour accueil visible -->
-    <button onclick="silentLogout();go('s-welcome')" style="display:flex;align-items:center;gap:6px;background:none;border:none;color:var(--sub);font-size:13px;cursor:pointer;font-family:'Montserrat',sans-serif;margin-bottom:24px;padding:0">← Retour à l'accueil</button>
+    <button onclick="silentLogout();go('s-welcome')" style="display:flex;align-items:center;gap:6px;background:none;border:none;color:var(--sub);font-size:13px;cursor:pointer;font-family:Montserrat,sans-serif;margin-bottom:24px;padding:0">← Retour à l'accueil</button>
     <div style="text-align:center;margin-bottom:32px">
       <div style="font-size:52px;margin-bottom:16px">🔑</div>
       <h1 style="margin-bottom:8px">Code d'accès</h1>
@@ -625,16 +625,16 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
     <div style="margin-bottom:16px">
       <input id="cc-code" type="text" placeholder="Colle ton code RC-XXXX-XXXX ou le lien reçu de ton coach"
-        style="width:100%;padding:14px;background:#111;border:1px solid var(--border);border-radius:12px;color:#fff;font-family:'Montserrat',sans-serif;font-size:13px;box-sizing:border-box;letter-spacing:1px"
+        style="width:100%;padding:14px;background:#111;border:1px solid var(--border);border-radius:12px;color:#fff;font-family:Montserrat,sans-serif;font-size:13px;box-sizing:border-box;letter-spacing:1px"
         oninput="var v=this.value;if(!v.startsWith('http')&&!v.startsWith('RCACCESS')&&!v.startsWith('RCLINK'))this.value=v.toUpperCase()">
       <div id="cc-err" class="err" style="display:none;margin-top:8px"></div>
     </div>
     <button class="btn btn-red" onclick="doLinkCoach()">Activer mon accès →</button>
     <div style="margin-top:20px;text-align:center">
-      <button onclick="go('s-subscribe');loadSubscribePage()" style="background:none;border:none;color:var(--sub);font-size:12px;cursor:pointer;font-family:'Montserrat',sans-serif">Pas de code coach ? Voir les abonnements →</button>
+      <button onclick="go('s-subscribe');loadSubscribePage()" style="background:none;border:none;color:var(--sub);font-size:12px;cursor:pointer;font-family:Montserrat,sans-serif">Pas de code coach ? Voir les abonnements →</button>
     </div>
     <div style="margin-top:12px;text-align:center">
-      <button onclick="logout()" style="background:none;border:none;color:#2a2a2a;font-size:11px;cursor:pointer;font-family:'Montserrat',sans-serif">Se déconnecter</button>
+      <button onclick="logout()" style="background:none;border:none;color:#2a2a2a;font-size:11px;cursor:pointer;font-family:Montserrat,sans-serif">Se déconnecter</button>
     </div>
   </div>
 </div>
@@ -654,19 +654,19 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="font-size:10px;color:#333;font-family:monospace;letter-spacing:1px" id="ch-code-sidebar"></div>
     </div>
     <div style="padding:12px 8px;flex:1">
-      <button id="sb-tab-dashboard" onclick="coachTab('dashboard')" style="width:100%;text-align:left;padding:12px 14px;background:var(--card);border:none;border-radius:10px;color:#fff;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
+      <button id="sb-tab-dashboard" onclick="coachTab('dashboard')" style="width:100%;text-align:left;padding:12px 14px;background:var(--card);border:none;border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
         <span style="font-size:16px"></span> ATHLETES
       </button>
-      <button id="sb-tab-codes" onclick="coachTab('codes')" style="width:100%;text-align:left;padding:12px 14px;background:none;border:none;border-radius:10px;color:var(--sub);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
+      <button id="sb-tab-codes" onclick="coachTab('codes')" style="width:100%;text-align:left;padding:12px 14px;background:none;border:none;border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
         <span style="font-size:16px"></span> CODES ACCES
       </button>
-      <button id="sb-tab-monetisation" onclick="coachTab('monetisation')" style="width:100%;text-align:left;padding:12px 14px;background:none;border:none;border-radius:10px;color:var(--sub);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
+      <button id="sb-tab-monetisation" onclick="coachTab('monetisation')" style="width:100%;text-align:left;padding:12px 14px;background:none;border:none;border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
         <span style="font-size:16px"></span> PAIEMENTS
       </button>
     </div>
     <div style="padding:16px">
-      <button onclick="showCoachCode()" style="width:100%;background:var(--card2);border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:9px;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:1px;margin-bottom:8px">MON CODE</button>
-      <button onclick="logout()" style="width:100%;background:none;border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:9px;font-family:'Montserrat',sans-serif;font-size:10px;cursor:pointer">DECONNEXION</button>
+      <button onclick="showCoachCode()" style="width:100%;background:var(--card2);border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:9px;font-family:Montserrat,sans-serif;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:1px;margin-bottom:8px">MON CODE</button>
+      <button onclick="logout()" style="width:100%;background:none;border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:9px;font-family:Montserrat,sans-serif;font-size:10px;cursor:pointer">DECONNEXION</button>
     </div>
   </div>
 
@@ -684,16 +684,16 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
       </div>
       <div style="display:flex;gap:8px">
-        <button onclick="showCoachCode()" style="background:var(--red-bg);border:1px solid var(--red);color:var(--red);padding:7px 14px;font-family:'Montserrat',sans-serif;font-size:9px;font-weight:800;cursor:pointer;letter-spacing:2px;text-transform:uppercase;transition:.15s" onmouseover="this.style.background='#1a0000'" onmouseout="this.style.background='var(--red-bg)'">CODE</button>
-        <button onclick="logout()" style="background:none;border:1px solid rgba(255,255,255,.1);color:var(--sub);padding:7px 10px;font-family:'Montserrat',sans-serif;font-size:11px;cursor:pointer;transition:.15s" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--sub)'">&#8592;</button>
+        <button onclick="showCoachCode()" style="background:var(--red-bg);border:1px solid var(--red);color:var(--red);padding:7px 14px;font-family:Montserrat,sans-serif;font-size:9px;font-weight:800;cursor:pointer;letter-spacing:2px;text-transform:uppercase;transition:.15s" onmouseover="this.style.background='#1a0000'" onmouseout="this.style.background='var(--red-bg)'">CODE</button>
+        <button onclick="logout()" style="background:none;border:1px solid rgba(255,255,255,.1);color:var(--sub);padding:7px 10px;font-family:Montserrat,sans-serif;font-size:11px;cursor:pointer;transition:.15s" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--sub)'">&#8592;</button>
       </div>
     </div>
 
     <!-- Mobile tabs (hidden on desktop) -->
     <div id="coach-tabs-bar" style="display:flex;border-bottom:1px solid #1a0000;flex-shrink:0;background:#080808">
-      <button id="ct-tab-dashboard" onclick="coachTab('dashboard')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid var(--red);color:#fff;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:800;letter-spacing:1px;cursor:pointer">ATHLETES</button>
-      <button id="ct-tab-codes" onclick="coachTab('codes')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--sub);font-family:'Montserrat',sans-serif;font-size:10px;font-weight:800;letter-spacing:1px;cursor:pointer">CODES</button>
-      <button id="ct-tab-monetisation" onclick="coachTab('monetisation')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--sub);font-family:'Montserrat',sans-serif;font-size:10px;font-weight:800;letter-spacing:1px;cursor:pointer">PAIEMENTS</button>
+      <button id="ct-tab-dashboard" onclick="coachTab('dashboard')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid var(--red);color:#fff;font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:1px;cursor:pointer">ATHLETES</button>
+      <button id="ct-tab-codes" onclick="coachTab('codes')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--sub);font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:1px;cursor:pointer">CODES</button>
+      <button id="ct-tab-monetisation" onclick="coachTab('monetisation')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--sub);font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:1px;cursor:pointer">PAIEMENTS</button>
     </div>
 
     <!-- Tab panels -->
@@ -705,7 +705,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <div class="metric-box"><div class="metric-val" id="ch-alerts" style="color:var(--red)">0</div><div class="metric-label">Alertes</div></div>
         </div>
         <div id="ch-todo"></div>
-        <button onclick="openCoachPrograms()" class="content-card" style="width:100%;margin-bottom:16px;padding:13px 16px;background:linear-gradient(135deg,#0d0d0d,#1a0000);border:1px solid #2a0000;border-left:3px solid var(--red);border-radius:10px;color:#fff;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px;text-align:left;display:flex;align-items:center;justify-content:space-between">
+        <button onclick="openCoachPrograms()" class="content-card" style="width:100%;margin-bottom:16px;padding:13px 16px;background:linear-gradient(135deg,#0d0d0d,#1a0000);border:1px solid #2a0000;border-left:3px solid var(--red);border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px;text-align:left;display:flex;align-items:center;justify-content:space-between">
           <span>🗂️ MES PROGRAMMES (H/F)</span>
           <span style="color:var(--red);font-size:13px">→</span>
         </button>
@@ -732,7 +732,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <div style="margin-bottom:12px"><label for="sc-name">Nom de l'eleve</label><input id="sc-name" placeholder="Ex: Marie Martin"></div>
           <div style="margin-bottom:14px">
             <label for="sc-duration">Duree d'acces</label>
-            <select id="sc-duration" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:#fff;padding:12px 14px;border-radius:10px;font-family:'Montserrat',sans-serif;font-size:13px;cursor:pointer">
+            <select id="sc-duration" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:#fff;padding:12px 14px;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;cursor:pointer">
               <option value="1">1 mois</option>
               <option value="3" selected>3 mois (recommande)</option>
               <option value="6">6 mois</option>
@@ -792,7 +792,7 @@ const COACH_PHOTO='icons/coach.jpg';
             <label style="font-size:10px;color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">Phrase d'accroche</label>
             <input id="coach-catchphrase" type="text" placeholder="ex: Chaque rep compte. Chaque jour compte." maxlength="100" style="width:100%;font-size:13px;padding:11px 14px;box-sizing:border-box">
           </div>
-          <button onclick="saveCoachIdentity()" style="width:100%;background:var(--red);border:none;color:#fff;border-radius:3px;padding:12px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px">ENREGISTRER</button>
+          <button onclick="saveCoachIdentity()" style="width:100%;background:var(--red);border:none;color:#fff;border-radius:3px;padding:12px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px">ENREGISTRER</button>
         </div>
 
         <!-- 🖼️ Bannières publicitaires -->
@@ -800,8 +800,8 @@ const COACH_PHOTO='icons/coach.jpg';
           <div style="font-size:9px;color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Bannières pub</div>
           <div style="font-size:11px;color:var(--sub);margin-bottom:14px;line-height:1.5">Affiché en bas de l'accueil de tes athlètes.<br>Format bannière cliquable (photo + lien).</div>
           <div id="coach-banners-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px"></div>
-          <button onclick="addCoachBannerRow()" style="width:100%;background:transparent;border:1px dashed #3a3a5a;color:var(--info);border-radius:3px;padding:10px;font-family:'Montserrat',sans-serif;font-size:11px;cursor:pointer;margin-bottom:12px">+ Ajouter une bannière</button>
-          <button onclick="saveCoachBanners()" style="width:100%;background:var(--red);border:none;color:#fff;border-radius:3px;padding:12px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px">ENREGISTRER</button>
+          <button onclick="addCoachBannerRow()" style="width:100%;background:transparent;border:1px dashed #3a3a5a;color:var(--info);border-radius:3px;padding:10px;font-family:Montserrat,sans-serif;font-size:11px;cursor:pointer;margin-bottom:12px">+ Ajouter une bannière</button>
+          <button onclick="saveCoachBanners()" style="width:100%;background:var(--red);border:none;color:#fff;border-radius:3px;padding:12px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px">ENREGISTRER</button>
         </div>
 
         <!-- 📱 WhatsApp coach -->
@@ -815,7 +815,7 @@ const COACH_PHOTO='icons/coach.jpg';
           </div>
           <div style="display:flex;gap:8px;margin-bottom:8px">
             <input id="coach-phone-input" type="tel" placeholder="+33 6 12 34 56 78" style="flex:1;font-size:14px;padding:11px 14px">
-            <button onclick="saveCoachPhone()" style="background:#22c55e;border:none;color:#000;border-radius:3px;padding:11px 18px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;white-space:nowrap">ENREGISTRER</button>
+            <button onclick="saveCoachPhone()" style="background:#22c55e;border:none;color:#000;border-radius:3px;padding:11px 18px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;white-space:nowrap">ENREGISTRER</button>
           </div>
           <div id="coach-phone-preview" style="font-size:10px;color:var(--sub)"></div>
         </div>
@@ -831,16 +831,16 @@ const COACH_PHOTO='icons/coach.jpg';
           </div>
           <div id="wm-current" style="display:none;margin-bottom:10px">
             <audio id="wm-preview" controls style="width:100%;height:36px;margin-bottom:8px"></audio>
-            <button onclick="deleteWelcomeMessage()" style="width:100%;background:none;border:1px solid #3a1a1a;border-radius:3px;padding:8px;font-size:11px;color:var(--red);font-family:'Montserrat',sans-serif;cursor:pointer;font-weight:700;letter-spacing:1px">SUPPRIMER</button>
+            <button onclick="deleteWelcomeMessage()" style="width:100%;background:none;border:1px solid #3a1a1a;border-radius:3px;padding:8px;font-size:11px;color:var(--red);font-family:Montserrat,sans-serif;cursor:pointer;font-weight:700;letter-spacing:1px">SUPPRIMER</button>
           </div>
           <div id="wm-recorder">
-            <button id="wm-rec-btn" onclick="toggleWelcomeRec()" style="width:100%;background:var(--red);border:none;color:#fff;border-radius:3px;padding:10px 18px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> ENREGISTRER</button>
+            <button id="wm-rec-btn" onclick="toggleWelcomeRec()" style="width:100%;background:var(--red);border:none;color:#fff;border-radius:3px;padding:10px 18px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> ENREGISTRER</button>
             <div id="wm-rec-status" style="font-size:10px;color:var(--sub);min-height:14px;text-align:center;margin-bottom:8px"></div>
             <div id="wm-preview-row" style="display:none;margin-bottom:8px">
               <audio id="wm-rec-preview" controls style="width:100%;height:36px;margin-bottom:8px"></audio>
               <div style="display:flex;gap:8px">
-                <button onclick="confirmWelcomeAudio()" style="flex:1;background:var(--red);border:none;color:#fff;border-radius:3px;padding:9px;font-size:11px;font-weight:800;font-family:'Montserrat',sans-serif;cursor:pointer">✓ ENREGISTRER</button>
-                <button onclick="cancelWelcomeRec()" style="flex:1;background:none;border:1px solid var(--border);border-radius:3px;padding:9px;font-size:11px;color:var(--sub);font-family:'Montserrat',sans-serif;cursor:pointer">✗ RECOMMENCER</button>
+                <button onclick="confirmWelcomeAudio()" style="flex:1;background:var(--red);border:none;color:#fff;border-radius:3px;padding:9px;font-size:11px;font-weight:800;font-family:Montserrat,sans-serif;cursor:pointer">✓ ENREGISTRER</button>
+                <button onclick="cancelWelcomeRec()" style="flex:1;background:none;border:1px solid var(--border);border-radius:3px;padding:9px;font-size:11px;color:var(--sub);font-family:Montserrat,sans-serif;cursor:pointer">✗ RECOMMENCER</button>
               </div>
             </div>
             <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--sub);cursor:pointer;margin:0;border-top:1px solid var(--surface-2);padding-top:10px">
@@ -863,7 +863,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <input id="cld-cloud-name" placeholder="ex: dxyz12abc" style="margin-bottom:10px">
           <label style="font-size:11px;color:var(--sub);margin-bottom:4px;display:block">Upload Preset <span style="font-weight:400;color:#555">(non signé)</span></label>
           <input id="cld-preset" placeholder="ex: repcore_videos" style="margin-bottom:10px">
-          <button onclick="saveCloudinaryConfig()" style="background:var(--red);border:none;color:#fff;border-radius:3px;padding:10px 18px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;width:100%">ENREGISTRER</button>
+          <button onclick="saveCloudinaryConfig()" style="background:var(--red);border:none;color:#fff;border-radius:3px;padding:10px 18px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;width:100%">ENREGISTRER</button>
           <div style="font-size:10px;color:#555;margin-top:8px;line-height:1.5">Créer un compte sur <b>cloudinary.com</b> → Settings → Upload → Add upload preset → choisir <b>Unsigned</b></div>
         </div>
 
@@ -910,10 +910,10 @@ const COACH_PHOTO='icons/coach.jpg';
         <div id="coach-admin-offboard" style="display:none;background:#0d0d00;border:1px solid #3a3a00;border-radius:14px;padding:18px;margin-top:24px">
           <div style="font-size:9px;color:#a3a300;letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:10px">⚙ Admin — Offboarding coach</div>
           <div style="font-size:11px;color:var(--sub);margin-bottom:12px;line-height:1.5">Réassigner les athlètes d'un coach avant de désactiver son compte.</div>
-          <select id="admin-offboard-select" style="width:100%;margin-bottom:10px;padding:10px;background:#1a1a08;border:1px solid #3a3a00;border-radius:6px;color:#fff;font-size:12px;font-family:'Montserrat',sans-serif">
+          <select id="admin-offboard-select" style="width:100%;margin-bottom:10px;padding:10px;background:#1a1a08;border:1px solid #3a3a00;border-radius:6px;color:#fff;font-size:12px;font-family:Montserrat,sans-serif">
             <option value="">— Sélectionne un coach —</option>
           </select>
-          <button onclick="_adminOffboardSelected()" style="width:100%;background:#a3a300;border:none;border-radius:6px;padding:10px;color:#000;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px">OFFBOARDER CE COACH →</button>
+          <button onclick="_adminOffboardSelected()" style="width:100%;background:#a3a300;border:none;border-radius:6px;padding:10px;color:#000;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px">OFFBOARDER CE COACH →</button>
         </div>
 
         <!-- Zone dangereuse : self-service -->
@@ -923,13 +923,13 @@ const COACH_PHOTO='icons/coach.jpg';
           <div style="margin-bottom:16px">
             <div style="font-weight:700;font-size:13px;margin-bottom:4px">Réassigner mes athlètes</div>
             <div style="font-size:11px;color:var(--sub);margin-bottom:10px;line-height:1.5">Transférer tous tes athlètes à un autre coach ou au créateur avant de fermer ton compte.</div>
-            <button onclick="offboardCoach(currentUser?.id)" style="width:100%;background:none;border:1px solid var(--red);border-radius:6px;padding:10px;color:var(--red);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:1px">RÉASSIGNER MES ATHLÈTES</button>
+            <button onclick="offboardCoach(currentUser?.id)" style="width:100%;background:none;border:1px solid var(--red);border-radius:6px;padding:10px;color:var(--red);font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:1px">RÉASSIGNER MES ATHLÈTES</button>
           </div>
 
           <div style="border-top:1px solid #2a0000;padding-top:16px">
             <div style="font-weight:700;font-size:13px;margin-bottom:4px">Supprimer mon compte</div>
             <div style="font-size:11px;color:var(--sub);margin-bottom:10px;line-height:1.5">Action irréversible. Conformément au RGPD (Art. 17), toutes tes données personnelles seront effacées. Les données financières sont conservées 5 ans (obligation légale).</div>
-            <button onclick="requestAccountDeletion()" style="width:100%;background:none;border:1px solid #600000;border-radius:6px;padding:10px;color:#cc0000;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:1px">SUPPRIMER MON COMPTE DÉFINITIVEMENT</button>
+            <button onclick="requestAccountDeletion()" style="width:100%;background:none;border:1px solid #600000;border-radius:6px;padding:10px;color:#cc0000;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:1px">SUPPRIMER MON COMPTE DÉFINITIVEMENT</button>
           </div>
         </div>
 
@@ -981,7 +981,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="ccd-sessions-recap" style="margin-top:24px"></div>
       <div id="ccd-videos"></div>
       <div style="margin-top:36px;padding-top:20px;border-top:1px solid var(--surface-2)">
-        <button onclick="confirmDeleteClient()" style="width:100%;padding:12px;background:transparent;border:1px solid #3a1500;color:#f97316;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer">Retirer cet élève du suivi</button>
+        <button onclick="confirmDeleteClient()" style="width:100%;padding:12px;background:transparent;border:1px solid #3a1500;color:#f97316;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer">Retirer cet élève du suivi</button>
       </div>
     </div>
   </div>
@@ -992,7 +992,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar">
     <button class="back-btn" onclick="go('s-coach-client')">←</button>
     <span class="topbar-title" id="csm-title">Séances</span>
-    <button onclick="saveCoachSessions()" style="background:var(--red);border:none;color:#fff;padding:7px 16px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:3px">SAUVEGARDER</button>
+    <button onclick="saveCoachSessions()" style="background:var(--red);border:none;color:#fff;padding:7px 16px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:3px">SAUVEGARDER</button>
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
@@ -1007,7 +1007,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar">
     <button class="back-btn" onclick="go('s-coach-home');loadCoachHome()">←</button>
     <span class="topbar-title">Mes programmes</span>
-    <button onclick="createCoachProgTemplate()" style="background:var(--red);border:none;color:#fff;padding:7px 14px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:3px">+ CRÉER</button>
+    <button onclick="createCoachProgTemplate()" style="background:var(--red);border:none;color:#fff;padding:7px 14px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:3px">+ CRÉER</button>
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
@@ -1021,12 +1021,12 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="s-coach-prog-template" class="screen">
   <div class="topbar">
     <button class="back-btn" onclick="go('s-coach-programs');loadCoachProgramsList()">←</button>
-    <input id="cpt-name" placeholder="Nom du programme" style="flex:1;background:transparent;border:none;color:#fff;font-family:'Montserrat',sans-serif;font-size:14px;font-weight:800;outline:none;min-width:0;margin:0 8px" onchange="saveCoachProgTemplateName()">
-    <button onclick="saveCoachProgTemplate()" style="background:var(--red);border:none;color:#fff;padding:7px 14px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:3px">SAUVEGARDER</button>
+    <input id="cpt-name" placeholder="Nom du programme" style="flex:1;background:transparent;border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:14px;font-weight:800;outline:none;min-width:0;margin:0 8px" onchange="saveCoachProgTemplateName()">
+    <button onclick="saveCoachProgTemplate()" style="background:var(--red);border:none;color:#fff;padding:7px 14px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:3px">SAUVEGARDER</button>
   </div>
   <div style="display:flex;border-bottom:1px solid #1a0000;flex-shrink:0;background:#080808">
-    <button id="cpt-tab-h" onclick="loadProgTemplateSlots('H')" style="flex:1;padding:11px 4px;background:none;border:none;border-bottom:2px solid var(--red);color:#fff;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;letter-spacing:1px;cursor:pointer">HOMME</button>
-    <button id="cpt-tab-f" onclick="loadProgTemplateSlots('F')" style="flex:1;padding:11px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--sub);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;letter-spacing:1px;cursor:pointer">FEMME</button>
+    <button id="cpt-tab-h" onclick="loadProgTemplateSlots('H')" style="flex:1;padding:11px 4px;background:none;border:none;border-bottom:2px solid var(--red);color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1px;cursor:pointer">HOMME</button>
+    <button id="cpt-tab-f" onclick="loadProgTemplateSlots('F')" style="flex:1;padding:11px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1px;cursor:pointer">FEMME</button>
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad" style="padding-top:16px">
@@ -1040,7 +1040,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar">
     <button class="back-btn" onclick="go('s-coach-programs');loadCoachProgramsList()">←</button>
     <span class="topbar-title" id="cpa-title">Assigner</span>
-    <button onclick="confirmAssignProgram()" style="background:var(--red);border:none;color:#fff;padding:7px 14px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:3px">ASSIGNER</button>
+    <button onclick="confirmAssignProgram()" style="background:var(--red);border:none;color:#fff;padding:7px 14px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:3px">ASSIGNER</button>
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
@@ -1115,7 +1115,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
         <div style="display:flex;gap:8px">
           <input id="prog-pdf-link" placeholder="Lien Google Drive ou Dropbox..." style="flex:1;font-size:12px;padding:10px 12px">
-          <button onclick="saveCoachPdfLink()" style="background:var(--red);border:none;color:#fff;border-radius:3px;padding:10px 14px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;white-space:nowrap;text-transform:uppercase">Lier</button>
+          <button onclick="saveCoachPdfLink()" style="background:var(--red);border:none;color:#fff;border-radius:3px;padding:10px 14px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;white-space:nowrap;text-transform:uppercase">Lier</button>
         </div>
         <div style="font-size:10px;color:#333;margin-top:6px">Lien de partage public (Accès → Tout le monde avec le lien)</div>
       </div>
@@ -1172,7 +1172,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <div style="font-size:10px;color:var(--green);font-weight:700;margin-bottom:6px">Colle tes liens YouTube (un par ligne) :</div>
           <textarea id="prog-paste-input" rows="4" placeholder="https://youtu.be/...&#10;https://youtu.be/...&#10;https://youtu.be/..."
             style="width:100%;font-size:11px;padding:8px;background:#060f00;border:1px solid #2a3a2a;border-radius:6px;color:#ccc;font-family:monospace;box-sizing:border-box;resize:vertical"></textarea>
-          <button onclick="savePastedLinks()" style="margin-top:6px;width:100%;padding:8px;background:#166534;border:none;border-radius:6px;color:var(--green);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;cursor:pointer"> Valider les liens</button>
+          <button onclick="savePastedLinks()" style="margin-top:6px;width:100%;padding:8px;background:#166534;border:none;border-radius:6px;color:var(--green);font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;cursor:pointer"> Valider les liens</button>
         </div>
         <div id="prog-photo2-ready" style="display:none;margin-top:4px;background:#0a1a00;border:1px solid #1a3a0a;border-radius:8px;padding:8px 12px">
           <div style="display:flex;align-items:center;gap:8px">
@@ -1183,7 +1183,7 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
 
       <!-- BOUTON ANALYSER -->
-      <button id="prog-analyze-btn" onclick="analyzeProgPhotos()" style="display:none;width:100%;margin-top:10px;padding:12px;background:linear-gradient(180deg,#1a0000,#110000);border:1px solid #3a0a0a;border-radius:3px;color:var(--red-light);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px;text-transform:uppercase;align-items:center;justify-content:center;gap:8px">
+      <button id="prog-analyze-btn" onclick="analyzeProgPhotos()" style="display:none;width:100%;margin-top:10px;padding:12px;background:linear-gradient(180deg,#1a0000,#110000);border:1px solid #3a0a0a;border-radius:3px;color:var(--red-light);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px;text-transform:uppercase;align-items:center;justify-content:center;gap:8px">
          Analyser → Importer les exercices
       </button>
 
@@ -1364,7 +1364,7 @@ const COACH_PHOTO='icons/coach.jpg';
             <div style="font-size:18px;color:#333;flex-shrink:0">→</div>
           </div>
           <div id="clh-pdf-new-badge" style="display:none;background:var(--green);color:#000;font-size:9px;font-weight:900;letter-spacing:2px;text-transform:uppercase;padding:4px 12px;text-align:center">Mis à jour</div>
-          <button onclick="triggerAthletePdfParse()" style="width:100%;background:linear-gradient(180deg,#0a1a00,#080f00);border:1px solid #1a3a0a;border-top:none;border-radius:0;padding:10px;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:800;color:var(--green);letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"> Lire & importer les séances</button>
+          <button onclick="triggerAthletePdfParse()" style="width:100%;background:linear-gradient(180deg,#0a1a00,#080f00);border:1px solid #1a3a0a;border-top:none;border-radius:0;padding:10px;font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;color:var(--green);letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"> Lire & importer les séances</button>
           <label style="display:block;background:var(--surface-1);border:1px solid var(--surface-2);border-top:none;border-radius:0 0 4px 4px;padding:8px 14px;font-size:10px;color:#444;letter-spacing:1.5px;text-transform:uppercase;font-weight:700;cursor:pointer;text-align:center">
             Remplacer le PDF
             <input type="file" accept=".pdf" style="display:none" onchange="uploadAthletePdf(this)">
@@ -1415,7 +1415,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar">
     <button class="back-btn" onclick="go('s-client-home')">←</button>
     <span class="topbar-title">Mon profil</span>
-    <button onclick="saveAthleteProfile()" style="background:var(--red);border:none;color:#fff;padding:7px 16px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:3px">SAUVEGARDER</button>
+    <button onclick="saveAthleteProfile()" style="background:var(--red);border:none;color:#fff;padding:7px 16px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:3px">SAUVEGARDER</button>
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
@@ -1440,17 +1440,17 @@ const COACH_PHOTO='icons/coach.jpg';
         <div>
           <label style="font-size:10px;color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Sexe</label>
           <div style="display:flex;gap:8px">
-            <button id="atp-btn-m" onclick="setAthleteGender('H')" style="flex:1;padding:11px;border:1px solid var(--border);background:none;border-radius:3px;font-family:'Montserrat',sans-serif;font-size:12px;font-weight:700;cursor:pointer;color:#fff;transition:.15s">Homme</button>
-            <button id="atp-btn-f" onclick="setAthleteGender('F')" style="flex:1;padding:11px;border:1px solid var(--border);background:none;border-radius:3px;font-family:'Montserrat',sans-serif;font-size:12px;font-weight:700;cursor:pointer;color:#fff;transition:.15s">Femme</button>
+            <button id="atp-btn-m" onclick="setAthleteGender('H')" style="flex:1;padding:11px;border:1px solid var(--border);background:none;border-radius:3px;font-family:Montserrat,sans-serif;font-size:12px;font-weight:700;cursor:pointer;color:#fff;transition:.15s">Homme</button>
+            <button id="atp-btn-f" onclick="setAthleteGender('F')" style="flex:1;padding:11px;border:1px solid var(--border);background:none;border-radius:3px;font-family:Montserrat,sans-serif;font-size:12px;font-weight:700;cursor:pointer;color:#fff;transition:.15s">Femme</button>
           </div>
         </div>
       </div>
       <div class="card">
         <label style="font-size:10px;color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Objectif</label>
-        <textarea id="atp-objective" placeholder="ex: Prise de masse, perte de poids, remise en forme..." style="width:100%;min-height:80px;font-size:13px;padding:11px 14px;box-sizing:border-box;resize:vertical;background:#111;border:1px solid #2a2a2a;color:#fff;font-family:'Montserrat',sans-serif;border-radius:4px;line-height:1.5" maxlength="200"></textarea>
+        <textarea id="atp-objective" placeholder="ex: Prise de masse, perte de poids, remise en forme..." style="width:100%;min-height:80px;font-size:13px;padding:11px 14px;box-sizing:border-box;resize:vertical;background:#111;border:1px solid #2a2a2a;color:#fff;font-family:Montserrat,sans-serif;border-radius:4px;line-height:1.5" maxlength="200"></textarea>
       </div>
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);text-align:center">
-        <button onclick="logout()" style="background:none;border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:10px 24px;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:1.5px">DÉCONNEXION</button>
+        <button onclick="logout()" style="background:none;border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:10px 24px;font-family:Montserrat,sans-serif;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:1.5px">DÉCONNEXION</button>
       </div>
     </div>
   </div>
@@ -1582,7 +1582,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
       </div>
     </div>
-    <button onclick="closeIosInstallGuide()" style="width:100%;padding:14px;background:var(--red);border:none;color:#fff;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;letter-spacing:2px;border-radius:10px;cursor:pointer">COMPRIS !</button>
+    <button onclick="closeIosInstallGuide()" style="width:100%;padding:14px;background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:2px;border-radius:10px;cursor:pointer">COMPRIS !</button>
   </div>
 </div>
 <!-- PAUSE / CANCEL WORKOUT MODAL -->
@@ -1591,9 +1591,9 @@ const COACH_PHOTO='icons/coach.jpg';
     <div style="font-size:14px;font-weight:800;letter-spacing:.5px;margin-bottom:4px">Séance en cours</div>
     <div style="font-size:12px;color:#666;margin-bottom:20px">Que veux-tu faire ?</div>
     <div style="display:flex;flex-direction:column;gap:10px">
-      <button onclick="document.getElementById('wo-pause-modal').style.display='none'" style="padding:14px;background:var(--surface-2);border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-family:'Montserrat',sans-serif;font-size:13px;font-weight:800;cursor:pointer;letter-spacing:.5px">▶ Continuer la séance</button>
-      <button onclick="confirmPauseWorkout()" style="padding:14px;background:#111;border:1px solid #2a2a2a;border-radius:10px;color:#aaa;font-family:'Montserrat',sans-serif;font-size:13px;font-weight:800;cursor:pointer;letter-spacing:.5px">⏸ Mettre en pause</button>
-      <button onclick="cancelWorkout()" style="padding:14px;background:#1a0000;border:1px solid var(--red);border-radius:10px;color:#fca5a5;font-family:'Montserrat',sans-serif;font-size:13px;font-weight:800;cursor:pointer;letter-spacing:.5px">✕ Annuler la séance</button>
+      <button onclick="document.getElementById('wo-pause-modal').style.display='none'" style="padding:14px;background:var(--surface-2);border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;cursor:pointer;letter-spacing:.5px">▶ Continuer la séance</button>
+      <button onclick="confirmPauseWorkout()" style="padding:14px;background:#111;border:1px solid #2a2a2a;border-radius:10px;color:#aaa;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;cursor:pointer;letter-spacing:.5px">⏸ Mettre en pause</button>
+      <button onclick="cancelWorkout()" style="padding:14px;background:#1a0000;border:1px solid var(--red);border-radius:10px;color:#fca5a5;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;cursor:pointer;letter-spacing:.5px">✕ Annuler la séance</button>
     </div>
   </div>
 </div>
@@ -1609,7 +1609,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div style="padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
     <button class="btn btn-outline" id="wo-prev-btn" onclick="woNav(-1)" style="flex:none;width:44px">←</button>
     <button class="btn btn-red" id="wo-next-btn" onclick="woNav(1)" style="flex:1">Exercice suivant →</button>
-    <button onclick="finishWorkoutEarly()" style="flex:none;align-self:stretch;background:#111;border:1px solid #333;color:var(--sub);padding:0 16px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;cursor:pointer;border-radius:3px;white-space:nowrap;letter-spacing:.5px;display:inline-flex;align-items:center;gap:7px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><circle cx="12" cy="12" r="9"/><polyline points="9 12 11 14 15 10"/></svg>Terminer</button>
+    <button onclick="finishWorkoutEarly()" style="flex:none;align-self:stretch;background:#111;border:1px solid #333;color:var(--sub);padding:0 16px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;cursor:pointer;border-radius:3px;white-space:nowrap;letter-spacing:.5px;display:inline-flex;align-items:center;gap:7px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><circle cx="12" cy="12" r="9"/><polyline points="9 12 11 14 15 10"/></svg>Terminer</button>
   </div>
 </div>
 
@@ -1728,7 +1728,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1" id="bil-content"></div>
   <div style="padding:14px 20px;border-top:1px solid #181818;background:var(--bg);flex-shrink:0">
     <button class="btn btn-red" id="bil-next-btn" onclick="bilNext()">Suivant →</button>
-    <button id="bil-skip-depart" onclick="skipFirstBilan()" style="display:none;width:100%;margin-top:10px;background:none;border:none;color:var(--sub);font-size:11px;font-family:'Montserrat',sans-serif;cursor:pointer;padding:6px;letter-spacing:.3px;text-decoration:underline">Remplir mon 1er bilan plus tard</button>
+    <button id="bil-skip-depart" onclick="skipFirstBilan()" style="display:none;width:100%;margin-top:10px;background:none;border:none;color:var(--sub);font-size:11px;font-family:Montserrat,sans-serif;cursor:pointer;padding:6px;letter-spacing:.3px;text-decoration:underline">Remplir mon 1er bilan plus tard</button>
   </div>
 </div>
 
@@ -1758,7 +1758,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- Sélecteur type de diet -->
       <div style="position:relative;margin-bottom:22px">
         <select id="nut-diet-select" onchange="setNutriDietType(this.value)"
-          style="width:100%;padding:13px 40px 13px 16px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:12px;color:#fff;font-family:'Montserrat',sans-serif;font-size:13px;font-weight:700;appearance:none;-webkit-appearance:none;cursor:pointer;outline:none">
+          style="width:100%;padding:13px 40px 13px 16px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:12px;color:#fff;font-family:Montserrat,sans-serif;font-size:13px;font-weight:700;appearance:none;-webkit-appearance:none;cursor:pointer;outline:none">
           <option value="strict">Diète Stricte</option>
           <option value="flexible">Diète Flexible</option>
         </select>
@@ -1854,7 +1854,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar"><button class="back-btn" onclick="loadNutrition()">←</button><span class="topbar-title">Ajouter un aliment</span><span></span></div>
   <div style="padding:12px 16px;background:var(--surface-1);border-bottom:1px solid var(--surface-2);flex-shrink:0">
     <input id="fj-search-input" type="search" autocomplete="off" placeholder="Rechercher (ex: poulet, riz, œuf…)"
-      style="width:100%;padding:12px 14px;background:var(--surface-2);border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-family:'Montserrat',sans-serif;font-size:14px;box-sizing:border-box;outline:none"
+      style="width:100%;padding:12px 14px;background:var(--surface-2);border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:14px;box-sizing:border-box;outline:none"
       oninput="onFjSearch(this.value)">
   </div>
   <div class="scroll-area" style="flex:1">
@@ -1880,15 +1880,15 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="display:flex;align-items:center;gap:10px">
           <button onclick="stepFjaQty(-10)" style="width:44px;height:44px;background:var(--surface-2);border:1px solid #2a2a2a;border-radius:8px;color:#fff;font-size:20px;cursor:pointer;flex-shrink:0">−</button>
           <input type="number" id="fja-qty" value="100" min="1" max="9999"
-            style="flex:1;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:'Montserrat',sans-serif;font-size:20px;font-weight:800;text-align:center"
+            style="flex:1;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:20px;font-weight:800;text-align:center"
             oninput="updateFjaCalc()">
           <button onclick="stepFjaQty(10)" style="width:44px;height:44px;background:var(--surface-2);border:1px solid #2a2a2a;border-radius:8px;color:#fff;font-size:20px;cursor:pointer;flex-shrink:0">+</button>
         </div>
         <div style="display:flex;gap:8px;margin-top:10px">
-          <button onclick="setFjaQty(50)"  style="flex:1;padding:8px;background:#111;border:1px solid #222;border-radius:8px;color:var(--sub);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;cursor:pointer">50g</button>
-          <button onclick="setFjaQty(100)" style="flex:1;padding:8px;background:#111;border:1px solid #222;border-radius:8px;color:var(--sub);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;cursor:pointer">100g</button>
-          <button onclick="setFjaQty(150)" style="flex:1;padding:8px;background:#111;border:1px solid #222;border-radius:8px;color:var(--sub);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;cursor:pointer">150g</button>
-          <button onclick="setFjaQty(200)" style="flex:1;padding:8px;background:#111;border:1px solid #222;border-radius:8px;color:var(--sub);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;cursor:pointer">200g</button>
+          <button onclick="setFjaQty(50)"  style="flex:1;padding:8px;background:#111;border:1px solid #222;border-radius:8px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;cursor:pointer">50g</button>
+          <button onclick="setFjaQty(100)" style="flex:1;padding:8px;background:#111;border:1px solid #222;border-radius:8px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;cursor:pointer">100g</button>
+          <button onclick="setFjaQty(150)" style="flex:1;padding:8px;background:#111;border:1px solid #222;border-radius:8px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;cursor:pointer">150g</button>
+          <button onclick="setFjaQty(200)" style="flex:1;padding:8px;background:#111;border:1px solid #222;border-radius:8px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;cursor:pointer">200g</button>
         </div>
       </div>
       <div id="fja-calc" style="margin-bottom:18px"></div>
@@ -1964,7 +1964,7 @@ const COACH_PHOTO='icons/coach.jpg';
           onkeydown="if(event.key==='Enter')addVideoLink()"
           oninput="document.getElementById('vid-drive-hint').style.display=this.value.includes('drive.google.com')?'block':'none'">
         <div id="vid-drive-hint" style="display:none;background:var(--warning-bg);border:1px solid #7c2d1244;border-radius:6px;padding:9px 12px;font-size:11px;color:var(--warning);line-height:1.5;margin-bottom:10px">⚠️ Vérifie que le lien est accessible à tous ceux qui l'ont (pas seulement toi) avant de l'envoyer — dans Drive : <strong>Partager → Toute personne avec le lien</strong>.</div>
-        <button onclick="addVideoLink()" style="width:100%;padding:10px;background:var(--red);border:none;color:#fff;border-radius:8px;font-family:'Montserrat',sans-serif;font-size:13px;font-weight:700;cursor:pointer">Ajouter la vidéo</button>
+        <button onclick="addVideoLink()" style="width:100%;padding:10px;background:var(--red);border:none;color:#fff;border-radius:8px;font-family:Montserrat,sans-serif;font-size:13px;font-weight:700;cursor:pointer">Ajouter la vidéo</button>
         <div class="sub" style="font-size:11px;margin-top:10px;line-height:1.5">Enregistre avec ton téléphone → partage sur <b>YouTube</b> (non répertoriée) ou <b>Google Drive</b> → colle le lien ici · <strong style="color:var(--info)">ton coach corrige directement dans l'app</strong></div>
       </div>
       <div style="margin-top:12px;background:var(--card2);border:1px dashed var(--border);border-radius:12px;padding:16px">
@@ -2049,8 +2049,8 @@ const COACH_PHOTO='icons/coach.jpg';
       <button class="btn btn-outline" onclick="go('s-client-code')">Entrer un nouveau code coach</button>
     </div>
     <div style="margin-top:20px;display:flex;flex-direction:column;gap:10px;align-items:center">
-      <button onclick="silentLogout();go('s-welcome')" style="background:none;border:none;color:var(--sub);font-size:12px;cursor:pointer;font-family:'Montserrat',sans-serif">← Retour à l'accueil</button>
-      <button onclick="logout()" style="background:none;border:none;color:#2a2a2a;font-size:11px;cursor:pointer;font-family:'Montserrat',sans-serif">Se déconnecter</button>
+      <button onclick="silentLogout();go('s-welcome')" style="background:none;border:none;color:var(--sub);font-size:12px;cursor:pointer;font-family:Montserrat,sans-serif">← Retour à l'accueil</button>
+      <button onclick="logout()" style="background:none;border:none;color:#2a2a2a;font-size:11px;cursor:pointer;font-family:Montserrat,sans-serif">Se déconnecter</button>
     </div>
   </div>
 </div>
@@ -2112,7 +2112,7 @@ const COACH_PHOTO='icons/coach.jpg';
             <path fill="#009CDE" fill-rule="evenodd" d="M20,30 L36,30 Q78,30 78,57 Q78,84 36,84 L36,114 L20,114 Z M36,42 Q60,42 60,57 Q60,72 36,72 Z"/>
           </svg>
           <div style="text-align:left">
-            <div style="font-size:11px;font-weight:700;color:#ccc;font-family:'Montserrat',sans-serif;display:flex;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="#6b9fd4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12" style="flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Paiement sécurisé via <span style="color:#009CDE">PayPal</span></div>
+            <div style="font-size:11px;font-weight:700;color:#ccc;font-family:Montserrat,sans-serif;display:flex;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="#6b9fd4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12" style="flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Paiement sécurisé via <span style="color:#009CDE">PayPal</span></div>
             <div style="font-size:9px;color:#555;margin-top:2px">Sans engagement · Résiliation à tout moment</div>
           </div>
         </div>
@@ -2194,8 +2194,8 @@ const ILLUS={
   folder:`<path d="M14,40 L14,76 Q14,80 18,80 L78,80 Q82,80 82,76 L82,40 Q82,36 78,36 L50,36 Q46,36 44,32 L40,27 Q38,24 34,24 L18,24 Q14,24 14,28 Z" stroke-dasharray="5 3"/><line x1="48" y1="52" x2="48" y2="64"/><line x1="42" y1="58" x2="54" y2="58"/>`,
 };
 function illusIcon(name,size=96){const s=ILLUS[name];if(!s)return icon(name,Math.round(size*.58));return '<svg viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:'+size+'px;height:'+size+'px;display:block;margin:0 auto">'+s+'</svg>';}
-function emptyState(iconName,message,ctaLabel,ctaFn,wrapStyle){const ico=illusIcon(iconName);const cta=(ctaLabel&&ctaFn)?`<button onclick="${ctaFn}" style="margin-top:16px;background:none;border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:9px 24px;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:1.5px">${ctaLabel}</button>`:'';const sa=wrapStyle?' style="'+wrapStyle+'"':'';return `<div class="empty-state"${sa}><div class="empty-illus" style="opacity:.42;margin-bottom:14px;transition:opacity .3s,filter .3s">${ico}</div><div>${message}</div>${cta}</div>`;}
-function setupScrollFade(el){if(!el||el._sfBound)return;el._sfBound=true;const par=el.parentElement;const badge=document.createElement('div');badge.style.cssText='position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.85);border:1px solid var(--border);color:var(--sub);font-size:9px;font-weight:800;font-family:'Montserrat',sans-serif;letter-spacing:.5px;padding:2px 7px;border-radius:10px;pointer-events:none;transition:opacity .2s;opacity:0;z-index:10;white-space:nowrap;line-height:1.5';par.appendChild(badge);const grad='linear-gradient(to right,#000 82%,transparent 100%)';const upd=()=>{const hidden=el.scrollWidth-el.scrollLeft-el.clientWidth;const hasMore=hidden>4;el.style.webkitMaskImage=hasMore?grad:'';el.style.maskImage=hasMore?grad:'';if(hasMore){let n=0;const tbl=el.querySelector('table');if(tbl){const row=tbl.querySelector('tr');if(row){const right=el.getBoundingClientRect().right;n=[...row.querySelectorAll('th,td')].filter(c=>c.getBoundingClientRect().left>=right-4).length;}}else{const right=el.getBoundingClientRect().right;n=[...el.children].filter(c=>c.getBoundingClientRect().left>=right-4).length;}badge.textContent=n>0?'+'+n:'';badge.style.opacity=n>0?'1':'0';}else{badge.style.opacity='0';}};el.addEventListener('scroll',upd,{passive:true});upd();}
+function emptyState(iconName,message,ctaLabel,ctaFn,wrapStyle){const ico=illusIcon(iconName);const cta=(ctaLabel&&ctaFn)?`<button onclick="${ctaFn}" style="margin-top:16px;background:none;border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:9px 24px;font-family:Montserrat,sans-serif;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:1.5px">${ctaLabel}</button>`:'';const sa=wrapStyle?' style="'+wrapStyle+'"':'';return `<div class="empty-state"${sa}><div class="empty-illus" style="opacity:.42;margin-bottom:14px;transition:opacity .3s,filter .3s">${ico}</div><div>${message}</div>${cta}</div>`;}
+function setupScrollFade(el){if(!el||el._sfBound)return;el._sfBound=true;const par=el.parentElement;const badge=document.createElement('div');badge.style.cssText='position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.85);border:1px solid var(--border);color:var(--sub);font-size:9px;font-weight:800;font-family:Montserrat,sans-serif;letter-spacing:.5px;padding:2px 7px;border-radius:10px;pointer-events:none;transition:opacity .2s;opacity:0;z-index:10;white-space:nowrap;line-height:1.5';par.appendChild(badge);const grad='linear-gradient(to right,#000 82%,transparent 100%)';const upd=()=>{const hidden=el.scrollWidth-el.scrollLeft-el.clientWidth;const hasMore=hidden>4;el.style.webkitMaskImage=hasMore?grad:'';el.style.maskImage=hasMore?grad:'';if(hasMore){let n=0;const tbl=el.querySelector('table');if(tbl){const row=tbl.querySelector('tr');if(row){const right=el.getBoundingClientRect().right;n=[...row.querySelectorAll('th,td')].filter(c=>c.getBoundingClientRect().left>=right-4).length;}}else{const right=el.getBoundingClientRect().right;n=[...el.children].filter(c=>c.getBoundingClientRect().left>=right-4).length;}badge.textContent=n>0?'+'+n:'';badge.style.opacity=n>0?'1':'0';}else{badge.style.opacity='0';}};el.addEventListener('scroll',upd,{passive:true});upd();}
 
 // ─── List / Table generics ───────────────────────────────────────────────────
 // renderDataList: flex rows with automatic border-bottom separator (removed on last child)
@@ -2610,7 +2610,7 @@ const CLOUD={
       <div style="font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:2px;margin-bottom:16px">Scanner sur un autre appareil</div>
       <img src="${qrUrl}" style="width:220px;height:220px;border-radius:12px;background:#fff;padding:8px">
       <p style="font-size:11px;color:#888;margin-top:12px;line-height:1.6">Ouvre l'app RepCore sur ton téléphone, scanne ce QR → sync configurée automatiquement</p>
-      <button onclick="this.closest('div').parentElement.remove()" style="margin-top:16px;background:var(--red);border:none;color:#fff;padding:10px 24px;border-radius:8px;font-family:'Montserrat',sans-serif;font-size:12px;font-weight:700;cursor:pointer">Fermer</button>
+      <button onclick="this.closest('div').parentElement.remove()" style="margin-top:16px;background:var(--red);border:none;color:#fff;padding:10px 24px;border-radius:8px;font-family:Montserrat,sans-serif;font-size:12px;font-weight:700;cursor:pointer">Fermer</button>
     </div>`;
     document.body.appendChild(modal);
   }
@@ -2985,16 +2985,16 @@ function rescueLogin(em,pw){
       <p style="font-size:12px;color:#888;line-height:1.6;margin-bottom:20px">Le site a changé d'adresse et tes données locales n'ont pas encore été retrouvées dans le cloud. Indique ton rôle pour continuer provisoirement — si tu te reconnectes depuis ton appareil ou navigateur habituel, ton profil complet sera restauré.</p>
       <div style="display:flex;gap:10px;margin-bottom:16px">
         <button onclick="doRescue('${em}','${encodeURIComponent(pw)}','coach')"
-          style="flex:1;background:#1a0000;border:1.5px solid var(--red);color:#fff;padding:14px 8px;border-radius:10px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:800;font-size:12px;letter-spacing:1px">
+          style="flex:1;background:#1a0000;border:1.5px solid var(--red);color:#fff;padding:14px 8px;border-radius:10px;cursor:pointer;font-family:Montserrat,sans-serif;font-weight:800;font-size:12px;letter-spacing:1px">
           🏋️ COACH
         </button>
         <button onclick="doRescue('${em}','${encodeURIComponent(pw)}','athlete')"
-          style="flex:1;background:#0a1a0a;border:1.5px solid #22c55e;color:#fff;padding:14px 8px;border-radius:10px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:800;font-size:12px;letter-spacing:1px">
+          style="flex:1;background:#0a1a0a;border:1.5px solid #22c55e;color:#fff;padding:14px 8px;border-radius:10px;cursor:pointer;font-family:Montserrat,sans-serif;font-weight:800;font-size:12px;letter-spacing:1px">
           💪 ATHLÈTE
         </button>
       </div>
       <button onclick="document.getElementById('rescue-panel').remove()"
-        style="background:none;border:none;color:#555;font-size:11px;cursor:pointer;font-family:'Montserrat',sans-serif">Annuler</button>
+        style="background:none;border:none;color:#555;font-size:11px;cursor:pointer;font-family:Montserrat,sans-serif">Annuler</button>
     </div>`;
   document.body.appendChild(panel);
 }
@@ -4268,8 +4268,8 @@ function loadAssignAthletes(){
         <div style="font-weight:700;font-size:13px">${escapeHtml((a.fname||'')+' '+(a.lname||''))}</div>
       </label>
       <div style="display:flex;gap:6px;flex-shrink:0">
-        <button onclick="cpaSwitchGender('${a.id}','H')" id="cpa-g-H-${a.id}" style="padding:4px 10px;border-radius:3px;border:none;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;background:${defG==='H'?'var(--red)':'#222'};color:${defG==='H'?'#fff':'var(--sub)'}">♂ H</button>
-        <button onclick="cpaSwitchGender('${a.id}','F')" id="cpa-g-F-${a.id}" style="padding:4px 10px;border-radius:3px;border:none;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;background:${defG==='F'?'var(--red)':'#222'};color:${defG==='F'?'#fff':'var(--sub)'}">♀ F</button>
+        <button onclick="cpaSwitchGender('${a.id}','H')" id="cpa-g-H-${a.id}" style="padding:4px 10px;border-radius:3px;border:none;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;background:${defG==='H'?'var(--red)':'#222'};color:${defG==='H'?'#fff':'var(--sub)'}">♂ H</button>
+        <button onclick="cpaSwitchGender('${a.id}','F')" id="cpa-g-F-${a.id}" style="padding:4px 10px;border-radius:3px;border:none;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;background:${defG==='F'?'var(--red)':'#222'};color:${defG==='F'?'#fff':'var(--sub)'}">♀ F</button>
       </div>
     </div>
   `;}).join('');
@@ -4561,7 +4561,7 @@ function renderClientPdfCard(c){
     </div>
     <button onclick="removeCoachPdf()" style="background:none;border:none;color:#444;font-size:18px;cursor:pointer;padding:4px;flex-shrink:0">×</button>
   </div>`:'';
-  const parseBtn=hasPdf?`<button onclick="triggerPdfProgrammeImport(${JSON.stringify(c.email)})" style="width:100%;margin-bottom:10px;padding:11px;background:linear-gradient(180deg,#0a1a00,#080f00);border:1px solid #1a3a0a;border-radius:6px;color:var(--green);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px;text-transform:uppercase;display:flex;align-items:center;justify-content:center;gap:7px"> Lire PDF → Importer les séances</button>`:'';
+  const parseBtn=hasPdf?`<button onclick="triggerPdfProgrammeImport(${JSON.stringify(c.email)})" style="width:100%;margin-bottom:10px;padding:11px;background:linear-gradient(180deg,#0a1a00,#080f00);border:1px solid #1a3a0a;border-radius:6px;color:var(--green);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px;text-transform:uppercase;display:flex;align-items:center;justify-content:center;gap:7px"> Lire PDF → Importer les séances</button>`:'';
   el.innerHTML=`${existHtml}${parseBtn}
     <label style="display:block;cursor:pointer;margin-bottom:10px">
       <input type="file" accept=".pdf,application/pdf" onchange="uploadCoachPdfInline(this)" style="display:none">
@@ -4572,7 +4572,7 @@ function renderClientPdfCard(c){
     </label>
     <div style="display:flex;gap:8px">
       <input id="ccc-pdf-link" placeholder="Lien Google Drive ou Dropbox..." value="${c.programPdfLink||''}" style="flex:1;font-size:12px;padding:9px 12px">
-      <button onclick="saveCoachPdfLinkInline()" style="background:var(--red);border:none;color:#fff;border-radius:3px;padding:9px 14px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;white-space:nowrap;text-transform:uppercase">Lier</button>
+      <button onclick="saveCoachPdfLinkInline()" style="background:var(--red);border:none;color:#fff;border-radius:3px;padding:9px 14px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;white-space:nowrap;text-transform:uppercase">Lier</button>
     </div>`;
 }
 async function uploadCoachPdfInline(input){
@@ -4662,7 +4662,7 @@ function renderProgEx(){
       <div style="background:var(--red);padding:8px 14px;display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:8px">
           <span style="background:#fff2;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0">${i+1}</span>
-          <input value="${escapeHtml(ex.name||'')}" onchange="_progExDirty=true;progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase()" placeholder="NOM DE L'EXERCICE (MATÉRIELS)" style="background:transparent;border:none;color:#fff;font-family:'Montserrat',sans-serif;font-weight:800;font-size:13px;outline:none;text-transform:uppercase;flex:1">
+          <input value="${escapeHtml(ex.name||'')}" onchange="_progExDirty=true;progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase()" placeholder="NOM DE L'EXERCICE (MATÉRIELS)" style="background:transparent;border:none;color:#fff;font-family:Montserrat,sans-serif;font-weight:800;font-size:13px;outline:none;text-transform:uppercase;flex:1">
         </div>
         <button onclick="_progExDirty=true;progEx.splice(${i},1);renderProgEx()" style="background:#fff2;border:none;color:#fff;font-size:14px;cursor:pointer;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center"></button>
       </div>
@@ -5062,7 +5062,7 @@ function loadSessionManager(){
                 <button onclick="removeSessionPhoto(${i})" style="background:rgba(198,15,8,.8);color:#fff;border:none;padding:6px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer"></button>
               </div>
             </div>
-            <button id="analyze-btn-${i}" onclick="analyzePhotoWithClaude(${i})" style="width:100%;margin-top:8px;padding:12px;background:linear-gradient(180deg,#1a0000,#110000);border:1px solid #3a0a0a;border-radius:3px;color:var(--red-light);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:1.5px;text-transform:uppercase">
+            <button id="analyze-btn-${i}" onclick="analyzePhotoWithClaude(${i})" style="width:100%;margin-top:8px;padding:12px;background:linear-gradient(180deg,#1a0000,#110000);border:1px solid #3a0a0a;border-radius:3px;color:var(--red-light);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:1.5px;text-transform:uppercase">
                Lire & importer les exercices (IA)
             </button>`:
             `<label style="display:block;margin-top:6px;cursor:pointer">
@@ -5553,7 +5553,7 @@ function renderWoEx(){
           <div class="ex-name" style="font-size:15px">${escapeHtml(ex.name)}</div>
           <div class="sub" style="font-size:12px;margin-top:3px">${ex.series} séries × ${escapeHtml(ex.reps)} reps${ex._cycleAdjusted?' <span style="color:var(--orange)">(−1 série cycle)</span>':''}</div>
         </div>
-        <button onclick="openCalc('${sug||''}','${escapeHtml(ex.reps)}','0','${currentUser.gender||''}')" style="background:var(--card2);border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:11px;padding:6px 10px;cursor:pointer;font-family:'Montserrat',sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Vue tableau</button>
+        <button onclick="openCalc('${sug||''}','${escapeHtml(ex.reps)}','0','${currentUser.gender||''}')" style="background:var(--card2);border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:11px;padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Vue tableau</button>
       </div>
 
       ${cycleLabel&&isFemme?`<div style="background:var(--dark);border:1px solid #2a2a2a;border-radius:3px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#888;letter-spacing:.5px">${cycleLabel.text}</div>`:''}
@@ -6317,7 +6317,7 @@ function renderWoReminderCard(){
   const el=document.getElementById('clh-wo-reminder-row');if(!el)return;
   const u=currentUser;
   if(!u._woReminderEnabled){
-    el.innerHTML=`<button onclick="openWoReminderConfig()" style="width:100%;background:transparent;border:1px dashed var(--border);border-radius:10px;padding:11px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;font-family:'Montserrat',sans-serif;color:var(--sub);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">
+    el.innerHTML=`<button onclick="openWoReminderConfig()" style="width:100%;background:transparent;border:1px dashed var(--border);border-radius:10px;padding:11px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;font-family:Montserrat,sans-serif;color:var(--sub);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Configurer un rappel séance</span>
     </button>`;
     return;
@@ -6332,7 +6332,7 @@ function renderWoReminderCard(){
       <div style="font-size:11px;font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.8px">Rappel séance activé</div>
       <div style="font-size:11px;color:var(--sub);margin-top:2px">${hh}:${mm} · ${days||'—'}</div>
     </div>
-    <button onclick="openWoReminderConfig()" style="background:none;border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--sub);font-size:11px;cursor:pointer;font-family:'Montserrat',sans-serif">⚙️</button>
+    <button onclick="openWoReminderConfig()" style="background:none;border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--sub);font-size:11px;cursor:pointer;font-family:Montserrat,sans-serif">⚙️</button>
   </div>`;
 }
 function checkWoReminderToday(){
@@ -6380,7 +6380,7 @@ function openWoReminderConfig(){
     (u.sessions_config||[]).reduce((a,s,i)=>{if(s.active)a.push(i);return a;},[])
   );
   const DS=['L','Ma','Me','J','V','S','D'];
-  const dayBtns=DS.map((d,i)=>`<button id="wrd-day-${i}" onclick="wrdToggleDay(${i})" style="flex:1;min-width:0;border:1px solid ${curDays.includes(i)?'var(--red)':'var(--border)'};border-radius:6px;padding:9px 2px;background:${curDays.includes(i)?'#1a0000':'transparent'};color:${curDays.includes(i)?'var(--red)':'var(--sub)'};font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer">${d}</button>`).join('');
+  const dayBtns=DS.map((d,i)=>`<button id="wrd-day-${i}" onclick="wrdToggleDay(${i})" style="flex:1;min-width:0;border:1px solid ${curDays.includes(i)?'var(--red)':'var(--border)'};border-radius:6px;padding:9px 2px;background:${curDays.includes(i)?'#1a0000':'transparent'};color:${curDays.includes(i)?'var(--red)':'var(--sub)'};font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer">${d}</button>`).join('');
   const hourOpts=Array.from({length:17},(_,i)=>i+6).map(h=>`<option value="${h}" ${h===curH?'selected':''}>${String(h).padStart(2,'0')}h</option>`).join('');
   document.getElementById('wo-reminder-config')?.remove();
   document.body.insertAdjacentHTML('beforeend',`<div id="wo-reminder-config" style="position:fixed;inset:0;background:#000b;z-index:3000;display:flex;align-items:flex-end;justify-content:center" onclick="if(event.target===this)this.remove()">
@@ -6393,8 +6393,8 @@ function openWoReminderConfig(){
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
       <select id="wrd-hour" style="flex:1;font-size:16px;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;padding:10px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px">${hourOpts}</select>
       <div style="display:flex;flex-direction:column;gap:6px">
-        <button id="wrd-min-0" onclick="wrdSetMin(0)" style="border-radius:4px;padding:6px 12px;font-size:11px;font-weight:800;font-family:'Montserrat',sans-serif;cursor:pointer;background:${curM===0?'var(--red)':'transparent'};border:1px solid ${curM===0?'var(--red)':'var(--border)'};color:${curM===0?'#fff':'var(--sub)'}">:00</button>
-        <button id="wrd-min-30" onclick="wrdSetMin(30)" style="border-radius:4px;padding:6px 12px;font-size:11px;font-weight:800;font-family:'Montserrat',sans-serif;cursor:pointer;background:${curM===30?'var(--red)':'transparent'};border:1px solid ${curM===30?'var(--red)':'var(--border)'};color:${curM===30?'#fff':'var(--sub)'}">:30</button>
+        <button id="wrd-min-0" onclick="wrdSetMin(0)" style="border-radius:4px;padding:6px 12px;font-size:11px;font-weight:800;font-family:Montserrat,sans-serif;cursor:pointer;background:${curM===0?'var(--red)':'transparent'};border:1px solid ${curM===0?'var(--red)':'var(--border)'};color:${curM===0?'#fff':'var(--sub)'}">:00</button>
+        <button id="wrd-min-30" onclick="wrdSetMin(30)" style="border-radius:4px;padding:6px 12px;font-size:11px;font-weight:800;font-family:Montserrat,sans-serif;cursor:pointer;background:${curM===30?'var(--red)':'transparent'};border:1px solid ${curM===30?'var(--red)':'var(--border)'};color:${curM===30?'#fff':'var(--sub)'}">:30</button>
       </div>
     </div>
     <label style="font-size:11px;display:block;margin-bottom:6px">Jours d'entraînement</label>
@@ -7105,8 +7105,8 @@ function _renderStrictDiet(){
     <div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:14px;padding:18px;margin-bottom:16px">
       <div style="font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:14px">J'ai respecté mon plan aujourd'hui</div>
       <div style="display:flex;gap:10px">
-        <button onclick="setNutriRespected('${todayKey}',true)" style="flex:1;padding:14px 0;border:none;border-radius:10px;font-family:'Montserrat',sans-serif;font-size:13px;font-weight:800;letter-spacing:1px;cursor:pointer;background:${respYes?'#15803d':'#111'};color:${respYes?'#fff':'#555'};border:2px solid ${respYes?'#22c55e':'#222'}">✓ OUI</button>
-        <button onclick="setNutriRespected('${todayKey}',false)" style="flex:1;padding:14px 0;border:none;border-radius:10px;font-family:'Montserrat',sans-serif;font-size:13px;font-weight:800;letter-spacing:1px;cursor:pointer;background:${respNo?'#7f1d1d':'#111'};color:${respNo?'#fff':'#555'};border:2px solid ${respNo?'var(--red)':'#222'}">✗ NON</button>
+        <button onclick="setNutriRespected('${todayKey}',true)" style="flex:1;padding:14px 0;border:none;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;letter-spacing:1px;cursor:pointer;background:${respYes?'#15803d':'#111'};color:${respYes?'#fff':'#555'};border:2px solid ${respYes?'#22c55e':'#222'}">✓ OUI</button>
+        <button onclick="setNutriRespected('${todayKey}',false)" style="flex:1;padding:14px 0;border:none;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;letter-spacing:1px;cursor:pointer;background:${respNo?'#7f1d1d':'#111'};color:${respNo?'#fff':'#555'};border:2px solid ${respNo?'var(--red)':'#222'}">✗ NON</button>
       </div>
     </div>
     <!-- Scores -->
@@ -7375,7 +7375,7 @@ function _renderFjDaySummary(date){
         </div>
         ${nextBtn}
       </div>
-      <button onclick="openFoodSearch('${date}')" style="background:var(--red);border:none;color:#fff;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:800;letter-spacing:1.5px;padding:8px 14px;border-radius:8px;cursor:pointer">+ AJOUTER</button>
+      <button onclick="openFoodSearch('${date}')" style="background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:1.5px;padding:8px 14px;border-radius:8px;cursor:pointer">+ AJOUTER</button>
     </div>
     <div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:12px;padding:14px;margin-bottom:6px">
       <div style="display:flex;gap:6px;margin-bottom:6px">
@@ -7439,9 +7439,9 @@ function renderCoachNutriSection(c){
     <div style="display:grid;grid-template-columns:90px 1fr 1fr;align-items:center;gap:6px;margin-bottom:7px">
       <div style="font-size:9px;font-weight:800;color:${f.color};letter-spacing:1px">${f.label}</div>
       <input id="ccd-on-${f.k}" type="number" min="0" placeholder="${f.ph}" value="${mon[f.k]||''}"
-        style="padding:7px 10px;background:#111;border:1px solid #2a2a2a;border-radius:8px;color:#fff;font-family:'Montserrat',sans-serif;font-size:12px;font-weight:600;outline:none;width:100%;box-sizing:border-box">
+        style="padding:7px 10px;background:#111;border:1px solid #2a2a2a;border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:12px;font-weight:600;outline:none;width:100%;box-sizing:border-box">
       <input id="ccd-off-${f.k}" type="number" min="0" placeholder="${f.ph}" value="${moff[f.k]||''}"
-        style="padding:7px 10px;background:#111;border:1px solid #2a2a2a;border-radius:8px;color:#fff;font-family:'Montserrat',sans-serif;font-size:12px;font-weight:600;outline:none;width:100%;box-sizing:border-box">
+        style="padding:7px 10px;background:#111;border:1px solid #2a2a2a;border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:12px;font-weight:600;outline:none;width:100%;box-sizing:border-box">
     </div>`).join('');
   el.innerHTML=`
     <div style="background:var(--dark);border:1px solid var(--surface-3);border-radius:12px;padding:16px;margin-bottom:16px">
@@ -7449,7 +7449,7 @@ function renderCoachNutriSection(c){
       <!-- Type de diète -->
       <div style="position:relative;margin-bottom:20px">
         <select id="ccd-diet-sel" onchange="saveClientNutriDiet(this.value)"
-          style="width:100%;padding:11px 36px 11px 14px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:10px;color:#fff;font-family:'Montserrat',sans-serif;font-size:12px;font-weight:700;appearance:none;-webkit-appearance:none;cursor:pointer;outline:none">
+          style="width:100%;padding:11px 36px 11px 14px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:12px;font-weight:700;appearance:none;-webkit-appearance:none;cursor:pointer;outline:none">
           <option value="strict" ${dt==='strict'?'selected':''}>Diète Stricte</option>
           <option value="flexible" ${dt==='flexible'?'selected':''}>Diète Flexible</option>
         </select>
@@ -7464,7 +7464,7 @@ function renderCoachNutriSection(c){
           <div style="font-size:8px;font-weight:800;color:var(--sub);letter-spacing:1px;text-align:center;background:var(--surface-1);border:1px solid var(--border);border-radius:6px;padding:4px">💤 JOUR OFF</div>
         </div>
         ${macroRows}
-        <button onclick="saveClientNutriMacros()" style="width:100%;margin-top:6px;padding:11px 0;background:var(--red);border:none;color:#fff;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer">💾 ENREGISTRER LES OBJECTIFS</button>
+        <button onclick="saveClientNutriMacros()" style="width:100%;margin-top:6px;padding:11px 0;background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer">💾 ENREGISTRER LES OBJECTIFS</button>
       </div>
       <!-- Plan photos (stricte uniquement) -->
       ${dt==='strict'?`
@@ -7610,7 +7610,7 @@ function loadSupplements(){
         <div style="width:3px;height:20px;background:var(--red);border-radius:2px"></div>
         <h3 style="margin:0">Mes compléments</h3>
       </div>
-      <button onclick="openSuppEdit(-1)" style="background:var(--red);border:none;color:#fff;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:800;letter-spacing:1.5px;padding:8px 14px;border-radius:8px;cursor:pointer">+ AJOUTER</button>
+      <button onclick="openSuppEdit(-1)" style="background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:1.5px;padding:8px 14px;border-radius:8px;cursor:pointer">+ AJOUTER</button>
     </div>
     <div style="background:var(--dark);border:1px solid var(--border);border-radius:14px;padding:14px">
       ${_renderSuppTable(list,false,'openSuppEdit')}
@@ -7624,12 +7624,12 @@ function loadSuppEmbedded(){
   const list=_suppStore().filter(s=>s.active!==false);
   el.innerHTML=`
     <div style="margin-bottom:12px">
-      <h3 style="margin:0;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--sub);display:flex;align-items:center;gap:5px">${icon('pill',11)} Compléments</h3>
+      <h3 style="margin:0;font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--sub);display:flex;align-items:center;gap:5px">${icon('pill',11)} Compléments</h3>
     </div>
     <div style="background:var(--dark);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px">
       ${_renderSuppTable(list,false,'openSuppEdit')}
     </div>
-    <button onclick="openSuppEdit(-1)" style="background:none;border:1px dashed #2a2a2a;border-radius:10px;color:var(--sub);font-family:'Montserrat',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;padding:10px 0;width:100%;cursor:pointer;margin-bottom:4px">+ Ajouter un complément</button>
+    <button onclick="openSuppEdit(-1)" style="background:none;border:1px dashed #2a2a2a;border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;padding:10px 0;width:100%;cursor:pointer;margin-bottom:4px">+ Ajouter un complément</button>
     <div style="height:4px"></div>`;
 }
 
@@ -7770,7 +7770,7 @@ function renderCoachSuppSection(c){
           <div style="font-size:9px;color:var(--sub);margin-bottom:4px">Notes (optionnel)</div>
           <input id="ccd-supp-notes" class="form-input" style="padding:8px 10px;font-size:12px" placeholder="Ex: à jeun, avec repas…">
         </div>
-        <button onclick="saveClientSuppEntry()" style="width:100%;padding:11px 0;background:var(--red);border:none;color:#fff;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer">+ AJOUTER AU PROGRAMME</button>
+        <button onclick="saveClientSuppEntry()" style="width:100%;padding:11px 0;background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer">+ AJOUTER AU PROGRAMME</button>
       </div>
     </div>`;
 }
@@ -7859,8 +7859,8 @@ function openCoachSuppEdit(idx){
       </div>
     </div>
     <input type="hidden" id="coach-supp-idx" value="${idx}">
-    <button onclick="saveCoachSuppEdit()" style="width:100%;padding:13px 0;background:var(--red);border:none;color:#fff;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer;margin-bottom:10px">SAUVEGARDER</button>
-    ${s?`<button onclick="deleteCoachSuppEdit(${idx})" style="width:100%;padding:11px 0;background:none;border:1px solid #333;color:#666;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;border-radius:10px;cursor:pointer">SUPPRIMER CE COMPLÉMENT</button>`:''}
+    <button onclick="saveCoachSuppEdit()" style="width:100%;padding:13px 0;background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer;margin-bottom:10px">SAUVEGARDER</button>
+    ${s?`<button onclick="deleteCoachSuppEdit(${idx})" style="width:100%;padding:11px 0;background:none;border:1px solid #333;color:#666;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;border-radius:10px;cursor:pointer">SUPPRIMER CE COMPLÉMENT</button>`:''}
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
 }
@@ -8048,7 +8048,7 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
     :'';
   const listHtml=!entries.length
     ?emptyState('coffee','Aucune prise enregistrée ce jour.',null,null,'padding:16px 0')
-    :renderDataList(entries,(e,i)=>`<span style="font-size:24px">${e.icon||'☕'}</span><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13px">${escapeHtml(e.name)}</div><div style="font-size:11px;color:var(--sub);display:flex;align-items:center;gap:4px"><input type="time" value="${e.time||''}" onchange="updateCaffeineEntryTime('${date}',${i},this.value)" style="background:none;border:none;border-bottom:1px solid #333;color:var(--sub);font-size:11px;font-family:'Montserrat',sans-serif;cursor:pointer;padding:0;width:52px">${e.volume?'· '+escapeHtml(e.volume):''}</div></div><span style="font-weight:900;color:var(--red);font-size:15px;min-width:48px;text-align:right">${e.mg}mg</span><button onclick="deleteCaffeineEntry('${date}',${i},'${deleteFnName}')" style="background:none;border:none;color:var(--sub);font-size:20px;cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent">×</button>`);
+    :renderDataList(entries,(e,i)=>`<span style="font-size:24px">${e.icon||'☕'}</span><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13px">${escapeHtml(e.name)}</div><div style="font-size:11px;color:var(--sub);display:flex;align-items:center;gap:4px"><input type="time" value="${e.time||''}" onchange="updateCaffeineEntryTime('${date}',${i},this.value)" style="background:none;border:none;border-bottom:1px solid #333;color:var(--sub);font-size:11px;font-family:Montserrat,sans-serif;cursor:pointer;padding:0;width:52px">${e.volume?'· '+escapeHtml(e.volume):''}</div></div><span style="font-weight:900;color:var(--red);font-size:15px;min-width:48px;text-align:right">${e.mg}mg</span><button onclick="deleteCaffeineEntry('${date}',${i},'${deleteFnName}')" style="background:none;border:none;color:var(--sub);font-size:20px;cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent">×</button>`);
   const _circ=2*Math.PI*48;
   const _off=_circ*(1-pct);
   return `<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:16px">
@@ -8108,11 +8108,11 @@ function _renderCaffeineScreen(){
   const dateLbl=isToday?"Aujourd'hui":date===localISODate(yst)?"Hier":new Date(yy,mm-1,dd).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
   const navEl=document.getElementById('caff-date-nav');
   if(navEl) navEl.innerHTML=`<div style="display:flex;align-items:center;justify-content:center;gap:12px">
-    <button onclick="_caffeineViewDate='${prevStr}';_renderCaffeineScreen()" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:6px 13px;cursor:pointer;font-size:15px;font-family:'Montserrat',sans-serif">←</button>
+    <button onclick="_caffeineViewDate='${prevStr}';_renderCaffeineScreen()" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:6px 13px;cursor:pointer;font-size:15px;font-family:Montserrat,sans-serif">←</button>
     <span style="font-size:13px;font-weight:700;min-width:110px;text-align:center">${dateLbl}</span>
     ${isToday
       ?`<button disabled style="background:none;border:1px solid #222;color:#333;border-radius:8px;padding:6px 13px;font-size:15px;cursor:not-allowed">→</button>`
-      :`<button onclick="_caffeineViewDate='${nextStr}';_renderCaffeineScreen()" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:6px 13px;cursor:pointer;font-size:15px;font-family:'Montserrat',sans-serif">→</button>`}
+      :`<button onclick="_caffeineViewDate='${nextStr}';_renderCaffeineScreen()" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:6px 13px;cursor:pointer;font-size:15px;font-family:Montserrat,sans-serif">→</button>`}
   </div>`;
   const entries=getCaffeineDay(date);
   const totalMg=entries.reduce((s,e)=>s+(e.mg||0),0);
@@ -8142,17 +8142,17 @@ function _renderCaffeineEmbedded(){
   const nextStr=localISODate(new Date(yy,mm-1,dd+1));
   const yst=new Date();yst.setDate(yst.getDate()-1);
   const dateLbl=isToday?"Aujourd'hui":date===localISODate(yst)?"Hier":new Date(yy,mm-1,dd).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
-  const navPrev=`<button onclick="_caffeineEmbedDate='${prevStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:15px;font-family:'Montserrat',sans-serif">←</button>`;
+  const navPrev=`<button onclick="_caffeineEmbedDate='${prevStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:15px;font-family:Montserrat,sans-serif">←</button>`;
   const navNext=isToday
     ?`<button disabled style="background:none;border:1px solid #222;color:#333;border-radius:8px;padding:5px 12px;font-size:15px;cursor:not-allowed">→</button>`
-    :`<button onclick="_caffeineEmbedDate='${nextStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:15px;font-family:'Montserrat',sans-serif">→</button>`;
+    :`<button onclick="_caffeineEmbedDate='${nextStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:15px;font-family:Montserrat,sans-serif">→</button>`;
   const entries=getCaffeineDay(date);
   const totalMg=entries.reduce((s,e)=>s+(e.mg||0),0);
   const {weight:wKg,estimated:_wEst}=getUserWeight();
   const thr=caffeineThresholds(wKg);
   el.innerHTML=`
     <div style="margin-bottom:12px">
-      <h3 style="margin:0;font-family:'Montserrat',sans-serif;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--sub);display:flex;align-items:center;gap:5px">${icon('coffee',11)} Caféine</h3>
+      <h3 style="margin:0;font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--sub);display:flex;align-items:center;gap:5px">${icon('coffee',11)} Caféine</h3>
     </div>
     <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:14px">
       ${navPrev}
@@ -8302,9 +8302,9 @@ function _renderCaffeineConfirmPanel(qty){
       <button onclick="cancelCaffeineAdd()" style="background:none;border:none;color:var(--sub);font-size:22px;cursor:pointer;padding:4px">×</button>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:12px">
-      ${[1,2,3].map(n=>`<button onclick="_renderCaffeineConfirmPanel(${n})" style="flex:1;padding:10px 0;background:${qty===n?'var(--red)':'var(--surface-2)'};border:1px solid ${qty===n?'var(--red)':'#333'};border-radius:8px;color:${qty===n?'#fff':'var(--sub)'};font-family:'Montserrat',sans-serif;font-size:15px;font-weight:900;cursor:pointer">×${n}</button>`).join('')}
+      ${[1,2,3].map(n=>`<button onclick="_renderCaffeineConfirmPanel(${n})" style="flex:1;padding:10px 0;background:${qty===n?'var(--red)':'var(--surface-2)'};border:1px solid ${qty===n?'var(--red)':'#333'};border-radius:8px;color:${qty===n?'#fff':'var(--sub)'};font-family:Montserrat,sans-serif;font-size:15px;font-weight:900;cursor:pointer">×${n}</button>`).join('')}
     </div>
-    <button onclick="_commitCaffeineAdd(${qty})" style="width:100%;padding:12px 0;background:var(--red);border:none;color:#fff;font-family:'Montserrat',sans-serif;font-size:12px;font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer">AJOUTER</button>
+    <button onclick="_commitCaffeineAdd(${qty})" style="width:100%;padding:12px 0;background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:12px;font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer">AJOUTER</button>
   </div>`;
 }
 function cancelCaffeineAdd(){
@@ -8354,7 +8354,7 @@ function loadVideos(){
     return;
   }
   el.innerHTML='<div id="vid-card-list"></div>'
-    +'<button id="vid-more-btn" onclick="loadMoreVideos()" style="display:none;width:100%;margin-top:10px;padding:10px;background:none;border:1px solid #222;border-radius:8px;color:var(--sub);font-size:12px;cursor:pointer;font-family:'Montserrat',sans-serif;font-weight:700;letter-spacing:.5px"></button>';
+    +'<button id="vid-more-btn" onclick="loadMoreVideos()" style="display:none;width:100%;margin-top:10px;padding:10px;background:none;border:1px solid #222;border-radius:8px;color:var(--sub);font-size:12px;cursor:pointer;font-family:Montserrat,sans-serif;font-weight:700;letter-spacing:.5px"></button>';
   _renderVideoBatch(0,20);
 }
 function _renderVideoBatch(from,count){
@@ -8517,8 +8517,8 @@ function _getQC(){
 function _renderQuickCommentChips(){
   const el=document.getElementById('qc-chips');if(!el)return;
   const qcs=_getQC();
-  el.innerHTML=(qcs.length?qcs.map(c=>`<button data-qc="${escapeHtml(c.text)}" onclick="insertQC(this.dataset.qc)" style="flex-shrink:0;background:var(--card2);border:1px solid var(--border);border-radius:20px;padding:0 14px;height:44px;color:var(--text);font-family:'Montserrat',sans-serif;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.label)}</button>`).join(''):'')
-    +`<button onclick="openQCManager()" style="flex-shrink:0;background:transparent;border:1px dashed var(--border);border-radius:20px;padding:0 14px;height:44px;color:var(--sub);font-family:'Montserrat',sans-serif;font-size:11px;cursor:pointer;white-space:nowrap">${icon('edit-2',13)} Gérer</button>`;
+  el.innerHTML=(qcs.length?qcs.map(c=>`<button data-qc="${escapeHtml(c.text)}" onclick="insertQC(this.dataset.qc)" style="flex-shrink:0;background:var(--card2);border:1px solid var(--border);border-radius:20px;padding:0 14px;height:44px;color:var(--text);font-family:Montserrat,sans-serif;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.label)}</button>`).join(''):'')
+    +`<button onclick="openQCManager()" style="flex-shrink:0;background:transparent;border:1px dashed var(--border);border-radius:20px;padding:0 14px;height:44px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;cursor:pointer;white-space:nowrap">${icon('edit-2',13)} Gérer</button>`;
 }
 function insertQC(text){
   const ta=document.getElementById('vc-general');if(!ta)return;
@@ -8553,11 +8553,11 @@ function openQCManager(){
       <label style="margin:0 0 6px;font-size:11px;display:block">Ajouter un commentaire</label>
       <div style="display:flex;gap:8px;margin-top:6px">
         <input id="qc-new-label" placeholder="Texte de la chip (max 40 car.)" maxlength="40" style="flex:1;font-size:12px">
-        <button onclick="qcAdd()" style="background:var(--red);border:none;color:#fff;border-radius:3px;padding:9px 14px;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap">+ Ajouter</button>
+        <button onclick="qcAdd()" style="background:var(--red);border:none;color:#fff;border-radius:3px;padding:9px 14px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap">+ Ajouter</button>
       </div>
       <input id="qc-new-text" placeholder="Texte inséré si différent du label (facultatif)" maxlength="120" style="width:100%;box-sizing:border-box;font-size:11px;margin-top:6px">
     </div>
-    <button onclick="qcReset()" style="margin-top:10px;background:none;border:1px solid #2a2a2a;border-radius:3px;color:#555;font-size:11px;padding:8px;cursor:pointer;font-family:'Montserrat',sans-serif;width:100%">Réinitialiser aux 6 valeurs par défaut</button>
+    <button onclick="qcReset()" style="margin-top:10px;background:none;border:1px solid #2a2a2a;border-radius:3px;color:#555;font-size:11px;padding:8px;cursor:pointer;font-family:Montserrat,sans-serif;width:100%">Réinitialiser aux 6 valeurs par défaut</button>
   </div></div>`);
 }
 function qcAdd(){
@@ -8577,7 +8577,7 @@ function qcEditRow(id){
     <input id="qce-lbl-${c.id}" value="${escapeHtml(c.label)}" maxlength="40" style="width:100%;box-sizing:border-box;margin-bottom:4px;font-size:12px">
     <input id="qce-txt-${c.id}" value="${escapeHtml(c.text)}" maxlength="120" style="width:100%;box-sizing:border-box;font-size:11px">
   </div>
-  <button data-id="${c.id}" onclick="qcSaveEdit(this.dataset.id)" style="background:var(--red);border:none;color:#fff;border-radius:3px;padding:7px 11px;font-size:11px;font-weight:800;cursor:pointer;font-family:'Montserrat',sans-serif">OK</button>
+  <button data-id="${c.id}" onclick="qcSaveEdit(this.dataset.id)" style="background:var(--red);border:none;color:#fff;border-radius:3px;padding:7px 11px;font-size:11px;font-weight:800;cursor:pointer;font-family:Montserrat,sans-serif">OK</button>
   <button onclick="openQCManager()" style="background:none;border:1px solid var(--border);border-radius:3px;padding:7px 10px;font-size:12px;cursor:pointer;color:var(--sub)">✕</button>`;
   document.getElementById('qce-lbl-'+c.id)?.focus();
 }
@@ -9857,7 +9857,7 @@ function showOcrReviewModal(exercises,idx,videoLinks=[]){
         <div style="font-size:9px;color:var(--green);letter-spacing:1px;font-weight:700;margin-bottom:4px"> VIDÉO 2 (optionnel)</div>
         <input value="" id="ocr-v2-${i}" placeholder="https://youtu.be/..." style="font-size:11px;padding:7px 10px">
       </div>
-      <button onclick="this.closest('#ocr-ex-${i}').remove()" style="margin-top:8px;background:none;border:none;color:var(--red-light);font-size:11px;cursor:pointer;font-family:'Montserrat',sans-serif"> Supprimer</button>
+      <button onclick="this.closest('#ocr-ex-${i}').remove()" style="margin-top:8px;background:none;border:none;color:var(--red-light);font-size:11px;cursor:pointer;font-family:Montserrat,sans-serif"> Supprimer</button>
     </div>`;}).join('');
 
   const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
@@ -10058,7 +10058,7 @@ function showDrivePdfModal(driveUrl,targetEmail){
        Sélectionner le fichier téléchargé
       <input type="file" accept=".pdf" style="display:none" onchange="_parsePdfFromDriveFile(this)">
     </label>
-    <button onclick="closeModal()" style="display:block;width:100%;padding:11px;background:none;border:1px solid #2a2a2a;border-radius:8px;color:var(--sub);font-size:12px;margin-top:10px;cursor:pointer;font-family:'Montserrat',sans-serif">Annuler</button>
+    <button onclick="closeModal()" style="display:block;width:100%;padding:11px;background:none;border:1px solid #2a2a2a;border-radius:8px;color:var(--sub);font-size:12px;margin-top:10px;cursor:pointer;font-family:Montserrat,sans-serif">Annuler</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
 }
@@ -10113,7 +10113,7 @@ function openAddAthlete(){
     <div><label style="margin-top:10px" for="aa-email">Email</label><input type="email" id="aa-email" placeholder="email@exemple.com"></div>
     <div><label style="margin-top:10px" for="aa-pwd">Mot de passe (provisoire)</label><input type="text" id="aa-pwd" placeholder="Ex: repcore123"></div>
     <div><label style="margin-top:10px" for="aa-gender">Genre</label><select id="aa-gender"><option value="H">Homme</option><option value="F">Femme</option></select></div>
-    <div><label style="margin-top:10px" for="aa-duration">Durée d'accès</label><select id="aa-duration" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:#fff;padding:12px 14px;border-radius:10px;font-family:'Montserrat',sans-serif;font-size:13px;cursor:pointer">
+    <div><label style="margin-top:10px" for="aa-duration">Durée d'accès</label><select id="aa-duration" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:#fff;padding:12px 14px;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;cursor:pointer">
       <option value="1">1 mois</option>
       <option value="3" selected>3 mois (recommandé)</option>
       <option value="6">6 mois</option>
@@ -10485,7 +10485,7 @@ function loadMonetisationTab(){
     const st=s.paymentStatus==='active'?'<span class="badge badge-green">Actif</span>':'<span class="badge badge-red">'+(s.paymentStatus||'Inactif')+'</span>';
     const coachInfo=isCreator&&s.coachName?'<div class="sub" style="font-size:10px">Coach : '+s.coachName+'</div>':'';
     const _snm=((s.fname||'')+' '+(s.lname||'')).trim()||'—';
-    return '<div class="client-row"><div class="avatar" style="width:36px;height:36px;font-size:13px">'+ini(s.fname,s.lname)+'</div><div style="flex:1"><div style="font-weight:700">'+_snm+'</div>'+coachInfo+'<div class="sub" style="font-size:11px;font-family:monospace">'+(s.paypalSubscriptionId||'no sub id')+'</div></div><div>'+st+'<button onclick="toggleSubStatus(\''+s.email+'\')" style="margin-top:4px;font-size:10px;background:none;border:1px solid var(--border);color:var(--sub);border-radius:6px;padding:3px 8px;cursor:pointer;font-family:'Montserrat',sans-serif">'+(s.paymentStatus==='active'?'Suspendre':'Activer')+'</button></div></div>';
+    return '<div class="client-row"><div class="avatar" style="width:36px;height:36px;font-size:13px">'+ini(s.fname,s.lname)+'</div><div style="flex:1"><div style="font-weight:700">'+_snm+'</div>'+coachInfo+'<div class="sub" style="font-size:11px;font-family:monospace">'+(s.paypalSubscriptionId||'no sub id')+'</div></div><div>'+st+'<button onclick="toggleSubStatus(\''+s.email+'\')" style="margin-top:4px;font-size:10px;background:none;border:1px solid var(--border);color:var(--sub);border-radius:6px;padding:3px 8px;cursor:pointer;font-family:Montserrat,sans-serif">'+(s.paymentStatus==='active'?'Suspendre':'Activer')+'</button></div></div>';
   }).join('');
   // Section admin offboarding — visible créateur seulement
   const adminSection=document.getElementById('coach-admin-offboard');
@@ -10552,7 +10552,7 @@ function offboardCoach(coachId){
     ?'<label style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:8px;cursor:pointer">'
       +'<input type="radio" name="ob-action" value="reassign" checked style="margin-top:3px;flex-shrink:0">'
       +'<div style="width:100%"><div style="font-weight:700;font-size:12px">Réassigner à un autre coach</div>'
-      +'<select id="ob-target" style="margin-top:8px;width:100%;padding:9px;background:var(--surface-2);border:1px solid #333;border-radius:6px;color:#fff;font-size:12px;font-family:'Montserrat',sans-serif">'+coachOptsHtml+'</select>'
+      +'<select id="ob-target" style="margin-top:8px;width:100%;padding:9px;background:var(--surface-2);border:1px solid #333;border-radius:6px;color:#fff;font-size:12px;font-family:Montserrat,sans-serif">'+coachOptsHtml+'</select>'
       +'</div></label>'
     :'';
   const creatorBlock=(!isCreatorSelf&&creator)
@@ -10576,8 +10576,8 @@ function offboardCoach(coachId){
     +'<div style="background:var(--surface-1);border-radius:8px;padding:8px 10px;margin-bottom:16px;max-height:140px;overflow-y:auto">'+athListHtml+'</div>'
     +'<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px">'+reassignBlock+creatorBlock+freeBlock+'</div>'
     +'<div style="display:flex;gap:10px">'
-    +'<button onclick="closeModal()" style="flex:1;background:none;border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--sub);font-family:'Montserrat',sans-serif;font-size:11px;cursor:pointer;font-weight:700">Annuler</button>'
-    +'<button onclick="executeOffboard(\''+coachId+'\')" style="flex:2;background:var(--red);border:none;border-radius:8px;padding:12px;color:#fff;font-family:'Montserrat',sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px">RÉASSIGNER '+athletes.length+' ATHLÈTE'+(athletes.length>1?'S':'')+' →</button>'
+    +'<button onclick="closeModal()" style="flex:1;background:none;border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;cursor:pointer;font-weight:700">Annuler</button>'
+    +'<button onclick="executeOffboard(\''+coachId+'\')" style="flex:2;background:var(--red);border:none;border-radius:8px;padding:12px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px">RÉASSIGNER '+athletes.length+' ATHLÈTE'+(athletes.length>1?'S':'')+' →</button>'
     +'</div></div>';
   document.body.appendChild(ov);
 }
@@ -10716,9 +10716,9 @@ function loadStudentCodes(){
       +'<div style="font-size:11px;color:#888;margin-bottom:4px">Expire: '+exp.toLocaleDateString('fr-FR')+' ('+c.months+' mois)</div>'
       +used
       +'<div style="display:flex;gap:8px;margin-top:10px">'
-      +'<button onclick="toggleStudentCode('+i+')" style="flex:1;background:none;border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:7px;font-family:'Montserrat',sans-serif;font-size:10px;cursor:pointer;font-weight:700">'+(c.active?'Desactiver':'Activer')+'</button>'
-      +'<button onclick="extendStudentCode('+i+')" style="flex:1;background:none;border:1px solid #1a3a1a;color:var(--green);border-radius:8px;padding:7px;font-family:'Montserrat',sans-serif;font-size:10px;cursor:pointer;font-weight:700">+3 mois</button>'
-      +'<button onclick="copyExistingCode('+i+')" style="flex:1;background:none;border:1px solid #1a1a3a;color:#7ab;border-radius:8px;padding:7px;font-family:'Montserrat',sans-serif;font-size:10px;cursor:pointer;font-weight:700">Copier</button>'
+      +'<button onclick="toggleStudentCode('+i+')" style="flex:1;background:none;border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:7px;font-family:Montserrat,sans-serif;font-size:10px;cursor:pointer;font-weight:700">'+(c.active?'Desactiver':'Activer')+'</button>'
+      +'<button onclick="extendStudentCode('+i+')" style="flex:1;background:none;border:1px solid #1a3a1a;color:var(--green);border-radius:8px;padding:7px;font-family:Montserrat,sans-serif;font-size:10px;cursor:pointer;font-weight:700">+3 mois</button>'
+      +'<button onclick="copyExistingCode('+i+')" style="flex:1;background:none;border:1px solid #1a1a3a;color:#7ab;border-radius:8px;padding:7px;font-family:Montserrat,sans-serif;font-size:10px;cursor:pointer;font-weight:700">Copier</button>'
       +'</div></div>';
   }).join('');
 }
