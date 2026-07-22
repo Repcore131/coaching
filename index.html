@@ -111,7 +111,7 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
 
 
 /* ====== METRIC BOXES ====== */
-.metric-box{background:linear-gradient(135deg,var(--card2),var(--surface-2));border-radius:2px;padding:16px 12px;text-align:center;flex:1;border:1px solid var(--border);border-left:3px solid var(--red);position:relative;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.04),0 0 0 1px rgba(224,32,32,.06)}
+.metric-box{background:repeating-linear-gradient(-50deg,transparent,transparent 14px,rgba(255,255,255,.016) 14px,rgba(255,255,255,.016) 15px),linear-gradient(160deg,#1e1e1e,#0d0d0d);border-radius:2px;padding:16px 12px;text-align:center;flex:1;border:1px solid rgba(255,255,255,.07);border-left:3px solid var(--red);position:relative;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,255,255,.06),0 0 0 1px rgba(224,32,32,.08)}
 .metric-box::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--red) var(--pct,0%),transparent var(--pct,0%))}
 .metric-val{font-size:32px;font-family:'Bebas Neue',Impact,sans-serif;letter-spacing:0;line-height:1}
 .metric-label{font-size:8px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;margin-top:6px;font-weight:700}
@@ -1314,7 +1314,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- CLIENT HOME -->
-<div id="s-client-home" class="screen carbon-bg">
+<div id="s-client-home" class="screen">
   <!-- Brand header athlete -->
   <div style="background:#090909;border-bottom:1px solid rgba(255,255,255,.22);box-shadow:0 4px 20px rgba(0,0,0,.9);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:relative;z-index:2;flex-shrink:0">
     <div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="openAthleteProfile()">
@@ -5467,29 +5467,42 @@ function _renderWeeklyInto(el,sc){
   const isFoundation=sc.some(s=>s._foundation);
   const selS=sel>=0?sc[sel]:{};
   const progNote=sc.find(s=>s.notes&&s._foundation)?.notes||'';
-  const dayLabel=selS.active&&selS.exercises?.length
-    ?(DAYS[sel]||'')+(selS.name?' — '+escapeHtml(selS.name):'')
-    :(DAYS[sel]||'')+' — Repos';
+  const nbEx=selS.active&&selS.exercises?.length?selS.exercises.length:0;
+  const heading=nbEx
+    ?((DAYS[sel]||'').toUpperCase()+(selS.name?' — '+selS.name.toUpperCase():''))
+    :((DAYS[sel]||'').toUpperCase()+' — REPOS');
+  const mainRest=nbEx?(selS.exercises.map(e=>e.repos).filter(Boolean)[0]||''):'';
   el.innerHTML=`
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <div>
-        <div style="font-size:9px;color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:3px">Séance du jour</div>
-        <div style="font-size:13px;font-weight:800;letter-spacing:.3px;text-transform:uppercase">${dayLabel}</div>
-      </div>
-      <div style="display:flex;gap:5px">
-        ${sc.map((s,i)=>{
-          const isToday=i===todayIdx;const isSel=i===sel;
-          const bg=isSel?'var(--red)':s.active?'#2a0000':'#141414';
-          const col=isSel||s.active?'#fff':'#444';
-          const bord=isToday?'2px solid '+(isSel?'#fff':'var(--red)'):'2px solid transparent';
-          return `<div onclick="_setWeekDay(${i})" style="flex-shrink:0;width:30px;height:30px;border-radius:3px;background:${bg};border:${bord};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;cursor:pointer;color:${col}">${DAY_ICONS[i]}</div>`;
-        }).join('')}
+    <div style="background:linear-gradient(145deg,#c10000 0%,#880000 55%,#560000 100%);border-radius:12px;padding:18px 20px;position:relative;overflow:hidden;margin-bottom:14px">
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 16px,rgba(0,0,0,.12) 16px,rgba(0,0,0,.12) 17px);pointer-events:none"></div>
+      <div style="position:absolute;right:-18px;top:-18px;width:90px;height:90px;border-radius:50%;background:rgba(255,255,255,.05);pointer-events:none"></div>
+      <div style="position:relative">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
+          <div>
+            <div style="font-size:8px;color:rgba(255,255,255,.55);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Séance du jour</div>
+            <div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:-0.3px;line-height:1.1">${heading}</div>
+            ${nbEx?`<div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:4px">${nbEx} exercice${nbEx>1?'s':''}${mainRest?' · '+mainRest+' repos':''}</div>`:'<div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:4px">Récupération active</div>'}
+          </div>
+          <div style="display:flex;gap:3px;flex-shrink:0;margin-left:10px;padding-top:2px">
+            ${sc.map((s,i)=>{
+              const isToday=i===todayIdx;const isSel=i===sel;
+              const bg=isSel?'rgba(255,255,255,.28)':s.active?'rgba(255,255,255,.1)':'rgba(0,0,0,.25)';
+              const col=isSel?'#fff':s.active?'rgba(255,255,255,.75)':'rgba(255,255,255,.25)';
+              const bord=isToday&&!isSel?'1px solid rgba(255,255,255,.55)':'1px solid transparent';
+              return `<div onclick="_setWeekDay(${i})" style="flex-shrink:0;width:26px;height:26px;border-radius:4px;background:${bg};border:${bord};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;cursor:pointer;color:${col}">${DAY_ICONS[i]}</div>`;
+            }).join('')}
+          </div>
+        </div>
+        ${nbEx?`<div style="border-top:1px solid rgba(255,255,255,.15);padding-top:10px;display:flex;flex-direction:column;gap:5px">
+          ${selS.exercises.map((ex,i)=>`
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="width:18px;height:18px;background:rgba(0,0,0,.3);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;color:rgba(255,255,255,.65);flex-shrink:0">${i+1}</div>
+              <div style="font-size:11px;color:#fff;font-weight:700;text-transform:uppercase;letter-spacing:.3px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(ex.name)}</div>
+              <div style="font-size:10px;color:rgba(255,255,255,.45);flex-shrink:0">${ex.series}×${ex.reps}</div>
+            </div>`).join('')}
+        </div>`:''}
       </div>
     </div>
-    ${progNote?`<p class="sub" style="font-size:11px;margin-bottom:8px;line-height:1.5">${escapeHtml(progNote)}</p>`:''}
-    ${selS.active&&selS.exercises?.length
-      ?selS.exercises.map((ex,idx)=>_renderExCard(ex,idx)).join('')
-      :`<div style="text-align:center;padding:20px 16px;color:var(--sub);font-size:13px">Jour de repos 💤</div>`}
   `;
 }
 function _renderProgExercisesInto(el){
