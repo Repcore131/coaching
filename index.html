@@ -239,46 +239,44 @@ h3{font-size:16px;text-transform:uppercase}
 }
 
 /* ====== WELCOME / SPLASH ANIMATIONS ====== */
-/* Lightning strike — court, violent, premium */
 @keyframes rcStrike{
-  0%   {opacity:0;transform:scale(0.5) translateY(20px);filter:brightness(1)}
-  6%   {opacity:1;transform:scale(1.18) translateY(-6px);
-        filter:brightness(6) drop-shadow(0 0 20px #fff) drop-shadow(0 0 50px #fff) drop-shadow(0 0 80px #7df)}
-  9%   {transform:scale(0.97);filter:brightness(1.5) drop-shadow(0 0 6px #fff)}
-  13%  {transform:scale(1.1);
-        filter:brightness(5) drop-shadow(0 0 16px #fff) drop-shadow(0 0 40px #E02020) drop-shadow(0 0 70px #E02020)}
-  17%  {transform:scale(1);filter:brightness(1.2) drop-shadow(0 0 4px rgba(224,32,32,.6))}
-  22%  {transform:scale(1.04);
-        filter:brightness(3) drop-shadow(0 0 12px #E02020) drop-shadow(0 0 30px #E02020)}
-  28%  {transform:scale(1);filter:brightness(1) drop-shadow(0 0 8px rgba(224,32,32,.5))}
-  60%  {filter:brightness(1) drop-shadow(0 0 5px rgba(224,32,32,.3))}
-  100% {filter:brightness(1) drop-shadow(0 0 3px rgba(224,32,32,.15))}
+  0%   {opacity:0;transform:scale(0.4) translateY(30px);filter:brightness(1)}
+  5%   {opacity:1;transform:scale(1.26) translateY(-10px);
+        filter:brightness(10) drop-shadow(0 0 30px #fff) drop-shadow(0 0 70px #fff) drop-shadow(0 0 130px #7df)}
+  8%   {transform:scale(0.95);filter:brightness(1.4) drop-shadow(0 0 6px #fff)}
+  12%  {transform:scale(1.16);
+        filter:brightness(9) drop-shadow(0 0 26px #fff) drop-shadow(0 0 60px #E02020) drop-shadow(0 0 115px #E02020)}
+  16%  {transform:scale(0.98);filter:brightness(1.1) drop-shadow(0 0 4px rgba(224,32,32,.5))}
+  21%  {transform:scale(1.07);
+        filter:brightness(5) drop-shadow(0 0 18px #E02020) drop-shadow(0 0 42px #E02020)}
+  28%  {transform:scale(1);filter:brightness(1) drop-shadow(0 0 9px rgba(224,32,32,.4))}
+  55%  {filter:brightness(1) drop-shadow(0 0 5px rgba(224,32,32,.2))}
+  100% {filter:brightness(1) drop-shadow(0 0 2px rgba(224,32,32,.07))}
 }
-/* Screen flash at strike */
 @keyframes screenFlash{
   0%  {opacity:0}
-  6%  {opacity:0.45}
-  10% {opacity:0.05}
-  13% {opacity:0.35}
-  18% {opacity:0}
+  5%  {opacity:0.65}
+  9%  {opacity:0.02}
+  12% {opacity:0.5}
+  17% {opacity:0}
   100%{opacity:0}
-}
-/* Electric arcs around RC */
-@keyframes arcPulse{
-  0%,100%{opacity:0}
-  6%  {opacity:1}
-  12% {opacity:0.3}
-  16% {opacity:1}
-  25% {opacity:0}
 }
 @keyframes boltFlash{
   0%  {opacity:0;filter:brightness(1)}
-  5%  {opacity:1;filter:brightness(3)}
-  12% {opacity:0.2;filter:brightness(1)}
-  16% {opacity:1;filter:brightness(4)}
-  28% {opacity:0.5;filter:brightness(1.5)}
-  45% {opacity:0;filter:brightness(1)}
+  4%  {opacity:1;filter:brightness(6)}
+  9%  {opacity:0.06;filter:brightness(1)}
+  13% {opacity:1;filter:brightness(7)}
+  22% {opacity:0.28;filter:brightness(1.5)}
+  36% {opacity:0;filter:brightness(1)}
   100%{opacity:0}
+}
+@keyframes boltFlash2{
+  0%,8%{opacity:0}
+  14%  {opacity:1;filter:brightness(5)}
+  19%  {opacity:0.06}
+  23%  {opacity:0.72;filter:brightness(3)}
+  32%  {opacity:0}
+  100% {opacity:0}
 }
 @keyframes splashLineIn{from{opacity:0;transform:scaleX(0)}to{opacity:1;transform:scaleX(1)}}
 @keyframes splashTextIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
@@ -335,41 +333,80 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- SPLASH -->
 <div id="s-splash" class="screen active carbon-bg" style="align-items:center;justify-content:center;position:relative;overflow:hidden">
-  <!-- Screen flash overlay (lightning illuminates everything) -->
-  <div id="splash-flash" style="position:absolute;inset:0;background:#fff;pointer-events:none;animation:screenFlash 0.7s ease 0.15s both;opacity:0;z-index:0"></div>
+  <!-- Screen flash overlay -->
+  <div id="splash-flash" style="position:absolute;inset:0;background:#fff;pointer-events:none;animation:screenFlash 0.45s ease 0.05s both;opacity:0;z-index:0"></div>
 
-  <!-- SVG Lightning bolts + arcs -->
-  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:320px;height:280px;pointer-events:none;z-index:4;overflow:visible">
-    <svg width="320" height="280" viewBox="0 0 320 280" xmlns="http://www.w3.org/2000/svg" overflow="visible" style="animation:boltFlash 0.9s ease 0.15s both;opacity:0">
-      <!-- Bolt gauche principal -->
-      <polyline points="42,80 28,112 52,104 35,142" stroke="#7df" stroke-width="3" fill="none" stroke-linecap="round" filter="url(#glow-b)"/>
-      <polyline points="38,72 18,110 46,100 24,140" stroke="#fff" stroke-width="1.2" fill="none" stroke-linecap="round" opacity="0.8"/>
-      <!-- Bolt gauche petit -->
-      <polyline points="68,55 58,75 72,70 60,92" stroke="#7df" stroke-width="1.8" fill="none" stroke-linecap="round"/>
-      <!-- Bolt droit principal -->
-      <polyline points="278,80 292,112 268,104 285,142" stroke="#E02020" stroke-width="3" fill="none" stroke-linecap="round" filter="url(#glow-r)"/>
-      <polyline points="282,72 302,110 274,100 296,140" stroke="#fff" stroke-width="1.2" fill="none" stroke-linecap="round" opacity="0.8"/>
-      <!-- Bolt droit petit -->
-      <polyline points="252,55 262,75 248,70 260,92" stroke="#E02020" stroke-width="1.8" fill="none" stroke-linecap="round"/>
-      <!-- Bolt haut -->
-      <polyline points="160,8 154,28 164,22 157,46" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round"/>
-      <!-- Sparks -->
-      <circle cx="28" cy="68" r="4" fill="#7df" opacity="0.95"/>
-      <circle cx="20" cy="82" r="2" fill="#fff" opacity="0.7"/>
-      <circle cx="292" cy="68" r="4" fill="#E02020" opacity="0.95"/>
-      <circle cx="300" cy="82" r="2" fill="#fff" opacity="0.7"/>
-      <circle cx="160" cy="4" r="3" fill="#fff" opacity="0.9"/>
-      <!-- Glow filters -->
+  <!-- SVG Foudre -->
+  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-54%);width:320px;height:290px;pointer-events:none;z-index:4;overflow:visible">
+    <svg width="320" height="290" viewBox="0 0 320 290" xmlns="http://www.w3.org/2000/svg" overflow="visible">
       <defs>
-        <filter id="glow-b" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="4" result="blur"/>
-          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-        </filter>
-        <filter id="glow-r" x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation="4" result="blur"/>
-          <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        <filter id="glw" x="-100%" y="-100%" width="300%" height="300%">
+          <feGaussianBlur stdDeviation="5" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
         </filter>
       </defs>
+
+      <!-- GROUPE 1 : grands éclairs principaux -->
+      <g style="animation:boltFlash 0.55s ease 0.05s both;opacity:0">
+        <!-- Éclair gauche (cyan) — couche glow -->
+        <polyline points="48,8 30,40 58,52 22,86 52,97 16,132 48,144 26,176" stroke="#7df" stroke-width="8" fill="none" stroke-linecap="round" opacity="0.15" filter="url(#glw)"/>
+        <!-- Éclair gauche — trait principal -->
+        <polyline points="48,8 30,40 58,52 22,86 52,97 16,132 48,144 26,176" stroke="#7df" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        <!-- Éclair gauche — noyau blanc -->
+        <polyline points="48,8 30,40 58,52 22,86 52,97 16,132 48,144 26,176" stroke="#fff" stroke-width="0.9" fill="none" stroke-linecap="round" opacity="0.7"/>
+        <!-- Branche gauche -->
+        <polyline points="52,97 34,116 50,128 38,144" stroke="#7df" stroke-width="1.9" fill="none" stroke-linecap="round" opacity="0.88"/>
+        <polyline points="52,97 34,116 50,128 38,144" stroke="#fff" stroke-width="0.7" fill="none" stroke-linecap="round" opacity="0.5"/>
+
+        <!-- Éclair droit (rouge) — couche glow -->
+        <polyline points="272,8 290,40 262,52 298,86 268,97 304,132 272,144 294,176" stroke="#E02020" stroke-width="8" fill="none" stroke-linecap="round" opacity="0.15" filter="url(#glw)"/>
+        <!-- Éclair droit — trait principal -->
+        <polyline points="272,8 290,40 262,52 298,86 268,97 304,132 272,144 294,176" stroke="#E02020" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        <!-- Éclair droit — noyau blanc -->
+        <polyline points="272,8 290,40 262,52 298,86 268,97 304,132 272,144 294,176" stroke="#fff" stroke-width="0.9" fill="none" stroke-linecap="round" opacity="0.7"/>
+        <!-- Branche droite -->
+        <polyline points="268,97 286,116 270,128 282,144" stroke="#E02020" stroke-width="1.9" fill="none" stroke-linecap="round" opacity="0.88"/>
+        <polyline points="268,97 286,116 270,128 282,144" stroke="#fff" stroke-width="0.7" fill="none" stroke-linecap="round" opacity="0.5"/>
+
+        <!-- Éclair centre haut (blanc) — glow -->
+        <polyline points="160,0 153,22 166,30 157,52 165,62 154,76" stroke="#fff" stroke-width="6" fill="none" stroke-linecap="round" opacity="0.14"/>
+        <!-- Éclair centre haut — trait -->
+        <polyline points="160,0 153,22 166,30 157,52 165,62 154,76" stroke="#fff" stroke-width="1.9" fill="none" stroke-linecap="round"/>
+
+        <!-- Sparks principaux -->
+        <circle cx="46" cy="5" r="6" fill="#7df" opacity="0.95"/>
+        <circle cx="30" cy="12" r="2.8" fill="#fff" opacity="0.85"/>
+        <circle cx="274" cy="5" r="6" fill="#E02020" opacity="0.95"/>
+        <circle cx="290" cy="12" r="2.8" fill="#fff" opacity="0.85"/>
+        <circle cx="160" cy="0" r="5.5" fill="#fff" opacity="0.96"/>
+        <circle cx="16" cy="130" r="4" fill="#7df" opacity="0.82"/>
+        <circle cx="304" cy="130" r="4" fill="#E02020" opacity="0.82"/>
+        <circle cx="52" cy="97" r="3.2" fill="#fff" opacity="0.92"/>
+        <circle cx="268" cy="97" r="3.2" fill="#fff" opacity="0.92"/>
+      </g>
+
+      <!-- GROUPE 2 : éclairs accent secondaires (décalage 0.09s) -->
+      <g style="animation:boltFlash2 0.55s ease 0.09s both;opacity:0">
+        <!-- Left accent 1 -->
+        <polyline points="86,22 77,44 91,37 82,58 91,50" stroke="#7df" stroke-width="1.7" fill="none" stroke-linecap="round" opacity="0.78"/>
+        <!-- Left accent 2 -->
+        <polyline points="63,64 55,82 68,76 59,96" stroke="#7df" stroke-width="1.3" fill="none" stroke-linecap="round" opacity="0.58"/>
+        <!-- Left top mini -->
+        <polyline points="108,20 102,34 112,29 105,44" stroke="#7df" stroke-width="1.1" fill="none" stroke-linecap="round" opacity="0.46"/>
+        <!-- Right accent 1 -->
+        <polyline points="234,22 243,44 229,37 238,58 229,50" stroke="#E02020" stroke-width="1.7" fill="none" stroke-linecap="round" opacity="0.78"/>
+        <!-- Right accent 2 -->
+        <polyline points="257,64 265,82 252,76 261,96" stroke="#E02020" stroke-width="1.3" fill="none" stroke-linecap="round" opacity="0.58"/>
+        <!-- Right top mini -->
+        <polyline points="212,20 218,34 208,29 215,44" stroke="#E02020" stroke-width="1.1" fill="none" stroke-linecap="round" opacity="0.46"/>
+        <!-- Extra sparks accent -->
+        <circle cx="86" cy="20" r="2.5" fill="#7df" opacity="0.88"/>
+        <circle cx="234" cy="20" r="2.5" fill="#E02020" opacity="0.88"/>
+        <circle cx="63" cy="62" r="2" fill="#7df" opacity="0.75"/>
+        <circle cx="257" cy="62" r="2" fill="#E02020" opacity="0.75"/>
+        <circle cx="108" cy="18" r="1.6" fill="#7df" opacity="0.62"/>
+        <circle cx="212" cy="18" r="1.6" fill="#E02020" opacity="0.62"/>
+      </g>
     </svg>
   </div>
 
@@ -2727,12 +2764,12 @@ window.onload=()=>{
   const logoAnim=document.getElementById('splash-logo-anim');
   if(logoAnim){
     requestAnimationFrame(()=>requestAnimationFrame(()=>{
-      logoAnim.style.animation='rcStrike 0.9s cubic-bezier(.2,0,.4,1) both';
+      logoAnim.style.animation='rcStrike 0.55s cubic-bezier(.15,0,.35,1) both';
     }));
   }
   setTimeout(()=>{
     const splash=document.getElementById('s-splash');
-    if(splash){splash.style.transition='opacity 0.5s ease';splash.style.opacity='0';}
+    if(splash){splash.style.transition='opacity 0.2s ease';splash.style.opacity='0';}
     setTimeout(async ()=>{
       // Sync uniquement les données de l'utilisateur connecté (pas toute la table)
       const sess=DB.get('session');
@@ -2797,8 +2834,8 @@ window.onload=()=>{
           }
         }
       },30000);
-    },500);
-  },1600);
+    },200);
+  },900);
 };
 function routeUser(){
   if(!currentUser) return go('s-welcome');
