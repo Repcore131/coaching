@@ -336,40 +336,58 @@ const COACH_PHOTO='icons/coach.jpg';
   <!-- Screen flash overlay -->
   <div id="splash-flash" style="position:absolute;inset:0;background:#fff;pointer-events:none;animation:screenFlash 0.45s ease 0.05s both;opacity:0;z-index:0"></div>
 
-  <!-- ÉCLAIR UNIQUE MASSIF — scie l'écran en deux de haut en bas -->
+  <!-- ÉCLAIR DIAGONAL — haut-droite vers bas-gauche, large au début, effilé à la fin -->
   <div style="position:absolute;inset:0;pointer-events:none;z-index:2">
     <svg viewBox="0 0 100 220" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%;overflow:visible">
       <defs>
-        <!-- Halo atmosphérique immense -->
         <filter id="ga" x="-800%" y="-5%" width="1700%" height="110%">
           <feGaussianBlur stdDeviation="14"/>
         </filter>
-        <!-- Glow électrique serré -->
         <filter id="ge" x="-250%" y="-3%" width="600%" height="106%">
           <feGaussianBlur stdDeviation="3.5" result="b"/>
           <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
         </filter>
+        <!-- Gradients taper haut-droite (80,0) → bas-gauche (18,220) -->
+        <linearGradient id="g-aura" x1="80" y1="0" x2="18" y2="220" gradientUnits="userSpaceOnUse">
+          <stop offset="0%"   stop-color="#c0e8ff" stop-opacity="0.09"/>
+          <stop offset="45%"  stop-color="#c0e8ff" stop-opacity="0.05"/>
+          <stop offset="100%" stop-color="#c0e8ff" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="g-halo" x1="80" y1="0" x2="18" y2="220" gradientUnits="userSpaceOnUse">
+          <stop offset="0%"   stop-color="#dff4ff" stop-opacity="0.24"/>
+          <stop offset="70%"  stop-color="#dff4ff" stop-opacity="0.07"/>
+          <stop offset="100%" stop-color="#dff4ff" stop-opacity="0"/>
+        </linearGradient>
+        <linearGradient id="g-body" x1="80" y1="0" x2="18" y2="220" gradientUnits="userSpaceOnUse">
+          <stop offset="0%"   stop-color="#f8fdff"/>
+          <stop offset="80%"  stop-color="#f8fdff" stop-opacity="0.35"/>
+          <stop offset="100%" stop-color="#f8fdff" stop-opacity="0.08"/>
+        </linearGradient>
+        <linearGradient id="g-core" x1="80" y1="0" x2="18" y2="220" gradientUnits="userSpaceOnUse">
+          <stop offset="0%"   stop-color="#ffffff"/>
+          <stop offset="85%"  stop-color="#ffffff" stop-opacity="0.4"/>
+          <stop offset="100%" stop-color="#ffffff" stop-opacity="0.1"/>
+        </linearGradient>
       </defs>
 
-      <!-- UN SEUL ÉCLAIR — part du haut, scie l'écran jusqu'en bas -->
       <g style="animation:boltFlash 0.55s ease 0.05s both;opacity:0">
-        <!-- Aura atmosphérique très large -->
-        <polyline points="50,0 20,35 78,65 15,98 83,128 18,158 76,188 46,210 50,220"
-          stroke="#c0e8ff" stroke-width="72" fill="none" stroke-linecap="round" opacity="0.09" filter="url(#ga)"/>
-        <!-- Halo intermédiaire -->
-        <polyline points="50,0 20,35 78,65 15,98 83,128 18,158 76,188 46,210 50,220"
-          stroke="#dff4ff" stroke-width="22" fill="none" stroke-linecap="round" opacity="0.24" filter="url(#ge)"/>
-        <!-- Corps principal -->
-        <polyline points="50,0 20,35 78,65 15,98 83,128 18,158 76,188 46,210 50,220"
-          stroke="#f2fbff" stroke-width="5" fill="none" stroke-linecap="round" filter="url(#ge)"/>
-        <!-- Noyau blanc pur -->
-        <polyline points="50,0 20,35 78,65 15,98 83,128 18,158 76,188 46,210 50,220"
-          stroke="#ffffff" stroke-width="1.8" fill="none" stroke-linecap="round"/>
-        <!-- Éclats aux nœuds de fracture -->
-        <circle cx="50" cy="0" r="5.5" fill="#fff" opacity="0.95"/>
-        <circle cx="15" cy="98" r="4.5" fill="#fff" opacity="0.9"/>
-        <circle cx="83" cy="128" r="4.5" fill="#fff" opacity="0.9"/>
-        <circle cx="50" cy="220" r="4" fill="#fff" opacity="0.55"/>
+        <!-- Aura atmosphérique (gradient stroke → s'évanouit en bas-gauche) -->
+        <polyline points="80,0 55,48 68,90 40,132 54,172 18,220"
+          stroke="url(#g-aura)" stroke-width="72" fill="none" stroke-linecap="round" filter="url(#ga)"/>
+        <!-- Halo électrique (taperé) -->
+        <polyline points="80,0 55,48 68,90 40,132 54,172 18,220"
+          stroke="url(#g-halo)" stroke-width="22" fill="none" stroke-linecap="round" filter="url(#ge)"/>
+        <!-- Corps taperé : polygon large haut (w≈22) → fin bas (w≈2), calculé perpendiculairement à chaque segment -->
+        <path d="M90,5 L63,49 L73,91 L44,132 L56,172 L19,221 L17,219 L52,172 L36,132 L63,89 L47,47 L70,-5Z"
+          fill="url(#g-body)"/>
+        <path d="M90,5 L63,49 L73,91 L44,132 L56,172 L19,221 L17,219 L52,172 L36,132 L63,89 L47,47 L70,-5Z"
+          fill="url(#g-core)" opacity="0.65"/>
+        <!-- Éclats aux nœuds (taille et opacité décroissantes) -->
+        <circle cx="80" cy="0"   r="7"   fill="#fff" opacity="0.95"/>
+        <circle cx="55" cy="48"  r="5"   fill="#fff" opacity="0.60"/>
+        <circle cx="68" cy="90"  r="3.5" fill="#fff" opacity="0.40"/>
+        <circle cx="40" cy="132" r="2.5" fill="#fff" opacity="0.25"/>
+        <circle cx="18" cy="220" r="1.5" fill="#fff" opacity="0.12"/>
       </g>
     </svg>
   </div>
