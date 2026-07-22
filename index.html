@@ -7123,6 +7123,191 @@ function setNutriDietType(type){
   _renderNutriContent(type);
 }
 
+// ======= CYCLE NUTRITION (Diète Flexible uniquement) =======
+function _getCycleNutConf(){return(currentUser.nutrition||{}).cycleAdaptation||{};}
+
+function _getCyclePhaseNut(dateStr){
+  const conf=_getCycleNutConf();
+  if(!conf.enabled||!conf.lastPeriodDate) return null;
+  const len=Math.max(20,Math.min(40,conf.cycleLength||28));
+  const diffDays=Math.floor((new Date(dateStr+'T00:00:00')-new Date(conf.lastPeriodDate+'T00:00:00'))/86400000);
+  if(diffDays<0) return null;
+  const day=(diffDays%len)+1;
+  if(day<=5) return 'menstrual';
+  if(day>=Math.ceil(len*0.80)+1) return 'luteal_late';
+  return 'stable';
+}
+
+function _applyNutCycleModifier(base,isOn,phase,conf){
+  // Protéines : jamais modifiées — seuls glucides et lipides varient
+  const m={...base};
+  if(!m.kcal) return m;
+  if(phase==='menstrual'&&conf.intensite_regles==='difficile'){
+    // +10g glucides (+40kcal) compensés par lipides → kcal total inchangé
+    m.g=Math.round((m.g||0)+10);
+    m.l=parseFloat(((m.l||0)-40/9).toFixed(1));
+  } else if(phase==='luteal_late'&&!isOn&&conf.sensibilite_pms){
+    // +4% OFF uniquement — ~12g glucides, reste en lipides
+    // Jamais de restriction automatique — en cas de doute on reste neutre
+    const extra=Math.round(m.kcal*0.04);
+    const dGKcal=Math.min(extra,48); // max 12g glucides = 48kcal
+    m.kcal=m.kcal+extra;
+    m.g=Math.round((m.g||0)+Math.round(dGKcal/4));
+    m.l=parseFloat(((m.l||0)+(extra-dGKcal)/9).toFixed(1));
+  }
+  return m;
+}
+
+function _getEffectiveMacros(nut,isOn,dateStr){
+  // Ne s'applique qu'en Diète Flexible — toutes les autres diètes retournent la base intacte
+  const base=(isOn?nut.macros?.on:nut.macros?.off)||{};
+  if((nut.dietType||'flexible')!=='flexible') return base;
+  const conf=nut.cycleAdaptation||{};
+  if(!conf.enabled||!conf.lastPeriodDate||!isFemale(currentUser.gender)) return base;
+  const phase=_getCyclePhaseNut(dateStr);
+  if(!phase||phase==='stable') return base;
+  return _applyNutCycleModifier(base,isOn,phase,conf);
+}
+
+function _manageCycleSupplements(){
+  const conf=_getCycleNutConf();
+  const list=_suppStore();
+  if(!conf.enabled||!conf.lastPeriodDate||!isFemale(currentUser.gender)){
+    let ch=false;
+    list.forEach(s=>{if(s._cycleManaged&&s.active!==false){s.active=false;ch=true;}});
+    if(ch) saveUser();
+    return;
+  }
+  const today=localISODate(new Date());
+  const inLuteal=_getCyclePhaseNut(today)==='luteal_late';
+  const hasUserOmega=list.some(s=>!s._cycleManaged&&/om[eé]ga/i.test(s.name));
+  if(!hasUserOmega){
+    const auto=list.find(s=>s._cycleManaged&&s._cyclePhase==='luteal_late');
+    if(inLuteal){
+      if(!auto){
+        // Dosage : 2 gélules ≈ 1g EPA+DHA — fenêtre anti-inflammatoire courte (5-8j)
+        // Source : Rahbar et al., BJOG 2012 — 1-2g EPA+DHA pour dysménorrhée & inflammation lutéale
+        list.push({id:'cycle_o3_'+Date.now(),name:'Oméga-3 (EPA/DHA)',
+          dosage_quantity:2,dosage_unit:'gélules',timings:['soir'],
+          notes:'Phase lutéale tardive — soutien anti-inflammatoire',
+          active:true,_cycleManaged:true,_cyclePhase:'luteal_late'});
+        saveUser();
+      } else if(auto.active===false){auto.active=true;saveUser();}
+    } else {
+      if(auto&&auto.active!==false){auto.active=false;saveUser();}
+    }
+  } else {
+    const anyActive=list.some(s=>s._cycleManaged&&s.active!==false);
+    if(anyActive){list.forEach(s=>{if(s._cycleManaged&&s.active!==false)s.active=false;});saveUser();}
+  }
+}
+
+function _renderCycleNutSettings(nut){
+  if(!isFemale(currentUser.gender)) return '';
+  const conf=nut.cycleAdaptation||{};
+  const on=!!conf.enabled;
+  const lastP=conf.lastPeriodDate||'';
+  const len=conf.cycleLength||28;
+  const intens=conf.intensite_regles||'supportable';
+  const pms=!!conf.sensibilite_pms;
+  const today=localISODate(new Date());
+  const isOn=nutIsOnDay(today);
+  const base=(isOn?nut.macros?.on:nut.macros?.off)||{};
+  let phaseHtml='';
+  if(on&&lastP){
+    const phase=_getCyclePhaseNut(today);
+    const pLabels={
+      menstrual:{txt:'Phase menstruelle (J1-5)',color:'#a78bfa'},
+      stable:{txt:'Phase stable — référence',color:'var(--green)'},
+      luteal_late:{txt:'Phase lutéale tardive',color:'var(--orange)'}
+    };
+    const pl=phase?pLabels[phase]:null;
+    const eff=phase&&phase!=='stable'?_applyNutCycleModifier(base,isOn,phase,conf):base;
+    const dKcal=Math.round((eff.kcal||0)-(base.kcal||0));
+    const dG=Math.round((eff.g||0)-(base.g||0));
+    const dL=parseFloat(((eff.l||0)-(base.l||0)).toFixed(1));
+    const hasAdj=dKcal!==0||dG!==0||dL!==0;
+    const adjLabel=hasAdj
+      ?[dG!==0?`glucides ${dG>0?'+':''}${dG}g`:null,dL!==0?`lipides ${dL>0?'+':''}${dL}g`:null,dKcal!==0?`${dKcal>0?'+':''}${dKcal} kcal`:null].filter(Boolean).join(' · ')
+      :phase==='luteal_late'&&!conf.sensibilite_pms?'Sensibilité PMS désactivée — pas d\'ajustement'
+      :phase==='menstrual'&&intens!=='difficile'?'Règles supportables — pas d\'ajustement':'Macros inchangées';
+    if(pl) phaseHtml=`<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+      <span style="font-size:10px;font-weight:800;color:${pl.color};background:${pl.color}18;border:1px solid ${pl.color}33;border-radius:6px;padding:3px 9px">${pl.txt}</span>
+      <div style="font-size:10px;color:var(--sub);margin-top:6px">${hasAdj?'Ajust. actif : ':''}<span style="color:${hasAdj?'#fff':'var(--sub)'}">${adjLabel}</span></div>
+    </div>`;
+    else phaseHtml=`<div style="font-size:10px;color:var(--sub);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">Date antérieure au cycle actuel — mets à jour la date des règles.</div>`;
+  }
+  const needDate=on&&!lastP?`<div style="font-size:10px;color:var(--orange);margin-top:8px">↑ Renseigne la date de tes dernières règles pour activer l'adaptation.</div>`:'';
+  const settingsHtml=on?`<div style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+    ${needDate}
+    <div>
+      <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:6px">Dernières règles</div>
+      <input type="date" id="cycle-last-period" value="${lastP}" max="${today}"
+        style="width:100%;padding:9px 12px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:13px;box-sizing:border-box"
+        onchange="saveCycleNutSettings()">
+    </div>
+    <div>
+      <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:6px">Longueur du cycle (jours)</div>
+      <input type="number" id="cycle-len" value="${len}" min="20" max="40"
+        style="width:100%;padding:9px 12px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:13px;box-sizing:border-box"
+        oninput="saveCycleNutSettings()">
+    </div>
+    <div>
+      <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:8px">Intensité des règles</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="saveCycleNutSettings('intensite','supportable')" style="flex:1;padding:9px 0;border-radius:8px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;border:1.5px solid ${intens==='supportable'?'var(--green)':'#2a2a2a'};background:${intens==='supportable'?'rgba(34,197,94,.12)':'#111'};color:${intens==='supportable'?'var(--green)':'#555'}">Supportable</button>
+        <button onclick="saveCycleNutSettings('intensite','difficile')" style="flex:1;padding:9px 0;border-radius:8px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;border:1.5px solid ${intens==='difficile'?'var(--red)':'#2a2a2a'};background:${intens==='difficile'?'rgba(224,32,32,.12)':'#111'};color:${intens==='difficile'?'var(--red)':'#555'}">Difficile</button>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border)">
+      <div>
+        <div style="font-size:12px;font-weight:700;color:#fff">Sensibilité PMS</div>
+        <div style="font-size:10px;color:var(--sub);margin-top:2px">+4% calories jours OFF en phase lutéale tardive</div>
+      </div>
+      <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;margin-left:12px;cursor:pointer">
+        <input type="checkbox" id="cycle-pms" ${pms?'checked':''} onchange="saveCycleNutSettings()" style="opacity:0;width:0;height:0;position:absolute">
+        <span style="position:absolute;inset:0;background:${pms?'var(--red)':'#2a2a2a'};border-radius:12px;transition:.2s;pointer-events:none">
+          <span style="position:absolute;top:3px;left:${pms?'23':'3'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s"></span>
+        </span>
+      </label>
+    </div>
+    ${phaseHtml}
+  </div>`:'';
+  return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:3px">Adaptation cycle menstruel</div>
+        <div style="font-size:11px;color:#888">Ajuste tes macros selon ta phase</div>
+      </div>
+      <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer">
+        <input type="checkbox" id="cycle-enabled" ${on?'checked':''} onchange="saveCycleNutSettings()" style="opacity:0;width:0;height:0;position:absolute">
+        <span style="position:absolute;inset:0;background:${on?'var(--red)':'#2a2a2a'};border-radius:12px;transition:.2s;pointer-events:none">
+          <span style="position:absolute;top:3px;left:${on?'23':'3'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s"></span>
+        </span>
+      </label>
+    </div>
+    ${settingsHtml}
+  </div>`;
+}
+
+function saveCycleNutSettings(field,value){
+  if(!currentUser.nutrition) currentUser.nutrition={};
+  if(!currentUser.nutrition.cycleAdaptation) currentUser.nutrition.cycleAdaptation={};
+  const conf=currentUser.nutrition.cycleAdaptation;
+  if(field==='intensite'){
+    conf.intensite_regles=value;
+  } else {
+    const g=id=>document.getElementById(id);
+    if(g('cycle-enabled')) conf.enabled=g('cycle-enabled').checked;
+    if(g('cycle-pms')) conf.sensibilite_pms=g('cycle-pms').checked;
+    if(g('cycle-last-period')&&g('cycle-last-period').value) conf.lastPeriodDate=g('cycle-last-period').value;
+    if(g('cycle-len')&&g('cycle-len').value) conf.cycleLength=Math.max(20,Math.min(40,parseInt(g('cycle-len').value)||28));
+  }
+  saveUser();
+  _manageCycleSupplements();
+  _renderNutriContent(currentUser.nutrition?.dietType||'flexible');
+}
+
 function _renderMacroTargets(nut){
   const mon=nut.macros?.on||{};
   const moff=nut.macros?.off||{};
@@ -7158,7 +7343,7 @@ function _renderMacroTargets(nut){
 function _renderStrictMacroRings(nut){
   const today=localISODate(new Date());
   const isOn=nutIsOnDay(today);
-  const m=(isOn?nut.macros?.on:nut.macros?.off)||{};
+  const m=_getEffectiveMacros(nut,isOn,today);
   if(!m.kcal&&!m.p&&!m.g&&!m.l) return '';
   const entries=(nut.log?.[today]?.entries)||[];
   const tot=entries.reduce((a,e)=>({
@@ -7228,8 +7413,10 @@ function _renderNutriContent(type){
           <p style="margin:0;font-size:12px;color:#aaa;line-height:1.65">La diète flexible, c'est la liberté de manger ce que tu veux: à condition d'atteindre tes objectifs de macros sur la journée. Protéines, glucides, lipides: tant que tu es dans les clous en fin de journée, tu progresses. Tu gardes ta liberté au quotidien, avec des résultats au rendez-vous.</p>
         </div>
       </div>
-      ${_renderStrictMacroRings(nut)}`;
+      ${_renderStrictMacroRings(nut)}
+      ${_renderCycleNutSettings(nut)}`;
     if(fjSec){fjSec.style.display='block';_renderFjDaySummary(localISODate(new Date()));}
+    _manageCycleSupplements();
   } else {
     if(fjSec) fjSec.style.display='none';
     _renderStrictDiet();
@@ -7529,7 +7716,7 @@ function _renderFjDaySummary(date){
   const nut=currentUser.nutrition||{};
   const entries=(nut.log?.[date]?.entries)||[];
   const isOn=nutIsOnDay(date);
-  const m=(isOn ? nut.macros?.on : nut.macros?.off)||{};
+  const m=_getEffectiveMacros(nut,isOn,date);
   const tot=entries.reduce((a,e)=>({
     kcal:a.kcal+(e.kcal||0),p:a.p+(e.p||0),c:a.c+(e.c||0),l:a.l+(e.l||0),
     s:a.s+(e.s||0),fi:a.fi+(e.fi||0)
@@ -7803,12 +7990,18 @@ function loadSuppEmbedded(){
   const el=document.getElementById('supp-embedded');
   if(!el) return;
   const list=_suppStore().filter(s=>s.active!==false);
+  const conf=_getCycleNutConf();
+  const today=localISODate(new Date());
+  const inLuteal=conf.enabled&&isFemale(currentUser.gender)&&_getCyclePhaseNut(today)==='luteal_late';
+  const hasUserOmega=inLuteal&&_suppStore().some(s=>!s._cycleManaged&&/om[eé]ga/i.test(s.name));
+  const omegaBanner=hasUserOmega
+    ?`<div style="margin-bottom:10px;background:rgba(251,146,60,.07);border:1px solid rgba(251,146,60,.22);border-radius:8px;padding:9px 12px;font-size:11px;color:#fb923c;font-weight:700">⚡ Phase lutéale — +2 gélules oméga-3 recommandées aujourd'hui (en plus de ta prise habituelle)</div>`:'';
   el.innerHTML=`
     <div style="margin-bottom:12px">
       <h3 style="margin:0;font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--sub);display:flex;align-items:center;gap:5px">${icon('pill',11)} Compléments</h3>
     </div>
     <div style="background:var(--dark);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px">
-      ${_renderSuppTable(list,false,'openSuppEdit')}
+      ${omegaBanner}${_renderSuppTable(list,false,'openSuppEdit')}
     </div>
     <button onclick="openSuppEdit(-1)" style="background:none;border:1px dashed #2a2a2a;border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;padding:10px 0;width:100%;cursor:pointer;margin-bottom:4px">+ Ajouter un complément</button>
     <div style="height:4px"></div>`;
