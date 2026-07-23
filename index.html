@@ -1291,7 +1291,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;margin-top:60px;min-height:calc(100vh - 60px)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <h2> Calculateur RIR</h2>
-      <button onclick="document.getElementById('calc-modal').style.display='none'" style="background:none;border:none;color:var(--sub);font-size:24px;cursor:pointer"></button>
+      <button onclick="document.getElementById('calc-modal').style.display='none'" aria-label="Fermer" style="background:none;border:1px solid #2a2a2a;border-radius:50%;width:32px;height:32px;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" width="15" height="15"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg></button>
     </div>
     <p class="sub" style="font-size:12px;margin-bottom:20px;line-height:1.5">Basé sur ta dernière performance. Le système calcule ta charge optimale pour chaque combinaison reps/RIR.</p>
     <div style="background:var(--card2);border-radius:12px;padding:14px;margin-bottom:16px">
@@ -1665,6 +1665,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1"><div class="pad" id="wo-content"></div></div>
   <div style="padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
     <button class="btn btn-outline" id="wo-prev-btn" onclick="woNav(-1)" style="flex:none;width:44px">←</button>
+    <button onclick="confirmPauseWorkout()" title="Retour à l'accueil (séance sauvegardée)" style="flex:none;width:44px;align-self:stretch;background:#111;border:1px solid #333;border-radius:3px;color:var(--sub);cursor:pointer;display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M3 10.5 L12 3 L21 10.5"/><path d="M5.5 9 V20 a1,1 0 0 0 1,1 H9.5 V14.5 h5 V21 H17.5 a1,1 0 0 0 1,-1 V9"/></svg></button>
     <button class="btn btn-red" id="wo-next-btn" onclick="woNav(1)" style="flex:1">Exercice suivant →</button>
     <button onclick="finishWorkoutEarly()" style="flex:none;align-self:stretch;background:#111;border:1px solid #333;color:var(--sub);padding:0 16px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;cursor:pointer;border-radius:3px;white-space:nowrap;letter-spacing:.5px;display:inline-flex;align-items:center;gap:7px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><circle cx="12" cy="12" r="9"/><polyline points="9 12 11 14 15 10"/></svg>Terminer</button>
   </div>
@@ -5665,17 +5666,18 @@ function renderWoEx(){
           <div style="font-size:11px;color:var(--sub);margin-top:4px">Durée · Cardio</div>
         </div>`
       :sug?`<div class="suggest-box">
-        <div class="s-title">${isCW?'↓ Contrepoids — progresser = réduire l\'assistance':'Charge suggérée (basée sur dernier RIR 0)'}</div>
-        <div style="display:flex;gap:16px;align-items:flex-end;margin:6px 0">
-          <div><div style="font-size:10px;color:#fca5a5">${isCW?'Assistance suggérée':'Base'}</div><div style="font-size:24px;font-weight:900">${sug}kg</div></div>
-          ${showCycleCol?`<div><div style="font-size:10px;color:var(--cycle-accent)">Cycle ajusté</div><div style="font-size:24px;font-weight:900;color:var(--cycle-accent)">${cycleWeight}kg</div></div>`:''}
+        <div style="display:flex;gap:18px;align-items:flex-end;margin:2px 0 6px">
+          <div><div style="font-size:27px;font-weight:900;line-height:1">${sug}kg</div><div style="font-size:10px;color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">${isCW?'↓ Assistance — progresser = réduire':'Charge pour la première série'}</div></div>
+          ${showCycleCol?`<div><div style="font-size:27px;font-weight:900;line-height:1;color:var(--cycle-accent)">${cycleWeight}kg</div><div style="font-size:10px;color:var(--cycle-accent);margin-top:4px">Cycle ajusté</div></div>`:''}
         </div>
-        <div class="s-note">${isCW?'Contrepoids: RIR élevé → diminuer la charge. ':''}${baseWeight?'Dernière séance à RIR 0 : '+baseWeight+'kg':prev?'Calculé depuis perf précédente : '+prev.weight+'kg':'Première séance'}</div>
+        <div class="s-note">${isCW?'Contrepoids: RIR élevé → diminuer la charge. ':''}${baseWeight?'Suggestion basée sur ta dernière séance (RIR 0 : '+baseWeight+'kg)':prev?'Suggestion basée sur ta séance précédente ('+prev.weight+'kg)':'Première séance'}</div>
       </div>`:
       ``}
 
-      ${ex.description?`<div style="background:var(--card2);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#ccc;line-height:1.6">${escapeHtml(ex.description)}</div>`:''}
-      ${ex.note&&!(ex.description||'').includes(ex.note)?`<div style="background:var(--surface-2);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#fca5a5"> ${escapeHtml(ex.note)}</div>`:''}
+      ${(ex.description||ex.note)?`<div style="background:var(--card2);border-radius:10px;padding:11px 14px;margin-bottom:12px">
+        <div style="font-size:9px;font-weight:800;letter-spacing:1.5px;color:var(--red);margin-bottom:5px">CONSIGNE</div>
+        <div style="font-size:12px;color:#bbb;line-height:1.6">${escapeHtml(ex.description||'')}${ex.note&&!(ex.description||'').includes(ex.note)?(ex.description?'<br>':'')+escapeHtml(ex.note):''}</div>
+      </div>`:''}
 
       ${ex.videoUrl?`<a href="${safeUrl(ex.videoUrl)}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:12px;background:#08081a;border:1px solid #2a2a5a;border-radius:10px;padding:11px 14px;margin-bottom:12px;text-decoration:none;color:#7799ff">
         <div style="width:32px;height:32px;background:#1a1a3a;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">▶</div>
@@ -5702,13 +5704,13 @@ function renderWoEx(){
         <tbody id="sets-body"></tbody>
       </table>
       </div>`}
-      ${ex.repos&&!isCardio(ex)?`<div style="margin-top:10px;display:flex;align-items:center;gap:8px;color:var(--sub);font-size:12px">⏱️ <strong>Repos :</strong> ${escapeHtml(ex.repos)}</div>`:''}
+      ${ex.repos&&!isCardio(ex)?`<div style="margin-top:10px;display:flex;align-items:center;gap:8px;color:var(--sub);font-size:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15" style="flex-shrink:0"><circle cx="12" cy="14" r="8"/><line x1="12" y1="14" x2="12" y2="9.5"/><line x1="10" y1="2.5" x2="14" y2="2.5"/><line x1="12" y1="2.5" x2="12" y2="6"/></svg> <strong>Repos :</strong> ${escapeHtml(ex.repos)}</div>`:''}
       ${!isCardio(ex)?`<div style="margin-top:10px">
         <div style="display:flex;align-items:center;justify-content:space-between">
           <label style="font-size:11px;cursor:pointer;color:var(--sub)"><input type="checkbox" id="film-ex" style="width:auto;margin-right:4px">  Filmer cet exercice</label>
           <span style="display:flex;align-items:center;gap:8px">
             <span style="font-size:10px;color:var(--red);font-weight:700">→ Vise RIR 0 sur ta dernière série</span>
-            <button onclick="toggleRirExplain()" style="background:none;border:1px solid #2a2a2a;border-radius:50%;width:18px;height:18px;color:var(--sub);font-size:10px;font-weight:800;cursor:pointer;line-height:1;padding:0;flex-shrink:0">?</button>
+            <button onclick="toggleRirExplain()" style="background:#1a1a1a;border:1.5px solid #fff;border-radius:50%;width:19px;height:19px;color:#fff;font-size:11px;font-weight:900;cursor:pointer;line-height:1;padding:0;flex-shrink:0;box-shadow:0 0 8px rgba(255,255,255,.45)">?</button>
           </span>
         </div>
         <div id="rir-explain" style="display:none;margin-top:10px;background:#08080f;border:1px solid #1e1e3a;border-radius:10px;padding:14px;font-size:12px;line-height:1.7">
@@ -5739,8 +5741,8 @@ function renderSets(ex,data){
       return `<tr class="${done?'done':''}">
         <td style="font-weight:700">${i+1}</td>
         <td><button onclick="woState.sessionData[woState.currentEx].sets[${i}].done=!woState.sessionData[woState.currentEx].sets[${i}].done;renderSets(woState.exercises[woState.currentEx],woState.sessionData[woState.currentEx])"
-          style="width:40px;height:40px;border-radius:50%;border:2px solid ${done?'var(--green)':'var(--border)'};background:${done?'var(--green)':'transparent'};color:${done?'#fff':'var(--sub)'};font-size:18px;cursor:pointer">
-          ${done?'✓':'○'}
+          style="width:40px;height:40px;border-radius:50%;border:2px solid ${done?'#fff':'var(--border)'};background:${done?'#1a1a1a':'transparent'};color:var(--sub);font-size:16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;${done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">
+          ${done?'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="19" height="19" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}
         </button></td>
       </tr>`;
     }).join('');
@@ -5844,7 +5846,7 @@ function renderSets(ex,data){
             <div style="display:flex;align-items:center;gap:8px">
               ${rirSelect}
               ${painSelect}
-              <button onclick="toggleSet(${i})" style="width:34px;height:34px;border-radius:50%;border:2px solid ${doneClr};background:${doneBg};color:${doneC};cursor:pointer;font-size:${s.done?'16':'14'}px;margin-left:auto">${s.done?'✅':'○'}</button>
+              <button onclick="toggleSet(${i})" style="width:34px;height:34px;border-radius:50%;border:2px solid ${s.done?'#fff':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:14px;margin-left:auto;display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button>
             </div>
           </div>
         </td>
@@ -5859,7 +5861,7 @@ function renderSets(ex,data){
       ${cycleCell}
       <td>${rirSelect}</td>
       <td>${painSelect}</td>
-      <td><button onclick="toggleSet(${i})" style="width:34px;height:34px;border-radius:50%;border:2px solid ${doneClr};background:${doneBg};color:${doneC};cursor:pointer;font-size:${s.done?'16':'14'}px">${s.done?'✅':'○'}</button></td>
+      <td><button onclick="toggleSet(${i})" style="width:34px;height:34px;border-radius:50%;border:2px solid ${s.done?'#fff':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button></td>
     </tr>`;
   }).join('');
 }
