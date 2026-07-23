@@ -333,6 +333,16 @@ h3{font-size:16px;text-transform:uppercase}
 .emo-opt.sel .emo{stroke:var(--eo);opacity:1;transform:scale(1.15);filter:drop-shadow(0 0 5px var(--eo))}
 .emo-opt.sel .emo .emo-dot{fill:var(--eo)}
 .emo-opt.sel .emo-lbl{color:var(--eo);text-shadow:0 0 8px var(--eo-glow)}
+/* Choix Homme/Femme avec silhouettes */
+.gsl-row{display:flex;gap:10px}
+.gsl-opt{flex:1;min-width:0;background:var(--surface-1);border:1px solid #222;border-radius:14px;padding:14px 8px 12px;text-align:center;cursor:pointer;transition:.18s;user-select:none}
+.gsl-opt svg{height:150px;width:100%}
+.gsl-opt .gsl-body{fill:#161616;stroke:#4a4a4a;stroke-width:2;transition:.18s}
+.gsl-opt .gsl-lbl{font-size:10px;font-weight:800;letter-spacing:1.5px;color:#555;margin-top:8px;transition:.18s}
+.gsl-opt:active{transform:scale(.97)}
+.gsl-opt.sel{border-color:#fff;background:#0e0a0a;box-shadow:0 0 16px rgba(255,255,255,.28),inset 0 0 12px rgba(255,255,255,.1)}
+.gsl-opt.sel .gsl-body{fill:#232323;stroke:#fff;filter:drop-shadow(0 0 6px rgba(255,255,255,.85))}
+.gsl-opt.sel .gsl-lbl{color:#fff;text-shadow:0 0 8px rgba(255,255,255,.6)}
 /* Curseur néon 1-10 (motivation) */
 .bsl-wrap{background:var(--surface-1);border:1px solid #222;border-radius:12px;padding:18px 16px 14px;text-align:center}
 .bsl-value{font-family:'Bebas Neue',sans-serif;font-size:44px;line-height:1;transition:.15s}
@@ -6123,6 +6133,14 @@ function bEmojiScale(gid,opts){
     `<svg class="emo" viewBox="0 0 48 48" fill="none" stroke-width="2.6" stroke-linecap="round"><circle cx="24" cy="24" r="20"/>${BEMO_FACES[o.f]}</svg>`+
     `<span class="emo-lbl">${o.v}</span></div>`).join('')+`</div>`;
 }
+// Choix Homme/Femme — cartes avec les silhouettes du schéma de mensurations
+function bGenderCards(gid){
+  const opts=[{v:'Homme',b:BSCH_M},{v:'Femme',b:BSCH_F}];
+  return `<div class="gsl-row">`+opts.map(o=>
+    `<div class="gsl-opt${bilData[gid]===o.v?' sel':''}" data-grp="${gid}" data-val="${o.v}" onclick="pickBilChoice('${gid}',this.dataset.val,false)">`+
+    `<svg viewBox="0 48 360 484" preserveAspectRatio="xMidYMid meet"><path class="gsl-body" d="${o.b.body}" fill-rule="evenodd"/></svg>`+
+    `<div class="gsl-lbl">${o.v.toUpperCase()}</div></div>`).join('')+`</div>`;
+}
 // Curseur néon 1-10 — stocke "X/10" (affiché tel quel côté coach)
 const BSL_COLORS=['#E02020','#ef4116','#f97316','#fb9d1e','#eab308','#c9d411','#a3e635','#67dd2f','#3ad348','#22c55e'];
 const BSL_LABELS=['À plat','Très faible','En baisse','Fragile','Moyenne','Correcte','Bonne','Très bonne','Excellente','EN FEU !'];
@@ -6352,7 +6370,7 @@ const DEB_STEPS=[
   // Step 1 : Informations personnelles
   ()=>bSec('Informations personnelles',
     bLbl('Tu es ?')+
-    `<div>${bC('deb-gender',['Homme','Femme'])}</div>`+
+    `<div>${bGenderCards('deb-gender')}</div>`+
     bLbl('Quel âge as-tu ? ')+bQ('deb-age')+
     bLbl('Quel est ton poids actuel ? ️ (en kg)')+bQ('deb-weight')+
     bLbl('Quelle est ta taille ?  (en cm)')+bQ('deb-height')+
