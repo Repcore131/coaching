@@ -877,36 +877,6 @@ const COACH_PHOTO='icons/coach.jpg';
           <div id="coach-phone-preview" style="font-size:10px;color:var(--sub)"></div>
         </div>
 
-        <!-- 🎙️ Message de bienvenue -->
-        <div style="background:#0a1400;border:1px solid #1a3000;border-radius:14px;padding:18px;margin-bottom:18px">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-            <div style="width:36px;height:36px;background:#0a2000;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></div>
-            <div>
-              <div style="font-weight:800;font-size:14px">Message de bienvenue</div>
-              <div style="font-size:11px;color:var(--sub);margin-top:2px">Un seul enregistrement, joué à la première connexion de chaque athlète</div>
-            </div>
-          </div>
-          <div id="wm-current" style="display:none;margin-bottom:10px">
-            <audio id="wm-preview" controls style="width:100%;height:36px;margin-bottom:8px"></audio>
-            <button onclick="deleteWelcomeMessage()" style="width:100%;background:none;border:1px solid #3a1a1a;border-radius:3px;padding:8px;font-size:11px;color:var(--red);font-family:Montserrat,sans-serif;cursor:pointer;font-weight:700;letter-spacing:1px">SUPPRIMER</button>
-          </div>
-          <div id="wm-recorder">
-            <button id="wm-rec-btn" onclick="toggleWelcomeRec()" style="width:100%;background:var(--red);border:none;color:#fff;border-radius:3px;padding:10px 18px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> ENREGISTRER</button>
-            <div id="wm-rec-status" style="font-size:10px;color:var(--sub);min-height:14px;text-align:center;margin-bottom:8px"></div>
-            <div id="wm-preview-row" style="display:none;margin-bottom:8px">
-              <audio id="wm-rec-preview" controls style="width:100%;height:36px;margin-bottom:8px"></audio>
-              <div style="display:flex;gap:8px">
-                <button onclick="confirmWelcomeAudio()" style="flex:1;background:var(--red);border:none;color:#fff;border-radius:3px;padding:9px;font-size:11px;font-weight:800;font-family:Montserrat,sans-serif;cursor:pointer">✓ ENREGISTRER</button>
-                <button onclick="cancelWelcomeRec()" style="flex:1;background:none;border:1px solid var(--border);border-radius:3px;padding:9px;font-size:11px;color:var(--sub);font-family:Montserrat,sans-serif;cursor:pointer">✗ RECOMMENCER</button>
-              </div>
-            </div>
-            <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--sub);cursor:pointer;margin:0;border-top:1px solid var(--surface-2);padding-top:10px">
-              <input type="file" accept="audio/*" style="display:none" onchange="importWelcomeAudio(this)">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Ou importe un fichier audio existant
-            </label>
-          </div>
-        </div>
-
         <!-- 🎥 Cloudinary vidéos -->
         <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px">
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
@@ -3758,6 +3728,7 @@ function confirmDeleteClient(){
     const athlete=Object.values(users).find(u=>u.id===currentClientId);
     if(athlete){
       athlete.coachId=null;athlete.coachName=null;athlete.coachCode=null;
+      athlete.updatedAt=Date.now();
       users[athlete.email]=athlete;
       DB.set('users',users);
       CLOUD.pushOne(athlete.email,athlete);
@@ -4868,7 +4839,6 @@ function loadClientHome(){
   // Vérification rappel bilan (samedi toutes les 2 semaines, 7h)
   setTimeout(checkBilanNotifToday, 800);
   setTimeout(checkWoReminderToday, 1100);
-  setTimeout(checkWelcomeMessage, 1500);
   const u=currentUser;
   // clh-avatar replaced by logo badge
   document.getElementById('clh-name').textContent=((u.fname||'')+' '+(u.lname||'')).trim()||'Profil incomplet';
@@ -4947,6 +4917,7 @@ function loadClientHome(){
             if(!mc.phone&&_preSync.phone) mc.phone=_preSync.phone;
             // Sauvegarder la version fusionnée et pousser vers Firebase
             if(mc.coachPhoto||mc.teamName||mc.catchphrase){
+              mc.updatedAt=Date.now();
               mu[ce]=mc;
               localStorage.setItem('rc_users',JSON.stringify(mu));
               CLOUD.pushOne(ce,mc);
@@ -6649,112 +6620,6 @@ function loadPhoto(input,imgId){
   });
 }
 
-// ======= WELCOME MESSAGE =======
-let _wcRec=null,_wcStream=null,_wcChunks=[],_wcBlob=null,_wcTimer=null;
-
-function renderWelcomeMessagePreview(){
-  const curr=document.getElementById('wm-current');
-  const rec=document.getElementById('wm-recorder');
-  const prev=document.getElementById('wm-preview');
-  if(!curr||!rec) return;
-  if(currentUser.welcomeAudio){
-    curr.style.display='block';rec.style.display='none';
-    if(prev) prev.src=currentUser.welcomeAudio;
-  } else {
-    curr.style.display='none';rec.style.display='block';
-  }
-}
-function toggleWelcomeRec(){
-  if(_wcRec&&_wcRec.state==='recording'){
-    _wcRec.stop();_wcStream?.getTracks().forEach(t=>t.stop());
-    clearInterval(_wcTimer);
-    const btn=document.getElementById('wm-rec-btn');
-    if(btn){btn.innerHTML=icon('mic',16)+' ENREGISTRER';btn.style.background='var(--red)';}
-    const st=document.getElementById('wm-rec-status');if(st) st.textContent='';
-    return;
-  }
-  _wcChunks=[];
-  navigator.mediaDevices.getUserMedia({audio:true}).then(stream=>{
-    _wcStream=stream;
-    _wcRec=new MediaRecorder(stream);
-    _wcRec.ondataavailable=e=>{if(e.data.size>0)_wcChunks.push(e.data);};
-    _wcRec.onstop=()=>{
-      _wcBlob=new Blob(_wcChunks,{type:'audio/webm'});
-      const url=URL.createObjectURL(_wcBlob);
-      const rp=document.getElementById('wm-rec-preview');if(rp) rp.src=url;
-      const pr=document.getElementById('wm-preview-row');if(pr) pr.style.display='block';
-    };
-    _wcRec.start();
-    let secs=0;
-    _wcTimer=setInterval(()=>{
-      secs++;
-      const st=document.getElementById('wm-rec-status');
-      if(st) st.textContent='● '+Math.floor(secs/60)+':'+(secs%60<10?'0':'')+secs%60;
-    },1000);
-    const btn=document.getElementById('wm-rec-btn');
-    if(btn){btn.textContent='⏹ ARRÊTER';btn.style.background='#991b1b';}
-    const st=document.getElementById('wm-rec-status');if(st) st.textContent='● 0:00';
-  }).catch(()=>toast('Microphone non accessible','var(--orange)'));
-}
-function cancelWelcomeRec(){
-  _wcBlob=null;
-  const pr=document.getElementById('wm-preview-row');if(pr) pr.style.display='none';
-  const rp=document.getElementById('wm-rec-preview');if(rp) rp.src='';
-}
-async function confirmWelcomeAudio(){
-  if(!_wcBlob){toast('Aucun enregistrement','var(--orange)');return;}
-  const btn=document.getElementById('wm-rec-btn');
-  if(btn){btn.textContent='⏳ Upload...';btn.disabled=true;}
-  try{
-    const file=new File([_wcBlob],'welcome.webm',{type:'audio/webm'});
-    const url=await _cloudinaryUpload(file);
-    currentUser.welcomeAudio=url;saveUser();
-    toast('Message de bienvenue enregistré ✓');
-    cancelWelcomeRec();renderWelcomeMessagePreview();
-  }catch(e){toast('Erreur upload : '+e.message,'var(--orange)');}
-  finally{if(btn){btn.innerHTML=icon('mic',16)+' ENREGISTRER';btn.disabled=false;}}
-}
-async function importWelcomeAudio(input){
-  const file=input.files[0];if(!file)return;
-  toast('Upload en cours...');
-  try{
-    const url=await _cloudinaryUpload(file);
-    currentUser.welcomeAudio=url;saveUser();
-    toast('Message importé ✓');renderWelcomeMessagePreview();
-  }catch(e){toast('Erreur : '+e.message,'var(--orange)');}
-  input.value='';
-}
-function deleteWelcomeMessage(){
-  if(!confirm('Supprimer le message de bienvenue ? Les athlètes déjà connectés ne verront plus rien au prochain chargement.')) return;
-  currentUser.welcomeAudio=null;saveUser();
-  toast('Message supprimé');renderWelcomeMessagePreview();
-}
-function checkWelcomeMessage(){
-  if(!currentUser||currentUser.role!=='athlete') return;
-  if(currentUser._welcomePlayed) return;
-  if(!currentUser.coachId) return;
-  const users=DB.get('users')||{};
-  const coach=Object.values(users).find(u=>u.id===currentUser.coachId);
-  if(!coach?.welcomeAudio) return;
-  showWelcomeModal(coach);
-}
-function showWelcomeModal(coach){
-  document.getElementById('wm-athlete-overlay')?.remove();
-  const coachName=([coach.fname,coach.lname].filter(Boolean).join(' '))||'ton coach';
-  document.body.insertAdjacentHTML('beforeend',`<div id="wm-athlete-overlay" style="position:fixed;inset:0;background:#000e;z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px">
-  <div style="background:var(--surface-1);border:1px solid #1e1e1e;border-radius:24px;padding:32px 24px;width:100%;max-width:420px;text-align:center;animation:fadeIn .4s ease">
-    <div style="font-size:52px;margin-bottom:16px">👋</div>
-    <h2 style="font-size:24px;margin-bottom:8px;font-family:'Bebas Neue',sans-serif;letter-spacing:.5px">Bienvenue, ${escapeHtml(currentUser.fname||'')} !</h2>
-    <p style="color:var(--sub);font-size:12px;margin-bottom:20px;line-height:1.6">${escapeHtml(coachName)} a enregistré un message pour toi</p>
-    <audio id="wm-athlete-audio" controls src="${coach.welcomeAudio}" style="width:100%;height:40px;margin-bottom:24px" preload="auto"></audio>
-    <button onclick="dismissWelcomeModal()" class="btn btn-red" style="width:100%;letter-spacing:1.5px;font-size:13px">C'est parti ! 💪</button>
-  </div></div>`);
-  setTimeout(()=>document.getElementById('wm-athlete-audio')?.play().catch(()=>{}),500);
-}
-function dismissWelcomeModal(){
-  document.getElementById('wm-athlete-overlay')?.remove();
-  currentUser._welcomePlayed=true;saveUser();
-}
 // ======= PROGRESS =======
 function loadProgress(){
   go('s-progress');showProgressTab('poids',document.querySelector('#prog-tabs button'));
@@ -8757,6 +8622,8 @@ async function deleteVideo(email,videoId){
   const users=DB.get('users')||{};
   const u=users[email];
   if(!u||!Array.isArray(u.videos)) return;
+  // Contrôle d'appartenance : ses propres vidéos ou celles d'un élève de son coaching
+  if(u.email!==currentUser?.email&&u.coachId!==currentUser?.id){toast('Élève introuvable ou non autorisé','var(--orange)');return;}
   const vid=u.videos.find(v=>v.id===videoId);
   if(!vid) return;
   u.videos=u.videos.filter(v=>v.id!==videoId);
@@ -10456,6 +10323,8 @@ function importPdfSeances(){
   const users=DB.get('users')||{};
   const u=users[email];
   if(!u){toast('Athlète introuvable.','var(--red)');return;}
+  // Contrôle d'appartenance : soi-même ou un élève de son propre coaching uniquement
+  if(u.email!==currentUser?.email&&u.coachId!==currentUser?.id){toast('Élève introuvable ou non autorisé','var(--orange)');return;}
   if(!u.sessions_config) u.sessions_config=Array.from({length:7},(_,i)=>({day:DAYS[i],name:'',exercises:[],active:false,notes:''}));
   seances.forEach((s,i)=>{
     if(i<u.sessions_config.length){
@@ -10464,6 +10333,7 @@ function importPdfSeances(){
       u.sessions_config[i].active=true;
     }
   });
+  u.updatedAt=Date.now();
   users[email]=u;
   DB.set('users',users);
   CLOUD.pushOne(email,u);
@@ -10833,7 +10703,6 @@ function loadMonetisationTab(){
   const phoneInput=document.getElementById('coach-phone-input');
   if(phoneInput) phoneInput.value=u.phone||'';
   _renderCoachPhonePreview(u.phone||'');
-  renderWelcomeMessagePreview();
   const cldName=document.getElementById('cld-cloud-name');
   const cldPreset=document.getElementById('cld-preset');
   if(cldName) cldName.value=u.cloudinaryName||'';
@@ -11047,6 +10916,7 @@ async function generateStudentCode(){
   // Store in coach's studentCodes
   if(!currentUser.studentCodes) currentUser.studentCodes=[];
   currentUser.studentCodes.push({...payload,token,usedBy:null,active:true,createdAt:Date.now()});
+  currentUser.updatedAt=Date.now();
   const users=DB.get('users')||{};
   users[currentUser.email]=currentUser;
   DB.set('users',users);DB.set('session',currentUser);
@@ -11115,6 +10985,7 @@ async function extendStudentCode(i){
     return;
   }
   Object.assign(c,res.payload,{token:res.token});
+  currentUser.updatedAt=Date.now();
   const users=DB.get('users')||{};
   users[currentUser.email]=currentUser;
   DB.set('users',users);DB.set('session',currentUser);
