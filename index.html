@@ -1666,7 +1666,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div style="padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
     <button class="btn btn-outline" id="wo-prev-btn" onclick="woNav(-1)" style="flex:none;width:44px">←</button>
     <button onclick="confirmPauseWorkout()" title="Retour à l'accueil (séance sauvegardée)" style="flex:none;width:44px;align-self:stretch;background:#111;border:1px solid #333;border-radius:3px;color:var(--sub);cursor:pointer;display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M3 10.5 L12 3 L21 10.5"/><path d="M5.5 9 V20 a1,1 0 0 0 1,1 H9.5 V14.5 h5 V21 H17.5 a1,1 0 0 0 1,-1 V9"/></svg></button>
-    <button class="btn btn-red" id="wo-next-btn" onclick="woNav(1)" style="flex:1">Exercice suivant →</button>
+    <button class="btn btn-red" id="wo-next-btn" onclick="woNav(1)" style="flex:1;white-space:nowrap;font-size:12px;letter-spacing:1px;padding-left:8px;padding-right:8px;min-width:0;overflow:hidden;text-overflow:ellipsis">Exercice suivant →</button>
     <button onclick="finishWorkoutEarly()" style="flex:none;align-self:stretch;background:#111;border:1px solid #333;color:var(--sub);padding:0 16px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;cursor:pointer;border-radius:3px;white-space:nowrap;letter-spacing:.5px;display:inline-flex;align-items:center;gap:7px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><circle cx="12" cy="12" r="9"/><polyline points="9 12 11 14 15 10"/></svg>Terminer</button>
   </div>
 </div>
