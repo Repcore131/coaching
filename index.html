@@ -322,6 +322,15 @@ h3{font-size:16px;text-transform:uppercase}
 
 /* ====== CHOICE OPTIONS REDESIGN ====== */
 .choice-opt{padding:13px 16px;border-radius:2px;border:1px solid var(--border);cursor:pointer;font-size:11px;font-weight:700;margin-bottom:6px;transition:.15s;color:#555;background:var(--surface-1);letter-spacing:1px;text-transform:uppercase}
+/* Échelle d'émojis néon (cheat meals) */
+.emo-row{display:flex;gap:7px;justify-content:space-between}
+.emo-opt{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 2px 10px;border-radius:12px;border:1px solid #222;background:var(--surface-1);cursor:pointer;transition:.18s;user-select:none}
+.emo-opt .emo{font-size:30px;line-height:1;filter:grayscale(1);opacity:.4;transition:.18s}
+.emo-opt .emo-lbl{font-size:9px;font-weight:800;letter-spacing:.8px;color:#555;text-transform:uppercase;text-align:center;white-space:nowrap;transition:.18s}
+.emo-opt:active{transform:scale(.95)}
+.emo-opt.sel{border-color:var(--eo);background:#0e0a0a;box-shadow:0 0 14px var(--eo-glow),inset 0 0 10px var(--eo-glow)}
+.emo-opt.sel .emo{filter:none;opacity:1;transform:scale(1.22);text-shadow:0 0 12px var(--eo)}
+.emo-opt.sel .emo-lbl{color:var(--eo);text-shadow:0 0 8px var(--eo-glow)}
 .choice-opt.sel{border-color:var(--red);border-left-width:3px;color:#fff;background:var(--red-bg)}
 .choice-opt:active{transform:scale(.99)}
 </style>
@@ -6083,6 +6092,12 @@ function bTA(id,ph){return`<textarea id="${id}" rows="3" placeholder="${ph||''}"
 function bC(gid,choices,multi){
   return choices.map(c=>`<div class="choice-opt${bilData[gid]&&(multi?bilData[gid].includes(c):bilData[gid]===c)?' sel':''}" data-grp="${gid}" data-val="${c}" onclick="pickBilChoice('${gid}',this.dataset.val,${!!multi})">${c}</div>`).join('');
 }
+// Échelle d'émojis néon — mêmes valeurs stockées que bC (compat stats coach)
+function bEmojiScale(gid,opts){
+  return `<div class="emo-row">`+opts.map(o=>
+    `<div class="emo-opt${bilData[gid]===o.v?' sel':''}" data-grp="${gid}" data-val="${o.v}" style="--eo:${o.c};--eo-glow:${o.c}55" onclick="pickBilChoice('${gid}',this.dataset.val,false)">`+
+    `<span class="emo">${o.e}</span><span class="emo-lbl">${o.v}</span></div>`).join('')+`</div>`;
+}
 function bSec(title,html){return`<div style="margin-bottom:22px"><div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">${title}</div>${html}</div>`;}
 function bMeas(id,label,unit){return`<div class="bil-row"><span class="bil-row-label">${label}</span><div style="display:flex;align-items:center;gap:6px">${bQ(id)}<span class="bil-unit">${unit}</span></div></div>`;}
 
@@ -6221,7 +6236,13 @@ const BIL_STEPS=[
     `<div>${bC('bil-diff-type',["Oui, avec les séances","Oui, avec l'alimentation","Oui, avec les deux","Non, aucune difficulté particulière"])}</div>`+
     bLbl('Si oui, détaille les difficultés rencontrées :')+bTA('bil-diff-detail','Décris tes difficultés...')+
     bLbl('Combien as tu fais de Cheat Meals ou de repas hors programme cette semaine ? ')+
-    `<div>${bC('bil-cheat-meals',['Aucun','1','2','3','4 ou plus'])}</div>`+
+    `<div>${bEmojiScale('bil-cheat-meals',[
+      {v:'Aucun',e:'😁',c:'#22c55e'},
+      {v:'1',e:'🙂',c:'#a3e635'},
+      {v:'2',e:'😐',c:'#eab308'},
+      {v:'3',e:'😟',c:'#f97316'},
+      {v:'4 ou plus',e:'😡',c:'#E02020'},
+    ])}</div>`+
     bLbl('Expliques moi les raisons (repas de famille, sorties professionnelles...) :')+bTA('bil-cheat-reasons','Repas de famille, sorties professionnelles...')
   ),
   // Step 3 : Ressenti & Modifications
