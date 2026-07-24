@@ -2810,35 +2810,40 @@ window.onload=()=>{
   }
   setTimeout(()=>{
     const splash=document.getElementById('s-splash');
-    if(splash){splash.style.transition='opacity 0.2s ease';splash.style.opacity='0';}
-    setTimeout(async ()=>{
-      // Sync uniquement les données de l'utilisateur connecté (pas toute la table)
+    if(splash){splash.style.transition='opacity 0.15s ease';splash.style.opacity='0';}
+    setTimeout(()=>{
       const sess=DB.get('session');
-      if(sess?.email&&CLOUD.ok()){
-        try{ await CLOUD.syncUser(sess.email); }catch(e){}
-      }
       if(sess){
         currentUser=sess;
-        // Rafraîchir currentUser depuis la DB (données à jour après sync cloud)
+        // Données locales d'abord — la sync cloud se fait en arrière-plan (accueil instantané)
         const users=DB.get('users')||{};
         if(users[currentUser.email]) currentUser=users[currentUser.email];
         if((currentUser.status||'FREE')==='FREE'){
           silentLogout();
           go('s-welcome');
-        } else {
-          if(CLOUD.canWrite()){
-            try{saveUser();}catch(e){}
-            // Push immédiat non-debounced pour garantir l'envoi des données locales (profil coach pré-v144)
-            setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},800);
-          }
+        } else if(sessionStorage.getItem('rc_paypal_return')){
           // Retour depuis redirection PayPal → remettre sur la page paiement
-          if(sessionStorage.getItem('rc_paypal_return')){
-            sessionStorage.removeItem('rc_paypal_return');
-            go('s-subscribe');
-            loadSubscribePage();
-          } else {
-            routeUser();
-          }
+          sessionStorage.removeItem('rc_paypal_return');
+          go('s-subscribe');
+          loadSubscribePage();
+        } else {
+          routeUser();
+        }
+        // Sync cloud en arrière-plan : rafraîchit l'écran si les données ont changé
+        if(sess.email&&CLOUD.ok()){
+          (async()=>{
+            try{ await CLOUD.syncUser(sess.email); }catch(e){}
+            const u2=(DB.get('users')||{})[sess.email];
+            if(u2){currentUser=u2;DB.set('session',currentUser);}
+            if((currentUser.status||'FREE')==='FREE'){silentLogout();go('s-welcome');return;}
+            if(CLOUD.canWrite()){
+              try{saveUser();}catch(e){}
+              // Push immédiat non-debounced pour garantir l'envoi des données locales (profil coach pré-v144)
+              setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},800);
+            }
+            if(currentUser.role==='athlete'&&document.getElementById('s-client-home')?.classList.contains('active')) loadClientHome();
+            if(currentUser.role==='coach'&&document.getElementById('s-coach-home')?.classList.contains('active')) loadCoachHome();
+          })();
         }
       } else if(window._importedCoach){
         go('s-athlete-entry');
@@ -2875,8 +2880,8 @@ window.onload=()=>{
           }
         }
       },30000);
-    },200);
-  },900);
+    },150);
+  },500);
 };
 function routeUser(){
   if(!currentUser) return go('s-welcome');
