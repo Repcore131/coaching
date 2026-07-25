@@ -7525,13 +7525,13 @@ function _renderStrictMacroRings(nut){
     :`<span style="display:inline-flex;align-items:center;gap:4px;font-size:8px;font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:5px;padding:3px 10px;letter-spacing:1px">${icon('moon',10)} JOUR OFF</span>`;
   return `<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 8px 24px rgba(0,0,0,.35);animation:fadeInUp .3s ease">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div style="display:inline-flex;align-items:center;gap:6px;font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700">${icon('target',12)} Objectifs du jour</div>
+      <div style="display:inline-flex;align-items:center;gap:7px;font-family:'Bebas Neue',sans-serif;font-size:17px;color:#ff3b30;text-transform:uppercase;letter-spacing:3px;text-shadow:0 0 8px rgba(224,32,32,.85),0 0 20px rgba(224,32,32,.45)"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('target',13)}</span>OBJECTIFS DU JOUR</div>
       ${dayBadge}
     </div>
     <div style="display:flex;justify-content:space-around;margin-bottom:16px">
-      ${ring(tot.p,m.p,'#60a5fa','Protéines')}
-      ${ring(tot.l,m.l,'#fb923c','Lipides')}
-      ${ring(tot.c,m.g,'var(--green)','Glucides')}
+      ${ring(tot.p,m.p,'#E02020','Protéines')}
+      ${ring(tot.c,m.g,'#f5c518','Glucides')}
+      ${ring(tot.l,m.l,'#22c55e','Lipides')}
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <span style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700">Calories</span>
@@ -7552,15 +7552,20 @@ function _renderNutriContent(type){
   const _cflx=Object.values(_cuu).find(x=>x.id===currentUser.coachId);
   const _flxPhoto=_cflx?.coachPhoto||'';
   const _flxCircle=_flxPhoto
-    ?`<img src="${_flxPhoto}" style="width:54px;height:54px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(210,0,0,0.45);box-shadow:0 0 0 4px rgba(200,0,0,0.07)">`
-    :`<div style="width:54px;height:54px;border-radius:50%;background:var(--surface-2);border:2px solid #2a2a2a;display:flex;align-items:center;justify-content:center;flex-shrink:0">${icon('dumbbell',22)}</div>`;
+    ?`<img src="${_flxPhoto}" style="width:54px;height:54px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(255,255,255,.35);box-shadow:0 0 0 4px rgba(0,0,0,.18)">`
+    :`<div style="width:54px;height:54px;border-radius:50%;background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff">${icon('dumbbell',22)}</div>`;
   if(type==='flexible'){
     contentEl.innerHTML=`
-      <div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:18px;display:flex;gap:14px;align-items:flex-start">
-        ${_flxCircle}
-        <div style="flex:1">
-          <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px">Diète Flexible</div>
-          <p style="margin:0;font-size:12px;color:#aaa;line-height:1.65">La diète flexible, c'est la liberté de manger ce que tu veux: à condition d'atteindre tes objectifs de macros sur la journée. Protéines, glucides, lipides: tant que tu es dans les clous en fin de journée, tu progresses. Tu gardes ta liberté au quotidien, avec des résultats au rendez-vous.</p>
+      <div style="background:linear-gradient(145deg,#c10000 0%,#880000 55%,#560000 100%);border-radius:12px;padding:18px 20px;position:relative;overflow:hidden;margin-bottom:18px;box-shadow:0 10px 26px rgba(0,0,0,.45);animation:fadeInUp .3s ease">
+        <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 16px,rgba(0,0,0,.12) 16px,rgba(0,0,0,.12) 17px);pointer-events:none"></div>
+        <div style="position:absolute;right:-18px;top:-18px;width:90px;height:90px;border-radius:50%;background:rgba(255,255,255,.05);pointer-events:none"></div>
+        <div style="position:relative;display:flex;gap:14px;align-items:flex-start">
+          ${_flxCircle}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:8px;color:rgba(255,255,255,.55);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Ton approche</div>
+            <div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:-0.3px;line-height:1.1;margin-bottom:8px">DIÈTE FLEXIBLE</div>
+            <p style="margin:0;font-size:12px;color:rgba(255,255,255,.72);line-height:1.65">La diète flexible, c'est la liberté de manger ce que tu veux: à condition d'atteindre tes objectifs de macros sur la journée. Protéines, glucides, lipides: tant que tu es dans les clous en fin de journée, tu progresses. Tu gardes ta liberté au quotidien, avec des résultats au rendez-vous.</p>
+          </div>
         </div>
       </div>
       ${_renderStrictMacroRings(nut)}
@@ -7878,9 +7883,17 @@ function _renderFjDaySummary(date){
   const dayBadge=isOn
     ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:8px;font-weight:800;color:var(--success);background:var(--success-bg);border:1px solid var(--success-border);border-radius:5px;padding:2px 7px;letter-spacing:1px">${icon('zap',10)} JOUR ON</span>`
     : `<span style="display:inline-flex;align-items:center;gap:4px;font-size:8px;font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:5px;padding:2px 7px;letter-spacing:1px">${icon('moon',10)} JOUR OFF</span>`;
-  const tile=(val,tgt,label,color)=>`<div style="flex:1;background:#111;border-radius:8px;padding:10px;text-align:center;min-width:0">
-    <div style="font-size:18px;font-weight:800;color:${color};line-height:1">${typeof val==='number'?parseFloat(val.toFixed(1)):val}${tgt?`<span style="font-size:8px;color:var(--sub);font-weight:400">/${tgt}</span>`:''}</div>
-    <div style="font-size:8px;color:var(--sub);letter-spacing:1px;margin-top:3px;text-transform:uppercase">${label}</div>
+  const tile=(val,tgt,label,color)=>`<div style="flex:1;background:linear-gradient(180deg,#141414,#0d0d0d);border:1px solid #1e1e1e;border-radius:10px;padding:10px 8px;text-align:center;min-width:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)">
+    <div style="font-size:18px;font-weight:800;color:${color};line-height:1;text-shadow:0 0 9px ${color}66">${typeof val==='number'?parseFloat(val.toFixed(1)):val}${tgt?`<span style="font-size:8px;color:var(--sub);font-weight:400;text-shadow:none">/${tgt}</span>`:''}</div>
+    <div style="font-size:8px;color:${color};opacity:.75;letter-spacing:1.2px;margin-top:4px;text-transform:uppercase;font-weight:800">${label}</div>
+  </div>`;
+  // Bloc calories : carré rouge, chiffre néon blanc
+  const kcalTile=`<div style="flex:1.25;min-width:0;background:linear-gradient(145deg,#c10000 0%,#8d0000 55%,#5a0000 100%);border:1px solid rgba(255,90,90,.45);border-radius:10px;padding:9px 8px;text-align:center;position:relative;overflow:hidden;box-shadow:0 0 18px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.16)">
+    <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(0,0,0,.14) 11px,rgba(0,0,0,.14) 12px);pointer-events:none"></div>
+    <div style="position:relative">
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:#fff;line-height:1;letter-spacing:1px;text-shadow:0 0 8px rgba(255,255,255,.95),0 0 20px rgba(255,255,255,.5)">${Math.round(tot.kcal)}${m.kcal?`<span style="font-size:11px;opacity:.65;letter-spacing:0;text-shadow:none"> / ${m.kcal}</span>`:''}</div>
+      <div style="font-size:8px;color:rgba(255,255,255,.85);letter-spacing:2.5px;margin-top:3px;text-transform:uppercase;font-weight:800;text-shadow:0 0 6px rgba(255,255,255,.5)">KCAL</div>
+    </div>
   </div>`;
 
   el.innerHTML=`
@@ -7898,15 +7911,14 @@ function _renderFjDaySummary(date){
       </div>
       <div style="border-top:1px solid var(--surface-2);padding:13px 14px 10px">
         <div style="display:flex;gap:6px;margin-bottom:6px">
-          ${tile(Math.round(tot.kcal),m.kcal?m.kcal+' kcal':'','kcal','var(--red)')}
-          ${tile(tot.p,m.p?m.p+'g':'','prot','#60a5fa')}
-          ${tile(tot.c,m.g?m.g+'g':'','gluc','var(--green)')}
-          ${tile(tot.l,m.l?m.l+'g':'','lip','#fb923c')}
+          ${tile(tot.p,m.p?m.p+'g':'','prot','#E02020')}
+          ${tile(tot.c,m.g?m.g+'g':'','gluc','#f5c518')}
+          ${tile(tot.l,m.l?m.l+'g':'','lip','#22c55e')}
         </div>
-        <div style="display:flex;gap:6px">
+        <div style="display:flex;gap:6px;align-items:stretch">
           ${tile(tot.s,m.s?m.s+'g':'','sucre ℹ','#a78bfa')}
           ${tile(tot.fi,m.f?m.f+'g':'','fibres ℹ','#94a3b8')}
-          <div style="flex:2"></div>
+          ${kcalTile}
         </div>
         <div style="font-size:9px;color:#3a3a3a;text-align:right;margin-top:7px">ℹ sucre & fibres — indicatif</div>
       </div>
