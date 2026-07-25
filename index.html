@@ -333,14 +333,14 @@ h3{font-size:16px;text-transform:uppercase}
 .emo-opt.sel .emo{stroke:var(--eo);opacity:1;transform:scale(1.15);filter:drop-shadow(0 0 5px var(--eo))}
 .emo-opt.sel .emo .emo-dot{fill:var(--eo)}
 .emo-opt.sel .emo-lbl{color:var(--eo);text-shadow:0 0 8px var(--eo-glow)}
-/* Badge record animé (fin de séance) */
-.wd-badge{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#1a1200,#0e0a00);border:1.5px solid #fbbf24;border-radius:14px;padding:14px 16px;animation:wdBadgePop .55s cubic-bezier(.2,1.4,.4,1) both,wdBadgeGlow 2.2s ease-in-out .55s infinite}
-.wd-badge-medal{width:58px;height:58px;border-radius:50%;background:#140f00;border:2px solid #fbbf24;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 14px rgba(251,191,36,.45),inset 0 0 10px rgba(251,191,36,.15);animation:wdMedalSwing 2.2s ease-in-out .55s infinite}
-.wd-badge::after{content:'';position:absolute;top:0;left:-60%;width:40%;height:100%;background:linear-gradient(105deg,transparent,rgba(255,255,255,.14),transparent);animation:wdShine 2.6s ease-in-out .8s infinite}
-@keyframes wdBadgePop{0%{transform:scale(.5);opacity:0}70%{transform:scale(1.06)}100%{transform:scale(1);opacity:1}}
-@keyframes wdBadgeGlow{0%,100%{box-shadow:0 0 10px rgba(251,191,36,.25)}50%{box-shadow:0 0 22px rgba(251,191,36,.5)}}
-@keyframes wdMedalSwing{0%,100%{transform:rotate(0deg)}20%{transform:rotate(-7deg)}40%{transform:rotate(6deg)}60%{transform:rotate(-3deg)}80%{transform:rotate(2deg)}}
-@keyframes wdShine{0%{left:-60%}55%,100%{left:120%}}
+/* Badge record animé (fin de séance) — médaillon */
+.wd-badge{display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 0 2px;animation:wdBadgePop .6s cubic-bezier(.2,1.5,.4,1) both}
+.wd-badge-medal{position:relative;width:138px;height:138px;border-radius:50%;flex-shrink:0;animation:wdMedalSwing 3s ease-in-out .6s infinite,wdBadgeGlow 2.4s ease-in-out .6s infinite}
+.wd-badge-medal::after{content:'';position:absolute;inset:0;border-radius:50%;background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.22) 48%,transparent 58%);background-size:280% 100%;animation:wdShine 2.8s ease-in-out .9s infinite}
+@keyframes wdBadgePop{0%{transform:scale(.4);opacity:0}65%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
+@keyframes wdBadgeGlow{0%,100%{filter:drop-shadow(0 0 8px rgba(224,32,32,.35))}50%{filter:drop-shadow(0 0 22px rgba(224,32,32,.65))}}
+@keyframes wdMedalSwing{0%,100%{transform:rotate(0deg)}18%{transform:rotate(-6deg)}38%{transform:rotate(5deg)}58%{transform:rotate(-2.5deg)}78%{transform:rotate(1.5deg)}}
+@keyframes wdShine{0%{background-position:120% 0}55%,100%{background-position:-160% 0}}
 /* Choix Homme/Femme avec silhouettes */
 .gsl-row{display:flex;gap:10px}
 .gsl-opt{flex:1;min-width:0;background:var(--surface-1);border:1px solid #222;border-radius:14px;padding:14px 8px 12px;text-align:center;cursor:pointer;transition:.18s;user-select:none}
@@ -5964,15 +5964,46 @@ function buildSessionComparison(vol,data){
   if(records.length){
     records.sort((a,b)=>b.gain-a.gain);
     const best=records[0];
-    html+=`<div class="wd-badge" style="margin-bottom:14px">
-      <div class="wd-badge-medal">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="34" height="34"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
-      </div>
-      <div style="min-width:0">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1.5px;color:#fbbf24;line-height:1">NOUVEAU RECORD</div>
-        <div style="font-size:12px;font-weight:800;color:#fff;margin-top:4px">${best.curMax}kg — ${escapeHtml(best.nm)}</div>
-        <div style="font-size:10px;color:var(--sub);margin-top:2px">était ${best.histMax}kg${records.length>1?' · +'+(records.length-1)+' autre'+(records.length>2?'s':'')+' record'+(records.length>2?'s':'')+' battu'+(records.length>2?'s':''):''}</div>
-      </div>
+    html+=`<div class="wd-badge" style="margin-bottom:16px">
+      <div class="wd-badge-medal"><svg viewBox="0 0 200 200" style="width:100%;height:100%;display:block">
+        <defs>
+          <linearGradient id="wdRed" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#ff7a50"/><stop offset=".35" stop-color="#e63a24"/>
+            <stop offset=".65" stop-color="#b01a12"/><stop offset="1" stop-color="#ff5a38"/>
+          </linearGradient>
+          <linearGradient id="wdRedDark" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#8a130d"/><stop offset="1" stop-color="#5a0c08"/>
+          </linearGradient>
+          <linearGradient id="wdSilver" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#ffffff"/><stop offset=".45" stop-color="#c9ced6"/>
+            <stop offset=".7" stop-color="#8f959f"/><stop offset="1" stop-color="#e8ebef"/>
+          </linearGradient>
+          <radialGradient id="wdMarble" cx=".38" cy=".3" r=".95">
+            <stop offset="0" stop-color="#262a30"/><stop offset=".55" stop-color="#14161a"/>
+            <stop offset="1" stop-color="#08090b"/>
+          </radialGradient>
+        </defs>
+        <circle cx="100" cy="100" r="92" fill="none" stroke="url(#wdRedDark)" stroke-width="15"/>
+        <circle cx="100" cy="100" r="92" fill="none" stroke="url(#wdRed)" stroke-width="12"/>
+        <circle cx="100" cy="100" r="97.5" fill="none" stroke="#4a0d08" stroke-width="1.4"/>
+        <circle cx="100" cy="100" r="92" fill="none" stroke="rgba(0,0,0,.35)" stroke-width="12" stroke-dasharray="1.5 6.5"/>
+        <circle cx="100" cy="100" r="86.2" fill="none" stroke="url(#wdSilver)" stroke-width="3.2"/>
+        <circle cx="100" cy="100" r="84.5" fill="url(#wdMarble)"/>
+        <path d="M52,58 C74,80 96,88 128,96 M118,150 C134,132 144,118 152,96 M60,132 C72,124 80,118 86,108" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="1.6"/>
+        <path d="M40,120 C66,110 88,112 108,124" fill="none" stroke="rgba(255,255,255,.035)" stroke-width="2.4"/>
+        <g transform="translate(71,45) scale(2.4)" fill="none" stroke="url(#wdSilver)" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+          <path d="M4 22h16"/>
+          <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
+          <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
+          <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
+          <path d="M9.4 4.9 C8.6 6.1 8.6 7.7 9.6 8.8 M14.6 4.9 C15.4 6.1 15.4 7.7 14.4 8.8" stroke-width=".9"/>
+        </g>
+        <text x="100" y="157" text-anchor="middle" font-family="'Bebas Neue',sans-serif" font-size="34" letter-spacing="4" fill="url(#wdSilver)" stroke="#43474e" stroke-width=".7" paint-order="stroke">RECORD</text>
+      </svg></div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:#e8ebef;margin-top:12px;line-height:1;text-shadow:0 0 10px rgba(255,255,255,.25)">NOUVEAU RECORD</div>
+      <div style="font-size:13px;font-weight:800;color:#fff;margin-top:5px">${best.curMax}kg — ${escapeHtml(best.nm)}</div>
+      <div style="font-size:10px;color:var(--sub);margin-top:3px">était ${best.histMax}kg${records.length>1?' · +'+(records.length-1)+' autre'+(records.length>2?'s':'')+' record'+(records.length>2?'s':'')+' battu'+(records.length>2?'s':''):''}</div>
     </div>`;
   }
   // ── Volume : une seule petite ligne sobre ──
