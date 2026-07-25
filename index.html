@@ -2121,7 +2121,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="s-steps" class="screen">
   <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
     <button class="back-btn" onclick="go('s-client-home');loadClientHome()">←</button>
-    <span class="topbar-title">Mes pas </span>
+    <span class="topbar-title">Mes pas</span>
     <span></span>
   </div>
   <div class="scroll-area" style="flex:1">
@@ -2132,7 +2132,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="s-sleep" class="screen">
   <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
     <button class="back-btn" onclick="go('s-client-home');loadClientHome()">←</button>
-    <span class="topbar-title">Mon sommeil 🌙</span>
+    <span class="topbar-title">Mon sommeil</span>
     <span></span>
   </div>
   <div class="scroll-area" style="flex:1">
@@ -2150,14 +2150,16 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-        <div style="width:3px;height:20px;background:var(--red);border-radius:2px"></div>
-        <h3>👟 Mes pas</h3>
+        <div style="width:3px;height:22px;background:var(--red);border-radius:2px;box-shadow:0 0 10px rgba(224,32,32,.9)"></div>
+        <span style="display:inline-flex;color:#ff3b30;filter:drop-shadow(0 0 6px rgba(224,32,32,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M2 17h18a2 2 0 0 0 2-2c0-1.6-1.2-2.3-2.8-2.9l-4.4-1.7a3 3 0 0 1-1.3-1L11.6 6.4a1.4 1.4 0 0 0-2.2-.2L7.6 8.1 2 8.1z"/><path d="M2 17v2h20v-2"/></svg></span>
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;color:#fff;text-transform:uppercase;text-shadow:0 0 14px rgba(255,255,255,.35)">MES PAS</span>
       </div>
       <div id="lifestyle-steps-content"></div>
       <div class="divider" style="margin:28px 0"></div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-        <div style="width:3px;height:20px;background:var(--red);border-radius:2px"></div>
-        <h3>🌙 Mon sommeil</h3>
+        <div style="width:3px;height:22px;background:#60a5fa;border-radius:2px;box-shadow:0 0 10px rgba(96,165,250,.9)"></div>
+        <span style="display:inline-flex;color:#60a5fa;filter:drop-shadow(0 0 6px rgba(96,165,250,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;color:#fff;text-transform:uppercase;text-shadow:0 0 14px rgba(255,255,255,.35)">MON SOMMEIL</span>
       </div>
       <div id="lifestyle-sleep-content"></div>
     </div>
@@ -2304,6 +2306,8 @@ const ICONS={
   'plus-circle':'<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>',
   zap:'<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
   target:'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+  shoe:'<path d="M2 17h18a2 2 0 0 0 2-2c0-1.6-1.2-2.3-2.8-2.9l-4.4-1.7a3 3 0 0 1-1.3-1L11.6 6.4a1.4 1.4 0 0 0-2.2-.2L7.6 8.1 2 8.1z"/><path d="M2 17v2h20v-2"/><path d="M7.6 8.1 9.3 10M10.6 9.2l1.7 1.9"/>',
+  sun:'<circle cx="12" cy="12" r="4.5"/><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="4.2" y1="4.2" x2="6" y2="6"/><line x1="18" y1="18" x2="19.8" y2="19.8"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.2" y1="19.8" x2="6" y2="18"/><line x1="18" y1="6" x2="19.8" y2="4.2"/>',
   leaf:'<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>',
   pencil:'<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/>',
   users:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
@@ -9508,21 +9512,21 @@ function loadSteps(containerId='steps-content'){
   const stepColor=(n,type)=>{
     if(!n) return '#2a2a2a';
     const goal=type==='on'?goals.on:type==='off'?goals.off:10000;
-    if(n>=goal) return 'var(--green)';
-    if(n>=goal*0.6) return 'var(--orange)';
+    if(n>=goal) return '#22c55e';
+    if(n>=goal*0.6) return '#f97316';
     return '#e05050';
   };
   const fmt=n=>n?n.toLocaleString('fr-FR'):'—';
-  const avgColor=weekAvg>=goals.on?'var(--green)':weekAvg>=goals.on*0.6?'var(--orange)':weekAvg>0?'var(--red)':'var(--sub)';
+  const avgColor=weekAvg>=goals.on?'#22c55e':weekAvg>=goals.on*0.6?'#f97316':weekAvg>0?'#E02020':'#777777';
 
   let bars='';
   weekData.forEach(d=>{
     const pct=d.count?Math.max(6,Math.round(d.count/maxVal*100)):6;
     const col=stepColor(d.count||0,d.type);
     const glow=d.isToday?';box-shadow:0 0 10px '+col+'66':'';
-    const typeAccent=d.type==='on'?'var(--red)':d.type==='off'?'var(--sub)':'transparent';
+    const typeAccent=d.type==='on'?'#E02020':d.type==='off'?'#60a5fa':'transparent';
     bars+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">
-      <div style="width:85%;height:${pct}%;background:${col};border-radius:3px 3px 0 0;min-height:5px${glow};transition:.4s;border-bottom:2px solid ${typeAccent}"></div>
+      <div style="width:82%;height:${pct}%;background:linear-gradient(180deg,${col},${col}55);border-radius:4px 4px 0 0;min-height:5px;box-shadow:0 0 ${d.isToday?'14':'8'}px ${col}${d.isToday?'aa':'55'},inset 0 1px 0 rgba(255,255,255,.25);transition:.4s;border-bottom:2px solid ${typeAccent}"></div>
     </div>`;
   });
 
@@ -9554,9 +9558,10 @@ function loadSteps(containerId='steps-content'){
         ${goalLine}
       </div>`;
     }).join('');
-    histHtml=`<div style="background:var(--dark);border:1px solid var(--surface-3);border-radius:12px;padding:16px">
-      <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:4px">Historique</div>
-      ${rows}
+    histHtml=`<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4)">
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div>
+      <div style="position:relative"><div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:6px">Historique</div>
+      ${rows}</div>
     </div>`;
   }
 
@@ -9575,53 +9580,70 @@ function loadSteps(containerId='steps-content'){
   const todayGoalHintHtml=todayType?`<div style="text-align:center;font-size:10px;color:var(--sub);margin-bottom:10px">Objectif : <strong style="color:${todayType==='on'?'var(--red)':'var(--sub)'}">${(todayType==='on'?goals.on:goals.off).toLocaleString('fr-FR')} pas</strong></div>`:'';
 
   document.getElementById(containerId).innerHTML=`
-    <div style="background:var(--dark);border:1px solid var(--surface-3);border-radius:12px;padding:16px;margin-bottom:18px">
-      <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:14px">Objectifs de pas</div>
-      <div style="display:flex;gap:10px;margin-bottom:12px">
-        <div style="flex:1">
-          <div style="font-size:10px;font-weight:800;color:var(--red);letter-spacing:.5px;margin-bottom:6px">JOUR ON <span style="font-size:9px;font-weight:400;color:var(--sub)">(entraînement)</span></div>
-          <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:18px;font-weight:900;text-align:center;padding:10px;background:#080808;border:1px solid #2a0000;border-radius:8px;color:#fff;font-family:'Bebas Neue',sans-serif">
+    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);animation:fadeInUp .3s ease">
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
+      <div style="position:relative">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:13px">Objectifs de pas</div>
+        <div style="display:flex;gap:10px;margin-bottom:12px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:9px;font-weight:800;color:#ff5a5a;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">JOUR ON <span style="font-size:8px;font-weight:600;color:#5a5a5a">entraînement</span></div>
+            <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:22px;text-align:center;padding:11px 6px;background:linear-gradient(180deg,#0a0000,#0f0303);border:1px solid #3a0d0d;border-radius:9px;color:#ff5a5a;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;box-shadow:inset 0 2px 7px rgba(0,0,0,.6),0 0 12px rgba(224,32,32,.12);text-shadow:0 0 10px rgba(224,32,32,.6)">
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:9px;font-weight:800;color:#7aa7d9;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">JOUR OFF <span style="font-size:8px;font-weight:600;color:#5a5a5a">repos</span></div>
+            <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:22px;text-align:center;padding:11px 6px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:9px;color:#7aa7d9;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;box-shadow:inset 0 2px 7px rgba(0,0,0,.6),0 0 12px rgba(96,165,250,.1);text-shadow:0 0 10px rgba(96,165,250,.5)">
+          </div>
         </div>
-        <div style="flex:1">
-          <div style="font-size:10px;font-weight:800;color:var(--sub);letter-spacing:.5px;margin-bottom:6px">JOUR OFF <span style="font-size:9px;font-weight:400;color:var(--sub)">(repos)</span></div>
-          <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:18px;font-weight:900;text-align:center;padding:10px;background:#080808;border:1px solid #001a3a;border-radius:8px;color:#fff;font-family:'Bebas Neue',sans-serif">
+        <button onclick="saveStepsGoals()" style="width:100%;padding:12px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:#fff;border-radius:9px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 18px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:0 0 9px rgba(255,255,255,.4)">Enregistrer les objectifs</button>
+      </div>
+    </div>
+
+    <div style="background:linear-gradient(145deg,#c10000 0%,#7d0000 55%,#4a0000 100%);border-radius:14px;padding:20px;margin-bottom:14px;text-align:center;position:relative;overflow:hidden;box-shadow:0 12px 30px rgba(0,0,0,.5);animation:fadeInUp .35s ease">
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 16px,rgba(0,0,0,.13) 16px,rgba(0,0,0,.13) 17px);pointer-events:none"></div>
+      <div style="position:absolute;right:-22px;top:-22px;width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,.055);pointer-events:none"></div>
+      <div style="position:relative">
+        <div style="font-size:8px;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:8px">Moyenne hebdomadaire</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:56px;line-height:.95;color:#fff;letter-spacing:1px;text-shadow:0 0 16px rgba(255,255,255,.85),0 0 34px rgba(255,255,255,.4)">${fmt(weekAvg)}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.62);margin-top:6px">pas / jour &nbsp;·&nbsp; ${withData.length} / 7 jours renseignés</div>
+        <div style="margin-top:14px;display:flex;justify-content:center;gap:14px">
+          <div style="text-align:center;flex:1"><div style="font-size:8px;color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">OBJECTIF ON</div><div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:#fff;margin-top:2px;text-shadow:0 0 10px rgba(255,255,255,.55)">${goals.on.toLocaleString('fr-FR')}</div></div>
+          <div style="width:1px;background:rgba(255,255,255,.18)"></div>
+          <div style="text-align:center;flex:1"><div style="font-size:8px;color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">OBJECTIF OFF</div><div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:rgba(255,255,255,.8);margin-top:2px">${goals.off.toLocaleString('fr-FR')}</div></div>
+          <div style="width:1px;background:rgba(255,255,255,.18)"></div>
+          <div style="text-align:center;flex:1"><div style="font-size:8px;color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">TOTAL SEMAINE</div><div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:#fff;margin-top:2px;text-shadow:0 0 10px rgba(255,255,255,.55)">${fmt(withData.reduce((s,d)=>s+d.count,0))}</div></div>
         </div>
       </div>
-      <button class="btn btn-red" onclick="saveStepsGoals()" style="width:100%;font-size:11px;letter-spacing:1.5px;padding:10px">ENREGISTRER LES OBJECTIFS</button>
     </div>
 
-    <div style="background:linear-gradient(135deg,#0f0000,#1a0000);border:1px solid #2a0000;border-radius:14px;padding:20px;margin-bottom:18px;text-align:center">
-      <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px">Moyenne hebdomadaire</div>
-      <div class="txt-hero" style="font-weight:900;color:${avgColor};letter-spacing:-1px">${fmt(weekAvg)}</div>
-      <div style="font-size:11px;color:var(--sub);margin-top:6px">pas / jour &nbsp;·&nbsp; ${withData.length} / 7 jours renseignés</div>
-      <div style="margin-top:12px;display:flex;justify-content:center;gap:18px">
-        <div style="text-align:center"><div style="font-size:10px;color:var(--sub);letter-spacing:1px;font-weight:700">OBJECTIF ON</div><div style="font-size:16px;font-weight:900;color:var(--red)">${goals.on.toLocaleString('fr-FR')}</div></div>
-        <div style="width:1px;background:#2a0000"></div>
-        <div style="text-align:center"><div style="font-size:10px;color:var(--sub);letter-spacing:1px;font-weight:700">OBJECTIF OFF</div><div style="font-size:16px;font-weight:900;color:var(--sub)">${goals.off.toLocaleString('fr-FR')}</div></div>
-        <div style="width:1px;background:#2a0000"></div>
-        <div style="text-align:center"><div style="font-size:10px;color:var(--sub);letter-spacing:1px;font-weight:700">TOTAL SEMAINE</div><div style="font-size:16px;font-weight:900;color:${avgColor}">${fmt(withData.reduce((s,d)=>s+d.count,0))}</div></div>
+    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);animation:fadeInUp .4s ease">
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
+      <div style="position:absolute;left:50%;top:-30px;transform:translateX(-50%);width:130px;height:90px;border-radius:50%;background:radial-gradient(circle,${todayType==='off'?'rgba(96,165,250,.13)':'rgba(224,32,32,.14)'},transparent 68%);pointer-events:none"></div>
+      <div style="position:relative">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:12px">Aujourd'hui : ${new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</div>
+        <div style="display:flex;gap:8px;margin-bottom:11px">
+          <button onclick="stepsToggleType('on')" style="flex:1;padding:10px 4px;border-radius:9px;border:2px solid ${todayType==='on'?'var(--red)':'#1f1f1f'};background:${todayType==='on'?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='on'?'#fff':'#4a4a4a'};font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='on'?'0 0 18px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='on'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">JOUR ON</button>
+          <button onclick="stepsToggleType('off')" style="flex:1;padding:10px 4px;border-radius:9px;border:2px solid ${todayType==='off'?'#60a5fa':'#1f1f1f'};background:${todayType==='off'?'linear-gradient(160deg,#1d4f80,#0b2740)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='off'?'#fff':'#4a4a4a'};font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='off'?'0 0 18px rgba(96,165,250,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='off'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">JOUR OFF</button>
+        </div>
+        ${todayGoalHintHtml}
+        <input type="number" id="steps-today-input" placeholder="0" min="0" max="99999"
+          value="${todayEntry&&todayEntry.count!=null?todayEntry.count:''}"
+          style="width:100%;box-sizing:border-box;font-size:44px;text-align:center;padding:14px 10px;background:linear-gradient(180deg,#070707,#0d0d0d);border:1px solid #242424;border-radius:10px;color:#fff;font-family:'Bebas Neue',sans-serif;letter-spacing:2px;margin-bottom:11px;box-shadow:inset 0 3px 10px rgba(0,0,0,.65);text-shadow:0 0 16px rgba(255,255,255,.45)">
+        <button onclick="saveSteps()" style="width:100%;padding:13px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:#fff;border-radius:9px;font-family:Montserrat,sans-serif;font-size:12px;font-weight:800;letter-spacing:2.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:0 0 10px rgba(255,255,255,.45)">Sauver</button>
+        ${todayProgressHtml}
       </div>
     </div>
 
-    <div style="background:var(--dark);border:1px solid var(--surface-3);border-radius:12px;padding:16px;margin-bottom:18px">
-      <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px">Aujourd'hui — ${new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</div>
-      <div style="display:flex;gap:8px;margin-bottom:10px">
-        <button onclick="stepsToggleType('on')" style="flex:1;padding:6px 4px;border-radius:8px;border:2px solid ${todayType==='on'?'var(--red)':'#2a2a2a'};background:${todayType==='on'?'#2a0000':'#080808'};color:${todayType==='on'?'var(--red)':'#555'};font-size:10px;font-weight:900;letter-spacing:.5px;cursor:pointer">JOUR ON</button>
-        <button onclick="stepsToggleType('off')" style="flex:1;padding:6px 4px;border-radius:8px;border:2px solid ${todayType==='off'?'var(--sub)':'#2a2a2a'};background:${todayType==='off'?'#001a2a':'#080808'};color:${todayType==='off'?'var(--sub)':'#555'};font-size:10px;font-weight:900;letter-spacing:.5px;cursor:pointer">JOUR OFF</button>
+    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);animation:fadeInUp .45s ease">
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
+      <div style="position:relative">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:15px">
+          <span style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Cette semaine</span>
+          <span style="font-size:8px;font-weight:800;letter-spacing:1px;color:#5a5a5a"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--red);vertical-align:middle;box-shadow:0 0 6px rgba(224,32,32,.9)"></span> ON &nbsp;<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#60a5fa;vertical-align:middle;box-shadow:0 0 6px rgba(96,165,250,.8)"></span> OFF</span>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:7px;border-bottom:1px solid rgba(255,255,255,.05)">${bars}</div>
+        <div style="display:flex;gap:4px">${labels}</div>
+        <div style="display:flex;gap:4px">${counts}</div>
       </div>
-      ${todayGoalHintHtml}
-      <input type="number" id="steps-today-input" placeholder="0" min="0" max="99999"
-        value="${todayEntry&&todayEntry.count!=null?todayEntry.count:''}"
-        style="width:100%;box-sizing:border-box;font-size:36px;font-weight:900;text-align:center;padding:14px 10px;background:#080808;border:1px solid #2a2a2a;border-radius:8px;color:#fff;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;margin-bottom:10px">
-      <button class="btn btn-red" onclick="saveSteps()" style="width:100%;padding:12px;font-size:12px;letter-spacing:1.5px;border-radius:8px">SAUVER</button>
-      ${todayProgressHtml}
-    </div>
-
-    <div style="background:var(--dark);border:1px solid var(--surface-3);border-radius:12px;padding:16px;margin-bottom:18px">
-      <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:16px">Cette semaine &nbsp;<span style="font-size:8px;font-weight:400"><span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--red);vertical-align:middle"></span> ON &nbsp;<span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--sub);vertical-align:middle"></span> OFF</span></div>
-      <div style="display:flex;align-items:flex-end;gap:3px;height:75px;margin-bottom:6px">${bars}</div>
-      <div style="display:flex;gap:3px">${labels}</div>
-      <div style="display:flex;gap:3px">${counts}</div>
     </div>
 
     ${histHtml}
@@ -9680,9 +9702,9 @@ function calcSleepDuration(bed,wake){
 }
 function sleepColor(h){
   if(!h) return '#2a2a2a';
-  if(h>=7&&h<=9) return 'var(--green)';
-  if((h>=6&&h<7)||(h>9&&h<=10)) return 'var(--orange)';
-  return 'var(--red)';
+  if(h>=7&&h<=9) return '#22c55e';
+  if((h>=6&&h<7)||(h>9&&h<=10)) return '#f97316';
+  return '#E02020';
 }
 function updateSleepPreview(){
   const bed=document.getElementById('sleep-bed-input')?.value;
@@ -9714,7 +9736,7 @@ function loadSleep(containerId='sleep-content'){
     const pct=h?Math.max(6,Math.round(h/maxVal*100)):4;
     const col=sleepColor(h);
     const glow=d.isToday?';box-shadow:0 0 10px '+col+'66':'';
-    bars+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%"><div style="width:85%;height:${pct}%;background:${col};border-radius:3px 3px 0 0;min-height:3px${glow};transition:.4s"></div></div>`;
+    bars+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%"><div style="width:82%;height:${pct}%;background:linear-gradient(180deg,${col},${col}55);border-radius:4px 4px 0 0;min-height:4px;box-shadow:0 0 ${d.isToday?'14':'8'}px ${col}${d.isToday?'aa':'55'},inset 0 1px 0 rgba(255,255,255,.25);transition:.4s"></div></div>`;
   });
   let labels='';
   weekData.forEach(d=>{
@@ -9732,39 +9754,60 @@ function loadSleep(containerId='sleep-content'){
     const rows=renderDataList(sortedLog,e=>{
       const lbl=new Date(e.date).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
       const col=sleepColor(e.duration);
-      const badge=e.duration>=7&&e.duration<=9?' Idéal':'';
+      const badge=e.duration>=7&&e.duration<=9?'Idéal':'';
       return `<div style="font-size:12px;font-weight:600;color:#aaa;text-transform:capitalize">${lbl}</div><div style="display:flex;align-items:center;gap:10px"><div style="font-size:10px;color:var(--sub)">${e.bed} → ${e.wake}</div>${badge?`<span style="font-size:9px;font-weight:800;color:var(--green)">${badge}</span>`:''}<div style="font-size:14px;font-weight:800;color:${col}">${e.duration}h</div></div>`;
     },{pad:'9px 0',justify:'space-between',gap:0,border:'#111'});
-    histHtml=`<div style="background:var(--dark);border:1px solid var(--surface-3);border-radius:12px;padding:16px"><div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:4px">Historique</div>${rows}</div>`;
+    histHtml=`<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4)"><div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div><div style="position:relative"><div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:6px">Historique</div>${rows}</div></div>`;
   }
 
   document.getElementById(containerId).innerHTML=`
-    <div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:14px;padding:20px;margin-bottom:18px;text-align:center">
-      <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px">Moyenne hebdomadaire</div>
-      <div class="txt-hero" style="font-weight:900;color:${avgColor};letter-spacing:-1px">${weekAvg?weekAvg+'h':'—'}</div>
-      <div style="font-size:11px;color:var(--sub);margin-top:6px">heures / nuit &nbsp;·&nbsp; ${withData.length} / 7 nuits renseignées</div>
-      <div style="margin-top:12px;display:flex;justify-content:center;gap:18px">
-        <div style="text-align:center"><div style="font-size:10px;color:var(--sub);letter-spacing:1px;font-weight:700">OPTIMAL</div><div style="font-size:16px;font-weight:900;color:#555">7 – 9 h</div></div>
-        <div style="width:1px;background:var(--info-border)"></div>
-        <div style="text-align:center"><div style="font-size:10px;color:var(--sub);letter-spacing:1px;font-weight:700">TOTAL SEMAINE</div><div style="font-size:16px;font-weight:900;color:${avgColor}">${weekTotal!=null?weekTotal+'h':'—'}</div></div>
+    <div style="background:linear-gradient(145deg,#0d2a4d 0%,#08172c 55%,#040c17 100%);border-radius:14px;padding:20px;margin-bottom:14px;text-align:center;position:relative;overflow:hidden;box-shadow:0 12px 30px rgba(0,0,0,.5);animation:fadeInUp .3s ease">
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 16px,rgba(0,0,0,.16) 16px,rgba(0,0,0,.16) 17px);pointer-events:none"></div>
+      <div style="position:absolute;right:-20px;top:-20px;width:96px;height:96px;border-radius:50%;background:rgba(255,255,255,.05);pointer-events:none"></div>
+      <div style="position:absolute;left:14px;top:12px;color:rgba(255,255,255,.16)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
+      <div style="position:relative">
+        <div style="font-size:8px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:8px">Moyenne hebdomadaire</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:56px;line-height:.95;color:${weekAvg?avgColor:'rgba(255,255,255,.55)'};letter-spacing:1px;text-shadow:0 0 16px ${weekAvg?avgColor:'rgba(255,255,255,.4)'},0 0 34px ${weekAvg?avgColor+'66':'transparent'}">${weekAvg?weekAvg+'h':'—'}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.55);margin-top:6px">heures / nuit &nbsp;·&nbsp; ${withData.length} / 7 nuits renseignées</div>
+        <div style="margin-top:14px;display:flex;justify-content:center;gap:16px">
+          <div style="text-align:center;flex:1"><div style="font-size:8px;color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">OPTIMAL</div><div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:#22c55e;margin-top:2px;text-shadow:0 0 11px rgba(34,197,94,.7)">7 – 9 h</div></div>
+          <div style="width:1px;background:rgba(255,255,255,.15)"></div>
+          <div style="text-align:center;flex:1"><div style="font-size:8px;color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">TOTAL SEMAINE</div><div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:${weekTotal!=null?avgColor:'rgba(255,255,255,.5)'};margin-top:2px;text-shadow:0 0 11px ${weekTotal!=null?avgColor+'99':'transparent'}">${weekTotal!=null?weekTotal+'h':'—'}</div></div>
+        </div>
       </div>
     </div>
 
-    <div style="background:var(--dark);border:1px solid var(--surface-3);border-radius:12px;padding:16px;margin-bottom:18px">
-      <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px">Aujourd'hui — ${new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-        <div><label style="margin-top:0;font-size:10px">🌙 Coucher</label><input type="time" id="sleep-bed-input" value="${todayEntry?.bed||''}" oninput="updateSleepPreview()" style="font-size:16px;font-weight:700;text-align:center;padding:10px;background:#080808;border:1px solid #2a2a2a;border-radius:8px;color:#fff;width:100%"></div>
-        <div><label style="margin-top:0;font-size:10px">☀️ Lever</label><input type="time" id="sleep-wake-input" value="${todayEntry?.wake||''}" oninput="updateSleepPreview()" style="font-size:16px;font-weight:700;text-align:center;padding:10px;background:#080808;border:1px solid #2a2a2a;border-radius:8px;color:#fff;width:100%"></div>
+    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);animation:fadeInUp .35s ease">
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
+      <div style="position:absolute;left:50%;top:-30px;transform:translateX(-50%);width:130px;height:90px;border-radius:50%;background:radial-gradient(circle,rgba(96,165,250,.13),transparent 68%);pointer-events:none"></div>
+      <div style="position:relative">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:13px">Aujourd'hui : ${new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px">
+          <div>
+            <div style="display:inline-flex;align-items:center;gap:5px;font-size:9px;font-weight:800;color:#60a5fa;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(96,165,250,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>Coucher</div>
+            <input type="time" id="sleep-bed-input" value="${todayEntry?.bed||''}" oninput="updateSleepPreview()" style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;text-align:center;padding:11px 4px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:9px;color:#9cc4ee;width:100%;box-sizing:border-box;box-shadow:inset 0 2px 7px rgba(0,0,0,.6);text-shadow:0 0 10px rgba(96,165,250,.5)">
+          </div>
+          <div>
+            <div style="display:inline-flex;align-items:center;gap:5px;font-size:9px;font-weight:800;color:#f5c518;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(245,197,24,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><circle cx="12" cy="12" r="4.5"/><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="4.2" y1="4.2" x2="6" y2="6"/><line x1="18" y1="18" x2="19.8" y2="19.8"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.2" y1="19.8" x2="6" y2="18"/><line x1="18" y1="6" x2="19.8" y2="4.2"/></svg></span>Lever</div>
+            <input type="time" id="sleep-wake-input" value="${todayEntry?.wake||''}" oninput="updateSleepPreview()" style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;text-align:center;padding:11px 4px;background:linear-gradient(180deg,#0d0900,#120e03);border:1px solid #4d3d12;border-radius:9px;color:#f0d98a;width:100%;box-sizing:border-box;box-shadow:inset 0 2px 7px rgba(0,0,0,.6);text-shadow:0 0 10px rgba(245,197,24,.45)">
+          </div>
+        </div>
+        <div id="sleep-preview" style="text-align:center;font-size:12px;color:#6a6a6a;margin-bottom:11px;min-height:26px">${todayEntry?.duration!=null?`<span style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:${sleepColor(todayEntry.duration)};text-shadow:0 0 13px ${sleepColor(todayEntry.duration)}aa">${todayEntry.duration}h</span> de sommeil`:''}</div>
+        <button onclick="saveSleep()" style="width:100%;padding:13px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:#fff;border-radius:9px;font-family:Montserrat,sans-serif;font-size:12px;font-weight:800;letter-spacing:2.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:0 0 10px rgba(255,255,255,.45)">Enregistrer</button>
       </div>
-      <div id="sleep-preview" style="text-align:center;font-size:13px;color:var(--sub);margin-bottom:10px;min-height:22px">${todayEntry?.duration!=null?`<span style="font-weight:800;font-size:18px;color:${sleepColor(todayEntry.duration)}">${todayEntry.duration}h</span> de sommeil`:''}</div>
-      <button class="btn btn-red" onclick="saveSleep()" style="width:100%;padding:13px;font-size:13px;letter-spacing:1.5px;border-radius:8px">ENREGISTRER</button>
     </div>
 
-    <div style="background:var(--dark);border:1px solid var(--surface-3);border-radius:12px;padding:16px;margin-bottom:18px">
-      <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:16px">Cette semaine</div>
-      <div style="display:flex;align-items:flex-end;gap:3px;height:75px;margin-bottom:6px">${bars}</div>
-      <div style="display:flex;gap:3px">${labels}</div>
-      <div style="display:flex;gap:3px">${counts}</div>
+    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);animation:fadeInUp .4s ease">
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
+      <div style="position:relative">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:15px">
+          <span style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Cette semaine</span>
+          <span style="font-size:8px;font-weight:800;letter-spacing:1px;color:#5a5a5a"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#22c55e;vertical-align:middle;box-shadow:0 0 6px rgba(34,197,94,.9)"></span> 7-9H</span>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:7px;border-bottom:1px solid rgba(255,255,255,.05)">${bars}</div>
+        <div style="display:flex;gap:4px">${labels}</div>
+        <div style="display:flex;gap:4px">${counts}</div>
+      </div>
     </div>
     ${histHtml}
   `;
