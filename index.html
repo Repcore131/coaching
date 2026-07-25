@@ -8125,20 +8125,63 @@ function _suppTimingTags(timings,small){
   }).join('');
 }
 
+// Métadonnées d'affichage par moment de prise : ordre chronologique, couleur, icône
+const SUPP_TIMING_META={
+  'jeun':               {color:'#94a3b8',svg:'<circle cx="12" cy="15" r="4"/><line x1="12" y1="5" x2="12" y2="8"/><line x1="5.6" y1="8.6" x2="7.7" y2="10.7"/><line x1="18.4" y1="8.6" x2="16.3" y2="10.7"/><line x1="3" y1="20" x2="21" y2="20"/>'},
+  'matin':              {color:'#f5c518',svg:'<circle cx="12" cy="12" r="4.5"/><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="4.2" y1="4.2" x2="6" y2="6"/><line x1="18" y1="18" x2="19.8" y2="19.8"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.2" y1="19.8" x2="6" y2="18"/><line x1="18" y1="6" x2="19.8" y2="4.2"/>'},
+  'midi':               {color:'#fb923c',svg:'<circle cx="12" cy="12" r="5.5"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="5" y1="5" x2="6.5" y2="6.5"/><line x1="17.5" y1="6.5" x2="19" y2="5"/>'},
+  'apres-midi':         {color:'#f59e0b',svg:'<circle cx="12" cy="13" r="4"/><line x1="12" y1="4" x2="12" y2="6.5"/><line x1="18.5" y1="7.5" x2="16.7" y2="9.3"/><line x1="20" y1="14" x2="17.5" y2="14"/><line x1="3" y1="20" x2="21" y2="20"/>'},
+  'soir':               {color:'#a78bfa',svg:'<circle cx="12" cy="14" r="4"/><line x1="12" y1="5" x2="12" y2="7.5"/><line x1="5.5" y1="8.5" x2="7.3" y2="10.3"/><line x1="4" y1="15" x2="6.5" y2="15"/><line x1="3" y1="20" x2="21" y2="20"/><polyline points="9 17.5 12 20.5 15 17.5"/>'},
+  'coucher':            {color:'#60a5fa',svg:'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'},
+  'avant-entrainement': {color:'#E02020',svg:'<path d="M6.5 6.5h11M6.5 17.5h11M4 9v6M20 9v6M8 7v10M16 7v10"/>'},
+  'intra':              {color:'#22c55e',svg:'<path d="M12 2.7 C12 2.7 5.5 10 5.5 14.2 a6.5 6.5 0 0 0 13 0 C18.5 10 12 2.7 12 2.7 Z"/>'},
+  'apres-entrainement': {color:'#ef7d3a',svg:'<path d="M6.5 6.5h11M6.5 17.5h11M4 9v6M20 9v6"/><polyline points="8.5 12 11 14.5 15.5 9.5"/>'},
+  'toutes-4h':          {color:'#94a3b8',svg:'<circle cx="12" cy="12" r="9"/><polyline points="12 6.5 12 12 15.8 14"/>'}
+};
+function _suppTimingIcon(id,size,color){
+  const m=SUPP_TIMING_META[id];
+  if(!m) return '';
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="${color||m.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="${size}" height="${size}" style="flex-shrink:0">${m.svg}</svg>`;
+}
+// Compléments regroupés par moment de prise — une section par créneau de la journée
 function _renderSuppTable(list, isCoach, editFn){
   if(!list.length) return emptyState('pill','Aucun complément renseigné.',null,null,'padding:28px 0');
-  const sorted=[...list].sort((a,b)=>_suppTimingOrder(a)-_suppTimingOrder(b)||a.name.localeCompare(b.name,'fr'));
-  return `
-    <div style="display:grid;grid-template-columns:1fr auto auto;align-items:center;padding:6px 0 8px;border-bottom:1px solid var(--border)">
-      <div style="font-size:8px;color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase">Complément</div>
-      <div style="font-size:8px;color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;text-align:right;padding-right:12px">Dosage</div>
-      <div style="font-size:8px;color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase">Moment(s)</div>
-    </div>
-    ${renderDataList(sorted,(s,i)=>{
-      const realIdx=list.indexOf(s);const inactive=s.active===false;
-      return{html:`<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:700;color:${inactive?'#444':'#fff'}">${escapeHtml(s.name)}${inactive?'<span style="font-size:9px;color:#444;margin-left:6px">désactivé</span>':''}</div><div style="font-size:10px;color:var(--sub);margin-top:2px">${s.dosage_quantity||'—'} ${s.dosage_unit||''}</div>${s.notes?`<div style="font-size:10px;color:#555;margin-top:2px;font-style:italic">${escapeHtml(s.notes)}</div>`:''}</div><div style="flex-shrink:0;text-align:right;padding-right:10px;padding-top:2px"><div style="font-size:14px;font-weight:800;color:var(--red)">${s.dosage_quantity||'—'}<span style="font-size:9px;color:var(--sub);font-weight:400">${s.dosage_quantity?' '+s.dosage_unit:''}</span></div></div><div style="flex-shrink:0;max-width:130px">${_suppTimingTags(s.timings,true)}</div>`,
-      onClick:`${editFn}(${realIdx})`,cls:inactive?'row-inactive':'',style:'cursor:pointer;'};
-    },{pad:'11px 0',gap:10,align:'flex-start'})}`;
+  const groups=TIMINGS_LIST
+    .map(t=>({t,items:list.filter(s=>(s.timings||[]).includes(t.id)).sort((a,b)=>a.name.localeCompare(b.name,'fr'))}))
+    .filter(g=>g.items.length);
+  const orphans=list.filter(s=>!(s.timings||[]).some(id=>TIMINGS_LIST.some(t=>t.id===id)));
+  if(orphans.length) groups.push({t:{id:'_none',label:'Moment non défini'},items:orphans});
+
+  const row=(s,color)=>{
+    const realIdx=list.indexOf(s);
+    const inactive=s.active===false;
+    const others=(s.timings||[]).length-1;
+    return `<div onclick="${editFn}(${realIdx})" style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;border-radius:9px;background:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,0));border:1px solid rgba(255,255,255,.045);margin-bottom:5px;transition:.15s${inactive?';opacity:.42':''}">
+      <div style="width:3px;align-self:stretch;border-radius:3px;background:${color};box-shadow:0 0 7px ${color}99;flex-shrink:0"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;color:${inactive?'#555':'#fff'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s.name)}${inactive?'<span style="font-size:9px;color:#444;margin-left:6px;font-weight:600">désactivé</span>':''}</div>
+        ${s.notes?`<div style="font-size:10px;color:#5a5a5a;margin-top:2px;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s.notes)}</div>`:''}
+        ${others>0?`<div style="font-size:9px;color:#4a4a4a;margin-top:2px;letter-spacing:.5px">aussi ${others} autre${others>1?'s':''} moment${others>1?'s':''}</div>`:''}
+      </div>
+      <div style="flex-shrink:0;text-align:right">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:21px;line-height:1;color:${color};text-shadow:0 0 9px ${color}88">${s.dosage_quantity||'—'}</div>
+        <div style="font-size:8.5px;color:#666;letter-spacing:.8px;margin-top:1px;text-transform:uppercase">${s.dosage_quantity?escapeHtml(s.dosage_unit||''):''}</div>
+      </div>
+    </div>`;
+  };
+
+  return groups.map(g=>{
+    const meta=SUPP_TIMING_META[g.t.id]||{color:'#666',svg:''};
+    const c=meta.color;
+    return `<div style="margin-bottom:13px">
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 11px;border-radius:9px 9px 0 0;background:linear-gradient(90deg,${c}22,${c}06 65%,transparent);border-left:3px solid ${c};box-shadow:inset 0 1px 0 rgba(255,255,255,.05)">
+        <span style="display:inline-flex;filter:drop-shadow(0 0 5px ${c}cc)">${_suppTimingIcon(g.t.id,14,c)}</span>
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2px;color:${c};text-transform:uppercase;text-shadow:0 0 9px ${c}88">${g.t.label}</span>
+        <span style="margin-left:auto;font-size:9px;font-weight:800;color:${c};opacity:.65;letter-spacing:1px">${g.items.length}</span>
+      </div>
+      <div style="padding-top:6px">${g.items.map(s=>row(s,c)).join('')}</div>
+    </div>`;
+  }).join('');
 }
 
 let _suppReturnToNutrition=false;
