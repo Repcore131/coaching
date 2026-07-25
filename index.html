@@ -5634,9 +5634,10 @@ function renderWoEx(){
   // Contrepoids (DIPS/TRACTIONS assistés|guidés) : progression = MOINS de charge
   const isCW=isCounterweightEx(ex.name);
   const baseWeight=getLastZeroRIRWeight(ex.name);
-  const _calcSug=prev?calcSug(prev.weight,prev.reps,prev.rir,ex.reps,ex.rir):null;
+  const _calcSug=prev?((prev.rir==='0'||prev.rir===0||prev.rir==='echec')?roundWeight(parseFloat(prev.weight)):calcSug(prev.weight,prev.reps,prev.rir,ex.reps,ex.rir)):null;
+  // RIR 0 atteint la dernière fois → même charge (on ne monte que si RIR > 0)
   const _rawSug=baseWeight
-    ?roundWeight(baseWeight+(isCW?-2.5:2.5))
+    ?roundWeight(baseWeight)
     :_calcSug!=null
       ?(isCW?roundWeight(2*parseFloat(prev.weight)-_calcSug):_calcSug)
       :null;
