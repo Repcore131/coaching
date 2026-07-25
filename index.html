@@ -333,6 +333,14 @@ h3{font-size:16px;text-transform:uppercase}
 .emo-opt.sel .emo{stroke:var(--eo);opacity:1;transform:scale(1.15);filter:drop-shadow(0 0 5px var(--eo))}
 .emo-opt.sel .emo .emo-dot{fill:var(--eo)}
 .emo-opt.sel .emo-lbl{color:var(--eo);text-shadow:0 0 8px var(--eo-glow)}
+/* Badge record animé (fin de séance) */
+.wd-badge{position:relative;overflow:hidden;display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#1a1200,#0e0a00);border:1.5px solid #fbbf24;border-radius:14px;padding:14px 16px;animation:wdBadgePop .55s cubic-bezier(.2,1.4,.4,1) both,wdBadgeGlow 2.2s ease-in-out .55s infinite}
+.wd-badge-medal{width:58px;height:58px;border-radius:50%;background:#140f00;border:2px solid #fbbf24;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 14px rgba(251,191,36,.45),inset 0 0 10px rgba(251,191,36,.15);animation:wdMedalSwing 2.2s ease-in-out .55s infinite}
+.wd-badge::after{content:'';position:absolute;top:0;left:-60%;width:40%;height:100%;background:linear-gradient(105deg,transparent,rgba(255,255,255,.14),transparent);animation:wdShine 2.6s ease-in-out .8s infinite}
+@keyframes wdBadgePop{0%{transform:scale(.5);opacity:0}70%{transform:scale(1.06)}100%{transform:scale(1);opacity:1}}
+@keyframes wdBadgeGlow{0%,100%{box-shadow:0 0 10px rgba(251,191,36,.25)}50%{box-shadow:0 0 22px rgba(251,191,36,.5)}}
+@keyframes wdMedalSwing{0%,100%{transform:rotate(0deg)}20%{transform:rotate(-7deg)}40%{transform:rotate(6deg)}60%{transform:rotate(-3deg)}80%{transform:rotate(2deg)}}
+@keyframes wdShine{0%{left:-60%}55%,100%{left:120%}}
 /* Choix Homme/Femme avec silhouettes */
 .gsl-row{display:flex;gap:10px}
 .gsl-opt{flex:1;min-width:0;background:var(--surface-1);border:1px solid #222;border-radius:14px;padding:14px 8px 12px;text-align:center;cursor:pointer;transition:.18s;user-select:none}
@@ -5941,12 +5949,8 @@ function finishWorkout(incomplete=false){
 function buildSessionComparison(vol,data){
   const prev=currentUser.sessions.slice(0,-1);
   const prevSame=[...prev].reverse().find(s=>s.name===woState.progName);
-  const items=[];
-  if(prevSame?.volume>0){
-    const delta=Math.round(vol)-prevSame.volume;
-    if(delta>0) items.push({icon:icon('flame',20),color:'var(--green)',text:'+'+delta+'kg de volume vs dernière séance'});
-    else if(delta<0) items.push({icon:'📉',color:'#666',text:delta+'kg de volume vs dernière séance'});
-  }
+  // ── Records : on collecte tout mais on n'affiche QU'UN badge (le meilleur gain) ──
+  const records=[];
   let firstSession=false;
   Object.entries(data).forEach(([nm,d])=>{
     const curMax=d.sets.filter(s=>s.done&&parseFloat(s.weight||0)>0).reduce((m,s)=>Math.max(m,parseFloat(s.weight)),0);
@@ -5954,15 +5958,31 @@ function buildSessionComparison(vol,data){
     let histMax=0;
     prev.forEach(s=>{(s.data?.[nm]?.sets||[]).filter(x=>x.done).forEach(x=>{const w=parseFloat(x.weight||0);if(w>histMax)histMax=w;});});
     if(histMax===0){firstSession=true;return;}
-    if(curMax>histMax)
-      items.push({icon:icon('trophy',20),color:'#fbbf24',text:'Record : '+curMax+'kg au '+nm+' (était '+histMax+'kg)',celebrate:true});
+    if(curMax>histMax) records.push({nm,curMax,histMax,gain:curMax-histMax});
   });
-  if(firstSession&&!items.length)
-    items.push({icon:'📝',color:'var(--sub)',text:'Première séance enregistrée — tes prochains records apparaîtront ici'});
-  if(!items.length) return '';
-  return `<div style="margin-bottom:16px;display:flex;flex-direction:column;gap:6px">`
-    +items.map(it=>`<div style="background:var(--surface-1);border:1px solid #1e1e1e;border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px"><span ${it.celebrate?'class="celebrate" ':''}style="font-size:18px;flex-shrink:0">${it.icon}</span><span style="font-size:12px;font-weight:700;color:${it.color}">${escapeHtml(it.text)}</span></div>`).join('')
-    +'</div>';
+  let html='';
+  if(records.length){
+    records.sort((a,b)=>b.gain-a.gain);
+    const best=records[0];
+    html+=`<div class="wd-badge" style="margin-bottom:14px">
+      <div class="wd-badge-medal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="34" height="34"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+      </div>
+      <div style="min-width:0">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:1.5px;color:#fbbf24;line-height:1">NOUVEAU RECORD</div>
+        <div style="font-size:12px;font-weight:800;color:#fff;margin-top:4px">${best.curMax}kg — ${escapeHtml(best.nm)}</div>
+        <div style="font-size:10px;color:var(--sub);margin-top:2px">était ${best.histMax}kg${records.length>1?' · +'+(records.length-1)+' autre'+(records.length>2?'s':'')+' record'+(records.length>2?'s':'')+' battu'+(records.length>2?'s':''):''}</div>
+      </div>
+    </div>`;
+  }
+  // ── Volume : une seule petite ligne sobre ──
+  if(prevSame?.volume>0){
+    const delta=Math.round(vol)-prevSame.volume;
+    if(delta!==0) html+=`<div style="background:var(--surface-1);border:1px solid #1e1e1e;border-radius:8px;padding:9px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px"><span style="flex-shrink:0;color:${delta>0?'var(--green)':'#666'}">${delta>0?icon('flame',18):'▾'}</span><span style="font-size:12px;font-weight:700;color:${delta>0?'var(--green)':'#888'}">${delta>0?'+':''}${delta}kg de volume vs dernière séance</span></div>`;
+  }
+  if(firstSession&&!html)
+    html=`<div style="background:var(--surface-1);border:1px solid #1e1e1e;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;font-weight:700;color:var(--sub)">Première séance enregistrée — tes prochains records apparaîtront ici</div>`;
+  return html;
 }
 function savePostSession(){
   const metrics={
