@@ -7211,33 +7211,87 @@ function showProgressTab(tab,btn){
     const hasSome=bl.some(b=>getP(b,'face')||getP(b,'back')||getP(b,'side'));
     if(!hasSome){c.innerHTML=emptyState('image','Aucune photo de bilan.<br>Ajoute des photos lors de ton prochain bilan.');return;}
     // Fresque : lignes = pose (Face/Dos/Profil), colonnes = bilans
-    const poses=[['face','FACE'],['back','DOS'],['side','PROFIL']];
-    const cellW=Math.max(72,Math.min(110,Math.floor((window.innerWidth||360)-40)/(bl.length+1)));
-    let html=`<div style="position:relative"><div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:8px" data-scroll-fade>
-      <table style="border-collapse:collapse;min-width:100%">
-        <thead><tr>
-          <td style="padding:6px 8px;font-size:8px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:1px;min-width:44px"></td>
-          ${bl.map((_,i)=>`<td style="padding:6px 4px;text-align:center;font-size:8px;font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;min-width:${cellW}px">
-            B${i+1}<br><span style="color:#444;font-weight:600;font-size:7px">${getBW(bl[i])?getBW(bl[i])+'kg':''}</span>
-          </td>`).join('')}
-        </tr></thead>
-        <tbody>
-        ${poses.map(([key,lbl])=>`<tr>
-          <td style="padding:6px 8px;font-size:8px;font-weight:900;color:#aaa;text-transform:uppercase;letter-spacing:.5px;vertical-align:middle">${lbl}</td>
-          ${bl.map((b,i)=>{
-            const src=getP(b,key);
-            return `<td style="padding:3px 4px;vertical-align:top">
-              ${src
-                ?`<div style="width:${cellW}px;aspect-ratio:.65;border-radius:6px;overflow:hidden;background:#111;cursor:pointer" onclick="openPhotoFull(this.querySelector('img').src,'Bilan ${i+1} — ${lbl}')"><img src="${src}" style="width:100%;height:100%;object-fit:cover"></div>`
-                :`<div style="width:${cellW}px;aspect-ratio:.65;border-radius:6px;background:var(--surface-1);border:1px dashed #1e1e1e;display:flex;align-items:center;justify-content:center"><span style="font-size:14px;opacity:.15"></span></div>`}
-            </td>`;
-          }).join('')}
-        </tr>`).join('')}
-        </tbody>
-      </table>
+    const poses=[['face','DE FACE',BPOSE.face],['back','DE DOS',BPOSE.back],['side','DE PROFIL',BPOSE.side]];
+    const cellW=Math.max(72,Math.min(104,Math.floor(((window.innerWidth||360)-124)/Math.max(1,Math.min(bl.length,3)))));
+    const first=bl[0],last=bl[bl.length-1];
+    const wFirst=getBW(first),wLast=getBW(last);
+    const dW=(wFirst&&wLast)?Math.round((wLast-wFirst)*10)/10:null;
+    const dCol=dW==null?'#8a8a8a':dW<0?'#22c55e':dW>0?'#f5c518':'#8a8a8a';
+    const period=(()=>{
+      if(bl.length<2) return '';
+      const d1=new Date(first.date),d2=new Date(last.date);
+      const days=Math.round((d2-d1)/864e5);
+      if(days<31) return days+' jours';
+      const m=Math.round(days/30.4);
+      return m+' mois';
+    })();
+
+    let html=`<div style="background:linear-gradient(160deg,#141414 0%,#0b0b0b 55%,#080808 100%);border:1px solid #202020;border-radius:16px;padding:16px 14px 14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 14px 34px rgba(0,0,0,.55);animation:fadeInUp .35s ease">
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 17px,rgba(255,255,255,.016) 17px,rgba(255,255,255,.016) 18px);pointer-events:none"></div>
+      <div style="position:absolute;left:-16px;top:34px;width:66px;height:150px;background:repeating-linear-gradient(-58deg,#E02020,#E02020 9px,transparent 9px,transparent 22px);opacity:.4;pointer-events:none;z-index:0"></div>
+      <div style="position:absolute;right:-16px;bottom:44px;width:66px;height:150px;background:repeating-linear-gradient(-58deg,#E02020,#E02020 9px,transparent 9px,transparent 22px);opacity:.4;pointer-events:none;z-index:0"></div>
+      <div style="position:relative;z-index:1">
+        <!-- Titre facon affiche -->
+        <div style="text-align:center;margin-bottom:4px">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:34px;line-height:1;letter-spacing:3px;color:#fff;text-shadow:0 0 18px rgba(255,255,255,.5),3px 3px 0 rgba(224,32,32,.9)">MA TRANSFORMATION</div>
+          <div style="font-size:8px;font-weight:800;letter-spacing:3.5px;color:#ff5a5a;text-transform:uppercase;margin-top:5px;text-shadow:0 0 10px rgba(224,32,32,.7)">${period?period+' de travail':'Suivi photo'} &nbsp;·&nbsp; ${bl.length} bilan${bl.length>1?'s':''}</div>
+        </div>
+        ${dW!=null?`<div style="display:flex;justify-content:center;gap:9px;margin:11px 0 13px">
+          <div style="flex:1;max-width:112px;background:linear-gradient(180deg,#131313,#0b0b0b);border:1px solid #232323;border-radius:10px;padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;line-height:1;color:#8a8a8a">${wFirst}<span style="font-size:11px">kg</span></div>
+            <div style="font-size:7.5px;letter-spacing:1.6px;color:#4a4a4a;margin-top:3px;font-weight:800">DÉPART</div>
+          </div>
+          <div style="flex:1;max-width:112px;background:linear-gradient(160deg,#c10000,#6d0000);border:1px solid rgba(255,90,90,.42);border-radius:10px;padding:8px 6px;text-align:center;box-shadow:0 0 20px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.18)">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;line-height:1;color:#fff;text-shadow:0 0 12px rgba(255,255,255,.9)">${wLast}<span style="font-size:11px">kg</span></div>
+            <div style="font-size:7.5px;letter-spacing:1.6px;color:rgba(255,255,255,.8);margin-top:3px;font-weight:800">AUJOURD'HUI</div>
+          </div>
+          <div style="flex:1;max-width:112px;background:linear-gradient(180deg,#131313,#0b0b0b);border:1px solid ${dCol}44;border-radius:10px;padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 0 16px ${dCol}22">
+            <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;line-height:1;color:${dCol};text-shadow:0 0 12px ${dCol}bb">${dW>0?'+':''}${dW}<span style="font-size:11px">kg</span></div>
+            <div style="font-size:7.5px;letter-spacing:1.6px;color:${dCol}aa;margin-top:3px;font-weight:800">ÉVOLUTION</div>
+          </div>
+        </div>`:'<div style="height:8px"></div>'}
+        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px" data-scroll-fade>
+          <table style="border-collapse:separate;border-spacing:0 0;min-width:100%">
+            <thead><tr>
+              <td style="padding:4px 6px;min-width:56px"></td>
+              ${bl.map((_,i)=>{
+                const isLast=i===bl.length-1;
+                return `<td style="padding:4px 4px 7px;text-align:center;min-width:${cellW}px">
+                  <div style="display:inline-block;padding:3px 9px;border-radius:20px;background:${isLast?'linear-gradient(160deg,#c10000,#6d0000)':'#141414'};border:1px solid ${isLast?'rgba(255,90,90,.45)':'#222'};box-shadow:${isLast?'0 0 14px rgba(224,32,32,.5)':'none'}">
+                    <span style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1.5px;color:${isLast?'#fff':'#7a7a7a'};${isLast?'text-shadow:0 0 9px rgba(255,255,255,.7)':''}">B${i+1}</span>
+                  </div>
+                  <div style="font-size:8px;font-weight:800;color:${isLast?'#ff7a7a':'#3f3f3f'};margin-top:3px;letter-spacing:.5px">${getBW(bl[i])?getBW(bl[i])+'KG':''}</div>
+                </td>`;
+              }).join('')}
+            </tr></thead>
+            <tbody>
+            ${poses.map(([key,lbl,poseImg])=>`<tr>
+              <td style="padding:5px 4px;vertical-align:middle;text-align:center">
+                <img src="${poseImg}" alt="${lbl}" style="height:52px;max-width:52px;object-fit:contain;filter:drop-shadow(0 0 7px rgba(255,255,255,.55));display:block;margin:0 auto 4px">
+                <div style="font-family:'Bebas Neue',sans-serif;font-size:11px;letter-spacing:1.4px;color:#fff;text-shadow:0 0 9px rgba(255,255,255,.4);white-space:nowrap">${lbl}</div>
+              </td>
+              ${bl.map((b,i)=>{
+                const src=getP(b,key);
+                const isLast=i===bl.length-1;
+                return `<td style="padding:4px;vertical-align:top">
+                  ${src
+                    ?`<div style="width:${cellW}px;aspect-ratio:.65;border-radius:9px;overflow:hidden;background:#111;cursor:pointer;border:1.5px solid ${isLast?'rgba(224,32,32,.75)':'#242424'};box-shadow:${isLast?'0 0 16px rgba(224,32,32,.45)':'0 5px 14px rgba(0,0,0,.5)'};position:relative" onclick="openPhotoFull(this.querySelector('img').src,'Bilan ${i+1} : ${lbl}')"><img src="${src}" style="width:100%;height:100%;object-fit:cover"><div style="position:absolute;inset:0;background:linear-gradient(180deg,transparent 62%,rgba(0,0,0,.55));pointer-events:none"></div></div>`
+                    :`<div style="width:${cellW}px;aspect-ratio:.65;border-radius:9px;background:linear-gradient(180deg,#101010,#0a0a0a);border:1px dashed #1e1e1e;display:flex;align-items:center;justify-content:center;color:#1e1e1e">${icon('image',20)}</div>`}
+                </td>`;
+              }).join('')}
+            </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+        <!-- Pied facon signature -->
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,.06)">
+          <img src="./icons/logo.png" alt="" style="width:20px;height:20px;border-radius:5px;object-fit:cover;opacity:.9">
+          <span style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:3px;color:#6a6a6a">REPCORE</span>
+          <span style="font-size:8px;color:#333;letter-spacing:1.5px;font-weight:700">· GUELLEC COACHING PRO</span>
+        </div>
+      </div>
     </div>
-    </div>
-    <div style="margin-top:10px;font-size:9px;color:#2a2a2a;text-align:center">Touche une photo pour l'agrandir · ${bl.length} bilan${bl.length>1?'s':''} enregistré${bl.length>1?'s':''}</div>`;
+    <div style="margin-top:10px;font-size:9px;color:#2f2f2f;text-align:center">Touche une photo pour l'agrandir · fais défiler pour voir tous tes bilans</div>`;
     c.innerHTML=html;
     c.querySelectorAll('[data-scroll-fade]').forEach(el=>setupScrollFade(el));
   } else if(tab==='notes'){
