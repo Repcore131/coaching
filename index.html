@@ -2265,6 +2265,7 @@ const ICONS={
   key:'<path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/>',
   'plus-circle':'<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>',
   zap:'<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  target:'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
   leaf:'<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>',
   pencil:'<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/>',
   users:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
@@ -7508,6 +7509,7 @@ function _renderStrictMacroRings(nut){
         <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="var(--surface-3)" stroke-width="${sw}"/>
         <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${color}" stroke-width="${sw}"
           stroke-dasharray="${d} ${gap}" stroke-linecap="${d>0?'round':'butt'}"
+          ${d>0?`filter="drop-shadow(0 0 4px ${color})"`:''}
           transform="rotate(-90 ${cx} ${cy})"/>
         <text x="${cx}" y="${cy}" dominant-baseline="middle" text-anchor="middle"
           font-family="Montserrat,sans-serif" font-size="13" font-weight="900" fill="#fff">${tgt||'—'}</text>
@@ -7519,11 +7521,11 @@ function _renderStrictMacroRings(nut){
   };
   const kcalPct=m.kcal?Math.min((tot.kcal||0)/m.kcal,1):0;
   const dayBadge=isOn
-    ?`<span style="font-size:8px;font-weight:800;color:var(--success);background:var(--success-bg);border:1px solid var(--success-border);border-radius:5px;padding:3px 10px;letter-spacing:1px">⚡ JOUR ON</span>`
-    :`<span style="font-size:8px;font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:5px;padding:3px 10px;letter-spacing:1px">💤 JOUR OFF</span>`;
-  return `<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:18px">
+    ?`<span style="display:inline-flex;align-items:center;gap:4px;font-size:8px;font-weight:800;color:var(--success);background:var(--success-bg);border:1px solid var(--success-border);border-radius:5px;padding:3px 10px;letter-spacing:1px">${icon('zap',10)} JOUR ON</span>`
+    :`<span style="display:inline-flex;align-items:center;gap:4px;font-size:8px;font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:5px;padding:3px 10px;letter-spacing:1px">${icon('moon',10)} JOUR OFF</span>`;
+  return `<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 8px 24px rgba(0,0,0,.35);animation:fadeInUp .3s ease">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700">🎯 Objectifs du jour</div>
+      <div style="display:inline-flex;align-items:center;gap:6px;font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700">${icon('target',12)} Objectifs du jour</div>
       ${dayBadge}
     </div>
     <div style="display:flex;justify-content:space-around;margin-bottom:16px">
@@ -7535,8 +7537,8 @@ function _renderStrictMacroRings(nut){
       <span style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700">Calories</span>
       <span style="font-size:11px;font-weight:800;color:var(--red)">${Math.round(tot.kcal||0)}<span style="font-size:9px;color:var(--sub);font-weight:400"> / ${m.kcal||'—'} kcal</span></span>
     </div>
-    <div style="height:10px;background:var(--surface-2);border-radius:5px;overflow:hidden">
-      <div style="height:100%;width:${(kcalPct*100).toFixed(1)}%;background:linear-gradient(90deg,var(--red),#ff4444);border-radius:5px;transition:width .4s ease"></div>
+    <div style="height:10px;background:var(--surface-2);border-radius:5px;overflow:visible">
+      <div style="height:100%;width:${(kcalPct*100).toFixed(1)}%;background:linear-gradient(90deg,var(--red),#ff4444);border-radius:5px;transition:width .4s ease;box-shadow:0 0 12px rgba(224,32,32,.5)"></div>
     </div>
   </div>`;
 }
@@ -7874,39 +7876,41 @@ function _renderFjDaySummary(date){
   const grouped={};
   entries.forEach(e=>{const r=e.repas||'dejeuner';if(!grouped[r])grouped[r]=[];grouped[r].push(e);});
   const dayBadge=isOn
-    ? `<span style="font-size:8px;font-weight:800;color:var(--success);background:var(--success-bg);border:1px solid var(--success-border);border-radius:5px;padding:2px 7px;letter-spacing:1px">⚡ JOUR ON</span>`
-    : `<span style="font-size:8px;font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:5px;padding:2px 7px;letter-spacing:1px">💤 JOUR OFF</span>`;
+    ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:8px;font-weight:800;color:var(--success);background:var(--success-bg);border:1px solid var(--success-border);border-radius:5px;padding:2px 7px;letter-spacing:1px">${icon('zap',10)} JOUR ON</span>`
+    : `<span style="display:inline-flex;align-items:center;gap:4px;font-size:8px;font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:5px;padding:2px 7px;letter-spacing:1px">${icon('moon',10)} JOUR OFF</span>`;
   const tile=(val,tgt,label,color)=>`<div style="flex:1;background:#111;border-radius:8px;padding:10px;text-align:center;min-width:0">
     <div style="font-size:18px;font-weight:800;color:${color};line-height:1">${typeof val==='number'?parseFloat(val.toFixed(1)):val}${tgt?`<span style="font-size:8px;color:var(--sub);font-weight:400">/${tgt}</span>`:''}</div>
     <div style="font-size:8px;color:var(--sub);letter-spacing:1px;margin-top:3px;text-transform:uppercase">${label}</div>
   </div>`;
 
   el.innerHTML=`
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <div style="display:flex;align-items:center;gap:6px">
-        <button onclick="_renderFjDaySummary('${prevStr}')" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:14px">←</button>
-        <div>
-          <h3 style="margin:0;font-size:14px">${dateLbl}</h3>
-          <div style="margin-top:3px">${dayBadge}</div>
+    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 8px 24px rgba(0,0,0,.35);animation:fadeInUp .3s ease;margin-bottom:12px;overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 14px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <button onclick="_renderFjDaySummary('${prevStr}')" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:14px">←</button>
+          <div>
+            <h3 style="margin:0;font-size:14px">${dateLbl}</h3>
+            <div style="margin-top:3px">${dayBadge}</div>
+          </div>
+          ${nextBtn}
         </div>
-        ${nextBtn}
+        <button onclick="openFoodSearch('${date}')" style="background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:1.5px;padding:8px 14px;border-radius:8px;cursor:pointer;box-shadow:0 0 14px rgba(224,32,32,.35)">+ AJOUTER</button>
       </div>
-      <button onclick="openFoodSearch('${date}')" style="background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:1.5px;padding:8px 14px;border-radius:8px;cursor:pointer">+ AJOUTER</button>
+      <div style="border-top:1px solid var(--surface-2);padding:13px 14px 10px">
+        <div style="display:flex;gap:6px;margin-bottom:6px">
+          ${tile(Math.round(tot.kcal),m.kcal?m.kcal+' kcal':'','kcal','var(--red)')}
+          ${tile(tot.p,m.p?m.p+'g':'','prot','#60a5fa')}
+          ${tile(tot.c,m.g?m.g+'g':'','gluc','var(--green)')}
+          ${tile(tot.l,m.l?m.l+'g':'','lip','#fb923c')}
+        </div>
+        <div style="display:flex;gap:6px">
+          ${tile(tot.s,m.s?m.s+'g':'','sucre ℹ','#a78bfa')}
+          ${tile(tot.fi,m.f?m.f+'g':'','fibres ℹ','#94a3b8')}
+          <div style="flex:2"></div>
+        </div>
+        <div style="font-size:9px;color:#3a3a3a;text-align:right;margin-top:7px">ℹ sucre & fibres — indicatif</div>
+      </div>
     </div>
-    <div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:12px;padding:14px;margin-bottom:6px">
-      <div style="display:flex;gap:6px;margin-bottom:6px">
-        ${tile(Math.round(tot.kcal),m.kcal?m.kcal+' kcal':'','kcal','var(--red)')}
-        ${tile(tot.p,m.p?m.p+'g':'','prot','#60a5fa')}
-        ${tile(tot.c,m.g?m.g+'g':'','gluc','var(--green)')}
-        ${tile(tot.l,m.l?m.l+'g':'','lip','#fb923c')}
-      </div>
-      <div style="display:flex;gap:6px">
-        ${tile(tot.s,m.s?m.s+'g':'','sucre ℹ','#a78bfa')}
-        ${tile(tot.fi,m.f?m.f+'g':'','fibres ℹ','#94a3b8')}
-        <div style="flex:2"></div>
-      </div>
-    </div>
-    <div style="font-size:9px;color:#333;text-align:right;margin-bottom:12px;padding-right:2px">ℹ sucre & fibres — indicatif</div>
     ${entries.length===0?`<div style="text-align:center;padding:18px 0 8px;color:#333;font-size:12px">Aucun aliment enregistré — appuie sur + AJOUTER</div>`:''}
     ${repasOrder.filter(r=>grouped[r]).map(r=>`
       <div style="margin-bottom:14px">
