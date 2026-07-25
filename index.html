@@ -1486,6 +1486,16 @@ const COACH_PHOTO='icons/coach.jpg';
       <div class="card" style="margin-bottom:14px">
         <div style="display:flex;gap:12px;margin-bottom:14px">
           <div style="flex:1">
+            <label style="font-size:10px;color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px">Prénom</label>
+            <input id="atp-fname" type="text" maxlength="40" placeholder="Prénom" style="width:100%;font-size:16px;padding:11px 14px;box-sizing:border-box">
+          </div>
+          <div style="flex:1">
+            <label style="font-size:10px;color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px">Nom</label>
+            <input id="atp-lname" type="text" maxlength="40" placeholder="Nom" style="width:100%;font-size:16px;padding:11px 14px;box-sizing:border-box">
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;margin-bottom:14px">
+          <div style="flex:1">
             <label style="font-size:10px;color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px">Âge</label>
             <input id="atp-age" type="number" min="10" max="99" placeholder="25" style="width:100%;font-size:16px;padding:11px 14px;box-sizing:border-box">
           </div>
@@ -10847,6 +10857,10 @@ function openAthleteProfile(){
   const u=currentUser;
   const circle=document.getElementById('atp-photo-circle');
   if(circle) circle.innerHTML=u.athletePhoto?`<img src="${escapeHtml(u.athletePhoto)}" style="width:100%;height:100%;object-fit:cover">`:icon('user',36);
+  const fnEl=document.getElementById('atp-fname');
+  if(fnEl) fnEl.value=u.fname||'';
+  const lnEl=document.getElementById('atp-lname');
+  if(lnEl) lnEl.value=u.lname||'';
   const ageEl=document.getElementById('atp-age');
   if(ageEl) ageEl.value=u.age||'';
   const wtEl=document.getElementById('atp-weight');
@@ -10858,6 +10872,10 @@ function openAthleteProfile(){
   go('s-athlete-profile');
 }
 function saveAthleteProfile(){
+  const _fn=(document.getElementById('atp-fname')?.value||'').trim().slice(0,40);
+  const _ln=(document.getElementById('atp-lname')?.value||'').trim().slice(0,40);
+  if(_fn) currentUser.fname=_fn;
+  if(_ln) currentUser.lname=_ln;
   currentUser.age=parseInt(document.getElementById('atp-age')?.value)||undefined;
   currentUser.profileWeight=parseFloat(document.getElementById('atp-weight')?.value)||undefined;
   currentUser.gender=_atpGender||currentUser.gender;
