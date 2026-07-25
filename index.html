@@ -2047,31 +2047,69 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <!-- BANNIÈRE DE BASCULE -->
-      <div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:12px;padding:14px 16px;margin-bottom:16px">
-        <div style="font-size:11px;font-weight:800;color:var(--info);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:middle;flex-shrink:0"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg> Nouveau canal — corrections techniques</div>
-        <p style="font-size:12px;color:#bbb;line-height:1.6;margin:0">Envoie tes vidéos ici <strong style="color:#fff">plutôt que sur Instagram</strong>. Ton coach te répond avec des repères à la seconde exacte, consultables à tout moment — plus efficace qu'un message perdu dans les DMs.</p>
+      <div style="background:linear-gradient(145deg,#c10000 0%,#880000 55%,#560000 100%);border-radius:12px;padding:18px 20px;position:relative;overflow:hidden;margin-bottom:16px;box-shadow:0 10px 26px rgba(0,0,0,.45);animation:fadeInUp .3s ease">
+        <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 16px,rgba(0,0,0,.12) 16px,rgba(0,0,0,.12) 17px);pointer-events:none"></div>
+        <div style="position:absolute;right:-18px;top:-18px;width:90px;height:90px;border-radius:50%;background:rgba(255,255,255,.05);pointer-events:none"></div>
+        <div style="position:relative;display:flex;gap:14px;align-items:flex-start">
+          <!-- Mockup téléphone en train de filmer un exercice -->
+          <svg viewBox="0 0 62 108" style="width:56px;flex-shrink:0;filter:drop-shadow(0 6px 12px rgba(0,0,0,.5))">
+            <rect x="2" y="2" width="58" height="104" rx="9" fill="#0b0b0b" stroke="rgba(255,255,255,.55)" stroke-width="2.2"/>
+            <rect x="6" y="9" width="50" height="90" rx="4" fill="rgba(255,255,255,.07)"/>
+            <rect x="24" y="4.5" width="14" height="2.6" rx="1.3" fill="rgba(255,255,255,.4)"/>
+            <!-- athlète qui soulève -->
+            <g stroke="#fff" stroke-width="2.4" stroke-linecap="round" fill="none" opacity=".92">
+              <circle cx="31" cy="34" r="4.4" fill="#fff" stroke="none"/>
+              <path d="M31 39 L31 58"/>
+              <path d="M31 43 L22 50 M31 43 L40 50"/>
+              <path d="M31 58 L24 72 M31 58 L38 72"/>
+            </g>
+            <g stroke="#fff" stroke-width="2.6" stroke-linecap="round" opacity=".92">
+              <line x1="16" y1="50" x2="46" y2="50"/>
+              <line x1="17.5" y1="45.5" x2="17.5" y2="54.5"/><line x1="44.5" y1="45.5" x2="44.5" y2="54.5"/>
+            </g>
+            <!-- cadrage + REC -->
+            <g stroke="rgba(255,255,255,.5)" stroke-width="1.6" fill="none">
+              <path d="M11 18 L11 14 L15 14"/><path d="M51 18 L51 14 L47 14"/>
+              <path d="M11 90 L11 94 L15 94"/><path d="M51 90 L51 94 L47 94"/>
+            </g>
+            <circle cx="17" cy="86" r="3.1" fill="#ff2d2d"><animate attributeName="opacity" values="1;.25;1" dur="1.4s" repeatCount="indefinite"/></circle>
+            <text x="23" y="89" font-family="Montserrat,sans-serif" font-size="7.5" font-weight="800" fill="rgba(255,255,255,.85)">REC</text>
+          </svg>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:8px;color:rgba(255,255,255,.55);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Nouveau canal</div>
+            <div style="font-size:19px;font-weight:900;color:#fff;letter-spacing:-0.3px;line-height:1.1;margin-bottom:8px">CORRECTIONS TECHNIQUES</div>
+            <p style="font-size:12px;color:rgba(255,255,255,.72);line-height:1.6;margin:0">Envoie tes vidéos ici <strong style="color:#fff">plutôt que sur Instagram</strong>. Ton coach te répond avec des repères à la seconde exacte, consultables à tout moment : plus efficace qu'un message perdu dans les DMs.</p>
+          </div>
+        </div>
       </div>
 
-      <div class="upload-zone" style="cursor:default" onclick="">
-        <div style="margin-bottom:8px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:32px;height:32px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
-        <div style="font-weight:700;margin-bottom:10px">Partager une vidéo</div>
-        <input id="vid-url-input" type="url" placeholder="Colle le lien YouTube ou Google Drive..." autocomplete="off"
-          style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-size:13px;font-family:inherit;margin-bottom:8px"
-          onkeydown="if(event.key==='Enter')addVideoLink()"
-          oninput="document.getElementById('vid-drive-hint').style.display=this.value.includes('drive.google.com')?'block':'none'">
-        <div id="vid-drive-hint" style="display:none;background:var(--warning-bg);border:1px solid #7c2d1244;border-radius:6px;padding:9px 12px;font-size:11px;color:var(--warning);line-height:1.5;margin-bottom:10px">⚠️ Vérifie que le lien est accessible à tous ceux qui l'ont (pas seulement toi) avant de l'envoyer — dans Drive : <strong>Partager → Toute personne avec le lien</strong>.</div>
-        <button onclick="addVideoLink()" style="width:100%;padding:10px;background:var(--red);border:none;color:#fff;border-radius:8px;font-family:Montserrat,sans-serif;font-size:13px;font-weight:700;cursor:pointer">Ajouter la vidéo</button>
-        <div class="sub" style="font-size:11px;margin-top:10px;line-height:1.5">Enregistre avec ton téléphone → partage sur <b>YouTube</b> (non répertoriée) ou <b>Google Drive</b> → colle le lien ici · <strong style="color:var(--info)">ton coach corrige directement dans l'app</strong></div>
+      <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:18px 16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.45);animation:fadeInUp .35s ease">
+        <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
+        <div style="position:absolute;left:50%;top:-34px;transform:translateX(-50%);width:120px;height:90px;border-radius:50%;background:radial-gradient(circle,rgba(224,32,32,.15),transparent 68%);pointer-events:none"></div>
+        <div style="position:relative;text-align:center">
+          <div style="margin-bottom:9px;color:#ff3b30;filter:drop-shadow(0 0 9px rgba(224,32,32,.75))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:30px;height:30px;display:inline-block;vertical-align:middle"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:19px;letter-spacing:2.5px;color:#fff;text-transform:uppercase;margin-bottom:12px;text-shadow:0 0 12px rgba(255,255,255,.3)">Partager une vidéo</div>
+          <input id="vid-url-input" type="url" placeholder="Colle le lien YouTube ou Google Drive…" autocomplete="off"
+            style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:9px;border:1px solid #262626;background:linear-gradient(180deg,#0b0b0b,#0f0f0f);color:var(--text);font-size:13px;font-family:inherit;margin-bottom:9px;box-shadow:inset 0 2px 6px rgba(0,0,0,.5)"
+            onkeydown="if(event.key==='Enter')addVideoLink()"
+            oninput="document.getElementById('vid-drive-hint').style.display=this.value.includes('drive.google.com')?'block':'none'">
+          <div id="vid-drive-hint" style="display:none;background:var(--warning-bg);border:1px solid #7c2d1244;border-radius:8px;padding:9px 12px;font-size:11px;color:var(--warning);line-height:1.5;margin-bottom:10px;text-align:left">⚠️ Vérifie que le lien est accessible à tous ceux qui l'ont (pas seulement toi) avant de l'envoyer · dans Drive : <strong>Partager → Toute personne avec le lien</strong>.</div>
+          <button onclick="addVideoLink()" style="width:100%;padding:13px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:#fff;border-radius:9px;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:0 0 10px rgba(255,255,255,.45)">Ajouter la vidéo</button>
+          <div class="sub" style="font-size:11px;margin-top:11px;line-height:1.6">Enregistre avec ton téléphone → partage sur <b style="color:#ddd">YouTube</b> (non répertoriée) ou <b style="color:#ddd">Google Drive</b> → colle le lien ici · <strong style="color:#ff5a5a">ton coach corrige directement dans l'app</strong></div>
+        </div>
       </div>
-      <div style="margin-top:12px;background:var(--card2);border:1px dashed var(--border);border-radius:12px;padding:16px">
-        <div style="font-size:11px;font-weight:700;margin-bottom:10px;color:var(--sub);text-transform:uppercase;letter-spacing:.5px">Ou upload direct (sans YouTube / Drive)</div>
-        <label for="vid-file-input" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text)" style="display:flex;align-items:center;gap:6px">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Choisir un fichier vidéo
-          <input id="vid-file-input" type="file" accept="video/*" style="display:none" onchange="uploadVideoFile(this)">
-        </label>
-        <div id="vid-upload-progress" style="display:none;margin-top:10px;font-size:13px;font-weight:700;color:var(--green);text-align:center"></div>
-        <div id="vid-upload-error" style="display:none;margin-top:10px;font-size:12px;color:var(--red)"></div>
-        <div class="sub" style="font-size:11px;margin-top:10px;line-height:1.5">Envoi direct et sécurisé — ta vidéo est visible par ton coach immédiatement.</div>
+      <div style="margin-top:12px;background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp .4s ease">
+        <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div>
+        <div style="position:relative">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2.2px;margin-bottom:11px;color:#8a8a8a;text-transform:uppercase">Ou upload direct : sans YouTube / Drive</div>
+          <label for="vid-file-input" style="display:flex;align-items:center;justify-content:center;gap:9px;padding:13px;border:1.5px dashed #2f2f2f;border-radius:10px;cursor:pointer;font-size:12.5px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#cfcfcf;background:linear-gradient(180deg,#111,#0c0c0c);box-shadow:inset 0 1px 0 rgba(255,255,255,.03);transition:.2s">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:17px;height:17px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Choisir un fichier vidéo
+            <input id="vid-file-input" type="file" accept="video/*" style="display:none" onchange="uploadVideoFile(this)">
+          </label>
+          <div id="vid-upload-progress" style="display:none;margin-top:10px;font-size:13px;font-weight:800;color:var(--green);text-align:center;text-shadow:0 0 10px rgba(34,197,94,.6)"></div>
+          <div id="vid-upload-error" style="display:none;margin-top:10px;font-size:12px;color:var(--red)"></div>
+          <div class="sub" style="font-size:11px;margin-top:11px;line-height:1.6">Envoi direct et sécurisé : ta vidéo est visible par ton coach immédiatement.</div>
+        </div>
       </div>
       <div style="margin-top:20px" id="vid-list"></div>
     </div>
