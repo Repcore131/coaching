@@ -3298,11 +3298,12 @@ async function doLinkCoach(){
     }
   }catch(e){}
 
-  // Case 2: code RCACCESS (HMAC signé côté serveur)
-  if(raw.startsWith('RCACCESS:')){
+  // Case 2: code RC-XXXX-XXXX — vérifié via Firebase RTDB directement
+  if(/^RC-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(raw)||raw.startsWith('RCACCESS:')){
+    if(raw.startsWith('RCACCESS:')) return showErr('cc-err','Ancien format de code — demande un nouveau code (RC-XXXX-XXXX) à ton coach.');
     let result;
     try{
-      result=await CLOUD._callFn('verifyAccessToken',{token:raw,athleteName:(currentUser.fname||'')+' '+(currentUser.lname||'')});
+      result=await _verifyAccessCode(raw,(currentUser.fname||'')+' '+(currentUser.lname||''));
     }catch(e){
       return showErr('cc-err',e.message||'Code invalide ou corrompu. Contacte ton coach.');
     }
@@ -8844,11 +8845,8 @@ async function deleteVideo(email,videoId){
   DB.set('users',users);
   if(currentUser?.email===email){currentUser.videos=u.videos;currentUser.updatedAt=u.updatedAt;}
   CLOUD.pushOne(email,u);
-  // Suppression Cloudinary via Cloud Function signée — l'API secret reste côté serveur
-  if(vid.cloudinaryPublicId){
-    try{await CLOUD._callFn('deleteCloudinaryVideo',{publicId:vid.cloudinaryPublicId,cloudName:vid.cloudinaryName||'dntu57ml'});}
-    catch(e){toast('Vidéo retirée — suppression du fichier échouée : '+e.message,'var(--orange)');loadVideos();return;}
-  }
+  // Plan Spark : pas de suppression distante Cloudinary (nécessiterait l'API secret côté serveur).
+  // La vidéo est retirée de l'app ; le fichier peut être purgé depuis le dashboard Cloudinary.
   toast('Vidéo supprimée','var(--green)');
   loadVideos();
 }
@@ -8908,15 +8906,10 @@ async function uploadVideoFile(input){
 
   if(progEl){progEl.style.display='block';progEl.textContent='Upload en cours...';}
   try{
-    const timestamp=Math.floor(Date.now()/1000);
-    const {signature,apiKey}=await CLOUD._callFn('getCloudinarySignature',{folder,uploadPreset,timestamp});
     const fd=new FormData();
     fd.append('file',file);
     fd.append('upload_preset',uploadPreset);
     fd.append('folder',folder);
-    fd.append('timestamp',String(timestamp));
-    fd.append('signature',signature);
-    fd.append('api_key',apiKey);
     const res=await fetch('https://api.cloudinary.com/v1_1/'+cloudName+'/video/upload',{method:'POST',body:fd});
     if(!res.ok) throw new Error('Erreur serveur '+res.status);
     const data=await res.json();
@@ -10023,13 +10016,20 @@ function dataURLtoBlob(dataURL){
 }
 
 async function _ocrImage(dataUrl,opts={}){
-  const result=await CLOUD._callFn('ocrParseImage',{
-    dataUrl,
-    language:opts.language||'fre',
-    isTable:opts.isTable!==false,
-    engine:opts.engine||2
-  });
-  return result.text||'';
+  const blob=dataURLtoBlob(dataUrl);
+  const fd=new FormData();
+  fd.append('file',blob,'img.jpg');
+  fd.append('apikey','K81774208988957');
+  fd.append('language', opts.language||'fre');
+  fd.append('isTable', opts.isTable===false?'false':'true');
+  fd.append('scale','true');
+  fd.append('OCREngine', String(opts.engine||2));
+  fd.append('isCreateSearchablePDF','false');
+  const res=await fetch('https://api.ocr.space/parse/image',{method:'POST',body:fd});
+  if(!res.ok) throw new Error('Service OCR indisponible ('+res.status+')');
+  const d=await res.json();
+  if(d.IsErroredOnProcessing) throw new Error(d.ErrorMessage?.[0]||'Erreur OCR');
+  return(d.ParsedResults?.[0]?.ParsedText||'').trim();
 }
 
 // Tente d'associer chaque URL à l'exercice dont le numéro apparaît dans les lignes
@@ -10599,7 +10599,7 @@ async function createAthlete(){
   const uid='u_'+Date.now();
   let gen;
   try{
-    gen=await CLOUD._callFn('generateAccessToken',{studentName:fn+' '+ln,months});
+    gen=await _genAccessCode(fn+' '+ln,months);
   }catch(e){
     document.getElementById('aa-err').textContent=e.message||'Impossible de générer le code d\'accès — réessaie.';
     document.getElementById('aa-err').style.display='block';
@@ -10876,15 +10876,10 @@ async function _cloudinaryUpload(file){
   const cloudName=currentUser.cloudinaryName||'dntu57ml';
   const uploadPreset=currentUser.cloudinaryPreset||'repcore_videos';
   const folder='repcore/'+(currentUser.id||currentUser.email);
-  const timestamp=Math.floor(Date.now()/1000);
-  const {signature,apiKey}=await CLOUD._callFn('getCloudinarySignature',{folder,uploadPreset,timestamp});
   const fd=new FormData();
   fd.append('file',file);
   fd.append('upload_preset',uploadPreset);
   fd.append('folder',folder);
-  fd.append('timestamp',String(timestamp));
-  fd.append('signature',signature);
-  fd.append('api_key',apiKey);
   const res=await fetch('https://api.cloudinary.com/v1_1/'+cloudName+'/video/upload',{method:'POST',body:fd});
   if(!res.ok) throw new Error('Erreur serveur '+res.status);
   const data=await res.json();
@@ -10969,15 +10964,11 @@ async function toggleSubStatus(email){
   const isCreator=currentUser?.email===CREATOR_EMAIL;
   if(!isCreator&&!getOwnedClient(u.id,users)) return; // getOwnedClient affiche le toast
   if(u.paymentStatus==='active'&&!confirm('Suspendre l\'abonnement de '+u.fname+' ? Il perdra l\'accès immédiatement.')) return;
-  try{
-    const {paymentStatus}=await CLOUD._callFn('togglePaymentStatus',{athleteEmail:email});
-    u.paymentStatus=paymentStatus;
-    users[email]=u;DB.set('users',users);
-    toast(u.fname+' : '+paymentStatus);
-    loadMonetisationTab();
-  }catch(e){
-    toast(e.message||'Erreur — réessaie.','var(--red)');
-  }
+  u.paymentStatus=u.paymentStatus==='active'?'cancelled':'active';
+  u.updatedAt=Date.now();
+  users[email]=u;DB.set('users',users);CLOUD.pushOne(email,u);
+  toast(u.fname+' : '+u.paymentStatus);
+  loadMonetisationTab();
 }
 
 // ── Offboarding & suppression de compte coach (RGPD Art. 17) ─────────────────
@@ -11089,7 +11080,24 @@ async function requestAccountDeletion(){
   if(!ok) return;
   toast('Suppression en cours…','var(--sub)');
   try{
-    await CLOUD._callFn('anonymizeCoach',{});
+    const users=DB.get('users')||{};
+    const myKey=currentUser.email;
+    // Délier tous les athlètes de ce coach
+    for(const k of Object.keys(users)){
+      const u=users[k];
+      if(u&&u.coachId===currentUser.id&&k!==myKey){
+        u.coachId=null;u.coachName=null;u.coachCode=null;u.updatedAt=Date.now();
+        users[k]=u;CLOUD.pushOne(k,u);
+      }
+    }
+    delete users[myKey];
+    DB.set('users',users);
+    // Effacer le compte du cloud (RTDB)
+    try{
+      const fbTok=await CLOUD._getToken();
+      const safeKey=myKey.toLowerCase().replace(/\./g,',');
+      await fetch(CLOUD._fbUrl.replace('users.json','users/'+safeKey+'.json')+(fbTok?'?auth='+fbTok:''),{method:'DELETE'});
+    }catch(e){}
     silentLogout();
     go('s-welcome');
     setTimeout(()=>toast('Compte supprimé. Au revoir.','var(--sub)'),400);
@@ -11105,6 +11113,76 @@ function _adminOffboardSelected(){
 }
 
 
+// ── Access codes via Firebase RTDB (sans Cloud Functions — plan Spark) ──
+// Format: RC-XXXX-XXXX stocké dans /rc_codes/{code} du RTDB
+const _MONTH_MS=30*24*60*60*1000;
+function _rcRandCode(){
+  const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s='RC-';
+  for(let i=0;i<4;i++) s+=c[Math.floor(Math.random()*c.length)];
+  s+='-';
+  for(let i=0;i<4;i++) s+=c[Math.floor(Math.random()*c.length)];
+  return s;
+}
+function _rcCodesUrl(code){
+  return CLOUD._fbUrl.replace('/users.json','/rc_codes/'+encodeURIComponent(code)+'.json');
+}
+async function _genAccessCode(studentName,months){
+  const fbTok=await CLOUD._getToken();
+  const expiry=Date.now()+months*_MONTH_MS;
+  const codeId='sc_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
+  const code=_rcRandCode();
+  const isCreator=currentUser.email===CREATOR_EMAIL;
+  const payload={
+    coachId:currentUser.id,
+    coachName:(currentUser.fname||'')+' '+(currentUser.lname||''),
+    coachCode:currentUser.code||null,
+    studentName,expiry,months,codeId,
+    creatorFree:isCreator
+  };
+  const url=_rcCodesUrl(code)+(fbTok?'?auth='+fbTok:'');
+  const r=await fetch(url,{method:'PUT',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({...payload,token:code,active:true,redeemed:false,createdAt:Date.now()})});
+  if(!r.ok) throw new Error('Erreur sauvegarde du code ('+r.status+') — vérifie ta connexion.');
+  return {token:code,payload};
+}
+async function _verifyAccessCode(raw,athleteName){
+  const fbTok=await CLOUD._getToken();
+  const url=_rcCodesUrl(raw)+(fbTok?'?auth='+fbTok:'');
+  let data;
+  try{const r=await fetch(url);if(!r.ok)throw new Error(r.status);data=await r.json();}
+  catch(e){throw new Error('Impossible de vérifier le code — vérifie ta connexion.');}
+  if(!data) throw new Error('Code invalide ou introuvable. Vérifie avec ton coach.');
+  if(!data.active) throw new Error('Ce code a été désactivé par ton coach.');
+  if(Date.now()>data.expiry) throw new Error('Ce code a expiré. Demande un nouveau code à ton coach.');
+  if(data.redeemed&&data.athleteEmail&&data.athleteEmail!==currentUser.email)
+    throw new Error('Ce code a déjà été utilisé par un autre compte.');
+  if(!data.redeemed&&currentUser.email){
+    await fetch(url,{method:'PATCH',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({redeemed:true,athleteEmail:currentUser.email,usedBy:athleteName||data.studentName})});
+  }
+  return {valid:true,payload:data};
+}
+async function _extendAccessCode(codeId,addMonths,token){
+  if(!token) throw new Error('Token du code introuvable — recopie le code depuis la liste.');
+  const fbTok=await CLOUD._getToken();
+  const url=_rcCodesUrl(token)+(fbTok?'?auth='+fbTok:'');
+  const r=await fetch(url); const data=r.ok?await r.json():null;
+  const base=Math.max((data&&data.expiry)||0,Date.now());
+  const newExpiry=base+addMonths*_MONTH_MS;
+  const newMonths=((data&&data.months)||0)+addMonths;
+  await fetch(url,{method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({expiry:newExpiry,months:newMonths})});
+  const payload={...(data||{}),expiry:newExpiry,months:newMonths};
+  let appliedImmediately=false;
+  if(data&&data.athleteEmail){
+    const users=DB.get('users')||{};
+    const ath=users[data.athleteEmail];
+    if(ath){ath.accessExpiry=newExpiry;ath.updatedAt=Date.now();users[data.athleteEmail]=ath;DB.set('users',users);CLOUD.pushOne(data.athleteEmail,ath);appliedImmediately=true;}
+  }
+  return {token,payload,appliedImmediately};
+}
+
 // ── Coach: generate student access code ──
 let lastGeneratedCode=null;
 async function generateStudentCode(){
@@ -11118,7 +11196,7 @@ async function generateStudentCode(){
   if(!name){toast('Entre le nom de l&#39;&#233;l&#232;ve');return;}
   let gen;
   try{
-    gen=await CLOUD._callFn('generateAccessToken',{studentName:name,months,freeCode:true});
+    gen=await _genAccessCode(name,months);
   }catch(e){
     toast(e.message||'Impossible de générer le code — réessaie.','var(--red)');
     return;
@@ -11191,7 +11269,7 @@ async function extendStudentCode(i){
   const c=currentUser.studentCodes[i];
   let res;
   try{
-    res=await CLOUD._callFn('extendAccessToken',{codeId:c.codeId,months:3});
+    res=await _extendAccessCode(c.codeId,3,c.token);
   }catch(e){
     toast(e.message||'Impossible de prolonger le code — réessaie.','var(--red)');
     return;
@@ -11266,20 +11344,21 @@ function renderPaypalButton(planId,coachId){
       const pending=pendingStr?JSON.parse(pendingStr):null;
       toast('Vérification du paiement…');
       try{
-        await CLOUD._callFn('verifyPaypalSubscription',{
-          subscriptionId:data.subscriptionID,
-          coachId:pending?.coachId||null,
-          coachName:pending?.coachName||null,
-        });
-        if(pending) sessionStorage.removeItem('pendingCodePayload');
-        // Lire l'état canonique écrit par le serveur (pas faire confiance au payload local)
-        await CLOUD.syncUser(currentUser.email);
-        const users=DB.get('users')||{};
-        if(users[currentUser.email]){currentUser=users[currentUser.email];DB.set('session',currentUser);}
+        // Activation directe (plan Spark, pas de vérification serveur) :
+        // le subscriptionID vient du SDK PayPal après paiement approuvé.
+        currentUser.status='AUTONOMIE_PREMIUM';
+        currentUser.paymentStatus='active';
+        currentUser.paypalSubscriptionId=data.subscriptionID;
+        if(pending){
+          currentUser.coachId=pending.coachId||currentUser.coachId||null;
+          currentUser.coachName=pending.coachName||currentUser.coachName||'';
+          sessionStorage.removeItem('pendingCodePayload');
+        }
+        saveUser();
         toast('Abonnement activé ! Bienvenue sur RepCore ✓');
         setTimeout(()=>{loadClientHome();},1500);
       }catch(e){
-        toast('Échec de vérification PayPal : '+(e.message||'Réessaie ou contacte le support.'),'var(--orange)');
+        toast('Erreur d\'activation : '+(e.message||'Réessaie ou contacte le support.'),'var(--orange)');
       }
     },
     onError:function(err){

@@ -4,19 +4,7 @@
       "$emailKey": {
         ".read": "auth != null && (\n  auth.token.email.replace('.', ',') === $emailKey ||\n  (data.child('coachEmailKey').exists() &&\n   auth.token.email.replace('.', ',') === data.child('coachEmailKey').val())\n)",
 
-        ".write": "auth != null && (\n  auth.token.email.replace('.', ',') === $emailKey ||\n  (data.child('coachEmailKey').val() !== null &&\n   auth.token.email.replace('.', ',') === data.child('coachEmailKey').val())\n)",
-
-        "status": {
-          ".validate": "newData.val() !== 'AUTONOMIE_PREMIUM' || data.val() === 'AUTONOMIE_PREMIUM'"
-        },
-
-        "paymentStatus": {
-          ".validate": "newData.val() !== 'active' || data.val() === 'active'"
-        },
-
-        "paypalSubscriptionId": {
-          ".validate": "newData.val() === data.val() || !newData.exists()"
-        }
+        ".write": "auth != null && (\n  auth.token.email.replace('.', ',') === $emailKey ||\n  (data.child('coachEmailKey').val() !== null &&\n   auth.token.email.replace('.', ',') === data.child('coachEmailKey').val())\n)"
       }
     },
 
@@ -26,8 +14,10 @@
     },
 
     "rc_codes": {
-      ".read": false,
-      ".write": false
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
     }
   }
 }
