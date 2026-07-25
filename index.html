@@ -5652,13 +5652,20 @@ function renderWoEx(){
   // Contrepoids (DIPS/TRACTIONS assistés|guidés) : progression = MOINS de charge
   const isCW=isCounterweightEx(ex.name);
   const baseWeight=getLastZeroRIRWeight(ex.name);
-  const _calcSug=prev?((prev.rir==='0'||prev.rir===0||prev.rir==='echec')?roundWeight(parseFloat(prev.weight)):calcSug(prev.weight,prev.reps,prev.rir,ex.reps,ex.rir)):null;
-  // RIR 0 atteint la dernière fois → même charge (on ne monte que si RIR > 0)
+  // Progression par paliers fixes : RIR 0 → même charge, échec → -1 palier,
+  // RIR n → +n paliers (palier = 2,5kg, ou 1,25kg sous 20kg, plafonné à 4)
+  const _stepUnit=w=>w>=20?2.5:1.25;
+  const _stepSug=(w,rir)=>{
+    w=parseFloat(w)||0;if(!w) return null;
+    const r=String(rir??'');
+    let n=r==='echec'?-1:(r===''||r==='null'||r==='undefined')?0:Math.min(parseInt(r)||0,4);
+    if(isCW) n=-n;
+    const out=w+n*_stepUnit(w);
+    return out>0?out:w;
+  };
   const _rawSug=baseWeight
-    ?roundWeight(baseWeight)
-    :_calcSug!=null
-      ?(isCW?roundWeight(2*parseFloat(prev.weight)-_calcSug):_calcSug)
-      :null;
+    ?baseWeight
+    :prev?_stepSug(prev.weight,prev.rir):null;
   const sug=_rawSug!=null&&_rawSug>0?_rawSug:null;
   const cycleWeight=sug?roundWeight(sug*cycle.factor):null;
   const isFemme=isFemale(currentUser.gender);
@@ -5695,7 +5702,7 @@ function renderWoEx(){
           <div><div style="font-size:27px;font-weight:900;line-height:1">${sug}kg</div><div style="font-size:10px;color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">${isCW?'↓ Assistance — progresser = réduire':'Charge pour la première série'}</div></div>
           ${showCycleCol?`<div><div style="font-size:27px;font-weight:900;line-height:1;color:var(--cycle-accent)">${cycleWeight}kg</div><div style="font-size:10px;color:var(--cycle-accent);margin-top:4px">Cycle ajusté</div></div>`:''}
         </div>
-        <div class="s-note">${isCW?'Contrepoids: RIR élevé → diminuer la charge. ':''}${baseWeight?'Suggestion basée sur ta dernière séance (RIR 0 : '+baseWeight+'kg)':prev?'Suggestion basée sur ta séance précédente ('+prev.weight+'kg)':'Première séance'}</div>
+        <div class="s-note">${isCW?'Contrepoids: RIR élevé → diminuer la charge. ':''}${baseWeight?'Suggestion basée sur ta dernière séance (RIR 0 : '+baseWeight+'kg)':prev?'Suggestion basée sur ta séance précédente ('+prev.weight+'kg'+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):'')+')':'Première séance'}</div>
       </div>`:
       ``}
 
@@ -5778,20 +5785,21 @@ function renderSets(ex,data){
   const showCycleCol=isFemme&&cycle.factor!==1.0;
   const isDeg=data.sets[0]?.degressive||false;
 
-  // ── RIR multipliers ──────────────────────────────────────────────
-  const RIR_MULT={'echec':0.95,'0':1.0,'1':1.025,'2':1.05,'3':1.075,'4':1.1,'5':1.125};
-  // Contrepoids: RIR élevé → suggère MOINS de charge (assistance réduite = progression)
-  const RIR_MULT_CW={'echec':1.05,'0':1.0,'1':0.975,'2':0.95,'3':0.925,'4':0.9,'5':0.875};
   const _isCW=isCounterweightEx(ex.name);
 
-  // ── Auto-fill next set weight from previous weight × RIR ─────────
+  // ── Auto-fill série suivante par paliers fixes ────────────────────
+  // RIR 0 → même charge (exacte, sans arrondi) · échec → -1 palier ·
+  // RIR n → +n paliers (2,5kg, ou 1,25kg sous 20kg, plafonné à 4).
+  // Contrepoids : logique inversée (échec → +assistance, RIR n → -n paliers).
   for(let i=0;i<data.sets.length-1;i++){
     const s=data.sets[i];
     const w=parseFloat(s.weight);
     if(w>0 && s.rir!==''&&s.rir!==undefined&&s.rir!==null){
-      const mult=(_isCW?RIR_MULT_CW:RIR_MULT)[String(s.rir)]??1.0;
-      const _raw=w*mult;
-      const nextW=mult>1?(_raw<20?Math.ceil(_raw/1.25)*1.25:Math.ceil(_raw/2.5)*2.5):roundWeight(_raw);
+      const r=String(s.rir);
+      const unit=w>=20?2.5:1.25;
+      let n=r==='echec'?-1:Math.min(parseInt(r)||0,4);
+      if(_isCW) n=-n;
+      const nextW=n===0?w:Math.max(w+n*unit,unit);
       if(!data.sets[i+1].done&&!data.sets[i+1].userEdited){
         data.sets[i+1].weight=nextW;
         data.sets[i+1].isAuto=true;
