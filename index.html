@@ -7630,22 +7630,33 @@ function _renderStrictDiet(){
       ${isCoach?`<label style="display:flex;align-items:center;justify-content:center;gap:10px;padding:14px;background:#111;border:1.5px dashed #2a2a2a;border-radius:12px;cursor:pointer;margin-top:${photos.length?'8':'0'}px">${icon('camera',18)}<span style="font-size:11px;font-weight:700;color:var(--sub);letter-spacing:1px">AJOUTER UNE PHOTO</span><input type="file" accept="image/*" capture="environment" style="display:none" onchange="addStrictPhoto(this)"></label>`:''}
     </div>
     <!-- Suivi du jour -->
-    <div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:14px;padding:18px;margin-bottom:16px">
-      <div style="font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:14px">J'ai respecté mon plan aujourd'hui</div>
-      <div style="display:flex;gap:10px">
-        <button onclick="setNutriRespected('${todayKey}',true)" style="flex:1;padding:14px 0;border:none;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;letter-spacing:1px;cursor:pointer;background:${respYes?'#15803d':'#111'};color:${respYes?'#fff':'#555'};border:2px solid ${respYes?'#22c55e':'#222'}">✓ OUI</button>
-        <button onclick="setNutriRespected('${todayKey}',false)" style="flex:1;padding:14px 0;border:none;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;letter-spacing:1px;cursor:pointer;background:${respNo?'#7f1d1d':'#111'};color:${respNo?'#fff':'#555'};border:2px solid ${respNo?'var(--red)':'#222'}">✗ NON</button>
+    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:18px;margin-bottom:12px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.45);animation:fadeInUp .3s ease">
+      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
+      <div style="position:relative">
+        <div style="display:inline-flex;align-items:center;gap:7px;font-family:'Bebas Neue',sans-serif;font-size:15px;color:#ff3b30;text-transform:uppercase;letter-spacing:2.5px;margin-bottom:14px;text-shadow:0 0 8px rgba(224,32,32,.8),0 0 18px rgba(224,32,32,.4)"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('check',13)}</span>J'AI RESPECTÉ MON PLAN AUJOURD'HUI</div>
+        <div style="display:flex;gap:10px">
+          <button onclick="setNutriRespected('${todayKey}',true)" style="flex:1;padding:14px 0;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;letter-spacing:1.5px;cursor:pointer;background:${respYes?'linear-gradient(160deg,#1a9c4d,#0f5c2e)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${respYes?'#fff':'#4a4a4a'};border:2px solid ${respYes?'#22c55e':'#1f1f1f'};box-shadow:${respYes?'0 0 20px rgba(34,197,94,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${respYes?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">✓ OUI</button>
+          <button onclick="setNutriRespected('${todayKey}',false)" style="flex:1;padding:14px 0;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;letter-spacing:1.5px;cursor:pointer;background:${respNo?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${respNo?'#fff':'#4a4a4a'};border:2px solid ${respNo?'var(--red)':'#1f1f1f'};box-shadow:${respNo?'0 0 20px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${respNo?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">✗ NON</button>
+        </div>
       </div>
     </div>
     <!-- Scores -->
     <div style="display:flex;gap:10px;margin-bottom:8px">
-      <div style="flex:1;background:var(--dark);border:1px solid var(--surface-2);border-radius:12px;padding:16px;text-align:center">
-        <div class="txt-hero" style="color:var(--green)">${streak}</div>
-        <div style="font-size:9px;color:var(--sub);letter-spacing:1.5px;margin-top:4px;text-transform:uppercase">Jours consécutifs</div>
+      <div style="flex:1;min-width:0;background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:12px;padding:16px 10px;text-align:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp .35s ease">
+        <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 13px,rgba(255,255,255,.015) 13px,rgba(255,255,255,.015) 14px);pointer-events:none"></div>
+        <div style="position:absolute;left:50%;top:-28px;transform:translateX(-50%);width:80px;height:80px;border-radius:50%;background:radial-gradient(circle,${streak>0?'rgba(34,197,94,.2)':'rgba(224,32,32,.13)'},transparent 68%);pointer-events:none"></div>
+        <div style="position:relative">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:44px;line-height:1;color:${streak>0?'#22c55e':'#ff3b30'};text-shadow:0 0 12px ${streak>0?'rgba(34,197,94,.85)':'rgba(224,32,32,.8)'},0 0 26px ${streak>0?'rgba(34,197,94,.4)':'rgba(224,32,32,.35)'}">${streak}</div>
+          <div style="font-size:8px;color:${streak>0?'rgba(34,197,94,.75)':'rgba(255,90,90,.7)'};letter-spacing:2px;margin-top:5px;text-transform:uppercase;font-weight:800">Jours consécutifs</div>
+        </div>
       </div>
-      <div style="flex:1;background:var(--dark);border:1px solid var(--surface-2);border-radius:12px;padding:16px;text-align:center">
-        <div class="txt-hero" style="color:var(--info)">${weekScore}<span style="font-size:18px;color:var(--sub)">/${answered||7}</span></div>
-        <div style="font-size:9px;color:var(--sub);letter-spacing:1.5px;margin-top:4px;text-transform:uppercase">Cette semaine</div>
+      <div style="flex:1;min-width:0;background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:12px;padding:16px 10px;text-align:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp .4s ease">
+        <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 13px,rgba(255,255,255,.015) 13px,rgba(255,255,255,.015) 14px);pointer-events:none"></div>
+        <div style="position:absolute;left:50%;top:-28px;transform:translateX(-50%);width:80px;height:80px;border-radius:50%;background:radial-gradient(circle,rgba(245,197,24,.16),transparent 68%);pointer-events:none"></div>
+        <div style="position:relative">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:44px;line-height:1;color:#f5c518;text-shadow:0 0 12px rgba(245,197,24,.8),0 0 26px rgba(245,197,24,.35)">${weekScore}<span style="font-size:19px;color:rgba(255,255,255,.35);text-shadow:none">/${answered||7}</span></div>
+          <div style="font-size:8px;color:rgba(245,197,24,.7);letter-spacing:2px;margin-top:5px;text-transform:uppercase;font-weight:800">Cette semaine</div>
+        </div>
       </div>
     </div>`;
 }
