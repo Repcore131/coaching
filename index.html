@@ -298,6 +298,12 @@ h3{font-size:16px;text-transform:uppercase}
 @keyframes wFadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
 @keyframes wSlideUp{from{opacity:0;transform:translateY(48px)}to{opacity:1;transform:translateY(0)}}
 
+/* ====== FOCUS CLAVIER ======
+   :focus-visible et non :focus — le contour n'apparaît qu'à la navigation
+   clavier, jamais après un tap ou un clic souris. */
+:focus-visible{outline:2px solid var(--red-glow);outline-offset:2px;border-radius:2px}
+button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px solid #FF3345;outline-offset:3px}
+
 /* ====== SCREEN TRANSITIONS ====== */
 @keyframes screenIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 
@@ -569,7 +575,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
 
     <!-- SE CONNECTER -->
-    <div onclick="go('s-login')" style="background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'">
+    <div onclick="go('s-login')" style="background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="display:flex;align-items:center;gap:14px">
         <div style="width:44px;height:44px;border-radius:10px;background:#1a0000;border:1px solid #3a0000;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
         <div>
@@ -581,7 +587,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
 
     <!-- CRÉER MON COMPTE -->
-    <div onclick="goRegisterCoach()" style="background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'">
+    <div onclick="goRegisterCoach()" style="background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="display:flex;align-items:center;gap:14px">
         <div style="width:44px;height:44px;border-radius:10px;background:#0d0d0d;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></div>
         <div>
@@ -625,7 +631,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
 
     <!-- Carte A : j'ai un code coach -->
-    <div id="ae-card-new" onclick="aeToggleCode()" style="background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'">
+    <div id="ae-card-new" onclick="aeToggleCode()" style="background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="display:flex;align-items:center;gap:14px">
         <div style="width:44px;height:44px;border-radius:10px;background:#1a0000;border:1px solid #3a0000;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></div>
         <div>
@@ -649,7 +655,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
 
     <!-- Carte B : déjà inscrit -->
-    <div onclick="go('s-login')" style="background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'">
+    <div onclick="go('s-login')" style="background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="display:flex;align-items:center;gap:14px">
         <div style="width:44px;height:44px;border-radius:10px;background:#0d0d0d;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
         <div>
@@ -688,8 +694,8 @@ const COACH_PHOTO='icons/coach.jpg';
     <div><label for="l-pwd">Mot de passe</label><input type="password" id="l-pwd" placeholder="••••••••"></div>
     <div id="l-err" style="color:var(--red-light);font-size:13px;display:none"></div>
     <button class="btn btn-red" style="margin-top:8px;letter-spacing:2px" onclick="doLogin()">SE CONNECTER</button>
-    <p class="sub" style="text-align:center;margin-top:12px"><span style="cursor:pointer;font-size:13px;color:#f97316;font-weight:700;text-decoration:underline;text-decoration-color:#f97316" onclick="forgotPassword()">Mot de passe oublié ?</span></p>
-    <p class="sub" style="text-align:center;margin-top:8px">Pas de compte ? <span class="red" style="cursor:pointer;font-weight:700" onclick="goRegisterAthlete()">Créer un compte</span></p>
+    <p class="sub" style="text-align:center;margin-top:12px"><span style="cursor:pointer;font-size:13px;color:#f97316;font-weight:700;text-decoration:underline;text-decoration-color:#f97316" onclick="forgotPassword()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">Mot de passe oublié ?</span></p>
+    <p class="sub" style="text-align:center;margin-top:8px">Pas de compte ? <span class="red" style="cursor:pointer;font-weight:700" onclick="goRegisterAthlete()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">Créer un compte</span></p>
     <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:16px">
       <p class="sub" style="text-align:center;font-size:11px;margin-bottom:10px;color:#555">Tu as changé de navigateur ou d'appareil ?</p>
       <button class="btn" style="width:100%;background:var(--card2);border:1px solid var(--border);color:var(--sub);font-size:12px;letter-spacing:1px" onclick="showNewPwdRecovery()">RÉCUPÉRER AVEC UN NOUVEAU MOT DE PASSE</button>
@@ -721,8 +727,8 @@ const COACH_PHOTO='icons/coach.jpg';
     <div class="divider"></div>
     <label style="margin:0">Je suis :</label>
     <div class="row2">
-      <div class="role-card" id="role-coach" onclick="selectRole('coach')"><div class="role-icon"></div><div style="font-weight:800;font-size:15px">COACH</div><div class="sub" style="font-size:11px;margin-top:4px">Gérer mes athlètes</div></div>
-      <div class="role-card" id="role-athlete" onclick="selectRole('athlete')"><div class="role-icon"></div><div style="font-weight:800;font-size:15px">ATHLÈTE</div><div class="sub" style="font-size:11px;margin-top:4px">Suivre ma progression</div></div>
+      <div class="role-card" id="role-coach" onclick="selectRole('coach')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><div class="role-icon"></div><div style="font-weight:800;font-size:15px">COACH</div><div class="sub" style="font-size:11px;margin-top:4px">Gérer mes athlètes</div></div>
+      <div class="role-card" id="role-athlete" onclick="selectRole('athlete')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><div class="role-icon"></div><div style="font-weight:800;font-size:15px">ATHLÈTE</div><div class="sub" style="font-size:11px;margin-top:4px">Suivre ma progression</div></div>
     </div>
     <div style="display:flex;align-items:flex-start;gap:10px;margin-top:4px;padding:12px;background:var(--card2);border:1px solid var(--border);border-radius:8px">
       <input type="checkbox" id="r-rgpd" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
@@ -1190,7 +1196,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div id="prog-photo-zone" onclick="document.getElementById('prog-photo-input').click()"
           style="border:2px dashed var(--border);border-radius:14px;padding:20px;text-align:center;cursor:pointer;transition:.2s;margin-top:6px;position:relative;overflow:hidden"
           ondragover="event.preventDefault();this.style.borderColor='var(--red)'"
-          ondrop="dropProgPhoto(event)">
+          ondrop="dropProgPhoto(event)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
           <input type="file" id="prog-photo-input" accept="image/*" onchange="loadProgPhoto(this)" style="display:none">
           <img id="prog-photo-preview" style="display:none;width:100%;border-radius:10px;margin-bottom:10px">
           <div id="prog-photo-ph">
@@ -1212,20 +1218,20 @@ const COACH_PHOTO='icons/coach.jpg';
           <!-- Coller les liens — option principale -->
           <div onclick="togglePasteLiens()" id="prog-paste-btn"
             style="flex:1.2;border:1px dashed var(--green);border-radius:8px;padding:10px;text-align:center;cursor:pointer;background:#0a1a00"
-            onmouseover="this.style.borderColor='#86efac'" onmouseout="this.style.borderColor='var(--green)'">
+            onmouseover="this.style.borderColor='#86efac'" onmouseout="this.style.borderColor='var(--green)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
             <div style="font-size:22px;margin-bottom:3px">✏️</div>
             <div style="font-size:10px;color:var(--green);font-weight:700">Coller liens</div>
           </div>
           <div onclick="document.getElementById('prog-photo2-input').click()"
             style="flex:1;border:1px dashed #2a2a2a;border-radius:8px;padding:10px;text-align:center;cursor:pointer"
-            onmouseover="this.style.borderColor='#555'" onmouseout="this.style.borderColor='#2a2a2a'">
+            onmouseover="this.style.borderColor='#555'" onmouseout="this.style.borderColor='#2a2a2a'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
             <input type="file" id="prog-photo2-input" accept="image/*" style="display:none" onchange="loadProgPhoto2(this)">
             <div style="font-size:22px;margin-bottom:3px">📷</div>
             <div style="font-size:10px;color:var(--sub);font-weight:700">Photo</div>
           </div>
           <div onclick="document.getElementById('prog-pdf-links-input').click()"
             style="flex:1;border:1px dashed #2a2a2a;border-radius:8px;padding:10px;text-align:center;cursor:pointer"
-            onmouseover="this.style.borderColor='#555'" onmouseout="this.style.borderColor='#2a2a2a'">
+            onmouseover="this.style.borderColor='#555'" onmouseout="this.style.borderColor='#2a2a2a'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
             <input type="file" id="prog-pdf-links-input" accept="application/pdf" style="display:none" onchange="importVideoLinksFromPdf(this)">
             <div style="font-size:22px;margin-bottom:3px">📄</div>
             <div style="font-size:10px;color:var(--sub);font-weight:700">PDF</div>
@@ -1342,7 +1348,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="s-client-home" class="screen">
   <!-- Brand header athlete -->
   <div style="background:#090909;border-bottom:1px solid rgba(255,255,255,.22);box-shadow:0 4px 20px rgba(0,0,0,.9);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:relative;z-index:2;flex-shrink:0">
-    <div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="openAthleteProfile()">
+    <div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="openAthleteProfile()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div id="clh-athlete-avatar" style="width:48px;height:48px;border-radius:50%;background:var(--surface-2);border:2px solid #2a2a2a;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
       <div>
         <div style="font-size:7px;color:var(--red);letter-spacing:4px;font-weight:700;text-transform:uppercase;margin-bottom:2px">MON PROFIL</div>
@@ -1387,21 +1393,21 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
 
       <!-- REPRISE SÉANCE EN COURS -->
-      <div id="clh-resume-workout" style="display:none;background:linear-gradient(135deg,#0a1a0a,#051005);border:1px solid #1a4a1a;border-radius:12px;padding:14px 16px;margin-bottom:14px;cursor:pointer" onclick="woResumeAndGo()">
+      <div id="clh-resume-workout" style="display:none;background:linear-gradient(135deg,#0a1a0a,#051005);border:1px solid #1a4a1a;border-radius:12px;padding:14px 16px;margin-bottom:14px;cursor:pointer" onclick="woResumeAndGo()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div style="font-size:9px;color:var(--green);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:5px">⚡ Séance en pause</div>
         <div style="font-size:14px;font-weight:800;margin-bottom:3px" id="clh-resume-name">Reprendre ma séance</div>
         <div style="font-size:11px;color:var(--sub)">Reprendre là où tu t'es arrêté →</div>
       </div>
 
       <!-- 1er BILAN EN ATTENTE -->
-      <div id="clh-first-bilan-card" style="display:none;background:var(--info-bg);border:1px solid var(--info-border);border-radius:12px;padding:14px 16px;margin-bottom:14px;cursor:pointer" onclick="openBilan('depart')">
+      <div id="clh-first-bilan-card" style="display:none;background:var(--info-bg);border:1px solid var(--info-border);border-radius:12px;padding:14px 16px;margin-bottom:14px;cursor:pointer" onclick="openBilan('depart')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div style="font-size:9px;color:var(--info);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:5px;display:flex;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="9" y="2" width="6" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> À compléter</div>
         <div style="font-size:13px;font-weight:800;margin-bottom:4px;color:#fff">Questionnaire de départ</div>
         <div style="font-size:11px;color:var(--sub);line-height:1.5">Remplis ton bilan initial pour permettre à ton coach de suivre ta progression →</div>
       </div>
 
       <!-- BILAN ALERT -->
-      <div id="clh-bilan-alert" style="display:none;background:#7c2d1222;border:1px solid var(--orange);border-radius:12px;padding:14px;margin-bottom:16px;cursor:pointer" onclick="openBilanChoice()">
+      <div id="clh-bilan-alert" style="display:none;background:#7c2d1222;border:1px solid var(--orange);border-radius:12px;padding:14px;margin-bottom:16px;cursor:pointer" onclick="openBilanChoice()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div style="font-weight:700;color:var(--orange);font-size:13px;text-transform:uppercase;letter-spacing:.5px">Bilan bimensuel à compléter</div>
         <div class="sub" style="font-size:12px;margin-top:4px">Suis ton évolution — remplis ton bilan.</div>
       </div>
@@ -1410,7 +1416,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="margin-bottom:14px">
         <!-- Etat : PDF existant -->
         <div id="clh-pdf-card" style="display:none">
-          <div class="content-card" style="background:var(--dark);border:1px solid #222;border-radius:4px 4px 0 0;padding:14px 16px;display:flex;align-items:center;gap:14px;position:relative;overflow:hidden;cursor:pointer" onclick="openHomePdf()">
+          <div class="content-card" style="background:var(--dark);border:1px solid #222;border-radius:4px 4px 0 0;padding:14px 16px;display:flex;align-items:center;gap:14px;position:relative;overflow:hidden;cursor:pointer" onclick="openHomePdf()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
             <div style="position:absolute;top:0;right:0;width:3px;height:100%;background:var(--red)"></div>
             <!-- Icône PDF -->
             <div style="width:42px;height:50px;background:linear-gradient(180deg,#1a0000,#110000);border:1px solid #3a0a0a;border-radius:3px;display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0">
@@ -1560,23 +1566,23 @@ const COACH_PHOTO='icons/coach.jpg';
     <h2 style="margin-bottom:6px"> Phase du cycle</h2>
     <p class="sub" style="font-size:12px;margin-bottom:20px;line-height:1.5">Indique où tu en es dans ton cycle. Les charges et séries seront ajustées automatiquement.</p>
     <div style="display:flex;flex-direction:column;gap:10px" id="cycle-options">
-      <div class="obj-opt" onclick="setCyclePhase('j1_difficile',this)">
+      <div class="obj-opt" onclick="setCyclePhase('j1_difficile',this)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div style="font-weight:800">J1→J5 — Menstruations difficiles</div>
         <div class="sub" style="font-size:11px;margin-top:3px">Douleurs, fatigue intense, moral bas</div>
       </div>
-      <div class="obj-opt" onclick="setCyclePhase('j1_supportable',this)">
+      <div class="obj-opt" onclick="setCyclePhase('j1_supportable',this)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div style="font-weight:800">J1→J5 — Menstruations supportables</div>
         <div class="sub" style="font-size:11px;margin-top:3px">Légère gêne, entraînement faisable</div>
       </div>
-      <div class="obj-opt" onclick="setCyclePhase('j6_14',this)">
+      <div class="obj-opt" onclick="setCyclePhase('j6_14',this)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div style="font-weight:800">J6→J14 — Phase folliculaire</div>
         <div class="sub" style="font-size:11px;margin-top:3px">Énergie optimale, bonne récupération</div>
       </div>
-      <div class="obj-opt" onclick="setCyclePhase('j15_21',this)">
+      <div class="obj-opt" onclick="setCyclePhase('j15_21',this)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div style="font-weight:800">J15→J21 — Phase lutéale (début)</div>
         <div class="sub" style="font-size:11px;margin-top:3px">Légère fatigue, entraînement normal</div>
       </div>
-      <div class="obj-opt" onclick="setCyclePhase('j22_28',this)">
+      <div class="obj-opt" onclick="setCyclePhase('j22_28',this)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div style="font-weight:800">J22→J28 — Phase lutéale (fin)</div>
         <div class="sub" style="font-size:11px;margin-top:3px">Fatigue, rétention — volume réduit (−1 série/exercice)</div>
       </div>
@@ -1780,14 +1786,14 @@ const COACH_PHOTO='icons/coach.jpg';
 
     <!-- Bilan de départ (1ère visite) -->
     <div id="bilan-choice-first" style="display:none;margin-bottom:12px">
-      <div onclick="openBilan('depart')" style="background:linear-gradient(135deg,#1a0000,#2a0000);border:1px solid var(--red);border-radius:16px;padding:20px;cursor:pointer">
+      <div onclick="openBilan('depart')" style="background:linear-gradient(135deg,#1a0000,#2a0000);border:1px solid var(--red);border-radius:16px;padding:20px;cursor:pointer" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div style="font-weight:900;font-size:15px;margin-bottom:6px;letter-spacing:.5px;text-transform:uppercase">🏁 Bilan de départ</div>
         <div class="sub" style="font-size:12px;line-height:1.5">Premier bilan complet : point de départ, objectifs, historique, mensurations initiales.</div>
       </div>
     </div>
 
     <!-- Bilan coaching -->
-    <div onclick="openBilan('coaching')" style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;cursor:pointer;margin-bottom:14px">
+    <div onclick="openBilan('coaching')" style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;cursor:pointer;margin-bottom:14px" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="font-weight:900;font-size:15px;margin-bottom:6px;letter-spacing:.5px;text-transform:uppercase;color:var(--red)">BILAN COACHING</div>
       <div style="font-size:13px;font-weight:700;margin-bottom:4px;color:#ddd">Bilan toutes les <span id="bilan-freq-display">2 semaines</span> :</div>
       <div class="sub" style="font-size:12px;line-height:1.5">Poids, mensurations, ressenti, photos.</div>
@@ -3605,7 +3611,7 @@ function renderQ(){
   const c=document.getElementById('q-content');
   if(s.type==='choice'){
     c.innerHTML=`<h2 style="margin-bottom:20px">${s.title}</h2>`+
-      s.choices.map((ch,i)=>`<div class="obj-opt${currentUser[s.field]===ch?' sel':''}" id="qo-${i}" onclick="pickQ(${i},'${s.field}','${ch}')">${ch}</div>`).join('');
+      s.choices.map((ch,i)=>`<div class="obj-opt${currentUser[s.field]===ch?' sel':''}" id="qo-${i}" onclick="pickQ(${i},'${s.field}','${ch}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${ch}</div>`).join('');
   } else {
     c.innerHTML=`<h2 style="margin-bottom:20px">${s.title}</h2>`+
       s.fields.map(f=>`<div><label>${f.label}</label><input type="${f.type}" id="${f.id}" placeholder="${f.ph}" value="${currentUser[f.id]||''}"></div>`).join('');
@@ -3697,7 +3703,7 @@ function renderClientRow(c){
   const _objDisplay=c.objective||c.bilanGoals||'';
   const objLine=_objDisplay?`<div style="font-size:10px;color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(_objDisplay)}</div>`:'';
   const _nm=(escapeHtml(c.fname||'')+' '+escapeHtml(c.lname||'')).trim()||'Profil incomplet';
-  return `<div class="client-row${!hasNewBilan(c)&&!needsAlert(c)&&!isActive(c)?' row-inactive':''}" onclick="openClientDetail('${c.id}')">
+  return `<div class="client-row${!hasNewBilan(c)&&!needsAlert(c)&&!isActive(c)?' row-inactive':''}" onclick="openClientDetail('${c.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <div class="avatar" style="width:44px;height:44px;font-size:15px;overflow:hidden;flex-shrink:0">${avatarHtml}</div>
     <div style="flex:1;min-width:0"><div style="font-weight:700">${_nm}</div><div class="sub" style="font-size:11px;margin-top:2px">${activityLine}</div>${objLine}</div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">${badge}</div>
@@ -3858,7 +3864,7 @@ function _buildSessionCard(s){
     </div>`;
   }).filter(Boolean).join('');
   return `<div style="background:var(--surface-1);border:1px solid #1e1e1e;border-radius:10px;margin-bottom:10px;overflow:hidden">
-    <div onclick="toggleSCard(this)" style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none">
+    <div onclick="toggleSCard(this)" style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:700;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(s.name||'Séance')}</div>
         <div style="font-size:11px;color:var(--sub)">${dt} · ${s.duration||0} min · ${s.sets||0} série${(s.sets||0)>1?'s':''} · ${s.volume||0} kg</div>
@@ -4245,7 +4251,7 @@ function renderBilanEvolution(c){
         const safeCap=(c.fname||'').replace(/'/g,'').replace(/"/g,'')+'  B'+(i+1);
         return img
           ?`<div data-cap="${safeCap}" onclick="openPhotoFull(this.querySelector('img').src,this.dataset.cap)"
-              style="flex-shrink:0;cursor:pointer;position:relative;border-radius:10px;overflow:hidden;background:#111;border:1px solid #333;width:110px">
+              style="flex-shrink:0;cursor:pointer;position:relative;border-radius:10px;overflow:hidden;background:#111;border:1px solid #333;width:110px" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
               <div style="position:absolute;top:6px;left:6px;background:#000b;color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:20px;letter-spacing:1px;z-index:1">B${i+1}</div>
               <img src="${img}" style="width:110px;height:160px;object-fit:cover;display:block">
               <div style="padding:5px 6px;font-size:9px;color:#888;font-weight:700;text-align:center">${date}</div>
@@ -4494,7 +4500,7 @@ function loadProgTemplateSlots(gender){
             <div class="sub" style="font-size:11px;margin-top:1px">${s.active?(escapeHtml(s.name)||'Séance sans nom'):'Jour de repos'}</div>
           </div>
         </div>
-        <div onclick="cptToggleDay(${i})" style="width:44px;height:24px;border-radius:12px;background:${s.active?'var(--red)':'var(--border)'};position:relative;cursor:pointer;flex-shrink:0">
+        <div onclick="cptToggleDay(${i})" style="width:44px;height:24px;border-radius:12px;background:${s.active?'var(--red)':'var(--border)'};position:relative;cursor:pointer;flex-shrink:0" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
           <div style="position:absolute;width:18px;height:18px;border-radius:9px;background:#fff;top:3px;left:${s.active?'23px':'3px'}"></div>
         </div>
       </div>
@@ -4697,7 +4703,7 @@ function loadCoachSessionSlots(){
             <div class="sub" style="font-size:11px;margin-top:1px" id="csm-sub-${i}">${s.active?(escapeHtml(s.name)||'Séance sans nom'):'Jour de repos'}</div>
           </div>
         </div>
-        <div onclick="coachToggleDay(${i})" style="width:44px;height:24px;border-radius:12px;background:${s.active?'var(--red)':'var(--border)'};position:relative;cursor:pointer;transition:.3s;flex-shrink:0">
+        <div onclick="coachToggleDay(${i})" style="width:44px;height:24px;border-radius:12px;background:${s.active?'var(--red)':'var(--border)'};position:relative;cursor:pointer;transition:.3s;flex-shrink:0" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
           <div style="position:absolute;width:18px;height:18px;border-radius:9px;background:#fff;top:3px;transition:.3s;left:${s.active?'23px':'3px'}"></div>
         </div>
       </div>
@@ -5281,7 +5287,7 @@ function loadSessionManager(){
         </div>
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
           <span class="sub" style="font-size:11px">${s.active?'Actif':'Repos'}</span>
-          <div onclick="toggleDayActive(${i})" style="width:44px;height:24px;border-radius:12px;background:${s.active?'var(--red)':'var(--border)'};position:relative;cursor:pointer;transition:.3s;flex-shrink:0">
+          <div onclick="toggleDayActive(${i})" style="width:44px;height:24px;border-radius:12px;background:${s.active?'var(--red)':'var(--border)'};position:relative;cursor:pointer;transition:.3s;flex-shrink:0" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
             <div style="position:absolute;width:18px;height:18px;border-radius:9px;background:#fff;top:3px;transition:.3s;left:${s.active?'23px':'3px'}"></div>
           </div>
         </label>
@@ -5475,7 +5481,7 @@ function openSessionPicker(){
     if(!s.active) return '';
     const isToday=s.day===today;
     return `<div onclick="startWorkoutSession(${i});document.getElementById('session-picker').style.display='none'"
-      style="background:${isToday?'linear-gradient(135deg,#1a0000,#2a0000)':'var(--card2)'};border-radius:12px;padding:14px;margin-bottom:10px;cursor:pointer;display:flex;align-items:center;gap:12px;border:1.5px solid ${isToday?'var(--red)':'var(--border)'}">
+      style="background:${isToday?'linear-gradient(135deg,#1a0000,#2a0000)':'var(--card2)'};border-radius:12px;padding:14px;margin-bottom:10px;cursor:pointer;display:flex;align-items:center;gap:12px;border:1.5px solid ${isToday?'var(--red)':'var(--border)'}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       ${s.photo?`<img src="${s.photo}" style="width:50px;height:50px;border-radius:8px;object-fit:cover">`:`<div style="width:50px;height:50px;border-radius:3px;background:var(--red);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;flex-shrink:0">${DAY_ICONS[i]}</div>`}
       <div style="flex:1">
         <div style="font-size:10px;color:${isToday?'#fca5a5':'var(--sub)'};font-weight:700;text-transform:uppercase;letter-spacing:.5px">${s.day}${isToday?' · Aujourd\'hui':''}</div>
@@ -5696,7 +5702,7 @@ function _renderWeeklyInto(el,sc){
               const bg=isSel?'rgba(255,255,255,.28)':s.active?'rgba(255,255,255,.1)':'rgba(0,0,0,.25)';
               const col=isSel?'#fff':s.active?'rgba(255,255,255,.75)':'rgba(255,255,255,.25)';
               const bord=isToday&&!isSel?'1px solid rgba(255,255,255,.55)':'1px solid transparent';
-              return `<div onclick="_setWeekDay(${i})" style="flex-shrink:0;width:26px;height:26px;border-radius:4px;background:${bg};border:${bord};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;cursor:pointer;color:${col}">${DAY_ICONS[i]}</div>`;
+              return `<div onclick="_setWeekDay(${i})" style="flex-shrink:0;width:26px;height:26px;border-radius:4px;background:${bg};border:${bord};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;cursor:pointer;color:${col}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${DAY_ICONS[i]}</div>`;
             }).join('')}
           </div>
         </div>
@@ -5818,7 +5824,7 @@ function renderWoEx(){
   // Photo programme en haut si disponible
   const photoHtml=woState.sessionPhoto?`<div style="margin-bottom:14px;border-radius:12px;overflow:hidden;border:1px solid var(--border)">
     <div style="font-size:10px;color:var(--sub);padding:6px 10px;background:var(--card2)"> Ta fiche programme (référence)</div>
-    <img src="${woState.sessionPhoto}" style="width:100%;max-height:160px;object-fit:cover;cursor:pointer" onclick="this.style.maxHeight=this.style.maxHeight==='none'?'160px':'none'">
+    <img src="${woState.sessionPhoto}" style="width:100%;max-height:160px;object-fit:cover;cursor:pointer" onclick="this.style.maxHeight=this.style.maxHeight==='none'?'160px':'none'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
   </div>`:'';
 
   document.getElementById('wo-content').innerHTML=`
@@ -6380,7 +6386,7 @@ function bQ(id){return`<input type="number" id="${id}" placeholder="—" value="
 function bT(id,ph){return`<input type="text" id="${id}" placeholder="${ph||''}" value="${escapeHtml(bilData[id]||'')}" oninput="bilData['${id}']=this.value">`;}
 function bTA(id,ph){return`<textarea id="${id}" rows="3" placeholder="${ph||''}" oninput="bilData['${id}']=this.value" style="resize:none">${escapeHtml(bilData[id]||'')}</textarea>`;}
 function bC(gid,choices,multi){
-  return choices.map(c=>`<div class="choice-opt${bilData[gid]&&(multi?bilData[gid].includes(c):bilData[gid]===c)?' sel':''}" data-grp="${gid}" data-val="${c}" onclick="pickBilChoice('${gid}',this.dataset.val,${!!multi})">${c}</div>`).join('');
+  return choices.map(c=>`<div class="choice-opt${bilData[gid]&&(multi?bilData[gid].includes(c):bilData[gid]===c)?' sel':''}" data-grp="${gid}" data-val="${c}" onclick="pickBilChoice('${gid}',this.dataset.val,${!!multi})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${c}</div>`).join('');
 }
 // Échelle d'émojis néon — visages SVG au trait (rendu identique sur tous les appareils)
 // Mêmes valeurs stockées que bC (compat stats coach)
@@ -6399,7 +6405,7 @@ const BEMO_FACES={
 function bEmojiScale(gid,opts){
   return `<div class="emo-row">`+opts.map(o=>{
     const inner=o.svg||('<circle cx="24" cy="24" r="20"/>'+BEMO_FACES[o.f]);
-    return `<div class="emo-opt${bilData[gid]===o.v?' sel':''}" data-grp="${gid}" data-val="${o.v}" style="--eo:${o.c};--eo-glow:${o.c}55" onclick="pickBilChoice('${gid}',this.dataset.val,false)">`+
+    return `<div class="emo-opt${bilData[gid]===o.v?' sel':''}" data-grp="${gid}" data-val="${o.v}" style="--eo:${o.c};--eo-glow:${o.c}55" onclick="pickBilChoice('${gid}',this.dataset.val,false)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">`+
     `<svg class="emo" viewBox="0 0 48 48" fill="none" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`+
     `<span class="emo-lbl">${o.l||o.v}</span></div>`;}).join('')+`</div>`;
 }
@@ -6414,7 +6420,7 @@ const BICON={
 function bGenderCards(gid){
   const opts=[{v:'Homme',b:BSCH_M},{v:'Femme',b:BSCH_F}];
   return `<div class="gsl-row">`+opts.map(o=>
-    `<div class="gsl-opt${bilData[gid]===o.v?' sel':''}" data-grp="${gid}" data-val="${o.v}" onclick="pickBilChoice('${gid}',this.dataset.val,false)">`+
+    `<div class="gsl-opt${bilData[gid]===o.v?' sel':''}" data-grp="${gid}" data-val="${o.v}" onclick="pickBilChoice('${gid}',this.dataset.val,false)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">`+
     `<svg viewBox="0 48 360 484" preserveAspectRatio="xMidYMid meet"><path class="gsl-body" d="${o.b.body}" fill-rule="evenodd"/></svg>`+
     `<div class="gsl-lbl">${o.v.toUpperCase()}</div></div>`).join('')+`</div>`;
 }
@@ -6838,7 +6844,7 @@ function showBilanNotifBanner(){
   const b=document.createElement('div');
   b.id='bilan-notif-banner';
   b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:5000;animation:slideDown .35s ease';
-  b.innerHTML=`<div style="background:linear-gradient(135deg,#1a0000,#280000);border-bottom:2px solid var(--red);padding:14px 18px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openBilanChoice();document.getElementById('bilan-notif-banner')?.remove()">
+  b.innerHTML=`<div style="background:linear-gradient(135deg,#1a0000,#280000);border-bottom:2px solid var(--red);padding:14px 18px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openBilanChoice();document.getElementById('bilan-notif-banner')?.remove()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <div style="font-size:26px;flex-shrink:0"></div>
     <div style="flex:1;min-width:0">
       <div style="font-size:10px;font-weight:900;color:var(--red);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px">Bilan bimensuel · Ce samedi</div>
@@ -6987,7 +6993,7 @@ function showWoReminderBanner(){
   const b=document.createElement('div');
   b.id='wo-reminder-banner';
   b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:5000;animation:slideDown .35s ease';
-  b.innerHTML=`<div style="background:linear-gradient(135deg,#001a06,#002810);border-bottom:2px solid var(--green);padding:14px 18px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openSessionPicker();document.getElementById('wo-reminder-banner')?.remove()">
+  b.innerHTML=`<div style="background:linear-gradient(135deg,#001a06,#002810);border-bottom:2px solid var(--green);padding:14px 18px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openSessionPicker();document.getElementById('wo-reminder-banner')?.remove()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <div style="font-size:26px;flex-shrink:0">💪</div>
     <div style="flex:1;min-width:0">
       <div style="font-size:10px;font-weight:900;color:var(--green);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px">Séance du jour</div>
@@ -7429,7 +7435,7 @@ function showProgressTab(tab,btn){
                 const isLast=i===bl.length-1;
                 return `<td style="padding:4px;vertical-align:top">
                   ${src
-                    ?`<div style="width:${cellW}px;aspect-ratio:.65;border-radius:9px;overflow:hidden;background:#111;cursor:pointer;border:1.5px solid ${isLast?'rgba(224,32,32,.75)':'#242424'};box-shadow:${isLast?'0 0 16px rgba(224,32,32,.45)':'0 5px 14px rgba(0,0,0,.5)'};position:relative" onclick="openPhotoFull(this.querySelector('img').src,'Bilan ${i+1} : ${lbl}')"><img src="${src}" style="width:100%;height:100%;object-fit:cover"><div style="position:absolute;inset:0;background:linear-gradient(180deg,transparent 62%,rgba(0,0,0,.55));pointer-events:none"></div></div>`
+                    ?`<div style="width:${cellW}px;aspect-ratio:.65;border-radius:9px;overflow:hidden;background:#111;cursor:pointer;border:1.5px solid ${isLast?'rgba(224,32,32,.75)':'#242424'};box-shadow:${isLast?'0 0 16px rgba(224,32,32,.45)':'0 5px 14px rgba(0,0,0,.5)'};position:relative" onclick="openPhotoFull(this.querySelector('img').src,'Bilan ${i+1} : ${lbl}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><img src="${src}" style="width:100%;height:100%;object-fit:cover"><div style="position:absolute;inset:0;background:linear-gradient(180deg,transparent 62%,rgba(0,0,0,.55));pointer-events:none"></div></div>`
                     :`<div style="width:${cellW}px;aspect-ratio:.65;border-radius:9px;background:linear-gradient(180deg,#101010,#0a0a0a);border:1px dashed #1e1e1e;display:flex;align-items:center;justify-content:center;color:#1e1e1e">${icon('image',20)}</div>`}
                 </td>`;
               }).join('')}
@@ -7876,7 +7882,7 @@ function _renderStrictDiet(){
     <div style="margin-bottom:20px">
       <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:5px">${icon('clipboard',12)} Plan alimentaire</div>
       ${photos.length===0&&!isCoach?`<div style="background:var(--surface-1);border:1px dashed #2a2a2a;border-radius:12px;padding:32px 16px;text-align:center;color:#333;font-size:12px"><div style="margin-bottom:8px;opacity:.3">${icon('clipboard',32)}</div>Plan alimentaire à venir</div>`:''}
-      ${photos.map((src,i)=>`<div style="margin-bottom:10px;position:relative"><img src="${escapeHtml(src)}" style="width:100%;border-radius:12px;display:block;border:1px solid var(--surface-2)" onclick="viewNutriPhoto(${i})">${isCoach?`<button onclick="deleteStrictPhoto(${i})" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.85);border:none;color:#fff;border-radius:50%;width:28px;height:28px;font-size:14px;cursor:pointer;line-height:1;padding:0">✕</button>`:''}</div>`).join('')}
+      ${photos.map((src,i)=>`<div style="margin-bottom:10px;position:relative"><img src="${escapeHtml(src)}" style="width:100%;border-radius:12px;display:block;border:1px solid var(--surface-2)" onclick="viewNutriPhoto(${i})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${isCoach?`<button onclick="deleteStrictPhoto(${i})" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.85);border:none;color:#fff;border-radius:50%;width:28px;height:28px;font-size:14px;cursor:pointer;line-height:1;padding:0">✕</button>`:''}</div>`).join('')}
       ${isCoach?`<label style="display:flex;align-items:center;justify-content:center;gap:10px;padding:14px;background:#111;border:1.5px dashed #2a2a2a;border-radius:12px;cursor:pointer;margin-top:${photos.length?'8':'0'}px">${icon('camera',18)}<span style="font-size:11px;font-weight:700;color:var(--sub);letter-spacing:1px">AJOUTER UNE PHOTO</span><input type="file" accept="image/*" capture="environment" style="display:none" onchange="addStrictPhoto(this)"></label>`:''}
     </div>
     <!-- Suivi du jour -->
@@ -8000,7 +8006,7 @@ function _renderFjRecent(){
 function _fjResultHtml(f){
   const _kvBadge=`<span style="font-size:8px;font-weight:800;color:#fb923c;background:#1a0e00;border:1px solid #3a1e00;border-radius:4px;padding:1px 5px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`;
   const kcalSpan=f.k!=null?`<span style="color:var(--red);font-weight:700">${f.k} kcal/100g</span>`:_kvBadge;
-  return `<div class="fj-result" onclick="selectFjFood(${f.id})">
+  return `<div class="fj-result" onclick="selectFjFood(${f.id})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <div style="font-weight:700;font-size:13px">${escapeHtml(f.n)}</div>
     <div style="font-size:10px;color:var(--sub);margin-top:2px;display:flex;gap:10px;align-items:center">
       ${kcalSpan}
@@ -8420,7 +8426,7 @@ function _renderSuppTable(list, isCoach, editFn){
     const realIdx=list.indexOf(s);
     const inactive=s.active===false;
     const others=(s.timings||[]).length-1;
-    return `<div onclick="${editFn}(${realIdx})" style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;border-radius:9px;background:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,0));border:1px solid rgba(255,255,255,.045);margin-bottom:5px;transition:.15s${inactive?';opacity:.42':''}">
+    return `<div onclick="${editFn}(${realIdx})" style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;border-radius:9px;background:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,0));border:1px solid rgba(255,255,255,.045);margin-bottom:5px;transition:.15s${inactive?';opacity:.42':''}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="width:3px;align-self:stretch;border-radius:3px;background:${color};box-shadow:0 0 7px ${color}99;flex-shrink:0"></div>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:700;color:${inactive?'#555':'#fff'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s.name)}${inactive?'<span style="font-size:9px;color:#444;margin-left:6px;font-weight:600">désactivé</span>':''}</div>
@@ -9155,7 +9161,7 @@ function renderCaffeineProducts(type){
   const products=CAFFEINE_DB.filter(p=>p.type===type);
   grid.innerHTML=products.map(p=>{
     const safe=encodeURIComponent(JSON.stringify(p));
-    return `<div class="caff-product-tile" data-id="${p.id}" onclick="confirmCaffeineAdd(decodeURIComponent('${safe}'))">
+    return `<div class="caff-product-tile" data-id="${p.id}" onclick="confirmCaffeineAdd(decodeURIComponent('${safe}'))" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="font-size:28px;margin-bottom:6px">${p.icon}</div>
       <div style="font-weight:800;font-size:12px;line-height:1.3;margin-bottom:4px">${p.name}</div>
       <div style="color:var(--red);font-weight:900;font-size:14px">${p.mg}mg</div>
@@ -9502,7 +9508,7 @@ function _renderTsAnnotations(annotations,opts={}){
     ?sorted.map((t,i)=>{
         const isAudio=!!t.audioUrl;
         return `<div style="display:flex;align-items:${isAudio?'flex-start':'center'};gap:8px;padding:6px 0;border-bottom:1px solid var(--surface-2)">
-          <span onclick="const _v=document.getElementById('${videoId}');if(_v)_v.currentTime=tsToSecs('${t.ts}')" style="font-family:'Bebas Neue',sans-serif;font-size:13px;color:var(--red);flex-shrink:0;min-width:36px;margin-top:${isAudio?'3px':'0'};cursor:pointer" title="▶ ${t.ts}">${t.ts}</span>
+          <span onclick="const _v=document.getElementById('${videoId}');if(_v)_v.currentTime=tsToSecs('${t.ts}')" style="font-family:'Bebas Neue',sans-serif;font-size:13px;color:var(--red);flex-shrink:0;min-width:36px;margin-top:${isAudio?'3px':'0'};cursor:pointer" title="▶ ${t.ts}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${t.ts}</span>
           ${isAudio
             ?`<div style="flex:1"><audio src="${t.audioUrl}" controls style="height:32px;width:100%;margin-bottom:2px"></audio><div style="font-size:10px;color:var(--sub);display:flex;align-items:center;gap:4px">${icon('mic',12)} message audio</div></div>`
             :`<span style="flex:1;font-size:12px">${escapeHtml(t.note)}</span>`}
@@ -10965,7 +10971,7 @@ function showPdfSeancesModal(seances,targetEmail){
   _pendingPdfSeances=seances;_pendingPdfTarget=targetEmail;
   const rows=seances.map((s,si)=>`
     <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:10px;overflow:hidden">
-      <div style="padding:12px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
+      <div style="padding:12px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div>
           <div style="font-size:11px;font-weight:800;letter-spacing:.5px">${escapeHtml(s.name)}</div>
           <div style="font-size:10px;color:var(--sub);margin-top:2px">${s.exercises.length} exercice${s.exercises.length>1?'s':''} détecté${s.exercises.length>1?'s':''}</div>
