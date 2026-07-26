@@ -659,7 +659,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="display:flex;align-items:center;gap:14px">
         <div style="width:44px;height:44px;border-radius:10px;background:#0d0d0d;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
         <div>
-          <div style="font-weight:800;font-size:15px;letter-spacing:.5px">JE REVIENS</div>
+          <div style="font-weight:800;font-size:15px;letter-spacing:.5px">J'AI DÉJÀ UN COMPTE</div>
           <div class="sub" style="font-size:11px;margin-top:3px">Me connecter et reprendre ma progression</div>
         </div>
         <div style="margin-left:auto;color:var(--sub);font-size:18px">›</div>
@@ -3178,6 +3178,21 @@ function selectRole(r){
   document.getElementById('role-coach').classList.toggle('sel',r==='coach');
   document.getElementById('role-athlete').classList.toggle('sel',r==='athlete');
 }
+// Consomme l'intention de retour posée par goRegisterPourSouscrire. Renvoie
+// true quand la navigation a été prise en charge, pour que l'appelant n'envoie
+// pas l'utilisateur vers l'écran de code par-dessus.
+// L'intention est retirée dans tous les cas : elle ne vaut que pour l'inscription
+// qui vient de se produire, jamais pour la suivante.
+function _retourApresInscription(){
+  let cible=null;
+  try{
+    cible=sessionStorage.getItem('rc_apres_inscription');
+    sessionStorage.removeItem('rc_apres_inscription');
+  }catch(e){}
+  if(cible!=='s-subscribe') return false;
+  go('s-subscribe');loadSubscribePage();
+  return true;
+}
 async function doRegister(){
   const fn=v('r-fname'),ln=v('r-lname'),em=v('r-email').toLowerCase(),pw=v('r-pwd'),pw2=v('r-pwd2'),gn=v('r-gender');
   const err=document.getElementById('r-err');err.style.display='none';
@@ -3221,6 +3236,7 @@ async function doRegister(){
     // routeUser() déconnecterait un athlète encore en statut FREE ; on le mène
     // à l'écran de code, comme le fait doLogin dans la même situation.
     if(cloudUser.role!=='coach'&&(cloudUser.status||'FREE')==='FREE'){
+      if(_retourApresInscription()) return;
       go('s-client-code');
       const enAttente=localStorage.getItem('pendingCode');
       if(enAttente){
@@ -3238,7 +3254,7 @@ async function doRegister(){
   if(selRole==='coach'){
     document.getElementById('coach-code-val').textContent=user.code;
     go('s-coach-code');
-  } else {
+  } else if(!_retourApresInscription()){
     go('s-client-code');
     // Pre-fill pending code if athlete came via s-athlete-entry
     const pending=localStorage.getItem('pendingCode');
@@ -11902,6 +11918,13 @@ function copyExistingCode(i){
 
 // ═══════════════════════════════════════════════════
 // ATHLETE: Subscribe page
+// Départ vers l'inscription DEPUIS l'écran d'abonnement. L'intention est
+// mémorisée en sessionStorage — pas en variable : l'inscription authentifie
+// auprès de Firebase, et un rechargement en cours de route perdrait le fil.
+function goRegisterPourSouscrire(){
+  try{sessionStorage.setItem('rc_apres_inscription','s-subscribe');}catch(e){}
+  go('s-register');selectRole('athlete');
+}
 // ═══════════════════════════════════════════════════
 function loadSubscribePage(mode,payload){
   // L'écran est atteignable sans compte : c'est justement là que le prix doit
@@ -11910,7 +11933,9 @@ function loadSubscribePage(mode,payload){
   // donc la création de compte, et l'abonnement se souscrit juste après.
   const _pp=document.getElementById('paypal-btn-container');
   if(!currentUser){
-    if(_pp) _pp.innerHTML='<button class="btn btn-red" onclick="go(\'s-register\');selectRole(\'athlete\')">Créer mon compte pour souscrire →</button>'
+    // goRegisterPourSouscrire pose l'intention de retour : après création du
+    // compte, doRegister ramène ici au lieu d'envoyer vers l'écran de code.
+    if(_pp) _pp.innerHTML='<button class="btn btn-red" onclick="goRegisterPourSouscrire()">Créer mon compte pour souscrire →</button>'
       +'<div style="font-size:11px;color:var(--sub);text-align:center;margin-top:10px;line-height:1.6">Le paiement se fait juste après, en une étape.</div>';
     const _co=document.getElementById('sub-code-option');
     if(_co) _co.style.display='';
