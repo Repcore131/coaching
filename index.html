@@ -507,10 +507,10 @@ const COACH_PHOTO='icons/coach.jpg';
     <button onclick="go('s-coach-entry')"
       style="width:100%;padding:20px;background:#E02020;color:#fff;border:none;font-family:'Bebas Neue','Anton',sans-serif;font-size:13px;font-weight:800;letter-spacing:4px;cursor:pointer;text-transform:uppercase;margin-bottom:12px;transition:.15s;box-shadow:inset 0 2px 0 rgba(255,255,255,.24),inset 0 -3px 0 rgba(0,0,0,.45),0 6px 28px rgba(224,32,32,.5)"
       onmouseover="this.style.background='#c91a1a'" onmouseout="this.style.background='#E02020'">ESPACE COACH</button>
-    <!-- ESPACE ATHLETE — bevel subtil -->
+    <!-- ESPACE ATHLÈTE — bevel subtil -->
     <button onclick="go('s-athlete-entry')"
       style="width:100%;padding:20px;background:rgba(255,255,255,.04);color:#fff;border:1px solid rgba(255,255,255,.15);font-family:'Bebas Neue','Anton',sans-serif;font-size:13px;font-weight:800;letter-spacing:4px;cursor:pointer;text-transform:uppercase;transition:.15s;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),inset 0 -2px 0 rgba(0,0,0,.4),0 4px 18px rgba(0,0,0,.55)"
-      onmouseover="this.style.borderColor='rgba(224,32,32,.6)';this.style.color='#E02020'" onmouseout="this.style.borderColor='rgba(255,255,255,.15)';this.style.color='#fff'">ESPACE ATHLETE</button>
+      onmouseover="this.style.borderColor='rgba(224,32,32,.6)';this.style.color='#E02020'" onmouseout="this.style.borderColor='rgba(255,255,255,.15)';this.style.color='#fff'">ESPACE ATHLÈTE</button>
     <button id="install-btn" onclick="installApp()"
       style="display:none;width:100%;margin-top:12px;padding:14px;background:transparent;color:#E02020;border:1px solid rgba(224,32,32,.35);font-family:'Bebas Neue','Anton',sans-serif;font-size:12px;font-weight:800;letter-spacing:3px;cursor:pointer;text-transform:uppercase;align-items:center;justify-content:center;gap:8px;transition:.15s;box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 4px 14px rgba(0,0,0,.4)"
       onmouseover="this.style.background='rgba(224,32,32,.08)'" onmouseout="this.style.background='transparent'">⬇ Installer l'app sur ce téléphone</button>
@@ -774,10 +774,10 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
     <div style="padding:12px 8px;flex:1">
       <button id="sb-tab-dashboard" onclick="coachTab('dashboard')" style="width:100%;text-align:left;padding:12px 14px;background:var(--card);border:none;border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
-        <span style="font-size:16px"></span> ATHLETES
+        <span style="font-size:16px"></span> ATHLÈTES
       </button>
       <button id="sb-tab-codes" onclick="coachTab('codes')" style="width:100%;text-align:left;padding:12px 14px;background:none;border:none;border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
-        <span style="font-size:16px"></span> CODES ACCES
+        <span style="font-size:16px"></span> CODES ACCÈS
       </button>
       <button id="sb-tab-monetisation" onclick="coachTab('monetisation')" style="width:100%;text-align:left;padding:12px 14px;background:none;border:none;border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
         <span style="font-size:16px"></span> PAIEMENTS
@@ -785,7 +785,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
     <div style="padding:16px">
       <button onclick="showCoachCode()" style="width:100%;background:var(--card2);border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:9px;font-family:Montserrat,sans-serif;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:1px;margin-bottom:8px">MON CODE</button>
-      <button onclick="logout()" style="width:100%;background:none;border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:9px;font-family:Montserrat,sans-serif;font-size:10px;cursor:pointer">DECONNEXION</button>
+      <button onclick="logout()" style="width:100%;background:none;border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:9px;font-family:Montserrat,sans-serif;font-size:10px;cursor:pointer">DÉCONNEXION</button>
     </div>
   </div>
 
@@ -810,7 +810,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
     <!-- Mobile tabs (hidden on desktop) -->
     <div id="coach-tabs-bar" style="display:flex;border-bottom:1px solid #1a0000;flex-shrink:0;background:#080808">
-      <button id="ct-tab-dashboard" onclick="coachTab('dashboard')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid var(--red);color:#fff;font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:1px;cursor:pointer">ATHLETES</button>
+      <button id="ct-tab-dashboard" onclick="coachTab('dashboard')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid var(--red);color:#fff;font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:1px;cursor:pointer">ATHLÈTES</button>
       <button id="ct-tab-codes" onclick="coachTab('codes')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--sub);font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:1px;cursor:pointer">CODES</button>
       <button id="ct-tab-monetisation" onclick="coachTab('monetisation')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--sub);font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:1px;cursor:pointer">PAIEMENTS</button>
     </div>
@@ -819,7 +819,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <div id="ct-dashboard" style="display:flex;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
       <div class="pad">
         <div style="display:flex;gap:10px;margin-bottom:20px;padding-top:4px">
-          <div class="metric-box"><div class="metric-val" id="ch-total">0</div><div class="metric-label">Athletes</div></div>
+          <div class="metric-box"><div class="metric-val" id="ch-total">0</div><div class="metric-label">Athlètes</div></div>
           <div class="metric-box"><div class="metric-val" id="ch-active" style="color:var(--green)">0</div><div class="metric-label">Actifs</div></div>
           <div class="metric-box"><div class="metric-val" id="ch-alerts" style="color:var(--red)">0</div><div class="metric-label">Alertes</div></div>
         </div>
@@ -831,7 +831,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
           <div class="section-header" style="margin-bottom:0">
             <div class="sh-line"></div>
-            <h2 style="font-size:16px">MES ATHLETES</h2>
+            <h2 style="font-size:16px">MES ATHLÈTES</h2>
           </div>
           <button class="btn btn-red btn-sm" onclick="openAddAthlete()" style="letter-spacing:2px;padding:9px 16px">+ AJOUTER</button>
         </div>
@@ -843,25 +843,25 @@ const COACH_PHOTO='icons/coach.jpg';
     <div id="ct-codes" style="display:none;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
       <div class="pad">
         <div style="width:20px;height:2px;background:var(--red);margin-bottom:8px;margin-top:4px"></div>
-        <h2 style="margin-bottom:4px">Codes acces eleves</h2>
-        <p class="sub" style="font-size:12px;margin-bottom:20px">Genere un code personnalise avec une duree d'acces pour chaque eleve. Envoie-le par WhatsApp ou SMS.</p>
+        <h2 style="margin-bottom:4px">Codes accès élèves</h2>
+        <p class="sub" style="font-size:12px;margin-bottom:20px">Génère un code personnalisé avec une durée d'accès pour chaque élève. Envoie-le par WhatsApp ou SMS.</p>
         <!-- Visible créateur uniquement — géré dans loadStudentCodes() -->
         <div id="sc-generate-card" style="background:var(--dark);border:1px solid #2a0000;border-radius:14px;padding:18px;margin-bottom:24px">
           <div style="font-size:11px;font-weight:800;color:var(--red);letter-spacing:2px;margin-bottom:14px">NOUVEAU CODE GRATUIT</div>
-          <div style="margin-bottom:12px"><label for="sc-name">Nom de l'eleve</label><input id="sc-name" placeholder="Ex: Marie Martin"></div>
+          <div style="margin-bottom:12px"><label for="sc-name">Nom de l'élève</label><input id="sc-name" placeholder="Ex: Marie Martin"></div>
           <div style="margin-bottom:14px">
-            <label for="sc-duration">Duree d'acces</label>
+            <label for="sc-duration">Durée d'accès</label>
             <select id="sc-duration" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:#fff;padding:12px 14px;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;cursor:pointer">
               <option value="1">1 mois</option>
-              <option value="3" selected>3 mois (recommande)</option>
+              <option value="3" selected>3 mois (recommandé)</option>
               <option value="6">6 mois</option>
               <option value="12">12 mois - 1 an</option>
             </select>
           </div>
-          <button class="btn btn-red" onclick="generateStudentCode()" style="letter-spacing:1px">Generer le code acces gratuit</button>
+          <button class="btn btn-red" onclick="generateStudentCode()" style="letter-spacing:1px">Générer le code accès gratuit</button>
           <div id="sc-result" style="display:none;margin-top:16px">
             <div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:10px;padding:16px">
-              <div style="font-size:10px;color:var(--sub);letter-spacing:2px;margin-bottom:8px">CODE ACCES GENERE</div>
+              <div style="font-size:10px;color:var(--sub);letter-spacing:2px;margin-bottom:8px">CODE ACCÈS GÉNÉRÉ</div>
               <div id="sc-code-val" style="font-family:monospace;font-size:11px;color:var(--green);word-break:break-all;line-height:1.6;margin-bottom:10px;background:#050f05;padding:10px;border-radius:6px"></div>
               <div style="font-size:12px;color:#aaa;margin-bottom:14px" id="sc-expiry-info"></div>
               <button class="btn btn-outline" onclick="copyStudentCode()" style="font-size:12px;letter-spacing:1px">Copier et envoyer par WhatsApp</button>
@@ -876,12 +876,12 @@ const COACH_PHOTO='icons/coach.jpg';
         <div>
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
             <div style="width:20px;height:2px;background:var(--red)"></div>
-            <h3>Codes generes</h3>
+            <h3>Codes générés</h3>
           </div>
           <div id="sc-list">
             <div style="text-align:center;padding:40px 20px;color:#444">
               <div style="font-size:36px;margin-bottom:12px;opacity:0.4"></div>
-              <div style="font-size:13px">Aucun code genere encore.<br>Utilise le formulaire ci-dessus.</div>
+              <div style="font-size:13px">Aucun code généré encore.<br>Utilise le formulaire ci-dessus.</div>
             </div>
           </div>
         </div>
@@ -1347,7 +1347,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
       <!-- STATS -->
       <div style="display:flex;gap:8px;margin-bottom:20px">
-        <div class="metric-box"><div class="metric-val" id="clh-sessions">0</div><div class="metric-label">Seances</div></div>
+        <div class="metric-box"><div class="metric-val" id="clh-sessions">0</div><div class="metric-label">Séances</div></div>
         <div class="metric-box"><div class="metric-val" id="clh-streak-nb" style="color:var(--red)">0</div><div class="metric-label">Streak J.</div></div>
         <div class="metric-box"><div class="metric-val" id="clh-weight">—</div><div class="metric-label">Poids kg</div></div>
       </div>
@@ -11472,7 +11472,7 @@ async function generateStudentCode(){
   }
   const name=document.getElementById('sc-name').value.trim();
   const months=parseInt(document.getElementById('sc-duration').value)||3;
-  if(!name){toast('Entre le nom de l&#39;&#233;l&#232;ve');return;}
+  if(!name){toast('Entre le nom de l\'élève');return;}
   let gen;
   try{
     gen=await _genAccessCode(name,months);
@@ -11494,17 +11494,17 @@ async function generateStudentCode(){
   lastGeneratedCode=token;
   document.getElementById('sc-code-val').textContent=token;
   const exp=new Date(expiry);
-  document.getElementById('sc-expiry-info').textContent='Acces pour '+name+' - expire le '+exp.toLocaleDateString('fr-FR')+' ('+months+' mois)';
+  document.getElementById('sc-expiry-info').textContent='Accès pour '+name+' - expire le '+exp.toLocaleDateString('fr-FR')+' ('+months+' mois)';
   document.getElementById('sc-result').style.display='';
   loadStudentCodes();
 }
 function copyStudentCode(){
   if(!lastGeneratedCode) return;
   if(navigator.clipboard){
-    navigator.clipboard.writeText(lastGeneratedCode).then(()=>toast('Code copie. Envoie-le a l&#39;&#233;l&#232;ve par WhatsApp/SMS'));
+    navigator.clipboard.writeText(lastGeneratedCode).then(()=>toast('Code copié. Envoie-le à l\'élève par WhatsApp/SMS'));
   } else {
     const t=document.createElement('textarea');t.value=lastGeneratedCode;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();
-    toast('Code copie');
+    toast('Code copié');
   }
 }
 function loadStudentCodes(){
@@ -11521,15 +11521,15 @@ function loadStudentCodes(){
     const i=codes.length-1-ri;
     const expired=now>c.expiry;
     const exp=new Date(c.expiry);
-    const st=!c.active?'<span class="badge badge-gray">Desactive</span>':expired?'<span class="badge badge-red">Expire</span>':'<span class="badge badge-green">Actif</span>';
-    const used=c.usedBy?'<div style="font-size:10px;color:var(--sub)">Utilise par: '+c.usedBy+'</div>':'<div style="font-size:10px;color:var(--sub)">Non utilise</div>';
+    const st=!c.active?'<span class="badge badge-gray">Désactivé</span>':expired?'<span class="badge badge-red">Expiré</span>':'<span class="badge badge-green">Actif</span>';
+    const used=c.usedBy?'<div style="font-size:10px;color:var(--sub)">Utilisé par : '+c.usedBy+'</div>':'<div style="font-size:10px;color:var(--sub)">Non utilisé</div>';
     return '<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:12px;padding:14px;margin-bottom:10px">'
       +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
       +'<div style="font-weight:700">'+c.studentName+'</div>'+st+'</div>'
       +'<div style="font-size:11px;color:#888;margin-bottom:4px">Expire: '+exp.toLocaleDateString('fr-FR')+' ('+c.months+' mois)</div>'
       +used
       +'<div style="display:flex;gap:8px;margin-top:10px">'
-      +'<button onclick="toggleStudentCode('+i+')" style="flex:1;background:none;border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:7px;font-family:Montserrat,sans-serif;font-size:10px;cursor:pointer;font-weight:700">'+(c.active?'Desactiver':'Activer')+'</button>'
+      +'<button onclick="toggleStudentCode('+i+')" style="flex:1;background:none;border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:7px;font-family:Montserrat,sans-serif;font-size:10px;cursor:pointer;font-weight:700">'+(c.active?'Désactiver':'Activer')+'</button>'
       +'<button onclick="extendStudentCode('+i+')" style="flex:1;background:none;border:1px solid #1a3a1a;color:var(--green);border-radius:8px;padding:7px;font-family:Montserrat,sans-serif;font-size:10px;cursor:pointer;font-weight:700">+3 mois</button>'
       +'<button onclick="copyExistingCode('+i+')" style="flex:1;background:none;border:1px solid #1a1a3a;color:#7ab;border-radius:8px;padding:7px;font-family:Montserrat,sans-serif;font-size:10px;cursor:pointer;font-weight:700">Copier</button>'
       +'</div></div>';
@@ -11541,7 +11541,7 @@ function toggleStudentCode(i){
   const users=DB.get('users')||{};users[currentUser.email]=currentUser;
   DB.set('users',users);DB.set('session',currentUser);
   loadStudentCodes();
-  toast(currentUser.studentCodes[i].active?'Code active':'Code desactive');
+  toast(currentUser.studentCodes[i].active?'Code activé':'Code désactivé');
 }
 async function extendStudentCode(i){
   if(!currentUser.studentCodes||!currentUser.studentCodes[i]) return;
@@ -11568,8 +11568,8 @@ async function extendStudentCode(i){
 function copyExistingCode(i){
   if(!currentUser.studentCodes||!currentUser.studentCodes[i]) return;
   const token=currentUser.studentCodes[i].token;
-  if(navigator.clipboard){navigator.clipboard.writeText(token).then(()=>toast('Code copie'));}
-  else{const t=document.createElement('textarea');t.value=token;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();toast('Code copie');}
+  if(navigator.clipboard){navigator.clipboard.writeText(token).then(()=>toast('Code copié'));}
+  else{const t=document.createElement('textarea');t.value=token;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();toast('Code copié');}
 }
 
 // ═══════════════════════════════════════════════════
