@@ -3525,6 +3525,9 @@ function dismissTodoRow(idx){
 }
 function urgencyScore(c){
   const lt=(c.bilans||[]).reduce((m,b)=>Math.max(m,b.date),0);
+  // Même priorité que « nouveau bilan » : les deux sont mutuellement exclusifs
+  // (hasNewBilan exige au moins un bilan, neverStarted exige aucun), pas d'égalité possible.
+  if(neverStarted(c)&&!isAlertSnoozed('nostart',c.id)) return 5;
   if(hasNewBilan(c)&&!isAlertSnoozed('bilan',c.id,lt)) return 5;
   if(!c._fromCode&&needsAlert(c)&&!isAlertSnoozed('overdue',c.id)) return 4;
   const now=Date.now();
@@ -3540,7 +3543,10 @@ function renderTodoBlock(clients){
   const overdue=clients.filter(c=>!c._fromCode&&needsAlert(c)&&!isAlertSnoozed('overdue',c.id));
   const expiring=clients.filter(c=>!c._fromCode&&c.status==='COACHING_SUIVI'&&c.accessExpiry&&(c.accessExpiry-now)>0&&(c.accessExpiry-now)<SOON&&!isAlertSnoozed('expiring',c.id));
   const noProg=clients.filter(c=>!c._fromCode&&!hasProgram(c)&&(c.bilans||[]).some(b=>b.type==='depart')&&!isAlertSnoozed('noprog',c.id));
+  const noStart=clients.filter(c=>neverStarted(c)&&!isAlertSnoozed('nostart',c.id));
   const rows=[];
+  // En tête : relancer un inscrit qui n'a jamais démarré prime sur tout le reste.
+  if(noStart.length) rows.push({type:'nostart',icon:'🆕',color:'var(--red)',label:'Inscrit, n\'a jamais commencé',list:noStart});
   if(newBil.length) rows.push({type:'bilan',icon:'📥',color:'var(--orange)',label:'Nouveau'+(newBil.length>1?'x bilans à lire':' bilan à lire'),list:newBil});
   if(overdue.length) rows.push({type:'overdue',icon:icon('alert-triangle',15),color:'var(--red)',label:'Bilan'+(overdue.length>1?'s':'')+' en retard',list:overdue});
   if(expiring.length) rows.push({type:'expiring',icon:'⏳',color:'var(--orange)',label:'Accès expire dans <14j',list:expiring});
@@ -3666,6 +3672,13 @@ function hasNewBilan(c){
   if(!c.bilans?.length||c._fromCode) return false;
   const seen=(currentUser.seenBilans||{})[c.email]||0;
   return c.bilans.some(b=>b.date>seen);
+}
+// Athlète rattaché depuis plus de 3 jours qui n'a jamais rempli le moindre bilan.
+// Utilisé à deux endroits (la ligne « À traiter » et urgencyScore) : un seul
+// prédicat pour que le tri de la liste et l'alerte ne puissent pas diverger.
+// createdAt absent (comptes antérieurs au champ) → traité comme ancien, donc signalé.
+function neverStarted(c){
+  return !c._fromCode&&!(c.bilans||[]).length&&(Date.now()-(c.createdAt||0))>3*864e5;
 }
 // Un athlète « a un programme » dès qu'UN de ces mécanismes est renseigné.
 // Source unique de vérité : tout code qui juge la présence d'un programme doit
