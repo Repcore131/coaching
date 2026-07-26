@@ -2297,6 +2297,18 @@ const COACH_PHOTO='icons/coach.jpg';
 //     leurs élèves doivent souscrire via PayPal (9,95 EUR/mois).
 const CREATOR_EMAIL='guellec.coachingpro@gmail.com';
 
+// APP_BASE_URL : racine publique de l'app, déduite de l'adresse courante.
+// Jamais codée en dur — un changement de dépôt, de chemin ou de domaine
+// (GitHub Pages, domaine perso, sous-dossier) suit automatiquement.
+// Sert aux liens d'invitation coach et au QR code multi-appareils.
+const APP_BASE_URL=(()=>{
+  const strip=u=>u.replace(/[?#].*$/,'').replace(/[^/]*$/,'');
+  // location.origin vaut "null" sur les pages file:// (test local) → repli sur href
+  return (location.origin&&location.origin!=='null')
+    ? location.origin+strip(location.pathname)
+    : strip(location.href);
+})();
+
 // PAYPAL_CLIENT_ID / PAYPAL_PLAN_ID : liés au compte PayPal du créateur
 //   (App créée sur developer.paypal.com avec guellec.coachingpro@gmail.com).
 //   Abonnement : 9,95 EUR/mois — Plan RepCore Mensuel.
@@ -2696,7 +2708,7 @@ const CLOUD={
   },
   async pullUser(email){
     const key=email.replace(/\./g,',');
-    const base='https://repcore-sync-default-rtdb.firebaseio.com/users/'+key+'.json';
+    const base=this._fbUrl.replace('users.json','users/'+key+'.json');
     const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),6000);
     try{
       const token=await this._getToken();
@@ -2765,7 +2777,7 @@ const CLOUD={
 
   // Générer le QR code pour ouvrir l'app sur un autre appareil (sync Firebase auto)
   showQR(){
-    const url='https://kevin79000.github.io/repcore/';
+    const url=APP_BASE_URL;
     const qrUrl='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(url);
     const modal=document.createElement('div');
     modal.style.cssText='position:fixed;inset:0;background:#000c;z-index:9999;display:flex;align-items:center;justify-content:center';
@@ -3276,7 +3288,7 @@ async function doNewPwdRecovery(){
     // Email déjà dans Firebase Auth → le compte existe avec un autre mot de passe
     // Essayer de tirer les données RTDB en lecture publique (sans token)
     const key=em.replace(/\./g,',');
-    const rtdbData=await fetch('https://repcore-sync-default-rtdb.firebaseio.com/users/'+key+'.json?t='+Date.now())
+    const rtdbData=await fetch(CLOUD._fbUrl.replace('users.json','users/'+key+'.json')+'?t='+Date.now())
       .then(r=>r.ok?r.json():null).catch(()=>null);
     if(rtdbData){
       show('Compte trouvé ('+( rtdbData.fname||em )+') — entre le BON mot de passe ci-dessus ou utilise "Mot de passe oublié ?" (vérifie les spams venant de noreply@repcore-sync.firebaseapp.com).');
@@ -3334,7 +3346,7 @@ function copyCoachInviteLink(){
     _st:undefined
   };
   const encoded=btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
-  const url='https://kevin79000.github.io/repcore/?coachpkg='+encoded;
+  const url=APP_BASE_URL+'?coachpkg='+encoded;
   if(navigator.clipboard){
     navigator.clipboard.writeText(url).then(()=>toast('✓ Lien copié ! Envoie-le à ton athlète par WhatsApp ou SMS.'));
   }else{
