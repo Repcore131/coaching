@@ -2466,6 +2466,64 @@ const CLOUD={
   _saveAuth(){
     try{localStorage.setItem('rc_fb_auth',JSON.stringify({i:this._idToken,r:this._refreshToken,e:this._tokenExpiry}));}catch{}
   },
+
+  // ── File de renvoi ────────────────────────────────────────────────────────
+  // Un push qui échouait (jeton absent, réseau coupé, 5xx côté Firebase) laissait
+  // la modification sur le seul appareil, sans jamais être retentée : le cloud ne
+  // la voyait qu'à la prochaine modification du même dossier — parfois jamais.
+  // On mémorise les clés en échec et on les rejoue au prochain démarrage de CLOUD
+  // et après chaque authentification réussie.
+  _QUEUE_KEY:'rc_sync_queue',
+  _lireFile(){
+    try{const f=JSON.parse(localStorage.getItem(this._QUEUE_KEY)||'[]');return Array.isArray(f)?f:[];}
+    catch{return [];}
+  },
+  _ecrireFile(liste){
+    // Bornée à 50 : une file non bornée finirait par saturer le stockage qu'elle
+    // est justement censée soulager. On garde les plus récentes.
+    try{localStorage.setItem(this._QUEUE_KEY,JSON.stringify(liste.slice(-50)));}catch{}
+  },
+  _enfiler(email){
+    if(!email) return;
+    const f=this._lireFile();
+    if(f.includes(email)) return;
+    f.push(email);this._ecrireFile(f);
+  },
+  _defiler(email){
+    const f=this._lireFile();
+    const g=f.filter(e=>e!==email);
+    if(g.length!==f.length) this._ecrireFile(g);
+  },
+  enAttenteDeSync(){return this._lireFile().length;},
+  // Rejoue les dossiers restés en échec. Silencieuse : c'est une reprise
+  // d'arrière-plan, l'utilisateur a déjà été averti au moment de l'échec.
+  // Séquentielle et non parallèle : chaque envoi relit le nœud distant pour la
+  // défense anti-écrasement, et les lancer tous d'un coup au démarrage
+  // retarderait l'affichage de l'accueil.
+  async viderFile(){
+    if(this._videEnCours) return 0;
+    const f=this._lireFile();
+    if(!f.length||!this.canWrite()) return 0;
+    this._videEnCours=true;
+    let renvoyes=0;
+    try{
+      const users=DB.get('users')||{};
+      for(const email of f){
+        const u=users[email];
+        // Le dossier n'existe plus localement : plus rien à renvoyer.
+        if(!u){this._defiler(email);continue;}
+        try{
+          await this._doPushOne(email,u);
+          renvoyes++;
+        }catch(e){
+          // Toujours hors ligne ou toujours refusé : _doPushOne a déjà remis la
+          // clé dans la file. Inutile d'insister sur les suivantes maintenant.
+          break;
+        }
+      }
+    } finally { this._videEnCours=false; }
+    return renvoyes;
+  },
   async _getToken(){
     if(this._idToken&&Date.now()<this._tokenExpiry-60000) return this._idToken;
     if(!this._refreshToken) return null;
@@ -2513,6 +2571,9 @@ const CLOUD={
       this._saveAuth();
       // Envoie immédiatement les données locales en attente après chaque auth réussie
       setTimeout(()=>{try{const u=DB.get('users');if(u) this._doPush(u);}catch{}},300);
+      // …et rejoue les dossiers restés en échec pendant qu'on n'était pas
+      // authentifié. C'est précisément le cas que la file existe pour rattraper.
+      setTimeout(()=>{this.viderFile().catch(()=>{});},1200);
       return true;
     }
     return false;
@@ -2624,7 +2685,11 @@ const CLOUD={
       // et on remonte une erreur actionnable aux appelants qui l'attendent.
       if(!token){
         this._setSyncStatus(false);
-        throw new Error('Session expirée — reconnecte-toi pour synchroniser.');
+        const sansJeton=new Error('Non authentifié — modification enregistrée sur cet appareil uniquement.');
+        // Remonté tel quel par toastSync : « synchronisation en échec » ne dirait
+        // pas à l'utilisateur qu'il lui suffit de se reconnecter.
+        sansJeton._actionnable=true;
+        throw sansJeton;
       }
       const safeKey=email.replace(/\./g,',');
       const safe={...user};
@@ -2671,18 +2736,29 @@ const CLOUD={
         const volume=o=>(((o&&o.sessions)||[]).length)+(((o&&o.bilans)||[]).length);
         if(volume(safe)<volume(distant)){
           this._setSyncStatus(false);
-          throw new Error('Version distante plus récente et plus complète ('
+          const refus=new Error('Version distante plus récente et plus complète ('
             +volume(distant)+' entrées contre '+volume(safe)
             +') — envoi annulé pour ne pas écraser tes données.');
+          // Refus délibéré, pas une panne : le rejouer à chaque démarrage
+          // échouerait à l'identique indéfiniment. Il ne va pas dans la file.
+          refus._nonRejouable=true;
+          refus._actionnable=true;
+          throw refus;
         }
       }
       const url=this._fbUrl.replace('users.json','users/'+safeKey+'.json');
       const r=await fetch(url+'?auth='+token,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(safe)});
       this._setSyncStatus(r.ok);
       if(!r.ok) throw new Error('Erreur serveur '+r.status+' ('+r.statusText+')');
+      // Le nœud distant est à jour : plus rien à rejouer pour cette clé.
+      this._defiler(email);
     }catch(e){
       console.error('[RepCore] sync push error:',e);
       this._setSyncStatus(false);
+      // Entonnoir unique de tous les échecs d'envoi : c'est ici, et nulle part
+      // ailleurs, que la file se remplit. Les ~20 appelants « fire-and-forget »
+      // en bénéficient sans avoir à s'en occuper.
+      if(!e||!e._nonRejouable) this._enfiler(email);
       throw e;
     }
   },
@@ -2950,10 +3026,13 @@ function _validateAthletePkg(o){
         });
         merged.sort((a,b)=>a.date-b.date);
         users[athlete.email]=Object.assign({},existing,athlete,{bilans:merged,_fromCode:false});
-        DB.set('users',users);CLOUD.pushOne(athlete.email,users[athlete.email]);
+        const okMaj=DB.set('users',users);
+        const envoiMaj=CLOUD.pushOne(athlete.email,users[athlete.email]);
         window._importedAthlete=athlete;
         const nb=newBilans.filter(nb=>!exBilans.find(eb=>eb.date===nb.date&&eb.type===nb.type)).length;
-        toast('✓ '+((athlete.fname||'')+' '+(athlete.lname||'')).trim()+' mis à jour'+(nb?' — '+nb+' nouveau'+(nb>1?'x':'')+' bilan'+(nb>1?'s':''):'')+'.');
+        toastSync(okMaj,envoiMaj,
+          '✓ '+((athlete.fname||'')+' '+(athlete.lname||'')).trim()+' mis à jour'+(nb?' — '+nb+' nouveau'+(nb>1?'x':'')+' bilan'+(nb>1?'s':''):'')+'.',
+          'la mise à jour est');
       }
     }
     const st=params.get('s');
@@ -2989,6 +3068,9 @@ let qStep=0;
 window.onload=()=>{
   document.querySelectorAll('#client-tabbar .tab-btn[data-icon]').forEach(b=>b.insertAdjacentHTML('afterbegin',icon(b.dataset.icon,19)));
   CLOUD._loadAuth();
+  // Reprise des envois restés en échec lors de la session précédente. Différée :
+  // l'accueil doit s'afficher d'abord, la file est une tâche d'arrière-plan.
+  setTimeout(()=>{CLOUD.viderFile().catch(()=>{});},3000);
   const logoAnim=document.getElementById('splash-logo-anim');
   if(logoAnim){
     requestAnimationFrame(()=>requestAnimationFrame(()=>{
@@ -4090,11 +4172,12 @@ function openClientDetail(cid,_refresh){
 function confirmDeleteClient(){
   if(!confirm('Retirer cet élève de ton suivi ?\nSon compte reste actif mais il ne sera plus associé à ton coaching.')) return;
   if(!getOwnedClient(currentClientId)) return;
+  let ok=true,envoi=Promise.resolve();
   if(currentClientId.startsWith('_code_')){
     // Élève code uniquement → supprimer le code
     const codeId=currentClientId.replace('_code_','');
     currentUser.studentCodes=(currentUser.studentCodes||[]).filter(c=>c.codeId!==codeId);
-    saveUser();
+    ok=saveUser();
   } else {
     // Élève enregistré → détacher du coach
     const users=DB.get('users')||{};
@@ -4103,16 +4186,19 @@ function confirmDeleteClient(){
       athlete.coachId=null;athlete.coachName=null;athlete.coachCode=null;
       athlete.updatedAt=Date.now();
       users[athlete.email]=athlete;
-      DB.set('users',users);
-      CLOUD.pushOne(athlete.email,athlete);
+      ok=DB.set('users',users);
+      // Cet envoi porte la révocation : c'est lui qui efface coachEmailKey côté
+      // serveur, et donc le droit d'accès de l'ex-coach au dossier de santé.
+      // Tant qu'il n'a pas abouti, le détachement n'est que cosmétique.
+      envoi=CLOUD.pushOne(athlete.email,athlete);
     }
     // Nettoyer les refs côté coach
     if(currentUser.clients) currentUser.clients=currentUser.clients.filter(id=>id!==currentClientId);
     if(currentUser.seenBilans) delete currentUser.seenBilans[athlete?.email];
-    saveUser();
+    ok=saveUser()&&ok;
   }
-  toast('Élève retiré du suivi');
   go('s-coach-home');loadCoachHome();
+  toastSync(ok,envoi,'Élève retiré du suivi','le retrait est');
 }
 function viewClientBilans(){
   const c=getOwnedClient(currentClientId);
@@ -4156,14 +4242,9 @@ function addBilanPhoto(bilanDate,bilanType,view,inputEl){
     // le texte d'un élément unique, le dernier message est le seul visible.
     if(localOk&&cacheOk) toast('Enregistrement…');
     renderBilanEvolution(cl);
-    CLOUD.pushOne(cl.email,cl)
-      // Le ✓ vert n'est affiché que si l'écriture locale a réellement eu lieu.
-      .then(()=>toast(
-        localOk&&cacheOk?'Photo ajoutée':'Photo envoyée au cloud — stockage de cet appareil plein',
-        localOk&&cacheOk?'var(--green)':'var(--orange)'))
-      // Remonter e.message : « Session expirée — reconnecte-toi pour synchroniser. »
-      // est actionnable, contrairement à l'ancien texte générique.
-      .catch(e=>toast(e?.message||'Photo sauvegardée localement — sync en erreur.','var(--orange)'));
+    // Les quatre issues (appareil × cloud) sont désormais gérées par toastSync,
+    // qui remonte lui-même les messages actionnables comme « Non authentifié ».
+    toastSync(localOk&&cacheOk,CLOUD.pushOne(cl.email,cl),'Photo ajoutée','la photo est');
   });
 }
 
@@ -4763,12 +4844,14 @@ function confirmAssignProgram(){
     users[emailKey]=a;
     pushes.push(CLOUD.pushOne(emailKey,a));
   });
-  DB.set('users',users);
-  toast('Enregistrement…');
+  const ok=DB.set('users',users);
+  if(ok) toast('Enregistrement…');
   go('s-coach-programs');loadCoachProgramsList();
-  Promise.all(pushes)
-    .then(()=>toast(` Programme assigné à ${targets.length} athlète${targets.length>1?'s':''} !`))
-    .catch(()=>toast('Programme assigné localement — sync en erreur.','var(--orange)'));
+  // Promise.all rejette au premier échec : un seul athlète non synchronisé
+  // suffit à invalider l'annonce, ce qui est le comportement voulu.
+  toastSync(ok,Promise.all(pushes),
+    ` Programme assigné à ${targets.length} athlète${targets.length>1?'s':''} !`,
+    'le programme est');
 }
 
 // ======= COACH SESSION MANAGER =======
@@ -4875,14 +4958,7 @@ function saveCoachSessions(){
   // « Enregistrement… » écraserait l'avertissement de quota émis par DB.set.
   if(localOk) toast('Enregistrement…');
   go('s-coach-client');
-  CLOUD.pushOne(emailKey,c)
-    .then(()=>toastEcriture(localOk,' Séances sauvegardées !','les séances sont'))
-    // Le message d'échec de sync affirmait « sauvegardées localement » : faux
-    // quand c'est justement l'écriture locale qui a échoué.
-    .catch(()=>toast(localOk
-      ?'Séances sauvegardées localement — sync en erreur.'
-      :'Ni enregistrées sur cet appareil ni synchronisées — libère de l\'espace et recommence.',
-      'var(--orange)'));
+  toastSync(localOk,CLOUD.pushOne(emailKey,c),' Séances sauvegardées !','les séances sont');
 }
 
 function resolveClient(cid){
@@ -4901,9 +4977,13 @@ function removeCoachPdf(){
   // « supprimé » restait servi à l'athlète et hasProgram() restait vrai à vie.
   c.programPdf=null;c.programPdfLink=null;c.programPdfStorageUrl=null;
   c.programPdfName=null;c.programPdfDate=null;c.programPdfSize=null;
-  c.updatedAt=Date.now();users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
+  c.updatedAt=Date.now();users[c.email]=c;
+  const ok=DB.set('users',users);
+  const envoi=CLOUD.pushOne(c.email,c);
   openClientDetail(currentClientId,true);
-  toast('PDF supprimé.');
+  // Une suppression non synchronisée est trompeuse dans l'autre sens : le PDF
+  // disparaît de l'écran du coach mais reste servi à l'athlète.
+  toastSync(ok,envoi,'PDF supprimé.','la suppression est');
 }
 function renderClientPdfCard(c){
   const el=document.getElementById('ccc-pdf-content');
@@ -4954,8 +5034,8 @@ async function uploadCoachPdfInline(input){
     c.programPdfDate=Date.now();
     c.programPdfVersion=(c.programPdfVersion||0)+1;
     c.updatedAt=Date.now();users[c.email]=c;
-    const ok=DB.set('users',users);CLOUD.pushOne(c.email,c);
-    toastEcriture(ok,'PDF v'+c.programPdfVersion+' importé — '+c.programPdfName,'le PDF est');
+    const ok=DB.set('users',users);
+    toastSync(ok,CLOUD.pushOne(c.email,c),'PDF v'+c.programPdfVersion+' importé — '+c.programPdfName,'le PDF est');
     openClientDetail(currentClientId,true);
   }catch(e){
     toast('Échec de téléversement : '+(e.message||'Réessaie.'),'var(--orange)');
@@ -4978,8 +5058,8 @@ function saveCoachPdfLinkInline(){
   c.updatedAt=Date.now();users[c.email]=c;
   // Écriture dans le dossier de l'ATHLÈTE : elle ne passe pas par saveUser(),
   // donc le retour de DB.set doit être relayé ici.
-  const ok=DB.set('users',users);CLOUD.pushOne(c.email,c);
-  toastEcriture(ok,'Lien v'+c.programPdfVersion+' enregistré !','le lien est');
+  const ok=DB.set('users',users);
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Lien v'+c.programPdfVersion+' enregistré !','le lien est');
   openClientDetail(currentClientId,true);
 }
 // Parse reps string : "10 PUIS 20", "6-8", "15 Par Jambe", "8"
@@ -8447,8 +8527,8 @@ function saveClientNutriDiet(type){
   if(!c.nutrition) c.nutrition={};
   c.nutrition.dietType=type;
   c.updatedAt=Date.now();users[c.email]=c;
-  const ok=DB.set('users',users);CLOUD.pushOne(c.email,c);
-  toastEcriture(ok,'Type de diète enregistré ✓','la diète est');
+  const ok=DB.set('users',users);
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Type de diète enregistré ✓','la diète est');
   renderCoachNutriSection(c);
 }
 
@@ -8463,8 +8543,8 @@ function saveClientNutriMacros(){
     off:{kcal:g('ccd-off-kcal'),p:g('ccd-off-p'),g:g('ccd-off-g'),l:g('ccd-off-l'),s:g('ccd-off-s'),f:g('ccd-off-f')},
   };
   c.updatedAt=Date.now();users[c.email]=c;
-  const ok=DB.set('users',users);CLOUD.pushOne(c.email,c);
-  toastEcriture(ok,'Objectifs enregistrés ✓','les objectifs sont');
+  const ok=DB.set('users',users);
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Objectifs enregistrés ✓','les objectifs sont');
 }
 
 function addClientStrictPhoto(input){
@@ -8480,8 +8560,8 @@ function addClientStrictPhoto(input){
     c.updatedAt=Date.now();users[c.email]=c;
     // Photo base64 dans le dossier de l'athlète : le cas de débordement le
     // plus probable côté coach.
-    const ok=DB.set('users',users);CLOUD.pushOne(c.email,c);
-    toastEcriture(ok,'Photo ajoutée ✓','la photo est');
+    const ok=DB.set('users',users);
+    toastSync(ok,CLOUD.pushOne(c.email,c),'Photo ajoutée ✓','la photo est');
     renderCoachNutriSection(c);
   });
 }
@@ -8712,9 +8792,9 @@ function saveSuppEntry(){
   const list=_suppStore();
   if(idx>=0&&idx<list.length){list[idx]={...list[idx],...entry,id:list[idx].id};}
   else{list.push(entry);}
-  saveUser();
+  const ok=saveUser();
   if(currentUser._notifEnabled) scheduleSuppNotif();
-  toast(idx>=0?'Complément mis à jour ✓':'Complément ajouté ✓');
+  toastEcriture(ok,idx>=0?'Complément mis à jour ✓':'Complément ajouté ✓','le complément est');
   _suppReturnToNutrition?loadNutrition():loadSupplements();
 }
 
@@ -8802,8 +8882,8 @@ function saveClientSuppEntry(){
   if(!Array.isArray(c.nutrition.supplements)) c.nutrition.supplements=[];
   c.nutrition.supplements.push({id:Date.now(),name,dosage_quantity:qty,dosage_unit:unit,timings,notes,active:true});
   c.updatedAt=Date.now();users[c.email]=c;
-  const ok=DB.set('users',users);CLOUD.pushOne(c.email,c);
-  toastEcriture(ok,'Complément ajouté ✓','le complément est');
+  const ok=DB.set('users',users);
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Complément ajouté ✓','le complément est');
   renderCoachSuppSection(c);
 }
 
@@ -8900,8 +8980,9 @@ function saveCoachSuppEdit(){
   } else {
     c.nutrition.supplements.push({id:Date.now(),...entry});
   }
-  c.updatedAt=Date.now();users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
-  toast(idx>=0?'Complément mis à jour ✓':'Complément ajouté ✓');
+  c.updatedAt=Date.now();users[c.email]=c;
+  const ok=DB.set('users',users);
+  toastSync(ok,CLOUD.pushOne(c.email,c),idx>=0?'Complément mis à jour ✓':'Complément ajouté ✓','le complément est');
   closeModal();
   renderCoachSuppSection(c);
 }
@@ -8911,8 +8992,9 @@ function deleteCoachSuppEdit(idx){
   const c=getOwnedClient(currentClientId,users);
   if(!c||!Array.isArray(c.nutrition?.supplements)) return;
   c.nutrition.supplements.splice(idx,1);
-  c.updatedAt=Date.now();users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
-  toast('Complément supprimé');
+  c.updatedAt=Date.now();users[c.email]=c;
+  const ok=DB.set('users',users);
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Complément supprimé','la suppression est');
   closeModal();
   renderCoachSuppSection(c);
 }
@@ -9426,12 +9508,11 @@ async function deleteVideo(email,videoId){
   u.videos=u.videos.filter(v=>v.id!==videoId);
   u.updatedAt=Date.now();
   users[email]=u;
-  DB.set('users',users);
+  const ok=DB.set('users',users);
   if(currentUser?.email===email){currentUser.videos=u.videos;currentUser.updatedAt=u.updatedAt;}
-  CLOUD.pushOne(email,u);
   // Plan Spark : pas de suppression distante Cloudinary (nécessiterait l'API secret côté serveur).
   // La vidéo est retirée de l'app ; le fichier peut être purgé depuis le dashboard Cloudinary.
-  toast('Vidéo supprimée','var(--green)');
+  toastSync(ok,CLOUD.pushOne(email,u),'Vidéo supprimée','la suppression est');
   loadVideos();
 }
 function addVideoLink(){
@@ -9752,11 +9833,12 @@ function saveVideoCorrection(){
   c.videos[idx].feedbackTimestamps=tss;
   c.videos[idx].feedbackDate=Date.now();
   c.updatedAt=Date.now();users[window._vcEmail]=c;
-  const ok=DB.set('users',users);CLOUD.pushOne(window._vcEmail,c);
+  const ok=DB.set('users',users);
+  const envoi=CLOUD.pushOne(window._vcEmail,c);
   closeModal();
   // La modale vient de se fermer : le coach ne peut plus rien récupérer si
   // l'écriture a échoué, il faut donc le lui dire au lieu d'un « ✓ ».
-  toastEcriture(ok,'Correction enregistrée !','la correction est');
+  toastSync(ok,envoi,'Correction enregistrée !','la correction est');
   openClientDetail(currentClientId,true);
 }
 
@@ -10352,6 +10434,31 @@ function toastEcriture(ok,succes,perdu){
   if(ok){toast(succes);return true;}
   toast('Stockage plein — '+perdu+' dans le cloud uniquement, pas sur cet appareil','var(--orange)');
   return false;
+}
+// Même chose, mais pour une sauvegarde qui a DEUX destinations : l'appareil et
+// le cloud. Quatre issues, un seul « ✓ » vert — celui où la donnée est
+// réellement aux deux endroits. Les appelants passaient jusqu'ici la promesse
+// de CLOUD.pushOne à la trappe et annonçaient le succès avant même que le
+// serveur ait répondu.
+// Retourne une promesse qui n'échoue jamais : les appelants « fire-and-forget »
+// peuvent l'ignorer sans provoquer de rejet non capturé.
+function toastSync(localOk,promesse,succes,perdu){
+  return Promise.resolve(promesse).then(
+    ()=>toastEcriture(localOk,succes,perdu),
+    e=>{
+      // Le message générique couvre le cas courant — réseau coupé, 5xx Firebase —
+      // où l'utilisateur n'a rien à faire de particulier. Deux échecs sont au
+      // contraire actionnables (se reconnecter, arbitrer un conflit de version)
+      // et sont remontés tels quels : les noyer dans le générique ferait perdre
+      // la seule information utile. Uniquement si l'écriture locale a réussi,
+      // sinon leur texte (« enregistrée sur cet appareil ») serait faux.
+      const detail=(localOk&&e&&e._actionnable)?e.message:null;
+      toast(detail||(localOk
+        ?'Enregistré sur cet appareil — synchronisation en échec'
+        :'Échec : ni enregistré sur cet appareil, ni synchronisé. Recommence.'),
+        'var(--orange)');
+      return false;
+    });
 }
 function silentLogout(){DB.del('session');currentUser=null;CLOUD.signOut();}
 function logout(){
@@ -11227,7 +11334,7 @@ function importPdfSeances(){
   u.updatedAt=Date.now();
   users[email]=u;
   let ok=DB.set('users',users);
-  CLOUD.pushOne(email,u);
+  const envoi=CLOUD.pushOne(email,u);
   if(email===currentUser?.email){
     currentUser.sessions_config=u.sessions_config;
     // Les deux écritures comptent : ok=DB.set(...)&&ok court-circuiterait la
@@ -11235,7 +11342,7 @@ function importPdfSeances(){
     ok=DB.set('session',currentUser)&&ok;
   }
   closeModal();
-  toastEcriture(ok,seances.length+' séances importées dans le programme  !','les séances sont');
+  toastSync(ok,envoi,seances.length+' séances importées dans le programme  !','les séances sont');
   if(email===currentUser?.email) loadSessionManager();
 }
 
@@ -11324,16 +11431,20 @@ async function createAthlete(){
   currentUser.clients.push(uid);
   athlete.updatedAt=Date.now();users[em]=athlete;
   users[currentUser.email]=currentUser;
-  DB.set('users',users);CLOUD.pushOne(em,athlete);
-  DB.set('session',currentUser);
+  const okU=DB.set('users',users);
+  const envoi=CLOUD.pushOne(em,athlete);
+  const okS=DB.set('session',currentUser);
   closeModal();
   // Copy token to clipboard for convenience
   try{navigator.clipboard?.writeText(token);}catch{}
   const exp=new Date(expiry).toLocaleDateString('fr-FR');
-  toast(motDePasseActif
+  // Sans synchronisation, l'athlète ne trouvera pas son dossier en se
+  // connectant depuis son propre téléphone : annoncer « il peut se connecter »
+  // serait un mensonge coûteux.
+  toastSync(okU&&okS,envoi,motDePasseActif
     ? '✓ '+fn+' créé — il peut se connecter avec cet email et ce mot de passe. Accès jusqu\'au '+exp+' (code copié)'
     : '✓ '+fn+' rattaché — il avait déjà un compte, il garde SON mot de passe. Accès jusqu\'au '+exp+' (code copié)',
-    'var(--green)');
+    'le compte est');
   loadCoachHome();
 }
 
@@ -11683,8 +11794,9 @@ async function toggleSubStatus(email){
   if(u.paymentStatus==='active'&&!confirm('Suspendre l\'abonnement de '+u.fname+' ? Il perdra l\'accès immédiatement.')) return;
   u.paymentStatus=u.paymentStatus==='active'?'cancelled':'active';
   u.updatedAt=Date.now();
-  users[email]=u;DB.set('users',users);CLOUD.pushOne(email,u);
-  toast(u.fname+' : '+u.paymentStatus);
+  users[email]=u;
+  const ok=DB.set('users',users);
+  toastSync(ok,CLOUD.pushOne(email,u),u.fname+' : '+u.paymentStatus,'le statut est');
   loadMonetisationTab();
 }
 
@@ -11764,18 +11876,22 @@ function executeOffboard(coachId){
     targetId=cr.id;targetName=(cr.fname||'')+' '+(cr.lname||'');
   }
   // action==='free' → targetId reste null
+  const envois=[];
   athletes.forEach(a=>{
     a.coachId=targetId;
     a.coachName=targetId?targetName:null;
     a.coachCode=targetId?a.coachCode||null:null;
     a.updatedAt=Date.now();
     users[a.email]=a;
-    CLOUD.pushOne(a.email,a);
+    envois.push(CLOUD.pushOne(a.email,a));
   });
-  DB.set('users',users);
+  const ok=DB.set('users',users);
   const label=action==='free'?'libérés':'transférés vers '+(targetName.trim()||'le créateur');
   closeModal();
-  toast(athletes.length+' athlète'+(athletes.length>1?'s':'')+' '+label+' ✓','var(--green)');
+  // Un transfert non synchronisé laisse l'ancien coach avec ses droits d'accès
+  // côté serveur : l'annoncer fait n'est pas anodin.
+  toastSync(ok,Promise.all(envois),
+    athletes.length+' athlète'+(athletes.length>1?'s':'')+' '+label+' ✓','le transfert est');
 }
 
 async function requestAccountDeletion(){
