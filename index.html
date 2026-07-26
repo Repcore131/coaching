@@ -10774,7 +10774,7 @@ function showOcrReviewModal(exercises,idx,videoLinks=[]){
     </div>
     <p class="sub" style="font-size:12px;margin-bottom:16px;line-height:1.6">Vérifie et corrige si besoin, puis importe. <span style="color:var(--green);font-size:10px">v233</span></p>
     <div id="ocr-rows">${rows}</div>
-    <button class="btn btn-red" style="margin-top:4px" onclick="importOcrExercises(${idx},${exercises.length})"> Importer dans la séance</button>
+    <button class="btn btn-red" style="margin-top:4px" onclick="importOcrExercises(${idx===null||idx===undefined?'null':idx},${exercises.length})"> ${currentUser?.role==='coach'?"Importer dans l'éditeur":'Importer dans la séance'}</button>
     <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Annuler</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
@@ -10795,7 +10795,29 @@ function importOcrExercises(idx,maxN){
     if(name) result.push({name,series,reps,repos,description,note:'',image:null,videoUrl,videoUrl2});
   }
   if(!result.length){toast('Aucun exercice à importer.','var(--orange)');return;}
-  currentUser.sessions_config[idx].exercises=result;
+
+  // ── Coach : l'import alimente l'éditeur d'exercices partagé ───────────────
+  // progEx est la source de vérité de cet écran, et saveProgram() sait déjà
+  // router vers les trois destinations (modèle H/F, séance d'un athlète,
+  // programme client) selon _progEditorCtx. On ne touche donc JAMAIS à
+  // currentUser.sessions_config, qui est la configuration du coach lui-même.
+  // Avant ce correctif, _athleteSessionIdx() valant null hors mode athlète,
+  // la ligne currentUser.sessions_config[null] levait une TypeError : l'import
+  // OCR était purement et simplement inopérant côté coach.
+  if(currentUser?.role==='coach'){
+    progEx=result;
+    _progExDirty=true;
+    renderProgEx();
+    closeModal();
+    toast(result.length+' exercices importés — pense à sauvegarder.');
+    return;
+  }
+
+  // ── Athlète : écriture directe dans sa propre séance, comportement inchangé ─
+  if(!currentUser.sessions_config) initSessionsConfig();
+  const cible=typeof idx==='number'?currentUser.sessions_config?.[idx]:null;
+  if(!cible){toast('Séance introuvable — rouvre-la puis réessaie.','var(--orange)');return;}
+  cible.exercises=result;
   saveUser();closeModal();
   toast(' '+result.length+' exercices importés !');
   loadSessionManager();
