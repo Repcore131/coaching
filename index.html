@@ -3754,7 +3754,7 @@ function _buildSessionCard(s){
     <div onclick="toggleSCard(this)" style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none">
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:700;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(s.name||'Séance')}</div>
-        <div style="font-size:11px;color:var(--sub)">${dt} · ${s.duration||0} min · ${s.sets||0} séries · ${s.volume||0} kg</div>
+        <div style="font-size:11px;color:var(--sub)">${dt} · ${s.duration||0} min · ${s.sets||0} série${(s.sets||0)>1?'s':''} · ${s.volume||0} kg</div>
       </div>
       <span style="font-size:11px;font-weight:700;flex-shrink:0;color:${complete?'var(--green)':'#555'}">${complete?'✓':'✗'}</span>
       <span class="sc-arr" style="color:#444;font-size:11px;flex-shrink:0">▶</span>
@@ -5952,7 +5952,19 @@ function finishWorkout(incomplete=false){
   clearInterval(woState.timerInterval);
   const mins=Math.floor((Date.now()-woState.startTime)/60000);
   let sets=0,vol=0;
-  Object.values(woState.sessionData).forEach(d=>d.sets.forEach(s=>{sets++;if(s.weight&&s.reps){const r1=repsToNumber(s.reps),w1=parseFloat(s.weight||0);vol+=w1*r1;if(s.degressive&&s.weight2)vol+=parseFloat(s.weight2||0)*parseFloat(s.p2reps||0);}}));
+  // Seules les séries validées comptent : sessionData contient toutes les séries
+  // prévues dès l'ouverture de l'exercice, l'ancien sets++ inconditionnel affichait
+  // donc le programme au lieu du réalisé. Même définition que la fiche coach, qui
+  // ne déplie que les séries done (_buildSessionCard).
+  Object.values(woState.sessionData).forEach(d=>d.sets.forEach(s=>{
+    if(!s.done) return;
+    sets++;
+    const r1=repsToNumber(s.reps), w1=parseFloat(s.weight||0);
+    if(w1>0&&r1>0){
+      vol+=w1*r1;
+      if(s.degressive&&s.weight2) vol+=parseFloat(s.weight2||0)*parseFloat(s.p2reps||0);
+    }
+  }));
   // Sauvegarder les données par NOM d'exercice (pas par index) pour permettre les lookups cross-séances
   const data={};
   Object.entries(woState.sessionData).forEach(([idx,d])=>{
