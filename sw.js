@@ -1,10 +1,37 @@
-const CACHE = 'repcore-v324';
+const CACHE = 'repcore-v325';
 const SW_DATA = 'repcore-sw-data'; // persistent across updates — not wiped by activate
-const ASSETS = ['./manifest.json', './icons/icon-192x192.png', './icons/icon-512x512.png', './icons/logo.png', './data/ciqual.json'];
+
+// Strict nécessaire à l'installabilité PWA (~46 Ko).
+// Le reste (icônes 512, logo, base Ciqual de 672 Ko) est mis en cache à la
+// demande par le handler fetch, ou préchargé explicitement — voir PREFETCH_CIQUAL.
+const ASSETS = ['./manifest.json', './icons/icon-192x192.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
+  // allSettled et non addAll : un asset manquant ou en erreur ne doit plus
+  // faire échouer toute l'installation du Service Worker.
+  e.waitUntil(
+    caches.open(CACHE)
+      .then(c => Promise.allSettled(ASSETS.map(a => c.add(a))))
+      .catch(() => {})
+  );
   self.skipWaiting();
+});
+
+// Préchargement différé et non bloquant de la base alimentaire (672 Ko).
+// index.html poste ce message au premier affichage de l'écran nutrition :
+// la recherche d'aliment fonctionne alors hors-ligne aux visites suivantes,
+// sans peser sur le tout premier chargement de l'app.
+const CIQUAL_URL = './data/ciqual.json';
+let _ciqualPrefetch = null;
+self.addEventListener('message', e => {
+  if (e.data?.type !== 'PREFETCH_CIQUAL') return;
+  if (_ciqualPrefetch) return;            // une seule tentative par cycle de vie du SW
+  _ciqualPrefetch = caches.open(CACHE)
+    .then(async c => {
+      if (await c.match(CIQUAL_URL)) return;   // déjà en cache : rien à faire
+      await c.add(CIQUAL_URL);
+    })
+    .catch(() => { _ciqualPrefetch = null; }); // échec (hors ligne) : réessayable
 });
 
 self.addEventListener('activate', e => {

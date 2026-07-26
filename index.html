@@ -8131,8 +8131,22 @@ function _renderFjDaySummary(date){
         </div>`).join('')}
       </div>`).join('')}`;
 }
+// Demande au Service Worker de mettre la base Ciqual (672 Ko) en cache.
+// Appelé au premier affichage de l'écran nutrition seulement : la recherche
+// d'aliment marchera hors-ligne ensuite, sans alourdir le 1er chargement.
+let _ciqualPrefetchAsked=false;
+function _prefetchCiqual(){
+  if(_ciqualPrefetchAsked) return;
+  _ciqualPrefetchAsked=true;
+  try{
+    navigator.serviceWorker?.ready
+      .then(reg=>reg.active?.postMessage({type:'PREFETCH_CIQUAL'}))
+      .catch(()=>{});
+  }catch(e){}
+}
 function loadNutrition(){
   go('s-nutrition');
+  _prefetchCiqual();
   const nut=currentUser.nutrition||{};
   const dt=nut.dietType||'strict';
   const sel=document.getElementById('nut-diet-select');
