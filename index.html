@@ -5075,7 +5075,9 @@ async function _openPdfSrc(raw){
       setTimeout(()=>URL.revokeObjectURL(url),15000);
     }catch{toast('Impossible d\'ouvrir le PDF.','var(--orange)');}
   } else {
-    const url=safeUrl(raw);
+    // URL passée à window.open, pas à du HTML : il faut la forme brute, sinon
+    // un & devenu &amp; casserait les paramètres de l'adresse.
+    const url=safeUrlRaw(raw);
     if(url!=='#') window.open(url,'_blank');
   }
 }
@@ -10030,7 +10032,20 @@ function openPhotoFull(src,title){
 // ======= HELPERS =======
 function ini(f,l){return((f||'?')[0]+(l||'?')[0]).toUpperCase();}
 function escapeHtml(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
-function safeUrl(u){if(!u)return'#';return/^https?:\/\//i.test(u)?u:'#';}
+// safeUrlRaw : valide le schéma et rend l'URL TELLE QUELLE. À réserver aux
+// usages hors HTML (window.open, fetch…), où des entités casseraient l'adresse.
+function safeUrlRaw(u){
+  if(!u) return '#';
+  const s=String(u).trim();
+  return /^https?:\/\//i.test(s) ? s : '#';
+}
+// safeUrl : version à utiliser dans un attribut HTML. Valider le schéma ne
+// suffisait pas — une valeur comme `https://x" autofocus="` passait le test
+// puis sortait de l'attribut href, permettant d'injecter d'autres attributs.
+function safeUrl(u){
+  const s=safeUrlRaw(u);
+  return s==='#' ? '#' : escapeHtml(s);
+}
 function ago(ts){const d=Math.floor((Date.now()-ts)/864e5);return d===0?"aujourd'hui":d===1?"hier":"il y a "+d+"j";}
 function saveUser(){
   currentUser.updatedAt=Date.now();
