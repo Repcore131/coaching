@@ -600,8 +600,8 @@ const COACH_PHOTO='icons/coach.jpg';
 
     <!-- Info box rouge -->
     <div style="background:rgba(224,32,32,.07);border:1px solid rgba(224,32,32,.24);border-radius:10px;padding:14px 16px;margin-top:4px">
-      <div style="font-size:10px;letter-spacing:1.5px;color:var(--red);font-weight:700;margin-bottom:6px">ℹ️ ESPACE COACH</div>
-      <div style="font-size:11px;color:rgba(255,255,255,.82);line-height:1.6">Aucun code ni abonnement requis. Tu génères ton propre code à donner à tes athlètes.</div>
+      <div style="font-size:10px;letter-spacing:1.5px;color:var(--red);font-weight:700;margin-bottom:6px">ℹ️ ESPACE COACH — TARIFS</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.82);line-height:1.6"><strong style="color:#fff">Ton compte coach est gratuit</strong>, sans abonnement ni code. Tu génères ton propre code à donner à tes athlètes.<br><br>Tes athlètes, eux, paient <strong style="color:#fff">9,95 €/mois</strong> pour accéder à l'app — sauf ceux à qui tu remets un code d'accès gratuit.</div>
     </div>
   </div>
 </div>
@@ -666,10 +666,25 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
     </div>
 
+    <!-- Carte C : sans code, accès payant en autonomie.
+         Le prix doit être atteignable AVANT toute création de compte : depuis
+         l'accueil, deux clics suffisent (ESPACE ATHLÈTE puis cette carte) et
+         aucune donnée personnelle n'est demandée. -->
+    <div onclick="go('s-subscribe');loadSubscribePage()" style="background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="width:44px;height:44px;border-radius:10px;background:#0d0d0d;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div>
+        <div>
+          <div style="font-weight:800;font-size:15px;letter-spacing:.5px">JE N'AI PAS DE CODE</div>
+          <div class="sub" style="font-size:11px;margin-top:3px">Accès en autonomie — 9,95 €/mois, sans engagement</div>
+        </div>
+        <div style="margin-left:auto;color:var(--sub);font-size:18px">›</div>
+      </div>
+    </div>
+
     <!-- Info box athlète -->
     <div style="background:rgba(224,32,32,.07);border:1px solid rgba(224,32,32,.24);border-radius:10px;padding:14px 16px;margin-top:4px">
       <div style="font-size:10px;letter-spacing:1.5px;color:var(--red);font-weight:700;margin-bottom:6px">ℹ️ ESPACE ATHLÈTE</div>
-      <div style="font-size:11px;color:rgba(255,255,255,.82);line-height:1.6">Un code d'accès est requis pour rejoindre l'app. Demande-le à ton coach RepCore.</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.82);line-height:1.6">Avec un code fourni par ton coach, l'accès est compris dans son suivi. Sans code, l'accès en autonomie coûte 9,95 €/mois, sans engagement.</div>
     </div>
 
   </div>
@@ -11889,7 +11904,21 @@ function copyExistingCode(i){
 // ATHLETE: Subscribe page
 // ═══════════════════════════════════════════════════
 function loadSubscribePage(mode,payload){
-  document.getElementById('paypal-btn-container').innerHTML='<button class="btn btn-red" onclick="initPaypalSubscription()" id="paypal-loading-btn">Souscrire pour 9,95€/mois →</button>';
+  // L'écran est atteignable sans compte : c'est justement là que le prix doit
+  // être visible avant toute inscription. Mais PayPal ne peut pas être lancé
+  // dans cet état — onApprove écrit dans currentUser, qui vaut null. On propose
+  // donc la création de compte, et l'abonnement se souscrit juste après.
+  const _pp=document.getElementById('paypal-btn-container');
+  if(!currentUser){
+    if(_pp) _pp.innerHTML='<button class="btn btn-red" onclick="go(\'s-register\');selectRole(\'athlete\')">Créer mon compte pour souscrire →</button>'
+      +'<div style="font-size:11px;color:var(--sub);text-align:center;margin-top:10px;line-height:1.6">Le paiement se fait juste après, en une étape.</div>';
+    const _co=document.getElementById('sub-code-option');
+    if(_co) _co.style.display='';
+    const _pi=document.getElementById('sub-pending-info');
+    if(_pi) _pi.style.display='none';
+    return;
+  }
+  _pp.innerHTML='<button class="btn btn-red" onclick="initPaypalSubscription()" id="paypal-loading-btn">Souscrire pour 9,95€/mois →</button>';
   const codeOpt=document.getElementById('sub-code-option');
   const pendingInfo=document.getElementById('sub-pending-info');
   if(mode==='pending-code'&&payload){
@@ -11905,6 +11934,13 @@ function loadSubscribePage(mode,payload){
   }
 }
 function initPaypalSubscription(){
+  // Défense en profondeur : le SDK ne doit jamais être chargé sans compte, même
+  // si un appel arrivait par un autre chemin que le bouton de loadSubscribePage.
+  if(!currentUser){
+    toast('Crée ton compte avant de souscrire.','var(--orange)');
+    go('s-register');selectRole('athlete');
+    return;
+  }
   const clientId=PAYPAL_CLIENT_ID;
   const planId=PAYPAL_PLAN_ID;
   const coachId=CREATOR_EMAIL;
