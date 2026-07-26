@@ -8727,19 +8727,36 @@ const CAFFEINE_DB=[
   {id:'preworkout_g',type:'preworkout',   name:'Pré-workout générique', icon:'💪',mg:150, volume:'1 dose'},
 ];
 
+// Référence réglementaire — EFSA, avis scientifique sur la caféine (2015),
+// repris par l'ANSES : pour un adulte en bonne santé,
+//   • 400 mg/jour est le plafond sans risque identifié ;
+//   • 200 mg en prise unique, soit environ 3 mg/kg, restent sans effet notable.
+// Les anciens ratios 2:4:6:8 plaçaient le seuil rouge à 600 mg pour 75 kg,
+// bien au-delà du plafond : l'anneau ne virait au rouge qu'après une dose déjà
+// dangereuse. Les paliers suivent maintenant le poids SANS jamais dépasser 400.
+const CAFFEINE_MAX_EFSA=400;
 function caffeineThresholds(wKg){
   const w=wKg||75;
-  // Ratios 2:4:6:8 garantissent green<yellow<orange<red pour tout poids (40-150 kg)
-  return {green:Math.round(w*2),yellow:Math.round(w*4),orange:Math.round(w*6),red:Math.round(w*8)};
+  // orange = seuil de bascule au rouge (cf. _caffeineColor). Plafonné à 400,
+  // donc à 75 kg l'anneau passe au rouge exactement à 400 mg ; un athlète plus
+  // léger bascule plus tôt (5,5 mg/kg), jamais plus tard.
+  return {
+    green :Math.min(Math.round(w*2),   200),
+    yellow:Math.min(Math.round(w*3),   300),
+    orange:Math.min(Math.round(w*5.5), CAFFEINE_MAX_EFSA),
+    red   :CAFFEINE_MAX_EFSA
+  };
 }
 function caffeineEquiv(mg){
   const n=Math.round(mg/63);
   return n<=0?'':`≈ ${n===1?'1 espresso':n+' expressos'}`;
 }
+// Les quatre paliers sont utilisés ici, et la légende sous la jauge reprend
+// exactement ces trois bornes — toute modification doit rester synchrone.
 function _caffeineColor(mg,thr){
   if(mg<thr.green)  return 'var(--success)';
   if(mg<thr.yellow) return 'var(--info)';
-  if(mg<thr.red)    return 'var(--warning)';
+  if(mg<thr.orange) return 'var(--warning)';
   return 'var(--danger)';
 }
 function getUserWeight(){
@@ -8775,15 +8792,19 @@ function addCaffeineEntry(entry){
   saveUser();
 }
 function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday,dateLbl){
-  const pct=Math.min(totalMg/thr.red,1);
+  // La jauge est pleine exactement quand l'anneau vire au rouge : même borne
+  // que _caffeineColor, sinon l'anneau et le remplissage racontent deux histoires.
+  const pct=Math.min(totalMg/thr.orange,1);
   const color=_caffeineColor(totalMg,thr);
   const wEstHtml=wEst?'<span style="display:block;margin-top:4px;color:var(--warning);font-size:9px">⚖️ Poids estimé (75 kg) — renseigne ton poids réel pour des seuils précis</span>':'';
-  const alertHtml=totalMg>=thr.red
-    ?'<div class="caff-alert-banner" style="background:var(--danger-bg);border-color:var(--danger);color:var(--danger)">🚨 Dose maximale dépassée — évite toute nouvelle prise aujourd\'hui.</div>'
-    :totalMg>=thr.orange
-    ?'<div class="caff-alert-banner" style="background:var(--warning-bg);border-color:var(--warning);color:var(--warning)">⚠️ Niveau élevé — surveille ton sommeil et ta fréquence cardiaque.</div>'
+  // Les trois niveaux de bannière suivent les trois bornes de _caffeineColor,
+  // pour que la sévérité du message et la couleur de l'anneau coïncident toujours.
+  const alertHtml=totalMg>=thr.orange
+    ?`<div class="caff-alert-banner" style="background:var(--danger-bg);border-color:var(--danger);color:var(--danger)">🚨 Limite dépassée (${thr.orange}mg) — évite toute nouvelle prise aujourd'hui.</div>`
     :totalMg>=thr.yellow
-    ?`<div class="caff-alert-banner" style="background:var(--info-bg);border-color:var(--info);color:var(--info)">⚡ Attention — proche de ta limite recommandée (${thr.yellow}mg).</div>`
+    ?'<div class="caff-alert-banner" style="background:var(--warning-bg);border-color:var(--warning);color:var(--warning)">⚠️ Niveau élevé — surveille ton sommeil et ta fréquence cardiaque.</div>'
+    :totalMg>=thr.green
+    ?`<div class="caff-alert-banner" style="background:var(--info-bg);border-color:var(--info);color:var(--info)">⚡ Consommation modérée — ta limite du jour est à ${thr.orange}mg.</div>`
     :'';
   const listHtml=!entries.length
     ?emptyState('coffee','Aucune prise enregistrée ce jour.',null,null,'padding:16px 0')
@@ -8799,7 +8820,7 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
         </svg>
         <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">
           <span class="txt-hero" style="color:${color}">${totalMg}mg</span>
-          <span style="font-size:9px;color:var(--sub);margin-top:3px">sur ${thr.red}mg max</span>
+          <span style="font-size:9px;color:var(--sub);margin-top:3px">sur ${thr.orange}mg max</span>
         </div>
       </div>
       <div style="flex:1;min-width:0">
@@ -8808,11 +8829,12 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
           <span style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--sub)"><span style="width:8px;height:8px;border-radius:50%;background:var(--success);display:inline-block;flex-shrink:0"></span>&lt;${thr.green}mg optimal</span>
           <span style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--sub)"><span style="width:8px;height:8px;border-radius:50%;background:var(--info);display:inline-block;flex-shrink:0"></span>&lt;${thr.yellow}mg modéré</span>
           <span style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--sub)"><span style="width:8px;height:8px;border-radius:50%;background:var(--warning);display:inline-block;flex-shrink:0"></span>&lt;${thr.orange}mg élevé</span>
-          <span style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--sub)"><span style="width:8px;height:8px;border-radius:50%;background:var(--danger);display:inline-block;flex-shrink:0"></span>${thr.red}mg maximum</span>
+          <span style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--sub)"><span style="width:8px;height:8px;border-radius:50%;background:var(--danger);display:inline-block;flex-shrink:0"></span>&ge;${thr.orange}mg maximum</span>
         </div>
         ${wEstHtml}
       </div>
     </div>
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--surface-2);font-size:9px;color:var(--sub);letter-spacing:.3px">Référence : ${thr.red} mg/j max (EFSA)</div>
   </div>
   ${alertHtml}
   ${isToday?'<button class="btn btn-red" onclick="openCaffeineAdd()" style="margin-bottom:20px">+ Enregistrer une prise</button>':''}
