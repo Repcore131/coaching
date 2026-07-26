@@ -301,6 +301,14 @@ h3{font-size:16px;text-transform:uppercase}
 /* ====== FOCUS CLAVIER ======
    :focus-visible et non :focus — le contour n'apparaît qu'à la navigation
    clavier, jamais après un tap ou un clic souris. */
+/* Indicateur de sync du header athlète. Discret quand tout va bien : l'état
+   nominal n'a pas à disputer l'attention au reste de l'écran. L'échec, lui,
+   passe en pleine opacité — c'est le seul moment où l'athlète doit le lire.
+   Ne s'applique qu'à cet élément : les badges coach existants gardent leur
+   rendu, la classe .rc-sync-badge n'étant qu'un crochet de sélection. */
+#clh-sync-badge{display:block;margin-top:3px;font-size:8px;font-weight:700;
+  letter-spacing:.3px;line-height:1;opacity:.4;transition:opacity .2s}
+#clh-sync-badge[data-sync-state="fail"]{opacity:1}
 :focus-visible{outline:2px solid var(--red-glow);outline-offset:2px;border-radius:2px}
 button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px solid #FF3345;outline-offset:3px}
 
@@ -846,7 +854,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div>
           <div style="font-size:7px;color:var(--red);letter-spacing:4px;font-weight:700;text-transform:uppercase;margin-bottom:2px">COACH</div>
           <div style="font-size:14px;font-family:'Bebas Neue',Impact,sans-serif;letter-spacing:1px;line-height:1" id="ch-name"></div>
-          <span class="coach-sync-badge" style="font-size:8px;font-weight:700;letter-spacing:.3px;display:block;margin-top:2px"></span>
+          <span class="coach-sync-badge rc-sync-badge" style="font-size:8px;font-weight:700;letter-spacing:.3px;display:block;margin-top:2px"></span>
         </div>
       </div>
       <div style="display:flex;gap:8px">
@@ -1076,7 +1084,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 <!-- COACH CLIENT DETAIL -->
 <div id="s-coach-client" class="screen">
-  <div class="topbar"><button class="back-btn" onclick="go('s-coach-home');loadCoachHome()">←</button><span class="topbar-title" id="ccd-title">Athlète</span><span class="coach-sync-badge" style="font-size:9px;font-weight:700;letter-spacing:.3px"></span></div>
+  <div class="topbar"><button class="back-btn" onclick="go('s-coach-home');loadCoachHome()">←</button><span class="topbar-title" id="ccd-title">Athlète</span><span class="coach-sync-badge rc-sync-badge" style="font-size:9px;font-weight:700;letter-spacing:.3px"></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div class="card" style="margin-bottom:16px">
@@ -1368,6 +1376,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div>
         <div style="font-size:7px;color:var(--red);letter-spacing:4px;font-weight:700;text-transform:uppercase;margin-bottom:2px">MON PROFIL</div>
         <div style="font-size:14px;font-family:'Bebas Neue',Impact,sans-serif;letter-spacing:1px;line-height:1" id="clh-name"></div>
+        <span id="clh-sync-badge" class="rc-sync-badge"></span>
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:10px;background:#1e0000;border:1px solid rgba(224,32,32,.5);border-radius:12px;padding:9px 16px;box-shadow:0 0 22px rgba(224,32,32,.2),inset 0 0 14px rgba(224,32,32,.06)">
@@ -2197,6 +2206,8 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- TOAST -->
+<!-- BANDE RÉSEAU — persistante hors ligne, brève au retour -->
+<div id="rc-offline-bar" role="status" aria-live="polite" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9998;padding:9px 14px;padding-top:calc(9px + env(safe-area-inset-top,0px));text-align:center;font-size:11px;font-weight:700;letter-spacing:.3px;line-height:1.4"></div>
 <div id="toast" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:#222;color:#fff;padding:12px 20px;border-radius:12px;font-size:13px;font-weight:600;z-index:9999;transition:.3s;opacity:0;min-width:200px;text-align:center;pointer-events:none"></div>
 
 
@@ -2505,6 +2516,35 @@ const CLOUD={
     if(g.length!==f.length) this._ecrireFile(g);
   },
   enAttenteDeSync(){return this._lireFile().length;},
+
+  // ── Relances progressives ─────────────────────────────────────────────────
+  // La file rc_sync_queue dit QUOI renvoyer et survit aux sessions ; ceci dit
+  // QUAND, pour le cas complémentaire où l'app reste ouverte et où le réseau
+  // revient sans qu'aucune action de l'utilisateur ne le signale.
+  // Paliers croissants : insister toutes les 30 s pendant une panne longue
+  // viderait la batterie sans rien résoudre.
+  _RETRY_DELAIS:[30000,120000,600000],
+  _retryIdx:0,_retryTimer:null,
+  _queueRetry(){
+    if(this._retryTimer) return; // une seule relance en vol à la fois
+    const delai=this._RETRY_DELAIS[Math.min(this._retryIdx,this._RETRY_DELAIS.length-1)];
+    this._retryIdx++;
+    this._retryTimer=setTimeout(async()=>{
+      this._retryTimer=null;
+      // Déconnecté entre-temps : plus rien à renvoyer, et _doPushOne écrirait
+      // sur un nœud qui n'est plus celui de l'utilisateur courant.
+      if(!currentUser?.email){this._retryIdx=0;return;}
+      try{
+        const u=(DB.get('users')||{})[currentUser.email]||currentUser;
+        await this._doPushOne(currentUser.email,u);
+        await this.viderFile();
+        this._retryIdx=0; // succès : le prochain échec repart du palier court
+      }catch(e){
+        this._queueRetry(); // toujours en échec : palier suivant
+      }
+    },delai);
+  },
+  _annulerRetry(){clearTimeout(this._retryTimer);this._retryTimer=null;this._retryIdx=0;},
   // Rejoue les dossiers restés en échec. Silencieuse : c'est une reprise
   // d'arrière-plan, l'utilisateur a déjà été averti au moment de l'échec.
   // Séquentielle et non parallèle : chaque envoi relit le nœud distant pour la
@@ -2760,15 +2800,19 @@ const CLOUD={
       const r=await fetch(url+'?auth='+token,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(safe)});
       this._setSyncStatus(r.ok);
       if(!r.ok) throw new Error('Erreur serveur '+r.status+' ('+r.statusText+')');
-      // Le nœud distant est à jour : plus rien à rejouer pour cette clé.
+      // Le nœud distant est à jour : plus rien à rejouer pour cette clé, et le
+      // réseau répond — la relance en attente n'a plus lieu d'être.
       this._defiler(email);
+      this._annulerRetry();
     }catch(e){
       console.error('[RepCore] sync push error:',e);
       this._setSyncStatus(false);
       // Entonnoir unique de tous les échecs d'envoi : c'est ici, et nulle part
       // ailleurs, que la file se remplit. Les ~20 appelants « fire-and-forget »
       // en bénéficient sans avoir à s'en occuper.
-      if(!e||!e._nonRejouable) this._enfiler(email);
+      // Branché ici et non au seul garde de jeton : le même entonnoir couvre
+      // le réseau coupé et les 5xx, qui sont les causes les plus fréquentes.
+      if(!e||!e._nonRejouable){this._enfiler(email);this._queueRetry();}
       throw e;
     }
   },
@@ -2800,7 +2844,13 @@ const CLOUD={
     if(s.state==='pending'){text='● Synchronisation en cours';color='var(--info)';}
     else if(s.state===true){text='● Synchronisé';color='var(--success)';}
     else{text='● Échec — réessaie';color='var(--warning)';}
-    document.querySelectorAll('.coach-sync-badge').forEach(el=>{el.textContent=text;el.style.color=color;});
+    // .rc-sync-badge est le crochet neutre : il permet d'ajouter un indicateur
+    // hors des écrans coach sans renommer l'existant. data-sync-state laisse la
+    // feuille de style décider de la discrétion, sans dupliquer la logique ici.
+    document.querySelectorAll('.coach-sync-badge, .rc-sync-badge').forEach(el=>{
+      el.textContent=text;el.style.color=color;
+      el.dataset.syncState=s.state==='pending'?'pending':(s.state===true?'ok':'fail');
+    });
   },
   async _doPush(users){
     // Ne pousse QUE currentUser — évite d'écraser les données d'athlètes avec des copies obsolètes
@@ -3074,8 +3124,63 @@ function _athleteSessionIdx(){
 let woState={exercises:[],currentEx:0,startTime:null,timerInterval:null,sessionData:{}};
 let qStep=0;
 
+// ── Bande réseau ────────────────────────────────────────────────────────────
+// Persistante hors ligne : contrairement au toast, qui s'efface au bout de
+// 2,8 s, l'absence de réseau dure et l'utilisateur doit pouvoir le constater à
+// tout moment — c'est ce qui lui évite de croire ses données parties.
+let _rcBandeauTimer=null;
+function _rcBandeauReseau(etat){
+  const bar=document.getElementById('rc-offline-bar');
+  if(!bar) return;
+  clearTimeout(_rcBandeauTimer);
+  if(etat==='offline'){
+    // Le coach ne s'envoie pas ses données « à son coach ».
+    bar.textContent=currentUser?.role==='coach'
+      ?'Hors ligne — tes modifications seront envoyées dès le retour du réseau'
+      :'Hors ligne — tes données seront envoyées à ton coach dès le retour du réseau';
+    bar.style.background='var(--warning-bg)';
+    bar.style.borderBottom='1px solid var(--warning)';
+    bar.style.color='var(--warning)';
+    bar.style.display='block';
+    return;
+  }
+  bar.textContent='Synchronisé ✓';
+  bar.style.background='var(--success-bg)';
+  bar.style.borderBottom='1px solid var(--success)';
+  bar.style.color='var(--success)';
+  bar.style.display='block';
+  _rcBandeauTimer=setTimeout(()=>{bar.style.display='none';},3000);
+}
+window.addEventListener('offline',()=>{
+  CLOUD._setSyncStatus(false);
+  _rcBandeauReseau('offline');
+});
+window.addEventListener('online',async()=>{
+  // Le réseau est revenu : renvoyer maintenant, sans attendre le prochain
+  // palier de _queueRetry qui peut être à dix minutes.
+  CLOUD._annulerRetry();
+  try{
+    if(currentUser?.email){
+      const u=(DB.get('users')||{})[currentUser.email]||currentUser;
+      await CLOUD._doPushOne(currentUser.email,u);
+    }
+    await CLOUD.viderFile();
+    // « Synchronisé ✓ » UNIQUEMENT si l'envoi a réellement abouti : l'annoncer
+    // sur le seul événement `online` serait le même mensonge que les toasts de
+    // succès non conditionnés.
+    _rcBandeauReseau('online');
+  }catch(e){
+    // Réseau annoncé revenu mais serveur injoignable : la bande reste, et
+    // _doPushOne a déjà réarmé la relance.
+    _rcBandeauReseau('offline');
+  }
+});
+
 // ======= BOOT =======
 window.onload=()=>{
+  // L'app peut démarrer hors ligne : l'événement `offline` ne se déclenchera
+  // pas, il n'y a pas de transition.
+  if(!navigator.onLine) _rcBandeauReseau('offline');
   document.querySelectorAll('#client-tabbar .tab-btn[data-icon]').forEach(b=>b.insertAdjacentHTML('afterbegin',icon(b.dataset.icon,19)));
   CLOUD._loadAuth();
   // Reprise des envois restés en échec lors de la session précédente. Différée :
