@@ -2771,10 +2771,21 @@ const CLOUD={
 
 const DB={
   get(k){try{return JSON.parse(localStorage.getItem('rc_'+k))}catch{return null}},
+  // Le quota local ne doit pas empêcher l'envoi au cloud : l'ancien `return`
+  // dans le catch sautait CLOUD.push, donc un stockage saturé faisait perdre
+  // la donnée des DEUX côtés. On avertit, et on pousse quand même.
   set(k,v){
-    try{localStorage.setItem('rc_'+k,JSON.stringify(v));}
-    catch(e){if(e.name==='QuotaExceededError'||e.code===22)toast('Stockage plein — supprime d\'anciens PDF ou photos pour libérer de la place','var(--orange)');else throw e;return;}
+    let localOk=true;
+    try{
+      localStorage.setItem('rc_'+k,JSON.stringify(v));
+    }catch(e){
+      if(e.name==='QuotaExceededError'||e.code===22){
+        localOk=false;
+        toast('Stockage local plein — tes données sont envoyées au cloud mais ne seront pas disponibles hors ligne.','var(--orange)');
+      } else throw e;
+    }
     if(k==='users') CLOUD.push(v);
+    return localOk;
   },
   del(k){localStorage.removeItem('rc_'+k)},
 };
