@@ -1157,57 +1157,6 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div><label for="prog-name">Nom du programme</label><input id="prog-name" placeholder="Ex: Prise de masse — Semaine 1"></div>
-      <div id="prog-session-sel-wrap"><label for="prog-session-sel">Séance type</label>
-        <select id="prog-session-sel">
-          <option>SÉANCE 1 : DOS & ABDOS</option><option>SÉANCE 2 : PECTORAUX & TRICEPS</option>
-          <option>SÉANCE 3 : ÉPAULES & BICEPS</option><option>SÉANCE 4 : JAMBES</option>
-          <option>SÉANCE 5 : FULL BODY</option><option>Personnalisé</option>
-        </select>
-      </div>
-
-      <!-- ===== PDF DU PROGRAMME ===== -->
-      <div id="prog-pdf-wrap" style="margin-top:20px;padding:16px;background:var(--dark);border:1px solid #222;border-radius:4px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-          <div>
-            <div style="font-size:9px;color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:2px">Programme PDF</div>
-            <div style="font-size:13px;font-weight:700">Fiche programme athlète</div>
-          </div>
-          <div id="prog-pdf-badge" style="display:none;font-size:9px;background:#16532222;color:var(--green);border:1px solid #16532244;border-radius:2px;padding:3px 8px;font-weight:700;letter-spacing:1px;text-transform:uppercase">Actif</div>
-        </div>
-
-        <!-- Fichier actuel -->
-        <div id="prog-pdf-current" style="display:none;background:#151515;border:1px solid #2a2a2a;border-radius:4px;padding:12px;margin-bottom:12px">
-          <div style="display:flex;align-items:center;gap:10px">
-            <div style="width:36px;height:36px;background:#1a0000;border:1px solid #3a0a0a;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0"></div>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="prog-pdf-name">—</div>
-              <div style="font-size:10px;color:var(--sub);margin-top:2px" id="prog-pdf-info">—</div>
-            </div>
-            <button onclick="removeCoachPdf()" style="background:none;border:none;color:#555;font-size:16px;cursor:pointer;padding:4px;flex-shrink:0"></button>
-          </div>
-        </div>
-
-        <!-- Upload PDF -->
-        <label style="display:block;cursor:pointer;margin-top:0">
-          <input type="file" id="prog-pdf-input" accept=".pdf,application/pdf" onchange="uploadCoachPdf(this)" style="display:none">
-          <div id="prog-pdf-upload-zone" style="border:1px dashed #2a2a2a;border-radius:4px;padding:16px;text-align:center;transition:.2s" onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='#2a2a2a'">
-            <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--sub);font-weight:700;margin-bottom:4px">Importer un PDF</div>
-            <div style="font-size:11px;color:#444">Glisse ou clique — max 20 Mo</div>
-          </div>
-        </label>
-
-        <!-- OU lien Drive -->
-        <div style="display:flex;align-items:center;gap:8px;margin:10px 0">
-          <div style="flex:1;height:1px;background:#1e1e1e"></div>
-          <div style="font-size:9px;color:#333;letter-spacing:2px;font-weight:700;text-transform:uppercase">Ou</div>
-          <div style="flex:1;height:1px;background:#1e1e1e"></div>
-        </div>
-        <div style="display:flex;gap:8px">
-          <input id="prog-pdf-link" placeholder="Lien Google Drive ou Dropbox..." style="flex:1;font-size:12px;padding:10px 12px">
-          <button onclick="saveCoachPdfLink()" style="background:var(--red);border:none;color:#fff;border-radius:3px;padding:10px 14px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;white-space:nowrap;text-transform:uppercase">Lier</button>
-        </div>
-        <div style="font-size:10px;color:#333;margin-top:6px">Lien de partage public (Accès → Tout le monde avec le lien)</div>
-      </div>
 
       <!-- IMPORT PHOTO PROGRAMME -->
       <div style="margin-top:16px">
@@ -3590,7 +3539,7 @@ function renderTodoBlock(clients){
   const newBil=clients.filter(c=>hasNewBilan(c)&&!isAlertSnoozed('bilan',c.id,lt(c)));
   const overdue=clients.filter(c=>!c._fromCode&&needsAlert(c)&&!isAlertSnoozed('overdue',c.id));
   const expiring=clients.filter(c=>!c._fromCode&&c.status==='COACHING_SUIVI'&&c.accessExpiry&&(c.accessExpiry-now)>0&&(c.accessExpiry-now)<SOON&&!isAlertSnoozed('expiring',c.id));
-  const noProg=clients.filter(c=>!c._fromCode&&!c.program&&(c.bilans||[]).some(b=>b.type==='depart')&&!isAlertSnoozed('noprog',c.id));
+  const noProg=clients.filter(c=>!c._fromCode&&!hasProgram(c)&&(c.bilans||[]).some(b=>b.type==='depart')&&!isAlertSnoozed('noprog',c.id));
   const rows=[];
   if(newBil.length) rows.push({type:'bilan',icon:'📥',color:'var(--orange)',label:'Nouveau'+(newBil.length>1?'x bilans à lire':' bilan à lire'),list:newBil});
   if(overdue.length) rows.push({type:'overdue',icon:icon('alert-triangle',15),color:'var(--red)',label:'Bilan'+(overdue.length>1?'s':'')+' en retard',list:overdue});
@@ -3717,6 +3666,20 @@ function hasNewBilan(c){
   if(!c.bilans?.length||c._fromCode) return false;
   const seen=(currentUser.seenBilans||{})[c.email]||0;
   return c.bilans.some(b=>b.date>seen);
+}
+// Un athlète « a un programme » dès qu'UN de ces mécanismes est renseigné.
+// Source unique de vérité : tout code qui juge la présence d'un programme doit
+// passer par ici, sinon un athlète servi par PDF ou par séances reste compté
+// « Sans programme ».
+//   sessions_config    séances activées et garnies (mécanisme actuel)
+//   programPdfStorageUrl / programPdfLink / programPdf   PDF stocké, lié, ou inline
+//   program            ancien tableau d'exercices (données historiques)
+function hasProgram(c){
+  return !!(
+    c?.sessions_config?.some(s=>s.active&&s.exercises?.length)
+    ||c?.programPdfStorageUrl||c?.programPdfLink||c?.programPdf
+    ||c?.program?.length
+  );
 }
 // ======= RÉCAP SÉANCES COACH =======
 let _coachSessions=[];
@@ -4427,7 +4390,7 @@ function cptRenameSession(i,val){
   sessions[i].name=val;
 }
 
-function _prepProgEditor({name='',notes='',warmup='',cooldown='',photo=null,photo2=null,showCoachSections=false}={}){
+function _prepProgEditor({name='',notes='',warmup='',cooldown='',photo=null,photo2=null}={}){
   document.getElementById('prog-name').value=name||'';
   document.getElementById('prog-notes').value=notes||'';
   document.getElementById('prog-warmup').value=warmup||'';
@@ -4440,9 +4403,6 @@ function _prepProgEditor({name='',notes='',warmup='',cooldown='',photo=null,phot
   const acts=document.getElementById('prog-photo-actions');
   if(progPhotoData){img.src=progPhotoData;img.style.display='block';ph.style.display='none';if(acts)acts.style.display='flex';}
   else{img.style.display='none';ph.style.display='block';if(acts)acts.style.display='none';}
-  ['prog-session-sel-wrap','prog-pdf-wrap'].forEach(id=>{
-    const el=document.getElementById(id);if(el) el.style.display=showCoachSections?'':'none';
-  });
 }
 function openProgTemplateSessionExercises(idx){
   if(_editProgTemplateIdx===null) return;
@@ -4528,10 +4488,14 @@ function confirmAssignProgram(){
     return {emailKey,a,gender:cb.dataset.gender,name:((a.fname||'')+(a.lname?' '+a.lname:'')).trim()||a.email};
   }).filter(Boolean);
   if(!targets.length){toast('Aucun athlète trouvé','var(--orange)');return;}
-  const hasExisting=targets.some(t=>t.a.sessions_config);
+  // Même définition que l'alerte « Sans programme » : un athlète servi par PDF ou
+  // par l'ancien c.program a bien déjà un programme, et les séances qu'on assigne
+  // vont le masquer (cascade de _renderProgExercisesInto). En revanche l'historique
+  // ne photographie que sessions_config — la phrase de rollback reste donc liée à lui.
+  const hasSessions=targets.some(t=>t.a.sessions_config);
   const msg=`Assigner "${prog.name||'Ce programme'}" à ${targets.length} athlète${targets.length>1?'s':''} ?\n\n`
-    +targets.map(t=>t.name+(t.a.sessions_config?' (programme existant remplacé)':'')).join('\n')
-    +(hasExisting?'\n\nL\'ancien programme sera sauvegardé dans l\'historique (rollback possible).':'');
+    +targets.map(t=>t.name+(hasProgram(t.a)?' (programme existant remplacé)':'')).join('\n')
+    +(hasSessions?'\n\nL\'ancien programme sera sauvegardé dans l\'historique (rollback possible).':'');
   if(!confirm(msg)) return;
   const pushes=[];
   targets.forEach(({emailKey,a,gender})=>{
@@ -4665,99 +4629,16 @@ function resolveClient(cid){
   if(c._fromCode){toast('Cet athlète n\'a pas encore créé son compte. Le programme sera disponible après son inscription.','var(--orange)');return null;}
   return {c,users};
 }
-function openCoachProgram(){
-  const res=resolveClient(currentClientId);if(!res) return;
-  const {c}=res;
-  progEx=c.program?JSON.parse(JSON.stringify(c.program)):[...defEx.map(e=>({...e}))];
-  _prepProgEditor({
-    name:c?.programName||'SÉANCE 1 : DOS & ABDOS',
-    notes:c?.programNotes,
-    warmup:c?.programWarmup??currentUser._defaultWarmup,
-    cooldown:c?.programCooldown??currentUser._defaultCooldown,
-    photo:c?.programPhoto,
-    showCoachSections:true
-  });
-  _progEditorCtx={mode:'clientProgram'};
-  const backBtn=document.querySelector('#s-coach-program .back-btn');
-  if(backBtn) backBtn.onclick=()=>{if(_progExDirty&&!confirm('Modifications non enregistrées — quitter quand même ?'))return;go('s-coach-client');};
-  const title=document.querySelector('#s-coach-program .topbar-title');
-  if(title) title.textContent='Programme';
-  refreshPdfUI(c);
-  renderProgEx();go('s-coach-program');
-  _progExDirty=false;
-}
-
-function refreshPdfUI(c){
-  const hasPdf=c?.programPdf||c?.programPdfLink||c?.programPdfStorageUrl;
-  const badge=document.getElementById('prog-pdf-badge');
-  const current=document.getElementById('prog-pdf-current');
-  const linkInput=document.getElementById('prog-pdf-link');
-  if(hasPdf){
-    badge.style.display='block';
-    current.style.display='block';
-    document.getElementById('prog-pdf-name').textContent=c.programPdfName||(c.programPdfLink?'Lien externe':'Programme.pdf');
-    const dt=c.programPdfDate?new Date(c.programPdfDate).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'})+' · v'+(c.programPdfVersion||1):'—';
-    document.getElementById('prog-pdf-info').textContent=c.programPdfLink?'Lien Google Drive / Dropbox · '+dt:(c.programPdfSize||'')+' · '+dt;
-    if(linkInput) linkInput.value=c.programPdfLink||'';
-  } else {
-    badge.style.display='none';
-    current.style.display='none';
-    if(linkInput) linkInput.value='';
-  }
-}
-
-async function uploadCoachPdf(input){
-  const f=input.files[0];if(!f) return;
-  if(f.size>20*1024*1024){toast('PDF trop lourd (max 20 Mo). Compresse ou utilise un lien Drive.','var(--orange)');return;}
-  const res=resolveClient(currentClientId);if(!res) return;
-  const {c,users}=res;
-  const emailKey=c.email.toLowerCase().replace(/\./g,',');
-  toast('Téléversement en cours…');
-  try{
-    const storageUrl=await CLOUD.uploadPdf(emailKey,f);
-    c.programPdf=null;
-    c.programPdfStorageUrl=storageUrl;
-    c.programPdfLink=null;
-    c.programPdfName=f.name.replace(/\.pdf$/i,'');
-    c.programPdfSize=f.size>1024*1024?(f.size/1024/1024).toFixed(1)+' Mo':(f.size/1024).toFixed(0)+' Ko';
-    c.programPdfDate=Date.now();
-    c.programPdfVersion=(c.programPdfVersion||0)+1;
-    c.updatedAt=Date.now();users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
-    refreshPdfUI(c);
-    toast(' PDF v'+c.programPdfVersion+' importé — '+c.programPdfName);
-  }catch(e){
-    toast('Échec de téléversement : '+(e.message||'Réessaie.'),'var(--orange)');
-  }
-}
-
-function saveCoachPdfLink(){
-  const link=(document.getElementById('prog-pdf-link').value||'').trim();
-  if(!link){toast('Entre un lien valide.','var(--red)');return;}
-  // Convertir lien Drive en lien de prévisualisation directe
-  let url=link;
-  const driveMatch=link.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  if(driveMatch) url=`https://drive.google.com/file/d/${driveMatch[1]}/preview`;
-  if(safeUrl(url)==='#'){toast('Lien invalide — seuls les liens https:// sont acceptés.','var(--red)');return;}
-  const res=resolveClient(currentClientId);if(!res) return;
-  const {c,users}=res;
-  c.programPdfLink=url;
-  c.programPdf=null;
-  c.programPdfName='Programme (Drive)';
-  c.programPdfSize='Lien externe';
-  c.programPdfDate=Date.now();
-  c.programPdfVersion=(c.programPdfVersion||0)+1;
-  c.updatedAt=Date.now();users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
-  refreshPdfUI(c);
-  toast(' Lien v'+c.programPdfVersion+' enregistré !');
-}
-
 function removeCoachPdf(){
   if(!confirm('Supprimer le PDF du programme ?')) return;
   const res=resolveClient(currentClientId);if(!res) return;
   const {c,users}=res;
-  c.programPdf=null;c.programPdfLink=null;c.programPdfName=null;c.programPdfDate=null;c.programPdfSize=null;
+  // programPdfStorageUrl DOIT être effacé aussi : tous les lecteurs font
+  // `programPdfStorageUrl||programPdfLink||programPdf`, donc sans ça le PDF
+  // « supprimé » restait servi à l'athlète et hasProgram() restait vrai à vie.
+  c.programPdf=null;c.programPdfLink=null;c.programPdfStorageUrl=null;
+  c.programPdfName=null;c.programPdfDate=null;c.programPdfSize=null;
   c.updatedAt=Date.now();users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
-  refreshPdfUI(c);
   openClientDetail(currentClientId,true);
   toast('PDF supprimé.');
 }
@@ -4982,19 +4863,11 @@ function saveProgram(){
       loadSessionManager();return;
     }
   }
-  // Sinon: coach édite le programme d'un athlète
-  if(!currentClientId) return;
-  const users=DB.get('users')||{};
-  const c=getOwnedClient(currentClientId,users);if(!c) return;
-  c.program=progEx;
-  c.programName=document.getElementById('prog-name').value;
-  c.programNotes=document.getElementById('prog-notes').value;
-  c.programWarmup=document.getElementById('prog-warmup').value;
-  c.programCooldown=document.getElementById('prog-cooldown').value;
-  c.programUpdatedAt=Date.now();
-  if(progPhotoData) c.programPhoto=progPhotoData;
-  c.updatedAt=Date.now();users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
-  toast(' Programme sauvegardé !');go('s-coach-client');
+  // Aucun mode d'édition valide. L'ancien bloc terminal écrivait ici le champ
+  // legacy c.program pour currentClientId — atteignable par les `break` ci-dessus,
+  // il pouvait donc écrire sur le mauvais athlète avec un contexte périmé.
+  // Le coach passe désormais par les séances (openCoachSessions) ou par le PDF.
+  toast('Contexte d\'édition perdu — réouvre la séance.','var(--orange)');
 }
 
 function saveWarmupTemplate(){
