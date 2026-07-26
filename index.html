@@ -3995,9 +3995,14 @@ function neverStarted(c){
 //   sessions_config    séances activées et garnies (mécanisme actuel)
 //   programPdfStorageUrl / programPdfLink / programPdf   PDF stocké, lié, ou inline
 //   program            ancien tableau d'exercices (données historiques)
+// Les séances d'essai ne comptent PAS : elles n'ont été écrites par personne.
+// Sans cette exclusion, un athlète qui ouvrait simplement son sélecteur de
+// séances disparaissait de la liste « Sans programme » du coach — la config de
+// repli était persistée puis poussée au cloud, et devenait indiscernable d'un
+// programme publié. (seanceEstExemple est défini plus bas : hoisting.)
 function hasProgram(c){
   return !!(
-    c?.sessions_config?.some(s=>s.active&&s.exercises?.length)
+    c?.sessions_config?.some(s=>s.active&&s.exercises?.length&&!seanceEstExemple(s))
     ||c?.programPdfStorageUrl||c?.programPdfLink||c?.programPdf
     ||c?.program?.length
   );
@@ -4839,7 +4844,7 @@ function confirmAssignProgram(){
   targets.forEach(({emailKey,a,gender})=>{
     const base=gender==='F'?prog.sessions_F:prog.sessions_H;
     _pushSessionsHistory(a); // sauvegarde avant écrasement
-    a.sessions_config=base.map(s=>({...s,exercises:s.exercises.map(e=>({...e}))}));
+    a.sessions_config=_marquerCommePublie(base.map(s=>({...s,exercises:s.exercises.map(e=>({...e}))})));
     a.updatedAt=Date.now();
     users[emailKey]=a;
     pushes.push(CLOUD.pushOne(emailKey,a));
@@ -4952,6 +4957,10 @@ function saveCoachSessions(){
   const emailKey=Object.keys(users).find(k=>users[k]?.id===currentClientId);
   if(!emailKey){toast('Athlète introuvable','var(--orange)');return;}
   _pushSessionsHistory(users[emailKey]); // snapshot avant écrasement
+  // Le coach publie : ce n'est plus un repli, même s'il valide la Fondation
+  // telle quelle. Sans ça, l'athlète continuerait de lire « ton coach n'a pas
+  // encore publié ton programme » devant un programme bel et bien publié.
+  _marquerCommePublie(c.sessions_config);
   c.updatedAt=Date.now();
   users[emailKey]=c;
   const localOk=DB.set('users',users);
@@ -5198,6 +5207,7 @@ function saveProgram(){
       if(!currentUser.sessions_config) initSessionsConfig();
       const sa=currentUser.sessions_config[_ctx.sessionIdx];
       if(!sa) break;
+      _personnaliserSeance(_ctx.sessionIdx);
       sa.exercises=progEx;
       sa.name=_f('prog-name');sa.notes=_f('prog-notes');
       sa.warmup=_f('prog-warmup');sa.cooldown=_f('prog-cooldown');
@@ -5568,21 +5578,33 @@ function loadSessionManager(){
 function toggleDayActive(i){
   if(!currentUser.sessions_config) initSessionsConfig();
   currentUser.sessions_config[i].active=!currentUser.sessions_config[i].active;
+  _personnaliserSeance(i);
   saveUser();loadSessionManager();
 }
 
 function renameSession(i,val){
   if(!currentUser.sessions_config) return;
   currentUser.sessions_config[i].name=val;
+  _personnaliserSeance(i);
   saveUser();
 }
 
 function removeSessionPhoto(i){
   if(!currentUser.sessions_config) return;
   currentUser.sessions_config[i].photo=null;
+  _personnaliserSeance(i);
   saveUser();loadSessionManager();
 }
 
+// Repli générique servi tant que le coach n'a rien publié.
+// Chaque séance produite ici porte _essai : sans ce marqueur, le repli était
+// indiscernable d'un programme réellement publié, et l'écran « Programme en
+// cours de création » ne pouvait plus jamais réapparaître une fois la config
+// écrite en base.
+// N'ÉCRIT PLUS RIEN : le simple fait d'ouvrir le sélecteur de séances
+// persistait la config, la poussait au cloud, et faisait disparaître l'athlète
+// de la liste « Sans programme » du coach. La persistance appartient désormais
+// aux seuls chemins de personnalisation, qui appellent saveUser() eux-mêmes.
 function initSessionsConfig(){
   const g=currentUser._evol_gender;
   const base=g==='F'?FONDATION_F:g==='H'?FONDATION_H:null;
@@ -5594,7 +5616,53 @@ function initSessionsConfig(){
       day,name:'',photo:null,photo2:null,exercises:i<5?defEx.map(e=>({...e})):[],active:i<5,notes:'',warmup:''
     }));
   }
-  currentUser.sessions_config=cfg;saveUser();return cfg;
+  cfg.forEach(s=>{s._essai=true;});
+  currentUser.sessions_config=cfg;
+  return cfg;
+}
+// Une séance est un EXEMPLE tant que personne ne l'a voulue.
+// _essai marque celles que fabrique initSessionsConfig ; _foundation couvre en
+// plus les configurations écrites avant l'existence de _essai, déjà présentes
+// en base chez les utilisateurs actuels.
+function seanceEstExemple(s){ return !!(s&&(s._essai||s._foundation)); }
+// Au moins une des séances proposées à l'athlète est un exemple générique.
+// Le prédicat suit EXACTEMENT les badges affichés séance par séance : le faire
+// dépendre de la configuration entière donnerait un bandeau qui disparaît
+// pendant que des séances portent encore la mention « exemple ».
+function programmeEstEssai(u){
+  const usr=u||currentUser;
+  if(!usr) return false;
+  if(usr.program?.length) return false;
+  if(usr.programPdf||usr.programPdfLink||usr.programPdfStorageUrl) return false;
+  const sc=usr.sessions_config;
+  if(!sc||!sc.length) return true;
+  return sc.some(s=>s.active&&s.exercises?.length&&seanceEstExemple(s));
+}
+// L'athlète vient de toucher cette séance : ce n'est plus un exemple.
+// Les DEUX marqueurs tombent, sinon une config Fondation personnalisée
+// continuerait d'être annoncée comme un simple essai.
+function _personnaliserSeance(i){
+  const s=currentUser.sessions_config?.[i];
+  if(!s) return;
+  delete s._essai;delete s._foundation;
+}
+// Une publication par le coach n'est jamais un essai, même quand il assigne la
+// Fondation telle quelle : c'est un choix, pas un repli.
+function _marquerCommePublie(cfg){
+  (cfg||[]).forEach(s=>{delete s._essai;delete s._foundation;});
+  return cfg;
+}
+// Un seul texte pour les deux écrans qui montrent le repli — le sélecteur de
+// séances et la vue programme. Les faire diverger reviendrait à raconter deux
+// histoires différentes sur le même état.
+function _bandeauEssai(){
+  return `<div style="background:linear-gradient(135deg,#2a1a00,#160e00);border:1.5px solid var(--orange);border-radius:12px;padding:14px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="font-size:17px">⏳</span>
+        <div style="font-weight:900;font-size:12px;color:var(--orange);text-transform:uppercase;letter-spacing:1px">Séances d'essai</div>
+      </div>
+      <div style="font-size:12px;color:var(--sub);line-height:1.6">Ton coach n'a pas encore publié ton programme. Les séances marquées « exemple » sont génériques : elles te permettent de commencer, mais ne sont pas personnalisées pour toi.</div>
+    </div>`;
 }
 
 function uploadSessionPhoto(idx,input){
@@ -5602,6 +5670,7 @@ function uploadSessionPhoto(idx,input){
   compressImage(f,1200,0.75,data=>{
     if(!currentUser.sessions_config) initSessionsConfig();
     currentUser.sessions_config[idx].photo=data;
+    _personnaliserSeance(idx);
     const ok=saveUser();loadSessionManager();
     toastEcriture(ok,' Photo enregistrée !','la photo est');
   });
@@ -5611,6 +5680,7 @@ function uploadSessionPhoto2(idx,input){
   compressImage(f,1200,0.75,data=>{
     if(!currentUser.sessions_config) initSessionsConfig();
     currentUser.sessions_config[idx].photo2=data;
+    _personnaliserSeance(idx);
     // rc_p2_ est la seule copie durable de photo2 : elle est retirée du nœud
     // avant chaque push RTDB. Son échec silencieux faisait disparaître la photo
     // au rechargement suivant, derrière un « ✓ » vert.
@@ -5623,6 +5693,7 @@ function uploadSessionPhoto2(idx,input){
 function removeSessionPhoto2(i){
   if(!currentUser.sessions_config) return;
   currentUser.sessions_config[i].photo2=null;
+  _personnaliserSeance(i);
   try{localStorage.removeItem('rc_p2_'+currentUser.email+'_'+i);}catch(e){}
   saveUser();loadSessionManager();
 }
@@ -5690,16 +5761,21 @@ function openSessionPicker(){
   const picker=document.getElementById('session-picker');
   picker.style.display='flex';
   const today=DAYS[new Date().getDay()===0?6:new Date().getDay()-1];
-  document.getElementById('session-picker-list').innerHTML=cfg.map((s,i)=>{
+  // Le repli générique doit se présenter comme tel. Sans ce bandeau, l'athlète
+  // n'avait aucun moyen de distinguer un programme écrit pour lui d'un contenu
+  // d'exemple servi par défaut.
+  const bandeau=programmeEstEssai()?_bandeauEssai():'';
+  document.getElementById('session-picker-list').innerHTML=bandeau+cfg.map((s,i)=>{
     if(!s.active) return '';
     const isToday=s.day===today;
+    const badgeExemple=seanceEstExemple(s)?`<span style="background:#2a1a00;color:var(--orange);border:1px solid var(--orange);padding:1px 6px;border-radius:3px;font-size:9px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;margin-left:6px;vertical-align:middle">Exemple</span>`:'';
     return `<div onclick="startWorkoutSession(${i});document.getElementById('session-picker').style.display='none'"
       style="background:${isToday?'linear-gradient(135deg,#1a0000,#2a0000)':'var(--card2)'};border-radius:12px;padding:14px;margin-bottom:10px;cursor:pointer;display:flex;align-items:center;gap:12px;border:1.5px solid ${isToday?'var(--red)':'var(--border)'}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       ${s.photo?`<img src="${s.photo}" style="width:50px;height:50px;border-radius:8px;object-fit:cover">`:`<div style="width:50px;height:50px;border-radius:3px;background:var(--red);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;flex-shrink:0">${DAY_ICONS[i]}</div>`}
       <div style="flex:1">
         <div style="font-size:10px;color:${isToday?'#fca5a5':'var(--sub)'};font-weight:700;text-transform:uppercase;letter-spacing:.5px">${s.day}${isToday?' · Aujourd\'hui':''}</div>
-        <div style="font-weight:800;font-size:14px;margin-top:2px">${s.name||'Séance '+s.day}</div>
-        <div class="sub" style="font-size:11px">${s.exercises?.length||0} exercices configurés</div>
+        <div style="font-weight:800;font-size:14px;margin-top:2px">${s.name||'Séance '+s.day}${badgeExemple}</div>
+        <div class="sub" style="font-size:11px">${s.exercises?.length||0} exercices ${seanceEstExemple(s)?'proposés':'configurés'}</div>
       </div>
       <span style="color:var(--red);font-size:20px">▶</span>
     </div>`;
@@ -5931,11 +6007,19 @@ function _renderWeeklyInto(el,sc){
     </div>
   `;
 }
+// Rend le programme hebdomadaire, en annonçant le repli quand c'en est un.
+// Le bandeau est inséré APRÈS le rendu — _renderWeeklyInto écrase innerHTML —
+// et window._weekProgEl reste `el`, donc changer de jour le régénère au lieu
+// de l'empiler.
+function _rendreSemaineAvecBandeau(el,sc){
+  _renderWeeklyInto(el,sc);
+  if(programmeEstEssai()) el.insertAdjacentHTML('afterbegin',_bandeauEssai());
+}
 function _renderProgExercisesInto(el){
   // sessions_config est toujours prioritaire (fondation ou séances modifiées par le coach)
   const sc=currentUser.sessions_config;
   const hasActive=sc&&sc.some(s=>s.active&&s.exercises?.length);
-  if(hasActive){_renderWeeklyInto(el,sc);return;}
+  if(hasActive){_rendreSemaineAvecBandeau(el,sc);return;}
 
   // Fallback : ancien programme unique assigné par le coach
   const u=(DB.get('users')||{})[currentUser.email]||currentUser;
@@ -5951,6 +6035,16 @@ function _renderProgExercisesInto(el){
       ${prog.exercises.map((ex,idx)=>_renderExCard(ex,idx)).join('')}`;
     return;
   }
+  // Rien de publié. Plutôt que d'afficher une impasse pendant que le sélecteur
+  // de séances propose, lui, un contenu complet, on montre ce même repli ici —
+  // annoncé comme tel par le bandeau. C'est la contradiction que corrige ce
+  // correctif : l'accueil ne peut plus dire « en cours de création » alors
+  // qu'un programme est proposé ailleurs comme s'il était configuré.
+  // initSessionsConfig n'écrit rien : la config reste en mémoire, et la
+  // regénérer à chaque rendu est déterministe.
+  const essai=currentUser.sessions_config||initSessionsConfig();
+  if(essai.some(s=>s.active&&s.exercises?.length)){_rendreSemaineAvecBandeau(el,essai);return;}
+  // Filet de sécurité : ni programme, ni repli exploitable.
   el.innerHTML=`
     <div style="text-align:center;padding:32px 24px 16px">
       <div style="font-size:36px;margin-bottom:12px">⏳</div>
@@ -11128,6 +11222,7 @@ function importOcrExercises(idx,maxN){
   if(!currentUser.sessions_config) initSessionsConfig();
   const cible=typeof idx==='number'?currentUser.sessions_config?.[idx]:null;
   if(!cible){toast('Séance introuvable — rouvre-la puis réessaie.','var(--orange)');return;}
+  _personnaliserSeance(idx);
   cible.exercises=result;
   const ok=saveUser();closeModal();
   toastEcriture(ok,' '+result.length+' exercices importés !','les exercices sont');
@@ -11329,6 +11424,8 @@ function importPdfSeances(){
       u.sessions_config[i].name=s.name;
       u.sessions_config[i].exercises=s.exercises;
       u.sessions_config[i].active=true;
+      // Séance issue du PDF du coach : publiée, donc plus un exemple.
+      delete u.sessions_config[i]._essai;delete u.sessions_config[i]._foundation;
     }
   });
   u.updatedAt=Date.now();
