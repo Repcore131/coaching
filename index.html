@@ -3631,8 +3631,8 @@ async function doLinkCoach(){
       currentUser.status='COACHING_SUIVI';
       currentUser.accessExpiry=payload.expiry;
       users[currentUser.email]=currentUser;
-      DB.set('users',users);DB.set('session',currentUser);
-      toast('Accès activé ✓');
+      const _u1=DB.set('users',users),_s1=DB.set('session',currentUser);
+      toastEcriture(_u1&&_s1,'Accès activé ✓','ton accès est');
       openBilan('depart');
     } else {
       // Code affilié : paiement 9,95€/mois requis
@@ -3661,8 +3661,8 @@ async function doLinkCoach(){
       currentUser.status='COACHING_SUIVI';
       const users=DB.get('users')||{};
       users[currentUser.email]=currentUser;
-      DB.set('users',users);DB.set('session',currentUser);
-      toast('Lié à '+currentUser.coachName+' ✓');
+      const _u2=DB.set('users',users),_s2=DB.set('session',currentUser);
+      toastEcriture(_u2&&_s2,'Lié à '+currentUser.coachName+' ✓','le rattachement est');
       openBilan('depart');return;
     }catch(e){return showErr('cc-err','Lien invalide. Demande un nouveau lien à ton coach.');}
   }
@@ -3726,7 +3726,7 @@ function qNext(){
   const s=QS[qStep];
   if(s.type==='form') s.fields.forEach(f=>{const el=document.getElementById(f.id);if(el)currentUser[f.id]=el.value;});
   if(qStep<QS.length-1){qStep++;renderQ();}
-  else{currentUser.questionnaireComplete=true;saveUser();toast(' Profil complété !');loadClientHome();}
+  else{currentUser.questionnaireComplete=true;toastEcriture(saveUser(),' Profil complété !','ton profil est');loadClientHome();}
 }
 function qPrev(){if(qStep>0){qStep--;renderQ();}}
 
@@ -4126,8 +4126,16 @@ function viewClientBilans(){
 function addBilanPhoto(bilanDate,bilanType,view,inputEl){
   const file=inputEl.files[0];
   if(!file)return;
-  const reader=new FileReader();
-  reader.onload=e=>{
+  // Compression AVANT tout stockage, comme uploadAthletePhoto et l'avatar coach.
+  // Une photo de téléphone de 8 Mo devient un dataURL d'environ 11 Mo une fois
+  // encodée en base64 : le double du quota localStorage à elle seule, et elle
+  // était écrite DEUX fois (nœud utilisateur + clé rc_photo_). 1080×1440
+  // conserve le cadrage portrait des photos de progression.
+  // Pas de garde-fou sur file.size ici, contrairement aux avatars : c'est
+  // justement une photo d'appareil photo, et la compresser est le travail de
+  // cette fonction, pas la refuser.
+  _resizeImage(file,1080,1440,0.82).then(b64=>{
+    if(!b64){toast('Image illisible — réessaie avec une autre photo','var(--orange)');return;}
     const users=DB.get('users')||{};
     const cl=getOwnedClient(currentClientId,users);
     if(!cl)return;
@@ -4135,19 +4143,28 @@ function addBilanPhoto(bilanDate,bilanType,view,inputEl){
     if(!bil)return;
     const prefix=bilanType==='depart'?'deb':'bil';
     const photoKey=prefix+'-photo-'+view;
-    bil[photoKey]=e.target.result;
-    try{localStorage.setItem('rc_photo_'+bilanDate+'_'+photoKey,e.target.result);}catch(ex){}
+    bil[photoKey]=b64;
+    // Cache de repli lu par getP() quand la photo a disparu du nœud utilisateur.
+    // Son échec ne perd pas la photo, mais l'utilisateur doit l'apprendre : le
+    // catch vide d'avant laissait croire à un enregistrement complet.
+    let cacheOk=true;
+    try{localStorage.setItem('rc_photo_'+bilanDate+'_'+photoKey,b64);}
+    catch(ex){cacheOk=false;toast('Stockage plein — la photo n\'a pas pu être conservée sur cet appareil','var(--orange)');}
     cl.updatedAt=Date.now();users[cl.email]=cl;
-    DB.set('users',users);
-    toast('Enregistrement…');
+    const localOk=DB.set('users',users);
+    // « Enregistrement… » écraserait l'avertissement de quota : toast() remplace
+    // le texte d'un élément unique, le dernier message est le seul visible.
+    if(localOk&&cacheOk) toast('Enregistrement…');
     renderBilanEvolution(cl);
     CLOUD.pushOne(cl.email,cl)
-      .then(()=>toast('Photo ajoutée','var(--green)'))
+      // Le ✓ vert n'est affiché que si l'écriture locale a réellement eu lieu.
+      .then(()=>toast(
+        localOk&&cacheOk?'Photo ajoutée':'Photo envoyée au cloud — stockage de cet appareil plein',
+        localOk&&cacheOk?'var(--green)':'var(--orange)'))
       // Remonter e.message : « Session expirée — reconnecte-toi pour synchroniser. »
       // est actionnable, contrairement à l'ancien texte générique.
       .catch(e=>toast(e?.message||'Photo sauvegardée localement — sync en erreur.','var(--orange)'));
-  };
-  reader.readAsDataURL(file);
+  });
 }
 
 function drawLineChart(canvas,datasets,labels){
@@ -4568,8 +4585,7 @@ function saveCoachProgTemplateName(){
 
 function saveCoachProgTemplate(){
   saveCoachProgTemplateName();
-  saveUser();
-  toast(' Programme sauvegardé !');
+  toastEcriture(saveUser(),' Programme sauvegardé !','ton programme est');
 }
 
 function deleteCoachProgTemplate(idx){
@@ -4855,12 +4871,18 @@ function saveCoachSessions(){
   _pushSessionsHistory(users[emailKey]); // snapshot avant écrasement
   c.updatedAt=Date.now();
   users[emailKey]=c;
-  DB.set('users',users);
-  toast('Enregistrement…');
+  const localOk=DB.set('users',users);
+  // « Enregistrement… » écraserait l'avertissement de quota émis par DB.set.
+  if(localOk) toast('Enregistrement…');
   go('s-coach-client');
   CLOUD.pushOne(emailKey,c)
-    .then(()=>toast(' Séances sauvegardées !'))
-    .catch(()=>toast('Séances sauvegardées localement — sync en erreur.','var(--orange)'));
+    .then(()=>toastEcriture(localOk,' Séances sauvegardées !','les séances sont'))
+    // Le message d'échec de sync affirmait « sauvegardées localement » : faux
+    // quand c'est justement l'écriture locale qui a échoué.
+    .catch(()=>toast(localOk
+      ?'Séances sauvegardées localement — sync en erreur.'
+      :'Ni enregistrées sur cet appareil ni synchronisées — libère de l\'espace et recommence.',
+      'var(--orange)'));
 }
 
 function resolveClient(cid){
@@ -4931,8 +4953,9 @@ async function uploadCoachPdfInline(input){
     c.programPdfSize=f.size>1024*1024?(f.size/1024/1024).toFixed(1)+' Mo':(f.size/1024).toFixed(0)+' Ko';
     c.programPdfDate=Date.now();
     c.programPdfVersion=(c.programPdfVersion||0)+1;
-    c.updatedAt=Date.now();users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
-    toast('PDF v'+c.programPdfVersion+' importé — '+c.programPdfName);
+    c.updatedAt=Date.now();users[c.email]=c;
+    const ok=DB.set('users',users);CLOUD.pushOne(c.email,c);
+    toastEcriture(ok,'PDF v'+c.programPdfVersion+' importé — '+c.programPdfName,'le PDF est');
     openClientDetail(currentClientId,true);
   }catch(e){
     toast('Échec de téléversement : '+(e.message||'Réessaie.'),'var(--orange)');
@@ -4952,8 +4975,11 @@ function saveCoachPdfLinkInline(){
   c.programPdfName='Programme (Drive)';
   c.programPdfDate=Date.now();
   c.programPdfVersion=(c.programPdfVersion||0)+1;
-  c.updatedAt=Date.now();users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
-  toast('Lien v'+c.programPdfVersion+' enregistré !');
+  c.updatedAt=Date.now();users[c.email]=c;
+  // Écriture dans le dossier de l'ATHLÈTE : elle ne passe pas par saveUser(),
+  // donc le retour de DB.set doit être relayé ici.
+  const ok=DB.set('users',users);CLOUD.pushOne(c.email,c);
+  toastEcriture(ok,'Lien v'+c.programPdfVersion+' enregistré !','le lien est');
   openClientDetail(currentClientId,true);
 }
 // Parse reps string : "10 PUIS 20", "6-8", "15 Par Jambe", "8"
@@ -5071,8 +5097,7 @@ function saveProgram(){
       s.name=_f('prog-name');s.notes=_f('prog-notes');
       s.warmup=_f('prog-warmup');s.cooldown=_f('prog-cooldown');
       _progEditorCtx={mode:'clientProgram'};
-      saveUser();
-      toast(' Séance sauvegardée !');
+      toastEcriture(saveUser(),' Séance sauvegardée !','la séance est');
       go('s-coach-prog-template');loadProgTemplateSlots(_ctx.gender);return;
     }
     // Coach edite une seance d'un athlete (via openCoachSessions)
@@ -5098,9 +5123,11 @@ function saveProgram(){
       sa.warmup=_f('prog-warmup');sa.cooldown=_f('prog-cooldown');
       if(progPhotoData) sa.photo=progPhotoData;
       if(progPhoto2Data) sa.photo2=progPhoto2Data;
-      saveUser();
+      const _ok=saveUser();
       _progEditorCtx={mode:'clientProgram'};
-      toast(' Séance sauvegardée !');
+      // Cette séance embarque jusqu'à deux images base64 : c'est le cas le plus
+      // exposé au débordement de quota de tout l'éditeur de programme.
+      toastEcriture(_ok,' Séance sauvegardée !','la séance est');
       loadSessionManager();return;
     }
   }
@@ -5291,8 +5318,7 @@ async function uploadAthletePdf(input){
     currentUser.programPdfSize=Math.round(f.size/1024)+'Ko';
     currentUser.programPdfDate=Date.now();
     currentUser.programPdfVersion=(currentUser.programPdfVersion||0)+1;
-    saveUser();
-    toast('Programme importé — v'+(currentUser.programPdfVersion));
+    toastEcriture(saveUser(),'Programme importé — v'+(currentUser.programPdfVersion),'le programme est');
     loadClientHome();
   }catch(e){
     toast('Échec : '+(e.message||'Réessaie.'),'var(--orange)');
@@ -5496,7 +5522,8 @@ function uploadSessionPhoto(idx,input){
   compressImage(f,1200,0.75,data=>{
     if(!currentUser.sessions_config) initSessionsConfig();
     currentUser.sessions_config[idx].photo=data;
-    saveUser();loadSessionManager();toast(' Photo enregistrée !');
+    const ok=saveUser();loadSessionManager();
+    toastEcriture(ok,' Photo enregistrée !','la photo est');
   });
 }
 function uploadSessionPhoto2(idx,input){
@@ -5504,8 +5531,13 @@ function uploadSessionPhoto2(idx,input){
   compressImage(f,1200,0.75,data=>{
     if(!currentUser.sessions_config) initSessionsConfig();
     currentUser.sessions_config[idx].photo2=data;
-    try{localStorage.setItem('rc_p2_'+currentUser.email+'_'+idx,data);}catch(e){}
-    saveUser();loadSessionManager();toast(' Photo vidéos enregistrée !');
+    // rc_p2_ est la seule copie durable de photo2 : elle est retirée du nœud
+    // avant chaque push RTDB. Son échec silencieux faisait disparaître la photo
+    // au rechargement suivant, derrière un « ✓ » vert.
+    let ancrageOk=true;
+    try{localStorage.setItem('rc_p2_'+currentUser.email+'_'+idx,data);}catch(e){ancrageOk=false;}
+    const ok=saveUser();loadSessionManager();
+    toastEcriture(ok&&ancrageOk,' Photo vidéos enregistrée !','la photo est');
   });
 }
 function removeSessionPhoto2(i){
@@ -6300,8 +6332,7 @@ function savePostSession(){
     currentUser.sessions[currentUser.sessions.length-1].metrics=metrics;
     if(metrics.steps) currentUser.sessions[currentUser.sessions.length-1].steps=parseInt(metrics.steps);
   }
-  saveUser();
-  toast(' Super séance enregistrée !');
+  toastEcriture(saveUser(),' Super séance enregistrée !','la séance est');
   go('s-client-home');loadClientHome();
 }
 // ── Assiduité : le streak compte des SEMAINES, pas des jours consécutifs ────
@@ -6866,13 +6897,19 @@ function saveBilanFinal(){
     initSessionsConfig();
   }
   // Ancrer photos dans clés séparées (survivent au sync Firebase)
+  let ancrageOk=true;
   Object.keys(bi).filter(k=>k.includes('photo')&&bi[k]).forEach(k=>{
-    try{localStorage.setItem('rc_photo_'+bi.date+'_'+k,bi[k]);}catch(e){}
+    try{localStorage.setItem('rc_photo_'+bi.date+'_'+k,bi[k]);}catch(e){ancrageOk=false;}
+    // Ce removeItem ne fait que du ménage : son échec ne perd aucune donnée.
     try{localStorage.removeItem('rc_pendingphoto_'+k);}catch(e){}
   });
-  saveUser();
+  const enregistre=saveUser();
   if(currentUser._notifEnabled) scheduleSwNotif();
-  toast(' Bilan n°'+n+' enregistré !');
+  // Un bilan représente une saisie longue : mensurations, photos et réponses
+  // de santé. Annoncer « enregistré ! » alors que le quota a débordé pousse
+  // l'utilisateur à fermer l'app sur une fausse certitude.
+  if(enregistre&&ancrageOk) toast(' Bilan n°'+n+' enregistré !');
+  else toast('Stockage plein — bilan envoyé au cloud, mais absent de cet appareil','var(--orange)');
   go('s-client-home');loadClientHome();
   // Propose notifications après le 1er bilan
   const totalBilans=(currentUser.bilans||[]).length;
@@ -8215,8 +8252,7 @@ function saveFoodEntry(){
   currentUser.nutrition.log[_fjDate].entries.push(entry);
   let rec=currentUser.nutrition.recentFoods||[];
   currentUser.nutrition.recentFoods=[f.id,...rec.filter(id=>id!==f.id)].slice(0,10);
-  saveUser();
-  toast('Ajouté ✓');
+  toastEcriture(saveUser(),'Ajouté ✓','cet aliment est');
   loadNutrition();
 }
 
@@ -8410,8 +8446,9 @@ function saveClientNutriDiet(type){
   if(!c) return;
   if(!c.nutrition) c.nutrition={};
   c.nutrition.dietType=type;
-  c.updatedAt=Date.now();users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
-  toast('Type de diète enregistré ✓');
+  c.updatedAt=Date.now();users[c.email]=c;
+  const ok=DB.set('users',users);CLOUD.pushOne(c.email,c);
+  toastEcriture(ok,'Type de diète enregistré ✓','la diète est');
   renderCoachNutriSection(c);
 }
 
@@ -8425,8 +8462,9 @@ function saveClientNutriMacros(){
     on:{kcal:g('ccd-on-kcal'),p:g('ccd-on-p'),g:g('ccd-on-g'),l:g('ccd-on-l'),s:g('ccd-on-s'),f:g('ccd-on-f')},
     off:{kcal:g('ccd-off-kcal'),p:g('ccd-off-p'),g:g('ccd-off-g'),l:g('ccd-off-l'),s:g('ccd-off-s'),f:g('ccd-off-f')},
   };
-  c.updatedAt=Date.now();users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
-  toast('Objectifs enregistrés ✓');
+  c.updatedAt=Date.now();users[c.email]=c;
+  const ok=DB.set('users',users);CLOUD.pushOne(c.email,c);
+  toastEcriture(ok,'Objectifs enregistrés ✓','les objectifs sont');
 }
 
 function addClientStrictPhoto(input){
@@ -8439,8 +8477,11 @@ function addClientStrictPhoto(input){
     if(!c.nutrition) c.nutrition={};
     if(!Array.isArray(c.nutrition.strictPhotos)) c.nutrition.strictPhotos=[];
     c.nutrition.strictPhotos.push(b64);
-    c.updatedAt=Date.now();users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
-    toast('Photo ajoutée ✓');
+    c.updatedAt=Date.now();users[c.email]=c;
+    // Photo base64 dans le dossier de l'athlète : le cas de débordement le
+    // plus probable côté coach.
+    const ok=DB.set('users',users);CLOUD.pushOne(c.email,c);
+    toastEcriture(ok,'Photo ajoutée ✓','la photo est');
     renderCoachNutriSection(c);
   });
 }
@@ -8760,8 +8801,9 @@ function saveClientSuppEntry(){
   if(!c.nutrition) c.nutrition={};
   if(!Array.isArray(c.nutrition.supplements)) c.nutrition.supplements=[];
   c.nutrition.supplements.push({id:Date.now(),name,dosage_quantity:qty,dosage_unit:unit,timings,notes,active:true});
-  c.updatedAt=Date.now();users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
-  toast('Complément ajouté ✓');
+  c.updatedAt=Date.now();users[c.email]=c;
+  const ok=DB.set('users',users);CLOUD.pushOne(c.email,c);
+  toastEcriture(ok,'Complément ajouté ✓','le complément est');
   renderCoachSuppSection(c);
 }
 
@@ -9404,10 +9446,10 @@ function addVideoLink(){
   else{const seg=url.split('/').pop().split('?')[0];if(seg) name=decodeURIComponent(seg).replace(/\.(mp4|mov|webm|mkv)$/i,'');}
   if(!currentUser.videos) currentUser.videos=[];
   currentUser.videos.push({id:'v_'+Date.now(),name,url,date:Date.now(),size:'—',feedback:null});
-  saveUser();
+  const ok=saveUser();
   if(inp) inp.value='';
   const hint=document.getElementById('vid-drive-hint');if(hint) hint.style.display='none';
-  toast('Vidéo ajoutée !','var(--green)');
+  toastEcriture(ok,'Vidéo ajoutée !','la vidéo est référencée');
   loadVideos();
 }
 function _cloudinaryUserMsg(e,kind){
@@ -9459,6 +9501,7 @@ async function uploadVideoFile(input){
     const url=data.secure_url;
     const name=file.name.replace(/\.(mp4|mov|webm|mkv|avi)$/i,'');
     const entry={id:'v_'+Date.now(),name,url,date:Date.now(),size:Math.round(file.size/1024/1024*10)/10+' Mo',feedback:null,cloudinaryPublicId:data.public_id,cloudinaryName:cloudName};
+    let _localOk=true;
     if(currentUser?.email!==targetEmail){
       // Session changée pendant l'upload — écrire directement dans le compte cible
       const allUsers=DB.get('users')||{};
@@ -9468,16 +9511,18 @@ async function uploadVideoFile(input){
       target.videos.push(entry);
       target.updatedAt=Date.now();
       allUsers[targetEmail]=target;
-      DB.set('users',allUsers);
+      _localOk=DB.set('users',allUsers);
       CLOUD.pushOne(targetEmail,target);
     }else{
       if(!currentUser.videos) currentUser.videos=[];
       currentUser.videos.push(entry);
-      saveUser();
+      _localOk=saveUser();
     }
     if(progEl) progEl.style.display='none';
     input.value='';
-    toast('Vidéo envoyée au coach !','var(--green)');
+    // La vidéo est bien sur Cloudinary, mais l'entrée qui la référence peut
+    // n'exister nulle part en local : elle disparaîtrait alors de la liste.
+    toastEcriture(_localOk,'Vidéo envoyée au coach !','la vidéo est référencée');
     loadVideos();
   }catch(e){
     console.error('[uploadVideoFile]',e);
@@ -9555,7 +9600,7 @@ function qcAdd(){
   if(!currentUser.quickComments)currentUser.quickComments=[];
   const maxPos=currentUser.quickComments.reduce((m,c)=>Math.max(m,c.pos??0),0);
   currentUser.quickComments.push({id:'qc'+Date.now(),label:label.slice(0,40),text:text.slice(0,120),pos:maxPos+1});
-  saveUser();toast('Commentaire ajouté ✓');
+  toastEcriture(saveUser(),'Commentaire ajouté ✓','le commentaire est');
   openQCManager();_renderQuickCommentChips();
 }
 function qcEditRow(id){
@@ -9595,7 +9640,7 @@ function qcDown(idx){
 function qcReset(){
   if(!confirm('Réinitialiser aux 6 commentaires par défaut ?'))return;
   currentUser.quickComments=QC_DEFAULTS.map((c,i)=>({id:'qcd'+Date.now()+i,label:c.label,text:c.text,pos:i}));
-  saveUser();toast('Liste réinitialisée ✓');openQCManager();_renderQuickCommentChips();
+  toastEcriture(saveUser(),'Liste réinitialisée ✓','la liste est');openQCManager();_renderQuickCommentChips();
 }
 // ======= VIDEO CORRECTION =======
 function tsToSecs(ts){
@@ -9707,9 +9752,11 @@ function saveVideoCorrection(){
   c.videos[idx].feedbackTimestamps=tss;
   c.videos[idx].feedbackDate=Date.now();
   c.updatedAt=Date.now();users[window._vcEmail]=c;
-  DB.set('users',users);CLOUD.pushOne(window._vcEmail,c);
+  const ok=DB.set('users',users);CLOUD.pushOne(window._vcEmail,c);
   closeModal();
-  toast('Correction enregistrée !','var(--green)');
+  // La modale vient de se fermer : le coach ne peut plus rien récupérer si
+  // l'écriture a échoué, il faut donc le lui dire au lieu d'un « ✓ ».
+  toastEcriture(ok,'Correction enregistrée !','la correction est');
   openClientDetail(currentClientId,true);
 }
 
@@ -10024,8 +10071,7 @@ function saveStepsGoals(){
   const offVal=parseInt(document.getElementById('steps-goal-off').value,10);
   if(isNaN(onVal)||onVal<500||isNaN(offVal)||offVal<500){toast('Objectifs invalides');return;}
   currentUser.stepsGoals={on:onVal,off:offVal};
-  saveUser();
-  toast('Objectifs enregistrés ✓');
+  toastEcriture(saveUser(),'Objectifs enregistrés ✓','les objectifs sont');
   loadLifestyle();
 }
 function stepsToggleType(type){
@@ -10181,8 +10227,7 @@ function saveSleep(){
   else currentUser.sleepLog.push(entry);
   const cutoff=localISODate(new Date(Date.now()-180*24*3600*1000));
   currentUser.sleepLog=currentUser.sleepLog.filter(e=>e.date>=cutoff);
-  saveUser();
-  toast(duration+'h enregistrées !','var(--green)');
+  toastEcriture(saveUser(),duration+'h enregistrées !','ta nuit est');
   loadLifestyle();
 }
 
@@ -10278,16 +10323,35 @@ function safeUrl(u){
   return s==='#' ? '#' : escapeHtml(s);
 }
 function ago(ts){const d=Math.floor((Date.now()-ts)/864e5);return d===0?"aujourd'hui":d===1?"hier":"il y a "+d+"j";}
+// Retourne true si la donnée est réellement sur l'appareil, false si le quota
+// localStorage a débordé. Les appelants qui annoncent un succès à l'utilisateur
+// doivent conditionner leur « ✓ » sur cette valeur : sinon l'utilisateur ferme
+// l'app en croyant sa saisie enregistrée alors qu'elle n'existe nulle part
+// localement. La donnée part quand même au cloud dans les deux cas.
 function saveUser(){
   currentUser.updatedAt=Date.now();
   delete currentUser._st;delete currentUser._stb64;delete currentUser._sk;
   const users=DB.get('users')||{};
   users[currentUser.email]=currentUser;
-  DB.set('users',users);
-  DB.set('session',currentUser);
+  // Les deux écritures sont évaluées séparément AVANT le &&, sans quoi un
+  // échec sur 'users' court-circuiterait l'écriture de 'session'.
+  const usersOk=DB.set('users',users);
+  const sessionOk=DB.set('session',currentUser);
   if(CLOUD.canWrite()){
     CLOUD.push(users);
   }
+  return usersOk&&sessionOk;
+}
+// Annonce le résultat d'une écriture locale. Un « ✓ » ne doit jamais s'afficher
+// quand le quota a débordé : l'utilisateur fermerait l'app en croyant sa saisie
+// enregistrée alors qu'elle n'existe que dans le cloud — et hors ligne, elle
+// n'existe nulle part. `perdu` est une proposition complète fournie par
+// l'appelant, ce qui règle l'accord en genre (« la photo est », « le programme
+// est ») sans que le helper ait à le deviner.
+function toastEcriture(ok,succes,perdu){
+  if(ok){toast(succes);return true;}
+  toast('Stockage plein — '+perdu+' dans le cloud uniquement, pas sur cet appareil','var(--orange)');
+  return false;
 }
 function silentLogout(){DB.del('session');currentUser=null;CLOUD.signOut();}
 function logout(){
@@ -10958,8 +11022,8 @@ function importOcrExercises(idx,maxN){
   const cible=typeof idx==='number'?currentUser.sessions_config?.[idx]:null;
   if(!cible){toast('Séance introuvable — rouvre-la puis réessaie.','var(--orange)');return;}
   cible.exercises=result;
-  saveUser();closeModal();
-  toast(' '+result.length+' exercices importés !');
+  const ok=saveUser();closeModal();
+  toastEcriture(ok,' '+result.length+' exercices importés !','les exercices sont');
   loadSessionManager();
 }
 
@@ -11162,14 +11226,16 @@ function importPdfSeances(){
   });
   u.updatedAt=Date.now();
   users[email]=u;
-  DB.set('users',users);
+  let ok=DB.set('users',users);
   CLOUD.pushOne(email,u);
   if(email===currentUser?.email){
     currentUser.sessions_config=u.sessions_config;
-    DB.set('session',currentUser);
+    // Les deux écritures comptent : ok=DB.set(...)&&ok court-circuiterait la
+    // seconde si la première a échoué.
+    ok=DB.set('session',currentUser)&&ok;
   }
   closeModal();
-  toast(seances.length+' séances importées dans le programme  !');
+  toastEcriture(ok,seances.length+' séances importées dans le programme  !','les séances sont');
   if(email===currentUser?.email) loadSessionManager();
 }
 
@@ -11358,8 +11424,7 @@ function saveCoachPhone(){
   const digits=raw.replace(/\D/g,'');
   if(!digits){toast('Entre un numéro avec indicatif, ex: +33612345678','var(--orange)');return;}
   currentUser.phone=raw;
-  saveUser();
-  toast('Numéro WhatsApp enregistré ✓');
+  toastEcriture(saveUser(),'Numéro WhatsApp enregistré ✓','le numéro est');
   _renderCoachPhonePreview(raw);
 }
 function _resizeImage(file,maxW,maxH,quality){
@@ -11386,12 +11451,14 @@ function uploadCoachPhoto(input){
   _resizeImage(f,200,200,0.80).then(b64=>{
     if(!b64) return;
     currentUser.coachPhoto=b64;
-    saveUser();
+    const ok=saveUser();
     // Push immédiat non-debounced pour que les athlètes voient la photo immédiatement
     setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},300);
     const el=document.getElementById('coach-photo-circle');
     if(el) el.innerHTML=`<img src="${b64}" style="width:100%;height:100%;object-fit:cover">`;
-    toast('Photo enregistrée ✓');
+    // L'aperçu vient d'être posé dans le DOM : sans ce garde-fou, l'image
+    // affichée renforcerait la fausse certitude d'un enregistrement réussi.
+    toastEcriture(ok,'Photo enregistrée ✓','la photo est');
   });
 }
 function saveCoachIdentity(){
@@ -11399,10 +11466,10 @@ function saveCoachIdentity(){
   const phrase=(document.getElementById('coach-catchphrase')?.value||'').trim();
   currentUser.teamName=name;
   currentUser.catchphrase=phrase;
-  saveUser();
+  const ok=saveUser();
   // Push immédiat non-debounced pour que les athlètes voient les données immédiatement
   setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},300);
-  toast('Identité de la team enregistrée ✓');
+  toastEcriture(ok,'Identité de la team enregistrée ✓','l\'identité est');
 }
 function addCoachBannerRow(imageUrl, linkUrl){
   const list=document.getElementById('coach-banners-list');
@@ -11449,9 +11516,9 @@ function saveCoachBanners(){
     if(img||url) banners.push({imageUrl:img,linkUrl:url});
   });
   currentUser.promoBanners=banners;
-  saveUser();
+  const ok=saveUser();
   setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},300);
-  toast('Bannières enregistrées ✓');
+  toastEcriture(ok,'Bannières enregistrées ✓','les bannières sont');
 }
 function _renderPromoBanners(coach){
   const el=document.getElementById('clh-promo-banners');
@@ -11470,12 +11537,12 @@ function uploadAthletePhoto(input){
   _resizeImage(f,300,300,0.80).then(b64=>{
     if(!b64) return;
     currentUser.athletePhoto=b64;
-    saveUser();
+    const ok=saveUser();
     const circle=document.getElementById('atp-photo-circle');
     if(circle) circle.innerHTML=`<img src="${b64}" style="width:100%;height:100%;object-fit:cover">`;
     const avatar=document.getElementById('clh-athlete-avatar');
     if(avatar) avatar.innerHTML=`<img src="${b64}" style="width:100%;height:100%;object-fit:cover">`;
-    toast('Photo enregistrée ✓');
+    toastEcriture(ok,'Photo enregistrée ✓','la photo est');
   });
 }
 let _atpGender='';
@@ -11513,8 +11580,7 @@ function saveAthleteProfile(){
   currentUser.profileWeight=parseFloat(document.getElementById('atp-weight')?.value)||undefined;
   currentUser.gender=_atpGender||currentUser.gender;
   currentUser.objective=(document.getElementById('atp-objective')?.value||'').trim()||undefined;
-  saveUser();
-  toast('Profil enregistré ✓');
+  toastEcriture(saveUser(),'Profil enregistré ✓','ton profil est');
   go('s-client-home');
   loadClientHome();
 }
@@ -11544,8 +11610,7 @@ function saveCloudinaryConfig(){
   if(!name||!preset){toast('Renseigne les deux champs','var(--orange)');return;}
   currentUser.cloudinaryName=name;
   currentUser.cloudinaryPreset=preset;
-  saveUser();
-  toast('Configuration vidéo enregistrée ✓');
+  toastEcriture(saveUser(),'Configuration vidéo enregistrée ✓','la configuration est');
 }
 function loadMonetisationTab(){
   updateCloudStatus();
@@ -12036,8 +12101,9 @@ function renderPaypalButton(planId,coachId){
           currentUser.coachName=pending.coachName||currentUser.coachName||'';
           sessionStorage.removeItem('pendingCodePayload');
         }
-        saveUser();
-        toast('Abonnement activé ! Bienvenue sur RepCore ✓');
+        // Activation d'abonnement : c'est le pire moment pour un « ✓ » menteur,
+        // l'athlète vient de payer et croirait son accès acquis sur l'appareil.
+        toastEcriture(saveUser(),'Abonnement activé ! Bienvenue sur RepCore ✓','ton abonnement est');
         setTimeout(()=>{loadClientHome();},1500);
       }catch(e){
         toast('Erreur d\'activation : '+(e.message||'Réessaie ou contacte le support.'),'var(--orange)');
