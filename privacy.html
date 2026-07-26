@@ -25,6 +25,19 @@
     .contact p{margin:0;color:#ccc}
     .contact a{font-weight:700}
     footer{margin-top:48px;font-size:11px;color:#333;text-align:center;line-height:1.8}
+    /* Le tableau des sous-traitants défile dans son propre cadre : sur mobile
+       la page elle-même ne doit jamais défiler horizontalement. */
+    .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid #1c1c1c;border-radius:10px;margin-bottom:16px}
+    table{border-collapse:collapse;width:100%;min-width:640px;font-size:12.5px}
+    thead th{background:#1a0000;color:#E02020;text-align:left;font-weight:800;
+      letter-spacing:1px;text-transform:uppercase;font-size:10.5px;padding:10px 12px;
+      border-bottom:1px solid #2a0000;white-space:nowrap}
+    tbody td{padding:10px 12px;border-bottom:1px solid #1c1c1c;color:#bbb;vertical-align:top;line-height:1.55}
+    tbody tr:last-child td{border-bottom:none}
+    tbody tr:nth-child(odd){background:#111}
+    td strong{color:#fff;font-weight:700}
+    td code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;color:#888;word-break:break-all}
+    .note{font-size:12px;color:#777;margin:-4px 0 16px}
     @media(max-width:480px){h1{font-size:22px}.wrap{padding:28px 16px 60px}}
   </style>
 </head>
@@ -45,6 +58,12 @@
   <div class="card">
     <div class="card-title">Kevin Guellec — Coach sportif diplômé d'État</div>
     <p style="margin:0;font-size:13px">Contact : <a href="mailto:guellec.coachingpro@gmail.com">guellec.coachingpro@gmail.com</a></p>
+  </div>
+  <div class="card">
+    <div class="card-title">Hébergeur <span class="badge">Art. 6 III LCEN</span></div>
+    <p style="margin:0;font-size:13px">GitHub, Inc. — 88 Colin P. Kelly Jr. Street, San Francisco, CA 94107, États-Unis.<br>
+    Téléphone : +1 877 448 4820 — <a href="https://github.com" target="_blank" rel="noopener">github.com</a><br>
+    L'application est publiée via le service GitHub Pages. Les données de suivi, elles, sont hébergées chez Google (voir le point 5).</p>
   </div>
 
   <h2>2. Données collectées</h2>
@@ -123,14 +142,95 @@
   </ul>
 
   <h2>5. Hébergement et sous-traitants</h2>
-  <div class="card">
-    <div class="card-title">Firebase (Google LLC)</div>
-    <p style="margin:0;font-size:13px">Les données sont synchronisées sur Firebase Realtime Database et Firebase Storage, services de Google LLC. Google agit en qualité de sous-traitant et est soumis aux clauses contractuelles types de la Commission européenne. Pour plus d'informations : <a href="https://firebase.google.com/support/privacy" target="_blank" rel="noopener">firebase.google.com/support/privacy</a>.</p>
+  <p>Les prestataires ci-dessous interviennent pour le compte de RepCore. Chacun n'accède qu'aux données strictement nécessaires à sa fonction, et aucun n'est autorisé à les utiliser pour son propre compte.</p>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr><th>Sous-traitant</th><th>Finalité</th><th>Données transmises</th><th>Pays / garantie</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Google LLC</strong> — Firebase Authentication<br><code>identitytoolkit.googleapis.com</code><br><code>securetoken.googleapis.com</code></td>
+          <td>Création de compte et authentification</td>
+          <td>Adresse email et mot de passe. Le mot de passe transite chiffré et n'est jamais stocké par RepCore.</td>
+          <td>États-Unis — CCT + Data Privacy Framework</td>
+        </tr>
+        <tr>
+          <td><strong>Google LLC</strong> — Firebase Realtime Database<br><code>repcore-sync-default-rtdb.firebaseio.com</code></td>
+          <td>Synchronisation de votre profil entre vos appareils, et partage avec votre coach</td>
+          <td>L'ensemble des données listées au point 2, à l'exception des photos stockées en clair sur l'appareil</td>
+          <td>États-Unis — CCT + Data Privacy Framework</td>
+        </tr>
+        <tr>
+          <td><strong>Google LLC</strong> — Firebase Storage<br><code>firebasestorage.googleapis.com</code></td>
+          <td>Stockage des programmes d'entraînement au format PDF</td>
+          <td>Les fichiers PDF déposés par votre coach ou par vous-même</td>
+          <td>États-Unis — CCT + Data Privacy Framework</td>
+        </tr>
+        <tr>
+          <td><strong>Cloudinary Inc.</strong><br><code>api.cloudinary.com</code></td>
+          <td>Hébergement des vidéos d'exécution et des mémos audio du coach</td>
+          <td>Les fichiers vidéo et audio que vous transmettez</td>
+          <td>États-Unis — clauses contractuelles types</td>
+        </tr>
+        <tr>
+          <td><strong>a9t9 software GmbH</strong> — OCR.space<br><code>api.ocr.space</code></td>
+          <td>Reconnaissance du texte figurant sur la photo d'une fiche de séance</td>
+          <td>Uniquement l'image que vous soumettez à la lecture, le temps du traitement</td>
+          <td>Hors Union européenne — voir 5 bis</td>
+        </tr>
+        <tr>
+          <td><strong>PayPal (Europe) S.à r.l. et Cie, S.C.A.</strong><br><code>www.paypal.com</code></td>
+          <td>Encaissement de l'abonnement mensuel</td>
+          <td>Vos coordonnées de paiement, saisies directement chez PayPal. RepCore ne reçoit que l'identifiant d'abonnement et son statut.</td>
+          <td>Luxembourg, avec transferts vers PayPal Inc. (États-Unis)</td>
+        </tr>
+        <tr>
+          <td><strong>GitHub, Inc.</strong> (Microsoft) — GitHub Pages</td>
+          <td>Hébergement du fichier de l'application et journaux d'accès</td>
+          <td>Adresse IP et en-têtes de votre navigateur, à chaque chargement</td>
+          <td>États-Unis — CCT + Data Privacy Framework</td>
+        </tr>
+        <tr>
+          <td><strong>Google Ireland Ltd</strong> — Google Fonts<br><code>fonts.googleapis.com</code></td>
+          <td>Chargement des polices de caractères de l'interface</td>
+          <td>Adresse IP et en-têtes de votre navigateur</td>
+          <td>Irlande, avec transferts vers Google LLC (États-Unis) — CCT + DPF</td>
+        </tr>
+        <tr>
+          <td><strong>Cloudflare, Inc.</strong><br><code>cdnjs.cloudflare.com</code></td>
+          <td>Chargement de la bibliothèque de lecture des PDF</td>
+          <td>Adresse IP et en-têtes de votre navigateur</td>
+          <td>États-Unis — CCT + Data Privacy Framework</td>
+        </tr>
+        <tr>
+          <td><strong>QR Server</strong><br><code>api.qrserver.com</code></td>
+          <td>Génération de l'image du QR code de synchronisation multi-appareils</td>
+          <td>Uniquement l'adresse publique de l'application. Aucune donnée personnelle n'est transmise.</td>
+          <td>Hors Union européenne — voir 5 bis</td>
+        </tr>
+        <tr>
+          <td><strong>YouTube</strong> (Google LLC)<br><code>www.youtube.com</code></td>
+          <td>Lecture des vidéos de démonstration que votre coach a associées à un exercice</td>
+          <td>Adresse IP et cookies YouTube, uniquement si vous ouvrez une de ces vidéos</td>
+          <td>États-Unis — CCT + Data Privacy Framework</td>
+        </tr>
+      </tbody>
+    </table>
   </div>
+  <p class="note">Aucun autre service tiers n'est contacté par l'application. Les liens WhatsApp et Google Drive éventuellement affichés ne sont ouverts que si vous les touchez, et vous quittez alors RepCore.</p>
+
   <div class="card">
     <div class="card-title">Stockage local (localStorage)</div>
-    <p style="margin:0;font-size:13px">Une copie des données est conservée localement sur votre appareil via le mécanisme localStorage du navigateur. Ces données restent sur votre appareil et ne sont pas accessibles à des tiers.</p>
+    <p style="margin:0;font-size:13px">Une copie des données est conservée sur votre appareil via le mécanisme localStorage du navigateur. Elle permet à l'application de fonctionner hors ligne. Ces données ne quittent pas votre appareil et ne sont accessibles à aucun tiers ; elles sont effacées lorsque vous videz les données du site ou désinstallez l'application.</p>
   </div>
+
+  <h2>5 bis. Transferts hors Union européenne</h2>
+  <p>Une partie des sous-traitants ci-dessus traite les données depuis les États-Unis. Ces transferts sont encadrés par les <strong>clauses contractuelles types</strong> adoptées par la Commission européenne, au titre de l'<strong>article 46.2.c du RGPD</strong>.</p>
+  <p>Pour les prestataires qui y adhèrent — Google, Microsoft/GitHub et Cloudflare — les transferts bénéficient en outre de la <strong>décision d'adéquation du 10 juillet 2023</strong> relative au <em>cadre de protection des données UE — États-Unis</em> (EU-US Data Privacy Framework), qui reconnaît un niveau de protection substantiellement équivalent à celui du droit européen.</p>
+  <p>Pour les prestataires ne relevant d'aucune décision d'adéquation, le transfert reste fondé sur les seules clauses contractuelles types. C'est le cas d'OCR.space et de QR Server, auxquels ne sont transmis, respectivement, que l'image soumise à la lecture et l'adresse publique de l'application.</p>
+  <p>Vous pouvez obtenir une copie des garanties applicables en écrivant à l'adresse indiquée au point 9.</p>
 
   <h2>6. Durée de conservation</h2>
   <ul>
