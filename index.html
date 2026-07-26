@@ -255,33 +255,32 @@ h3{font-size:16px;text-transform:uppercase}
 }
 
 /* ====== WELCOME / SPLASH ANIMATIONS ====== */
+/* Seuil de flash WCAG 2.1 (2.3.1) : pas plus de 3 changements brusques de
+   luminance par seconde. Les trois animations du splash se jouent en même
+   temps ; chacune ne conserve donc QU'UN seul pic, soit 3 au total sur la
+   première seconde. Les rebonds de scale sont conservés : un changement de
+   taille n'est pas un flash. */
 @keyframes rcStrike{
   0%   {opacity:0;transform:scale(0.4) translateY(30px);filter:brightness(1)}
   5%   {opacity:1;transform:scale(1.26) translateY(-10px);
-        filter:brightness(10) drop-shadow(0 0 30px #fff) drop-shadow(0 0 70px #fff) drop-shadow(0 0 130px #7df)}
+        filter:brightness(4) drop-shadow(0 0 30px #fff) drop-shadow(0 0 70px #fff) drop-shadow(0 0 130px #7df)}
   8%   {transform:scale(0.95);filter:brightness(1.4) drop-shadow(0 0 6px #fff)}
-  12%  {transform:scale(1.16);
-        filter:brightness(9) drop-shadow(0 0 26px #fff) drop-shadow(0 0 60px #E02020) drop-shadow(0 0 115px #E02020)}
   16%  {transform:scale(0.98);filter:brightness(1.1) drop-shadow(0 0 4px rgba(224,32,32,.5))}
   21%  {transform:scale(1.07);
-        filter:brightness(5) drop-shadow(0 0 18px #E02020) drop-shadow(0 0 42px #E02020)}
+        filter:brightness(1.1) drop-shadow(0 0 18px #E02020) drop-shadow(0 0 42px #E02020)}
   28%  {transform:scale(1);filter:brightness(1) drop-shadow(0 0 9px rgba(224,32,32,.4))}
   55%  {filter:brightness(1) drop-shadow(0 0 5px rgba(224,32,32,.2))}
   100% {filter:brightness(1) drop-shadow(0 0 2px rgba(224,32,32,.07))}
 }
 @keyframes screenFlash{
   0%  {opacity:0}
-  5%  {opacity:0.65}
-  9%  {opacity:0.02}
-  12% {opacity:0.5}
-  17% {opacity:0}
+  6%  {opacity:0.5}
+  20% {opacity:0}
   100%{opacity:0}
 }
 @keyframes boltFlash{
   0%  {opacity:0;filter:brightness(1)}
   4%  {opacity:1;filter:brightness(6)}
-  9%  {opacity:0.06;filter:brightness(1)}
-  13% {opacity:1;filter:brightness(7)}
   22% {opacity:0.28;filter:brightness(1.5)}
   36% {opacity:0;filter:brightness(1)}
   100%{opacity:0}
@@ -397,6 +396,16 @@ h3{font-size:16px;text-transform:uppercase}
   .wd-badge{opacity:1!important;transform:none!important}
   .wd-badge-medal{transform:none!important;filter:drop-shadow(0 0 12px rgba(224,32,32,.45))!important}
   .rc-blink{opacity:1!important}
+  /* Splash : le voile blanc est purement décoratif, on le retire. Le logo et
+     l'éclair doivent s'afficher d'emblée, à pleine opacité et sans filtre —
+     animation:none seul les figerait sur leur première image (opacity:0). */
+  #splash-flash{display:none!important}
+  #splash-logo-anim,[style*="boltFlash"]{
+    animation:none!important;
+    opacity:1!important;
+    filter:none!important;
+    transform:none!important;
+  }
 }
 </style>
 <script>
