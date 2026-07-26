@@ -4,7 +4,11 @@
       "$emailKey": {
         ".read": "auth != null && (\n  auth.token.email.replace('.', ',') === $emailKey ||\n  (data.child('coachEmailKey').exists() &&\n   auth.token.email.replace('.', ',') === data.child('coachEmailKey').val())\n)",
 
-        ".write": "auth != null && (\n  auth.token.email.replace('.', ',') === $emailKey ||\n  (data.child('coachEmailKey').val() !== null &&\n   auth.token.email.replace('.', ',') === data.child('coachEmailKey').val())\n)"
+        ".write": "auth != null && (\n  auth.token.email.replace('.', ',') === $emailKey ||\n  (data.child('coachEmailKey').val() !== null &&\n   auth.token.email.replace('.', ',') === data.child('coachEmailKey').val())\n)",
+
+        "coachEmailKey": {
+          ".validate": "auth.token.email.replace('.', ',') === $emailKey || (data.exists() && newData.val() === data.val())"
+        }
       }
     },
 

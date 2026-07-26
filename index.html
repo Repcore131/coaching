@@ -2633,7 +2633,19 @@ const CLOUD={
       delete safe.seenBilans;
       delete safe.programPdf; // base64 blob — stocké dans Firebase Storage, pas dans RTDB
       // Permettre aux règles RTDB de vérifier qui est le coach de cet athlète
-      if(safe.coachId){const coach=Object.values(DB.get('users')||{}).find(u=>u.id===safe.coachId);if(coach?.email)safe.coachEmailKey=coach.email.replace(/\./g,',');}
+      // Les trois cas doivent être traités EXPLICITEMENT. L'ancienne forme ne
+      // touchait à coachEmailKey que lorsqu'un coach était trouvé : après un
+      // « Libérer » ou la suppression du compte coach, la clé restait en place
+      // et l'ex-coach conservait son droit d'écriture, que les règles RTDB
+      // accordent précisément sur la foi de cette valeur.
+      // null et non undefined : JSON.stringify conserve null, et Firebase
+      // supprime alors la clé côté serveur.
+      if(safe.coachId){
+        const coach=Object.values(DB.get('users')||{}).find(u=>u.id===safe.coachId);
+        safe.coachEmailKey = coach?.email ? coach.email.replace(/\./g,',') : null;
+      } else {
+        safe.coachEmailKey = null;
+      }
       // Supprimer photo2 (base64 temporaire pour OCR) de chaque session avant push RTDB
       if(safe.sessions_config) safe.sessions_config=safe.sessions_config.map(s=>{
         if(!s.photo2) return s;
