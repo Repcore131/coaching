@@ -783,7 +783,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="s-client-code" class="screen" style="justify-content:center;padding:32px 24px">
   <div class="anim-in" style="max-width:400px;width:100%">
     <!-- Bouton retour accueil visible -->
-    <button onclick="silentLogout();go('s-welcome')" style="display:flex;align-items:center;gap:6px;background:none;border:none;color:var(--sub);font-size:13px;cursor:pointer;font-family:Montserrat,sans-serif;margin-bottom:24px;padding:0">← Retour à l'accueil</button>
+    <button onclick="go('s-welcome')" style="display:flex;align-items:center;gap:6px;background:none;border:none;color:var(--sub);font-size:13px;cursor:pointer;font-family:Montserrat,sans-serif;margin-bottom:24px;padding:0">← Retour à l'accueil</button>
     <div style="text-align:center;margin-bottom:32px">
       <div style="font-size:52px;margin-bottom:16px">🔑</div>
       <h1 style="margin-bottom:8px">Code d'accès</h1>
@@ -2205,7 +2205,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <button class="btn btn-outline" onclick="go('s-client-code')">Entrer un nouveau code coach</button>
     </div>
     <div style="margin-top:20px;display:flex;flex-direction:column;gap:10px;align-items:center">
-      <button onclick="silentLogout();go('s-welcome')" style="background:none;border:none;color:var(--sub);font-size:12px;cursor:pointer;font-family:Montserrat,sans-serif">← Retour à l'accueil</button>
+      <button onclick="go('s-welcome')" style="background:none;border:none;color:var(--sub);font-size:12px;cursor:pointer;font-family:Montserrat,sans-serif">← Retour à l'accueil</button>
       <button onclick="logout()" style="background:none;border:none;color:#2a2a2a;font-size:11px;cursor:pointer;font-family:Montserrat,sans-serif">Se déconnecter</button>
     </div>
   </div>
@@ -2996,9 +2996,16 @@ window.onload=()=>{
         // Le statut ne gouverne QUE l'accès athlète : doRegister crée tout compte
         // en status:'FREE' et rien ne le change jamais pour un coach, qui serait
         // donc déconnecté à chaque rechargement. Aligné sur doLogin (l. ~3177).
-        if(currentUser.role!=='coach'&&(currentUser.status||'FREE')==='FREE'){
+        // Un athlète encore FREE n'est PAS un compte invalide : il vient de
+        // s'inscrire et n'a pas encore saisi de code. Le déconnecter détruisait
+        // son compte à chaque rechargement. On garde la session et on l'amène
+        // à s-client-code, qui propose à la fois le code et les abonnements.
+        if(!currentUser.email){
+          // Session corrompue : là, et seulement là, la purge est justifiée.
           silentLogout();
           go('s-welcome');
+        } else if(currentUser.role!=='coach'&&(currentUser.status||'FREE')==='FREE'){
+          go('s-client-code');
         } else if(sessionStorage.getItem('rc_paypal_return')){
           // Retour depuis redirection PayPal → remettre sur la page paiement
           sessionStorage.removeItem('rc_paypal_return');
@@ -3016,7 +3023,14 @@ window.onload=()=>{
             // Même exclusion coach qu'au démarrage synchrone : sans elle le coach
             // atteint bien s-coach-home puis en est éjecté ~1s plus tard, à la fin
             // de la sync cloud.
-            if(currentUser.role!=='coach'&&(currentUser.status||'FREE')==='FREE'){silentLogout();go('s-welcome');return;}
+            if(currentUser.role!=='coach'&&(currentUser.status||'FREE')==='FREE'){
+              // La sync de fond arrive ~1s après le boot : l'utilisateur peut
+              // déjà être parti voir les abonnements ou remplir son inscription.
+              // On ne le ramène que s'il est resté sur un écran d'accès.
+              const _ec=document.querySelector('.screen.active')?.id;
+              if(_ec!=='s-client-code'&&_ec!=='s-subscribe'&&_ec!=='s-register') go('s-client-code');
+              return;
+            }
             if(CLOUD.canWrite()){
               try{saveUser();}catch(e){}
               // Push immédiat non-debounced pour garantir l'envoi des données locales (profil coach pré-v144)
@@ -3080,13 +3094,16 @@ window.onload=()=>{
 };
 function routeUser(){
   if(!currentUser) return go('s-welcome');
+  // Session corrompue (objet sans email) : seul cas où la purge est justifiée.
+  if(!currentUser.email){silentLogout();return go('s-welcome');}
   if(currentUser.role==='coach'){loadCoachHome();return;}
   // Athlète : vérifier l'accès
   const s=currentUser.status||'FREE';
-  // Athlète FREE = pas encore de code actif → retour à l'accueil.
-  // Le coach est déjà sorti ligne 3006 : son statut reste 'FREE' à vie et ne
-  // doit jamais servir de test d'accès.
-  if(s==='FREE'){silentLogout();return go('s-welcome');}
+  // Athlète FREE = inscrit mais pas encore activé. Ce n'est pas un compte
+  // invalide : on conserve sa session et on l'amène à l'écran qui propose le
+  // code ET les abonnements. Le déconnecter revenait à détruire son compte
+  // parce qu'il n'avait pas encore choisi comment payer.
+  if(s==='FREE') return go('s-client-code');
   if(!checkAccess(currentUser)){go('s-access-gate');loadAccessGate();return;}
   loadClientHome();
   if(window._pendingBilanOpen){window._pendingBilanOpen=false;setTimeout(()=>openBilanChoice(),800);}
