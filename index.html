@@ -26,7 +26,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-:root{--bg:#080808;--red:#E02020;--red2:#b81515;--red-bg:#0d0000;--red-glow:#FF3345;--red-light:color-mix(in srgb,var(--red) 70%,white);--dark:#0f0f0f;--card:#111;--card2:#181818;--surface-1:#111111;--surface-2:#181818;--surface-3:#1e1e1e;--border:#1e1e1e;--sub:#777777;--text:#efefef;--green:#22c55e;--orange:#f97316;--success:#22c55e;--success-bg:#021007;--success-border:#052a10;--info:#d4a017;--info-bg:#160d00;--info-border:#2a1a00;--warning:#f97316;--warning-bg:#1a0800;--warning-border:#3a1500;--danger:#E02020;--danger-bg:#1a0000;--danger-border:#3a0000;--cycle-accent:#A78BFA;--glow-sm:0 0 12px rgba(224,32,32,.25);--glow-md:0 0 28px rgba(255,51,69,.4);--glow-lg:0 0 56px rgba(255,51,69,.5)}
+:root{--bg:#080808;--red:#E02020;--red2:#b81515;--red-bg:#0d0000;--red-glow:#FF3345;--red-light:color-mix(in srgb,var(--red) 70%,white);--dark:#0f0f0f;--card:#111;--card2:#181818;--surface-1:#111111;--surface-2:#181818;--surface-3:#1e1e1e;--border:#1e1e1e;--sub:#8a8a8a;--text:#efefef;--green:#22c55e;--orange:#f97316;--success:#22c55e;--success-bg:#021007;--success-border:#052a10;--info:#d4a017;--info-bg:#160d00;--info-border:#2a1a00;--warning:#f97316;--warning-bg:#1a0800;--warning-border:#3a1500;--danger:#E02020;--danger-bg:#1a0000;--danger-border:#3a0000;--cycle-accent:#A78BFA;--glow-sm:0 0 12px rgba(224,32,32,.25);--glow-md:0 0 28px rgba(255,51,69,.4);--glow-lg:0 0 56px rgba(255,51,69,.5)}
 body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;min-height:100vh;max-width:480px;margin:0 auto;overflow-x:hidden;position:relative}
 /* ── DESKTOP: fond brande autour de l'app ── */
 @media(min-width:600px){
@@ -5252,7 +5252,7 @@ function loadSessionManager(){
 
         <!-- Photo vidéos (liens YouTube — cachée) -->
         <div style="margin-bottom:12px">
-          <div style="font-size:9px;color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin-bottom:5px"> Photo liens vidéos <span style="opacity:.5">(cachée — IA seulement)</span></div>
+          <div style="font-size:9px;color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin-bottom:5px"> Photo liens vidéos <span style="font-weight:400">(cachée — IA seulement)</span></div>
           ${s.photo2?`
             <div style="display:flex;align-items:center;gap:8px;background:#0a1a00;border:1px solid #1a3a0a;border-radius:8px;padding:8px 12px">
               <div style="color:var(--green);font-size:11px;font-weight:700;flex:1">✓ Photo vidéos prête</div>
