@@ -1056,7 +1056,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div id="ccd-profile-details" style="display:none;border-top:1px solid var(--surface-2);padding-top:10px;flex-wrap:wrap;gap:10px"></div>
       </div>
       <div style="display:flex;gap:10px;margin-bottom:16px">
-        <div class="metric-box"><div class="metric-val" id="ccd-streak">0</div><div class="metric-label">Streak</div></div>
+        <div class="metric-box"><div class="metric-val" id="ccd-streak">0</div><div class="metric-label">Semaines</div></div>
         <div class="metric-box"><div class="metric-val" id="ccd-sessions">0</div><div class="metric-label">Séances</div></div>
         <div class="metric-box"><div class="metric-val" id="ccd-weight">—</div><div class="metric-label">Poids</div></div>
       </div>
@@ -1339,7 +1339,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" style="flex-shrink:0;filter:drop-shadow(0 0 6px rgba(224,32,32,.85))"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg>
       <div>
         <div class="txt-stat" style="color:var(--red);line-height:1;font-size:30px;text-shadow:0 0 8px rgba(224,32,32,.95),0 0 22px rgba(224,32,32,.5)" id="clh-streak-val">0</div>
-        <div style="font-size:7px;color:rgba(224,32,32,.7);letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-top:1px">jours</div>
+        <div style="font-size:7px;color:rgba(224,32,32,.7);letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-top:1px">SEM.</div>
       </div>
     </div>
   </div>
@@ -1360,7 +1360,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- STATS -->
       <div style="display:flex;gap:8px;margin-bottom:20px">
         <div class="metric-box"><div class="metric-val" id="clh-sessions">0</div><div class="metric-label">Séances</div></div>
-        <div class="metric-box"><div class="metric-val" id="clh-streak-nb" style="color:var(--red)">0</div><div class="metric-label">Streak J.</div></div>
+        <div class="metric-box"><div class="metric-val" id="clh-streak-nb" style="color:var(--red)">0</div><div class="metric-label">Semaines</div></div>
         <div class="metric-box"><div class="metric-val" id="clh-weight">—</div><div class="metric-label">Poids kg</div></div>
       </div>
 
@@ -3850,7 +3850,7 @@ function openClientDetail(cid,_refresh){
     if(_bits.length){_pd.innerHTML=_bits.join('');_pd.style.display='flex';}
     else _pd.style.display='none';
   }
-  document.getElementById('ccd-streak').textContent=(c.streak||0)+'';
+  document.getElementById('ccd-streak').textContent=streakSemaines(c)+'';
   document.getElementById('ccd-sessions').textContent=(c.sessions||[]).length;
   const lb=c.bilans?.length?c.bilans[c.bilans.length-1]:null;
   document.getElementById('ccd-weight').textContent=lb&&getBW(lb)?getBW(lb)+'kg':'—';
@@ -4955,7 +4955,7 @@ function loadClientHome(){
   } else {
     coachEl.textContent='Sans coach assigné';
   }
-  const s=u.streak||0;
+  const s=streakSemaines(u);
   document.getElementById('clh-streak-val').textContent=s;
   // no streak icon
   document.getElementById('clh-streak-nb').textContent=s;
@@ -5139,9 +5139,16 @@ function renderNutriDots(){
 function renderNotifs(){
   const notifs=[];
   if(!currentUser.sessions?.length) notifs.push({icon:'',msg:'Lance ta première séance dès maintenant !',c:'var(--red)'});
-  else{const days=Math.floor((Date.now()-currentUser.sessions[currentUser.sessions.length-1].date)/864e5);
-    if(days>=2) notifs.push({icon:'',msg:`${days} jours sans séance. Maintiens ton streak !`,c:'var(--orange)'});}
-  if((currentUser.streak||0)>=7) notifs.push({icon:'',msg:`${currentUser.streak} jours de streak — Continue !`,c:'var(--green)'});
+  else{
+    const days=Math.floor((Date.now()-currentUser.sessions[currentUser.sessions.length-1].date)/864e5);
+    // Un jour de repos prévu au programme n'est pas un oubli : on ne s'alarme
+    // qu'au-delà de l'intervalle normal entre deux séances actives. Avec 3
+    // séances par semaine l'intervalle vaut 3 jours, plus 1 de marge.
+    const ecartNormal=Math.ceil(7/seancesPrevuesParSemaine(currentUser))+1;
+    if(days>ecartNormal) notifs.push({icon:'',msg:`${days} jours sans séance. Reprends le rythme !`,c:'var(--orange)'});
+  }
+  const _sem=streakSemaines(currentUser);
+  if(_sem>=4) notifs.push({icon:'',msg:`${_sem} semaines d'assiduité — Continue !`,c:'var(--green)'});
   const _cb=(currentUser.bilans||[]).filter(b=>b.type!=='depart');
   if(_cb.length){const _d=new Date(_cb[_cb.length-1].date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
     notifs.push({icon:icon('check-circle',16),msg:`Bilan du ${_d} transmis à ton coach`,c:'var(--green)'});}
@@ -6111,12 +6118,48 @@ function savePostSession(){
   toast(' Super séance enregistrée !');
   go('s-client-home');loadClientHome();
 }
+// ── Assiduité : le streak compte des SEMAINES, pas des jours consécutifs ────
+// L'ancienne version n'incrémentait que si l'écart valait exactement 1 jour.
+// Un programme Lundi/Mercredi/Vendredi laisse toujours 2 jours d'écart : un
+// athlète parfaitement assidu voyait donc son compteur retomber à 1 à chaque
+// séance. Une semaine est acquise quand le nombre de séances prévues au
+// programme a été réalisé ; elle n'est perdue qu'après une semaine calendaire
+// entièrement vide.
+function _lundiDe(d){
+  const x=new Date(d);x.setHours(0,0,0,0);
+  x.setDate(x.getDate()-((x.getDay()+6)%7));   // même formule que renderNutriDots
+  return x;
+}
+function _semainesEntre(a,b){return Math.round((_lundiDe(b)-_lundiDe(a))/(7*864e5));}
+// Nombre de séances actives au programme — le quota hebdomadaire à atteindre.
+function seancesPrevuesParSemaine(u){
+  return Math.max(1,((u&&u.sessions_config)||[]).filter(s=>s&&s.active).length);
+}
+// Valeur à AFFICHER. Le compteur stocké ne bouge qu'à la fin d'une séance ;
+// sans ce calcul, un athlète à l'arrêt depuis un mois verrait encore son
+// ancien score en ouvrant l'app.
+function streakSemaines(u){
+  const s=(u&&u.streak)||0;
+  if(!s||!u.lastSession) return s;
+  return _semainesEntre(u.lastSession,Date.now())>=2 ? 0 : s;
+}
 function updateStreak(){
-  const now=new Date();now.setHours(0,0,0,0);
-  const last=currentUser.lastSession?new Date(currentUser.lastSession):null;
-  if(last){last.setHours(0,0,0,0);const d=(now-last)/864e5;if(d===1)currentUser.streak=(currentUser.streak||0)+1;else if(d>1)currentUser.streak=1;}
-  else currentUser.streak=1;
-  currentUser.lastSession=Date.now();
+  const now=Date.now();
+  // Une semaine calendaire complète sans aucune séance remet le compteur à zéro.
+  if(currentUser.lastSession&&_semainesEntre(currentUser.lastSession,now)>=2){
+    currentUser.streak=0;currentUser.streakWeek=null;
+  }
+  const quota=seancesPrevuesParSemaine(currentUser);
+  const depuis=now-7*864e5;
+  const faites=(currentUser.sessions||[]).filter(s=>s&&s.date>depuis).length;
+  // streakWeek : lundi de la dernière semaine créditée, pour ne compter
+  // qu'une fois même si l'athlète dépasse son quota.
+  const cle=localISODate(_lundiDe(now));
+  if(faites>=quota&&currentUser.streakWeek!==cle){
+    currentUser.streak=(currentUser.streak||0)+1;
+    currentUser.streakWeek=cle;
+  }
+  currentUser.lastSession=now;
 }
 function roundWeight(w){return w<20?Math.ceil(w/1.25)*1.25:Math.round(w/2.5)*2.5;}
 // Détecte les exercices à contrepoids (DIPS/TRACTIONS assistés ou guidés)
@@ -7227,7 +7270,7 @@ function showProgressTab(tab,btn){
     const sl=ss.slice(-8);
     c.innerHTML=`<div style="display:flex;gap:10px;margin-bottom:16px">
       <div class="metric-box"><div class="metric-val">${ss.length}</div><div class="metric-label">Total</div></div>
-      <div class="metric-box"><div class="metric-val">${currentUser.streak||0}</div><div class="metric-label">Streak</div></div>
+      <div class="metric-box"><div class="metric-val">${streakSemaines(currentUser)}</div><div class="metric-label">Semaines</div></div>
       <div class="metric-box"><div class="metric-val">${ss.length?Math.round(ss.reduce((s,x)=>s+(x.duration||0),0)/ss.length):0}min</div><div class="metric-label">Durée moy.</div></div>
     </div><div class="card"><canvas id="v-chart" height="140"></canvas></div>`;
     setTimeout(()=>barChart('v-chart',sl.map(s=>new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})),sl.map(s=>s.volume||0)),50);
