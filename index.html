@@ -627,8 +627,13 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
       <!-- Zone code -->
       <div id="ae-code-zone" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
-        <div style="font-size:10px;letter-spacing:2px;color:var(--red);font-weight:800;margin-bottom:8px">ENTRE TON CODE (RC-XXXX-XXXX)</div>
-        <input id="ae-code" type="text" placeholder="Ex: RC-A3KZ-W9MX" style="text-transform:uppercase;letter-spacing:2px;font-family:monospace" onclick="event.stopPropagation()">
+        <div id="ae-coach-banner" style="display:none;background:#0a1a0a;border:1px solid #1a3a1a;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--green);font-weight:700;line-height:1.5"></div>
+        <div style="font-size:10px;letter-spacing:2px;color:var(--red);font-weight:800;margin-bottom:8px">ENTRE TON CODE OU COLLE LE LIEN DE TON COACH</div>
+        <!-- Pas de text-transform:uppercase ici : un lien d'invitation collé
+             s'afficherait en majuscules alors que sa charge base64 y est sensible.
+             La normalisation ne s'applique qu'aux codes courts, comme sur cc-code. -->
+        <input id="ae-code" type="text" placeholder="Ex: RC-A3KZ-W9MX ou le lien reçu" style="letter-spacing:1px;font-family:monospace" onclick="event.stopPropagation()"
+          oninput="var v=this.value;if(!v.startsWith('http')&&!v.startsWith('RCACCESS')&&!v.startsWith('RCLINK'))this.value=v.toUpperCase()">
         <div id="ae-err" style="color:var(--red);font-size:11px;margin-top:6px;display:none"></div>
         <button class="btn btn-red" onclick="event.stopPropagation();doAthleteCode()" style="margin-top:12px">VALIDER → CRÉER MON COMPTE</button>
       </div>
@@ -2953,10 +2958,24 @@ window.onload=()=>{
           })();
         }
       } else if(window._importedCoach){
-        go('s-athlete-entry');
+        // Ouverture directe du lien d'invitation. Un toast disparaissait avant
+        // que l'athlète ait pu agir, et il devait retrouver puis ressaisir le
+        // code lui-même. On ouvre l'accordéon, on pré-remplit, et la bannière
+        // reste affichée : il ne lui reste qu'à valider.
         const c=window._importedCoach;
-        setTimeout(()=>toast('👋 Coach '+(c.fname||c.lname||'?')+' importé ! Entre son code '+(c.code||'?')+'.'),400);
+        go('s-athlete-entry');
         window._importedCoach=null;
+        setTimeout(()=>{
+          const zone=document.getElementById('ae-code-zone');
+          if(zone&&zone.style.display==='none') aeToggleCode();
+          const inp=document.getElementById('ae-code');
+          if(inp) inp.value=c.code||'';
+          const ban=document.getElementById('ae-coach-banner');
+          if(ban){
+            ban.textContent='Coach '+((c.fname||c.lname||'?').trim())+' reconnu — valide pour créer ton compte';
+            ban.style.display='block';
+          }
+        },350);
       } else {
         go('s-welcome');
       }
@@ -3353,21 +3372,47 @@ function copyCoachInviteLink(){
 }
 
 function doAthleteCode(){
-  const raw=(document.getElementById('ae-code').value||'').trim().toUpperCase();
+  // La valeur brute est lue SANS mise en majuscules : la charge base64 d'un lien
+  // d'invitation y est sensible, et c'est ce qui faisait échouer tout collage de
+  // lien complet dans ce champ. La normalisation n'intervient qu'après, pour les
+  // codes courts — même logique que le oninput de cc-code.
+  const raw=(document.getElementById('ae-code').value||'').trim();
   const errEl=document.getElementById('ae-err');
   errEl.style.display='none';
   if(!raw){errEl.textContent='Entre un code valide.';errEl.style.display='block';return;}
+
+  // Cas 1 : lien d'invitation complet (?coachpkg=BASE64) — aligné sur doLinkCoach.
+  // L'athlète n'a pas encore de compte : on mémorise le coach et son code, puis
+  // on enchaîne sur l'inscription, exactement comme la branche du code GCP.
+  try{
+    const pkg=new URL(raw).searchParams.get('coachpkg');
+    if(pkg){
+      const coach=_validateCoachPkg(JSON.parse(decodeURIComponent(escape(atob(pkg)))));
+      if(coach){
+        const users=DB.get('users')||{};
+        users[coach.email]=Object.assign(users[coach.email]||{},coach);
+        DB.set('users',users);
+        localStorage.setItem('pendingCode',coach.code||'');
+        go('s-register');
+        setTimeout(()=>selectRole('athlete'),50);
+        return;
+      }
+    }
+  }catch(e){}
+
+  // Cas 2 : codes courts. C'est SEULEMENT ici que la mise en majuscules a un sens.
+  const code=raw.toUpperCase();
   // Try RCACCESS token (starts with "RCACCESS:")
-  if(raw.startsWith('RCACCESS:')){
+  if(code.startsWith('RCACCESS:')){
     // Pass to s-client-code after registration — go register first
-    localStorage.setItem('pendingCode', raw);
+    localStorage.setItem('pendingCode', code);
     go('s-register');
     setTimeout(()=>selectRole('athlete'),50);
     return;
   }
   // Code RC-XXXX-XXXX (codes Firebase) — passer à l'inscription d'abord
-  if(/^RC-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(raw)){
-    localStorage.setItem('pendingCode', raw);
+  if(/^RC-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(code)){
+    localStorage.setItem('pendingCode', code);
     go('s-register');
     setTimeout(()=>selectRole('athlete'),50);
     return;
@@ -3376,14 +3421,15 @@ function doAthleteCode(){
   const users=DB.get('users')||{};
   const allCoaches=Object.values(users).filter(u=>u.role==='coach');
   // Check coach's main GCP code
-  const directCoach=allCoaches.find(u=>u.code&&u.code.toUpperCase()===raw);
+  const directCoach=allCoaches.find(u=>u.code&&u.code.toUpperCase()===code);
   if(directCoach){
-    localStorage.setItem('pendingCode', raw);
+    localStorage.setItem('pendingCode', code);
     go('s-register');
     setTimeout(()=>selectRole('athlete'),50);
     return;
   }
-  errEl.textContent='Code introuvable. Utilise le lien d\'invitation de ton coach ou entre son code GCP.';
+  // Le lien d'invitation vient d'être tenté sans succès : ne pas le recommander.
+  errEl.textContent='Ce code ne correspond à aucun coach. Vérifie que tu as bien collé le lien complet envoyé par ton coach, ou demande-lui de te le renvoyer.';
   errEl.style.display='block';
 }
 function linkToCoach(coach){
