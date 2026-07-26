@@ -2487,6 +2487,30 @@ const CLOUD={
     }
     return false;
   },
+  // Crée un compte Firebase Auth SANS toucher à la session en cours.
+  // signIn() écrase _idToken / _refreshToken : l'utiliser ici déconnecterait le
+  // coach au profit de l'élève qu'il vient de créer. returnSecureToken:false
+  // demande à Firebase de ne même pas émettre de jeton — rien à ignorer, donc
+  // rien qui puisse fuiter dans la session.
+  // Retourne {ok:true} ou {ok:false, err:'exists'|'weak'|'email'|'network'|<code>}.
+  async createAuthAccount(email,password){
+    if(!this._fbKey||this._fbKey==='REPLACE_WITH_FIREBASE_WEB_API_KEY') return {ok:false,err:'config'};
+    try{
+      const r=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key='+this._fbKey,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({email,password,returnSecureToken:false})
+      });
+      const d=await r.json();
+      const m=d.error?.message||'';
+      if(m){
+        if(m.includes('EMAIL_EXISTS'))   return {ok:false,err:'exists'};
+        if(m.includes('WEAK_PASSWORD'))  return {ok:false,err:'weak'};
+        if(m.includes('INVALID_EMAIL'))  return {ok:false,err:'email'};
+        return {ok:false,err:m};
+      }
+      return {ok:true};
+    }catch(e){ return {ok:false,err:'network'}; }
+  },
   signOut(){
     this._idToken=null;this._refreshToken=null;this._tokenExpiry=0;
     try{localStorage.removeItem('rc_fb_auth');}catch{}
@@ -11038,11 +11062,11 @@ function openAddAthlete(){
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:6px">➕ Ajouter un athlète</h2>
-    <p class="sub" style="margin-bottom:8px;font-size:12px">Crée le compte et active l'accès en une seule étape.</p>
+    <p class="sub" style="margin-bottom:8px;font-size:12px">Crée le compte et active l'accès en une seule étape. Ton élève se connectera avec l'email et le mot de passe que tu saisis ici.</p>
     <div><label style="margin-top:10px" for="aa-fname">Prénom</label><input id="aa-fname" placeholder="Prénom de l'athlète"></div>
     <div><label style="margin-top:10px" for="aa-lname">Nom</label><input id="aa-lname" placeholder="Nom de l'athlète"></div>
     <div><label style="margin-top:10px" for="aa-email">Email</label><input type="email" id="aa-email" placeholder="email@exemple.com"></div>
-    <div><label style="margin-top:10px" for="aa-pwd">Mot de passe (provisoire)</label><input type="text" id="aa-pwd" placeholder="Ex: repcore123"></div>
+    <div><label style="margin-top:10px" for="aa-pwd">Mot de passe (provisoire, 6 caractères minimum)</label><input type="text" id="aa-pwd" placeholder="Ex: repcore123"></div>
     <div><label style="margin-top:10px" for="aa-gender">Genre</label><select id="aa-gender"><option value="H">Homme</option><option value="F">Femme</option></select></div>
     <div><label style="margin-top:10px" for="aa-duration">Durée d'accès</label><select id="aa-duration" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:#fff;padding:12px 14px;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;cursor:pointer">
       <option value="1">1 mois</option>
@@ -11068,9 +11092,35 @@ async function createAthlete(){
   const pw=document.getElementById('aa-pwd').value.trim();
   const gn=document.getElementById('aa-gender').value;
   const months=parseInt(document.getElementById('aa-duration').value)||3;
-  if(!fn||!ln||!em||!pw){document.getElementById('aa-err').textContent='Tous les champs sont obligatoires.';document.getElementById('aa-err').style.display='block';return;}
+  const _err=m=>{const e=document.getElementById('aa-err');e.textContent=m;e.style.display='block';};
+  if(!fn||!ln||!em||!pw){_err('Tous les champs sont obligatoires.');return;}
+  if(pw.length<6){_err('Le mot de passe doit faire au moins 6 caractères.');return;}
   const users=DB.get('users')||{};
-  if(users[em]){document.getElementById('aa-err').textContent='Email déjà utilisé.';document.getElementById('aa-err').style.display='block';return;}
+  if(users[em]){_err('Email déjà utilisé.');return;}
+
+  // Le compte Firebase Auth est créé AVANT d'écrire l'athlète : sans lui, la
+  // fiche existait dans la base mais le mot de passe annoncé au coach n'ouvrait
+  // rien. Pire, l'email restant inconnu de Firebase Auth, le repli signUp de
+  // CLOUD.signIn laissait n'importe qui prendre le compte avec le mot de passe
+  // de son choix. createAuthAccount ne touche pas à la session du coach.
+  let motDePasseActif=true;
+  const auth=await CLOUD.createAuthAccount(em,pw);
+  if(!auth.ok){
+    if(auth.err==='exists'){
+      // L'élève possède déjà un compte : on le rattache, mais son mot de passe
+      // actuel reste le sien — on ne peut pas le remplacer sans le connaître.
+      motDePasseActif=false;
+    } else {
+      _err(
+        auth.err==='weak'    ? 'Mot de passe trop faible — 6 caractères minimum.' :
+        auth.err==='email'   ? 'Adresse email invalide.' :
+        auth.err==='network' ? 'Pas de connexion — impossible de créer le compte maintenant.' :
+        auth.err==='config'  ? 'Synchronisation non configurée — impossible de créer le compte.' :
+                               'Création du compte impossible. Réessaie.'
+      );
+      return;
+    }
+  }
   const uid='u_'+Date.now();
   let gen;
   try{
@@ -11098,7 +11148,10 @@ async function createAthlete(){
   // Copy token to clipboard for convenience
   try{navigator.clipboard?.writeText(token);}catch{}
   const exp=new Date(expiry).toLocaleDateString('fr-FR');
-  toast('✓ '+fn+' créé — accès actif jusqu\'au '+exp+' (code copié)','var(--green)');
+  toast(motDePasseActif
+    ? '✓ '+fn+' créé — il peut se connecter avec cet email et ce mot de passe. Accès jusqu\'au '+exp+' (code copié)'
+    : '✓ '+fn+' rattaché — il avait déjà un compte, il garde SON mot de passe. Accès jusqu\'au '+exp+' (code copié)',
+    'var(--green)');
   loadCoachHome();
 }
 
