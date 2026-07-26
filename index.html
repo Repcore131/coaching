@@ -2634,6 +2634,21 @@ const CLOUD={
         }
         return cl;
       }));
+      // Défense en profondeur : ne jamais écraser un nœud distant PLUS RÉCENT
+      // par un objet PLUS PAUVRE. Un appareil resté longtemps hors ligne, ou une
+      // réinscription mal rattrapée, effacerait sinon tout l'historique. Le
+      // surcoût est une lecture par envoi ; à ce prix, une perte de données
+      // devient impossible même si un autre garde-fou cède.
+      const distant=await this.pullUser(email);
+      if(distant&&(distant.updatedAt||0)>(safe.updatedAt||0)){
+        const volume=o=>(((o&&o.sessions)||[]).length)+(((o&&o.bilans)||[]).length);
+        if(volume(safe)<volume(distant)){
+          this._setSyncStatus(false);
+          throw new Error('Version distante plus récente et plus complète ('
+            +volume(distant)+' entrées contre '+volume(safe)
+            +') — envoi annulé pour ne pas écraser tes données.');
+        }
+      }
       const url=this._fbUrl.replace('users.json','users/'+safeKey+'.json');
       const r=await fetch(url+'?auth='+token,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(safe)});
       this._setSyncStatus(r.ok);
@@ -3177,6 +3192,32 @@ async function doRegister(){
           ? 'Pas de connexion — impossible de créer le compte maintenant.'
           : 'Inscription impossible. Réessaie.');
   }
+  // Le compte peut exister CÔTÉ SERVEUR sans exister sur cet appareil :
+  // réinstallation, nouveau téléphone, cache vidé. signIn réussit alors avec le
+  // bon mot de passe, et l'ancien code écrivait par-dessus un objet vierge — que
+  // le push suivant répliquait dans la RTDB, effaçant séances et bilans.
+  // On adopte le profil distant au lieu de le remplacer.
+  const cloudUser=await CLOUD.pullUser(em);
+  if(cloudUser){
+    showErr('r-err','Ce compte existe déjà, connexion en cours…');
+    toast('Ce compte existe déjà — tes données ont été récupérées.','var(--green)');
+    users[em]=cloudUser;DB.set('users',users);
+    currentUser=cloudUser;DB.set('session',cloudUser);
+    // routeUser() déconnecterait un athlète encore en statut FREE ; on le mène
+    // à l'écran de code, comme le fait doLogin dans la même situation.
+    if(cloudUser.role!=='coach'&&(cloudUser.status||'FREE')==='FREE'){
+      go('s-client-code');
+      const enAttente=localStorage.getItem('pendingCode');
+      if(enAttente){
+        const inp=document.getElementById('cc-code');
+        if(inp) inp.value=enAttente;
+        localStorage.removeItem('pendingCode');
+      }
+      return;
+    }
+    return routeUser();
+  }
+
   users[em]=user;DB.set('users',users);
   currentUser=user;DB.set('session',user);
   if(selRole==='coach'){
