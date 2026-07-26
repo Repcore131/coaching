@@ -2930,7 +2930,10 @@ window.onload=()=>{
         // Données locales d'abord — la sync cloud se fait en arrière-plan (accueil instantané)
         const users=DB.get('users')||{};
         if(users[currentUser.email]) currentUser=users[currentUser.email];
-        if((currentUser.status||'FREE')==='FREE'){
+        // Le statut ne gouverne QUE l'accès athlète : doRegister crée tout compte
+        // en status:'FREE' et rien ne le change jamais pour un coach, qui serait
+        // donc déconnecté à chaque rechargement. Aligné sur doLogin (l. ~3177).
+        if(currentUser.role!=='coach'&&(currentUser.status||'FREE')==='FREE'){
           silentLogout();
           go('s-welcome');
         } else if(sessionStorage.getItem('rc_paypal_return')){
@@ -2947,7 +2950,10 @@ window.onload=()=>{
             try{ await CLOUD.syncUser(sess.email); }catch(e){}
             const u2=(DB.get('users')||{})[sess.email];
             if(u2){currentUser=u2;DB.set('session',currentUser);}
-            if((currentUser.status||'FREE')==='FREE'){silentLogout();go('s-welcome');return;}
+            // Même exclusion coach qu'au démarrage synchrone : sans elle le coach
+            // atteint bien s-coach-home puis en est éjecté ~1s plus tard, à la fin
+            // de la sync cloud.
+            if(currentUser.role!=='coach'&&(currentUser.status||'FREE')==='FREE'){silentLogout();go('s-welcome');return;}
             if(CLOUD.canWrite()){
               try{saveUser();}catch(e){}
               // Push immédiat non-debounced pour garantir l'envoi des données locales (profil coach pré-v144)
@@ -3000,7 +3006,9 @@ function routeUser(){
   if(currentUser.role==='coach'){loadCoachHome();return;}
   // Athlète : vérifier l'accès
   const s=currentUser.status||'FREE';
-  // Si FREE = pas encore de code actif → retour à l'accueil (coach/athlète)
+  // Athlète FREE = pas encore de code actif → retour à l'accueil.
+  // Le coach est déjà sorti ligne 3006 : son statut reste 'FREE' à vie et ne
+  // doit jamais servir de test d'accès.
   if(s==='FREE'){silentLogout();return go('s-welcome');}
   if(!checkAccess(currentUser)){go('s-access-gate');loadAccessGate();return;}
   loadClientHome();
