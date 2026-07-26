@@ -8770,11 +8770,15 @@ function _caffeineColor(mg,thr){
 }
 function getUserWeight(){
   if(!currentUser) return {weight:75,estimated:true};
-  const w0=parseFloat(currentUser.weight);
+  // Poids du profil (saisi au bilan) puis repli sur l'écran Mon profil
+  const w0=parseFloat(currentUser.weight)||parseFloat(currentUser.profileWeight);
   if(w0>0) return {weight:w0,estimated:false};
-  const bilans=Object.values(currentUser.bilans||{});
+  // bilan.date est un timestamp (Date.now()) : tri numérique sur une COPIE.
+  // L'ancien localeCompare levait une TypeError des le 2e bilan (les nombres
+  // n'ont pas cette methode), ce qui cassait tout l'ecran Cafeine.
+  const bilans=(currentUser.bilans||[]).slice().sort((a,b)=>(b.date||0)-(a.date||0));
   if(bilans.length){
-    const last=bilans.sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0];
+    const last=bilans[0];
     const w1=parseFloat(last['bil-weight']||last['deb-weight']||last.weight||0);
     if(w1>0) return {weight:w1,estimated:false};
   }
