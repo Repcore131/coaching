@@ -2547,13 +2547,26 @@ const CLOUD={
   pushOne(email,user){
     const key='_one_'+email;
     clearTimeout(this._pushTimers?.[key]);
-    return this._doPushOne(email,user);
+    const p=this._doPushOne(email,user);
+    // Filet unique pour la trentaine d'appelants « fire-and-forget » : attacher
+    // ici un gestionnaire marque la promesse comme traitée, donc aucun rejet non
+    // capturé. `p` est tout de même retournée telle quelle — les appelants qui
+    // l'await ou lui ajoutent un .catch reçoivent bien l'erreur (voir
+    // addBilanPhoto). L'échec reste signalé par le badge de synchronisation.
+    p.catch(()=>{});
+    return p;
   },
   async _doPushOne(email,user){
     this._setSyncStatus('pending');
     try{
       const token=await this._getToken();
-      if(!token) return;
+      // Sans jeton, l'ancien `return` laissait le badge figé sur « Synchronisation
+      // en cours » et l'utilisateur croyait ses données envoyées. On signale l'échec
+      // et on remonte une erreur actionnable aux appelants qui l'attendent.
+      if(!token){
+        this._setSyncStatus(false);
+        throw new Error('Session expirée — reconnecte-toi pour synchroniser.');
+      }
       const safeKey=email.replace(/\./g,',');
       const safe={...user};
       delete safe.pwd;delete safe.pwdHash;delete safe._st;delete safe._stb64;delete safe._sk;
@@ -2620,7 +2633,11 @@ const CLOUD={
   async _doPush(users){
     // Ne pousse QUE currentUser — évite d'écraser les données d'athlètes avec des copies obsolètes
     if(!currentUser?.email) return;
-    await this._doPushOne(currentUser.email, users[currentUser.email]||currentUser);
+    // Push groupé débounce, toujours appelé depuis un setTimeout sans capture :
+    // il ne doit jamais rejeter. L'échec est déjà porté par le badge (_doPushOne).
+    try{
+      await this._doPushOne(currentUser.email, users[currentUser.email]||currentUser);
+    }catch(e){}
   },
 
   // ── Firebase Storage : téléverse un PDF, retourne l'URL de téléchargement ──
@@ -3929,7 +3946,9 @@ function addBilanPhoto(bilanDate,bilanType,view,inputEl){
     renderBilanEvolution(cl);
     CLOUD.pushOne(cl.email,cl)
       .then(()=>toast('Photo ajoutée','var(--green)'))
-      .catch(()=>toast('Photo sauvegardée localement — sync en erreur.','var(--orange)'));
+      // Remonter e.message : « Session expirée — reconnecte-toi pour synchroniser. »
+      // est actionnable, contrairement à l'ancien texte générique.
+      .catch(e=>toast(e?.message||'Photo sauvegardée localement — sync en erreur.','var(--orange)'));
   };
   reader.readAsDataURL(file);
 }
