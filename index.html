@@ -3003,7 +3003,10 @@ function go(id){
   const _safe=['s-splash','s-welcome','s-coach-home','s-client-home','s-coach-entry','s-athlete-entry'];
   if(window._swUpdatePending&&_safe.includes(id)){location.reload();return;}
   // Filet de sécurité UI — le vrai contrôle d'accès reste côté données/serveur (P02).
-  if(id.startsWith('s-coach-')&&!['s-coach-home','s-coach-entry'].includes(id)&&currentUser?.role!=='coach'){
+  // s-coach-program est l'éditeur d'exercices partagé : l'athlète y accède pour SA propre
+  // séance (openSessionExercises fixe _editingSessionIdx juste avant l'appel à go()).
+  const _athleteEditing=typeof window._editingSessionIdx==='number';
+  if(id.startsWith('s-coach-')&&!['s-coach-home','s-coach-entry'].includes(id)&&currentUser?.role!=='coach'&&!(id==='s-coach-program'&&_athleteEditing)){
     toast('Accès réservé au coach','var(--orange)');
     go(currentUser?'s-client-home':'s-welcome');
     return;
