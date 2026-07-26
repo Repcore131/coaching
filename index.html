@@ -5114,16 +5114,22 @@ function getProgram(){
   return{name:'SÉANCE 1 : DOS & ABDOS',exercises:defEx,notes:'',_isDefault:true};
 }
 function renderNutriDots(){
-  const today=new Date(),wk=new Date(today);wk.setDate(today.getDate()-today.getDay()+1);
+  const today=new Date(),wk=new Date(today);
+  // Lundi de la semaine courante — même formule que _renderStrictDiet.
+  // (l'ancien calcul -getDay()+1 renvoyait le lundi SUIVANT le dimanche)
+  wk.setDate(today.getDate()-((today.getDay()+6)%7));
   const days=['L','M','M','J','V','S','D'],nut=currentUser.nutrition||{};
+  // Semaine courante (lundi → dimanche) — même source que _renderStrictDiet : nutrition.days[key].respected
+  const weekKeys=days.map((_,i)=>{const dt=new Date(wk);dt.setDate(wk.getDate()+i);return localISODate(dt);});
   document.getElementById('clh-nutri-dots').innerHTML=days.map((d,i)=>{
-    const dt=new Date(wk);dt.setDate(wk.getDate()+i);
-    const key=localISODate(dt),val=nut[key];
+    const val=nut.days?.[weekKeys[i]]?.respected;
     const bg=val===true?'var(--green)':val===false?'var(--red)':'var(--border)';
     return `<div style="flex:1;text-align:center"><div style="width:28px;height:28px;border-radius:50%;background:${bg};margin:0 auto"></div><div style="font-size:9px;color:var(--sub);margin-top:3px">${d}</div></div>`;
   }).join('');
-  const score=Object.values(nut).filter(v=>v===true).length;
-  document.getElementById('clh-nutri-score').textContent=score+'/7';
+  const score=weekKeys.filter(k=>nut.days?.[k]?.respected===true).length;
+  const scoreEl=document.getElementById('clh-nutri-score');
+  scoreEl.textContent=score+'/7';
+  scoreEl.style.color='#f5c518'; // aligné sur le score "Cette semaine" de _renderStrictDiet
 }
 function renderNotifs(){
   const notifs=[];
