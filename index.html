@@ -191,6 +191,10 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
 .row-alert{background:var(--danger-bg)!important;border-left:3px solid var(--red)}
 .row-target{background:var(--red);color:#fff;border-radius:4px}
 .skeleton{background:linear-gradient(90deg,var(--surface-1) 25%,var(--surface-2) 37%,var(--surface-1) 63%);background-size:400% 100%;animation:skeletonShimmer 1.4s ease infinite;border-radius:6px}
+/* Point REC du mockup téléphone — animation CSS (et non SMIL) pour rester
+   neutralisable par la règle prefers-reduced-motion en fin de feuille. */
+.rc-blink{animation:rcBlink 1.4s ease-in-out infinite}
+@keyframes rcBlink{0%,100%{opacity:1}50%{opacity:.25}}
 @keyframes skeletonShimmer{0%{background-position:100% 50%}100%{background-position:0 50%}}
 .content-card{transition:background .2s,box-shadow .2s,transform .2s}
 .content-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.4);transform:translateY(-1px);filter:brightness(1.08)}
@@ -362,6 +366,26 @@ h3{font-size:16px;text-transform:uppercase}
 .bsl-scale{display:flex;justify-content:space-between;font-size:9px;font-weight:700;color:#3a3a3a;margin-top:8px;padding:0 4px}
 .choice-opt.sel{border-color:var(--red);border-left-width:3px;color:#fff;background:var(--red-bg)}
 .choice-opt:active{transform:scale(.99)}
+
+/* ── Accessibilité : respect de « Réduire les animations » du système ──────────
+   Doit rester en TOUTE FIN de feuille pour l'emporter sur les règles ci-dessus. */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation-duration:.01ms!important;
+    animation-iteration-count:1!important;
+    transition-duration:.01ms!important;
+    scroll-behavior:auto!important;
+  }
+  /* Animations en boucle : coupées net plutôt que jouées une fois en accéléré,
+     sinon elles se figent sur leur dernière image (médaillon penché, halo éteint). */
+  .wd-badge,.wd-badge-medal,.wd-badge-medal::after,
+  .skeleton,.done-anim .done-icon,.rc-blink,
+  .celebrate,.emo-opt .emo,.pulse-dot{animation:none!important}
+  /* État final propre pour les éléments dont l'animation portait la mise en forme */
+  .wd-badge{opacity:1!important;transform:none!important}
+  .wd-badge-medal{transform:none!important;filter:drop-shadow(0 0 12px rgba(224,32,32,.45))!important}
+  .rc-blink{opacity:1!important}
+}
 </style>
 <script>
 const COACH_PHOTO='icons/coach.jpg';
@@ -2072,7 +2096,7 @@ const COACH_PHOTO='icons/coach.jpg';
               <path d="M11 18 L11 14 L15 14"/><path d="M51 18 L51 14 L47 14"/>
               <path d="M11 90 L11 94 L15 94"/><path d="M51 90 L51 94 L47 94"/>
             </g>
-            <circle cx="17" cy="86" r="3.1" fill="#ff2d2d"><animate attributeName="opacity" values="1;.25;1" dur="1.4s" repeatCount="indefinite"/></circle>
+            <circle class="rc-blink" cx="17" cy="86" r="3.1" fill="#ff2d2d"/>
             <text x="23" y="89" font-family="Montserrat,sans-serif" font-size="7.5" font-weight="800" fill="rgba(255,255,255,.85)">REC</text>
           </svg>
           <div style="flex:1;min-width:0">
