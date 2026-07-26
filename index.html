@@ -1414,6 +1414,16 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="font-size:11px;color:var(--sub)">Reprendre là où tu t'es arrêté →</div>
       </div>
 
+      <!-- REPRISE BILAN EN COURS -->
+      <div id="clh-resume-bilan" style="display:none;background:linear-gradient(135deg,#0a1420,#04080f);border:1px solid #1c4266;border-radius:12px;padding:14px 16px;margin-bottom:14px;cursor:pointer" onclick="bilResumeAndGo()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+        <!-- accent bleu propre à cette carte : var(--info) est ambre et servirait
+             déjà la carte « 1er bilan en attente » juste en dessous, les deux
+             deviendraient indistinguables -->
+        <div style="font-size:9px;color:#7fb3e8;letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:5px">✎ Bilan commencé</div>
+        <div style="font-size:14px;font-weight:800;margin-bottom:3px" id="clh-resume-bilan-name">Reprendre mon bilan</div>
+        <div style="font-size:11px;color:var(--sub)" id="clh-resume-bilan-sub">Reprendre là où tu t'es arrêté →</div>
+      </div>
+
       <!-- 1er BILAN EN ATTENTE -->
       <div id="clh-first-bilan-card" style="display:none;background:var(--info-bg);border:1px solid var(--info-border);border-radius:12px;padding:14px 16px;margin-bottom:14px;cursor:pointer" onclick="openBilan('depart')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div style="font-size:9px;color:var(--info);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:5px;display:flex;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="9" y="2" width="6" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> À compléter</div>
@@ -5278,6 +5288,22 @@ function loadClientHome(){
   const _resumeName=document.getElementById('clh-resume-name');
   if(_resumeEl){_resumeEl.style.display=_snap?'block':'none';}
   if(_resumeName&&_snap) _resumeName.textContent=_snap.progName||'Reprendre ma séance';
+  // Reprise de bilan — même mécanique que la reprise de séance ci-dessus.
+  const _bilDraft=_bilLoadDraft();
+  const _bilEl=document.getElementById('clh-resume-bilan');
+  if(_bilEl){
+    const montrer=!!_bilDraft&&_bilDraftRempli(_bilDraft)>0;
+    _bilEl.style.display=montrer?'block':'none';
+    if(montrer){
+      const nom=document.getElementById('clh-resume-bilan-name');
+      const sub=document.getElementById('clh-resume-bilan-sub');
+      const steps=_bilDraft.bilType==='depart'?DEB_STEPS:BIL_STEPS;
+      if(nom) nom.textContent=_bilDraft.bilType==='depart'
+        ?'Reprendre mon questionnaire de début':'Reprendre mon bilan coaching';
+      if(sub) sub.textContent='Étape '+(_bilDraft.bilStep+1)+'/'+steps.length
+        +' — reprendre là où tu t\'es arrêté →';
+    }
+  }
   // PDF card
   const users=DB.get('users')||{};
   const freshU=users[currentUser.email]||currentUser;
@@ -6580,8 +6606,99 @@ function getPrevPerf(name){
 // ======= BILAN MULTI-STEP =======
 let bilStep=0,bilType='coaching',bilData={},_bilPhotoLoading=0;
 
+// ── Brouillon de bilan ──────────────────────────────────────────────────────
+// Le questionnaire de départ compte une quinzaine d'étapes. Fermer l'onglet en
+// cours de route effaçait toute la saisie : bilData ne vivait qu'en mémoire.
+const BIL_DRAFT_KEY='rc_bil_draft';
+const BIL_DRAFT_TTL=7*24*3600*1000;
+let _bilDraftTimer=null,_bilDraftAvertiPlein=false;
+// Les photos ne vont PAS dans le brouillon. compressImage les ramène déjà à
+// plusieurs centaines de Ko et elles sont écrites dès la compression dans
+// rc_pendingphoto_* : les dupliquer ferait déborder le quota sur la saisie même
+// qu'on cherche à sauver.
+function _bilDataSansPhotos(){
+  const o={};
+  for(const k of Object.keys(bilData)) if(!k.includes('photo')) o[k]=bilData[k];
+  return o;
+}
+function _bilSaveDraft(){
+  clearTimeout(_bilDraftTimer);
+  _bilDraftTimer=setTimeout(()=>{
+    try{
+      localStorage.setItem(BIL_DRAFT_KEY,JSON.stringify({
+        bilType,bilStep,bilData:_bilDataSansPhotos(),ts:Date.now()
+      }));
+    }catch(e){
+      // Une seule alerte par session : la sauvegarde se déclenche à chaque
+      // frappe, un toast par caractère serait pire que le problème signalé.
+      if(!_bilDraftAvertiPlein){
+        _bilDraftAvertiPlein=true;
+        toast('Stockage plein — ton bilan ne sera pas récupérable si tu quittes l\'app.','var(--orange)');
+      }
+    }
+  },400);
+}
+function _bilClearDraft(){
+  clearTimeout(_bilDraftTimer);
+  try{localStorage.removeItem(BIL_DRAFT_KEY);}catch(e){}
+}
+// Retourne le brouillon s'il est exploitable, null sinon. Ne supprime rien :
+// c'est à l'appelant de décider, selon qu'il consulte ou qu'il repart à zéro.
+function _bilLoadDraft(type){
+  try{
+    const d=JSON.parse(localStorage.getItem(BIL_DRAFT_KEY)||'null');
+    if(!d||!d.bilData||typeof d.bilStep!=='number') return null;
+    if(type&&d.bilType!==type) return null;
+    if(!d.ts||Date.now()-d.ts>BIL_DRAFT_TTL) return null;
+    return d;
+  }catch{return null;}
+}
+// Nombre de réponses réellement saisies : ouvrir puis refermer un bilan sans
+// rien remplir ne doit pas déclencher de proposition de reprise.
+function _bilDraftRempli(d){
+  if(!d) return 0;
+  return Object.values(d.bilData||{})
+    .filter(v=>Array.isArray(v)?v.length:(v!==''&&v!=null)).length;
+}
+function _bilPhotoPrefixe(type){return (type==='depart'?'deb':'bil')+'-photo-';}
+// Les photos survivent dans leurs propres clés. On ne récupère que celles du
+// type en cours : un bilan de départ abandonné laisserait sinon ses photos
+// s'inviter dans un bilan de suivi.
+function _bilRestaurerPhotos(type){
+  const prefixe='rc_pendingphoto_'+_bilPhotoPrefixe(type);
+  let n=0;
+  try{
+    for(let i=0;i<localStorage.length;i++){
+      const k=localStorage.key(i);
+      if(!k||!k.startsWith(prefixe)) continue;
+      const v=localStorage.getItem(k);
+      if(v){bilData[k.slice('rc_pendingphoto_'.length)]=v;n++;}
+    }
+  }catch(e){}
+  return n;
+}
+function _bilPurgerPhotos(type){
+  const prefixe='rc_pendingphoto_'+_bilPhotoPrefixe(type);
+  try{
+    Object.keys(localStorage).filter(k=>k.startsWith(prefixe))
+      .forEach(k=>localStorage.removeItem(k));
+  }catch(e){}
+}
+// Branché une seule fois sur le conteneur, qui survit aux rendus d'étape.
+// Délégation plutôt qu'un appel ajouté dans chaque oninput : les champs sont
+// produits par sept helpers distincts (bQ, bT, bTA, bC, bEmo, bSlider, le
+// schéma corporel) et un oubli serait silencieux.
+function _bilBrancherAutoSave(){
+  const zone=document.getElementById('bil-content');
+  if(!zone||zone._draftBranche) return;
+  zone._draftBranche=true;
+  zone.addEventListener('input',_bilSaveDraft);
+  zone.addEventListener('change',_bilSaveDraft);
+}
+
 function skipFirstBilan(){
   currentUser._firstBilanPending=true;
+  _bilClearDraft();_bilPurgerPhotos('depart');
   saveUser();
   go('s-client-home');
   loadClientHome();
@@ -6649,9 +6766,39 @@ function _updateBilanCountdown(){
     <div style="display:flex;gap:6px">${blocks.map(b=>`<div style="flex:1;background:${b.red?'rgba(224,32,32,.13)':'rgba(255,255,255,.03)'};border:1px solid ${b.red?'rgba(224,32,32,.28)':'rgba(255,255,255,.07)'};border-radius:8px;padding:12px 6px;text-align:center"><div style="font-size:36px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:${b.red?'var(--red)':'#fff'}${b.red?';text-shadow:0 0 18px rgba(224,32,32,.55)':''}">${b.v}</div><div style="font-size:9px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:rgba(255,255,255,.32);margin-top:5px">${b.l}</div></div>`).join('')}</div>
   </div>`;
 }
-function openBilan(type){
+// forcerReprise : appelé depuis la carte de reprise de l'accueil, où l'athlète
+// a déjà exprimé son intention — lui reposer la question serait redondant.
+function openBilan(type,forcerReprise){
+  const brut=localStorage.getItem(BIL_DRAFT_KEY);
+  const brouillon=_bilLoadDraft(type);
   bilType=type;bilStep=0;bilData={};_bilPhotoLoading=0;
+  if(brouillon&&_bilDraftRempli(brouillon)>0
+     &&(forcerReprise||confirm('Reprendre ton bilan en cours ?\n\nTu en étais à l\'étape '
+        +(brouillon.bilStep+1)+', avec '+_bilDraftRempli(brouillon)+' réponse'
+        +(_bilDraftRempli(brouillon)>1?'s':'')+' déjà saisie'
+        +(_bilDraftRempli(brouillon)>1?'s':'')+'.'))){
+    bilStep=brouillon.bilStep;
+    bilData={...brouillon.bilData};
+    _bilRestaurerPhotos(type);
+  } else if(brut){
+    // Brouillon refusé, périmé, ou d'un autre type : on repart à zéro pour de
+    // bon, photos en attente comprises — sinon elles reviendraient plus tard.
+    _bilClearDraft();_bilPurgerPhotos(type);
+  }
+  // Le nombre d'étapes peut avoir changé depuis l'écriture du brouillon.
+  const steps=type==='depart'?DEB_STEPS:BIL_STEPS;
+  bilStep=Math.max(0,Math.min(bilStep,steps.length-1));
   renderBilStep();go('s-bilan');
+}
+// Entrée depuis la carte « Bilan commencé » de l'accueil.
+function bilResumeAndGo(){
+  const d=_bilLoadDraft();
+  if(!d||!_bilDraftRempli(d)){
+    const el=document.getElementById('clh-resume-bilan');
+    if(el) el.style.display='none';
+    _bilClearDraft();return;
+  }
+  openBilan(d.bilType,true);
 }
 function bilBack(){
   if(bilStep>0){bilStep--;renderBilStep();}
@@ -6676,6 +6823,10 @@ function renderBilStep(){
   document.getElementById('bil-content').innerHTML='<div class="pad">'+steps[bilStep]()+'</div>';
   const skipBtn=document.getElementById('bil-skip-depart');
   if(skipBtn) skipBtn.style.display=(bilType==='depart'&&!currentUser?.bilans?.some(b=>b.type==='depart'))?'block':'none';
+  _bilBrancherAutoSave();
+  // Enregistre aussi le numéro d'étape : sans ça, une reprise ramènerait à la
+  // dernière étape où l'athlète a tapé quelque chose, pas où il en était.
+  _bilSaveDraft();
 }
 function pickBilChoice(groupId,val,multi){
   if(multi){
@@ -6687,6 +6838,8 @@ function pickBilChoice(groupId,val,multi){
     bilData[groupId]=val;
     document.querySelectorAll('[data-grp="'+groupId+'"]').forEach(el=>el.classList.toggle('sel',el.dataset.val===val));
   }
+  // Un clic ne déclenche pas d'événement `input` : la délégation ne le voit pas.
+  _bilSaveDraft();
 }
 function bQ(id){return`<input type="number" id="${id}" placeholder="—" value="${bilData[id]||''}" step="any" oninput="bilData['${id}']=this.value" style="width:68px;text-align:right;padding:6px 8px;font-size:15px;font-weight:800;margin:0;background:#080808;border:1px solid #222;border-radius:2px">`;}
 function bT(id,ph){return`<input type="text" id="${id}" placeholder="${ph||''}" value="${escapeHtml(bilData[id]||'')}" oninput="bilData['${id}']=this.value">`;}
@@ -6897,6 +7050,7 @@ function loadBilPhoto(input,key){
     _bilPhotoLoading--;
     bilData[key]=data;
     try{localStorage.setItem('rc_pendingphoto_'+key,data);}catch(e){}
+    _bilSaveDraft();
     if(lbl){lbl.style.background='#001a00';lbl.style.borderColor='#22c55e';lbl.style.color='#22c55e';lbl.innerHTML=' Ajoutée';}
   });
 }
@@ -7038,6 +7192,9 @@ const DEB_STEPS=[
 function saveBilanFinal(){
   const n=(currentUser.bilans||[]).filter(b=>b.type===bilType).length+1;
   const bi=Object.assign({type:bilType,date:Date.now(),num:n},bilData);
+  // Le bilan est validé : le brouillon n'a plus de raison d'être, et le laisser
+  // ferait reproposer une reprise au prochain bilan du même type.
+  _bilClearDraft();
   if(bilType==='depart'){
     currentUser.questionnaireComplete=true;
     // Objectifs bilan départ → bilanGoals (champ distinct de objective/profil)
