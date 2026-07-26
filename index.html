@@ -3038,7 +3038,7 @@ function loadAccessGate(){
   } else if(u.status==='AUTONOMIE_PREMIUM'&&u.paymentStatus!=='active'){
     title.textContent='Abonnement inactif';
     sub.textContent='Ton abonnement mensuel nest plus actif.';
-    block.innerHTML=`<div style="font-size:12px;color:#888;line-height:1.8">Statut: <span style="color:var(--red-light)">${u.paymentStatus||'INACTIF'}</span><br>Abonnement ID: <span style="font-family:monospace;font-size:11px">${u.paypalSubscriptionId||'N/A'}</span><br><br>Renouvelle ton abonnement pour retrouver l'acces.</div>`;
+    block.innerHTML=`<div style="font-size:12px;color:#888;line-height:1.8">Statut: <span style="color:var(--red-light)">${escapeHtml(u.paymentStatus||'INACTIF')}</span><br>Abonnement ID: <span style="font-family:monospace;font-size:11px">${escapeHtml(u.paypalSubscriptionId||'N/A')}</span><br><br>Renouvelle ton abonnement pour retrouver l'acces.</div>`;
   } else {
     title.textContent='Acces requis';
     sub.textContent='Tu dois activer un acces pour utiliser RepCore.';
@@ -3858,7 +3858,7 @@ function openClientDetail(cid,_refresh){
   if(c._fromCode){
     be.innerHTML=`<div style="background:#111;border:1px solid var(--surface-2);border-radius:12px;padding:16px;text-align:center">
       <div style="margin-bottom:10px">${icon('smartphone',32)}</div>
-      <div style="font-weight:700;margin-bottom:6px">${c.fname} n'a pas encore créé son compte</div>
+      <div style="font-weight:700;margin-bottom:6px">${escapeHtml(c.fname||'')} n'a pas encore créé son compte</div>
       <div class="sub" style="font-size:12px;line-height:1.6">Envoie-lui le code d'accès pour qu'elle s'inscrive.<br>Ses données apparaîtront ici automatiquement dès qu'elle aura complété son premier bilan.</div>
     </div>`;
   } else if(!c.bilans?.length){
@@ -4701,7 +4701,7 @@ function renderClientPdfCard(c){
   const el=document.getElementById('ccc-pdf-content');
   if(!el) return;
   if(c._fromCode){
-    el.innerHTML=`<div style="text-align:center;padding:12px 0;font-size:12px;color:var(--sub)">${c.fname} n'a pas encore créé son compte.<br>Le PDF sera disponible après son inscription.</div>`;
+    el.innerHTML=`<div style="text-align:center;padding:12px 0;font-size:12px;color:var(--sub)">${escapeHtml(c.fname||'')} n'a pas encore créé son compte.<br>Le PDF sera disponible après son inscription.</div>`;
     return;
   }
   const hasPdf=!!(c.programPdf||c.programPdfLink||c.programPdfStorageUrl);
@@ -4725,7 +4725,7 @@ function renderClientPdfCard(c){
       </div>
     </label>
     <div style="display:flex;gap:8px">
-      <input id="ccc-pdf-link" placeholder="Lien Google Drive ou Dropbox..." value="${c.programPdfLink||''}" style="flex:1;font-size:12px;padding:9px 12px">
+      <input id="ccc-pdf-link" placeholder="Lien Google Drive ou Dropbox..." value="${escapeHtml(c.programPdfLink||'')}" style="flex:1;font-size:12px;padding:9px 12px">
       <button onclick="saveCoachPdfLinkInline()" style="background:var(--red);border:none;color:#fff;border-radius:3px;padding:9px 14px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;white-space:nowrap;text-transform:uppercase">Lier</button>
     </div>`;
 }
@@ -4949,7 +4949,9 @@ function loadClientHome(){
   if(avatar) avatar.innerHTML=u.athletePhoto?`<img src="${escapeHtml(u.athletePhoto)}" style="width:100%;height:100%;object-fit:cover">`:ini(u.fname,u.lname);
   const coachEl=document.getElementById('clh-coach');
   if(u.coachName){
-    coachEl.innerHTML=`Coach: ${u.coachName}`;
+    // textContent et non innerHTML : coachName vient de DB.get('users'),
+    // donc d'une valeur saisie par le coach et synchronisée depuis le cloud.
+    coachEl.textContent='Coach: '+(u.coachName||'');
   } else {
     coachEl.textContent='Sans coach assigné';
   }
@@ -5741,7 +5743,7 @@ function renderWoEx(){
           <div class="ex-name" style="font-size:15px">${escapeHtml(ex.name)}</div>
           <div class="sub" style="font-size:12px;margin-top:3px">${ex.series} séries × ${escapeHtml(ex.reps)} reps${ex._cycleAdjusted?' <span style="color:var(--orange)">(−1 série cycle)</span>':''}</div>
         </div>
-        <button onclick="openCalc('${sug||''}','${escapeHtml(ex.reps)}','0','${currentUser.gender||''}')" style="background:var(--card2);border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:11px;padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Vue tableau</button>
+        <button onclick="openCalc(${escapeHtml(JSON.stringify(sug||''))},${escapeHtml(JSON.stringify(ex.reps||''))},'0',${escapeHtml(JSON.stringify(currentUser.gender||''))})" style="background:var(--card2);border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:11px;padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Vue tableau</button>
       </div>
 
       ${cycleLabel&&isFemme?`<div style="background:var(--dark);border:1px solid #2a2a2a;border-radius:3px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#888;letter-spacing:.5px">${cycleLabel.text}</div>`:''}
@@ -7163,7 +7165,7 @@ function showProgressTab(tab,btn){
       <div style="background:var(--dark);border:1px solid var(--surface-3);border-radius:12px;padding:14px;margin-bottom:14px">
         <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px">Paramètres — Formule US Navy</div>
         <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-          <div style="flex:1;min-width:70px"><label for="evol-height" style="font-size:9px">Taille (cm)</label><input type="number" id="evol-height" value="${storedH||''}" placeholder="176" style="padding:8px;font-size:14px;font-weight:700;text-align:center"></div>
+          <div style="flex:1;min-width:70px"><label for="evol-height" style="font-size:9px">Taille (cm)</label><input type="number" id="evol-height" value="${escapeHtml(String(storedH||''))}" placeholder="176" style="padding:8px;font-size:14px;font-weight:700;text-align:center"></div>
           <div style="flex:1;min-width:80px">
             <label style="font-size:9px">Sexe</label>
             <div style="display:flex;gap:4px;margin-top:6px">
@@ -7752,7 +7754,7 @@ function _renderStrictDiet(){
     <div style="margin-bottom:20px">
       <div style="font-size:9px;color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:5px">${icon('clipboard',12)} Plan alimentaire</div>
       ${photos.length===0&&!isCoach?`<div style="background:var(--surface-1);border:1px dashed #2a2a2a;border-radius:12px;padding:32px 16px;text-align:center;color:#333;font-size:12px"><div style="margin-bottom:8px;opacity:.3">${icon('clipboard',32)}</div>Plan alimentaire à venir</div>`:''}
-      ${photos.map((src,i)=>`<div style="margin-bottom:10px;position:relative"><img src="${src}" style="width:100%;border-radius:12px;display:block;border:1px solid var(--surface-2)" onclick="viewNutriPhoto(${i})">${isCoach?`<button onclick="deleteStrictPhoto(${i})" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.85);border:none;color:#fff;border-radius:50%;width:28px;height:28px;font-size:14px;cursor:pointer;line-height:1;padding:0">✕</button>`:''}</div>`).join('')}
+      ${photos.map((src,i)=>`<div style="margin-bottom:10px;position:relative"><img src="${escapeHtml(src)}" style="width:100%;border-radius:12px;display:block;border:1px solid var(--surface-2)" onclick="viewNutriPhoto(${i})">${isCoach?`<button onclick="deleteStrictPhoto(${i})" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.85);border:none;color:#fff;border-radius:50%;width:28px;height:28px;font-size:14px;cursor:pointer;line-height:1;padding:0">✕</button>`:''}</div>`).join('')}
       ${isCoach?`<label style="display:flex;align-items:center;justify-content:center;gap:10px;padding:14px;background:#111;border:1.5px dashed #2a2a2a;border-radius:12px;cursor:pointer;margin-top:${photos.length?'8':'0'}px">${icon('camera',18)}<span style="font-size:11px;font-weight:700;color:var(--sub);letter-spacing:1px">AJOUTER UNE PHOTO</span><input type="file" accept="image/*" capture="environment" style="display:none" onchange="addStrictPhoto(this)"></label>`:''}
     </div>
     <!-- Suivi du jour -->
@@ -7813,7 +7815,7 @@ function viewNutriPhoto(index){
   const ov=document.createElement('div');
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;display:flex;align-items:center;justify-content:center';
   ov.onclick=()=>ov.remove();
-  ov.innerHTML=`<img src="${src}" style="max-width:96%;max-height:90vh;border-radius:8px;object-fit:contain">`;
+  ov.innerHTML=`<img src="${escapeHtml(src)}" style="max-width:96%;max-height:90vh;border-radius:8px;object-fit:contain">`;
   document.body.appendChild(ov);
 }
 
@@ -8160,7 +8162,7 @@ function renderCoachNutriSection(c){
           <div style="font-size:9px;color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:5px">${icon('clipboard',12)} Plan alimentaire</div>
           ${photos.map((src,i)=>`
             <div style="position:relative;margin-bottom:8px">
-              <img src="${src}" style="width:100%;border-radius:8px;display:block;border:1px solid var(--border)">
+              <img src="${escapeHtml(src)}" style="width:100%;border-radius:8px;display:block;border:1px solid var(--border)">
               <button onclick="deleteClientStrictPhoto(${i})" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.8);border:none;color:#fff;border-radius:50%;width:26px;height:26px;font-size:13px;cursor:pointer;line-height:1;padding:0">✕</button>
             </div>`).join('')}
           <label style="display:flex;align-items:center;justify-content:center;gap:10px;padding:13px;background:#111;border:1.5px dashed #2a2a2a;border-radius:10px;cursor:pointer;margin-top:${photos.length?'4':'0'}px">
@@ -10024,7 +10026,7 @@ function openPhotoFull(src,title){
   m.style.cssText='position:fixed;inset:0;background:#000e;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer';
   m.onclick=()=>m.remove();
   m.innerHTML=`<div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:12px">${escapeHtml(title)}</div>
-    <img src="${src}" style="max-width:94vw;max-height:80vh;object-fit:contain;border-radius:8px">
+    <img src="${escapeHtml(src)}" style="max-width:94vw;max-height:80vh;object-fit:contain;border-radius:8px">
     <div style="font-size:11px;color:#444;margin-top:12px">Touche pour fermer</div>`;
   document.body.appendChild(m);
 }
