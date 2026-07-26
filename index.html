@@ -2856,6 +2856,21 @@ function _validateAthletePkg(o){
 })();
 
 let currentUser=null,currentClientId=null;
+// ── Contexte unique de l'editeur d'exercices (ecran s-coach-program) ──────────
+// Remplace les anciens drapeaux _editProgTemplateSessionIdx / _editingCoachSessionIdx
+// / _editingSessionIdx, qui pouvaient rester positionnes et faire ecrire la
+// sauvegarde dans la mauvaise cible (ex. modele au lieu de l'athlete).
+// Chaque point d'entree ecrit le contexte EN ENTIER ; saveProgram() le lit via switch.
+//   mode 'template'      : coach edite une seance d'un modele H/F  (+progIdx, gender, sessionIdx)
+//   mode 'coachClient'   : coach edite une seance d'un athlete      (+sessionIdx)
+//   mode 'athlete'       : l'athlete edite sa propre seance         (+sessionIdx)
+//   mode 'clientProgram' : coach edite le programme d'un athlete
+let _progEditorCtx={mode:'clientProgram'};
+// Index de seance uniquement quand l'athlete edite la sienne (photo2 localStorage, OCR)
+function _athleteSessionIdx(){
+  return _progEditorCtx.mode==='athlete'&&typeof _progEditorCtx.sessionIdx==='number'
+    ? _progEditorCtx.sessionIdx : null;
+}
 let woState={exercises:[],currentEx:0,startTime:null,timerInterval:null,sessionData:{}};
 let qStep=0;
 
@@ -3004,8 +3019,8 @@ function go(id){
   if(window._swUpdatePending&&_safe.includes(id)){location.reload();return;}
   // Filet de sécurité UI — le vrai contrôle d'accès reste côté données/serveur (P02).
   // s-coach-program est l'éditeur d'exercices partagé : l'athlète y accède pour SA propre
-  // séance (openSessionExercises fixe _editingSessionIdx juste avant l'appel à go()).
-  const _athleteEditing=typeof window._editingSessionIdx==='number';
+  // séance (openSessionExercises fixe le contexte juste avant l'appel à go()).
+  const _athleteEditing=_progEditorCtx.mode==='athlete';
   if(id.startsWith('s-coach-')&&!['s-coach-home','s-coach-entry'].includes(id)&&currentUser?.role!=='coach'&&!(id==='s-coach-program'&&_athleteEditing)){
     toast('Accès réservé au coach','var(--orange)');
     go(currentUser?'s-client-home':'s-welcome');
@@ -4238,7 +4253,7 @@ const defEx=[
 let progEx=[];
 let _progExDirty=false;
 // ======= COACH PROGRAMME TEMPLATES =======
-let _editProgTemplateIdx=null, _editProgTemplateGender='H', _editProgTemplateSessionIdx=null, _assigningProgIdx=null;
+let _editProgTemplateIdx=null, _editProgTemplateGender='H', _assigningProgIdx=null;
 
 function openCoachPrograms(){go('s-coach-programs');loadCoachProgramsList();}
 
@@ -4381,10 +4396,9 @@ function openProgTemplateSessionExercises(idx){
   const s=sessions[idx];
   progEx=JSON.parse(JSON.stringify(s.exercises||[]));
   _prepProgEditor({name:s.name,notes:s.notes,warmup:s.warmup,cooldown:s.cooldown});
-  window._editingSessionIdx=null;window._editingCoachSessionIdx=null;
-  _editProgTemplateSessionIdx=idx;
+  _progEditorCtx={mode:'template',sessionIdx:idx,progIdx:_editProgTemplateIdx,gender:_editProgTemplateGender};
   const backBtn=document.querySelector('#s-coach-program .back-btn');
-  if(backBtn) backBtn.onclick=()=>{go('s-coach-prog-template');loadProgTemplateSlots(_editProgTemplateGender);};
+  if(backBtn) backBtn.onclick=()=>{_progEditorCtx={mode:'clientProgram'};go('s-coach-prog-template');loadProgTemplateSlots(_editProgTemplateGender);};
   const title=document.querySelector('#s-coach-program .topbar-title');
   if(title) title.textContent=(s.name||DAYS[idx])+' ('+_editProgTemplateGender+') — Exercices';
   renderProgEx();go('s-coach-program');
@@ -4563,10 +4577,9 @@ function openCoachSessionExercises(idx){
   const s=c.sessions_config[idx];
   progEx=JSON.parse(JSON.stringify(s.exercises||[]));
   _prepProgEditor({name:s.name,notes:s.notes,warmup:s.warmup,cooldown:s.cooldown||currentUser._defaultCooldown});
-  window._editingSessionIdx=null;
-  window._editingCoachSessionIdx=idx;
+  _progEditorCtx={mode:'coachClient',sessionIdx:idx};
   const backBtn=document.querySelector('#s-coach-program .back-btn');
-  if(backBtn) backBtn.onclick=()=>{if(_progExDirty&&!confirm('Modifications non enregistrées — quitter quand même ?'))return;go('s-coach-sessions');loadCoachSessionSlots();};
+  if(backBtn) backBtn.onclick=()=>{if(_progExDirty&&!confirm('Modifications non enregistrées — quitter quand même ?'))return;_progEditorCtx={mode:'clientProgram'};go('s-coach-sessions');loadCoachSessionSlots();};
   const title=document.querySelector('#s-coach-program .topbar-title');
   if(title) title.textContent=(s.name||DAYS[idx])+' — Exercices';
   renderProgEx();go('s-coach-program');
@@ -4609,6 +4622,7 @@ function openCoachProgram(){
     photo:c?.programPhoto,
     showCoachSections:true
   });
+  _progEditorCtx={mode:'clientProgram'};
   const backBtn=document.querySelector('#s-coach-program .back-btn');
   if(backBtn) backBtn.onclick=()=>{if(_progExDirty&&!confirm('Modifications non enregistrées — quitter quand même ?'))return;go('s-coach-client');};
   const title=document.querySelector('#s-coach-program .topbar-title');
@@ -4865,49 +4879,53 @@ function addExercise(){
 }
 function saveProgram(){
   _progExDirty=false;
-  // Cas 0 : coach édite une séance d'un template programme H/F
-  if(_editProgTemplateSessionIdx!==null&&_editProgTemplateIdx!==null){
-    const p=currentUser.coachPrograms[_editProgTemplateIdx];
-    const sessions=_editProgTemplateGender==='H'?p.sessions_H:p.sessions_F;
-    const s=sessions[_editProgTemplateSessionIdx];
-    s.exercises=progEx;
-    s.name=document.getElementById('prog-name').value;
-    s.notes=document.getElementById('prog-notes').value;
-    s.warmup=document.getElementById('prog-warmup').value;
-    s.cooldown=document.getElementById('prog-cooldown').value;
-    _editProgTemplateSessionIdx=null;
-    saveUser();
-    toast(' Séance sauvegardée !');
-    go('s-coach-prog-template');loadProgTemplateSlots(_editProgTemplateGender);return;
-  }
-  // Cas 1 : coach édite une séance d'un athlète via openCoachSessions
-  if(typeof window._editingCoachSessionIdx==='number'&&_coachEditClient){
-    const idx=window._editingCoachSessionIdx;
-    if(!_coachEditClient.sessions_config[idx]) return;
-    _coachEditClient.sessions_config[idx].exercises=progEx;
-    _coachEditClient.sessions_config[idx].name=document.getElementById('prog-name').value;
-    _coachEditClient.sessions_config[idx].notes=document.getElementById('prog-notes').value;
-    _coachEditClient.sessions_config[idx].warmup=document.getElementById('prog-warmup').value;
-    _coachEditClient.sessions_config[idx].cooldown=document.getElementById('prog-cooldown').value;
-    window._editingCoachSessionIdx=null;
-    toast(' Séance sauvegardée !');
-    go('s-coach-sessions');loadCoachSessionSlots();return;
-  }
-  // Cas 2 : athlète édite depuis le session manager
-  if(typeof window._editingSessionIdx==='number'){
-    if(!currentUser.sessions_config) initSessionsConfig();
-    const idx=window._editingSessionIdx;
-    currentUser.sessions_config[idx].exercises=progEx;
-    currentUser.sessions_config[idx].name=document.getElementById('prog-name').value;
-    currentUser.sessions_config[idx].notes=document.getElementById('prog-notes').value;
-    currentUser.sessions_config[idx].warmup=document.getElementById('prog-warmup').value;
-    currentUser.sessions_config[idx].cooldown=document.getElementById('prog-cooldown').value;
-    if(progPhotoData) currentUser.sessions_config[idx].photo=progPhotoData;
-    if(progPhoto2Data) currentUser.sessions_config[idx].photo2=progPhoto2Data;
-    saveUser();
-    window._editingSessionIdx=null;
-    toast(' Séance sauvegardée !');
-    loadSessionManager();return;
+  const _ctx=_progEditorCtx;
+  const _f=id=>document.getElementById(id).value;
+  switch(_ctx.mode){
+    // Coach edite une seance d'un modele de programme H/F
+    case 'template':{
+      if(_ctx.progIdx==null||typeof _ctx.sessionIdx!=='number') break;
+      const p=currentUser.coachPrograms?.[_ctx.progIdx];
+      if(!p) break;
+      const sessions=_ctx.gender==='H'?p.sessions_H:p.sessions_F;
+      const s=sessions?.[_ctx.sessionIdx];
+      if(!s) break;
+      s.exercises=progEx;
+      s.name=_f('prog-name');s.notes=_f('prog-notes');
+      s.warmup=_f('prog-warmup');s.cooldown=_f('prog-cooldown');
+      _progEditorCtx={mode:'clientProgram'};
+      saveUser();
+      toast(' Séance sauvegardée !');
+      go('s-coach-prog-template');loadProgTemplateSlots(_ctx.gender);return;
+    }
+    // Coach edite une seance d'un athlete (via openCoachSessions)
+    case 'coachClient':{
+      if(!_coachEditClient||typeof _ctx.sessionIdx!=='number') break;
+      const sc=_coachEditClient.sessions_config?.[_ctx.sessionIdx];
+      if(!sc) break;
+      sc.exercises=progEx;
+      sc.name=_f('prog-name');sc.notes=_f('prog-notes');
+      sc.warmup=_f('prog-warmup');sc.cooldown=_f('prog-cooldown');
+      _progEditorCtx={mode:'clientProgram'};
+      toast(' Séance sauvegardée !');
+      go('s-coach-sessions');loadCoachSessionSlots();return;
+    }
+    // L'athlete edite sa propre seance depuis le gestionnaire de seances
+    case 'athlete':{
+      if(typeof _ctx.sessionIdx!=='number') break;
+      if(!currentUser.sessions_config) initSessionsConfig();
+      const sa=currentUser.sessions_config[_ctx.sessionIdx];
+      if(!sa) break;
+      sa.exercises=progEx;
+      sa.name=_f('prog-name');sa.notes=_f('prog-notes');
+      sa.warmup=_f('prog-warmup');sa.cooldown=_f('prog-cooldown');
+      if(progPhotoData) sa.photo=progPhotoData;
+      if(progPhoto2Data) sa.photo2=progPhoto2Data;
+      saveUser();
+      _progEditorCtx={mode:'clientProgram'};
+      toast(' Séance sauvegardée !');
+      loadSessionManager();return;
+    }
   }
   // Sinon: coach édite le programme d'un athlète
   if(!currentClientId) return;
@@ -5358,9 +5376,9 @@ function openSessionExercises(idx){
   const p2ok=document.getElementById('prog-photo2-ready');
   if(p2ph&&p2ok){if(progPhoto2Data){p2ph.style.display='none';p2ok.style.display='block';}else{p2ph.style.display='flex';p2ok.style.display='none';}}
   _updateAnalyzeBtn();
-  window._editingSessionIdx=idx;
+  _progEditorCtx={mode:'athlete',sessionIdx:idx};
   const backBtn=document.querySelector('#s-coach-program .back-btn');
-  if(backBtn) backBtn.onclick=()=>{if(_progExDirty&&!confirm('Modifications non enregistrées — quitter quand même ?'))return;go('s-session-manager');};
+  if(backBtn) backBtn.onclick=()=>{if(_progExDirty&&!confirm('Modifications non enregistrées — quitter quand même ?'))return;_progEditorCtx={mode:'clientProgram'};go('s-session-manager');};
   const title=document.querySelector('#s-coach-program .topbar-title');
   if(title) title.textContent=(cfg[idx].name||'Séance')+' — Exercices';
   renderProgEx();
@@ -10037,8 +10055,8 @@ function loadProgPhoto2(input){
   compressImage(f,1600,0.92,data=>{
     progPhoto2Data=data;
     // Persist in localStorage — Firebase strips photo2 on every push
-    const idx=window._editingSessionIdx;
-    if(currentUser?.email&&typeof idx==='number'){
+    const idx=_athleteSessionIdx();
+    if(currentUser?.email&&idx!==null){
       try{localStorage.setItem('rc_p2_'+currentUser.email+'_'+idx,data);}catch(e){}
     }
     document.getElementById('prog-photo2-ph').style.display='none';
@@ -10049,8 +10067,8 @@ function clearProgPhoto2(){
   progPhoto2Data=null;
   _pdfVideoLinks=null;
   // Remove from localStorage too
-  const idx2=window._editingSessionIdx;
-  if(currentUser?.email&&typeof idx2==='number'){
+  const idx2=_athleteSessionIdx();
+  if(currentUser?.email&&idx2!==null){
     try{localStorage.removeItem('rc_p2_'+currentUser.email+'_'+idx2);}catch(e){}
   }
   document.getElementById('prog-photo2-ph').style.display='flex';
@@ -10200,8 +10218,7 @@ async function analyzeProgPhotos(){
         toast('Erreur de lecture : '+(e.message||'réessaie'),'var(--red)');
       }
     }
-    const idx=window._editingSessionIdx;
-    showOcrReviewModal(exercises,typeof idx==='number'?idx:null,videoLinks);
+    showOcrReviewModal(exercises,_athleteSessionIdx(),videoLinks);
     reset();
   }catch(e){toast('Erreur : '+e.message,'var(--red)');reset();}
 }
