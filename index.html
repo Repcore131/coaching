@@ -5777,6 +5777,28 @@ function _personnaliserSeance(i){
   if(!s) return;
   delete s._essai;delete s._foundation;
 }
+// Un programme RÉEL : au moins une séance active, garnie, et voulue par
+// quelqu'un — ni repli générique, ni Fondation posée d'office.
+// Le test porte sur la présence d'EXERCICES et non sur celle d'un nom : un
+// coach peut parfaitement assigner un programme sans nommer ses séances, et
+// son travail était alors considéré comme absent, donc écrasable.
+function _configReelle(sc){
+  return !!(sc&&sc.some(s=>s.active&&s.exercises?.length&&!seanceEstExemple(s)));
+}
+// Le programme du coach peut n'exister que dans le nœud stocké : depuis que
+// initSessionsConfig ne persiste plus, currentUser porte parfois une config de
+// repli fabriquée pour l'affichage pendant que le programme, arrivé par la
+// synchro, n'est que dans rc_users. L'adopter est indispensable — sans ça le
+// saveUser() qui suit écraserait le programme du coach par le repli.
+function _adopterProgrammeStocke(){
+  if(!currentUser?.email) return false;
+  const stocke=(DB.get('users')||{})[currentUser.email]?.sessions_config;
+  if(_configReelle(stocke)&&!_configReelle(currentUser.sessions_config)){
+    currentUser.sessions_config=stocke;
+    return true;
+  }
+  return false;
+}
 // Une publication par le coach n'est jamais un essai, même quand il assigne la
 // Fondation telle quelle : c'est un choix, pas un repli.
 function _marquerCommePublie(cfg){
@@ -6065,10 +6087,15 @@ function _setWeekDay(i){_selDay=i;if(window._weekProgEl)_renderProgExercisesInto
 function _migrateFoundationIfNeeded(){
   const g=currentUser._evol_gender;
   if(g!=='H'&&g!=='F') return;
+  _adopterProgrammeStocke();
   const sc=currentUser.sessions_config;
   if(sc&&sc.some(s=>s._foundation)) return; // déjà sur fondation
-  // Ne pas écraser si le coach a nommé une séance active (signe de personalisation)
-  if(sc&&sc.filter(s=>s.active).some(s=>s.name&&!s._foundation)) return;
+  // L'ancien garde cherchait un NOM de séance. Un coach qui assigne un
+  // programme sans nommer ses séances passait donc au travers, et son travail
+  // était remplacé par la Fondation dès que le genre de l'athlète devenait
+  // connu. La présence d'exercices est le seul signe fiable.
+  if(_configReelle(sc)) return;
+  _pushSessionsHistory(currentUser); // rollback possible depuis l'historique
   currentUser.sessions_config=null;initSessionsConfig();
 }
 function _renderExCard(ex,idx){
@@ -7329,8 +7356,15 @@ function saveBilanFinal(){
   currentUser.bilans.push(bi);
   if(bi.type==='depart'){
     delete currentUser._firstBilanPending;
-    currentUser.sessions_config=null;
-    initSessionsConfig();
+    // Le questionnaire de départ installait la Fondation SANS regarder si un
+    // programme avait déjà été assigné : l'athlète effaçait le travail de son
+    // coach en validant son propre questionnaire.
+    _adopterProgrammeStocke();
+    if(!_configReelle(currentUser.sessions_config)){
+      _pushSessionsHistory(currentUser); // rollback possible depuis l'historique
+      currentUser.sessions_config=null;
+      initSessionsConfig();
+    }
   }
   // Ancrer photos dans clés séparées (survivent au sync Firebase)
   let ancrageOk=true;
