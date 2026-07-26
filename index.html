@@ -105,9 +105,21 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
 /* ====== TABS ====== */
 .tab-bar{display:flex;background:#0c0c0c;border-top:1px solid var(--surface-2);padding:6px 0 10px;flex-shrink:0;scrollbar-width:none}
 .tab-bar::-webkit-scrollbar{display:none}
-.tab-btn{flex:1 1 0;min-width:0;background:none;border:none;color:var(--sub);display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:6px 5px;font-family:Montserrat,sans-serif;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;transition:.2s}
-@media(max-width:400px){.tab-btn{font-size:7px;letter-spacing:.3px;padding:6px 2px}}
-.tab-btn.active{color:var(--red)}.tab-btn svg{width:19px;height:19px}
+.tab-btn{flex:1 1 0;min-width:0;position:relative;background:none;border:none;color:#8a8a8a;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:6px 5px;font-family:Montserrat,sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;transition:.2s}
+/* 6 onglets doivent tenir sans debordement horizontal. A 10px la barre demande
+   400px : le palier couvre donc jusqu'a 420px (iPhone XR/11 = 414). */
+@media(max-width:420px){.tab-btn{font-size:9px;letter-spacing:.2px;padding:6px 2px}}
+/* Tres petits ecrans (iPhone SE 320px) : « NUTRITION » en 9px ne tient pas dans
+   un sixieme de 320px, meme sans interlettrage — 8px evite que le libelle soit
+   rogne. Le seuil de 9px reste tenu a partir de 360px. */
+@media(max-width:340px){.tab-btn{font-size:8px;letter-spacing:0;padding:6px 1px}}
+/* Onglet actif : trois signaux cumulés — teinte plus claire (#ff5a5a sur #0c0c0c
+   = 6,4:1), halo sur l'icône, et liseré supérieur. Le liseré est un repère de
+   FORME : l'onglet actif reste identifiable sans percevoir la couleur. */
+.tab-btn.active{color:#ff5a5a}
+.tab-btn.active svg{filter:drop-shadow(0 0 6px rgba(224,32,32,.8))}
+.tab-btn.active::after{content:'';position:absolute;top:0;left:20%;right:20%;height:2px;background:var(--red)}
+.tab-btn svg{width:19px;height:19px}
 
 
 /* ====== METRIC BOXES ====== */
