@@ -1140,7 +1140,10 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
-      <p class="sub" style="font-size:12px;margin-bottom:20px;line-height:1.6">Active/désactive les jours et modifie chaque séance. Le Programme Fondation est pré-chargé jusqu'à personnalisation.</p>
+      <p class="sub" style="font-size:12px;margin-bottom:12px;line-height:1.6">Active/désactive les jours et modifie chaque séance. Le Programme Fondation est pré-chargé jusqu'à personnalisation.</p>
+      <!-- Placé ici et non dans la topbar : celle-ci porte déjà retour, titre et
+           SAUVEGARDER, un quatrième élément déborderait à 375 px. -->
+      <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:20px" onclick="saveCoachSessionsAsTemplate()">⭑ Enregistrer comme modèle</button>
       <div id="coach-session-slots"></div>
     </div>
   </div>
@@ -4750,7 +4753,8 @@ function loadCoachProgramsList(){
       <div style="display:flex;gap:8px">
         <button class="btn btn-outline btn-sm" style="flex:1" onclick="editCoachProgTemplate(${i})">✏️ Modifier</button>
         <button class="btn btn-red btn-sm" style="flex:1" onclick="openAssignProgram(${i})">▶ Assigner</button>
-        <button onclick="deleteCoachProgTemplate(${i})" style="background:none;border:1px solid #333;color:#666;border-radius:8px;padding:7px 10px;font-size:14px;cursor:pointer;line-height:1">🗑</button>
+        <button onclick="duplicateCoachProgTemplate(${i})" title="Dupliquer ce programme" aria-label="Dupliquer ce programme" style="background:none;border:1px solid #333;color:#888;border-radius:8px;padding:7px 10px;font-size:14px;cursor:pointer;line-height:1">⧉</button>
+        <button onclick="deleteCoachProgTemplate(${i})" title="Supprimer ce programme" aria-label="Supprimer ce programme" style="background:none;border:1px solid #333;color:#666;border-radius:8px;padding:7px 10px;font-size:14px;cursor:pointer;line-height:1">🗑</button>
       </div>
     </div>
   `).join('');
@@ -4787,6 +4791,21 @@ function saveCoachProgTemplateName(){
 function saveCoachProgTemplate(){
   saveCoachProgTemplateName();
   toastEcriture(saveUser(),' Programme sauvegardé !','ton programme est');
+}
+
+// Repartir d'un programme existant plutôt que de tout ressaisir. JSON plutôt
+// que structuredClone : c'est l'idiome déjà employé partout ailleurs dans ce
+// fichier, et les données sont du JSON pur — le résultat est identique.
+function duplicateCoachProgTemplate(idx){
+  const src=(currentUser.coachPrograms||[])[idx];
+  if(!src) return;
+  const p=JSON.parse(JSON.stringify(src));
+  p.id=Date.now().toString(36);
+  p.name=(src.name||'Sans nom')+' (copie)';
+  p.createdAt=Date.now();
+  currentUser.coachPrograms.push(p);
+  toastEcriture(saveUser(),'« '+p.name+' » créé','le programme est');
+  loadCoachProgramsList();
 }
 
 function deleteCoachProgTemplate(idx){
@@ -4829,9 +4848,59 @@ function loadProgTemplateSlots(gender){
           <input value="${escapeHtml(s.name||'')}" placeholder="Ex: PECS & TRICEPS" onchange="cptRenameSession(${i},this.value)" style="margin-top:4px">
         </div>
         <button class="btn btn-red btn-sm" style="width:100%" onclick="openProgTemplateSessionExercises(${i})"> Modifier les exercices (${s.exercises?.length||0})</button>
+        ${_boutonsCopieJour('cptCopyDay',i)}
       </div>`:''}
     </div>
   `).join('');
+}
+
+// ── Copier une séance sur un autre jour ─────────────────────────────────────
+// Rangée de boutons compacts, aucun écran nouveau. Les six autres jours en
+// initiales : à 375 px un menu déroulant coûterait deux appuis de plus.
+function _boutonsCopieJour(fn,i){
+  return `<div style="margin-top:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+    <span class="sub" style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;flex-shrink:0">Copier vers</span>
+    ${DAYS.map((d,j)=>j===i?'':`<button onclick="${fn}(${i},${j})" title="Copier vers ${d}" aria-label="Copier cette séance vers ${d}" style="background:none;border:1px solid #333;color:var(--sub);border-radius:6px;min-width:44px;min-height:44px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">${DAY_ICONS[j]}</button>`).join('')}
+  </div>`;
+}
+function _copierSeance(src,dst){
+  dst.name=src.name||'';
+  dst.exercises=(src.exercises||[]).map(e=>({...e}));
+  dst.warmup=src.warmup||'';
+  dst.cooldown=src.cooldown||'';
+  dst.notes=src.notes||'';
+  dst.active=true;
+  // Une séance recopiée volontairement n'est plus un exemple.
+  delete dst._essai;delete dst._foundation;
+}
+// Un mauvais appui ne doit pas effacer une séance déjà écrite : c'est le seul
+// endroit de ce lot où l'on peut détruire du travail.
+function _confirmerEcrasement(src,dst){
+  if(!dst.active||!dst.exercises?.length) return true;
+  const n=dst.exercises.length;
+  return confirm(dst.day+' contient déjà '+n+' exercice'+(n>1?'s':'')
+    +'.\nLes remplacer par ceux de '+src.day+' ?');
+}
+function cptCopyDay(i,j){
+  if(_editProgTemplateIdx===null) return;
+  const p=currentUser.coachPrograms[_editProgTemplateIdx];
+  const sessions=_editProgTemplateGender==='H'?p.sessions_H:p.sessions_F;
+  const src=sessions[i],dst=sessions[j];
+  if(!src||!dst||!_confirmerEcrasement(src,dst)) return;
+  _copierSeance(src,dst);
+  loadProgTemplateSlots(_editProgTemplateGender);
+  // Pas de saveUser ici : comme cptToggleDay et cptRenameSession, l'écriture
+  // appartient au bouton SAUVEGARDER de l'écran.
+  toast(src.day+' → '+dst.day+' ✓');
+}
+function coachCopyDay(i,j){
+  const sc=_coachEditClient?.sessions_config;
+  if(!sc) return;
+  const src=sc[i],dst=sc[j];
+  if(!src||!dst||!_confirmerEcrasement(src,dst)) return;
+  _copierSeance(src,dst);
+  loadCoachSessionSlots();
+  toast(src.day+' → '+dst.day+' ✓');
 }
 
 function cptToggleDay(i){
@@ -5034,9 +5103,41 @@ function loadCoachSessionSlots(){
           <input value="${escapeHtml(s.name||'')}" placeholder="Ex: DOS & BICEPS" onchange="coachRenameSession(${i},this.value)" style="margin-top:4px">
         </div>
         <button class="btn btn-red btn-sm" style="width:100%" onclick="openCoachSessionExercises(${i})"> Modifier les exercices (${s.exercises?.length||0})</button>
+        ${_boutonsCopieJour('coachCopyDay',i)}
       </div>`:''}
     </div>
   `).join('');
+}
+
+// Transformer le programme abouti d'un athlète en modèle réassignable, sans
+// ressaisir un exercice.
+function saveCoachSessionsAsTemplate(){
+  const c=_coachEditClient;
+  if(!c) return;
+  const src=c.sessions_config||[];
+  if(!src.some(s=>s.active&&s.exercises?.length)){
+    toast('Aucune séance à enregistrer — active au moins un jour avec des exercices.','var(--orange)');
+    return;
+  }
+  const defaut=((c.fname||'Athlète')+' — '+new Date().toLocaleDateString('fr-FR'));
+  const nom=(prompt('Nom du modèle ?',defaut)||'').trim();
+  if(!nom) return; // annulé, ou nom vide
+  // Les photos de séance sont écartées : elles sont en base64 et les modèles
+  // vivent dans currentUser, poussé en entier à chaque synchro. Sept jours de
+  // photos y ajouteraient plusieurs Mo, pour une valeur nulle dans un modèle.
+  // Les marqueurs d'exemple sautent aussi : un modèle est un choix délibéré.
+  const copie=()=>src.map(s=>({
+    day:s.day,name:s.name||'',active:!!s.active,notes:s.notes||'',
+    warmup:s.warmup||'',cooldown:s.cooldown||'',photo:null,photo2:null,
+    exercises:(s.exercises||[]).map(e=>({...e}))
+  }));
+  if(!currentUser.coachPrograms) currentUser.coachPrograms=[];
+  currentUser.coachPrograms.push({
+    id:Date.now().toString(36),name:nom,createdAt:Date.now(),
+    // Les deux genres partent de la même copie : le coach adapte l'onglet F.
+    sessions_H:copie(),sessions_F:copie()
+  });
+  toastEcriture(saveUser(),'Modèle « '+nom+' » créé — pense à adapter l\'onglet F','le modèle est');
 }
 
 function coachToggleDay(i){
