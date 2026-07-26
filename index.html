@@ -3097,8 +3097,19 @@ async function doRegister(){
     createdAt:Date.now(),streak:0,lastSession:null,sessions:[],bilans:[],nutrition:{},videos:[],coachId:null,coachName:null,
     status:'FREE',accessExpiry:null,paymentStatus:null,paypalSubscriptionId:null};
   if(selRole==='coach'){user.code=genCode();user.clients=[];}
-  // Authentifier Firebase AVANT de sauvegarder → le push 2s plus tard aura un token valide
-  await CLOUD.signIn(em,pw);
+  // Authentifier Firebase AVANT de sauvegarder → le push 2s plus tard aura un token valide.
+  // Si l'auth échoue on n'écrit RIEN localement : sinon un compte fantôme est créé
+  // sur l'appareil (email deja pris chez Firebase, mauvais mot de passe, hors ligne...)
+  // et il bloque ensuite la vraie connexion.
+  const authOk=await CLOUD.signIn(em,pw);
+  if(!authOk){
+    return showErr('r-err',
+      CLOUD._signInErr==='wrong_password'
+        ? 'Un compte existe déjà avec cet email. Utilise « Se connecter » ou « Mot de passe oublié ? ».'
+        : CLOUD._signInErr==='network'
+          ? 'Pas de connexion — impossible de créer le compte maintenant.'
+          : 'Inscription impossible. Réessaie.');
+  }
   users[em]=user;DB.set('users',users);
   currentUser=user;DB.set('session',user);
   if(selRole==='coach'){
