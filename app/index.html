@@ -3269,19 +3269,41 @@ const CLOUD={
     const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),6000);
     try{
       const token=await this._getToken();
-      const url=token?base+'?auth='+token+'&t='+Date.now():base+'?t='+Date.now();
+      const url=token?base+'?auth='+token:base;
       const r=await fetch(url,{signal:ctrl.signal});
       if(r.ok){const d=await r.json();if(d) return d;}
     }catch{}
     return null;
   },
+  // Sonde de fraicheur : un entier, pas un dossier. Le dossier complet d'un
+  // athlete actif pese plusieurs dizaines de kilo-octets ; son updatedAt en
+  // pese une vingtaine. C'est ce rapport qui fait tout le gain.
+  async pullUpdatedAt(email){
+    const key=email.replace(/\./g,',');
+    const base=this._fbUrl.replace('users.json','users/'+key+'/updatedAt.json');
+    const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),6000);
+    try{
+      const token=await this._getToken();
+      const r=await fetch(token?base+'?auth='+token:base,{signal:ctrl.signal});
+      if(r.ok){const v=await r.json();return typeof v==='number'?v:null;}
+    }catch{}
+    return null;
+  },
+  // Renvoie TRUE si quelque chose a change, FALSE sinon. Les appelants s'en
+  // servent pour ne pas repeindre un ecran identique.
   async syncUser(email){
-    const cloudUser=await this.pullUser(email);
-    if(!cloudUser) return;
     const local=JSON.parse(localStorage.getItem('rc_users')||'{}');
+    const localAt=(local[email]&&local[email].updatedAt)||0;
+    // On ne tire le dossier que si le distant est STRICTEMENT plus recent.
+    // Egalite = rien de neuf : c'est le cas de l'immense majorite des reveils.
+    const distantAt=await this.pullUpdatedAt(email);
+    if(distantAt!==null&&localAt&&distantAt<=localAt) return false;
+    const cloudUser=await this.pullUser(email);
+    if(!cloudUser) return false;
     const merged=Object.assign({},local);
     this._mergeUser(merged,email,cloudUser);
     localStorage.setItem('rc_users',JSON.stringify(merged));
+    return true;
   },
   // Sync ciblée — coach : lui-même + ses athlètes uniquement ; athlète : lui-même + son coach
   async syncRelevantUsers(){
@@ -3900,7 +3922,11 @@ window.onload=()=>{
       // Sync périodique toutes les 30 secondes
       setInterval(async()=>{
         if(!CLOUD.ok()||!currentUser) return;
-        await CLOUD.syncUser(currentUser.email);
+        // syncUser renvoie desormais s'il y a eu un changement REEL. Sans ce
+        // signal, on repeignait l'ecran toutes les 30 s pour rien : loadCoachHome
+        // et loadClientHome refont tout le rendu, et go() ferme au passage les
+        // modales ouvertes.
+        let _change=await CLOUD.syncUser(currentUser.email);
         // Rafraîchir currentUser
         const u2=(DB.get('users')||{})[currentUser.email];
         if(u2){currentUser=u2;DB.set('session',currentUser);}
@@ -3912,26 +3938,44 @@ window.onload=()=>{
           _majPastilleVideos();
           if(document.getElementById('s-client-home')?.classList.contains('active')) renderNotifs();
         }
-        // Coach : rafraîchir dashboard et fiche athlète
+        // Athlète : sync les données du coach pour mettre à jour le banner.
+        // Fait AVANT les rendus, pour que _change couvre aussi ce dossier-là.
+        if(currentUser.role==='athlete'&&currentUser.coachId){
+          const _uu=DB.get('users')||{};
+          const _ce=Object.keys(_uu).find(k=>_uu[k]?.id===currentUser.coachId);
+          if(_ce){
+            const _c2=await CLOUD.syncUser(_ce).catch(()=>false);
+            _change=_change||_c2;
+          }
+        }
+        // Rendus : SEULEMENT si quelque chose a bougé. Une heure passée sur
+        // l'accueil sans activité du coach ne repeint donc plus rien.
+        if(!_change) return;
         if(currentUser.role==='coach'&&document.getElementById('s-coach-home')?.classList.contains('active')){
           loadCoachHome();
         }
         if(currentUser.role==='coach'&&document.getElementById('s-coach-client')?.classList.contains('active')&&currentClientId){
           openClientDetail(currentClientId,true);
         }
-        // Athlète : sync les données du coach pour mettre à jour le banner
-        if(currentUser.role==='athlete'&&currentUser.coachId){
-          const _uu=DB.get('users')||{};
-          const _ce=Object.keys(_uu).find(k=>_uu[k]?.id===currentUser.coachId);
-          if(_ce){
-            await CLOUD.syncUser(_ce).catch(()=>{});
-            // Rafraîchir le banner si l'athlète est sur son accueil
-            if(document.getElementById('s-client-home')?.classList.contains('active')){
-              loadClientHome();
-            }
-          }
+        if(currentUser.role==='athlete'&&document.getElementById('s-client-home')?.classList.contains('active')){
+          loadClientHome();
         }
-      },30000);
+      },300000);
+      // Le passage à 5 minutes rendrait l'app molle au retour d'arrière-plan :
+      // un athlète qui rouvre son téléphone attendrait jusqu'à 5 min pour voir
+      // la correction de son coach. Le retour au premier plan déclenche donc
+      // une synchro unique, immédiate — c'est le seul moment où l'utilisateur
+      // regarde vraiment l'écran.
+      document.addEventListener('visibilitychange',()=>{
+        if(document.visibilityState!=='visible') return;
+        if(!CLOUD.ok()||!currentUser) return;
+        // Garde anti-rafale : basculer entre deux apps déclenche plusieurs
+        // évènements rapprochés, qui feraient repartir autant de requêtes.
+        const _now=Date.now();
+        if(window._derniereSyncVisible&&_now-window._derniereSyncVisible<60000) return;
+        window._derniereSyncVisible=_now;
+        CLOUD.syncRelevantUsers().catch(()=>{});
+      });
     },150);
   },500);
 };
