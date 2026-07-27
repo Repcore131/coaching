@@ -3080,6 +3080,53 @@ const DB={
 // par un flux de validation explicite par l'utilisateur. Les fonctions ci-dessous
 // extraient uniquement les champs attendus et vérifient type, longueur et email
 // avant tout Object.assign / DB.set.
+// ── Caches photo : écriture et purge ────────────────────────────────────────
+// Point d'écriture unique pour les copies photo hors ligne. Trois des cinq
+// sites avalaient l'échec en silence : la photo disparaissait au rechargement
+// suivant, derrière un « ✓ » vert.
+function _setPhotoLS(key,val){
+  try{ localStorage.setItem(key,val); return true; }
+  catch(e){
+    if(e.name==='QuotaExceededError'||e.code===22){
+      toast('Stockage plein — les photos les plus anciennes ne sont plus conservées hors ligne.','var(--orange)');
+    }
+    return false;
+  }
+}
+// Les clés rc_photo_<date>_<champ> s'accumulaient sans limite : chaque bilan y
+// dépose jusqu'à trois photos et rien ne les retirait jamais. Sur un compte
+// suivi depuis un an, c'est précisément ce qui remplit le quota et fait
+// échouer l'enregistrement du bilan en cours.
+// On garde les trois derniers bilans DE CHAQUE utilisateur présent sur
+// l'appareil : ces clés ne portent que la date, pas l'identité de l'athlète —
+// sur le téléphone d'un coach, purger d'après les seuls bilans de currentUser
+// effacerait les photos de tous ses élèves.
+const _PHOTO_BILANS_GARDES=3;
+function purgerPhotosAnciennes(){
+  const dates=new Set();
+  try{
+    const users=DB.get('users')||{};
+    Object.values(users).forEach(u=>{
+      (u?.bilans||[]).map(b=>b&&b.date).filter(Boolean)
+        .sort((a,b)=>b-a).slice(0,_PHOTO_BILANS_GARDES)
+        .forEach(d=>dates.add(String(d)));
+    });
+  }catch(e){ return 0; }
+  // Aucun bilan connu localement — dossier pas encore synchronisé, par exemple.
+  // On ne sait pas ce qui est encore utile : supprimer serait pire que garder.
+  if(!dates.size) return 0;
+  let supprimes=0;
+  try{
+    Object.keys(localStorage).filter(k=>k.startsWith('rc_photo_')).forEach(k=>{
+      const m=k.match(/^rc_photo_(\d+)_/);
+      if(!m) return;               // format inattendu : ne pas y toucher
+      if(dates.has(m[1])) return;  // bilan récent : on garde
+      localStorage.removeItem(k);supprimes++;
+    });
+  }catch(e){}
+  return supprimes;
+}
+
 const _PKG_EMAIL_RE=/^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,64}$/;
 function _validateCoachPkg(o){
   if(typeof o!=='object'||o===null||o.role!=='coach') return null;
@@ -3245,6 +3292,13 @@ window.onload=()=>{
   if(!navigator.onLine) _rcBandeauReseau('offline');
   document.querySelectorAll('#client-tabbar .tab-btn[data-icon]').forEach(b=>b.insertAdjacentHTML('afterbegin',icon(b.dataset.icon,19)));
   CLOUD._loadAuth();
+  // Purge AVANT toute écriture de la session : c'est ce qui libère la place
+  // pour le bilan que l'utilisateur s'apprête à remplir. Synchrone et bornée à
+  // un balayage des clés — aucun dataURL n'est relu.
+  try{
+    const _purges=purgerPhotosAnciennes();
+    if(_purges) console.info('[RepCore] '+_purges+' cache(s) photo périmé(s) supprimé(s)');
+  }catch(e){}
   // Reprise des envois restés en échec lors de la session précédente. Différée :
   // l'accueil doit s'afficher d'abord, la file est une tâche d'arrière-plan.
   setTimeout(()=>{CLOUD.viderFile().catch(()=>{});},3000);
@@ -4617,9 +4671,7 @@ function addBilanPhoto(bilanDate,bilanType,view,inputEl){
     // Cache de repli lu par getP() quand la photo a disparu du nœud utilisateur.
     // Son échec ne perd pas la photo, mais l'utilisateur doit l'apprendre : le
     // catch vide d'avant laissait croire à un enregistrement complet.
-    let cacheOk=true;
-    try{localStorage.setItem('rc_photo_'+bilanDate+'_'+photoKey,b64);}
-    catch(ex){cacheOk=false;toast('Stockage plein — la photo n\'a pas pu être conservée sur cet appareil','var(--orange)');}
+    const cacheOk=_setPhotoLS('rc_photo_'+bilanDate+'_'+photoKey,b64);
     cl.updatedAt=Date.now();users[cl.email]=cl;
     const localOk=DB.set('users',users);
     // « Enregistrement… » écraserait l'avertissement de quota : toast() remplace
@@ -6310,8 +6362,7 @@ function uploadSessionPhoto2(idx,input){
     // rc_p2_ est la seule copie durable de photo2 : elle est retirée du nœud
     // avant chaque push RTDB. Son échec silencieux faisait disparaître la photo
     // au rechargement suivant, derrière un « ✓ » vert.
-    let ancrageOk=true;
-    try{localStorage.setItem('rc_p2_'+currentUser.email+'_'+idx,data);}catch(e){ancrageOk=false;}
+    const ancrageOk=_setPhotoLS('rc_p2_'+currentUser.email+'_'+idx,data);
     const ok=saveUser();loadSessionManager();
     toastEcriture(ok&&ancrageOk,' Photo vidéos enregistrée !','la photo est');
   });
@@ -7654,7 +7705,7 @@ function loadBilPhoto(input,key){
   compressImage(f,1200,0.75,data=>{
     _bilPhotoLoading--;
     bilData[key]=data;
-    try{localStorage.setItem('rc_pendingphoto_'+key,data);}catch(e){}
+    _setPhotoLS('rc_pendingphoto_'+key,data);
     _bilSaveDraft();
     if(lbl){lbl.style.background='#001a00';lbl.style.borderColor='#22c55e';lbl.style.color='#22c55e';lbl.innerHTML=' Ajoutée';}
   });
@@ -7842,7 +7893,7 @@ function saveBilanFinal(){
   // Ancrer photos dans clés séparées (survivent au sync Firebase)
   let ancrageOk=true;
   Object.keys(bi).filter(k=>k.includes('photo')&&bi[k]).forEach(k=>{
-    try{localStorage.setItem('rc_photo_'+bi.date+'_'+k,bi[k]);}catch(e){ancrageOk=false;}
+    if(!_setPhotoLS('rc_photo_'+bi.date+'_'+k,bi[k])) ancrageOk=false;
     // Ce removeItem ne fait que du ménage : son échec ne perd aucune donnée.
     try{localStorage.removeItem('rc_pendingphoto_'+k);}catch(e){}
   });
@@ -11372,7 +11423,7 @@ function loadProgPhoto2(input){
     // Persist in localStorage — Firebase strips photo2 on every push
     const idx=_athleteSessionIdx();
     if(currentUser?.email&&idx!==null){
-      try{localStorage.setItem('rc_p2_'+currentUser.email+'_'+idx,data);}catch(e){}
+      _setPhotoLS('rc_p2_'+currentUser.email+'_'+idx,data);
     }
     document.getElementById('prog-photo2-ph').style.display='none';
     document.getElementById('prog-photo2-ready').style.display='block';
