@@ -1928,6 +1928,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="background:var(--dark);border:1px solid var(--surface-3);border-radius:3px;padding:12px 14px">
           <label style="margin-top:0;margin-bottom:6px">Pas aujourd'hui</label>
           <input type="number" id="ps-steps" placeholder="Ex: 8500" style="margin-top:0">
+          <div class="sub" style="font-size:var(--fs-xs);margin-top:6px">Ajouté à ton suivi Lifestyle</div>
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
@@ -7589,6 +7590,15 @@ function savePostSession(){
     currentUser.sessions[currentUser.sessions.length-1].metrics=metrics;
     if(metrics.steps) currentUser.sessions[currentUser.sessions.length-1].steps=parseInt(metrics.steps);
   }
+  // …et reverser les pas dans le MÊME journal que l'écran Lifestyle. Sans ça,
+  // le chiffre restait accroché à la séance : l'athlète le saisissait, et ni la
+  // barre du jour ni la moyenne de la semaine n'en tenaient compte.
+  // Le garde >0 est volontairement plus strict que celui de _recordSteps : un
+  // champ laissé vide, ou à 0, ne doit pas écraser une saisie Lifestyle déjà
+  // faite le même jour. Placé AVANT saveUser(), pour que les deux écritures
+  // partent dans la même persistance.
+  const _pas=parseInt(metrics.steps,10);
+  if(!isNaN(_pas)&&_pas>0&&_pas<=99999) _recordSteps(localISODate(new Date()),_pas);
   toastEcriture(saveUser(),' Super séance enregistrée !','la séance est');
   go('s-client-home');loadClientHome();
 }
@@ -11471,17 +11481,34 @@ function loadSteps(containerId='steps-content'){
     ${histHtml}
   `;
 }
+// ── Journal de pas : point d'écriture unique ────────────────────────────────
+// Deux écrans y déposent la même donnée — la saisie Lifestyle et le champ de
+// fin de séance. Dupliquer la logique, c'était garantir qu'elles finiraient par
+// diverger sur la clé de date, la purge ou l'écrasement, et produire soit des
+// doublons soit des jours fantômes. Un seul chemin, donc.
+// N'ÉCRIT PAS : la persistance reste à l'appelant, qui sait s'il a d'autres
+// modifications à grouper dans le même saveUser().
+const STEPS_RETENTION_JOURS=180;
+function _recordSteps(dateStr,count){
+  const n=parseInt(count,10);
+  // 0 est une valeur légitime saisie à la main (« je n'ai pas marché »), d'où
+  // le seuil bas à 0 et non à 1 — le champ de fin de séance, lui, resserre à
+  // >0 côté appelant pour qu'un champ laissé vide n'écrase rien.
+  if(!dateStr||isNaN(n)||n<0||n>99999) return false;
+  if(!currentUser.stepsLog) currentUser.stepsLog=[];
+  const idx=currentUser.stepsLog.findIndex(e=>e.date===dateStr);
+  // Écrasement, jamais ajout : un jour n'a qu'un total. C'est précisément ce
+  // qui permet de corriger dans Lifestyle un chiffre entré en fin de séance.
+  if(idx>=0) currentUser.stepsLog[idx].count=n;
+  else currentUser.stepsLog.push({date:dateStr,count:n});
+  const cutoff=localISODate(new Date(Date.now()-STEPS_RETENTION_JOURS*24*3600*1000));
+  currentUser.stepsLog=currentUser.stepsLog.filter(e=>e.date>=cutoff);
+  return true;
+}
 function saveSteps(){
   const input=document.getElementById('steps-today-input');
   const count=parseInt(input.value,10);
-  if(count==null||isNaN(count)||count<0||count>99999){toast('️ Saisis un nombre de pas valide');return;}
-  const todayStr=localISODate(new Date());
-  if(!currentUser.stepsLog) currentUser.stepsLog=[];
-  const idx=currentUser.stepsLog.findIndex(e=>e.date===todayStr);
-  if(idx>=0) currentUser.stepsLog[idx].count=count;
-  else currentUser.stepsLog.push({date:todayStr,count});
-  const cutoff=localISODate(new Date(Date.now()-180*24*3600*1000));
-  currentUser.stepsLog=currentUser.stepsLog.filter(e=>e.date>=cutoff);
+  if(!_recordSteps(localISODate(new Date()),count)){toast('️ Saisis un nombre de pas valide');return;}
   saveUser();
   toast(' '+count.toLocaleString('fr-FR')+' pas enregistrés !');
   loadLifestyle();
