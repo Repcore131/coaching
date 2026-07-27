@@ -1103,8 +1103,11 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="metric-box"><div class="metric-val" id="ccd-sessions">0</div><div class="metric-label">Séances</div></div>
         <div class="metric-box"><div class="metric-val" id="ccd-weight">—</div><div class="metric-label">Poids</div></div>
       </div>
+      <!-- Modèle appliqué : renseigné par openClientDetail -->
+      <div id="ccd-assigned-prog" style="display:none;font-size:11px;color:var(--sub);margin-bottom:10px;padding:8px 12px;background:var(--surface-1);border-left:2px solid var(--red);border-radius:0 6px 6px 0;line-height:1.5"></div>
       <div class="gap" style="margin-bottom:20px">
         <button class="btn btn-red" onclick="openCoachSessions()"> Gérer le programme</button>
+        <button class="btn btn-outline" onclick="openApplyTemplate()">🗂️ Appliquer un modèle</button>
         <button class="btn btn-outline" onclick="viewClientBilans()"> Bilans complets</button>
       </div>
 
@@ -4241,6 +4244,17 @@ function openClientDetail(cid,_refresh){
     if(_bits.length){_pd.innerHTML=_bits.join('');_pd.style.display='flex';}
     else _pd.style.display='none';
   }
+  // Modèle appliqué : sans cette ligne, le coach n'avait aucun moyen de savoir
+  // lequel de ses programmes cet athlète suit — l'écran des séances ne montre
+  // que le contenu, jamais son origine.
+  const _ap=document.getElementById('ccd-assigned-prog');
+  if(_ap){
+    if(c.assignedProgramName){
+      _ap.innerHTML='<strong style="color:#ddd">Programme :</strong> '+escapeHtml(c.assignedProgramName)
+        +(c.assignedProgramAt?' — assigné le '+new Date(c.assignedProgramAt).toLocaleDateString('fr-FR'):'');
+      _ap.style.display='block';
+    } else _ap.style.display='none';
+  }
   document.getElementById('ccd-streak').textContent=streakSemaines(c)+'';
   document.getElementById('ccd-sessions').textContent=(c.sessions||[]).length;
   const lb=c.bilans?.length?c.bilans[c.bilans.length-1]:null;
@@ -5026,10 +5040,7 @@ function confirmAssignProgram(){
   if(!confirm(msg)) return;
   const pushes=[];
   targets.forEach(({emailKey,a,gender})=>{
-    const base=gender==='F'?prog.sessions_F:prog.sessions_H;
-    _pushSessionsHistory(a); // sauvegarde avant écrasement
-    a.sessions_config=_marquerCommePublie(base.map(s=>({...s,exercises:s.exercises.map(e=>({...e}))})));
-    a.updatedAt=Date.now();
+    _assignerModele(a,prog,gender);
     users[emailKey]=a;
     pushes.push(CLOUD.pushOne(emailKey,a));
   });
@@ -5041,6 +5052,91 @@ function confirmAssignProgram(){
   toastSync(ok,Promise.all(pushes),
     ` Programme assigné à ${targets.length} athlète${targets.length>1?'s':''} !`,
     'le programme est');
+}
+
+// Cœur d'assignation, partagé par l'écran d'assignation en masse et par
+// « Appliquer un modèle » depuis la fiche d'un athlète. Un seul endroit écrit
+// sessions_config ET la trace du modèle : les deux chemins ne peuvent pas
+// diverger, et la fiche affichera toujours le bon nom quel que soit le geste.
+function _assignerModele(a,prog,genre){
+  const base=(genre==='F'?prog.sessions_F:prog.sessions_H)||[];
+  _pushSessionsHistory(a); // sauvegarde avant écrasement — rollback possible
+  a.sessions_config=_marquerCommePublie(base.map(s=>({...s,exercises:(s.exercises||[]).map(e=>({...e}))})));
+  a.assignedProgramName=prog.name||'Programme';
+  a.assignedProgramAt=Date.now();
+  a.updatedAt=Date.now();
+}
+
+// ── Appliquer un modèle depuis la fiche de l'athlète ────────────────────────
+// Sans quitter l'écran : ouvrir la liste des programmes puis revenir coûtait
+// jusqu'ici quatre navigations, et faisait perdre le contexte de l'athlète.
+let _atGenre={};
+function openApplyTemplate(){
+  const c=getOwnedClient(currentClientId);
+  if(!c) return;
+  if(c._fromCode){toast('Cet athlète n\'a pas encore créé son compte.','var(--orange)');return;}
+  const progs=currentUser.coachPrograms||[];
+  if(!progs.length){
+    toast('Aucun modèle enregistré — crée-en un depuis l\'onglet Programmes.','var(--orange)');
+    return;
+  }
+  // Pré-positionné sur le genre connu de l'athlète : dans la grande majorité
+  // des cas le coach n'a rien à toucher, ce qui ramène le geste à deux appuis.
+  const genreDefaut=isFemale(c._evol_gender||c.gender)?'F':'H';
+  _atGenre={};
+  progs.forEach((_,i)=>{_atGenre[i]=genreDefaut;});
+  const bg=(actif)=>actif?'var(--red)':'#222';
+  const fg=(actif)=>actif?'#fff':'var(--sub)';
+  const lignes=progs.map((p,i)=>`
+    <div style="padding:14px 0;border-bottom:1px solid #181818">
+      <div style="font-weight:800;font-size:14px;margin-bottom:3px">${escapeHtml(p.name||'Sans nom')}</div>
+      <div class="sub" style="font-size:11px;margin-bottom:10px">${_cptCount(p.sessions_H)} séances H · ${_cptCount(p.sessions_F)} séances F</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button onclick="_atSwitchGenre(${i},'H')" id="at-g-H-${i}" style="min-height:44px;min-width:52px;padding:0 12px;border-radius:3px;border:none;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;background:${bg(genreDefaut==='H')};color:${fg(genreDefaut==='H')}">♂ H</button>
+        <button onclick="_atSwitchGenre(${i},'F')" id="at-g-F-${i}" style="min-height:44px;min-width:52px;padding:0 12px;border-radius:3px;border:none;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;background:${bg(genreDefaut==='F')};color:${fg(genreDefaut==='F')}">♀ F</button>
+        <button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="applyTemplateToClient(${i})">Appliquer</button>
+      </div>
+    </div>`).join('');
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:85vh;overflow-y:auto">
+    <h2 style="margin-bottom:4px">🗂️ Appliquer un modèle</h2>
+    <p class="sub" style="font-size:12px;margin-bottom:6px">à ${escapeHtml((c.fname||'')+' '+(c.lname||'')).trim()||'cet athlète'} — version ${genreDefaut==='F'?'F':'H'} pré-sélectionnée</p>
+    ${lignes}
+    <button class="btn btn-outline" style="margin-top:14px" onclick="closeModal()">Annuler</button>
+  </div></div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+function _atSwitchGenre(i,g){
+  _atGenre[i]=g;
+  const bH=document.getElementById('at-g-H-'+i),bF=document.getElementById('at-g-F-'+i);
+  if(!bH||!bF) return;
+  bH.style.background=g==='H'?'var(--red)':'#222';bH.style.color=g==='H'?'#fff':'var(--sub)';
+  bF.style.background=g==='F'?'var(--red)':'#222';bF.style.color=g==='F'?'#fff':'var(--sub)';
+}
+function applyTemplateToClient(idx){
+  const prog=(currentUser.coachPrograms||[])[idx];
+  if(!prog) return;
+  const users=DB.get('users')||{};
+  const emailKey=Object.keys(users).find(k=>users[k]?.id===currentClientId);
+  if(!emailKey){toast('Athlète introuvable','var(--orange)');return;}
+  const a=users[emailKey];
+  const genre=_atGenre[idx]||'H';
+  // Remplacer un programme existant est destructeur : on le dit, et on rappelle
+  // que l'historique permet un retour en arrière. Aucun athlète sans programme
+  // n'a à subir cette question — le geste reste à deux appuis dans ce cas.
+  if(hasProgram(a)){
+    const rollback=a.sessions_config
+      ?'\n\nL\'ancien programme sera sauvegardé dans l\'historique (rollback possible).':'';
+    if(!confirm('Remplacer le programme actuel de '+(a.fname||'cet athlète')
+      +' par « '+(prog.name||'ce modèle')+' » (version '+genre+') ?'+rollback)) return;
+  }
+  _assignerModele(a,prog,genre);
+  users[emailKey]=a;
+  const ok=DB.set('users',users);
+  const envoi=CLOUD.pushOne(emailKey,a);
+  closeModal();
+  openClientDetail(currentClientId,true);
+  toastSync(ok,envoi,'« '+(prog.name||'Modèle')+' » appliqué à '+(a.fname||'l\'athlète'),'le programme est');
 }
 
 // ======= COACH SESSION MANAGER =======
