@@ -7444,6 +7444,14 @@ function finishWorkout(incomplete=false){
   clearInterval(woState.timerInterval);
   const mins=Math.floor((Date.now()-woState.startTime)/60000);
   let sets=0,vol=0;
+  // Total PRÉVU, compté sur le programme et non sur sessionData : ce dernier
+  // n'est rempli qu'à l'ouverture de chaque exercice (renderWoEx), et
+  // « Terminer » (finishWorkoutEarly) permet de sortir avant d'avoir tout
+  // parcouru. Sur sessionData, une séance de 3×4 abandonnée au 2e exercice
+  // annoncerait « 5/8 » — l'écart réel, celui qu'on veut montrer, est 5/12.
+  // woState.exercises porte déjà la réduction de séries de la phase lutéale :
+  // c'est bien ce qui était prévu POUR CETTE séance-là.
+  const setsPlanned=(woState.exercises||[]).reduce((n,ex)=>n+(parseInt(ex.series)||0),0);
   // Seules les séries validées comptent : sessionData contient toutes les séries
   // prévues dès l'ouverture de l'exercice, l'ancien sets++ inconditionnel affichait
   // donc le programme au lieu du réalisé. Même définition que la fiche coach, qui
@@ -7466,12 +7474,19 @@ function finishWorkout(incomplete=false){
   // slot : le créneau d'où vient cette séance. C'est la clé qui permettra à la
   // prochaine séance du même jour de retrouver ses charges sans aller les
   // chercher dans un autre jour de la semaine.
-  const sess={id:'s_'+Date.now(),date:Date.now(),name:woState.progName,slot:woState.slot??null,duration:mins,sets,volume:Math.round(vol),complete:!incomplete,data};
+  // sets = réalisé, setsPlanned = prévu. Les deux sont conservés : sans le
+  // second, un « 5 » isolé ne dit pas s'il vaut pour 5 sur 5 ou 5 sur 12, et
+  // l'historique ne permet plus de reconstituer l'écart après coup.
+  const sess={id:'s_'+Date.now(),date:Date.now(),name:woState.progName,slot:woState.slot??null,duration:mins,sets,setsPlanned,volume:Math.round(vol),complete:!incomplete,data};
   if(!currentUser.sessions) currentUser.sessions=[];
   currentUser.sessions.push(sess);
   updateStreak();saveUser();
   document.getElementById('wd-time').textContent=mins+'min';
-  document.getElementById('wd-sets').textContent=sets;
+  // « 5/12 » plutôt que « 5 » : l'écart devient lisible au lieu d'être noyé.
+  // Le dénominateur n'est affiché que s'il est connu et cohérent — sur le
+  // chemin hérité (startWorkout), un exercice sans .series donnerait 0.
+  document.getElementById('wd-sets').textContent=
+    (setsPlanned>0&&setsPlanned>=sets)?(sets+'/'+setsPlanned):sets;
   document.getElementById('wd-vol').textContent=Math.round(vol)+'kg';
   document.getElementById('wd-msg').textContent=incomplete?'Séance interrompue. Continue demain !':'Excellent travail ! Chaque séance compte ';
   document.getElementById('wd-comparison').innerHTML=buildSessionComparison(vol,data);
