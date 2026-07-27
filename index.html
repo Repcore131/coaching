@@ -9305,9 +9305,15 @@ function _renderCycleNutSettings(nut){
     </div>
     <div>
       <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:6px">Longueur du cycle (jours)</div>
+      <!-- onchange et NON oninput : le gestionnaire se termine par un
+           _renderNutriContent qui reconstruit ce champ. À chaque frappe il
+           était donc détruit et recréé — le focus partait, et « 3 » avait déjà
+           été ramené à 20 avant qu'on ait pu taper le second chiffre. Saisir
+           « 30 » était matériellement impossible. onchange n'intervient qu'au
+           blur, quand la valeur est complète. -->
       <input type="number" id="cycle-len" value="${len}" min="20" max="40"
         style="width:100%;padding:9px 12px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:13px;box-sizing:border-box"
-        oninput="saveCycleNutSettings()">
+        onchange="saveCycleNutSettings()">
     </div>
     <div>
       <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:8px">Intensité des règles</div>
@@ -9358,7 +9364,16 @@ function saveCycleNutSettings(field,value){
     if(g('cycle-enabled')) conf.enabled=g('cycle-enabled').checked;
     if(g('cycle-pms')) conf.sensibilite_pms=g('cycle-pms').checked;
     if(g('cycle-last-period')&&g('cycle-last-period').value) conf.lastPeriodDate=g('cycle-last-period').value;
-    if(g('cycle-len')&&g('cycle-len').value) conf.cycleLength=Math.max(20,Math.min(40,parseInt(g('cycle-len').value)||28));
+    // Ne clamper qu'une valeur COMPLÈTE. Un champ vidé ne doit rien écrire :
+    // le clamp le remplacerait par 20 sous les doigts de l'utilisatrice.
+    // parseInt(...)||28 était pire encore : une saisie illisible retombait
+    // silencieusement sur 28, en écrasant la valeur précédemment enregistrée.
+    // Ici, ce qui n'est pas un nombre ne touche à rien.
+    const _len=g('cycle-len')?String(g('cycle-len').value).trim():'';
+    if(_len!==''){
+      const _n=parseInt(_len,10);
+      if(isFinite(_n)) conf.cycleLength=Math.max(20,Math.min(40,_n));
+    }
   }
   saveUser();
   _manageCycleSupplements();
