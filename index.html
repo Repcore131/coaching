@@ -608,7 +608,9 @@ const COACH_PHOTO='icons/coach.jpg';
     <div style="margin-bottom:8px">
       <div style="width:24px;height:2px;background:var(--red);margin-bottom:14px"></div>
       <div style="font-size:26px;font-weight:900;letter-spacing:-0.5px;text-transform:uppercase;color:var(--red)">ESPACE COACH</div>
-      <div class="sub" style="font-size:12px;margin-top:6px">Accès réservé aux coachs de l'application RepCore.</div>
+      <!-- Cette phrase décrivait une restriction qui n'existait pas :
+           l'inscription coach était ouverte à tous. Elle est maintenant exacte. -->
+      <div class="sub" style="font-size:12px;margin-top:6px">Accès sur invitation. La création d'un compte coach demande un code fourni par le créateur de RepCore.</div>
     </div>
 
     <!-- SE CONNECTER -->
@@ -789,6 +791,9 @@ const COACH_PHOTO='icons/coach.jpg';
       <input type="checkbox" id="r-rgpd" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
       <label for="r-rgpd" style="font-size:12px;color:var(--sub);line-height:1.6;cursor:pointer">J'ai lu et j'accepte la <a href="./privacy.html" target="_blank" rel="noopener" style="color:var(--red);text-decoration:underline;font-weight:600">politique de confidentialité</a> et je consens explicitement au traitement de mes données de santé (âge, taille, poids, mensurations, photos et vidéos, problèmes de santé et blessures, allergies, troubles alimentaires, alimentation, sommeil, stress, caféine, compléments, pas quotidiens, entraînement et, si je choisis de les renseigner, cycle menstruel) dans le cadre de mon suivi sportif.</label>
     </div>
+    <!-- Rappel de l'invitation portée depuis l'écran coach : sans ce repère,
+         le coach ne voit nulle part que son code a bien été pris en compte. -->
+    <div id="r-invite-line" style="display:none;font-size:11px;color:var(--green);font-family:monospace;letter-spacing:1px;margin-bottom:4px"></div>
     <div id="r-err" style="color:var(--red-light);font-size:13px;display:none"></div>
     <button class="btn btn-red" onclick="doRegister()">Créer mon compte</button>
     <div style="height:30px"></div>
@@ -938,6 +943,31 @@ const COACH_PHOTO='icons/coach.jpg';
         <h2 style="margin-bottom:4px">Codes accès élèves</h2>
         <p class="sub" style="font-size:12px;margin-bottom:20px">Génère un code personnalisé avec une durée d'accès pour chaque élève. Envoie-le par WhatsApp ou SMS.</p>
         <!-- Visible créateur uniquement — géré dans loadStudentCodes() -->
+        <!-- INVITATION COACH — créateur uniquement, même visibilité que la carte
+             de génération de codes élèves (loadStudentCodes). -->
+        <div id="sc-coach-invite-card" style="display:none;background:var(--dark);border:1px solid #1c4266;border-radius:14px;padding:18px;margin-bottom:16px">
+          <div style="font-size:11px;font-weight:800;color:#7fb3e8;letter-spacing:2px;margin-bottom:6px">INVITER UN COACH</div>
+          <p class="sub" style="font-size:11px;line-height:1.6;margin-bottom:12px">Un code à usage unique qui autorise la création d'UN compte coach. Sans lui, l'inscription coach est fermée.</p>
+          <div style="margin-bottom:12px"><label for="ci-nom">Nom du coach invité</label><input id="ci-nom" placeholder="Ex: Julie Bernard"></div>
+          <div style="margin-bottom:14px">
+            <label for="ci-duree">Validité de l'invitation</label>
+            <select id="ci-duree" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:#fff;padding:12px 14px;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;cursor:pointer">
+              <option value="1" selected>1 mois</option>
+              <option value="3">3 mois</option>
+              <option value="6">6 mois</option>
+            </select>
+          </div>
+          <button class="btn btn-outline" onclick="generateCoachInvite()" style="letter-spacing:1px;border-color:#1c4266;color:#7fb3e8">Générer une invitation coach</button>
+          <div id="ci-result" style="display:none;margin-top:16px">
+            <div style="background:#0a1420;border:1px solid #1c4266;border-radius:10px;padding:16px">
+              <div style="font-size:10px;color:var(--sub);letter-spacing:2px;margin-bottom:8px">INVITATION GÉNÉRÉE</div>
+              <div id="ci-code-val" style="font-family:monospace;font-size:15px;color:#7fb3e8;letter-spacing:2px;margin-bottom:10px;background:#050b14;padding:10px;border-radius:6px;text-align:center"></div>
+              <div style="font-size:12px;color:#aaa;margin-bottom:14px" id="ci-expiry-info"></div>
+              <button class="btn btn-outline" onclick="_copierInviteCoach()" style="font-size:12px;letter-spacing:1px">Copier l'invitation</button>
+            </div>
+          </div>
+        </div>
+
         <div id="sc-generate-card" style="background:var(--dark);border:1px solid #2a0000;border-radius:14px;padding:18px;margin-bottom:24px">
           <div style="font-size:11px;font-weight:800;color:var(--red);letter-spacing:2px;margin-bottom:14px">NOUVEAU CODE GRATUIT</div>
           <div style="margin-bottom:12px"><label for="sc-name">Nom de l'élève</label><input id="sc-name" placeholder="Ex: Marie Martin"></div>
@@ -3553,6 +3583,9 @@ async function doRegister(){
   if(pw.length<6) return showErr('r-err','Mot de passe trop court (min 6 car.).');
   if(pw!==pw2) return showErr('r-err','Mots de passe différents.');
   if(!selRole) return showErr('r-err','Sélectionne ton rôle.');
+  // Échec rapide : inutile de créer un compte Firebase pour refuser ensuite.
+  if(selRole==='coach'&&!_INVITE_RE.test(_coachInviteCode()))
+    return showErr('r-err','Les comptes coach sont sur invitation. Passe par « CRÉER MON COMPTE » depuis l\'espace coach et saisis ton code.');
   if(!document.getElementById('r-rgpd')?.checked) return showErr('r-err','Accepte la politique de confidentialité pour continuer.');
   const users=DB.get('users')||{};
   if(users[em]) return showErr('r-err','Email déjà utilisé.');
@@ -3602,9 +3635,18 @@ async function doRegister(){
     return routeUser();
   }
 
+  // Consommation de l'invitation : ICI et pas plus haut, pour ne pas brûler un
+  // code au profit de quelqu'un qui ne fait que récupérer un compte existant
+  // (branche cloudUser ci-dessus, qui sort avant d'arriver là).
+  if(selRole==='coach'){
+    try{ await _verifyCoachInvite(_coachInviteCode(),em); }
+    catch(e){ return showErr('r-err',e.message||'Invitation refusée.'); }
+  }
+
   users[em]=user;DB.set('users',users);
   currentUser=user;DB.set('session',user);
   if(selRole==='coach'){
+    _clearCoachInvite();
     document.getElementById('coach-code-val').textContent=user.code;
     go('s-coach-code');
   } else if(!_retourApresInscription()){
@@ -3784,9 +3826,41 @@ async function doNewPwdRecovery(){
   }
 }
 function showErr(id,msg){const e=document.getElementById(id);e.textContent=msg;e.style.display='block';}
+// La carte « CRÉER MON COMPTE » demande l'invitation AVANT d'ouvrir le
+// formulaire. Le contrôle de forme est fait ici pour attraper les fautes de
+// frappe tout de suite ; la validité réelle est vérifiée et le code consommé
+// dans doRegister, seul moment où l'on dispose d'un jeton Firebase.
 function goRegisterCoach(){
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease">
+    <h2 style="margin-bottom:6px">Code d'invitation coach</h2>
+    <p class="sub" style="font-size:12px;margin-bottom:12px;line-height:1.6">Les comptes coach sont sur invitation. Demande ton code au créateur de RepCore — il est à usage unique.</p>
+    <label for="ci-code" style="margin-top:0">Ton code</label>
+    <input id="ci-code" placeholder="RC-XXXX-XXXX" autocapitalize="characters" autocomplete="off" spellcheck="false" style="font-family:monospace;letter-spacing:1px" onkeydown="if(event.key==='Enter'){event.preventDefault();_validerInviteCoach()}">
+    <div id="ci-err" style="color:var(--red-light);font-size:12px;margin-top:8px;display:none"></div>
+    <button class="btn btn-red" style="margin-top:14px" onclick="_validerInviteCoach()">Continuer</button>
+    <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Annuler</button>
+  </div></div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+  setTimeout(()=>document.getElementById('ci-code')?.focus(),80);
+}
+function _validerInviteCoach(){
+  const champ=document.getElementById('ci-code');
+  const err=document.getElementById('ci-err');
+  const v=(champ?.value||'').trim().toUpperCase();
+  if(!_INVITE_RE.test(v)){
+    if(err){err.textContent='Format attendu : RC-XXXX-XXXX (lettres et chiffres).';err.style.display='block';}
+    champ?.focus();
+    return;
+  }
+  try{sessionStorage.setItem('rc_coach_invite',v);}catch(e){}
+  closeModal();
   go('s-register');
-  setTimeout(()=>selectRole('coach'),50);
+  setTimeout(()=>{
+    selectRole('coach');
+    const l=document.getElementById('r-invite-line');
+    if(l){l.textContent='Invitation : '+v;l.style.display='block';}
+  },50);
 }
 function goRegisterAthlete(){
   go('s-register');
@@ -12927,7 +13001,10 @@ function _rcRandCode(){
 function _rcCodesUrl(code){
   return CLOUD._fbUrl.replace('/users.json','/rc_codes/'+encodeURIComponent(code)+'.json');
 }
-async function _genAccessCode(studentName,months){
+// type : 'athlete' (défaut, code d'accès élève) ou 'coach' (invitation à créer
+// un compte coach). Le type est écrit dans le nœud RTDB et re-vérifié à la
+// consommation : un code élève ne peut pas ouvrir un compte coach.
+async function _genAccessCode(studentName,months,type){
   const fbTok=await CLOUD._getToken();
   const expiry=Date.now()+months*_MONTH_MS;
   const codeId='sc_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
@@ -12938,6 +13015,7 @@ async function _genAccessCode(studentName,months){
     coachName:(currentUser.fname||'')+' '+(currentUser.lname||''),
     coachCode:currentUser.code||null,
     studentName,expiry,months,codeId,
+    type:type||'athlete',
     creatorFree:isCreator
   };
   const url=_rcCodesUrl(code)+(fbTok?'?auth='+fbTok:'');
@@ -12946,6 +13024,41 @@ async function _genAccessCode(studentName,months){
   if(!r.ok) throw new Error('Erreur sauvegarde du code ('+r.status+') — vérifie ta connexion.');
   return {token:code,payload};
 }
+// ── Invitation coach ────────────────────────────────────────────────────────
+// L'inscription coach était libre : n'importe qui pouvait se déclarer coach et
+// obtenir un tableau de bord, des codes élèves et une place dans la liste
+// d'offboarding. Elle passe désormais par un code émis par le créateur.
+const _INVITE_RE=/^RC-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
+function _coachInviteCode(){try{return sessionStorage.getItem('rc_coach_invite')||'';}catch(e){return '';}}
+function _clearCoachInvite(){try{sessionStorage.removeItem('rc_coach_invite');}catch(e){}}
+
+// Ne peut pas réutiliser _verifyAccessCode : celui-ci s'appuie sur currentUser,
+// qui n'existe pas encore au moment où quelqu'un s'inscrit.
+// Appelée APRÈS CLOUD.signIn, car les règles RTDB exigent auth != null pour
+// lire rc_codes. Conséquence assumée : un code refusé laisse un compte Firebase
+// Auth sans dossier applicatif — état inoffensif, identique à une inscription
+// abandonnée, que la tentative suivante avec le même mot de passe rattrape.
+// C'est le PATCH redeemed côté serveur qui rend le code réellement à usage
+// unique : le refuser côté client seulement serait contournable.
+async function _verifyCoachInvite(raw,email){
+  const code=String(raw||'').trim().toUpperCase();
+  if(!_INVITE_RE.test(code)) throw new Error('Code d\'invitation mal formé (format RC-XXXX-XXXX).');
+  const fbTok=await CLOUD._getToken();
+  const url=_rcCodesUrl(code)+(fbTok?'?auth='+fbTok:'');
+  let data;
+  try{const r=await fetch(url);if(!r.ok)throw new Error(r.status);data=await r.json();}
+  catch(e){throw new Error('Impossible de vérifier le code d\'invitation — vérifie ta connexion.');}
+  if(!data) throw new Error('Code d\'invitation inconnu.');
+  if(data.type!=='coach') throw new Error('Ce code n\'est pas une invitation coach.');
+  if(!data.active) throw new Error('Cette invitation a été désactivée.');
+  if(Date.now()>data.expiry) throw new Error('Cette invitation a expiré.');
+  if(data.redeemed) throw new Error('Cette invitation a déjà servi.');
+  const r2=await fetch(url,{method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({redeemed:true,coachEmail:email,usedBy:email,redeemedAt:Date.now()})});
+  if(!r2.ok) throw new Error('Impossible de consommer l\'invitation ('+r2.status+') — réessaie.');
+  return {valid:true,payload:data};
+}
+
 async function _verifyAccessCode(raw,athleteName){
   const fbTok=await CLOUD._getToken();
   const url=_rcCodesUrl(raw)+(fbTok?'?auth='+fbTok:'');
@@ -12985,6 +13098,41 @@ async function _extendAccessCode(codeId,addMonths,token){
 
 // ── Coach: generate student access code ──
 let lastGeneratedCode=null;
+// Génération d'une invitation coach. Même garde que les codes gratuits : seul
+// CREATOR_EMAIL peut en émettre, sinon n'importe quel coach pourrait s'inviter
+// des confrères et le contrôle ne vaudrait rien.
+let _dernierInviteCoach=null;
+async function generateCoachInvite(){
+  if(currentUser.email!==CREATOR_EMAIL){
+    toast('Seul l\'administrateur RepCore peut inviter un coach.','var(--red)');
+    return;
+  }
+  const nom=(document.getElementById('ci-nom')?.value||'').trim();
+  const mois=parseInt(document.getElementById('ci-duree')?.value)||1;
+  if(!nom){toast('Entre le nom du coach à inviter','var(--orange)');return;}
+  let gen;
+  try{ gen=await _genAccessCode(nom,mois,'coach'); }
+  catch(e){ toast(e.message||'Impossible de générer l\'invitation — réessaie.','var(--red)'); return; }
+  _dernierInviteCoach=gen.token;
+  const val=document.getElementById('ci-code-val');
+  const inf=document.getElementById('ci-expiry-info');
+  const res=document.getElementById('ci-result');
+  if(val) val.textContent=gen.token;
+  if(inf) inf.textContent='Pour '+nom+' · valable jusqu\'au '
+    +new Date(gen.payload.expiry).toLocaleDateString('fr-FR')+' · usage unique';
+  if(res) res.style.display='block';
+  toast('Invitation coach générée','var(--green)');
+}
+function _copierInviteCoach(){
+  if(!_dernierInviteCoach){toast('Génère d\'abord une invitation','var(--orange)');return;}
+  const t=_dernierInviteCoach;
+  try{
+    navigator.clipboard.writeText(t)
+      .then(()=>toast('Invitation copiée','var(--green)'))
+      .catch(()=>toast('Copie refusée — sélectionne le code à la main.','var(--orange)'));
+  }catch(e){toast('Copie impossible sur cet appareil.','var(--orange)');}
+}
+
 async function generateStudentCode(){
   // Seul le créateur (CREATOR_EMAIL) peut générer des codes d'accès gratuits.
   if(currentUser.email!==CREATOR_EMAIL){
@@ -13034,6 +13182,9 @@ function loadStudentCodes(){
   const nonCreatorMsg=document.getElementById('sc-noncreatormsg');
   if(genCard) genCard.style.display=isCreator?'':'none';
   if(nonCreatorMsg) nonCreatorMsg.style.display=isCreator?'none':'';
+  // L'invitation coach suit la même règle : réservée au créateur.
+  const inviteCard=document.getElementById('sc-coach-invite-card');
+  if(inviteCard) inviteCard.style.display=isCreator?'':'none';
   const codes=currentUser.studentCodes||[];
   const el=document.getElementById('sc-list');
   if(!codes.length){el.innerHTML=emptyState('key','Aucun code généré encore.');return;}
