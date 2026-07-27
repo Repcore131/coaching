@@ -2658,6 +2658,16 @@ function compressImage(file, maxPx, quality, cb){
 //   • /users/{emailKey}   — écriture réservée au propriétaire (auth.token.email ≈ emailKey).
 //   • /users/{athleteKey} — écriture autorisée au coach (vérifié via data().coachEmailKey).
 //   Les Cloud Functions opèrent via Admin SDK et ne sont pas soumises à ces règles.
+// Bucket Firebase Storage du projet repcore-sync. Valeur relevée sur la
+// configuration du projet elle-même (firebase apps:sdkconfig web), c'est-à-dire
+// la source qu'affiche la console.
+// Elle était écrite EN DEUX ENDROITS, avec DEUX VALEURS DIFFÉRENTES : l'upload
+// de PDF visait « repcore-sync.appspot.com », l'upload de vidéo
+// « repcore-sync.firebasestorage.app ». Les projets créés depuis fin 2024
+// reçoivent le second suffixe ; le premier n'a jamais existé ici, et tout
+// téléversement de PDF partait donc vers un bucket fantôme.
+// Une seule constante, pour que les deux ne puissent plus diverger.
+const STORAGE_BUCKET='repcore-sync.firebasestorage.app';
 const CLOUD={
   _fbUrl:'https://repcore-sync-default-rtdb.firebaseio.com/users.json',
   _fbKey:'AIzaSyDQ_9jqpYMD6_32LRz1s7xyJOvEUPyr9K0',
@@ -3047,7 +3057,7 @@ const CLOUD={
   },
 
   // ── Firebase Storage : téléverse un PDF, retourne l'URL de téléchargement ──
-  _storageBucket:'repcore-sync.appspot.com',
+  _storageBucket:STORAGE_BUCKET,
   async uploadPdf(emailKey,file){
     const token=await this._getToken();
     if(!token) throw new Error('Non connecté — impossible de téléverser le PDF.');
@@ -3134,7 +3144,7 @@ const CLOUD={
     if(!token) throw new Error('Non authentifié');
     const ts=Date.now();
     const path=`videos/${userId}/${ts}_${file.name}`;
-    const bucket='repcore-sync.firebasestorage.app';
+    const bucket=STORAGE_BUCKET;
     return new Promise((resolve,reject)=>{
       const xhr=new XMLHttpRequest();
       xhr.open('POST',`https://firebasestorage.googleapis.com/v0/b/${bucket}/o?uploadType=media&name=${encodeURIComponent(path)}`);
