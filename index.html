@@ -9398,6 +9398,19 @@ function _renderStrictMacroRings(nut){
     const pct=tgt&&val?Math.min(val/tgt,1):0;
     const d=+(pct*circ).toFixed(2);
     const gap=+(circ-d).toFixed(2);
+    // Le centre affichait la CIBLE : ajouter un aliment remplissait l'arc sans
+    // que le chiffre bouge, et l'athlète ne lisait nulle part ce qu'il avait
+    // réellement mangé. On montre le consommé, la cible passe en dessous —
+    // exactement la forme de la ligne Calories un peu plus bas.
+    const fait=Math.round(val||0);
+    // La cible est arrondie elle aussi : l'adaptation de cycle produit des
+    // lipides à la décimale (_applyNutCycleModifier fait un toFixed(1)), et
+    // « / 61.6 g » en face d'un consommé entier ne veut rien dire.
+    const cible=(typeof tgt==='number'&&isFinite(tgt)&&tgt>0)?Math.round(tgt):null;
+    // Au-delà de 110 % de la cible, le chiffre vire à l'orange. L'arc est
+    // plafonné à 100 % par Math.min : à lui seul, il ne peut pas distinguer
+    // « pile atteint » de « largement dépassé ».
+    const trop=cible!=null&&val>tgt*1.1;
     return `<div style="flex:1;text-align:center">
       <svg width="88" height="88" viewBox="0 0 88 88">
         <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="var(--surface-3)" stroke-width="${sw}"/>
@@ -9405,10 +9418,11 @@ function _renderStrictMacroRings(nut){
           stroke-dasharray="${d} ${gap}" stroke-linecap="${d>0?'round':'butt'}"
           ${d>0?`filter="drop-shadow(0 0 4px ${color})"`:''}
           transform="rotate(-90 ${cx} ${cy})"/>
-        <text x="${cx}" y="${cy}" dominant-baseline="middle" text-anchor="middle"
-          font-family="Montserrat,sans-serif" font-size="13" font-weight="900" fill="#fff">${tgt||'—'}</text>
-        <text x="${cx}" y="${cy+15}" text-anchor="middle"
-          font-family="Montserrat,sans-serif" font-size="11" fill="#777">g</text>
+        <text x="${cx}" y="${cy-5}" dominant-baseline="middle" text-anchor="middle"
+          font-family="Montserrat,sans-serif" font-size="15" font-weight="900"
+          fill="${trop?'var(--orange)':'#fff'}">${fait}</text>
+        <text x="${cx}" y="${cy+13}" dominant-baseline="middle" text-anchor="middle"
+          font-family="Montserrat,sans-serif" font-size="11" fill="#777">/ ${cible!=null?cible:'—'} g</text>
       </svg>
       <div style="font-size:var(--fs-xs);color:#888;letter-spacing:1px;font-weight:700;text-transform:uppercase;margin-top:-4px">${label}</div>
     </div>`;
