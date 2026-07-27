@@ -891,7 +891,10 @@ const COACH_PHOTO='icons/coach.jpg';
             <div class="sh-line"></div>
             <h2 style="font-size:16px">MES ATHLÈTES</h2>
           </div>
-          <button class="btn btn-red btn-sm" onclick="openAddAthlete()" style="letter-spacing:2px;padding:9px 16px">+ AJOUTER</button>
+          <div style="display:flex;gap:6px;flex-shrink:0">
+            <button class="btn btn-outline btn-sm" onclick="openWaGroupe()" title="Message groupé WhatsApp" aria-label="Message groupé WhatsApp" style="letter-spacing:1px;padding:9px 12px;margin:0;min-height:38px">💬 GROUPÉ</button>
+            <button class="btn btn-red btn-sm" onclick="openAddAthlete()" style="letter-spacing:2px;padding:9px 16px;margin:0;min-height:38px">+ AJOUTER</button>
+          </div>
         </div>
         <div class="sub" style="font-size:11px;margin-bottom:14px;font-family:monospace;letter-spacing:2px" id="ch-code-small"></div>
         <div id="ch-clients-list"></div>
@@ -1108,6 +1111,11 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
       <!-- Modèle appliqué : renseigné par openClientDetail -->
       <div id="ccd-assigned-prog" style="display:none;font-size:11px;color:var(--sub);margin-bottom:10px;padding:8px 12px;background:var(--surface-1);border-left:2px solid var(--red);border-radius:0 6px 6px 0;line-height:1.5"></div>
+      <!-- Lien WhatsApp de l'athlète : libellé et cible posés par openClientDetail -->
+      <a id="ccd-wa" href="#" target="_blank" rel="noopener" style="display:none;align-items:center;justify-content:center;gap:8px;min-height:46px;margin-bottom:6px;background:#0a1a0a;border:1px solid #1e3a1e;border-radius:10px;color:#22c55e;text-decoration:none;font-size:13px;font-weight:800;letter-spacing:.5px"></a>
+      <!-- Sans ce lien, la fonctionnalité ne servirait qu'aux comptes créés
+           après ce commit : aucun athlète existant n'a de numéro. -->
+      <button id="ccd-wa-set" onclick="setClientPhone()" style="display:block;width:100%;background:none;border:none;color:var(--sub);font-family:inherit;font-size:11px;text-decoration:underline;cursor:pointer;min-height:34px;margin-bottom:10px">Enregistrer son numéro</button>
       <div class="gap" style="margin-bottom:20px">
         <button class="btn btn-red" onclick="openCoachSessions()"> Gérer le programme</button>
         <button class="btn btn-outline" onclick="openApplyTemplate()">🗂️ Appliquer un modèle</button>
@@ -3990,6 +3998,167 @@ function urgencyScore(c){
   if(isActive(c)) return 2;
   return 1;
 }
+// ── Liens WhatsApp pré-remplis ──────────────────────────────────────────────
+// AUCUNE messagerie n'est implémentée : on ouvre le WhatsApp du coach avec le
+// destinataire et le texte déjà écrits. Le coach relit et envoie lui-même.
+// Sans numéro connu, wa.me accepte l'absence de destinataire et laisse choisir
+// le contact ; le texte, lui, reste pré-rempli. C'est le cas de TOUS les
+// athlètes inscrits avant l'ajout du champ téléphone.
+// wa.me exige l'indicatif pays SANS zéro de tête. « 0612345678 » ouvre
+// WhatsApp sur « numéro invalide » et le texte pré-rempli est perdu — or un
+// coach français tape 06 par réflexe. On traite donc le cas plutôt que de
+// fabriquer un lien mort :
+//   00 33 6…  → 33 6…   (préfixe international écrit en toutes lettres)
+//   +33 6…    → 33 6…
+//   06 12…    → '' : numéro national, indicatif inconnu, inutilisable ici.
+function _numWa(phone){
+  const d=String(phone||'').replace(/\D/g,'').replace(/^00/,'');
+  return /^0/.test(d)?'':d;
+}
+function waLink(phone,text){
+  return 'https://wa.me/'+_numWa(phone)+'?text='+encodeURIComponent(text||'');
+}
+function _telAthlete(c){return _numWa(c?.phone);}
+// Un numéro est enregistré mais inexploitable : le dire précisément, sinon le
+// coach lit « numéro non enregistré » alors qu'il vient de le saisir.
+function _telInutilisable(c){return !!(c&&c.phone)&&!_numWa(c.phone);}
+// Textes contextualisés par type de ligne « À traiter ». Point de départ, pas
+// message final : rien n'est envoyé sans que le coach ait validé dans WhatsApp.
+function _waTexteTodo(type,c){
+  const p=c?.fname||'';
+  const j=n=>n+' jour'+(n>1?'s':'');
+  const dernier=(c?.bilans||[]).reduce((m,b)=>Math.max(m,b.date),0);
+  if(type==='overdue'){
+    // needsAlert se déclenche à 14 jours : le « retard » est ce qui dépasse.
+    const retard=Math.max(1,Math.floor((Date.now()-dernier)/864e5)-14);
+    return 'Salut '+p+', je vois que ton bilan est en retard de '+j(retard)
+      +' — tu peux le remplir quand tu veux dans l\'app 💪';
+  }
+  if(type==='nostart'){
+    const depuis=Math.max(1,Math.floor((Date.now()-(c?.createdAt||0))/864e5));
+    return 'Salut '+p+', tu es inscrit depuis '+j(depuis)
+      +' et je n\'ai pas encore ton premier bilan — dis-moi si tu bloques sur quelque chose, on démarre quand tu veux 💪';
+  }
+  if(type==='expiring'){
+    const reste=Math.max(1,Math.ceil(((c?.accessExpiry||0)-Date.now())/864e5));
+    return 'Salut '+p+', ton accès RepCore arrive à échéance dans '+j(reste)
+      +' — pense à le renouveler pour garder ton suivi 💪';
+  }
+  if(type==='bilan') return 'Salut '+p+', j\'ai bien reçu ton bilan, je le regarde et je reviens vers toi rapidement 💪';
+  if(type==='noprog') return 'Salut '+p+', je prépare ton programme, je te l\'envoie très vite 💪';
+  return 'Salut '+p+' 💪';
+}
+// Corps GÉNÉRIQUE pour l'envoi groupé : ni prénom, ni compteur de jours.
+// Le texte individuel de _waTexteTodo porte les chiffres d'UN athlète ; le
+// pré-remplir dans la modale groupée envoyait à tout le monde le retard du
+// premier de la liste, avec son prénom. Chaque lien est ré-adressé dans
+// _wagPreparer avec « Salut <prénom>, » + ce corps.
+function _waCorpsGroupe(type){
+  if(type==='overdue') return 'je vois que ton bilan est en retard — tu peux le remplir quand tu veux dans l\'app 💪';
+  if(type==='nostart') return 'je n\'ai pas encore ton premier bilan — dis-moi si tu bloques sur quelque chose, on démarre quand tu veux 💪';
+  if(type==='expiring') return 'ton accès RepCore arrive bientôt à échéance — pense à le renouveler pour garder ton suivi 💪';
+  if(type==='bilan') return 'j\'ai bien reçu ton bilan, je le regarde et je reviens vers toi rapidement 💪';
+  if(type==='noprog') return 'je prépare ton programme, je te l\'envoie très vite 💪';
+  return '';
+}
+// Bouton 💬 d'une ligne « À traiter ».
+// Un seul athlète → vrai lien <a> : un clic, et aucun bloqueur de fenêtres ne
+// s'interpose. Plusieurs → ouvre la sélection groupée pré-cochée sur cette
+// ligne, où chaque envoi reste un geste distinct.
+function _waBoutonTodo(r,idx){
+  const style='background:none;border:1px solid #1e3a1e;color:#22c55e;border-radius:6px;'
+    +'min-width:34px;min-height:34px;padding:0 8px;font-size:14px;cursor:pointer;flex-shrink:0;'
+    +'display:inline-flex;align-items:center;justify-content:center;text-decoration:none';
+  if(r.list.length===1){
+    const c=r.list[0];
+    const tel=_telAthlete(c);
+    const titre=tel?'Écrire à '+(c.fname||'')+' sur WhatsApp'
+      :'Ouvrir WhatsApp avec le message pré-rempli ('+(c.fname||'cet athlète')+' n\'a pas de numéro enregistré)';
+    return `<a href="${safeUrl(waLink(tel,_waTexteTodo(r.type,c)))}" target="_blank" rel="noopener"
+      onclick="event.stopPropagation()" title="${escapeHtml(titre)}" aria-label="${escapeHtml(titre)}"
+      style="${style}${tel?'':';opacity:.55'}">💬</a>`;
+  }
+  return `<button onclick="event.stopPropagation();openWaGroupe(${idx})"
+    title="Écrire aux ${r.list.length} athlètes de cette ligne" aria-label="Écrire aux ${r.list.length} athlètes de cette ligne"
+    style="${style}">💬</button>`;
+}
+// ── Envoi groupé ────────────────────────────────────────────────────────────
+// Appelée sans argument depuis le dashboard, ou avec l'index d'une ligne
+// « À traiter » pour pré-cocher exactement ses athlètes.
+// Pas de boucle window.open : au-delà de la première, le navigateur les bloque
+// et le coach croirait avoir écrit à tout le monde. Chaque destinataire reçoit
+// son propre lien, donc son propre geste — rien ne peut être avalé en silence.
+function openWaGroupe(rowIdx){
+  const source=(typeof rowIdx==='number'&&window._todoRows&&window._todoRows[rowIdx])
+    ?window._todoRows[rowIdx]:null;
+  const tous=getClients().filter(c=>!c._fromCode);
+  if(!tous.length){toast('Aucun athlète à contacter.','var(--orange)');return;}
+  const preCoches=new Set((source?source.list:tous).map(c=>c.id));
+  const lignes=tous.map(c=>{
+    const tel=_telAthlete(c);
+    const nom=((c.fname||'')+' '+(c.lname||'')).trim()||c.email||'Athlète';
+    return `<label style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid #181818;cursor:pointer">
+      <input type="checkbox" class="wag-cb" value="${escapeHtml(c.id)}" data-tel="${escapeHtml(tel)}" data-nom="${escapeHtml(c.fname||'')}"
+        ${preCoches.has(c.id)?'checked':''} style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:13px">${escapeHtml(nom)}</div>
+        <div class="sub" style="font-size:10px">${tel?'📱 '+escapeHtml(tel):'<span style="color:var(--orange)">aucun numéro — le contact sera à choisir dans WhatsApp</span>'}</div>
+      </div>
+    </label>`;
+  }).join('');
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:88vh;overflow-y:auto">
+    <h2 style="margin-bottom:4px">💬 Message groupé</h2>
+    <p class="sub" style="font-size:12px;margin-bottom:10px">Rien n'est envoyé d'ici : chaque nom ouvrira ta conversation WhatsApp avec le texte déjà écrit.</p>
+    <label for="wag-texte" style="margin-top:0">Message — chacun le recevra précédé de « Salut &lt;son prénom&gt;, »</label>
+    <textarea id="wag-texte" rows="3" style="resize:none" placeholder="petit point d'étape cette semaine 💪">${escapeHtml(source?_waCorpsGroupe(source.type):'')}</textarea>
+    <div style="display:flex;gap:8px;margin:10px 0 4px">
+      <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="_wagTout(true)">Tout cocher</button>
+      <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="_wagTout(false)">Tout décocher</button>
+    </div>
+    <div id="wag-liste">${lignes}</div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="_wagCopierNumeros()">Copier les numéros</button>
+      <button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="_wagPreparer()">Préparer les envois</button>
+    </div>
+    <div id="wag-liens" style="margin-top:12px"></div>
+    <button class="btn btn-outline" style="margin-top:12px" onclick="closeModal()">Fermer</button>
+  </div></div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+function _wagTout(v){document.querySelectorAll('.wag-cb').forEach(cb=>cb.checked=v);}
+function _wagSelection(){
+  return [...document.querySelectorAll('.wag-cb:checked')].map(cb=>({
+    id:cb.value,tel:cb.dataset.tel||'',nom:cb.dataset.nom||''
+  }));
+}
+function _wagCopierNumeros(){
+  const avecTel=_wagSelection().filter(s=>s.tel);
+  if(!avecTel.length){toast('Aucun numéro enregistré parmi les athlètes cochés.','var(--orange)');return;}
+  const liste=avecTel.map(s=>s.tel).join('\n');
+  try{
+    navigator.clipboard.writeText(liste)
+      .then(()=>toast(avecTel.length+' numéro'+(avecTel.length>1?'s copiés':' copié'),'var(--green)'))
+      .catch(()=>toast('Copie refusée par le navigateur — sélectionne les numéros à la main.','var(--orange)'));
+  }catch(e){toast('Copie impossible sur cet appareil.','var(--orange)');}
+}
+function _wagPreparer(){
+  const sel=_wagSelection();
+  const zone=document.getElementById('wag-liens');
+  if(!zone) return;
+  if(!sel.length){zone.innerHTML='';toast('Coche au moins un athlète.','var(--orange)');return;}
+  const texte=(document.getElementById('wag-texte')?.value||'').trim();
+  if(!texte){toast('Écris le message à envoyer.','var(--orange)');return;}
+  const sansTel=sel.filter(s=>!s.tel).length;
+  // Ré-adressage par destinataire : sans lui, tout le monde recevait le prénom
+  // et les chiffres du premier athlète de la liste.
+  const pour=s=>(s.nom?'Salut '+s.nom+', ':'Salut ! ')+texte;
+  zone.innerHTML=`<div class="sub" style="font-size:11px;margin-bottom:8px">Touche chaque nom pour ouvrir WhatsApp — ${sel.length} conversation${sel.length>1?'s':''} à ouvrir${sansTel?`, dont ${sansTel} sans numéro utilisable (contact à choisir)`:''}.</div>`
+    +sel.map(s=>`<a href="${safeUrl(waLink(s.tel,pour(s)))}" target="_blank" rel="noopener"
+      style="display:flex;align-items:center;gap:8px;min-height:44px;padding:0 12px;margin-bottom:6px;background:#0a1a0a;border:1px solid #1e3a1e;border-radius:8px;color:#22c55e;text-decoration:none;font-size:13px;font-weight:700"
+      onclick="this.style.opacity='.5';this.style.borderColor='#333'">💬 ${escapeHtml(s.nom||'Athlète')}${s.tel?'':' <span style="color:var(--orange);font-weight:400;font-size:11px">(contact à choisir)</span>'}</a>`).join('');
+}
+
 function renderTodoBlock(clients){
   const el=document.getElementById('ch-todo');if(!el) return;
   const now=Date.now(),SOON=14*864e5;
@@ -4015,8 +4184,11 @@ function renderTodoBlock(clients){
       <span style="background:var(--red);color:#fff;font-size:11px;font-weight:900;padding:1px 8px;border-radius:10px;font-family:'Bebas Neue',sans-serif;letter-spacing:1px">${unique}</span>
     </div>
     ${renderDataList(rows,(r,idx)=>{
-      const names=r.list.slice(0,2).map(c=>c.fname).join(', ')+(r.list.length>2?' +'+(r.list.length-2):'');
-      return{html:`<span style="font-size:15px;flex-shrink:0">${r.icon}</span><div style="flex:1;min-width:0"><span style="font-size:12px;font-weight:700;color:#fff">${r.list.length>1?r.list.length+' ':''}</span><span style="font-size:12px;font-weight:700;color:${r.color}">${r.label}</span><span style="font-size:11px;color:var(--sub)"> · ${names}</span></div><button onclick="event.stopPropagation();dismissTodoRow(${idx})" title="Snoozer 7 jours" style="background:none;border:none;color:#444;font-size:15px;cursor:pointer;padding:4px 8px;flex-shrink:0;transition:color .15s;border-radius:4px" onmouseover="this.style.color='var(--sub)'" onmouseout="this.style.color='#444'">✕</button>`,
+      // XSS stocké : le prénom est saisi par l'athlète lui-même et atterrissait
+      // brut dans le tableau de bord de son coach. Trouvé en testant les liens
+      // WhatsApp avec un prénom hostile — le défaut est antérieur.
+      const names=r.list.slice(0,2).map(c=>escapeHtml(c.fname||'')).join(', ')+(r.list.length>2?' +'+(r.list.length-2):'');
+      return{html:`<span style="font-size:15px;flex-shrink:0">${r.icon}</span><div style="flex:1;min-width:0"><span style="font-size:12px;font-weight:700;color:#fff">${r.list.length>1?r.list.length+' ':''}</span><span style="font-size:12px;font-weight:700;color:${r.color}">${r.label}</span><span style="font-size:11px;color:var(--sub)"> · ${names}</span></div>${_waBoutonTodo(r,idx)}<button onclick="event.stopPropagation();dismissTodoRow(${idx})" title="Snoozer 7 jours" style="background:none;border:none;color:#444;font-size:15px;cursor:pointer;padding:4px 8px;flex-shrink:0;transition:color .15s;border-radius:4px" onmouseover="this.style.color='var(--sub)'" onmouseout="this.style.color='#444'">✕</button>`,
       onClick:`openClientDetail('${r.list[0].id}')`,style:'cursor:pointer;transition:background .15s;'};
     },{pad:'10px 14px',gap:10,border:'#180000',hover:'#140000'})}
   </div>`;
@@ -4277,6 +4449,25 @@ function openClientDetail(cid,_refresh){
     if(c.bilanGoals) _bits.push(`<div style="font-size:11px;flex-basis:100%"><span style="color:var(--sub)">Objectifs bilan départ</span><br><strong>${escapeHtml(c.bilanGoals)}</strong></div>`);
     if(_bits.length){_pd.innerHTML=_bits.join('');_pd.style.display='flex';}
     else _pd.style.display='none';
+  }
+  // Lien WhatsApp vers l'athlète. Sans numéro, le lien reste utile — WhatsApp
+  // s'ouvre avec le texte et le coach choisit le contact — mais le libellé le
+  // dit, pour ne pas laisser croire à un destinataire déjà résolu.
+  const _wa=document.getElementById('ccd-wa');
+  if(_wa){
+    if(c._fromCode){_wa.style.display='none';}
+    else{
+      const _tel=_telAthlete(c);
+      const _pre=c.fname||'cet athlète';
+      _wa.href=safeUrlRaw(waLink(_tel,'Salut '+(c.fname||'')+' 💪'));
+      _wa.innerHTML=_tel
+        ?'💬 Écrire à '+escapeHtml(_pre)
+        :'💬 Écrire à '+escapeHtml(_pre)+' <span style="font-weight:400;font-size:11px;color:var(--orange)">('
+          +(_telInutilisable(c)?'numéro sans indicatif pays':'numéro non enregistré')+')</span>';
+      _wa.style.display='flex';
+      const _def=document.getElementById('ccd-wa-set');
+      if(_def) _def.textContent=_tel?'Modifier le numéro':'Enregistrer son numéro';
+    }
   }
   // Modèle appliqué : sans cette ligne, le coach n'avait aucun moyen de savoir
   // lequel de ses programmes cet athlète suit — l'écran des séances ne montre
@@ -5088,6 +5279,32 @@ function confirmAssignProgram(){
     'le programme est');
 }
 
+// Renseigner le numéro d'un athlète depuis sa fiche. Écrit dans le nœud de
+// l'athlète, donc synchronisé et visible depuis n'importe quel appareil du coach.
+function setClientPhone(){
+  const users=DB.get('users')||{};
+  const emailKey=Object.keys(users).find(k=>users[k]?.id===currentClientId);
+  if(!emailKey){toast('Athlète introuvable','var(--orange)');return;}
+  const a=users[emailKey];
+  const saisi=prompt('Numéro WhatsApp de '+(a.fname||'cet athlète')
+    +'\n\nAvec l\'indicatif pays, ex : +33612345678',a.phone||'+33');
+  if(saisi===null) return; // annulé
+  const brut=saisi.trim();
+  // Refuser à la saisie plutôt que de stocker un numéro qui ouvrira WhatsApp
+  // sur « numéro invalide ». _numWa rejette tout ce qui commence par 0.
+  if(brut&&_numWa(brut).length<8){
+    toast('Numéro inutilisable — mets l\'indicatif pays sans le 0, ex : +33612345678','var(--orange)');
+    return;
+  }
+  a.phone=brut||null;   // champ vidé = numéro retiré
+  a.updatedAt=Date.now();
+  users[emailKey]=a;
+  const ok=DB.set('users',users);
+  const envoi=CLOUD.pushOne(emailKey,a);
+  openClientDetail(currentClientId,true);
+  toastSync(ok,envoi,brut?'Numéro enregistré ✓':'Numéro retiré','le numéro est');
+}
+
 // Cœur d'assignation, partagé par l'écran d'assignation en masse et par
 // « Appliquer un modèle » depuis la fiche d'un athlète. Un seul endroit écrit
 // sessions_config ET la trace du modèle : les deux chemins ne peuvent pas
@@ -5661,7 +5878,10 @@ function loadClientHome(){
     const _applyCoachData=(usrs)=>{
       const coachUser=Object.values(usrs).find(x=>x.id===u.coachId);
       const coachEmail=Object.keys(usrs).find(k=>usrs[k]?.id===u.coachId);
-      const phone=(coachUser?.phone||'').replace(/\D/g,'');
+      // _numWa et non un replace brut : un coach ayant enregistré son numéro en
+      // 06 avant le durcissement produisait ici un lien que WhatsApp refuse.
+      // Mieux vaut retomber sur l'email que donner un bouton mort à l'athlète.
+      const phone=_numWa(coachUser?.phone);
       const href=phone?'https://wa.me/'+phone:(coachEmail?'mailto:'+coachEmail:'');
       if(href){contactLink.href=href;contactLink.style.display='inline-flex';}
       _renderCoachBanner(coachUser, u.coachName);
@@ -11986,6 +12206,7 @@ function openAddAthlete(){
     <div><label style="margin-top:10px" for="aa-lname">Nom</label><input id="aa-lname" placeholder="Nom de l'athlète"></div>
     <div><label style="margin-top:10px" for="aa-email">Email</label><input type="email" id="aa-email" placeholder="email@exemple.com"></div>
     <div><label style="margin-top:10px" for="aa-pwd">Mot de passe (provisoire, 6 caractères minimum)</label><input type="text" id="aa-pwd" placeholder="Ex: repcore123"></div>
+    <div><label style="margin-top:10px" for="aa-phone">Numéro WhatsApp <span style="color:var(--sub);font-weight:400">(facultatif)</span></label><input type="tel" id="aa-phone" placeholder="+33612345678" inputmode="tel"><div class="sub" style="font-size:10px;margin-top:4px">Avec l'indicatif pays. Sert à ouvrir WhatsApp pré-rempli depuis sa fiche.</div></div>
     <div><label style="margin-top:10px" for="aa-gender">Genre</label><select id="aa-gender"><option value="H">Homme</option><option value="F">Femme</option></select></div>
     ${estCreateur?`<div><label style="margin-top:10px" for="aa-duration">Durée d'accès</label><select id="aa-duration" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:#fff;padding:12px 14px;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;cursor:pointer">
       <option value="1">1 mois</option>
@@ -12058,6 +12279,15 @@ async function createAthlete(){
     createdAt:Date.now(),streak:0,lastSession:null,sessions:[],bilans:[],nutrition:{},videos:[],
     coachId:currentUser.id,coachName:currentUser.fname+' '+currentUser.lname,
     questionnaireComplete:false};
+  // Facultatif : la fiche reste utilisable sans, WhatsApp demandera le contact.
+  // Mais un numéro SAISI doit être exploitable, sinon le coach croira pouvoir
+  // écrire et tombera sur « numéro invalide ».
+  const tel=(document.getElementById('aa-phone')?.value||'').trim();
+  if(tel&&_numWa(tel).length<8){
+    _err('Numéro inutilisable — mets l\'indicatif pays sans le 0, ex : +33612345678');
+    return;
+  }
+  if(tel) athlete.phone=tel;
   // Un affilié n'accorde aucun accès : son code part en creatorFree:false et
   // renvoie l'athlète vers le paiement. Écrire COACHING_SUIVI ici affichait sur
   // son tableau de bord un élève « suivi » qui, lui, se heurtait au paywall.
@@ -12178,8 +12408,8 @@ function updateCloudStatus(){
 }
 function saveCoachPhone(){
   const raw=(document.getElementById('coach-phone-input').value||'').trim();
-  const digits=raw.replace(/\D/g,'');
-  if(!digits){toast('Entre un numéro avec indicatif, ex: +33612345678','var(--orange)');return;}
+  // Même règle que pour les athlètes : wa.me refuse un numéro national.
+  if(_numWa(raw).length<8){toast('Numéro inutilisable — mets l\'indicatif pays sans le 0, ex : +33612345678','var(--orange)');return;}
   currentUser.phone=raw;
   toastEcriture(saveUser(),'Numéro WhatsApp enregistré ✓','le numéro est');
   _renderCoachPhonePreview(raw);
@@ -12342,10 +12572,17 @@ function saveAthleteProfile(){
   loadClientHome();
 }
 function _renderCoachPhonePreview(raw){
-  const digits=(raw||'').replace(/\D/g,'');
+  const digits=_numWa(raw);
   const el=document.getElementById('coach-phone-preview');
   if(!el) return;
-  el.innerHTML=digits?'→ Lien : <a href="https://wa.me/'+digits+'" target="_blank" rel="noopener" style="color:#22c55e;text-decoration:none">wa.me/'+digits+'</a>'+'<span style="margin-left:8px;color:#555">(tes athlètes verront ce bouton)</span>':'';
+  // L'aperçu servait de confirmation : il affichait wa.me/0612345678 comme si
+  // le lien marchait. Un numéro sans indicatif est maintenant signalé comme tel.
+  if(!digits){
+    el.innerHTML=(raw||'').trim()
+      ?'<span style="color:var(--orange)">⚠ Numéro sans indicatif pays — WhatsApp le refusera. Écris-le sous la forme +33612345678.</span>':'';
+    return;
+  }
+  el.innerHTML='→ Lien : <a href="https://wa.me/'+digits+'" target="_blank" rel="noopener" style="color:#22c55e;text-decoration:none">wa.me/'+digits+'</a>'+'<span style="margin-left:8px;color:#555">(tes athlètes verront ce bouton)</span>';
 }
 async function _cloudinaryUpload(file){
   const cloudName=currentUser.cloudinaryName||'dntu57ml';
@@ -12722,10 +12959,13 @@ function loadStudentCodes(){
     const expired=now>c.expiry;
     const exp=new Date(c.expiry);
     const st=!c.active?'<span class="badge badge-gray">Désactivé</span>':expired?'<span class="badge badge-red">Expiré</span>':'<span class="badge badge-green">Actif</span>';
-    const used=c.usedBy?'<div style="font-size:10px;color:var(--sub)">Utilisé par : '+c.usedBy+'</div>':'<div style="font-size:10px;color:var(--sub)">Non utilisé</div>';
+    // usedBy vient du nom que l'ATHLÈTE saisit en rachetant son code
+    // (_verifyAccessCode), studentName de la saisie du coach : les deux
+    // atterrissent dans l'écran du coach et doivent être échappés.
+    const used=c.usedBy?'<div style="font-size:10px;color:var(--sub)">Utilisé par : '+escapeHtml(c.usedBy)+'</div>':'<div style="font-size:10px;color:var(--sub)">Non utilisé</div>';
     return '<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:12px;padding:14px;margin-bottom:10px">'
       +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
-      +'<div style="font-weight:700">'+c.studentName+'</div>'+st+'</div>'
+      +'<div style="font-weight:700">'+escapeHtml(c.studentName||'')+'</div>'+st+'</div>'
       +'<div style="font-size:11px;color:#888;margin-bottom:4px">Expire: '+exp.toLocaleDateString('fr-FR')+' ('+c.months+' mois)</div>'
       +used
       +'<div style="display:flex;gap:8px;margin-top:10px">'
