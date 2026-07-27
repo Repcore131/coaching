@@ -4795,7 +4795,7 @@ function _buildSessionCard(s){
     <div onclick="toggleSCard(this)" style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:700;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(s.name||'Séance')}</div>
-        <div style="font-size:11px;color:var(--sub)">${dt} · ${s.duration||0} min · ${s.sets||0} série${(s.sets||0)>1?'s':''} · ${s.volume||0} kg</div>
+        <div style="font-size:11px;color:var(--sub)">${dt} · ${s.duration||0} min · ${fmtSeries(s.sets,s.setsPlanned)} série${pluSeries(s.sets,s.setsPlanned)} · ${s.volume||0} kg</div>
       </div>
       <span style="font-size:11px;font-weight:700;flex-shrink:0;color:${complete?'var(--green)':'#555'}">${complete?'✓':'✗'}</span>
       <span class="sc-arr" style="color:#444;font-size:11px;flex-shrink:0">▶</span>
@@ -7483,10 +7483,9 @@ function finishWorkout(incomplete=false){
   updateStreak();saveUser();
   document.getElementById('wd-time').textContent=mins+'min';
   // « 5/12 » plutôt que « 5 » : l'écart devient lisible au lieu d'être noyé.
-  // Le dénominateur n'est affiché que s'il est connu et cohérent — sur le
-  // chemin hérité (startWorkout), un exercice sans .series donnerait 0.
-  document.getElementById('wd-sets').textContent=
-    (setsPlanned>0&&setsPlanned>=sets)?(sets+'/'+setsPlanned):sets;
+  // Même formatage que la fiche coach, via fmtSeries — les deux écrans parlent
+  // du même dossier et ne doivent pas pouvoir se contredire.
+  document.getElementById('wd-sets').textContent=fmtSeries(sets,setsPlanned);
   document.getElementById('wd-vol').textContent=Math.round(vol)+'kg';
   document.getElementById('wd-msg').textContent=incomplete?'Séance interrompue. Continue demain !':'Excellent travail ! Chaque séance compte ';
   document.getElementById('wd-comparison').innerHTML=buildSessionComparison(vol,data);
@@ -11699,6 +11698,22 @@ function openPhotoFull(src,title){
 }
 
 // ======= HELPERS =======
+// « 5/12 » quand le total prévu est connu, « 5 » sinon. Partagé par le récap de
+// fin de séance et la fiche coach : les deux décrivent le même dossier et ne
+// doivent pas pouvoir diverger. setsPlanned n'existe que sur les séances
+// enregistrées depuis son introduction — tout l'historique antérieur retombe
+// donc sur le seul nombre réalisé, sans dénominateur inventé.
+// Le garde p>=f écarte aussi les dossiers incohérents, où l'on afficherait
+// « 14/12 ».
+function fmtSeries(sets,planned){
+  const f=parseInt(sets)||0, p=parseInt(planned)||0;
+  return (p>0&&p>=f)?(f+'/'+p):String(f);
+}
+// Accord du mot « série » : sur le total prévu quand il existe, sinon sur le
+// réalisé — « 1/12 série » serait faux.
+function pluSeries(sets,planned){
+  return Math.max(parseInt(sets)||0,parseInt(planned)||0)>1?'s':'';
+}
 function ini(f,l){return((f||'?')[0]+(l||'?')[0]).toUpperCase();}
 function escapeHtml(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 // safeUrlRaw : valide le schéma et rend l'URL TELLE QUELLE. À réserver aux
