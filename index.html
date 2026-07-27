@@ -173,6 +173,28 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
 .tab-btn.active svg{filter:drop-shadow(0 0 6px rgba(224,32,32,.8))}
 .tab-btn.active::after{content:'';position:absolute;top:0;left:20%;right:20%;height:2px;background:var(--red)}
 .tab-btn svg{width:19px;height:19px}
+/* La barre d'onglets athlete vivait DANS #s-client-home : elle disparaissait
+   donc des que l'athlete ouvrait Nutrition ou Videos, et passer de l'un a
+   l'autre imposait un detour par l'accueil (2 taps). Sortie des ecrans et
+   fixee en bas, elle survit au changement d'ecran.
+   Recentrage obligatoire : body fait max-width:480px;margin:0 auto, alors que
+   position:fixed se cale sur la fenetre — sans cela la barre s'etalerait sur
+   toute la largeur d'un ecran large. Meme idiome que les bannieres (l. 8717).
+   z-index sous les modales (1000) : une modale doit couvrir la barre. */
+#client-tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+  width:100%;max-width:480px;z-index:900;display:none}
+#client-tabbar.show{display:flex}
+/* Compensation de la hauteur : la barre etant fixe, elle recouvre le bas de
+   l'ecran. On rend au SCREEN la place qu'occupait l'ancien enfant flex — la
+   .scroll-area (flex:1) se raccourcit d'autant et son dernier element reste
+   visible. Applique au screen plutot qu'a la .scroll-area pour couvrir aussi
+   s-bilan-choice, qui n'en a pas et centre son contenu.
+   !important : s-bilan-choice porte un padding en style INLINE, qui gagnerait
+   sinon sur cette regle. La valeur de repli ci-dessous ne sert qu'avant la
+   premiere mesure : _majHauteurTabbar() releve la hauteur reelle au boot puis
+   a chaque affichage de la barre. */
+:root{--tabbar-h:64px}
+body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 
 
 /* ====== METRIC BOXES ====== */
@@ -1676,14 +1698,8 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="clh-promo-banners" style="display:none;margin-top:18px;margin-bottom:8px"></div>
     </div>
   </div>
-  <div class="tab-bar" id="client-tabbar">
-    <button class="tab-btn active" data-icon="home" onclick="clientTab('home',this)">Accueil</button>
-    <button class="tab-btn" data-icon="chart-bar" onclick="clientTab('bilan',this)">Bilan</button>
-    <button class="tab-btn" data-icon="utensils" onclick="clientTab('nutrition',this)">Nutrition</button>
-    <button class="tab-btn" data-icon="video" onclick="clientTab('videos',this)">Vidéos</button>
-    <button class="tab-btn" data-icon="user" onclick="clientTab('lifestyle',this)">Lifestyle</button>
-    <button class="tab-btn" data-icon="trending-up" onclick="clientTab('evolution',this)">Évolution</button>
-  </div>
+  <!-- La barre d'onglets etait ici. Elle est desormais soeur des ecrans, plus
+       bas, pour survivre au changement d'ecran. -->
 </div>
 
 <!-- ATHLETE PROFILE EDITOR -->
@@ -2395,6 +2411,20 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- BANDE RÉSEAU — persistante hors ligne, brève au retour -->
 <div id="rc-offline-bar" role="status" aria-live="polite" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9998;padding:9px 14px;padding-top:calc(9px + env(safe-area-inset-top,0px));text-align:center;font-size:11px;font-weight:700;letter-spacing:.3px;line-height:1.4"></div>
 <div id="toast" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:#222;color:#fff;padding:12px 20px;border-radius:12px;font-size:13px;font-weight:600;z-index:9999;transition:.3s;opacity:0;min-width:200px;text-align:center;pointer-events:none"></div>
+
+<!-- ══════ BARRE D'ONGLETS ATHLÈTE ══════
+     Sœur des écrans, et non enfant de #s-client-home : c'est ce qui lui permet
+     de rester à l'écran sur Nutrition, Vidéos, Lifestyle, Évolution et Bilan.
+     Ni son affichage ni l'onglet surligné ne sont décidés ici : go() les déduit
+     de l'écran réellement affiché — voir _majTabbar(). -->
+<div class="tab-bar" id="client-tabbar" aria-label="Navigation athlète">
+  <button class="tab-btn" data-tab="home" data-icon="home" onclick="clientTab('home')">Accueil</button>
+  <button class="tab-btn" data-tab="bilan" data-icon="chart-bar" onclick="clientTab('bilan')">Bilan</button>
+  <button class="tab-btn" data-tab="nutrition" data-icon="utensils" onclick="clientTab('nutrition')">Nutrition</button>
+  <button class="tab-btn" data-tab="videos" data-icon="video" onclick="clientTab('videos')">Vidéos</button>
+  <button class="tab-btn" data-tab="lifestyle" data-icon="user" onclick="clientTab('lifestyle')">Lifestyle</button>
+  <button class="tab-btn" data-tab="evolution" data-icon="trending-up" onclick="clientTab('evolution')">Évolution</button>
+</div>
 
 
 <!-- ══════ ACCESS GATE ══════ -->
@@ -3703,6 +3733,17 @@ window.onload=()=>{
   // pas, il n'y a pas de transition.
   if(!navigator.onLine) _rcBandeauReseau('offline');
   document.querySelectorAll('#client-tabbar .tab-btn[data-icon]').forEach(b=>b.insertAdjacentHTML('afterbegin',icon(b.dataset.icon,19)));
+  // APRÈS l'injection des icônes : elles font la moitié de la hauteur de la
+  // barre. Mesurer avant donnerait une valeur trop basse, et le dernier
+  // élément de chaque page passerait sous la barre.
+  _majHauteurTabbar();
+  // Les polices arrivent après ce point et rehaussent la barre de 2px : sans
+  // cette reprise, la compensation resterait courte d'autant.
+  if(document.fonts?.ready) document.fonts.ready.then(_majHauteurTabbar).catch(()=>{});
+  // La hauteur bouge avec la largeur (à 340px les libellés se réorganisent) et
+  // avec la zone sûre en rotation.
+  window.addEventListener('resize',_majHauteurTabbar);
+  window.addEventListener('orientationchange',()=>setTimeout(_majHauteurTabbar,150));
   // Mêmes mécanique et source que ci-dessus, pour les deux cartes de rôle de
   // l'inscription : le conteneur .role-icon avait perdu son glyphe et laissait
   // 40px de vide au-dessus de « COACH » et « ATHLÈTE ». Passer par ICONS plutôt
@@ -3954,6 +3995,58 @@ function loadAccessGate(){
 }
 
 // ======= NAV =======
+// ── Barre d'onglets athlète : visibilité et onglet actif ───────────────────
+// Les écrans qui la portent, et l'onglet que chacun allume. Tout ce qui ne
+// figure PAS dans cette table la masque : séance en cours, bilan, recherche
+// d'aliment, portail d'accès, abonnement, et l'intégralité des écrans coach.
+// Une table d'inclusion plutôt qu'une liste d'exclusion : un écran ajouté plus
+// tard est masqué par défaut, ce qui est le comportement sûr — l'oubli inverse
+// ferait apparaître la barre en pleine séance.
+const TABBAR_ECRANS={
+  's-client-home':'home',
+  's-bilan-choice':'bilan',
+  's-nutrition':'nutrition',
+  's-videos':'videos',
+  's-lifestyle':'lifestyle',
+  's-progress':'evolution'
+};
+// Hauteur mesurée, pas devinée : elle dépend des icônes injectées au boot et de
+// l'échelle typographique (--fs-xs). Une constante en dur laisserait soit une
+// bande morte sous le contenu, soit le dernier élément caché par la barre.
+function _majHauteurTabbar(){
+  const b=document.getElementById('client-tabbar');
+  if(!b) return;
+  // Mesure possible même barre masquée : on l'affiche le temps d'un calcul,
+  // en visibility:hidden pour qu'aucun scintillement ne soit visible.
+  const cache=!b.classList.contains('show');
+  if(cache){b.style.visibility='hidden';b.classList.add('show');}
+  const h=b.offsetHeight;
+  if(cache){b.classList.remove('show');b.style.visibility='';}
+  if(h>0) document.documentElement.style.setProperty('--tabbar-h',h+'px');
+}
+function _majTabbar(id){
+  const bar=document.getElementById('client-tabbar');
+  if(!bar) return;
+  const onglet=TABBAR_ECRANS[id];
+  const montrer=currentUser?.role==='athlete'&&!!onglet;
+  bar.classList.toggle('show',montrer);
+  document.body.classList.toggle('with-tabbar',montrer);
+  if(!montrer) return;
+  // Re-mesure dans les conditions réelles d'affichage. Mesuré : la valeur prise
+  // au boot vaut 63px, la barre effectivement rendue 65px — les polices
+  // (Montserrat) n'étaient pas encore chargées et la ligne de texte était plus
+  // basse. Ces 2px suffisaient à laisser le dernier élément sous la barre.
+  _majHauteurTabbar();
+  // L'onglet allumé se déduit de l'ÉCRAN AFFICHÉ, jamais du dernier clic : un
+  // retour par la flèche appelle go() sans passer par clientTab(), et laissait
+  // donc allumé l'onglet quitté.
+  bar.querySelectorAll('.tab-btn').forEach(b=>{
+    const actif=b.dataset.tab===onglet;
+    b.classList.toggle('active',actif);
+    if(actif) b.setAttribute('aria-current','page');
+    else b.removeAttribute('aria-current');
+  });
+}
 function go(id){
   const _safe=['s-splash','s-welcome','s-coach-home','s-client-home','s-coach-entry','s-athlete-entry'];
   if(window._swUpdatePending&&_safe.includes(id)){location.reload();return;}
@@ -3990,6 +4083,9 @@ function go(id){
     s.style.display='flex';
     s.scrollTop=0;
   }
+  // Après l'affichage : la barre suit l'écran courant, quel que soit le chemin
+  // emprunté pour y arriver (onglet, flèche retour, redirection interne).
+  _majTabbar(id);
 }
 function toast(msg,c='var(--green)'){
   const t=document.getElementById('toast');
@@ -6740,9 +6836,11 @@ function renderNotifs(){
     notifs.push({icon:icon('check-circle',16),msg:`Bilan du ${_d} transmis à ton coach`,c:'var(--green)'});}
   document.getElementById('clh-notifs').innerHTML=notifs.map(n=>`<div class="notification" style="border-color:${n.c}">${n.icon} ${n.msg}</div>`).join('');
 }
-function clientTab(tab,btn){
-  document.querySelectorAll('#client-tabbar .tab-btn').forEach(b=>b.classList.remove('active'));
-  if(btn) btn.classList.add('active');
+function clientTab(tab){
+  // Le surlignage n'est plus posé ici mais dans go(), à partir de l'écran
+  // réellement affiché. Le faire aussi ici rouvrirait la désynchronisation que
+  // ce déplacement corrige, et allumerait l'onglet AVANT de savoir si la
+  // navigation aboutit — go() peut rediriger (filet de sécurité de rôle).
   if(tab==='home') loadClientHome();
   else if(tab==='bilan') openBilanChoice();
   else if(tab==='nutrition') loadNutrition();
