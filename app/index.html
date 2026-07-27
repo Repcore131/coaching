@@ -190,6 +190,8 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
    (19px, centre dans le bouton) et non du bouton : sur un bouton large elle
    aurait flotte loin de l'icone. Le lisere sombre la detache du fond de barre.
    pointer-events:none pour qu'elle n'intercepte jamais le tap sur l'onglet. */
+.ch-chip{background:var(--surface-1);border:1px solid var(--border);color:var(--text-dim);border-radius:20px;padding:7px 14px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;cursor:pointer;min-height:34px;transition:.15s}
+.ch-chip.actif{background:var(--red-bg);border-color:var(--red);color:#fff}
 .tab-dot{position:absolute;top:3px;left:calc(50% + 5px);width:9px;height:9px;
   border-radius:50%;background:var(--red);border:1.5px solid #0c0c0c;
   box-shadow:0 0 6px rgba(224,32,32,.9);display:none;pointer-events:none}
@@ -1065,6 +1067,22 @@ const COACH_PHOTO='icons/coach.jpg';
           </div>
         </div>
         <div class="sub" style="font-size:11px;margin-bottom:14px;font-family:monospace;letter-spacing:2px" id="ch-code-small"></div>
+        <!-- Barre de recherche et filtres. VOLONTAIREMENT HORS de
+             #ch-clients-list : c'est ce conteneur-la que le rafraichissement
+             reecrit. Places dedans, la saisie et la puce active seraient
+             remises a zero a chaque reveil ; places dessus, ils survivent sans
+             qu'aucun etat n'ait besoin d'etre memorise ailleurs. -->
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+          <input type="search" id="ch-search" placeholder="Rechercher un athlete"
+            oninput="renderClientList()" autocomplete="off"
+            style="width:100%;padding:11px 14px;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:13px;min-height:44px">
+          <div style="display:flex;gap:6px;flex-wrap:wrap" id="ch-filtres">
+            <button class="ch-chip actif" data-filtre="tous" onclick="setFiltreClients('tous')">Tous</button>
+            <button class="ch-chip" data-filtre="traiter" onclick="setFiltreClients('traiter')">A traiter</button>
+            <button class="ch-chip" data-filtre="attente" onclick="setFiltreClients('attente')">En attente d'inscription</button>
+          </div>
+          <div class="sub" id="ch-count" style="font-size:11px;letter-spacing:.5px"></div>
+        </div>
         <div id="ch-clients-list"></div>
       </div>
     </div>
@@ -5092,6 +5110,49 @@ function _wagPreparer(){
       onclick="this.style.opacity='.5';this.style.borderColor='#333'">💬 ${escapeHtml(s.nom||'Athlète')}${s.tel?'':' <span style="color:var(--orange);font-weight:400;font-size:11px">(contact à choisir)</span>'}</a>`).join('');
 }
 
+// Rendu de la liste d'athletes. La recherche et le filtre sont lus dans le
+// DOM au moment du rendu : le rafraichissement periodique rappelle simplement
+// cette fonction, et retrouve donc l'etat courant sans qu'on ait a le stocker.
+// Sans argument, elle recalcule la liste elle-meme — c'est ce qui permet a
+// l'oninput de la barre de recherche de l'appeler directement.
+function norm(s){
+  // Insensible aux accents ET a la casse : « jul » doit trouver « Julien »,
+  // et « joel » doit trouver « Joel » comme « Joël ».
+  return (s||'').toString().normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+}
+let _filtreClients='tous';
+function setFiltreClients(f){
+  _filtreClients=f;
+  document.querySelectorAll('#ch-filtres .ch-chip').forEach(b=>{
+    b.classList.toggle('actif',b.dataset.filtre===f);
+  });
+  renderClientList();
+}
+function renderClientList(clients){
+  const el=document.getElementById('ch-clients-list');
+  if(!el) return;
+  const tous=clients||getClients();
+  const q=norm((document.getElementById('ch-search')||{}).value||'');
+  let vus=tous;
+  if(q) vus=vus.filter(c=>norm((c.fname||'')+' '+(c.lname||'')).includes(q));
+  if(_filtreClients==='traiter') vus=vus.filter(c=>needsAlert(c)||hasNewBilan(c));
+  else if(_filtreClients==='attente') vus=vus.filter(c=>c._fromCode||!c.email);
+  vus.sort((a,b)=>urgencyScore(b)-urgencyScore(a));
+  const cnt=document.getElementById('ch-count');
+  if(cnt) cnt.textContent=vus.length+'/'+tous.length+' athlete'+(tous.length>1?'s':'');
+  // Position de defilement preservee : reecrire innerHTML la remet a zero.
+  const pan=document.getElementById('ct-dashboard');
+  const scr=pan?pan.scrollTop:0;
+  if(!vus.length){
+    el.innerHTML=(q||_filtreClients!=='tous')
+      ? '<div class="sub" style="text-align:center;padding:28px 12px;font-size:12px">Aucun athlete ne correspond.</div>'
+      : el.innerHTML;
+  } else {
+    el.innerHTML=vus.map(renderClientRow).join('');
+  }
+  if(pan&&scr) pan.scrollTop=scr;
+  return vus.length;
+}
 function renderTodoBlock(clients){
   const el=document.getElementById('ch-todo');if(!el) return;
   const now=Date.now(),SOON=14*864e5;
@@ -5225,10 +5286,7 @@ function loadCoachHome(){
   // Reecrire innerHTML remet le panneau en haut : le coach qui parcourait sa
   // liste y etait ramene a chaque reveil. On releve la position avant, on la
   // repose apres.
-  const _pan=document.getElementById('ct-dashboard');
-  const _scr=_pan?_pan.scrollTop:0;
-  elList.innerHTML=clients.map(renderClientRow).join('');
-  if(_pan&&_scr) _pan.scrollTop=_scr;
+  renderClientList(clients);
   // Preserve current tab if already on coach home, otherwise default to dashboard
   const _alreadyHere=document.getElementById('s-coach-home')?.classList.contains('active');
   const _activeTab=_alreadyHere?(['dashboard','codes','monetisation'].find(t=>{const e=document.getElementById('ct-'+t);return e&&e.style.display!=='none';})||'dashboard'):'dashboard';
@@ -5241,10 +5299,7 @@ function loadCoachHome(){
     const el2=document.getElementById('ch-clients-list');
     if(!el2||!freshClients.length) return;
     // Meme precaution apres la synchro distante, qui reecrit la meme liste.
-    const _p2=document.getElementById('ct-dashboard');
-    const _s2=_p2?_p2.scrollTop:0;
-    el2.innerHTML=freshClients.map(renderClientRow).join('');
-    if(_p2&&_s2) _p2.scrollTop=_s2;
+    renderClientList(freshClients);
   }).catch(()=>{});
 }
 function getClients(){
