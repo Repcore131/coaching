@@ -3236,8 +3236,15 @@ function _validateAthletePkg(o){
 }
 // ── Import depuis URL (coachpkg ou athletepkg) ──
 (function importFromURL(){
+  // Le nettoyage de l'adresse est décidé AVANT tout décodage, et exécuté dans un
+  // `finally` : un paquet malformé jetait auparavant avant d'atteindre le
+  // replaceState, et restait donc dans la barre d'adresse, prêt à repartir à
+  // chaque rechargement.
+  let aNettoyer=false;
   try{
     const params=new URLSearchParams(window.location.search);
+    aNettoyer=!!(params.get('coachpkg')||params.get('athletepkg')||params.get('s')
+      ||params.get('bilan')==='1'||params.get('wo')==='1');
     // Coach invite → athlete device
     const cpkg=params.get('coachpkg');
     if(cpkg){
@@ -3253,30 +3260,17 @@ function _validateAthletePkg(o){
       }
     }
     // Athlete profile → coach device
+    // Ce paquet n'est PAS signé : il suffit d'un lien pour en présenter un. La
+    // version précédente écrivait le profil et le poussait dans le cloud dès
+    // l'ouverture de l'URL, avant que quiconque ait rien demandé — ouvrir un
+    // lien reçu suffisait à écraser le dossier d'un athlète, y compris à
+    // distance. On se contente ici de valider et de mettre de côté ; l'écriture
+    // attend une confirmation nommée (_proposerImportAthlete, plus bas).
     const apkg=params.get('athletepkg');
     if(apkg){
       const rawA=JSON.parse(decodeURIComponent(escape(atob(apkg))));
       const athlete=_validateAthletePkg(rawA);
-      if(athlete){
-        const users=DB.get('users')||{};
-        const existing=users[athlete.email]||{};
-        // Fusionner les bilans : ajouter les nouveaux sans écraser les existants
-        const exBilans=existing.bilans||[];
-        const newBilans=athlete.bilans||[];
-        const merged=[...exBilans];
-        newBilans.forEach(nb=>{
-          if(!merged.find(eb=>eb.date===nb.date&&eb.type===nb.type)) merged.push(nb);
-        });
-        merged.sort((a,b)=>a.date-b.date);
-        users[athlete.email]=Object.assign({},existing,athlete,{bilans:merged,_fromCode:false});
-        const okMaj=DB.set('users',users);
-        const envoiMaj=CLOUD.pushOne(athlete.email,users[athlete.email]);
-        window._importedAthlete=athlete;
-        const nb=newBilans.filter(nb=>!exBilans.find(eb=>eb.date===nb.date&&eb.type===nb.type)).length;
-        toastSync(okMaj,envoiMaj,
-          '✓ '+((athlete.fname||'')+' '+(athlete.lname||'')).trim()+' mis à jour'+(nb?' — '+nb+' nouveau'+(nb>1?'x':'')+' bilan'+(nb>1?'s':''):'')+'.',
-          'la mise à jour est');
-      }
+      if(athlete) window._pendingAthletePkg=athlete;
     }
     const st=params.get('s');
     if(!CLOUD.canWrite()&&st) CLOUD.configure(atob(st));
@@ -3284,9 +3278,138 @@ function _validateAthletePkg(o){
     if(_bilanDeepLink) window._pendingBilanOpen=true;
     const _woDeepLink=params.get('wo')==='1';
     if(_woDeepLink) window._pendingWoOpen=true;
-    if(cpkg||apkg||st||_bilanDeepLink||_woDeepLink) window.history.replaceState({},'',window.location.pathname);
   }catch(e){}
+  finally{
+    if(aNettoyer){
+      try{window.history.replaceState({},'',window.location.pathname);}catch(e){}
+    }
+  }
 })();
+
+// ── Import d'un profil athlète : proposer, puis seulement écrire ────────────
+// Le paquet vient de l'URL et n'est pas signé. Rien n'est écrit, ni en local ni
+// dans le cloud, tant que la personne devant l'écran n'a pas dit oui en voyant
+// le nom et les volumes concernés.
+
+// Ce que l'import changerait réellement, pour pouvoir l'annoncer sans mentir.
+// Les bilans sont FUSIONNÉS (union sur date+type) : n'annoncer que les
+// nouveaux, pas le total du paquet. Les séances, elles, sont REMPLACÉES par
+// Object.assign — un paquet sans séances viderait l'historique, et c'est
+// précisément ce qu'il faut montrer avant, pas découvrir après.
+function _diffAthletePkg(a){
+  const existant=(DB.get('users')||{})[a.email]||null;
+  const exBilans=(existant&&existant.bilans)||[];
+  const pkgBilans=a.bilans||[];
+  return {
+    existant:existant,
+    connu:!!existant,
+    bilansNouveaux:pkgBilans.filter(nb=>!exBilans.find(eb=>eb.date===nb.date&&eb.type===nb.type)).length,
+    bilansConserves:exBilans.length,
+    seances:(a.sessions||[]).length,
+    seancesExistantes:((existant&&existant.sessions)||[]).length,
+    // nutrition et videos sont eux aussi remplacés en bloc par l'Object.assign,
+    // sans apparaître dans le décompte bilans/séances : un paquet qui ne les
+    // porte pas effacerait le plan nutritionnel sans que l'écran l'ait dit.
+    ecrase:[
+      (existant&&Object.keys(existant.nutrition||{}).length&&!Object.keys(a.nutrition||{}).length)?'le plan nutritionnel':'',
+      (existant&&((existant.videos||[]).length)&&!((a.videos||[]).length))?'les vidéos':''
+    ].filter(Boolean)
+  };
+}
+// Qui a qualité pour accepter : un coach (ce paquet va d'un athlète VERS un
+// appareil de coach), ou l'athlète lui-même qui rapatrie son propre dossier.
+// Le déclencheur étant en tête de routeUser(), donc avant le test de rôle,
+// sans ce garde un athlète connecté se verrait proposer d'écrire le dossier
+// d'un tiers puis de le pousser sous sa propre identité. Un consentement n'est
+// pas une autorisation.
+function _peutImporterPkg(a){
+  return !!(a&&currentUser&&(currentUser.role==='coach'||currentUser.email===a.email));
+}
+function _proposerImportAthlete(){
+  const a=window._pendingAthletePkg;
+  // Idempotent : routeUser() peut être appelé deux fois (démarrage puis
+  // connexion) et ne doit pas empiler deux modales.
+  if(!a||document.getElementById('rc-pkg-modal')) return;
+  // Pas qualifié : on ne propose rien et on ne jette rien non plus — si un
+  // coach se connecte ensuite sur le même onglet, routeUser() repassera ici.
+  if(!_peutImporterPkg(a)) return;
+  const d=_diffAthletePkg(a);
+  const nom=((a.fname||'')+' '+(a.lname||'')).trim();
+  // Tous ces champs viennent de l'URL : échappés sans exception.
+  const nomAff=escapeHtml(nom||a.email);
+  // Tout ce que l'import DÉTRUIRAIT, en une seule liste : c'est la partie que
+  // le décompte au-dessus ne dit pas, et la seule qui soit irréversible.
+  const degats=[];
+  if(d.connu&&d.seances<d.seancesExistantes)
+    degats.push((d.seancesExistantes-d.seances)+' séance'+((d.seancesExistantes-d.seances)>1?'s':''));
+  degats.push(...d.ecrase);
+  const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
+  <div id="rc-pkg-modal" onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <h2 style="font-size:16px">Importer un profil ?</h2>
+      <button onclick="_refuserImportAthlete()" style="background:none;border:none;color:var(--sub);font-size:22px;cursor:pointer">✕</button>
+    </div>
+    <p class="sub" style="font-size:12px;margin-bottom:14px;line-height:1.6">Ce lien contient un profil d'athlète. Il n'a rien enregistré pour l'instant.</p>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px">
+      <div style="font-weight:800;color:#fff;font-size:14px">${nomAff}</div>
+      <div class="sub" style="font-size:11px;margin-bottom:10px">${escapeHtml(a.email)}</div>
+      <div style="font-size:12px;color:#bbb;line-height:1.9">
+        ${d.bilansNouveaux} nouveau${d.bilansNouveaux>1?'x':''} bilan${d.bilansNouveaux>1?'s':''}${d.bilansConserves?(d.bilansConserves>1?' (les '+d.bilansConserves+' déjà enregistrés sont conservés)':' (le bilan déjà enregistré est conservé)'):''}<br>
+        ${d.seances} séance${d.seances>1?'s':''}${d.connu?' — remplacera les '+d.seancesExistantes+' actuellement enregistrée'+(d.seancesExistantes>1?'s':''):''}
+      </div>
+    </div>
+    ${degats.length?`<p style="font-size:12px;color:var(--orange);line-height:1.6;margin-bottom:14px">⚠ L'import supprimerait ${degats.join(', ')}. C'est irréversible.</p>`:''}
+    ${d.connu?'':'<p class="sub" style="font-size:11px;margin-bottom:14px;line-height:1.6">Aucun dossier ne porte encore cet email : l\'import créerait une nouvelle fiche.</p>'}
+    <p class="sub" style="font-size:11px;margin-bottom:16px;line-height:1.6">N'importe qui peut fabriquer un lien de ce type. N'accepte que s'il vient de ton élève.</p>
+    <button class="btn btn-red" onclick="_confirmerImportAthlete()">Importer ce profil</button>
+    <button class="btn btn-outline" style="margin-top:10px" onclick="_refuserImportAthlete()">Ignorer</button>
+  </div></div>`;
+  // closeModal() et non un remove() direct : lui seul annule un enregistrement
+  // audio en cours, que le remove laisserait tourner micro ouvert.
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',html);
+  // Sert à la restaurer si un rafraîchissement de fond la balaie (voir go()).
+  window._pkgDejaProposee=true;
+}
+function _refuserImportAthlete(){
+  window._pendingAthletePkg=null;
+  window._pkgDejaProposee=false;
+  closeModal();
+  toast('Import ignoré — rien n\'a été modifié.');
+}
+// Seul point d'écriture de tout le mécanisme.
+function _confirmerImportAthlete(){
+  const athlete=window._pendingAthletePkg;
+  if(!athlete) return;
+  // Redit ici, et pas seulement à l'affichage : cette fonction est le point
+  // d'écriture, et elle est atteignable autrement que par le bouton.
+  if(!_peutImporterPkg(athlete)){closeModal();return;}
+  // Consommé AVANT l'écriture : un double clic ne doit pas pousser deux fois.
+  window._pendingAthletePkg=null;
+  window._pkgDejaProposee=false;
+  const users=DB.get('users')||{};
+  const existing=users[athlete.email]||{};
+  // Fusionner les bilans : ajouter les nouveaux sans écraser les existants
+  const exBilans=existing.bilans||[];
+  const newBilans=athlete.bilans||[];
+  const merged=[...exBilans];
+  newBilans.forEach(nb=>{
+    if(!merged.find(eb=>eb.date===nb.date&&eb.type===nb.type)) merged.push(nb);
+  });
+  merged.sort((a,b)=>a.date-b.date);
+  users[athlete.email]=Object.assign({},existing,athlete,{bilans:merged,_fromCode:false});
+  const okMaj=DB.set('users',users);
+  const envoiMaj=CLOUD.pushOne(athlete.email,users[athlete.email]);
+  window._importedAthlete=athlete;
+  const nb=newBilans.filter(nb=>!exBilans.find(eb=>eb.date===nb.date&&eb.type===nb.type)).length;
+  closeModal();
+  toastSync(okMaj,envoiMaj,
+    '✓ '+((athlete.fname||'')+' '+(athlete.lname||'')).trim()+' mis à jour'+(nb?' — '+nb+' nouveau'+(nb>1?'x':'')+' bilan'+(nb>1?'s':''):'')+'.',
+    'la mise à jour est');
+  // Sans ça, l'athlète importé n'apparaît sur le tableau de bord qu'à la sync
+  // suivante, jusqu'à 30 secondes plus tard.
+  if(currentUser?.role==='coach'&&document.getElementById('s-coach-home')?.classList.contains('active')) loadCoachHome();
+}
 
 let currentUser=null,currentClientId=null;
 // ── Contexte unique de l'editeur d'exercices (ecran s-coach-program) ──────────
@@ -3512,6 +3635,12 @@ function routeUser(){
   if(!currentUser) return go('s-welcome');
   // Session corrompue (objet sans email) : seul cas où la purge est justifiée.
   if(!currentUser.email){silentLogout();return go('s-welcome');}
+  // Un paquet athlète attend une décision. Le déclencheur est ICI, en tête, et
+  // non plus bas avec _pendingBilanOpen : ce paquet vise un appareil de COACH,
+  // et la branche coach retourne deux lignes plus loin — le code d'en bas ne
+  // serait jamais atteint. Le délai laisse l'écran d'arrivée se peindre, et
+  // couvre aussi la connexion tardive : doLogin rappelle routeUser().
+  if(window._pendingAthletePkg) setTimeout(_proposerImportAthlete,700);
   if(currentUser.role==='coach'){loadCoachHome();return;}
   // Athlète : vérifier l'accès
   const s=currentUser.status||'FREE';
@@ -3586,6 +3715,14 @@ function go(id){
     return;
   }
   closeModal();
+  // Une question sans réponse ne doit pas s'évanouir. closeModal() ci-dessus
+  // efface AUSSI la demande de confirmation d'import, et le rafraîchissement de
+  // fond appelle loadCoachHome() — donc go() — toutes les 30 secondes : mesuré,
+  // la modale disparaissait au bout d'une demi-minute en laissant le paquet en
+  // attente, sans plus aucun moyen ni de l'accepter ni de le refuser.
+  // Restaurée seulement si elle avait déjà été montrée : sinon elle s'ouvrirait
+  // dès le premier go() du démarrage, avant même que l'utilisateur soit routé.
+  if(window._pendingAthletePkg&&window._pkgDejaProposee) setTimeout(_proposerImportAthlete,0);
   document.querySelectorAll('.screen').forEach(s=>{
     s.classList.remove('active');
     s.style.display='none';
