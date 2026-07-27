@@ -2733,11 +2733,23 @@ function compressImage(file, maxPx, quality, cb){
 
 // ── Cloud sync (Firebase Realtime Database — auth requise via Email/Password) ──
 // Écriture : idToken Firebase obligatoire (?auth=token sur chaque PUT /users/{emailKey}.json).
-// Lecture  : token si disponible, fallback public si absent (pullUser, L. 2412).
-// Règles RTDB attendues (P01) :
-//   • /users/{emailKey}   — écriture réservée au propriétaire (auth.token.email ≈ emailKey).
-//   • /users/{athleteKey} — écriture autorisée au coach (vérifié via data().coachEmailKey).
-//   Les Cloud Functions opèrent via Admin SDK et ne sont pas soumises à ces règles.
+// Lecture  : idToken obligatoire lui aussi. pullUser CONSTRUIT bien une URL
+//   sans ?auth quand le jeton manque, mais le serveur la refuse : .read exige
+//   auth != null. Une lecture non authentifiee recoit 401 et pullUser retourne
+//   null — verifie en interrogeant la base sans jeton. Il n'y a donc PAS de
+//   « repli public » ; le commentaire precedent en promettait un, ce qui
+//   laissait croire que l'app pouvait encore lire hors session.
+// Regles REELLEMENT deployees (database.rules.json, deploye le 27/07/2026) :
+//   - /users/{emailKey}  : lecture ET ecriture au titulaire du noeud, ou a son
+//     coach (reconnu via data().coachEmailKey). AUCUNE restriction par champ,
+//     hormis le .validate qui protege coachEmailKey lui-meme.
+//   - /rc_codes/{code}   : lecture ET ECRITURE ouvertes a tout compte
+//     authentifie. Ce n'est pas un oubli : sans serveur, la consommation d'un
+//     code se fait depuis le client, qui doit donc pouvoir ecrire redeemed.
+//   - /deleted_accounts  : ferme des deux cotes.
+//   AUCUNE Cloud Function ne tourne : le plan Spark ne les execute pas, et
+//   l'app est passee 100 % client. Toute mention d'un controle « serveur »
+//   ailleurs dans ce fichier serait donc fausse.
 // Bucket Firebase Storage du projet repcore-sync. Valeur relevée sur la
 // configuration du projet elle-même (firebase apps:sdkconfig web), c'est-à-dire
 // la source qu'affiche la console.
@@ -2950,7 +2962,13 @@ const CLOUD={
   canWrite(){return !!this._idToken;},
   configure(){},
 
-  // ── Cloud Functions (tokens RCACCESS signés côté serveur) ───────
+  // ── _callFn : VESTIGE, jamais appele ────────────────────────────────────
+  // Aucune Cloud Function n'est deployee ni executable : le plan Spark ne les
+  // fait pas tourner, et l'app est passee 100 % client. Cette methode n'a plus
+  // aucun appelant dans le fichier — conservee comme point d'accroche si le
+  // projet passe un jour en Blaze, mais elle ne protege RIEN aujourd'hui.
+  // L'en-tete precedent annoncait des « tokens RCACCESS signes cote serveur » :
+  // cette signature n'existe pas.
   _functionsBase:'https://europe-west1-repcore-sync.cloudfunctions.net',
   async _callFn(name,data){
     const token=await this._getToken();
@@ -3859,15 +3877,22 @@ function routeUser(){
   if(window._pendingBilanOpen){window._pendingBilanOpen=false;setTimeout(()=>openBilanChoice(),800);}
   if(window._pendingWoOpen){window._pendingWoOpen=false;setTimeout(()=>openSessionPicker(),900);}
 }
-// SÉCURITÉ — champs contrôlés exclusivement par le serveur (Cloud Functions Admin SDK).
-// Ne JAMAIS écrire ces valeurs depuis le client — les règles RTDB (database.rules.json)
-// bloquent toute tentative de self-upgrade :
-//   status            : seul verifyPaypalSubscription peut écrire 'AUTONOMIE_PREMIUM'
-//   paymentStatus     : seul verifyPaypalSubscription peut écrire 'active' (downgrade →
-//                       'cancelled' autorisé depuis client ; réactivation = CF uniquement)
-//   paypalSubscriptionId : gel total dès qu'une valeur est écrite par la CF
-// Lire ces champs côté client reste nécessaire pour l'UI, mais saveUser() / CLOUD.pushOne()
-// ne doivent jamais en modifier la valeur vers un état plus privilégié.
+// ARBITRAGE ASSUMÉ (24/07/2026, plan Spark) — status, paymentStatus et
+// paypalSubscriptionId ne sont protégés par AUCUNE règle serveur :
+// database.rules.json autorise le titulaire du nœud à y écrire n'importe quelle
+// valeur. La seule barrière est l'interface.
+// Ne pas retirer les contrôles client en croyant qu'un filet serveur existe.
+// Condition de réouverture : premier coach affilié payant, ou passage au plan Blaze.
+//
+// Ce que dit exactement database.rules.json aujourd'hui : sous users/$emailKey,
+// .write est accordé au titulaire du nœud (et à son coach), sans aucune
+// restriction de champ — le seul .validate du fichier porte sur coachEmailKey.
+// Le commentaire précédent affirmait l'inverse : « champs contrôlés
+// exclusivement par le serveur (Cloud Functions Admin SDK) », « les règles RTDB
+// bloquent toute tentative de self-upgrade ». Les Cloud Functions ne tournent
+// plus depuis le passage en 100 % client, et cette règle n'a jamais existé.
+// Un commentaire faux est pire qu'absent : il invite à retirer le seul garde
+// qui reste.
 function checkAccess(u){
   if(!u||u.role==='coach') return true;
   const s=u.status||'FREE';
@@ -4518,10 +4543,12 @@ async function doLinkCoach(){
     return;
   }
 
-  // Ancien format RC-XXXX-XXXX (plus compatible — règle RTDB bloque /rc_codes/*)
-  if(/^RC-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(raw)){
-    return showErr('cc-err','Ce code n\'est plus compatible. Demande un nouveau code à ton coach.');
-  }
+  // NOTE — une branche « ancien format RC-XXXX-XXXX » figurait ici. Elle etait
+  // INATTEIGNABLE : la Case 2 plus haut teste le MEME motif exact et retourne
+  // toujours. Son commentaire affirmait de surcroit qu'une « regle RTDB bloque
+  // /rc_codes/* », alors que database.rules.json les ouvre en lecture ET en
+  // ecriture a tout compte authentifie. Code mort porteur d'une contre-verite :
+  // retire plutot que corrige.
 
   // Case 3: RCLINK token (legacy)
   if(raw.startsWith('RCLINK:')){
@@ -13726,8 +13753,13 @@ function _clearCoachInvite(){try{sessionStorage.removeItem('rc_coach_invite');}c
 // lire rc_codes. Conséquence assumée : un code refusé laisse un compte Firebase
 // Auth sans dossier applicatif — état inoffensif, identique à une inscription
 // abandonnée, que la tentative suivante avec le même mot de passe rattrape.
-// C'est le PATCH redeemed côté serveur qui rend le code réellement à usage
-// unique : le refuser côté client seulement serait contournable.
+// LIMITE CONNUE — l'usage unique n'est PAS garanti par le serveur. Le PATCH
+// redeemed part du CLIENT, et database.rules.json ouvre /rc_codes/{code} en
+// ecriture a tout compte authentifie : n'importe quel titulaire de compte peut
+// techniquement remettre redeemed a false. Le controle est donc de meme nature
+// que le reste — client seul. Le commentaire precedent attribuait cette
+// garantie au serveur, ce qui invitait a relacher la verification cliente.
+// Fermer ce trou demande une regle .validate sur redeemed, ou un serveur.
 async function _verifyCoachInvite(raw,email){
   const code=String(raw||'').trim().toUpperCase();
   if(!_INVITE_RE.test(code)) throw new Error('Code d\'invitation mal formé (format RC-XXXX-XXXX).');
