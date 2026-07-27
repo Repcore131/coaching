@@ -778,6 +778,13 @@ const COACH_PHOTO='icons/coach.jpg';
     <div><label for="r-email">Email</label><input type="email" id="r-email" placeholder="ton@email.com"></div>
     <div><label for="r-pwd">Mot de passe</label><input type="password" id="r-pwd" placeholder="Min. 6 caractères"></div>
     <div><label for="r-pwd2">Confirmer</label><input type="password" id="r-pwd2" placeholder="••••••••"></div>
+    <!-- max est posé au démarrage à aujourd'hui − 16 ans : le sélecteur natif
+         décourage déjà les dates trop récentes. Ce n'est qu'un confort —
+         doRegister revérifie, car l'attribut est trivial à contourner. -->
+    <div><label for="r-birthdate">Date de naissance</label>
+      <input type="date" id="r-birthdate" required>
+      <div class="sub" style="font-size:11px;margin-top:4px">L'inscription demande 16 ans révolus.</div>
+    </div>
     <div><label for="r-gender">Genre</label>
       <select id="r-gender"><option value="">-- Sélectionner --</option><option value="H">Homme</option><option value="F">Femme</option></select>
     </div>
@@ -3359,6 +3366,7 @@ window.onload=()=>{
   if(!navigator.onLine) _rcBandeauReseau('offline');
   document.querySelectorAll('#client-tabbar .tab-btn[data-icon]').forEach(b=>b.insertAdjacentHTML('afterbegin',icon(b.dataset.icon,19)));
   CLOUD._loadAuth();
+  _initBirthdateMax();
   // Purge AVANT toute écriture de la session : c'est ce qui libère la place
   // pour le bilan que l'utilisateur s'apprête à remplir. Synchrone et bornée à
   // un balayage des clés — aucun dataURL n'est relu.
@@ -3385,6 +3393,22 @@ window.onload=()=>{
         // Données locales d'abord — la sync cloud se fait en arrière-plan (accueil instantané)
         const users=DB.get('users')||{};
         if(users[currentUser.email]) currentUser=users[currentUser.email];
+        // age est une VUE de birthdate : figé à l'inscription, il annoncerait
+        // encore 16 ans à quelqu'un qui en a 19. On le recalcule à chaque
+        // démarrage quand la date de naissance est connue.
+        // La correction est ÉCRITE, pas seulement posée en mémoire : la sync
+        // cloud relit le stockage une seconde après le démarrage et rétablirait
+        // sinon l'ancienne valeur — mesuré, l'âge revenait à 16 entre 1 et 2 s.
+        // N'écrit qu'au changement réel, soit une fois par an et par compte.
+        if(currentUser.birthdate){
+          const _a=_ageRevolu(currentUser.birthdate);
+          if(_a!==null&&_a!==currentUser.age){
+            currentUser.age=_a;
+            users[currentUser.email]=currentUser;
+            DB.set('users',users);
+            DB.set('session',currentUser);
+          }
+        }
         // Le statut ne gouverne QUE l'accès athlète : doRegister crée tout compte
         // en status:'FREE' et rien ne le change jamais pour un coach, qui serait
         // donc déconnecté à chaque rechargement. Aligné sur doLogin (l. ~3177).
@@ -3608,6 +3632,18 @@ async function doRegister(){
   if(!fn||!ln||!em||!pw){return showErr('r-err','Tous les champs sont obligatoires.');}
   if(pw.length<6) return showErr('r-err','Mot de passe trop court (min 6 car.).');
   if(pw!==pw2) return showErr('r-err','Mots de passe différents.');
+  // Contrôle d'âge AVANT CLOUD.signIn : signIn crée le compte Firebase Auth,
+  // et un refus qui interviendrait après laisserait derrière lui le compte
+  // d'un mineur — exactement ce que ce contrôle doit empêcher.
+  const bd=v('r-birthdate');
+  if(!bd) return showErr('r-err','Renseigne ta date de naissance.');
+  const ageInscription=_ageRevolu(bd);
+  if(ageInscription===null||ageInscription<0||ageInscription>120)
+    return showErr('r-err','Date de naissance invalide.');
+  if(ageInscription<AGE_MINIMUM)
+    return showErr('r-err','L\'inscription à RepCore demande d\'avoir '+AGE_MINIMUM
+      +' ans révolus. L\'application traite des données de santé, et le consentement '
+      +'d\'un mineur plus jeune ne peut pas être recueilli ici.');
   if(!selRole) return showErr('r-err','Sélectionne ton rôle.');
   // Échec rapide : inutile de créer un compte Firebase pour refuser ensuite.
   if(selRole==='coach'&&!_INVITE_RE.test(_coachInviteCode()))
@@ -3618,6 +3654,9 @@ async function doRegister(){
   const uid='u_'+Date.now();
   const user={id:uid,fname:fn,lname:ln,email:em,
     role:selRole,gender:gn,
+    // birthdate est la source de vérité ; age n'en est qu'une vue, recalculée
+    // au démarrage pour ne pas vieillir sur place.
+    birthdate:bd,age:ageInscription,
     createdAt:Date.now(),streak:0,lastSession:null,sessions:[],bilans:[],nutrition:{},videos:[],coachId:null,coachName:null,
     status:'FREE',accessExpiry:null,paymentStatus:null,paypalSubscriptionId:null};
   if(selRole==='coach'){user.code=genCode();user.clients=[];}
@@ -3903,6 +3942,35 @@ function aeToggleCode(){
   if(open) setTimeout(()=>document.getElementById('ae-code')?.focus(),100);
 }
 function v(id){return document.getElementById(id)?.value?.trim()||'';}
+
+// ── Âge minimum à l'inscription ─────────────────────────────────────────────
+// 16 ans révolus. L'art. 8 du RGPD fixe 16 ans par défaut et laisse chaque État
+// descendre jusqu'à 13 ; la France a retenu 15 ans (art. 45 de la loi
+// Informatique et Libertés). RepCore se place volontairement au-dessus du seuil
+// français, parce qu'il traite des données de santé au sens de l'art. 9.
+const AGE_MINIMUM=16;
+// Âge RÉVOLU, par comparaison des quantièmes. Une division du nombre de
+// millisecondes par 365,25 jours se trompe autour de l'anniversaire et sur les
+// années bissextiles — pour un seuil légal, l'à-peu-près n'est pas tenable.
+function _ageRevolu(iso){
+  if(!iso) return null;
+  const n=new Date(iso+'T00:00:00');
+  if(isNaN(n.getTime())) return null;
+  const a=new Date();
+  let age=a.getFullYear()-n.getFullYear();
+  const m=a.getMonth()-n.getMonth();
+  if(m<0||(m===0&&a.getDate()<n.getDate())) age--;
+  return age;
+}
+// Borne haute du sélecteur natif : la date la plus récente encore acceptable.
+function _initBirthdateMax(){
+  const el=document.getElementById('r-birthdate');
+  if(!el) return;
+  const d=new Date();
+  d.setFullYear(d.getFullYear()-AGE_MINIMUM);
+  el.max=d.toISOString().slice(0,10);
+  el.min='1900-01-01';
+}
 // Normalise toutes les conventions historiques ('femme','F','f') → booléen
 function isFemale(g){const s=String(g||'');return s==='F'||s==='f'||s.toLowerCase()==='femme';}
 function genCode(){
