@@ -6784,7 +6784,7 @@ function startWorkoutSession(idx){
     document.getElementById('cycle-modal').style.display='flex';
   } else {
     currentUser.currentCycle='ignore';
-    launchWorkout(sess);
+    launchWorkout(sess,idx);
   }
 }
 
@@ -6798,7 +6798,7 @@ function setCyclePhase(phase,el){
   document.getElementById('cycle-modal').style.display='none';
   const cfg=currentUser.sessions_config||initSessionsConfig();
   const idx=window._pendingWorkoutIdx||0;
-  launchWorkout(cfg[idx]);
+  launchWorkout(cfg[idx],idx);
 }
 
 // Détecte si un exercice est cardio (durée) plutôt que force (répétitions + poids)
@@ -6838,6 +6838,10 @@ function woPersist(){
       startTime:woState.startTime,
       sessionData:woState.sessionData,
       progName:woState.progName,
+      // Sans lui, une séance mise en pause puis reprise perdrait son créneau :
+      // la suggestion repartirait sur le repli par nom, et l'enregistrement
+      // final ne porterait plus de slot.
+      slot:woState.slot??null,
       sessionPhoto:woState.sessionPhoto||null
     }));
   }catch{}
@@ -6901,7 +6905,10 @@ window.addEventListener('beforeunload',()=>{
   }
 });
 
-function launchWorkout(sessConfig){
+// slotIdx = l'index du créneau dans sessions_config, 0..6 pour lundi..dimanche.
+// Il suit la séance jusqu'à l'historique : c'est lui qui permettra plus tard de
+// ne suggérer une charge qu'à partir du MÊME jour (voir _memeCreneau).
+function launchWorkout(sessConfig,slotIdx){
   if(!sessConfig?.exercises?.length){toast('Aucun exercice dans cette séance.','var(--red)');return;}
   const cycle=getCycleFactor();
   // Appliquer réduction de séries si phase lutéale
@@ -6911,7 +6918,8 @@ function launchWorkout(sessConfig){
     _cycleAdjusted:cycle.seriesReduce>0
   }));
   woState={exercises,currentEx:0,startTime:Date.now(),timerInterval:null,sessionData:{},
-    progName:sessConfig.name,sessionPhoto:sessConfig.photo||null};
+    progName:sessConfig.name,sessionPhoto:sessConfig.photo||null,
+    slot:(typeof slotIdx==='number'&&slotIdx>=0&&slotIdx<=6)?slotIdx:null};
   woState.timerInterval=setInterval(()=>{
     const el=Math.floor((Date.now()-woState.startTime)/1000);
     document.getElementById('wo-timer').textContent=pad(Math.floor(el/60))+':'+pad(el%60);
@@ -7080,7 +7088,9 @@ async function downloadPdf(){
 function startWorkout(){
   const prog=getProgram();
   if(!prog.exercises?.length){toast('Aucun programme défini.','var(--red)');return;}
-  woState={exercises:prog.exercises,currentEx:0,startTime:Date.now(),timerInterval:null,sessionData:{},progName:prog.name};
+  // Chemin hérité : ce programme unique ne vient pas d'un créneau de la semaine.
+  // slot:null fait retomber la recherche d'historique sur le nom de la séance.
+  woState={exercises:prog.exercises,currentEx:0,startTime:Date.now(),timerInterval:null,sessionData:{},progName:prog.name,slot:null};
   woState.timerInterval=setInterval(()=>{
     const el=Math.floor((Date.now()-woState.startTime)/1000);
     document.getElementById('wo-timer').textContent=pad(Math.floor(el/60))+':'+pad(el%60);
@@ -7099,13 +7109,20 @@ function renderWoEx(){
   const pr=parseReps(ex.reps);
   if(!woState.sessionData[woState.currentEx]) woState.sessionData[woState.currentEx]={sets:Array.from({length:ex.series},(_,si)=>({weight:'',weight2:'',reps:pr.type==='degressive'?pr.p1:ex.reps,rir:'',pain:'',done:false,degressive:pr.type==='degressive',p2reps:pr.p2}))};
   const data=woState.sessionData[woState.currentEx];
-  const prev=getPrevPerf(ex.name);
+  const prev=getPrevPerf(ex.name,woState.slot,woState.progName);
   const cycle=getCycleFactor();
   const cycleLabel=getCycleLabel();
   // Calcul charge suggérée = last 0-RIR weight de la séance précédente
   // Contrepoids (DIPS/TRACTIONS assistés|guidés) : progression = MOINS de charge
   const isCW=isCounterweightEx(ex.name);
-  const baseWeight=getLastZeroRIRWeight(ex.name);
+  const baseWeight=getLastZeroRIRWeight(ex.name,woState.slot,woState.progName);
+  // Nommer d'où vient la suggestion : c'est ce qui rend vérifiable le fait
+  // qu'elle ne vient plus d'un autre jour de la semaine. Deux formulations,
+  // parce que sans créneau connu il ne reste que le nom de la séance, et
+  // « ton dernier SÉANCE 1 : DOS » ne se dit pas.
+  const _jour=(woState.slot!=null&&DAYS[woState.slot])?DAYS[woState.slot].toLowerCase():null;
+  const creneauRef=_jour?('ton dernier '+_jour):'ta séance précédente';
+  const creneauPhrase=_jour?('le '+_jour):'sur cette séance';
   // Progression par paliers fixes : RIR 0 → même charge, échec → -1 palier,
   // RIR n → +n paliers (palier = 2,5kg, ou 1,25kg sous 20kg, plafonné à 4)
   const _stepUnit=w=>w>=20?2.5:1.25;
@@ -7156,9 +7173,12 @@ function renderWoEx(){
           <div><div style="font-size:27px;font-weight:900;line-height:1">${sug}kg</div><div style="font-size:10px;color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">${isCW?'↓ Assistance — progresser = réduire':'Charge pour la première série'}</div></div>
           ${showCycleCol?`<div><div style="font-size:27px;font-weight:900;line-height:1;color:var(--cycle-accent)">${cycleWeight}kg</div><div style="font-size:10px;color:var(--cycle-accent);margin-top:4px">Cycle ajusté</div></div>`:''}
         </div>
-        <div class="s-note">${isCW?'Contrepoids: RIR élevé → diminuer la charge. ':''}${baseWeight?'Suggestion basée sur ta dernière séance (RIR 0 : '+baseWeight+'kg)':prev?'Suggestion basée sur ta séance précédente ('+prev.weight+'kg'+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):'')+')':'Première séance'}</div>
+        <div class="s-note">${isCW?'Contrepoids: RIR élevé → diminuer la charge. ':''}${baseWeight?'Basée sur '+escapeHtml(creneauRef)+' (RIR 0 : '+baseWeight+'kg)':prev?'Basée sur '+escapeHtml(creneauRef)+' ('+prev.weight+'kg'+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):'')+')':'Première séance'}</div>
       </div>`:
-      ``}
+      // Pas d'historique SUR CE CRÉNEAU. On le dit, au lieu de laisser un vide
+      // inexpliqué — et surtout au lieu de proposer la charge d'un autre jour,
+      // qui ne correspond ni aux mêmes répétitions ni au même effort.
+      `<div id="wo-no-hist" class="sub" style="font-size:11px;background:var(--card2);border-radius:8px;padding:10px 13px;margin-bottom:12px;line-height:1.6">Pas encore d'historique pour cet exercice ${escapeHtml(creneauPhrase)} — note ta charge, elle servira de repère la prochaine fois.</div>`}
 
       ${(ex.description||ex.note)?`<div style="background:var(--card2);border-radius:10px;padding:11px 14px;margin-bottom:12px">
         <div style="font-size:9px;font-weight:800;letter-spacing:1.5px;color:var(--red);margin-bottom:5px">CONSIGNE</div>
@@ -7359,10 +7379,28 @@ function toggleRirExplain(){
   if(el) el.style.display=el.style.display==='none'?'block':'none';
 }
 // Récupère la dernière charge enregistrée à RIR 0 pour un exercice
-function getLastZeroRIRWeight(exName){
+// ── Historique : ne comparer que ce qui est comparable ──────────────────────
+// Un même exercice peut figurer dans deux séances de la semaine avec des
+// fourchettes de répétitions différentes — « abdos poulie » en 8-10 le lundi,
+// en 15-20 le samedi. Chercher la dernière charge par le seul NOM d'exercice
+// proposait donc le lundi le poids du samedi, qui ne veut rien dire à ce
+// nombre de répétitions.
+// Rattachement, dans cet ordre :
+//   1. le CRÉNEAU (slot 0..6, lundi..dimanche), enregistré depuis cette version ;
+//   2. à défaut le NOM de la séance — tout l'historique antérieur n'a que ça,
+//      et sans ce repli l'app repartirait de zéro sur chaque exercice ;
+//   3. sinon rien. Pas de repli global : ce serait exactement le bug d'origine.
+function _memeCreneau(sess,slot,progName){
+  if(!sess) return false;
+  if(slot!=null&&sess.slot!=null) return sess.slot===slot;
+  if(progName&&sess.name) return sess.name===progName;
+  return false;
+}
+function getLastZeroRIRWeight(exName,slot,progName){
   if(!currentUser.sessions?.length) return null;
   for(let i=currentUser.sessions.length-1;i>=0;i--){
     const sess=currentUser.sessions[i];if(!sess.data) continue;
+    if(!_memeCreneau(sess,slot,progName)) continue;
     const d=sess.data[exName];if(!d) continue;
     const zeroSets=d.sets?.filter(s=>s.done&&(s.rir==='0'||s.rir===0)&&s.weight);
     if(zeroSets?.length) return parseFloat(zeroSets[zeroSets.length-1].weight);
@@ -7402,7 +7440,10 @@ function finishWorkout(incomplete=false){
     const nm=woState.exercises[parseInt(idx)]?.name;
     if(nm) data[nm]=d;
   });
-  const sess={id:'s_'+Date.now(),date:Date.now(),name:woState.progName,duration:mins,sets,volume:Math.round(vol),complete:!incomplete,data};
+  // slot : le créneau d'où vient cette séance. C'est la clé qui permettra à la
+  // prochaine séance du même jour de retrouver ses charges sans aller les
+  // chercher dans un autre jour de la semaine.
+  const sess={id:'s_'+Date.now(),date:Date.now(),name:woState.progName,slot:woState.slot??null,duration:mins,sets,volume:Math.round(vol),complete:!incomplete,data};
   if(!currentUser.sessions) currentUser.sessions=[];
   currentUser.sessions.push(sess);
   updateStreak();saveUser();
@@ -7565,10 +7606,12 @@ function calcSug(pw,pr,prr,tr,trir){
   const sug=e1rm*(1+tR/30)/(1+(tRIR*0.025+0.33));
   return roundWeight(sug);
 }
-function getPrevPerf(name){
+// Même rattachement au créneau que getLastZeroRIRWeight : voir _memeCreneau.
+function getPrevPerf(name,slot,progName){
   if(!currentUser.sessions?.length) return null;
   for(let i=currentUser.sessions.length-1;i>=0;i--){
     const sess=currentUser.sessions[i];if(!sess.data) continue;
+    if(!_memeCreneau(sess,slot,progName)) continue;
     const d=sess.data[name];if(!d) continue;
     const done=d.sets.filter(s=>s.done&&s.weight);
     if(done.length) return done[done.length-1];
