@@ -855,11 +855,21 @@ const COACH_PHOTO='icons/coach.jpg';
       <div class="role-card" id="role-athlete" onclick="selectRole('athlete')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><div class="role-icon" data-icon="dumbbell"></div><div style="font-weight:800;font-size:15px">ATHLÈTE</div><div class="sub" style="font-size:11px;margin-top:4px">Suivre ma progression</div></div>
     </div>
     <div style="display:flex;align-items:flex-start;gap:10px;margin-top:4px;padding:12px;background:var(--card2);border:1px solid var(--border);border-radius:8px">
-      <input type="checkbox" id="r-rgpd" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
-      <label for="r-rgpd" style="font-size:12px;color:var(--sub);line-height:1.6;cursor:pointer">J'ai lu et j'accepte la <a href="./privacy.html" target="_blank" rel="noopener" style="color:var(--red);text-decoration:underline;font-weight:600">politique de confidentialité</a> et je consens explicitement au traitement de mes données de santé (âge, taille, poids, mensurations, photos et vidéos, problèmes de santé et blessures, allergies, troubles alimentaires, alimentation, sommeil, stress, caféine, compléments, pas quotidiens, entraînement et, si je choisis de les renseigner, cycle menstruel) dans le cadre de mon suivi sportif.</label>
-    <div style="font-size:11px;color:var(--sub);margin-top:6px">
-      <a href="./legal.html" target="_blank" rel="noopener" style="color:var(--sub);text-decoration:underline">Mentions légales</a>
-    </div>
+      <!-- Deux consentements DISTINCTS, et non un seul.
+           Le RGPD traite ces deux acceptations différemment : accepter des
+           conditions relève de l'article 6, consentir à des données de santé
+           relève de l'article 9 et doit être EXPLICITE et SÉPARÉ. Une case
+           unique mélangeait les deux : l'utilisateur ne pouvait pas accepter
+           d'utiliser l'app sans consentir à ses données de santé, et rien ne
+           permettait de prouver lequel des deux il avait vraiment lu. -->
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--card2);border:1px solid var(--border);border-radius:8px">
+        <input type="checkbox" id="r-cgu" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
+        <label for="r-cgu" style="font-size:12px;color:var(--sub);line-height:1.6;cursor:pointer">J'ai lu et j'accepte la <a href="./privacy.html" target="_blank" rel="noopener" style="color:var(--red);text-decoration:underline;font-weight:600">politique de confidentialité</a> et les <a href="./legal.html" target="_blank" rel="noopener" style="color:var(--red);text-decoration:underline;font-weight:600">mentions légales</a>.</label>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:10px;margin-top:8px;padding:12px;background:var(--card2);border:1px solid var(--border);border-radius:8px">
+        <input type="checkbox" id="r-health" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
+        <label for="r-health" style="font-size:12px;color:var(--sub);line-height:1.6;cursor:pointer">Je consens explicitement au traitement de mes <strong style="color:#ccc">données de santé</strong> — poids, mensurations, photos corporelles, cycle menstruel, sommeil — pour mon suivi sportif.</label>
+      </div>
     </div>
     <!-- Rappel de l'invitation portée depuis l'écran coach : sans ce repère,
          le coach ne voit nulle part que son code a bien été pris en compte. -->
@@ -2496,6 +2506,16 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <script>
 
+// ── Version de la politique de confidentialite ────────────────────────
+// A INCREMENTER A CHAQUE MODIFICATION DE privacy.html. C'est le seul geste qui
+// redemande son accord a l'utilisateur : un consentement porte sur un texte
+// precis, et un texte modifie n'est plus celui qui a ete accepte.
+// Format AAAA-MM ; si deux revisions tombent le meme mois, suffixer (2026-07b).
+// Tout compte dont consent.policyVersion differe de cette valeur revoit l'ecran
+// de consentement au demarrage — y compris les comptes crees avant l'existence
+// du champ, qui n'en portent aucun.
+const POLICY_VERSION='2026-07';
+
 // ── Identité créateur & configuration PayPal ─────────────────────────────────
 // Ces constantes sont en dur et NE doivent jamais être exposées ni modifiables
 // depuis l'interface utilisateur.
@@ -3440,6 +3460,63 @@ function _diffAthletePkg(a){
 // sans ce garde un athlète connecté se verrait proposer d'écrire le dossier
 // d'un tiers puis de le pousser sous sa propre identité. Un consentement n'est
 // pas une autorisation.
+// ── Re-consentement quand la politique change ───────────────────────────────
+// Un consentement porte sur un TEXTE. Modifier privacy.html sans redemander
+// l'accord laisserait des comptes rattaches a une version qu'ils n'ont jamais
+// lue. On compare donc la version stockee a POLICY_VERSION.
+// Les comptes anterieurs a ce champ n'en portent aucun : ils passent aussi par
+// cet ecran, ce qui est le comportement voulu — leur accord d'origine portait
+// sur un texte qui a change depuis.
+function _consentementAJour(u){
+  const c=u&&u.consent;
+  return !!(c&&c.cgu&&c.health&&c.policyVersion===POLICY_VERSION);
+}
+function _proposerReconsentement(){
+  if(!currentUser||_consentementAJour(currentUser)) return;
+  if(document.getElementById('rc-consent-modal')) return;   // idempotent
+  const dejaVu=!!(currentUser.consent&&currentUser.consent.policyVersion);
+  const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:#000d;z-index:3000;display:flex;align-items:flex-end;justify-content:center">
+  <div id="rc-consent-modal" onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+    <h2 style="font-size:16px;margin-bottom:8px">${dejaVu?'La politique de confidentialité a changé':'Ton accord est nécessaire'}</h2>
+    <p class="sub" style="font-size:12px;line-height:1.6;margin-bottom:16px">${dejaVu
+      ?'Le texte que tu avais accepté a été modifié. Relis-le et confirme ton accord pour continuer.'
+      :'Ton compte a été créé avant que ces deux accords soient recueillis séparément. Confirme-les pour continuer.'}</p>
+    <div style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
+      <input type="checkbox" id="rc-cgu" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
+      <label for="rc-cgu" style="font-size:12px;color:var(--sub);line-height:1.6;cursor:pointer">J'ai lu et j'accepte la <a href="./privacy.html" target="_blank" rel="noopener" style="color:var(--red);text-decoration:underline;font-weight:600">politique de confidentialité</a> et les <a href="./legal.html" target="_blank" rel="noopener" style="color:var(--red);text-decoration:underline;font-weight:600">mentions légales</a>.</label>
+    </div>
+    <div style="display:flex;align-items:flex-start;gap:10px;margin-top:8px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
+      <input type="checkbox" id="rc-health" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
+      <label for="rc-health" style="font-size:12px;color:var(--sub);line-height:1.6;cursor:pointer">Je consens explicitement au traitement de mes <strong style="color:#ccc">données de santé</strong> — poids, mensurations, photos corporelles, cycle menstruel, sommeil — pour mon suivi sportif.</label>
+    </div>
+    <div id="rc-consent-err" style="color:var(--red-light);font-size:12px;margin-top:10px;display:none"></div>
+    <button class="btn btn-red" style="margin-top:14px" onclick="_validerReconsentement()">Confirmer mon accord</button>
+    <!-- Pas de « plus tard » : un traitement de donnees de sante sans accord en
+         cours de validite ne doit pas continuer. La seule autre issue est de se
+         deconnecter, ce qui laisse le compte intact. -->
+    <button class="btn btn-outline" style="margin-top:10px" onclick="logout()">Se déconnecter</button>
+  </div></div>`;
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+function _validerReconsentement(){
+  const cgu=document.getElementById('rc-cgu')?.checked;
+  const sante=document.getElementById('rc-health')?.checked;
+  const err=document.getElementById('rc-consent-err');
+  if(!cgu||!sante){
+    if(err){err.style.display='';err.textContent=!cgu
+      ?'Accepte la politique de confidentialité et les mentions légales pour continuer.'
+      :'Le consentement au traitement de tes données de santé est nécessaire pour continuer.';}
+    return;
+  }
+  currentUser.consent={cgu:true,health:true,at:Date.now(),policyVersion:POLICY_VERSION};
+  const users=DB.get('users')||{};
+  users[currentUser.email]=currentUser;
+  const ok=DB.set('users',users)&&DB.set('session',currentUser);
+  const envoi=CLOUD.pushOne(currentUser.email,currentUser);
+  closeModal();
+  toastSync(ok,envoi,'Accord enregistré ✓','ton accord est');
+}
 function _peutImporterPkg(a){
   return !!(a&&currentUser&&(currentUser.role==='coach'||currentUser.email===a.email));
 }
@@ -3448,6 +3525,8 @@ function _proposerImportAthlete(){
   // Idempotent : routeUser() peut être appelé deux fois (démarrage puis
   // connexion) et ne doit pas empiler deux modales.
   if(!a||document.getElementById('rc-pkg-modal')) return;
+  // Le consentement passe avant : sa modale ne doit pas etre recouverte.
+  if(document.getElementById('rc-consent-modal')) return;
   // Pas qualifié : on ne propose rien et on ne jette rien non plus — si un
   // coach se connecte ensuite sur le même onglet, routeUser() repassera ici.
   if(!_peutImporterPkg(a)) return;
@@ -3763,6 +3842,9 @@ function routeUser(){
   // et la branche coach retourne deux lignes plus loin — le code d'en bas ne
   // serait jamais atteint. Le délai laisse l'écran d'arrivée se peindre, et
   // couvre aussi la connexion tardive : doLogin rappelle routeUser().
+  // Consentement d'abord : tant qu'il n'est pas a jour, rien d'autre ne doit
+  // s'interposer. Meme delai, pour laisser l'ecran d'arrivee se peindre.
+  setTimeout(_proposerReconsentement,600);
   if(window._pendingAthletePkg) setTimeout(_proposerImportAthlete,700);
   if(currentUser.role==='coach'){loadCoachHome();return;}
   // Athlète : vérifier l'accès
@@ -3935,7 +4017,13 @@ async function doRegister(){
   // Échec rapide : inutile de créer un compte Firebase pour refuser ensuite.
   if(selRole==='coach'&&!_INVITE_RE.test(_coachInviteCode()))
     return showErr('r-err','Les comptes coach sont sur invitation. Passe par « CRÉER MON COMPTE » depuis l\'espace coach et saisis ton code.');
-  if(!document.getElementById('r-rgpd')?.checked) return showErr('r-err','Accepte la politique de confidentialité pour continuer.');
+  // Les deux consentements sont exiges SEPAREMENT, et refuses avec des messages
+  // distincts : dire « accepte les conditions » a quelqu'un qui a coche les
+  // conditions mais pas les donnees de sante le laisse chercher.
+  if(!document.getElementById('r-cgu')?.checked)
+    return showErr('r-err','Accepte la politique de confidentialité et les mentions légales pour continuer.');
+  if(!document.getElementById('r-health')?.checked)
+    return showErr('r-err','Le consentement au traitement de tes données de santé est nécessaire : sans lui, RepCore ne peut enregistrer ni ton poids, ni tes mensurations, ni tes photos.');
   const users=DB.get('users')||{};
   if(users[em]) return showErr('r-err','Email déjà utilisé.');
   const uid='u_'+Date.now();
@@ -3945,7 +4033,13 @@ async function doRegister(){
     // au démarrage pour ne pas vieillir sur place.
     birthdate:bd,age:ageInscription,
     createdAt:Date.now(),streak:0,lastSession:null,sessions:[],bilans:[],nutrition:{},videos:[],coachId:null,coachName:null,
-    status:'FREE',accessExpiry:null,paymentStatus:null,paypalSubscriptionId:null};
+    status:'FREE',accessExpiry:null,paymentStatus:null,paypalSubscriptionId:null,
+    // Trace du consentement : QUOI, QUAND, et sur QUELLE VERSION du texte.
+    // Sans la version, on saurait que la personne a accepte quelque chose, sans
+    // pouvoir dire quoi — c'est precisement ce que l'article 7.1 du RGPD demande
+    // de pouvoir demontrer. Pousse tel quel vers RTDB : _doPushOne ne retire que
+    // les champs sensibles (mots de passe, blobs), jamais celui-ci.
+    consent:{cgu:true,health:true,at:Date.now(),policyVersion:POLICY_VERSION}};
   if(selRole==='coach'){user.code=genCode();user.clients=[];}
   // Authentifier Firebase AVANT de sauvegarder → le push 2s plus tard aura un token valide.
   // Si l'auth échoue on n'écrit RIEN localement : sinon un compte fantôme est créé
