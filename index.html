@@ -3,7 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <link rel="icon" type="image/png" href="icons/icon-192x192.png">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<!-- viewport-fit=cover (avec les tirets) : c'est ce token qui étend la page
+     sous l'encoche et qui donne une valeur non nulle à env(safe-area-inset-*).
+     Sans lui, tous les calc(... + env(...)) plus bas valent leur seule partie
+     fixe et les retraits d'encoche sont silencieusement sans effet. -->
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
 <meta name="theme-color" content="#0A0A0A">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -27,17 +31,21 @@
 <style>
 html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{--bg:#080808;--red:#E02020;--red2:#b81515;--red-bg:#0d0000;--red-glow:#FF3345;--red-light:color-mix(in srgb,var(--red) 70%,white);--dark:#0f0f0f;--card:#111;--card2:#181818;--surface-1:#111111;--surface-2:#181818;--surface-3:#1e1e1e;--border:#1e1e1e;--sub:#8a8a8a;--text:#efefef;--green:#22c55e;--orange:#f97316;--success:#22c55e;--success-bg:#021007;--success-border:#052a10;--info:#d4a017;--info-bg:#160d00;--info-border:#2a1a00;--warning:#f97316;--warning-bg:#1a0800;--warning-border:#3a1500;--danger:#E02020;--danger-bg:#1a0000;--danger-border:#3a0000;--cycle-accent:#A78BFA;--glow-sm:0 0 12px rgba(224,32,32,.25);--glow-md:0 0 28px rgba(255,51,69,.4);--glow-lg:0 0 56px rgba(255,51,69,.5)}
-body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;min-height:100vh;max-width:480px;margin:0 auto;overflow-x:hidden;position:relative}
+/* 100vh d'abord comme repli, 100dvh ensuite : sur mobile 100vh vaut la hauteur
+   barre d'URL RÉTRACTÉE, si bien qu'au premier affichage — barre déployée — le
+   bas de l'écran passe sous le pli. dvh suit la hauteur réellement visible.
+   Un navigateur qui ignore dvh laisse simplement la première déclaration. */
+body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;min-height:100vh;min-height:100dvh;max-width:480px;margin:0 auto;overflow-x:hidden;position:relative}
 /* ── DESKTOP: fond brande autour de l'app ── */
 @media(min-width:600px){
-  html{background:radial-gradient(ellipse at 50% 0%,#1a0000 0%,#060606 50%,#030303 100%);min-height:100vh}
-  body{border-left:1px solid #1a0000;border-right:1px solid #1a0000;box-shadow:0 0 100px rgba(198,15,8,.12);min-height:100vh}
+  html{background:radial-gradient(ellipse at 50% 0%,#1a0000 0%,#060606 50%,#030303 100%);min-height:100vh;min-height:100dvh}
+  body{border-left:1px solid #1a0000;border-right:1px solid #1a0000;box-shadow:0 0 100px rgba(198,15,8,.12);min-height:100vh;min-height:100dvh}
 }
 /* ── DESKTOP COACH DASHBOARD ── */
 /* Desktop coach: simple column layout, sidebar hidden */
 #ch-sidebar{display:none!important}
 #coach-tabs-bar{display:flex!important}
-#s-coach-home{height:100vh;overflow:hidden}
+#s-coach-home{height:100vh;height:100dvh;overflow:hidden}
 
 /* ====== GRAIN TEXTURE GLOBAL ====== */
 body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;opacity:1;
@@ -49,7 +57,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;o
   repeating-linear-gradient(-55deg,transparent,transparent 18px,rgba(198,15,8,.028) 18px,rgba(198,15,8,.028) 19px);}
 
 /* ====== SCREENS ====== */
-.screen{display:none!important;min-height:100vh;flex-direction:column;animation:screenIn .22s ease both}.screen.active{display:flex!important}
+.screen{display:none!important;min-height:100vh;min-height:100dvh;flex-direction:column;animation:screenIn .22s ease both}.screen.active{display:flex!important}
 /* .screen.active handled above */
 
 /* ====== BUTTONS ====== */
@@ -94,7 +102,10 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
 .divider{height:1px;background:var(--border);margin:16px 0}
 
 /* ====== TOPBAR ====== */
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--red);flex-shrink:0;background:#090909;position:relative}
+/* En PWA installée avec viewport-fit=cover, la page démarre SOUS la barre
+   d'état : sans ce retrait, l'heure système recouvre le titre de la topbar.
+   La longhand suit la shorthand, sinon elle serait écrasée. */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;padding-top:calc(14px + env(safe-area-inset-top,0px));border-bottom:1px solid var(--red);flex-shrink:0;background:#090909;position:relative}
 
 /* ====== ACCENT LINE ====== */
 .accent-line{width:32px;height:2px;background:var(--red);display:block;margin-bottom:12px}
@@ -103,7 +114,9 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
 
 
 /* ====== TABS ====== */
-.tab-bar{display:flex;background:#0c0c0c;border-top:1px solid var(--surface-2);padding:6px 0 10px;flex-shrink:0;scrollbar-width:none}
+/* Barre d'accueil iOS / geste de retour Android : sans ce retrait, la dernière
+   rangée d'onglets passe sous l'indicateur système et devient intappable. */
+.tab-bar{display:flex;background:#0c0c0c;border-top:1px solid var(--surface-2);padding:6px 0 10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));flex-shrink:0;scrollbar-width:none}
 .tab-bar::-webkit-scrollbar{display:none}
 .tab-btn{flex:1 1 0;min-width:0;position:relative;background:none;border:none;color:#8a8a8a;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:6px 5px;font-family:Montserrat,sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;transition:.2s}
 /* 6 onglets doivent tenir sans debordement horizontal. A 10px la barre demande
@@ -235,7 +248,7 @@ input[type=file]{display:none}
 /* ═══ COACH TABS ═══ */
 #coach-tabs-bar{display:flex!important;flex-shrink:0;position:relative;z-index:10}
 #coach-tabs-bar button{cursor:pointer!important;pointer-events:auto!important;position:relative;z-index:10}
-#s-coach-home{height:100vh!important;overflow:hidden!important;display:flex;flex-direction:column}
+#s-coach-home{height:100vh!important;height:100dvh!important;overflow:hidden!important;display:flex;flex-direction:column}
 #ch-main-area{display:flex!important;flex-direction:column!important;flex:1!important;min-height:0!important;overflow:hidden!important}
 
 /* ====== METAL MANIA — TITRES PRINCIPAUX ====== */
@@ -501,7 +514,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- WELCOME -->
-<div id="s-welcome" class="screen carbon-bg" style="flex-direction:column;height:100vh;position:relative;overflow:hidden">
+<div id="s-welcome" class="screen carbon-bg" style="flex-direction:column;height:100vh;height:100dvh;position:relative;overflow:hidden">
 
   <!-- Rougeur subtile haut-centre -->
   <div style="position:absolute;top:-60px;left:50%;transform:translateX(-50%);width:500px;height:400px;background:radial-gradient(ellipse at 50% 0%,rgba(224,32,32,.18) 0%,transparent 65%);pointer-events:none;z-index:0"></div>
@@ -517,16 +530,22 @@ const COACH_PHOTO='icons/coach.jpg';
     <span style="writing-mode:vertical-rl;text-orientation:mixed;font-size:6.5px;color:rgba(255,255,255,.1);letter-spacing:1.8px;font-family:Montserrat,sans-serif;font-weight:500;text-transform:uppercase;white-space:nowrap">© Kevin Guellec · RepCore · Données &amp; idées protégées</span>
   </div>
 
-  <!-- TOP: Logo + texte -->
-  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1;padding-top:60px">
+  <!-- TOP: Logo + texte
+       min-height:0 : sans lui, un enfant flex:1 refuse de descendre sous la
+       taille de son contenu (min-height:auto par défaut). Le bloc restait donc
+       à 448px quelle que soit la hauteur disponible, et « ESPACE ATHLÈTE »
+       passait sous le pli, coupé par l'overflow:hidden de l'écran.
+       Les min(fixe, Ndvh) ne mordent qu'en dessous de ~667px de hauteur : sur
+       un grand écran, les valeurs restent exactement celles d'avant. -->
+  <div style="flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1;padding-top:60px;padding-top:min(60px,6dvh)">
 
     <!-- Logo avec ombre directionnelle droite + bas -->
-    <div style="animation:wFadeUp 0.8s cubic-bezier(.16,1,.3,1) 0.1s both">
-      <img src="./icons/logo.png" style="display:block;width:200px;height:200px;filter:drop-shadow(5px 8px 16px rgba(0,0,0,.95)) drop-shadow(2px 4px 6px rgba(0,0,0,.7))">
+    <div style="animation:wFadeUp 0.8s cubic-bezier(.16,1,.3,1) 0.1s both;min-height:0">
+      <img src="./icons/logo.png" style="display:block;width:200px;height:200px;height:min(200px,30dvh);width:auto;aspect-ratio:1;filter:drop-shadow(5px 8px 16px rgba(0,0,0,.95)) drop-shadow(2px 4px 6px rgba(0,0,0,.7))">
     </div>
 
     <!-- Tagline avec text-shadow pour faire ressortir -->
-    <div style="margin-top:48px;text-align:center;padding:0 32px;animation:wFadeUp 0.7s ease 0.5s both;opacity:0">
+    <div style="margin-top:48px;margin-top:min(48px,5dvh);text-align:center;padding:0 32px;animation:wFadeUp 0.7s ease 0.5s both;opacity:0">
       <div style="font-size:32px;font-weight:900;line-height:1.1;letter-spacing:-1.5px;color:#fff;text-shadow:0 2px 20px rgba(0,0,0,.95),0 0 50px rgba(0,0,0,.8),0 4px 8px rgba(0,0,0,.6)">Entraîne-toi<br>comme un<br><span style="color:#E02020;text-shadow:0 0 30px rgba(224,32,32,.5),0 2px 14px rgba(0,0,0,.9)">pro.</span></div>
     </div>
 
@@ -536,8 +555,9 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
   </div>
 
-  <!-- BOTTOM: CTA buttons -->
-  <div style="padding:32px 28px 48px;z-index:1;animation:wSlideUp 0.7s cubic-bezier(.16,1,.3,1) 0.55s both;opacity:0">
+  <!-- BOTTOM: CTA buttons — flex-shrink:0 pour que ce soit le bloc du HAUT
+       qui cède, jamais les deux boutons d'entrée dans l'app. -->
+  <div style="padding:32px 28px 48px;padding:min(32px,4dvh) 28px min(48px,6dvh);flex-shrink:0;z-index:1;animation:wSlideUp 0.7s cubic-bezier(.16,1,.3,1) 0.55s both;opacity:0">
     <!-- ESPACE COACH — bevel 3D inset + glow rouge -->
     <button onclick="go('s-coach-entry')"
       style="width:100%;padding:20px;background:#E02020;color:#fff;border:none;font-family:'Bebas Neue','Anton',sans-serif;font-size:13px;font-weight:800;letter-spacing:4px;cursor:pointer;text-transform:uppercase;margin-bottom:12px;transition:.15s;box-shadow:inset 0 2px 0 rgba(255,255,255,.24),inset 0 -3px 0 rgba(0,0,0,.45),0 6px 28px rgba(224,32,32,.5)"
@@ -816,7 +836,7 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<div id="s-coach-home" class="screen" style="flex-direction:column;height:100vh;overflow:hidden">
+<div id="s-coach-home" class="screen" style="flex-direction:column;height:100vh;height:100dvh;overflow:hidden">
 
   <!-- SIDEBAR (desktop only) -->
   <div id="ch-sidebar" style="display:none;flex-direction:column;background:#040404;border-right:1px solid #1a0000">
@@ -851,7 +871,9 @@ const COACH_PHOTO='icons/coach.jpg';
   <div id="ch-main-area" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden">
 
     <!-- Mobile header -->
-    <div id="ch-mobile-header" style="background:#090909;border-bottom:1px solid var(--red);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+    <!-- 12px et non 14 : c'est le padding propre à cet en-tête. Le retrait
+         d'encoche s'ajoute à l'existant, il ne le redéfinit pas. -->
+    <div id="ch-mobile-header" style="background:#090909;border-bottom:1px solid var(--red);padding:12px 20px;padding-top:calc(12px + env(safe-area-inset-top,0px));display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
       <div style="display:flex;align-items:center;gap:10px">
         <img src="./icons/logo.png" style="display:block;width:52px;height:52px;flex-shrink:0">
         <div>
@@ -1341,7 +1363,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- CALCULATEUR DE CHARGES (modal) -->
 <div id="calc-modal" style="display:none;position:fixed;inset:0;background:#000c;z-index:2000;overflow-y:auto">
-  <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;margin-top:60px;min-height:calc(100vh - 60px)">
+  <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;margin-top:60px;min-height:calc(100vh - 60px);min-height:calc(100dvh - 60px)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <h2> Calculateur RIR</h2>
       <button onclick="document.getElementById('calc-modal').style.display='none'" aria-label="Fermer" style="background:none;border:1px solid #2a2a2a;border-radius:50%;width:32px;height:32px;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" width="15" height="15"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg></button>
