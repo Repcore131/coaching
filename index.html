@@ -677,7 +677,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- Cet écran est lu AVANT l'inscription, donc par de futurs coachs affiliés.
            L'ancienne formule promettait « des codes d'accès gratuits » que seul le
            créateur peut émettre : la promesse ne pouvait pas être tenue. -->
-      <div style="font-size:11px;color:rgba(255,255,255,.82);line-height:1.6"><strong style="color:#fff">Ton compte coach est gratuit</strong>, sans abonnement ni code. Tu génères ton propre code à donner à tes athlètes : il les rattache à ton suivi.<br><br>Tes athlètes, eux, paient <strong style="color:#fff">9,95 €/mois</strong> pour accéder à l'app. Les accès gratuits sont réservés au créateur de RepCore.</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.82);line-height:1.6"><strong style="color:#fff">Ton compte coach est gratuit</strong>, sans abonnement ni code. Tu génères ton propre code à donner à tes athlètes : il les rattache à ton suivi.<br><br>Tes athlètes, eux, paient <strong style="color:#fff">9,95 €/mois</strong> pour accéder à l'app. Les accès gratuits sont réservés au créateur de RepCore.</div>
     </div>
   </div>
 </div>
@@ -751,7 +751,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="width:44px;height:44px;border-radius:10px;background:#0d0d0d;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div>
         <div>
           <div style="font-weight:800;font-size:15px;letter-spacing:.5px">JE N'AI PAS DE CODE</div>
-          <div class="sub" style="font-size:11px;margin-top:3px">Accès en autonomie — 9,95 €/mois, sans engagement</div>
+          <div class="sub" style="font-size:11px;margin-top:3px">Accès en autonomie — 9,95 €/mois, sans engagement</div>
         </div>
         <div style="margin-left:auto;color:var(--sub);font-size:18px">›</div>
       </div>
@@ -760,7 +760,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- Info box athlète -->
     <div style="background:rgba(224,32,32,.07);border:1px solid rgba(224,32,32,.24);border-radius:10px;padding:14px 16px;margin-top:4px">
       <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:var(--red);font-weight:700;margin-bottom:6px">ℹ️ ESPACE ATHLÈTE</div>
-      <div style="font-size:11px;color:rgba(255,255,255,.82);line-height:1.6">Avec un code fourni par ton coach, l'accès est compris dans son suivi. Sans code, l'accès en autonomie coûte 9,95 €/mois, sans engagement.</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.82);line-height:1.6">Avec un code fourni par ton coach, l'accès est compris dans son suivi. Sans code, l'accès en autonomie coûte 9,95 €/mois, sans engagement.</div>
     </div>
 
   </div>
@@ -2367,7 +2367,9 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="s-access-gate" class="screen" style="background:#060606;justify-content:center;padding:32px 24px;position:relative;overflow:hidden">
   <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(-55deg,transparent,transparent 18px,rgba(198,15,8,.025) 18px,rgba(198,15,8,.025) 19px);pointer-events:none"></div>
   <div class="anim-in" style="text-align:center;z-index:1;width:100%">
-    <div style="font-size:56px;margin-bottom:16px"></div>
+    <!-- Rempli par loadAccessGate (seul chemin qui mène ici) : le bloc restait
+         vide et laissait 56px de trou au-dessus du titre. -->
+    <div id="ag-icon" style="color:var(--red);margin-bottom:16px;line-height:0"></div>
     <h1 style="margin-bottom:8px" id="ag-title">Accès expiré</h1>
     <p class="sub" style="line-height:1.6;margin-bottom:32px" id="ag-sub">Ton accès à RepCore n'est plus actif.</p>
     <div style="background:var(--dark);border:1px solid #2a0000;border-radius:16px;padding:20px;margin-bottom:24px;text-align:left">
@@ -2417,7 +2419,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
         <div>
           <div style="font-weight:800;font-size:15px">Coaching en autonomie</div>
-          <div style="font-size:11px;color:var(--red);font-weight:700">9,95 € / mois</div>
+          <div style="font-size:11px;color:var(--red);font-weight:700">9,95 € / mois</div>
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:16px;color:var(--green)">
@@ -3724,20 +3726,47 @@ function loadAccessGate(){
   const title=document.getElementById('ag-title');
   const sub=document.getElementById('ag-sub');
   const block=document.getElementById('ag-status-block');
+  const ic=document.getElementById('ag-icon');
   if(!u){return;}
+  if(ic) ic.innerHTML=icon('lock',56);
+  const L='<div style="font-size:12px;color:#888;line-height:1.8">';
   if(u.status==='COACHING_SUIVI'&&u.accessExpiry&&Date.now()>=u.accessExpiry){
-    title.textContent='Acces expire';
-    sub.textContent='Ton acces coaching avec suivi a expire.';
-    const d=new Date(u.accessExpiry);
-    block.innerHTML='<div style="font-size:12px;color:#888;line-height:1.8">Statut: <span style="color:var(--red-light)">EXPIRE</span><br>Expire le: <strong>'+d.toLocaleDateString('fr-FR')+'</strong><br>Coach: <strong>'+(u.coachName||'?')+'</strong><br><br>Contacte ton coach pour prolonger ton acces.</div>';
+    const d=new Date(u.accessExpiry).toLocaleDateString('fr-FR');
+    const nom=(u.coachName||'').trim();
+    title.textContent='Accès expiré';
+    sub.textContent='Ton accès coaching avec suivi a expiré le '+d+'.';
+    // Sur cet écran, joindre son coach est la seule action qui débloque
+    // quoi que ce soit : quand on sait où le joindre, on affiche le bouton
+    // plutôt que de dire à l'athlète de se débrouiller. Le message est
+    // pré-rempli — il n'a plus qu'à envoyer.
+    const href=_coachContactHref(u.coachId,
+      'Bonjour'+(nom?' '+nom:'')+", mon accès RepCore a expiré le "+d+'. Peux-tu le prolonger ?');
+    block.innerHTML=L
+      +'Expiré le : <strong style="color:#ddd">'+escapeHtml(d)+'</strong>'
+      +(nom?'<br>Coach : <strong style="color:#ddd">'+escapeHtml(nom)+'</strong>':'')
+      +'</div>'
+      +(href
+        ?'<a href="'+_safeContactUrl(href)+'" target="_blank" rel="noopener" class="btn btn-red" '
+          +'style="margin-top:14px;display:flex;align-items:center;justify-content:center;gap:8px;text-decoration:none">'
+          +'💬 Demander une prolongation'+(nom?' à '+escapeHtml(nom):'')+'</a>'
+        // Pas de coach rattaché, ou aucun moyen de le joindre : la phrase
+        // reste, faute de mieux.
+        :L+'Contacte ton coach pour le prolonger.</div>');
   } else if(u.status==='AUTONOMIE_PREMIUM'&&u.paymentStatus!=='active'){
     title.textContent='Abonnement inactif';
-    sub.textContent='Ton abonnement mensuel nest plus actif.';
-    block.innerHTML=`<div style="font-size:12px;color:#888;line-height:1.8">Statut: <span style="color:var(--red-light)">${escapeHtml(u.paymentStatus||'INACTIF')}</span><br>Abonnement ID: <span style="font-family:monospace;font-size:11px">${escapeHtml(u.paypalSubscriptionId||'N/A')}</span><br><br>Renouvelle ton abonnement pour retrouver l'acces.</div>`;
+    sub.textContent="Ton abonnement mensuel n'est plus actif.";
+    block.innerHTML=L
+      +'Statut : <span style="color:var(--red-light)">'+escapeHtml(u.paymentStatus||'inactif')+'</span>'
+      +'<br>Abonnement : <span style="font-family:monospace;font-size:var(--fs-xs)">'
+      +escapeHtml(u.paypalSubscriptionId||'non renseigné')+'</span>'
+      +'<br><br>Renouvelle-le pour retrouver ton accès.</div>';
   } else {
-    title.textContent='Acces requis';
-    sub.textContent='Tu dois activer un acces pour utiliser RepCore.';
-    block.innerHTML='<div style="font-size:12px;color:#888;line-height:1.8">Tu n&#39;as pas encore d&#39;acces actif.<br>Entre un code fourni par ton coach, ou souscris a l&#39;abonnement autonomie a 9,95EUR/mois.</div>';
+    title.textContent='Accès requis';
+    sub.textContent='Tu dois activer un accès pour utiliser RepCore.';
+    // Espace insécable avant le € : la coupure « 9,95 » / « €/mois » en fin de
+    // ligne est fautive en typographie française.
+    block.innerHTML=L+"Tu n'as pas encore d'accès actif.<br>"
+      +"Entre un code fourni par ton coach, ou souscris à l'abonnement autonomie à 9,95 €/mois.</div>";
   }
 }
 
@@ -4455,6 +4484,30 @@ function _numWa(phone){
 function waLink(phone,text){
   return 'https://wa.me/'+_numWa(phone)+'?text='+encodeURIComponent(text||'');
 }
+// Lien de contact d'un coach, vu depuis un de ses athlètes : WhatsApp si son
+// numéro est exploitable, sinon son email, sinon rien. _numWa et non un replace
+// brut — un numéro saisi en « 06… » produit un lien que WhatsApp refuse, et
+// mieux vaut un mailto qu'un bouton mort.
+// Partagé par l'accueil athlète et l'écran d'accès expiré : sur ce dernier,
+// joindre son coach est la SEULE action qui débloque quoi que ce soit.
+function _coachContactHref(coachId,texte,users){
+  if(!coachId) return '';
+  const us=users||DB.get('users')||{};
+  const coach=Object.values(us).find(x=>x&&x.id===coachId);
+  const email=Object.keys(us).find(k=>us[k]&&us[k].id===coachId);
+  const phone=_numWa(coach?.phone);
+  if(phone) return texte?waLink(coach.phone,texte):('https://wa.me/'+phone);
+  if(!email) return '';
+  return 'mailto:'+email+(texte?'?subject='+encodeURIComponent('RepCore')+'&body='+encodeURIComponent(texte):'');
+}
+// safeUrl n'autorise que http(s) : un lien mailto: y deviendrait '#', soit
+// exactement le bouton mort qu'on cherche à éviter quand le coach n'a pas
+// renseigné de numéro. Allow-list resserrée sur les deux seules formes que
+// _coachContactHref sait produire, et échappement d'attribut conservé.
+function _safeContactUrl(u){
+  const s=String(u||'').trim();
+  return /^(https:\/\/wa\.me\/|mailto:)/i.test(s)?escapeHtml(s):'#';
+}
 function _telAthlete(c){return _numWa(c?.phone);}
 // Un numéro est enregistré mais inexploitable : le dire précisément, sinon le
 // coach lit « numéro non enregistré » alors qu'il vient de le saisir.
@@ -4873,7 +4926,7 @@ function openClientDetail(cid,_refresh){
   document.getElementById('ccd-badge').innerHTML=c._fromCode
     ?'<span class="badge badge-orange">⏳ En attente d\'inscription</span>'
     // Même verdict que la liste : les deux écrans doivent dire la même chose.
-    :_enAttenteAbonnement(c)?'<span class="badge badge-orange">⏳ Abonnement à souscrire — 9,95 €/mois</span>'
+    :_enAttenteAbonnement(c)?'<span class="badge badge-orange">⏳ Abonnement à souscrire — 9,95 €/mois</span>'
     :_newBil?'<span class="badge badge-orange"> Nouveau bilan</span>'
     :needsAlert(c)?'<span class="badge badge-red"> Bilan en retard</span>':isActive(c)?'<span class="badge badge-green"> Actif</span>':'<span class="badge badge-gray">Inactif</span>';
   const _pd=document.getElementById('ccd-profile-details');
@@ -6319,12 +6372,10 @@ function loadClientHome(){
   if(contactLink&&u.coachId){
     const _applyCoachData=(usrs)=>{
       const coachUser=Object.values(usrs).find(x=>x.id===u.coachId);
-      const coachEmail=Object.keys(usrs).find(k=>usrs[k]?.id===u.coachId);
-      // _numWa et non un replace brut : un coach ayant enregistré son numéro en
-      // 06 avant le durcissement produisait ici un lien que WhatsApp refuse.
-      // Mieux vaut retomber sur l'email que donner un bouton mort à l'athlète.
-      const phone=_numWa(coachUser?.phone);
-      const href=phone?'https://wa.me/'+phone:(coachEmail?'mailto:'+coachEmail:'');
+      // Calcul déporté dans _coachContactHref, partagé avec l'écran d'accès
+      // expiré : deux écrans qui proposent de joindre le même coach ne doivent
+      // pas pouvoir diverger sur le numéro retenu ni sur le repli email.
+      const href=_coachContactHref(u.coachId,'',usrs);
       if(href){contactLink.href=href;contactLink.style.display='inline-flex';}
       _renderCoachBanner(coachUser, u.coachName);
       _renderPromoBanners(coachUser);
@@ -12762,7 +12813,7 @@ function openAddAthlete(){
     <h2 style="margin-bottom:6px">➕ Ajouter un athlète</h2>
     <p class="sub" style="margin-bottom:8px;font-size:12px">${estCreateur
       ?'Crée le compte et active l\'accès en une seule étape. Ton élève se connectera avec l\'email et le mot de passe que tu saisis ici.'
-      :'Crée le compte de ton élève : il se connectera avec l\'email et le mot de passe que tu saisis ici. Son accès sera activé après souscription à <strong style="color:#ddd">9,95 €/mois</strong> — les accès gratuits sont réservés au créateur de RepCore.'}</p>
+      :'Crée le compte de ton élève : il se connectera avec l\'email et le mot de passe que tu saisis ici. Son accès sera activé après souscription à <strong style="color:#ddd">9,95 €/mois</strong> — les accès gratuits sont réservés au créateur de RepCore.'}</p>
     <div><label style="margin-top:10px" for="aa-fname">Prénom</label><input id="aa-fname" placeholder="Prénom de l'athlète"></div>
     <div><label style="margin-top:10px" for="aa-lname">Nom</label><input id="aa-lname" placeholder="Nom de l'athlète"></div>
     <div><label style="margin-top:10px" for="aa-email">Email</label><input type="email" id="aa-email" placeholder="email@exemple.com"></div>
@@ -12880,7 +12931,7 @@ async function createAthlete(){
     ?(motDePasseActif
       ? '✓ '+fn+' créé — il peut se connecter avec cet email et ce mot de passe. Accès jusqu\'au '+exp+' (code copié)'
       : '✓ '+fn+' rattaché — il avait déjà un compte, il garde SON mot de passe. Accès jusqu\'au '+exp+' (code copié)')
-    :'Compte préparé. '+fn+' devra souscrire à 9,95 €/mois pour activer son accès (code copié)';
+    :'Compte préparé. '+fn+' devra souscrire à 9,95 €/mois pour activer son accès (code copié)';
   toastSync(okU&&okS,envoi,messageFinal,'le compte est');
   loadCoachHome();
 }
