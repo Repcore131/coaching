@@ -1,7 +1,7 @@
 {
   "name": "RepCore",
   "short_name": "RepCore",
-  "description": "Application de coaching sportif RepCore",
+  "description": "Coaching musculation avec suivi : charges ajustées à ta phase de cycle, fiche papier importée par photo, base Ciqual hors ligne.",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#080808",
