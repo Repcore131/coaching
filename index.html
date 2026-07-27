@@ -7040,6 +7040,14 @@ window.addEventListener('beforeunload',()=>{
 // ne suggérer une charge qu'à partir du MÊME jour (voir _memeCreneau).
 function launchWorkout(sessConfig,slotIdx){
   if(!sessConfig?.exercises?.length){toast('Aucun exercice dans cette séance.','var(--red)');return;}
+  // Après le garde, et non en toute première ligne : un lancement avorté doit
+  // laisser intacte la séance déjà en cours. Placé avant, il tuerait l'horloge
+  // d'un entraînement que woState continue par ailleurs de décrire, et le
+  // chrono se figerait à l'écran.
+  // Ici, en revanche, c'est le dernier instant où l'ancien intervalle est
+  // encore joignable : la ligne suivante remplace woState en bloc et sa
+  // référence est perdue à jamais — l'intervalle, lui, continue de battre.
+  if(woState?.timerInterval) clearInterval(woState.timerInterval);
   const cycle=getCycleFactor();
   // Appliquer réduction de séries si phase lutéale
   const exercises=sessConfig.exercises.map(ex=>({
@@ -7218,6 +7226,9 @@ async function downloadPdf(){
 function startWorkout(){
   const prog=getProgram();
   if(!prog.exercises?.length){toast('Aucun programme défini.','var(--red)');return;}
+  // Même raison qu'en tête de launchWorkout : woState est remplacé juste après,
+  // et avec lui la seule référence à l'intervalle en cours.
+  if(woState?.timerInterval) clearInterval(woState.timerInterval);
   // Chemin hérité : ce programme unique ne vient pas d'un créneau de la semaine.
   // slot:null fait retomber la recherche d'historique sur le nom de la séance.
   woState={exercises:prog.exercises,currentEx:0,startTime:Date.now(),timerInterval:null,sessionData:{},progName:prog.name,slot:null};
