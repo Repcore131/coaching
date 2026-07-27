@@ -912,6 +912,7 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
       <div style="display:flex;align-items:flex-start;gap:10px;margin-top:8px;padding:12px;background:var(--card2);border:1px solid var(--border);border-radius:8px">
         <input type="checkbox" id="r-health" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
+        <div style="font-size:11px;color:var(--sub);margin:4px 0 12px;line-height:1.6">En creant un compte tu acceptes les <a href="../terms.html" target="_blank" rel="noopener" style="color:var(--red-light)">CGV</a> et prends connaissance des <a href="../legal.html" target="_blank" rel="noopener" style="color:var(--red-light)">mentions legales</a>.</div>
         <label for="r-health" style="font-size:12px;color:var(--sub);line-height:1.6;cursor:pointer">Je consens explicitement au traitement de mes <strong style="color:#ccc">données de santé</strong> — poids, mensurations, photos corporelles, cycle menstruel, sommeil — pour mon suivi sportif.</label>
       </div>
     </div>
@@ -14551,11 +14552,38 @@ function initPaypalSubscription(){
 }
 function renderPaypalButton(planId,coachId){
   const container=document.getElementById('paypal-btn-container');
-  container.innerHTML='<div id="paypal-buttons-inner"></div>';
+  // Acceptation des CGV, DISTINCTE du consentement RGPD de l'inscription : les
+  // deux n'ont pas le meme objet. Le consentement RGPD porte sur un traitement
+  // de donnees, celui-ci sur un engagement contractuel et un prelevement
+  // reconduit. Les fusionner priverait chacun de sa validite.
+  // Le bouton PayPal n'est pas seulement masque : createSubscription refuse
+  // aussi, pour qu'aucun chemin ne contourne la case.
+  container.innerHTML=
+    '<label for="cgv-ok" style="display:flex;gap:10px;align-items:flex-start;'
+    +'background:var(--card2);border:1px solid var(--border);border-radius:10px;'
+    +'padding:14px 16px;margin-bottom:16px;cursor:pointer;text-align:left">'
+    +'<input type="checkbox" id="cgv-ok" style="margin-top:3px;flex-shrink:0;'
+    +'width:18px;height:18px;accent-color:var(--red);cursor:pointer">'
+    +'<span style="font-size:12px;line-height:1.6;color:var(--sub)">'
+    +"J'ai lu et j'accepte les <a href=\"../terms.html\" target=\"_blank\" rel=\"noopener\">"
+    +"conditions générales de vente</a>. Je demande l'accès immédiat au service et "
+    +"reconnais qu'à ce titre je perds mon droit de rétractation de 14 jours une fois "
+    +"le contenu numérique fourni.</span></label>"
+    +'<div id="paypal-buttons-inner" style="display:none"></div>';
+  const _cgv=document.getElementById('cgv-ok');
+  const _inner=document.getElementById('paypal-buttons-inner');
+  _cgv.addEventListener('change',()=>{_inner.style.display=_cgv.checked?'':'none';});
   if(typeof paypal==='undefined'){toast('PayPal non charge');return;}
   paypal.Buttons({
     style:{layout:'vertical',color:'black',shape:'rect',label:'subscribe'},
     createSubscription:function(data,actions){
+      // Deuxieme verrou : masquer ne suffit pas, un clic programmatique
+      // contournerait l'affichage.
+      const ok=document.getElementById('cgv-ok');
+      if(!ok||!ok.checked){
+        toast('Accepte les conditions générales avant de payer','var(--orange)');
+        throw new Error('CGV non acceptees');
+      }
       sessionStorage.setItem('rc_paypal_return','1');
       return actions.subscription.create({'plan_id':planId});
     },
