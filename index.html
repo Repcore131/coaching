@@ -3106,7 +3106,14 @@ const CLOUD={
       // supprime alors la clé côté serveur.
       if(safe.coachId){
         const coach=Object.values(DB.get('users')||{}).find(u=>u.id===safe.coachId);
-        safe.coachEmailKey = coach?.email ? coach.email.replace(/\./g,',') : null;
+        // Le coach n'est pas toujours en cache : sur un appareil neuf, l'athlete
+        // a saisi un code sans avoir jamais vu sa fiche. Ecraser a null dans ce
+        // cas annulait la cle posee au rattachement A CHAQUE push, et le coach
+        // n'obtenait jamais l'acces. On retombe donc sur la valeur deja portee.
+        // La revocation reste intacte : « Liberer » efface coachId, donc la
+        // branche else ci-dessous, qui met bien null.
+        safe.coachEmailKey = coach?.email ? coach.email.replace(/\./g,',')
+                                          : (safe.coachEmailKey||null);
       } else {
         safe.coachEmailKey = null;
       }
@@ -4680,10 +4687,19 @@ async function doLinkCoach(){
       // Code créateur : accès gratuit immédiat
       currentUser.coachId=payload.coachId;
       currentUser.coachName=payload.coachName||'Coach';
+      // Pose EXPLICITE, depuis le code et non depuis le cache local : c'est la
+      // seule valeur qui ouvre le dossier au coach cote serveur. Le repli
+      // derive la cle de coachEmail pour les codes emis avant ce changement.
+      const _ck=payload.coachEmailKey
+        ||((payload.coachEmail||'').replace(/\./g,','))||null;
+      if(_ck) currentUser.coachEmailKey=_ck;
       currentUser.status='COACHING_SUIVI';
       currentUser.accessExpiry=payload.expiry;
       users[currentUser.email]=currentUser;
       const _u1=DB.set('users',users),_s1=DB.set('session',currentUser);
+      // Envoi immediat : sans lui, le coach ne voit rien tant que l'athlete
+      // n'a pas declenche une autre ecriture.
+      CLOUD.pushOne(currentUser.email,currentUser);
       toastEcriture(_u1&&_s1,'Accès activé ✓','ton accès est');
       openBilan('depart');
     } else {
@@ -5058,10 +5074,53 @@ function renderClientRow(c){
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">${badge}</div>
   </div>`;
 }
+// Releve des codes consommes. Un athlete qui saisit un code sur un appareil
+// neuf n'existe nulle part chez le coach : ni dans ses users locaux, ni dans
+// sa liste clients. Le seul lien est le noeud /rc_codes/{token}, que l'athlete
+// marque redeemed en y inscrivant son email. On le relit donc a chaque
+// ouverture du tableau de bord, et on tire le dossier correspondant.
+// Sans reseau, la fonction ne fait rien et n'affiche pas d'erreur : ce n'est
+// pas une action demandee par le coach.
+async function _rafraichirCodesEleves(){
+  const codes=(currentUser&&currentUser.studentCodes)||[];
+  const actifs=codes.filter(c=>c&&c.token&&c.active!==false);
+  if(!actifs.length||!CLOUD.ok()) return;
+  let tok=null;
+  try{tok=await CLOUD._getToken();}catch(e){return;}
+  let change=false;
+  for(const c of actifs){
+    let data=null;
+    try{
+      const r=await fetch(_rcCodesUrl(c.token)+(tok?'?auth='+tok:''));
+      if(!r.ok) continue;
+      data=await r.json();
+    }catch(e){continue;}
+    if(!data||!data.redeemed||!data.athleteEmail) continue;
+    // Le dossier n'est lisible que si l'athlete a bien inscrit coachEmailKey :
+    // c'est la condition posee par database.rules.json. Un echec ici signifie
+    // que le rattachement n'est pas alle au bout, pas que le code est faux.
+    try{await CLOUD.syncUser(data.athleteEmail);}catch(e){}
+    if(c.redeemed!==true||c.athleteEmail!==data.athleteEmail){
+      c.redeemed=true;
+      c.athleteEmail=data.athleteEmail;
+      if(data.usedBy) c.usedBy=data.usedBy;
+      change=true;
+    }
+  }
+  if(change){
+    saveUser();
+    // Re-rendu seulement si le coach est encore sur son tableau de bord : la
+    // requete est longue, il a pu naviguer ailleurs entre-temps.
+    if(document.getElementById('s-coach-home')?.classList.contains('active')) loadCoachHome();
+  }
+}
 function loadCoachHome(){
   go('s-coach-home');
   // Pousser les données locales vers Firebase dès l'ouverture (récupère les saves pré-v144)
   if(CLOUD.canWrite()) CLOUD.push(DB.get('users')||{});
+  // Sans await : le tableau de bord s'affiche tout de suite avec ce qu'on a,
+  // et se complete quand les codes ont repondu.
+  _rafraichirCodesEleves();
   const u=currentUser;
   const fullName=((u.fname||'')+' '+(u.lname||'')).trim()||'Profil incomplet';
   const el=document.getElementById('ch-name');if(el)el.textContent=fullName;
@@ -14117,6 +14176,13 @@ async function _genAccessCode(studentName,months,type){
   const payload={
     coachId:currentUser.id,
     coachName:(currentUser.fname||'')+' '+(currentUser.lname||''),
+    // Identite RTDB du coach transportee PAR LE CODE. Sans elle, un athlete
+    // qui saisit le code sur un appareil neuf n'a aucun moyen de connaitre la
+    // cle a inscrire : le coach n'est pas dans son localStorage, et c'est
+    // pourtant cette cle que .read/.write de database.rules.json exigent pour
+    // lui accorder l'acces au dossier.
+    coachEmail:currentUser.email||null,
+    coachEmailKey:(currentUser.email||'').replace(/\./g,',')||null,
     coachCode:currentUser.code||null,
     studentName,expiry,months,codeId,
     type:type||'athlete',
@@ -14506,6 +14572,12 @@ function renderPaypalButton(planId,coachId){
         if(pending){
           currentUser.coachId=pending.coachId||currentUser.coachId||null;
           currentUser.coachName=pending.coachName||currentUser.coachName||'';
+          // Meme raison que dans doLinkCoach : sans cette cle, database.rules.json
+          // n'accorde au coach aucun droit de lecture sur le dossier. L'athlete
+          // aurait paye et serait reste invisible pour lui.
+          const _ck2=pending.coachEmailKey
+            ||((pending.coachEmail||'').replace(/\./g,','))||null;
+          if(_ck2) currentUser.coachEmailKey=_ck2;
           sessionStorage.removeItem('pendingCodePayload');
         }
         // Activation d'abonnement : c'est le pire moment pour un « ✓ » menteur,
