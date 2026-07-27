@@ -7077,8 +7077,8 @@ function openSessionPicker(){
       style="background:${isToday?'linear-gradient(135deg,#1a0000,#2a0000)':'var(--card2)'};border-radius:12px;padding:14px;margin-bottom:10px;cursor:pointer;display:flex;align-items:center;gap:12px;border:1.5px solid ${isToday?'var(--red)':'var(--border)'}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       ${s.photo?`<img src="${s.photo}" style="width:50px;height:50px;border-radius:8px;object-fit:cover">`:`<div style="width:50px;height:50px;border-radius:3px;background:var(--red);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;flex-shrink:0">${DAY_ICONS[i]}</div>`}
       <div style="flex:1">
-        <div style="font-size:var(--fs-xs);color:${isToday?'#fca5a5':'var(--sub)'};font-weight:700;text-transform:uppercase;letter-spacing:.5px">${s.day}${isToday?' · Aujourd\'hui':''}</div>
-        <div style="font-weight:800;font-size:14px;margin-top:2px">${s.name||'Séance '+s.day}${badgeExemple}</div>
+        <div style="font-size:var(--fs-xs);color:${isToday?'#fca5a5':'var(--sub)'};font-weight:700;text-transform:uppercase;letter-spacing:.5px">${s.day||DAYS[i]}${isToday?' · Aujourd\'hui':''}</div>
+        <div style="font-weight:800;font-size:14px;margin-top:2px">${escapeHtml(_nomSeance(s,i))}${badgeExemple}</div>
         <div class="sub" style="font-size:11px">${s.exercises?.length||0} exercices ${seanceEstExemple(s)?'proposés':'configurés'}</div>
       </div>
       <span style="color:var(--red);font-size:20px">▶</span>
@@ -7219,6 +7219,20 @@ window.addEventListener('beforeunload',()=>{
 // slotIdx = l'index du créneau dans sessions_config, 0..6 pour lundi..dimanche.
 // Il suit la séance jusqu'à l'historique : c'est lui qui permettra plus tard de
 // ne suggérer une charge qu'à partir du MÊME jour (voir _memeCreneau).
+// Nom affichable d'une séance. Le sélecteur appliquait déjà ce repli, mais lui
+// seul : une séance laissée sans nom dans la configuration par défaut partait
+// donc avec progName='' — titre vide en haut de l'écran de séance, et surtout
+// une séance enregistrée sans nom dans l'historique.
+// Le repli suit l'ordre de fiabilité : le nom saisi, sinon le jour porté par la
+// configuration, sinon le jour déduit du créneau — ce dernier cas couvre les
+// configurations anciennes où `day` manque.
+function _nomSeance(sessConfig,slotIdx){
+  const nom=(sessConfig&&sessConfig.name||'').trim();
+  if(nom) return nom;
+  const jour=(sessConfig&&sessConfig.day)
+    ||((typeof slotIdx==='number'&&DAYS[slotIdx])||'');
+  return jour?('Séance '+jour):'Séance';
+}
 function launchWorkout(sessConfig,slotIdx){
   if(!sessConfig?.exercises?.length){toast('Aucun exercice dans cette séance.','var(--red)');return;}
   // Après le garde, et non en toute première ligne : un lancement avorté doit
@@ -7236,15 +7250,16 @@ function launchWorkout(sessConfig,slotIdx){
     series:Math.max(1,(ex.series||3)-cycle.seriesReduce),
     _cycleAdjusted:cycle.seriesReduce>0
   }));
+  const _slot=(typeof slotIdx==='number'&&slotIdx>=0&&slotIdx<=6)?slotIdx:null;
   woState={exercises,currentEx:0,startTime:Date.now(),timerInterval:null,sessionData:{},
-    progName:sessConfig.name,sessionPhoto:sessConfig.photo||null,
-    slot:(typeof slotIdx==='number'&&slotIdx>=0&&slotIdx<=6)?slotIdx:null};
+    progName:_nomSeance(sessConfig,_slot),sessionPhoto:sessConfig.photo||null,
+    slot:_slot};
   woState.timerInterval=setInterval(()=>{
     const el=Math.floor((Date.now()-woState.startTime)/1000);
     document.getElementById('wo-timer').textContent=pad(Math.floor(el/60))+':'+pad(el%60);
   },1000);
   go('s-workout');
-  document.getElementById('wo-title').textContent=sessConfig.name;
+  document.getElementById('wo-title').textContent=woState.progName;
   renderWoEx();
 }
 
@@ -7799,7 +7814,14 @@ function finishWorkout(incomplete=false){
 }
 function buildSessionComparison(vol,data){
   const prev=currentUser.sessions.slice(0,-1);
-  const prevSame=[...prev].reverse().find(s=>s.name===woState.progName);
+  // Appariement sur le CRÉNEAU, pas sur le libellé. Le nom est saisi librement
+  // par le coach ou l'athlète : deux jours peuvent porter le même intitulé, et
+  // renommer une séance cassait silencieusement la comparaison. _memeCreneau
+  // compare d'abord slot — l'index de sessions_config, donc le jour — et ne
+  // retombe sur le nom que pour l'historique antérieur à ce champ.
+  // Même prédicat que la suggestion de charge : une seule définition de « la
+  // même séance » dans tout le fichier.
+  const prevSame=[...prev].reverse().find(s=>_memeCreneau(s,woState.slot,woState.progName));
   // ── Records : on collecte tout mais on n'affiche QU'UN badge (le meilleur gain) ──
   const records=[];
   let firstSession=false;
