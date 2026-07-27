@@ -14130,12 +14130,63 @@ async function requestAccountDeletion(){
     }
     delete users[myKey];
     DB.set('users',users);
-    // Effacer le compte du cloud (RTDB)
+    // ── Effacement distant, PUIS local ────────────────────────────────────
+    // L'ORDRE EST CRITIQUE. Le jeton d'identite vit dans rc_fb_auth : vider
+    // localStorage en premier le detruirait, et les quatre appels distants
+    // partiraient sans autorisation pour echouer en silence. On obtient donc
+    // le jeton d'abord, on efface le distant, et le local en dernier.
+    const safeKey=myKey.toLowerCase().replace(/\./g,',');
+    let fbTok=null;
+    try{ fbTok=await CLOUD._getToken(); }catch(e){}
+
+    // 1. Dossier utilisateur dans la base temps reel
     try{
-      const fbTok=await CLOUD._getToken();
-      const safeKey=myKey.toLowerCase().replace(/\./g,',');
-      await fetch(CLOUD._fbUrl.replace('users.json','users/'+safeKey+'.json')+(fbTok?'?auth='+fbTok:''),{method:'DELETE'});
+      await fetch(CLOUD._fbUrl.replace('users.json','users/'+safeKey+'.json')
+        +(fbTok?'?auth='+fbTok:''),{method:'DELETE'});
     }catch(e){}
+
+    // 2. Fiche programme PDF dans Storage. Chemin encode en entier : le nom
+    //    d'objet contient des barres obliques qui doivent etre echappees.
+    if(fbTok){
+      try{
+        await fetch('https://firebasestorage.googleapis.com/v0/b/'+STORAGE_BUCKET
+          +'/o/'+encodeURIComponent('pdfs/'+safeKey+'/programme.pdf'),
+          {method:'DELETE',headers:{'Authorization':'Bearer '+fbTok}});
+      }catch(e){}
+    }
+
+    // 3. Codes d'acces emis par ce coach. Ils vivent hors du dossier
+    //    utilisateur : supprimer le dossier les laisserait actifs, et un code
+    //    orphelin resterait utilisable par un athlete.
+    for(const c of (currentUser.studentCodes||[])){
+      if(!c||!c.token) continue;
+      try{
+        await fetch(_rcCodesUrl(c.token)+(fbTok?'?auth='+fbTok:''),{method:'DELETE'});
+      }catch(e){}
+    }
+
+    // 4. Identite Firebase Auth. Sans cet appel, le dossier disparait mais le
+    //    compte d'authentification survit : l'adresse resterait prise et une
+    //    reconnexion reussirait sur un dossier vide.
+    if(fbTok){
+      try{
+        await fetch('https://identitytoolkit.googleapis.com/v1/accounts:delete?key='+CLOUD._fbKey,
+          {method:'POST',headers:{'Content-Type':'application/json'},
+           body:JSON.stringify({idToken:fbTok})});
+      }catch(e){}
+    }
+
+    // 5. Traces locales. Balayage de TOUTES les cles rc_ plutot qu'une liste
+    //    nominative : rc_photo_<id> est suffixee dynamiquement, et une liste
+    //    figee laisserait passer toute cle ajoutee plus tard. Couvre donc
+    //    rc_photo_*, rc_wo_state, rc_session, rc_fb_auth, rc_users et le reste.
+    try{
+      for(const k of Object.keys(localStorage)){
+        if(k.indexOf('rc_')===0) localStorage.removeItem(k);
+      }
+      sessionStorage.clear();
+    }catch(e){}
+
     silentLogout();
     go('s-welcome');
     setTimeout(()=>toast('Compte supprimé. Au revoir.','var(--sub)'),400);
