@@ -225,7 +225,10 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
 /* ====== ROLE CARDS ====== */
 .role-card{background:var(--card);border-radius:4px;padding:28px 20px;text-align:center;border:1px solid var(--border);cursor:pointer;transition:.3s;flex:1}
 .role-card:hover,.role-card.sel{border-color:var(--red);background:#110000}
-.role-icon{font-size:40px;margin-bottom:12px}
+/* Porte désormais un SVG et non plus un caractère : font-size ne sert plus à
+   rien, c'est color qui teinte le tracé (stroke:currentColor) et line-height:0
+   qui évite la demi-ligne de blanc sous l'icône. */
+.role-icon{color:var(--red);margin-bottom:12px;line-height:0}
 .client-row{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--card);border-radius:0 2px 2px 0;margin-bottom:6px;cursor:pointer;border:1px solid var(--border);border-left:3px solid var(--red);transition:all .15s}
 .client-row:hover{background:var(--red-bg);border-color:var(--red);box-shadow:0 4px 16px rgba(224,32,32,0.12);transform:translateY(-1px)}
 .client-row:active{transform:scale(.99);box-shadow:none}
@@ -825,8 +828,8 @@ const COACH_PHOTO='icons/coach.jpg';
     <div class="divider"></div>
     <label style="margin:0">Je suis :</label>
     <div class="row2">
-      <div class="role-card" id="role-coach" onclick="selectRole('coach')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><div class="role-icon"></div><div style="font-weight:800;font-size:15px">COACH</div><div class="sub" style="font-size:11px;margin-top:4px">Gérer mes athlètes</div></div>
-      <div class="role-card" id="role-athlete" onclick="selectRole('athlete')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><div class="role-icon"></div><div style="font-weight:800;font-size:15px">ATHLÈTE</div><div class="sub" style="font-size:11px;margin-top:4px">Suivre ma progression</div></div>
+      <div class="role-card" id="role-coach" onclick="selectRole('coach')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><div class="role-icon" data-icon="users"></div><div style="font-weight:800;font-size:15px">COACH</div><div class="sub" style="font-size:11px;margin-top:4px">Gérer mes athlètes</div></div>
+      <div class="role-card" id="role-athlete" onclick="selectRole('athlete')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><div class="role-icon" data-icon="dumbbell"></div><div style="font-weight:800;font-size:15px">ATHLÈTE</div><div class="sub" style="font-size:11px;margin-top:4px">Suivre ma progression</div></div>
     </div>
     <div style="display:flex;align-items:flex-start;gap:10px;margin-top:4px;padding:12px;background:var(--card2);border:1px solid var(--border);border-radius:8px">
       <input type="checkbox" id="r-rgpd" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
@@ -910,13 +913,13 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
     <div style="padding:12px 8px;flex:1">
       <button id="sb-tab-dashboard" onclick="coachTab('dashboard')" style="width:100%;text-align:left;padding:12px 14px;background:var(--card);border:none;border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
-        <span style="font-size:16px"></span> ATHLÈTES
+        ATHLÈTES
       </button>
       <button id="sb-tab-codes" onclick="coachTab('codes')" style="width:100%;text-align:left;padding:12px 14px;background:none;border:none;border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
-        <span style="font-size:16px"></span> CODES ACCÈS
+        CODES ACCÈS
       </button>
       <button id="sb-tab-monetisation" onclick="coachTab('monetisation')" style="width:100%;text-align:left;padding:12px 14px;background:none;border:none;border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
-        <span style="font-size:16px"></span> PAIEMENTS
+        PAIEMENTS
       </button>
     </div>
     <div style="padding:16px">
@@ -1053,7 +1056,6 @@ const COACH_PHOTO='icons/coach.jpg';
           </div>
           <div id="sc-list">
             <div style="text-align:center;padding:40px 20px;color:#444">
-              <div style="font-size:36px;margin-bottom:12px;opacity:0.4"></div>
               <div style="font-size:13px">Aucun code généré encore.<br>Utilise le formulaire ci-dessus.</div>
             </div>
           </div>
@@ -1361,7 +1363,6 @@ const COACH_PHOTO='icons/coach.jpg';
           <input type="file" id="prog-photo-input" accept="image/*" onchange="loadProgPhoto(this)" style="display:none">
           <img id="prog-photo-preview" style="display:none;width:100%;border-radius:10px;margin-bottom:10px">
           <div id="prog-photo-ph">
-            <div style="font-size:32px;margin-bottom:8px"></div>
             <div style="font-weight:700;font-size:13px">Importe ta fiche programme</div>
             <div class="sub" style="font-size:11px;margin-top:4px">Photo de ton Google Sheet, PDF ou tableau papier<br>Elle s'affichera en référence pendant la création</div>
           </div>
@@ -3535,6 +3536,11 @@ window.onload=()=>{
   // pas, il n'y a pas de transition.
   if(!navigator.onLine) _rcBandeauReseau('offline');
   document.querySelectorAll('#client-tabbar .tab-btn[data-icon]').forEach(b=>b.insertAdjacentHTML('afterbegin',icon(b.dataset.icon,19)));
+  // Mêmes mécanique et source que ci-dessus, pour les deux cartes de rôle de
+  // l'inscription : le conteneur .role-icon avait perdu son glyphe et laissait
+  // 40px de vide au-dessus de « COACH » et « ATHLÈTE ». Passer par ICONS plutôt
+  // que réinliner un SVG garde une seule définition par pictogramme.
+  document.querySelectorAll('.role-icon[data-icon]').forEach(e=>{e.innerHTML=icon(e.dataset.icon,36);});
   CLOUD._loadAuth();
   _initBirthdateMax();
   // Purge AVANT toute écriture de la session : c'est ce qui libère la place
@@ -6625,7 +6631,6 @@ function loadSessionManager(){
             `<label style="display:block;margin-top:6px;cursor:pointer">
               <input type="file" accept="image/*" style="display:none" onchange="uploadSessionPhoto(${i},this)">
               <div style="border:2px dashed var(--border);border-radius:12px;padding:20px;text-align:center;transition:.2s" onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='var(--border)'">
-                <div style="font-size:28px;margin-bottom:6px"></div>
                 <div style="font-weight:700;font-size:13px">Ajouter ma fiche programme</div>
                 <div class="sub" style="font-size:11px;margin-top:3px"> Photo →  IA lit et importe les exercices automatiquement</div>
               </div>
@@ -8254,7 +8259,6 @@ const BIL_STEPS=[
   // Step 6 : Photos de progression
   ()=>`<div style="margin-bottom:22px"><div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">Photos de progression </div>`+
     `<div style="background:var(--dark);border:1px solid var(--surface-3);border-radius:8px;padding:16px;margin-bottom:14px;text-align:center">`+
-    `<div style="font-size:28px;margin-bottom:8px"></div>`+
     `<div style="font-weight:700;font-size:13px;margin-bottom:6px;color:#fff">Photos de progression</div>`+
     `<div style="font-size:11px;color:var(--sub);line-height:1.6">Reproduis les 3 poses ci-dessous — même endroit, même lumière qu'au début :<br><strong style="color:var(--red)">Face · Dos · Profil</strong></div></div>`+
     bPhotoCards('bil')+
@@ -8334,7 +8338,6 @@ const DEB_STEPS=[
   // Step 5 : Photos de départ
   ()=>`<div style="margin-bottom:22px"><div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">Photos de départ </div>`+
     `<div style="background:var(--dark);border:1px solid var(--surface-3);border-radius:8px;padding:16px;margin-bottom:14px;text-align:center">`+
-    `<div style="font-size:28px;margin-bottom:8px"></div>`+
     `<div style="font-weight:700;font-size:13px;margin-bottom:6px;color:#fff">Photos de départ</div>`+
     `<div style="font-size:11px;color:var(--sub);line-height:1.6">Reproduis les 3 poses ci-dessous, tenue légère, lumière naturelle — <strong style="color:var(--red)">touche AJOUTER sous chaque pose</strong>.</div></div>`+
     bPhotoCards('deb')+
@@ -8474,7 +8477,6 @@ function showBilanNotifBanner(){
   b.id='bilan-notif-banner';
   b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:5000;animation:slideDown .35s ease';
   b.innerHTML=`<div style="background:linear-gradient(135deg,#1a0000,#280000);border-bottom:2px solid var(--red);padding:14px 18px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openBilanChoice();document.getElementById('bilan-notif-banner')?.remove()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-    <div style="font-size:26px;flex-shrink:0"></div>
     <div style="flex:1;min-width:0">
       <div style="font-size:var(--fs-xs);font-weight:900;color:var(--red);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px">Bilan bimensuel · Ce samedi</div>
       <div style="font-size:12px;color:#ddd;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Remplis ton bilan coaching pour suivre ton évolution !</div>
