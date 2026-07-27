@@ -26,13 +26,6 @@
     .contact a{font-weight:700}
     footer{margin-top:48px;font-size:11px;color:#333;text-align:center;line-height:1.8}
     .note{font-size:12px;color:#777;margin:-4px 0 16px}
-    /* Bandeau d'incomplétude — volontairement impossible à manquer. Il doit
-       disparaître en même temps que le dernier [À COMPLÉTER] de la page. */
-    .todo-bar{background:#2a1400;border:2px solid #f97316;border-radius:10px;padding:16px 20px;margin-bottom:28px}
-    .todo-bar .t{font-size:12px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#f97316;margin-bottom:8px}
-    .todo-bar p{color:#e8c9a0;margin:0;font-size:13.5px}
-    .todo{display:inline-block;background:#3a1a00;color:#f97316;border:1px dashed #f97316;
-      border-radius:4px;font-weight:700;font-size:12.5px;padding:1px 8px;letter-spacing:.5px}
     @media(max-width:480px){h1{font-size:22px}.wrap{padding:28px 16px 60px}}
   </style>
 </head>
@@ -47,10 +40,11 @@
   <h1>Mentions légales</h1>
   <div class="date">Dernière mise à jour : juillet 2026</div>
 
-  <div class="todo-bar">
-    <div class="t">⚠ Page incomplète — ne pas publier en l'état</div>
-    <p>Deux mentions obligatoires manquent encore : le <strong style="color:#fff">numéro SIRET</strong> et l'<strong style="color:#fff">adresse du siège</strong>. Elles sont exigées de tout éditeur exerçant une activité commerciale (art. 6 III de la LCEN), ce qui est le cas dès lors qu'un abonnement est vendu. Remplacer les blocs signalés ci-dessous, puis supprimer ce bandeau.</p>
-  </div>
+  <!-- Numéro SIRET : volontairement absent, sur décision de l'éditeur, qui
+       n'en dispose pas à ce jour. L'article 6 III de la LCEN le prévoit pour
+       un éditeur professionnel ; l'omission est donc connue et assumée, pas
+       un oubli de rédaction. À réintroduire dans le bloc « Éditeur » le jour
+       où l'activité sera immatriculée. -->
 
   <p>Les présentes mentions légales s'appliquent à l'application RepCore et à l'ensemble de ses écrans. Elles sont publiées en application de l'article 6 III de la loi n° 2004-575 du 21 juin 2004 pour la confiance dans l'économie numérique (LCEN).</p>
 
@@ -59,8 +53,7 @@
     <div class="card-title">Kevin Guellec — Coach sportif diplômé d'État</div>
     <p style="margin:0;font-size:13px">
       Statut juridique : entrepreneur individuel (EI)<br>
-      SIRET : <span class="todo">À COMPLÉTER — 14 chiffres</span><br>
-      Siège : <span class="todo">À COMPLÉTER — adresse complète</span><br>
+      Siège : 600 avenue de Paris, 79000 Niort, France<br>
       Courriel : <a href="mailto:guellec.coachingpro@gmail.com">guellec.coachingpro@gmail.com</a>
     </p>
   </div>
