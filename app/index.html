@@ -4196,6 +4196,18 @@ function go(id){
   // Après l'affichage : la barre suit l'écran courant, quel que soit le chemin
   // emprunté pour y arriver (onglet, flèche retour, redirection interne).
   _majTabbar(id);
+  // Pre-remplissage du code en attente, pose ICI et non chez les appelants :
+  // cinq chemins menent a s-client-code (doRegister, doLogin, la reprise de
+  // session, doNewPwdRecovery, les boutons « entrer un code ») et seuls deux
+  // pre-remplissaient. Au centre, le comportement est le meme quel que soit
+  // le chemin, et un chemin ajoute plus tard en herite.
+  if(id==='s-client-code'){
+    try{
+      const _pc=localStorage.getItem('pendingCode');
+      const _in=document.getElementById('cc-code');
+      if(_pc&&_in&&!_in.value) _in.value=_pc;
+    }catch(e){}
+  }
 }
 function toast(msg,c='var(--green)'){
   const t=document.getElementById('toast');
@@ -4305,7 +4317,10 @@ async function doRegister(){
       if(enAttente){
         const inp=document.getElementById('cc-code');
         if(inp) inp.value=enAttente;
-        localStorage.removeItem('pendingCode');
+      // Conserve TANT QUE la liaison n'a pas abouti. L'effacer ici perdait
+      // le code des qu'on affichait l'ecran : fermer l'onglet avant de valider
+      // obligeait a redemander le code au coach. Il est efface a la liaison
+      // reussie, dans linkToCoach et dans la branche succes de doLinkCoach.
       }
       return;
     }
@@ -4333,7 +4348,10 @@ async function doRegister(){
     if(pending){
       const inp=document.getElementById('cc-code');
       if(inp){inp.value=pending;}
-      localStorage.removeItem('pendingCode');
+      // Conserve TANT QUE la liaison n'a pas abouti. L'effacer ici perdait
+      // le code des qu'on affichait l'ecran : fermer l'onglet avant de valider
+      // obligeait a redemander le code au coach. Il est efface a la liaison
+      // reussie, dans linkToCoach et dans la branche succes de doLinkCoach.
     }
   }
 }
@@ -4688,6 +4706,8 @@ function linkToCoach(coach){
   users[currentUser.email]=currentUser;
   users[coach.email]=coach;
   DB.set('users',users);DB.set('session',currentUser);
+  // La liaison a abouti : le code a joue son role et peut partir.
+  try{localStorage.removeItem('pendingCode');}catch(e){}
   toast('Lié à '+((coach.fname||'')+' '+(coach.lname||'')).trim()+' ✓');
   openBilan('depart');
 }
@@ -4745,6 +4765,8 @@ async function doLinkCoach(){
       // Envoi immediat : sans lui, le coach ne voit rien tant que l'athlete
       // n'a pas declenche une autre ecriture.
       CLOUD.pushOne(currentUser.email,currentUser);
+      // Idem : succes confirme, le code en attente n'a plus lieu d'etre.
+      try{localStorage.removeItem('pendingCode');}catch(e){}
       toastEcriture(_u1&&_s1,'Accès activé ✓','ton accès est');
       openBilan('depart');
     } else {
