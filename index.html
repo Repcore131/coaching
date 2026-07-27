@@ -237,7 +237,7 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
 .series-table td{padding:10px;text-align:center;border-top:1px solid #181818;font-size:13px;font-weight:600}
 .series-table tr.done td{background:#E0202010;color:var(--red)}
 .series-table-wo td{padding:8px 4px}.series-table-wo th{padding:7px 4px}
-.set-input{width:56px;background:var(--dark);border:1px solid #2a2a2a;border-radius:3px;color:#fff;text-align:center;padding:7px 4px;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800}
+.set-input{width:56px;background:var(--dark);border:1px solid #2a2a2a;border-radius:3px;color:#fff;text-align:center;padding:12px 4px;min-height:44px;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800}
 .set-input:focus{border-color:var(--red);outline:none;box-shadow:0 0 0 2px rgba(198,15,8,.15)}
 
 /* ====== SUGGEST BOX ====== */
@@ -447,7 +447,20 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
    44x44 : le repère tactile d'iOS, et bien au-delà des 24x24 exigés par la
    règle WCAG 2.5.8 AA. inline-flex parce qu'un min-width sans centrage
    collerait le glyphe à gauche de sa nouvelle zone. */
-.back-btn{background:none;border:none;color:var(--sub);font-size:18px;cursor:pointer;padding:6px 8px;font-weight:300;transition:.15s;line-height:1;min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+.back-btn{background:none;border:none;color:var(--sub);font-size:20px;cursor:pointer;padding:12px 14px;font-weight:300;transition:.15s;line-height:1;min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+/* Zone tactile de 44x44 sans toucher a l'apparence. Le ::before est un calque
+   invisible centre sur la commande : il agrandit ce que le doigt atteint, pas
+   ce que l'oeil voit. C'est ce qui permet aux pastilles de serie de rester des
+   ronds de 34px tout en devenant tapables.
+   min-width/min-height a 100% : une commande DEJA plus large que 44px garde sa
+   propre largeur, le calque ne la retrecit jamais.
+   NE FONCTIONNE PAS sur input ni select : ces elements remplaces ne rendent
+   pas de pseudo-element. Leur zone tactile passe par min-height (voir
+   .set-input plus bas). */
+.hit44,.back-btn,.exo-chip{position:relative}
+.hit44::before,.back-btn::before,.exo-chip::before{
+  content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:44px;height:44px;min-width:100%;min-height:100%}
 .back-btn:hover{color:var(--red)}
 .back-btn:active{transform:scale(.9)}
 /* ── Garde-fou : une commande sans glyphe redevient visible ─────────────────
@@ -7704,7 +7717,7 @@ function renderWoEx(){
           <div class="ex-name" style="font-size:15px">${escapeHtml(ex.name)}</div>
           <div class="sub" style="font-size:12px;margin-top:3px">${ex.series} séries × ${escapeHtml(ex.reps)} reps${ex._cycleAdjusted?' <span style="color:var(--orange)">(−1 série cycle)</span>':''}</div>
         </div>
-        <button onclick="openCalc(${escapeHtml(JSON.stringify(sug||''))},${escapeHtml(JSON.stringify(ex.reps||''))},'0',${escapeHtml(JSON.stringify(currentUser.gender||''))})" style="background:var(--card2);border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:11px;padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Vue tableau</button>
+        <button class="hit44" onclick="openCalc(${escapeHtml(JSON.stringify(sug||''))},${escapeHtml(JSON.stringify(ex.reps||''))},'0',${escapeHtml(JSON.stringify(currentUser.gender||''))})" style="background:var(--card2);border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:11px;padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Vue tableau</button>
       </div>
 
       ${cycleLabel&&isFemme?`<div style="background:var(--dark);border:1px solid #2a2a2a;border-radius:3px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#888;letter-spacing:.5px">${cycleLabel.text}</div>`:''}
@@ -7760,10 +7773,10 @@ function renderWoEx(){
       ${ex.repos&&!isCardio(ex)?`<div style="margin-top:10px;display:flex;align-items:center;gap:8px;color:var(--sub);font-size:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15" style="flex-shrink:0"><circle cx="12" cy="14" r="8"/><line x1="12" y1="14" x2="12" y2="9.5"/><line x1="10" y1="2.5" x2="14" y2="2.5"/><line x1="12" y1="2.5" x2="12" y2="6"/></svg> <strong>Repos :</strong> ${escapeHtml(ex.repos)}</div>`:''}
       ${!isCardio(ex)?`<div style="margin-top:10px">
         <div style="display:flex;align-items:center;justify-content:space-between">
-          <label style="font-size:11px;cursor:pointer;color:var(--sub)"><input type="checkbox" id="film-ex" style="width:auto;margin-right:4px">  Filmer cet exercice</label>
+          <label class="hit44" style="font-size:11px;cursor:pointer;color:var(--sub)"><input type="checkbox" id="film-ex" style="width:auto;margin-right:4px">  Filmer cet exercice</label>
           <span style="display:flex;align-items:center;gap:8px">
             <span style="font-size:var(--fs-xs);color:var(--red);font-weight:700">→ Vise RIR 0 sur ta dernière série</span>
-            <button onclick="toggleRirExplain()" style="background:#1a1a1a;border:1.5px solid #fff;border-radius:50%;width:19px;height:19px;color:#fff;font-size:11px;font-weight:900;cursor:pointer;line-height:1;padding:0;flex-shrink:0;box-shadow:0 0 8px rgba(255,255,255,.45)">?</button>
+            <button class="hit44" onclick="toggleRirExplain()" style="background:#1a1a1a;border:1.5px solid #fff;border-radius:50%;width:19px;height:19px;color:#fff;font-size:11px;font-weight:900;cursor:pointer;line-height:1;padding:0;flex-shrink:0;box-shadow:0 0 8px rgba(255,255,255,.45)">?</button>
           </span>
         </div>
         <div id="rir-explain" style="display:none;margin-top:10px;background:#08080f;border:1px solid #1e1e3a;border-radius:10px;padding:14px;font-size:12px;line-height:1.7">
@@ -7865,13 +7878,13 @@ function renderSets(ex,data){
     const cycleCell=showCycleCol?`<td style="color:var(--cycle-accent);font-weight:800;font-size:13px">${cycleW?cycleW+'kg':'—'}</td>`:'';
 
     // RIR dropdown
-    const rirSelect=`<select class="set-input" onchange="${onChR}" ${dis} style="padding:4px 2px;font-size:11px;min-width:52px">
+    const rirSelect=`<select class="set-input" onchange="${onChR}" ${dis} style="padding:4px 2px;font-size:11px;min-width:52px;min-height:44px">
       <option value="">RIR</option>
       ${RIR_OPTS.map(v=>`<option value="${v}" ${String(s.rir)===v?'selected':''}>${v==='echec'?'Échec':v==='0'?'0 ':v}</option>`).join('')}
     </select>`;
 
     // Pain dropdown
-    const painSelect=`<select class="set-input" onchange="${onChP}" ${dis} style="padding:4px 2px;font-size:11px;min-width:40px">
+    const painSelect=`<select class="set-input" onchange="${onChP}" ${dis} style="padding:4px 2px;font-size:11px;min-width:44px;min-height:44px">
       <option value="">—</option>
       ${PAIN_OPTS.map(v=>`<option value="${v}" ${String(s.pain)===v?'selected':''}>${v}</option>`).join('')}
     </select>`;
@@ -7900,7 +7913,7 @@ function renderSets(ex,data){
             <div style="display:flex;align-items:center;gap:8px">
               ${rirSelect}
               ${painSelect}
-              <button onclick="toggleSet(${i})" style="width:34px;height:34px;border-radius:50%;border:2px solid ${s.done?'#fff':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:14px;margin-left:auto;display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button>
+              <button class="hit44" onclick="toggleSet(${i})" style="width:34px;height:34px;border-radius:50%;border:2px solid ${s.done?'#fff':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:14px;margin-left:auto;display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button>
             </div>
           </div>
         </td>
@@ -7915,7 +7928,7 @@ function renderSets(ex,data){
       ${cycleCell}
       <td>${rirSelect}</td>
       <td>${painSelect}</td>
-      <td><button onclick="toggleSet(${i})" style="width:34px;height:34px;border-radius:50%;border:2px solid ${s.done?'#fff':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button></td>
+      <td><button class="hit44" onclick="toggleSet(${i})" style="width:34px;height:34px;border-radius:50%;border:2px solid ${s.done?'#fff':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button></td>
     </tr>`;
   }).join('');
 }
