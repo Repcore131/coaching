@@ -1283,6 +1283,11 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="metric-box"><div class="metric-val" id="ccd-sessions">0</div><div class="metric-label">Séances</div></div>
         <div class="metric-box"><div class="metric-val" id="ccd-weight">—</div><div class="metric-label">Poids</div></div>
       </div>
+      <!-- CONTRE-INDICATIONS — épinglées en permanence, jamais repliées.
+           Santé, allergies et TCA conditionnent toute la programmation : les
+           laisser au fond du questionnaire de départ revenait à demander au
+           coach de s'en souvenir. Rempli par openClientDetail. -->
+      <div id="ccd-alertes" style="display:none;margin-bottom:14px"></div>
       <!-- Modèle appliqué : renseigné par openClientDetail -->
       <div id="ccd-assigned-prog" style="display:none;font-size:11px;color:var(--sub);margin-bottom:10px;padding:8px 12px;background:var(--surface-1);border-left:2px solid var(--red);border-radius:0 6px 6px 0;line-height:1.5"></div>
       <!-- Lien WhatsApp de l'athlète : libellé et cible posés par openClientDetail -->
@@ -5294,6 +5299,19 @@ function openClientDetail(cid,_refresh){
   document.getElementById('ccd-sessions').textContent=(c.sessions||[]).length;
   const lb=c.bilans?.length?c.bilans[c.bilans.length-1]:null;
   document.getElementById('ccd-weight').textContent=lb&&getBW(lb)?getBW(lb)+'kg':'—';
+  // Contre-indications du bilan de départ, épinglées en haut de la fiche.
+  // Elles viennent de la même déclaration que la liste complète des réponses
+  // (BILAN_QUESTIONS.depart, entrées `alerte`) : en ajouter une au
+  // questionnaire suffit à la faire apparaître ici.
+  const _al=document.getElementById('ccd-alertes');
+  if(_al){
+    const ci=contreIndications(c.bilans);
+    _al.style.display=ci.length?'block':'none';
+    _al.innerHTML=!ci.length?'':`<div style="background:#1a0d00;border:1px solid var(--orange);border-left:4px solid var(--orange);border-radius:8px;padding:12px 14px">
+      <div style="font-size:var(--fs-xs);color:var(--orange);font-weight:900;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:8px">⚠️ À prendre en compte</div>
+      ${ci.map(x=>`<div style="font-size:12px;line-height:1.55;margin-bottom:4px"><span style="color:#fcd34d;font-weight:700">${x.emoji} ${x.lbl} :</span> <span style="color:#eee">${escapeHtml(x.txt)}</span></div>`).join('')}
+    </div>`;
+  }
   const be=document.getElementById('ccd-bilans');
   if(c._fromCode){
     be.innerHTML=`<div style="background:#111;border:1px solid var(--surface-2);border-radius:12px;padding:16px;text-align:center">
@@ -5307,17 +5325,26 @@ function openClientDetail(cid,_refresh){
     be.innerHTML=c.bilans.slice(-3).reverse().map(b=>{
       const bw=getBW(b)||0,bWaist=getBM(b,'waist')||0,bNeck=getBM(b,'neck')||0,bHips=getBM(b,'hips')||0;
       const bfPct=calcBF(bWaist,bNeck,bHips,parseFloat(c._evol_height||c['init-height']||c['deb-height']||0),c.gender||'H');
-      // Citation sous les chiffres. Elle s'appuyait sur bil-ressenti, question
-      // retirée du questionnaire en v234 : la ligne ne s'affichait donc JAMAIS
-      // sur un bilan récent, et le coach ne voyait que des mensurations.
-      // Par ordre d'utilité pour lui : ce que l'athlète demande de changer,
-      // puis ce qui l'a bloqué, puis l'ancien champ pour les bilans d'archive.
-      const _cit=[b['bil-prog-modifs'],b['bil-diff-detail'],b['bil-ressenti']]
-        .map(v=>v==null?'':String(v).trim()).find(Boolean)||'';
+      // Extrait actionnable sous les chiffres : ce sur quoi le coach peut agir
+      // dès maintenant. Remplace la citation unique tronquée à 80 caractères,
+      // qui ne montrait qu'une seule des trois informations utiles.
+      // Rien pour un bilan de départ : ses réponses sont épinglées plus haut,
+      // et aucune clé bil-* n'y figure de toute façon.
+      const _ACTIONNABLES=[
+        {k:'bil-diff-detail',repli:'bil-diff-type',lbl:'Difficultés'},
+        {k:'bil-prog-modifs',lbl:'Demande'},
+        {k:'bil-motivation',lbl:'Motivation'},
+      ];
+      const _extrait=b.type==='depart'?[]:_ACTIONNABLES
+        .map(a=>({lbl:a.lbl,txt:_texteReponse(b[a.k])||(a.repli?_texteReponse(b[a.repli]):'')}))
+        .filter(x=>x.txt);
       return `<div class="card" style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700">${new Date(b.date).toLocaleDateString('fr-FR')}</span><span class="badge ${b.date>_oldSeen?'badge-orange':'badge-green'}">${b.date>_oldSeen?'Nouveau ✦':'Complété'}</span></div>
       <div style="display:flex;gap:16px;flex-wrap:wrap"><span class="sub">Poids: <strong style="color:#fff">${bw||'—'}kg</strong></span><span class="sub">MG: <strong style="color:#fff">${bfPct!==null?bfPct+'%':'—'}</strong></span><span class="sub">Taille: <strong style="color:#fff">${bWaist||'—'}cm</strong></span></div>
-      ${_cit?`<div style="margin-top:8px;font-size:11px;color:var(--sub);font-style:italic">"${escapeHtml(_cit.slice(0,80))}"</div>`:''}
+      ${_extrait.length?`<div style="margin-top:10px;border-top:1px solid #1a1a1a;padding-top:8px">
+        ${_extrait.map(x=>`<div style="font-size:11px;line-height:1.5;margin-bottom:3px"><span style="color:var(--sub);font-weight:700">${x.lbl} :</span> <span style="color:#ccc">${escapeHtml(x.txt.length>90?x.txt.slice(0,90)+'…':x.txt)}</span></div>`).join('')}
+        <button class="btn btn-outline btn-sm" style="margin-top:6px" onclick="viewClientBilans();evoTab('reponses')">Voir toutes les réponses</button>
+      </div>`:''}
     </div>`}).join('');
   }
   // Section vidéos
@@ -5378,6 +5405,22 @@ function confirmDeleteClient(){
   }
   go('s-coach-home');loadCoachHome();
   toastSync(ok,envoi,'Élève retiré du suivi','le retrait est');
+}
+// Bascule des deux volets de l'écran d'évolution coach. Portée au conteneur
+// #evo-content : plusieurs écrans utilisent .btn-red, un sélecteur global
+// repeindrait des boutons étrangers.
+function evoTab(t){
+  const root=document.getElementById('evo-content');
+  if(!root) return;
+  root.querySelectorAll('[data-evo-pane]').forEach(p=>{
+    p.style.display=p.dataset.evoPane===t?'':'none';
+  });
+  root.querySelectorAll('[data-evo-tab]').forEach(b=>{
+    const actif=b.dataset.evoTab===t;
+    b.classList.toggle('btn-red',actif);
+    b.classList.toggle('btn-outline',!actif);
+    if(actif) b.setAttribute('aria-current','true'); else b.removeAttribute('aria-current');
+  });
 }
 function viewClientBilans(){
   const c=getOwnedClient(currentClientId);
@@ -5659,15 +5702,32 @@ function renderBilanEvolution(c){
   };
 
   // ── Assemble HTML ─────────────────────────────────────────────────
+  // Deux volets. Jusqu'ici cet écran ne montrait QUE des chiffres : tout ce que
+  // l'athlète avait écrit — difficultés, demandes de modification, santé —
+  // n'était lisible nulle part côté coach.
+  // Le compte des bilans porteurs de réponses est annoncé sur l'onglet : sans
+  // lui, rien n'indique qu'il y a quelque chose à lire derrière.
+  const _avecRep=(bilans||[]).filter(b=>
+    (b.type==='depart'?BILAN_QUESTIONS.depart:BILAN_QUESTIONS.suivi)
+      .some(q=>_texteReponse(b[q.k]))).length;
   const html=`<div class="pad" style="padding-bottom:40px">
-    ${buildPhotos()}
-    <h3 style="margin-bottom:16px;text-align:center">Mensurations</h3>
-    ${buildMeasTable()}
-    <h3 style="margin-bottom:12px;text-align:center">Évolution par groupe</h3>
-    ${buildGroupCharts()}
-    ${buildWeightSection()}
-    <h3 style="margin-bottom:12px;text-align:center">Composition corporelle</h3>
-    ${buildFatSection()}
+    <div style="display:flex;gap:8px;margin-bottom:18px">
+      <button class="btn btn-red btn-sm" style="flex:1" data-evo-tab="mesures" onclick="evoTab('mesures')">Mesures</button>
+      <button class="btn btn-outline btn-sm" style="flex:1" data-evo-tab="reponses" onclick="evoTab('reponses')">Réponses${_avecRep?' ('+_avecRep+')':''}</button>
+    </div>
+    <div data-evo-pane="mesures">
+      ${buildPhotos()}
+      <h3 style="margin-bottom:16px;text-align:center">Mensurations</h3>
+      ${buildMeasTable()}
+      <h3 style="margin-bottom:12px;text-align:center">Évolution par groupe</h3>
+      ${buildGroupCharts()}
+      ${buildWeightSection()}
+      <h3 style="margin-bottom:12px;text-align:center">Composition corporelle</h3>
+      ${buildFatSection()}
+    </div>
+    <div data-evo-pane="reponses" style="display:none">
+      ${renderReponsesBilans(bilans)}
+    </div>
   </div>`;
   document.getElementById('evo-content').innerHTML=html;
   document.querySelectorAll('#evo-content [data-scroll-fade]').forEach(el=>setupScrollFade(el));
@@ -8601,6 +8661,113 @@ function loadBilPhoto(input,key){
 }
 
 // ===== BIL STEPS (Bilan coaching toutes les 2 semaines) =====
+// ── Réponses qualitatives des bilans : ordre et libellés d'affichage ───────
+// Extrait de showProgressTab, où la liste vivait en local et n'était donc
+// visible que par l'athlète. Le coach ne voyait aucune réponse écrite.
+//
+// Les clés ont été relevées sur les questionnaires RENDUS (BIL_STEPS et
+// DEB_STEPS évalués, puis extraction des cibles de bilData, data-grp,
+// pickBilChoice et bSliderInput) : c'est bilData qui devient le bilan par
+// Object.assign dans saveBilanFinal, donc c'est la seule source de vérité.
+// Aucune clé listée ici n'est absente des questionnaires réels.
+//
+// Deux jeux distincts, choisis par le TYPE du bilan : un bilan de départ ne
+// contient aucune réponse bil-*, et l'inverse est vrai aussi. Les afficher
+// séparément évite les rubriques vides.
+// `alerte` marque les contre-indications, épinglées en haut de la fiche
+// athlète — une seule déclaration, deux usages.
+const BILAN_QUESTIONS={
+  suivi:[
+    {k:'bil-motivation',lbl:'Motivation',emoji:'🔥'},
+    {k:'bil-diff-type',lbl:'Difficultés rencontrées',emoji:'⚠️'},
+    {k:'bil-diff-detail',lbl:'Détail des difficultés',emoji:'📝'},
+    {k:'bil-cheat-meals',lbl:'Repas hors programme',emoji:'🍕'},
+    {k:'bil-cheat-reasons',lbl:'Raisons des écarts',emoji:'💬'},
+    {k:'bil-prog-modifs',lbl:'Modifications demandées',emoji:'🏋️'},
+    {k:'bil-sleep-quality',lbl:'Qualité du sommeil',emoji:'😴'},
+    {k:'bil-stress',lbl:'Niveau de stress',emoji:'😤'},
+    {k:'bil-stress-detail',lbl:'Source du stress',emoji:'📌'},
+    {k:'bil-new-goals',lbl:'Nouveaux objectifs ?',emoji:'🎯'},
+    {k:'bil-new-goals-detail',lbl:'Lesquels',emoji:'🚀'},
+  ],
+  depart:[
+    // Les trois contre-indications d'abord : c'est ce qui conditionne tout le
+    // reste de la programmation.
+    {k:'deb-health',lbl:'Problèmes de santé / blessures',emoji:'🩺',alerte:true},
+    {k:'deb-allergies',lbl:'Allergies / régime particulier',emoji:'🥜',alerte:true},
+    {k:'deb-tca',lbl:'Troubles du comportement alimentaire',emoji:'🚨',alerte:true},
+    {k:'deb-goals',lbl:'Objectifs principaux',emoji:'🎯'},
+    {k:'deb-job',lbl:'Profession',emoji:'💼'},
+    {k:'deb-work-rhythm',lbl:'Rythme de travail',emoji:'🕒'},
+    {k:'deb-location',lbl:"Lieu d'entraînement",emoji:'📍'},
+    {k:'deb-gym',lbl:'Salle fréquentée',emoji:'🏢'},
+    {k:'deb-training-days',lbl:"Jours d'entraînement souhaités",emoji:'📅'},
+    {k:'deb-training-time',lbl:'Moment de la journée',emoji:'⏰'},
+    {k:'deb-session-duration',lbl:'Durée de séance préférée',emoji:'⏱️'},
+    {k:'deb-other-sports',lbl:'Autres sports pratiqués',emoji:'⚽'},
+    {k:'deb-intensity-1',lbl:'Intensité perçue (1)',emoji:'🔥'},
+    {k:'deb-intensity-2',lbl:'Intensité perçue (2)',emoji:'🔥'},
+    {k:'deb-history',lbl:'Antécédents sportifs',emoji:'📜'},
+    {k:'deb-nutrition-type',lbl:'Type de suivi nutritionnel',emoji:'🥗'},
+    {k:'deb-meals-day',lbl:'Repas par jour',emoji:'🍽️'},
+    {k:'deb-food-love',lbl:'Aliments appréciés',emoji:'😋'},
+    {k:'deb-food-hate',lbl:'Aliments détestés',emoji:'🤢'},
+    {k:'deb-water',lbl:"Eau bue par jour",emoji:'💧'},
+    {k:'deb-track-macros',lbl:'Suit ses calories / macros',emoji:'📊'},
+    {k:'deb-calories',lbl:'Calories et objectif',emoji:'🔢'},
+    {k:'deb-supplements',lbl:'Souhaite des compléments',emoji:'💊'},
+    {k:'deb-supps-detail',lbl:'Compléments déjà pris',emoji:'🧪'},
+  ]
+};
+// Texte affichable d'une réponse. Un tableau vide est truthy et produisait une
+// rubrique titrée sans rien dessous : on juge le texte effectivement rendu.
+function _texteReponse(val){
+  if(val==null||val==='') return '';
+  return (Array.isArray(val)?val.join(', '):String(val)).trim();
+}
+// Contre-indications du bilan de départ. Rendues à part de la liste complète,
+// mais lues dans la MÊME déclaration : impossible d'en ajouter une au
+// questionnaire et d'oublier l'encart d'avertissement.
+function contreIndications(bilans){
+  const dep=(bilans||[]).filter(b=>b&&b.type==='depart').slice(-1)[0];
+  if(!dep) return [];
+  return BILAN_QUESTIONS.depart.filter(q=>q.alerte)
+    .map(q=>({lbl:q.lbl,emoji:q.emoji,txt:_texteReponse(dep[q.k])}))
+    .filter(x=>x.txt&&!/^(non|aucun|aucune|rien|ras|n\/a)\.?$/i.test(x.txt));
+}
+// Rendu partagé par l'écran athlète (showProgressTab) et l'écran coach
+// (renderBilanEvolution). Une seule mise en forme, alimentée par la liste de
+// bilans qu'on lui passe — currentUser.bilans d'un côté, c.bilans de l'autre.
+function renderReponsesBilans(bilans){
+  const bl=(bilans||[]).filter(b=>b&&b.date);
+  // Numérotation des bilans de SUIVI seuls. Le questionnaire de départ porte
+  // son propre titre, mais il occupait quand même un rang : le premier bilan
+  // de suivi s'affichait « Bilan 2 » alors qu'il n'y en avait qu'un.
+  let _n=0; const _rang=new Map();
+  bl.forEach(b=>{ if(b.type!=='depart') _rang.set(b,++_n); });
+  const cartes=bl.slice().reverse().map(b=>{
+    const depart=b.type==='depart';
+    const d=new Date(b.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
+    const w=getBW(b);
+    const answers=(depart?BILAN_QUESTIONS.depart:BILAN_QUESTIONS.suivi).map(q=>{
+      const txt=_texteReponse(b[q.k]);
+      if(!txt) return '';
+      return `<div style="padding:8px 0;border-bottom:1px solid #141414">
+        <div style="font-size:var(--fs-xs);color:${q.alerte?'#fca5a5':'var(--sub)'};font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">${q.emoji} ${q.lbl}</div>
+        <div style="font-size:12px;color:#ddd;line-height:1.5">${escapeHtml(txt)}</div>
+      </div>`;
+    }).filter(Boolean).join('');
+    if(!answers) return '';
+    return `<div style="background:var(--dark);border:1px solid ${depart?'rgba(224,32,32,.35)':'var(--surface-3)'};border-radius:12px;padding:16px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-size:var(--fs-xs);font-weight:900;color:var(--red);text-transform:uppercase;letter-spacing:1.5px">${depart?'Questionnaire de départ':'Bilan '+_rang.get(b)}</div>
+        <div style="text-align:right"><div style="font-size:var(--fs-xs);color:#555">${d}</div>${w?`<div style="font-size:12px;font-weight:700;color:#fff;margin-top:2px">⚖️ ${w}kg</div>`:''}</div>
+      </div>
+      ${answers}
+    </div>`;
+  }).filter(Boolean).join('');
+  return cartes||emptyState('message-circle','Aucune réponse écrite pour le moment.');
+}
 const BIL_STEPS=[
   // Step 1 : Mensurations — schéma corporel interactif
   ()=>bSec('Mensurations ',
@@ -9531,64 +9698,10 @@ function showProgressTab(tab,btn){
     c.querySelectorAll('[data-scroll-fade]').forEach(el=>setupScrollFade(el));
   } else if(tab==='notes'){
     if(!bl.length){c.innerHTML=emptyState('clipboard','Aucun bilan enregistré.');return;}
-    // Ordre d'affichage des réponses de bilan. Deux blocs, et la distinction
-    // compte : le premier liste ce que le questionnaire demande AUJOURD'HUI,
-    // le second des questions retirées depuis, dont les réponses dorment
-    // encore dans les bilans déjà enregistrés.
-    const bilQ=[
-      // ── Questions posées par le bilan actuel ──────────────────────────────
-      {k:'bil-motivation',lbl:'Motivation',emoji:'🔥'},
-      {k:'bil-diff-type',lbl:'Difficultés',emoji:'⚠️'},
-      {k:'bil-diff-detail',lbl:'Détail difficultés',emoji:'📝'},
-      {k:'bil-cheat-meals',lbl:'Cheat meals',emoji:'🍕'},
-      {k:'bil-cheat-reasons',lbl:'Raisons écarts',emoji:'💬'},
-      // Ces deux-là étaient collectées mais n'étaient affichées NULLE PART :
-      // l'athlète écrivait ses demandes de modification de programme, et
-      // personne ne les lisait jamais.
-      {k:'bil-prog-modifs',lbl:'Modifications demandées',emoji:'🏋️'},
-      {k:'bil-sleep-quality',lbl:'Qualité du sommeil',emoji:'😴'},
-      {k:'bil-stress',lbl:'Niveau de stress',emoji:'😤'},
-      {k:'bil-stress-detail',lbl:'Source du stress',emoji:'📌'},
-      {k:'bil-new-goals',lbl:'Nouveaux objectifs ?',emoji:'🎯'},
-      {k:'bil-new-goals-detail',lbl:'Nouveaux objectifs',emoji:'🚀'},
-      // ── Questions RETIREES du questionnaire, conservées à l'affichage ─────
-      // Elles ne sont plus posées — bil-ressenti / bil-exo-* ont disparu en
-      // v234 (cee88c6), bil-goals-next en v235 (4aa7dff) — mais elles ont été
-      // réellement remplies avant ça. Les retirer d'ici n'aurait effacé aucune
-      // donnée, seulement le seul écran qui sait encore les montrer.
-      // Aucun coût pour les bilans récents : une valeur absente n'affiche rien.
-      // A supprimer le jour où plus aucun bilan antérieur à v235 ne circule.
-      {k:'bil-ressenti',lbl:'Ressenti évolution (archivé)',emoji:'💭'},
-      {k:'bil-goals-next',lbl:'Objectifs à venir (archivé)',emoji:'🎯'},
-      {k:'bil-exo-change',lbl:'Changements programme (archivé)',emoji:'🏋️'},
-      {k:'bil-exo-detail',lbl:'Exercices à modifier (archivé)',emoji:'✏️'},
-    ];
-    c.innerHTML=bl.slice().reverse().map((b,ri)=>{
-      const i=bl.length-1-ri;
-      const d=new Date(b.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
-      const w=getBW(b);
-      const answers=bilQ.map(q=>{
-        const val=b[q.k];
-        if(val==null||val==='') return '';
-        // Le test sur la seule valeur ne suffit pas : un tableau vide est
-        // truthy et produisait une ligne titrée sans rien dessous. On juge
-        // le texte effectivement rendu.
-        const txt=(Array.isArray(val)?val.join(', '):String(val)).trim();
-        if(!txt) return '';
-        return `<div style="padding:8px 0;border-bottom:1px solid #141414">
-          <div style="font-size:var(--fs-xs);color:var(--sub);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">${q.emoji} ${q.lbl}</div>
-          <div style="font-size:12px;color:#ddd;line-height:1.5">${escapeHtml(txt)}</div>
-        </div>`;
-      }).filter(Boolean).join('');
-      if(!answers) return '';
-      return `<div style="background:var(--dark);border:1px solid var(--surface-3);border-radius:12px;padding:16px;margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-          <div style="font-size:var(--fs-xs);font-weight:900;color:var(--red);text-transform:uppercase;letter-spacing:1.5px">Bilan ${i+1}${b.type==='depart'?' · Départ':''}</div>
-          <div style="text-align:right"><div style="font-size:var(--fs-xs);color:#555">${d}</div>${w?`<div style="font-size:12px;font-weight:700;color:#fff;margin-top:2px">⚖️ ${w}kg</div>`:''}</div>
-        </div>
-        ${answers}
-      </div>`;
-    }).filter(Boolean).join('')||emptyState('message-circle','Les réponses de tes prochains bilans apparaîtront ici.');
+    // Liste et mise en forme partagées avec l'écran coach : voir
+    // BILAN_QUESTIONS et renderReponsesBilans. Elles vivaient ici, en local,
+    // et l'athlète était donc le seul à pouvoir lire ses propres réponses.
+    c.innerHTML=renderReponsesBilans(bl);
   }
 }
 
