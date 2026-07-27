@@ -609,7 +609,10 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- Info box rouge -->
     <div style="background:rgba(224,32,32,.07);border:1px solid rgba(224,32,32,.24);border-radius:10px;padding:14px 16px;margin-top:4px">
       <div style="font-size:10px;letter-spacing:1.5px;color:var(--red);font-weight:700;margin-bottom:6px">ℹ️ ESPACE COACH — TARIFS</div>
-      <div style="font-size:11px;color:rgba(255,255,255,.82);line-height:1.6"><strong style="color:#fff">Ton compte coach est gratuit</strong>, sans abonnement ni code. Tu génères ton propre code à donner à tes athlètes.<br><br>Tes athlètes, eux, paient <strong style="color:#fff">9,95 €/mois</strong> pour accéder à l'app — sauf ceux à qui tu remets un code d'accès gratuit.</div>
+      <!-- Cet écran est lu AVANT l'inscription, donc par de futurs coachs affiliés.
+           L'ancienne formule promettait « des codes d'accès gratuits » que seul le
+           créateur peut émettre : la promesse ne pouvait pas être tenue. -->
+      <div style="font-size:11px;color:rgba(255,255,255,.82);line-height:1.6"><strong style="color:#fff">Ton compte coach est gratuit</strong>, sans abonnement ni code. Tu génères ton propre code à donner à tes athlètes : il les rattache à ton suivi.<br><br>Tes athlètes, eux, paient <strong style="color:#fff">9,95 €/mois</strong> pour accéder à l'app. Les accès gratuits sont réservés au créateur de RepCore.</div>
     </div>
   </div>
 </div>
@@ -2318,6 +2321,29 @@ const COACH_PHOTO='icons/coach.jpg';
 //     qu'ils appartiennent au créateur ou à un autre coach.
 //   — Les autres coachs ne peuvent pas générer de codes gratuits ;
 //     leurs élèves doivent souscrire via PayPal (9,95 EUR/mois).
+//
+// ── PARTAGE DE REVENU AVEC LES COACHS AFFILIÉS : NON DÉCIDÉ ────────────────
+// Ce qui est IMPLÉMENTÉ aujourd'hui, sans ambiguïté :
+//   • 100 % des 9,95 EUR/mois vont sur le PayPal de CREATOR_EMAIL. Il n'existe
+//     aucun mécanisme de reversement, ni automatique ni manuel, dans ce code.
+//   • Un code émis par un coach affilié (creatorFree:false) sert uniquement à
+//     rattacher l'athlète à ce coach — voir doAthleteCode et l'activation
+//     PayPal, qui ne reprend du code que coachId et coachName.
+//   • payload.expiry n'est PAS utilisé après paiement : l'athlète devient
+//     AUTONOMIE_PREMIUM sur abonnement PayPal. La « durée d'accès » choisie par
+//     un affilié au moment de créer un compte n'a donc aucun effet.
+//
+// Ce qui n'est PAS décidé : si, et selon quelle règle, un coach affilié touche
+// une part de l'abonnement de ses athlètes. Tant que ce point reste ouvert,
+// AUCUN écran ne doit le promettre, même implicitement — et l'interface a été
+// alignée en conséquence : le coach affilié lit partout qu'il ne peut pas
+// offrir d'accès et que ses élèves paient l'app directement.
+//
+// Si un partage est un jour décidé, les trois points à modifier sont :
+//   1. ce commentaire, qui fait foi ;
+//   2. _genAccessCode / creatorFree, qui porte déjà l'identité du coach ;
+//   3. l'écran Monétisation (pp-mrr), qui agrège aujourd'hui le chiffre total
+//      sans distinguer la part de chaque coach.
 const CREATOR_EMAIL='guellec.coachingpro@gmail.com';
 
 // APP_BASE_URL : racine publique de l'app, déduite de l'adresse courante.
@@ -3995,8 +4021,14 @@ function renderTodoBlock(clients){
     },{pad:'10px 14px',gap:10,border:'#180000',hover:'#140000'})}
   </div>`;
 }
+// status 'FREE' = aucun accès : l'athlète se heurte au paywall à chaque
+// ouverture. Le badge d'activité seul affichait « Inactif », ce qui se lisait
+// comme un manque d'assiduité alors que l'élève ne peut tout simplement pas
+// entrer. Le coach doit savoir ce qu'il reste à faire.
+function _enAttenteAbonnement(c){return !c._fromCode&&c.status==='FREE';}
 function renderClientRow(c){
-  const badge=hasNewBilan(c)?'<span class="badge badge-orange">Nouveau bilan</span>':needsAlert(c)?'<span class="badge badge-red">Alerte</span>':isActive(c)?'<span class="badge badge-green">Actif</span>':'<span class="badge badge-gray">Inactif</span>';
+  const badge=_enAttenteAbonnement(c)?'<span class="badge badge-orange">⏳ Abonnement à souscrire</span>'
+    :hasNewBilan(c)?'<span class="badge badge-orange">Nouveau bilan</span>':needsAlert(c)?'<span class="badge badge-red">Alerte</span>':isActive(c)?'<span class="badge badge-green">Actif</span>':'<span class="badge badge-gray">Inactif</span>';
   const lastSession=c.sessions?.length?c.sessions[c.sessions.length-1].date:0;
   const lastBilan=c.bilans?.length?c.bilans[c.bilans.length-1].date:0;
   const lastActivity=Math.max(lastSession,lastBilan);
@@ -4231,6 +4263,8 @@ function openClientDetail(cid,_refresh){
   }
   document.getElementById('ccd-badge').innerHTML=c._fromCode
     ?'<span class="badge badge-orange">⏳ En attente d\'inscription</span>'
+    // Même verdict que la liste : les deux écrans doivent dire la même chose.
+    :_enAttenteAbonnement(c)?'<span class="badge badge-orange">⏳ Abonnement à souscrire — 9,95 €/mois</span>'
     :_newBil?'<span class="badge badge-orange"> Nouveau bilan</span>'
     :needsAlert(c)?'<span class="badge badge-red"> Bilan en retard</span>':isActive(c)?'<span class="badge badge-green"> Actif</span>':'<span class="badge badge-gray">Inactif</span>';
   const _pd=document.getElementById('ccd-profile-details');
@@ -11938,24 +11972,30 @@ function importPdfSeances(){
 
 // ======= COACH: AJOUTER ATHLÈTE DIRECTEMENT =======
 function openAddAthlete(){
+  // Un coach affilié ne peut PAS activer d'accès : ses élèves passent par
+  // PayPal. Annoncer « active l'accès en une seule étape » lui faisait promettre
+  // à son élève quelque chose que l'app ne lui donnerait jamais.
+  const estCreateur=currentUser?.email===CREATOR_EMAIL;
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:6px">➕ Ajouter un athlète</h2>
-    <p class="sub" style="margin-bottom:8px;font-size:12px">Crée le compte et active l'accès en une seule étape. Ton élève se connectera avec l'email et le mot de passe que tu saisis ici.</p>
+    <p class="sub" style="margin-bottom:8px;font-size:12px">${estCreateur
+      ?'Crée le compte et active l\'accès en une seule étape. Ton élève se connectera avec l\'email et le mot de passe que tu saisis ici.'
+      :'Crée le compte de ton élève : il se connectera avec l\'email et le mot de passe que tu saisis ici. Son accès sera activé après souscription à <strong style="color:#ddd">9,95 €/mois</strong> — les accès gratuits sont réservés au créateur de RepCore.'}</p>
     <div><label style="margin-top:10px" for="aa-fname">Prénom</label><input id="aa-fname" placeholder="Prénom de l'athlète"></div>
     <div><label style="margin-top:10px" for="aa-lname">Nom</label><input id="aa-lname" placeholder="Nom de l'athlète"></div>
     <div><label style="margin-top:10px" for="aa-email">Email</label><input type="email" id="aa-email" placeholder="email@exemple.com"></div>
     <div><label style="margin-top:10px" for="aa-pwd">Mot de passe (provisoire, 6 caractères minimum)</label><input type="text" id="aa-pwd" placeholder="Ex: repcore123"></div>
     <div><label style="margin-top:10px" for="aa-gender">Genre</label><select id="aa-gender"><option value="H">Homme</option><option value="F">Femme</option></select></div>
-    <div><label style="margin-top:10px" for="aa-duration">Durée d'accès</label><select id="aa-duration" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:#fff;padding:12px 14px;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;cursor:pointer">
+    ${estCreateur?`<div><label style="margin-top:10px" for="aa-duration">Durée d'accès</label><select id="aa-duration" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:#fff;padding:12px 14px;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;cursor:pointer">
       <option value="1">1 mois</option>
       <option value="3" selected>3 mois (recommandé)</option>
       <option value="6">6 mois</option>
       <option value="12">12 mois</option>
-    </select></div>
+    </select></div>`:''}
     <div id="aa-err" style="color:var(--red-light);font-size:12px;margin-top:8px;display:none"></div>
     <div style="position:sticky;bottom:0;height:36px;background:linear-gradient(transparent,var(--surface-2));pointer-events:none;margin-top:-36px"></div>
-    <button class="btn btn-red" style="margin-top:10px" onclick="createAthlete()">Créer et activer l'accès</button>
+    <button class="btn btn-red" style="margin-top:10px" onclick="createAthlete()">${estCreateur?'Créer et activer l\'accès':'Créer le compte'}</button>
     <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Annuler</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
@@ -11970,7 +12010,10 @@ async function createAthlete(){
   const em=document.getElementById('aa-email').value.trim().toLowerCase();
   const pw=document.getElementById('aa-pwd').value.trim();
   const gn=document.getElementById('aa-gender').value;
-  const months=parseInt(document.getElementById('aa-duration').value)||3;
+  // Le sélecteur de durée n'existe que pour le créateur : pour un affilié,
+  // payload.expiry n'est jamais lu après paiement (voir le bloc CREATOR_EMAIL).
+  const months=parseInt(document.getElementById('aa-duration')?.value)||3;
+  const estCreateur=currentUser.email===CREATOR_EMAIL;
   const _err=m=>{const e=document.getElementById('aa-err');e.textContent=m;e.style.display='block';};
   if(!fn||!ln||!em||!pw){_err('Tous les champs sont obligatoires.');return;}
   if(pw.length<6){_err('Le mot de passe doit faire au moins 6 caractères.');return;}
@@ -12014,7 +12057,17 @@ async function createAthlete(){
   const athlete={id:uid,fname:fn,lname:ln,email:em,role:'athlete',gender:gn,
     createdAt:Date.now(),streak:0,lastSession:null,sessions:[],bilans:[],nutrition:{},videos:[],
     coachId:currentUser.id,coachName:currentUser.fname+' '+currentUser.lname,
-    status:'COACHING_SUIVI',accessExpiry:expiry,questionnaireComplete:false};
+    questionnaireComplete:false};
+  // Un affilié n'accorde aucun accès : son code part en creatorFree:false et
+  // renvoie l'athlète vers le paiement. Écrire COACHING_SUIVI ici affichait sur
+  // son tableau de bord un élève « suivi » qui, lui, se heurtait au paywall.
+  // status:'FREE' est ce que routeUser attend pour l'envoyer vers s-client-code.
+  if(estCreateur){
+    athlete.status='COACHING_SUIVI';
+    athlete.accessExpiry=expiry;
+  } else {
+    athlete.status='FREE';
+  }
   if(!currentUser.studentCodes) currentUser.studentCodes=[];
   currentUser.studentCodes.push({...payload,token,usedBy:fn+' '+ln,athleteEmail:em,active:true,redeemed:true,createdAt:Date.now()});
   if(!currentUser.clients) currentUser.clients=[];
@@ -12031,10 +12084,13 @@ async function createAthlete(){
   // Sans synchronisation, l'athlète ne trouvera pas son dossier en se
   // connectant depuis son propre téléphone : annoncer « il peut se connecter »
   // serait un mensonge coûteux.
-  toastSync(okU&&okS,envoi,motDePasseActif
-    ? '✓ '+fn+' créé — il peut se connecter avec cet email et ce mot de passe. Accès jusqu\'au '+exp+' (code copié)'
-    : '✓ '+fn+' rattaché — il avait déjà un compte, il garde SON mot de passe. Accès jusqu\'au '+exp+' (code copié)',
-    'le compte est');
+  // Le message d'un affilié ne parle plus d'accès : il n'en accorde aucun.
+  const messageFinal=estCreateur
+    ?(motDePasseActif
+      ? '✓ '+fn+' créé — il peut se connecter avec cet email et ce mot de passe. Accès jusqu\'au '+exp+' (code copié)'
+      : '✓ '+fn+' rattaché — il avait déjà un compte, il garde SON mot de passe. Accès jusqu\'au '+exp+' (code copié)')
+    :'Compte préparé. '+fn+' devra souscrire à 9,95 €/mois pour activer son accès (code copié)';
+  toastSync(okU&&okS,envoi,messageFinal,'le compte est');
   loadCoachHome();
 }
 
