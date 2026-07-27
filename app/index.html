@@ -3951,8 +3951,17 @@ window.onload=()=>{
         // Rendus : SEULEMENT si quelque chose a bougé. Une heure passée sur
         // l'accueil sans activité du coach ne repeint donc plus rien.
         if(!_change) return;
+        // Ne jamais repeindre pendant une saisie. loadCoachHome reecrit la
+        // liste ET rappelle coachTab : un champ en cours de frappe perdrait
+        // son focus et les caracteres tapes entre deux reveils.
+        // Le garde couvre TOUS les onglets, pas seulement le tableau de bord :
+        // c'est justement sur PAIEMENTS que l'on saisit un numero.
         if(currentUser.role==='coach'&&document.getElementById('s-coach-home')?.classList.contains('active')){
-          loadCoachHome();
+          const _ae=document.activeElement;
+          const _saisie=_ae&&_ae.matches&&_ae.matches('input,textarea,select');
+          const _surDashboard=document.getElementById('ct-dashboard')
+            &&getComputedStyle(document.getElementById('ct-dashboard')).display!=='none';
+          if(!_saisie&&_surDashboard) loadCoachHome();
         }
         if(currentUser.role==='coach'&&document.getElementById('s-coach-client')?.classList.contains('active')&&currentClientId){
           openClientDetail(currentClientId,true);
@@ -5213,7 +5222,13 @@ function loadCoachHome(){
   }
   clients.sort((a,b)=>urgencyScore(b)-urgencyScore(a));
   renderTodoBlock(clients);
+  // Reecrire innerHTML remet le panneau en haut : le coach qui parcourait sa
+  // liste y etait ramene a chaque reveil. On releve la position avant, on la
+  // repose apres.
+  const _pan=document.getElementById('ct-dashboard');
+  const _scr=_pan?_pan.scrollTop:0;
   elList.innerHTML=clients.map(renderClientRow).join('');
+  if(_pan&&_scr) _pan.scrollTop=_scr;
   // Preserve current tab if already on coach home, otherwise default to dashboard
   const _alreadyHere=document.getElementById('s-coach-home')?.classList.contains('active');
   const _activeTab=_alreadyHere?(['dashboard','codes','monetisation'].find(t=>{const e=document.getElementById('ct-'+t);return e&&e.style.display!=='none';})||'dashboard'):'dashboard';
@@ -5225,7 +5240,11 @@ function loadCoachHome(){
     renderTodoBlock(freshClients);
     const el2=document.getElementById('ch-clients-list');
     if(!el2||!freshClients.length) return;
+    // Meme precaution apres la synchro distante, qui reecrit la meme liste.
+    const _p2=document.getElementById('ct-dashboard');
+    const _s2=_p2?_p2.scrollTop:0;
     el2.innerHTML=freshClients.map(renderClientRow).join('');
+    if(_p2&&_s2) _p2.scrollTop=_s2;
   }).catch(()=>{});
 }
 function getClients(){
@@ -13995,24 +14014,40 @@ function saveCloudinaryConfig(){
   toastEcriture(saveUser(),'Configuration vidéo enregistrée ✓','la configuration est');
 }
 function loadMonetisationTab(){
+  // N'ecrase JAMAIS un champ que le coach est en train de remplir. Le
+  // rafraichissement periodique rappelle cette fonction : sans ce garde, un
+  // numero tape lentement etait remis a sa valeur enregistree a chaque reveil.
+  // `dirty` survit a la perte de focus : un champ modifie puis quitte sans
+  // enregistrer garde la saisie de l'utilisateur, qui prime sur le stocke.
+  const setIf=(el,v)=>{
+    if(!el) return;
+    if(el===document.activeElement) return;
+    if(el.dataset.dirty) return;
+    el.value=v;
+  };
+  const suivre=(el)=>{
+    if(!el||el.dataset.suivi) return;
+    el.dataset.suivi='1';
+    el.addEventListener('input',()=>{el.dataset.dirty='1';});
+  };
   updateCloudStatus();
   const u=currentUser;
   // Identité coach
   const photoCircle=document.getElementById('coach-photo-circle');
   if(photoCircle) photoCircle.innerHTML=u.coachPhoto?`<img src="${escapeHtml(u.coachPhoto)}" style="width:100%;height:100%;object-fit:cover">`:icon('user',28);
   const teamNameEl=document.getElementById('coach-team-name');
-  if(teamNameEl) teamNameEl.value=u.teamName||'';
+  setIf(teamNameEl,u.teamName||'');suivre(teamNameEl);
   const catchEl=document.getElementById('coach-catchphrase');
-  if(catchEl) catchEl.value=u.catchphrase||'';
+  setIf(catchEl,u.catchphrase||'');suivre(catchEl);
   const bannerList=document.getElementById('coach-banners-list');
   if(bannerList){bannerList.innerHTML='';(u.promoBanners||[]).forEach(b=>addCoachBannerRow(b.imageUrl,b.linkUrl));}
   const phoneInput=document.getElementById('coach-phone-input');
-  if(phoneInput) phoneInput.value=u.phone||'';
+  setIf(phoneInput,u.phone||'');suivre(phoneInput);
   _renderCoachPhonePreview(u.phone||'');
   const cldName=document.getElementById('cld-cloud-name');
   const cldPreset=document.getElementById('cld-preset');
-  if(cldName) cldName.value=u.cloudinaryName||'';
-  if(cldPreset) cldPreset.value=u.cloudinaryPreset||'';
+  setIf(cldName,u.cloudinaryName||'');suivre(cldName);
+  setIf(cldPreset,u.cloudinaryPreset||'');suivre(cldPreset);
   const isCreator=u.email===CREATOR_EMAIL;
   const users=DB.get('users')||{};
   // Créateur : voit tous les abonnés PayPal de l'application.
