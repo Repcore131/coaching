@@ -53,7 +53,20 @@
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-:root{--bg:#080808;--red:#E02020;--red2:#b81515;--red-bg:#0d0000;--red-glow:#FF3345;--red-light:color-mix(in srgb,var(--red) 70%,white);--dark:#0f0f0f;--card:#111;--card2:#181818;--surface-1:#111111;--surface-2:#181818;--surface-3:#1e1e1e;--border:#1e1e1e;--sub:#8a8a8a;--text:#efefef;--green:#22c55e;--orange:#f97316;--success:#22c55e;--success-bg:#021007;--success-border:#052a10;--info:#d4a017;--info-bg:#160d00;--info-border:#2a1a00;--warning:#f97316;--warning-bg:#1a0800;--warning-border:#3a1500;--danger:#E02020;--danger-bg:#1a0000;--danger-border:#3a0000;--cycle-accent:#A78BFA;--glow-sm:0 0 12px rgba(224,32,32,.25);--glow-md:0 0 28px rgba(255,51,69,.4);--glow-lg:0 0 56px rgba(255,51,69,.5);
+:root{--bg:#080808;--red:#E02020;--red2:#b81515;--red-bg:#0d0000;--red-glow:#FF3345;--red-light:color-mix(in srgb,var(--red) 70%,white);--dark:#0f0f0f;--card:#111;--card2:#181818;--surface-1:#111111;--surface-2:#181818;--surface-3:#1e1e1e;--border:#1e1e1e;--sub:#8a8a8a;--text:#efefef;
+  /* Paliers de contraste du texte, mesures sur le fond de carte #111 :
+     --text-dim   #8a8a8a  5,47:1  — texte secondaire, passe AA a toute taille.
+                                     Meme valeur que --sub, qui nomme un ROLE
+                                     (sous-titre) la ou --text-dim nomme un
+                                     PALIER. Les deux coexistent volontairement.
+     --text-faint #6f6f6f  3,70:1  — sous le seuil AA : reserve au non essentiel
+                                     de 18px et plus, jamais un libelle d action.
+     Les gris en dur qu'ils remplacent descendaient jusqu'a #2a2a2a, soit
+     1,4:1 — invisible. */
+  --text-dim:#8a8a8a;--text-faint:#6f6f6f;
+  /* Bleus. #3355aa et #4466aa donnaient 2,7:1 et 3,4:1 sur #111 : c'etait un
+     lien, donc un echec de contraste sur du texte actionnable. */
+  --link:#7aa7e8;--accent-blue:#4fc3f7;--green:#22c55e;--orange:#f97316;--success:#22c55e;--success-bg:#021007;--success-border:#052a10;--info:#d4a017;--info-bg:#160d00;--info-border:#2a1a00;--warning:#f97316;--warning-bg:#1a0800;--warning-border:#3a1500;--danger:#E02020;--danger-bg:#1a0000;--danger-border:#3a0000;--cycle-accent:#A78BFA;--glow-sm:0 0 12px rgba(224,32,32,.25);--glow-md:0 0 28px rgba(255,51,69,.4);--glow-lg:0 0 56px rgba(255,51,69,.5);
   /* Échelle typographique. --fs-xs est un PLANCHER : 11px est la plus petite
      taille admise dans l'app. En dessous, le texte n'est plus lisible sur un
      téléphone tenu à bout de bras, et les libellés en majuscules très espacées
@@ -261,13 +274,13 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
 .bilan-section h3{margin-bottom:12px;font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:2px;color:var(--sub);font-weight:700}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 /* ====== CHOICE OPTIONS ====== */
-.choice-opt-sm{padding:10px 14px;border-radius:3px;border:1px solid #1e1e1e;cursor:pointer;font-size:11px;font-weight:700;transition:.15s;color:#555;background:#0c0c0c;flex:1;text-align:center}
+.choice-opt-sm{padding:10px 14px;border-radius:3px;border:1px solid #1e1e1e;cursor:pointer;font-size:11px;font-weight:700;transition:.15s;color:var(--text-dim);background:#0c0c0c;flex:1;text-align:center}
 .choice-opt-sm.sel{border-color:var(--red);color:#fff;background:#100000}
 /* ====== BIL MEASURE ROW ====== */
 .bil-row{background:var(--dark);border:1px solid var(--surface-3);border-radius:3px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
 .bil-row-label{font-size:11px;font-weight:700;color:#777;text-transform:uppercase;letter-spacing:.5px}
 .bil-row input{width:72px;text-align:right;padding:6px 8px;font-size:15px;font-weight:800;margin:0;background:#080808;border:1px solid #222;border-radius:2px}
-.bil-unit{font-size:11px;color:#444;font-weight:700;margin-left:6px}
+.bil-unit{font-size:11px;color:var(--text-dim);font-weight:700;margin-left:6px}
 .notification{background:var(--card);border-left:3px solid var(--red);border-radius:0 2px 2px 0;padding:12px 14px;margin-bottom:8px}
 
 /* ====== SCROLL ====== */
@@ -453,13 +466,13 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 .red-zone{background:var(--red-bg)!important}
 
 /* ====== CHOICE OPTIONS REDESIGN ====== */
-.choice-opt{padding:13px 16px;border-radius:2px;border:1px solid var(--border);cursor:pointer;font-size:11px;font-weight:700;margin-bottom:6px;transition:.15s;color:#555;background:var(--surface-1);letter-spacing:1px;text-transform:uppercase}
+.choice-opt{padding:13px 16px;border-radius:2px;border:1px solid var(--border);cursor:pointer;font-size:11px;font-weight:700;margin-bottom:6px;transition:.15s;color:var(--text-dim);background:var(--surface-1);letter-spacing:1px;text-transform:uppercase}
 /* Échelle d'émojis néon (cheat meals) */
 .emo-row{display:flex;gap:7px;justify-content:space-between}
 .emo-opt{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 2px 10px;border-radius:12px;border:1px solid #222;background:var(--surface-1);cursor:pointer;transition:.18s;user-select:none}
 .emo-opt .emo{width:32px;height:32px;stroke:#4a4a4a;opacity:.55;transition:.18s}
 .emo-opt .emo .emo-dot{fill:#4a4a4a;stroke:none}
-.emo-opt .emo-lbl{font-size:var(--fs-xs);font-weight:800;letter-spacing:.8px;color:#555;text-transform:uppercase;text-align:center;white-space:nowrap;transition:.18s}
+.emo-opt .emo-lbl{font-size:var(--fs-xs);font-weight:800;letter-spacing:.8px;color:var(--text-dim);text-transform:uppercase;text-align:center;white-space:nowrap;transition:.18s}
 .emo-opt:active{transform:scale(.95)}
 .emo-opt.sel{border-color:var(--eo);background:#0e0a0a;box-shadow:0 0 14px var(--eo-glow),inset 0 0 10px var(--eo-glow)}
 .emo-opt.sel .emo{stroke:var(--eo);opacity:1;transform:scale(1.15);filter:drop-shadow(0 0 5px var(--eo))}
@@ -478,7 +491,7 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 .gsl-opt{flex:1;min-width:0;background:var(--surface-1);border:1px solid #222;border-radius:14px;padding:14px 8px 12px;text-align:center;cursor:pointer;transition:.18s;user-select:none}
 .gsl-opt svg{height:150px;width:100%}
 .gsl-opt .gsl-body{fill:#161616;stroke:#4a4a4a;stroke-width:2;transition:.18s}
-.gsl-opt .gsl-lbl{font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:#555;margin-top:8px;transition:.18s}
+.gsl-opt .gsl-lbl{font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--text-dim);margin-top:8px;transition:.18s}
 .gsl-opt:active{transform:scale(.97)}
 .gsl-opt.sel{border-color:#fff;background:#0e0a0a;box-shadow:0 0 16px rgba(255,255,255,.28),inset 0 0 12px rgba(255,255,255,.1)}
 .gsl-opt.sel .gsl-body{fill:#232323;stroke:#fff;filter:drop-shadow(0 0 6px rgba(255,255,255,.85))}
@@ -486,12 +499,12 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 /* Curseur néon 1-10 (motivation) */
 .bsl-wrap{background:var(--surface-1);border:1px solid #222;border-radius:12px;padding:18px 16px 14px;text-align:center}
 .bsl-value{font-family:'Bebas Neue',sans-serif;font-size:44px;line-height:1;transition:.15s}
-.bsl-value .bsl-max{font-size:20px;color:#444;margin-left:2px}
+.bsl-value .bsl-max{font-size:20px;color:var(--text-dim);margin-left:2px}
 .bsl-feedback{font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;margin:4px 0 14px;min-height:13px;transition:.15s}
 .bslider{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:3px;background:#1a1a1a;outline:none;margin:0;padding:0;border:none;box-shadow:none}
 .bslider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:26px;height:26px;border-radius:50%;background:#0a0a0a;border:2.5px solid var(--bsl,#555);box-shadow:0 0 12px var(--bsl-glow,transparent);cursor:pointer;transition:border-color .15s,box-shadow .15s}
 .bslider::-moz-range-thumb{width:26px;height:26px;border-radius:50%;background:#0a0a0a;border:2.5px solid var(--bsl,#555);box-shadow:0 0 12px var(--bsl-glow,transparent);cursor:pointer}
-.bsl-scale{display:flex;justify-content:space-between;font-size:var(--fs-xs);font-weight:700;color:#3a3a3a;margin-top:8px;padding:0 4px}
+.bsl-scale{display:flex;justify-content:space-between;font-size:var(--fs-xs);font-weight:700;color:var(--text-dim);margin-top:8px;padding:0 4px}
 .choice-opt.sel{border-color:var(--red);border-left-width:3px;color:#fff;background:var(--red-bg)}
 .choice-opt:active{transform:scale(.99)}
 
@@ -830,9 +843,9 @@ const COACH_PHOTO='icons/coach.jpg';
     <div id="l-err" style="color:var(--red-light);font-size:13px;display:none"></div>
     <button class="btn btn-red" style="margin-top:8px;letter-spacing:2px" onclick="doLogin()">SE CONNECTER</button>
     <p class="sub" style="text-align:center;margin-top:12px"><span style="cursor:pointer;font-size:13px;color:#f97316;font-weight:700;text-decoration:underline;text-decoration-color:#f97316" onclick="forgotPassword()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">Mot de passe oublié ?</span></p>
-    <p class="sub" style="text-align:center;margin-top:8px">Pas de compte ? <span class="red" style="cursor:pointer;font-weight:700" onclick="goRegisterAthlete()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">Créer un compte</span></p>
+    <p class="sub" style="text-align:center;margin-top:8px">Pas de compte ? <span class="red" style="cursor:pointer;font-weight:700;color:var(--red-light)" onclick="goRegisterAthlete()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">Créer un compte</span></p>
     <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:16px">
-      <p class="sub" style="text-align:center;font-size:11px;margin-bottom:10px;color:#555">Tu as changé de navigateur ou d'appareil ?</p>
+      <p class="sub" style="text-align:center;font-size:11px;margin-bottom:10px;color:var(--text-dim)">Tu as changé de navigateur ou d'appareil ?</p>
       <button class="btn" style="width:100%;background:var(--card2);border:1px solid var(--border);color:var(--sub);font-size:12px;letter-spacing:1px" onclick="showNewPwdRecovery()">RÉCUPÉRER AVEC UN NOUVEAU MOT DE PASSE</button>
     </div>
     <div id="new-pwd-recovery" style="display:none;margin-top:12px;background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:16px">
@@ -911,13 +924,13 @@ const COACH_PHOTO='icons/coach.jpg';
 
     <!-- Info code court -->
     <div style="background:#111;border:1px solid var(--surface-2);border-radius:10px;padding:12px;text-align:left;margin-bottom:20px">
-      <div style="font-size:var(--fs-xs);color:#444;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px">⚠️ Code court (même appareil uniquement)</div>
-      <p style="font-size:11px;color:#555;line-height:1.6;margin:0">Le code GCP ci-dessus ne fonctionne que si le coach et l'athlète utilisent le même téléphone/ordi. Pour un autre appareil, utilise le lien d'invitation.</p>
+      <div style="font-size:var(--fs-xs);color:var(--text-dim);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px">⚠️ Code court (même appareil uniquement)</div>
+      <p style="font-size:11px;color:var(--text-dim);line-height:1.6;margin:0">Le code GCP ci-dessus ne fonctionne que si le coach et l'athlète utilisent le même téléphone/ordi. Pour un autre appareil, utilise le lien d'invitation.</p>
     </div>
 
     <div style="border-top:1px solid var(--surface-2);margin-bottom:16px;padding-top:16px">
       <button class="btn btn-outline" style="width:100%;margin-bottom:12px;color:var(--orange);border-color:#7c2d1244" onclick="regenCoachCode()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Régénérer mon code</button>
-      <p class="sub" style="font-size:var(--fs-xs);line-height:1.5;color:#444;margin:0">Les liens d'invitation déjà partagés cesseront de fonctionner. Les athlètes déjà liés ne sont pas affectés.</p>
+      <p class="sub" style="font-size:var(--fs-xs);line-height:1.5;color:var(--text-dim);margin:0">Les liens d'invitation déjà partagés cesseront de fonctionner. Les athlètes déjà liés ne sont pas affectés.</p>
     </div>
     <button class="btn btn-outline" style="width:100%" onclick="go('s-coach-home');loadCoachHome()">Espace Coach →</button>
   </div>
@@ -943,7 +956,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <button onclick="go('s-subscribe');loadSubscribePage()" style="background:none;border:none;color:var(--sub);font-size:12px;cursor:pointer;font-family:Montserrat,sans-serif">Pas de code coach ? Voir les abonnements →</button>
     </div>
     <div style="margin-top:12px;text-align:center">
-      <button onclick="logout()" style="background:none;border:none;color:#2a2a2a;font-size:11px;cursor:pointer;font-family:Montserrat,sans-serif">Se déconnecter</button>
+      <button onclick="logout()" style="background:none;border:none;color:var(--text-dim);font-size:11px;cursor:pointer;font-family:Montserrat,sans-serif">Se déconnecter</button>
     </div>
   </div>
 </div>
@@ -960,7 +973,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <div style="font-size:13px;font-weight:900" id="ch-name-sidebar"></div>
         </div>
       </div>
-      <div style="font-size:var(--fs-xs);color:#333;font-family:monospace;letter-spacing:1px" id="ch-code-sidebar"></div>
+      <div style="font-size:var(--fs-xs);color:var(--text-dim);font-family:monospace;letter-spacing:1px" id="ch-code-sidebar"></div>
     </div>
     <div style="padding:12px 8px;flex:1">
       <button id="sb-tab-dashboard" onclick="coachTab('dashboard')" style="width:100%;text-align:left;padding:12px 14px;background:var(--card);border:none;border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
@@ -978,10 +991,10 @@ const COACH_PHOTO='icons/coach.jpg';
       <button onclick="logout()" style="width:100%;background:none;border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:9px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer">DÉCONNEXION</button>
       <!-- Pied coach : la barre latérale est visible depuis tout le tableau de
            bord, le lien est donc à un clic une fois connecté. -->
-      <div style="margin-top:12px;font-size:var(--fs-xs);color:#444;text-align:center;line-height:1.9">
-        <a href="./legal.html" target="_blank" rel="noopener" style="color:#555;text-decoration:underline">Mentions légales</a>
+      <div style="margin-top:12px;font-size:var(--fs-xs);color:var(--text-dim);text-align:center;line-height:1.9">
+        <a href="./legal.html" target="_blank" rel="noopener" style="color:var(--text-dim);text-decoration:underline">Mentions légales</a>
         &nbsp;·&nbsp;
-        <a href="./privacy.html" target="_blank" rel="noopener" style="color:#555;text-decoration:underline">Confidentialité</a>
+        <a href="./privacy.html" target="_blank" rel="noopener" style="color:var(--text-dim);text-decoration:underline">Confidentialité</a>
       </div>
     </div>
   </div>
@@ -1002,7 +1015,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
       </div>
       <div style="display:flex;gap:8px">
-        <button onclick="showCoachCode()" style="background:var(--red-bg);border:1px solid var(--red);color:var(--red);padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:2px;text-transform:uppercase;transition:.15s" onmouseover="this.style.background='#1a0000'" onmouseout="this.style.background='var(--red-bg)'">CODE</button>
+        <button onclick="showCoachCode()" style="background:var(--red-bg);border:1px solid var(--red);color:var(--red-light);padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:2px;text-transform:uppercase;transition:.15s" onmouseover="this.style.background='#1a0000'" onmouseout="this.style.background='var(--red-bg)'">CODE</button>
         <button onclick="logout()" style="background:none;border:1px solid rgba(255,255,255,.1);color:var(--sub);padding:7px 10px;font-family:Montserrat,sans-serif;font-size:11px;cursor:pointer;transition:.15s" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--sub)'">&#8592;</button>
       </div>
     </div>
@@ -1106,7 +1119,7 @@ const COACH_PHOTO='icons/coach.jpg';
             <h3>Codes générés</h3>
           </div>
           <div id="sc-list">
-            <div style="text-align:center;padding:40px 20px;color:#444">
+            <div style="text-align:center;padding:40px 20px;color:var(--text-dim)">
               <div style="font-size:13px">Aucun code généré encore.<br>Utilise le formulaire ci-dessus.</div>
             </div>
           </div>
@@ -1124,7 +1137,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
             <label style="cursor:pointer;flex-shrink:0">
               <div id="coach-photo-circle" style="width:72px;height:72px;border-radius:50%;background:var(--surface-2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:28px;height:28px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
-              <div style="text-align:center;font-size:var(--fs-xs);color:#555;margin-top:5px;letter-spacing:1px">PHOTO</div>
+              <div style="text-align:center;font-size:var(--fs-xs);color:var(--text-dim);margin-top:5px;letter-spacing:1px">PHOTO</div>
               <input type="file" accept="image/*" style="display:none" onchange="uploadCoachPhoto(this)">
             </label>
             <div style="flex:1;font-size:11px;color:var(--sub);line-height:1.6">Photo du coach<br>visible par tes athlètes sur leur accueil</div>
@@ -1176,10 +1189,10 @@ const COACH_PHOTO='icons/coach.jpg';
           </div>
           <label style="font-size:11px;color:var(--sub);margin-bottom:4px;display:block">Cloud Name</label>
           <input id="cld-cloud-name" placeholder="ex: dxyz12abc" style="margin-bottom:10px">
-          <label style="font-size:11px;color:var(--sub);margin-bottom:4px;display:block">Upload Preset <span style="font-weight:400;color:#555">(non signé)</span></label>
+          <label style="font-size:11px;color:var(--sub);margin-bottom:4px;display:block">Upload Preset <span style="font-weight:400;color:var(--text-dim)">(non signé)</span></label>
           <input id="cld-preset" placeholder="ex: repcore_videos" style="margin-bottom:10px">
           <button onclick="saveCloudinaryConfig()" style="background:var(--red);border:none;color:#fff;border-radius:3px;padding:10px 18px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;width:100%">ENREGISTRER</button>
-          <div style="font-size:var(--fs-xs);color:#555;margin-top:8px;line-height:1.5">Créer un compte sur <b>cloudinary.com</b> → Settings → Upload → Add upload preset → choisir <b>Unsigned</b></div>
+          <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:8px;line-height:1.5">Créer un compte sur <b>cloudinary.com</b> → Settings → Upload → Add upload preset → choisir <b>Unsigned</b></div>
         </div>
 
         <!-- ☁️ Sync Cloud -->
@@ -1214,7 +1227,7 @@ const COACH_PHOTO='icons/coach.jpg';
             <h3>Abonnes autonomie</h3>
           </div>
           <div id="pp-subs-list">
-            <div style="text-align:center;padding:40px 20px;color:#444">
+            <div style="text-align:center;padding:40px 20px;color:var(--text-dim)">
               <div style="font-size:36px;margin-bottom:12px;opacity:0.4">💳</div>
               <div style="font-size:13px">Aucun abonné pour l'instant.</div>
             </div>
@@ -1254,7 +1267,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- Pied légal du tableau de bord coach. Il est ICI et non dans
          #ch-sidebar : celle-ci est en display:none sous 900 px, donc sur
          mobile — la plateforme réelle — le coach ne verrait jamais le lien. -->
-    <div style="flex-shrink:0;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));border-top:1px solid #141414;background:#080808;text-align:center;font-size:var(--fs-xs);color:#444;line-height:1.9">
+    <div style="flex-shrink:0;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));border-top:1px solid #141414;background:#080808;text-align:center;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.9">
       <a href="./legal.html" target="_blank" rel="noopener" style="color:#666;text-decoration:underline">Mentions légales</a>
       &nbsp;·&nbsp;
       <a href="./privacy.html" target="_blank" rel="noopener" style="color:#666;text-decoration:underline">Confidentialité</a>
@@ -1291,7 +1304,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- Modèle appliqué : renseigné par openClientDetail -->
       <div id="ccd-assigned-prog" style="display:none;font-size:11px;color:var(--sub);margin-bottom:10px;padding:8px 12px;background:var(--surface-1);border-left:2px solid var(--red);border-radius:0 6px 6px 0;line-height:1.5"></div>
       <!-- Lien WhatsApp de l'athlète : libellé et cible posés par openClientDetail -->
-      <a id="ccd-wa" href="#" target="_blank" rel="noopener" style="display:none;align-items:center;justify-content:center;gap:8px;min-height:46px;margin-bottom:6px;background:#0a1a0a;border:1px solid #1e3a1e;border-radius:10px;color:#22c55e;text-decoration:none;font-size:13px;font-weight:800;letter-spacing:.5px"></a>
+      <a id="ccd-wa" href="#" target="_blank" rel="noopener" style="display:none;align-items:center;justify-content:center;gap:8px;min-height:46px;margin-bottom:6px;background:#0a1a0a;border:1px solid #1e3a1e;border-radius:10px;color:var(--green);text-decoration:none;font-size:13px;font-weight:800;letter-spacing:.5px"></a>
       <!-- Sans ce lien, la fonctionnalité ne servirait qu'aux comptes créés
            après ce commit : aucun athlète existant n'a de numéro. -->
       <button id="ccd-wa-set" onclick="setClientPhone()" style="display:block;width:100%;background:none;border:none;color:var(--sub);font-family:inherit;font-size:11px;text-decoration:underline;cursor:pointer;min-height:34px;margin-bottom:10px">Enregistrer son numéro</button>
@@ -1660,11 +1673,11 @@ const COACH_PHOTO='icons/coach.jpg';
               <div style="font-size:13px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="clh-pdf-name">Fiche programme</div>
               <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px" id="clh-pdf-meta"></div>
             </div>
-            <div style="font-size:18px;color:#333;flex-shrink:0">→</div>
+            <div style="font-size:18px;color:var(--text-dim);flex-shrink:0">→</div>
           </div>
           <div id="clh-pdf-new-badge" style="display:none;background:var(--green);color:#000;font-size:var(--fs-xs);font-weight:900;letter-spacing:2px;text-transform:uppercase;padding:4px 12px;text-align:center">Mis à jour</div>
           <button onclick="triggerAthletePdfParse()" style="width:100%;background:linear-gradient(180deg,#0a1a00,#080f00);border:1px solid #1a3a0a;border-top:none;border-radius:0;padding:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;color:var(--green);letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px"> Lire & importer les séances</button>
-          <label style="display:block;background:var(--surface-1);border:1px solid var(--surface-2);border-top:none;border-radius:0 0 4px 4px;padding:8px 14px;font-size:var(--fs-xs);color:#444;letter-spacing:1.5px;text-transform:uppercase;font-weight:700;cursor:pointer;text-align:center">
+          <label style="display:block;background:var(--surface-1);border:1px solid var(--surface-2);border-top:none;border-radius:0 0 4px 4px;padding:8px 14px;font-size:var(--fs-xs);color:var(--text-dim);letter-spacing:1.5px;text-transform:uppercase;font-weight:700;cursor:pointer;text-align:center">
             Remplacer le PDF
             <input type="file" accept=".pdf" style="display:none" onchange="uploadAthletePdf(this)">
           </label>
@@ -1674,9 +1687,9 @@ const COACH_PHOTO='icons/coach.jpg';
           <label style="display:block;background:var(--dark);border:1px solid var(--surface-3);border-radius:4px;padding:16px;cursor:pointer;position:relative;overflow:hidden">
             <div style="position:absolute;top:0;left:0;width:3px;height:100%;background:#222"></div>
             <div style="padding-left:8px">
-              <div style="font-size:var(--fs-xs);color:#444;letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Programme</div>
-              <div style="font-size:13px;font-weight:800;color:#555">Importer mon programme PDF</div>
-              <div style="font-size:var(--fs-xs);color:#333;margin-top:2px">Max 20 Mo</div>
+              <div style="font-size:var(--fs-xs);color:var(--text-dim);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Programme</div>
+              <div style="font-size:13px;font-weight:800;color:var(--text-dim)">Importer mon programme PDF</div>
+              <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px">Max 20 Mo</div>
             </div>
             <input type="file" accept=".pdf" style="display:none" onchange="uploadAthletePdf(this)">
           </label>
@@ -1756,7 +1769,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <button onclick="logout()" style="background:none;border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:10px 24px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1.5px">DÉCONNEXION</button>
         <!-- Pied athlète : deux clics depuis n'importe quel écran connecté —
              l'avatar de l'accueil ouvre ce profil, ce lien ouvre la page. -->
-        <div style="margin-top:14px;font-size:11px;color:#555;line-height:1.9">
+        <div style="margin-top:14px;font-size:11px;color:var(--text-dim);line-height:1.9">
           <a href="./legal.html" target="_blank" rel="noopener" style="color:#666;text-decoration:underline">Mentions légales</a>
           &nbsp;·&nbsp;
           <a href="./privacy.html" target="_blank" rel="noopener" style="color:#666;text-decoration:underline">Confidentialité</a>
@@ -1836,7 +1849,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0;animation:pulse 1.5s infinite"></div>
         <div style="flex:1">
           <div style="font-size:var(--fs-xs);font-weight:800;color:var(--green);letter-spacing:1px;text-transform:uppercase">Programme mis à jour</div>
-          <div style="font-size:var(--fs-xs);color:#444;margin-top:1px" id="pv-pdf-update-date"></div>
+          <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:1px" id="pv-pdf-update-date"></div>
         </div>
       </div>
       <!-- PDF principal -->
@@ -1867,28 +1880,28 @@ const COACH_PHOTO='icons/coach.jpg';
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px 36px;width:100%;max-width:480px;animation:slideUp .3s ease">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <div style="font-size:15px;font-weight:800;letter-spacing:.3px">📲 Installer l'app</div>
-      <button onclick="closeIosInstallGuide()" style="background:none;border:none;color:#555;font-size:22px;cursor:pointer;line-height:1">✕</button>
+      <button onclick="closeIosInstallGuide()" style="background:none;border:none;color:var(--text-dim);font-size:22px;cursor:pointer;line-height:1">✕</button>
     </div>
     <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:28px">
       <div id="ios-step-safari" style="display:flex;align-items:flex-start;gap:12px">
         <div style="width:28px;height:28px;background:#1a0000;border:1px solid #3a0000;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--red);flex-shrink:0">1</div>
         <div>
           <div style="font-size:13px;font-weight:700;margin-bottom:2px">Ouvre ce lien dans <span style="color:var(--red)">Safari</span></div>
-          <div style="font-size:11px;color:#555;line-height:1.5">L'installation ne fonctionne que depuis Safari — pas Chrome ni Firefox.</div>
+          <div style="font-size:11px;color:var(--text-dim);line-height:1.5">L'installation ne fonctionne que depuis Safari — pas Chrome ni Firefox.</div>
         </div>
       </div>
       <div style="display:flex;align-items:flex-start;gap:12px">
         <div id="ios-step2-num" style="width:28px;height:28px;background:#1a0000;border:1px solid #3a0000;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--red);flex-shrink:0">2</div>
         <div>
           <div style="font-size:13px;font-weight:700;margin-bottom:2px">Appuie sur le bouton <span style="color:var(--red)">Partager</span> <span style="font-size:15px">⎙</span></div>
-          <div style="font-size:11px;color:#555;line-height:1.5">L'icône carré avec une flèche vers le haut — en bas de l'écran Safari.</div>
+          <div style="font-size:11px;color:var(--text-dim);line-height:1.5">L'icône carré avec une flèche vers le haut — en bas de l'écran Safari.</div>
         </div>
       </div>
       <div style="display:flex;align-items:flex-start;gap:12px">
         <div id="ios-step3-num" style="width:28px;height:28px;background:#1a0000;border:1px solid #3a0000;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--red);flex-shrink:0">3</div>
         <div>
           <div style="font-size:13px;font-weight:700;margin-bottom:2px">Sélectionne <span style="color:var(--red)">"Sur l'écran d'accueil"</span></div>
-          <div style="font-size:11px;color:#555;line-height:1.5">Fais défiler les options du menu Partager puis appuie sur "Ajouter".</div>
+          <div style="font-size:11px;color:var(--text-dim);line-height:1.5">Fais défiler les options du menu Partager puis appuie sur "Ajouter".</div>
         </div>
       </div>
     </div>
@@ -2192,7 +2205,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1">
     <div id="fj-recent-section"></div>
     <div id="fj-results-list"></div>
-    <div style="padding:20px 16px;font-size:var(--fs-xs);color:#333;text-align:center;letter-spacing:.5px">
+    <div style="padding:20px 16px;font-size:var(--fs-xs);color:var(--text-dim);text-align:center;letter-spacing:.5px">
       Source&nbsp;: Anses. 2025. Table de composition nutritionnelle des aliments Ciqual
     </div>
   </div>
@@ -2446,7 +2459,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
     <div style="margin-top:20px;display:flex;flex-direction:column;gap:10px;align-items:center">
       <button onclick="go('s-welcome')" style="background:none;border:none;color:var(--sub);font-size:12px;cursor:pointer;font-family:Montserrat,sans-serif">← Retour à l'accueil</button>
-      <button onclick="logout()" style="background:none;border:none;color:#2a2a2a;font-size:11px;cursor:pointer;font-family:Montserrat,sans-serif">Se déconnecter</button>
+      <button onclick="logout()" style="background:none;border:none;color:var(--text-dim);font-size:11px;cursor:pointer;font-family:Montserrat,sans-serif">Se déconnecter</button>
     </div>
   </div>
 </div>
@@ -2525,7 +2538,7 @@ const COACH_PHOTO='icons/coach.jpg';
           </svg>
           <div style="text-align:left">
             <div style="font-size:11px;font-weight:700;color:#ccc;font-family:Montserrat,sans-serif;display:flex;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="#6b9fd4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12" style="flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Paiement sécurisé via <span style="color:#009CDE">PayPal</span></div>
-            <div style="font-size:var(--fs-xs);color:#555;margin-top:2px">Sans engagement · Résiliation à tout moment</div>
+            <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px">Sans engagement · Résiliation à tout moment</div>
           </div>
         </div>
       </div>
@@ -4324,7 +4337,7 @@ function rescueLogin(em,pw){
         </button>
       </div>
       <button onclick="document.getElementById('rescue-panel').remove()"
-        style="background:none;border:none;color:#555;font-size:11px;cursor:pointer;font-family:Montserrat,sans-serif">Annuler</button>
+        style="background:none;border:none;color:var(--text-dim);font-size:11px;cursor:pointer;font-family:Montserrat,sans-serif">Annuler</button>
     </div>`;
   document.body.appendChild(panel);
 }
@@ -4881,7 +4894,7 @@ function _waCorpsGroupe(type){
 // s'interpose. Plusieurs → ouvre la sélection groupée pré-cochée sur cette
 // ligne, où chaque envoi reste un geste distinct.
 function _waBoutonTodo(r,idx){
-  const style='background:none;border:1px solid #1e3a1e;color:#22c55e;border-radius:6px;'
+  const style='background:none;border:1px solid #1e3a1e;color:var(--green);border-radius:6px;'
     +'min-width:34px;min-height:34px;padding:0 8px;font-size:14px;cursor:pointer;flex-shrink:0;'
     +'display:inline-flex;align-items:center;justify-content:center;text-decoration:none';
   if(r.list.length===1){
@@ -4970,7 +4983,7 @@ function _wagPreparer(){
   const pour=s=>(s.nom?'Salut '+s.nom+', ':'Salut ! ')+texte;
   zone.innerHTML=`<div class="sub" style="font-size:11px;margin-bottom:8px">Touche chaque nom pour ouvrir WhatsApp — ${sel.length} conversation${sel.length>1?'s':''} à ouvrir${sansTel?`, dont ${sansTel} sans numéro utilisable (contact à choisir)`:''}.</div>`
     +sel.map(s=>`<a href="${safeUrl(waLink(s.tel,pour(s)))}" target="_blank" rel="noopener"
-      style="display:flex;align-items:center;gap:8px;min-height:44px;padding:0 12px;margin-bottom:6px;background:#0a1a0a;border:1px solid #1e3a1e;border-radius:8px;color:#22c55e;text-decoration:none;font-size:13px;font-weight:700"
+      style="display:flex;align-items:center;gap:8px;min-height:44px;padding:0 12px;margin-bottom:6px;background:#0a1a0a;border:1px solid #1e3a1e;border-radius:8px;color:var(--green);text-decoration:none;font-size:13px;font-weight:700"
       onclick="this.style.opacity='.5';this.style.borderColor='#333'">💬 ${escapeHtml(s.nom||'Athlète')}${s.tel?'':' <span style="color:var(--orange);font-weight:400;font-size:11px">(contact à choisir)</span>'}</a>`).join('');
 }
 
@@ -5003,7 +5016,7 @@ function renderTodoBlock(clients){
       // brut dans le tableau de bord de son coach. Trouvé en testant les liens
       // WhatsApp avec un prénom hostile — le défaut est antérieur.
       const names=r.list.slice(0,2).map(c=>escapeHtml(c.fname||'')).join(', ')+(r.list.length>2?' +'+(r.list.length-2):'');
-      return{html:`<span style="font-size:15px;flex-shrink:0">${r.icon}</span><div style="flex:1;min-width:0"><span style="font-size:12px;font-weight:700;color:#fff">${r.list.length>1?r.list.length+' ':''}</span><span style="font-size:12px;font-weight:700;color:${r.color}">${r.label}</span><span style="font-size:11px;color:var(--sub)"> · ${names}</span></div>${_waBoutonTodo(r,idx)}<button onclick="event.stopPropagation();dismissTodoRow(${idx})" title="Snoozer 7 jours" style="background:none;border:none;color:#444;font-size:15px;cursor:pointer;padding:4px 8px;flex-shrink:0;transition:color .15s;border-radius:4px" onmouseover="this.style.color='var(--sub)'" onmouseout="this.style.color='#444'">✕</button>`,
+      return{html:`<span style="font-size:15px;flex-shrink:0">${r.icon}</span><div style="flex:1;min-width:0"><span style="font-size:12px;font-weight:700;color:#fff">${r.list.length>1?r.list.length+' ':''}</span><span style="font-size:12px;font-weight:700;color:${r.color}">${r.label}</span><span style="font-size:11px;color:var(--sub)"> · ${names}</span></div>${_waBoutonTodo(r,idx)}<button onclick="event.stopPropagation();dismissTodoRow(${idx})" title="Snoozer 7 jours" style="background:none;border:none;color:var(--text-dim);font-size:15px;cursor:pointer;padding:4px 8px;flex-shrink:0;transition:color .15s;border-radius:4px" onmouseover="this.style.color='var(--sub)'" onmouseout="this.style.color='#444'">✕</button>`,
       onClick:`openClientDetail('${r.list[0].id}')`,style:'cursor:pointer;transition:background .15s;'};
     },{pad:'10px 14px',gap:10,border:'#180000',hover:'#140000'})}
   </div>`;
@@ -5198,10 +5211,10 @@ function _buildSessionCard(s){
         <div style="font-size:11px;color:var(--sub)">${dt} · ${s.duration||0} min · ${fmtSeries(s.sets,s.setsPlanned)} série${pluSeries(s.sets,s.setsPlanned)} · ${s.volume||0} kg</div>
       </div>
       <span style="font-size:11px;font-weight:700;flex-shrink:0;color:${complete?'var(--green)':'#555'}">${complete?'✓':'✗'}</span>
-      <span class="sc-arr" style="color:#444;font-size:11px;flex-shrink:0">▶</span>
+      <span class="sc-arr" style="color:var(--text-dim);font-size:11px;flex-shrink:0">▶</span>
     </div>
     <div class="sc-body" style="display:none;padding:0 14px 14px">
-      ${rows||'<div style="font-size:11px;color:#444;padding-top:8px">Aucune série enregistrée.</div>'}
+      ${rows||'<div style="font-size:11px;color:var(--text-dim);padding-top:8px">Aucune série enregistrée.</div>'}
     </div>
   </div>`;
 }
@@ -5613,10 +5626,10 @@ function renderBilanEvolution(c){
     const formulaNote=`<div style="background:#111;border:1px solid #222;border-radius:8px;padding:12px;margin-bottom:14px;font-size:var(--fs-xs);line-height:1.8">
       <div style="font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:2px;color:var(--red);margin-bottom:6px">Formule US Navy ${female?'(Femme)':'(Homme)'} — Calcul automatique</div>
       ${female
-        ?`<div style="color:#aaa;font-family:monospace;font-size:var(--fs-xs)">%MG = 495 / [1,29579 − 0,35004 × log(<b style="color:#fff">taille</b> + <b style="color:#69f0ae">hanches</b> − <b style="color:#ffd600">cou</b>) + 0,22100 × log(<b style="color:#4fc3f7">hauteur</b>)] − 450</div>
-         <div style="color:#555;font-size:var(--fs-xs);margin-top:4px">taille = tour de taille · hanches = tour de hanches · cou = tour de cou · hauteur = taille en cm</div>`
-        :`<div style="color:#aaa;font-family:monospace;font-size:var(--fs-xs)">%MG = 495 / [1,0324 − 0,19077 × log(<b style="color:#fff">taille</b> − <b style="color:#ffd600">cou</b>) + 0,15456 × log(<b style="color:#4fc3f7">hauteur</b>)] − 450</div>
-         <div style="color:#555;font-size:var(--fs-xs);margin-top:4px">taille = tour de taille · cou = tour de cou · hauteur = taille en cm</div>`
+        ?`<div style="color:#aaa;font-family:monospace;font-size:var(--fs-xs)">%MG = 495 / [1,29579 − 0,35004 × log(<b style="color:#fff">taille</b> + <b style="color:#69f0ae">hanches</b> − <b style="color:#ffd600">cou</b>) + 0,22100 × log(<b style="color:var(--accent-blue)">hauteur</b>)] − 450</div>
+         <div style="color:var(--text-dim);font-size:var(--fs-xs);margin-top:4px">taille = tour de taille · hanches = tour de hanches · cou = tour de cou · hauteur = taille en cm</div>`
+        :`<div style="color:#aaa;font-family:monospace;font-size:var(--fs-xs)">%MG = 495 / [1,0324 − 0,19077 × log(<b style="color:#fff">taille</b> − <b style="color:#ffd600">cou</b>) + 0,15456 × log(<b style="color:var(--accent-blue)">hauteur</b>)] − 450</div>
+         <div style="color:var(--text-dim);font-size:var(--fs-xs);margin-top:4px">taille = tour de taille · cou = tour de cou · hauteur = taille en cm</div>`
       }
       <div style="margin-top:8px;color:#888;font-size:var(--fs-xs);border-top:1px solid #222;padding-top:8px"> Précision estimée ±3% par rapport à la réalité. La formule est une estimation — pour un résultat précis, privilégier une pesée hydrostatique ou DEXA.</div>
     </div>`;
@@ -6460,7 +6473,7 @@ function renderClientPdfCard(c){
       <div style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${dt}</div>
     </div>
-    <button onclick="removeCoachPdf()" style="background:none;border:none;color:#444;font-size:18px;cursor:pointer;padding:4px;flex-shrink:0">×</button>
+    <button onclick="removeCoachPdf()" style="background:none;border:none;color:var(--text-dim);font-size:18px;cursor:pointer;padding:4px;flex-shrink:0">×</button>
   </div>`:'';
   const parseBtn=hasPdf?`<button onclick="triggerPdfProgrammeImport(${JSON.stringify(c.email)})" style="width:100%;margin-bottom:10px;padding:11px;background:linear-gradient(180deg,#0a1a00,#080f00);border:1px solid #1a3a0a;border-radius:6px;color:var(--green);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px;text-transform:uppercase;display:flex;align-items:center;justify-content:center;gap:7px"> Lire PDF → Importer les séances</button>`:'';
   el.innerHTML=`${existHtml}${parseBtn}
@@ -6468,7 +6481,7 @@ function renderClientPdfCard(c){
       <input type="file" accept=".pdf,application/pdf" onchange="uploadCoachPdfInline(this)" style="display:none">
       <div style="border:1px dashed #2a2a2a;border-radius:8px;padding:14px;text-align:center" onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='#2a2a2a'">
         <div style="font-size:var(--fs-xs);letter-spacing:2px;text-transform:uppercase;color:var(--sub);font-weight:700;margin-bottom:3px">${hasPdf?'Remplacer le PDF':'Importer un PDF'}</div>
-        <div style="font-size:11px;color:#444">Clique ou glisse — max 20 Mo</div>
+        <div style="font-size:11px;color:var(--text-dim)">Clique ou glisse — max 20 Mo</div>
       </div>
     </label>
     <div style="display:flex;gap:8px">
@@ -7723,9 +7736,9 @@ function renderWoEx(){
         <div style="width:32px;height:32px;background:#1a1a3a;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">▶</div>
         <div style="flex:1">
           <div style="font-size:11px;font-weight:800;letter-spacing:.5px;color:#99aaff">VIDÉO TECHNIQUE</div>
-          <div style="font-size:var(--fs-xs);color:#4466aa;margin-top:2px">Regarder la technique d'exécution</div>
+          <div style="font-size:var(--fs-xs);color:var(--link);margin-top:2px">Regarder la technique d'exécution</div>
         </div>
-        <span style="font-size:14px;color:#3355aa">→</span>
+        <span style="font-size:14px;color:var(--link)">→</span>
       </a>`:''}
 
       ${!isCardio(ex)&&pr.type==='degressive'?`<div style="background:#7c2d1222;border:1px solid #9a3412;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#fca5a5">
@@ -8519,7 +8532,7 @@ function bSlider(gid){
   const track=set?`linear-gradient(90deg,${c} ${pct}%,#1a1a1a ${pct}%)`:'#1a1a1a';
   return `<div class="bsl-wrap">
     <div class="bsl-value" id="bsl-num-${gid}" style="color:${c};${set?`text-shadow:0 0 16px ${c}66`:''}">${set?v:'–'}<span class="bsl-max">/10</span></div>
-    <div class="bsl-feedback" id="bsl-fb-${gid}" style="color:${set?c:'#555'}">${set?BSL_LABELS[v-1]:'Fais glisser le curseur'}</div>
+    <div class="bsl-feedback" id="bsl-fb-${gid}" style="color:${set?c:'var(--text-dim)'}">${set?BSL_LABELS[v-1]:'Fais glisser le curseur'}</div>
     <input type="range" min="1" max="10" step="1" value="${v}" class="bslider" id="bsl-in-${gid}" style="--bsl:${set?c:'#555'};--bsl-glow:${set?c+'66':'transparent'};background:${track}" oninput="bSliderInput('${gid}',this.value)">
     <div class="bsl-scale"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span></div>
   </div>`;
@@ -8631,7 +8644,7 @@ function bBodySchema(prefix){
             oninput="bilData['${id}']=this.value"
             onfocus="bBodyFocus('${id}',1)" onblur="bBodyFocus('${id}',0)"
             style="width:100%;min-width:0;background:none;border:none;outline:none;box-shadow:none;color:#fff;font-family:Montserrat,sans-serif;font-weight:800;font-size:14px;text-align:center;padding:4px 0;margin:0">
-          <span style="font-size:var(--fs-xs);color:#555;font-weight:700;margin-left:2px">cm</span>
+          <span style="font-size:var(--fs-xs);color:var(--text-dim);font-weight:700;margin-left:2px">cm</span>
         </div>
       </div>`;
     }).join('')}
@@ -8761,7 +8774,7 @@ function renderReponsesBilans(bilans){
     return `<div style="background:var(--dark);border:1px solid ${depart?'rgba(224,32,32,.35)':'var(--surface-3)'};border-radius:12px;padding:16px;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <div style="font-size:var(--fs-xs);font-weight:900;color:var(--red);text-transform:uppercase;letter-spacing:1.5px">${depart?'Questionnaire de départ':'Bilan '+_rang.get(b)}</div>
-        <div style="text-align:right"><div style="font-size:var(--fs-xs);color:#555">${d}</div>${w?`<div style="font-size:12px;font-weight:700;color:#fff;margin-top:2px">⚖️ ${w}kg</div>`:''}</div>
+        <div style="text-align:right"><div style="font-size:var(--fs-xs);color:var(--text-dim)">${d}</div>${w?`<div style="font-size:12px;font-weight:700;color:#fff;margin-top:2px">⚖️ ${w}kg</div>`:''}</div>
       </div>
       ${answers}
     </div>`;
@@ -9241,7 +9254,7 @@ function showWoReminderBanner(){
       <div style="font-size:var(--fs-xs);font-weight:900;color:var(--green);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px">Séance du jour</div>
       <div style="font-size:12px;color:#ddd;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">C'est l'heure de t'entraîner ! Clique pour démarrer.</div>
     </div>
-    <button onclick="event.stopPropagation();document.getElementById('wo-reminder-banner')?.remove()" style="background:none;border:none;color:#555;font-size:22px;cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1">✕</button>
+    <button onclick="event.stopPropagation();document.getElementById('wo-reminder-banner')?.remove()" style="background:none;border:none;color:var(--text-dim);font-size:22px;cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1">✕</button>
   </div>`;
   document.body.appendChild(b);
   setTimeout(()=>b?.remove(),60000);
@@ -9575,7 +9588,7 @@ function showProgressTab(tab,btn){
          pad:'7px 14px',cellBorder:'#141414',cellBorderSide:'bottom',mb:'16px',
          emptyColor:'var(--sub)',valueColor:'#f0f0f0'}
       )}
-      <div style="font-size:var(--fs-xs);color:#333;text-align:center;margin-top:8px;line-height:1.6">
+      <div style="font-size:var(--fs-xs);color:var(--text-dim);text-align:center;margin-top:8px;line-height:1.6">
         Formule US Navy · Basée sur tour de cou, tour de taille${female?' et tour de hanche':''} + taille<br>
         Masse grasse = Poids × (% MG / 100) · Masse musculaire = Poids − Masse grasse
       </div>
@@ -9641,7 +9654,7 @@ function showProgressTab(tab,btn){
         ${dW!=null?`<div style="display:flex;justify-content:center;gap:9px;margin:11px 0 13px">
           <div style="flex:1;max-width:112px;background:linear-gradient(180deg,#131313,#0b0b0b);border:1px solid #232323;border-radius:10px;padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)">
             <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;line-height:1;color:#8a8a8a">${wFirst}<span style="font-size:11px">kg</span></div>
-            <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:#4a4a4a;margin-top:3px;font-weight:800">DÉPART</div>
+            <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:var(--text-dim);margin-top:3px;font-weight:800">DÉPART</div>
           </div>
           <div style="flex:1;max-width:112px;background:linear-gradient(160deg,#c10000,#6d0000);border:1px solid rgba(255,90,90,.42);border-radius:10px;padding:8px 6px;text-align:center;box-shadow:0 0 20px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.18)">
             <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;line-height:1;color:#fff;text-shadow:0 0 12px rgba(255,255,255,.9)">${wLast}<span style="font-size:11px">kg</span></div>
@@ -9689,11 +9702,11 @@ function showProgressTab(tab,btn){
         <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,.06)">
           <img src="./icons/logo.png" alt="" style="width:20px;height:20px;border-radius:5px;object-fit:cover;opacity:.9">
           <span style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:3px;color:#6a6a6a">REPCORE</span>
-          <span style="font-size:var(--fs-xs);color:#333;letter-spacing:1.5px;font-weight:700">· GUELLEC COACHING PRO</span>
+          <span style="font-size:var(--fs-xs);color:var(--text-dim);letter-spacing:1.5px;font-weight:700">· GUELLEC COACHING PRO</span>
         </div>
       </div>
     </div>
-    <div style="margin-top:10px;font-size:var(--fs-xs);color:#2f2f2f;text-align:center">Touche une photo pour l'agrandir · fais défiler pour voir tous tes bilans</div>`;
+    <div style="margin-top:10px;font-size:var(--fs-xs);color:var(--text-dim);text-align:center">Touche une photo pour l'agrandir · fais défiler pour voir tous tes bilans</div>`;
     c.innerHTML=html;
     c.querySelectorAll('[data-scroll-fade]').forEach(el=>setupScrollFade(el));
   } else if(tab==='notes'){
@@ -10119,7 +10132,7 @@ function _renderStrictDiet(){
     <!-- Plan photos -->
     <div style="margin-bottom:20px">
       <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:5px">${icon('clipboard',12)} Plan alimentaire</div>
-      ${photos.length===0&&!isCoach?`<div style="background:var(--surface-1);border:1px dashed #2a2a2a;border-radius:12px;padding:32px 16px;text-align:center;color:#333;font-size:12px"><div style="margin-bottom:8px;opacity:.3">${icon('clipboard',32)}</div>Plan alimentaire à venir</div>`:''}
+      ${photos.length===0&&!isCoach?`<div style="background:var(--surface-1);border:1px dashed #2a2a2a;border-radius:12px;padding:32px 16px;text-align:center;color:var(--text-dim);font-size:12px"><div style="margin-bottom:8px;opacity:.3">${icon('clipboard',32)}</div>Plan alimentaire à venir</div>`:''}
       ${photos.map((src,i)=>`<div style="margin-bottom:10px;position:relative"><img src="${escapeHtml(src)}" style="width:100%;border-radius:12px;display:block;border:1px solid var(--surface-2)" onclick="viewNutriPhoto(${i})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${isCoach?`<button onclick="deleteStrictPhoto(${i})" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.85);border:none;color:#fff;border-radius:50%;width:28px;height:28px;font-size:14px;cursor:pointer;line-height:1;padding:0">✕</button>`:''}</div>`).join('')}
       ${isCoach?`<label style="display:flex;align-items:center;justify-content:center;gap:10px;padding:14px;background:#111;border:1.5px dashed #2a2a2a;border-radius:12px;cursor:pointer;margin-top:${photos.length?'8':'0'}px">${icon('camera',18)}<span style="font-size:11px;font-weight:700;color:var(--sub);letter-spacing:1px">AJOUTER UNE PHOTO</span><input type="file" accept="image/*" capture="environment" style="display:none" onchange="addStrictPhoto(this)"></label>`:''}
     </div>
@@ -10234,7 +10247,7 @@ function _renderFjRecent(){
   const el=document.getElementById('fj-recent-section');
   if(!el||!_ciqualDB) return;
   const ids=currentUser.nutrition?.recentFoods||[];
-  if(!ids.length){el.innerHTML='<div style="padding:20px 16px;font-size:12px;color:#333;text-align:center">Commence à saisir pour rechercher un aliment</div>';return;}
+  if(!ids.length){el.innerHTML='<div style="padding:20px 16px;font-size:12px;color:var(--text-dim);text-align:center">Commence à saisir pour rechercher un aliment</div>';return;}
   const foods=ids.map(id=>_ciqualDB.find(f=>f.id===id)).filter(Boolean);
   el.innerHTML='<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;padding:14px 16px 6px">Récents</div>'+
     foods.map(_fjResultHtml).join('')+
@@ -10375,7 +10388,7 @@ function _renderFjDaySummary(date){
   const yst=new Date();yst.setDate(yst.getDate()-1);
   const dateLbl=isToday?"Aujourd'hui":date===localISODate(yst)?"Hier":new Date(_yy,_mm-1,_dd).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
   const nextBtn=isToday
-    ?`<button disabled style="background:none;border:1px solid #222;color:#333;border-radius:8px;padding:4px 10px;font-size:14px;cursor:not-allowed">→</button>`
+    ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:8px;padding:4px 10px;font-size:14px;cursor:not-allowed">→</button>`
     :`<button onclick="_renderFjDaySummary('${nextStr}')" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:14px">→</button>`;
   const nut=currentUser.nutrition||{};
   const entries=(nut.log?.[date]?.entries)||[];
@@ -10429,10 +10442,10 @@ function _renderFjDaySummary(date){
           ${tile(tot.fi,m.f?m.f+'g':'','fibres ℹ','#94a3b8')}
           ${kcalTile}
         </div>
-        <div style="font-size:var(--fs-xs);color:#3a3a3a;text-align:right;margin-top:7px">ℹ sucre & fibres — indicatif</div>
+        <div style="font-size:var(--fs-xs);color:var(--text-dim);text-align:right;margin-top:7px">ℹ sucre & fibres — indicatif</div>
       </div>
     </div>
-    ${entries.length===0?`<div style="text-align:center;padding:18px 0 8px;color:#333;font-size:12px">Aucun aliment enregistré — appuie sur + AJOUTER</div>`:''}
+    ${entries.length===0?`<div style="text-align:center;padding:18px 0 8px;color:var(--text-dim);font-size:12px">Aucun aliment enregistré — appuie sur + AJOUTER</div>`:''}
     ${repasOrder.filter(r=>grouped[r]).map(r=>`
       <div style="margin-bottom:14px">
         <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:6px">${repasLabels[r]}</div>
@@ -10443,7 +10456,7 @@ function _renderFjDaySummary(date){
           </div>
           <div style="flex-shrink:0;margin-left:8px;text-align:right">
             ${e.kcal!=null?`<div style="font-size:13px;font-weight:800;color:var(--red)">${e.kcal}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400"> kcal</span></div>`:`<span style="font-size:var(--fs-xs);font-weight:800;color:#fb923c;background:#1a0e00;border:1px solid #3a1e00;border-radius:4px;padding:1px 5px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`}
-            <button onclick="deleteFoodEntry('${date}',${e.id})" style="background:none;border:none;color:#333;font-size:14px;cursor:pointer;padding:2px 4px;margin-top:2px">✕</button>
+            <button onclick="deleteFoodEntry('${date}',${e.id})" style="background:none;border:none;color:var(--text-dim);font-size:14px;cursor:pointer;padding:2px 4px;margin-top:2px">✕</button>
           </div>
         </div>`).join('')}
       </div>`).join('')}`;
@@ -10536,7 +10549,7 @@ function renderCoachNutriSection(c){
             <input type="file" accept="image/*" capture="environment" style="display:none" onchange="addClientStrictPhoto(this)">
           </label>
         </div>`
-      :`<div style="font-size:11px;color:#444;text-align:center;margin-top:4px">Journal libre — pas de plan photo à configurer</div>`}
+      :`<div style="font-size:11px;color:var(--text-dim);text-align:center;margin-top:4px">Journal libre — pas de plan photo à configurer</div>`}
     </div>`;
 }
 
@@ -10629,7 +10642,7 @@ function _suppTimingOrder(supp){
 }
 
 function _suppTimingTags(timings,small){
-  if(!timings?.length) return '<span style="color:#333;font-size:var(--fs-xs)">—</span>';
+  if(!timings?.length) return '<span style="color:var(--text-dim);font-size:var(--fs-xs)">—</span>';
   return timings.map(id=>{
     const t=TIMINGS_LIST.find(x=>x.id===id);
     const label=t?t.label:id;
@@ -10671,9 +10684,9 @@ function _renderSuppTable(list, isCoach, editFn){
     return `<div onclick="${editFn}(${realIdx})" style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;border-radius:9px;background:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,0));border:1px solid rgba(255,255,255,.045);margin-bottom:5px;transition:.15s${inactive?';opacity:.42':''}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="width:3px;align-self:stretch;border-radius:3px;background:${color};box-shadow:0 0 7px ${color}99;flex-shrink:0"></div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:700;color:${inactive?'#555':'#fff'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s.name)}${inactive?'<span style="font-size:var(--fs-xs);color:#444;margin-left:6px;font-weight:600">désactivé</span>':''}</div>
-        ${s.notes?`<div style="font-size:var(--fs-xs);color:#5a5a5a;margin-top:2px;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s.notes)}</div>`:''}
-        ${others>0?`<div style="font-size:var(--fs-xs);color:#4a4a4a;margin-top:2px;letter-spacing:.5px">aussi ${others} autre${others>1?'s':''} moment${others>1?'s':''}</div>`:''}
+        <div style="font-size:13px;font-weight:700;color:${inactive?'var(--text-dim)':'#fff'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s.name)}${inactive?'<span style="font-size:var(--fs-xs);color:var(--text-dim);margin-left:6px;font-weight:600">désactivé</span>':''}</div>
+        ${s.notes?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s.notes)}</div>`:''}
+        ${others>0?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px;letter-spacing:.5px">aussi ${others} autre${others>1?'s':''} moment${others>1?'s':''}</div>`:''}
       </div>
       <div style="flex-shrink:0;text-align:right">
         <div style="font-family:'Bebas Neue',sans-serif;font-size:21px;line-height:1;color:${color};text-shadow:0 0 9px ${color}88">${s.dosage_quantity||'—'}</div>
@@ -11068,7 +11081,7 @@ function renderCoachCaffeineSection(c){
         ?emptyState('coffee','Aucune prise enregistrée sur 28 jours.',null,null,'padding:16px 0')
         :`<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin-bottom:8px">Historique 28 jours</div>
           <canvas id="ccd-caff-history" height="100" style="width:100%;display:block;border-radius:6px"></canvas>
-          <div style="font-size:var(--fs-xs);color:#444;margin-top:6px">Seuils (pour ${wKg}kg) : vert &lt;${thr.green}mg · jaune &lt;${thr.yellow}mg · orange &lt;${thr.orange}mg · rouge ${thr.red}mg</div>`
+          <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:6px">Seuils (pour ${wKg}kg) : vert &lt;${thr.green}mg · jaune &lt;${thr.yellow}mg · orange &lt;${thr.orange}mg · rouge ${thr.red}mg</div>`
       }
     </div>`;
   if(withData.length){
@@ -11249,7 +11262,7 @@ function _renderCaffeineScreen(){
     <button onclick="_caffeineViewDate='${prevStr}';_renderCaffeineScreen()" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:6px 13px;cursor:pointer;font-size:15px;font-family:Montserrat,sans-serif">←</button>
     <span style="font-size:13px;font-weight:700;min-width:110px;text-align:center">${dateLbl}</span>
     ${isToday
-      ?`<button disabled style="background:none;border:1px solid #222;color:#333;border-radius:8px;padding:6px 13px;font-size:15px;cursor:not-allowed">→</button>`
+      ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:8px;padding:6px 13px;font-size:15px;cursor:not-allowed">→</button>`
       :`<button onclick="_caffeineViewDate='${nextStr}';_renderCaffeineScreen()" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:6px 13px;cursor:pointer;font-size:15px;font-family:Montserrat,sans-serif">→</button>`}
   </div>`;
   const entries=getCaffeineDay(date);
@@ -11282,7 +11295,7 @@ function _renderCaffeineEmbedded(){
   const dateLbl=isToday?"Aujourd'hui":date===localISODate(yst)?"Hier":new Date(yy,mm-1,dd).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
   const navPrev=`<button onclick="_caffeineEmbedDate='${prevStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:15px;font-family:Montserrat,sans-serif">←</button>`;
   const navNext=isToday
-    ?`<button disabled style="background:none;border:1px solid #222;color:#333;border-radius:8px;padding:5px 12px;font-size:15px;cursor:not-allowed">→</button>`
+    ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:8px;padding:5px 12px;font-size:15px;cursor:not-allowed">→</button>`
     :`<button onclick="_caffeineEmbedDate='${nextStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:15px;font-family:Montserrat,sans-serif">→</button>`;
   const entries=getCaffeineDay(date);
   const totalMg=entries.reduce((s,e)=>s+(e.mg||0),0);
@@ -11530,8 +11543,8 @@ function _buildVideoCard(v){
   const hasFb=v.feedback||v.feedbackTimestamps?.length;
   const tsInner=_renderTsAnnotations(v.feedbackTimestamps||[],{readonly:true,videoId:'vc-video-'+v.id});
   const tsBlock=tsInner?`<div style="margin-top:8px">${tsInner}</div>`:'';
-  const fbBlock=hasFb?`<div style="background:var(--card2);border-radius:8px;padding:10px;margin-top:10px;font-size:12px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span style="color:var(--sub);font-size:var(--fs-xs);font-weight:700">FEEDBACK COACH</span>${v.feedbackDate?`<span style="font-size:var(--fs-xs);color:#444">${new Date(v.feedbackDate).toLocaleDateString('fr-FR')}</span>`:''}</div>${v.feedback?`<p style="margin:0;line-height:1.5">${escapeHtml(v.feedback)}</p>`:''}${tsBlock}</div>`:'';
-  return `<div class="video-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:13px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?'✓ Corrigée':'En attente'}</span><button onclick="if(confirm('Supprimer cette vidéo ?'))deleteVideo('${currentUser.email}','${v.id}')" style="background:none;border:none;color:#555;cursor:pointer;font-size:18px;line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button></div><div class="sub" style="font-size:11px">${new Date(v.date).toLocaleDateString('fr-FR')}</div>${_videoEmbed(v.url,'vc-video-'+v.id)}${fbBlock}</div>`;
+  const fbBlock=hasFb?`<div style="background:var(--card2);border-radius:8px;padding:10px;margin-top:10px;font-size:12px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span style="color:var(--sub);font-size:var(--fs-xs);font-weight:700">FEEDBACK COACH</span>${v.feedbackDate?`<span style="font-size:var(--fs-xs);color:var(--text-dim)">${new Date(v.feedbackDate).toLocaleDateString('fr-FR')}</span>`:''}</div>${v.feedback?`<p style="margin:0;line-height:1.5">${escapeHtml(v.feedback)}</p>`:''}${tsBlock}</div>`:'';
+  return `<div class="video-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:13px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?'✓ Corrigée':'En attente'}</span><button onclick="if(confirm('Supprimer cette vidéo ?'))deleteVideo('${currentUser.email}','${v.id}')" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:18px;line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button></div><div class="sub" style="font-size:11px">${new Date(v.date).toLocaleDateString('fr-FR')}</div>${_videoEmbed(v.url,'vc-video-'+v.id)}${fbBlock}</div>`;
 }
 async function deleteVideo(email,videoId){
   const users=DB.get('users')||{};
@@ -11707,7 +11720,7 @@ function openQCManager(){
       </div>
       <input id="qc-new-text" placeholder="Texte inséré si différent du label (facultatif)" maxlength="120" style="width:100%;box-sizing:border-box;font-size:11px;margin-top:6px">
     </div>
-    <button onclick="qcReset()" style="margin-top:10px;background:none;border:1px solid #2a2a2a;border-radius:3px;color:#555;font-size:11px;padding:8px;cursor:pointer;font-family:Montserrat,sans-serif;width:100%">Réinitialiser aux 6 valeurs par défaut</button>
+    <button onclick="qcReset()" style="margin-top:10px;background:none;border:1px solid #2a2a2a;border-radius:3px;color:var(--text-dim);font-size:11px;padding:8px;cursor:pointer;font-family:Montserrat,sans-serif;width:100%">Réinitialiser aux 6 valeurs par défaut</button>
   </div></div>`);
 }
 function qcAdd(){
@@ -11775,7 +11788,7 @@ function _renderTsAnnotations(annotations,opts={}){
           ${isAudio
             ?`<div style="flex:1"><audio src="${t.audioUrl}" controls style="height:32px;width:100%;margin-bottom:2px"></audio><div style="font-size:var(--fs-xs);color:var(--sub);display:flex;align-items:center;gap:4px">${icon('mic',12)} message audio</div></div>`
             :`<span style="flex:1;font-size:12px">${escapeHtml(t.note)}</span>`}
-          ${readonly?'':`<button onclick="removeTsAnnotation(${i})" style="background:none;border:none;color:#555;cursor:pointer;font-size:18px;line-height:1;padding:0;flex-shrink:0;margin-top:${isAudio?'3px':'0'}">×</button>`}
+          ${readonly?'':`<button onclick="removeTsAnnotation(${i})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:18px;line-height:1;padding:0;flex-shrink:0;margin-top:${isAudio?'3px':'0'}">×</button>`}
         </div>`;
       }).join('')
     :readonly?'':`<div class="sub" style="font-size:11px;padding:6px 0">Aucun repère — ajoute des annotations ci-dessous.</div>`;
@@ -12114,11 +12127,11 @@ function loadSteps(containerId='steps-content'){
         <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:13px">Objectifs de pas</div>
         <div style="display:flex;gap:10px;margin-bottom:12px">
           <div style="flex:1;min-width:0">
-            <div style="font-size:var(--fs-xs);font-weight:800;color:#ff5a5a;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">JOUR ON <span style="font-size:var(--fs-xs);font-weight:600;color:#5a5a5a">entraînement</span></div>
+            <div style="font-size:var(--fs-xs);font-weight:800;color:#ff5a5a;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">JOUR ON <span style="font-size:var(--fs-xs);font-weight:600;color:var(--text-dim)">entraînement</span></div>
             <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:22px;text-align:center;padding:11px 6px;background:linear-gradient(180deg,#0a0000,#0f0303);border:1px solid #3a0d0d;border-radius:9px;color:#ff5a5a;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;box-shadow:inset 0 2px 7px rgba(0,0,0,.6),0 0 12px rgba(224,32,32,.12);text-shadow:0 0 10px rgba(224,32,32,.6)">
           </div>
           <div style="flex:1;min-width:0">
-            <div style="font-size:var(--fs-xs);font-weight:800;color:#7aa7d9;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">JOUR OFF <span style="font-size:var(--fs-xs);font-weight:600;color:#5a5a5a">repos</span></div>
+            <div style="font-size:var(--fs-xs);font-weight:800;color:#7aa7d9;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">JOUR OFF <span style="font-size:var(--fs-xs);font-weight:600;color:var(--text-dim)">repos</span></div>
             <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:22px;text-align:center;padding:11px 6px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:9px;color:#7aa7d9;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;box-shadow:inset 0 2px 7px rgba(0,0,0,.6),0 0 12px rgba(96,165,250,.1);text-shadow:0 0 10px rgba(96,165,250,.5)">
           </div>
         </div>
@@ -12166,7 +12179,7 @@ function loadSteps(containerId='steps-content'){
       <div style="position:relative">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:15px">
           <span style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Cette semaine</span>
-          <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:#5a5a5a"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--red);vertical-align:middle;box-shadow:0 0 6px rgba(224,32,32,.9)"></span> ON &nbsp;<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#60a5fa;vertical-align:middle;box-shadow:0 0 6px rgba(96,165,250,.8)"></span> OFF</span>
+          <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--text-dim)"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--red);vertical-align:middle;box-shadow:0 0 6px rgba(224,32,32,.9)"></span> ON &nbsp;<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#60a5fa;vertical-align:middle;box-shadow:0 0 6px rgba(96,165,250,.8)"></span> OFF</span>
         </div>
         <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:7px;border-bottom:1px solid rgba(255,255,255,.05)">${bars}</div>
         <div style="display:flex;gap:4px">${labels}</div>
@@ -12314,7 +12327,7 @@ function loadSleep(containerId='sleep-content'){
         <div style="font-family:'Bebas Neue',sans-serif;font-size:56px;line-height:.95;color:${weekAvg?avgColor:'rgba(255,255,255,.55)'};letter-spacing:1px;text-shadow:0 0 16px ${weekAvg?avgColor:'rgba(255,255,255,.4)'},0 0 34px ${weekAvg?avgColor+'66':'transparent'}">${weekAvg?weekAvg+'h':'—'}</div>
         <div style="font-size:11px;color:rgba(255,255,255,.55);margin-top:6px">heures / nuit &nbsp;·&nbsp; ${withData.length} / 7 nuits renseignées</div>
         <div style="margin-top:14px;display:flex;justify-content:center;gap:16px">
-          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">OPTIMAL</div><div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:#22c55e;margin-top:2px;text-shadow:0 0 11px rgba(34,197,94,.7)">7 – 9 h</div></div>
+          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">OPTIMAL</div><div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:var(--green);margin-top:2px;text-shadow:0 0 11px rgba(34,197,94,.7)">7 – 9 h</div></div>
           <div style="width:1px;background:rgba(255,255,255,.15)"></div>
           <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">TOTAL SEMAINE</div><div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:${weekTotal!=null?avgColor:'rgba(255,255,255,.5)'};margin-top:2px;text-shadow:0 0 11px ${weekTotal!=null?avgColor+'99':'transparent'}">${weekTotal!=null?weekTotal+'h':'—'}</div></div>
         </div>
@@ -12346,7 +12359,7 @@ function loadSleep(containerId='sleep-content'){
       <div style="position:relative">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:15px">
           <span style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Cette semaine</span>
-          <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:#5a5a5a"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#22c55e;vertical-align:middle;box-shadow:0 0 6px rgba(34,197,94,.9)"></span> 7-9H</span>
+          <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--text-dim)"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#22c55e;vertical-align:middle;box-shadow:0 0 6px rgba(34,197,94,.9)"></span> 7-9H</span>
         </div>
         <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:7px;border-bottom:1px solid rgba(255,255,255,.05)">${bars}</div>
         <div style="display:flex;gap:4px">${labels}</div>
@@ -12444,7 +12457,7 @@ function openPhotoFull(src,title){
   m.onclick=()=>m.remove();
   m.innerHTML=`<div style="font-size:var(--fs-xs);color:#888;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:12px">${escapeHtml(title)}</div>
     <img src="${escapeHtml(src)}" style="max-width:94vw;max-height:80vh;object-fit:contain;border-radius:8px">
-    <div style="font-size:11px;color:#444;margin-top:12px">Touche pour fermer</div>`;
+    <div style="font-size:11px;color:var(--text-dim);margin-top:12px">Touche pour fermer</div>`;
   document.body.appendChild(m);
 }
 
@@ -13326,7 +13339,7 @@ function showPdfSeancesModal(seances,targetEmail){
           <div style="font-size:11px;font-weight:800;letter-spacing:.5px">${escapeHtml(s.name)}</div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${s.exercises.length} exercice${s.exercises.length>1?'s':''} détecté${s.exercises.length>1?'s':''}</div>
         </div>
-        <div style="color:#444;font-size:14px;flex-shrink:0">▸</div>
+        <div style="color:var(--text-dim);font-size:14px;flex-shrink:0">▸</div>
       </div>
       <div style="display:none;border-top:1px solid var(--surface-2);padding:8px 14px 12px">
         ${s.exercises.map((ex,ei)=>`
@@ -13705,14 +13718,14 @@ function addCoachBannerRow(imageUrl, linkUrl){
   row.style.cssText='background:#0f0f1f;border:1px solid #2a2a4a;border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px';
   const previewHtml=imageUrl
     ?`<img src="${escapeHtml(imageUrl)}" style="width:100%;height:90px;object-fit:cover;border-radius:4px;display:block">`
-    :`<div style="height:90px;display:flex;align-items:center;justify-content:center;background:#0a0a1a;border-radius:4px;font-size:11px;color:#444">📷 Ajouter une photo</div>`;
+    :`<div style="height:90px;display:flex;align-items:center;justify-content:center;background:#0a0a1a;border-radius:4px;font-size:11px;color:var(--text-dim)">📷 Ajouter une photo</div>`;
   row.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between">
     <span style="font-size:var(--fs-xs);font-weight:800;color:var(--info);letter-spacing:1px">BANNIÈRE ${n}</span>
-    <button onclick="this.closest('.banner-row').remove()" style="background:none;border:none;color:#444;font-size:16px;cursor:pointer;line-height:1">✕</button>
+    <button onclick="this.closest('.banner-row').remove()" style="background:none;border:none;color:var(--text-dim);font-size:16px;cursor:pointer;line-height:1">✕</button>
   </div>
   <label style="cursor:pointer;display:block">
     <div class="banner-preview">${previewHtml}</div>
-    <div style="text-align:center;font-size:var(--fs-xs);color:#555;margin-top:4px;letter-spacing:1px">APPUYER POUR CHANGER LA PHOTO</div>
+    <div style="text-align:center;font-size:var(--fs-xs);color:var(--text-dim);margin-top:4px;letter-spacing:1px">APPUYER POUR CHANGER LA PHOTO</div>
     <input type="file" accept="image/*" style="display:none" onchange="handleBannerImage(this)">
   </label>
   <input type="url" placeholder="URL du lien au clic (https://…)" value="${escapeHtml(linkUrl||'')}" style="width:100%;font-size:12px;padding:8px 10px;box-sizing:border-box;border-radius:3px">`;
@@ -13818,7 +13831,7 @@ function _renderCoachPhonePreview(raw){
       ?'<span style="color:var(--orange)">⚠ Numéro sans indicatif pays — WhatsApp le refusera. Écris-le sous la forme +33612345678.</span>':'';
     return;
   }
-  el.innerHTML='→ Lien : <a href="https://wa.me/'+digits+'" target="_blank" rel="noopener" style="color:#22c55e;text-decoration:none">wa.me/'+digits+'</a>'+'<span style="margin-left:8px;color:#555">(tes athlètes verront ce bouton)</span>';
+  el.innerHTML='→ Lien : <a href="https://wa.me/'+digits+'" target="_blank" rel="noopener" style="color:var(--green);text-decoration:none">wa.me/'+digits+'</a>'+'<span style="margin-left:8px;color:var(--text-dim)">(tes athlètes verront ce bouton)</span>';
 }
 async function _cloudinaryUpload(file){
   const cloudName=currentUser.cloudinaryName||'dntu57ml';
