@@ -2436,14 +2436,24 @@ const COACH_PHOTO='icons/coach.jpg';
 
     <!-- Option 2: Autonomie -->
     <div style="border:2px solid var(--red);border-radius:16px;padding:20px;margin-bottom:16px;background:#0a0000;position:relative;overflow:hidden">
-      <div style="position:absolute;top:12px;right:12px;background:var(--red);color:#fff;font-size:var(--fs-xs);font-weight:800;padding:3px 8px;border-radius:20px;letter-spacing:1px">POPULAIRE</div>
+      <!-- Badge « POPULAIRE » retiré : rien ne le mesurait. L'app ne compte
+           nulle part la répartition des souscriptions entre les deux formules,
+           et l'offre n'a jamais eu qu'un seul palier — il n'y avait donc même
+           pas de quoi comparer. À réintroduire le jour où l'écran Monétisation
+           saura dire lequel des deux paliers domine réellement. -->
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
         <div style="width:48px;height:48px;border-radius:50%;background:var(--surface-2);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--red)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:32px;height:32px;display:inline-block;flex-shrink:0"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
         </div>
         <div>
-          <div style="font-weight:800;font-size:15px">Coaching en autonomie</div>
-          <div style="font-size:11px;color:var(--red);font-weight:700">9,95 € / mois</div>
+          <!-- « Coaching en autonomie » promettait un accompagnement humain que
+               ce mode ne delivre pas : personne ne suit l athlete ici. « Acces
+               autonome » ne promet que ce qui est livre, et aligne cet ecran sur
+               le vocabulaire deja employe ailleurs (« acces en autonomie », sur
+               l ecran d entree athlete et l ecran d acces requis).
+               Le prix quitte cette ligne : il vit dans le selecteur de palier. -->
+          <div style="font-weight:800;font-size:15px">Accès autonome</div>
+          <div style="font-size:11px;color:var(--sub)">L'app seule, sans coach</div>
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:16px;color:var(--green)">
@@ -2456,9 +2466,13 @@ const COACH_PHOTO='icons/coach.jpg';
 <span style="font-size:12px;color:#aaa">Sans engagement, tu arrêtes quand tu veux</span></div>
       </div>
       <div style="width:36px;height:2px;background:var(--red);margin-bottom:16px"></div>
+      <!-- Sélecteur de palier — rempli par _renderSubPaliers(). Rendu en JS et
+           non en dur, parce que le nombre de paliers dépend de l'existence du
+           plan annuel côté PayPal. -->
+      <div id="sub-paliers" style="display:flex;gap:10px;margin-bottom:16px"></div>
       <div id="sub-pending-info" style="display:none"></div>
       <div id="paypal-btn-container" style="min-height:48px">
-        <button class="btn btn-red" onclick="initPaypalSubscription()" id="paypal-loading-btn">Souscrire pour 9,95€/mois →</button>
+        <button class="btn btn-red" onclick="initPaypalSubscription()" id="paypal-loading-btn">Souscrire</button>
       </div>
       <div style="margin-top:14px;text-align:center">
         <div style="display:inline-flex;align-items:center;gap:10px;border:1px solid #1a2a4a;border-radius:10px;padding:8px 16px;background:#060e1a">
@@ -2476,7 +2490,7 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
     </div>
 
-    <p class="sub" style="font-size:11px;text-align:center;line-height:1.6">Tu as déjà acheté un programme ? Inscris-toi ici pour accéder à toutes les fonctionnalités de coaching en autonomie.</p>
+    <p class="sub" style="font-size:11px;text-align:center;line-height:1.6">Tu as déjà acheté un programme ? Inscris-toi ici pour accéder à l'app en autonomie.</p>
   </div>
 </div>
 
@@ -2535,6 +2549,29 @@ const APP_BASE_URL=(()=>{
 //   Ces valeurs sont fixes et centralisées : aucun coach tiers ne peut les modifier.
 const PAYPAL_CLIENT_ID='AS9pdM1fxqdyzKzvuiQB3mTPAIHZW12rW_KWAOKB8XkalJXV8kEyWWBzwHPUxCBZtMMzqjJNnAjfa1f1';
 const PAYPAL_PLAN_ID='P-95N51603RD882780YNJKS2QA';
+// Palier annuel — 99 EUR/an, soit 17 % de moins que 12 × 9,95.
+// VIDE TANT QUE LE PLAN N'EST PAS CRÉÉ SUR PAYPAL. Un identifiant ne s'invente
+// pas : tant que cette constante est vide, l'offre annuelle n'est PAS proposée
+// du tout, et l'écran retombe sur le seul mensuel. Mieux vaut une offre de
+// moins qu'un bouton qui échoue au moment de payer.
+// Pour l'activer : developer.paypal.com → Billing Plans → créer un plan
+// « RepCore Annuel », 99,00 EUR, cycle ANNUAL, puis coller l'ID ci-dessous.
+// Rien d'autre à modifier : l'écran s'adapte tout seul.
+const PAYPAL_PLAN_ID_ANNUEL='';
+// Les deux paliers, dans l'ordre d'affichage. `dispo` est ce qui décide de
+// montrer ou non une carte : il n'y a pas d'état « bientôt disponible ».
+const SUB_PALIERS=[
+  {cle:'annuel', titre:'Annuel', prix:'99'+' €', periode:'par an',
+   detail:'soit 8,25 € / mois', econ:'Économise 20,40 €', remise:'−17 %',
+   planId:()=>PAYPAL_PLAN_ID_ANNUEL},
+  {cle:'mensuel', titre:'Mensuel', prix:'9,95'+' €', periode:'par mois',
+   detail:'119,40 € sur un an', econ:'', remise:'',
+   planId:()=>PAYPAL_PLAN_ID},
+];
+function _paliersDispo(){return SUB_PALIERS.filter(p=>!!p.planId());}
+// Palier retenu. L'annuel est pré-sélectionné quand il existe ; sinon le
+// premier disponible, pour qu'aucun état ne laisse la sélection vide.
+let _subPalier=null;
 // ── Système d'icônes SVG inline (style Lucide / Feather) ─────────────────────
 const ICONS={
   home:'<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
@@ -13814,12 +13851,69 @@ function goRegisterPourSouscrire(){
   go('s-register');selectRole('athlete');
 }
 // ═══════════════════════════════════════════════════
+// ── Paliers d'abonnement : rendu et sélection ───────────────────────────────
+// Un seul palier disponible : on n'affiche aucun sélecteur, seulement le prix.
+// Proposer un « choix » entre une option et rien serait du décor.
+function _renderSubPaliers(){
+  const zone=document.getElementById('sub-paliers');
+  if(!zone) return;
+  const dispo=_paliersDispo();
+  if(!dispo.length){zone.innerHTML='';return;}
+  // Le palier retenu doit toujours exister : si l'annuel disparaît (constante
+  // vidée) alors qu'il était sélectionné, on retombe sur le premier disponible.
+  if(!_subPalier||!dispo.some(p=>p.cle===_subPalier)) _subPalier=dispo[0].cle;
+  if(dispo.length===1){
+    const p=dispo[0];
+    zone.innerHTML='<div style="font-size:22px;font-weight:900;color:var(--red);line-height:1">'
+      +escapeHtml(p.prix)+'<span style="font-size:12px;color:var(--sub);font-weight:600"> '
+      +escapeHtml(p.periode)+'</span></div>';
+    return;
+  }
+  zone.innerHTML=dispo.map(p=>{
+    const sel=p.cle===_subPalier;
+    return `<div onclick="_choisirPalier('${p.cle}')" role="button" tabindex="0"
+      onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
+      style="flex:1;position:relative;cursor:pointer;border:2px solid ${sel?'var(--red)':'#2a2a2a'};
+      background:${sel?'rgba(224,32,32,.08)':'transparent'};border-radius:12px;padding:14px 12px;
+      text-align:center;transition:.15s;min-height:44px">
+      ${p.remise?`<div style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);
+        background:var(--green);color:#04210d;font-size:var(--fs-xs);font-weight:900;
+        padding:2px 8px;border-radius:20px;letter-spacing:.5px;white-space:nowrap">${escapeHtml(p.remise)}</div>`:''}
+      <div style="font-size:var(--fs-xs);color:${sel?'var(--red)':'var(--sub)'};font-weight:800;
+        text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">${escapeHtml(p.titre)}</div>
+      <div style="font-size:20px;font-weight:900;color:#fff;line-height:1">${escapeHtml(p.prix)}</div>
+      <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:3px">${escapeHtml(p.periode)}</div>
+      <div style="font-size:var(--fs-xs);color:${p.econ?'var(--green)':'var(--sub)'};margin-top:6px;
+        font-weight:${p.econ?'800':'400'}">${escapeHtml(p.econ||p.detail)}</div>
+    </div>`;
+  }).join('');
+}
+function _choisirPalier(cle){
+  _subPalier=cle;
+  _renderSubPaliers();
+  _majBoutonSouscrire();
+}
+// Le libellé du bouton suit la sélection : il doit annoncer exactement ce qui
+// sera débité, sans quoi l'athlète découvre le montant sur l'écran PayPal.
+function _majBoutonSouscrire(){
+  const b=document.getElementById('paypal-loading-btn');
+  if(!b) return;
+  const p=_paliersDispo().find(x=>x.cle===_subPalier)||_paliersDispo()[0];
+  if(p) b.textContent='Souscrire pour '+p.prix+' '+p.periode+' →';
+}
+function _planIdChoisi(){
+  const p=_paliersDispo().find(x=>x.cle===_subPalier)||_paliersDispo()[0];
+  return p?p.planId():'';
+}
 function loadSubscribePage(mode,payload){
   // L'écran est atteignable sans compte : c'est justement là que le prix doit
   // être visible avant toute inscription. Mais PayPal ne peut pas être lancé
   // dans cet état — onApprove écrit dans currentUser, qui vaut null. On propose
   // donc la création de compte, et l'abonnement se souscrit juste après.
   const _pp=document.getElementById('paypal-btn-container');
+  // Les paliers sont rendus AVANT le test de connexion : le prix doit être
+  // visible même sans compte, c'est justement le rôle de cet écran.
+  _renderSubPaliers();
   if(!currentUser){
     // goRegisterPourSouscrire pose l'intention de retour : après création du
     // compte, doRegister ramène ici au lieu d'envoyer vers l'écran de code.
@@ -13831,14 +13925,16 @@ function loadSubscribePage(mode,payload){
     if(_pi) _pi.style.display='none';
     return;
   }
-  _pp.innerHTML='<button class="btn btn-red" onclick="initPaypalSubscription()" id="paypal-loading-btn">Souscrire pour 9,95€/mois →</button>';
+  _pp.innerHTML='<button class="btn btn-red" onclick="initPaypalSubscription()" id="paypal-loading-btn">Souscrire</button>';
+  // Ecrit apres l insertion : le bouton doit exister pour recevoir son libelle.
+  _majBoutonSouscrire();
   const codeOpt=document.getElementById('sub-code-option');
   const pendingInfo=document.getElementById('sub-pending-info');
   if(mode==='pending-code'&&payload){
     if(codeOpt) codeOpt.style.display='none';
     if(pendingInfo){
       pendingInfo.style.display='';
-      pendingInfo.innerHTML='<div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:12px;padding:14px;margin-bottom:14px;font-size:12px;line-height:1.7">Code de <strong>'+(payload.coachName||'ton coach')+'</strong> reconnu ✓<br><br>Pour finaliser ton accès à l\'app, souscris à l\'abonnement à <strong>9,95€/mois</strong> ci-dessous.</div>';
+      pendingInfo.innerHTML='<div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:12px;padding:14px;margin-bottom:14px;font-size:12px;line-height:1.7">Code de <strong>'+(payload.coachName||'ton coach')+'</strong> reconnu ✓<br><br>Pour finaliser ton accès à l\'app, souscris à l\'abonnement ci-dessous.</div>';
     }
   } else {
     if(codeOpt) codeOpt.style.display='';
@@ -13855,7 +13951,9 @@ function initPaypalSubscription(){
     return;
   }
   const clientId=PAYPAL_CLIENT_ID;
-  const planId=PAYPAL_PLAN_ID;
+  // Le plan facture est celui que l athlete a choisi a l ecran, jamais une
+  // constante figee : sans cela, selectionner l annuel debiterait le mensuel.
+  const planId=_planIdChoisi()||PAYPAL_PLAN_ID;
   const coachId=CREATOR_EMAIL;
   const _ppCon=document.getElementById('paypal-btn-container');
   if(_ppCon) _ppCon.innerHTML='<div class="skeleton" style="height:55px;border-radius:8px"></div>';
