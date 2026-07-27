@@ -4912,10 +4912,17 @@ function openClientDetail(cid,_refresh){
     be.innerHTML=c.bilans.slice(-3).reverse().map(b=>{
       const bw=getBW(b)||0,bWaist=getBM(b,'waist')||0,bNeck=getBM(b,'neck')||0,bHips=getBM(b,'hips')||0;
       const bfPct=calcBF(bWaist,bNeck,bHips,parseFloat(c._evol_height||c['init-height']||c['deb-height']||0),c.gender||'H');
+      // Citation sous les chiffres. Elle s'appuyait sur bil-ressenti, question
+      // retirée du questionnaire en v234 : la ligne ne s'affichait donc JAMAIS
+      // sur un bilan récent, et le coach ne voyait que des mensurations.
+      // Par ordre d'utilité pour lui : ce que l'athlète demande de changer,
+      // puis ce qui l'a bloqué, puis l'ancien champ pour les bilans d'archive.
+      const _cit=[b['bil-prog-modifs'],b['bil-diff-detail'],b['bil-ressenti']]
+        .map(v=>v==null?'':String(v).trim()).find(Boolean)||'';
       return `<div class="card" style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700">${new Date(b.date).toLocaleDateString('fr-FR')}</span><span class="badge ${b.date>_oldSeen?'badge-orange':'badge-green'}">${b.date>_oldSeen?'Nouveau ✦':'Complété'}</span></div>
       <div style="display:flex;gap:16px;flex-wrap:wrap"><span class="sub">Poids: <strong style="color:#fff">${bw||'—'}kg</strong></span><span class="sub">MG: <strong style="color:#fff">${bfPct!==null?bfPct+'%':'—'}</strong></span><span class="sub">Taille: <strong style="color:#fff">${bWaist||'—'}cm</strong></span></div>
-      ${b['bil-ressenti']?`<div style="margin-top:8px;font-size:11px;color:var(--sub);font-style:italic">"${escapeHtml(String(b['bil-ressenti']).slice(0,80))}"</div>`:''}
+      ${_cit?`<div style="margin-top:8px;font-size:11px;color:var(--sub);font-style:italic">"${escapeHtml(_cit.slice(0,80))}"</div>`:''}
     </div>`}).join('');
   }
   // Section vidéos
@@ -8984,20 +8991,37 @@ function showProgressTab(tab,btn){
     c.querySelectorAll('[data-scroll-fade]').forEach(el=>setupScrollFade(el));
   } else if(tab==='notes'){
     if(!bl.length){c.innerHTML=emptyState('clipboard','Aucun bilan enregistré.');return;}
+    // Ordre d'affichage des réponses de bilan. Deux blocs, et la distinction
+    // compte : le premier liste ce que le questionnaire demande AUJOURD'HUI,
+    // le second des questions retirées depuis, dont les réponses dorment
+    // encore dans les bilans déjà enregistrés.
     const bilQ=[
-      {k:'bil-ressenti',lbl:'Ressenti évolution',emoji:'💭'},
+      // ── Questions posées par le bilan actuel ──────────────────────────────
       {k:'bil-motivation',lbl:'Motivation',emoji:'🔥'},
       {k:'bil-diff-type',lbl:'Difficultés',emoji:'⚠️'},
       {k:'bil-diff-detail',lbl:'Détail difficultés',emoji:'📝'},
       {k:'bil-cheat-meals',lbl:'Cheat meals',emoji:'🍕'},
       {k:'bil-cheat-reasons',lbl:'Raisons écarts',emoji:'💬'},
+      // Ces deux-là étaient collectées mais n'étaient affichées NULLE PART :
+      // l'athlète écrivait ses demandes de modification de programme, et
+      // personne ne les lisait jamais.
+      {k:'bil-prog-modifs',lbl:'Modifications demandées',emoji:'🏋️'},
       {k:'bil-sleep-quality',lbl:'Qualité du sommeil',emoji:'😴'},
       {k:'bil-stress',lbl:'Niveau de stress',emoji:'😤'},
       {k:'bil-stress-detail',lbl:'Source du stress',emoji:'📌'},
-      {k:'bil-goals-next',lbl:'Objectifs à venir',emoji:'🎯'},
+      {k:'bil-new-goals',lbl:'Nouveaux objectifs ?',emoji:'🎯'},
       {k:'bil-new-goals-detail',lbl:'Nouveaux objectifs',emoji:'🚀'},
-      {k:'bil-exo-change',lbl:'Changements programme',emoji:'🏋️'},
-      {k:'bil-exo-detail',lbl:'Exercices à modifier',emoji:'✏️'},
+      // ── Questions RETIREES du questionnaire, conservées à l'affichage ─────
+      // Elles ne sont plus posées — bil-ressenti / bil-exo-* ont disparu en
+      // v234 (cee88c6), bil-goals-next en v235 (4aa7dff) — mais elles ont été
+      // réellement remplies avant ça. Les retirer d'ici n'aurait effacé aucune
+      // donnée, seulement le seul écran qui sait encore les montrer.
+      // Aucun coût pour les bilans récents : une valeur absente n'affiche rien.
+      // A supprimer le jour où plus aucun bilan antérieur à v235 ne circule.
+      {k:'bil-ressenti',lbl:'Ressenti évolution (archivé)',emoji:'💭'},
+      {k:'bil-goals-next',lbl:'Objectifs à venir (archivé)',emoji:'🎯'},
+      {k:'bil-exo-change',lbl:'Changements programme (archivé)',emoji:'🏋️'},
+      {k:'bil-exo-detail',lbl:'Exercices à modifier (archivé)',emoji:'✏️'},
     ];
     c.innerHTML=bl.slice().reverse().map((b,ri)=>{
       const i=bl.length-1-ri;
@@ -9005,8 +9029,12 @@ function showProgressTab(tab,btn){
       const w=getBW(b);
       const answers=bilQ.map(q=>{
         const val=b[q.k];
-        if(!val) return '';
-        const txt=Array.isArray(val)?val.join(', '):String(val);
+        if(val==null||val==='') return '';
+        // Le test sur la seule valeur ne suffit pas : un tableau vide est
+        // truthy et produisait une ligne titrée sans rien dessous. On juge
+        // le texte effectivement rendu.
+        const txt=(Array.isArray(val)?val.join(', '):String(val)).trim();
+        if(!txt) return '';
         return `<div style="padding:8px 0;border-bottom:1px solid #141414">
           <div style="font-size:var(--fs-xs);color:var(--sub);font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">${q.emoji} ${q.lbl}</div>
           <div style="font-size:12px;color:#ddd;line-height:1.5">${escapeHtml(txt)}</div>
