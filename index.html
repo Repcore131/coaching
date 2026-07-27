@@ -5893,13 +5893,25 @@ function openCoachSessions(){
   if(c._fromCode){toast('Cet athlète n\'a pas encore créé son compte.','var(--orange)');return;}
   _coachEditClient=JSON.parse(JSON.stringify(c));
   const sc=_coachEditClient.sessions_config;
-  const g=_coachEditClient._evol_gender;
+  // _evol_gender n'existe qu'à partir du premier bilan. Un athlète créé par le
+  // coach porte son genre dans .gender et rien d'autre : lu seul, _evol_gender
+  // valait undefined, aucune Fondation ne correspondait, et le coach héritait
+  // de la liste générique defEx pour une athlète femme. On retombe donc sur
+  // .gender, via isFemale qui absorbe les conventions historiques
+  // ('F', 'f', 'femme'). g sert AUSSI au test de migration plus bas : la
+  // normalisation profite aux deux.
+  const _gBrut=_coachEditClient._evol_gender||_coachEditClient.gender;
+  const g=isFemale(_gBrut)?'F':(_gBrut?'H':null);
   // Init sessions_config si absent
   if(!_coachEditClient.sessions_config){
     const base=g==='F'?FONDATION_F:g==='H'?FONDATION_H:null;
     _coachEditClient.sessions_config=base
       ?base.map(s=>({...s,exercises:s.exercises.map(e=>({...e}))}))
-      :DAYS.map((day,i)=>({day,name:'',photo:null,photo2:null,exercises:i<5?defEx.map(e=>({...e})):[],active:i<5,notes:'',warmup:''}));
+      // Genre réellement inconnu : sept jours VIDES et INACTIFS. defEx était un
+      // programme arbitraire — « DOS & ABDOS », cinq jours actifs — que
+      // personne n'avait choisi et que le coach devait d'abord défaire. Une
+      // grille vide dit la vérité : il n'y a pas encore de programme.
+      :DAYS.map(day=>({day,name:'',photo:null,photo2:null,exercises:[],active:false,notes:'',warmup:''}));
   }
   // Migration vers Fondation si genre connu et séances non personnalisées
   if((g==='H'||g==='F')&&sc&&!sc.some(s=>s._foundation)){
