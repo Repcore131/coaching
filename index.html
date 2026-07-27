@@ -8452,6 +8452,17 @@ function isBilanNotifDay(){
   const cycle=freq*7*24*3600*1000;
   return Math.round(diff/cycle)*cycle===diff;
 }
+// ── Notifications : disponibilité, testée partout avant usage ──────────────
+// Safari iOS n'expose Notification QUE dans une PWA installée : dans un onglet,
+// l'identifiant n'existe pas du tout, et le lire lève un ReferenceError — pas
+// un `undefined`. Un `if(Notification.permission==='granted')` casse donc la
+// fonction entière, et avec elle la bannière in-app qui, elle, marcherait très
+// bien. Un helper unique plutôt que six tests inline, qui divergeaient déjà.
+function _notifSupported(){return typeof window!=='undefined' && 'Notification' in window;}
+// Message des chemins déclenchés par l'utilisateur : dire pourquoi ça ne marche
+// pas ET quoi faire. « Non supportées » laissait croire à une impasse alors que
+// l'installation sur l'écran d'accueil suffit.
+const _NOTIF_INDISPO="Les notifications ne sont pas disponibles sur ce navigateur — installe RepCore sur ton écran d'accueil.";
 function checkBilanNotifToday(){
   if(!currentUser||currentUser.role!=='athlete') return;
   if(!(currentUser.bilans||[]).length) return;
@@ -8460,7 +8471,11 @@ function checkBilanNotifToday(){
   if(currentUser._lastBilanNotif===todayStr) return; // déjà montré
   currentUser._lastBilanNotif=todayStr;saveUser();
   showBilanNotifBanner();
-  if(Notification.permission==='granted'){
+  // La bannière in-app est déjà posée : le garde ne couvre QUE la notification
+  // système. Sur un iPhone en onglet, l'athlète voit donc son rappel malgré
+  // tout — avant, la ligne suivante jetait et la bannière restait, mais tout ce
+  // qui suivait dans le cycle de démarrage sautait avec elle.
+  if(_notifSupported()&&Notification.permission==='granted'){
     navigator.serviceWorker.ready.then(reg=>reg.showNotification('RepCore — Bilan bimensuel 📊',{
       body:"C'est le moment de remplir ton bilan coaching ! Suis ton évolution 📈",
       icon:'./icons/icon-192x192.png',badge:'./icons/icon-192x192.png',
@@ -8502,9 +8517,7 @@ async function scheduleSwNotif(){
   }catch(e){}
 }
 function requestBilanNotifPermission(){
-  if(!('Notification' in window)){
-    toast('️ Notifications non supportées par ce navigateur');return;
-  }
+  if(!_notifSupported()){toast(_NOTIF_INDISPO,'var(--orange)');return;}
   if(Notification.permission==='granted'){
     currentUser._notifEnabled=true;saveUser();
     scheduleSwNotif();scheduleSuppNotif();
@@ -8524,7 +8537,8 @@ function requestBilanNotifPermission(){
   });
 }
 function showBilanNotifPrompt(){
-  if(!('Notification' in window)||Notification.permission==='granted'||Notification.permission==='denied') return;
+  // Invite automatique : pas de toast ici, l'utilisateur n'a rien demandé.
+  if(!_notifSupported()||Notification.permission==='granted'||Notification.permission==='denied') return;
   const existing=document.getElementById('notif-perm-modal');if(existing) return;
   const m=document.createElement('div');
   m.id='notif-perm-modal';
@@ -8611,7 +8625,9 @@ function checkWoReminderToday(){
   if(currentUser._lastWoNotif===todayStr)return;
   currentUser._lastWoNotif=todayStr;saveUser();
   showWoReminderBanner();
-  if(Notification.permission==='granted'){
+  // Même partage qu'au rappel de bilan : la bannière d'abord, la notification
+  // système seulement si le navigateur la propose.
+  if(_notifSupported()&&Notification.permission==='granted'){
     navigator.serviceWorker.ready.then(reg=>reg.showNotification('RepCore — Séance du jour 💪',{
       body:"C'est l'heure de t'entraîner ! Lance ta séance maintenant.",
       icon:'./icons/icon-192x192.png',badge:'./icons/icon-192x192.png',
@@ -8704,7 +8720,7 @@ async function saveWoReminderConfig(){
     document.getElementById('wo-reminder-config')?.remove();
     renderWoReminderCard();
   };
-  if(!('Notification' in window)){toast('Notifications non supportées','var(--orange)');return;}
+  if(!_notifSupported()){toast(_NOTIF_INDISPO,'var(--orange)');return;}
   if(Notification.permission==='granted'){await doSave();return;}
   if(Notification.permission==='denied'){toast('Notifications bloquées — autorise-les dans les réglages du navigateur','var(--orange)');return;}
   const p=await Notification.requestPermission();
