@@ -6814,7 +6814,7 @@ function renderNotifs(){
     // Un jour de repos prévu au programme n'est pas un oubli : on ne s'alarme
     // qu'au-delà de l'intervalle normal entre deux séances actives. Avec 3
     // séances par semaine l'intervalle vaut 3 jours, plus 1 de marge.
-    const ecartNormal=Math.ceil(7/seancesPrevuesParSemaine(currentUser))+1;
+    const ecartNormal=ecartNormalJours(currentUser);
     if(days>ecartNormal) notifs.push({icon:'',msg:`${days} jours sans séance. Reprends le rythme !`,c:'var(--orange)'});
   }
   const _sem=streakSemaines(currentUser);
@@ -8006,17 +8006,42 @@ function savePostSession(){
 // Un programme Lundi/Mercredi/Vendredi laisse toujours 2 jours d'écart : un
 // athlète parfaitement assidu voyait donc son compteur retomber à 1 à chaque
 // séance. Une semaine est acquise quand le nombre de séances prévues au
-// programme a été réalisé ; elle n'est perdue qu'après une semaine calendaire
-// entièrement vide.
+// programme a été réalisé ; elle n'est perdue qu'après une absence dépassant
+// d'une semaine pleine le rythme normal de l'athlète (voir _streakPerime).
 function _lundiDe(d){
   const x=new Date(d);x.setHours(0,0,0,0);
   x.setDate(x.getDate()-((x.getDay()+6)%7));   // même formule que renderNutriDots
   return x;
 }
-function _semainesEntre(a,b){return Math.round((_lundiDe(b)-_lundiDe(a))/(7*864e5));}
 // Nombre de séances actives au programme — le quota hebdomadaire à atteindre.
 function seancesPrevuesParSemaine(u){
   return Math.max(1,((u&&u.sessions_config)||[]).filter(s=>s&&s.active).length);
+}
+// Écart normal entre deux séances, en jours, plus un jour de marge. Avec 3
+// séances par semaine l'intervalle vaut 3 jours, donc 4 avec la marge. Même
+// notion que la relance « X jours sans séance » de loadClientHome, qui la
+// recalculait de son côté : une seule définition désormais.
+function ecartNormalJours(u){
+  return Math.ceil(7/seancesPrevuesParSemaine(u))+1;
+}
+// Un streak est périmé quand l'absence dépasse d'une SEMAINE PLEINE le rythme
+// normal de l'athlète. Le seuil dépend donc de la durée réelle d'absence et du
+// rythme, et de rien d'autre.
+//
+// L'ancienne règle comparait le lundi de la semaine de la dernière séance à
+// celui de la semaine courante, et périmait à partir de deux semaines d'écart.
+// Mesuré : pour un même athlète à 3 séances/semaine, le compteur tombait à
+// partir de 8 jours d'absence si la dernière séance était un lundi, mais
+// seulement à partir de 14 si c'était un dimanche — un escalier de 8 à 14 jours
+// selon le jour de la semaine. Pire, la règle s'inversait : 8 jours d'absence
+// remettaient à zéro, 13 jours conservaient le compteur intact.
+//
+// La calibration sur le rythme est nécessaire : un athlète qui s'entraîne une
+// fois par semaine ne doit pas être jugé comme celui qui s'entraîne cinq fois.
+function _streakPerime(u,now){
+  if(!u||!u.lastSession) return false;
+  const jours=Math.floor((now-u.lastSession)/864e5);
+  return jours>ecartNormalJours(u)+7;
 }
 // Valeur à AFFICHER. Le compteur stocké ne bouge qu'à la fin d'une séance ;
 // sans ce calcul, un athlète à l'arrêt depuis un mois verrait encore son
@@ -8024,12 +8049,13 @@ function seancesPrevuesParSemaine(u){
 function streakSemaines(u){
   const s=(u&&u.streak)||0;
   if(!s||!u.lastSession) return s;
-  return _semainesEntre(u.lastSession,Date.now())>=2 ? 0 : s;
+  return _streakPerime(u,Date.now()) ? 0 : s;
 }
 function updateStreak(){
   const now=Date.now();
-  // Une semaine calendaire complète sans aucune séance remet le compteur à zéro.
-  if(currentUser.lastSession&&_semainesEntre(currentUser.lastSession,now)>=2){
+  // Même prédicat que l'affichage : la valeur stockée et la valeur montrée ne
+  // peuvent pas diverger.
+  if(_streakPerime(currentUser,now)){
     currentUser.streak=0;currentUser.streakWeek=null;
   }
   const quota=seancesPrevuesParSemaine(currentUser);
