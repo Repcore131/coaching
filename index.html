@@ -790,6 +790,9 @@ const COACH_PHOTO='icons/coach.jpg';
     <div style="display:flex;align-items:flex-start;gap:10px;margin-top:4px;padding:12px;background:var(--card2);border:1px solid var(--border);border-radius:8px">
       <input type="checkbox" id="r-rgpd" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
       <label for="r-rgpd" style="font-size:12px;color:var(--sub);line-height:1.6;cursor:pointer">J'ai lu et j'accepte la <a href="./privacy.html" target="_blank" rel="noopener" style="color:var(--red);text-decoration:underline;font-weight:600">politique de confidentialité</a> et je consens explicitement au traitement de mes données de santé (âge, taille, poids, mensurations, photos et vidéos, problèmes de santé et blessures, allergies, troubles alimentaires, alimentation, sommeil, stress, caféine, compléments, pas quotidiens, entraînement et, si je choisis de les renseigner, cycle menstruel) dans le cadre de mon suivi sportif.</label>
+    <div style="font-size:11px;color:var(--sub);margin-top:6px">
+      <a href="./legal.html" target="_blank" rel="noopener" style="color:var(--sub);text-decoration:underline">Mentions légales</a>
+    </div>
     </div>
     <!-- Rappel de l'invitation portée depuis l'écran coach : sans ce repère,
          le coach ne voit nulle part que son code a bien été pris en compte. -->
@@ -878,6 +881,13 @@ const COACH_PHOTO='icons/coach.jpg';
     <div style="padding:16px">
       <button onclick="showCoachCode()" style="width:100%;background:var(--card2);border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:9px;font-family:Montserrat,sans-serif;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:1px;margin-bottom:8px">MON CODE</button>
       <button onclick="logout()" style="width:100%;background:none;border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:9px;font-family:Montserrat,sans-serif;font-size:10px;cursor:pointer">DÉCONNEXION</button>
+      <!-- Pied coach : la barre latérale est visible depuis tout le tableau de
+           bord, le lien est donc à un clic une fois connecté. -->
+      <div style="margin-top:12px;font-size:10px;color:#444;text-align:center;line-height:1.9">
+        <a href="./legal.html" target="_blank" rel="noopener" style="color:#555;text-decoration:underline">Mentions légales</a>
+        &nbsp;·&nbsp;
+        <a href="./privacy.html" target="_blank" rel="noopener" style="color:#555;text-decoration:underline">Confidentialité</a>
+      </div>
     </div>
   </div>
 
@@ -1145,6 +1155,15 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
 
       </div>
+    </div>
+
+    <!-- Pied légal du tableau de bord coach. Il est ICI et non dans
+         #ch-sidebar : celle-ci est en display:none sous 900 px, donc sur
+         mobile — la plateforme réelle — le coach ne verrait jamais le lien. -->
+    <div style="flex-shrink:0;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));border-top:1px solid #141414;background:#080808;text-align:center;font-size:10px;color:#444;line-height:1.9">
+      <a href="./legal.html" target="_blank" rel="noopener" style="color:#666;text-decoration:underline">Mentions légales</a>
+      &nbsp;·&nbsp;
+      <a href="./privacy.html" target="_blank" rel="noopener" style="color:#666;text-decoration:underline">Confidentialité</a>
     </div>
 
   </div><!-- end #ch-main-area -->
@@ -1643,6 +1662,13 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);text-align:center">
         <button onclick="logout()" style="background:none;border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:10px 24px;font-family:Montserrat,sans-serif;font-size:10px;font-weight:700;cursor:pointer;letter-spacing:1.5px">DÉCONNEXION</button>
+        <!-- Pied athlète : deux clics depuis n'importe quel écran connecté —
+             l'avatar de l'accueil ouvre ce profil, ce lien ouvre la page. -->
+        <div style="margin-top:14px;font-size:11px;color:#555;line-height:1.9">
+          <a href="./legal.html" target="_blank" rel="noopener" style="color:#666;text-decoration:underline">Mentions légales</a>
+          &nbsp;·&nbsp;
+          <a href="./privacy.html" target="_blank" rel="noopener" style="color:#666;text-decoration:underline">Confidentialité</a>
+        </div>
       </div>
     </div>
   </div>
