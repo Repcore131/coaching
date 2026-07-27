@@ -173,6 +173,14 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
 .tab-btn.active svg{filter:drop-shadow(0 0 6px rgba(224,32,32,.8))}
 .tab-btn.active::after{content:'';position:absolute;top:0;left:20%;right:20%;height:2px;background:var(--red)}
 .tab-btn svg{width:19px;height:19px}
+/* Pastille « il y a du nouveau ». Calee sur le coin haut-droit du pictogramme
+   (19px, centre dans le bouton) et non du bouton : sur un bouton large elle
+   aurait flotte loin de l'icone. Le lisere sombre la detache du fond de barre.
+   pointer-events:none pour qu'elle n'intercepte jamais le tap sur l'onglet. */
+.tab-dot{position:absolute;top:3px;left:calc(50% + 5px);width:9px;height:9px;
+  border-radius:50%;background:var(--red);border:1.5px solid #0c0c0c;
+  box-shadow:0 0 6px rgba(224,32,32,.9);display:none;pointer-events:none}
+.tab-dot.on{display:block}
 /* La barre d'onglets athlete vivait DANS #s-client-home : elle disparaissait
    donc des que l'athlete ouvrait Nutrition ou Videos, et passer de l'un a
    l'autre imposait un detour par l'accueil (2 taps). Sortie des ecrans et
@@ -2409,7 +2417,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <button class="tab-btn" data-tab="home" data-icon="home" onclick="clientTab('home')">Accueil</button>
   <button class="tab-btn" data-tab="bilan" data-icon="chart-bar" onclick="clientTab('bilan')">Bilan</button>
   <button class="tab-btn" data-tab="nutrition" data-icon="utensils" onclick="clientTab('nutrition')">Nutrition</button>
-  <button class="tab-btn" data-tab="videos" data-icon="video" onclick="clientTab('videos')">Vidéos</button>
+  <button class="tab-btn" data-tab="videos" data-icon="video" onclick="clientTab('videos')"><span class="tab-dot" aria-hidden="true"></span>Vidéos</button>
   <button class="tab-btn" data-tab="lifestyle" data-icon="user" onclick="clientTab('lifestyle')">Lifestyle</button>
   <button class="tab-btn" data-tab="evolution" data-icon="trending-up" onclick="clientTab('evolution')">Évolution</button>
 </div>
@@ -3857,6 +3865,14 @@ window.onload=()=>{
         // Rafraîchir currentUser
         const u2=(DB.get('users')||{})[currentUser.email];
         if(u2){currentUser=u2;DB.set('session',currentUser);}
+        // La correction du coach vient d'atterrir dans le dossier de l'athlète.
+        // Les trois couches sont remises à jour dans la foulée : notification
+        // système, pastille d'onglet, et liste d'accueil si elle est à l'écran.
+        if(currentUser.role==='athlete'){
+          checkFeedbackNotif();
+          _majPastilleVideos();
+          if(document.getElementById('s-client-home')?.classList.contains('active')) renderNotifs();
+        }
         // Coach : rafraîchir dashboard et fiche athlète
         if(currentUser.role==='coach'&&document.getElementById('s-coach-home')?.classList.contains('active')){
           loadCoachHome();
@@ -4012,6 +4028,26 @@ function _majHauteurTabbar(){
   if(cache){b.classList.remove('show');b.style.visibility='';}
   if(h>0) document.documentElement.style.setProperty('--tabbar-h',h+'px');
 }
+// Retours coach pas encore consultés. `=== false` est STRICT et volontaire :
+// une vidéo corrigée avant l'arrivée de ce champ vaut undefined et n'est donc
+// pas comptée. Sans cela, la mise à jour aurait ressorti d'un coup toutes les
+// anciennes corrections comme si elles venaient d'arriver.
+// Source unique : la notification d'accueil, la pastille d'onglet et le
+// marquage à la lecture comptent tous la même chose.
+function feedbacksNonVus(u){
+  return ((u&&u.videos)||[]).filter(v=>v&&v.feedbackSeen===false);
+}
+// Pastille rouge sur l'onglet Vidéos. Le libellé accessible est mis à jour en
+// même temps : une pastille seule n'est perceptible que visuellement.
+function _majPastilleVideos(){
+  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="videos"]');
+  if(!btn) return;
+  const dot=btn.querySelector('.tab-dot');
+  const n=feedbacksNonVus(currentUser).length;
+  if(dot) dot.classList.toggle('on',n>0);
+  if(n>0) btn.setAttribute('aria-label','Vidéos — '+n+' retour'+(n>1?'s':'')+' du coach à consulter');
+  else btn.removeAttribute('aria-label');
+}
 function _majTabbar(id){
   const bar=document.getElementById('client-tabbar');
   if(!bar) return;
@@ -4034,6 +4070,9 @@ function _majTabbar(id){
     if(actif) b.setAttribute('aria-current','page');
     else b.removeAttribute('aria-current');
   });
+  // À chaque navigation : la pastille suit l'état réel des retours non vus,
+  // qu'ils viennent d'arriver par la synchro ou d'être consultés à l'instant.
+  _majPastilleVideos();
 }
 function go(id){
   const _safe=['s-splash','s-welcome','s-coach-home','s-client-home','s-coach-entry','s-athlete-entry'];
@@ -6808,6 +6847,13 @@ function renderNutriDots(){
 }
 function renderNotifs(){
   const notifs=[];
+  // EN TÊTE — les retours du coach. C'est la seule entrée qui appelle une
+  // action de l'athlète ; les rappels d'assiduité qui suivent ne sont que du
+  // contexte. Une par vidéo corrigée non consultée.
+  feedbacksNonVus(currentUser).forEach(v=>notifs.push({
+    icon:icon('video',16),
+    msg:'Ton coach a corrigé ta vidéo « '+escapeHtml(v.name||'sans nom')+' »',
+    c:'var(--green)',act:'loadVideos()'}));
   if(!currentUser.sessions?.length) notifs.push({icon:'',msg:'Lance ta première séance dès maintenant !',c:'var(--red)'});
   else{
     const days=Math.floor((Date.now()-currentUser.sessions[currentUser.sessions.length-1].date)/864e5);
@@ -6822,7 +6868,12 @@ function renderNotifs(){
   const _cb=(currentUser.bilans||[]).filter(b=>b.type!=='depart');
   if(_cb.length){const _d=new Date(_cb[_cb.length-1].date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
     notifs.push({icon:icon('check-circle',16),msg:`Bilan du ${_d} transmis à ton coach`,c:'var(--green)'});}
-  document.getElementById('clh-notifs').innerHTML=notifs.map(n=>`<div class="notification" style="border-color:${n.c}">${n.icon} ${n.msg}</div>`).join('');
+  // `act` est facultatif : les entrées qui en portent une deviennent de vrais
+  // boutons — curseur, rôle et clavier compris, pas seulement un onclick posé
+  // sur un div muet.
+  document.getElementById('clh-notifs').innerHTML=notifs.map(n=>n.act
+    ? `<div class="notification" style="border-color:${n.c};cursor:pointer" onclick="${n.act}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${n.icon} ${n.msg}</div>`
+    : `<div class="notification" style="border-color:${n.c}">${n.icon} ${n.msg}</div>`).join('');
 }
 function clientTab(tab){
   // Le surlignage n'est plus posé ici mais dans go(), à partir de l'écran
@@ -8819,6 +8870,47 @@ function checkBilanNotifToday(){
     })).catch(()=>{try{new Notification('RepCore — Bilan bimensuel 📊',{
       body:"C'est le moment de remplir ton bilan coaching !",
       icon:'./icons/icon-192x192.png',tag:'bilan-reminder'
+    });}catch(e){}});
+  }
+}
+// Notification système à l'arrivée d'un NOUVEAU retour du coach. Même structure
+// que checkBilanNotifToday ci-dessus : garde de disponibilité, service worker
+// en premier, `new Notification` en repli.
+// Appelée par la synchro périodique — c'est elle qui fait descendre l'écriture
+// du coach jusqu'au dossier de l'athlète, donc le seul moment où l'app peut
+// signaler la nouvelle sans que l'athlète ait rien fait.
+function checkFeedbackNotif(){
+  if(!currentUser||currentUser.role!=='athlete') return;
+  const dates=(currentUser.videos||[]).map(v=>v&&v.feedbackDate)
+    .filter(d=>typeof d==='number'&&isFinite(d));
+  if(!dates.length) return;
+  const plusRecent=Math.max.apply(null,dates);
+  // PREMIER PASSAGE : on prend acte de l'existant SANS notifier. Sans ce garde,
+  // un athlète ayant dix anciennes corrections recevrait dix notifications à la
+  // première synchro suivant la mise à jour — le repère n'existait pas encore,
+  // tout son historique passerait pour nouveau.
+  if(typeof currentUser._lastFbNotif!=='number'){
+    currentUser._lastFbNotif=plusRecent;saveUser();return;
+  }
+  if(plusRecent<=currentUser._lastFbNotif) return;
+  const nouveaux=(currentUser.videos||[])
+    .filter(v=>v&&v.feedbackDate>currentUser._lastFbNotif)
+    .sort((a,b)=>b.feedbackDate-a.feedbackDate);
+  currentUser._lastFbNotif=plusRecent;saveUser();
+  if(!nouveaux.length) return;
+  // Une seule notification, même pour plusieurs corrections : en empiler une
+  // par vidéo transformerait une bonne nouvelle en nuisance.
+  const multi=nouveaux.length>1;
+  const titre=multi?('RepCore — '+nouveaux.length+' corrections de ton coach')
+                   :'RepCore — Ton coach a corrigé ta vidéo';
+  const corps=multi?(nouveaux.length+' de tes vidéos viennent d\'être corrigées.')
+                   :('« '+(nouveaux[0].name||'sans nom')+' » vient d\'être corrigée.');
+  if(_notifSupported()&&Notification.permission==='granted'){
+    navigator.serviceWorker.ready.then(reg=>reg.showNotification(titre,{
+      body:corps,icon:'./icons/icon-192x192.png',badge:'./icons/icon-192x192.png',
+      tag:'feedback-coach',data:{url:'./?videos=1'}
+    })).catch(()=>{try{new Notification(titre,{
+      body:corps,icon:'./icons/icon-192x192.png',tag:'feedback-coach'
     });}catch(e){}});
   }
 }
@@ -11294,7 +11386,23 @@ function _renderVideoBatch(from,count){
   const list=document.getElementById('vid-card-list');
   const btn=document.getElementById('vid-more-btn');
   if(!list) return;
-  list.insertAdjacentHTML('beforeend',_vidsSorted.slice(from,from+count).map(_buildVideoCard).join(''));
+  const lot=_vidsSorted.slice(from,from+count);
+  list.insertAdjacentHTML('beforeend',lot.map(_buildVideoCard).join(''));
+  // Fermeture de la boucle : le retour est consulté dès que sa carte est
+  // rendue, puisque c'est à ce moment que le commentaire du coach est à
+  // l'écran — il n'y a pas d'« ouverture » de carte, la liste affiche tout.
+  // Marqué ICI et non dans _buildVideoCard, qui construit une chaîne et doit
+  // le rester : une écriture par lot au lieu d'une par vidéo.
+  // Limité au lot RENDU : une correction restée sur la page suivante garde sa
+  // pastille tant que « voir plus » n'a pas été touché.
+  const vus=lot.filter(v=>v&&v.feedbackSeen===false);
+  if(vus.length){
+    vus.forEach(v=>{v.feedbackSeen=true;});
+    // _vidsSorted porte les mêmes objets que currentUser.videos (slice est
+    // superficiel) : la mutation ci-dessus est donc bien celle qu'on persiste.
+    saveUser();
+    _majPastilleVideos();
+  }
   const more=_vidsSorted.length-(from+count);
   if(btn){
     if(more>0){btn.textContent='Voir '+(more>20?20:more)+' vidéo'+(more!==1?'s':'')+' de plus';btn.style.display='block';}
@@ -11647,6 +11755,14 @@ function saveVideoCorrection(){
   c.videos[idx].feedback=general;
   c.videos[idx].feedbackTimestamps=tss;
   c.videos[idx].feedbackDate=Date.now();
+  // Point de départ de la boucle de retour : tant que l'athlète n'a pas ouvert
+  // sa liste de vidéos, ce retour compte comme non vu — d'où la notification
+  // verte sur l'accueil et la pastille sur l'onglet Vidéos.
+  // false STRICT, jamais undefined : les corrections antérieures à cette
+  // fonctionnalité restent à undefined et ne déclenchent donc rien
+  // rétroactivement. Un athlète avec dix anciennes corrections ne se réveille
+  // pas avec dix notifications.
+  c.videos[idx].feedbackSeen=false;
   c.updatedAt=Date.now();users[window._vcEmail]=c;
   const ok=DB.set('users',users);
   const envoi=CLOUD.pushOne(window._vcEmail,c);
