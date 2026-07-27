@@ -1379,6 +1379,16 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <p class="sub" style="font-size:12px;margin-bottom:12px;line-height:1.6">Active/désactive les jours et modifie chaque séance. Le Programme Fondation est pré-chargé jusqu'à personnalisation.</p>
+      <!-- Versions precedentes. Le confirm d'application d'un modele promet
+           « rollback possible » et _snapshotSessionsConfig ecrit bien
+           l'historique, mais aucun ecran ne permettait de s'en servir : la
+           promesse etait fausse. Rempli par renderSessionsHistory(). -->
+      <details id="csm-history" style="background:var(--dark);border:1px solid var(--surface-3);border-radius:10px;margin-bottom:14px;display:none">
+        <summary style="cursor:pointer;padding:12px 14px;font-size:12px;font-weight:700;letter-spacing:.5px;color:var(--sub);list-style:none;display:flex;justify-content:space-between;align-items:center;min-height:44px">
+          <span>Versions precedentes</span><span id="csm-history-n" style="color:var(--red)"></span>
+        </summary>
+        <div id="csm-history-list" style="padding:0 14px 12px"></div>
+      </details>
       <!-- Placé ici et non dans la topbar : celle-ci porte déjà retour, titre et
            SAUVEGARDER, un quatrième élément déborderait à 375 px. -->
       <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:20px" onclick="saveCoachSessionsAsTemplate()">⭑ Enregistrer comme modèle</button>
@@ -6532,7 +6542,49 @@ function openCoachSessions(){
   loadCoachSessionSlots();
 }
 
+// Versions precedentes de la configuration de seances. Alimente par
+// _snapshotSessionsConfig, appele avant chaque application de modele.
+function renderSessionsHistory(){
+  const box=document.getElementById('csm-history');
+  const list=document.getElementById('csm-history-list');
+  if(!box||!list) return;
+  const hist=(_coachEditClient&&_coachEditClient.sessions_config_history)||[];
+  if(!hist.length){box.style.display='none';return;}
+  box.style.display='block';
+  const n=document.getElementById('csm-history-n');
+  if(n) n.textContent=hist.length;
+  list.innerHTML=hist.map((e,i)=>{
+    const d=new Date(e.ts).toLocaleString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+    const actifs=((e.sessions_config)||[]).filter(s=>s&&s.active).length;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid #1a1a1a">
+      <div style="min-width:0">
+        <div style="font-size:12px;font-weight:700;color:#ddd">${escapeHtml(d)}</div>
+        <div class="sub" style="font-size:11px">${actifs} jour${actifs>1?'s':''} actif${actifs>1?'s':''}</div>
+      </div>
+      <button class="btn btn-outline btn-sm" style="flex-shrink:0;margin:0" onclick="restaurerSessionsConfig(${i})">Restaurer</button>
+    </div>`;
+  }).join('');
+}
+// Restauration : on remet la copie en memoire et on redessine. On N'ENREGISTRE
+// PAS — le coach valide par SAUVEGARDER, comme pour toute autre modification.
+// C'est ce qui lui laisse une porte de sortie s'il s'est trompe de version.
+function restaurerSessionsConfig(i){
+  const hist=(_coachEditClient&&_coachEditClient.sessions_config_history)||[];
+  const e=hist[i];
+  if(!e||!e.sessions_config) return;
+  const d=new Date(e.ts).toLocaleString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+  if(!confirm("Restaurer la configuration du "+d+" ?\n\n"
+    +"Le programme affiché sera remplacé. Rien n'est enregistré tant que tu n'as "
+    +"pas touché SAUVEGARDER.")) return;
+  _coachEditClient.sessions_config=JSON.parse(JSON.stringify(e.sessions_config));
+  loadCoachSessionSlots();
+  renderSessionsHistory();
+  toast('Version du '+d+' chargee — valide par SAUVEGARDER','var(--orange)');
+}
 function loadCoachSessionSlots(){
+  // Redessine aussi l'historique : l'ecran peut etre rouvert apres qu'un
+  // modele a ete applique, donc apres qu'une version a ete archivee.
+  try{renderSessionsHistory();}catch(e){}
   const c=_coachEditClient;
   if(!c?.sessions_config) return;
   const sessions=c.sessions_config;
