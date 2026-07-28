@@ -8074,9 +8074,10 @@ function renderProgEx(){
           <div style="flex:1">
             <label style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;color:var(--sub);font-weight:700">Lien vidéo YouTube (technique)</label>
             <div style="display:flex;gap:6px;margin-top:4px">
-              <input value="${escapeHtml(ex.videoUrl||'')}" onchange="_progExDirty=true;progEx[${i}].videoUrl=this.value.trim()" placeholder="https://youtu.be/..." style="flex:1;font-size:11px;padding:7px 10px">
-              ${ex.videoUrl?`<a href="${safeUrl(ex.videoUrl)}" target="_blank" rel="noopener" style="background:var(--surface-2);border:1px solid var(--border);border-radius:3px;padding:7px 10px;font-size:12px;text-decoration:none;display:flex;align-items:center">▶</a>`:''}
+              <input value="${escapeHtml(ex.videoUrl||'')}" onchange="_progExDirty=true;progEx[${i}].videoUrl=normaliserUrlVideo(this.value);this.value=progEx[${i}].videoUrl;renderProgEx()" placeholder="https://youtu.be/..." style="flex:1;font-size:11px;padding:7px 10px">
+              ${normaliserUrlVideo(ex.videoUrl)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl))}" target="_blank" rel="noopener" style="background:var(--surface-2);border:1px solid var(--border);border-radius:3px;padding:7px 10px;font-size:12px;text-decoration:none;display:flex;align-items:center">▶</a>`:''}
             </div>
+            ${ex.videoUrl&&!normaliserUrlVideo(ex.videoUrl)?`<div class="videoInutilisable" style="font-size:10px;color:var(--orange);margin-top:4px;line-height:1.5">Ce texte n'est pas un lien : l'athlète ne verra aucune vidéo. Colle l'adresse YouTube, ou juste l'identifiant de la vidéo.</div>`:''}
           </div>
         </div>
       </div>
@@ -9166,8 +9167,8 @@ function _renderExCard(ex,idx){
       ${badge?`<div style="margin-top:5px">${badge}</div>`:''}
       ${ex.description?`<div style="font-size:11px;color:#666;margin-top:6px;line-height:1.5;border-left:2px solid #2a2a2a;padding-left:8px">${escapeHtml(ex.description)}</div>`:''}
       ${(ex.videoUrl||ex.videoUrl2)?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
-        ${ex.videoUrl?`<a href="${safeUrl(ex.videoUrl)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;background:#1a0000;border:1px solid #3a0a0a;border-radius:6px;padding:5px 10px;color:var(--red-light);font-size:var(--fs-xs);font-weight:800;text-decoration:none;letter-spacing:1px">▶ VIDÉO 1</a>`:''}
-        ${ex.videoUrl2?`<a href="${safeUrl(ex.videoUrl2)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;background:#1a0000;border:1px solid #3a0a0a;border-radius:6px;padding:5px 10px;color:var(--red-light);font-size:var(--fs-xs);font-weight:800;text-decoration:none;letter-spacing:1px">▶ VIDÉO 2</a>`:''}
+        ${normaliserUrlVideo(ex.videoUrl)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl))}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;background:#1a0000;border:1px solid #3a0a0a;border-radius:6px;padding:5px 10px;color:var(--red-light);font-size:var(--fs-xs);font-weight:800;text-decoration:none;letter-spacing:1px">▶ VIDÉO 1</a>`:''}
+        ${normaliserUrlVideo(ex.videoUrl2)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl2))}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;background:#1a0000;border:1px solid #3a0a0a;border-radius:6px;padding:5px 10px;color:var(--red-light);font-size:var(--fs-xs);font-weight:800;text-decoration:none;letter-spacing:1px">▶ VIDÉO 2</a>`:''}
       </div>`:''}
     </div>
   </div></div>`;
@@ -9535,7 +9536,7 @@ function _blocExo(idx,estSS){
         <div style="font-size:12px;color:#bbb;line-height:1.6">${escapeHtml(ex.description||'')}${ex.note&&!(ex.description||'').includes(ex.note)?(ex.description?'<br>':'')+escapeHtml(ex.note):''}</div>
       </div>`:''}
 
-      ${ex.videoUrl?`<a href="${safeUrl(ex.videoUrl)}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:12px;background:#08081a;border:1px solid #2a2a5a;border-radius:10px;padding:11px 14px;margin-bottom:12px;text-decoration:none;color:#7799ff">
+      ${normaliserUrlVideo(ex.videoUrl)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl))}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:12px;background:#08081a;border:1px solid #2a2a5a;border-radius:10px;padding:11px 14px;margin-bottom:12px;text-decoration:none;color:#7799ff">
         <div style="width:32px;height:32px;background:#1a1a3a;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">▶</div>
         <div style="flex:1">
           <div style="font-size:11px;font-weight:800;letter-spacing:.5px;color:#99aaff">VIDÉO TECHNIQUE</div>
@@ -15006,6 +15007,31 @@ function ini(f,l){return((f||'?')[0]+(l||'?')[0]).toUpperCase();}
 function escapeHtml(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 // safeUrlRaw : valide le schéma et rend l'URL TELLE QUELLE. À réserver aux
 // usages hors HTML (window.open, fetch…), où des entités casseraient l'adresse.
+// ── Lien vidéo : normalisation du schéma ────────────────────────────────────
+// safeUrl exige « http:// » ou « https:// » en tête et rend '#' sinon. Or on
+// colle rarement une URL complète : « youtu.be/abc », « www.youtube.com/... »
+// ou l'identifiant seul donnaient un lien mort, sans le moindre signe que
+// quelque chose n'allait pas. On complète le schéma manquant plutôt que de
+// relâcher safeUrl, qui protège l'attribut href de toute l'application.
+function normaliserUrlVideo(v){
+  let s=String(v==null?'':v).trim();
+  if(!s) return '';
+  // Protocole déjà là : on ne touche à rien, safeUrl tranchera.
+  if(/^https?:\/\//i.test(s)) return s;
+  // « //youtu.be/abc », forme héritée des intégrations.
+  if(/^\/\//.test(s)) return 'https:'+s;
+  // Un autre schéma que http(s) n'a rien à faire dans un lien vidéo, et
+  // laisser passer « javascript: » serait une faille.
+  if(/^[a-z][a-z0-9+.-]*:/i.test(s)) return '';
+  // Identifiant YouTube seul : 11 caractères de l'alphabet des identifiants.
+  // Le champ est explicitement « lien vidéo YouTube », l'interprétation est sûre.
+  if(/^[A-Za-z0-9_-]{11}$/.test(s)) return 'https://youtu.be/'+s;
+  // Reste un nom de domaine : il lui faut au moins un point avant le premier
+  // « / », sinon c'est du texte libre et on n'en fait pas un lien.
+  const hote=s.split(/[/?#]/)[0];
+  if(/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(hote)) return 'https://'+s;
+  return '';
+}
 function safeUrlRaw(u){
   if(!u) return '#';
   const s=String(u).trim();
@@ -15779,8 +15805,10 @@ function importOcrExercises(idx,maxN){
     const reps=(document.getElementById('ocr-reps-'+i)?.value||'10').trim();
     const repos=(document.getElementById('ocr-repos-'+i)?.value||'90 sec').trim();
     const description=(document.getElementById('ocr-desc-'+i)?.value||'').trim();
-    const videoUrl=(document.getElementById('ocr-v1-'+i)?.value||'').trim();
-    const videoUrl2=(document.getElementById('ocr-v2-'+i)?.value||'').trim();
+    // Une fiche papier porte rarement le « https:// » : sans normalisation,
+    // les liens lus par OCR arrivaient morts dans le programme.
+    const videoUrl=normaliserUrlVideo(document.getElementById('ocr-v1-'+i)?.value);
+    const videoUrl2=normaliserUrlVideo(document.getElementById('ocr-v2-'+i)?.value);
     // La case n'existe pas sur la première carte, et une carte supprimée
     // décale ce qui suit : un exercice ne peut pas rester enchaîné avec un
     // précédent qui n'est plus là.
@@ -19059,6 +19087,37 @@ function testExercices(){
     currentUser=_cpSauve.u;
     if(_cpSauve.p) localStorage.setItem('rc_coach_profil',_cpSauve.p);
     else localStorage.removeItem('rc_coach_profil');
+
+    // ══════ LIENS VIDÉO : NORMALISATION DU SCHÉMA ══════
+    // safeUrl exige http(s) en tête et rend '#' sinon : « youtu.be/abc » et
+    // l'identifiant seul donnaient un lien mort, sans le moindre signe.
+    const _nv=(v)=>normaliserUrlVideo(v);
+    const _nvOk=(v,att)=>ok('Lien « '+String(v)+' » → '+att,_nv(v)===att,_nv(v));
+    _nvOk('https://youtu.be/dQw4w9WgXcQ','https://youtu.be/dQw4w9WgXcQ');
+    _nvOk('http://youtu.be/abc','http://youtu.be/abc');
+    _nvOk('youtu.be/dQw4w9WgXcQ','https://youtu.be/dQw4w9WgXcQ');
+    _nvOk('www.youtube.com/watch?v=abc','https://www.youtube.com/watch?v=abc');
+    _nvOk('youtube.com/shorts/abc123','https://youtube.com/shorts/abc123');
+    _nvOk('m.youtube.com/watch?v=abc','https://m.youtube.com/watch?v=abc');
+    _nvOk('//youtu.be/abc','https://youtu.be/abc');
+    _nvOk('  youtu.be/abc  ','https://youtu.be/abc');
+    // Identifiant YouTube seul : 11 caractères de l'alphabet des identifiants.
+    _nvOk('dQw4w9WgXcQ','https://youtu.be/dQw4w9WgXcQ');
+    _nvOk('abcdefghij','');            // 10 caractères : pas un identifiant
+    _nvOk('abcdefghijkl','');          // 12 caractères non plus
+    _nvOk('ma video de squat','');
+    _nvOk('','');
+    _nvOk(null,'');
+    _nvOk(undefined,'');
+    // Aucun autre schéma ne doit passer : ce lien finit dans un href.
+    for(const p of ['javascript:alert(1)','data:text/html,x','vbscript:x','file:///etc/passwd'])
+      ok('Schéma refusé : '+p.split(':')[0],_nv(p)==='',_nv(p));
+    ok('Rien ne sort qui ne soit http(s)',
+       ['youtu.be/a','dQw4w9WgXcQ','javascript:x','n\'importe quoi','//x.fr/a']
+         .every(v=>{const n=_nv(v);return !n||/^https?:\/\//i.test(n);}));
+    // Un lien inutilisable ne doit produire AUCUN lien, jamais un lien mort.
+    ok('Aucun lien mort produit',
+       ['ma video','','abcdefghij'].every(v=>{const n=_nv(v);return !n||safeUrl(n)!=='#';}));
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
