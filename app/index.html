@@ -243,6 +243,13 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 .pe-mini:disabled{opacity:.3;cursor:default}
 .pe-mini.pe-suppr{width:26px;height:38px;font-size:12px;color:var(--red-light)}
 .pe-saisi{opacity:.55;outline:2px dashed var(--red);outline-offset:3px;border-radius:8px}
+.px-poignee{background:#fff2;border:none;color:#fff;font-size:15px;line-height:1;padding:0;border-radius:7px;cursor:grab;flex-shrink:0;width:30px;height:34px;touch-action:none;user-select:none;font-family:Montserrat,sans-serif}
+.px-poignee:active{cursor:grabbing;background:#fff4}
+/* 22x12 etait intouchable au doigt. Deux fleches empilees ne peuvent pas
+   prendre 44px chacune sans se recouvrir : on les agrandit au maximum que
+   permet la barre, la poignee restant la cible principale. */
+.px-mini{background:#fff2;border:none;color:#fff;font-size:9px;line-height:1;padding:0;border-radius:5px;cursor:pointer;width:26px;height:16px;font-family:Montserrat,sans-serif;flex-shrink:0}
+.px-mini:disabled{opacity:.3;cursor:default}
 .pf-select{background:var(--surface-2);border:1.5px solid var(--border);color:var(--sub);font-size:10px;font-weight:800;letter-spacing:.5px;padding:6px 9px;border-radius:16px;font-family:Montserrat,sans-serif;min-height:30px;width:auto;margin:0}
 .ex-name{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:1px}
 .ex-detail{font-size:11px;color:var(--sub);margin-top:3px;letter-spacing:.3px}
@@ -889,7 +896,7 @@ const COACH_PHOTO='icons/coach.jpg';
          Le prix doit être atteignable AVANT toute création de compte : depuis
          l'accueil, deux clics suffisent (ESPACE ATHLÈTE puis cette carte) et
          aucune donnée personnelle n'est demandée. -->
-    <div onclick="go('s-subscribe');loadSubscribePage()" style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+    <div onclick="goAvecRetour('s-subscribe');loadSubscribePage()" style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="display:flex;align-items:center;gap:14px">
         <div style="width:44px;height:44px;border-radius:10px;background:#0d0d0d;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div>
         <div>
@@ -1040,7 +1047,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
     <button class="btn btn-red" onclick="doLinkCoach()">Activer mon accès →</button>
     <div style="margin-top:20px;text-align:center">
-      <button onclick="go('s-subscribe');loadSubscribePage()" style="background:none;border:none;color:var(--sub);font-size:12px;cursor:pointer;font-family:Montserrat,sans-serif">Pas de code coach ? Voir les abonnements →</button>
+      <button onclick="goAvecRetour('s-subscribe');loadSubscribePage()" style="background:none;border:none;color:var(--sub);font-size:12px;cursor:pointer;font-family:Montserrat,sans-serif">Pas de code coach ? Voir les abonnements →</button>
     </div>
     <div style="margin-top:12px;text-align:center">
       <button onclick="logout()" style="background:none;border:none;color:var(--text-dim);font-size:11px;cursor:pointer;font-family:Montserrat,sans-serif">Se déconnecter</button>
@@ -2622,7 +2629,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="ag-status-block"></div>
     </div>
     <div class="gap">
-      <button class="btn btn-red" onclick="go('s-subscribe');loadSubscribePage()">Renouveler mon accès</button>
+      <button class="btn btn-red" onclick="goAvecRetour('s-subscribe');loadSubscribePage()">Renouveler mon accès</button>
       <button class="btn btn-outline" onclick="go('s-client-code')">Entrer un nouveau code coach</button>
     </div>
     <div style="margin-top:20px;display:flex;flex-direction:column;gap:10px;align-items:center">
@@ -2635,7 +2642,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- ══════ EXERCICES À CLASSER ══════ -->
 <div id="s-ex-classify" class="screen">
   <div class="topbar">
-    <button class="back-btn" onclick="history.back()">←</button>
+    <button class="back-btn" onclick="retourDe('s-ex-classify')">←</button>
     <span class="topbar-title">Exercices à classer</span>
     <span></span>
   </div>
@@ -2666,8 +2673,12 @@ const COACH_PHOTO='icons/coach.jpg';
     <span></span>
   </div>
   <!-- Les filtres restent visibles pendant qu'on fait défiler la liste : c'est
-       la seule façon de voir l'effet d'un filtre sur un résultat plus bas. -->
-  <div style="flex-shrink:0;border-bottom:1px solid var(--border);background:var(--bg)">
+       la seule façon de voir l'effet d'un filtre sur un résultat plus bas.
+       Il faut sticky pour cela : .screen est en min-height:100dvh, il grandit
+       avec son contenu, .scroll-area ne déborde donc jamais et c'est le
+       document qui défile. Un simple flex-shrink:0 laissait la barre partir
+       vers le haut avec le reste. -->
+  <div style="position:sticky;top:0;z-index:5;flex-shrink:0;border-bottom:1px solid var(--border);background:var(--bg)">
     <div style="padding:10px 16px 8px">
       <input id="pf-q" placeholder="Chercher un protocole, une étape..." oninput="_pfSet('q',this.value)"
              style="font-size:12px;padding:9px 12px;margin-bottom:8px">
@@ -2700,7 +2711,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- ══════ SUBSCRIBE ══════ -->
 <div id="s-subscribe" class="screen" style="background:#060606;overflow:hidden">
   <div class="topbar" style="border-bottom:1px solid #1a0000">
-    <button class="back-btn" onclick="history.back()">←</button>
+    <button class="back-btn" onclick="retourDe('s-subscribe')">←</button>
     <span class="topbar-title">Accès RepCore</span>
     <span></span>
   </div>
@@ -4157,7 +4168,7 @@ window.onload=()=>{
         } else if(sessionStorage.getItem('rc_paypal_return')){
           // Retour depuis redirection PayPal → remettre sur la page paiement
           sessionStorage.removeItem('rc_paypal_return');
-          go('s-subscribe');
+          goAvecRetour('s-subscribe');
           loadSubscribePage();
         } else {
           routeUser();
@@ -4531,6 +4542,24 @@ function go(id){
   if(id==='s-welcome') rcmVue('welcome_view');
   if(id==='s-register') rcmVue('register_started');
 }
+// ── Retour vers l'écran d'origine ───────────────────────────────────────────
+// L'application n'empile aucun état d'historique : la navigation se fait
+// uniquement en basculant la classe .active entre les div.screen. Un bouton
+// retour câblé sur history.back() ne revient donc pas à l'écran précédent, il
+// SORT de l'application. Deux écrans le faisaient. On mémorise l'origine à
+// l'ouverture plutôt que d'y coder une destination en dur : ils sont
+// atteignables depuis plusieurs endroits.
+const _ecranOrigine={};
+function goAvecRetour(id){
+  const actif=document.querySelector('.screen.active')?.id;
+  // Rentrer sur l'écran depuis lui-même (rechargement de sa propre liste) ne
+  // doit pas écraser l'origine par lui-même, sinon le retour tourne en rond.
+  if(actif&&actif!==id) _ecranOrigine[id]=actif;
+  go(id);
+}
+function retourDe(id,defaut){
+  go(_ecranOrigine[id]||defaut||(currentUser?.role==='coach'?'s-coach-home':'s-client-home'));
+}
 function toast(msg,c='var(--green)'){
   const t=document.getElementById('toast');
   t.textContent=msg;t.style.borderLeft='4px solid '+c;
@@ -4561,7 +4590,7 @@ function _retourApresInscription(){
     sessionStorage.removeItem('rc_apres_inscription');
   }catch(e){}
   if(cible!=='s-subscribe') return false;
-  go('s-subscribe');loadSubscribePage();
+  goAvecRetour('s-subscribe');loadSubscribePage();
   return true;
 }
 async function doRegister(){
@@ -5129,7 +5158,7 @@ function _appliquerPayloadCode(payload){
     // Le code n'est PAS oublié ici : le paiement peut échouer ou être
     // abandonné, et l'athlète doit pouvoir revenir sur s-subscribe sans
     // redemander son code au coach. loadSubscribePage le relit.
-    go('s-subscribe');
+    goAvecRetour('s-subscribe');
     loadSubscribePage('pending-code',payload);
   }
 }
@@ -7841,6 +7870,10 @@ function renderProgEx(){
   document.getElementById('prog-exercises').innerHTML=progEx.map((ex,i)=>{
     const pr=parseReps(ex.reps);
     const enSS=_grs.some(g=>g.length>1&&g.includes(i));
+    // Seule la tête d'un groupe porte la poignée : un superset se déplace d'un
+    // bloc, et pour en sortir un exercice il y a le bouton DÉLIER.
+    const gi=_grs.findIndex(g=>g.includes(i));
+    const estTete=gi>=0&&_grs[gi][0]===i&&_grs.length>1;
     // Bandeau d'appariement au-dessus de chaque exercice sauf le premier :
     // c'est l'espace ENTRE deux exercices qu'on lie ou qu'on délie.
     const lien=i===0?'':`<div style="display:flex;align-items:center;gap:8px;margin:-6px 0 8px">
@@ -7852,10 +7885,15 @@ function renderProgEx(){
       pr.type==='unilateral'?`<span style="background:#1e3a5f;color:#93c5fd;padding:2px 7px;border-radius:20px;font-size:var(--fs-xs);font-weight:700">UNILATÉRAL</span>`:
       pr.type==='range'?`<span style="background:#1a3322;color:#86efac;padding:2px 7px;border-radius:20px;font-size:var(--fs-xs);font-weight:700">PLAGE</span>`:'';
     return `${lien}
-    <div style="background:var(--surface-1);border-radius:14px;margin-bottom:14px;overflow:hidden;border:1px solid ${enSS?'var(--orange)':'var(--border)'}">
+    <div id="px-carte-${i}" data-px-idx="${i}" style="background:var(--surface-1);border-radius:14px;margin-bottom:14px;overflow:hidden;border:1px solid ${enSS?'var(--orange)':'var(--border)'}">
       <!-- Numéro + Nom -->
       <div style="background:var(--red);padding:8px 14px;display:flex;align-items:center;justify-content:space-between">
-        <div style="display:flex;align-items:center;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1">
+          ${estTete?`<button type="button" class="px-poignee" aria-label="Déplacer ${escapeHtml(ex.name||'cet exercice')}" onpointerdown="_pxDragDebut(event,${i})">⠿</button>
+          <span style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">
+            <button type="button" class="px-mini" onclick="_pxDeplacerParFleche(${i},-1)" ${gi===0?'disabled':''} aria-label="Monter">▲</button>
+            <button type="button" class="px-mini" onclick="_pxDeplacerParFleche(${i},1)" ${gi===_grs.length-1?'disabled':''} aria-label="Descendre">▼</button>
+          </span>`:''}
           <span style="background:#fff2;border-radius:50%;min-width:22px;height:22px;padding:0 5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0">${_repereEx(progEx,i)}</span>
           <input value="${escapeHtml(ex.name||'')}" onchange="_progExDirty=true;progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase()" placeholder="NOM DE L'EXERCICE (MATÉRIELS)" style="background:transparent;border:none;color:#fff;font-family:Montserrat,sans-serif;font-weight:800;font-size:13px;outline:none;text-transform:uppercase;flex:1">
         </div>
@@ -7916,9 +7954,112 @@ function _supprimerEx(i){
   renderProgEx();
 }
 
+// ══════════════ RÉORDONNANCEMENT DES EXERCICES ══════════════
+// On déplace des GROUPES, pas des exercices : un superset se lit « 3a / 3b »
+// et se déplace d'un bloc. Seule la tête porte la poignée ; pour sortir un
+// exercice d'un superset il y a déjà le bouton DÉLIER. Aucun ordre incohérent
+// n'est donc atteignable par glissement.
+function _pxDeplacerGroupe(giDe,giVers){
+  const grs=_groupesEx(progEx);
+  if(giDe<0||giDe>=grs.length||giVers<0||giVers>=grs.length||giDe===giVers) return false;
+  const idx=grs[giDe];
+  const bloc=idx.map(i=>progEx[i]);
+  const teteCible=progEx[grs[giVers][0]];
+  const reste=progEx.filter((_,i)=>!idx.includes(i));
+  let pos=reste.indexOf(teteCible);
+  // Descendre : on se place APRÈS le groupe visé, sinon un glissement vers le
+  // bas ne ferait jamais franchir la cible.
+  if(giVers>giDe) pos+=grs[giVers].length;
+  reste.splice(pos,0,...bloc);
+  progEx=reste;
+  _normaliserSS(progEx);
+  _progExDirty=true;
+  return true;
+}
+// Index de groupe d'une ligne, et index de groupe d'un objet exercice.
+function _pxGroupeDeLigne(i){
+  const grs=_groupesEx(progEx);
+  const gi=grs.findIndex(g=>g.includes(i));
+  return gi<0?0:gi;
+}
+function _pxDeplacerParFleche(i,delta){
+  const gi=_pxGroupeDeLigne(i);
+  if(_pxDeplacerGroupe(gi,gi+delta)) renderProgEx();
+}
+
+let _pxDrag=null;   // {tete, gi}
+// Les champs de l'éditeur écrivent dans progEx sur « change », donc au blur.
+// Sans ça, saisir un nom puis glisser sans quitter le champ perdait la frappe :
+// le re-rendu détruisait la zone de saisie avant que « change » ne parte. On
+// déclenche l'événement explicitement plutôt que de compter sur le blur seul,
+// pour que la valeur soit reprise quoi qu'il arrive.
+function _pxCommitChampActif(){
+  const a=document.activeElement;
+  if(!a||(a.tagName!=='INPUT'&&a.tagName!=='TEXTAREA')) return;
+  try{ a.dispatchEvent(new Event('change',{bubbles:true})); a.blur(); }catch(e){}
+}
+function _pxDragDebut(ev,i){
+  if(ev.button!=null&&ev.button!==0) return;
+  _pxCommitChampActif();
+  ev.preventDefault();
+  const grs=_groupesEx(progEx);
+  const gi=grs.findIndex(g=>g[0]===i);
+  if(gi<0) return;                       // seule la tête d'un groupe se saisit
+  _pxDrag={tete:progEx[i],gi};
+  const c=document.getElementById('px-carte-'+i);
+  if(c) c.classList.add('pe-saisi');
+  try{ ev.target.setPointerCapture&&ev.target.setPointerCapture(ev.pointerId); }catch(e){}
+}
+// Une carte d'exercice fait près de 470 px : sur un téléphone on en voit deux
+// à la fois. Sans ce défilement au bord, glisser au-delà du voisin immédiat
+// était impossible, la cible n'étant jamais à l'écran.
+function _pxDefilerAuBord(y){
+  const marge=70, pas=16;
+  const z=document.getElementById('s-coach-program')?.querySelector('.scroll-area');
+  // .screen est en min-height:100dvh, donc il grandit avec son contenu et
+  // .scroll-area ne déborde jamais : c'est le DOCUMENT qui défile. On vise
+  // celui des deux qui peut réellement défiler, pour rester juste si la mise
+  // en page change.
+  const zoneDefile=z&&z.scrollHeight>z.clientHeight+2;
+  const cible=zoneDefile?z:document.scrollingElement;
+  if(!cible) return;
+  const r=zoneDefile?z.getBoundingClientRect():{top:0,bottom:window.innerHeight};
+  if(y<r.top+marge) cible.scrollTop-=pas;
+  else if(y>r.bottom-marge) cible.scrollTop+=pas;
+}
+function _pxDragBouge(ev){
+  if(!_pxDrag) return;
+  ev.preventDefault();
+  _pxDefilerAuBord(ev.clientY);
+  const sous=document.elementFromPoint(ev.clientX,ev.clientY);
+  const cible=sous&&sous.closest&&sous.closest('[data-px-idx]');
+  if(!cible) return;
+  const giVers=_pxGroupeDeLigne(parseInt(cible.dataset.pxIdx));
+  if(isNaN(giVers)||giVers===_pxDrag.gi) return;
+  if(!_pxDeplacerGroupe(_pxDrag.gi,giVers)) return;
+  // Le groupe a bougé : on retrouve sa nouvelle place par l'identité de sa
+  // tête, l'index seul ne suffit plus.
+  _pxDrag.gi=_pxGroupeDeLigne(progEx.indexOf(_pxDrag.tete));
+  renderProgEx();
+  const c=document.getElementById('px-carte-'+progEx.indexOf(_pxDrag.tete));
+  if(c) c.classList.add('pe-saisi');
+}
+function _pxDragFin(){
+  if(!_pxDrag) return;
+  _pxDrag=null;
+  renderProgEx();
+}
+document.addEventListener('pointermove',_pxDragBouge,{passive:false});
+document.addEventListener('pointerup',_pxDragFin);
+document.addEventListener('pointercancel',_pxDragFin);
+
 function loadExImage(idx,input){
   const f=input.files[0];if(!f) return;
-  compressImage(f,800,0.75,data=>{progEx[idx].image=data;renderProgEx();});
+  // On retient l'OBJET exercice, pas son index : la compression est
+  // asynchrone, et un réordonnancement pendant ce temps ferait atterrir la
+  // photo sur un autre exercice.
+  const cible=progEx[idx]; if(!cible) return;
+  compressImage(f,800,0.75,data=>{cible.image=data;renderProgEx();});
 }
 
 function addExercise(){
@@ -16721,7 +16862,7 @@ function _collecterExercices(){
   return vus;
 }
 function loadExClassify(){
-  go('s-ex-classify');
+  goAvecRetour('s-ex-classify');
   const el=document.getElementById('exc-corps'); if(!el) return;
   const vus=_collecterExercices();
   const aClasser=[];
@@ -17841,6 +17982,80 @@ function testExercices(){
     ok('Déplacement hors bornes sans effet',JSON.stringify(_peBrouillon.etapes)==='["D","A","B","C"]',
        JSON.stringify(_peBrouillon.etapes));
     _peBrouillon=_peSauve; currentUser.protocolesPerso=_ppSauve;
+
+    // ══════ RETOUR VERS L'ÉCRAN D'ORIGINE ══════
+    // Sans rôle, go() refuse les écrans coach et redirige : ces contrôles
+    // porteraient alors sur une navigation qui n'a pas eu lieu.
+    currentUser.role='coach';
+    // L'application n'empile aucun état d'historique : ces écrans sortaient de
+    // l'application au lieu de revenir en arrière.
+    const _orSauve=Object.assign({},_ecranOrigine);
+    const _actif=()=>document.querySelector('.screen.active')?.id;
+    go('s-coach-home'); goAvecRetour('s-ex-classify');
+    ok('L\'origine est mémorisée à l\'ouverture',_ecranOrigine['s-ex-classify']==='s-coach-home',
+       _ecranOrigine['s-ex-classify']);
+    retourDe('s-ex-classify');
+    ok('Le retour ramène à l\'écran d\'origine',_actif()==='s-coach-home',_actif());
+    go('s-coach-program'); goAvecRetour('s-ex-classify'); retourDe('s-ex-classify');
+    ok('L\'origine suit d\'où l\'on vient',_actif()==='s-coach-program',_actif());
+    go('s-coach-home'); goAvecRetour('s-ex-classify'); goAvecRetour('s-ex-classify');
+    ok('Rentrer depuis soi-même ne fait pas boucler le retour',
+       _ecranOrigine['s-ex-classify']==='s-coach-home',_ecranOrigine['s-ex-classify']);
+    delete _ecranOrigine['s-subscribe'];
+    go('s-splash'); retourDe('s-subscribe');
+    ok('Sans origine connue, repli sur l\'accueil du rôle',
+       _actif()==='s-coach-home'||_actif()==='s-client-home',_actif());
+    ok('Plus aucun bouton retour sur history.back()',
+       !Array.from(document.querySelectorAll('.back-btn'))
+         .some(b=>/history\.back/.test(b.getAttribute('onclick')||'')));
+    Object.keys(_ecranOrigine).forEach(k=>delete _ecranOrigine[k]);
+    Object.assign(_ecranOrigine,_orSauve);
+
+    // ══════ RÉORDONNANCEMENT DES EXERCICES ══════
+    // On déplace des GROUPES : un superset se lit « 3a / 3b » et se déplace
+    // d'un bloc. Aucun ordre incohérent n'est donc atteignable.
+    const _pxSauve=progEx;
+    const _mk=(...l)=>l.map(s=>({name:s.replace('*',''),series:3,reps:'10',ss:s.includes('*')}));
+    const _ord=()=>progEx.map(e=>e.name+(e.ss?'*':'')).join(' ');
+    progEx=_mk('A','B','C','D'); _pxDeplacerGroupe(3,0);
+    ok('Remonter un exercice en tête',_ord()==='D A B C',_ord());
+    progEx=_mk('A','B','C','D'); _pxDeplacerGroupe(0,3);
+    ok('Descendre un exercice en queue',_ord()==='B C D A',_ord());
+    progEx=_mk('A','B','C','D'); _pxDeplacerGroupe(1,2);
+    ok('Échanger deux voisins',_ord()==='A C B D',_ord());
+    progEx=_mk('A','B','C*','D'); _pxDeplacerGroupe(1,0);
+    ok('Un superset remonte d\'un bloc',_ord()==='B C* A D'&&
+       JSON.stringify(_groupesEx(progEx))==='[[0,1],[2],[3]]',_ord());
+    progEx=_mk('A','B','C*','D'); _pxDeplacerGroupe(1,2);
+    ok('Un superset descend d\'un bloc',_ord()==='A D B C*'&&
+       JSON.stringify(_groupesEx(progEx))==='[[0],[1],[2,3]]',_ord());
+    progEx=_mk('A','B*','C'); _pxDeplacerGroupe(1,0);
+    ok('Jamais de superset orphelin en tête de liste',!progEx[0].ss&&
+       JSON.stringify(_groupesEx(progEx))==='[[0],[1,2]]',_ord());
+    progEx=_mk('A','B','C');
+    _pxDeplacerGroupe(0,-1); _pxDeplacerGroupe(2,9); _pxDeplacerGroupe(1,1);
+    ok('Déplacement hors bornes sans effet',_ord()==='A B C',_ord());
+    ok('_pxDeplacerGroupe rend faux quand il ne bouge rien',
+       _pxDeplacerGroupe(1,1)===false&&_pxDeplacerGroupe(0,-1)===false);
+
+    // La poignée n'est offerte qu'à la tête d'un groupe, et seulement s'il y a
+    // plusieurs groupes à réordonner.
+    progEx=_mk('A','B','C*','D'); go('s-coach-program'); renderProgEx();
+    ok('Une poignée par groupe',document.querySelectorAll('.px-poignee').length===_groupesEx(progEx).length,
+       document.querySelectorAll('.px-poignee').length+'/'+_groupesEx(progEx).length);
+    ok('Le second d\'un superset n\'a pas de poignée',
+       !document.querySelector('#px-carte-2 .px-poignee'));
+    progEx=_mk('A'); renderProgEx();
+    ok('Un seul exercice : rien à réordonner',document.querySelectorAll('.px-poignee').length===0);
+
+    // Les champs écrivent dans progEx sur « change » : sans ce commit, saisir
+    // puis glisser sans quitter le champ perdait la frappe.
+    progEx=_mk('A','B'); renderProgEx();
+    const _ch=document.querySelector('#px-carte-0 input');
+    _ch.focus(); _ch.value='RENOMME'; _pxCommitChampActif();
+    ok('La saisie en cours est reprise avant un glissement',progEx[0].name==='RENOMME',progEx[0].name);
+    ok('Le champ perd le focus après le commit',document.activeElement!==_ch);
+    progEx=_pxSauve;
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
