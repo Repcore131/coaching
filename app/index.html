@@ -1435,6 +1435,9 @@ const COACH_PHOTO='icons/coach.jpg';
       <h3 style="margin-bottom:12px">Bilans récents</h3>
       <div id="ccd-bilans"></div>
       <div id="ccd-sessions-recap" style="margin-top:24px"></div>
+      <div id="ccd-lien-classer" style="display:none;margin-top:16px">
+        <button class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="loadExClassify()">Exercices à classer <span id="ccd-nb-classer"></span></button>
+      </div>
       <div id="ccd-videos"></div>
       <div style="margin-top:36px;padding-top:20px;border-top:1px solid var(--surface-2)">
         <button onclick="confirmDeleteClient()" style="width:100%;padding:12px;background:transparent;border:1px solid #3a1500;color:#f97316;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer">Retirer cet élève du suivi</button>
@@ -1906,6 +1909,11 @@ const COACH_PHOTO='icons/coach.jpg';
     <div class="pad">
       <p class="sub" style="font-size:12px;margin-bottom:20px;line-height:1.6"> Uploade la photo de ta fiche programme → l'IA détecte automatiquement les exercices, séries, reps et temps de repos.</p>
       <div id="session-slots"></div>
+      <!-- Discret et en bas : ce tri n'est utile que si quelque chose n'a pas
+           été reconnu, et le compteur reste masqué tant que la file est vide. -->
+      <div id="sm-lien-classer" style="display:none;margin-top:18px">
+        <button class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="loadExClassify()">Exercices à classer <span id="sm-nb-classer"></span></button>
+      </div>
       <div style="height:20px"></div>
     </div>
   </div>
@@ -2600,6 +2608,16 @@ const COACH_PHOTO='icons/coach.jpg';
       <button onclick="logout()" style="background:none;border:none;color:var(--text-dim);font-size:11px;cursor:pointer;font-family:Montserrat,sans-serif">Se déconnecter</button>
     </div>
   </div>
+</div>
+
+<!-- ══════ EXERCICES À CLASSER ══════ -->
+<div id="s-ex-classify" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="history.back()">←</button>
+    <span class="topbar-title">Exercices à classer</span>
+    <span></span>
+  </div>
+  <div class="scroll-area pad"><div id="exc-corps"></div></div>
 </div>
 
 <!-- ══════ TUNNEL D'ACQUISITION (créateur uniquement) ══════ -->
@@ -5763,6 +5781,7 @@ function getOwnedClient(cid,users){
   return c;
 }
 function openClientDetail(cid,_refresh){
+  setTimeout(_majLiensClasser,0);
   currentClientId=cid;
   const c=getOwnedClient(cid);
   if(!c) return;
@@ -6722,7 +6741,7 @@ function openProgTemplateSessionExercises(idx){
   const p=currentUser.coachPrograms[_editProgTemplateIdx];
   const sessions=_editProgTemplateGender==='H'?p.sessions_H:p.sessions_F;
   const s=sessions[idx];
-  progEx=JSON.parse(JSON.stringify(s.exercises||[]));
+  progEx=JSON.parse(JSON.stringify(s.exercises||[]));_photographierProgEx();
   _prepProgEditor({name:s.name,notes:s.notes,warmup:s.warmup,cooldown:s.cooldown});
   _progEditorCtx={mode:'template',sessionIdx:idx,progIdx:_editProgTemplateIdx,gender:_editProgTemplateGender};
   const backBtn=document.querySelector('#s-coach-program .back-btn');
@@ -7103,7 +7122,7 @@ function openCoachSessionExercises(idx){
   const c=_coachEditClient;
   if(!c?.sessions_config?.[idx]) return;
   const s=c.sessions_config[idx];
-  progEx=JSON.parse(JSON.stringify(s.exercises||[]));
+  progEx=JSON.parse(JSON.stringify(s.exercises||[]));_photographierProgEx();
   _prepProgEditor({name:s.name,notes:s.notes,warmup:s.warmup,cooldown:s.cooldown||currentUser._defaultCooldown});
   _progEditorCtx={mode:'coachClient',sessionIdx:idx};
   const backBtn=document.querySelector('#s-coach-program .back-btn');
@@ -7279,6 +7298,8 @@ function ajouterAlias(de,vers){
   }
   currentUser.exAlias[d]=v;
   if(!currentUser.exCatalogVersion) currentUser.exCatalogVersion=1;
+  // Les index de séance portent des clés canonicalisées : ils sont périmés.
+  _aliasGen++;
   return {ok:true};
 }
 
@@ -7392,6 +7413,7 @@ function renderProgEx(){
           </div>
           <div><label>Repos</label><input value="${escapeHtml(ex.repos||'01 min')}" onchange="_progExDirty=true;progEx[${i}].repos=this.value" placeholder="01 min" style="text-align:center;font-size:12px"></div>
         </div>
+        ${_ligneMuscles(ex,i)}
         <!-- Image + Vidéo exercice -->
         <div style="display:flex;align-items:flex-start;gap:10px;margin-top:4px">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-shrink:0">
@@ -7426,6 +7448,10 @@ function addExercise(){
 }
 function saveProgram(){
   _progExDirty=false;
+  // Comparaison des exKey avant/après AVANT que progEx ne parte dans la séance.
+  // La modale, elle, s'affiche après la navigation de sortie : posée ici, elle
+  // apparaîtrait sur l'éditeur qu'on est en train de quitter.
+  _detecterRenommage();
   const _ctx=_progEditorCtx;
   const _f=id=>document.getElementById(id).value;
   switch(_ctx.mode){
@@ -7782,6 +7808,7 @@ const DAY_ICONS=['L','Ma','Me','J','V','S','D'];
 
 function loadSessionManager(){
   go('s-session-manager');
+  setTimeout(_majLiensClasser,0);
   if(!currentUser.sessions_config) initSessionsConfig();
   // Migration : garantir 7 slots avec toutes les propriétés requises
   let changed=false;
@@ -8050,7 +8077,7 @@ function openSessionExercises(idx){
   const cfg=currentUser.sessions_config||initSessionsConfig();
   if(!cfg[idx]) return;
   if(!Array.isArray(cfg[idx].exercises)) cfg[idx].exercises=[];
-  progEx=JSON.parse(JSON.stringify(cfg[idx].exercises));
+  progEx=JSON.parse(JSON.stringify(cfg[idx].exercises));_photographierProgEx();
   // photo2 stripée de Firebase : restaurer depuis localStorage avant _prepProgEditor
   // (spécifique à la vue athlète — les autres appelants n'ont pas de photo2 en localStorage)
   const _lsP2=localStorage.getItem('rc_p2_'+(currentUser?.email||'')+'_'+idx);
@@ -8787,24 +8814,36 @@ function toggleRirExplain(){
 // Mémoïsé par séance, car ces fonctions remontent tout l'historique à chaque
 // affichage d'exercice : sans cache, un athlète à 200 séances reconstruirait
 // 200 index à chaque changement d'exercice pendant sa séance.
-// La clé retombe sur date puis sur l'objet lui-même : les séances écrites
-// avant l'existence du champ id n'en ont pas, et deux d'entre elles ne doivent
-// pas se partager la même entrée de cache.
+//
+// Le cache est indexé sur l'OBJET data lui-même, pas sur sess.id. Une première
+// version utilisait l'identifiant : deux séances portant le même id — deux
+// comptes ouverts l'un après l'autre, un jeu d'essai, un import — se
+// partageaient alors la même entrée, et la seconde recevait l'index de la
+// première. La conséquence n'était pas une erreur visible mais une charge
+// suggérée prise sur le mauvais exercice, ce qui est pire.
+// L'identité d'objet ne peut pas entrer en collision, se passe de champ id
+// (les séances anciennes n'en ont pas) et se libère toute seule.
+// Les clés de l'index sont CANONICALISÉES, c'est-à-dire passées par les alias.
+// Un alias va de l'ancien nom vers le nouveau ; l'historique, lui, ne contient
+// que des anciens noms. Indexer sur la clé brute et chercher avec le nouveau
+// nom ne se rencontrait donc jamais, et la fusion ne rendait aucune charge.
+// En canonicalisant les deux côtés, l'ancien et le nouveau se rejoignent.
+// Le compteur de génération invalide les index dès qu'un alias est ajouté :
+// sans lui, une fusion ne prendrait effet qu'au prochain rechargement.
+let _aliasGen=0;
 const _idxSessData=new WeakMap();
-const _idxSessParId=new Map();
 function _indexSessionData(sess){
   if(!sess||!sess.data) return null;
-  const cle=sess.id||(sess.date!=null?'d_'+sess.date:null);
-  if(cle&&_idxSessParId.has(cle)) return _idxSessParId.get(cle);
-  if(!cle&&_idxSessData.has(sess)) return _idxSessData.get(sess);
+  const cache=_idxSessData.get(sess.data);
+  if(cache&&cache.gen===_aliasGen) return cache.idx;
   const idx={};
   for(const nom of Object.keys(sess.data)){
-    const k=exKey(nom);
+    const k=resoudreAlias(exKey(nom));
     // Première clé gagnante : si deux noms se normalisent pareil dans la même
     // séance, on garde le premier plutôt que d'en perdre un silencieusement.
     if(k&&idx[k]===undefined) idx[k]=nom;
   }
-  if(cle) _idxSessParId.set(cle,idx); else _idxSessData.set(sess,idx);
+  _idxSessData.set(sess.data,{gen:_aliasGen,idx});
   return idx;
 }
 // Retrouve l'entrée d'un exercice dans une séance, par identité normalisée.
@@ -15894,6 +15933,256 @@ function renderPaypalButton(planId,coachId){
 }
 
 
+// ══════════════ UI DE CLASSIFICATION MUSCULAIRE ══════════════
+
+// Ligne « Muscles » sous le champ Reps de l'éditeur d'exercice.
+// Primaires en pastilles pleines, secondaires en pastilles creuses : la
+// hiérarchie doit se lire sans légende. Un rattachement trouvé tout seul est
+// annoncé comme proposé, pour que le coach sache qu'il peut le corriger.
+function _ligneMuscles(ex,i){
+  const nom=ex&&ex.name;
+  if(!nom||!String(nom).trim()) return '';
+  if(isCardio(ex)) return '';
+  const r=resoudreMuscles(nom,ex);
+  const past=(g,plein)=>{
+    const m=MUSCLES[g]; if(!m) return '';
+    return `<span style="display:inline-block;padding:3px 9px;border-radius:20px;font-size:var(--fs-xs);font-weight:800;letter-spacing:.3px;white-space:nowrap;`
+      +(plein?`background:${m.c};color:#08080a;border:1px solid ${m.c}`
+             :`background:transparent;color:${m.c};border:1px solid ${m.c}`)+`">${m.lib}</span>`;
+  };
+  const corps=r
+    ? [...r.p.map(g=>past(g,true)),...r.s.map(g=>past(g,false))].join(' ')
+      +(r.src==='auto'?`<span style="color:var(--text-dim);font-size:var(--fs-xs);margin-left:6px">proposé, à corriger</span>`:'')
+    : `<span style="color:var(--orange);font-size:var(--fs-xs);font-weight:700">Non classé, appuie pour choisir</span>`;
+  return `<div onclick="ouvrirSelecteurMuscles(${i})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
+    style="margin-bottom:10px;padding:8px 10px;background:#0c0c0c;border:1px solid var(--border);border-radius:9px;cursor:pointer">
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:5px">Muscles</div>
+    <div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center">${corps}</div>
+  </div>`;
+}
+
+// Sélecteur : deux colonnes, primaire et secondaire, sur les 17 groupes.
+// Un même groupe ne peut pas être les deux à la fois — cocher d'un côté
+// décoche de l'autre, sinon un exercice sortirait « pectoraux ET pectoraux ».
+let _selMusclesIdx=null,_selMusclesP=[],_selMusclesS=[];
+function ouvrirSelecteurMuscles(i){
+  const ex=progEx[i]; if(!ex||!ex.name) return;
+  const r=resoudreMuscles(ex.name,ex);
+  _selMusclesIdx=i; _selMusclesP=r?r.p.slice():[]; _selMusclesS=r?r.s.slice():[];
+  _rendreSelecteurMuscles(escapeHtml(ex.name));
+}
+function _rendreSelecteurMuscles(titre){
+  const lignes=Object.keys(MUSCLES).map(g=>{
+    const m=MUSCLES[g],p=_selMusclesP.includes(g),s=_selMusclesS.includes(g);
+    const b=(actif,col,lbl,fn)=>`<button onclick="${fn}('${g}')" style="flex:1;padding:7px 4px;border-radius:7px;cursor:pointer;font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:.5px;`
+      +(actif?`background:${col};color:#08080a;border:1px solid ${col}`:`background:transparent;color:#555;border:1px solid #262626`)+`">${lbl}</button>`;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #161616">
+      <span style="flex:1;min-width:0;font-size:12px;font-weight:700;color:${(p||s)?'#fff':'var(--sub)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.lib}</span>
+      <div style="display:flex;gap:5px;flex:0 0 122px">${b(p,m.c,'PRIM.','_selMusclePrim')}${b(s,m.c,'SEC.','_selMuscleSec')}</div>
+    </div>`;
+  }).join('');
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+    <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 18px 20px;width:100%;max-width:480px;max-height:88vh;display:flex;flex-direction:column">
+      <h2 style="margin-bottom:2px;font-size:17px">Muscles travaillés</h2>
+      <p class="sub" style="font-size:11px;margin-bottom:12px;line-height:1.5">${titre}</p>
+      <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;margin-bottom:12px">${lignes}</div>
+      <button class="btn btn-red" onclick="_validerSelecteurMuscles()">Enregistrer</button>
+      <button class="btn btn-outline" style="margin-top:8px" onclick="closeModal()">Annuler</button>
+    </div></div>`;
+  const old=document.getElementById('modal-overlay'); if(old) old.remove();
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+function _selMusclePrim(g){
+  _selMusclesS=_selMusclesS.filter(x=>x!==g);
+  _selMusclesP=_selMusclesP.includes(g)?_selMusclesP.filter(x=>x!==g):[..._selMusclesP,g];
+  _rendreSelecteurMuscles(escapeHtml(progEx[_selMusclesIdx]?.name||''));
+}
+function _selMuscleSec(g){
+  _selMusclesP=_selMusclesP.filter(x=>x!==g);
+  _selMusclesS=_selMusclesS.includes(g)?_selMusclesS.filter(x=>x!==g):[..._selMusclesS,g];
+  _rendreSelecteurMuscles(escapeHtml(progEx[_selMusclesIdx]?.name||''));
+}
+function _validerSelecteurMuscles(){
+  const ex=progEx[_selMusclesIdx]; if(!ex) return closeModal();
+  if(!_selMusclesP.length) return toast('Choisis au moins un muscle principal','var(--orange)');
+  const k=resoudreAlias(exKey(ex.name));
+  // src:'manuel' : resoudreMuscles rend cette entrée telle quelle et ne la
+  // recalcule jamais, quelle que soit l'évolution du guide ou des règles.
+  _ecrireMuscles(k,{p:_selMusclesP.slice(),s:_selMusclesS.slice(),src:'manuel'});
+  _exAClasser.delete(k);
+  saveUser();
+  closeModal();
+  // Le sélecteur sert aussi à l'écran de tri : chacun reprend la main
+  // sur son propre rendu plutôt que de forcer celui de l'éditeur.
+  if(typeof _apresSelecteur==='function'){const f=_apresSelecteur;_apresSelecteur=null;f();return;}
+  renderProgEx();
+}
+
+// ══════════════ ÉCRAN « EXERCICES À CLASSER » ══════════════
+// Balaie tout ce que l'utilisateur possède — programmes configurés, modèles
+// coach, et l'historique des séances — pour lister ce qui n'a pas trouvé de
+// rattachement. La liste est DÉRIVÉE : rien n'est persisté, elle se
+// reconstruit à chaque ouverture et suit donc les corrections en direct.
+function _collecterExercices(){
+  const vus=new Map();   // exKey -> { nom d'origine, nb de séances }
+  const noter=(nom,nb)=>{
+    if(!nom||!String(nom).trim()) return;
+    const k=resoudreAlias(exKey(nom)); if(!k) return;
+    const e=vus.get(k)||{nom,seances:0};
+    e.seances+=nb||0;
+    vus.set(k,e);
+  };
+  (currentUser.sessions_config||[]).forEach(s=>(s.exercises||[]).forEach(e=>noter(e.name,0)));
+  (currentUser.coachPrograms||[]).forEach(p=>['sessions_H','sessions_F'].forEach(g=>
+    (p[g]||[]).forEach(s=>(s.exercises||[]).forEach(e=>noter(e.name,0)))));
+  (currentUser.sessions||[]).forEach(s=>Object.keys(s.data||{}).forEach(n=>noter(n,1)));
+  return vus;
+}
+function loadExClassify(){
+  go('s-ex-classify');
+  const el=document.getElementById('exc-corps'); if(!el) return;
+  const vus=_collecterExercices();
+  const aClasser=[];
+  for(const [k,e] of vus){
+    // On passe l'exercice tel qu'on le connaît pour que le cardio soit écarté.
+    const ex=_exemplaireExercice(k)||{reps:''};
+    if(isCardio(ex)) continue;
+    if(!resoudreMuscles(e.nom,ex)) aClasser.push({k,...e});
+  }
+  aClasser.sort((a,b)=>b.seances-a.seances||a.nom.localeCompare(b.nom));
+  if(!aClasser.length){
+    el.innerHTML=emptyState('check','Tous tes exercices sont classés.',null,null,'padding:30px 0');
+    return;
+  }
+  el.innerHTML=`<p class="sub" style="font-size:12px;line-height:1.6;margin-bottom:16px">${aClasser.length} exercice${aClasser.length>1?'s':''} sans muscle rattaché. Classe-les, ou fusionne un doublon avec l'exercice qu'il désigne vraiment pour lui rendre son historique de charge.</p>`
+    +aClasser.map(a=>`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px">
+      <div style="font-weight:800;font-size:13px;margin-bottom:3px">${escapeHtml(a.nom)}</div>
+      <div class="sub" style="font-size:11px;margin-bottom:10px">${a.seances?a.seances+' séance'+(a.seances>1?'s':''):'jamais réalisé'}</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline btn-sm" style="flex:1;margin:0" onclick="_classerDepuisFile('${escapeHtml(a.k).replace(/'/g,"\'")}')">Classer</button>
+        <button class="btn btn-outline btn-sm" style="flex:1;margin:0" onclick="ouvrirFusion('${escapeHtml(a.k).replace(/'/g,"\'")}')">Fusionner avec…</button>
+      </div>
+    </div>`).join('');
+}
+// Retrouve un exemplaire de l'exercice pour disposer de ses reps (test cardio).
+function _exemplaireExercice(k){
+  const sources=[...(currentUser.sessions_config||[]),
+    ...(currentUser.coachPrograms||[]).flatMap(p=>[...(p.sessions_H||[]),...(p.sessions_F||[])])];
+  for(const s of sources) for(const e of (s.exercises||[]))
+    if(resoudreAlias(exKey(e.name))===k) return e;
+  return null;
+}
+// Classer depuis la file : on réutilise le sélecteur de l'éditeur en lui
+// fabriquant un exercice temporaire, plutôt que d'en écrire un second.
+function _classerDepuisFile(k){
+  const ex=_exemplaireExercice(k)||{name:k,reps:''};
+  progEx=[ex]; _selMusclesIdx=0;
+  const r=resoudreMuscles(ex.name,ex);
+  _selMusclesP=r?r.p.slice():[]; _selMusclesS=r?r.s.slice():[];
+  _rendreSelecteurMuscles(escapeHtml(ex.name));
+  _apresSelecteur=()=>{progEx=[];loadExClassify();};
+}
+let _apresSelecteur=null;
+
+// Fusion : « ce nom désigne en réalité cet exercice-là ».
+function ouvrirFusion(k){
+  const vus=_collecterExercices();
+  const cibles=[...vus.entries()].filter(([kk])=>kk!==k)
+    .sort((a,b)=>b[1].seances-a[1].seances).slice(0,60);
+  if(!cibles.length) return toast('Aucun autre exercice avec qui fusionner.','var(--orange)');
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+    <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 18px 20px;width:100%;max-width:480px;max-height:82vh;display:flex;flex-direction:column">
+      <h2 style="margin-bottom:2px;font-size:17px">Fusionner</h2>
+      <p class="sub" style="font-size:11px;margin-bottom:6px;line-height:1.5">« ${escapeHtml(k)} » désigne en réalité :</p>
+      <p class="sub" style="font-size:11px;margin-bottom:12px;line-height:1.5;color:var(--text-dim)">L'historique de charge des deux noms sera réuni. Rien n'est renommé ni effacé.</p>
+      <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch">
+        ${cibles.map(([kk,e])=>`<button onclick="_confirmerFusion('${escapeHtml(k).replace(/'/g,"\'")}','${escapeHtml(kk).replace(/'/g,"\'")}')" style="width:100%;text-align:left;background:var(--surface-1);border:1px solid var(--border);border-radius:9px;padding:11px 13px;margin-bottom:7px;color:#fff;font-family:Montserrat,sans-serif;font-size:12px;font-weight:700;cursor:pointer">
+          ${escapeHtml(e.nom)}<span style="display:block;color:var(--sub);font-size:10px;font-weight:400;margin-top:2px">${e.seances?e.seances+' séance'+(e.seances>1?'s':''):'jamais réalisé'}</span></button>`).join('')}
+      </div>
+      <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Annuler</button>
+    </div></div>`;
+  const old=document.getElementById('modal-overlay'); if(old) old.remove();
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+function _confirmerFusion(de,vers){
+  const r=ajouterAlias(de,vers);
+  if(!r.ok){ toast(r.msg,'var(--orange)'); return; }
+  saveUser(); closeModal(); loadExClassify();
+  toast('Fusionné, historique réuni');
+}
+
+// Compte les exercices sans rattachement et n'affiche l'entrée que s'il y en a.
+// Un lien « 0 exercice à classer » serait du bruit permanent dans l'interface.
+function _nbExAClasser(){
+  if(!currentUser) return 0;
+  let n=0;
+  for(const [k,e] of _collecterExercices()){
+    const ex=_exemplaireExercice(k)||{reps:''};
+    if(isCardio(ex)) continue;
+    if(!resoudreMuscles(e.nom,ex)) n++;
+  }
+  return n;
+}
+function _majLiensClasser(){
+  const n=_nbExAClasser();
+  [['sm-lien-classer','sm-nb-classer'],['ccd-lien-classer','ccd-nb-classer']].forEach(([w,c])=>{
+    const wrap=document.getElementById(w),cnt=document.getElementById(c);
+    if(!wrap) return;
+    wrap.style.display=n?'block':'none';
+    if(cnt) cnt.textContent=n?'('+n+')':'';
+  });
+}
+
+// ══════════════ DÉTECTION DE RENOMMAGE ══════════════
+// Photographie des exKey à l'ouverture de l'éditeur. Comparée à la sortie,
+// elle permet de proposer de conserver l'historique de charge quand un
+// exercice a simplement changé de nom.
+let _progExAvant=null;
+function _photographierProgEx(){ _progExAvant=(progEx||[]).map(e=>exKey(e&&e.name)).filter(Boolean); }
+
+// Appelée par saveProgram AVANT d'écrire progEx dans la séance.
+// Un seul disparu et un seul apparu : le cas est net, on propose la fusion.
+// Plusieurs des deux côtés : on ne devine pas, l'écran « à classer » est là
+// pour ça.
+function _detecterRenommage(){
+  if(!_progExAvant) return;
+  const avant=_progExAvant, apres=(progEx||[]).map(e=>exKey(e&&e.name)).filter(Boolean);
+  _progExAvant=null;
+  const disparus=avant.filter(k=>!apres.includes(k));
+  const apparus =apres.filter(k=>!avant.includes(k));
+  if(disparus.length!==1||apparus.length!==1) return;
+  const [x]=disparus,[y]=apparus;
+  // Rien à conserver si l'ancien nom n'a aucun historique.
+  const aDeLHistorique=(currentUser.sessions||[]).some(s=>{
+    const idx=_indexSessionData(s); return idx&&idx[x]!==undefined;
+  });
+  if(!aDeLHistorique) return;
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+    <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px">
+      <h2 style="margin-bottom:8px;font-size:17px">Même exercice ?</h2>
+      <p class="sub" style="font-size:12px;line-height:1.65;margin-bottom:16px">
+        « <strong style="color:#fff">${escapeHtml(x)}</strong> » a disparu et
+        « <strong style="color:#fff">${escapeHtml(y)}</strong> » est apparu dans cette séance.<br><br>
+        Répondre oui conserve l'historique de charge : les séries déjà réalisées sous l'ancien nom continueront d'alimenter la charge suggérée.
+      </p>
+      <button class="btn btn-red" onclick="_confirmerRenommage('${escapeHtml(x).replace(/'/g,"\'")}','${escapeHtml(y).replace(/'/g,"\'")}')">Oui, c'est le même</button>
+      <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Non, ce sont deux exercices</button>
+    </div></div>`;
+  // Différée : saveProgram enchaîne sur un go() de sortie, et la modale posée
+  // tout de suite s'afficherait par-dessus l'éditeur qu'on quitte.
+  setTimeout(()=>{
+    const old=document.getElementById('modal-overlay'); if(old) old.remove();
+    document.body.insertAdjacentHTML('beforeend',html);
+  },420);
+}
+function _confirmerRenommage(x,y){
+  const r=ajouterAlias(x,y);
+  closeModal();
+  if(!r.ok) return toast(r.msg,'var(--orange)');
+  saveUser();
+  toast('Historique de charge conservé');
+}
+
 // ══════════════ TESTS DE LA COUCHE D'IDENTITÉ D'EXERCICE ══════════════
 // Exécutable depuis la console : testExercices().
 // Ne touche à AUCUNE donnée réelle : currentUser est sauvegardé puis restauré.
@@ -15981,6 +16270,21 @@ function testExercices(){
     // ── Aucune écriture dans sessions[n].data ──
     ok('sessions[0].data intact',Object.keys(currentUser.sessions[0].data).join()==='DÉVELOPPÉ COUCHÉ',
        Object.keys(currentUser.sessions[0].data).join());
+
+    // ── Régression : un alias ancien→nouveau doit rendre l'historique quand
+    // on cherche avec le NOUVEAU nom. L'index de séance est bâti sur des clés
+    // historiques, donc anciennes ; sans canonicalisation des deux côtés, la
+    // fusion s'écrivait sans jamais rendre la moindre charge.
+    currentUser.exAlias={};_aliasGen++;
+    currentUser.sessions=[{id:'sx',date:9,slot:0,name:'P',
+      data:{'ANCIEN NOM':{sets:[{done:true,rir:'0',weight:'77'}]}}}];
+    ok('Avant fusion : le nouveau nom ne trouve rien',getLastZeroRIRWeight('NOUVEAU NOM',0,'P')===null);
+    ajouterAlias('ANCIEN NOM','NOUVEAU NOM');
+    ok('Après fusion : le nouveau nom retrouve la charge',getLastZeroRIRWeight('NOUVEAU NOM',0,'P')===77,
+       String(getLastZeroRIRWeight('NOUVEAU NOM',0,'P')));
+    ok('Fusion effective sans rechargement',getPrevPerf('NOUVEAU NOM',0,'P')?.weight==='77');
+    ok('L\'ancien nom continue de fonctionner',getLastZeroRIRWeight('ANCIEN NOM',0,'P')===77,
+       String(getLastZeroRIRWeight('ANCIEN NOM',0,'P')));
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
 
