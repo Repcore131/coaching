@@ -1452,6 +1452,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="ccd-caffeine" style="margin-bottom:20px"></div>
       <h3 style="margin-bottom:12px">Bilans récents</h3>
       <div id="ccd-bilans"></div>
+      <div id="ccd-volume"></div>
       <div id="ccd-sessions-recap" style="margin-top:24px"></div>
       <div id="ccd-lien-classer" style="display:none;margin-top:16px">
         <button class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="loadExClassify()">Exercices à classer <span id="ccd-nb-classer"></span></button>
@@ -1487,6 +1488,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- Placé ici et non dans la topbar : celle-ci porte déjà retour, titre et
            SAUVEGARDER, un quatrième élément déborderait à 375 px. -->
       <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:20px" onclick="saveCoachSessionsAsTemplate()">⭑ Enregistrer comme modèle</button>
+      <div id="csm-volume"></div>
       <div id="coach-session-slots"></div>
     </div>
   </div>
@@ -2251,11 +2253,12 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar"><button class="back-btn" onclick="go('s-client-home');loadClientHome()">←</button><span class="topbar-title">Évolution</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
-      <div style="display:flex;gap:6px;margin-bottom:20px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch" id="prog-tabs">
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px" id="prog-tabs">
         <button class="btn btn-red btn-sm" onclick="showProgressTab('poids',this)" style="white-space:nowrap">️ Poids</button>
         <button class="btn btn-outline btn-sm" onclick="showProgressTab('mensus',this)" style="white-space:nowrap"> Mensurations</button>
         <button class="btn btn-outline btn-sm" onclick="showProgressTab('masseGrasse',this)" style="white-space:nowrap"> Masse Grasse</button>
         <button class="btn btn-outline btn-sm" onclick="showProgressTab('perf',this)" style="white-space:nowrap">️ Perfs</button>
+        <button class="btn btn-outline btn-sm" onclick="showProgressTab('volume',this)" style="white-space:nowrap">Volume</button>
         <button class="btn btn-outline btn-sm" onclick="showProgressTab('photos',this)" style="white-space:nowrap"> Photos</button>
         <button class="btn btn-outline btn-sm" onclick="showProgressTab('notes',this)" style="white-space:nowrap;display:inline-flex;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="9" y="2" width="6" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> Notes</button>
       </div>
@@ -5873,6 +5876,9 @@ function openClientDetail(cid,_refresh){
   currentClientId=cid;
   const c=getOwnedClient(cid);
   if(!c) return;
+  // Volume de la semaine en cours, calcule avec la classification et les
+  // reperes de L ATHLETE.
+  try{ renderVolumeCoach(c); }catch(e){}
 
   document.getElementById('ccd-title').textContent=c.fname||c.lname||'—';
   const _av=document.getElementById('ccd-avatar');
@@ -6507,6 +6513,66 @@ const MUSCLES={
   MOLLETS   :{lib:'Mollets',      c:'#14b8a6'},
   ABDOS     :{lib:'Abdominaux',   c:'#f97316'}
 };
+// ══════════════ VOLUME D'ENTRAÎNEMENT : SÉRIES DURES ══════════════
+// Une « série dure » n'est pas une série : c'est une unité de stimulus. Deux
+// pondérations la ramènent à une valeur comparable d'un exercice à l'autre.
+
+// Intensité. Au-delà de RIR 4 la série n'apporte plus grand-chose au stimulus
+// hypertrophique ; à RIR 5 on ne la compte plus du tout. Ce sont des paliers de
+// terrain, pas une fonction continue mesurée.
+const POIDS_RIR=Object.freeze({echec:1, '0':1, '1':1, '2':1, '3':1, '4':0.5, '5':0});
+// Rôle du muscle dans l'exercice. Un secondaire reçoit un stimulus réel mais
+// moindre : on le compte une demi-série.
+const POIDS_ROLE=Object.freeze({PRIMAIRE:1, SECONDAIRE:0.5, AUCUN:0});
+// RIR non renseigné : la série est comptée pleine, et la semaine est signalée
+// comme « intensité partielle ». Ne pas la compter du tout ferait disparaître
+// du volume réellement produit ; la compter en silence laisserait croire à une
+// précision qui n'existe pas.
+const POIDS_RIR_ABSENT=1;
+// Au-delà, un total sur un seul muscle en une séance est signalé comme
+// inhabituel. Le calcul n'est jamais plafonné pour autant : c'est peut-être
+// vrai, et un chiffre tronqué serait un mensonge.
+const VOL_SEUIL_ABERRANT=40;
+// Part de séries sans RIR au-delà de laquelle le comptage est annoncé comme
+// une estimation haute.
+const VOL_PART_SANS_RIR=0.30;
+
+// Repères de volume hebdomadaire, en séries dures par muscle et par semaine.
+//
+// Ces valeurs sont des repères de PRATIQUE DE TERRAIN (cadre MEV/MAV/MRV
+// popularisé par Israetel / Renaissance Performance). Elles n'ont pas de
+// validation expérimentale directe et la variance interindividuelle est
+// majeure. Elles servent de point de départ ajustable, jamais de verdict.
+//
+// LOMBAIRES, ABDUCTEURS et ADDUCTEURS n'y figurent pas volontairement : ils
+// reçoivent du volume réel, mais aucun repère de terrain ne fait consensus
+// pour eux. Ils sont comptés et affichés sans zone ni couleur, plutôt que
+// jugés contre un chiffre inventé.
+const REPERES_VOLUME=Object.freeze({
+  PECTORAUX :{mev:8,  mavMin:12, mavMax:20, mrv:22},
+  DORSAUX   :{mev:10, mavMin:14, mavMax:22, mrv:25},
+  TRAPEZES  :{mev:0,  mavMin:12, mavMax:20, mrv:26},
+  DELT_ANT  :{mev:0,  mavMin:6,  mavMax:8,  mrv:12},
+  DELT_LAT  :{mev:8,  mavMin:16, mavMax:22, mrv:26},
+  DELT_POST :{mev:6,  mavMin:10, mavMax:18, mrv:24},
+  BICEPS    :{mev:8,  mavMin:14, mavMax:20, mrv:26},
+  TRICEPS   :{mev:6,  mavMin:10, mavMax:14, mrv:18},
+  AVANT_BRAS:{mev:0,  mavMin:8,  mavMax:16, mrv:20},
+  QUADRICEPS:{mev:8,  mavMin:12, mavMax:18, mrv:20},
+  ISCHIOS   :{mev:4,  mavMin:10, mavMax:16, mrv:20},
+  FESSIERS  :{mev:0,  mavMin:8,  mavMax:16, mrv:16},
+  MOLLETS   :{mev:6,  mavMin:12, mavMax:16, mrv:20},
+  ABDOS     :{mev:0,  mavMin:8,  mavMax:16, mrv:25}
+});
+// Zones d'un repère, dans l'ordre croissant. Le libellé est celui montré à
+// l'athlète : il décrit une position, il ne prescrit rien.
+const VOL_ZONES=Object.freeze([
+  {cle:'SOUS',   lib:'sous le minimum',      c:'#6f6f6f'},
+  {cle:'MAINTIEN',lib:'maintien',            c:'#3b82f6'},
+  {cle:'PROGRES',lib:'zone de progrès',      c:'#22c55e'},
+  {cle:'ELEVE',  lib:'volume élevé',         c:'#f97316'},
+  {cle:'AU_DESSUS',lib:'au-dessus du repère',c:'#e05050'}
+]);
 
 // Table issue du « Guide des méthodes et des exercices de musculation » du
 // coach : 408 exercices, classés par sa propre nomenclature (section du guide
@@ -7529,6 +7595,7 @@ function loadCoachSessionSlots(){
     if(!sessions[i]) sessions[i]={day,name:'',photo:null,exercises:[],active:false,notes:'',warmup:''};
     if(!Array.isArray(sessions[i].exercises)) sessions[i].exercises=[];
   });
+  try{ renderVolumePrescrit(sessions,c); }catch(e){}
   const container=document.getElementById('coach-session-slots');
   if(!container) return;
   container.innerHTML=sessions.map((s,i)=>`
@@ -7782,6 +7849,9 @@ function ajouterAlias(de,vers){
   if(!currentUser.exCatalogVersion) currentUser.exCatalogVersion=1;
   // Les index de séance portent des clés canonicalisées : ils sont périmés.
   _aliasGen++;
+  // Une fusion change la résolution musculaire de tout l'historique, donc les
+  // volumes déjà calculés.
+  _viderCacheVolume();
   return {ok:true};
 }
 
@@ -7827,6 +7897,7 @@ function _ecrireMuscles(k,r){
   if(!currentUser.exMuscles) currentUser.exMuscles={};
   if(!currentUser.exCatalogVersion) currentUser.exCatalogVersion=1;
   currentUser.exMuscles[k]=r;
+  _viderCacheVolume();
 }
 
 // Parse reps string : "10 PUIS 20", "6-8", "15 Par Jambe", "8"
@@ -9674,6 +9745,7 @@ function finishWorkout(incomplete=false){
   const sess={id:'s_'+Date.now(),date:Date.now(),name:woState.progName,slot:woState.slot??null,duration:mins,sets,setsPlanned,volume:Math.round(vol),complete:!incomplete,data};
   if(!currentUser.sessions) currentUser.sessions=[];
   currentUser.sessions.push(sess);
+  _viderCacheVolume();
   updateStreak();saveUser();
   document.getElementById('wd-time').textContent=mins+'min';
   // « 5/12 » plutôt que « 5 » : l'écart devient lisible au lieu d'être noyé.
@@ -9904,6 +9976,204 @@ function getPrevPerf(name,slot,progName){
     const done=d.sets.filter(s=>s.done&&s.weight);
     if(done.length) return done[done.length-1];
   }return null;
+}
+// ══════════════ CALCUL DU VOLUME PAR MUSCLE ET PAR SEMAINE ══════════════
+// Tout est DÉRIVÉ de user.sessions. Rien n'est écrit dans les séances, aucune
+// migration, et le seul champ nouveau est user.reperesVolume, optionnel.
+
+// ── Résolution musculaire EN LECTURE SEULE ─────────────────────────────────
+// resoudreMuscles() écrit dans currentUser.exMuscles et met les inconnus en
+// file « à classer ». Appelée depuis un calcul de volume, elle aurait trois
+// effets indésirables : consulter un écran grossirait la file d'attente, le
+// cache de volume s'invaliderait pendant le calcul qui le remplit (l'écriture
+// dans exMuscles est justement ce qui l'invalide), et surtout un coach qui
+// consulte le volume d'un athlète résoudrait contre SA propre table de
+// classification. D'où cette variante : aucune écriture, utilisateur explicite.
+function _aliasPour(k,user){
+  const a=user&&user.exAlias; if(!a) return k;
+  let cur=k;
+  for(let i=0;i<3;i++){ const s=a[cur]; if(!s||s===cur) return cur; cur=s; }
+  return cur;
+}
+// Marqueur distinct de null : un cardio n'est pas un exercice « non rattaché »,
+// il n'a simplement pas de muscle à compter et ne doit pas être signalé.
+const VOL_CARDIO=Object.freeze({cardio:true});
+function resoudreMusclesLecture(nom,ex,user){
+  const k0=exKey(nom); if(!k0) return null;
+  const k=_aliasPour(k0,user);
+  // Même ordre que resoudreMuscles : un choix déjà enregistré fait foi.
+  const dejaVu=user&&user.exMuscles&&user.exMuscles[k];
+  if(dejaVu) return dejaVu;
+  if((ex&&isCardio(ex))||_exGuideEstCardio(k)) return VOL_CARDIO;
+  const g=_exGuide().get(k);
+  if(g) return {p:g.p.slice(),s:g.s.slice(),src:'auto'};
+  for(const rg of EX_REGLES) if(rg.motif.test(k)) return {p:rg.p.slice(),s:rg.s.slice(),src:'auto'};
+  return null;   // inconnu : à compter comme « non rattaché », pas à deviner
+}
+
+// ── Pondérations ───────────────────────────────────────────────────────────
+function poidsIntensite(s){
+  const r=s?s.rir:null;
+  if(r===''||r==null) return POIDS_RIR_ABSENT;
+  const k=String(r);
+  if(k in POIDS_RIR) return POIDS_RIR[k];
+  const n=parseInt(k,10);
+  // Valeur inattendue : on ne perd pas la série. En dessous de 4 on compte
+  // plein, au-delà de 5 on ne compte plus, dans la continuité de la table.
+  if(!isFinite(n)) return POIDS_RIR_ABSENT;
+  return n<=3?1:(n===4?0.5:0);
+}
+function _poidsRoleCls(m,cls){
+  if(!cls||cls===VOL_CARDIO) return POIDS_ROLE.AUCUN;
+  if((cls.p||[]).includes(m)) return POIDS_ROLE.PRIMAIRE;
+  if((cls.s||[]).includes(m)) return POIDS_ROLE.SECONDAIRE;
+  return POIDS_ROLE.AUCUN;
+}
+function poidsRole(m,ex,user){
+  return _poidsRoleCls(m,resoudreMusclesLecture(ex&&ex.name,ex,user||currentUser));
+}
+// Éligibilité d'une série : réalisée, chargée, et pas du cardio.
+// Une série unilatérale (« 10 par jambe ») compte 1 et non 2, une dégressive
+// (phase 1 + phase 2) compte 1 et non 2 : dans sess.data, un objet de sets EST
+// une série, et le weight2/p2reps d'une dégressive vit dans ce même objet.
+// La convention est donc tenue par la structure, sans code dédié.
+function serieEligible(s,ex){
+  if(!s||s.done!==true) return false;
+  if(!(parseFloat(s.weight)>0)) return false;
+  return !isCardio(ex);
+}
+function serieDure(s,m,ex,user){
+  if(!serieEligible(s,ex)) return 0;
+  return poidsIntensite(s)*poidsRole(m,ex,user);
+}
+
+// ── Semaines ISO ───────────────────────────────────────────────────────────
+// _lundiDe est la seule définition de « début de semaine » du fichier, déjà
+// employée par updateStreak et renderNutriDots : on la réutilise plutôt que
+// d'en introduire une seconde qui finirait par diverger.
+function semaineISO(date){
+  const lundi=_lundiDe(date);
+  // ISO 8601 : la semaine 1 est celle qui contient le premier jeudi de
+  // l'année. On date donc la semaine par SON jeudi, ce qui règle d'un coup le
+  // 31 décembre et le 1er janvier.
+  const jeudi=new Date(lundi); jeudi.setDate(jeudi.getDate()+3);
+  const an=jeudi.getFullYear();
+  const premierLundi=_lundiDe(new Date(an,0,4));   // le 4 janvier est toujours en S1
+  const n=Math.round((lundi-premierLundi)/604800000)+1;
+  return an+'-W'+String(n).padStart(2,'0');
+}
+function _lundiDeSemaine(cle){
+  const m=/^(\d{4})-W(\d{1,2})$/.exec(String(cle||''));
+  if(!m) return null;
+  const d=_lundiDe(new Date(+m[1],0,4));
+  d.setDate(d.getDate()+(+m[2]-1)*7);
+  return d;
+}
+function _cleJour(ms){
+  const d=new Date(ms);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+
+// ── Cache mémoire, JAMAIS persisté ─────────────────────────────────────────
+// Un athlète peut avoir plusieurs centaines de séances et l'écran se rejoue à
+// chaque changement de semaine. La clé porte l'e-mail : un coach consulte
+// plusieurs athlètes dans la même session.
+let _cacheVolume={};
+function _viderCacheVolume(){ _cacheVolume={}; }
+
+// Le cœur : une passe sur les séances de la semaine.
+function _calculSemaine(user,cle){
+  const k=(user&&user.email||'?')+'|'+cle;
+  if(_cacheVolume[k]) return _cacheVolume[k];
+  const res={muscles:{},freq:{},eligibles:0,sansRir:0,nonRattachees:0,
+             exNonRattaches:[],aberrants:{},seances:0,ts:Date.now()};
+  const lundi=_lundiDeSemaine(cle);
+  if(!lundi||!user||!Array.isArray(user.sessions)) return (_cacheVolume[k]=res);
+  const debut=lundi.getTime();
+  const fin=debut+7*86400000;
+  // Filtrage par date AVANT d'ouvrir data : c'est ce qui tient la contrainte
+  // des 30 ms sur plusieurs centaines de séances.
+  const parJour={};
+  const vus=new Set();
+  for(const sess of user.sessions){
+    if(!sess||!sess.data) continue;
+    const t=sess.date;
+    if(!(t>=debut&&t<fin)) continue;
+    res.seances++;
+    const jour=_cleJour(t);
+    const j=parJour[jour]||(parJour[jour]={});
+    const parSeance={};
+    for(const nom of Object.keys(sess.data)){
+      const d=sess.data[nom];
+      if(!d||!Array.isArray(d.sets)||!d.sets.length) continue;
+      // L'objet exercice n'est pas conservé dans l'historique : on le
+      // reconstitue à partir du nom et des reps de la première série, seuls
+      // éléments dont isCardio a besoin.
+      const ex={name:nom,reps:d.sets[0].reps};
+      const cardio=isCardio(ex);
+      const cls=cardio?VOL_CARDIO:resoudreMusclesLecture(nom,ex,user);
+      let elig=0,sansRir=0;
+      for(const s of d.sets){
+        if(!serieEligible(s,ex)) continue;
+        elig++;
+        if(s.rir===''||s.rir==null) sansRir++;
+      }
+      if(!elig) continue;
+      res.eligibles+=elig;
+      res.sansRir+=sansRir;
+      if(cls===VOL_CARDIO) continue;         // compté nulle part, signalé nulle part
+      if(!cls){                               // exercice inconnu : on ne répartit pas au hasard
+        res.nonRattachees+=elig;
+        if(!vus.has(nom)){ vus.add(nom); res.exNonRattaches.push(nom); }
+        continue;
+      }
+      for(const s of d.sets){
+        if(!serieEligible(s,ex)) continue;
+        const pi=poidsIntensite(s);
+        if(!pi) continue;
+        for(const m of (cls.p||[])){ const v=pi*POIDS_ROLE.PRIMAIRE;
+          res.muscles[m]=(res.muscles[m]||0)+v; j[m]=(j[m]||0)+v; parSeance[m]=(parSeance[m]||0)+v; }
+        for(const m of (cls.s||[])){ const v=pi*POIDS_ROLE.SECONDAIRE;
+          res.muscles[m]=(res.muscles[m]||0)+v; j[m]=(j[m]||0)+v; parSeance[m]=(parSeance[m]||0)+v; }
+      }
+    }
+    for(const m in parSeance) if(parSeance[m]>VOL_SEUIL_ABERRANT) res.aberrants[m]=true;
+  }
+  // Fréquence : jours DISTINCTS où le muscle a reçu au moins une série dure
+  // entière. Une demi-série secondaire isolée ne fait pas une séance de plus.
+  for(const jour in parJour)
+    for(const m in parJour[jour])
+      if(parJour[jour][m]>=1) res.freq[m]=(res.freq[m]||0)+1;
+  _cacheVolume[k]=res;
+  return res;
+}
+function volumeSemaine(user,cle){ return _calculSemaine(user,cle).muscles; }
+function frequenceSemaine(user,cle,muscle){ return _calculSemaine(user,cle).freq[muscle]||0; }
+
+// ── Repères effectifs ──────────────────────────────────────────────────────
+// Surcharge partielle : le coach peut ne remonter que le MRV, les autres
+// bornes gardent leur défaut. Rend null pour un muscle sans repère : l'écran
+// affiche alors le volume sans le juger.
+function reperesEffectifs(user,muscle){
+  const d=REPERES_VOLUME[muscle];
+  const o=user&&user.reperesVolume&&user.reperesVolume[muscle];
+  if(!d&&!o) return null;
+  const r=Object.assign({},d||{},o||{});
+  for(const b of ['mev','mavMin','mavMax','mrv']) if(typeof r[b]!=='number') return null;
+  return r;
+}
+function zoneVolume(n,rep){
+  if(!rep) return null;
+  if(n<rep.mev) return VOL_ZONES[0];
+  if(n<rep.mavMin) return VOL_ZONES[1];
+  if(n<=rep.mavMax) return VOL_ZONES[2];
+  if(n<=rep.mrv) return VOL_ZONES[3];
+  return VOL_ZONES[4];
+}
+// Arrondi à 0,5 près, à L'AFFICHAGE seulement : le calcul garde sa précision.
+function volAffiche(n){
+  const v=Math.round(n*2)/2;
+  return Number.isInteger(v)?String(v):String(v).replace('.',',');
 }
 
 // ======= BILAN MULTI-STEP =======
@@ -11136,6 +11406,247 @@ const MEAS=[
 ];
 
 
+// ══════════════ ONGLET VOLUME (ATHLÈTE) ══════════════
+let _volDecalage=0;                 // 0 = semaine courante, 1 = la précédente…
+const VOL_SEMAINES_MAX=12;          // profondeur de navigation offerte
+// Une semaine sautée ne casse pas la comparaison, une vraie coupure si. Sans
+// cette limite, un athlète revenant après cinq semaines d'arrêt se serait vu
+// comparer à ses semaines d'avant la coupure, ce qui ne veut rien dire.
+const VOL_COUPURE=3;                // semaines vides consécutives = coupure
+const VOL_DELTA_N=4;                // semaines entraînées prises pour la moyenne
+const VOL_DELTA_MIN=2;              // en dessous, aucun delta n'est affiché
+
+function _volCleDecalee(n){
+  const d=_lundiDe(new Date());
+  d.setDate(d.getDate()-7*n);
+  return semaineISO(d);
+}
+// Moyenne des VOL_DELTA_N semaines ENTRAÎNÉES précédentes, abandonnée dès
+// qu'une coupure est franchie.
+function _volMoyennePrecedente(user,decalage,muscle){
+  const vals=[]; let vides=0;
+  for(let n=decalage+1;n<=decalage+26&&vals.length<VOL_DELTA_N;n++){
+    const c=_calculSemaine(user,_volCleDecalee(n));
+    if(!c.eligibles){ if(++vides>=VOL_COUPURE) break; continue; }
+    vides=0;
+    vals.push(c.muscles[muscle]||0);
+  }
+  if(vals.length<VOL_DELTA_MIN) return null;
+  return vals.reduce((a,b)=>a+b,0)/vals.length;
+}
+
+function _volBarre(m,n,rep,aberrant){
+  const z=zoneVolume(n,rep);
+  // Sans repère, aucune zone : on montre la quantité, on ne la juge pas.
+  const echelle=rep?Math.max(rep.mrv*1.25,n*1.05):Math.max(n*1.15,10);
+  const pc=v=>Math.max(0,Math.min(100,v/echelle*100));
+  const seg=(a,b,c)=>b>a?`<div style="position:absolute;left:${pc(a)}%;width:${pc(b)-pc(a)}%;top:0;bottom:0;background:${c};opacity:.34"></div>`:'';
+  const fond=rep
+    ? seg(0,rep.mev,VOL_ZONES[0].c)+seg(rep.mev,rep.mavMin,VOL_ZONES[1].c)
+      +seg(rep.mavMin,rep.mavMax,VOL_ZONES[2].c)+seg(rep.mavMax,rep.mrv,VOL_ZONES[3].c)
+      +seg(rep.mrv,echelle,VOL_ZONES[4].c)
+    : `<div style="position:absolute;inset:0;background:var(--surface-3)"></div>`;
+  const couleur=z?z.c:'var(--sub)';
+  // Le remplissage est PLUS FIN que la piste, et centré : à pleine hauteur il
+  // recouvrait les seuils déjà franchis, alors que situer la valeur par rapport
+  // à eux est tout l'intérêt de la barre. Les zones restent lisibles au-dessus
+  // et au-dessous, le trait de MRV traverse le tout.
+  return `<div style="position:relative;height:16px;border-radius:8px;overflow:hidden;background:var(--surface-2);${aberrant?'outline:1.5px solid var(--orange);outline-offset:1px':''}">
+      ${fond}
+      <div style="position:absolute;left:0;top:5px;height:6px;width:${pc(n)}%;background:${couleur};border-radius:3px;box-shadow:0 0 0 1px rgba(0,0,0,.45)"></div>
+      ${rep?`<div style="position:absolute;left:${pc(rep.mrv)}%;top:0;bottom:0;width:1.5px;background:#fff;opacity:.6"></div>`:''}
+    </div>`;
+}
+
+function renderVolume(){
+  const u=currentUser;
+  const cle=_volCleDecalee(_volDecalage);
+  const c=_calculSemaine(u,cle);
+  const lundi=_lundiDeSemaine(cle);
+  const dim=new Date(lundi); dim.setDate(dim.getDate()+6);
+  const fmt=d=>d.getDate()+'/'+String(d.getMonth()+1).padStart(2,'0');
+
+  const nav=`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:14px">
+      <button class="hit44" onclick="_volNav(1)" ${_volDecalage>=VOL_SEMAINES_MAX-1?'disabled':''}
+        style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:${_volDecalage>=VOL_SEMAINES_MAX-1?'var(--text-faint)':'#fff'};width:38px;height:34px;cursor:pointer;font-size:15px">←</button>
+      <div style="text-align:center;flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:800">${_volDecalage===0?'Cette semaine':(_volDecalage===1?'Semaine dernière':'Il y a '+_volDecalage+' semaines')}</div>
+        <div style="font-size:10px;color:var(--sub);margin-top:1px">${fmt(lundi)} au ${fmt(dim)}</div>
+      </div>
+      <button class="hit44" onclick="_volNav(-1)" ${_volDecalage<=0?'disabled':''}
+        style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:${_volDecalage<=0?'var(--text-faint)':'#fff'};width:38px;height:34px;cursor:pointer;font-size:15px">→</button>
+    </div>`;
+
+  // Bandeau d'honnêteté : permanent, non masquable.
+  const bandeau=`<div style="background:var(--surface-2);border-left:3px solid var(--sub);border-radius:8px;padding:10px 12px;margin-top:16px;font-size:11px;color:var(--sub);line-height:1.6">
+      Repères indicatifs. Ils varient fortement d'une personne à l'autre.
+      Ils ne remplacent pas l'avis de ton coach.
+    </div>`;
+
+  if(!c.seances){
+    document.getElementById('progress-content').innerHTML=nav
+      +`<div class="sub" style="font-size:12px;background:var(--surface-2);border-radius:10px;padding:18px;text-align:center;line-height:1.6">
+          ${_volDecalage===0?'Fais ta première séance, ton volume apparaîtra ici.':'Aucune séance cette semaine-là.'}
+        </div>`+bandeau;
+    return;
+  }
+
+  const lignes=Object.keys(c.muscles).filter(m=>c.muscles[m]>=0.5)
+    .sort((a,b)=>c.muscles[b]-c.muscles[a]);
+  const absents=Object.keys(MUSCLES).filter(m=>!(c.muscles[m]>=0.5));
+
+  const corps=lignes.map(m=>{
+    const n=c.muscles[m];
+    const rep=reperesEffectifs(u,m);
+    const z=zoneVolume(n,rep);
+    const freq=c.freq[m]||0;
+    const moy=_volMoyennePrecedente(u,_volDecalage,m);
+    let delta='';
+    if(moy!=null){
+      const d=n-moy;
+      const signe=d>0?'+':'';
+      // Un écart sous une demi-série n'est pas un mouvement, c'est du bruit.
+      if(Math.abs(d)>=0.5) delta=`<span style="font-size:11px;font-weight:800;color:${d>0?'var(--success)':'var(--orange)'};margin-left:6px">${signe}${volAffiche(d)}</span>`;
+      else delta=`<span style="font-size:11px;color:var(--text-faint);margin-left:6px">stable</span>`;
+    }
+    return `<div style="margin-bottom:13px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px">
+        <span style="font-size:12px;font-weight:800;color:${(MUSCLES[m]||{}).c||'#fff'}">${(MUSCLES[m]||{}).lib||m}</span>
+        <span style="font-size:11px;color:var(--sub);white-space:nowrap">${volAffiche(n)} série${n>=2?'s':''}${freq?' · '+freq+'×/sem':''}${delta}</span>
+      </div>
+      ${_volBarre(m,n,rep,c.aberrants[m])}
+      <div style="font-size:10px;color:${z?z.c:'var(--text-faint)'};margin-top:4px">
+        ${z?z.lib:'pas de repère établi'}${c.aberrants[m]?' <span style="color:var(--orange)">· inhabituel</span>':''}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Avertissements, dans l'ordre où ils changent la lecture du chiffre.
+  let alertes='';
+  if(c.eligibles&&c.sansRir/c.eligibles>VOL_PART_SANS_RIR){
+    alertes+=`<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:var(--orange);line-height:1.6">
+      Intensité non renseignée sur ${c.sansRir} série${c.sansRir>1?'s':''} : ce comptage est une estimation haute.
+    </div>`;
+  }
+  if(c.nonRattachees){
+    alertes+=`<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:var(--sub);line-height:1.6">
+      ${c.nonRattachees} série${c.nonRattachees>1?'s':''} non rattachée${c.nonRattachees>1?'s':''} à un muscle
+      (${c.exNonRattaches.slice(0,3).map(escapeHtml).join(', ')}${c.exNonRattaches.length>3?'…':''}).
+      <button onclick="loadExClassify()" style="background:none;border:none;color:var(--link);font-size:11px;font-family:Montserrat,sans-serif;cursor:pointer;text-decoration:underline;padding:0">Les classer</button>
+    </div>`;
+  }
+
+  const zero=absents.length?`<div style="margin-top:14px;font-size:11px;color:var(--text-faint);line-height:1.6">
+      Aucun volume cette semaine : ${absents.map(m=>(MUSCLES[m]||{}).lib||m).join(', ')}
+    </div>`:'';
+
+  document.getElementById('progress-content').innerHTML=nav+alertes+corps+zero+bandeau;
+}
+function _volNav(d){
+  const n=_volDecalage+d;
+  if(n<0||n>=VOL_SEMAINES_MAX) return;
+  _volDecalage=n;
+  renderVolume();
+}
+
+// ══════════════ VOLUME CÔTÉ COACH ══════════════
+// Les repères et la classification sont ceux de L'ATHLÈTE, pas ceux du coach :
+// resoudreMusclesLecture et reperesEffectifs prennent l'utilisateur en
+// paramètre, c'est toute la raison de leur existence.
+let _volCoachDeplie=false;
+
+function renderVolumeCoach(c){
+  const z=document.getElementById('ccd-volume');
+  if(!z) return;
+  if(!c||!Array.isArray(c.sessions)||!c.sessions.length){ z.innerHTML=''; return; }
+  const cle=semaineISO(new Date());
+  const res=_calculSemaine(c,cle);
+  if(!res.seances){
+    z.innerHTML=`<div style="font-size:11px;color:var(--text-faint);margin-bottom:14px">Aucune séance cette semaine.</div>`;
+    return;
+  }
+  const lignes=Object.keys(res.muscles).filter(m=>res.muscles[m]>=0.5)
+    .sort((a,b)=>res.muscles[b]-res.muscles[a]);
+  // Vue compacte : uniquement ce qui sort de la zone. Un muscle sans repère ne
+  // peut sortir d'aucune zone, il n'apparaît donc pas ici.
+  const hors=lignes.map(m=>({m,n:res.muscles[m],rep:reperesEffectifs(c,m)}))
+    .filter(x=>x.rep&&(x.n<x.rep.mev||x.n>x.rep.mrv));
+
+  const ligne=(m,n,rep)=>{
+    const zo=zoneVolume(n,rep);
+    return `<div style="margin-bottom:9px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px">
+        <span style="font-size:11px;font-weight:800;color:${(MUSCLES[m]||{}).c||'#fff'}">${(MUSCLES[m]||{}).lib||m}</span>
+        <span style="font-size:10px;color:${zo?zo.c:'var(--sub)'};white-space:nowrap">${volAffiche(n)} série${n>=2?'s':''} · ${zo?zo.lib:'pas de repère'}</span>
+      </div>
+      ${_volBarre(m,n,rep,res.aberrants[m])}
+    </div>`;
+  };
+
+  const corps=_volCoachDeplie
+    ? lignes.map(m=>ligne(m,res.muscles[m],reperesEffectifs(c,m))).join('')
+    : (hors.length?hors.map(x=>ligne(x.m,x.n,x.rep)).join('')
+       :`<div style="font-size:11px;color:var(--success);margin-bottom:6px">Tous les muscles travaillés sont dans leur zone.</div>`);
+
+  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:16px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">
+      <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Volume 7 jours</span>
+      <button onclick="_volCoachDeplie=!_volCoachDeplie;renderVolumeCoach(getOwnedClient(currentClientId))" style="background:none;border:none;color:var(--sub);font-size:10px;font-family:Montserrat,sans-serif;cursor:pointer;text-decoration:underline;padding:0">${_volCoachDeplie?'réduire':'voir tout'}</button>
+    </div>
+    ${corps}
+    ${res.nonRattachees?`<div style="font-size:10px;color:var(--text-faint);margin-top:6px">${res.nonRattachees} série${res.nonRattachees>1?'s':''} non rattachée${res.nonRattachees>1?'s':''}</div>`:''}
+    <div style="font-size:10px;color:var(--text-faint);margin-top:8px;line-height:1.5">Repères indicatifs, à ajuster selon l'athlète.</div>
+  </div>`;
+}
+
+// ── Volume PRESCRIT : ce que le programme impose, avant publication ─────────
+// Σ séries × poids de rôle sur les créneaux actifs. Aucune notion d'intensité
+// ici : le RIR n'est pas prescrit, il est constaté. Ce chiffre est donc un
+// MAJORANT du volume dur, pas une prévision.
+function volumePrescrit(cfg,user){
+  const out={muscles:{},nonRattaches:0};
+  for(const s of (cfg||[])){
+    if(!s||!s.active||!Array.isArray(s.exercises)) continue;
+    for(const ex of s.exercises){
+      if(!ex||!ex.name||isCardio(ex)) continue;
+      const cls=resoudreMusclesLecture(ex.name,ex,user);
+      const nb=Math.max(0,parseInt(ex.series)||0);
+      if(!nb) continue;
+      if(!cls||cls===VOL_CARDIO){ if(!cls) out.nonRattaches+=nb; continue; }
+      for(const m of (cls.p||[])) out.muscles[m]=(out.muscles[m]||0)+nb*POIDS_ROLE.PRIMAIRE;
+      for(const m of (cls.s||[])) out.muscles[m]=(out.muscles[m]||0)+nb*POIDS_ROLE.SECONDAIRE;
+    }
+  }
+  return out;
+}
+function renderVolumePrescrit(cfg,user){
+  const z=document.getElementById('csm-volume');
+  if(!z) return;
+  const u=user||_coachEditClient||currentUser;
+  const v=volumePrescrit(cfg,u);
+  const lignes=Object.keys(v.muscles).filter(m=>v.muscles[m]>=0.5)
+    .sort((a,b)=>v.muscles[b]-v.muscles[a]);
+  if(!lignes.length){ z.innerHTML=''; return; }
+  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:14px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:4px">Volume prescrit</div>
+    <div style="font-size:10px;color:var(--text-faint);margin-bottom:10px;line-height:1.5">
+      Séries programmées sur les créneaux actifs. L'intensité n'étant pas prescrite,
+      c'est un maximum : le volume réellement dur sera au plus égal.
+    </div>
+    ${lignes.map(m=>{
+      const rep=reperesEffectifs(u,m);
+      const zo=zoneVolume(v.muscles[m],rep);
+      return `<div style="margin-bottom:9px">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px">
+          <span style="font-size:11px;font-weight:800;color:${(MUSCLES[m]||{}).c||'#fff'}">${(MUSCLES[m]||{}).lib||m}</span>
+          <span style="font-size:10px;color:${zo?zo.c:'var(--sub)'};white-space:nowrap">${volAffiche(v.muscles[m])} série${v.muscles[m]>=2?'s':''}${zo?' · '+zo.lib:''}</span>
+        </div>
+        ${_volBarre(m,v.muscles[m],rep,false)}
+      </div>`;}).join('')}
+    ${v.nonRattaches?`<div style="font-size:10px;color:var(--text-faint);margin-top:6px">${v.nonRattaches} série${v.nonRattaches>1?'s':''} sur exercice non classé</div>`:''}
+  </div>`;
+}
+
 function showProgressTab(tab,btn){
   document.querySelectorAll('#prog-tabs button').forEach(b=>{b.className='btn btn-outline btn-sm';b.style.whiteSpace='nowrap';});
   if(btn){btn.className='btn btn-red btn-sm';btn.style.whiteSpace='nowrap';}
@@ -11325,6 +11836,10 @@ function showProgressTab(tab,btn){
       }
     },60);
 
+  } else if(tab==='volume'){
+    // Onglet Perfs et son graphique de tonnage conserves tels quels : ce
+    // sont deux grandeurs differentes, le tonnage et les series dures.
+    renderVolume();
   } else if(tab==='perf'){
     if(!ss.length){c.innerHTML=emptyState('dumbbell','Aucune séance enregistrée.');return;}
     const sl=ss.slice(-8);
@@ -18056,6 +18571,294 @@ function testExercices(){
     ok('La saisie en cours est reprise avant un glissement',progEx[0].name==='RENOMME',progEx[0].name);
     ok('Le champ perd le focus après le commit',document.activeElement!==_ch);
     progEx=_pxSauve;
+
+    // ══════════════ VOLUME : SÉRIES DURES ══════════════
+    const _vSauve={s:currentUser.sessions,m:currentUser.exMuscles,a:currentUser.exAlias,r:currentUser.reperesVolume};
+    _viderCacheVolume();
+
+    // ── poidsIntensite : les 8 valeurs de rir, plus undefined et null ──
+    const _pi=(r,att)=>ok('poidsIntensite rir='+JSON.stringify(r)+' = '+att,
+      poidsIntensite({rir:r})===att,String(poidsIntensite({rir:r})));
+    _pi('echec',1); _pi('0',1); _pi('1',1); _pi('2',1); _pi('3',1);
+    _pi('4',0.5); _pi('5',0); _pi('',1); _pi(undefined,1); _pi(null,1);
+    ok('poidsIntensite sur une série absente',poidsIntensite(null)===1);
+
+    // ── poidsRole : primaire, secondaire, absent, exercice non classé ──
+    currentUser.exMuscles={'DEVELOPPE COUCHE TEST':{p:['PECTORAUX'],s:['TRICEPS','DELT_ANT'],src:'manuel'}};
+    currentUser.exAlias={};
+    const _exDC={name:'DEVELOPPE COUCHE TEST',reps:'8'};
+    ok('poidsRole primaire = 1',poidsRole('PECTORAUX',_exDC,currentUser)===1);
+    ok('poidsRole secondaire = 0,5',poidsRole('TRICEPS',_exDC,currentUser)===0.5);
+    ok('poidsRole muscle absent = 0',poidsRole('MOLLETS',_exDC,currentUser)===0);
+    const _exInconnu={name:'ZZQQ EXERCICE INCONNU XYZ',reps:'10'};
+    ok('poidsRole sur exercice non classé = 0',poidsRole('PECTORAUX',_exInconnu,currentUser)===0);
+    ok('resoudreMusclesLecture rend null sur inconnu',
+       resoudreMusclesLecture(_exInconnu.name,_exInconnu,currentUser)===null);
+    ok('resoudreMusclesLecture n\'écrit RIEN',
+       !currentUser.exMuscles[exKey(_exInconnu.name)]);
+    ok('resoudreMusclesLecture ne met pas en file « à classer »',
+       !_exAClasser.has(exKey(_exInconnu.name)));
+
+    // ── serieDure : produit croisé des deux tables ──
+    const _sd=(rir,m,att)=>ok('serieDure rir='+rir+' '+m+' = '+att,
+      serieDure({done:true,weight:'60',rir},m,_exDC,currentUser)===att,
+      String(serieDure({done:true,weight:'60',rir},m,_exDC,currentUser)));
+    _sd('1','PECTORAUX',1);   _sd('1','TRICEPS',0.5);   _sd('1','MOLLETS',0);
+    _sd('4','PECTORAUX',0.5); _sd('4','TRICEPS',0.25);  _sd('5','PECTORAUX',0);
+    _sd('5','TRICEPS',0);     _sd('','PECTORAUX',1);    _sd('echec','TRICEPS',0.5);
+
+    // ── Éligibilité : tout ce qui doit rendre 0 ──
+    const _inel=(s,lib)=>ok('Inéligible : '+lib,
+      serieDure(Object.assign({done:true,weight:'60',rir:'0'},s),'PECTORAUX',_exDC,currentUser)===0);
+    _inel({done:false},'série non validée');
+    _inel({weight:'0'},'charge 0');
+    _inel({weight:''},'charge vide');
+    _inel({weight:'-20'},'charge négative');
+    _inel({weight:null},'charge absente');
+    ok('Inéligible : cardio',
+       serieDure({done:true,weight:'60',rir:'0'},'PECTORAUX',{name:'TAPIS',reps:'30 min'},currentUser)===0);
+
+    // ── Unilatéral et dégressive : une série reste une série ──
+    // Ce n'est pas une règle codée : dans sess.data un objet DE sets EST une
+    // série, phases comprises. Ces contrôles verrouillent la structure.
+    currentUser.exMuscles['FENTES TEST']={p:['QUADRICEPS'],s:[],src:'manuel'};
+    const _exUni={name:'FENTES TEST',reps:'10 par jambe'};
+    ok('Unilatéral : parseReps le reconnaît',parseReps('10 par jambe').type==='unilateral',
+       parseReps('10 par jambe').type);
+    ok('Unilatéral : une série compte 1, pas 2',
+       serieDure({done:true,weight:'40',rir:'1'},'QUADRICEPS',_exUni,currentUser)===1);
+    currentUser.exMuscles['CURL TEST']={p:['BICEPS'],s:[],src:'manuel'};
+    const _exDeg={name:'CURL TEST',reps:'10 PUIS 20'};
+    ok('Dégressive : parseReps la reconnaît',parseReps('10 PUIS 20').type==='degressive');
+    ok('Dégressive : une série compte 1, pas 2',
+       serieDure({done:true,weight:'30',weight2:'20',p2reps:'20',degressive:true,rir:'1'},
+                 'BICEPS',_exDeg,currentUser)===1);
+
+    // ── semaineISO ──
+    const _si=(d,att)=>ok('semaineISO '+d+' = '+att,semaineISO(new Date(d))===att,semaineISO(new Date(d)));
+    _si('2024-06-03T00:00:00','2024-W23');   // lundi 00:00
+    _si('2024-06-09T23:59:00','2024-W23');   // dimanche 23:59, même semaine
+    _si('2024-06-10T00:00:00','2024-W24');   // lundi suivant
+    _si('2024-12-31T12:00:00','2025-W01');   // 31/12 appartient à la S1 de 2025
+    _si('2025-01-01T12:00:00','2025-W01');
+    _si('2023-01-01T12:00:00','2022-W52');   // 1er janvier rattaché à l'année précédente
+    _si('2024-02-29T12:00:00','2024-W09');   // année bissextile
+    _si('2021-01-04T00:00:00','2021-W01');
+    ok('Lundi et dimanche de la même semaine ont la même clé',
+       semaineISO(new Date('2024-06-03T00:00:00'))===semaineISO(new Date('2024-06-09T23:59:00')));
+    ok('_lundiDeSemaine est l\'inverse de semaineISO',
+       semaineISO(_lundiDeSemaine('2024-W23'))==='2024-W23');
+    ok('_lundiDeSemaine sur une clé invalide rend null',_lundiDeSemaine('n\'importe quoi')===null);
+
+    // ── volumeSemaine : 3 séances factices sur 2 semaines, totaux à la main ──
+    currentUser.exMuscles={
+      'DC':{p:['PECTORAUX'],s:['TRICEPS','DELT_ANT'],src:'manuel'},
+      'SQ':{p:['QUADRICEPS'],s:['FESSIERS'],src:'manuel'}
+    };
+    const _s4=(rir)=>Array.from({length:4},()=>({done:true,weight:'60',reps:'8',rir}));
+    const _lu=new Date('2024-06-03T10:00:00').getTime();   // lundi  S23
+    const _me=new Date('2024-06-05T10:00:00').getTime();   // mercredi S23
+    const _lu2=new Date('2024-06-10T10:00:00').getTime();  // lundi  S24
+    currentUser.sessions=[
+      {id:'v1',date:_lu, data:{'DC':{sets:_s4('1')}}},                       // PEC 4, TRI 2, DELT_ANT 2
+      {id:'v2',date:_me, data:{'DC':{sets:_s4('4')},'SQ':{sets:_s4('0')}}},  // PEC +2, TRI +1, DA +1 ; QUAD 4, FESS 2
+      {id:'v3',date:_lu2,data:{'SQ':{sets:_s4('1')}}}                        // autre semaine
+    ];
+    _viderCacheVolume();
+    const _v23=volumeSemaine(currentUser,'2024-W23');
+    ok('Critère 1 : 4 séries RIR 1 → primaire 4, secondaires 2',
+       volumeSemaine(currentUser,'2024-W24').QUADRICEPS===4&&volumeSemaine(currentUser,'2024-W24').FESSIERS===2,
+       JSON.stringify(volumeSemaine(currentUser,'2024-W24')));
+    ok('Somme sur la semaine : PECTORAUX = 6',_v23.PECTORAUX===6,String(_v23.PECTORAUX));
+    ok('Somme sur la semaine : TRICEPS = 3',_v23.TRICEPS===3,String(_v23.TRICEPS));
+    ok('Somme sur la semaine : DELT_ANT = 3',_v23.DELT_ANT===3,String(_v23.DELT_ANT));
+    ok('Somme sur la semaine : QUADRICEPS = 4',_v23.QUADRICEPS===4,String(_v23.QUADRICEPS));
+    ok('Somme sur la semaine : FESSIERS = 2',_v23.FESSIERS===2,String(_v23.FESSIERS));
+    ok('Les semaines ne se mélangent pas',volumeSemaine(currentUser,'2024-W24').PECTORAUX===undefined);
+    ok('Semaine sans séance : objet vide',JSON.stringify(volumeSemaine(currentUser,'2024-W30'))==='{}');
+
+    // ── frequenceSemaine ──
+    ok('Même muscle sur 2 jours distincts → 2',frequenceSemaine(currentUser,'2024-W23','PECTORAUX')===2,
+       String(frequenceSemaine(currentUser,'2024-W23','PECTORAUX')));
+    currentUser.sessions=[
+      {id:'f1',date:_lu,      data:{'DC':{sets:_s4('1')}}},
+      {id:'f2',date:_lu+3600000,data:{'DC':{sets:_s4('1')}}}   // même jour
+    ];
+    _viderCacheVolume();
+    ok('Deux séances le même jour → fréquence 1',frequenceSemaine(currentUser,'2024-W23','PECTORAUX')===1,
+       String(frequenceSemaine(currentUser,'2024-W23','PECTORAUX')));
+    currentUser.sessions=[{id:'f3',date:_lu,data:{'DC':{sets:[{done:true,weight:'60',reps:'8',rir:'1'}]}}}];
+    _viderCacheVolume();
+    ok('Muscle à 0,5 série sur un jour → ce jour ne compte pas',
+       frequenceSemaine(currentUser,'2024-W23','TRICEPS')===0,
+       String(frequenceSemaine(currentUser,'2024-W23','TRICEPS')));
+    ok('Le primaire du même jour compte, lui',frequenceSemaine(currentUser,'2024-W23','PECTORAUX')===1);
+
+    // ── Cardio et non rattachés (critère 4) ──
+    currentUser.sessions=[{id:'c1',date:_lu,data:{
+      'TAPIS ROULANT':{sets:[{done:true,weight:'1',reps:'30 min',rir:''}]},
+      'ZZQQ INCONNU XYZ':{sets:_s4('1')}
+    }}];
+    _viderCacheVolume();
+    const _vCard=_calculSemaine(currentUser,'2024-W23');
+    ok('Cardio : ne contribue à aucun muscle',JSON.stringify(_vCard.muscles)==='{}',JSON.stringify(_vCard.muscles));
+    ok('Cardio : n\'apparaît pas dans les séries non rattachées',_vCard.nonRattachees===4,String(_vCard.nonRattachees));
+    ok('Cardio : n\'est pas listé comme exercice non rattaché',
+       _vCard.exNonRattaches.length===1&&_vCard.exNonRattaches[0]==='ZZQQ INCONNU XYZ',
+       JSON.stringify(_vCard.exNonRattaches));
+
+    // ── Compteur « intensité non renseignée » (critère 7) ──
+    currentUser.exMuscles={'DC':{p:['PECTORAUX'],s:[],src:'manuel'}};
+    currentUser.sessions=[{id:'r1',date:_lu,data:{'DC':{sets:[
+      {done:true,weight:'60',reps:'8',rir:'1'},{done:true,weight:'60',reps:'8',rir:''},
+      {done:true,weight:'60',reps:'8',rir:''},{done:true,weight:'60',reps:'8',rir:'2'},
+      {done:true,weight:'60',reps:'8',rir:'2'}]}}}];
+    _viderCacheVolume();
+    const _r=_calculSemaine(currentUser,'2024-W23');
+    ok('Séries sans RIR comptées exactement',_r.sansRir===2&&_r.eligibles===5,
+       _r.sansRir+'/'+_r.eligibles);
+    ok('Part sans RIR au-dessus du seuil détectée',_r.sansRir/_r.eligibles>VOL_PART_SANS_RIR);
+
+    // ── Valeur aberrante : signalée, jamais plafonnée ──
+    currentUser.sessions=[{id:'a1',date:_lu,data:{'DC':{sets:
+      Array.from({length:45},()=>({done:true,weight:'60',reps:'8',rir:'1'}))}}}];
+    _viderCacheVolume();
+    const _a=_calculSemaine(currentUser,'2024-W23');
+    ok('Volume aberrant signalé',_a.aberrants.PECTORAUX===true);
+    ok('Volume aberrant NON plafonné',_a.muscles.PECTORAUX===45,String(_a.muscles.PECTORAUX));
+
+    // ── reperesEffectifs ──
+    currentUser.reperesVolume=undefined;
+    ok('Repère par défaut lu tel quel',reperesEffectifs(currentUser,'TRICEPS').mrv===18);
+    currentUser.reperesVolume={TRICEPS:{mrv:26}};
+    const _re=reperesEffectifs(currentUser,'TRICEPS');
+    ok('Surcharge partielle : le MRV change',_re.mrv===26,String(_re.mrv));
+    ok('Surcharge partielle : les autres bornes gardent le défaut',
+       _re.mev===6&&_re.mavMin===10&&_re.mavMax===14,JSON.stringify(_re));
+    ok('Muscle sans repère → null',reperesEffectifs(currentUser,'LOMBAIRES')===null);
+    ok('ABDUCTEURS et ADDUCTEURS aussi',
+       reperesEffectifs(currentUser,'ABDUCTEURS')===null&&reperesEffectifs(currentUser,'ADDUCTEURS')===null);
+    ok('Les 14 muscles à repère sont couverts',Object.keys(REPERES_VOLUME).length===14);
+    ok('Tous les repères portent sur un muscle connu',
+       Object.keys(REPERES_VOLUME).every(m=>MUSCLES[m]));
+    ok('Repères cohérents : mev <= mavMin <= mavMax <= mrv',
+       Object.values(REPERES_VOLUME).every(r=>r.mev<=r.mavMin&&r.mavMin<=r.mavMax&&r.mavMax<=r.mrv));
+
+    // ── Zones (critères 5 et 6) ──
+    currentUser.reperesVolume=undefined;
+    ok('24 séries de triceps avec MRV 18 → au-dessus du repère',
+       zoneVolume(24,reperesEffectifs(currentUser,'TRICEPS')).cle==='AU_DESSUS');
+    currentUser.reperesVolume={TRICEPS:{mrv:26}};
+    ok('MRV surchargé à 26 → 24 séries repassent en volume élevé',
+       zoneVolume(24,reperesEffectifs(currentUser,'TRICEPS')).cle==='ELEVE');
+    currentUser.reperesVolume=undefined;
+    const _rp=reperesEffectifs(currentUser,'PECTORAUX');   // 8 / 12 / 20 / 22
+    ok('Zone sous le minimum',zoneVolume(7,_rp).cle==='SOUS');
+    ok('Zone maintien à la borne basse',zoneVolume(8,_rp).cle==='MAINTIEN');
+    ok('Zone progrès aux deux bornes',zoneVolume(12,_rp).cle==='PROGRES'&&zoneVolume(20,_rp).cle==='PROGRES');
+    ok('Zone volume élevé',zoneVolume(21,_rp).cle==='ELEVE'&&zoneVolume(22,_rp).cle==='ELEVE');
+    ok('Zone au-dessus du repère',zoneVolume(23,_rp).cle==='AU_DESSUS');
+    ok('Sans repère, aucune zone',zoneVolume(12,null)===null);
+
+    // ── Affichage arrondi à 0,5, jamais dans le calcul ──
+    ok('Affichage 2,5',volAffiche(2.5)==='2,5');
+    ok('Affichage 3 sans décimale',volAffiche(3)==='3');
+    ok('Affichage arrondi au demi le plus proche',volAffiche(2.26)==='2,5'&&volAffiche(2.24)==='2');
+
+    // ── Performance : 300 séances, une semaine sous 30 ms ──
+    const _base=new Date('2024-01-01T10:00:00').getTime();
+    const _gros=[];
+    for(let i=0;i<300;i++){
+      _gros.push({id:'p'+i,date:_base+i*86400000/2,data:{
+        'DC':{sets:_s4('1')},'SQ':{sets:_s4('2')},'ZZQQ INCONNU XYZ':{sets:_s4('1')}}});
+    }
+    currentUser.sessions=_gros;
+    currentUser.exMuscles={'DC':{p:['PECTORAUX'],s:['TRICEPS'],src:'manuel'},
+                           'SQ':{p:['QUADRICEPS'],s:['FESSIERS'],src:'manuel'}};
+    _viderCacheVolume();
+    const _t0=performance.now();
+    volumeSemaine(currentUser,semaineISO(new Date(_base+150*86400000/2)));
+    const _dt=performance.now()-_t0;
+    ok('300 séances : une semaine calculée sous 30 ms',_dt<30,Math.round(_dt*100)/100+' ms');
+    const _t1=performance.now();
+    volumeSemaine(currentUser,semaineISO(new Date(_base+150*86400000/2)));
+    const _dt1=performance.now()-_t1;
+    ok('Second appel servi par le cache',_dt1<_dt||_dt1<1,Math.round(_dt1*100)/100+' ms');
+    ok('Le cache n\'est jamais persisté',
+       !JSON.stringify(localStorage.getItem('rc_users')||'').includes('_cacheVolume'));
+
+    currentUser.sessions=_vSauve.s; currentUser.exMuscles=_vSauve.m;
+    currentUser.exAlias=_vSauve.a; currentUser.reperesVolume=_vSauve.r;
+    _viderCacheVolume();
+
+    // ══════ VOLUME : CÔTÉ COACH ET SEMAINES ══════
+    const _vcSauve=currentUser;
+    const _vcL=(n)=>{const d=_lundiDe(new Date());d.setDate(d.getDate()-7*n+2);return d.getTime();};
+    const _vcS=(k,rir)=>Array.from({length:k},()=>({done:true,weight:'60',reps:'8',rir}));
+
+    // Un coach consulte SON athlète : c'est la classification et les repères de
+    // l'athlète qui font foi, jamais ceux du coach. C'est toute la raison d'être
+    // de resoudreMusclesLecture.
+    currentUser={email:'coach@t',role:'coach',exAlias:{},sessions:[],
+      exMuscles:{'MYSTERE':{p:['MOLLETS'],s:[],src:'m'}}};
+    const _ath={email:'ath@t',exAlias:{},reperesVolume:{PECTORAUX:{mrv:30}},
+      exMuscles:{'MYSTERE':{p:['PECTORAUX'],s:[],src:'m'}},
+      sessions:[{id:'q',date:_vcL(0),data:{'MYSTERE':{sets:_vcS(3,'1')}}}]};
+    _viderCacheVolume();
+    const _vv=volumeSemaine(_ath,_volCleDecalee(0));
+    ok('Le coach résout avec la classification de l\'ATHLÈTE',
+       _vv.PECTORAUX===3&&_vv.MOLLETS===undefined,JSON.stringify(_vv));
+    ok('Le coach lit les repères de l\'ATHLÈTE',
+       reperesEffectifs(_ath,'PECTORAUX').mrv===30&&reperesEffectifs(currentUser,'PECTORAUX').mrv===22);
+
+    // volumePrescrit : ce qui doit être ignoré
+    const _cfg=[
+      {active:true, exercises:[{name:'DC',series:4,reps:'8'},{name:'EXT',series:3,reps:'12'}]},
+      {active:false,exercises:[{name:'DC',series:9,reps:'8'}]},
+      {active:true, exercises:[{name:'TAPIS',series:1,reps:'30 min'},{name:'ZZINCONNU XYZ',series:5,reps:'10'}]}
+    ];
+    const _uP={email:'p@t',exAlias:{},exMuscles:{
+      'DC':{p:['PECTORAUX'],s:['TRICEPS'],src:'m'},'EXT':{p:['TRICEPS'],s:[],src:'m'}}};
+    const _vp=volumePrescrit(_cfg,_uP);
+    ok('Prescrit : créneau inactif ignoré',_vp.muscles.PECTORAUX===4,String(_vp.muscles.PECTORAUX));
+    // 4 séries de DC où le triceps est SECONDAIRE (4 × 0,5 = 2), plus 3 séries
+    // d'extensions où il est primaire (3 × 1) : 5, et non 7.
+    ok('Prescrit : secondaire compté pour moitié',_vp.muscles.TRICEPS===4*0.5+3,String(_vp.muscles.TRICEPS));
+    ok('Prescrit : cardio ignoré, non classé compté à part',_vp.nonRattaches===5,String(_vp.nonRattaches));
+    ok('Prescrit : programme vide → rien',
+       JSON.stringify(volumePrescrit([],_uP).muscles)==='{}'&&JSON.stringify(volumePrescrit(null,_uP).muscles)==='{}');
+    ok('Prescrit : séries à 0 ou absentes ignorées',
+       JSON.stringify(volumePrescrit([{active:true,exercises:[{name:'DC',series:0},{name:'DC'}]}],_uP).muscles)==='{}');
+
+    // Navigation de semaine et clé décalée
+    ok('_volCleDecalee(0) est la semaine courante',_volCleDecalee(0)===semaineISO(new Date()));
+    ok('_volCleDecalee(1) est bien la semaine d\'avant',
+       (()=>{const d=_lundiDeSemaine(_volCleDecalee(1)),e=_lundiDeSemaine(_volCleDecalee(0));
+             return Math.round((e-d)/86400000)===7;})());
+
+    // Delta : moyenne sur les semaines ENTRAÎNÉES, abandonnée après une coupure
+    const _uD={email:'d@t',exAlias:{},exMuscles:{'EXT':{p:['TRICEPS'],s:[],src:'m'}},sessions:[
+      {id:'d0',date:_vcL(0),data:{'EXT':{sets:_vcS(10,'1')}}},
+      {id:'d2',date:_vcL(2),data:{'EXT':{sets:_vcS(4,'1')}}},
+      {id:'d3',date:_vcL(3),data:{'EXT':{sets:_vcS(4,'1')}}}]};
+    _viderCacheVolume();
+    ok('Une seule semaine sautée ne casse pas la comparaison',
+       _volMoyennePrecedente(_uD,0,'TRICEPS')===4,String(_volMoyennePrecedente(_uD,0,'TRICEPS')));
+    const _uC={email:'c@t',exAlias:{},exMuscles:{'EXT':{p:['TRICEPS'],s:[],src:'m'}},sessions:[
+      {id:'c0',date:_vcL(0),data:{'EXT':{sets:_vcS(10,'1')}}},
+      {id:'c6',date:_vcL(6),data:{'EXT':{sets:_vcS(4,'1')}}},
+      {id:'c7',date:_vcL(7),data:{'EXT':{sets:_vcS(4,'1')}}}]};
+    _viderCacheVolume();
+    ok('Cinq semaines d\'arrêt : aucun delta',_volMoyennePrecedente(_uC,0,'TRICEPS')===null,
+       String(_volMoyennePrecedente(_uC,0,'TRICEPS')));
+    const _uU={email:'u@t',exAlias:{},exMuscles:{'EXT':{p:['TRICEPS'],s:[],src:'m'}},sessions:[
+      {id:'u0',date:_vcL(0),data:{'EXT':{sets:_vcS(10,'1')}}},
+      {id:'u1',date:_vcL(1),data:{'EXT':{sets:_vcS(4,'1')}}}]};
+    _viderCacheVolume();
+    ok('Une seule semaine entraînée avant : pas de delta',
+       _volMoyennePrecedente(_uU,0,'TRICEPS')===null);
+
+    currentUser=_vcSauve; _viderCacheVolume();
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
