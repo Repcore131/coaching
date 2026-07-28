@@ -1453,6 +1453,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <h3 style="margin-bottom:12px">Bilans récents</h3>
       <div id="ccd-bilans"></div>
       <div id="ccd-volume"></div>
+      <div id="ccd-plateaux"></div>
       <div id="ccd-sessions-recap" style="margin-top:24px"></div>
       <div id="ccd-lien-classer" style="display:none;margin-top:16px">
         <button class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="loadExClassify()">Exercices à classer <span id="ccd-nb-classer"></span></button>
@@ -2111,6 +2112,7 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
       <div id="wd-cooldown"></div>
       <div id="wd-comparison"></div>
+      <div id="wd-etats"></div>
       <!-- RESSENTI POST-SÉANCE -->
       <div style="margin-bottom:16px">
         <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px">Ressenti post-séance</div>
@@ -5960,6 +5962,7 @@ function openClientDetail(cid,_refresh){
   // Volume de la semaine en cours, calcule avec la classification et les
   // reperes de L ATHLETE.
   try{ renderVolumeCoach(c); }catch(e){}
+  try{ renderPlateauxCoach(c); }catch(e){}
 
   document.getElementById('ccd-title').textContent=c.fname||c.lname||'—';
   const _av=document.getElementById('ccd-avatar');
@@ -9854,6 +9857,9 @@ function finishWorkout(incomplete=false){
   document.getElementById('wd-vol').textContent=Math.round(vol)+'kg';
   document.getElementById('wd-msg').textContent=incomplete?'Séance interrompue. Continue demain !':'Excellent travail ! Chaque séance compte ';
   document.getElementById('wd-comparison').innerHTML=buildSessionComparison(vol,data);
+  // Seuls les exercices dont l'état vient de CHANGER, et jamais pour annoncer
+  // une progression : l'écran de fin de séance n'est pas un bulletin.
+  renderEtatsSeance(currentUser,sess);
   // Le retour au calme n'a de sens qu'ici, une fois la dernière série faite.
   document.getElementById('wd-cooldown').innerHTML=_carteProtocole(woState&&woState.cooldown,'Fin de séance','var(--accent-blue)','wd-cooldown-body');
   // Reset sliders post-séance
@@ -9943,9 +9949,9 @@ function perfExercice(sess,exNom){
 }
 
 // Série temporelle d'un exercice sur un créneau, prête à être jugée.
-function _serieExercice(user,exNom,slot,progName){
+function _serieExercice(seances,exNom,slot,progName){
   const out=[];
-  for(const sess of (user&&user.sessions)||[]){
+  for(const sess of (seances||[])){
     if(!sess||!sess.date) continue;
     // Séance de décharge : hors série. Le champ vient de BB-05 et n'existe pas
     // encore ; la garde est donc inerte aujourd'hui, et juste le jour où il
@@ -9979,12 +9985,18 @@ function _marquerAberrations(serie){
   return serie;
 }
 
+// Enveloppe memoisee. Le calcul lui-meme prend une LISTE de seances : c est
+// ce qui permet de le rejouer sans la derniere pour savoir si l etat vient de
+// changer, sans polluer le cache avec des cles factices.
 function etatExercice(user,exNom,slot,progName){
   const cle=(user&&user.email||'?')+'|'+exKey(exNom)+'|'+slot+'|'+(progName||'');
   if(_cachePlateau[cle]) return _cachePlateau[cle];
-  const rendre=(o)=>(_cachePlateau[cle]=o);
+  return (_cachePlateau[cle]=_calculEtat((user&&user.sessions)||[],exNom,slot,progName));
+}
+function _calculEtat(seances,exNom,slot,progName){
+  const rendre=(o)=>o;
 
-  let serie=_serieExercice(user,exNom,slot,progName);
+  let serie=_serieExercice(seances,exNom,slot,progName);
   if(!serie.length) return rendre({etat:'insuffisant',n:0,T:0});
 
   // Un changement de métrique COUPE la série : comparer un e1RM à un volume de
@@ -10045,7 +10057,7 @@ function etatExercice(user,exNom,slot,progName){
 // Un exercice où il n'est que secondaire ne dit rien de sa progression.
 function etatMuscle(user,m,slot,progName){
   const noms=new Set();
-  for(const sess of (user&&user.sessions)||[]){
+  for(const sess of ((user&&user.sessions)||[])){
     if(!sess||!sess.data) continue;
     for(const nom of Object.keys(sess.data)) noms.add(nom);
   }
@@ -10076,6 +10088,166 @@ const PERF_ETAT_LIB={
   progression:'en progression', ralentissement:'ça ralentit',
   plateau:'plateau', regression:'en recul', insuffisant:'pas assez de recul'
 };
+
+// ══════════════ ÉTATS DE PROGRESSION : AFFICHAGE ══════════════
+// Encadré commun aux trois écrans. Il dit la limite du modèle, y compris celle
+// qui vient de l'absence de repsDone : sans elle, un chiffre stable pourrait
+// être lu comme « rien n'a bougé » alors que les répétitions, elles, ont bougé.
+const PERF_ENCADRE=`<div style="background:var(--surface-2);border-left:3px solid var(--sub);border-radius:8px;padding:10px 12px;margin-top:14px;font-size:11px;color:var(--sub);line-height:1.6">
+    Estimation basée sur tes séries validées. L'e1RM est un modèle : il est
+    fiable jusqu'à 12 répétitions, approximatif au-delà. Le calcul retient les
+    répétitions <strong>prévues</strong> au programme, pas celles réellement
+    faites.
+  </div>`;
+
+// Exercices dont l'état a CHANGÉ avec la séance qu'on vient d'enregistrer.
+// On rejoue le calcul sans cette séance : c'est le seul moyen de savoir ce qui
+// est nouveau, aucun état n'étant stocké.
+function etatsChanges(user,sess){
+  if(!user||!sess||!sess.data) return [];
+  const toutes=(user.sessions||[]);
+  const avant=toutes.filter(s=>s!==sess&&s.id!==sess.id);
+  const out=[];
+  for(const nom of Object.keys(sess.data)){
+    const ap=_calculEtat(toutes,nom,sess.slot,sess.name);
+    // Aucun message quand ça progresse ou qu'on ne sait pas : on ne parle que
+    // de ce qui mérite d'être dit.
+    if(ap.etat==='progression'||ap.etat==='insuffisant') continue;
+    const av=_calculEtat(avant,nom,sess.slot,sess.name);
+    if(av.etat===ap.etat) continue;
+    out.push({nom,...ap});
+  }
+  return out;
+}
+// Ton factuel, jamais culpabilisant : on décrit, on ne reproche pas.
+function _phraseEtat(x){
+  const sem=Math.floor((x.joursDepuisRecord||0)/7);
+  if(x.etat==='plateau')
+    return 'pas de nouveau maximum depuis '+(sem>=2?sem+' semaines':'4 semaines')+'. Ça arrive. Parles-en à ton coach.';
+  if(x.etat==='regression')
+    return 'les dernières séries sont en dessous de ton meilleur niveau. Fatigue, sommeil, charge de travail : ça se discute avec ton coach.';
+  return 'la progression marque le pas. Rien d\'alarmant à ce stade.';
+}
+function renderEtatsSeance(user,sess){
+  const z=document.getElementById('wd-etats');
+  if(!z) return;
+  let ch=[];
+  try{ ch=etatsChanges(user,sess); }catch(e){ ch=[]; }
+  if(!ch.length){ z.innerHTML=''; return; }
+  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:16px">
+    ${ch.map(x=>`<div style="display:flex;gap:9px;align-items:flex-start;margin-bottom:8px">
+      <span style="width:6px;height:6px;border-radius:50%;background:${x.etat==='regression'?'var(--orange)':'var(--sub)'};margin-top:6px;flex-shrink:0"></span>
+      <div style="flex:1;min-width:0;font-size:12px;line-height:1.6;color:#ccc">
+        <strong style="color:#fff">${escapeHtml(x.nom)}</strong> : ${_phraseEtat(x)}
+      </div></div>`).join('')}
+    ${PERF_ENCADRE}
+  </div>`;
+}
+
+// Courbe de la performance NORMALISÉE : on compare une forme, pas des kilos.
+// Aucune valeur absolue n'est affichée — le calculateur « Vue tableau » utilise
+// un autre modèle d'e1RM et les deux chiffres se contrediraient.
+function _sparkline(points,couleur){
+  if(!points||points.length<2) return '';
+  const min=Math.min(...points), max=Math.max(...points);
+  const etendue=(max-min)||1;
+  const L=100, H=26;
+  const d=points.map((p,i)=>{
+    const x=(i/(points.length-1))*L;
+    const y=H-((p-min)/etendue)*(H-4)-2;
+    return (i?'L':'M')+x.toFixed(1)+' '+y.toFixed(1);
+  }).join(' ');
+  return `<svg viewBox="0 0 ${L} ${H}" preserveAspectRatio="none" style="width:100%;height:26px;overflow:visible" aria-hidden="true">
+    <path d="${d}" fill="none" stroke="${couleur}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  </svg>`;
+}
+const PERF_ETAT_COULEUR={progression:'var(--success)',ralentissement:'var(--info)',
+  plateau:'var(--orange)',regression:'var(--red)',insuffisant:'var(--text-faint)'};
+
+// Tous les exercices de l'historique, avec leur état, triés par ancienneté du
+// dernier record : ce qui bloque depuis le plus longtemps arrive en premier.
+function _listeEtats(user){
+  const vus=new Map();
+  for(const sess of (user.sessions||[])){
+    if(!sess||!sess.data) continue;
+    for(const nom of Object.keys(sess.data))
+      if(!vus.has(nom)) vus.set(nom,{slot:sess.slot,name:sess.name});
+  }
+  const out=[];
+  for(const [nom,ref] of vus){
+    const e=etatExercice(user,nom,ref.slot,ref.name);
+    const serie=_serieExercice(user.sessions||[],nom,ref.slot,ref.name);
+    out.push({nom,...e,points:serie.map(p=>p.score)});
+  }
+  // Les exercices sans recul suffisant ferment la liste : ils n'ont rien à dire.
+  return out.sort((a,b)=>{
+    const ai=a.etat==='insuffisant'?1:0, bi=b.etat==='insuffisant'?1:0;
+    if(ai!==bi) return ai-bi;
+    return (b.joursDepuisRecord||0)-(a.joursDepuisRecord||0);
+  });
+}
+function _ligneEtat(x){
+  const c=PERF_ETAT_COULEUR[x.etat]||'var(--sub)';
+  const detail=x.etat==='insuffisant'
+    ? (x.n<MIN_SEANCES?x.n+' séance'+(x.n>1?'s':'')+' sur ce créneau : pas encore de quoi juger'
+       :'suivi trop récent : encore '+(MIN_JOURS-x.T)+' jour'+((MIN_JOURS-x.T)>1?'s':'')+' à attendre')
+    : (x.joursDepuisRecord>0?'dernier record il y a '+x.joursDepuisRecord+' jour'+(x.joursDepuisRecord>1?'s':'')
+       :'record sur la dernière séance');
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-left:3px solid ${c};border-radius:10px;padding:11px 12px;margin-bottom:9px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:3px">
+      <span style="font-size:12px;font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nom)}</span>
+      <span style="font-size:11px;font-weight:800;color:${c};white-space:nowrap">${PERF_ETAT_LIB[x.etat]||x.etat}</span>
+    </div>
+    <div style="font-size:10px;color:var(--sub);line-height:1.5">${detail}</div>
+    ${x.etat!=='insuffisant'?_sparkline(x.points,c):''}
+    <div style="font-size:10px;color:var(--text-faint);margin-top:3px">${PERF_METRIQUE_LIB[x.metrique]||''}${x.metriqueChangee?' · série repartie de zéro : le format de séries a changé':''}${x.aberrants?' · '+x.aberrants+' valeur'+(x.aberrants>1?'s':'')+' inhabituelle'+(x.aberrants>1?'s':'')+', vérifie ta saisie':''}</div>
+  </div>`;
+}
+
+// ── Ce qui bloque, côté coach ───────────────────────────────────────────────
+// Uniquement ce qui appelle une décision : exercices en plateau ou en recul,
+// et muscles dont plusieurs exercices primaires sont bloqués. Ce qui progresse
+// n'a pas besoin du coach.
+function renderPlateauxCoach(c){
+  const z=document.getElementById('ccd-plateaux');
+  if(!z) return;
+  if(!c||!Array.isArray(c.sessions)||!c.sessions.length){ z.innerHTML=''; return; }
+  let bloques=[],muscles=[];
+  try{
+    bloques=_listeEtats(c).filter(x=>x.etat==='plateau'||x.etat==='regression');
+    // On ne teste que les muscles réellement touchés : parcourir les 17 à vide
+    // ferait dix-sept fois le tour de l'historique pour rien.
+    // Le verdict musculaire est construit a partir de la liste deja calculee,
+    // et non par un appel a etatMuscle : celui-ci exige un creneau, et
+    // _memeCreneau rejette TOUTES les seances quand slot et progName sont nuls.
+    // Chaque exercice porte deja le creneau ou il a ete vu.
+    const parMuscle={};
+    for(const x of _listeEtats(c)){
+      if(x.etat==='insuffisant') continue;
+      const cls=resoudreMusclesLecture(x.nom,{name:x.nom},c);
+      if(!cls||cls===VOL_CARDIO) continue;
+      for(const m of (cls.p||[])) (parMuscle[m]=parMuscle[m]||[]).push(x);
+    }
+    for(const m in parMuscle){
+      const ex=parMuscle[m];
+      const bl=ex.filter(e=>e.etat==='plateau'||e.etat==='regression').length;
+      if(bl>=2) muscles.push({m,exercices:ex});
+    }
+  }catch(e){ }
+  if(!bloques.length&&!muscles.length){ z.innerHTML=''; return; }
+  const dat=(t)=>t?new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'}):'—';
+  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:16px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Ce qui bloque</div>
+    ${muscles.map(x=>`<div style="font-size:11px;color:var(--orange);font-weight:800;margin-bottom:7px">
+        ${(MUSCLES[x.m]||{}).lib||x.m} : plateau musculaire, ${x.exercices.filter(e=>e.etat==='plateau'||e.etat==='regression').length} exercices bloqués
+      </div>`).join('')}
+    ${bloques.map(x=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px">
+        <span style="font-size:11px;font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nom)}</span>
+        <span style="font-size:10px;color:${PERF_ETAT_COULEUR[x.etat]};white-space:nowrap">${PERF_ETAT_LIB[x.etat]} · record du ${dat(x.dateRecord)}</span>
+      </div>`).join('')}
+    ${PERF_ENCADRE}
+  </div>`;
+}
 
 function buildSessionComparison(vol,data){
   const prev=currentUser.sessions.slice(0,-1);
@@ -12147,11 +12319,21 @@ function showProgressTab(tab,btn){
   } else if(tab==='perf'){
     if(!ss.length){c.innerHTML=emptyState('dumbbell','Aucune séance enregistrée.');return;}
     const sl=ss.slice(-8);
+    let _lst=[];
+    try{ _lst=_listeEtats(currentUser); }catch(e){ _lst=[]; }
+    const _jug=_lst.filter(x=>x.etat!=='insuffisant');
     c.innerHTML=`<div style="display:flex;gap:10px;margin-bottom:16px">
       <div class="metric-box"><div class="metric-val">${ss.length}</div><div class="metric-label">Total</div></div>
       <div class="metric-box"><div class="metric-val">${streakSemaines(currentUser)}</div><div class="metric-label">Semaines</div></div>
-      <div class="metric-box"><div class="metric-val">${ss.length?Math.round(ss.reduce((s,x)=>s+(x.duration||0),0)/ss.length):0}min</div><div class="metric-label">Durée moy.</div></div>
-    </div><div class="card"><canvas id="v-chart" height="140"></canvas></div>`;
+      <div class="metric-box"><div class="metric-val">${ss.length?Math.round(ss.reduce((s,x)=>s+(x.duration||0),0)/ss.length):0}min</div><div class="metric-label">Durée</div></div>
+    </div>
+    <div id="perf-etats" style="margin-bottom:18px">
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Progression par exercice</div>
+      ${_lst.length?_lst.map(_ligneEtat).join(''):'<div class="sub" style="font-size:12px">Aucun exercice suivi pour l\'instant.</div>'}
+      ${_jug.length?PERF_ENCADRE:''}
+    </div>
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Tonnage par séance</div>
+    <div class="card"><canvas id="v-chart" height="140"></canvas></div>`;
     setTimeout(()=>barChart('v-chart',sl.map(s=>new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})),sl.map(s=>s.volume||0)),50);
 
   } else if(tab==='photos'){
@@ -19528,6 +19710,43 @@ function testExercices(){
     const _n5=[_plSeance(0,100),_plSeance(7,100),_plSeance(14,80),_plSeance(21,70),_plSeance(28,60)];
     ok('Avec un point d\'historique, la règle d\'origine s\'applique',
        _plEtat(_n5).etat==='regression'&&_plEtat(_n5).fenetreHistorique===1);
+
+    // ── Changements d'état annoncés à la fin de la séance ──
+    // On ne parle que de ce qui vient de changer, et jamais pour féliciter.
+    const _chU=(seances)=>{_viderCachePlateau();
+      return etatsChanges({email:'ch@t.fr',exAlias:{},exMuscles:{},sessions:seances},
+                          seances[seances.length-1]);};
+    // Sans la dernière : record à 21 j. Avec : 28 j → le plateau est nouveau.
+    const _chPlateau=[_plSeance(0,90),_plSeance(7,100),_plSeance(14,97),
+                      _plSeance(21,97),_plSeance(28,97),_plSeance(35,97)];
+    ok('Un plateau qui vient d\'apparaître est annoncé',
+       _chU(_chPlateau).length===1&&_chU(_chPlateau)[0].etat==='plateau',
+       JSON.stringify(_chU(_chPlateau).map(x=>x.etat)));
+    // Rejouer la même séance : l'état n'a plus changé, donc plus rien à dire.
+    const _chDeja=_chPlateau.concat([_plSeance(42,97)]);
+    ok('Un état déjà connu n\'est pas répété',_chU(_chDeja).length===0,
+       JSON.stringify(_chU(_chDeja).map(x=>x.etat)));
+    // Une progression ne déclenche jamais de message.
+    const _chProg=[_plSeance(0,80),_plSeance(7,85),_plSeance(14,90),
+                   _plSeance(21,95),_plSeance(28,100)];
+    ok('Une progression reste muette',_chU(_chProg).length===0);
+    // Un échantillon insuffisant non plus.
+    ok('Un échantillon insuffisant reste muet',
+       _chU([_plSeance(0,90),_plSeance(15,80),_plSeance(30,70)]).length===0);
+    ok('Le texte affiché ne culpabilise pas',
+       /Ça arrive|se discute|Rien d\\?'alarmant/.test(_phraseEtat({etat:'plateau',joursDepuisRecord:35}))
+       ||_phraseEtat({etat:'plateau',joursDepuisRecord:35}).includes('Ça arrive'));
+
+    // ── Sparkline : une forme, jamais une valeur ──
+    ok('Sparkline vide sous deux points',_sparkline([5],'red')===''&&_sparkline([],'red')==='');
+    ok('Sparkline produite au-delà',/^<svg /.test(_sparkline([1,2,3],'red')));
+    ok('Sparkline sans valeur en clair',!/\d+kg/.test(_sparkline([60,80,100],'red')));
+    ok('Série plate ne divise pas par zéro',
+       _sparkline([50,50,50],'red').includes('M0')&&!/NaN/.test(_sparkline([50,50,50],'red')));
+
+    // ── L'encadré d'honnêteté dit la limite de repsDone ──
+    ok('L\'encadré annonce que les répétitions sont celles PRÉVUES',
+       /pr[ée]vues/i.test(PERF_ENCADRE)&&/e1RM est un mod[èe]le/i.test(PERF_ENCADRE));
 
     currentUser=_plSauve; _viderCachePlateau();
 
