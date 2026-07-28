@@ -233,6 +233,9 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 .exercise-card{background:var(--surface-1);border-radius:4px;margin-bottom:12px;overflow:hidden;border:1px solid var(--border)}
 .exo-chip{background:var(--surface-2);border:1.5px solid var(--border);color:var(--sub);font-size:12px;font-weight:800;width:32px;height:32px;border-radius:50%;cursor:pointer;font-family:Montserrat,sans-serif;transition:.15s;display:inline-flex;align-items:center;justify-content:center;padding:0}
 .exo-chip.active{background:var(--red);color:#fff;border-color:var(--red)}
+.pf-chip{background:var(--surface-2);border:1.5px solid var(--border);color:var(--sub);font-size:10px;font-weight:800;letter-spacing:.5px;padding:6px 11px;border-radius:16px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;min-height:30px}
+.pf-chip.active{background:var(--red);color:#fff;border-color:var(--red)}
+.pf-select{background:var(--surface-2);border:1.5px solid var(--border);color:var(--sub);font-size:10px;font-weight:800;letter-spacing:.5px;padding:6px 9px;border-radius:16px;font-family:Montserrat,sans-serif;min-height:30px;width:auto;margin:0}
 .ex-name{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:1px}
 .ex-detail{font-size:11px;color:var(--sub);margin-top:3px;letter-spacing:.3px}
 .series-table{width:100%;border-collapse:collapse}
@@ -1611,7 +1614,14 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="margin-top:20px;background:var(--surface-2);border:1px solid var(--border);border-radius:12px;padding:14px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Protocoles de séance</div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+          <!-- Consultation des 20 protocoles, les deux phases mêlées et sans
+               champ à remplir. Les liens « Voir tous les protocoles » plus bas
+               ouvrent le même écran, mais filtré sur une phase et prêt à
+               écrire dans le champ correspondant. -->
+          <button class="btn btn-outline btn-sm" style="font-size:var(--fs-xs);color:var(--sub);padding:4px 10px" onclick="ouvrirProtocoles('',null,'s-coach-program')">📖 Bibliothèque</button>
           <button class="btn btn-outline btn-sm" style="font-size:var(--fs-xs);color:var(--sub);padding:4px 10px" onclick="saveWarmupTemplate()">💾 Mémoriser comme modèle</button>
+          </div>
         </div>
         <div>
           <label for="prog-warmup" style="margin-top:0">🔥 Échauffement</label>
@@ -2622,6 +2632,27 @@ const COACH_PHOTO='icons/coach.jpg';
     <span></span>
   </div>
   <div class="scroll-area pad"><div id="exc-corps"></div></div>
+</div>
+
+<!-- ══════ BIBLIOTHÈQUE DE PROTOCOLES ══════ -->
+<div id="s-protocoles" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="_pfRetourner()">←</button>
+    <span class="topbar-title">Protocoles</span>
+    <span></span>
+  </div>
+  <!-- Les filtres restent visibles pendant qu'on fait défiler la liste : c'est
+       la seule façon de voir l'effet d'un filtre sur un résultat plus bas. -->
+  <div style="flex-shrink:0;border-bottom:1px solid var(--border);background:var(--bg)">
+    <div style="padding:10px 16px 8px">
+      <input id="pf-q" placeholder="Chercher un protocole, une étape..." oninput="_pfSet('q',this.value)"
+             style="font-size:12px;padding:9px 12px;margin-bottom:8px">
+      <div id="pf-filtres"></div>
+    </div>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad" id="pf-liste"></div>
+  </div>
 </div>
 
 <!-- ══════ TUNNEL D'ACQUISITION (créateur uniquement) ══════ -->
@@ -16811,7 +16842,7 @@ function _rendreSuggestionsProto(){
         ${p.contreInd.length?`<div style="font-size:10px;color:var(--orange);margin-top:3px">À éviter si : ${p.contreInd.map(c=>_PROTO_CI_LIB[c]||c).join(', ')}</div>`:''}
       </button>`;
     }).join('')
-    +`<button onclick="_ouvrirListeProto('${phase==='warmup'?'WARMUP':'COOLDOWN'}','${champ}')" style="background:none;border:none;color:var(--sub);font-size:11px;font-family:Montserrat,sans-serif;cursor:pointer;text-decoration:underline;padding:4px 0">Voir tous les protocoles</button>`;
+    +`<button onclick="ouvrirProtocoles('${phase==='warmup'?'WARMUP':'COOLDOWN'}','${champ}')" style="background:none;border:none;color:var(--sub);font-size:11px;font-family:Montserrat,sans-serif;cursor:pointer;text-decoration:underline;padding:4px 0">Voir tous les protocoles</button>`;
   }
   const t=document.getElementById('proto-type-seance');
   if(t) t.textContent=type?('Séance reconnue : '+_PROTO_TYPE_LIB[type]):'Type de séance indéterminé, suggestions générales';
@@ -16894,31 +16925,178 @@ function _carteProtocole(txt,titre,couleur,id){
   </div>`;
 }
 
-function _ouvrirListeProto(phase,champ){
-  const liste=PROTOCOLES.filter(p=>p.phase===phase);
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
-    <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 18px 20px;width:100%;max-width:480px;max-height:86vh;display:flex;flex-direction:column">
-      <h2 style="margin-bottom:10px;font-size:17px">${phase==='WARMUP'?'Échauffements':'Fins de séance'}</h2>
-      <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch">
-        ${liste.map(p=>{
-          const o=PROTO_OBJECTIFS[p.objectif]||{lib:p.objectif,c:'var(--sub)'};
-          return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px">
-            <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:4px">
-              <span style="font-size:13px;font-weight:800">${escapeHtml(p.nom)}</span>
-              <span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:10px;background:${o.c};color:#08080a">${o.lib.toUpperCase()}</span>
-              <span style="font-size:10px;color:var(--sub)">${p.dureeMin===p.dureeMax?p.dureeMin:p.dureeMin+' à '+p.dureeMax} min</span>
-            </div>
-            <div style="font-size:11px;color:var(--sub);line-height:1.5;margin-bottom:6px">${escapeHtml(p.desc)}</div>
-            <ol style="margin:0 0 8px 16px;padding:0;font-size:11px;color:#bbb;line-height:1.7">${p.etapes.map(e=>'<li>'+escapeHtml(e)+'</li>').join('')}</ol>
-            <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px">Matériel : ${p.materiel.map(m=>PROTO_MATERIEL[m]||m).join(', ')}${p.contreInd.length?' · À éviter si : '+p.contreInd.map(c=>_PROTO_CI_LIB[c]||c).join(', '):''}</div>
-            <button class="btn btn-outline btn-sm" style="margin:0;width:100%" onclick="_appliquerProto('${p.slug}','${champ}');closeModal()">Utiliser</button>
-          </div>`;}).join('')}
-      </div>
-      <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Fermer</button>
-    </div></div>`;
-  const old=document.getElementById('modal-overlay'); if(old) old.remove();
-  document.body.insertAdjacentHTML('beforeend',html);
+// ══════════════ BIBLIOTHÈQUE DE PROTOCOLES ══════════════
+// La modale d'avant listait les 10 protocoles d'une phase, sans filtre et sans
+// moyen de chercher. Cet écran couvre les 20 et permet de restreindre par
+// phase, objectif, durée, matériel et type de séance.
+//
+// Deux usages : consultation seule, ou choix d'un protocole pour un champ de
+// l'éditeur. _pfCible porte le champ à remplir, null en consultation.
+let _pfCible=null, _pfRetour='s-coach-program';
+let _pfFiltres={phase:'',objectif:'',duree:0,materiel:'',type:'',q:''};
+// Repliés par défaut : dépliés, les cinq groupes de filtres occupaient 48 % de
+// la hauteur d'un écran de téléphone (59 % sur un petit modèle), ne laissant
+// presque rien à la liste qu'ils servent à filtrer. Un résumé de ce qui est
+// actif reste affiché replié, sinon on ne comprend pas pourquoi la liste est
+// courte.
+let _pfOuvert=false;
+const _PF_DUREES=[[10,'10 min ou moins'],[15,'15 min ou moins'],[20,'20 min ou moins']];
+
+function ouvrirProtocoles(phase,champ,retour){
+  _pfCible=champ||null;
+  _pfRetour=retour||(champ?'s-coach-program':(currentUser?.role==='coach'?'s-coach-home':'s-client-home'));
+  // Arriver depuis le champ « échauffement » sans voir d'emblée les fins de
+  // séance : le filtre de phase part pré-réglé, et reste modifiable.
+  _pfFiltres={phase:phase||'',objectif:'',duree:0,materiel:'',type:'',q:''};
+  const q=document.getElementById('pf-q'); if(q) q.value='';
+  go('s-protocoles');
+  _pfRendre();
 }
+function _pfRetourner(){ go(_pfRetour); }
+
+function _pfSet(cle,val){
+  // Recliquer une puce déjà active l'enlève : c'est le seul moyen de revenir à
+  // « tous » sans une puce « tous » par ligne.
+  _pfFiltres[cle]=(cle!=='q'&&_pfFiltres[cle]===val)?(cle==='duree'?0:''):val;
+  _pfRendre();
+}
+function _pfReset(){
+  _pfFiltres={phase:'',objectif:'',duree:0,materiel:'',type:'',q:''};
+  const q=document.getElementById('pf-q'); if(q) q.value='';
+  _pfRendre();
+}
+
+function _pfFiltrer(){
+  const f=_pfFiltres;
+  const q=(f.q||'').trim().toLowerCase();
+  return PROTOCOLES.filter(p=>{
+    if(f.phase&&p.phase!==f.phase) return false;
+    if(f.objectif&&p.objectif!==f.objectif) return false;
+    // Sur une fourchette, c'est la durée HAUTE qui engage : annoncer 12 min
+    // pour un protocole qui peut en prendre 15 fait déborder la séance.
+    if(f.duree&&p.dureeMax>f.duree) return false;
+    if(f.materiel==='AUCUN'&&!p.materiel.every(m=>m==='AUCUN')) return false;
+    if(f.materiel&&f.materiel!=='AUCUN'&&!p.materiel.includes(f.materiel)) return false;
+    if(f.type&&!p.compatible.includes(f.type)) return false;
+    if(q){
+      const foin=(p.nom+' '+p.desc+' '+p.etapes.join(' ')).toLowerCase();
+      if(!foin.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function _pfRendre(){
+  const zf=document.getElementById('pf-filtres'); if(!zf) return;
+  const f=_pfFiltres;
+  const puce=(actif,libelle,onclick)=>
+    `<button class="pf-chip${actif?' active':''}" onclick="${onclick}">${libelle}</button>`;
+  const ligne=(titre,contenu)=>
+    `<div style="margin-bottom:7px"><div style="font-size:9px;letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:4px">${titre}</div>
+     <div style="display:flex;flex-wrap:wrap;gap:5px">${contenu}</div></div>`;
+
+  const actifs=[f.phase,f.objectif,f.duree,f.materiel,f.type,f.q].filter(Boolean).length;
+  // Résumé de ce qui filtre, lisible sans déplier.
+  const resume=[
+    f.phase?(f.phase==='WARMUP'?'Échauffement':'Fin de séance'):'',
+    f.objectif?PROTO_OBJECTIFS[f.objectif].lib:'',
+    f.duree?(f.duree+' min ou moins'):'',
+    f.materiel?(PROTO_MATERIEL[f.materiel]||f.materiel):'',
+    f.type?(_PROTO_TYPE_LIB[f.type]||f.type):''
+  ].filter(Boolean).join(' · ');
+
+  const barre=`<button onclick="_pfOuvert=!_pfOuvert;_pfRendre()"
+      style="display:flex;align-items:center;gap:8px;width:100%;background:none;border:none;padding:2px 0;cursor:pointer;font-family:Montserrat,sans-serif;text-align:left">
+      <span class="pf-chip${actifs?' active':''}" style="pointer-events:none">☰ Filtres${actifs?' ('+actifs+')':''}</span>
+      <span style="flex:1;min-width:0;font-size:10px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(resume)}</span>
+      <span style="color:var(--sub);font-size:12px">${_pfOuvert?'▾':'▸'}</span>
+    </button>`;
+
+  if(!_pfOuvert){ zf.innerHTML=barre; _pfRendreListe(); return; }
+
+  // Les puces passent à la ligne au lieu de défiler horizontalement : un filtre
+  // qu'il faut faire glisser pour découvrir n'est jamais utilisé.
+  zf.innerHTML=barre+`<div style="margin-top:9px">`+
+    ligne('Moment',
+      puce(f.phase==='WARMUP','Échauffement',"_pfSet('phase','WARMUP')")+
+      puce(f.phase==='COOLDOWN','Fin de séance',"_pfSet('phase','COOLDOWN')"))
+   +ligne('Objectif',
+      Object.keys(PROTO_OBJECTIFS).map(k=>
+        puce(f.objectif===k,PROTO_OBJECTIFS[k].lib,`_pfSet('objectif','${k}')`)).join(''))
+   +ligne('Durée',
+      _PF_DUREES.map(([v,lib])=>puce(f.duree===v,lib,`_pfSet('duree',${v})`)).join(''))
+   +ligne('Matériel',
+      puce(f.materiel==='AUCUN','Sans matériel',"_pfSet('materiel','AUCUN')")+
+      `<select onchange="_pfSet('materiel',this.value)" class="pf-select">
+        <option value="">Tout matériel</option>
+        ${Object.keys(PROTO_MATERIEL).filter(m=>m!=='AUCUN').map(m=>
+          `<option value="${m}" ${f.materiel===m?'selected':''}>${PROTO_MATERIEL[m]}</option>`).join('')}
+      </select>`)
+   +ligne('Type de séance',
+      `<select onchange="_pfSet('type',this.value)" class="pf-select">
+        <option value="">Tous les types</option>
+        ${PROTO_TYPES.map(t=>
+          `<option value="${t}" ${f.type===t?'selected':''}>${_PROTO_TYPE_LIB[t]||t}</option>`).join('')}
+      </select>`)
+   +`</div>`;
+  _pfRendreListe();
+}
+
+function _pfRendreListe(){
+  const f=_pfFiltres;
+  const liste=_pfFiltrer();
+  const actifs=[f.phase,f.objectif,f.duree,f.materiel,f.type,f.q].filter(Boolean).length;
+  const zl=document.getElementById('pf-liste'); if(!zl) return;
+
+  const entete=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px">
+      <span style="font-size:11px;color:var(--sub)">${liste.length} protocole${liste.length>1?'s':''} sur ${PROTOCOLES.length}</span>
+      ${actifs?`<button onclick="_pfReset()" style="background:none;border:none;color:var(--sub);font-size:11px;font-family:Montserrat,sans-serif;cursor:pointer;text-decoration:underline;padding:4px 0">Tout afficher</button>`:''}
+    </div>`;
+
+  if(!liste.length){
+    zl.innerHTML=entete+`<div class="sub" style="font-size:12px;background:var(--surface-2);border-radius:10px;padding:16px;line-height:1.6;text-align:center">
+      Aucun protocole ne correspond. Retire un filtre pour élargir la recherche.</div>`;
+    return;
+  }
+
+  zl.innerHTML=entete+liste.map(p=>{
+    const o=PROTO_OBJECTIFS[p.objectif]||{lib:p.objectif,c:'var(--sub)'};
+    const duree=p.dureeMin===p.dureeMax?p.dureeMin:p.dureeMin+' à '+p.dureeMax;
+    const universel=p.compatible.length>=PROTO_TYPES.length;
+    // Un protocole déjà écrit dans le champ visé : le dire évite de le
+    // réappliquer en croyant changer quelque chose.
+    const pose=_pfCible&&_vientDunProtocole(document.getElementById(_pfCible)?.value)
+      &&(document.getElementById(_pfCible)?.value||'').trim().split('\n')[0]===protoTexte(p).split('\n')[0];
+    return `<div style="background:var(--surface-1);border:1px solid ${pose?'var(--success)':'var(--border)'};border-radius:12px;padding:13px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px">
+        <span style="font-size:13px;font-weight:800">${escapeHtml(p.nom)}</span>
+        <span style="font-size:9px;font-weight:800;letter-spacing:.5px;padding:1px 6px;border-radius:10px;background:${o.c};color:#08080a">${o.lib.toUpperCase()}</span>
+        <span style="font-size:10px;color:var(--sub)">${duree} min</span>
+        <span style="font-size:9px;font-weight:800;letter-spacing:.5px;color:var(--text-faint)">${p.phase==='WARMUP'?'ÉCHAUFFEMENT':'FIN DE SÉANCE'}</span>
+        ${pose?'<span style="font-size:10px;color:var(--success);font-weight:800">EN PLACE</span>':''}
+      </div>
+      <div style="font-size:11px;color:var(--sub);line-height:1.5;margin-bottom:8px">${escapeHtml(p.desc)}</div>
+      <ol style="margin:0 0 8px 16px;padding:0;font-size:11px;color:#bbb;line-height:1.7">${p.etapes.map(e=>'<li>'+escapeHtml(e)+'</li>').join('')}</ol>
+      <div style="font-size:10px;color:var(--text-faint);line-height:1.6">
+        Matériel : ${p.materiel.map(m=>PROTO_MATERIEL[m]||m).join(', ')}<br>
+        Convient à : ${universel?'toutes les séances':p.compatible.map(t=>_PROTO_TYPE_LIB[t]||t).join(', ')}
+      </div>
+      ${p.contreInd.length?`<div style="font-size:10px;color:var(--orange);margin-top:5px">À éviter si : ${p.contreInd.map(c=>_PROTO_CI_LIB[c]||c).join(', ')}</div>`:''}
+      ${_pfCible?`<button class="btn btn-outline btn-sm" style="margin:9px 0 0;width:100%" onclick="_pfUtiliser('${p.slug}')">Utiliser ce protocole</button>`:''}
+    </div>`;
+  }).join('');
+}
+
+function _pfUtiliser(slug){
+  if(!_pfCible) return;
+  const avant=(document.getElementById(_pfCible)?.value||'').trim();
+  _appliquerProto(slug,_pfCible);
+  // _appliquerProto peut être annulé par la confirmation d'écrasement : on ne
+  // quitte l'écran que si le champ a réellement changé.
+  if((document.getElementById(_pfCible)?.value||'').trim()!==avant) _pfRetourner();
+  else _pfRendre();
+}
+
 
 // ══════════════ TESTS DE LA COUCHE D'IDENTITÉ D'EXERCICE ══════════════
 // Exécutable depuis la console : testExercices().
@@ -17165,6 +17343,32 @@ function testExercices(){
        getLastZeroRIRWeight('LEG CURL',2,'SS')===40&&getLastZeroRIRWeight('LEG EXTENSION',2,'SS')===55,
        getLastZeroRIRWeight('LEG CURL',2,'SS')+' / '+getLastZeroRIRWeight('LEG EXTENSION',2,'SS'));
     currentUser.sessions=_sauveSess;
+
+    // ══════ BIBLIOTHÈQUE DE PROTOCOLES ══════
+    const _fSauve=JSON.parse(JSON.stringify(_pfFiltres));
+    const _f=(o)=>{_pfFiltres=Object.assign({phase:'',objectif:'',duree:0,materiel:'',type:'',q:''},o);
+                   return _pfFiltrer();};
+    ok('Sans filtre : les 20 protocoles',_f({}).length===20,String(_f({}).length));
+    ok('Filtre phase échauffement',_f({phase:'WARMUP'}).every(p=>p.phase==='WARMUP')&&_f({phase:'WARMUP'}).length===10);
+    ok('Filtre phase fin de séance',_f({phase:'COOLDOWN'}).every(p=>p.phase==='COOLDOWN')&&_f({phase:'COOLDOWN'}).length===10);
+    ok('Filtre objectif',_f({objectif:'RECUPERATION'}).every(p=>p.objectif==='RECUPERATION'));
+    // C'est la durée HAUTE qui engage : un protocole 12 à 15 min ne passe pas
+    // le filtre « 12 min ou moins », sinon la séance déborde.
+    ok('Filtre durée : borne haute',_f({duree:12}).every(p=>p.dureeMax<=12));
+    ok('Filtre durée n\'exclut pas les plus courts',_f({duree:20}).length>=_f({duree:15}).length);
+    ok('Filtre sans matériel',_f({materiel:'AUCUN'}).every(p=>p.materiel.every(m=>m==='AUCUN')));
+    ok('Filtre matériel précis',_f({materiel:'VELO'}).every(p=>p.materiel.includes('VELO')));
+    ok('Filtre type de séance',_f({type:'PUSH'}).every(p=>p.compatible.includes('PUSH')));
+    ok('Recherche sur le nom',_f({q:'tapis'}).some(p=>/tapis/i.test(p.nom)));
+    ok('Recherche dans les étapes',_f({q:'rameur'}).length>0,String(_f({q:'rameur'}).length));
+    ok('Recherche insensible à la casse',_f({q:'RAMEUR'}).length===_f({q:'rameur'}).length);
+    ok('Recherche sans résultat',_f({q:'ZZINTROUVABLE'}).length===0);
+    // Le cumul doit RESTREINDRE, jamais élargir
+    const _c=_f({phase:'WARMUP',duree:15,type:'PULL'});
+    ok('Filtres cumulés : tous respectés',
+       _c.every(p=>p.phase==='WARMUP'&&p.dureeMax<=15&&p.compatible.includes('PULL')));
+    ok('Filtres cumulés : sous-ensemble de la phase seule',_c.length<=_f({phase:'WARMUP'}).length);
+    _pfFiltres=_fSauve;
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
