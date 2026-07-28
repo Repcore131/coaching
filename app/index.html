@@ -585,8 +585,8 @@ const COACH_PHOTO='icons/coach.jpg';
 <svg width="0" height="0" style="position:absolute;pointer-events:none" aria-hidden="true" focusable="false">
   <defs>
     <filter id="rcNeonGlow" x="-75%" y="-75%" width="250%" height="250%" color-interpolation-filters="sRGB">
-      <feGaussianBlur stdDeviation="0.9" result="proche"/>
-      <feGaussianBlur stdDeviation="2.6" result="loin"/>
+      <feGaussianBlur stdDeviation="0.55" result="proche"/>
+      <feGaussianBlur stdDeviation="1.7" result="loin"/>
       <feMerge>
         <feMergeNode in="loin"/>
         <feMergeNode in="proche"/>
@@ -11789,38 +11789,44 @@ const CAFF_ICONES={
   // ce seul détail qui fait basculer un pictogramme plat en objet posé — même
   // logique pour la soucoupe, le haut de canette et le couvercle du pot.
   // La vapeur distingue le café du thé, qui porte lui son étiquette.
-  coffee:'<path d="M4.8 8.6a6.2 1.9 0 1 0 12.4 0 6.2 1.9 0 1 0-12.4 0"/>'
-        +'<path d="M4.8 8.6c0 4.3 1.5 7.7 6.2 7.7s6.2-3.4 6.2-7.7"/>'
-        +'<path d="M17.1 10.6c2.5-.5 3.5.7 3.3 2.1s-1.6 2-3.3 1.8"/>'
-        +'<path d="M2.7 18.4a8.3 2.1 0 1 0 16.6 0 8.3 2.1 0 1 0-16.6 0"/>'
-        +'<path d="M8.3 6.1c1.2-1.1-1.2-2.2 0-3.3"/><path d="M12.5 6.1c1.2-1.1-1.2-2.2 0-3.3"/>',
-  tea:'<path d="M4.6 9.9a5.9 1.8 0 1 0 11.8 0 5.9 1.8 0 1 0-11.8 0"/>'
-     +'<path d="M4.6 9.9c0 3.9 1.4 7 5.9 7s5.9-3.1 5.9-7"/>'
-     +'<path d="M16.3 11.6c2.3-.5 3.2.6 3 1.9s-1.5 1.9-3 1.7"/>'
-     +'<path d="M2.5 19a8 2 0 1 0 16 0 8 2 0 1 0-16 0"/>'
-     +'<path d="m12.9 9.5 3.3-3.1"/>'
-     +'<path d="m15.3 3.4 3.5 1.1-1.1 3.5-3.5-1.1z"/>'
-     +'<path d="M16 5.9q1-.9 1.6 0"/>',
+  // Tasse à anse et vapeur. Pas de soucoupe : rendue en néon, l'ellipse de la
+  // soucoupe se détachait du fond de la tasse et flottait comme un anneau
+  // séparé. Un mug se lit très bien seul, et gagne la place que prenait
+  // l'assiette pour être plus grand dans la même boîte.
+  coffee:'<path d="M4.9 9.4a5.6 1.7 0 1 0 11.2 0 5.6 1.7 0 1 0-11.2 0"/>'
+        +'<path d="M4.9 9.4c0 5.4 1.9 8.6 5.6 8.6s5.6-3.2 5.6-8.6"/>'
+        +'<path d="M16.2 11c3.2-.7 4.6.9 4.3 2.7-.3 1.8-2 2.6-4.3 2.3"/>'
+        +'<path d="M7.9 6.6c1.3-1.2-1.3-2.4 0-3.6"/><path d="M12.3 6.6c1.3-1.2-1.3-2.4 0-3.6"/>',
+  // Même tasse, SANS anse, avec l'étiquette du sachet au bout d'une ficelle
+  // verticale. L'étiquette penchée essayée avant se lisait comme une note de
+  // musique : un rectangle droit au bout d'un fil droit, c'est un sachet de
+  // thé et rien d'autre. L'absence d'anse achève de distinguer les deux tasses.
+  tea:'<path d="M4.9 11.2a5.6 1.7 0 1 0 11.2 0 5.6 1.7 0 1 0-11.2 0"/>'
+     +'<path d="M4.9 11.2c0 5 1.9 8 5.6 8s5.6-3 5.6-8"/>'
+     +'<path d="M16.2 12.6c3.1-.7 4.5.9 4.2 2.6-.3 1.7-1.9 2.5-4.2 2.2"/>'
+     +'<path d="M7.4 10.6V5.9"/>'
+     +'<path d="M5.3 2.2h4.2v3.7H5.3z"/>',
   // Canette : bord serti elliptique, épaulement conique, corps cylindrique,
   // fond bombé, et UN éclair plein sur le flanc.
   // Trois griffes parallèles avaient été essayées : mesuré au pixel, leurs
   // halos se rejoignaient et n'en formaient plus qu'un bloc, à toutes les
   // tailles. Sous néon, deux traits distants de moins de trois unités ne font
   // plus qu'un — d'où une forme pleine, isolée, plutôt qu'une hachure.
-  energy_drink:'<path d="M9.1 4.6a2.9 .95 0 1 0 5.8 0 2.9 .95 0 1 0-5.8 0"/>'
-              +'<path d="M9.1 4.6c-.3 2-1.1 2.7-1.1 4.3"/><path d="M14.9 4.6c.3 2 1.1 2.7 1.1 4.3"/>'
-              +'<path d="M8 8.9v10.3"/><path d="M16 8.9v10.3"/>'
-              +'<path d="M8 19.2c0 1.6 1.8 2.4 4 2.4s4-.8 4-2.4"/>'
-              +'<path d="M13.3 10.5 10.4 15h2.5l-.6 3.4 3.1-4.7h-2.5z"/>',
-  // Pot : couvercle à vis posé sur un corps cylindrique, vus sous le même
-  // angle que les tasses. Les stries du couvercle et la seconde bande
-  // d'étiquette ont sauté pour la même raison que les griffes : trop
-  // rapprochées, elles se remplissaient de lueur. Reste une seule bande, assez
-  // loin des arêtes pour rester lisible.
-  preworkout:'<path d="M5.4 5a6.6 1.7 0 1 0 13.2 0 6.6 1.7 0 1 0-13.2 0"/>'
-            +'<path d="M5.4 5v2.8c0 .95 2.95 1.7 6.6 1.7s6.6-.75 6.6-1.7V5"/>'
-            +'<path d="M6.3 9.2v9.6c0 1.5 2.55 2.5 5.7 2.5s5.7-1 5.7-2.5V9.2"/>'
-            +'<path d="M6.5 14.4c1.8.6 9.2.6 11 0"/>',
+  // Canette élargie : à 8 unités de large sur 17 de haut, elle se lisait comme
+  // un bâtonnet dès qu'on descendait sous 26 px. Proportion resserrée, éclair
+  // agrandi d'autant pour rester visible au centre du flanc.
+  energy_drink:'<path d="M8.6 4.8a3.4 1.05 0 1 0 6.8 0 3.4 1.05 0 1 0-6.8 0"/>'
+              +'<path d="M8.6 4.8c-.4 2-1.4 2.6-1.4 4.2"/><path d="M15.4 4.8c.4 2 1.4 2.6 1.4 4.2"/>'
+              +'<path d="M7.2 9v9.4"/><path d="M16.8 9v9.4"/>'
+              +'<path d="M7.2 18.4c0 1.9 2.2 2.8 4.8 2.8s4.8-.9 4.8-2.8"/>'
+              +'<path d="M13.2 10.4 10 15.2h2.8l-.7 3.6 3.4-5h-2.8z"/>',
+  // Pot de complément : le couvercle DÉBORDE du corps. C'est la signature
+  // visuelle d'un pot vissé, et c'est ce qui manquait — couvercle et corps de
+  // même largeur, séparés par une bande, se lisaient comme un empilement de
+  // rondelles. La bande d'étiquette est retirée pour la même raison.
+  preworkout:'<path d="M5.6 5.2a6.4 1.7 0 1 0 12.8 0 6.4 1.7 0 1 0-12.8 0"/>'
+            +'<path d="M5.6 5.2v2.4c0 .95 2.87 1.7 6.4 1.7s6.4-.75 6.4-1.7V5.2"/>'
+            +'<path d="M7.2 9.5v8.7c0 1.4 2.15 2.3 4.8 2.3s4.8-.9 4.8-2.3V9.5"/>',
   // Molécule de caféine, en formule topologique : le bicycle purine —
   // pyrimidinedione à six sommets accolée à l'imidazole à cinq — et ses
   // quatre substituants. Le trait intérieur de double liaison a été retiré :
@@ -11854,8 +11860,8 @@ function caffIcone(type,taille){
   // Halo resserré depuis la mesure des séparations : trop large, il débordait
   // d'un trait sur son voisin et remplissait les creux du dessin. Le rendu
   // reste un tube allumé, mais les vides du tracé restent des vides.
-  const halo=coeur+1.15;
-  const opHalo=s<=16?0.40:0.46;
+  const halo=coeur+0.85;
+  const opHalo=s<=16?0.38:0.44;
   return `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:inline-block;vertical-align:middle;flex-shrink:0;overflow:visible">`
     +`<g filter="url(#rcNeonGlow)" stroke="#9ed4ff" stroke-width="${halo.toFixed(2)}" opacity="${opHalo}">${t}</g>`
     +`<g filter="url(#rcNeonGlow)" stroke="#e8f6ff" stroke-width="${douce.toFixed(2)}" opacity=".72">${t}</g>`
