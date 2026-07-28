@@ -9312,8 +9312,12 @@ function renderWoEx(){
       </div>`:''}
       ${blocs.map(b=>b.html).join(estSS?`<div style="display:flex;align-items:center;gap:8px;margin:2px 0 12px"><div style="flex:1;height:1px;background:var(--orange);opacity:.35"></div><span style="font-size:var(--fs-xs);color:var(--orange);letter-spacing:1.5px;font-weight:800">PUIS ENCHAÎNER</span><div style="flex:1;height:1px;background:var(--orange);opacity:.35"></div></div>`:'')}
       ${auMoinsUnMuscu?`<div style="margin-top:10px">
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <label class="hit44" style="font-size:11px;cursor:pointer;color:var(--sub)"><input type="checkbox" id="film-ex" style="width:auto;margin-right:4px">  Filmer cet exercice</label>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <!-- La règle globale « label » met en majuscules et espace les lettres :
+               « FILMER CET EXERCICE » débordait alors sur deux lignes dès qu'un
+               écran étroit la mettait en concurrence avec le rappel RIR. C'est
+               une phrase, pas un intitulé de champ. -->
+          <label class="hit44" style="font-size:11px;cursor:pointer;color:var(--sub);text-transform:none;letter-spacing:normal;font-weight:400;margin:0;display:inline-flex;align-items:center;gap:5px"><input type="checkbox" id="film-ex" style="width:auto;margin:0">Filmer cet exercice</label>
           <span style="display:flex;align-items:center;gap:8px">
             <span style="font-size:var(--fs-xs);color:var(--red);font-weight:700">→ Vise RIR 0 sur ta dernière série</span>
             <button class="hit44" onclick="toggleRirExplain()" style="background:#1a1a1a;border:1.5px solid #fff;border-radius:50%;width:19px;height:19px;color:#fff;font-size:11px;font-weight:900;cursor:pointer;line-height:1;padding:0;flex-shrink:0;box-shadow:0 0 8px rgba(255,255,255,.45)">?</button>
@@ -9387,11 +9391,18 @@ function _blocExo(idx,estSS){
   const _rawSug=baseWeight
     ?baseWeight
     :prev?_stepSug(prev.weight,prev.rir):null;
-  const sug=_rawSug!=null&&_rawSug>0?_rawSug:null;
-  const cycleWeight=sug?roundWeight(sug*cycle.factor):null;
+  const _sugBrut=_rawSug!=null&&_rawSug>0?_rawSug:null;
   const isFemme=isFemale(currentUser.gender);
-  const showCycleCol=isFemme&&cycle.factor!==1.0;
-  const isWide=pr.type==='degressive'||showCycleCol;
+  // L'ajustement de cycle est intégré À LA CHARGE SUGGÉRÉE, il n'a plus de
+  // colonne à lui. Une colonne « CYC » en plus faisait basculer tout le tableau
+  // en mode carte : l'écran de séance ne ressemblait plus du tout à celui des
+  // hommes, pour une information qui tient dans une phrase. Une seule charge
+  // est affichée, celle à mettre sur la barre, et la raison de l'écart est
+  // écrite dessous.
+  const _facteurCycle=(isFemme&&cycle.factor!==1.0)?cycle.factor:1;
+  const sugAjustee=_facteurCycle!==1&&_sugBrut?roundWeight(_sugBrut*_facteurCycle):null;
+  const sug=sugAjustee||_sugBrut;
+  const isWide=pr.type==='degressive';
   // Repère A1 / A2 sur un superset, numéro d'ordre sinon : c'est ainsi que
   // l'exercice est écrit sur la fiche papier.
   const rep=_repereEx(woState.exercises,idx);
@@ -9420,9 +9431,9 @@ function _blocExo(idx,estSS){
       :sug?`<div class="suggest-box">
         <div style="display:flex;gap:18px;align-items:flex-end;margin:2px 0 6px">
           <div><div style="font-size:27px;font-weight:900;line-height:1">${sug}kg</div><div style="font-size:var(--fs-xs);color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">${isCW?'↓ Assistance : progresser = réduire':'Charge pour la première série'}</div></div>
-          ${showCycleCol?`<div><div style="font-size:27px;font-weight:900;line-height:1;color:var(--cycle-accent)">${cycleWeight}kg</div><div style="font-size:var(--fs-xs);color:var(--cycle-accent);margin-top:4px">Cycle ajusté</div></div>`:''}
         </div>
         <div class="s-note">${isCW?'Contrepoids: RIR élevé → diminuer la charge. ':''}${baseWeight?'Basée sur '+escapeHtml(creneauRef)+' (RIR 0 : '+baseWeight+'kg)':prev?'Basée sur '+escapeHtml(creneauRef)+' ('+prev.weight+'kg'+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):'')+')':'Première séance'}</div>
+        ${sugAjustee?`<div class="s-note" style="color:var(--cycle-accent);margin-top:5px">Ajustée de ${Math.round((1-_facteurCycle)*100)} % pour ta phase de cycle : ${_sugBrut}kg d'habitude, ${sugAjustee}kg aujourd'hui.</div>`:''}
       </div>`:
       // Pas d'historique SUR CE CRÉNEAU. On le dit, au lieu de laisser un vide
       // inexpliqué — et surtout au lieu de proposer la charge d'un autre jour,
@@ -9453,7 +9464,7 @@ function _blocExo(idx,estSS){
       <table class="series-table series-table-wo" style="width:100%${!isWide?';min-width:260px':''}">
         <thead><tr style="background:var(--red)">
           ${isWide
-            ?`<th style="color:#fff;text-align:left;padding-left:10px;font-size:var(--fs-xs);letter-spacing:.5px">Séries${pr.type==='degressive'?' · Dégressive':''}${showCycleCol?' · Cycle':''}</th>`
+            ?`<th style="color:#fff;text-align:left;padding-left:10px;font-size:var(--fs-xs);letter-spacing:.5px">Séries${pr.type==='degressive'?' · Dégressive':''}</th>`
             :`<th style="color:#fff">Reps</th><th style="color:#fff">Charge</th><th style="color:#fff">RIR</th><th style="font-size:var(--fs-xs);color:#fff">Douleur</th><th style="color:#fff;font-size:var(--fs-xs)">Validé</th>`}
         </tr></thead>
         <tbody id="sets-body-${idx}"></tbody>
@@ -9485,9 +9496,8 @@ function renderSets(ex,data,idx){
     }).join('');
     return;
   }
-  const cycle=getCycleFactor();
-  const isFemme=isFemale(currentUser.gender);
-  const showCycleCol=isFemme&&cycle.factor!==1.0;
+  // Plus aucune colonne de cycle ici : l ajustement est porte par la charge
+  // suggeree en haut de l exercice, pas par une colonne de tableau.
   const isDeg=data.sets[0]?.degressive||false;
 
   const _isCW=isCounterweightEx(ex.name);
@@ -9517,7 +9527,6 @@ function renderSets(ex,data,idx){
 
   tb.innerHTML=data.sets.map((s,i)=>{
     const baseW=parseFloat(s.weight)||0;
-    const cycleW=showCycleCol&&baseW>0?Math.round(baseW*cycle.factor/2.5)*2.5:null;
     const dis=s.done?'disabled':'';
     const rowCls=s.done?'done':'';
     const painAlert=s.pain&&parseInt(s.pain)>=4?' row-alert':'';
@@ -9532,13 +9541,10 @@ function renderSets(ex,data,idx){
     const weightBorder=s.isAuto&&!s.done?'border-color:var(--green)':'';
 
     // Wide-mode: content without <td> wrappers (for 2-sub-row card layout)
-    const isWide=isDeg||showCycleCol;
+    const isWide=isDeg;
     const weightInner=isDeg
       ?`<input class="set-input" type="number" value="${s.weight||''}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}><input class="set-input" type="number" value="${s.weight2||''}" placeholder="P2" style="border-color:#78350f;margin-left:4px" onchange="${onChW2}" ${dis}>`
       :`<div><input class="set-input" type="number" value="${s.weight||''}" placeholder="kg" style="${weightBorder}" onchange="${onChW}" ${dis}>${autoLabel}</div>`;
-    const cycleInner=showCycleCol
-      ?`<div style="text-align:center;min-width:42px"><div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:.5px">CYC</div><div style="font-size:12px;font-weight:800;color:var(--cycle-accent)">${cycleW?cycleW+'kg':'—'}</div></div>`
-      :'';
 
     // Simple-mode: <td> wrappers for classic table layout
     const weightCell=isDeg
@@ -9546,7 +9552,6 @@ function renderSets(ex,data,idx){
       :`<td><input class="set-input" type="number" value="${s.weight||''}" placeholder="kg" style="${weightBorder}" onchange="${onChW}" ${dis}>${autoLabel}</td>`;
 
     // Cycle cell
-    const cycleCell=showCycleCol?`<td style="color:var(--cycle-accent);font-weight:800;font-size:13px">${cycleW?cycleW+'kg':'—'}</td>`:'';
 
     // RIR dropdown
     const rirSelect=`<select class="set-input" onchange="${onChR}" ${dis} style="padding:4px 2px;font-size:11px;min-width:52px;min-height:44px">
@@ -9579,7 +9584,6 @@ function renderSets(ex,data,idx){
                 <div style="font-size:14px;font-weight:900;line-height:1.2"><span style="font-size:var(--fs-xs);font-weight:600">×</span>${s.reps||ex.reps}</div>
               </div>
               ${weightInner}
-              ${cycleInner}
             </div>
             <div style="display:flex;align-items:center;gap:8px">
               ${rirSelect}
@@ -9596,7 +9600,6 @@ function renderSets(ex,data,idx){
         <span style="font-size:15px;font-weight:900;line-height:1.2"><span style="font-size:var(--fs-xs);font-weight:600">×</span>${s.reps||ex.reps}</span>
       </td>
       ${weightCell}
-      ${cycleCell}
       <td>${rirSelect}</td>
       <td>${painSelect}</td>
       <td><button class="hit44" onclick="toggleSet(${i},${idx})" style="width:34px;height:34px;border-radius:50%;border:2px solid ${s.done?'#fff':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button></td>
@@ -18859,6 +18862,62 @@ function testExercices(){
        _volMoyennePrecedente(_uU,0,'TRICEPS')===null);
 
     currentUser=_vcSauve; _viderCacheVolume();
+
+    // ══════ ÉCRAN DE SÉANCE : MÊME MISE EN PAGE POUR TOUS ══════
+    // La colonne « CYC » faisait basculer le tableau en mode carte pour toute
+    // femme en phase non neutre : l'écran de séance ne ressemblait plus du tout
+    // à celui des hommes. L'ajustement de cycle est désormais porté par la
+    // charge suggérée, et ces contrôles empêchent la colonne de revenir.
+    const _cySauve={u:currentUser,w:typeof woState!=='undefined'?woState:null};
+    const _cyMonter=(genre,phase,reps)=>{
+      currentUser={email:'cy@t',fname:'T',gender:genre,currentCycle:phase,exAlias:{},exMuscles:{},
+        programs:{},bilans:[],
+        sessions:[{id:'cy',date:Date.now()-604800000,slot:2,name:'P',
+          data:{'TIRAGE CY':{sets:[{done:true,weight:'50',reps:'10',rir:'0'}]}}}]};
+      woState={exercises:[{name:'TIRAGE CY',series:3,reps:reps||'10',repos:'02 min',description:''}],
+        currentEx:0,startTime:Date.now(),timerInterval:null,sessionData:{},
+        progName:'P',slot:2,warmup:'',cooldown:''};
+      go('s-workout'); renderWoEx();
+      const c=document.getElementById('wo-content');
+      return {col:Array.from(c.querySelectorAll('thead th')).map(t=>t.textContent.trim()),
+              gros:Array.from(c.querySelectorAll('div[style*="font-size:27px"]')).map(d=>d.textContent),
+              txt:c.textContent};
+    };
+    const _cyH=_cyMonter('homme','ignore');
+    const _cyF0=_cyMonter('femme','j6_14');          // facteur 1,00
+    const _cyF5=_cyMonter('femme','j1_supportable'); // facteur 0,95
+    const _cyF20=_cyMonter('femme','j1_difficile');  // facteur 0,80
+    ok('Cinq colonnes chez l\'homme',_cyH.col.length===5,JSON.stringify(_cyH.col));
+    ok('Mêmes colonnes pour une femme en phase neutre',
+       JSON.stringify(_cyF0.col)===JSON.stringify(_cyH.col),JSON.stringify(_cyF0.col));
+    ok('Mêmes colonnes pour une femme en phase difficile',
+       JSON.stringify(_cyF20.col)===JSON.stringify(_cyH.col),JSON.stringify(_cyF20.col));
+    ok('Plus aucune colonne CYC',!_cyF20.txt.includes('CYC')&&!_cyF5.txt.includes('CYC'));
+    ok('Une seule charge affichée, pas deux',_cyF20.gros.length===1,JSON.stringify(_cyF20.gros));
+
+    // L'ajustement est DANS la charge suggérée, et sa raison est écrite.
+    ok('Phase neutre : charge inchangée',_cyF0.gros[0]==='50kg'&&_cyH.gros[0]==='50kg',
+       _cyF0.gros[0]+' / '+_cyH.gros[0]);
+    ok('Phase à 0,95 : charge ajustée affichée',_cyF5.gros[0]==='47.5kg',_cyF5.gros[0]);
+    ok('Phase à 0,80 : charge ajustée affichée',_cyF20.gros[0]==='40kg',_cyF20.gros[0]);
+    ok('La raison de l\'ajustement est écrite',
+       /Ajustée de 20 % pour ta phase de cycle/.test(_cyF20.txt)
+       &&/50kg d’habitude|50kg d'habitude/.test(_cyF20.txt));
+    ok('Aucune mention d\'ajustement en phase neutre',!_cyF0.txt.includes('Ajustée de'));
+    ok('Aucune mention d\'ajustement chez l\'homme',!_cyH.txt.includes('Ajustée de'));
+
+    // Le mode carte subsiste pour la dégressive, son seul usage restant.
+    const _cyD=_cyMonter('femme','j1_difficile','10 PUIS 20');
+    ok('La dégressive garde le mode carte',_cyD.col.length===1&&/Dégressive/.test(_cyD.col[0]),
+       JSON.stringify(_cyD.col));
+    ok('La dégressive n\'affiche pas de cycle dans son en-tête',!/Cycle/.test(_cyD.col[0]));
+    const _cyDH=_cyMonter('homme','ignore','10 PUIS 20');
+    ok('Dégressive identique homme et femme',JSON.stringify(_cyDH.col)===JSON.stringify(_cyD.col));
+
+    // La bannière de phase reste : c'est une information, pas une colonne.
+    ok('La phase de cycle reste annoncée',/Phase menstruelle/.test(_cyF20.txt));
+
+    currentUser=_cySauve.u; if(_cySauve.w) woState=_cySauve.w;
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
