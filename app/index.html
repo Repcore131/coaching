@@ -190,6 +190,9 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
    (19px, centre dans le bouton) et non du bouton : sur un bouton large elle
    aurait flotte loin de l'icone. Le lisere sombre la detache du fond de barre.
    pointer-events:none pour qu'elle n'intercepte jamais le tap sur l'onglet. */
+.banner-hero{background:linear-gradient(145deg,#c10000 0%,#880000 55%,#560000 100%);border-radius:12px;padding:18px 20px;position:relative;overflow:hidden;box-shadow:0 10px 26px rgba(0,0,0,.45)}
+.banner-hero::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 16px,rgba(0,0,0,.12) 16px,rgba(0,0,0,.12) 17px);pointer-events:none}
+.banner-hero::after{content:'';position:absolute;right:-18px;top:-18px;width:90px;height:90px;border-radius:50%;background:rgba(255,255,255,.05);pointer-events:none}
 .ch-chip{background:var(--surface-1);border:1px solid var(--border);color:var(--text-dim);border-radius:20px;padding:7px 14px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;cursor:pointer;min-height:34px;transition:.15s}
 .ch-chip.actif{background:var(--red-bg);border-color:var(--red);color:#fff}
 .tab-dot{position:absolute;top:3px;left:calc(50% + 5px);width:9px;height:9px;
@@ -2338,9 +2341,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <!-- BANNIÈRE DE BASCULE -->
-      <div style="background:linear-gradient(145deg,#c10000 0%,#880000 55%,#560000 100%);border-radius:12px;padding:18px 20px;position:relative;overflow:hidden;margin-bottom:16px;box-shadow:0 10px 26px rgba(0,0,0,.45);animation:fadeInUp .3s ease">
-        <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 16px,rgba(0,0,0,.12) 16px,rgba(0,0,0,.12) 17px);pointer-events:none"></div>
-        <div style="position:absolute;right:-18px;top:-18px;width:90px;height:90px;border-radius:50%;background:rgba(255,255,255,.05);pointer-events:none"></div>
+      <div class="banner-hero" style="margin-bottom:16px;animation:fadeInUp .3s ease">
         <div style="position:relative;display:flex;gap:14px;align-items:flex-start">
           <!-- Mockup téléphone en train de filmer un exercice -->
           <svg viewBox="0 0 62 108" style="width:56px;flex-shrink:0;filter:drop-shadow(0 6px 12px rgba(0,0,0,.5))">
@@ -7790,9 +7791,7 @@ function _renderWeeklyInto(el,sc){
     :((DAYS[sel]||'').toUpperCase()+' — REPOS');
   const mainRest=nbEx?(selS.exercises.map(e=>e.repos).filter(Boolean)[0]||''):'';
   el.innerHTML=`
-    <div style="background:linear-gradient(145deg,#c10000 0%,#880000 55%,#560000 100%);border-radius:12px;padding:18px 20px;position:relative;overflow:hidden;margin-bottom:14px">
-      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 16px,rgba(0,0,0,.12) 16px,rgba(0,0,0,.12) 17px);pointer-events:none"></div>
-      <div style="position:absolute;right:-18px;top:-18px;width:90px;height:90px;border-radius:50%;background:rgba(255,255,255,.05);pointer-events:none"></div>
+    <div class="banner-hero" style="margin-bottom:14px">
       <div style="position:relative">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
           <div>
@@ -10328,9 +10327,7 @@ function _renderNutriContent(type){
     :`<div style="width:54px;height:54px;border-radius:50%;background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff">${icon('dumbbell',22)}</div>`;
   if(type==='flexible'){
     contentEl.innerHTML=`
-      <div style="background:linear-gradient(145deg,#c10000 0%,#880000 55%,#560000 100%);border-radius:12px;padding:18px 20px;position:relative;overflow:hidden;margin-bottom:18px;box-shadow:0 10px 26px rgba(0,0,0,.45);animation:fadeInUp .3s ease">
-        <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 16px,rgba(0,0,0,.12) 16px,rgba(0,0,0,.12) 17px);pointer-events:none"></div>
-        <div style="position:absolute;right:-18px;top:-18px;width:90px;height:90px;border-radius:50%;background:rgba(255,255,255,.05);pointer-events:none"></div>
+      <div class="banner-hero" style="margin-bottom:18px;animation:fadeInUp .3s ease">
         <div style="position:relative;display:flex;gap:14px;align-items:flex-start">
           ${_flxCircle}
           <div style="flex:1;min-width:0">
@@ -10382,9 +10379,7 @@ function _renderStrictDiet(){
     :`<div style="width:54px;height:54px;border-radius:50%;background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff">${icon('dumbbell',22)}</div>`;
   el.innerHTML=`
     <!-- Définition diète stricte -->
-    <div style="background:linear-gradient(145deg,#c10000 0%,#880000 55%,#560000 100%);border-radius:12px;padding:18px 20px;position:relative;overflow:hidden;margin-bottom:18px;box-shadow:0 10px 26px rgba(0,0,0,.45);animation:fadeInUp .3s ease">
-      <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 16px,rgba(0,0,0,.12) 16px,rgba(0,0,0,.12) 17px);pointer-events:none"></div>
-      <div style="position:absolute;right:-18px;top:-18px;width:90px;height:90px;border-radius:50%;background:rgba(255,255,255,.05);pointer-events:none"></div>
+    <div class="banner-hero" style="margin-bottom:18px;animation:fadeInUp .3s ease">
       <div style="position:relative;display:flex;gap:14px;align-items:flex-start">
         ${coachCircle}
         <div style="flex:1;min-width:0">
