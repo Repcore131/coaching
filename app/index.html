@@ -3331,7 +3331,11 @@ const CLOUD={
     if(!cloudUser) return false;
     const merged=Object.assign({},local);
     this._mergeUser(merged,email,cloudUser);
-    localStorage.setItem('rc_users',JSON.stringify(merged));
+    // DB.set et non localStorage.setItem : lui seul gere le debordement de
+    // quota. L'ecriture brute levait une QuotaExceededError dans une fonction
+    // async dont personne n'attend le resultat — donc une unhandled rejection,
+    // et une synchro silencieusement perdue.
+    DB.set('users',merged);
     return true;
   },
   // Sync ciblée — coach : lui-même + ses athlètes uniquement ; athlète : lui-même + son coach
@@ -3951,53 +3955,70 @@ window.onload=()=>{
       // Sync périodique toutes les 30 secondes
       setInterval(async()=>{
         if(!CLOUD.ok()||!currentUser) return;
-        // syncUser renvoie desormais s'il y a eu un changement REEL. Sans ce
-        // signal, on repeignait l'ecran toutes les 30 s pour rien : loadCoachHome
-        // et loadClientHome refont tout le rendu, et go() ferme au passage les
-        // modales ouvertes.
-        let _change=await CLOUD.syncUser(currentUser.email);
-        // Rafraîchir currentUser
-        const u2=(DB.get('users')||{})[currentUser.email];
-        if(u2){currentUser=u2;DB.set('session',currentUser);}
-        // La correction du coach vient d'atterrir dans le dossier de l'athlète.
-        // Les trois couches sont remises à jour dans la foulée : notification
-        // système, pastille d'onglet, et liste d'accueil si elle est à l'écran.
-        if(currentUser.role==='athlete'){
-          checkFeedbackNotif();
-          _majPastilleVideos();
-          if(document.getElementById('s-client-home')?.classList.contains('active')) renderNotifs();
-        }
-        // Athlète : sync les données du coach pour mettre à jour le banner.
-        // Fait AVANT les rendus, pour que _change couvre aussi ce dossier-là.
-        if(currentUser.role==='athlete'&&currentUser.coachId){
-          const _uu=DB.get('users')||{};
-          const _ce=Object.keys(_uu).find(k=>_uu[k]?.id===currentUser.coachId);
-          if(_ce){
-            const _c2=await CLOUD.syncUser(_ce).catch(()=>false);
-            _change=_change||_c2;
+        // Garde d'edition GLOBAL, en tete : proteger le seul re-render ne
+        // suffit pas, car la synchro elle-meme remplace currentUser sous les
+        // doigts de l'utilisateur. Tant qu'un champ a le focus, on ne touche
+        // a rien — le reveil suivant s'en chargera.
+        const _typing=document.activeElement
+          && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+        if(_typing) return;
+        // Corps entierement garde : une exception dans un callback async
+        // n'est rattrapee par personne et tue l'intervalle definitivement.
+        // L'app cessait de se synchroniser jusqu'au rechargement.
+        try{
+          // syncUser renvoie desormais s'il y a eu un changement REEL. Sans ce
+          // signal, on repeignait l'ecran toutes les 30 s pour rien : loadCoachHome
+          // et loadClientHome refont tout le rendu, et go() ferme au passage les
+          // modales ouvertes.
+          let _change=await CLOUD.syncUser(currentUser.email);
+          // Rafraîchir currentUser
+          const u2=(DB.get('users')||{})[currentUser.email];
+          if(u2){
+            // Fusion et non remplacement : currentUser porte des champs de
+            // travail que le distant ignore. Le remplacer les effaçait au
+            // milieu d'une interaction.
+            Object.assign(currentUser,u2);DB.set('session',currentUser);
           }
-        }
-        // Rendus : SEULEMENT si quelque chose a bougé. Une heure passée sur
-        // l'accueil sans activité du coach ne repeint donc plus rien.
-        if(!_change) return;
-        // Ne jamais repeindre pendant une saisie. loadCoachHome reecrit la
-        // liste ET rappelle coachTab : un champ en cours de frappe perdrait
-        // son focus et les caracteres tapes entre deux reveils.
-        // Le garde couvre TOUS les onglets, pas seulement le tableau de bord :
-        // c'est justement sur PAIEMENTS que l'on saisit un numero.
-        if(currentUser.role==='coach'&&document.getElementById('s-coach-home')?.classList.contains('active')){
-          const _ae=document.activeElement;
-          const _saisie=_ae&&_ae.matches&&_ae.matches('input,textarea,select');
-          const _surDashboard=document.getElementById('ct-dashboard')
-            &&getComputedStyle(document.getElementById('ct-dashboard')).display!=='none';
-          if(!_saisie&&_surDashboard) loadCoachHome();
-        }
-        if(currentUser.role==='coach'&&document.getElementById('s-coach-client')?.classList.contains('active')&&currentClientId){
-          openClientDetail(currentClientId,true);
-        }
-        if(currentUser.role==='athlete'&&document.getElementById('s-client-home')?.classList.contains('active')){
-          loadClientHome();
-        }
+          // La correction du coach vient d'atterrir dans le dossier de l'athlète.
+          // Les trois couches sont remises à jour dans la foulée : notification
+          // système, pastille d'onglet, et liste d'accueil si elle est à l'écran.
+          if(currentUser.role==='athlete'){
+            checkFeedbackNotif();
+            _majPastilleVideos();
+            if(document.getElementById('s-client-home')?.classList.contains('active')) renderNotifs();
+          }
+          // Athlète : sync les données du coach pour mettre à jour le banner.
+          // Fait AVANT les rendus, pour que _change couvre aussi ce dossier-là.
+          if(currentUser.role==='athlete'&&currentUser.coachId){
+            const _uu=DB.get('users')||{};
+            const _ce=Object.keys(_uu).find(k=>_uu[k]?.id===currentUser.coachId);
+            if(_ce){
+              const _c2=await CLOUD.syncUser(_ce).catch(()=>false);
+              _change=_change||_c2;
+            }
+          }
+          // Rendus : SEULEMENT si quelque chose a bougé. Une heure passée sur
+          // l'accueil sans activité du coach ne repeint donc plus rien.
+          if(!_change) return;
+          // Ne jamais repeindre pendant une saisie. loadCoachHome reecrit la
+          // liste ET rappelle coachTab : un champ en cours de frappe perdrait
+          // son focus et les caracteres tapes entre deux reveils.
+          // Le garde couvre TOUS les onglets, pas seulement le tableau de bord :
+          // c'est justement sur PAIEMENTS que l'on saisit un numero.
+          if(currentUser.role==='coach'&&document.getElementById('s-coach-home')?.classList.contains('active')){
+            const _ae=document.activeElement;
+            const _saisie=_ae&&_ae.matches&&_ae.matches('input,textarea,select');
+            const _surDashboard=document.getElementById('ct-dashboard')
+              &&getComputedStyle(document.getElementById('ct-dashboard')).display!=='none';
+            if(!_saisie&&_surDashboard) loadCoachHome();
+          }
+          if(currentUser.role==='coach'&&document.getElementById('s-coach-client')?.classList.contains('active')&&currentClientId){
+            openClientDetail(currentClientId,true);
+          }
+          if(currentUser.role==='athlete'&&document.getElementById('s-client-home')?.classList.contains('active')){
+            loadClientHome();
+          }
+        }catch(e){console.warn('sync periodique :',e);}
       },300000);
       // Le passage à 5 minutes rendrait l'app molle au retour d'arrière-plan :
       // un athlète qui rouvre son téléphone attendrait jusqu'à 5 min pour voir
