@@ -7989,7 +7989,7 @@ function renderWoEx(){
           <div class="ex-name" style="font-size:15px">${escapeHtml(ex.name)}</div>
           <div class="sub" style="font-size:12px;margin-top:3px">${ex.series} séries × ${escapeHtml(ex.reps)} reps${ex._cycleAdjusted?' <span style="color:var(--orange)">(−1 série cycle)</span>':''}</div>
         </div>
-        <button class="hit44" onclick="openCalc(${escapeHtml(JSON.stringify(sug||''))},${escapeHtml(JSON.stringify(ex.reps||''))},'0',${escapeHtml(JSON.stringify(currentUser.gender||''))})" style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:11px;padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Vue tableau</button>
+        <button class="hit44" id="wo-calc-btn" style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:11px;padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Vue tableau</button>
       </div>
 
       ${cycleLabel&&isFemme?`<div style="background:var(--dark);border:1px solid #2a2a2a;border-radius:3px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#888;letter-spacing:.5px">${cycleLabel.text}</div>`:''}
@@ -8066,6 +8066,15 @@ function renderWoEx(){
         </div>
       </div>`:''}
     </div>`;
+  // Handler pose en JS, hors attribut. Auparavant les trois valeurs etaient
+  // interpolees DANS onclick : cela ne cassait pas — JSON.stringify les met
+  // entre guillemets doubles avant qu'escapeHtml n'encode l'apostrophe, donc
+  // « 10 par bras d'appui » passait — mais la correction ne tenait qu'a l'ordre
+  // de ces deux appels. Retirer le JSON.stringify, ou echapper apres, suffisait
+  // a produire du JS invalide dans un attribut. Ici, plus rien n'est parse
+  // comme du code : les valeurs restent des valeurs.
+  const _cb=document.getElementById('wo-calc-btn');
+  if(_cb) _cb.onclick=()=>openCalc(sug,ex.reps,'0',currentUser.gender);
   renderSets(ex,data);
   woPersist();
   setTimeout(()=>setupScrollFade(document.getElementById('wo-sets-scroll')),0);
@@ -12769,6 +12778,11 @@ function pluSeries(sets,planned){
   return Math.max(parseInt(sets)||0,parseInt(planned)||0)>1?'s':'';
 }
 function ini(f,l){return((f||'?')[0]+(l||'?')[0]).toUpperCase();}
+// escapeHtml : encode pour le CONTEXTE HTML uniquement — texte de noeud ou
+// valeur d'attribut. Ne convient NI a une URL, NI a un fragment de code JS :
+// dans un attribut onclick, les entites sont decodees avant que le JS ne soit
+// parse, donc l'echappement n'y protege de rien. Pour du JS, ne pas construire
+// la chaine — poser le handler en JS et passer les valeurs telles quelles.
 function escapeHtml(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 // safeUrlRaw : valide le schéma et rend l'URL TELLE QUELLE. À réserver aux
 // usages hors HTML (window.open, fetch…), où des entités casseraient l'adresse.
