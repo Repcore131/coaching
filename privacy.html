@@ -132,8 +132,9 @@
     <li><strong>Suivi sportif personnalisé</strong> — permettre au coach de suivre la progression de l'athlète et d'adapter le programme</li>
     <li><strong>Fonctionnement de l'application</strong> — authentification, synchronisation multi-appareils, notifications</li>
     <li><strong>Facturation</strong> — gestion des abonnements via PayPal</li>
+    <li><strong>Mesure d'audience anonyme</strong> — comprendre à quelle étape du parcours les visiteurs s'arrêtent, afin d'améliorer l'application (voir le point 6 bis)</li>
   </ul>
-  <p>Les données ne sont utilisées à aucune fin commerciale, publicitaire ou statistique externe.</p>
+  <p>Les données ne sont utilisées à aucune fin commerciale ou publicitaire. Elles ne sont transmises à aucun outil de statistiques externe : la mesure d'audience décrite au point 6 bis n'utilise que des compteurs anonymes, hébergés chez le même prestataire technique que le reste de l'application, et ne s'appuie sur aucune des données personnelles listées au point 2.</p>
 
   <h2>4. Base légale</h2>
   <ul>
@@ -228,7 +229,7 @@
       </tbody>
     </table>
   </div>
-  <p class="note">Aucun autre service tiers n'est contacté par l'application. Les liens WhatsApp et Google Drive éventuellement affichés ne sont ouverts que si vous les touchez, et vous quittez alors RepCore.</p>
+  <p class="note">Aucun autre service tiers n'est contacté par l'application — la mesure d'audience décrite au point 6 bis n'ajoute aucun destinataire, ses compteurs étant écrits dans la base Firebase déjà listée ci-dessus. Les liens WhatsApp et Google Drive éventuellement affichés ne sont ouverts que si vous les touchez, et vous quittez alors RepCore.</p>
 
   <div class="card">
     <div class="card-title">Stockage local (localStorage)</div>
@@ -252,6 +253,24 @@
     automatiquement</strong> — leur suppression exige une clé serveur que l'application ne
     détient pas. Ils sont supprimés manuellement sous 30 jours sur demande adressée à
     <a href="mailto:guellec.coachingpro@gmail.com">guellec.coachingpro@gmail.com</a>.</li>
+  </ul>
+
+  <h2>6 bis. Mesure d'audience</h2>
+  <p>RepCore mesure à quelle étape du parcours les visiteurs s'arrêtent — page de vente, ouverture de l'application, saisie du code, création de compte, abonnement, première séance, premier bilan. Cette mesure sert uniquement à identifier les points de blocage et à améliorer le service.</p>
+
+  <div class="card">
+    <div class="card-title">Ce qui est réellement enregistré</div>
+    <p style="margin:0 0 8px;font-size:13px">Pour chaque étape, un <strong style="color:#fff">simple compteur par jour</strong> est incrémenté d'une unité. Un enregistrement complet ressemble à ceci :</p>
+    <p style="margin:0 0 8px;font-size:13px"><code>2026-07-28 / register_completed = 4</code></p>
+    <p style="margin:0;font-size:13px">C'est tout. Aucun identifiant, aucune adresse email, aucune adresse IP, aucune donnée de santé, aucun contenu de formulaire n'est associé à ces compteurs. Il est <strong style="color:#fff">structurellement impossible</strong> d'en déduire qui a franchi une étape, ni de relier deux étapes à une même personne : les règles de sécurité de la base n'acceptent, sous ces clés, qu'un nombre entier appartenant à une liste fermée de quinze noms d'étapes.</p>
+  </div>
+
+  <ul>
+    <li><strong>Aucun cookie</strong> n'est déposé, et aucun traceur, empreinte de navigateur ou identifiant publicitaire n'est utilisé. La mesure ne relevant pas de l'article 82 de la loi Informatique et Libertés, elle ne nécessite pas de bandeau de consentement.</li>
+    <li><strong>Aucun outil tiers</strong> n'est sollicité : ni Google Analytics, ni Plausible, ni Matomo, ni aucun autre service de statistiques. Les compteurs sont écrits dans la base Firebase déjà mentionnée au point 5, sans nouveau destinataire.</li>
+    <li><strong>Base légale : l'intérêt légitime</strong> (Art. 6.1.f du RGPD) — améliorer un service à partir de données strictement anonymes. Ces compteurs ne constituant pas des données à caractère personnel, ils ne relèvent d'aucun profilage et ne peuvent faire l'objet d'une demande d'accès ou d'effacement individuelle : il n'existe aucun moyen de retrouver votre passage parmi eux.</li>
+    <li><strong>Conservation :</strong> les compteurs sont conservés sous forme agrégée sans limite de durée, leur anonymat rendant sans objet toute suppression.</li>
+    <li>Ces chiffres ne sont consultables que par le responsable de traitement, depuis un écran d'administration de l'application.</li>
   </ul>
 
   <h2>7. Vos droits</h2>

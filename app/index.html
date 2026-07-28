@@ -274,6 +274,18 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
 .caff-type-btn{flex:0 0 auto;padding:8px 14px;border:1px solid var(--border);border-radius:20px;background:none;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;cursor:pointer;transition:.15s;white-space:nowrap}
 .caff-type-btn.active{background:#1a0000;border-color:var(--red);color:#fff}
 
+/* Barre de navigation de séance : 4 boutons sur une ligne. Sous 430px, la place
+   restante pour le bouton central tombe sous 120px alors que « Exercice
+   suivant → » en réclame ~150 : il se coupait en « Exercice s… ».
+   Deux libellés dans le DOM, un seul visible — la bascule suit la rotation de
+   l'écran sans avoir à re-rendre l'exercice. */
+.wo-lbl-court{display:none}
+@media(max-width:430px){
+  .wo-lbl-long{display:none}
+  .wo-lbl-court{display:inline}
+  #wo-next-btn{letter-spacing:.3px;font-size:11px}
+}
+
 /* ====== BILAN ====== */
 .bilan-section{background:var(--surface-1);border-radius:4px;padding:16px;margin-bottom:12px;border:1px solid var(--border)}
 .bilan-section h3{margin-bottom:12px;font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:2px;color:var(--sub);font-weight:700}
@@ -717,9 +729,10 @@ const COACH_PHOTO='icons/coach.jpg';
     <div style="margin-bottom:8px">
       <div style="width:24px;height:2px;background:var(--red);margin-bottom:14px"></div>
       <div style="font-size:26px;font-weight:900;letter-spacing:-0.5px;text-transform:uppercase;color:var(--red)">ESPACE COACH</div>
-      <!-- Cette phrase décrivait une restriction qui n'existait pas :
-           l'inscription coach était ouverte à tous. Elle est maintenant exacte. -->
-      <div class="sub" style="font-size:12px;margin-top:6px">Accès sur invitation. La création d'un compte coach demande un code fourni par le créateur de RepCore.</div>
+      <!-- Le sous-titre vend le tableau de bord ; la condition d'accès n'a pas
+           disparu, elle est portée par la carte « CRÉER MON COMPTE », seule
+           concernée. L'énoncer deux fois faisait de l'écran une procédure. -->
+      <div class="sub" style="font-size:12px;margin-top:6px">Tes athlètes saisissent, ton tableau de bord trie : tu vois qui avance, qui décroche, et ce qu'il te reste à traiter.</div>
     </div>
 
     <!-- SE CONNECTER -->
@@ -740,19 +753,41 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="width:44px;height:44px;border-radius:10px;background:#0d0d0d;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></div>
         <div>
           <div style="font-weight:800;font-size:15px;letter-spacing:.5px">CRÉER MON COMPTE</div>
-          <div class="sub" style="font-size:11px;margin-top:3px">Nouveau coach : inscription gratuite</div>
+          <!-- « inscription gratuite » laissait croire à une inscription libre,
+               alors que doRegister exige un code d'invitation valide (_INVITE_RE
+               + _verifyCoachInvite). Le compte EST gratuit — l'encart tarifs le
+               dit — mais il n'est pas ouvert : c'est la condition d'entrée, pas
+               le prix, qui devait figurer sur le bouton qu'elle gouverne. -->
+          <div class="sub" style="font-size:11px;margin-top:3px">Nouveau coach : code d'invitation requis</div>
         </div>
         <div style="margin-left:auto;color:var(--sub);font-size:18px">›</div>
       </div>
     </div>
 
+    <!-- Bénéfices — ce que le tableau de bord fait, pas comment on s'y inscrit.
+         Les quatre lignes correspondent chacune à une fonctionnalité présente :
+         file « À traiter » (needsAlert/hasNewBilan), modèles de programme
+         (_assignerModele), bannière coach chez l'athlète (_renderCoachBanner :
+         teamName/coachPhoto/catchphrase) et contact direct (_coachContactHref,
+         partagé par l'accueil athlète). Ne pas y ajouter de promesse sans
+         vérifier qu'elle existe : cet écran est lu avant l'inscription. -->
+    <div style="margin-top:4px">
+      <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:var(--sub);font-weight:700;margin-bottom:10px;text-transform:uppercase">Ton tableau de bord</div>
+      <ul style="list-style:none;margin:0;padding:0">
+        <li style="position:relative;padding-left:18px;margin-bottom:9px;font-size:12px;line-height:1.5;color:rgba(255,255,255,.82)"><span style="position:absolute;left:0;top:6px;width:6px;height:6px;border-radius:50%;background:var(--red)"></span>Repère les athlètes en alerte et les nouveaux bilans</li>
+        <li style="position:relative;padding-left:18px;margin-bottom:9px;font-size:12px;line-height:1.5;color:rgba(255,255,255,.82)"><span style="position:absolute;left:0;top:6px;width:6px;height:6px;border-radius:50%;background:var(--red)"></span>Assigne un programme-modèle à un athlète en un geste</li>
+        <li style="position:relative;padding-left:18px;margin-bottom:9px;font-size:12px;line-height:1.5;color:rgba(255,255,255,.82)"><span style="position:absolute;left:0;top:6px;width:6px;height:6px;border-radius:50%;background:var(--red)"></span>Affiche ta team, ta photo et ton accroche chez eux</li>
+        <li style="position:relative;padding-left:18px;font-size:12px;line-height:1.5;color:rgba(255,255,255,.82)"><span style="position:absolute;left:0;top:6px;width:6px;height:6px;border-radius:50%;background:var(--red)"></span>Reste joignable sur WhatsApp depuis l'accueil de tes athlètes</li>
+      </ul>
+    </div>
+
     <!-- Info box rouge -->
     <div style="background:rgba(224,32,32,.07);border:1px solid rgba(224,32,32,.24);border-radius:10px;padding:14px 16px;margin-top:4px">
-      <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:var(--red);font-weight:700;margin-bottom:6px">ℹ️ ESPACE COACH — TARIFS</div>
+      <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:var(--red);font-weight:700;margin-bottom:6px">ℹ️ ESPACE COACH : TARIFS</div>
       <!-- Cet écran est lu AVANT l'inscription, donc par de futurs coachs affiliés.
            L'ancienne formule promettait « des codes d'accès gratuits » que seul le
            créateur peut émettre : la promesse ne pouvait pas être tenue. -->
-      <div style="font-size:11px;color:rgba(255,255,255,.82);line-height:1.6"><strong style="color:#fff">Ton compte coach est gratuit</strong>, sans abonnement ni code. Tu génères ton propre code à donner à tes athlètes : il les rattache à ton suivi.<br><br>Tes athlètes, eux, paient <strong style="color:#fff">9,95 €/mois</strong> pour accéder à l'app. Les accès gratuits sont réservés au créateur de RepCore.</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.82);line-height:1.6"><strong style="color:#fff">Ton compte coach est gratuit</strong>, sans abonnement : son ouverture demande un code d'invitation du créateur. Tu génères ensuite tes propres codes à donner à tes athlètes : ils les rattachent à ton suivi.<br><br>Tes athlètes, eux, paient <strong style="color:#fff">9,95 €/mois</strong> pour accéder à l'app. Les accès gratuits sont réservés au créateur de RepCore.</div>
     </div>
   </div>
 </div>
@@ -801,7 +836,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <input id="ae-code" type="text" placeholder="Ex: RC-A3KZ-W9MX ou le lien reçu" style="letter-spacing:1px;font-family:monospace" onclick="event.stopPropagation()"
           oninput="var v=this.value;if(!v.startsWith('http')&&!v.startsWith('RCACCESS')&&!v.startsWith('RCLINK'))this.value=v.toUpperCase()">
         <div id="ae-err" style="color:var(--red);font-size:11px;margin-top:6px;display:none"></div>
-        <button class="btn btn-red" onclick="event.stopPropagation();doAthleteCode()" style="margin-top:12px">VALIDER → CRÉER MON COMPTE</button>
+        <button id="ae-valider" class="btn btn-red" onclick="event.stopPropagation();doAthleteCode()" style="margin-top:12px">VALIDER → CRÉER MON COMPTE</button>
       </div>
     </div>
 
@@ -826,7 +861,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="width:44px;height:44px;border-radius:10px;background:#0d0d0d;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div>
         <div>
           <div style="font-weight:800;font-size:15px;letter-spacing:.5px">JE N'AI PAS DE CODE</div>
-          <div class="sub" style="font-size:11px;margin-top:3px">Accès en autonomie — 9,95 €/mois, sans engagement</div>
+          <div class="sub" style="font-size:11px;margin-top:3px">Accès en autonomie : 9,95 €/mois, sans engagement</div>
         </div>
         <div style="margin-left:auto;color:var(--sub);font-size:18px">›</div>
       </div>
@@ -918,7 +953,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="display:flex;align-items:flex-start;gap:10px;margin-top:8px;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px">
         <input type="checkbox" id="r-health" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
         <div style="font-size:11px;color:var(--sub);margin:4px 0 12px;line-height:1.6">En creant un compte tu acceptes les <a href="../terms.html" target="_blank" rel="noopener" style="color:var(--red-light)">CGV</a> et prends connaissance des <a href="../legal.html" target="_blank" rel="noopener" style="color:var(--red-light)">mentions legales</a>.</div>
-        <label for="r-health" style="font-size:12px;color:var(--sub);line-height:1.6;cursor:pointer">Je consens explicitement au traitement de mes <strong style="color:#ccc">données de santé</strong> — poids, mensurations, photos corporelles, cycle menstruel, sommeil — pour mon suivi sportif.</label>
+        <label for="r-health" style="font-size:12px;color:var(--sub);line-height:1.6;cursor:pointer">Je consens explicitement au traitement de mes <strong style="color:#ccc">données de santé</strong> (poids, mensurations, photos corporelles, cycle menstruel, sommeil) pour mon suivi sportif.</label>
       </div>
     </div>
     <!-- Rappel de l'invitation portée depuis l'écran coach : sans ce repère,
@@ -1146,7 +1181,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <!-- Notice pour coachs non-créateur — géré dans loadStudentCodes() -->
         <div id="sc-noncreatormsg" style="display:none;background:var(--info-bg);border:1px solid var(--info-border);border-radius:14px;padding:18px;margin-bottom:24px">
           <div style="font-size:11px;font-weight:800;color:var(--info);letter-spacing:2px;margin-bottom:10px">ACCÈS ÉLÈVES</div>
-          <p style="font-size:12px;color:#aaa;line-height:1.7;margin:0">Les codes d'accès gratuits sont réservés exclusivement au créateur de RepCore.<br><br>Tes élèves peuvent accéder à l'application en souscrivant directement via PayPal (9,95€/mois). Les paiements sont centralisés sur le compte du créateur — tu n'as rien à configurer.</p>
+          <p style="font-size:12px;color:#aaa;line-height:1.7;margin:0">Les codes d'accès gratuits sont réservés exclusivement au créateur de RepCore.<br><br>Tes élèves peuvent accéder à l'application en souscrivant directement via PayPal (9,95€/mois). Les paiements sont centralisés sur le compte du créateur : tu n'as rien à configurer.</p>
         </div>
         <div>
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
@@ -1165,6 +1200,20 @@ const COACH_PHOTO='icons/coach.jpg';
     <div id="ct-monetisation" style="display:none;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
       <div class="pad">
         <div style="width:20px;height:2px;background:var(--red);margin-bottom:8px;margin-top:4px"></div>
+
+        <!-- Tunnel — chiffres produit, pas chiffres d'un coach : réservé au
+             créateur, comme la génération de codes gratuits. Affiché par
+             loadCoachDashboard, qui seul connaît l'utilisateur courant. -->
+        <div id="ch-lien-tunnel" style="display:none;margin-bottom:18px">
+          <div onclick="loadMetrics()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:16px 18px;cursor:pointer;display:flex;align-items:center;gap:14px">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Mesure</div>
+              <div style="font-weight:800;font-size:14px">Tunnel d'acquisition</div>
+              <div class="sub" style="font-size:11px;margin-top:2px">7 derniers jours : compteurs anonymes</div>
+            </div>
+            <div style="color:var(--sub);font-size:18px">›</div>
+          </div>
+        </div>
 
         <!-- 🏷️ Identité coach / team -->
         <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px">
@@ -1219,7 +1268,7 @@ const COACH_PHOTO='icons/coach.jpg';
             <div style="width:36px;height:36px;background:var(--surface-2);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px;display:inline-block;vertical-align:middle;flex-shrink:0"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></div>
             <div>
               <div style="font-weight:800;font-size:14px">Hébergement vidéo</div>
-              <div style="font-size:11px;color:var(--sub);margin-top:2px">Tes athlètes envoient leurs vidéos directement dans l'app — gratuit jusqu'à 25 Go/mois</div>
+              <div style="font-size:11px;color:var(--sub);margin-top:2px">Tes athlètes envoient leurs vidéos directement dans l'app : gratuit jusqu'à 25 Go/mois</div>
             </div>
           </div>
           <label style="font-size:11px;color:var(--sub);margin-bottom:4px;display:block">Cloud Name</label>
@@ -1246,7 +1295,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
 
         <h2 style="margin-bottom:4px">Paiements</h2>
-        <p class="sub" style="font-size:12px;margin-bottom:20px">Tous les abonnements (9,95€/mois) sont centralisés sur le compte RepCore. Seul le créateur peut émettre des codes d'accès gratuits. Les élèves des autres coachs souscrivent directement via PayPal — les paiements reviennent exclusivement au créateur de l'application.</p>
+        <p class="sub" style="font-size:12px;margin-bottom:20px">Tous les abonnements (9,95€/mois) sont centralisés sur le compte RepCore. Seul le créateur peut émettre des codes d'accès gratuits. Les élèves des autres coachs souscrivent directement via PayPal : les paiements reviennent exclusivement au créateur de l'application.</p>
 
         <!-- Stats -->
         <div style="display:flex;gap:10px;margin-bottom:20px">
@@ -1271,7 +1320,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
         <!-- Admin : offboarding d'un coach tiers — visible créateur seulement -->
         <div id="coach-admin-offboard" style="display:none;background:#0d0d00;border:1px solid #3a3a00;border-radius:14px;padding:18px;margin-top:24px">
-          <div style="font-size:var(--fs-xs);color:#a3a300;letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:10px">⚙ Admin — Offboarding coach</div>
+          <div style="font-size:var(--fs-xs);color:#a3a300;letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:10px">⚙ Admin : Offboarding coach</div>
           <div style="font-size:11px;color:var(--sub);margin-bottom:12px;line-height:1.5">Réassigner les athlètes d'un coach avant de désactiver son compte.</div>
           <select id="admin-offboard-select" style="width:100%;margin-bottom:10px;padding:10px;background:#1a1a08;border:1px solid #3a3a00;border-radius:6px;color:#fff;font-size:12px;font-family:Montserrat,sans-serif">
             <option value="">— Sélectionne un coach —</option>
@@ -1465,7 +1514,7 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
-      <div><label for="prog-name">Nom du programme</label><input id="prog-name" placeholder="Ex: Prise de masse — Semaine 1"></div>
+      <div><label for="prog-name">Nom du programme</label><input id="prog-name" placeholder="Ex: Prise de masse : Semaine 1"></div>
 
       <!-- IMPORT PHOTO PROGRAMME -->
       <div style="margin-top:16px">
@@ -1489,7 +1538,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
       <!-- LIENS YOUTUBE : coller / photo / pdf (cachés des athlètes) -->
       <div style="margin-top:10px">
-        <div style="font-size:var(--fs-xs);color:var(--green);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin-bottom:6px"> Liens YouTube <span style="opacity:.5;font-size:var(--fs-xs)">(cachés — IA seulement)</span></div>
+        <div style="font-size:var(--fs-xs);color:var(--green);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin-bottom:6px"> Liens YouTube <span style="opacity:.5;font-size:var(--fs-xs)">(cachés : IA seulement)</span></div>
         <div id="prog-photo2-ph" style="display:flex;gap:6px">
           <!-- Coller les liens — option principale -->
           <div onclick="togglePasteLiens()" id="prog-paste-btn"
@@ -1690,13 +1739,17 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="clh-first-bilan-card" style="display:none;background:var(--info-bg);border:1px solid var(--info-border);border-radius:12px;padding:14px 16px;margin-bottom:14px;cursor:pointer" onclick="openBilan('depart')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div style="font-size:var(--fs-xs);color:var(--info);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:5px;display:flex;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="9" y="2" width="6" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> À compléter</div>
         <div style="font-size:13px;font-weight:800;margin-bottom:4px;color:#fff">Questionnaire de départ</div>
-        <div style="font-size:11px;color:var(--sub);line-height:1.5">Remplis ton bilan initial pour permettre à ton coach de suivre ta progression →</div>
+        <!-- Le texte disait quoi faire, pas ce que ça rapporte. Depuis que le
+             bilan ne bloque plus l'entrée dans l'app, cette carte est le seul
+             argument qui reste pour le faire remplir : il doit porter le
+             bénéfice, pas la consigne. -->
+        <div style="font-size:11px;color:var(--sub);line-height:1.5">Une fois rempli, ton coach pourra suivre ta progression et adapter tes charges. Environ 5 minutes →</div>
       </div>
 
       <!-- BILAN ALERT -->
       <div id="clh-bilan-alert" style="display:none;background:#7c2d1222;border:1px solid var(--orange);border-radius:12px;padding:14px;margin-bottom:16px;cursor:pointer" onclick="openBilanChoice()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div style="font-weight:700;color:var(--orange);font-size:13px;text-transform:uppercase;letter-spacing:.5px">Bilan bimensuel à compléter</div>
-        <div class="sub" style="font-size:12px;margin-top:4px">Suis ton évolution — remplis ton bilan.</div>
+        <div class="sub" style="font-size:12px;margin-top:4px">Suis ton évolution : remplis ton bilan.</div>
       </div>
 
       <!-- PDF PROGRAMME — accès direct -->
@@ -1855,24 +1908,24 @@ const COACH_PHOTO='icons/coach.jpg';
     <p class="sub" style="font-size:12px;margin-bottom:20px;line-height:1.5">Indique où tu en es dans ton cycle. Les charges et séries seront ajustées automatiquement.</p>
     <div style="display:flex;flex-direction:column;gap:10px" id="cycle-options">
       <div class="obj-opt" onclick="setCyclePhase('j1_difficile',this)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <div style="font-weight:800">J1→J5 — Menstruations difficiles</div>
+        <div style="font-weight:800">J1→J5 : Menstruations difficiles</div>
         <div class="sub" style="font-size:11px;margin-top:3px">Douleurs, fatigue intense, moral bas</div>
       </div>
       <div class="obj-opt" onclick="setCyclePhase('j1_supportable',this)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <div style="font-weight:800">J1→J5 — Menstruations supportables</div>
+        <div style="font-weight:800">J1→J5 : Menstruations supportables</div>
         <div class="sub" style="font-size:11px;margin-top:3px">Légère gêne, entraînement faisable</div>
       </div>
       <div class="obj-opt" onclick="setCyclePhase('j6_14',this)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <div style="font-weight:800">J6→J14 — Phase folliculaire</div>
+        <div style="font-weight:800">J6→J14 : Phase folliculaire</div>
         <div class="sub" style="font-size:11px;margin-top:3px">Énergie optimale, bonne récupération</div>
       </div>
       <div class="obj-opt" onclick="setCyclePhase('j15_21',this)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <div style="font-weight:800">J15→J21 — Phase lutéale (début)</div>
+        <div style="font-weight:800">J15→J21 : Phase lutéale (début)</div>
         <div class="sub" style="font-size:11px;margin-top:3px">Légère fatigue, entraînement normal</div>
       </div>
       <div class="obj-opt" onclick="setCyclePhase('j22_28',this)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <div style="font-weight:800">J22→J28 — Phase lutéale (fin)</div>
-        <div class="sub" style="font-size:11px;margin-top:3px">Fatigue, rétention — volume réduit (−1 série/exercice)</div>
+        <div style="font-weight:800">J22→J28 : Phase lutéale (fin)</div>
+        <div class="sub" style="font-size:11px;margin-top:3px">Fatigue, rétention : volume réduit (−1 série/exercice)</div>
       </div>
     </div>
     <button class="btn btn-outline" style="margin-top:16px" onclick="setCyclePhase('ignore',null)">Ignorer / Pas applicable</button>
@@ -1932,14 +1985,14 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="width:28px;height:28px;background:#1a0000;border:1px solid #3a0000;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--red);flex-shrink:0">1</div>
         <div>
           <div style="font-size:13px;font-weight:700;margin-bottom:2px">Ouvre ce lien dans <span style="color:var(--red)">Safari</span></div>
-          <div style="font-size:11px;color:var(--text-dim);line-height:1.5">L'installation ne fonctionne que depuis Safari — pas Chrome ni Firefox.</div>
+          <div style="font-size:11px;color:var(--text-dim);line-height:1.5">L'installation ne fonctionne que depuis Safari : pas Chrome ni Firefox.</div>
         </div>
       </div>
       <div style="display:flex;align-items:flex-start;gap:12px">
         <div id="ios-step2-num" style="width:28px;height:28px;background:#1a0000;border:1px solid #3a0000;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--red);flex-shrink:0">2</div>
         <div>
           <div style="font-size:13px;font-weight:700;margin-bottom:2px">Appuie sur le bouton <span style="color:var(--red)">Partager</span> <span style="font-size:15px">⎙</span></div>
-          <div style="font-size:11px;color:var(--text-dim);line-height:1.5">L'icône carré avec une flèche vers le haut — en bas de l'écran Safari.</div>
+          <div style="font-size:11px;color:var(--text-dim);line-height:1.5">L'icône carré avec une flèche vers le haut : en bas de l'écran Safari.</div>
         </div>
       </div>
       <div style="display:flex;align-items:flex-start;gap:12px">
@@ -1977,7 +2030,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div style="padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
     <button class="btn btn-outline" id="wo-prev-btn" onclick="woNav(-1)" style="flex:none;width:44px">←</button>
     <button onclick="confirmPauseWorkout()" title="Retour à l'accueil (séance sauvegardée)" style="flex:none;width:44px;align-self:stretch;background:#111;border:1px solid #333;border-radius:3px;color:var(--sub);cursor:pointer;display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M3 10.5 L12 3 L21 10.5"/><path d="M5.5 9 V20 a1,1 0 0 0 1,1 H9.5 V14.5 h5 V21 H17.5 a1,1 0 0 0 1,-1 V9"/></svg></button>
-    <button class="btn btn-red" id="wo-next-btn" onclick="woNav(1)" style="flex:1;white-space:nowrap;font-size:12px;letter-spacing:1px;padding-left:8px;padding-right:8px;min-width:0;overflow:hidden;text-overflow:ellipsis">Exercice suivant →</button>
+    <button class="btn btn-red" id="wo-next-btn" onclick="woNav(1)" style="flex:1;white-space:nowrap;font-size:12px;letter-spacing:1px;padding-left:8px;padding-right:8px;min-width:0;overflow:hidden;text-overflow:ellipsis"><span class="wo-lbl-long">Exercice suivant</span><span class="wo-lbl-court">Suivant</span> →</button>
     <button onclick="finishWorkoutEarly()" style="flex:none;align-self:stretch;background:#111;border:1px solid #333;color:var(--sub);padding:0 16px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;cursor:pointer;border-radius:3px;white-space:nowrap;letter-spacing:.5px;display:inline-flex;align-items:center;gap:7px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><circle cx="12" cy="12" r="9"/><polyline points="9 12 11 14 15 10"/></svg>Terminer</button>
   </div>
 </div>
@@ -2056,6 +2109,18 @@ const COACH_PHOTO='icons/coach.jpg';
           <input type="number" id="ps-steps" placeholder="Ex: 8500" style="margin-top:0">
           <div class="sub" style="font-size:var(--fs-xs);margin-top:6px">Ajouté à ton suivi Lifestyle</div>
         </div>
+      </div>
+      <!-- RELANCE BILAN DE DÉPART — visible seulement s'il manque encore.
+           Placée ici, après la séance et avant les boutons : c'est le moment où
+           l'athlète vient de recevoir de la valeur, donc celui où la demande se
+           justifie. À l'inscription elle n'aurait été qu'un péage.
+           Le clic passe par savePostSession(true) et JAMAIS par openBilan
+           directement : le ressenti saisi au-dessus n'est écrit qu'à la
+           validation, l'ouvrir en direct le jetterait silencieusement. -->
+      <div id="wd-first-bilan-card" style="display:none;background:var(--info-bg);border:1px solid var(--info-border);border-radius:12px;padding:14px 16px;margin-bottom:14px;cursor:pointer" onclick="savePostSession(true)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+        <div style="font-size:var(--fs-xs);color:var(--info);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:5px">Et maintenant ?</div>
+        <div style="font-size:13px;font-weight:800;margin-bottom:4px;color:#fff">Remplis ton questionnaire de départ</div>
+        <div style="font-size:11px;color:var(--sub);line-height:1.5">Ton coach pourra suivre ta progression et adapter tes charges. On enregistre ta séance et on y va →</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
         <button class="btn btn-red" onclick="savePostSession()">Valider et terminer </button>
@@ -2186,7 +2251,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <label class="form-label">Nom du complément</label>
         <input class="form-input" id="supp-name" list="supp-name-list" placeholder="Ex: Créatine monohydrate" autocomplete="off" oninput="checkSuppCaffeineRedirect(this.value)">
         <datalist id="supp-name-list"></datalist>
-        <div id="supp-caff-warning" style="display:none;margin-top:8px;background:var(--warning-bg);border:1px solid var(--warning);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--warning)">☕ La caféine a son propre module dédié — utilise la section <strong>Caféine</strong> pour la traquer avec précision (mg, équivalents, historique).</div>
+        <div id="supp-caff-warning" style="display:none;margin-top:8px;background:var(--warning-bg);border:1px solid var(--warning);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--warning)">☕ La caféine a son propre module dédié : utilise la section <strong>Caféine</strong> pour la traquer avec précision (mg, équivalents, historique).</div>
       </div>
       <!-- Dosage -->
       <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -2507,6 +2572,24 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
+<!-- ══════ TUNNEL D'ACQUISITION (créateur uniquement) ══════ -->
+<div id="s-metrics" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="go('s-coach-home');coachTab('monetisation')">←</button>
+    <span class="topbar-title">Tunnel : 7 jours</span>
+    <span></span>
+  </div>
+  <div class="scroll-area pad">
+    <div id="mt-corps"></div>
+    <p class="sub" style="font-size:11px;line-height:1.6;margin-top:20px;border-top:1px solid var(--border);padding-top:14px">
+      Compteurs agrégés par jour. Aucun cookie, aucun identifiant, aucune donnée
+      de santé : ces nombres ne permettent pas de savoir qui a fait quoi, ni de
+      relier deux étapes à une même personne. Les pourcentages comparent des
+      volumes d'étapes, pas des individus suivis d'un bout à l'autre.
+    </p>
+  </div>
+</div>
+
 <!-- ══════ SUBSCRIBE ══════ -->
 <div id="s-subscribe" class="screen" style="background:#060606;overflow:hidden">
   <div class="topbar" style="border-bottom:1px solid #1a0000">
@@ -2637,6 +2720,59 @@ const POLICY_VERSION='2026-07';
 //   3. l'écran Monétisation (pp-mrr), qui agrège aujourd'hui le chiffre total
 //      sans distinguer la part de chaque coach.
 const CREATOR_EMAIL='guellec.coachingpro@gmail.com';
+
+// ── Mesure de tunnel ────────────────────────────────────────────────────────
+// Des COMPTEURS agrégés, dans la base déjà utilisée par l'app : aucun outil
+// tiers n'est contacté, donc rien ne sort de l'hébergeur déjà déclaré dans la
+// politique de confidentialité. Aucun cookie n'est posé, aucune session n'est
+// tracée, et il est structurellement impossible de remonter à une personne :
+// ce qui part sur le réseau est « +1 sur cette étape aujourd'hui », jamais qui,
+// jamais depuis où.
+// La requête est délibérément envoyée SANS jeton d'authentification : y joindre
+// le jeton rattacherait chaque incrément à un compte identifié, ce que cette
+// mesure ne doit précisément pas permettre.
+// Les noms sont figés ici ET dans database.rules.json : le serveur refuse toute
+// clé hors liste, donc une faute de frappe ou un ajout non réfléchi ne peut pas
+// créer de dimension imprévue.
+const RCM_EVENEMENTS=['landing_view','welcome_view','role_selected_coach','role_selected_athlete',
+  'code_entered','code_valid','code_invalid','register_started','register_completed',
+  'subscribe_viewed','paypal_clicked','subscription_activated',
+  'first_workout_started','first_workout_completed','first_bilan_completed'];
+const RCM_BASE='https://repcore-sync-default-rtdb.firebaseio.com/metrics';
+function rcm(nom){
+  try{
+    if(RCM_EVENEMENTS.indexOf(nom)===-1) return;
+    // Le développement local ne doit pas polluer les chiffres de production.
+    const h=location.hostname;
+    if(h==='localhost'||h==='127.0.0.1'||h===''||h.startsWith('192.168.')) return;
+    // .sv/increment : incrément atomique côté serveur. Sans lui, deux visiteurs
+    // simultanés liraient la même valeur et en écriraient la même — un des deux
+    // passages serait perdu.
+    fetch(RCM_BASE+'/'+localISODate(new Date())+'/'+nom+'.json',{
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({'.sv':{'increment':1}}),
+      // L'étape est souvent la dernière chose qui se produit avant un
+      // changement d'écran ou une fermeture : sans keepalive, l'événement le
+      // plus intéressant du tunnel serait justement celui qu'on perdrait.
+      keepalive:true
+    }).catch(()=>{});
+  }catch(e){}
+}
+// Étapes « vue d'écran » : comptées une seule fois par session de navigation.
+// Sans ce garde, un aller-retour entre l'accueil et l'inscription — le
+// comportement normal de quelqu'un qui hésite — gonflerait l'étape et ferait
+// apparaître un taux de conversion inférieur à la réalité.
+// sessionStorage et non localStorage : on veut une fois par visite, pas une
+// fois dans la vie de l'appareil.
+function rcmVue(nom){
+  try{
+    const cle='rcm_vu_'+nom;
+    if(sessionStorage.getItem(cle)) return;
+    sessionStorage.setItem(cle,'1');
+  }catch(e){}
+  rcm(nom);
+}
 
 // APP_BASE_URL : racine publique de l'app, déduite de l'adresse courante.
 // Jamais codée en dur — un changement de dépôt, de chemin ou de domaine
@@ -3065,20 +3201,20 @@ const CLOUD={
     try{
       r=await fetch(this._functionsBase+'/'+name,{method:'POST',headers,body:JSON.stringify({data})});
     }catch(e){
-      throw new Error('Impossible de joindre le serveur — vérifie ta connexion.');
+      throw new Error('Impossible de joindre le serveur : vérifie ta connexion.');
     }
     let j;
     try{ j=await r.json(); }catch(e){
       // Réponse non-JSON (ex. page d'erreur HTML servie par le Service Worker en fallback
       // offline si le serveur est injoignable) — à traiter comme une vraie erreur, jamais
       // comme un succès silencieux.
-      throw new Error('Réponse serveur invalide ('+r.status+') — le service est peut-être indisponible.');
+      throw new Error('Réponse serveur invalide ('+r.status+') : le service est peut-être indisponible.');
     }
     if(!r.ok||j.error){
       throw new Error((j.error&&j.error.message)||'Erreur serveur ('+r.status+').');
     }
     if(!('result' in j)){
-      throw new Error('Réponse serveur inattendue — réessaie.');
+      throw new Error('Réponse serveur inattendue : réessaie.');
     }
     return j.result;
   },
@@ -3114,7 +3250,7 @@ const CLOUD={
       // et on remonte une erreur actionnable aux appelants qui l'attendent.
       if(!token){
         this._setSyncStatus(false);
-        const sansJeton=new Error('Non authentifié — modification enregistrée sur cet appareil uniquement.');
+        const sansJeton=new Error('Non authentifié : modification enregistrée sur cet appareil uniquement.');
         // Remonté tel quel par toastSync : « synchronisation en échec » ne dirait
         // pas à l'utilisateur qu'il lui suffit de se reconnecter.
         sansJeton._actionnable=true;
@@ -3174,7 +3310,7 @@ const CLOUD={
           this._setSyncStatus(false);
           const refus=new Error('Version distante plus récente et plus complète ('
             +volume(distant)+' entrées contre '+volume(safe)
-            +') — envoi annulé pour ne pas écraser tes données.');
+            +') : envoi annulé pour ne pas écraser tes données.');
           // Refus délibéré, pas une panne : le rejouer à chaque démarrage
           // échouerait à l'identique indéfiniment. Il ne va pas dans la file.
           refus._nonRejouable=true;
@@ -3183,7 +3319,18 @@ const CLOUD={
         }
       }
       const url=this._fbUrl.replace('users.json','users/'+safeKey+'.json');
-      const r=await fetch(url+'?auth='+token,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(safe)});
+      const corps=JSON.stringify(safe);
+      const opts={method:'PUT',headers:{'Content-Type':'application/json'},body:corps};
+      // Onglet déjà masqué : le navigateur peut détruire la page avant la
+      // réponse, et une requête normale serait annulée en vol. `keepalive` la
+      // laisse aller au bout — c'est l'équivalent de sendBeacon, mais qui
+      // accepte PUT et l'en-tête d'authentification (sendBeacon ne fait que
+      // POST sans en-tête, inutilisable sur cette route).
+      // Plafond du navigateur : 64 Ko. Au-delà, fetch rejette d'emblée ; on
+      // envoie alors normalement — la file de relance couvre le cas où la page
+      // meurt avant la fin.
+      if(document.hidden&&corps.length<60000) opts.keepalive=true;
+      const r=await fetch(url+'?auth='+token,opts);
       this._setSyncStatus(r.ok);
       if(!r.ok) throw new Error('Erreur serveur '+r.status+' ('+r.statusText+')');
       // Le nœud distant est à jour : plus rien à rejouer pour cette clé, et le
@@ -3229,7 +3376,7 @@ const CLOUD={
     let text,color;
     if(s.state==='pending'){text='● Synchronisation en cours';color='var(--info)';}
     else if(s.state===true){text='● Synchronisé';color='var(--success)';}
-    else{text='● Échec — réessaie';color='var(--warning)';}
+    else{text='● Échec : réessaie';color='var(--warning)';}
     // .rc-sync-badge est le crochet neutre : il permet d'ajouter un indicateur
     // hors des écrans coach sans renommer l'existant. data-sync-state laisse la
     // feuille de style décider de la discrétion, sans dupliquer la logique ici.
@@ -3252,7 +3399,7 @@ const CLOUD={
   _storageBucket:STORAGE_BUCKET,
   async uploadPdf(emailKey,file){
     const token=await this._getToken();
-    if(!token) throw new Error('Non connecté — impossible de téléverser le PDF.');
+    if(!token) throw new Error('Non connecté : impossible de téléverser le PDF.');
     const path='pdfs/'+emailKey+'/programme.pdf';
     const url='https://firebasestorage.googleapis.com/v0/b/'+this._storageBucket+'/o?name='+encodeURIComponent(path)+'&uploadType=media';
     const res=await fetch(url,{method:'POST',headers:{'Authorization':'Bearer '+token,'Content-Type':'application/pdf'},body:file});
@@ -3415,7 +3562,7 @@ const DB={
     }catch(e){
       if(e.name==='QuotaExceededError'||e.code===22){
         localOk=false;
-        toast('Stockage local plein — tes données sont envoyées au cloud mais ne seront pas disponibles hors ligne.','var(--orange)');
+        toast('Stockage local plein : tes données sont envoyées au cloud mais ne seront pas disponibles hors ligne.','var(--orange)');
       } else throw e;
     }
     if(k==='users') CLOUD.push(v);
@@ -3438,7 +3585,7 @@ function _setPhotoLS(key,val){
   try{ localStorage.setItem(key,val); return true; }
   catch(e){
     if(e.name==='QuotaExceededError'||e.code===22){
-      toast('Stockage plein — les photos les plus anciennes ne sont plus conservées hors ligne.','var(--orange)');
+      toast('Stockage plein : les photos les plus anciennes ne sont plus conservées hors ligne.','var(--orange)');
     }
     return false;
   }
@@ -3625,7 +3772,7 @@ function _proposerReconsentement(){
     </div>
     <div style="display:flex;align-items:flex-start;gap:10px;margin-top:8px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
       <input type="checkbox" id="rc-health" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
-      <label for="rc-health" style="font-size:12px;color:var(--sub);line-height:1.6;cursor:pointer">Je consens explicitement au traitement de mes <strong style="color:#ccc">données de santé</strong> — poids, mensurations, photos corporelles, cycle menstruel, sommeil — pour mon suivi sportif.</label>
+      <label for="rc-health" style="font-size:12px;color:var(--sub);line-height:1.6;cursor:pointer">Je consens explicitement au traitement de mes <strong style="color:#ccc">données de santé</strong> (poids, mensurations, photos corporelles, cycle menstruel, sommeil) pour mon suivi sportif.</label>
     </div>
     <div id="rc-consent-err" style="color:var(--red-light);font-size:12px;margin-top:10px;display:none"></div>
     <button class="btn btn-red" style="margin-top:14px" onclick="_validerReconsentement()">Confirmer mon accord</button>
@@ -3690,7 +3837,7 @@ function _proposerImportAthlete(){
       <div class="sub" style="font-size:11px;margin-bottom:10px">${escapeHtml(a.email)}</div>
       <div style="font-size:12px;color:#bbb;line-height:1.9">
         ${d.bilansNouveaux} nouveau${d.bilansNouveaux>1?'x':''} bilan${d.bilansNouveaux>1?'s':''}${d.bilansConserves?(d.bilansConserves>1?' (les '+d.bilansConserves+' déjà enregistrés sont conservés)':' (le bilan déjà enregistré est conservé)'):''}<br>
-        ${d.seances} séance${d.seances>1?'s':''}${d.connu?' — remplacera les '+d.seancesExistantes+' actuellement enregistrée'+(d.seancesExistantes>1?'s':''):''}
+        ${d.seances} séance${d.seances>1?'s':''}${d.connu?' : remplacera les '+d.seancesExistantes+' actuellement enregistrée'+(d.seancesExistantes>1?'s':''):''}
       </div>
     </div>
     ${degats.length?`<p style="font-size:12px;color:var(--orange);line-height:1.6;margin-bottom:14px">⚠ L'import supprimerait ${degats.join(', ')}. C'est irréversible.</p>`:''}
@@ -3710,7 +3857,7 @@ function _refuserImportAthlete(){
   window._pendingAthletePkg=null;
   window._pkgDejaProposee=false;
   closeModal();
-  toast('Import ignoré — rien n\'a été modifié.');
+  toast('Import ignoré : rien n\'a été modifié.');
 }
 // Seul point d'écriture de tout le mécanisme.
 function _confirmerImportAthlete(){
@@ -3739,7 +3886,7 @@ function _confirmerImportAthlete(){
   const nb=newBilans.filter(nb=>!exBilans.find(eb=>eb.date===nb.date&&eb.type===nb.type)).length;
   closeModal();
   toastSync(okMaj,envoiMaj,
-    '✓ '+((athlete.fname||'')+' '+(athlete.lname||'')).trim()+' mis à jour'+(nb?' — '+nb+' nouveau'+(nb>1?'x':'')+' bilan'+(nb>1?'s':''):'')+'.',
+    '✓ '+((athlete.fname||'')+' '+(athlete.lname||'')).trim()+' mis à jour'+(nb?' : '+nb+' nouveau'+(nb>1?'x':'')+' bilan'+(nb>1?'s':''):'')+'.',
     'la mise à jour est');
   // Sans ça, l'athlète importé n'apparaît sur le tableau de bord qu'à la sync
   // suivante, jusqu'à 30 secondes plus tard.
@@ -3777,8 +3924,8 @@ function _rcBandeauReseau(etat){
   if(etat==='offline'){
     // Le coach ne s'envoie pas ses données « à son coach ».
     bar.textContent=currentUser?.role==='coach'
-      ?'Hors ligne — tes modifications seront envoyées dès le retour du réseau'
-      :'Hors ligne — tes données seront envoyées à ton coach dès le retour du réseau';
+      ?'Hors ligne : tes modifications seront envoyées dès le retour du réseau'
+      :'Hors ligne : tes données seront envoyées à ton coach dès le retour du réseau';
     bar.style.background='var(--warning-bg)';
     bar.style.borderBottom='1px solid var(--warning)';
     bar.style.color='var(--warning)';
@@ -3945,7 +4092,7 @@ window.onload=()=>{
           if(inp) inp.value=c.code||'';
           const ban=document.getElementById('ae-coach-banner');
           if(ban){
-            ban.textContent='Coach '+((c.fname||c.lname||'?').trim())+' reconnu — valide pour créer ton compte';
+            ban.textContent='Coach '+((c.fname||c.lname||'?').trim())+' reconnu : valide pour créer ton compte';
             ban.style.display='block';
           }
         },350);
@@ -4187,7 +4334,7 @@ function _majPastilleVideos(){
   const dot=btn.querySelector('.tab-dot');
   const n=feedbacksNonVus(currentUser).length;
   if(dot) dot.classList.toggle('on',n>0);
-  if(n>0) btn.setAttribute('aria-label','Vidéos — '+n+' retour'+(n>1?'s':'')+' du coach à consulter');
+  if(n>0) btn.setAttribute('aria-label','Vidéos : '+n+' retour'+(n>1?'s':'')+' du coach à consulter');
   else btn.removeAttribute('aria-label');
 }
 function _majTabbar(id){
@@ -4267,6 +4414,11 @@ function go(id){
       if(_pc&&_in&&!_in.value) _in.value=_pc;
     }catch(e){}
   }
+  // Étapes de tunnel adossées à l'affichage d'un écran. Posées ici plutôt que
+  // chez les appelants : plusieurs chemins mènent à chacun de ces écrans, et
+  // n'en instrumenter qu'un donnerait un tunnel faux sans que ça se voie.
+  if(id==='s-welcome') rcmVue('welcome_view');
+  if(id==='s-register') rcmVue('register_started');
 }
 function toast(msg,c='var(--green)'){
   const t=document.getElementById('toast');
@@ -4281,6 +4433,10 @@ function selectRole(r){
   selRole=r;
   document.getElementById('role-coach').classList.toggle('sel',r==='coach');
   document.getElementById('role-athlete').classList.toggle('sel',r==='athlete');
+  // Deux compteurs distincts plutôt qu'une propriété « role » : la validation
+  // serveur n'accepte que des entiers, elle ne peut donc pas laisser passer une
+  // valeur libre — le rôle reste une étape, pas une donnée attachée à quelqu'un.
+  rcmVue(r==='coach'?'role_selected_coach':'role_selected_athlete');
 }
 // Consomme l'intention de retour posée par goRegisterPourSouscrire. Renvoie
 // true quand la navigation a été prise en charge, pour que l'appelant n'envoie
@@ -4353,7 +4509,7 @@ async function doRegister(){
       CLOUD._signInErr==='wrong_password'
         ? 'Un compte existe déjà avec cet email. Utilise « Se connecter » ou « Mot de passe oublié ? ».'
         : CLOUD._signInErr==='network'
-          ? 'Pas de connexion — impossible de créer le compte maintenant.'
+          ? 'Pas de connexion : impossible de créer le compte maintenant.'
           : 'Inscription impossible. Réessaie.');
   }
   // Le compte peut exister CÔTÉ SERVEUR sans exister sur cet appareil :
@@ -4364,13 +4520,17 @@ async function doRegister(){
   const cloudUser=await CLOUD.pullUser(em);
   if(cloudUser){
     showErr('r-err','Ce compte existe déjà, connexion en cours…');
-    toast('Ce compte existe déjà — tes données ont été récupérées.','var(--green)');
+    toast('Ce compte existe déjà : tes données ont été récupérées.','var(--green)');
     users[em]=cloudUser;DB.set('users',users);
     currentUser=cloudUser;DB.set('session',cloudUser);
     // routeUser() déconnecterait un athlète encore en statut FREE ; on le mène
     // à l'écran de code, comme le fait doLogin dans la même situation.
     if(cloudUser.role!=='coach'&&(cloudUser.status||'FREE')==='FREE'){
       if(_retourApresInscription()) return;
+      // Même règle que pour une inscription neuve : un code déjà vérifié
+      // s'applique tout seul. Ce chemin est celui du réinstallateur, qui n'a
+      // aucune raison de ressaisir un code qu'il vient de valider.
+      if(await _appliquerCodeApresInscription()) return;
       go('s-client-code');
       const enAttente=localStorage.getItem('pendingCode');
       if(enAttente){
@@ -4396,11 +4556,22 @@ async function doRegister(){
 
   users[em]=user;DB.set('users',users);
   currentUser=user;DB.set('session',user);
+  // Ici et pas plus haut : le compte existe vraiment à cette ligne. Les deux
+  // sorties précédentes (compte déjà présent côté cloud, invitation coach
+  // refusée) ne sont pas des inscriptions abouties et ne doivent pas compter.
+  rcm('register_completed');
   if(selRole==='coach'){
     _clearCoachInvite();
     document.getElementById('coach-code-val').textContent=user.code;
     go('s-coach-code');
   } else if(!_retourApresInscription()){
+    // Le code saisi sur l'écran d'entrée a DÉJÀ été vérifié : le redemander
+    // ici était la double saisie. On l'applique directement, et l'athlète part
+    // sur son bilan de départ (code créateur) ou sur l'abonnement (code
+    // affilié) sans jamais voir s-client-code.
+    if(await _appliquerCodeApresInscription()) return;
+    // Pas de code retenu, ou application impossible : l'écran de saisie reste
+    // le filet — c'est désormais son seul rôle.
     go('s-client-code');
     // Pre-fill pending code if athlete came via s-athlete-entry
     const pending=localStorage.getItem('pendingCode');
@@ -4427,7 +4598,7 @@ async function doLogin(){
     if(btn){btn.textContent='SE CONNECTER';btn.disabled=false;}
     if(!ok){
       if(CLOUD._signInErr==='network')
-        return showErr('l-err','Erreur réseau — vérifiez votre connexion et réessayez.');
+        return showErr('l-err','Erreur réseau : vérifiez votre connexion et réessayez.');
       if(CLOUD._signInErr==='wrong_password')
         return showErr('l-err','Mot de passe incorrect. Utilisez "Mot de passe oublié ?" pour le réinitialiser par email.');
       return showErr('l-err','Impossible de se connecter. Essayez "Mot de passe oublié ?" ou vérifiez votre connexion.');
@@ -4446,7 +4617,7 @@ async function doLogin(){
 
   const ok=await CLOUD.signIn(em,pw);
   if(!ok) return showErr('l-err',CLOUD._signInErr==='network'
-    ?'Erreur réseau — vérifiez votre connexion.'
+    ?'Erreur réseau : vérifiez votre connexion.'
     :'Email ou mot de passe incorrect.');
   currentUser=users[em];DB.set('session',currentUser);
   if(CLOUD.canWrite()) saveUser();
@@ -4467,7 +4638,7 @@ function rescueLogin(em,pw){
     <div style="background:var(--surface-2);border:1px solid #2a2a2a;border-radius:20px;padding:28px 24px;max-width:340px;width:100%;text-align:center">
       <div style="font-size:28px;margin-bottom:12px">✅</div>
       <div style="font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px">Mot de passe reconnu</div>
-      <p style="font-size:12px;color:#888;line-height:1.6;margin-bottom:20px">Le site a changé d'adresse et tes données locales n'ont pas encore été retrouvées dans le cloud. Indique ton rôle pour continuer provisoirement — si tu te reconnectes depuis ton appareil ou navigateur habituel, ton profil complet sera restauré.</p>
+      <p style="font-size:12px;color:#888;line-height:1.6;margin-bottom:20px">Le site a changé d'adresse et tes données locales n'ont pas encore été retrouvées dans le cloud. Indique ton rôle pour continuer provisoirement : si tu te reconnectes depuis ton appareil ou navigateur habituel, ton profil complet sera restauré.</p>
       <div style="display:flex;gap:10px;margin-bottom:16px">
         <button onclick="doRescue('${em}','${encodeURIComponent(pw)}','coach')"
           style="flex:1;background:#1a0000;border:1.5px solid var(--red);color:#fff;padding:14px 8px;border-radius:10px;cursor:pointer;font-family:Montserrat,sans-serif;font-weight:800;font-size:12px;letter-spacing:1px">
@@ -4515,9 +4686,9 @@ async function forgotPassword(){
   }
   const err=CLOUD._resetErr||'';
   if(err.includes('EMAIL_NOT_FOUND')||err.includes('USER_NOT_FOUND')){
-    showErr('l-err','Cet email n\'est pas enregistré dans notre système. Essaie de te connecter directement avec ton mot de passe — un compte sera créé automatiquement.');
+    showErr('l-err','Cet email n\'est pas enregistré dans notre système. Essaie de te connecter directement avec ton mot de passe : un compte sera créé automatiquement.');
   } else if(err==='network'){
-    showErr('l-err','Erreur réseau — vérifie ta connexion et réessaie.');
+    showErr('l-err','Erreur réseau : vérifie ta connexion et réessaie.');
   } else {
     showErr('l-err','Impossible d\'envoyer l\'email. Vérifie l\'adresse saisie.');
   }
@@ -4546,7 +4717,7 @@ async function doNewPwdRecovery(){
     CLOUD._idToken=r.idToken;CLOUD._refreshToken=r.refreshToken;
     CLOUD._tokenExpiry=Date.now()+(parseInt(r.expiresIn)||3600)*1000;
     CLOUD._saveAuth();
-    toast('Compte créé — récupération des données…');
+    toast('Compte créé : récupération des données…');
     await CLOUD.syncUser(em);
     const users=DB.get('users')||{};
     let u=users[em];
@@ -4567,14 +4738,14 @@ async function doNewPwdRecovery(){
     const rtdbData=await fetch(CLOUD._fbUrl.replace('users.json','users/'+key+'.json')+'?t='+Date.now())
       .then(r=>r.ok?r.json():null).catch(()=>null);
     if(rtdbData){
-      show('Compte trouvé ('+( rtdbData.fname||em )+') — entre le BON mot de passe ci-dessus ou utilise "Mot de passe oublié ?" (vérifie les spams venant de noreply@repcore-sync.firebaseapp.com).');
+      show('Compte trouvé ('+( rtdbData.fname||em )+') : entre le BON mot de passe ci-dessus ou utilise "Mot de passe oublié ?" (vérifie les spams venant de noreply@repcore-sync.firebaseapp.com).');
     } else {
       show('Ce compte existe déjà dans notre système. Utilise ton ancien mot de passe ou "Mot de passe oublié ?" et vérifie les spams (expéditeur : noreply@repcore-sync.firebaseapp.com).');
     }
   } else if(code.includes('WEAK_PASSWORD')){
-    show('Mot de passe trop faible — utilise au moins 6 caractères.');
+    show('Mot de passe trop faible : utilise au moins 6 caractères.');
   } else if(!code){
-    show('Erreur réseau — vérifie ta connexion.');
+    show('Erreur réseau : vérifie ta connexion.');
   } else {
     show('Erreur : '+code);
   }
@@ -4588,7 +4759,7 @@ function goRegisterCoach(){
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease">
     <h2 style="margin-bottom:6px">Code d'invitation coach</h2>
-    <p class="sub" style="font-size:12px;margin-bottom:12px;line-height:1.6">Les comptes coach sont sur invitation. Demande ton code au créateur de RepCore — il est à usage unique.</p>
+    <p class="sub" style="font-size:12px;margin-bottom:12px;line-height:1.6">Les comptes coach sont sur invitation. Demande ton code au créateur de RepCore : il est à usage unique.</p>
     <label for="ci-code" style="margin-top:0">Ton code</label>
     <input id="ci-code" placeholder="RC-XXXX-XXXX" autocapitalize="characters" autocomplete="off" spellcheck="false" style="font-family:monospace;letter-spacing:1px" onkeydown="if(event.key==='Enter'){event.preventDefault();_validerInviteCoach()}">
     <div id="ci-err" style="color:var(--red-light);font-size:12px;margin-top:8px;display:none"></div>
@@ -4692,7 +4863,7 @@ function copyCoachInviteLink(){
   }
 }
 
-function doAthleteCode(){
+async function doAthleteCode(){
   // La valeur brute est lue SANS mise en majuscules : la charge base64 d'un lien
   // d'invitation y est sensible, et c'est ce qui faisait échouer tout collage de
   // lien complet dans ce champ. La normalisation n'intervient qu'après, pour les
@@ -4701,6 +4872,10 @@ function doAthleteCode(){
   const errEl=document.getElementById('ae-err');
   errEl.style.display='none';
   if(!raw){errEl.textContent='Entre un code valide.';errEl.style.display='block';return;}
+  // Compté sur la tentative RÉELLE, après le champ vide : un clic sur un
+  // formulaire vide n'est pas une saisie de code, et le compter ferait croire
+  // à un abandon massif entre « code saisi » et « code valide ».
+  rcm('code_entered');
 
   // Cas 1 : lien d'invitation complet (?coachpkg=BASE64) — aligné sur doLinkCoach.
   // L'athlète n'a pas encore de compte : on mémorise le coach et son code, puis
@@ -4724,18 +4899,36 @@ function doAthleteCode(){
   // Cas 2 : codes courts. C'est SEULEMENT ici que la mise en majuscules a un sens.
   const code=raw.toUpperCase();
   // Try RCACCESS token (starts with "RCACCESS:")
+  // Format abandonné : doLinkCoach le refuse déjà en aval. Le laisser passer
+  // jusqu'à l'inscription faisait créer un compte à quelqu'un qui apprenait
+  // ensuite seulement que son code n'était plus accepté.
   if(code.startsWith('RCACCESS:')){
-    // Pass to s-client-code after registration — go register first
-    localStorage.setItem('pendingCode', code);
-    go('s-register');
-    setTimeout(()=>selectRole('athlete'),50);
+    errEl.textContent='Ancien format de code : demande un nouveau code (RC-XXXX-XXXX) à ton coach.';
+    errEl.style.display='block';
     return;
   }
-  // Code RC-XXXX-XXXX (codes Firebase) — passer à l'inscription d'abord
-  if(/^RC-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(code)){
-    localStorage.setItem('pendingCode', code);
-    go('s-register');
-    setTimeout(()=>selectRole('athlete'),50);
+  // Code RC-XXXX-XXXX : vérifié AUPRÈS DU SERVEUR avant toute inscription.
+  // L'ancienne version se contentait du format et envoyait sur s-register :
+  // un code désactivé, expiré ou déjà utilisé n'était découvert qu'APRÈS la
+  // création du compte Firebase et le consentement au traitement des données
+  // de santé — un consentement collecté pour un accès qui n'existait pas.
+  if(_INVITE_RE.test(code)){
+    const btn=document.getElementById('ae-valider');
+    const libelle=btn?btn.textContent:'';
+    if(btn){btn.disabled=true;btn.textContent='VÉRIFICATION…';}
+    try{
+      const payload=await _verifierCodeSansConsommer(code);
+      rcm('code_valid');
+      _retenirCodeVerifie(code,payload);
+      go('s-register');
+      setTimeout(()=>selectRole('athlete'),50);
+    }catch(e){
+      rcm('code_invalid');
+      errEl.textContent=e.message||'Code invalide.';
+      errEl.style.display='block';
+    }finally{
+      if(btn){btn.disabled=false;btn.textContent=libelle;}
+    }
     return;
   }
   // Try coach main GCP code or student code
@@ -4768,7 +4961,88 @@ function linkToCoach(coach){
   // La liaison a abouti : le code a joue son role et peut partir.
   try{localStorage.removeItem('pendingCode');}catch(e){}
   toast('Lié à '+((coach.fname||'')+' '+(coach.lname||'')).trim()+' ✓');
-  openBilan('depart');
+  _apresRattachement();
+}
+
+// Point d'arrivée unique après un rattachement réussi — trois chemins y
+// menaient et ouvraient chacun `openBilan('depart')` sans détour.
+// Un questionnaire de six étapes barrait donc l'entrée d'un athlète qui venait
+// de saisir son code et voulait simplement voir son programme : le seul moyen
+// d'avancer était de le remplir, ou de trouver le lien « plus tard ».
+// Le bilan reste demandé — carte permanente sur l'accueil, relance à la fin de
+// la première séance — mais il ne conditionne plus l'accès à l'app.
+function _apresRattachement(){
+  go('s-client-home');
+  loadClientHome();
+}
+
+// Applique un code DÉJÀ vérifié et consommé à currentUser. Extrait de
+// doLinkCoach pour que le rattachement automatique d'après inscription et la
+// saisie manuelle de rattrapage produisent exactement le même état — deux
+// copies de cette logique auraient divergé au premier correctif porté sur une
+// seule (coachEmailKey, pushOne et accessExpiry sont trop faciles à oublier).
+function _appliquerPayloadCode(payload){
+  const users=DB.get('users')||{};
+  const coach=Object.values(users).find(u=>u.id===payload.coachId);
+  if(coach){
+    if(!coach.clients) coach.clients=[];
+    if(!coach.clients.includes(currentUser.id)) coach.clients.push(currentUser.id);
+    users[coach.email]=coach;
+  }
+  if(payload.creatorFree){
+    // Code créateur : accès gratuit immédiat
+    currentUser.coachId=payload.coachId;
+    currentUser.coachName=payload.coachName||'Coach';
+    // Pose EXPLICITE, depuis le code et non depuis le cache local : c'est la
+    // seule valeur qui ouvre le dossier au coach cote serveur. Le repli
+    // derive la cle de coachEmail pour les codes emis avant ce changement.
+    const _ck=payload.coachEmailKey
+      ||((payload.coachEmail||'').replace(/\./g,','))||null;
+    if(_ck) currentUser.coachEmailKey=_ck;
+    currentUser.status='COACHING_SUIVI';
+    currentUser.accessExpiry=payload.expiry;
+    users[currentUser.email]=currentUser;
+    const _u1=DB.set('users',users),_s1=DB.set('session',currentUser);
+    // Envoi immediat : sans lui, le coach ne voit rien tant que l'athlete
+    // n'a pas declenche une autre ecriture.
+    CLOUD.pushOne(currentUser.email,currentUser);
+    // Idem : succes confirme, le code en attente n'a plus lieu d'etre.
+    _oublierCodeVerifie();
+    toastEcriture(_u1&&_s1,'Accès activé ✓','ton accès est');
+    _apresRattachement();
+  } else {
+    // Code affilié : paiement 9,95€/mois requis
+    sessionStorage.setItem('pendingCodePayload',JSON.stringify(payload));
+    users[currentUser.email]=currentUser;
+    DB.set('users',users);
+    // Le code n'est PAS oublié ici : le paiement peut échouer ou être
+    // abandonné, et l'athlète doit pouvoir revenir sur s-subscribe sans
+    // redemander son code au coach. loadSubscribePage le relit.
+    go('s-subscribe');
+    loadSubscribePage('pending-code',payload);
+  }
+}
+
+// Rattachement automatique juste après l'inscription. Le code a déjà été
+// validé sur l'écran d'entrée ; _verifyAccessCode est rappelée ici parce que
+// c'est elle qui CONSOMME (PATCH redeemed), ce que la vérification préalable
+// s'interdit — et parce qu'à ce stade currentUser et le jeton existent enfin.
+// Retourne true si l'athlète a été routé, false s'il faut le laisser sur
+// l'écran de rattrapage.
+async function _appliquerCodeApresInscription(){
+  const retenu=_codeVerifieEnAttente();
+  if(!retenu||!retenu.code) return false;
+  try{
+    const r=await _verifyAccessCode(retenu.code,(currentUser.fname||'')+' '+(currentUser.lname||''));
+    _appliquerPayloadCode(r.payload);
+    return true;
+  }catch(e){
+    // Rare : le code était valide quelques secondes plus tôt. Réseau coupé
+    // pendant l'inscription, ou code consommé entre-temps par un autre
+    // appareil. On ne laisse pas l'athlète sans explication ni sans issue.
+    toast(e.message||'Code non appliqué : ressaisis-le.','var(--orange)');
+    return false;
+  }
 }
 
 async function doLinkCoach(){
@@ -4792,50 +5066,14 @@ async function doLinkCoach(){
 
   // Case 2: code RC-XXXX-XXXX — vérifié via Firebase RTDB directement
   if(/^RC-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(raw)||raw.startsWith('RCACCESS:')){
-    if(raw.startsWith('RCACCESS:')) return showErr('cc-err','Ancien format de code — demande un nouveau code (RC-XXXX-XXXX) à ton coach.');
+    if(raw.startsWith('RCACCESS:')) return showErr('cc-err','Ancien format de code : demande un nouveau code (RC-XXXX-XXXX) à ton coach.');
     let result;
     try{
       result=await _verifyAccessCode(raw,(currentUser.fname||'')+' '+(currentUser.lname||''));
     }catch(e){
       return showErr('cc-err',e.message||'Code invalide ou corrompu. Contacte ton coach.');
     }
-    const payload=result.payload;
-    const users=DB.get('users')||{};
-    const coach=Object.values(users).find(u=>u.id===payload.coachId);
-    if(coach){
-      if(!coach.clients) coach.clients=[];
-      if(!coach.clients.includes(currentUser.id)) coach.clients.push(currentUser.id);
-      users[coach.email]=coach;
-    }
-    if(payload.creatorFree){
-      // Code créateur : accès gratuit immédiat
-      currentUser.coachId=payload.coachId;
-      currentUser.coachName=payload.coachName||'Coach';
-      // Pose EXPLICITE, depuis le code et non depuis le cache local : c'est la
-      // seule valeur qui ouvre le dossier au coach cote serveur. Le repli
-      // derive la cle de coachEmail pour les codes emis avant ce changement.
-      const _ck=payload.coachEmailKey
-        ||((payload.coachEmail||'').replace(/\./g,','))||null;
-      if(_ck) currentUser.coachEmailKey=_ck;
-      currentUser.status='COACHING_SUIVI';
-      currentUser.accessExpiry=payload.expiry;
-      users[currentUser.email]=currentUser;
-      const _u1=DB.set('users',users),_s1=DB.set('session',currentUser);
-      // Envoi immediat : sans lui, le coach ne voit rien tant que l'athlete
-      // n'a pas declenche une autre ecriture.
-      CLOUD.pushOne(currentUser.email,currentUser);
-      // Idem : succes confirme, le code en attente n'a plus lieu d'etre.
-      try{localStorage.removeItem('pendingCode');}catch(e){}
-      toastEcriture(_u1&&_s1,'Accès activé ✓','ton accès est');
-      openBilan('depart');
-    } else {
-      // Code affilié : paiement 9,95€/mois requis
-      sessionStorage.setItem('pendingCodePayload',JSON.stringify(payload));
-      users[currentUser.email]=currentUser;
-      DB.set('users',users);
-      go('s-subscribe');
-      loadSubscribePage('pending-code',payload);
-    }
+    _appliquerPayloadCode(result.payload);
     return;
   }
 
@@ -4859,7 +5097,7 @@ async function doLinkCoach(){
       users[currentUser.email]=currentUser;
       const _u2=DB.set('users',users),_s2=DB.set('session',currentUser);
       toastEcriture(_u2&&_s2,'Lié à '+currentUser.coachName+' ✓','le rattachement est');
-      openBilan('depart');return;
+      _apresRattachement();return;
     }catch(e){return showErr('cc-err','Lien invalide. Demande un nouveau lien à ton coach.');}
   }
 
@@ -4884,7 +5122,7 @@ function regenCoachCode(){
   currentUser.code=genCode();
   saveUser();
   document.getElementById('coach-code-val').textContent=currentUser.code;
-  toast('Nouveau code généré — pense à partager le nouveau lien.','var(--green)');
+  toast('Nouveau code généré : pense à partager le nouveau lien.','var(--green)');
 }
 
 // ======= QUESTIONNAIRE =======
@@ -5015,17 +5253,17 @@ function _waTexteTodo(type,c){
     // needsAlert se déclenche à 14 jours : le « retard » est ce qui dépasse.
     const retard=Math.max(1,Math.floor((Date.now()-dernier)/864e5)-14);
     return 'Salut '+p+', je vois que ton bilan est en retard de '+j(retard)
-      +' — tu peux le remplir quand tu veux dans l\'app 💪';
+      +' : tu peux le remplir quand tu veux dans l\'app 💪';
   }
   if(type==='nostart'){
     const depuis=Math.max(1,Math.floor((Date.now()-(c?.createdAt||0))/864e5));
     return 'Salut '+p+', tu es inscrit depuis '+j(depuis)
-      +' et je n\'ai pas encore ton premier bilan — dis-moi si tu bloques sur quelque chose, on démarre quand tu veux 💪';
+      +' et je n\'ai pas encore ton premier bilan : dis-moi si tu bloques sur quelque chose, on démarre quand tu veux 💪';
   }
   if(type==='expiring'){
     const reste=Math.max(1,Math.ceil(((c?.accessExpiry||0)-Date.now())/864e5));
     return 'Salut '+p+', ton accès RepCore arrive à échéance dans '+j(reste)
-      +' — pense à le renouveler pour garder ton suivi 💪';
+      +' : pense à le renouveler pour garder ton suivi 💪';
   }
   if(type==='bilan') return 'Salut '+p+', j\'ai bien reçu ton bilan, je le regarde et je reviens vers toi rapidement 💪';
   if(type==='noprog') return 'Salut '+p+', je prépare ton programme, je te l\'envoie très vite 💪';
@@ -5037,9 +5275,9 @@ function _waTexteTodo(type,c){
 // premier de la liste, avec son prénom. Chaque lien est ré-adressé dans
 // _wagPreparer avec « Salut <prénom>, » + ce corps.
 function _waCorpsGroupe(type){
-  if(type==='overdue') return 'je vois que ton bilan est en retard — tu peux le remplir quand tu veux dans l\'app 💪';
-  if(type==='nostart') return 'je n\'ai pas encore ton premier bilan — dis-moi si tu bloques sur quelque chose, on démarre quand tu veux 💪';
-  if(type==='expiring') return 'ton accès RepCore arrive bientôt à échéance — pense à le renouveler pour garder ton suivi 💪';
+  if(type==='overdue') return 'je vois que ton bilan est en retard : tu peux le remplir quand tu veux dans l\'app 💪';
+  if(type==='nostart') return 'je n\'ai pas encore ton premier bilan : dis-moi si tu bloques sur quelque chose, on démarre quand tu veux 💪';
+  if(type==='expiring') return 'ton accès RepCore arrive bientôt à échéance : pense à le renouveler pour garder ton suivi 💪';
   if(type==='bilan') return 'j\'ai bien reçu ton bilan, je le regarde et je reviens vers toi rapidement 💪';
   if(type==='noprog') return 'je prépare ton programme, je te l\'envoie très vite 💪';
   return '';
@@ -5085,7 +5323,7 @@ function openWaGroupe(rowIdx){
         ${preCoches.has(c.id)?'checked':''} style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <div style="flex:1;min-width:0">
         <div style="font-weight:700;font-size:13px">${escapeHtml(nom)}</div>
-        <div class="sub" style="font-size:var(--fs-xs)">${tel?'📱 '+escapeHtml(tel):'<span style="color:var(--orange)">aucun numéro — le contact sera à choisir dans WhatsApp</span>'}</div>
+        <div class="sub" style="font-size:var(--fs-xs)">${tel?'📱 '+escapeHtml(tel):'<span style="color:var(--orange)">aucun numéro : le contact sera à choisir dans WhatsApp</span>'}</div>
       </div>
     </label>`;
   }).join('');
@@ -5093,7 +5331,7 @@ function openWaGroupe(rowIdx){
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:88vh;overflow-y:auto">
     <h2 style="margin-bottom:4px">💬 Message groupé</h2>
     <p class="sub" style="font-size:12px;margin-bottom:10px">Rien n'est envoyé d'ici : chaque nom ouvrira ta conversation WhatsApp avec le texte déjà écrit.</p>
-    <label for="wag-texte" style="margin-top:0">Message — chacun le recevra précédé de « Salut &lt;son prénom&gt;, »</label>
+    <label for="wag-texte" style="margin-top:0">Message : chacun le recevra précédé de « Salut &lt;son prénom&gt;, »</label>
     <textarea id="wag-texte" rows="3" style="resize:none" placeholder="petit point d'étape cette semaine 💪">${escapeHtml(source?_waCorpsGroupe(source.type):'')}</textarea>
     <div style="display:flex;gap:8px;margin:10px 0 4px">
       <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="_wagTout(true)">Tout cocher</button>
@@ -5122,7 +5360,7 @@ function _wagCopierNumeros(){
   try{
     navigator.clipboard.writeText(liste)
       .then(()=>toast(avecTel.length+' numéro'+(avecTel.length>1?'s copiés':' copié'),'var(--green)'))
-      .catch(()=>toast('Copie refusée par le navigateur — sélectionne les numéros à la main.','var(--orange)'));
+      .catch(()=>toast('Copie refusée par le navigateur : sélectionne les numéros à la main.','var(--orange)'));
   }catch(e){toast('Copie impossible sur cet appareil.','var(--orange)');}
 }
 function _wagPreparer(){
@@ -5136,7 +5374,7 @@ function _wagPreparer(){
   // Ré-adressage par destinataire : sans lui, tout le monde recevait le prénom
   // et les chiffres du premier athlète de la liste.
   const pour=s=>(s.nom?'Salut '+s.nom+', ':'Salut ! ')+texte;
-  zone.innerHTML=`<div class="sub" style="font-size:11px;margin-bottom:8px">Touche chaque nom pour ouvrir WhatsApp — ${sel.length} conversation${sel.length>1?'s':''} à ouvrir${sansTel?`, dont ${sansTel} sans numéro utilisable (contact à choisir)`:''}.</div>`
+  zone.innerHTML=`<div class="sub" style="font-size:11px;margin-bottom:8px">Touche chaque nom pour ouvrir WhatsApp : ${sel.length} conversation${sel.length>1?'s':''} à ouvrir${sansTel?`, dont ${sansTel} sans numéro utilisable (contact à choisir)`:''}.</div>`
     +sel.map(s=>`<a href="${safeUrl(waLink(s.tel,pour(s)))}" target="_blank" rel="noopener"
       style="display:flex;align-items:center;gap:8px;min-height:44px;padding:0 12px;margin-bottom:6px;background:#0a1a0a;border:1px solid #1e3a1e;border-radius:8px;color:var(--green);text-decoration:none;font-size:13px;font-weight:700"
       onclick="this.style.opacity='.5';this.style.borderColor='#333'">💬 ${escapeHtml(s.nom||'Athlète')}${s.tel?'':' <span style="color:var(--orange);font-weight:400;font-size:11px">(contact à choisir)</span>'}</a>`).join('');
@@ -5291,6 +5529,10 @@ function loadCoachHome(){
   // et se complete quand les codes ont repondu.
   _rafraichirCodesEleves();
   const u=currentUser;
+  // Entrée du tunnel : chiffres du produit, donc créateur uniquement. Le
+  // masquage n'est qu'un confort d'affichage — loadMetrics refait le contrôle.
+  const _lt=document.getElementById('ch-lien-tunnel');
+  if(_lt) _lt.style.display=(u.email===CREATOR_EMAIL)?'block':'none';
   const fullName=((u.fname||'')+' '+(u.lname||'')).trim()||'Profil incomplet';
   const el=document.getElementById('ch-name');if(el)el.textContent=fullName;
   const elSb=document.getElementById('ch-name-sidebar');if(elSb)elSb.textContent=fullName;
@@ -5509,7 +5751,7 @@ function openClientDetail(cid,_refresh){
   document.getElementById('ccd-badge').innerHTML=c._fromCode
     ?'<span class="badge badge-orange">⏳ En attente d\'inscription</span>'
     // Même verdict que la liste : les deux écrans doivent dire la même chose.
-    :_enAttenteAbonnement(c)?'<span class="badge badge-orange">⏳ Abonnement à souscrire — 9,95 €/mois</span>'
+    :_enAttenteAbonnement(c)?'<span class="badge badge-orange">⏳ Abonnement à souscrire : 9,95 €/mois</span>'
     :_newBil?'<span class="badge badge-orange"> Nouveau bilan</span>'
     :needsAlert(c)?'<span class="badge badge-red"> Bilan en retard</span>':isActive(c)?'<span class="badge badge-green"> Actif</span>':'<span class="badge badge-gray">Inactif</span>';
   const _pd=document.getElementById('ccd-profile-details');
@@ -5549,7 +5791,7 @@ function openClientDetail(cid,_refresh){
   if(_ap){
     if(c.assignedProgramName){
       _ap.innerHTML='<strong style="color:#ddd">Programme :</strong> '+escapeHtml(c.assignedProgramName)
-        +(c.assignedProgramAt?' — assigné le '+new Date(c.assignedProgramAt).toLocaleDateString('fr-FR'):'');
+        +(c.assignedProgramAt?' : assigné le '+new Date(c.assignedProgramAt).toLocaleDateString('fr-FR'):'');
       _ap.style.display='block';
     } else _ap.style.display='none';
   }
@@ -5684,7 +5926,7 @@ function viewClientBilans(){
   const c=getOwnedClient(currentClientId);
   if(!c) return;
   if(!c.bilans?.length){toast('Aucun bilan disponible','var(--orange)');return;}
-  document.getElementById('evo-title').textContent=c.fname+' — Évolution';
+  document.getElementById('evo-title').textContent=c.fname+' : Évolution';
   renderBilanEvolution(c);
   go('s-coach-bilan-evo');
 }
@@ -5701,7 +5943,7 @@ function addBilanPhoto(bilanDate,bilanType,view,inputEl){
   // justement une photo d'appareil photo, et la compresser est le travail de
   // cette fonction, pas la refuser.
   _resizeImage(file,1080,1440,0.82).then(b64=>{
-    if(!b64){toast('Image illisible — réessaie avec une autre photo','var(--orange)');return;}
+    if(!b64){toast('Image illisible : réessaie avec une autre photo','var(--orange)');return;}
     const users=DB.get('users')||{};
     const cl=getOwnedClient(currentClientId,users);
     if(!cl)return;
@@ -5869,14 +6111,14 @@ function renderBilanEvolution(c){
     });
     // Formula note
     const formulaNote=`<div style="background:#111;border:1px solid #222;border-radius:8px;padding:12px;margin-bottom:14px;font-size:var(--fs-xs);line-height:1.8">
-      <div style="font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:2px;color:var(--red);margin-bottom:6px">Formule US Navy ${female?'(Femme)':'(Homme)'} — Calcul automatique</div>
+      <div style="font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:2px;color:var(--red);margin-bottom:6px">Formule US Navy ${female?'(Femme)':'(Homme)'} : Calcul automatique</div>
       ${female
         ?`<div style="color:#aaa;font-family:monospace;font-size:var(--fs-xs)">%MG = 495 / [1,29579 − 0,35004 × log(<b style="color:#fff">taille</b> + <b style="color:#69f0ae">hanches</b> − <b style="color:#ffd600">cou</b>) + 0,22100 × log(<b style="color:var(--accent-blue)">hauteur</b>)] − 450</div>
          <div style="color:var(--text-dim);font-size:var(--fs-xs);margin-top:4px">taille = tour de taille · hanches = tour de hanches · cou = tour de cou · hauteur = taille en cm</div>`
         :`<div style="color:#aaa;font-family:monospace;font-size:var(--fs-xs)">%MG = 495 / [1,0324 − 0,19077 × log(<b style="color:#fff">taille</b> − <b style="color:#ffd600">cou</b>) + 0,15456 × log(<b style="color:var(--accent-blue)">hauteur</b>)] − 450</div>
          <div style="color:var(--text-dim);font-size:var(--fs-xs);margin-top:4px">taille = tour de taille · cou = tour de cou · hauteur = taille en cm</div>`
       }
-      <div style="margin-top:8px;color:#888;font-size:var(--fs-xs);border-top:1px solid #222;padding-top:8px"> Précision estimée ±3% par rapport à la réalité. La formule est une estimation — pour un résultat précis, privilégier une pesée hydrostatique ou DEXA.</div>
+      <div style="margin-top:8px;color:#888;font-size:var(--fs-xs);border-top:1px solid #222;padding-top:8px"> Précision estimée ±3% par rapport à la réalité. La formule est une estimation : pour un résultat précis, privilégier une pesée hydrostatique ou DEXA.</div>
     </div>`;
     // Pie charts for each bilan (first 3 with data)
     const pieBilans=bfVals.map((b,i)=>b.mg!==null?{idx:i,mg:b.mg,mm:b.mm}:null).filter(Boolean).slice(0,4);
@@ -6033,7 +6275,7 @@ function renderBilanEvolution(c){
 // ======= COACH PROGRAM EDITOR =======
 // ===== PROGRAMME FONDATION — données extraites du PDF =====
 const FONDATION_F=[
-  {day:'Lundi',name:'SÉANCE A — JAMBES & CUISSES',active:true,photo:null,photo2:null,warmup:'Échauffement 8-12 min : mobilisation articulaire, vélo ou tapis 5 min, quelques squats sans charge.',notes:'Programme Fondation · 8-12 semaines · 3 séances/semaine · 1 jour de repos min entre 2 séances',_foundation:true,exercises:[
+  {day:'Lundi',name:'SÉANCE A : JAMBES & CUISSES',active:true,photo:null,photo2:null,warmup:'Échauffement 8-12 min : mobilisation articulaire, vélo ou tapis 5 min, quelques squats sans charge.',notes:'Programme Fondation · 8-12 semaines · 3 séances/semaine · 1 jour de repos min entre 2 séances',_foundation:true,exercises:[
     {name:'SQUAT GOBLET',series:4,reps:'10-12',repos:'2 min',description:'Debout, pieds écartés et surélevés avec des steps, un haltère tenu à 2 mains, bras relâchés. Dos droit et faire une flexion des cuisses. Descendre puis faire une extension pour revenir à la position de départ.',videoUrl:'https://youtu.be/lUuPEpfdgrs',videoUrl2:''},
     {name:'PRESSE À CUISSE INCLINÉE PIEDS EN HAUT',series:4,reps:'10-12',repos:'2 min',description:'Installé dos callé sur le dossier pieds en haut de la plateforme suffisamment écartée. Débloquer la sécurité et fléchir les jambes au maximum puis revenir en position de départ.',videoUrl:'https://youtu.be/MYC-woyTDjY',videoUrl2:''},
     {name:'FENTES HALTÈRE',series:3,reps:'10 par jambe',repos:'2 min',description:'Debout, jambes légèrement écartées, bras semis tendus. Effectuer un pas en avant en gardant le dos droit, la cuisse en avant doit se stabiliser à l\'horizontale et le genou opposé à quelques cm du sol. Réaliser ensuite la même chose avec l\'autre jambe.',videoUrl:'https://youtu.be/hvfdPZgQIL8',videoUrl2:''},
@@ -6042,7 +6284,7 @@ const FONDATION_F=[
     {name:'MOLLETS À LA SMITH MACHINE',series:3,reps:'15-20',repos:'1 min',description:'Debout, dos droit, l\'avant des pieds sur la cale. Monter le talon le plus haut possible puis descendre le plus bas possible.',videoUrl:'https://youtu.be/lD4CUFENxUw',videoUrl2:''}
   ]},
   {day:'Mardi',name:'',active:false,photo:null,photo2:null,warmup:'',notes:'',_foundation:true,exercises:[]},
-  {day:'Mercredi',name:'SÉANCE B — HAUT DU CORPS',active:true,photo:null,photo2:null,warmup:'Échauffement 8-12 min : rotations des épaules, rotations de poignets, quelques pompes légères.',notes:'',_foundation:true,exercises:[
+  {day:'Mercredi',name:'SÉANCE B : HAUT DU CORPS',active:true,photo:null,photo2:null,warmup:'Échauffement 8-12 min : rotations des épaules, rotations de poignets, quelques pompes légères.',notes:'',_foundation:true,exercises:[
     {name:'TIRAGE POITRINE NEUTRE',series:4,reps:'10-12',repos:'2 min',description:'Prise largeur épaules et mains neutres (pouce vers soi). Effectuer un tirage et emmener le menton au-dessus de la barre puis tendre les bras.',videoUrl:'https://youtu.be/T--lg679EZM',videoUrl2:''},
     {name:'TIRAGE HORIZONTAL SERRÉ',series:3,reps:'12',repos:'2 min',description:'Assis, face à l\'appareil, torse bombé et dos droit. Ramener les coudes le plus en arrière possible et la poignée vers le sternum puis revenir en position de départ.',videoUrl:'https://youtu.be/br_sJJabsoY',videoUrl2:''},
     {name:'DÉVELOPPÉ À LA MACHINE ASSIS',series:3,reps:'10-12',repos:'2 min',description:'La prise des poignées est en pronation (pouces vers l\'intérieur). Dos collé au siège et poitrine en avant. Pousser la pédale avec les jambes pour avancer les prises puis pousser jusqu\'à ce que les bras soient tendus, puis revenir.',videoUrl:'https://youtu.be/T--lg679EZM',videoUrl2:''},
@@ -6051,7 +6293,7 @@ const FONDATION_F=[
     {name:'TRICEPS À LA POULIE HAUTE CORDE',series:3,reps:'12-15',repos:'1 min 30',description:'Face à la poulie saisir la corde en prise neutre (pouce vers le haut), effectuer une extension des avant-bras en gardant les coudes près du corps. En fin du mouvement écarter les poignets vers l\'extérieur.',videoUrl:'https://youtu.be/vzfUXQdMKdg',videoUrl2:''}
   ]},
   {day:'Jeudi',name:'',active:false,photo:null,photo2:null,warmup:'',notes:'',_foundation:true,exercises:[]},
-  {day:'Vendredi',name:'SÉANCE C — FESSIERS & CUISSES',active:true,photo:null,photo2:null,warmup:'Échauffement 8-12 min : fentes légères, ponts fessiers au sol, mobilisation des hanches.',notes:'',_foundation:true,exercises:[
+  {day:'Vendredi',name:'SÉANCE C : FESSIERS & CUISSES',active:true,photo:null,photo2:null,warmup:'Échauffement 8-12 min : fentes légères, ponts fessiers au sol, mobilisation des hanches.',notes:'',_foundation:true,exercises:[
     {name:'HIP THRUST MACHINE OU À LA BARRE',series:4,reps:'10-12',repos:'2 min',description:'Placer les pieds sur la plateforme, les talons ancrés et les genoux à environ 90°. Positionner la barre sur le bassin, puis pousser avec les talons pour soulever les hanches en contractant les fessiers. Redescendre lentement.',videoUrl:'https://youtu.be/npL42UPPf-w',videoUrl2:'https://youtu.be/33V0XER5Msw'},
     {name:'SQUAT SMITH MACHINE',series:3,reps:'12',repos:'2 min',description:'Debout, pieds légèrement écartés, la barre repose sur les trapèzes. Dos droit et faire une flexion des cuisses. Descendre puis faire une extension pour revenir à la position de départ.',videoUrl:'https://youtu.be/r9S7bn3AQB8',videoUrl2:''},
     {name:'SOULEVÉ DE TERRE ROUMAIN HALTÈRES',series:3,reps:'10-12',repos:'2 min',description:'Se pencher le buste et garder les jambes légèrement fléchies et le dos droit. Prendre les haltères en pronation, puis se redresser en utilisant un mouvement de bassin en gardant les haltères près des jambes.',videoUrl:'https://youtu.be/KZXyPNBJZ1c',videoUrl2:''},
@@ -6063,7 +6305,7 @@ const FONDATION_F=[
   {day:'Dimanche',name:'',active:false,photo:null,photo2:null,warmup:'',notes:'',_foundation:true,exercises:[]}
 ];
 const FONDATION_H=[
-  {day:'Lundi',name:'SÉANCE A — PECS, ÉPAULES & TRICEPS',active:true,photo:null,photo2:null,warmup:'Échauffement 8-12 min : rotations des épaules, rotations de poignets, pompes légères, élévations frontales légères.',notes:'Programme Fondation · 8-12 semaines · 3 séances/semaine · 1 jour de repos min entre 2 séances',_foundation:true,exercises:[
+  {day:'Lundi',name:'SÉANCE A : PECS, ÉPAULES & TRICEPS',active:true,photo:null,photo2:null,warmup:'Échauffement 8-12 min : rotations des épaules, rotations de poignets, pompes légères, élévations frontales légères.',notes:'Programme Fondation · 8-12 semaines · 3 séances/semaine · 1 jour de repos min entre 2 séances',_foundation:true,exercises:[
     {name:'DÉVELOPPÉ COUCHÉ HALTÈRE',series:4,reps:'8-10',repos:'2 min',description:'La prise des haltères est en pronation (les pouces sont à l\'intérieur). Les pieds servent d\'appuis au sol. Descendre les haltères le plus bas possible puis revenir en position initiale.',videoUrl:'https://youtu.be/eRglSFbnRro',videoUrl2:''},
     {name:'DÉVELOPPÉ MACHINE HAUT DE PECS OU À LA SMITH',series:3,reps:'10-12',repos:'2 min',description:'La prise des poignées est en pronation (pouces vers l\'intérieur). Dos collé au siège et poitrine en avant. Pousser jusqu\'à ce que les bras soient tendus puis revenir à la position de départ.',videoUrl:'https://youtu.be/DVQ6nW2o7K4',videoUrl2:'https://youtu.be/Wku24QRTfIk'},
     {name:'ÉLÉVATION LATÉRALE HALTÈRE',series:4,reps:'12-15',repos:'1 min 30',description:'Prise neutre (paumes vers l\'intérieur). Réaliser une élévation simultanée des deux bras vers l\'extérieur jusqu\'à ce qu\'ils soient parallèles au sol. Les coudes sont légèrement fléchis et ne doivent pas être plus bas que les poignets.',videoUrl:'https://youtu.be/D0cB-ZHzv18',videoUrl2:''},
@@ -6072,7 +6314,7 @@ const FONDATION_H=[
     {name:'DIPS ASSISTÉ',series:2,reps:'MAX',repos:'1 min',description:'Réaliser une flexion de coudes vers l\'arrière jusqu\'à ce que les épaules soient à la même hauteur que les coudes. Tendre les bras sans verrouiller les coudes. Barres assez proches, ne pas trop se pencher en avant.',videoUrl:'https://youtu.be/0cVzj1QY22A',videoUrl2:''}
   ]},
   {day:'Mardi',name:'',active:false,photo:null,photo2:null,warmup:'',notes:'',_foundation:true,exercises:[]},
-  {day:'Mercredi',name:'SÉANCE B — DOS & BICEPS',active:true,photo:null,photo2:null,warmup:'Échauffement 8-12 min : mobilisation des épaules, rotations du buste, band pull-aparts ou tractions légères.',notes:'',_foundation:true,exercises:[
+  {day:'Mercredi',name:'SÉANCE B : DOS & BICEPS',active:true,photo:null,photo2:null,warmup:'Échauffement 8-12 min : mobilisation des épaules, rotations du buste, band pull-aparts ou tractions légères.',notes:'',_foundation:true,exercises:[
     {name:'TIRAGE POITRINE NEUTRE',series:4,reps:'8-10',repos:'2 min',description:'Prise largeur épaules et mains neutres (pouce vers soi). Effectuer un tirage et emmener le menton au-dessus de la barre puis tendre les bras.',videoUrl:'https://youtu.be/T--lg679EZM',videoUrl2:''},
     {name:'TIRAGE HORIZONTAL SERRÉ',series:4,reps:'10-12',repos:'2 min',description:'Assis, face à l\'appareil, torse bombé et dos droit. Ramener les coudes le plus en arrière possible et la poignée vers le sternum puis revenir en position de départ.',videoUrl:'https://youtu.be/br_sJJabsoY',videoUrl2:''},
     {name:'ROWING HALTÈRE UNILATÉRAL SUR BANC',series:3,reps:'10-12',repos:'2 min',description:'La main et le genou opposé en appui sur le banc, dos droit. Monter le coude le plus en arrière possible en le gardant près du corps. Puis revenir dans la position initiale.',videoUrl:'',videoUrl2:''},
@@ -6081,7 +6323,7 @@ const FONDATION_H=[
     {name:'CURL LARRY SCOTT MACHINE GUIDÉE OU PUPITRE',series:3,reps:'12-15',repos:'1 min 30',description:'Réaliser une flexion de coudes pour amener les poignées vers les épaules à la force des biceps. L\'écartement des mains est légèrement supérieur à la largeur des épaules.',videoUrl:'https://youtu.be/vzfUXQdMKdg',videoUrl2:''}
   ]},
   {day:'Jeudi',name:'',active:false,photo:null,photo2:null,warmup:'',notes:'',_foundation:true,exercises:[]},
-  {day:'Vendredi',name:'SÉANCE C — JAMBES',active:true,photo:null,photo2:null,warmup:'Échauffement 8-12 min : vélo ou tapis 5 min, fentes légères, squats sans charge, mobilisation des hanches.',notes:'',_foundation:true,exercises:[
+  {day:'Vendredi',name:'SÉANCE C : JAMBES',active:true,photo:null,photo2:null,warmup:'Échauffement 8-12 min : vélo ou tapis 5 min, fentes légères, squats sans charge, mobilisation des hanches.',notes:'',_foundation:true,exercises:[
     {name:'PRESSE À CUISSE INCLINÉE',series:4,reps:'10-12',repos:'2 min',description:'Installé dos callé sur le dossier pieds au centre de la plateforme. Débloquer la sécurité et fléchir les jambes au maximum puis revenir en position de départ.',videoUrl:'https://youtu.be/1GMcszqB5nU',videoUrl2:''},
     {name:'SQUAT SMITH MACHINE',series:3,reps:'10-12',repos:'2 min',description:'Debout, pieds légèrement écartés, la barre repose sur les trapèzes. Dos droit et faire une flexion des cuisses. Descendre puis faire une extension pour revenir à la position de départ.',videoUrl:'https://youtu.be/r9S7bn3AQB8',videoUrl2:''},
     {name:'HIP THRUST MACHINE OU À LA BARRE',series:3,reps:'10-12',repos:'2 min',description:'Placer les pieds sur la plateforme, les talons ancrés et les genoux à environ 90°. Positionner la barre sur le bassin, puis pousser avec les talons pour soulever les hanches en contractant les fessiers. Redescendre lentement.',videoUrl:'https://youtu.be/npL42UPPf-w',videoUrl2:'https://youtu.be/33V0XER5Msw'},
@@ -6314,7 +6556,7 @@ function openProgTemplateSessionExercises(idx){
   const backBtn=document.querySelector('#s-coach-program .back-btn');
   if(backBtn) backBtn.onclick=()=>{_progEditorCtx={mode:'clientProgram'};go('s-coach-prog-template');loadProgTemplateSlots(_editProgTemplateGender);};
   const title=document.querySelector('#s-coach-program .topbar-title');
-  if(title) title.textContent=(s.name||DAYS[idx])+' ('+_editProgTemplateGender+') — Exercices';
+  if(title) title.textContent=(s.name||DAYS[idx])+' ('+_editProgTemplateGender+') : Exercices';
   renderProgEx();go('s-coach-program');
 }
 
@@ -6323,7 +6565,7 @@ function openAssignProgram(idx){
   _assigningProgIdx=idx;
   const p=currentUser.coachPrograms[idx];
   const title=document.getElementById('cpa-title');
-  if(title) title.textContent='Assigner — '+escapeHtml(p.name||'Programme');
+  if(title) title.textContent='Assigner : '+escapeHtml(p.name||'Programme');
   go('s-coach-prog-assign');
   loadAssignAthletes();
 }
@@ -6426,7 +6668,7 @@ function setClientPhone(){
   // Refuser à la saisie plutôt que de stocker un numéro qui ouvrira WhatsApp
   // sur « numéro invalide ». _numWa rejette tout ce qui commence par 0.
   if(brut&&_numWa(brut).length<8){
-    toast('Numéro inutilisable — mets l\'indicatif pays sans le 0, ex : +33612345678','var(--orange)');
+    toast('Numéro inutilisable : mets l\'indicatif pays sans le 0, ex : +33612345678','var(--orange)');
     return;
   }
   a.phone=brut||null;   // champ vidé = numéro retiré
@@ -6461,7 +6703,7 @@ function openApplyTemplate(){
   if(c._fromCode){toast('Cet athlète n\'a pas encore créé son compte.','var(--orange)');return;}
   const progs=currentUser.coachPrograms||[];
   if(!progs.length){
-    toast('Aucun modèle enregistré — crée-en un depuis l\'onglet Programmes.','var(--orange)');
+    toast('Aucun modèle enregistré : crée-en un depuis l\'onglet Programmes.','var(--orange)');
     return;
   }
   // Pré-positionné sur le genre connu de l'athlète : dans la grande majorité
@@ -6484,7 +6726,7 @@ function openApplyTemplate(){
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:85vh;overflow-y:auto">
     <h2 style="margin-bottom:4px">🗂️ Appliquer un modèle</h2>
-    <p class="sub" style="font-size:12px;margin-bottom:6px">à ${escapeHtml((c.fname||'')+' '+(c.lname||'')).trim()||'cet athlète'} — version ${genreDefaut==='F'?'F':'H'} pré-sélectionnée</p>
+    <p class="sub" style="font-size:12px;margin-bottom:6px">à ${escapeHtml((c.fname||'')+' '+(c.lname||'')).trim()||'cet athlète'} : version ${genreDefaut==='F'?'F':'H'} pré-sélectionnée</p>
     ${lignes}
     <button class="btn btn-outline" style="margin-top:14px" onclick="closeModal()">Annuler</button>
   </div></div>`;
@@ -6559,7 +6801,7 @@ function openCoachSessions(){
     }
   }
   const title=document.getElementById('csm-title');
-  if(title) title.textContent=(_coachEditClient.fname||'Athlète')+' — Séances';
+  if(title) title.textContent=(_coachEditClient.fname||'Athlète')+' : Séances';
   go('s-coach-sessions');
   loadCoachSessionSlots();
 }
@@ -6601,7 +6843,7 @@ function restaurerSessionsConfig(i){
   _coachEditClient.sessions_config=JSON.parse(JSON.stringify(e.sessions_config));
   loadCoachSessionSlots();
   renderSessionsHistory();
-  toast('Version du '+d+' chargee — valide par SAUVEGARDER','var(--orange)');
+  toast('Version du '+d+' chargee : valide par SAUVEGARDER','var(--orange)');
 }
 function loadCoachSessionSlots(){
   // Redessine aussi l'historique : l'ecran peut etre rouvert apres qu'un
@@ -6650,10 +6892,10 @@ function saveCoachSessionsAsTemplate(){
   if(!c) return;
   const src=c.sessions_config||[];
   if(!src.some(s=>s.active&&s.exercises?.length)){
-    toast('Aucune séance à enregistrer — active au moins un jour avec des exercices.','var(--orange)');
+    toast('Aucune séance à enregistrer : active au moins un jour avec des exercices.','var(--orange)');
     return;
   }
-  const defaut=((c.fname||'Athlète')+' — '+new Date().toLocaleDateString('fr-FR'));
+  const defaut=((c.fname||'Athlète')+' : '+new Date().toLocaleDateString('fr-FR'));
   const nom=(prompt('Nom du modèle ?',defaut)||'').trim();
   if(!nom) return; // annulé, ou nom vide
   // Les photos de séance sont écartées : elles sont en base64 et les modèles
@@ -6671,7 +6913,7 @@ function saveCoachSessionsAsTemplate(){
     // Les deux genres partent de la même copie : le coach adapte l'onglet F.
     sessions_H:copie(),sessions_F:copie()
   });
-  toastEcriture(saveUser(),'Modèle « '+nom+' » créé — pense à adapter l\'onglet F','le modèle est');
+  toastEcriture(saveUser(),'Modèle « '+nom+' » créé : pense à adapter l\'onglet F','le modèle est');
 }
 
 function coachToggleDay(i){
@@ -6693,9 +6935,9 @@ function openCoachSessionExercises(idx){
   _prepProgEditor({name:s.name,notes:s.notes,warmup:s.warmup,cooldown:s.cooldown||currentUser._defaultCooldown});
   _progEditorCtx={mode:'coachClient',sessionIdx:idx};
   const backBtn=document.querySelector('#s-coach-program .back-btn');
-  if(backBtn) backBtn.onclick=()=>{if(_progExDirty&&!confirm('Modifications non enregistrées — quitter quand même ?'))return;_progEditorCtx={mode:'clientProgram'};go('s-coach-sessions');loadCoachSessionSlots();};
+  if(backBtn) backBtn.onclick=()=>{if(_progExDirty&&!confirm('Modifications non enregistrées : quitter quand même ?'))return;_progEditorCtx={mode:'clientProgram'};go('s-coach-sessions');loadCoachSessionSlots();};
   const title=document.querySelector('#s-coach-program .topbar-title');
-  if(title) title.textContent=(s.name||DAYS[idx])+' — Exercices';
+  if(title) title.textContent=(s.name||DAYS[idx])+' : Exercices';
   renderProgEx();go('s-coach-program');
   _progExDirty=false;
 }
@@ -6768,7 +7010,7 @@ function renderClientPdfCard(c){
       <input type="file" accept=".pdf,application/pdf" onchange="uploadCoachPdfInline(this)" style="display:none">
       <div style="border:1px dashed #2a2a2a;border-radius:8px;padding:14px;text-align:center" onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='#2a2a2a'">
         <div style="font-size:var(--fs-xs);letter-spacing:2px;text-transform:uppercase;color:var(--sub);font-weight:700;margin-bottom:3px">${hasPdf?'Remplacer le PDF':'Importer un PDF'}</div>
-        <div style="font-size:11px;color:var(--text-dim)">Clique ou glisse — max 20 Mo</div>
+        <div style="font-size:11px;color:var(--text-dim)">Clique ou glisse : max 20 Mo</div>
       </div>
     </label>
     <div style="display:flex;gap:8px">
@@ -6794,7 +7036,7 @@ async function uploadCoachPdfInline(input){
     c.programPdfVersion=(c.programPdfVersion||0)+1;
     c.updatedAt=Date.now();users[c.email]=c;
     const ok=DB.set('users',users);
-    toastSync(ok,CLOUD.pushOne(c.email,c),'PDF v'+c.programPdfVersion+' importé — '+c.programPdfName,'le PDF est');
+    toastSync(ok,CLOUD.pushOne(c.email,c),'PDF v'+c.programPdfVersion+' importé : '+c.programPdfName,'le PDF est');
     openClientDetail(currentClientId,true);
   }catch(e){
     toast('Échec de téléversement : '+(e.message||'Réessaie.'),'var(--orange)');
@@ -6806,7 +7048,7 @@ function saveCoachPdfLinkInline(){
   let url=link;
   const driveMatch=link.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
   if(driveMatch) url=`https://drive.google.com/file/d/${driveMatch[1]}/preview`;
-  if(safeUrl(url)==='#'){toast('Lien invalide — seuls les liens https:// sont acceptés.','var(--red)');return;}
+  if(safeUrl(url)==='#'){toast('Lien invalide : seuls les liens https:// sont acceptés.','var(--red)');return;}
   const res=resolveClient(currentClientId);if(!res) return;
   const {c,users}=res;
   c.programPdfLink=url;
@@ -6882,7 +7124,7 @@ function renderProgEx(){
           <div><label>Séries</label><input type="number" min="0" value="${ex.series||3}" onchange="_progExDirty=true;this.value=Math.max(0,+this.value);progEx[${i}].series=+this.value" style="text-align:center"></div>
           <div>
             <label>Reps <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(ex: 10 PUIS 20 / 6-8 / 15 Par Jambe)</span></label>
-            <input value="${escapeHtml(ex.reps||'')}" onchange="if(/^-\\d+$/.test(this.value.trim())){toast('Reps invalides — valeur négative non autorisée','var(--orange)');this.value=progEx[${i}].reps||'';return;}_progExDirty=true;progEx[${i}].reps=this.value" placeholder="10 PUIS 20" style="text-align:center">
+            <input value="${escapeHtml(ex.reps||'')}" onchange="if(/^-\\d+$/.test(this.value.trim())){toast('Reps invalides : valeur négative non autorisée','var(--orange)');this.value=progEx[${i}].reps||'';return;}_progExDirty=true;progEx[${i}].reps=this.value" placeholder="10 PUIS 20" style="text-align:center">
             <div style="margin-top:4px">${badge}</div>
           </div>
           <div><label>Repos</label><input value="${escapeHtml(ex.repos||'01 min')}" onchange="_progExDirty=true;progEx[${i}].repos=this.value" placeholder="01 min" style="text-align:center;font-size:12px"></div>
@@ -6975,7 +7217,7 @@ function saveProgram(){
   // legacy c.program pour currentClientId — atteignable par les `break` ci-dessus,
   // il pouvait donc écrire sur le mauvais athlète avec un contexte périmé.
   // Le coach passe désormais par les séances (openCoachSessions) ou par le PDF.
-  toast('Contexte d\'édition perdu — réouvre la séance.','var(--orange)');
+  toast('Contexte d\'édition perdu : réouvre la séance.','var(--orange)');
 }
 
 function saveWarmupTemplate(){
@@ -6985,7 +7227,7 @@ function saveWarmupTemplate(){
   currentUser._defaultWarmup=wu;
   currentUser._defaultCooldown=cd;
   saveUser();
-  toast('Modèle mémorisé — pré-rempli automatiquement à la prochaine séance','var(--green)');
+  toast('Modèle mémorisé : pré-rempli automatiquement à la prochaine séance','var(--green)');
 }
 
 // ======= CLIENT HOME =======
@@ -7041,7 +7283,7 @@ function loadClientHome(){
       if(nom) nom.textContent=_bilDraft.bilType==='depart'
         ?'Reprendre mon questionnaire de début':'Reprendre mon bilan coaching';
       if(sub) sub.textContent='Étape '+(_bilDraft.bilStep+1)+'/'+steps.length
-        +' — reprendre là où tu t\'es arrêté →';
+        +' : reprendre là où tu t\'es arrêté →';
     }
   }
   // PDF card
@@ -7108,6 +7350,12 @@ function loadClientHome(){
         _afterCoachSync();
       }
     }
+  } else if(!u.coachId){
+    // Tout le bloc ci-dessus est conditionné à u.coachId : sans coach, la
+    // bannière n'était jamais rendue, donc jamais masquée non plus — elle
+    // gardait l'état du dernier athlète affiché. C'est aussi le seul moment
+    // où proposer le rattrapage a un sens.
+    _renderCoachBanner(null,'');
   }
   function _renderCoachBanner(coach, fallbackName){
     const el=document.getElementById('clh-coach-banner');
@@ -7116,7 +7364,24 @@ function loadClientHome(){
     const name=((coach?.fname||'')+' '+(coach?.lname||'')).trim()||fallbackName||'';
     const phrase=coach?.catchphrase||'';
     const photo=coach?.coachPhoto||'';
-    if(!name){el.style.display='none';return;}
+    // Aucun coach rattaché : cet emplacement était simplement masqué. C'est
+    // pourtant le seul endroit de l'accueil où la question « et mon coach ? »
+    // se pose. Depuis que le code s'applique automatiquement à l'inscription,
+    // s-client-code n'est plus sur le chemin de personne — il lui faut donc
+    // une porte d'entrée visible pour l'athlète qui a perdu sa session, changé
+    // d'appareil, ou reçu son code après s'être inscrit.
+    if(!name){
+      el.style.display='block';
+      el.innerHTML=`<div onclick="go('s-client-code')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;background:#0c0c0c;border:1px dashed #2e2e2e;cursor:pointer">
+        <div style="flex-shrink:0;width:38px;height:38px;border-radius:50%;background:var(--surface-3);display:flex;align-items:center;justify-content:center;color:var(--sub)">${icon('user',18)}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:800;font-size:13px">Tu as un code coach&nbsp;?</div>
+          <div class="sub" style="font-size:11px;margin-top:2px">Entre-le pour être rattaché à ton suivi</div>
+        </div>
+        <div style="color:var(--sub);font-size:18px">›</div>
+      </div>`;
+      return;
+    }
     el.style.display='block';
     el.innerHTML=`<div style="position:relative;overflow:hidden;border-radius:14px;background:#0c0c0c;border-top:2px solid var(--red);border-left:3px solid var(--red);border-right:1px solid #1e1e1e;border-bottom:1px solid rgba(180,0,0,0.18)">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 18px,rgba(255,255,255,0.013) 18px,rgba(255,255,255,0.013) 19px);pointer-events:none"></div>
@@ -7175,7 +7440,7 @@ async function uploadAthletePdf(input){
     currentUser.programPdfSize=Math.round(f.size/1024)+'Ko';
     currentUser.programPdfDate=Date.now();
     currentUser.programPdfVersion=(currentUser.programPdfVersion||0)+1;
-    toastEcriture(saveUser(),'Programme importé — v'+(currentUser.programPdfVersion),'le programme est');
+    toastEcriture(saveUser(),'Programme importé : v'+(currentUser.programPdfVersion),'le programme est');
     loadClientHome();
   }catch(e){
     toast('Échec : '+(e.message||'Réessaie.'),'var(--orange)');
@@ -7224,7 +7489,7 @@ function renderNotifs(){
     if(days>ecartNormal) notifs.push({icon:'',msg:`${days} jours sans séance. Reprends le rythme !`,c:'var(--orange)'});
   }
   const _sem=streakSemaines(currentUser);
-  if(_sem>=4) notifs.push({icon:'',msg:`${_sem} semaines d'assiduité — Continue !`,c:'var(--green)'});
+  if(_sem>=4) notifs.push({icon:'',msg:`${_sem} semaines d'assiduité : Continue !`,c:'var(--green)'});
   const _cb=(currentUser.bilans||[]).filter(b=>b.type!=='depart');
   if(_cb.length){const _d=new Date(_cb[_cb.length-1].date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
     notifs.push({icon:icon('check-circle',16),msg:`Bilan du ${_d} transmis à ton coach`,c:'var(--green)'});}
@@ -7328,7 +7593,7 @@ function loadSessionManager(){
 
         <!-- Photo vidéos (liens YouTube — cachée) -->
         <div style="margin-bottom:12px">
-          <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin-bottom:5px"> Photo liens vidéos <span style="font-weight:400">(cachée — IA seulement)</span></div>
+          <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin-bottom:5px"> Photo liens vidéos <span style="font-weight:400">(cachée : IA seulement)</span></div>
           ${s.photo2?`
             <div style="display:flex;align-items:center;gap:8px;background:#0a1a00;border:1px solid #1a3a0a;border-radius:8px;padding:8px 12px">
               <div style="color:var(--green);font-size:11px;font-weight:700;flex:1">✓ Photo vidéos prête</div>
@@ -7542,9 +7807,9 @@ function openSessionExercises(idx){
   _updateAnalyzeBtn();
   _progEditorCtx={mode:'athlete',sessionIdx:idx};
   const backBtn=document.querySelector('#s-coach-program .back-btn');
-  if(backBtn) backBtn.onclick=()=>{if(_progExDirty&&!confirm('Modifications non enregistrées — quitter quand même ?'))return;_progEditorCtx={mode:'clientProgram'};go('s-session-manager');};
+  if(backBtn) backBtn.onclick=()=>{if(_progExDirty&&!confirm('Modifications non enregistrées : quitter quand même ?'))return;_progEditorCtx={mode:'clientProgram'};go('s-session-manager');};
   const title=document.querySelector('#s-coach-program .topbar-title');
-  if(title) title.textContent=(cfg[idx].name||'Séance')+' — Exercices';
+  if(title) title.textContent=(cfg[idx].name||'Séance')+' : Exercices';
   renderProgEx();
   go('s-coach-program');
   _progExDirty=false;
@@ -7628,11 +7893,11 @@ function getCycleFactor(){
 
 function getCycleLabel(){
   const p=currentUser.currentCycle||'ignore';
-  if(p==='j1_difficile') return{text:' Phase menstruelle — Difficile',color:'var(--cycle-accent)'};
-  if(p==='j1_supportable') return{text:' Phase menstruelle — Supportable',color:'var(--orange)'};
-  if(p==='j6_14') return{text:' Phase folliculaire — Énergie optimale',color:'var(--green)'};
-  if(p==='j15_21') return{text:' Phase lutéale J15-21 — Normal',color:'var(--green)'};
-  if(p==='j22_28') return{text:' Phase lutéale J22-28 — Volume réduit',color:'var(--orange)'};
+  if(p==='j1_difficile') return{text:' Phase menstruelle : Difficile',color:'var(--cycle-accent)'};
+  if(p==='j1_supportable') return{text:' Phase menstruelle : Supportable',color:'var(--orange)'};
+  if(p==='j6_14') return{text:' Phase folliculaire : Énergie optimale',color:'var(--green)'};
+  if(p==='j15_21') return{text:' Phase lutéale J15-21 : Normal',color:'var(--green)'};
+  if(p==='j22_28') return{text:' Phase lutéale J22-28 : Volume réduit',color:'var(--orange)'};
   return null;
 }
 
@@ -7706,6 +7971,16 @@ function finishWorkoutEarly(){
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden&&woState?.exercises?.length) woPersist();
   if(document.hidden&&typeof _audioMediaRecorder!=='undefined'&&_audioMediaRecorder&&_audioMediaRecorder.state==='recording') cancelAudioAnnotation();
+  // CLOUD.push() attend 2 s avant d'envoyer (débounce). Masquer l'onglet dans
+  // cette fenêtre — le réflexe normal après « Enregistrer » — gelait le timer :
+  // l'envoi ne partait qu'au retour au premier plan, ou jamais si l'onglet
+  // était fermé entre-temps. On vide donc la file d'attente immédiatement.
+  if(document.hidden&&CLOUD._pushTimer){
+    clearTimeout(CLOUD._pushTimer);
+    CLOUD._pushTimer=null;
+    const u=DB.get('users');
+    if(u) CLOUD._doPush(u);
+  }
 });
 window.addEventListener('beforeunload',()=>{
   if(typeof _audioMediaRecorder!=='undefined'&&_audioMediaRecorder&&_audioMediaRecorder.state==='recording'){
@@ -7732,6 +8007,11 @@ function _nomSeance(sessConfig,slotIdx){
 }
 function launchWorkout(sessConfig,slotIdx){
   if(!sessConfig?.exercises?.length){toast('Aucun exercice dans cette séance.','var(--red)');return;}
+  // « Première » déduit de l'historique réel, jamais d'un drapeau local : un
+  // drapeau se perdrait au changement d'appareil et recompterait la même
+  // première séance. Après le garde ci-dessus, pour ne pas compter un
+  // lancement qui n'a pas eu lieu.
+  if(!(currentUser.sessions||[]).length) rcm('first_workout_started');
   // Après le garde, et non en toute première ligne : un lancement avorté doit
   // laisser intacte la séance déjà en cours. Placé avant, il tuerait l'horloge
   // d'un entraînement que woState continue par ailleurs de décrire, et le
@@ -7808,8 +8088,8 @@ function _renderWeeklyInto(el,sc){
   const progNote=sc.find(s=>s.notes&&s._foundation)?.notes||'';
   const nbEx=selS.active&&selS.exercises?.length?selS.exercises.length:0;
   const heading=nbEx
-    ?((DAYS[sel]||'').toUpperCase()+(selS.name?' — '+selS.name.toUpperCase():''))
-    :((DAYS[sel]||'').toUpperCase()+' — REPOS');
+    ?((DAYS[sel]||'').toUpperCase()+(selS.name?' : '+selS.name.toUpperCase():''))
+    :((DAYS[sel]||'').toUpperCase()+' : REPOS');
   const mainRest=nbEx?(selS.exercises.map(e=>e.repos).filter(Boolean)[0]||''):'';
   el.innerHTML=`
     <div class="banner-hero" style="margin-bottom:14px">
@@ -7937,7 +8217,12 @@ function renderWoEx(){
   document.getElementById('wo-progress').style.width=(woState.currentEx/total*100)+'%';
   document.getElementById('wo-ex-count').textContent=(woState.currentEx+1)+'/'+total;
   document.getElementById('wo-prev-btn').style.opacity=woState.currentEx===0?'0.3':'1';
-  document.getElementById('wo-next-btn').textContent=woState.currentEx===total-1?'Terminer la séance ':'Exercice suivant →';
+  // innerHTML et non textContent : les deux libellés (long/court) doivent
+  // survivre au changement d'exercice, sinon la version mobile disparaît dès le
+  // premier woNav et le texte se remet à déborder.
+  document.getElementById('wo-next-btn').innerHTML=woState.currentEx===total-1
+    ?'<span class="wo-lbl-long">Terminer la séance</span><span class="wo-lbl-court">Terminer</span> '
+    :'<span class="wo-lbl-long">Exercice suivant</span><span class="wo-lbl-court">Suivant</span> →';
   const pr=parseReps(ex.reps);
   if(!woState.sessionData[woState.currentEx]) woState.sessionData[woState.currentEx]={sets:Array.from({length:ex.series},(_,si)=>({weight:'',weight2:'',reps:pr.type==='degressive'?pr.p1:ex.reps,rir:'',pain:'',done:false,degressive:pr.type==='degressive',p2reps:pr.p2}))};
   const data=woState.sessionData[woState.currentEx];
@@ -8002,7 +8287,7 @@ function renderWoEx(){
         </div>`
       :sug?`<div class="suggest-box">
         <div style="display:flex;gap:18px;align-items:flex-end;margin:2px 0 6px">
-          <div><div style="font-size:27px;font-weight:900;line-height:1">${sug}kg</div><div style="font-size:var(--fs-xs);color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">${isCW?'↓ Assistance — progresser = réduire':'Charge pour la première série'}</div></div>
+          <div><div style="font-size:27px;font-weight:900;line-height:1">${sug}kg</div><div style="font-size:var(--fs-xs);color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">${isCW?'↓ Assistance : progresser = réduire':'Charge pour la première série'}</div></div>
           ${showCycleCol?`<div><div style="font-size:27px;font-weight:900;line-height:1;color:var(--cycle-accent)">${cycleWeight}kg</div><div style="font-size:var(--fs-xs);color:var(--cycle-accent);margin-top:4px">Cycle ajusté</div></div>`:''}
         </div>
         <div class="s-note">${isCW?'Contrepoids: RIR élevé → diminuer la charge. ':''}${baseWeight?'Basée sur '+escapeHtml(creneauRef)+' (RIR 0 : '+baseWeight+'kg)':prev?'Basée sur '+escapeHtml(creneauRef)+' ('+prev.weight+'kg'+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):'')+')':'Première séance'}</div>
@@ -8010,7 +8295,7 @@ function renderWoEx(){
       // Pas d'historique SUR CE CRÉNEAU. On le dit, au lieu de laisser un vide
       // inexpliqué — et surtout au lieu de proposer la charge d'un autre jour,
       // qui ne correspond ni aux mêmes répétitions ni au même effort.
-      `<div id="wo-no-hist" class="sub" style="font-size:11px;background:var(--surface-2);border-radius:8px;padding:10px 13px;margin-bottom:12px;line-height:1.6">Pas encore d'historique pour cet exercice ${escapeHtml(creneauPhrase)} — note ta charge, elle servira de repère la prochaine fois.</div>`}
+      `<div id="wo-no-hist" class="sub" style="font-size:11px;background:var(--surface-2);border-radius:8px;padding:10px 13px;margin-bottom:12px;line-height:1.6">Pas encore d'historique pour cet exercice ${escapeHtml(creneauPhrase)} : note ta charge, elle servira de repère la prochaine fois.</div>`}
 
       ${(ex.description||ex.note)?`<div style="background:var(--surface-2);border-radius:10px;padding:11px 14px;margin-bottom:12px">
         <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--red);margin-bottom:5px">CONSIGNE</div>
@@ -8052,13 +8337,13 @@ function renderWoEx(){
           </span>
         </div>
         <div id="rir-explain" style="display:none;margin-top:10px;background:#08080f;border:1px solid #1e1e3a;border-radius:10px;padding:14px;font-size:12px;line-height:1.7">
-          <div style="font-weight:800;color:#aaa;letter-spacing:.5px;margin-bottom:8px">RIR — Répétitions En Réserve</div>
+          <div style="font-weight:800;color:#aaa;letter-spacing:.5px;margin-bottom:8px">RIR : Répétitions En Réserve</div>
           <div style="color:var(--sub);font-size:11px;margin-bottom:10px">Le nombre de répétitions que tu pourrais encore réaliser <em>après</em> ta dernière rep, avant l'échec musculaire total.</div>
           <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
-            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:var(--fs-xs);font-weight:900;min-width:40px;padding-top:1px;color:var(--danger)">RIR 0</span><span style="color:#aaa;font-size:11px">Échec — impossible de faire 1 rep de plus</span></div>
+            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:var(--fs-xs);font-weight:900;min-width:40px;padding-top:1px;color:var(--danger)">RIR 0</span><span style="color:#aaa;font-size:11px">Échec : impossible de faire 1 rep de plus</span></div>
             <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:var(--fs-xs);font-weight:900;min-width:40px;padding-top:1px;color:var(--warning)">RIR 1</span><span style="color:#aaa;font-size:11px">1 rep encore dans le réservoir</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:var(--fs-xs);font-weight:900;min-width:40px;padding-top:1px;color:var(--info)">RIR 2</span><span style="color:#aaa;font-size:11px">2 reps encore possibles — effort intense mais contrôlé</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:var(--fs-xs);font-weight:900;min-width:40px;padding-top:1px;color:var(--success)">RIR 3+</span><span style="color:#aaa;font-size:11px">Encore loin de l'échec — échauffement ou séance légère</span></div>
+            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:var(--fs-xs);font-weight:900;min-width:40px;padding-top:1px;color:var(--info)">RIR 2</span><span style="color:#aaa;font-size:11px">2 reps encore possibles : effort intense mais contrôlé</span></div>
+            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:var(--fs-xs);font-weight:900;min-width:40px;padding-top:1px;color:var(--success)">RIR 3+</span><span style="color:#aaa;font-size:11px">Encore loin de l'échec : échauffement ou séance légère</span></div>
           </div>
           <div style="border-top:1px solid #1a1a2a;padding-top:10px;color:#666;font-size:11px;line-height:1.6">
             💡 <strong style="color:#aaa">En pratique :</strong> vise <strong style="color:var(--info)">RIR 2</strong> sur tes premières séries pour préserver l'énergie, puis pousse à <strong style="color:var(--danger)">RIR 0–1</strong> sur ta <strong style="color:#fff">dernière série</strong> pour maximiser le stimulus musculaire.
@@ -8313,6 +8598,15 @@ function finishWorkout(incomplete=false){
     if(el){el.value=5;}if(vl)vl.textContent='5';
   });
   document.getElementById('ps-steps').value='';
+  // La séance est déjà dans l'historique à ce stade : la toute première y est
+  // donc seule. Même raisonnement que first_workout_started — c'est la donnée
+  // qui décide, pas un drapeau d'appareil.
+  if((currentUser.sessions||[]).length===1) rcm('first_workout_completed');
+  // La séance vient d'être enregistrée : si le bilan de départ manque toujours,
+  // c'est ici qu'on le propose. Même prédicat que la carte de l'accueil — les
+  // deux relances doivent apparaître et disparaître ensemble.
+  const _wdBil=document.getElementById('wd-first-bilan-card');
+  if(_wdBil) _wdBil.style.display=(currentUser.bilans||[]).some(b=>b.type==='depart')?'none':'block';
   go('s-workout-done');
   const _wd=document.getElementById('s-workout-done');_wd.classList.remove('celebrate');void _wd.offsetWidth;_wd.classList.add('celebrate');
 }
@@ -8379,7 +8673,7 @@ function buildSessionComparison(vol,data){
         <text x="100" y="157" text-anchor="middle" font-family="'Bebas Neue',sans-serif" font-size="34" letter-spacing="4" fill="url(#wdSilver)" stroke="#43474e" stroke-width=".7" paint-order="stroke">RECORD</text>
       </svg></div>
       <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:#e8ebef;margin-top:12px;line-height:1;text-shadow:0 0 10px rgba(255,255,255,.25)">NOUVEAU RECORD</div>
-      <div style="font-size:13px;font-weight:800;color:#fff;margin-top:5px">${best.curMax}kg — ${escapeHtml(best.nm)}</div>
+      <div style="font-size:13px;font-weight:800;color:#fff;margin-top:5px">${best.curMax}kg : ${escapeHtml(best.nm)}</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:3px">était ${best.histMax}kg${records.length>1?' · +'+(records.length-1)+' autre'+(records.length>2?'s':'')+' record'+(records.length>2?'s':'')+' battu'+(records.length>2?'s':''):''}</div>
     </div>`;
   }
@@ -8389,10 +8683,13 @@ function buildSessionComparison(vol,data){
     if(delta!==0) html+=`<div style="background:var(--surface-1);border:1px solid #1e1e1e;border-radius:8px;padding:9px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px"><span style="flex-shrink:0;color:${delta>0?'var(--green)':'#666'}">${delta>0?icon('flame',18):'▾'}</span><span style="font-size:12px;font-weight:700;color:${delta>0?'var(--green)':'#888'}">${delta>0?'+':''}${delta}kg de volume vs dernière séance</span></div>`;
   }
   if(firstSession&&!html)
-    html=`<div style="background:var(--surface-1);border:1px solid #1e1e1e;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;font-weight:700;color:var(--sub)">Première séance enregistrée — tes prochains records apparaîtront ici</div>`;
+    html=`<div style="background:var(--surface-1);border:1px solid #1e1e1e;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;font-weight:700;color:var(--sub)">Première séance enregistrée : tes prochains records apparaîtront ici</div>`;
   return html;
 }
-function savePostSession(){
+// versBilan : enchaîner sur le questionnaire de départ au lieu de rentrer à
+// l'accueil. Utilisé par la carte de relance de s-workout-done, pour que le
+// ressenti post-séance soit enregistré AVANT de changer d'écran.
+function savePostSession(versBilan){
   const metrics={
     fatigue:document.getElementById('ps-fatigue').value,
     intensite:document.getElementById('ps-intensite').value,
@@ -8417,6 +8714,7 @@ function savePostSession(){
   const _pas=parseInt(metrics.steps,10);
   if(!isNaN(_pas)&&_pas>0&&_pas<=99999) _recordSteps(localISODate(new Date()),_pas);
   toastEcriture(saveUser(),' Super séance enregistrée !','la séance est');
+  if(versBilan){openBilan('depart');return;}
   go('s-client-home');loadClientHome();
 }
 // ── Assiduité : le streak compte des SEMAINES, pas des jours consécutifs ────
@@ -8545,7 +8843,7 @@ function _bilSaveDraft(){
       // frappe, un toast par caractère serait pire que le problème signalé.
       if(!_bilDraftAvertiPlein){
         _bilDraftAvertiPlein=true;
-        toast('Stockage plein — ton bilan ne sera pas récupérable si tu quittes l\'app.','var(--orange)');
+        toast('Stockage plein : ton bilan ne sera pas récupérable si tu quittes l\'app.','var(--orange)');
       }
     }
   },400);
@@ -8660,7 +8958,7 @@ function _updateBilanCountdown(){
   const diffMs=next.getTime()-now.getTime();
   const dateLabel=next.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
   if(diffMs<=0){
-    cd.innerHTML=`<div style="background:linear-gradient(135deg,#c10000,#7a0000);border-radius:12px;padding:20px 16px;text-align:center;box-shadow:0 0 32px rgba(224,32,32,.35)"><div style="font-size:17px;font-weight:900;color:#fff;letter-spacing:.5px;text-transform:uppercase">C'est le moment !</div><div style="font-size:12px;color:rgba(255,255,255,.75);margin-top:6px">Ton bilan est prévu aujourd'hui — complète-le maintenant.</div></div>`;
+    cd.innerHTML=`<div style="background:linear-gradient(135deg,#c10000,#7a0000);border-radius:12px;padding:20px 16px;text-align:center;box-shadow:0 0 32px rgba(224,32,32,.35)"><div style="font-size:17px;font-weight:900;color:#fff;letter-spacing:.5px;text-transform:uppercase">C'est le moment !</div><div style="font-size:12px;color:rgba(255,255,255,.75);margin-top:6px">Ton bilan est prévu aujourd'hui : complète-le maintenant.</div></div>`;
     return;
   }
   const totalMins=Math.floor(diffMs/60000);
@@ -9121,7 +9419,7 @@ const BIL_STEPS=[
   ()=>`<div style="margin-bottom:22px"><div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">Photos de progression </div>`+
     `<div style="background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:14px;text-align:center">`+
     `<div style="font-weight:700;font-size:13px;margin-bottom:6px;color:#fff">Photos de progression</div>`+
-    `<div style="font-size:11px;color:var(--sub);line-height:1.6">Reproduis les 3 poses ci-dessous — même endroit, même lumière qu'au début :<br><strong style="color:var(--red)">Face · Dos · Profil</strong></div></div>`+
+    `<div style="font-size:11px;color:var(--sub);line-height:1.6">Reproduis les 3 poses ci-dessous : même endroit, même lumière qu'au début :<br><strong style="color:var(--red)">Face · Dos · Profil</strong></div></div>`+
     bPhotoCards('bil')+
     `</div>`
 ];
@@ -9200,7 +9498,7 @@ const DEB_STEPS=[
   ()=>`<div style="margin-bottom:22px"><div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">Photos de départ </div>`+
     `<div style="background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:14px;text-align:center">`+
     `<div style="font-weight:700;font-size:13px;margin-bottom:6px;color:#fff">Photos de départ</div>`+
-    `<div style="font-size:11px;color:var(--sub);line-height:1.6">Reproduis les 3 poses ci-dessous, tenue légère, lumière naturelle — <strong style="color:var(--red)">touche AJOUTER sous chaque pose</strong>.</div></div>`+
+    `<div style="font-size:11px;color:var(--sub);line-height:1.6">Reproduis les 3 poses ci-dessous, tenue légère, lumière naturelle : <strong style="color:var(--red)">touche AJOUTER sous chaque pose</strong>.</div></div>`+
     bPhotoCards('deb')+
     `</div>`
 ];
@@ -9259,12 +9557,15 @@ function saveBilanFinal(){
     try{localStorage.removeItem('rc_pendingphoto_'+k);}catch(e){}
   });
   const enregistre=saveUser();
+  // Le bilan vient d'être poussé dans l'historique : longueur 1 = c'était le
+  // premier. Seul le compteur part — ni le type, ni la moindre réponse.
+  if((currentUser.bilans||[]).length===1) rcm('first_bilan_completed');
   if(currentUser._notifEnabled) scheduleSwNotif();
   // Un bilan représente une saisie longue : mensurations, photos et réponses
   // de santé. Annoncer « enregistré ! » alors que le quota a débordé pousse
   // l'utilisateur à fermer l'app sur une fausse certitude.
   if(enregistre&&ancrageOk) toast(' Bilan n°'+n+' enregistré !');
-  else toast('Stockage plein — bilan envoyé au cloud, mais absent de cet appareil','var(--orange)');
+  else toast('Stockage plein : bilan envoyé au cloud, mais absent de cet appareil','var(--orange)');
   go('s-client-home');loadClientHome();
   // Propose notifications après le 1er bilan
   const totalBilans=(currentUser.bilans||[]).length;
@@ -9275,27 +9576,47 @@ function saveBilanFinal(){
 
 // ======= NOTIFICATIONS BILAN (toutes les 2 semaines, samedi 7h) =======
 function _bilanAnchorSat(dateMs,freqWeeks){
-  // Remonte au samedi de la semaine du bilan, puis ajoute freqWeeks*7 jours
-  // → retourne toujours un samedi, jamais plus de freqWeeks*7 jours dans le futur
+  // Samedi le PLUS PROCHE de « bilan + freqWeeks semaines ».
+  //
+  // L'ancienne version remontait d'abord au samedi PRÉCÉDANT le bilan, puis
+  // ajoutait freqWeeks*7. Un bilan rempli un vendredi visait donc le samedi du
+  // lendemain en hebdomadaire — une échéance déjà passée le temps que l'athlète
+  // rouvre l'app. La boucle de rattrapage la repoussait alors au samedi suivant,
+  // exactement celui que la fréquence bimensuelle désignait de son côté : les
+  // deux réglages affichaient la même date dans 14 cas sur 29 selon le jour du
+  // dernier bilan, et choisir « chaque semaine » ne changeait rien à l'écran.
+  //
+  // En partant de la date du bilan pour y ajouter l'intervalle voulu AVANT
+  // d'arrondir au samedi, l'échéance tombe toujours à ±3 jours de l'intervalle
+  // demandé, et les deux fréquences restent séparées de 7 jours pleins.
   const d=new Date(dateMs);d.setHours(0,0,0,0);
+  d.setDate(d.getDate()+freqWeeks*7);
   const dow=d.getDay(); // 0=dim ... 6=sam
-  const daysSinceSat=dow===6?0:dow+1;
-  d.setDate(d.getDate()-daysSinceSat+freqWeeks*7);
+  // Écart au samedi le plus proche : -3..+3. dow=6 (samedi) → 0.
+  const versSamedi=dow===6?0:(dow<3?-(dow+1):6-dow);
+  d.setDate(d.getDate()+versSamedi);
+  d.setHours(0,0,0,0);
   return d;
 }
-function getNextBilanSaturday(){
+// rattraper : reporter l'échéance au prochain multiple encore à venir.
+// Le compte à rebours ne le fait PAS, et c'est le second volet de la
+// correction : quand l'échéance hebdomadaire était dépassée, le report la
+// poussait au samedi suivant — précisément celui que la fréquence bimensuelle
+// visait déjà. Les deux réglages affichaient alors la même date, alors que la
+// vérité est qu'en hebdomadaire l'athlète est EN RETARD. Sans report,
+// _updateBilanCountdown reçoit une date passée et affiche « C'est le moment ! ».
+// Seul le planificateur de notification garde le report : il lui faut un
+// horodatage futur, sans quoi le rappel ne pourrait jamais être programmé.
+function getNextBilanSaturday(rattraper){
   const bilans=currentUser.bilans||[];
   if(!bilans.length) return null;
   const freq=currentUser._bilanFreq||2;
   const sorted=bilans.slice().sort((a,b)=>a.date-b.date);
-  // MEME point de depart que isBilanNotifDay : _bilanAnchorSat, qui remonte au
-  // samedi de la semaine du bilan avant d'ajouter freq*7 jours.
-  // L'ancienne version faisait « date du bilan + freq*7 » et conservait donc le
-  // JOUR DE LA SEMAINE du bilan : un bilan rempli un mardi donnait un mardi,
-  // alors que la notification, elle, ne part que le samedi. Le compte a rebours
-  // et le rappel designaient deux dates differentes.
+  // MEME point de depart que isBilanNotifDay : _bilanAnchorSat, qui arrondit
+  // « bilan + freq semaines » au samedi le plus proche.
   const next=_bilanAnchorSat(sorted[sorted.length-1].date,freq);
   next.setHours(0,0,0,0);
+  if(!rattraper) return next;
   const today=new Date();today.setHours(0,0,0,0);
   // Avance par pas de semaines entieres via setDate, et non en ajoutant des
   // millisecondes : un passage a l'heure d'ete decalerait l'heure et pourrait
@@ -9332,7 +9653,7 @@ function _notifSupported(){return typeof window!=='undefined' && 'Notification' 
 // Message des chemins déclenchés par l'utilisateur : dire pourquoi ça ne marche
 // pas ET quoi faire. « Non supportées » laissait croire à une impasse alors que
 // l'installation sur l'écran d'accueil suffit.
-const _NOTIF_INDISPO="Les notifications ne sont pas disponibles sur ce navigateur — installe RepCore sur ton écran d'accueil.";
+const _NOTIF_INDISPO="Les notifications ne sont pas disponibles sur ce navigateur : installe RepCore sur ton écran d'accueil.";
 function checkBilanNotifToday(){
   if(!currentUser||currentUser.role!=='athlete') return;
   if(!(currentUser.bilans||[]).length) return;
@@ -9346,11 +9667,11 @@ function checkBilanNotifToday(){
   // tout — avant, la ligne suivante jetait et la bannière restait, mais tout ce
   // qui suivait dans le cycle de démarrage sautait avec elle.
   if(_notifSupported()&&Notification.permission==='granted'){
-    navigator.serviceWorker.ready.then(reg=>reg.showNotification('RepCore — Bilan bimensuel 📊',{
+    navigator.serviceWorker.ready.then(reg=>reg.showNotification('RepCore : Bilan bimensuel 📊',{
       body:"C'est le moment de remplir ton bilan coaching ! Suis ton évolution 📈",
       icon:'./icons/icon-192x192.png',badge:'./icons/icon-192x192.png',
       tag:'bilan-reminder',requireInteraction:true,data:{url:'./?bilan=1'}
-    })).catch(()=>{try{new Notification('RepCore — Bilan bimensuel 📊',{
+    })).catch(()=>{try{new Notification('RepCore : Bilan bimensuel 📊',{
       body:"C'est le moment de remplir ton bilan coaching !",
       icon:'./icons/icon-192x192.png',tag:'bilan-reminder'
     });}catch(e){}});
@@ -9384,8 +9705,8 @@ function checkFeedbackNotif(){
   // Une seule notification, même pour plusieurs corrections : en empiler une
   // par vidéo transformerait une bonne nouvelle en nuisance.
   const multi=nouveaux.length>1;
-  const titre=multi?('RepCore — '+nouveaux.length+' corrections de ton coach')
-                   :'RepCore — Ton coach a corrigé ta vidéo';
+  const titre=multi?('RepCore : '+nouveaux.length+' corrections de ton coach')
+                   :'RepCore : Ton coach a corrigé ta vidéo';
   const corps=multi?(nouveaux.length+' de tes vidéos viennent d\'être corrigées.')
                    :('« '+(nouveaux[0].name||'sans nom')+' » vient d\'être corrigée.');
   if(_notifSupported()&&Notification.permission==='granted'){
@@ -9416,7 +9737,10 @@ async function scheduleSwNotif(){
   if(!('serviceWorker' in navigator)) return;
   try{
     const reg=await navigator.serviceWorker.ready;
-    const next=getNextBilanSaturday();
+    // true : le rappel a besoin d'une date FUTURE. Une échéance déjà dépassée
+    // ne pourrait pas être programmée, et l'athlète en retard ne serait plus
+    // relancé du tout — c'est justement lui qu'il faut relancer.
+    const next=getNextBilanSaturday(true);
     const c=await caches.open('repcore-sw-data');
     await c.put('/bilan-schedule',new Response(JSON.stringify({
       nextDate:next?next.getTime():Date.now()+14*24*3600*1000,
@@ -9435,7 +9759,7 @@ function requestBilanNotifPermission(){
     toast(' Rappels déjà activés !');return;
   }
   if(Notification.permission==='denied'){
-    toast('️ Notifications bloquées — autorise-les dans les réglages du navigateur');return;
+    toast('️ Notifications bloquées : autorise-les dans les réglages du navigateur');return;
   }
   Notification.requestPermission().then(p=>{
     if(p==='granted'){
@@ -9539,7 +9863,7 @@ function checkWoReminderToday(){
   // Même partage qu'au rappel de bilan : la bannière d'abord, la notification
   // système seulement si le navigateur la propose.
   if(_notifSupported()&&Notification.permission==='granted'){
-    navigator.serviceWorker.ready.then(reg=>reg.showNotification('RepCore — Séance du jour 💪',{
+    navigator.serviceWorker.ready.then(reg=>reg.showNotification('RepCore : Séance du jour 💪',{
       body:"C'est l'heure de t'entraîner ! Lance ta séance maintenant.",
       icon:'./icons/icon-192x192.png',badge:'./icons/icon-192x192.png',
       tag:'wo-reminder',requireInteraction:true,data:{url:'./?wo=1'}
@@ -9633,10 +9957,10 @@ async function saveWoReminderConfig(){
   };
   if(!_notifSupported()){toast(_NOTIF_INDISPO,'var(--orange)');return;}
   if(Notification.permission==='granted'){await doSave();return;}
-  if(Notification.permission==='denied'){toast('Notifications bloquées — autorise-les dans les réglages du navigateur','var(--orange)');return;}
+  if(Notification.permission==='denied'){toast('Notifications bloquées : autorise-les dans les réglages du navigateur','var(--orange)');return;}
   const p=await Notification.requestPermission();
   if(p==='granted') await doSave();
-  else toast('Permission refusée — rappel non activé');
+  else toast('Permission refusée : rappel non activé');
 }
 async function disableWoReminder(){
   currentUser._woReminderEnabled=false;saveUser();
@@ -9849,7 +10173,7 @@ function showProgressTab(tab,btn){
     };
     c.innerHTML=`
       <div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">
-        <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px">Paramètres — Formule US Navy</div>
+        <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px">Paramètres : Formule US Navy</div>
         <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
           <div style="flex:1;min-width:70px"><label for="evol-height" style="font-size:var(--fs-xs)">Taille (cm)</label><input type="number" id="evol-height" value="${escapeHtml(String(storedH||''))}" placeholder="176" style="padding:8px;font-size:14px;font-weight:700;text-align:center"></div>
           <div style="flex:1;min-width:80px">
@@ -10119,7 +10443,7 @@ function _manageCycleSupplements(){
         // Source : Rahbar et al., BJOG 2012 — 1-2g EPA+DHA pour dysménorrhée & inflammation lutéale
         list.push({id:'cycle_o3_'+Date.now(),name:'Oméga-3 (EPA/DHA)',
           dosage_quantity:2,dosage_unit:'gélules',timings:['soir'],
-          notes:'Phase lutéale tardive — soutien anti-inflammatoire',
+          notes:'Phase lutéale tardive : soutien anti-inflammatoire',
           active:true,_cycleManaged:true,_cyclePhase:'luteal_late'});
         saveUser();
       } else if(auto.active===false){auto.active=true;saveUser();}
@@ -10148,7 +10472,7 @@ function _renderCycleNutSettings(nut){
     const phase=_getCyclePhaseNut(today);
     const pLabels={
       menstrual:{txt:'Phase menstruelle (J1-5)',color:'#a78bfa'},
-      stable:{txt:'Phase stable — référence',color:'var(--green)'},
+      stable:{txt:'Phase stable : référence',color:'var(--green)'},
       luteal_late:{txt:'Phase lutéale tardive',color:'var(--orange)'}
     };
     const pl=phase?pLabels[phase]:null;
@@ -10159,13 +10483,13 @@ function _renderCycleNutSettings(nut){
     const hasAdj=dKcal!==0||dG!==0||dL!==0;
     const adjLabel=hasAdj
       ?[dG!==0?`glucides ${dG>0?'+':''}${dG}g`:null,dL!==0?`lipides ${dL>0?'+':''}${dL}g`:null,dKcal!==0?`${dKcal>0?'+':''}${dKcal} kcal`:null].filter(Boolean).join(' · ')
-      :phase==='luteal_late'&&!conf.sensibilite_pms?'Sensibilité PMS désactivée — pas d\'ajustement'
-      :phase==='menstrual'&&intens!=='difficile'?'Règles supportables — pas d\'ajustement':'Macros inchangées';
+      :phase==='luteal_late'&&!conf.sensibilite_pms?'Sensibilité PMS désactivée : pas d\'ajustement'
+      :phase==='menstrual'&&intens!=='difficile'?'Règles supportables : pas d\'ajustement':'Macros inchangées';
     if(pl) phaseHtml=`<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
       <span style="font-size:var(--fs-xs);font-weight:800;color:${pl.color};background:${pl.color}18;border:1px solid ${pl.color}33;border-radius:6px;padding:3px 9px">${pl.txt}</span>
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:6px">${hasAdj?'Ajust. actif : ':''}<span style="color:${hasAdj?'#fff':'var(--sub)'}">${adjLabel}</span></div>
     </div>`;
-    else phaseHtml=`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">Date antérieure au cycle actuel — mets à jour la date des règles.</div>`;
+    else phaseHtml=`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">Date antérieure au cycle actuel : mets à jour la date des règles.</div>`;
   }
   const needDate=on&&!lastP?`<div style="font-size:var(--fs-xs);color:var(--orange);margin-top:8px">↑ Renseigne la date de tes dernières règles pour activer l'adaptation.</div>`:'';
   const settingsHtml=on?`<div style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
@@ -10741,10 +11065,10 @@ function _renderFjDaySummary(date){
           ${tile(tot.fi,m.f?m.f+'g':'','fibres ℹ','#94a3b8')}
           ${kcalTile}
         </div>
-        <div style="font-size:var(--fs-xs);color:var(--text-dim);text-align:right;margin-top:7px">ℹ sucre & fibres — indicatif</div>
+        <div style="font-size:var(--fs-xs);color:var(--text-dim);text-align:right;margin-top:7px">ℹ sucre & fibres : indicatif</div>
       </div>
     </div>
-    ${entries.length===0?`<div style="text-align:center;padding:18px 0 8px;color:var(--text-dim);font-size:12px">Aucun aliment enregistré — appuie sur + AJOUTER</div>`:''}
+    ${entries.length===0?`<div style="text-align:center;padding:18px 0 8px;color:var(--text-dim);font-size:12px">Aucun aliment enregistré : appuie sur + AJOUTER</div>`:''}
     ${repasOrder.filter(r=>grouped[r]).map(r=>`
       <div style="margin-bottom:14px">
         <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:6px">${repasLabels[r]}</div>
@@ -10848,7 +11172,7 @@ function renderCoachNutriSection(c){
             <input type="file" accept="image/*" capture="environment" style="display:none" onchange="addClientStrictPhoto(this)">
           </label>
         </div>`
-      :`<div style="font-size:11px;color:var(--text-dim);text-align:center;margin-top:4px">Journal libre — pas de plan photo à configurer</div>`}
+      :`<div style="font-size:11px;color:var(--text-dim);text-align:center;margin-top:4px">Journal libre : pas de plan photo à configurer</div>`}
     </div>`;
 }
 
@@ -11042,7 +11366,7 @@ function loadSuppEmbedded(){
   const inLuteal=conf.enabled&&isFemale(currentUser.gender)&&_getCyclePhaseNut(today)==='luteal_late';
   const hasUserOmega=inLuteal&&_suppStore().some(s=>!s._cycleManaged&&/om[eé]ga/i.test(s.name));
   const omegaBanner=hasUserOmega
-    ?`<div style="margin-bottom:10px;background:rgba(251,146,60,.07);border:1px solid rgba(251,146,60,.22);border-radius:8px;padding:9px 12px;font-size:11px;color:#fb923c;font-weight:700">⚡ Phase lutéale — +2 gélules oméga-3 recommandées aujourd'hui (en plus de ta prise habituelle)</div>`:'';
+    ?`<div style="margin-bottom:10px;background:rgba(251,146,60,.07);border:1px solid rgba(251,146,60,.22);border-radius:8px;padding:9px 12px;font-size:11px;color:#fb923c;font-weight:700">⚡ Phase lutéale : +2 gélules oméga-3 recommandées aujourd'hui (en plus de ta prise habituelle)</div>`:'';
   el.innerHTML=`
     <div style="margin-bottom:12px">
       <h3 style="margin:0;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--sub);display:flex;align-items:center;gap:5px">${icon('pill',11)} Compléments</h3>
@@ -11485,21 +11809,27 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
   // que _caffeineColor, sinon l'anneau et le remplissage racontent deux histoires.
   const pct=Math.min(totalMg/thr.orange,1);
   const color=_caffeineColor(totalMg,thr);
-  const wEstHtml=wEst?'<span style="display:block;margin-top:4px;color:var(--warning);font-size:var(--fs-xs)">⚖️ Poids estimé (75 kg) — renseigne ton poids réel pour des seuils précis</span>':'';
+  const wEstHtml=wEst?'<span style="display:block;margin-top:4px;color:var(--warning);font-size:var(--fs-xs)">⚖️ Poids estimé (75 kg) : renseigne ton poids réel pour des seuils précis</span>':'';
   // Les trois niveaux de bannière suivent les trois bornes de _caffeineColor,
   // pour que la sévérité du message et la couleur de l'anneau coïncident toujours.
   const alertHtml=totalMg>=thr.orange
-    ?`<div class="caff-alert-banner" style="background:var(--danger-bg);border-color:var(--danger);color:var(--danger)">🚨 Limite dépassée (${thr.orange}mg) — évite toute nouvelle prise aujourd'hui.</div>`
+    ?`<div class="caff-alert-banner" style="background:var(--danger-bg);border-color:var(--danger);color:var(--danger)">🚨 Limite dépassée (${thr.orange}mg) : évite toute nouvelle prise aujourd'hui.</div>`
     :totalMg>=thr.yellow
-    ?'<div class="caff-alert-banner" style="background:var(--warning-bg);border-color:var(--warning);color:var(--warning)">⚠️ Niveau élevé — surveille ton sommeil et ta fréquence cardiaque.</div>'
+    ?'<div class="caff-alert-banner" style="background:var(--warning-bg);border-color:var(--warning);color:var(--warning)">⚠️ Niveau élevé : surveille ton sommeil et ta fréquence cardiaque.</div>'
     :totalMg>=thr.green
-    ?`<div class="caff-alert-banner" style="background:var(--info-bg);border-color:var(--info);color:var(--info)">⚡ Consommation modérée — ta limite du jour est à ${thr.orange}mg.</div>`
+    ?`<div class="caff-alert-banner" style="background:var(--info-bg);border-color:var(--info);color:var(--info)">⚡ Consommation modérée : ta limite du jour est à ${thr.orange}mg.</div>`
     :'';
   const listHtml=!entries.length
     ?emptyState('coffee','Aucune prise enregistrée ce jour.',null,null,'padding:16px 0')
     :renderDataList(entries,(e,i)=>`<span style="font-size:24px">${e.icon||'☕'}</span><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13px">${escapeHtml(e.name)}</div><div style="font-size:11px;color:var(--sub);display:flex;align-items:center;gap:4px"><input type="time" value="${e.time||''}" onchange="updateCaffeineEntryTime('${date}',${i},this.value)" style="background:none;border:none;border-bottom:1px solid #333;color:var(--sub);font-size:11px;font-family:Montserrat,sans-serif;cursor:pointer;padding:0;width:52px">${e.volume?'· '+escapeHtml(e.volume):''}</div></div><span style="font-weight:900;color:var(--red);font-size:15px;min-width:48px;text-align:right">${e.mg}mg</span><button onclick="deleteCaffeineEntry('${date}',${i},'${deleteFnName}')" style="background:none;border:none;color:var(--sub);font-size:20px;cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent">×</button>`);
   const _circ=2*Math.PI*48;
   const _off=_circ*(1-pct);
+  // Le cercle mesure 120px de diamètre, dont 9px d'anneau de chaque côté : il
+  // reste ~100px, moins la marge intérieure. À 44px fixes, « 1200 » débordait
+  // sur l'anneau. L'unité « mg » est sortie du même span pour ne plus manger
+  // deux caractères de large sur la valeur elle-même.
+  const _nbChiffres=String(totalMg).length;
+  const _tailleChiffres=_nbChiffres<=3?42:_nbChiffres===4?34:27;
   return `<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:16px">
     <div style="display:flex;align-items:center;gap:16px">
       <div style="position:relative;width:120px;height:120px;flex-shrink:0">
@@ -11507,10 +11837,13 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
           <circle cx="60" cy="60" r="48" fill="none" stroke="#1e1e1e" stroke-width="9"/>
           <circle cx="60" cy="60" r="48" fill="none" style="stroke:${color};transition:stroke-dashoffset .4s ease,stroke .4s ease" stroke-width="9" stroke-linecap="round" stroke-dasharray="${_circ.toFixed(1)}" stroke-dashoffset="${_off.toFixed(1)}" transform="rotate(-90 60 60)"/>
         </svg>
-        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">
-          <span class="txt-hero" style="color:${color}">${totalMg}mg</span>
-          <span style="font-size:var(--fs-xs);color:var(--sub);margin-top:3px">sur ${thr.orange}mg max</span>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;padding:0 11px;box-sizing:border-box">
+          <div style="display:flex;align-items:baseline;justify-content:center;gap:1px;max-width:100%">
+            <span class="txt-hero" style="color:${color};font-size:${_tailleChiffres}px;line-height:1">${totalMg}</span>
+            <span style="color:${color};font-family:Montserrat,sans-serif;font-size:12px;font-weight:800;line-height:1">mg</span>
+          </div>
         </div>
+        <div style="position:absolute;left:0;right:0;bottom:15px;text-align:center;font-size:var(--fs-xs);color:var(--sub);line-height:1.15;pointer-events:none">sur ${thr.orange}mg max</div>
       </div>
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;color:var(--sub);margin-bottom:10px">${caffeineEquiv(totalMg)}</div>
@@ -11884,16 +12217,16 @@ function addVideoLink(){
 function _cloudinaryUserMsg(e,kind){
   const m=(e.message||'').toLowerCase();
   if(/file size too large|exceeds.*maximum|too large|erreur serveur 413/.test(m))
-    return 'Fichier trop volumineux — réduis la taille'+(kind==='video'?' ou la durée de la vidéo':'');
+    return 'Fichier trop volumineux : réduis la taille'+(kind==='video'?' ou la durée de la vidéo':'');
   if(/upload preset not found|unknown api key|invalid upload preset|erreur serveur 401/.test(m))
-    return "Configuration d'envoi invalide — vérifie tes paramètres vidéo";
+    return "Configuration d'envoi invalide : vérifie tes paramètres vidéo";
   if(/not allowed|unsupported format|invalid.*file|file type/.test(m))
     return kind==='audio'
-      ?'Format non supporté — utilise MP3, M4A ou WebM'
-      :'Format non supporté — utilise MP4, MOV, WebM ou MKV';
+      ?'Format non supporté : utilise MP3, M4A ou WebM'
+      :'Format non supporté : utilise MP4, MOV, WebM ou MKV';
   if(/erreur serveur 5/.test(m))
-    return "Service d'envoi momentanément indisponible — réessaie dans quelques instants";
-  return "Erreur d'envoi — vérifie ta connexion et réessaie";
+    return "Service d'envoi momentanément indisponible : réessaie dans quelques instants";
+  return "Erreur d'envoi : vérifie ta connexion et réessaie";
 }
 async function uploadVideoFile(input){
   const file=input.files[0];if(!file) return;
@@ -11901,7 +12234,7 @@ async function uploadVideoFile(input){
   const progEl=document.getElementById('vid-upload-progress');
   if(errEl) errEl.style.display='none';
   if(!file.type.startsWith('video/')){
-    if(errEl){errEl.style.display='block';errEl.textContent='Fichier invalide — sélectionne une vidéo (MP4, MOV, WebM…)';}
+    if(errEl){errEl.style.display='block';errEl.textContent='Fichier invalide : sélectionne une vidéo (MP4, MOV, WebM…)';}
     input.value='';return;
   }
   if(file.size>300*1024*1024){
@@ -11935,7 +12268,7 @@ async function uploadVideoFile(input){
       // Session changée pendant l'upload — écrire directement dans le compte cible
       const allUsers=DB.get('users')||{};
       const target=allUsers[targetEmail];
-      if(!target){toast('Session expirée — vidéo non sauvegardée.','var(--orange)');if(progEl)progEl.style.display='none';input.value='';return;}
+      if(!target){toast('Session expirée : vidéo non sauvegardée.','var(--orange)');if(progEl)progEl.style.display='none';input.value='';return;}
       if(!target.videos) target.videos=[];
       target.videos.push(entry);
       target.updatedAt=Date.now();
@@ -12010,7 +12343,7 @@ function openQCManager(){
       <h2 style="margin:0;font-size:16px">✏️ Commentaires-types</h2>
       <button onclick="document.getElementById('qcm-overlay').remove()" style="background:none;border:none;color:var(--sub);font-size:22px;cursor:pointer;line-height:1">✕</button>
     </div>
-    <div id="qcm-list">${rows||'<div class="sub" style="padding:12px 0;text-align:center">Aucun commentaire — ajoute-en ci-dessous.</div>'}</div>
+    <div id="qcm-list">${rows||'<div class="sub" style="padding:12px 0;text-align:center">Aucun commentaire : ajoute-en ci-dessous.</div>'}</div>
     <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--surface-2)">
       <label style="margin:0 0 6px;font-size:11px;display:block">Ajouter un commentaire</label>
       <div style="display:flex;gap:8px;margin-top:6px">
@@ -12090,7 +12423,7 @@ function _renderTsAnnotations(annotations,opts={}){
           ${readonly?'':`<button onclick="removeTsAnnotation(${i})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:18px;line-height:1;padding:0;flex-shrink:0;margin-top:${isAudio?'3px':'0'}">×</button>`}
         </div>`;
       }).join('')
-    :readonly?'':`<div class="sub" style="font-size:11px;padding:6px 0">Aucun repère — ajoute des annotations ci-dessous.</div>`;
+    :readonly?'':`<div class="sub" style="font-size:11px;padding:6px 0">Aucun repère : ajoute des annotations ci-dessous.</div>`;
   if(readonly) return html;
   const el=document.getElementById('vc-ts-list');if(!el)return;
   el.innerHTML=html;
@@ -12099,7 +12432,7 @@ function addTsAnnotation(){
   const ts=(document.getElementById('vc-ts-time')?.value||'').trim();
   const note=(document.getElementById('vc-ts-note')?.value||'').trim();
   if(!ts||!note) return toast('Renseigne le repère et la note','var(--orange)');
-  if(!/^\d+:\d{2}$/.test(ts)) return toast('Format invalide — utilise m:ss (ex: 0:45 ou 1:30)','var(--orange)');
+  if(!/^\d+:\d{2}$/.test(ts)) return toast('Format invalide : utilise m:ss (ex: 0:45 ou 1:30)','var(--orange)');
   if(!window._tsAnnotations) window._tsAnnotations=[];
   window._tsAnnotations.push({ts,note});
   document.getElementById('vc-ts-time').value='';
@@ -12138,7 +12471,7 @@ function openVideoCorrection(email,videoId){
         <input id="vc-ts-note" placeholder="Ex : genoux qui rentrent" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addTsAnnotation();}">
         <button class="btn btn-outline btn-sm" style="flex-shrink:0;padding:9px 12px" onclick="addTsAnnotation()">+</button>
       </div>
-      <div class="sub" style="font-size:var(--fs-xs);margin-top:5px">Format m:ss — ex: 0:15 · 1:30 · 12:05</div>
+      <div class="sub" style="font-size:var(--fs-xs);margin-top:5px">Format m:ss : ex: 0:15 · 1:30 · 12:05</div>
     </div>
     <div style="margin-top:12px;padding:12px;background:#080808;border:1px solid var(--surface-2);border-radius:10px">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--sub);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> Message audio</div>
@@ -12237,7 +12570,7 @@ async function startAudioRec(){
     const preview=document.getElementById('vc-audio-preview');if(preview)preview.style.display='none';
     const status=document.getElementById('vc-audio-status');if(status)status.textContent='⏺ Enregistrement… 0:00';
   }catch(e){
-    toast('Micro non autorisé — active l\'accès au microphone dans les réglages du navigateur','var(--orange)');
+    toast('Micro non autorisé : active l\'accès au microphone dans les réglages du navigateur','var(--orange)');
   }
 }
 function stopAudioRec(){
@@ -12248,7 +12581,7 @@ async function confirmAudioAnnotation(){
   if(!_audioBlob){toast('Aucun enregistrement','var(--orange)');return;}
   const ts=(document.getElementById('vc-audio-ts')?.value||'').trim();
   if(!ts)return toast('Renseigne le timestamp avant d\'ajouter','var(--orange)');
-  if(!/^\d+:\d{2}$/.test(ts))return toast('Format invalide — utilise m:ss (ex: 0:45)','var(--orange)');
+  if(!/^\d+:\d{2}$/.test(ts))return toast('Format invalide : utilise m:ss (ex: 0:45)','var(--orange)');
   const targetEmail=currentUser.email; // capturé avant tout await
   const status=document.getElementById('vc-audio-status');
   if(status)status.textContent='⏳ Envoi…';
@@ -12262,7 +12595,7 @@ async function confirmAudioAnnotation(){
     const url=await _cloudinaryUpload(file);
     if(currentUser?.email!==targetEmail){
       const allUsers=DB.get('users')||{};
-      if(!allUsers[targetEmail]){toast('Session expirée — audio non sauvegardé.','var(--orange)');return;}
+      if(!allUsers[targetEmail]){toast('Session expirée : audio non sauvegardé.','var(--orange)');return;}
     }
     if(!window._tsAnnotations)window._tsAnnotations=[];
     window._tsAnnotations.push({ts,note:'🎤 message audio',audioUrl:url});
@@ -12279,7 +12612,7 @@ async function confirmAudioAnnotation(){
 async function uploadAudioFile(input){
   const file=input.files[0];if(!file)return;
   if(!file.type.startsWith('audio/')){
-    toast('Fichier invalide — sélectionne un fichier audio (MP3, M4A, WebM…)','var(--orange)');
+    toast('Fichier invalide : sélectionne un fichier audio (MP3, M4A, WebM…)','var(--orange)');
     input.value='';return;
   }
   if(file.size>300*1024*1024){
@@ -12288,7 +12621,7 @@ async function uploadAudioFile(input){
   }
   const ts=(document.getElementById('vc-audio-ts')?.value||'').trim();
   if(!ts){toast('Renseigne le timestamp d\'abord','var(--orange)');input.value='';return;}
-  if(!/^\d+:\d{2}$/.test(ts)){toast('Format invalide — utilise m:ss','var(--orange)');input.value='';return;}
+  if(!/^\d+:\d{2}$/.test(ts)){toast('Format invalide : utilise m:ss','var(--orange)');input.value='';return;}
   const targetEmail=currentUser.email; // capturé avant tout await
   const status=document.getElementById('vc-audio-status');
   if(status)status.textContent='⏳ Envoi…';
@@ -12296,7 +12629,7 @@ async function uploadAudioFile(input){
     const url=await _cloudinaryUpload(file);
     if(currentUser?.email!==targetEmail){
       const allUsers=DB.get('users')||{};
-      if(!allUsers[targetEmail]){toast('Session expirée — audio non sauvegardé.','var(--orange)');input.value='';return;}
+      if(!allUsers[targetEmail]){toast('Session expirée : audio non sauvegardé.','var(--orange)');input.value='';return;}
     }
     if(!window._tsAnnotations)window._tsAnnotations=[];
     window._tsAnnotations.push({ts,note:'🎤 message audio',audioUrl:url});
@@ -12673,7 +13006,7 @@ function saveSleep(){
   const wake=document.getElementById('sleep-wake-input')?.value;
   if(!bed||!wake) return toast('Renseigne l\'heure de coucher et de lever','var(--orange)');
   const duration=calcSleepDuration(bed,wake);
-  if(duration===null) return toast('Heures invalides — vérifie la saisie','var(--orange)');
+  if(duration===null) return toast('Heures invalides : vérifie la saisie','var(--orange)');
   const todayStr=localISODate(new Date());
   if(!currentUser.sleepLog) currentUser.sleepLog=[];
   const idx=currentUser.sleepLog.findIndex(e=>e.date===todayStr);
@@ -12826,7 +13159,7 @@ function saveUser(){
 // est ») sans que le helper ait à le deviner.
 function toastEcriture(ok,succes,perdu){
   if(ok){toast(succes);return true;}
-  toast('Stockage plein — '+perdu+' dans le cloud uniquement, pas sur cet appareil','var(--orange)');
+  toast('Stockage plein : '+perdu+' dans le cloud uniquement, pas sur cet appareil','var(--orange)');
   return false;
 }
 // Même chose, mais pour une sauvegarde qui a DEUX destinations : l'appareil et
@@ -12848,7 +13181,7 @@ function toastSync(localOk,promesse,succes,perdu){
       // sinon leur texte (« enregistrée sur cet appareil ») serait faux.
       const detail=(localOk&&e&&e._actionnable)?e.message:null;
       toast(detail||(localOk
-        ?'Enregistré sur cet appareil — synchronisation en échec'
+        ?'Enregistré sur cet appareil : synchronisation en échec'
         :'Échec : ni enregistré sur cet appareil, ni synchronisé. Recommence.'),
         'var(--orange)');
       return false;
@@ -12932,7 +13265,7 @@ function togglePasteLiens(){
 function savePastedLinks(){
   const raw=document.getElementById('prog-paste-input')?.value||'';
   const links=[...new Set(raw.split(/[\n,\s]+/).map(s=>s.trim()).filter(s=>s.includes('youtu')))];
-  if(!links.length){toast('Aucun lien YouTube reconnu — vérifie le format.','var(--orange)');return;}
+  if(!links.length){toast('Aucun lien YouTube reconnu : vérifie le format.','var(--orange)');return;}
   _pdfVideoLinks=links;
   progPhoto2Data='pdf';
   document.getElementById('prog-photo2-ph').style.display='none';
@@ -12993,7 +13326,7 @@ async function importVideoLinksFromPdf(input){
       const html=`<div id="modal-overlay" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
       <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:500px;max-height:80vh;overflow-y:auto">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-          <b style="color:var(--red-light)">Aucun lien trouvé — Diagnostic</b>
+          <b style="color:var(--red-light)">Aucun lien trouvé : Diagnostic</b>
           <button onclick="document.getElementById('modal-overlay').remove()" style="background:none;border:none;color:var(--sub);font-size:22px;cursor:pointer">✕</button>
         </div>
         <p style="font-size:11px;color:var(--sub);margin-bottom:8px">Copie ce texte et envoie-le pour qu'on diagnostique :</p>
@@ -13026,7 +13359,7 @@ async function analyzeProgPhotos(){
       videoLinks=_pdfVideoLinks;
     } else if(!progPhoto2Data||progPhoto2Data===''){
       // photo2 absente (stripée de Firebase au rechargement) — avertir l'utilisateur
-      toast('⚠️ Photo vidéos non chargée — recharge-la ci-dessus puis réanalyse','var(--orange)');
+      toast('⚠️ Photo vidéos non chargée : recharge-la ci-dessus puis réanalyse','var(--orange)');
     } else if(progPhoto2Data&&progPhoto2Data!=='pdf'){
       if(btn) btn.innerHTML='⏳ Lecture liens vidéos...';
       try{
@@ -13048,7 +13381,7 @@ async function analyzeProgPhotos(){
           <div id="modal-overlay" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
           <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:500px;max-height:85vh;overflow-y:auto">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-              <b style="color:var(--red-light)">Lecture automatique — texte brut</b>
+              <b style="color:var(--red-light)">Lecture automatique : texte brut</b>
               <button onclick="document.getElementById('modal-overlay').remove()" style="background:none;border:none;color:var(--sub);font-size:22px;cursor:pointer">✕</button>
             </div>
             <p style="font-size:11px;color:var(--sub);margin-bottom:8px">Envoie-moi ce texte :</p>
@@ -13086,7 +13419,7 @@ function updateCalcTable(){
   if(!pw||!pr){document.getElementById('calc-table-body').innerHTML='<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--sub)">Entre ta charge et tes reps précédentes</td></tr>';document.getElementById('calc-e1rm-display').style.display='none';return;}
   // %1RM = 100 - 2.5 × RIR - 2.5 × (reps - 1)
   const pct=100-2.5*prir-2.5*(pr-1);
-  if(pct<=0){document.getElementById('calc-table-body').innerHTML='<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--orange)">Nombre de reps ou RIR trop élevé — réduis les valeurs</td></tr>';document.getElementById('calc-e1rm-display').style.display='none';return;}
+  if(pct<=0){document.getElementById('calc-table-body').innerHTML='<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--orange)">Nombre de reps ou RIR trop élevé : réduis les valeurs</td></tr>';document.getElementById('calc-e1rm-display').style.display='none';return;}
   let e1rm=pw/(pct/100);
   if(cycleAdj) e1rm=e1rm*0.95; // Ajustement phase menstruelle -5%
   document.getElementById('calc-e1rm-val').textContent=Math.round(e1rm)+'kg';
@@ -13514,14 +13847,14 @@ function importOcrExercises(idx,maxN){
     _progExDirty=true;
     renderProgEx();
     closeModal();
-    toast(result.length+' exercices importés — pense à sauvegarder.');
+    toast(result.length+' exercices importés : pense à sauvegarder.');
     return;
   }
 
   // ── Athlète : écriture directe dans sa propre séance, comportement inchangé ─
   if(!currentUser.sessions_config) initSessionsConfig();
   const cible=typeof idx==='number'?currentUser.sessions_config?.[idx]:null;
-  if(!cible){toast('Séance introuvable — rouvre-la puis réessaie.','var(--orange)');return;}
+  if(!cible){toast('Séance introuvable : rouvre-la puis réessaie.','var(--orange)');return;}
   _personnaliserSeance(idx);
   cible.exercises=result;
   const ok=saveUser();closeModal();
@@ -13754,7 +14087,7 @@ function openAddAthlete(){
     <h2 style="margin-bottom:6px">➕ Ajouter un athlète</h2>
     <p class="sub" style="margin-bottom:8px;font-size:12px">${estCreateur
       ?'Crée le compte et active l\'accès en une seule étape. Ton élève se connectera avec l\'email et le mot de passe que tu saisis ici.'
-      :'Crée le compte de ton élève : il se connectera avec l\'email et le mot de passe que tu saisis ici. Son accès sera activé après souscription à <strong style="color:#ddd">9,95 €/mois</strong> — les accès gratuits sont réservés au créateur de RepCore.'}</p>
+      :'Crée le compte de ton élève : il se connectera avec l\'email et le mot de passe que tu saisis ici. Son accès sera activé après souscription à <strong style="color:#ddd">9,95 €/mois</strong> : les accès gratuits sont réservés au créateur de RepCore.'}</p>
     <div><label style="margin-top:10px" for="aa-fname">Prénom</label><input id="aa-fname" placeholder="Prénom de l'athlète"></div>
     <div><label style="margin-top:10px" for="aa-lname">Nom</label><input id="aa-lname" placeholder="Nom de l'athlète"></div>
     <div><label style="margin-top:10px" for="aa-email">Email</label><input type="email" id="aa-email" placeholder="email@exemple.com"></div>
@@ -13808,10 +14141,10 @@ async function createAthlete(){
       motDePasseActif=false;
     } else {
       _err(
-        auth.err==='weak'    ? 'Mot de passe trop faible — 6 caractères minimum.' :
+        auth.err==='weak'    ? 'Mot de passe trop faible : 6 caractères minimum.' :
         auth.err==='email'   ? 'Adresse email invalide.' :
-        auth.err==='network' ? 'Pas de connexion — impossible de créer le compte maintenant.' :
-        auth.err==='config'  ? 'Synchronisation non configurée — impossible de créer le compte.' :
+        auth.err==='network' ? 'Pas de connexion : impossible de créer le compte maintenant.' :
+        auth.err==='config'  ? 'Synchronisation non configurée : impossible de créer le compte.' :
                                'Création du compte impossible. Réessaie.'
       );
       return;
@@ -13822,7 +14155,7 @@ async function createAthlete(){
   try{
     gen=await _genAccessCode(fn+' '+ln,months);
   }catch(e){
-    document.getElementById('aa-err').textContent=e.message||'Impossible de générer le code d\'accès — réessaie.';
+    document.getElementById('aa-err').textContent=e.message||'Impossible de générer le code d\'accès : réessaie.';
     document.getElementById('aa-err').style.display='block';
     return;
   }
@@ -13837,7 +14170,7 @@ async function createAthlete(){
   // écrire et tombera sur « numéro invalide ».
   const tel=(document.getElementById('aa-phone')?.value||'').trim();
   if(tel&&_numWa(tel).length<8){
-    _err('Numéro inutilisable — mets l\'indicatif pays sans le 0, ex : +33612345678');
+    _err('Numéro inutilisable : mets l\'indicatif pays sans le 0, ex : +33612345678');
     return;
   }
   if(tel) athlete.phone=tel;
@@ -13870,8 +14203,8 @@ async function createAthlete(){
   // Le message d'un affilié ne parle plus d'accès : il n'en accorde aucun.
   const messageFinal=estCreateur
     ?(motDePasseActif
-      ? '✓ '+fn+' créé — il peut se connecter avec cet email et ce mot de passe. Accès jusqu\'au '+exp+' (code copié)'
-      : '✓ '+fn+' rattaché — il avait déjà un compte, il garde SON mot de passe. Accès jusqu\'au '+exp+' (code copié)')
+      ? '✓ '+fn+' créé : il peut se connecter avec cet email et ce mot de passe. Accès jusqu\'au '+exp+' (code copié)'
+      : '✓ '+fn+' rattaché : il avait déjà un compte, il garde SON mot de passe. Accès jusqu\'au '+exp+' (code copié)')
     :'Compte préparé. '+fn+' devra souscrire à 9,95 €/mois pour activer son accès (code copié)';
   toastSync(okU&&okS,envoi,messageFinal,'le compte est');
   loadCoachHome();
@@ -13925,6 +14258,97 @@ document.addEventListener('DOMContentLoaded',initLogos);
 // ═══════════════════════════════════════════════════
 // MONETISATION — Coach tabs
 // ═══════════════════════════════════════════════════
+// ── Tableau de bord du tunnel ───────────────────────────────────────────────
+// Ordre d'affichage = ordre du parcours réel. Une étape peut regrouper
+// plusieurs compteurs (le rôle en a deux) : `cles` est donc toujours un tableau.
+const RCM_TUNNEL=[
+  {cles:['landing_view'],lib:'Page de vente vue'},
+  {cles:['welcome_view'],lib:'Application ouverte'},
+  {cles:['role_selected_coach','role_selected_athlete'],lib:'Rôle choisi',detail:['role_selected_athlete','athlète','role_selected_coach','coach']},
+  {cles:['code_entered'],lib:'Code saisi'},
+  {cles:['code_valid'],lib:'Code valide'},
+  {cles:['code_invalid'],lib:'Code refusé',horsTunnel:true},
+  {cles:['register_started'],lib:'Inscription commencée'},
+  {cles:['register_completed'],lib:'Compte créé'},
+  {cles:['subscribe_viewed'],lib:'Écran abonnement vu'},
+  {cles:['paypal_clicked'],lib:'PayPal cliqué'},
+  {cles:['subscription_activated'],lib:'Abonnement activé'},
+  {cles:['first_workout_started'],lib:'1re séance lancée'},
+  {cles:['first_workout_completed'],lib:'1re séance terminée'},
+  {cles:['first_bilan_completed'],lib:'1er bilan rempli'}
+];
+async function loadMetrics(){
+  // Même garde que la génération de codes gratuits : ce sont les chiffres du
+  // produit, pas ceux d'un coach. Contrôle d'affichage ET d'entrée.
+  if(currentUser?.email!==CREATOR_EMAIL){
+    toast('Réservé à l\'administrateur RepCore.','var(--red)');
+    return;
+  }
+  go('s-metrics');
+  const corps=document.getElementById('mt-corps');
+  if(!corps) return;
+  corps.innerHTML='<div class="sub" style="font-size:12px">Chargement…</div>';
+  const tok=await CLOUD._getToken().catch(()=>null);
+  // 7 jours glissants, aujourd'hui inclus.
+  const jours=[];
+  for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);jours.push(localISODate(d));}
+  const parJour={};
+  await Promise.all(jours.map(async j=>{
+    try{
+      const r=await fetch(RCM_BASE+'/'+j+'.json'+(tok?'?auth='+tok:''));
+      parJour[j]=(r.ok?await r.json():null)||{};
+    }catch(e){parJour[j]={};}
+  }));
+  const total=cle=>jours.reduce((n,j)=>n+(parseInt(parJour[j][cle],10)||0),0);
+  const totalEtape=e=>e.cles.reduce((n,c)=>n+total(c),0);
+  const reference=totalEtape(RCM_TUNNEL[0])||totalEtape(RCM_TUNNEL[1])||0;
+  let precedent=null;
+  let html='';
+  for(const e of RCM_TUNNEL){
+    const n=totalEtape(e);
+    const largeur=reference>0?Math.max(2,Math.round(n/reference*100)):0;
+    // Le taux compare à l'étape précédente du tunnel ; les étapes marquées
+    // horsTunnel (les échecs) ne cassent pas la chaîne pour les suivantes.
+    const taux=(!e.horsTunnel&&precedent!==null&&precedent>0)?Math.round(n/precedent*100)+' %':'';
+    let detail='';
+    if(e.detail&&n>0){
+      const parts=[];
+      for(let i=0;i<e.detail.length;i+=2) parts.push(total(e.detail[i])+' '+e.detail[i+1]);
+      detail=' · '+parts.join(' / ');
+    }
+    html+='<div style="margin-bottom:12px">'
+      +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:5px">'
+      +'<span style="font-size:12px;font-weight:700;color:'+(e.horsTunnel?'var(--orange)':'#fff')+'">'+escapeHtml(e.lib)+'</span>'
+      +'<span style="font-size:12px;color:var(--sub);white-space:nowrap"><strong style="color:#fff;font-size:14px">'+n+'</strong>'
+      +(taux?' <span style="color:var(--sub)">('+taux+')</span>':'')+'</span>'
+      +'</div>'
+      +'<div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden">'
+      +'<div style="height:100%;width:'+largeur+'%;background:'+(e.horsTunnel?'var(--orange)':'var(--red)')+'"></div>'
+      +'</div>'
+      +(detail?'<div class="sub" style="font-size:10px;margin-top:3px">'+escapeHtml(detail.slice(3))+'</div>':'')
+      +'</div>';
+    if(!e.horsTunnel) precedent=n;
+  }
+  // Détail jour par jour : une conversion qui s'effondre se voit ici avant de
+  // se voir dans le total sur 7 jours.
+  let tbl='<div style="overflow-x:auto;margin-top:22px"><table style="border-collapse:collapse;font-size:11px;white-space:nowrap">'
+    +'<tr><th style="text-align:left;padding:4px 8px 4px 0;color:var(--sub);font-weight:700">Étape</th>';
+  for(const j of jours) tbl+='<th style="padding:4px 6px;color:var(--sub);font-weight:700">'+j.slice(8)+'/'+j.slice(5,7)+'</th>';
+  tbl+='</tr>';
+  for(const e of RCM_TUNNEL){
+    tbl+='<tr><td style="padding:4px 8px 4px 0;color:'+(e.horsTunnel?'var(--orange)':'#ddd')+'">'+escapeHtml(e.lib)+'</td>';
+    for(const j of jours){
+      const n=e.cles.reduce((s,c)=>s+(parseInt(parJour[j][c],10)||0),0);
+      tbl+='<td style="padding:4px 6px;text-align:center;color:'+(n?'#fff':'#444')+'">'+(n||'—')+'</td>';
+    }
+    tbl+='</tr>';
+  }
+  tbl+='</table></div>';
+  const totalTout=RCM_TUNNEL.reduce((n,e)=>n+totalEtape(e),0);
+  corps.innerHTML=totalTout===0
+    ? '<div class="sub" style="font-size:12px;line-height:1.6">Aucune mesure sur les 7 derniers jours.<br><br>C\'est normal tant que les règles de la base n\'ont pas été redéployées, ou tant que personne n\'a ouvert l\'application depuis la mise en ligne.</div>'
+    : html+tbl;
+}
 function coachTab(tab){
   ['dashboard','codes','monetisation'].forEach(function(id){
     var p=document.getElementById('ct-'+id);
@@ -13962,7 +14386,7 @@ function updateCloudStatus(){
 function saveCoachPhone(){
   const raw=(document.getElementById('coach-phone-input').value||'').trim();
   // Même règle que pour les athlètes : wa.me refuse un numéro national.
-  if(_numWa(raw).length<8){toast('Numéro inutilisable — mets l\'indicatif pays sans le 0, ex : +33612345678','var(--orange)');return;}
+  if(_numWa(raw).length<8){toast('Numéro inutilisable : mets l\'indicatif pays sans le 0, ex : +33612345678','var(--orange)');return;}
   currentUser.phone=raw;
   toastEcriture(saveUser(),'Numéro WhatsApp enregistré ✓','le numéro est');
   _renderCoachPhonePreview(raw);
@@ -14132,7 +14556,7 @@ function _renderCoachPhonePreview(raw){
   // le lien marchait. Un numéro sans indicatif est maintenant signalé comme tel.
   if(!digits){
     el.innerHTML=(raw||'').trim()
-      ?'<span style="color:var(--orange)">⚠ Numéro sans indicatif pays — WhatsApp le refusera. Écris-le sous la forme +33612345678.</span>':'';
+      ?'<span style="color:var(--orange)">⚠ Numéro sans indicatif pays : WhatsApp le refusera. Écris-le sous la forme +33612345678.</span>':'';
     return;
   }
   el.innerHTML='→ Lien : <a href="https://wa.me/'+digits+'" target="_blank" rel="noopener" style="color:var(--green);text-decoration:none">wa.me/'+digits+'</a>'+'<span style="margin-left:8px;color:var(--text-dim)">(tes athlètes verront ce bouton)</span>';
@@ -14273,7 +14697,7 @@ function offboardCoach(coachId){
     +'<div style="flex:1">'+escapeHtml((a.fname||'')+' '+(a.lname||''))+'</div></div>'
   ).join('')+(athletes.length>10?'<div style="font-size:11px;color:var(--sub);padding:6px 0">… et '+(athletes.length-10)+' autre(s)</div>':'');
   const coachOptsHtml=otherCoaches.map(c=>
-    '<option value="'+c.id+'">'+escapeHtml((c.fname||'')+' '+(c.lname||'')+' — '+(c.email||''))+'</option>'
+    '<option value="'+c.id+'">'+escapeHtml((c.fname||'')+' '+(c.lname||'')+' : '+(c.email||''))+'</option>'
   ).join('');
   const reassignBlock=otherCoaches.length
     ?'<label style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:8px;cursor:pointer">'
@@ -14351,7 +14775,7 @@ async function requestAccountDeletion(){
   const users=DB.get('users')||{};
   const remaining=Object.values(users).filter(u=>u.coachId===currentUser.id&&u.role!=='coach');
   if(remaining.length>0){
-    toast(remaining.length+' athlète'+(remaining.length>1?'s':'')+' encore rattaché'+(remaining.length>1?'s':'')+' — réassigne-les d\'abord','var(--orange)');
+    toast(remaining.length+' athlète'+(remaining.length>1?'s':'')+' encore rattaché'+(remaining.length>1?'s':'')+' : réassigne-les d\'abord','var(--orange)');
     offboardCoach(currentUser.id);
     return;
   }
@@ -14490,7 +14914,7 @@ async function _genAccessCode(studentName,months,type){
   const url=_rcCodesUrl(code)+(fbTok?'?auth='+fbTok:'');
   const r=await fetch(url,{method:'PUT',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({...payload,token:code,active:true,redeemed:false,createdAt:Date.now()})});
-  if(!r.ok) throw new Error('Erreur sauvegarde du code ('+r.status+') — vérifie ta connexion.');
+  if(!r.ok) throw new Error('Erreur sauvegarde du code ('+r.status+') : vérifie ta connexion.');
   return {token:code,payload};
 }
 // ── Invitation coach ────────────────────────────────────────────────────────
@@ -14521,7 +14945,7 @@ async function _verifyCoachInvite(raw,email){
   const url=_rcCodesUrl(code)+(fbTok?'?auth='+fbTok:'');
   let data;
   try{const r=await fetch(url);if(!r.ok)throw new Error(r.status);data=await r.json();}
-  catch(e){throw new Error('Impossible de vérifier le code d\'invitation — vérifie ta connexion.');}
+  catch(e){throw new Error('Impossible de vérifier le code d\'invitation : vérifie ta connexion.');}
   if(!data) throw new Error('Code d\'invitation inconnu.');
   if(data.type!=='coach') throw new Error('Ce code n\'est pas une invitation coach.');
   if(!data.active) throw new Error('Cette invitation a été désactivée.');
@@ -14529,8 +14953,64 @@ async function _verifyCoachInvite(raw,email){
   if(data.redeemed) throw new Error('Cette invitation a déjà servi.');
   const r2=await fetch(url,{method:'PATCH',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({redeemed:true,coachEmail:email,usedBy:email,redeemedAt:Date.now()})});
-  if(!r2.ok) throw new Error('Impossible de consommer l\'invitation ('+r2.status+') — réessaie.');
+  if(!r2.ok) throw new Error('Impossible de consommer l\'invitation ('+r2.status+') : réessaie.');
   return {valid:true,payload:data};
+}
+
+// Contrôle de validité SANS effet de bord, pour l'athlète qui n'a pas encore de
+// compte. Ne peut pas réutiliser _verifyAccessCode : celui-ci lit currentUser
+// (inexistant avant l'inscription) et surtout CONSOMME le code par un PATCH —
+// le brûler ici le rendrait inutilisable par l'inscription qui suit.
+// Le rejet d'un code déjà consommé est ici sans nuance, contrairement à
+// _verifyAccessCode qui tolère `redeemed` pour le compte qui l'a consommé :
+// personne ne peut être ce compte avant de s'être inscrit.
+async function _verifierCodeSansConsommer(raw){
+  const code=String(raw||'').trim().toUpperCase();
+  if(!_INVITE_RE.test(code)) throw new Error('Format attendu : RC-XXXX-XXXX (lettres et chiffres).');
+  // Sans jeton : la règle .read de /rc_codes/$code est publique précisément
+  // pour ce cas. Le jeton est tout de même joint s'il existe (rattrapage
+  // depuis un compte connecté), pour rester correct si la règle se resserre.
+  const fbTok=await CLOUD._getToken().catch(()=>null);
+  const url=_rcCodesUrl(code)+(fbTok?'?auth='+fbTok:'');
+  let data;
+  try{const r=await fetch(url);if(!r.ok)throw new Error(r.status);data=await r.json();}
+  catch(e){throw new Error('Impossible de vérifier le code : vérifie ta connexion.');}
+  if(!data) throw new Error('Code invalide ou introuvable. Vérifie avec ton coach.');
+  if(data.type==='coach') throw new Error('Ce code est une invitation coach, pas un code d\'accès athlète.');
+  if(!data.active) throw new Error('Ce code a été désactivé par ton coach.');
+  if(Date.now()>data.expiry) throw new Error('Ce code a expiré. Demande un nouveau code à ton coach.');
+  if(data.redeemed) throw new Error('Ce code a déjà été utilisé par un autre compte.');
+  return data;
+}
+
+// ── Code retenu entre l'écran d'entrée et la fin de l'inscription ────────────
+// Doublé sessionStorage + localStorage à dessein : sessionStorage seul est
+// perdu si l'inscription rouvre l'app dans un autre onglet (lien de
+// vérification, gestionnaire de mots de passe), localStorage seul survit trop
+// longtemps et re-proposerait un vieux code. On écrit les deux, on lit le plus
+// frais disponible, on efface les deux à la consommation.
+const _CLE_CODE='rc_code_verifie';
+function _retenirCodeVerifie(code,payload){
+  const brut=JSON.stringify({code,payload,at:Date.now()});
+  try{sessionStorage.setItem(_CLE_CODE,brut);}catch(e){}
+  try{localStorage.setItem(_CLE_CODE,brut);}catch(e){}
+  // pendingCode reste écrit pour le pré-remplissage de s-client-code : c'est
+  // lui que lit le rattrapage, et cinq chemins en dépendent encore.
+  try{localStorage.setItem('pendingCode',code);}catch(e){}
+}
+function _codeVerifieEnAttente(){
+  for(const st of [sessionStorage,localStorage]){
+    try{
+      const b=st.getItem(_CLE_CODE);
+      if(b) return JSON.parse(b);
+    }catch(e){}
+  }
+  return null;
+}
+function _oublierCodeVerifie(){
+  try{sessionStorage.removeItem(_CLE_CODE);}catch(e){}
+  try{localStorage.removeItem(_CLE_CODE);}catch(e){}
+  try{localStorage.removeItem('pendingCode');}catch(e){}
 }
 
 async function _verifyAccessCode(raw,athleteName){
@@ -14538,7 +15018,7 @@ async function _verifyAccessCode(raw,athleteName){
   const url=_rcCodesUrl(raw)+(fbTok?'?auth='+fbTok:'');
   let data;
   try{const r=await fetch(url);if(!r.ok)throw new Error(r.status);data=await r.json();}
-  catch(e){throw new Error('Impossible de vérifier le code — vérifie ta connexion.');}
+  catch(e){throw new Error('Impossible de vérifier le code : vérifie ta connexion.');}
   if(!data) throw new Error('Code invalide ou introuvable. Vérifie avec ton coach.');
   if(!data.active) throw new Error('Ce code a été désactivé par ton coach.');
   if(Date.now()>data.expiry) throw new Error('Ce code a expiré. Demande un nouveau code à ton coach.');
@@ -14551,7 +15031,7 @@ async function _verifyAccessCode(raw,athleteName){
   return {valid:true,payload:data};
 }
 async function _extendAccessCode(codeId,addMonths,token){
-  if(!token) throw new Error('Token du code introuvable — recopie le code depuis la liste.');
+  if(!token) throw new Error('Token du code introuvable : recopie le code depuis la liste.');
   const fbTok=await CLOUD._getToken();
   const url=_rcCodesUrl(token)+(fbTok?'?auth='+fbTok:'');
   const r=await fetch(url); const data=r.ok?await r.json():null;
@@ -14586,7 +15066,7 @@ async function generateCoachInvite(){
   if(!nom){toast('Entre le nom du coach à inviter','var(--orange)');return;}
   let gen;
   try{ gen=await _genAccessCode(nom,mois,'coach'); }
-  catch(e){ toast(e.message||'Impossible de générer l\'invitation — réessaie.','var(--red)'); return; }
+  catch(e){ toast(e.message||'Impossible de générer l\'invitation : réessaie.','var(--red)'); return; }
   _dernierInviteCoach=gen.token;
   const val=document.getElementById('ci-code-val');
   const inf=document.getElementById('ci-expiry-info');
@@ -14603,7 +15083,7 @@ function _copierInviteCoach(){
   try{
     navigator.clipboard.writeText(t)
       .then(()=>toast('Invitation copiée','var(--green)'))
-      .catch(()=>toast('Copie refusée — sélectionne le code à la main.','var(--orange)'));
+      .catch(()=>toast('Copie refusée : sélectionne le code à la main.','var(--orange)'));
   }catch(e){toast('Copie impossible sur cet appareil.','var(--orange)');}
 }
 
@@ -14620,7 +15100,7 @@ async function generateStudentCode(){
   try{
     gen=await _genAccessCode(name,months);
   }catch(e){
-    toast(e.message||'Impossible de générer le code — réessaie.','var(--red)');
+    toast(e.message||'Impossible de générer le code : réessaie.','var(--red)');
     return;
   }
   const {token,payload}=gen;
@@ -14699,7 +15179,7 @@ async function extendStudentCode(i){
   try{
     res=await _extendAccessCode(c.codeId,3,c.token);
   }catch(e){
-    toast(e.message||'Impossible de prolonger le code — réessaie.','var(--red)');
+    toast(e.message||'Impossible de prolonger le code : réessaie.','var(--red)');
     return;
   }
   Object.assign(c,res.payload,{token:res.token});
@@ -14709,9 +15189,9 @@ async function extendStudentCode(i){
   DB.set('users',users);DB.set('session',currentUser);
   loadStudentCodes();
   if(res.appliedImmediately){
-    toast('Accès prolongé de 3 mois — actif immédiatement.','var(--green)');
+    toast('Accès prolongé de 3 mois : actif immédiatement.','var(--green)');
   } else {
-    toast('Nouveau code généré — envoie-le à l\'élève, il doit le ressaisir pour activer la prolongation.','var(--orange)');
+    toast('Nouveau code généré : envoie-le à l\'élève, il doit le ressaisir pour activer la prolongation.','var(--orange)');
   }
 }
 function copyExistingCode(i){
@@ -14791,6 +15271,7 @@ function loadSubscribePage(mode,payload){
   // dans cet état — onApprove écrit dans currentUser, qui vaut null. On propose
   // donc la création de compte, et l'abonnement se souscrit juste après.
   const _pp=document.getElementById('paypal-btn-container');
+  rcmVue('subscribe_viewed');
   // Les paliers sont rendus AVANT le test de connexion : le prix doit être
   // visible même sans compte, c'est justement le rôle de cet écran.
   _renderSubPaliers();
@@ -14882,6 +15363,10 @@ function renderPaypalButton(planId,coachId){
         toast('Accepte les conditions générales avant de payer','var(--orange)');
         throw new Error('CGV non acceptees');
       }
+      // Après le verrou CGV : un clic bloqué par la case non cochée n'est pas
+      // une intention de payer aboutie, et le compter masquerait justement le
+      // frottement que cette étape sert à détecter.
+      rcm('paypal_clicked');
       sessionStorage.setItem('rc_paypal_return','1');
       return actions.subscription.create({'plan_id':planId});
     },
@@ -14895,6 +15380,7 @@ function renderPaypalButton(planId,coachId){
         currentUser.status='AUTONOMIE_PREMIUM';
         currentUser.paymentStatus='active';
         currentUser.paypalSubscriptionId=data.subscriptionID;
+        rcm('subscription_activated');
         if(pending){
           currentUser.coachId=pending.coachId||currentUser.coachId||null;
           currentUser.coachName=pending.coachName||currentUser.coachName||'';

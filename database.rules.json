@@ -17,10 +17,65 @@
       ".write": false
     },
 
+    // Lecture ouverte sur UN code precis, jamais sur la collection : l'athlete
+    // doit pouvoir verifier son code avant de creer un compte et de consentir au
+    // traitement de ses donnees de sante, or il n'a pas encore d'identite
+    // Firebase a ce moment-la. L'enumeration reste impossible — lister
+    // /rc_codes exigerait un .read sur le parent, qui n'est pas accorde.
+    //
+    // NE PAS repasser ce .read a "auth != null" sans retirer d'abord la
+    // verification prealable : _verifierCodeSansConsommer s'execute AVANT toute
+    // inscription, donc sans jeton. Le verrou renverrait 401 pour tout le monde,
+    // et l'ecran d'entree deviendrait un cul-de-sac pour chaque athlete.
+    //
+    // L'ECRITURE, elle, est verrouillee par proprietaire :
+    //   - creation : n'importe quel compte connecte peut poser un code neuf ;
+    //   - modification/suppression : reservees a l'emetteur, identifie par
+    //     coachEmailKey, pose par _genAccessCode ;
+    //   - exception unique : un tiers peut faire passer redeemed de false a
+    //     true, c'est le rachat par l'athlete. Il ne peut PAS en profiter pour
+    //     s'attribuer le code (coachEmailKey doit rester identique), ce qui
+    //     fermerait sinon les anciens codes emis avant que cette cle existe.
+    // Les .validate par champ empechent qu'une ecriture de rachat legitime
+    // serve de cheval de Troie : sans eux, un PATCH {redeemed:true,
+    // active:false} passait le .write et desactivait le code au passage.
     "rc_codes": {
       "$code": {
+        ".read": true,
+        ".write": "auth != null && (!data.exists() || data.child('coachEmailKey').val() === auth.token.email.replace('.', ',') || (data.child('redeemed').val() !== true && newData.child('redeemed').val() === true && newData.child('coachEmailKey').val() === data.child('coachEmailKey').val()))",
+
+        "coachEmailKey": { ".validate": "!data.exists() || data.val() === newData.val()" },
+        "coachId":       { ".validate": "!data.exists() || data.val() === newData.val()" },
+
+        "active":      { ".validate": "!data.exists() || data.val() === newData.val() || data.parent().child('coachEmailKey').val() === auth.token.email.replace('.', ',')" },
+        "expiry":      { ".validate": "!data.exists() || data.val() === newData.val() || data.parent().child('coachEmailKey').val() === auth.token.email.replace('.', ',')" },
+        "months":      { ".validate": "!data.exists() || data.val() === newData.val() || data.parent().child('coachEmailKey').val() === auth.token.email.replace('.', ',')" },
+        "creatorFree": { ".validate": "!data.exists() || data.val() === newData.val() || data.parent().child('coachEmailKey').val() === auth.token.email.replace('.', ',')" },
+        "type":        { ".validate": "!data.exists() || data.val() === newData.val() || data.parent().child('coachEmailKey').val() === auth.token.email.replace('.', ',')" }
+      }
+    },
+
+    // Mesure de tunnel — DES COMPTEURS, RIEN D'AUTRE.
+    // Un noeud par jour, un entier par etape. Aucun identifiant, aucun email,
+    // aucune donnee de sante ne peut y entrer : la validation n'accepte qu'un
+    // nombre, sous une cle appartenant a une liste fermee de 15 noms. Toute
+    // autre cle ou tout autre type est refuse par le serveur — la garantie ne
+    // repose donc pas sur la bonne conduite du client.
+    // Ecriture non authentifiee : le visiteur de la page d'accueil n'a pas de
+    // compte, c'est justement le debut du tunnel qu'on mesure.
+    // Contrepartie assumee : les compteurs sont gonflables par quiconque sait
+    // les appeler. La croissance seule est autorisee (pas de remise a zero),
+    // et le plafond evite qu'un seul appel rende la mesure absurde.
+    // Lecture reservee aux comptes connectes ; l'ecran est en outre reserve au
+    // createur cote application.
+    "metrics": {
+      "$jour": {
         ".read": "auth != null",
-        ".write": "auth != null"
+        ".validate": "$jour.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
+        "$evenement": {
+          ".write": true,
+          ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && (!data.exists() || newData.val() > data.val()) && $evenement.matches(/^(landing_view|welcome_view|role_selected_coach|role_selected_athlete|code_entered|code_valid|code_invalid|register_started|register_completed|subscribe_viewed|paypal_clicked|subscription_activated|first_workout_started|first_workout_completed|first_bilan_completed)$/)"
+        }
       }
     }
   }

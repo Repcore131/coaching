@@ -68,6 +68,28 @@
     if(installe) location.replace('app/');
   }catch(e){}
 })();
+/* Mesure de tunnel — un compteur, rien d'autre.
+   Aucun outil tiers n'est chargé : l'incrément part vers la base Firebase déjà
+   utilisée par l'application, donc aucun nouveau destinataire de données.
+   Aucun cookie, aucun identifiant, aucune adresse : ce qui est envoyé se
+   résume à « +1 sur landing_view aujourd'hui ». Les règles de la base refusent
+   toute clé hors liste et toute valeur qui ne serait pas un nombre.
+   Volontairement dupliqué depuis app/index.html plutôt que factorisé : la page
+   de vente doit rester un fichier autonome, sans dépendance à charger. */
+(function(){
+  try{
+    var h=location.hostname;
+    if(h==='localhost'||h==='127.0.0.1'||h==='') return;
+    var d=new Date();
+    var jour=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    fetch('https://repcore-sync-default-rtdb.firebaseio.com/metrics/'+jour+'/landing_view.json',{
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({'.sv':{'increment':1}}),
+      keepalive:true
+    }).catch(function(){});
+  }catch(e){}
+})();
 </script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -157,12 +179,15 @@ footer a{color:var(--dim);margin:0 8px}
         <h3>Coach</h3>
         <p style="color:#c8c8c8;font-size:14px">Un tableau de bord par athlète, alimenté par
           ce qu'il saisit lui-même.</p>
+        <!-- Même liste que l'écran ESPACE COACH de l'app (app/index.html,
+             s-coach-entry) : les deux surfaces doivent promettre la même chose,
+             sinon la landing vend un produit que l'écran d'entrée ne confirme
+             pas. Toute modification ici se répercute là-bas, et inversement. -->
         <ul>
-          <li>Programmes par jour de la semaine, modèles réutilisables</li>
-          <li>Bilans complets : mensurations, photos, réponses écrites</li>
-          <li>Correction de vidéos technique avec repères horodatés</li>
-          <li>Plans nutrition et compléments</li>
-          <li>Rattachement des élèves par code d'accès</li>
+          <li>Repère les athlètes en alerte et les nouveaux bilans</li>
+          <li>Assigne un programme-modèle à un athlète en un geste</li>
+          <li>Affiche ta team, ta photo et ton accroche chez eux</li>
+          <li>Reste joignable sur WhatsApp depuis l'accueil de tes athlètes</li>
         </ul>
       </div>
       <div class="card">
