@@ -5417,6 +5417,10 @@ function waLink(phone,text){
 function cleCoachDe(u){
   if(!u) return null;
   if(u.coachEmailKey) return u.coachEmailKey;
+  // Sans coachId, ne rien chercher : la comparaison users[k].id === undefined
+  // était vraie pour tout dossier dépourvu d'id, et rendait sa clé comme
+  // si c'était celle du coach.
+  if(!u.coachId) return null;
   const users=DB.get("users")||{};
   const e=Object.keys(users).find(k=>users[k]&&users[k].id===u.coachId);
   return e?e.replace(/\./g,','):null;
@@ -9839,6 +9843,7 @@ function finishWorkout(incomplete=false){
   const sess={id:'s_'+Date.now(),date:Date.now(),name:woState.progName,slot:woState.slot??null,duration:mins,sets,setsPlanned,volume:Math.round(vol),complete:!incomplete,data};
   if(!currentUser.sessions) currentUser.sessions=[];
   currentUser.sessions.push(sess);
+  _viderCachePlateau();
   _viderCacheVolume();
   updateStreak();saveUser();
   document.getElementById('wd-time').textContent=mins+'min';
@@ -9869,6 +9874,209 @@ function finishWorkout(incomplete=false){
   go('s-workout-done');
   const _wd=document.getElementById('s-workout-done');_wd.classList.remove('celebrate');void _wd.offsetWidth;_wd.classList.add('celebrate');
 }
+// ══════════════ DÉTECTION DE L'ABSENCE DE PROGRESSION ══════════════
+// Tout est DÉRIVÉ de user.sessions : aucun champ nouveau, aucune migration.
+//
+// Limite assumée : repsDone n'existe pas encore (BB-03). Le nombre de
+// répétitions retenu est donc TOUJOURS celui PRESCRIT, jamais celui réalisé.
+// Deux séances où l'athlète a fait 8 puis 10 répétitions à charge égale
+// donnent le même score. Le code lit s.repsDone dès qu'il existera, sans rien
+// à remigrer, mais tant qu'il est absent la détection ne voit que la charge et
+// le RIR. C'est écrit à l'écran, pas seulement ici.
+
+// Seuils CALIBRÉS pour éviter les faux positifs, pas des constantes
+// physiologiques. Ils sont ajustables : ce sont des choix de produit.
+const MIN_SEANCES=4;        // en dessous, aucun verdict n'est rendu
+const MIN_JOURS=21;         // ni sur une fenêtre trop courte
+const SEUIL_REGRESSION=0.95;// perf < 95 % du max global = recul, borne stricte
+const JOURS_PLATEAU=28;     // sans nouveau record depuis 4 semaines
+const FENETRE_RECENTE=4;    // nombre de séances formant le « récent »
+const ABERRATION_FACTEUR=1.5;// au-delà de 1,5 × la médiane des 5 précédents
+const ABERRATION_FENETRE=5;
+const PART_RIR_MANQUANT=0.5;// séance à plus de 50 % de RIR vides : écartée du max
+
+// Une seule définition de l'e1RM dans le fichier. Elle vivait dans calcSug,
+// qui n'avait plus aucun appelant ; calcSug l'utilise désormais aussi, ce qui
+// évite d'en avoir deux versions qui divergeraient.
+// Attention : le calculateur « Vue tableau » (openCalc) utilise, lui, une table
+// de pourcentages, un autre modèle. C'est pourquoi aucune valeur en kg n'est
+// affichée par la détection de plateau : elle contredirait ce calculateur.
+function e1rm(poids,reps,rir){
+  const w=parseFloat(poids)||0, r=parseFloat(reps)||0, i=parseFloat(rir)||0;
+  if(w<=0) return 0;
+  return w*(1+r/30)/(1+i*0.025);
+}
+const PERF_REPS_MAX_E1RM=12;  // au-delà, l'e1RM n'est plus fiable
+
+function _perfRir(s){
+  // '' et absent donnent 0, donc « à l'échec » : c'est ce qui SURESTIME l'e1RM
+  // et justifie d'écarter du maximum les séances où le RIR est majoritairement
+  // vide, sans quoi une séance mal renseignée deviendrait un record imbattable.
+  return (s&&s.rir==='echec')?0:(parseInt(s&&s.rir)||0);
+}
+function _perfReps(s){
+  return (s&&s.repsDone!=null)?Number(s.repsDone):repsToNumber(s&&s.reps);
+}
+
+function perfExercice(sess,exNom){
+  const d=_dataDeSeance(sess,exNom);
+  if(!d||!Array.isArray(d.sets)) return null;
+  let score=0, metrique=null, vus={}, retenues=0, sansRir=0;
+  for(const s of d.sets){
+    if(!s||s.done!==true) continue;
+    const w=parseFloat(s.weight);
+    if(!(w>0)) continue;
+    retenues++;
+    if(s.rir===''||s.rir==null) sansRir++;
+    const r=_perfReps(s);
+    const m=r<=PERF_REPS_MAX_E1RM?'e1RM':'volume-serie';
+    vus[m]=true;
+    const v=m==='e1RM'?e1rm(w,r,_perfRir(s)):w*r;
+    if(v>score){ score=v; metrique=m; }
+  }
+  if(!retenues) return null;
+  return {score,metrique,
+    // Séries des deux régimes dans le même exercice : le score reste le max,
+    // mais la comparaison d'une séance à l'autre devient douteuse.
+    mixte:!!(vus['e1RM']&&vus['volume-serie']),
+    sansRirDominant:sansRir/retenues>PART_RIR_MANQUANT};
+}
+
+// Série temporelle d'un exercice sur un créneau, prête à être jugée.
+function _serieExercice(user,exNom,slot,progName){
+  const out=[];
+  for(const sess of (user&&user.sessions)||[]){
+    if(!sess||!sess.date) continue;
+    // Séance de décharge : hors série. Le champ vient de BB-05 et n'existe pas
+    // encore ; la garde est donc inerte aujourd'hui, et juste le jour où il
+    // apparaîtra.
+    if(sess.deload) continue;
+    if(!_memeCreneau(sess,slot,progName)) continue;
+    const p=perfExercice(sess,exNom);
+    if(!p||!(p.score>0)) continue;
+    out.push({date:sess.date,score:p.score,metrique:p.metrique,
+              mixte:p.mixte,sansRirDominant:p.sansRirDominant,id:sess.id});
+  }
+  out.sort((a,b)=>a.date-b.date);
+  return out;
+}
+
+// Un point qui dépasse de plus de moitié la médiane des précédents est
+// probablement une faute de saisie. On le SIGNALE et on l'écarte du maximum,
+// sans jamais le supprimer : c'est peut-être vrai.
+function _mediane(t){
+  if(!t.length) return 0;
+  const x=t.slice().sort((a,b)=>a-b), m=Math.floor(x.length/2);
+  return x.length%2?x[m]:(x[m-1]+x[m])/2;
+}
+function _marquerAberrations(serie){
+  for(let i=0;i<serie.length;i++){
+    const prec=serie.slice(Math.max(0,i-ABERRATION_FENETRE),i).map(p=>p.score);
+    if(prec.length<ABERRATION_FENETRE){ serie[i].aberrant=false; continue; }
+    const med=_mediane(prec);
+    serie[i].aberrant=med>0&&serie[i].score>ABERRATION_FACTEUR*med;
+  }
+  return serie;
+}
+
+function etatExercice(user,exNom,slot,progName){
+  const cle=(user&&user.email||'?')+'|'+exKey(exNom)+'|'+slot+'|'+(progName||'');
+  if(_cachePlateau[cle]) return _cachePlateau[cle];
+  const rendre=(o)=>(_cachePlateau[cle]=o);
+
+  let serie=_serieExercice(user,exNom,slot,progName);
+  if(!serie.length) return rendre({etat:'insuffisant',n:0,T:0});
+
+  // Un changement de métrique COUPE la série : comparer un e1RM à un volume de
+  // série n'a pas de sens. On repart de la dernière rupture.
+  const metrique=serie[serie.length-1].metrique;
+  let debut=serie.length-1;
+  while(debut>0&&serie[debut-1].metrique===metrique) debut--;
+  const metriqueChangee=debut>0;
+  serie=serie.slice(debut);
+  _marquerAberrations(serie);
+
+  const n=serie.length;
+  const T=Math.round((serie[n-1].date-serie[0].date)/86400000);
+  const base={n,T,metrique,metriqueChangee,
+              mixte:serie.some(p=>p.mixte),
+              aberrants:serie.filter(p=>p.aberrant).length};
+  if(n<MIN_SEANCES||T<MIN_JOURS) return rendre(Object.assign({etat:'insuffisant'},base));
+
+  // Écartés du MAXIMUM seulement : ces séances restent dans la série (elles
+  // comptent pour n et T), mais ne peuvent pas fixer un record.
+  const utilisable=p=>!p.aberrant&&!p.sansRirDominant;
+  const maxDe=(t)=>{const v=t.filter(utilisable).map(p=>p.score);
+                    return v.length?Math.max(...v):-Infinity;};
+
+  const recents=serie.slice(-FENETRE_RECENTE);
+  const anciens=serie.slice(0,-FENETRE_RECENTE);
+  const maxHist=maxDe(anciens);
+  const maxRecent=maxDe(recents);
+  const maxGlobal=Math.max(maxHist,maxRecent);
+  const perfCur=serie[n-1].score;
+  const porteur=serie.filter(utilisable).reduce((a,p)=>(!a||p.score>a.score)?p:a,null);
+  const joursDepuisRecord=porteur
+    ? Math.round((serie[n-1].date-porteur.date)/86400000) : 0;
+
+  let etat;
+  // Quand la fenêtre récente couvre TOUTE la série (n === FENETRE_RECENTE),
+  // maxHist porte sur un ensemble vide et « maxRecent > maxHist » est vrai quoi
+  // qu'il arrive : un athlète passé de 100 à 60 en quatre séances était déclaré
+  // « en progression ». Un verdict rendu sur rien, et le plus flatteur possible.
+  // Sans historique à battre, « progresser » ne peut vouloir dire qu'une chose :
+  // la dernière séance dépasse strictement toutes les précédentes.
+  const progresse=anciens.length
+    ? maxRecent>maxHist
+    : perfCur>maxDe(serie.slice(0,-1));
+  if(progresse) etat='progression';
+  else if(perfCur<SEUIL_REGRESSION*maxGlobal) etat='regression';
+  else if(joursDepuisRecord>=JOURS_PLATEAU) etat='plateau';
+  else etat='ralentissement';
+
+  return rendre(Object.assign({etat,maxGlobal,joursDepuisRecord,
+    // Nombre de séances réellement comparables au passé. À 0, « progression »
+    // ne compare rien : la fenêtre récente couvre toute la série.
+    fenetreHistorique:anciens.length,
+    dateRecord:porteur?porteur.date:null},base));
+}
+
+// État d'un muscle, à partir des seuls exercices dont il est PRIMAIRE.
+// Un exercice où il n'est que secondaire ne dit rien de sa progression.
+function etatMuscle(user,m,slot,progName){
+  const noms=new Set();
+  for(const sess of (user&&user.sessions)||[]){
+    if(!sess||!sess.data) continue;
+    for(const nom of Object.keys(sess.data)) noms.add(nom);
+  }
+  const exercices=[];
+  for(const nom of noms){
+    const cls=resoudreMusclesLecture(nom,{name:nom},user);
+    if(!cls||cls===VOL_CARDIO) continue;
+    if(!(cls.p||[]).includes(m)) continue;      // secondaire : ne compte pas
+    const e=etatExercice(user,nom,slot,progName);
+    if(e.etat==='insuffisant') continue;
+    exercices.push({nom,...e});
+  }
+  if(!exercices.length) return {etat:'insuffisant',exercices:[]};
+  const bloques=exercices.filter(x=>x.etat==='plateau'||x.etat==='regression').length;
+  const progresse=exercices.filter(x=>x.etat==='progression').length;
+  const recule=exercices.filter(x=>x.etat==='regression').length;
+  let etat;
+  if(bloques>=2) etat='plateau musculaire';
+  else if(progresse>=1&&recule===0) etat='progression';
+  else etat='mitigé';
+  return {etat,exercices};
+}
+
+let _cachePlateau={};
+function _viderCachePlateau(){ _cachePlateau={}; }
+const PERF_METRIQUE_LIB={'e1RM':'e1RM estimé','volume-serie':'charge × reps'};
+const PERF_ETAT_LIB={
+  progression:'en progression', ralentissement:'ça ralentit',
+  plateau:'plateau', regression:'en recul', insuffisant:'pas assez de recul'
+};
+
 function buildSessionComparison(vol,data){
   const prev=currentUser.sessions.slice(0,-1);
   // Appariement sur le CRÉNEAU, pas sur le libellé. Le nom est saisi librement
@@ -10056,7 +10264,9 @@ function isCounterweightEx(name){
 function calcSug(pw,pr,prr,tr,trir){
   const pW=parseFloat(pw),pR=parseFloat(pr),pRIR=parseFloat(prr),tR=parseFloat(tr)||pR,tRIR=parseFloat(trir)||0;
   if(!pW||pW<=0) return null;
-  const e1rm=pW*(1+pR/30)/(1+pRIR*0.025);
+  // Meme definition que partout ailleurs : voir e1rm(). Elle vivait ici et
+  // nulle part ailleurs, dans une fonction qui n avait plus d appelant.
+  const e1rm=window.e1rm?window.e1rm(pW,pR,pRIR):pW*(1+pR/30)/(1+pRIR*0.025);
   const sug=e1rm*(1+tR/30)/(1+(tRIR*0.025+0.33));
   return roundWeight(sug);
 }
@@ -19118,6 +19328,208 @@ function testExercices(){
     // Un lien inutilisable ne doit produire AUCUN lien, jamais un lien mort.
     ok('Aucun lien mort produit',
        ['ma video','','abcdefghij'].every(v=>{const n=_nv(v);return !n||safeUrl(n)!=='#';}));
+
+    // ══════ ABSENCE DE PROGRESSION : PLATEAU, RECUL ══════
+    const _plSauve=currentUser;
+    const _plBase=new Date('2024-01-01T10:00:00').getTime();
+    const _plJ=(n)=>_plBase+n*86400000;
+    // Une série à r=20 tombe en « volume-serie », donc score = charge × 20 :
+    // on pilote ainsi le score exactement, sans passer par l'e1RM.
+    const _plSeance=(jour,score,extra)=>Object.assign({
+      id:'p'+jour,date:_plJ(jour),slot:0,name:'P',
+      data:{'EX':{sets:[{done:true,weight:String(score/20),reps:'20',rir:'2'}]}}},extra||{});
+    const _plUser=(seances)=>({email:'pl@t.fr',exAlias:{},exMuscles:{},sessions:seances});
+    const _plEtat=(seances)=>{_viderCachePlateau();
+      return etatExercice(_plUser(seances),'EX',0,'P');};
+
+    // ── perfExercice : les deux régimes et leur bascule ──
+    const _pf=(w,reps,rir)=>perfExercice(
+      {data:{'X':{sets:[{done:true,weight:String(w),reps:String(reps),rir}]}}},'X');
+    ok('Critère 4 : 60 kg × 10 reps RIR 1 → 78,05 en e1RM',
+       Math.abs(_pf(60,10,'1').score-60*(1+10/30)/(1+0.025))<1e-9
+       &&_pf(60,10,'1').metrique==='e1RM',
+       _pf(60,10,'1').score+' / '+_pf(60,10,'1').metrique);
+    ok('Critère 5 : 40 kg × 20 reps → 800 en volume-serie',
+       _pf(40,20,'2').score===800&&_pf(40,20,'2').metrique==='volume-serie',
+       _pf(40,20,'2').score+' / '+_pf(40,20,'2').metrique);
+    ok('Bascule de métrique à 12 reps : encore e1RM',_pf(60,12,'0').metrique==='e1RM');
+    ok('Bascule de métrique à 13 reps : volume-serie',_pf(60,13,'0').metrique==='volume-serie');
+    ok('r=13 vaut charge × reps',_pf(60,13,'0').score===780);
+    ok('r=1 reste en e1RM',_pf(100,1,'0').metrique==='e1RM');
+    ok('r=0 reste en e1RM et vaut la charge',
+       _pf(100,0,'0').metrique==='e1RM'&&Math.abs(_pf(100,0,'0').score-100)<1e-9);
+    // RIR : 'echec' vaut 0, une valeur vide aussi (ce qui SURESTIME l'e1RM)
+    ok('RIR « echec » compte comme 0',_pf(60,10,'echec').score===_pf(60,10,'0').score);
+    ok('RIR vide compte comme 0',_pf(60,10,'').score===_pf(60,10,'0').score);
+    ok('RIR 3 abaisse le score',_pf(60,10,'3').score<_pf(60,10,'0').score);
+    ok('RIR 3 : diviseur 1,075',
+       Math.abs(_pf(60,10,'3').score-60*(1+10/30)/(1+3*0.025))<1e-9);
+    // Séries non éligibles
+    ok('Série non validée : ignorée',_pf(60,10,'1')&&
+       perfExercice({data:{'X':{sets:[{done:false,weight:'60',reps:'10',rir:'1'}]}}},'X')===null);
+    ok('Charge 0 : ignorée',
+       perfExercice({data:{'X':{sets:[{done:true,weight:'0',reps:'10',rir:'1'}]}}},'X')===null);
+    ok('Charge vide : ignorée',
+       perfExercice({data:{'X':{sets:[{done:true,weight:'',reps:'10',rir:'1'}]}}},'X')===null);
+    ok('Exercice absent de la séance : null',perfExercice({data:{}},'X')===null);
+    // Le score est le MAX des séries, avec la métrique de la série retenue
+    const _pfMax=perfExercice({data:{'X':{sets:[
+      {done:true,weight:'50',reps:'10',rir:'0'},
+      {done:true,weight:'70',reps:'10',rir:'0'}]}}},'X');
+    ok('Le score retenu est le maximum des séries',
+       Math.abs(_pfMax.score-e1rm(70,10,0))<1e-9);
+    const _pfMix=perfExercice({data:{'X':{sets:[
+      {done:true,weight:'60',reps:'10',rir:'0'},
+      {done:true,weight:'40',reps:'20',rir:'0'}]}}},'X');
+    ok('Régimes mélangés : signalés',_pfMix.mixte===true);
+
+    // ── Cohérence STRICTE avec calcSug ──
+    // calcSug appelle désormais e1rm : les deux doivent être rigoureusement
+    // identiques, pas seulement proches.
+    ok('e1rm identique à celui de calcSug',
+       [[60,10,1],[100,5,0],[42.5,8,3],[80,1,2]].every(([w,r,i])=>{
+         const attendu=w*(1+r/30)/(1+i*0.025);
+         return Math.abs(e1rm(w,r,i)-attendu)===0;}));
+    ok('e1rm sur charge nulle ou négative rend 0',e1rm(0,10,1)===0&&e1rm(-5,10,1)===0);
+
+    // ── etatExercice : les cinq sorties ──
+    // Critère 1 : 3 séances sur 30 jours → insuffisant
+    ok('Critère 1 : 3 séances → insuffisant',
+       _plEtat([_plSeance(0,100),_plSeance(15,100),_plSeance(30,100)]).etat==='insuffisant');
+    // Bornes exactes de l'échantillon
+    ok('n=4 et T=20 → insuffisant',
+       _plEtat([_plSeance(0,100),_plSeance(7,100),_plSeance(14,100),_plSeance(20,100)]).etat==='insuffisant');
+    ok('n=4 et T=21 → un verdict est rendu',
+       _plEtat([_plSeance(0,100),_plSeance(7,100),_plSeance(14,100),_plSeance(21,100)]).etat!=='insuffisant');
+    // Progression : le récent bat l'ancien
+    ok('Progression : le récent dépasse l\'ancien',
+       _plEtat([_plSeance(0,90),_plSeance(7,90),_plSeance(14,90),
+                _plSeance(21,95),_plSeance(28,100)]).etat==='progression');
+    // Critère 2 : plateau — record à 35 jours, rien de mieux depuis
+    const _plPlateau=[_plSeance(0,90),_plSeance(7,100),_plSeance(14,90),
+                      _plSeance(21,97),_plSeance(28,97),_plSeance(35,97),_plSeance(42,97)];
+    ok('Critère 2 : record il y a 35 jours → plateau',
+       _plEtat(_plPlateau).etat==='plateau',_plEtat(_plPlateau).etat);
+    ok('Le nombre de jours depuis le record est exact',
+       _plEtat(_plPlateau).joursDepuisRecord===35,String(_plEtat(_plPlateau).joursDepuisRecord));
+    // Critère 3 : recul — la dernière perf sous 95 % du max
+    const _plRecul=[_plSeance(0,90),_plSeance(7,100),_plSeance(14,90),
+                    _plSeance(21,97),_plSeance(28,97),_plSeance(35,97),_plSeance(42,92)];
+    ok('Critère 3 : 0,92 × le max → recul, et non plateau',
+       _plEtat(_plRecul).etat==='regression',_plEtat(_plRecul).etat);
+    // Borne stricte du recul
+    const _plBorne=(dernier)=>[_plSeance(0,90),_plSeance(7,100),_plSeance(14,90),
+      _plSeance(21,95),_plSeance(28,95),_plSeance(35,95),_plSeance(42,dernier)];
+    ok('Exactement 0,95 × le max → PAS de recul',_plEtat(_plBorne(95)).etat!=='regression',
+       _plEtat(_plBorne(95)).etat);
+    ok('0,9499 × le max → recul',_plEtat(_plBorne(94.99)).etat==='regression',
+       _plEtat(_plBorne(94.99)).etat);
+    // Borne du plateau : 27 jours contre 28
+    const _plJours=(jourRecord,dernier)=>[_plSeance(0,90),_plSeance(jourRecord,100),
+      _plSeance(14,97),_plSeance(21,97),_plSeance(28,97),_plSeance(dernier,97)];
+    ok('27 jours depuis le record → ralentissement',
+       _plEtat(_plJours(8,35)).etat==='ralentissement',_plEtat(_plJours(8,35)).etat);
+    ok('28 jours depuis le record → plateau',
+       _plEtat(_plJours(7,35)).etat==='plateau',_plEtat(_plJours(7,35)).etat);
+
+    // ── Aberration ──
+    const _plAb=(t)=>{const s=t.map((v,i)=>({date:_plJ(i*7),score:v,metrique:'volume-serie'}));
+                      _marquerAberrations(s);return s;};
+    ok('Critère 7 : 600 après [60,62,60,61,63] est aberrant',
+       _plAb([60,62,60,61,63,600])[5].aberrant===true);
+    ok('80 après les mêmes points n\'est PAS aberrant (80 < 1,5 × 61)',
+       _plAb([60,62,60,61,63,80])[5].aberrant===false);
+    ok('Sans 5 points précédents, aucune aberration déclarée',
+       _plAb([60,62,60,600]).every(p=>p.aberrant===false));
+    // Une valeur aberrante ne doit pas fixer le record
+    const _plAvecAb=[_plSeance(0,90),_plSeance(7,90),_plSeance(14,90),_plSeance(21,90),
+                     _plSeance(28,90),_plSeance(35,900),_plSeance(42,90)];
+    const _rAb=_plEtat(_plAvecAb);
+    ok('Critère 7 : la valeur aberrante est exclue du maximum',
+       _rAb.maxGlobal<200,String(_rAb.maxGlobal));
+    ok('Et elle est signalée',_rAb.aberrants===1,String(_rAb.aberrants));
+
+    // ── Exclusions ──
+    // Critère 8 : une séance de décharge sort de la série
+    const _plDeload=[_plSeance(0,90),_plSeance(7,100),_plSeance(14,97),_plSeance(21,97),
+                     _plSeance(28,97),_plSeance(35,50,{deload:true})];
+    ok('Critère 8 : la séance de décharge est exclue',_plEtat(_plDeload).n===5,
+       String(_plEtat(_plDeload).n));
+    ok('Et elle ne déclenche pas de recul',_plEtat(_plDeload).etat!=='regression',
+       _plEtat(_plDeload).etat);
+    // Séance à plus de 50 % de RIR vides : écartée du maximum
+    const _plSansRir=(jour,score)=>({id:'r'+jour,date:_plJ(jour),slot:0,name:'P',
+      data:{'EX':{sets:[{done:true,weight:String(score/20),reps:'20',rir:''},
+                        {done:true,weight:String(score/20),reps:'20',rir:''},
+                        {done:true,weight:String(score/20),reps:'20',rir:'2'}]}}});
+    const _plRir=[_plSeance(0,90),_plSansRir(7,300),_plSeance(14,90),_plSeance(21,90),
+                  _plSeance(28,90),_plSeance(35,90)];
+    ok('Séance à plus de 50 % de RIR vides : écartée du maximum',
+       _plEtat(_plRir).maxGlobal===90,String(_plEtat(_plRir).maxGlobal));
+
+    // ── Coupure au changement de métrique ──
+    const _plMetr=[_plSeance(0,100),_plSeance(7,100),_plSeance(14,100),
+      {id:'m1',date:_plJ(21),slot:0,name:'P',
+       data:{'EX':{sets:[{done:true,weight:'60',reps:'10',rir:'2'}]}}},
+      {id:'m2',date:_plJ(28),slot:0,name:'P',
+       data:{'EX':{sets:[{done:true,weight:'62',reps:'10',rir:'2'}]}}}];
+    const _rMetr=_plEtat(_plMetr);
+    ok('Un changement de métrique coupe la série',_rMetr.n===2,String(_rMetr.n));
+    ok('La coupure est signalée',_rMetr.metriqueChangee===true);
+    ok('La métrique retenue est celle de la fin',_rMetr.metrique==='e1RM',_rMetr.metrique);
+    ok('Série trop courte après coupure → insuffisant',_rMetr.etat==='insuffisant');
+
+    // ── etatMuscle ──
+    const _plMU=(etats)=>{
+      // etats : { 'NOM EXERCICE': [suite de scores] }
+      const sessions=[]; const exM={};
+      let i=0;
+      for(const nom in etats){
+        exM[nom]=etats[nom].primaire
+          ? {p:['PECTORAUX'],s:[],src:'m'} : {p:['TRICEPS'],s:['PECTORAUX'],src:'m'};
+        etats[nom].scores.forEach((sc,k)=>{
+          sessions.push({id:'mu'+(i++),date:_plJ(k*7),slot:0,name:'P',
+            data:{[nom]:{sets:[{done:true,weight:String(sc/20),reps:'20',rir:'2'}]}}});
+        });
+      }
+      _viderCachePlateau();
+      return {email:'mu@t.fr',exAlias:{},exMuscles:exM,sessions};
+    };
+    const _sPlateau=[90,100,90,97,97,97,97];       // → plateau
+    const _sProgres=[90,90,90,95,100];             // → progression
+    ok('Aucun exercice primaire exploitable → insuffisant',
+       etatMuscle(_plMU({'A':{primaire:false,scores:_sPlateau}}),'PECTORAUX',0,'P').etat==='insuffisant');
+    ok('Un exercice SECONDAIRE en plateau n\'influence pas le muscle',
+       etatMuscle(_plMU({'A':{primaire:false,scores:_sPlateau}}),'PECTORAUX',0,'P').exercices.length===0);
+    ok('Un seul primaire en plateau → mitigé, pas plateau musculaire',
+       etatMuscle(_plMU({'A':{primaire:true,scores:_sPlateau}}),'PECTORAUX',0,'P').etat==='mitigé');
+    ok('Critère 6 : deux primaires en plateau → plateau musculaire',
+       etatMuscle(_plMU({'A':{primaire:true,scores:_sPlateau},
+                         'B':{primaire:true,scores:_sPlateau}}),'PECTORAUX',0,'P').etat==='plateau musculaire');
+    ok('Un primaire en progression, aucun en recul → progression',
+       etatMuscle(_plMU({'A':{primaire:true,scores:_sProgres}}),'PECTORAUX',0,'P').etat==='progression');
+
+    // ── Fenêtre historique vide (n = FENETRE_RECENTE) ──
+    // La formule littérale « maxRecent > maxHist » est vraie quoi qu'il arrive
+    // quand maxHist porte sur un ensemble vide. Sans ces contrôles, une chute
+    // de 100 à 60 en quatre séances passait pour une progression.
+    const _n4Chute=[_plSeance(0,100),_plSeance(7,80),_plSeance(14,70),_plSeance(21,60)];
+    ok('4 séances en chute libre : recul, PAS progression',
+       _plEtat(_n4Chute).etat==='regression',_plEtat(_n4Chute).etat);
+    ok('La fenêtre historique est bien vide dans ce cas',
+       _plEtat(_n4Chute).fenetreHistorique===0);
+    const _n4Monte=[_plSeance(0,60),_plSeance(7,70),_plSeance(14,80),_plSeance(21,100)];
+    ok('4 séances en hausse : progression',
+       _plEtat(_n4Monte).etat==='progression',_plEtat(_n4Monte).etat);
+    const _n4Plat=[_plSeance(0,100),_plSeance(7,100),_plSeance(14,100),_plSeance(21,100)];
+    ok('4 séances identiques : ni progression ni recul',
+       _plEtat(_n4Plat).etat==='ralentissement',_plEtat(_n4Plat).etat);
+    // Dès qu'un point d'historique existe, la règle d'origine reprend la main
+    const _n5=[_plSeance(0,100),_plSeance(7,100),_plSeance(14,80),_plSeance(21,70),_plSeance(28,60)];
+    ok('Avec un point d\'historique, la règle d\'origine s\'applique',
+       _plEtat(_n5).etat==='regression'&&_plEtat(_n5).fenetreHistorique===1);
+
+    currentUser=_plSauve; _viderCachePlateau();
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
