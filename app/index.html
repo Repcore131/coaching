@@ -9279,13 +9279,22 @@ function getNextBilanSaturday(){
   if(!bilans.length) return null;
   const freq=currentUser._bilanFreq||2;
   const sorted=bilans.slice().sort((a,b)=>a.date-b.date);
-  // Prochain bilan = dernier bilan + freq*7 jours (jamais plus de freq*7 jours)
-  const next=new Date(sorted[sorted.length-1].date);
-  next.setDate(next.getDate()+freq*7);
+  // MEME point de depart que isBilanNotifDay : _bilanAnchorSat, qui remonte au
+  // samedi de la semaine du bilan avant d'ajouter freq*7 jours.
+  // L'ancienne version faisait « date du bilan + freq*7 » et conservait donc le
+  // JOUR DE LA SEMAINE du bilan : un bilan rempli un mardi donnait un mardi,
+  // alors que la notification, elle, ne part que le samedi. Le compte a rebours
+  // et le rappel designaient deux dates differentes.
+  const next=_bilanAnchorSat(sorted[sorted.length-1].date,freq);
   next.setHours(0,0,0,0);
   const today=new Date();today.setHours(0,0,0,0);
-  const cycleMs=freq*7*24*3600*1000;
-  while(next.getTime()<today.getTime()) next.setTime(next.getTime()+cycleMs);
+  // Avance par pas de semaines entieres via setDate, et non en ajoutant des
+  // millisecondes : un passage a l'heure d'ete decalerait l'heure et pourrait
+  // faire basculer la date d'un jour.
+  while(next.getTime()<today.getTime()){
+    next.setDate(next.getDate()+freq*7);
+    next.setHours(0,0,0,0);
+  }
   return next;
 }
 function isBilanNotifDay(){
