@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v332';
+const CACHE = 'repcore-v333';
 const SW_DATA = 'repcore-sw-data'; // persistent across updates — not wiped by activate
 
 // Strict nécessaire à l'installabilité PWA (~46 Ko).
@@ -96,7 +96,7 @@ async function swCheckAndNotify() {
   // Advance schedule by 14 days for the next cycle
   await swSet('/bilan-schedule', { ...sched, nextDate: sched.nextDate + 14 * 24 * 3600 * 1000 });
   const pref = sched.fname ? sched.fname + ', c' : 'C';
-  await self.registration.showNotification('RepCore — Bilan bimensuel 📊', {
+  await self.registration.showNotification('Bilan bimensuel 📊', {
     body: pref + '\'est le moment de remplir ton bilan coaching ! Suis ton évolution 📈',
     icon: './icons/icon-192x192.png',
     badge: './icons/icon-192x192.png',
@@ -138,7 +138,7 @@ async function swCheckWoReminder() {
   await swSet('/wo-reminder', { ...sched, lastNotifDate: todayStr });
 
   const pref = sched.fname ? sched.fname + ', c' : 'C';
-  await self.registration.showNotification('RepCore — Séance du jour 💪', {
+  await self.registration.showNotification('Séance du jour 💪', {
     body: pref + "'est l'heure de t'entraîner ! Lance ta séance maintenant.",
     icon: './icons/icon-192x192.png',
     badge: './icons/icon-192x192.png',
@@ -174,9 +174,9 @@ async function swCheckSuppReminders() {
     if (!due.length) continue;
     updatedLastNotif[timingId] = todayStr;
     changed = true;
-    const names = due.map(s => s.name + (s.dosage_quantity ? ' — ' + s.dosage_quantity + (s.dosage_unit ? ' ' + s.dosage_unit : '') : '')).join(' • ');
+    const names = due.map(s => s.name + (s.dosage_quantity ? ' ' + s.dosage_quantity + (s.dosage_unit ? ' ' + s.dosage_unit : '') : '')).join(' • ');
     const pref = sched.fname ? sched.fname + ', c' : 'C';
-    await self.registration.showNotification('RepCore — Compléments 💊', {
+    await self.registration.showNotification('Compléments 💊', {
       body: pref + "'est l'heure de prendre : " + names,
       icon: './icons/icon-192x192.png',
       badge: './icons/icon-192x192.png',
