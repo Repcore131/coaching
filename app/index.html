@@ -1615,10 +1615,13 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
         <div>
           <label for="prog-warmup" style="margin-top:0">🔥 Échauffement</label>
+          <div id="proto-type-seance" style="font-size:var(--fs-xs);color:var(--text-dim);margin-bottom:6px"></div>
+          <div id="proto-sug-warmup" style="margin-bottom:8px"></div>
           <textarea id="prog-warmup" rows="2" placeholder="Ex: 10 min vélo léger, 2×10 squats vide, rotations épaules..."></textarea>
         </div>
         <div style="margin-top:8px">
           <label for="prog-cooldown">🧘 Étirements / Retour au calme</label>
+          <div id="proto-sug-cooldown" style="margin-bottom:8px"></div>
           <textarea id="prog-cooldown" rows="2" placeholder="Ex: 3×30s quadriceps, 2×30s ischio, 5 min marche..."></textarea>
         </div>
       </div>
@@ -2079,6 +2082,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="metric-box"><div class="metric-val" id="wd-sets">—</div><div class="metric-label">Séries</div></div>
         <div class="metric-box"><div class="metric-val" id="wd-vol">—</div><div class="metric-label">Volume</div></div>
       </div>
+      <div id="wd-cooldown"></div>
       <div id="wd-comparison"></div>
       <!-- RESSENTI POST-SÉANCE -->
       <div style="margin-bottom:16px">
@@ -6647,6 +6651,263 @@ function videosPour(nom){
   });
 }
 
+// ══════════════ PROTOCOLES D'ÉCHAUFFEMENT ET DE FIN DE SÉANCE ══════════════
+// Vingt protocoles écrits par le coach. Constante en dur, comme FONDATION_H/F
+// et EX_GUIDE : il n'y a ni base de données ni mécanisme de seed dans ce
+// projet, et un protocole système ne doit de toute façon pas être modifiable.
+//
+// Le champ `warmup` / `cooldown` de la séance existait déjà, en texte libre.
+// Choisir un protocole y écrit son déroulé : le texte reste donc la source
+// affichée, et un coach qui le retouche crée de fait sa propre version sans
+// altérer le protocole d'origine. `warmupProto` ne garde que la provenance.
+const PROTO_OBJECTIFS={
+  PERFORMANCE :{lib:'Performance',  c:'#e05050'},
+  RECUPERATION:{lib:'Récupération', c:'#3b82f6'},
+  DEPENSE     :{lib:'Dépense',      c:'#f97316'},
+  MOBILITE    :{lib:'Mobilité',     c:'#22c55e'},
+  PREVENTION  :{lib:'Prévention',   c:'#a855f7'}
+};
+const PROTO_MATERIEL={
+  AUCUN:'Sans matériel', TAPIS:'Tapis', VELO:'Vélo', RAMEUR:'Rameur',
+  ESCALIER:'Escalier', ELASTIQUE:'Élastique', FOAM_ROLLER:'Foam roller',
+  PISTOLET_MASSAGE:'Pistolet', SAUNA:'Sauna', HYDROMASSAGE:'Hydromassage',
+  AIRBIKE:'Airbike', CORDE:'Corde', BARRE:'Barre'
+};
+// Types de séance reconnus. TOUS signifie « compatible avec n'importe laquelle ».
+const PROTO_TYPES=['PUSH','PULL','JAMBES_QUADRI','JAMBES_HANCHE','FULL_BODY',
+  'FORCE_MAX','METABOLIQUE','CARDIO','REPOS_ACTIF'];
+
+const PROTOCOLES=[
+// ── ÉCHAUFFEMENTS ──────────────────────────────────────────────────────────
+{slug:'echauffement_push',nom:'Push haut du corps',phase:'WARMUP',objectif:'PERFORMANCE',
+ dureeMin:10,dureeMax:12,intensite:'MODEREE',priorite:10,compatible:['PUSH'],
+ materiel:['RAMEUR','ELASTIQUE'],contreInd:[],
+ desc:'Épaules chauffées et coiffe des rotateurs activée avant de pousser.',
+ etapes:['Rameur ou élastique, 3 min','Rotations externes d\'épaule, 2×15',
+   'Dislocations au bâton, 2×10','Pompes inclinées, 2×10','Montées en charge 40 / 60 / 80 %']},
+
+{slug:'echauffement_pull',nom:'Pull haut du corps',phase:'WARMUP',objectif:'PERFORMANCE',
+ dureeMin:10,dureeMax:12,intensite:'MODEREE',priorite:10,compatible:['PULL'],
+ materiel:['RAMEUR','FOAM_ROLLER','ELASTIQUE'],contreInd:[],
+ desc:'Ouverture thoracique et réveil scapulaire avant de tirer.',
+ etapes:['Rameur, 3 min','Extension thoracique au foam roller, 2×8',
+   'Scapular pull-ups, 2×10','Face pull élastique, 2×20','Montées en charge']},
+
+{slug:'echauffement_squat',nom:'Dominante quadriceps',phase:'WARMUP',objectif:'PERFORMANCE',
+ dureeMin:12,dureeMax:15,intensite:'MODEREE',priorite:10,compatible:['JAMBES_QUADRI'],
+ materiel:['VELO','BARRE'],contreInd:[],
+ desc:'Chevilles et hanches mobilisées avant les squats et les presses.',
+ etapes:['Vélo, 4 min','Mobilité de cheville en fente, 2×10 par côté','90/90 hanches, 2×8',
+   'Goblet squat avec pause, 2×8','Barre à vide, 2×10','Montées 40 / 60 / 80 %']},
+
+{slug:'echauffement_hinge',nom:'Charnière de hanche',phase:'WARMUP',objectif:'PERFORMANCE',
+ dureeMin:12,dureeMax:15,intensite:'MODEREE',priorite:10,compatible:['JAMBES_HANCHE'],
+ materiel:['VELO','BARRE'],contreInd:[],
+ desc:'Gainage et chaîne postérieure réveillés avant soulevé et hip thrust.',
+ etapes:['Vélo, 4 min','Cat-cow, 10','Bird-dog, 2×8 par côté','Dead bug, 2×10',
+   'Hip thrust léger, 2×12','Soulevé de terre roumain barre à vide, 2×10','Montées progressives']},
+
+{slug:'echauffement_dos_sensible',nom:'Protocole dos sensible',phase:'WARMUP',objectif:'PREVENTION',
+ // Priorité basse volontairement : c'est un protocole CONDITIONNEL. À 8 il
+ // sortait en tête de toute séance sans échauffement dédié (full body
+ // notamment), et le bonus « antécédent lombaire » ne déplaçait plus rien
+ // puisqu'il était déjà devant. À 3, il reste derrière les généralistes et ne
+ // remonte que quand l'antécédent est réellement présent.
+ dureeMin:15,dureeMax:15,intensite:'FAIBLE',priorite:3,compatible:PROTO_TYPES,
+ materiel:['TAPIS'],contreInd:[],
+ desc:'Montée en charge allongée et gainage anti-extension pour un dos fragile.',
+ etapes:['Marche inclinée, 5 min','McGill Big 3 (curl-up, side plank, bird-dog), 2 tours',
+   'Mobilité de hanche en décubitus','Gainage anti-extension, 2×20 s',
+   'Montées en 5 paliers minimum']},
+
+{slug:'echauffement_express',nom:'Express',phase:'WARMUP',objectif:'PERFORMANCE',
+ dureeMin:6,dureeMax:8,intensite:'MODEREE',priorite:0,compatible:PROTO_TYPES,
+ materiel:['AUCUN'],contreInd:[],
+ desc:'Le strict nécessaire quand le temps manque.',
+ etapes:['Cardio, 3 min','Une mobilité ciblée sur l\'articulation clé',
+   '2 séries de montée en charge']},
+
+{slug:'echauffement_force_max',nom:'Jour lourd, force',phase:'WARMUP',objectif:'PERFORMANCE',
+ dureeMin:20,dureeMax:20,intensite:'ELEVEE',priorite:15,compatible:['FORCE_MAX'],
+ materiel:['BARRE'],contreInd:[],
+ desc:'Paliers rapprochés et repos longs avant une série lourde.',
+ etapes:['Cardio, 5 min','Mobilité complète du mouvement travaillé','Activation des antagonistes',
+   'Montées 30 / 50 / 65 / 80 / 90 / 95 %','Repos 2 à 3 min sur les derniers paliers']},
+
+{slug:'echauffement_corps_froid',nom:'Corps froid, séance du matin',phase:'WARMUP',objectif:'PERFORMANCE',
+ dureeMin:15,dureeMax:15,intensite:'MODEREE',priorite:5,compatible:PROTO_TYPES,
+ materiel:['VELO','TAPIS'],contreInd:[],
+ desc:'Un palier de plus quand le corps sort du lit.',
+ etapes:['Cardio progressif, 6 à 7 min','Mobilité globale colonne, hanches, épaules',
+   'Activation','Montées avec un palier supplémentaire']},
+
+{slug:'echauffement_post_assis',nom:'Après une journée assise',phase:'WARMUP',objectif:'MOBILITE',
+ dureeMin:12,dureeMax:12,intensite:'FAIBLE',priorite:5,compatible:PROTO_TYPES,
+ materiel:['ELASTIQUE'],contreInd:[],
+ desc:'Ouvre les fléchisseurs de hanche et le haut du dos après le bureau.',
+ etapes:['Marche, 3 min','Ouverture des fléchisseurs de hanche, 2×30 s par côté',
+   'Extension thoracique','Monster walk élastique, 2×15','Échauffement spécifique']},
+
+{slug:'echauffement_metabolique',nom:'Métabolique, circuit',phase:'WARMUP',objectif:'PERFORMANCE',
+ dureeMin:8,dureeMax:10,intensite:'ELEVEE',priorite:10,compatible:['METABOLIQUE'],
+ materiel:['AUCUN'],contreInd:[],
+ desc:'Un tour à blanc pour installer le rythme avant le circuit.',
+ etapes:['Montée cardio, 4 min','Mobilité dynamique globale',
+   'Un tour du circuit à 40 % d\'intensité']},
+
+// ── FINS DE SÉANCE ─────────────────────────────────────────────────────────
+{slug:'escaliers_20',nom:'Escaliers',phase:'COOLDOWN',objectif:'DEPENSE',
+ dureeMin:20,dureeMax:20,intensite:'MODEREE',priorite:5,compatible:PROTO_TYPES,
+ materiel:['ESCALIER'],contreInd:['GENOU','CARDIO'],
+ desc:'Vingt minutes d\'escalier à allure régulière.',
+ etapes:['Escalier, 20 min à allure régulière']},
+
+{slug:'tapis_incline_40',nom:'Tapis incliné',phase:'COOLDOWN',objectif:'DEPENSE',
+ dureeMin:40,dureeMax:40,intensite:'MODEREE',priorite:10,compatible:PROTO_TYPES,
+ materiel:['TAPIS'],contreInd:['CARDIO'],
+ desc:'Marche inclinée longue, cardiaque entre 120 et 135.',
+ etapes:['Tapis, pente 12 %','Vitesse 5 à 5,5 km/h','40 min','Fréquence cardiaque 120 à 135']},
+
+{slug:'velo_recup_active',nom:'Vélo, récupération active',phase:'COOLDOWN',objectif:'RECUPERATION',
+ dureeMin:12,dureeMax:15,intensite:'TRES_FAIBLE',priorite:10,compatible:PROTO_TYPES,
+ materiel:['VELO'],contreInd:[],
+ desc:'Pédalage souple pour évacuer sans ajouter de fatigue.',
+ etapes:['Vélo, résistance très faible','80 à 90 tours par minute','12 à 15 min']},
+
+{slug:'marche_neat',nom:'Marche extérieure',phase:'COOLDOWN',objectif:'DEPENSE',
+ dureeMin:20,dureeMax:30,intensite:'FAIBLE',priorite:5,compatible:PROTO_TYPES,
+ materiel:['AUCUN'],contreInd:[],
+ desc:'De la dépense sans matériel et sans fatigue nerveuse.',
+ etapes:['Marche extérieure, 20 à 30 min']},
+
+{slug:'retour_calme_respiratoire',nom:'Retour au calme respiratoire',phase:'COOLDOWN',objectif:'RECUPERATION',
+ dureeMin:5,dureeMax:8,intensite:'TRES_FAIBLE',priorite:0,compatible:PROTO_TYPES,
+ materiel:['AUCUN'],contreInd:[],
+ desc:'Fait redescendre le rythme cardiaque en quelques minutes.',
+ etapes:['Allongé, jambes surélevées','Inspiration 4 s, expiration 6 s','5 à 8 min']},
+
+{slug:'mobilite_longue',nom:'Mobilité, étirements longs',phase:'COOLDOWN',objectif:'MOBILITE',
+ dureeMin:15,dureeMax:15,intensite:'TRES_FAIBLE',priorite:5,compatible:PROTO_TYPES,
+ materiel:['TAPIS'],contreInd:[],
+ desc:'Trois à quatre positions tenues longtemps.',
+ etapes:['3 à 4 positions','Maintien 60 à 90 s par position','15 min au total']},
+
+{slug:'hydromassage',nom:'Hydromassage',phase:'COOLDOWN',objectif:'RECUPERATION',
+ dureeMin:15,dureeMax:20,intensite:'TRES_FAIBLE',priorite:0,compatible:PROTO_TYPES,
+ materiel:['HYDROMASSAGE'],contreInd:[],
+ desc:'Récupération passive quand la salle en dispose.',
+ etapes:['Hydromassage, 15 à 20 min']},
+
+{slug:'sauna',nom:'Sauna',phase:'COOLDOWN',objectif:'RECUPERATION',
+ dureeMin:15,dureeMax:20,intensite:'TRES_FAIBLE',priorite:0,compatible:PROTO_TYPES,
+ materiel:['SAUNA'],contreInd:['CARDIO'],
+ desc:'Deux passages courts plutôt qu\'un long.',
+ etapes:['Sauna, 2 × 10 min','Pause entre les deux passages']},
+
+{slug:'auto_massage',nom:'Foam roller et pistolet',phase:'COOLDOWN',objectif:'RECUPERATION',
+ dureeMin:8,dureeMax:10,intensite:'TRES_FAIBLE',priorite:5,compatible:PROTO_TYPES,
+ materiel:['FOAM_ROLLER'],contreInd:[],
+ desc:'Zone par zone, en évitant les lombaires.',
+ etapes:['60 à 90 s par zone','Éviter les lombaires','8 à 10 min au total']},
+
+{slug:'finisher_metabolique',nom:'Finisher métabolique',phase:'COOLDOWN',objectif:'DEPENSE',
+ dureeMin:8,dureeMax:12,intensite:'ELEVEE',priorite:5,compatible:['METABOLIQUE','FULL_BODY'],
+ materiel:['AIRBIKE'],contreInd:['CARDIO','GENOU'],
+ desc:'Court et intense, pour finir dans le rouge.',
+ etapes:['Airbike ou corde à sauter','8 à 12 min en intensité élevée']}
+];
+
+const _protoParSlug=(()=>{const m={};for(const p of PROTOCOLES) m[p.slug]=p;return m;})();
+function protocole(slug){ return _protoParSlug[slug]||null; }
+
+// Déroulé d'un protocole en texte, tel qu'il sera écrit dans le champ de la
+// séance : c'est ce texte que l'athlète verra, pas une référence au protocole.
+function protoTexte(p){
+  if(!p) return '';
+  return p.nom+' ('+(p.dureeMin===p.dureeMax?p.dureeMin:p.dureeMin+' à '+p.dureeMax)+' min)\n'
+    +p.etapes.map((e,i)=>(i+1)+'. '+e).join('\n');
+}
+
+// ── Type d'une séance, déduit de ses exercices ──────────────────────────────
+// La séance ne porte AUCUN champ « type » : il n'y en a jamais eu dans
+// l'application. Sans lui, toutes les suggestions tombaient dans le cas
+// « type inconnu » et se classaient à l'aveugle. On le déduit donc de la
+// classification musculaire : on compte les muscles primaires des exercices,
+// et la famille qui domine donne le type.
+// Rend null si rien ne domine, ce qui vaut mieux qu'un type inventé.
+const _PROTO_FAMILLES={
+  PUSH          :['PECTORAUX','DELT_ANT','DELT_LAT','TRICEPS'],
+  PULL          :['DORSAUX','TRAPEZES','BICEPS','DELT_POST','AVANT_BRAS'],
+  JAMBES_QUADRI :['QUADRICEPS'],
+  JAMBES_HANCHE :['FESSIERS','ISCHIOS','ABDUCTEURS','ADDUCTEURS','LOMBAIRES']
+};
+function typeDeSeance(exercises){
+  const ex=(exercises||[]).filter(e=>e&&e.name&&!isCardio(e));
+  if(!ex.length) return null;
+  const score={PUSH:0,PULL:0,JAMBES_QUADRI:0,JAMBES_HANCHE:0};
+  let classes=0;
+  for(const e of ex){
+    const r=resoudreMuscles(e.name,e);
+    if(!r||!r.p||!r.p.length) continue;
+    classes++;
+    for(const fam of Object.keys(_PROTO_FAMILLES))
+      if(r.p.some(g=>_PROTO_FAMILLES[fam].includes(g))) score[fam]++;
+  }
+  if(!classes) return null;
+  const haut=score.PUSH+score.PULL, bas=score.JAMBES_QUADRI+score.JAMBES_HANCHE;
+  // Séance mêlant haut et bas de façon équilibrée : full body.
+  if(haut&&bas&&Math.min(haut,bas)/Math.max(haut,bas)>=0.6) return 'FULL_BODY';
+  const gagnant=Object.keys(score).sort((a,b)=>score[b]-score[a])[0];
+  // Il faut une vraie domination : la moitié des exercices classés au moins.
+  return score[gagnant]>=Math.max(2,classes*0.5)?gagnant:null;
+}
+
+// ── Moteur de suggestion ────────────────────────────────────────────────────
+// Rend au plus 3 protocoles par phase, du meilleur score au moins bon.
+//
+// La spécification prévoyait un filtre DUR sur les contre-indications, croisées
+// avec les blessures du profil. Ce filtre n'est PAS appliqué, et c'est
+// délibéré : les blessures ne sont saisies qu'en texte libre dans le bilan de
+// départ (« Hernie discale, entorse… »). Les lire par mots-clés reviendrait à
+// deviner, et un protocole écarté à tort est invisible — le coach ne saurait
+// jamais qu'il a existé. Les contre-indications sont donc AFFICHÉES, et c'est
+// le coach qui tranche. Le jour où le bilan portera des cases à cocher, le
+// filtre pourra devenir dur sans rien changer d'autre.
+function suggestProtocols(seance,profil){
+  const type=(seance&&seance.type)||null;
+  const objSeance=(seance&&seance.objectif)||null;
+  const dispo=(seance&&seance.dureeCible)||null;
+  const materielDispo=(profil&&profil.materielDispo)||null;   // null = on ne filtre pas
+  const res={warmup:[],cooldown:[]};
+  for(const phase of ['WARMUP','COOLDOWN']){
+    const notes=PROTOCOLES.filter(p=>p.phase===phase).map(p=>{
+      let s=p.priorite||0;
+      // Un protocole VISANT ce type de séance l'emporte sur un protocole
+      // compatible avec tout. Sans cette distinction, « Protocole dos
+      // sensible », déclaré compatible partout, passait devant « Dominante
+      // quadriceps » sur une séance de jambes : la suggestion la plus
+      // pertinente se retrouvait reléguée derrière une passe-partout.
+      const universel=p.compatible.length>=PROTO_TYPES.length;
+      if(type&&p.compatible.includes(type)) s+=universel?12:50;
+      if(dispo&&p.dureeMax<=dispo) s+=20;
+      if(objSeance&&p.objectif===objSeance) s+=15;
+      if(profil&&profil.antecedentLombaire&&p.objectif==='PREVENTION') s+=10;
+      return {p,s};
+    }).filter(({p})=>{
+      // Seul filtre dur conservé : le matériel, quand la donnée existe.
+      if(!materielDispo) return true;
+      return p.materiel.every(m=>m==='AUCUN'||materielDispo.includes(m));
+    });
+    notes.sort((a,b)=>b.s-a.s||a.p.nom.localeCompare(b.p.nom));
+    res[phase==='WARMUP'?'warmup':'cooldown']=notes.slice(0,3).map(x=>x.p);
+  }
+  // Repli : si le matériel disponible ne laisse rien passer, on rend les deux
+  // protocoles qui ne demandent rien plutôt qu'une liste vide.
+  if(!res.warmup.length) res.warmup=[protocole('echauffement_express')].filter(Boolean);
+  if(!res.cooldown.length) res.cooldown=[protocole('retour_calme_respiratoire')].filter(Boolean);
+  return res;
+}
+
 const defEx=[
   {name:'Pull Over sur Banc Incliné',series:3,reps:'20',repos:'90 sec',description:'Amplitude maximale, expiration à la montée. Bras tendus, descendre jusqu\'à l\'étirement complet des dorsaux.',note:'',image:null},
   {name:'Tirage Poitrine Largeur Épaule',series:4,reps:'5+',repos:'2 min',description:'Prise légèrement plus large que les épaules. Coudes vers le bas, omoplates en rétraction en fin de mouvement.',note:'',image:null},
@@ -7500,6 +7761,7 @@ function setExerciseCount(n){
   renderProgEx();
 }
 function renderProgEx(){
+  setTimeout(()=>{try{_rendreSuggestionsProto();}catch(e){}},0);
   // Sync chips
   for(let n=1;n<=10;n++){const c=document.getElementById('exo-chip-'+n);if(c)c.classList.toggle('active',n===progEx.length);}
   document.getElementById('prog-exercises').innerHTML=progEx.map((ex,i)=>{
@@ -8325,7 +8587,11 @@ function woPersist(){
       // la suggestion repartirait sur le repli par nom, et l'enregistrement
       // final ne porterait plus de slot.
       slot:woState.slot??null,
-      sessionPhoto:woState.sessionPhoto||null
+      sessionPhoto:woState.sessionPhoto||null,
+      // Sans eux, une séance reprise après pause perdrait sa fin de séance,
+      // qui est justement ce qui reste à faire au moment de la reprise.
+      warmup:woState.warmup||'',
+      cooldown:woState.cooldown||''
     }));
   }catch{}
 }
@@ -8440,7 +8706,16 @@ function launchWorkout(sessConfig,slotIdx){
   const _slot=(typeof slotIdx==='number'&&slotIdx>=0&&slotIdx<=6)?slotIdx:null;
   woState={exercises,currentEx:0,startTime:Date.now(),timerInterval:null,sessionData:{},
     progName:_nomSeance(sessConfig,_slot),sessionPhoto:sessConfig.photo||null,
-    slot:_slot};
+    slot:_slot,
+    // L'échauffement et la fin de séance étaient écrits par le coach depuis
+    // toujours, et n'étaient affichés NULLE PART à l'athlète : ils vivaient
+    // uniquement dans la zone de texte de l'éditeur. On les embarque pour
+    // pouvoir enfin les montrer, au début et à la fin de la séance.
+    // ?? et non || : sessConfig a déjà appliqué le protocole par défaut avec
+    // la même règle. Un champ vidé volontairement par le coach doit rester
+    // vide, pas se faire remplir par le défaut au lancement.
+    warmup:String(sessConfig.warmup??currentUser._defaultWarmup??'').trim(),
+    cooldown:String(sessConfig.cooldown??currentUser._defaultCooldown??'').trim()};
   woState.timerInterval=setInterval(()=>{
     const el=Math.floor((Date.now()-woState.startTime)/1000);
     document.getElementById('wo-timer').textContent=pad(Math.floor(el/60))+':'+pad(el%60);
@@ -8612,7 +8887,9 @@ function startWorkout(){
   if(woState?.timerInterval) clearInterval(woState.timerInterval);
   // Chemin hérité : ce programme unique ne vient pas d'un créneau de la semaine.
   // slot:null fait retomber la recherche d'historique sur le nom de la séance.
-  woState={exercises:prog.exercises,currentEx:0,startTime:Date.now(),timerInterval:null,sessionData:{},progName:prog.name,slot:null};
+  woState={exercises:prog.exercises,currentEx:0,startTime:Date.now(),timerInterval:null,sessionData:{},progName:prog.name,slot:null,
+    warmup:String(prog.warmup??currentUser._defaultWarmup??'').trim(),
+    cooldown:String(prog.cooldown??currentUser._defaultCooldown??'').trim()};
   woState.timerInterval=setInterval(()=>{
     const el=Math.floor((Date.now()-woState.startTime)/1000);
     document.getElementById('wo-timer').textContent=pad(Math.floor(el/60))+':'+pad(el%60);
@@ -8678,6 +8955,7 @@ function renderWoEx(){
 
   document.getElementById('wo-content').innerHTML=`
     <div class="anim-in">
+      ${woState.currentEx===0?_carteProtocole(woState.warmup,'Échauffement','var(--orange)','wo-warmup-body'):''}
       ${photoHtml}
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <div>
@@ -9051,6 +9329,8 @@ function finishWorkout(incomplete=false){
   document.getElementById('wd-vol').textContent=Math.round(vol)+'kg';
   document.getElementById('wd-msg').textContent=incomplete?'Séance interrompue. Continue demain !':'Excellent travail ! Chaque séance compte ';
   document.getElementById('wd-comparison').innerHTML=buildSessionComparison(vol,data);
+  // Le retour au calme n'a de sens qu'ici, une fois la dernière série faite.
+  document.getElementById('wd-cooldown').innerHTML=_carteProtocole(woState&&woState.cooldown,'Fin de séance','var(--accent-blue)','wd-cooldown-body');
   // Reset sliders post-séance
   ['fatigue','intensite','satisfaction','sensation','hydratation','motivation'].forEach(m=>{
     const el=document.getElementById('ps-'+m);const vl=document.getElementById('ps-'+m+'-val');
@@ -16332,6 +16612,145 @@ function _confirmerRenommage(x,y){
   toast('Historique de charge conservé');
 }
 
+// ══════════════ CHOIX D'UN PROTOCOLE DANS L'ÉDITEUR ══════════════
+// Trois suggestions par phase, plus l'accès à la liste complète. Choisir écrit
+// le déroulé dans le champ texte existant : c'est lui que l'athlète verra, et
+// un coach qui le retouche crée sa propre version sans toucher au protocole.
+function _rendreSuggestionsProto(){
+  const type=typeDeSeance(progEx);
+  const sug=suggestProtocols(
+    {type},
+    {antecedentLombaire:_aAntecedentLombaire()}
+  );
+  for(const [phase,zone,champ] of [['warmup','proto-sug-warmup','prog-warmup'],
+                                   ['cooldown','proto-sug-cooldown','prog-cooldown']]){
+    const el=document.getElementById(zone); if(!el) continue;
+    const actuel=(document.getElementById(champ)?.value||'').trim();
+    el.innerHTML=sug[phase].map(p=>{
+      const o=PROTO_OBJECTIFS[p.objectif]||{lib:p.objectif,c:'var(--sub)'};
+      // Comparaison sur la ligne d'en-tête entière, pas sur un préfixe : deux
+      // protocoles peuvent partager un début de nom.
+      const pose=actuel&&actuel.split('\n')[0].trim()===protoTexte(p).split('\n')[0];
+      return `<button onclick="_appliquerProto('${p.slug}','${champ}')" style="text-align:left;background:${pose?'#101a10':'var(--surface-1)'};border:1px solid ${pose?'var(--success)':'var(--border)'};border-radius:9px;padding:9px 11px;cursor:pointer;font-family:Montserrat,sans-serif;color:#fff;width:100%;margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+          <span style="font-size:12px;font-weight:800">${escapeHtml(p.nom)}</span>
+          <span style="font-size:9px;font-weight:800;letter-spacing:.5px;padding:1px 6px;border-radius:10px;background:${o.c};color:#08080a">${o.lib.toUpperCase()}</span>
+          <span style="font-size:10px;color:var(--sub)">${p.dureeMin===p.dureeMax?p.dureeMin:p.dureeMin+' à '+p.dureeMax} min</span>
+          ${pose?'<span style="font-size:10px;color:var(--success);font-weight:800">EN PLACE</span>':''}
+        </div>
+        <div style="font-size:10px;color:var(--sub);margin-top:3px;line-height:1.4">${escapeHtml(p.desc)}</div>
+        ${p.contreInd.length?`<div style="font-size:10px;color:var(--orange);margin-top:3px">À éviter si : ${p.contreInd.map(c=>_PROTO_CI_LIB[c]||c).join(', ')}</div>`:''}
+      </button>`;
+    }).join('')
+    +`<button onclick="_ouvrirListeProto('${phase==='warmup'?'WARMUP':'COOLDOWN'}','${champ}')" style="background:none;border:none;color:var(--sub);font-size:11px;font-family:Montserrat,sans-serif;cursor:pointer;text-decoration:underline;padding:4px 0">Voir tous les protocoles</button>`;
+  }
+  const t=document.getElementById('proto-type-seance');
+  if(t) t.textContent=type?('Séance reconnue : '+_PROTO_TYPE_LIB[type]):'Type de séance indéterminé, suggestions générales';
+}
+const _PROTO_TYPE_LIB={PUSH:'poussée',PULL:'tirage',JAMBES_QUADRI:'jambes, quadriceps',
+  JAMBES_HANCHE:'jambes, hanches',FULL_BODY:'full body',FORCE_MAX:'force',
+  METABOLIQUE:'métabolique',CARDIO:'cardio',REPOS_ACTIF:'repos actif'};
+const _PROTO_CI_LIB={DOS_LOMBAIRE:'dos',GENOU:'genou',EPAULE:'épaule',
+  HANCHE:'hanche',CARDIO:'problème cardiaque',GROSSESSE:'grossesse'};
+
+// Antécédent lombaire lu dans le texte libre du bilan. Sert UNIQUEMENT à
+// remonter les protocoles de prévention dans la liste, jamais à en écarter :
+// une lecture par mots-clés se trompe, et un protocole écarté à tort est
+// invisible pour le coach.
+function _aAntecedentLombaire(){
+  const b=(currentUser&&currentUser.bilans)||[];
+  const txt=b.map(x=>String(x['deb-health']||x['bil-health']||'')).join(' ').toLowerCase();
+  return /lombaire|hernie|sciatique|lumbago|dos\b/.test(txt);
+}
+
+function _appliquerProto(slug,champ){
+  const p=protocole(slug); if(!p) return;
+  const el=document.getElementById(champ); if(!el) return;
+  const actuel=(el.value||'').trim();
+  // Le texte écrit à la main n'est jamais écrasé sans confirmation : il peut
+  // porter une consigne pour cet athlète-là. En revanche un texte issu d'un
+  // protocole se remplace directement, sinon essayer les suggestions l'une
+  // après l'autre demande une confirmation à chaque clic.
+  if(actuel&&!_vientDunProtocole(actuel)&&!confirm('Remplacer le texte actuel par « '+p.nom+' » ?')) return;
+  el.value=protoTexte(p);
+  _progExDirty=true;
+  // Provenance conservée, pour savoir plus tard d'où vient ce texte.
+  if(champ==='prog-warmup') _protoChoisi.warmup=slug; else _protoChoisi.cooldown=slug;
+  _rendreSuggestionsProto();
+  toast(p.nom+' appliqué');
+}
+let _protoChoisi={warmup:null,cooldown:null};
+
+// Un texte vient d'un protocole si sa première ligne est « Nom (durée) » d'un
+// protocole existant. On ne se fie pas à _protoChoisi : il est vide au
+// rechargement de l'éditeur, alors que le texte, lui, est enregistré.
+function _vientDunProtocole(txt){
+  const l1=String(txt||'').trim().split('\n')[0].trim();
+  // En-tête reconstruite via protoTexte, pour qu'un changement de format là-bas
+  // n'ait pas à être répercuté ici.
+  return PROTOCOLES.some(p=>l1===protoTexte(p).split('\n')[0]);
+}
+
+// ── Affichage à l'athlète ───────────────────────────────────────────────────
+// Carte dépliable, rendue à partir du texte de la séance. Les lignes numérotées
+// « 1. … » écrites par un protocole deviennent une liste à cocher ; un texte
+// libre saisi à la main reste affiché tel quel. Aucune donnée n'est écrite :
+// les coches ne vivent que le temps de la séance.
+function _carteProtocole(txt,titre,couleur,id){
+  const t=String(txt||'').trim();
+  if(!t) return '';
+  const lignes=t.split('\n').map(x=>x.trim()).filter(Boolean);
+  // Première ligne « Nom (12 à 15 min) » : c'est un protocole, pas du texte libre.
+  const entete=/^.+\(\d+( à \d+)? min\)$/.test(lignes[0])?lignes.shift():null;
+  const etapes=lignes.filter(l=>/^\d+\.\s/.test(l)).map(l=>l.replace(/^\d+\.\s*/,''));
+  const corps=etapes.length
+    // La règle globale « label » met en majuscules, espace les lettres et
+    // ajoute 16px de marge haute : lisible pour un intitulé de champ, illisible
+    // pour une consigne d'exercice. On la neutralise ici.
+    ? etapes.map(e=>`<label style="display:flex;align-items:flex-start;gap:9px;padding:7px 0;margin:0;cursor:pointer;border-bottom:1px solid #141414;text-transform:none;letter-spacing:normal;font-weight:400">
+        <input type="checkbox" style="width:17px;height:17px;margin:1px 0 0;accent-color:${couleur};flex-shrink:0;cursor:pointer">
+        <span style="font-size:12px;line-height:1.5;color:#ccc">${escapeHtml(e)}</span></label>`).join('')
+    : `<div style="font-size:12px;line-height:1.6;color:#ccc;white-space:pre-wrap">${escapeHtml(lignes.join('\n'))}</div>`;
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-left:3px solid ${couleur};border-radius:10px;margin-bottom:14px;overflow:hidden">
+    <div onclick="const c=document.getElementById('${id}');c.style.display=c.style.display==='none'?'block':'none';this.querySelector('.chev').textContent=c.style.display==='none'?'▸':'▾'"
+         role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
+         style="display:flex;align-items:center;gap:9px;padding:11px 13px;cursor:pointer">
+      <span style="flex:1;min-width:0">
+        <span style="font-size:var(--fs-xs);letter-spacing:2px;font-weight:800;color:${couleur};text-transform:uppercase">${titre}</span>
+        ${entete?`<span style="display:block;font-size:11px;color:var(--sub);margin-top:2px">${escapeHtml(entete)}</span>`:''}
+      </span>
+      <span class="chev" style="color:var(--sub);font-size:13px">▾</span>
+    </div>
+    <div id="${id}" style="padding:0 13px 11px">${corps}</div>
+  </div>`;
+}
+
+function _ouvrirListeProto(phase,champ){
+  const liste=PROTOCOLES.filter(p=>p.phase===phase);
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+    <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 18px 20px;width:100%;max-width:480px;max-height:86vh;display:flex;flex-direction:column">
+      <h2 style="margin-bottom:10px;font-size:17px">${phase==='WARMUP'?'Échauffements':'Fins de séance'}</h2>
+      <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch">
+        ${liste.map(p=>{
+          const o=PROTO_OBJECTIFS[p.objectif]||{lib:p.objectif,c:'var(--sub)'};
+          return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px">
+            <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:4px">
+              <span style="font-size:13px;font-weight:800">${escapeHtml(p.nom)}</span>
+              <span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:10px;background:${o.c};color:#08080a">${o.lib.toUpperCase()}</span>
+              <span style="font-size:10px;color:var(--sub)">${p.dureeMin===p.dureeMax?p.dureeMin:p.dureeMin+' à '+p.dureeMax} min</span>
+            </div>
+            <div style="font-size:11px;color:var(--sub);line-height:1.5;margin-bottom:6px">${escapeHtml(p.desc)}</div>
+            <ol style="margin:0 0 8px 16px;padding:0;font-size:11px;color:#bbb;line-height:1.7">${p.etapes.map(e=>'<li>'+escapeHtml(e)+'</li>').join('')}</ol>
+            <div style="font-size:10px;color:var(--text-dim);margin-bottom:8px">Matériel : ${p.materiel.map(m=>PROTO_MATERIEL[m]||m).join(', ')}${p.contreInd.length?' · À éviter si : '+p.contreInd.map(c=>_PROTO_CI_LIB[c]||c).join(', '):''}</div>
+            <button class="btn btn-outline btn-sm" style="margin:0;width:100%" onclick="_appliquerProto('${p.slug}','${champ}');closeModal()">Utiliser</button>
+          </div>`;}).join('')}
+      </div>
+      <button class="btn btn-outline" style="margin-top:10px" onclick="closeModal()">Fermer</button>
+    </div></div>`;
+  const old=document.getElementById('modal-overlay'); if(old) old.remove();
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+
 // ══════════════ TESTS DE LA COUCHE D'IDENTITÉ D'EXERCICE ══════════════
 // Exécutable depuis la console : testExercices().
 // Ne touche à AUCUNE donnée réelle : currentUser est sauvegardé puis restauré.
@@ -16456,6 +16875,70 @@ function testExercices(){
     ok('Fusion effective sans rechargement',getPrevPerf('NOUVEAU NOM',0,'P')?.weight==='77');
     ok('L\'ancien nom continue de fonctionner',getLastZeroRIRWeight('ANCIEN NOM',0,'P')===77,
        String(getLastZeroRIRWeight('ANCIEN NOM',0,'P')));
+    // ══════════════ PROTOCOLES ══════════════
+    ok('20 protocoles',PROTOCOLES.length===20,String(PROTOCOLES.length));
+    ok('Slugs uniques',new Set(PROTOCOLES.map(p=>p.slug)).size===20);
+    ok('10 échauffements',PROTOCOLES.filter(p=>p.phase==='WARMUP').length===10);
+    ok('10 fins de séance',PROTOCOLES.filter(p=>p.phase==='COOLDOWN').length===10);
+    ok('Aucune durée incohérente',PROTOCOLES.every(p=>p.dureeMin<=p.dureeMax));
+    ok('Tous les protocoles ont des étapes',PROTOCOLES.every(p=>p.etapes.length>0));
+    ok('Objectifs tous connus',PROTOCOLES.every(p=>PROTO_OBJECTIFS[p.objectif]));
+    ok('Matériels tous connus',PROTOCOLES.every(p=>p.materiel.every(m=>PROTO_MATERIEL[m])));
+    ok('Types compatibles tous connus',PROTOCOLES.every(p=>p.compatible.every(t=>PROTO_TYPES.includes(t))));
+    ok('protocole() retrouve par slug',protocole('echauffement_squat')?.nom==='Dominante quadriceps');
+    ok('protocole() sur slug inconnu rend null',protocole('nexiste_pas')==null);
+
+    // typeDeSeance : déduit des muscles, session.type n'existe pas dans RepCore
+    const _T=(noms)=>typeDeSeance(noms.map(n=>({name:n})));
+    ok('Séance push reconnue',_T(['DEVELOPPE COUCHE','DEVELOPPE MILITAIRE','DIPS'])==='PUSH');
+    ok('Séance pull reconnue',_T(['TRACTIONS','ROWING BARRE','TIRAGE VERTICAL'])==='PULL');
+    ok('Séance quadriceps reconnue',_T(['SQUAT','PRESSE A CUISSES','LEG EXTENSION'])==='JAMBES_QUADRI');
+    ok('Séance hanches reconnue',_T(['SOULEVE DE TERRE ROUMAIN','HIP THRUST','LEG CURL'])==='JAMBES_HANCHE');
+    ok('Full body reconnue',_T(['SQUAT','DEVELOPPE COUCHE','TRACTIONS','SOULEVE DE TERRE'])==='FULL_BODY');
+    ok('Séance vide : aucun type',_T([])===null);
+    ok('Exercice inconnu seul : aucun type',typeDeSeance([{name:'ZZZ QQQ INCONNU'}])===null);
+
+    // Le protocole VISANT le type doit sortir en tête
+    for(const [type,slug] of [['PUSH','echauffement_push'],['PULL','echauffement_pull'],
+                              ['JAMBES_QUADRI','echauffement_squat'],['JAMBES_HANCHE','echauffement_hinge']]){
+      const s=suggestProtocols({type},{}).warmup;
+      ok('Suggestion 1 pour '+type+' = '+slug,s[0]&&s[0].slug===slug,s[0]&&s[0].slug);
+    }
+    ok('Toujours 3 suggestions par phase',
+       ['PUSH','FULL_BODY',null].every(t=>{const s=suggestProtocols({type:t},{});
+         return s.warmup.length===3&&s.cooldown.length===3;}));
+
+    // Antécédent lombaire : remonte la prévention, ne l'impose jamais
+    const _sw=(dos)=>suggestProtocols({type:'PUSH'},{antecedentLombaire:dos}).warmup.map(p=>p.slug);
+    ok('Sans antécédent, le protocole dos ne sort pas',!_sw(false).includes('echauffement_dos_sensible'));
+    ok('Avec antécédent, le protocole dos remonte',_sw(true).includes('echauffement_dos_sensible'));
+    ok('Le spécifique reste devant malgré l\'antécédent',_sw(true)[0]==='echauffement_push');
+
+    // Filtre matériel : jamais de liste vide
+    const _sansRien=suggestProtocols({type:'PUSH'},{materielDispo:[]});
+    ok('Matériel nul : repli non vide',_sansRien.warmup.length>0&&_sansRien.cooldown.length>0);
+
+    // protoTexte et détection de provenance
+    const _pt=protoTexte(protocole('echauffement_push'));
+    ok('protoTexte : en-tête puis étapes numérotées',/^Push haut du corps \(10 à 12 min\)\n1\. /.test(_pt));
+    ok('Texte de protocole reconnu comme tel',_vientDunProtocole(_pt));
+    ok('Texte manuel non pris pour un protocole',!_vientDunProtocole('Vélo 10 min et étirements'));
+    ok('Texte vide non pris pour un protocole',!_vientDunProtocole('')&&!_vientDunProtocole(null));
+
+    // Carte athlète
+    const _d=document.createElement('div');
+    _d.innerHTML=_carteProtocole(_pt,'Échauffement','var(--orange)','_t1');
+    ok('Carte athlète : une case par étape',
+       _d.querySelectorAll('input[type=checkbox]').length===protocole('echauffement_push').etapes.length);
+    ok('Carte athlète : en-tête hors des cases',!/\(10 à 12 min\)/.test(_d.querySelector('#_t1').textContent));
+    _d.innerHTML=_carteProtocole('Consigne libre du coach','Échauffement','var(--orange)','_t2');
+    ok('Texte libre : affiché sans cases',_d.querySelectorAll('input').length===0
+       &&_d.textContent.includes('Consigne libre du coach'));
+    ok('Protocole absent : aucune carte',_carteProtocole('','X','y','z')===''
+       &&_carteProtocole(null,'X','y','z')===''&&_carteProtocole(undefined,'X','y','z')==='');
+    _d.innerHTML=_carteProtocole('1. <img src=x onerror=alert(1)>','X','var(--orange)','_t3');
+    ok('Carte athlète : HTML échappé',_d.querySelectorAll('img').length===0);
+
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
 
