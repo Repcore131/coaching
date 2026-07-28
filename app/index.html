@@ -6370,6 +6370,144 @@ const FONDATION_H=[
 ];
 // ===== fin PROGRAMME FONDATION =====
 
+
+// ══════════════ CLASSIFICATION MUSCULAIRE DES EXERCICES ══════════════
+// Couche d'identité posée PAR-DESSUS les noms d'exercices, sans rien migrer :
+// aucune donnée existante n'est réécrite, aucun exercice n'est renommé.
+// La clé de jointure physique de l'historique reste le nom en clair dans
+// sessions[n].data ; on ajoute seulement une résolution par-dessus.
+//
+// 17 groupes. Le brief en prévoyait 14 ; LOMBAIRES, ABDUCTEURS et ADDUCTEURS
+// ont été ajoutés parce que le guide d'exercices les distingue réellement
+// (11 exercices lombaires, 6 abducteurs/adducteurs) et qu'aucun des 14 ne
+// pouvait les recevoir sans mentir sur le muscle travaillé.
+const MUSCLES={
+  PECTORAUX :{lib:'Pectoraux',    c:'#e05050'},
+  DORSAUX   :{lib:'Dorsaux',      c:'#3b82f6'},
+  TRAPEZES  :{lib:'Trapèzes',     c:'#60a5fa'},
+  LOMBAIRES :{lib:'Lombaires',    c:'#1d4ed8'},
+  DELT_ANT  :{lib:'Deltoïde ant.',c:'#f59e0b'},
+  DELT_LAT  :{lib:'Deltoïde lat.',c:'#fbbf24'},
+  DELT_POST :{lib:'Deltoïde post.',c:'#d97706'},
+  BICEPS    :{lib:'Biceps',       c:'#a855f7'},
+  TRICEPS   :{lib:'Triceps',      c:'#8b5cf6'},
+  AVANT_BRAS:{lib:'Avant-bras',   c:'#c084fc'},
+  QUADRICEPS:{lib:'Quadriceps',   c:'#22c55e'},
+  ISCHIOS   :{lib:'Ischios',      c:'#16a34a'},
+  FESSIERS  :{lib:'Fessiers',     c:'#4ade80'},
+  ABDUCTEURS:{lib:'Abducteurs',   c:'#65a30d'},
+  ADDUCTEURS:{lib:'Adducteurs',   c:'#84cc16'},
+  MOLLETS   :{lib:'Mollets',      c:'#14b8a6'},
+  ABDOS     :{lib:'Abdominaux',   c:'#f97316'}
+};
+
+// Table issue du « Guide des méthodes et des exercices de musculation » du
+// coach : 408 exercices, classés par sa propre nomenclature (section du guide
+// + partie spécifique qu'il a écrite pour chacun, « Longue portion »,
+// « Ischio, fessiers »…). C'est la source PRINCIPALE de classification ; les
+// expressions régulières plus bas ne servent que de repli.
+// Stockée par signature — une signature, tous les exercices qui la partagent,
+// séparés par ~ — pour ne pas répéter 408 fois les mêmes tableaux.
+const EX_GUIDE_BRUT={
+  'PECTORAUX,DELT_ANT,TRICEPS':'BUTTERFLY~CHEST CROSSOVER DUAL~CHEST PRESS DEBOUT~DEVELOPPE A LA MACHINE ASSIS~DEVELOPPE A LA MACHINE CONVERGENTE~DEVELOPPE A LA MACHINE CONVERGENTE HAUT DE PECS~DEVELOPPE A LA MACHINE CONVERGENTE UNILATERAL~DEVELOPPE ASSIS A LA MACHINE~DEVELOPPE ASSIS A LA MACHINE HAUT DE PECS~DEVELOPPE ASSIS A LA MACHINE UNILATERAL~DEVELOPPE COUCHE BARRE~DEVELOPPE COUCHE BARRE AVEC CALLE~DEVELOPPE COUCHE HALTERE~DEVELOPPE COUCHE LARSEN~DEVELOPPE COUCHE MACHINE~DEVELOPPE COUCHE POWER SMITH MACHINE~DEVELOPPE COUCHE SMITH MACHINE~DEVELOPPE DECLINE BARRE~DEVELOPPE DECLINE BARRE SMITH MACHINE~DEVELOPPE DECLINE HALTERE~DEVELOPPE INCLINE BARRE~DEVELOPPE INCLINE HALTERE~DEVELOPPE INCLINE MACHINE~DEVELOPPE INCLINE SMITH MACHINE~DIPS BAS DE PECS~DIPS MACHINE BAS DE PECS~ECARTE HALTERE SUR BANC~ECARTE HALTERE SUR BANC DECLINE~ECARTE HALTERE SUR BANC INCLINE~ECARTE MACHINE~ECARTE MACHINE HAUT DE PEC~ECARTE POULIE BASSE ELASTIQUE BAS~ECARTE POULIE BASSE ELASTIQUE BAS EN UNILATERAL~ECARTE POULIE HAUT ELASTIQUE HAUT EN UNILATERAL~ECARTE POULIE HAUTE ELASTIQUE HAUTE~ECARTE POULIE SUR BANC~ECARTE POULIE SUR BANC INCLINE~FLOOR PRESS~POMPE AUX ANNEAUX~POMPES~POMPES AVEC ELASTIQUE~POMPES DECLINE~POMPES INCLINE~POMPES LESTEE~POMPES SAUTEES ALTERNEES SUR BALLON~POMPES SAUTES',
+  'DORSAUX,BICEPS':'ISO LATERAL FRONT LAT PULLDOWN S INSTALLER PIEDS BIEN ANCRES AJUSTER LES POIGNEES A HAUTEUR DES EPAULES SAISIR LES POIGNEES AVEC LES PAUMES VERS L AVANT BRAS LEGEREMENT FLECHIS TIRER LES POIGNEES VERS LE BAS EN CONTROLANT LE MOUVEMENT JUSQU A AMENER LES COUDES PRES DU TORSE RETOURNER LENTEMENT A LA POSITION INITIALE~PULL OVER~PULL OVER MACHINE~PULL OVER SUR BANC~PULL OVER SUR BANC INCLINE~PULL OVER UNILATERAL~PURE PULLOVER S INSTALLER SUR LE BANC PIEDS AU SOL SAISIR LES POIGNEES AU DESSUS DE LA TETE BRAS TENDUS DESCENDRE LENTEMENT LES POIGNEES DERRIERE LA TETE EN GARDANT LES BRAS LEGEREMENT FLECHIS RAMENER LES POIGNEES AU DESSUS DE LA POITRINE EN EXPIRANT EN CONTROLANT LE MOUVEMENT REPOS 02 MIN~RENEGATE ROW~ROW~ROW S INSTALLER SUR LA MACHINE PIEDS BIEN ANCRES AJUSTER LES POIGNEES A HAUTEUR DES EPAULES SAISIR LES POIGNEES PAUMES FACE A FACE TIRER LES POIGNEES VERS SOI EN RAMENANT LES COUDES VERS L ARRIERE PUIS REVENIR LENTEMENT A LA POSITION INITIALE EN CONTROLANT LE MOUVEMENT~ROWING BARRE SERRE~ROWING HALTERE BUSTE PENCHE~ROWING HALTERE UNILATERAL~ROWING HALTERE UNILATERAL SUR BANC~ROWING POULIE BASSE ALLONGE SUR BANC INCLINE~ROWING POULIE BASSE UNILATERAL~ROWING SAC UNILATERAL SUR BANC~ROWING UNILATERAL A LA LANDMINE~TIRAGE DOS FACE A LA POULIE~TIRAGE DOS POULIE VIS A VIS~TIRAGE HORIZONTAL MACHINE CONVERGENTE~TIRAGE HORIZONTAL MACHINE CONVERGENTE UNILATERAL~TIRAGE HORIZONTAL MACHINE UNILATERAL~TIRAGE HORIZONTAL SUPINATION~TIRAGE HORIZONTAL UNILATERAL SUR BANC~TIRAGE NUQUE~TIRAGE POITRINE LARGE~TIRAGE POITRINE LARGEUR EPAULE~TIRAGE POITRINE MACHINE CONVERGENTE~TIRAGE POITRINE PRISE NEUTRE~TIRAGE POITRINE SERRE~TIRAGE POITRINE SUPINATION~TIRAGE POITRINE SUPINATION MACHINE CONVERGENTE~TIRAGE POITRINE UNILATERAL POULIE~TIRAGE UNILATERAL SUR BANC~TRACTIONS~TRACTIONS ELASTIQUE~TRACTIONS LESTE~TRACTIONS MACHINE ASSISTE~TRACTIONS PRISE NEUTRE~VERTICAL TRACTION S INSTALLER SUR LA MACHINE PIEDS BIEN ANCRES AJUSTER LES POIGNEES A HAUTEUR DES EPAULES SAISIR LES POIGNEES AVEC LES PAUMES VERS L AVANT TIRER LES POIGNEES VERS LE BAS EN RAMENANT LES COUDES PRES DU TORSE PUIS REVENIR LENTEMENT A LA POSITION INITIALE EN CONTROLANT LE MOUVEMENT REPOS 02 MIN LIEN VIDEO EXERCICE H',
+  'QUADRICEPS,FESSIERS,ISCHIOS':'ABDOMINALS AND THIGHS~BACK DOUBLE BICEPS~DEEP SQUAT~FRONT DOUBLE BICEPS~FRONT LAT SPREAD~GAINAGE CHAISE~ICARUS POSE~JUMPING JACK~MONTE DE GENOUX~MOON POSE~MOST MUSCULAR POSE~POWER RUN~PRESSE A CUISSE ASSISE~PRESSE A CUISSE HIGH STANCE~PRESSE A CUISSE INCLINE~PRIEST MANTIS POSE~QUAD STOMP~QUARTER TURN~REAR LAT SPREAD~SAFETY SQUAT BARRE~SIDE CHEST~SIDE TRICEPS~SOULEVE DE TERRE TRAP BARRE~SQUAT~SQUAT ASSIS~SQUAT AU BELT SQUAT A LA BARRE T~SQUAT AU BELT SQUAT A LA SMITH MACHINE~SQUAT AVEC HALTERES~SQUAT AVEC SAC~SQUAT PISTOL~SQUAT SAUTE~SQUAT SAUTE SUR BOX~SQUAT SERRE~SQUAT SMITH MACHINE~SQUAT SUMO~SUPER SQUAT MACHINE~THE CHRISTMAS THREE~THE KNEEL~VACUUM POSE~ZYZZ POSE',
+  'TRICEPS':'BARRE AU FRONT~BARRE AU FRONT BANC INCLINE~BODYWEIGHT SKULL CRUSHER~CHEST PRESS DEBOUT TRICEPS~DEVELOPPE COUCHE PRISE SEREE~DIPS~DIPS ASSISTE~DIPS AUX ANNEAUX~DIPS MACHINE~DIPS MACHINE GUIDEE~DIPS SUR BARRE~EXTENSION TRICEPS AU DESSU DE LA TETE~EXTENSIONS POULIE BASSE TRICEPS UNILATERALE~EXTENSIONS TRICEPS POULIE EN X~EXTENSIONS TRICEPS SUR LE COTE POULIE~EXTENSIONS VERTICALES TRICEPS~EXTENSIONS VERTICALES TRICEPS BARRE~EXTENSIONS VERTICALES TRICEPS HALTERE~EXTENSIONS VERTICALES TRICEPS UNILATERALE~EXTENTION TRICEPS POULIE BASSE~EXTENTION TRICEPS SUR BANC~EXTENTION TRICEPS SUR BANC UNILATERALE~FRENCH PRESS MACHINR~KICKBACK HALTERE~KICKBACK POULIE~POMPES SERREES~TRICEPS A LA POULIE HAUTE BARRE~TRICEPS A LA POULIE HAUTE CORDE~TRICEPS A LA POULIE HAUTE POIGNEE~TRICEPS A LA POULIE HAUTE UNILATERALE~TRICEPS DIPS~TRICEPS EXTENSION MACHINE',
+  'ABDOS':'AB CRUNCH BENCH~ABS ROLLER~CRUNCH A DOUBLE CONTRACTION SUR BANC~CRUNCH A LA MACHINE~CRUNCH A LA POULIE~CRUNCH AU SOL~CRUNCH BENCH~CRUNCH CROISE~CRUNCH JAMBES EN APPUI SUR BANC~CRUNCH SUR BALL~CRUNCH SUR BANC INCLINE~FLEXION LATERAL DE BUSTE AU BANC~FLEXION LATERAL DE BUSTE AVEC POIDS~FLEXION LATERAL DE BUSTE POULIE ELASTIQUE~FLEXIONS DE BUSTE EN GAINAGE LATERAL~FLEXIONS LATERALS AU SOL~GAINAGE HOLLOW HOLD~GAINAGE LATERAL~GAINAGE PLANCHE~LE VACUUM~LES CISEAUX~MOUNTAIN CLIMBER~OBLIQUE ABDOMINAL CRUNCH~PALLOF PRESS~RELEVE DE GENOUX A LA BARRE DE TRACTIONS~RELEVE DE GENOUX A LA CHAISE ABDOMINALE~RELEVE DE GENOUX SUR BANC~RELEVE DE JAMBE A LA PLANCHE INCLINE~RELEVE DE JAMBE AU SOL~ROTATION AU SOL~ROTATION DE BUSTE POULIE ELASTIQUE HAUTE~V SIT UP',
+  'TRAPEZES,DORSAUX':'ROWING BARRE ALLONGE SUR BANC INCLINE~ROWING BARRE LARGE~ROWING BARRE POULIE BASSE~ROWING BARRE T~ROWING BARRE T A LA MACHINE~ROWING BARRE T PRISE LARGE~ROWING HALTERE ALLONGE SUR BANC INCLINE~ROWING INVERSE~ROWING PENDLAY SMITH MACHINE~ROWING PLANCHE BARRE~ROWING POWER SMITH~ROWING POWER SMITH DORS~ROWING POWER SMITH TRAP~ROWING TRAPEZES POULIE HAUTE~SEAL ROW AVEC HALTERE~SHRUG~SHRUG ASSIS A LA MACHINE~SHRUG DEBOUT A LA MACHINE~SHRUG DELAVIER~SHRUG HALTERE~SHRUG HALTERES SUR BANC~SHRUG POULIE~TIRAGE HORIZONTAL LARGE~TIRAGE HORIZONTAL LARGE NEUTRE~TIRAGE HORIZONTAL MACHINE~TIRAGE HORIZONTAL SERRE~TIRAGE HORIZONTAL UNILATERAL~TIRAGE VERTICAL A LA BARRE~TIRAGE VERTICAL A LA BARRE SMITH MACHINE~TIRAGE VERTICAL A LA POULIE',
+  'BICEPS,AVANT_BRAS':'BICEPS BRAS EN CROIX~CURL A LA POULIE BASSE EN UNILATERAL~CURL ACCROUPI~CURL ALLONGE POULIE~CURL ALLONGE POULIE HAUTE~CURL BARRE~CURL BARRE BALLET SAC~CURL BARRE POULIE ELASTIQUE~CURL CONCENTRE~CURL HALTERES SUR BANC~CURL LARRY SCOTT~CURL LARRY SCOTT HALTERES~CURL LARRY SCOTT MACHINE GUIDEE~CURL LARRY SCOTT POULIE BASSE~CURL MACHINE GUIDEE~CURL MARTEAU~CURL MARTEAU POULIE~CURL MARTEAU SUR BANC~CURL POULIE HAUTE~CURL ROTATION~CURL ROTATION ASSIS~CURL SUR BANC INCLINE~CURL SUR BANC POULIE~CURL UNILATERAL POULIE BASSE AVEC COUDE EN ARRIERE~SPIDER CURL~SPIDER CURL HALTERE~SPIDER CURL HALTERE UNILATERALE~TRACTION PRISE SERREE',
+  'DELT_ANT,TRICEPS':'DEVELOPPE EPAULE AU LANDMINE~DEVELOPPE EPAULES BARRE~DEVELOPPE EPAULES ELASTIQUE~DEVELOPPE EPAULES HALTERES~DEVELOPPE MILITAIRE BARRE~DEVELOPPE MILITAIRE ELASTIQUE~DEVELOPPE MILITAIRE HALTERES~DEVELOPPE MILITAIRE MACHINE~DEVELOPPE MILITAIRE SMITH MACHINE~ELEVATION FRONTALE BOUTEILLES~ELEVATION FRONTALE DISQUE DE POIDS~ELEVATION FRONTALE HALTERES~ELEVATION FRONTALE MACHINE~ELEVATION FRONTALE POULIE ELASTIQUE~ELEVATION FRONTALE SUR BANC INCLINE~HANDSTAND PUSH UP~PIKE PUSH UP~POWER SMITH EPAULES~SHOULDER PRESS',
+  'FESSIERS':'ABDUCTION A LA MACHINE BUSTE PENCHE~ABDUCTION DE HANCHE AU SOL~ABDUCTION DEBOUT POULIE ELASTIQUE~BOOTYMIZER~DONKEY KICK SMITH MACHINE~EXTENSION DE HANCHE AU SOL~EXTENSION DE HANCHE MACHINE~EXTENSION DE HANCHE POULIE BASSE~FESSIER A LA MACHINE DE TRACTION~GLUTE BRIDGE~GLUTE MACHINE~GLUTEUS MACHINE~HIP THRUST~HIP THRUST UNILATERAL HALTERE~HYPTRUST A LA SMITH MACHINE~MONTER SUR BANC HALTERE~MONTER SUR BANC POULIE~MONTER SUR BANC SMITH MACHINE~REVERSE HYPER MACHINE',
+  'DELT_LAT':'ELEVATION LATERALE AVEC BOUTEILLES D EAU~ELEVATION LATERALE HALTERE~ELEVATION LATERALE HALTERE UNILATERAL~ELEVATION LATERALE MACHINE~ELEVATION LATERALE MACHINE DEBOUT~ELEVATION LATERALE POULIE~ELEVATION LATERALE POULIE ELASTIQUE UNILATERAL~ELEVATION LATERALE SUR BANC A 60~LATERAL RAISE~TIRAGE MENTON BALET SAC~TIRAGE MENTON BARRE~TIRAGE MENTON POULIE ELASTIQUE ET MANCHE A BALLET',
+  'MOLLETS':'CALF EXTENSION MACHINE~DONKEY CALF RAISE MACHINE~MOLLETS A LA HACKSQUAT EN UNILATERAL~MOLLETS A LA MACHINE~MOLLETS A LA PRESSE ASSISE~MOLLETS A LA SMITH MACHINE~MOLLETS ASSIS A LA MACHINE~MOLLETS ASSIS AVEC BARRE~MOLLETS CHAMEAU~MOLLETS DEBOUT UNILATERAL~PURE SEATED CALF~TIBIA DORSI FLEXION',
+  'DELT_POST,TRAPEZES':'ARRIERE EPAULE A LA MACHINE~ELEVATION ARRIERE EPAULE POULIE~ELEVATION ARRIERE POULIE COUCHEE~ELEVATION Y~FACE PULL~FACE PULL ASSIS~OISEAUX BUSTE PENCHE~OISEAUX BUSTE PENCHE MACHINE~OISEAUX BUSTE PENCHE POULIE ELASTIQUE~OISEAUX BUSTE PENCHE SUR BANC~OISEAUX SUR BANC INCLINE',
+  'LOMBAIRES,FESSIERS,ISCHIOS':'EXTENSION DE BUSTE A LA MACHINE~EXTENSION DE BUSTE ASSIS SUR BANC~EXTENSION DE BUSTE SUR BANC~EXTENSION DE BUSTE SUR BANC AVEC ROWING~GOOD MORNING~JEFFERSON CURL SUR STEP~RACK POOL~SOULEVE DE TERRE~SOULEVE DE TERRE HALTERE~SOULEVE DE TERRE PIEDS SURELEVE~SUPERMAN',
+  'ISCHIOS':'ISO LATERAL CURL~LEG CURL ALLONGE~LEG CURL ALLONGE EN UNILATERAL~LEG CURL ASSIS~LEG CURL DEBOUT~LEG EXTENTION ALLONGE ELASTIQUE~LEG EXTENTION ALLONGE HALTERE~NORDIC CURL AVEC ELASTIQUE~NORDIC HAMSTRING ASSISTE~SOULEVE DE TERRE ROUMAIN HALTERES~SOULEVE DE TERRE ROUMAIN LANDMINE',
+  'QUADRICEPS,FESSIERS':'CHUTE DE BOX SAUT~FENTE BULGARE MACHINE~FENTES ARRIERE BARRE SMITH MACHINE~FENTES ARRIERE HALTERE~FENTES ARRIERES BARRE~FENTES BARRE~FENTES BARRE SMITH MACHINE~FENTES HALTERE~SQUAT BULGAR HALTERE~SQUAT BULGAR SMITH MACHINE',
+  'ISCHIOS,FESSIERS':'HIP THRUST AU SOL~HIP THRUST MACHINE 1~HIP THRUST MACHINE 2~HIP THRUST SAC~MONTER SUR BANC~RELEVE FESSIER BANC A LOMBAIRE~SOULEVE DE TERRE ROUMAIN~SOULEVE DE TERRE ROUMAIN SMITH MACHINE~SOULEVE DE TERRE ROUMAIN UNILATERAL~SQUAT AVEC HALTERES TENDU ENTRE LES JAMBES',
+  'QUADRICEPS':'HACKSQUAT~LEG EXTENSION~LEG EXTENTION~LEG EXTENTION HALTERE~PENDULUM SQUAT~PRESSE A CUISSE ISO LATERALE~SISSY SQUAT~SQUAT AVEC SAC AVANT~SQUAT BARRE DEVANT~V SQUAT',
+  'AVANT_BRAS':'BOBINE DANDRIEU~FLEXION AVANT BRAS A LA BARRE DEBOUT~FLEXION AVANT BRAS A LA BARRE SUR BANC PRONATION~FLEXION AVANT BRAS A LA BARRE SUR BANC SUPINATION~FLEXION AVANT BRAS UNILATERAL PRISE NEUTRE~GRIPPER',
+  'ABDUCTEURS':'3D ABDUCTOR~ABDUCTEUR A LA MACHINE~ABDUCTEUR ASSIS AVEC ELASTIQUE~COPENHAGEN PLANK',
+  'AVANT_BRAS,BICEPS':'REVERSE CURL BARRE~REVERSE CURL HALTERE',
+  'DELT_ANT,DELT_LAT,TRICEPS':'DEVELOPPE NUQUE BARRE~DEVELOPPE NUQUE SMITH MACHINE',
+  'ADDUCTEURS':'ADDUCTEUR A LA MACHINE~ADDUCTION DEBOUT POULIE ELASTIQUE',
+  'QUADRICEPS,ISCHIOS,FESSIERS':'SOULEVE DE TERRE SUMO~SQUAT AU BELT SQUAT',
+  'QUADRICEPS,PECTORAUX,ABDOS':'BURPEES',
+  'QUADRICEPS,TRAPEZES,DELT_LAT':'SNATCH',
+  'DORSAUX,BICEPS,AVANT_BRAS':'MONTEE DE CORDE',
+  'DELT_ANT,TRICEPS,QUADRICEPS':'PUSH PRESS',
+  'QUADRICEPS,TRAPEZES,DORSAUX':'POWER CLEAN',
+  'FESSIERS,ISCHIOS,LOMBAIRES':'KETTLEBELL SWING',
+  'QUADRICEPS,TRAPEZES,DELT_ANT':'CLEAN AND JERK',
+  'QUADRICEPS,DELT_ANT,TRICEPS':'BARBELL THUSTERS',
+  'QUADRICEPS,DELT_ANT,FESSIERS':'WALL BALL',
+  'QUADRICEPS,DORSAUX,TRAPEZES':'RENVERSEMENT DE PNEU',
+  'QUADRICEPS,DELT_ANT,ABDOS':'SLEDGE',
+  'TRAPEZES,AVANT_BRAS,ABDOS':'MARCHE DU FERMIER',
+  'QUADRICEPS,MOLLETS':'SAUTS SUR PLACE AVEC ELASTIQUE',
+  'QUADRICEPS,ABDUCTEURS':'SAUT SUR LES COTES',
+  'FESSIERS,ABDUCTEURS':'FIRE HYDRANT',
+  'ABDUCTEURS,FESSIERS':'STANDING ADUCTOR'
+};
+const EX_GUIDE_CARDIO='BATTLE ROPE~CORDE A SAUTER~ESCALIERS~LE SKIERG~RAMEUR~TAPIS DE COURSE~VELO D INTERIEUR~VELO ELLIPTIQUE';
+
+// Repli pour tout ce qui n'est PAS dans le guide : variantes saisies par un
+// athlète, noms sortis de l'OCR d'une fiche papier, exercices ajoutés depuis.
+// Tableau ORDONNÉ — la PREMIÈRE règle qui matche gagne, et cet ordre est le
+// cœur du mécanisme :
+//   1. Les motifs SPÉCIFIQUES d'abord. « LEG EXTENSION » doit sortir
+//      quadriceps SEUL ; placé après « SQUAT », il hériterait des fessiers et
+//      des ischios qu'il ne travaille pas.
+//   2. Les épaules AVANT les pectoraux. « DEVELOPPE » suivi de n'importe quoi
+//      puis « MACHINE » doit pouvoir désigner un développé machine pour pecs,
+//      mais « DEVELOPPE MILITAIRE À LA MACHINE » est un mouvement d'épaules :
+//      la règle épaules doit donc trancher la première.
+//   3. Les motifs GÉNÉRIQUES en dernier.
+// Toute règle ajoutée doit l'être en connaissance de sa position.
+const EX_REGLES=[
+  // — spécifiques —
+  {motif:/\bLEG EXTENSION\b/,                                        p:['QUADRICEPS'], s:[]},
+  {motif:/\bLEG CURL|SOULEVE DE TERRE ROUMAIN|ROMANIAN|GOOD MORNING/,p:['ISCHIOS'],    s:['FESSIERS']},
+  {motif:/\bFACE PULL|OISEAU|REAR DELT|ELEVATION POSTERIEURE/,       p:['DELT_POST'],  s:['TRAPEZES']},
+  {motif:/\bELEVATION LATERALE|LATERAL RAISE/,                       p:['DELT_LAT'],   s:[]},
+  // épaules avant pectoraux — voir note 2 ci-dessus
+  {motif:/\bSHOULDER PRESS|OVERHEAD PRESS|DEVELOPPE.*(MILITAIRE|EPAULE|NUQUE)/,
+                                                                     p:['DELT_ANT'],   s:['TRICEPS','DELT_LAT']},
+  {motif:/\bDEVELOPPE.*(COUCHE|MACHINE|INCLINE|DECLINE)|BENCH|PEC (DECK|FLY)|ECARTE/,
+                                                                     p:['PECTORAUX'],  s:['DELT_ANT','TRICEPS']},
+  {motif:/\bTIRAGE (VERTICAL|POITRINE|NUQUE)|TRACTION|LAT PULL|PULL OVER/,
+                                                                     p:['DORSAUX'],    s:['BICEPS']},
+  {motif:/\bROWING|\bROW\b|TIRAGE (HORIZONTAL|ASSIS)/,               p:['DORSAUX'],    s:['BICEPS','TRAPEZES']},
+  {motif:/\bHIP THRUST|EXTENSION DE HANCHE|KICK BACK/,               p:['FESSIERS'],   s:['ISCHIOS']},
+  {motif:/\bABDUCTEUR/,                                              p:['ABDUCTEURS'], s:['FESSIERS']},
+  {motif:/\bADDUCTEUR/,                                              p:['ADDUCTEURS'], s:[]},
+  {motif:/\bMOLLET|\bCALF\b/,                                        p:['MOLLETS'],    s:[]},
+  {motif:/\bSHRUG|HAUSSEMENT/,                                       p:['TRAPEZES'],   s:[]},
+  {motif:/\bLOMBAIRE|HYPEREXTENSION|BANC A LOMBAIRE/,                p:['LOMBAIRES'],  s:['FESSIERS','ISCHIOS']},
+  {motif:/\bTRICEPS|EXTENSION (POULIE|NUQUE)|BARRE AU FRONT|\bDIPS\b/,
+                                                                     p:['TRICEPS'],    s:['PECTORAUX','DELT_ANT']},
+  {motif:/\bCURL(?! LARRY)|BICEPS|LARRY SCOTT/,                      p:['BICEPS'],     s:['AVANT_BRAS']},
+  {motif:/\bCRUNCH|\bABDO|GAINAGE|RELEVE DE JAMBE|OBLIQUE/,          p:['ABDOS'],      s:[]},
+  // — génériques, en dernier —
+  {motif:/\bSQUAT|PRESSE A CUISSE|LEG PRESS|\bHACK\b|\bFENTE|BULGARE/,
+                                                                     p:['QUADRICEPS'], s:['FESSIERS','ISCHIOS']},
+];
+
+// Expansion PARESSEUSE de la table du guide : 408 entrées ne sont dépliées
+// qu'au premier exercice à classer, jamais au démarrage de l'application.
+let _exGuideMap=null, _exGuideCardio=null;
+function _exGuide(){
+  if(_exGuideMap) return _exGuideMap;
+  _exGuideMap=new Map();
+  for(const sig of Object.keys(EX_GUIDE_BRUT)){
+    const g=sig.split(',');
+    for(const k of EX_GUIDE_BRUT[sig].split('~')) _exGuideMap.set(k,{p:[g[0]],s:g.slice(1)});
+  }
+  _exGuideCardio=new Set(EX_GUIDE_CARDIO.split('~'));
+  return _exGuideMap;
+}
+function _exGuideEstCardio(k){ _exGuide(); return _exGuideCardio.has(k); }
+
 const defEx=[
   {name:'Pull Over sur Banc Incliné',series:3,reps:'20',repos:'90 sec',description:'Amplitude maximale, expiration à la montée. Bras tendus, descendre jusqu\'à l\'étirement complet des dorsaux.',note:'',image:null},
   {name:'Tirage Poitrine Largeur Épaule',series:4,reps:'5+',repos:'2 min',description:'Prise légèrement plus large que les épaules. Coudes vers le bas, omoplates en rétraction en fin de mouvement.',note:'',image:null},
@@ -7097,6 +7235,97 @@ function saveCoachPdfLinkInline(){
   toastSync(ok,CLOUD.pushOne(c.email,c),'Lien v'+c.programPdfVersion+' enregistré !','le lien est');
   openClientDetail(currentClientId,true);
 }
+
+// ── Identité stable d'un exercice ───────────────────────────────────────────
+// Normalisation déterministe et SANS état : majuscules, accents dépliés puis
+// retirés, toute ponctuation ramenée à une espace simple.
+// « Développé  Couché–Haltère » et « DEVELOPPE COUCHE HALTERE » donnent la
+// même clé, donc renommer un exercice ne coupe plus son historique de charge.
+// Ce n'est PAS une clé de stockage : rien n'est écrit sous cette forme dans
+// sessions[n].data, qui reste indexé par le nom en clair.
+function exKey(nom){
+  return String(nom||'')
+    .toUpperCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^A-Z0-9]+/g,' ')
+    .trim()
+    .replace(/\s+/g,' ');
+}
+
+// ── Alias : « cet exercice est en fait celui-là » ───────────────────────────
+// Écrit par la détection de renommage et par la fusion manuelle. Résolution
+// bornée à 3 sauts : au-delà, on rend la dernière clé atteinte plutôt que de
+// boucler. Un cycle A→B→A est refusé à l'écriture (voir ajouterAlias).
+function resoudreAlias(k){
+  const a=currentUser?.exAlias; if(!a) return k;
+  let cur=k;
+  for(let i=0;i<3;i++){
+    const suiv=a[cur];
+    if(!suiv||suiv===cur) return cur;
+    cur=suiv;
+  }
+  return cur;
+}
+// Refuse tout ajout qui refermerait une chaîne sur elle-même.
+function ajouterAlias(de,vers){
+  const d=exKey(de), v=exKey(vers);
+  if(!d||!v||d===v) return {ok:false,msg:'Les deux exercices sont identiques.'};
+  if(!currentUser.exAlias) currentUser.exAlias={};
+  // v remonte-t-il déjà jusqu'à d ? Si oui, écrire d→v fermerait le cycle.
+  let cur=v;
+  for(let i=0;i<4;i++){
+    if(cur===d) return {ok:false,msg:'Fusion refusée : elle créerait une boucle entre ces deux exercices.'};
+    const suiv=currentUser.exAlias[cur]; if(!suiv||suiv===cur) break; cur=suiv;
+  }
+  currentUser.exAlias[d]=v;
+  if(!currentUser.exCatalogVersion) currentUser.exCatalogVersion=1;
+  return {ok:true};
+}
+
+// ── File « à classer » ──────────────────────────────────────────────────────
+// Dérivée, jamais persistée : elle se reconstruit à chaque session.
+const _exAClasser=new Set();
+
+// ── Résolution musculaire ───────────────────────────────────────────────────
+// ex : l'objet exercice complet quand on l'a, pour pouvoir écarter le cardio.
+// Appelée avec le seul nom, la détection cardio est sautée plutôt que devinée.
+// Écriture opportuniste : un rattachement trouvé automatiquement est mémorisé
+// dans user.exMuscles avec src:'auto', ce qui évite de refaire le travail et
+// laisse une trace corrigeable. Un choix manuel n'est JAMAIS réécrit.
+function resoudreMuscles(nom,ex){
+  if(!currentUser) return null;
+  let k=exKey(nom);
+  if(!k) return null;
+  k=resoudreAlias(k);
+  const dejaVu=currentUser.exMuscles&&currentUser.exMuscles[k];
+  if(dejaVu) return dejaVu;
+  // Cardio : aucun rattachement, et surtout pas de mise en file.
+  if((ex&&isCardio(ex))||_exGuideEstCardio(k)) return null;
+  // 1. Le guide du coach fait foi.
+  const g=_exGuide().get(k);
+  if(g){
+    const r={p:g.p.slice(),s:g.s.slice(),src:'auto'};
+    _ecrireMuscles(k,r); return r;
+  }
+  // 2. Repli sur les règles, dans l'ordre.
+  for(const rg of EX_REGLES){
+    if(rg.motif.test(k)){
+      const r={p:rg.p.slice(),s:rg.s.slice(),src:'auto'};
+      _ecrireMuscles(k,r); return r;
+    }
+  }
+  // 3. Rien de sûr : on ne devine pas, on met en file.
+  _exAClasser.add(k);
+  return null;
+}
+// Création à la volée des champs : ils n'existent chez AUCUN utilisateur
+// actuel, et leur absence doit rester un état valide.
+function _ecrireMuscles(k,r){
+  if(!currentUser.exMuscles) currentUser.exMuscles={};
+  if(!currentUser.exCatalogVersion) currentUser.exCatalogVersion=1;
+  currentUser.exMuscles[k]=r;
+}
+
 // Parse reps string : "10 PUIS 20", "6-8", "15 Par Jambe", "8"
 function parseReps(r){
   const s=String(r||'').trim();
@@ -8550,6 +8779,43 @@ function toggleRirExplain(){
 //   2. à défaut le NOM de la séance — tout l'historique antérieur n'a que ça,
 //      et sans ce repli l'app repartirait de zéro sur chaque exercice ;
 //   3. sinon rien. Pas de repli global : ce serait exactement le bug d'origine.
+// ── Jointure de l'historique par identité, et non par égalité de chaîne ─────
+// sessions[n].data reste indexé par le NOM EN CLAIR : on ne le réécrit pas, on
+// construit un index { exKey → clé réelle } au-dessus. Renommer « DÉVELOPPÉ
+// COUCHÉ » en « DEVELOPPE COUCHE » ne coupe donc plus la suggestion de charge.
+//
+// Mémoïsé par séance, car ces fonctions remontent tout l'historique à chaque
+// affichage d'exercice : sans cache, un athlète à 200 séances reconstruirait
+// 200 index à chaque changement d'exercice pendant sa séance.
+// La clé retombe sur date puis sur l'objet lui-même : les séances écrites
+// avant l'existence du champ id n'en ont pas, et deux d'entre elles ne doivent
+// pas se partager la même entrée de cache.
+const _idxSessData=new WeakMap();
+const _idxSessParId=new Map();
+function _indexSessionData(sess){
+  if(!sess||!sess.data) return null;
+  const cle=sess.id||(sess.date!=null?'d_'+sess.date:null);
+  if(cle&&_idxSessParId.has(cle)) return _idxSessParId.get(cle);
+  if(!cle&&_idxSessData.has(sess)) return _idxSessData.get(sess);
+  const idx={};
+  for(const nom of Object.keys(sess.data)){
+    const k=exKey(nom);
+    // Première clé gagnante : si deux noms se normalisent pareil dans la même
+    // séance, on garde le premier plutôt que d'en perdre un silencieusement.
+    if(k&&idx[k]===undefined) idx[k]=nom;
+  }
+  if(cle) _idxSessParId.set(cle,idx); else _idxSessData.set(sess,idx);
+  return idx;
+}
+// Retrouve l'entrée d'un exercice dans une séance, par identité normalisée.
+function _dataDeSeance(sess,nomEx){
+  if(!sess||!sess.data) return null;
+  const direct=sess.data[nomEx];
+  if(direct) return direct;                 // chemin rapide : nom identique
+  const idx=_indexSessionData(sess); if(!idx) return null;
+  const reel=idx[resoudreAlias(exKey(nomEx))];
+  return reel!=null?sess.data[reel]:null;
+}
 function _memeCreneau(sess,slot,progName){
   if(!sess) return false;
   if(slot!=null&&sess.slot!=null) return sess.slot===slot;
@@ -8561,7 +8827,7 @@ function getLastZeroRIRWeight(exName,slot,progName){
   for(let i=currentUser.sessions.length-1;i>=0;i--){
     const sess=currentUser.sessions[i];if(!sess.data) continue;
     if(!_memeCreneau(sess,slot,progName)) continue;
-    const d=sess.data[exName];if(!d) continue;
+    const d=_dataDeSeance(sess,exName);if(!d) continue;
     const zeroSets=d.sets?.filter(s=>s.done&&(s.rir==='0'||s.rir===0)&&s.weight);
     if(zeroSets?.length) return parseFloat(zeroSets[zeroSets.length-1].weight);
   }return null;
@@ -8661,7 +8927,7 @@ function buildSessionComparison(vol,data){
     const curMax=d.sets.filter(s=>s.done&&parseFloat(s.weight||0)>0).reduce((m,s)=>Math.max(m,parseFloat(s.weight)),0);
     if(!curMax) return;
     let histMax=0;
-    prev.forEach(s=>{(s.data?.[nm]?.sets||[]).filter(x=>x.done).forEach(x=>{const w=parseFloat(x.weight||0);if(w>histMax)histMax=w;});});
+    prev.forEach(s=>{(_dataDeSeance(s,nm)?.sets||[]).filter(x=>x.done).forEach(x=>{const w=parseFloat(x.weight||0);if(w>histMax)histMax=w;});});
     if(histMax===0){firstSession=true;return;}
     if(curMax>histMax) records.push({nm,curMax,histMax,gain:curMax-histMax});
   });
@@ -8841,7 +9107,7 @@ function getPrevPerf(name,slot,progName){
   for(let i=currentUser.sessions.length-1;i>=0;i--){
     const sess=currentUser.sessions[i];if(!sess.data) continue;
     if(!_memeCreneau(sess,slot,progName)) continue;
-    const d=sess.data[name];if(!d) continue;
+    const d=_dataDeSeance(sess,name);if(!d) continue;
     const done=d.sets.filter(s=>s.done&&s.weight);
     if(done.length) return done[done.length-1];
   }return null;
@@ -15626,6 +15892,105 @@ function renderPaypalButton(planId,coachId){
     }
   }).render('#paypal-buttons-inner');
 }
+
+
+// ══════════════ TESTS DE LA COUCHE D'IDENTITÉ D'EXERCICE ══════════════
+// Exécutable depuis la console : testExercices().
+// Ne touche à AUCUNE donnée réelle : currentUser est sauvegardé puis restauré.
+function testExercices(){
+  const R=[];const ok=(n,c,d)=>R.push({n,ok:!!c,d:d||''});
+  const sauve=currentUser;
+  currentUser={id:'_test',email:'t@t',exMuscles:{},exAlias:{},sessions:[]};
+  try{
+    // ── exKey : 12 cas ──
+    const cas=[
+      ['Développé  Couché–Haltère','DEVELOPPE COUCHE HALTERE'],
+      ['DEVELOPPE COUCHE HALTERE','DEVELOPPE COUCHE HALTERE'],
+      ['  curl   barre  ','CURL BARRE'],
+      ['Élévation Latérale','ELEVATION LATERALE'],
+      ['Tirage/Poitrine','TIRAGE POITRINE'],
+      ["Curl l'haltère",'CURL L HALTERE'],
+      ['LEG-EXTENSION','LEG EXTENSION'],
+      ['Squat 90°','SQUAT 90'],
+      ['Presse à cuisse (inclinée)','PRESSE A CUISSE INCLINEE'],
+      ['',''],[null,''],[undefined,''],
+      ['SQUAT   SUMO','SQUAT SUMO'],
+      ['Rowing — Haltère','ROWING HALTERE']
+    ];
+    cas.forEach(([e,a])=>ok('exKey('+JSON.stringify(e)+')',exKey(e)===a,'obtenu '+JSON.stringify(exKey(e))+' attendu '+JSON.stringify(a)));
+
+    // ── Les exercices des programmes Fondation doivent TOUS être rattachés ──
+    const fond=[...new Set([...FONDATION_H,...FONDATION_F].flatMap(s=>(s.exercises||[]).map(e=>e.name)))];
+    let manques=0;
+    fond.forEach(n=>{
+      const r=resoudreMuscles(n,{reps:'10'});
+      if(!r||!r.p||!r.p.length){manques++;R.push({n:'Fondation « '+n+' »',ok:false,d:'AUCUN rattachement'});}
+      else R.push({n:'Fondation « '+n+' »',ok:true,d:r.p.join('+')+(r.s.length?' / '+r.s.join('+'):'')});
+    });
+    ok('Fondation : '+fond.length+' exercices, 0 sans rattachement',manques===0,manques+' manquant(s)');
+
+    // ── Ordre des règles ──
+    currentUser.exMuscles={};
+    const le=resoudreMuscles('LEG EXTENSION',{reps:'12'});
+    ok('LEG EXTENSION = quadriceps SEUL',le&&le.p.join()==='QUADRICEPS'&&le.s.length===0,
+       le?le.p.join('+')+' / '+le.s.join('+'):'null');
+    currentUser.exMuscles={};
+    const dm=resoudreMuscles('DEVELOPPE MILITAIRE A LA MACHINE',{reps:'10'});
+    ok('DEVELOPPE MILITAIRE A LA MACHINE = épaules, pas pecs',dm&&dm.p[0]==='DELT_ANT',dm?dm.p.join('+'):'null');
+
+    // ── Cardio ──
+    currentUser.exMuscles={};_exAClasser.clear();
+    const cardio=resoudreMuscles('TAPIS DE COURSE',{reps:'30 min'});
+    ok('TAPIS DE COURSE : aucun rattachement',cardio===null);
+    ok('TAPIS DE COURSE : pas mis en file',!_exAClasser.has('TAPIS DE COURSE'));
+
+    // ── Inconnu : file, sans deviner ──
+    _exAClasser.clear();
+    const inc=resoudreMuscles('MACHINE BIZARRE DU FOND DE LA SALLE',{reps:'10'});
+    ok('Exercice inconnu : aucun rattachement deviné',inc===null);
+    ok('Exercice inconnu : mis en file',_exAClasser.has('MACHINE BIZARRE DU FOND DE LA SALLE'));
+
+    // ── Choix manuel non écrasé ──
+    currentUser.exMuscles={'CURL BARRE':{p:['BICEPS'],s:[],src:'manuel'}};
+    const man=resoudreMuscles('Curl Barre',{reps:'10'});
+    ok('Choix manuel préservé',man&&man.src==='manuel'&&man.s.length===0,man?man.src+' / s='+man.s.length:'null');
+
+    // ── Alias : chaîne, cycle, profondeur ──
+    currentUser.exAlias={A:'B',B:'C'};
+    ok('Alias A→B→C rend C',resoudreAlias('A')==='C',resoudreAlias('A'));
+    currentUser.exAlias={A:'B',B:'C',C:'D',D:'E'};
+    ok('Alias borné à 3 sauts',resoudreAlias('A')==='D',resoudreAlias('A'));
+    currentUser.exAlias={A:'B'};
+    ok('Cycle B→A refusé',ajouterAlias('B','A').ok===false);
+    currentUser.exAlias={};
+    ok('Alias normal accepté',ajouterAlias('Vieux Nom','Nouveau Nom').ok===true);
+
+    // ── Jointure d'historique par identité ──
+    currentUser.exAlias={};
+    currentUser.sessions=[
+      {id:'s1',date:1,slot:0,name:'P',data:{'DÉVELOPPÉ COUCHÉ':{sets:[{done:true,rir:'0',weight:'60'}]}}},
+      {id:'s2',date:2,slot:0,name:'P',data:{'AUTRE':{sets:[{done:true,rir:'0',weight:'99'}]}}}
+    ];
+    ok('Historique : nom accentué rejoint nom sans accent',
+       getLastZeroRIRWeight('DEVELOPPE COUCHE',0,'P')===60,String(getLastZeroRIRWeight('DEVELOPPE COUCHE',0,'P')));
+    ok('Historique : nom identique inchangé',
+       getLastZeloRIRSafe('DÉVELOPPÉ COUCHÉ')===60,String(getLastZeloRIRSafe('DÉVELOPPÉ COUCHÉ')));
+    const pp=getPrevPerf('Developpe  Couche',0,'P');
+    ok('getPrevPerf rejoint aussi par identité',pp&&pp.weight==='60',pp?pp.weight:'null');
+
+    // ── Aucune écriture dans sessions[n].data ──
+    ok('sessions[0].data intact',Object.keys(currentUser.sessions[0].data).join()==='DÉVELOPPÉ COUCHÉ',
+       Object.keys(currentUser.sessions[0].data).join());
+  }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
+  finally{ currentUser=sauve; }
+
+  const ko=R.filter(r=>!r.ok);
+  console.log('%c'+R.length+' vérifications, '+ko.length+' en échec',
+    'font-weight:bold;color:'+(ko.length?'#e05050':'#22c55e'));
+  R.forEach(r=>console.log((r.ok?'  ok   ':'  ÉCHEC')+'  '+r.n+(r.d?'   → '+r.d:'')));
+  return {total:R.length,echecs:ko.length,detail:R};
+}
+function getLastZeloRIRSafe(n){ return getLastZeroRIRWeight(n,0,'P'); }
 
 </script>
 </body></html>
