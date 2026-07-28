@@ -12663,6 +12663,48 @@ function getStepsWeek(){
     return localISODate(d);
   });
 }
+// ── Jour saisi dans Pas et Sommeil ──────────────────────────────────────────
+// Les deux cartes n'acceptaient que la date du jour : une nuit oubliée au
+// réveil, ou des pas relevés le lendemain, n'étaient plus saisissables du tout.
+// _recordSteps prenait déjà une date en paramètre, seul l'appelant la figeait.
+// null signifie « aujourd'hui » : la valeur n'est donc jamais périmée si l'app
+// reste ouverte au passage de minuit.
+let _stepsDate=null, _sleepDate=null;
+function _jourSteps(){ return _stepsDate||localISODate(new Date()); }
+function _jourSleep(){ return _sleepDate||localISODate(new Date()); }
+function changeStepsDate(v){ _stepsDate=(v&&v!==localISODate(new Date()))?v:null; _rerenderLifestyle(); }
+function changeSleepDate(v){ _sleepDate=(v&&v!==localISODate(new Date()))?v:null; _rerenderLifestyle(); }
+// Re-rend la ou les cartes réellement affichées. Un loadLifestyle() aveugle
+// ferait sortir de l'écran Pas ou Sommeil autonome au moindre changement de
+// date, ce qui interromprait la saisie qu'on cherche justement à permettre.
+function _rerenderLifestyle(){
+  const actif=id=>document.getElementById(id)?.classList.contains('active');
+  if(actif('s-lifestyle')){ loadSteps('lifestyle-steps-content'); loadSleep('lifestyle-sleep-content'); return; }
+  if(actif('s-steps')){ loadSteps('steps-content'); return; }
+  if(actif('s-sleep')){ loadSleep('sleep-content'); return; }
+  loadLifestyle();
+}
+// Bandeau de sélection du jour, commun aux deux cartes.
+// Bornes : jamais le futur (on ne saisit pas une nuit qui n'a pas eu lieu),
+// jamais au-delà de la rétention, sinon la purge effacerait la saisie aussitôt.
+function _bandeauJour(inputId,jour,handler){
+  const auj=localISODate(new Date());
+  const min=localISODate(new Date(Date.now()-STEPS_RETENTION_JOURS*24*3600*1000));
+  // Midi et non minuit : 'YYYY-MM-DD' seul est interprété en UTC, ce qui
+  // décalerait l'affichage d'un jour à l'ouest de Greenwich.
+  const estAuj=jour===auj;
+  // Le jour de la semaine SEUL, pas la date complète : le sélecteur affiche
+  // déjà 26/07, la répéter en toutes lettres débordait de la carte sur mobile.
+  // Le jour reste utile, lui : c'est ce qui distingue un jour ON d'un jour OFF.
+  const lbl=estAuj?"Aujourd'hui"
+    :new Date(jour+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long'});
+  return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <div style="flex:1;min-width:0;font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2.5px;color:${estAuj?'#8a8a8a':'var(--red)'};text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${lbl}</div>
+    ${estAuj?'':`<button onclick="${handler}('')" title="Revenir à aujourd'hui" style="flex:none;background:#141414;border:1px solid #2a2a2a;color:var(--sub);border-radius:7px;padding:6px 9px;font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:.5px;cursor:pointer">AUJ.</button>`}
+    <input type="date" id="${inputId}" value="${jour}" min="${min}" max="${auj}" onchange="${handler}(this.value)" aria-label="Choisir le jour" style="flex:0 0 auto;width:138px;box-sizing:border-box;background:#101010;border:1px solid #2a2a2a;color:#ccc;border-radius:7px;padding:6px 8px;font-family:Montserrat,sans-serif;font-size:11px;color-scheme:dark">
+  </div>`;
+}
+
 function loadSteps(containerId='steps-content'){
   if(containerId==='steps-content') go('s-steps');
   const log=currentUser.stepsLog||[];
@@ -12680,8 +12722,11 @@ function loadSteps(containerId='steps-content'){
   const withData=weekData.filter(d=>d.count!==null);
   const weekAvg=withData.length?Math.round(withData.reduce((s,d)=>s+d.count,0)/withData.length):0;
   const maxVal=Math.max(...weekData.map(d=>d.count||0),1);
-  const todayEntry=weekData.find(d=>d.isToday);
-  const todayType=dayTypes[todayStr]??null;
+  // Le graphe hebdomadaire reste sur la semaine en cours ; seule la carte de
+  // saisie suit le jour choisi, qui peut être hors de cette semaine.
+  const selStr=_jourSteps();
+  const todayEntry={count:(log.find(e=>e.date===selStr)||{}).count??null};
+  const todayType=dayTypes[selStr]??null;
   const stepColor=(n,type)=>{
     if(!n) return '#2a2a2a';
     const goal=type==='on'?goals.on:type==='off'?goals.off:10000;
@@ -12792,7 +12837,7 @@ function loadSteps(containerId='steps-content'){
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:absolute;left:50%;top:-30px;transform:translateX(-50%);width:130px;height:90px;border-radius:50%;background:radial-gradient(circle,${todayType==='off'?'rgba(96,165,250,.13)':'rgba(224,32,32,.14)'},transparent 68%);pointer-events:none"></div>
       <div style="position:relative">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:12px">Aujourd'hui : ${new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</div>
+        ${_bandeauJour('steps-date-input',selStr,'changeStepsDate')}
         <div style="display:flex;gap:8px;margin-bottom:11px">
           <button onclick="stepsToggleType('on')" style="flex:1;padding:10px 4px;border-radius:9px;border:2px solid ${todayType==='on'?'var(--red)':'#1f1f1f'};background:${todayType==='on'?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='on'?'#fff':'#4a4a4a'};font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='on'?'0 0 18px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='on'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">JOUR ON</button>
           <button onclick="stepsToggleType('off')" style="flex:1;padding:10px 4px;border-radius:9px;border:2px solid ${todayType==='off'?'#60a5fa':'#1f1f1f'};background:${todayType==='off'?'linear-gradient(160deg,#1d4f80,#0b2740)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='off'?'#fff':'#4a4a4a'};font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='off'?'0 0 18px rgba(96,165,250,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='off'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">JOUR OFF</button>
@@ -12849,10 +12894,17 @@ function _recordSteps(dateStr,count){
 function saveSteps(){
   const input=document.getElementById('steps-today-input');
   const count=parseInt(input.value,10);
-  if(!_recordSteps(localISODate(new Date()),count)){toast('️ Saisis un nombre de pas valide');return;}
+  const jour=_jourSteps();
+  if(!_recordSteps(jour,count)){toast('️ Saisis un nombre de pas valide');return;}
   saveUser();
-  toast(' '+count.toLocaleString('fr-FR')+' pas enregistrés !');
-  loadLifestyle();
+  // Le jour est rappelé quand ce n'est pas aujourd'hui : sans lui, l'athlète
+  // qui rattrape trois jours d'affilée n'a aucune confirmation de la ligne
+  // qu'il vient réellement d'écrire.
+  const suffixe=jour===localISODate(new Date())
+    ? ''
+    : ' le '+new Date(jour+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
+  toast(' '+count.toLocaleString('fr-FR')+' pas enregistrés'+suffixe+' !');
+  _rerenderLifestyle();
 }
 function saveStepsGoals(){
   const onVal=parseInt(document.getElementById('steps-goal-on').value,10);
@@ -12863,12 +12915,14 @@ function saveStepsGoals(){
   loadLifestyle();
 }
 function stepsToggleType(type){
-  const todayStr=localISODate(new Date());
+  // Le type de journée appartient au jour affiché, pas au jour courant : sinon
+  // rattraper un lundi écraserait le type d'aujourd'hui sans prévenir.
+  const jour=_jourSteps();
   if(!currentUser.stepsDayType) currentUser.stepsDayType={};
-  if(currentUser.stepsDayType[todayStr]===type) delete currentUser.stepsDayType[todayStr];
-  else currentUser.stepsDayType[todayStr]=type;
+  if(currentUser.stepsDayType[jour]===type) delete currentUser.stepsDayType[jour];
+  else currentUser.stepsDayType[jour]=type;
   saveUser();
-  loadLifestyle();
+  _rerenderLifestyle();
 }
 
 
@@ -12916,7 +12970,10 @@ function loadSleep(containerId='sleep-content'){
   const weekAvg=withData.length?Math.round(withData.reduce((s,d)=>s+d.entry.duration,0)/withData.length*10)/10:0;
   const weekTotal=withData.length?Math.round(withData.reduce((s,d)=>s+d.entry.duration,0)*10)/10:null;
   const maxVal=Math.max(...weekData.map(d=>d.entry?.duration||0),8);
-  const todayEntry=weekData.find(d=>d.isToday)?.entry||null;
+  // Comme pour les pas : le graphe reste sur la semaine, la carte de saisie
+  // suit le jour choisi, qui peut être antérieur.
+  const selStr=_jourSleep();
+  const todayEntry=log.find(e=>e.date===selStr)||null;
   const avgColor=sleepColor(weekAvg);
 
   let bars='';
@@ -12970,7 +13027,7 @@ function loadSleep(containerId='sleep-content'){
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:absolute;left:50%;top:-30px;transform:translateX(-50%);width:130px;height:90px;border-radius:50%;background:radial-gradient(circle,rgba(96,165,250,.13),transparent 68%);pointer-events:none"></div>
       <div style="position:relative">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:13px">Aujourd'hui : ${new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</div>
+        ${_bandeauJour('sleep-date-input',selStr,'changeSleepDate')}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px">
           <div>
             <div style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-xs);font-weight:800;color:#60a5fa;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(96,165,250,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>Coucher</div>
@@ -13007,16 +13064,19 @@ function saveSleep(){
   if(!bed||!wake) return toast('Renseigne l\'heure de coucher et de lever','var(--orange)');
   const duration=calcSleepDuration(bed,wake);
   if(duration===null) return toast('Heures invalides : vérifie la saisie','var(--orange)');
-  const todayStr=localISODate(new Date());
+  const jour=_jourSleep();
   if(!currentUser.sleepLog) currentUser.sleepLog=[];
-  const idx=currentUser.sleepLog.findIndex(e=>e.date===todayStr);
-  const entry={date:todayStr,bed,wake,duration};
+  const idx=currentUser.sleepLog.findIndex(e=>e.date===jour);
+  const entry={date:jour,bed,wake,duration};
   if(idx>=0) currentUser.sleepLog[idx]=entry;
   else currentUser.sleepLog.push(entry);
   const cutoff=localISODate(new Date(Date.now()-180*24*3600*1000));
   currentUser.sleepLog=currentUser.sleepLog.filter(e=>e.date>=cutoff);
-  toastEcriture(saveUser(),duration+'h enregistrées !','ta nuit est');
-  loadLifestyle();
+  const suffixe=jour===localISODate(new Date())
+    ? ''
+    : ' pour le '+new Date(jour+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
+  toastEcriture(saveUser(),duration+'h enregistrées'+suffixe+' !','ta nuit est');
+  _rerenderLifestyle();
 }
 
 function loadLifestyle(){
