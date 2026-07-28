@@ -7764,20 +7764,30 @@ function renderProgEx(){
   setTimeout(()=>{try{_rendreSuggestionsProto();}catch(e){}},0);
   // Sync chips
   for(let n=1;n<=10;n++){const c=document.getElementById('exo-chip-'+n);if(c)c.classList.toggle('active',n===progEx.length);}
+  _normaliserSS(progEx);
+  const _grs=_groupesEx(progEx);
   document.getElementById('prog-exercises').innerHTML=progEx.map((ex,i)=>{
     const pr=parseReps(ex.reps);
+    const enSS=_grs.some(g=>g.length>1&&g.includes(i));
+    // Bandeau d'appariement au-dessus de chaque exercice sauf le premier :
+    // c'est l'espace ENTRE deux exercices qu'on lie ou qu'on délie.
+    const lien=i===0?'':`<div style="display:flex;align-items:center;gap:8px;margin:-6px 0 8px">
+      <div style="flex:1;height:1px;background:${ex.ss?'var(--orange)':'var(--border)'}"></div>
+      <button onclick="_basculerSS(${i})" style="background:${ex.ss?'#1a0f00':'var(--surface-1)'};border:1px solid ${ex.ss?'var(--orange)':'var(--border)'};color:${ex.ss?'var(--orange)':'var(--sub)'};border-radius:20px;padding:4px 11px;font-size:10px;font-weight:800;letter-spacing:1px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap">${ex.ss?'⇄ SUPERSET · DÉLIER':'+ SUPERSET'}</button>
+      <div style="flex:1;height:1px;background:${ex.ss?'var(--orange)':'var(--border)'}"></div>
+    </div>`;
     const badge=pr.type==='degressive'?`<span style="background:#7c2d12;color:#fca5a5;padding:2px 7px;border-radius:20px;font-size:var(--fs-xs);font-weight:700">DÉGRESSIVE</span>`:
       pr.type==='unilateral'?`<span style="background:#1e3a5f;color:#93c5fd;padding:2px 7px;border-radius:20px;font-size:var(--fs-xs);font-weight:700">UNILATÉRAL</span>`:
       pr.type==='range'?`<span style="background:#1a3322;color:#86efac;padding:2px 7px;border-radius:20px;font-size:var(--fs-xs);font-weight:700">PLAGE</span>`:'';
-    return `
-    <div style="background:var(--surface-1);border-radius:14px;margin-bottom:14px;overflow:hidden;border:1px solid var(--border)">
+    return `${lien}
+    <div style="background:var(--surface-1);border-radius:14px;margin-bottom:14px;overflow:hidden;border:1px solid ${enSS?'var(--orange)':'var(--border)'}">
       <!-- Numéro + Nom -->
       <div style="background:var(--red);padding:8px 14px;display:flex;align-items:center;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:8px">
-          <span style="background:#fff2;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0">${i+1}</span>
+          <span style="background:#fff2;border-radius:50%;min-width:22px;height:22px;padding:0 5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0">${_repereEx(progEx,i)}</span>
           <input value="${escapeHtml(ex.name||'')}" onchange="_progExDirty=true;progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase()" placeholder="NOM DE L'EXERCICE (MATÉRIELS)" style="background:transparent;border:none;color:#fff;font-family:Montserrat,sans-serif;font-weight:800;font-size:13px;outline:none;text-transform:uppercase;flex:1">
         </div>
-        <button onclick="_progExDirty=true;progEx.splice(${i},1);renderProgEx()" aria-label="Supprimer cet exercice" style="background:#fff2;border:none;color:#fff;font-size:14px;cursor:pointer;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center">${icon('trash',13)}</button>
+        <button onclick="_supprimerEx(${i})" aria-label="Supprimer cet exercice" style="background:#fff2;border:none;color:#fff;font-size:14px;cursor:pointer;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center">${icon('trash',13)}</button>
       </div>
       <div style="padding:12px">
         <!-- Description technique -->
@@ -7816,13 +7826,31 @@ function renderProgEx(){
   }).join('');
 }
 
+// Lier ou délier un exercice avec celui du dessus.
+function _basculerSS(i){
+  if(i<=0||!progEx[i]) return;
+  progEx[i].ss=!progEx[i].ss;
+  _progExDirty=true;
+  renderProgEx();
+}
+// Supprimer la TÊTE d'un superset laisserait le suivant enchaîné avec un
+// exercice qui n'a plus rien à voir : il devient tête de groupe à son tour.
+function _supprimerEx(i){
+  if(!progEx[i]) return;
+  if(progEx[i+1]&&progEx[i+1].ss&&!progEx[i].ss) progEx[i+1].ss=false;
+  progEx.splice(i,1);
+  _normaliserSS(progEx);
+  _progExDirty=true;
+  renderProgEx();
+}
+
 function loadExImage(idx,input){
   const f=input.files[0];if(!f) return;
   compressImage(f,800,0.75,data=>{progEx[idx].image=data;renderProgEx();});
 }
 
 function addExercise(){
-  progEx.push({name:'',series:3,reps:'10',repos:'01 min',description:'',image:null,videoUrl:''});
+  progEx.push({name:'',series:3,reps:'10',repos:'01 min',description:'',image:null,videoUrl:'',ss:false});
   _progExDirty=true;
   renderProgEx();
   // Scroll vers le nouvel exercice
@@ -8898,21 +8926,144 @@ function startWorkout(){
   document.getElementById('wo-title').textContent=prog.name;
   renderWoEx();
 }
+// ══════════════ SUPERSETS ══════════════
+// Deux exercices enchaînés sans repos doivent être visibles ENSEMBLE : les
+// alterner série par série en naviguant d'un écran à l'autre est impraticable
+// une barre en main.
+//
+// Modèle : un exercice porte « ss:true » = enchaîné avec le PRÉCÉDENT. Les
+// groupes s'en déduisent, il n'y a pas d'identifiant à maintenir, et
+// sessionData reste indexé par le vrai index de l'exercice : l'enregistrement
+// par nom, l'historique et les charges suggérées ne changent pas d'un iota.
+function _groupesEx(exercices){
+  const g=[];
+  (exercices||[]).forEach((ex,i)=>{
+    // Le premier exercice ne peut pas être enchaîné avec un précédent qui
+    // n'existe pas : on ouvre toujours un groupe sur lui.
+    if(i===0||!ex||!ex.ss) g.push([i]); else g[g.length-1].push(i);
+  });
+  return g;
+}
+function _groupeDe(exercices,idx){
+  return _groupesEx(exercices).find(g=>g.includes(idx))||[idx];
+}
+// Repère affiché : le NUMÉRO DU GROUPE, suffixé d'une lettre quand le groupe
+// en contient plusieurs, comme « 3a / 3b » sur une fiche. Numéroter par groupe
+// et non par exercice évite qu'un exercice seul placé après deux supersets
+// s'affiche « 3 » alors qu'il est le cinquième de la liste.
+const _SS_LETTRES='abcdefghijklmnopqrstuvwxyz';
+function _repereEx(exercices,idx){
+  const grs=_groupesEx(exercices);
+  const gi=grs.findIndex(g=>g.includes(idx));
+  if(gi<0) return String(idx+1);
+  const g=grs[gi];
+  if(g.length<2) return String(gi+1);
+  return String(gi+1)+(_SS_LETTRES[g.indexOf(idx)]||'');
+}
+// Après une suppression ou un réordonnancement, un exercice peut se retrouver
+// enchaîné avec un précédent qui n'est plus le bon, ou en tête de liste.
+function _normaliserSS(exercices){
+  (exercices||[]).forEach((ex,i)=>{ if(ex&&i===0) ex.ss=false; });
+  return exercices;
+}
 function pad(n){return n.toString().padStart(2,'0');}
+// Un écran de séance affiche un GROUPE : un exercice seul, ou les deux (ou
+// plus) d'un superset. Le corps propre à un exercice a été sorti dans
+// _blocExo pour pouvoir en rendre plusieurs côte à côte ; tout ce qui vaut
+// pour l'écran entier (échauffement, photo, encart RIR) reste ici, en un seul
+// exemplaire.
 function renderWoEx(){
-  const ex=woState.exercises[woState.currentEx],total=woState.exercises.length;
-  document.getElementById('wo-progress').style.width=(woState.currentEx/total*100)+'%';
-  document.getElementById('wo-ex-count').textContent=(woState.currentEx+1)+'/'+total;
-  document.getElementById('wo-prev-btn').style.opacity=woState.currentEx===0?'0.3':'1';
+  const total=woState.exercises.length;
+  const grs=_groupesEx(woState.exercises);
+  let gi=grs.findIndex(g=>g.includes(woState.currentEx));
+  if(gi<0) gi=0;
+  const groupe=grs[gi];
+  // Une reprise de séance enregistrée avant les supersets peut pointer au
+  // milieu d'un groupe : on se recale sur sa tête.
+  woState.currentEx=groupe[0];
+  const estSS=groupe.length>1;
+
+  document.getElementById('wo-progress').style.width=(gi/grs.length*100)+'%';
+  // Le compteur suit les ÉCRANS, pas les exercices : un superset est un seul
+  // écran. Le nombre d'exercices reste visible sur le badge de chaque bloc.
+  document.getElementById('wo-ex-count').textContent=(gi+1)+'/'+grs.length;
+  document.getElementById('wo-prev-btn').style.opacity=gi===0?'0.3':'1';
   // innerHTML et non textContent : les deux libellés (long/court) doivent
   // survivre au changement d'exercice, sinon la version mobile disparaît dès le
   // premier woNav et le texte se remet à déborder.
-  document.getElementById('wo-next-btn').innerHTML=woState.currentEx===total-1
+  document.getElementById('wo-next-btn').innerHTML=gi===grs.length-1
     ?'<span class="wo-lbl-long">Terminer la séance</span><span class="wo-lbl-court">Terminer</span> '
     :'<span class="wo-lbl-long">Exercice suivant</span><span class="wo-lbl-court">Suivant</span> →';
+
+  // Photo programme en haut si disponible
+  const photoHtml=woState.sessionPhoto?`<div style="margin-bottom:14px;border-radius:12px;overflow:hidden;border:1px solid var(--border)">
+    <div style="font-size:var(--fs-xs);color:var(--sub);padding:6px 10px;background:var(--surface-2)"> Ta fiche programme (référence)</div>
+    <img src="${woState.sessionPhoto}" style="width:100%;max-height:160px;object-fit:cover;cursor:pointer" onclick="this.style.maxHeight=this.style.maxHeight==='none'?'160px':'none'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+  </div>`:'';
+
+  const blocs=groupe.map(i=>_blocExo(i,estSS));
+  const auMoinsUnMuscu=groupe.some(i=>!isCardio(woState.exercises[i]));
+
+  document.getElementById('wo-content').innerHTML=`
+    <div class="anim-in">
+      ${woState.currentEx===0?_carteProtocole(woState.warmup,'Échauffement','var(--orange)','wo-warmup-body'):''}
+      ${photoHtml}
+      ${estSS?`<div style="display:flex;align-items:center;gap:9px;background:#1a0f00;border:1px solid var(--orange);border-radius:10px;padding:10px 13px;margin-bottom:12px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="flex-shrink:0"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--orange)">SUPERSET</div>
+          <div style="font-size:11px;color:#bbb;margin-top:2px;line-height:1.5">Enchaîne les ${groupe.length===2?'deux':groupe.length} exercices sans repos, puis repose-toi avant la série suivante.</div>
+        </div>
+      </div>`:''}
+      ${blocs.map(b=>b.html).join(estSS?`<div style="display:flex;align-items:center;gap:8px;margin:2px 0 12px"><div style="flex:1;height:1px;background:var(--orange);opacity:.35"></div><span style="font-size:var(--fs-xs);color:var(--orange);letter-spacing:1.5px;font-weight:800">PUIS ENCHAÎNER</span><div style="flex:1;height:1px;background:var(--orange);opacity:.35"></div></div>`:'')}
+      ${auMoinsUnMuscu?`<div style="margin-top:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <label class="hit44" style="font-size:11px;cursor:pointer;color:var(--sub)"><input type="checkbox" id="film-ex" style="width:auto;margin-right:4px">  Filmer cet exercice</label>
+          <span style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:var(--fs-xs);color:var(--red);font-weight:700">→ Vise RIR 0 sur ta dernière série</span>
+            <button class="hit44" onclick="toggleRirExplain()" style="background:#1a1a1a;border:1.5px solid #fff;border-radius:50%;width:19px;height:19px;color:#fff;font-size:11px;font-weight:900;cursor:pointer;line-height:1;padding:0;flex-shrink:0;box-shadow:0 0 8px rgba(255,255,255,.45)">?</button>
+          </span>
+        </div>
+        <div id="rir-explain" style="display:none;margin-top:10px;background:#08080f;border:1px solid #1e1e3a;border-radius:10px;padding:14px;font-size:12px;line-height:1.7">
+          <div style="font-weight:800;color:#aaa;letter-spacing:.5px;margin-bottom:8px">RIR : Répétitions En Réserve</div>
+          <div style="color:var(--sub);font-size:11px;margin-bottom:10px">Le nombre de répétitions que tu pourrais encore réaliser <em>après</em> ta dernière rep, avant l'échec musculaire total.</div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:var(--fs-xs);font-weight:900;min-width:40px;padding-top:1px;color:var(--danger)">RIR 0</span><span style="color:#aaa;font-size:11px">Échec : impossible de faire 1 rep de plus</span></div>
+            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:var(--fs-xs);font-weight:900;min-width:40px;padding-top:1px;color:var(--warning)">RIR 1</span><span style="color:#aaa;font-size:11px">1 rep encore dans le réservoir</span></div>
+            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:var(--fs-xs);font-weight:900;min-width:40px;padding-top:1px;color:var(--info)">RIR 2</span><span style="color:#aaa;font-size:11px">2 reps encore possibles : effort intense mais contrôlé</span></div>
+            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:var(--fs-xs);font-weight:900;min-width:40px;padding-top:1px;color:var(--success)">RIR 3+</span><span style="color:#aaa;font-size:11px">Encore loin de l'échec : échauffement ou séance légère</span></div>
+          </div>
+          <div style="border-top:1px solid #1a1a2a;padding-top:10px;color:#666;font-size:11px;line-height:1.6">
+            💡 <strong style="color:#aaa">En pratique :</strong> vise <strong style="color:var(--info)">RIR 2</strong> sur tes premières séries pour préserver l'énergie, puis pousse à <strong style="color:var(--danger)">RIR 0–1</strong> sur ta <strong style="color:#fff">dernière série</strong> pour maximiser le stimulus musculaire.
+          </div>
+        </div>
+      </div>`:''}
+    </div>`;
+
+  // Handlers posés en JS, hors attribut. Auparavant les trois valeurs etaient
+  // interpolees DANS onclick : cela ne cassait pas — JSON.stringify les met
+  // entre guillemets doubles avant qu'escapeHtml n'encode l'apostrophe, donc
+  // « 10 par bras d'appui » passait — mais la correction ne tenait qu'a l'ordre
+  // de ces deux appels. Retirer le JSON.stringify, ou echapper apres, suffisait
+  // a produire du JS invalide dans un attribut. Ici, plus rien n'est parse
+  // comme du code : les valeurs restent des valeurs.
+  blocs.forEach(b=>{
+    const cb=document.getElementById('wo-calc-btn-'+b.idx);
+    if(cb) cb.onclick=()=>openCalc(b.sug,b.ex.reps,'0',currentUser.gender);
+    renderSets(b.ex,b.data,b.idx);
+  });
+  woPersist();
+  setTimeout(()=>blocs.forEach(b=>setupScrollFade(document.getElementById('wo-sets-scroll-'+b.idx))),0);
+}
+
+// Corps d'un seul exercice. Rend le HTML et renvoie de quoi câbler la suite :
+// l'index est explicite partout, car deux exercices peuvent être à l'écran en
+// même temps et woState.currentEx ne désigne alors que la tête du groupe.
+function _blocExo(idx,estSS){
+  const ex=woState.exercises[idx];
   const pr=parseReps(ex.reps);
-  if(!woState.sessionData[woState.currentEx]) woState.sessionData[woState.currentEx]={sets:Array.from({length:ex.series},(_,si)=>({weight:'',weight2:'',reps:pr.type==='degressive'?pr.p1:ex.reps,rir:'',pain:'',done:false,degressive:pr.type==='degressive',p2reps:pr.p2}))};
-  const data=woState.sessionData[woState.currentEx];
+  if(!woState.sessionData[idx]) woState.sessionData[idx]={sets:Array.from({length:ex.series},(_,si)=>({weight:'',weight2:'',reps:pr.type==='degressive'?pr.p1:ex.reps,rir:'',pain:'',done:false,degressive:pr.type==='degressive',p2reps:pr.p2}))};
+  const data=woState.sessionData[idx];
   const prev=getPrevPerf(ex.name,woState.slot,woState.progName);
   const cycle=getCycleFactor();
   const cycleLabel=getCycleLabel();
@@ -8946,26 +9097,24 @@ function renderWoEx(){
   const isFemme=isFemale(currentUser.gender);
   const showCycleCol=isFemme&&cycle.factor!==1.0;
   const isWide=pr.type==='degressive'||showCycleCol;
+  // Repère A1 / A2 sur un superset, numéro d'ordre sinon : c'est ainsi que
+  // l'exercice est écrit sur la fiche papier.
+  const rep=_repereEx(woState.exercises,idx);
 
-  // Photo programme en haut si disponible
-  const photoHtml=woState.sessionPhoto?`<div style="margin-bottom:14px;border-radius:12px;overflow:hidden;border:1px solid var(--border)">
-    <div style="font-size:var(--fs-xs);color:var(--sub);padding:6px 10px;background:var(--surface-2)"> Ta fiche programme (référence)</div>
-    <img src="${woState.sessionPhoto}" style="width:100%;max-height:160px;object-fit:cover;cursor:pointer" onclick="this.style.maxHeight=this.style.maxHeight==='none'?'160px':'none'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-  </div>`:'';
-
-  document.getElementById('wo-content').innerHTML=`
-    <div class="anim-in">
-      ${woState.currentEx===0?_carteProtocole(woState.warmup,'Échauffement','var(--orange)','wo-warmup-body'):''}
-      ${photoHtml}
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div>
-          <div class="ex-name" style="font-size:15px">${escapeHtml(ex.name)}</div>
-          <div class="sub" style="font-size:12px;margin-top:3px">${ex.series} séries × ${escapeHtml(ex.reps)} reps${ex._cycleAdjusted?' <span style="color:var(--orange)">(−1 série cycle)</span>':''}</div>
+  const html=`
+      <div${estSS?' style="border-left:2px solid var(--orange);padding-left:11px"':''}>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px">
+        <div style="display:flex;align-items:center;gap:9px;min-width:0">
+          ${estSS?`<div style="background:var(--orange);color:#08080a;font-size:12px;font-weight:900;border-radius:6px;padding:3px 7px;flex-shrink:0">${rep}</div>`:''}
+          <div style="min-width:0">
+            <div class="ex-name" style="font-size:15px">${escapeHtml(ex.name)}</div>
+            <div class="sub" style="font-size:12px;margin-top:3px">${ex.series} séries × ${escapeHtml(ex.reps)} reps${ex._cycleAdjusted?' <span style="color:var(--orange)">(−1 série cycle)</span>':''}</div>
+          </div>
         </div>
-        <button class="hit44" id="wo-calc-btn" style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:11px;padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Vue tableau</button>
+        <button class="hit44" id="wo-calc-btn-${idx}" style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:11px;padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Vue tableau</button>
       </div>
 
-      ${cycleLabel&&isFemme?`<div style="background:var(--dark);border:1px solid #2a2a2a;border-radius:3px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#888;letter-spacing:.5px">${cycleLabel.text}</div>`:''}
+      ${cycleLabel&&isFemme&&!estSS?`<div style="background:var(--dark);border:1px solid #2a2a2a;border-radius:3px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#888;letter-spacing:.5px">${cycleLabel.text}</div>`:''}
 
       ${isCardio(ex)?
         `<div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:10px;padding:14px;margin-bottom:12px;text-align:center">
@@ -8983,7 +9132,7 @@ function renderWoEx(){
       // Pas d'historique SUR CE CRÉNEAU. On le dit, au lieu de laisser un vide
       // inexpliqué — et surtout au lieu de proposer la charge d'un autre jour,
       // qui ne correspond ni aux mêmes répétitions ni au même effort.
-      `<div id="wo-no-hist" class="sub" style="font-size:11px;background:var(--surface-2);border-radius:8px;padding:10px 13px;margin-bottom:12px;line-height:1.6">Pas encore d'historique pour cet exercice ${escapeHtml(creneauPhrase)} : note ta charge, elle servira de repère la prochaine fois.</div>`}
+      `<div id="wo-no-hist-${idx}" class="wo-no-hist sub" style="font-size:11px;background:var(--surface-2);border-radius:8px;padding:10px 13px;margin-bottom:12px;line-height:1.6">Pas encore d'historique pour cet exercice ${escapeHtml(creneauPhrase)} : note ta charge, elle servira de repère la prochaine fois.</div>`}
 
       ${(ex.description||ex.note)?`<div style="background:var(--surface-2);border-radius:10px;padding:11px 14px;margin-bottom:12px">
         <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--red);margin-bottom:5px">CONSIGNE</div>
@@ -9004,63 +9153,36 @@ function renderWoEx(){
       </div>`:''}
 
       ${isCardio(ex)?
-        `<table class="series-table" style="width:100%"><thead><tr><th>#</th><th>Complété</th></tr></thead><tbody id="sets-body"></tbody></table>`
-      :`<div id="wo-sets-scroll"${!isWide?' style="overflow-x:auto"':''}>
+        `<table class="series-table" style="width:100%"><thead><tr><th>#</th><th>Complété</th></tr></thead><tbody id="sets-body-${idx}"></tbody></table>`
+      :`<div id="wo-sets-scroll-${idx}"${!isWide?' style="overflow-x:auto"':''}>
       <table class="series-table series-table-wo" style="width:100%${!isWide?';min-width:260px':''}">
         <thead><tr style="background:var(--red)">
           ${isWide
             ?`<th style="color:#fff;text-align:left;padding-left:10px;font-size:var(--fs-xs);letter-spacing:.5px">Séries${pr.type==='degressive'?' · Dégressive':''}${showCycleCol?' · Cycle':''}</th>`
             :`<th style="color:#fff">Reps</th><th style="color:#fff">Charge</th><th style="color:#fff">RIR</th><th style="font-size:var(--fs-xs);color:#fff">Douleur</th><th style="color:#fff;font-size:var(--fs-xs)">Validé</th>`}
         </tr></thead>
-        <tbody id="sets-body"></tbody>
+        <tbody id="sets-body-${idx}"></tbody>
       </table>
       </div>`}
-      ${ex.repos&&!isCardio(ex)?`<div style="margin-top:10px;display:flex;align-items:center;gap:8px;color:var(--sub);font-size:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15" style="flex-shrink:0"><circle cx="12" cy="14" r="8"/><line x1="12" y1="14" x2="12" y2="9.5"/><line x1="10" y1="2.5" x2="14" y2="2.5"/><line x1="12" y1="2.5" x2="12" y2="6"/></svg> <strong>Repos :</strong> ${escapeHtml(ex.repos)}</div>`:''}
-      ${!isCardio(ex)?`<div style="margin-top:10px">
-        <div style="display:flex;align-items:center;justify-content:space-between">
-          <label class="hit44" style="font-size:11px;cursor:pointer;color:var(--sub)"><input type="checkbox" id="film-ex" style="width:auto;margin-right:4px">  Filmer cet exercice</label>
-          <span style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:var(--fs-xs);color:var(--red);font-weight:700">→ Vise RIR 0 sur ta dernière série</span>
-            <button class="hit44" onclick="toggleRirExplain()" style="background:#1a1a1a;border:1.5px solid #fff;border-radius:50%;width:19px;height:19px;color:#fff;font-size:11px;font-weight:900;cursor:pointer;line-height:1;padding:0;flex-shrink:0;box-shadow:0 0 8px rgba(255,255,255,.45)">?</button>
-          </span>
-        </div>
-        <div id="rir-explain" style="display:none;margin-top:10px;background:#08080f;border:1px solid #1e1e3a;border-radius:10px;padding:14px;font-size:12px;line-height:1.7">
-          <div style="font-weight:800;color:#aaa;letter-spacing:.5px;margin-bottom:8px">RIR : Répétitions En Réserve</div>
-          <div style="color:var(--sub);font-size:11px;margin-bottom:10px">Le nombre de répétitions que tu pourrais encore réaliser <em>après</em> ta dernière rep, avant l'échec musculaire total.</div>
-          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
-            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:var(--fs-xs);font-weight:900;min-width:40px;padding-top:1px;color:var(--danger)">RIR 0</span><span style="color:#aaa;font-size:11px">Échec : impossible de faire 1 rep de plus</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:var(--fs-xs);font-weight:900;min-width:40px;padding-top:1px;color:var(--warning)">RIR 1</span><span style="color:#aaa;font-size:11px">1 rep encore dans le réservoir</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:var(--fs-xs);font-weight:900;min-width:40px;padding-top:1px;color:var(--info)">RIR 2</span><span style="color:#aaa;font-size:11px">2 reps encore possibles : effort intense mais contrôlé</span></div>
-            <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:var(--fs-xs);font-weight:900;min-width:40px;padding-top:1px;color:var(--success)">RIR 3+</span><span style="color:#aaa;font-size:11px">Encore loin de l'échec : échauffement ou séance légère</span></div>
-          </div>
-          <div style="border-top:1px solid #1a1a2a;padding-top:10px;color:#666;font-size:11px;line-height:1.6">
-            💡 <strong style="color:#aaa">En pratique :</strong> vise <strong style="color:var(--info)">RIR 2</strong> sur tes premières séries pour préserver l'énergie, puis pousse à <strong style="color:var(--danger)">RIR 0–1</strong> sur ta <strong style="color:#fff">dernière série</strong> pour maximiser le stimulus musculaire.
-          </div>
-        </div>
-      </div>`:''}
-    </div>`;
-  // Handler pose en JS, hors attribut. Auparavant les trois valeurs etaient
-  // interpolees DANS onclick : cela ne cassait pas — JSON.stringify les met
-  // entre guillemets doubles avant qu'escapeHtml n'encode l'apostrophe, donc
-  // « 10 par bras d'appui » passait — mais la correction ne tenait qu'a l'ordre
-  // de ces deux appels. Retirer le JSON.stringify, ou echapper apres, suffisait
-  // a produire du JS invalide dans un attribut. Ici, plus rien n'est parse
-  // comme du code : les valeurs restent des valeurs.
-  const _cb=document.getElementById('wo-calc-btn');
-  if(_cb) _cb.onclick=()=>openCalc(sug,ex.reps,'0',currentUser.gender);
-  renderSets(ex,data);
-  woPersist();
-  setTimeout(()=>setupScrollFade(document.getElementById('wo-sets-scroll')),0);
+      ${ex.repos&&!isCardio(ex)&&!estSS?`<div style="margin-top:10px;display:flex;align-items:center;gap:8px;color:var(--sub);font-size:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15" style="flex-shrink:0"><circle cx="12" cy="14" r="8"/><line x1="12" y1="14" x2="12" y2="9.5"/><line x1="10" y1="2.5" x2="14" y2="2.5"/><line x1="12" y1="2.5" x2="12" y2="6"/></svg> <strong>Repos :</strong> ${escapeHtml(ex.repos)}</div>`:''}
+      </div>`;
+
+  return {idx,ex,data,sug,html};
 }
-function renderSets(ex,data){
-  const tb=document.getElementById('sets-body');if(!tb) return;
+
+// idx explicite : sur un superset, deux tableaux de séries coexistent à
+// l'écran. Le laisser retomber sur woState.currentEx ferait écrire les deux
+// dans le même exercice.
+function renderSets(ex,data,idx){
+  if(idx==null) idx=woState.currentEx;
+  const tb=document.getElementById('sets-body-'+idx);if(!tb) return;
   // Cardio : affichage simplifié sans poids ni RIR
   if(isCardio(ex)){
     tb.innerHTML=data.sets.map((s,i)=>{
       const done=s.done;
       return `<tr class="${done?'done':''}">
         <td style="font-weight:700">${i+1}</td>
-        <td><button onclick="woState.sessionData[woState.currentEx].sets[${i}].done=!woState.sessionData[woState.currentEx].sets[${i}].done;renderSets(woState.exercises[woState.currentEx],woState.sessionData[woState.currentEx])"
+        <td><button onclick="woState.sessionData[${idx}].sets[${i}].done=!woState.sessionData[${idx}].sets[${i}].done;renderSets(woState.exercises[${idx}],woState.sessionData[${idx}],${idx})"
           style="width:40px;height:40px;border-radius:50%;border:2px solid ${done?'#fff':'var(--border)'};background:${done?'#1a1a1a':'transparent'};color:var(--sub);font-size:16px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;${done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">
           ${done?'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="19" height="19" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}
         </button></td>
@@ -9105,10 +9227,10 @@ function renderSets(ex,data){
     const rowCls=s.done?'done':'';
     const painAlert=s.pain&&parseInt(s.pain)>=4?' row-alert':'';
 
-    const onChW=`woState.sessionData[woState.currentEx].sets[${i}].weight=this.value;woState.sessionData[woState.currentEx].sets[${i}].userEdited=true;woState.sessionData[woState.currentEx].sets[${i}].isAuto=false;renderSets(woState.exercises[woState.currentEx],woState.sessionData[woState.currentEx])`;
-    const onChW2=`woState.sessionData[woState.currentEx].sets[${i}].weight2=this.value;renderSets(woState.exercises[woState.currentEx],woState.sessionData[woState.currentEx])`;
-    const onChR=`woState.sessionData[woState.currentEx].sets[${i}].rir=this.value;renderSets(woState.exercises[woState.currentEx],woState.sessionData[woState.currentEx])`;
-    const onChP=`woState.sessionData[woState.currentEx].sets[${i}].pain=this.value`;
+    const onChW=`woState.sessionData[${idx}].sets[${i}].weight=this.value;woState.sessionData[${idx}].sets[${i}].userEdited=true;woState.sessionData[${idx}].sets[${i}].isAuto=false;renderSets(woState.exercises[${idx}],woState.sessionData[${idx}],${idx})`;
+    const onChW2=`woState.sessionData[${idx}].sets[${i}].weight2=this.value;renderSets(woState.exercises[${idx}],woState.sessionData[${idx}],${idx})`;
+    const onChR=`woState.sessionData[${idx}].sets[${i}].rir=this.value;renderSets(woState.exercises[${idx}],woState.sessionData[${idx}],${idx})`;
+    const onChP=`woState.sessionData[${idx}].sets[${i}].pain=this.value`;
 
     // Weight cell (with AUTO badge)
     const autoLabel=s.isAuto&&!s.done?'<div style="font-size:var(--fs-xs);color:var(--green);text-align:center;margin-top:2px;letter-spacing:1px">AUTO</div>':'';
@@ -9167,7 +9289,7 @@ function renderSets(ex,data){
             <div style="display:flex;align-items:center;gap:8px">
               ${rirSelect}
               ${painSelect}
-              <button class="hit44" onclick="toggleSet(${i})" style="width:34px;height:34px;border-radius:50%;border:2px solid ${s.done?'#fff':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:14px;margin-left:auto;display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button>
+              <button class="hit44" onclick="toggleSet(${i},${idx})" style="width:34px;height:34px;border-radius:50%;border:2px solid ${s.done?'#fff':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:14px;margin-left:auto;display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button>
             </div>
           </div>
         </td>
@@ -9182,11 +9304,10 @@ function renderSets(ex,data){
       ${cycleCell}
       <td>${rirSelect}</td>
       <td>${painSelect}</td>
-      <td><button class="hit44" onclick="toggleSet(${i})" style="width:34px;height:34px;border-radius:50%;border:2px solid ${s.done?'#fff':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button></td>
+      <td><button class="hit44" onclick="toggleSet(${i},${idx})" style="width:34px;height:34px;border-radius:50%;border:2px solid ${s.done?'#fff':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button></td>
     </tr>`;
   }).join('');
 }
-
 
 function toggleRirExplain(){
   const el=document.getElementById('rir-explain');
@@ -9269,15 +9390,23 @@ function getLastZeroRIRWeight(exName,slot,progName){
     if(zeroSets?.length) return parseFloat(zeroSets[zeroSets.length-1].weight);
   }return null;
 }
-function toggleSet(i){
-  const d=woState.sessionData[woState.currentEx];d.sets[i].done=!d.sets[i].done;
-  renderSets(woState.exercises[woState.currentEx],d);
+function toggleSet(i,idx){
+  // idx explicite : sur un superset, le bouton « validé » du second exercice
+  // ne doit pas cocher une série du premier.
+  if(idx==null) idx=woState.currentEx;
+  const d=woState.sessionData[idx];if(!d) return;
+  d.sets[i].done=!d.sets[i].done;
+  renderSets(woState.exercises[idx],d,idx);
 }
 function woNav(dir){
-  const nxt=woState.currentEx+dir;
+  // On navigue d'un GROUPE à l'autre : un superset est un seul écran, sinon
+  // « suivant » ramènerait sur le second exercice déjà affiché.
+  const grs=_groupesEx(woState.exercises);
+  const gi=grs.findIndex(g=>g.includes(woState.currentEx));
+  const nxt=(gi<0?0:gi)+dir;
   if(nxt<0) return;
-  if(nxt>=woState.exercises.length){localStorage.removeItem('rc_wo_state');finishWorkout(false);return;}
-  woState.currentEx=nxt;renderWoEx();woPersist();
+  if(nxt>=grs.length){localStorage.removeItem('rc_wo_state');finishWorkout(false);return;}
+  woState.currentEx=grs[nxt][0];renderWoEx();woPersist();
 }
 function finishWorkout(incomplete=false){
   localStorage.removeItem('rc_wo_state');
@@ -14685,12 +14814,43 @@ function parseWorkoutSheet(text){
 
     const description=descParts.filter(l=>l.length>4).join(' ').replace(/\s+/g,' ').trim();
 
-    exercises.push({name,series,reps,repos,description,note:'',image:null});
+    // Une ligne numérotée peut porter DEUX exercices enchaînés. On les sépare
+    // en deux exercices, le second marqué ss, pour qu'ils s'affichent ensemble
+    // à la séance. La détection reste volontairement stricte : un découpage à
+    // tort fabrique un exercice fantôme, alors qu'un superset manqué se
+    // rattrape d'une case à cocher dans l'écran de relecture.
+    const _noms=_ocrDecouperSS(name);
+    _noms.forEach((nm,k)=>{
+      exercises.push({name:nm,series,reps,repos,description,note:'',image:null,ss:k>0});
+    });
   }
   return exercises;
 }
 
 // ======= MODAL DE RÉVISION AVANT IMPORT =======
+// Découpe le nom lu sur une ligne de fiche quand elle porte un superset.
+// Rend toujours au moins un nom : en cas de doute, on ne découpe pas.
+function _ocrDecouperSS(nom){
+  let n=String(nom||'').trim();
+  if(!n) return [n];
+  // Marqueur explicite écrit par le coach : « SUPERSET : A + B », « SS A / B ».
+  // Ancré en tête : c'est là qu'il s'écrit sur une fiche, et « SS » au milieu
+  // d'un nom serait plus probablement un artefact de lecture qu'un marqueur.
+  const marque=/^\s*(SUPERSETS?|SUPER\s?SETS?|BI\s?-?SETS?|SS)\b\s*[:.\-]?\s*/i;
+  const avaitMarque=marque.test(n);
+  if(avaitMarque) n=n.replace(marque,'').trim();
+  // Repères A1/A2 en tête de chaque nom : « A1 DEVELOPPE A2 ECARTE ».
+  const parLettres=n.split(/\s*\b[A-D][1-4][\s.):-]+/).map(s=>s.trim()).filter(Boolean);
+  if(parLettres.length>1&&parLettres.every(s=>s.length>=4)) return parLettres;
+  // Sinon, un séparateur franc. Le « / » n'est accepté qu'avec le marqueur :
+  // « TIRAGE POITRINE/NUQUE » est un seul exercice, pas deux.
+  const sep=avaitMarque?/\s+[+\/]\s+|\s*\+\s*/:/\s+\+\s+/;
+  const morceaux=n.split(sep).map(s=>s.trim()).filter(Boolean);
+  if(morceaux.length>1&&morceaux.length<=3&&morceaux.every(s=>s.length>=5&&/[A-ZÀ-Ÿ]{3}/i.test(s)))
+    return morceaux;
+  return [n];
+}
+
 function showOcrReviewModal(exercises,idx,videoLinks=[]){
   // videoLinks : 1 URL par exercice en ordre (une ligne tableau = un exo)
   const rows=exercises.map((ex,i)=>{
@@ -14711,7 +14871,11 @@ function showOcrReviewModal(exercises,idx,videoLinks=[]){
       ? `<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-bottom:4px">Proposé depuis ton guide</div>` : '';
     const desc=(ex.description||'').replace(/"/g,'&quot;');
     return`
-    <div style="background:var(--surface-2);border-radius:10px;padding:12px;margin-bottom:10px;border:1px solid var(--border)" id="ocr-ex-${i}">
+    <div style="background:var(--surface-2);border-radius:10px;padding:12px;margin-bottom:10px;border:1px solid ${ex.ss?'var(--orange)':'var(--border)'}" id="ocr-ex-${i}">
+      ${i===0?'':`<label style="display:flex;align-items:center;gap:7px;margin:-4px 0 9px;cursor:pointer">
+        <input type="checkbox" id="ocr-ss-${i}" ${ex.ss?'checked':''} style="width:15px;height:15px;margin:0;accent-color:var(--orange);flex-shrink:0;cursor:pointer">
+        <span style="font-size:10px;font-weight:800;letter-spacing:1px;color:${ex.ss?'var(--orange)':'var(--sub)'};text-transform:none">⇄ EN SUPERSET AVEC LE PRÉCÉDENT</span>
+      </label>`}
       <div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:8px">
         <span style="background:var(--red);color:#fff;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:800;flex-shrink:0">${i+1}</span>
         <input value="${ex.name.replace(/"/g,'&quot;')}" id="ocr-name-${i}" style="font-weight:700;font-size:13px;text-transform:uppercase;flex:1" placeholder="Nom exercice">
@@ -14784,9 +14948,14 @@ function importOcrExercises(idx,maxN){
     const description=(document.getElementById('ocr-desc-'+i)?.value||'').trim();
     const videoUrl=(document.getElementById('ocr-v1-'+i)?.value||'').trim();
     const videoUrl2=(document.getElementById('ocr-v2-'+i)?.value||'').trim();
-    if(name) result.push({name,series,reps,repos,description,note:'',image:null,videoUrl,videoUrl2});
+    // La case n'existe pas sur la première carte, et une carte supprimée
+    // décale ce qui suit : un exercice ne peut pas rester enchaîné avec un
+    // précédent qui n'est plus là.
+    const ss=!!document.getElementById('ocr-ss-'+i)?.checked&&result.length>0;
+    if(name) result.push({name,series,reps,repos,description,note:'',image:null,videoUrl,videoUrl2,ss});
   }
   if(!result.length){toast('Aucun exercice à importer.','var(--orange)');return;}
+  _normaliserSS(result);
 
   // ── Coach : l'import alimente l'éditeur d'exercices partagé ───────────────
   // progEx est la source de vérité de cet écran, et saveProgram() sait déjà
@@ -16938,6 +17107,64 @@ function testExercices(){
        &&_carteProtocole(null,'X','y','z')===''&&_carteProtocole(undefined,'X','y','z')==='');
     _d.innerHTML=_carteProtocole('1. <img src=x onerror=alert(1)>','X','var(--orange)','_t3');
     ok('Carte athlète : HTML échappé',_d.querySelectorAll('img').length===0);
+
+    // ══════════════ SUPERSETS ══════════════
+    const _E=(...ss)=>ss.map((s,i)=>({name:'EX'+(i+1),series:2,reps:'10',ss:s}));
+    const _G=(...ss)=>JSON.stringify(_groupesEx(_E(...ss)));
+    ok('Aucun superset : un groupe par exercice',_G(false,false,false)==='[[0],[1],[2]]');
+    ok('Une paire enchaînée',_G(false,true,false)==='[[0,1],[2]]');
+    ok('Trois exercices enchaînés',_G(false,true,true)==='[[0,1,2]]');
+    ok('Deux paires',_G(false,true,false,true)==='[[0,1],[2,3]]');
+    ok('Le premier exercice ne peut pas être enchaîné',_G(true,false)==='[[0],[1]]',_G(true,false));
+    ok('Séance vide',_G()==='[]');
+    ok('_groupeDe trouve le groupe',JSON.stringify(_groupeDe(_E(false,true,false),1))==='[0,1]');
+    ok('_groupeDe sur index hors liste',JSON.stringify(_groupeDe(_E(false),9))==='[9]');
+
+    // Repères : numéro de GROUPE, suffixé quand le groupe en contient plusieurs
+    const _rx=_E(false,true,false,true,false);
+    ok('Repères 1a 1b 2a 2b 3',_rx.map((_,i)=>_repereEx(_rx,i)).join(' ')==='1a 1b 2a 2b 3',
+       _rx.map((_,i)=>_repereEx(_rx,i)).join(' '));
+    const _rs=_E(false,false);
+    ok('Sans superset, repère = numéro d\'ordre',_rs.map((_,i)=>_repereEx(_rs,i)).join(' ')==='1 2');
+
+    // Réparation après suppression : la tête supprimée, le suivant prend sa place
+    const _sup=(liste,i)=>{const p=liste.slice();
+      if(p[i+1]&&p[i+1].ss&&!p[i].ss) p[i+1]={...p[i+1],ss:false};
+      p.splice(i,1);_normaliserSS(p);return p.map(e=>!!e.ss);};
+    ok('Supprimer la tête d\'un superset délie le suivant',
+       JSON.stringify(_sup([{name:'A'},{name:'B'},{name:'C',ss:true},{name:'D'}],1))==='[false,false,false]');
+    ok('Supprimer le second d\'un superset laisse le premier seul',
+       JSON.stringify(_sup([{name:'A'},{name:'B'},{name:'C',ss:true},{name:'D'}],2))==='[false,false,false]');
+    ok('Supprimer le premier de la liste ne laisse pas un ss orphelin en tête',
+       JSON.stringify(_sup([{name:'A'},{name:'B',ss:true},{name:'C'}],0))==='[false,false]');
+
+    // Découpage OCR : strict, car un découpage à tort fabrique un exercice fantôme
+    const _dec=(t,n)=>ok('OCR « '+t+' » → '+n+' exercice(s)',_ocrDecouperSS(t).length===n,
+       JSON.stringify(_ocrDecouperSS(t)));
+    _dec('SUPERSET : DEVELOPPE COUCHE + ECARTE HALTERES',2);
+    _dec('SUPER SET DEVELOPPE COUCHE / ECARTE HALTERES',2);
+    _dec('DEVELOPPE COUCHE + ECARTE HALTERES',2);
+    _dec('A1 DEVELOPPE COUCHE A2 ECARTE HALTERES',2);
+    _dec('BI-SET LEG CURL + LEG EXTENSION',2);
+    _dec('TIRAGE POITRINE/NUQUE',1);
+    _dec('ROWING BARRE PRISE SUPINATION',1);
+    _dec('SQUAT 5+',1);
+    _dec('DIPS + L',1);
+    _dec('SOULEVE DE TERRE ROUMAIN (JAMBES TENDUES)',1);
+    _dec('',1);
+    ok('OCR : le marqueur est retiré du nom',_ocrDecouperSS('SS CURL BARRE + EXTENSION TRICEPS')[0]==='CURL BARRE',
+       _ocrDecouperSS('SS CURL BARRE + EXTENSION TRICEPS')[0]);
+
+    // Le pont vers l'historique reste indexé par NOM, superset ou pas.
+    // C'est la garantie que les charges suggérées ne se mélangent pas.
+    const _sauveSess=currentUser.sessions;
+    currentUser.sessions=[{id:'ss1',date:5,slot:2,name:'SS',data:{
+      'LEG CURL':{sets:[{done:true,rir:'0',weight:'40'}]},
+      'LEG EXTENSION':{sets:[{done:true,rir:'0',weight:'55'}]}}}];
+    ok('Superset : chaque exercice retrouve SA charge',
+       getLastZeroRIRWeight('LEG CURL',2,'SS')===40&&getLastZeroRIRWeight('LEG EXTENSION',2,'SS')===55,
+       getLastZeroRIRWeight('LEG CURL',2,'SS')+' / '+getLastZeroRIRWeight('LEG EXTENSION',2,'SS'));
+    currentUser.sessions=_sauveSess;
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
