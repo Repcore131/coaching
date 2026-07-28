@@ -575,6 +575,27 @@ const COACH_PHOTO='icons/coach.jpg';
 </head>
 <body>
 
+<!-- Filtre de halo néon, défini UNE fois et référencé par toutes les icônes.
+     Un drop-shadow CSS ne donne qu'une ombre portée uniforme ; un vrai tube
+     néon a un cœur surexposé et une lueur qui s'étale en s'affaiblissant.
+     D'où deux flous de rayons différents, réempilés sous le tracé net : le
+     petit sature le pourtour immédiat, le grand diffuse au loin.
+     Placé dans le document plutôt que dans chaque icône : le filtre est
+     référencé par identifiant, le dupliquer 30 fois ne servirait à rien. -->
+<svg width="0" height="0" style="position:absolute;pointer-events:none" aria-hidden="true" focusable="false">
+  <defs>
+    <filter id="rcNeonGlow" x="-75%" y="-75%" width="250%" height="250%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="0.9" result="proche"/>
+      <feGaussianBlur stdDeviation="2.6" result="loin"/>
+      <feMerge>
+        <feMergeNode in="loin"/>
+        <feMergeNode in="proche"/>
+        <feMergeNode in="proche"/>
+      </feMerge>
+    </filter>
+  </defs>
+</svg>
+
 <!-- SPLASH -->
 <div id="s-splash" class="screen active carbon-bg" style="align-items:center;justify-content:center;position:relative;overflow:hidden">
   <!-- Screen flash overlay -->
@@ -2398,7 +2419,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="caff-products-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
       <div id="caff-confirm-panel" style="display:none"></div>
       <div id="caff-preworkout-info" style="display:none;background:var(--info-bg);border:1px solid var(--info-border);border-radius:10px;padding:12px;margin-top:16px;font-size:12px;color:#aab;line-height:1.7">
-        <strong style="color:var(--info);display:inline-flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" style="flex-shrink:0;filter:drop-shadow(0 0 5px rgba(255,255,255,.9)) drop-shadow(0 0 11px rgba(255,255,255,.45))"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>Timing recommandé</strong><br>
+        <strong style="color:var(--info);display:inline-flex;align-items:center;gap:7px"><span class="caff-tab-ico" data-caff="clock"></span>Timing recommandé</strong><br>
         Prends ton pré-workout <strong>30 à 20 min avant</strong> ta séance pour un effet optimal.
       </div>
     </div>
@@ -11760,17 +11781,58 @@ const CAFFEINE_DB=[
 // différemment sur chaque plateforme et juraient avec le reste de l'interface.
 // Le type suffit à choisir l'icône, ce qui évite de stocker un glyphe dans
 // chaque prise enregistrée.
+// Tracés pensés pour le néon : peu de traits, tous fermés ou nettement
+// terminés, sans détail sous 1,5 unité — un tube de verre ne fait pas d'angle
+// vif et une fioriture disparaît dans le halo dès qu'on descend à 14 px.
 const CAFF_ICONES={
-  coffee:'<path d="M17 8h1a4 4 0 0 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" y1="2" x2="6" y2="4.5"/><line x1="10" y1="2" x2="10" y2="4.5"/><line x1="14" y1="2" x2="14" y2="4.5"/>',
-  tea:'<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>',
-  energy_drink:'<path d="M7.5 7h9v12.5a2.5 2.5 0 0 1-2.5 2.5h-4a2.5 2.5 0 0 1-2.5-2.5z"/><path d="M7.5 7 8.6 3h6.8L16.5 7"/><line x1="10.2" y1="4.4" x2="13.8" y2="4.4"/><line x1="9.6" y1="11" x2="14.4" y2="11"/>',
-  preworkout:'<rect x="4" y="4.5" width="16" height="4" rx="1.2"/><path d="M5.5 8.5h13V19a2.5 2.5 0 0 1-2.5 2.5H8A2.5 2.5 0 0 1 5.5 19z"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="16.5" x2="15" y2="16.5"/>',
-  custom:'<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/>'
+  // Tasse à anse, soucoupe, et deux volutes de vapeur
+  coffee:'<path d="M5.6 9.2h10.2v5.6a4.6 4.6 0 0 1-4.6 4.6h-1a4.6 4.6 0 0 1-4.6-4.6z"/>'
+        +'<path d="M15.8 10.6h1.5a2.6 2.6 0 0 1 0 5.2h-1.5"/>'
+        +'<path d="M3.6 21.4h14.2"/>'
+        +'<path d="M8.7 6.8c1-.9-1-1.9 0-2.9"/><path d="M12.4 6.8c1-.9-1-1.9 0-2.9"/>',
+  // Tasse basse et large, étiquette de sachet suspendue au bord
+  tea:'<path d="M5.4 10.6h11.4v3.6a5.2 5.2 0 0 1-5.2 5.2h-1a5.2 5.2 0 0 1-5.2-5.2z"/>'
+     +'<path d="M3.4 21.4h15.4"/>'
+     +'<path d="M12 10.6V6.8h3.6"/>'
+     +'<path d="M15.6 5.5h2.8v2.6h-2.8z"/>',
+  // Canette : épaulement conique, sertissage, éclair sur le corps
+  energy_drink:'<path d="M8.1 8.3h7.8v11a2.7 2.7 0 0 1-2.7 2.7h-2.4a2.7 2.7 0 0 1-2.7-2.7z"/>'
+              +'<path d="M8.1 8.3 9 4.7h6l.9 3.6"/>'
+              +'<path d="M9.7 4.7h4.6"/>'
+              +'<path d="M12.9 10.8 11 14.6h2.1l-.9 3.6 2.8-4.2h-2.1z"/>',
+  // Pot de complément : couvercle à prise, corps, bandeau d'étiquette
+  preworkout:'<path d="M6.1 5h11.8a1 1 0 0 1 1 1v2.3H5.1V6a1 1 0 0 1 1-1z"/>'
+            +'<path d="M9 5V3.5h6V5"/>'
+            +'<path d="M6.2 8.3h11.6v11.1a2.6 2.6 0 0 1-2.6 2.6H8.8a2.6 2.6 0 0 1-2.6-2.6z"/>'
+            +'<path d="M6.2 12.4h11.6"/><path d="M6.2 16.6h11.6"/>',
+  custom:'<path d="M16.8 3.2a2.7 2.7 0 0 1 3.8 3.8L7.6 20 2.4 21.6 4 16.4z"/><path d="m15 5.4 3.6 3.6"/>',
+  // Sert au bandeau « Timing recommandé » du pré-workout, pas à une catégorie.
+  clock:'<circle cx="12" cy="12.6" r="8.4"/><path d="M12 7.4v5.2l3.4 2"/><path d="M9.6 2.4h4.8"/>'
 };
+// Trois passes du même tracé, du plus diffus au plus net : c'est cet
+// empilement qui fait le néon. Une seule couche floutée donnerait une tache,
+// une seule couche nette un pictogramme plat.
+// overflow:visible est indispensable : sans lui la lueur serait tranchée net
+// au bord du viewBox, et l'icône paraîtrait posée dans une boîte.
 function caffIcone(type,taille){
   const t=CAFF_ICONES[type]||CAFF_ICONES.custom;
   const s=taille||24;
-  return `<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="${s}" height="${s}" style="display:inline-block;vertical-align:middle;flex-shrink:0;filter:drop-shadow(0 0 5px rgba(255,255,255,.9)) drop-shadow(0 0 11px rgba(255,255,255,.45))">${t}</svg>`;
+  // Le flou est exprimé en unités du viewBox : il rétrécit donc avec l'icône,
+  // mais le cœur aussi, et sous 16 px il tombait à un demi-pixel réel. Rendu
+  // à cette épaisseur, l'anti-crénelage le grisait et le halo l'avalait : les
+  // onglets affichaient une tache là où les tuiles montraient un tube net.
+  // On garantit donc au trait central un peu plus d'un pixel à l'écran, quelle
+  // que soit la taille demandée, et on resserre le halo en conséquence.
+  const parPixel=24/s;
+  const coeur=Math.max(1.15, 1.18*parPixel);
+  const douce=coeur+0.5;
+  const halo=coeur+1.55;
+  const opHalo=s<=16?0.42:0.5;
+  return `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:inline-block;vertical-align:middle;flex-shrink:0;overflow:visible">`
+    +`<g filter="url(#rcNeonGlow)" stroke="#9ed4ff" stroke-width="${halo.toFixed(2)}" opacity="${opHalo}">${t}</g>`
+    +`<g filter="url(#rcNeonGlow)" stroke="#e8f6ff" stroke-width="${douce.toFixed(2)}" opacity=".72">${t}</g>`
+    +`<g stroke="#fff" stroke-width="${coeur.toFixed(2)}">${t}</g>`
+    +`</svg>`;
 }
 
 // Référence réglementaire — EFSA, avis scientifique sur la caféine (2015),
