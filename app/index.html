@@ -3572,6 +3572,53 @@ const CLOUD={
     }catch{}
     return null;
   },
+  // ── Profil coach visible par ses athlètes ────────────────────────────────
+  // La règle de /users ne va que dans un sens : un coach lit ses athlètes,
+  // l'athlète NE PEUT PAS lire son coach. Le code tentait pourtant
+  // syncUser(coachEmail) depuis l'athlète, requête refusée en silence : sur le
+  // téléphone du coach tout s'affichait (son dossier est en local), sur celui
+  // de l'athlète ni la photo, ni la team, ni les bannières n'arrivaient jamais.
+  //
+  // On ne relâche pas la règle de /users pour autant : elle donnerait à chaque
+  // athlète l'accès aux séances, bilans, nutrition et liste de clients du
+  // coach. On publie à la place un nœud séparé qui ne contient QUE ce qui est
+  // destiné à être vu, lisible par les seuls athlètes rattachés.
+  CHAMPS_PROFIL_COACH:['fname','lname','teamName','catchphrase','coachPhoto','promoBanners','phone'],
+  _urlProfilCoach(key){ return this._fbUrl.replace('users.json','coach_public/'+key+'.json'); },
+
+  async pushProfilCoach(user){
+    const u=user||currentUser;
+    if(!u||u.role!=='coach'||!u.email) return false;
+    try{
+      const token=await this._getToken();
+      if(!token) return false;
+      const profil={};
+      for(const c of this.CHAMPS_PROFIL_COACH) if(u[c]!=null) profil[c]=u[c];
+      profil.maj=Date.now();
+      const r=await fetch(this._urlProfilCoach(u.email.replace(/\./g,','))+'?auth='+token,
+        {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(profil)});
+      return r.ok;
+    }catch(e){ return false; }
+  },
+
+  async pullProfilCoach(key){
+    if(!key) return null;
+    const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),6000);
+    try{
+      const token=await this._getToken();
+      if(!token) return null;
+      const r=await fetch(this._urlProfilCoach(key)+'?auth='+token,{signal:ctrl.signal});
+      if(!r.ok) return null;
+      const d=await r.json();
+      if(!d) return null;
+      // Rangé HORS de currentUser : la photo du coach est en base64 et les
+      // bannières peuvent être lourdes. Dans le dossier de l'athlète, elles
+      // repartiraient vers Firebase à chaque synchronisation, dupliquées
+      // autant de fois qu'il y a d'athlètes.
+      try{ localStorage.setItem('rc_coach_profil',JSON.stringify({key,d})); }catch(e){}
+      return d;
+    }catch(e){ return null; }
+  },
   // Sonde de fraicheur : un entier, pas un dossier. Le dossier complet d'un
   // athlete actif pese plusieurs dizaines de kilo-octets ; son updatedAt en
   // pese une vingtaine. C'est ce rapport qui fait tout le gain.
@@ -5364,12 +5411,37 @@ function waLink(phone,text){
 // mieux vaut un mailto qu'un bouton mort.
 // Partagé par l'accueil athlète et l'écran d'accès expiré : sur ce dernier,
 // joindre son coach est la SEULE action qui débloque quoi que ce soit.
+// Cle Firebase du coach de l athlete courant. coachEmailKey est pose au
+// rattachement ; le repli par le dossier local sert aux comptes rattaches avant
+// son introduction, et au coach lui-meme.
+function cleCoachDe(u){
+  if(!u) return null;
+  if(u.coachEmailKey) return u.coachEmailKey;
+  const users=DB.get("users")||{};
+  const e=Object.keys(users).find(k=>users[k]&&users[k].id===u.coachId);
+  return e?e.replace(/\./g,','):null;
+}
+// Profil public du coach, tel que rapatrie a la derniere connexion. Sert aussi
+// hors ligne : c est la seule copie que l athlete possede.
+function profilCoachLocal(key){
+  try{
+    const b=JSON.parse(localStorage.getItem("rc_coach_profil")||"null");
+    return b&&(!key||b.key===key)?b.d:null;
+  }catch(e){ return null; }
+}
+
 function _coachContactHref(coachId,texte,users){
   if(!coachId) return '';
   const us=users||DB.get('users')||{};
   const coach=Object.values(us).find(x=>x&&x.id===coachId);
-  const email=Object.keys(us).find(k=>us[k]&&us[k].id===coachId);
-  const phone=_numWa(coach?.phone);
+  // Sur le téléphone de l'athlète, le dossier du coach est absent : ni numéro
+  // ni adresse. Le profil public porte le numéro, et coachEmailKey l'adresse.
+  const _cle=cleCoachDe(currentUser);
+  const _pub=profilCoachLocal(_cle);
+  const email=Object.keys(us).find(k=>us[k]&&us[k].id===coachId)
+    ||(_cle?_cle.replace(/,/g,'.'):null);
+  const phone=_numWa(coach?.phone||_pub?.phone);
+  if(phone&&!coach?.phone) return texte?waLink(_pub.phone,texte):('https://wa.me/'+phone);
   if(phone) return texte?waLink(coach.phone,texte):('https://wa.me/'+phone);
   if(!email) return '';
   return 'mailto:'+email+(texte?'?subject='+encodeURIComponent('RepCore')+'&body='+encodeURIComponent(texte):'');
@@ -5665,6 +5737,11 @@ async function _rafraichirCodesEleves(){
   }
 }
 function loadCoachHome(){
+  // Publication de rattrapage : les coachs qui ont rempli leur profil AVANT
+  // l existence du nud public n auraient rien a montrer tant qu ils ne
+  // reenregistrent pas. Une fois par session suffit.
+  if(!window._profilCoachPublie){ window._profilCoachPublie=true;
+    try{ CLOUD.pushProfilCoach(currentUser); }catch(e){} }
   go('s-coach-home');
   // Pousser les données locales vers Firebase dès l'ouverture (récupère les saves pré-v144)
   if(CLOUD.canWrite()) CLOUD.push(DB.get('users')||{});
@@ -8287,8 +8364,16 @@ function loadClientHome(){
   }
   const contactLink=document.getElementById('clh-contact-link');
   if(contactLink&&u.coachId){
+    // Déclarée AVANT _applyCoachData : le rapatriement plus bas s'en sert
+    // aussi, et il vit hors de cette fonction.
+    const _cle=cleCoachDe(u);
     const _applyCoachData=(usrs)=>{
-      const coachUser=Object.values(usrs).find(x=>x.id===u.coachId);
+      // Le dossier complet du coach n'est PAS lisible par l'athlète : sur son
+      // téléphone, Object.values(usrs) ne contient que son propre dossier. Le
+      // profil public est donc la seule source, et le dossier local ne sert
+      // que sur l'appareil du coach.
+      const _pub=profilCoachLocal(_cle);
+      const coachUser=Object.assign({},Object.values(usrs).find(x=>x.id===u.coachId)||{},_pub||{});
       // Calcul déporté dans _coachContactHref, partagé avec l'écran d'accès
       // expiré : deux écrans qui proposent de joindre le même coach ne doivent
       // pas pouvoir diverger sur le numéro retenu ni sur le repli email.
@@ -8298,6 +8383,11 @@ function loadClientHome(){
       _renderPromoBanners(coachUser);
     };
     _applyCoachData(users);
+    if(CLOUD.ok()&&_cle){
+      // Le dossier complet du coach est refuse a l athlete par les regles :
+      // c est ce nud public qui porte photo, team, phrase et bannieres.
+      CLOUD.pullProfilCoach(_cle).then(p=>{ if(p) _applyCoachData(DB.get("users")||{}); });
+    }
     if(CLOUD.ok()){
       const coachEmail=Object.keys(users).find(k=>users[k]?.id===u.coachId);
       // Snapshot des données coach AVANT le sync (pour récupérer les champs que le sync pourrait écraser)
@@ -16281,6 +16371,7 @@ function uploadCoachPhoto(input){
   _resizeImage(f,200,200,0.80).then(b64=>{
     if(!b64) return;
     currentUser.coachPhoto=b64;
+    CLOUD.pushProfilCoach(currentUser);
     const ok=saveUser();
     // Push immédiat non-debounced pour que les athlètes voient la photo immédiatement
     setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},300);
@@ -16296,6 +16387,7 @@ function saveCoachIdentity(){
   const phrase=(document.getElementById('coach-catchphrase')?.value||'').trim();
   currentUser.teamName=name;
   currentUser.catchphrase=phrase;
+  CLOUD.pushProfilCoach(currentUser);
   const ok=saveUser();
   // Push immédiat non-debounced pour que les athlètes voient les données immédiatement
   setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},300);
@@ -16346,6 +16438,7 @@ function saveCoachBanners(){
     if(img||url) banners.push({imageUrl:img,linkUrl:url});
   });
   currentUser.promoBanners=banners;
+  CLOUD.pushProfilCoach(currentUser);
   const ok=saveUser();
   setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},300);
   toastEcriture(ok,'Bannières enregistrées ✓','les bannières sont');
@@ -18918,6 +19011,54 @@ function testExercices(){
     ok('La phase de cycle reste annoncée',/Phase menstruelle/.test(_cyF20.txt));
 
     currentUser=_cySauve.u; if(_cySauve.w) woState=_cySauve.w;
+
+    // ══════ PROFIL COACH VISIBLE PAR SES ATHLÈTES ══════
+    // La règle de /users ne va que dans un sens : l'athlète ne peut pas lire le
+    // dossier de son coach. Sur son téléphone, le stockage local ne contient
+    // donc que son propre dossier, et ni la photo, ni la team, ni les bannières
+    // n'arrivaient. Un nœud public séparé porte ce qui est destiné à être vu.
+    const _cpSauve={u:currentUser,p:localStorage.getItem('rc_coach_profil')};
+
+    ok('La clé du coach vient de coachEmailKey',
+       cleCoachDe({coachEmailKey:'kevin@coach,fr'})==='kevin@coach,fr');
+    ok('Sans coachEmailKey, repli sur le dossier local',
+       (()=>{const s=DB.get('users');
+             DB.set('users',{'k@c.fr':{id:'c9',role:'coach'}});
+             const r=cleCoachDe({coachId:'c9'});
+             DB.set('users',s); return r==='k@c,fr';})());
+    ok('Sans coach du tout, aucune clé',cleCoachDe({})===null&&cleCoachDe(null)===null);
+
+    localStorage.setItem('rc_coach_profil',JSON.stringify({key:'kevin@coach,fr',
+      d:{teamName:'RepCore',promoBanners:[{imageUrl:'https://x/y.jpg'}]}}));
+    ok('Le profil en cache est relu',profilCoachLocal('kevin@coach,fr').teamName==='RepCore');
+    ok('Le cache d\'un AUTRE coach n\'est pas servi',profilCoachLocal('autre@coach,fr')===null);
+    localStorage.removeItem('rc_coach_profil');
+    ok('Sans cache, rien',profilCoachLocal('kevin@coach,fr')===null);
+    localStorage.setItem('rc_coach_profil','pas du json');
+    ok('Un cache illisible ne fait pas planter l\'accueil',profilCoachLocal()===null);
+    localStorage.removeItem('rc_coach_profil');
+
+    // Le nœud public ne doit porter QUE ce qui est destiné à être vu : il est
+    // lisible par tous les athlètes du coach.
+    const _cpAttendus=['fname','lname','teamName','catchphrase','coachPhoto','promoBanners','phone'];
+    ok('Liste des champs publiés figée',
+       JSON.stringify(CLOUD.CHAMPS_PROFIL_COACH)===JSON.stringify(_cpAttendus),
+       JSON.stringify(CLOUD.CHAMPS_PROFIL_COACH));
+    for(const interdit of ['pwdHash','pwd','sessions','bilans','nutrition','clients','email','id'])
+      ok('Jamais publié : '+interdit,!CLOUD.CHAMPS_PROFIL_COACH.includes(interdit));
+    ok('L\'URL vise bien le nœud public',
+       /\/coach_public\/kevin@coach,fr\.json$/.test(CLOUD._urlProfilCoach('kevin@coach,fr')),
+       CLOUD._urlProfilCoach('kevin@coach,fr'));
+
+    // Un athlète ne publie pas de profil coach, même s'il appelle la fonction.
+    ok('Seul un coach publie',
+       (()=>{const s=currentUser; currentUser={email:'a@t.fr',role:'athlete'};
+             const p=CLOUD.pushProfilCoach(currentUser); currentUser=s;
+             return p instanceof Promise?true:p===false;})());
+
+    currentUser=_cpSauve.u;
+    if(_cpSauve.p) localStorage.setItem('rc_coach_profil',_cpSauve.p);
+    else localStorage.removeItem('rc_coach_profil');
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }

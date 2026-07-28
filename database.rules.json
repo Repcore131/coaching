@@ -12,6 +12,47 @@
       }
     },
 
+    // ── Profil coach visible par ses athletes ──────────────────────────────
+    // La regle de /users ne va que dans un sens : un coach lit ses athletes,
+    // l athlete NE PEUT PAS lire le dossier de son coach. Ni sa photo, ni sa
+    // team, ni ses bannieres n arrivaient donc jamais sur le telephone de
+    // l athlete ; sur celui du coach tout s affichait, son dossier etant en
+    // local. On ne relache PAS /users pour autant : cela donnerait a chaque
+    // athlete l acces aux seances, bilans, nutrition et liste de clients du
+    // coach. Ce nud ne porte QUE ce qui est destine a etre vu, et n est
+    // lisible que par les athletes rattaches a ce coach precis.
+    "coach_public": {
+      "$emailKey": {
+        ".read": "auth != null && (auth.token.email.replace('.', ',') === $emailKey || root.child('users').child(auth.token.email.replace('.', ',')).child('coachEmailKey').val() === $emailKey)",
+        ".write": "auth != null && auth.token.email.replace('.', ',') === $emailKey",
+        "fname": {
+          ".validate": "newData.isString() && newData.val().length < 120"
+        },
+        "lname": {
+          ".validate": "newData.isString() && newData.val().length < 120"
+        },
+        "teamName": {
+          ".validate": "newData.isString() && newData.val().length < 200"
+        },
+        "catchphrase": {
+          ".validate": "newData.isString() && newData.val().length < 400"
+        },
+        "phone": {
+          ".validate": "newData.isString() && newData.val().length < 40"
+        },
+        "coachPhoto": {
+          ".validate": "newData.isString() && newData.val().length < 400000"
+        },
+        "promoBanners": {},
+        "maj": {
+          ".validate": "newData.isNumber()"
+        },
+        "$autre": {
+          ".validate": false
+        }
+      }
+    },
+
     "deleted_accounts": {
       ".read": false,
       ".write": false
