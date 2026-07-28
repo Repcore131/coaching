@@ -2436,20 +2436,24 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="position:relative;display:flex;gap:14px;align-items:flex-start">
           <!-- Mockup téléphone en train de filmer un exercice -->
           <svg viewBox="0 0 62 108" style="width:56px;flex-shrink:0;filter:drop-shadow(0 6px 12px rgba(0,0,0,.5))">
+            <defs>
+              <!-- Découpe aux coins arrondis de l'écran : sans elle la photo
+                   dépasserait du châssis et le téléphone perdrait sa forme. -->
+              <clipPath id="rcEcranMockup"><rect x="6" y="9" width="50" height="90" rx="4"/></clipPath>
+            </defs>
             <rect x="2" y="2" width="58" height="104" rx="9" fill="#0b0b0b" stroke="rgba(255,255,255,.55)" stroke-width="2.2"/>
             <rect x="6" y="9" width="50" height="90" rx="4" fill="rgba(255,255,255,.07)"/>
+            <!-- Photo réelle d'une série, à la place du bonhomme filaire : la
+                 bannière annonce d'envoyer SES vidéos, une vraie image le dit
+                 mieux qu'un pictogramme. « slice » remplit le cadre sans
+                 déformer — le fichier est déjà recadré au format de l'écran,
+                 donc rien n'est rogné en pratique. -->
+            <image href="./icons/mockup-correction.jpg" x="6" y="9" width="50" height="90"
+                   preserveAspectRatio="xMidYMid slice" clip-path="url(#rcEcranMockup)"/>
+            <!-- Voile sombre : les repères de cadrage et le voyant REC sont en
+                 blanc translucide, illisibles sur les zones claires de la photo. -->
+            <rect x="6" y="9" width="50" height="90" rx="4" fill="rgba(0,0,0,.22)"/>
             <rect x="24" y="4.5" width="14" height="2.6" rx="1.3" fill="rgba(255,255,255,.4)"/>
-            <!-- athlète qui soulève -->
-            <g stroke="#fff" stroke-width="2.4" stroke-linecap="round" fill="none" opacity=".92">
-              <circle cx="31" cy="34" r="4.4" fill="#fff" stroke="none"/>
-              <path d="M31 39 L31 58"/>
-              <path d="M31 43 L22 50 M31 43 L40 50"/>
-              <path d="M31 58 L24 72 M31 58 L38 72"/>
-            </g>
-            <g stroke="#fff" stroke-width="2.6" stroke-linecap="round" opacity=".92">
-              <line x1="16" y1="50" x2="46" y2="50"/>
-              <line x1="17.5" y1="45.5" x2="17.5" y2="54.5"/><line x1="44.5" y1="45.5" x2="44.5" y2="54.5"/>
-            </g>
             <!-- cadrage + REC -->
             <g stroke="rgba(255,255,255,.5)" stroke-width="1.6" fill="none">
               <path d="M11 18 L11 14 L15 14"/><path d="M51 18 L51 14 L47 14"/>
