@@ -11756,24 +11756,31 @@ const CAFFEINE_DB=[
   {id:'the_blanc',   type:'tea',          name:'Thé blanc',             icon:'🍵',mg:15,  volume:'240ml'},
   {id:'the_oolong',  type:'tea',          name:'Thé oolong',            icon:'🍵',mg:37,  volume:'240ml'},
   {id:'yerba',       type:'tea',          name:'Yerba Maté',            icon:'🍵',mg:80,  volume:'240ml'},
+  // Canettes : valeurs EUROPÉENNES. La réglementation impose l'étiquetage de la
+  // teneur, et les formules européennes tournent à 30-32 mg/100 ml — nettement
+  // sous les versions américaines souvent citées en ligne. Une canette annoncée
+  // trop forte fait croire à un dépassement qui n'a pas eu lieu, une annoncée
+  // trop faible masque un vrai dépassement : les deux trompent l'athlète.
   {id:'redbull',     type:'energy_drink', name:'Red Bull',              icon:'⚡',mg:80,  volume:'250ml'},
-  {id:'monster',     type:'energy_drink', name:'Monster 500ml',         icon:'⚡',mg:160, volume:'500ml'},
-  {id:'monster_355', type:'energy_drink', name:'Monster 355ml',         icon:'⚡',mg:114, volume:'355ml'},
+  {id:'monster',     type:'energy_drink', name:'Monster',               icon:'⚡',mg:150, volume:'500ml'},
+  {id:'monster_355', type:'energy_drink', name:'Monster',               icon:'⚡',mg:107, volume:'355ml'},
   {id:'rockstar',    type:'energy_drink', name:'Rockstar',              icon:'⚡',mg:160, volume:'500ml'},
   {id:'burn',        type:'energy_drink', name:'Burn Energy',           icon:'⚡',mg:80,  volume:'250ml'},
   {id:'hell',        type:'energy_drink', name:'Hell Energy',           icon:'⚡',mg:80,  volume:'250ml'},
   // Canettes prêtes à boire, à ne pas confondre avec les poudres du même nom
   // rangées en pré-workout : le dosage n'est pas le même.
-  {id:'c4_can',      type:'energy_drink', name:'C4 Energy (canette)',   icon:'⚡',mg:200, volume:'473ml'},
-  {id:'c4_can_ultra',type:'energy_drink', name:'C4 Ultimate (canette)', icon:'⚡',mg:300, volume:'473ml'},
-  {id:'abe_can',     type:'energy_drink', name:'ABE Energy (canette)',  icon:'⚡',mg:150, volume:'330ml'},
+  {id:'c4_can',      type:'energy_drink', name:'C4 Energy (canette)',   icon:'⚡',mg:160, volume:'500ml'},
+  {id:'abe_can',     type:'energy_drink', name:'ABE Energy (canette)',  icon:'⚡',mg:200, volume:'330ml'},
+  // Poudres : le nom porte la VERSION quand la gamme en compte plusieurs à des
+  // dosages très différents. « Mr Hyde » seul allait de 196 à 380 mg selon
+  // qu'on prenait Signature, Xtreme ou Infinite.
   {id:'c4_original', type:'preworkout',   name:'C4 Original',           icon:'💪',mg:150, volume:'1 dose'},
   {id:'c4_extreme',  type:'preworkout',   name:'C4 Extreme',            icon:'💪',mg:200, volume:'1 dose'},
-  {id:'ghost',       type:'preworkout',   name:'Ghost Legend',          icon:'💪',mg:200, volume:'1 dose'},
-  {id:'animal_pump', type:'preworkout',   name:'Animal Pump',           icon:'💪',mg:180, volume:'1 dose'},
-  {id:'hyde',        type:'preworkout',   name:'Mr Hyde',               icon:'💪',mg:325, volume:'1 dose'},
+  {id:'ghost',       type:'preworkout',   name:'Ghost Legend V4',       icon:'💪',mg:300, volume:'1 dose'},
+  {id:'hyde',        type:'preworkout',   name:'Mr Hyde Signature',     icon:'💪',mg:200, volume:'1 dose'},
+  {id:'hyde_xtreme', type:'preworkout',   name:'Mr Hyde Xtreme',        icon:'💪',mg:375, volume:'1 dose'},
   {id:'myp_origin',  type:'preworkout',   name:'Origin (MyProtein)',    icon:'💪',mg:150, volume:'1 dose'},
-  {id:'myp_the_pre', type:'preworkout',   name:'THE Pre-Workout (MyProtein)',icon:'💪',mg:175,volume:'1 dose'},
+  {id:'myp_the_pre', type:'preworkout',   name:'THE Pre-Workout (MyProtein)',icon:'💪',mg:200,volume:'1 dose'},
   {id:'preworkout_g',type:'preworkout',   name:'Pré-workout générique', icon:'💪',mg:150, volume:'1 dose'},
 ];
 
