@@ -235,6 +235,14 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 .exo-chip.active{background:var(--red);color:#fff;border-color:var(--red)}
 .pf-chip{background:var(--surface-2);border:1.5px solid var(--border);color:var(--sub);font-size:10px;font-weight:800;letter-spacing:.5px;padding:6px 11px;border-radius:16px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;min-height:30px}
 .pf-chip.active{background:var(--red);color:#fff;border-color:var(--red)}
+.ck-chrono{background:var(--surface-2);border:1px solid var(--border);color:var(--sub);font-size:11px;font-weight:800;font-family:Montserrat,sans-serif;padding:5px 9px;border-radius:14px;cursor:pointer;flex-shrink:0;min-width:58px;min-height:30px;letter-spacing:.5px}
+.ck-chrono.ck-actif{background:var(--red);border-color:var(--red);color:#fff;box-shadow:0 0 12px rgba(224,32,32,.45)}
+.pe-poignee{background:var(--surface-2);border:1px solid var(--border);color:var(--sub);font-size:14px;line-height:1;padding:0;border-radius:8px;cursor:grab;flex-shrink:0;width:32px;min-height:38px;touch-action:none;user-select:none;font-family:Montserrat,sans-serif}
+.pe-poignee:active{cursor:grabbing;background:var(--red);color:#fff;border-color:var(--red)}
+.pe-mini{background:var(--surface-2);border:1px solid var(--border);color:var(--sub);font-size:9px;line-height:1;padding:0;border-radius:6px;cursor:pointer;width:26px;height:18px;font-family:Montserrat,sans-serif;flex-shrink:0}
+.pe-mini:disabled{opacity:.3;cursor:default}
+.pe-mini.pe-suppr{width:26px;height:38px;font-size:12px;color:var(--red-light)}
+.pe-saisi{opacity:.55;outline:2px dashed var(--red);outline-offset:3px;border-radius:8px}
 .pf-select{background:var(--surface-2);border:1.5px solid var(--border);color:var(--sub);font-size:10px;font-weight:800;letter-spacing:.5px;padding:6px 9px;border-radius:16px;font-family:Montserrat,sans-serif;min-height:30px;width:auto;margin:0}
 .ex-name{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:1px}
 .ex-detail{font-size:11px;color:var(--sub);margin-top:3px;letter-spacing:.3px}
@@ -2632,6 +2640,22 @@ const COACH_PHOTO='icons/coach.jpg';
     <span></span>
   </div>
   <div class="scroll-area pad"><div id="exc-corps"></div></div>
+</div>
+
+<!-- ══════ CRÉATION D'UN PROTOCOLE SUR MESURE ══════ -->
+<div id="s-proto-edit" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="_peQuitter()">←</button>
+    <span class="topbar-title" id="pe-titre">Nouveau protocole</span>
+    <span></span>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad" id="pe-corps"></div>
+  </div>
+  <div style="padding:12px 16px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
+    <button class="btn btn-outline" style="flex:0 0 auto;width:auto;padding:0 16px;margin:0" onclick="_peQuitter()">Annuler</button>
+    <button class="btn" style="flex:1;margin:0" onclick="_peEnregistrer()">Enregistrer</button>
+  </div>
 </div>
 
 <!-- ══════ BIBLIOTHÈQUE DE PROTOCOLES ══════ -->
@@ -6848,8 +6872,25 @@ const PROTOCOLES=[
  etapes:['Airbike ou corde à sauter','8 à 12 min en intensité élevée']}
 ];
 
+// ── Protocoles sur mesure ───────────────────────────────────────────────────
+// Rangés sur l'utilisateur, donc synchronisés et sauvegardés comme le reste.
+// Les 20 protocoles livrés restent en dur : ils servent de repli et ne peuvent
+// pas être cassés par une modification.
+function protocolesPerso(){
+  const l=currentUser&&currentUser.protocolesPerso;
+  return Array.isArray(l)?l:[];
+}
+function tousProtocoles(){
+  const p=protocolesPerso();
+  return p.length?PROTOCOLES.concat(p):PROTOCOLES;
+}
+function estProtoPerso(slug){ return /^perso_/.test(String(slug||'')); }
 const _protoParSlug=(()=>{const m={};for(const p of PROTOCOLES) m[p.slug]=p;return m;})();
-function protocole(slug){ return _protoParSlug[slug]||null; }
+function protocole(slug){
+  // Table figée pour les 20 livrés, recherche linéaire pour les perso : ils
+  // sont peu nombreux et changent, une table mémoïsée deviendrait fausse.
+  return _protoParSlug[slug]||protocolesPerso().find(p=>p.slug===slug)||null;
+}
 
 // Déroulé d'un protocole en texte, tel qu'il sera écrit dans le champ de la
 // séance : c'est ce texte que l'athlète verra, pas une référence au protocole.
@@ -6911,7 +6952,7 @@ function suggestProtocols(seance,profil){
   const materielDispo=(profil&&profil.materielDispo)||null;   // null = on ne filtre pas
   const res={warmup:[],cooldown:[]};
   for(const phase of ['WARMUP','COOLDOWN']){
-    const notes=PROTOCOLES.filter(p=>p.phase===phase).map(p=>{
+    const notes=tousProtocoles().filter(p=>p.phase===phase).map(p=>{
       let s=p.priorite||0;
       // Un protocole VISANT ce type de séance l'emporte sur un protocole
       // compatible avec tout. Sans cette distinction, « Protocole dos
@@ -8650,7 +8691,10 @@ function woPersist(){
       // Sans eux, une séance reprise après pause perdrait sa fin de séance,
       // qui est justement ce qui reste à faire au moment de la reprise.
       warmup:woState.warmup||'',
-      cooldown:woState.cooldown||''
+      cooldown:woState.cooldown||'',
+      // Les étapes déjà cochées de l'échauffement : sans elles, une séance
+      // reprise après une interruption repartait avec une checklist vierge.
+      ckEtat:_ckEtat
     }));
   }catch{}
 }
@@ -8668,6 +8712,10 @@ function woResumeAndGo(){
   const snap=_woLoadSnap();
   if(!snap){document.getElementById('clh-resume-workout').style.display='none';return;}
   woState={...snap};
+  // Checklist restaurée avant le rendu, sinon les coches s'afficheraient vides.
+  // Le chrono, lui, ne redémarre pas : le temps a passé pendant la pause.
+  _ckEtat=snap.ckEtat||{};
+  _ckStopChrono();
   clearInterval(woState.timerInterval);
   woState.timerInterval=setInterval(()=>{
     const el=document.getElementById('wo-timer');
@@ -8755,6 +8803,9 @@ function launchWorkout(sessConfig,slotIdx){
   // encore joignable : la ligne suivante remplace woState en bloc et sa
   // référence est perdue à jamais — l'intervalle, lui, continue de battre.
   if(woState?.timerInterval) clearInterval(woState.timerInterval);
+  // Nouvelle séance : checklist vierge, sinon les étapes cochées la fois
+  // précédente réapparaissent déjà faites.
+  _ckEtat={};_ckStopChrono();
   const cycle=getCycleFactor();
   // Appliquer réduction de séries si phase lutéale
   const exercises=sessConfig.exercises.map(ex=>({
@@ -8946,6 +8997,7 @@ function startWorkout(){
   if(woState?.timerInterval) clearInterval(woState.timerInterval);
   // Chemin hérité : ce programme unique ne vient pas d'un créneau de la semaine.
   // slot:null fait retomber la recherche d'historique sur le nom de la séance.
+  _ckEtat={};_ckStopChrono();
   woState={exercises:prog.exercises,currentEx:0,startTime:Date.now(),timerInterval:null,sessionData:{},progName:prog.name,slot:null,
     warmup:String(prog.warmup??currentUser._defaultWarmup??'').trim(),
     cooldown:String(prog.cooldown??currentUser._defaultCooldown??'').trim()};
@@ -9432,6 +9484,7 @@ function toggleSet(i,idx){
 function woNav(dir){
   // On navigue d'un GROUPE à l'autre : un superset est un seul écran, sinon
   // « suivant » ramènerait sur le second exercice déjà affiché.
+  _ckStopChrono();
   const grs=_groupesEx(woState.exercises);
   const gi=grs.findIndex(g=>g.includes(woState.currentEx));
   const nxt=(gi<0?0:gi)+dir;
@@ -16888,14 +16941,92 @@ function _vientDunProtocole(txt){
   const l1=String(txt||'').trim().split('\n')[0].trim();
   // En-tête reconstruite via protoTexte, pour qu'un changement de format là-bas
   // n'ait pas à être répercuté ici.
-  return PROTOCOLES.some(p=>l1===protoTexte(p).split('\n')[0]);
+  return tousProtocoles().some(p=>l1===protoTexte(p).split('\n')[0]);
 }
 
-// ── Affichage à l'athlète ───────────────────────────────────────────────────
-// Carte dépliable, rendue à partir du texte de la séance. Les lignes numérotées
+// ── Checklist athlète, avec chrono par étape ────────────────────────────────
+// Carte dépliable rendue à partir du texte de la séance. Les lignes numérotées
 // « 1. … » écrites par un protocole deviennent une liste à cocher ; un texte
-// libre saisi à la main reste affiché tel quel. Aucune donnée n'est écrite :
-// les coches ne vivent que le temps de la séance.
+// libre saisi à la main reste affiché tel quel.
+//
+// Les coches vivent dans _ckEtat et non dans le DOM : sans ça, mettre la séance
+// en pause pendant l'échauffement remettait tout à zéro au retour.
+let _ckEtat={};
+let _ckChrono=null;   // {cle, i, reste, id} — un seul chrono à la fois
+
+// Durée d'une étape, en secondes, ou null si l'étape n'en annonce pas.
+// Plancher à 20 s : en dessous ce n'est pas une étape à chronométrer mais une
+// cadence (« inspiration 4 s »), et c'est là que se logeaient les faux
+// positifs. La garde (?![a-zà-ÿ]) est indispensable : sans elle « 2 séries »
+// se lisait « 2 s ».
+const CK_SECONDES_MIN=20;
+function dureeEtape(txt){
+  const t=String(txt||'');
+  let m=t.match(/(\d+)\s*min(?:utes?)?\s+(\d{1,2})\s*(?:s|sec|secondes?)?(?![a-zà-ÿ])/i);
+  if(m) return _ckPlancher((+m[1])*60+(+m[2]));
+  // Sur une fourchette on retient la borne BASSE : on peut toujours prolonger,
+  // alors qu'un compte à rebours qui exige d'emblée le haut de la fourchette
+  // décourage.
+  m=t.match(/(\d+)(?:\s*(?:à|-|–)\s*\d+)?\s*min(?:utes?)?(?![a-zà-ÿ])/i);
+  if(m) return _ckPlancher((+m[1])*60);
+  m=t.match(/(\d+)(?:\s*(?:à|-|–)\s*\d+)?\s*(?:s|sec|secondes?)(?![a-zà-ÿ])/i);
+  if(m) return _ckPlancher(+m[1]);
+  return null;
+}
+function _ckPlancher(s){ return s>=CK_SECONDES_MIN?s:null; }
+function _ckMMSS(s){ return Math.floor(s/60)+':'+String(Math.max(0,s%60)).padStart(2,'0'); }
+
+function _ckCocher(cle,i,val){
+  (_ckEtat[cle]=_ckEtat[cle]||{})[i]=!!val;
+  // Cocher une étape en cours de chrono l'arrête : elle est faite.
+  if(_ckChrono&&_ckChrono.cle===cle&&_ckChrono.i===i&&val) _ckStopChrono();
+  _ckMajEntete(cle);
+  if(typeof woPersist==='function') woPersist();
+}
+function _ckStopChrono(){
+  if(!_ckChrono) return;
+  clearInterval(_ckChrono.id);
+  const b=document.getElementById('ck-chrono-'+_ckChrono.cle+'-'+_ckChrono.i);
+  if(b){ b.textContent=b.dataset.libelle; b.classList.remove('ck-actif'); }
+  _ckChrono=null;
+}
+function _ckDemarrerChrono(cle,i,secs){
+  // Relancer le chrono déjà en cours l'annule : c'est le seul geste d'arrêt.
+  const memeEtape=_ckChrono&&_ckChrono.cle===cle&&_ckChrono.i===i;
+  _ckStopChrono();
+  if(memeEtape) return;
+  const b=document.getElementById('ck-chrono-'+cle+'-'+i);
+  if(!b) return;
+  b.classList.add('ck-actif');
+  _ckChrono={cle,i,reste:secs,id:null};
+  const tic=()=>{
+    // Le bouton a disparu (changement d'écran, séance terminée) : on s'arrête
+    // au lieu de faire tourner un intervalle sur un DOM qui n'existe plus.
+    const el=document.getElementById('ck-chrono-'+cle+'-'+i);
+    if(!el||!_ckChrono){ _ckStopChrono(); return; }
+    el.textContent=_ckMMSS(_ckChrono.reste);
+    if(_ckChrono.reste<=0){
+      _ckStopChrono();
+      try{ navigator.vibrate&&navigator.vibrate([180,90,180]); }catch(e){}
+      const c=document.getElementById('ck-case-'+cle+'-'+i);
+      if(c&&!c.checked){ c.checked=true; _ckCocher(cle,i,true); }
+      return;
+    }
+    _ckChrono.reste--;
+  };
+  tic();
+  if(_ckChrono) _ckChrono.id=setInterval(tic,1000);
+}
+function _ckMajEntete(cle){
+  const el=document.getElementById('ck-compte-'+cle);
+  if(!el) return;
+  const et=_ckEtat[cle]||{};
+  const tot=parseInt(el.dataset.total)||0;
+  const n=Object.keys(et).filter(k=>et[k]).length;
+  el.textContent=n+'/'+tot;
+  el.style.color=n>=tot&&tot?'var(--success)':'var(--sub)';
+}
+
 function _carteProtocole(txt,titre,couleur,id){
   const t=String(txt||'').trim();
   if(!t) return '';
@@ -16903,14 +17034,23 @@ function _carteProtocole(txt,titre,couleur,id){
   // Première ligne « Nom (12 à 15 min) » : c'est un protocole, pas du texte libre.
   const entete=/^.+\(\d+( à \d+)? min\)$/.test(lignes[0])?lignes.shift():null;
   const etapes=lignes.filter(l=>/^\d+\.\s/.test(l)).map(l=>l.replace(/^\d+\.\s*/,''));
+  const cle=id;
+  const et=_ckEtat[cle]||{};
   const corps=etapes.length
-    // La règle globale « label » met en majuscules, espace les lettres et
-    // ajoute 16px de marge haute : lisible pour un intitulé de champ, illisible
-    // pour une consigne d'exercice. On la neutralise ici.
-    ? etapes.map(e=>`<label style="display:flex;align-items:flex-start;gap:9px;padding:7px 0;margin:0;cursor:pointer;border-bottom:1px solid #141414;text-transform:none;letter-spacing:normal;font-weight:400">
-        <input type="checkbox" style="width:17px;height:17px;margin:1px 0 0;accent-color:${couleur};flex-shrink:0;cursor:pointer">
-        <span style="font-size:12px;line-height:1.5;color:#ccc">${escapeHtml(e)}</span></label>`).join('')
+    ? etapes.map((e,i)=>{
+        const secs=dureeEtape(e);
+        const coche=!!et[i];
+        // La règle globale « label » met en majuscules, espace les lettres et
+        // ajoute 16px de marge haute : lisible pour un intitulé de champ,
+        // illisible pour une consigne d'exercice. On la neutralise ici.
+        return `<label style="display:flex;align-items:center;gap:9px;padding:7px 0;margin:0;cursor:pointer;border-bottom:1px solid #141414;text-transform:none;letter-spacing:normal;font-weight:400">
+        <input type="checkbox" id="ck-case-${cle}-${i}" ${coche?'checked':''} onchange="_ckCocher('${cle}',${i},this.checked)" style="width:17px;height:17px;margin:0;accent-color:${couleur};flex-shrink:0;cursor:pointer">
+        <span style="flex:1;min-width:0;font-size:12px;line-height:1.5;color:${coche?'var(--text-faint)':'#ccc'};${coche?'text-decoration:line-through':''}">${escapeHtml(e)}</span>
+        ${secs?`<button type="button" id="ck-chrono-${cle}-${i}" data-libelle="▶ ${_ckMMSS(secs)}" onclick="event.preventDefault();_ckDemarrerChrono('${cle}',${i},${secs})" class="ck-chrono">▶ ${_ckMMSS(secs)}</button>`:''}
+      </label>`;
+      }).join('')
     : `<div style="font-size:12px;line-height:1.6;color:#ccc;white-space:pre-wrap">${escapeHtml(lignes.join('\n'))}</div>`;
+  const faits=etapes.length?Object.keys(et).filter(k=>et[k]).length:0;
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-left:3px solid ${couleur};border-radius:10px;margin-bottom:14px;overflow:hidden">
     <div onclick="const c=document.getElementById('${id}');c.style.display=c.style.display==='none'?'block':'none';this.querySelector('.chev').textContent=c.style.display==='none'?'▸':'▾'"
          role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
@@ -16919,6 +17059,7 @@ function _carteProtocole(txt,titre,couleur,id){
         <span style="font-size:var(--fs-xs);letter-spacing:2px;font-weight:800;color:${couleur};text-transform:uppercase">${titre}</span>
         ${entete?`<span style="display:block;font-size:11px;color:var(--sub);margin-top:2px">${escapeHtml(entete)}</span>`:''}
       </span>
+      ${etapes.length?`<span id="ck-compte-${cle}" data-total="${etapes.length}" style="font-size:11px;font-weight:800;color:${faits>=etapes.length?'var(--success)':'var(--sub)'}">${faits}/${etapes.length}</span>`:''}
       <span class="chev" style="color:var(--sub);font-size:13px">▾</span>
     </div>
     <div id="${id}" style="padding:0 13px 11px">${corps}</div>
@@ -16941,6 +17082,253 @@ let _pfFiltres={phase:'',objectif:'',duree:0,materiel:'',type:'',q:''};
 // courte.
 let _pfOuvert=false;
 const _PF_DUREES=[[10,'10 min ou moins'],[15,'15 min ou moins'],[20,'20 min ou moins']];
+
+// ══════════════ ÉDITEUR DE PROTOCOLE SUR MESURE ══════════════
+// _peBrouillon est une copie de travail : tant qu'on n'a pas enregistré, rien
+// n'est écrit sur l'utilisateur, et « Annuler » n'a rien à défaire.
+let _peBrouillon=null, _peRetour='s-protocoles', _peModifie=false;
+
+function _peNeuf(){
+  return {slug:'perso_'+Date.now().toString(36),nom:'',phase:'WARMUP',objectif:'PERFORMANCE',
+    dureeMin:10,dureeMax:12,intensite:'MODEREE',priorite:10,
+    compatible:PROTO_TYPES.slice(),materiel:['AUCUN'],contreInd:[],desc:'',etapes:[''],perso:true};
+}
+function ouvrirEditeurProto(slug,retour){
+  _peRetour=retour||'s-protocoles';
+  const src=slug?protocolesPerso().find(p=>p.slug===slug):null;
+  _peBrouillon=src?JSON.parse(JSON.stringify(src)):_peNeuf();
+  if(!_peBrouillon.etapes.length) _peBrouillon.etapes=[''];
+  _peModifie=false;
+  document.getElementById('pe-titre').textContent=src?'Modifier le protocole':'Nouveau protocole';
+  go('s-proto-edit');
+  _peRendre();
+}
+function _peQuitter(){
+  if(_peModifie&&!confirm('Quitter sans enregistrer ? Les modifications seront perdues.')) return;
+  _peBrouillon=null;
+  go(_peRetour);
+  if(_peRetour==='s-protocoles') _pfRendre();
+}
+function _peSet(cle,val){ _peBrouillon[cle]=val; _peModifie=true; _peRendre(); }
+function _peBascule(cle,val){
+  const l=_peBrouillon[cle];
+  const i=l.indexOf(val);
+  if(i>=0) l.splice(i,1); else l.push(val);
+  _peModifie=true; _peRendre();
+}
+
+// ── Étapes ──
+function _peEtapeTexte(i,v){ _peBrouillon.etapes[i]=v; _peModifie=true; _peMajApercu(); }
+function _peAjouterEtape(){
+  _peBrouillon.etapes.push(''); _peModifie=true; _peRendre();
+  setTimeout(()=>{const c=document.getElementById('pe-et-'+(_peBrouillon.etapes.length-1));if(c)c.focus();},30);
+}
+function _peSupprimerEtape(i){
+  if(_peBrouillon.etapes.length<=1){ _peBrouillon.etapes=['']; }
+  else _peBrouillon.etapes.splice(i,1);
+  _peModifie=true; _peRendre();
+}
+function _peDeplacerEtape(de,vers){
+  const l=_peBrouillon.etapes;
+  if(vers<0||vers>=l.length||de===vers) return;
+  l.splice(vers,0,l.splice(de,1)[0]);
+  _peModifie=true; _peRendre();
+}
+
+// ── Glisser-déposer des étapes ──────────────────────────────────────────────
+// Pointer Events et non l'API drag HTML5 : celle-ci ne se déclenche pas au
+// doigt, et cette application est d'abord utilisée sur téléphone. Les flèches
+// restent là pour qui préfère, et pour le clavier.
+let _peDrag=null;   // {de, y0, ligne}
+function _peDragDebut(ev,i){
+  // Seul le bouton gauche ou un doigt : un clic droit ne doit pas saisir.
+  if(ev.button!=null&&ev.button!==0) return;
+  ev.preventDefault();
+  const ligne=document.getElementById('pe-ligne-'+i);
+  if(!ligne) return;
+  _peDrag={de:i,ligne};
+  ligne.classList.add('pe-saisi');
+  try{ ev.target.setPointerCapture&&ev.target.setPointerCapture(ev.pointerId); }catch(e){}
+}
+function _peDragBouge(ev){
+  if(!_peDrag) return;
+  ev.preventDefault();
+  // Ligne survolée, déterminée par la position réelle du doigt : plus fiable
+  // qu'un calcul de hauteurs, qui se décale dès qu'une étape passe sur deux
+  // lignes de texte.
+  const sous=document.elementFromPoint(ev.clientX,ev.clientY);
+  const cible=sous&&sous.closest&&sous.closest('[data-pe-idx]');
+  if(!cible) return;
+  const vers=parseInt(cible.dataset.peIdx);
+  if(isNaN(vers)||vers===_peDrag.de) return;
+  const l=_peBrouillon.etapes;
+  l.splice(vers,0,l.splice(_peDrag.de,1)[0]);
+  _peDrag.de=vers;
+  _peModifie=true;
+  _peRendreEtapes();
+  const nv=document.getElementById('pe-ligne-'+vers);
+  if(nv){ nv.classList.add('pe-saisi'); _peDrag.ligne=nv; }
+}
+function _peDragFin(){
+  if(!_peDrag) return;
+  if(_peDrag.ligne) _peDrag.ligne.classList.remove('pe-saisi');
+  _peDrag=null;
+  _peRendre();
+}
+
+document.addEventListener('pointermove',_peDragBouge,{passive:false});
+document.addEventListener('pointerup',_peDragFin);
+document.addEventListener('pointercancel',_peDragFin);
+
+function _peLigneEtape(e,i,total){
+  return `<div id="pe-ligne-${i}" data-pe-idx="${i}" style="display:flex;align-items:flex-start;gap:7px;margin-bottom:6px">
+    <button type="button" class="pe-poignee" aria-label="Déplacer l'étape ${i+1}"
+      onpointerdown="_peDragDebut(event,${i})">⠿</button>
+    <span style="font-size:11px;font-weight:800;color:var(--red);padding-top:11px;min-width:14px;text-align:right">${i+1}</span>
+    <textarea id="pe-et-${i}" rows="1" oninput="_peEtapeTexte(${i},this.value);this.style.height='auto';this.style.height=this.scrollHeight+'px'"
+      placeholder="Ex : Rameur, 3 min" style="flex:1;font-size:12px;padding:8px 10px;margin:0;line-height:1.5;resize:none;min-height:38px">${escapeHtml(e)}</textarea>
+    <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">
+      <button type="button" class="pe-mini" onclick="_peDeplacerEtape(${i},${i-1})" ${i===0?'disabled':''} aria-label="Monter">▲</button>
+      <button type="button" class="pe-mini" onclick="_peDeplacerEtape(${i},${i+1})" ${i===total-1?'disabled':''} aria-label="Descendre">▼</button>
+    </div>
+    <button type="button" class="pe-mini pe-suppr" onclick="_peSupprimerEtape(${i})" aria-label="Supprimer l'étape">✕</button>
+  </div>`;
+}
+function _peRendreEtapes(){
+  const z=document.getElementById('pe-etapes'); if(!z) return;
+  const l=_peBrouillon.etapes;
+  z.innerHTML=l.map((e,i)=>_peLigneEtape(e,i,l.length)).join('');
+  // Hauteur des zones de texte ajustée au contenu, sinon une étape longue est
+  // tronquée à une ligne.
+  z.querySelectorAll('textarea').forEach(t=>{t.style.height='auto';t.style.height=t.scrollHeight+'px';});
+  _peMajApercu();
+}
+function _peMajApercu(){
+  const a=document.getElementById('pe-apercu'); if(!a) return;
+  const p=_peNormaliser();
+  a.textContent=p.etapes.length?protoTexte(p):'(aucune étape)';
+  const d=document.getElementById('pe-duree-chrono');
+  if(d){
+    const n=p.etapes.filter(e=>dureeEtape(e)!=null).length;
+    d.textContent=n?(n+' étape'+(n>1?'s':'')+' chronométrable'+(n>1?'s':'')):'aucune étape chronométrable';
+  }
+}
+// Copie propre du brouillon : étapes vides retirées, durées remises dans l'ordre.
+function _peNormaliser(){
+  const b=_peBrouillon;
+  const dmin=Math.max(1,parseInt(b.dureeMin)||1);
+  const dmax=Math.max(dmin,parseInt(b.dureeMax)||dmin);
+  return Object.assign({},b,{
+    nom:(b.nom||'').trim(),
+    desc:(b.desc||'').trim(),
+    etapes:b.etapes.map(e=>String(e||'').trim()).filter(Boolean),
+    materiel:b.materiel.length?b.materiel:['AUCUN'],
+    compatible:b.compatible.length?b.compatible:PROTO_TYPES.slice(),
+    dureeMin:dmin,dureeMax:dmax
+  });
+}
+
+function _peRendre(){
+  const z=document.getElementById('pe-corps'); if(!z||!_peBrouillon) return;
+  const b=_peBrouillon;
+  const puce=(actif,lib,onclick)=>`<button type="button" class="pf-chip${actif?' active':''}" onclick="${onclick}">${lib}</button>`;
+  const groupe=(titre,contenu,aide)=>`<div style="margin-bottom:16px">
+    <div style="font-size:9px;letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:5px">${titre}</div>
+    ${aide?`<div style="font-size:10px;color:var(--sub);margin-bottom:6px;line-height:1.5">${aide}</div>`:''}
+    <div style="display:flex;flex-wrap:wrap;gap:5px">${contenu}</div></div>`;
+
+  z.innerHTML=`
+    <div style="margin-bottom:16px">
+      <div style="font-size:9px;letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:5px">Nom</div>
+      <input id="pe-nom" value="${escapeHtml(b.nom)}" oninput="_peBrouillon.nom=this.value;_peModifie=true;_peMajApercu()"
+        placeholder="Ex : Échauffement épaules sensibles" style="font-size:13px;padding:10px 12px;margin:0">
+    </div>
+    ${groupe('Moment',
+      puce(b.phase==='WARMUP','Échauffement',"_peSet('phase','WARMUP')")+
+      puce(b.phase==='COOLDOWN','Fin de séance',"_peSet('phase','COOLDOWN')"))}
+    ${groupe('Objectif',Object.keys(PROTO_OBJECTIFS).map(k=>
+      puce(b.objectif===k,PROTO_OBJECTIFS[k].lib,`_peSet('objectif','${k}')`)).join(''))}
+    <div style="margin-bottom:16px">
+      <div style="font-size:9px;letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:5px">Durée (minutes)</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="number" min="1" max="120" value="${b.dureeMin}" oninput="_peBrouillon.dureeMin=this.value;_peModifie=true;_peMajApercu()" style="text-align:center;margin:0;width:74px">
+        <span style="font-size:11px;color:var(--sub)">à</span>
+        <input type="number" min="1" max="120" value="${b.dureeMax}" oninput="_peBrouillon.dureeMax=this.value;_peModifie=true;_peMajApercu()" style="text-align:center;margin:0;width:74px">
+        <span style="font-size:11px;color:var(--sub)">min</span>
+      </div>
+    </div>
+    <div style="margin-bottom:16px">
+      <div style="font-size:9px;letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:5px">Description</div>
+      <textarea rows="2" oninput="_peBrouillon.desc=this.value;_peModifie=true" placeholder="À quoi sert ce protocole, en une phrase." style="font-size:12px;padding:9px 11px;margin:0;line-height:1.5">${escapeHtml(b.desc)}</textarea>
+    </div>
+
+    <div style="margin-bottom:16px">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px">
+        <div style="font-size:9px;letter-spacing:1.5px;color:var(--text-faint);font-weight:800">Étapes</div>
+        <div id="pe-duree-chrono" style="font-size:10px;color:var(--sub)"></div>
+      </div>
+      <div style="font-size:10px;color:var(--sub);margin-bottom:8px;line-height:1.5">
+        Glisse la poignée ⠿ pour réordonner. Une étape qui annonce une durée
+        (« Rameur, 3 min ») devient chronométrable pour l'athlète.
+      </div>
+      <div id="pe-etapes"></div>
+      <button type="button" class="btn btn-outline btn-sm" style="width:100%;margin:6px 0 0" onclick="_peAjouterEtape()">+ Ajouter une étape</button>
+    </div>
+
+    ${groupe('Matériel',
+      Object.keys(PROTO_MATERIEL).map(m=>
+        puce(b.materiel.includes(m),PROTO_MATERIEL[m],`_peBascule('materiel','${m}')`)).join(''),
+      'Sert à filtrer. Sans choix, le protocole est rangé en « sans matériel ».')}
+    ${groupe('Types de séance',
+      PROTO_TYPES.map(t=>
+        puce(b.compatible.includes(t),_PROTO_TYPE_LIB[t]||t,`_peBascule('compatible','${t}')`)).join(''),
+      'Ceux pour lesquels ce protocole sera suggéré. Sans choix, il vaut pour toutes.')}
+    ${groupe('À éviter si',
+      Object.keys(_PROTO_CI_LIB).map(c=>
+        puce(b.contreInd.includes(c),_PROTO_CI_LIB[c],`_peBascule('contreInd','${c}')`)).join(''),
+      'Affiché en garde-fou, jamais utilisé pour masquer le protocole.')}
+
+    <div style="margin-bottom:16px">
+      <div style="font-size:9px;letter-spacing:1.5px;color:var(--text-faint);font-weight:800;margin-bottom:5px">Ce que verra l'athlète</div>
+      <pre id="pe-apercu" style="background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:11px 13px;font-family:Montserrat,sans-serif;font-size:11px;color:#bbb;line-height:1.7;white-space:pre-wrap;margin:0"></pre>
+    </div>
+
+    ${estProtoPerso(b.slug)&&protocolesPerso().some(p=>p.slug===b.slug)?
+      `<button type="button" class="btn btn-outline" style="color:var(--red-light);border-color:#3a0000;margin-bottom:8px" onclick="_peSupprimer()">Supprimer ce protocole</button>`:''}
+  `;
+  _peRendreEtapes();
+}
+
+function _peEnregistrer(){
+  const p=_peNormaliser();
+  if(!p.nom){ toast('Donne un nom à ce protocole.','var(--orange)'); return; }
+  if(!p.etapes.length){ toast('Ajoute au moins une étape.','var(--orange)'); return; }
+  // Un nom qui reprend celui d'un protocole livré rendrait les deux
+  // indiscernables dans le champ de la séance, qui ne contient que du texte.
+  const collision=tousProtocoles().some(x=>x.slug!==p.slug&&x.nom.toLowerCase()===p.nom.toLowerCase());
+  if(collision){ toast('Un protocole porte déjà ce nom.','var(--orange)'); return; }
+  if(!Array.isArray(currentUser.protocolesPerso)) currentUser.protocolesPerso=[];
+  const i=currentUser.protocolesPerso.findIndex(x=>x.slug===p.slug);
+  if(i>=0) currentUser.protocolesPerso[i]=p; else currentUser.protocolesPerso.push(p);
+  const ok=saveUser();
+  _peModifie=false;
+  _peBrouillon=null;
+  go(_peRetour);
+  if(_peRetour==='s-protocoles') _pfRendre();
+  if(typeof toastEcriture==='function') toastEcriture(ok,'Protocole enregistré','le protocole est');
+  else toast('Protocole enregistré');
+}
+function _peSupprimer(){
+  const slug=_peBrouillon&&_peBrouillon.slug;
+  if(!slug) return;
+  if(!confirm('Supprimer ce protocole ? Les séances où son déroulé a déjà été écrit ne changent pas.')) return;
+  currentUser.protocolesPerso=protocolesPerso().filter(p=>p.slug!==slug);
+  saveUser();
+  _peModifie=false; _peBrouillon=null;
+  go(_peRetour);
+  if(_peRetour==='s-protocoles') _pfRendre();
+  toast('Protocole supprimé');
+}
 
 function ouvrirProtocoles(phase,champ,retour){
   _pfCible=champ||null;
@@ -16969,7 +17357,7 @@ function _pfReset(){
 function _pfFiltrer(){
   const f=_pfFiltres;
   const q=(f.q||'').trim().toLowerCase();
-  return PROTOCOLES.filter(p=>{
+  return tousProtocoles().filter(p=>{
     if(f.phase&&p.phase!==f.phase) return false;
     if(f.objectif&&p.objectif!==f.objectif) return false;
     // Sur une fourchette, c'est la durée HAUTE qui engage : annoncer 12 min
@@ -17048,8 +17436,9 @@ function _pfRendreListe(){
   const actifs=[f.phase,f.objectif,f.duree,f.materiel,f.type,f.q].filter(Boolean).length;
   const zl=document.getElementById('pf-liste'); if(!zl) return;
 
-  const entete=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px">
-      <span style="font-size:11px;color:var(--sub)">${liste.length} protocole${liste.length>1?'s':''} sur ${PROTOCOLES.length}</span>
+  const entete=`<button class="btn btn-outline btn-sm" style="width:100%;margin:0 0 12px" onclick="ouvrirEditeurProto(null,'s-protocoles')">+ Créer un protocole</button>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px">
+      <span style="font-size:11px;color:var(--sub)">${liste.length} protocole${liste.length>1?'s':''} sur ${tousProtocoles().length}</span>
       ${actifs?`<button onclick="_pfReset()" style="background:none;border:none;color:var(--sub);font-size:11px;font-family:Montserrat,sans-serif;cursor:pointer;text-decoration:underline;padding:4px 0">Tout afficher</button>`:''}
     </div>`;
 
@@ -17073,6 +17462,7 @@ function _pfRendreListe(){
         <span style="font-size:9px;font-weight:800;letter-spacing:.5px;padding:1px 6px;border-radius:10px;background:${o.c};color:#08080a">${o.lib.toUpperCase()}</span>
         <span style="font-size:10px;color:var(--sub)">${duree} min</span>
         <span style="font-size:9px;font-weight:800;letter-spacing:.5px;color:var(--text-faint)">${p.phase==='WARMUP'?'ÉCHAUFFEMENT':'FIN DE SÉANCE'}</span>
+        ${estProtoPerso(p.slug)?'<span style="font-size:9px;font-weight:800;letter-spacing:.5px;padding:1px 6px;border-radius:10px;border:1px solid var(--border);color:var(--sub)">PERSO</span>':''}
         ${pose?'<span style="font-size:10px;color:var(--success);font-weight:800">EN PLACE</span>':''}
       </div>
       <div style="font-size:11px;color:var(--sub);line-height:1.5;margin-bottom:8px">${escapeHtml(p.desc)}</div>
@@ -17082,7 +17472,10 @@ function _pfRendreListe(){
         Convient à : ${universel?'toutes les séances':p.compatible.map(t=>_PROTO_TYPE_LIB[t]||t).join(', ')}
       </div>
       ${p.contreInd.length?`<div style="font-size:10px;color:var(--orange);margin-top:5px">À éviter si : ${p.contreInd.map(c=>_PROTO_CI_LIB[c]||c).join(', ')}</div>`:''}
-      ${_pfCible?`<button class="btn btn-outline btn-sm" style="margin:9px 0 0;width:100%" onclick="_pfUtiliser('${p.slug}')">Utiliser ce protocole</button>`:''}
+      <div style="display:flex;gap:6px;margin-top:9px">
+        ${_pfCible?`<button class="btn btn-outline btn-sm" style="margin:0;flex:1" onclick="_pfUtiliser('${p.slug}')">Utiliser ce protocole</button>`:''}
+        ${estProtoPerso(p.slug)?`<button class="btn btn-outline btn-sm" style="margin:0;${_pfCible?'flex:0 0 auto;width:auto;padding:0 14px':'flex:1'}" onclick="ouvrirEditeurProto('${p.slug}','s-protocoles')">Modifier</button>`:''}
+      </div>
     </div>`;
   }).join('');
 }
@@ -17369,6 +17762,85 @@ function testExercices(){
        _c.every(p=>p.phase==='WARMUP'&&p.dureeMax<=15&&p.compatible.includes('PULL')));
     ok('Filtres cumulés : sous-ensemble de la phase seule',_c.length<=_f({phase:'WARMUP'}).length);
     _pfFiltres=_fSauve;
+
+    // ══════ CHECKLIST CHRONOMÉTRÉE ══════
+    // Le plancher de 20 s et la garde (?![a-zà-ÿ]) sont ce qui sépare une durée
+    // réelle d'un faux positif : ce sont eux que ces cas protègent.
+    const _dur=(t,att)=>ok('Durée « '+t+' » = '+(att==null?'aucune':att+'s'),dureeEtape(t)===att,
+       String(dureeEtape(t)));
+    _dur('Rameur ou élastique, 3 min',180);
+    _dur('40 min',2400);
+    _dur('12 à 15 min',720);            // fourchette : borne basse
+    _dur('Maintien 60 à 90 s par position',60);
+    _dur('Gainage anti-extension, 2×20 s',20);
+    _dur('Maintien 1 min 30',90);
+    _dur('2 séries de montée en charge',null);      // « 2 s » de « 2 séries »
+    _dur('Inspiration 4 s, expiration 6 s',null);   // cadence, pas une étape
+    _dur('80 à 90 tours par minute',null);
+    _dur('Vitesse 5 à 5,5 km/h',null);
+    _dur('Fréquence cardiaque 120 à 135',null);
+    _dur("Rotations externes d'épaule, 2×15",null);
+    _dur('Tapis, pente 12 %',null);
+    _dur('',null);
+    ok('Aucun faux positif sur les 71 étapes livrées',
+       PROTOCOLES.flatMap(p=>p.etapes).filter(e=>dureeEtape(e)!=null).length===25,
+       String(PROTOCOLES.flatMap(p=>p.etapes).filter(e=>dureeEtape(e)!=null).length));
+
+    const _ckSauve=_ckEtat; _ckEtat={};
+    _ckCocher('zt',0,true); _ckCocher('zt',2,true); _ckCocher('zt',0,false);
+    ok('Les coches sont retenues hors du DOM',JSON.stringify(_ckEtat.zt)==='{"0":false,"2":true}',
+       JSON.stringify(_ckEtat.zt));
+    const _zc=document.createElement('div');
+    _zc.innerHTML=_carteProtocole("T (5 min)\n1. Rameur, 3 min\n2. Pompes, 2×10",'É','var(--orange)','zt2');
+    ok('Une case par étape',_zc.querySelectorAll('input[type=checkbox]').length===2);
+    ok('Un chrono seulement sur l\'étape qui annonce une durée',_zc.querySelectorAll('.ck-chrono').length===1);
+    ok('Le chrono affiche mm:ss',/3:00/.test(_zc.querySelector('.ck-chrono').textContent),
+       _zc.querySelector('.ck-chrono').textContent);
+    ok('Texte libre : ni case ni chrono',
+       (()=>{const d=document.createElement('div');
+             d.innerHTML=_carteProtocole('Vélo 10 min tranquille','É','var(--orange)','zt3');
+             return d.querySelectorAll('input,.ck-chrono').length===0;})());
+    _ckEtat=_ckSauve;
+
+    // ══════ PROTOCOLES SUR MESURE ══════
+    const _ppSauve=currentUser.protocolesPerso;
+    currentUser.protocolesPerso=[];
+    ok('Sans perso, tousProtocoles rend les 20 livrés',tousProtocoles().length===20);
+    currentUser.protocolesPerso=[{slug:'perso_zz',nom:'Test',phase:'WARMUP',objectif:'MOBILITE',
+      dureeMin:5,dureeMax:5,intensite:'FAIBLE',priorite:10,compatible:['PUSH'],materiel:['AUCUN'],
+      contreInd:[],desc:'d',etapes:['Rameur, 3 min'],perso:true}];
+    ok('Un protocole perso s\'ajoute aux livrés',tousProtocoles().length===21);
+    ok('protocole() retrouve un perso',protocole('perso_zz')?.nom==='Test');
+    ok('protocole() retrouve toujours un livré',protocole('echauffement_push')?.nom==='Push haut du corps');
+    ok('estProtoPerso distingue les deux',estProtoPerso('perso_zz')&&!estProtoPerso('echauffement_push'));
+    ok('Un perso est suggéré comme les autres',
+       suggestProtocols({type:'PUSH'},{}).warmup.some(p=>p.slug==='perso_zz'));
+    ok('Le texte d\'un perso est reconnu comme protocole',_vientDunProtocole(protoTexte(protocole('perso_zz'))));
+
+    // _peNormaliser : c'est lui qui empêche d'enregistrer n'importe quoi
+    const _peSauve=_peBrouillon;
+    _peBrouillon={slug:'perso_t',nom:'  Nom  ',phase:'WARMUP',objectif:'MOBILITE',
+      dureeMin:'12',dureeMax:'5',intensite:'FAIBLE',priorite:10,compatible:[],materiel:[],
+      contreInd:[],desc:'  d  ',etapes:['  A  ','','   ','B'],perso:true};
+    const _norm=_peNormaliser();
+    ok('Normalisation : nom et description détourés',_norm.nom==='Nom'&&_norm.desc==='d');
+    ok('Normalisation : étapes vides retirées',JSON.stringify(_norm.etapes)==='["A","B"]',JSON.stringify(_norm.etapes));
+    ok('Normalisation : durée max jamais sous la min',_norm.dureeMax>=_norm.dureeMin&&_norm.dureeMin===12,
+       _norm.dureeMin+'/'+_norm.dureeMax);
+    ok('Normalisation : sans matériel choisi, « aucun »',JSON.stringify(_norm.materiel)==='["AUCUN"]');
+    ok('Normalisation : sans type choisi, tous les types',_norm.compatible.length===PROTO_TYPES.length);
+
+    // Réordonnancement des étapes
+    // Brouillon complet : _peDeplacerEtape déclenche le rendu, qui lit tous
+    // les champs. Un objet réduit aux étapes faisait échouer le test, pas le code.
+    _peBrouillon=Object.assign(_peNeuf(),{etapes:['A','B','C','D']});
+    _peDeplacerEtape(3,0);
+    ok('Déplacer une étape en tête',JSON.stringify(_peBrouillon.etapes)==='["D","A","B","C"]',
+       JSON.stringify(_peBrouillon.etapes));
+    _peDeplacerEtape(0,-1); _peDeplacerEtape(0,9); _peDeplacerEtape(1,1);
+    ok('Déplacement hors bornes sans effet',JSON.stringify(_peBrouillon.etapes)==='["D","A","B","C"]',
+       JSON.stringify(_peBrouillon.etapes));
+    _peBrouillon=_peSauve; currentUser.protocolesPerso=_ppSauve;
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
