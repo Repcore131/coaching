@@ -237,6 +237,10 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 .pf-chip.active{background:var(--red);color:#fff;border-color:var(--red)}
 .ck-chrono{background:var(--surface-2);border:1px solid var(--border);color:var(--sub);font-size:11px;font-weight:800;font-family:Montserrat,sans-serif;padding:5px 9px;border-radius:14px;cursor:pointer;flex-shrink:0;min-width:58px;min-height:30px;letter-spacing:.5px}
 .ck-chrono.ck-actif{background:var(--red);border-color:var(--red);color:#fff;box-shadow:0 0 12px rgba(224,32,32,.45)}
+/* Repetitions REELLEMENT faites. Le placeholder porte la valeur prescrite :
+   un champ vide veut dire « comme prevu », et le calcul retombe dessus. */
+.reps-done{max-width:52px;text-align:center;padding:5px 2px;font-size:14px;font-weight:900}
+.reps-done::placeholder{font-weight:700;color:var(--text-faint);font-size:13px}
 .pe-poignee{background:var(--surface-2);border:1px solid var(--border);color:var(--sub);font-size:14px;line-height:1;padding:0;border-radius:8px;cursor:grab;flex-shrink:0;width:32px;min-height:38px;touch-action:none;user-select:none;font-family:Montserrat,sans-serif}
 .pe-poignee:active{cursor:grabbing;background:var(--red);color:#fff;border-color:var(--red)}
 .pe-mini{background:var(--surface-2);border:1px solid var(--border);color:var(--sub);font-size:9px;line-height:1;padding:0;border-radius:6px;cursor:pointer;width:26px;height:18px;font-family:Montserrat,sans-serif;flex-shrink:0}
@@ -7702,6 +7706,10 @@ function loadCoachSessionSlots(){
           <label style="margin-top:0">Nom de la séance</label>
           <input value="${escapeHtml(s.name||'')}" placeholder="Ex: DOS & BICEPS" onchange="coachRenameSession(${i},this.value)" style="margin-top:4px">
         </div>
+        <label class="hit44" style="display:flex;align-items:center;gap:8px;margin:0 0 12px;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:400;font-size:11px;color:var(--sub)">
+          <input type="checkbox" ${s.deload?'checked':''} onchange="coachToggleDeload(${i},this.checked)" style="width:16px;height:16px;margin:0;accent-color:var(--info);flex-shrink:0">
+          Séance de décharge : elle ne comptera pas dans la détection de plateau
+        </label>
         <button class="btn btn-red btn-sm" style="width:100%" onclick="openCoachSessionExercises(${i})"> Modifier les exercices (${s.exercises?.length||0})</button>
         ${_boutonsCopieJour('coachCopyDay',i)}
       </div>`:''}
@@ -7740,6 +7748,14 @@ function saveCoachSessionsAsTemplate(){
   toastEcriture(saveUser(),'Modèle « '+nom+' » créé : pense à adapter l\'onglet F','le modèle est');
 }
 
+// Une decharge est PLANIFIEE par le coach, pas constatee apres coup : elle ne
+// doit pas pouvoir servir a effacer une mauvaise seance de l historique.
+function coachToggleDeload(i,val){
+  const c=_coachEditClient; if(!c?.sessions_config?.[i]) return;
+  c.sessions_config[i].deload=!!val;
+  saveUser(); CLOUD.pushOne(c.email,c);
+  _viderCachePlateau();
+}
 function coachToggleDay(i){
   if(!_coachEditClient?.sessions_config) return;
   _coachEditClient.sessions_config[i].active=!_coachEditClient.sessions_config[i].active;
@@ -9000,6 +9016,7 @@ function woPersist(){
       sessionPhoto:woState.sessionPhoto||null,
       // Sans eux, une séance reprise après pause perdrait sa fin de séance,
       // qui est justement ce qui reste à faire au moment de la reprise.
+      deload:!!woState.deload,
       warmup:woState.warmup||'',
       cooldown:woState.cooldown||'',
       // Les étapes déjà cochées de l'échauffement : sans elles, une séance
@@ -9126,6 +9143,7 @@ function launchWorkout(sessConfig,slotIdx){
   const _slot=(typeof slotIdx==='number'&&slotIdx>=0&&slotIdx<=6)?slotIdx:null;
   woState={exercises,currentEx:0,startTime:Date.now(),timerInterval:null,sessionData:{},
     progName:_nomSeance(sessConfig,_slot),sessionPhoto:sessConfig.photo||null,
+    deload:!!sessConfig.deload,
     slot:_slot,
     // L'échauffement et la fin de séance étaient écrits par le coach depuis
     // toujours, et n'étaient affichés NULLE PART à l'athlète : ils vivaient
@@ -9399,6 +9417,10 @@ function renderWoEx(){
 
   document.getElementById('wo-content').innerHTML=`
     <div class="anim-in">
+      ${woState.deload?`<div style="display:flex;align-items:center;gap:9px;background:var(--info-bg);border:1px solid var(--info-border);border-radius:10px;padding:10px 13px;margin-bottom:12px">
+        <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--info);flex-shrink:0">DÉCHARGE</span>
+        <span style="font-size:11px;color:#bbb;line-height:1.5">Semaine allégée voulue par ton coach. Elle ne comptera pas comme un recul.</span>
+      </div>`:''}
       ${woState.currentEx===0?_carteProtocole(woState.warmup,'Échauffement','var(--orange)','wo-warmup-body'):''}
       ${photoHtml}
       ${estSS?`<div style="display:flex;align-items:center;gap:9px;background:#1a0f00;border:1px solid var(--orange);border-radius:10px;padding:10px 13px;margin-bottom:12px">
@@ -9633,6 +9655,9 @@ function renderSets(ex,data,idx){
     const onChW2=`woState.sessionData[${idx}].sets[${i}].weight2=this.value;renderSets(woState.exercises[${idx}],woState.sessionData[${idx}],${idx})`;
     const onChR=`woState.sessionData[${idx}].sets[${i}].rir=this.value;renderSets(woState.exercises[${idx}],woState.sessionData[${idx}],${idx})`;
     const onChP=`woState.sessionData[${idx}].sets[${i}].pain=this.value`;
+    // Repetitions REELLEMENT faites. Vide = non renseigne : le calcul retombe
+    // alors sur les repetitions prescrites, comme avant ce champ.
+    const onChRD=`const v=parseInt(this.value);woState.sessionData[${idx}].sets[${i}].repsDone=(isFinite(v)&&v>0)?v:null`;
 
     // Weight cell (with AUTO badge)
     const autoLabel=s.isAuto&&!s.done?'<div style="font-size:var(--fs-xs);color:var(--green);text-align:center;margin-top:2px;letter-spacing:1px">AUTO</div>':'';
@@ -9679,7 +9704,7 @@ function renderSets(ex,data,idx){
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
               <div style="text-align:center;min-width:28px;flex-shrink:0">
                 <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red);line-height:1">${i+1}</div>
-                <div style="font-size:14px;font-weight:900;line-height:1.2"><span style="font-size:var(--fs-xs);font-weight:600">×</span>${s.reps||ex.reps}</div>
+                <input class="set-input reps-done" type="number" inputmode="numeric" min="0" value="${s.repsDone??''}" placeholder="${escapeHtml(String(s.reps||ex.reps))}" onchange="${onChRD}" ${dis} aria-label="Répétitions réalisées">
               </div>
               ${weightInner}
             </div>
@@ -9695,7 +9720,7 @@ function renderSets(ex,data,idx){
     return `<tr class="${rowCls}${painAlert}">
       <td style="text-align:center;padding:4px 6px">
         <span style="display:block;font-size:var(--fs-xs);font-weight:800;color:var(--red);line-height:1">${i+1}</span>
-        <span style="font-size:15px;font-weight:900;line-height:1.2"><span style="font-size:var(--fs-xs);font-weight:600">×</span>${s.reps||ex.reps}</span>
+        <input class="set-input reps-done" type="number" inputmode="numeric" min="0" value="${s.repsDone??''}" placeholder="${escapeHtml(String(s.reps||ex.reps))}" onchange="${onChRD}" ${dis} aria-label="Répétitions réalisées">
       </td>
       ${weightCell}
       <td>${rirSelect}</td>
@@ -9825,7 +9850,10 @@ function finishWorkout(incomplete=false){
   Object.values(woState.sessionData).forEach(d=>d.sets.forEach(s=>{
     if(!s.done) return;
     sets++;
-    const r1=repsToNumber(s.reps), w1=parseFloat(s.weight||0);
+    // Le tonnage s'appelle « charge × reps » : dès qu'on connaît les
+    // répétitions réellement faites, le calculer sur celles prescrites serait
+    // un chiffre volontairement faux. Sans saisie, repli inchangé.
+    const r1=(s.repsDone!=null?Number(s.repsDone):repsToNumber(s.reps)), w1=parseFloat(s.weight||0);
     if(w1>0&&r1>0){
       vol+=w1*r1;
       if(s.degressive&&s.weight2) vol+=parseFloat(s.weight2||0)*parseFloat(s.p2reps||0);
@@ -9843,7 +9871,10 @@ function finishWorkout(incomplete=false){
   // sets = réalisé, setsPlanned = prévu. Les deux sont conservés : sans le
   // second, un « 5 » isolé ne dit pas s'il vaut pour 5 sur 5 ou 5 sur 12, et
   // l'historique ne permet plus de reconstituer l'écart après coup.
-  const sess={id:'s_'+Date.now(),date:Date.now(),name:woState.progName,slot:woState.slot??null,duration:mins,sets,setsPlanned,volume:Math.round(vol),complete:!incomplete,data};
+  const sess={id:'s_'+Date.now(),date:Date.now(),name:woState.progName,slot:woState.slot??null,duration:mins,sets,setsPlanned,volume:Math.round(vol),complete:!incomplete,data,
+    // Planifiee par le coach : cette seance sort de la serie temporelle et ne
+    // peut donc pas passer pour un recul.
+    deload:!!woState.deload};
   if(!currentUser.sessions) currentUser.sessions=[];
   currentUser.sessions.push(sess);
   _viderCachePlateau();
@@ -9883,14 +9914,10 @@ function finishWorkout(incomplete=false){
 // ══════════════ DÉTECTION DE L'ABSENCE DE PROGRESSION ══════════════
 // Tout est DÉRIVÉ de user.sessions : aucun champ nouveau, aucune migration.
 //
-// Limite assumée : repsDone n'existe pas encore (BB-03). Le nombre de
-// répétitions retenu est donc TOUJOURS celui PRESCRIT, jamais celui réalisé.
-// Deux séances où l'athlète a fait 8 puis 10 répétitions à charge égale
-// donnent le même score. Le code lit s.repsDone dès qu'il existera, sans rien
-// à remigrer, mais tant qu'il est absent la détection ne voit que la charge et
-// le RIR. C'est écrit à l'écran, pas seulement ici.
-
-// Seuils CALIBRÉS pour éviter les faux positifs, pas des constantes
+// repsDone porte les répétitions RÉELLEMENT faites, saisies par l'athlète sur
+// l'écran de séance. Quand le champ reste vide, le calcul retombe sur les
+// répétitions prescrites : c'est le cas de tout l'historique antérieur, qui
+// n'avait pas ce champ, et aucune migration n'est nécessaire pour autant.
 // physiologiques. Ils sont ajustables : ce sont des choix de produit.
 const MIN_SEANCES=4;        // en dessous, aucun verdict n'est rendu
 const MIN_JOURS=21;         // ni sur une fenêtre trop courte
@@ -10096,8 +10123,8 @@ const PERF_ETAT_LIB={
 const PERF_ENCADRE=`<div style="background:var(--surface-2);border-left:3px solid var(--sub);border-radius:8px;padding:10px 12px;margin-top:14px;font-size:11px;color:var(--sub);line-height:1.6">
     Estimation basée sur tes séries validées. L'e1RM est un modèle : il est
     fiable jusqu'à 12 répétitions, approximatif au-delà. Le calcul retient les
-    répétitions <strong>prévues</strong> au programme, pas celles réellement
-    faites.
+    répétitions que tu as <strong>saisies</strong> ; quand tu laisses le champ
+    vide, il retombe sur celles prévues au programme.
   </div>`;
 
 // Exercices dont l'état a CHANGÉ avec la séance qu'on vient d'enregistrer.
@@ -19745,8 +19772,46 @@ function testExercices(){
        _sparkline([50,50,50],'red').includes('M0')&&!/NaN/.test(_sparkline([50,50,50],'red')));
 
     // ── L'encadré d'honnêteté dit la limite de repsDone ──
-    ok('L\'encadré annonce que les répétitions sont celles PRÉVUES',
-       /pr[ée]vues/i.test(PERF_ENCADRE)&&/e1RM est un mod[èe]le/i.test(PERF_ENCADRE));
+    ok('L\u0027encadré dit exactement quelles répétitions servent au calcul',
+       /saisies/i.test(PERF_ENCADRE)&&/retombe sur celles pr[ée]vues/i.test(PERF_ENCADRE)
+       &&/e1RM est un mod[èe]le/i.test(PERF_ENCADRE),PERF_ENCADRE.slice(0,40));
+
+    // ── BB-03 : répétitions réellement faites ──
+    // repsDone existe désormais. Un champ vide vaut « comme prévu » et le
+    // calcul retombe sur les répétitions prescrites, comme avant.
+    const _rdS=(reps,repsDone)=>({done:true,weight:'60',reps:String(reps),rir:'1',
+                                  ...(repsDone!==undefined?{repsDone}:{})});
+    ok('Sans repsDone, on retombe sur les reps prescrites',
+       Math.abs(perfExercice({data:{'X':{sets:[_rdS(10)]}}},'X').score-e1rm(60,10,1))<1e-9);
+    ok('Avec repsDone, c\'est lui qui compte',
+       Math.abs(perfExercice({data:{'X':{sets:[_rdS(10,8)]}}},'X').score-e1rm(60,8,1))<1e-9);
+    ok('Moins de répétitions faites = score plus bas',
+       perfExercice({data:{'X':{sets:[_rdS(10,8)]}}},'X').score
+       <perfExercice({data:{'X':{sets:[_rdS(10)]}}},'X').score);
+    ok('repsDone null : repli sur les reps prescrites',
+       Math.abs(perfExercice({data:{'X':{sets:[_rdS(10,null)]}}},'X').score-e1rm(60,10,1))<1e-9);
+    ok('repsDone fait basculer la métrique quand il dépasse 12',
+       perfExercice({data:{'X':{sets:[_rdS(10,20)]}}},'X').metrique==='volume-serie');
+    ok('_perfReps lit repsDone puis les reps prescrites',
+       _perfReps({repsDone:7,reps:'10'})===7&&_perfReps({reps:'10'})===10
+       &&_perfReps({repsDone:null,reps:'6-8'})===7);
+
+    // ── BB-05 : séance de décharge ──
+    // Planifiée par le coach. Elle sort de la série temporelle, donc elle ne
+    // peut pas passer pour un recul ni écraser un record.
+    const _dlS=(j,sc,dl)=>Object.assign(_plSeance(j,sc),dl?{deload:true}:{});
+    const _dlAvec=[_dlS(0,90),_dlS(7,100),_dlS(14,97),_dlS(21,97),_dlS(28,97),_dlS(35,40,true)];
+    const _dlSans=[_dlS(0,90),_dlS(7,100),_dlS(14,97),_dlS(21,97),_dlS(28,97)];
+    ok('La décharge sort de la série',_plEtat(_dlAvec).n===5,String(_plEtat(_dlAvec).n));
+    ok('Elle ne déclenche pas de recul',_plEtat(_dlAvec).etat!=='regression',_plEtat(_dlAvec).etat);
+    ok('Le verdict est celui de la série sans elle',
+       _plEtat(_dlAvec).etat===_plEtat(_dlSans).etat,
+       _plEtat(_dlAvec).etat+' / '+_plEtat(_dlSans).etat);
+    // Une décharge exceptionnellement bonne ne doit pas non plus fixer un record
+    const _dlHaut=[_dlS(0,90),_dlS(7,95),_dlS(14,97),_dlS(21,97),_dlS(28,97),_dlS(35,500,true)];
+    ok('Une décharge ne peut pas fixer un record',_plEtat(_dlHaut).maxGlobal<200,
+       String(_plEtat(_dlHaut).maxGlobal));
+    ok('coachToggleDeload existe',typeof coachToggleDeload==='function');
 
     currentUser=_plSauve; _viderCachePlateau();
 
