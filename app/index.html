@@ -14325,6 +14325,14 @@ function _notifSupported(){return typeof window!=='undefined' && 'Notification' 
 // pas ET quoi faire. « Non supportées » laissait croire à une impasse alors que
 // l'installation sur l'écran d'accueil suffit.
 const _NOTIF_INDISPO="Les notifications ne sont pas disponibles sur ce navigateur : installe RepCore sur ton écran d'accueil.";
+// L'app au premier plan a deja sa banniere : une notification systeme par
+// dessus, c'est le meme message deux fois dans la meme seconde. On ne garde
+// que la banniere.
+// Repli SUR : si visibilityState est indisponible, on suppose l'app cachee
+// et la notification part. Un doublon vaut mieux qu'un rappel perdu.
+function _appAuPremierPlan(){
+  try{ return document.visibilityState==='visible'; }catch(e){ return false; }
+}
 function checkBilanNotifToday(){
   if(!currentUser||currentUser.role!=='athlete') return;
   if(!(currentUser.bilans||[]).length) return;
@@ -14337,13 +14345,17 @@ function checkBilanNotifToday(){
   // système. Sur un iPhone en onglet, l'athlète voit donc son rappel malgré
   // tout — avant, la ligne suivante jetait et la bannière restait, mais tout ce
   // qui suivait dans le cycle de démarrage sautait avec elle.
+  if(_appAuPremierPlan()) return;
+  const _fq=(currentUser._bilanFreq===1)?1:2;
+  const _tBil=_fq===1?'Bilan de la semaine':'Bilan de quinzaine';
+  const _bBil=(currentUser.fname||'')+', 10 min quand tu as le temps ce week-end.';
   if(_notifSupported()&&Notification.permission==='granted'){
-    navigator.serviceWorker.ready.then(reg=>reg.showNotification('RepCore : Bilan bimensuel 📊',{
-      body:"C'est le moment de remplir ton bilan coaching ! Suis ton évolution 📈",
+    navigator.serviceWorker.ready.then(reg=>reg.showNotification(_tBil,{
+      body:_bBil,
       icon:'./icons/icon-192x192.png',badge:'./icons/icon-192x192.png',
-      tag:'bilan-reminder',requireInteraction:true,data:{url:'./?bilan=1'}
-    })).catch(()=>{try{new Notification('RepCore : Bilan bimensuel 📊',{
-      body:"C'est le moment de remplir ton bilan coaching !",
+      tag:'bilan-reminder',requireInteraction:false,data:{url:'./?bilan=1'}
+    })).catch(()=>{try{new Notification(_tBil,{
+      body:_bBil,
       icon:'./icons/icon-192x192.png',tag:'bilan-reminder'
     });}catch(e){}});
   }
@@ -14413,8 +14425,12 @@ async function scheduleSwNotif(){
     // relancé du tout — c'est justement lui qu'il faut relancer.
     const next=getNextBilanSaturday(true);
     const c=await caches.open('repcore-sw-data');
+    // La fréquence CHOISIE part avec le planning : sans elle, le Service
+    // Worker avançait de quinze jours quel que soit le réglage.
+    const _fq=(currentUser&&currentUser._bilanFreq===1)?1:2;
     await c.put('/bilan-schedule',new Response(JSON.stringify({
-      nextDate:next?next.getTime():Date.now()+14*24*3600*1000,
+      nextDate:next?next.getTime():Date.now()+_fq*7*24*3600*1000,
+      freqSemaines:_fq,
       fname:currentUser?.fname||''
     }),{headers:{'Content-Type':'application/json'}}));
     if('periodicSync' in reg){
@@ -14455,6 +14471,11 @@ function showBilanNotifPrompt(){
     <p style="text-align:center;color:var(--sub);font-size:12px;line-height:1.7;margin-bottom:24px">
       Reçois une notification <strong style="color:#fff">tous les 2 samedis à 7h00</strong><br>pour ne jamais oublier ton bilan coaching.
     </p>
+    <!-- iOS ne réveille pas les Service Workers en arrière-plan : le dire ici
+         évite qu'un athlète croie ses rappels cassés. -->
+    <p style="text-align:center;color:var(--text-faint);font-size:11px;line-height:1.6;margin-bottom:20px">
+      Sur iPhone, les rappels ne s'affichent que quand l'app est ouverte.
+    </p>
     <button class="btn btn-red" onclick="requestBilanNotifPermission();document.getElementById('notif-perm-modal')?.remove()" style="margin-bottom:10px;letter-spacing:1.5px">Activer les notifications</button>
     <button class="btn btn-outline" onclick="document.getElementById('notif-perm-modal')?.remove()" style="font-size:11px;letter-spacing:1px;color:var(--sub)">Plus tard</button>
   </div>`;
@@ -14462,6 +14483,22 @@ function showBilanNotifPrompt(){
 }
 
 // ======= WORKOUT REMINDER =======
+// Nom de la séance par jour de la semaine, tiré des créneaux ACTIFS. Le
+// Service Worker n'a aucun accès à sessions_config : il faut le lui poster.
+function _nomsSeancesParJour(u){
+  const noms={};
+  const jours=(u&&u._woReminderDays)||[];
+  const actifs=((u&&u.sessions_config)||[]).map((s,i)=>({s,i})).filter(x=>x.s&&x.s.active);
+  jours.forEach((j,k)=>{
+    const c=actifs[k%Math.max(1,actifs.length)];
+    if(c&&c.s.name) noms[j]=c.s.name;
+  });
+  return noms;
+}
+function _nomSeanceDuJour(u,jour){
+  const n=_nomsSeancesParJour(u);
+  return n[jour]||null;
+}
 async function scheduleWoNotif(){
   if(!('serviceWorker' in navigator))return;
   const u=currentUser;
@@ -14471,6 +14508,7 @@ async function scheduleWoNotif(){
       enabled:true,
       hour:u._woReminderHour??18,
       days:u._woReminderDays||[],
+      noms:_nomsSeancesParJour(u),
       fname:u.fname||'',
       lastNotifDate:null
     }),{headers:{'Content-Type':'application/json'}}));
@@ -14533,11 +14571,13 @@ function checkWoReminderToday(){
   showWoReminderBanner();
   // Même partage qu'au rappel de bilan : la bannière d'abord, la notification
   // système seulement si le navigateur la propose.
+  if(_appAuPremierPlan()) return;
+  const _nomSeance=_nomSeanceDuJour(currentUser,todayApp)||'ta séance';
   if(_notifSupported()&&Notification.permission==='granted'){
-    navigator.serviceWorker.ready.then(reg=>reg.showNotification('RepCore : Séance du jour 💪',{
-      body:"C'est l'heure de t'entraîner ! Lance ta séance maintenant.",
+    navigator.serviceWorker.ready.then(reg=>reg.showNotification('Séance du jour',{
+      body:(currentUser.fname||'')+', '+_nomSeance+' est au programme.',
       icon:'./icons/icon-192x192.png',badge:'./icons/icon-192x192.png',
-      tag:'wo-reminder',requireInteraction:true,data:{url:'./?wo=1'}
+      tag:'wo-reminder',requireInteraction:false,data:{url:'./?wo=1'}
     })).catch(()=>{});
   }
 }
@@ -22248,6 +22288,198 @@ function _pfUtiliser(slug){
 // ══════════════ TESTS DE LA COUCHE D'IDENTITÉ D'EXERCICE ══════════════
 // Exécutable depuis la console : testExercices().
 // Ne touche à AUCUNE donnée réelle : currentUser est sauvegardé puis restauré.
+
+// ══════════════ TESTS DU SERVICE WORKER ══════════════
+// sw.js s'exécute dans un autre contexte : la page n'y a aucun accès, et
+// testExercices() ne peut donc rien en dire. Or c'est là que vivent le plafond
+// de trois notifications, l'avance de bilan et le calcul de jour — c'est-à-dire
+// tout ce que ce lot corrige.
+//
+// On charge le FICHIER RÉELLEMENT LIVRÉ par fetch et on l'évalue avec des
+// bouchons. Rien n'est dupliqué : si sw.js change, le test suit. Et « Date »
+// est passé en paramètre, ce qui le fait masquer le Date global À L'INTÉRIEUR
+// du source évalué — on peut donc simuler une heure sans toucher à la page.
+//
+// À lancer depuis la console : await testNotifs()
+async function testNotifs(){
+  const R=[]; const ok=(n,c,d)=>R.push({n,ok:!!c,d:d||''});
+  let src='';
+  try{ src=await (await fetch('./sw.js',{cache:'no-store'})).text(); }
+  catch(e){ console.error('sw.js introuvable : '+e.message); return {total:0,echecs:1}; }
+
+  // ── Bouchons ──
+  const faireContexte=(isoFige)=>{
+    const notifs=[], mem=new Map(), VraiDate=window.Date;
+    const fige=new VraiDate(isoFige);
+    const D=new Proxy(VraiDate,{
+      construct:(t,a)=>a.length?new VraiDate(...a):new VraiDate(fige.getTime()),
+      get:(t,k)=>k==='now'?(()=>fige.getTime()):t[k]
+    });
+    const self={
+      addEventListener(){}, skipWaiting(){}, location:{origin:'http://x'},
+      clients:{claim(){}},
+      registration:{showNotification(titre,opts){notifs.push({titre,opts});return Promise.resolve();}}
+    };
+    const caches={open:()=>Promise.resolve({
+      match:k=>Promise.resolve(mem.has(k)?{json:()=>Promise.resolve(JSON.parse(mem.get(k)))}:undefined),
+      put:(k,resp)=>Promise.resolve(resp.text()).then(t=>{mem.set(k,t);}),
+      add:()=>Promise.resolve()
+    })};
+    const usine=new Function('self','caches','clients','Date',
+      src+'\nreturn {_jourLocal,_freqBilan,SUPP_GROUPES,swCheckSuppReminders,swCheckAndNotify,swGet,swSet};');
+    return {api:usine(self,caches,self.clients,D),notifs,mem};
+  };
+
+  // ── _jourLocal ──
+  {
+    const {api}=faireContexte('2026-07-15T10:00:00');
+    const d=new Date(2026,6,15,0,30);            // 15 juillet, 00 h 30 LOCALES
+    ok('_jourLocal rend la date locale',api._jourLocal(d)==='2026-07-15',api._jourLocal(d));
+    ok('_jourLocal : 23 h 59 reste le même jour',
+       api._jourLocal(new Date(2026,6,15,23,59))==='2026-07-15');
+    ok('_jourLocal : 00 h 01 bascule au jour suivant',
+       api._jourLocal(new Date(2026,6,16,0,1))==='2026-07-16');
+    ok('_jourLocal : hiver, 00 h 01',
+       api._jourLocal(new Date(2026,0,10,0,1))==='2026-01-10');
+    ok('_jourLocal : les mois et jours sont sur deux chiffres',
+       api._jourLocal(new Date(2026,0,5,12,0))==='2026-01-05');
+    // Là où le bug vivait : en avance sur UTC, minuit local est encore la
+    // veille en UTC. On ne l'affirme que si la machine est dans ce cas.
+    if(d.getTimezoneOffset()<0){
+      ok('_jourLocal diffère de toISOString quand UTC est en retard',
+         api._jourLocal(d)!==d.toISOString().slice(0,10),
+         'local '+api._jourLocal(d)+' vs UTC '+d.toISOString().slice(0,10));
+    } else {
+      ok('Fuseau non décalé : comparaison UTC sans objet',true,'ignoré ici');
+    }
+  }
+
+  // ── _freqBilan : bornage ──
+  {
+    const {api}=faireContexte('2026-07-15T10:00:00');
+    ok('Fréquence absente : deux semaines',api._freqBilan({})===2&&api._freqBilan(null)===2);
+    ok('Fréquence 1 respectée',api._freqBilan({freqSemaines:1})===1);
+    ok('Fréquence 2 respectée',api._freqBilan({freqSemaines:2})===2);
+    ok('Valeur aberrante bornée à deux',
+       api._freqBilan({freqSemaines:0})===2&&api._freqBilan({freqSemaines:99})===2
+       &&api._freqBilan({freqSemaines:'beaucoup'})===2);
+  }
+
+  // ── swCheckAndNotify : avance paramétrée ──
+  const avanceApres=async(freq,retardJours)=>{
+    const {api,mem,notifs}=faireContexte('2026-07-15T09:00:00');
+    const t=new Date(2026,6,15,9,0).getTime();
+    const sched={nextDate:t-retardJours*864e5,fname:'Marc'};
+    if(freq!=null) sched.freqSemaines=freq;
+    await api.swSet('/bilan-schedule',sched);
+    await api.swCheckAndNotify();
+    const apres=JSON.parse(mem.get('/bilan-schedule'));
+    return {avanceJours:Math.round((apres.nextDate-sched.nextDate)/864e5),notifs};
+  };
+  {
+    const a=await avanceApres(null,1);
+    ok('Cache sans freqSemaines : avance de 14 jours',a.avanceJours===14,String(a.avanceJours));
+    ok('Cache sans freqSemaines : aucune erreur, la notification part',a.notifs.length===1);
+    const b=await avanceApres(1,1);
+    ok('freqSemaines 1 : avance de 7 jours',b.avanceJours===7,String(b.avanceJours));
+    ok('freqSemaines 1 : le titre est « Bilan de la semaine »',
+       b.notifs[0]&&b.notifs[0].titre==='Bilan de la semaine',b.notifs[0]&&b.notifs[0].titre);
+    const c=await avanceApres(2,1);
+    ok('freqSemaines 2 : avance de 14 jours',c.avanceJours===14);
+    ok('freqSemaines 2 : le titre est « Bilan de quinzaine »',
+       c.notifs[0]&&c.notifs[0].titre==='Bilan de quinzaine');
+    ok('Le corps porte le prénom et la formule exacte',
+       c.notifs[0]&&c.notifs[0].opts.body==='Marc, 10 min quand tu as le temps ce week-end.',
+       c.notifs[0]&&c.notifs[0].opts.body);
+    ok('Le rappel de bilan ne colle plus à l\'écran',
+       c.notifs[0]&&c.notifs[0].opts.requireInteraction===false);
+    const d=await avanceApres(99,1);
+    ok('Valeur aberrante : avance bornée à 14 jours',d.avanceJours===14,String(d.avanceJours));
+    const e=await avanceApres(2,60);
+    ok('Échéance dépassée de plusieurs cycles : une seule avance, une seule notification',
+       e.avanceJours===14&&e.notifs.length===1);
+  }
+
+  // ── swCheckSuppReminders : trois groupes, plafond strict ──
+  const passeSupp=async(heure,items,memPartage)=>{
+    const {api,mem,notifs}=faireContexte('2026-07-15T'+String(heure).padStart(2,'0')+':05:00');
+    if(memPartage) memPartage.forEach((v,k)=>mem.set(k,v));
+    await api.swSet('/supp-reminders',{enabled:true,fname:'Marc',items,
+      lastNotif:memPartage?JSON.parse(mem.get('/supp-reminders')||'{}').lastNotif:undefined});
+    await api.swCheckSuppReminders();
+    return {notifs,mem};
+  };
+  {
+    const dix=[
+      {name:'Créatine',timings:['jeun'],dosage_quantity:5,dosage_unit:'g'},
+      {name:'Vitamine D',timings:['matin']},
+      {name:'Magnésium',timings:['toutes-4h']},
+      {name:'Oméga 3',timings:['midi']},
+      {name:'Zinc',timings:['apres-midi']},
+      {name:'Caféine',timings:['avant-entrainement']},
+      {name:'EAA',timings:['intra']},
+      {name:'Whey',timings:['apres-entrainement']},
+      {name:'Tisane',timings:['soir']},
+      {name:'Mélatonine',timings:['coucher']}
+    ];
+    ok('Aucun complément : aucune notification',(await passeSupp(8,[])).notifs.length===0);
+    const m=await passeSupp(8,[dix[0]]);
+    ok('Un seul complément le matin : une notification',m.notifs.length===1);
+    ok('Le corps porte le prénom, le nom, la quantité et l\'unité',
+       m.notifs[0].opts.body==='Marc : Créatine 5 g',m.notifs[0].opts.body);
+    ok('Le titre est « Compléments »',m.notifs[0].titre==='Compléments');
+    const m3=await passeSupp(8,[dix[0],dix[1],dix[2]]);
+    ok('Groupe matin : une seule notification pour trois produits',m3.notifs.length===1);
+    ok('Les produits sont concaténés par « · »',
+       m3.notifs[0].opts.body==='Marc : Créatine 5 g · Vitamine D · Magnésium',m3.notifs[0].opts.body);
+    // Une journée entière : trois passages aux trois heures d'émission.
+    let total=0;
+    for(const h of [8,13,20]) total+=(await passeSupp(h,dix)).notifs.length;
+    ok('Dix compléments sur dix créneaux : au plus 3 notifications par jour',total===3,String(total));
+    // Deux passages dans la même heure : une seule émission.
+    const p1=await passeSupp(8,[dix[0]]);
+    const p2=await passeSupp(8,[dix[0]],p1.mem);
+    ok('Deux passages dans la même heure : une seule émission',
+       p1.notifs.length===1&&p2.notifs.length===0,'1er '+p1.notifs.length+' 2e '+p2.notifs.length);
+    // Fenêtre d'émission.
+    ok('À 7 h, rien ne part encore',(await passeSupp(7,dix)).notifs.length===0);
+    ok('À 8 h, le groupe du matin part',(await passeSupp(8,dix)).notifs.length===1);
+    ok('À 9 h, le groupe du matin part encore',(await passeSupp(9,dix)).notifs.length===1);
+    ok('À 12 h, plus rien du matin',(await passeSupp(12,dix)).notifs.length===0);
+    ok('Aucune notification de complément ne colle à l\'écran',
+       (await passeSupp(8,dix)).notifs.every(x=>x.opts.requireInteraction===false));
+    ok('Les trois groupes couvrent les dix créneaux',(()=>{
+      const {api}=faireContexte('2026-07-15T08:00:00');
+      const c=api.SUPP_GROUPES.reduce((a,g)=>a.concat(g.timings),[]);
+      return c.length===10&&new Set(c).size===10;})());
+  }
+
+  // ── Les textes doivent rester identiques entre les deux fichiers ──
+  {
+    const page=document.documentElement.innerHTML;
+    const paires=[
+      ['Bilan de quinzaine',/Bilan de quinzaine/],
+      ['Bilan de la semaine',/Bilan de la semaine/],
+      ['Séance du jour',/'Séance du jour'/],
+      [', 10 min quand tu as le temps ce week-end.',/10 min quand tu as le temps ce week-end/],
+      [' est au programme.',/est au programme/]
+    ];
+    paires.forEach(([txt,re])=>{
+      ok('Texte partagé présent dans sw.js : « '+txt.trim()+' »',src.indexOf(txt)>=0);
+      ok('Texte partagé présent dans l\'app : « '+txt.trim()+' »',re.test(page));
+    });
+    ok('Aucun requireInteraction:true ne subsiste dans sw.js',!/requireInteraction:\s*true/.test(src));
+    ok('Aucune date UTC ne sert plus de clé de déduplication',
+       !/toISOString\(\)\.slice/.test(src));
+  }
+
+  const ko=R.filter(r=>!r.ok);
+  console.log('%c'+R.length+' vérifications Service Worker, '+ko.length+' en échec',
+    'font-weight:bold;color:'+(ko.length?'#e05050':'#22c55e'));
+  R.forEach(r=>console.log((r.ok?'  ok   ':'  ÉCHEC')+'  '+r.n+(r.d?'   → '+r.d:'')));
+  return {total:R.length,echecs:ko.length,detail:R};
+}
+
 function testExercices(){
   const R=[];const ok=(n,c,d)=>R.push({n,ok:!!c,d:d||''});
   const sauve=currentUser;
@@ -25843,6 +26075,31 @@ function testExercices(){
       if(sauveP){ progEx.length=0; sauveP.forEach(x=>progEx.push(x)); }
       currentUser=sauveU; woState=sauveW; _coachEditClient=sauveCE;
     })();
+
+    // ── Garde de visibilité des rappels ──
+    // L'app au premier plan a déjà sa bannière : la notification système par
+    // dessus ferait le même message deux fois dans la même seconde.
+    ok("App visible : on considère qu'elle est au premier plan",(()=>{
+      const d=Object.getOwnPropertyDescriptor(Document.prototype,'visibilityState');
+      Object.defineProperty(document,'visibilityState',{value:'visible',configurable:true});
+      const r=_appAuPremierPlan();
+      delete document.visibilityState; if(d) Object.defineProperty(Document.prototype,'visibilityState',d);
+      return r===true;})());
+    ok('App cachée : la notification doit partir',(()=>{
+      Object.defineProperty(document,'visibilityState',{value:'hidden',configurable:true});
+      const r=_appAuPremierPlan();
+      delete document.visibilityState;
+      return r===false;})());
+    ok('visibilityState indisponible : repli sûr, la notification part',(()=>{
+      Object.defineProperty(document,'visibilityState',{get(){throw new Error('indisponible');},configurable:true});
+      let r; try{ r=_appAuPremierPlan(); }catch(e){ r='EXCEPTION'; }
+      delete document.visibilityState;
+      return r===false;})());
+    ok('Les deux rappels passent par le même garde',
+       /_appAuPremierPlan()/.test(String(checkBilanNotifToday))
+       &&/_appAuPremierPlan()/.test(String(checkWoReminderToday)));
+    ok("Aucun requireInteraction:true ne subsiste dans l'app",
+       !/requireInteraction:(s*)true/.test(String(checkBilanNotifToday)+String(checkWoReminderToday)));
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }

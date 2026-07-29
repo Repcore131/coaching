@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v372';
+const CACHE = 'repcore-v373';
 const SW_DATA = 'repcore-sw-data'; // persistent across updates — not wiped by activate
 
 // Strict nécessaire à l'installabilité PWA (~46 Ko).
@@ -86,22 +86,54 @@ self.addEventListener('periodicsync', e => {
   if (e.tag === 'supp-reminder') e.waitUntil(swCheckSuppReminders());
 });
 
+// Jour LOCAL au format AAAA-MM-JJ. toISOString() rend une date UTC : a
+// 00 h 30 en France l'ete, elle designe encore la veille, et la cle de
+// deduplication d'une notification changeait donc a 2 h du matin au lieu de
+// minuit. L'application, elle, a toujours raisonne en date locale.
+function _jourLocal(d) {
+  const x = d || new Date();
+  const m = String(x.getMonth() + 1).padStart(2, '0');
+  const j = String(x.getDate()).padStart(2, '0');
+  return x.getFullYear() + '-' + m + '-' + j;
+}
+
+// Compléments : les dix créneaux restent, ils disent QUAND chaque produit est
+// dû. Mais l'émission est regroupée en trois moments. Dix notifications par
+// jour, c'est un produit qu'on finit par couper — et couper les
+// notifications, c'est aussi couper les deux rappels qui comptent.
+const SUPP_GROUPES = [
+  { cle: 'matin', heure: 8,  timings: ['jeun', 'matin', 'toutes-4h'] },
+  { cle: 'jour',  heure: 13, timings: ['midi', 'apres-midi', 'avant-entrainement', 'intra', 'apres-entrainement'] },
+  { cle: 'soir',  heure: 20, timings: ['soir', 'coucher'] }
+];
+// Fréquence de bilan, en semaines. Bornée : une valeur aberrante venue d'un
+// cache corrompu ne doit pas espacer les rappels de 99 semaines.
+function _freqBilan(sched) {
+  const n = Number(sched && sched.freqSemaines);
+  return (n === 1 || n === 2) ? n : 2;
+}
+
 async function swCheckAndNotify() {
   const sched = await swGet('/bilan-schedule');
   if (!sched?.nextDate) return;
   if (Date.now() < sched.nextDate) return;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = _jourLocal();
   if (await swGet('/bilan-last-notif') === today) return;
   await swSet('/bilan-last-notif', today);
   // Advance schedule by 14 days for the next cycle
-  await swSet('/bilan-schedule', { ...sched, nextDate: sched.nextDate + 14 * 24 * 3600 * 1000 });
-  const pref = sched.fname ? sched.fname + ', c' : 'C';
-  await self.registration.showNotification('Bilan bimensuel 📊', {
-    body: pref + '\'est le moment de remplir ton bilan coaching ! Suis ton évolution 📈',
+  // Avance paramétrée par la fréquence CHOISIE par l'athlète. Le repli sur 2
+  // est obligatoire : les caches écrits par les versions antérieures ne
+  // portent pas ce champ.
+  const _fq = _freqBilan(sched);
+  await swSet('/bilan-schedule', { ...sched, nextDate: sched.nextDate + _fq * 7 * 24 * 3600 * 1000 });
+  await self.registration.showNotification(_fq === 1 ? 'Bilan de la semaine' : 'Bilan de quinzaine', {
+    body: (sched.fname || '') + ', 10 min quand tu as le temps ce week-end.',
     icon: './icons/icon-192x192.png',
     badge: './icons/icon-192x192.png',
     tag: 'bilan-reminder',
-    requireInteraction: true,
+    // Une notification qui reste collée jusqu'au clic pour un rappel de bilan
+    // est disproportionnée : elle se subit, elle ne se lit pas.
+    requireInteraction: false,
     data: { url: './?bilan=1' }
   });
 }
@@ -124,7 +156,7 @@ async function swCheckWoReminder() {
   if (!sched?.enabled) return;
 
   const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
+  const todayStr = _jourLocal(now);
   if (sched.lastNotifDate === todayStr) return;
 
   const todayJS = now.getDay();                          // 0=Sun … 6=Sat
@@ -137,13 +169,15 @@ async function swCheckWoReminder() {
 
   await swSet('/wo-reminder', { ...sched, lastNotifDate: todayStr });
 
-  const pref = sched.fname ? sched.fname + ', c' : 'C';
-  await self.registration.showNotification('Séance du jour 💪', {
-    body: pref + "'est l'heure de t'entraîner ! Lance ta séance maintenant.",
+  // Le nom de la séance du jour, quand le planning le porte. Sans lui, on
+  // reste générique plutôt que d'inventer un intitulé.
+  const _nom = (sched.noms && sched.noms[todayApp]) || 'ta séance';
+  await self.registration.showNotification('Séance du jour', {
+    body: (sched.fname || '') + ', ' + _nom + ' est au programme.',
     icon: './icons/icon-192x192.png',
     badge: './icons/icon-192x192.png',
     tag: 'wo-reminder',
-    requireInteraction: true,
+    requireInteraction: false,
     data: { url: './?wo=1' }
   });
 }
@@ -154,33 +188,42 @@ async function swCheckSuppReminders() {
   if (!sched?.enabled || !sched?.items?.length) return;
 
   const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
+  const todayStr = _jourLocal(now);
   const h = now.getHours();
   const lastNotif = sched.lastNotif || {};
 
+  // Les dix créneaux restent la nomenclature de référence : c'est ce que
+  // portent les compléments eux-mêmes. Ils ne pilotent plus l'ÉMISSION, qui
+  // passe par SUPP_GROUPES — mais ils servent à vérifier qu'aucun créneau
+  // n'est orphelin le jour où on en ajoutera un.
   const TIMING_HOURS = {
     'jeun': 6, 'matin': 7, 'midi': 12, 'apres-midi': 15,
     'avant-entrainement': 17, 'intra': 18, 'apres-entrainement': 20,
     'soir': 19, 'coucher': 21, 'toutes-4h': 8
   };
+  const _couverts = SUPP_GROUPES.reduce((a, g) => a.concat(g.timings), []);
+  const _orphelins = Object.keys(TIMING_HOURS).filter(k => _couverts.indexOf(k) < 0);
 
   const updatedLastNotif = { ...lastNotif };
   let changed = false;
 
-  for (const [timingId, targetHour] of Object.entries(TIMING_HOURS)) {
-    if (h < targetHour || h >= targetHour + 3) continue;
-    if (lastNotif[timingId] === todayStr) continue;
-    const due = sched.items.filter(s => (s.timings || []).includes(timingId));
+  // UNE notification par groupe et par jour, trois groupes : trois au maximum.
+  // La boucle porte sur les groupes et non sur les créneaux, ce qui rend le
+  // plafond structurel plutôt que surveillé.
+  for (const g of SUPP_GROUPES) {
+    if (h < g.heure || h >= g.heure + 3) continue;
+    if (lastNotif[g.cle] === todayStr) continue;
+    const timings = g.timings.concat(_orphelins.length && g.cle === 'jour' ? _orphelins : []);
+    const due = sched.items.filter(x => (x.timings || []).some(t => timings.indexOf(t) >= 0));
     if (!due.length) continue;
-    updatedLastNotif[timingId] = todayStr;
+    updatedLastNotif[g.cle] = todayStr;
     changed = true;
-    const names = due.map(s => s.name + (s.dosage_quantity ? ' ' + s.dosage_quantity + (s.dosage_unit ? ' ' + s.dosage_unit : '') : '')).join(' • ');
-    const pref = sched.fname ? sched.fname + ', c' : 'C';
-    await self.registration.showNotification('Compléments 💊', {
-      body: pref + "'est l'heure de prendre : " + names,
+    const noms = due.map(x => x.name + (x.dosage_quantity ? ' ' + x.dosage_quantity + (x.dosage_unit ? ' ' + x.dosage_unit : '') : '')).join(' · ');
+    await self.registration.showNotification('Compléments', {
+      body: (sched.fname || '') + ' : ' + noms,
       icon: './icons/icon-192x192.png',
       badge: './icons/icon-192x192.png',
-      tag: 'supp-' + timingId,
+      tag: 'supp-' + g.cle,
       requireInteraction: false,
       data: { url: './' }
     });
