@@ -12446,32 +12446,50 @@ function arrondiCharge125(cible,depart){
   return Math.max(1.25,q*1.25);
 }
 
-// ── Montée en charge : trois séries d'approche, affichage seul ──────────────
+// ── Montée en charge : les séries d'approche, affichage seul ────────────────
 // Ce que le pratiquant met sur la barre AVANT sa première série de travail.
 // Rien de tout ceci n'existe en donnée : aucune ligne dans le tableau, aucune
 // case à valider, rien dans woState.sessionData, donc rien dans le tonnage, le
 // volume ou l'historique. C'est un pense-bête, pas une série.
-const MONTEE_CHARGE_MIN=20;
-const MONTEE_PALIERS=Object.freeze([
-  Object.freeze({pct:0.50,reps:8}),
-  Object.freeze({pct:0.70,reps:5}),
-  Object.freeze({pct:0.85,reps:3})
-]);
+//
+// Le NOMBRE de séries d'approche suit la charge de travail : plus la barre est
+// lourde, plus il faut de marches pour l'atteindre. Ce sont les paliers du
+// coach, pas une mesure.
+//   moins de 20 kg → 1 · de 20 à 50 → 2 · de 50 à 100 → 3 · au-delà → 4
+function _nbSeriesApproche(w){
+  if(w<20) return 1;
+  if(w<50) return 2;
+  if(w<=100) return 3;
+  return 4;
+}
+// Les pourcentages sont indexés sur le nombre de paliers. À trois, ce sont
+// ceux d'avant — 50, 70, 85. Les autres échelles gardent le même esprit :
+// partir autour de la moitié, finir juste sous la charge de travail.
+const MONTEE_POURCENTS=Object.freeze({
+  1:Object.freeze([0.50]),
+  2:Object.freeze([0.50,0.75]),
+  3:Object.freeze([0.50,0.70,0.85]),
+  4:Object.freeze([0.40,0.60,0.75,0.90])
+});
 // arrondiCharge125 est appelée avec la charge de travail comme point de DÉPART :
 // la rampe descend donc vers l'inférieur, et aucun palier ne peut dépasser —
 // ni même atteindre — la charge visée. C'est le seul arrondi appliqué.
 function seriesApproche(chargeTravail,repsPrescrites,ex){
   const w=Number(chargeTravail);
-  if(!isFinite(w)||w<MONTEE_CHARGE_MIN) return [];
+  if(!isFinite(w)||!(w>0)) return [];
   // Sous ces trois formes l'échauffement en charge n'a pas de sens : le cardio
   // n'a pas de barre, l'isométrie compte des secondes, et sur un contrepoids
   // une charge PLUS BASSE veut dire un exercice PLUS DUR — une rampe
   // descendante y serait exactement à l'envers.
   if(ex&&(isCardio(ex)||techniqueDe(ex)==='isometrie'||isCounterweightEx(ex.name))) return [];
-  // Une prescription sans aucun chiffre (« max », « AMRAP ») n'est pas un
-  // nombre de répétitions : on ne sait pas vers quoi on monte.
-  if(repsPrescrites!=null&&repsPrescrites!==''&&!/\d/.test(String(repsPrescrites))) return [];
-  return MONTEE_PALIERS.map(p=>({pct:p.pct,charge:arrondiCharge125(w*p.pct,w),reps:p.reps}));
+  // Les répétitions des paliers sont celles PRESCRITES, à l'identique : on
+  // répète le geste de la série de travail, allégé. Seule la charge change.
+  // Sans prescription chiffrée (« max », « AMRAP », champ vide) il n'y a rien
+  // à écrire en face de chaque palier.
+  const reps=(repsPrescrites==null?'':String(repsPrescrites)).trim();
+  if(!/\d/.test(reps)) return [];
+  const pcts=MONTEE_POURCENTS[_nbSeriesApproche(w)]||MONTEE_POURCENTS[3];
+  return pcts.map(pct=>({pct,charge:arrondiCharge125(w*pct,w),reps}));
 }
 function _fmtChargeMontee(v){ return String(v).replace('.',','); }
 function _htmlMonteeCharge(chargeTravail,ex,idx){
@@ -26162,35 +26180,64 @@ function testExercices(){
       const _mcMul=t=>t.every(p=>Math.abs(p.charge/1.25-Math.round(p.charge/1.25))<1e-9);
       const _mcCroit=t=>t.every((p,i)=>i===0||p.charge>t[i-1].charge);
 
-      // ── La fonction pure ──
-      ok('seriesApproche(80,\'5\') rend trois paliers',(()=>{
+      // ── Le NOMBRE de paliers suit la charge de travail ──
+      ok('Moins de 20 kg : une seule série de chauffe',
+        seriesApproche(15,'10').length===1&&seriesApproche(5,'10').length===1
+        &&seriesApproche(19.75,'10').length===1);
+      ok('De 20 à 50 kg : deux séries',
+        seriesApproche(20,'10').length===2&&seriesApproche(35,'10').length===2
+        &&seriesApproche(49.75,'10').length===2);
+      ok('De 50 à 100 kg : trois séries, 100 compris',
+        seriesApproche(50,'10').length===3&&seriesApproche(80,'5').length===3
+        &&seriesApproche(100,'5').length===3);
+      ok('Au-delà de 100 kg : quatre séries',
+        seriesApproche(101,'5').length===4&&seriesApproche(180,'3').length===4);
+      ok('Chaque bascule tombe pile où elle doit',(()=>{
+        const n=w=>seriesApproche(w,'10').length;
+        return n(19.99)===1&&n(20)===2&&n(49.99)===2&&n(50)===3
+            &&n(100)===3&&n(100.01)===4;})());
+
+      // ── Les répétitions sont celles PRESCRITES, à l'identique ──
+      ok('Chaque palier reprend les répétitions prescrites',(()=>{
         const t=seriesApproche(80,'5');
-        return Array.isArray(t)&&t.length===3;})());
-      ok('Les trois paliers sont des multiples de 1,25',_mcMul(seriesApproche(80,'5')),
-        JSON.stringify(seriesApproche(80,'5').map(p=>p.charge)));
-      ok('Les trois paliers sont croissants',_mcCroit(seriesApproche(80,'5')));
+        return t.length===3&&t.every(p=>p.reps==='5');})());
+      ok('Une fourchette est reprise telle quelle',(()=>{
+        const t=seriesApproche(120,'8-12');
+        return t.length===4&&t.every(p=>p.reps==='8-12');})());
+      ok('Les répétitions ne dépendent plus du palier',(()=>{
+        const t=seriesApproche(180,'3');
+        return new Set(t.map(p=>p.reps)).size===1;})());
+
+      // ── Les charges ──
+      ok('Les paliers sont des multiples de 1,25',
+        [15,35,80,150].every(w=>_mcMul(seriesApproche(w,'5'))),
+        JSON.stringify([15,35,80,150].map(w=>seriesApproche(w,'5').map(p=>p.charge))));
+      ok('Les paliers sont croissants',
+        [35,80,150].every(w=>_mcCroit(seriesApproche(w,'5'))));
       ok('Aucun palier n\'atteint la charge de travail',
-        seriesApproche(80,'5').every(p=>p.charge<80));
-      ok('Les pourcentages et les répétitions sont ceux annoncés',(()=>{
-        const t=seriesApproche(80,'5');
-        return t[0].pct===0.50&&t[0].reps===8
-            &&t[1].pct===0.70&&t[1].reps===5
-            &&t[2].pct===0.85&&t[2].reps===3;})());
-      ok('80 kg donne 40 · 55 · 67,5',
+        [15,35,80,150].every(w=>seriesApproche(w,'5').every(p=>p.charge<w)));
+      ok('Les pourcentages sont ceux annoncés, par échelle',(()=>{
+        const pc=w=>seriesApproche(w,'5').map(p=>p.pct).join('/');
+        return pc(15)==='0.5'&&pc(35)==='0.5/0.75'
+            &&pc(80)==='0.5/0.7/0.85'&&pc(150)==='0.4/0.6/0.75/0.9';})());
+      ok('80 kg donne toujours 40 · 55 · 67,5',
         seriesApproche(80,'5').map(p=>p.charge).join('/')==='40/55/67.5',
         seriesApproche(80,'5').map(p=>p.charge).join('/'));
+      // 40 % de 140 vaut 56, qui n'est PAS un multiple de 1,25 : l'arrondi vers
+      // l'inférieur donne 55. Même chose pour 126 → 125. C'est bien la règle
+      // voulue — un palier ne monte jamais au-dessus de son pourcentage.
+      ok('140 kg donne 55 · 83,75 · 105 · 125',
+        seriesApproche(140,'3').map(p=>p.charge).join('/')==='55/83.75/105/125',
+        seriesApproche(140,'3').map(p=>p.charge).join('/'));
+      ok('Chaque palier reste sous son pourcentage exact',
+        [15,35,80,140,200].every(w=>seriesApproche(w,'5')
+          .every(p=>p.charge<=w*p.pct+1e-9)));
 
-      // ── Les charges trop basses ──
-      ok('seriesApproche(15,\'10\') rend un tableau vide',(()=>{
-        const t=seriesApproche(15,'10'); return Array.isArray(t)&&t.length===0;})());
+      // ── Ce qui ne rend toujours rien ──
       ok('seriesApproche(null,\'10\') rend un tableau vide',(()=>{
         const t=seriesApproche(null,'10'); return Array.isArray(t)&&t.length===0;})());
-      ok('Charge absente, vide ou illisible : tableau vide',
+      ok('Charge absente, vide, nulle ou illisible : tableau vide',
         [undefined,'','abc',NaN,0,-40].every(v=>seriesApproche(v,'10').length===0));
-      ok('Juste sous le seuil : rien à 19,75 kg',seriesApproche(19.75,'10').length===0);
-      ok('Pile au seuil : la rampe existe à 20 kg',(()=>{
-        const t=seriesApproche(20,'10');
-        return t.length===3&&_mcMul(t)&&_mcCroit(t)&&t.every(p=>p.charge<20);})());
       ok('Une charge en chaîne est acceptée comme un nombre',
         seriesApproche('80','5').length===3);
 
@@ -26204,6 +26251,9 @@ function testExercices(){
         return isCounterweightEx(ex.name)===true&&seriesApproche(80,'8',ex).length===0;})());
       ok('Une prescription sans aucun chiffre n\'a pas de rampe',
         seriesApproche(80,'max',{name:'CURL BARRE',reps:'max'}).length===0);
+      ok('Sans prescription du tout, aucune rampe : rien à écrire en face',
+        seriesApproche(80,'').length===0&&seriesApproche(80,null).length===0
+        &&seriesApproche(80,undefined).length===0);
       ok('Une fourchette de répétitions garde sa rampe',
         seriesApproche(80,'8-12',{name:'CURL BARRE',reps:'8-12'}).length===3);
       ok('Un exercice ordinaire garde sa rampe',
@@ -26212,17 +26262,25 @@ function testExercices(){
       // ── L'affichage ──
       currentUser={id:'mc',email:'mc@t.fr',role:'athlete',fname:'A',exAlias:{},exMuscles:{},
         sessions:[],bilans:[],programs:{},videos:[]};
-      ok('La ligne affichée cite les trois paliers, en français',(()=>{
+      ok('La ligne affichée cite les paliers, en français',(()=>{
         const h=_htmlMonteeCharge(80,{name:'SQUAT',reps:'5'},0);
-        return /Montée en charge/.test(h)&&/40 kg × 8/.test(h)
-          &&/55 kg × 5/.test(h)&&/67,5 kg × 3/.test(h);})());
+        return /Montée en charge/.test(h)&&/40 kg × 5/.test(h)
+          &&/55 kg × 5/.test(h)&&/67,5 kg × 5/.test(h);})());
+      ok('Une charge légère n\'affiche qu\'un seul palier',(()=>{
+        const h=_htmlMonteeCharge(15,{name:'CURL HALTERE',reps:'12'},0);
+        return /Montée en charge/.test(h)&&/7,5 kg × 12/.test(h)&&h.split('·').length===1;})());
+      ok('Une charge lourde en affiche quatre',(()=>{
+        const h=_htmlMonteeCharge(140,{name:'SOULEVE DE TERRE',reps:'3'},0);
+        return /55 kg × 3/.test(h)&&/83,75 kg × 3/.test(h)
+          &&/105 kg × 3/.test(h)&&/125 kg × 3/.test(h);})());
       ok('Aucun bouton de validation, aucune case, aucune ligne de tableau',(()=>{
         const h=_htmlMonteeCharge(80,{name:'SQUAT',reps:'5'},0);
         return !/<input/i.test(h)&&!/<td/i.test(h)&&!/<tr/i.test(h)
           &&!/checkbox/i.test(h)&&!/toggleSet|validerSerie|onSetChange/i.test(h);})());
       ok('Sans rampe, rien n\'est écrit à l\'écran',
-        _htmlMonteeCharge(15,{name:'SQUAT',reps:'5'},0)===''
-        &&_htmlMonteeCharge(null,{name:'SQUAT',reps:'5'},0)==='');
+        _htmlMonteeCharge(0,{name:'SQUAT',reps:'5'},0)===''
+        &&_htmlMonteeCharge(null,{name:'SQUAT',reps:'5'},0)===''
+        &&_htmlMonteeCharge(80,{name:'VELO',reps:'20 min'},0)==='');
 
       // ── Le repli : préférence globale, persistée ──
       ok('Dépliée par défaut',(()=>{
@@ -26239,7 +26297,7 @@ function testExercices(){
         currentUser.monteeChargeMasquee=true;
         const h=_htmlMonteeCharge(80,{name:'SQUAT',reps:'5'},0);
         currentUser.monteeChargeMasquee=false;
-        return /▸/.test(h)&&/display:none/.test(h)&&/40 kg × 8/.test(h);})());
+        return /▸/.test(h)&&/display:none/.test(h)&&/40 kg × 5/.test(h);})());
       ok('La préférence est GLOBALE : deux exercices différents suivent le même état',(()=>{
         currentUser.monteeChargeMasquee=true;
         const a=_htmlMonteeCharge(80,{name:'SQUAT',reps:'5'},0);
