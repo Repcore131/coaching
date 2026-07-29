@@ -1423,7 +1423,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="display:flex;gap:10px;margin-bottom:16px">
         <div class="metric-box"><div class="metric-val" id="ccd-streak">0</div><div class="metric-label">Semaines</div></div>
         <div class="metric-box"><div class="metric-val" id="ccd-sessions">0</div><div class="metric-label">Séances</div></div>
-        <div class="metric-box" style="display:none"><div class="metric-val" id="ccd-weight"></div><div class="metric-label">Poids</div></div>
+        <div class="metric-box"><div class="metric-val" id="ccd-weight">—</div><div class="metric-label">Poids</div></div>
       </div>
       <!-- CONTRE-INDICATIONS — épinglées en permanence, jamais repliées.
            Santé, allergies et TCA conditionnent toute la programmation : les
@@ -1714,7 +1714,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
     <div id="calc-e1rm-display" style="background:linear-gradient(135deg,#1a0000,#2a0000);border:1px solid #7f1d1d;border-radius:12px;padding:14px;margin-bottom:16px;display:none">
       <div style="font-size:var(--fs-xs);color:#fca5a5;text-transform:uppercase;letter-spacing:.5px;font-weight:700">1RM estimé</div>
-      <div style="font-size:28px;font-weight:900;color:#fff" id="calc-e1rm-val"></div>
+      <div style="font-size:28px;font-weight:900;color:#fff" id="calc-e1rm-val">—</div>
     </div>
     <h3 style="margin-bottom:10px;font-size:13px">Table des charges suggérées</h3>
     <div style="overflow-x:auto">
@@ -1780,11 +1780,11 @@ const COACH_PHOTO='icons/coach.jpg';
 
       <!-- STATS -->
       <div style="display:flex;gap:8px;margin-bottom:20px">
-        <div class="metric-box" style="display:none"><div class="metric-val" id="clh-m1"></div><div class="metric-label">Cette semaine</div>
+        <div class="metric-box"><div class="metric-val" id="clh-m1">—</div><div class="metric-label">Cette semaine</div>
           <div style="font-size:9px;color:var(--text-faint);margin-top:2px" id="clh-m1-sub"></div></div>
-        <div class="metric-box" style="display:none"><div class="metric-val" id="clh-m2"></div><div class="metric-label">Charge totale</div>
+        <div class="metric-box"><div class="metric-val" id="clh-m2">—</div><div class="metric-label">Charge totale</div>
           <div style="font-size:9px;color:var(--text-faint);margin-top:2px" id="clh-m2-sub"></div></div>
-        <div class="metric-box" style="display:none"><div class="metric-val" id="clh-m3"></div><div class="metric-label">Exercices en progrès</div>
+        <div class="metric-box"><div class="metric-val" id="clh-m3">—</div><div class="metric-label">Exercices en progrès</div>
           <div style="font-size:9px;color:var(--text-faint);margin-top:2px" id="clh-m3-sub"></div></div>
       </div>
 
@@ -1894,7 +1894,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div class="card">
         <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--sub);margin-bottom:10px">Nutrition cette semaine</div>
         <div style="display:flex;gap:6px" id="clh-nutri-dots"></div>
-        <div style="margin-top:10px;font-size:12px" id="clh-nutri-score-ligne">Score: <span style="font-weight:800;color:var(--green)" id="clh-nutri-score"></span></div>
+        <div style="margin-top:10px;font-size:12px">Score: <span style="font-weight:800;color:var(--green)" id="clh-nutri-score">—</span></div>
       </div>
 
       <!-- BANNIÈRES PUB COACH -->
@@ -2051,7 +2051,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
           <div>
             <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:2px">Fiche Programme</div>
-            <div style="font-size:14px;font-weight:900" id="pv-pdf-title"></div>
+            <div style="font-size:14px;font-weight:900" id="pv-pdf-title">—</div>
             <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px" id="pv-pdf-meta"></div>
           </div>
           <div style="width:40px;height:48px;background:linear-gradient(180deg,#1a0000,#120000);border:1px solid #3a0a0a;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0"></div>
@@ -2146,9 +2146,9 @@ const COACH_PHOTO='icons/coach.jpg';
         <p style="text-align:center;font-size:12.5px;color:#ccc;line-height:1.6;padding:0 14px" id="wd-msg"></p>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:20px">
-        <div class="metric-box" style="display:none"><div class="metric-val" id="wd-time"></div><div class="metric-label">Durée</div></div>
-        <div class="metric-box" style="display:none"><div class="metric-val" id="wd-sets"></div><div class="metric-label">Séries</div></div>
-        <div class="metric-box" style="display:none"><div class="metric-val" id="wd-vol"></div><div class="metric-label">Volume</div></div>
+        <div class="metric-box"><div class="metric-val" id="wd-time">—</div><div class="metric-label">Durée</div></div>
+        <div class="metric-box"><div class="metric-val" id="wd-sets">—</div><div class="metric-label">Séries</div></div>
+        <div class="metric-box"><div class="metric-val" id="wd-vol">—</div><div class="metric-label">Volume</div></div>
       </div>
       <div id="wd-cooldown"></div>
       <div id="wd-comparison"></div>
@@ -2441,8 +2441,8 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:12px;padding:14px;margin-bottom:18px">
-        <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:4px" id="fja-food-group"></div>
-        <div style="font-size:15px;font-weight:800;line-height:1.3" id="fja-food-name"></div>
+        <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:4px" id="fja-food-group">—</div>
+        <div style="font-size:15px;font-weight:800;line-height:1.3" id="fja-food-name">—</div>
       </div>
       <div style="margin-bottom:18px">
         <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:8px">Quantité (grammes)</label>
@@ -3086,7 +3086,7 @@ function renderDataTable(columns,rows,opts={}){
     border='#222',cellBorder='var(--surface-2)',cellBorderSide='all',
     stickyCol0=false,firstColMinWidth=null,bodyLabelBg=null,
     pad='5px 8px',dataPad=null,wrapperStyle='',mb='16px',
-    emptyVal='',emptyColor='var(--sub)',valueColor='#fff',
+    emptyVal='—',emptyColor='var(--sub)',valueColor='#fff',
   }=opts;
   const dp=dataPad||pad;
   const cbS=cellBorderSide==='bottom'?`border-bottom:1px solid ${cellBorder};`:`border:1px solid ${cellBorder};`;
@@ -6125,7 +6125,7 @@ function blocDouleurCoach(c){
     </div>
     ${l.map(x=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px">
       <span style="font-size:11px;font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nom)}</span>
-      <span style="font-size:10px;color:var(--sub);white-space:nowrap;flex-shrink:0">${x.n} série${x.n>1?'s':''} · max ${x.painMax}/6 · ${dat(x.derniere)}</span>
+      <span style="font-size:10px;color:var(--sub);white-space:nowrap;flex-shrink:0">${x.n} série${x.n>1?'s':''} · max ${x.painMax}/6${_fragmentSiValeur(' · ',dat(x.derniere))}</span>
     </div>`).join('')}
     ${blocDisclaimerDouleur()}
   </div>`;
@@ -6603,7 +6603,7 @@ function openClientDetail(cid,_refresh){
   document.getElementById('ccd-streak').textContent=streakSemaines(c)+'';
   document.getElementById('ccd-sessions').textContent=(c.sessions||[]).length;
   const lb=c.bilans?.length?c.bilans[c.bilans.length-1]:null;
-  _poserMetrique('ccd-weight',lb&&getBW(lb)?getBW(lb)+'kg':null);
+  document.getElementById('ccd-weight').textContent=lb&&getBW(lb)?getBW(lb)+'kg':'—';
   // Contre-indications du bilan de départ, épinglées en haut de la fiche.
   // Elles viennent de la même déclaration que la liste complète des réponses
   // (BILAN_QUESTIONS.depart, entrées `alerte`) : en ajouter une au
@@ -6640,7 +6640,12 @@ function openClientDetail(cid,_refresh){
     be.innerHTML=emptyState('clipboard','Aucun bilan.',null,null,'padding:20px');
   } else {
     be.innerHTML=c.bilans.slice(-3).reverse().map(b=>{
-      const bw=getBW(b)||0,bWaist=getBM(b,'waist')||0,bNeck=getBM(b,'neck')||0,bHips=getBM(b,'hips')||0;
+      // Deux jeux de valeurs, et c'est voulu : calcBF veut des NOMBRES, donc le
+      // repli à 0. L'affichage, lui, doit distinguer « pas mesuré » de « zéro »
+      // — sans quoi la ligne annonce « Poids: 0kg » à un athlète qui n'a
+      // simplement rien renseigné.
+      const bwN=getBW(b),bWaistN=getBM(b,'waist'),bNeckN=getBM(b,'neck'),bHipsN=getBM(b,'hips');
+      const bw=bwN||0,bWaist=bWaistN||0,bNeck=bNeckN||0,bHips=bHipsN||0;
       const bfPct=calcBF(bWaist,bNeck,bHips,parseFloat(c._evol_height||c['init-height']||c['deb-height']||0),c.gender||'H');
       // Extrait actionnable sous les chiffres : ce sur quoi le coach peut agir
       // dès maintenant. Remplace la citation unique tronquée à 80 caractères,
@@ -6657,7 +6662,7 @@ function openClientDetail(cid,_refresh){
         .filter(x=>x.txt);
       return `<div class="card" style="margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-weight:700">${new Date(b.date).toLocaleDateString('fr-FR')}</span><span class="badge ${b.date>_oldSeen?'badge-orange':'badge-green'}">${b.date>_oldSeen?'Nouveau ✦':'Complété'}</span></div>
-      <div style="display:flex;gap:16px;flex-wrap:wrap">${_fragmentSiValeur('<span class="sub">Poids: <strong style="color:#fff">',bw,'kg</strong></span>')}${_fragmentSiValeur('<span class="sub">MG: <strong style="color:#fff">',bfPct,'%</strong></span>')}${_fragmentSiValeur('<span class="sub">Taille: <strong style="color:#fff">',bWaist,'cm</strong></span>')}</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap">${_fragmentSiValeur('<span class="sub">Poids: <strong style="color:#fff">',bwN,'kg</strong></span>')}${_fragmentSiValeur('<span class="sub">MG: <strong style="color:#fff">',bfPct,'%</strong></span>')}${_fragmentSiValeur('<span class="sub">Taille: <strong style="color:#fff">',bWaistN,'cm</strong></span>')}</div>
       ${_extrait.length?`<div style="margin-top:10px;border-top:1px solid #1a1a1a;padding-top:8px">
         ${_extrait.map(x=>`<div style="font-size:11px;line-height:1.5;margin-bottom:3px"><span style="color:var(--sub);font-weight:700">${x.lbl} :</span> <span style="color:#ccc">${escapeHtml(x.txt.length>90?x.txt.slice(0,90)+'…':x.txt)}</span></div>`).join('')}
         <button class="btn btn-outline btn-sm" style="margin-top:6px" onclick="viewClientBilans();evoTab('reponses')">Voir toutes les réponses</button>
@@ -10952,7 +10957,7 @@ function renderSets(ex,data,idx){
 
     // Pain dropdown
     const painSelect=`<select class="set-input" onchange="${onChP}" ${dis} style="padding:4px 2px;font-size:11px;min-width:44px;min-height:44px">
-      <option value=""></option>
+      <option value="">—</option>
       ${PAIN_OPTS.map(v=>`<option value="${v}" ${String(s.pain)===v?'selected':''}>${v}</option>`).join('')}
     </select>`;
 
@@ -11118,6 +11123,13 @@ function _dlrDeclarer(idx){
 function toggleRirExplain(){
   const el=document.getElementById('rir-explain');
   if(el) el.style.display=el.style.display==='none'?'block':'none';
+}
+// Fragment de phrase optionnel : « Poids: 82kg » ou rien du tout. Sert aux
+// textes courants, JAMAIS aux cases à remplir — celles-ci gardent leur tiret,
+// qui y signifie « en attente d'une valeur ».
+function _fragmentSiValeur(prefixe,val,suffixe){
+  if(val==null||val===''||val==='—'||(typeof val==='number'&&!isFinite(val))) return '';
+  return (prefixe||'')+val+(suffixe||'');
 }
 // Récupère la dernière charge enregistrée à RIR 0 pour un exercice
 // ── Historique : ne comparer que ce qui est comparable ──────────────────────
@@ -11291,12 +11303,12 @@ function finishWorkout(incomplete=false){
   _viderCacheSignaux();
   _viderCacheVolume();
   updateStreak();saveUser();
-  _poserMetrique('wd-time',mins+'min');
+  document.getElementById('wd-time').textContent=mins+'min';
   // « 5/12 » plutôt que « 5 » : l'écart devient lisible au lieu d'être noyé.
   // Même formatage que la fiche coach, via fmtSeries — les deux écrans parlent
   // du même dossier et ne doivent pas pouvoir se contredire.
-  _poserMetrique('wd-sets',fmtSeries(sets,setsPlanned));
-  _poserMetrique('wd-vol',Math.round(vol)+'kg');
+  document.getElementById('wd-sets').textContent=fmtSeries(sets,setsPlanned);
+  document.getElementById('wd-vol').textContent=Math.round(vol)+'kg';
   // La comparaison est calculee AVANT le message : celui-ci lit _cmp, et un
   // const utilise avant sa declaration leve une ReferenceError — la fin de
   // seance s'interrompait donc juste apres l'enregistrement, sans jamais
@@ -11675,7 +11687,7 @@ function renderPlateauxCoach(c){
       </div>`).join('')}
     ${bloques.map(x=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px">
         <span style="font-size:11px;font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nom)}</span>
-        <span style="font-size:10px;color:${PERF_ETAT_COULEUR[x.etat]};white-space:nowrap">${PERF_ETAT_LIB[x.etat]} · record du ${dat(x.dateRecord)}</span>
+        <span style="font-size:10px;color:${PERF_ETAT_COULEUR[x.etat]};white-space:nowrap">${PERF_ETAT_LIB[x.etat]}${_fragmentSiValeur(' · record du ',dat(x.dateRecord))}</span>
       </div>`).join('')}
     ${PERF_ENCADRE}
   </div>`;
@@ -11778,77 +11790,19 @@ function _messageFinSeance(sets,setsPlanned,duration,records,delta,jour,incomple
 }
 
 
-// Peuplement des trois cases de l'accueil. Une case qui n'a pas son chiffre ne
-// s'affiche pas : un « 0 » sans historique se lirait comme un échec, et le
-// tiret qui le remplaçait ne disait rien de plus que l'absence de la case.
-// La rangée peut donc se retrouver à deux cases, à une, ou à aucune.
-
-// ══════════════ PAS DE VALEUR, PAS DE CASE ═════════════════════════════════
-// Le « — » était le repli « pas encore mesuré » de toute l'application. Il ne
-// dit rien de plus que l'absence, et il occupe la place d'un chiffre qui ne
-// viendra peut-être jamais : une rangée de trois tirets ressemble à un écran
-// cassé. Une métrique sans valeur ne s'affiche donc plus du tout, et une
-// rangée entièrement vide disparaît avec ses cases.
-//
-// Ce n'est PAS un zéro : ne pas avoir mesuré et avoir mesuré zéro sont deux
-// choses différentes, et l'app n'a pas le droit de les confondre.
-
-// Un encart de l'écran caféine n'existe que s'il a son chiffre. Sans mesure,
-// la rangée se resserre sur ce qui est connu au lieu d'aligner des tirets.
-function _encartCafeine(titre,valeur,couleur,sousTitre,taille){
-  if(_valeurVide(valeur)||valeur===0) return '';
-  const st=taille?`font-size:${taille}px;font-family:'Bebas Neue',sans-serif;`:'';
-  return `<div style="flex:1;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">
-      <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;margin-bottom:5px">${titre}</div>
-      <div class="${taille?'':'txt-stat'}" style="${st}color:${couleur};line-height:1">${valeur}</div>
-      ${sousTitre?`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${sousTitre}</div>`:''}
-    </div>`;
-}
-
-function _valeurVide(v){
-  return v==null||v===''||v==='—'||(typeof v==='number'&&!isFinite(v));
-}
-function _htmlCaseMetrique(val,libelle,styleVal,sousTitre){
-  if(_valeurVide(val)) return '';
-  return `<div class="metric-box"><div class="metric-val"${styleVal?` style="${styleVal}"`:''}>${val}</div>`
-    +`<div class="metric-label">${libelle}</div>`
-    +(sousTitre?`<div style="font-size:9px;color:var(--text-faint);margin-top:2px">${sousTitre}</div>`:'')
-    +`</div>`;
-}
-// La rangée n'existe que si au moins une case l'habite : sinon son écart de
-// marge laisserait un trou à la place du bloc.
-function _htmlRangeeMetriques(cases,style){
-  const l=(cases||[]).filter(x=>x);
-  if(!l.length) return '';
-  return `<div style="${style||'display:flex;gap:8px;margin-bottom:14px'}">${l.join('')}</div>`;
-}
-// Cases posées en HTML statique et remplies plus tard par du JS. Même règle :
-// sans valeur, la case se cache ; avec une valeur, elle réapparaît. Le
-// sous-titre suit la case, il n'a pas de sens tout seul.
-function _poserMetrique(id,val,sub){
-  const a=document.getElementById(id);
-  if(!a) return;
-  const boite=(a.closest&&a.closest('.metric-box'))||a.parentElement;
-  const vide=_valeurVide(val);
-  if(boite&&boite!==document.body) boite.style.display=vide?'none':'';
-  a.textContent=vide?'':String(val);
-  const b=document.getElementById(id+'-sub');
-  if(b) b.textContent=vide?'':(sub||'');
-}
-// Fragment de texte optionnel : « Poids : 82 kg » ou rien du tout. Évite les
-// « Poids : —kg » qui restaient dans les phrases.
-function _fragmentSiValeur(prefixe,val,suffixe){
-  if(_valeurVide(val)) return '';
-  return (prefixe||'')+val+(suffixe||'');
-}
-
+// Peuplement des trois cases de l'accueil. Chaque case dit ce qui lui manque
+// plutôt que d'afficher un chiffre qu'elle ne peut pas calculer : un « 0 »
+// sans historique se lit comme un échec, un « — » se lit comme une attente.
 function _majMetriquesAccueil(u){
-  // val à null : la case disparaît. Le sous-titre explicatif part avec elle —
-  // il commentait un chiffre absent, il n'a rien à commenter tout seul.
-  const met=(id,val,sub)=>_poserMetrique(id,val,sub);
+  const met=(id,val,sub)=>{
+    const a=document.getElementById(id), b=document.getElementById(id+'-sub');
+    if(a) a.textContent=val;
+    if(b) b.textContent=sub||'';
+  };
   const ss=((u&&u.sessions)||[]).filter(s=>s&&s.date);
   if(!ss.length){
-    met('clh-m1',null); met('clh-m2',null); met('clh-m3',null);
+    met('clh-m1','—',''); met('clh-m2','—','Il faut 5 semaines pour comparer.');
+    met('clh-m3','—','Pas encore assez d\'historique.');
     return;
   }
   // a) Cette semaine — depuis lundi, comme partout ailleurs dans l'app. Le
@@ -11857,12 +11811,12 @@ function _majMetriquesAccueil(u){
   met('clh-m1',String(faites),faites+' sur '+quota);
   // b) Charge totale.
   const ch=_chargeHebdo(u);
-  if(!ch||ch.pct==null) met('clh-m2',null);
+  if(!ch||ch.pct==null) met('clh-m2','—','Il faut 5 semaines pour comparer.');
   else met('clh-m2',(ch.pct>0?'+':'')+ch.pct+' %',
     (ch.pct>0?'+':'')+ch.pct+' % vs 4 dernières semaines');
   // c) Exercices en progrès.
   const ex=_exercicesEnProgres(u);
-  if(!ex) met('clh-m3',null);
+  if(!ex) met('clh-m3','—','Pas encore assez d\'historique.');
   else met('clh-m3',String(ex.enProgres),ex.enProgres+' sur '+ex.total+' ce mois-ci');
 }
 
@@ -13053,7 +13007,7 @@ function pickBilChoice(groupId,val,multi){
   // Un clic ne déclenche pas d'événement `input` : la délégation ne le voit pas.
   _bilSaveDraft();
 }
-function bQ(id){return`<input type="number" id="${id}" value="${bilData[id]||''}" step="any" oninput="bilData['${id}']=this.value" style="width:68px;text-align:right;padding:6px 8px;font-size:15px;font-weight:800;margin:0;background:#080808;border:1px solid #222;border-radius:2px">`;}
+function bQ(id){return`<input type="number" id="${id}" placeholder="—" value="${bilData[id]||''}" step="any" oninput="bilData['${id}']=this.value" style="width:68px;text-align:right;padding:6px 8px;font-size:15px;font-weight:800;margin:0;background:#080808;border:1px solid #222;border-radius:2px">`;}
 function bT(id,ph){return`<input type="text" id="${id}" placeholder="${ph||''}" value="${escapeHtml(bilData[id]||'')}" oninput="bilData['${id}']=this.value">`;}
 function bTA(id,ph){return`<textarea id="${id}" rows="3" placeholder="${ph||''}" oninput="bilData['${id}']=this.value" style="resize:none">${escapeHtml(bilData[id]||'')}</textarea>`;}
 function bC(gid,choices,multi){
@@ -13234,7 +13188,7 @@ function bBodySchema(prefix){
       return `<div style="position:absolute;${posX};top:${top}%;width:26.5%">
         <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--sub);margin-bottom:2px;white-space:nowrap;${f.s==='r'?'text-align:right':''}">${f.l}</div>
         <div id="bx-${id}" style="display:flex;align-items:center;background:#0c0c0c;border:1px solid #2b2b2b;border-radius:7px;padding:1px 7px;transition:border-color .2s,box-shadow .2s">
-          <input type="number" inputmode="decimal" step="any" id="${id}" value="${bilData[id]||''}"
+          <input type="number" inputmode="decimal" step="any" id="${id}" value="${bilData[id]||''}" placeholder="—"
             oninput="bilData['${id}']=this.value"
             onfocus="bBodyFocus('${id}',1)" onblur="bBodyFocus('${id}',0)"
             style="width:100%;min-width:0;background:none;border:none;outline:none;box-shadow:none;color:#fff;font-family:Montserrat,sans-serif;font-weight:800;font-size:14px;text-align:center;padding:4px 0;margin:0">
@@ -13895,7 +13849,7 @@ function renderCharges(){
           <div style="font-size:9px;color:var(--text-faint)">${m.nb} exercices${ouvert?'':' · voir'}</div>
         </div>
         ${ZONES_ARTICULAIRES.map(zz=>m.hors.indexOf(zz)>=0
-          ?`<div style="width:36px;flex-shrink:0"></div>`
+          ?`<div style="width:36px;flex-shrink:0;text-align:center;font-size:12px;color:#2a2a2a">—</div>`
           :`<div style="width:36px;flex-shrink:0;display:flex;justify-content:center">${_chCase(s,zz)}</div>`).join('')}
       </div>
       ${ouvert?`<div style="font-size:10px;color:var(--sub);line-height:1.6;margin-top:7px;border-top:1px solid var(--border);padding-top:7px">
@@ -14174,7 +14128,7 @@ function _renderObjectifCarte(){
     ${masque?'':`<div style="height:7px;background:var(--surface-2);border-radius:4px;margin-top:9px;overflow:hidden">
       <div style="height:100%;width:${pct}%;background:var(--red);border-radius:4px"></div>
     </div>
-    <div style="font-size:11px;color:var(--sub);margin-top:5px">${_objFmtVal(p.valeurActuelle,o.unite)} · ${pct} %</div>`}
+    <div style="font-size:11px;color:var(--sub);margin-top:5px">${_fragmentSiValeur('',_objFmtVal(p.valeurActuelle,o.unite),' · ')}${pct} %</div>`}
     <div style="font-size:12px;color:var(--sub);line-height:1.6;margin-top:8px">Cette semaine : ${p.seancesSemaine} séances sur ${p.seancesPrevues}</div>
     ${ph?`<div style="font-size:10px;color:var(--text-faint);margin-top:6px">${escapeHtml(PHASES[ph.type].lib)} · ${escapeHtml(ordinalSemaine(semainesPhase(currentUser)))} · <span onclick="ouvrirChoixPhase()" style="color:var(--link);cursor:pointer">changer</span></div>`:''}
   </div>`;
@@ -15238,7 +15192,7 @@ function renderWoReminderCard(){
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
     <div style="flex:1;min-width:0">
       <div style="font-size:11px;font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.8px">Rappel séance activé</div>
-      <div style="font-size:11px;color:var(--sub);margin-top:2px">${hh}:${mm}${days?' · '+days:''}</div>
+      <div style="font-size:11px;color:var(--sub);margin-top:2px">${hh}:${mm}${_fragmentSiValeur(' · ',days)}</div>
     </div>
     <button onclick="openWoReminderConfig()" style="background:none;border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--sub);font-size:11px;cursor:pointer;font-family:Montserrat,sans-serif">⚙️</button>
   </div>`;
@@ -15881,11 +15835,11 @@ function showProgressTab(tab,btn){
         </div>
         ${missingHeight?`<div style="margin-top:10px;padding:8px 10px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:6px;font-size:var(--fs-xs);color:var(--warning);line-height:1.5">⚠ Renseigne ta taille ci-dessus pour calculer ta masse grasse.</div>`:missingMeas?`<div style="margin-top:10px;padding:8px 10px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:6px;font-size:var(--fs-xs);color:var(--warning);line-height:1.5">⚠ Certains bilans manquent : <strong>Tour de Cou</strong>${female?' + <strong>Tour de Hanche</strong>':''} + <strong>Tour de Taille</strong>. Renseigne ces mesures dans ton prochain bilan.</div>`:''}
       </div>
-      ${_htmlRangeeMetriques([
-        _htmlCaseMetrique(fb!==null?fb+'%':null,'MG départ'),
-        _htmlCaseMetrique(lb!==null?lb+'%':null,'MG actuel'),
-        _htmlCaseMetrique(diff!==null?(diff>0?'+':'')+diff+'%':null,'Évolution','color:'+col)
-      ])}
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <div class="metric-box"><div class="metric-val">${fb!==null?fb+'%':'—'}</div><div class="metric-label">MG départ</div></div>
+        <div class="metric-box"><div class="metric-val">${lb!==null?lb+'%':'—'}</div><div class="metric-label">MG actuel</div></div>
+        <div class="metric-box"><div class="metric-val" style="color:${col}">${diff!==null?(diff>0?'+':'')+diff+'%':'—'}</div><div class="metric-label">Évolution</div></div>
+      </div>
       <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:14px;font-size:10px;color:var(--text-faint);line-height:1.6">
         Estimation par la formule US Navy, à partir de trois tours de mesure. Sa marge
         d'erreur est de l'ordre de 3 à 4 points de pourcentage sur une mesure isolée,
@@ -16309,7 +16263,7 @@ function _renderMacroTargets(nut){
     {k:'f',label:'FIBRES ℹ',unit:'g',color:'#94a3b8'},
   ];
   const col=(m)=>macros.map(x=>`<div style="background:var(--surface-1);border-radius:8px;padding:8px 4px;text-align:center">
-    <div style="font-size:14px;font-weight:800;color:${x.color};line-height:1">${m[x.k]||''}${m[x.k]?`<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400">${x.unit?'&thinsp;'+x.unit:''}</span>`:''}</div>
+    <div style="font-size:14px;font-weight:800;color:${x.color};line-height:1">${m[x.k]||'—'}${m[x.k]?`<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400">${x.unit?'&thinsp;'+x.unit:''}</span>`:''}</div>
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;margin-top:3px;text-transform:uppercase">${x.label}</div>
   </div>`).join('');
   return `<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:14px;padding:14px;margin-bottom:18px">
@@ -16366,7 +16320,7 @@ function _renderStrictMacroRings(nut){
           font-family="Montserrat,sans-serif" font-size="15" font-weight="900"
           fill="${trop?'var(--orange)':'#fff'}">${fait}</text>
         <text x="${cx}" y="${cy+13}" dominant-baseline="middle" text-anchor="middle"
-          font-family="Montserrat,sans-serif" font-size="11" fill="#777">${cible!=null?'/ '+cible+' g':''}</text>
+          font-family="Montserrat,sans-serif" font-size="11" fill="#777">${_fragmentSiValeur('/ ',cible,' g')}</text>
       </svg>
       <div style="font-size:var(--fs-xs);color:#888;letter-spacing:1px;font-weight:700;text-transform:uppercase;margin-top:-4px">${label}</div>
     </div>`;
@@ -16679,15 +16633,12 @@ function updateFjaCalc(){
   const p=f.p!=null?parseFloat((f.p*r).toFixed(1)):null;
   const c=f.c!=null?parseFloat((f.c*r).toFixed(1)):null;
   const l=f.l!=null?parseFloat((f.l*r).toFixed(1)):null;
-  // Une macro non renseignée ne montre pas sa colonne : le cadre se resserre
-  // sur ce qui est réellement connu de l'aliment.
-  const colonne=(v,lib,coul)=>_valeurVide(v)?'':`<div><div class="txt-stat" style="${coul||''}line-height:1">${v}</div>`
-    +`<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-top:2px">${lib}</div></div>`;
-  const cols=[colonne(kcal,'KCAL','color:var(--red);'),colonne(p,'PROT g'),
-              colonne(c,'GLUC g'),colonne(l,'LIP g')].filter(x=>x);
-  el.innerHTML=cols.length?`<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:12px;padding:14px;display:flex;justify-content:space-around;text-align:center">
-    ${cols.join('')}
-  </div>`:'';
+  el.innerHTML=`<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:12px;padding:14px;display:flex;justify-content:space-around;text-align:center">
+    <div><div class="txt-stat" style="color:var(--red);line-height:1">${kcal??'—'}</div><div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-top:2px">KCAL</div></div>
+    <div><div class="txt-stat" style="line-height:1">${p??'—'}</div><div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-top:2px">PROT g</div></div>
+    <div><div class="txt-stat" style="line-height:1">${c??'—'}</div><div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-top:2px">GLUC g</div></div>
+    <div><div class="txt-stat" style="line-height:1">${l??'—'}</div><div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-top:2px">LIP g</div></div>
+  </div>`;
 }
 
 function saveFoodEntry(){
@@ -16986,7 +16937,7 @@ function _suppTimingOrder(supp){
 }
 
 function _suppTimingTags(timings,small){
-  if(!timings?.length) return '';
+  if(!timings?.length) return '<span style="color:var(--text-dim);font-size:var(--fs-xs)">—</span>';
   return timings.map(id=>{
     const t=TIMINGS_LIST.find(x=>x.id===id);
     const label=t?t.label:id;
@@ -17033,7 +16984,7 @@ function _renderSuppTable(list, isCoach, editFn){
         ${others>0?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px;letter-spacing:.5px">aussi ${others} autre${others>1?'s':''} moment${others>1?'s':''}</div>`:''}
       </div>
       <div style="flex-shrink:0;text-align:right">
-        ${s.dosage_quantity?`<div style="font-family:'Bebas Neue',sans-serif;font-size:21px;line-height:1;color:${color};text-shadow:0 0 9px ${color}88">${s.dosage_quantity}</div>`:''}
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:21px;line-height:1;color:${color};text-shadow:0 0 9px ${color}88">${s.dosage_quantity||'—'}</div>
         <div style="font-size:var(--fs-xs);color:#666;letter-spacing:.8px;margin-top:1px;text-transform:uppercase">${s.dosage_quantity?escapeHtml(s.dosage_unit||''):''}</div>
       </div>
     </div>`;
@@ -17397,7 +17348,7 @@ function renderCoachCaffeineSection(c){
   const avg28=withData.length?Math.round(withData.reduce((s,x)=>s+x.total,0)/withData.length):0;
   const data7=totals28.slice(-7).filter(x=>x.total>0);
   const avg7=data7.length?Math.round(data7.reduce((s,x)=>s+x.total,0)/data7.length):0;
-  const peakStr=peakDate&&peakMg>0?peakDate.toLocaleDateString('fr-FR',{day:'numeric',month:'short'}):'';
+  const peakStr=peakDate&&peakMg>0?peakDate.toLocaleDateString('fr-FR',{day:'numeric',month:'short'}):'—';
   const col7=avg7>0?_caffeineColor(avg7,thr):'#555';
   const col28=avg28>0?_caffeineColor(avg28,thr):'#555';
   const colPeak=peakMg>0?_caffeineColor(peakMg,thr):'#555';
@@ -17405,9 +17356,21 @@ function renderCoachCaffeineSection(c){
     <div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px">
       <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:14px">☕ Caféine</div>
       <div style="display:flex;gap:8px;margin-bottom:14px">
-        ${_encartCafeine('MOY. 7J',avg7,col7,'mg/j')}
-        ${_encartCafeine('MOY. 28J',avg28,col28,'mg/j')}
-        ${_encartCafeine('PIC 28J',peakMg,colPeak,peakStr,peakMg>999?'18':'24')}
+        <div style="flex:1;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;margin-bottom:5px">MOY. 7J</div>
+          <div class="txt-stat" style="color:${col7};line-height:1">${avg7||'—'}</div>
+          <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">mg/j</div>
+        </div>
+        <div style="flex:1;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;margin-bottom:5px">MOY. 28J</div>
+          <div class="txt-stat" style="color:${col28};line-height:1">${avg28||'—'}</div>
+          <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">mg/j</div>
+        </div>
+        <div style="flex:1;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;margin-bottom:5px">PIC 28J</div>
+          <div style="font-size:${peakMg>999?'18':'24'}px;font-family:'Bebas Neue',sans-serif;color:${colPeak};line-height:1">${peakMg||'—'}</div>
+          <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${peakMg?peakStr:'—'}</div>
+        </div>
       </div>
       ${!withData.length
         ?emptyState('coffee','Aucune prise enregistrée sur 28 jours.',null,null,'padding:16px 0')
@@ -18074,7 +18037,7 @@ function addVideoLink(){
   else{const seg=url.split('/').pop().split('?')[0];if(seg) name=decodeURIComponent(seg).replace(/\.(mp4|mov|webm|mkv)$/i,'');}
   if(_saisi) name=_saisi;
   if(!currentUser.videos) currentUser.videos=[];
-  currentUser.videos.push({id:'v_'+Date.now(),name,url,date:Date.now(),size:'',feedback:null});
+  currentUser.videos.push({id:'v_'+Date.now(),name,url,date:Date.now(),size:'—',feedback:null});
   // Une vidéo portant le nom de l'exercice éteint la demande du coach. Rien
   // n'est notifié : la demande disparaît, c'est tout.
   consommerDemandeVideo(name,currentUser);
@@ -18629,7 +18592,7 @@ function loadSteps(containerId='steps-content'){
     if(n>=goal*0.6) return '#f97316';
     return '#e05050';
   };
-  const fmt=n=>n?n.toLocaleString('fr-FR'):'';
+  const fmt=n=>n?n.toLocaleString('fr-FR'):'—';
   const avgColor=weekAvg>=goals.on?'#22c55e':weekAvg>=goals.on*0.6?'#f97316':weekAvg>0?'#E02020':'#777777';
 
   let bars='';
@@ -19073,7 +19036,7 @@ function renderCartePesee(){
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <input type="number" id="pesee-input" inputmode="decimal" step="0.1"
-        min="${PESEE_MIN}" max="${PESEE_MAX}" placeholder="${der?der.kg:''}"
+        min="${PESEE_MIN}" max="${PESEE_MAX}" placeholder="${der?der.kg:'—'}"
         value="${dujour?dujour.kg:''}"
         style="flex:1;min-width:0;box-sizing:border-box;font-size:20px;text-align:center;padding:10px 6px;background:var(--dark);border:1px solid var(--border);border-radius:9px;color:#f0f0f0;font-family:'Bebas Neue',sans-serif;letter-spacing:1px">
       <button class="btn btn-red btn-sm" onclick="savePesee()" style="height:44px;padding:0 18px;letter-spacing:1px;white-space:nowrap">${dujour?'Corriger':'Valider'}</button>
@@ -19186,11 +19149,11 @@ function blocPoids(user){
   const diff=(dep!=null&&act!=null)?Math.round((act-dep)*10)/10:null;
   // Mode neutre : ni couleur de verdict, ni vitesse, ni cible, ni alerte.
   const colEvol=neutre?'var(--sub)':couleurEvolution(user,diff);
-  const entete=_htmlRangeeMetriques([
-      _htmlCaseMetrique(dep!=null?dep+'kg':null,'Départ'),
-      _htmlCaseMetrique(act!=null?act+'kg':null,'Actuel'),
-      _htmlCaseMetrique(diff!=null?(diff>0?'+':'')+diff+'kg':null,'Évolution','color:'+colEvol)
-    ]);
+  const entete=`<div style="display:flex;gap:8px;margin-bottom:14px">
+      <div class="metric-box"><div class="metric-val">${dep??'—'}kg</div><div class="metric-label">Départ</div></div>
+      <div class="metric-box"><div class="metric-val">${act??'—'}kg</div><div class="metric-label">Actuel</div></div>
+      <div class="metric-box"><div class="metric-val" style="color:${colEvol}">${diff!=null?(diff>0?'+':'')+diff+'kg':'—'}</div><div class="metric-label">Évolution</div></div>
+    </div>`;
   const courbe=`<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">
         <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700">Évolution du poids</span>
@@ -19632,12 +19595,12 @@ function loadSleep(containerId='sleep-content'){
       <div style="position:absolute;left:14px;top:12px;color:rgba(255,255,255,.16)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
       <div style="position:relative">
         <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:8px">Moyenne hebdomadaire</div>
-        ${weekAvg?`<div style="font-family:'Bebas Neue',sans-serif;font-size:56px;line-height:.95;color:${avgColor};letter-spacing:1px;text-shadow:0 0 16px ${avgColor},0 0 34px ${avgColor+'66'}">${weekAvg}h</div>`:''}
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:56px;line-height:.95;color:${weekAvg?avgColor:'rgba(255,255,255,.55)'};letter-spacing:1px;text-shadow:0 0 16px ${weekAvg?avgColor:'rgba(255,255,255,.4)'},0 0 34px ${weekAvg?avgColor+'66':'transparent'}">${weekAvg?weekAvg+'h':'—'}</div>
         <div style="font-size:11px;color:rgba(255,255,255,.55);margin-top:6px">heures / nuit &nbsp;·&nbsp; ${withData.length} / 7 nuits renseignées</div>
         <div style="margin-top:14px;display:flex;justify-content:center;gap:16px">
           <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">OPTIMAL</div><div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:var(--green);margin-top:2px;text-shadow:0 0 11px rgba(34,197,94,.7)">7 – 9 h</div></div>
           <div style="width:1px;background:rgba(255,255,255,.15)"></div>
-          ${weekTotal!=null?`<div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">TOTAL SEMAINE</div><div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:${avgColor};margin-top:2px;text-shadow:0 0 11px ${avgColor+'99'}">${weekTotal}h</div></div>`:''}
+          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">TOTAL SEMAINE</div><div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:${weekTotal!=null?avgColor:'rgba(255,255,255,.5)'};margin-top:2px;text-shadow:0 0 11px ${weekTotal!=null?avgColor+'99':'transparent'}">${weekTotal!=null?weekTotal+'h':'—'}</div></div>
         </div>
       </div>
     </div>
@@ -20140,7 +20103,7 @@ function updateCalcTable(){
         let w=e1rm*(p2/100);
         w=Math.round(w/2.5)*2.5; // arrondi à 2.5kg
         const isTarget=r===Math.round(pr)&&rir===Math.round(prir);
-        return `<td style="padding:8px 6px;text-align:center;background:${isTarget?'var(--red)':''};border-radius:${isTarget?'6px':''};font-weight:${isTarget?'800':'600'};box-shadow:${isTarget?'var(--glow-sm)':''}">${w>0?w+'kg':''}</td>`;
+        return `<td style="padding:8px 6px;text-align:center;background:${isTarget?'var(--red)':''};border-radius:${isTarget?'6px':''};font-weight:${isTarget?'800':'600'};box-shadow:${isTarget?'var(--glow-sm)':''}">${w>0?w+'kg':'—'}</td>`;
       }).join('')}
     </tr>`;
   }).join('');
@@ -21114,7 +21077,7 @@ async function loadMetrics(){
     tbl+='<tr><td style="padding:4px 8px 4px 0;color:'+(e.horsTunnel?'var(--orange)':'#ddd')+'">'+escapeHtml(e.lib)+'</td>';
     for(const j of jours){
       const n=e.cles.reduce((s,c)=>s+(parseInt(parJour[j][c],10)||0),0);
-      tbl+='<td style="padding:4px 6px;text-align:center;color:'+(n?'#fff':'#444')+'">'+(n||'')+'</td>';
+      tbl+='<td style="padding:4px 6px;text-align:center;color:'+(n?'#fff':'#444')+'">'+(n||'—')+'</td>';
     }
     tbl+='</tr>';
   }
@@ -25372,181 +25335,126 @@ function testExercices(){
 
 
 
-    // ══════════════ AUCUN TIRET DE REPLI VISIBLE ══════════════
-    // Le « — » servait de repli « pas encore mesuré » dans toute l'app. Une
-    // case sans valeur ne s'affiche plus du tout. Ce test est le garde-fou :
-    // il REND réellement chaque écran avec un dossier vide — le cas où les
-    // tirets apparaissaient — puis lit le DOM.
+    // ══════════════ LE TIRET : DANS LES CASES OUI, DANS LES PHRASES NON ══════
+    // Règle du coach : le « — » d'une case à remplir dit « en attente d'une
+    // valeur » et doit RESTER. Dans une phrase il ne dit rien — « Poids: —kg »
+    // se lit comme un bug — et le fragment disparaît alors en entier.
+    // Les deux moitiés sont testées : sans la première, un lot ultérieur
+    // reviendrait vider les cases sans que rien ne s'y oppose.
     (function(){
       const sauveU=currentUser, sauveCid=currentClientId;
       const sauveUsers=DB.get('users');
-
-      // Un élément FEUILLE dont le texte entier est un tiret est un repli
-      // visible. La ponctuation d'une phrase (« Étape 1 — Ouvre… ») ne peut pas
-      // tomber là-dedans : elle vit dans un texte plus long.
-      const _tiretsVisibles=()=>{
-        const out=[];
-        document.querySelectorAll('*').forEach(e=>{
-          if(e.children.length) return;
-          const t=(e.textContent||'').trim();
-          if(t==='—'||t==='–') out.push((e.tagName||'?')+(e.id?'#'+e.id:'')
-            +(e.className?'.'+String(e.className).split(' ')[0]:''));
-        });
-        document.querySelectorAll('[placeholder]').forEach(e=>{
-          if((e.getAttribute('placeholder')||'').trim()==='—')
-            out.push('placeholder#'+(e.id||'?'));
-        });
-        return out;
-      };
-
-      ok('Aucun tiret de repli dans le HTML statique',(()=>{
-        const l=_tiretsVisibles();
-        return l.length===0?true:_echec(l.join(', '));})());
-
-      // Dossier VIDE : aucune séance, aucun bilan, aucune mesure.
-      const neuf={id:'neuf',email:'neuf@t.fr',fname:'Neuf',lname:'X',role:'athlete',
+      const neuf={id:'tp',email:'tp@t.fr',fname:'Neuf',lname:'X',role:'athlete',
         exAlias:{},exMuscles:{},sessions:[],bilans:[],videos:[],programs:{},
         weights:[],supplements:[],caffeine:[],sleep:[],steps:[],
         sessions_config:[{active:true,name:'P',exercises:[]}]};
 
-      ok('Aucun tiret sur les écrans de l\'athlète sans aucune donnée',(()=>{
-        currentUser=JSON.parse(JSON.stringify(neuf));
-        const ecrans=['loadClientHome','renderVolume','loadNutrition','loadCaffeine',
-          'loadSleep','loadVideos','loadSupplements','loadSteps','loadProgress'];
-        // Contrôle de non-vacuité : un nom de fonction disparu rendrait ce
-        // test muet, exactement comme s'il ne testait rien.
-        const absents=ecrans.filter(f=>typeof window[f]!=='function');
-        if(absents.length) return _echec('fonctions introuvables : '+absents.join(', '));
-        const err=[];
-        for(const f of ecrans){ try{ window[f](); }catch(e){ err.push(f+' → '+e.message); } }
-        if(err.length) return _echec(err.join(' | '));
-        const l=_tiretsVisibles();
-        return l.length===0?true:_echec(l.join(', '));})());
+      // ── La moitié « phrases » ──
+      ok('_fragmentSiValeur efface le fragment ENTIER, ponctuation comprise',
+        _fragmentSiValeur('Poids: ',null,'kg')===''
+        &&_fragmentSiValeur('Poids: ','','kg')===''
+        &&_fragmentSiValeur(' · ',undefined)===''
+        &&_fragmentSiValeur('P ',NaN,'g')==='');
+      ok('_fragmentSiValeur rend le fragment complet quand la valeur existe',
+        _fragmentSiValeur('Poids: ',82,'kg')==='Poids: 82kg'
+        &&_fragmentSiValeur(' · ','lundi')===' · lundi');
+      ok('Un zéro est une VALEUR, pas une absence',
+        _fragmentSiValeur('P ',0,'g')==='P 0g');
+      ok('Un objectif sans valeur ne s\'écrit pas dans la phrase',
+        _objFmtVal(null,'kg')===''&&_objFmtVal(undefined,'kg')===''
+        &&_objFmtVal(80,'kg')==='80 kg');
 
-      ok('Aucun tiret sur les six onglets de Progression, dossier vide',(()=>{
-        currentUser=JSON.parse(JSON.stringify(neuf));
-        if(typeof showProgressTab!=='function') return _echec('showProgressTab introuvable');
-        const err=[];
-        for(const t of ['poids','mensus','masseGrasse','perf','volume','photos']){
-          try{ showProgressTab(t,null); }catch(e){ err.push(t+' → '+e.message); }
-        }
-        if(err.length) return _echec(err.join(' | '));
-        const l=_tiretsVisibles();
-        return l.length===0?true:_echec(l.join(', '));})());
-
-      ok('L\'écran % de gras sans mesure n\'affiche aucune case vide',(()=>{
-        currentUser=JSON.parse(JSON.stringify(neuf));
-        try{ showProgressTab('masseGrasse',null); }catch(e){ return _echec('exception: '+e.message); }
-        const z=document.getElementById('progress-content');
-        // On cherche des TIRETS ISOLÉS, pas le caractère « — » : le texte de
-        // l'écran contient « aux extrêmes — très maigre ou très corpulent »,
-        // qui est de la ponctuation et doit rester.
-        const l=_tiretsVisibles();
-        // Et aucune case de métrique vide : la rangée entière a disparu.
-        const boites=[...(z?z.querySelectorAll('.metric-box'):[])]
-          .filter(b=>((b.querySelector('.metric-val')||{}).textContent||'').trim()==='');
-        if(l.length) return _echec('tirets : '+l.join(', '));
-        return boites.length===0;})());
-
-      // Preuve que le masquage ne triche pas : avec des mesures, les cases
-      // REVIENNENT. Sans ce test, tout cacher en permanence passerait pour un
-      // succès.
-      ok('Avec des mesures, les cases MG reviennent',(()=>{
-        const u=JSON.parse(JSON.stringify(neuf));
-        // La taille est lue via _evol_height, puis le bilan de départ : c'est
-        // là que l'écran va la chercher, pas dans user.height.
-        u._evol_height=178; u._evol_gender='H'; u.gender='H';
-        const bil=(j,co,ta)=>({type:'suivi',date:Date.now()-j*864e5,
-          'deb-weight':'80','deb-neck':String(co),'deb-waist':String(ta),'deb-height':'178'});
-        u.bilans=[bil(60,40,88),bil(2,39,84)];
-        currentUser=u;
-        try{ showProgressTab('masseGrasse',null); }catch(e){ return _echec('exception: '+e.message); }
-        const z=document.getElementById('progress-content');
-        const h=z?z.innerHTML:'';
-        const l=_tiretsVisibles();
-        if(l.length) return _echec('tirets : '+l.join(', '));
-        return /MG départ/.test(h)&&/MG actuel/.test(h)&&/Évolution/.test(h);})());
-
-      ok('Aucun tiret sur la fiche athlète du coach, dossier vide',(()=>{
+      ok('Fiche coach : plus de « Poids: —kg » sans mesure',(()=>{
         const c=JSON.parse(JSON.stringify(neuf));
-        c.id='neufc'; c.email='neufc@t.fr'; c.coachId='coT';
+        c.id='tpc'; c.email='tpc@t.fr'; c.coachId='coTP';
+        c.bilans=[{type:'depart',date:Date.now()-2*864e5}];
         const u={}; u[c.email]=c; DB.set('users',u);
-        currentUser={id:'coT',email:'cot@t.fr',role:'coach',fname:'K',
+        currentUser={id:'coTP',email:'cotp@t.fr',role:'coach',fname:'K',
           seenBilans:{},alertStatus:{},studentCodes:[]};
         currentClientId=c.id;
         try{ openClientDetail(c.id,true); }catch(e){ return _echec('exception: '+e.message); }
-        const l=_tiretsVisibles();
-        return l.length===0?true:_echec(l.join(', '));})());
+        const z=document.getElementById('ccd-bilans');
+        const h=z?z.innerHTML:'';
+        // Ni tiret, ni « 0kg » : un athlète qui n'a rien renseigné ne pèse pas
+        // zéro. Le fragment doit disparaître, pas se replier sur un chiffre.
+        return !/Poids:/.test(h)&&!/MG:/.test(h)&&!/Taille:/.test(h)
+          &&!/—/.test(h)&&!/>0kg</.test(h)&&!/>0cm</.test(h);})());
+      ok('Fiche coach : la ligne revient dès qu\'il y a une mesure',(()=>{
+        const c=JSON.parse(JSON.stringify(neuf));
+        c.id='tpd'; c.email='tpd@t.fr'; c.coachId='coTP';
+        c.bilans=[{type:'depart',date:Date.now()-2*864e5,'deb-weight':'78','deb-waist':'84'}];
+        const u={}; u[c.email]=c; DB.set('users',u);
+        currentClientId=c.id;
+        try{ openClientDetail(c.id,true); }catch(e){ return _echec('exception: '+e.message); }
+        const h=(document.getElementById('ccd-bilans')||{}).innerHTML||'';
+        return /Poids:/.test(h)&&/78/.test(h)&&/Taille:/.test(h)&&/84/.test(h);})());
 
-      ok('Aucun tiret sur l\'accueil coach sans aucun élève',(()=>{
+      ok('Accueil coach : plus de « Code: — » sans code',(()=>{
         DB.set('users',{});
-        currentUser={id:'coV',email:'cov@t.fr',role:'coach',fname:'K',code:'',
+        currentUser={id:'coTZ',email:'cotz@t.fr',role:'coach',fname:'K',code:'',
           seenBilans:{},alertStatus:{},studentCodes:[]};
         try{ loadCoachHome(); }catch(e){ return _echec('exception: '+e.message); }
-        const l=_tiretsVisibles();
-        return l.length===0?true:_echec(l.join(', '));})());
+        const e1=document.getElementById('ch-code-small');
+        const e2=document.getElementById('ch-code-sidebar');
+        return (!e1||e1.textContent.indexOf('—')<0)&&(!e2||e2.textContent.indexOf('—')<0);})());
+      ok('Accueil coach : le code s\'affiche quand il existe',(()=>{
+        currentUser.code='ABC123';
+        try{ loadCoachHome(); }catch(e){ return _echec('exception: '+e.message); }
+        const e1=document.getElementById('ch-code-small');
+        return !!e1&&/Code: ABC123/.test(e1.textContent);})());
 
-      // ── Les fonctions de repli elles-mêmes ──
-      ok('Une métrique sans valeur ne produit aucun HTML',
-        _htmlCaseMetrique(null,'Poids')===''&&_htmlCaseMetrique('','Poids')===''
-        &&_htmlCaseMetrique('—','Poids')===''&&_htmlCaseMetrique(NaN,'Poids')==='');
-      ok('Une métrique avec valeur produit sa case',(()=>{
-        const h=_htmlCaseMetrique('82kg','Poids');
-        return /metric-box/.test(h)&&/82kg/.test(h)&&/Poids/.test(h);})());
-      ok('Une rangée entièrement vide disparaît',
-        _htmlRangeeMetriques([null,'',undefined])===''
-        &&_htmlRangeeMetriques([])==='');
-      ok('Une rangée partielle ne garde que ce qui existe',(()=>{
-        const h=_htmlRangeeMetriques([_htmlCaseMetrique('82kg','Poids'),
-          _htmlCaseMetrique(null,'MG'),_htmlCaseMetrique('12%','Gras')]);
-        const d=document.createElement('div'); d.innerHTML=h;
-        return d.querySelectorAll('.metric-box').length===2&&!/MG/.test(h);})());
-      ok('Un zéro est une VALEUR, pas une absence',(()=>{
-        const h=_htmlCaseMetrique(0,'Séries');
-        return h!==''&&/>0</.test(h);})());
-      // Le balayage du DOM ne voit que les TIRETS. Un encart rendu vide ne
-      // laisse pas de tiret et lui échappait : on teste donc la fonction.
-      ok('Un encart de caféine sans chiffre ne s\'affiche pas',
-        _encartCafeine('MOY. 7J',null,'#fff','mg/j')===''
-        &&_encartCafeine('MOY. 7J',0,'#fff','mg/j')===''
-        &&_encartCafeine('MOY. 7J','','#fff','mg/j')==='');
-      ok('Un encart de caféine avec chiffre s\'affiche',(()=>{
-        const h=_encartCafeine('MOY. 7J',180,'var(--red)','mg/j');
-        return /MOY\. 7J/.test(h)&&/180/.test(h)&&/mg\/j/.test(h);})());
-      ok('Aucun encart vide sur l\'écran caféine sans consommation',(()=>{
+      ok('Le nom d\'un athlète sans prénom ne devient pas un tiret',(()=>{
+        const c=JSON.parse(JSON.stringify(neuf));
+        c.id='tpe'; c.email='tpe@t.fr'; c.coachId='coTP'; c.fname=''; c.lname='';
+        const u={}; u[c.email]=c; DB.set('users',u);
+        currentUser={id:'coTP',email:'cotp@t.fr',role:'coach',fname:'K',
+          seenBilans:{},alertStatus:{},studentCodes:[]};
+        currentClientId=c.id;
+        try{ openClientDetail(c.id,true); }catch(e){ return _echec('exception: '+e.message); }
+        const t=document.getElementById('ccd-title');
+        return !!t&&t.textContent.indexOf('—')<0;})());
+
+      // ── La moitié « cases » : le tiret RESTE. C'est la règle du coach. ──
+      ok('Les trois cases de l\'accueil gardent leur tiret',(()=>{
         currentUser=JSON.parse(JSON.stringify(neuf));
-        try{ loadCaffeine(); }catch(e){ return _echec('exception: '+e.message); }
-        const z=document.getElementById('caffeine-content')||document.body;
-        const vides=[...z.querySelectorAll('.txt-stat')]
-          .filter(e=>((e.textContent||'').trim()===''));
-        return vides.length===0;})());
-      ok('Le fragment de phrase disparaît en entier',
-        _fragmentSiValeur('Poids: ',null,'kg')===''
-        &&_fragmentSiValeur('Poids: ','','kg')===''
-        &&_fragmentSiValeur('Poids: ',82,'kg')==='Poids: 82kg');
-      ok('_poserMetrique cache puis remontre la case',(()=>{
-        const d=document.createElement('div');
-        d.innerHTML='<div class="metric-box"><div class="metric-val" id="tst-mv"></div>'
-          +'<div class="metric-label">X</div></div><div id="tst-mv-sub"></div>';
-        document.body.appendChild(d);
-        _poserMetrique('tst-mv',null,'ignoré');
-        const b=document.getElementById('tst-mv').closest('.metric-box');
-        const cache=b.style.display==='none'
-          &&document.getElementById('tst-mv').textContent===''
-          &&document.getElementById('tst-mv-sub').textContent==='';
-        _poserMetrique('tst-mv','42kg','sur 50');
-        const revenu=b.style.display!=='none'
-          &&document.getElementById('tst-mv').textContent==='42kg'
-          &&document.getElementById('tst-mv-sub').textContent==='sur 50';
-        d.remove();
-        return cache&&revenu;})());
-      ok('Les tableaux laissent la cellule VIDE, sans la supprimer',(()=>{
-        // On ne peut pas cacher une cellule sans décaler ses voisines : elle
-        // reste donc en place, vide.
+        try{ _majMetriquesAccueil(currentUser); }catch(e){ return _echec('exception: '+e.message); }
+        const l=id=>(document.getElementById(id)||{}).textContent;
+        return l('clh-m1')==='—'&&l('clh-m2')==='—'&&l('clh-m3')==='—';})());
+      ok('Les textes d\'attente des cases sont toujours là',(()=>{
+        const l=id=>(document.getElementById(id)||{}).textContent;
+        return l('clh-m2-sub')==='Il faut 5 semaines pour comparer.'
+          &&l('clh-m3-sub')==='Pas encore assez d\'historique.';})());
+      // LE cas de l'athlète qui a des bilans mais pas ses tours de mesure :
+      // c'est exactement l'écran où le coach a vu ses trois tirets, et il a
+      // demandé qu'ils y restent.
+      ok('Les trois cases MG gardent leur tiret quand la mesure manque',(()=>{
+        const u=JSON.parse(JSON.stringify(neuf));
+        u._evol_height=178; u._evol_gender='H';
+        u.bilans=[{type:'suivi',date:Date.now()-60*864e5,'deb-weight':'80'},
+                  {type:'suivi',date:Date.now()-2*864e5,'deb-weight':'78'}];
+        currentUser=u;
+        try{ showProgressTab('masseGrasse',null); }catch(e){ return _echec('exception: '+e.message); }
+        const z=document.getElementById('progress-content');
+        const vals=[...(z?z.querySelectorAll('.metric-val'):[])].map(e=>e.textContent.trim());
+        if(vals.length!==3) return _echec('cases trouvées : '+vals.length+' → '+vals.join('|'));
+        return vals.every(v=>v==='—');})());
+      // Ces trois-là sont réécrites par finishWorkout : au repos elles portent
+      // le tiret posé dans le HTML. On lit donc la SOURCE, pas le DOM courant
+      // qu'un test précédent a pu remplir.
+      ok('Les cases de fin de séance gardent leur tiret dans le HTML',(()=>{
+        const h=(document.getElementById('s-workout-done')||{}).outerHTML||'';
+        const n=(h.match(/class="metric-val" id="wd-(time|sets|vol)">/g)||[]).length;
+        if(n!==3) return _echec('cases wd-* trouvées : '+n);
+        return ['wd-time','wd-sets','wd-vol'].every(id=>{
+          const e=document.getElementById(id);
+          return !!e&&!!(e.textContent||'').trim();});})());
+      ok('Les champs à remplir gardent leur indication « — »',(()=>{
+        const h=document.getElementById('s-bilan')?document.getElementById('s-bilan').innerHTML:'';
+        const src=bQ.toString();
+        return /placeholder="—"/.test(src);})());
+      ok('Les tableaux gardent leur cellule « — »',(()=>{
         const h=renderDataTable(['','A','B'],[{label:'L',values:[null,3]}]);
-        const d=document.createElement('div'); d.innerHTML=h;
-        const tds=[...d.querySelectorAll('td')];
-        return tds.length>=2&&!/—/.test(h);})());
+        return /—/.test(h);})());
 
       if(sauveUsers) DB.set('users',sauveUsers);
       currentUser=sauveU; currentClientId=sauveCid;
@@ -28087,19 +27995,15 @@ function testExercices(){
         const h=document.getElementById('s-client-home').innerHTML;
         return /Cette semaine/.test(h)&&/Charge totale/.test(h)&&/Exercices en progrès/.test(h)
           &&!/>Séances</.test(h.replace(/DÉMARRER MA SÉANCE|GÉRER MES SÉANCES/g,''));})());
-      // Aucun historique : les trois cases disparaissent, aucune erreur.
+      // Aucun historique : trois tirets, aucune erreur.
       currentUser={id:'a',email:'a@t.fr',exAlias:{},exMuscles:{},bilans:[],sessions:[],
         sessions_config:[{active:true}]};
       _majMetriquesAccueil(currentUser);
-      const _boite=id=>{ const e=document.getElementById(id);
-        return e?((e.closest&&e.closest('.metric-box'))||e.parentElement):null; };
-      const _cachee=id=>{ const b=_boite(id); return !!b&&b.style.display==='none'; };
-      ok('Aucune séance : les trois cases sont masquées',
-         _cachee('clh-m1')&&_cachee('clh-m2')&&_cachee('clh-m3'));
-      ok('Aucune séance : aucun tiret n\'est écrit',
-         lire('clh-m1')===''&&lire('clh-m2')===''&&lire('clh-m3')===''); 
-      ok('Aucune séance : le sous-titre part avec sa case',
-         lire('clh-m2-sub')===''&&lire('clh-m3-sub')==='');
+      ok('Aucune séance : les trois cases affichent —',
+         lire('clh-m1')==='—'&&lire('clh-m2')==='—'&&lire('clh-m3')==='—');
+      ok('Aucune séance : les textes d\'attente sont exacts',
+         lire('clh-m2-sub')==='Il faut 5 semaines pour comparer.'
+         &&lire('clh-m3-sub')==='Pas encore assez d\'historique.');
       // Historique court : Cette semaine se remplit, les deux autres attendent.
       const J=n=>Date.now()-n*864e5;
       const lundi=_lundiDe(new Date()).getTime();
@@ -28109,8 +28013,8 @@ function testExercices(){
       _majMetriquesAccueil(currentUser);
       ok('Cette semaine : le compte et le quota',
          lire('clh-m1')==='2'&&lire('clh-m1-sub')==='2 sur 3');
-      ok('Moins de 5 semaines : Charge totale se masque, les autres restent',
-         _cachee('clh-m2')&&lire('clh-m2')===''&&!_cachee('clh-m1'));
+      ok('Moins de 5 semaines : Charge totale attend',
+         lire('clh-m2')==='—'&&lire('clh-m2-sub')==='Il faut 5 semaines pour comparer.');
       // Cinq exercices sur douze.
       const anc={},rec={};
       for(let i=0;i<12;i++){
