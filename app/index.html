@@ -1134,6 +1134,10 @@ const COACH_PHOTO='icons/coach.jpg';
           <span>🗂️ MES PROGRAMMES (H/F)</span>
           <span style="color:var(--red);font-size:13px">→</span>
         </button>
+        <button onclick="loadCharges()" class="content-card" style="width:100%;margin-bottom:16px;padding:13px 16px;display:flex;align-items:center;justify-content:space-between;background:var(--surface-1);border:1px solid var(--border);cursor:pointer">
+          <span style="font-size:12px;font-weight:800;letter-spacing:1px">CHARGES ARTICULAIRES</span>
+          <span id="ch-charges-av" style="font-size:11px;color:var(--sub)"></span>
+        </button>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
           <div class="section-header" style="margin-bottom:0">
             <div class="sh-line"></div>
@@ -2270,6 +2274,12 @@ const COACH_PHOTO='icons/coach.jpg';
     <button class="btn btn-red" id="bil-next-btn" onclick="bilNext()">Suivant →</button>
     <button id="bil-skip-depart" onclick="skipFirstBilan()" style="display:none;width:100%;margin-top:10px;background:none;border:none;color:var(--sub);font-size:11px;font-family:Montserrat,sans-serif;cursor:pointer;padding:6px;letter-spacing:.3px;text-decoration:underline">Remplir mon 1er bilan plus tard</button>
   </div>
+</div>
+
+<!-- CHARGES ARTICULAIRES (coach) -->
+<div id="s-charges" class="screen">
+  <div class="topbar"><button class="back-btn" onclick="go('s-coach-home');loadCoachHome()">←</button><span class="topbar-title">Charges articulaires</span></div>
+  <div class="scroll-area" style="flex:1"><div class="pad" id="charges-content"></div></div>
 </div>
 
 <!-- PROGRESS -->
@@ -3608,7 +3618,11 @@ const CLOUD={
   // athlète l'accès aux séances, bilans, nutrition et liste de clients du
   // coach. On publie à la place un nœud séparé qui ne contient QUE ce qui est
   // destiné à être vu, lisible par les seuls athlètes rattachés.
-  CHAMPS_PROFIL_COACH:['fname','lname','teamName','catchphrase','coachPhoto','promoBanners','phone'],
+  // chargesSchema : la grille de charges articulaires du coach. Elle doit
+  // atteindre le téléphone de l'athlète, sinon aucun avertissement de santé
+  // ne peut se déclencher de son côté. C'est un jugement de métier publié
+  // volontairement, au même titre que la photo ou la bannière.
+  CHAMPS_PROFIL_COACH:['fname','lname','teamName','catchphrase','coachPhoto','promoBanners','phone','chargesSchema'],
   _urlProfilCoach(key){ return this._fbUrl.replace('users.json','coach_public/'+key+'.json'); },
 
   async pushProfilCoach(user){
@@ -6265,6 +6279,8 @@ function loadCoachHome(){
   document.getElementById('ch-total').textContent=clients.length;
   document.getElementById('ch-active').textContent=clients.filter(c=>isActive(c)).length;
   document.getElementById('ch-alerts').textContent=clients.filter(c=>needsAlert(c)).length;
+  try{ const _av=avancementCharges(), _e=document.getElementById('ch-charges-av');
+    if(_e) _e.textContent=_av.pose+'/'+_av.total+(_av.pose<_av.total?' — à compléter':' ✓'); }catch(e){}
   const elList=document.getElementById('ch-clients-list');
   if(!clients.length){
     renderTodoBlock([]);
@@ -12884,6 +12900,256 @@ function renderContraintesAthlete(){
   let h='';
   try{ h=currentUser?blocDrapeauRouge(currentUser):''; }catch(e){ h=''; }
   z.innerHTML=h;
+}
+
+
+// ══════════════ SCHÉMAS MOTEURS ══════════════
+// Les 408 exercices du guide, rangés par SCHÉMA MOTEUR. Un rowing est un
+// tirage horizontal : c'est descriptif, ça se vérifie, et c'est pour ça que
+// cette classification-là peut être faite par le logiciel.
+//
+// Les NOTES de charge articulaire, elles, ne sont PAS ici. Elles sont saisies
+// par le coach (écran « Charges articulaires ») parce qu'attribuer « lombaire
+// 3 » à un mouvement est un jugement de métier, pas une donnée qu'on déduit.
+// Tant qu'une note manque, aucun avertissement n'est produit : l'absence de
+// jugement ne se remplace pas par une valeur par défaut.
+//
+// Stocké par signature, comme EX_GUIDE_BRUT : un schéma, tous ses exercices
+// séparés par ~.
+const ZONES_ARTICULAIRES=Object.freeze(["rachis-lombaire","rachis-cervical","epaule","coude","poignet","hanche","genou","cheville"]);
+const SCHEMAS_META=Object.freeze({
+  "charniere-hanche":{lib:"Charnière de hanche",nb:32,ex:["bootymizer","extension de buste a la machine","extension de buste assis sur banc"],hors:["epaule","coude"]},
+  "squat":{lib:"Squat",nb:26,ex:["deep squat","hacksquat","pendulum squat"],hors:["coude"]},
+  "fente":{lib:"Fente",nb:12,ex:["fente bulgare machine","fentes arriere barre smith machine","fentes arriere haltere"],hors:["rachis-cervical","epaule","coude","poignet"]},
+  "poussee-verticale":{lib:"Poussée verticale",nb:15,ex:["developpe epaule au landmine","developpe epaules barre","developpe epaules elastique"],hors:["hanche","genou","cheville"]},
+  "poussee-horizontale":{lib:"Poussée horizontale",nb:55,ex:["butterfly","chest crossover dual","chest press debout"],hors:["rachis-cervical","hanche","genou","cheville"]},
+  "tirage-vertical":{lib:"Tirage vertical",nb:28,ex:["fessier a la machine de traction","iso lateral front lat pulldown","muscle up"],hors:["hanche","genou","cheville"]},
+  "tirage-horizontal":{lib:"Tirage horizontal",nb:50,ex:["face pull","face pull assis","rack pool"],hors:["hanche","genou","cheville"]},
+  "isolation-epaule":{lib:"Isolation épaule",nb:24,ex:["arriere epaule a la machine","elevation arriere epaule poulie","elevation arriere poulie couchee"],hors:["rachis-lombaire","rachis-cervical","poignet","hanche","genou","cheville"]},
+  "isolation-coude":{lib:"Isolation coude",nb:54,ex:["barre au front","barre au front banc incline","biceps bras en croix"],hors:["rachis-lombaire","rachis-cervical","hanche","genou","cheville"]},
+  "isolation-genou":{lib:"Isolation genou",nb:11,ex:["leg curl allonge","leg curl allonge en unilateral","leg curl assis"],hors:["rachis-lombaire","rachis-cervical","epaule","coude","poignet","cheville"]},
+  "isolation-hanche":{lib:"Isolation hanche",nb:11,ex:["3d abductor","abducteur a la machine","abducteur assis avec elastique"],hors:["rachis-cervical","epaule","coude","poignet","genou","cheville"]},
+  "mollets-cheville":{lib:"Mollets et cheville",nb:12,ex:["calf extension machine","donkey calf raise machine","mollets a la hacksquat en unilateral"],hors:["rachis-lombaire","rachis-cervical","epaule","coude","poignet","hanche"]},
+  "gainage-tronc":{lib:"Gainage et tronc",nb:35,ex:["ab crunch bench","abs roller","copenhagen plank"],hors:["coude","genou","cheville"]},
+  "poignet-avant-bras":{lib:"Poignet et avant-bras",nb:6,ex:["bobine dandrieu","flexion avant bras a la barre debout","flexion avant bras a la barre sur banc pronation"],hors:["rachis-lombaire","rachis-cervical","epaule","hanche","genou","cheville"]},
+  "port-de-charge":{lib:"Port de charge",nb:2,ex:["marche du fermier","montee de corde"],hors:["coude"]},
+  "halterophilie":{lib:"Haltérophilie",nb:3,ex:["clean and jerk","power clean","snatch"],hors:[]},
+  "pliometrie":{lib:"Pliométrie",nb:16,ex:["barbell thusters","burpees","chute de box saut"],hors:["rachis-cervical","epaule","coude","poignet"]}
+});
+const SCHEMA_LIB=Object.freeze({"charniere-hanche":"Charnière de hanche","squat":"Squat","fente":"Fente","poussee-verticale":"Poussée verticale","poussee-horizontale":"Poussée horizontale","tirage-vertical":"Tirage vertical","tirage-horizontal":"Tirage horizontal","isolation-epaule":"Isolation épaule","isolation-coude":"Isolation coude","isolation-genou":"Isolation genou","isolation-hanche":"Isolation hanche","mollets-cheville":"Mollets et cheville","gainage-tronc":"Gainage et tronc","poignet-avant-bras":"Poignet et avant-bras","port-de-charge":"Port de charge","halterophilie":"Haltérophilie","pliometrie":"Pliométrie","posing":"Posing","cardio":"Cardio"});
+const SCHEMAS_BRUT={
+  "isolation-hanche":"3D ABDUCTOR~ABDUCTEUR A LA MACHINE~ABDUCTEUR ASSIS AVEC ELASTIQUE~ABDUCTION A LA MACHINE BUSTE PENCHE~ABDUCTION DE HANCHE AU SOL~ABDUCTION DEBOUT POULIE ELASTIQUE~ADDUCTEUR A LA MACHINE~ADDUCTION DEBOUT POULIE ELASTIQUE~DONKEY KICK SMITH MACHINE~FIRE HYDRANT~STANDING ADUCTOR",
+  "gainage-tronc":"AB CRUNCH BENCH~ABS ROLLER~COPENHAGEN PLANK~CRUNCH A DOUBLE CONTRACTION SUR BANC~CRUNCH A LA MACHINE~CRUNCH A LA POULIE~CRUNCH AU SOL~CRUNCH BENCH~CRUNCH CROISE~CRUNCH JAMBES EN APPUI SUR BANC~CRUNCH SUR BALL~CRUNCH SUR BANC INCLINE~FLEXION LATERAL DE BUSTE AU BANC~FLEXION LATERAL DE BUSTE AVEC POIDS~FLEXION LATERAL DE BUSTE POULIE ELASTIQUE~FLEXIONS DE BUSTE EN GAINAGE LATERAL~FLEXIONS LATERALS AU SOL~GAINAGE CHAISE~GAINAGE HOLLOW HOLD~GAINAGE LATERAL~GAINAGE PLANCHE~LES CISEAUX~MOUNTAIN CLIMBER~OBLIQUE ABDOMINAL CRUNCH~PALLOF PRESS~RELEVE DE GENOUX A LA BARRE DE TRACTIONS~RELEVE DE GENOUX A LA CHAISE ABDOMINALE~RELEVE DE GENOUX SUR BANC~RELEVE DE JAMBE A LA PLANCHE INCLINE~RELEVE DE JAMBE AU SOL~ROTATION AU SOL~ROTATION DE BUSTE POULIE ELASTIQUE HAUTE~ROWING PLANCHE BARRE~SUPERMAN~V SIT UP",
+  "posing":"ABDOMINALS AND THIGHS~BACK DOUBLE BICEPS~FRONT DOUBLE BICEPS~FRONT LAT SPREAD~ICARUS POSE~LE VACUUM~MOON POSE~MOST MUSCULAR POSE~PRIEST MANTIS POSE~QUARTER TURN~REAR LAT SPREAD~SIDE CHEST~THE CHRISTMAS THREE~THE KNEEL~VACUUM POSE~ZYZZ POSE",
+  "isolation-epaule":"ARRIERE EPAULE A LA MACHINE~ELEVATION ARRIERE EPAULE POULIE~ELEVATION ARRIERE POULIE COUCHEE~ELEVATION FRONTALE BOUTEILLES~ELEVATION FRONTALE DISQUE DE POIDS~ELEVATION FRONTALE HALTERES~ELEVATION FRONTALE MACHINE~ELEVATION FRONTALE POULIE ELASTIQUE~ELEVATION FRONTALE SUR BANC INCLINE~ELEVATION LATERALE AVEC BOUTEILLES D EAU~ELEVATION LATERALE HALTERE~ELEVATION LATERALE HALTERE UNILATERAL~ELEVATION LATERALE MACHINE~ELEVATION LATERALE MACHINE DEBOUT~ELEVATION LATERALE POULIE~ELEVATION LATERALE POULIE ELASTIQUE UNILATERAL~ELEVATION LATERALE SUR BANC A 60~ELEVATION Y~LATERAL RAISE~OISEAUX BUSTE PENCHE~OISEAUX BUSTE PENCHE MACHINE~OISEAUX BUSTE PENCHE POULIE ELASTIQUE~OISEAUX BUSTE PENCHE SUR BANC~OISEAUX SUR BANC INCLINE",
+  "pliometrie":"BARBELL THUSTERS~BURPEES~CHUTE DE BOX SAUT~JUMPING JACK~MONTE DE GENOUX~POMPES SAUTEES ALTERNEES SUR BALLON~POMPES SAUTES~POWER RUN~QUAD STOMP~RENVERSEMENT DE PNEU~SAUT SUR LES COTES~SAUTS SUR PLACE AVEC ELASTIQUE~SLEDGE~SQUAT SAUTE~SQUAT SAUTE SUR BOX~WALL BALL",
+  "isolation-coude":"BARRE AU FRONT~BARRE AU FRONT BANC INCLINE~BICEPS BRAS EN CROIX~BODYWEIGHT SKULL CRUSHER~CURL A LA POULIE BASSE EN UNILATERAL~CURL ACCROUPI~CURL ALLONGE POULIE~CURL ALLONGE POULIE HAUTE~CURL BARRE~CURL BARRE BALLET SAC~CURL BARRE POULIE ELASTIQUE~CURL CONCENTRE~CURL HALTERES SUR BANC~CURL LARRY SCOTT~CURL LARRY SCOTT HALTERES~CURL LARRY SCOTT MACHINE GUIDEE~CURL LARRY SCOTT POULIE BASSE~CURL MACHINE GUIDEE~CURL MARTEAU~CURL MARTEAU POULIE~CURL MARTEAU SUR BANC~CURL POULIE HAUTE~CURL ROTATION~CURL ROTATION ASSIS~CURL SUR BANC INCLINE~CURL SUR BANC POULIE~CURL UNILATERAL POULIE BASSE AVEC COUDE EN ARRIERE~EXTENSION TRICEPS AU DESSU DE LA TETE~EXTENSIONS POULIE BASSE TRICEPS UNILATERALE~EXTENSIONS TRICEPS POULIE EN X~EXTENSIONS TRICEPS SUR LE COTE POULIE~EXTENSIONS VERTICALES TRICEPS~EXTENSIONS VERTICALES TRICEPS BARRE~EXTENSIONS VERTICALES TRICEPS HALTERE~EXTENSIONS VERTICALES TRICEPS UNILATERALE~EXTENTION TRICEPS POULIE BASSE~EXTENTION TRICEPS SUR BANC~EXTENTION TRICEPS SUR BANC UNILATERALE~FRENCH PRESS MACHINR~ISO LATERAL CURL~JEFFERSON CURL SUR STEP~KICKBACK HALTERE~KICKBACK POULIE~REVERSE CURL BARRE~REVERSE CURL HALTERE~SIDE TRICEPS~SPIDER CURL~SPIDER CURL HALTERE~SPIDER CURL HALTERE UNILATERALE~TRICEPS A LA POULIE HAUTE BARRE~TRICEPS A LA POULIE HAUTE CORDE~TRICEPS A LA POULIE HAUTE POIGNEE~TRICEPS A LA POULIE HAUTE UNILATERALE~TRICEPS EXTENSION MACHINE",
+  "poignet-avant-bras":"BOBINE DANDRIEU~FLEXION AVANT BRAS A LA BARRE DEBOUT~FLEXION AVANT BRAS A LA BARRE SUR BANC PRONATION~FLEXION AVANT BRAS A LA BARRE SUR BANC SUPINATION~FLEXION AVANT BRAS UNILATERAL PRISE NEUTRE~GRIPPER",
+  "charniere-hanche":"BOOTYMIZER~EXTENSION DE BUSTE A LA MACHINE~EXTENSION DE BUSTE ASSIS SUR BANC~EXTENSION DE BUSTE SUR BANC~EXTENSION DE BUSTE SUR BANC AVEC ROWING~EXTENSION DE HANCHE AU SOL~EXTENSION DE HANCHE MACHINE~EXTENSION DE HANCHE POULIE BASSE~GLUTE BRIDGE~GLUTE MACHINE~GLUTEUS MACHINE~GOOD MORNING~HIP THRUST~HIP THRUST AU SOL~HIP THRUST MACHINE 1~HIP THRUST MACHINE 2~HIP THRUST SAC~HIP THRUST UNILATERAL HALTERE~HYPTRUST A LA SMITH MACHINE~KETTLEBELL SWING~RELEVE FESSIER BANC A LOMBAIRE~REVERSE HYPER MACHINE~SOULEVE DE TERRE~SOULEVE DE TERRE HALTERE~SOULEVE DE TERRE PIEDS SURELEVE~SOULEVE DE TERRE ROUMAIN~SOULEVE DE TERRE ROUMAIN HALTERES~SOULEVE DE TERRE ROUMAIN LANDMINE~SOULEVE DE TERRE ROUMAIN SMITH MACHINE~SOULEVE DE TERRE ROUMAIN UNILATERAL~SOULEVE DE TERRE SUMO~SOULEVE DE TERRE TRAP BARRE",
+  "poussee-horizontale":"BUTTERFLY~CHEST CROSSOVER DUAL~CHEST PRESS DEBOUT~CHEST PRESS DEBOUT TRICEPS~DEVELOPPE A LA MACHINE ASSIS~DEVELOPPE A LA MACHINE CONVERGENTE~DEVELOPPE A LA MACHINE CONVERGENTE HAUT DE PECS~DEVELOPPE A LA MACHINE CONVERGENTE UNILATERAL~DEVELOPPE ASSIS A LA MACHINE~DEVELOPPE ASSIS A LA MACHINE HAUT DE PECS~DEVELOPPE ASSIS A LA MACHINE UNILATERAL~DEVELOPPE COUCHE BARRE~DEVELOPPE COUCHE BARRE AVEC CALLE~DEVELOPPE COUCHE HALTERE~DEVELOPPE COUCHE LARSEN~DEVELOPPE COUCHE MACHINE~DEVELOPPE COUCHE POWER SMITH MACHINE~DEVELOPPE COUCHE PRISE SEREE~DEVELOPPE COUCHE SMITH MACHINE~DEVELOPPE DECLINE BARRE~DEVELOPPE DECLINE BARRE SMITH MACHINE~DEVELOPPE DECLINE HALTERE~DEVELOPPE INCLINE BARRE~DEVELOPPE INCLINE HALTERE~DEVELOPPE INCLINE MACHINE~DEVELOPPE INCLINE SMITH MACHINE~DIPS~DIPS ASSISTE~DIPS AUX ANNEAUX~DIPS BAS DE PECS~DIPS MACHINE~DIPS MACHINE BAS DE PECS~DIPS MACHINE GUIDEE~DIPS SUR BARRE~ECARTE HALTERE SUR BANC~ECARTE HALTERE SUR BANC DECLINE~ECARTE HALTERE SUR BANC INCLINE~ECARTE MACHINE~ECARTE MACHINE HAUT DE PEC~ECARTE POULIE BASSE ELASTIQUE BAS~ECARTE POULIE BASSE ELASTIQUE BAS EN UNILATERAL~ECARTE POULIE HAUT ELASTIQUE HAUT EN UNILATERAL~ECARTE POULIE HAUTE ELASTIQUE HAUTE~ECARTE POULIE SUR BANC~ECARTE POULIE SUR BANC INCLINE~FLOOR PRESS~PIKE PUSH UP~POMPE AUX ANNEAUX~POMPES~POMPES AVEC ELASTIQUE~POMPES DECLINE~POMPES INCLINE~POMPES LESTEE~POMPES SERREES~TRICEPS DIPS",
+  "mollets-cheville":"CALF EXTENSION MACHINE~DONKEY CALF RAISE MACHINE~MOLLETS A LA HACKSQUAT EN UNILATERAL~MOLLETS A LA MACHINE~MOLLETS A LA PRESSE ASSISE~MOLLETS A LA SMITH MACHINE~MOLLETS ASSIS A LA MACHINE~MOLLETS ASSIS AVEC BARRE~MOLLETS CHAMEAU~MOLLETS DEBOUT UNILATERAL~PURE SEATED CALF~TIBIA DORSI FLEXION",
+  "halterophilie":"CLEAN AND JERK~POWER CLEAN~SNATCH",
+  "squat":"DEEP SQUAT~HACKSQUAT~PENDULUM SQUAT~PRESSE A CUISSE ASSISE~PRESSE A CUISSE HIGH STANCE~PRESSE A CUISSE INCLINE~PRESSE A CUISSE ISO LATERALE~SAFETY SQUAT BARRE~SQUAT~SQUAT ASSIS~SQUAT AU BELT SQUAT~SQUAT AU BELT SQUAT A LA BARRE T~SQUAT AU BELT SQUAT A LA SMITH MACHINE~SQUAT AVEC HALTERES~SQUAT AVEC HALTERES TENDU ENTRE LES JAMBES~SQUAT AVEC SAC~SQUAT AVEC SAC AVANT~SQUAT BARRE DEVANT~SQUAT BULGAR HALTERE~SQUAT BULGAR SMITH MACHINE~SQUAT PISTOL~SQUAT SERRE~SQUAT SMITH MACHINE~SQUAT SUMO~SUPER SQUAT MACHINE~V SQUAT",
+  "poussee-verticale":"DEVELOPPE EPAULE AU LANDMINE~DEVELOPPE EPAULES BARRE~DEVELOPPE EPAULES ELASTIQUE~DEVELOPPE EPAULES HALTERES~DEVELOPPE MILITAIRE BARRE~DEVELOPPE MILITAIRE ELASTIQUE~DEVELOPPE MILITAIRE HALTERES~DEVELOPPE MILITAIRE MACHINE~DEVELOPPE MILITAIRE SMITH MACHINE~DEVELOPPE NUQUE BARRE~DEVELOPPE NUQUE SMITH MACHINE~HANDSTAND PUSH UP~POWER SMITH EPAULES~PUSH PRESS~SHOULDER PRESS",
+  "tirage-horizontal":"FACE PULL~FACE PULL ASSIS~RACK POOL~RENEGATE ROW~ROW~ROWING BARRE ALLONGE SUR BANC INCLINE~ROWING BARRE LARGE~ROWING BARRE POULIE BASSE~ROWING BARRE SERRE~ROWING BARRE T~ROWING BARRE T A LA MACHINE~ROWING BARRE T PRISE LARGE~ROWING HALTERE ALLONGE SUR BANC INCLINE~ROWING HALTERE BUSTE PENCHE~ROWING HALTERE UNILATERAL~ROWING HALTERE UNILATERAL SUR BANC~ROWING INVERSE~ROWING PENDLAY SMITH MACHINE~ROWING POULIE BASSE ALLONGE SUR BANC INCLINE~ROWING POULIE BASSE UNILATERAL~ROWING POWER SMITH~ROWING POWER SMITH DORS~ROWING POWER SMITH TRAP~ROWING SAC UNILATERAL SUR BANC~ROWING TRAPEZES POULIE HAUTE~ROWING UNILATERAL A LA LANDMINE~SEAL ROW AVEC HALTERE~SHRUG~SHRUG ASSIS A LA MACHINE~SHRUG DEBOUT A LA MACHINE~SHRUG DELAVIER~SHRUG HALTERE~SHRUG HALTERES SUR BANC~SHRUG POULIE~TIRAGE DOS FACE A LA POULIE~TIRAGE DOS POULIE VIS A VIS~TIRAGE HORIZONTAL LARGE~TIRAGE HORIZONTAL LARGE NEUTRE~TIRAGE HORIZONTAL MACHINE~TIRAGE HORIZONTAL MACHINE CONVERGENTE~TIRAGE HORIZONTAL MACHINE CONVERGENTE UNILATERAL~TIRAGE HORIZONTAL MACHINE UNILATERAL~TIRAGE HORIZONTAL SERRE~TIRAGE HORIZONTAL SUPINATION~TIRAGE HORIZONTAL UNILATERAL~TIRAGE HORIZONTAL UNILATERAL SUR BANC~TIRAGE MENTON BALET SAC~TIRAGE MENTON BARRE~TIRAGE MENTON POULIE ELASTIQUE ET MANCHE A BALLET~TIRAGE UNILATERAL SUR BANC",
+  "fente":"FENTE BULGARE MACHINE~FENTES ARRIERE BARRE SMITH MACHINE~FENTES ARRIERE HALTERE~FENTES ARRIERES BARRE~FENTES BARRE~FENTES BARRE SMITH MACHINE~FENTES HALTERE~MONTER SUR BANC~MONTER SUR BANC HALTERE~MONTER SUR BANC POULIE~MONTER SUR BANC SMITH MACHINE~SISSY SQUAT",
+  "tirage-vertical":"FESSIER A LA MACHINE DE TRACTION~ISO LATERAL FRONT LAT PULLDOWN~MUSCLE UP~PULL OVER~PULL OVER MACHINE~PULL OVER SUR BANC~PULL OVER SUR BANC INCLINE~PULL OVER UNILATERAL~PURE PULLOVER~TIRAGE NUQUE~TIRAGE POITRINE LARGE~TIRAGE POITRINE LARGEUR EPAULE~TIRAGE POITRINE MACHINE CONVERGENTE~TIRAGE POITRINE PRISE NEUTRE~TIRAGE POITRINE SERRE~TIRAGE POITRINE SUPINATION~TIRAGE POITRINE SUPINATION MACHINE CONVERGENTE~TIRAGE POITRINE UNILATERAL POULIE~TIRAGE VERTICAL A LA BARRE~TIRAGE VERTICAL A LA BARRE SMITH MACHINE~TIRAGE VERTICAL A LA POULIE~TRACTION PRISE SERREE~TRACTIONS~TRACTIONS ELASTIQUE~TRACTIONS LESTE~TRACTIONS MACHINE ASSISTE~TRACTIONS PRISE NEUTRE~VERTICAL TRACTION",
+  "isolation-genou":"LEG CURL ALLONGE~LEG CURL ALLONGE EN UNILATERAL~LEG CURL ASSIS~LEG CURL DEBOUT~LEG EXTENSION~LEG EXTENTION~LEG EXTENTION ALLONGE ELASTIQUE~LEG EXTENTION ALLONGE HALTERE~LEG EXTENTION HALTERE~NORDIC CURL AVEC ELASTIQUE~NORDIC HAMSTRING ASSISTE",
+  "port-de-charge":"MARCHE DU FERMIER~MONTEE DE CORDE"
+};
+// Index nom d'exercice → schéma, construit une fois.
+const _SCHEMA_INDEX=(()=>{
+  const m={};
+  for(const s in SCHEMAS_BRUT) for(const n of SCHEMAS_BRUT[s].split('~')) if(n) m[exKey(n)]=s;
+  return m;
+})();
+// Résolution : nom exact, puis alias de l'athlète, comme resoudreMusclesLecture.
+function schemaDe(ex,user){
+  const nom=(ex&&(ex.name||ex))||'';
+  if(!nom) return null;
+  const k=exKey(nom);
+  if(_SCHEMA_INDEX[k]) return _SCHEMA_INDEX[k];
+  try{
+    const a=resoudreAlias(k);
+    if(a&&_SCHEMA_INDEX[a]) return _SCHEMA_INDEX[a];
+  }catch(e){}
+  return null;
+}
+
+
+// ── Charges articulaires : les notes du coach ───────────────────────────────
+// Une note par (schéma, zone), de 0 à 3. Elles vivent sur le dossier du COACH
+// — c'est son jugement de métier, pas une préférence d'athlète — et voyagent
+// vers les athlètes par le profil public déjà en place.
+//
+// Une note ABSENTE n'est pas un zéro : c'est « pas encore jugé », et rien ne
+// se déclenche dessus. C'est ce qui permet de remplir la grille petit à petit
+// sans qu'une case vide produise un faux verdict.
+const CHARGE_MIN=0, CHARGE_MAX=3;
+function _grilleCharges(){
+  // Chaîne de résolution : le coach lit la sienne, l'athlète lit celle de son
+  // coach, récupérée avec le reste du profil public.
+  if(currentUser&&currentUser.role==='coach'&&currentUser.chargesSchema) return currentUser.chargesSchema;
+  try{
+    const p=profilCoachLocal(cleCoachDe(currentUser));
+    if(p&&p.chargesSchema) return p.chargesSchema;
+  }catch(e){}
+  return (currentUser&&currentUser.chargesSchema)||null;
+}
+function chargeSchema(schema,zone){
+  const g=_grilleCharges();
+  const v=g&&g[schema]&&g[schema][zone];
+  return (typeof v==='number'&&v>=CHARGE_MIN&&v<=CHARGE_MAX)?v:null;
+}
+function poserChargeSchema(schema,zone,valeur){
+  if(!currentUser) return false;
+  if(!SCHEMAS_META[schema]||ZONES_ARTICULAIRES.indexOf(zone)<0) return false;
+  const v=Number(valeur);
+  if(!isFinite(v)||v<CHARGE_MIN||v>CHARGE_MAX) return false;
+  if(!currentUser.chargesSchema) currentUser.chargesSchema={};
+  if(!currentUser.chargesSchema[schema]) currentUser.chargesSchema[schema]={};
+  currentUser.chargesSchema[schema][zone]=Math.round(v);
+  return true;
+}
+function effacerChargeSchema(schema,zone){
+  const g=currentUser&&currentUser.chargesSchema;
+  if(g&&g[schema]) delete g[schema][zone];
+  return true;
+}
+// Nombre de notes posées / attendues, pour dire où en est le remplissage.
+function avancementCharges(){
+  let pose=0,total=0;
+  for(const s in SCHEMAS_META){
+    for(const z of ZONES_ARTICULAIRES){
+      if(SCHEMAS_META[s].hors.indexOf(z)>=0) continue;
+      total++;
+      if(chargeSchema(s,z)!=null) pose++;
+    }
+  }
+  return {pose,total};
+}
+
+// ── ficheDe : le contrat attendu par les contraintes de santé ───────────────
+// Rendu : { schema, contraintes:{ '<zone>': 0..3 } }. Une zone absente de
+// « contraintes » signifie « pas de note » — et contraintesPourExercice ne
+// déclenche que sur un nombre, jamais sur une absence.
+function ficheDe(ex){
+  const s=schemaDe(ex,currentUser);
+  if(!s||!SCHEMAS_META[s]) return null;
+  const c={};
+  for(const z of ZONES_ARTICULAIRES){
+    if(SCHEMAS_META[s].hors.indexOf(z)>=0){ c[z]=0; continue; }
+    const v=chargeSchema(s,z);
+    if(v!=null) c[z]=v;
+  }
+  return {schema:s,contraintes:c};
+}
+// Substituts : même schéma n'aurait aucun intérêt (même charge). On cherche
+// donc, sur les AUTRES schémas, ceux dont la note sur la zone visée est
+// STRICTEMENT plus basse — et on ne rend rien tant que la zone n'est pas notée.
+function substitutsDe(ex,filtres){
+  const zone=filtres&&filtres.zone;
+  if(!zone) return [];
+  // Sous drapeau rouge, on ne propose rien. C'est la règle qui prime.
+  if(drapeauRougeActif(currentUser)) return [];
+  const s=schemaDe(ex,currentUser);
+  const ref=s?chargeSchema(s,zone):null;
+  if(ref==null) return [];
+  const out=[];
+  for(const s2 in SCHEMAS_META){
+    if(s2===s) continue;
+    const v=chargeSchema(s2,zone);
+    if(v==null||v>=ref) continue;
+    const noms=(SCHEMAS_BRUT[s2]||'').split('~').filter(Boolean);
+    if(!noms.length) continue;
+    out.push({schema:s2,lib:SCHEMAS_META[s2].lib,charge:v,exemples:noms.slice(0,3)});
+  }
+  return out.sort((a,b)=>a.charge-b.charge);
+}
+
+
+// ── Écran de saisie des charges articulaires ────────────────────────────────
+// Une ligne par schéma, une case par zone concernée. Les exemples d'exercices
+// sont sous les yeux : c'est ce qui permet de noter « charnière de hanche »
+// sans avoir à se rappeler ce que ça recouvre.
+const CHARGE_LIB=Object.freeze(['aucune','légère','forte','maximale']);
+let _chSchemaOuvert=null;
+function loadCharges(){
+  _chSchemaOuvert=null;
+  go('s-charges');
+  renderCharges();
+}
+function _chCase(s,z){
+  const v=chargeSchema(s,z);
+  const c=v==null?'var(--text-faint)':(v>=2?'var(--orange)':(v===0?'var(--sub)':'#ddd'));
+  return `<button onclick="_chCycle('${s}','${z}')" class="hit44"
+    style="min-width:34px;min-height:38px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:800;
+    background:${v>=2?'#1a0f00':'var(--surface-1)'};border:1px solid ${v>=2?'var(--orange)':'var(--border)'};color:${c}">${v==null?'·':v}</button>`;
+}
+// Un appui fait défiler 0 → 1 → 2 → 3 → non noté. Pas de sélecteur : sur
+// soixante-treize cases, un menu déroulant par case serait insupportable.
+function _chCycle(s,z){
+  const v=chargeSchema(s,z);
+  if(v==null) poserChargeSchema(s,z,0);
+  else if(v>=CHARGE_MAX) effacerChargeSchema(s,z);
+  else poserChargeSchema(s,z,v+1);
+  saveUser();
+  renderCharges();
+}
+function renderCharges(){
+  const z=document.getElementById('charges-content');
+  if(!z) return;
+  const av=avancementCharges();
+  const pc=av.total?Math.round(av.pose/av.total*100):0;
+  const entete=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:14px">
+    <div style="font-size:12px;color:var(--sub);line-height:1.6">
+      Pour chaque famille de mouvement, dis à quel point elle sollicite chaque articulation.
+      Un appui fait défiler <b style="color:#ddd">0</b> aucune · <b style="color:#ddd">1</b> légère ·
+      <b style="color:var(--orange)">2</b> forte · <b style="color:var(--orange)">3</b> maximale · <b>·</b> pas encore noté.
+    </div>
+    <div style="font-size:11px;color:var(--sub);line-height:1.6;margin-top:8px">
+      À partir de <b style="color:var(--orange)">2</b>, un athlète qui a déclaré une gêne sur cette
+      articulation sera averti avant de faire l'exercice. Une case laissée à <b>·</b> ne déclenche rien :
+      tant que tu n'as pas jugé, l'app ne juge pas à ta place.
+    </div>
+    <div style="display:flex;align-items:center;gap:9px;margin-top:11px">
+      <div style="flex:1;height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:${pc}%;background:var(--red);border-radius:3px"></div>
+      </div>
+      <span style="font-size:11px;font-weight:800;color:var(--sub);white-space:nowrap">${av.pose}/${av.total}</span>
+    </div>
+  </div>`;
+  const entetes=`<div style="display:flex;gap:3px;padding:0 0 5px 0;min-width:max-content">
+    <div style="flex:0 0 132px"></div>
+    ${ZONES_ARTICULAIRES.map(zz=>`<div style="width:36px;flex-shrink:0;text-align:center;font-size:8px;letter-spacing:.3px;color:var(--text-faint);text-transform:uppercase;line-height:1.2">${escapeHtml(_chAbrege(zz))}</div>`).join('')}
+  </div>`;
+  const lignes=Object.keys(SCHEMAS_META).map(s=>{
+    const m=SCHEMAS_META[s];
+    const ouvert=_chSchemaOuvert===s;
+    return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:9px 10px;margin-bottom:6px">
+      <div style="display:flex;align-items:center;gap:3px;min-width:max-content">
+        <div style="flex:0 0 132px;cursor:pointer" onclick="_chSchemaOuvert=${ouvert?'null':"'"+s+"'"};renderCharges()">
+          <div style="font-size:12px;font-weight:800;color:#eee;line-height:1.25">${escapeHtml(m.lib)}</div>
+          <div style="font-size:9px;color:var(--text-faint)">${m.nb} exercices${ouvert?'':' · voir'}</div>
+        </div>
+        ${ZONES_ARTICULAIRES.map(zz=>m.hors.indexOf(zz)>=0
+          ?`<div style="width:36px;flex-shrink:0;text-align:center;font-size:12px;color:#2a2a2a">—</div>`
+          :`<div style="width:36px;flex-shrink:0;display:flex;justify-content:center">${_chCase(s,zz)}</div>`).join('')}
+      </div>
+      ${ouvert?`<div style="font-size:10px;color:var(--sub);line-height:1.6;margin-top:7px;border-top:1px solid var(--border);padding-top:7px">
+        ${escapeHtml((SCHEMAS_BRUT[s]||'').split('~').slice(0,12).join(' · ').toLowerCase())}${(SCHEMAS_BRUT[s]||'').split('~').length>12?'…':''}
+      </div>`:''}
+    </div>`;
+  }).join('');
+  z.innerHTML=entete+`<div data-scroll-fade style="overflow-x:auto">${entetes}${lignes}</div>`
+    +`<div style="font-size:10px;color:var(--text-faint);line-height:1.6;margin-top:12px">
+       Ces notes sont ton jugement de coach. RepCore ne les déduit pas et n'en invente aucune.
+     </div>`;
+  z.querySelectorAll('[data-scroll-fade]').forEach(el=>setupScrollFade(el));
+}
+function _chAbrege(z){
+  return ({'rachis-lombaire':'lomb','rachis-cervical':'cerv','epaule':'épaule','coude':'coude',
+    'poignet':'poign','hanche':'hanche','genou':'genou','cheville':'chev'})[z]||z;
 }
 
 function contreIndications(bilans){
@@ -21923,7 +22189,7 @@ function testExercices(){
 
     // Le nœud public ne doit porter QUE ce qui est destiné à être vu : il est
     // lisible par tous les athlètes du coach.
-    const _cpAttendus=['fname','lname','teamName','catchphrase','coachPhoto','promoBanners','phone'];
+    const _cpAttendus=['fname','lname','teamName','catchphrase','coachPhoto','promoBanners','phone','chargesSchema'];
     ok('Liste des champs publiés figée',
        JSON.stringify(CLOUD.CHAMPS_PROFIL_COACH)===JSON.stringify(_cpAttendus),
        JSON.stringify(CLOUD.CHAMPS_PROFIL_COACH));
@@ -23957,6 +24223,102 @@ function testExercices(){
     ok('Aucune analyse du texte libre dans le formulaire',
        !/deb-health|bil-health/.test(String(_htmlFormContrainte))
        &&!/deb-health/.test(String(_ctValider)));
+
+
+    // ══════════════ SCHÉMAS MOTEURS ET CHARGES ARTICULAIRES ══════════════
+    ok('Les 408 exercices du guide ont un schéma',(()=>{
+      const noms=new Set();
+      for(const sig in EX_GUIDE_BRUT) EX_GUIDE_BRUT[sig].split('~').forEach(n=>{ if(n) noms.add(n); });
+      const sans=[...noms].filter(n=>!schemaDe({name:n}));
+      return noms.size===408&&sans.length===0;})(),
+      (()=>{const n=new Set();for(const s in EX_GUIDE_BRUT) EX_GUIDE_BRUT[s].split('~').forEach(x=>{if(x)n.add(x);});
+        return [...n].filter(x=>!schemaDe({name:x})).slice(0,3).join(' | ')||'aucun manquant';})());
+    ok('Dix-sept schémas notables',Object.keys(SCHEMAS_META).length===17);
+    ok('Chaque schéma porte son libellé, son effectif et ses exemples',
+       Object.values(SCHEMAS_META).every(m=>m.lib&&m.nb>0&&Array.isArray(m.ex)&&Array.isArray(m.hors)));
+    ok('Classement de repère : soulevé de terre, développé couché, traction',
+       schemaDe({name:'SOULEVE DE TERRE ROUMAIN HALTERES'})==='charniere-hanche'
+       &&schemaDe({name:'DEVELOPPE COUCHE BARRE'})==='poussee-horizontale'
+       &&schemaDe({name:'TRACTIONS'})==='tirage-vertical'
+       &&schemaDe({name:'LEG CURL ASSIS'})==='isolation-genou');
+    ok('Un exercice inconnu n\'a pas de schéma, sans exception',
+       schemaDe({name:'MOUVEMENT QUI N EXISTE PAS'})===null&&schemaDe(null)===null&&schemaDe({})===null);
+
+    // ── Une note absente n'est PAS un zéro ──
+    (function(){
+      const sauve=currentUser;
+      currentUser={id:'c',email:'c@t.fr',role:'coach',exAlias:{},exMuscles:{},sessions:[]};
+      ok('Grille vide : aucune note',avancementCharges().pose===0&&avancementCharges().total===73);
+      ok('Zone non notée : chargeSchema rend null, pas 0',
+         chargeSchema('charniere-hanche','rachis-lombaire')===null);
+      ok('Zone hors périmètre : pré-remplie à 0 dans la fiche',(()=>{
+        const f=ficheDe({name:'SOULEVE DE TERRE'});
+        return f&&f.contraintes.epaule===0&&f.contraintes['rachis-lombaire']===undefined;})());
+      ok('Sans note, aucun avertissement n\'est produit',(()=>{
+        const u={contraintesSante:[{id:'a',zone:'rachis-lombaire',niveau:'eviter',actif:true}]};
+        return contraintesPourExercice({name:'SOULEVE DE TERRE'},u).length===0;})());
+      // On note, et l'avertissement apparaît.
+      ok('Une note à 2 déclenche l\'avertissement',(()=>{
+        poserChargeSchema('charniere-hanche','rachis-lombaire',2);
+        const u={contraintesSante:[{id:'a',zone:'rachis-lombaire',niveau:'eviter',actif:true}]};
+        return contraintesPourExercice({name:'SOULEVE DE TERRE'},u).length===1;})());
+      ok('Une note à 1 ne déclenche pas',(()=>{
+        poserChargeSchema('charniere-hanche','rachis-lombaire',1);
+        const u={contraintesSante:[{id:'a',zone:'rachis-lombaire',niveau:'eviter',actif:true}]};
+        return contraintesPourExercice({name:'SOULEVE DE TERRE'},u).length===0;})());
+      ok('Note hors bornes refusée',
+         poserChargeSchema('charniere-hanche','rachis-lombaire',7)===false
+         &&poserChargeSchema('charniere-hanche','rachis-lombaire',-1)===false);
+      ok('Schéma ou zone inconnus refusés',
+         poserChargeSchema('nimportequoi','genou',2)===false
+         &&poserChargeSchema('squat','nombril',2)===false);
+      ok('Effacer une note la ramène à « non notée »',(()=>{
+        poserChargeSchema('squat','genou',3);
+        const a=chargeSchema('squat','genou');
+        effacerChargeSchema('squat','genou');
+        return a===3&&chargeSchema('squat','genou')===null;})());
+      ok('L\'avancement suit les notes posées',(()=>{
+        currentUser.chargesSchema={};
+        const a=avancementCharges().pose;
+        poserChargeSchema('squat','genou',2); poserChargeSchema('fente','hanche',1);
+        return a===0&&avancementCharges().pose===2;})());
+
+      // ── Substituts ──
+      currentUser.chargesSchema={};
+      poserChargeSchema('charniere-hanche','rachis-lombaire',3);
+      poserChargeSchema('isolation-genou','rachis-lombaire',0);
+      poserChargeSchema('squat','rachis-lombaire',2);
+      poserChargeSchema('tirage-vertical','rachis-lombaire',1);
+      ok('Les substituts ont TOUS une charge strictement plus basse',(()=>{
+        const l=substitutsDe({name:'SOULEVE DE TERRE'},{zone:'rachis-lombaire'});
+        return l.length===3&&l.every(x=>x.charge<3);})());
+      ok('Les substituts sont triés du moins chargé au plus chargé',(()=>{
+        const l=substitutsDe({name:'SOULEVE DE TERRE'},{zone:'rachis-lombaire'});
+        return l[0].charge<=l[1].charge&&l[1].charge<=l[2].charge;})());
+      ok('Chaque substitut porte des exemples d\'exercices',
+         substitutsDe({name:'SOULEVE DE TERRE'},{zone:'rachis-lombaire'})
+           .every(x=>x.exemples&&x.exemples.length));
+      ok('Un schéma non noté n\'est jamais proposé en substitut',(()=>{
+        const l=substitutsDe({name:'SOULEVE DE TERRE'},{zone:'rachis-lombaire'});
+        return !l.some(x=>x.schema==='fente'||x.schema==='pliometrie');})());
+      ok('Zone de départ non notée : aucun substitut',
+         substitutsDe({name:'SOULEVE DE TERRE'},{zone:'genou'}).length===0);
+      ok('Sans zone demandée : aucun substitut',
+         substitutsDe({name:'SOULEVE DE TERRE'},{}).length===0);
+      // Drapeau rouge : la règle qui prime sur toutes les autres.
+      ok('Sous drapeau rouge, AUCUN substitut n\'est rendu',(()=>{
+        poserDrapeauRouge(currentUser,'rachis-lombaire',['irradiation']);
+        const l=substitutsDe({name:'SOULEVE DE TERRE'},{zone:'rachis-lombaire'});
+        leverDrapeauRouge(currentUser);
+        return l.length===0;})());
+      ok('Drapeau levé : les substituts reviennent',
+         substitutsDe({name:'SOULEVE DE TERRE'},{zone:'rachis-lombaire'}).length===3);
+      currentUser=sauve;
+    })();
+    ok('Aucune note n\'est écrite en dur dans le code',(()=>{
+      // SCHEMAS_META ne porte que des libellés, des effectifs et les zones
+      // hors périmètre. Aucune charge de 1 à 3 n'y est inscrite.
+      return !Object.values(SCHEMAS_META).some(m=>m.charges||m.contraintes);})());
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }

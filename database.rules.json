@@ -44,6 +44,11 @@
           ".validate": "newData.isString() && newData.val().length < 400000"
         },
         "promoBanners": {},
+        "chargesSchema": {
+          "$schema": {
+            "$zone": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 3" }
+          }
+        },
         "maj": {
           ".validate": "newData.isNumber()"
         },
