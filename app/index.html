@@ -1748,7 +1748,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <div style="display:flex;align-items:center;gap:10px;background:#1e0000;border:1px solid rgba(224,32,32,.5);border-radius:12px;padding:9px 16px;box-shadow:0 0 22px rgba(224,32,32,.2),inset 0 0 14px rgba(224,32,32,.06)">
       <svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" style="flex-shrink:0;filter:drop-shadow(0 0 6px rgba(224,32,32,.85))"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg>
       <div>
-        <div class="txt-stat" style="color:var(--red);line-height:1;font-size:30px;text-shadow:0 0 8px rgba(224,32,32,.95),0 0 22px rgba(224,32,32,.5)" id="clh-streak-val">0</div>
+        <div class="txt-stat" style="color:var(--red);line-height:1;font-size:18px" id="clh-streak-val">0</div>
         <div style="font-size:var(--fs-xs);color:rgba(224,32,32,.7);letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-top:1px">SEM.</div>
       </div>
     </div>
@@ -1767,29 +1767,29 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- COACH BANNER -->
       <div id="clh-coach-banner" style="display:none;margin-bottom:18px"></div>
 
-      <!-- STATS -->
-      <div style="display:flex;gap:8px;margin-bottom:20px">
-        <div class="metric-box"><div class="metric-val" id="clh-sessions">0</div><div class="metric-label">Séances</div></div>
-        <div class="metric-box"><div class="metric-val" id="clh-streak-nb" style="color:var(--red)">0</div><div class="metric-label">Semaines</div></div>
-        <div class="metric-box"><div class="metric-val" id="clh-weight">—</div><div class="metric-label">Poids kg</div></div>
-      </div>
-
       <!-- SIGNES À FAIRE EXAMINER -->
       <div id="clh-contraintes"></div>
 
       <!-- DOULEUR SIGNALÉE -->
       <div id="clh-douleur"></div>
 
-      <!-- PHASE -->
-      <div id="clh-bandeau-phase"></div>
-      <div id="clh-relance-phase"></div>
-      <div id="clh-phase"></div>
-
-      <!-- PESÉE DU JOUR -->
-      <div id="clh-pesee"></div>
-
       <!-- OBJECTIF -->
       <div id="clh-objectif"></div>
+
+      <!-- STATS -->
+      <div style="display:flex;gap:8px;margin-bottom:20px">
+        <div class="metric-box"><div class="metric-val" id="clh-m1">—</div><div class="metric-label">Cette semaine</div>
+          <div style="font-size:9px;color:var(--text-faint);margin-top:2px" id="clh-m1-sub"></div></div>
+        <div class="metric-box"><div class="metric-val" id="clh-m2">—</div><div class="metric-label">Charge totale</div>
+          <div style="font-size:9px;color:var(--text-faint);margin-top:2px" id="clh-m2-sub"></div></div>
+        <div class="metric-box"><div class="metric-val" id="clh-m3">—</div><div class="metric-label">Exercices en progrès</div>
+          <div style="font-size:9px;color:var(--text-faint);margin-top:2px" id="clh-m3-sub"></div></div>
+      </div>
+
+
+
+
+
 
       <!-- DÉMARRER SÉANCE — hero card -->
       <div style="background:linear-gradient(135deg,#0f0000,#160000);border:1px solid #2a0000;border-radius:4px;padding:20px;margin-bottom:14px;position:relative;overflow:hidden">
@@ -1798,6 +1798,14 @@ const COACH_PHOTO='icons/coach.jpg';
         <button class="btn btn-red" onclick="openSessionPicker()" style="margin-bottom:10px;letter-spacing:1.5px;font-size:13px;box-shadow:inset 0 2px 0 rgba(255,255,255,.22),inset 0 -3px 0 rgba(0,0,0,.45),0 4px 20px rgba(224,32,32,.35)">DÉMARRER MA SÉANCE</button>
         <button class="btn btn-outline" onclick="loadSessionManager()" style="font-size:11px;padding:11px;letter-spacing:1.5px">GÉRER MES SÉANCES</button>
       </div>
+
+      <!-- PHASE -->
+      <div id="clh-bandeau-phase"></div>
+      <div id="clh-relance-phase"></div>
+      <div id="clh-phase"></div>
+
+      <!-- PESÉE DU JOUR -->
+      <div id="clh-pesee"></div>
 
       <!-- REPRISE SÉANCE EN COURS -->
       <div id="clh-resume-workout" style="display:none;background:linear-gradient(135deg,#0a1a0a,#051005);border:1px solid #1a4a1a;border-radius:12px;padding:14px 16px;margin-bottom:14px;cursor:pointer" onclick="woResumeAndGo()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
@@ -2130,7 +2138,10 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="text-align:center;padding:24px 0 20px;border-bottom:1px solid #181818;margin-bottom:20px">
         <div style="margin-bottom:12px;color:var(--red);filter:drop-shadow(0 0 20px rgba(198,15,8,.4))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:56px;height:56px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg></div>
         <h1 style="text-align:center;font-size:36px;margin-bottom:6px;color:#fff">SÉANCE TERMINÉE</h1>
-        <p style="text-align:center;font-size:11px;color:var(--sub);letter-spacing:1px;text-transform:uppercase" id="wd-msg"></p>
+        <!-- Le message porte désormais des chiffres et un nom d'exercice. En
+             majuscules espacées, comme le voulait la formule générique qu'il
+             remplace, une phrase de ce genre devient pénible à lire. -->
+        <p style="text-align:center;font-size:12.5px;color:#ccc;line-height:1.6;padding:0 14px" id="wd-msg"></p>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:20px">
         <div class="metric-box"><div class="metric-val" id="wd-time">—</div><div class="metric-label">Durée</div></div>
@@ -9265,19 +9276,19 @@ function loadClientHome(){
     coachEl.textContent='Sans coach assigné';
   }
   const s=streakSemaines(u);
-  document.getElementById('clh-streak-val').textContent=s;
-  // no streak icon
-  document.getElementById('clh-streak-nb').textContent=s;
+  // Le compteur de l'en-tete subsiste, reduit. La case « Semaines » a quitte
+  // les metriques : elle reste consultable dans l'onglet Perfs.
+  const _sv=document.getElementById('clh-streak-val');
+  if(_sv) _sv.textContent=s;
   const h=new Date().getHours();
   document.getElementById('clh-greeting').textContent=(h<12?'Bonjour,':'Bonsoir,')+' '+u.fname+'.';
   const _dStr=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
   document.getElementById('clh-date').textContent=_dStr.charAt(0).toUpperCase()+_dStr.slice(1);
-  document.getElementById('clh-sessions').textContent=(u.sessions||[]).length;
-  // Le compteur suit désormais la pesée la plus récente, bilan ou balance :
-  // afficher le poids du dernier bilan à côté d'une pesée du matin serait
-  // contradictoire à l'écran près.
-  const _pAff=poidsAffiche(u);
-  document.getElementById('clh-weight').textContent=_pAff!=null?_pAff+'kg':'—';
+  // ── Trois chiffres d'entraînement ──
+  // Le total de séances et le poids ont quitté cet écran : le premier compte
+  // des présences, le second est déjà porté par la carte « Pesée du jour »
+  // juste en dessous. Total et Semaines restent dans l'onglet Perfs.
+  _majMetriquesAccueil(u);
   renderCartePesee();
   renderContraintesAthlete();
   _renderObjectifCarte();
@@ -10886,8 +10897,9 @@ function finishWorkout(incomplete=false){
   // du même dossier et ne doivent pas pouvoir se contredire.
   document.getElementById('wd-sets').textContent=fmtSeries(sets,setsPlanned);
   document.getElementById('wd-vol').textContent=Math.round(vol)+'kg';
-  document.getElementById('wd-msg').textContent=incomplete?'Séance interrompue. Continue demain !':'Excellent travail ! Chaque séance compte ';
-  document.getElementById('wd-comparison').innerHTML=buildSessionComparison(vol,data);
+  document.getElementById('wd-msg').textContent=_messageFinSeance(sets,setsPlanned,mins,_cmp.records,_cmp.delta,_cmp.jour,incomplete);
+  const _cmp=buildSessionComparison(vol,data);
+  document.getElementById('wd-comparison').innerHTML=_cmp.html;
   // Seuls les exercices dont l'état vient de CHANGER, et jamais pour annoncer
   // une progression : l'écran de fin de séance n'est pas un bulletin.
   renderEtatsSeance(currentUser,sess);
@@ -11264,6 +11276,203 @@ function renderPlateauxCoach(c){
   </div>`;
 }
 
+
+// ══════════════ TROIS CHIFFRES D'ENTRAÎNEMENT ══════════════
+// L'accueil mettait en avant le nombre total de séances, les semaines de suite
+// et le poids. Deux comptent des présences, aucun ne parle d'entraînement. On
+// les remplace par trois chiffres calculés sur des données DÉJÀ collectées :
+// rien de nouveau n'est demandé à l'athlète.
+//
+// « Total » et « Semaines » ne disparaissent pas du produit : ils restent dans
+// l'onglet Perfs, où on va les chercher quand on les veut.
+const ACC_JOURS_PROGRES=28;
+
+// Quota de séances de la semaine. L'ENGAGEMENT pris dans l'objectif prime sur
+// le nombre de créneaux du programme : c'est le chiffre que l'athlète a choisi
+// lui-même, et c'est celui que la carte d'objectif affichait déjà.
+function _quotaSemaine(u){
+  try{
+    const o=_objectifCourant(u);
+    const e=o&&o.processus&&o.processus.seancesParSemaine;
+    if(typeof e==='number'&&isFinite(e)&&e>0) return e;
+  }catch(e){}
+  return seancesPrevuesParSemaine(u);
+}
+// Charge de la semaine contre la moyenne des quatre précédentes.
+// FENÊTRES GLISSANTES de sept jours, et non semaines calendaires : la semaine
+// en cours est partielle un mardi, et la comparer à des semaines pleines
+// annoncerait une chute de charge tous les lundis.
+function _chargeHebdo(u){
+  const ss=((u&&u.sessions)||[]).filter(s=>s&&s.date);
+  if(!ss.length) return null;
+  const now=Date.now(), SEM=7*864e5;
+  // Il faut cinq semaines d'historique : la courante plus quatre de référence.
+  const plusVieille=Math.min.apply(null,ss.map(s=>s.date));
+  if(now-plusVieille<5*SEM) return null;
+  const somme=(a,b)=>ss.filter(s=>s.date>=a&&s.date<b)
+    .reduce((n,s)=>n+(Number(s.volume)||0),0);
+  const volumeSemaine=somme(now-SEM,now+1);
+  const moyenne4Semaines=somme(now-5*SEM,now-SEM)/4;
+  // Moyenne nulle : aucun pourcentage n'a de sens, et surtout aucune division.
+  const pct=moyenne4Semaines>0
+    ? Math.round((volumeSemaine-moyenne4Semaines)/moyenne4Semaines*100) : null;
+  return {volumeSemaine,moyenne4Semaines,pct};
+}
+// Exercices dont la charge maximale à RIR 0 progresse d'une fenêtre de 28
+// jours à l'autre.
+//
+// LIMITE ASSUMÉE : la comparaison se fait sur le NOM en texte libre. Un
+// exercice renommé sort du décompte sans avertissement. C'est la conséquence
+// de l'absence d'entité exercice, et ce n'est pas réparable ici.
+function _exercicesEnProgres(u){
+  const ss=((u&&u.sessions)||[]).filter(s=>s&&s.date&&s.data);
+  if(!ss.length) return null;
+  const now=Date.now(), J=ACC_JOURS_PROGRES*864e5;
+  const maxRir0=(a,b)=>{
+    const m={};
+    for(const s of ss){
+      if(!(s.date>=a&&s.date<b)) continue;
+      for(const nom of Object.keys(s.data)){
+        for(const x of (((s.data[nom]||{}).sets)||[])){
+          if(!x||!x.done) continue;
+          if(!(x.rir==='0'||x.rir===0)) continue;
+          const w=parseFloat(x.weight||0);
+          if(w>0) m[nom]=Math.max(m[nom]||0,w);
+        }
+      }
+    }
+    return m;
+  };
+  const recent=maxRir0(now-J,now+1), ancien=maxRir0(now-2*J,now-J);
+  let enProgres=0,total=0;
+  for(const nom in recent){
+    // Présent sur une seule des deux fenêtres : rien à comparer. Il ne compte
+    // ni au numérateur ni au dénominateur — l'annoncer « pas en progrès »
+    // serait un jugement qu'on n'a pas les moyens de porter.
+    if(ancien[nom]==null) continue;
+    total++;
+    if(recent[nom]>ancien[nom]) enProgres++;
+  }
+  // Aucun couple comparable : on rend null, pas « 0 sur 0 ».
+  if(!total) return null;
+  return {enProgres,total};
+}
+// Message de fin de séance. Il dit ce qui vient de se passer, pas une formule
+// de politesse identique pour tout le monde.
+function _messageFinSeance(sets,setsPlanned,duration,records,delta,jour,incomplete){
+  const n=Number(sets)||0, p=Number(setsPlanned)||0, m=Number(duration)||0;
+  if(incomplete) return 'Séance écourtée : '+n+' séries sur '+p+' enregistrées. C\'est compté.';
+  const tete=n+' séries sur '+p+', '+m+' min. ';
+  if(records&&records.length){
+    const b=records.slice().sort((a,x)=>x.gain-a.gain)[0];
+    return tete+'Record : '+b.nm+' à '+b.curMax+' kg.';
+  }
+  if(Number(delta)>0) return tete+'+'+Math.round(delta)+' kg de volume sur ta séance du '+(jour||'dernière fois')+'.';
+  if(p>0&&n===p) return tete+'Séance complète.';
+  return tete+'C\'est enregistré.';
+}
+
+
+// Peuplement des trois cases de l'accueil. Chaque case dit ce qui lui manque
+// plutôt que d'afficher un chiffre qu'elle ne peut pas calculer : un « 0 »
+// sans historique se lit comme un échec, un « — » se lit comme une attente.
+function _majMetriquesAccueil(u){
+  const met=(id,val,sub)=>{
+    const a=document.getElementById(id), b=document.getElementById(id+'-sub');
+    if(a) a.textContent=val;
+    if(b) b.textContent=sub||'';
+  };
+  const ss=((u&&u.sessions)||[]).filter(s=>s&&s.date);
+  if(!ss.length){
+    met('clh-m1','—',''); met('clh-m2','—','Il faut 5 semaines pour comparer.');
+    met('clh-m3','—','Pas encore assez d\'historique.');
+    return;
+  }
+  // a) Cette semaine — depuis lundi, comme partout ailleurs dans l'app. Le
+  // quota est l'ENGAGEMENT de l'objectif s'il existe, sinon les créneaux.
+  const faites=_seancesCetteSemaine(u), quota=_quotaSemaine(u);
+  met('clh-m1',String(faites),faites+' sur '+quota);
+  // b) Charge totale.
+  const ch=_chargeHebdo(u);
+  if(!ch||ch.pct==null) met('clh-m2','—','Il faut 5 semaines pour comparer.');
+  else met('clh-m2',(ch.pct>0?'+':'')+ch.pct+' %',
+    (ch.pct>0?'+':'')+ch.pct+' % vs 4 dernières semaines');
+  // c) Exercices en progrès.
+  const ex=_exercicesEnProgres(u);
+  if(!ex) met('clh-m3','—','Pas encore assez d\'historique.');
+  else met('clh-m3',String(ex.enProgres),ex.enProgres+' sur '+ex.total+' ce mois-ci');
+}
+
+
+// ── Volume par créneau, dans l'onglet Perfs ─────────────────────────────────
+// Le graphique mélangeait tous les créneaux : une séance jambes et une séance
+// bras dans le même histogramme, où la première écrase la seconde sans que
+// rien ne progresse. On trace un créneau à la fois.
+//
+// L'appariement passe par _memeCreneau, le prédicat déjà utilisé par la
+// suggestion de charge et la comparaison de fin de séance. Il retombe sur le
+// NOM pour l'historique antérieur au champ slot : c'est ce qui garde les
+// vieilles séances visibles.
+let _perfCreneau=null;
+function _creneauxActifs(u){
+  return ((u&&u.sessions_config)||[])
+    .map((s,i)=>({slot:i,nom:(s&&s.name)||('Séance '+(i+1)),actif:!!(s&&s.active)}))
+    .filter(x=>x.actif);
+}
+function _perfCreneauCourant(u){
+  const l=_creneauxActifs(u);
+  if(!l.length) return null;
+  const trouve=l.find(x=>x.slot===_perfCreneau);
+  return trouve||l[0];
+}
+function _seancesDuCreneau(u,cr){
+  if(!cr) return [];
+  return ((u&&u.sessions)||[]).filter(s=>{
+    try{ return _memeCreneau(s,cr.slot,cr.nom); }catch(e){ return false; }
+  });
+}
+function _htmlSelecteurCreneau(u){
+  const l=_creneauxActifs(u);
+  if(!l.length) return '';
+  const cur=_perfCreneauCourant(u);
+  // Un seul créneau : le sélecteur n'apporte rien, on nomme la séance et on
+  // s'arrête là.
+  if(l.length===1) return '';
+  return `<div data-scroll-fade style="display:flex;gap:6px;overflow-x:auto;margin-bottom:10px;padding-bottom:2px">
+    ${l.map(x=>`<button onclick="_perfSetCreneau(${x.slot})" class="hit44"
+      style="flex:0 0 auto;min-height:38px;padding:8px 13px;border-radius:9px;cursor:pointer;white-space:nowrap;font-size:12px;font-weight:700;
+      background:${cur&&cur.slot===x.slot?'#1a0505':'var(--surface-1)'};border:1px solid ${cur&&cur.slot===x.slot?'var(--red)':'var(--border)'};
+      color:${cur&&cur.slot===x.slot?'#fff':'#bbb'}">${escapeHtml(x.nom)}</button>`).join('')}
+  </div>`;
+}
+function _perfSetCreneau(slot){
+  _perfCreneau=slot;
+  showProgressTab('perf',document.querySelector('#prog-tabs button:nth-child(4)'));
+}
+function _htmlVolumeCreneau(u){
+  const cur=_perfCreneauCourant(u);
+  if(!cur) return '';
+  const l=_seancesDuCreneau(u,cur).slice(-8);
+  const titre='Volume de tes séances du '+escapeHtml(cur.nom);
+  if(!l.length){
+    return `${_htmlSelecteurCreneau(u)}
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">${titre}</div>
+      <div class="card" style="font-size:12px;color:var(--sub);line-height:1.6">Aucune séance enregistrée sur ce créneau.</div>`;
+  }
+  return `${_htmlSelecteurCreneau(u)}
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">${titre}</div>
+    <div class="card"><canvas id="v-chart" height="140"></canvas></div>`;
+}
+function _peindreVolumeCreneau(u){
+  const cur=_perfCreneauCourant(u);
+  if(!cur) return;
+  const l=_seancesDuCreneau(u,cur).slice(-8);
+  if(!l.length) return;
+  barChart('v-chart',
+    l.map(s=>new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})),
+    l.map(s=>s.volume||0));
+}
+
 function buildSessionComparison(vol,data){
   const prev=currentUser.sessions.slice(0,-1);
   // Appariement sur le CRÉNEAU, pas sur le libellé. Le nom est saisi librement
@@ -11332,13 +11541,18 @@ function buildSessionComparison(vol,data){
     </div>`;
   }
   // ── Volume : une seule petite ligne sobre ──
+  // Le delta et le jour de la seance comparee sortent de la fonction : le
+  // message de fin de seance en a besoin, et ils etaient locaux ici.
+  let _bscDelta=0,_bscJour='';
   if(prevSame?.volume>0){
     const delta=Math.round(vol)-prevSame.volume;
+    _bscDelta=delta;
+    _bscJour=new Date(prevSame.date).toLocaleDateString('fr-FR',{weekday:'long'});
     if(delta!==0) html+=`<div style="background:var(--surface-1);border:1px solid #1e1e1e;border-radius:8px;padding:9px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px"><span style="flex-shrink:0;color:${delta>0?'var(--green)':'#666'}">${delta>0?icon('flame',18):'▾'}</span><span style="font-size:12px;font-weight:700;color:${delta>0?'var(--green)':'#888'}">${delta>0?'+':''}${delta}kg de volume vs dernière séance</span></div>`;
   }
   if(firstSession&&!html)
     html=`<div style="background:var(--surface-1);border:1px solid #1e1e1e;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;font-weight:700;color:var(--sub)">Première séance enregistrée : tes prochains records apparaîtront ici</div>`;
-  return html;
+  return {html,records,delta:_bscDelta,jour:_bscJour};
 }
 // versBilan : enchaîner sur le questionnaire de départ au lieu de rentrer à
 // l'accueil. Utilisé par la carte de relance de s-workout-done, pour que le
@@ -14816,9 +15030,9 @@ function showProgressTab(tab,btn){
       ${_lst.length?_lst.map(_ligneEtat).join(''):'<div class="sub" style="font-size:12px">Aucun exercice suivi pour l\'instant.</div>'}
       ${_jug.length?PERF_ENCADRE:''}
     </div>
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Tonnage par séance</div>
-    <div class="card"><canvas id="v-chart" height="140"></canvas></div>`;
-    setTimeout(()=>barChart('v-chart',sl.map(s=>new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})),sl.map(s=>s.volume||0)),50);
+    ${_htmlVolumeCreneau(currentUser)}`;
+    setTimeout(()=>{ try{ _peindreVolumeCreneau(currentUser); }catch(e){} },50);
+    c.querySelectorAll('[data-scroll-fade]').forEach(el=>setupScrollFade(el));
 
   } else if(tab==='photos'){
     const getP=(b,t)=>b['bil-photo-'+t]||b['deb-photo-'+t]||(b.photos&&b.photos[t])||localStorage.getItem('rc_photo_'+b.date+'_bil-photo-'+t)||localStorage.getItem('rc_photo_'+b.date+'_deb-photo-'+t)||null;
@@ -17905,8 +18119,6 @@ function savePesee(){
   saveUser();
   toast('Pesée enregistrée 👍');
   renderCartePesee();
-  const el=document.getElementById('clh-weight');
-  if(el) el.textContent=poidsAffiche(currentUser)!=null?poidsAffiche(currentUser)+'kg':'—';
 }
 
 
@@ -25109,6 +25321,254 @@ function testExercices(){
         &&/C'est le seul chiffre que tu contrôles entièrement\. C'est celui qui compte\./.test(h);})());
     ok('Le mot « échec » n\'existe nulle part dans le lot objectif',
        !/échec/i.test(String(htmlEtapeObjectif)+String(_renderObjectifCarte)+String(_htmlSansObjectif)));
+
+
+    // ══════════════ TROIS CHIFFRES D'ENTRAÎNEMENT ══════════════
+    const _acJ=n=>Date.now()-n*864e5;
+    const _acS=(jours,vol,data)=>({id:'s'+jours+'_'+Math.round(Math.random()*1e9),
+      date:_acJ(jours),volume:vol,sets:8,setsPlanned:10,data:data||{}});
+    const _acU=(ss,extra)=>Object.assign({id:'a',email:'a@t.fr',exAlias:{},exMuscles:{},
+      bilans:[],sessions_config:[{active:true},{active:true},{active:true}],
+      sessions:ss||[]},extra||{});
+
+    // ── _chargeHebdo ──
+    ok('Aucune séance : null',_chargeHebdo(_acU([]))===null&&_chargeHebdo({})===null);
+    ok('Une semaine d\'historique : null',_chargeHebdo(_acU([_acS(3,1000)]))===null);
+    ok('Quatre semaines d\'historique : null',_chargeHebdo(_acU([_acS(27,1000),_acS(3,1000)]))===null);
+    ok('Cinq semaines : la comparaison devient possible',(()=>{
+      const ss=[_acS(36,1000)];
+      for(let j=32;j>=1;j-=3) ss.push(_acS(j,1000));
+      return _chargeHebdo(_acU(ss))!==null;})());
+    ok('Charge en hausse : pourcentage positif',(()=>{
+      // Quatre semaines de référence à 1000 par semaine, puis 1500 cette semaine.
+      const ss=[_acS(36,0)];
+      [31,24,17,10].forEach(j=>ss.push(_acS(j,1000)));
+      ss.push(_acS(2,1500));
+      const r=_chargeHebdo(_acU(ss));
+      return r&&r.volumeSemaine===1500&&r.moyenne4Semaines===1000&&r.pct===50;})(),
+      JSON.stringify(_chargeHebdo(_acU((()=>{const s=[_acS(36,0)];[31,24,17,10].forEach(j=>s.push(_acS(j,1000)));s.push(_acS(2,1500));return s;})()))));
+    ok('Moyenne nulle : aucune division par zéro',(()=>{
+      const ss=[_acS(36,0),_acS(30,0),_acS(20,0),_acS(10,0),_acS(2,800)];
+      const r=_chargeHebdo(_acU(ss));
+      return r&&r.moyenne4Semaines===0&&r.pct===null&&!isNaN(r.volumeSemaine);})());
+    ok('Volumes tous nuls : aucun NaN',(()=>{
+      const ss=[_acS(36,0),_acS(30,0),_acS(20,0),_acS(10,0),_acS(2,0)];
+      const r=_chargeHebdo(_acU(ss));
+      return r&&r.volumeSemaine===0&&r.pct===null;})());
+    ok('Volume absent sur une séance : compté zéro, pas NaN',(()=>{
+      const ss=[_acS(36,1000)];
+      [31,24,17,10].forEach(j=>ss.push(_acS(j,1000)));
+      const sansVol=_acS(2,undefined); delete sansVol.volume; ss.push(sansVol);
+      const r=_chargeHebdo(_acU(ss));
+      return r&&r.volumeSemaine===0&&!isNaN(r.pct);})());
+
+    // ── _exercicesEnProgres ──
+    const _acD=(nom,poids,rir)=>{const d={};d[nom]={sets:[{done:true,rir:rir==null?'0':String(rir),weight:String(poids)}]};return d;};
+    ok('Aucune séance : null',_exercicesEnProgres(_acU([]))===null);
+    ok('Aucun exercice à RIR 0 : null et non « 0 sur 0 »',(()=>{
+      const ss=[_acS(40,900,_acD('DC',80,'2')),_acS(5,900,_acD('DC',85,'2'))];
+      return _exercicesEnProgres(_acU(ss))===null;})());
+    ok('Exercice présent sur une seule fenêtre : hors décompte',(()=>{
+      const ss=[_acS(5,900,_acD('DC',85))];
+      return _exercicesEnProgres(_acU(ss))===null;})());
+    ok('Charge identique entre les deux fenêtres : pas un progrès',(()=>{
+      const ss=[_acS(40,900,_acD('DC',80)),_acS(5,900,_acD('DC',80))];
+      const r=_exercicesEnProgres(_acU(ss));
+      return r&&r.total===1&&r.enProgres===0;})());
+    ok('Charge en hausse : compté comme progrès',(()=>{
+      const ss=[_acS(40,900,_acD('DC',80)),_acS(5,900,_acD('DC',85))];
+      const r=_exercicesEnProgres(_acU(ss));
+      return r&&r.total===1&&r.enProgres===1;})());
+    ok('Charge en baisse : pas un progrès',(()=>{
+      const ss=[_acS(40,900,_acD('DC',90)),_acS(5,900,_acD('DC',80))];
+      const r=_exercicesEnProgres(_acU(ss));
+      return r&&r.total===1&&r.enProgres===0;})());
+    // LIMITE ASSUMÉE, testée comme un comportement attendu et non comme un bug :
+    // un exercice renommé sort du décompte, faute d'entité exercice.
+    ok('Exercice renommé : il sort du décompte, sans avertissement',(()=>{
+      const ss=[_acS(40,900,_acD('DEVELOPPE COUCHE',80)),_acS(5,900,_acD('DEVELOPPE COUCHE BARRE',85))];
+      return _exercicesEnProgres(_acU(ss))===null;})());
+    ok('Cinq exercices sur douze en progrès',(()=>{
+      const anc={},rec={};
+      for(let i=0;i<12;i++){
+        anc['EX'+i]={sets:[{done:true,rir:'0',weight:'50'}]};
+        rec['EX'+i]={sets:[{done:true,rir:'0',weight:String(i<5?60:50)}]};
+      }
+      const r=_exercicesEnProgres(_acU([_acS(40,900,anc),_acS(5,900,rec)]));
+      return r&&r.enProgres===5&&r.total===12;})());
+    ok('Séries non validées ignorées',(()=>{
+      const d={'DC':{sets:[{done:false,rir:'0',weight:'200'}]}};
+      const ss=[_acS(40,900,_acD('DC',80)),_acS(5,900,d)];
+      return _exercicesEnProgres(_acU(ss))===null;})());
+
+    // ── _messageFinSeance ──
+    ok('Record battu : l\'exercice et la charge sont nommés',
+       _messageFinSeance(10,12,45,[{nm:'DEVELOPPE COUCHE',curMax:85,gain:5}],0,'lundi',false)
+       ==='10 séries sur 12, 45 min. Record : DEVELOPPE COUCHE à 85 kg.');
+    ok('Plusieurs records : le meilleur gain est retenu',
+       /SQUAT à 140 kg/.test(_messageFinSeance(10,12,45,
+         [{nm:'DC',curMax:85,gain:2},{nm:'SQUAT',curMax:140,gain:10}],0,'lundi',false)));
+    ok('Gain de volume : le delta et le jour sont donnés',
+       _messageFinSeance(10,12,45,[],1250,'mardi',false)
+       ==='10 séries sur 12, 45 min. +1250 kg de volume sur ta séance du mardi.');
+    ok('Séance complète sans record ni gain',
+       _messageFinSeance(12,12,50,[],0,'lundi',false)
+       ==='12 séries sur 12, 50 min. Séance complète.');
+    ok('Séance partielle sans record ni gain',
+       _messageFinSeance(8,12,40,[],0,'lundi',false)
+       ==='8 séries sur 12, 40 min. C\'est enregistré.');
+    ok('Séance interrompue',
+       _messageFinSeance(5,12,20,[{nm:'DC',curMax:85,gain:5}],900,'lundi',true)
+       ==='Séance écourtée : 5 séries sur 12 enregistrées. C\'est compté.');
+    ok('setsPlanned à zéro : aucune fausse « séance complète »',(()=>{
+      const m=_messageFinSeance(0,0,10,[],0,'lundi',false);
+      return m==='0 séries sur 0, 10 min. C\'est enregistré.';})());
+    ok('Delta négatif : on ne l\'annonce pas',
+       !/de volume/.test(_messageFinSeance(10,12,45,[],-400,'lundi',false)));
+
+    // ── Quota de séances : l'engagement prime ──
+    ok('Sans objectif : le quota vient des créneaux actifs',_quotaSemaine(_acU([]))===3);
+    ok('Avec objectif : le quota est l\'engagement',(()=>{
+      const u=_acU([],{objectif:{id:'o',type:'assiduite',valeurDepart:0,valeurCible:5,
+        dateDebut:Date.now(),dateEcheance:Date.now()+84*864e5,statut:'actif',
+        validePar:'athlete',processus:{seancesParSemaine:5}}});
+      return _quotaSemaine(u)===5;})());
+    ok('Objectif expiré : on retombe sur les créneaux',(()=>{
+      const u=_acU([],{objectif:{id:'o',type:'assiduite',valeurDepart:0,valeurCible:5,
+        dateDebut:Date.now()-200*864e5,dateEcheance:Date.now()-100*864e5,statut:'actif',
+        validePar:'athlete',processus:{seancesParSemaine:5}}});
+      // L'objectif est révisé mais reste lisible : l'engagement tient encore.
+      return _quotaSemaine(u)===5;})());
+
+
+    // ── Les trois cases de l'accueil ──
+    (function(){
+      const sauveU=currentUser;
+      const g={};
+      ['clh-m1','clh-m2','clh-m3','clh-m1-sub','clh-m2-sub','clh-m3-sub']
+        .forEach(id=>{const e=document.getElementById(id); g[id]=e?e.textContent:null;});
+      const lire=id=>{const e=document.getElementById(id); return e?e.textContent:null;};
+      ok('Les trois cases existent',
+         !!document.getElementById('clh-m1')&&!!document.getElementById('clh-m2')
+         &&!!document.getElementById('clh-m3'));
+      ok('Les anciennes cases ont disparu',
+         !document.getElementById('clh-sessions')&&!document.getElementById('clh-weight'));
+      ok('Les libellés sont ceux du cahier des charges',(()=>{
+        const h=document.getElementById('s-client-home').innerHTML;
+        return /Cette semaine/.test(h)&&/Charge totale/.test(h)&&/Exercices en progrès/.test(h)
+          &&!/>Séances</.test(h.replace(/DÉMARRER MA SÉANCE|GÉRER MES SÉANCES/g,''));})());
+      // Aucun historique : trois tirets, aucune erreur.
+      currentUser={id:'a',email:'a@t.fr',exAlias:{},exMuscles:{},bilans:[],sessions:[],
+        sessions_config:[{active:true}]};
+      _majMetriquesAccueil(currentUser);
+      ok('Aucune séance : les trois cases affichent —',
+         lire('clh-m1')==='—'&&lire('clh-m2')==='—'&&lire('clh-m3')==='—');
+      ok('Aucune séance : les textes d\'attente sont exacts',
+         lire('clh-m2-sub')==='Il faut 5 semaines pour comparer.'
+         &&lire('clh-m3-sub')==='Pas encore assez d\'historique.');
+      // Historique court : Cette semaine se remplit, les deux autres attendent.
+      const J=n=>Date.now()-n*864e5;
+      const lundi=_lundiDe(new Date()).getTime();
+      currentUser.sessions=[{id:'s1',date:lundi+3600000,volume:4000,data:{}},
+                            {id:'s2',date:lundi+9e6,volume:4200,data:{}}];
+      currentUser.sessions_config=[{active:true},{active:true},{active:true}];
+      _majMetriquesAccueil(currentUser);
+      ok('Cette semaine : le compte et le quota',
+         lire('clh-m1')==='2'&&lire('clh-m1-sub')==='2 sur 3');
+      ok('Moins de 5 semaines : Charge totale attend',
+         lire('clh-m2')==='—'&&lire('clh-m2-sub')==='Il faut 5 semaines pour comparer.');
+      // Cinq exercices sur douze.
+      const anc={},rec={};
+      for(let i=0;i<12;i++){
+        anc['EX'+i]={sets:[{done:true,rir:'0',weight:'50'}]};
+        rec['EX'+i]={sets:[{done:true,rir:'0',weight:String(i<5?60:50)}]};
+      }
+      currentUser.sessions=[{id:'a1',date:J(40),volume:1000,data:anc},
+                            {id:'a2',date:J(5),volume:1000,data:rec}];
+      _majMetriquesAccueil(currentUser);
+      ok('Cinq exercices en progrès sur douze',
+         lire('clh-m3')==='5'&&lire('clh-m3-sub')==='5 sur 12 ce mois-ci');
+      // Charge totale en hausse.
+      const ss=[{id:'z',date:J(36),volume:0,data:{}}];
+      [31,24,17,10].forEach(j=>ss.push({id:'z'+j,date:J(j),volume:1000,data:{}}));
+      ss.push({id:'zz',date:J(2),volume:1500,data:{}});
+      currentUser.sessions=ss;
+      _majMetriquesAccueil(currentUser);
+      ok('Charge totale : le pourcentage et sa référence',
+         lire('clh-m2')==='+50 %'&&lire('clh-m2-sub')==='+50 % vs 4 dernières semaines');
+      for(const id in g){ const e=document.getElementById(id); if(e&&g[id]!=null) e.textContent=g[id]; }
+      currentUser=sauveU;
+    })();
+    ok('Le compteur de streak ne dépasse pas 18 px et n\'a plus de halo',(()=>{
+      const e=document.getElementById('clh-streak-val');
+      if(!e) return false;
+      const st=(e.getAttribute('style')||'');
+      const m=st.match(/font-size:(\d+)px/);
+      return m&&Number(m[1])<=18&&!/text-shadow/.test(st);})());
+    ok('Le compteur de streak reste affiché',!!document.getElementById('clh-streak-val'));
+    // Test qui manquait : appeler loadClientHome EN ENTIER. Les tests ne
+    // sollicitaient que _majMetriquesAccueil, si bien qu'une ecriture vers une
+    // case supprimee interrompait toute la fonction sans qu'aucun test tombe.
+    ok("loadClientHome va jusqu'au bout après le remaniement",(()=>{
+      const sauve=currentUser;
+      let err=null;
+      try{
+        currentUser={id:'a',email:'a@t.fr',fname:'M',role:'athlete',exAlias:{},exMuscles:{},
+          bilans:[],sessions:[],sessions_config:[{active:true}],programs:{}};
+        loadClientHome();
+      }catch(e){ err=e.message; }
+      const g=(document.getElementById('clh-greeting')||{}).textContent||'';
+      currentUser=sauve;
+      return !err&&g.length>0;})(),'');
+    ok('Aucune ecriture vers une case supprimee ne subsiste',
+       !/clh-sessions|clh-streak-nb|clh-weight/.test(String(loadClientHome)));
+
+    // ── Message de fin de séance : la chaîne générique a disparu ──
+    ok('« Excellent travail » n\'existe plus dans le produit',
+       !/Excellent travail/.test(String(finishWorkout))
+       &&!/Excellent travail/.test(document.getElementById('s-workout-done').innerHTML));
+    ok('buildSessionComparison rend un objet exploitable',(()=>{
+      // On ne l'exécute pas (elle dépend de woState) : on vérifie sa signature
+      // de sortie, qui est ce dont finishWorkout a besoin.
+      const src=String(buildSessionComparison);
+      return /return\s*\{html,records,delta/.test(src);})());
+    ok('finishWorkout appelle bien le message spécifique',
+       /_messageFinSeance\(/.test(String(finishWorkout)));
+
+    // ── Sélecteur de créneau ──
+    (function(){
+      const sauveU=currentUser, sauveC=_perfCreneau;
+      const J=n=>Date.now()-n*864e5;
+      currentUser={id:'a',email:'a@t.fr',exAlias:{},exMuscles:{},bilans:[],
+        sessions_config:[{active:true,name:'Push'},{active:true,name:'Pull'},{active:false,name:'Off'}],
+        sessions:[{id:'s1',date:J(9),slot:0,name:'Push',volume:5000,data:{}},
+                  {id:'s2',date:J(6),slot:1,name:'Pull',volume:4000,data:{}},
+                  {id:'s3',date:J(2),slot:0,name:'Push',volume:5500,data:{}}]};
+      _perfCreneau=null;
+      ok('Seuls les créneaux actifs sont proposés',_creneauxActifs(currentUser).length===2);
+      ok('Le filtrage ne garde que le créneau choisi',
+         _seancesDuCreneau(currentUser,{slot:0,nom:'Push'}).length===2
+         &&_seancesDuCreneau(currentUser,{slot:1,nom:'Pull'}).length===1);
+      ok('Le titre nomme le créneau',/Volume de tes séances du Push/.test(_htmlVolumeCreneau(currentUser)));
+      ok('Un créneau sans séance le dit, sans erreur',(()=>{
+        currentUser.sessions_config.push({active:true,name:'Legs'});
+        _perfCreneau=3;
+        const h=_htmlVolumeCreneau(currentUser);
+        return /Aucune séance enregistrée sur ce créneau/.test(h)&&!/canvas/.test(h);})());
+      // Séances anciennes sans slot : repli sur le nom, via _memeCreneau.
+      ok('Séances anciennes sans slot : appariées par le nom',(()=>{
+        currentUser.sessions=[{id:'v1',date:J(20),name:'Push',volume:3000,data:{}},
+                              {id:'v2',date:J(10),name:'Push',volume:3200,data:{}}];
+        return _seancesDuCreneau(currentUser,{slot:9,nom:'Push'}).length===2;})());
+      ok('Un seul créneau actif : aucun sélecteur inutile',(()=>{
+        currentUser.sessions_config=[{active:true,name:'Full body'}];
+        _perfCreneau=null;
+        return _htmlSelecteurCreneau(currentUser)==='';})());
+      ok('Aucun créneau actif : aucune exception',(()=>{
+        currentUser.sessions_config=[];
+        return _htmlVolumeCreneau(currentUser)===''&&_perfCreneauCourant(currentUser)===null;})());
+      currentUser=sauveU; _perfCreneau=sauveC;
+    })();
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
