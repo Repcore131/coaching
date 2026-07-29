@@ -2103,6 +2103,8 @@ const COACH_PHOTO='icons/coach.jpg';
     <span style="font-size:12px;font-weight:700;color:var(--sub)" id="wo-ex-count">0/0</span>
   </div>
   <div class="scroll-area" style="flex:1"><div class="pad" id="wo-content"></div></div>
+  <!-- MINUTEUR DE REPOS -->
+  <div id="wo-repos" style="display:none;flex-shrink:0"></div>
   <div style="padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
     <button class="btn btn-outline" id="wo-prev-btn" onclick="woNav(-1)" style="flex:none;width:44px">←</button>
     <button onclick="confirmPauseWorkout()" title="Retour à l'accueil (séance sauvegardée)" style="flex:none;width:44px;align-self:stretch;background:#111;border:1px solid #333;border-radius:3px;color:var(--sub);cursor:pointer;display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M3 10.5 L12 3 L21 10.5"/><path d="M5.5 9 V20 a1,1 0 0 0 1,1 H9.5 V14.5 h5 V21 H17.5 a1,1 0 0 0 1,-1 V9"/></svg></button>
@@ -8584,6 +8586,213 @@ function repsPourTonnage(ex){
   return techniqueDe(ex)==='isometrie'?0:repsToNumber(ex&&ex.reps);
 }
 
+
+// ══════════════ TEMPS DE REPOS ══════════════
+// ex.repos est et reste une CHAÎNE EN TEXTE LIBRE : « 2 min », « 1 min 30 »,
+// « au feeling ». On la lit, on ne la réécrit jamais, et on n'impose aucun
+// format à la saisie. Ce qui n'est pas lisible n'a simplement pas de minuteur.
+const REPOS_MIN=10, REPOS_MAX=600;
+// Fenêtre d'affichage APRÈS l'échéance, pendant laquelle le compteur monte en
+// positif. Le cahier des charges disait « 10 s » mais exigeait aussi de voir
+// « +0:12 » : à 10 s le bandeau avait déjà disparu. Trente secondes couvrent
+// le cas et disent quelque chose d'utile — de combien le repos a débordé —
+// sans laisser le bandeau à l'écran indéfiniment.
+const REPOS_DEPASSEMENT=30;
+const REPOS_REEL_MIN=5;          // en dessous : saisie groupée, pas un repos
+const REPOS_REEL_MAX=900;        // plafond : au-delà, ce n'est plus un repos
+const REPOS_RELANCE=15;          // « 15 s de repos », valeur du guide du coach
+
+// null signifie « pas de minuteur », JAMAIS « zéro ».
+function parseRepos(str){
+  if(str==null) return null;
+  const s=String(str).toLowerCase()
+    .replace(/ /g,' ').replace(/,/g,'.')
+    .trim().replace(/\s+/g,' ');
+  if(!s||!/\d/.test(s)) return null;
+  let sec=null;
+  // Plage « 2-3 min » ou « 2 à 3 min » : moyenne des deux bornes.
+  const plage=s.match(/^(\d+(?:\.\d+)?)\s*(?:-|–|à)\s*(\d+(?:\.\d+)?)\s*([a-z]*)$/);
+  if(plage){
+    const moy=(parseFloat(plage[1])+parseFloat(plage[2]))/2;
+    sec=/^m/.test(plage[3]||'')?moy*60:moy;
+  } else {
+    // « 2 min », « 2 minutes », « 1 min 30 », « 1min30 », « 1 min 30 s »
+    const mm=s.match(/^(\d+(?:\.\d+)?)\s*m(?:in|n|inute)?[a-z]*\s*(?:(\d+)\s*s?[a-z]*)?$/);
+    if(mm) sec=parseFloat(mm[1])*60+(mm[2]?parseInt(mm[2],10):0);
+    else{
+      const ss=s.match(/^(\d+(?:\.\d+)?)\s*s(?:ec|econde)?[a-z]*$/);
+      if(ss) sec=parseFloat(ss[1]);
+      // Un nombre NU est interprété en SECONDES. « 2 » vaut donc 2 s, sous le
+      // plancher, donc null : c'est voulu, un coach qui écrit « 2 » pour deux
+      // minutes écrit « 2 min » partout ailleurs dans le produit.
+      else if(/^\d+(?:\.\d+)?$/.test(s)) sec=parseFloat(s);
+    }
+  }
+  if(sec==null||!isFinite(sec)) return null;
+  sec=Math.round(sec);
+  return (sec<REPOS_MIN||sec>REPOS_MAX)?null:sec;
+}
+
+// ── Minuteur ────────────────────────────────────────────────────────────────
+// On stocke une ÉCHÉANCE et on recalcule à chaque affichage. Un compteur qu'on
+// décrémente dérive de plusieurs dizaines de secondes : setInterval est bridé
+// dès que l'onglet passe en arrière-plan sur mobile, et l'écran verrouillé le
+// suspend franchement. L'échéance, elle, survit à tout.
+let _reposTick=null;
+function _resteRepos(){
+  if(typeof woState==='undefined'||!woState||!woState.reposFin) return null;
+  return Math.round((woState.reposFin-Date.now())/1000);
+}
+function _fmtRepos(s){
+  const a=Math.abs(Math.round(s));
+  return Math.floor(a/60)+':'+String(a%60).padStart(2,'0');
+}
+function demarrerRepos(sec,lib){
+  if(!(sec>0)||typeof woState==='undefined'||!woState) return false;
+  woState.reposFin=Date.now()+sec*1000;
+  woState.reposTotal=sec;
+  woState.reposLib=lib||'';
+  woState.reposVibre=false;
+  _lancerTickRepos();
+  _peindreRepos();
+  woPersist();
+  return true;
+}
+function annulerRepos(){
+  if(typeof woState==='undefined'||!woState) return;
+  woState.reposFin=null; woState.reposTotal=null; woState.reposLib=''; woState.reposVibre=false;
+  if(_reposTick){ clearInterval(_reposTick); _reposTick=null; }
+  _peindreRepos();
+  woPersist();
+}
+function ajusterRepos(delta){
+  if(typeof woState==='undefined'||!woState||!woState.reposFin) return;
+  woState.reposFin+=delta*1000;
+  woState.reposTotal=Math.max(1,(woState.reposTotal||0)+delta);
+  // Retirer du temps peut mettre l'échéance dans le passé : c'est légitime,
+  // le dépassement prend le relais.
+  if(delta>0) woState.reposVibre=false;
+  _peindreRepos();
+  woPersist();
+}
+function _lancerTickRepos(){
+  if(_reposTick) clearInterval(_reposTick);
+  _reposTick=setInterval(_peindreRepos,1000);
+}
+function _peindreRepos(){
+  const z=document.getElementById('wo-repos');
+  if(!z) return;
+  const reste=_resteRepos();
+  if(reste==null||reste<-REPOS_DEPASSEMENT){
+    if(_reposTick&&(reste==null||reste<-REPOS_DEPASSEMENT)){ clearInterval(_reposTick); _reposTick=null; }
+    if(reste!=null&&woState) { woState.reposFin=null; woState.reposTotal=null; }
+    z.style.display='none'; z.innerHTML='';
+    return;
+  }
+  const fini=reste<=0;
+  if(fini&&woState&&!woState.reposVibre){
+    woState.reposVibre=true;
+    // Dégradation silencieuse : iOS Safari n'expose pas vibrate, et un message
+    // d'erreur pour un confort serait pire que l'absence du confort.
+    try{ if(navigator.vibrate) navigator.vibrate([180,90,180]); }catch(e){}
+    try{ if(currentUser&&currentUser.sonRepos) _bipRepos(); }catch(e){}
+  }
+  const tot=woState.reposTotal||1;
+  const pc=fini?100:Math.max(0,Math.min(100,(1-reste/tot)*100));
+  const coul=fini?'var(--green)':'var(--red)';
+  z.style.display='block';
+  z.innerHTML=`<div style="background:#0c0c0c;border-top:1px solid ${fini?'#14532d':'#2a0000'};padding:9px 14px 10px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);font-weight:800">
+          ${fini?'Repos terminé':'Repos'}${woState.reposLib?' · '+escapeHtml(woState.reposLib):''}
+        </div>
+        <div style="font-size:26px;font-weight:800;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;color:${coul};line-height:1.1">
+          ${fini?'+':''}${_fmtRepos(reste)}
+        </div>
+      </div>
+      <button onclick="ajusterRepos(-15)" class="hit44" style="min-width:46px;min-height:44px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;color:#ddd;font-size:12px;font-weight:800;cursor:pointer">−15</button>
+      <button onclick="ajusterRepos(15)" class="hit44" style="min-width:46px;min-height:44px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;color:#ddd;font-size:12px;font-weight:800;cursor:pointer">+15</button>
+      <button onclick="annulerRepos()" class="hit44" style="min-width:60px;min-height:44px;background:none;border:1px solid var(--border);border-radius:9px;color:var(--sub);font-size:11px;font-weight:800;letter-spacing:.5px;cursor:pointer">Passer</button>
+    </div>
+    <div style="height:4px;background:var(--surface-2);border-radius:2px;margin-top:7px;overflow:hidden">
+      <div style="height:100%;width:${pc.toFixed(1)}%;background:${coul};border-radius:2px"></div>
+    </div>
+  </div>`;
+}
+// Aucun son par défaut : une salle est bruyante et l'athlète a souvent ses
+// écouteurs. Le réglage existe, il est éteint.
+function _bipRepos(){
+  try{
+    const C=window.AudioContext||window.webkitAudioContext;
+    if(!C) return;
+    const ctx=new C(), o=ctx.createOscillator(), g=ctx.createGain();
+    o.frequency.value=880; o.connect(g); g.connect(ctx.destination);
+    g.gain.setValueAtTime(0.0001,ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.25,ctx.currentTime+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+0.35);
+    o.start(); o.stop(ctx.currentTime+0.36);
+    setTimeout(()=>{ try{ ctx.close(); }catch(e){} },600);
+  }catch(e){}
+}
+function basculerSonRepos(){
+  if(!currentUser) return;
+  currentUser.sonRepos=!currentUser.sonRepos;
+  saveUser();
+  toast(currentUser.sonRepos?'Son de fin de repos activé':'Son de fin de repos désactivé');
+}
+// Le retour d'arrière-plan est le moment où un compteur décrémenté aurait
+// menti : on repeint depuis l'échéance, qui est la seule source de vérité.
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) _peindreRepos(); });
+
+// Tempo : une CONSIGNE du coach, affichée telle quelle. Aucune saisie,
+// aucune mesure, aucun décompte — mesurer un temps sous tension déclaratif
+// coûterait une interaction par série pour une donnée sans valeur.
+function blocTempo(ex){
+  const t=(ex&&ex.tempo||'').trim();
+  if(!t) return '';
+  const n=t.split(/[^0-9]+/).filter(x=>x!=='').map(Number);
+  const expl=n.length===4
+    ? n[0]+' s pour descendre, '+n[1]+' s en bas, '+n[2]+' s pour monter, '+n[3]+' s en haut.'
+    : 'excentrique · pause basse · concentrique · pause haute, en secondes.';
+  return `<div style="margin-bottom:7px">
+    <span style="font-size:12px;font-weight:800;color:#eee">Tempo ${escapeHtml(t)}</span>
+    <div style="font-size:11px;color:var(--sub);line-height:1.6;margin-top:2px">${escapeHtml(expl)}</div>
+  </div>`;
+}
+function _reprendreRepos(){
+  const r=_resteRepos();
+  if(r!=null&&r>-REPOS_DEPASSEMENT) _lancerTickRepos();
+  _peindreRepos();
+}
+// ── Repos réel, mesuré sans aucune saisie ───────────────────────────────────
+// Écart entre deux validations DANS LE MÊME EXERCICE. En dessous de cinq
+// secondes, ce n'est pas un repos mais une saisie groupée : on écrit null
+// plutôt qu'un chiffre faux.
+function _reposReelDepuis(d,i,maintenant){
+  const prec=(d&&d.sets||[]).reduce((m,s,j)=>(j!==i&&s&&s.tValid>m)?s.tValid:m,0);
+  if(!prec) return null;
+  const dt=Math.round((maintenant-prec)/1000);
+  if(dt<REPOS_REEL_MIN) return null;
+  return Math.min(dt,REPOS_REEL_MAX);
+}
+// Le minuteur ne part pas sur : le cardio, la dernière série d'un exercice
+// (le repos suivant est un changement d'exercice), un exercice qui n'est pas
+// le dernier de son groupe (sur un superset, le repos est à la fin du couple),
+// et un repos qu'on ne sait pas lire.
+function _reposApresSerie(idx,i){
+  if(typeof woState==='undefined'||!woState) return null;
+  const ex=(woState.exercises||[])[idx];
+  if(!ex||isCardio(ex)) return null;
+  const d=woState.sessionData[idx];
+  if(!d||!d.sets||i>=d.sets.length-1) return null;
+  const grs=_groupesEx(woState.exercises);
+  const g=grs.find(x=>x.indexOf(idx)>=0);
+  if(g&&g[g.length-1]!==idx) return null;
+  const src=(g&&g.length>1)?((woState.exercises[g[g.length-1]]||{}).repos||(woState.exercises[g[0]]||{}).repos):ex.repos;
+  return parseRepos(src);
+}
+
 function parseReps(r){
   const s=String(r||'').trim();
   if(/puis/i.test(s)){const p=s.split(/puis/i).map(x=>x.trim());return{type:'degressive',p1:p[0],p2:p[1],label:s};}
@@ -8746,6 +8955,11 @@ function renderProgEx(){
             <div style="margin-top:4px">${badge}</div>
           </div>
           <div><label>Repos</label><input value="${escapeHtml(ex.repos||'01 min')}" onchange="_progExDirty=true;progEx[${i}].repos=this.value" placeholder="01 min" style="text-align:center;font-size:12px"></div>
+        </div>
+        <!-- Tempo : ligne propre, la grille au-dessus n'a que trois colonnes -->
+        <div style="margin-bottom:10px">
+          <label>Tempo <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(ex: 3-1-1-0 — descente, bas, montée, haut)</span></label>
+          <input value="${escapeHtml(ex.tempo||'')}" onchange="_progExDirty=true;progEx[${i}].tempo=this.value" placeholder="3-1-1-0">
         </div>
         ${_selecteurTechnique(ex,i)}
         ${_ligneMuscles(ex,i)}
@@ -9677,6 +9891,11 @@ function woPersist(){
       startTime:woState.startTime,
       sessionData:woState.sessionData,
       progName:woState.progName,
+      // Échéance du minuteur de repos : sans elle, une séance reprise
+      // redémarrerait sans savoir qu'un repos était en cours.
+      reposFin:woState.reposFin||null,
+      reposTotal:woState.reposTotal||null,
+      reposLib:woState.reposLib||'',
       // Sans lui, une séance mise en pause puis reprise perdrait son créneau :
       // la suggestion repartirait sur le repli par nom, et l'enregistrement
       // final ne porterait plus de slot.
@@ -9719,6 +9938,9 @@ function woResumeAndGo(){
   go('s-workout');
   document.getElementById('wo-title').textContent=woState.progName||'Séance';
   renderWoEx();
+  // Le minuteur repart de son ÉCHÉANCE : si elle est passée, _peindreRepos
+  // masque le bandeau et rien n'est réaffiché.
+  _reprendreRepos();
 }
 function pauseWorkout(){
   const m=document.getElementById('wo-pause-modal');
@@ -10059,7 +10281,6 @@ function pad(n){return n.toString().padStart(2,'0');}
 //
 // Le décompte est un CONFORT, jamais une condition : aucune saisie n'est
 // bloquée parce qu'un compteur n'a pas été touché.
-const RELANCE_SECONDES=15;   // « 15 s de repos », valeur du guide
 function banniereTechnique(ex,idx){
   const m=methodeDe(ex);
   const fam=techniqueDe(ex);
@@ -10076,25 +10297,22 @@ function banniereTechnique(ex,idx){
 // Décompte de repos entre deux relances. Une seule minuterie à la fois, et le
 // même patron que le chronomètre de la checklist : il n'y avait aucune
 // minuterie de repos dans l'écran de séance à réutiliser.
-let _relanceTimer=null,_relanceReste=0,_relanceIdx=null;
 function _compteurRelances(idx){
   const d=woState&&woState.sessionData&&woState.sessionData[idx];
   const faites=(d&&d.relancesFaites)||0;
-  const enCours=_relanceIdx===idx&&_relanceReste>0;
   return `<div style="display:flex;align-items:center;gap:9px;margin-top:9px;flex-wrap:wrap">
     <span style="font-size:11px;color:var(--sub)">Relances :</span>
     <span id="rel-n-${idx}" style="font-size:16px;font-weight:800;font-family:'Bebas Neue',sans-serif;letter-spacing:1px">${faites}</span>
     <button onclick="_ajouterRelance(${idx})" class="hit44" style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#eee;font-size:16px;font-weight:800;min-width:38px;min-height:34px;cursor:pointer">+</button>
     ${faites?`<button onclick="_retirerRelance(${idx})" class="hit44" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:14px;min-width:34px;min-height:34px;cursor:pointer">−</button>`:''}
-    <span id="rel-t-${idx}" style="font-size:12px;font-weight:800;color:${enCours?'var(--orange)':'var(--text-faint)'}">${enCours?_relanceReste+' s':''}</span>
   </div>`;
 }
 function _ajouterRelance(idx){
   if(!woState||!woState.sessionData||!woState.sessionData[idx]) return;
   const d=woState.sessionData[idx];
   d.relancesFaites=Math.min(99,((d.relancesFaites|0)||0)+1);
+  demarrerRepos(REPOS_RELANCE,'relance');
   woPersist();
-  _lancerDecompteRelance(idx);
   const n=document.getElementById('rel-n-'+idx);
   if(n) n.textContent=d.relancesFaites;
 }
@@ -10105,29 +10323,9 @@ function _retirerRelance(idx){
   woPersist();
   renderWoEx();
 }
-function _lancerDecompteRelance(idx){
-  if(_relanceTimer){ clearInterval(_relanceTimer); _relanceTimer=null; }
-  _relanceIdx=idx; _relanceReste=RELANCE_SECONDES;
-  const peindre=()=>{
-    const t=document.getElementById('rel-t-'+idx);
-    if(!t) return;
-    t.textContent=_relanceReste>0?_relanceReste+' s':'reprends';
-    t.style.color=_relanceReste>0?'var(--orange)':'var(--green)';
-  };
-  peindre();
-  _relanceTimer=setInterval(()=>{
-    _relanceReste--;
-    if(_relanceReste<=0){
-      clearInterval(_relanceTimer); _relanceTimer=null; _relanceReste=0;
-      try{ if(navigator.vibrate) navigator.vibrate(180); }catch(e){}
-    }
-    peindre();
-  },1000);
-}
-function _arreterDecompteRelance(){
-  if(_relanceTimer){ clearInterval(_relanceTimer); _relanceTimer=null; }
-  _relanceReste=0; _relanceIdx=null;
-}
+// Le décompte de relance passait par son propre setInterval et DÉCRÉMENTAIT
+// un compteur : il dérivait dès que l'écran se verrouillait. Il est remplacé
+// par le minuteur de repos, qui lit une échéance. Une seule mécanique.
 
 function renderWoEx(){
   const total=woState.exercises.length;
@@ -10297,8 +10495,9 @@ function _blocExo(idx,estSS){
       // qui ne correspond ni aux mêmes répétitions ni au même effort.
       `<div id="wo-no-hist-${idx}" class="wo-no-hist sub" style="font-size:11px;background:var(--surface-2);border-radius:8px;padding:10px 13px;margin-bottom:12px;line-height:1.6">Pas encore d'historique pour cet exercice ${escapeHtml(creneauPhrase)} : note ta charge, elle servira de repère la prochaine fois.</div>`}
 
-      ${(ex.description||ex.note)?`<div style="background:var(--surface-2);border-radius:10px;padding:11px 14px;margin-bottom:12px">
+      ${(ex.description||ex.note||ex.tempo)?`<div style="background:var(--surface-2);border-radius:10px;padding:11px 14px;margin-bottom:12px">
         <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--red);margin-bottom:5px">CONSIGNE</div>
+        ${blocTempo(ex)}
         <div style="font-size:12px;color:#bbb;line-height:1.6">${escapeHtml(ex.description||'')}${ex.note&&!(ex.description||'').includes(ex.note)?(ex.description?'<br>':'')+escapeHtml(ex.note):''}</div>
       </div>`:''}
 
@@ -10547,8 +10746,19 @@ function toggleSet(i,idx){
   // ne doit pas cocher une série du premier.
   if(idx==null) idx=woState.currentEx;
   const d=woState.sessionData[idx];if(!d) return;
-  d.sets[i].done=!d.sets[i].done;
+  const avant=!!d.sets[i].done;
+  d.sets[i].done=!avant;
+  // Décocher ne lance rien et n'annule rien : c'est une correction de saisie,
+  // pas un événement d'entraînement.
+  if(!avant){
+    const now=Date.now();
+    d.sets[i].reposReel=_reposReelDepuis(d,i,now);
+    d.sets[i].tValid=now;
+    const sec=_reposApresSerie(idx,i);
+    if(sec) demarrerRepos(sec,(woState.exercises[idx]||{}).name||'');
+  }
   renderSets(woState.exercises[idx],d,idx);
+  woPersist();
 }
 function woNav(dir){
   // On navigue d'un GROUPE à l'autre : un superset est un seul écran, sinon
@@ -22973,6 +23183,182 @@ function testExercices(){
     ok('Une série normale n\'affiche aucune bannière',
        banniereTechnique({name:'X',reps:'10'},0)==='');
     ok('Une série normale n\'affiche aucun badge',badgeTechnique({name:'X',reps:'10'})==='');
+
+
+    // ══════════════ TEMPS DE REPOS ══════════════
+    // ── parseRepos : toutes les écritures rencontrées dans les programmes ──
+    const _rpCas=[
+      ['2 min',120],['2min',120],['2 minutes',120],['01 min',60],
+      ['1 min 30',90],['1min30',90],['1 min 30 s',90],['1 min 30 sec',90],
+      ['90 sec',90],['90s',90],['90 secondes',90],['90',90],['120',120],
+      ['2-3 min',150],['2 à 3 min',150],['2,5 min',150],['2.5 min',150],
+      ['  2 MIN  ',120],['3 MIN',180],
+      ['0 min',null],['15 min',null],['',null],[null,null],[undefined,null],
+      ['au feeling',null],['entre les séries',null],['selon sensation',null],
+      ['2',null]
+    ];
+    _rpCas.forEach(([e,a])=>ok('parseRepos('+JSON.stringify(e)+') = '+a,
+      parseRepos(e)===a,'obtenu '+parseRepos(e)));
+    // Bornes explicites.
+    ok('Borne basse : 9 s refusé, 10 s accepté',parseRepos('9')===null&&parseRepos('10')===10);
+    ok('Borne haute : 600 s accepté, 601 s refusé',parseRepos('600')===600&&parseRepos('601')===null);
+    ok('Critère 1 : « 1 min 30 » vaut 90 secondes',parseRepos('1 min 30')===90);
+    ok('Critère 2 : « au feeling » ne donne pas de minuteur',parseRepos('au feeling')===null);
+    ok('null n\'est pas zéro',parseRepos('au feeling')===null&&parseRepos('0 min')===null);
+
+    // ── Le minuteur lit une ÉCHÉANCE, il ne décrémente pas ──
+    // C'est LE test du lot : un compteur décrémenté afficherait encore 120
+    // après un saut de 60 s, parce que ses ticks n'auraient pas eu lieu.
+    (function(){
+      const vraiNow=Date.now, sauveWo=woState;
+      let faux=1750000000000;
+      try{
+        Date.now=()=>faux;
+        woState={exercises:[{name:'X',repos:'2 min',series:3}],sessionData:{},startTime:faux,
+          reposFin:null,reposTotal:null};
+        woState.reposFin=faux+120000; woState.reposTotal=120;
+        ok('Critère 3 : un repos de 120 s démarre à 2:00',
+           _resteRepos()===120&&_fmtRepos(_resteRepos())==='2:00');
+        faux+=60000;   // l'écran est resté verrouillé une minute
+        ok('Critère 4 : après un saut de 60 s, il reste 60 s et non 120',
+           _resteRepos()===60,'obtenu '+_resteRepos());
+        ok('Le format est correct à mi-parcours',_fmtRepos(_resteRepos())==='1:00');
+        faux+=59000;
+        ok('À une seconde de la fin',_resteRepos()===1&&_fmtRepos(1)==='0:01');
+        faux+=13000;
+        ok('Critère 5 : douze secondes après l\'échéance, le reste vaut −12',
+           _resteRepos()===-12&&_fmtRepos(_resteRepos())==='0:12');
+        faux+=(REPOS_DEPASSEMENT+5)*1000;   // au-delà de la fenêtre, quelle qu'elle soit
+        ok('Au-delà de la fenêtre de dépassement, le bandeau doit disparaître',
+           _resteRepos()<-REPOS_DEPASSEMENT,'reste '+_resteRepos()+' fenêtre '+REPOS_DEPASSEMENT);
+      } finally { Date.now=vraiNow; woState=sauveWo; }
+    })();
+    ok('Critère 5 : le bandeau est bien VISIBLE à +12 s',(()=>{
+      const sauveWo=woState, z=document.getElementById('wo-repos');
+      woState={exercises:[],sessionData:{},startTime:Date.now(),
+        reposFin:Date.now()-12000,reposTotal:120,reposVibre:true,reposLib:''};
+      _peindreRepos();
+      const vu=z&&z.style.display!=='none'&&/Repos terminé/.test(z.innerHTML)&&z.innerHTML.indexOf('+0:12')>=0;
+      annulerRepos(); woState=sauveWo;
+      return !!vu;})(),(document.getElementById('wo-repos')||{}).innerHTML?'':'zone absente');
+    ok('Au-delà de la fenêtre, le bandeau est masqué',(()=>{
+      const sauveWo=woState, z=document.getElementById('wo-repos');
+      woState={exercises:[],sessionData:{},startTime:Date.now(),
+        reposFin:Date.now()-(REPOS_DEPASSEMENT+5)*1000,reposTotal:120,reposVibre:true};
+      _peindreRepos();
+      const cache=!z||z.style.display==='none';
+      woState=sauveWo;
+      return cache;})());
+    ok('Format : une minute pile',_fmtRepos(60)==='1:00');
+    ok('Format : moins d\'une minute',_fmtRepos(7)==='0:07');
+    ok('Format : plus de dix minutes',_fmtRepos(605)==='10:05');
+
+    // ── Exclusions du minuteur ──
+    (function(){
+      const sauveWo=woState;
+      const mk=(exs,sets)=>{ woState={exercises:exs,sessionData:{},startTime:Date.now()};
+        exs.forEach((e,i)=>woState.sessionData[i]={sets:Array.from({length:sets||3},()=>({}))}); };
+      mk([{name:'DC',repos:'2 min',series:3}]);
+      ok('Une série qui n\'est pas la dernière lance le minuteur',_reposApresSerie(0,0)===120);
+      ok('Critère 6 : la DERNIÈRE série ne lance rien',_reposApresSerie(0,2)===null);
+      mk([{name:'DC',repos:'au feeling',series:3}]);
+      ok('Un repos illisible ne lance rien',_reposApresSerie(0,0)===null);
+      // isCardio se fonde sur REPS (« 20 min »), pas sur le nom de l'exercice.
+      mk([{name:'TAPIS DE COURSE',reps:'20 min',repos:'2 min',series:3}]);
+      ok('Le cardio ne lance rien',_reposApresSerie(0,0)===null);
+      // Superset : le repos est à la fin du COUPLE, pas entre les deux exercices.
+      mk([{name:'DC',repos:'2 min',series:3},{name:'ROWING',repos:'2 min',series:3,ss:true}]);
+      ok('Superset : le premier exercice ne lance rien',_reposApresSerie(0,0)===null);
+      ok('Superset : le second lance le minuteur',_reposApresSerie(1,0)===120);
+      ok('Superset : la dernière série du couple ne lance rien',_reposApresSerie(1,2)===null);
+      woState=sauveWo;
+    })();
+
+    // ── Repos réel, mesuré sans saisie ──
+    const _rpSets=(...t)=>({sets:t.map(x=>x==null?{}:{tValid:x})});
+    ok('Critère 7 : trois secondes d\'écart valent null, pas 3',
+       _reposReelDepuis(_rpSets(1000000),1,1003000)===null);
+    ok('Cinq secondes sont enregistrées',_reposReelDepuis(_rpSets(1000000),1,1005000)===5);
+    ok('Deux minutes sont enregistrées',_reposReelDepuis(_rpSets(1000000),1,1120000)===120);
+    ok('Mille secondes sont plafonnées à 900',_reposReelDepuis(_rpSets(1000000),1,2000000)===900);
+    ok('Première série de l\'exercice : rien à mesurer',_reposReelDepuis(_rpSets(null),0,1000000)===null);
+    ok('Rattrapage de saisie : c\'est la validation la PLUS RÉCENTE qui compte',
+       _reposReelDepuis(_rpSets(1000000,1100000,null),2,1160000)===60);
+
+    // ── Tempo : consigne, jamais saisie ──
+    ok('Critère 8 : le tempo est expliqué',(()=>{
+      const h=blocTempo({tempo:'3-1-1-0'});
+      return /Tempo 3-1-1-0/.test(h)&&/3 s pour descendre/.test(h)&&/1 s en bas/.test(h)
+        &&/1 s pour monter/.test(h)&&/0 s en haut/.test(h);})());
+    ok('Critère 8 : aucun champ de saisie de tempo en séance',
+       !/<input|<select|onchange/.test(blocTempo({tempo:'3-1-1-0'})));
+    ok('Sans tempo, aucun bloc',blocTempo({})===''&&blocTempo({tempo:'   '})==='');
+    ok('Un tempo libre est affiché tel quel avec une explication générique',(()=>{
+      const h=blocTempo({tempo:'lent'});
+      return /lent/.test(h)&&/excentrique/.test(h);})());
+    ok('Le tempo n\'est jamais décompté ni mesuré',
+       !/setInterval|Date\.now|reposFin/.test(String(blocTempo)));
+
+    // ── Vibration absente : aucune exception ──
+    ok('Sans navigator.vibrate, aucune exception',(()=>{
+      const v=navigator.vibrate; let ok2=true;
+      try{
+        try{ delete navigator.vibrate; }catch(e){}
+        const sauveWo=woState;
+        woState={exercises:[],sessionData:{},startTime:Date.now(),
+          reposFin:Date.now()-1000,reposTotal:60,reposVibre:false};
+        _peindreRepos();
+        woState=sauveWo;
+      }catch(e){ ok2=false; }
+      finally{ try{ if(v) navigator.vibrate=v; }catch(e){} }
+      return ok2;})());
+    ok('Aucun son par défaut',!currentUser.sonRepos);
+
+    // ── Persistance ──
+    ok('Critère 9 : un minuteur expiré n\'est pas réaffiché',(()=>{
+      const sauveWo=woState;
+      const z=document.getElementById('wo-repos');
+      woState={exercises:[],sessionData:{},startTime:Date.now(),
+        reposFin:Date.now()-20*60000,reposTotal:120};
+      _reprendreRepos();
+      const cache=!z||z.style.display==='none';
+      woState=sauveWo;
+      return cache;})());
+    ok('Un minuteur encore valide est réaffiché',(()=>{
+      const sauveWo=woState;
+      const z=document.getElementById('wo-repos');
+      woState={exercises:[],sessionData:{},startTime:Date.now(),
+        reposFin:Date.now()+45000,reposTotal:120};
+      _reprendreRepos();
+      const vu=z&&z.style.display!=='none'&&/0:4\d/.test(z.innerHTML);
+      annulerRepos();
+      woState=sauveWo;
+      return !!vu;})());
+    ok('woPersist sérialise l\'échéance',(()=>{
+      const sauveWo=woState;
+      woState={exercises:[{name:'X',repos:'2 min',series:3}],sessionData:{0:{sets:[{}]}},
+        startTime:Date.now(),reposFin:Date.now()+60000,reposTotal:120,reposLib:'X',progName:'P'};
+      woPersist();
+      const snap=JSON.parse(localStorage.getItem('rc_wo_state')||'{}');
+      localStorage.removeItem('rc_wo_state');
+      woState=sauveWo;
+      return snap.reposFin>0&&snap.reposTotal===120;})());
+    ok('reposReel et tValid suivent sessionData sans champ dédié',(()=>{
+      const sauveWo=woState;
+      woState={exercises:[{name:'X',repos:'2 min',series:3}],
+        sessionData:{0:{sets:[{done:true,tValid:123,reposReel:47}]}},
+        startTime:Date.now(),progName:'P'};
+      woPersist();
+      const snap=JSON.parse(localStorage.getItem('rc_wo_state')||'{}');
+      localStorage.removeItem('rc_wo_state');
+      woState=sauveWo;
+      return snap.sessionData[0].sets[0].reposReel===47&&snap.sessionData[0].sets[0].tValid===123;})());
+
+    // ── Le format de ex.repos n'est jamais réécrit ──
+    ok('parseRepos ne modifie pas la chaîne',(()=>{
+      const ex={repos:'1 min 30'};
+      parseRepos(ex.repos); _reposApresSerie&&0;
+      return ex.repos==='1 min 30';})());
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
