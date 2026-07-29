@@ -10469,20 +10469,31 @@ function multiplicateurRir(rir){
   if(n>=1) return SUG_MULTIPLICATEURS[1];
   return SUG_MULTIPLICATEURS[0];
 }
-function arrondiSup125(v){
-  const x=Number(v)||0;
+// Arrondi au 1,25 DANS LE SENS DU CHANGEMENT : au supérieur quand la charge
+// monte, à l'inférieur quand elle baisse. Toujours arrondir au supérieur
+// annulait les baisses trop petites pour le pas : à 20 kg, les 5 % de l'échec
+// valent 1 kg, moins que 1,25, et la charge revenait à son point de départ.
+// C'est aussi ce que réclament les machines guidées, où l'on RETIRE du poids
+// de compensation pour progresser.
+function arrondiCharge125(cible,depart){
   // Une multiplication à virgule flottante peut tomber à 1e-13 au-dessus d'un
-  // multiple exact : sans ce rattrapage, 63,75 monterait à 65.
-  return Math.ceil(Math.round(x*1e6)/1e6/1.25)*1.25;
+  // multiple exact : sans ce rattrapage, 110 monterait à 111,25.
+  const x=Math.round((Number(cible)||0)*1e6)/1e6;
+  const d=Number(depart)||0;
+  if(Math.abs(x-d)<1e-9) return d;
+  const q=x>d?Math.ceil(x/1.25):Math.floor(x/1.25);
+  // Jamais en dessous d'un cran : une charge ne descend pas à zéro.
+  return Math.max(1.25,q*1.25);
 }
 function chargeSuivante(charge,rir,contrepoids){
   const w=parseFloat(charge)||0;
   if(!(w>0)) return null;
   const m=multiplicateurRir(rir);
-  // Contrepoids (dips ou tractions assistés) : plus de charge = plus
-  // d'assistance = plus facile. Progresser veut donc dire en RETIRER, d'où
-  // l'inverse du multiplicateur.
-  return arrondiSup125(contrepoids?w/m:w*m);
+  // Contrepoids (dips ou tractions guidés) : le poids affiché est celui de la
+  // COMPENSATION. Plus il est élevé, plus c'est facile. Progresser veut donc
+  // dire en retirer, d'où l'inverse du multiplicateur — et l'arrondi qui suit
+  // le sens fait que la compensation baisse vraiment.
+  return arrondiCharge125(contrepoids?w/m:w*m,w);
 }
 
 function getPrevPerf(name,slot,progName){
@@ -19849,28 +19860,41 @@ function testExercices(){
     ok('ÉCHEC insensible à la casse',multiplicateurRir('ECHEC')===0.95&&multiplicateurRir('Echec')===0.95);
 
     // Arrondi au 1,25 SUPÉRIEUR, et rien d'autre
-    ok('Un multiple exact ne bouge pas',arrondiSup125(60)===60&&arrondiSup125(63.75)===63.75);
-    ok('Tout le reste monte',arrondiSup125(60.01)===61.25&&arrondiSup125(61.5)===62.5);
+    // L'arrondi suit le SENS du changement.
+    ok('Un multiple exact ne bouge pas',arrondiCharge125(60,60)===60&&arrondiCharge125(63.75,63.75)===63.75);
+    ok('Une montée va au 1,25 supérieur',
+       arrondiCharge125(60.01,60)===61.25&&arrondiCharge125(61.5,60)===62.5);
+    ok('Une baisse va au 1,25 inférieur',
+       arrondiCharge125(19,20)===18.75&&arrondiCharge125(57.95,61)===57.5);
+    ok('Une charge ne descend jamais sous un cran',arrondiCharge125(0.4,1.25)===1.25);
     // 100×1,10 vaut 110.00000000000001 en virgule flottante : sans rattrapage,
     // l'arrondi supérieur le fait basculer à 111,25 au lieu de 110.
     ok('La virgule flottante ne fait pas sauter un cran',
        chargeSuivante(100,'4',false)===110,String(chargeSuivante(100,'4',false)));
     ok('Idem à 200 kg',chargeSuivante(200,'4',false)===220,String(chargeSuivante(200,'4',false)));
 
-    // Conformité au tableur, en arithmétique entière (comme Excel en décimal)
-    const _xl=(G,I)=>{
+    // Conformité au tableur. L'arrondi ne suit le tableur QUE sur les montées :
+    // sur une baisse on arrondit désormais à l'inférieur, pour que l'échec
+    // allège vraiment. C'est une divergence VOULUE, pas une erreur.
+    const _xl=(G,I,sens)=>{
       const mm=I==='echec'?950:(parseInt(I)>=5?1125:parseInt(I)>=4?1100:parseInt(I)>=3?1075
               :parseInt(I)>=2?1050:parseInt(I)>=1?1025:1000);
-      return Math.ceil(Math.round(G*mm)/1250)*1250/1000;
+      const cible=Math.round(G*mm)/1000;
+      return sens<0?Math.floor(cible/1.25)*1.25:Math.ceil(cible/1.25)*1.25;
     };
     const _charges=[5,10,15,20,25,30,40,50,60,80,100,142.5,180,200,250];
     const _rirs=['echec','0','1','2','3','4','5'];
     let _div=0,_ex='';
     for(const G of _charges) for(const I of _rirs){
-      const a=_xl(G,I), v=chargeSuivante(G,I,false);
+      const sens=multiplicateurRir(I)<1?-1:1;
+      const a=_xl(G,I,sens), v=chargeSuivante(G,I,false);
       if(Math.abs(a-v)>1e-9){ _div++; if(!_ex) _ex=G+'/'+I+' → '+v+' au lieu de '+a; }
     }
     ok('Conforme au tableur sur '+(_charges.length*_rirs.length)+' combinaisons',_div===0,_ex);
+    // Les MONTÉES sont strictement celles du tableur d'origine.
+    ok('Les montées sont inchangées par rapport au tableur',
+       _charges.every(G=>['1','2','3','4','5'].every(I=>
+         Math.abs(chargeSuivante(G,I,false)-Math.ceil(Math.round(G*multiplicateurRir(I)*1e6)/1e6/1.25)*1.25)<1e-9)));
     ok('Toute charge proposée est un multiple de 1,25',
        _charges.every(G=>_rirs.every(I=>{
          const v=chargeSuivante(G,I,false);
@@ -19881,16 +19905,42 @@ function testExercices(){
        chargeSuivante(60,'1',false)>60&&chargeSuivante(60,'5',false)>chargeSuivante(60,'1',false));
     ok('L\'échec la fait descendre',chargeSuivante(60,'echec',false)<60);
     ok('RIR 0 la laisse en place',chargeSuivante(60,'0',false)===60);
-    // Conséquence assumée de « toujours arrondir au supérieur » : sous 25 kg,
-    // les 5 % de l'échec sont plus petits que le grain de 1,25 kg.
-    ok('Sous 25 kg, l\'échec ne peut pas alléger',chargeSuivante(20,'echec',false)===20);
-    ok('Au-delà, il allège',chargeSuivante(25,'echec',false)<25);
+    // ── L'échec allège TOUJOURS, quelle que soit la charge ──
+    // Avec un arrondi toujours au supérieur, 5 % de 20 kg (1 kg) étaient plus
+    // petits que le pas de 1,25 et la charge revenait à son point de départ.
+    ok('Échec à 20 kg : la charge baisse',chargeSuivante(20,'echec',false)===18.75,
+       String(chargeSuivante(20,'echec',false)));
+    ok('Échec à 10 kg : la charge baisse',chargeSuivante(10,'echec',false)<10,
+       String(chargeSuivante(10,'echec',false)));
+    ok('L\'échec allège à TOUTES les charges',
+       [5,7.5,10,12.5,15,20,25,30,40,60,100,200].every(w=>chargeSuivante(w,'echec',false)<w),
+       [5,10,20,30].map(w=>w+'→'+chargeSuivante(w,'echec',false)).join(' '));
+    ok('Une charge d\'un cran ne descend pas à zéro',chargeSuivante(1.25,'echec',false)===1.25);
 
-    // Contrepoids : le sens s'inverse, plus de charge = plus d'assistance
-    ok('Contrepoids : un RIR élevé RETIRE de l\'assistance',
-       chargeSuivante(40,'5',true)<40,String(chargeSuivante(40,'5',true)));
-    ok('Contrepoids : l\'échec en AJOUTE',
+    // ── Machines guidées : le poids affiché est la COMPENSATION ──
+    // Progresser veut dire en retirer, donc la charge doit baisser pour de bon.
+    const _mg=['TRACTION GUIDEE','DIPS GUIDEE','TRACTIONS GUIDEES','DIPS GUIDES',
+               'TRACTION ASSISTEE','DIPS ASSISTES'];
+    ok('Les machines guidées sont bien reconnues',_mg.every(isCounterweightEx),
+       _mg.filter(n=>!isCounterweightEx(n)).join(', '));
+    ok('Guidée : un RIR élevé RETIRE de la compensation',
+       chargeSuivante(40,'5',true)===35&&chargeSuivante(40,'5',true)<40,
+       String(chargeSuivante(40,'5',true)));
+    ok('Guidée : plus le RIR est haut, plus on retire',
+       chargeSuivante(40,'5',true)<chargeSuivante(40,'1',true)
+       &&chargeSuivante(40,'1',true)<40,
+       chargeSuivante(40,'5',true)+' < '+chargeSuivante(40,'1',true));
+    ok('Guidée : RIR 0 ne change rien',chargeSuivante(40,'0',true)===40);
+    // Cas non cité mais nécessaire : à l'échec sur machine guidée il faut
+    // AJOUTER de la compensation, sinon la série suivante échoue aussi.
+    ok('Guidée : l\'échec AJOUTE de la compensation',
        chargeSuivante(40,'echec',true)>40,String(chargeSuivante(40,'echec',true)));
+    ok('Guidée : la baisse est réelle à toutes les charges',
+       [10,20,30,40,60].every(w=>chargeSuivante(w,'4',true)<w),
+       [10,20,40].map(w=>w+'→'+chargeSuivante(w,'4',true)).join(' '));
+    // Les deux sens restent opposés à ceux d'un exercice normal
+    ok('Les machines guidées vont à l\'inverse d\'un exercice classique',
+       chargeSuivante(40,'4',true)<40&&chargeSuivante(40,'4',false)>40);
 
     // Charge absente ou nulle : aucune suggestion
     ok('Charge nulle ou vide : rien',
