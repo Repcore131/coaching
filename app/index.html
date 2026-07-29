@@ -7281,6 +7281,21 @@ const VOL_SEUIL_ABERRANT=40;
 // une estimation haute.
 const VOL_PART_SANS_RIR=0.30;
 
+// Concentration : au-delà de ce nombre de séries sur UN SEUL entraînement,
+// un muscle a probablement plus à gagner à voir son volume réparti sur deux
+// jours qu'à tout encaisser d'un coup.
+//
+// Comme REPERES_VOLUME, c'est un repère de PRATIQUE DE TERRAIN et non une
+// mesure. Il n'a pas de validation expérimentale directe, la variance
+// interindividuelle est majeure, et un pratiquant avancé peut très bien tenir
+// davantage. D'où une simple phrase en gris : on donne à lire, on ne juge pas,
+// et rien de tout ceci n'entre dans un signal ni dans une alerte.
+const VOL_CONCENTRATION_SEANCE=10;
+// Et seulement si cette séance porte l'essentiel de la semaine : 12 séries sur
+// 30 ne sont pas une concentration, c'est une grosse séance dans un gros
+// volume.
+const VOL_CONCENTRATION_PART=0.70;
+
 // Repères de volume hebdomadaire, en séries dures par muscle et par semaine.
 //
 // Ces valeurs sont des repères de PRATIQUE DE TERRAIN (cadre MEV/MAV/MRV
@@ -12612,7 +12627,7 @@ function _calculSemaine(user,cle){
   const k=(user&&user.email||'?')+'|'+cle;
   if(_cacheVolume[k]) return _cacheVolume[k];
   const res={muscles:{},freq:{},eligibles:0,sansRir:0,nonRattachees:0,
-             exNonRattaches:[],aberrants:{},seances:0,ts:Date.now()};
+             exNonRattaches:[],aberrants:{},maxParSeance:{},seances:0,ts:Date.now()};
   const lundi=_lundiDeSemaine(cle);
   if(!lundi||!user||!Array.isArray(user.sessions)) return (_cacheVolume[k]=res);
   const debut=lundi.getTime();
@@ -12664,6 +12679,9 @@ function _calculSemaine(user,cle){
       }
     }
     for(const m in parSeance) if(parSeance[m]>VOL_SEUIL_ABERRANT) res.aberrants[m]=true;
+    // Plus gros total obtenu sur UNE séance. parSeance est déjà construit
+    // au-dessus pour le seuil d'aberration : on ne le recalcule pas.
+    for(const m in parSeance) if(parSeance[m]>(res.maxParSeance[m]||0)) res.maxParSeance[m]=parSeance[m];
   }
   // Fréquence : jours DISTINCTS où le muscle a reçu au moins une série dure
   // entière. Une demi-série secondaire isolée ne fait pas une séance de plus.
@@ -12672,6 +12690,17 @@ function _calculSemaine(user,cle){
       if(parJour[jour][m]>=1) res.freq[m]=(res.freq[m]||0)+1;
   _cacheVolume[k]=res;
   return res;
+}
+// Une phrase grise sous la barre, quand le volume de la semaine tient
+// pour l'essentiel sur une seule séance. Elle ne dépend PAS de
+// REPERES_VOLUME : un muscle sans repère la reçoit comme les autres, parce
+// que répartir son volume est une question de répartition, pas de zone.
+function _htmlConcentration(res,m){
+  const max=((res&&res.maxParSeance)||{})[m]||0;
+  const tot=((res&&res.muscles)||{})[m]||0;
+  if(!(max>VOL_CONCENTRATION_SEANCE)) return '';
+  if(!(tot>0)||!(max/tot>VOL_CONCENTRATION_PART)) return '';
+  return `<div style="font-size:10px;color:var(--text-faint);margin-top:4px;line-height:1.5">${volAffiche(max)} des ${volAffiche(tot)} séries sur une seule séance : les répartir sur deux jours donnerait probablement plus.</div>`;
 }
 function volumeSemaine(user,cle){ return _calculSemaine(user,cle).muscles; }
 function frequenceSemaine(user,cle,muscle){ return _calculSemaine(user,cle).freq[muscle]||0; }
@@ -15448,6 +15477,7 @@ function renderVolume(){
       <div style="font-size:10px;color:${z?z.c:'var(--text-faint)'};margin-top:4px">
         ${z?z.lib:'pas de repère établi'}${c.aberrants[m]?' <span style="color:var(--orange)">· inhabituel</span>':''}
       </div>
+      ${_htmlConcentration(c,m)}
     </div>`;
   }).join('');
 
@@ -15537,6 +15567,7 @@ function renderVolumeCoach(c){
         <span style="font-size:10px;color:${zo?zo.c:'var(--sub)'};white-space:nowrap">${volAffiche(n)} série${n>=2?'s':''} · ${zo?zo.lib:'pas de repère'}</span>
       </div>
       ${_volBarre(m,n,rep,res.aberrants[m],c)}
+      ${_htmlConcentration(res,m)}
     </div>`;
   };
 
@@ -25271,6 +25302,218 @@ function testExercices(){
 
 
 
+
+
+    // ══════════════ CONCENTRATION SUR UNE SEULE SÉANCE ══════════════
+    // Une lecture, pas un signal : rien n'entre dans urgencyScore, dans
+    // signauxEntrainement ni dans une notification. Les tests le vérifient.
+    (function(){
+      const sauveU=currentUser;
+      const _cK=exKey('EXO CONC'), _cK2=exKey('EXO LOMB');
+      // Lundi, mercredi et vendredi de la semaine EN COURS : _calculSemaine
+      // travaille sur la semaine ISO, pas sur une fenêtre glissante.
+      const _cJour=i=>{ const d=_lundiDe(new Date());
+        d.setDate(d.getDate()+i); d.setHours(12,0,0,0); return d.getTime(); };
+      const _cSets=n=>Array.from({length:n},()=>({weight:'50',reps:'10',rir:'2',done:true}));
+      const _cSess=(i,n,nom)=>({id:'cc'+i+'_'+Math.round(Math.random()*1e9),date:_cJour(i),
+        name:'P',slot:0,volume:1,duration:60,
+        data:{[nom||'EXO CONC']:{sets:_cSets(n)}}});
+      // repartition : [séries au jour 0, au jour 2, au jour 4…]
+      const _cAth=(repartition,muscle,extra)=>{
+        _viderCacheVolume();
+        return Object.assign({id:'cc'+Math.round(Math.random()*1e9),
+          email:'cc'+Math.round(Math.random()*1e9)+'@t.fr',fname:'A',lname:'B',
+          exAlias:{},exMuscles:{[_cK]:{p:[muscle||'PECTORAUX'],s:[]}},
+          bilans:[],sessions_config:[],
+          sessions:repartition.map((n,k)=>_cSess(k*2,n)).filter(x=>x)},extra||{});
+      };
+      const _cRes=c=>_calculSemaine(c,semaineISO(new Date()));
+
+      // ── maxParSeance ──
+      ok('maxParSeance rend le plus gros total obtenu sur UNE séance',(()=>{
+        const r=_cRes(_cAth([8,14,3]));
+        return r.maxParSeance.PECTORAUX===14&&r.muscles.PECTORAUX===25;})());
+      ok('Une seule séance : le max vaut le total',(()=>{
+        const r=_cRes(_cAth([12]));
+        return r.maxParSeance.PECTORAUX===12&&r.muscles.PECTORAUX===12;})());
+      ok('maxParSeance existe même sans aucune séance',(()=>{
+        _viderCacheVolume();
+        const r=_calculSemaine({email:'vide@t.fr',sessions:[]},semaineISO(new Date()));
+        return !!r.maxParSeance&&Object.keys(r.maxParSeance).length===0;})());
+      ok('Deux séances le MÊME jour restent deux séances',(()=>{
+        _viderCacheVolume();
+        const c={id:'cj',email:'cj@t.fr',exAlias:{},exMuscles:{[_cK]:{p:['PECTORAUX'],s:[]}},
+          sessions:[_cSess(0,9),_cSess(0,9)]};
+        const r=_cRes(c);
+        // 18 au total sur le jour, mais 9 au plus sur une séance.
+        return r.muscles.PECTORAUX===18&&r.maxParSeance.PECTORAUX===9;})());
+
+      // ── Aucun champ existant n'a bougé ──
+      ok('Critère 5 : les champs existants du résultat sont inchangés',(()=>{
+        const r=_cRes(_cAth([8,14,3]));
+        const attendu=['aberrants','eligibles','exNonRattaches','freq','maxParSeance',
+          'muscles','nonRattachees','sansRir','seances','ts'];
+        return Object.keys(r).sort().join(',')===attendu.join(',');})());
+      ok('Critère 5 : totaux, fréquence et séances restent les mêmes',(()=>{
+        const r=_cRes(_cAth([8,14,3]));
+        return r.muscles.PECTORAUX===25&&r.freq.PECTORAUX===3&&r.seances===3
+          &&r.eligibles===25&&r.nonRattachees===0&&r.sansRir===0;})());
+      ok('Critère 5 : volumeSemaine et frequenceSemaine ne bougent pas',(()=>{
+        const c=_cAth([8,14,3]), cle=semaineISO(new Date());
+        return volumeSemaine(c,cle).PECTORAUX===25&&frequenceSemaine(c,cle,'PECTORAUX')===3;})());
+      ok('Critère 6 : le seuil d\'aberration et sa mention sont intacts',(()=>{
+        const r=_cRes(_cAth([41]));
+        const r2=_cRes(_cAth([40]));
+        return VOL_SEUIL_ABERRANT===40&&r.aberrants.PECTORAUX===true
+          &&r2.aberrants.PECTORAUX===undefined;})());
+
+      // ── La ligne elle-même ──
+      ok('Critère 1 : 16 séries réparties 8 + 8 → aucune ligne',(()=>{
+        const c=_cAth([8,8]);
+        return _htmlConcentration(_cRes(c),'PECTORAUX')==='';})());
+      ok('Critère 2 : 16 séries dont 14 sur une séance → ligne affichée',(()=>{
+        const c=_cAth([14,2]);
+        const h=_htmlConcentration(_cRes(c),'PECTORAUX');
+        return /14 des 16 séries sur une seule séance/.test(h)
+          &&/les répartir sur deux jours donnerait probablement plus/.test(h);})());
+      ok('Critère 3 : 9 séries toutes sur une séance → aucune ligne',(()=>{
+        const c=_cAth([9]);
+        return _htmlConcentration(_cRes(c),'PECTORAUX')==='';})());
+      ok('Pile à 10 sur une séance : aucune ligne, le seuil est strict',(()=>{
+        const c=_cAth([10]);
+        return _htmlConcentration(_cRes(c),'PECTORAUX')==='';})());
+      ok('11 sur une séance sur 11 au total : la ligne apparaît',(()=>{
+        const c=_cAth([11]);
+        return _htmlConcentration(_cRes(c),'PECTORAUX')!=='';})());
+      ok('Pile à 70 % : aucune ligne, la part est stricte elle aussi',(()=>{
+        // 14 sur 20 = 70,0 % exactement.
+        const c=_cAth([14,6]);
+        const r=_cRes(c);
+        return r.maxParSeance.PECTORAUX===14&&r.muscles.PECTORAUX===20
+          &&_htmlConcentration(r,'PECTORAUX')==='';})());
+      ok('Un gros total bien réparti n\'est pas une concentration',(()=>{
+        // 12 sur 30 : la séance est grosse, la semaine l'est aussi.
+        const c=_cAth([12,10,8]);
+        return _htmlConcentration(_cRes(c),'PECTORAUX')==='';})());
+      ok('Un muscle absent de la semaine ne rend rien',
+        _htmlConcentration(_cRes(_cAth([14,2])),'MOLLETS')==='');
+      ok('Un résultat sans maxParSeance ne fait pas tomber la fonction',
+        _htmlConcentration({muscles:{PECTORAUX:16}},'PECTORAUX')===''
+        &&_htmlConcentration(null,'PECTORAUX')===''
+        &&_htmlConcentration({},'PECTORAUX')==='');
+
+      // ── Indépendance vis-à-vis des repères ──
+      ok('Critère 4 : un muscle SANS repère reçoit la ligne',(()=>{
+        const c=_cAth([14,2],'LOMBAIRES');
+        const r=_cRes(c);
+        return reperesEffectifs(c,'LOMBAIRES')===null
+          &&/14 des 16 séries sur une seule séance/.test(_htmlConcentration(r,'LOMBAIRES'));})());
+      ok('La ligne ne lit ni REPERES_VOLUME ni zoneVolume',
+        _htmlConcentration.toString().indexOf('REPERES_VOLUME')<0
+        &&_htmlConcentration.toString().indexOf('reperesEffectifs')<0
+        &&_htmlConcentration.toString().indexOf('zoneVolume')<0);
+      ok('La ligne est grise, sans couleur d\'alerte',(()=>{
+        const h=_htmlConcentration(_cRes(_cAth([14,2])),'PECTORAUX');
+        return /var\(--text-faint\)/.test(h)
+          &&!/var\(--red\)|var\(--orange\)|var\(--danger\)|var\(--warning\)/.test(h);})());
+      ok('Une seule phrase, aucun bouton, aucune injonction',(()=>{
+        const d=document.createElement('div');
+        d.innerHTML=_htmlConcentration(_cRes(_cAth([14,2])),'PECTORAUX');
+        const txt=(d.textContent||'').trim();
+        return d.querySelectorAll('button').length===0
+          &&txt.split(/[.!?]/).filter(x=>x.trim()).length===1
+          &&!/tu dois|il faut|arrête|réduis|attention/i.test(txt);})());
+
+      // ── Les deux écrans ──
+      ok('L\'écran Volume de l\'athlète affiche la ligne',(()=>{
+        const sauve=currentUser, sauveD=_volDecalage;
+        currentUser=_cAth([14,2],'PECTORAUX',{role:'athlete',sessions_config:[]});
+        _volDecalage=0;
+        let z=document.getElementById('progress-content');
+        if(!z){ z=document.createElement('div'); z.id='progress-content'; document.body.appendChild(z); }
+        let h='';
+        try{ renderVolume(); h=z.innerHTML; }catch(e){ currentUser=sauve; _volDecalage=sauveD; return _echec('exception: '+e.message); }
+        currentUser=sauve; _volDecalage=sauveD;
+        return /14 des 16 séries sur une seule séance/.test(h);})());
+      ok('L\'écran Volume n\'affiche rien quand c\'est réparti',(()=>{
+        const sauve=currentUser, sauveD=_volDecalage;
+        currentUser=_cAth([8,8],'PECTORAUX',{role:'athlete',sessions_config:[]});
+        _volDecalage=0;
+        const z=document.getElementById('progress-content');
+        let h='';
+        try{ renderVolume(); h=z.innerHTML; }catch(e){ currentUser=sauve; _volDecalage=sauveD; return _echec('exception: '+e.message); }
+        currentUser=sauve; _volDecalage=sauveD;
+        return !/sur une seule séance/.test(h)&&/Pectoraux/.test(h);})());
+      ok('La fiche coach affiche la ligne sur un muscle déjà listé',(()=>{
+        const sauve=currentUser, sauveDep=_volCoachDeplie;
+        currentUser={id:'co',email:'co@t.fr',role:'coach',seenBilans:{},alertStatus:{}};
+        // 26 séries : au-dessus du MRV, donc le muscle est dans la vue compacte.
+        const c=_cAth([20,6],'PECTORAUX',{sessions_config:[]});
+        let z=document.getElementById('ccd-volume');
+        if(!z){ z=document.createElement('div'); z.id='ccd-volume'; document.body.appendChild(z); }
+        _volCoachDeplie=false;
+        let h='';
+        try{ renderVolumeCoach(c); h=z.innerHTML; }
+        catch(e){ currentUser=sauve; _volCoachDeplie=sauveDep; return _echec('exception: '+e.message); }
+        currentUser=sauve; _volCoachDeplie=sauveDep;
+        return /20 des 26 séries sur une seule séance/.test(h);})());
+      ok('Critère 4bis : le filtre des muscles du coach n\'a PAS été élargi',(()=>{
+        const sauve=currentUser, sauveDep=_volCoachDeplie;
+        currentUser={id:'co',email:'co@t.fr',role:'coach',seenBilans:{},alertStatus:{}};
+        // 16 séries pectoraux : DANS la zone (mev 8, mrv 22). Concentrées, mais
+        // le muscle n'a rien à faire dans la vue compacte pour autant.
+        const c=_cAth([14,2],'PECTORAUX',{sessions_config:[]});
+        const z=document.getElementById('ccd-volume');
+        _volCoachDeplie=false;
+        let compact='';
+        try{ renderVolumeCoach(c); compact=z.innerHTML; }
+        catch(e){ currentUser=sauve; _volCoachDeplie=sauveDep; return _echec('exception: '+e.message); }
+        _volCoachDeplie=true;
+        let deplie='';
+        try{ renderVolumeCoach(c); deplie=z.innerHTML; }
+        catch(e){ currentUser=sauve; _volCoachDeplie=sauveDep; return _echec('exception: '+e.message); }
+        currentUser=sauve; _volCoachDeplie=sauveDep;
+        return /Tous les muscles travaillés sont dans leur zone/.test(compact)
+          &&!/sur une seule séance/.test(compact)
+          &&/14 des 16 séries sur une seule séance/.test(deplie);})());
+
+      // La ligne s'AJOUTE, elle ne remplace rien : le total, la fréquence, la
+      // zone, la couleur et le delta restent à l'écran, tels quels.
+      ok('Critère 5 : la ligne s\'ajoute sans rien remplacer à l\'écran',(()=>{
+        const sauve=currentUser, sauveD=_volDecalage;
+        currentUser=_cAth([14,2],'PECTORAUX',{role:'athlete',sessions_config:[]});
+        _volDecalage=0;
+        const z=document.getElementById('progress-content');
+        let h='';
+        try{ renderVolume(); h=z.innerHTML; }
+        catch(e){ currentUser=sauve; _volDecalage=sauveD; return _echec('exception: '+e.message); }
+        currentUser=sauve; _volDecalage=sauveD;
+        return /Pectoraux/.test(h)&&/16 séries/.test(h)&&/2×\/sem/.test(h)
+          &&/progrès|maintien|entretien|volume élevé|au-dessus|sous le/i.test(h)
+          &&/_volbarre|barre|linear-gradient|background/i.test(h)
+          &&/14 des 16 séries sur une seule séance/.test(h);})());
+
+      // ── Aucun signal, aucune alerte ──
+      ok('Critère 5bis : rien n\'entre dans signauxEntrainement ni urgencyScore',(()=>{
+        const sauve=currentUser;
+        currentUser={id:'co',email:'co@t.fr',role:'coach',seenBilans:{},alertStatus:{}};
+        const c=_cAth([20,2],'PECTORAUX',{id:'cz',email:'cz@t.fr',sessions_config:[],
+          createdAt:Date.now()-90*864e5,bilans:[{type:'depart',date:Date.now()-3*864e5,
+            reponseCoach:'vu',reponseDate:1,reponseVue:true}]});
+        currentUser.seenBilans['cz@t.fr']=Date.now();
+        _viderCacheSignaux();
+        const sg=signauxEntrainement(c);
+        const sc=urgencyScore(c);
+        currentUser=sauve; _viderCacheSignaux();
+        return sg.volumeHaut===false&&sg.sousMEV===false&&sg.plateauMuscle===false
+          &&Object.keys(sg.details).length===0&&sc===2;})());
+      ok('Aucune fonction du lot ne parle de signal ni de notification',(()=>{
+        const src=_htmlConcentration.toString();
+        return !/urgencyScore|signauxEntrainement|showNotification|Notification|toast/.test(src);})());
+
+      _viderCacheVolume();
+      currentUser=sauveU;
+    })();
 
     // ══════════════ DOULEUR RÉPÉTÉE DANS LA SÉANCE EN COURS ══════════════
     (function(){
