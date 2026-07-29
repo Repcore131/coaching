@@ -16178,13 +16178,27 @@ function _htmlPhaseCoach(c){
   // La combinaison sèche + antécédent déclaré est nommée explicitement : c'est
   // exactement le cas où le coach doit savoir que l'écran de son athlète est
   // amputé volontairement, et pourquoi.
-  const combi=(p&&p.type==='seche'&&aTCA(c))
-    ? `<div style="margin-top:9px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--sub);line-height:1.6">
-        Sèche <b>et</b> antécédent de trouble du comportement alimentaire déclaré.
+  //
+  // Et quand cette sèche DURE, la durée est dite au coach. L'athlète, lui,
+  // reçoit déjà la relance « c'est long, où en es-tu ? » ; le coach ne recevait
+  // rien : il pouvait avoir un athlète à antécédent en déficit depuis six mois
+  // sans que rien ne le lui signale, puisque le mode neutre lui retire par
+  // ailleurs la courbe de vitesse qui l'aurait alerté. C'est le seul endroit de
+  // l'app où le garde-fou RETIRE de l'information au coach, il faut donc la lui
+  // rendre autrement. Rien de plus n'est montré à l'athlète.
+  const combiTCA=!!(p&&p.type==='seche'&&aTCA(c));
+  const semSeche=combiTCA?semainesEcoulees(c):0;
+  const combiLongue=combiTCA&&semSeche>=PHASE_SEMAINES_RELANCE;
+  const combi=!combiTCA?''
+    : `<div style="margin-top:9px;background:${combiLongue?'#1a0505':'var(--warning-bg)'};border:1px solid ${combiLongue?'var(--red)':'var(--warning-border)'};border-radius:8px;padding:9px 11px;font-size:11px;color:var(--sub);line-height:1.6">
+        ${combiLongue?`<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--red);margin-bottom:6px">Sèche longue et antécédent déclaré</div>
+        Sèche depuis <b style="color:#fff">${semSeche} semaines</b>, et un antécédent de trouble du
+        comportement alimentaire est déclaré au questionnaire de départ.`
+        :`Sèche <b>et</b> antécédent de trouble du comportement alimentaire déclaré.`}
         La sèche reste sélectionnable, mais le mode neutre du suivi du poids
         s'applique intégralement : ni vitesse, ni cible, ni alerte du côté de
         l'athlète. À suivre de près hors de l'application.
-      </div>` : '';
+      </div>`;
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:16px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Phase</span>
@@ -21714,6 +21728,40 @@ function testExercices(){
       return JSON.stringify(u.nutrition)===avant;})());
     ok('Aucune table de calories ni de TDEE dans les phases',
        !/kcal|calorie|tdee|prot[eé]ine|macro/i.test(JSON.stringify(PHASES)));
+
+
+    // ── Sèche qui dure ET antécédent déclaré : le coach est prévenu ──
+    // Seul endroit où le garde-fou retire de l'information au coach (la courbe
+    // de vitesse) : on la lui rend sous une autre forme, sans rien montrer de
+    // plus à l'athlète.
+    const _cSL=(t,tca,sem)=>({email:'sl@t.fr',
+      bilans:[{type:'depart','deb-tca':tca?'anorexie il y a 5 ans':'non'}],
+      phase:{type:t,debut:Date.now()-sem*7*864e5,definiPar:'coach',historique:[]}});
+    ok('Sèche courte + antécédent : la combinaison est nommée, sans durée',(()=>{
+      const h=_htmlPhaseCoach(_cSL('seche',true,5));
+      return /antécédent de trouble du comportement alimentaire déclaré/.test(h)
+        &&!/Sèche longue/.test(h);})());
+    ok('Sèche longue + antécédent : la durée est dite au coach',(()=>{
+      const h=_htmlPhaseCoach(_cSL('seche',true,22));
+      return /Sèche longue et antécédent déclaré/.test(h)&&/22 semaines/.test(h);})(),
+      (_htmlPhaseCoach(_cSL('seche',true,22)).match(/\d+ semaines/)||['aucune durée'])[0]);
+    ok('Le seuil est le même que celui de la relance',(()=>{
+      const avant=_htmlPhaseCoach(_cSL('seche',true,PHASE_SEMAINES_RELANCE-1));
+      const apres=_htmlPhaseCoach(_cSL('seche',true,PHASE_SEMAINES_RELANCE));
+      return !/Sèche longue/.test(avant)&&/Sèche longue/.test(apres);})());
+    ok('Sèche longue SANS antécédent : aucun encart de combinaison',
+       !/Sèche longue|reste sélectionnable/.test(_htmlPhaseCoach(_cSL('seche',false,40))));
+    ok('Prise de masse longue + antécédent : aucun encart de combinaison',
+       !/Sèche longue|reste sélectionnable/.test(_htmlPhaseCoach(_cSL('masse',true,40))));
+    ok('La sèche reste sélectionnable même longue',
+       _htmlPhaseCoach(_cSL('seche',true,40)).includes("coachSetPhase('seche')"));
+    // Rien de plus côté athlète : ni vitesse, ni alerte, ni mention de durée
+    // ajoutée à son écran de poids.
+    ok('L\'athlète ne voit rien de plus qu\'avant',(()=>{
+      const u=Object.assign(_cSL('seche',true,40),{weightLog:_ps(20,i=>60-i*1.5/7)});
+      u.phase.debut=new Date(2025,0,1).getTime();
+      const h=blocPoids(u);
+      return !/par semaine|moyennes glissantes|Sèche longue|40 semaines/.test(h);})());
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
