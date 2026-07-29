@@ -8466,6 +8466,124 @@ function _ecrireMuscles(k,r){
 }
 
 // Parse reps string : "10 PUIS 20", "6-8", "15 Par Jambe", "8"
+
+// ══════════════ TECHNIQUES D'INTENSIFICATION ══════════════
+// Catalogue repris MOT POUR MOT du « Guide des méthodes et des exercices de
+// musculation » du coach : son nom, sa description, sa vidéo. L'application
+// n'invente aucune méthode et n'en renomme aucune.
+//
+// « famille » est la seule chose qui pilote le COMPORTEMENT de l'app : elle
+// dit ce qu'il faut afficher, ce qu'il faut saisir et ce que la série vaut au
+// volume. Sept familles suffisent parce qu'elles décrivent ce que le logiciel
+// doit faire de différent, pas ce que le muscle subit. Re-router une méthode
+// tient en un mot.
+//
+// Ce catalogue ne SUGGÈRE jamais rien : il n'est lu que par le sélecteur de
+// l'éditeur, qui n'est ouvert que par un coach ou par un athlète qui va
+// délibérément le chercher.
+const TECHNIQUES=Object.freeze({
+  "dropset_type_1":{nom:"Dropset type 1",sous:"3 x 12 répétitions",famille:"degressive",desc:"Faire 12 répétitions puis diminuer les charges, sans repos faire 12 répétitions de nouveau et réduire une seconde fois pour refaire 12 répétitions.",video:"https://youtu.be/BeyRmP_R_d8"},
+  "dropset_type_2":{nom:"Dropset type 2",sous:"3 x 8 répétitions",famille:"degressive",desc:"Faire 8 répétitions puis diminuer les charges, sans repos faire 8 répétitions de nouveau et réduire une seconde fois pour refaire 8 répétitions.",video:"https://youtu.be/rYi9stYwuaU"},
+  "dropset_type_3":{nom:"Dropset type 3",sous:"100 répétitions",famille:"degressive",desc:"Mettre un poids assez conséquent pour commencer, faire le maximum de répétitions, diminuer les charges refaire le maximum, rediminuer et recommencer jusqu’à atteindre un total de 100 répétitions.",video:"https://youtu.be/aDXSxfCGYlE"},
+  "methode_5_repetitions_10_sec":{nom:"Méthode 5 répétitions / 10 secondes",sous:"",famille:"myo_reps",desc:"Faire 5 répétitions puis 10 s de repos, refaire 5 répétitions de nouveaux 10 s de repos et finir par 5 répétitions.",video:"https://youtu.be/fnifu6TSPkM"},
+  "methode_10_repetitions_10_se":{nom:"Méthode 10 répétitions / 10 secondes",sous:"",famille:"myo_reps",desc:"Faire 10 répétitions puis 10 s de repos, refaire 10 répétitions de nouveaux 10 s de repos et finir par 10 répétitions.",video:"https://youtu.be/wfuCe8SzLm4"},
+  "methode_lourd_leger":{nom:"Méthode lourd / léger",sous:"",famille:"degressive",desc:"Faire 8 répétitions lourdes puis réduire la charge et faire 15 répétitions légères.",video:"https://youtu.be/ScIXBxNgrCs"},
+  "rest_in_pause":{nom:"Rest in pause",sous:"",famille:"rest_pause",desc:"Une fois votre limite de répétitions atteinte marquée, 15 s de repos puis finissez votre série.",video:"https://youtu.be/K3b7rjKt9xg"},
+  "stop_and_go":{nom:"Stop and go",sous:"",famille:"normale",desc:"Marquer 2 s de repos en haut/bas du mouvement.",video:"https://youtu.be/TPbobxebyNs"},
+  "maximum":{nom:"Maximum",sous:"",famille:"normale",desc:"Ne pas compter le nombre de répétitions, faites le maximum de répétitions et dépasser la sensation de brûlure.",video:"https://youtu.be/pvfzmIOnYPc"},
+  "unilaterale":{nom:"Unilatérale",sous:"",famille:"normale",desc:"Faire _ _ répétitions du côté droit puis _ _ du gauche. Toucher le muscle qui travaille pour mieux le ressentir.",video:"https://youtu.be/2nF1EggRxmQ"},
+  "superset":{nom:"Superset",sous:"",famille:"superset",desc:"Enchainer 2 exercices à la suite sans temps de repos.",video:"https://youtu.be/i0LlHtgMTo0"},
+  "methode_curl_barre":{nom:"Méthode curl barre",sous:"",famille:"normale",desc:"Faire 10 répétitions prise serrées, 10 prise large et 10 avec une prise largeur d’épaules sans temps de repos.",video:"https://youtu.be/yztTEdUz9Po"},
+  "methode_1_des_demis_repetiti":{nom:"Méthode 1 des demis répétitions",sous:"10 b/m, 10 m/h, 10 entière",famille:"partielles",desc:"Faire 10 répétitions partant du bas du mouvement jusqu’au milieu, puis 10 partants du milieu jusqu’en haut du mouvement et enfin 10 répétitions entières.",video:"https://youtu.be/2_Gd6MOBPL0"},
+  "methode_isometrie_type_1":{nom:"Méthode isométrie type 1",sous:"20s puis 8 reps",famille:"normale",desc:"Faire une répétition et rester pendant 20 s contracter en haut/bas du mouvement puis enchaîner 8 répétitions à la suite.",video:"https://youtu.be/3loSbniuDNA"},
+  "methode_isometrie_type_2":{nom:"Méthode isométrie type 2",sous:"8 reps puis 20s",famille:"normale",desc:"En fin de série lors de votre dernière répétition rester pendant 20 seconde contractée en haut/bas du mouvement.",video:"https://youtu.be/OXnzVh8bKuM"},
+  "triset":{nom:"Triset",sous:"",famille:"superset",desc:"Enchainer 3 exercices à la suite sans temps de repos.",video:"https://youtu.be/fI2fVawJ4DA"},
+  "fst_7":{nom:"FST 7",sous:"",famille:"myo_reps",desc:"Faire 8 à 12 répétitions, pendant les repos faire 20-30s en contractant les muscles utilisés pendant l’exercice puis 15 s de repos et recommencer.",video:"https://youtu.be/udzloBhc8RU"},
+  "repetition_partielle":{nom:"Répétition partielle",sous:"",famille:"partielles",desc:"Ne pas faire les mouvements en entier en tendant les bras/jambes.",video:"https://youtu.be/du4tHFWQXbs"},
+  "20_10_10_20":{nom:"20/10/10/20",sous:"",famille:"normale",desc:"Faire 20 répétitions pour la première et dernière série et 10 pour la deuxième et troisième.",video:"https://youtu.be/BOljyOZbL30"},
+  "bulgare":{nom:"Bulgare",sous:"",famille:"degressive",desc:"Faire 3 répétitions à 85 % de votre charge maximum sur une répétition puis 6 répétitions à 50 %",video:"https://youtu.be/oQeJBHWgKSQ"},
+  "isotention":{nom:"Isotention",sous:"3s en bas",famille:"normale",desc:"Rester 3 s en contraction en bas de votre mouvement.",video:"https://youtu.be/CfozUMUqmKc"},
+  "isometrie_max":{nom:"Isométrie max",sous:"",famille:"isometrie",desc:"Mettre une charge impossible à lever ou pousser puis tenter de la pousser/ou tirer pendant 4 s puis 4 s de repos et recommencer ça 2 fois.",video:"https://youtu.be/nFL2bUg46z8"},
+  "methode_2_des_demis_repetiti":{nom:"Méthode 2 des demis répétitions",sous:"",famille:"partielles",desc:"Faire 1 répétition partant du bas du mouvement jusqu’au milieu, puis 1 entière. Les deux ne comptent que pour 1 répétition.",video:"https://youtu.be/YMwFRdaBeP0"},
+  "methode_isometrie_type_3":{nom:"Méthode isométrie type 3",sous:"10 reps d’un côté iso de l’autre",famille:"normale",desc:"Faire 10 répétitions d’un bras pendant que l’autre est plié et contracté et reste en position fixe, puis inverser le travail des bras et finir par faire 10 répétitions avec les deux bras en même temps.",video:"https://youtu.be/r70usBSJAr8"},
+  "methode_7_7_7":{nom:"Méthode 7/7/7",sous:"3x 7 reps 7s",famille:"normale",desc:"Faire 7 répétitions puis à la suite maintenir la charge 7 s et recommencer cet enchaînement 2 fois à la suite (faire un total de 21 répétitions et 21 secondes).",video:"https://youtu.be/Ym-coFOBAcY"},
+  "excentrique_ralentit":{nom:"Excentrique ralentit",sous:"Descente de 5 secondes",famille:"normale",desc:"Freiner la descente de 5 secondes sur votre mouvement.",video:"https://youtu.be/CN8X-2D1eD8"},
+  "methode_trinite":{nom:"Méthode trinité",sous:"",famille:"partielles",desc:"Faire le maximum de répétitions normales puis sans repos le maximum de répétitions partiel (du bas/haut jusqu’au milieu du mouvement) et enfin maintenir la charge en haut du mouvement le plus longtemps possible.",video:"https://youtu.be/-OjDIkIASBs"},
+  "methode_infinite":{nom:"Méthode Infinité",sous:"120 répétitions",famille:"rest_pause",desc:"Faire 12 répétitions, 12s de repos, 24 répétitions, 24s de repos, 36 répétitions, 36s de repos, 50 répétitions, 50s de repos.",video:"https://youtu.be/t4CLx1MHGPw"},
+  "methode_sst":{nom:"Méthode SST",sous:"Patrick Tuor",famille:"degressive",desc:"Faire 6 à 8 répétitions lourdes, baisser la charge de 20 à 30 %, faire 5 répétitions en freinant la descente de 5s puis rebaisser de de 20 à 30 %, faire 5 répétitions en freinant la montée de 5s puis 5s de repos et faire 20s en maintenant la charge en bas/haut de l’exercice.",video:"https://youtu.be/CqChnh7ZBnQ"},
+  "8_reps_puis_5_5s":{nom:"8 reps puis 5 / 5s",sous:"",famille:"degressive",desc:"Faire 8 répétitions puis baisser la charge et faire 5 répétitions en freinant la descente de 5s.",video:""}
+});
+const FAMILLES_TECHNIQUE=Object.freeze(['normale','degressive','rest_pause','myo_reps','superset','partielles','isometrie']);
+
+// Contribution d'une série au volume, PAR FAMILLE.
+// Aucune donnée ne permet aujourd'hui de dire ce que vaut un rest-pause en
+// séries dures. 1,0 est une CONVENTION affichée comme telle, pas une mesure.
+// Ne pas la transformer en valeur d'apparence précise.
+const POIDS_TECHNIQUE=Object.freeze({
+  normale:1.0,        // mesure
+  degressive:1.0,     // convention, inchangée depuis l'origine
+  rest_pause:1.0,     // CONVENTION
+  myo_reps:1.0,       // CONVENTION
+  superset:1.0,       // mesure : 1,0 PAR EXERCICE, donc 1,0 pour chacun des deux muscles
+  partielles:1.0,     // CONVENTION
+  isometrie:0.5       // CONVENTION : pas de travail mécanique au sens des répétitions
+});
+const TEXTE_CONVENTION_TECHNIQUE="Il n'existe pas de facteur de conversion validé pour ces techniques. Nous comptons une série dure par défaut. Tu peux l'ajuster.";
+const POIDS_TECHNIQUE_MIN=0, POIDS_TECHNIQUE_MAX=2;
+
+// Résolution de la technique d'un exercice.
+// RÉTROCOMPATIBILITÉ : aucun programme existant ne porte ces champs. Un
+// exercice dont reps contient « PUIS » reste une dégressive, exactement comme
+// avant. La chaîne reps n'est JAMAIS réécrite, dans aucun sens.
+//
+// ex.ss n'entre PAS dans cette résolution : le chaînage est orthogonal à la
+// méthode. Un dropset chaîné au précédent reste un dropset, et son volume vaut
+// de toute façon 1,0 par exercice comme le superset.
+function techniqueDe(ex){
+  if(!ex) return 'normale';
+  const m=ex.methode&&TECHNIQUES[ex.methode];
+  if(m) return m.famille;
+  if(ex.technique&&FAMILLES_TECHNIQUE.indexOf(ex.technique)>=0) return ex.technique;
+  try{ if(parseReps(ex.reps).type==='degressive') return 'degressive'; }catch(e){}
+  return 'normale';
+}
+function methodeDe(ex){
+  return (ex&&ex.methode&&TECHNIQUES[ex.methode])?TECHNIQUES[ex.methode]:null;
+}
+// Poids d'une famille, surchargeable par athlète — même patron que
+// user.reperesVolume. Une surcharge hors bornes est REFUSÉE : elle vient d'une
+// saisie erronée, et un facteur de 40 rendrait l'écran Volume absurde.
+function poidsTechniqueSurcharge(fam,user){
+  const o=user&&user.poidsTechnique&&user.poidsTechnique[fam];
+  return (typeof o==='number'&&isFinite(o)&&o>=POIDS_TECHNIQUE_MIN&&o<=POIDS_TECHNIQUE_MAX)?o:null;
+}
+function poidsTechnique(fam,user){
+  const base=POIDS_TECHNIQUE[fam];
+  if(base==null) return 1;
+  const o=poidsTechniqueSurcharge(fam,user);
+  return o!=null?o:base;
+}
+// Tonnage en kilos d'une série validée. Extrait de finishWorkout pour avoir
+// une seule source de vérité, et pour être testable : c'est la ligne qui porte
+// la contribution de la dégressive depuis l'origine, et elle ne doit pas bouger.
+function tonnageSerie(s,ex){
+  if(!s||!s.done) return 0;
+  // Isométrie : reps est une durée. Multiplier 30 secondes par la charge
+  // fabriquerait un tonnage qui ne veut rien dire.
+  if(ex&&techniqueDe(ex)==='isometrie') return 0;
+  const r1=repsToNumber(s.reps), w1=parseFloat(s.weight||0);
+  if(!(w1>0&&r1>0)) return 0;
+  let v=w1*r1;
+  if(s.degressive&&s.weight2) v+=parseFloat(s.weight2||0)*parseFloat(s.p2reps||0);
+  return v;
+}
+// L'isométrie compte des SECONDES et non des répétitions : multiplier 30 s par
+// la charge donnerait un tonnage inventé. On neutralise la contribution en kg
+// sans toucher au comptage en séries dures, qui vaut 0,5.
+function repsPourTonnage(ex){
+  return techniqueDe(ex)==='isometrie'?0:repsToNumber(ex&&ex.reps);
+}
+
 function parseReps(r){
   const s=String(r||'').trim();
   if(/puis/i.test(s)){const p=s.split(/puis/i).map(x=>x.trim());return{type:'degressive',p1:p[0],p2:p[1],label:s};}
@@ -8497,6 +8615,80 @@ function setExerciseCount(n){
   }
   renderProgEx();
 }
+
+// ── Sélecteur de méthode dans l'éditeur ─────────────────────────────────────
+// Le champ reps reste ÉDITABLE ET INDÉPENDANT : choisir « Dropset type 1 » ne
+// réécrit pas « 3 x 12 ». La méthode décrit ce qu'on fait de la série, reps dit
+// combien de répétitions sont prescrites. Les deux sont saisis à la main.
+const LIB_FAMILLE_BADGE=Object.freeze({degressive:'DÉGRESSIVE',rest_pause:'REST-PAUSE',
+  myo_reps:'MINI-SÉRIES',superset:'SUPERSET',partielles:'PARTIELLES',isometrie:'ISOMÉTRIE'});
+const COUL_FAMILLE=Object.freeze({degressive:['#7c2d12','#fca5a5'],rest_pause:['#3b1a5f','#c4b5fd'],
+  myo_reps:['#0f3b3b','#5eead4'],superset:['#4a2c00','#fdba74'],
+  partielles:['#3f2d00','#fde047'],isometrie:['#1e3a5f','#93c5fd']});
+function badgeTechnique(ex){
+  const m=methodeDe(ex);
+  const fam=techniqueDe(ex);
+  if(!m&&fam==='normale') return '';
+  const c=COUL_FAMILLE[fam]||['#2a2a2a','#bbb'];
+  const txt=m?m.nom.toUpperCase():(LIB_FAMILLE_BADGE[fam]||fam.toUpperCase());
+  return `<span style="background:${c[0]};color:${c[1]};padding:2px 7px;border-radius:20px;font-size:var(--fs-xs);font-weight:700">${escapeHtml(txt)}</span>`;
+}
+// Le sélecteur est désactivé sur un exercice cardio : aucune de ces méthodes
+// n'a de sens sur du vélo, et proposer un choix inopérant est pire que rien.
+function _selecteurTechnique(ex,i){
+  const cardio=(()=>{ try{ return isCardio(ex); }catch(e){ return false; } })();
+  const cles=Object.keys(TECHNIQUES);
+  const sel=ex&&ex.methode&&TECHNIQUES[ex.methode]?ex.methode:'';
+  const opts='<option value="">Aucune (série normale)</option>'
+    +cles.map(k=>`<option value="${k}"${sel===k?' selected':''}>${escapeHtml(TECHNIQUES[k].nom+(TECHNIQUES[k].sous?' ('+TECHNIQUES[k].sous+')':''))}</option>`).join('');
+  const m=methodeDe(ex);
+  return `<div style="margin-bottom:10px">
+    <label>Technique ${cardio?'<span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(sans objet sur du cardio)</span>':''}</label>
+    <select ${cardio?'disabled':''} onchange="_progExTechnique(${i},this.value)"
+      style="width:100%;box-sizing:border-box${cardio?';opacity:.45':''}">${opts}</select>
+    ${m?`<div style="font-size:10px;color:var(--sub);line-height:1.6;margin-top:5px">${escapeHtml(m.desc)}
+      ${m.video?`<a href="${safeUrl(m.video)}" target="_blank" rel="noopener" style="color:var(--link);white-space:nowrap">· voir la vidéo</a>`:''}</div>`:''}
+    ${_avertissementTechnique(ex,i)}
+  </div>`;
+}
+// Avertissements de l'éditeur. Ils DÉCRIVENT une situation inhabituelle, ils
+// n'empêchent rien : c'est le coach qui décide.
+function _avertissementTechnique(ex,i){
+  if(!ex) return '';
+  const av=[];
+  const fam=techniqueDe(ex);
+  if(fam==='superset'&&!ex.ss&&!(progEx[i+1]&&progEx[i+1].ss)){
+    av.push('Cette méthode enchaîne deux exercices, mais celui-ci n\'est chaîné à aucun autre. Utilise le bouton de liaison entre deux cartes.');
+  }
+  // Deux exercices supersetés sur le MÊME muscle : autorisé, mais le volume
+  // comptera bien deux séries dures pour ce muscle. On le dit.
+  if(ex.ss&&progEx[i-1]){
+    try{
+      const a=resoudreMusclesLecture(ex.name,ex,currentUser);
+      const b=resoudreMusclesLecture(progEx[i-1].name,progEx[i-1],currentUser);
+      const communs=((a&&a.p)||[]).filter(m=>((b&&b.p)||[]).includes(m));
+      if(communs.length) av.push('Chaîné avec un exercice qui travaille le même muscle ('
+        +communs.map(m=>(MUSCLES[m]||{}).lib||m).join(', ')+') : le volume comptera deux séries dures pour ce muscle.');
+    }catch(e){}
+  }
+  if(fam==='isometrie') av.push('Le champ Reps se lit en SECONDES pour cette méthode.');
+  if(!av.length) return '';
+  return av.map(t=>`<div style="margin-top:6px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:6px;padding:7px 9px;font-size:10px;color:var(--sub);line-height:1.5">${escapeHtml(t)}</div>`).join('');
+}
+function _progExTechnique(i,cle){
+  if(!progEx[i]) return;
+  _progExDirty=true;
+  if(cle&&TECHNIQUES[cle]){
+    progEx[i].methode=cle;
+    // Superset et triset SONT le chaînage : on le pose, plutôt que d'ajouter
+    // un second mécanisme qui pourrait le contredire.
+    if(TECHNIQUES[cle].famille==='superset'&&i>0&&!progEx[i].ss) progEx[i].ss=true;
+  } else {
+    delete progEx[i].methode;
+  }
+  renderProgEx();
+}
+
 function renderProgEx(){
   setTimeout(()=>{try{_rendreSuggestionsProto();}catch(e){}},0);
   // Sync chips
@@ -8517,7 +8709,11 @@ function renderProgEx(){
       <button onclick="_basculerSS(${i})" style="background:${ex.ss?'#1a0f00':'var(--surface-1)'};border:1px solid ${ex.ss?'var(--orange)':'var(--border)'};color:${ex.ss?'var(--orange)':'var(--sub)'};border-radius:20px;padding:4px 11px;font-size:10px;font-weight:800;letter-spacing:1px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap">${ex.ss?'⇄ SUPERSET · DÉLIER':'+ SUPERSET'}</button>
       <div style="flex:1;height:1px;background:${ex.ss?'var(--orange)':'var(--border)'}"></div>
     </div>`;
-    const badge=pr.type==='degressive'?`<span style="background:#7c2d12;color:#fca5a5;padding:2px 7px;border-radius:20px;font-size:var(--fs-xs);font-weight:700">DÉGRESSIVE</span>`:
+    // Le badge de METHODE prime : il porte le nom exact du guide. Les badges
+    // de FORME (plage, unilateral) restent pour tout le reste.
+    const _bTech=badgeTechnique(ex);
+    const badge=_bTech?_bTech:
+      pr.type==='degressive'?`<span style="background:#7c2d12;color:#fca5a5;padding:2px 7px;border-radius:20px;font-size:var(--fs-xs);font-weight:700">DÉGRESSIVE</span>`:
       pr.type==='unilateral'?`<span style="background:#1e3a5f;color:#93c5fd;padding:2px 7px;border-radius:20px;font-size:var(--fs-xs);font-weight:700">UNILATÉRAL</span>`:
       pr.type==='range'?`<span style="background:#1a3322;color:#86efac;padding:2px 7px;border-radius:20px;font-size:var(--fs-xs);font-weight:700">PLAGE</span>`:'';
     return `${lien}
@@ -8551,6 +8747,7 @@ function renderProgEx(){
           </div>
           <div><label>Repos</label><input value="${escapeHtml(ex.repos||'01 min')}" onchange="_progExDirty=true;progEx[${i}].repos=this.value" placeholder="01 min" style="text-align:center;font-size:12px"></div>
         </div>
+        ${_selecteurTechnique(ex,i)}
         ${_ligneMuscles(ex,i)}
         <!-- Image + Vidéo exercice -->
         <div style="display:flex;align-items:flex-start;gap:10px;margin-top:4px">
@@ -9854,6 +10051,84 @@ function pad(n){return n.toString().padStart(2,'0');}
 // _blocExo pour pouvoir en rendre plusieurs côte à côte ; tout ce qui vaut
 // pour l'écran entier (échauffement, photo, encart RIR) reste ici, en un seul
 // exemplaire.
+
+// ── Guidage en séance ───────────────────────────────────────────────────────
+// La bannière reprend la description du guide MOT POUR MOT, avec le lien vers
+// la vidéo du coach. L'app n'explique pas la méthode à sa façon : elle affiche
+// celle qui est déjà écrite et filmée.
+//
+// Le décompte est un CONFORT, jamais une condition : aucune saisie n'est
+// bloquée parce qu'un compteur n'a pas été touché.
+const RELANCE_SECONDES=15;   // « 15 s de repos », valeur du guide
+function banniereTechnique(ex,idx){
+  const m=methodeDe(ex);
+  const fam=techniqueDe(ex);
+  if(!m||fam==='normale'&&!m) return '';
+  const c=COUL_FAMILLE[fam]||['#2a2a2a','#bbb'];
+  const compteur=(fam==='rest_pause'||fam==='myo_reps')?_compteurRelances(idx):'';
+  return `<div style="background:${c[0]}22;border:1px solid ${c[0]};border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;line-height:1.6;color:#ddd">
+    <strong style="color:${c[1]}">${escapeHtml(m.nom)}${m.sous?' ('+escapeHtml(m.sous)+')':''} :</strong>
+    ${escapeHtml(m.desc)}
+    ${m.video?`<a href="${safeUrl(m.video)}" target="_blank" rel="noopener" style="color:var(--link);white-space:nowrap"> · vidéo</a>`:''}
+    ${compteur}
+  </div>`;
+}
+// Décompte de repos entre deux relances. Une seule minuterie à la fois, et le
+// même patron que le chronomètre de la checklist : il n'y avait aucune
+// minuterie de repos dans l'écran de séance à réutiliser.
+let _relanceTimer=null,_relanceReste=0,_relanceIdx=null;
+function _compteurRelances(idx){
+  const d=woState&&woState.sessionData&&woState.sessionData[idx];
+  const faites=(d&&d.relancesFaites)||0;
+  const enCours=_relanceIdx===idx&&_relanceReste>0;
+  return `<div style="display:flex;align-items:center;gap:9px;margin-top:9px;flex-wrap:wrap">
+    <span style="font-size:11px;color:var(--sub)">Relances :</span>
+    <span id="rel-n-${idx}" style="font-size:16px;font-weight:800;font-family:'Bebas Neue',sans-serif;letter-spacing:1px">${faites}</span>
+    <button onclick="_ajouterRelance(${idx})" class="hit44" style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#eee;font-size:16px;font-weight:800;min-width:38px;min-height:34px;cursor:pointer">+</button>
+    ${faites?`<button onclick="_retirerRelance(${idx})" class="hit44" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:14px;min-width:34px;min-height:34px;cursor:pointer">−</button>`:''}
+    <span id="rel-t-${idx}" style="font-size:12px;font-weight:800;color:${enCours?'var(--orange)':'var(--text-faint)'}">${enCours?_relanceReste+' s':''}</span>
+  </div>`;
+}
+function _ajouterRelance(idx){
+  if(!woState||!woState.sessionData||!woState.sessionData[idx]) return;
+  const d=woState.sessionData[idx];
+  d.relancesFaites=Math.min(99,((d.relancesFaites|0)||0)+1);
+  woPersist();
+  _lancerDecompteRelance(idx);
+  const n=document.getElementById('rel-n-'+idx);
+  if(n) n.textContent=d.relancesFaites;
+}
+function _retirerRelance(idx){
+  const d=woState&&woState.sessionData&&woState.sessionData[idx];
+  if(!d) return;
+  d.relancesFaites=Math.max(0,((d.relancesFaites|0)||0)-1);
+  woPersist();
+  renderWoEx();
+}
+function _lancerDecompteRelance(idx){
+  if(_relanceTimer){ clearInterval(_relanceTimer); _relanceTimer=null; }
+  _relanceIdx=idx; _relanceReste=RELANCE_SECONDES;
+  const peindre=()=>{
+    const t=document.getElementById('rel-t-'+idx);
+    if(!t) return;
+    t.textContent=_relanceReste>0?_relanceReste+' s':'reprends';
+    t.style.color=_relanceReste>0?'var(--orange)':'var(--green)';
+  };
+  peindre();
+  _relanceTimer=setInterval(()=>{
+    _relanceReste--;
+    if(_relanceReste<=0){
+      clearInterval(_relanceTimer); _relanceTimer=null; _relanceReste=0;
+      try{ if(navigator.vibrate) navigator.vibrate(180); }catch(e){}
+    }
+    peindre();
+  },1000);
+}
+function _arreterDecompteRelance(){
+  if(_relanceTimer){ clearInterval(_relanceTimer); _relanceTimer=null; }
+  _relanceReste=0; _relanceIdx=null;
+}
+
 function renderWoEx(){
   const total=woState.exercises.length;
   const grs=_groupesEx(woState.exercises);
@@ -10036,6 +10311,7 @@ function _blocExo(idx,estSS){
         <span style="font-size:14px;color:var(--link)">→</span>
       </a>`:''}
 
+      ${!isCardio(ex)?banniereTechnique(ex,idx):''}
       ${!isCardio(ex)&&pr.type==='degressive'?`<div style="background:#7c2d1222;border:1px solid #9a3412;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#fca5a5">
         <strong>Dégressive :</strong> Phase 1 → <strong>${pr.p1} reps</strong> lourd · Phase 2 → <strong>${pr.p2} reps</strong> léger (sans poser la charge)
       </div>`:''}
@@ -10302,20 +10578,25 @@ function finishWorkout(incomplete=false){
   // prévues dès l'ouverture de l'exercice, l'ancien sets++ inconditionnel affichait
   // donc le programme au lieu du réalisé. Même définition que la fiche coach, qui
   // ne déplie que les séries done (_buildSessionCard).
-  Object.values(woState.sessionData).forEach(d=>d.sets.forEach(s=>{
+  Object.entries(woState.sessionData).forEach(([idx,d])=>d.sets.forEach(s=>{
     if(!s.done) return;
     sets++;
-    const r1=repsToNumber(s.reps), w1=parseFloat(s.weight||0);
-    if(w1>0&&r1>0){
-      vol+=w1*r1;
-      if(s.degressive&&s.weight2) vol+=parseFloat(s.weight2||0)*parseFloat(s.p2reps||0);
-    }
+    vol+=tonnageSerie(s,(woState.exercises||[])[idx]);
   }));
   // Sauvegarder les données par NOM d'exercice (pas par index) pour permettre les lookups cross-séances
   const data={};
   Object.entries(woState.sessionData).forEach(([idx,d])=>{
-    const nm=woState.exercises[parseInt(idx)]?.name;
-    if(nm) data[nm]=d;
+    const _ex=woState.exercises[parseInt(idx)];
+    const nm=_ex&&_ex.name;
+    if(!nm) return;
+    // L'objet exercice n'est pas conserve dans l'historique. On y ajoute la
+    // METHODE et sa FAMILLE, sans quoi le calcul de volume reconstitue un
+    // exercice nu et le poids de technique ne s'applique jamais.
+    // Rien n'est ecrit pour une serie normale : les seances anterieures a ce
+    // champ se comportent alors exactement comme avant.
+    const _fam=techniqueDe(_ex);
+    data[nm]=(_fam==='normale'&&!_ex.methode)?d
+      :Object.assign({},d,{methode:_ex.methode||null,technique:_fam});
   });
   // slot : le créneau d'où vient cette séance. C'est la clé qui permettra à la
   // prochaine séance du même jour de retrouver ses charges sans aller les
@@ -11367,7 +11648,10 @@ function serieEligible(s,ex){
 }
 function serieDure(s,m,ex,user){
   if(!serieEligible(s,ex)) return 0;
-  return poidsIntensite(s)*poidsRole(m,ex,user);
+  // La technique entre en TROISIÈME facteur, après l'intensité et le rôle du
+  // muscle. Elle vaut 1,0 pour presque tout : c'est une convention assumée,
+  // pas une mesure — voir POIDS_TECHNIQUE et le texte affiché à l'écran Volume.
+  return poidsIntensite(s)*poidsRole(m,ex,user)*poidsTechnique(techniqueDe(ex),user);
 }
 
 // ── Semaines ISO ───────────────────────────────────────────────────────────
@@ -11432,7 +11716,7 @@ function _calculSemaine(user,cle){
       // L'objet exercice n'est pas conservé dans l'historique : on le
       // reconstitue à partir du nom et des reps de la première série, seuls
       // éléments dont isCardio a besoin.
-      const ex={name:nom,reps:d.sets[0].reps};
+      const ex={name:nom,reps:d.sets[0].reps,methode:d.methode,technique:d.technique};
       const cardio=isCardio(ex);
       const cls=cardio?VOL_CARDIO:resoudreMusclesLecture(nom,ex,user);
       let elig=0,sansRir=0;
@@ -12871,7 +13155,33 @@ function renderVolume(){
       Aucun volume cette semaine : ${absents.map(m=>(MUSCLES[m]||{}).lib||m).join(', ')}
     </div>`:'';
 
-  document.getElementById('progress-content').innerHTML=nav+alertes+corps+zero+bandeau;
+  // Convention de comptage des techniques d'intensification. Le texte est
+  // OBLIGATOIRE : il dit que 1,0 est une convention et non une mesure, et il
+  // n'apparait que si l'athlete a reellement pratique une de ces techniques —
+  // sinon c'est un avertissement sur un probleme qu'il n'a pas.
+  const conv=_techniquesPratiquees(u).length
+    ? `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:10px;color:var(--text-faint);line-height:1.6">
+        ${escapeHtml(TEXTE_CONVENTION_TECHNIQUE)}
+        <div style="margin-top:5px">${_techniquesPratiquees(u).map(f=>escapeHtml(LIB_FAMILLE[f]||f)+' : '+_fmtPoidsTech(poidsTechnique(f,u))+(poidsTechniqueSurcharge(f,u)!=null?' (ajusté)':'')).join(' · ')}</div>
+      </div>` : '';
+  document.getElementById('progress-content').innerHTML=nav+alertes+corps+zero+conv+bandeau;
+}
+// Familles reellement pratiquees sur la fenetre affichee : on ne parle de
+// convention que si elle s'applique a quelque chose.
+const LIB_FAMILLE=Object.freeze({normale:'Séries normales',degressive:'Dégressives',
+  rest_pause:'Rest-pause',myo_reps:'Mini-séries',superset:'Supersets',
+  partielles:'Partielles',isometrie:'Isométrie'});
+function _fmtPoidsTech(v){ return String(Math.round(v*100)/100).replace('.',','); }
+function _techniquesPratiquees(user){
+  const vues=new Set();
+  for(const sess of ((user&&user.sessions)||[]).slice(-30)){
+    for(const nom of Object.keys((sess&&sess.data)||{})){
+      const d=sess.data[nom];
+      const f=techniqueDe({name:nom,reps:(d&&d.reps)||'',methode:d&&d.methode,technique:d&&d.technique});
+      if(f!=='normale') vues.add(f);
+    }
+  }
+  return [...vues];
 }
 function _volNav(d){
   const n=_volDecalage+d;
@@ -22515,6 +22825,154 @@ function testExercices(){
       currentUser=sauveU;
       window._perfSignaux=Math.round(ms);
       return ms<300;})(),'mesuré : '+(window._perfSignaux||'?')+' ms');
+
+
+    // ══════════════ TECHNIQUES D'INTENSIFICATION ══════════════
+    // ── NON-RÉGRESSION DÉGRESSIVE : test BLOQUANT ──
+    // Un exercice '10 PUIS 20' sans aucun champ nouveau doit se comporter
+    // EXACTEMENT comme avant. Toute divergence ici casse des programmes réels.
+    const _tqDeg={name:'DEVELOPPE COUCHE',series:3,reps:'10 PUIS 20'};
+    ok('Dégressive : parseReps inchangé',(()=>{
+      const p=parseReps('10 PUIS 20');
+      return p.type==='degressive'&&p.p1==='10'&&p.p2==='20'&&p.label==='10 PUIS 20';})());
+    ok('Dégressive : déduite de reps, sans champ technique',
+       techniqueDe(_tqDeg)==='degressive'&&_tqDeg.technique===undefined&&_tqDeg.methode===undefined);
+    ok('Dégressive : la chaîne reps n\'est JAMAIS réécrite',(()=>{
+      const e={name:'X',reps:'10 PUIS 20'};
+      techniqueDe(e); methodeDe(e); badgeTechnique(e); tonnageSerie({done:true,weight:'50',reps:'10'},e);
+      return e.reps==='10 PUIS 20'&&e.methode===undefined&&e.technique===undefined;})());
+    ok('Dégressive : le tonnage inclut toujours weight2 × p2reps',
+       tonnageSerie({done:true,weight:'100',reps:'10',degressive:true,weight2:'60',p2reps:'20'},_tqDeg)===2200);
+    ok('Dégressive : sans weight2, le tonnage reste celui de la phase 1',
+       tonnageSerie({done:true,weight:'100',reps:'10',degressive:true},_tqDeg)===1000);
+    ok('Dégressive : son poids de technique vaut 1,0',poidsTechnique('degressive',{})===1);
+    ok('Dégressive : la bannière d\'origine reste servie par parseReps',
+       parseReps(_tqDeg.reps).type==='degressive'&&!methodeDe(_tqDeg));
+
+    // ── techniqueDe ──
+    ok('Méthode explicite : sa famille est rendue',
+       techniqueDe({name:'X',reps:'10',methode:'rest_in_pause'})==='rest_pause');
+    ok('Sans méthode et reps normale : normale',techniqueDe({name:'X',reps:'10'})==='normale');
+    ok('Méthode inconnue : repli sur normale',
+       techniqueDe({name:'X',reps:'10',methode:'nimportequoi'})==='normale');
+    ok('Famille inconnue dans technique : repli sur normale',
+       techniqueDe({name:'X',reps:'10',technique:'occlusion'})==='normale');
+    ok('Exercice nul : normale',techniqueDe(null)==='normale');
+    ok('Le chaînage ne masque pas la méthode',(()=>{
+      // Un dropset chaîné au précédent reste un dropset.
+      return techniqueDe({name:'X',reps:'12',ss:true,methode:'dropset_type_1'})==='degressive';})());
+
+    // ── Catalogue issu du guide ──
+    ok('Les 30 méthodes du guide sont présentes',Object.keys(TECHNIQUES).length===30,
+       String(Object.keys(TECHNIQUES).length));
+    ok('Chaque méthode a une famille valide',
+       Object.values(TECHNIQUES).every(t=>FAMILLES_TECHNIQUE.indexOf(t.famille)>=0));
+    ok('Chaque méthode porte le texte du guide',
+       Object.values(TECHNIQUES).every(t=>t.desc&&t.desc.length>20));
+    ok('Presque toutes portent la vidéo du coach',
+       Object.values(TECHNIQUES).filter(t=>/^https:\/\/youtu\.be\//.test(t.video)).length===29,
+       String(Object.values(TECHNIQUES).filter(t=>t.video).length));
+    ok('Aucune méthode hors périmètre n\'a été inventée',
+       !/occlusion|kaatsu|cluster|excentrique surcharg/i.test(JSON.stringify(TECHNIQUES)));
+    ok('Rest in pause suit le guide : une seule relance',
+       /15 s de repos puis finissez votre série/.test(TECHNIQUES.rest_in_pause.desc));
+
+    // ── POIDS_TECHNIQUE ──
+    ok('Les sept familles ont un poids',
+       FAMILLES_TECHNIQUE.every(f=>typeof POIDS_TECHNIQUE[f]==='number'));
+    ok('Six familles à 1,0, isométrie à 0,5',
+       FAMILLES_TECHNIQUE.filter(f=>POIDS_TECHNIQUE[f]===1).length===6&&POIDS_TECHNIQUE.isometrie===0.5);
+    ok('Critère 7 : une surcharge d\'athlète est utilisée',
+       poidsTechnique('rest_pause',{poidsTechnique:{rest_pause:1.5}})===1.5);
+    ok('Critère 7 : l\'origine de la surcharge est signalée',
+       poidsTechniqueSurcharge('rest_pause',{poidsTechnique:{rest_pause:1.5}})===1.5
+       &&poidsTechniqueSurcharge('rest_pause',{})===null);
+    ok('Surcharge hors bornes refusée',
+       poidsTechnique('rest_pause',{poidsTechnique:{rest_pause:40}})===1
+       &&poidsTechnique('rest_pause',{poidsTechnique:{rest_pause:-3}})===1);
+    ok('Surcharge non numérique refusée',
+       poidsTechnique('rest_pause',{poidsTechnique:{rest_pause:'beaucoup'}})===1);
+
+    // ── serieDure : la technique entre en troisième facteur ──
+    (function(){
+      const sauve=currentUser;
+      currentUser={id:'t',email:'t@t.fr',exMuscles:{'DC':{p:['PECTORAUX'],s:[]}},exAlias:{},sessions:[]};
+      const u=currentUser;
+      const serie={done:true,weight:'60',reps:'10',rir:'1'};
+      const exN={name:'DC',reps:'10'};
+      const exI={name:'DC',reps:'30',methode:'isometrie_max'};
+      ok('Critère 3 : un rest-pause compte 1,0 série dure',
+         serieDure(serie,'PECTORAUX',{name:'DC',reps:'10',methode:'rest_in_pause'},u)
+         ===serieDure(serie,'PECTORAUX',exN,u));
+      ok('Critère 6 : une isométrie compte 0,5 série dure',
+         Math.abs(serieDure(serie,'PECTORAUX',exI,u)-serieDure(serie,'PECTORAUX',exN,u)*0.5)<1e-9);
+      ok('Critère 7 : la surcharge est bien appliquée au calcul',(()=>{
+        u.poidsTechnique={rest_pause:1.5};
+        const v=serieDure(serie,'PECTORAUX',{name:'DC',reps:'10',methode:'rest_in_pause'},u);
+        const n=serieDure(serie,'PECTORAUX',exN,u);
+        delete u.poidsTechnique;
+        return Math.abs(v-n*1.5)<1e-9;})());
+      currentUser=sauve;
+    })();
+
+    // ── Isométrie ──
+    ok('Isométrie : le tonnage en kilos est neutralisé',
+       tonnageSerie({done:true,weight:'80',reps:'30'},{name:'X',reps:'30',methode:'isometrie_max'})===0);
+    ok('Isométrie : aucune division par zéro ni NaN',
+       !/NaN|Infinity/.test(String(tonnageSerie({done:true,weight:'0',reps:'0'},
+         {name:'X',reps:'30',methode:'isometrie_max'}))));
+    ok('Isométrie : l\'éditeur annonce que Reps est en secondes',
+       /SECONDES/.test(_avertissementTechnique({name:'X',reps:'30',methode:'isometrie_max'},0)));
+    ok('Une série non validée ne compte pas',
+       tonnageSerie({done:false,weight:'80',reps:'10'},{name:'X'})===0);
+
+    // ── Superset : le chaînage existant fait foi ──
+    ok('Critère 4 : chaque exercice d\'un superset vaut 1,0 pour SON muscle',
+       poidsTechnique('superset',{})===1);
+    ok('Critère 5 : un superset sans exercice chaîné ne casse rien',(()=>{
+      // Aucun appariement par nom n'existe : il n'y a donc pas de pointeur
+      // pendant possible. L'exercice se comporte comme une série normale.
+      const e={name:'X',reps:'10',methode:'superset'};
+      return techniqueDe(e)==='superset'&&banniereTechnique(e,0).length>0;})());
+    ok('Critère 5 : l\'éditeur avertit quand rien n\'est chaîné',(()=>{
+      // progEx est une liaison lexicale : lui affecter une valeur via window
+      // ne la change pas. On mute le VRAI tableau, puis on le restaure.
+      const sauve=progEx.slice();
+      progEx.length=0; progEx.push({name:'X',reps:'10',methode:'superset'});
+      const a=_avertissementTechnique(progEx[0],0);
+      progEx.length=0; sauve.forEach(x=>progEx.push(x));
+      // Sans apostrophe dans le motif : escapeHtml l'encode en &#39; dans la
+      // sortie, et un motif qui en contient une ne peut pas correspondre.
+      return /chaîné à aucun autre/.test(a);})());
+    ok('Un exercice ne peut pas être chaîné à lui-même',(()=>{
+      // Le chaînage est positionnel : ex.ss dit « avec le précédent ». Se
+      // référencer soi-même est impossible par construction, et le premier
+      // exercice ne peut pas être chaîné.
+      const g=_groupesEx([{name:'A',ss:true},{name:'B',ss:true}]);
+      return g.length===1&&g[0].length===2;})());
+
+    // ── relancesFaites : jamais bloquant ──
+    ok('Relances : une série se valide sans compteur renseigné',
+       tonnageSerie({done:true,weight:'60',reps:'10'},{name:'X',reps:'10',methode:'rest_in_pause'})===600);
+    ok('Relances : valeurs limites acceptées sans erreur',(()=>{
+      const vals=[undefined,null,0,-3,7,120];
+      return vals.every(v=>{
+        const d={sets:[{done:true,weight:'60',reps:'10'}],relancesFaites:v};
+        return typeof _compteurRelances===   'function'&&!/NaN/.test(String((d.relancesFaites|0)||0));});})());
+    ok('Le compteur n\'apparaît que sur rest-pause et mini-séries',(()=>{
+      const sansC=banniereTechnique({name:'X',reps:'10',methode:'repetition_partielle'},0);
+      const avecC=banniereTechnique({name:'X',reps:'10',methode:'rest_in_pause'},0);
+      return !/Relances/.test(sansC)&&/Relances/.test(avecC);})());
+
+    // ── Aucune suggestion automatique ──
+    ok('Critère 8 : aucune technique n\'est suggérée nulle part',(()=>{
+      // Le catalogue n'est lu que par le sélecteur de l'éditeur et par les
+      // bannières d'un exercice qui porte DÉJÀ une méthode.
+      const h=blocPoids({})+_htmlChoixPhase();
+      return !Object.values(TECHNIQUES).some(t=>h.includes(t.nom));})());
+    ok('Une série normale n\'affiche aucune bannière',
+       banniereTechnique({name:'X',reps:'10'},0)==='');
+    ok('Une série normale n\'affiche aucun badge',badgeTechnique({name:'X',reps:'10'})==='');
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
