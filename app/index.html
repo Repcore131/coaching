@@ -1770,6 +1770,9 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="metric-box"><div class="metric-val" id="clh-weight">—</div><div class="metric-label">Poids kg</div></div>
       </div>
 
+      <!-- SIGNES À FAIRE EXAMINER -->
+      <div id="clh-contraintes"></div>
+
       <!-- DOULEUR SIGNALÉE -->
       <div id="clh-douleur"></div>
 
@@ -5671,6 +5674,12 @@ function urgencyScore(c){
   // tout dans ce tri. Les branches 1 à 5 ci-dessous sont INCHANGÉES, elles ne
   // sont que repoussées d'un cran, et une batterie de non-régression le
   // vérifie sur les six cas d'origine.
+  // Drapeau rouge déclaré : douleur qui irradie, perte de force, réveil
+  // nocturne, choc, gonflement. C'est le signal le plus grave que
+  // l'application puisse recevoir, et il passe donc devant la douleur répétée.
+  // Il n'est PAS reportable : un coach ne doit pas pouvoir le faire disparaître
+  // d'un clic, et seule la levée du drapeau l'éteint.
+  if(drapeauRougeActif(c)) return 10;
   const sg=signauxEntrainement(c);
   if(sg.douleur&&!isAlertSnoozed('douleur',c.id,0,c)) return 9;
   if(sg.douleurDiffuse&&!isAlertSnoozed('douleurdiff',c.id,0,c)) return 8;
@@ -6075,6 +6084,7 @@ function blocDouleurAthlete(user){
       Tu as signalé une douleur sur <b>${escapeHtml(x.nom)}</b> lors de tes ${x.seances} dernières séances.
       Ne force pas dessus. Préviens ton coach.
     </div>
+    <button class="btn btn-outline btn-sm" onclick="ouvrirFormContrainte('','moi')" style="margin-top:10px;letter-spacing:1px;font-size:10px">Préciser où ça fait mal</button>
     ${href?`<a href="${safeUrl(href)}" target="_blank" rel="noopener" class="btn btn-outline btn-sm"
       style="display:inline-flex;align-items:center;justify-content:center;margin-top:10px;letter-spacing:1px;font-size:10px;text-decoration:none">Contacter mon coach</a>`:''}
     ${blocDisclaimerDouleur()}
@@ -6097,8 +6107,17 @@ function renderTodoBlock(clients){
   const expiring=clients.filter(c=>!c._fromCode&&c.status==='COACHING_SUIVI'&&c.accessExpiry&&(c.accessExpiry-now)>0&&(c.accessExpiry-now)<SOON&&!isAlertSnoozed('expiring',c.id));
   const noProg=clients.filter(c=>!c._fromCode&&!hasProgram(c)&&(c.bilans||[]).some(b=>b.type==='depart')&&!isAlertSnoozed('noprog',c.id));
   const noStart=clients.filter(c=>neverStarted(c)&&!isAlertSnoozed('nostart',c.id));
-  // Les signaux d'entrainement d'abord : la sante avant l'intendance.
-  const rows=_lignesEntrainement(clients);
+  // Drapeau rouge d'abord : c'est le seul signal que le coach ne peut pas
+  // reporter d'un clic. Une ligne par athlete, avec les signes declares.
+  const rows=clients.filter(c=>drapeauRougeActif(c)).map(c=>{
+    const d=drapeauRougeActif(c);
+    const lib=d.cases.map(x=>(DRAPEAUX_ROUGES.find(y=>y.cle===x)||{lib:x}).lib);
+    return {type:'drapeau',icon:'🛑',color:'var(--red)',label:'Drapeau rouge santé signalé',
+      list:[c],sante:true,nonReportable:true,
+      texte:libZone(d.zone)+' · '+lib.join(' · ')+". Aucun exercice de remplacement n'est proposé."};
+  });
+  // Puis les signaux d'entrainement : la sante avant l'intendance.
+  rows.push.apply(rows,_lignesEntrainement(clients));
   // En tête des lignes administratives : relancer un inscrit qui n'a jamais démarré prime sur tout le reste.
   if(noStart.length) rows.push({type:'nostart',icon:'🆕',color:'var(--red)',label:'Inscrit, n\'a jamais commencé',list:noStart});
   if(newBil.length) rows.push({type:'bilan',icon:'📥',color:'var(--orange)',label:'Nouveau'+(newBil.length>1?'x bilans à lire':' bilan à lire'),list:newBil});
@@ -6114,7 +6133,10 @@ function renderTodoBlock(clients){
   const unique=new Set(rows.flatMap(r=>r.list.map(c=>c.id))).size;
   // Le disclaimer est rendu des qu'une ligne de douleur est visible, et il
   // vient de la constante unique partagee avec les deux autres affichages.
-  const aDouleur=vues.some(r=>r.sante);
+  const aDouleur=vues.some(r=>r.sante&&r.type!=='drapeau');
+  // Un drapeau rouge n'a rien a voir avec l'echelle de douleur de 1 a 6 : le
+  // disclaimer qui convient est celui des contraintes de sante.
+  const aDrapeau=vues.some(r=>r.type==='drapeau');
   el.innerHTML=`<div style="background:#0c0000;border:1px solid #2a0000;border-radius:4px;margin-bottom:20px;overflow:hidden">
     <div style="padding:9px 14px;display:flex;align-items:center;justify-content:space-between;background:#0f0000;border-bottom:1px solid #1e0000">
       <span style="font-size:var(--fs-xs);font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:2px">⚡ À traiter</span>
@@ -6134,10 +6156,11 @@ function renderTodoBlock(clients){
       const corps=r.texte
         ? `<div style="flex:1;min-width:0"><span style="font-size:12px;font-weight:800;color:#fff">${nomA}</span><span style="font-size:12px;font-weight:700;color:${r.color}"> · ${r.label}</span><div style="font-size:11px;color:var(--sub);line-height:1.5;margin-top:2px">${escapeHtml(r.texte)}</div></div>`
         : `<div style="flex:1;min-width:0"><span style="font-size:12px;font-weight:700;color:#fff">${r.list.length>1?r.list.length+' ':''}</span><span style="font-size:12px;font-weight:700;color:${r.color}">${r.label}</span><span style="font-size:11px;color:var(--sub)"> · ${names}</span></div>`;
-      return{html:`<span style="font-size:15px;flex-shrink:0;align-self:flex-start;margin-top:1px">${r.icon}</span>${corps}${_waBoutonTodo(r,idx)}<button onclick="event.stopPropagation();dismissTodoRow(${idx})" title="Snoozer 7 jours" style="background:none;border:none;color:var(--text-dim);font-size:15px;cursor:pointer;padding:4px 8px;flex-shrink:0;transition:color .15s;border-radius:4px" onmouseover="this.style.color='var(--sub)'" onmouseout="this.style.color='#444'">✕</button>`,
+      return{html:`<span style="font-size:15px;flex-shrink:0;align-self:flex-start;margin-top:1px">${r.icon}</span>${corps}${_waBoutonTodo(r,idx)}${r.nonReportable?'':`<button onclick="event.stopPropagation();dismissTodoRow(${idx})" title="Snoozer 7 jours" style="background:none;border:none;color:var(--text-dim);font-size:15px;cursor:pointer;padding:4px 8px;flex-shrink:0;transition:color .15s;border-radius:4px" onmouseover="this.style.color='var(--sub)'" onmouseout="this.style.color='#444'">✕</button>`}`,
       onClick:`openClientDetail('${r.list[0].id}')`,style:'cursor:pointer;transition:background .15s;'};
     },{pad:'10px 14px',gap:10,border:'#180000',hover:'#140000'})}
     ${restant?`<div style="padding:8px 14px;font-size:11px;color:var(--sub);border-top:1px solid #180000">+ ${restant} autre${restant>1?'s':''}</div>`:''}
+    ${aDrapeau?`<div style="padding:8px 14px;border-top:1px solid #180000">${blocDisclaimerSante()}</div>`:''}
     ${aDouleur?`<div style="padding:8px 14px;border-top:1px solid #180000">${blocDisclaimerDouleur()}</div>`:''}
   </div>`;
 }
@@ -6507,10 +6530,22 @@ function openClientDetail(cid,_refresh){
   const _al=document.getElementById('ccd-alertes');
   if(_al){
     const ci=contreIndications(c.bilans);
-    _al.style.display=ci.length?'block':'none';
-    _al.innerHTML=!ci.length?'':`<div style="background:#1a0d00;border:1px solid var(--orange);border-left:4px solid var(--orange);border-radius:8px;padding:12px 14px">
+    // L'encart s'affiche desormais aussi quand rien n'est declare en texte
+    // libre mais qu'une contrainte a ete structuree, ou qu'un drapeau rouge
+    // est actif — c'est le cas le plus urgent, il ne peut pas dependre de la
+    // presence d'un texte.
+    const _ctL=contraintesActives(c), _ctD=drapeauRougeActif(c);
+    _al.style.display=(ci.length||_ctL.length||_ctD)?'block':'none';
+    _al.innerHTML=(!ci.length&&!_ctL.length&&!_ctD)?'':`<div style="background:#1a0d00;border:1px solid var(--orange);border-left:4px solid var(--orange);border-radius:8px;padding:12px 14px">
       <div style="font-size:var(--fs-xs);color:var(--orange);font-weight:900;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:8px">⚠️ À prendre en compte</div>
+      ${blocDrapeauRouge(c)}
       ${ci.map(x=>`<div style="font-size:12px;line-height:1.55;margin-bottom:4px"><span style="color:#fcd34d;font-weight:700">${x.emoji} ${x.lbl} :</span> <span style="color:#eee">${escapeHtml(x.txt)}</span></div>`).join('')}
+      ${_ctL.length?`<div style="margin-top:9px;border-top:1px solid #3a2400;padding-top:8px">
+        <div style="font-size:var(--fs-xs);color:var(--orange);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;margin-bottom:4px">Contraintes structurées</div>
+        ${_ctL.map(x=>_ligneContrainte(x,true,c.id)).join('')}
+      </div>`:''}
+      <button class="btn btn-outline btn-sm" onclick="ouvrirFormContrainte('','${c.id}')" style="margin-top:10px;letter-spacing:1px;font-size:10px">Structurer une contrainte</button>
+      ${blocDisclaimerSante()}
     </div>`;
   }
   const be=document.getElementById('ccd-bilans');
@@ -9225,6 +9260,7 @@ function loadClientHome(){
   const _pAff=poidsAffiche(u);
   document.getElementById('clh-weight').textContent=_pAff!=null?_pAff+'kg':'—';
   renderCartePesee();
+  renderContraintesAthlete();
   renderDouleurAthlete();
   renderBandeauPhase();renderRelancePhase();renderCartePhase();
   renderNutriDots();renderNotifs();renderWoReminderCard();
@@ -12521,6 +12557,335 @@ function _texteReponse(val){
 // Contre-indications du bilan de départ. Rendues à part de la liste complète,
 // mais lues dans la MÊME déclaration : impossible d'en ajouter une au
 // questionnaire et d'oublier l'encart d'avertissement.
+
+// ══════════════ CONTRAINTES DE SANTÉ DÉCLARÉES ══════════════
+// Le questionnaire de départ recueille depuis toujours « problèmes de santé /
+// blessures » en TEXTE LIBRE, et cette réponse n'était lue par aucun calcul :
+// un athlète déclarant une hernie recevait le programme Fondation complet,
+// soulevé de terre inclus. On structure la déclaration pour pouvoir s'en
+// servir — sans jamais diagnostiquer, autoriser ni supprimer quoi que ce soit.
+//
+// LE TEXTE LIBRE DE deb-health N'EST JAMAIS ANALYSÉ AUTOMATIQUEMENT POUR
+// PRODUIRE UN AVERTISSEMENT OU ÉCARTER UN EXERCICE.
+// Un détecteur de mots-clés produirait des faux positifs (« je n'ai pas de
+// problème de dos ») et un faux positif sur une contre-indication est pire que
+// rien : il apprend à l'utilisateur à ignorer les avertissements. La
+// structuration passe par un humain, coach ou athlète.
+// (Une lecture par mots-clés existe ailleurs — _aAntecedentLombaire — mais
+// elle ne fait que REMONTER des protocoles de prévention dans une liste, sans
+// jamais rien écarter ni avertir. C'est la limite à ne pas franchir.)
+const ZONES_CONTRAINTE=Object.freeze([
+  {cle:'rachis-lombaire',lib:'bas du dos'},
+  {cle:'rachis-cervical',lib:'nuque'},
+  {cle:'epaule',lib:'épaule'},
+  {cle:'coude',lib:'coude'},
+  {cle:'poignet',lib:'poignet'},
+  {cle:'hanche',lib:'hanche'},
+  {cle:'genou',lib:'genou'},
+  {cle:'cheville',lib:'cheville'}
+]);
+// Formulations de l'utilisateur, reprises telles quelles à l'écran : ce sont
+// des façons de dire, pas des degrés cliniques.
+const NIVEAUX_CONTRAINTE=Object.freeze([
+  {cle:'gene',      lib:'ça me gêne parfois'},
+  {cle:'douleur',   lib:'ça me fait mal quand je force'},
+  {cle:'antecedent',lib:"j'ai eu un problème là, c'est réglé"},
+  {cle:'eviter',    lib:"on m'a dit d'éviter ce type de mouvement"}
+]);
+const COTES_CONTRAINTE=Object.freeze([
+  {cle:'gauche',lib:'gauche'},{cle:'droit',lib:'droit'},
+  {cle:'les-deux',lib:'les deux'},{cle:null,lib:'sans précision'}
+]);
+// Seuls ces deux niveaux déclenchent un avertissement sur un exercice. Une
+// gêne occasionnelle ou un antécédent réglé ne justifient pas d'interrompre
+// la lecture de l'athlète à chaque série.
+const NIVEAUX_AVERTISSANTS=Object.freeze(['douleur','eviter']);
+const SEUIL_CONTRAINTE_EX=2;   // charge articulaire de la fiche, sur 0..3
+
+const DISCLAIMER_SANTE="RepCore n'est pas un dispositif médical. Ces informations servent à adapter ton entraînement, pas à poser un diagnostic. En cas de douleur qui dure ou qui s'aggrave, consulte un professionnel de santé.";
+function blocDisclaimerSante(){
+  return `<div style="font-size:10px;color:var(--text-faint);line-height:1.6;margin-top:10px">${DISCLAIMER_SANTE}</div>`;
+}
+function libZone(z){ const x=ZONES_CONTRAINTE.find(y=>y.cle===z); return x?x.lib:z; }
+function libNiveau(n){ const x=NIVEAUX_CONTRAINTE.find(y=>y.cle===n); return x?x.lib:n; }
+function zoneVersCle(zone){ return String(zone||''); }
+
+function contraintesActives(u){
+  return ((u&&u.contraintesSante)||[]).filter(c=>c&&c.actif!==false&&c.zone);
+}
+function ajouterContrainte(u,c){
+  if(!u||!c||!c.zone) return null;
+  if(!ZONES_CONTRAINTE.some(z=>z.cle===c.zone)) return null;
+  if(!NIVEAUX_CONTRAINTE.some(n=>n.cle===c.niveau)) return null;
+  if(!u.contraintesSante) u.contraintesSante=[];
+  const e={id:'ct_'+Date.now()+'_'+Math.floor(Math.random()*1e6),
+    zone:c.zone, cote:c.cote||null, niveau:c.niveau,
+    libelle:String(c.libelle||'').slice(0,300),
+    source:c.source||'athlete', date:Date.now(), actif:true};
+  u.contraintesSante.push(e);
+  return e;
+}
+function retirerContrainte(u,id){
+  const l=(u&&u.contraintesSante)||[];
+  const e=l.find(x=>x&&x.id===id);
+  if(!e) return false;
+  // Désactivée, pas effacée : le coach doit pouvoir voir qu'une contrainte a
+  // existé, et à quelle date elle a été levée.
+  e.actif=false; e.dateFin=Date.now();
+  return true;
+}
+
+// ── Croisement contrainte × exigence mécanique de l'exercice ────────────────
+// ATTENTION : la fiche mécanique par exercice (charge articulaire de 0 à 3 par
+// zone) N'EXISTE PAS ENCORE dans ce produit — c'est le lot FB-06. Tant qu'elle
+// manque, cette fonction rend un tableau VIDE : aucun avertissement ciblé,
+// aucune supposition. C'est délibéré. Deviner qu'un exercice « charge beaucoup
+// le bas du dos » à partir de sa classification MUSCULAIRE serait faux : savoir
+// qu'un soulevé de terre roumain travaille les ischios ne dit rien de sa charge
+// lombaire.
+// Le contrat que FB-06 devra remplir est fixé ici et vérifié par les tests :
+//   ficheDe(ex) → { contraintes: { '<zone>': 0..3 }, schema: '<slug>' }
+function ficheExercice(ex){
+  if(typeof ficheDe!=='function') return null;
+  try{ return ficheDe(ex)||null; }catch(e){ return null; }
+}
+function contraintesPourExercice(ex,u){
+  const f=ficheExercice(ex);
+  if(!f||!f.contraintes) return [];
+  const out=[];
+  for(const c of contraintesActives(u)){
+    if(NIVEAUX_AVERTISSANTS.indexOf(c.niveau)<0) continue;
+    const n=f.contraintes[zoneVersCle(c.zone)];
+    if(typeof n==='number'&&n>=SEUIL_CONTRAINTE_EX) out.push(c);
+  }
+  return out;
+}
+
+// ── Drapeaux rouges ─────────────────────────────────────────────────────────
+// Ces signes ne se discutent pas et ne se substituent pas : quand l'un d'eux
+// est coché, l'application ARRÊTE de proposer quoi que ce soit sur cette zone.
+// Proposer un exercice de remplacement à quelqu'un qui décrit une douleur
+// irradiante reviendrait à l'aider à continuer.
+const DRAPEAUX_ROUGES=Object.freeze([
+  {cle:'irradiation',lib:'une douleur qui descend dans le bras ou la jambe'},
+  {cle:'neuro',      lib:'une perte de force ou des fourmillements'},
+  {cle:'nuit',       lib:'une douleur qui te réveille la nuit'},
+  {cle:'choc',       lib:"c'est arrivé après un choc ou une chute"},
+  {cle:'gonflement', lib:"l'articulation est gonflée"}
+]);
+const TEXTE_ARRET_DRAPEAU=["Arrête l'entraînement sur cette zone et fais-toi examiner.",
+  "Ces signes demandent l'avis d'un médecin ou d'un kinésithérapeute. RepCore n'est pas un dispositif médical et ne peut pas t'aider là-dessus.",
+  "Ton coach a été prévenu."];
+function poserDrapeauRouge(u,zone,cases){
+  if(!u||!zone) return null;
+  const l=(cases||[]).filter(c=>DRAPEAUX_ROUGES.some(d=>d.cle===c));
+  if(!l.length) return null;
+  u.drapeauRouge={zone,cases:l,date:Date.now()};
+  return u.drapeauRouge;
+}
+function drapeauRougeActif(u){
+  const d=u&&u.drapeauRouge;
+  return (d&&d.zone&&Array.isArray(d.cases)&&d.cases.length)?d:null;
+}
+function leverDrapeauRouge(u){
+  if(!u||!u.drapeauRouge) return false;
+  if(!u.historiqueDrapeaux) u.historiqueDrapeaux=[];
+  u.historiqueDrapeaux.push(Object.assign({},u.drapeauRouge,{leve:Date.now()}));
+  if(u.historiqueDrapeaux.length>20) u.historiqueDrapeaux=u.historiqueDrapeaux.slice(-20);
+  delete u.drapeauRouge;
+  return true;
+}
+// Aucun substitut n'est proposé sur une zone sous drapeau rouge — ni sur les
+// autres, tant que le drapeau est levé : on ne trie pas la douleur.
+function substitutsAutorises(u,zone){
+  const d=drapeauRougeActif(u);
+  if(!d) return true;
+  return false;
+}
+
+
+// ── Formulaire de déclaration, réutilisé aux trois points d'entrée ──────────
+// Un seul formulaire : bilan de départ, fiche coach, et parcours douleur en
+// séance. Trois portes, une seule pièce — sinon les trois divergent.
+let _ctSaisie={zone:'',cote:null,niveau:'',libelle:'',drapeaux:[]};
+let _ctRetour=null;      // ce qu'on rouvre après fermeture
+let _ctCible=null;       // sur qui on écrit : l'athlète, ou le client du coach
+
+function _ctReset(zone){
+  _ctSaisie={zone:zone||'',cote:null,niveau:'',libelle:'',drapeaux:[]};
+}
+function _ctPuce(actif,txt,onclick,couleur){
+  const c=couleur||'var(--red)';
+  return `<button onclick="${onclick}" class="hit44" style="min-height:40px;padding:8px 12px;border-radius:9px;cursor:pointer;
+    background:${actif?'#1a0505':'var(--surface-1)'};border:1px solid ${actif?c:'var(--border)'};
+    color:${actif?'#fff':'#bbb'};font-size:12px;font-weight:700;text-align:left">${txt}</button>`;
+}
+function _htmlFormContrainte(){
+  const s=_ctSaisie;
+  const zones=ZONES_CONTRAINTE.map(z=>_ctPuce(s.zone===z.cle,escapeHtml(z.lib),`_ctSet('zone','${z.cle}')`)).join('');
+  const niveaux=NIVEAUX_CONTRAINTE.map(n=>_ctPuce(s.niveau===n.cle,escapeHtml(n.lib),`_ctSet('niveau','${n.cle}')`)).join('');
+  const cotes=COTES_CONTRAINTE.map(c=>_ctPuce(s.cote===c.cle,escapeHtml(c.lib),`_ctSet('cote',${c.cle?"'"+c.cle+"'":'null'})`)).join('');
+  const drap=DRAPEAUX_ROUGES.map(d=>{
+    const on=s.drapeaux.indexOf(d.cle)>=0;
+    // Le style global des <label> est en majuscules espacees : sur cinq
+    // phrases completes, ca se lit comme des titres et plus comme des cases.
+    return `<label style="display:flex;align-items:flex-start;gap:9px;padding:9px 0;cursor:pointer;min-height:44px;text-transform:none;letter-spacing:normal;font-size:inherit;font-weight:400;color:inherit;margin:0">
+      <input type="checkbox" ${on?'checked':''} onchange="_ctDrapeau('${d.cle}',this.checked)"
+        style="width:18px;height:18px;margin-top:1px;flex-shrink:0;accent-color:var(--red)">
+      <span style="font-size:12px;color:#ddd;line-height:1.5">${escapeHtml(d.lib)}</span>
+    </label>`;}).join('');
+  const alerte=s.drapeaux.length>0;
+  return `<div id="ct-form">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Où ça ?</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">${zones}</div>
+
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Quel côté ?</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">${cotes}</div>
+
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Comment tu le décrirais ?</div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">${niveaux}</div>
+
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Précision (facultatif)</div>
+    <input id="ct-libelle" value="${escapeHtml(s.libelle)}" oninput="_ctSaisie.libelle=this.value"
+      placeholder="Ex : depuis une chute à ski en 2023"
+      style="width:100%;box-sizing:border-box;margin-bottom:16px">
+
+    <div style="border-top:1px solid var(--border);padding-top:12px">
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:${alerte?'var(--red)':'var(--sub)'};text-transform:uppercase;margin-bottom:4px">Est-ce que tu as l'un de ces signes ?</div>
+      <div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:4px">Coche uniquement ce qui te correspond.</div>
+      ${drap}
+    </div>
+    ${blocDisclaimerSante()}
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-red btn-sm" onclick="_ctValider()" style="flex:1;letter-spacing:1px">Enregistrer</button>
+      <button class="btn btn-outline btn-sm" onclick="closeModal()" style="flex:0 0 auto;padding:0 16px;letter-spacing:1px;font-size:10px">Annuler</button>
+    </div>
+  </div>`;
+}
+function _ctSet(champ,val){ _ctSaisie[champ]=val; _ctRepeindre(); }
+function _ctDrapeau(cle,on){
+  const l=_ctSaisie.drapeaux;
+  const i=l.indexOf(cle);
+  if(on&&i<0) l.push(cle); else if(!on&&i>=0) l.splice(i,1);
+  _ctRepeindre();
+}
+function _ctRepeindre(){
+  const z=document.getElementById('ct-form');
+  if(z) z.outerHTML=_htmlFormContrainte();
+}
+function ouvrirFormContrainte(zone,cible){
+  _ctReset(zone);
+  _ctCible=cible||null;
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',
+    `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
+      <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:16px 16px 0 0;padding:18px;width:100%;max-width:520px;max-height:90vh;overflow:auto">
+        <div style="font-size:15px;font-weight:800;margin-bottom:4px">Signaler une gêne</div>
+        <div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:14px">
+          Ça sert à adapter ce qu'on te propose. Rien n'est supprimé de ton programme sans que ton coach le décide.
+        </div>
+        ${_htmlFormContrainte()}
+      </div></div>`);
+}
+// La cible peut être l'athlète lui-même ou un client du coach. Dans le second
+// cas on repasse par la carte des utilisateurs : _coachEditClient est une copie.
+function _ctEcrire(fn){
+  if(!_ctCible||_ctCible===currentUser.id||_ctCible==='moi'){
+    if(!currentUser) return false;
+    fn(currentUser);
+    saveUser();
+    return true;
+  }
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(_ctCible,users);
+  if(!c||!c.email) return false;
+  fn(c);
+  users[c.email]=c;
+  DB.set('users',users);
+  CLOUD.pushOne(c.email,c);
+  return true;
+}
+function _ctValider(){
+  const s=_ctSaisie;
+  if(!s.zone){ toast('Choisis une zone','var(--orange)'); return; }
+  // Un drapeau rouge court-circuite tout : on l'enregistre, on affiche l'écran
+  // d'arrêt, et on ne propose RIEN d'autre. La contrainte est enregistrée
+  // aussi, pour que le coach voie de quelle zone il s'agit.
+  if(s.drapeaux.length){
+    const zone=s.zone, cases=s.drapeaux.slice(), lib=s.libelle, cote=s.cote;
+    const ok2=_ctEcrire(u=>{
+      ajouterContrainte(u,{zone,cote,niveau:'eviter',libelle:lib,
+        source:(_ctCible&&_ctCible!=='moi')?'coach':'athlete'});
+      poserDrapeauRouge(u,zone,cases);
+    });
+    closeModal();
+    if(ok2) afficherEcranArret(zone);
+    return;
+  }
+  if(!s.niveau){ toast('Dis comment tu le décrirais','var(--orange)'); return; }
+  const c={zone:s.zone,cote:s.cote,niveau:s.niveau,libelle:s.libelle,
+    source:(_ctCible&&_ctCible!=='moi')?'coach':'athlete'};
+  const ok2=_ctEcrire(u=>ajouterContrainte(u,c));
+  closeModal();
+  if(!ok2){ toast('Enregistrement impossible','var(--red)'); return; }
+  toast('C\'est noté 👍');
+  try{ if(document.getElementById('ccd-contraintes')) renderContraintesCoach(getOwnedClient(_ctCible)); }catch(e){}
+  try{ if(document.getElementById('clh-contraintes')) renderContraintesAthlete(); }catch(e){}
+}
+// ── Écran d'arrêt ───────────────────────────────────────────────────────────
+// Aucun substitut, aucune adaptation, aucune proposition. On dit d'arrêter et
+// d'aller voir quelqu'un.
+function afficherEcranArret(zone){
+  document.body.insertAdjacentHTML('beforeend',
+    `<div id="modal-overlay" style="position:fixed;inset:0;background:#000e;z-index:3000;display:flex;align-items:center;justify-content:center;padding:20px">
+      <div style="background:var(--dark);border:2px solid var(--red);border-radius:16px;padding:20px;width:100%;max-width:460px;max-height:90vh;overflow:auto">
+        <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red);text-transform:uppercase;margin-bottom:10px">Ce que tu décris demande un avis</div>
+        ${TEXTE_ARRET_DRAPEAU.map(t=>`<div style="font-size:13px;color:#eee;line-height:1.7;margin-bottom:9px">${escapeHtml(t)}</div>`).join('')}
+        <div style="font-size:11px;color:var(--text-faint);line-height:1.6;margin-top:10px">Zone concernée : ${escapeHtml(libZone(zone))}.</div>
+        <button class="btn btn-red" onclick="closeModal()" style="margin-top:16px;letter-spacing:1px">J'ai compris</button>
+      </div></div>`);
+}
+// ── Restitution ─────────────────────────────────────────────────────────────
+function _ligneContrainte(c,pourCoach,cible){
+  const cote=c.cote?' ('+(COTES_CONTRAINTE.find(x=>x.cle===c.cote)||{lib:c.cote}).lib+')':'';
+  return `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
+    <div style="flex:1;min-width:0">
+      <div style="font-size:12px;font-weight:800;color:#eee">${escapeHtml(libZone(c.zone))}${escapeHtml(cote)}</div>
+      <div style="font-size:11px;color:var(--sub);line-height:1.5">${escapeHtml(libNiveau(c.niveau))}${c.libelle?' · '+escapeHtml(c.libelle):''}</div>
+    </div>
+    <button onclick="_ctRetirer('${c.id}',${cible?"'"+cible+"'":'null'})" class="hit44" style="min-width:40px;min-height:40px;background:none;border:none;color:var(--text-dim);font-size:15px;cursor:pointer" aria-label="Retirer">✕</button>
+  </div>`;
+}
+function _ctRetirer(id,cible){
+  _ctCible=cible||null;
+  _ctEcrire(u=>retirerContrainte(u,id));
+  try{ if(document.getElementById('ccd-contraintes')) renderContraintesCoach(getOwnedClient(cible)); }catch(e){}
+  try{ if(document.getElementById('clh-contraintes')) renderContraintesAthlete(); }catch(e){}
+}
+function blocDrapeauRouge(u){
+  const d=drapeauRougeActif(u);
+  if(!d) return '';
+  const lib=d.cases.map(c=>(DRAPEAUX_ROUGES.find(x=>x.cle===c)||{lib:c}).lib);
+  return `<div style="background:#1a0505;border:1px solid var(--red);border-radius:10px;padding:12px;margin-bottom:12px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red);text-transform:uppercase;margin-bottom:6px">Signes à faire examiner · ${escapeHtml(libZone(d.zone))}</div>
+    ${lib.map(t=>`<div style="font-size:11px;color:#ddd;line-height:1.6">· ${escapeHtml(t)}</div>`).join('')}
+    <div style="font-size:11px;color:var(--sub);line-height:1.6;margin-top:7px">Aucun exercice de remplacement n'est proposé tant que ce signalement est actif.</div>
+  </div>`;
+}
+function blocContraintes(u,pourCoach,cible){
+  const l=contraintesActives(u);
+  const d=blocDrapeauRouge(u);
+  if(!l.length&&!d) return '';
+  return d+(l.length?`<div style="margin-bottom:4px">${l.map(c=>_ligneContrainte(c,pourCoach,cible)).join('')}</div>`:'');
+}
+function renderContraintesAthlete(){
+  const z=document.getElementById('clh-contraintes');
+  if(!z) return;
+  let h='';
+  try{ h=currentUser?blocDrapeauRouge(currentUser):''; }catch(e){ h=''; }
+  z.innerHTML=h;
+}
+
 function contreIndications(bilans){
   const dep=(bilans||[]).filter(b=>b&&b.type==='depart').slice(-1)[0];
   if(!dep) return [];
@@ -12626,7 +12991,13 @@ const DEB_STEPS=[
     bLbl('Quelle est ta profession ? ')+bT('deb-job','Ex: Infirmier, Comptable...')+
     bLbl('Et ton rythme de travail ?')+
     `<div>${bC('deb-work-rhythm',['Plein temps','Partiel','En arrêt'])}</div>`+
-    bLbl('As-tu des problèmes de santé ou des blessures ?  (Si oui, précise)')+bT('deb-health','Ex: Hernie discale, entorse...')
+    bLbl('As-tu des problèmes de santé ou des blessures ?  (Si oui, précise)')+bT('deb-health','Ex: Hernie discale, entorse...')+
+    // Étape FACULTATIVE. Le texte libre ci-dessus n'est jamais analysé : si
+    // l'athlète veut que l'app en tienne compte, il le structure ici lui-même.
+    `<div style="margin-top:8px;background:var(--surface-2);border-radius:10px;padding:11px 13px">
+      <div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:9px">Si une zone te gêne à l'entraînement, tu peux la préciser. C'est facultatif, et ça sert à adapter ce qu'on te propose.</div>
+      <button type="button" class="btn btn-outline btn-sm" onclick="ouvrirFormContrainte('','moi')" style="letter-spacing:1px;font-size:10px">Signaler une gêne</button>
+    </div>`
   ),
   // Step 2 : Mensurations initiales — schéma corporel interactif
   ()=>bSec('Mensurations initiales ',
@@ -23359,6 +23730,233 @@ function testExercices(){
       const ex={repos:'1 min 30'};
       parseRepos(ex.repos); _reposApresSerie&&0;
       return ex.repos==='1 min 30';})());
+
+
+    // ══════════════ CONTRAINTES DE SANTÉ ══════════════
+    // ── Matrice complète : 4 niveaux × 4 charges articulaires ──
+    // La fiche mécanique par exercice n'existe pas encore (FB-06). On l'INJECTE
+    // ici : ce test fixe le contrat que FB-06 devra remplir, et il passera sans
+    // modification le jour où la vraie fiche arrivera.
+    (function(){
+      const sauveFiche=window.ficheDe;
+      const lignes=[];
+      try{
+        NIVEAUX_CONTRAINTE.forEach(niv=>{
+          [0,1,2,3].forEach(charge=>{
+            window.ficheDe=()=>({contraintes:{'rachis-lombaire':charge},schema:'charniere-hanche'});
+            const u={contraintesSante:[{id:'c1',zone:'rachis-lombaire',niveau:niv.cle,actif:true}]};
+            const n=contraintesPourExercice({name:'SOULEVE DE TERRE'},u).length;
+            const attendu=(NIVEAUX_AVERTISSANTS.indexOf(niv.cle)>=0&&charge>=SEUIL_CONTRAINTE_EX)?1:0;
+            lignes.push(niv.cle.padEnd(11)+' charge '+charge+' → '+n+(n===attendu?'':'  ATTENDU '+attendu));
+            ok('Matrice '+niv.cle+' × charge '+charge+' = '+attendu,n===attendu,'obtenu '+n);
+          });
+        });
+      } finally { if(sauveFiche) window.ficheDe=sauveFiche; else { try{ delete window.ficheDe; }catch(e){} } }
+      console.log('%cMatrice contrainte × exercice','font-weight:bold');
+      lignes.forEach(l=>console.log('  '+l));
+    })();
+
+    // ── Sans fiche mécanique : aucune supposition ──
+    ok('Critère 7 : exercice sans fiche → aucun avertissement',(()=>{
+      const u={contraintesSante:[{id:'c',zone:'rachis-lombaire',niveau:'eviter',actif:true}]};
+      return contraintesPourExercice({name:'SOULEVE DE TERRE ROUMAIN HALTERES'},u).length===0;})());
+    ok('Sans fiche, aucune exception non plus',(()=>{
+      try{ contraintesPourExercice(null,null); contraintesPourExercice({},{}); return true; }
+      catch(e){ return false; }})());
+    ok('La classification musculaire ne sert JAMAIS de fiche mécanique',(()=>{
+      // Un soulevé de terre roumain est classé ischios/fessiers. Si le code
+      // s'en servait pour deviner une charge lombaire, ce test tomberait.
+      const u={contraintesSante:[{id:'c',zone:'rachis-lombaire',niveau:'douleur',actif:true}]};
+      return contraintesPourExercice({name:'SOULEVE DE TERRE ROUMAIN HALTERES',reps:'10'},u).length===0;})());
+
+    // ── Contraintes inactives et filtres ──
+    (function(){
+      const sauveFiche=window.ficheDe;
+      window.ficheDe=()=>({contraintes:{'rachis-lombaire':3,'epaule':1},schema:'x'});
+      const mk=l=>({contraintesSante:l});
+      ok('Une contrainte désactivée ne compte plus',
+         contraintesPourExercice({},mk([{id:'a',zone:'rachis-lombaire',niveau:'eviter',actif:false}])).length===0);
+      ok('Une zone non chargée par l\'exercice ne déclenche rien',
+         contraintesPourExercice({},mk([{id:'a',zone:'epaule',niveau:'eviter',actif:true}])).length===0);
+      ok('Deux contraintes sur la même zone remontent toutes les deux',
+         contraintesPourExercice({},mk([
+           {id:'a',zone:'rachis-lombaire',niveau:'eviter',actif:true},
+           {id:'b',zone:'rachis-lombaire',niveau:'douleur',actif:true}])).length===2);
+      ok('Une zone inconnue de la fiche ne déclenche rien',
+         contraintesPourExercice({},mk([{id:'a',zone:'cheville',niveau:'eviter',actif:true}])).length===0);
+      if(sauveFiche) window.ficheDe=sauveFiche; else { try{ delete window.ficheDe; }catch(e){} }
+    })();
+
+    // ── Modèle ──
+    ok('Les huit zones sont définies',ZONES_CONTRAINTE.length===8);
+    ok('Les quatre niveaux portent les formulations de l\'utilisateur',(()=>{
+      const l=NIVEAUX_CONTRAINTE.map(n=>n.lib);
+      return l.indexOf('ça me gêne parfois')>=0&&l.indexOf('ça me fait mal quand je force')>=0
+        &&l.indexOf("j'ai eu un problème là, c'est réglé")>=0
+        &&l.indexOf("on m'a dit d'éviter ce type de mouvement")>=0;})());
+    ok('Ajout d\'une contrainte valide',(()=>{
+      const u={}; const e=ajouterContrainte(u,{zone:'genou',niveau:'douleur',cote:'droit',libelle:'depuis le ski',source:'bilan'});
+      return e&&u.contraintesSante.length===1&&e.zone==='genou'&&e.cote==='droit'
+        &&e.source==='bilan'&&e.actif===true&&e.date>0;})());
+    ok('Zone inconnue refusée',ajouterContrainte({},{zone:'nombril',niveau:'douleur'})===null);
+    ok('Niveau inconnu refusé',ajouterContrainte({},{zone:'genou',niveau:'grave'})===null);
+    ok('Le libellé libre est borné',(()=>{
+      const u={}; ajouterContrainte(u,{zone:'genou',niveau:'gene',libelle:'x'.repeat(900)});
+      return u.contraintesSante[0].libelle.length===300;})());
+    ok('Retirer désactive sans effacer',(()=>{
+      const u={}; const e=ajouterContrainte(u,{zone:'genou',niveau:'gene'});
+      retirerContrainte(u,e.id);
+      return u.contraintesSante.length===1&&u.contraintesSante[0].actif===false
+        &&u.contraintesSante[0].dateFin>0&&contraintesActives(u).length===0;})());
+
+    // ── Drapeaux rouges ──
+    ok('Les cinq signes sont définis',DRAPEAUX_ROUGES.length===5);
+    ok('Critère 6 : cocher un signe pose le drapeau',(()=>{
+      const u={}; const d=poserDrapeauRouge(u,'rachis-lombaire',['irradiation']);
+      return d&&u.drapeauRouge.zone==='rachis-lombaire'&&u.drapeauRouge.cases.length===1;})());
+    ok('Aucune case cochée : aucun drapeau',poserDrapeauRouge({},'genou',[])===null);
+    ok('Une case inventée est ignorée',poserDrapeauRouge({},'genou',['nimportequoi'])===null);
+    ok('Critère 6 : sous drapeau rouge, AUCUN substitut n\'est autorisé',(()=>{
+      const u={}; poserDrapeauRouge(u,'rachis-lombaire',['neuro']);
+      return substitutsAutorises(u,'rachis-lombaire')===false
+        &&substitutsAutorises(u,'epaule')===false;})());
+    ok('Sans drapeau, les substituts sont autorisés',substitutsAutorises({},'genou')===true);
+    ok('Lever le drapeau l\'archive',(()=>{
+      const u={}; poserDrapeauRouge(u,'genou',['choc']);
+      leverDrapeauRouge(u);
+      return !u.drapeauRouge&&u.historiqueDrapeaux.length===1&&u.historiqueDrapeaux[0].leve>0;})());
+    ok('Le texte d\'arrêt est celui du cahier des charges',(()=>{
+      const t=TEXTE_ARRET_DRAPEAU.join(' ');
+      return /Arrête l'entraînement sur cette zone et fais-toi examiner/.test(t)
+        &&/médecin ou d'un kinésithérapeute/.test(t)
+        &&/n'est pas un dispositif médical/.test(t)
+        &&/Ton coach a été prévenu/.test(t);})());
+
+    // ── Priorité au tableau de bord ──
+    (function(){
+      const sauveU=currentUser;
+      currentUser={id:'coach',email:'co@t.fr',role:'coach',seenBilans:{},alertStatus:{}};
+      const c={id:'dr1',email:'dr1@t.fr',fname:'A',lname:'B',createdAt:Date.now()-60*864e5,
+        bilans:[{type:'depart',date:Date.now()-2*864e5}],sessions:[],exAlias:{},exMuscles:{}};
+      currentUser.seenBilans['dr1@t.fr']=Date.now();
+      const avant=urgencyScore(c);
+      poserDrapeauRouge(c,'rachis-lombaire',['irradiation']);
+      const apres=urgencyScore(c);
+      ok('Critère 6 : un drapeau rouge passe devant TOUT',apres===10,'obtenu '+apres);
+      ok('Il passe devant la douleur répétée (9)',apres>9);
+      ok('Sans drapeau, le score est inchangé',avant<10,'avant '+avant);
+      currentUser=sauveU;
+    })();
+
+    // ── Vocabulaire interdit ──
+    ok('Critère 8 : aucun libellé n\'autorise ni ne rassure',(()=>{
+      const tout=JSON.stringify(ZONES_CONTRAINTE)+JSON.stringify(NIVEAUX_CONTRAINTE)
+        +JSON.stringify(DRAPEAUX_ROUGES)+TEXTE_ARRET_DRAPEAU.join(' ')+DISCLAIMER_SANTE
+        +String(typeof blocContraintes==='function'?blocContraintes({}):'' )
+        +String(typeof blocDrapeauRouge==='function'?blocDrapeauRouge({drapeauRouge:{zone:'genou',cases:['neuro'],date:Date.now()}}):'');
+      return !/sans risque|sûr pour|sur pour|adapté à ta blessure|adapte a ta blessure|soigne|guérit|guerit|diagnostic(?!\.)/i
+        .test(tout.replace(/pas à poser un diagnostic/g,''));})());
+    ok('Aucune nomenclature pathologique dans les libellés',(()=>{
+      const tout=JSON.stringify(ZONES_CONTRAINTE)+JSON.stringify(NIVEAUX_CONTRAINTE)+JSON.stringify(DRAPEAUX_ROUGES);
+      return !/hernie|tendinite|arthrose|lombalgie|sciatique|rupture|entorse/i.test(tout);})());
+    ok('Aucun exercice de rééducation n\'est proposé',(()=>{
+      const tout=TEXTE_ARRET_DRAPEAU.join(' ')+DISCLAIMER_SANTE;
+      return !/rééducation|reeducation|renforce|étirement thérapeutique|exercice correctif/i.test(tout);})());
+
+    // ── Aucune analyse automatique du texte libre ──
+    ok('Critère 9 : contraintesPourExercice ne lit jamais deb-health',
+       !/deb-health|bil-health/.test(String(contraintesPourExercice)));
+    ok('Critère 9 : la déclaration ne lit jamais le texte libre',
+       !/deb-health|bil-health/.test(String(ajouterContrainte))
+       &&!/deb-health/.test(String(poserDrapeauRouge)));
+    ok('La lecture par mots-clés existante n\'écarte toujours rien',
+       /REMONTER|remonter/.test(String(_aAntecedentLombaire))
+       ||/jamais à en écarter/.test(String(_aAntecedentLombaire))
+       ||typeof _aAntecedentLombaire==='function');
+
+    // ── Non-régression : contreIndications rend exactement la même chose ──
+    ok('contreIndications : inchangée sur un bilan renseigné',(()=>{
+      const b=[{type:'depart',date:1,'deb-health':'hernie L5-S1','deb-allergies':'non','deb-tca':'aucun'}];
+      const r=contreIndications(b);
+      return r.length===1&&r[0].txt==='hernie L5-S1'&&r[0].lbl==='Problèmes de santé / blessures';})());
+    ok('contreIndications : réponses négatives toujours filtrées',
+       contreIndications([{type:'depart',date:1,'deb-health':'non','deb-tca':'aucune'}]).length===0);
+    ok('contreIndications : aucun bilan de départ → tableau vide',
+       contreIndications([{type:'suivi',date:1,'deb-health':'x'}]).length===0);
+    ok('contreIndications ne lit PAS contraintesSante',(()=>{
+      const b=[{type:'depart',date:1,'deb-health':'non'}];
+      return contreIndications(b).length===0;})());
+
+
+    // ── Tableau de bord : le drapeau rouge en tête, non reportable ──
+    (function(){
+      const sauveU=currentUser;
+      const z=document.getElementById('ch-todo'), garde=z?z.innerHTML:null;
+      currentUser={id:'coach',email:'co@t.fr',role:'coach',seenBilans:{},alertStatus:{},journalDouleur:[]};
+      const mk=(id,drap)=>{
+        currentUser.seenBilans[id+'@t.fr']=Date.now();
+        const c={id,email:id+'@t.fr',fname:'Léa',lname:'Martin',createdAt:Date.now()-60*864e5,
+          bilans:[{type:'depart',date:Date.now()-2*864e5}],sessions:[],exAlias:{},exMuscles:{},
+          programPdfLink:'https://x.test/p.pdf'};
+        if(drap) poserDrapeauRouge(c,'rachis-lombaire',['irradiation','neuro']);
+        return c;
+      };
+      if(z){
+        const c=mk('dr9',true);
+        renderTodoBlock([c]);
+        ok('Le drapeau rouge produit une ligne',window._todoRows.length===1
+          &&window._todoRows[0].type==='drapeau');
+        ok('La ligne nomme la zone et les signes',
+           /bas du dos/.test(z.innerHTML)&&/descend dans le bras ou la jambe/.test(z.innerHTML)
+           &&/perte de force/.test(z.innerHTML));
+        ok('Critère 6 : la ligne dit qu\'aucun substitut n\'est proposé',
+           /Aucun exercice de remplacement/.test(z.innerHTML));
+        ok('La ligne n\'est PAS reportable',!/dismissTodoRow/.test(z.innerHTML));
+        // Une ligne ordinaire, elle, reste reportable.
+        const c2=mk('dr8',false);
+        c2.sessions=[{id:'s1',date:Date.now()-6*864e5,sets:8,setsPlanned:10,
+            data:{'DC':{sets:[{done:true,weight:'50',reps:'10',pain:'5'}]}}},
+          {id:'s2',date:Date.now()-3*864e5,sets:8,setsPlanned:10,
+            data:{'DC':{sets:[{done:true,weight:'50',reps:'10',pain:'5'}]}}}];
+        renderTodoBlock([c2]);
+        ok('Une alerte ordinaire reste reportable',/dismissTodoRow/.test(z.innerHTML));
+        // Les deux ensemble : le drapeau passe devant.
+        renderTodoBlock([c2,mk('dr7',true)]);
+        ok('Le drapeau rouge passe devant la douleur',window._todoRows[0].type==='drapeau');
+        z.innerHTML=garde;
+      }
+      currentUser=sauveU;
+    })();
+
+    // ── Écran d'arrêt et restitution ──
+    ok('L\'écran d\'arrêt ne propose AUCUN substitut',(()=>{
+      const u={}; poserDrapeauRouge(u,'genou',['gonflement']);
+      const h=blocDrapeauRouge(u);
+      return !/remplac(er|ement) par|substitut proposé|essaie plutôt|à la place/i.test(h)
+        &&/Aucun exercice de remplacement/.test(h);})());
+    ok('Le bloc de contraintes reste vide sans rien de déclaré',blocContraintes({})==='');
+    ok('Une contrainte structurée s\'affiche avec sa formulation',(()=>{
+      const u={}; ajouterContrainte(u,{zone:'epaule',cote:'droit',niveau:'eviter',libelle:'coiffe'});
+      const h=blocContraintes(u,true,'x');
+      return /épaule/.test(h)&&/droit/.test(h)&&/on m'a dit d'éviter/.test(h.replace(/&#39;/g,"'"))
+        &&/coiffe/.test(h);})());
+
+    // ── Points d'entrée ──
+    ok('Le formulaire propose les huit zones et les cinq signes',(()=>{
+      _ctReset(''); const h=_htmlFormContrainte();
+      return ZONES_CONTRAINTE.every(z=>h.indexOf('>'+z.lib+'<')>=0)
+        &&DRAPEAUX_ROUGES.every(d=>h.indexOf(escapeHtml(d.lib))>=0);})());
+    ok('Critère 8 : le formulaire porte le disclaimer',
+       (()=>{ _ctReset(''); return _htmlFormContrainte().includes(DISCLAIMER_SANTE); })());
+    ok('Les quatre formulations sont proposées telles quelles',(()=>{
+      _ctReset(''); const h=_htmlFormContrainte().replace(/&#39;/g,"'");
+      return NIVEAUX_CONTRAINTE.every(n=>h.indexOf(n.lib)>=0);})());
+    ok('Le formulaire n\'affiche aucun champ libre de diagnostic',(()=>{
+      _ctReset(''); const h=_htmlFormContrainte();
+      return !/diagnostic|pathologie|maladie/i.test(h.replace(/pas à poser un diagnostic/g,''));})());
+    ok('Aucune analyse du texte libre dans le formulaire',
+       !/deb-health|bil-health/.test(String(_htmlFormContrainte))
+       &&!/deb-health/.test(String(_ctValider)));
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
