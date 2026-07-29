@@ -237,15 +237,6 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 .pf-chip.active{background:var(--red);color:#fff;border-color:var(--red)}
 .ck-chrono{background:var(--surface-2);border:1px solid var(--border);color:var(--sub);font-size:11px;font-weight:800;font-family:Montserrat,sans-serif;padding:5px 9px;border-radius:14px;cursor:pointer;flex-shrink:0;min-width:58px;min-height:30px;letter-spacing:.5px}
 .ck-chrono.ck-actif{background:var(--red);border-color:var(--red);color:#fff;box-shadow:0 0 12px rgba(224,32,32,.45)}
-/* Repetitions REELLEMENT faites. Le placeholder porte la valeur prescrite :
-   un champ vide veut dire « comme prevu », et le calcul retombe dessus. */
-.reps-done{max-width:52px;text-align:center;padding:5px 2px;font-size:14px;font-weight:900}
-.reps-done::placeholder{font-weight:700;color:var(--text-faint);font-size:13px}
-/* Le bouton visible est compact pour tenir dans la colonne ; .hit44 elargit
-   la zone tactile a 44 px sans elargir le dessin. */
-.rd-pas{background:var(--surface-2);border:1px solid var(--border);color:#fff;font-size:15px;font-weight:900;line-height:1;width:26px;height:30px;border-radius:6px;cursor:pointer;flex-shrink:0;font-family:Montserrat,sans-serif;padding:0}
-.rd-pas:disabled{opacity:.35;cursor:default}
-.reps-done{max-width:46px}
 .pe-poignee{background:var(--surface-2);border:1px solid var(--border);color:var(--sub);font-size:14px;line-height:1;padding:0;border-radius:8px;cursor:grab;flex-shrink:0;width:32px;min-height:38px;touch-action:none;user-select:none;font-family:Montserrat,sans-serif}
 .pe-poignee:active{cursor:grabbing;background:var(--red);color:#fff;border-color:var(--red)}
 .pe-mini{background:var(--surface-2);border:1px solid var(--border);color:var(--sub);font-size:9px;line-height:1;padding:0;border-radius:6px;cursor:pointer;width:26px;height:18px;font-family:Montserrat,sans-serif;flex-shrink:0}
@@ -9502,14 +9493,21 @@ function _blocExo(idx,estSS){
   const _jour=(woState.slot!=null&&DAYS[woState.slot])?DAYS[woState.slot].toLowerCase():null;
   const creneauRef=_jour?('ton dernier '+_jour):'ta séance précédente';
   const creneauPhrase=_jour?('le '+_jour):'sur cette séance';
-  // Double progression : on gagne d'abord des répétitions dans la fourchette,
-  // puis on monte la charge, d'un pas borné à un palier ET à 5 %. L'ancien
-  // moteur montait proportionnellement au RIR sans borne relative : à 20 kg un
-  // RIR 4 proposait 30 kg, soit +50 %.
-  const _sg=suggererCharge(ex.name,woState.slot,woState.progName,ex,currentUser);
-  const _sugBrut=_sg.charge!=null&&_sg.charge>0?_sg.charge:null;
-  const repsCible=_sg.repsCible;
-  _repsCibleParEx[idx]=repsCible;
+  // Progression par paliers fixes : RIR 0 → même charge, échec → -1 palier,
+  // RIR n → +n paliers (palier = 2,5kg, ou 1,25kg sous 20kg, plafonné à 4)
+  const _stepUnit=w=>w>=20?2.5:1.25;
+  const _stepSug=(w,rir)=>{
+    w=parseFloat(w)||0;if(!w) return null;
+    const r=String(rir??'');
+    let n=r==='echec'?-1:(r===''||r==='null'||r==='undefined')?0:Math.min(parseInt(r)||0,4);
+    if(isCW) n=-n;
+    const out=w+n*_stepUnit(w);
+    return out>0?out:w;
+  };
+  const _rawSug=baseWeight
+    ?baseWeight
+    :prev?_stepSug(prev.weight,prev.rir):null;
+  const _sugBrut=_rawSug!=null&&_rawSug>0?_rawSug:null;
   const isFemme=isFemale(currentUser.gender);
   // L'ajustement de cycle est intégré À LA CHARGE SUGGÉRÉE, il n'a plus de
   // colonne à lui. Une colonne « CYC » en plus faisait basculer tout le tableau
@@ -9547,14 +9545,10 @@ function _blocExo(idx,estSS){
           <div style="font-size:11px;color:var(--sub);margin-top:4px">Durée · Cardio</div>
         </div>`
       :sug?`<div class="suggest-box">
-        <div style="display:flex;flex-direction:column;margin:2px 0 6px">
-          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
-            <div style="font-size:27px;font-weight:900;line-height:1">${sug}kg</div>
-            ${repsCible?`<div id="sug-reps-cible" style="font-size:20px;font-weight:900;line-height:1;color:var(--sub)">× ${repsCible} reps</div>`:''}
-          </div>
-          <div style="font-size:var(--fs-xs);color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">${isCW?'↓ Assistance : progresser = réduire':'Charge et objectif de la première série'}</div>
+        <div style="display:flex;gap:18px;align-items:flex-end;margin:2px 0 6px">
+          <div><div style="font-size:27px;font-weight:900;line-height:1">${sug}kg</div><div style="font-size:var(--fs-xs);color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">${isCW?'↓ Assistance : progresser = réduire':'Charge pour la première série'}</div></div>
         </div>
-        <div class="s-note">${escapeHtml(phraseSuggestion(_sg))}</div>
+        <div class="s-note">${isCW?'Contrepoids: RIR élevé → diminuer la charge. ':''}${baseWeight?'Basée sur '+escapeHtml(creneauRef)+' (RIR 0 : '+baseWeight+'kg)':prev?'Basée sur '+escapeHtml(creneauRef)+' ('+prev.weight+'kg'+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):'')+')':'Première séance'}</div>
         ${sugAjustee?`<div class="s-note" style="color:var(--cycle-accent);margin-top:5px">Ajustée de ${Math.round((1-_facteurCycle)*100)} % pour ta phase de cycle : ${_sugBrut}kg d'habitude, ${sugAjustee}kg aujourd'hui.</div>`:''}
       </div>`:
       // Pas d'historique SUR CE CRÉNEAU. On le dit, au lieu de laisser un vide
@@ -9601,65 +9595,6 @@ function _blocExo(idx,estSS){
 // idx explicite : sur un superset, deux tableaux de séries coexistent à
 // l'écran. Le laisser retomber sur woState.currentEx ferait écrire les deux
 // dans le même exercice.
-// ── Saisie des répétitions réalisées ────────────────────────────────────────
-// Cible affichée par exercice, posée par _blocExo et lue par renderSets. Gardée
-// hors de sessionData : celui-ci est sérialisé dans rc_wo_state, et rien ne
-// justifie d'y écrire une valeur recalculable.
-const _repsCibleParEx={};
-const REPS_MIN=1, REPS_MAX=100;
-
-// Garde de saisie. Même traitement que les reps négatives de l'éditeur : on
-// refuse, on prévient, et on remet la valeur précédente plutôt que d'enregistrer
-// une aberration en silence.
-function majRepsDone(idx,i,champ){
-  const d=woState&&woState.sessionData&&woState.sessionData[idx];
-  if(!d||!d.sets[i]) return;
-  const brut=String(champ.value||'').trim();
-  const avant=d.sets[i].repsDone;
-  if(brut===''){ d.sets[i].repsDone=null; return; }
-  const v=Number(brut);
-  if(!isFinite(v)||!Number.isInteger(v)||v<REPS_MIN||v>REPS_MAX){
-    toast('Répétitions : un entier entre '+REPS_MIN+' et '+REPS_MAX+'.','var(--orange)');
-    champ.value=avant!=null?String(avant):'';
-    return;
-  }
-  d.sets[i].repsDone=v;
-}
-// Boutons −/+ : un pas de 1 sans ouvrir le clavier, ce qui est le geste le plus
-// fréquent en salle.
-function pasRepsDone(idx,i,delta){
-  const champ=document.getElementById('rd-'+idx+'-'+i);
-  if(!champ) return;
-  const d=woState&&woState.sessionData&&woState.sessionData[idx];
-  const base=Number(champ.value)||(d&&d.sets[i]&&d.sets[i].repsDone)||0;
-  const v=Math.min(REPS_MAX,Math.max(REPS_MIN,base+delta));
-  champ.value=String(v);
-  majRepsDone(idx,i,champ);
-}
-// Cellule complète : le champ, sa fourchette rappelée, et les deux pas.
-function _celluleReps(s,ex,idx,i,dis){
-  const cible=cibleReps(ex&&ex.reps);
-  const propose=_repsCibleParEx[idx]!=null?_repsCibleParEx[idx]
-               :(cible&&cible.max!=null?cible.max:null);
-  // Pré-rempli avec ce qu'on attend : dans le cas nominal l'athlète ne touche
-  // à rien, et ce qu'il voit est ce qui sera enregistré.
-  const val=s.repsDone!=null?s.repsDone:(propose!=null?propose:'');
-  const rappel=cible
-    ? (cible.ouverte?(cible.min!=null?cible.min+'+':'max')
-       :(cible.min===cible.max?String(cible.min):cible.min+'-'+cible.max))
-    : escapeHtml(String(s.reps||ex.reps||''));
-  return `<div style="display:flex;align-items:center;gap:3px;justify-content:center">
-      <button type="button" class="rd-pas hit44" onclick="pasRepsDone(${idx},${i},-1)" ${dis} aria-label="Une répétition de moins">−</button>
-      <div style="display:flex;flex-direction:column;align-items:center;min-width:0">
-        <input class="set-input reps-done" id="rd-${idx}-${i}" type="number" inputmode="numeric"
-               min="${REPS_MIN}" max="${REPS_MAX}" value="${val}"
-               onchange="majRepsDone(${idx},${i},this)" ${dis} aria-label="Répétitions réalisées">
-        <span style="font-size:9px;color:var(--text-faint);letter-spacing:.5px;margin-top:1px">${rappel}</span>
-      </div>
-      <button type="button" class="rd-pas hit44" onclick="pasRepsDone(${idx},${i},1)" ${dis} aria-label="Une répétition de plus">+</button>
-    </div>`;
-}
-
 function renderSets(ex,data,idx){
   if(idx==null) idx=woState.currentEx;
   const tb=document.getElementById('sets-body-'+idx);if(!tb) return;
@@ -9687,32 +9622,19 @@ function renderSets(ex,data,idx){
   // RIR 0 → même charge (exacte, sans arrondi) · échec → -1 palier ·
   // RIR n → +n paliers (2,5kg, ou 1,25kg sous 20kg, plafonné à 4).
   // Contrepoids : logique inversée (échec → +assistance, RIR n → -n paliers).
-  const _cibleSets=cibleReps(ex&&ex.reps);
   for(let i=0;i<data.sets.length-1;i++){
     const s=data.sets[i];
     const w=parseFloat(s.weight);
-    if(!(w>0)) continue;
-    // Pas de verrou sur le RIR : il servait à CALCULER un pas, il n'y a plus de
-    // pas à calculer. La charge descend la colonne dès qu'elle est saisie, même
-    // sur une série pas encore faite — sinon la troisième restait vide.
-    // À l'INTÉRIEUR d'une séance, la charge ne monte JAMAIS. L'ancienne règle
-    // réappliquait le pas du RIR série après série : trois RIR 3 d'affilée
-    // faisaient passer de 60 à 82,5 kg dans la même séance, ce qu'aucun athlète
-    // ne peut suivre. La progression se décide d'une séance à l'autre.
-    const rFait=(s.repsDone!=null?Number(s.repsDone):repsToNumber(s.reps));
-    const souslaFourchette=_cibleSets&&_cibleSets.min!=null&&rFait<_cibleSets.min;
-    let suivante=w;
-    // Seule exception : l'échec SOUS la fourchette, où continuer à la même
-    // charge revient à programmer un second échec.
-    if(s.rir==='echec'&&souslaFourchette){
-      const pal=_palierSug(w);
-      suivante=_isCW?Math.min(w+pal,w*(1+SUG_BORNE_BAISSE))
-                    :Math.max(w-pal,w*(1-SUG_BORNE_BAISSE));
-      suivante=arrondiCharge(suivante,w);
-    }
-    if(!data.sets[i+1].done&&!data.sets[i+1].userEdited){
-      data.sets[i+1].weight=suivante;
-      data.sets[i+1].isAuto=suivante!==w;
+    if(w>0 && s.rir!==''&&s.rir!==undefined&&s.rir!==null){
+      const r=String(s.rir);
+      const unit=w>=20?2.5:1.25;
+      let n=r==='echec'?-1:Math.min(parseInt(r)||0,4);
+      if(_isCW) n=-n;
+      const nextW=n===0?w:Math.max(w+n*unit,unit);
+      if(!data.sets[i+1].done&&!data.sets[i+1].userEdited){
+        data.sets[i+1].weight=nextW;
+        data.sets[i+1].isAuto=true;
+      }
     }
   }
 
@@ -9729,9 +9651,6 @@ function renderSets(ex,data,idx){
     const onChW2=`woState.sessionData[${idx}].sets[${i}].weight2=this.value;renderSets(woState.exercises[${idx}],woState.sessionData[${idx}],${idx})`;
     const onChR=`woState.sessionData[${idx}].sets[${i}].rir=this.value;renderSets(woState.exercises[${idx}],woState.sessionData[${idx}],${idx})`;
     const onChP=`woState.sessionData[${idx}].sets[${i}].pain=this.value`;
-    // Repetitions REELLEMENT faites. Vide = non renseigne : le calcul retombe
-    // alors sur les repetitions prescrites, comme avant ce champ.
-    const onChRD=`const v=parseInt(this.value);woState.sessionData[${idx}].sets[${i}].repsDone=(isFinite(v)&&v>0)?v:null`;
 
     // Weight cell (with AUTO badge)
     const autoLabel=s.isAuto&&!s.done?'<div style="font-size:var(--fs-xs);color:var(--green);text-align:center;margin-top:2px;letter-spacing:1px">AUTO</div>':'';
@@ -9778,7 +9697,7 @@ function renderSets(ex,data,idx){
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
               <div style="text-align:center;min-width:28px;flex-shrink:0">
                 <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red);line-height:1">${i+1}</div>
-                ${_celluleReps(s,ex,idx,i,dis)}
+                <div style="font-size:14px;font-weight:900;line-height:1.2"><span style="font-size:var(--fs-xs);font-weight:600">×</span>${s.reps||ex.reps}</div>
               </div>
               ${weightInner}
             </div>
@@ -9794,7 +9713,7 @@ function renderSets(ex,data,idx){
     return `<tr class="${rowCls}${painAlert}">
       <td style="text-align:center;padding:4px 6px">
         <span style="display:block;font-size:var(--fs-xs);font-weight:800;color:var(--red);line-height:1">${i+1}</span>
-        ${_celluleReps(s,ex,idx,i,dis)}
+        <span style="font-size:15px;font-weight:900;line-height:1.2"><span style="font-size:var(--fs-xs);font-weight:600">×</span>${s.reps||ex.reps}</span>
       </td>
       ${weightCell}
       <td>${rirSelect}</td>
@@ -9890,14 +9809,6 @@ function toggleSet(i,idx){
   // ne doit pas cocher une série du premier.
   if(idx==null) idx=woState.currentEx;
   const d=woState.sessionData[idx];if(!d) return;
-  // Valider fige la valeur AFFICHÉE dans le champ de répétitions. Sans cela,
-  // l athlète voit « 11 » et le calcul retient autre chose, tiré de la chaîne
-  // prescrite : ce qui est à l écran doit être ce qui est enregistré.
-  if(!d.sets[i].done&&d.sets[i].repsDone==null){
-    const champ=document.getElementById('rd-'+idx+'-'+i);
-    const v=champ?Number(champ.value):NaN;
-    if(isFinite(v)&&Number.isInteger(v)&&v>=REPS_MIN&&v<=REPS_MAX) d.sets[i].repsDone=v;
-  }
   d.sets[i].done=!d.sets[i].done;
   renderSets(woState.exercises[idx],d,idx);
 }
@@ -9932,10 +9843,7 @@ function finishWorkout(incomplete=false){
   Object.values(woState.sessionData).forEach(d=>d.sets.forEach(s=>{
     if(!s.done) return;
     sets++;
-    // Le tonnage s'appelle « charge × reps » : dès qu'on connaît les
-    // répétitions réellement faites, le calculer sur celles prescrites serait
-    // un chiffre volontairement faux. Sans saisie, repli inchangé.
-    const r1=(s.repsDone!=null?Number(s.repsDone):repsToNumber(s.reps)), w1=parseFloat(s.weight||0);
+    const r1=repsToNumber(s.reps), w1=parseFloat(s.weight||0);
     if(w1>0&&r1>0){
       vol+=w1*r1;
       if(s.degressive&&s.weight2) vol+=parseFloat(s.weight2||0)*parseFloat(s.p2reps||0);
@@ -9996,10 +9904,10 @@ function finishWorkout(incomplete=false){
 // ══════════════ DÉTECTION DE L'ABSENCE DE PROGRESSION ══════════════
 // Tout est DÉRIVÉ de user.sessions : aucun champ nouveau, aucune migration.
 //
-// repsDone porte les répétitions RÉELLEMENT faites, saisies par l'athlète sur
-// l'écran de séance. Quand le champ reste vide, le calcul retombe sur les
-// répétitions prescrites : c'est le cas de tout l'historique antérieur, qui
-// n'avait pas ce champ, et aucune migration n'est nécessaire pour autant.
+// Limite assumée : les répétitions ne sont pas saisies. Le nombre retenu est
+// donc TOUJOURS celui PRESCRIT. Deux séances où l'athlète a fait 8 puis 10
+// répétitions à charge égale donnent le même score. La lecture passe par
+// s.repsDone quand il existe, ce qui laisse la porte ouverte sans rien imposer.
 // physiologiques. Ils sont ajustables : ce sont des choix de produit.
 const MIN_SEANCES=4;        // en dessous, aucun verdict n'est rendu
 const MIN_JOURS=21;         // ni sur une fenêtre trop courte
@@ -10205,8 +10113,8 @@ const PERF_ETAT_LIB={
 const PERF_ENCADRE=`<div style="background:var(--surface-2);border-left:3px solid var(--sub);border-radius:8px;padding:10px 12px;margin-top:14px;font-size:11px;color:var(--sub);line-height:1.6">
     Estimation basée sur tes séries validées. L'e1RM est un modèle : il est
     fiable jusqu'à 12 répétitions, approximatif au-delà. Le calcul retient les
-    répétitions que tu as <strong>saisies</strong> ; quand tu laisses le champ
-    vide, il retombe sur celles prévues au programme.
+    répétitions <strong>prévues</strong> au programme, pas celles réellement
+    faites.
   </div>`;
 
 // Exercices dont l'état a CHANGÉ avec la séance qu'on vient d'enregistrer.
@@ -10552,159 +10460,6 @@ function calcSug(pw,pr,prr,tr,trir){
   return roundWeight(sug);
 }
 // Même rattachement au créneau que getLastZeroRIRWeight : voir _memeCreneau.
-// ══════════════ DOUBLE PROGRESSION : RÉPÉTITIONS PUIS CHARGE ══════════════
-// L'ancien moteur montait la charge proportionnellement au RIR déclaré, sans
-// borne relative : à 20 kg un RIR 4 proposait 30 kg, soit +50 %, et la règle se
-// réappliquait en cascade sur chaque série de la MÊME séance. On gagne d'abord
-// des répétitions dans la fourchette, puis on monte la charge, d'un pas borné.
-
-// Fourchette de répétitions visée, lue dans la chaîne prescrite.
-// Complète parseReps sans la modifier : les deux coexistent.
-function cibleReps(repsStr){
-  const s=String(repsStr==null?'':repsStr).trim();
-  if(!s) return null;
-  // Cardio : une durée, pas des répétitions.
-  if(/\d\s*(min|sec|h\b|km|m\b)/i.test(s)||/cardio/i.test(s)) return null;
-  const uni=/jambe|bras|c[oô]t[eé]|par\b/i.test(s);
-  // Fourchette ouverte : « MAX », « AMRAP ». Aucune progression en répétitions
-  // possible, on ne sait pas où est le haut.
-  if(/^(max|amrap)$/i.test(s)) return {min:null,max:null,ouverte:true,unilateral:uni};
-  // Dégressive : la fourchette porte sur la PHASE 1, la seule qu'on pilote.
-  let base=s;
-  if(/puis/i.test(s)) base=s.split(/puis/i)[0].trim();
-  else if(/^\s*\d+\s*\/\s*\d+/.test(s)) base=s.split('/')[0].trim();
-  // « 5+ » : plancher connu, plafond inconnu.
-  const ouvert=base.match(/^(\d+)\s*\+$/);
-  if(ouvert) return {min:+ouvert[1],max:null,ouverte:true,unilateral:uni};
-  const plage=base.match(/^(\d+)\s*[-–]\s*(\d+)/);
-  if(plage){
-    const a=+plage[1], b=+plage[2];
-    return {min:Math.min(a,b),max:Math.max(a,b),ouverte:false,unilateral:uni};
-  }
-  const seul=base.match(/(\d+)/);
-  if(seul) return {min:+seul[1],max:+seul[1],ouverte:false,unilateral:uni};
-  return null;
-}
-
-const SUG_BORNE_MONTEE=0.05;   // un pas ne peut pas dépasser 5 % de la charge
-const SUG_BORNE_BAISSE=0.10;   // ni retirer plus de 10 %
-const SUG_JOURS_REPRISE=21;    // au-delà, on repart 10 % en dessous
-const SUG_FACTEUR_REPRISE=0.90;
-function _palierSug(w){ return w>=20?2.5:1.25; }
-
-// Arrondi CONSCIENT DU SENS. roundWeight arrondit vers le haut sous 20 kg :
-// utilisé tel quel pour un allègement, une charge de 10 kg ne baissait jamais
-// (brut 9 → 10). On quantifie donc dans le sens du changement. Et quand la borne
-// relative rabote l'incrément sous un palier, on descend au pas fin de 1,25 kg
-// plutôt que de rendre le changement nul : à 20 kg, +5 % vaut 21, que le pas de
-// 2,5 ramènerait à 20, soit aucune progression.
-// Sur les charges très légères les deux bornes ne peuvent pas tenir ensemble :
-// à 10 kg un palier vaut DÉJÀ 12,5 %, il n'existe aucune valeur de barre entre
-// −10 % et −12,5 %. On honore alors le palier, qui est la contrainte physique,
-// plutôt que le plancher relatif, qui interdirait tout allègement.
-function arrondiCharge(valeur,depart){
-  const v=Math.max(0,valeur);
-  if(!(depart>0)) return roundWeight(v);
-  const ecart=Math.abs(v-depart);
-  const pas=(ecart>0&&ecart<_palierSug(depart))?1.25:_palierSug(depart);
-  const q=v>depart?Math.ceil(v/pas)*pas
-        :v<depart?Math.floor(v/pas)*pas
-        :v;
-  return Math.round(q*100)/100;
-}
-
-// Dernière séance comparable contenant l'exercice, et sa série de référence.
-function _derniereSerieRef(user,exNom,slot,progName){
-  const ses=(user&&user.sessions)||[];
-  for(let i=ses.length-1;i>=0;i--){
-    const sess=ses[i];
-    if(!sess||!sess.data||!sess.date) continue;
-    if(!_memeCreneau(sess,slot,progName)) continue;
-    const d=_dataDeSeance(sess,exNom);
-    if(!d||!Array.isArray(d.sets)) continue;
-    // Série de référence : la DERNIÈRE validée avec une charge.
-    for(let k=d.sets.length-1;k>=0;k--){
-      const s=d.sets[k];
-      if(!s||s.done!==true) continue;
-      const w=parseFloat(s.weight);
-      if(!(w>0)) continue;
-      return {w,r:(s.repsDone!=null?Number(s.repsDone):repsToNumber(s.reps)),
-              rir:s.rir,date:sess.date,set:s,sets:d.sets};
-    }
-  }
-  return null;
-}
-
-function suggererCharge(exNom,slot,progName,ex,user){
-  const u=user||currentUser;
-  const cible=cibleReps(ex&&ex.reps);
-  const ref=_derniereSerieRef(u,exNom,slot,progName);
-  if(!ref) return {charge:null,repsCible:cible&&cible.max,motif:'premiere',cible};
-
-  const {w,r}=ref;
-  const rir=ref.rir;
-  const estEchec=rir==='echec';
-  const nRir=parseInt(rir);
-  const cw=isCounterweightEx(exNom);
-  const pal=_palierSug(w);
-  // Contrepoids : plus de charge = plus d'assistance = plus facile. « Progresser »
-  // veut donc dire RETIRER de la charge. Les bornes gardent leur valeur : 5 %
-  // du côté qui durcit, 10 % du côté qui allège.
-  const durcir=()=>cw?Math.max(w-pal,w*(1-SUG_BORNE_MONTEE))
-                     :Math.min(w+pal,w*(1+SUG_BORNE_MONTEE));
-  const alleger=()=>cw?Math.min(w+pal,w*(1+SUG_BORNE_BAISSE))
-                      :Math.max(w-pal,w*(1-SUG_BORNE_BAISSE));
-
-  let charge,motif,repsCible=cible&&cible.max;
-  if(estEchec&&cible&&cible.min!=null&&r<cible.min){
-    charge=alleger(); motif='trop lourd'; repsCible=cible.min;
-  } else if(estEchec){
-    charge=w; motif='echec dans la fourchette';
-  } else if(cible&&cible.ouverte===false&&cible.max!=null&&r>=cible.max
-            &&(isFinite(nRir)&&nRir<=1)){
-    charge=durcir(); motif='haut de fourchette tenu'; repsCible=cible.min;
-  } else if(isFinite(nRir)&&nRir>=3){
-    charge=durcir(); motif='marge importante';
-  } else {
-    charge=w; motif='viser une de plus';
-    repsCible=Math.min(r+1,(cible&&cible.max!=null)?cible.max:r+1);
-  }
-
-  charge=arrondiCharge(charge,w);
-
-  // Reprise : au-delà de trois semaines sans cet exercice, on repart plus bas
-  // quoi qu'ait dit la dernière séance.
-  const jours=Math.round((Date.now()-ref.date)/86400000);
-  if(jours>SUG_JOURS_REPRISE){
-    charge=arrondiCharge(charge*SUG_FACTEUR_REPRISE,charge);
-    motif='reprise';
-    repsCible=cible&&(cible.min!=null?cible.min:cible.max);
-  }
-  return {charge,repsCible,motif,cible,precedent:{w,r,rir},jours};
-}
-
-// Phrase affichée à l'athlète : elle dit ce qui est proposé ET pourquoi.
-function phraseSuggestion(s){
-  if(!s||s.motif==='premiere') return '';
-  const p=s.precedent||{};
-  const rirTxt=p.rir==='echec'?'à l\'échec'
-    :(p.rir!==''&&p.rir!=null?'à RIR '+p.rir:'sans RIR noté');
-  switch(s.motif){
-    case 'reprise':
-      return 'Plus de trois semaines sans cet exercice : on repart 10 % en dessous.';
-    case 'trop lourd':
-      return 'Échec à '+p.r+' reps la dernière fois, sous la fourchette. On allège.';
-    case 'echec dans la fourchette':
-      return 'À l\'échec à '+p.r+' reps la dernière fois, dans la fourchette. On garde la charge.';
-    case 'haut de fourchette tenu':
-      return 'Tu as tenu '+p.r+' reps '+rirTxt+'. On monte, on repart en bas de fourchette.';
-    case 'marge importante':
-      return 'Il te restait de la marge ('+rirTxt+'). On monte d\'un cran.';
-    default:
-      return 'La dernière fois : '+p.r+' reps '+rirTxt+'. Vise une de plus.';
-  }
-}
-
 function getPrevPerf(name,slot,progName){
   if(!currentUser.sessions?.length) return null;
   for(let i=currentUser.sessions.length-1;i>=0;i--){
@@ -19671,19 +19426,14 @@ function testExercices(){
     ok('Une seule charge affichée, pas deux',_cyF20.gros.length===1,JSON.stringify(_cyF20.gros));
 
     // L'ajustement est DANS la charge suggérée, et sa raison est écrite.
-    // La charge de base vient du moteur de suggestion : on la LIT plutôt que de
-    // la figer, sinon ces contrôles cassent à chaque évolution du moteur alors
-    // qu'ils portent sur le cycle, pas sur lui.
-    const _cyBase=parseFloat(_cyH.gros[0]);
-    ok('Phase neutre : même charge que chez l\u0027homme',_cyF0.gros[0]===_cyH.gros[0],
+    ok('Phase neutre : charge inchangée',_cyF0.gros[0]==='50kg'&&_cyH.gros[0]==='50kg',
        _cyF0.gros[0]+' / '+_cyH.gros[0]);
-    ok('Phase à 0,95 : charge abaissée',parseFloat(_cyF5.gros[0])<_cyBase,_cyF5.gros[0]);
-    ok('Phase à 0,80 : charge abaissée davantage',
-       parseFloat(_cyF20.gros[0])<parseFloat(_cyF5.gros[0]),_cyF20.gros[0]);
-    ok('La raison de l\u0027ajustement est écrite',
+    ok('Phase à 0,95 : charge ajustée affichée',_cyF5.gros[0]==='47.5kg',_cyF5.gros[0]);
+    ok('Phase à 0,80 : charge ajustée affichée',_cyF20.gros[0]==='40kg',_cyF20.gros[0]);
+    ok('La raison de l\'ajustement est écrite',
        /Ajustée de 20 % pour ta phase de cycle/.test(_cyF20.txt)
-       &&new RegExp(_cyBase+'kg d[’\u0027]habitude').test(_cyF20.txt),
-       String(_cyF20.txt.match(/Ajustée[^.]{0,70}/)||''));
+       &&/50kg d’habitude|50kg d'habitude/.test(_cyF20.txt));
+    ok('Aucune mention d\'ajustement en phase neutre',!_cyF0.txt.includes('Ajustée de'));
     ok('Aucune mention d\'ajustement chez l\'homme',!_cyH.txt.includes('Ajustée de'));
 
     // Le mode carte subsiste pour la dégressive, son seul usage restant.
@@ -20012,29 +19762,32 @@ function testExercices(){
        _sparkline([50,50,50],'red').includes('M0')&&!/NaN/.test(_sparkline([50,50,50],'red')));
 
     // ── L'encadré d'honnêteté dit la limite de repsDone ──
-    ok('L\u0027encadré dit exactement quelles répétitions servent au calcul',
-       /saisies/i.test(PERF_ENCADRE)&&/retombe sur celles pr[ée]vues/i.test(PERF_ENCADRE)
-       &&/e1RM est un mod[èe]le/i.test(PERF_ENCADRE),PERF_ENCADRE.slice(0,40));
+    ok('L\u0027encadré annonce que les répétitions sont celles PRÉVUES',
+       /pr[ée]vues/i.test(PERF_ENCADRE)&&/e1RM est un mod[èe]le/i.test(PERF_ENCADRE));
 
-    // ── BB-03 : répétitions réellement faites ──
-    // repsDone existe désormais. Un champ vide vaut « comme prévu » et le
-    // calcul retombe sur les répétitions prescrites, comme avant.
-    const _rdS=(reps,repsDone)=>({done:true,weight:'60',reps:String(reps),rir:'1',
-                                  ...(repsDone!==undefined?{repsDone}:{})});
+    // La saisie des répétitions a été retirée : le calcul retombe donc
+    // TOUJOURS sur les répétitions prescrites. La lecture par s.repsDone est
+    // conservée, inerte, pour ne pas fermer la porte.
     ok('Sans repsDone, on retombe sur les reps prescrites',
-       Math.abs(perfExercice({data:{'X':{sets:[_rdS(10)]}}},'X').score-e1rm(60,10,1))<1e-9);
-    ok('Avec repsDone, c\'est lui qui compte',
-       Math.abs(perfExercice({data:{'X':{sets:[_rdS(10,8)]}}},'X').score-e1rm(60,8,1))<1e-9);
-    ok('Moins de répétitions faites = score plus bas',
-       perfExercice({data:{'X':{sets:[_rdS(10,8)]}}},'X').score
-       <perfExercice({data:{'X':{sets:[_rdS(10)]}}},'X').score);
-    ok('repsDone null : repli sur les reps prescrites',
-       Math.abs(perfExercice({data:{'X':{sets:[_rdS(10,null)]}}},'X').score-e1rm(60,10,1))<1e-9);
-    ok('repsDone fait basculer la métrique quand il dépasse 12',
-       perfExercice({data:{'X':{sets:[_rdS(10,20)]}}},'X').metrique==='volume-serie');
-    ok('_perfReps lit repsDone puis les reps prescrites',
-       _perfReps({repsDone:7,reps:'10'})===7&&_perfReps({reps:'10'})===10
-       &&_perfReps({repsDone:null,reps:'6-8'})===7);
+       Math.abs(perfExercice({data:{'X':{sets:[{done:true,weight:'60',reps:'10',rir:'1'}]}}},'X').score-e1rm(60,10,1))<1e-9);
+    ok('_perfReps lit les reps prescrites',
+       _perfReps({reps:'10'})===10&&_perfReps({reps:'6-8'})===7);
+    // La chaîne cherchée ne peut pas être le nom de classe : ce test la contient,
+    // donc elle serait toujours présente dans le DOM. On rend l'écran et on
+    // compte les champs de saisie dans la colonne des répétitions.
+    ok('La cellule des répétitions n\u0027est plus saisissable',(()=>{
+      const sauve=woState;
+      woState={exercises:[{name:'TX',series:2,reps:'10'}],currentEx:0,
+        sessionData:{0:{sets:[{weight:'',reps:'10',rir:'',done:false},
+                             {weight:'',reps:'10',rir:'',done:false}]}},progName:'P',slot:0};
+      const tb=document.createElement('tbody'); tb.id='sets-body-0';
+      document.body.appendChild(tb);
+      try{ renderSets(woState.exercises[0],woState.sessionData[0],0); }catch(e){}
+      const n=tb.querySelectorAll('input[type=number]').length;
+      const cw=tb.querySelectorAll('input[placeholder=\u0027kg\u0027]').length;
+      tb.remove(); woState=sauve;
+      return n===cw;   // les seuls champs numériques sont ceux de charge
+    })());
 
     // ── BB-05 : séance de décharge ──
     // Planifiée par le coach. Elle sort de la série temporelle, donc elle ne
@@ -20055,187 +19808,6 @@ function testExercices(){
 
     currentUser=_plSauve; _viderCachePlateau();
 
-    // ══════ DOUBLE PROGRESSION : RÉPÉTITIONS PUIS CHARGE ══════
-    const _cr=(s)=>cibleReps(s);
-    const _crEq=(s,att)=>{const c=_cr(s);
-      // join rend null en chaine VIDE : on le nomme explicitement, sinon
-      // « 5/null/... » et « 5//... » se confondent dans le comparateur.
-      const _n=v=>v==null?'null':String(v);
-      const vu=c?[_n(c.min),_n(c.max),_n(c.ouverte),_n(!!c.unilateral)].join('/'):'null';
-      ok('cibleReps('+JSON.stringify(s)+') = '+att,vu===att,vu);};
-    _crEq('10-12','10/12/false/false');
-    _crEq('  10 - 12  ','10/12/false/false');
-    _crEq('12','12/12/false/false');
-    _crEq('8 Par Bras','8/8/false/true');
-    _crEq('15 par jambe','15/15/false/true');
-    _crEq('5+','5/null/true/false');
-    _crEq('MAX','null/null/true/false');
-    _crEq('AMRAP','null/null/true/false');
-    _crEq('20/12','20/20/false/false');       // dégressive : phase 1
-    _crEq('10 PUIS 20','10/10/false/false');  // dégressive : phase 1
-    _crEq('30 min','null');                   // cardio
-    _crEq('','null');
-    _crEq(null,'null');
-    ok('cibleReps ne casse pas parseReps',
-       parseReps('10 PUIS 20').type==='degressive'&&parseReps('10-12').type==='range'
-       &&parseReps('8 Par Bras').type==='unilateral'&&parseReps('12').type==='normal');
-
-    // ── Arrondi conscient du sens ──
-    // roundWeight arrondit VERS LE HAUT sous 20 kg : tel quel, une charge de
-    // 10 kg ne pouvait pas baisser.
-    ok('Allègement sous 20 kg : la charge baisse vraiment',
-       arrondiCharge(9,10)<10,String(arrondiCharge(9,10)));
-    ok('Montée bornée à 20 kg : pas fin de 1,25',
-       arrondiCharge(21,20)===21.25,String(arrondiCharge(21,20)));
-    ok('Montée d\'un palier plein : pas de 2,5',
-       arrondiCharge(102.5,100)===102.5,String(arrondiCharge(102.5,100)));
-    ok('Charge inchangée : aucun arrondi parasite',arrondiCharge(60,60)===60);
-
-    // ── suggererCharge : les cinq branches ──
-    const _sgU=(w,r,rir,jours,nom)=>({email:'sg@t.fr',exAlias:{},exMuscles:{},sessions:[
-      {id:'sg1',date:Date.now()-(jours||1)*86400000,slot:0,name:'P',
-       data:{[nom||'EX']:{sets:[{done:true,weight:String(w),reps:'10-12',rir,repsDone:r}]}}}]});
-    const _sg=(w,r,rir,reps,jours,nom)=>suggererCharge(nom||'EX',0,'P',
-      {name:nom||'EX',reps:reps||'10-12'},_sgU(w,r,rir,jours,nom));
-
-    // Critère 1 : 60 kg × 10 à RIR 2 sur 10-12 → 60 kg, viser 11
-    const _c1=_sg(60,10,'2');
-    ok('Critère 1 : RIR 2 ne monte plus la charge, on vise +1 rep',
-       _c1.charge===60&&_c1.repsCible===11&&_c1.motif==='viser une de plus',
-       _c1.charge+' × '+_c1.repsCible+' ('+_c1.motif+')');
-    // Critère 2 : 60 kg × 12 à RIR 1 → 62,5 kg, repartir en bas de fourchette
-    const _c2=_sg(60,12,'1');
-    ok('Critère 2 : haut de fourchette tenu → +1 palier, retour en bas',
-       _c2.charge===62.5&&_c2.repsCible===10&&_c2.motif==='haut de fourchette tenu',
-       _c2.charge+' × '+_c2.repsCible+' ('+_c2.motif+')');
-    // Critère 3 : 20 kg × 12 à RIR 4 → 21,25 et NON 30
-    const _c3=_sg(20,12,'4');
-    ok('Critère 3 : 20 kg RIR 4 → 21,25 et non 30',_c3.charge===21.25,String(_c3.charge));
-    // Critère 4 : la borne relative ne rabote pas un palier sur charge lourde
-    ok('Critère 4 : 200 kg RIR 3 → 202,5',_sg(200,10,'3').charge===202.5,
-       String(_sg(200,10,'3').charge));
-    ok('100 kg RIR 3 → 102,5',_sg(100,10,'3').charge===102.5,String(_sg(100,10,'3').charge));
-    // Critère 5 : échec sous la fourchette → on allège sans passer sous 90 %
-    const _c5=_sg(60,8,'echec');
-    ok('Critère 5 : échec sous fourchette → allègement d\'un palier',
-       _c5.charge===57.5&&_c5.motif==='trop lourd',_c5.charge+' ('+_c5.motif+')');
-    ok('Le plancher de 10 % tient',_sg(60,8,'echec').charge>=60*0.9);
-    ok('30 kg en échec sous fourchette → 27,5',_sg(30,8,'echec').charge===27.5,
-       String(_sg(30,8,'echec').charge));
-    // À 10 kg, un palier vaut 12,5 % : le plancher de 10 % et « baisser d'un
-    // palier » sont incompatibles, aucune valeur de barre ne tombe entre les deux.
-    ok('Charge légère : on honore le palier, pas le plancher relatif',
-       _sg(10,8,'echec').charge===8.75,String(_sg(10,8,'echec').charge));
-    ok('10 kg en échec sous fourchette baisse vraiment',_sg(10,8,'echec').charge<10,
-       String(_sg(10,8,'echec').charge));
-    // Branche b : échec DANS la fourchette → charge inchangée
-    ok('Échec dans la fourchette : charge inchangée',
-       _sg(60,11,'echec').charge===60&&_sg(60,11,'echec').motif==='echec dans la fourchette');
-    // RIR 5 borné comme RIR 4
-    ok('20 kg RIR 5 → 21,25 aussi',_sg(20,12,'5').charge===21.25,String(_sg(20,12,'5').charge));
-    // Fourchette ouverte : le cas « haut de fourchette » ne s'applique pas
-    const _co=_sg(60,20,'1','5+');
-    ok('Fourchette ouverte : pas de montée par le haut de fourchette',
-       _co.motif!=='haut de fourchette tenu',_co.motif);
-    // Critère 8 : reprise au-delà de 21 jours
-    const _c8=_sg(60,10,'2','10-12',25);
-    ok('Critère 8 : 25 jours → reprise à 90 %',
-       _c8.motif==='reprise'&&_c8.charge<60&&_c8.charge>=60*0.85,
-       _c8.charge+' ('+_c8.motif+')');
-    ok('20 jours : pas de reprise',_sg(60,10,'2','10-12',20).motif!=='reprise');
-    // Critère 7 : historique SANS repsDone
-    const _sansRD={email:'x@t.fr',exAlias:{},exMuscles:{},sessions:[
-      {id:'v',date:Date.now()-86400000,slot:0,name:'P',
-       data:{'EX':{sets:[{done:true,weight:'60',reps:'10-12',rir:'2'}]}}}]};
-    const _c7=suggererCharge('EX',0,'P',{name:'EX',reps:'10-12'},_sansRD);
-    ok('Critère 7 : sans repsDone, repli sur les reps prescrites',
-       _c7.charge===60&&_c7.repsCible===12,_c7.charge+' × '+_c7.repsCible);
-    // Aucun historique
-    const _cP=suggererCharge('ZZ',0,'P',{name:'ZZ',reps:'10-12'},
-      {email:'p@t.fr',exAlias:{},exMuscles:{},sessions:[]});
-    ok('Sans historique : motif premiere, cible = haut de fourchette',
-       _cP.charge===null&&_cP.motif==='premiere'&&_cP.repsCible===12);
-    // Contrepoids : les sens sont inversés
-    const _cwNom='TRACTIONS ASSISTEES';
-    ok('Contrepoids : marge importante RETIRE de l\'assistance',
-       _sg(40,10,'3','10-12',1,_cwNom).charge<40,
-       String(_sg(40,10,'3','10-12',1,_cwNom).charge));
-    ok('Contrepoids : échec sous fourchette AJOUTE de l\'assistance',
-       _sg(40,8,'echec','10-12',1,_cwNom).charge>40,
-       String(_sg(40,8,'echec','10-12',1,_cwNom).charge));
-    ok('Contrepoids reconnu',isCounterweightEx(_cwNom));
-    // Cardio : aucune fourchette, aucune progression en répétitions
-    ok('Cardio : pas de cible de répétitions',_sg(0,0,'',' 30 min').repsCible==null
-       ||cibleReps('30 min')===null);
-
-    // ── Cascade intra-séance : la charge ne monte JAMAIS ──
-    // L'ancienne règle réappliquait le pas du RIR série après série : trois
-    // RIR 3 d'affilée faisaient passer de 60 à 82,5 kg dans la même séance.
-    const _casc=(sets,reps)=>{
-      const sauveW=woState;
-      woState={exercises:[{name:'CX',series:sets.length,reps:reps||'10-12'}],
-        currentEx:0,startTime:Date.now(),timerInterval:null,
-        sessionData:{0:{sets:sets.map(s=>Object.assign({reps:reps||'10-12'},s))}},
-        progName:'P',slot:0};
-      // renderSets écrit dans le DOM ; on lui donne un tbody jetable.
-      const tb=document.createElement('tbody'); tb.id='sets-body-0';
-      document.body.appendChild(tb);
-      try{ renderSets(woState.exercises[0],woState.sessionData[0],0); }catch(e){}
-      const out=woState.sessionData[0].sets.map(s=>String(s.weight));
-      tb.remove(); woState=sauveW;
-      return out;
-    };
-    ok('Trois RIR 3 : la charge reste identique',
-       _casc([{weight:'60',rir:'3',done:true,repsDone:11},
-              {weight:'',rir:'',done:false},
-              {weight:'',rir:'',done:false}]).join(',')==='60,60,60',
-       _casc([{weight:'60',rir:'3',done:true,repsDone:11},{weight:'',rir:'',done:false},{weight:'',rir:'',done:false}]).join(','));
-    ok('Échec SOUS la fourchette : la suivante s\'allège d\'un palier',
-       _casc([{weight:'60',rir:'echec',done:true,repsDone:8},
-              {weight:'',rir:'',done:false}]).join(',')==='60,57.5',
-       _casc([{weight:'60',rir:'echec',done:true,repsDone:8},{weight:'',rir:'',done:false}]).join(','));
-    ok('Échec DANS la fourchette : charge inchangée',
-       _casc([{weight:'60',rir:'echec',done:true,repsDone:11},
-              {weight:'',rir:'',done:false}]).join(',')==='60,60');
-    ok('Une charge saisie à la main n\'est jamais écrasée',
-       _casc([{weight:'60',rir:'3',done:true,repsDone:11},
-              {weight:'80',rir:'',done:false,userEdited:true}]).join(',')==='60,80');
-
-    // ── Garde de saisie des répétitions ──
-    const _gardeU=(v)=>{
-      const sauveW=woState;
-      woState={exercises:[{name:'GX',series:1,reps:'10-12'}],currentEx:0,
-        sessionData:{0:{sets:[{weight:'60',reps:'10-12',rir:'',done:false,repsDone:9}]}},
-        progName:'P',slot:0};
-      const ch={value:String(v)};
-      majRepsDone(0,0,ch);
-      const out={retenu:woState.sessionData[0].sets[0].repsDone,affiche:ch.value};
-      woState=sauveW; return out;
-    };
-    ok('Répétitions à 0 : refusé, valeur précédente restaurée',
-       _gardeU(0).retenu===9&&_gardeU(0).affiche==='9',JSON.stringify(_gardeU(0)));
-    ok('Répétitions négatives : refusé',_gardeU(-1).retenu===9);
-    ok('Au-delà de 100 : refusé',_gardeU(101).retenu===9);
-    ok('100 exactement : accepté',_gardeU(100).retenu===100);
-    ok('1 exactement : accepté',_gardeU(1).retenu===1);
-    ok('Texte : refusé',_gardeU('abc').retenu===9);
-    ok('Décimal : refusé',_gardeU('10.5').retenu===9);
-    ok('Champ vidé : remis à « non renseigné »',_gardeU('').retenu===null);
-
-    // ── Volume : ce qui est fait, pas ce qui est prescrit ──
-    const _volSets=[{done:true,weight:'50',reps:'10',repsDone:10},
-                    {done:true,weight:'50',reps:'10',repsDone:10},
-                    {done:true,weight:'50',reps:'10',repsDone:8},
-                    {done:true,weight:'50',reps:'10',repsDone:6}];
-    const _volCalc=(sets)=>sets.reduce((v,s)=>{
-      const r=(s.repsDone!=null?Number(s.repsDone):repsToNumber(s.reps));
-      const w=parseFloat(s.weight||0);
-      return v+((w>0&&r>0)?w*r:0);},0);
-    ok('Volume : 4×10 prescrit dont 10,10,8,6 réalisés → 50×34',
-       _volCalc(_volSets)===50*34,String(_volCalc(_volSets)));
-    ok('Sans repsDone, le volume est celui d\'avant',
-       _volCalc([{done:true,weight:'50',reps:'10'}])===500);
-
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
 
@@ -20249,3 +19821,4 @@ function getLastZeloRIRSafe(n){ return getLastZeroRIRWeight(n,0,'P'); }
 
 </script>
 </body></html>
+
