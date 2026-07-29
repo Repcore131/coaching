@@ -1454,6 +1454,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="ccd-bilans"></div>
       <div id="ccd-volume"></div>
       <div id="ccd-plateaux"></div>
+      <div id="ccd-forme"></div>
       <div id="ccd-sessions-recap" style="margin-top:24px"></div>
       <div id="ccd-lien-classer" style="display:none;margin-top:16px">
         <button class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="loadExClassify()">Exercices à classer <span id="ccd-nb-classer"></span></button>
@@ -2116,6 +2117,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- RESSENTI POST-SÉANCE -->
       <div style="margin-bottom:16px">
         <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px">Ressenti post-séance</div>
+        <button id="ps-detail-btn" onclick="togglePsDetail()" style="background:none;border:none;color:var(--sub);font-size:11px;font-family:Montserrat,sans-serif;cursor:pointer;text-decoration:underline;padding:0 0 10px">+ de détail</button>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
           <!-- Fatigue -->
           <div style="background:var(--dark);border:1px solid var(--border);border-radius:3px;padding:12px 10px">
@@ -2123,10 +2125,10 @@ const COACH_PHOTO='icons/coach.jpg';
               <div style="font-size:var(--fs-xs);font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Fatigue</div>
               <div style="font-size:18px;font-weight:900;color:var(--red)" id="ps-fatigue-val">5</div>
             </div>
-            <input type="range" id="ps-fatigue" min="0" max="10" value="5" oninput="document.getElementById('ps-fatigue-val').textContent=this.value" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
+            <input type="range" id="ps-fatigue" min="0" max="10" value="5" oninput="document.getElementById('ps-fatigue-val').textContent=this.value;renderFormeSeance()" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
           </div>
           <!-- Intensité -->
-          <div style="background:var(--dark);border:1px solid var(--border);border-radius:3px;padding:12px 10px">
+          <div class="ps-detail-item" style="display:none;background:var(--dark);border:1px solid var(--border);border-radius:3px;padding:12px 10px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
               <div style="font-size:var(--fs-xs);font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Intensité</div>
               <div style="font-size:18px;font-weight:900;color:var(--red)" id="ps-intensite-val">5</div>
@@ -2134,7 +2136,7 @@ const COACH_PHOTO='icons/coach.jpg';
             <input type="range" id="ps-intensite" min="0" max="10" value="5" oninput="document.getElementById('ps-intensite-val').textContent=this.value" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
           </div>
           <!-- Satisfaction -->
-          <div style="background:var(--dark);border:1px solid var(--border);border-radius:3px;padding:12px 10px">
+          <div class="ps-detail-item" style="display:none;background:var(--dark);border:1px solid var(--border);border-radius:3px;padding:12px 10px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
               <div style="font-size:var(--fs-xs);font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Satisfaction</div>
               <div style="font-size:18px;font-weight:900;color:var(--red)" id="ps-satisfaction-val">5</div>
@@ -2147,10 +2149,10 @@ const COACH_PHOTO='icons/coach.jpg';
               <div style="font-size:var(--fs-xs);font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Sensation</div>
               <div style="font-size:18px;font-weight:900;color:var(--red)" id="ps-sensation-val">5</div>
             </div>
-            <input type="range" id="ps-sensation" min="0" max="10" value="5" oninput="document.getElementById('ps-sensation-val').textContent=this.value" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
+            <input type="range" id="ps-sensation" min="0" max="10" value="5" oninput="document.getElementById('ps-sensation-val').textContent=this.value;renderFormeSeance()" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
           </div>
           <!-- Hydratation -->
-          <div style="background:var(--dark);border:1px solid var(--border);border-radius:3px;padding:12px 10px">
+          <div class="ps-detail-item" style="display:none;background:var(--dark);border:1px solid var(--border);border-radius:3px;padding:12px 10px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
               <div style="font-size:var(--fs-xs);font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Hydratation</div>
               <div style="font-size:18px;font-weight:900;color:var(--red)" id="ps-hydratation-val">5</div>
@@ -2163,7 +2165,7 @@ const COACH_PHOTO='icons/coach.jpg';
               <div style="font-size:var(--fs-xs);font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Motivation</div>
               <div style="font-size:18px;font-weight:900;color:var(--red)" id="ps-motivation-val">5</div>
             </div>
-            <input type="range" id="ps-motivation" min="0" max="10" value="5" oninput="document.getElementById('ps-motivation-val').textContent=this.value" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
+            <input type="range" id="ps-motivation" min="0" max="10" value="5" oninput="document.getElementById('ps-motivation-val').textContent=this.value;renderFormeSeance()" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
           </div>
         </div>
         <!-- Pas -->
@@ -2186,6 +2188,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="font-size:11px;color:var(--sub);line-height:1.5">Ton coach pourra suivre ta progression et adapter tes charges. On enregistre ta séance et on y va →</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:10px;margin-top:4px">
+      <div id="wd-forme"></div>
         <button class="btn btn-red" onclick="savePostSession()">Valider et terminer </button>
         <button class="btn btn-outline" onclick="go('s-client-home');loadClientHome()">Passer</button>
       </div>
@@ -5963,6 +5966,7 @@ function openClientDetail(cid,_refresh){
   // reperes de L ATHLETE.
   try{ renderVolumeCoach(c); }catch(e){}
   try{ renderPlateauxCoach(c); }catch(e){}
+  try{ renderFormeCoach(c); }catch(e){}
 
   document.getElementById('ccd-title').textContent=c.fname||c.lname||'—';
   const _av=document.getElementById('ccd-avatar');
@@ -10332,16 +10336,346 @@ function buildSessionComparison(vol,data){
 // versBilan : enchaîner sur le questionnaire de départ au lieu de rentrer à
 // l'accueil. Utilisé par la carte de relance de s-workout-done, pour que le
 // ressenti post-séance soit enregistré AVANT de changer d'écran.
+// ══════════════ INDICE DE FORME DÉCLARÉE ══════════════
+// Les six curseurs de fin de séance étaient écrits dans sessions[n].metrics et
+// n'étaient relus NULLE PART. On en tire un indice, normalisé sur la base
+// personnelle de l'athlète : une note de 5 ne veut rien dire dans l'absolu,
+// elle ne vaut que comparée à ce que CET athlète met d'habitude.
+//
+// On décrit, on ne prescrit pas : aucun conseil de sommeil, d'alimentation ni
+// de santé mentale n'est généré à partir d'un auto-report de trois curseurs.
+const FORME_MAX=10;               // les curseurs vont de 0 à 10
+const FORME_MIN_SEANCES=6;        // en dessous, aucune normalisation
+const FORME_FENETRE=10;           // séances servant de base
+const FORME_ECART_PLANCHER=0.8;   // sinon un athlète régulier déclencherait tout
+const FORME_Z_CREUX=-1.5;
+const FORME_Z_BAS=-0.8;
+const FORME_Z_HAUT=1.0;
+const FORME_JOURS_VIEILLE=60;     // au-delà, la base est signalée comme datée
+const FORME_ITEMS=Object.freeze([
+  {cle:'fatigue',   lib:'fatigue',    inverse:true},
+  {cle:'motivation',lib:'motivation', inverse:false},
+  {cle:'sensation', lib:'sensations', inverse:false}
+]);
+// intensite, satisfaction et hydratation restent écrits à l'identique mais ne
+// sont pas exploités : le premier recoupe le RIR déjà saisi série par série, le
+// dernier est un auto-report sans usage décisionnel ici.
+
+// Curseur valide : un entier de 0 à 10. Les bornes sont celles du widget, pas
+// celles de la spécification d'origine qui annonçait 1 à 10.
+function _valForme(v){
+  const n=parseInt(v,10);
+  return (isFinite(n)&&n>=0&&n<=FORME_MAX)?n:null;
+}
+// Contribution d'un item, tous ramenés dans le même sens : 10 = au mieux.
+// La fatigue est inversée par 10 − f et non 11 − f : à 11 − f, une fatigue nulle
+// vaudrait 11, hors de l'échelle des deux autres items.
+function _contribForme(m,item){
+  const v=_valForme(m&&m[item.cle]);
+  if(v==null) return null;
+  return item.inverse?FORME_MAX-v:v;
+}
+function formeSeance(sess){
+  const m=sess&&sess.metrics;
+  if(!m) return null;
+  const vals=FORME_ITEMS.map(it=>_contribForme(m,it)).filter(v=>v!=null);
+  // Moins de deux items : la moyenne ne veut plus rien dire.
+  if(vals.length<2) return null;
+  return vals.reduce((a,b)=>a+b,0)/vals.length;
+}
+
+// Série chronologique des séances qui ont un indice. Les séances sans metrics
+// en sont ABSENTES, jamais comptées comme des zéros.
+function _serieForme(user){
+  const out=[];
+  for(const s of ((user&&user.sessions)||[])){
+    const v=formeSeance(s);
+    if(v!=null) out.push({date:s.date,v,metrics:s.metrics,id:s.id});
+  }
+  return out;
+}
+function _fenetreForme(user,exclureId){
+  let t=_serieForme(user);
+  if(exclureId!=null) t=t.filter(x=>x.id!==exclureId);
+  return t.slice(-FORME_FENETRE);
+}
+function _moyenne(t){ return t.length?t.reduce((a,b)=>a+b,0)/t.length:null; }
+
+function baseForme(user,exclureId){
+  const t=_fenetreForme(user,exclureId);
+  if(t.length<FORME_MIN_SEANCES) return null;
+  return _moyenne(t.map(x=>x.v));
+}
+function ecartForme(user,exclureId){
+  const t=_fenetreForme(user,exclureId);
+  if(t.length<FORME_MIN_SEANCES) return null;
+  const d=t.map(x=>x.v), mu=_moyenne(d);
+  const va=d.reduce((a,b)=>a+(b-mu)*(b-mu),0)/d.length;
+  return Math.max(FORME_ECART_PLANCHER,Math.sqrt(va));
+}
+// Curseurs jamais bougés : ils partent à 5 et y sont remis après chaque séance,
+// donc un athlète qui valide sans y toucher produit toujours la même note.
+// L'indice n'a alors rien à mesurer.
+function formeFigee(user){
+  const t=_fenetreForme(user);
+  if(t.length<FORME_MIN_SEANCES) return false;
+  return t.every(x=>Math.abs(x.v-t[0].v)<1e-9);
+}
+// La base est-elle vieille ? On la garde, mais on le dit.
+function baseFormeDatee(user){
+  const t=_fenetreForme(user);
+  if(t.length<FORME_MIN_SEANCES) return false;
+  return (Date.now()-t[t.length-1].date)>FORME_JOURS_VIEILLE*86400000;
+}
+
+// z d'une séance contre la base personnelle. La séance jugée est EXCLUE de sa
+// propre base : « ta normale » est ce que tu fais d'habitude, pas ce que tu
+// viens de faire.
+function zForme(sess,user){
+  if(formeFigee(user)) return null;
+  const v=formeSeance(sess);
+  if(v==null) return null;
+  const b=baseForme(user,sess&&sess.id), e=ecartForme(user,sess&&sess.id);
+  if(b==null||!e) return null;
+  return (v-b)/e;
+}
+function etatForme(z){
+  if(z==null) return null;
+  if(z<=FORME_Z_CREUX) return 'creux';
+  if(z<=FORME_Z_BAS)   return 'bas';
+  if(z>=FORME_Z_HAUT)  return 'haut';
+  return 'normal';
+}
+// Libellé court, pour une étiquette ou une liste.
+const FORME_ETAT_LIB={creux:'creux marqué',bas:'en dessous de ta normale',
+                      normal:'dans ta normale',haut:'très bonne forme'};
+// Phrase complète, qui se met derrière « Tu es ». Séparée du libellé court :
+// « Tu es creux marqué » et « Tu es très bonne forme » ne se disent pas.
+const FORME_ETAT_PHRASE={creux:'dans un creux marqué',bas:'en dessous de ta normale',
+                         normal:'dans ta normale',haut:'en très bonne forme'};
+
+function formeMoy3(user){
+  const t=_serieForme(user);
+  if(!t.length) return null;
+  return _moyenne(t.slice(-3).map(x=>x.v));
+}
+// Nombre de séances consécutives, en partant de la fin, sous le seuil bas.
+function serieBasseForme(user){
+  const t=_serieForme(user);
+  if(formeFigee(user)) return 0;
+  let n=0;
+  for(let i=t.length-1;i>=0;i--){
+    const b=baseForme(user,t[i].id), e=ecartForme(user,t[i].id);
+    if(b==null||!e) break;
+    if((t[i].v-b)/e<=FORME_Z_BAS) n++; else break;
+  }
+  return n;
+}
+// Quelle composante décroche le plus : la fatigue et la motivation n'appellent
+// pas la même réponse, et c'est au coach d'en décider.
+function composanteFaible(user){
+  const t=_serieForme(user);
+  if(t.length<FORME_MIN_SEANCES) return null;
+  const fen=t.slice(-FORME_FENETRE), rec=t.slice(-3);
+  let pire=null;
+  for(const it of FORME_ITEMS){
+    const base=_moyenne(fen.map(x=>_contribForme(x.metrics,it)).filter(v=>v!=null));
+    const cur =_moyenne(rec.map(x=>_contribForme(x.metrics,it)).filter(v=>v!=null));
+    if(base==null||cur==null) continue;
+    const d=cur-base;
+    if(!pire||d<pire.delta) pire={cle:it.cle,lib:it.lib,delta:d};
+  }
+  return pire;
+}
+
+// ── Retour immédiat sur l'écran de fin de séance ────────────────────────────
+// Rendu à chaque mouvement de curseur, AVANT la validation : l'athlète voit
+// tout de suite ce que sa saisie donne, sinon il ne saurait pas à quoi elle sert.
+// Une phrase, pas un graphique.
+function _seanceEnCoursForme(){
+  // On lit les curseurs à l'écran plutôt que la séance enregistrée : elle n'a
+  // pas encore ses metrics au moment où l'athlète bouge les curseurs.
+  const lu=(id)=>{const e=document.getElementById('ps-'+id);return e?e.value:null;};
+  return {id:'__encours__',date:Date.now(),
+          metrics:{fatigue:lu('fatigue'),motivation:lu('motivation'),sensation:lu('sensation')}};
+}
+function renderFormeSeance(){
+  const z=document.getElementById('wd-forme');
+  if(!z||!currentUser) return;
+  const sess=_seanceEnCoursForme();
+  const v=formeSeance(sess);
+  if(v==null){ z.innerHTML=''; return; }
+
+  const cadre=(couleur,titre,detail)=>`<div style="background:var(--surface-1);border:1px solid var(--border);border-left:3px solid ${couleur};border-radius:10px;padding:11px 13px;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:800;color:${couleur};margin-bottom:${detail?'3px':'0'}">${titre}</div>
+      ${detail?`<div style="font-size:11px;color:var(--sub);line-height:1.6">${detail}</div>`:''}
+    </div>`;
+
+  // Curseurs jamais bougés : l'indice ne mesure rien, on le dit franchement.
+  if(formeFigee(currentUser)){
+    z.innerHTML=cadre('var(--orange)','Tu mets toujours la même note',
+      'Ces curseurs ne servent à rien tant que tu ne les bouges pas.');
+    return;
+  }
+  const base=baseForme(currentUser);
+  // Sous le seuil d'échantillon : la tendance brute, aucun jugement.
+  if(base==null){
+    const n=_serieForme(currentUser).length;
+    z.innerHTML=cadre('var(--sub)','Forme déclarée : '+_fmtForme(v)+'/10',
+      'Encore '+(FORME_MIN_SEANCES-n)+' séance'+((FORME_MIN_SEANCES-n)>1?'s':'')
+      +' avant de pouvoir te comparer à ta normale.');
+    return;
+  }
+  const e=ecartForme(currentUser);
+  const etat=etatForme((v-base)/e);
+  const coul={creux:'var(--red)',bas:'var(--orange)',normal:'var(--sub)',haut:'var(--success)'}[etat];
+  const suite=serieBasseForme(currentUser);
+  let detail='';
+  // Une série basse mérite d'être nommée. On décrit et on renvoie au coach :
+  // aucun conseil de sommeil, d'alimentation ni de moral n'est généré à partir
+  // de trois curseurs.
+  if((etat==='bas'||etat==='creux')&&suite>=2){
+    const c=composanteFaible(currentUser);
+    detail=(suite+1)+'ᵉ séance de suite en dessous de ta normale'
+      +(c&&c.delta<-0.5?', la '+c.lib+' surtout':'')+'. Parles-en à ton coach.';
+  } else if(etat==='haut'){
+    detail='Ta meilleure forme déclarée depuis un moment.';
+  } else if(etat==='creux'||etat==='bas'){
+    detail='Ça arrive. Si ça se répète, parles-en à ton coach.';
+  }
+  if(baseFormeDatee(currentUser))
+    detail+=(detail?' ':'')+'Ta base date de plus de deux mois.';
+  z.innerHTML=cadre(coul,'Tu es '+FORME_ETAT_PHRASE[etat]+'.',detail);
+}
+function _fmtForme(v){
+  const x=Math.round(v*10)/10;
+  return Number.isInteger(x)?String(x):String(x).replace('.',',');
+}
+// Repli des trois curseurs secondaires. Ils ne sont écrits que si l'athlète a
+// ouvert le détail : un 5 laissé par défaut ressemblerait à une réponse.
+let _psDetailOuvert=false;
+function togglePsDetail(){
+  _psDetailOuvert=!_psDetailOuvert;
+  // Les trois curseurs secondaires sont marqués par une classe : les replier
+  // sans toucher à la grille evite de reordonner tout le bloc.
+  document.querySelectorAll('.ps-detail-item').forEach(e=>{
+    e.style.display=_psDetailOuvert?'block':'none';});
+  const b=document.getElementById('ps-detail-btn');
+  if(b) b.textContent=_psDetailOuvert?'− moins de détail':'+ de détail';
+}
+
+// ── Courbe de forme déclarée ────────────────────────────────────────────────
+// Échelle FIXE de 0 à 10, contrairement à la sparkline de progression qui
+// normalise sur ses propres extrêmes : ici la bande « base ± écart » n'aurait
+// aucun sens sur une échelle mouvante.
+const FORME_DERNIERES=12;
+function _formeCourbe(pts,base,ecart){
+  if(!pts||pts.length<2) return '';
+  const L=100,H=44,marge=3;
+  // Échelle cadrée sur ce qui est réellement tracé, bande comprise, et non sur
+  // 0-10 : avec des notes entre 4 et 7, la courbe n'occupait qu'un tiers de la
+  // hauteur et la bande devenait invisible. Une plage minimale de 3 points
+  // évite l'effet inverse, où un écart de 0,2 remplirait tout le cadre.
+  const vals=pts.concat(base!=null&&ecart?[base-ecart,base+ecart]:[]);
+  let lo=Math.min(...vals), hi=Math.max(...vals);
+  const centre=(lo+hi)/2, demi=Math.max(1.5,(hi-lo)/2);
+  lo=Math.max(0,centre-demi); hi=Math.min(FORME_MAX,centre+demi);
+  if(hi-lo<0.5){ lo=Math.max(0,lo-0.5); hi=Math.min(FORME_MAX,hi+0.5); }
+  const y=v=>H-marge-((v-lo)/(hi-lo))*(H-2*marge);
+  const x=i=>(i/(pts.length-1))*L;
+  const d=pts.map((p,i)=>(i?'L':'M')+x(i).toFixed(1)+' '+y(p).toFixed(1)).join(' ');
+  let bande='';
+  if(base!=null&&ecart){
+    const haut=y(Math.min(hi,base+ecart)), bas=y(Math.max(lo,base-ecart));
+    bande=`<rect x="0" y="${haut.toFixed(1)}" width="${L}" height="${(bas-haut).toFixed(1)}"
+             fill="var(--sub)" opacity=".22"/>
+           <line x1="0" y1="${y(base).toFixed(1)}" x2="${L}" y2="${y(base).toFixed(1)}"
+             stroke="var(--sub)" stroke-width=".6" stroke-dasharray="2 2" vector-effect="non-scaling-stroke"/>`;
+  }
+  return `<svg viewBox="0 0 ${L} ${H}" preserveAspectRatio="none" style="width:100%;height:44px;overflow:visible" aria-hidden="true">
+    ${bande}
+    <path d="${d}" fill="none" stroke="var(--accent-blue)" stroke-width="1.6"
+      stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+  </svg>`;
+}
+// Les trois composantes séparément : la fatigue et la motivation n'appellent
+// pas la même réponse, l'athlète doit voir LAQUELLE décroche.
+function _formeComposantes(user){
+  const t=_serieForme(user).slice(-FORME_DERNIERES);
+  if(t.length<2) return '';
+  return `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">`
+    +FORME_ITEMS.map(it=>{
+      const v=t.map(x=>_contribForme(x.metrics,it)).filter(z=>z!=null);
+      if(v.length<2) return '';
+      const der=v[v.length-1], moy=_moyenne(v);
+      const ecart=der-moy;
+      const c=ecart<=-1?'var(--orange)':ecart>=1?'var(--success)':'var(--sub)';
+      return `<div style="flex:1;min-width:78px">
+        <div style="font-size:9px;letter-spacing:1px;color:var(--text-faint);text-transform:uppercase">${it.lib}</div>
+        <div style="font-size:12px;font-weight:800;color:${c}">${_fmtForme(der)}<span style="font-size:9px;color:var(--text-faint);font-weight:400"> / moy ${_fmtForme(moy)}</span></div>
+      </div>`;}).join('')
+    +`</div>`;
+}
+// Bloc complet, partagé par l'onglet Perfs et la fiche coach.
+function blocForme(user,pourCoach){
+  const t=_serieForme(user);
+  if(t.length<2) return '';
+  const pts=t.slice(-FORME_DERNIERES).map(x=>x.v);
+  const base=baseForme(user), ecart=ecartForme(user);
+  const fige=formeFigee(user);
+  let phrase='';
+  if(fige){
+    phrase='Notes identiques d\'une séance à l\'autre : ces curseurs ne disent rien tant qu\'ils ne bougent pas.';
+  } else if(base==null){
+    phrase='Encore '+(FORME_MIN_SEANCES-t.length)+' séance'+((FORME_MIN_SEANCES-t.length)>1?'s':'')
+      +' avant de pouvoir comparer à une normale.';
+  } else {
+    const suite=serieBasseForme(user);
+    const c=composanteFaible(user);
+    if(suite>=3) phrase='Forme déclarée en baisse depuis '+suite+' séances'
+      +(c&&c.delta<-0.5?' ('+c.lib+' surtout)':'')+'.';
+    else{
+      const z=(t[t.length-1].v-base)/ecart;
+      phrase=(pourCoach?'Dernière séance ':'Tu es ')+(pourCoach?FORME_ETAT_LIB[etatForme(z)]:FORME_ETAT_PHRASE[etatForme(z)])+'.';
+    }
+    if(baseFormeDatee(user)) phrase+=' Base de plus de deux mois.';
+  }
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:16px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
+      <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Forme déclarée</span>
+      ${base!=null&&!fige?`<span style="font-size:10px;color:var(--text-faint)">normale ${_fmtForme(base)}/10</span>`:''}
+    </div>
+    ${fige?'':_formeCourbe(pts,fige?null:base,fige?null:ecart)}
+    ${fige?'':_formeComposantes(user)}
+    <div style="font-size:11px;color:var(--sub);line-height:1.6;margin-top:8px">${escapeHtml(phrase)}</div>
+    <div style="font-size:10px;color:var(--text-faint);margin-top:6px;line-height:1.5">Déclaratif, comparé à ta propre moyenne. Ce n'est pas une mesure.</div>
+  </div>`;
+}
+function renderFormeCoach(c){
+  const z=document.getElementById('ccd-forme');
+  if(!z) return;
+  let html='';
+  try{ html=c?blocForme(c,true):''; }catch(e){ html=''; }
+  z.innerHTML=html;
+}
+
 function savePostSession(versBilan){
+  const _lu=(id)=>{const e=document.getElementById('ps-'+id);return e?e.value:undefined;};
   const metrics={
-    fatigue:document.getElementById('ps-fatigue').value,
-    intensite:document.getElementById('ps-intensite').value,
-    satisfaction:document.getElementById('ps-satisfaction').value,
-    sensation:document.getElementById('ps-sensation').value,
-    hydratation:document.getElementById('ps-hydratation').value,
-    motivation:document.getElementById('ps-motivation').value,
-    steps:document.getElementById('ps-steps').value
+    fatigue:_lu('fatigue'),
+    sensation:_lu('sensation'),
+    motivation:_lu('motivation'),
+    steps:_lu('steps')
   };
+  // Les trois curseurs secondaires ne sont écrits que si l'athlète a ouvert le
+  // détail. Enregistrer le 5 posé par défaut ressemblerait à une réponse alors
+  // que personne n'a rien répondu. Quand ils sont renseignés, ils partent au
+  // même format qu'avant : rien à migrer, rien à relire autrement.
+  if(_psDetailOuvert){
+    metrics.intensite=_lu('intensite');
+    metrics.satisfaction=_lu('satisfaction');
+    metrics.hydratation=_lu('hydratation');
+  }
   // Attacher les métriques à la dernière séance
   if(currentUser.sessions?.length){
     currentUser.sessions[currentUser.sessions.length-1].metrics=metrics;
@@ -12372,6 +12706,8 @@ function showProgressTab(tab,btn){
   } else if(tab==='perf'){
     if(!ss.length){c.innerHTML=emptyState('dumbbell','Aucune séance enregistrée.');return;}
     const sl=ss.slice(-8);
+    let _blocFormePerf='';
+    try{ _blocFormePerf=blocForme(currentUser,false); }catch(e){}
     let _lst=[];
     try{ _lst=_listeEtats(currentUser); }catch(e){ _lst=[]; }
     const _jug=_lst.filter(x=>x.etat!=='insuffisant');
@@ -12380,6 +12716,7 @@ function showProgressTab(tab,btn){
       <div class="metric-box"><div class="metric-val">${streakSemaines(currentUser)}</div><div class="metric-label">Semaines</div></div>
       <div class="metric-box"><div class="metric-val">${ss.length?Math.round(ss.reduce((s,x)=>s+(x.duration||0),0)/ss.length):0}min</div><div class="metric-label">Durée</div></div>
     </div>
+    ${_blocFormePerf}
     <div id="perf-etats" style="margin-bottom:18px">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Progression par exercice</div>
       ${_lst.length?_lst.map(_ligneEtat).join(''):'<div class="sub" style="font-size:12px">Aucun exercice suivi pour l\'instant.</div>'}
@@ -19946,6 +20283,183 @@ function testExercices(){
     ok('Charge nulle ou vide : rien',
        chargeSuivante(0,'2',false)===null&&chargeSuivante('','2',false)===null
        &&chargeSuivante(null,'2',false)===null);
+
+    // ══════ INDICE DE FORME DÉCLARÉE ══════
+    const _fS=(f,m,s,extra)=>({id:'f'+Math.random(),date:Date.now(),
+      metrics:Object.assign({},f!=null?{fatigue:String(f)}:{},
+        m!=null?{motivation:String(m)}:{},s!=null?{sensation:String(s)}:{},extra||{})});
+
+    // ── formeSeance ──
+    // La fatigue est inversée par 10 − f : les curseurs vont de 0 à 10, et à
+    // 11 − f une fatigue nulle vaudrait 11, hors de l'échelle des deux autres.
+    // La spécification annonçait ((11−8)+4+5)/3 = 4,0 en supposant une échelle
+    // de 1 à 10 ; sur l'échelle réelle le même cas vaut ((10−8)+4+5)/3.
+    ok('Trois items : moyenne avec fatigue inversée',
+       Math.abs(formeSeance(_fS(8,4,5))-((10-8)+4+5)/3)<1e-9,String(formeSeance(_fS(8,4,5))));
+    ok('Fatigue 0 contribue au maximum',formeSeance(_fS(0,10,10))===10);
+    ok('Fatigue 10 contribue au minimum',formeSeance(_fS(10,0,0))===0);
+    ok('Inversion vérifiée aux deux bouts',
+       formeSeance(_fS(0,5,5))>formeSeance(_fS(10,5,5)));
+    ok('Deux items présents : moyenne sur deux',
+       Math.abs(formeSeance(_fS(8,4,null))-((10-8)+4)/2)<1e-9,String(formeSeance(_fS(8,4,null))));
+    ok('Un seul item : null',formeSeance(_fS(8,null,null))===null);
+    ok('Aucun item : null',formeSeance(_fS(null,null,null))===null);
+    ok('metrics absent : null',formeSeance({id:'x',date:1})===null);
+    ok('metrics vide : null',formeSeance({id:'x',date:1,metrics:{}})===null);
+    ok('Séance nulle : null',formeSeance(null)===null);
+    ok('Valeurs 0 et 10 acceptées',formeSeance(_fS(0,0,10))!=null&&formeSeance(_fS(10,10,0))!=null);
+    ok('Valeur non numérique ignorée',formeSeance(_fS('abc',4,5))!=null
+       &&Math.abs(formeSeance(_fS('abc',4,5))-4.5)<1e-9,String(formeSeance(_fS('abc',4,5))));
+    ok('Valeur hors bornes ignorée',
+       formeSeance(_fS(99,4,5))!=null&&Math.abs(formeSeance(_fS(99,4,5))-4.5)<1e-9);
+    ok('Les trois curseurs non exploités n\'entrent pas dans le calcul',
+       formeSeance(_fS(8,4,5))===formeSeance(_fS(8,4,5,{intensite:'9',satisfaction:'1',hydratation:'0'})));
+
+    // ── base et écart ──
+    const _fU=(vals)=>({email:'fo@t.fr',sessions:vals.map((v,i)=>{
+      // v = [fatigue,motivation,sensation] ou null pour une séance SANS metrics
+      const s={id:'s'+i,date:Date.now()-(vals.length-i)*86400000};
+      if(v) s.metrics={fatigue:String(v[0]),motivation:String(v[1]),sensation:String(v[2])};
+      return s;})});
+    // Un indice de X se construit avec fatigue 10−X, motivation X, sensation X.
+    const _fV=(x)=>[10-x,x,x];
+    ok('Cinq séances : pas de base',baseForme(_fU([5,5,5,5,5].map(_fV)))===null);
+    ok('Six séances : base calculée',baseForme(_fU([4,5,6,5,4,6].map(_fV)))!=null);
+    ok('Base = moyenne des indices',
+       Math.abs(baseForme(_fU([4,5,6,5,4,6].map(_fV)))-5)<1e-9,
+       String(baseForme(_fU([4,5,6,5,4,6].map(_fV)))));
+    // Quinze séances : seules les dix dernières comptent
+    const _f15=_fU([1,1,1,1,1,6,6,6,6,6,6,6,6,6,6].map(_fV));
+    ok('Seules les dix dernières séances comptent',
+       Math.abs(baseForme(_f15)-6)<1e-9,String(baseForme(_f15)));
+    // Séances SANS metrics intercalées : ignorées, jamais comptées comme des zéros
+    const _fTrous={email:'t@t.fr',sessions:[]};
+    [6,null,6,null,6,6,6,6].forEach((x,i)=>{
+      const s={id:'t'+i,date:Date.now()-(8-i)*86400000};
+      if(x!=null) s.metrics={fatigue:String(10-x),motivation:String(x),sensation:String(x)};
+      _fTrous.sessions.push(s);});
+    ok('Séances sans metrics ignorées, pas imputées à zéro',
+       Math.abs(baseForme(_fTrous)-6)<1e-9,String(baseForme(_fTrous)));
+
+    // ── plancher de l'écart-type ──
+    const _fPlat=_fU([5,5,5,5,5,5,5,5,5,5].map(_fV));
+    ok('Écart-type nul relevé au plancher',ecartForme(_fPlat)===FORME_ECART_PLANCHER,
+       String(ecartForme(_fPlat)));
+    ok('Dix notes identiques : indice DÉSACTIVÉ',formeFigee(_fPlat)===true);
+    const _fPresque=_fU([5,5,5,5,5,5,5,5,5,6].map(_fV));
+    ok('Une seule note différente : indice actif',formeFigee(_fPresque)===false);
+    ok('Et l\'écart reste au plancher',ecartForme(_fPresque)===FORME_ECART_PLANCHER,
+       String(ecartForme(_fPresque)));
+    ok('Sous six séances, pas de verdict « figé »',formeFigee(_fU([5,5,5].map(_fV)))===false);
+
+    // ── z et ses quatre branches, bornes exactes ──
+    // La table fait foi : z <= −1,5 est un creux marqué, y compris à −1,5 pile.
+    ok('z = −1,5 exactement → creux marqué',etatForme(-1.5)==='creux');
+    ok('z = −1,49 → en dessous de la normale',etatForme(-1.49)==='bas');
+    ok('z = −0,8 exactement → en dessous',etatForme(-0.8)==='bas');
+    ok('z = −0,79 → dans la normale',etatForme(-0.79)==='normal');
+    ok('z = 1,0 exactement → très bonne forme',etatForme(1.0)==='haut');
+    ok('z = 0,99 → dans la normale',etatForme(0.99)==='normal');
+    ok('z nul rend null',etatForme(null)===null);
+    // La séance jugée est exclue de sa propre base
+    const _fZ={email:'z@t.fr',sessions:[]};
+    [6,6,6,6,6,6].forEach((x,i)=>_fZ.sessions.push({id:'z'+i,date:Date.now()-(7-i)*86400000,
+      metrics:{fatigue:String(10-x),motivation:String(x),sensation:String(x)}}));
+    const _fCour={id:'zc',date:Date.now(),metrics:{fatigue:'6',motivation:'4',sensation:'4'}};
+    _fZ.sessions.push(_fCour);
+    ok('La séance jugée n\'entre pas dans sa propre base',
+       Math.abs(baseForme(_fZ,'zc')-6)<1e-9,String(baseForme(_fZ,'zc')));
+    ok('z négatif quand la séance est sous la base',zForme(_fCour,_fZ)<0,String(zForme(_fCour,_fZ)));
+    ok('Indice figé : aucun z',zForme(_fPlat.sessions[9],_fPlat)===null);
+    ok('Moins de six séances : aucun z',
+       zForme(_fU([5,5,5].map(_fV)).sessions[2],_fU([5,5,5].map(_fV)))===null);
+
+    // ── moyenne des trois dernières ──
+    ok('formeMoy3 sur les trois dernières',
+       Math.abs(formeMoy3(_fU([9,9,9,9,9,3,3,3].map(_fV)))-3)<1e-9,
+       String(formeMoy3(_fU([9,9,9,9,9,3,3,3].map(_fV)))));
+    ok('formeMoy3 sans aucune séance : null',formeMoy3({email:'v@t.fr',sessions:[]})===null);
+
+    // ── série basse et composante qui décroche ──
+    const _fBaisse={email:'b@t.fr',sessions:[]};
+    [7,7,7,7,7,7,7].forEach((x,i)=>_fBaisse.sessions.push({id:'b'+i,
+      date:Date.now()-(11-i)*86400000,
+      metrics:{fatigue:String(10-x),motivation:String(x),sensation:String(x)}}));
+    // Trois séances basses, la MOTIVATION décroche plus que le reste
+    [0,1,2].forEach(k=>_fBaisse.sessions.push({id:'bb'+k,date:Date.now()-(3-k)*86400000,
+      metrics:{fatigue:'4',motivation:'1',sensation:'6'}}));
+    ok('Trois séances consécutives sous le seuil détectées',
+       serieBasseForme(_fBaisse)>=3,String(serieBasseForme(_fBaisse)));
+    ok('La composante qui décroche le plus est identifiée',
+       composanteFaible(_fBaisse).cle==='motivation',
+       JSON.stringify(composanteFaible(_fBaisse)));
+    ok('Aucune série basse quand tout va bien',serieBasseForme(_fU([7,7,7,7,7,7,7].map(_fV)))===0);
+
+    // ── base datée ──
+    const _fVieux={email:'x@t.fr',sessions:[6,6,6,6,6,6].map((x,i)=>({id:'v'+i,
+      date:Date.now()-(90+i)*86400000,
+      metrics:{fatigue:String(10-x),motivation:String(x),sensation:String(x)}}))};
+    ok('Base de plus de 60 jours signalée',baseFormeDatee(_fVieux)===true);
+    ok('Base récente non signalée',baseFormeDatee(_fU([6,6,6,6,6,6].map(_fV)))===false);
+
+    // ── non-régression : savePostSession écrit toujours les six champs ──
+    ok('Les six curseurs existent toujours dans l\'écran',
+       ['fatigue','intensite','satisfaction','sensation','hydratation','motivation']
+         .every(m=>document.getElementById('ps-'+m)));
+    ok('Une séance enregistrée avant la livraison reste lisible',
+       formeSeance({id:'old',date:1,metrics:{fatigue:'5',intensite:'5',satisfaction:'5',
+         sensation:'5',hydratation:'5',motivation:'5',steps:'8000'}})===5);
+
+    // ── Restitution : courbe, composantes, phrase ──
+    const _fbU=(vals)=>({email:'ui@t.fr',sessions:vals.map((x,i)=>({id:'u'+i,
+      date:Date.now()-(vals.length-i)*86400000,
+      metrics:{fatigue:String(10-x),motivation:String(x),sensation:String(x)}}))});
+    const _fb=(u,coach)=>blocForme(u,!!coach);
+    ok('Moins de deux séances : aucun bloc',_fb(_fbU([6]))==='');
+    ok('Le bloc porte la courbe et les composantes',(()=>{
+      const h=_fb(_fbU([6,7,6,5,6,7,6,5,7,6]));
+      return h.includes('<svg')&&/fatigue/i.test(h)&&/motivation/i.test(h)&&/sensations/i.test(h);})());
+    ok('La bande base ± écart est dessinée',_fb(_fbU([6,7,6,5,6,7,6,5,7,6])).includes('<rect'));
+    // Sous le seuil : pas de bande, pas de verdict, on dit ce qui manque.
+    ok('Sous six séances : aucun jugement',(()=>{
+      const h=_fb(_fbU([6,7,6]));
+      return !h.includes('<rect')&&/avant de pouvoir comparer/.test(h);})());
+    // Curseurs figés : aucune courbe, message franc.
+    ok('Notes figées : aucune courbe',(()=>{
+      const h=_fb(_fbU([5,5,5,5,5,5,5,5,5,5]));
+      return !h.includes('<svg')&&/ne disent rien/.test(h);})());
+    // Série basse : la phrase nomme la composante qui décroche.
+    ok('Série basse : la composante est nommée',(()=>{
+      const u=_fbU([7,7,7,7,7,7,7,4,4,4]);
+      u.sessions.slice(-3).forEach(s=>{s.metrics.motivation='1';s.metrics.fatigue='6';s.metrics.sensation='6';});
+      const h=_fb(u,true);
+      return /en baisse depuis \d+ séances/.test(h)&&/motivation surtout/.test(h);})());
+    // On décrit, on ne prescrit pas : aucun conseil de sommeil, d'alimentation
+    // ni de moral ne doit sortir d'un auto-report de trois curseurs.
+    ok('Aucun conseil de santé généré',(()=>{
+      const jeux=[[6,7,6,5,6,7,6,5,7,6],[7,7,7,7,7,7,7,3,3,3],[3,3,3,3,3,3,3,3,3,3],[6,7,6]];
+      return jeux.every(v=>{
+        const h=_fb(_fbU(v))+_fb(_fbU(v),true);
+        return !/sommeil|aliment|nutrition|dors|mange|repose-toi|moral/i.test(h);});})());
+    // Formulations : « Tu es creux marqué » ne se dit pas.
+    ok('La phrase se construit correctement derrière « Tu es »',
+       ['creux','bas','normal','haut'].every(e=>FORME_ETAT_PHRASE[e]
+         &&/^(dans|en)\s/.test(FORME_ETAT_PHRASE[e])),
+       JSON.stringify(FORME_ETAT_PHRASE));
+    // La vue coach ne tutoie pas l'athlète.
+    ok('La vue coach ne tutoie pas',(()=>{
+      const h=_fb(_fbU([6,7,6,5,6,7,6,5,7,6]),true);
+      return !/\bTu es\b/.test(h);})());
+    ok('La vue athlète tutoie',(()=>{
+      const h=_fb(_fbU([6,7,6,5,6,7,6,5,7,6]),false);
+      return /\bTu es\b/.test(h)||/en baisse depuis/.test(h);})());
+
+    // ── Écriture conditionnelle des trois curseurs secondaires ──
+    ok('Le repli est fermé par défaut',_psDetailOuvert===false);
+    ok('Les trois curseurs secondaires sont bien marqués',
+       document.querySelectorAll('.ps-detail-item').length===3,
+       String(document.querySelectorAll('.ps-detail-item').length));
+    ok('Le bouton de dépliage existe',!!document.getElementById('ps-detail-btn'));
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
