@@ -9989,6 +9989,14 @@ function getCycleLabel(){
 // ======= WORKOUT PERSISTENCE =======
 function woPersist(){
   if(!woState?.exercises?.length||!woState.startTime) return;
+  // Séance TERMINÉE : on n'écrit plus rien. finishWorkout supprime le
+  // snapshot mais ne vide pas woState — l'objet garde ses exercices et son
+  // startTime. N'importe quel woPersist ultérieur ressuscitait donc la
+  // séance en « à finir » sur l'accueil. Le cas le plus courant : le
+  // visibilitychange qui persiste quand l'app passe en arrière-plan, c'est-
+  // à-dire au moment précis où l'athlète verrouille son téléphone après
+  // avoir terminé. D'où le « parfois » : il fallait ce geste-là.
+  if(woState.termine) return;
   try{
     localStorage.setItem('rc_wo_state',JSON.stringify({
       exercises:woState.exercises,
@@ -10880,7 +10888,13 @@ function woNav(dir){
 }
 function finishWorkout(incomplete=false){
   localStorage.removeItem('rc_wo_state');
+  // Marque posée AVANT tout le reste : à partir d'ici, plus aucune écriture
+  // du snapshot n'est possible, quel que soit le chemin.
+  woState.termine=true;
   clearInterval(woState.timerInterval);
+  // Le minuteur de repos peut encore tourner : il repeint une bannière sur
+  // un écran qu'on quitte, et il appelait woPersist en s'ajustant.
+  try{ annulerRepos(); }catch(e){}
   const mins=Math.floor((Date.now()-woState.startTime)/60000);
   let sets=0,vol=0;
   // Total PRÉVU, compté sur le programme et non sur sessionData : ce dernier
@@ -10940,8 +10954,12 @@ function finishWorkout(incomplete=false){
   // du même dossier et ne doivent pas pouvoir se contredire.
   document.getElementById('wd-sets').textContent=fmtSeries(sets,setsPlanned);
   document.getElementById('wd-vol').textContent=Math.round(vol)+'kg';
-  document.getElementById('wd-msg').textContent=_messageFinSeance(sets,setsPlanned,mins,_cmp.records,_cmp.delta,_cmp.jour,incomplete);
+  // La comparaison est calculee AVANT le message : celui-ci lit _cmp, et un
+  // const utilise avant sa declaration leve une ReferenceError — la fin de
+  // seance s'interrompait donc juste apres l'enregistrement, sans jamais
+  // afficher l'ecran de fin.
   const _cmp=buildSessionComparison(vol,data);
+  document.getElementById('wd-msg').textContent=_messageFinSeance(sets,setsPlanned,mins,_cmp.records,_cmp.delta,_cmp.jour,incomplete);
   document.getElementById('wd-comparison').innerHTML=_cmp.html;
   // Seuls les exercices dont l'état vient de CHANGER, et jamais pour annoncer
   // une progression : l'écran de fin de séance n'est pas un bulletin.
@@ -26620,6 +26638,91 @@ function testExercices(){
       const b=_rbB(2,{'bil-motivation':'8'});
       const h=renderReponsesBilans([b],{id:'c1',email:'c1@t.fr',fname:'Léa',bilans:[b]});
       return !/Les chiffres de poids sont masqués/.test(h);})());
+
+
+    // ══════════════ REPRISE DE SÉANCE : LA SÉANCE TERMINÉE NE REVIENT PAS ══════════════
+    // Bug constaté en production : une séance terminée réapparaissait « à finir »
+    // sur l'accueil. finishWorkout supprimait le snapshot mais ne vidait pas
+    // woState — l'objet gardait ses exercices et son startTime, et le
+    // visibilitychange le réécrivait au premier passage en arrière-plan,
+    // c'est-à-dire quand l'athlète verrouille son téléphone après sa séance.
+    (function(){
+      const sauveU=currentUser, sauveW=woState, sauveSnap=localStorage.getItem('rc_wo_state');
+      // ── Le garde, isolément ──
+      woState={exercises:[{name:'X',series:2,reps:'10'}],sessionData:{0:{sets:[{}]}},
+        startTime:Date.now(),progName:'P'};
+      localStorage.removeItem('rc_wo_state');
+      woPersist();
+      ok('Séance en cours : le snapshot est écrit',!!localStorage.getItem('rc_wo_state'));
+      localStorage.removeItem('rc_wo_state');
+      woState.termine=true;
+      woPersist();
+      ok('Séance terminée : woPersist n\'écrit plus rien',!localStorage.getItem('rc_wo_state'));
+      // Le garde tient quel que soit l'appelant : minuteur de repos, ajustement,
+      // substitution d'exercice — tous passent par woPersist.
+      ok('Le garde tient sur tous les chemins d\'écriture',(()=>{
+        localStorage.removeItem('rc_wo_state');
+        try{ demarrerRepos(60,'X'); }catch(e){}
+        try{ ajusterRepos(15); }catch(e){}
+        try{ annulerRepos(); }catch(e){}
+        return !localStorage.getItem('rc_wo_state');})());
+
+      // ── Le scénario réel, de bout en bout ──
+      ok('Séance terminée puis app en arrière-plan : aucune reprise proposée',(()=>{
+        currentUser={id:'r',email:'r@t.fr',fname:'Claire',role:'athlete',exAlias:{},exMuscles:{},
+          programs:{},bilans:[],sessions:[],videos:[],
+          sessions_config:[{active:true,name:'Push',exercises:[{name:'DEVELOPPE COUCHE'}]}]};
+        woState={exercises:[{name:'DEVELOPPE COUCHE',series:2,reps:'10',repos:'2 min'}],
+          sessionData:{0:{sets:[{weight:'60',reps:'10',rir:'1',done:true},
+                               {weight:'60',reps:'10',rir:'0',done:true}]}},
+          currentEx:0,startTime:Date.now()-45*60000,progName:'Push',slot:0,timerInterval:null};
+        localStorage.setItem('rc_wo_state','{"exercises":[1]}');
+        // Une exception doit faire ECHOUER le test. Renvoyer la chaine du
+        // message la rendait truthy, et ok() passait malgre le plantage.
+        try{ finishWorkout(false); }catch(e){ window._errFin=e.message; return false; }
+        // C'est ici que le bug se produisait : le passage en arrière-plan.
+        woPersist();
+        const snap=localStorage.getItem('rc_wo_state');
+        return !snap;})());
+      // AUCUN test n'appelait finishWorkout de bout en bout : une
+      // ReferenceError s'y est glissée et a vécu deux commits en production,
+      // interrompant chaque fin de séance juste après l'enregistrement.
+      ok("finishWorkout va jusqu'au bout sans lever",!window._errFin,window._errFin||'');
+      ok('La séance a bien été enregistrée',(currentUser.sessions||[]).length===1);
+      ok("L'écran de fin est renseigné",(()=>{
+        const m=document.getElementById('wd-msg');
+        const t=document.getElementById('wd-time');
+        return !!(m&&m.textContent&&t&&t.textContent);})(),
+        (document.getElementById('wd-msg')||{}).textContent||'vide');
+      ok("L'écran de fin est bien affiché",
+         !!document.getElementById('s-workout-done')&&
+         document.getElementById('s-workout-done').classList.contains('active'));
+      ok('_woLoadSnap ne propose plus de reprise',(()=>{
+        try{ return _woLoadSnap()===null; }catch(e){ return false; }})());
+      ok('La carte de reprise de l\'accueil reste masquée',(()=>{
+        try{ loadClientHome(); }catch(e){}
+        const el=document.getElementById('clh-resume-workout');
+        return !el||el.style.display==='none';})());
+
+      // ── Une NOUVELLE séance repart proprement ──
+      ok('Une nouvelle séance n\'hérite pas de la marque',(()=>{
+        woState={exercises:[{name:'Y',series:2,reps:'10'}],sessionData:{0:{sets:[{}]}},
+          currentEx:0,startTime:Date.now(),progName:'P2',timerInterval:null};
+        localStorage.removeItem('rc_wo_state');
+        woPersist();
+        return !!localStorage.getItem('rc_wo_state')&&woState.termine===undefined;})());
+      // ── Une séance REPRISE reste persistable ──
+      ok('Une séance reprise continue de se sauvegarder',(()=>{
+        const snap=JSON.parse(localStorage.getItem('rc_wo_state')||'{}');
+        woState={...snap};
+        localStorage.removeItem('rc_wo_state');
+        woPersist();
+        return !!localStorage.getItem('rc_wo_state');})());
+
+      localStorage.removeItem('rc_wo_state');
+      if(sauveSnap) localStorage.setItem('rc_wo_state',sauveSnap);
+      currentUser=sauveU; woState=sauveW;
+    })();
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
