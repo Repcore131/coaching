@@ -5565,7 +5565,7 @@ function douleurParExercice(c,jours){
 const _cacheSignaux=new Map();
 function _viderCacheSignaux(){ _cacheSignaux.clear(); }
 const SIGNAUX_VIDES=Object.freeze({douleur:false,douleurDiffuse:false,decrochage:false,
-  plateauMuscle:false,sousMEV:false,formeBasse:false,details:Object.freeze({})});
+  plateauMuscle:false,sousMEV:false,volumeHaut:false,formeBasse:false,details:Object.freeze({})});
 
 function signauxEntrainement(c){
   // Invité non inscrit : aucun historique d'entraînement chez le coach, donc
@@ -5588,7 +5588,7 @@ function signauxEntrainement(c){
   const cle=c.id+'|'+ss.length+'|'+(ss.length?tri[tri.length-1].date:0)+'|'+emp;
   if(_cacheSignaux.has(cle)) return _cacheSignaux.get(cle);
   const r={douleur:false,douleurDiffuse:false,decrochage:false,
-    plateauMuscle:false,sousMEV:false,formeBasse:false,details:{}};
+    plateauMuscle:false,sousMEV:false,volumeHaut:false,formeBasse:false,details:{}};
   if(!ss.length){ _cacheSignaux.set(cle,r); return r; }
 
   // ── Douleur ciblée : même exercice, au moins deux séries ET deux séances ──
@@ -5676,13 +5676,24 @@ function signauxEntrainement(c){
     }
     for(const m of candidats){
       const rep=reperesEffectifs(c,m);
+      // Un muscle sans repere ne peut sortir d'aucune zone : ni sous le MEV,
+      // ni au-dessus du MRV. LOMBAIRES, ABDUCTEURS et ADDUCTEURS sont dans ce
+      // cas et ne leveront donc jamais ces deux signaux.
       if(!rep) continue;
-      if((v1[m]||0)<rep.mev&&(v2[m]||0)<rep.mev){
+      if(!r.sousMEV&&(v1[m]||0)<rep.mev&&(v2[m]||0)<rep.mev){
         r.sousMEV=true;
         r.details.sousMEV={muscle:m,lib:(MUSCLES[m]||{}).lib||m,
           mev:rep.mev,s1:v1[m]||0,s2:v2[m]||0,semaines:[s1,s2]};
-        break;
       }
+      // Symetrique du sous-MEV, sur le MEME patron : deux semaines revolues
+      // consecutives au-dessus du repere haut. Une seule semaine ne suffit
+      // pas — un pic isole est un choix d'entrainement, pas une derive.
+      if(!r.volumeHaut&&(v1[m]||0)>rep.mrv&&(v2[m]||0)>rep.mrv){
+        r.volumeHaut=true;
+        r.details.volumeHaut={muscle:m,lib:(MUSCLES[m]||{}).lib||m,
+          mrv:rep.mrv,s1:v1[m]||0,s2:v2[m]||0,semaines:[s1,s2]};
+      }
+      if(r.sousMEV&&r.volumeHaut) break;
     }
   }catch(e){}
 
@@ -5719,7 +5730,7 @@ function urgencyScore(c){
   if(sg.douleur&&!isAlertSnoozed('douleur',c.id,0,c)) return 9;
   if(sg.douleurDiffuse&&!isAlertSnoozed('douleurdiff',c.id,0,c)) return 8;
   if(sg.decrochage&&!isAlertSnoozed('decrochage',c.id)) return 7;
-  if((sg.plateauMuscle||sg.formeBasse||sg.sousMEV)&&!isAlertSnoozed('entrainement',c.id)) return 6;
+  if((sg.plateauMuscle||sg.formeBasse||sg.sousMEV||sg.volumeHaut)&&!isAlertSnoozed('entrainement',c.id)) return 6;
   // Même priorité que « nouveau bilan » : les deux sont mutuellement exclusifs
   // (hasNewBilan exige au moins un bilan, neverStarted exige aucun), pas d'égalité possible.
   if(neverStarted(c)&&!isAlertSnoozed('nostart',c.id)) return 5;
@@ -6049,6 +6060,9 @@ function _texteSignal(type,c,sg){
     if(d.sousMEV) return d.sousMEV.lib.toLowerCase()+' sous le volume minimum deux semaines de suite ('
       +volAffiche(d.sousMEV.s1)+' et '+volAffiche(d.sousMEV.s2)+' séries pour un minimum de '
       +volAffiche(d.sousMEV.mev)+').';
+    if(d.volumeHaut) return d.volumeHaut.lib.toLowerCase()+' au-dessus du repère haut depuis 2 semaines ('
+      +volAffiche(d.volumeHaut.s1)+' et '+volAffiche(d.volumeHaut.s2)+' séries, repère '
+      +volAffiche(d.volumeHaut.mrv)+').';
   }
   return '';
 }
@@ -6067,13 +6081,19 @@ function _lignesEntrainement(clients){
     for(const c of clients){
       if(vus.has(c.id)) continue;
       let sg; try{ sg=signauxEntrainement(c); }catch(e){ continue; }
-      const actif=n.cle?sg[n.cle]:(sg.plateauMuscle||sg.formeBasse||sg.sousMEV);
+      const actif=n.cle?sg[n.cle]:(sg.plateauMuscle||sg.formeBasse||sg.sousMEV||sg.volumeHaut);
       if(!actif) continue;
       if(isAlertSnoozed(n.type,c.id,0,c)) continue;
       const txt=_texteSignal(n.type,c,sg);
       if(!txt) continue;
       vus.add(c.id);
-      out.push({type:n.type,icon:n.icon,color:n.color,label:n.lib,list:[c],
+      // Le rang est commun, mais l'intitulé ne peut pas l'être : un volume
+      // au-dessus du repère haut n'est pas une progression bloquée. Même
+      // précédence que _texteSignal, pour que le titre et la phrase parlent
+      // toujours du même signal.
+      const lib=n.cle?n.lib
+        :((sg.plateauMuscle||sg.formeBasse||sg.sousMEV)?n.lib:'Volume élevé');
+      out.push({type:n.type,icon:n.icon,color:n.color,label:lib,list:[c],
         texte:txt,sante:ALERTES_SANTE.includes(n.type)});
     }
   }
@@ -15140,7 +15160,8 @@ function renderVolumeCoach(c){
   const cle=semaineISO(new Date());
   const res=_calculSemaine(c,cle);
   if(!res.seances){
-    z.innerHTML=`<div style="font-size:11px;color:var(--text-faint);margin-bottom:14px">Aucune séance cette semaine.</div>`;
+    z.innerHTML=`<div style="font-size:11px;color:var(--text-faint);margin-bottom:14px">Aucune séance cette semaine.</div>`
+      +_htmlBoutonDecharge(c);
     return;
   }
   const lignes=Object.keys(res.muscles).filter(m=>res.muscles[m]>=0.5)
@@ -15174,7 +15195,43 @@ function renderVolumeCoach(c){
     ${corps}
     ${res.nonRattachees?`<div style="font-size:10px;color:var(--text-faint);margin-top:6px">${res.nonRattachees} série${res.nonRattachees>1?'s':''} non rattachée${res.nonRattachees>1?'s':''}</div>`:''}
     <div style="font-size:10px;color:var(--text-faint);margin-top:8px;line-height:1.5">Repères indicatifs, à ajuster selon l'athlète.</div>
+    ${_htmlBoutonDecharge(c)}
   </div>`;
+}
+// Decharge programmee sur TOUS les creneaux actifs. Elle reutilise le booleen
+// deload existant, le meme que la case a cocher de l'editeur de seances : rien
+// de neuf en base, et le bandeau que l'athlete voit deja en seance s'allume
+// sans qu'on ait a en creer un second.
+function _htmlBoutonDecharge(c){
+  const actifs=((c&&c.sessions_config)||[]).filter(x=>x&&x.active);
+  if(!actifs.length) return '';
+  const dejaTout=actifs.every(x=>x.deload);
+  return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+    ${dejaTout?`<div style="font-size:11px;color:var(--info);line-height:1.6;margin-bottom:8px">Semaine de décharge programmée sur les ${actifs.length} créneaux actifs. Les séances de décharge sortent de la détection de plateau. À toi de la retirer quand elle est passée.</div>`:''}
+    <button class="btn btn-outline btn-sm" onclick="programmerDecharge()" style="letter-spacing:1px;font-size:10px">${dejaTout?'Décharge déjà programmée':'Programmer une semaine de décharge'}</button>
+  </div>`;
+}
+function programmerDecharge(){
+  // Ecriture par la carte des utilisateurs, comme toute autre modification
+  // depuis la fiche athlete : _coachEditClient est une copie profonde reservee
+  // a l'editeur de seances et n'est pas forcement renseigne ici.
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c) return;
+  if(!c.email){ toast('Cet élève n\'a pas encore de dossier synchronisé','var(--orange)'); return; }
+  const actifs=((c.sessions_config)||[]).map((x,i)=>({x,i})).filter(o=>o.x&&o.x.active);
+  if(!actifs.length){ toast('Aucun créneau actif','var(--orange)'); return; }
+  if(!confirm('Programmer une semaine de décharge ?'+String.fromCharCode(10)+String.fromCharCode(10)
+    +'Les '+actifs.length+' séances actives seront marquées « décharge » et sortiront de la détection de plateau.'
+    +String.fromCharCode(10)+'Aucun décochage automatique : c\'est toi qui la retires ensuite.')) return;
+  actifs.forEach(o=>{ c.sessions_config[o.i].deload=true; });
+  users[c.email]=c;
+  const ok=DB.set('users',users);
+  const envoi=CLOUD.pushOne(c.email,c);
+  _viderCachePlateau();
+  _viderCacheSignaux();
+  try{ renderVolumeCoach(getOwnedClient(currentClientId)); }catch(e){}
+  toastSync(ok,envoi,'Décharge programmée sur '+actifs.length+' séances','la décharge est');
 }
 
 // ── Volume PRESCRIT : ce que le programme impose, avant publication ─────────
@@ -24805,6 +24862,217 @@ function testExercices(){
       const c=_sgAth([_sgSess(9,{},10,10),_sgSess(6,{},10,10),_sgSess(3,{},10,10)],
         {id:'p5',email:'p5@t.fr',bilans:[{type:'depart',date:_sgJ(40),reponseCoach:'vu et répondu',reponseDate:1,reponseVue:true}]});
       const v=urgencyScore(c); currentUser=sauveU; return v===4;})());
+
+
+    // ══════════════ VOLUME AU-DESSUS DU REPÈRE HAUT ══════════════
+    // Symétrique du sous-MEV : même fenêtre de deux semaines révolues, mêmes
+    // muscles candidats, même rang d'urgence. Les repères sont surchargés sur
+    // l'athlète de test, et le rattachement musculaire forcé par exMuscles :
+    // le seuil est ainsi lisible dans le test lui-même et ne bougera pas si la
+    // table par défaut ou le guide des exercices évoluent.
+    (function(){
+      const sauveU=currentUser;
+      currentUser={id:'coach',email:'co@t.fr',role:'coach',seenBilans:{},alertStatus:{}};
+      const _vhK=exKey('EXO VOLUME'), _vhK2=exKey('EXO DOS');
+      const _vhRep={PECTORAUX:{mev:8,mavMin:12,mavMax:18,mrv:22},
+                    DORSAUX:{mev:10,mavMin:14,mavMax:20,mrv:24}};
+      // Mardi de la i-ème semaine révolue, à midi : indépendant du jour de la
+      // semaine où tourne la suite de tests.
+      const _vhDate=i=>{ const d=_lundiDe(new Date());
+        d.setDate(d.getDate()-7*i+1); d.setHours(12,0,0,0); return d.getTime(); };
+      // reps EN CHAÎNE : _calculSemaine reconstruit un exercice à partir des reps
+      // de la première série et isCardio y applique toLowerCase. Un nombre y
+      // lève une exception, comme en production sur une saisie mal typée.
+      const _vhSets=(n,pain)=>Array.from({length:n},(_,k)=>
+        ({weight:50,reps:'10',rir:'2',done:true,pain:(pain&&k===0)?String(pain):''}));
+      const _vhSess=(i,dico)=>{
+        const s={id:'vs'+i+'_'+Math.round(Math.random()*1e9),date:_vhDate(i),
+          name:'P',slot:0,volume:1000,duration:60,data:{}};
+        for(const nom in dico){ const v=dico[nom];
+          s.data[nom]={sets:_vhSets(typeof v==='number'?v:v.n,typeof v==='number'?0:v.pain)}; }
+        return s;
+      };
+      // n1 séries la semaine révolue la plus récente, n2 la précédente.
+      const _vhAth=(id,n1,n2,extra)=>Object.assign({id,email:id+'@t.fr',fname:'A',lname:'B',
+        sessions:[_vhSess(1,{'EXO VOLUME':n1}),_vhSess(2,{'EXO VOLUME':n2})],
+        bilans:[],createdAt:_sgJ(120),exAlias:{},
+        exMuscles:{[_vhK]:{p:['PECTORAUX'],s:[]},[_vhK2]:{p:['DORSAUX'],s:[]}},
+        reperesVolume:_vhRep},extra||{});
+      const _vhScore=c=>{ const v=urgencyScore(c); return v; };
+
+      // ── Le montage lui-même, avant toute assertion sur le signal ──
+      ok('Montage : les séances tombent bien dans les deux semaines révolues',(()=>{
+        const c=_vhAth('vh0',24,24), [s1,s2]=_semainesRevolues(2);
+        return volumeSemaine(c,s1).PECTORAUX===24&&volumeSemaine(c,s2).PECTORAUX===24;})());
+
+      // ── Critère : une seule semaine au-dessus ne suffit pas ──
+      ok('Critère 1 : au-dessus du repère haut UNE semaine → aucun signal',(()=>{
+        const c=_vhAth('vh1',24,10);
+        return signauxEntrainement(c).volumeHaut===false;})());
+      ok('Une seule semaine, l\'autre étant la plus récente → aucun signal non plus',(()=>{
+        const c=_vhAth('vh1b',10,24);
+        return signauxEntrainement(c).volumeHaut===false;})());
+      ok('Pile sur le repère haut deux semaines → aucun signal (seuil strict)',(()=>{
+        const c=_vhAth('vh1c',22,22);
+        return signauxEntrainement(c).volumeHaut===false;})());
+
+      // ── Critère : deux semaines consécutives ──
+      ok('Critère 2 : au-dessus du repère haut DEUX semaines → signal levé',(()=>{
+        const c=_vhAth('vh2',24,26);
+        const sg=signauxEntrainement(c);
+        return sg.volumeHaut===true&&sg.sousMEV===false;})());
+      ok('Critère 2 : le détail nomme le muscle, le repère et les deux semaines',(()=>{
+        const d=signauxEntrainement(_vhAth('vh2b',24,26)).details.volumeHaut;
+        return !!d&&d.muscle==='PECTORAUX'&&d.lib==='Pectoraux'&&d.mrv===22
+          &&d.s1===24&&d.s2===26&&Array.isArray(d.semaines)&&d.semaines.length===2;})());
+      ok('Critère 2 : urgencyScore vaut 6, comme le sous-MEV',
+        _vhScore(_vhAth('vh3',24,26))===6,String(_vhScore(_vhAth('vh3',24,26))));
+
+      // ── Critère : un muscle sans repère ne lève jamais rien ──
+      // reperesEffectifs rend null pour LOMBAIRES, ABDUCTEURS et ADDUCTEURS :
+      // ni sous-MEV, ni volume haut, quel que soit le nombre de séries.
+      ok('Critère 3 : un muscle sans repère ne lève pas le signal',(()=>{
+        return ['LOMBAIRES','ABDUCTEURS','ADDUCTEURS'].every((m,i)=>{
+          const c=_vhAth('vhs'+i,40,40,{exMuscles:{[_vhK]:{p:[m],s:[]}},reperesVolume:{}});
+          const sg=signauxEntrainement(c);
+          return reperesEffectifs(c,m)===null&&sg.volumeHaut===false&&sg.sousMEV===false;});})());
+
+      // ── Critère : la santé passe devant ──
+      // Un signal de niveau 6 n'est même pas calculé quand un 7, 8 ou 9 est
+      // acquis (voir le court-circuit de signauxEntrainement) : volumeHaut
+      // reste donc à false, et c'est bien 9 qui sort. Le volume est identique
+      // à celui du cas vh2 qui, lui, lève le signal — seule la douleur change.
+      ok('Critère 4 : une douleur ciblée simultanée vaut toujours 9',(()=>{
+        const c=_vhAth('vh4',24,26);
+        c.sessions=[_vhSess(1,{'EXO VOLUME':{n:24,pain:5}}),
+                    _vhSess(2,{'EXO VOLUME':{n:26,pain:5}})];
+        const sg=signauxEntrainement(c);
+        return sg.douleur===true&&sg.volumeHaut===false&&_vhScore(c)===9;})());
+      ok('Sans la douleur, le même volume lève bien le signal',(()=>{
+        const c=_vhAth('vh4b',24,26);
+        return signauxEntrainement(c).volumeHaut===true;})());
+
+      // ── Critère : le sous-MEV n'a pas été abîmé par la mise en commun ──
+      ok('Non-régression : le sous-MEV est toujours détecté',(()=>{
+        const c=_vhAth('vh5',2,3);
+        const sg=signauxEntrainement(c);
+        return sg.sousMEV===true&&sg.volumeHaut===false&&sg.details.sousMEV.mev===8;})());
+      ok('Non-régression : le sous-MEV vaut toujours 6',
+        _vhScore(_vhAth('vh5b',2,3))===6);
+      ok('Un muscle sous le MEV et un autre au-dessus du MRV : les deux sortent',(()=>{
+        const c=_vhAth('vh6',0,0);
+        c.sessions=[_vhSess(1,{'EXO VOLUME':26,'EXO DOS':2}),
+                    _vhSess(2,{'EXO VOLUME':24,'EXO DOS':3})];
+        const sg=signauxEntrainement(c);
+        return sg.volumeHaut===true&&sg.details.volumeHaut.muscle==='PECTORAUX'
+          &&sg.sousMEV===true&&sg.details.sousMEV.muscle==='DORSAUX';})());
+
+      // ── La mise en veille est la même que celle du sous-MEV ──
+      ok('Critère : reporté sous la clé « entrainement », le signal se tait',(()=>{
+        const c=_vhAth('vh7',24,26);
+        currentUser.alertStatus['entrainement-vh7']=
+          {s:'ignoré',until:Date.now()+3*864e5,at:Date.now(),seenUpTo:0};
+        const v=_vhScore(c);
+        delete currentUser.alertStatus['entrainement-vh7'];
+        return v<6;})());
+
+      // ── Le texte de l'alerte : factuel, chiffré, sans injonction ──
+      ok('L\'alerte cite le muscle, les deux volumes et le repère',(()=>{
+        const c=_vhAth('vh8',24,26,{programPdfLink:'https://exemple.test/p.pdf',
+          bilans:[{type:'depart',date:_sgJ(2),reponseCoach:'ok',reponseDate:1,reponseVue:true}]});
+        currentUser.seenBilans['vh8@t.fr']=Date.now();
+        const l=_lignesEntrainement([c]).filter(x=>x.type==='entrainement');
+        return l.length===1&&/pectoraux au-dessus du repère haut depuis 2 semaines/.test(l[0].texte)
+          &&/24/.test(l[0].texte)&&/26/.test(l[0].texte)&&/repère 22/.test(l[0].texte);})());
+      ok('L\'intitulé dit « Volume élevé » et non « Progression bloquée »',(()=>{
+        const c=_vhAth('vh8b',24,26,{programPdfLink:'https://exemple.test/p.pdf',
+          bilans:[{type:'depart',date:_sgJ(2),reponseCoach:'ok',reponseDate:1,reponseVue:true}]});
+        currentUser.seenBilans['vh8b@t.fr']=Date.now();
+        const l=_lignesEntrainement([c]).filter(x=>x.type==='entrainement');
+        return l.length===1&&l[0].label==='Volume élevé';})());
+      ok('Un sous-MEV garde l\'intitulé « Progression bloquée »',(()=>{
+        const c=_vhAth('vh8c',2,3,{programPdfLink:'https://exemple.test/p.pdf',
+          bilans:[{type:'depart',date:_sgJ(2),reponseCoach:'ok',reponseDate:1,reponseVue:true}]});
+        currentUser.seenBilans['vh8c@t.fr']=Date.now();
+        const l=_lignesEntrainement([c]).filter(x=>x.type==='entrainement');
+        return l.length===1&&l[0].label==='Progression bloquée';})());
+      ok('Aucune injonction dans le texte : on décrit, on ne prescrit pas',(()=>{
+        const d={details:{volumeHaut:{lib:'Pectoraux',mrv:22,s1:24,s2:26}}};
+        const t=_texteSignal('entrainement',null,d);
+        return !/décharge|baisse|réduis|arrête|il faut|tu dois/i.test(t);})());
+
+      currentUser=sauveU;
+      _viderCacheVolume(); _viderCacheSignaux();
+    })();
+
+    // ══════════════ SEMAINE DE DÉCHARGE PROGRAMMÉE ══════════════
+    (function(){
+      const sauveU=currentUser, sauveCid=currentClientId;
+      const sauveUsers=DB.get('users'), sauveConfirm=window.confirm;
+      currentUser={id:'coachD',email:'cod@t.fr',role:'coach',seenBilans:{},alertStatus:{}};
+      const faireClient=()=>({id:'dch1',email:'dch1@t.fr',fname:'A',lname:'B',role:'athlete',
+        coachId:'coachD',sessions:[],bilans:[],exAlias:{},exMuscles:{},
+        sessions_config:[{active:true,name:'Push',exercises:[]},
+                         {active:false,name:'Vieux',exercises:[]},
+                         {active:true,name:'Pull',exercises:[],deload:false}]});
+      const poser=c=>{ const u={}; u[c.email]=c; DB.set('users',u); currentClientId=c.id; };
+
+      window.confirm=()=>false;
+      ok('Décharge : refuser la confirmation ne change rien',(()=>{
+        poser(faireClient());
+        try{ programmerDecharge(); }catch(e){ return 'exception: '+e.message; }
+        const c=(DB.get('users')||{})['dch1@t.fr'];
+        return c.sessions_config.every(s=>!s.deload);})());
+
+      window.confirm=()=>true;
+      ok('Critère 6 : tous les créneaux ACTIFS passent en décharge',(()=>{
+        poser(faireClient());
+        try{ programmerDecharge(); }catch(e){ return 'exception: '+e.message; }
+        const c=(DB.get('users')||{})['dch1@t.fr'];
+        return c.sessions_config[0].deload===true&&c.sessions_config[2].deload===true;})());
+      ok('Critère 6 : un créneau inactif n\'est pas touché',(()=>{
+        const c=(DB.get('users')||{})['dch1@t.fr'];
+        return !c.sessions_config[1].deload;})());
+      ok('Aucun champ nouveau en base : seul deload bouge',(()=>{
+        const c=(DB.get('users')||{})['dch1@t.fr'];
+        return Object.keys(c.sessions_config[0]).sort().join(',')==='active,deload,exercises,name';})());
+      ok('Le bouton n\'apparaît pas sans créneau actif',(()=>{
+        const c=faireClient(); c.sessions_config.forEach(s=>{s.active=false;});
+        return _htmlBoutonDecharge(c)==='';})());
+      ok('Le bouton s\'affiche, puis annonce la décharge déjà programmée',(()=>{
+        const c=faireClient();
+        const avant=_htmlBoutonDecharge(c);
+        c.sessions_config.forEach(s=>{ if(s.active) s.deload=true; });
+        const apres=_htmlBoutonDecharge(c);
+        return /Programmer une semaine de décharge/.test(avant)
+          &&/Décharge déjà programmée/.test(apres)
+          &&/2 créneaux actifs/.test(apres);})());
+      ok('Aucun décochage automatique : rejouer ne remet rien à false',(()=>{
+        try{ programmerDecharge(); }catch(e){ return 'exception: '+e.message; }
+        const c=(DB.get('users')||{})['dch1@t.fr'];
+        return c.sessions_config[0].deload===true&&c.sessions_config[2].deload===true;})());
+
+      // Le second maillon : une séance RÉALISÉE en décharge sort du calcul de
+      // plateau. Le premier maillon (sessions_config → woState → sess.deload)
+      // est déjà en place et testé par ailleurs.
+      ok('Critère 6 : une séance de décharge sort de la détection de plateau',(()=>{
+        _viderCachePlateau();
+        const s=(j,dl)=>({id:'d'+j+'_'+Math.round(Math.random()*1e9),date:_sgJ(j),
+          name:'Push',slot:0,deload:dl,volume:100,duration:60,
+          data:{'SQUAT':{sets:[{weight:100,reps:'5',rir:'1',done:true}]}}});
+        const sans={id:'pl1',email:'pl1@t.fr',exAlias:{},exMuscles:{},
+          sessions:[s(21,false),s(14,false),s(7,false)]};
+        const avec={id:'pl2',email:'pl2@t.fr',exAlias:{},exMuscles:{},
+          sessions:[s(21,false),s(14,true),s(7,false)]};
+        const a=etatExercice(sans,'SQUAT',0,'Push'), b=etatExercice(avec,'SQUAT',0,'Push');
+        _viderCachePlateau();
+        return a.n===3&&b.n===2;})());
+
+      window.confirm=sauveConfirm;
+      if(sauveUsers) DB.set('users',sauveUsers);
+      currentUser=sauveU; currentClientId=sauveCid;
+      _viderCacheVolume(); _viderCacheSignaux(); _viderCachePlateau();
+    })();
 
     // ── Report : plafond de sept jours, journal, aggravation ──
     (function(){
