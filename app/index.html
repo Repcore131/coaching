@@ -10629,6 +10629,7 @@ function _blocExo(idx,estSS){
       // qui ne correspond ni aux mêmes répétitions ni au même effort.
       `<div id="wo-no-hist-${idx}" class="wo-no-hist sub" style="font-size:11px;background:var(--surface-2);border-radius:8px;padding:10px 13px;margin-bottom:12px;line-height:1.6">Pas encore d'historique pour cet exercice ${escapeHtml(creneauPhrase)} : note ta charge, elle servira de repère la prochaine fois.</div>`}
 
+      ${_htmlMonteeCharge(sug,ex,idx)}
       ${_blocContrainteSeance(ex,idx)}
       ${(ex.description||ex.note||ex.tempo)?`<div style="background:var(--surface-2);border-radius:10px;padding:11px 14px;margin-bottom:12px">
         <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--red);margin-bottom:5px">CONSIGNE</div>
@@ -12121,6 +12122,55 @@ function arrondiCharge125(cible,depart){
   // Jamais en dessous d'un cran : une charge ne descend pas à zéro.
   return Math.max(1.25,q*1.25);
 }
+
+// ── Montée en charge : trois séries d'approche, affichage seul ──────────────
+// Ce que le pratiquant met sur la barre AVANT sa première série de travail.
+// Rien de tout ceci n'existe en donnée : aucune ligne dans le tableau, aucune
+// case à valider, rien dans woState.sessionData, donc rien dans le tonnage, le
+// volume ou l'historique. C'est un pense-bête, pas une série.
+const MONTEE_CHARGE_MIN=20;
+const MONTEE_PALIERS=Object.freeze([
+  Object.freeze({pct:0.50,reps:8}),
+  Object.freeze({pct:0.70,reps:5}),
+  Object.freeze({pct:0.85,reps:3})
+]);
+// arrondiCharge125 est appelée avec la charge de travail comme point de DÉPART :
+// la rampe descend donc vers l'inférieur, et aucun palier ne peut dépasser —
+// ni même atteindre — la charge visée. C'est le seul arrondi appliqué.
+function seriesApproche(chargeTravail,repsPrescrites,ex){
+  const w=Number(chargeTravail);
+  if(!isFinite(w)||w<MONTEE_CHARGE_MIN) return [];
+  // Sous ces trois formes l'échauffement en charge n'a pas de sens : le cardio
+  // n'a pas de barre, l'isométrie compte des secondes, et sur un contrepoids
+  // une charge PLUS BASSE veut dire un exercice PLUS DUR — une rampe
+  // descendante y serait exactement à l'envers.
+  if(ex&&(isCardio(ex)||techniqueDe(ex)==='isometrie'||isCounterweightEx(ex.name))) return [];
+  // Une prescription sans aucun chiffre (« max », « AMRAP ») n'est pas un
+  // nombre de répétitions : on ne sait pas vers quoi on monte.
+  if(repsPrescrites!=null&&repsPrescrites!==''&&!/\d/.test(String(repsPrescrites))) return [];
+  return MONTEE_PALIERS.map(p=>({pct:p.pct,charge:arrondiCharge125(w*p.pct,w),reps:p.reps}));
+}
+function _fmtChargeMontee(v){ return String(v).replace('.',','); }
+function _htmlMonteeCharge(chargeTravail,ex,idx){
+  const paliers=seriesApproche(chargeTravail,ex&&ex.reps,ex);
+  if(!paliers.length) return '';
+  const masque=!!(currentUser&&currentUser.monteeChargeMasquee);
+  const txt=paliers.map(p=>_fmtChargeMontee(p.charge)+' kg × '+p.reps).join(' · ');
+  return `<div class="wo-ramp sub" style="font-size:11px;background:var(--surface-2);border-radius:8px;padding:10px 13px;margin-bottom:12px;line-height:1.6"><button type="button" onclick="basculerMonteeCharge()" style="background:none;border:none;padding:0;margin:0;color:inherit;font:inherit;cursor:pointer">Montée en charge <span class="wo-ramp-caret">${masque?'▸':'▾'}</span></button><span class="wo-ramp-det"${masque?' style="display:none"':''}> : ${txt}</span></div>`;
+}
+// Préférence GLOBALE, pas par exercice : replier la rampe une fois la replie
+// partout, sinon il faudrait la replier à chaque exercice de chaque séance.
+function basculerMonteeCharge(){
+  if(!currentUser) return;
+  currentUser.monteeChargeMasquee=!currentUser.monteeChargeMasquee;
+  saveUser();
+  // Repli EN PLACE, sans re-rendre le bloc : renderSets repeindrait le tableau
+  // des séries, et une saisie en cours non validée disparaîtrait.
+  const m=!!currentUser.monteeChargeMasquee;
+  document.querySelectorAll('.wo-ramp-det').forEach(e=>{ e.style.display=m?'none':''; });
+  document.querySelectorAll('.wo-ramp-caret').forEach(e=>{ e.textContent=m?'▸':'▾'; });
+}
+
 function chargeSuivante(charge,rir,contrepoids){
   const w=parseFloat(charge)||0;
   if(!(w>0)) return null;
@@ -24863,6 +24913,172 @@ function testExercices(){
         {id:'p5',email:'p5@t.fr',bilans:[{type:'depart',date:_sgJ(40),reponseCoach:'vu et répondu',reponseDate:1,reponseVue:true}]});
       const v=urgencyScore(c); currentUser=sauveU; return v===4;})());
 
+
+
+    // ══════════════ MONTÉE EN CHARGE ══════════════
+    (function(){
+      const sauveU=currentUser;
+      const _mcMul=t=>t.every(p=>Math.abs(p.charge/1.25-Math.round(p.charge/1.25))<1e-9);
+      const _mcCroit=t=>t.every((p,i)=>i===0||p.charge>t[i-1].charge);
+
+      // ── La fonction pure ──
+      ok('seriesApproche(80,\'5\') rend trois paliers',(()=>{
+        const t=seriesApproche(80,'5');
+        return Array.isArray(t)&&t.length===3;})());
+      ok('Les trois paliers sont des multiples de 1,25',_mcMul(seriesApproche(80,'5')),
+        JSON.stringify(seriesApproche(80,'5').map(p=>p.charge)));
+      ok('Les trois paliers sont croissants',_mcCroit(seriesApproche(80,'5')));
+      ok('Aucun palier n\'atteint la charge de travail',
+        seriesApproche(80,'5').every(p=>p.charge<80));
+      ok('Les pourcentages et les répétitions sont ceux annoncés',(()=>{
+        const t=seriesApproche(80,'5');
+        return t[0].pct===0.50&&t[0].reps===8
+            &&t[1].pct===0.70&&t[1].reps===5
+            &&t[2].pct===0.85&&t[2].reps===3;})());
+      ok('80 kg donne 40 · 55 · 67,5',
+        seriesApproche(80,'5').map(p=>p.charge).join('/')==='40/55/67.5',
+        seriesApproche(80,'5').map(p=>p.charge).join('/'));
+
+      // ── Les charges trop basses ──
+      ok('seriesApproche(15,\'10\') rend un tableau vide',(()=>{
+        const t=seriesApproche(15,'10'); return Array.isArray(t)&&t.length===0;})());
+      ok('seriesApproche(null,\'10\') rend un tableau vide',(()=>{
+        const t=seriesApproche(null,'10'); return Array.isArray(t)&&t.length===0;})());
+      ok('Charge absente, vide ou illisible : tableau vide',
+        [undefined,'','abc',NaN,0,-40].every(v=>seriesApproche(v,'10').length===0));
+      ok('Juste sous le seuil : rien à 19,75 kg',seriesApproche(19.75,'10').length===0);
+      ok('Pile au seuil : la rampe existe à 20 kg',(()=>{
+        const t=seriesApproche(20,'10');
+        return t.length===3&&_mcMul(t)&&_mcCroit(t)&&t.every(p=>p.charge<20);})());
+      ok('Une charge en chaîne est acceptée comme un nombre',
+        seriesApproche('80','5').length===3);
+
+      // ── Les exercices sans rampe ──
+      ok('Un exercice cardio n\'a pas de montée en charge',
+        seriesApproche(80,'20 min',{name:'VELO',reps:'20 min'}).length===0);
+      ok('Une isométrie n\'a pas de montée en charge',
+        seriesApproche(80,'30',{name:'GAINAGE LESTE',reps:'30',technique:'isometrie'}).length===0);
+      ok('Un contrepoids n\'a pas de montée en charge',(()=>{
+        const ex={name:'TRACTIONS ASSISTEES',reps:'8'};
+        return isCounterweightEx(ex.name)===true&&seriesApproche(80,'8',ex).length===0;})());
+      ok('Une prescription sans aucun chiffre n\'a pas de rampe',
+        seriesApproche(80,'max',{name:'CURL BARRE',reps:'max'}).length===0);
+      ok('Une fourchette de répétitions garde sa rampe',
+        seriesApproche(80,'8-12',{name:'CURL BARRE',reps:'8-12'}).length===3);
+      ok('Un exercice ordinaire garde sa rampe',
+        seriesApproche(80,'5',{name:'SQUAT',reps:'5'}).length===3);
+
+      // ── L'affichage ──
+      currentUser={id:'mc',email:'mc@t.fr',role:'athlete',fname:'A',exAlias:{},exMuscles:{},
+        sessions:[],bilans:[],programs:{},videos:[]};
+      ok('La ligne affichée cite les trois paliers, en français',(()=>{
+        const h=_htmlMonteeCharge(80,{name:'SQUAT',reps:'5'},0);
+        return /Montée en charge/.test(h)&&/40 kg × 8/.test(h)
+          &&/55 kg × 5/.test(h)&&/67,5 kg × 3/.test(h);})());
+      ok('Aucun bouton de validation, aucune case, aucune ligne de tableau',(()=>{
+        const h=_htmlMonteeCharge(80,{name:'SQUAT',reps:'5'},0);
+        return !/<input/i.test(h)&&!/<td/i.test(h)&&!/<tr/i.test(h)
+          &&!/checkbox/i.test(h)&&!/toggleSet|validerSerie|onSetChange/i.test(h);})());
+      ok('Sans rampe, rien n\'est écrit à l\'écran',
+        _htmlMonteeCharge(15,{name:'SQUAT',reps:'5'},0)===''
+        &&_htmlMonteeCharge(null,{name:'SQUAT',reps:'5'},0)==='');
+
+      // ── Le repli : préférence globale, persistée ──
+      ok('Dépliée par défaut',(()=>{
+        delete currentUser.monteeChargeMasquee;
+        const h=_htmlMonteeCharge(80,{name:'SQUAT',reps:'5'},0);
+        return /▾/.test(h)&&!/wo-ramp-det" style="display:none"/.test(h);})());
+      ok('Le repli bascule la préférence sur currentUser',(()=>{
+        delete currentUser.monteeChargeMasquee;
+        basculerMonteeCharge();
+        const a=currentUser.monteeChargeMasquee===true;
+        basculerMonteeCharge();
+        return a&&currentUser.monteeChargeMasquee===false;})());
+      ok('Repliée, la ligne est masquée et le chevron change',(()=>{
+        currentUser.monteeChargeMasquee=true;
+        const h=_htmlMonteeCharge(80,{name:'SQUAT',reps:'5'},0);
+        currentUser.monteeChargeMasquee=false;
+        return /▸/.test(h)&&/display:none/.test(h)&&/40 kg × 8/.test(h);})());
+      ok('La préférence est GLOBALE : deux exercices différents suivent le même état',(()=>{
+        currentUser.monteeChargeMasquee=true;
+        const a=_htmlMonteeCharge(80,{name:'SQUAT',reps:'5'},0);
+        const b=_htmlMonteeCharge(120,{name:'SOULEVE DE TERRE',reps:'3'},1);
+        currentUser.monteeChargeMasquee=false;
+        return /display:none/.test(a)&&/display:none/.test(b);})());
+      ok('La préférence part au cloud : saveUser est bien appelée',(()=>{
+        const vrai=window.saveUser; let vu=0;
+        window.saveUser=function(){ vu++; };
+        try{ basculerMonteeCharge(); basculerMonteeCharge(); }finally{ window.saveUser=vrai; }
+        return vu===2;})());
+
+      // ── Rien n'entre dans les données ──
+      // Le patch est de l'AFFICHAGE. Ce test compare l'état complet de la
+      // séance avant et après le rendu du bloc : une seule série ajoutée par
+      // erreur ferait bouger l'empreinte.
+      ok('Le rendu du bloc ne touche pas woState.sessionData',(()=>{
+        const sauveW=woState;
+        // La rampe part de la charge SUGGÉRÉE : sans historique sur ce créneau
+        // il n'y a pas de charge de travail, donc rien à afficher. On donne
+        // donc une séance précédente, sinon le test ne testerait rien.
+        currentUser.sessions=[{id:'mcp',date:Date.now()-7*864e5,name:'P',slot:0,
+          volume:1,duration:60,data:{'SQUAT':{sets:[
+            {weight:'80',reps:'5',rir:'0',done:true}]}}}];
+        woState={progName:'P',slot:0,currentEx:0,startTime:Date.now(),
+          exercises:[{name:'SQUAT',series:3,reps:'5',repos:'3 min'}],
+          sessionData:{0:{sets:[{weight:'80',reps:'5',rir:'1',pain:'',done:true},
+                               {weight:'80',reps:'5',rir:'1',pain:'',done:true},
+                               {weight:'80',reps:'5',rir:'2',pain:'',done:true}]}}};
+        const avant=JSON.stringify(woState.sessionData);
+        let h='';
+        try{ h=_blocExo(0,false).html; }catch(e){ woState=sauveW; return 'exception: '+e.message; }
+        const apres=JSON.stringify(woState.sessionData);
+        const n=woState.sessionData[0].sets.length;
+        woState=sauveW; currentUser.sessions=[];
+        return avant===apres&&n===3&&/Montée en charge/.test(h);})());
+      // Sans historique sur le créneau, il n'y a pas de charge de travail :
+      // la rampe se tait plutôt que de partir d'un nombre inventé.
+      ok('Sans historique sur le créneau, aucune montée en charge',(()=>{
+        const sauveW=woState; currentUser.sessions=[];
+        woState={progName:'P',slot:0,currentEx:0,startTime:Date.now(),
+          exercises:[{name:'SQUAT',series:3,reps:'5'}],sessionData:{}};
+        let h=''; try{ h=_blocExo(0,false).html; }catch(e){ woState=sauveW; return 'exception: '+e.message; }
+        woState=sauveW;
+        return !/Montée en charge/.test(h)&&/Pas encore d'historique/.test(h);})());
+
+      // ── Tonnage et volume : jeu de séances de référence, valeurs en dur ──
+      // Ce sont les nombres d'AVANT le patch. Ils sont écrits ici en toutes
+      // lettres : si la montée en charge entrait un jour dans le calcul, ils
+      // bougeraient et ce test tomberait.
+      ok('Tonnage de référence inchangé : 3640 kg',(()=>{
+        const ex={name:'EXO A',reps:'10'};
+        const sets=[{weight:'80',reps:'10',done:true},{weight:'80',reps:'10',done:true},
+                    {weight:'75',reps:'8',done:true}];
+        const exB={name:'EXO B',reps:'12'};
+        const setsB=[{weight:'60',reps:'12',done:true},{weight:'60',reps:'12',done:true}];
+        const t=sets.reduce((s,x)=>s+tonnageSerie(x,ex),0)
+               +setsB.reduce((s,x)=>s+tonnageSerie(x,exB),0);
+        return t===3640;})(),String((()=>{
+          const ex={name:'EXO A',reps:'10'};
+          return [{weight:'80',reps:'10',done:true},{weight:'80',reps:'10',done:true},
+                  {weight:'75',reps:'8',done:true}].reduce((s,x)=>s+tonnageSerie(x,ex),0);})()));
+      ok('Volume hebdomadaire de référence inchangé : 3 et 2 séries',(()=>{
+        _viderCacheVolume();
+        const KA=exKey('EXO A'), KB=exKey('EXO B');
+        const d=_lundiDe(new Date()); d.setDate(d.getDate()-7+1); d.setHours(12,0,0,0);
+        const c={id:'mcv',email:'mcv@t.fr',exAlias:{},
+          exMuscles:{[KA]:{p:['PECTORAUX'],s:[]},[KB]:{p:['DORSAUX'],s:[]}},
+          sessions:[{id:'mcv1',date:d.getTime(),name:'P',slot:0,volume:1,duration:60,data:{
+            'EXO A':{sets:[{weight:'80',reps:'10',rir:'1',done:true},
+                           {weight:'80',reps:'10',rir:'1',done:true},
+                           {weight:'75',reps:'8',rir:'2',done:true}]},
+            'EXO B':{sets:[{weight:'60',reps:'12',rir:'1',done:true},
+                           {weight:'60',reps:'12',rir:'1',done:true}]}}}]};
+        const v=volumeSemaine(c,_semainesRevolues(1)[0])||{};
+        _viderCacheVolume();
+        return v.PECTORAUX===3&&v.DORSAUX===2;})());
+
+      currentUser=sauveU;
+    })();
 
     // ══════════════ VOLUME AU-DESSUS DU REPÈRE HAUT ══════════════
     // Symétrique du sous-MEV : même fenêtre de deux semaines révolues, mêmes
