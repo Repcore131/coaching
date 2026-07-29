@@ -1788,6 +1788,9 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- PESÉE DU JOUR -->
       <div id="clh-pesee"></div>
 
+      <!-- OBJECTIF -->
+      <div id="clh-objectif"></div>
+
       <!-- DÉMARRER SÉANCE — hero card -->
       <div style="background:linear-gradient(135deg,#0f0000,#160000);border:1px solid #2a0000;border-radius:4px;padding:20px;margin-bottom:14px;position:relative;overflow:hidden">
         <div style="position:absolute;right:0;top:0;width:3px;height:100%;background:var(--red)"></div>
@@ -9277,6 +9280,7 @@ function loadClientHome(){
   document.getElementById('clh-weight').textContent=_pAff!=null?_pAff+'kg':'—';
   renderCartePesee();
   renderContraintesAthlete();
+  _renderObjectifCarte();
   renderDouleurAthlete();
   renderBandeauPhase();renderRelancePhase();renderCartePhase();
   renderNutriDots();renderNotifs();renderWoReminderCard();
@@ -13152,6 +13156,454 @@ function _chAbrege(z){
     'poignet':'poign','hanche':'hanche','genou':'genou','cheville':'chev'})[z]||z;
 }
 
+
+// ══════════════ OBJECTIF UNIQUE, CHIFFRÉ ET DATÉ ══════════════
+// Le seul « objectif » du produit était une case cochée à l'inscription, lue
+// par trois écrans coach et jamais revue par l'athlète. Aucune valeur cible,
+// aucune date. On en fait un engagement : un chiffre, une échéance, et un
+// nombre de séances par semaine — le seul des trois qu'il contrôle vraiment.
+//
+// UN SEUL objectif à la fois. Pas un tableau : deux objectifs simultanés, ce
+// sont deux directions, et l'athlète n'en suit aucune.
+const OBJ_DUREE_MIN=28, OBJ_DUREE_MAX=168, OBJ_DUREE_DEFAUT=84;
+const OBJ_SEANCES_MIN=1, OBJ_SEANCES_MAX=7;
+const OBJ_REVISIONS_SIMPLIFIER=3;
+const OBJ_TYPES=Object.freeze(['poids','charge','mensuration','assiduite']);
+// deb-goals pilote le type, et la PHASE qui va avec : sans ça on pourrait
+// choisir « prise de masse » et un objectif de perte de cinq kilos.
+const OBJ_DEPUIS_GOAL=Object.freeze({
+  'Perte de poids':{type:'poids',phase:'seche'},
+  'Prise de muscle':{type:'poids',phase:'masse'},
+  'Rééquilibrage corporel':{type:'poids',phase:'recomp'},
+  'Amélioration des performances':{type:'charge',phase:null},
+  'Bien-être général':{type:'assiduite',phase:'maintien'}
+});
+function _objTypeDepuisGoals(goals,user){
+  const l=Array.isArray(goals)?goals:[goals];
+  // Le garde-fou TCA retire les options qui mènent au poids : on ne les
+  // reconnaît pas non plus si elles arrivent par un autre chemin.
+  const tca=aTCA(user);
+  for(const g of l){
+    const m=OBJ_DEPUIS_GOAL[String(g||'').trim()];
+    if(!m) continue;
+    if(tca&&m.type==='poids') continue;
+    return m;
+  }
+  return {type:'assiduite',phase:null};
+}
+function _objSemaines(o){
+  if(!o||!o.dateDebut||!o.dateEcheance) return 0;
+  return Math.max(0,(o.dateEcheance-o.dateDebut)/(7*864e5));
+}
+function _seancesCetteSemaine(u){
+  const lundi=_lundiDe(new Date()).getTime();
+  return ((u&&u.sessions)||[]).filter(s=>s&&s.date>=lundi).length;
+}
+// Avertissement de vitesse. Les seuils sont CEUX DE L'ÉCRAN POIDS : un même
+// chiffre ne peut pas être bloquant ici et normal là-bas.
+function _objectifVitesseAlerte(depart,cible,semaines){
+  // Number(null) et Number('') valent 0, qui passe isFinite : une cible
+  // absente devenait « cible zéro » et sortait un avertissement sur une
+  // perte de sept kilos par semaine, calculée sur du vide.
+  const _n=v=>(v===null||v===undefined||v==='')?NaN:Number(v);
+  const d=_n(depart), c=_n(cible), s=_n(semaines);
+  if(!isFinite(d)||!isFinite(c)||!(s>0)||!(d>0)) return null;
+  const pct=((c-d)/d)/s*100;
+  const perte=c<d;
+  if(c===d) return null;
+  const fam=perte?'seche':'masse';
+  if(!vitesseAlerte(pct,Object.assign({phase:fam},PHASES[fam]))) return null;
+  const x=Math.abs((c-d)/s).toFixed(2).replace('.',',');
+  return perte
+    ? 'Ça fait '+x+' kg par semaine. C\'est plus rapide que ce qu\'un corps encaisse sans perdre de muscle. Rallonge l\'échéance, ou vise moins bas.'
+    : 'Ça fait '+x+' kg par semaine. À ce rythme, la majeure partie ne sera pas du muscle. Rallonge l\'échéance, ou vise moins haut.';
+}
+// Valeur atteinte aujourd'hui. Pour le poids on lit la série FUSIONNÉE (pesées
+// quotidiennes + bilans) plutôt que le seul dernier bilan : une pesée de ce
+// matin vaut mieux qu'un bilan d'il y a douze jours.
+function _objectifValeurActuelle(u,o){
+  if(!u||!o) return null;
+  try{
+    if(o.type==='charge') return getLastZeroRIRWeight(o.libelle,o.slot,o.progName);
+    if(o.type==='poids'){
+      const s=serieWeight(u);
+      if(s.length) return s[s.length-1].kg;
+      const b=((u.bilans)||[]).slice(-1)[0];
+      return b?getBW(b):null;
+    }
+    if(o.type==='assiduite') return _seancesCetteSemaine(u);
+  }catch(e){}
+  return null;
+}
+// Statut recalculé depuis l'échéance à CHAQUE lecture : un athlète absent deux
+// mois doit retrouver un objectif expiré, pas un objectif qui se croit actif.
+// Rend une COPIE : lire ne doit pas écrire.
+function _objectifCourant(u){
+  const o=u&&u.objectif;
+  if(!o||!o.id||!o.type) return null;
+  if(o.statut==='abandonne') return null;
+  const c=Object.assign({},o);
+  const val=_objectifValeurActuelle(u,c);
+  const d=Number(c.valeurCible)-Number(c.valeurDepart);
+  const atteint=(val!=null&&d!==0)
+    ? (d>0?val>=Number(c.valeurCible):val<=Number(c.valeurCible)) : false;
+  if(atteint) c.statut='atteint';
+  else if(c.dateEcheance&&Date.now()>c.dateEcheance) c.statut='revise';
+  else if(c.statut!=='atteint') c.statut='actif';
+  return c;
+}
+function _objectifProgression(u){
+  const o=_objectifCourant(u);
+  if(!o) return null;
+  const _sp=o.processus&&o.processus.seancesParSemaine;
+  // Zéro est une VALEUR, pas une absence : avec « || » il retombait sur le
+  // nombre de séances du programme au lieu d'être borné à 1.
+  const _spn=(typeof _sp==='number'&&isFinite(_sp))?_sp:seancesPrevuesParSemaine(u);
+  const prevues=Math.min(OBJ_SEANCES_MAX,Math.max(OBJ_SEANCES_MIN,_spn));
+  const faites=_seancesCetteSemaine(u);
+  const val=_objectifValeurActuelle(u,o);
+  let pct=0;
+  if(o.type==='assiduite'){
+    pct=prevues>0?Math.max(0,Math.min(1,faites/prevues)):0;
+  } else {
+    const d=Number(o.valeurCible)-Number(o.valeurDepart);
+    // Cible égale au départ : aucun chemin à parcourir, donc aucune fraction.
+    if(d!==0&&val!=null) pct=Math.max(0,Math.min(1,(val-Number(o.valeurDepart))/d));
+  }
+  const sem=Math.max(0,Math.ceil((Number(o.dateEcheance)-Date.now())/(7*864e5)));
+  return {pct,valeurActuelle:val,semainesRestantes:sem,
+    seancesSemaine:faites,seancesPrevues:prevues};
+}
+// Construction et bornage. Rend {ok, erreur, objectif}.
+function _validerObjectif(bilData,u){
+  const b=bilData||{};
+  const user=u||currentUser;
+  const m=_objTypeDepuisGoals(b['deb-goals']||b['obj-goals'],user);
+  const type=b['obj-type']||m.type;
+  if(OBJ_TYPES.indexOf(type)<0) return {ok:false,erreur:'Type d\'objectif inconnu'};
+  const now=Date.now();
+  let jours=parseInt(b['obj-duree'],10);
+  if(!isFinite(jours)) jours=OBJ_DUREE_DEFAUT;
+  jours=Math.min(OBJ_DUREE_MAX,Math.max(OBJ_DUREE_MIN,jours));
+  let sp=parseInt(b['obj-seances'],10);
+  if(!isFinite(sp)) sp=seancesPrevuesParSemaine(user);
+  sp=Math.min(OBJ_SEANCES_MAX,Math.max(OBJ_SEANCES_MIN,sp));
+  const o={id:'obj_'+now,type,
+    libelle:String(b['obj-libelle']||'').slice(0,120),
+    valeurDepart:parseFloat(b['obj-depart']),
+    valeurCible:parseFloat(b['obj-cible']),
+    unite:type==='assiduite'?'seances/semaine':(type==='mensuration'?'cm':'kg'),
+    dateDebut:now, dateEcheance:now+jours*864e5,
+    processus:{seancesParSemaine:sp},
+    validePar:b['obj-par']||'athlete', valideAt:now,
+    statut:'actif', masqueValeurs:!!aTCA(user)};
+  if(b['obj-slot']!=null&&b['obj-slot']!=='') o.slot=parseInt(b['obj-slot'],10);
+  if(b['obj-prog']) o.progName=b['obj-prog'];
+  if(type==='assiduite'){
+    o.valeurDepart=0; o.valeurCible=sp; o.libelle=o.libelle||'être là';
+  } else {
+    if(!isFinite(o.valeurDepart)||!isFinite(o.valeurCible))
+      return {ok:false,erreur:'Il manque un chiffre'};
+    if(o.valeurDepart<=0||o.valeurCible<=0)
+      return {ok:false,erreur:'Les valeurs doivent être positives'};
+  }
+  return {ok:true,objectif:o,phase:m.phase};
+}
+// Trois révisions d'affilée : on arrête de viser un chiffre et on ne garde que
+// la présence. Ce n'est pas une punition, c'est le seul engagement qui reste
+// tenable quand les autres n'ont pas tenu.
+function _objectifTropRevise(u){
+  return (((u&&u.historiqueObjectifs)||[]).slice(-OBJ_REVISIONS_SIMPLIFIER)
+    .filter(o=>o&&o.statut==='revise').length)>=OBJ_REVISIONS_SIMPLIFIER;
+}
+function _archiverObjectif(u,statut){
+  if(!u||!u.objectif) return false;
+  if(!u.historiqueObjectifs) u.historiqueObjectifs=[];
+  u.historiqueObjectifs.push(Object.assign({},u.objectif,{statut:statut||'revise',finAt:Date.now()}));
+  if(u.historiqueObjectifs.length>12) u.historiqueObjectifs=u.historiqueObjectifs.slice(-12);
+  delete u.objectif;
+  return true;
+}
+
+
+// ── Carte d'objectif sur l'accueil ──────────────────────────────────────────
+// Elle prend la place de la carte de choix de phase : les deux posaient la
+// même question à l'athlète, et rien n'empêchait de répondre « prise de masse »
+// d'un côté et « perdre cinq kilos » de l'autre. La phase est maintenant
+// DÉDUITE du type d'objectif, et modifiable depuis cette carte.
+function _objFmtDate(ts){
+  return new Date(ts).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'});
+}
+function _objFmtVal(v,u){
+  if(v==null) return '—';
+  const n=Math.round(v*10)/10;
+  return String(n).replace('.',',')+(u==='seances/semaine'?'':' '+(u||''));
+}
+function _objLibelleCible(o){
+  if(o.type==='assiduite') return o.valeurCible+' séances par semaine';
+  if(o.type==='charge') return _objFmtVal(o.valeurCible,o.unite)+' au '+(o.libelle||'exercice');
+  return _objFmtVal(o.valeurCible,o.unite);
+}
+// Proposition non validée : SEULE cette carte s'affiche, jamais l'objectif
+// comme s'il était acquis. Tant que l'athlète n'a pas dit oui, ce n'est pas
+// son objectif.
+function _htmlPropositionCoach(u){
+  const o=u&&u.objectif;
+  if(!o||o.validePar) return '';
+  const coach=(()=>{ try{ const p=profilCoachLocal(cleCoachDe(u)); return (p&&p.fname)||'Ton coach'; }catch(e){ return 'Ton coach'; } })();
+  const n=(o.processus&&o.processus.seancesParSemaine)||seancesPrevuesParSemaine(u);
+  return `<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:12px;padding:13px;margin-bottom:14px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--info);text-transform:uppercase;margin-bottom:7px">Proposition de ton coach</div>
+    <div style="font-size:13px;font-weight:800;color:#fff;line-height:1.5">${escapeHtml(coach)} te propose : ${escapeHtml(_objLibelleCible(o))}${o.type==='assiduite'?'':' '+escapeHtml(o.libelle||'')} d'ici le ${escapeHtml(_objFmtDate(o.dateEcheance))}</div>
+    <div style="font-size:12px;color:var(--sub);line-height:1.6;margin-top:5px">Plus ${n} séances par semaine. Tu peux accepter, ou ajuster.</div>
+    <div style="display:flex;gap:8px;margin-top:11px">
+      <button class="btn btn-red btn-sm" onclick="_accepterObjectifCoach()" style="flex:1;letter-spacing:1px">J'accepte</button>
+      <button class="btn btn-outline btn-sm" onclick="_ajusterObjectifCoach()" style="flex:0 0 auto;padding:0 16px;letter-spacing:1px;font-size:10px">Ajuster</button>
+    </div>
+  </div>`;
+}
+function _accepterObjectifCoach(){
+  if(!currentUser||!currentUser.objectif) return;
+  currentUser.objectif.validePar='athlete';
+  currentUser.objectif.valideAt=Date.now();
+  saveUser();
+  loadClientHome();
+  toast('Objectif accepté 👍');
+}
+function _ajusterObjectifCoach(){
+  // On ouvre le même formulaire que le questionnaire, pré-rempli.
+  ouvrirFormObjectif(currentUser.objectif);
+}
+function _renderObjectifCarte(){
+  const z=document.getElementById('clh-objectif');
+  if(!z) return;
+  if(!currentUser){ z.innerHTML=''; return; }
+  // Proposition en attente : elle seule.
+  const brut=currentUser.objectif;
+  if(brut&&!brut.validePar){ z.innerHTML=_htmlPropositionCoach(currentUser); return; }
+  const o=_objectifCourant(currentUser);
+  if(!o){ z.innerHTML=_htmlSansObjectif(); return; }
+  const p=_objectifProgression(currentUser)||{pct:0,semainesRestantes:0,seancesSemaine:0,seancesPrevues:0};
+  if(o.statut==='atteint'){
+    z.innerHTML=`<div style="background:#03150a;border:1px solid #14532d;border-radius:12px;padding:13px;margin-bottom:14px">
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--green);text-transform:uppercase;margin-bottom:6px">Objectif</div>
+      <div style="font-size:13px;font-weight:800;color:#fff;line-height:1.5">Objectif atteint. On en fixe un nouveau ?</div>
+      <button class="btn btn-red btn-sm" onclick="ouvrirFormObjectif()" style="margin-top:11px;letter-spacing:1px">Fixer un objectif</button>
+    </div>`;
+    return;
+  }
+  if(o.statut==='revise'){
+    const simpl=_objectifTropRevise(currentUser);
+    const n=(o.processus&&o.processus.seancesParSemaine)||seancesPrevuesParSemaine(currentUser);
+    z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:14px">
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:6px">Objectif</div>
+      <div style="font-size:12px;color:#eee;line-height:1.6">Ton objectif du ${escapeHtml(_objFmtDate(o.dateEcheance))} est arrivé à échéance. On en refixe un ?</div>
+      ${simpl?`<div style="font-size:12px;color:var(--sub);line-height:1.6;margin-top:7px">On simplifie : cette fois, l'objectif c'est juste d'y être ${n} fois par semaine.</div>`:''}
+      <button class="btn btn-red btn-sm" onclick="ouvrirFormObjectif()" style="margin-top:11px;letter-spacing:1px">Refixer</button>
+    </div>`;
+    return;
+  }
+  // Objectif actif.
+  const pct=Math.round(p.pct*100);
+  const masque=!!o.masqueValeurs;
+  const ph=phaseCourante(currentUser);
+  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:14px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:7px">
+      <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Objectif · ${p.semainesRestantes} semaine${p.semainesRestantes>1?'s':''} restante${p.semainesRestantes>1?'s':''}</span>
+      <button onclick="ouvrirFormObjectif(currentUser.objectif)" style="background:none;border:none;padding:0;cursor:pointer;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--red);font-weight:700">Changer</button>
+    </div>
+    <div style="font-size:14px;font-weight:800;color:#fff;line-height:1.4">${escapeHtml(masque?(o.libelle||'Ton objectif'):_objLibelleCible(o))}</div>
+    ${masque?'':`<div style="height:7px;background:var(--surface-2);border-radius:4px;margin-top:9px;overflow:hidden">
+      <div style="height:100%;width:${pct}%;background:var(--red);border-radius:4px"></div>
+    </div>
+    <div style="font-size:11px;color:var(--sub);margin-top:5px">${_objFmtVal(p.valeurActuelle,o.unite)} · ${pct} %</div>`}
+    <div style="font-size:12px;color:var(--sub);line-height:1.6;margin-top:8px">Cette semaine : ${p.seancesSemaine} séances sur ${p.seancesPrevues}</div>
+    ${ph?`<div style="font-size:10px;color:var(--text-faint);margin-top:6px">${escapeHtml(PHASES[ph.type].lib)} · ${escapeHtml(ordinalSemaine(semainesPhase(currentUser)))} · <span onclick="ouvrirChoixPhase()" style="color:var(--link);cursor:pointer">changer</span></div>`:''}
+  </div>`;
+}
+function _htmlSansObjectif(){
+  // Aucun objectif : on propose, on n'impose pas. Et rien ne s'affiche tant
+  // que l'athlète n'a pas de programme — il a autre chose à faire d'abord.
+  if(!hasProgram(currentUser)&&!(currentUser.sessions||[]).length) return '';
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:14px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:6px">Ton objectif</div>
+    <div style="font-size:12px;color:var(--sub);line-height:1.6">Un seul objectif à la fois. Chiffré, avec une date. C'est ce qui rend la progression lisible.</div>
+    <button class="btn btn-outline btn-sm" onclick="ouvrirFormObjectif()" style="margin-top:10px;letter-spacing:1px;font-size:10px">Fixer un objectif</button>
+  </div>`;
+}
+
+
+// ── Formulaire d'objectif, partagé ──────────────────────────────────────────
+// Le même écran sert au questionnaire de départ, au bilan de suivi, au bouton
+// « Changer » de l'accueil et à « Ajuster » une proposition du coach. Quatre
+// portes, une seule pièce.
+let _objSaisie=null;
+function _objDefaut(u){
+  return {type:null,libelle:'',depart:'',cible:'',jours:OBJ_DUREE_DEFAUT,
+    seances:seancesPrevuesParSemaine(u),slot:'',prog:'',alerteVue:false};
+}
+function ouvrirFormObjectif(existant){
+  const u=currentUser;
+  if(!u) return;
+  _objSaisie=_objDefaut(u);
+  if(existant){
+    _objSaisie.type=existant.type;
+    _objSaisie.libelle=existant.libelle||'';
+    _objSaisie.depart=existant.valeurDepart!=null?String(existant.valeurDepart):'';
+    _objSaisie.cible=existant.valeurCible!=null?String(existant.valeurCible):'';
+    _objSaisie.jours=Math.round((existant.dateEcheance-existant.dateDebut)/864e5)||OBJ_DUREE_DEFAUT;
+    _objSaisie.seances=(existant.processus&&existant.processus.seancesParSemaine)||_objSaisie.seances;
+    _objSaisie.slot=existant.slot!=null?String(existant.slot):'';
+    _objSaisie.prog=existant.progName||'';
+  } else {
+    const m=_objTypeDepuisGoals(_objectifGoalsDe(u),u);
+    _objSaisie.type=m.type;
+  }
+  if(_objSaisie.type==='poids'&&!_objSaisie.depart){
+    const p=poidsAffiche(u); if(p!=null) _objSaisie.depart=String(p);
+  }
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',
+    `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
+      <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:16px 16px 0 0;padding:18px;width:100%;max-width:520px;max-height:90vh;overflow:auto">
+        ${htmlEtapeObjectif(u)}
+      </div></div>`);
+}
+function _objectifGoalsDe(u){
+  const dep=((u&&u.bilans)||[]).filter(b=>b&&b.type==='depart').slice(-1)[0];
+  return dep?dep['deb-goals']:null;
+}
+// Exercices présents dans les séances actives, pour un objectif de charge.
+function _objExercices(u){
+  const out=[];
+  ((u&&u.sessions_config)||[]).forEach((s,i)=>{
+    if(!s||!s.active) return;
+    (s.exercises||[]).forEach(e=>{ if(e&&e.name) out.push({nom:e.name,slot:i,prog:s.name||''}); });
+  });
+  return out;
+}
+function _objSet(champ,val){ if(_objSaisie){ _objSaisie[champ]=val; _objSaisie.alerteVue=false; _objRepeindre(); } }
+function _objRepeindre(){
+  const z=document.getElementById('obj-form');
+  if(!z) return;
+  // Le contexte se déduit de la présence du bouton Suivant du questionnaire.
+  const dans=!!document.getElementById('bil-next-btn')&&!document.getElementById('modal-overlay');
+  z.outerHTML=htmlEtapeObjectif(currentUser,dans);
+  if(dans) _objBloquerSuivant(_objAlerteBloquante());
+}
+// Suivant reste INACTIF tant qu'aucun des deux boutons de l'avertissement
+// n'a été touché. On ne masque pas l'avertissement, on empêche de passer
+// devant sans l'avoir lu.
+function _objAlerteBloquante(){
+  const s=_objSaisie;
+  if(!s||s.type!=='poids') return false;
+  return !!_objectifVitesseAlerte(s.depart,s.cible,Math.round(s.jours/7))&&!s.alerteVue;
+}
+function _objBloquerSuivant(bloque){
+  const b=document.getElementById('bil-next-btn');
+  if(!b) return;
+  b.disabled=!!bloque;
+  b.style.opacity=bloque?'.45':'';
+}
+function _objRallonger(){
+  if(!_objSaisie) return;
+  _objSaisie.jours=Math.min(OBJ_DUREE_MAX,_objSaisie.jours+28);
+  _objSaisie.alerteVue=false;
+  _objRepeindre();
+}
+function _objGarder(){ if(_objSaisie){ _objSaisie.alerteVue=true; _objRepeindre(); } }
+// Rendu de l'étape. Utilisé tel quel dans le questionnaire et dans la modale.
+function htmlEtapeObjectif(u,dansQuestionnaire){
+  const s=_objSaisie||(_objSaisie=_objDefaut(u));
+  const tca=aTCA(u);
+  const sem=Math.round(s.jours/7);
+  const alerte=(s.type==='poids')?_objectifVitesseAlerte(s.depart,s.cible,sem):null;
+  const bloque=!!alerte&&!s.alerteVue;
+  const btnEch=[[42,'6 semaines'],[84,'12 semaines'],[168,'24 semaines']].map(([j,l])=>
+    `<button type="button" onclick="_objSet('jours',${j})" class="hit44" style="flex:1;min-height:42px;border-radius:9px;cursor:pointer;font-size:12px;font-weight:700;
+      background:${s.jours===j?'#1a0505':'var(--surface-1)'};border:1px solid ${s.jours===j?'var(--red)':'var(--border)'};color:${s.jours===j?'#fff':'#bbb'}">${l}</button>`).join('');
+  const seances=[1,2,3,4,5,6,7].map(n=>
+    `<button type="button" onclick="_objSet('seances',${n})" class="hit44" style="flex:1;min-width:38px;min-height:42px;border-radius:9px;cursor:pointer;font-size:14px;font-weight:800;
+      background:${s.seances===n?'#1a0505':'var(--surface-1)'};border:1px solid ${s.seances===n?'var(--red)':'var(--border)'};color:${s.seances===n?'#fff':'#bbb'}">${n}</button>`).join('');
+  let coeur='';
+  if(s.type==='charge'){
+    const ex=_objExercices(u);
+    coeur=ex.length
+      ? `<label>Sur quel exercice ?</label>
+         <select onchange="_objChoisirExo(this.value)" style="width:100%;box-sizing:border-box;margin-bottom:10px">
+           <option value="">Choisis un exercice</option>
+           ${ex.map((e,i)=>`<option value="${i}"${s.libelle===e.nom?' selected':''}>${escapeHtml(e.nom)}</option>`).join('')}
+         </select>
+         <div style="display:flex;gap:8px">
+           <div style="flex:1"><label>Aujourd'hui</label><input type="number" inputmode="decimal" value="${escapeHtml(s.depart)}" oninput="_objSaisie.depart=this.value" placeholder="kg"></div>
+           <div style="flex:1"><label>Ta charge cible</label><input type="number" inputmode="decimal" value="${escapeHtml(s.cible)}" oninput="_objSaisie.cible=this.value;_objSaisie.alerteVue=false" placeholder="kg"></div>
+         </div>`
+      : `<div style="background:var(--surface-2);border-radius:10px;padding:11px 13px;font-size:12px;color:var(--sub);line-height:1.6;margin-bottom:10px">
+           On fixera une charge cible après tes 3 premières séances. Pour l'instant, l'objectif c'est d'y aller.
+         </div>`;
+  } else if(s.type==='poids'&&!tca){
+    coeur=`<div style="display:flex;gap:8px">
+        <div style="flex:1"><label>Aujourd'hui</label><input type="number" inputmode="decimal" value="${escapeHtml(s.depart)}" oninput="_objSaisie.depart=this.value;_objSaisie.alerteVue=false" placeholder="kg"></div>
+        <div style="flex:1"><label>Ton poids cible</label><input type="number" inputmode="decimal" value="${escapeHtml(s.cible)}" oninput="_objSaisie.cible=this.value;_objSaisie.alerteVue=false" placeholder="kg"></div>
+      </div>`;
+  }
+  return `<div id="obj-form">
+    <div style="font-size:16px;font-weight:800;margin-bottom:3px">Ton objectif</div>
+    <div style="font-size:12px;color:var(--sub);line-height:1.6;margin-bottom:14px">Un seul objectif à la fois. Chiffré, avec une date. C'est ce qui rend la progression lisible.</div>
+    ${coeur}
+    ${s.type!=='assiduite'?`<label style="margin-top:12px">Pour quand ?</label>
+    <div style="display:flex;gap:6px;margin-bottom:4px">${btnEch}</div>
+    <div style="font-size:10px;color:var(--text-faint);margin-bottom:12px">Échéance : ${escapeHtml(_objFmtDate(Date.now()+s.jours*864e5))}</div>`:''}
+    ${alerte?`<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:10px;padding:11px 13px;margin-bottom:12px">
+      <div style="font-size:12px;color:#eee;line-height:1.6">${escapeHtml(alerte)}</div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button type="button" class="btn btn-red btn-sm" onclick="_objRallonger()" style="flex:1;letter-spacing:1px;font-size:11px">Rallonger</button>
+        <button type="button" class="btn btn-outline btn-sm" onclick="_objGarder()" style="flex:1;letter-spacing:1px;font-size:11px">Je garde quand même</button>
+      </div>
+    </div>`:''}
+    <label>Combien de séances par semaine t'engages-tu à faire ?</label>
+    <div style="display:flex;gap:5px;margin-bottom:4px">${seances}</div>
+    <div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:14px">C'est le seul chiffre que tu contrôles entièrement. C'est celui qui compte.</div>
+    ${dansQuestionnaire?`<script>setTimeout(function(){_objBloquerSuivant(${bloque?'true':'false'});},0)</scr`+`ipt>`:`<div style="display:flex;gap:8px">
+      <button type="button" class="btn btn-red btn-sm" onclick="_objEnregistrer()" ${bloque?'disabled':''}
+        style="flex:1;letter-spacing:1px${bloque?';opacity:.45':''}">Enregistrer</button>
+      <button type="button" class="btn btn-outline btn-sm" onclick="closeModal()" style="flex:0 0 auto;padding:0 16px;letter-spacing:1px;font-size:10px">Plus tard</button>
+    </div>`}
+  </div>`;
+}
+function _objChoisirExo(i){
+  const ex=_objExercices(currentUser)[parseInt(i,10)];
+  if(!ex||!_objSaisie) return;
+  _objSaisie.libelle=ex.nom; _objSaisie.slot=String(ex.slot); _objSaisie.prog=ex.prog;
+  // Charge de départ : dernière série à RIR 0 SUR CE CRÉNEAU. Sans le créneau,
+  // _memeCreneau rejette toutes les séances et la valeur reste vide.
+  try{
+    const w=getLastZeroRIRWeight(ex.nom,ex.slot,ex.prog);
+    if(w!=null) _objSaisie.depart=String(w);
+  }catch(e){}
+  _objRepeindre();
+}
+function _objEnregistrer(){
+  if(!currentUser||!_objSaisie) return;
+  const s=_objSaisie;
+  const r=_validerObjectif({'deb-goals':_objectifGoalsDe(currentUser),
+    'obj-type':s.type,'obj-libelle':s.libelle,'obj-depart':s.depart,'obj-cible':s.cible,
+    'obj-duree':String(s.jours),'obj-seances':String(s.seances),
+    'obj-slot':s.slot,'obj-prog':s.prog,'obj-par':'athlete'},currentUser);
+  if(!r.ok){ toast('⚠️ '+r.erreur,'var(--orange)'); return; }
+  // L'objectif en cours part à l'historique : on ne perd pas la trace.
+  if(currentUser.objectif) _archiverObjectif(currentUser,'revise');
+  currentUser.objectif=r.objectif;
+  // La phase suit le type d'objectif, si aucune n'est déjà posée : c'est ce qui
+  // évite « prise de masse » avec un objectif de perte de cinq kilos.
+  if(r.phase&&!phaseCourante(currentUser)) changerPhase(currentUser,r.phase,null,'athlete');
+  _objSaisie=null;
+  saveUser();
+  closeModal();
+  toast('Objectif enregistré 👍');
+  if(document.getElementById('clh-objectif')) loadClientHome();
+}
+
 function contreIndications(bilans){
   const dep=(bilans||[]).filter(b=>b&&b.type==='depart').slice(-1)[0];
   if(!dep) return [];
@@ -13228,11 +13680,11 @@ const BIL_STEPS=[
     `<div>${bC('bil-stress',['Pas du tout','Un peu','Beaucoup','Énormément'])}</div>`+
     bLbl('Si tu es stressé, peux-tu me donner des précisions sur ce qui te préoccupe en ce moment ?')+bTA('bil-stress-detail','Ce qui te préoccupe...')
   ),
-  // Step 5 : Objectifs
-  ()=>bSec('Objectifs à venir ',
-    bLbl('As-tu de nouveaux objectifs ou des priorités spécifiques ?')+
-    `<div>${bC('bil-new-goals',['Oui','Non'])}</div>`+
-    bLbl('Si oui, lesquels ?')+bTA('bil-new-goals-detail','Tes nouveaux objectifs...')
+  // Step 5 : Objectif — remplace « Objectifs a venir ». Le texte libre reste
+  // collecte, mais l'engagement chiffre est desormais le coeur de l'etape.
+  ()=>bSec('Ton objectif',
+    htmlEtapeObjectif(currentUser,true)+
+    bLbl('Autre chose a signaler sur tes objectifs ?')+bTA('bil-new-goals-detail','Facultatif...')
   ),
   // Step 6 : Photos de progression
   ()=>`<div style="margin-bottom:22px"><div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">Photos de progression </div>`+
@@ -13295,6 +13747,9 @@ const DEB_STEPS=[
     bLbl('Quand souhaites tu t\'entraîner ? ⏰')+
     `<div>${bC('deb-training-time',['Matin','Après-midi','Soir'],true)}</div>`
   ),
+  // Étape Objectif — inséree entre Entrainement et Nutrition. Facultative :
+  // un athlete qui ne la remplit pas garde exactement le comportement actuel.
+  ()=>bSec('Ton objectif', htmlEtapeObjectif(currentUser,true)),
   // Step 4 : Nutrition
   ()=>bSec('Nutrition ',
     bLbl('As-tu des allergies ou régimes alimentaires spécifiques ? ')+bT('deb-allergies','Ex: Intolérance lactose, végétarien...')+
@@ -13335,6 +13790,23 @@ function saveBilanFinal(){
   // Le bilan est validé : le brouillon n'a plus de raison d'être, et le laisser
   // ferait reproposer une reprise au prochain bilan du même type.
   _bilClearDraft();
+  // Objectif saisi pendant le questionnaire. Facultatif : sans saisie, rien
+  // n'est ecrit et le compte se comporte comme avant.
+  try{
+    if(_objSaisie&&(_objSaisie.cible!==''||_objSaisie.type==='assiduite')){
+      const _r=_validerObjectif({'deb-goals':bilData['deb-goals']||_objectifGoalsDe(currentUser),
+        'obj-type':_objSaisie.type,'obj-libelle':_objSaisie.libelle,'obj-depart':_objSaisie.depart,
+        'obj-cible':_objSaisie.cible,'obj-duree':String(_objSaisie.jours),
+        'obj-seances':String(_objSaisie.seances),'obj-slot':_objSaisie.slot,
+        'obj-prog':_objSaisie.prog,'obj-par':'athlete'},currentUser);
+      if(_r.ok){
+        if(currentUser.objectif) _archiverObjectif(currentUser,'revise');
+        currentUser.objectif=_r.objectif;
+        if(_r.phase&&!phaseCourante(currentUser)) changerPhase(currentUser,_r.phase,null,'athlete');
+      }
+    }
+    _objSaisie=null;
+  }catch(e){}
   if(bilType==='depart'){
     currentUser.questionnaireComplete=true;
     // Objectifs bilan départ → bilanGoals (champ distinct de objective/profil)
@@ -17696,9 +18168,14 @@ function refuserPhase(){
   closeModal();
   renderCartePhase();
 }
+// La carte de CHOIX de phase ne s'affiche plus sur l'accueil : l'objectif
+// pose la même question, en plus précis, et deux réponses pouvaient se
+// contredire. La phase reste modifiable depuis la carte d'objectif et depuis
+// la fiche coach ; ouvrirChoixPhase reste le point d'entrée.
 function renderCartePhase(){
   const z=document.getElementById('clh-phase');
   if(!z) return;
+  z.innerHTML=''; return;
   if(!currentUser||phaseCourante(currentUser)||currentUser.phaseRefusee){ z.innerHTML=''; return; }
   z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:14px">
     ${_htmlChoixPhase()}</div>`;
@@ -17727,7 +18204,11 @@ function renderBandeauPhase(){
   const h=_htmlBandeauPhase(currentUser);
   for(const id of ['clh-bandeau-phase','prog-bandeau-phase']){
     const z=document.getElementById(id);
-    if(z) z.innerHTML=h;
+    if(!z) continue;
+    // Sur l'accueil, la carte d'objectif porte déjà la phase : afficher le
+    // bandeau en plus la montrait deux fois à quatre lignes d'écart.
+    if(id==='clh-bandeau-phase'&&_objectifCourant(currentUser)){ z.innerHTML=''; continue; }
+    z.innerHTML=h;
   }
 }
 function renderRelancePhase(){
@@ -23216,32 +23697,39 @@ function testExercices(){
         // Sans phase : la carte de choix s'affiche, le bandeau non.
         currentUser={email:'p@t.fr',bilans:[]}; _phChoix=null;
         renderCartePhase(); renderBandeauPhase(); renderRelancePhase();
-        ok('Sans phase : la carte de choix apparaît',
-           /Ta phase/.test(zP.innerHTML)&&Object.keys(PHASES).every(t=>zP.innerHTML.includes(PHASES[t].lib)));
+        // Le formulaire de choix ne s'affiche PLUS sur l'accueil : c'est la
+        // carte d'objectif qui pose désormais la question. Il reste servi tel
+        // quel par ouvrirChoixPhase, et c'est lui qu'on vérifie.
+        ok('L\'accueil n\'affiche plus la carte de choix de phase',zP.innerHTML==='');
+        ok('Le formulaire de choix reste complet',
+           /Ta phase/.test(_htmlChoixPhase())&&Object.keys(PHASES).every(t=>_htmlChoixPhase().includes(PHASES[t].lib)));
         ok('Sans phase : aucun bandeau',zB.innerHTML==='');
         ok('Sans phase : aucune relance',zR.innerHTML==='');
         // Comparaison au texte BRUT : escapeHtml encode l'apostrophe en &#39;
         // mais innerHTML la restitue décodée à la relecture. Comparer à la
         // version encodée échouerait alors que le texte affiché est exact.
+        // Sortie BRUTE du formulaire : elle est encodée par escapeHtml, donc
+        // on compare à la version encodée et non au texte source.
         ok('Les quatre textes sont repris tels quels',
-           Object.keys(PHASES).every(t=>zP.innerHTML.includes(PHASES[t].texte)),
-           Object.keys(PHASES).filter(t=>!zP.innerHTML.includes(PHASES[t].texte)).join(' '));
-        ok('Aucun bouton Confirmer actif sans sélection',/disabled/.test(zP.innerHTML));
+           Object.keys(PHASES).every(t=>_htmlChoixPhase().includes(escapeHtml(PHASES[t].texte))),
+           Object.keys(PHASES).filter(t=>!_htmlChoixPhase().includes(escapeHtml(PHASES[t].texte))).join(' '));
+        ok('Aucun bouton Confirmer actif sans sélection',/disabled/.test(_htmlChoixPhase()));
 
         // Critère 8 : deb-goals « prise de masse propre » pré-sélectionne, sans appliquer.
         currentUser={email:'p@t.fr',bilans:[{type:'depart','deb-goals':'prise de masse propre'}]};
-        _phChoix=null; renderCartePhase();
-        ok('Critère 8 : la suggestion est marquée',/suggéré/.test(zP.innerHTML));
+        _phChoix=null;
+        const _hSug=_htmlChoixPhase();
+        ok('Critère 8 : la suggestion est marquée',/suggéré/.test(_hSug));
         ok('Critère 8 : elle est pré-sélectionnée',_phChoix==='masse');
         ok('Critère 8 : elle n\'est PAS appliquée d\'office',phaseCourante(currentUser)===null);
-        ok('Critère 8 : le bouton Confirmer est actif',!/disabled/.test(zP.innerHTML));
+        ok('Critère 8 : le bouton Confirmer est actif',!/disabled/.test(_htmlChoixPhase()));
         ok('Critère 8 : le texte libre est conservé intact',
            currentUser.bilans[0]['deb-goals']==='prise de masse propre');
 
         // Refus : la carte disparaît et ne revient pas.
         currentUser={email:'p@t.fr',bilans:[]}; _phChoix=null;
         renderCartePhase(); refuserPhase();
-        ok('Refusée : la carte disparaît',zP.innerHTML==='');
+        ok('Refusée : rien sur l\'accueil',zP.innerHTML==='');
         ok('Refusée : la date du refus est mémorisée',!!currentUser.phaseRefusee);
         renderCartePhase();
         ok('Refusée : elle ne revient pas au rendu suivant',zP.innerHTML==='');
@@ -24319,6 +24807,308 @@ function testExercices(){
       // SCHEMAS_META ne porte que des libellés, des effectifs et les zones
       // hors périmètre. Aucune charge de 1 à 3 n'y est inscrite.
       return !Object.values(SCHEMAS_META).some(m=>m.charges||m.contraintes);})());
+
+
+    // ══════════════ OBJECTIF ══════════════
+    const _obJ=n=>Date.now()+n*864e5;
+    const _obU=(o,extra)=>Object.assign({id:'o1',email:'o@t.fr',exAlias:{},exMuscles:{},
+      sessions:[],bilans:[],sessions_config:[{active:true,name:'A',exercises:[{name:'X'}]},
+        {active:true,name:'B',exercises:[{name:'Y'}]},{active:true,name:'C',exercises:[{name:'Z'}]}],
+      objectif:o},extra||{});
+
+    // ── _objectifVitesseAlerte ──
+    ok('90→85 en 12 semaines : aucun avertissement',_objectifVitesseAlerte(90,85,12)===null);
+    ok('90→78 en 6 semaines : avertissement de perte',(()=>{
+      const t=_objectifVitesseAlerte(90,78,6);
+      return t&&/2,00 kg par semaine/.test(t)&&/sans perdre de muscle/.test(t)&&/vise moins bas/.test(t);})(),
+      String(_objectifVitesseAlerte(90,78,6)).slice(0,50));
+    ok('70→78 en 8 semaines : avertissement de prise',(()=>{
+      const t=_objectifVitesseAlerte(70,78,8);
+      return t&&/1,00 kg par semaine/.test(t)&&/ne sera pas du muscle/.test(t)&&/vise moins haut/.test(t);})());
+    ok('90→90 : aucun avertissement',_objectifVitesseAlerte(90,90,12)===null);
+    ok('Durée nulle : aucune division par zéro',
+       _objectifVitesseAlerte(90,80,0)===null&&_objectifVitesseAlerte(90,80,-3)===null);
+    ok('Départ à zéro ou absent : aucune exception',
+       _objectifVitesseAlerte(0,80,12)===null&&_objectifVitesseAlerte(null,80,12)===null
+       &&_objectifVitesseAlerte(90,null,12)===null);
+    ok('Le mot « échec » n\'apparaît dans aucun avertissement',
+       !/échec/i.test(String(_objectifVitesseAlerte(90,78,6))+String(_objectifVitesseAlerte(70,78,8))));
+    // Le seuil est CELUI de l'écran Poids : un même chiffre ne peut pas être
+    // bloquant ici et normal là-bas.
+    ok('Le seuil de perte est celui de la phase sèche',(()=>{
+      // −1,2 %/sem sur 90 kg pendant 10 semaines = −10,8 kg : pile au seuil.
+      const pile=_objectifVitesseAlerte(90,90-90*0.012*10,10);
+      const au_dela=_objectifVitesseAlerte(90,90-90*0.013*10,10);
+      return pile===null&&au_dela!==null;})());
+
+    // ── _objectifCourant ──
+    ok('Objectif absent : null',_objectifCourant({})===null&&_objectifCourant(null)===null);
+    ok('Objet incomplet : null',_objectifCourant({objectif:{}})===null);
+    ok('Statut abandonné : null',
+       _objectifCourant(_obU({id:'a',type:'poids',statut:'abandonne'}))===null);
+    ok('Échéance dépassée d\'une milliseconde : révisé',(()=>{
+      const o=_objectifCourant(_obU({id:'a',type:'poids',valeurDepart:90,valeurCible:85,
+        dateDebut:_obJ(-84),dateEcheance:Date.now()-1,statut:'actif'}));
+      return o&&o.statut==='revise';})());
+    ok('Échéance dépassée de 200 jours : révisé',(()=>{
+      const o=_objectifCourant(_obU({id:'a',type:'poids',valeurDepart:90,valeurCible:85,
+        dateDebut:_obJ(-284),dateEcheance:_obJ(-200),statut:'actif'}));
+      return o&&o.statut==='revise';})());
+    ok('Échéance à venir : actif',(()=>{
+      const o=_objectifCourant(_obU({id:'a',type:'poids',valeurDepart:90,valeurCible:85,
+        dateDebut:Date.now(),dateEcheance:_obJ(84),statut:'actif'}));
+      return o&&o.statut==='actif';})());
+    ok('Lire ne modifie pas l\'objectif stocké',(()=>{
+      const u=_obU({id:'a',type:'poids',valeurDepart:90,valeurCible:85,
+        dateDebut:_obJ(-84),dateEcheance:Date.now()-1,statut:'actif'});
+      _objectifCourant(u);
+      return u.objectif.statut==='actif';})());
+    ok('Cible atteinte avant l\'échéance : atteint',(()=>{
+      const u=_obU({id:'a',type:'poids',valeurDepart:90,valeurCible:85,
+        dateDebut:Date.now(),dateEcheance:_obJ(84),statut:'actif'});
+      u.weightLog=[{date:localISODate(new Date()),kg:84}];
+      return _objectifCourant(u).statut==='atteint';})());
+
+    // ── _objectifProgression ──
+    ok('Cible égale au départ : aucune division par zéro',(()=>{
+      const p=_objectifProgression(_obU({id:'a',type:'poids',valeurDepart:90,valeurCible:90,
+        dateDebut:Date.now(),dateEcheance:_obJ(84),statut:'actif',processus:{seancesParSemaine:3}}));
+      return p&&p.pct===0&&!isNaN(p.pct);})());
+    ok('Dépassement de la cible : barre plafonnée à 100 %',(()=>{
+      const u=_obU({id:'a',type:'poids',valeurDepart:90,valeurCible:85,
+        dateDebut:Date.now(),dateEcheance:_obJ(84),statut:'actif'});
+      u.weightLog=[{date:localISODate(new Date()),kg:80}];
+      return _objectifProgression(u).pct===1;})());
+    ok('Régression sous le départ : barre plancher à 0 %',(()=>{
+      const u=_obU({id:'a',type:'poids',valeurDepart:90,valeurCible:85,
+        dateDebut:Date.now(),dateEcheance:_obJ(84),statut:'actif'});
+      u.weightLog=[{date:localISODate(new Date()),kg:95}];
+      return _objectifProgression(u).pct===0;})());
+    ok('Objectif d\'assiduité : la barre porte sur les séances',(()=>{
+      const u=_obU({id:'a',type:'assiduite',valeurDepart:0,valeurCible:3,
+        dateDebut:Date.now(),dateEcheance:_obJ(84),statut:'actif',processus:{seancesParSemaine:4}});
+      const lundi=_lundiDe(new Date()).getTime();
+      u.sessions=[{id:'s1',date:lundi+3600000},{id:'s2',date:lundi+7200000}];
+      const p=_objectifProgression(u);
+      return p.seancesSemaine===2&&p.seancesPrevues===4&&Math.abs(p.pct-0.5)<1e-9;})());
+    ok('Semaines restantes bornées à zéro',(()=>{
+      const p=_objectifProgression(_obU({id:'a',type:'poids',valeurDepart:90,valeurCible:85,
+        dateDebut:_obJ(-200),dateEcheance:_obJ(-100),statut:'actif'}));
+      return p.semainesRestantes===0;})());
+    ok('Séances prévues bornées à [1;7]',(()=>{
+      const a=_objectifProgression(_obU({id:'a',type:'poids',valeurDepart:90,valeurCible:85,
+        dateDebut:Date.now(),dateEcheance:_obJ(84),processus:{seancesParSemaine:99}}));
+      const b=_objectifProgression(_obU({id:'a',type:'poids',valeurDepart:90,valeurCible:85,
+        dateDebut:Date.now(),dateEcheance:_obJ(84),processus:{seancesParSemaine:0}}));
+      return a.seancesPrevues===7&&b.seancesPrevues===1;})());
+
+    // ── Critère : charge 70→80, séance à RIR 0 / 75 kg, barre à 50 % ──
+    ok('Objectif de charge : 70→80 avec 75 kg fait = 50 %',(()=>{
+      const sauve=currentUser;
+      const u=_obU({id:'a',type:'charge',libelle:'DEVELOPPE COUCHE',slot:0,progName:'A',
+        valeurDepart:70,valeurCible:80,dateDebut:Date.now(),dateEcheance:_obJ(84),statut:'actif'});
+      u.sessions=[{id:'s1',date:Date.now()-864e5,slot:0,name:'A',
+        data:{'DEVELOPPE COUCHE':{sets:[{done:true,rir:'0',weight:'75'}]}}}];
+      currentUser=u;
+      const p=_objectifProgression(u);
+      currentUser=sauve;
+      return Math.abs(p.pct-0.5)<1e-9&&p.valeurActuelle===75;})());
+
+    // ── _validerObjectif : bornes et types ──
+    ok('Perte de poids : 90→85 sur 12 semaines',(()=>{
+      const sauve=currentUser; currentUser=_obU(null);
+      const r=_validerObjectif({'deb-goals':['Perte de poids'],'obj-depart':'90',
+        'obj-cible':'85','obj-duree':'84','obj-seances':'3'},currentUser);
+      currentUser=sauve;
+      return r.ok&&r.objectif.type==='poids'&&r.objectif.valeurCible===85
+        &&Math.round((r.objectif.dateEcheance-r.objectif.dateDebut)/864e5)===84
+        &&r.objectif.statut==='actif'&&r.phase==='seche';})());
+    ok('Durée bornée à [28 ; 168] jours',(()=>{
+      const sauve=currentUser; currentUser=_obU(null);
+      const c=(j)=>{const r=_validerObjectif({'deb-goals':['Perte de poids'],'obj-depart':'90',
+        'obj-cible':'85','obj-duree':String(j)},currentUser);
+        return Math.round((r.objectif.dateEcheance-r.objectif.dateDebut)/864e5);};
+      const a=c(3),b=c(500),d=c(84);
+      currentUser=sauve;
+      return a===28&&b===168&&d===84;})());
+    ok('Durée absente : 84 jours par défaut',(()=>{
+      const sauve=currentUser; currentUser=_obU(null);
+      const r=_validerObjectif({'deb-goals':['Perte de poids'],'obj-depart':'90','obj-cible':'85'},currentUser);
+      currentUser=sauve;
+      return Math.round((r.objectif.dateEcheance-r.objectif.dateDebut)/864e5)===84;})());
+    ok('Séances par défaut : celles du programme',(()=>{
+      const sauve=currentUser; const u=_obU(null); currentUser=u;
+      const r=_validerObjectif({'deb-goals':['Perte de poids'],'obj-depart':'90','obj-cible':'85'},u);
+      currentUser=sauve;
+      return r.objectif.processus.seancesParSemaine===3;})());
+    ok('Amélioration des performances : type charge',(()=>{
+      const sauve=currentUser; currentUser=_obU(null);
+      const r=_validerObjectif({'deb-goals':['Amélioration des performances'],
+        'obj-libelle':'SQUAT','obj-depart':'100','obj-cible':'120','obj-slot':'1','obj-prog':'B'},currentUser);
+      currentUser=sauve;
+      return r.ok&&r.objectif.type==='charge'&&r.objectif.libelle==='SQUAT'
+        &&r.objectif.slot===1&&r.objectif.progName==='B'&&r.objectif.unite==='kg';})());
+    ok('Bien-être général : type assiduité, cible = séances',(()=>{
+      const sauve=currentUser; currentUser=_obU(null);
+      const r=_validerObjectif({'deb-goals':['Bien-être général'],'obj-seances':'4'},currentUser);
+      currentUser=sauve;
+      return r.ok&&r.objectif.type==='assiduite'&&r.objectif.valeurCible===4
+        &&r.objectif.unite==='seances/semaine';})());
+    ok('Chiffre manquant sur un objectif chiffré : refusé',(()=>{
+      const sauve=currentUser; currentUser=_obU(null);
+      const r=_validerObjectif({'deb-goals':['Perte de poids'],'obj-depart':'90'},currentUser);
+      currentUser=sauve;
+      return r.ok===false&&!!r.erreur;})());
+
+    // ── Garde-fou TCA ──
+    ok('Antécédent déclaré : aucune option ne mène au poids',(()=>{
+      const u=_obU(null,{bilans:[{type:'depart','deb-tca':'anorexie'}]});
+      const m=_objTypeDepuisGoals(['Perte de poids'],u);
+      return m.type!=='poids';})());
+    ok('Antécédent déclaré : masqueValeurs est posé',(()=>{
+      const sauve=currentUser;
+      const u=_obU(null,{bilans:[{type:'depart','deb-tca':'anorexie'}]});
+      currentUser=u;
+      const r=_validerObjectif({'deb-goals':['Bien-être général'],'obj-seances':'3'},u);
+      currentUser=sauve;
+      return r.ok&&r.objectif.masqueValeurs===true;})());
+    ok('Sans antécédent, masqueValeurs reste faux',(()=>{
+      const sauve=currentUser; const u=_obU(null); currentUser=u;
+      const r=_validerObjectif({'deb-goals':['Perte de poids'],'obj-depart':'90','obj-cible':'85'},u);
+      currentUser=sauve;
+      return r.objectif.masqueValeurs===false;})());
+
+    // ── Trois révisions ──
+    ok('Trois objectifs révisés d\'affilée : on simplifie',(()=>{
+      const u=_obU(null,{historiqueObjectifs:[{statut:'revise'},{statut:'revise'},{statut:'revise'}]});
+      return _objectifTropRevise(u)===true;})());
+    ok('Deux révisions : on ne simplifie pas',
+       _objectifTropRevise(_obU(null,{historiqueObjectifs:[{statut:'revise'},{statut:'revise'}]}))===false);
+    ok('Un objectif atteint coupe la série',
+       _objectifTropRevise(_obU(null,{historiqueObjectifs:[{statut:'revise'},{statut:'atteint'},{statut:'revise'}]}))===false);
+    ok('Archiver vide le champ et garde la trace',(()=>{
+      const u=_obU({id:'a',type:'poids',valeurDepart:90,valeurCible:85});
+      _archiverObjectif(u,'revise');
+      return !u.objectif&&u.historiqueObjectifs.length===1
+        &&u.historiqueObjectifs[0].statut==='revise'&&u.historiqueObjectifs[0].finAt>0;})());
+
+    // ── Rétrocompatibilité ──
+    ok('Compte sans objectif : aucune carte, aucune exception',(()=>{
+      const u={id:'v',email:'v@t.fr',exAlias:{},exMuscles:{},sessions:[],bilans:[]};
+      return _objectifCourant(u)===null&&_objectifProgression(u)===null;})());
+
+
+    // ── Carte d'accueil et formulaire ──
+    (function(){
+      const sauveU=currentUser, sauveS=_objSaisie;
+      const z=document.getElementById('clh-objectif'), garde=z?z.innerHTML:null;
+      const zp=document.getElementById('clh-phase');
+      ok('La zone objectif existe sur l\'accueil',!!z);
+      if(z){
+        // Sans objectif ET sans programme : rien du tout.
+        currentUser={id:'a',email:'a@t.fr',exAlias:{},exMuscles:{},sessions:[],bilans:[]};
+        _renderObjectifCarte();
+        ok('Sans objectif ni programme : aucune carte',z.innerHTML==='');
+        ok('La carte de choix de phase a quitté l\'accueil',(()=>{
+          _phChoix=null; renderCartePhase(); return zp.innerHTML===''; })());
+
+        // Proposition du coach non validée : ELLE SEULE.
+        currentUser={id:'a',email:'a@t.fr',exAlias:{},exMuscles:{},sessions:[],bilans:[],
+          objectif:{id:'o1',type:'poids',libelle:'',valeurDepart:90,valeurCible:85,unite:'kg',
+            dateDebut:Date.now(),dateEcheance:Date.now()+84*864e5,
+            processus:{seancesParSemaine:4},statut:'actif'}};
+        _renderObjectifCarte();
+        ok('Sans validePar : seule la proposition du coach apparaît',
+           /Proposition de ton coach/.test(z.innerHTML)&&!/semaines restantes/.test(z.innerHTML));
+        ok('La proposition porte les deux boutons',
+           /J'accepte/.test(z.innerHTML.replace(/&#39;/g,"'"))&&/Ajuster/.test(z.innerHTML));
+        ok('La proposition annonce les séances',/Plus 4 séances par semaine/.test(z.innerHTML));
+        _accepterObjectifCoach&&0;
+        currentUser.objectif.validePar='athlete';
+        _renderObjectifCarte();
+        ok('Une fois acceptée, la carte active remplace la proposition',
+           !/Proposition de ton coach/.test(z.innerHTML)&&/semaines restantes/.test(z.innerHTML));
+        ok('La carte porte la ligne des séances de la semaine',
+           /Cette semaine : \d+ séances sur \d+/.test(z.innerHTML));
+
+        // Échéance dépassée.
+        currentUser.objectif.dateEcheance=Date.now()-864e5;
+        _renderObjectifCarte();
+        ok('Échéance dépassée : on propose de refixer',
+           /arrivé à échéance/.test(z.innerHTML)&&/Refixer/.test(z.innerHTML));
+        ok('Le mot « échec » n\'apparaît nulle part',!/échec/i.test(z.innerHTML));
+
+        // Objectif atteint.
+        currentUser.objectif.dateEcheance=Date.now()+84*864e5;
+        currentUser.weightLog=[{date:localISODate(new Date()),kg:84}];
+        _renderObjectifCarte();
+        ok('Cible atteinte : la carte le dit',
+           /Objectif atteint\. On en fixe un nouveau \?/.test(z.innerHTML));
+
+        // Garde-fou TCA : aucune valeur chiffrée affichée.
+        currentUser={id:'a',email:'a@t.fr',exAlias:{},exMuscles:{},sessions:[],
+          bilans:[{type:'depart','deb-tca':'anorexie'}],
+          objectif:{id:'o1',type:'assiduite',libelle:'être là',valeurDepart:0,valeurCible:3,
+            unite:'seances/semaine',dateDebut:Date.now(),dateEcheance:Date.now()+84*864e5,
+            processus:{seancesParSemaine:3},statut:'actif',validePar:'athlete',masqueValeurs:true}};
+        _renderObjectifCarte();
+        ok('Mode neutre : aucune barre ni pourcentage',
+           !/%<\/div>/.test(z.innerHTML)&&!/width:\d+%/.test(z.innerHTML));
+        z.innerHTML=garde;
+      }
+      currentUser=sauveU; _objSaisie=sauveS;
+    })();
+
+    // ── Blocage du bouton Suivant ──
+    (function(){
+      const sauveU=currentUser, sauveS=_objSaisie;
+      currentUser={id:'a',email:'a@t.fr',exAlias:{},exMuscles:{},sessions:[],bilans:[],
+        sessions_config:[{active:true},{active:true},{active:true}]};
+      _objSaisie={type:'poids',libelle:'',depart:'90',cible:'78',jours:42,seances:3,
+        slot:'',prog:'',alerteVue:false};
+      ok('Vitesse excessive : Suivant est bloqué',_objAlerteBloquante()===true);
+      ok('L\'avertissement propose les deux issues',(()=>{
+        const h=htmlEtapeObjectif(currentUser,true);
+        return /Rallonger/.test(h)&&/Je garde quand même/.test(h);})());
+      _objGarder();
+      ok('« Je garde quand même » débloque',_objAlerteBloquante()===false);
+      _objSaisie.alerteVue=false; _objRallonger();
+      ok('« Rallonger » ajoute quatre semaines',_objSaisie.jours===70);
+      _objSaisie={type:'poids',libelle:'',depart:'90',cible:'85',jours:84,seances:3,
+        slot:'',prog:'',alerteVue:false};
+      ok('Vitesse raisonnable : rien ne bloque',_objAlerteBloquante()===false);
+      ok('Type assiduité : jamais bloquant',(()=>{
+        _objSaisie.type='assiduite'; return _objAlerteBloquante()===false;})());
+      currentUser=sauveU; _objSaisie=sauveS;
+    })();
+
+    // ── Débutant sans historique de charge ──
+    ok('Sans exercice au programme, on ne demande pas de charge cible',(()=>{
+      const sauveU=currentUser, sauveS=_objSaisie;
+      currentUser={id:'a',email:'a@t.fr',exAlias:{},exMuscles:{},sessions:[],bilans:[],sessions_config:[]};
+      _objSaisie={type:'charge',libelle:'',depart:'',cible:'',jours:84,seances:3,slot:'',prog:'',alerteVue:false};
+      const h=htmlEtapeObjectif(currentUser,true);
+      currentUser=sauveU; _objSaisie=sauveS;
+      return /On fixera une charge cible après tes 3 premières séances/.test(h)
+        &&/l'objectif c'est d'y aller/.test(h.replace(/&#39;/g,"'"));})());
+
+    // ── Textes du cahier des charges, mot pour mot ──
+    ok('Les libellés imposés sont présents',(()=>{
+      const sauveU=currentUser, sauveS=_objSaisie;
+      currentUser={id:'a',email:'a@t.fr',exAlias:{},exMuscles:{},sessions:[],bilans:[],
+        sessions_config:[{active:true}]};
+      _objSaisie={type:'poids',libelle:'',depart:'90',cible:'85',jours:84,seances:3,
+        slot:'',prog:'',alerteVue:false};
+      const h=htmlEtapeObjectif(currentUser,true).replace(/&#39;/g,"'");
+      currentUser=sauveU; _objSaisie=sauveS;
+      return /Ton objectif/.test(h)
+        &&/Un seul objectif à la fois\. Chiffré, avec une date\./.test(h)
+        &&/Ton poids cible/.test(h)&&/Pour quand \?/.test(h)
+        &&/6 semaines/.test(h)&&/12 semaines/.test(h)&&/24 semaines/.test(h)
+        &&/Combien de séances par semaine t'engages-tu à faire \?/.test(h)
+        &&/C'est le seul chiffre que tu contrôles entièrement\. C'est celui qui compte\./.test(h);})());
+    ok('Le mot « échec » n\'existe nulle part dans le lot objectif',
+       !/échec/i.test(String(htmlEtapeObjectif)+String(_renderObjectifCarte)+String(_htmlSansObjectif)));
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
