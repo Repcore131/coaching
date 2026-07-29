@@ -1454,6 +1454,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="ccd-bilans"></div>
       <div id="ccd-volume"></div>
       <div id="ccd-plateaux"></div>
+      <div id="ccd-douleur"></div>
       <div id="ccd-phase"></div>
       <div id="ccd-forme"></div>
       <div id="ccd-poids"></div>
@@ -1768,6 +1769,9 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="metric-box"><div class="metric-val" id="clh-streak-nb" style="color:var(--red)">0</div><div class="metric-label">Semaines</div></div>
         <div class="metric-box"><div class="metric-val" id="clh-weight">—</div><div class="metric-label">Poids kg</div></div>
       </div>
+
+      <!-- DOULEUR SIGNALÉE -->
+      <div id="clh-douleur"></div>
 
       <!-- PHASE -->
       <div id="clh-bandeau-phase"></div>
@@ -5371,26 +5375,305 @@ function qNext(){
 function qPrev(){if(qStep>0){qStep--;renderQ();}}
 
 // ======= COACH HOME =======
-function isAlertSnoozed(type,clientId,latestBilanTs){
+// Types d'alerte portant sur la SANTÉ. Leur report obéit à deux règles que les
+// alertes administratives n'ont pas :
+//   — il ne peut jamais dépasser sept jours, même si une valeur plus lointaine
+//     a été écrite. Un coach peut décider de ne pas agir ; il ne doit pas
+//     pouvoir faire disparaître définitivement une alerte de santé d'un clic.
+//   — une aggravation le casse immédiatement.
+const ALERTES_SANTE=Object.freeze(['douleur','douleurdiff']);
+const REPORT_SANTE_MAX=7*864e5;
+function _pireDouleur(c){
+  const sg=signauxEntrainement(c);
+  return Math.max(
+    (sg.details&&sg.details.douleur&&sg.details.douleur.painMax)||0,
+    (sg.details&&sg.details.douleurDiffuse&&sg.details.douleurDiffuse.painMax)||0);
+}
+function isAlertSnoozed(type,clientId,latestBilanTs,client){
   const st=(currentUser.alertStatus||{})[type+'-'+clientId];
   if(!st) return false;
   if(st.until&&Date.now()>=st.until) return false;
   if(type==='bilan'&&latestBilanTs&&st.seenUpTo&&latestBilanTs>st.seenUpTo) return false;
+  if(ALERTES_SANTE.includes(type)){
+    // Plafond appliqué à la LECTURE et non seulement à l'écriture : une entrée
+    // écrite autrement, ou par une version future du code, reste bornée.
+    // Sans horodatage de report, l'entrée n'est PAS un report valable — sinon
+    // il suffisait d'écrire un « until » lointain sans « at » pour enterrer
+    // définitivement une alerte de santé. reporterAlerte écrit toujours « at ».
+    if(!st.at||Date.now()>=st.at+REPORT_SANTE_MAX) return false;
+    if(client&&st.painMax!=null&&_pireDouleur(client)>st.painMax) return false;
+  }
   return true;
+}
+// Report d'un athlète pour un type donné. Extrait de dismissTodoRow pour que
+// la ligne par athlète et la ligne groupée écrivent exactement la même chose.
+function reporterAlerte(type,c){
+  if(!currentUser.alertStatus) currentUser.alertStatus={};
+  const lt=(c.bilans||[]).reduce((m,b)=>Math.max(m,b.date),0);
+  const st={s:'ignoré',until:Date.now()+7*864e5,at:Date.now(),
+    seenUpTo:type==='bilan'?lt:0};
+  if(ALERTES_SANTE.includes(type)){
+    // Niveau de douleur au moment du report : sans cette référence,
+    // « passer de 4 à 6 » n'est pas détectable.
+    st.painMax=_pireDouleur(c);
+    if(!currentUser.journalDouleur) currentUser.journalDouleur=[];
+    currentUser.journalDouleur.push({at:Date.now(),type,clientId:c.id,painMax:st.painMax});
+    // Journal borné : c'est une trace, pas un historique complet.
+    if(currentUser.journalDouleur.length>200)
+      currentUser.journalDouleur=currentUser.journalDouleur.slice(-200);
+  }
+  currentUser.alertStatus[type+'-'+c.id]=st;
 }
 function dismissTodoRow(idx){
   const r=window._todoRows&&window._todoRows[idx];if(!r) return;
-  if(!currentUser.alertStatus) currentUser.alertStatus={};
-  const until=Date.now()+7*864e5;
-  r.list.forEach(c=>{
-    const lt=(c.bilans||[]).reduce((m,b)=>Math.max(m,b.date),0);
-    currentUser.alertStatus[r.type+'-'+c.id]={s:'ignoré',until,seenUpTo:r.type==='bilan'?lt:0};
-  });
+  r.list.forEach(c=>reporterAlerte(r.type,c));
   saveUser();
   renderTodoBlock(getClients());
 }
+
+// ══════════════ SIGNAUX D'ENTRAÎNEMENT ══════════════
+// Le tableau de bord triait sur six signaux dont AUCUN ne parlait
+// d'entraînement : bilan en retard, accès qui expire, inscrit qui n'a jamais
+// commencé. La douleur par série était collectée depuis toujours, colorait la
+// ligne pendant la séance, et ne remontait nulle part.
+//
+// Ces signaux DÉCRIVENT, ils ne décident pas : aucune modification de
+// programme, aucune charge réduite, aucun exercice retiré automatiquement.
+// Retirer un exercice sur la foi d'un chiffre de 1 à 6 serait une décision de
+// coaching prise par un algorithme.
+const SIG_PAIN_SEUIL=4;
+const SIG_SEANCES=3;              // fenêtre « les trois dernières séances »
+const SIG_DOULEUR_MIN_SEANCES=2;  // la sécurité n'attend pas un échantillon
+const SIG_DIFFUS_JOURS=14;
+const SIG_DIFFUS_MIN=5;
+const SIG_DECROCHAGE=0.70;
+const SIG_FORME_ECART=1.5;
+const SIG_MEV_SEMAINES_CANDIDAT=4;// recul servant à savoir si le muscle est travaillé
+const SIG_DOULEUR_JOURS=30;       // bloc « douleur » de la fiche client
+
+// Disclaimer unique, réutilisé partout où une douleur est affichée — coach
+// comme athlète. Une seule constante : impossible d'ajouter un affichage de
+// douleur en oubliant l'avertissement, il suffit de le concaténer.
+const DISCLAIMER_DOULEUR='L\'échelle de douleur est déclarative. Elle n\'est ni un diagnostic ni un avis médical. Une douleur qui persiste ou qui s\'aggrave doit être évaluée par un professionnel de santé.';
+function blocDisclaimerDouleur(){
+  return `<div style="font-size:10px;color:var(--text-faint);line-height:1.6;margin-top:8px">${DISCLAIMER_DOULEUR}</div>`;
+}
+
+// Muscles en plateau. Extrait de renderPlateauxCoach pour être partagé avec
+// signauxEntrainement : la logique contient un piège qu'il ne faut pas
+// réécrire deux fois. Le verdict est construit à partir de la liste DÉJÀ
+// calculée par _listeEtats, et non par un appel à etatMuscle : celui-ci exige
+// un créneau, et _memeCreneau rejette TOUTES les séances quand slot et
+// progName sont nuls. Chaque exercice porte déjà le créneau où il a été vu.
+function musclesEnPlateau(c){
+  const parMuscle={};
+  for(const x of _listeEtats(c)){
+    if(x.etat==='insuffisant') continue;
+    const cls=resoudreMusclesLecture(x.nom,{name:x.nom},c);
+    if(!cls||cls===VOL_CARDIO) continue;
+    for(const m of (cls.p||[])) (parMuscle[m]=parMuscle[m]||[]).push(x);
+  }
+  const out=[];
+  for(const m in parMuscle){
+    const ex=parMuscle[m];
+    if(ex.filter(e=>e.etat==='plateau'||e.etat==='regression').length>=2) out.push({m,exercices:ex});
+  }
+  return out;
+}
+
+// Séries à douleur déclarée d'une séance. La série n'a pas besoin d'être
+// validée : une douleur saisie est une douleur saisie, et l'ignorer parce que
+// la case « fait » est restée vide irait dans le mauvais sens.
+function _seriesDouloureuses(sess){
+  const out=[];
+  if(!sess||!sess.data) return out;
+  for(const nom of Object.keys(sess.data)){
+    const d=sess.data[nom];
+    for(const s of ((d&&d.sets)||[])){
+      const p=parseInt(s&&s.pain,10);
+      if(isFinite(p)&&p>=SIG_PAIN_SEUIL) out.push({nom,pain:p});
+    }
+  }
+  return out;
+}
+// Clés des n dernières semaines ISO RÉVOLUES. La semaine en cours est exclue :
+// le lundi matin elle est vide, et tout le monde serait sous son MEV.
+function _semainesRevolues(n){
+  const out=[], lundi=_lundiDe(new Date());
+  for(let i=1;i<=n;i++){
+    const d=new Date(lundi); d.setDate(d.getDate()-7*i);
+    out.push(semaineISO(d));
+  }
+  return out;
+}
+// Douleur des trente derniers jours, par exercice. Sert au bloc de la fiche
+// client et au détail des alertes.
+function douleurParExercice(c,jours){
+  const limite=Date.now()-(jours||SIG_DOULEUR_JOURS)*864e5;
+  const parEx={};
+  for(const sess of ((c&&c.sessions)||[])){
+    if(!sess||!(sess.date>=limite)) continue;
+    for(const x of _seriesDouloureuses(sess)){
+      const e=parEx[x.nom]=parEx[x.nom]||{nom:x.nom,n:0,painMax:0,derniere:0};
+      e.n++; e.painMax=Math.max(e.painMax,x.pain);
+      e.derniere=Math.max(e.derniere,sess.date);
+    }
+  }
+  return Object.values(parEx).sort((a,b)=>b.n-a.n||b.derniere-a.derniere);
+}
+
+const _cacheSignaux=new Map();
+function _viderCacheSignaux(){ _cacheSignaux.clear(); }
+const SIGNAUX_VIDES=Object.freeze({douleur:false,douleurDiffuse:false,decrochage:false,
+  plateauMuscle:false,sousMEV:false,formeBasse:false,details:Object.freeze({})});
+
+function signauxEntrainement(c){
+  // Invité non inscrit : aucun historique d'entraînement chez le coach, donc
+  // aucun signal. Cohérent avec les exclusions déjà présentes d'urgencyScore.
+  if(!c||c._fromCode) return SIGNAUX_VIDES;
+  const ss=(c.sessions||[]).filter(s=>s&&s.date);
+  const tri=ss.slice().sort((a,b)=>a.date-b.date);
+  const der=tri.slice(-SIG_SEANCES);
+  // La clé porte une empreinte du CONTENU douleur des trois dernières séances,
+  // et pas seulement (identifiant, nombre, date). Sans elle, deux historiques
+  // de même longueur et de même date finale partagent une entrée de cache —
+  // et une douleur qui passe de 4 à 6 dans une séance corrigée ou resynchronisée
+  // reste invisible. C'est exactement le cas que la règle d'aggravation doit
+  // rattraper : le cache ne doit pas la masquer. Coût borné à trois séances.
+  let emp='';
+  for(const sess of der){
+    const l=_seriesDouloureuses(sess);
+    emp+=';'+(sess.id||sess.date)+':'+l.length+':'+l.reduce((m,x)=>Math.max(m,x.pain),0);
+  }
+  const cle=c.id+'|'+ss.length+'|'+(ss.length?tri[tri.length-1].date:0)+'|'+emp;
+  if(_cacheSignaux.has(cle)) return _cacheSignaux.get(cle);
+  const r={douleur:false,douleurDiffuse:false,decrochage:false,
+    plateauMuscle:false,sousMEV:false,formeBasse:false,details:{}};
+  if(!ss.length){ _cacheSignaux.set(cle,r); return r; }
+
+  // ── Douleur ciblée : même exercice, au moins deux séries ET deux séances ──
+  if(tri.length>=SIG_DOULEUR_MIN_SEANCES){
+    const parEx={};
+    for(const sess of der){
+      const vues=new Set();
+      for(const x of _seriesDouloureuses(sess)){
+        const e=parEx[x.nom]=parEx[x.nom]||{nom:x.nom,series:0,seances:0,painMax:0,dates:[]};
+        e.series++; e.painMax=Math.max(e.painMax,x.pain);
+        if(!vues.has(x.nom)){ vues.add(x.nom); e.seances++; e.dates.push(sess.date); }
+      }
+    }
+    const touches=Object.values(parEx)
+      .filter(e=>e.series>=2&&e.seances>=SIG_DOULEUR_MIN_SEANCES)
+      .sort((a,b)=>b.painMax-a.painMax||b.seances-a.seances);
+    if(touches.length){
+      r.douleur=true;
+      r.details.douleur=touches[0];
+      r.details.douleurTous=touches;
+    }
+  }
+
+  // ── Douleur diffuse : exercices confondus, sur quatorze jours ──
+  const limite=Date.now()-SIG_DIFFUS_JOURS*864e5;
+  let nDiffus=0, painMaxDiffus=0; const exDiffus=new Set();
+  for(const sess of tri){
+    if(!(sess.date>=limite)) continue;
+    for(const x of _seriesDouloureuses(sess)){
+      nDiffus++; exDiffus.add(x.nom); painMaxDiffus=Math.max(painMaxDiffus,x.pain);
+    }
+  }
+  if(nDiffus>=SIG_DIFFUS_MIN){
+    r.douleurDiffuse=true;
+    r.details.douleurDiffuse={series:nDiffus,exercices:[...exDiffus],
+      jours:SIG_DIFFUS_JOURS,painMax:painMaxDiffus};
+  }
+
+  // ── Décrochage d'exécution ──
+  // Les séances antérieures au champ setsPlanned sont EXCLUES : un « 5 » sans
+  // prévu ne dit pas s'il vaut 5 sur 5 ou 5 sur 12.
+  if(tri.length>=SIG_SEANCES){
+    const evaluables=der.filter(s=>Number(s.setsPlanned)>0);
+    if(evaluables.length){
+      let faits=0,prevus=0;
+      for(const s of evaluables){ faits+=(parseInt(s.sets,10)||0); prevus+=Number(s.setsPlanned); }
+      if(prevus>0&&(faits/prevus)<SIG_DECROCHAGE){
+        r.decrochage=true;
+        r.details.decrochage={faits,prevus,seances:evaluables.length,
+          ratio:Math.round(faits/prevus*100)/100};
+      }
+    }
+  }
+
+  // ── Signaux de niveau 6 : jamais calculés si un niveau supérieur est acquis ──
+  // Ce n'est pas une approximation. Un signal de niveau 6 ne peut pas dépasser
+  // un 7, 8 ou 9 déjà obtenu : le classement est identique, et on épargne le
+  // parcours complet de l'historique pour les athlètes déjà en tête.
+  if(r.douleur||r.douleurDiffuse||r.decrochage){ _cacheSignaux.set(cle,r); return r; }
+
+  try{
+    const mus=musclesEnPlateau(c);
+    if(mus.length){
+      r.plateauMuscle=true;
+      const x=mus[0];
+      r.details.plateauMuscle={muscle:x.m,
+        lib:(MUSCLES[x.m]||{}).lib||x.m,
+        bloques:x.exercices.filter(e=>e.etat==='plateau'||e.etat==='regression').length,
+        semaines:Math.max(0,Math.floor(Math.max(...x.exercices.map(e=>e.joursDepuisRecord||0))/7))};
+    }
+  }catch(e){}
+
+  try{
+    const [s1,s2]=_semainesRevolues(2);
+    const recentes=_semainesRevolues(SIG_MEV_SEMAINES_CANDIDAT);
+    const v1=volumeSemaine(c,s1)||{}, v2=volumeSemaine(c,s2)||{};
+    // Muscle CANDIDAT : travaillé au moins une fois sur les quatre dernières
+    // semaines révolues. Sans ce filtre, un débutant qui ne fait que du haut
+    // du corps serait signalé « sous MEV » sur douze muscles qu'il n'a jamais
+    // eu l'intention de travailler.
+    const candidats=new Set();
+    for(const cle2 of recentes){
+      const v=volumeSemaine(c,cle2)||{};
+      for(const m in v) if(v[m]>0) candidats.add(m);
+    }
+    for(const m of candidats){
+      const rep=reperesEffectifs(c,m);
+      if(!rep) continue;
+      if((v1[m]||0)<rep.mev&&(v2[m]||0)<rep.mev){
+        r.sousMEV=true;
+        r.details.sousMEV={muscle:m,lib:(MUSCLES[m]||{}).lib||m,
+          mev:rep.mev,s1:v1[m]||0,s2:v2[m]||0,semaines:[s1,s2]};
+        break;
+      }
+    }
+  }catch(e){}
+
+  try{
+    if(tri.length>=SIG_SEANCES){
+      const moy=formeMoy3(c), base=baseForme(c);
+      if(moy!=null&&base!=null&&moy<=base-SIG_FORME_ECART){
+        r.formeBasse=true;
+        r.details.formeBasse={moy:Math.round(moy*10)/10,base:Math.round(base*10)/10,
+          ecart:Math.round((base-moy)*10)/10};
+      }
+    }
+  }catch(e){}
+
+  _cacheSignaux.set(cle,r);
+  return r;
+}
+
 function urgencyScore(c){
   const lt=(c.bilans||[]).reduce((m,b)=>Math.max(m,b.date),0);
+  // ── Signaux d'entraînement, au-dessus de l'échelle administrative ──
+  // La santé passe avant l'intendance : une douleur répétée prime sur un bilan
+  // en retard, ce qui n'était pas le cas — l'entraînement ne pesait rien du
+  // tout dans ce tri. Les branches 1 à 5 ci-dessous sont INCHANGÉES, elles ne
+  // sont que repoussées d'un cran, et une batterie de non-régression le
+  // vérifie sur les six cas d'origine.
+  const sg=signauxEntrainement(c);
+  if(sg.douleur&&!isAlertSnoozed('douleur',c.id,0,c)) return 9;
+  if(sg.douleurDiffuse&&!isAlertSnoozed('douleurdiff',c.id,0,c)) return 8;
+  if(sg.decrochage&&!isAlertSnoozed('decrochage',c.id)) return 7;
+  if((sg.plateauMuscle||sg.formeBasse||sg.sousMEV)&&!isAlertSnoozed('entrainement',c.id)) return 6;
   // Même priorité que « nouveau bilan » : les deux sont mutuellement exclusifs
   // (hasNewBilan exige au moins un bilan, neverStarted exige aucun), pas d'égalité possible.
   if(neverStarted(c)&&!isAlertSnoozed('nostart',c.id)) return 5;
@@ -5502,6 +5785,18 @@ function _waTexteTodo(type,c){
   }
   if(type==='bilan') return 'Salut '+p+', j\'ai bien reçu ton bilan, je le regarde et je reviens vers toi rapidement 💪';
   if(type==='noprog') return 'Salut '+p+', je prépare ton programme, je te l\'envoie très vite 💪';
+  // Signaux d'entraînement. Ces messages POSENT UNE QUESTION et ne donnent
+  // aucun conseil : ni « arrête cet exercice », ni « baisse la charge », ni
+  // quoi que ce soit qui ressemble à un avis médical. C'est au coach d'écrire
+  // la suite, le texte n'est qu'une amorce qu'il relit avant d'envoyer.
+  if(type==='douleur'||type==='douleurdiff')
+    return 'Salut '+p+', je vois que tu as noté de la douleur sur tes dernières séances. '
+      +'Dis-moi où exactement et à quel moment ça se déclenche, qu\'on en parle avant ta prochaine séance 💪';
+  if(type==='decrochage')
+    return 'Salut '+p+', je vois que tes dernières séances n\'ont pas été terminées. '
+      +'Dis-moi ce qui bloque : le temps, la fatigue, un exercice en particulier ? 💪';
+  if(type==='entrainement')
+    return 'Salut '+p+', ta progression marque le pas en ce moment. On regarde ça ensemble ? 💪';
   return 'Salut '+p+' 💪';
 }
 // Corps GÉNÉRIQUE pour l'envoi groupé : ni prénom, ni compteur de jours.
@@ -5658,6 +5953,139 @@ function renderClientList(clients){
   if(pan&&scr) pan.scrollTop=scr;
   return vus.length;
 }
+
+// ── Lignes d'alerte d'entraînement ──────────────────────────────────────────
+// Les cinq lignes administratives sont GROUPÉES par type (« 3 bilans à lire ·
+// Marc, Julie +1 »). Les signaux d'entraînement ne peuvent pas l'être : chacun
+// porte une donnée propre à l'athlète — un nom d'exercice, des chiffres, un
+// muscle. Une ligne par athlète, donc, au-dessus des lignes groupées.
+const TODO_MAX_LIGNES=8;
+// Rappel de la contre-indication à côté d'une alerte de douleur. C'est le
+// croisement que contreIndications permettait depuis toujours sans avoir
+// jamais été fait : le coach lisait « douleur épaule » d'un côté et « épaule
+// droite opérée en 2023 » de l'autre, sans que rien ne les rapproche.
+function _rappelContreIndication(c){
+  let ci=[];
+  try{ ci=contreIndications(c.bilans); }catch(e){ ci=[]; }
+  if(!ci.length) return '';
+  return ' Contre-indication au dossier : '+ci.map(x=>x.txt).join(' · ')+'.';
+}
+function _texteSignal(type,c,sg){
+  const d=(sg&&sg.details)||{};
+  if(type==='douleur'&&d.douleur){
+    const x=d.douleur;
+    return 'douleur déclarée '+x.painMax+'/6 sur '+x.nom+', '+x.seances+' séances sur les 3 dernières.'
+      +_rappelContreIndication(c);
+  }
+  if(type==='douleurdiff'&&d.douleurDiffuse){
+    const x=d.douleurDiffuse;
+    return x.series+' séries douloureuses sur '+x.jours+' jours, '+x.exercices.length
+      +' exercice'+(x.exercices.length>1?'s':'')+' concerné'+(x.exercices.length>1?'s':'')+'.'
+      +_rappelContreIndication(c);
+  }
+  if(type==='decrochage'&&d.decrochage){
+    const x=d.decrochage;
+    return x.faits+' séries réalisées sur '+x.prevus+' prévues sur les '+x.seances+' dernières séances.';
+  }
+  if(type==='entrainement'){
+    if(d.plateauMuscle) return d.plateauMuscle.lib.toLowerCase()+' en plateau : '
+      +d.plateauMuscle.bloques+' exercices sans nouveau maximum depuis '
+      +d.plateauMuscle.semaines+' semaines.';
+    if(d.formeBasse) return 'forme déclarée à '+d.formeBasse.moy+'/10, contre '
+      +d.formeBasse.base+' habituellement.';
+    if(d.sousMEV) return d.sousMEV.lib.toLowerCase()+' sous le volume minimum deux semaines de suite ('
+      +volAffiche(d.sousMEV.s1)+' et '+volAffiche(d.sousMEV.s2)+' séries pour un minimum de '
+      +volAffiche(d.sousMEV.mev)+').';
+  }
+  return '';
+}
+// Lignes par athlète, dans l'ordre de priorité. Un athlète n'apparaît qu'une
+// fois : son signal le plus grave. Sinon un athlète qui cumule douleur,
+// décrochage et plateau occuperait trois des huit lignes à lui seul.
+function _lignesEntrainement(clients){
+  const out=[], vus=new Set();
+  const NIV=[
+    {type:'douleur',    cle:'douleur',       icon:'🩹',color:'var(--red)',   lib:'Douleur répétée'},
+    {type:'douleurdiff',cle:'douleurDiffuse',icon:'🩹',color:'var(--red)',   lib:'Douleurs diffuses'},
+    {type:'decrochage', cle:'decrochage',    icon:'📉',color:'var(--orange)',lib:'Séances écourtées'},
+    {type:'entrainement',cle:null,           icon:'⚠️',color:'var(--orange)',lib:'Progression bloquée'}
+  ];
+  for(const n of NIV){
+    for(const c of clients){
+      if(vus.has(c.id)) continue;
+      let sg; try{ sg=signauxEntrainement(c); }catch(e){ continue; }
+      const actif=n.cle?sg[n.cle]:(sg.plateauMuscle||sg.formeBasse||sg.sousMEV);
+      if(!actif) continue;
+      if(isAlertSnoozed(n.type,c.id,0,c)) continue;
+      const txt=_texteSignal(n.type,c,sg);
+      if(!txt) continue;
+      vus.add(c.id);
+      out.push({type:n.type,icon:n.icon,color:n.color,label:n.lib,list:[c],
+        texte:txt,sante:ALERTES_SANTE.includes(n.type)});
+    }
+  }
+  return out;
+}
+
+
+// ── Bloc « Douleur » de la fiche client ─────────────────────────────────────
+// Trente jours d'historique, par exercice, trié par nombre d'occurrences. La
+// donnée existait depuis toujours dans sessions[n].data et ne remontait nulle
+// part : elle colorait la ligne pendant la séance, puis disparaissait.
+function blocDouleurCoach(c){
+  const l=douleurParExercice(c,SIG_DOULEUR_JOURS);
+  if(!l.length) return '';
+  const dat=t=>t?new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}):'—';
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:16px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:9px">
+      <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Douleur · 30 jours</span>
+      <span style="font-size:10px;color:var(--text-faint)">niveau 4 et plus</span>
+    </div>
+    ${l.map(x=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px">
+      <span style="font-size:11px;font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nom)}</span>
+      <span style="font-size:10px;color:var(--sub);white-space:nowrap;flex-shrink:0">${x.n} série${x.n>1?'s':''} · max ${x.painMax}/6 · ${dat(x.derniere)}</span>
+    </div>`).join('')}
+    ${blocDisclaimerDouleur()}
+  </div>`;
+}
+function renderDouleurCoach(c){
+  const z=document.getElementById('ccd-douleur');
+  if(!z) return;
+  let html='';
+  try{ html=c?blocDouleurCoach(c):''; }catch(e){ html=''; }
+  z.innerHTML=html;
+}
+
+// ── Carte athlète ───────────────────────────────────────────────────────────
+// Symétrie obligatoire : alerter le coach sans rien dire à l'athlète serait
+// incohérent. On lui dit ce qu'il a lui-même saisi, on lui dit de ne pas
+// forcer, et on lui donne le lien pour joindre son coach. Aucun conseil
+// médical, aucune modification de son programme.
+function blocDouleurAthlete(user){
+  let sg; try{ sg=signauxEntrainement(user); }catch(e){ return ''; }
+  if(!sg.douleur||!sg.details.douleur) return '';
+  const x=sg.details.douleur;
+  const href=_coachContactHref(user&&user.coachId,
+    'Salut, j\'ai ressenti de la douleur sur '+x.nom+' lors de mes dernières séances.');
+  return `<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:12px;padding:13px;margin-bottom:14px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--warning);text-transform:uppercase;margin-bottom:7px">Douleur signalée</div>
+    <div style="font-size:12px;color:#eee;line-height:1.6">
+      Tu as signalé une douleur sur <b>${escapeHtml(x.nom)}</b> lors de tes ${x.seances} dernières séances.
+      Ne force pas dessus. Préviens ton coach.
+    </div>
+    ${href?`<a href="${safeUrl(href)}" target="_blank" rel="noopener" class="btn btn-outline btn-sm"
+      style="display:inline-flex;align-items:center;justify-content:center;margin-top:10px;letter-spacing:1px;font-size:10px;text-decoration:none">Contacter mon coach</a>`:''}
+    ${blocDisclaimerDouleur()}
+  </div>`;
+}
+function renderDouleurAthlete(){
+  const z=document.getElementById('clh-douleur');
+  if(!z) return;
+  let html='';
+  try{ html=currentUser?blocDouleurAthlete(currentUser):''; }catch(e){ html=''; }
+  z.innerHTML=html;
+}
+
 function renderTodoBlock(clients){
   const el=document.getElementById('ch-todo');if(!el) return;
   const now=Date.now(),SOON=14*864e5;
@@ -5667,29 +6095,48 @@ function renderTodoBlock(clients){
   const expiring=clients.filter(c=>!c._fromCode&&c.status==='COACHING_SUIVI'&&c.accessExpiry&&(c.accessExpiry-now)>0&&(c.accessExpiry-now)<SOON&&!isAlertSnoozed('expiring',c.id));
   const noProg=clients.filter(c=>!c._fromCode&&!hasProgram(c)&&(c.bilans||[]).some(b=>b.type==='depart')&&!isAlertSnoozed('noprog',c.id));
   const noStart=clients.filter(c=>neverStarted(c)&&!isAlertSnoozed('nostart',c.id));
-  const rows=[];
-  // En tête : relancer un inscrit qui n'a jamais démarré prime sur tout le reste.
+  // Les signaux d'entrainement d'abord : la sante avant l'intendance.
+  const rows=_lignesEntrainement(clients);
+  // En tête des lignes administratives : relancer un inscrit qui n'a jamais démarré prime sur tout le reste.
   if(noStart.length) rows.push({type:'nostart',icon:'🆕',color:'var(--red)',label:'Inscrit, n\'a jamais commencé',list:noStart});
   if(newBil.length) rows.push({type:'bilan',icon:'📥',color:'var(--orange)',label:'Nouveau'+(newBil.length>1?'x bilans à lire':' bilan à lire'),list:newBil});
   if(overdue.length) rows.push({type:'overdue',icon:icon('alert-triangle',15),color:'var(--red)',label:'Bilan'+(overdue.length>1?'s':'')+' en retard',list:overdue});
   if(expiring.length) rows.push({type:'expiring',icon:'⏳',color:'var(--orange)',label:'Accès expire dans <14j',list:expiring});
   if(noProg.length) rows.push({type:'noprog',icon:'📋',color:'var(--sub)',label:'Sans programme',list:noProg});
-  window._todoRows=rows;
-  if(!rows.length){el.innerHTML='';return;}
+  if(!rows.length){ window._todoRows=[]; el.innerHTML=''; return; }
+  // Un tableau de bord qui affiche trente alertes n'oriente plus rien. Les
+  // lignes sont deja triees par gravite : on coupe la queue et on l'annonce.
+  const restant=Math.max(0,rows.length-TODO_MAX_LIGNES);
+  const vues=rows.slice(0,TODO_MAX_LIGNES);
+  window._todoRows=vues;
   const unique=new Set(rows.flatMap(r=>r.list.map(c=>c.id))).size;
+  // Le disclaimer est rendu des qu'une ligne de douleur est visible, et il
+  // vient de la constante unique partagee avec les deux autres affichages.
+  const aDouleur=vues.some(r=>r.sante);
   el.innerHTML=`<div style="background:#0c0000;border:1px solid #2a0000;border-radius:4px;margin-bottom:20px;overflow:hidden">
     <div style="padding:9px 14px;display:flex;align-items:center;justify-content:space-between;background:#0f0000;border-bottom:1px solid #1e0000">
       <span style="font-size:var(--fs-xs);font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:2px">⚡ À traiter</span>
       <span style="background:var(--red);color:#fff;font-size:11px;font-weight:900;padding:1px 8px;border-radius:10px;font-family:'Bebas Neue',sans-serif;letter-spacing:1px">${unique}</span>
     </div>
-    ${renderDataList(rows,(r,idx)=>{
+    ${renderDataList(vues,(r,idx)=>{
       // XSS stocké : le prénom est saisi par l'athlète lui-même et atterrissait
       // brut dans le tableau de bord de son coach. Trouvé en testant les liens
       // WhatsApp avec un prénom hostile — le défaut est antérieur.
       const names=r.list.slice(0,2).map(c=>escapeHtml(c.fname||'')).join(', ')+(r.list.length>2?' +'+(r.list.length-2):'');
-      return{html:`<span style="font-size:15px;flex-shrink:0">${r.icon}</span><div style="flex:1;min-width:0"><span style="font-size:12px;font-weight:700;color:#fff">${r.list.length>1?r.list.length+' ':''}</span><span style="font-size:12px;font-weight:700;color:${r.color}">${r.label}</span><span style="font-size:11px;color:var(--sub)"> · ${names}</span></div>${_waBoutonTodo(r,idx)}<button onclick="event.stopPropagation();dismissTodoRow(${idx})" title="Snoozer 7 jours" style="background:none;border:none;color:var(--text-dim);font-size:15px;cursor:pointer;padding:4px 8px;flex-shrink:0;transition:color .15s;border-radius:4px" onmouseover="this.style.color='var(--sub)'" onmouseout="this.style.color='#444'">✕</button>`,
+      // Ligne d'entrainement : elle porte un nom d'athlete et SA donnee, pas
+      // un groupe. Le corps differe donc de celui des lignes administratives,
+      // qui restent rendues exactement comme avant.
+      const _n0=r.list[0]||{};
+      const _ini=(_n0.lname||'').charAt(0);
+      const nomA=escapeHtml(((_n0.fname||'')+(_ini?' '+_ini+'.':'')).trim()||'Athlète');
+      const corps=r.texte
+        ? `<div style="flex:1;min-width:0"><span style="font-size:12px;font-weight:800;color:#fff">${nomA}</span><span style="font-size:12px;font-weight:700;color:${r.color}"> · ${r.label}</span><div style="font-size:11px;color:var(--sub);line-height:1.5;margin-top:2px">${escapeHtml(r.texte)}</div></div>`
+        : `<div style="flex:1;min-width:0"><span style="font-size:12px;font-weight:700;color:#fff">${r.list.length>1?r.list.length+' ':''}</span><span style="font-size:12px;font-weight:700;color:${r.color}">${r.label}</span><span style="font-size:11px;color:var(--sub)"> · ${names}</span></div>`;
+      return{html:`<span style="font-size:15px;flex-shrink:0;align-self:flex-start;margin-top:1px">${r.icon}</span>${corps}${_waBoutonTodo(r,idx)}<button onclick="event.stopPropagation();dismissTodoRow(${idx})" title="Snoozer 7 jours" style="background:none;border:none;color:var(--text-dim);font-size:15px;cursor:pointer;padding:4px 8px;flex-shrink:0;transition:color .15s;border-radius:4px" onmouseover="this.style.color='var(--sub)'" onmouseout="this.style.color='#444'">✕</button>`,
       onClick:`openClientDetail('${r.list[0].id}')`,style:'cursor:pointer;transition:background .15s;'};
     },{pad:'10px 14px',gap:10,border:'#180000',hover:'#140000'})}
+    ${restant?`<div style="padding:8px 14px;font-size:11px;color:var(--sub);border-top:1px solid #180000">+ ${restant} autre${restant>1?'s':''}</div>`:''}
+    ${aDouleur?`<div style="padding:8px 14px;border-top:1px solid #180000">${blocDisclaimerDouleur()}</div>`:''}
   </div>`;
 }
 // status 'FREE' = aucun accès : l'athlète se heurte au paywall à chaque
@@ -5980,6 +6427,7 @@ function openClientDetail(cid,_refresh){
   // reperes de L ATHLETE.
   try{ renderVolumeCoach(c); }catch(e){}
   try{ renderPlateauxCoach(c); }catch(e){}
+  try{ renderDouleurCoach(c); }catch(e){}
   try{ renderPhaseCoach(c); }catch(e){}
   try{ renderFormeCoach(c); }catch(e){}
   try{ renderPoidsCoach(c); }catch(e){}
@@ -7771,6 +8219,7 @@ function coachToggleDeload(i,val){
   c.sessions_config[i].deload=!!val;
   saveUser(); CLOUD.pushOne(c.email,c);
   _viderCachePlateau();
+  _viderCacheSignaux();
 }
 function coachToggleDay(i){
   if(!_coachEditClient?.sessions_config) return;
@@ -8365,6 +8814,7 @@ function loadClientHome(){
   const _pAff=poidsAffiche(u);
   document.getElementById('clh-weight').textContent=_pAff!=null?_pAff+'kg':'—';
   renderCartePesee();
+  renderDouleurAthlete();
   renderBandeauPhase();renderRelancePhase();renderCartePhase();
   renderNutriDots();renderNotifs();renderWoReminderCard();
   const _hasDepart=(currentUser.bilans||[]).some(b=>b.type==='depart');
@@ -9880,6 +10330,7 @@ function finishWorkout(incomplete=false){
   if(!currentUser.sessions) currentUser.sessions=[];
   currentUser.sessions.push(sess);
   _viderCachePlateau();
+  _viderCacheSignaux();
   _viderCacheVolume();
   updateStreak();saveUser();
   document.getElementById('wd-time').textContent=mins+'min';
@@ -10249,24 +10700,7 @@ function renderPlateauxCoach(c){
   let bloques=[],muscles=[];
   try{
     bloques=_listeEtats(c).filter(x=>x.etat==='plateau'||x.etat==='regression');
-    // On ne teste que les muscles réellement touchés : parcourir les 17 à vide
-    // ferait dix-sept fois le tour de l'historique pour rien.
-    // Le verdict musculaire est construit a partir de la liste deja calculee,
-    // et non par un appel a etatMuscle : celui-ci exige un creneau, et
-    // _memeCreneau rejette TOUTES les seances quand slot et progName sont nuls.
-    // Chaque exercice porte deja le creneau ou il a ete vu.
-    const parMuscle={};
-    for(const x of _listeEtats(c)){
-      if(x.etat==='insuffisant') continue;
-      const cls=resoudreMusclesLecture(x.nom,{name:x.nom},c);
-      if(!cls||cls===VOL_CARDIO) continue;
-      for(const m of (cls.p||[])) (parMuscle[m]=parMuscle[m]||[]).push(x);
-    }
-    for(const m in parMuscle){
-      const ex=parMuscle[m];
-      const bl=ex.filter(e=>e.etat==='plateau'||e.etat==='regression').length;
-      if(bl>=2) muscles.push({m,exercices:ex});
-    }
+    muscles=musclesEnPlateau(c);
   }catch(e){ }
   if(!bloques.length&&!muscles.length){ z.innerHTML=''; return; }
   const dat=(t)=>t?new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'}):'—';
@@ -21762,6 +22196,325 @@ function testExercices(){
       u.phase.debut=new Date(2025,0,1).getTime();
       const h=blocPoids(u);
       return !/par semaine|moyennes glissantes|Sèche longue|40 semaines/.test(h);})());
+
+
+    // ══════════════ SIGNAUX D'ENTRAÎNEMENT ══════════════
+    const _sgJ=n=>Date.now()-n*864e5;
+    // Séance : sets réalisés / prévus, et un dictionnaire {exercice:[douleurs]}.
+    const _sgSess=(jours,douleurs,faits,prevus)=>{
+      const s={id:'s'+jours+'_'+Math.round(Math.random()*1e9),date:_sgJ(jours),data:{},
+        name:'P',slot:0,volume:1000,duration:60};
+      if(faits!=null) s.sets=faits;
+      if(prevus!=null) s.setsPlanned=prevus;
+      for(const nom in (douleurs||{}))
+        s.data[nom]={sets:(douleurs[nom]||[]).map(p=>({weight:50,reps:10,rir:'2',done:true,
+          pain:p==null?'':String(p)}))};
+      return s;
+    };
+    const _sgAth=(seances,extra)=>Object.assign({id:'c'+Math.round(Math.random()*1e9),
+      email:'x@t.fr',fname:'A',lname:'B',sessions:seances||[],bilans:[],
+      createdAt:_sgJ(60),exAlias:{},exMuscles:{}},extra||{});
+
+    // ── NON-RÉGRESSION EXHAUSTIVE d'urgencyScore : les six cas d'origine ──
+    // Test bloquant. Ces valeurs sont celles d'AVANT l'ajout des signaux
+    // d'entraînement ; aucune ne doit bouger.
+    (function(){
+      const sauveU=currentUser;
+      currentUser={id:'coach',email:'co@t.fr',role:'coach',seenBilans:{},alertStatus:{}};
+      const nu={id:'n1',email:'n1@t.fr',sessions:[],bilans:[],createdAt:_sgJ(10)};
+      ok('urgencyScore 5 : jamais démarré',urgencyScore(nu)===5,String(urgencyScore(nu)));
+      const nb={id:'n2',email:'n2@t.fr',sessions:[],bilans:[{type:'depart',date:_sgJ(1)}],createdAt:_sgJ(30)};
+      ok('urgencyScore 5 : nouveau bilan',urgencyScore(nb)===5,String(urgencyScore(nb)));
+      // Bilan vu, mais vieux de plus de 14 jours.
+      currentUser.seenBilans={'n3@t.fr':Date.now()};
+      const ov={id:'n3',email:'n3@t.fr',sessions:[],bilans:[{type:'depart',date:_sgJ(30)}],createdAt:_sgJ(60)};
+      ok('urgencyScore 4 : bilan en retard',urgencyScore(ov)===4,String(urgencyScore(ov)));
+      currentUser.seenBilans={'n4@t.fr':Date.now()};
+      const ex={id:'n4',email:'n4@t.fr',sessions:[],bilans:[{type:'depart',date:_sgJ(3)}],
+        createdAt:_sgJ(60),status:'COACHING_SUIVI',accessExpiry:Date.now()+5*864e5};
+      ok('urgencyScore 3 : accès qui expire',urgencyScore(ex)===3,String(urgencyScore(ex)));
+      currentUser.seenBilans={'n5@t.fr':Date.now()};
+      const ac={id:'n5',email:'n5@t.fr',sessions:[],bilans:[{type:'depart',date:_sgJ(3)}],createdAt:_sgJ(60)};
+      ok('urgencyScore 2 : actif',urgencyScore(ac)===2,String(urgencyScore(ac)));
+      currentUser.seenBilans={'n6@t.fr':Date.now()};
+      // Tout doit dater de plus de quatorze jours, createdAt compris :
+      // isActive retient le PLUS RÉCENT des trois, y compris l'inscription.
+      const inact={id:'n6',email:'n6@t.fr',sessions:[],bilans:[{type:'depart',date:_sgJ(20)}],
+        createdAt:_sgJ(60),_fromCode:true};
+      ok('urgencyScore 1 : inactif',urgencyScore(inact)===1,String(urgencyScore(inact)));
+      currentUser=sauveU;
+    })();
+
+    // ── douleur ciblée ──
+    const _DC='DEVELOPPE COUCHE';
+    ok('Douleur : même exercice sur deux des trois dernières séances',
+       signauxEntrainement(_sgAth([_sgSess(9,{[_DC]:[5]}),_sgSess(6,{}),_sgSess(3,{[_DC]:[5]})])).douleur===true);
+    ok('Douleur : exercices différents, ce n\'est PAS une douleur ciblée',
+       signauxEntrainement(_sgAth([_sgSess(9,{[_DC]:[5]}),_sgSess(6,{}),_sgSess(3,{'SQUAT':[5]})])).douleur===false);
+    ok('Douleur : un 3 sur l\'échelle ne compte pas',
+       signauxEntrainement(_sgAth([_sgSess(9,{[_DC]:[3]}),_sgSess(3,{[_DC]:[3]})])).douleur===false);
+    ok('Douleur : un 4 compte',
+       signauxEntrainement(_sgAth([_sgSess(9,{[_DC]:[4]}),_sgSess(3,{[_DC]:[4]})])).douleur===true);
+    ok('Douleur : une seule séance ne suffit pas',
+       signauxEntrainement(_sgAth([_sgSess(3,{[_DC]:[5,5,5]})])).douleur===false);
+    ok('Douleur : DEUX séances au total suffisent, pas de délai d\'échantillon',
+       signauxEntrainement(_sgAth([_sgSess(6,{[_DC]:[5]}),_sgSess(3,{[_DC]:[5]})])).douleur===true);
+    ok('Douleur : au-delà de trois séances, seules les trois dernières comptent',
+       signauxEntrainement(_sgAth([_sgSess(40,{[_DC]:[6]}),_sgSess(9,{}),_sgSess(6,{}),_sgSess(3,{[_DC]:[6]})])).douleur===false);
+    ok('Douleur : le détail porte l\'exercice et le niveau maximum',(()=>{
+      const d=signauxEntrainement(_sgAth([_sgSess(6,{[_DC]:[4]}),_sgSess(3,{[_DC]:[6]})])).details.douleur;
+      return d&&d.nom===_DC&&d.painMax===6&&d.seances===2;})());
+    ok('Aucune séance : aucun signal',(()=>{
+      const s=signauxEntrainement(_sgAth([]));
+      return !s.douleur&&!s.douleurDiffuse&&!s.decrochage&&!s.plateauMuscle;})());
+    ok('Invité non inscrit : aucun signal d\'entraînement',
+       signauxEntrainement(_sgAth([_sgSess(6,{[_DC]:[6]}),_sgSess(3,{[_DC]:[6]})],{_fromCode:true})).douleur===false);
+
+    // ── douleur diffuse ──
+    ok('Diffuse : cinq séries douloureuses sur quatorze jours',
+       signauxEntrainement(_sgAth([_sgSess(10,{'A':[5],'B':[5]}),_sgSess(5,{'C':[5],'D':[5]}),_sgSess(2,{'E':[5]})]))
+         .douleurDiffuse===true);
+    ok('Diffuse : quatre séries ne suffisent pas',
+       signauxEntrainement(_sgAth([_sgSess(10,{'A':[5],'B':[5]}),_sgSess(5,{'C':[5],'D':[5]})]))
+         .douleurDiffuse===false);
+    ok('Diffuse : au-delà de quatorze jours, ça ne compte plus',
+       signauxEntrainement(_sgAth([_sgSess(30,{'A':[5],'B':[5],'C':[5]}),_sgSess(20,{'D':[5],'E':[5]})]))
+         .douleurDiffuse===false);
+
+    // ── décrochage ──
+    ok('Décrochage : ratio 0,69 déclenche',
+       signauxEntrainement(_sgAth([_sgSess(9,{},23,34),_sgSess(6,{},23,33),_sgSess(3,{},23,33)])).decrochage===true,
+       JSON.stringify(signauxEntrainement(_sgAth([_sgSess(9,{},23,34),_sgSess(6,{},23,33),_sgSess(3,{},23,33)])).details.decrochage));
+    ok('Décrochage : ratio 0,70 pile ne déclenche pas, borne stricte',
+       signauxEntrainement(_sgAth([_sgSess(9,{},7,10),_sgSess(6,{},7,10),_sgSess(3,{},7,10)])).decrochage===false);
+    ok('Critère 3 : 12 séries réalisées sur 21 prévues',(()=>{
+      const s=signauxEntrainement(_sgAth([_sgSess(9,{},4,7),_sgSess(6,{},4,7),_sgSess(3,{},4,7)]));
+      return s.decrochage===true&&s.details.decrochage.faits===12&&s.details.decrochage.prevus===21;})());
+    ok('Décrochage : setsPlanned absent, la séance est exclue',(()=>{
+      // Deux séances sans le champ, une seule avec, et celle-ci est bonne.
+      const s=signauxEntrainement(_sgAth([_sgSess(9,{},2),_sgSess(6,{},2),_sgSess(3,{},10,10)]));
+      return s.decrochage===false;})());
+    ok('Décrochage : aucune séance chiffrée, signal non évaluable',
+       signauxEntrainement(_sgAth([_sgSess(9,{}),_sgSess(6,{}),_sgSess(3,{})])).decrochage===false);
+    ok('Décrochage : setsPlanned à 0, aucune division par zéro',(()=>{
+      const s=signauxEntrainement(_sgAth([_sgSess(9,{},0,0),_sgSess(6,{},0,0),_sgSess(3,{},0,0)]));
+      return s.decrochage===false&&!/NaN/.test(JSON.stringify(s));})());
+    ok('Décrochage : moins de trois séances, non évalué',
+       signauxEntrainement(_sgAth([_sgSess(6,{},1,10),_sgSess(3,{},1,10)])).decrochage===false);
+
+    // ── Priorité ──
+    ok('Critère 1 : la douleur ciblée vaut 9',(()=>{
+      const sauveU=currentUser;
+      currentUser={id:'coach',email:'co@t.fr',role:'coach',seenBilans:{},alertStatus:{}};
+      const c=_sgAth([_sgSess(6,{[_DC]:[5]}),_sgSess(3,{[_DC]:[5]})],{id:'p1',email:'p1@t.fr'});
+      const v=urgencyScore(c); currentUser=sauveU; return v===9;})());
+    ok('Priorité : douleur (9) l\'emporte sur bilan en retard (4)',(()=>{
+      const sauveU=currentUser;
+      currentUser={id:'coach',email:'co@t.fr',role:'coach',seenBilans:{'p2@t.fr':Date.now()},alertStatus:{}};
+      const c=_sgAth([_sgSess(6,{[_DC]:[5]}),_sgSess(3,{[_DC]:[5]})],
+        {id:'p2',email:'p2@t.fr',bilans:[{type:'depart',date:_sgJ(40)}]});
+      const v=urgencyScore(c); currentUser=sauveU; return v===9;})());
+    ok('Priorité : douleur diffuse vaut 8',(()=>{
+      const sauveU=currentUser;
+      currentUser={id:'coach',email:'co@t.fr',role:'coach',seenBilans:{},alertStatus:{}};
+      const c=_sgAth([_sgSess(10,{'A':[5],'B':[5]}),_sgSess(5,{'C':[5],'D':[5]}),_sgSess(2,{'E':[5]})],
+        {id:'p3',email:'p3@t.fr'});
+      const v=urgencyScore(c); currentUser=sauveU; return v===8;})());
+    ok('Priorité : décrochage vaut 7',(()=>{
+      const sauveU=currentUser;
+      currentUser={id:'coach',email:'co@t.fr',role:'coach',seenBilans:{},alertStatus:{}};
+      const c=_sgAth([_sgSess(9,{},4,7),_sgSess(6,{},4,7),_sgSess(3,{},4,7)],{id:'p4',email:'p4@t.fr'});
+      const v=urgencyScore(c); currentUser=sauveU; return v===7;})());
+    ok('Critère 4 : sans signal d\'entraînement, l\'échelle administrative est intacte',(()=>{
+      const sauveU=currentUser;
+      currentUser={id:'coach',email:'co@t.fr',role:'coach',seenBilans:{'p5@t.fr':Date.now()},alertStatus:{}};
+      const c=_sgAth([_sgSess(9,{},10,10),_sgSess(6,{},10,10),_sgSess(3,{},10,10)],
+        {id:'p5',email:'p5@t.fr',bilans:[{type:'depart',date:_sgJ(40)}]});
+      const v=urgencyScore(c); currentUser=sauveU; return v===4;})());
+
+    // ── Report : plafond de sept jours, journal, aggravation ──
+    (function(){
+      const sauveU=currentUser;
+      currentUser={id:'coach',email:'co@t.fr',role:'coach',seenBilans:{},alertStatus:{},journalDouleur:[]};
+      const c=_sgAth([_sgSess(6,{[_DC]:[4]}),_sgSess(3,{[_DC]:[4]})],{id:'r1',email:'r1@t.fr'});
+      reporterAlerte('douleur',c);
+      ok('Report : journalisé',(currentUser.journalDouleur||[]).length===1
+        &&currentUser.journalDouleur[0].clientId==='r1');
+      ok('Critère 5 : reporté six jours, l\'alerte reste masquée',(()=>{
+        currentUser.alertStatus['douleur-r1'].until=Date.now()+1*864e5;
+        return isAlertSnoozed('douleur','r1',0,c)===true;})());
+      ok('Critère 5 : au-delà de sept jours, l\'alerte réapparaît',(()=>{
+        currentUser.alertStatus['douleur-r1'].until=Date.now()-1*864e5;
+        return isAlertSnoozed('douleur','r1',0,c)===false;})());
+      ok('Le report d\'une douleur ne peut PAS dépasser sept jours',(()=>{
+        currentUser.alertStatus['douleur-r1']={s:'ignoré',until:Date.now()+90*864e5,at:Date.now()-8*864e5,painMax:4};
+        return isAlertSnoozed('douleur','r1',0,c)===false;})());
+      ok('Critère 6 : une aggravation remonte l\'alerte malgré le report',(()=>{
+        currentUser.alertStatus['douleur-r1']={s:'ignoré',until:Date.now()+5*864e5,at:Date.now(),painMax:4};
+        const pire=_sgAth([_sgSess(6,{[_DC]:[4]}),_sgSess(3,{[_DC]:[6]})],{id:'r1',email:'r1@t.fr'});
+        return isAlertSnoozed('douleur','r1',0,pire)===false;})());
+      ok('Sans aggravation, le report tient',(()=>{
+        currentUser.alertStatus['douleur-r1']={s:'ignoré',until:Date.now()+5*864e5,at:Date.now(),painMax:6};
+        const pareil=_sgAth([_sgSess(6,{[_DC]:[6]}),_sgSess(3,{[_DC]:[6]})],{id:'r1',email:'r1@t.fr'});
+        return isAlertSnoozed('douleur','r1',0,pareil)===true;})());
+      ok('Sans horodatage, le report de sante ne vaut rien',(()=>{
+        currentUser.alertStatus['douleur-r1']={s:'ignoré',until:Date.now()+90*864e5,painMax:9};
+        return isAlertSnoozed('douleur','r1',0,c)===false;})());
+      ok('Les types administratifs gardent leur report intact',(()=>{
+        currentUser.alertStatus['overdue-r1']={s:'ignoré',until:Date.now()+5*864e5,seenUpTo:0};
+        return isAlertSnoozed('overdue','r1')===true;})());
+      currentUser=sauveU;
+    })();
+
+
+    // ── Contenu des alertes, plafond, disclaimer ──
+    (function(){
+      const sauveU=currentUser;
+      const zTodo=document.getElementById('ch-todo'), gTodo=zTodo?zTodo.innerHTML:null;
+      currentUser={id:'coach',email:'co@t.fr',role:'coach',seenBilans:{},alertStatus:{},journalDouleur:[]};
+      // Un bilan RECENT et deja vu : sinon ces athletes declenchent aussi la
+      // ligne administrative « jamais commence », et le decompte du plafond
+      // mesurerait autre chose que ce qu'il pretend mesurer.
+      const douloureux=(id,nom,ci)=>{
+        const b={type:'depart',date:_sgJ(2)};
+        if(ci) b['deb-health']=ci;
+        currentUser.seenBilans[id+'@t.fr']=Date.now();
+        return _sgAth([_sgSess(6,{[nom]:[5]}),_sgSess(3,{[nom]:[5]})],
+          {id,email:id+'@t.fr',fname:'Marc',lname:'Dupont',bilans:[b],
+           // Un programme, sinon la ligne administrative « sans programme »
+           // s'ajoute et le decompte porte sur seize lignes au lieu de quinze.
+           programPdfLink:'https://exemple.test/p.pdf'});
+      };
+
+      ok('Critère 1 : l\'alerte nomme l\'exercice',(()=>{
+        const l=_lignesEntrainement([douloureux('a1','DEVELOPPE COUCHE')]);
+        return l.length===1&&l[0].type==='douleur'&&/DEVELOPPE COUCHE/.test(l[0].texte)
+          &&/5\/6/.test(l[0].texte);})());
+      ok('Critère 2 : la contre-indication est rappelée à côté',(()=>{
+        const l=_lignesEntrainement([douloureux('a2','DEVELOPPE COUCHE','épaule droite opérée en 2023')]);
+        return /Contre-indication au dossier : épaule droite opérée en 2023/.test(l[0].texte);})());
+      ok('Sans contre-indication au dossier, rien n\'est inventé',
+         !/Contre-indication/.test(_lignesEntrainement([douloureux('a3','SQUAT')])[0].texte));
+      ok('Une contre-indication « non » n\'est pas rappelée',
+         !/Contre-indication/.test(_lignesEntrainement([douloureux('a4','SQUAT','non')])[0].texte));
+      ok('Critère 3 : les chiffres exacts du décrochage',(()=>{
+        const c=_sgAth([_sgSess(9,{},4,7),_sgSess(6,{},4,7),_sgSess(3,{},4,7)],{id:'a5',email:'a5@t.fr'});
+        const l=_lignesEntrainement([c]);
+        return l.length===1&&l[0].type==='decrochage'
+          &&/12 séries réalisées sur 21 prévues/.test(l[0].texte);})());
+      ok('Un athlète n\'occupe qu\'une ligne, la plus grave',(()=>{
+        // Douleur ciblée ET décrochage : une seule ligne, la douleur.
+        const c=_sgAth([_sgSess(9,{'DC':[5]},2,10),_sgSess(6,{'DC':[5]},2,10),_sgSess(3,{},2,10)],
+          {id:'a6',email:'a6@t.fr'});
+        const l=_lignesEntrainement([c]);
+        return l.length===1&&l[0].type==='douleur';})());
+      ok('Les lignes sont ordonnées par gravité',(()=>{
+        const d=douloureux('a7','DC');
+        const dec=_sgAth([_sgSess(9,{},4,7),_sgSess(6,{},4,7),_sgSess(3,{},4,7)],{id:'a8',email:'a8@t.fr'});
+        const l=_lignesEntrainement([dec,d]);   // volontairement dans le désordre
+        return l[0].type==='douleur'&&l[1].type==='decrochage';})());
+      ok('Une alerte reportée ne produit plus de ligne',(()=>{
+        const c=douloureux('a9','DC');
+        reporterAlerte('douleur',c);
+        const l=_lignesEntrainement([c]);
+        return l.length===0;})());
+
+      // Plafond du bloc « À traiter ».
+      if(zTodo){
+        const beaucoup=[];
+        for(let i=0;i<15;i++) beaucoup.push(douloureux('m'+i,'EX'+i));
+        currentUser.alertStatus={};
+        renderTodoBlock(beaucoup);
+        ok('Critère 7 : quinze alertes, huit lignes affichées',
+           window._todoRows.length===TODO_MAX_LIGNES,String(window._todoRows.length));
+        ok('Critère 7 : le reste est compté',/\+ 7 autres/.test(zTodo.innerHTML),
+           (zTodo.innerHTML.match(/\+ \d+ autres?/)||['aucun compteur'])[0]);
+        renderTodoBlock(beaucoup.slice(0,3));
+        ok('Plafond : trois alertes, trois lignes, aucun compteur',
+           window._todoRows.length===3&&!/autres?</.test(zTodo.innerHTML));
+        ok('Critère 9 : le disclaimer accompagne toute douleur affichée',
+           zTodo.innerHTML.includes(DISCLAIMER_DOULEUR));
+        // Sans douleur affichée, pas de disclaimer inutile.
+        currentUser.seenBilans={'d1@t.fr':Date.now()};
+        renderTodoBlock([_sgAth([],{id:'d1',email:'d1@t.fr',bilans:[{type:'depart',date:_sgJ(40)}]})]);
+        ok('Sans douleur, aucun disclaimer',!zTodo.innerHTML.includes(DISCLAIMER_DOULEUR));
+        ok('Les lignes affichées et _todoRows restent alignés',(()=>{
+          currentUser.alertStatus={};
+          renderTodoBlock(beaucoup);
+          // Le report de la ligne 0 doit toucher l'athlète de la ligne 0 vue.
+          const vise=window._todoRows[0].list[0].id;
+          dismissTodoRow(0);
+          return !!currentUser.alertStatus['douleur-'+vise];})());
+        zTodo.innerHTML=gTodo;
+      }
+      currentUser=sauveU;
+    })();
+
+    // ── Bloc douleur de la fiche client ──
+    ok('Bloc douleur : trié par occurrences, avec la date la plus récente',(()=>{
+      const c=_sgAth([_sgSess(20,{'A':[5]}),_sgSess(10,{'B':[4],'A':[5]}),_sgSess(2,{'B':[6],'A':[4]})],
+        {id:'b1',email:'b1@t.fr'});
+      const l=douleurParExercice(c,30);
+      return l.length===2&&l[0].nom==='A'&&l[0].n===3&&l[1].nom==='B'&&l[1].n===2
+        &&l[1].painMax===6;})());
+    ok('Bloc douleur : au-delà de trente jours, rien n\'est compté',
+       douleurParExercice(_sgAth([_sgSess(40,{'A':[6,6,6]})]),30).length===0);
+    ok('Bloc douleur : aucune douleur, aucun bloc',
+       blocDouleurCoach(_sgAth([_sgSess(3,{'A':[2]})]))==='' );
+    ok('Critère 9 : le bloc coach porte le disclaimer',
+       blocDouleurCoach(_sgAth([_sgSess(3,{'A':[5]}),_sgSess(6,{'A':[5]})])).includes(DISCLAIMER_DOULEUR));
+
+    // ── Carte athlète ──
+    ok('Critère 8 : la carte invite à ne pas forcer et à prévenir le coach',(()=>{
+      const u=_sgAth([_sgSess(6,{'DEVELOPPE COUCHE':[5]}),_sgSess(3,{'DEVELOPPE COUCHE':[5]})],
+        {id:'at1',email:'at1@t.fr',coachId:'co1'});
+      const h=blocDouleurAthlete(u);
+      return /DEVELOPPE COUCHE/.test(h)&&/Ne force pas dessus/.test(h)&&/Préviens ton coach/.test(h);})());
+    ok('Critère 9 : la carte athlète porte le disclaimer',
+       blocDouleurAthlete(_sgAth([_sgSess(6,{'DC':[5]}),_sgSess(3,{'DC':[5]})],
+         {id:'at2',email:'at2@t.fr'})).includes(DISCLAIMER_DOULEUR));
+    ok('Sans douleur ciblée, aucune carte athlète',
+       blocDouleurAthlete(_sgAth([_sgSess(3,{'DC':[2]})],{id:'at3',email:'at3@t.fr'}))==='');
+    ok('La carte athlète ne donne AUCUN conseil médical',(()=>{
+      const h=blocDouleurAthlete(_sgAth([_sgSess(6,{'DC':[6]}),_sgSess(3,{'DC':[6]})],
+        {id:'at4',email:'at4@t.fr'}));
+      return !/glace|anti-inflammatoire|repos complet|kiné|étire|masse|médicament|arrête la musculation/i.test(h);})());
+    // Aucun message pré-rempli ne doit prescrire quoi que ce soit.
+    ok('Les messages WhatsApp ne prescrivent rien',
+       ['douleur','douleurdiff','decrochage','entrainement'].every(t=>
+         !/arrête|baisse la charge|retire|glace|anti-inflammatoire|repos complet|médicament/i
+           .test(_waTexteTodo(t,{fname:'X'}))));
+
+    // ── Aucune modification automatique du programme ──
+    ok('Une douleur ne modifie NI le programme NI les séances',(()=>{
+      const u=_sgAth([_sgSess(6,{'DC':[6]}),_sgSess(3,{'DC':[6]})],
+        {id:'np',email:'np@t.fr',programs:{P:{a:1}},sessions_config:[{name:'S',active:true}]});
+      const avant=JSON.stringify({p:u.programs,s:u.sessions_config,ses:u.sessions});
+      signauxEntrainement(u); blocDouleurAthlete(u); blocDouleurCoach(u);
+      return JSON.stringify({p:u.programs,s:u.sessions_config,ses:u.sessions})===avant;})());
+
+    // ── Performance : 40 athlètes, 100 séances chacun ──
+    ok('Perf : 40 athlètes × 100 séances sous 300 ms',(()=>{
+      const sauveU=currentUser;
+      currentUser={id:'coach',email:'co@t.fr',role:'coach',seenBilans:{},alertStatus:{}};
+      _viderCacheSignaux();
+      const gros=[];
+      for(let i=0;i<40;i++){
+        const ss=[];
+        for(let j=0;j<100;j++){
+          // Un athlète sur quatre déclare de la douleur : le chemin court ne
+          // doit pas être le seul mesuré.
+          ss.push(_sgSess(200-j*2,i%4===0&&j>96?{'DC':[5]}:{'DC':[1],'SQUAT':[1]},8,10));
+        }
+        gros.push(_sgAth(ss,{id:'g'+i,email:'g'+i+'@t.fr'}));
+      }
+      const t0=performance.now();
+      gros.forEach(c=>urgencyScore(c));
+      gros.sort((a,b)=>urgencyScore(b)-urgencyScore(a));
+      const ms=performance.now()-t0;
+      currentUser=sauveU;
+      window._perfSignaux=Math.round(ms);
+      return ms<300;})(),'mesuré : '+(window._perfSignaux||'?')+' ms');
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
