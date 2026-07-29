@@ -1467,6 +1467,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="ccd-lien-classer" style="display:none;margin-top:16px">
         <button class="btn btn-outline btn-sm" style="width:100%;margin:0" onclick="loadExClassify()">Exercices à classer <span id="ccd-nb-classer"></span></button>
       </div>
+      <div id="ccd-demandes-video"></div>
       <div id="ccd-videos"></div>
       <div style="margin-top:36px;padding-top:20px;border-top:1px solid var(--surface-2)">
         <button onclick="confirmDeleteClient()" style="width:100%;padding:12px;background:transparent;border:1px solid #3a1500;color:#f97316;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer">Retirer cet élève du suivi</button>
@@ -2152,6 +2153,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="wd-cooldown"></div>
       <div id="wd-comparison"></div>
       <div id="wd-etats"></div>
+      <div id="wd-afilmer"></div>
       <!-- RESSENTI POST-SÉANCE -->
       <div style="margin-bottom:16px">
         <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px">Ressenti post-séance</div>
@@ -2572,6 +2574,13 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="position:relative;text-align:center">
           <div style="margin-bottom:9px;color:#ff3b30;filter:drop-shadow(0 0 9px rgba(224,32,32,.75))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:30px;height:30px;display:inline-block;vertical-align:middle"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
           <div style="font-family:'Bebas Neue',sans-serif;font-size:19px;letter-spacing:2.5px;color:#fff;text-transform:uppercase;margin-bottom:12px;text-shadow:0 0 12px rgba(255,255,255,.3)">Partager une vidéo</div>
+          <!-- Le nom était jusqu'ici DÉDUIT de l'URL (« Vidéo YouTube ») ou du
+               nom de fichier. Deux vidéos de deux exercices différents
+               s'appelaient donc pareil, et le coach devait ouvrir chacune pour
+               savoir de quoi elle parlait. Le champ est facultatif : laissé
+               vide, l'ancienne déduction s'applique exactement comme avant. -->
+          <input id="vid-name-input" type="text" placeholder="Quel exercice ? (facultatif)" autocomplete="off"
+            style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:9px;border:1px solid #262626;background:linear-gradient(180deg,#0b0b0b,#0f0f0f);color:var(--text);font-size:13px;font-family:inherit;margin-bottom:9px;box-shadow:inset 0 2px 6px rgba(0,0,0,.5)">
           <input id="vid-url-input" type="url" placeholder="Colle le lien YouTube ou Google Drive…" autocomplete="off"
             style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:9px;border:1px solid #262626;background:linear-gradient(180deg,#0b0b0b,#0f0f0f);color:var(--text);font-size:13px;font-family:inherit;margin-bottom:9px;box-shadow:inset 0 2px 6px rgba(0,0,0,.5)"
             onkeydown="if(event.key==='Enter')addVideoLink()"
@@ -6670,6 +6679,7 @@ function openClientDetail(cid,_refresh){
       <button class="btn btn-outline btn-sm" onclick="openVideoCorrection('${c.email}','${v.id}')">${icon('edit-2',13)} ${(v.feedback||v.feedbackTimestamps?.length)?'Modifier':'Corriger'}</button>
     </div>`).join('')}`);
 
+  _majDemandesVideo();
   renderClientPdfCard(c);
   renderCoachSessionRecap(c);
   renderCoachNutriSection(c);
@@ -6683,6 +6693,79 @@ function openClientDetail(cid,_refresh){
     }).catch(()=>{});
   }
 }
+
+// ── Demander une vidéo, côté coach ─────────────────────────────────────────
+// Même chemin d'écriture et de push que la semaine de décharge : la carte des
+// utilisateurs, getOwnedClient pour le contrôle d'appartenance, DB.set puis
+// CLOUD.pushOne. Aucun canal neuf, et rien qui déclenche une notification.
+function _htmlDemandesVideo(c){
+  const prog=exercicesDuProgramme(c);
+  const dem=((c&&c.demandesVideo)||[]).filter(Boolean);
+  if(!prog.length&&!dem.length) return '';
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:16px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Demander une vidéo</div>
+    ${dem.length?`<div style="margin-bottom:10px">
+      ${dem.map((d,i)=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+        <span style="flex:1;min-width:0;font-size:11px;color:#ccc;line-height:1.5">${escapeHtml(d.exercice)} <span style="color:var(--text-faint)">· demandée le ${new Date(d.date).toLocaleDateString('fr-FR')}</span></span>
+        <button class="cvd-annul" data-i="${i}" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:18px;line-height:1;padding:0 4px;flex-shrink:0" title="Retirer la demande">×</button>
+      </div>`).join('')}
+    </div>`:''}
+    ${prog.length?`<div style="display:flex;gap:8px;align-items:center">
+      <select id="cvd-select" style="flex:1;min-width:0;padding:9px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:12px;font-family:inherit">
+        ${prog.map((n,i)=>`<option value="${i}">${escapeHtml(n)}</option>`).join('')}
+      </select>
+      <button class="btn btn-outline btn-sm" style="margin:0;white-space:nowrap" onclick="demanderVideo()">Demander</button>
+    </div>
+    <div style="font-size:10px;color:var(--text-faint);margin-top:8px;line-height:1.5">La demande apparaît dans sa séance et s'efface d'elle-même quand il dépose la vidéo. Aucune notification n'est envoyée.</div>`
+    :`<div style="font-size:11px;color:var(--text-faint);line-height:1.6">Aucun exercice dans ses créneaux actifs : il n'y a rien à demander.</div>`}
+  </div>`;
+}
+function demanderVideo(){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c) return;
+  if(!c.email){ toast('Cet élève n\'a pas encore de dossier synchronisé','var(--orange)'); return; }
+  const sel=document.getElementById('cvd-select');
+  const prog=exercicesDuProgramme(c);
+  const nom=prog[parseInt(sel&&sel.value,10)];
+  // Une demande hors programme est REFUSÉE : l'athlète ne verrait jamais la
+  // ligne en séance, et la demande resterait en attente pour toujours.
+  if(!nom||!estDansLeProgramme(nom,c)){ toast('Cet exercice n\'est pas dans son programme','var(--orange)'); return; }
+  if(!Array.isArray(c.demandesVideo)) c.demandesVideo=[];
+  if(demandeVideoPour(nom,c)){ toast('Demande déjà en cours pour cet exercice','var(--orange)'); return; }
+  c.demandesVideo.push({exercice:nom,date:Date.now(),parQui:currentUser.id});
+  users[c.email]=c;
+  const ok=DB.set('users',users);
+  const envoi=CLOUD.pushOne(c.email,c);
+  _majDemandesVideo();
+  toastSync(ok,envoi,'Vidéo demandée : '+nom,'la demande est');
+}
+function annulerDemandeVideo(i){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c||!Array.isArray(c.demandesVideo)||!c.demandesVideo[i]) return;
+  const nom=c.demandesVideo[i].exercice;
+  c.demandesVideo.splice(i,1);
+  users[c.email]=c;
+  const ok=DB.set('users',users);
+  const envoi=CLOUD.pushOne(c.email,c);
+  _majDemandesVideo();
+  toastSync(ok,envoi,'Demande retirée : '+nom,'le retrait est');
+}
+// Repeint la seule zone concernée, et recâble les croix en JS : un index dans
+// un attribut onclick tiendrait, mais la liste est reconstruite à chaque fois
+// et le décalage d'index serait invisible à la relecture.
+function _majDemandesVideo(){
+  const z=document.getElementById('ccd-demandes-video');
+  if(!z) return;
+  const c=getOwnedClient(currentClientId);
+  z.innerHTML=c?_htmlDemandesVideo(c):'';
+  z.querySelectorAll('.cvd-annul').forEach(b=>{
+    const i=parseInt(b.getAttribute('data-i'),10);
+    b.onclick=()=>annulerDemandeVideo(i);
+  });
+}
+
 function confirmDeleteClient(){
   if(!confirm('Retirer cet élève de ton suivi ?\nSon compte reste actif mais il ne sera plus associé à ton coaching.')) return;
   if(!getOwnedClient(currentClientId)) return;
@@ -10007,6 +10090,84 @@ function getCycleLabel(){
 }
 
 // ======= WORKOUT PERSISTENCE =======
+
+// ══════════════ FILMER : INTENTION DE L'ATHLÈTE, DEMANDE DU COACH ══════════
+// Deux objets distincts, volontairement :
+//   woState.aFilmer      — la liste des exercices que l'athlète a cochés
+//                          PENDANT sa séance. Même cycle de vie que
+//                          woState.substitutions : persisté par woPersist,
+//                          recopié dans la séance par finishWorkout.
+//   user.demandesVideo   — les demandes du COACH, dans le dossier de l'athlète.
+//                          Écrites par le même chemin que la décharge, poussées
+//                          par le même CLOUD.pushOne. Aucun canal neuf, et
+//                          surtout AUCUNE notification : le plafond de trois
+//                          par jour ne bouge pas.
+function _nomsAFilmer(indices){
+  // Un cardio ne se filme pas pour la technique : la case n'apparaît d'ailleurs
+  // que si le groupe contient au moins un exercice de musculation.
+  return (indices||[]).filter(i=>!isCardio(woState.exercises[i]))
+    .map(i=>woState.exercises[i]&&woState.exercises[i].name).filter(Boolean);
+}
+function estAFilmer(nom){
+  return !!nom&&(woState&&woState.aFilmer||[]).indexOf(nom)>=0;
+}
+// La case est UNE pour tout l'écran. Sur un superset, deux exercices sont
+// affichés ensemble : « Filmer cet exercice » les prend alors tous les deux,
+// faute de pouvoir désigner l'un plutôt que l'autre avec une seule case.
+function basculerAFilmer(coche,indices){
+  if(!woState) return;
+  if(!Array.isArray(woState.aFilmer)) woState.aFilmer=[];
+  const noms=_nomsAFilmer(indices);
+  for(const n of noms){
+    const i=woState.aFilmer.indexOf(n);
+    if(coche&&i<0) woState.aFilmer.push(n);
+    if(!coche&&i>=0) woState.aFilmer.splice(i,1);
+  }
+  woPersist();
+}
+// ── Demandes du coach ──────────────────────────────────────────────────────
+// Une demande est EN ATTENTE tant qu'elle est dans le tableau. La consommer,
+// c'est la retirer : le coach l'efface de la même façon. Pas de drapeau
+// « faite » à maintenir, donc pas d'état intermédiaire à faire vivre.
+function demandeVideoPour(nom,user){
+  const u=user||currentUser;
+  if(!nom||!u||!Array.isArray(u.demandesVideo)) return null;
+  const k=exKey(nom);
+  return u.demandesVideo.find(d=>d&&exKey(d.exercice)===k)||null;
+}
+// Le dépôt d'une vidéo portant le nom de l'exercice éteint la demande. Rend
+// true si quelque chose a été retiré, pour que l'appelant sache s'il doit
+// écrire. Comparaison par exKey : « Développé couché » et « DEVELOPPE COUCHE »
+// désignent le même exercice partout ailleurs dans l'app.
+function consommerDemandeVideo(nom,user){
+  const u=user||currentUser;
+  if(!nom||!u||!Array.isArray(u.demandesVideo)||!u.demandesVideo.length) return false;
+  const k=exKey(nom);
+  const reste=u.demandesVideo.filter(d=>!d||exKey(d.exercice)!==k);
+  if(reste.length===u.demandesVideo.length) return false;
+  u.demandesVideo=reste;
+  return true;
+}
+// Exercices du programme, créneaux ACTIFS uniquement, dédoublonnés par exKey.
+// C'est la liste dans laquelle le coach choisit, et c'est elle qui sert de
+// contrôle : une demande hors programme n'a pas de sens et est refusée.
+function exercicesDuProgramme(c){
+  const vus=new Set(), out=[];
+  for(const s of ((c&&c.sessions_config)||[])){
+    if(!s||!s.active||!Array.isArray(s.exercises)) continue;
+    for(const ex of s.exercises){
+      const n=ex&&ex.name; if(!n) continue;
+      const k=exKey(n); if(!k||vus.has(k)) continue;
+      vus.add(k); out.push(n);
+    }
+  }
+  return out;
+}
+function estDansLeProgramme(nom,c){
+  const k=exKey(nom);
+  return !!k&&exercicesDuProgramme(c).some(n=>exKey(n)===k);
+}
+
 function woPersist(){
   if(!woState?.exercises?.length||!woState.startTime) return;
   // Séance TERMINÉE : on n'écrit plus rien. finishWorkout supprime le
@@ -10027,6 +10188,9 @@ function woPersist(){
       // Échéance du minuteur de repos : sans elle, une séance reprise
       // redémarrerait sans savoir qu'un repos était en cours.
       substitutions:(woState.substitutions||[]).slice(),
+      // Sans lui, une séance reprise après une interruption repartirait avec
+      // les cases « Filmer » décochées et l'intention serait perdue.
+      aFilmer:(woState.aFilmer||[]).slice(),
       reposFin:woState.reposFin||null,
       reposTotal:woState.reposTotal||null,
       reposLib:woState.reposLib||'',
@@ -10168,6 +10332,11 @@ function launchWorkout(sessConfig,slotIdx){
   woState={exercises,currentEx:0,startTime:Date.now(),timerInterval:null,sessionData:{},
     progName:_nomSeance(sessConfig,_slot),sessionPhoto:sessConfig.photo||null,
     deload:!!sessConfig.deload,
+    // Une demande du coach vaut case cochée d'avance. Amorcée ICI et non à
+    // chaque rendu : sans quoi un décochage serait réécrit à la seconde
+    // suivante et l'athlète n'aurait pas la main.
+    aFilmer:exercises.filter(ex=>!isCardio(ex)&&demandeVideoPour(ex.name,currentUser))
+      .map(ex=>ex.name),
     slot:_slot,
     // L'échauffement et la fin de séance étaient écrits par le coach depuis
     // toujours, et n'étaient affichés NULLE PART à l'athlète : ils vivaient
@@ -10351,6 +10520,10 @@ function startWorkout(){
   // slot:null fait retomber la recherche d'historique sur le nom de la séance.
   _ckEtat={};_ckStopChrono();
   woState={exercises:prog.exercises,currentEx:0,startTime:Date.now(),timerInterval:null,sessionData:{},progName:prog.name,slot:null,
+    // Même amorçage que launchWorkout : une demande du coach vaut case cochée
+    // d'avance. Sans cette ligne, le chemin hérité l'ignorerait en silence.
+    aFilmer:(prog.exercises||[]).filter(ex=>!isCardio(ex)&&demandeVideoPour(ex.name,currentUser))
+      .map(ex=>ex.name),
     warmup:String(prog.warmup??currentUser._defaultWarmup??'').trim(),
     cooldown:String(prog.cooldown??currentUser._defaultCooldown??'').trim()};
   woState.timerInterval=setInterval(()=>{
@@ -10549,6 +10722,15 @@ function renderWoEx(){
     if(cb) cb.onclick=()=>openCalc(b.sug,b.ex.reps,'0',currentUser.gender);
     renderSets(b.ex,b.data,b.idx);
   });
+  // La case « Filmer cet exercice » n'était qu'un décor : elle ne se relisait
+  // nulle part et repartait vierge à chaque changement d'exercice. Son état
+  // vient maintenant de woState.aFilmer et y retourne.
+  const _film=document.getElementById('film-ex');
+  if(_film){
+    const _nomsF=_nomsAFilmer(groupe);
+    _film.checked=_nomsF.length>0&&_nomsF.every(estAFilmer);
+    _film.onchange=function(){ basculerAFilmer(this.checked,groupe); };
+  }
   woPersist();
   setTimeout(()=>blocs.forEach(b=>setupScrollFade(document.getElementById('wo-sets-scroll-'+b.idx))),0);
 }
@@ -10651,6 +10833,7 @@ function _blocExo(idx,estSS){
         <strong>Dégressive :</strong> Phase 1 → <strong>${pr.p1} reps</strong> lourd · Phase 2 → <strong>${pr.p2} reps</strong> léger (sans poser la charge)
       </div>`:''}
 
+      ${(!isCardio(ex)&&demandeVideoPour(ex.name,currentUser))?`<div class="wo-demande-video" style="display:flex;align-items:center;gap:9px;background:var(--surface-2);border-radius:8px;padding:10px 13px;margin-bottom:12px;font-size:11px;color:var(--sub);line-height:1.6"><span style="flex-shrink:0">🎥</span><span>Ton coach t'a demandé une vidéo de cet exercice.</span></div>`:''}
       ${isCardio(ex)?
         `<table class="series-table" style="width:100%"><thead><tr><th>#</th><th>Complété</th></tr></thead><tbody id="sets-body-${idx}"></tbody></table>`
       :`<div id="wo-sets-scroll-${idx}"${!isWide?' style="overflow-x:auto"':''}>
@@ -10963,6 +11146,9 @@ function finishWorkout(incomplete=false){
     // Substitutions de la seance : l'athlete a remplace un exercice pour
     // AUJOURD'HUI. sessions_config n'a pas bouge, le coach doit le voir.
     substitutions:(woState.substitutions||[]).slice()};
+  // Écrit seulement s'il y a quelque chose à écrire : une séance sans aucune
+  // case cochée doit rester octet pour octet celle d'avant ce lot.
+  if((woState.aFilmer||[]).length) sess.aFilmer=woState.aFilmer.slice();
   if(!currentUser.sessions) currentUser.sessions=[];
   currentUser.sessions.push(sess);
   _viderCachePlateau();
@@ -10985,6 +11171,7 @@ function finishWorkout(incomplete=false){
   // Seuls les exercices dont l'état vient de CHANGER, et jamais pour annoncer
   // une progression : l'écran de fin de séance n'est pas un bulletin.
   renderEtatsSeance(currentUser,sess);
+  renderCarteAFilmer(sess);
   // Le retour au calme n'a de sens qu'ici, une fois la dernière série faite.
   document.getElementById('wd-cooldown').innerHTML=_carteProtocole(woState&&woState.cooldown,'Fin de séance','var(--accent-blue)','wd-cooldown-body');
   // Reset sliders post-séance
@@ -17556,9 +17743,39 @@ function _videoEmbed(url,vidId='vc-video'){
   if(/\.(mp4|mov|webm|mkv)(\?|$)/i.test(url)) return `<video id="${vidId}" src="${url}" controls preload="none" style="width:100%;border-radius:8px;margin-top:8px;max-height:220px;background:#000"></video>`;
   return `<a href="${url}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:10px 14px;background:var(--surface-2);border-radius:8px;color:var(--red);font-size:12px;font-weight:700;text-decoration:none">▶ Voir la vidéo</a>`;
 }
+
+// Carte de fin de séance. Elle ne dépose rien : elle renvoie vers l'écran
+// Vidéos EXISTANT, avec le nom de l'exercice déjà écrit dans le champ. Il n'y
+// a donc qu'un seul endroit dans l'app où l'on dépose une vidéo.
+function renderCarteAFilmer(sess){
+  const z=document.getElementById('wd-afilmer');
+  if(!z) return;
+  const noms=((sess&&sess.aFilmer)||[]).filter(Boolean);
+  if(!noms.length){ z.innerHTML=''; return; }
+  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:16px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">À filmer</div>
+    <div style="font-size:12px;color:#ccc;line-height:1.6;margin-bottom:10px">Tu voulais filmer : ${noms.map(n=>escapeHtml(n)).join(', ')}</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${noms.map((n,i)=>`<button class="btn btn-outline btn-sm wd-af-btn" data-i="${i}" style="width:100%;margin:0">Déposer la vidéo de ${escapeHtml(n)}</button>`).join('')}
+    </div>
+  </div>`;
+  // Handler posé en JS, hors attribut : un nom d'exercice contient des
+  // apostrophes et des accents, et rien de tout cela n'a à être relu comme du
+  // code dans un onclick. Même règle que les boutons de l'écran de séance.
+  z.querySelectorAll('.wd-af-btn').forEach(b=>{
+    const n=noms[parseInt(b.getAttribute('data-i'),10)];
+    b.onclick=()=>loadVideos(n);
+  });
+}
+
 let _vidsSorted=[];
-function loadVideos(){
+function loadVideos(nomPrerempli){
   go('s-videos');
+  // Pré-saisie venue de la carte de fin de séance ou d'une demande du coach.
+  // Sans argument, le champ est laissé tel quel : les appels existants ne
+  // changent pas de comportement.
+  const _nom=document.getElementById('vid-name-input');
+  if(_nom&&nomPrerempli) _nom.value=String(nomPrerempli);
   _vidsSorted=(currentUser.videos||[]).slice().sort((a,b)=>b.date-a.date);
   const el=document.getElementById('vid-list');
   if(!_vidsSorted.length){
@@ -17630,14 +17847,20 @@ function addVideoLink(){
   const url=(inp?.value||'').trim();
   if(!url) return toast('Colle un lien vidéo','var(--orange)');
   if(!/^https?:\/\//i.test(url)) return toast('Le lien doit commencer par https://','var(--orange)');
+  const _saisi=((document.getElementById('vid-name-input')||{}).value||'').trim();
   let name='Vidéo';
   const ytM=url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);
   if(ytM) name='Vidéo YouTube';
   else if(url.includes('drive.google.com')) name='Vidéo Google Drive';
   else{const seg=url.split('/').pop().split('?')[0];if(seg) name=decodeURIComponent(seg).replace(/\.(mp4|mov|webm|mkv)$/i,'');}
+  if(_saisi) name=_saisi;
   if(!currentUser.videos) currentUser.videos=[];
   currentUser.videos.push({id:'v_'+Date.now(),name,url,date:Date.now(),size:'—',feedback:null});
+  // Une vidéo portant le nom de l'exercice éteint la demande du coach. Rien
+  // n'est notifié : la demande disparaît, c'est tout.
+  consommerDemandeVideo(name,currentUser);
   const ok=saveUser();
+  const _nomEl=document.getElementById('vid-name-input'); if(_nomEl) _nomEl.value='';
   if(inp) inp.value='';
   const hint=document.getElementById('vid-drive-hint');if(hint) hint.style.display='none';
   toastEcriture(ok,'Vidéo ajoutée !','la vidéo est référencée');
@@ -17690,7 +17913,8 @@ async function uploadVideoFile(input){
     const data=await res.json();
     if(data.error) throw new Error(data.error.message);
     const url=data.secure_url;
-    const name=file.name.replace(/\.(mp4|mov|webm|mkv|avi)$/i,'');
+    const _saisi=((document.getElementById('vid-name-input')||{}).value||'').trim();
+    const name=_saisi||file.name.replace(/\.(mp4|mov|webm|mkv|avi)$/i,'');
     const entry={id:'v_'+Date.now(),name,url,date:Date.now(),size:Math.round(file.size/1024/1024*10)/10+' Mo',feedback:null,cloudinaryPublicId:data.public_id,cloudinaryName:cloudName};
     let _localOk=true;
     if(currentUser?.email!==targetEmail){
@@ -17707,9 +17931,11 @@ async function uploadVideoFile(input){
     }else{
       if(!currentUser.videos) currentUser.videos=[];
       currentUser.videos.push(entry);
+      consommerDemandeVideo(name,currentUser);
       _localOk=saveUser();
     }
     if(progEl) progEl.style.display='none';
+    const _nomEl=document.getElementById('vid-name-input'); if(_nomEl) _nomEl.value='';
     input.value='';
     // La vidéo est bien sur Cloudinary, mais l'entrée qui la référence peut
     // n'exister nulle part en local : elle disparaîtrait alors de la liste.
@@ -24914,6 +25140,360 @@ function testExercices(){
       const v=urgencyScore(c); currentUser=sauveU; return v===4;})());
 
 
+
+
+    // ══════════════ FILMER : INTENTION ATHLÈTE, DEMANDE COACH ══════════════
+    (function(){
+      const sauveU=currentUser, sauveW=woState, sauveCid=currentClientId;
+      const sauveUsers=DB.get('users'), sauveSnap=localStorage.getItem('rc_wo_state');
+      const _fCfg=(exs)=>({active:true,name:'Push',exercises:exs.map(n=>({name:n,series:3,reps:'10'}))});
+      const _fAth=(extra)=>Object.assign({id:'flm',email:'flm@t.fr',fname:'A',lname:'B',
+        role:'athlete',exAlias:{},exMuscles:{},sessions:[],bilans:[],videos:[],programs:{},
+        sessions_config:[_fCfg(['SQUAT','DEVELOPPE COUCHE','VELO'])]},extra||{});
+
+      // ── La case film-ex écrit vraiment ──
+      ok('Cocher deux exercices remplit woState.aFilmer',(()=>{
+        currentUser=_fAth();
+        woState={progName:'Push',slot:0,currentEx:0,startTime:Date.now(),aFilmer:[],
+          exercises:[{name:'SQUAT',series:2,reps:'5'},{name:'DEVELOPPE COUCHE',series:2,reps:'8'}],
+          sessionData:{0:{sets:[]},1:{sets:[]}}};
+        basculerAFilmer(true,[0]);
+        basculerAFilmer(true,[1]);
+        return woState.aFilmer.length===2
+          &&woState.aFilmer.indexOf('SQUAT')>=0
+          &&woState.aFilmer.indexOf('DEVELOPPE COUCHE')>=0;})());
+      ok('Décocher retire le nom, sans toucher aux autres',(()=>{
+        basculerAFilmer(false,[0]);
+        return woState.aFilmer.length===1&&woState.aFilmer[0]==='DEVELOPPE COUCHE';})());
+      ok('estAFilmer lit l\'état posé',
+        estAFilmer('DEVELOPPE COUCHE')===true&&estAFilmer('SQUAT')===false);
+      ok('Cocher deux fois ne duplique pas',(()=>{
+        basculerAFilmer(true,[1]); basculerAFilmer(true,[1]);
+        return woState.aFilmer.filter(n=>n==='DEVELOPPE COUCHE').length===1;})());
+      ok('Un cardio n\'entre jamais dans la liste',(()=>{
+        woState.exercises.push({name:'VELO',series:1,reps:'20 min'});
+        basculerAFilmer(true,[2]);
+        return woState.aFilmer.indexOf('VELO')<0;})());
+
+      // ── Le PARCOURS RÉEL : on clique la vraie case, on ne l'appelle pas ──
+      // Le test précédent appelle basculerAFilmer directement. Il resterait
+      // vert si la case n'était plus câblée à rien — c'est exactement ce
+      // qu'elle était avant ce lot. Ici on coche la case elle-même.
+      ok('Critère 1 : cocher la case sur deux exercices puis terminer',(()=>{
+        currentUser=_fAth();
+        currentUser.sessions_config=[_fCfg(['SQUAT','DEVELOPPE COUCHE'])];
+        const sauveW2=woState;
+        try{ launchWorkout(currentUser.sessions_config[0],0); }
+        catch(e){ woState=sauveW2; return 'exception au lancement: '+e.message; }
+        const clic=()=>{ const cb=document.getElementById('film-ex');
+          if(!cb) return false;
+          cb.checked=true;
+          cb.dispatchEvent(new Event('change'));
+          return true; };
+        if(!clic()){ try{clearInterval(woState.timerInterval);}catch(e){} woState=sauveW2; return 'case absente'; }
+        try{ woNav(1); }catch(e){ woState=sauveW2; return 'exception woNav: '+e.message; }
+        if(!clic()){ try{clearInterval(woState.timerInterval);}catch(e){} woState=sauveW2; return 'case absente au 2e'; }
+        const liste=(woState.aFilmer||[]).slice();
+        woState.sessionData={0:{sets:[{weight:'100',reps:'5',rir:'1',done:true}]},
+                             1:{sets:[{weight:'80',reps:'8',rir:'1',done:true}]}};
+        try{ finishWorkout(false); }catch(e){ woState=sauveW2; return 'exception fin: '+e.message; }
+        const sess=(currentUser.sessions||[])[0];
+        const z=document.getElementById('wd-afilmer');
+        woState=sauveW2;
+        return liste.length===2
+          &&(sess.aFilmer||[]).join('|')==='SQUAT|DEVELOPPE COUCHE'
+          &&/SQUAT/.test(z.innerHTML)&&/DEVELOPPE COUCHE/.test(z.innerHTML);})());
+      ok('Décocher la vraie case retire bien le nom',(()=>{
+        currentUser=_fAth();
+        currentUser.sessions_config=[_fCfg(['SQUAT'])];
+        const sauveW2=woState;
+        try{ launchWorkout(currentUser.sessions_config[0],0); }
+        catch(e){ woState=sauveW2; return 'exception: '+e.message; }
+        const cb=document.getElementById('film-ex');
+        cb.checked=true; cb.dispatchEvent(new Event('change'));
+        const apres=(woState.aFilmer||[]).length;
+        cb.checked=false; cb.dispatchEvent(new Event('change'));
+        const vide=(woState.aFilmer||[]).length;
+        try{ clearInterval(woState.timerInterval); }catch(e){}
+        woState=sauveW2;
+        return apres===1&&vide===0;})());
+      ok('La case relit son état en revenant sur l\'exercice',(()=>{
+        currentUser=_fAth();
+        currentUser.sessions_config=[_fCfg(['SQUAT','DEVELOPPE COUCHE'])];
+        const sauveW2=woState;
+        try{ launchWorkout(currentUser.sessions_config[0],0); }
+        catch(e){ woState=sauveW2; return 'exception: '+e.message; }
+        const cb=document.getElementById('film-ex');
+        cb.checked=true; cb.dispatchEvent(new Event('change'));
+        try{ woNav(1); }catch(e){ woState=sauveW2; return 'exception: '+e.message; }
+        const surLe2=document.getElementById('film-ex').checked;
+        try{ woNav(-1); }catch(e){ woState=sauveW2; return 'exception: '+e.message; }
+        const revenu=document.getElementById('film-ex').checked;
+        try{ clearInterval(woState.timerInterval); }catch(e){}
+        woState=sauveW2;
+        return surLe2===false&&revenu===true;})());
+
+      // ── Survie au rechargement ──
+      ok('Critère 3 : aFilmer survit à un rechargement en cours de séance',(()=>{
+        woState.aFilmer=['SQUAT','DEVELOPPE COUCHE'];
+        localStorage.removeItem('rc_wo_state');
+        woPersist();
+        const snap=JSON.parse(localStorage.getItem('rc_wo_state')||'{}');
+        // Reprise : woResumeAndGo fait exactement woState={...snap}.
+        const repris={...snap};
+        localStorage.removeItem('rc_wo_state');
+        return Array.isArray(snap.aFilmer)&&snap.aFilmer.length===2
+          &&repris.aFilmer.join('|')==='SQUAT|DEVELOPPE COUCHE';})());
+
+      // ── Fin de séance : la séance enregistrée, puis la carte ──
+      const _fFin=(coches)=>{
+        currentUser=_fAth();
+        woState={progName:'Push',slot:0,currentEx:0,startTime:Date.now()-40*60000,
+          timerInterval:null,aFilmer:coches.slice(),
+          exercises:[{name:'SQUAT',series:2,reps:'5'},{name:'DEVELOPPE COUCHE',series:2,reps:'8'}],
+          sessionData:{0:{sets:[{weight:'100',reps:'5',rir:'1',done:true},
+                                {weight:'100',reps:'5',rir:'0',done:true}]},
+                       1:{sets:[{weight:'80',reps:'8',rir:'1',done:true},
+                                {weight:'80',reps:'8',rir:'0',done:true}]}}};
+        try{ finishWorkout(false); }catch(e){ return {err:e.message}; }
+        return {sess:(currentUser.sessions||[])[0]};
+      };
+      ok('Critère 1 : la séance enregistrée porte les deux noms',(()=>{
+        const r=_fFin(['SQUAT','DEVELOPPE COUCHE']);
+        if(r.err) return 'exception: '+r.err;
+        return Array.isArray(r.sess.aFilmer)&&r.sess.aFilmer.length===2
+          &&r.sess.aFilmer.join('|')==='SQUAT|DEVELOPPE COUCHE';})());
+      ok('Critère 1 : la carte de fin affiche les deux exercices',(()=>{
+        const z=document.getElementById('wd-afilmer');
+        if(!z) return 'zone wd-afilmer absente';
+        return /Tu voulais filmer/.test(z.innerHTML)
+          &&/SQUAT/.test(z.innerHTML)&&/DEVELOPPE COUCHE/.test(z.innerHTML)
+          &&z.querySelectorAll('.wd-af-btn').length===2;})());
+      ok('Critère 2 : sans coche, aucune carte',(()=>{
+        const r=_fFin([]);
+        if(r.err) return 'exception: '+r.err;
+        const z=document.getElementById('wd-afilmer');
+        return z&&z.innerHTML==='';})());
+      // La séance enregistrée doit rester CELLE D'AVANT le patch : le champ
+      // n'existe pas, il n'est pas à false ni à [].
+      ok('Critère 2 : sans coche, la séance ne porte aucun champ nouveau',(()=>{
+        const r=_fFin([]);
+        if(r.err) return 'exception: '+r.err;
+        const attendu=['complete','data','date','deload','duration','id','name',
+          'sets','setsPlanned','slot','substitutions','volume'];
+        return Object.keys(r.sess).sort().join(',')===attendu.join(',')
+          &&!('aFilmer' in r.sess);})());
+      ok('Une seule coche : un seul nom, un seul bouton',(()=>{
+        const r=_fFin(['SQUAT']);
+        if(r.err) return 'exception: '+r.err;
+        const z=document.getElementById('wd-afilmer');
+        return r.sess.aFilmer.length===1
+          &&z.querySelectorAll('.wd-af-btn').length===1;})());
+
+      // ── Le bouton ouvre l'écran EXISTANT, champ pré-rempli ──
+      ok('Le bouton pré-remplit le champ nom de l\'écran Vidéos',(()=>{
+        const r=_fFin(['DEVELOPPE COUCHE']);
+        if(r.err) return 'exception: '+r.err;
+        const b=document.querySelectorAll('#wd-afilmer .wd-af-btn')[0];
+        if(!b) return 'bouton absent';
+        try{ b.click(); }catch(e){ return 'exception: '+e.message; }
+        const inp=document.getElementById('vid-name-input');
+        const ecran=document.getElementById('s-videos');
+        const v=inp?inp.value:null;
+        if(inp) inp.value='';
+        return v==='DEVELOPPE COUCHE'&&!!ecran&&ecran.classList.contains('active');})());
+      ok('Il n\'existe qu\'UN écran de dépôt de vidéo',
+        document.querySelectorAll('#vid-url-input').length===1
+        &&document.querySelectorAll('#vid-name-input').length===1);
+      ok('Sans argument, loadVideos ne touche pas au champ',(()=>{
+        const inp=document.getElementById('vid-name-input');
+        inp.value='DEJA LA';
+        try{ loadVideos(); }catch(e){ return 'exception: '+e.message; }
+        const v=inp.value; inp.value='';
+        return v==='DEJA LA';})());
+
+      // ── Demandes du coach ──
+      ok('exercicesDuProgramme ne rend que les créneaux actifs, dédoublonnés',(()=>{
+        const c=_fAth({sessions_config:[_fCfg(['SQUAT','SQUAT']),
+          Object.assign(_fCfg(['ROWING']),{active:false}),_fCfg(['DEVELOPPE COUCHE'])]});
+        const l=exercicesDuProgramme(c);
+        return l.length===2&&l[0]==='SQUAT'&&l[1]==='DEVELOPPE COUCHE';})());
+      ok('estDansLeProgramme ignore casse et accents',(()=>{
+        const c=_fAth();
+        return estDansLeProgramme('Développé  Couché',c)===true
+          &&estDansLeProgramme('SOULEVE DE TERRE',c)===false;})());
+
+      (function(){
+        currentUser={id:'coachF',email:'cof@t.fr',role:'coach',seenBilans:{},alertStatus:{}};
+        const poser=()=>{ const c=_fAth({coachId:'coachF',demandesVideo:[]});
+          const u={}; u[c.email]=c; DB.set('users',u); currentClientId=c.id;
+          const z=document.getElementById('ccd-demandes-video');
+          if(z) _majDemandesVideo();
+          return c; };
+        const relire=()=>(DB.get('users')||{})['flm@t.fr'];
+
+        ok('Le coach demande une vidéo : elle est écrite dans SON dossier',(()=>{
+          poser();
+          const sel=document.getElementById('cvd-select');
+          if(!sel) return 'sélecteur absent';
+          sel.value='0';
+          try{ demanderVideo(); }catch(e){ return 'exception: '+e.message; }
+          const c=relire();
+          return c.demandesVideo.length===1&&c.demandesVideo[0].exercice==='SQUAT'
+            &&typeof c.demandesVideo[0].date==='number'
+            &&c.demandesVideo[0].parQui==='coachF';})());
+        ok('La demande ne porte QUE les trois champs annoncés',(()=>{
+          const d=relire().demandesVideo[0];
+          return Object.keys(d).sort().join(',')==='date,exercice,parQui';})());
+        ok('Deux fois le même exercice : pas de doublon',(()=>{
+          const sel=document.getElementById('cvd-select'); sel.value='0';
+          try{ demanderVideo(); }catch(e){ return 'exception: '+e.message; }
+          return relire().demandesVideo.length===1;})());
+        ok('Critère 4 : une demande hors programme est refusée',(()=>{
+          const c=relire();
+          c.demandesVideo=[]; const u={}; u[c.email]=c; DB.set('users',u);
+          // Le sélecteur ne propose que le programme : on force la main comme
+          // le ferait un dossier désynchronisé entre le choix et l'écriture.
+          const sel=document.getElementById('cvd-select');
+          const vrai=sel.value; sel.value='99';
+          try{ demanderVideo(); }catch(e){ sel.value=vrai; return 'exception: '+e.message; }
+          sel.value=vrai;
+          return (relire().demandesVideo||[]).length===0;})());
+        ok('estDansLeProgramme refuse un exercice retiré du programme',(()=>{
+          const c=relire();
+          return estDansLeProgramme('SOULEVE DE TERRE',c)===false;})());
+        ok('Le coach peut retirer une demande',(()=>{
+          const sel=document.getElementById('cvd-select'); sel.value='0';
+          demanderVideo();
+          if((relire().demandesVideo||[]).length!==1) return 'demande non posée';
+          try{ annulerDemandeVideo(0); }catch(e){ return 'exception: '+e.message; }
+          return (relire().demandesVideo||[]).length===0;})());
+        ok('L\'écran coach liste la demande en cours',(()=>{
+          const sel=document.getElementById('cvd-select'); sel.value='1';
+          demanderVideo();
+          const z=document.getElementById('ccd-demandes-video');
+          const vu=/DEVELOPPE COUCHE/.test(z.innerHTML)&&z.querySelectorAll('.cvd-annul').length===1;
+          annulerDemandeVideo(0);
+          return vu;})());
+      })();
+
+      // ── Côté athlète : ligne en séance, case pré-cochée, consommation ──
+      ok('Critère 4 : une demande affiche la ligne au-dessus du tableau',(()=>{
+        currentUser=_fAth({demandesVideo:[{exercice:'SQUAT',date:Date.now(),parQui:'coachF'}]});
+        const sauveW2=woState;
+        woState={progName:'Push',slot:0,currentEx:0,startTime:Date.now(),aFilmer:[],
+          exercises:[{name:'SQUAT',series:2,reps:'5'},{name:'DEVELOPPE COUCHE',series:2,reps:'8'}],
+          sessionData:{}};
+        let a='',b='';
+        try{ a=_blocExo(0,false).html; b=_blocExo(1,false).html; }
+        catch(e){ woState=sauveW2; return 'exception: '+e.message; }
+        woState=sauveW2;
+        return /Ton coach t'a demandé une vidéo de cet exercice/.test(a)
+          &&!/Ton coach t'a demandé/.test(b);})());
+      ok('Critère 4 : la case est PRÉ-COCHÉE au démarrage de la séance',(()=>{
+        currentUser=_fAth({demandesVideo:[{exercice:'SQUAT',date:Date.now(),parQui:'coachF'}]});
+        const sauveW2=woState;
+        try{ launchWorkout(currentUser.sessions_config[0],0); }catch(e){ woState=sauveW2; return 'exception: '+e.message; }
+        const cb=document.getElementById('film-ex');
+        const pre=(woState.aFilmer||[]).join('|')==='SQUAT';
+        const coche=!!(cb&&cb.checked);
+        try{ clearInterval(woState.timerInterval); }catch(e){}
+        woState=sauveW2;
+        return pre&&coche;})());
+      ok('Sans demande, la case n\'est pas pré-cochée',(()=>{
+        currentUser=_fAth();
+        const sauveW2=woState;
+        try{ launchWorkout(currentUser.sessions_config[0],0); }catch(e){ woState=sauveW2; return 'exception: '+e.message; }
+        const cb=document.getElementById('film-ex');
+        const vide=(woState.aFilmer||[]).length===0;
+        const decoche=!!(cb&&!cb.checked);
+        try{ clearInterval(woState.timerInterval); }catch(e){}
+        woState=sauveW2;
+        return vide&&decoche;})());
+      ok('Un cardio demandé n\'est pas pré-coché',(()=>{
+        currentUser=_fAth({demandesVideo:[{exercice:'VELO',date:Date.now(),parQui:'coachF'}]});
+        currentUser.sessions_config=[_fCfg(['VELO'])];
+        currentUser.sessions_config[0].exercises[0].reps='20 min';
+        const sauveW2=woState;
+        try{ launchWorkout(currentUser.sessions_config[0],0); }catch(e){ woState=sauveW2; return 'exception: '+e.message; }
+        const vide=(woState.aFilmer||[]).length===0;
+        try{ clearInterval(woState.timerInterval); }catch(e){}
+        woState=sauveW2;
+        return vide;})());
+
+      ok('Critère 5 : déposer une vidéo du même nom éteint la demande',(()=>{
+        currentUser=_fAth({demandesVideo:[{exercice:'SQUAT',date:Date.now(),parQui:'coachF'},
+                                          {exercice:'DEVELOPPE COUCHE',date:Date.now(),parQui:'coachF'}]});
+        const u={}; u[currentUser.email]=currentUser; DB.set('users',u);
+        document.getElementById('vid-name-input').value='SQUAT';
+        document.getElementById('vid-url-input').value='https://youtu.be/aaaaaaaaaaa';
+        try{ addVideoLink(); }catch(e){ return 'exception: '+e.message; }
+        const v=(currentUser.videos||[])[0];
+        return (currentUser.demandesVideo||[]).length===1
+          &&currentUser.demandesVideo[0].exercice==='DEVELOPPE COUCHE'
+          &&v&&v.name==='SQUAT';})());
+      ok('Critère 5 : une vidéo d\'un AUTRE exercice ne consomme rien',(()=>{
+        currentUser=_fAth({demandesVideo:[{exercice:'SQUAT',date:Date.now(),parQui:'coachF'}]});
+        document.getElementById('vid-name-input').value='ROWING';
+        document.getElementById('vid-url-input').value='https://youtu.be/bbbbbbbbbbb';
+        try{ addVideoLink(); }catch(e){ return 'exception: '+e.message; }
+        return (currentUser.demandesVideo||[]).length===1;})());
+      ok('La consommation ignore casse et accents',(()=>{
+        currentUser=_fAth({demandesVideo:[{exercice:'DEVELOPPE COUCHE',date:1,parQui:'c'}]});
+        return consommerDemandeVideo('Développé  Couché',currentUser)===true
+          &&(currentUser.demandesVideo||[]).length===0;})());
+      ok('Champ nom laissé vide : la déduction d\'avant s\'applique',(()=>{
+        currentUser=_fAth();
+        document.getElementById('vid-name-input').value='';
+        document.getElementById('vid-url-input').value='https://youtu.be/ccccccccccc';
+        try{ addVideoLink(); }catch(e){ return 'exception: '+e.message; }
+        return ((currentUser.videos||[])[0]||{}).name==='Vidéo YouTube';})());
+
+      // ── Aucune notification ──
+      // Le circuit entier ne doit produire AUCUN envoi : ni Notification, ni
+      // showNotification via le Service Worker. On instrumente les deux.
+      ok('Critère 6 : aucune notification n\'est émise par ce circuit',(()=>{
+        let n=0;
+        const vraiN=window.Notification;
+        const faux=function(){ n++; };
+        faux.permission='granted';
+        faux.requestPermission=()=>Promise.resolve('granted');
+        try{ window.Notification=faux; }catch(e){}
+        const reg=(navigator.serviceWorker||{}).ready;
+        currentUser=_fAth({coachId:'coachF',demandesVideo:[]});
+        const u={}; u[currentUser.email]=currentUser; DB.set('users',u);
+        const sauveCu=currentUser;
+        currentUser={id:'coachF',email:'cof@t.fr',role:'coach',seenBilans:{},alertStatus:{}};
+        currentClientId='flm';
+        try{
+          _majDemandesVideo();
+          const sel=document.getElementById('cvd-select'); if(sel){ sel.value='0'; demanderVideo(); }
+          currentUser=sauveCu;
+          currentUser.demandesVideo=((DB.get('users')||{})['flm@t.fr']||{}).demandesVideo||[];
+          const sauveW2=woState;
+          try{ launchWorkout(currentUser.sessions_config[0],0); clearInterval(woState.timerInterval); }catch(e){}
+          woState=sauveW2;
+          document.getElementById('vid-name-input').value='SQUAT';
+          document.getElementById('vid-url-input').value='https://youtu.be/ddddddddddd';
+          addVideoLink();
+        }catch(e){ try{ window.Notification=vraiN; }catch(e2){} return 'exception: '+e.message; }
+        try{ window.Notification=vraiN; }catch(e){}
+        return n===0&&reg===((navigator.serviceWorker||{}).ready);})());
+      // Le plafond de trois par jour vit dans sw.js. Rien de ce lot ne l'appelle :
+      // aucun des noms du circuit n'apparaît dans un chemin de notification.
+      ok('Aucune fonction du circuit ne parle de notification',(()=>{
+        const src=[demanderVideo,annulerDemandeVideo,consommerDemandeVideo,
+                   basculerAFilmer,renderCarteAFilmer,_htmlDemandesVideo]
+          .map(f=>f.toString()).join('\n');
+        return !/showNotification|new Notification|registration\.|postMessage/.test(src);})());
+
+      if(sauveUsers) DB.set('users',sauveUsers);
+      localStorage.removeItem('rc_wo_state');
+      if(sauveSnap) localStorage.setItem('rc_wo_state',sauveSnap);
+      const _n=document.getElementById('vid-name-input'); if(_n) _n.value='';
+      const _u=document.getElementById('vid-url-input'); if(_u) _u.value='';
+      currentUser=sauveU; woState=sauveW; currentClientId=sauveCid;
+    })();
 
     // ══════════════ MONTÉE EN CHARGE ══════════════
     (function(){
