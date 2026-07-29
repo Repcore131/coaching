@@ -1164,6 +1164,7 @@ const COACH_PHOTO='icons/coach.jpg';
             <button class="ch-chip" data-filtre="attente" onclick="setFiltreClients('attente')">En attente d'inscription</button>
           </div>
           <div class="sub" id="ch-count" style="font-size:11px;letter-spacing:.5px"></div>
+          <div class="sub" id="ch-sans-reponse" style="font-size:11px;letter-spacing:.5px;color:var(--orange)"></div>
         </div>
         <div id="ch-clients-list"></div>
       </div>
@@ -2660,7 +2661,7 @@ const COACH_PHOTO='icons/coach.jpg';
      de l'écran réellement affiché — voir _majTabbar(). -->
 <div class="tab-bar" id="client-tabbar" aria-label="Navigation athlète">
   <button class="tab-btn" data-tab="home" data-icon="home" onclick="clientTab('home')">Accueil</button>
-  <button class="tab-btn" data-tab="bilan" data-icon="chart-bar" onclick="clientTab('bilan')">Bilan</button>
+  <button class="tab-btn" data-tab="bilan" data-icon="chart-bar" onclick="clientTab('bilan')"><span class="tab-dot" aria-hidden="true"></span>Bilan</button>
   <button class="tab-btn" data-tab="nutrition" data-icon="utensils" onclick="clientTab('nutrition')">Nutrition</button>
   <button class="tab-btn" data-tab="videos" data-icon="video" onclick="clientTab('videos')"><span class="tab-dot" aria-hidden="true"></span>Vidéos</button>
   <button class="tab-btn" data-tab="lifestyle" data-icon="user" onclick="clientTab('lifestyle')">Lifestyle</button>
@@ -4357,6 +4358,10 @@ window.onload=()=>{
           if(currentUser.role==='athlete'){
             checkFeedbackNotif();
             _majPastilleVideos();
+            // Meme traitement pour la reponse au bilan : elle arrive par la
+            // meme synchro, dans le meme dossier.
+            checkReponseBilanNotif();
+            _majPastilleBilan();
             if(document.getElementById('s-client-home')?.classList.contains('active')) renderNotifs();
           }
           // Athlète : sync les données du coach pour mettre à jour le banner.
@@ -4584,9 +4589,11 @@ function _majTabbar(id){
     if(actif) b.setAttribute('aria-current','page');
     else b.removeAttribute('aria-current');
   });
-  // À chaque navigation : la pastille suit l'état réel des retours non vus,
-  // qu'ils viennent d'arriver par la synchro ou d'être consultés à l'instant.
+  // À chaque navigation : les pastilles suivent l'état réel des retours non
+  // vus, qu'ils viennent d'arriver par la synchro ou d'être consultés à
+  // l'instant.
   _majPastilleVideos();
+  _majPastilleBilan();
 }
 function go(id){
   const _safe=['s-splash','s-welcome','s-coach-home','s-client-home','s-coach-entry','s-athlete-entry'];
@@ -5977,6 +5984,13 @@ function renderClientList(clients){
   if(_filtreClients==='traiter') vus=vus.filter(c=>needsAlert(c)||hasNewBilan(c));
   else if(_filtreClients==='attente') vus=vus.filter(c=>c._fromCode||!c.email);
   vus.sort((a,b)=>urgencyScore(b)-urgencyScore(a));
+  // Bilans auxquels le coach n'a pas encore ecrit. « Sans reponse » et non
+  // « non lus » : ouvrir ne compte plus.
+  const _sr=document.getElementById('ch-sans-reponse');
+  if(_sr){
+    const n=tous.reduce((a,c)=>a+bilansSansReponse(c),0);
+    _sr.textContent=n?('Bilans sans réponse : '+n):'';
+  }
   const cnt=document.getElementById('ch-count');
   if(cnt) cnt.textContent=vus.length+'/'+tous.length+' athlete'+(tous.length>1?'s':'');
   // Position de defilement preservee : reecrire innerHTML la remet a zero.
@@ -6361,10 +6375,15 @@ function needsAlert(c){
   if(!c.bilans?.length) return !!c.questionnaireComplete;
   return Date.now()-c.bilans[c.bilans.length-1].date>14*864e5;
 }
+// Le signal ne retombe plus a la simple OUVERTURE du bilan mais a l'ECRITURE
+// d'une reponse. Consequence assumee : un bilan lu sans reponse reste en
+// alerte. C'est le but — repondre sur WhatsApp ne laissait aucune trace, et
+// l'athlete ne voyait jamais rien revenir.
+// seenBilans reste ecrit par ailleurs : il sert encore a distinguer un bilan
+// jamais ouvert d'un bilan lu, ce que la fiche client affiche.
 function hasNewBilan(c){
   if(!c.bilans?.length||c._fromCode) return false;
-  const seen=(currentUser.seenBilans||{})[c.email]||0;
-  return c.bilans.some(b=>b.date>seen);
+  return c.bilans.some(b=>b&&!b.reponseCoach);
 }
 // Athlète rattaché depuis plus de 3 jours qui n'a jamais rempli le moindre bilan.
 // Utilisé à deux endroits (la ligne « À traiter » et urgencyScore) : un seul
@@ -6483,6 +6502,9 @@ function openClientDetail(cid,_refresh){
   try{ renderVolumeCoach(c); }catch(e){}
   try{ renderPlateauxCoach(c); }catch(e){}
   try{ renderDouleurCoach(c); }catch(e){}
+  // Chips de reponse au bilan : la zone n'existe qu'apres le rendu des
+  // reponses, on la peuple donc ici et non a la construction du bloc.
+  setTimeout(()=>{ try{ _renderQuickCommentChips('bilan'); }catch(e){} },0);
   try{ renderPhaseCoach(c); }catch(e){}
   try{ renderFormeCoach(c); }catch(e){}
   try{ renderPoidsCoach(c); }catch(e){}
@@ -6992,7 +7014,7 @@ function renderBilanEvolution(c){
       ${buildFatSection()}
     </div>
     <div data-evo-pane="reponses" style="display:none">
-      ${renderReponsesBilans(bilans)}
+      ${renderReponsesBilans(bilans,c)}
     </div>
   </div>`;
   document.getElementById('evo-content').innerHTML=html;
@@ -9522,6 +9544,12 @@ function renderNotifs(){
   // EN TÊTE — les retours du coach. C'est la seule entrée qui appelle une
   // action de l'athlète ; les rappels d'assiduité qui suivent ne sont que du
   // contexte. Une par vidéo corrigée non consultée.
+  // Les réponses au bilan passent DEVANT les corrections vidéo : le bilan est
+  // l'acte le plus coûteux du parcours, sa réponse est la plus attendue.
+  bilansAvecReponseNonVue(currentUser).forEach(b=>notifs.push({
+    icon:icon('message-circle',16),
+    msg:(_nomCoachAffiche()||'Ton coach')+' a répondu à ton bilan du '+_dateBilanCourte(b),
+    c:'var(--green)',act:"openReponseBilan('"+_idBilan(b)+"')"}));
   feedbacksNonVus(currentUser).forEach(v=>notifs.push({
     icon:icon('video',16),
     msg:'Ton coach a corrigé ta vidéo « '+escapeHtml(v.name||'sans nom')+' »',
@@ -9538,8 +9566,17 @@ function renderNotifs(){
   const _sem=streakSemaines(currentUser);
   if(_sem>=4) notifs.push({icon:'',msg:`${_sem} semaines d'assiduité : Continue !`,c:'var(--green)'});
   const _cb=(currentUser.bilans||[]).filter(b=>b.type!=='depart');
-  if(_cb.length){const _d=new Date(_cb[_cb.length-1].date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
-    notifs.push({icon:icon('check-circle',16),msg:`Bilan du ${_d} transmis à ton coach`,c:'var(--green)'});}
+  // Le dernier bilan n'a droit a cette ligne que s'il n'a PAS de reponse :
+  // sinon l'entree en tete la remplace, et l'athlete lirait deux lignes sur
+  // le meme bilan.
+  const _dern=_cb.length?_cb[_cb.length-1]:null;
+  if(_dern&&_dern.reponseVue!==false){
+    const _d=_dateBilanCourte(_dern);
+    // « transmis a ton coach » a quelqu'un qui n'a pas de coach etait un
+    // mensonge que le code produisait a chaque ouverture.
+    const _msg=currentUser.coachId?`Bilan du ${_d} transmis à ton coach`:`Bilan du ${_d} enregistré.`;
+    notifs.push({icon:icon('check-circle',16),msg:_msg,c:'var(--green)',act:'openBilanNotes()'});
+  }
   // `act` est facultatif : les entrées qui en portent une deviennent de vrais
   // boutons — curseur, rôle et clavier compris, pas seulement un onclick posé
   // sur un div muet.
@@ -13988,7 +14025,151 @@ function contreIndications(bilans){
 // Rendu partagé par l'écran athlète (showProgressTab) et l'écran coach
 // (renderBilanEvolution). Une seule mise en forme, alimentée par la liste de
 // bilans qu'on lui passe — currentUser.bilans d'un côté, c.bilans de l'autre.
-function renderReponsesBilans(bilans){
+
+// ══════════════ RÉPONSE DU COACH AU BILAN ══════════════
+// Le bilan est l'acte le plus coûteux du parcours athlète — six étapes,
+// quatorze mensurations, trois photos — et il ne recevait qu'un toast et une
+// ligne grise non cliquable. Le coach répondait sur WhatsApp, hors de l'app,
+// sans trace.
+//
+// Ce circuit est la COPIE de celui du retour vidéo, qui fonctionne : mêmes
+// conventions de champs, même garde de premier passage, même test strict.
+
+// Test STRICT sur false, comme feedbacksNonVus. Un bilan d'avant le déploiement
+// n'a pas le champ : une simple vérification de fausseté ferait remonter tout
+// l'historique comme non lu, et l'athlète recevrait une pastille pour des
+// bilans auxquels personne n'a jamais répondu.
+function _nomCoachAffiche(){
+  try{
+    const pr=profilCoachLocal(cleCoachDe(currentUser));
+    if(pr&&pr.fname) return pr.fname;
+  }catch(e){}
+  return '';
+}
+function bilansAvecReponseNonVue(u){
+  return ((u&&u.bilans)||[]).filter(b=>b&&b.reponseVue===false);
+}
+function _idBilan(b){ return b&&(b.id||('bil_'+b.date)); }
+function _dateBilanCourte(b){
+  return b&&b.date?new Date(b.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}):'';
+}
+// Pastille de l'onglet Bilan, calquée sur _majPastilleVideos.
+function _majPastilleBilan(){
+  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="bilan"]');
+  if(!btn) return;
+  const dot=btn.querySelector('.tab-dot');
+  const n=bilansAvecReponseNonVue(currentUser).length;
+  if(dot) dot.classList.toggle('on',n>0);
+  if(n>0) btn.setAttribute('aria-label','Bilan : '+n+' réponse'+(n>1?'s':'')+' de ton coach à lire');
+  else btn.removeAttribute('aria-label');
+}
+// Notification système, calquée sur checkFeedbackNotif — garde de premier
+// passage compris. Sans lui, la première synchro après déploiement enverrait
+// une notification par bilan historique déjà répondu.
+function checkReponseBilanNotif(){
+  if(!currentUser||currentUser.role!=='athlete') return;
+  const dates=(currentUser.bilans||[]).map(b=>b&&b.reponseDate)
+    .filter(d=>typeof d==='number'&&isFinite(d));
+  if(!dates.length) return;
+  const plusRecent=Math.max.apply(null,dates);
+  if(typeof currentUser._lastRepBilanNotif!=='number'){
+    currentUser._lastRepBilanNotif=plusRecent;saveUser();return;
+  }
+  if(plusRecent<=currentUser._lastRepBilanNotif) return;
+  const nouveaux=(currentUser.bilans||[])
+    .filter(b=>b&&b.reponseDate>currentUser._lastRepBilanNotif)
+    .sort((a,b)=>b.reponseDate-a.reponseDate);
+  currentUser._lastRepBilanNotif=plusRecent;saveUser();
+  if(!nouveaux.length) return;
+  // UNE seule notification même pour plusieurs réponses : en empiler une par
+  // bilan transformerait une bonne nouvelle en nuisance.
+  if(_appAuPremierPlan()) return;
+  const d=_dateBilanCourte(nouveaux[0]);
+  try{
+    if(_notifSupported()&&Notification.permission==='granted'){
+      navigator.serviceWorker.ready.then(reg=>reg.showNotification('Ton coach a répondu',{
+        body:'Réponse à ton bilan du '+d+'.',
+        icon:'./icons/icon-192x192.png',badge:'./icons/icon-192x192.png',
+        tag:'reponse-bilan',requireInteraction:false,data:{url:'./?bilan=1'}
+      })).catch(()=>{});
+    }
+  }catch(e){}
+}
+// Ouverture d'une réponse : marque comme lue, éteint la pastille, et emmène
+// l'athlète sur l'onglet Notes où la réponse est affichée.
+function openReponseBilan(id){
+  const b=((currentUser&&currentUser.bilans)||[]).find(x=>_idBilan(x)===id);
+  if(b&&b.reponseVue===false){ b.reponseVue=true; saveUser(); }
+  _majPastilleBilan();
+  openBilanNotes(id);
+}
+// Onglet Notes de l'écran Évolution. Sert aussi aux lignes « bilan transmis ».
+function openBilanNotes(id){
+  go('s-progress');
+  const btn=document.querySelector('#prog-tabs button[onclick*="notes"]');
+  showProgressTab('notes',btn);
+  if(id) setTimeout(()=>{
+    const el=document.getElementById('bil-'+id);
+    if(el&&el.scrollIntoView) el.scrollIntoView({block:'start'});
+  },60);
+}
+
+// ── Côté coach ──────────────────────────────────────────────────────────────
+// Un bilan « sans réponse » est un bilan auquel le coach n'a pas écrit. Ce
+// n'est plus « pas encore ouvert » : ouvrir ne suffit plus à éteindre le
+// signal, il faut répondre.
+function bilansSansReponse(c){
+  return ((c&&c.bilans)||[]).filter(b=>b&&!b.reponseCoach).length;
+}
+function saveReponseBilan(email,bilanId){
+  const ta=document.getElementById('rb-texte');
+  const txt=((ta&&ta.value)||'').trim();
+  if(!txt){ toast('Écris ta réponse avant d\'envoyer.','var(--orange)'); return false; }
+  const users=DB.get('users')||{};
+  const c=users[email];
+  if(!c||!Array.isArray(c.bilans)){ toast('Athlète introuvable','var(--red)'); return false; }
+  const b=c.bilans.find(x=>_idBilan(x)===bilanId);
+  if(!b){ toast('Bilan introuvable','var(--red)'); return false; }
+  b.reponseCoach=txt.slice(0,2000);
+  b.reponseDate=Date.now();
+  // Repasse à false même si la réponse avait déjà été lue : une réponse
+  // modifiée est une nouvelle information.
+  b.reponseVue=false;
+  users[email]=c;
+  const ok=DB.set('users',users);
+  const envoi=CLOUD.pushOne(email,c);
+  toastSync(ok,envoi,'Réponse envoyée. '+(c.fname||'Ton athlète')+' la verra à sa prochaine ouverture.',
+    'la réponse est');
+  try{ openClientDetail(c.id,true); }catch(e){}
+  return true;
+}
+// Bloc de réponse, rendu SOUS chaque bilan — côté coach uniquement.
+function blocReponseBilan(b,c){
+  if(!b||!c) return '';
+  const id=_idBilan(b);
+  const dejaLue=b.reponseVue===true;
+  const tca=(()=>{ try{ return aTCA(c); }catch(e){ return false; } })();
+  return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+    ${b.reponseCoach?`<div style="background:var(--surface-2);border-radius:8px;padding:9px 11px;margin-bottom:9px">
+      <div style="font-size:var(--fs-xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);font-weight:800;margin-bottom:4px">Ta réponse${dejaLue?' · lue':' · non lue'}</div>
+      <div style="font-size:12px;color:#ddd;line-height:1.6">${escapeHtml(b.reponseCoach)}</div>
+    </div>`:''}
+    ${tca?`<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:8px;padding:9px 11px;margin-bottom:9px;font-size:11px;color:var(--sub);line-height:1.6">
+      Les chiffres de poids sont masqués dans son application. Évite de les citer par message.
+    </div>`:''}
+    <div id="qc-chips-bilan" style="display:flex;gap:6px;overflow-x:auto;padding:6px 0 8px;scrollbar-width:none;-ms-overflow-style:none"></div>
+    <textarea id="rb-texte" rows="3" placeholder="Ce que tu retiens de ce bilan, et ce qu'on ajuste." style="width:100%;box-sizing:border-box">${escapeHtml(b.reponseCoach||'')}</textarea>
+    <button class="btn btn-red btn-sm" onclick="saveReponseBilan('${escapeHtml(c.email||'')}','${escapeHtml(id)}')"
+      style="margin-top:8px;letter-spacing:1px">Envoyer ma réponse</button>
+  </div>`;
+}
+
+// « client » n'est fourni que par l'ecran COACH. Sans lui on est cote
+// athlete : la reponse du coach s'affiche en lecture seule, et surtout PAS
+// le formulaire d'ecriture — ce rendu est partage par les deux ecrans, et
+// l'oublier aurait mis un bouton « Envoyer ma reponse » sur les bilans de
+// l'athlete lui-meme.
+function renderReponsesBilans(bilans,client){
   const bl=(bilans||[]).filter(b=>b&&b.date);
   // Numérotation des bilans de SUIVI seuls. Le questionnaire de départ porte
   // son propre titre, mais il occupait quand même un rang : le premier bilan
@@ -14008,12 +14189,17 @@ function renderReponsesBilans(bilans){
       </div>`;
     }).filter(Boolean).join('');
     if(!answers) return '';
-    return `<div style="background:var(--dark);border:1px solid ${depart?'rgba(224,32,32,.35)':'var(--border)'};border-radius:12px;padding:16px;margin-bottom:12px">
+    return `<div id="bil-${escapeHtml(_idBilan(b))}" style="background:var(--dark);border:1px solid ${depart?'rgba(224,32,32,.35)':'var(--border)'};border-radius:12px;padding:16px;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <div style="font-size:var(--fs-xs);font-weight:900;color:var(--red);text-transform:uppercase;letter-spacing:1.5px">${depart?'Questionnaire de départ':'Bilan '+_rang.get(b)}</div>
         <div style="text-align:right"><div style="font-size:var(--fs-xs);color:var(--text-dim)">${d}</div>${w?`<div style="font-size:12px;font-weight:700;color:#fff;margin-top:2px">⚖️ ${w}kg</div>`:''}</div>
       </div>
       ${answers}
+      ${(!client&&b.reponseCoach)?`<div style="margin-top:10px;background:var(--surface-2);border-left:3px solid var(--green);border-radius:8px;padding:10px 12px">
+        <div style="font-size:var(--fs-xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--green);font-weight:800;margin-bottom:4px">Réponse de ton coach</div>
+        <div style="font-size:12px;color:#ddd;line-height:1.6">${escapeHtml(b.reponseCoach)}</div>
+      </div>`:''}
+      ${client?blocReponseBilan(b,client):''}
     </div>`;
   }).filter(Boolean).join('');
   return cartes||emptyState('message-circle','Aucune réponse écrite pour le moment.');
@@ -17420,21 +17606,42 @@ const QC_DEFAULTS=[
   {label:'Beau travail !',text:"Beau travail"},
   {label:'Belle progression',text:"Belle progression depuis la dernière séance"},
 ];
-function _getQC(){
+// Chips du retour de BILAN. Liste distincte de celle des videos : melanger
+// « Garde le dos droit » et « Bonne semaine » dans le meme jeu n'aurait pas
+// de sens. Elle est FIXE, donc rien n'est ecrit dans le dossier du coach.
+const QC_BILAN_DEFAULTS=[
+  {label:'Bonne semaine',text:"Bonne semaine, le poids évolue comme prévu."},
+  {label:'On ajuste',text:"On ajuste le programme, je te mets ça à jour."},
+  {label:'Sommeil',text:"Le sommeil me préoccupe plus que le reste : on en parle ?"},
+  {label:'Écarts',text:"Les écarts ne sont pas un problème à cette fréquence."},
+  {label:'Mesures',text:"Pense à reprendre les mesures dans les mêmes conditions."}
+];
+// « liste » est facultatif et vaut 'video' par defaut : tous les appels
+// existants gardent exactement leur comportement.
+function _getQC(liste){
+  if(liste==='bilan') return QC_BILAN_DEFAULTS.map((c,i)=>({id:'qcb'+i,label:c.label,text:c.text,pos:i}));
   if(!currentUser.quickComments?.length){
     currentUser.quickComments=QC_DEFAULTS.map((c,i)=>({id:'qcd'+i,label:c.label,text:c.text,pos:i}));
     saveUser();
   }
   return currentUser.quickComments.slice().sort((a,b)=>(a.pos??99)-(b.pos??99));
 }
-function _renderQuickCommentChips(){
-  const el=document.getElementById('qc-chips');if(!el)return;
-  const qcs=_getQC();
-  el.innerHTML=(qcs.length?qcs.map(c=>`<button data-qc="${escapeHtml(c.text)}" onclick="insertQC(this.dataset.qc)" style="flex-shrink:0;background:var(--surface-2);border:1px solid var(--border);border-radius:20px;padding:0 14px;height:44px;color:var(--text);font-family:Montserrat,sans-serif;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.label)}</button>`).join(''):'')
-    +`<button onclick="openQCManager()" style="flex-shrink:0;background:transparent;border:1px dashed var(--border);border-radius:20px;padding:0 14px;height:44px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;cursor:pointer;white-space:nowrap">${icon('edit-2',13)} Gérer</button>`;
+// Le composant etait cable en dur sur l'ecran de retour video : la zone
+// '#qc-chips' et la cible '#vc-general' etaient ecrites dans le code. On les
+// parametre, avec les memes valeurs par defaut — les appels existants ne
+// changent pas, et une batterie de non-regression le verifie.
+function _renderQuickCommentChips(liste){
+  const bilan=liste==='bilan';
+  const zone=bilan?'qc-chips-bilan':'qc-chips';
+  const cible=bilan?'rb-texte':'vc-general';
+  const el=document.getElementById(zone);if(!el)return;
+  const qcs=_getQC(liste);
+  el.innerHTML=(qcs.length?qcs.map(c=>`<button data-qc="${escapeHtml(c.text)}" onclick="insertQC(this.dataset.qc,'${cible}')" style="flex-shrink:0;background:var(--surface-2);border:1px solid var(--border);border-radius:20px;padding:0 14px;height:44px;color:var(--text);font-family:Montserrat,sans-serif;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.label)}</button>`).join(''):'')
+    // La liste du bilan est fixe : pas de bouton de gestion.
+    +(bilan?'':`<button onclick="openQCManager()" style="flex-shrink:0;background:transparent;border:1px dashed var(--border);border-radius:20px;padding:0 14px;height:44px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;cursor:pointer;white-space:nowrap">${icon('edit-2',13)} Gérer</button>`);
 }
-function insertQC(text){
-  const ta=document.getElementById('vc-general');if(!ta)return;
+function insertQC(text,cible){
+  const ta=document.getElementById(cible||'vc-general');if(!ta)return;
   const s=ta.selectionStart,e=ta.selectionEnd;
   const before=ta.value.substring(0,s),after=ta.value.substring(e);
   const sep=(before&&!/[\s\n]$/.test(before))?'. ':'';
@@ -24476,19 +24683,19 @@ function testExercices(){
       ok('urgencyScore 5 : nouveau bilan',urgencyScore(nb)===5,String(urgencyScore(nb)));
       // Bilan vu, mais vieux de plus de 14 jours.
       currentUser.seenBilans={'n3@t.fr':Date.now()};
-      const ov={id:'n3',email:'n3@t.fr',sessions:[],bilans:[{type:'depart',date:_sgJ(30)}],createdAt:_sgJ(60)};
+      const ov={id:'n3',email:'n3@t.fr',sessions:[],bilans:[{type:'depart',date:_sgJ(30),reponseCoach:'vu et répondu',reponseDate:1,reponseVue:true}],createdAt:_sgJ(60)};
       ok('urgencyScore 4 : bilan en retard',urgencyScore(ov)===4,String(urgencyScore(ov)));
       currentUser.seenBilans={'n4@t.fr':Date.now()};
-      const ex={id:'n4',email:'n4@t.fr',sessions:[],bilans:[{type:'depart',date:_sgJ(3)}],
+      const ex={id:'n4',email:'n4@t.fr',sessions:[],bilans:[{type:'depart',date:_sgJ(3),reponseCoach:'vu et répondu',reponseDate:1,reponseVue:true}],
         createdAt:_sgJ(60),status:'COACHING_SUIVI',accessExpiry:Date.now()+5*864e5};
       ok('urgencyScore 3 : accès qui expire',urgencyScore(ex)===3,String(urgencyScore(ex)));
       currentUser.seenBilans={'n5@t.fr':Date.now()};
-      const ac={id:'n5',email:'n5@t.fr',sessions:[],bilans:[{type:'depart',date:_sgJ(3)}],createdAt:_sgJ(60)};
+      const ac={id:'n5',email:'n5@t.fr',sessions:[],bilans:[{type:'depart',date:_sgJ(3),reponseCoach:'vu et répondu',reponseDate:1,reponseVue:true}],createdAt:_sgJ(60)};
       ok('urgencyScore 2 : actif',urgencyScore(ac)===2,String(urgencyScore(ac)));
       currentUser.seenBilans={'n6@t.fr':Date.now()};
       // Tout doit dater de plus de quatorze jours, createdAt compris :
       // isActive retient le PLUS RÉCENT des trois, y compris l'inscription.
-      const inact={id:'n6',email:'n6@t.fr',sessions:[],bilans:[{type:'depart',date:_sgJ(20)}],
+      const inact={id:'n6',email:'n6@t.fr',sessions:[],bilans:[{type:'depart',date:_sgJ(20),reponseCoach:'vu et répondu',reponseDate:1,reponseVue:true}],
         createdAt:_sgJ(60),_fromCode:true};
       ok('urgencyScore 1 : inactif',urgencyScore(inact)===1,String(urgencyScore(inact)));
       currentUser=sauveU;
@@ -24561,7 +24768,7 @@ function testExercices(){
       const sauveU=currentUser;
       currentUser={id:'coach',email:'co@t.fr',role:'coach',seenBilans:{'p2@t.fr':Date.now()},alertStatus:{}};
       const c=_sgAth([_sgSess(6,{[_DC]:[5]}),_sgSess(3,{[_DC]:[5]})],
-        {id:'p2',email:'p2@t.fr',bilans:[{type:'depart',date:_sgJ(40)}]});
+        {id:'p2',email:'p2@t.fr',bilans:[{type:'depart',date:_sgJ(40),reponseCoach:'vu et répondu',reponseDate:1,reponseVue:true}]});
       const v=urgencyScore(c); currentUser=sauveU; return v===9;})());
     ok('Priorité : douleur diffuse vaut 8',(()=>{
       const sauveU=currentUser;
@@ -24578,7 +24785,7 @@ function testExercices(){
       const sauveU=currentUser;
       currentUser={id:'coach',email:'co@t.fr',role:'coach',seenBilans:{'p5@t.fr':Date.now()},alertStatus:{}};
       const c=_sgAth([_sgSess(9,{},10,10),_sgSess(6,{},10,10),_sgSess(3,{},10,10)],
-        {id:'p5',email:'p5@t.fr',bilans:[{type:'depart',date:_sgJ(40)}]});
+        {id:'p5',email:'p5@t.fr',bilans:[{type:'depart',date:_sgJ(40),reponseCoach:'vu et répondu',reponseDate:1,reponseVue:true}]});
       const v=urgencyScore(c); currentUser=sauveU; return v===4;})());
 
     // ── Report : plafond de sept jours, journal, aggravation ──
@@ -24625,7 +24832,7 @@ function testExercices(){
       // ligne administrative « jamais commence », et le decompte du plafond
       // mesurerait autre chose que ce qu'il pretend mesurer.
       const douloureux=(id,nom,ci)=>{
-        const b={type:'depart',date:_sgJ(2)};
+        const b={type:'depart',date:_sgJ(2),reponseCoach:'vu et répondu',reponseDate:1,reponseVue:true};
         if(ci) b['deb-health']=ci;
         currentUser.seenBilans[id+'@t.fr']=Date.now();
         return _sgAth([_sgSess(6,{[nom]:[5]}),_sgSess(3,{[nom]:[5]})],
@@ -24685,7 +24892,7 @@ function testExercices(){
            zTodo.innerHTML.includes(DISCLAIMER_DOULEUR));
         // Sans douleur affichée, pas de disclaimer inutile.
         currentUser.seenBilans={'d1@t.fr':Date.now()};
-        renderTodoBlock([_sgAth([],{id:'d1',email:'d1@t.fr',bilans:[{type:'depart',date:_sgJ(40)}]})]);
+        renderTodoBlock([_sgAth([],{id:'d1',email:'d1@t.fr',bilans:[{type:'depart',date:_sgJ(40),reponseCoach:'vu et répondu',reponseDate:1,reponseVue:true}]})]);
         ok('Sans douleur, aucun disclaimer',!zTodo.innerHTML.includes(DISCLAIMER_DOULEUR));
         ok('Les lignes affichées et _todoRows restent alignés',(()=>{
           currentUser.alertStatus={};
@@ -25195,7 +25402,7 @@ function testExercices(){
       const sauveU=currentUser;
       currentUser={id:'coach',email:'co@t.fr',role:'coach',seenBilans:{},alertStatus:{}};
       const c={id:'dr1',email:'dr1@t.fr',fname:'A',lname:'B',createdAt:Date.now()-60*864e5,
-        bilans:[{type:'depart',date:Date.now()-2*864e5}],sessions:[],exAlias:{},exMuscles:{}};
+        bilans:[{type:'depart',date:Date.now()-2*864e5,reponseCoach:'vu et répondu',reponseDate:1,reponseVue:true}],sessions:[],exAlias:{},exMuscles:{}};
       currentUser.seenBilans['dr1@t.fr']=Date.now();
       const avant=urgencyScore(c);
       poserDrapeauRouge(c,'rachis-lombaire',['irradiation']);
@@ -25254,7 +25461,7 @@ function testExercices(){
       const mk=(id,drap)=>{
         currentUser.seenBilans[id+'@t.fr']=Date.now();
         const c={id,email:id+'@t.fr',fname:'Léa',lname:'Martin',createdAt:Date.now()-60*864e5,
-          bilans:[{type:'depart',date:Date.now()-2*864e5}],sessions:[],exAlias:{},exMuscles:{},
+          bilans:[{type:'depart',date:Date.now()-2*864e5,reponseCoach:'vu et répondu',reponseDate:1,reponseVue:true}],sessions:[],exAlias:{},exMuscles:{},
           programPdfLink:'https://x.test/p.pdf'};
         if(drap) poserDrapeauRouge(c,'rachis-lombaire',['irradiation','neuro']);
         return c;
@@ -26100,6 +26307,319 @@ function testExercices(){
        &&/_appAuPremierPlan()/.test(String(checkWoReminderToday)));
     ok("Aucun requireInteraction:true ne subsiste dans l'app",
        !/requireInteraction:(s*)true/.test(String(checkBilanNotifToday)+String(checkWoReminderToday)));
+
+
+    // ══════════════ NON-RÉGRESSION DU CIRCUIT VIDÉO ══════════════
+    // Écrits AVANT de généraliser le composant de chips, qui est aujourd'hui
+    // câblé en dur sur l'écran de retour vidéo. Ils doivent rester verts après.
+    const _vdU=(vids,extra)=>Object.assign({id:'v',email:'v@t.fr',role:'athlete',
+      exAlias:{},exMuscles:{},sessions:[],bilans:[],videos:vids||[]},extra||{});
+    ok('feedbacksNonVus : test STRICT sur false',(()=>{
+      const u=_vdU([{id:'a',feedbackSeen:false},{id:'b',feedbackSeen:true},
+        {id:'c'},{id:'d',feedbackSeen:undefined},{id:'e',feedbackSeen:0}]);
+      const l=feedbacksNonVus(u);
+      return l.length===1&&l[0].id==='a';})());
+    ok('feedbacksNonVus : aucune vidéo, aucune exception',
+       feedbacksNonVus({}).length===0&&feedbacksNonVus(null).length===0
+       &&feedbacksNonVus(_vdU([])).length===0);
+    ok('_majPastilleVideos : allume et éteint la pastille',(()=>{
+      const sauve=currentUser;
+      const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="videos"]');
+      if(!btn){ currentUser=sauve; return false; }
+      const dot=btn.querySelector('.tab-dot');
+      currentUser=_vdU([{id:'a',feedbackSeen:false}]);
+      _majPastilleVideos();
+      const allume=dot&&dot.classList.contains('on')&&/1 retour/.test(btn.getAttribute('aria-label')||'');
+      currentUser=_vdU([{id:'a',feedbackSeen:true}]);
+      _majPastilleVideos();
+      const eteint=dot&&!dot.classList.contains('on')&&!btn.getAttribute('aria-label');
+      currentUser=sauve; _majPastilleVideos();
+      return allume&&eteint;})());
+    ok('checkFeedbackNotif : premier passage, aucune notification',(()=>{
+      const sauve=currentUser;
+      let emises=0;
+      const vraiN=window.Notification;
+      currentUser=_vdU([{id:'a',feedbackDate:Date.now()-10*864e5},
+                        {id:'b',feedbackDate:Date.now()-5*864e5}]);
+      // Pas de _lastFbNotif : le garde doit prendre acte SANS notifier.
+      try{ checkFeedbackNotif(); }catch(e){}
+      const pris=typeof currentUser._lastFbNotif==='number';
+      currentUser=sauve;
+      return pris&&emises===0;})());
+    ok('checkFeedbackNotif : repère posé sur le plus récent',(()=>{
+      const sauve=currentUser;
+      const t1=Date.now()-10*864e5, t2=Date.now()-5*864e5;
+      currentUser=_vdU([{id:'a',feedbackDate:t1},{id:'b',feedbackDate:t2}]);
+      try{ checkFeedbackNotif(); }catch(e){}
+      const r=currentUser._lastFbNotif;
+      currentUser=sauve;
+      return r===t2;})());
+    ok('checkFeedbackNotif : aucun retour, rien n\'est écrit',(()=>{
+      const sauve=currentUser;
+      currentUser=_vdU([{id:'a'}]);
+      try{ checkFeedbackNotif(); }catch(e){}
+      const r=currentUser._lastFbNotif;
+      currentUser=sauve;
+      return r===undefined;})());
+    ok('_getQC : la liste par défaut compte six commentaires',(()=>{
+      const sauve=currentUser;
+      currentUser=_vdU([],{quickComments:null});
+      const l=_getQC();
+      currentUser=sauve;
+      return l.length===QC_DEFAULTS.length&&l.length===6&&l[0].text==='Garde le dos droit';})());
+    ok('_getQC : la liste de l\'utilisateur est respectée et triée',(()=>{
+      const sauve=currentUser;
+      currentUser=_vdU([],{quickComments:[{id:'x',label:'B',text:'bb',pos:1},{id:'y',label:'A',text:'aa',pos:0}]});
+      const l=_getQC();
+      currentUser=sauve;
+      return l.length===2&&l[0].text==='aa';})());
+    ok('insertQC : écrit dans le textarea du retour vidéo',(()=>{
+      const ta=document.createElement('textarea'); ta.id='vc-general'; ta.value='';
+      document.body.appendChild(ta);
+      insertQC('Garde le dos droit');
+      const v=ta.value; ta.remove();
+      return v==='Garde le dos droit';})());
+    ok('insertQC : sépare par un point quand du texte précède',(()=>{
+      const ta=document.createElement('textarea'); ta.id='vc-general'; ta.value='Bien';
+      document.body.appendChild(ta);
+      ta.setSelectionRange(4,4);
+      insertQC('Souffle sur l\'effort');
+      const v=ta.value; ta.remove();
+      return v==='Bien. Souffle sur l\'effort';})());
+    ok('insertQC : sans textarea, aucune exception',(()=>{
+      try{ insertQC('x'); return true; }catch(e){ return false; }})());
+    ok('_renderQuickCommentChips : peuple la zone de chips',(()=>{
+      const sauve=currentUser;
+      currentUser=_vdU([],{quickComments:[{id:'x',label:'Dos',text:'Garde le dos droit',pos:0}]});
+      const z=document.createElement('div'); z.id='qc-chips';
+      document.body.appendChild(z);
+      _renderQuickCommentChips();
+      const h=z.innerHTML; z.remove(); currentUser=sauve;
+      return /data-qc="Garde le dos droit"/.test(h)&&/insertQC\(/.test(h);})());
+    ok('_renderQuickCommentChips : sans zone, aucune exception',(()=>{
+      try{ _renderQuickCommentChips(); return true; }catch(e){ return false; }})());
+
+
+    // ══════════════ RÉPONSE DU COACH AU BILAN ══════════════
+    const _rbB=(jours,extra)=>Object.assign({type:'suivi',date:Date.now()-jours*864e5,
+      'bil-weight':'80'},extra||{});
+    const _rbU=(bils,extra)=>Object.assign({id:'rb',email:'rb@t.fr',role:'athlete',
+      exAlias:{},exMuscles:{},sessions:[],videos:[],bilans:bils||[]},extra||{});
+
+    // ── bilansAvecReponseNonVue : test STRICT, comme feedbacksNonVus ──
+    ok('Bilans absents : tableau vide, aucune exception',
+       bilansAvecReponseNonVue({}).length===0&&bilansAvecReponseNonVue(null).length===0);
+    ok('Tableau vide : rien ne remonte',bilansAvecReponseNonVue(_rbU([])).length===0);
+    ok('Champ absent : ne remonte PAS',(()=>{
+      // C'est LE cas qui compte : tout l'historique d'avant le déploiement.
+      return bilansAvecReponseNonVue(_rbU([_rbB(10),_rbB(24),_rbB(38)])).length===0;})());
+    ok('reponseVue === false : remonte',
+       bilansAvecReponseNonVue(_rbU([_rbB(10,{reponseVue:false})])).length===1);
+    ok('reponseVue === true : ne remonte pas',
+       bilansAvecReponseNonVue(_rbU([_rbB(10,{reponseVue:true})])).length===0);
+    ok('reponseVue === undefined : ne remonte pas',
+       bilansAvecReponseNonVue(_rbU([_rbB(10,{reponseVue:undefined})])).length===0);
+    ok('reponseVue === 0 : ne remonte pas non plus',
+       bilansAvecReponseNonVue(_rbU([_rbB(10,{reponseVue:0})])).length===0);
+    ok('Mélange : seuls les false remontent',(()=>{
+      const l=bilansAvecReponseNonVue(_rbU([_rbB(5,{reponseVue:false}),_rbB(10,{reponseVue:true}),
+        _rbB(15),_rbB(20,{reponseVue:0}),_rbB(25,{reponseVue:false})]));
+      return l.length===2;})());
+
+    // ── checkReponseBilanNotif : garde de premier passage ──
+    (function(){
+      const sauve=currentUser;
+      // Dix bilans anciens DÉJÀ répondus, aucun repère : zéro notification.
+      const dix=[];
+      for(let i=0;i<10;i++) dix.push(_rbB(i*7+3,{reponseCoach:'ok',reponseDate:Date.now()-(i*7+3)*864e5,reponseVue:true}));
+      currentUser=_rbU(dix);
+      let emises=0;
+      const vraiSw=navigator.serviceWorker;
+      checkReponseBilanNotif();
+      ok('Premier passage, dix réponses anciennes : ZÉRO notification et repère posé',
+         typeof currentUser._lastRepBilanNotif==='number'&&emises===0);
+      ok('Le repère vaut la réponse la plus récente',
+         currentUser._lastRepBilanNotif===Math.max.apply(null,dix.map(b=>b.reponseDate)));
+      // Une réponse neuve : le repère avance.
+      const avant=currentUser._lastRepBilanNotif;
+      currentUser.bilans.push(_rbB(0,{reponseCoach:'neuf',reponseDate:Date.now(),reponseVue:false}));
+      checkReponseBilanNotif();
+      ok('Réponse neuve : le repère avance',currentUser._lastRepBilanNotif>avant);
+      // Deux réponses neuves d'un coup : une seule avance, une seule émission.
+      const avant2=currentUser._lastRepBilanNotif;
+      currentUser.bilans.push(_rbB(0,{reponseCoach:'a',reponseDate:Date.now()+1000,reponseVue:false}));
+      currentUser.bilans.push(_rbB(0,{reponseCoach:'b',reponseDate:Date.now()+2000,reponseVue:false}));
+      checkReponseBilanNotif();
+      ok('Deux réponses neuves : un seul repère, le plus récent',
+         currentUser._lastRepBilanNotif===Math.max.apply(null,
+           currentUser.bilans.map(b=>b.reponseDate).filter(d=>typeof d==='number')));
+      ok('Rien de neuf : le repère ne bouge pas',(()=>{
+        const r=currentUser._lastRepBilanNotif;
+        checkReponseBilanNotif();
+        return currentUser._lastRepBilanNotif===r;})());
+      ok('Aucune réponse : aucun repère n\'est écrit',(()=>{
+        currentUser=_rbU([_rbB(5)]);
+        checkReponseBilanNotif();
+        return currentUser._lastRepBilanNotif===undefined;})());
+      currentUser=sauve;
+    })();
+
+    // ── _majPastilleBilan ──
+    ok('La pastille de l\'onglet Bilan existe dans le HTML',
+       !!document.querySelector('#client-tabbar .tab-btn[data-tab="bilan"] .tab-dot'));
+    ok('Pastille allumée puis éteinte',(()=>{
+      const sauve=currentUser;
+      const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="bilan"]');
+      const dot=btn&&btn.querySelector('.tab-dot');
+      if(!dot){ currentUser=sauve; return false; }
+      currentUser=_rbU([_rbB(3,{reponseCoach:'x',reponseDate:Date.now(),reponseVue:false})]);
+      _majPastilleBilan();
+      const on=dot.classList.contains('on')&&/1 réponse/.test(btn.getAttribute('aria-label')||'');
+      currentUser=_rbU([_rbB(3,{reponseCoach:'x',reponseDate:Date.now(),reponseVue:true})]);
+      _majPastilleBilan();
+      const off=!dot.classList.contains('on')&&!btn.getAttribute('aria-label');
+      currentUser=sauve; _majPastilleBilan();
+      return on&&off;})());
+    ok('Historique sans les champs : aucune pastille',(()=>{
+      const sauve=currentUser;
+      const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="bilan"]');
+      const dot=btn&&btn.querySelector('.tab-dot');
+      currentUser=_rbU([_rbB(10),_rbB(24),_rbB(38)]);
+      _majPastilleBilan();
+      const r=dot&&!dot.classList.contains('on');
+      currentUser=sauve; _majPastilleBilan();
+      return !!r;})());
+
+    // ── openReponseBilan ──
+    ok('Ouvrir marque comme lu et éteint la pastille',(()=>{
+      const sauve=currentUser;
+      const b=_rbB(3,{reponseCoach:'x',reponseDate:Date.now(),reponseVue:false});
+      currentUser=_rbU([b]);
+      const id=_idBilan(b);
+      openReponseBilan(id);
+      const r=b.reponseVue===true&&bilansAvecReponseNonVue(currentUser).length===0;
+      currentUser=sauve; go('s-client-home');
+      return r;})());
+    ok('Ouvrir un identifiant inconnu ne lève pas',(()=>{
+      const sauve=currentUser;
+      currentUser=_rbU([]);
+      let ok2=true; try{ openReponseBilan('inexistant'); }catch(e){ ok2=false; }
+      currentUser=sauve; go('s-client-home');
+      return ok2;})());
+
+    // ── saveReponseBilan ──
+    (function(){
+      const sauveU=currentUser;
+      const sauveUsers=DB.get('users');
+      const ta=document.createElement('textarea'); ta.id='rb-texte'; document.body.appendChild(ta);
+      const b=_rbB(2);
+      const client={id:'cl1',email:'cl1@t.fr',fname:'Léa',role:'athlete',bilans:[b]};
+      const users=Object.assign({},sauveUsers||{}); users['cl1@t.fr']=client;
+      DB.set('users',users);
+      currentUser={id:'co',email:'co@t.fr',role:'coach',exAlias:{},exMuscles:{},sessions:[],bilans:[]};
+      const id=_idBilan(b);
+      ta.value='';
+      ok('Texte vide : envoi refusé',saveReponseBilan('cl1@t.fr',id)===false);
+      ta.value='   \n  ';
+      ok('Espaces uniquement : envoi refusé',saveReponseBilan('cl1@t.fr',id)===false);
+      ok('Rien n\'a été écrit sur le bilan',
+         (DB.get('users')['cl1@t.fr'].bilans[0].reponseCoach)===undefined);
+      ta.value='Bonne semaine, on continue.';
+      ok('Texte valide : les trois champs sont écrits',(()=>{
+        saveReponseBilan('cl1@t.fr',id);
+        const x=DB.get('users')['cl1@t.fr'].bilans[0];
+        return x.reponseCoach==='Bonne semaine, on continue.'
+          &&typeof x.reponseDate==='number'&&x.reponseVue===false;})());
+      ok('Modifier une réponse déjà lue la remet en non lue',(()=>{
+        const u2=DB.get('users'); u2['cl1@t.fr'].bilans[0].reponseVue=true; DB.set('users',u2);
+        ta.value='Finalement, on ajuste.';
+        saveReponseBilan('cl1@t.fr',id);
+        const x=DB.get('users')['cl1@t.fr'].bilans[0];
+        return x.reponseVue===false&&x.reponseCoach==='Finalement, on ajuste.';})());
+      ok('Athlète introuvable : refus sans exception',saveReponseBilan('personne@t.fr',id)===false);
+      ok('Bilan introuvable : refus sans exception',saveReponseBilan('cl1@t.fr','bil_0')===false);
+      ta.remove();
+      if(sauveUsers) DB.set('users',sauveUsers);
+      currentUser=sauveU;
+    })();
+
+    // ── hasNewBilan : le signal retombe à la RÉPONSE ──
+    (function(){
+      const sauve=currentUser;
+      currentUser={id:'co',email:'co@t.fr',role:'coach',seenBilans:{},alertStatus:{},sessions:[]};
+      const sansRep={id:'x1',email:'x1@t.fr',bilans:[_rbB(2)],sessions:[]};
+      const avecRep={id:'x2',email:'x2@t.fr',bilans:[_rbB(2,{reponseCoach:'ok',reponseDate:1,reponseVue:false})],sessions:[]};
+      ok('Bilan sans réponse : signal actif',hasNewBilan(sansRep)===true);
+      ok('Critère 8 : bilan répondu, le signal retombe',hasNewBilan(avecRep)===false);
+      ok('Ouvrir ne suffit plus : seenBilans n\'éteint plus le signal',(()=>{
+        currentUser.seenBilans={'x1@t.fr':Date.now()+1e6};
+        return hasNewBilan(sansRep)===true;})());
+      ok('Compteur coach : bilans sans réponse',
+         bilansSansReponse(sansRep)===1&&bilansSansReponse(avecRep)===0
+         &&bilansSansReponse({})===0);
+      currentUser=sauve;
+    })();
+
+    // ── renderNotifs : les quatre cas ──
+    (function(){
+      const sauve=currentUser;
+      const z=document.getElementById('clh-notifs'); const garde=z?z.innerHTML:null;
+      const lire=()=>{ renderNotifs(); return z?z.innerHTML:''; };
+      if(z){
+        // Sans coach : plus de mensonge.
+        currentUser=_rbU([_rbB(2)],{createdAt:Date.now()-60*864e5});
+        ok('Sans coachId : « enregistré », jamais « transmis à ton coach »',(()=>{
+          const h=lire();
+          return /Bilan du .* enregistré\./.test(h)&&!/transmis à ton coach/.test(h);})());
+        ok('Sans coachId : la ligne est cliquable',/openBilanNotes\(\)/.test(lire()));
+        // Avec coach, sans réponse.
+        currentUser=_rbU([_rbB(2)],{coachId:'co9',createdAt:Date.now()-60*864e5});
+        ok('Avec coach et sans réponse : « transmis à ton coach »',
+           /transmis à ton coach/.test(lire()));
+        // Avec réponse non vue : entrée EN TÊTE, et la ligne « transmis » disparaît.
+        currentUser=_rbU([_rbB(2,{reponseCoach:'x',reponseDate:Date.now(),reponseVue:false})],
+          {coachId:'co9',createdAt:Date.now()-60*864e5});
+        ok('Réponse non vue : l\'entrée est EN TÊTE',(()=>{
+          const h=lire();
+          const i=h.indexOf('a répondu à ton bilan');
+          return i>=0&&(h.indexOf('transmis à ton coach')<0)&&i<h.length;})());
+        ok('Réponse non vue : l\'entrée est cliquable',/openReponseBilan\(/.test(lire()));
+        ok('Réponse non vue : pas de doublon avec la ligne « transmis »',
+           !/transmis à ton coach/.test(lire()));
+        // Avec réponse déjà vue : plus d'entrée en tête, la ligne revient.
+        currentUser=_rbU([_rbB(2,{reponseCoach:'x',reponseDate:Date.now(),reponseVue:true})],
+          {coachId:'co9',createdAt:Date.now()-60*864e5});
+        ok('Réponse déjà vue : plus d\'entrée en tête',!/a répondu à ton bilan/.test(lire()));
+        ok('Réponse déjà vue : la ligne de transmission revient',/transmis à ton coach/.test(lire()));
+        z.innerHTML=garde;
+      }
+      currentUser=sauve;
+    })();
+
+    // ── Le rendu partagé ne montre le formulaire QUE côté coach ──
+    ok('Côté athlète : la réponse est lisible, sans formulaire',(()=>{
+      const b=_rbB(2,{reponseCoach:'Bonne semaine.',reponseDate:Date.now(),reponseVue:true,'bil-motivation':'8'});
+      const h=renderReponsesBilans([b]);
+      return /Réponse de ton coach/.test(h)&&/Bonne semaine\./.test(h)
+        &&!/rb-texte/.test(h)&&!/Envoyer ma réponse/.test(h);})());
+    ok('Côté coach : le formulaire est présent',(()=>{
+      const b=_rbB(2,{'bil-motivation':'8'});
+      const h=renderReponsesBilans([b],{id:'c1',email:'c1@t.fr',fname:'Léa',bilans:[b]});
+      return /rb-texte/.test(h)&&/Envoyer ma réponse/.test(h)
+        &&/Ce que tu retiens de ce bilan, et ce qu'on ajuste\./.test(h.replace(/&#39;/g,"'"));})());
+    ok('Côté coach : les cinq chips de bilan sont distinctes des chips vidéo',(()=>{
+      const l=_getQC('bilan');
+      return l.length===5&&l[0].text==='Bonne semaine, le poids évolue comme prévu.'
+        &&!l.some(x=>x.text==='Garde le dos droit');})());
+    ok('Antécédent déclaré : la mention de masquage apparaît',(()=>{
+      const b=_rbB(2,{'bil-motivation':'8'});
+      const c={id:'c1',email:'c1@t.fr',fname:'Léa',bilans:[{type:'depart','deb-tca':'anorexie'},b]};
+      const h=renderReponsesBilans([b],c);
+      return /Les chiffres de poids sont masqués dans son application/.test(h);})());
+    ok('Sans antécédent : aucune mention de masquage',(()=>{
+      const b=_rbB(2,{'bil-motivation':'8'});
+      const h=renderReponsesBilans([b],{id:'c1',email:'c1@t.fr',fname:'Léa',bilans:[b]});
+      return !/Les chiffres de poids sont masqués/.test(h);})());
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
