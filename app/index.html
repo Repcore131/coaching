@@ -9027,6 +9027,7 @@ function renderProgEx(){
           <input value="${escapeHtml(ex.tempo||'')}" onchange="_progExDirty=true;progEx[${i}].tempo=this.value" placeholder="3-1-1-0">
         </div>
         ${_selecteurTechnique(ex,i)}
+        ${_blocAvertissementContrainte(ex,i)}
         ${_ligneMuscles(ex,i)}
         <!-- Image + Vidéo exercice -->
         <div style="display:flex;align-items:flex-start;gap:10px;margin-top:4px">
@@ -9960,6 +9961,7 @@ function woPersist(){
       progName:woState.progName,
       // Échéance du minuteur de repos : sans elle, une séance reprise
       // redémarrerait sans savoir qu'un repos était en cours.
+      substitutions:(woState.substitutions||[]).slice(),
       reposFin:woState.reposFin||null,
       reposTotal:woState.reposTotal||null,
       reposLib:woState.reposLib||'',
@@ -10562,6 +10564,7 @@ function _blocExo(idx,estSS){
       // qui ne correspond ni aux mêmes répétitions ni au même effort.
       `<div id="wo-no-hist-${idx}" class="wo-no-hist sub" style="font-size:11px;background:var(--surface-2);border-radius:8px;padding:10px 13px;margin-bottom:12px;line-height:1.6">Pas encore d'historique pour cet exercice ${escapeHtml(creneauPhrase)} : note ta charge, elle servira de repère la prochaine fois.</div>`}
 
+      ${_blocContrainteSeance(ex,idx)}
       ${(ex.description||ex.note||ex.tempo)?`<div style="background:var(--surface-2);border-radius:10px;padding:11px 14px;margin-bottom:12px">
         <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--red);margin-bottom:5px">CONSIGNE</div>
         ${blocTempo(ex)}
@@ -10884,7 +10887,10 @@ function finishWorkout(incomplete=false){
   const sess={id:'s_'+Date.now(),date:Date.now(),name:woState.progName,slot:woState.slot??null,duration:mins,sets,setsPlanned,volume:Math.round(vol),complete:!incomplete,data,
     // Planifiee par le coach : cette seance sort de la serie temporelle et ne
     // peut donc pas passer pour un recul.
-    deload:!!woState.deload};
+    deload:!!woState.deload,
+    // Substitutions de la seance : l'athlete a remplace un exercice pour
+    // AUJOURD'HUI. sessions_config n'a pas bouge, le coach doit le voir.
+    substitutions:(woState.substitutions||[]).slice()};
   if(!currentUser.sessions) currentUser.sessions=[];
   currentUser.sessions.push(sess);
   _viderCachePlateau();
@@ -13816,6 +13822,160 @@ function _objEnregistrer(){
   closeModal();
   toast('Objectif enregistré 👍');
   if(document.getElementById('clh-objectif')) loadClientHome();
+}
+
+
+// ── Contre-indication croisée avec l'exercice ───────────────────────────────
+// Cette partie attendait FB-06 : sans note de charge articulaire,
+// contraintesPourExercice rendait toujours un tableau vide. Les notes du coach
+// existent désormais, le croisement peut opérer.
+//
+// L'EXERCICE N'EST JAMAIS SUPPRIMÉ AUTOMATIQUEMENT. On avertit, on propose, on
+// demande une justification. La décision reste au coach, et en séance elle
+// reste à l'athlète — pour SA séance seulement.
+
+// À qui s'appliquent les contraintes dans l'éditeur ? Au client dont on édite
+// le programme. Un modèle de programme n'est rattaché à personne : il n'y a
+// alors aucune contrainte à croiser, et aucun avertissement à produire.
+function _cibleContraintes(){
+  if(currentUser&&currentUser.role!=='coach') return currentUser;
+  if(typeof _coachEditClient!=='undefined'&&_coachEditClient) return _coachEditClient;
+  try{
+    if(typeof currentClientId!=='undefined'&&currentClientId) return getOwnedClient(currentClientId);
+  }catch(e){}
+  return null;
+}
+function _exemplesSubstitut(s,n){
+  return (SCHEMAS_BRUT[s.schema]||'').split('~').filter(Boolean).slice(0,n||3);
+}
+// Bloc d'avertissement de l'éditeur.
+function _blocAvertissementContrainte(ex,i){
+  const cible=_cibleContraintes();
+  if(!cible||!ex||!ex.name) return '';
+  let l=[];
+  try{ l=contraintesPourExercice(ex,cible); }catch(e){ return ''; }
+  if(!l.length) return '';
+  const c=l[0];
+  // Justification déjà donnée : on rappelle la décision au lieu de la
+  // redemander à chaque ouverture de l'éditeur.
+  if(ex.justificationContrainte){
+    return `<div style="margin-top:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--sub);line-height:1.6">
+      Contrainte ${escapeHtml(libZone(c.zone))} maintenue : « ${escapeHtml(ex.justificationContrainte)} »
+      <button onclick="_annulerJustification(${i})" style="background:none;border:none;padding:0 0 0 6px;color:var(--link);font-size:11px;cursor:pointer">revoir</button>
+    </div>`;
+  }
+  const subs=(()=>{ try{ return substitutsDe(ex,{zone:c.zone}).slice(0,3); }catch(e){ return []; } })();
+  return `<div style="margin-top:8px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:8px;padding:10px 12px">
+    <div style="font-size:11px;color:#eee;line-height:1.6">
+      ${escapeHtml(cible.fname||'Cet athlète')} a signalé : <b>${escapeHtml(libZone(c.zone))}</b>, ${escapeHtml(libNiveau(c.niveau))}${c.libelle?' — '+escapeHtml(c.libelle):''}.
+    </div>
+    <div style="font-size:11px;color:#eee;line-height:1.6;margin-top:4px">
+      <b>${escapeHtml(ex.name)}</b> sollicite fortement ${escapeHtml(libZone(c.zone))}.
+    </div>
+    ${subs.length?`<div style="font-size:10px;color:var(--sub);line-height:1.6;margin-top:7px">Mouvements moins exigeants sur cette zone :</div>
+      ${subs.map(s=>`<div style="margin-top:5px">
+        <div style="font-size:10px;color:var(--text-faint)">${escapeHtml(s.lib)} · charge ${s.charge}/3</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:3px">
+          ${_exemplesSubstitut(s,3).map(n=>`<button onclick="_remplacerParExo(${i},${JSON.stringify(n).replace(/"/g,'&quot;')})"
+            style="background:var(--surface-1);border:1px solid var(--border);border-radius:7px;padding:6px 9px;font-size:10px;color:#ddd;cursor:pointer">${escapeHtml(n.toLowerCase())}</button>`).join('')}
+        </div></div>`).join('')}`
+      :`<div style="font-size:10px;color:var(--text-faint);line-height:1.6;margin-top:7px">Aucun mouvement de remplacement à proposer : les charges articulaires ne sont pas encore renseignées pour les autres familles.</div>`}
+    <div style="display:flex;gap:7px;margin-top:9px">
+      <button onclick="_garderMalgreContrainte(${i})" class="btn btn-outline btn-sm" style="flex:1;letter-spacing:.5px;font-size:10px">Garder — je sais ce que je fais</button>
+    </div>
+    ${blocDisclaimerSante()}
+  </div>`;
+}
+function _remplacerParExo(i,nom){
+  if(!progEx[i]) return;
+  _progExDirty=true;
+  progEx[i].name=nom;
+  delete progEx[i].justificationContrainte;
+  renderProgEx();
+  toast('Exercice remplacé');
+}
+function _garderMalgreContrainte(i){
+  if(!progEx[i]) return;
+  const j=prompt('Pourquoi tu maintiens cet exercice ? (une ligne)');
+  if(j==null) return;
+  const t=String(j).trim().slice(0,200);
+  if(!t){ toast('Une justification est demandée','var(--orange)'); return; }
+  _progExDirty=true;
+  progEx[i].justificationContrainte=t;
+  renderProgEx();
+}
+function _annulerJustification(i){
+  if(!progEx[i]) return;
+  _progExDirty=true;
+  delete progEx[i].justificationContrainte;
+  renderProgEx();
+}
+
+// ── En séance ───────────────────────────────────────────────────────────────
+function _blocContrainteSeance(ex,idx){
+  if(!currentUser||!ex||!ex.name) return '';
+  let l=[];
+  try{ l=contraintesPourExercice(ex,currentUser); }catch(e){ return ''; }
+  if(!l.length) return '';
+  if(ex.justificationContrainte){
+    return `<div style="background:var(--surface-2);border-radius:10px;padding:11px 14px;margin-bottom:12px">
+      <div style="font-size:12px;color:#ddd;line-height:1.6">Ton coach a maintenu cet exercice : « ${escapeHtml(ex.justificationContrainte)} »</div>
+      ${blocDisclaimerSante()}
+    </div>`;
+  }
+  const c=l[0];
+  const subs=(()=>{ try{ return substitutsDe(ex,{zone:c.zone}).slice(0,3); }catch(e){ return []; } })();
+  return `<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:10px;padding:11px 14px;margin-bottom:12px">
+    <div style="font-size:12px;color:#eee;line-height:1.6">
+      ⚠ Tu as signalé une gêne au ${escapeHtml(libZone(c.zone))}. Cet exercice sollicite beaucoup cette zone.
+      Reste sur une charge où ta technique est parfaite, et arrête si ça pince.
+    </div>
+    ${subs.length?`<button onclick="_jeRemplace(${idx})" class="btn btn-outline btn-sm" style="margin-top:9px;letter-spacing:1px;font-size:10px">Je remplace</button>`:''}
+    ${blocDisclaimerSante()}
+  </div>`;
+}
+// Substitution POUR CETTE SÉANCE UNIQUEMENT : woState.exercises change,
+// sessions_config n'est pas touché, et l'échange est journalisé pour le coach.
+function _jeRemplace(idx){
+  const ex=(woState.exercises||[])[idx];
+  if(!ex) return;
+  let l=[];
+  try{ l=contraintesPourExercice(ex,currentUser); }catch(e){ return; }
+  if(!l.length) return;
+  const subs=substitutsDe(ex,{zone:l[0].zone}).slice(0,3);
+  if(!subs.length){ toast('Aucun remplacement à proposer','var(--orange)'); return; }
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',
+    `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
+      <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:16px 16px 0 0;padding:18px;width:100%;max-width:520px;max-height:88vh;overflow:auto">
+        <div style="font-size:15px;font-weight:800;margin-bottom:3px">Remplacer pour aujourd'hui</div>
+        <div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:12px">
+          Ton programme n'est pas modifié. Ton coach verra l'échange.
+        </div>
+        ${subs.map(s=>`<div style="margin-bottom:10px">
+          <div style="font-size:10px;color:var(--text-faint);letter-spacing:1px;text-transform:uppercase">${escapeHtml(s.lib)}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+            ${_exemplesSubstitut(s,4).map(n=>`<button onclick="_appliquerSubstitut(${idx},${JSON.stringify(n).replace(/"/g,'&quot;')})"
+              class="hit44" style="min-height:40px;background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:8px 11px;font-size:11px;color:#ddd;cursor:pointer">${escapeHtml(n.toLowerCase())}</button>`).join('')}
+          </div></div>`).join('')}
+        ${blocDisclaimerSante()}
+      </div></div>`);
+}
+function _appliquerSubstitut(idx,nom){
+  const ex=(woState.exercises||[])[idx];
+  if(!ex) return;
+  if(!woState.substitutions) woState.substitutions=[];
+  woState.substitutions.push({de:ex.name,vers:nom,date:Date.now()});
+  ex.name=nom;
+  // Les séries déjà saisies portaient sur l'exercice précédent : on repart
+  // propre plutôt que d'attribuer des charges à un mouvement qui n'a pas été
+  // fait.
+  if(woState.sessionData&&woState.sessionData[idx])
+    woState.sessionData[idx].sets=woState.sessionData[idx].sets.map(()=>({}));
+  woPersist();
+  closeModal();
+  renderWoEx();
+  toast('Remplacé pour aujourd\'hui');
 }
 
 function contreIndications(bilans){
@@ -25568,6 +25728,120 @@ function testExercices(){
         currentUser.sessions_config=[];
         return _htmlVolumeCreneau(currentUser)===''&&_perfCreneauCourant(currentUser)===null;})());
       currentUser=sauveU; _perfCreneau=sauveC;
+    })();
+
+
+    // ══════════════ CONTRE-INDICATION CROISÉE : LA PARTIE DÉBLOQUÉE ══════════════
+    // Elle attendait les notes de charge articulaire. On les pose ici pour
+    // vérifier la chaîne complète, sans dépendre de la grille réelle du coach.
+    (function(){
+      const sauveU=currentUser, sauveP=(typeof progEx!=='undefined')?progEx.slice():null;
+      const sauveW=(typeof woState!=='undefined')?woState:null;
+      const sauveCE=(typeof _coachEditClient!=='undefined')?_coachEditClient:null;
+      currentUser={id:'c',email:'c@t.fr',role:'coach',exAlias:{},exMuscles:{},sessions:[],bilans:[],
+        chargesSchema:{'charniere-hanche':{'rachis-lombaire':3},
+                       'isolation-genou':{'rachis-lombaire':0},
+                       'poussee-horizontale':{'rachis-lombaire':1},
+                       'tirage-vertical':{'rachis-lombaire':1}}};
+      const athlete={id:'a1',email:'a1@t.fr',fname:'Marc',exAlias:{},exMuscles:{},sessions:[],
+        bilans:[{type:'depart','deb-health':'hernie L5-S1'}],
+        contraintesSante:[{id:'x',zone:'rachis-lombaire',cote:'les-deux',niveau:'douleur',
+          libelle:'depuis 2023',source:'coach',date:Date.now(),actif:true}]};
+      _coachEditClient=athlete;
+
+      // Critère 1 : avertissement + au moins deux substituts de charge plus basse.
+      ok('Critère 1 : le soulevé de terre déclenche l\'avertissement',(()=>{
+        return contraintesPourExercice({name:'SOULEVE DE TERRE ROUMAIN HALTERES'},athlete).length===1;})());
+      progEx.length=0;
+      progEx.push({name:'SOULEVE DE TERRE ROUMAIN HALTERES',series:3,reps:'10',repos:'2 min'});
+      const hEd=_blocAvertissementContrainte(progEx[0],0);
+      ok('Critère 1 : la contrainte déclarée est rappelée',
+         /bas du dos/.test(hEd)&&/ça me fait mal quand je force/.test(hEd.replace(/&#39;/g,"'"))
+         &&/depuis 2023/.test(hEd));
+      ok('Critère 1 : la phrase « sollicite fortement » est présente',
+         /sollicite fortement bas du dos/.test(hEd));
+      ok('Critère 1 : au moins deux substituts sont proposés',(()=>{
+        const l=substitutsDe({name:'SOULEVE DE TERRE ROUMAIN HALTERES'},{zone:'rachis-lombaire'});
+        return l.length>=2&&l.every(x=>x.charge<3);})());
+      ok('Critère 8 : le disclaimer accompagne l\'avertissement',hEd.includes(DISCLAIMER_SANTE));
+      ok('Critère 8 : aucun libellé n\'autorise ni ne rassure',
+         !/sans risque|sûr pour|adapté à ta blessure|soigne|guérit/i.test(hEd));
+      ok('L\'exercice n\'est JAMAIS supprimé automatiquement',
+         progEx.length===1&&progEx[0].name==='SOULEVE DE TERRE ROUMAIN HALTERES');
+
+      // Critère 2 : « Garder » demande et stocke une justification.
+      ok('Critère 2 : la justification est stockée et rappelée',(()=>{
+        progEx[0].justificationContrainte='charge légère, technique validée';
+        const h=_blocAvertissementContrainte(progEx[0],0);
+        return /charge légère, technique validée/.test(h)&&!/sollicite fortement/.test(h);})());
+
+      // Critère 3 : côté athlète, la justification prime sur l'avertissement.
+      currentUser=Object.assign({},athlete,{
+        chargesSchema:{'charniere-hanche':{'rachis-lombaire':3},'isolation-genou':{'rachis-lombaire':0}}});
+      ok('Critère 3 : l\'athlète voit la justification, pas l\'avertissement générique',(()=>{
+        const h=_blocContrainteSeance({name:'SOULEVE DE TERRE',justificationContrainte:'on garde, charge légère'},0);
+        return /Ton coach a maintenu cet exercice/.test(h)&&/on garde, charge légère/.test(h)
+          &&!/Tu as signalé une gêne/.test(h);})());
+      // Critère 4 : athlète autonome, contrainte épaule niveau eviter.
+      ok('Critère 4 : avertissement et bouton « Je remplace »',(()=>{
+        currentUser.contraintesSante=[{id:'y',zone:'epaule',niveau:'eviter',actif:true}];
+        currentUser.chargesSchema={'poussee-verticale':{'epaule':3},'isolation-genou':{'epaule':0}};
+        const h=_blocContrainteSeance({name:'DEVELOPPE MILITAIRE BARRE'},0);
+        return /Tu as signalé une gêne au épaule|Tu as signalé une gêne/.test(h)
+          &&/arrête si ça pince/.test(h)&&/Je remplace/.test(h);})());
+      ok('Sans substitut disponible, aucun bouton « Je remplace »',(()=>{
+        currentUser.chargesSchema={'poussee-verticale':{'epaule':3}};
+        const h=_blocContrainteSeance({name:'DEVELOPPE MILITAIRE BARRE'},0);
+        return /Tu as signalé une gêne/.test(h)&&!/Je remplace/.test(h);})());
+      ok('Critère 8 : le disclaimer accompagne l\'avertissement en séance',
+         _blocContrainteSeance({name:'DEVELOPPE MILITAIRE BARRE'},0).includes(DISCLAIMER_SANTE));
+
+      // Critère 5 : la substitution ne touche PAS sessions_config.
+      ok('Critère 5 : substitution de séance, programme intact',(()=>{
+        currentUser.chargesSchema={'poussee-verticale':{'epaule':3},'isolation-genou':{'epaule':0}};
+        currentUser.sessions_config=[{active:true,name:'Push',exercises:[{name:'DEVELOPPE MILITAIRE BARRE'}]}];
+        const avant=JSON.stringify(currentUser.sessions_config);
+        woState={exercises:[{name:'DEVELOPPE MILITAIRE BARRE',series:3,reps:'10'}],
+          sessionData:{0:{sets:[{weight:'40',reps:'10',done:true}]}},startTime:Date.now(),progName:'Push',substitutions:[]};
+        _appliquerSubstitut(0,'LEG EXTENSION');
+        const apres=JSON.stringify(currentUser.sessions_config);
+        return avant===apres&&woState.exercises[0].name==='LEG EXTENSION'
+          &&woState.substitutions.length===1
+          &&woState.substitutions[0].de==='DEVELOPPE MILITAIRE BARRE'
+          &&woState.substitutions[0].vers==='LEG EXTENSION';})());
+      ok('Les séries de l\'exercice remplacé sont remises à zéro',
+         woState.sessionData[0].sets.every(x=>!x.done&&!x.weight));
+      ok('Critère 5 : les substitutions sont sérialisées dans la séance',
+         /substitutions:\(woState\.substitutions\|\|\[\]\)\.slice\(\)/.test(String(finishWorkout)));
+      ok('Les substitutions survivent à une pause',
+         /substitutions:/.test(String(woPersist)));
+
+      // Critère 6 : sous drapeau rouge, RIEN n'est proposé.
+      ok('Critère 6 : drapeau rouge, aucun substitut où que ce soit',(()=>{
+        poserDrapeauRouge(currentUser,'epaule',['irradiation']);
+        const enSeance=_blocContrainteSeance({name:'DEVELOPPE MILITAIRE BARRE'},0);
+        const l=substitutsDe({name:'DEVELOPPE MILITAIRE BARRE'},{zone:'epaule'});
+        leverDrapeauRouge(currentUser);
+        return l.length===0&&!/Je remplace/.test(enSeance);})());
+
+      // Critère 7 : exercice sans fiche — aucune supposition.
+      ok('Critère 7 : exercice inconnu du guide, aucun avertissement',(()=>{
+        return contraintesPourExercice({name:'MOUVEMENT INVENTE'},currentUser).length===0
+          &&_blocContrainteSeance({name:'MOUVEMENT INVENTE'},0)==='';})());
+      ok('Schéma non noté : aucun avertissement',(()=>{
+        currentUser.chargesSchema={};
+        return _blocContrainteSeance({name:'DEVELOPPE MILITAIRE BARRE'},0)==='';})());
+
+      // Modèle de programme sans athlète : rien à croiser.
+      ok('Modèle sans athlète rattaché : aucun avertissement',(()=>{
+        const sv=_coachEditClient; _coachEditClient=null;
+        currentUser={id:'c',email:'c@t.fr',role:'coach',exAlias:{},exMuscles:{},sessions:[],bilans:[]};
+        const h=_blocAvertissementContrainte({name:'SOULEVE DE TERRE'},0);
+        _coachEditClient=sv;
+        return h==='';})());
+
+      if(sauveP){ progEx.length=0; sauveP.forEach(x=>progEx.push(x)); }
+      currentUser=sauveU; woState=sauveW; _coachEditClient=sauveCE;
     })();
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
