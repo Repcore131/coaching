@@ -10191,6 +10191,9 @@ function woPersist(){
       // Sans lui, une séance reprise après une interruption repartirait avec
       // les cases « Filmer » décochées et l'intention serait perdue.
       aFilmer:(woState.aFilmer||[]).slice(),
+      // Sans lui, une séance reprise reproposerait la carte de douleur sur un
+      // exercice où l'athlète a déjà répondu.
+      douleurChoix:Object.assign({},woState.douleurChoix||{}),
       reposFin:woState.reposFin||null,
       reposTotal:woState.reposTotal||null,
       reposLib:woState.reposLib||'',
@@ -10846,6 +10849,7 @@ function _blocExo(idx,estSS){
         <tbody id="sets-body-${idx}"></tbody>
       </table>
       </div>`}
+      <div id="wo-douleur-${idx}"></div>
       ${ex.repos&&!isCardio(ex)&&!estSS?`<div style="margin-top:10px;display:flex;align-items:center;gap:8px;color:var(--sub);font-size:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15" style="flex-shrink:0"><circle cx="12" cy="14" r="8"/><line x1="12" y1="14" x2="12" y2="9.5"/><line x1="10" y1="2.5" x2="14" y2="2.5"/><line x1="12" y1="2.5" x2="12" y2="6"/></svg> <strong>Repos :</strong> ${escapeHtml(ex.repos)}</div>`:''}
       </div>`;
 
@@ -10977,6 +10981,123 @@ function renderSets(ex,data,idx){
       <td><button class="hit44" onclick="toggleSet(${i},${idx})" style="width:34px;height:34px;border-radius:50%;border:2px solid ${s.done?'#fff':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button></td>
     </tr>`;
   }).join('');
+  // Deux séries validées à 4 ou plus sur CET exercice : la carte apparaît.
+  // Ici et pas dans toggleSet, parce que la douleur peut aussi être saisie
+  // après coup sur une série déjà validée.
+  _majCarteDouleur(idx);
+}
+
+
+// ══════════════ DOULEUR RÉPÉTÉE DANS LA SÉANCE EN COURS ════════════════════
+// Détection PURE et LOCALE : on compte les séries VALIDÉES de CE seul exercice,
+// dans CETTE seule séance. Rien n'est lu dans l'historique, rien n'y est écrit.
+//
+// Ce circuit ne touche à AUCUN des signaux du coach : signauxEntrainement,
+// urgencyScore et les seuils SIG_* sont inchangés. Le signal « douleur sur deux
+// séances » continue de vivre sa vie, sur sa fenêtre à lui. Ici on parle à
+// l'athlète, tout de suite, pendant qu'il a la barre en main — ce n'est ni la
+// même question ni le même destinataire.
+const DLR_SEANCE_SEUIL=4;      // même échelle que la colonne « Douleur » (1..6)
+const DLR_SEANCE_MIN=2;        // deux séries validées suffisent
+const DLR_ALLEGE=0.80;         // « J'allège » : −20 %
+function seriesDouloureusesSeance(idx){
+  const d=woState&&woState.sessionData&&woState.sessionData[idx];
+  if(!d||!Array.isArray(d.sets)) return 0;
+  let n=0;
+  for(const s of d.sets){
+    if(!s||s.done!==true) continue;
+    if(parseInt(s.pain,10)>=DLR_SEANCE_SEUIL) n++;
+  }
+  return n;
+}
+// Le choix est retenu PAR EXERCICE et PAR SÉANCE. Par exercice : la clé est
+// exKey, pas l'index — un remplacement en cours de séance décale les index.
+// Par séance : woState meurt avec elle, il n'y a rien à purger.
+function _dlrCle(idx){
+  const ex=(woState&&woState.exercises||[])[idx];
+  return ex&&ex.name?exKey(ex.name):'';
+}
+function _dlrChoixFait(idx){
+  const k=_dlrCle(idx);
+  return k?((woState&&woState.douleurChoix)||{})[k]||'':'';
+}
+function _htmlCarteDouleur(idx){
+  // Un drapeau rouge déjà posé prime, et reste SEUL à l'écran. Proposer
+  // « j'allège » à quelqu'un qui a décrit une douleur irradiante reviendrait à
+  // l'aider à continuer — c'est exactement ce que l'écran d'arrêt refuse.
+  if(drapeauRougeActif(currentUser)) return '';
+  const ex=(woState&&woState.exercises||[])[idx];
+  if(!ex||isCardio(ex)) return '';
+  const choix=_dlrChoixFait(idx);
+  if(choix==='continue'||choix==='declare') return '';
+  if(choix==='allege'){
+    return `<div style="background:var(--surface-2);border-radius:10px;padding:11px 14px;margin-top:10px;font-size:12px;color:#ddd;line-height:1.6">J'ai baissé tes séries qui restent de 20 %. À toi de voir si ça passe mieux.</div>`;
+  }
+  if(seriesDouloureusesSeance(idx)<DLR_SEANCE_MIN) return '';
+  return `<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:10px;padding:12px 14px;margin-top:10px">
+    <div style="font-size:12px;color:#eee;line-height:1.6;margin-bottom:10px">Ça t'a fait mal deux fois sur cet exercice. Qu'est-ce que tu veux faire ?</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <button class="btn btn-outline btn-sm dlr-btn" data-choix="continue" data-idx="${idx}" style="width:100%;margin:0;letter-spacing:1px;font-size:10px">Je continue comme ça</button>
+      <button class="btn btn-outline btn-sm dlr-btn" data-choix="allege" data-idx="${idx}" style="width:100%;margin:0;letter-spacing:1px;font-size:10px">J'allège</button>
+      <button class="btn btn-outline btn-sm dlr-btn" data-choix="declare" data-idx="${idx}" style="width:100%;margin:0;letter-spacing:1px;font-size:10px">Je déclare une gêne</button>
+    </div>
+  </div>`;
+}
+// Repeinte la seule zone de la carte, et recâble ses boutons. Ne repasse pas
+// par renderWoEx : celui-ci reconstruit le tableau des séries, et une saisie
+// en cours de frappe y serait perdue.
+function _majCarteDouleur(idx){
+  const z=document.getElementById('wo-douleur-'+idx);
+  if(!z) return;
+  z.innerHTML=_htmlCarteDouleur(idx);
+  z.querySelectorAll('.dlr-btn').forEach(b=>{
+    const c=b.getAttribute('data-choix');
+    b.onclick=()=>_dlrChoisir(idx,c);
+  });
+}
+function _dlrPoserChoix(idx,choix){
+  const k=_dlrCle(idx);
+  if(!k||!woState) return;
+  if(!woState.douleurChoix) woState.douleurChoix={};
+  woState.douleurChoix[k]=choix;
+  woPersist();
+}
+function _dlrChoisir(idx,choix){
+  if(choix==='continue'){ _dlrPoserChoix(idx,'continue'); _majCarteDouleur(idx); return; }
+  if(choix==='allege'){ _dlrAlleger(idx); return; }
+  if(choix==='declare'){ _dlrDeclarer(idx); return; }
+}
+// −20 % sur les séries NON VALIDÉES uniquement. Une série déjà validée est un
+// fait : la réécrire falsifierait la séance.
+// userEdited est posé en même temps, sinon le remplissage automatique de
+// renderSets reprendrait la main à la ligne suivante et remonterait la charge.
+function _dlrAlleger(idx){
+  const d=woState&&woState.sessionData&&woState.sessionData[idx];
+  if(!d||!Array.isArray(d.sets)) return;
+  for(const s of d.sets){
+    if(!s||s.done===true) continue;
+    const w=parseFloat(s.weight);
+    if(!(w>0)) continue;
+    s.weight=arrondiCharge125(w*DLR_ALLEGE,w);
+    s.userEdited=true;
+    s.isAuto=false;
+  }
+  _dlrPoserChoix(idx,'allege');
+  renderSets((woState.exercises||[])[idx],d,idx);
+  _majCarteDouleur(idx);
+}
+// Le formulaire de contrainte EXISTANT, celui du bilan et de la fiche coach.
+// Pré-rempli sur l'EXERCICE et non sur une zone : seul l'athlète sait où ça
+// fait mal, et déduire une articulation d'un mouvement reviendrait à décider
+// à sa place.
+function _dlrDeclarer(idx){
+  const ex=(woState&&woState.exercises||[])[idx];
+  if(!ex) return;
+  _dlrPoserChoix(idx,'declare');
+  _majCarteDouleur(idx);
+  ouvrirFormContrainte('','moi');
+  _ctSaisie.libelle='Ressenti pendant : '+ex.name;
+  _ctRepeindre();
 }
 
 function toggleRirExplain(){
@@ -23039,7 +23160,15 @@ async function testNotifs(){
 }
 
 function testExercices(){
-  const R=[];const ok=(n,c,d)=>R.push({n,ok:!!c,d:d||''});
+  const R=[];
+  // Un test qui rend une CHAÎNE passerait : ok ne regarde que la véracité de
+  // son second argument, et « exception: … » est vrai. Ces retours servaient à
+  // EXPLIQUER un échec — ils le masquaient, et le test ne pouvait plus tomber.
+  // _echec range le message de côté et rend false : le test tombe, et le
+  // message ressort dans le détail du rapport.
+  let _msgEchec='';
+  const _echec=m=>{ _msgEchec=m; return false; };
+  const ok=(n,c,d)=>{ R.push({n,ok:!!c,d:d||_msgEchec||''}); _msgEchec=''; };
   const sauve=currentUser;
   currentUser={id:'_test',email:'t@t',exMuscles:{},exAlias:{},sessions:[]};
   try{
@@ -25142,6 +25271,295 @@ function testExercices(){
 
 
 
+
+    // ══════════════ DOULEUR RÉPÉTÉE DANS LA SÉANCE EN COURS ══════════════
+    (function(){
+      const sauveU=currentUser, sauveW=woState;
+      const sauveSnap=localStorage.getItem('rc_wo_state');
+      const _dCfg=[{active:true,name:'Push',exercises:[
+        {name:'SQUAT',series:4,reps:'5',repos:'3 min'},
+        {name:'DEVELOPPE COUCHE',series:4,reps:'8',repos:'2 min'}]}];
+      const _dAth=(extra)=>Object.assign({id:'dlr',email:'dlr@t.fr',fname:'A',lname:'B',
+        role:'athlete',exAlias:{},exMuscles:{},sessions:[],bilans:[],videos:[],programs:{},
+        contraintesSante:[],sessions_config:_dCfg},extra||{});
+      // Série : charge, douleur, validée ou non.
+      // userEdited sur les séries NON validées : sans lui, le remplissage
+      // automatique de renderSets réécrit leur charge à partir du RIR de la
+      // série précédente, et les nombres du test ne sont plus ceux du jeu
+      // d'essai. C'est aussi ce que produit un athlète qui a tapé sa charge.
+      const _s=(w,pain,done)=>({weight:String(w),reps:'5',rir:'1',
+        pain:pain==null?'':String(pain),done:!!done,userEdited:!done});
+      const _lancer=(sets0,sets1,extra)=>{
+        currentUser=_dAth(extra);
+        launchWorkout(currentUser.sessions_config[0],0);
+        woState.sessionData={0:{sets:sets0},1:{sets:sets1||[]}};
+        renderSets(woState.exercises[0],woState.sessionData[0],0);
+        return document.getElementById('wo-douleur-0');
+      };
+      const _fin=()=>{ try{ clearInterval(woState.timerInterval); }catch(e){} };
+
+      // ── Le seuil ──
+      ok('Critère 1 : une seule série à 4 ou plus → aucune carte',(()=>{
+        const z=_lancer([_s(100,5,true),_s(100,2,true),_s(100,null,false)]);
+        const vide=!!z&&z.innerHTML.trim()==='';
+        _fin(); return vide;})());
+      ok('Critère 2 : deux séries à 4 ou plus → la carte apparaît',(()=>{
+        const z=_lancer([_s(100,5,true),_s(100,4,true),_s(100,null,false)]);
+        const vu=!!z&&/Qu'est-ce que tu veux faire/.test(z.innerHTML)
+          &&z.querySelectorAll('.dlr-btn').length===3;
+        _fin(); return vu;})());
+      ok('Une douleur à 3 ne compte pas',(()=>{
+        const z=_lancer([_s(100,3,true),_s(100,3,true),_s(100,3,true)]);
+        const vide=!!z&&z.innerHTML.trim()==='';
+        _fin(); return vide;})());
+      ok('Une série douloureuse NON validée ne compte pas',(()=>{
+        const z=_lancer([_s(100,6,true),_s(100,6,false),_s(100,6,false)]);
+        const vide=!!z&&z.innerHTML.trim()==='';
+        _fin(); return vide;})());
+      ok('Le compte est bien local à l\'exercice',(()=>{
+        _lancer([_s(100,5,true),_s(100,5,true)],[_s(80,5,true)]);
+        const a=seriesDouloureusesSeance(0), b=seriesDouloureusesSeance(1);
+        _fin(); return a===2&&b===1;})());
+      ok('Critère 3 : deux séries réparties sur DEUX exercices → aucune carte',(()=>{
+        currentUser=_dAth();
+        launchWorkout(currentUser.sessions_config[0],0);
+        woState.sessionData={0:{sets:[_s(100,5,true),_s(100,1,true)]},
+                             1:{sets:[_s(80,5,true),_s(80,1,true)]}};
+        renderSets(woState.exercises[0],woState.sessionData[0],0);
+        const z0=document.getElementById('wo-douleur-0');
+        const vide=!!z0&&z0.innerHTML.trim()==='';
+        _fin(); return vide;})());
+
+      // ── La carte n'apparaît qu'une fois ──
+      ok('Critère 4 : « Je continue comme ça » ferme la carte pour cet exercice',(()=>{
+        const z=_lancer([_s(100,5,true),_s(100,5,true),_s(100,null,false),_s(100,null,false)]);
+        if(!z||!/Qu'est-ce que tu veux faire/.test(z.innerHTML)){ _fin(); return _echec('carte absente'); }
+        z.querySelector('.dlr-btn[data-choix="continue"]').click();
+        const ferme=z.innerHTML.trim()==='';
+        // Une série douloureuse de plus ne la fait pas revenir.
+        woState.sessionData[0].sets[2]=_s(100,6,true);
+        renderSets(woState.exercises[0],woState.sessionData[0],0);
+        const toujoursFerme=document.getElementById('wo-douleur-0').innerHTML.trim()==='';
+        _fin(); return ferme&&toujoursFerme;})());
+      ok('Le choix est retenu PAR EXERCICE : l\'autre garde sa carte',(()=>{
+        currentUser=_dAth();
+        launchWorkout(currentUser.sessions_config[0],0);
+        woState.sessionData={0:{sets:[_s(100,5,true),_s(100,5,true)]},
+                             1:{sets:[_s(80,5,true),_s(80,5,true)]}};
+        renderSets(woState.exercises[0],woState.sessionData[0],0);
+        document.getElementById('wo-douleur-0')
+          .querySelector('.dlr-btn[data-choix="continue"]').click();
+        const c0=_dlrChoixFait(0), c1=_dlrChoixFait(1);
+        const carte1=_htmlCarteDouleur(1);
+        _fin();
+        return c0==='continue'&&c1===''&&/Qu'est-ce que tu veux faire/.test(carte1);})());
+      ok('Le choix survit à une reprise de séance',(()=>{
+        _lancer([_s(100,5,true),_s(100,5,true)]);
+        document.getElementById('wo-douleur-0')
+          .querySelector('.dlr-btn[data-choix="continue"]').click();
+        localStorage.removeItem('rc_wo_state');
+        woPersist();
+        const snap=JSON.parse(localStorage.getItem('rc_wo_state')||'{}');
+        localStorage.removeItem('rc_wo_state');
+        _fin();
+        return !!snap.douleurChoix&&snap.douleurChoix[exKey('SQUAT')]==='continue';})());
+
+      // ── « J'allège » ──
+      ok('Critère 5 : les séries non validées baissent de 20 %, arrondi au cran',(()=>{
+        const z=_lancer([_s(100,5,true),_s(100,5,true),_s(100,null,false),_s(90,null,false)]);
+        if(!z){ _fin(); return _echec('zone absente'); }
+        z.querySelector('.dlr-btn[data-choix="allege"]').click();
+        const s=woState.sessionData[0].sets;
+        _fin();
+        // 100 × 0,80 = 80 pile ; 90 × 0,80 = 72 → 71,25 au cran inférieur.
+        return Number(s[2].weight)===80&&Number(s[3].weight)===71.25
+          &&[s[2].weight,s[3].weight].every(w=>Math.abs(w/1.25-Math.round(w/1.25))<1e-9);})());
+      ok('Critère 5 : les séries déjà validées sont inchangées',(()=>{
+        const z=_lancer([_s(100,5,true),_s(120,5,true),_s(100,null,false)]);
+        z.querySelector('.dlr-btn[data-choix="allege"]').click();
+        const s=woState.sessionData[0].sets;
+        _fin();
+        return s[0].weight==='100'&&s[1].weight==='120';})());
+      ok('« J\'allège » l\'annonce en une phrase, et la carte ne revient pas',(()=>{
+        const z=_lancer([_s(100,5,true),_s(100,5,true),_s(100,null,false)]);
+        z.querySelector('.dlr-btn[data-choix="allege"]').click();
+        const txt=document.getElementById('wo-douleur-0').innerHTML;
+        _fin();
+        return /baissé tes séries qui restent de 20 %/.test(txt)
+          &&!/Qu'est-ce que tu veux faire/.test(txt);})());
+      ok('L\'allègement tient : le remplissage automatique ne le remonte pas',(()=>{
+        const z=_lancer([_s(100,5,true),_s(100,5,true),_s(100,null,false)]);
+        z.querySelector('.dlr-btn[data-choix="allege"]').click();
+        const apres=Number(woState.sessionData[0].sets[2].weight);
+        renderSets(woState.exercises[0],woState.sessionData[0],0);
+        const encore=Number(woState.sessionData[0].sets[2].weight);
+        _fin(); return apres===80&&encore===80;})());
+      ok('Une série sans charge n\'est pas touchée',(()=>{
+        const z=_lancer([_s(100,5,true),_s(100,5,true),
+          {weight:'',reps:'5',rir:'',pain:'',done:false,userEdited:true}]);
+        z.querySelector('.dlr-btn[data-choix="allege"]').click();
+        const s=woState.sessionData[0].sets[2];
+        _fin(); return s.weight==='';})());
+      // Le cas RÉEL le plus courant : l'athlète n'a rien tapé, la charge de la
+      // série suivante vient du remplissage automatique. C'est cette
+      // charge-là — celle qui est à l'écran — que « J'allège » doit baisser.
+      ok('Une charge remplie automatiquement est allégée elle aussi',(()=>{
+        currentUser=_dAth();
+        launchWorkout(currentUser.sessions_config[0],0);
+        woState.sessionData={0:{sets:[
+          {weight:'100',reps:'5',rir:'1',pain:'5',done:true},
+          {weight:'100',reps:'5',rir:'1',pain:'5',done:true},
+          {weight:'',reps:'5',rir:'',pain:'',done:false}]},1:{sets:[]}};
+        renderSets(woState.exercises[0],woState.sessionData[0],0);
+        // 100 à RIR 1 → 102,5 posé par le remplissage automatique.
+        const auto=Number(woState.sessionData[0].sets[2].weight);
+        document.getElementById('wo-douleur-0')
+          .querySelector('.dlr-btn[data-choix="allege"]').click();
+        const apres=Number(woState.sessionData[0].sets[2].weight);
+        _fin();
+        // 102,5 × 0,80 = 82 → 81,25 au cran inférieur.
+        return auto===102.5&&apres===81.25;})());
+
+      // ── « Je déclare une gêne » : le formulaire EXISTANT ──
+      ok('Critère : le bouton ouvre le formulaire de contrainte existant',(()=>{
+        const z=_lancer([_s(100,5,true),_s(100,5,true)]);
+        z.querySelector('.dlr-btn[data-choix="declare"]').click();
+        const form=document.getElementById('ct-form');
+        const nb=document.querySelectorAll('#ct-form').length;
+        const pre=_ctSaisie.libelle;
+        try{ closeModal(); }catch(e){}
+        _fin();
+        return !!form&&nb===1&&pre==='Ressenti pendant : SQUAT';})());
+      ok('Après déclaration, la carte est fermée pour cet exercice',(()=>{
+        const z=_lancer([_s(100,5,true),_s(100,5,true)]);
+        z.querySelector('.dlr-btn[data-choix="declare"]').click();
+        try{ closeModal(); }catch(e){}
+        const ferme=document.getElementById('wo-douleur-0').innerHTML.trim()==='';
+        _fin(); return ferme;})());
+      ok('Aucun second formulaire de gêne n\'a été créé',
+        typeof ouvrirFormContrainte==='function'
+        &&typeof _htmlFormContrainte==='function'
+        &&[_htmlCarteDouleur,_dlrDeclarer].map(f=>f.toString()).join('')
+          .indexOf('ZONES_CONTRAINTE')<0);
+
+      // ── Drapeau rouge : l'écran d'arrêt prime et reste seul ──
+      ok('Critère 6 : sous drapeau rouge, aucune carte',(()=>{
+        const z=_lancer([_s(100,6,true),_s(100,6,true)],[],
+          {drapeauRouge:{zone:'epaule',cases:['irradiation'],date:Date.now()}});
+        const vide=!!z&&z.innerHTML.trim()===''
+          &&_htmlCarteDouleur(0)===''
+          &&!!drapeauRougeActif(currentUser);
+        _fin(); return vide;})());
+      ok('Critère 6 : l\'écran d\'arrêt existant est rendu tel quel',(()=>{
+        currentUser=_dAth({drapeauRouge:{zone:'epaule',cases:['irradiation'],date:Date.now()}});
+        try{ closeModal(); }catch(e){}
+        try{ afficherEcranArret('epaule'); }catch(e){ return _echec('exception: '+e.message); }
+        const ov=document.getElementById('modal-overlay');
+        // On lit le TEXTE rendu, pas le HTML : escapeHtml encode l'apostrophe
+        // en &#39;, mais innerHTML la redonne décodée. Comparer à la sortie
+        // d'escapeHtml ne trouverait jamais les deux premières phrases.
+        const txt=ov?(ov.textContent||''):'';
+        try{ closeModal(); }catch(e){}
+        return TEXTE_ARRET_DRAPEAU.every(t=>txt.indexOf(t)>=0)
+          &&/Zone concernée/.test(txt);})());
+      ok('Drapeau levé : la carte redevient possible',(()=>{
+        const z=_lancer([_s(100,6,true),_s(100,6,true)],[],
+          {drapeauRouge:{zone:'epaule',cases:['irradiation'],date:Date.now()}});
+        const avant=z.innerHTML.trim()==='';
+        leverDrapeauRouge(currentUser);
+        renderSets(woState.exercises[0],woState.sessionData[0],0);
+        const apres=/Qu'est-ce que tu veux faire/.test(document.getElementById('wo-douleur-0').innerHTML);
+        _fin(); return avant&&apres;})());
+
+      // ── Le vocabulaire ──
+      // Même contrôle que celui du drapeau rouge : on lit la CHAÎNE RENDUE.
+      ok('Critère 7 : aucun mot de la carte ne nomme une pathologie',(()=>{
+        currentUser=_dAth();
+        woState={exercises:[{name:'SQUAT',series:4,reps:'5'}],currentEx:0,
+          startTime:Date.now(),sessionData:{0:{sets:[_s(100,6,true),_s(100,6,true),_s(100,null,false)]}},
+          douleurChoix:{}};
+        const propose=_htmlCarteDouleur(0);
+        woState.douleurChoix={[exKey('SQUAT')]:'allege'};
+        const apresAllege=_htmlCarteDouleur(0);
+        const tout=(propose+' '+apresAllege).toLowerCase()
+          .normalize('NFD').replace(/[̀-ͯ]/g,'');
+        const interdits=['tendinite','tendinopathie','lesion','blessure','pathologie',
+          'inflammation','arthrose','hernie','dechirure','entorse','luxation','fracture',
+          'rupture','diagnostic','syndrome','symptome','traumatisme','claquage','contracture',
+          'nerf','articulation abimee','grave','urgence','medecin','kine','consulte'];
+        const trouve=interdits.filter(m=>tout.indexOf(m)>=0);
+        if(trouve.length) return _echec('mots trouvés : '+trouve.join(', '));
+        return propose.length>0&&apresAllege.length>0;})());
+      ok('La carte ne dramatise pas : ni majuscules criées, ni point d\'exclamation',(()=>{
+        currentUser=_dAth();
+        woState={exercises:[{name:'SQUAT',series:4,reps:'5'}],currentEx:0,startTime:Date.now(),
+          sessionData:{0:{sets:[_s(100,6,true),_s(100,6,true)]}},douleurChoix:{}};
+        const h=_htmlCarteDouleur(0);
+        // On ne lit que le TEXTE, pas les attributs de style.
+        const d=document.createElement('div'); d.innerHTML=h;
+        const txt=d.textContent||'';
+        return txt.indexOf('!')<0&&!/\b[A-ZÀ-Ÿ]{4,}\b/.test(txt);})());
+      ok('Les trois choix sont exactement ceux annoncés',(()=>{
+        currentUser=_dAth();
+        woState={exercises:[{name:'SQUAT',series:4,reps:'5'}],currentEx:0,startTime:Date.now(),
+          sessionData:{0:{sets:[_s(100,6,true),_s(100,6,true)]}},douleurChoix:{}};
+        const d=document.createElement('div'); d.innerHTML=_htmlCarteDouleur(0);
+        const b=[...d.querySelectorAll('.dlr-btn')].map(x=>x.textContent.trim());
+        return b.length===3&&b[0]==='Je continue comme ça'
+          &&b[1]==='J\'allège'&&b[2]==='Je déclare une gêne';})());
+      ok('La carte n\'ajoute aucune ligne au tableau de séries',(()=>{
+        const z=_lancer([_s(100,5,true),_s(100,5,true)]);
+        const n=document.getElementById('sets-body-0').children.length;
+        const dans=document.getElementById('sets-body-0').innerHTML.indexOf('dlr-btn');
+        _fin(); return n===2&&dans<0;})());
+
+      // ── Non-régression du signal coach ──
+      // Le lot ne touche ni signauxEntrainement, ni urgencyScore, ni les seuils.
+      ok('Critère 8 : les seuils SIG_DOULEUR_* sont inchangés',
+        SIG_PAIN_SEUIL===4&&SIG_DOULEUR_MIN_SEANCES===2&&SIG_SEANCES===3
+        &&SIG_DOULEUR_JOURS===30);
+      ok('Critère 8 : le signal coach reste à DEUX SÉANCES, pas deux séries',(()=>{
+        const sauveCu=currentUser;
+        const S=(j,pains)=>({id:'x'+j+'_'+Math.round(Math.random()*1e9),date:Date.now()-j*864e5,
+          name:'P',slot:0,volume:1,duration:60,
+          data:{'SQUAT':{sets:pains.map(p=>({weight:'100',reps:'5',rir:'1',done:true,
+            pain:p==null?'':String(p)}))}}});
+        const base={id:'sg1',email:'sg1@t.fr',fname:'A',lname:'B',exAlias:{},exMuscles:{},
+          bilans:[],createdAt:Date.now()-90*864e5};
+        // Deux séries douloureuses, mais une SEULE séance : rien côté coach.
+        const uneSeance=Object.assign({},base,{id:'sg1',sessions:[S(3,[5,5,null])]});
+        // Deux séances : le signal se lève, exactement comme avant ce lot.
+        const deuxSeances=Object.assign({},base,{id:'sg2',sessions:[S(6,[5]),S(3,[5])]});
+        currentUser=sauveCu;
+        return signauxEntrainement(uneSeance).douleur===false
+          &&signauxEntrainement(deuxSeances).douleur===true;})());
+      ok('Critère 8 : urgencyScore ne bouge pas sur les cas de référence',(()=>{
+        const sauveCu=currentUser;
+        currentUser={id:'coach',email:'co@t.fr',role:'coach',seenBilans:{},alertStatus:{}};
+        const R=',reponseCoach:1';
+        const nu={id:'z1',email:'z1@t.fr',sessions:[],bilans:[],createdAt:Date.now()-10*864e5};
+        const a=urgencyScore(nu);
+        currentUser.seenBilans={'z2@t.fr':Date.now()};
+        const ov={id:'z2',email:'z2@t.fr',sessions:[],createdAt:Date.now()-60*864e5,
+          bilans:[{type:'depart',date:Date.now()-30*864e5,reponseCoach:'vu',reponseDate:1,reponseVue:true}]};
+        const b=urgencyScore(ov);
+        currentUser=sauveCu;
+        return a===5&&b===4;})());
+      ok('Le circuit en séance n\'écrit rien dans le dossier de l\'athlète',(()=>{
+        const z=_lancer([_s(100,5,true),_s(100,5,true),_s(100,null,false)]);
+        const avant=JSON.stringify({c:currentUser.contraintesSante,s:currentUser.sessions,
+          d:currentUser.drapeauRouge||null});
+        z.querySelector('.dlr-btn[data-choix="allege"]').click();
+        const apres=JSON.stringify({c:currentUser.contraintesSante,s:currentUser.sessions,
+          d:currentUser.drapeauRouge||null});
+        _fin(); return avant===apres;})());
+
+      localStorage.removeItem('rc_wo_state');
+      if(sauveSnap) localStorage.setItem('rc_wo_state',sauveSnap);
+      try{ closeModal(); }catch(e){}
+      currentUser=sauveU; woState=sauveW;
+    })();
+
     // ══════════════ FILMER : INTENTION ATHLÈTE, DEMANDE COACH ══════════════
     (function(){
       const sauveU=currentUser, sauveW=woState, sauveCid=currentClientId;
@@ -25184,19 +25602,19 @@ function testExercices(){
         currentUser.sessions_config=[_fCfg(['SQUAT','DEVELOPPE COUCHE'])];
         const sauveW2=woState;
         try{ launchWorkout(currentUser.sessions_config[0],0); }
-        catch(e){ woState=sauveW2; return 'exception au lancement: '+e.message; }
+        catch(e){ woState=sauveW2; return _echec('exception au lancement: '+e.message); }
         const clic=()=>{ const cb=document.getElementById('film-ex');
           if(!cb) return false;
           cb.checked=true;
           cb.dispatchEvent(new Event('change'));
           return true; };
-        if(!clic()){ try{clearInterval(woState.timerInterval);}catch(e){} woState=sauveW2; return 'case absente'; }
-        try{ woNav(1); }catch(e){ woState=sauveW2; return 'exception woNav: '+e.message; }
-        if(!clic()){ try{clearInterval(woState.timerInterval);}catch(e){} woState=sauveW2; return 'case absente au 2e'; }
+        if(!clic()){ try{clearInterval(woState.timerInterval);}catch(e){} woState=sauveW2; return _echec('case absente'); }
+        try{ woNav(1); }catch(e){ woState=sauveW2; return _echec('exception woNav: '+e.message); }
+        if(!clic()){ try{clearInterval(woState.timerInterval);}catch(e){} woState=sauveW2; return _echec('case absente au 2e'); }
         const liste=(woState.aFilmer||[]).slice();
         woState.sessionData={0:{sets:[{weight:'100',reps:'5',rir:'1',done:true}]},
                              1:{sets:[{weight:'80',reps:'8',rir:'1',done:true}]}};
-        try{ finishWorkout(false); }catch(e){ woState=sauveW2; return 'exception fin: '+e.message; }
+        try{ finishWorkout(false); }catch(e){ woState=sauveW2; return _echec('exception fin: '+e.message); }
         const sess=(currentUser.sessions||[])[0];
         const z=document.getElementById('wd-afilmer');
         woState=sauveW2;
@@ -25208,7 +25626,7 @@ function testExercices(){
         currentUser.sessions_config=[_fCfg(['SQUAT'])];
         const sauveW2=woState;
         try{ launchWorkout(currentUser.sessions_config[0],0); }
-        catch(e){ woState=sauveW2; return 'exception: '+e.message; }
+        catch(e){ woState=sauveW2; return _echec('exception: '+e.message); }
         const cb=document.getElementById('film-ex');
         cb.checked=true; cb.dispatchEvent(new Event('change'));
         const apres=(woState.aFilmer||[]).length;
@@ -25222,12 +25640,12 @@ function testExercices(){
         currentUser.sessions_config=[_fCfg(['SQUAT','DEVELOPPE COUCHE'])];
         const sauveW2=woState;
         try{ launchWorkout(currentUser.sessions_config[0],0); }
-        catch(e){ woState=sauveW2; return 'exception: '+e.message; }
+        catch(e){ woState=sauveW2; return _echec('exception: '+e.message); }
         const cb=document.getElementById('film-ex');
         cb.checked=true; cb.dispatchEvent(new Event('change'));
-        try{ woNav(1); }catch(e){ woState=sauveW2; return 'exception: '+e.message; }
+        try{ woNav(1); }catch(e){ woState=sauveW2; return _echec('exception: '+e.message); }
         const surLe2=document.getElementById('film-ex').checked;
-        try{ woNav(-1); }catch(e){ woState=sauveW2; return 'exception: '+e.message; }
+        try{ woNav(-1); }catch(e){ woState=sauveW2; return _echec('exception: '+e.message); }
         const revenu=document.getElementById('film-ex').checked;
         try{ clearInterval(woState.timerInterval); }catch(e){}
         woState=sauveW2;
@@ -25260,32 +25678,32 @@ function testExercices(){
       };
       ok('Critère 1 : la séance enregistrée porte les deux noms',(()=>{
         const r=_fFin(['SQUAT','DEVELOPPE COUCHE']);
-        if(r.err) return 'exception: '+r.err;
+        if(r.err) return _echec('exception: '+r.err);
         return Array.isArray(r.sess.aFilmer)&&r.sess.aFilmer.length===2
           &&r.sess.aFilmer.join('|')==='SQUAT|DEVELOPPE COUCHE';})());
       ok('Critère 1 : la carte de fin affiche les deux exercices',(()=>{
         const z=document.getElementById('wd-afilmer');
-        if(!z) return 'zone wd-afilmer absente';
+        if(!z) return _echec('zone wd-afilmer absente');
         return /Tu voulais filmer/.test(z.innerHTML)
           &&/SQUAT/.test(z.innerHTML)&&/DEVELOPPE COUCHE/.test(z.innerHTML)
           &&z.querySelectorAll('.wd-af-btn').length===2;})());
       ok('Critère 2 : sans coche, aucune carte',(()=>{
         const r=_fFin([]);
-        if(r.err) return 'exception: '+r.err;
+        if(r.err) return _echec('exception: '+r.err);
         const z=document.getElementById('wd-afilmer');
         return z&&z.innerHTML==='';})());
       // La séance enregistrée doit rester CELLE D'AVANT le patch : le champ
       // n'existe pas, il n'est pas à false ni à [].
       ok('Critère 2 : sans coche, la séance ne porte aucun champ nouveau',(()=>{
         const r=_fFin([]);
-        if(r.err) return 'exception: '+r.err;
+        if(r.err) return _echec('exception: '+r.err);
         const attendu=['complete','data','date','deload','duration','id','name',
           'sets','setsPlanned','slot','substitutions','volume'];
         return Object.keys(r.sess).sort().join(',')===attendu.join(',')
           &&!('aFilmer' in r.sess);})());
       ok('Une seule coche : un seul nom, un seul bouton',(()=>{
         const r=_fFin(['SQUAT']);
-        if(r.err) return 'exception: '+r.err;
+        if(r.err) return _echec('exception: '+r.err);
         const z=document.getElementById('wd-afilmer');
         return r.sess.aFilmer.length===1
           &&z.querySelectorAll('.wd-af-btn').length===1;})());
@@ -25293,10 +25711,10 @@ function testExercices(){
       // ── Le bouton ouvre l'écran EXISTANT, champ pré-rempli ──
       ok('Le bouton pré-remplit le champ nom de l\'écran Vidéos',(()=>{
         const r=_fFin(['DEVELOPPE COUCHE']);
-        if(r.err) return 'exception: '+r.err;
+        if(r.err) return _echec('exception: '+r.err);
         const b=document.querySelectorAll('#wd-afilmer .wd-af-btn')[0];
-        if(!b) return 'bouton absent';
-        try{ b.click(); }catch(e){ return 'exception: '+e.message; }
+        if(!b) return _echec('bouton absent');
+        try{ b.click(); }catch(e){ return _echec('exception: '+e.message); }
         const inp=document.getElementById('vid-name-input');
         const ecran=document.getElementById('s-videos');
         const v=inp?inp.value:null;
@@ -25308,7 +25726,7 @@ function testExercices(){
       ok('Sans argument, loadVideos ne touche pas au champ',(()=>{
         const inp=document.getElementById('vid-name-input');
         inp.value='DEJA LA';
-        try{ loadVideos(); }catch(e){ return 'exception: '+e.message; }
+        try{ loadVideos(); }catch(e){ return _echec('exception: '+e.message); }
         const v=inp.value; inp.value='';
         return v==='DEJA LA';})());
 
@@ -25335,9 +25753,9 @@ function testExercices(){
         ok('Le coach demande une vidéo : elle est écrite dans SON dossier',(()=>{
           poser();
           const sel=document.getElementById('cvd-select');
-          if(!sel) return 'sélecteur absent';
+          if(!sel) return _echec('sélecteur absent');
           sel.value='0';
-          try{ demanderVideo(); }catch(e){ return 'exception: '+e.message; }
+          try{ demanderVideo(); }catch(e){ return _echec('exception: '+e.message); }
           const c=relire();
           return c.demandesVideo.length===1&&c.demandesVideo[0].exercice==='SQUAT'
             &&typeof c.demandesVideo[0].date==='number'
@@ -25347,7 +25765,7 @@ function testExercices(){
           return Object.keys(d).sort().join(',')==='date,exercice,parQui';})());
         ok('Deux fois le même exercice : pas de doublon',(()=>{
           const sel=document.getElementById('cvd-select'); sel.value='0';
-          try{ demanderVideo(); }catch(e){ return 'exception: '+e.message; }
+          try{ demanderVideo(); }catch(e){ return _echec('exception: '+e.message); }
           return relire().demandesVideo.length===1;})());
         ok('Critère 4 : une demande hors programme est refusée',(()=>{
           const c=relire();
@@ -25356,7 +25774,7 @@ function testExercices(){
           // le ferait un dossier désynchronisé entre le choix et l'écriture.
           const sel=document.getElementById('cvd-select');
           const vrai=sel.value; sel.value='99';
-          try{ demanderVideo(); }catch(e){ sel.value=vrai; return 'exception: '+e.message; }
+          try{ demanderVideo(); }catch(e){ sel.value=vrai; return _echec('exception: '+e.message); }
           sel.value=vrai;
           return (relire().demandesVideo||[]).length===0;})());
         ok('estDansLeProgramme refuse un exercice retiré du programme',(()=>{
@@ -25365,8 +25783,8 @@ function testExercices(){
         ok('Le coach peut retirer une demande',(()=>{
           const sel=document.getElementById('cvd-select'); sel.value='0';
           demanderVideo();
-          if((relire().demandesVideo||[]).length!==1) return 'demande non posée';
-          try{ annulerDemandeVideo(0); }catch(e){ return 'exception: '+e.message; }
+          if((relire().demandesVideo||[]).length!==1) return _echec('demande non posée');
+          try{ annulerDemandeVideo(0); }catch(e){ return _echec('exception: '+e.message); }
           return (relire().demandesVideo||[]).length===0;})());
         ok('L\'écran coach liste la demande en cours',(()=>{
           const sel=document.getElementById('cvd-select'); sel.value='1';
@@ -25386,14 +25804,14 @@ function testExercices(){
           sessionData:{}};
         let a='',b='';
         try{ a=_blocExo(0,false).html; b=_blocExo(1,false).html; }
-        catch(e){ woState=sauveW2; return 'exception: '+e.message; }
+        catch(e){ woState=sauveW2; return _echec('exception: '+e.message); }
         woState=sauveW2;
         return /Ton coach t'a demandé une vidéo de cet exercice/.test(a)
           &&!/Ton coach t'a demandé/.test(b);})());
       ok('Critère 4 : la case est PRÉ-COCHÉE au démarrage de la séance',(()=>{
         currentUser=_fAth({demandesVideo:[{exercice:'SQUAT',date:Date.now(),parQui:'coachF'}]});
         const sauveW2=woState;
-        try{ launchWorkout(currentUser.sessions_config[0],0); }catch(e){ woState=sauveW2; return 'exception: '+e.message; }
+        try{ launchWorkout(currentUser.sessions_config[0],0); }catch(e){ woState=sauveW2; return _echec('exception: '+e.message); }
         const cb=document.getElementById('film-ex');
         const pre=(woState.aFilmer||[]).join('|')==='SQUAT';
         const coche=!!(cb&&cb.checked);
@@ -25403,7 +25821,7 @@ function testExercices(){
       ok('Sans demande, la case n\'est pas pré-cochée',(()=>{
         currentUser=_fAth();
         const sauveW2=woState;
-        try{ launchWorkout(currentUser.sessions_config[0],0); }catch(e){ woState=sauveW2; return 'exception: '+e.message; }
+        try{ launchWorkout(currentUser.sessions_config[0],0); }catch(e){ woState=sauveW2; return _echec('exception: '+e.message); }
         const cb=document.getElementById('film-ex');
         const vide=(woState.aFilmer||[]).length===0;
         const decoche=!!(cb&&!cb.checked);
@@ -25415,7 +25833,7 @@ function testExercices(){
         currentUser.sessions_config=[_fCfg(['VELO'])];
         currentUser.sessions_config[0].exercises[0].reps='20 min';
         const sauveW2=woState;
-        try{ launchWorkout(currentUser.sessions_config[0],0); }catch(e){ woState=sauveW2; return 'exception: '+e.message; }
+        try{ launchWorkout(currentUser.sessions_config[0],0); }catch(e){ woState=sauveW2; return _echec('exception: '+e.message); }
         const vide=(woState.aFilmer||[]).length===0;
         try{ clearInterval(woState.timerInterval); }catch(e){}
         woState=sauveW2;
@@ -25427,7 +25845,7 @@ function testExercices(){
         const u={}; u[currentUser.email]=currentUser; DB.set('users',u);
         document.getElementById('vid-name-input').value='SQUAT';
         document.getElementById('vid-url-input').value='https://youtu.be/aaaaaaaaaaa';
-        try{ addVideoLink(); }catch(e){ return 'exception: '+e.message; }
+        try{ addVideoLink(); }catch(e){ return _echec('exception: '+e.message); }
         const v=(currentUser.videos||[])[0];
         return (currentUser.demandesVideo||[]).length===1
           &&currentUser.demandesVideo[0].exercice==='DEVELOPPE COUCHE'
@@ -25436,7 +25854,7 @@ function testExercices(){
         currentUser=_fAth({demandesVideo:[{exercice:'SQUAT',date:Date.now(),parQui:'coachF'}]});
         document.getElementById('vid-name-input').value='ROWING';
         document.getElementById('vid-url-input').value='https://youtu.be/bbbbbbbbbbb';
-        try{ addVideoLink(); }catch(e){ return 'exception: '+e.message; }
+        try{ addVideoLink(); }catch(e){ return _echec('exception: '+e.message); }
         return (currentUser.demandesVideo||[]).length===1;})());
       ok('La consommation ignore casse et accents',(()=>{
         currentUser=_fAth({demandesVideo:[{exercice:'DEVELOPPE COUCHE',date:1,parQui:'c'}]});
@@ -25446,7 +25864,7 @@ function testExercices(){
         currentUser=_fAth();
         document.getElementById('vid-name-input').value='';
         document.getElementById('vid-url-input').value='https://youtu.be/ccccccccccc';
-        try{ addVideoLink(); }catch(e){ return 'exception: '+e.message; }
+        try{ addVideoLink(); }catch(e){ return _echec('exception: '+e.message); }
         return ((currentUser.videos||[])[0]||{}).name==='Vidéo YouTube';})());
 
       // ── Aucune notification ──
@@ -25476,7 +25894,7 @@ function testExercices(){
           document.getElementById('vid-name-input').value='SQUAT';
           document.getElementById('vid-url-input').value='https://youtu.be/ddddddddddd';
           addVideoLink();
-        }catch(e){ try{ window.Notification=vraiN; }catch(e2){} return 'exception: '+e.message; }
+        }catch(e){ try{ window.Notification=vraiN; }catch(e2){} return _echec('exception: '+e.message); }
         try{ window.Notification=vraiN; }catch(e){}
         return n===0&&reg===((navigator.serviceWorker||{}).ready);})());
       // Le plafond de trois par jour vit dans sw.js. Rien de ce lot ne l'appelle :
@@ -25610,7 +26028,7 @@ function testExercices(){
                                {weight:'80',reps:'5',rir:'2',pain:'',done:true}]}}};
         const avant=JSON.stringify(woState.sessionData);
         let h='';
-        try{ h=_blocExo(0,false).html; }catch(e){ woState=sauveW; return 'exception: '+e.message; }
+        try{ h=_blocExo(0,false).html; }catch(e){ woState=sauveW; return _echec('exception: '+e.message); }
         const apres=JSON.stringify(woState.sessionData);
         const n=woState.sessionData[0].sets.length;
         woState=sauveW; currentUser.sessions=[];
@@ -25621,7 +26039,7 @@ function testExercices(){
         const sauveW=woState; currentUser.sessions=[];
         woState={progName:'P',slot:0,currentEx:0,startTime:Date.now(),
           exercises:[{name:'SQUAT',series:3,reps:'5'}],sessionData:{}};
-        let h=''; try{ h=_blocExo(0,false).html; }catch(e){ woState=sauveW; return 'exception: '+e.message; }
+        let h=''; try{ h=_blocExo(0,false).html; }catch(e){ woState=sauveW; return _echec('exception: '+e.message); }
         woState=sauveW;
         return !/Montée en charge/.test(h)&&/Pas encore d'historique/.test(h);})());
 
@@ -25816,14 +26234,14 @@ function testExercices(){
       window.confirm=()=>false;
       ok('Décharge : refuser la confirmation ne change rien',(()=>{
         poser(faireClient());
-        try{ programmerDecharge(); }catch(e){ return 'exception: '+e.message; }
+        try{ programmerDecharge(); }catch(e){ return _echec('exception: '+e.message); }
         const c=(DB.get('users')||{})['dch1@t.fr'];
         return c.sessions_config.every(s=>!s.deload);})());
 
       window.confirm=()=>true;
       ok('Critère 6 : tous les créneaux ACTIFS passent en décharge',(()=>{
         poser(faireClient());
-        try{ programmerDecharge(); }catch(e){ return 'exception: '+e.message; }
+        try{ programmerDecharge(); }catch(e){ return _echec('exception: '+e.message); }
         const c=(DB.get('users')||{})['dch1@t.fr'];
         return c.sessions_config[0].deload===true&&c.sessions_config[2].deload===true;})());
       ok('Critère 6 : un créneau inactif n\'est pas touché',(()=>{
@@ -25844,7 +26262,7 @@ function testExercices(){
           &&/Décharge déjà programmée/.test(apres)
           &&/2 créneaux actifs/.test(apres);})());
       ok('Aucun décochage automatique : rejouer ne remet rien à false',(()=>{
-        try{ programmerDecharge(); }catch(e){ return 'exception: '+e.message; }
+        try{ programmerDecharge(); }catch(e){ return _echec('exception: '+e.message); }
         const c=(DB.get('users')||{})['dch1@t.fr'];
         return c.sessions_config[0].deload===true&&c.sessions_config[2].deload===true;})());
 
