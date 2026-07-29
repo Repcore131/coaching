@@ -1454,6 +1454,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="ccd-bilans"></div>
       <div id="ccd-volume"></div>
       <div id="ccd-plateaux"></div>
+      <div id="ccd-phase"></div>
       <div id="ccd-forme"></div>
       <div id="ccd-poids"></div>
       <div id="ccd-sessions-recap" style="margin-top:24px"></div>
@@ -1767,6 +1768,11 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="metric-box"><div class="metric-val" id="clh-streak-nb" style="color:var(--red)">0</div><div class="metric-label">Semaines</div></div>
         <div class="metric-box"><div class="metric-val" id="clh-weight">—</div><div class="metric-label">Poids kg</div></div>
       </div>
+
+      <!-- PHASE -->
+      <div id="clh-bandeau-phase"></div>
+      <div id="clh-relance-phase"></div>
+      <div id="clh-phase"></div>
 
       <!-- PESÉE DU JOUR -->
       <div id="clh-pesee"></div>
@@ -2262,6 +2268,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar"><button class="back-btn" onclick="go('s-client-home');loadClientHome()">←</button><span class="topbar-title">Évolution</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
+      <div id="prog-bandeau-phase"></div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px" id="prog-tabs">
         <button class="btn btn-red btn-sm" onclick="showProgressTab('poids',this)" style="white-space:nowrap">️ Poids</button>
         <button class="btn btn-outline btn-sm" onclick="showProgressTab('mensus',this)" style="white-space:nowrap"> Mensurations</button>
@@ -5702,10 +5709,13 @@ function renderClientRow(c){
     :escapeHtml(ini(c.fname,c.lname));
   const _objDisplay=c.objective||c.bilanGoals||'';
   const objLine=_objDisplay?`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(_objDisplay)}</div>`:'';
+  // Phase : rien du tout quand elle est absente, ce qui est le cas par defaut.
+  const _ph=phaseCourante(c);
+  const phLine=_ph?`<div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:2px">${PHASES[_ph.type].lib} · ${ordinalSemaine(semainesPhase(c))}</div>`:'';
   const _nm=(escapeHtml(c.fname||'')+' '+escapeHtml(c.lname||'')).trim()||'Profil incomplet';
   return `<div class="client-row${!hasNewBilan(c)&&!needsAlert(c)&&!isActive(c)?' row-inactive':''}" onclick="openClientDetail('${c.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <div class="avatar" style="width:44px;height:44px;font-size:15px;overflow:hidden;flex-shrink:0">${avatarHtml}</div>
-    <div style="flex:1;min-width:0"><div style="font-weight:700">${_nm}</div><div class="sub" style="font-size:11px;margin-top:2px">${activityLine}</div>${objLine}</div>
+    <div style="flex:1;min-width:0"><div style="font-weight:700">${_nm}</div><div class="sub" style="font-size:11px;margin-top:2px">${activityLine}</div>${objLine}${phLine}</div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">${badge}</div>
   </div>`;
 }
@@ -5970,6 +5980,7 @@ function openClientDetail(cid,_refresh){
   // reperes de L ATHLETE.
   try{ renderVolumeCoach(c); }catch(e){}
   try{ renderPlateauxCoach(c); }catch(e){}
+  try{ renderPhaseCoach(c); }catch(e){}
   try{ renderFormeCoach(c); }catch(e){}
   try{ renderPoidsCoach(c); }catch(e){}
 
@@ -8354,6 +8365,7 @@ function loadClientHome(){
   const _pAff=poidsAffiche(u);
   document.getElementById('clh-weight').textContent=_pAff!=null?_pAff+'kg':'—';
   renderCartePesee();
+  renderBandeauPhase();renderRelancePhase();renderCartePhase();
   renderNutriDots();renderNotifs();renderWoReminderCard();
   const _hasDepart=(currentUser.bilans||[]).some(b=>b.type==='depart');
   const _firstCard=document.getElementById('clh-first-bilan-card');
@@ -10137,10 +10149,15 @@ function etatsChanges(user,sess){
   return out;
 }
 // Ton factuel, jamais culpabilisant : on décrit, on ne reproche pas.
-function _phraseEtat(x){
+function _phraseEtat(x,user){
   const sem=Math.floor((x.joursDepuisRecord||0)/7);
+  // En sèche, l'absence de record n'est pas un symptôme : c'est le résultat
+  // attendu d'un déficit. Le dire évite qu'un athlète interprète comme un
+  // échec ce qui est le déroulement normal de sa phase.
+  const enSeche=typePhase(user)==='seche'
+    ? ' Un plateau de force en déficit est attendu ; l\'objectif est de conserver, pas de progresser.' : '';
   if(x.etat==='plateau')
-    return 'pas de nouveau maximum depuis '+(sem>=2?sem+' semaines':'4 semaines')+'. Ça arrive. Parles-en à ton coach.';
+    return 'pas de nouveau maximum depuis '+(sem>=2?sem+' semaines':'4 semaines')+'. Ça arrive. Parles-en à ton coach.'+enSeche;
   if(x.etat==='regression')
     return 'les dernières séries sont en dessous de ton meilleur niveau. Fatigue, sommeil, charge de travail : ça se discute avec ton coach.';
   return 'la progression marque le pas. Rien d\'alarmant à ce stade.';
@@ -10155,7 +10172,7 @@ function renderEtatsSeance(user,sess){
     ${ch.map(x=>`<div style="display:flex;gap:9px;align-items:flex-start;margin-bottom:8px">
       <span style="width:6px;height:6px;border-radius:50%;background:${x.etat==='regression'?'var(--orange)':'var(--sub)'};margin-top:6px;flex-shrink:0"></span>
       <div style="flex:1;min-width:0;font-size:12px;line-height:1.6;color:#ccc">
-        <strong style="color:#fff">${escapeHtml(x.nom)}</strong> : ${_phraseEtat(x)}
+        <strong style="color:#fff">${escapeHtml(x.nom)}</strong> : ${_phraseEtat(x,user)}
       </div></div>`).join('')}
     ${PERF_ENCADRE}
   </div>`;
@@ -11034,12 +11051,20 @@ function reperesEffectifs(user,muscle){
   for(const b of ['mev','mavMin','mavMax','mrv']) if(typeof r[b]!=='number') return null;
   return r;
 }
-function zoneVolume(n,rep){
+// En déficit énergétique la capacité de récupération diminue : le volume qui
+// faisait progresser à l'entretien devient du volume qu'on ne récupère plus.
+// La zone de progrès descend donc d'un cran, sur [MEV, MAVmin[, et la bande
+// qui était verte se lit comme un volume élevé. Le maintien disparaît en tant
+// que zone : en déficit, le volume d'entretien EST l'objectif.
+// Le maintien déclaré suit la même règle — on entretient, on ne construit pas.
+function zoneVolume(n,rep,user){
   if(!rep) return null;
+  const t=typePhase(user);
+  const economie=(t==='seche'||t==='maintien');
   if(n<rep.mev) return VOL_ZONES[0];
-  if(n<rep.mavMin) return VOL_ZONES[1];
-  if(n<=rep.mavMax) return VOL_ZONES[2];
-  if(n<=rep.mrv) return VOL_ZONES[3];
+  if(n<rep.mavMin) return economie?VOL_ZONES[2]:VOL_ZONES[1];
+  if(n<=rep.mavMax) return economie?VOL_ZONES[3]:VOL_ZONES[2];
+  if(n<=rep.mrv) return economie?VOL_ZONES[4]:VOL_ZONES[3];
   return VOL_ZONES[4];
 }
 // Arrondi à 0,5 près, à L'AFFICHAGE seulement : le calcul garde sa précision.
@@ -12219,7 +12244,7 @@ function loadPhoto(input,imgId){
 
 // ======= PROGRESS =======
 function loadProgress(){
-  go('s-progress');showProgressTab('poids',document.querySelector('#prog-tabs button'));
+  go('s-progress');renderBandeauPhase();showProgressTab('poids',document.querySelector('#prog-tabs button'));
   setTimeout(()=>setupScrollFade(document.getElementById('prog-tabs')),0);
 }
 
@@ -12307,8 +12332,8 @@ function _volMoyennePrecedente(user,decalage,muscle){
   return vals.reduce((a,b)=>a+b,0)/vals.length;
 }
 
-function _volBarre(m,n,rep,aberrant){
-  const z=zoneVolume(n,rep);
+function _volBarre(m,n,rep,aberrant,user){
+  const z=zoneVolume(n,rep,user);
   // Sans repère, aucune zone : on montre la quantité, on ne la juge pas.
   const echelle=rep?Math.max(rep.mrv*1.25,n*1.05):Math.max(n*1.15,10);
   const pc=v=>Math.max(0,Math.min(100,v/echelle*100));
@@ -12370,7 +12395,7 @@ function renderVolume(){
   const corps=lignes.map(m=>{
     const n=c.muscles[m];
     const rep=reperesEffectifs(u,m);
-    const z=zoneVolume(n,rep);
+    const z=zoneVolume(n,rep,u);
     const freq=c.freq[m]||0;
     const moy=_volMoyennePrecedente(u,_volDecalage,m);
     let delta='';
@@ -12386,7 +12411,7 @@ function renderVolume(){
         <span style="font-size:12px;font-weight:800;color:${(MUSCLES[m]||{}).c||'#fff'}">${(MUSCLES[m]||{}).lib||m}</span>
         <span style="font-size:11px;color:var(--sub);white-space:nowrap">${volAffiche(n)} série${n>=2?'s':''}${freq?' · '+freq+'×/sem':''}${delta}</span>
       </div>
-      ${_volBarre(m,n,rep,c.aberrants[m])}
+      ${_volBarre(m,n,rep,c.aberrants[m],u)}
       <div style="font-size:10px;color:${z?z.c:'var(--text-faint)'};margin-top:4px">
         ${z?z.lib:'pas de repère établi'}${c.aberrants[m]?' <span style="color:var(--orange)">· inhabituel</span>':''}
       </div>
@@ -12445,13 +12470,13 @@ function renderVolumeCoach(c){
     .filter(x=>x.rep&&(x.n<x.rep.mev||x.n>x.rep.mrv));
 
   const ligne=(m,n,rep)=>{
-    const zo=zoneVolume(n,rep);
+    const zo=zoneVolume(n,rep,c);
     return `<div style="margin-bottom:9px">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px">
         <span style="font-size:11px;font-weight:800;color:${(MUSCLES[m]||{}).c||'#fff'}">${(MUSCLES[m]||{}).lib||m}</span>
         <span style="font-size:10px;color:${zo?zo.c:'var(--sub)'};white-space:nowrap">${volAffiche(n)} série${n>=2?'s':''} · ${zo?zo.lib:'pas de repère'}</span>
       </div>
-      ${_volBarre(m,n,rep,res.aberrants[m])}
+      ${_volBarre(m,n,rep,res.aberrants[m],c)}
     </div>`;
   };
 
@@ -12507,13 +12532,13 @@ function renderVolumePrescrit(cfg,user){
     </div>
     ${lignes.map(m=>{
       const rep=reperesEffectifs(u,m);
-      const zo=zoneVolume(v.muscles[m],rep);
+      const zo=zoneVolume(v.muscles[m],rep,u);
       return `<div style="margin-bottom:9px">
         <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px">
           <span style="font-size:11px;font-weight:800;color:${(MUSCLES[m]||{}).c||'#fff'}">${(MUSCLES[m]||{}).lib||m}</span>
           <span style="font-size:10px;color:${zo?zo.c:'var(--sub)'};white-space:nowrap">${volAffiche(v.muscles[m])} série${v.muscles[m]>=2?'s':''}${zo?' · '+zo.lib:''}</span>
         </div>
-        ${_volBarre(m,v.muscles[m],rep,false)}
+        ${_volBarre(m,v.muscles[m],rep,false,u)}
       </div>`;}).join('')}
     ${v.nonRattaches?`<div style="font-size:10px;color:var(--text-faint);margin-top:6px">${v.nonRattaches} série${v.nonRattaches>1?'s':''} sur exercice non classé</div>`:''}
   </div>`;
@@ -13150,7 +13175,7 @@ function _renderStrictMacroRings(nut){
   return `<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 8px 24px rgba(0,0,0,.35);animation:fadeInUp .3s ease">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <div style="display:inline-flex;align-items:center;gap:7px;font-family:'Bebas Neue',sans-serif;font-size:17px;color:#ff3b30;text-transform:uppercase;letter-spacing:3px;text-shadow:0 0 8px rgba(224,32,32,.85),0 0 20px rgba(224,32,32,.45)"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('target',13)}</span>OBJECTIFS DU JOUR</div>
-      ${dayBadge}
+      <span style="display:inline-flex;align-items:center;gap:6px">${badgePhase(currentUser)}${dayBadge}</span>
     </div>
     <div style="display:flex;justify-content:space-around;margin-bottom:16px">
       ${ring(tot.p,m.p,'#E02020','Protéines')}
@@ -15617,20 +15642,119 @@ function vitesseHebdo(serie){
           points:n, mm7Courant:courant};
 }
 
-// Cibles par phase. user.phase n'existe pas encore : la table est écrite et
-// testée, mais seule la dernière ligne s'applique tant que le champ est absent.
-// Le jour où il existera, il n'y aura rien à recoder.
-const PESEE_CIBLES=Object.freeze({
-  seche:   {min:-1.0, max:-0.5,  alerte:-1.2, lib:'sèche'},
-  prise:   {min:0.25, max:0.5,   alerte:0.75, lib:'prise de masse'},
-  recomp:  {min:-0.25,max:0.25,  alerteAbs:0.5, lib:'recomposition'},
-  maintien:{min:-0.25,max:0.25,  alerteAbs:0.5, lib:'maintien'}
+// ══════════════════════ PHASE : MASSE / SÈCHE / RECOMP / MAINTIEN ══════════
+// La phase ne CALCULE rien et ne prescrit rien. Elle dit seulement dans quel
+// sens lire ce que les autres écrans mesurent déjà : sans elle, l'app tenait
+// pour acquis que perdre du poids est un progrès, ce qui est faux pour la
+// moitié des gens qui s'entraînent.
+//
+// « sens » est la seule chose qui pilote la couleur : +1 la hausse est le but,
+// −1 la baisse est le but, 0 aucune direction n'est un progrès — donc aucune
+// couleur. Absente vaut 0, et c'est un état parfaitement valide.
+const PHASES=Object.freeze({
+  masse:{lib:'Prise de masse', apres:'prise de masse', sens:1, min:0.25, max:0.5, alerte:0.75,
+    texte:"Tu manges plus que ta dépense pour construire du muscle. Une part de gras vient avec, c'est normal. Rythme habituel : +0,25 à 0,5 % de ton poids par semaine."},
+  seche:{lib:'Sèche', apres:'sèche', sens:-1, min:-1.0, max:-0.5, alerte:-1.2,
+    texte:"Tu manges moins que ta dépense pour perdre du gras. L'objectif à l'entraînement devient de CONSERVER ta masse musculaire, pas d'en gagner. Rythme habituel : −0,5 à 1 % par semaine."},
+  recomp:{lib:'Recomposition', apres:'recomposition', sens:0, min:-0.25, max:0.25, alerteAbs:0.5,
+    texte:"Poids stable, composition qui change. C'est réaliste quand on débute, quand on reprend, ou avec du surpoids. Chez un pratiquant avancé et déjà sec, c'est très lent."},
+  maintien:{lib:'Maintien', apres:'maintien', sens:0, min:-0.25, max:0.25, alerteAbs:0.5,
+    texte:"Tu entretiens. Volume d'entraînement au minimum efficace, poids stable."}
 });
 const PESEE_ALERTE_SANS_PHASE=1.5;
-function cibleVitesse(user){
+const PHASE_HIST_MAX=12;
+const PHASE_SEMAINES_RELANCE=20;
+// Un type inconnu retombe sur neutre au lieu de faire planter l'écran : une
+// version future du champ ne doit pas casser une version ancienne de l'app.
+function phaseCourante(user){
   const p=user&&user.phase;
-  if(p&&PESEE_CIBLES[p]) return Object.assign({phase:p},PESEE_CIBLES[p]);
+  if(!p||!p.type||!PHASES[p.type]||!p.debut) return null;
+  return p;
+}
+function typePhase(user){ const p=phaseCourante(user); return p?p.type:null; }
+function libPhase(user){ const p=phaseCourante(user); return p?PHASES[p.type].lib:null; }
+function ordinalSemaine(n){ return n===1?'1re semaine':n+'e semaine'; }
+function semainesPhase(user){
+  const p=phaseCourante(user);
+  if(!p) return null;
+  return Math.max(1,Math.floor((Date.now()-p.debut)/(7*24*3600*1000))+1);
+}
+// Durée RÉVOLUE, et non le numéro de la semaine en cours : au 140e jour on
+// est dans la semaine 21 mais on a bien vingt semaines derrière soi. Comparer
+// un seuil au numéro affiché déclenchait la relance une semaine trop tôt.
+function semainesEcoulees(user){
+  const p=phaseCourante(user);
+  if(!p) return null;
+  return Math.floor((Date.now()-p.debut)/(7*24*3600*1000));
+}
+// Reconduire la MÊME phase ne remet pas le compteur à zéro : ça effacerait la
+// semaine 12 d'une sèche et supprimerait la vitesse pendant trois semaines,
+// pour un clic qui ne changeait rien.
+function changerPhase(user,type,finPrevue,definiPar){
+  if(!user||!PHASES[type]) return false;
+  const anc=phaseCourante(user);
+  const hist=((user.phase&&user.phase.historique)||[]).slice();
+  if(anc&&anc.type===type){
+    user.phase=Object.assign({},anc,{finPrevue:finPrevue||null,
+      definiPar:definiPar||anc.definiPar||'athlete',historique:hist.slice(-PHASE_HIST_MAX)});
+    return true;
+  }
+  if(anc) hist.push({type:anc.type,debut:anc.debut,fin:Date.now()});
+  user.phase={type,debut:Date.now(),finPrevue:finPrevue||null,
+    definiPar:definiPar||'athlete',historique:hist.slice(-PHASE_HIST_MAX)};
+  return true;
+}
+// Suggestion depuis l'objectif déjà saisi. Les libellés EXACTS des cases à
+// cocher du questionnaire sont dans les motifs : « Prise de muscle » ne
+// contient pas « prendre » et « Perte de poids » ne contient pas « perdre »,
+// donc sans eux la suggestion ne se serait jamais déclenchée sur le cas le
+// plus fréquent. Les deux familles présentes → on ne suggère RIEN : deviner
+// serait pire que se taire.
+const _RX_PH_MASSE=/masse|volume|prise de muscle|\bprendre\b|\bgrossir\b|prise de poids/i;
+const _RX_PH_SECHE=/s[eéè]ch|\bsec\b|perte de poids|\bperdre\b|maigrir|affut|affût|mincir/i;
+function suggererPhaseDepuisTexte(txt){
+  const t=_texteReponse(txt);
+  if(!t) return null;
+  const m=_RX_PH_MASSE.test(t), s=_RX_PH_SECHE.test(t);
+  if(m===s) return null;
+  return m?'masse':'seche';
+}
+// Couleur d'évolution du poids. Remplace le « perdre = vert » inconditionnel
+// qui contredisait frontalement l'objectif d'un athlète en prise de masse.
+function couleurEvolution(user,diff){
+  const p=phaseCourante(user);
+  const sens=p?PHASES[p.type].sens:0;
+  if(!sens||diff==null||!diff) return 'var(--sub)';
+  return (diff>0)===(sens>0)?'var(--green)':'var(--orange)';
+}
+// Relance : une phase qui dure trop, ou dont la fin annoncée est passée. On
+// pose une QUESTION, on ne donne pas d'ordre — c'est à l'athlète et à son
+// coach de décider si la phase continue.
+function relancePhase(user){
+  const p=phaseCourante(user);
+  if(!p) return null;
+  const sem=semainesEcoulees(user);
+  if(sem>=PHASE_SEMAINES_RELANCE)
+    return 'Tu es en '+PHASES[p.type].apres+' depuis '+sem+" semaines. C'est long. Où en es-tu ?";
+  if(p.finPrevue&&Date.now()>p.finPrevue)
+    return 'La fin que tu avais prévue pour ta '+PHASES[p.type].apres+' est passée. Où en es-tu ?';
+  return null;
+}
+function cibleVitesse(user){
+  const p=phaseCourante(user);
+  if(p) return Object.assign({phase:p.type},PHASES[p.type]);
   return {phase:null,min:null,max:null,alerteAbs:PESEE_ALERTE_SANS_PHASE,lib:null};
+}
+// Série servant à la VITESSE, bornée au début de la phase en cours : une
+// régression à cheval sur une prise de masse et la sèche qui la suit ne décrit
+// aucune des deux. Conséquence assumée : après un changement de phase, la
+// vitesse disparaît le temps de reconstituer trois semaines de pesées.
+function serieVitesse(user){
+  const s=serieWeight(user);
+  const p=phaseCourante(user);
+  if(!p) return s;
+  const d=localISODate(new Date(p.debut));
+  return s.filter(e=>e.date>=d);
 }
 // Vrai si la vitesse dépasse le seuil d'alerte de la phase.
 function vitesseAlerte(pct,cible){
@@ -15769,8 +15893,8 @@ function _fmtJourCourt(iso){
 // Encadré vitesse. En mode neutre il n'est jamais construit — pas caché : pas
 // construit du tout, pour qu'aucun chemin d'affichage ne puisse le ressortir.
 function _blocVitesse(user){
-  const serie=serieWeight(user);
-  const v=vitesseHebdo(serie);
+  // Bornée à la phase : voir serieVitesse.
+  const v=vitesseHebdo(serieVitesse(user));
   if(!v){
     return `<div style="font-size:11px;color:var(--sub);line-height:1.6">
       Pas encore de tendance : il faut environ trois semaines de pesées, à raison
@@ -15809,7 +15933,7 @@ function blocPoids(user){
   const dep=serie.length?serie[0].kg:null, act=serie.length?serie[serie.length-1].kg:null;
   const diff=(dep!=null&&act!=null)?Math.round((act-dep)*10)/10:null;
   // Mode neutre : ni couleur de verdict, ni vitesse, ni cible, ni alerte.
-  const colEvol=neutre?'var(--sub)':(diff!=null?(diff<=0?'var(--green)':'var(--red)'):'var(--sub)');
+  const colEvol=neutre?'var(--sub)':couleurEvolution(user,diff);
   const entete=`<div style="display:flex;gap:8px;margin-bottom:14px">
       <div class="metric-box"><div class="metric-val">${dep??'—'}kg</div><div class="metric-label">Départ</div></div>
       <div class="metric-box"><div class="metric-val">${act??'—'}kg</div><div class="metric-label">Actuel</div></div>
@@ -15875,7 +15999,7 @@ function blocPoidsCoach(user){
     </div>`;
   }
   if(!serie.length) return '';
-  const v=vitesseHebdo(serie);
+  const v=vitesseHebdo(serieVitesse(user));
   const cible=cibleVitesse(user);
   const alerte=v&&vitesseAlerte(v.pctSem,cible);
   const c=alerte?'var(--orange)':'#f0f0f0';
@@ -15904,6 +16028,195 @@ function renderPoidsCoach(c){
   let html='';
   try{ html=c?blocPoidsCoach(c):''; }catch(e){ html=''; }
   z.innerHTML=html;
+}
+
+
+// ── Choix de phase, côté athlète ────────────────────────────────────────────
+// La carte est REFUSABLE et ne revient pas : un refus écrit une date dans
+// user.phaseRefusee et la carte disparaît définitivement de l'accueil. Sans ce
+// champ, « ne doit pas réapparaître de façon insistante » n'est pas
+// implémentable — on ne peut pas distinguer « pas encore décidé » de « non ».
+let _phChoix=null;
+// Objectif déjà saisi, dans l'ordre du plus récent au plus ancien : le texte
+// libre d'un bilan de suivi l'emporte sur les cases cochées à l'inscription.
+function _objectifTexte(user){
+  const bs=(user&&user.bilans)||[];
+  for(let i=bs.length-1;i>=0;i--){
+    if(!bs[i]) continue;
+    const t=_texteReponse(bs[i]['bil-new-goals']), d=_texteReponse(bs[i]['bil-new-goals-detail']);
+    if(t||d) return (t+' '+d).trim();
+  }
+  const dep=bs.filter(b=>b&&b.type==='depart').slice(-1)[0];
+  return dep?_texteReponse(dep['deb-goals']):'';
+}
+function _htmlChoixPhase(){
+  const sugg=suggererPhaseDepuisTexte(_objectifTexte(currentUser));
+  if(_phChoix===null) _phChoix=sugg;
+  const opts=Object.keys(PHASES).map(t=>{
+    const p=PHASES[t], sel=_phChoix===t;
+    return `<button onclick="_phSet('${t}')" style="display:block;width:100%;text-align:left;margin-bottom:8px;padding:12px;border-radius:10px;cursor:pointer;
+      background:${sel?'#1a0505':'var(--surface-1)'};border:1px solid ${sel?'var(--red)':'var(--border)'}">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+        <span style="font-size:13px;font-weight:800;color:${sel?'#fff':'#ddd'}">${p.lib}</span>
+        ${sugg===t?'<span style="font-size:9px;color:var(--text-faint);letter-spacing:1px;text-transform:uppercase">suggéré</span>':''}
+      </div>
+      <div style="font-size:11px;color:var(--sub);line-height:1.6;margin-top:5px">${escapeHtml(p.texte)}</div>
+    </button>`;
+  }).join('');
+  return `<div id="ph-choix-zone">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">Ta phase</div>
+    <div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:11px">
+      Ce que tu cherches en ce moment. Ça ne change ni tes séances ni tes macros :
+      ça change la façon dont l'app lit tes chiffres.
+      ${sugg?'<br>Une suggestion est faite d\'après l\'objectif que tu as déjà indiqué — à toi de confirmer.':''}
+    </div>
+    ${opts}
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-red btn-sm" onclick="confirmerPhase()" ${_phChoix?'':'disabled'}
+        style="flex:1;letter-spacing:1px${_phChoix?'':';opacity:.45'}">Confirmer</button>
+      <button class="btn btn-outline btn-sm" onclick="refuserPhase()" style="flex:0 0 auto;padding:0 14px;letter-spacing:1px;font-size:10px">Plus tard</button>
+    </div>
+  </div>`;
+}
+function _phSet(t){
+  if(!PHASES[t]) return;
+  _phChoix=t;
+  const z=document.getElementById('ph-choix-zone');
+  if(z) z.outerHTML=_htmlChoixPhase();
+}
+function confirmerPhase(){
+  if(!currentUser||!_phChoix) return;
+  const t=_phChoix;
+  if(!changerPhase(currentUser,t,null,'athlete')) return;
+  currentUser.phaseRefusee=null;
+  _phChoix=null;
+  saveUser();
+  closeModal();
+  toast(PHASES[t].lib+' enregistrée 👍');
+  if(document.getElementById('clh-phase')) loadClientHome();
+  const bp=document.getElementById('prog-bandeau-phase');
+  if(bp) renderBandeauPhase();
+}
+function refuserPhase(){
+  if(!currentUser) return;
+  currentUser.phaseRefusee=Date.now();
+  _phChoix=null;
+  saveUser();
+  closeModal();
+  renderCartePhase();
+}
+function renderCartePhase(){
+  const z=document.getElementById('clh-phase');
+  if(!z) return;
+  if(!currentUser||phaseCourante(currentUser)||currentUser.phaseRefusee){ z.innerHTML=''; return; }
+  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:14px">
+    ${_htmlChoixPhase()}</div>`;
+}
+function ouvrirChoixPhase(){
+  if(!currentUser) return;
+  _phChoix=typePhase(currentUser);
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',
+    `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+      <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:16px 16px 0 0;padding:18px;width:100%;max-width:520px;max-height:88vh;overflow:auto">
+        ${_htmlChoixPhase()}
+      </div></div>`);
+}
+// Bandeau discret. Volontairement sans couleur de verdict : la phase n'est ni
+// un bon ni un mauvais état.
+function _htmlBandeauPhase(user){
+  const p=phaseCourante(user);
+  if(!p) return '';
+  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:14px">
+    <span style="font-size:11px;color:var(--sub)"><b style="color:#ddd">${PHASES[p.type].lib}</b> · ${ordinalSemaine(semainesPhase(user))}</span>
+    <button onclick="ouvrirChoixPhase()" style="background:none;border:none;padding:0;cursor:pointer;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--red);font-weight:700">Changer</button>
+  </div>`;
+}
+function renderBandeauPhase(){
+  const h=_htmlBandeauPhase(currentUser);
+  for(const id of ['clh-bandeau-phase','prog-bandeau-phase']){
+    const z=document.getElementById(id);
+    if(z) z.innerHTML=h;
+  }
+}
+function renderRelancePhase(){
+  const z=document.getElementById('clh-relance-phase');
+  if(!z) return;
+  const msg=currentUser?relancePhase(currentUser):null;
+  z.innerHTML=msg?`<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:12px;padding:13px;margin-bottom:14px">
+    <div style="font-size:12px;color:#eee;line-height:1.6">${escapeHtml(msg)}</div>
+    <button class="btn btn-outline btn-sm" onclick="ouvrirChoixPhase()" style="margin-top:9px;letter-spacing:1px;font-size:10px">Mettre à jour ma phase</button>
+  </div>`:'';
+}
+// Étiquette compacte, posée à côté des macros. AUCUN calcul n'en découle : la
+// phase ne touche pas à nutrition.macros, elle dit seulement dans quel cadre
+// ces macros ont été fixées.
+function badgePhase(user){
+  const p=phaseCourante(user);
+  if(!p) return '';
+  return `<span style="display:inline-flex;align-items:center;font-size:var(--fs-xs);font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:20px;padding:3px 9px;letter-spacing:1px;text-transform:uppercase">${PHASES[p.type].lib}</span>`;
+}
+
+
+// ── Sélecteur de phase, côté coach ──────────────────────────────────────────
+// Le coach décide POUR son athlète : definiPar vaut 'coach'. La phase est
+// écrite dans le dossier de l'athlète et poussée, comme la case de décharge.
+function renderPhaseCoach(c){
+  const z=document.getElementById('ccd-phase');
+  if(!z) return;
+  let html='';
+  try{ html=c?_htmlPhaseCoach(c):''; }catch(e){ html=''; }
+  z.innerHTML=html;
+}
+function _htmlPhaseCoach(c){
+  const p=phaseCourante(c);
+  const boutons=Object.keys(PHASES).map(t=>{
+    const sel=p&&p.type===t;
+    return `<button onclick="coachSetPhase('${t}')" style="flex:1 1 auto;min-width:88px;padding:9px 6px;border-radius:8px;cursor:pointer;font-size:11px;font-weight:800;
+      background:${sel?'#1a0505':'var(--surface-1)'};border:1px solid ${sel?'var(--red)':'var(--border)'};color:${sel?'#fff':'#bbb'}">${PHASES[t].lib}</button>`;
+  }).join('');
+  // La combinaison sèche + antécédent déclaré est nommée explicitement : c'est
+  // exactement le cas où le coach doit savoir que l'écran de son athlète est
+  // amputé volontairement, et pourquoi.
+  const combi=(p&&p.type==='seche'&&aTCA(c))
+    ? `<div style="margin-top:9px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--sub);line-height:1.6">
+        Sèche <b>et</b> antécédent de trouble du comportement alimentaire déclaré.
+        La sèche reste sélectionnable, mais le mode neutre du suivi du poids
+        s'applique intégralement : ni vitesse, ni cible, ni alerte du côté de
+        l'athlète. À suivre de près hors de l'application.
+      </div>` : '';
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:16px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
+      <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Phase</span>
+      ${p?`<span style="font-size:10px;color:var(--text-faint)">${ordinalSemaine(semainesPhase(c))} · ${p.definiPar==='coach'?'définie par toi':'choisie par l\'athlète'}</span>`:''}
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">${boutons}</div>
+    ${p?'':`<div style="font-size:11px;color:var(--sub);line-height:1.6;margin-top:8px">Aucune phase définie. Les écrans de cet athlète restent neutres : aucune direction n'est présentée comme un progrès.</div>`}
+    ${combi}
+  </div>`;
+}
+function coachSetPhase(t){
+  if(!PHASES[t]) return;
+  // _coachEditClient est une COPIE PROFONDE réservée à l'éditeur de séances :
+  // y écrire ne toucherait pas le dossier réel. On repasse par la carte des
+  // utilisateurs, comme toute autre écriture sur un athlète.
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c) return;
+  if(!c.email){ toast('Cet élève n\'a pas encore de dossier synchronisé','var(--orange)'); return; }
+  // Reclic sur la phase déjà active : on la retire plutôt que de ne rien
+  // faire. C'est le seul moyen de revenir à l'état neutre.
+  if(phaseCourante(c)&&phaseCourante(c).type===t){
+    const hist=((c.phase&&c.phase.historique)||[]).slice();
+    hist.push({type:c.phase.type,debut:c.phase.debut,fin:Date.now()});
+    c.phase={type:null,debut:null,finPrevue:null,definiPar:'coach',historique:hist.slice(-PHASE_HIST_MAX)};
+  } else if(!changerPhase(c,t,null,'coach')) return;
+  users[c.email]=c;
+  const ok=DB.set('users',users);
+  const envoi=CLOUD.pushOne(c.email,c);
+  renderPhaseCoach(c);
+  try{ renderPoidsCoach(c); }catch(e){}
+  toastSync(ok,envoi,phaseCourante(c)?PHASES[t].lib+' enregistrée':'Phase retirée','la phase est');
 }
 
 function _recordSteps(dateStr,count){
@@ -20978,25 +21291,27 @@ function testExercices(){
       const v=vitesseHebdo(s);
       return v&&Math.abs(v.kgSem)<0.001;})());
 
-    // ── Cibles par phase : écrites, testées, dormantes ──
+    // ── Cibles par phase ──
+    // user.phase est un OBJET depuis le lot phase : {type, debut, ...}.
+    const _ph=t=>({phase:{type:t,debut:Date.now()}});
     ok('Sans phase : seuil unique à ±1,5 %',(()=>{
       const c=cibleVitesse({});
       return c.phase===null&&c.alerteAbs===1.5&&c.min===null;})());
     ok('Les quatre phases sont câblées',
-       ['seche','prise','recomp','maintien'].every(p=>cibleVitesse({phase:p}).phase===p));
+       ['seche','masse','recomp','maintien'].every(p=>cibleVitesse(_ph(p)).phase===p));
     ok('Une phase inconnue retombe sur le seuil unique',
-       cibleVitesse({phase:'nimportequoi'}).alerteAbs===1.5);
+       cibleVitesse(_ph('nimportequoi')).alerteAbs===1.5);
     ok('Alerte sèche : au-delà de −1,2 %',
-       vitesseAlerte(-1.3,cibleVitesse({phase:'seche'}))===true
-       &&vitesseAlerte(-1.1,cibleVitesse({phase:'seche'}))===false
-       &&vitesseAlerte(-0.2,cibleVitesse({phase:'seche'}))===false);
+       vitesseAlerte(-1.3,cibleVitesse(_ph('seche')))===true
+       &&vitesseAlerte(-1.1,cibleVitesse(_ph('seche')))===false
+       &&vitesseAlerte(-0.2,cibleVitesse(_ph('seche')))===false);
     ok('Alerte prise : au-delà de +0,75 %',
-       vitesseAlerte(0.9,cibleVitesse({phase:'prise'}))===true
-       &&vitesseAlerte(0.5,cibleVitesse({phase:'prise'}))===false);
+       vitesseAlerte(0.9,cibleVitesse(_ph('masse')))===true
+       &&vitesseAlerte(0.5,cibleVitesse(_ph('masse')))===false);
     ok('Alerte maintien : dans les deux sens',
-       vitesseAlerte(0.7,cibleVitesse({phase:'maintien'}))===true
-       &&vitesseAlerte(-0.7,cibleVitesse({phase:'maintien'}))===true
-       &&vitesseAlerte(0.3,cibleVitesse({phase:'maintien'}))===false);
+       vitesseAlerte(0.7,cibleVitesse(_ph('maintien')))===true
+       &&vitesseAlerte(-0.7,cibleVitesse(_ph('maintien')))===true
+       &&vitesseAlerte(0.3,cibleVitesse(_ph('maintien')))===false);
     ok('Sans phase, seul un écart franc alerte',
        vitesseAlerte(-1.6,cibleVitesse({}))===true
        &&vitesseAlerte(-1.4,cibleVitesse({}))===false
@@ -21024,10 +21339,13 @@ function testExercices(){
     const _uPds=(tca,phase)=>{
       const u={weightLog:[],bilans:tca?[{type:'depart','deb-tca':'anorexie il y a 5 ans'}]:[]};
       for(let i=0;i<=20;i++) u.weightLog.push({date:_pj(i),kg:60-i*1.5/7});
-      if(phase) u.phase=phase;
+      // Début antérieur à la série de test : sinon serieVitesse tronquerait
+      // les pesées et la contre-épreuve « la vitesse sort bien » échouerait
+      // pour une raison qui n'a rien à voir avec le garde-fou.
+      if(phase) u.phase={type:phase,debut:new Date(2025,0,1).getTime()};
       return u;
     };
-    const _PHASES=[null,'seche','prise','recomp','maintien'];
+    const _PHASES=[null,'seche','masse','recomp','maintien'];
     // Fragments produits UNIQUEMENT par l'encart vitesse. Chercher le mot
     // « vitesse » ne fonctionne pas : la phrase qui explique le mode neutre dit
     // elle-même « sans vitesse, sans objectif et sans alerte ».
@@ -21091,6 +21409,311 @@ function testExercices(){
        (_courbePesee(_ps(20,()=>80)).match(/<circle/g)||[]).length===21);
     ok('Une série parfaitement plate ne divise pas par zéro',
        !/NaN|Infinity/.test(_courbePesee(_ps(20,()=>80))));
+
+
+    // ══════════════ PHASE ══════════════
+    const _mkPh=(t,jours,fin)=>({phase:{type:t,debut:Date.now()-(jours||0)*864e5,
+      finPrevue:fin||null,definiPar:'athlete',historique:[]}});
+
+    // ── phaseCourante : neutre par défaut, neutre en cas de doute ──
+    ok('Phase absente : neutre',phaseCourante({})===null);
+    ok('Utilisateur nul : neutre',phaseCourante(null)===null);
+    ok('Phase valide : rendue telle quelle',phaseCourante(_mkPh('seche',10)).type==='seche');
+    ok('Type inconnu : neutre',phaseCourante({phase:{type:'peakweek',debut:Date.now()}})===null);
+    ok('Phase sans date de début : neutre',phaseCourante({phase:{type:'seche'}})===null);
+    ok('Les quatre types, et seulement eux',
+       JSON.stringify(Object.keys(PHASES))==='["masse","seche","recomp","maintien"]',
+       JSON.stringify(Object.keys(PHASES)));
+    ok('Aucune phase de compétition n\'est proposée',
+       !/peak|comp[eé]tition|dessiccation|sodium|manipulation hydrique/i.test(JSON.stringify(PHASES)));
+    ok('Semaine 1 le premier jour',semainesPhase(_mkPh('masse',0))===1);
+    ok('Semaine 7 au quarante-quatrième jour',semainesPhase(_mkPh('masse',44))===7,
+       String(semainesPhase(_mkPh('masse',44))));
+    ok('Sans phase, aucune semaine',semainesPhase({})===null);
+
+    // ── Couleur d'évolution : produit croisé 5 × 3 ──
+    // Attendu explicite pour chacun des quinze cas. « masse » inverse le
+    // comportement historique : la hausse devient le progrès.
+    const _COUL=[
+      ['masse',   -2,'var(--orange)'], ['masse',   0,'var(--sub)'], ['masse',   2,'var(--green)'],
+      ['seche',   -2,'var(--green)'],  ['seche',   0,'var(--sub)'], ['seche',   2,'var(--orange)'],
+      ['recomp',  -2,'var(--sub)'],    ['recomp',  0,'var(--sub)'], ['recomp',  2,'var(--sub)'],
+      ['maintien',-2,'var(--sub)'],    ['maintien',0,'var(--sub)'], ['maintien',2,'var(--sub)'],
+      [null,      -2,'var(--sub)'],    [null,      0,'var(--sub)'], [null,      2,'var(--sub)']
+    ];
+    _COUL.forEach(([t,d,att])=>{
+      const u=t?_mkPh(t,10):{};
+      ok('Couleur '+(t||'sans phase')+' / diff '+d,couleurEvolution(u,d)===att,
+         couleurEvolution(u,d)+' au lieu de '+att);
+    });
+    ok('Évolution inconnue : aucune couleur',couleurEvolution(_mkPh('seche',10),null)==='var(--sub)');
+
+    // ── cibleVitesse : bornes EXCLUSIVES ──
+    // Pile sur le seuil = pas d'alerte. C'est un seuil de dépassement.
+    ok('Masse : +0,75 pile n\'alerte pas, +0,76 alerte',
+       vitesseAlerte(0.75,cibleVitesse(_mkPh('masse',10)))===false
+       &&vitesseAlerte(0.76,cibleVitesse(_mkPh('masse',10)))===true);
+    ok('Sèche : −1,2 pile n\'alerte pas, −1,21 alerte',
+       vitesseAlerte(-1.2,cibleVitesse(_mkPh('seche',10)))===false
+       &&vitesseAlerte(-1.21,cibleVitesse(_mkPh('seche',10)))===true);
+    ok('Recomp : ±0,5 pile n\'alerte pas',
+       vitesseAlerte(0.5,cibleVitesse(_mkPh('recomp',10)))===false
+       &&vitesseAlerte(-0.5,cibleVitesse(_mkPh('recomp',10)))===false
+       &&vitesseAlerte(0.51,cibleVitesse(_mkPh('recomp',10)))===true);
+    ok('Sans phase : ±1,5 pile n\'alerte pas',
+       vitesseAlerte(1.5,cibleVitesse({}))===false
+       &&vitesseAlerte(-1.5,cibleVitesse({}))===false
+       &&vitesseAlerte(1.51,cibleVitesse({}))===true);
+    ok('Critère 3 : −0,7 %/sem en sèche est dans la cible, sans alerte',(()=>{
+      const c=cibleVitesse(_mkPh('seche',10));
+      return -0.7>=c.min&&-0.7<=c.max&&vitesseAlerte(-0.7,c)===false;})());
+    ok('Fourchette masse conforme',(()=>{
+      const c=cibleVitesse(_mkPh('masse',10));
+      return c.min===0.25&&c.max===0.5&&c.alerte===0.75;})());
+
+    // ── changerPhase ──
+    ok('Première phase : historique vide',(()=>{
+      const u={}; changerPhase(u,'masse',null,'athlete');
+      return u.phase.type==='masse'&&u.phase.historique.length===0&&u.phase.definiPar==='athlete';})());
+    ok('Type inconnu refusé',(()=>{
+      const u={}; return changerPhase(u,'peakweek')===false&&!u.phase;})());
+    ok('L\'ancienne phase entre dans l\'historique avec sa date de fin',(()=>{
+      const u=_mkPh('masse',30); const d=u.phase.debut;
+      changerPhase(u,'seche');
+      const h=u.phase.historique;
+      return u.phase.type==='seche'&&h.length===1&&h[0].type==='masse'&&h[0].debut===d
+             &&h[0].fin>=d&&h[0].fin<=Date.now();})());
+    ok('Reconduire la même phase ne remet pas le compteur à zéro',(()=>{
+      const u=_mkPh('seche',60); const d=u.phase.debut;
+      changerPhase(u,'seche',Date.now()+30*864e5);
+      return u.phase.debut===d&&u.phase.historique.length===0
+             &&semainesPhase(u)>=9;})());
+    ok('Historique borné à douze entrées',(()=>{
+      const u={};
+      const T=['masse','seche','recomp','maintien'];
+      for(let i=0;i<20;i++) changerPhase(u,T[i%4]);
+      return u.phase.historique.length===PHASE_HIST_MAX;})());
+    ok('L\'historique garde les plus RÉCENTES',(()=>{
+      const u={};
+      const T=['masse','seche','recomp','maintien'];
+      for(let i=0;i<20;i++) changerPhase(u,T[i%4]);
+      // 20 changements, le 19e (indice 18) est T[2]='recomp' et clôt la liste
+      return u.phase.historique[u.phase.historique.length-1].type===T[18%4];})());
+    ok('definiPar par le coach est conservé',(()=>{
+      const u={}; changerPhase(u,'seche',null,'coach');
+      return u.phase.definiPar==='coach';})());
+
+    // ── Vitesse recalculée depuis le changement de phase ──
+    ok('Critère 6 : la régression ne porte que sur la phase en cours',(()=>{
+      // 30 jours de pesées, changement de phase au 22e jour : il ne reste que
+      // 8 jours, très en dessous des 19 nécessaires — donc pas de vitesse.
+      const u={weightLog:[]};
+      for(let i=0;i<30;i++) u.weightLog.push({date:_pj(i),kg:80-i*0.1});
+      u.phase={type:'seche',debut:new Date(2026,0,23).getTime(),historique:[]};
+      const avant=vitesseHebdo(serieWeight(u));       // sans bornage : une vitesse existe
+      const apres=vitesseHebdo(serieVitesse(u));      // bornée : plus assez de recul
+      return avant!==null&&apres===null&&serieVitesse(u).length===8;})(),
+      'longueur bornée = '+(()=>{const u={weightLog:[]};
+        for(let i=0;i<30;i++) u.weightLog.push({date:_pj(i),kg:80-i*0.1});
+        u.phase={type:'seche',debut:new Date(2026,0,23).getTime(),historique:[]};
+        return serieVitesse(u).length;})());
+    ok('Sans phase, la série de vitesse n\'est pas tronquée',(()=>{
+      const u={weightLog:[]};
+      for(let i=0;i<30;i++) u.weightLog.push({date:_pj(i),kg:80-i*0.1});
+      return serieVitesse(u).length===30;})());
+
+    // ── suggererPhaseDepuisTexte ──
+    ok('« prise de masse » → masse',suggererPhaseDepuisTexte('prise de masse propre')==='masse');
+    ok('« sécher pour l\'été » → sèche',suggererPhaseDepuisTexte("sécher pour l'été")==='seche');
+    ok('« perdre du ventre » → sèche',suggererPhaseDepuisTexte('perdre du ventre')==='seche');
+    ok('« me remettre au sport » → rien',suggererPhaseDepuisTexte('me remettre au sport')===null);
+    ok('Texte vide → rien',suggererPhaseDepuisTexte('')===null);
+    ok('null → rien',suggererPhaseDepuisTexte(null)===null);
+    ok('Les deux familles → rien plutôt que deviner',
+       suggererPhaseDepuisTexte('prendre du muscle et perdre du gras')===null);
+    // Les libellés EXACTS des cases du questionnaire, sans lesquels la
+    // suggestion ne se déclencherait jamais sur le cas le plus fréquent.
+    ok('Case « Prise de muscle » → masse',suggererPhaseDepuisTexte('Prise de muscle')==='masse');
+    ok('Case « Perte de poids » → sèche',suggererPhaseDepuisTexte('Perte de poids')==='seche');
+    ok('Les deux cases cochées → rien',
+       suggererPhaseDepuisTexte(['Perte de poids','Prise de muscle'])===null);
+    ok('« Rééquilibrage corporel » seul → rien',
+       suggererPhaseDepuisTexte(['Rééquilibrage corporel'])===null);
+    ok('« Amélioration des performances » → rien',
+       suggererPhaseDepuisTexte('Amélioration des performances')===null);
+    ok('« reprendre le sport » ne devient pas une prise de masse',
+       suggererPhaseDepuisTexte('reprendre le sport')===null);
+
+    // ── BB-02 : la zone de progrès descend d'un cran en économie d'énergie ──
+    const _rpPh={mev:8,mavMin:12,mavMax:20,mrv:22};
+    ok('Sans phase, les zones sont inchangées',
+       zoneVolume(7,_rpPh).cle==='SOUS'&&zoneVolume(10,_rpPh).cle==='MAINTIEN'
+       &&zoneVolume(16,_rpPh).cle==='PROGRES'&&zoneVolume(21,_rpPh).cle==='ELEVE'
+       &&zoneVolume(23,_rpPh).cle==='AU_DESSUS');
+    ok('En masse, les zones sont inchangées',
+       zoneVolume(10,_rpPh,_mkPh('masse',10)).cle==='MAINTIEN'
+       &&zoneVolume(16,_rpPh,_mkPh('masse',10)).cle==='PROGRES');
+    ok('En sèche, [MEV, MAVmin[ devient la zone de progrès',
+       zoneVolume(10,_rpPh,_mkPh('seche',10)).cle==='PROGRES'
+       &&zoneVolume(8,_rpPh,_mkPh('seche',10)).cle==='PROGRES');
+    ok('En sèche, l\'ancienne zone verte se lit comme un volume élevé',
+       zoneVolume(16,_rpPh,_mkPh('seche',10)).cle==='ELEVE'
+       &&zoneVolume(21,_rpPh,_mkPh('seche',10)).cle==='AU_DESSUS');
+    ok('En maintien, même règle qu\'en sèche',
+       zoneVolume(10,_rpPh,_mkPh('maintien',10)).cle==='PROGRES'
+       &&zoneVolume(16,_rpPh,_mkPh('maintien',10)).cle==='ELEVE');
+    ok('Sous le MEV reste sous le MEV dans toutes les phases',
+       ['masse','seche','recomp','maintien'].every(t=>zoneVolume(7,_rpPh,_mkPh(t,10)).cle==='SOUS'));
+    ok('Sans repère, aucune zone quelle que soit la phase',
+       zoneVolume(12,null,_mkPh('seche',10))===null);
+
+    // ── BB-04 : le message de plateau en sèche ──
+    ok('Critère 5 : en sèche, le plateau est annoncé comme attendu',
+       /plateau de force en déficit est attendu/
+         .test(_phraseEtat({etat:'plateau',joursDepuisRecord:35},_mkPh('seche',10))));
+    ok('Sans phase, le message de plateau est inchangé',
+       !/déficit/.test(_phraseEtat({etat:'plateau',joursDepuisRecord:35},{})));
+    ok('En masse, aucune mention de déficit',
+       !/déficit/.test(_phraseEtat({etat:'plateau',joursDepuisRecord:35},_mkPh('masse',10))));
+    ok('La régression n\'est pas excusée par la sèche',
+       !/déficit/.test(_phraseEtat({etat:'regression',joursDepuisRecord:35},_mkPh('seche',10))));
+
+    // ── Relance à vingt semaines ──
+    ok('Critère 7 : dix-neuf semaines, pas de relance',relancePhase(_mkPh('seche',19*7))===null);
+    ok('Critère 7 : vingt semaines, relance',(()=>{
+      const r=relancePhase(_mkPh('seche',20*7));
+      return r&&/C'est long/.test(r)&&/20 semaines/.test(r);})(),
+      String(relancePhase(_mkPh('seche',20*7))));
+    ok('Vingt-deux semaines : le nombre est exact',
+       /22 semaines/.test(relancePhase(_mkPh('seche',22*7))||''));
+    ok('Fin prévue dépassée : relance même tôt',
+       !!relancePhase(_mkPh('masse',30,Date.now()-864e5)));
+    ok('Fin prévue à venir : pas de relance',
+       relancePhase(_mkPh('masse',30,Date.now()+30*864e5))===null);
+    ok('Sans phase, aucune relance',relancePhase({})===null);
+
+    // ── Non-régression : rien ne casse sans phase ──
+    ok('Sans phase, tous les points d\'entrée répondent',(()=>{
+      const u={weightLog:[{date:_pj(0),kg:80}]};
+      return typePhase(u)===null&&libPhase(u)===null&&cibleVitesse(u).phase===null
+        &&couleurEvolution(u,-3)==='var(--sub)'&&blocPoids(u).length>0
+        &&zoneVolume(16,_rpPh,u).cle==='PROGRES';})());
+
+
+    // ── UI de la phase ──
+    (function(){
+      const sauveU=currentUser, sauveCh=_phChoix;
+      const zP=document.getElementById('clh-phase'), gP=zP?zP.innerHTML:null;
+      const zB=document.getElementById('clh-bandeau-phase'), gB=zB?zB.innerHTML:null;
+      const zR=document.getElementById('clh-relance-phase'), gR=zR?zR.innerHTML:null;
+      ok('Les trois zones de phase existent sur l\'accueil',!!zP&&!!zB&&!!zR);
+      if(zP&&zB&&zR){
+        // Sans phase : la carte de choix s'affiche, le bandeau non.
+        currentUser={email:'p@t.fr',bilans:[]}; _phChoix=null;
+        renderCartePhase(); renderBandeauPhase(); renderRelancePhase();
+        ok('Sans phase : la carte de choix apparaît',
+           /Ta phase/.test(zP.innerHTML)&&Object.keys(PHASES).every(t=>zP.innerHTML.includes(PHASES[t].lib)));
+        ok('Sans phase : aucun bandeau',zB.innerHTML==='');
+        ok('Sans phase : aucune relance',zR.innerHTML==='');
+        // Comparaison au texte BRUT : escapeHtml encode l'apostrophe en &#39;
+        // mais innerHTML la restitue décodée à la relecture. Comparer à la
+        // version encodée échouerait alors que le texte affiché est exact.
+        ok('Les quatre textes sont repris tels quels',
+           Object.keys(PHASES).every(t=>zP.innerHTML.includes(PHASES[t].texte)),
+           Object.keys(PHASES).filter(t=>!zP.innerHTML.includes(PHASES[t].texte)).join(' '));
+        ok('Aucun bouton Confirmer actif sans sélection',/disabled/.test(zP.innerHTML));
+
+        // Critère 8 : deb-goals « prise de masse propre » pré-sélectionne, sans appliquer.
+        currentUser={email:'p@t.fr',bilans:[{type:'depart','deb-goals':'prise de masse propre'}]};
+        _phChoix=null; renderCartePhase();
+        ok('Critère 8 : la suggestion est marquée',/suggéré/.test(zP.innerHTML));
+        ok('Critère 8 : elle est pré-sélectionnée',_phChoix==='masse');
+        ok('Critère 8 : elle n\'est PAS appliquée d\'office',phaseCourante(currentUser)===null);
+        ok('Critère 8 : le bouton Confirmer est actif',!/disabled/.test(zP.innerHTML));
+        ok('Critère 8 : le texte libre est conservé intact',
+           currentUser.bilans[0]['deb-goals']==='prise de masse propre');
+
+        // Refus : la carte disparaît et ne revient pas.
+        currentUser={email:'p@t.fr',bilans:[]}; _phChoix=null;
+        renderCartePhase(); refuserPhase();
+        ok('Refusée : la carte disparaît',zP.innerHTML==='');
+        ok('Refusée : la date du refus est mémorisée',!!currentUser.phaseRefusee);
+        renderCartePhase();
+        ok('Refusée : elle ne revient pas au rendu suivant',zP.innerHTML==='');
+
+        // Phase active : bandeau, pas de carte.
+        currentUser={email:'p@t.fr',bilans:[],
+          phase:{type:'masse',debut:Date.now()-44*864e5,finPrevue:null,definiPar:'athlete',historique:[]}};
+        _phChoix=null;
+        renderCartePhase(); renderBandeauPhase(); renderRelancePhase();
+        ok('Phase active : le bandeau porte le libellé et la semaine',
+           /Prise de masse/.test(zB.innerHTML)&&/7e semaine/.test(zB.innerHTML),zB.innerHTML.slice(0,120));
+        ok('Phase active : plus de carte de choix',zP.innerHTML==='');
+        ok('Phase active récente : aucune relance',zR.innerHTML==='');
+
+        // Critère 7 : 22 semaines de sèche.
+        currentUser={email:'p@t.fr',bilans:[],
+          phase:{type:'seche',debut:Date.now()-22*7*864e5,finPrevue:null,definiPar:'athlete',historique:[]}};
+        renderRelancePhase();
+        ok('Critère 7 : la relance apparaît à 22 semaines',
+           /22 semaines/.test(zR.innerHTML)&&/C'est long/.test(zR.innerHTML));
+
+        zP.innerHTML=gP; zB.innerHTML=gB; zR.innerHTML=gR;
+      }
+      currentUser=sauveU; _phChoix=sauveCh;
+    })();
+
+    // ── Étiquette près des macros : affichage seul ──
+    ok('Sans phase, aucune étiquette',badgePhase({})==='');
+    ok('Avec phase, l\'étiquette porte le libellé',
+       /Sèche/.test(badgePhase({phase:{type:'seche',debut:Date.now()}})));
+    ok('L\'étiquette ne contient aucun chiffre de macro',
+       !/kcal|prot|glucide|lipide|\d/i.test(badgePhase({phase:{type:'masse',debut:Date.now()}})
+         .replace(/style="[^"]*"/g,'')));
+
+    // ── Fiche coach ──
+    ok('Sans phase, la fiche coach le dit sans le reprocher',(()=>{
+      const h=_htmlPhaseCoach({email:'c@t.fr',bilans:[]});
+      return /Aucune phase définie/.test(h)&&/neutres/.test(h);})());
+    ok('Les quatre boutons sont proposés au coach',(()=>{
+      const h=_htmlPhaseCoach({email:'c@t.fr',bilans:[]});
+      return Object.keys(PHASES).every(t=>h.includes("coachSetPhase('"+t+"')"));})());
+    ok('La phase active est marquée et datée',(()=>{
+      const h=_htmlPhaseCoach({email:'c@t.fr',bilans:[],
+        phase:{type:'seche',debut:Date.now()-30*864e5,definiPar:'coach',historique:[]}});
+      return /5e semaine/.test(h)&&/définie par toi/.test(h);})());
+    // La combinaison sèche + antécédent est nommée, et seulement dans ce cas.
+    const _cTCA=t=>({email:'c@t.fr',bilans:[{type:'depart','deb-tca':'boulimie'}],
+      phase:t?{type:t,debut:Date.now()-30*864e5,definiPar:'coach',historique:[]}:undefined});
+    ok('Sèche + antécédent : la combinaison est signalée au coach',
+       /antécédent de trouble du comportement alimentaire déclaré/.test(_htmlPhaseCoach(_cTCA('seche'))));
+    ok('Masse + antécédent : pas de mention de combinaison',
+       !/reste sélectionnable/.test(_htmlPhaseCoach(_cTCA('masse'))));
+    ok('Sèche sans antécédent : pas de mention de combinaison',
+       !/reste sélectionnable/.test(_htmlPhaseCoach({email:'c@t.fr',bilans:[],
+         phase:{type:'seche',debut:Date.now(),definiPar:'coach',historique:[]}})));
+    ok('La sèche reste sélectionnable malgré l\'antécédent',
+       _htmlPhaseCoach(_cTCA('masse')).includes("coachSetPhase('seche')"));
+    // Le garde-fou du poids reste entier : la phase ne le desserre pas.
+    ok('Sèche + antécédent : aucune vitesse ne sort côté athlète',
+       !/par semaine|moyennes glissantes/.test(blocPoids(
+         Object.assign(_cTCA('seche'),{weightLog:_ps(20,i=>60-i*1.5/7)}))));
+
+    // ── Ligne de phase dans la liste des athlètes ──
+    ok('Sans phase, la ligne d\'athlète n\'affiche rien de plus',
+       !/semaine/.test(renderClientRow({id:'z',fname:'A',lname:'B',sessions:[],bilans:[]})));
+    ok('Avec phase, la ligne porte le libellé et la semaine',
+       /Prise de masse · 7e semaine/.test(renderClientRow({id:'z',fname:'A',lname:'B',sessions:[],bilans:[],
+         phase:{type:'masse',debut:Date.now()-44*864e5,definiPar:'coach',historique:[]}})));
+
+    // ── Aucun calcul nutritionnel n'a été ajouté ──
+    ok('La phase n\'écrit rien dans nutrition.macros',(()=>{
+      const u={email:'n@t.fr',bilans:[],nutrition:{macros:{kcal:2000,p:150,g:200,l:60}}};
+      const avant=JSON.stringify(u.nutrition);
+      changerPhase(u,'seche',null,'athlete');
+      return JSON.stringify(u.nutrition)===avant;})());
+    ok('Aucune table de calories ni de TDEE dans les phases',
+       !/kcal|calorie|tdee|prot[eé]ine|macro/i.test(JSON.stringify(PHASES)));
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
