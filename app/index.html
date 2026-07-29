@@ -9485,7 +9485,6 @@ function _blocExo(idx,estSS){
   // Calcul charge suggérée = last 0-RIR weight de la séance précédente
   // Contrepoids (DIPS/TRACTIONS assistés|guidés) : progression = MOINS de charge
   const isCW=isCounterweightEx(ex.name);
-  const baseWeight=getLastZeroRIRWeight(ex.name,woState.slot,woState.progName);
   // Nommer d'où vient la suggestion : c'est ce qui rend vérifiable le fait
   // qu'elle ne vient plus d'un autre jour de la semaine. Deux formulations,
   // parce que sans créneau connu il ne reste que le nom de la séance, et
@@ -9493,20 +9492,12 @@ function _blocExo(idx,estSS){
   const _jour=(woState.slot!=null&&DAYS[woState.slot])?DAYS[woState.slot].toLowerCase():null;
   const creneauRef=_jour?('ton dernier '+_jour):'ta séance précédente';
   const creneauPhrase=_jour?('le '+_jour):'sur cette séance';
-  // Progression par paliers fixes : RIR 0 → même charge, échec → -1 palier,
-  // RIR n → +n paliers (palier = 2,5kg, ou 1,25kg sous 20kg, plafonné à 4)
-  const _stepUnit=w=>w>=20?2.5:1.25;
-  const _stepSug=(w,rir)=>{
-    w=parseFloat(w)||0;if(!w) return null;
-    const r=String(rir??'');
-    let n=r==='echec'?-1:(r===''||r==='null'||r==='undefined')?0:Math.min(parseInt(r)||0,4);
-    if(isCW) n=-n;
-    const out=w+n*_stepUnit(w);
-    return out>0?out:w;
-  };
-  const _rawSug=baseWeight
-    ?baseWeight
-    :prev?_stepSug(prev.weight,prev.rir):null;
+  // La charge part TOUJOURS de la dernière série faite sur ce créneau, à
+  // laquelle on applique le multiplicateur de son RIR. getLastZeroRIRWeight
+  // n'est plus prioritaire : elle renvoyait la dernière charge notée à RIR 0,
+  // parfois vieille de plusieurs séances, ce qui court-circuitait la
+  // progression. Elle reste utilisée pour formuler l'explication.
+  const _rawSug=prev?chargeSuivante(prev.weight,prev.rir,isCW):null;
   const _sugBrut=_rawSug!=null&&_rawSug>0?_rawSug:null;
   const isFemme=isFemale(currentUser.gender);
   // L'ajustement de cycle est intégré À LA CHARGE SUGGÉRÉE, il n'a plus de
@@ -9548,7 +9539,7 @@ function _blocExo(idx,estSS){
         <div style="display:flex;gap:18px;align-items:flex-end;margin:2px 0 6px">
           <div><div style="font-size:27px;font-weight:900;line-height:1">${sug}kg</div><div style="font-size:var(--fs-xs);color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">${isCW?'↓ Assistance : progresser = réduire':'Charge pour la première série'}</div></div>
         </div>
-        <div class="s-note">${isCW?'Contrepoids: RIR élevé → diminuer la charge. ':''}${baseWeight?'Basée sur '+escapeHtml(creneauRef)+' (RIR 0 : '+baseWeight+'kg)':prev?'Basée sur '+escapeHtml(creneauRef)+' ('+prev.weight+'kg'+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):'')+')':'Première séance'}</div>
+        <div class="s-note">${isCW?'Contrepoids : un RIR élevé fait diminuer la charge. ':''}${prev?'Basée sur '+escapeHtml(creneauRef)+' ('+prev.weight+'kg'+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):', RIR non noté')+')':'Première séance'}</div>
         ${sugAjustee?`<div class="s-note" style="color:var(--cycle-accent);margin-top:5px">Ajustée de ${Math.round((1-_facteurCycle)*100)} % pour ta phase de cycle : ${_sugBrut}kg d'habitude, ${sugAjustee}kg aujourd'hui.</div>`:''}
       </div>`:
       // Pas d'historique SUR CE CRÉNEAU. On le dit, au lieu de laisser un vide
@@ -9626,11 +9617,7 @@ function renderSets(ex,data,idx){
     const s=data.sets[i];
     const w=parseFloat(s.weight);
     if(w>0 && s.rir!==''&&s.rir!==undefined&&s.rir!==null){
-      const r=String(s.rir);
-      const unit=w>=20?2.5:1.25;
-      let n=r==='echec'?-1:Math.min(parseInt(r)||0,4);
-      if(_isCW) n=-n;
-      const nextW=n===0?w:Math.max(w+n*unit,unit);
+      const nextW=chargeSuivante(w,s.rir,_isCW);
       if(!data.sets[i+1].done&&!data.sets[i+1].userEdited){
         data.sets[i+1].weight=nextW;
         data.sets[i+1].isAuto=true;
@@ -10460,6 +10447,44 @@ function calcSug(pw,pr,prr,tr,trir){
   return roundWeight(sug);
 }
 // Même rattachement au créneau que getLastZeroRIRWeight : voir _memeCreneau.
+// ── Progression de charge : la formule du coach ─────────────────────────────
+// Multiplicateur appliqué à la charge de la dernière série, selon son RIR :
+//   ÉCHEC → ×0,95   RIR 5 → ×1,125   RIR 4 → ×1,10   RIR 3 → ×1,075
+//   RIR 2 → ×1,05   RIR 1 → ×1,025   RIR 0 → ×1,00
+// puis arrondi TOUJOURS au 1,25 supérieur.
+//
+// C'est un pourcentage et non un palier fixe : le pas suit donc la charge, ce
+// qui règle de lui-même l'écart entre une barre à 20 kg et une à 200 kg.
+const SUG_MULTIPLICATEURS=Object.freeze({echec:0.95,5:1.125,4:1.10,3:1.075,2:1.05,1:1.025,0:1});
+function multiplicateurRir(rir){
+  const r=String(rir==null?'':rir).trim().toLowerCase();
+  if(r==='echec') return SUG_MULTIPLICATEURS.echec;
+  const n=parseInt(r,10);
+  // RIR non renseigné : on ne fait pas varier la charge plutôt que de deviner.
+  if(!isFinite(n)) return SUG_MULTIPLICATEURS[0];
+  if(n>=5) return SUG_MULTIPLICATEURS[5];
+  if(n>=4) return SUG_MULTIPLICATEURS[4];
+  if(n>=3) return SUG_MULTIPLICATEURS[3];
+  if(n>=2) return SUG_MULTIPLICATEURS[2];
+  if(n>=1) return SUG_MULTIPLICATEURS[1];
+  return SUG_MULTIPLICATEURS[0];
+}
+function arrondiSup125(v){
+  const x=Number(v)||0;
+  // Une multiplication à virgule flottante peut tomber à 1e-13 au-dessus d'un
+  // multiple exact : sans ce rattrapage, 63,75 monterait à 65.
+  return Math.ceil(Math.round(x*1e6)/1e6/1.25)*1.25;
+}
+function chargeSuivante(charge,rir,contrepoids){
+  const w=parseFloat(charge)||0;
+  if(!(w>0)) return null;
+  const m=multiplicateurRir(rir);
+  // Contrepoids (dips ou tractions assistés) : plus de charge = plus
+  // d'assistance = plus facile. Progresser veut donc dire en RETIRER, d'où
+  // l'inverse du multiplicateur.
+  return arrondiSup125(contrepoids?w/m:w*m);
+}
+
 function getPrevPerf(name,slot,progName){
   if(!currentUser.sessions?.length) return null;
   for(let i=currentUser.sessions.length-1;i>=0;i--){
@@ -19807,6 +19832,70 @@ function testExercices(){
     ok('coachToggleDeload existe',typeof coachToggleDeload==='function');
 
     currentUser=_plSauve; _viderCachePlateau();
+
+    // ══════ FORMULE DE PROGRESSION DU COACH ══════
+    // ÉCHEC ×0,95 · RIR5 ×1,125 · RIR4 ×1,10 · RIR3 ×1,075 · RIR2 ×1,05
+    // RIR1 ×1,025 · RIR0 ×1,00, puis arrondi TOUJOURS au 1,25 supérieur.
+    ok('Multiplicateur ÉCHEC',multiplicateurRir('echec')===0.95);
+    ok('Multiplicateur RIR 0',multiplicateurRir('0')===1);
+    ok('Multiplicateur RIR 1',multiplicateurRir('1')===1.025);
+    ok('Multiplicateur RIR 2',multiplicateurRir('2')===1.05);
+    ok('Multiplicateur RIR 3',multiplicateurRir('3')===1.075);
+    ok('Multiplicateur RIR 4',multiplicateurRir('4')===1.10);
+    ok('Multiplicateur RIR 5',multiplicateurRir('5')===1.125);
+    ok('Au-delà de 5, le plafond de 5 s\'applique',multiplicateurRir('9')===1.125);
+    ok('RIR non renseigné : charge inchangée',
+       multiplicateurRir('')===1&&multiplicateurRir(null)===1&&multiplicateurRir(undefined)===1);
+    ok('ÉCHEC insensible à la casse',multiplicateurRir('ECHEC')===0.95&&multiplicateurRir('Echec')===0.95);
+
+    // Arrondi au 1,25 SUPÉRIEUR, et rien d'autre
+    ok('Un multiple exact ne bouge pas',arrondiSup125(60)===60&&arrondiSup125(63.75)===63.75);
+    ok('Tout le reste monte',arrondiSup125(60.01)===61.25&&arrondiSup125(61.5)===62.5);
+    // 100×1,10 vaut 110.00000000000001 en virgule flottante : sans rattrapage,
+    // l'arrondi supérieur le fait basculer à 111,25 au lieu de 110.
+    ok('La virgule flottante ne fait pas sauter un cran',
+       chargeSuivante(100,'4',false)===110,String(chargeSuivante(100,'4',false)));
+    ok('Idem à 200 kg',chargeSuivante(200,'4',false)===220,String(chargeSuivante(200,'4',false)));
+
+    // Conformité au tableur, en arithmétique entière (comme Excel en décimal)
+    const _xl=(G,I)=>{
+      const mm=I==='echec'?950:(parseInt(I)>=5?1125:parseInt(I)>=4?1100:parseInt(I)>=3?1075
+              :parseInt(I)>=2?1050:parseInt(I)>=1?1025:1000);
+      return Math.ceil(Math.round(G*mm)/1250)*1250/1000;
+    };
+    const _charges=[5,10,15,20,25,30,40,50,60,80,100,142.5,180,200,250];
+    const _rirs=['echec','0','1','2','3','4','5'];
+    let _div=0,_ex='';
+    for(const G of _charges) for(const I of _rirs){
+      const a=_xl(G,I), v=chargeSuivante(G,I,false);
+      if(Math.abs(a-v)>1e-9){ _div++; if(!_ex) _ex=G+'/'+I+' → '+v+' au lieu de '+a; }
+    }
+    ok('Conforme au tableur sur '+(_charges.length*_rirs.length)+' combinaisons',_div===0,_ex);
+    ok('Toute charge proposée est un multiple de 1,25',
+       _charges.every(G=>_rirs.every(I=>{
+         const v=chargeSuivante(G,I,false);
+         return Math.abs(v/1.25-Math.round(v/1.25))<1e-9;})));
+
+    // Le RIR doit faire MONTER et DESCENDRE
+    ok('Le RIR fait monter la charge',
+       chargeSuivante(60,'1',false)>60&&chargeSuivante(60,'5',false)>chargeSuivante(60,'1',false));
+    ok('L\'échec la fait descendre',chargeSuivante(60,'echec',false)<60);
+    ok('RIR 0 la laisse en place',chargeSuivante(60,'0',false)===60);
+    // Conséquence assumée de « toujours arrondir au supérieur » : sous 25 kg,
+    // les 5 % de l'échec sont plus petits que le grain de 1,25 kg.
+    ok('Sous 25 kg, l\'échec ne peut pas alléger',chargeSuivante(20,'echec',false)===20);
+    ok('Au-delà, il allège',chargeSuivante(25,'echec',false)<25);
+
+    // Contrepoids : le sens s'inverse, plus de charge = plus d'assistance
+    ok('Contrepoids : un RIR élevé RETIRE de l\'assistance',
+       chargeSuivante(40,'5',true)<40,String(chargeSuivante(40,'5',true)));
+    ok('Contrepoids : l\'échec en AJOUTE',
+       chargeSuivante(40,'echec',true)>40,String(chargeSuivante(40,'echec',true)));
+
+    // Charge absente ou nulle : aucune suggestion
+    ok('Charge nulle ou vide : rien',
+       chargeSuivante(0,'2',false)===null&&chargeSuivante('','2',false)===null
+       &&chargeSuivante(null,'2',false)===null);
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
