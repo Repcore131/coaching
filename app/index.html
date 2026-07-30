@@ -16305,6 +16305,59 @@ function _renderMacroTargets(nut){
   </div>`;
 }
 
+
+// ── Proposition côté athlète ───────────────────────────────────────────────
+// Elle ne s'affiche QUE si personne n'a rempli les objectifs. Dès qu'un coach
+// a écrit des macros, cette carte disparaît : le coach prime, toujours, et il
+// n'y a pas de bouton capable d'écraser son travail.
+//
+// Note : la zone annoncée dans le cahier des charges, _renderMacroTargets,
+// n'est appelée nulle part — c'est du code mort. La carte est donc posée dans
+// _renderNutriContent, l'écran où l'athlète regarde réellement ses macros.
+function macrosRemplies(nut){
+  const m=(nut&&nut.macros)||{};
+  const rempli=o=>!!o&&['kcal','p','g','l'].some(k=>Number(o[k])>0);
+  return rempli(m.on)||rempli(m.off);
+}
+function _htmlDepartAthlete(nut){
+  if(macrosRemplies(nut)) return '';
+  const b=besoinsProposes(currentUser);
+  if(!b||b.source===null) return '';
+  const nom=b.source==='katch'?'Katch-McArdle':'Mifflin-St Jeor';
+  const bloc=(t,j,coul)=>`<div style="flex:1;min-width:0;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:9px 6px;text-align:center">
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:${coul};margin-bottom:5px">${t}</div>
+      <div style="font-size:16px;font-weight:900;color:#fff;line-height:1">${j.kcal}<span style="font-size:9px;color:var(--sub);font-weight:400"> kcal</span></div>
+      <div style="font-size:10px;color:var(--sub);margin-top:4px;line-height:1.5">P ${j.p} · G ${j.g} · L ${j.l}<br>Fibres ${j.f}</div>
+    </div>`;
+  return `<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:14px;padding:14px;margin-bottom:18px">
+    <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:4px">Point de départ proposé</div>
+    <div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:11px">Ton coach n'a pas encore fixé tes objectifs. Voici un point de départ calculé sur ton dernier bilan — tu peux l'utiliser en attendant.</div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      ${bloc('⚡ JOUR ON',b.on,'var(--success)')}
+      ${bloc('💤 JOUR OFF',b.off,'var(--sub)')}
+    </div>
+    <button class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:10px" onclick="utiliserBesoinsProposes()">Utiliser ces objectifs</button>
+    <div style="font-size:10px;color:var(--text-faint);line-height:1.6;margin-top:9px">${escapeHtml(nom)} · dépense estimée ${b.depense} kcal — ${escapeHtml(b.hypotheses.join(' · '))}.</div>
+    ${blocDisclaimerSante()}
+  </div>`;
+}
+function utiliserBesoinsProposes(){
+  const nut=currentUser.nutrition||{};
+  // Deuxième garde, au MOMENT de l'écriture et pas seulement au rendu : entre
+  // l'affichage de la carte et le clic, une synchronisation a pu apporter les
+  // macros du coach. On ne les écrase pas.
+  if(macrosRemplies(nut)){ toast('Ton coach a fixé tes objectifs entre-temps','var(--orange)'); loadNutrition(); return; }
+  const b=besoinsProposes(currentUser);
+  if(!b||b.source===null){ toast('Données de base incomplètes','var(--orange)'); return; }
+  const j=o=>({kcal:o.kcal,p:o.p,g:o.g,l:o.l,f:o.f});
+  if(!currentUser.nutrition) currentUser.nutrition={};
+  currentUser.nutrition.macros={on:j(b.on),off:j(b.off),origine:'auto',
+    origineDate:Date.now(),origineSource:b.source};
+  const ok=saveUser();
+  toastEcriture(ok,'Objectifs enregistrés ✓','les objectifs sont');
+  loadNutrition();
+}
+
 function _renderStrictMacroRings(nut){
   const today=localISODate(new Date());
   const isOn=nutIsOnDay(today);
@@ -16396,6 +16449,7 @@ function _renderNutriContent(type){
           </div>
         </div>
       </div>
+      ${_htmlDepartAthlete(nut)}
       ${_renderStrictMacroRings(nut)}
       ${_renderCycleNutSettings(nut)}`;
     if(fjSec){fjSec.style.display='block';_renderFjDaySummary(localISODate(new Date()));}
@@ -16806,6 +16860,232 @@ function loadNutrition(){
 }
 
 // ======= NUTRITION COACH (gestion plan client) =======
+
+// ══════════════ POINT DE DÉPART NUTRITIONNEL ════════════════════════════════
+// Une PROPOSITION, jamais une prescription. Rien de ce qui suit n'écrit dans
+// nutrition.macros : le coach relit et enregistre lui-même, et côté athlète la
+// proposition ne s'affiche que si AUCUN coach n'a rempli les objectifs.
+//
+// Tout est recalculé à la lecture, depuis le DERNIER bilan. Un nouveau bilan
+// change donc la proposition sans qu'il y ait quoi que ce soit à migrer.
+
+// ── Métabolisme de base : deux formules, choisies par la donnée disponible ──
+// Mifflin-St Jeor ne demande que poids, taille, âge et sexe. C'est elle qui
+// porte la différence homme / femme : +5 chez l'homme, −161 chez la femme. On
+// n'ajoute donc aucun correctif de sexe par-dessus.
+function mbMifflin(poids,taille,age,sexe){
+  const p=Number(poids),t=Number(taille),a=Number(age);
+  if(!(p>0)||!(t>0)||!(a>0)) return null;
+  return Math.round(10*p+6.25*t-5*a+(isFemale(sexe)?-161:5));
+}
+// Katch-McArdle part de la MASSE MAIGRE. Elle ne connaît pas le sexe et n'en a
+// pas besoin : la différence de composition est déjà dans la masse maigre. À
+// poids égal, elle distingue deux personnes que Mifflin confondrait.
+function mbKatch(masseMaigreKg){
+  const mm=Number(masseMaigreKg);
+  if(!(mm>0)) return null;
+  return Math.round(370+21.6*mm);
+}
+
+// Masse maigre du dernier bilan, par le MÊME chemin que l'écran % de gras :
+// calcBF puis retrait de la masse grasse. Aucune formule parallèle, sinon les
+// deux écrans finiraient par annoncer deux masses maigres différentes.
+function masseMaigreDuBilan(user){
+  const bl=((user&&user.bilans)||[]).filter(b=>b&&b.date).slice().sort((a,b)=>a.date-b.date);
+  const b=bl[bl.length-1];
+  if(!b) return null;
+  const w=getBW(b);
+  const taille=parseFloat(user._evol_height||user['init-height']||b['deb-height']||user.height||0);
+  const sexe=user._evol_gender||user.gender||b['deb-gender']||'';
+  const bf=calcBF(getBM(b,'waist'),getBM(b,'neck'),getBM(b,'hips'),taille,sexe);
+  if(bf===null||!(w>0)) return null;
+  const mg=Math.round(w*bf/10)/10;
+  return Math.round((w-mg)*10)/10;
+}
+
+// ── Facteur d'activité, déduit de ce que l'app sait DÉJÀ ────────────────────
+// Aucune question nouvelle : le nombre de créneaux actifs du programme, et la
+// moyenne de pas sur quatorze jours quand elle existe.
+//
+// Comme REPERES_VOLUME, ce barème est un repère de PRATIQUE DE TERRAIN et non
+// une mesure. Les facteurs publiés varient d'une source à l'autre, la dépense
+// réelle d'une même personne varie d'un jour à l'autre, et le compteur de pas
+// d'un téléphone posé sur un bureau ne vaut rien. C'est un point de départ que
+// le coach ajuste, jamais un verdict.
+const ACT_SEANCES=Object.freeze([1.20,1.30,1.375,1.45,1.55,1.65]);
+const ACT_PAS=Object.freeze([
+  Object.freeze({max:4000,  d:-0.05}),
+  Object.freeze({max:7500,  d: 0    }),
+  Object.freeze({max:10000, d: 0.05 }),
+  Object.freeze({max:Infinity, d:0.10})
+]);
+const ACT_MIN=1.15, ACT_MAX=1.90;
+function moyennePas14j(user){
+  const log=((user&&user.stepsLog)||[]).filter(e=>e&&e.date&&Number(e.count)>0);
+  if(!log.length) return null;
+  const limite=localISODate(new Date(Date.now()-14*864e5));
+  const l=log.filter(e=>e.date>=limite);
+  if(!l.length) return null;
+  return Math.round(l.reduce((s,e)=>s+Number(e.count),0)/l.length);
+}
+function facteurActivite(user){
+  const actifs=((user&&user.sessions_config)||[]).filter(s=>s&&s.active).length;
+  const base=ACT_SEANCES[Math.min(actifs,ACT_SEANCES.length-1)];
+  const pas=moyennePas14j(user);
+  let d=0;
+  if(pas!=null) for(const b of ACT_PAS) if(pas<=b.max){ d=b.d; break; }
+  const f=Math.min(ACT_MAX,Math.max(ACT_MIN,base+d));
+  return {f:Math.round(f*1000)/1000,seances:actifs,pas};
+}
+
+// ── Protéines : le coach choisit, la phase propose ─────────────────────────
+// En grammes par kilo de POIDS DE CORPS. La sèche demande le plus — c'est là
+// qu'il faut protéger le muscle — la prise de masse un cran en dessous, et
+// hors phase déclarée on reste sur le bas de l'échelle.
+const PROT_DEFAUT=Object.freeze({seche:2.4,masse:2.2,recomp:2.2,maintien:1.8});
+const PROT_BASE=1.8;
+// L'échelle de la liste déroulante : de 2,4 à 1,8 par pas de 0,1.
+const PROT_ECHELLE=Object.freeze([2.4,2.3,2.2,2.1,2.0,1.9,1.8]);
+const LIP_G_PAR_KG=0.8;          // plancher, jamais en dessous
+const FIBRES_PAR_1000=14;
+const CYCLE_GLUC=0.15;           // jour ON : +15 % de glucides, OFF : −15 %
+
+function _repartition(kcal,poids,gParKg){
+  const p=Math.round(gParKg*poids);
+  const l=Math.round(LIP_G_PAR_KG*poids);
+  const reste=kcal-4*p-9*l;
+  const g=Math.max(0,Math.round(reste/4));
+  return {p,l,g};
+}
+function _bloc(p,l,g){
+  const kcal=Math.round(4*p+9*l+4*g);
+  return {kcal,p,l,g,f:Math.round(FIBRES_PAR_1000*kcal/1000)};
+}
+
+// opts : { protGparKg, cycle }  — cycle à false donne le MÊME total tous les
+// jours, ce que demandent les athlètes qui ne veulent pas gérer deux colonnes.
+function besoinsProposes(user,opts){
+  const o=opts||{};
+  const hypotheses=[];
+  const bl=((user&&user.bilans)||[]).filter(b=>b&&b.date).slice().sort((a,b)=>a.date-b.date);
+  const b=bl[bl.length-1]||{};
+  const poids=getBW(b)||parseFloat((user&&user['init-weight'])||0)||null;
+  const taille=parseFloat((user&&(user._evol_height||user['init-height']))||b['deb-height']||(user&&user.height)||0)||null;
+  const age=parseFloat(b['deb-age']||(user&&user['init-age'])||(user&&user.age)||0)||null;
+  const sexe=(user&&(user._evol_gender||user.gender))||b['deb-gender']||'';
+  // On ne devine RIEN. Sans l'une de ces quatre données, il n'y a pas de
+  // proposition — un chiffre inventé serait pire que pas de chiffre.
+  const manque=[];
+  if(!(poids>0)) manque.push('poids');
+  if(!(taille>0)) manque.push('taille');
+  if(!(age>0)) manque.push('âge');
+  if(!sexe) manque.push('sexe');
+  if(manque.length) return {source:null,on:null,off:null,manque,hypotheses};
+
+  const mm=masseMaigreDuBilan(user);
+  let mb=null,source=null;
+  if(mm!=null){ mb=mbKatch(mm); source='katch';
+    hypotheses.push('masse maigre '+String(mm).replace('.',',')+' kg, mesurée au dernier bilan'); }
+  if(mb==null){ mb=mbMifflin(poids,taille,age,sexe); source='mifflin';
+    hypotheses.push('tours de mesure absents : estimation sur poids, taille, âge et sexe'); }
+  if(mb==null) return {source:null,on:null,off:null,manque:['calcul impossible'],hypotheses};
+
+  const act=facteurActivite(user);
+  const depense=Math.round(mb*act.f);
+  hypotheses.push(act.seances+' séance'+(act.seances>1?'s':'')+' par semaine'
+    +(act.pas!=null?' et '+act.pas.toLocaleString('fr-FR')+' pas par jour':'')
+    +' → facteur '+String(act.f).replace('.',','));
+
+  const phase=typePhase(user);
+  const gParKg=(typeof o.protGparKg==='number'&&isFinite(o.protGparKg))
+    ? o.protGparKg
+    : (PROT_DEFAUT[phase]||PROT_BASE);
+  const libPhase=(phase&&PHASES[phase]&&PHASES[phase].lib)||'';
+  hypotheses.push(String(gParKg).replace('.',',')+' g de protéines par kilo'
+    +(libPhase?' ('+libPhase.toLowerCase()+')':''));
+
+  const r=_repartition(depense,poids,gParKg);
+  const cycle=o.cycle!==false;
+  if(!cycle){
+    hypotheses.push('même total tous les jours');
+    const j=_bloc(r.p,r.l,r.g);
+    return {source,on:j,off:Object.assign({},j),act,depense,mb,gParKg,cycle:false,hypotheses};
+  }
+  hypotheses.push('glucides +15 % les jours d\'entraînement, −15 % les jours de repos');
+  return {source,
+    on:_bloc(r.p,r.l,Math.round(r.g*(1+CYCLE_GLUC))),
+    off:_bloc(r.p,r.l,Math.round(r.g*(1-CYCLE_GLUC))),
+    act,depense,mb,gParKg,cycle:true,hypotheses};
+}
+
+
+// ── Réglages de la proposition, côté coach ─────────────────────────────────
+// Ils vivent en mémoire, PAS dans le dossier de l'athlète : ce sont les
+// curseurs du calcul, pas une donnée de suivi. Rien n'est enregistré tant que
+// le coach n'a pas cliqué sur son bouton habituel.
+let _propProt=null;      // null = valeur suggérée par la phase
+let _propCycle=true;
+function _propReglages(){
+  const p=_propProt;
+  return {protGparKg:(typeof p==='number')?p:undefined,cycle:_propCycle};
+}
+function _propSetProt(v){
+  const n=parseFloat(v);
+  _propProt=isFinite(n)?n:null;
+  const c=getOwnedClient(currentClientId);
+  if(c) renderCoachNutriSection(c);
+}
+function _propSetCycle(v){
+  _propCycle=(String(v)==='1');
+  const c=getOwnedClient(currentClientId);
+  if(c) renderCoachNutriSection(c);
+}
+// Le bloc de commande + la ligne d'hypothèses. Rendu vide quand la proposition
+// est impossible : pas de bouton qui ne mènerait à rien.
+function _htmlDepartCoach(c){
+  const b=besoinsProposes(c,_propReglages());
+  if(!b||b.source===null){
+    const m=(b&&b.manque||[]).join(', ');
+    return `<div style="font-size:10px;color:var(--text-faint);line-height:1.5;margin-bottom:10px">Point de départ calculable dès que son bilan porte ${escapeHtml(m||'les données de base')}.</div>`;
+  }
+  const phase=typePhase(c);
+  const suggere=PROT_DEFAUT[phase]||PROT_BASE;
+  const opts=PROT_ECHELLE.map(v=>`<option value="${v}"${b.gParKg===v?' selected':''}>${String(v).replace('.',',')} g/kg${v===suggere?' · suggéré':''}</option>`).join('');
+  return `<div style="border-top:1px solid var(--border);padding-top:11px;margin-bottom:12px">
+    <div style="display:flex;gap:6px;margin-bottom:8px">
+      <select onchange="_propSetProt(this.value)" style="flex:1;min-width:0;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700">${opts}</select>
+      <select onchange="_propSetCycle(this.value)" style="flex:1;min-width:0;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700">
+        <option value="1"${b.cycle?' selected':''}>Diète cyclée</option>
+        <option value="0"${b.cycle?'':' selected'}>Même total 7 j</option>
+      </select>
+    </div>
+    <button class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:10px" onclick="proposerPointDepart()">Proposer un point de départ</button>
+  </div>`;
+}
+function _htmlDepartHypotheses(c){
+  const b=besoinsProposes(c,_propReglages());
+  if(!b||b.source===null) return '';
+  const nom=b.source==='katch'?'Katch-McArdle':'Mifflin-St Jeor';
+  return `<div style="font-size:10px;color:var(--text-faint);line-height:1.6;margin-top:8px">${escapeHtml(nom)} · ${b.mb} kcal au repos · dépense estimée ${b.depense} kcal — ${escapeHtml(b.hypotheses.join(' · '))}. Repère de départ, à ajuster.</div>`;
+}
+// PRÉ-REMPLIT les champs et rien d'autre. Aucune écriture, aucun push : le
+// coach relit, corrige, puis clique sur « Enregistrer » comme d'habitude.
+function proposerPointDepart(){
+  const c=getOwnedClient(currentClientId);
+  if(!c) return;
+  const b=besoinsProposes(c,_propReglages());
+  if(!b||b.source===null){ toast('Données de base incomplètes','var(--orange)'); return; }
+  // Le sucre n'est pas proposé : aucune cible de sucre ajouté ne sort du
+  // calcul, et en inventer une sur un écran de santé serait pire que la
+  // laisser vide. Le coach la remplit s'il le souhaite.
+  for(const [col,j] of [['on',b.on],['off',b.off]])
+    for(const k of ['kcal','p','g','l','f']){
+      const el=document.getElementById('ccd-'+col+'-'+k);
+      if(el) el.value=j[k];
+    }
+  toast('Proposition remplie. Relis, puis enregistre.');
+}
+
 function renderCoachNutriSection(c){
   const el=document.getElementById('ccd-nutrition');
   if(!el||!c) return;
@@ -16845,12 +17125,14 @@ function renderCoachNutriSection(c){
       <!-- Objectifs macro -->
       <div style="margin-bottom:16px">
         <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:10px">🎯 Objectifs nutritionnels</div>
+        ${_htmlDepartCoach(c)}
         <div style="display:grid;grid-template-columns:90px 1fr 1fr;gap:6px;margin-bottom:8px">
           <div></div>
           <div style="font-size:var(--fs-xs);font-weight:800;color:var(--success);letter-spacing:1px;text-align:center;background:var(--success-bg);border:1px solid var(--success-border);border-radius:6px;padding:4px">⚡ JOUR ON</div>
           <div style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);letter-spacing:1px;text-align:center;background:var(--surface-1);border:1px solid var(--border);border-radius:6px;padding:4px">💤 JOUR OFF</div>
         </div>
         ${macroRows}
+        ${_htmlDepartHypotheses(c)}
         <button onclick="saveClientNutriMacros()" style="width:100%;margin-top:6px;padding:11px 0;background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer">💾 ENREGISTRER LES OBJECTIFS</button>
       </div>
       <!-- Plan photos (stricte uniquement) -->
@@ -25359,6 +25641,294 @@ function testExercices(){
 
 
 
+
+
+    // ══════════════ POINT DE DÉPART NUTRITIONNEL ══════════════
+    (function(){
+      const sauveU=currentUser, sauveCid=currentClientId;
+      const sauveUsers=DB.get('users');
+      const sauveProt=(typeof _propProt!=='undefined')?_propProt:null;
+      const sauveCyc=(typeof _propCycle!=='undefined')?_propCycle:true;
+
+      // Bilan complet : poids, taille, âge, sexe ET les trois tours de mesure.
+      const _bil=(j,extra)=>Object.assign({type:'suivi',date:Date.now()-j*864e5,
+        'deb-weight':'80','deb-height':'178','deb-age':'32','deb-gender':'Homme',
+        'deb-neck':'39','deb-waist':'84','deb-hips':'98'},extra||{});
+      const _ath=(extra)=>Object.assign({id:'nb',email:'nb@t.fr',fname:'A',lname:'B',
+        role:'athlete',gender:'H',_evol_height:178,_evol_gender:'H',
+        exAlias:{},exMuscles:{},sessions:[],videos:[],programs:{},
+        sessions_config:[{active:true,name:'P',exercises:[]},{active:true,name:'Q',exercises:[]},
+                         {active:true,name:'R',exercises:[]}],
+        bilans:[_bil(60),_bil(2)],nutrition:{}},extra||{});
+
+      // ── Les deux formules, nues ──
+      ok('Mifflin distingue l\'homme de la femme',(()=>{
+        const h=mbMifflin(80,178,32,'H'), f=mbMifflin(80,178,32,'F');
+        // Écart théorique : 5 − (−161) = 166 kcal, à poids/taille/âge égaux.
+        return h!==null&&f!==null&&h-f===166;})());
+      ok('Mifflin : la valeur attendue pour un homme de 80 kg, 178 cm, 32 ans',
+        mbMifflin(80,178,32,'H')===Math.round(10*80+6.25*178-5*32+5),
+        String(mbMifflin(80,178,32,'H')));
+      ok('Mifflin refuse une donnée manquante ou absurde',
+        mbMifflin(0,178,32,'H')===null&&mbMifflin(80,null,32,'H')===null
+        &&mbMifflin(80,178,0,'H')===null&&mbMifflin(-80,178,32,'H')===null);
+      ok('Katch suit 370 + 21,6 × masse maigre',
+        mbKatch(65)===Math.round(370+21.6*65)&&mbKatch(0)===null&&mbKatch(null)===null);
+      ok('Katch ne dépend PAS du sexe : la composition est déjà dans la masse maigre',
+        mbKatch.length===1&&mbKatch.toString().indexOf('isFemale')<0);
+
+      // ── Le choix de la formule ──
+      ok('Critère 2 : mensurations complètes → Katch',(()=>{
+        const b=besoinsProposes(_ath());
+        return b.source==='katch';})());
+      ok('Critère 2 : sans tours de mesure mais poids/taille/âge/sexe → Mifflin',(()=>{
+        const u=_ath({bilans:[{type:'suivi',date:Date.now()-2*864e5,
+          'deb-weight':'80','deb-height':'178','deb-age':'32','deb-gender':'Homme'}]});
+        const b=besoinsProposes(u);
+        return b.source==='mifflin';})());
+      ok('Critère 1 : sans taille, source vaut null et rien n\'est proposé',(()=>{
+        const u=_ath({_evol_height:null,height:null,
+          bilans:[{type:'suivi',date:Date.now()-2*864e5,
+            'deb-weight':'80','deb-age':'32','deb-gender':'Homme'}]});
+        delete u['init-height'];
+        const b=besoinsProposes(u);
+        return b.source===null&&b.on===null&&b.off===null
+          &&b.manque.indexOf('taille')>=0;})());
+      ok('Sans poids, sans âge ou sans sexe : même refus',(()=>{
+        const nu=(champ)=>{
+          const bl={type:'suivi',date:Date.now()-2*864e5,
+            'deb-weight':'80','deb-height':'178','deb-age':'32','deb-gender':'Homme'};
+          delete bl[champ];
+          const u=_ath({bilans:[bl]});
+          if(champ==='deb-gender'){ u.gender=''; u._evol_gender=''; }
+          return besoinsProposes(u);
+        };
+        return ['deb-weight','deb-age','deb-gender'].every(c=>nu(c).source===null);})());
+      ok('Une donnée absente n\'est JAMAIS devinée',(()=>{
+        const src=besoinsProposes.toString();
+        // Aucun repli sur une valeur par défaut pour les quatre entrées de base.
+        return !/poids\s*=\s*\w+\s*\|\|\s*\d/.test(src)&&!/age\s*=\s*\w+\s*\|\|\s*\d\d/.test(src);})());
+
+      // ── La répartition ──
+      ok('Critère 3 : protéines entre 1,6 et 2,4 g/kg dans tous les cas',(()=>{
+        const cas=[{},{phase:{type:'seche',debut:Date.now()-30*864e5}},
+                   {phase:{type:'masse',debut:Date.now()-30*864e5}},
+                   {phase:{type:'maintien',debut:Date.now()-30*864e5}}];
+        const mauvais=[];
+        for(const extra of cas){
+          const u=_ath(extra);
+          for(const cyc of [true,false]){
+            const b=besoinsProposes(u,{cycle:cyc});
+            if(b.source===null){ mauvais.push('source null'); continue; }
+            const r=b.on.p/80;
+            if(r<1.6||r>2.4) mauvais.push((extra.phase?extra.phase.type:'sans phase')+' → '+r.toFixed(2));
+          }
+        }
+        return mauvais.length?_echec(mauvais.join(', ')):true;})());
+      ok('Critère 4 : lipides jamais sous 0,8 g/kg',(()=>{
+        const mauvais=[];
+        for(const v of PROT_ECHELLE){
+          const b=besoinsProposes(_ath(),{protGparKg:v});
+          if(b.on.l/80<0.8-1e-9) mauvais.push(v+' → '+(b.on.l/80).toFixed(3));
+          if(b.off.l!==b.on.l) mauvais.push('ON≠OFF à '+v);
+        }
+        return mauvais.length?_echec(mauvais.join(', ')):true;})());
+      ok('Critère 5 : kcal ON ≥ kcal OFF, et protéines ON = protéines OFF',(()=>{
+        const b=besoinsProposes(_ath());
+        return b.on.kcal>=b.off.kcal&&b.on.p===b.off.p&&b.on.l===b.off.l;})());
+      ok('Les glucides portent SEULS l\'écart ON / OFF',(()=>{
+        const b=besoinsProposes(_ath());
+        return b.on.g>b.off.g
+          &&Math.abs((b.on.kcal-b.off.kcal)-4*(b.on.g-b.off.g))<=1;})());
+      ok('Fibres à 14 g pour 1000 kcal, sur chaque jour',(()=>{
+        const b=besoinsProposes(_ath());
+        return b.on.f===Math.round(14*b.on.kcal/1000)
+          &&b.off.f===Math.round(14*b.off.kcal/1000);})());
+      ok('Diète non cyclée : le même total tous les jours',(()=>{
+        const b=besoinsProposes(_ath(),{cycle:false});
+        return b.cycle===false&&b.on.kcal===b.off.kcal&&b.on.g===b.off.g
+          &&b.on.p===b.off.p&&b.on.l===b.off.l;})());
+      ok('La sèche propose plus de protéines que le maintien',(()=>{
+        const s=besoinsProposes(_ath({phase:{type:'seche',debut:Date.now()-30*864e5}}));
+        const m=besoinsProposes(_ath({phase:{type:'maintien',debut:Date.now()-30*864e5}}));
+        return s.gParKg>m.gParKg&&s.on.p>m.on.p;})());
+      ok('La liste déroulante descend de 2,4 à 1,8 par pas de 0,1',
+        PROT_ECHELLE.length===7&&PROT_ECHELLE[0]===2.4&&PROT_ECHELLE[6]===1.8
+        &&PROT_ECHELLE.every((v,i)=>i===0||Math.abs(PROT_ECHELLE[i-1]-v-0.1)<1e-9));
+      ok('Le choix explicite du coach l\'emporte sur la suggestion de phase',(()=>{
+        const u=_ath({phase:{type:'seche',debut:Date.now()-30*864e5}});
+        const b=besoinsProposes(u,{protGparKg:1.8});
+        return b.gParKg===1.8&&b.on.p===Math.round(1.8*80);})());
+
+      // ── Le facteur d'activité ──
+      ok('Le facteur monte avec le nombre de créneaux actifs',(()=>{
+        const f=n=>facteurActivite({sessions_config:Array.from({length:n},()=>({active:true}))}).f;
+        return f(0)<f(2)&&f(2)<f(4)&&f(4)<=f(6);})());
+      ok('Les créneaux inactifs ne comptent pas',(()=>{
+        const a=facteurActivite({sessions_config:[{active:true},{active:false},{active:false}]});
+        const b=facteurActivite({sessions_config:[{active:true}]});
+        return a.f===b.f&&a.seances===1;})());
+      ok('Les pas ajustent le facteur, dans les deux sens',(()=>{
+        const cfg=[{active:true},{active:true},{active:true}];
+        const j=(n,c)=>({date:localISODate(new Date(Date.now()-n*864e5)),count:c});
+        const bas=facteurActivite({sessions_config:cfg,stepsLog:[j(1,2000),j(2,2500)]});
+        const neutre=facteurActivite({sessions_config:cfg});
+        const haut=facteurActivite({sessions_config:cfg,stepsLog:[j(1,14000),j(2,13000)]});
+        return bas.f<neutre.f&&neutre.f<haut.f;})());
+      ok('Les pas de plus de quatorze jours sont ignorés',(()=>{
+        const j=(n,c)=>({date:localISODate(new Date(Date.now()-n*864e5)),count:c});
+        return moyennePas14j({stepsLog:[j(30,20000)]})===null
+          &&moyennePas14j({stepsLog:[j(3,8000),j(30,20000)]})===8000;})());
+      ok('Le facteur reste dans ses bornes',(()=>{
+        const j=(n,c)=>({date:localISODate(new Date(Date.now()-n*864e5)),count:c});
+        const f=facteurActivite({sessions_config:Array.from({length:20},()=>({active:true})),
+          stepsLog:[j(1,50000)]}).f;
+        return f<=ACT_MAX&&facteurActivite({}).f>=ACT_MIN;})());
+
+      // ── Masse maigre : le MÊME chemin que l'écran % de gras ──
+      ok('La masse maigre vient de calcBF, pas d\'une formule parallèle',(()=>{
+        const u=_ath();
+        const b=u.bilans[u.bilans.length-1];
+        const bf=calcBF(getBM(b,'waist'),getBM(b,'neck'),getBM(b,'hips'),178,'H');
+        const w=getBW(b);
+        const attendu=Math.round((w-Math.round(w*bf/10)/10)*10)/10;
+        return masseMaigreDuBilan(u)===attendu;})());
+      ok('Le calcul suit le DERNIER bilan',(()=>{
+        const u=_ath({bilans:[_bil(60),_bil(2,{'deb-weight':'90','deb-waist':'96'})]});
+        const a=besoinsProposes(u);
+        const v=_ath({bilans:[_bil(60)]});
+        const b=besoinsProposes(v);
+        return a.depense!==b.depense;})());
+
+      // ── Côté coach : la proposition n'écrit RIEN ──
+      (function(){
+        currentUser={id:'coN',email:'con@t.fr',role:'coach',fname:'K',
+          seenBilans:{},alertStatus:{},studentCodes:[]};
+        const poser=extra=>{
+          const c=_ath(Object.assign({id:'nbc',email:'nbc@t.fr',coachId:'coN'},extra||{}));
+          const u={}; u[c.email]=c; DB.set('users',u); currentClientId=c.id;
+          renderCoachNutriSection(c);
+          return c;
+        };
+        ok('Le bouton « Proposer » est rendu quand le calcul est possible',(()=>{
+          poser();
+          const z=document.getElementById('ccd-nutrition');
+          return !!z&&/Proposer un point de départ/.test(z.innerHTML);})());
+        ok('Critère 1 : aucun bouton quand la taille manque',(()=>{
+          const c=poser({_evol_height:null,height:null,
+            bilans:[{type:'suivi',date:Date.now()-2*864e5,
+              'deb-weight':'80','deb-age':'32','deb-gender':'Homme'}]});
+          delete c['init-height'];
+          renderCoachNutriSection(c);
+          const z=document.getElementById('ccd-nutrition');
+          return !!z&&!/Proposer un point de départ/.test(z.innerHTML);})());
+        ok('Critère 6 : « Proposer » remplit les champs et n\'écrit RIEN en base',(()=>{
+          poser();
+          const avant=JSON.stringify((DB.get('users')||{})['nbc@t.fr'].nutrition);
+          try{ proposerPointDepart(); }catch(e){ return _echec('exception: '+e.message); }
+          const apres=JSON.stringify((DB.get('users')||{})['nbc@t.fr'].nutrition);
+          const g=id=>(document.getElementById(id)||{}).value;
+          const remplis=['ccd-on-kcal','ccd-on-p','ccd-on-g','ccd-on-l','ccd-on-f',
+            'ccd-off-kcal','ccd-off-p','ccd-off-g','ccd-off-l','ccd-off-f']
+            .every(id=>Number(g(id))>0);
+          if(avant!==apres) return _echec('la base a bougé : '+apres);
+          return remplis;})());
+        ok('Les champs remplis sont bien ceux du calcul',(()=>{
+          const c=poser();
+          const b=besoinsProposes(c,{cycle:_propCycle,
+            protGparKg:(typeof _propProt==='number')?_propProt:undefined});
+          proposerPointDepart();
+          const g=id=>Number((document.getElementById(id)||{}).value);
+          return g('ccd-on-kcal')===b.on.kcal&&g('ccd-off-g')===b.off.g
+            &&g('ccd-on-p')===b.on.p&&g('ccd-on-f')===b.on.f;})());
+        ok('La formule et les hypothèses sont écrites sous le tableau',(()=>{
+          poser();
+          const h=(document.getElementById('ccd-nutrition')||{}).innerHTML||'';
+          return /Katch-McArdle|Mifflin-St Jeor/.test(h)&&/dépense estimée/.test(h)
+            &&/facteur/.test(h);})());
+        ok('Enregistrer APRÈS avoir proposé écrit bien les valeurs',(()=>{
+          poser();
+          proposerPointDepart();
+          try{ saveClientNutriMacros(); }catch(e){ return _echec('exception: '+e.message); }
+          const m=((DB.get('users')||{})['nbc@t.fr'].nutrition||{}).macros||{};
+          return Number(m.on&&m.on.kcal)>0&&Number(m.off&&m.off.kcal)>0;})());
+      })();
+
+      // ── Côté athlète : le coach prime, toujours ──
+      ok('Critère 6 : un athlète dont le coach a rempli les macros ne voit RIEN',(()=>{
+        currentUser=_ath({nutrition:{dietType:'flexible',
+          macros:{on:{kcal:2400,p:180,g:260,l:70},off:{kcal:2100,p:180,g:190,l:70}}}});
+        return _htmlDepartAthlete(currentUser.nutrition)===''
+          &&macrosRemplies(currentUser.nutrition)===true;})());
+      ok('Des macros vides ne comptent pas comme remplies',
+        macrosRemplies({})===false&&macrosRemplies({macros:{}})===false
+        &&macrosRemplies({macros:{on:{},off:{}}})===false
+        &&macrosRemplies({macros:{on:{kcal:0,p:0,g:0,l:0}}})===false
+        &&macrosRemplies({macros:{off:{kcal:2000}}})===true);
+      ok('Sans macros, la carte de proposition s\'affiche',(()=>{
+        currentUser=_ath({nutrition:{dietType:'flexible'}});
+        const h=_htmlDepartAthlete(currentUser.nutrition);
+        return /Point de départ proposé/.test(h)&&/Utiliser ces objectifs/.test(h)
+          &&/JOUR ON/.test(h)&&/JOUR OFF/.test(h);})());
+      ok('Aucune carte quand le calcul est impossible',(()=>{
+        const u=_ath({nutrition:{dietType:'flexible'},_evol_height:null,height:null,
+          bilans:[{type:'suivi',date:Date.now()-2*864e5,'deb-weight':'80','deb-age':'32','deb-gender':'Homme'}]});
+        delete u['init-height'];
+        currentUser=u;
+        return _htmlDepartAthlete(currentUser.nutrition)==='';})());
+      ok('« Utiliser ces objectifs » écrit les macros et note l\'origine',(()=>{
+        currentUser=_ath({nutrition:{dietType:'flexible'}});
+        const b=besoinsProposes(currentUser);
+        try{ utiliserBesoinsProposes(); }catch(e){ return _echec('exception: '+e.message); }
+        const m=(currentUser.nutrition||{}).macros||{};
+        return m.origine==='auto'&&m.origineSource===b.source
+          &&m.on.kcal===b.on.kcal&&m.off.g===b.off.g&&m.on.p===b.on.p;})());
+      ok('Critère 6 : le bouton REFUSE d\'écraser des macros arrivées entre-temps',(()=>{
+        currentUser=_ath({nutrition:{dietType:'flexible'}});
+        // Les macros du coach arrivent après l'affichage de la carte.
+        currentUser.nutrition.macros={on:{kcal:2500,p:190,g:270,l:75},off:{kcal:2200,p:190,g:200,l:75}};
+        try{ utiliserBesoinsProposes(); }catch(e){ return _echec('exception: '+e.message); }
+        const m=currentUser.nutrition.macros;
+        return m.on.kcal===2500&&m.origine===undefined;})());
+      ok('La carte porte le disclaimer santé',(()=>{
+        currentUser=_ath({nutrition:{dietType:'flexible'}});
+        const h=_htmlDepartAthlete(currentUser.nutrition);
+        return h.indexOf(DISCLAIMER_SANTE)>=0;})());
+
+      // ── Pas de collision avec la carte « Proposition de ton coach » ──
+      // Premier jet : j'avais nommé ma carte coach _htmlPropositionCoach, nom
+      // DÉJÀ pris par la proposition d'objectif. Ma définition écrasait la
+      // sienne et trois tests de l'objectif tombaient. Ce test verrouille le
+      // fait que ce sont deux fonctions distinctes qui rendent deux choses
+      // distinctes.
+      ok('La carte d\'objectif et le point de départ nutri sont deux fonctions',(()=>{
+        if(typeof _htmlPropositionCoach!=='function') return _echec('_htmlPropositionCoach perdue');
+        if(typeof _htmlDepartCoach!=='function') return _echec('_htmlDepartCoach perdue');
+        if(_htmlPropositionCoach===_htmlDepartCoach) return _echec('même fonction');
+        const u={id:'z',email:'z@t.fr',exAlias:{},exMuscles:{},sessions:[],bilans:[],
+          objectif:{id:'o',type:'poids',valeurDepart:90,valeurCible:85,unite:'kg',
+            dateDebut:Date.now(),dateEcheance:Date.now()+84*864e5,
+            processus:{seancesParSemaine:4},statut:'actif'}};
+        const h=_htmlPropositionCoach(u);
+        return /Proposition de ton coach/.test(h);})());
+
+      // ── Aucun effet de bord dans les fonctions PURES ──
+      ok('Critère : besoinsProposes ne modifie pas l\'utilisateur',(()=>{
+        const u=_ath();
+        const avant=JSON.stringify(u);
+        besoinsProposes(u); besoinsProposes(u,{protGparKg:2.0,cycle:false});
+        return JSON.stringify(u)===avant;})());
+      ok('mbMifflin, mbKatch et facteurActivite n\'écrivent rien',(()=>{
+        const u=_ath();
+        const avant=JSON.stringify(u);
+        mbMifflin(80,178,32,'H'); mbKatch(65); facteurActivite(u); moyennePas14j(u);
+        masseMaigreDuBilan(u);
+        return JSON.stringify(u)===avant;})());
+
+      if(sauveUsers) DB.set('users',sauveUsers);
+      _propProt=sauveProt; _propCycle=sauveCyc;
+      currentUser=sauveU; currentClientId=sauveCid;
+    })();
 
     // ══════════════ POSES PHOTO SELON LE GENRE ══════════════
     // Les trois silhouettes du visuel « LES PHOTOS » du coach existent en
