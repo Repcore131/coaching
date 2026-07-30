@@ -11305,7 +11305,12 @@ function _blocExo(idx,estSS){
   // n'est plus prioritaire : elle renvoyait la dernière charge notée à RIR 0,
   // parfois vieille de plusieurs séances, ce qui court-circuitait la
   // progression. Elle reste utilisée pour formuler l'explication.
-  const _rawSug=prev?chargeSuivante(prev.weight,prev.rir,isCW):null;
+  // Reprise après coupure. Sans _refDate — ancienne signature, ou séance sans
+  // date — on ne décote rien et le comportement reste l'actuel.
+  const _joursRef=prev?joursDepuisRef(prev._refDate):null;
+  const _decote=_joursRef==null?1:decoteReprise(_joursRef);
+  const _abandon=!!prev&&_decote===null;
+  const _rawSug=(prev&&!_abandon)?chargeSuivante(prev.weight,prev.rir,isCW,_decote):null;
   const _sugBrut=_rawSug!=null&&_rawSug>0?_rawSug:null;
   const isFemme=isFemale(currentUser.gender);
   // L'ajustement de cycle est intégré À LA CHARGE SUGGÉRÉE, il n'a plus de
@@ -11343,11 +11348,17 @@ function _blocExo(idx,estSS){
           <div style="font-size:20px;font-weight:900;color:var(--green)">${escapeHtml(ex.reps)}</div>
           <div style="font-size:11px;color:var(--sub);margin-top:4px">Durée · Cardio</div>
         </div>`
+      :_abandon?
+      `<div class="wo-no-hist sub" style="font-size:11px;background:var(--surface-2);border-radius:8px;padding:10px 13px;margin-bottom:12px;line-height:1.6">
+        Plus de quatre mois sans cette séance. Reprends à une charge que tu tiens facilement pour 10 répétitions, et laisse la progression repartir de là.
+        <div style="color:var(--text-dim);margin-top:5px">${SUG_NOTE_REPERE}</div>
+      </div>`
       :sug?`<div class="suggest-box">
         <div style="display:flex;gap:18px;align-items:flex-end;margin:2px 0 6px">
           <div><div style="font-size:27px;font-weight:900;line-height:1">${sug}kg</div><div style="font-size:var(--fs-xs);color:#fca5a5;letter-spacing:.5px;margin-top:4px;font-weight:700">${isCW?'↓ Assistance : progresser = réduire':'Charge pour la première série'}</div></div>
         </div>
         <div class="s-note">${isCW?'Contrepoids : un RIR élevé fait diminuer la charge. ':''}${prev?'Basée sur '+escapeHtml(creneauRef)+' ('+prev.weight+'kg'+(prev.rir!==''&&prev.rir!=null?(String(prev.rir)==='echec'?' à l’échec':' à RIR '+prev.rir):', RIR non noté')+')':'Première séance'}</div>
+        ${_decote<1?`<div class="s-note" style="margin-top:5px">Ta dernière séance de ${escapeHtml(ex.name)} date du ${_libDateRef(prev._refDate)}. On repart ${Math.round((1-_decote)*100)} % en dessous, le temps de te retrouver.<div style="color:var(--text-dim);margin-top:4px">${SUG_NOTE_REPERE}</div></div>`:''}
         ${sugAjustee?`<div class="s-note" style="color:var(--cycle-accent);margin-top:5px">Ajustée de ${Math.round((1-_facteurCycle)*100)} % pour ta phase de cycle : ${_sugBrut}kg d'habitude, ${sugAjustee}kg aujourd'hui.</div>`:''}
       </div>`:
       // Pas d'historique SUR CE CRÉNEAU. On le dit, au lieu de laisser un vide
@@ -13049,15 +13060,73 @@ function basculerMonteeCharge(){
   document.querySelectorAll('.wo-ramp-caret').forEach(e=>{ e.textContent=m?'▸':'▾'; });
 }
 
-function chargeSuivante(charge,rir,contrepoids){
+// ── Reprise après coupure ──────────────────────────────────────────────────
+// Une charge d'il y a quatre mois n'est pas un repère, c'est un souvenir. Le
+// produit borne déjà les séries de pesées (PESEE_COUPURE_JOURS) et le volume
+// (VOL_COUPURE) ; la charge suggérée, elle, ne bornait rien : un athlète qui
+// revenait après un long arrêt recevait sa charge d'avant, majorée du
+// multiplicateur de RIR par-dessus.
+const SUG_JOURS_PERIME=28;
+const SUG_DECOTES=Object.freeze([{jours:56,part:0.90},{jours:112,part:0.80}]);
+const SUG_JOURS_ABANDON=112;
+const SUG_NOTE_REPERE='Repère de terrain, pas une mesure.';
+
+// PURE. Rend le facteur à appliquer à la charge de référence, ou null quand la
+// référence est trop vieille pour qu'on propose quoi que ce soit.
+// Une date de référence dans le futur (horloge décalée) arrive ici à 0 jour et
+// ne décote donc rien.
+function decoteReprise(joursEcoules){
+  const j=Number(joursEcoules);
+  if(!isFinite(j)||j<=SUG_JOURS_PERIME) return 1;
+  if(j>SUG_JOURS_ABANDON) return null;
+  for(const d of SUG_DECOTES) if(j<=d.jours) return d.part;
+  // La table doit couvrir jusqu'au seuil d'abandon. Si elle ne le fait plus, on
+  // ne propose rien plutôt que d'appliquer 1 en silence — un test le vérifie.
+  return null;
+}
+// Date de la séance de référence, en jour local. Rend null sur une date absente
+// ou aberrante : sans date, pas de décote, et le comportement reste l'actuel.
+function _dateRefSeance(sess){
+  const t=Number(sess&&sess.date);
+  if(!isFinite(t)||t<=0) return null;
+  return localISODate(new Date(t));
+}
+// Jours calendaires entre la référence et aujourd'hui. Jamais en millisecondes :
+// deux séances à 23 h et à 1 h du matin sont à un jour d'écart, pas à deux heures.
+// « 12 mars », ou « 12 mars 2025 » quand l'année n'est pas la courante : à
+// quatre mois de distance on peut avoir changé d'année.
+function _libDateRef(refDate){
+  if(!refDate) return '';
+  const d=new Date(refDate+'T12:00:00');
+  if(isNaN(d.getTime())) return '';
+  const opt={day:'numeric',month:'long'};
+  if(d.getFullYear()!==new Date().getFullYear()) opt.year='numeric';
+  return d.toLocaleDateString('fr-FR',opt);
+}
+function joursDepuisRef(refDate,aujourdhui){
+  if(!refDate) return null;
+  const auj=aujourdhui||localISODate(new Date());
+  const j=_joursEntre(refDate,auj);
+  return isFinite(j)?Math.max(0,j):null;
+}
+function chargeSuivante(charge,rir,contrepoids,decote){
   const w=parseFloat(charge)||0;
   if(!(w>0)) return null;
   const m=multiplicateurRir(rir);
+  // Décote de reprise : 1 par défaut, donc aucun appelant à trois arguments ne
+  // change de comportement. Elle DIVISE sur un contrepoids : là, le poids
+  // affiché est l'assistance, et repartir plus bas veut dire s'assister
+  // DAVANTAGE. La multiplier aurait retiré de l'assistance, donc rendu
+  // l'exercice plus dur — l'inverse exact d'une reprise en douceur.
+  const d=(decote==null)?1:Number(decote);
+  if(!isFinite(d)||d<=0) return null;
   // Contrepoids (dips ou tractions guidés) : le poids affiché est celui de la
   // COMPENSATION. Plus il est élevé, plus c'est facile. Progresser veut donc
   // dire en retirer, d'où l'inverse du multiplicateur — et l'arrondi qui suit
   // le sens fait que la compensation baisse vraiment.
-  return arrondiCharge125(contrepoids?w/m:w*m,w);
+  // Le DÉPART de l'arrondi reste la charge réellement faite : la cible décotée
+  // ne doit jamais être dépassée, sinon « on repart 10 % en dessous » est faux.
+  return arrondiCharge125(contrepoids?w/(m*d):w*m*d,w);
 }
 
 function getPrevPerf(name,slot,progName){
@@ -13067,7 +13136,13 @@ function getPrevPerf(name,slot,progName){
     if(!_memeCreneau(sess,slot,progName)) continue;
     const d=_dataDeSeance(sess,name);if(!d) continue;
     const done=d.sets.filter(s=>s.done&&s.weight);
-    if(done.length) return done[done.length-1];
+    // COPIE, et non la série elle-même : y écrire _refDate reviendrait à
+    // glisser un champ parasite dans l'historique de l'athlète, que le prochain
+    // saveUser persisterait. La date vient de la SÉANCE — une série n'en porte
+    // pas. Le test « sessions[0].data intact » n'aurait pas vu la différence :
+    // il compare les clés de data, pas les objets série.
+    if(done.length) return Object.assign({},done[done.length-1],
+      {_refDate:_dateRefSeance(sess)});
   }return null;
 }
 // ══════════════ CALCUL DU VOLUME PAR MUSCLE ET PAR SEMAINE ══════════════
@@ -33454,6 +33529,238 @@ function testExercices(){
         return orphelins.length
           ?_echec(orphelins.length+' sans muscle : '+orphelins.slice(0,5).join(', '))
           :true;})());
+    })();
+
+
+    // ══ REPRISE APRÈS COUPURE : DÉCOTE DE LA CHARGE SUGGÉRÉE ══════════════
+    (()=>{
+      // ── La fonction pure ──────────────────────────────────────────────
+      ok('Critère : decoteReprise aux quatre paliers',(()=>{
+        const cas=[[7,1],[40,0.90],[90,0.80],[200,null]];
+        for(const [j,att] of cas){
+          const v=decoteReprise(j);
+          if(v!==att) return _echec(j+' jours → '+v+' au lieu de '+att);}
+        return true;})());
+      ok('Les seuils sont bien 28, 56 et 112 jours',(()=>{
+        // En chiffres, pas en constantes : lire les constantes pour bâtir
+        // l'attente validait n'importe quelle valeur, et la variante qui
+        // ramenait la péremption à 7 jours passait au vert.
+        const cas=[[1,1],[27,1],[28,1],[29,0.90],[55,0.90],[56,0.90],
+          [57,0.80],[111,0.80],[112,0.80],[113,null],[500,null]];
+        for(const [j,att] of cas){
+          const v=decoteReprise(j);
+          if(v!==att) return _echec(j+' jours → '+v+' au lieu de '+att);}
+        return true;})());
+      ok('Les constantes portent les valeurs annoncées',(()=>{
+        if(SUG_JOURS_PERIME!==28) return _echec('péremption à '+SUG_JOURS_PERIME);
+        if(SUG_JOURS_ABANDON!==112) return _echec('abandon à '+SUG_JOURS_ABANDON);
+        const t=SUG_DECOTES.map(d=>d.jours+':'+d.part).join(' ');
+        return t==='56:0.9 112:0.8'?true:_echec(t);})());
+      ok('La table de décotes couvre jusqu\'au seuil d\'abandon',(()=>{
+        // Sans quoi decoteReprise rendrait null entre le dernier palier et
+        // l'abandon, et l'athlète perdrait sa suggestion sans raison.
+        const dernier=SUG_DECOTES[SUG_DECOTES.length-1];
+        return dernier.jours>=SUG_JOURS_ABANDON
+          ?true:_echec('dernier palier à '+dernier.jours+' j, abandon à '+SUG_JOURS_ABANDON);})());
+      ok('Les décotes sont décroissantes et strictement entre 0 et 1',(()=>{
+        let prec=1;
+        for(const d of SUG_DECOTES){
+          if(!(d.part>0&&d.part<prec)) return _echec('palier '+d.jours+' : '+d.part);
+          prec=d.part;}
+        return true;})());
+      ok('Critère : une date de référence dans le futur ne décote rien',(()=>{
+        try{
+          const auj=localISODate(new Date());
+          const demain=localISODate(new Date(Date.now()+3*864e5));
+          const j=joursDepuisRef(demain,auj);
+          if(j!==0) return _echec('jours = '+j+' au lieu de 0');
+          return decoteReprise(j)===1;
+        }catch(e){ return _echec('exception : '+e.message); }})());
+      ok('Le rappel « repère de terrain » n\'est pas vide',(()=>{
+        const t=String(SUG_NOTE_REPERE||'');
+        return /Repère de terrain, pas une mesure\./.test(t)
+          ?true:_echec('«'+t+'»');})());
+      ok('Une entrée absurde ne décote rien plutôt que de tout casser',
+        decoteReprise(null)===1&&decoteReprise(undefined)===1
+        &&decoteReprise('abc')===1&&decoteReprise(-5)===1);
+      ok('joursDepuisRef compte en jours CALENDAIRES',(()=>{
+        // 23 h la veille et 1 h du matin : un jour d'écart, pas deux heures.
+        const j=joursDepuisRef('2026-03-10','2026-03-11');
+        const k=joursDepuisRef('2026-02-28','2026-03-01');   // année non bissextile
+        return j===1&&k===1?true:_echec('j='+j+' k='+k);})());
+      ok('Sans date de référence, aucun jour calculé',
+        joursDepuisRef(null)===null&&joursDepuisRef('')===null
+        &&joursDepuisRef(undefined)===null);
+
+      // ── chargeSuivante : la décote entre AVANT le multiplicateur ────────
+      ok('Critère : 100 kg à RIR 2 sans coupure → 105 kg',(()=>{
+        // Non-régression stricte : trois arguments, comportement d'avant.
+        const a=chargeSuivante(100,'2',false);
+        const b=chargeSuivante(100,'2',false,1);
+        const c=chargeSuivante(100,'2',false,decoteReprise(7));
+        return a===105&&b===105&&c===105?true:_echec(a+' / '+b+' / '+c);})());
+      ok('Critère : 100 kg à RIR 2 après 40 jours → 93,75 kg',(()=>{
+        // 100 × 1,05 × 0,90 = 94,5, qui n'est pas sur la grille de 1,25.
+        // L'arrondi part de la charge RÉELLEMENT faite (100) et descend, donc
+        // 93,75 : la cible décotée n'est jamais dépassée.
+        const v=chargeSuivante(100,'2',false,decoteReprise(40));
+        if(v!==93.75) return _echec(String(v));
+        return v<=94.5?true:_echec('dépasse la cible décotée : '+v);})());
+      ok('À 90 jours la décote est plus forte qu\'à 40',(()=>{
+        const a=chargeSuivante(100,'2',false,decoteReprise(40));
+        const b=chargeSuivante(100,'2',false,decoteReprise(90));
+        return b<a&&b<100?true:_echec(a+' puis '+b);})());
+      ok('La décote ne s\'applique jamais deux fois',(()=>{
+        // Rapport attendu ≈ 0,90. Appliquée deux fois il vaudrait ≈ 0,81.
+        const ref=chargeSuivante(100,'2',false);
+        const dec=chargeSuivante(100,'2',false,0.9);
+        const r=dec/ref;
+        return (r>0.88&&r<0.91)?true:_echec('rapport '+r.toFixed(3));})());
+      ok('Une décote absurde ne propose rien plutôt qu\'une charge fausse',
+        chargeSuivante(100,'2',false,0)===null
+        &&chargeSuivante(100,'2',false,-1)===null
+        &&chargeSuivante(100,'2',false,NaN)===null);
+      ok('La charge décotée ne descend jamais sous un cran',(()=>{
+        const v=chargeSuivante(1.25,'echec',false,0.8);
+        return v===1.25?true:_echec(String(v));})());
+
+      // ── Contrepoids : la décote AUGMENTE la compensation ────────────────
+      ok('Critère : contrepoids 40 kg à 40 jours → la compensation AUGMENTE',(()=>{
+        const v=chargeSuivante(40,'2',true,decoteReprise(40));
+        if(!(v>40)) return _echec('compensation à '+v+' au lieu de plus de 40');
+        return v===42.5?true:_echec(String(v));})());
+      ok('À tout RIR, la décote pousse la compensation VERS LE HAUT',(()=>{
+        // L'invariant qui compte : à RIR élevé, retirer de l'assistance peut
+        // encore l'emporter sur la décote, mais la décote doit toujours faire
+        // remonter la valeur par rapport au même calcul sans elle.
+        const faux=['echec','0','1','2','3','4','5'].filter(r=>
+          !(chargeSuivante(40,r,true,0.9)>=chargeSuivante(40,r,true)));
+        return faux.length?_echec('RIR '+faux.join(', ')):true;})());
+      ok('Sur une charge normale, la décote pousse VERS LE BAS',(()=>{
+        const faux=['echec','0','1','2','3','4','5'].filter(r=>
+          !(chargeSuivante(100,r,false,0.9)<=chargeSuivante(100,r,false)));
+        return faux.length?_echec('RIR '+faux.join(', ')):true;})());
+
+      // ── getPrevPerf rend la date, sans toucher à l'historique ──────────
+      const _sU=currentUser;
+      try{
+        ok('getPrevPerf rend la date de la séance de référence',(()=>{
+          const j=Date.now()-40*864e5;
+          currentUser={id:'_td',email:'td@t',exAlias:{},exMuscles:{},
+            sessions:[{id:'sd',date:j,name:'P',slot:0,
+              data:{'SQUAT':{sets:[{weight:'100',reps:'5',rir:'2',done:true}]}}}]};
+          const p=getPrevPerf('SQUAT',0,'P');
+          if(!p) return _echec('rien trouvé');
+          return p._refDate===localISODate(new Date(j))
+            ?true:_echec('_refDate = '+p._refDate);})());
+        ok('getPrevPerf n\'écrit RIEN dans la série stockée',(()=>{
+          // Le retour était une référence VIVE dans currentUser.sessions : y
+          // poser _refDate aurait glissé un champ parasite dans l'historique,
+          // que le prochain saveUser aurait persisté.
+          const serie={weight:'100',reps:'5',rir:'2',done:true};
+          currentUser={id:'_td',email:'td@t',exAlias:{},exMuscles:{},
+            sessions:[{id:'sd',date:Date.now()-10*864e5,name:'P',slot:0,
+              data:{'SQUAT':{sets:[serie]}}}]};
+          const p=getPrevPerf('SQUAT',0,'P');
+          if(!p) return _echec('rien trouvé');
+          if('_refDate' in serie) return _echec('la série stockée a gagné _refDate');
+          return p!==serie?true:_echec('la série elle-même est rendue, pas une copie');})());
+        ok('Une séance sans date exploitable ne porte pas de _refDate',(()=>{
+          currentUser={id:'_td',email:'td@t',exAlias:{},exMuscles:{},
+            sessions:[{id:'sd',date:0,name:'P',slot:0,
+              data:{'SQUAT':{sets:[{weight:'100',reps:'5',rir:'2',done:true}]}}}]};
+          const p=getPrevPerf('SQUAT',0,'P');
+          return p&&p._refDate===null?true:_echec(p?String(p._refDate):'rien');})());
+      } finally { currentUser=_sU; }
+
+      // ── L'écran de séance ──────────────────────────────────────────────
+      const _sU2=currentUser, _sW=woState;
+      try{
+        const _scene=(jours,poids,nom)=>{
+          currentUser={id:'_ds',email:'ds@t.fr',role:'athlete',fname:'A',
+            exAlias:{},exMuscles:{},bilans:[],programs:{},videos:[],
+            sessions:[{id:'sp',date:Date.now()-jours*864e5,name:'P',slot:0,
+              volume:1,duration:60,data:{[nom||'SQUAT']:{sets:[
+                {weight:String(poids),reps:'5',rir:'2',done:true}]}}}]};
+          woState={progName:'P',slot:0,currentEx:0,startTime:Date.now(),
+            exercises:[{name:nom||'SQUAT',series:3,reps:'5'}],sessionData:{}};
+          try{ return _blocExo(0,false).html; }catch(e){ return 'EXCEPTION '+e.message; }};
+        ok('Critère : à 7 jours, la charge affichée est inchangée',(()=>{
+          const h=_scene(7,100);
+          if(/EXCEPTION/.test(h)) return _echec(h);
+          if(!/105kg/.test(h)) return _echec('105kg absent');
+          return !/en dessous/.test(h)?true:_echec('une décote est annoncée à 7 jours');})());
+        ok('Critère : à 40 jours, la charge est décotée et la phrase le dit',(()=>{
+          const h=_scene(40,100);
+          if(/EXCEPTION/.test(h)) return _echec(h);
+          if(!/93[.,]75kg/.test(h)) return _echec('93,75kg absent');
+          if(!/On repart 10 % en dessous/.test(h)) return _echec('phrase de décote absente');
+          if(!/Ta dernière séance de SQUAT date du /.test(h)) return _echec('date absente');
+          // En clair, pas via la constante : indexOf('') rend toujours 0, et la
+          // variante qui vidait la constante passait au vert.
+          return /Repère de terrain, pas une mesure\./.test(h)
+            ?true:_echec('le rappel « repère de terrain » manque');})());
+        ok('Critère : à 200 jours, aucune charge et le message d\'abandon',(()=>{
+          const h=_scene(200,100);
+          if(/EXCEPTION/.test(h)) return _echec(h);
+          if(!/Plus de quatre mois sans cette séance/.test(h))
+            return _echec('message d\'abandon absent');
+          if(/suggest-box/.test(h)) return _echec('une charge est encore proposée');
+          if(/10 répétitions/.test(h)===false) return _echec('la consigne de reprise manque');
+          // Et surtout pas « pas encore d'historique » : il en existe un.
+          return !/Pas encore d'historique/.test(h)
+            ?true:_echec('confondu avec une absence d\'historique');})());
+        ok('À l\'abandon, aucune montée en charge n\'est proposée',(()=>{
+          // Pas de charge de travail, donc rien à échauffer : la rampe se tait
+          // plutôt que de partir d'un nombre inventé.
+          const h=_scene(200,100);
+          return !/Montée en charge/.test(h)
+            ?true:_echec('une rampe est affichée sans charge de travail');})());
+        ok('À 40 jours, la montée en charge part de la charge DÉCOTÉE',(()=>{
+          const h=_scene(40,100);
+          // La rampe se calcule sur 93,75 et non sur 105 : sinon l'échauffement
+          // serait plus lourd que la série de travail.
+          const att=seriesApproche(93.75,'5',{name:'SQUAT',reps:'5'});
+          if(!att.length) return _echec('aucune rampe attendue sur 93,75');
+          const dernier=_fmtChargeMontee(att[att.length-1].charge);
+          return h.indexOf(dernier+' kg')>=0
+            ?true:_echec('dernier palier attendu '+dernier+' kg');})());
+        ok('Sans référence, la décote ne vaut JAMAIS null',(()=>{
+          // C'est ce qui rend la garde !!prev de _abandon neutre aujourd'hui :
+          // pas de référence, pas de jours, donc pas d'abandon possible. La
+          // variante qui retire la garde passe au vert pour cette raison.
+          const j=joursDepuisRef(null);
+          if(j!==null) return _echec('jours = '+j+' sans référence');
+          return decoteReprise(j)===1
+            ?true:_echec('décote '+decoteReprise(j)+' sans référence');})());
+        ok('Sans historique, le message d\'abandon ne s\'affiche pas',(()=>{
+          currentUser={id:'_ds',email:'ds@t.fr',role:'athlete',fname:'A',
+            exAlias:{},exMuscles:{},bilans:[],programs:{},videos:[],sessions:[]};
+          woState={progName:'P',slot:0,currentEx:0,startTime:Date.now(),
+            exercises:[{name:'SQUAT',series:3,reps:'5'}],sessionData:{}};
+          let h=''; try{ h=_blocExo(0,false).html; }catch(e){ return _echec('exception : '+e.message); }
+          return /Pas encore d'historique/.test(h)&&!/quatre mois/.test(h)
+            ?true:_echec('mauvais message pour une première séance');})());
+        ok('Un contrepoids ancien affiche une compensation PLUS GRANDE',(()=>{
+          const h7=_scene(7,40,'DIPS ASSISTE');
+          const h40=_scene(40,40,'DIPS ASSISTE');
+          if(/EXCEPTION/.test(h7)||/EXCEPTION/.test(h40)) return _echec(h7+' | '+h40);
+          const lire=h=>{const m=/(\d+(?:[.,]\d+)?)kg/.exec(h);
+            return m?parseFloat(m[1].replace(',','.')):null;};
+          const a=lire(h7), b=lire(h40);
+          if(a==null||b==null) return _echec('charges illisibles : '+a+' / '+b);
+          return b>a?true:_echec(a+' à 7 j puis '+b+' à 40 j');})());
+        ok('La décote n\'est appliquée qu\'une fois dans le rendu',(()=>{
+          // Un seul appel décoté, et le facteur de cycle reste distinct.
+          const src=String(_blocExo);
+          const n=src.split('chargeSuivante(prev.weight,prev.rir,isCW,_decote)').length-1;
+          if(n!==1) return _echec(n+' appels décotés');
+          // _decote ne doit pas entrer dans le calcul du facteur de cycle.
+          const i=src.indexOf('_facteurCycle=');
+          const j=src.indexOf(';',i);
+          return src.slice(i,j).indexOf('_decote')<0
+            ?true:_echec('la décote entre dans le facteur de cycle');})());
+      } finally { currentUser=_sU2; woState=_sW; }
     })();
 
 
