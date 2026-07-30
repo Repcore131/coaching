@@ -21728,7 +21728,7 @@ function _htmlAjustement(user,lectureSeule){
     const pl=_ajustPlancherAtteint(user);
     if(pl&&!lectureSeule) return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:18px">
       <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">Rythme</div>
-      <div style="font-size:12px;color:#ddd;line-height:1.7">Ta ${escapeHtml(PHASES[(phaseCourante(user)||{}).type].apres)} avance plus lentement que visé, mais je ne te propose pas de baisser : tu serais ${pl.plancher!=null?'sous ton métabolisme au repos ('+pl.plancher+' kcal)':'sous ton plancher'}. On regarde ailleurs — sommeil, pas quotidiens, régularité — et on en parle.</div>
+      <div style="font-size:12px;color:#ddd;line-height:1.7">Ta ${escapeHtml(PHASES[(phaseCourante(user)||{}).type].apres)} avance plus lentement que visé, mais je ne te propose pas de baisser : tu serais ${pl.plancher!=null?(pl.regle||'sous ton plancher')+' ('+pl.plancher+' kcal)':'sous ton plancher'}. On regarde ailleurs — sommeil, pas quotidiens, régularité — et on en parle.</div>
       ${blocDisclaimerSante()}
     </div>`;
     // Historique : le coach doit voir ce qui a été proposé et ce qui a été fait.
@@ -21870,6 +21870,18 @@ function ajustementPropose(user){
 // Message de plancher : rendu à la PLACE de la proposition quand une baisse
 // serait nécessaire mais passerait sous le plancher. On ne se tait pas — on dit
 // pourquoi on ne propose rien.
+// Libelle de la regle de plancher REELLEMENT atteinte. « Sous ton metabolisme
+// au repos » etait faux dans les trois cas : le plancher n'a jamais ete le
+// metabolisme depuis que le coach a donne ses chiffres, et il l'est encore
+// moins depuis qu'il s'indexe sur la masse maigre.
+function libelleReglePlancher(pl){
+  if(!pl) return 'sous ton plancher';
+  if(pl.regle==='masse_maigre')
+    return 'sous '+KCAL_PLANCHER_PAR_KG_MM+' kcal par kilo de masse maigre';
+  if(pl.regle==='poids_total')
+    return 'sous '+KCAL_PLANCHER_PAR_KG+' kcal par kilo de poids';
+  return 'sous le plancher de '+pl.abs+' kcal';
+}
 function _ajustPlancherAtteint(user){
   const nut=(user&&user.nutrition)||{};
   if(!nut.macros) return null;
@@ -21888,9 +21900,10 @@ function _ajustPlancherAtteint(user){
   if(!(kcal>0)) return null;
   const gApres=gl-Math.round(Math.round(kcal*AJUST_PAS)/4);
   const kcalApres=Math.round(4*pr+9*li+4*Math.max(0,gApres));
-  const pl=plancherKcal(user);
-  if(pl==null) return {plancher:null,kcalApres};
-  return kcalApres<pl?{plancher:pl,kcalApres}:null;
+  const ple=plancherEffectif(user);
+  const pl=ple.kcal>0?ple.kcal:null;
+  if(pl==null) return {plancher:null,kcalApres,regle:null};
+  return kcalApres<pl?{plancher:pl,kcalApres,regle:libelleReglePlancher(ple)}:null;
 }
 
 
@@ -21918,6 +21931,45 @@ const PLANCHER_MAJORATION_TCA=1.15;
 
 // Poids de référence : la pesée la plus récente, à défaut le dernier bilan.
 // Rend null quand rien n'est connu — et dans ce cas seul l'absolu s'applique.
+// Plancher indexé sur la MASSE MAIGRE quand elle est connue. 22 kcal par kilo
+// de poids TOTAL punit le gros gabarit deux fois : plus il pèse, plus son
+// plancher monte, alors qu'une partie de ce poids ne consomme presque rien. Un
+// homme de 140 kg obtenait 3080 kcal — proche de sa dépense — et aucune baisse
+// ne lui était jamais proposée.
+//
+// Comme KCAL_PLANCHER_PAR_KG et ACT_SEANCES, 30 est un repère de PRATIQUE DE
+// TERRAIN et non une mesure : la dépense d'un kilo de masse maigre varie d'un
+// tissu à l'autre et d'une personne à l'autre, et la masse maigre elle-même
+// n'est ici qu'une ESTIMATION par tours de taille et de cou. C'est une borne
+// basse de sécurité, pas un besoin calculé.
+const KCAL_PLANCHER_PAR_KG_MM=30;      // par kilo de MASSE MAIGRE
+// Part de la dépense estimée que le plancher PROPORTIONNEL ne peut pas
+// dépasser. Sans elle, un plancher qui frôle la dépense interdit toute sèche
+// tout en prétendant protéger l'athlète.
+const PLANCHER_PLAFOND_DEPENSE=0.85;
+// Dépense estimée, par le MÊME chemin que besoinsProposes — mb puis facteur —
+// mais SANS passer par lui : besoinsProposes appelle _relevePlancher, qui
+// appelle plancherKcal, qui appelle plancherEffectif. L'appeler d'ici
+// refermerait la boucle.
+function _depensePourPlafond(user){
+  try{
+    const bl=((user&&user.bilans)||[]).filter(b=>b&&b.date).slice().sort((a,b)=>a.date-b.date);
+    const b=bl[bl.length-1]||{};
+    const poids=getBW(b)||parseFloat((user&&user['init-weight'])||0)||null;
+    const taille=parseFloat((user&&(user._evol_height||user['init-height']))||b['deb-height']||(user&&user.height)||0)||null;
+    const age=parseFloat(b['deb-age']||(user&&user['init-age'])||(user&&user.age)||0)||null;
+    const sexe=(user&&(user._evol_gender||user.gender))||b['deb-gender']||'';
+    const mm=masseMaigreDuBilan(user);
+    let mb=(mm!=null)?mbKatch(mm):null;
+    if(mb==null) mb=mbMifflin(poids,taille,age,sexe);
+    if(!(mb>0)) return null;
+    const metier=_dernierChamp(user,'deb-job');
+    const prof=facteurProfession(metier);
+    if(prof) return Math.round(mb*prof.f)+depenseSportsParJour(_dernierChamp(user,'deb-sports')).jour;
+    return Math.round(mb*facteurActivite(user).f);
+  }catch(e){ return null; }
+}
+
 function _poidsPourPlancher(user){
   try{
     const s=serieWeight(user);
@@ -21941,12 +21993,35 @@ function plancherEffectif(user){
   let tca=false;
   try{ tca=aTCA(user); }catch(e){}
   const maj=tca?PLANCHER_MAJORATION_TCA:1;
-  const parKg=poids!=null?KCAL_PLANCHER_PAR_KG*poids:null;
-  const kcal=Math.round(Math.max(abs,parKg==null?0:parKg)*maj);
-  return {kcal,
+  // La masse maigre est PRIORITAIRE quand elle est calculable. Elle ne l'est
+  // que si les tours de mesure sont présents et que calcBF rend un nombre —
+  // sinon on retombe sur le poids total, et la règle affichée le DIT plutôt que
+  // de laisser croire à une précision qu'on n'a pas.
+  const mm=masseMaigreDuBilan(user);
+  const parMM=(mm!=null&&mm>0)?KCAL_PLANCHER_PAR_KG_MM*mm:null;
+  const parPoids=poids!=null?KCAL_PLANCHER_PAR_KG*poids:null;
+  let proportionnel=(parMM!=null)?parMM:parPoids;
+  const regleProp=(parMM!=null)?'masse_maigre':(parPoids!=null?'poids_total':null);
+  // Plafonnement du seul plancher PROPORTIONNEL. L'absolu n'est jamais plafonné :
+  // c'est un minimum vital, pas une proportion. Et le plafond s'applique AVANT la
+  // majoration TCA, qui reste la DERNIÈRE opération et ne peut donc jamais être
+  // rabotée par lui.
+  const dep=_depensePourPlafond(user);
+  let plafonne=false;
+  if(proportionnel!=null&&dep>0){
+    const plafond=dep*PLANCHER_PLAFOND_DEPENSE;
+    if(proportionnel>plafond){ proportionnel=plafond; plafonne=true; }
+  }
+  const base=Math.max(abs,proportionnel==null?0:proportionnel);
+  // La règle qui a réellement gagné : c'est elle que les messages nomment.
+  const regle=(proportionnel!=null&&proportionnel>abs)?regleProp:'absolu';
+  const kcal=Math.round(base*maj);
+  return {kcal,regle,
     p:poids!=null?Math.round(PROT_PLANCHER_G_KG*poids*maj*10)/10:null,
     l:poids!=null?Math.round(LIP_PLANCHER_G_KG*poids*maj*10)/10:null,
-    poids,tca,majoration:maj,abs,parKg:parKg!=null?Math.round(parKg*maj):null};
+    poids,masseMaigre:mm,tca,majoration:maj,abs,plafonne,
+    proportionnel:proportionnel!=null?Math.round(proportionnel*maj):null,
+    parKg:parPoids!=null?Math.round(parPoids*maj):null};
 }
 // Le plancher que consulte le chemin AUTOMATIQUE. Il n'y a plus qu'une seule
 // définition de plancher dans l'app, celle du coach.
@@ -22060,7 +22135,9 @@ function restrictionProlongee(user){
   if(!m) return false;
   const pl=plancherEffectif(user);
   if(!(pl.poids>0)) return false;
-  const seuil=KCAL_PLANCHER_PAR_KG*pl.poids*pl.majoration*RESTRICTION_MARGE;
+  // Le seuil vient de plancherEffectif, jamais d'un recalcul local : deux
+  // definitions du meme plancher divergeraient a la premiere evolution.
+  const seuil=pl.kcal*RESTRICTION_MARGE;
   const kcals=[m.on,m.off].filter(x=>x&&Number(x.kcal)>0).map(x=>Number(x.kcal));
   if(!kcals.length) return false;
   // Le plus BAS des deux jours : c'est lui que l'athlète vit le plus souvent
@@ -28520,8 +28597,26 @@ function testExercices(){
         // Femme de 45 kg : 22 × 45 = 990, l'absolu 1200 l'emporte.
         return plancherEffectif(_u('F',45)).kcal===1200
           &&plancherEffectif(_u('H',60)).kcal===1500;})());
-      ok('Le proportionnel protège les grands gabarits',
-        plancherEffectif(_u('H',100)).kcal===2200);
+      // Ancien contrat : 22 x 100 = 2200, point. Ce test tombait depuis que le
+      // proportionnel est plafonne a 85 % de la depense — et il avait RAISON de
+      // tomber : cet athlete fictif n'a aucun creneau actif, donc une depense
+      // estimee de 2350, et un plancher de 2200 aurait represente 94 % de sa
+      // depense. C'est exactement la pathologie que ce lot corrige. Le test
+      // enonce le nouveau contrat au lieu de disparaitre.
+      ok('Le proportionnel protege les grands gabarits, sans les emmurer',(()=>{
+        const u=_u('H',100);
+        const pl=plancherEffectif(u);
+        const dep=_depensePourPlafond(u);
+        const brut=KCAL_PLANCHER_PAR_KG*100;
+        if(pl.kcal<=KCAL_PLANCHER_ABS.H)
+          return _echec('le proportionnel ne joue plus : '+pl.kcal);
+        if(!(dep>0)) return _echec('depense incalculable, le plafond ne peut pas etre juge');
+        if(brut>dep*PLANCHER_PLAFOND_DEPENSE){
+          return pl.plafonne===true
+            &&pl.kcal===Math.round(dep*PLANCHER_PLAFOND_DEPENSE)
+            ?true:_echec('plafond non applique : '+pl.kcal+' pour une depense de '+dep);
+        }
+        return pl.kcal===brut?true:_echec(pl.kcal+' au lieu de '+brut);})());
       ok('Critère : poids inconnu → seul l\'absolu, aucune erreur',(()=>{
         const u=_u('F',null);
         const pl=plancherEffectif(u);
@@ -28959,12 +29054,23 @@ function testExercices(){
           ?true:_echec('refus dû aux glucides négatifs, pas au plancher');})());
       // Le plancher provisoire (métabolisme au repos) a été remplacé par celui
       // du coach. Ce test énonce le NOUVEAU contrat au lieu de disparaître.
-      ok('Le plancher est celui du coach, plus le métabolisme au repos',(()=>{
+      // Ancien contrat : max(absolu, 22 x poids TOTAL). Nouveau contrat : la
+      // masse maigre prime quand elle est calculable, et le proportionnel est
+      // plafonne a 85 % de la depense. Le test enonce le nouveau, il ne
+      // disparait pas.
+      ok('Le plancher est celui du coach, indexe sur la regle qui gagne',(()=>{
         const u=_ath('seche',-0.15);
         const b=besoinsProposes(u);
         const pl=plancherEffectif(u);
-        return plancherKcal(u)===pl.kcal&&pl.kcal!==b.mb
-          &&pl.kcal===Math.max(KCAL_PLANCHER_ABS.H,Math.round(KCAL_PLANCHER_PAR_KG*pl.poids));})());
+        if(plancherKcal(u)!==pl.kcal) return _echec('plancherKcal diverge');
+        if(pl.kcal===b.mb) return _echec('le plancher vaut encore le metabolisme');
+        if(['absolu','masse_maigre','poids_total'].indexOf(pl.regle)<0)
+          return _echec('regle inconnue : '+pl.regle);
+        // Quelle que soit la regle, le plancher ne descend jamais sous l'absolu
+        // et ne depasse jamais 85 % de la depense hors majoration TCA.
+        if(pl.kcal<pl.abs) return _echec('sous l absolu : '+pl.kcal);
+        return pl.kcal<=Math.round(b.depense*PLANCHER_PLAFOND_DEPENSE*pl.majoration)+1
+          ?true:_echec('plancher '+pl.kcal+' pour une depense de '+b.depense);})());
       // Le plancher du coach est TOUJOURS calculable : sans poids connu,
       // l'absolu s'applique. Le cas « pas de plancher » n'existe plus.
       ok('Le sexe se lit dans le bilan quand le champ est absent',(()=>{
@@ -28997,8 +29103,12 @@ function testExercices(){
         u.nutrition.macros={on:{kcal:pl+300,p:150,g:40,l:70,f:20},
                             off:{kcal:pl+40,p:150,g:10,l:70,f:20}};
         const h=_htmlAjustement(u,false);
+        // « sous ton metabolisme au repos » etait FAUX dans les trois cas.
+        // Le message doit nommer la regle reellement atteinte.
+        if(/métabolisme au repos/.test(h)) return _echec('la phrase fausse est revenue');
         return /je ne te propose pas de baisser/.test(h)
-          &&/métabolisme au repos/.test(h);})());
+          &&/(kilo de masse maigre|kilo de poids|plancher de \d+ kcal)/.test(h)
+          ?true:_echec(h.replace(/<[^>]*>/g,' ').slice(0,200));})());
 
       // ── Le garde-fou TCA prime ──
       ok('Sèche avec antécédent TCA déclaré : aucune proposition',(()=>{
@@ -35847,6 +35957,189 @@ function testExercices(){
         return manque.length?_echec('absents de BILAN_QUESTIONS : '+manque.join(', ')):true;})());
     })();
 
+
+    // ══ PLANCHER INDEXÉ SUR LA MASSE MAIGRE ══════════════════════════════
+    (()=>{
+      const _sU=currentUser;
+      // Fixture à masse maigre PILOTÉE : on cherche le tour de taille qui donne
+      // la masse maigre voulue, au lieu d'inventer un chiffre que calcBF ne
+      // produirait jamais. Un test bâti sur une valeur impossible ne prouve rien.
+      const _athMM=(poids,mmVoulue,sexe,taille,age,cou,hanches)=>{
+        const t=taille||180, s=sexe||'H', c=cou||40, h=hanches||95;
+        let meilleur=null, ecart=1e9;
+        for(let w=c+1;w<=200;w+=0.5){
+          const bf=calcBF(w,c,h,t,s);
+          if(bf===null) continue;
+          const mm=Math.round((poids-Math.round(poids*bf/10)/10)*10)/10;
+          const d=Math.abs(mm-mmVoulue);
+          if(d<ecart){ ecart=d; meilleur=w; }
+        }
+        return {id:'pm'+poids+'_'+mmVoulue,email:'pm'+poids+'_'+mmVoulue+'@t',
+          role:'athlete',exAlias:{},exMuscles:{},sessions:[],weightLog:[],
+          bilans:[{type:'depart',date:Date.now()-10*864e5,
+            'deb-weight':String(poids),'deb-height':String(t),'deb-age':String(age||35),
+            'deb-gender':s,'deb-waist':String(meilleur),'deb-neck':String(c),
+            'deb-hips':String(h)}],
+          sessions_config:Array.from({length:4},(_,i)=>({day:'J'+i,name:'S'+i,
+            active:true,exercises:[{name:'SQUAT',series:3,reps:'8'}]}))};
+      };
+      // Même athlète SANS tours de mesure : la masse maigre devient incalculable
+      // et le repli sur le poids total doit prendre la main.
+      const _athSansMesures=(poids,sexe,taille,age)=>({
+        id:'ps'+poids,email:'ps'+poids+'@t',role:'athlete',exAlias:{},exMuscles:{},
+        sessions:[],weightLog:[],
+        bilans:[{type:'depart',date:Date.now()-10*864e5,'deb-weight':String(poids),
+          'deb-height':String(taille||180),'deb-age':String(age||35),
+          'deb-gender':sexe||'H'}],
+        sessions_config:Array.from({length:4},(_,i)=>({day:'J'+i,name:'S'+i,
+          active:true,exercises:[{name:'SQUAT',series:3,reps:'8'}]}))});
+      try{
+        ok('La fixture pilote BIEN la masse maigre',(()=>{
+          const mm=masseMaigreDuBilan(_athMM(120,74));
+          return mm!=null&&Math.abs(mm-74)<=1.5
+            ?true:_echec('masse maigre obtenue : '+mm);})());
+        ok('Critère : homme 120 kg, masse maigre 74 kg → plancher ≈ 2220',(()=>{
+          const u=_athMM(120,74);
+          const pl=plancherEffectif(u);
+          const mm=masseMaigreDuBilan(u);
+          const attendu=Math.round(KCAL_PLANCHER_PAR_KG_MM*mm);
+          if(pl.regle!=='masse_maigre') return _echec('règle '+pl.regle);
+          return Math.abs(pl.kcal-attendu)<=2&&Math.abs(pl.kcal-2220)<=80
+            ?true:_echec(pl.kcal+' au lieu de '+attendu);})());
+        ok('Critère : homme 140 kg, masse maigre 77 kg → PAS 3080',(()=>{
+          const u=_athMM(140,77);
+          const pl=plancherEffectif(u);
+          const ancien=Math.round(KCAL_PLANCHER_PAR_KG*140);
+          if(pl.kcal>=ancien) return _echec(pl.kcal+' ne descend pas sous '+ancien);
+          return pl.kcal<3000&&Math.abs(pl.kcal-2310)<=140
+            ?true:_echec(pl.kcal+' (règle '+pl.regle+', plafonné '+pl.plafonne+')');})());
+        ok('Critère : femme 48 kg, masse maigre 37 kg → 1200, règle absolue',(()=>{
+          const u=_athMM(48,37,'F',162,29,31,92);
+          const mm=masseMaigreDuBilan(u);
+          if(mm==null) return _echec('masse maigre incalculable, fixture inutile');
+          if(KCAL_PLANCHER_PAR_KG_MM*mm>=KCAL_PLANCHER_ABS.F)
+            return _echec('fixture inutile : '+Math.round(KCAL_PLANCHER_PAR_KG_MM*mm)+' dépasse déjà l\'absolu');
+          const pl=plancherEffectif(u);
+          return pl.kcal===KCAL_PLANCHER_ABS.F&&pl.regle==='absolu'
+            ?true:_echec(pl.kcal+' règle '+pl.regle);})());
+        ok('Critère : masse maigre incalculable → repli poids total, et il le dit',(()=>{
+          const u=_athSansMesures(120);
+          if(masseMaigreDuBilan(u)!==null) return _echec('masse maigre calculable, fixture inutile');
+          const pl=plancherEffectif(u);
+          if(pl.regle!=='poids_total') return _echec('règle '+pl.regle);
+          return pl.kcal===Math.round(KCAL_PLANCHER_PAR_KG*120)
+            ?true:_echec(pl.kcal+' au lieu de 2640');})());
+        ok('calcBF impossible (cou ≥ taille) → repli poids total',(()=>{
+          const u=_athSansMesures(100);
+          u.bilans[0]['deb-waist']='38'; u.bilans[0]['deb-neck']='42';
+          if(masseMaigreDuBilan(u)!==null) return _echec('calcBF aurait dû échouer');
+          return plancherEffectif(u).regle==='poids_total'
+            ?true:_echec('règle '+plancherEffectif(u).regle);})());
+        ok('Poids inconnu → seul l\'absolu s\'applique',(()=>{
+          const u=_athSansMesures(100);
+          u.bilans=[{type:'depart',date:Date.now()-10*864e5,'deb-height':'180',
+            'deb-age':'35','deb-gender':'H'}];
+          const pl=plancherEffectif(u);
+          return pl.poids===null&&pl.kcal===KCAL_PLANCHER_ABS.H&&pl.regle==='absolu'
+            ?true:_echec(JSON.stringify({k:pl.kcal,r:pl.regle,p:pl.poids}));})());
+
+        // ── Plafonnement ──────────────────────────────────────────────────
+        ok('Le plancher proportionnel ne dépasse jamais 85 % de la dépense',(()=>{
+          const cas=[_athMM(120,74),_athMM(140,77),_athSansMesures(140),
+                     _athSansMesures(160,'H',175,50)];
+          const fautifs=[];
+          for(const u of cas){
+            const pl=plancherEffectif(u);
+            const dep=_depensePourPlafond(u);
+            if(dep>0&&pl.regle!=='absolu'
+               &&pl.kcal>Math.round(dep*PLANCHER_PLAFOND_DEPENSE*pl.majoration)+1)
+              fautifs.push(pl.kcal+'/'+dep);
+          }
+          return fautifs.length?_echec(fautifs.join(' ')):true;})());
+        ok('Le plafond MORD sur un très gros gabarit peu actif',(()=>{
+          const u=_athSansMesures(160,'H',175,50);
+          u.sessions_config=[{day:'J0',name:'S0',active:true,
+            exercises:[{name:'SQUAT',series:3,reps:'8'}]}];
+          const dep=_depensePourPlafond(u);
+          const brut=KCAL_PLANCHER_PAR_KG*160;
+          if(!(brut>dep*PLANCHER_PLAFOND_DEPENSE))
+            return _echec('fixture inutile : brut '+brut+' déjà sous le plafond');
+          const pl=plancherEffectif(u);
+          return pl.plafonne===true&&pl.kcal<brut
+            ?true:_echec('plafonné '+pl.plafonne+' kcal '+pl.kcal+' brut '+brut);})());
+        ok('Le plancher ABSOLU n\'est jamais plafonné',(()=>{
+          const u=_athSansMesures(45,'F',155,60);
+          u.sessions_config=[];
+          const pl=plancherEffectif(u);
+          return pl.kcal>=KCAL_PLANCHER_ABS.F
+            ?true:_echec(pl.kcal+' sous l\'absolu '+KCAL_PLANCHER_ABS.F);})());
+        ok('Dépense non calculable → aucun plafonnement',(()=>{
+          const u=_athSansMesures(120);
+          u.bilans[0]['deb-height']=''; delete u.bilans[0]['deb-age'];
+          return plancherEffectif(u).plafonne===false
+            ?true:_echec('plafonné sans dépense connue');})());
+
+        // ── Le garde-fou TCA, intact ──────────────────────────────────────
+        ok('Critère : la majoration TCA est la DERNIÈRE opération',(()=>{
+          const u=_athMM(120,74);
+          const sans=plancherEffectif(u).kcal;
+          const v=Object.assign({},u,{bilans:u.bilans.map(b=>Object.assign({},b,{'deb-tca':'anorexie il y a 4 ans'}))});
+          const avec=plancherEffectif(v);
+          if(!avec.tca) return _echec('le TCA n\'a pas été vu');
+          if(avec.majoration!==PLANCHER_MAJORATION_TCA) return _echec('majoration '+avec.majoration);
+          return Math.abs(avec.kcal-Math.round(sans*PLANCHER_MAJORATION_TCA))<=2
+            ?true:_echec(avec.kcal+' au lieu de '+Math.round(sans*PLANCHER_MAJORATION_TCA));})());
+        ok('Le plafond ne rabote JAMAIS la majoration TCA',(()=>{
+          const u=_athSansMesures(160,'H',175,50);
+          u.sessions_config=[{day:'J0',name:'S0',active:true,exercises:[{name:'SQUAT',series:3,reps:'8'}]}];
+          const sans=plancherEffectif(u);
+          if(!sans.plafonne) return _echec('fixture inutile : le plafond ne mord pas');
+          const v=Object.assign({},u,{bilans:u.bilans.map(b=>Object.assign({},b,{'deb-tca':'boulimie'}))});
+          const avec=plancherEffectif(v);
+          return avec.kcal>sans.kcal
+            &&Math.abs(avec.kcal-Math.round(sans.kcal*PLANCHER_MAJORATION_TCA))<=2
+            ?true:_echec(avec.kcal+' contre '+sans.kcal);})());
+        ok('PLANCHER_MAJORATION_TCA vaut toujours 1,15',
+           PLANCHER_MAJORATION_TCA===1.15);
+
+        // ── Une seule définition dans l'app ───────────────────────────────
+        ok('Critère : restrictionProlongee lit le MÊME plancher',(()=>{
+          const src=String(restrictionProlongee);
+          if(/KCAL_PLANCHER_PAR_KG\s*\*/.test(src))
+            return _echec('recalcul local du plancher');
+          return /pl\.kcal/.test(src)?true:_echec('ne lit pas plancherEffectif');})());
+        ok('restrictionProlongee suit le plancher quand il baisse',(()=>{
+          const pl=plancherEffectif(_athMM(140,77));
+          const ancien=KCAL_PLANCHER_PAR_KG*140*RESTRICTION_MARGE;
+          return pl.kcal*RESTRICTION_MARGE<ancien
+            ?true:_echec('seuil '+Math.round(pl.kcal*RESTRICTION_MARGE)+' contre '+Math.round(ancien));})());
+
+        ok('plancherEffectif n\'appelle JAMAIS besoinsProposes',(()=>{
+          // besoinsProposes → _relevePlancher → plancherKcal → plancherEffectif.
+          // Refermer la boucle depuis le plafond fige l'application entière, et
+          // un test qui se contente de lire la source ne le verrait pas si le
+          // chemin passait par un intermédiaire. On COMPTE les appels.
+          const vrai=besoinsProposes;
+          let n=0;
+          try{
+            besoinsProposes=function(){ n++; return vrai.apply(this,arguments); };
+            plancherEffectif(_athMM(120,74));
+            plancherEffectif(_athSansMesures(140));
+          } finally { besoinsProposes=vrai; }
+          return n===0?true:_echec(n+' appel(s) à besoinsProposes');})());
+
+        // ── Les messages nomment la règle ─────────────────────────────────
+        ok('Critère : plus aucun message ne parle de « métabolisme au repos »',(()=>{
+          const l=[libelleReglePlancher({regle:'absolu',abs:1500}),
+                   libelleReglePlancher({regle:'masse_maigre'}),
+                   libelleReglePlancher({regle:'poids_total'}),
+                   libelleReglePlancher(null)];
+          const f=l.filter(x=>/métabolisme/i.test(x));
+          if(f.length) return _echec(f.join(' | '));
+          return /masse maigre/.test(l[1])&&/kilo de poids/.test(l[2])
+            &&/1500/.test(l[0])?true:_echec(l.join(' | '));})());
+      } finally { currentUser=_sU; }
+    })();
 
     // ══ POINT DE DÉPART CALORIQUE DÉRIVÉ DE LA VITESSE ═══════════════════
     (()=>{
