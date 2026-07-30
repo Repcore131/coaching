@@ -16284,6 +16284,7 @@ function _renderNutriContent(type){
         </div>
       </div>
       ${_htmlDepartAthlete(nut)}
+      ${_htmlAjustement(currentUser,false)}
       ${_renderStrictMacroRings(nut)}
       ${_renderCycleNutSettings(nut)}`;
     if(fjSec){fjSec.style.display='block';_renderFjDaySummary(localISODate(new Date()));}
@@ -17196,7 +17197,8 @@ function renderCoachNutriSection(c){
           <div style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);letter-spacing:1px;text-align:center;background:var(--surface-1);border:1px solid var(--border);border-radius:6px;padding:4px">💤 JOUR OFF</div>
         </div>
         ${macroRows}
-        ${_htmlDepartHypotheses(c)}
+        ${_htmlAjustement(c,true)}
+    ${_htmlDepartHypotheses(c)}
         <button onclick="saveClientNutriMacros()" style="width:100%;margin-top:6px;padding:11px 0;background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer">💾 ENREGISTRER LES OBJECTIFS</button>
       </div>
       <!-- Plan photos (stricte uniquement) -->
@@ -19362,6 +19364,216 @@ function vitesseAlerte(pct,cible){
 // filtrée et bascule en mode neutre. Pour un garde-fou, c'est le bon sens
 // d'erreur.
 const _RIEN_DECLARE=/^(non|aucun|aucune|rien|ras|n\/a)\.?$/i;
+
+// ══════════════ AJUSTEMENT PROPOSÉ : LA VITESSE CONTRE LA FOURCHETTE ════════
+// Une PROPOSITION, jamais une application automatique. L'athlète décide, le
+// coach voit. Rien ici ne touche vitesseAlerte, ni les couleurs d'évolution,
+// ni les seuils de PHASES : on les LIT.
+//
+// Sens du pas, et c'est la seule règle à retenir : la vitesse mesurée est
+// comparée à la fourchette de la phase, et
+//   mesurée AU-DESSUS du max → on mange MOINS  (baisse de kcal)
+//   mesurée EN DESSOUS du min → on mange PLUS   (hausse de kcal)
+// La règle est la même en sèche et en prise de masse, parce que les bornes de
+// la phase portent déjà le signe. Une sèche à −0,15 %/sem est au-dessus de son
+// max (−0,5) : elle avance trop lentement, il faut baisser. Une prise de masse
+// à +0,9 % est au-dessus de son max (+0,5) : elle va trop vite, il faut
+// baisser aussi.
+const AJUST_PAS=0.10;              // 10 % des kcal du jour concerné
+const AJUST_VERROU_JOURS=14;       // jamais plus d'un ajustement par quinzaine
+const AJUST_ECART_RELEVES=7;       // deux relevés espacés d'au moins sept jours
+
+// ── Plancher calorique ─────────────────────────────────────────────────────
+// ATTENTION : le lot [A2-03] annoncé n'existe pas dans le code — aucun
+// plancher n'y était défini. Faute de valeur du coach, on prend le
+// MÉTABOLISME AU REPOS déjà calculé par besoinsProposes (Katch quand la masse
+// maigre est mesurable, Mifflin sinon). Ce n'est pas un chiffre inventé : c'est
+// la dépense de l'athlète au repos, et personne ne descend là-dessous sur une
+// proposition automatique.
+// Rend null quand il n'est pas calculable — et dans ce cas AUCUNE baisse n'est
+// proposée. Le sens de la prudence est celui-là, pas l'inverse.
+
+// ── La carte : le CONSTAT avant la proposition ─────────────────────────────
+// L'ordre n'est pas cosmétique. Annoncer « −190 kcal » sans dire pourquoi, c'est
+// une prescription ; dire d'abord ce qui est mesuré, c'est un raisonnement que
+// l'athlète peut suivre et refuser.
+function _fmtPct(v){ return (v>0?'+':'')+String(Math.round(v*100)/100).replace('.',','); }
+function _htmlAjustement(user,lectureSeule){
+  const nut=(user&&user.nutrition)||{};
+  const a=ajustementPropose(user);
+  if(!a){
+    // Pas de proposition : soit il n'y a rien à ajuster, soit le plancher
+    // l'interdit. Le second cas se dit, il ne se tait pas.
+    const pl=_ajustPlancherAtteint(user);
+    if(pl&&!lectureSeule) return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:18px">
+      <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">Rythme</div>
+      <div style="font-size:12px;color:#ddd;line-height:1.7">Ta ${escapeHtml(PHASES[(phaseCourante(user)||{}).type].apres)} avance plus lentement que visé, mais je ne te propose pas de baisser : tu serais ${pl.plancher!=null?'sous ton métabolisme au repos ('+pl.plancher+' kcal)':'sous ton plancher'}. On regarde ailleurs — sommeil, pas quotidiens, régularité — et on en parle.</div>
+      ${blocDisclaimerSante()}
+    </div>`;
+    // Historique : le coach doit voir ce qui a été proposé et ce qui a été fait.
+    const h=(nut.ajustHisto||[]).slice(-1)[0];
+    if(lectureSeule&&h) return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:16px">
+      <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">Dernier ajustement proposé</div>
+      <div style="font-size:11px;color:#ddd;line-height:1.7">${new Date(h.date).toLocaleDateString('fr-FR')} · ${h.sens==='baisse'?'baisse':'hausse'} de ${Math.abs(h.kcalDelta)} kcal les jours ${h.jour==='off'?'OFF':'ON'} (${_fmtPct(h.gDelta)} g de glucides) — vitesse mesurée ${_fmtPct(h.mesuree)} %/sem.<br><strong style="color:${h.decision==='applique'?'var(--success)':'var(--sub)'}">${h.decision==='applique'?'Appliqué par l\'athlète':'Refusé : il garde ses objectifs'}</strong></div>
+    </div>`;
+    return '';
+  }
+  const ph=PHASES[a.phase]||{apres:'phase'};
+  const jourLib=a.jour==='off'?'les jours OFF':'les jours d\'entraînement';
+  const constat=`Ta ${escapeHtml(ph.apres)} avance à ${_fmtPct(a.mesuree)} % par semaine depuis ${a.semaines} semaine${a.semaines>1?'s':''}, la fourchette visée est ${_fmtPct(a.cible.min)} à ${_fmtPct(a.cible.max)} %.`;
+  const propo=`Proposition : ${_fmtPct(a.kcalDelta)} kcal ${jourLib} (${_fmtPct(a.gDelta)} g de glucides).`;
+  return `<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:14px;padding:14px;margin-bottom:18px">
+    <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:8px">Ajustement proposé</div>
+    <div style="font-size:12px;color:#ddd;line-height:1.7;margin-bottom:6px">${constat}</div>
+    <div style="font-size:12.5px;color:#fff;font-weight:800;line-height:1.6;margin-bottom:4px">${propo}</div>
+    <div style="font-size:10px;color:var(--text-faint);line-height:1.6;margin-bottom:${lectureSeule?'0':'11px'}">Tes protéines et tes lipides ne changent pas. Un seul ajustement par quinzaine.</div>
+    ${lectureSeule?'':`<div style="display:flex;gap:8px">
+      <button class="btn btn-red btn-sm" style="flex:1;margin:0;letter-spacing:1px" onclick="appliquerAjustement()">Appliquer</button>
+      <button class="btn btn-outline btn-sm" style="flex:0 0 auto;margin:0;padding:0 14px;letter-spacing:1px;font-size:10px" onclick="refuserAjustement()">Garder comme ça</button>
+    </div>`}
+    ${lectureSeule?'':blocDisclaimerSante()}
+  </div>`;
+}
+function _ajustJournaliser(a,decision){
+  if(!currentUser.nutrition) currentUser.nutrition={};
+  const n=currentUser.nutrition;
+  if(!Array.isArray(n.ajustHisto)) n.ajustHisto=[];
+  n.ajustHisto.push({date:Date.now(),sens:a.sens,jour:a.jour,kcalDelta:a.kcalDelta,
+    gDelta:a.gDelta,mesuree:a.mesuree,decision});
+  if(n.ajustHisto.length>12) n.ajustHisto=n.ajustHisto.slice(-12);
+  // Le verrou de quinzaine part de la DÉCISION, acceptée ou refusée : dans les
+  // deux cas l'athlète a répondu, on ne le relance pas avant quatorze jours.
+  n.dernierAjustement=Date.now();
+}
+function appliquerAjustement(){
+  const a=ajustementPropose(currentUser);
+  if(!a){ toast('Cette proposition n\'est plus d\'actualité','var(--orange)'); loadNutrition(); return; }
+  const n=currentUser.nutrition;
+  const cible=n.macros[a.jour]||{};
+  // Seuls les glucides et le total bougent. Protéines et lipides sont recopiés
+  // tels quels, pas recalculés : le contrat est qu'ils ne changent pas.
+  n.macros[a.jour]=Object.assign({},cible,{
+    kcal:a.apres.kcal,g:a.apres.g,p:cible.p,l:cible.l,
+    f:Math.round(FIBRES_PAR_1000*a.apres.kcal/1000)});
+  n.macros.origine='ajustement';
+  n.macros.origineDate=Date.now();
+  _ajustJournaliser(a,'applique');
+  const ok=saveUser();
+  toastEcriture(ok,'Objectifs ajustés ✓','l\'ajustement est');
+  loadNutrition();
+}
+function refuserAjustement(){
+  const a=ajustementPropose(currentUser);
+  if(!a){ loadNutrition(); return; }
+  _ajustJournaliser(a,'refuse');
+  const ok=saveUser();
+  toastEcriture(ok,'C\'est noté, on garde comme ça','ton choix est');
+  loadNutrition();
+}
+
+function plancherKcal(user){
+  try{
+    const b=besoinsProposes(user);
+    return (b&&b.source&&b.mb>0)?b.mb:null;
+  }catch(e){ return null; }
+}
+
+// Vitesse telle qu'elle était à une date donnée : on tronque la série et on
+// rejoue la MÊME régression. Aucun relevé n'est stocké, rien à migrer, et les
+// garde-fous PESEE_VIT_MIN_PTS et PESEE_MM_MIN s'appliquent tels quels
+// puisqu'on passe par vitesseHebdo.
+function _vitesseAuJour(user,jourISO){
+  try{
+    const s=serieVitesse(user).filter(e=>e&&e.date<=jourISO);
+    return vitesseHebdo(s);
+  }catch(e){ return null; }
+}
+
+function ajustementPropose(user){
+  if(!user) return null;
+  const nut=user.nutrition||{};
+  // Sans objectif chiffré, il n'y a rien à ajuster.
+  if(!nut.macros) return null;
+  const p=phaseCourante(user);
+  if(!p) return null;
+  // Garde-fou TCA : en sèche déclarée avec antécédent, l'athlète n'a ni
+  // vitesse ni cible ni alerte. Lui proposer de manger moins serait
+  // exactement ce que ce garde-fou existe pour empêcher.
+  try{ if(aTCA(user)) return null; }catch(e){}
+  const cible=cibleVitesse(user);
+  if(cible.min==null||cible.max==null) return null;
+  // Un seul ajustement par quinzaine, accepté OU refusé.
+  const der=Number(nut.dernierAjustement)||0;
+  if(der&&Date.now()-der<AJUST_VERROU_JOURS*864e5) return null;
+
+  // DEUX relevés, espacés d'au moins sept jours, tous deux hors fourchette et
+  // du même côté. Un seul relevé, c'est du bruit.
+  const aujd=localISODate(new Date());
+  const v1=_vitesseAuJour(user,aujd);
+  const v2=_vitesseAuJour(user,_jourPlus(aujd,-AJUST_ECART_RELEVES));
+  if(!v1||v1.pctSem==null||!v2||v2.pctSem==null) return null;
+  const cote=v=>v.pctSem>cible.max?'haut':(v.pctSem<cible.min?'bas':null);
+  const c1=cote(v1), c2=cote(v2);
+  if(!c1||c1!==c2) return null;
+
+  // Le jour visé : on freine sur les jours de REPOS et on relance sur les
+  // jours d'entraînement. Couper le carburant d'une séance pour ralentir une
+  // sèche est le plus mauvais endroit où couper.
+  const sens=c1==='haut'?'baisse':'hausse';
+  const jour=sens==='baisse'?'off':'on';
+  const base=(nut.macros[jour])||(nut.macros.on)||(nut.macros.off)||{};
+  const kcal=Number(base.kcal), pr=Number(base.p), li=Number(base.l), gl=Number(base.g);
+  if(!(kcal>0)||!isFinite(pr)||!isFinite(li)||!isFinite(gl)) return null;
+
+  // Le pas est porté ENTIÈREMENT par les glucides. Protéines et lipides ne
+  // bougent pas : c'est le contrat.
+  const kcalDelta=(sens==='baisse'?-1:1)*Math.round(kcal*AJUST_PAS);
+  const gDelta=Math.round(kcalDelta/4);
+  const gApres=gl+gDelta;
+  if(gApres<0) return null;
+  const kcalApres=Math.round(4*pr+9*li+4*gApres);
+
+  // PRIORITÉ ABSOLUE : le plancher. Sans plancher calculable, aucune baisse.
+  if(sens==='baisse'){
+    const pl=plancherKcal(user);
+    if(pl==null||kcalApres<pl) return null;
+  }
+
+  const jours=_joursEntre(_jourPlus(aujd,-(PESEE_FENETRE_VIT+AJUST_ECART_RELEVES-1)),aujd);
+  return {sens,pct:Math.round(AJUST_PAS*100),kcalDelta,gDelta,
+    mesuree:Math.round(v1.pctSem*100)/100,
+    cible:{min:cible.min,max:cible.max},
+    semaines:Math.max(1,Math.round((jours+1)/7)),
+    jour,phase:p.type,
+    apres:{kcal:kcalApres,p:pr,l:li,g:gApres,f:base.f}};
+}
+
+// Message de plancher : rendu à la PLACE de la proposition quand une baisse
+// serait nécessaire mais passerait sous le plancher. On ne se tait pas — on dit
+// pourquoi on ne propose rien.
+function _ajustPlancherAtteint(user){
+  const nut=(user&&user.nutrition)||{};
+  if(!nut.macros) return null;
+  const p=phaseCourante(user);
+  if(!p) return null;
+  try{ if(aTCA(user)) return null; }catch(e){}
+  const cible=cibleVitesse(user);
+  if(cible.min==null||cible.max==null) return null;
+  const aujd=localISODate(new Date());
+  const v1=_vitesseAuJour(user,aujd);
+  const v2=_vitesseAuJour(user,_jourPlus(aujd,-AJUST_ECART_RELEVES));
+  if(!v1||v1.pctSem==null||!v2||v2.pctSem==null) return null;
+  if(!(v1.pctSem>cible.max&&v2.pctSem>cible.max)) return null;
+  const base=nut.macros.off||nut.macros.on||{};
+  const kcal=Number(base.kcal), pr=Number(base.p), li=Number(base.l), gl=Number(base.g);
+  if(!(kcal>0)) return null;
+  const gApres=gl-Math.round(Math.round(kcal*AJUST_PAS)/4);
+  const kcalApres=Math.round(4*pr+9*li+4*Math.max(0,gApres));
+  const pl=plancherKcal(user);
+  if(pl==null) return {plancher:null,kcalApres};
+  return kcalApres<pl?{plancher:pl,kcalApres}:null;
+}
+
 function aTCA(user){
   const dep=((user&&user.bilans)||[]).filter(b=>b&&b.type==='depart').slice(-1)[0];
   if(!dep) return false;
@@ -25534,14 +25746,26 @@ function testExercices(){
        /Prise de masse · 7e semaine/.test(renderClientRow({id:'z',fname:'A',lname:'B',sessions:[],bilans:[],
          phase:{type:'masse',debut:Date.now()-44*864e5,definiPar:'coach',historique:[]}})));
 
-    // ── Aucun calcul nutritionnel n'a été ajouté ──
-    ok('La phase n\'écrit rien dans nutrition.macros',(()=>{
+    // ── Le contrat entre la phase et la nutrition ──
+    // Il a changé avec l'ajustement proposé, et le nouveau s'énonce en trois
+    // points plutôt que de laisser tomber l'ancien test.
+    ok('Contrat 1 : changer de phase n\'écrit RIEN dans nutrition.macros',(()=>{
       const u={email:'n@t.fr',bilans:[],nutrition:{macros:{kcal:2000,p:150,g:200,l:60}}};
       const avant=JSON.stringify(u.nutrition);
       changerPhase(u,'seche',null,'athlete');
       return JSON.stringify(u.nutrition)===avant;})());
-    ok('Aucune table de calories ni de TDEE dans les phases',
+    ok('Contrat 2 : les phases ne portent toujours aucune calorie',
        !/kcal|calorie|tdee|prot[eé]ine|macro/i.test(JSON.stringify(PHASES)));
+    // Contrat 3 : SEUL un ajustement accepté par l'athlète écrit dans
+    // nutrition.macros. La phase donne la fourchette, elle ne prescrit pas.
+    ok('Contrat 3 : seul un ajustement ACCEPTÉ écrit dans nutrition.macros',(()=>{
+      const src=ajustementPropose.toString()+_htmlAjustement.toString();
+      // La fonction de proposition ne doit contenir AUCUNE écriture.
+      if(/nutrition\.macros\s*=|macros\[[^\]]+\]\s*=|saveUser\(/.test(ajustementPropose.toString()))
+        return _echec('ajustementPropose écrit');
+      // Et l'écriture existe bien, dans appliquerAjustement et là seulement.
+      return /macros\[a\.jour\]=/.test(appliquerAjustement.toString())
+        &&!/macros\[/.test(refuserAjustement.toString());})());
 
 
     // ── Sèche qui dure ET antécédent déclaré : le coach est prévenu ──
@@ -25721,6 +25945,267 @@ function testExercices(){
 
 
 
+
+
+    // ══════════════ AJUSTEMENT PROPOSÉ ══════════════
+    (function(){
+      const sauveU=currentUser;
+      // Série de pesées qui produit une vitesse VOULUE. On part d'un poids et
+      // on applique une pente quotidienne : la régression de vitesseHebdo la
+      // retrouve, garde-fous compris — on ne les contourne pas.
+      const _serie=(poids0,pctSem,jours)=>{
+        const l=[];
+        const kgJour=poids0*(pctSem/100)/7;
+        for(let i=jours-1;i>=0;i--){
+          const d=localISODate(new Date(Date.now()-i*864e5));
+          l.push({date:d,kg:Math.round((poids0+kgJour*(jours-1-i))*100)/100});
+        }
+        return l;
+      };
+      const _ath=(phase,pctSem,extra)=>Object.assign({
+        id:'aj',email:'aj@t.fr',fname:'A',lname:'B',role:'athlete',
+        gender:'H',_evol_height:178,_evol_gender:'H',
+        exAlias:{},exMuscles:{},sessions:[],videos:[],programs:{},sessions_config:[],
+        bilans:[{type:'suivi',date:Date.now()-3*864e5,'deb-weight':'80','deb-height':'178',
+          'deb-age':'32','deb-gender':'Homme','deb-neck':'39','deb-waist':'84','deb-hips':'98'}],
+        weightLog:_serie(80,pctSem==null?0:pctSem,30),
+        phase:phase?{type:phase,debut:Date.now()-40*864e5,definiPar:'athlete',historique:[]}:undefined,
+        nutrition:{dietType:'flexible',macros:{
+          on:{kcal:2600,p:150,g:340,l:70,f:36},
+          off:{kcal:2200,p:150,g:240,l:70,f:31}}}
+      },extra||{});
+
+      // ── Les conditions de déclenchement, une par une ──
+      ok('Critère : sans phase déclarée, aucune proposition',
+        ajustementPropose(_ath(null,-0.15))===null);
+      ok('Critère : sans nutrition.macros, aucune proposition',(()=>{
+        const u=_ath('seche',-0.15); u.nutrition={dietType:'flexible'};
+        return ajustementPropose(u)===null;})());
+      ok('Critère : moins de PESEE_VIT_MIN_PTS points, aucune proposition',(()=>{
+        const u=_ath('seche',-0.15);
+        // Cinq pesées seulement : la régression refuse, on ne la contourne pas.
+        u.weightLog=_serie(80,-0.15,30).slice(-5);
+        return ajustementPropose(u)===null;})());
+      ok('Critère : sèche à −0,7 %/sem, dans la fourchette, aucune proposition',
+        ajustementPropose(_ath('seche',-0.7))===null);
+      ok('Les bornes de la sèche sont bien celles de PHASES',
+        PHASES.seche.min===-1.0&&PHASES.seche.max===-0.5);
+
+      // ── Deux relevés espacés de sept jours ──
+      ok('Critère : un seul relevé hors fourchette ne suffit pas',(()=>{
+        // La régression porte sur 14 jours. Le relevé d'AUJOURD'HUI couvre
+        // J−13..J, celui d'il y a sept jours couvre J−20..J−7. Pour qu'un seul
+        // des deux sorte, il faut une cassure nette il y a sept jours :
+        //   J−28..J−7  à −0,7 %/sem  → le relevé ancien est DANS la fourchette
+        //   J−6..J     à +0,5 %/sem  → le relevé du jour, moitié-moitié, sort
+        // Premier jet : je changeais de pente trop tôt et les DEUX relevés
+        // sortaient — le test passait sans rien éprouver.
+        // Série CONTINUE, construite jour par jour : concaténer deux appels à
+        // _serie créait une marche de plusieurs kilos à la jonction, et les
+        // pentes mesurées n'avaient plus rien à voir avec les pentes voulues.
+        const u=_ath('seche',null);
+        const l=[]; let kg=80;
+        for(let i=29;i>=0;i--){
+          l.push({date:localISODate(new Date(Date.now()-i*864e5)),kg:Math.round(kg*100)/100});
+          const pct=(i>7)?-0.7:0.6;
+          kg+=kg*(pct/100)/7;
+        }
+        u.weightLog=l;
+        const aujd=localISODate(new Date());
+        const v1=_vitesseAuJour(u,aujd);
+        const v2=_vitesseAuJour(u,_jourPlus(aujd,-7));
+        if(!v1||!v2) return _echec('vitesse non calculable sur ce jeu');
+        const sort=v=>v.pctSem>PHASES.seche.max||v.pctSem<PHASES.seche.min;
+        if(!sort(v1)||sort(v2))
+          return _echec('jeu d\'essai invalide : jour '+v1.pctSem.toFixed(2)
+            +' / −7 j '+v2.pctSem.toFixed(2));
+        return ajustementPropose(u)===null
+          ?true:_echec('proposition alors qu\'un seul relevé sort');})());
+      ok('Critère : deux relevés hors fourchette → proposition de baisse',(()=>{
+        const r=ajustementPropose(_ath('seche',-0.15));
+        if(!r) return _echec('aucune proposition');
+        return r.sens==='baisse'&&r.jour==='off';})());
+
+      // ── Le sens du pas ──
+      ok('Critère : prise de masse à +0,9 %/sem → BAISSE, pas hausse',(()=>{
+        const r=ajustementPropose(_ath('masse',0.9));
+        if(!r) return _echec('aucune proposition');
+        return r.sens==='baisse'&&r.kcalDelta<0;})());
+      ok('Sèche trop RAPIDE (−1,4 %/sem) → hausse',(()=>{
+        const r=ajustementPropose(_ath('seche',-1.4));
+        if(!r) return _echec('aucune proposition');
+        return r.sens==='hausse'&&r.kcalDelta>0&&r.jour==='on';})());
+      ok('Prise de masse trop LENTE (+0,05 %/sem) → hausse',(()=>{
+        const r=ajustementPropose(_ath('masse',0.05));
+        if(!r) return _echec('aucune proposition');
+        return r.sens==='hausse';})());
+
+      // ── Le pas : 10 % des kcal, porté par les glucides SEULS ──
+      ok('Critère : le pas vaut 10 % des kcal du jour concerné',(()=>{
+        const r=ajustementPropose(_ath('seche',-0.15));
+        if(!r) return _echec('aucune proposition');
+        // Jour OFF : 2200 kcal → 220.
+        return r.pct===10&&Math.abs(r.kcalDelta)===220
+          &&r.gDelta===Math.round(-220/4);})());
+      ok('Critère : protéines et lipides IDENTIQUES avant/après application',(()=>{
+        currentUser=_ath('seche',-0.15);
+        const avant=JSON.parse(JSON.stringify(currentUser.nutrition.macros));
+        const r=ajustementPropose(currentUser);
+        if(!r) return _echec('aucune proposition');
+        try{ appliquerAjustement(); }catch(e){ return _echec('exception: '+e.message); }
+        const ap=currentUser.nutrition.macros;
+        if(ap.off.p!==avant.off.p||ap.off.l!==avant.off.l)
+          return _echec('protéines ou lipides ont bougé');
+        // Le jour ON n'est pas touché du tout.
+        if(JSON.stringify(ap.on)!==JSON.stringify(avant.on))
+          return _echec('le jour ON a bougé');
+        // Le delta porte à 100 % sur les glucides.
+        return ap.off.g===avant.off.g+r.gDelta
+          &&ap.off.kcal===Math.round(4*ap.off.p+9*ap.off.l+4*ap.off.g);})());
+      ok('L\'application note l\'origine et la date',(()=>{
+        const n=currentUser.nutrition;
+        return n.macros.origine==='ajustement'&&n.macros.origineDate>0
+          &&n.dernierAjustement>0;})());
+      ok('L\'historique garde la décision, pour le coach',(()=>{
+        const h=(currentUser.nutrition.ajustHisto||[]).slice(-1)[0];
+        return !!h&&h.decision==='applique'&&h.sens==='baisse'&&h.kcalDelta===-220;})());
+
+      // ── Le verrou de quinzaine ──
+      ok('Critère : une proposition acceptée en bloque toute autre 14 jours',(()=>{
+        // currentUser vient d'appliquer, juste au-dessus.
+        return ajustementPropose(currentUser)===null;})());
+      // Sur un dossier NEUF : après un ajustement, les macros ont baissé et un
+      // second passage butte légitimement sur le plancher. Ce test ne doit
+      // mesurer que l'expiration du verrou, pas le plancher.
+      ok('Passé quatorze jours, le verrou ne bloque plus',(()=>{
+        const u=_ath('seche',-0.15);
+        u.nutrition.dernierAjustement=Date.now()-15*864e5;
+        const a=ajustementPropose(u);
+        u.nutrition.dernierAjustement=Date.now()-2*864e5;
+        const b=ajustementPropose(u);
+        if(!a) return _echec('rien à 15 jours');
+        return b===null?true:_echec('le verrou de 2 jours n\'a pas tenu');})());
+      ok('Un refus bloque aussi quatorze jours',(()=>{
+        currentUser=_ath('seche',-0.15);
+        try{ refuserAjustement(); }catch(e){ return _echec('exception: '+e.message); }
+        const h=(currentUser.nutrition.ajustHisto||[]).slice(-1)[0];
+        return h.decision==='refuse'&&ajustementPropose(currentUser)===null;})());
+      ok('Un refus ne touche PAS les macros',(()=>{
+        const u=_ath('seche',-0.15);
+        const avant=JSON.stringify(u.nutrition.macros);
+        currentUser=u;
+        refuserAjustement();
+        return JSON.stringify(currentUser.nutrition.macros)===avant;})());
+
+      // ── Le plancher, priorité absolue ──
+      ok('Critère : une baisse qui passerait sous le plancher rend null',(()=>{
+        const u=_ath('seche',-0.15);
+        // Macros déjà très basses : la baisse de 10 % passerait sous le
+        // métabolisme au repos.
+        const pl=plancherKcal(u);
+        if(pl==null) return _echec('plancher non calculable sur ce profil');
+        // Les glucides doivent être assez hauts pour ABSORBER la coupe : sinon
+        // c'est le garde « glucides négatifs » qui refuse, et le test passerait
+        // sans jamais éprouver le plancher. Premier jet : g valait 10, gApres
+        // tombait sous zéro, et retirer le plancher ne faisait rien échouer.
+        u.nutrition.macros={on:{kcal:pl+400,p:150,g:150,l:70,f:20},
+                            off:{kcal:pl+100,p:150,g:100,l:70,f:20}};
+        const r=ajustementPropose(u);
+        if(r) return _echec('baisse proposée à '+r.apres.kcal+' kcal, plancher '+pl);
+        // Et on vérifie que c'est bien le PLANCHER qui a refusé, pas le garde
+        // des glucides négatifs.
+        return (100-Math.round(Math.round((pl+100)*0.10)/4))>=0
+          ?true:_echec('refus dû aux glucides négatifs, pas au plancher');})());
+      ok('Le plancher est le métabolisme au repos, et il est annoncé',(()=>{
+        const u=_ath('seche',-0.15);
+        const b=besoinsProposes(u);
+        return plancherKcal(u)===b.mb&&b.mb>0;})());
+      ok('Sans plancher calculable, AUCUNE baisse n\'est proposée',(()=>{
+        const u=_ath('seche',-0.15);
+        // Taille absente : besoinsProposes rend source:null, donc pas de plancher.
+        u._evol_height=null; delete u['init-height'];
+        u.bilans=[{type:'suivi',date:Date.now()-3*864e5,'deb-weight':'80','deb-age':'32','deb-gender':'Homme'}];
+        return plancherKcal(u)===null&&ajustementPropose(u)===null;})());
+      ok('Une HAUSSE reste possible sans plancher calculable',(()=>{
+        const u=_ath('seche',-1.4);
+        u._evol_height=null; delete u['init-height'];
+        u.bilans=[{type:'suivi',date:Date.now()-3*864e5,'deb-weight':'80','deb-age':'32','deb-gender':'Homme'}];
+        const r=ajustementPropose(u);
+        return !!r&&r.sens==='hausse';})());
+      ok('Le message de plancher remplace la proposition, il ne se tait pas',(()=>{
+        const u=_ath('seche',-0.15);
+        const pl=plancherKcal(u);
+        u.nutrition.macros={on:{kcal:pl+300,p:150,g:40,l:70,f:20},
+                            off:{kcal:pl+40,p:150,g:10,l:70,f:20}};
+        const h=_htmlAjustement(u,false);
+        return /je ne te propose pas de baisser/.test(h)
+          &&/métabolisme au repos/.test(h);})());
+
+      // ── Le garde-fou TCA prime ──
+      ok('Sèche avec antécédent TCA déclaré : aucune proposition',(()=>{
+        const u=_ath('seche',-0.15);
+        u.bilans=u.bilans.concat([{type:'depart',date:Date.now()-100*864e5,
+          'deb-tca':'anorexie il y a dix ans'}]);
+        return aTCA(u)===true&&ajustementPropose(u)===null;})());
+
+      // ── La carte : constat AVANT proposition ──
+      ok('Critère : la carte dit le constat avant la proposition',(()=>{
+        const u=_ath('seche',-0.15);
+        const h=_htmlAjustement(u,false);
+        const iC=h.indexOf('la fourchette visée'), iP=h.indexOf('Proposition :');
+        return iC>=0&&iP>iC;})());
+      ok('La carte cite la vitesse, la fourchette et le delta en glucides',(()=>{
+        const u=_ath('seche',-0.15);
+        const h=_htmlAjustement(u,false);
+        return /% par semaine depuis/.test(h)&&/-1 à -0,5 %/.test(h)
+          &&/-220 kcal les jours OFF/.test(h)&&/-55 g de glucides/.test(h);})());
+      ok('Elle annonce que protéines et lipides ne bougent pas',(()=>{
+        const h=_htmlAjustement(_ath('seche',-0.15),false);
+        return /protéines et tes lipides ne changent pas/.test(h);})());
+      ok('Deux boutons, « Appliquer » et « Garder comme ça »',(()=>{
+        const h=_htmlAjustement(_ath('seche',-0.15),false);
+        return /appliquerAjustement\(\)/.test(h)&&/refuserAjustement\(\)/.test(h)
+          &&/Garder comme ça/.test(h);})());
+      ok('Aucun mot d\'injonction ni de reproche',(()=>{
+        const d=document.createElement('div');
+        d.innerHTML=_htmlAjustement(_ath('seche',-0.15),false);
+        const t=(d.textContent||'').toLowerCase();
+        return !/tu dois|il faut|échec|raté|mauvais|discipline/.test(t);})());
+
+      // ── La fiche coach : lecture seule ──
+      ok('Critère : la carte du coach n\'a AUCUN bouton',(()=>{
+        const h=_htmlAjustement(_ath('seche',-0.15),true);
+        return h.length>0&&!/appliquerAjustement|refuserAjustement|<button/.test(h);})());
+      ok('Le coach voit ce que l\'athlète a fait de la proposition',(()=>{
+        const u=_ath('seche',-0.15);
+        currentUser=u;
+        appliquerAjustement();
+        const h=_htmlAjustement(currentUser,true);
+        return /Dernier ajustement proposé/.test(h)
+          &&/Appliqué par l'athlète/.test(h.replace(/&#39;/g,"'"));})());
+      ok('Et il voit aussi un refus',(()=>{
+        const u=_ath('seche',-0.15);
+        currentUser=u;
+        refuserAjustement();
+        const h=_htmlAjustement(currentUser,true);
+        return /Refusé/.test(h);})());
+
+      // ── Ce que le lot ne doit PAS toucher ──
+      ok('vitesseAlerte n\'a pas bougé',
+        vitesseAlerte(-1.3,cibleVitesse({phase:{type:'seche',debut:1}}))===true
+        &&vitesseAlerte(-0.7,cibleVitesse({phase:{type:'seche',debut:1}}))===false);
+      ok('Les seuils de phase n\'ont pas bougé',
+        PHASES.masse.min===0.25&&PHASES.masse.max===0.5&&PHASES.masse.alerte===0.75
+        &&PHASES.seche.alerte===-1.2&&PHASES.recomp.alerteAbs===0.5);
+      ok('ajustementPropose est PURE : elle ne modifie pas l\'utilisateur',(()=>{
+        const u=_ath('seche',-0.15);
+        const avant=JSON.stringify(u);
+        ajustementPropose(u); ajustementPropose(u);
+        _ajustPlancherAtteint(u);
+        return JSON.stringify(u)===avant;})());
+
+      currentUser=sauveU;
+    })();
 
     // ══════════════ PLUSIEURS COMPTES SUR LE MÊME APPAREIL ══════════════
     (function(){
