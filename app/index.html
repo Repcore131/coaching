@@ -13117,6 +13117,126 @@ function bSliderInput(gid,val){
   const inp=document.getElementById('bsl-in-'+gid);
   if(inp){if(inp.value!==String(v))inp.value=v;const pct=(v-1)/9*100;inp.style.setProperty('--bsl',c);inp.style.setProperty('--bsl-glow',c+'66');inp.style.background=`linear-gradient(90deg,${c} ${pct}%,#1a1a1a ${pct}%)`;}
 }
+
+// ── Profession : saisie libre AVEC suggestions ──────────────────────────────
+// Le champ reste un texte libre : un métier absent de la liste doit pouvoir
+// être écrit. Reconnu, il donne son niveau d'activité ; inconnu, le calcul
+// retombe sur le barème par séances et le dit.
+function bMetier(id){
+  const v=bilData[id]||'';
+  const n=facteurProfession(v);
+  return `<div style="position:relative">
+    <input type="text" id="${id}" autocomplete="off" placeholder="Commence à taper : maçon, infirmier, comptable…"
+      value="${escapeHtml(v)}" oninput="_bMetierSaisie('${id}',this.value)" onfocus="_bMetierSaisie('${id}',this.value)">
+    <div id="${id}-sug" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:40;background:var(--dark);border:1px solid var(--border);border-radius:0 0 10px 10px;max-height:210px;overflow:auto"></div>
+    <div id="${id}-niv" style="font-size:10px;line-height:1.6;margin-top:5px;color:${n?'var(--success)':'var(--text-faint)'}">${
+      n?escapeHtml(n.lib)+' → facteur '+String(n.f).replace('.',',')
+       :(v?'Métier non reconnu : le calcul utilisera le nombre de séances.':'')}</div>
+  </div>`;
+}
+function _bMetierSaisie(id,val){
+  bilData[id]=val;
+  const zs=document.getElementById(id+'-sug');
+  const zn=document.getElementById(id+'-niv');
+  const l=chercherMetiers(val,8);
+  if(zs){
+    // On ne propose plus rien dès que la saisie EST un métier connu : la liste
+    // resterait ouverte par-dessus la suite du formulaire.
+    const exact=!!niveauMetier(val);
+    zs.style.display=(l.length&&!exact)?'block':'none';
+    zs.innerHTML=l.map(m=>`<div onclick="_bMetierChoisi('${id}',this.dataset.n)" data-n="${escapeHtml(m.nom)}"
+      style="padding:9px 12px;font-size:12px;color:#ddd;cursor:pointer;border-bottom:1px solid var(--border)">
+      ${escapeHtml(m.nom)}<span style="color:var(--text-faint);font-size:10px"> · ${escapeHtml(m.fam)}</span></div>`).join('');
+  }
+  if(zn){
+    const n=facteurProfession(val);
+    zn.style.color=n?'var(--success)':'var(--text-faint)';
+    zn.textContent=n?(n.lib+' → facteur '+String(n.f).replace('.',','))
+      :(val?'Métier non reconnu : le calcul utilisera le nombre de séances.':'');
+  }
+}
+function _bMetierChoisi(id,nom){
+  bilData[id]=nom;
+  const el=document.getElementById(id);
+  if(el) el.value=nom;
+  const zs=document.getElementById(id+'-sug');
+  if(zs) zs.style.display='none';
+  _bMetierSaisie(id,nom);
+}
+
+// ── Sports pratiqués : sport + intensité + heures par semaine ───────────────
+// Stocké comme un TABLEAU d'objets, pas comme du texte libre : c'est lui qui
+// alimente le calcul de dépense, et une phrase ne se calcule pas.
+function _bSportsListe(id){
+  const l=bilData[id];
+  return Array.isArray(l)?l:[];
+}
+function bSports(id){
+  const l=_bSportsListe(id);
+  const noms=Object.keys(SPORTS_KCAL_H);
+  const ligne=(e,i)=>{
+    const kh=kcalHeureSport(e.sport,e.intensite);
+    return `<div style="display:flex;gap:5px;align-items:center;margin-bottom:6px">
+      <select onchange="_bSportSet('${id}',${i},'sport',this.value)"
+        style="flex:2;min-width:0;padding:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px">
+        ${noms.map(n=>`<option value="${escapeHtml(n)}"${e.sport===n?' selected':''}>${escapeHtml(n)}</option>`).join('')}
+      </select>
+      <select onchange="_bSportSet('${id}',${i},'intensite',this.value)"
+        style="flex:1.3;min-width:0;padding:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px">
+        ${SPORT_INTENSITES.map(x=>`<option value="${x.cle}"${e.intensite===x.cle?' selected':''}>${x.lib}</option>`).join('')}
+      </select>
+      <input type="number" min="0" step="0.5" value="${e.heures!=null?e.heures:''}" placeholder="h/sem"
+        oninput="_bSportSet('${id}',${i},'heures',this.value)"
+        style="flex:1;min-width:0;width:auto;text-align:right;padding:8px;background:#080808;border:1px solid #222;border-radius:8px;color:#fff;font-size:12px;font-weight:700;margin:0">
+      <button type="button" onclick="_bSportRetirer('${id}',${i})" class="hit44"
+        style="flex:0 0 auto;background:none;border:none;color:var(--text-dim);font-size:16px;cursor:pointer;padding:0 4px;min-width:30px">✕</button>
+    </div>
+    ${kh!=null&&Number(e.heures)>0?`<div style="font-size:10px;color:var(--text-faint);margin:-3px 0 8px 2px">${kh} kcal/h × ${String(e.heures).replace('.',',')} h = ${Math.round(kh*Number(e.heures))} kcal par semaine</div>`:''}`;
+  };
+  const total=depenseSportsParJour(l);
+  return `<div id="${id}-zone">
+    ${l.map(ligne).join('')}
+    <button type="button" onclick="_bSportAjouter('${id}')" class="btn btn-outline btn-sm"
+      style="width:100%;margin:2px 0 0;letter-spacing:1px;font-size:10px">+ Ajouter un sport</button>
+    <div data-sports-total style="font-size:11px;color:var(--success);line-height:1.6;margin-top:8px">${total.semaine>0?total.semaine+' kcal par semaine, soit '+total.jour+' kcal par jour ajoutés à ta dépense.':''}</div>
+    <div style="font-size:10px;color:var(--text-faint);line-height:1.6;margin-top:6px">Compte ici TOUT ce que tu fais, séances RepCore incluses — ligne « Musculation ». C'est cette liste qui sert au calcul, elle ne doit rien oublier ni rien compter deux fois.</div>
+  </div>`;
+}
+function _bRepeindreSports(id){
+  const z=document.getElementById(id+'-zone');
+  if(z) z.outerHTML=bSports(id);
+}
+function _bSportAjouter(id){
+  const l=_bSportsListe(id).slice();
+  l.push({sport:'Musculation',intensite:'moderee',heures:''});
+  bilData[id]=l;
+  _bRepeindreSports(id);
+}
+function _bSportRetirer(id,i){
+  const l=_bSportsListe(id).slice();
+  l.splice(i,1);
+  bilData[id]=l;
+  _bRepeindreSports(id);
+}
+function _bSportSet(id,i,champ,val){
+  const l=_bSportsListe(id).slice();
+  if(!l[i]) return;
+  l[i]=Object.assign({},l[i],{[champ]:champ==='heures'?val:String(val)});
+  bilData[id]=l;
+  // On ne repeint que sur les listes déroulantes : repeindre à chaque frappe
+  // dans le champ des heures ferait perdre le focus au bout d'un caractère.
+  if(champ!=='heures') _bRepeindreSports(id);
+  else{
+    const z=document.getElementById(id+'-zone');
+    if(z){
+      const t=depenseSportsParJour(l);
+      // Mise à jour du seul total, sans toucher aux champs de saisie.
+      const tot=z.querySelector('[data-sports-total]');
+      if(tot) tot.textContent=t.semaine>0?(t.semaine+' kcal par semaine, soit '+t.jour+' kcal par jour ajoutés à ta dépense.'):'';
+    }
+  }
+}
+
 function bSec(title,html){return`<div style="margin-bottom:22px"><div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">${title}</div>${html}</div>`;}
 function bMeas(id,label,unit){return`<div class="bil-row"><span class="bil-row-label">${label}</span><div style="display:flex;align-items:center;gap:6px">${bQ(id)}<span class="bil-unit">${unit}</span></div></div>`;}
 
@@ -14742,7 +14862,7 @@ const DEB_STEPS=[
     bLbl('Quelle est ta taille ?  (en cm)')+bQ('deb-height')+
     bLbl('Quels sont tes objectifs principaux ? ')+
     `<div>${bC('deb-goals',['Perte de poids','Prise de muscle','Rééquilibrage corporel','Amélioration des performances','Bien-être général'],true)}</div>`+
-    bLbl('Quelle est ta profession ? ')+bT('deb-job','Ex: Infirmier, Comptable...')+
+    bLbl('Quelle est ta profession ? ')+bMetier('deb-job')+
     bLbl('Et ton rythme de travail ?')+
     `<div>${bC('deb-work-rhythm',['Plein temps','Partiel','En arrêt'])}</div>`+
     bLbl('As-tu des problèmes de santé ou des blessures ?  (Si oui, précise)')+bT('deb-health','Ex: Hernie discale, entorse...')+
@@ -14766,7 +14886,7 @@ const DEB_STEPS=[
     bLbl('Quels jours souhaites-tu t\'entraîner ? ')+
     `<div>${bC('deb-training-days',['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'],true)}</div>`+
     bLbl('Quelle est la durée de séance que tu préfères ? ⏱')+bT('deb-session-duration','Ex: 45min, 1h30...')+
-    bLbl("Pratiques tu d'autres sports ?  (si oui le/lesquels et combien d'heure par semaine?)")+bTA('deb-other-sports',"Ex: Football 3h/semaine, natation...")+
+    bLbl("Quels sports pratiques-tu, et combien d'heures par semaine ?")+bSports('deb-sports')+
     bLbl("A quel niveau estime tu l'intensité de ta pratique sportive 1")+
     `<div>${bEmojiScale('deb-intensity-1',[
       {v:'Faible intensité',l:'Faible',svg:BICON.flame1,c:'#22c55e'},
@@ -16873,6 +16993,199 @@ function loadNutrition(){
 // Mifflin-St Jeor ne demande que poids, taille, âge et sexe. C'est elle qui
 // porte la différence homme / femme : +5 chez l'homme, −161 chez la femme. On
 // n'ajoute donc aucun correctif de sexe par-dessus.
+
+// ══════════════ DÉPENSE : PROFESSION + SPORTS ═══════════════════════════════
+// Deux entrées nouvelles au bilan, deux barèmes. Comme REPERES_VOLUME, ce sont
+// des repères de PRATIQUE DE TERRAIN et non des mesures : la dépense réelle
+// d'une même personne varie d'un jour à l'autre, et deux tables publiées ne
+// donnent jamais les mêmes chiffres. Point de départ ajustable, jamais verdict.
+
+// ── Sports : dépense en kcal PAR HEURE, par intensité ──────────────────────
+// Les onze premières lignes sont la table du coach, reprise sans y toucher.
+// Celles marquées « ajout » la complètent, calées sur la même échelle — c'est
+// mon estimation, à corriger si elle ne colle pas à son expérience.
+//
+// ATTENTION : ce sont des kcal ABSOLUES par heure, pas des MET. Elles ne
+// varient donc pas avec le poids de l'athlète. C'est la table du coach, et
+// l'introduire telle quelle vaut mieux que de la « corriger » dans son dos.
+const SPORT_INTENSITES=Object.freeze([
+  Object.freeze({cle:'faible', lib:'Faible'}),
+  Object.freeze({cle:'moderee',lib:'Modérée'}),
+  Object.freeze({cle:'haute',  lib:'Haute'})
+]);
+const SPORTS_KCAL_H=Object.freeze({
+  'Marche':          Object.freeze([200,280,370]),
+  'Course à pied':   Object.freeze([400,550,700]),
+  'Vélo':            Object.freeze([300,450,600]),
+  'Natation':        Object.freeze([300,500,700]),
+  'Tennis':          Object.freeze([350,450,600]),
+  'Football':        Object.freeze([300,500,700]),
+  'Musculation':     Object.freeze([200,350,500]),
+  'Yoga':            Object.freeze([180,250,300]),
+  'Ski':             Object.freeze([350,500,700]),
+  'Boxe':            Object.freeze([400,600,800]),
+  'Danse':           Object.freeze([200,300,500]),
+  // ── ajouts, calés sur l'échelle ci-dessus ──
+  'Randonnée':       Object.freeze([250,350,450]),
+  'Trail':           Object.freeze([450,600,750]),
+  'Corde à sauter':  Object.freeze([450,650,850]),
+  'Rameur':          Object.freeze([350,550,750]),
+  'Vélo elliptique': Object.freeze([300,450,600]),
+  'Spinning':        Object.freeze([400,600,750]),
+  'CrossFit':        Object.freeze([400,600,800]),
+  'HIIT':            Object.freeze([400,600,800]),
+  'Escalade':        Object.freeze([350,500,650]),
+  'Basket':          Object.freeze([350,500,650]),
+  'Handball':        Object.freeze([350,550,700]),
+  'Rugby':           Object.freeze([350,550,750]),
+  'Volley':          Object.freeze([250,350,500]),
+  'Badminton':       Object.freeze([300,450,600]),
+  'Padel':           Object.freeze([300,450,600]),
+  'Squash':          Object.freeze([450,600,800]),
+  'Arts martiaux':   Object.freeze([350,550,750]),
+  'Judo':            Object.freeze([350,550,750]),
+  'Pilates':         Object.freeze([180,250,320]),
+  'Stretching':      Object.freeze([150,200,250]),
+  'Aquagym':         Object.freeze([250,350,450]),
+  'Équitation':      Object.freeze([250,350,450]),
+  'Golf':            Object.freeze([200,280,350]),
+  'Roller':          Object.freeze([300,450,600]),
+  'Patinage':        Object.freeze([300,450,600]),
+  'Surf':            Object.freeze([250,400,550]),
+  'Kayak':           Object.freeze([300,450,600]),
+  'Ping-pong':       Object.freeze([200,300,400]),
+  'Athlétisme':      Object.freeze([400,550,700]),
+  'Gymnastique':     Object.freeze([300,450,600]),
+  'Aucun':           Object.freeze([0,0,0])
+});
+function kcalHeureSport(sport,intensite){
+  const t=SPORTS_KCAL_H[sport];
+  if(!t) return null;
+  const i=SPORT_INTENSITES.findIndex(x=>x.cle===intensite);
+  return t[i<0?1:i];
+}
+// Dépense sportive rapportée au JOUR : le coach raisonne en heures par
+// semaine, le calcul en kcal par jour. On divise donc par sept, comme demandé.
+function depenseSportsParJour(liste){
+  const l=Array.isArray(liste)?liste:[];
+  let semaine=0; const detail=[];
+  for(const e of l){
+    if(!e||!e.sport) continue;
+    const h=Number(e.heures);
+    const kh=kcalHeureSport(e.sport,e.intensite);
+    if(kh==null||!(h>0)) continue;
+    semaine+=kh*h;
+    detail.push(e.sport.toLowerCase()+' '+String(h).replace('.',',')+' h');
+  }
+  return {jour:Math.round(semaine/7),semaine:Math.round(semaine),detail};
+}
+
+// ── Professions : familles, et niveau d'activité de chacune ────────────────
+// Le facteur ne compte QUE l'activité hors sport — ce que la littérature
+// appelle le NEAT. Il est donc plus bas que les multiplicateurs classiques,
+// qui englobent l'entraînement : ici le sport est ajouté à part, en kcal, et
+// le compter deux fois gonflerait la dépense de plusieurs centaines de kcal.
+const METIER_NIVEAUX=Object.freeze({
+  sedentaire:Object.freeze({lib:'Assis la majeure partie de la journée', f:1.15}),
+  leger:     Object.freeze({lib:'Debout, peu de marche',                 f:1.25}),
+  modere:    Object.freeze({lib:'Marche soutenue, charges légères',      f:1.40}),
+  lourd:     Object.freeze({lib:'Effort physique continu, port de charges',f:1.55})
+});
+const METIERS_FAMILLES=Object.freeze([
+  Object.freeze({fam:'Bureau, gestion, informatique',n:'sedentaire',l:Object.freeze([
+    'Comptable','Contrôleur de gestion','Assistant administratif','Secrétaire',
+    'Développeur','Ingénieur informatique','Analyste','Data analyst','Chef de projet',
+    'Juriste','Avocat','Notaire','Banquier','Conseiller clientèle','Assureur',
+    'Ressources humaines','Chargé de recrutement','Community manager','Graphiste',
+    'Rédacteur','Traducteur','Architecte','Dessinateur industriel','Télé-conseiller',
+    'Standardiste','Statisticien','Consultant','Chercheur','Cadre dirigeant'])}),
+  Object.freeze({fam:'Enseignement et petite enfance',n:'leger',l:Object.freeze([
+    'Enseignant','Professeur des écoles','Professeur de collège ou lycée',
+    'Formateur','Éducateur spécialisé','Animateur','Assistante maternelle',
+    'Auxiliaire de puériculture','Agent territorial d\'école','Surveillant scolaire'])}),
+  Object.freeze({fam:'Santé et soin',n:'modere',l:Object.freeze([
+    'Infirmier','Aide-soignant','Auxiliaire de vie','Kinésithérapeute',
+    'Ostéopathe','Ergothérapeute','Sage-femme','Ambulancier','Brancardier',
+    'Manipulateur radio','Préparateur en pharmacie','Dentiste','Vétérinaire',
+    'Aide médico-psychologique'])}),
+  Object.freeze({fam:'Santé assise',n:'sedentaire',l:Object.freeze([
+    'Médecin généraliste','Médecin spécialiste','Psychologue','Pharmacien',
+    'Diététicien','Orthophoniste','Radiologue'])}),
+  Object.freeze({fam:'Commerce et vente',n:'leger',l:Object.freeze([
+    'Vendeur','Conseiller de vente','Caissier','Hôte de caisse','Commercial',
+    'Représentant','Chef de rayon','Responsable de magasin','Fleuriste',
+    'Coiffeur','Esthéticienne','Opticien','Bijoutier'])}),
+  Object.freeze({fam:'Restauration et hôtellerie',n:'modere',l:Object.freeze([
+    'Serveur','Barman','Cuisinier','Chef de cuisine','Commis de cuisine',
+    'Plongeur','Pâtissier','Boulanger','Boucher','Charcutier','Poissonnier',
+    'Femme ou valet de chambre','Réceptionniste'])}),
+  Object.freeze({fam:'Bâtiment et travaux publics',n:'lourd',l:Object.freeze([
+    'Maçon','Charpentier','Couvreur','Plaquiste','Carreleur','Peintre en bâtiment',
+    'Plombier','Chauffagiste','Électricien','Menuisier','Serrurier','Terrassier',
+    'Coffreur','Ferrailleur','Grutier','Conducteur d\'engins','Chef de chantier'])}),
+  Object.freeze({fam:'Industrie et logistique',n:'modere',l:Object.freeze([
+    'Opérateur de production','Agent de fabrication','Technicien de maintenance',
+    'Soudeur','Chaudronnier','Tourneur-fraiseur','Mécanicien','Carrossier',
+    'Cariste','Préparateur de commandes','Magasinier','Agent de conditionnement'])}),
+  Object.freeze({fam:'Manutention et livraison',n:'lourd',l:Object.freeze([
+    'Manutentionnaire','Déménageur','Livreur','Coursier','Éboueur','Docker',
+    'Agent de tri','Facteur'])}),
+  Object.freeze({fam:'Transport',n:'sedentaire',l:Object.freeze([
+    'Chauffeur routier','Chauffeur de bus','Chauffeur de taxi','Chauffeur VTC',
+    'Conducteur de train','Pilote','Contrôleur des transports'])}),
+  Object.freeze({fam:'Agriculture et espaces verts',n:'lourd',l:Object.freeze([
+    'Agriculteur','Éleveur','Maraîcher','Viticulteur','Jardinier','Paysagiste',
+    'Bûcheron','Ouvrier agricole','Horticulteur'])}),
+  Object.freeze({fam:'Sécurité et secours',n:'modere',l:Object.freeze([
+    'Policier','Gendarme','Pompier','Militaire','Agent de sécurité','Vigile',
+    'Maître-nageur','Surveillant pénitentiaire','Secouriste'])}),
+  Object.freeze({fam:'Propreté et services',n:'modere',l:Object.freeze([
+    'Agent d\'entretien','Agent de propreté','Femme ou homme de ménage',
+    'Laveur de vitres','Gardien d\'immeuble','Concierge','Agent de restauration'])}),
+  Object.freeze({fam:'Sport et animation',n:'lourd',l:Object.freeze([
+    'Coach sportif','Éducateur sportif','Professeur de sport','Préparateur physique',
+    'Sportif professionnel','Moniteur de ski','Guide de haute montagne'])}),
+  Object.freeze({fam:'Sans activité professionnelle',n:'sedentaire',l:Object.freeze([
+    'Étudiant','Sans emploi','Retraité','Parent au foyer','En arrêt de travail'])})
+]);
+// Index plat, construit une fois. La recherche est faite sur une forme
+// normalisée — sans accent ni casse — sinon « eleveur » ne trouve « Éleveur ».
+function _normMetier(s){
+  return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+}
+let _idxMetiers=null;
+function _metiersIndex(){
+  if(_idxMetiers) return _idxMetiers;
+  const out=[];
+  for(const f of METIERS_FAMILLES)
+    for(const nom of f.l) out.push({nom,fam:f.fam,niveau:f.n,k:_normMetier(nom)});
+  _idxMetiers=out;
+  return out;
+}
+// Métiers proposés pendant la frappe. Ceux qui COMMENCENT par la saisie
+// d'abord : taper « bou » doit remonter « Boulanger » avant « Charbounier ».
+function chercherMetiers(q,max){
+  const k=_normMetier(q);
+  if(k.length<2) return [];
+  const idx=_metiersIndex();
+  const debut=idx.filter(m=>m.k.startsWith(k));
+  const dedans=idx.filter(m=>!m.k.startsWith(k)&&m.k.indexOf(k)>=0);
+  return debut.concat(dedans).slice(0,max||8);
+}
+function niveauMetier(nom){
+  const k=_normMetier(nom);
+  if(!k) return null;
+  const m=_metiersIndex().find(x=>x.k===k);
+  return m?m.niveau:null;
+}
+// Facteur de profession. Rend null quand le métier n'est pas reconnu : on ne
+// devine pas le niveau d'activité d'un intitulé qu'on ne connaît pas.
+function facteurProfession(nom){
+  const n=niveauMetier(nom);
+  if(!n) return null;
+  return {f:METIER_NIVEAUX[n].f,niveau:n,lib:METIER_NIVEAUX[n].lib};
+}
+
 function mbMifflin(poids,taille,age,sexe){
   const p=Number(poids),t=Number(taille),a=Number(age);
   if(!(p>0)||!(t>0)||!(a>0)) return null;
@@ -16890,6 +17203,19 @@ function mbKatch(masseMaigreKg){
 // Masse maigre du dernier bilan, par le MÊME chemin que l'écran % de gras :
 // calcBF puis retrait de la masse grasse. Aucune formule parallèle, sinon les
 // deux écrans finiraient par annoncer deux masses maigres différentes.
+// Dernière valeur NON VIDE d'un champ, en remontant les bilans du plus récent
+// au plus ancien. La profession est renseignée au bilan de départ et n'est pas
+// forcément redonnée à chaque suivi : la chercher seulement dans le dernier
+// bilan la ferait disparaître dès le suivi suivant.
+function _dernierChamp(user,champ){
+  const bl=((user&&user.bilans)||[]).filter(x=>x&&x.date).slice().sort((x,y)=>y.date-x.date);
+  for(const x of bl){
+    const v=x[champ];
+    if(Array.isArray(v)){ if(v.length) return v; continue; }
+    if(v!=null&&String(v).trim()!=='') return v;
+  }
+  return null;
+}
 function masseMaigreDuBilan(user){
   const bl=((user&&user.bilans)||[]).filter(b=>b&&b.date).slice().sort((a,b)=>a.date-b.date);
   const b=bl[bl.length-1];
@@ -16990,12 +17316,36 @@ function besoinsProposes(user,opts){
     hypotheses.push('tours de mesure absents : estimation sur poids, taille, âge et sexe'); }
   if(mb==null) return {source:null,on:null,off:null,manque:['calcul impossible'],hypotheses};
 
-  const act=facteurActivite(user);
-  const depense=Math.round(mb*act.f);
-  hypotheses.push(act.seances+' séance'+(act.seances>1?'s':'')+' par semaine'
-    +(act.pas!=null?' et '+act.pas.toLocaleString('fr-FR')+' pas par jour':'')
-    +' → facteur '+String(act.f).replace('.',','));
-
+  // Profession et sports viennent du DERNIER bilan qui les porte. Un athlète
+  // qui n'a pas encore refait son bilan garde l'ancien calcul : personne ne
+  // perd sa proposition le jour de la mise à jour.
+  const metier=_dernierChamp(user,'deb-job');
+  const sports=_dernierChamp(user,'deb-sports');
+  const prof=facteurProfession(metier);
+  const sp=depenseSportsParJour(sports);
+  let act,depense,modele;
+  if(prof){
+    // Modèle décomposé : la profession donne le NEAT, les sports s'ajoutent
+    // en kcal. Les créneaux de RepCore ne sont PAS recomptés ici — ils sont
+    // déclarés dans la liste des sports, ligne « Musculation », sinon la même
+    // séance serait payée deux fois.
+    modele='profession';
+    act={f:prof.f,seances:null,pas:null,niveau:prof.niveau,metier};
+    depense=Math.round(mb*prof.f)+sp.jour;
+    hypotheses.push(metier.toLowerCase()+' : '+prof.lib.toLowerCase()+' → facteur '
+      +String(prof.f).replace('.',','));
+    if(sp.jour>0) hypotheses.push('sports déclarés '+sp.detail.join(', ')
+      +' → '+sp.semaine+' kcal par semaine, soit '+sp.jour+' par jour');
+    else hypotheses.push('aucun sport déclaré en dehors de RepCore');
+  } else {
+    modele='seances';
+    act=facteurActivite(user);
+    depense=Math.round(mb*act.f);
+    hypotheses.push(act.seances+' séance'+(act.seances>1?'s':'')+' par semaine'
+      +(act.pas!=null?' et '+act.pas.toLocaleString('fr-FR')+' pas par jour':'')
+      +' → facteur '+String(act.f).replace('.',','));
+    if(metier) hypotheses.push('profession « '+metier+' » non reconnue : barème par séances');
+  }
   const phase=typePhase(user);
   const gParKg=(typeof o.protGparKg==='number'&&isFinite(o.protGparKg))
     ? o.protGparKg
@@ -17009,13 +17359,13 @@ function besoinsProposes(user,opts){
   if(!cycle){
     hypotheses.push('même total tous les jours');
     const j=_bloc(r.p,r.l,r.g);
-    return {source,on:j,off:Object.assign({},j),act,depense,mb,gParKg,cycle:false,hypotheses};
+    return {source,on:j,off:Object.assign({},j),act,depense,mb,gParKg,modele,cycle:false,hypotheses};
   }
   hypotheses.push('glucides +15 % les jours d\'entraînement, −15 % les jours de repos');
   return {source,
     on:_bloc(r.p,r.l,Math.round(r.g*(1+CYCLE_GLUC))),
     off:_bloc(r.p,r.l,Math.round(r.g*(1-CYCLE_GLUC))),
-    act,depense,mb,gParKg,cycle:true,hypotheses};
+    act,depense,mb,gParKg,modele,cycle:true,hypotheses};
 }
 
 
@@ -25642,6 +25992,253 @@ function testExercices(){
 
 
 
+
+
+    // ══════════════ DÉPENSE : PROFESSION + SPORTS ══════════════
+    (function(){
+      const sauveU=currentUser;
+      const sauveB=(typeof bilData!=='undefined')?bilData:null;
+
+      // ── La table du coach, reprise sans y toucher ──
+      ok('Les onze lignes du coach ont ses valeurs exactes',(()=>{
+        const t={'Marche':[200,280,370],'Course à pied':[400,550,700],'Vélo':[300,450,600],
+          'Natation':[300,500,700],'Tennis':[350,450,600],'Football':[300,500,700],
+          'Musculation':[200,350,500],'Yoga':[180,250,300],'Ski':[350,500,700],
+          'Boxe':[400,600,800],'Danse':[200,300,500]};
+        const faux=[];
+        for(const k in t){
+          const v=SPORTS_KCAL_H[k];
+          if(!v) { faux.push(k+' absent'); continue; }
+          if(v[0]!==t[k][0]||v[1]!==t[k][1]||v[2]!==t[k][2]) faux.push(k+' → '+v.join('/'));
+        }
+        return faux.length?_echec(faux.join(', ')):true;})());
+      ok('« Aucun » ne coûte rien, aux trois intensités',
+        [0,1,2].every(i=>SPORTS_KCAL_H['Aucun'][i]===0));
+      ok('kcalHeureSport lit la bonne colonne',
+        kcalHeureSport('Boxe','faible')===400&&kcalHeureSport('Boxe','moderee')===600
+        &&kcalHeureSport('Boxe','haute')===800);
+      ok('Un sport inconnu ne rend rien',kcalHeureSport('Pétanque','haute')===null);
+      ok('Une intensité absente retombe sur modérée, pas sur zéro',
+        kcalHeureSport('Boxe',undefined)===600&&kcalHeureSport('Boxe','n\'importe quoi')===600);
+      ok('Chaque sport ajouté est croissant en intensité et positif',(()=>{
+        const faux=[];
+        for(const k in SPORTS_KCAL_H){
+          const v=SPORTS_KCAL_H[k];
+          if(k==='Aucun') continue;
+          if(!(v[0]>0)||!(v[1]>=v[0])||!(v[2]>=v[1])) faux.push(k+' → '+v.join('/'));
+        }
+        return faux.length?_echec(faux.join(', ')):true;})());
+
+      // ── Dépense hebdomadaire ÷ 7, comme demandé ──
+      ok('La dépense sportive est la somme des heures, divisée par sept',(()=>{
+        // Boxe haute 2 h = 1600, musculation modérée 4 h = 1400 → 3000/semaine.
+        const d=depenseSportsParJour([
+          {sport:'Boxe',intensite:'haute',heures:2},
+          {sport:'Musculation',intensite:'moderee',heures:4}]);
+        return d.semaine===3000&&d.jour===Math.round(3000/7);})());
+      ok('Les lignes sans heures ou sans sport sont ignorées',(()=>{
+        const d=depenseSportsParJour([
+          {sport:'Boxe',intensite:'haute',heures:0},
+          {sport:'',intensite:'haute',heures:5},
+          {sport:'Inconnu',intensite:'haute',heures:5},
+          {sport:'Marche',intensite:'faible',heures:''},
+          {sport:'Vélo',intensite:'faible',heures:1}]);
+        return d.semaine===300&&d.detail.length===1;})());
+      ok('Une liste vide ou absente coûte zéro',
+        depenseSportsParJour([]).jour===0&&depenseSportsParJour(null).jour===0
+        &&depenseSportsParJour(undefined).semaine===0);
+      ok('Les demi-heures sont acceptées',(()=>{
+        const d=depenseSportsParJour([{sport:'Yoga',intensite:'faible',heures:1.5}]);
+        return d.semaine===270;})());
+
+      // ── Professions ──
+      ok('Les quatre niveaux vont du plus bas au plus haut',
+        METIER_NIVEAUX.sedentaire.f<METIER_NIVEAUX.leger.f
+        &&METIER_NIVEAUX.leger.f<METIER_NIVEAUX.modere.f
+        &&METIER_NIVEAUX.modere.f<METIER_NIVEAUX.lourd.f);
+      // Ces facteurs ne comptent QUE l'activité hors sport : ils doivent donc
+      // rester sous les multiplicateurs classiques, qui englobent l'entraînement.
+      ok('Les facteurs de profession restent des facteurs NEAT',
+        METIER_NIVEAUX.lourd.f<=1.60&&METIER_NIVEAUX.sedentaire.f>=1.10);
+      ok('Un maçon est classé lourd, un comptable sédentaire',
+        niveauMetier('Maçon')==='lourd'&&niveauMetier('Comptable')==='sedentaire');
+      ok('Le classement ignore accents et casse',
+        niveauMetier('macon')==='lourd'&&niveauMetier('MAÇON')==='lourd'
+        &&niveauMetier('  Éleveur ')==='lourd'&&niveauMetier('eleveur')==='lourd');
+      ok('Un métier inconnu n\'est PAS classé au hasard',
+        niveauMetier('Dresseur de licornes')===null
+        &&facteurProfession('Dresseur de licornes')===null
+        &&facteurProfession('')===null&&facteurProfession(null)===null);
+      ok('L\'infirmier est modéré, le médecin sédentaire',(()=>{
+        // Deux métiers de santé, deux dépenses : c'est tout l'intérêt d'un
+        // classement par métier plutôt que par secteur.
+        return niveauMetier('Infirmier')==='modere'
+          &&niveauMetier('Médecin généraliste')==='sedentaire';})());
+      ok('La liste couvre au moins dix familles et cent métiers',(()=>{
+        const n=METIERS_FAMILLES.reduce((s,f)=>s+f.l.length,0);
+        return METIERS_FAMILLES.length>=10&&n>=100
+          ?true:_echec(METIERS_FAMILLES.length+' familles, '+n+' métiers');})());
+      ok('Aucun métier n\'apparaît deux fois',(()=>{
+        const vus={},dbl=[];
+        for(const f of METIERS_FAMILLES) for(const m of f.l){
+          const k=m.toLowerCase();
+          if(vus[k]) dbl.push(m); else vus[k]=1;
+        }
+        return dbl.length?_echec(dbl.join(', ')):true;})());
+      ok('Chaque famille porte un niveau connu',
+        METIERS_FAMILLES.every(f=>!!METIER_NIVEAUX[f.n]));
+
+      // ── L'autocomplétion ──
+      ok('Deux lettres suffisent, une seule ne propose rien',
+        chercherMetiers('m',8).length===0&&chercherMetiers('ma',8).length>0);
+      ok('Ceux qui COMMENCENT par la saisie passent devant',(()=>{
+        const l=chercherMetiers('bou',8).map(m=>m.nom);
+        return l.length>0&&/^Bou/.test(l[0]);})());
+      ok('La recherche trouve aussi au milieu du mot',(()=>{
+        const l=chercherMetiers('ferm',8);
+        return Array.isArray(l);})());
+      ok('La recherche ignore accents et casse',(()=>{
+        const a=chercherMetiers('MACON',8), b=chercherMetiers('maçon',8);
+        return a.length>0&&a[0].nom===b[0].nom;})());
+      ok('Le nombre de suggestions est plafonné',
+        chercherMetiers('e',20).length===0&&chercherMetiers('en',3).length<=3);
+      ok('Chaque suggestion porte son métier, sa famille et son niveau',(()=>{
+        const m=chercherMetiers('infirm',3)[0];
+        return !!m&&m.nom==='Infirmier'&&!!m.fam&&m.niveau==='modere';})());
+
+      // ── Le calcul décomposé, et l'absence de double comptage ──
+      const _bil=(j,extra)=>Object.assign({type:'suivi',date:Date.now()-j*864e5,
+        'deb-weight':'80','deb-height':'178','deb-age':'32','deb-gender':'Homme',
+        'deb-neck':'39','deb-waist':'84','deb-hips':'98'},extra||{});
+      const _ath=(extra)=>Object.assign({id:'dp',email:'dp@t.fr',fname:'A',lname:'B',
+        role:'athlete',gender:'H',_evol_height:178,_evol_gender:'H',
+        exAlias:{},exMuscles:{},sessions:[],videos:[],programs:{},
+        sessions_config:[{active:true},{active:true},{active:true}],
+        bilans:[_bil(60),_bil(2)],nutrition:{}},extra||{});
+
+      ok('Profession reconnue : le modèle décomposé prend la main',(()=>{
+        const u=_ath({bilans:[_bil(60),_bil(2,{'deb-job':'Comptable'})]});
+        const b=besoinsProposes(u);
+        return b.modele==='profession'&&b.act.niveau==='sedentaire';})());
+      ok('Profession inconnue : repli sur le barème par séances, et c\'est dit',(()=>{
+        const u=_ath({bilans:[_bil(60),_bil(2,{'deb-job':'Dresseur de licornes'})]});
+        const b=besoinsProposes(u);
+        return b.modele==='seances'
+          &&b.hypotheses.some(h=>/non reconnue/.test(h));})());
+      ok('Aucune profession : l\'ancien calcul, personne ne perd sa proposition',(()=>{
+        const b=besoinsProposes(_ath());
+        return b.modele==='seances'&&b.source!==null&&b.on.kcal>0;})());
+      ok('La profession est retrouvée dans un bilan ANCIEN',(()=>{
+        // Elle est posée au bilan de départ et pas redonnée à chaque suivi.
+        const u=_ath({bilans:[_bil(200,{'deb-job':'Maçon'}),_bil(60),_bil(2)]});
+        const b=besoinsProposes(u);
+        return b.modele==='profession'&&b.act.niveau==='lourd';})());
+      ok('Les sports déclarés s\'ajoutent en kcal, pas en facteur',(()=>{
+        const sansSport=_ath({bilans:[_bil(2,{'deb-job':'Comptable'})]});
+        const avec=_ath({bilans:[_bil(2,{'deb-job':'Comptable',
+          'deb-sports':[{sport:'Boxe',intensite:'haute',heures:2}]})]});
+        const a=besoinsProposes(sansSport), c=besoinsProposes(avec);
+        // 1600 kcal/semaine → 229 par jour.
+        return c.depense-a.depense===Math.round(1600/7);})());
+      ok('Un métier lourd dépense plus qu\'un métier assis, à sport égal',(()=>{
+        const sp=[{sport:'Musculation',intensite:'moderee',heures:4}];
+        const assis=besoinsProposes(_ath({bilans:[_bil(2,{'deb-job':'Comptable','deb-sports':sp})]}));
+        const lourd=besoinsProposes(_ath({bilans:[_bil(2,{'deb-job':'Maçon','deb-sports':sp})]}));
+        return lourd.depense>assis.depense;})());
+      // LE piège du modèle : compter les séances RepCore ET les sports.
+      ok('Les créneaux RepCore ne sont pas recomptés dans le modèle profession',(()=>{
+        const bil={'deb-job':'Comptable','deb-sports':[{sport:'Musculation',intensite:'moderee',heures:4}]};
+        const peu=_ath({sessions_config:[{active:true}],bilans:[_bil(2,bil)]});
+        const beaucoup=_ath({sessions_config:Array.from({length:6},()=>({active:true})),
+          bilans:[_bil(2,bil)]});
+        const a=besoinsProposes(peu), b=besoinsProposes(beaucoup);
+        return a.depense===b.depense
+          ?true:_echec('1 créneau → '+a.depense+', 6 créneaux → '+b.depense);})());
+      ok('Les pas ne comptent pas non plus dans le modèle profession',(()=>{
+        const j=(n,c)=>({date:localISODate(new Date(Date.now()-n*864e5)),count:c});
+        const bil={'deb-job':'Comptable'};
+        const a=besoinsProposes(_ath({bilans:[_bil(2,bil)]}));
+        const b=besoinsProposes(_ath({bilans:[_bil(2,bil)],stepsLog:[j(1,20000),j(2,19000)]}));
+        return a.depense===b.depense;})());
+      ok('Les hypothèses nomment le métier et les sports',(()=>{
+        const u=_ath({bilans:[_bil(2,{'deb-job':'Infirmier',
+          'deb-sports':[{sport:'Vélo',intensite:'moderee',heures:3}]})]});
+        const h=besoinsProposes(u).hypotheses.join(' | ');
+        return /infirmier/i.test(h)&&/vélo 3 h/i.test(h)&&/kcal par semaine/.test(h);})());
+      ok('Sans sport déclaré, la ligne le dit au lieu de se taire',(()=>{
+        const u=_ath({bilans:[_bil(2,{'deb-job':'Comptable'})]});
+        return besoinsProposes(u).hypotheses.some(h=>/aucun sport déclaré/.test(h));})());
+      ok('Les macros suivent la dépense : plus de sport, plus de glucides',(()=>{
+        const a=besoinsProposes(_ath({bilans:[_bil(2,{'deb-job':'Comptable'})]}));
+        const b=besoinsProposes(_ath({bilans:[_bil(2,{'deb-job':'Comptable',
+          'deb-sports':[{sport:'Boxe',intensite:'haute',heures:6}]})]}));
+        return b.on.g>a.on.g&&b.on.p===a.on.p&&b.on.l===a.on.l;})());
+
+      // ── Les widgets du bilan ──
+      (function(){
+        bilData={};
+        ok('Le champ profession rend une saisie ET une zone de suggestions',(()=>{
+          const h=bMetier('deb-job');
+          return /id="deb-job"/.test(h)&&/id="deb-job-sug"/.test(h)
+            &&/id="deb-job-niv"/.test(h)&&/_bMetierSaisie/.test(h);})());
+        ok('Un métier reconnu annonce son niveau dans le champ',(()=>{
+          bilData['deb-job']='Maçon';
+          const h=bMetier('deb-job');
+          bilData={};
+          return /facteur 1,55/.test(h)&&/Effort physique continu/.test(h);})());
+        ok('Un métier inconnu prévient au lieu de faire semblant',(()=>{
+          bilData['deb-job']='Dresseur de licornes';
+          const h=bMetier('deb-job');
+          bilData={};
+          return /non reconnu/.test(h);})());
+        ok('Le champ sports démarre vide, avec son bouton d\'ajout',(()=>{
+          bilData={};
+          const h=bSports('deb-sports');
+          return /Ajouter un sport/.test(h)&&!/<select/.test(h);})());
+        ok('Ajouter puis régler une ligne écrit bien dans bilData',(()=>{
+          bilData={};
+          _bSportAjouter('deb-sports');
+          if(!Array.isArray(bilData['deb-sports'])||bilData['deb-sports'].length!==1)
+            return _echec('ajout raté');
+          _bSportSet('deb-sports',0,'sport','Boxe');
+          _bSportSet('deb-sports',0,'intensite','haute');
+          _bSportSet('deb-sports',0,'heures','2');
+          const e=bilData['deb-sports'][0];
+          const d=depenseSportsParJour(bilData['deb-sports']);
+          bilData={};
+          return e.sport==='Boxe'&&e.intensite==='haute'&&e.heures==='2'&&d.semaine===1600;})());
+        ok('Retirer une ligne la retire vraiment',(()=>{
+          bilData={};
+          _bSportAjouter('deb-sports'); _bSportAjouter('deb-sports');
+          _bSportSet('deb-sports',1,'sport','Yoga');
+          _bSportRetirer('deb-sports',0);
+          const l=bilData['deb-sports'];
+          bilData={};
+          return l.length===1&&l[0].sport==='Yoga';})());
+        ok('La liste déroulante propose tous les sports de la table',(()=>{
+          bilData={'deb-sports':[{sport:'Marche',intensite:'faible',heures:1}]};
+          const h=bSports('deb-sports');
+          const manquants=Object.keys(SPORTS_KCAL_H).filter(n=>h.indexOf('>'+n+'<')<0);
+          bilData={};
+          return manquants.length?_echec('absents : '+manquants.join(', ')):true;})());
+        ok('Le total hebdomadaire est affiché dans le widget',(()=>{
+          bilData={'deb-sports':[{sport:'Boxe',intensite:'haute',heures:2}]};
+          const h=bSports('deb-sports');
+          bilData={};
+          return /1600 kcal par semaine/.test(h)&&/229 kcal par jour/.test(h);})());
+        ok('Le widget dit d\'y compter les séances RepCore',(()=>{
+          bilData={};
+          const h=bSports('deb-sports');
+          return /séances RepCore incluses/.test(h)&&/Musculation/.test(h);})());
+        ok('Le bilan ne pose plus la question en texte libre',(()=>{
+          const src=DEB_STEPS.map(f=>f.toString()).join('');
+          return src.indexOf('deb-other-sports')<0&&src.indexOf("bSports('deb-sports')")>=0
+            &&src.indexOf("bMetier('deb-job')")>=0;})());
+      })();
+
+      if(sauveB!==null) bilData=sauveB;
+      currentUser=sauveU;
+    })();
 
     // ══════════════ POINT DE DÉPART NUTRITIONNEL ══════════════
     (function(){
