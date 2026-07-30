@@ -1167,6 +1167,7 @@ const COACH_PHOTO='icons/coach.jpg';
           </div>
           <div class="sub" id="ch-count" style="font-size:11px;letter-spacing:.5px"></div>
           <div class="sub" id="ch-sans-reponse" style="font-size:11px;letter-spacing:.5px;color:var(--orange)"></div>
+          <button onclick="openDechargeGroupee()" class="btn btn-outline btn-sm" style="width:100%;margin:2px 0 0">Décharge groupée</button>
         </div>
         <div id="ch-clients-list"></div>
       </div>
@@ -1556,6 +1557,25 @@ const COACH_PHOTO='icons/coach.jpg';
         <button onclick="cpaSelectAll(false)" class="btn btn-outline btn-sm" style="flex:1">Tout décocher</button>
       </div>
       <div id="cpa-athletes"></div>
+    </div>
+  </div>
+</div>
+
+<!-- DÉCHARGE GROUPÉE -->
+<div id="s-coach-decharge" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="go('s-coach-home')">←</button>
+    <span class="topbar-title">Décharge groupée</span>
+    <button id="cdg-appliquer" onclick="confirmDechargeGroupee()" disabled style="background:#222;border:none;color:var(--text-dim);padding:7px 14px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:not-allowed;letter-spacing:1px;border-radius:3px">APPLIQUER</button>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <p class="sub" style="font-size:12px;margin-bottom:4px;line-height:1.6">Les séances actives des athlètes cochés seront marquées « décharge » et sortiront de la détection de plateau. Aucun décochage automatique : c'est toi qui la retires ensuite.</p>
+      <div style="display:flex;gap:8px;margin-bottom:16px;margin-top:12px">
+        <button onclick="cdgSelectAll(true)" class="btn btn-outline btn-sm" style="flex:1">Tout sélectionner</button>
+        <button onclick="cdgSelectAll(false)" class="btn btn-outline btn-sm" style="flex:1">Tout décocher</button>
+      </div>
+      <div id="cdg-athletes"></div>
     </div>
   </div>
 </div>
@@ -8688,6 +8708,85 @@ function _confirmerEcrasement(src,dst){
   return confirm(dst.day+' contient déjà '+n+' exercice'+(n>1?'s':'')
     +'.\nLes remplacer par ceux de '+src.day+' ?');
 }
+// ── Duplication de séance ───────────────────────────────────────────────────
+// Le NOM porte une conséquence : _memeCreneau compare d'abord le slot, mais
+// retombe sur le nom quand une séance ancienne a été enregistrée sans slot.
+// Trois « PUSH » sur trois créneaux mélangeraient alors leurs historiques
+// d'exercice. Une copie reçoit donc toujours une lettre libre — « PUSH B »,
+// puis « PUSH C ». C'est exactement ce que _copierSeance ne faisait pas :
+// il recopiait le nom tel quel.
+const _RE_SUFFIXE_COPIE=/^(.*\S)\s+([B-Z])$/;
+function _baseNomSeance(nom){
+  const s=String(nom||'').trim();
+  const m=_RE_SUFFIXE_COPIE.exec(s);
+  return m?m[1]:s;
+}
+// Premier nom « <base> <lettre> » que ne porte aucun AUTRE créneau. Le créneau
+// destination est exclu de la comparaison : il est sur le point d'être écrasé.
+function _nomSeanceLibre(cfg,nomSource,slotDest){
+  const base=_baseNomSeance(nomSource);
+  if(!base) return '';
+  const pris=new Set();
+  (cfg||[]).forEach((s,i)=>{
+    if(i===slotDest||!s||!s.name) return;
+    pris.add(String(s.name).trim().toUpperCase());
+  });
+  for(let c=66;c<=90;c++){                       // B … Z
+    const n=base+' '+String.fromCharCode(c);
+    if(!pris.has(n.toUpperCase())) return n;
+  }
+  // Vingt-cinq lettres épuisées. On ne rend JAMAIS un nom déjà porté : mieux
+  // vaut un nom laid qu'un historique mélangé.
+  return base+' '+Date.now();
+}
+// PURE : ne lit ni le DOM ni le stockage, ne demande rien, n'écrit rien.
+// La confirmation et l'instantané appartiennent à l'appelant.
+function dupliquerSeance(cfg,slotSource,slotDest){
+  if(!Array.isArray(cfg)) return {ok:false,raison:'Aucune configuration de séances.'};
+  if(slotSource===slotDest) return {ok:false,raison:'Source et destination identiques.'};
+  const src=cfg[slotSource], dst=cfg[slotDest];
+  if(!src||!dst) return {ok:false,raison:'Créneau inconnu.'};
+  if(!src.active||!((src.exercises||[]).length))
+    return {ok:false,raison:'Le créneau source est vide : rien à dupliquer.'};
+  const nom=_nomSeanceLibre(cfg,src.name,slotDest);
+  // Copie PROFONDE. Le {...e} par exercice de _copierSeance laissait partagé
+  // tout objet imbriqué : modifier la copie touchait la source.
+  dst.name=nom;
+  dst.exercises=JSON.parse(JSON.stringify(src.exercises||[]));
+  dst.warmup=src.warmup||'';
+  dst.cooldown=src.cooldown||'';
+  dst.notes=src.notes||'';
+  dst.active=true;
+  // La photo n'est JAMAIS copiée : c'est du base64 en localStorage, et la
+  // dupliquer doublerait le poids du dossier pour une image identique.
+  dst.photo=null; dst.photo2=null;
+  // Une séance dupliquée volontairement n'est plus un exemple.
+  delete dst._essai; delete dst._foundation;
+  _normaliserSS(dst.exercises);
+  return {ok:true,nom};
+}
+// ── Duplication d'un exercice dans l'éditeur ────────────────────────────────
+// La copie se pose juste après sa source, SAUF quand celle-ci ouvre un
+// superset : s'insérer au milieu volerait la suite du groupe à la source.
+// Dans ce cas la copie se pose après le groupe entier, et reste seule.
+function _dupliquerExUI(i){
+  if(!dupliquerExercice(i)) return;
+  renderProgEx();
+  toast('Exercice dupliqué');
+}
+function dupliquerExercice(i){
+  if(!progEx||!progEx[i]) return false;
+  const copie=JSON.parse(JSON.stringify(progEx[i]));
+  copie.name=((progEx[i].name||'')+' (COPIE)').trim().toUpperCase();
+  const groupe=_groupeDe(progEx,i);
+  const tete=groupe[0]===i&&groupe.length>1;
+  if(tete) copie.ss=false;
+  progEx.splice((tete?groupe[groupe.length-1]:i)+1,0,copie);
+  _normaliserSS(progEx);
+  _progExDirty=true;
+  return true;
+}
+
 function cptCopyDay(i,j){
   if(_editProgTemplateIdx===null) return;
   const p=currentUser.coachPrograms[_editProgTemplateIdx];
@@ -8700,14 +8799,25 @@ function cptCopyDay(i,j){
   // appartient au bouton SAUVEGARDER de l'écran.
   toast(src.day+' → '+dst.day+' ✓');
 }
+// Le programme d'un ATHLÈTE passe par dupliquerSeance : copie profonde, nom
+// unique, photo non reprise. cptCopyDay garde _copierSeance — un modèle n'a ni
+// historique d'exercice ni _memeCreneau à protéger.
+// Aucun _pushSessionsHistory ici : cet écran n'écrit rien avant SAUVEGARDER, et
+// c'est saveCoachSessions qui archive la version STOCKÉE — donc bien celle
+// d'avant la duplication. Un instantané posé sur la copie en mémoire serait
+// écrasé à la sauvegarde et ne survivrait à aucun rechargement.
 function coachCopyDay(i,j){
   const sc=_coachEditClient?.sessions_config;
   if(!sc) return;
   const src=sc[i],dst=sc[j];
-  if(!src||!dst||!_confirmerEcrasement(src,dst)) return;
-  _copierSeance(src,dst);
+  if(!src||!dst) return;
+  if(!src.active||!((src.exercises||[]).length)){
+    toast('Le créneau source est vide : rien à dupliquer.','var(--orange)'); return; }
+  if(!_confirmerEcrasement(src,dst)) return;
+  const r=dupliquerSeance(sc,i,j);
+  if(!r.ok){ toast(r.raison,'var(--orange)'); return; }
   loadCoachSessionSlots();
-  toast(src.day+' → '+dst.day+' ✓');
+  toast(src.day+' → '+dst.day+' : '+r.nom+' ✓');
 }
 
 function cptToggleDay(i){
@@ -9155,7 +9265,14 @@ function saveCoachSessions(){
   if(!getOwnedClient(currentClientId,users)) return;
   const emailKey=Object.keys(users).find(k=>users[k]?.id===currentClientId);
   if(!emailKey){toast('Athlète introuvable','var(--orange)');return;}
+  // L'instantané se pose sur l'objet STOCKÉ, mais la ligne qui suivait
+  // — users[emailKey]=c — le remplaçait par _coachEditClient, copie profonde
+  // prise à l'ouverture de l'écran. L'entrée qui venait d'être créée était donc
+  // jetée à chaque sauvegarde, et la liste de rollback du coach ne grossissait
+  // jamais. On archive la version stockée, puis on REPORTE l'historique sur la
+  // copie qui va être écrite.
   _pushSessionsHistory(users[emailKey]); // snapshot avant écrasement
+  c.sessions_config_history=users[emailKey].sessions_config_history;
   // Le coach publie : ce n'est plus un repli, même s'il valide la Fondation
   // telle quelle. Sans ça, l'athlète continuerait de lire « ton coach n'a pas
   // encore publié ton programme » devant un programme bel et bien publié.
@@ -9838,7 +9955,10 @@ function renderProgEx(){
           <span style="background:#fff2;border-radius:50%;min-width:22px;height:22px;padding:0 5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0">${_repereEx(progEx,i)}</span>
           <input value="${escapeHtml(ex.name||'')}" onchange="_progExDirty=true;progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase()" placeholder="NOM DE L'EXERCICE (MATÉRIELS)" style="background:transparent;border:none;color:#fff;font-family:Montserrat,sans-serif;font-weight:800;font-size:13px;outline:none;text-transform:uppercase;flex:1">
         </div>
-        <button onclick="_supprimerEx(${i})" aria-label="Supprimer cet exercice" style="background:#fff2;border:none;color:#fff;font-size:14px;cursor:pointer;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center">${icon('trash',13)}</button>
+        <span style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          <button onclick="_dupliquerExUI(${i})" aria-label="Dupliquer cet exercice" title="Dupliquer" style="background:#fff2;border:none;color:#fff;font-size:11px;font-weight:800;cursor:pointer;border-radius:12px;height:24px;padding:0 9px;display:flex;align-items:center;justify-content:center;font-family:inherit">COPIE</button>
+          <button onclick="_supprimerEx(${i})" aria-label="Supprimer cet exercice" style="background:#fff2;border:none;color:#fff;font-size:14px;cursor:pointer;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center">${icon('trash',13)}</button>
+        </span>
       </div>
       <div style="padding:12px">
         <!-- Description technique -->
@@ -16356,6 +16476,141 @@ function _htmlBoutonDecharge(c){
     <button class="btn btn-outline btn-sm" onclick="programmerDecharge()" style="letter-spacing:1px;font-size:10px">${dejaTout?'Décharge déjà programmée':'Programmer une semaine de décharge'}</button>
   </div>`;
 }
+// ══════════════ DÉCHARGE GROUPÉE ══════════════
+// Même geste que programmerDecharge, sur plusieurs athlètes. Rien n'est
+// implicite : aucune case n'est cochée au départ, le récapitulatif nomme les
+// athlètes touchés, et le rapport final NOMME chaque échec. Un athlète qu'on
+// croit traité et qui ne l'est pas, c'est une semaine d'entraînement fausse.
+const _DECHARGE_LOT_MAX=40;
+function _nomAthlete(a){
+  const n=((a&&a.fname)||'')+' '+((a&&a.lname)||'');
+  return n.trim()||((a&&a.email)||'Athlète sans nom');
+}
+// Phase LOCALE, synchrone et testable : qui peut être traité, qui ne peut pas
+// et pourquoi. Ne touche ni au stockage ni au réseau, et ne modifie rien.
+function _preparerDechargeGroupee(ids,users){
+  const cibles=[], echecs=[];
+  const tous=users||{};
+  for(const id of (ids||[])){
+    const c=Object.values(tous).find(u=>u&&u.id===id&&u.coachId===(currentUser&&currentUser.id));
+    if(!c){ echecs.push({nom:String(id),raison:'élève introuvable ou non autorisé'}); continue; }
+    // Un élève créé par code n'a pas encore de dossier : programmerDecharge le
+    // refuse déjà un par un, on le refuse ici AVEC son nom.
+    if(c._fromCode||!c.email){
+      echecs.push({nom:_nomAthlete(c),raison:'dossier non synchronisé'}); continue; }
+    const actifs=((c.sessions_config)||[]).map((x,i)=>({x,i})).filter(o=>o.x&&o.x.active);
+    if(!actifs.length){ echecs.push({nom:_nomAthlete(c),raison:'aucun créneau actif'}); continue; }
+    cibles.push({c,nom:_nomAthlete(c),n:actifs.length,index:actifs.map(o=>o.i)});
+  }
+  return {cibles,echecs};
+}
+// Écriture, athlète par athlète, par le chemin de programmerDecharge : carte
+// users + DB.set + CLOUD.pushOne. Un envoi refusé n'arrête pas les suivants et
+// ne perd pas l'écriture locale — il est simplement rapporté.
+async function appliquerDechargeGroupee(ids){
+  const users=DB.get('users')||{};
+  const {cibles,echecs}=_preparerDechargeGroupee(ids,users);
+  const faits=[];
+  for(const cible of cibles){
+    cible.index.forEach(i=>{ cible.c.sessions_config[i].deload=true; });
+    cible.c.updatedAt=Date.now();
+    users[cible.c.email]=cible.c;
+    const localOk=DB.set('users',users);
+    if(!localOk){ echecs.push({nom:cible.nom,raison:'écriture locale refusée'}); continue; }
+    try{ await CLOUD.pushOne(cible.c.email,cible.c); faits.push(cible.nom); }
+    catch(e){ echecs.push({nom:cible.nom,raison:'envoi refusé'}); }
+  }
+  // Les caches se purgent une fois le lot passé : ils sont globaux, les vider
+  // à chaque athlète ne ferait que répéter le même travail.
+  _viderCachePlateau();
+  _viderCacheSignaux();
+  return {faits,echecs,total:(ids||[]).length};
+}
+// « Décharge appliquée à 6 athlètes sur 8. Échec pour Untel (dossier non
+// synchronisé) et Unetelle (envoi refusé). » Aucun échec silencieux.
+function _rapportDecharge(r){
+  const n=r.faits.length;
+  let s='Décharge appliquée à '+n+' athlète'+(n>1?'s':'')+' sur '+r.total+'.';
+  if(r.echecs.length){
+    const l=r.echecs.map(e=>e.nom+' ('+e.raison+')');
+    const dernier=l.pop();
+    s+=' Échec pour '+(l.length?l.join(', ')+' et '+dernier:dernier)+'.';
+  }
+  return s;
+}
+
+// ── Écran de sélection ──────────────────────────────────────────────────────
+function openDechargeGroupee(){
+  go('s-coach-decharge');
+  loadDechargeAthletes();
+}
+function loadDechargeAthletes(){
+  const users=DB.get('users')||{};
+  const athletes=Object.values(users)
+    .filter(u=>u&&u.coachId===(currentUser&&currentUser.id)&&u.role!=='coach');
+  const el=document.getElementById('cdg-athletes');
+  if(!el) return;
+  if(!athletes.length){
+    el.innerHTML='<div style="text-align:center;padding:24px;color:var(--sub);font-size:12px">Aucun athlète lié à ton compte.</div>';
+    _cdgMajBouton(); return;
+  }
+  el.innerHTML=athletes.map(a=>{
+    const n=((a.sessions_config)||[]).filter(s=>s&&s.active).length;
+    // Un athlète qui ne peut pas être traité reste VISIBLE et cochable : c'est
+    // le récapitulatif qui dira pourquoi. Le masquer ferait croire au coach
+    // qu'il n'existe pas.
+    const empeche=(!a.email?'dossier non synchronisé':(!n?'aucun créneau actif':''));
+    return `<div style="display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid #181818">
+      <input type="checkbox" id="cdg-cb-${escapeHtml(a.id)}" value="${escapeHtml(a.id)}" onchange="_cdgMajBouton()" style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
+      <label for="cdg-cb-${escapeHtml(a.id)}" style="flex:1;cursor:pointer;min-width:0">
+        <div style="font-weight:700;font-size:13px">${escapeHtml(_nomAthlete(a))}</div>
+        <div class="sub" style="font-size:11px;color:${empeche?'var(--orange)':'var(--sub)'}">${empeche?escapeHtml(empeche):(n+' créneau'+(n>1?'x':'')+' actif'+(n>1?'s':''))}</div>
+      </label>
+    </div>`;
+  }).join('');
+  _cdgMajBouton();
+}
+function _cdgCoches(){
+  return [...document.querySelectorAll('#cdg-athletes input[type=checkbox]:checked')]
+    .map(cb=>cb.value);
+}
+// Le bouton ne s'allume qu'à partir d'un athlète coché : appliquer une décharge
+// à personne n'est pas une action, c'est une erreur silencieuse.
+function _cdgMajBouton(){
+  const b=document.getElementById('cdg-appliquer');
+  if(!b) return;
+  const n=_cdgCoches().length;
+  b.disabled=!n;
+  b.style.background=n?'var(--red)':'#222';
+  b.style.color=n?'#fff':'var(--text-dim)';
+  b.style.cursor=n?'pointer':'not-allowed';
+}
+function cdgSelectAll(v){
+  document.querySelectorAll('#cdg-athletes input[type=checkbox]').forEach(cb=>{cb.checked=v;});
+  _cdgMajBouton();
+}
+// Récapitulatif NOMMÉ avant d'écrire : le coach voit qui est touché, sur
+// combien de créneaux, et qui ne le sera pas.
+async function confirmDechargeGroupee(){
+  const ids=_cdgCoches();
+  if(!ids.length) return;
+  const users=DB.get('users')||{};
+  const prep=_preparerDechargeGroupee(ids,users);
+  const nl=String.fromCharCode(10);
+  let txt='Programmer une semaine de décharge ?'+nl+nl;
+  txt+=prep.cibles.length
+    ?prep.cibles.map(x=>'· '+x.nom+' — '+x.n+' créneau'+(x.n>1?'x':'')).join(nl)
+    :'Aucun athlète traitable dans cette sélection.';
+  if(prep.echecs.length) txt+=nl+nl+'Ne seront PAS traités :'+nl
+    +prep.echecs.map(e=>'· '+e.nom+' ('+e.raison+')').join(nl);
+  if(!prep.cibles.length){ alert(txt); return; }
+  if(!confirm(txt)) return;
+  const r=await appliquerDechargeGroupee(ids);
+  loadDechargeAthletes();
+  // Une liste d'échecs ne se lit pas en deux secondes de toast.
+  if(r.echecs.length) alert(_rapportDecharge(r)); else toast(_rapportDecharge(r));
+}
+
 function programmerDecharge(){
   // Ecriture par la carte des utilisateurs, comme toute autre modification
   // depuis la fiche athlete : _coachEditClient est une copie profonde reservee
@@ -25607,6 +25862,57 @@ async function testNotifs(){
     ok('Aucune date UTC ne sert plus de clé de déduplication',
        !/toISOString\(\)\.slice/.test(src));
   }
+
+  // ── Décharge groupée : ce qui ne se vérifie qu'après l'écriture ──────────
+  {
+    const _sU=currentUser, _sUsers=DB.get('users');
+    try{
+      currentUser={id:'coZ',email:'coz@t.fr',role:'coach',exAlias:{},exMuscles:{},
+        sessions:[],bilans:[]};
+      const jour=(n)=>({day:'J'+n,name:'S'+n,active:true,photo:null,photo2:null,
+        warmup:'',cooldown:'',notes:'',exercises:[{name:'SQUAT',series:3,reps:'8'}]});
+      const mk=(id,fn,em,n)=>({id,fname:fn,lname:'Z',role:'athlete',coachId:'coZ',
+        email:em,exAlias:{},exMuscles:{},sessions:[],bilans:[],
+        sessions_config:Array.from({length:n},(_,k)=>jour(k))});
+      const a=mk('zA','Anna','annaz@t.fr',2), b=mk('zB','Bruno','brunoz@t.fr',1),
+            c=mk('zC','Chloe','',1);
+      const u={}; u[a.email]=a; u[b.email]=b; u['_sansmail_zC']=c;
+      DB.set('users',u);
+      // On empoisonne les deux caches : s'ils ne sont pas purgés, la décharge
+      // resterait invisible pour la détection de plateau et les signaux.
+      _cachePlateau['sentinelle']={x:1};
+      _cacheSignaux.set('sentinelle',1);
+      const r=await appliquerDechargeGroupee(['zA','zB','zC']);
+      ok('Critère : la décharge groupée vide le cache de plateau',
+         _cachePlateau['sentinelle']===undefined,
+         'la sentinelle a survécu');
+      ok('Critère : la décharge groupée vide le cache de signaux',
+         !_cacheSignaux.has('sentinelle'),'la sentinelle a survécu');
+      ok('La décharge groupée marque bien les créneaux actifs',(()=>{
+        const ap=DB.get('users')['annaz@t.fr'];
+        return ((ap&&ap.sessions_config)||[]).every(s=>s.deload===true);})(),
+        'des créneaux sont restés sans décharge');
+      // L'envoi ne peut pas aboutir ici : le bac à sable n'a pas de jeton, donc
+      // les deux athlètes synchronisés ressortent en « envoi refusé ». C'est le
+      // chemin d'échec, et il doit rester COMPLET — on vérifie donc que chaque
+      // athlète sélectionné est rapporté exactement une fois, et que celui qui
+      // n'a pas de dossier est distingué de celui dont l'envoi a échoué.
+      ok('Aucun échec silencieux : chaque athlète est rapporté une fois',
+         r.faits.length+r.echecs.length===3&&r.total===3,
+         JSON.stringify({faits:r.faits,echecs:r.echecs}));
+      ok('L\'athlète sans dossier est nommé, et pour la BONNE raison',
+         r.echecs.some(e=>/Chloe/.test(e.nom)&&e.raison==='dossier non synchronisé'),
+         JSON.stringify(r.echecs));
+      ok('Un athlète synchronisé n\'est jamais dit « non synchronisé »',
+         !r.echecs.some(e=>/Anna|Bruno/.test(e.nom)&&e.raison==='dossier non synchronisé'),
+         JSON.stringify(r.echecs));
+    } finally {
+      currentUser=_sU;
+      if(_sUsers) DB.set('users',_sUsers);
+      _viderCachePlateau(); _viderCacheSignaux();
+    }
+  }
+
 
   const ko=R.filter(r=>!r.ok);
   console.log('%c'+R.length+' vérifications Service Worker, '+ko.length+' en échec',
@@ -35101,6 +35407,219 @@ function testExercices(){
         return manque.length?_echec('absents de BILAN_QUESTIONS : '+manque.join(', ')):true;})());
     })();
 
+
+    // ══ DUPLICATION ET DÉCHARGE GROUPÉE ══════════════════════════════════
+    (()=>{
+      const _sU=currentUser;
+      const _sCid=(typeof currentClientId!=='undefined')?currentClientId:null;
+      const _sCE=(typeof _coachEditClient!=='undefined')?_coachEditClient:null;
+      const _sPE=progEx.slice();
+      const _jour=(d,nom,exos,actif)=>({day:d,name:nom,active:actif!==false,
+        photo:null,photo2:null,warmup:'É',cooldown:'C',notes:'N',
+        exercises:(exos||[]).map(e=>({...e}))});
+      const _ex=n=>({name:n,series:3,reps:'8',repos:'2 min'});
+      try{
+        // ── Duplication de séance ─────────────────────────────────────────
+        ok('Critère : la duplication copie tous les exercices',(()=>{
+          const cfg=[_jour('Lundi','PUSH',[_ex('SQUAT'),_ex('DIPS')]),
+                     _jour('Mardi','',[],false)];
+          const r=dupliquerSeance(cfg,0,1);
+          if(!r.ok) return _echec(r.raison);
+          return cfg[1].exercises.length===2&&cfg[1].exercises[1].name==='DIPS'
+            ?true:_echec(JSON.stringify(cfg[1].exercises));})());
+        ok('Critère : la copie est PROFONDE, la source ne bouge plus',(()=>{
+          // Un champ IMBRIQUÉ est indispensable ici : {...e} recopie déjà tous
+          // les scalaires, et un test qui ne touche que series ou name passerait
+          // aussi bien sur une copie superficielle. Aucun exercice ne porte
+          // d'objet imbriqué aujourd'hui — c'est le CONTRAT de dupliquerSeance
+          // qui est vérifié, pour que le jour où un tel champ apparaît la
+          // source ne bouge pas.
+          const cfg=[_jour('Lundi','PUSH',[_ex('SQUAT')]),_jour('Mardi','',[],false)];
+          cfg[0].exercises[0].meta={charge:'lourde'};
+          dupliquerSeance(cfg,0,1);
+          cfg[1].exercises[0].series=99;
+          cfg[1].exercises[0].name='MODIFIE';
+          cfg[1].exercises[0].meta.charge='legere';
+          if(cfg[0].exercises[0].meta.charge!=='lourde')
+            return _echec('champ imbriqué partagé : '+cfg[0].exercises[0].meta.charge);
+          return cfg[0].exercises[0].series===3&&cfg[0].exercises[0].name==='SQUAT'
+            ?true:_echec('la source a bougé : '+JSON.stringify(cfg[0].exercises[0]));})());
+        ok('Critère : deux duplications donnent PUSH B puis PUSH C',(()=>{
+          const cfg=[_jour('Lundi','PUSH',[_ex('SQUAT')]),_jour('Mardi','',[],false),
+                     _jour('Mercredi','',[],false)];
+          const r1=dupliquerSeance(cfg,0,1);
+          const r2=dupliquerSeance(cfg,0,2);
+          return r1.nom==='PUSH B'&&r2.nom==='PUSH C'
+            ?true:_echec(r1.nom+' puis '+r2.nom);})());
+        ok('Dupliquer une copie repart de la base, pas de « PUSH B B »',(()=>{
+          const cfg=[_jour('Lundi','PUSH',[_ex('SQUAT')]),_jour('Mardi','',[],false),
+                     _jour('Mercredi','',[],false)];
+          dupliquerSeance(cfg,0,1);            // PUSH B
+          const r=dupliquerSeance(cfg,1,2);    // depuis PUSH B
+          return r.nom==='PUSH C'?true:_echec(r.nom);})());
+        ok('Trois séances homonymes ne partagent JAMAIS un nom',(()=>{
+          const cfg=[_jour('Lundi','PUSH',[_ex('SQUAT')]),_jour('Mardi','',[],false),
+                     _jour('Mercredi','',[],false)];
+          dupliquerSeance(cfg,0,1); dupliquerSeance(cfg,0,2);
+          const noms=cfg.map(s=>s.name);
+          return new Set(noms).size===noms.length?true:_echec(noms.join(' / '));})());
+        ok('Critère : la photo n\'est pas copiée',(()=>{
+          const cfg=[_jour('Lundi','PUSH',[_ex('SQUAT')]),_jour('Mardi','',[],false)];
+          cfg[0].photo='data:image/png;base64,AAAA'; cfg[0].photo2='data:image/png;base64,BBBB';
+          dupliquerSeance(cfg,0,1);
+          return cfg[1].photo===null&&cfg[1].photo2===null
+            ?true:_echec('photo '+cfg[1].photo+' / '+cfg[1].photo2);})());
+        ok('Un créneau source vide refuse la duplication',(()=>{
+          const cfg=[_jour('Lundi','',[],false),_jour('Mardi','',[],false)];
+          const r=dupliquerSeance(cfg,0,1);
+          return r.ok===false&&/vide/.test(r.raison)?true:_echec(JSON.stringify(r));})());
+        ok('L\'échauffement, le retour au calme et les notes suivent',(()=>{
+          const cfg=[_jour('Lundi','PUSH',[_ex('SQUAT')]),_jour('Mardi','',[],false)];
+          dupliquerSeance(cfg,0,1);
+          return cfg[1].warmup==='É'&&cfg[1].cooldown==='C'&&cfg[1].notes==='N'
+            ?true:_echec(JSON.stringify([cfg[1].warmup,cfg[1].cooldown,cfg[1].notes]));})());
+
+        ok('Critère : le rollback ramène la configuration d\'avant duplication',(()=>{
+          // On rejoue le geste RÉEL : ouverture de l'éditeur, duplication,
+          // SAUVEGARDER. Lire le code ne prouverait rien — l'instantané était
+          // justement posé au bon endroit et jeté à la ligne suivante.
+          const sauveUsers=DB.get('users');
+          const sauveCid=currentClientId;
+          try{
+            currentUser={id:'coR',email:'cor@t.fr',role:'coach',exAlias:{},
+              exMuscles:{},sessions:[],bilans:[]};
+            const athlete={id:'atR',email:'atr@t.fr',fname:'Rita',lname:'R',
+              role:'athlete',coachId:'coR',exAlias:{},exMuscles:{},sessions:[],
+              bilans:[],sessions_config:[_jour('Lundi','PUSH',[_ex('SQUAT')]),
+                                         _jour('Mardi','',[],false)]};
+            const u={}; u[athlete.email]=JSON.parse(JSON.stringify(athlete));
+            DB.set('users',u);
+            currentClientId='atR';
+            _coachEditClient=JSON.parse(JSON.stringify(athlete));
+            const avant=JSON.stringify(_coachEditClient.sessions_config);
+            const r=dupliquerSeance(_coachEditClient.sessions_config,0,1);
+            if(!r.ok) return _echec('duplication refusée : '+r.raison);
+            saveCoachSessions();
+            const stocke=DB.get('users')['atr@t.fr'];
+            const hist=(stocke&&stocke.sessions_config_history)||[];
+            if(!hist.length) return _echec('aucun instantané conservé');
+            if(stocke.sessions_config[1].name!=='PUSH B')
+              return _echec('la duplication n\'a pas été enregistrée');
+            return JSON.stringify(hist[0].sessions_config)===avant
+              ?true:_echec('l\'instantané ne correspond pas à l\'état d\'avant');
+          } finally {
+            if(sauveUsers) DB.set('users',sauveUsers);
+            currentClientId=sauveCid;
+          }})());
+
+        // ── Duplication d'exercice ────────────────────────────────────────
+        ok('Critère : l\'exercice dupliqué se pose juste après sa source',(()=>{
+          progEx.length=0;
+          progEx.push(_ex('SQUAT'),_ex('DIPS'));
+          dupliquerExercice(0);
+          return progEx.length===3&&progEx[1].name==='SQUAT (COPIE)'&&progEx[2].name==='DIPS'
+            ?true:_echec(progEx.map(e=>e.name).join(' / '));})());
+        ok('La copie d\'exercice est PROFONDE',(()=>{
+          progEx.length=0;
+          progEx.push({name:'SQUAT',series:3,reps:'8',meta:{note:'lourd'}});
+          dupliquerExercice(0);
+          progEx[1].meta.note='leger';
+          return progEx[0].meta.note==='lourd'
+            ?true:_echec('la source a bougé : '+progEx[0].meta.note);})());
+        ok('Dupliquer la tête d\'un superset ne casse pas le groupe',(()=>{
+          progEx.length=0;
+          progEx.push(_ex('SQUAT'),Object.assign(_ex('DIPS'),{ss:true}));
+          dupliquerExercice(0);
+          // Le superset SQUAT+DIPS reste entier, la copie vient après.
+          return _groupesEx(progEx).length===2&&progEx[2].name==='SQUAT (COPIE)'
+            &&progEx[1].name==='DIPS'&&progEx[2].ss!==true
+            ?true:_echec(progEx.map(e=>e.name+(e.ss?'*':'')).join(' / '));})());
+        ok('La duplication d\'exercice marque l\'éditeur comme modifié',(()=>{
+          progEx.length=0; progEx.push(_ex('SQUAT'));
+          _progExDirty=false;
+          dupliquerExercice(0);
+          return _progExDirty===true?true:_echec('_progExDirty reste faux');})());
+
+        // ── Décharge groupée ──────────────────────────────────────────────
+        const _trois=()=>{
+          currentUser={id:'coD',email:'cod@t.fr',role:'coach',exAlias:{},exMuscles:{},
+            sessions:[],bilans:[]};
+          const mk=(id,fn,em,nAct)=>({id,fname:fn,lname:'T',role:'athlete',coachId:'coD',
+            email:em,exAlias:{},exMuscles:{},sessions:[],bilans:[],
+            sessions_config:Array.from({length:nAct},(_,k)=>_jour('J'+k,'S'+k,[_ex('SQUAT')]))});
+          const u={};
+          const a=mk('dA','Anna','anna@t.fr',2), b=mk('dB','Bruno','bruno@t.fr',3),
+                c=mk('dC','Chloe','',1);
+          u[a.email]=a; u[b.email]=b; u['_sansmail_dC']=c;
+          return u;
+        };
+        ok('Critère : 3 athlètes dont 1 sans email → 2 traités, 1 nommé',(()=>{
+          const u=_trois();
+          const p=_preparerDechargeGroupee(['dA','dB','dC'],u);
+          if(p.cibles.length!==2) return _echec(p.cibles.length+' cibles');
+          if(p.echecs.length!==1) return _echec(p.echecs.length+' échecs');
+          return /Chloe/.test(p.echecs[0].nom)&&/non synchronisé/.test(p.echecs[0].raison)
+            ?true:_echec(JSON.stringify(p.echecs[0]));})());
+        ok('Le récapitulatif compte les créneaux de chacun',(()=>{
+          const u=_trois();
+          const p=_preparerDechargeGroupee(['dA','dB'],u);
+          const n=p.cibles.map(x=>x.n).join(',');
+          return n==='2,3'?true:_echec(n);})());
+        ok('Un athlète d\'un AUTRE coach est refusé, jamais traité',(()=>{
+          const u=_trois();
+          Object.values(u).forEach(a=>{ if(a.id==='dA') a.coachId='autre'; });
+          const p=_preparerDechargeGroupee(['dA','dB'],u);
+          return p.cibles.length===1&&p.cibles[0].nom==='Bruno T'
+            ?true:_echec(JSON.stringify(p.cibles.map(x=>x.nom)));})());
+        ok('Un athlète sans créneau actif est nommé, pas ignoré',(()=>{
+          const u=_trois();
+          Object.values(u).forEach(a=>{ if(a.id==='dA') a.sessions_config=[]; });
+          const p=_preparerDechargeGroupee(['dA'],u);
+          return p.echecs.length===1&&/aucun créneau actif/.test(p.echecs[0].raison)
+            ?true:_echec(JSON.stringify(p.echecs));})());
+        ok('Le rapport NOMME chaque échec, avec sa raison',(()=>{
+          const s=_rapportDecharge({faits:['Anna T','Bruno T'],total:4,
+            echecs:[{nom:'Chloe T',raison:'dossier non synchronisé'},
+                    {nom:'Dan T',raison:'envoi refusé'}]});
+          return /2 athlètes sur 4/.test(s)&&/Chloe T \(dossier non synchronisé\)/.test(s)
+            &&/et Dan T \(envoi refusé\)/.test(s)?true:_echec(s);})());
+        ok('Sans aucun échec, le rapport ne parle pas d\'échec',(()=>{
+          const s=_rapportDecharge({faits:['Anna T'],total:1,echecs:[]});
+          return !/Échec/.test(s)?true:_echec(s);})());
+        ok('Critère : aucune sélection par défaut, bouton inactif',(()=>{
+          // On rend l'écran RÉELLEMENT, puis on lit l'état du bouton.
+          const u=_trois();
+          const sauve=DB.get('users');
+          try{
+            DB.set('users',u);
+            loadDechargeAthletes();
+            const cbs=[...document.querySelectorAll('#cdg-athletes input[type=checkbox]')];
+            if(!cbs.length) return _echec('aucune case rendue');
+            if(cbs.some(c=>c.checked)) return _echec('une case est cochée au départ');
+            const b=document.getElementById('cdg-appliquer');
+            return b&&b.disabled===true?true:_echec('le bouton est actif');
+          } finally { if(sauve) DB.set('users',sauve); }})());
+        ok('Cocher un athlète active le bouton, décocher le rend inactif',(()=>{
+          const u=_trois();
+          const sauve=DB.get('users');
+          try{
+            DB.set('users',u);
+            loadDechargeAthletes();
+            const cb=document.querySelector('#cdg-athletes input[type=checkbox]');
+            const b=document.getElementById('cdg-appliquer');
+            if(!cb||!b) return _echec('écran non rendu');
+            cb.checked=true; _cdgMajBouton();
+            if(b.disabled) return _echec('le bouton reste inactif après une coche');
+            cb.checked=false; _cdgMajBouton();
+            return b.disabled===true?true:_echec('le bouton reste actif sans coche');
+          } finally { if(sauve) DB.set('users',sauve); }})());
+      } finally {
+        currentUser=_sU;
+        if(_sCid!==null) currentClientId=_sCid;
+        if(typeof _coachEditClient!=='undefined') _coachEditClient=_sCE;
+        progEx.length=0; _sPE.forEach(e=>progEx.push(e));
+      }
+    })();
 
     // ══ RECORDS, TONNAGE, RIR MOYEN, PRESCRIT / RÉALISÉ ═══════════════════
     (()=>{
