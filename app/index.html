@@ -19898,7 +19898,7 @@ function renderCoachCaffeineSection(c){
   if(!el||!c) return;
   const days=c.nutrition?.caffeine?.days||{};
   const wKg=parseFloat(c.weight)||75;
-  const thr=caffeineThresholds(wKg);
+  const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser));
   // Construire les 28 jours
   const today=new Date();
   const totals28=[];
@@ -20106,17 +20106,76 @@ function caffIcone(type,taille){
 // bien au-delà du plafond : l'anneau ne virait au rouge qu'après une dose déjà
 // dangereuse. Les paliers suivent maintenant le poids SANS jamais dépasser 400.
 const CAFFEINE_MAX_EFSA=400;
-function caffeineThresholds(wKg){
-  const w=wKg||75;
-  // orange = seuil de bascule au rouge (cf. _caffeineColor). Plafonné à 400,
-  // donc à 75 kg l'anneau passe au rouge exactement à 400 mg ; un athlète plus
-  // léger bascule plus tôt (5,5 mg/kg), jamais plus tard.
+// Références : avis de l'EFSA de 2015 sur la sécurité de la caféine, repris par
+// l'ANSES. 400 mg par jour pour l'adulte, 3 mg par kilo et par jour pour les
+// enfants et adolescents, 200 mg par jour pendant la grossesse.
+// AGE_MINIMUM vaut 16 : le produit accueille explicitement des utilisateurs de
+// 16 et 17 ans, et privacy.html met cette protection en avant. Leur servir le
+// plafond adulte était un défaut, pas un cas théorique.
+const CAFFEINE_MG_KG_MINEUR=3;
+const CAFFEINE_MAX_GROSSESSE=200;
+// 60 kg et non 75 : un repli sur un poids INCONNU doit tirer les seuils vers le
+// bas, jamais vers le haut. Surestimer le poids relève tous les paliers de
+// quelqu'un dont on ne sait rien.
+const CAFFEINE_POIDS_DEFAUT=60;
+const CAFFEINE_AGE_ADULTE=18;
+// Âge lu par le MÊME chemin que besoinsProposes : le dernier bilan qui porte la
+// réponse, puis les champs d'inscription. Pas de seconde lecture.
+function _ageUtilisateur(user){
+  const v=parseFloat(_dernierChamp(user,'deb-age'))
+    ||parseFloat((user&&user['init-age'])||0)
+    ||parseFloat((user&&user.age)||0);
+  return (v>0)?v:null;
+}
+// grossesse : TODO lot A3-09. Aucun champ de grossesse n'existe aujourd'hui —
+// la note de demi-vie la mentionne, mais rien ne la SAISIT. La branche est
+// écrite et testable ; elle ne s'activera que le jour où A3-09 fournira le
+// champ, et aucun appelant ne passe encore cet argument.
+function caffeineThresholds(wKg,age,grossesse){
+  const w=wKg||CAFFEINE_POIDS_DEFAUT;
+  const mineur=(age!=null&&age<CAFFEINE_AGE_ADULTE);
+  // Le prorata annoncé (50 % / 75 % du plafond) NE REDONNE PAS les valeurs
+  // adultes actuelles : à 75 kg il produirait 200/300 là où la jauge affiche
+  // 150/225 depuis toujours. On conserve donc le calcul historique pour les
+  // adultes — il suit déjà le poids — et le prorata ne sert qu'aux cas où un
+  // plafond plus bas s'impose.
+  if(grossesse!==true&&!mineur){
+    return {
+      green :Math.min(Math.round(w*2),   200),
+      yellow:Math.min(Math.round(w*3),   300),
+      orange:Math.min(Math.round(w*5.5), CAFFEINE_MAX_EFSA),
+      red   :CAFFEINE_MAX_EFSA,
+      regle :'adulte', plafond:CAFFEINE_MAX_EFSA
+    };
+  }
+  const plafond=(grossesse===true)
+    ?CAFFEINE_MAX_GROSSESSE
+    :Math.min(Math.round(CAFFEINE_MG_KG_MINEUR*w), CAFFEINE_MAX_EFSA);
+  // Mêmes proportions visuelles que la jauge adulte : l'anneau se lit de la
+  // même façon, seule l'échelle change.
   return {
-    green :Math.min(Math.round(w*2),   200),
-    yellow:Math.min(Math.round(w*3),   300),
-    orange:Math.min(Math.round(w*5.5), CAFFEINE_MAX_EFSA),
-    red   :CAFFEINE_MAX_EFSA
+    green :Math.round(plafond*0.50),
+    yellow:Math.round(plafond*0.75),
+    orange:plafond,
+    red   :plafond,
+    regle :(grossesse===true)?'grossesse':'mineur', plafond
   };
+}
+// La légende NOMME la règle appliquée. « 400 mg » sans dire d'où il sort
+// n'apprend rien, et un mineur doit savoir que ses seuils ne sont pas ceux
+// d'un adulte.
+function legendeSeuilsCafeine(thr,poidsEstime){
+  if(!thr) return '';
+  let s;
+  if(thr.regle==='grossesse')
+    s='Seuils calculés sur la référence pendant la grossesse ('+CAFFEINE_MAX_GROSSESSE+' mg par jour).';
+  else if(thr.regle==='mineur')
+    s='Seuils calculés sur la référence pour les moins de '+CAFFEINE_AGE_ADULTE+' ans ('+CAFFEINE_MG_KG_MINEUR+' mg par kilo).';
+  else
+    s='Seuils calculés sur la référence adulte (EFSA, '+CAFFEINE_MAX_EFSA+' mg par jour).';
+  if(poidsEstime)
+    s+=' Seuils calculés sur un poids estimé — renseigne ton poids pour qu\'ils soient justes.';
+  return s;
 }
 function caffeineEquiv(mg){
   const n=Math.round(mg/63);
@@ -20131,7 +20190,7 @@ function _caffeineColor(mg,thr){
   return 'var(--danger)';
 }
 function getUserWeight(){
-  if(!currentUser) return {weight:75,estimated:true};
+  if(!currentUser) return {weight:CAFFEINE_POIDS_DEFAUT,estimated:true};
   // Poids du profil (saisi au bilan) puis repli sur l'écran Mon profil
   const w0=parseFloat(currentUser.weight)||parseFloat(currentUser.profileWeight);
   if(w0>0) return {weight:w0,estimated:false};
@@ -20144,7 +20203,7 @@ function getUserWeight(){
     const w1=parseFloat(last['bil-weight']||last['deb-weight']||last.weight||0);
     if(w1>0) return {weight:w1,estimated:false};
   }
-  return {weight:75,estimated:true};
+  return {weight:CAFFEINE_POIDS_DEFAUT,estimated:true};
 }
 function _caffStore(){
   if(!currentUser.nutrition) currentUser.nutrition={};
@@ -20324,7 +20383,12 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
   // que _caffeineColor, sinon l'anneau et le remplissage racontent deux histoires.
   const pct=Math.min(totalMg/thr.orange,1);
   const color=_caffeineColor(totalMg,thr);
-  const wEstHtml=wEst?'<span style="display:block;margin-top:4px;color:var(--warning);font-size:var(--fs-xs)">⚖️ Poids estimé (75 kg) : renseigne ton poids réel pour des seuils précis</span>':'';
+  const wEstHtml=wEst?'<span style="display:block;margin-top:4px;color:var(--warning);font-size:var(--fs-xs)">⚖️ Poids estimé ('+CAFFEINE_POIDS_DEFAUT+' kg) : renseigne ton poids réel pour des seuils précis</span>':'';
+  // La legende NOMME la regle appliquee, juste sous la jauge. Un mineur doit
+  // lire que ses seuils ne sont pas ceux d'un adulte, sans avoir a le deviner
+  // des chiffres.
+  const legendeHtml='<div style="font-size:11px;color:var(--text-dim);line-height:1.5;margin-top:6px">'
+    +escapeHtml(legendeSeuilsCafeine(thr,wEst))+'</div>';
   // Les trois niveaux de bannière suivent les trois bornes de _caffeineColor,
   // pour que la sévérité du message et la couleur de l'anneau coïncident toujours.
   const alertHtml=totalMg>=thr.orange
@@ -20372,6 +20436,7 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
           <span style="display:flex;align-items:center;gap:6px;font-size:var(--fs-xs);color:var(--sub)"><span style="width:8px;height:8px;border-radius:50%;background:var(--danger);display:inline-block;flex-shrink:0"></span>&ge;${thr.orange}mg maximum</span>
         </div>
         ${wEstHtml}
+        ${legendeHtml}
       </div>
     </div>
     <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--surface-2);font-size:var(--fs-xs);color:var(--sub);letter-spacing:.3px">Référence : ${thr.red} mg/j max (EFSA)</div>
@@ -20419,7 +20484,7 @@ function _renderCaffeineScreen(){
   const entries=getCaffeineDay(date);
   const totalMg=entries.reduce((s,e)=>s+(e.mg||0),0);
   const {weight:wKg,estimated:_wEst}=getUserWeight();
-  const thr=caffeineThresholds(wKg);
+  const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser));
   document.getElementById('caff-block').innerHTML=_renderCaffeineBlock(entries,totalMg,thr,'screen',date,_wEst,isToday,dateLbl,wKg);
   requestAnimationFrame(()=>_drawCaffeineHistory(wKg));
 }
@@ -20451,7 +20516,7 @@ function _renderCaffeineEmbedded(){
   const entries=getCaffeineDay(date);
   const totalMg=entries.reduce((s,e)=>s+(e.mg||0),0);
   const {weight:wKg,estimated:_wEst}=getUserWeight();
-  const thr=caffeineThresholds(wKg);
+  const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser));
   el.innerHTML=`
     <div style="margin-bottom:12px">
       <h3 style="margin:0;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--sub);display:flex;align-items:center;gap:5px">${icon('coffee',11)} Caféine</h3>
@@ -20479,7 +20544,7 @@ function _drawCaffeineHistory(wKg,canvasId='caff-history-chart',daysOverride){
   canvas.width=canvas.offsetWidth||340;
   const W=canvas.width,H=canvas.height||140;
   const days=daysOverride!==undefined?daysOverride:_caffStore();
-  const thr=caffeineThresholds(wKg);
+  const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser));
   const labels=[],data=[];
   for(let i=27;i>=0;i--){
     const d=new Date();d.setDate(d.getDate()-i);
@@ -36123,6 +36188,204 @@ function testExercices(){
         return manque.length?_echec('absents de BILAN_QUESTIONS : '+manque.join(', ')):true;})());
     })();
 
+
+    // ══ SEUILS DE CAFÉINE SELON L'ÂGE ════════════════════════════════════
+    (()=>{
+      const _sU=currentUser;
+      try{
+        // ── Non-régression : l'adulte ne bouge pas d'un milligramme ───────
+        ok('Critère : caffeineThresholds(75) sans âge = les valeurs actuelles',(()=>{
+          // Valeurs RELEVÉES dans le code avant écriture, jamais ajustées pour
+          // faire passer le test : min(75*2,200)=150, min(75*3,300)=225,
+          // min(75*5,5,400)=400, 400.
+          const a=caffeineThresholds(75);
+          return a.green===150&&a.yellow===225&&a.orange===400&&a.red===400
+            ?true:_echec(JSON.stringify(a));})());
+        ok('Non-régression : 50 kg et 120 kg inchangés',(()=>{
+          const b=caffeineThresholds(50), c=caffeineThresholds(120);
+          if(b.green!==100||b.yellow!==150||b.orange!==275||b.red!==400)
+            return _echec('50 kg : '+JSON.stringify(b));
+          return c.green===200&&c.yellow===300&&c.orange===400&&c.red===400
+            ?true:_echec('120 kg : '+JSON.stringify(c));})());
+        ok('Un âge adulte donne EXACTEMENT le même résultat que pas d\'âge',(()=>{
+          const sans=caffeineThresholds(75), avec=caffeineThresholds(75,30);
+          const k=['green','yellow','orange','red'];
+          const d=k.filter(x=>sans[x]!==avec[x]);
+          return d.length?_echec('divergence sur '+d.join(',')):true;})());
+
+        // ── Le mineur ─────────────────────────────────────────────────────
+        ok('Critère : caffeineThresholds(70,17).orange === 210',(()=>{
+          const t=caffeineThresholds(70,17);
+          return t.orange===210?true:_echec(JSON.stringify(t));})());
+        ok('Critère : un mineur de 100 kg plafonne à 300, jamais 400',(()=>{
+          const t=caffeineThresholds(100,17);
+          return t.orange===300&&t.red===300
+            ?true:_echec(JSON.stringify(t));})());
+        ok('Critère : un adulte de 70 kg relève bien du plafond EFSA',(()=>{
+          // Le cahier des charges attendait orange === 400. Or orange est le
+          // seuil de BASCULE AU ROUGE, pas le plafond, et la formule
+          // historique — que le même cahier des charges demande de conserver
+          // strictement — donne min(70 × 5,5 ; 400) = 385. Les deux exigences
+          // ne peuvent pas être vraies ensemble : on garde la conservation, et
+          // on vérifie que la RÈGLE appliquée est bien celle de l'adulte.
+          const t=caffeineThresholds(70,30);
+          if(t.plafond!==CAFFEINE_MAX_EFSA) return _echec('plafond '+t.plafond);
+          if(t.regle!=='adulte') return _echec('règle '+t.regle);
+          return t.orange===385&&t.red===CAFFEINE_MAX_EFSA
+            ?true:_echec('orange '+t.orange+' red '+t.red);})());
+        ok('Un mineur ne dépasse JAMAIS le plafond adulte',(()=>{
+          const fautifs=[];
+          for(const w of [40,60,80,100,140,200]){
+            const t=caffeineThresholds(w,16);
+            if(t.orange>CAFFEINE_MAX_EFSA||t.red>CAFFEINE_MAX_EFSA)
+              fautifs.push(w+' kg : '+t.orange);
+          }
+          return fautifs.length?_echec(fautifs.join(' ')):true;})());
+        ok('Les paliers d\'un mineur restent ordonnés',(()=>{
+          const t=caffeineThresholds(70,17);
+          return t.green<t.yellow&&t.yellow<t.orange&&t.orange<=t.red
+            ?true:_echec(JSON.stringify(t));})());
+        ok('À 17 ans le seuil est PLUS BAS qu\'à 18 ans, au même poids',(()=>{
+          const j=caffeineThresholds(70,17), a=caffeineThresholds(70,18);
+          return j.orange<a.orange?true:_echec(j.orange+' vs '+a.orange);})());
+        ok('Un âge sous 16 ans suit la même règle que le mineur',(()=>{
+          const t=caffeineThresholds(70,14);
+          return t.regle==='mineur'&&t.orange===210
+            ?true:_echec(JSON.stringify(t));})());
+        ok('Critère : poids inconnu ET mineur → plafond 180',(()=>{
+          const t=caffeineThresholds(null,17);
+          return t.orange===Math.round(CAFFEINE_MG_KG_MINEUR*CAFFEINE_POIDS_DEFAUT)
+            &&t.orange===180?true:_echec(JSON.stringify(t));})());
+
+        // ── Grossesse : la branche existe, sans champ pour l'alimenter ────
+        ok('Critère : caffeineThresholds(70,30,true).orange === 200',(()=>{
+          const t=caffeineThresholds(70,30,true);
+          return t.orange===200&&t.red===200&&t.regle==='grossesse'
+            ?true:_echec(JSON.stringify(t));})());
+        ok('La grossesse prime sur l\'âge',(()=>{
+          const t=caffeineThresholds(70,17,true);
+          return t.orange===CAFFEINE_MAX_GROSSESSE
+            ?true:_echec(JSON.stringify(t));})());
+        ok('Aucun appelant ne passe encore l\'argument grossesse (lot A3-09)',(()=>{
+          // La branche est écrite et testée, mais RIEN ne la déclenche : aucun
+          // champ de grossesse n'existe. Le jour où A3-09 en ajoute un, ce test
+          // tombera — et ce sera le rappel qu'il faut brancher les appelants.
+          let n=0;
+          for(const nom of Object.getOwnPropertyNames(window)){
+            let f; try{ f=window[nom]; }catch(e){ continue; }
+            if(typeof f!=='function'||nom==='testExercices'||nom==='testNotifs') continue;
+            // Sa PROPRE declaration porte trois parametres : ce n'est pas un
+            // appel. Premier jet, elle s'accusait elle-meme.
+            if(nom==='caffeineThresholds') continue;
+            let src=''; try{ src=Function.prototype.toString.call(f); }catch(e){ continue; }
+            if(/caffeineThresholds\([^)]*,[^)]*,/.test(src)) n++;
+          }
+          return n===0?true:_echec(n+' appelant(s) passent déjà la grossesse');})());
+
+        // ── Le repli de poids ─────────────────────────────────────────────
+        ok('Critère : dossier sans poids → { weight:60, estimated:true }',(()=>{
+          const sauve=currentUser;
+          try{
+            currentUser={id:'cf',email:'cf@t',role:'athlete',bilans:[]};
+            const w=getUserWeight();
+            return w.weight===CAFFEINE_POIDS_DEFAUT&&w.weight===60&&w.estimated===true
+              ?true:_echec(JSON.stringify(w));
+          } finally { currentUser=sauve; }})());
+        ok('Le repli est PRUDENT : il abaisse les seuils, il ne les relève pas',(()=>{
+          // 60 kg donne des paliers strictement inférieurs à ceux de 75 kg.
+          const a=caffeineThresholds(CAFFEINE_POIDS_DEFAUT), b=caffeineThresholds(75);
+          return a.green<b.green&&a.yellow<b.yellow&&a.orange<b.orange
+            ?true:_echec(JSON.stringify(a)+' vs '+JSON.stringify(b));})());
+        ok('Un poids connu n\'est jamais marqué estimé',(()=>{
+          const sauve=currentUser;
+          try{
+            currentUser={id:'cf',email:'cf@t',role:'athlete',weight:82,bilans:[]};
+            const w=getUserWeight();
+            return w.weight===82&&w.estimated===false?true:_echec(JSON.stringify(w));
+          } finally { currentUser=sauve; }})());
+
+        // ── L'âge lu par le MÊME chemin que le reste ──────────────────────
+        ok('L\'âge se lit dans le dernier bilan qui le porte',(()=>{
+          const u={id:'a',bilans:[
+            {type:'depart',date:1000,'deb-age':'40'},
+            {type:'suivi', date:2000,'deb-age':'17'}]};
+          return _ageUtilisateur(u)===17?true:_echec(String(_ageUtilisateur(u)));})());
+        ok('À défaut de bilan, init-age puis age',(()=>{
+          return _ageUtilisateur({id:'a',bilans:[],'init-age':'22'})===22
+            &&_ageUtilisateur({id:'a',bilans:[],age:35})===35
+            ?true:_echec('replis cassés');})());
+        ok('Critère : âge inconnu → règle ADULTE, jamais mineur',(()=>{
+          const u={id:'a',bilans:[]};
+          if(_ageUtilisateur(u)!==null) return _echec('un âge est apparu');
+          const t=caffeineThresholds(70,_ageUtilisateur(u));
+          const sansAge=caffeineThresholds(70);
+          return t.regle==='adulte'&&t.orange===sansAge.orange
+            ?true:_echec(JSON.stringify(t));})());
+        ok('_ageUtilisateur n\'invente pas une seconde lecture',(()=>{
+          return /_dernierChamp\(\s*user\s*,\s*'deb-age'\s*\)/.test(String(_ageUtilisateur))
+            ?true:_echec('ne passe pas par _dernierChamp');})());
+
+        // ── La légende ────────────────────────────────────────────────────
+        ok('Critère : la légende dit « moins de 18 ans » pour un mineur',(()=>{
+          const t=legendeSeuilsCafeine(caffeineThresholds(70,17),false);
+          return /moins de 18 ans/.test(t)&&/3 mg par kilo/.test(t)
+            ?true:_echec(t);})());
+        ok('La légende adulte cite l\'EFSA et son plafond',(()=>{
+          const t=legendeSeuilsCafeine(caffeineThresholds(70,30),false);
+          return /référence adulte/.test(t)&&/EFSA/.test(t)&&/400 mg/.test(t)
+            ?true:_echec(t);})());
+        ok('La légende signale un poids estimé',(()=>{
+          const t=legendeSeuilsCafeine(caffeineThresholds(70,30),true);
+          return /poids estimé/.test(t)&&/renseigne ton poids/.test(t)
+            ?true:_echec(t);})());
+        ok('La légende de grossesse nomme sa référence',(()=>{
+          const t=legendeSeuilsCafeine(caffeineThresholds(70,30,true),false);
+          return /grossesse/.test(t)&&/200 mg/.test(t)?true:_echec(t);})());
+
+        ok('La légende est RÉELLEMENT rendue sous la jauge',(()=>{
+          // Les tests ci-dessus interrogent legendeSeuilsCafeine en isolation :
+          // on pouvait retirer entièrement son affichage du bloc et tout
+          // restait vert, pour une phrase que personne ne verrait jamais.
+          const sauveU=currentUser;
+          try{
+            currentUser={id:'lg',email:'lg@t',role:'athlete',bilans:[],weight:70};
+            const mineur=_renderCaffeineBlock([],0,caffeineThresholds(70,17),
+              'screen','2026-01-01',false,true,'Aujourd\'hui',70);
+            if(mineur.indexOf('moins de 18 ans')<0)
+              return _echec('la règle du mineur n\'apparaît pas dans le bloc');
+            const adulte=_renderCaffeineBlock([],0,caffeineThresholds(70,30),
+              'screen','2026-01-01',false,true,'Aujourd\'hui',70);
+            return adulte.indexOf('référence adulte')>=0
+              ?true:_echec('la règle adulte n\'apparaît pas dans le bloc');
+          } finally { currentUser=sauveU; }})());
+        ok('La mention de poids estimé est rendue elle aussi',(()=>{
+          const sauveU=currentUser;
+          try{
+            currentUser={id:'lg',email:'lg@t',role:'athlete',bilans:[]};
+            const h=_renderCaffeineBlock([],0,caffeineThresholds(60,30),
+              'screen','2026-01-01',true,true,'Aujourd\'hui',60);
+            return h.indexOf('renseigne ton poids')>=0
+              ?true:_echec('rien sur le poids estimé');
+          } finally { currentUser=sauveU; }})());
+
+        // ── Tous les appelants sont recâblés ──────────────────────────────
+        ok('Critère : aucun appelant ne reste sur l\'ancienne signature',(()=>{
+          const coupables=[];
+          for(const nom of Object.getOwnPropertyNames(window)){
+            let f; try{ f=window[nom]; }catch(e){ continue; }
+            if(typeof f!=='function') continue;
+            if(nom==='caffeineThresholds'||nom==='testExercices'||nom==='testNotifs') continue;
+            let src=''; try{ src=Function.prototype.toString.call(f); }catch(e){ continue; }
+            // Un appel à un seul argument est le signe d'un écran oublié.
+            if(/caffeineThresholds\(\s*[A-Za-z_$][\w$]*\s*\)/.test(src)) coupables.push(nom);
+          }
+          return coupables.length?_echec('ancienne signature : '+coupables.join(', ')):true;})());
+        ok('La bulle de poids estimé n\'annonce plus 75 kg',(()=>{
+          const src=document.documentElement.outerHTML;
+          return !/Poids estimé \(75 kg\)/.test(src)
+            ?true:_echec('le 75 kg en dur est toujours là');})());
+      } finally { currentUser=_sU; }
+    })();
 
     // ══ COUVERTURE EN MICRONUTRIMENTS ════════════════════════════════════
     (()=>{
