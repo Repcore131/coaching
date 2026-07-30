@@ -6000,7 +6000,129 @@ const MICRO_MOTS_VEGE=Object.freeze(['vegetarien','vegetarienne','vegetalien',
 // Les trois champs libres du bilan de départ où ce genre de précision se tape
 // en pratique. On ne fouille pas tout le dossier : ailleurs, le mot voudrait
 // dire autre chose.
-const MICRO_CHAMPS_VEGE=Object.freeze(['deb-allergies','deb-food-hate','deb-health']);
+const MICRO_CHAMPS_VEGE=Object.freeze(['deb-allergies','deb-food-hate','deb-health','deb-food-love']);
+// ══════════════ COUVERTURE EN MICRONUTRIMENTS ══════════════
+// On CONSTATE une couverture, on ne diagnostique rien. Le mot « carence »
+// n'apparaît nulle part hors de MICRO_DISCLAIMER, et aucun score global n'est
+// produit : agréger huit nutriments en une note donnerait un chiffre qui ne
+// veut rien dire et que personne ne pourrait contredire.
+//
+// RÉFÉRENCES NUTRITIONNELLES POUR LA POPULATION (RNP), adulte.
+// Source unique : Anses, « Les références nutritionnelles en vitamines et
+// minéraux », https://www.anses.fr/fr/content/les-references-nutritionnelles-en-vitamines-et-mineraux
+// Consulté le 30 juillet 2026. Aucune valeur n'est estimée ni interpolée : un
+// nutriment absent de cette source aurait été retiré du lot.
+//
+// Trois valeurs demandent un choix explicite, l'Anses en donnant plusieurs
+// selon le contexte :
+//  · FER, femme : 16 mg correspond aux pertes menstruelles ÉLEVÉES (11 mg pour
+//    des pertes faibles ou modérées). On retient 16, la borne prudente — cette
+//    règle sert à ouvrir une conversation, pas à rassurer.
+//  · ZINC : la RNP dépend de l'acide phytique du régime. On retient la ligne
+//    600 mg/j de phytates (H 11,7 · F 9,3), régime mixte courant. Un régime
+//    très végétal en contient davantage et sa vraie RNP serait plus haute : la
+//    couverture affichée est donc OPTIMISTE pour ces athlètes.
+//  · CALCIUM : 950 mg, valeur adulte à partir de 25 ans.
+const MICRO_REFS=Object.freeze({
+  fe: {lib:'Fer',          unite:'mg', H:11,   F:16},
+  ca: {lib:'Calcium',      unite:'mg', H:950,  F:950},
+  mg: {lib:'Magnésium',    unite:'mg', H:380,  F:300},
+  zn: {lib:'Zinc',         unite:'mg', H:11.7, F:9.3},
+  io: {lib:'Iode',         unite:'µg', H:150,  F:150},
+  k_: {lib:'Potassium',    unite:'mg', H:3500, F:3500},
+  b9: {lib:'Folates',      unite:'µg', H:330,  F:330},
+  b12:{lib:'Vitamine B12', unite:'µg', H:4,    F:4}
+});
+const MICRO_JOURS_FENETRE=7;
+const MICRO_COUVERTURE_SEUIL=0.70;
+const MICRO_DOC_MINIMALE=0.60;
+// Sexe inconnu : on prend la référence la PLUS ÉLEVÉE des deux, et l'affichage
+// le dit. Sous-estimer la référence gonflerait la couverture et éteindrait la
+// question au moment où elle serait le plus utile.
+function refMicro(user,cle){
+  const r=MICRO_REFS[cle];
+  if(!r) return null;
+  const sexe=(user&&(user._evol_gender||user.gender))||'';
+  if(!sexe) return {valeur:Math.max(r.H,r.F),sexeConnu:false,lib:r.lib,unite:r.unite};
+  return {valeur:isFemale(sexe)?r.F:r.H,sexeConnu:true,lib:r.lib,unite:r.unite};
+}
+// PURE. Rend {part, partDocumentee, nJours, ...} ou null.
+//
+// partDocumentee est la FIABILITÉ du calcul, pas un résultat nutritionnel :
+// la part des kilocalories journalisées dont l'aliment porte une valeur pour ce
+// nutriment. Un aliment sans donnée est exclu de l'apport ET du total — il
+// n'est JAMAIS compté zéro, ce qui reviendrait à affirmer qu'il n'en contient
+// pas. C'est la même règle que le sel du journal, pour la même raison.
+function couvertureMicro(user,cle,joursISO){
+  const r=MICRO_REFS[cle];
+  if(!r||!user) return null;
+  const log=((user.nutrition||{}).log)||{};
+  const jours=(joursISO||[]).filter(j=>log[j]&&Array.isArray(log[j].entries)&&log[j].entries.length);
+  if(jours.length<MICRO_JOURS_FENETRE) return null;
+  const ref=refMicro(user,cle);
+  if(!ref||!(ref.valeur>0)) return null;
+  let apport=0, kcalDoc=0, kcalTotal=0;
+  for(const j of jours){
+    for(const e of log[j].entries){
+      if(!e) continue;
+      const kc=Number(e.kcal)||0;
+      kcalTotal+=kc;
+      const v=e[cle];
+      // undefined (journée saisie avant ce lot) et null (aliment sans donnée)
+      // tombent du même côté : inconnu.
+      if(v==null) continue;
+      apport+=Number(v)||0;
+      kcalDoc+=kc;
+    }
+  }
+  return {
+    part:Math.round((apport/jours.length)/ref.valeur*1000)/1000,
+    partDocumentee:kcalTotal>0?Math.round(kcalDoc/kcalTotal*1000)/1000:0,
+    nJours:jours.length,ref:ref.valeur,unite:ref.unite,lib:ref.lib,
+    sexeConnu:ref.sexeConnu
+  };
+}
+// Les MICRO_JOURS_FENETRE derniers jours calendaires, du plus ancien au plus
+// récent. La fenêtre est FIXE : « sept jours consécutifs » ne veut pas dire
+// « les sept dernières journées où l'athlète a saisi quelque chose ».
+function _microDerniersJours(ref){
+  const base=(ref instanceof Date)?ref:new Date();
+  const out=[];
+  for(let i=MICRO_JOURS_FENETRE-1;i>=0;i--)
+    out.push(localISODate(new Date(base.getTime()-i*864e5)));
+  return out;
+}
+// Phrase du journal. La mention de fiabilité est OBLIGATOIRE dès que la part
+// documentée n'est pas totale : sans elle, « 68 % de la référence » se lirait
+// comme un résultat, alors que c'est un calcul partiel.
+function phraseCouvertureMicro(c){
+  if(!c) return '';
+  let s=c.lib+' : '+Math.round(c.part*100)+' % de la référence sur '+c.nJours+' jours';
+  if(c.partDocumentee<1)
+    s+=' — calculé sur '+Math.round(c.partDocumentee*100)
+      +' % de ce que tu as journalisé, le reste n\'a pas de donnée';
+  s+='.';
+  if(!c.sexeConnu)
+    s+=' Sexe non renseigné : la référence la plus élevée est retenue.';
+  return s;
+}
+function _htmlCouvertureMicro(user,ref){
+  const jours=_microDerniersJours(ref);
+  const lignes=[];
+  for(const cle in MICRO_REFS){
+    const c=couvertureMicro(user,cle,jours);
+    if(c) lignes.push(phraseCouvertureMicro(c));
+  }
+  if(!lignes.length) return '';
+  // Aucune couleur d'alerte, aucun tri par « manque », aucun total : huit
+  // phrases dans l'ordre de la table, et le rappel qui les encadre.
+  return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Micronutriments · ${MICRO_JOURS_FENETRE} jours</div>
+    ${lignes.map(t=>`<div style="font-size:11px;color:#ddd;line-height:1.6;padding:4px 0;border-bottom:1px solid #161616">${escapeHtml(t)}</div>`).join('')}
+    <div style="font-size:10px;color:var(--text-faint);line-height:1.6;margin-top:9px">${escapeHtml(MICRO_DISCLAIMER)}</div>
+  </div>`;
+}
+
 const MICRO_DISCLAIMER="RepCore n'est pas un dispositif médical. Seul un bilan sanguin peut établir une carence.";
 
 function _microNorm(s){
@@ -6024,8 +6146,18 @@ function _microCycleActif(user){
   const c=(user&&user.nutrition&&user.nutrition.cycleAdaptation)||{};
   return !!(c.enabled&&c.lastPeriodDate);
 }
+// Vrai si la reponse vaut oui, quelle que soit la forme sous laquelle la case
+// a ete enregistree au fil des versions du questionnaire.
+function _microCoche(v){
+  const t=_microNorm(_texteReponse(v));
+  return t==='oui'||t==='true'||t==='1'||t==='on'||t==='vege'||t==='vegetarien'
+    ||t==='vegetalien';
+}
 function _microVege(user){
   const bl=((user&&user.bilans)||[]).filter(b=>b&&b.type==='depart');
+  // La case cochee PRIME : elle est explicite. La recherche de mot-cle n'est
+  // qu'un rattrapage pour les dossiers anterieurs a ce champ.
+  for(const b of bl) if(_microCoche(b['deb-vege'])) return true;
   for(const b of bl){
     for(const champ of MICRO_CHAMPS_VEGE){
       const t=_microNorm(b[champ]);
@@ -6057,11 +6189,37 @@ function risquesMicro(user,ref){
   }
 
   // ── Saison : de novembre à mars, pour tout le monde ──────────────────────
-  if(MICRO_MOIS_PEU_SOLEIL.indexOf(date.getMonth())>=0){
+  // Meme motif que hasUserOmega : un complement ACTIF portant le nom du
+  // nutriment eteint la regle. La question a deja recu sa reponse, et la
+  // reposer chaque hiver use la seule chose qui compte ici, l'attention.
+  const _aVitD=(((user.nutrition||{}).supplements)||[]).some(x=>x&&x.active!==false
+    &&/vitamine\s*d\b|\bd3\b/i.test(String(x.name||'')));
+  if(!_aVitD&&MICRO_MOIS_PEU_SOLEIL.indexOf(date.getMonth())>=0){
     const mois=date.toLocaleDateString('fr-FR',{month:'long'});
     out.push({cle:'vitamineD',lib:'Saison peu ensoleillée',
       motif:'Nous sommes en '+mois+' : de novembre à mars, l\'ensoleillement est faible sous nos latitudes.',
       question:'Le dosage de la vitamine D a-t-il été abordé avec un professionnel de santé ?'});
+  }
+
+  // ── Couverture journalisée sous le seuil ─────────────────────────────────
+  // Deux conditions, et la seconde compte autant que la premiere : une
+  // couverture basse calculee sur un tiers du journal ne dit rien du tout.
+  // En dessous de MICRO_DOC_MINIMALE, la regle SE TAIT — l'affichage du
+  // journal, lui, continue de montrer la faible fiabilite.
+  {
+    const _jours=_microDerniersJours(date);
+    for(const _cle in MICRO_REFS){
+      const _c=couvertureMicro(user,_cle,_jours);
+      if(!_c) continue;
+      if(!(_c.part<MICRO_COUVERTURE_SEUIL)) continue;
+      if(!(_c.partDocumentee>=MICRO_DOC_MINIMALE)) continue;
+      out.push({cle:'couverture_'+_cle,lib:'Couverture '+_c.lib.toLowerCase(),
+        motif:'Ses apports en '+_c.lib.toLowerCase()+' ressortent à '
+          +Math.round(_c.part*100)+' % de la référence sur la dernière semaine'
+          +' journalisée, sur '+Math.round(_c.partDocumentee*100)
+          +' % de ce qui a été journalisé.',
+        question:'Un bilan sanguin récent existe-t-il ?'});
+    }
   }
 
   // ── Alimentation végétarienne ou végétalienne déclarée ───────────────────
@@ -18337,6 +18495,12 @@ function saveFoodEntry(){
     // deviendrait 0,2 g, et l'écart se cumule sur une journée entière.
     sel:f.e!=null?parseFloat((f.e*r).toFixed(2)):null,
   };
+  // Micronutriments : la cle n'est posee QUE si l'aliment porte la valeur.
+  // Trois decimales, l'iode et la B12 se comptant en microgrammes.
+  for(const _mc in MICRO_REFS){
+    const _v=f[_mc];
+    if(_v!=null) entry[_mc]=parseFloat((_v*r).toFixed(3));
+  }
   if(!currentUser.nutrition) currentUser.nutrition={};
   if(!currentUser.nutrition.log) currentUser.nutrition.log={};
   if(!currentUser.nutrition.log[_fjDate]) currentUser.nutrition.log[_fjDate]={entries:[]};
@@ -18380,6 +18544,7 @@ function _renderFjDaySummary(date){
   // n'ont pas de valeur de sel, comptent pour zéro. On le DIT plutôt que
   // d'afficher un total qui aurait l'air complet.
   const _selManquant=entries.filter(e=>e&&e.sel==null).length;
+  const _microHtml=_htmlCouvertureMicro(currentUser);
   const repasOrder=['matin','dejeuner','diner','collation'];
   const repasLabels={matin:'Petit-déjeuner',dejeuner:'Déjeuner',diner:'Dîner',collation:'Collation'};
   const grouped={};
@@ -18428,6 +18593,7 @@ function _renderFjDaySummary(date){
         ${_selManquant?`<div style="font-size:var(--fs-xs);color:var(--text-dim);text-align:right;margin-top:3px">sel non compté sur ${_selManquant} aliment${_selManquant>1?'s':''}</div>`:''}
       </div>
     </div>
+    ${_microHtml}
     ${_htmlDernierAjout(date)}
     ${isToday?`<button onclick="copierHier()" style="width:100%;margin-bottom:12px;padding:10px 0;background:none;border:1px dashed #2a2a2a;border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;cursor:pointer">Copier la journée d'hier</button>`:''}
     ${entries.length===0?`<div style="text-align:center;padding:18px 0 8px;color:var(--text-dim);font-size:12px">Aucun aliment enregistré : appuie sur + AJOUTER</div>`:''}
@@ -35957,6 +36123,264 @@ function testExercices(){
         return manque.length?_echec('absents de BILAN_QUESTIONS : '+manque.join(', ')):true;})());
     })();
 
+
+    // ══ COUVERTURE EN MICRONUTRIMENTS ════════════════════════════════════
+    (()=>{
+      const _sU=currentUser;
+      const _jours=(n,base)=>{const out=[];const b=base||new Date();
+        for(let i=n-1;i>=0;i--) out.push(localISODate(new Date(b.getTime()-i*864e5)));
+        return out;};
+      // Journal fabriqué : nJours journées, chacune avec deux aliments — l'un
+      // porte le nutriment, l'autre non. On pilote ainsi la part documentée par
+      // le rapport des kilocalories, exactement comme le fait le vrai calcul.
+      const _ath=(sexe,nJours,cle,valParJour,kcalDoc,kcalMuet,base)=>{
+        const u={id:'mn',email:'mn@t',role:'athlete',gender:sexe||'H',
+          exAlias:{},exMuscles:{},sessions:[],bilans:[],nutrition:{log:{}}};
+        for(const j of _jours(nJours,base)){
+          const e1={id:1,nom:'documenté',kcal:kcalDoc,qty:100};
+          if(valParJour!=null) e1[cle]=valParJour;
+          const e2={id:2,nom:'sans donnée',kcal:kcalMuet,qty:100};
+          u.nutrition.log[j]={entries:[e1,e2]};
+        }
+        return u;
+      };
+      try{
+        // ── La règle absolue : jamais zéro ────────────────────────────────
+        ok('Critère : un aliment sans donnée de zinc n\'est JAMAIS compté zéro',(()=>{
+          // Un seul aliment, sans zinc, sur sept jours : la part documentée
+          // tombe à 0 et l'apport reste nul — mais pour cause d'IGNORANCE, pas
+          // parce qu'on aurait décidé que cet aliment n'en contient pas.
+          const u=_ath('H',7,'zn',null,0,500);
+          const c=couvertureMicro(u,'zn',_jours(7));
+          if(c===null) return true;
+          return c.partDocumentee===0
+            ?true:_echec('partDocumentee '+c.partDocumentee);})());
+        ok('Un aliment sans donnée ne tire pas la couverture vers le bas',(()=>{
+          // Même apport réel, mais accompagné d'un aliment muet : la PART ne
+          // doit pas bouger, seule la fiabilité baisse.
+          const seul=_ath('H',7,'fe',11,500,0);
+          const accompagne=_ath('H',7,'fe',11,500,500);
+          const a=couvertureMicro(seul,'fe',_jours(7));
+          const b=couvertureMicro(accompagne,'fe',_jours(7));
+          if(a.part!==b.part) return _echec('part '+a.part+' vs '+b.part);
+          return b.partDocumentee<a.partDocumentee
+            ?true:_echec('la fiabilité n\'a pas baissé : '+b.partDocumentee);})());
+
+        // ── La fenêtre de sept jours ──────────────────────────────────────
+        ok('Critère : six jours journalisés → couvertureMicro rend null',(()=>{
+          const u=_ath('H',6,'fe',11,500,0);
+          return couvertureMicro(u,'fe',_jours(7))===null
+            ?true:_echec('un résultat a été rendu sur six jours');})());
+        ok('Sept jours journalisés → un résultat',(()=>{
+          const u=_ath('H',7,'fe',11,500,0);
+          const c=couvertureMicro(u,'fe',_jours(7));
+          return c&&c.nJours===7?true:_echec(JSON.stringify(c));})());
+        ok('Journal vide → null, sans erreur',
+           couvertureMicro({id:'v',nutrition:{log:{}}},'fe',_jours(7))===null);
+
+        // ── Le calcul lui-même ────────────────────────────────────────────
+        ok('La part est bien apport moyen / référence',(()=>{
+          // Homme, fer : référence 11 mg. 7,48 mg par jour → 68 %.
+          const u=_ath('H',7,'fe',7.48,500,0);
+          const c=couvertureMicro(u,'fe',_jours(7));
+          return Math.abs(c.part-0.68)<0.005
+            ?true:_echec('part '+c.part);})());
+        ok('La part documentée est bien un rapport de kilocalories',(()=>{
+          const u=_ath('H',7,'fe',7.48,740,260);
+          const c=couvertureMicro(u,'fe',_jours(7));
+          return Math.abs(c.partDocumentee-0.74)<0.005
+            ?true:_echec('partDocumentee '+c.partDocumentee);})());
+        ok('La référence suit le sexe déclaré',(()=>{
+          const h=refMicro({gender:'H'},'fe'), f=refMicro({gender:'F'},'fe');
+          return h.valeur===11&&f.valeur===16
+            ?true:_echec(h.valeur+' / '+f.valeur);})());
+        ok('Critère : sexe inconnu → la référence la PLUS ÉLEVÉE, et on le dit',(()=>{
+          const r=refMicro({id:'x'},'fe');
+          if(r.valeur!==16||r.sexeConnu!==false) return _echec(JSON.stringify(r));
+          const u=_ath('',7,'fe',7.48,500,0); u.gender='';
+          const c=couvertureMicro(u,'fe',_jours(7));
+          return /référence la plus élevée/.test(phraseCouvertureMicro(c))
+            ?true:_echec(phraseCouvertureMicro(c));})());
+
+        // ── La phrase du journal ──────────────────────────────────────────
+        ok('Critère : la mention de fiabilité est OBLIGATOIRE sous 100 %',(()=>{
+          const u=_ath('H',7,'fe',7.48,740,260);
+          const t=phraseCouvertureMicro(couvertureMicro(u,'fe',_jours(7)));
+          return /68 % de la référence sur 7 jours/.test(t)
+            &&/calculé sur 74 % de ce que tu as journalisé/.test(t)
+            &&/le reste n'a pas de donnée/.test(t)
+            ?true:_echec(t);})());
+        ok('À 100 % documenté, la mention disparaît',(()=>{
+          const u=_ath('H',7,'fe',7.48,500,0);
+          const t=phraseCouvertureMicro(couvertureMicro(u,'fe',_jours(7)));
+          return !/calculé sur/.test(t)?true:_echec(t);})());
+        ok('Critère : aucun score global, aucune couleur d\'alerte',(()=>{
+          const u=_ath('H',7,'fe',3,300,700);
+          const h=_htmlCouvertureMicro(u);
+          if(!h) return _echec('aucun rendu');
+          const couleurs=(h.match(/color:\s*[^;"']+/g)||[])
+            .filter(c=>/red|orange|danger|warning|--red|--orange/i.test(c));
+          if(couleurs.length) return _echec('couleur d\'alerte : '+couleurs.join(' '));
+          return !/score|indice global|note globale|\/\s*100\b/i.test(h)
+            ?true:_echec('un score global apparaît');})());
+        ok('Le rendu porte le disclaimer et ne dit jamais « carence »',(()=>{
+          const u=_ath('H',7,'fe',3,300,700);
+          const h=_htmlCouvertureMicro(u);
+          const sansDisc=h.split(escapeHtml(MICRO_DISCLAIMER)).join('');
+          return h.indexOf(escapeHtml(MICRO_DISCLAIMER))>=0
+            &&!/carence/i.test(sansDisc)
+            ?true:_echec('« carence » hors disclaimer');})());
+
+        // ── L'ENREGISTREMENT réel, pas une fixture écrite à la main ───────
+        ok('Critère : l\'ajout au journal enregistre bien les micronutriments',(()=>{
+          // Toutes les fixtures ci-dessus fabriquent leurs entrées à la main :
+          // sans ce test, on pourrait retirer entièrement l'écriture des micros
+          // dans saveFoodEntry et TOUT resterait vert, pour une fonctionnalité
+          // parfaitement morte. On appelle donc la vraie fonction.
+          const sU=currentUser, sF=_fjFood, sD=_fjDate, sR=_fjRepas;
+          // L'écran porte DÉJÀ un champ #fja-qty, avec 100 g par défaut. En
+          // ajouter un second n'y change rien : getElementById rend le premier,
+          // et le test lisait donc la quantité de la page au lieu de la sienne.
+          // On réutilise le champ existant et on lui rend sa valeur ensuite.
+          const champ=document.getElementById('fja-qty');
+          const jetable=!champ;
+          const el=champ||document.createElement('input');
+          const valeurInitiale=el.value;
+          if(jetable){ el.id='fja-qty'; document.body.appendChild(el); }
+          el.value='200';
+          try{
+            currentUser={id:'aj',email:'aj@t',role:'athlete',exAlias:{},exMuscles:{},
+              sessions:[],bilans:[],nutrition:{log:{}}};
+            _fjDate=localISODate(new Date());
+            _fjRepas='matin';
+            // fe renseigné, zn ABSENT : on vérifie les deux comportements.
+            _fjFood={id:99001,n:'TEST MICRO',g:'',k:100,p:10,c:5,l:2,f:1,e:0.5,
+              fe:2.5,ca:80,b12:1.2};
+            saveFoodEntry();
+            const e=((currentUser.nutrition.log[_fjDate]||{}).entries||[])[0];
+            if(!e) return _echec('aucune entrée créée');
+            // 200 g → coefficient 2. Le typeof N'EST PAS decoratif : sans lui,
+            // Math.abs(undefined-5) vaut NaN, NaN>0.01 vaut FAUX, et le test
+            // passait au vert alors que plus aucun micronutriment n'etait
+            // enregistre. C'est la variante de regression qui l'a revele.
+            const attendus={fe:5,ca:160,b12:2.4};
+            for(const k in attendus){
+              if(typeof e[k]!=='number')
+                return _echec(k+' absent de l\'entree : '+JSON.stringify(e[k]));
+              if(Math.abs(e[k]-attendus[k])>0.01)
+                return _echec(k+' vaut '+e[k]+' au lieu de '+attendus[k]);
+            }
+            if('zn' in e) return _echec('le zinc absent de l\'aliment a été écrit');
+            return true;
+          } finally {
+            if(jetable) el.remove(); else el.value=valeurInitiale;
+            currentUser=sU; _fjFood=sF; _fjDate=sD; _fjRepas=sR;
+          }})());
+
+        // ── Le seuil dans risquesMicro ────────────────────────────────────
+        const _sansSaison=new Date(2026,5,15);   // juin : la règle saisonnière dort
+        ok('Critère : 68 % avec 74 % documenté → une entrée',(()=>{
+          const u=_ath('H',7,'fe',7.48,740,260,_sansSaison);
+          const l=risquesMicro(u,_sansSaison).filter(x=>x.cle==='couverture_fe');
+          if(l.length!==1) return _echec(l.length+' entrée(s)');
+          return /68 %/.test(l[0].motif)&&/\?$/.test(l[0].question)
+            ?true:_echec(JSON.stringify(l[0]));})());
+        ok('Critère : 68 % avec 40 % documenté → AUCUNE entrée',(()=>{
+          const u=_ath('H',7,'fe',7.48,400,600,_sansSaison);
+          const c=couvertureMicro(u,'fe',_microDerniersJours(_sansSaison));
+          if(!(c.partDocumentee<MICRO_DOC_MINIMALE))
+            return _echec('fixture inutile : documenté '+c.partDocumentee);
+          return risquesMicro(u,_sansSaison).filter(x=>x.cle==='couverture_fe').length===0
+            ?true:_echec('une entrée est apparue');})());
+        ok('Une couverture AU-DESSUS du seuil ne dit rien',(()=>{
+          const u=_ath('H',7,'fe',11,740,260,_sansSaison);
+          return risquesMicro(u,_sansSaison).filter(x=>x.cle==='couverture_fe').length===0
+            ?true:_echec('une entrée est apparue à 100 %');})());
+        ok('Six jours → aucune entrée de couverture',(()=>{
+          const u=_ath('H',6,'fe',3,740,260,_sansSaison);
+          return risquesMicro(u,_sansSaison).filter(x=>/^couverture_/.test(x.cle)).length===0
+            ?true:_echec('une entrée sur six jours');})());
+        ok('Les entrées de couverture gardent le format existant',(()=>{
+          const u=_ath('H',7,'fe',3,740,260,_sansSaison);
+          const e=risquesMicro(u,_sansSaison).find(x=>x.cle==='couverture_fe');
+          if(!e) return _echec('aucune entrée');
+          return ['cle','lib','motif','question'].every(k=>typeof e[k]==='string'&&e[k])
+            ?true:_echec(JSON.stringify(e));})());
+        ok('Aucun motif ni question ne prononce « carence »',(()=>{
+          const u=_ath('H',7,'fe',3,740,260,_sansSaison);
+          const t=risquesMicro(u,_sansSaison).map(x=>x.motif+' '+x.question).join(' ');
+          return !/carence/i.test(t)?true:_echec(t.slice(0,140));})());
+
+        // ── Vitamine D resserrée ──────────────────────────────────────────
+        const _hiver=new Date(2026,0,15);
+        ok('Critère : « Vitamine D3 » actif → la règle saisonnière se tait',(()=>{
+          const u={id:'d',gender:'H',bilans:[],
+            nutrition:{supplements:[{name:'Vitamine D3',active:true}]}};
+          return risquesMicro(u,_hiver).filter(x=>x.cle==='vitamineD').length===0
+            ?true:_echec('la règle s\'est déclenchée');})());
+        ok('Sans complément, la règle saisonnière parle toujours',(()=>{
+          const u={id:'d',gender:'H',bilans:[],nutrition:{supplements:[]}};
+          return risquesMicro(u,_hiver).filter(x=>x.cle==='vitamineD').length===1
+            ?true:_echec('la règle ne se déclenche plus');})());
+        ok('Un complément DÉSACTIVÉ ne fait pas taire la règle',(()=>{
+          const u={id:'d',gender:'H',bilans:[],
+            nutrition:{supplements:[{name:'Vitamine D3',active:false}]}};
+          return risquesMicro(u,_hiver).filter(x=>x.cle==='vitamineD').length===1
+            ?true:_echec('un complément inactif a éteint la règle');})());
+        ok('Un complément sans rapport ne fait pas taire la règle',(()=>{
+          const u={id:'d',gender:'H',bilans:[],
+            nutrition:{supplements:[{name:'Créatine',active:true}]}};
+          return risquesMicro(u,_hiver).filter(x=>x.cle==='vitamineD').length===1
+            ?true:_echec('la créatine a éteint la vitamine D');})());
+
+        // ── Végétarisme déclaré ───────────────────────────────────────────
+        ok('Critère : deb-vege coché → _microVege vrai sans aucun mot-clé',(()=>{
+          const u={id:'v',bilans:[{type:'depart',date:1,'deb-vege':'oui'}]};
+          return _microVege(u)===true?true:_echec('la case n\'a pas primé');})());
+        ok('deb-vege non coché : le mot-clé reste le rattrapage',(()=>{
+          const sans={id:'v',bilans:[{type:'depart',date:1,'deb-vege':'non'}]};
+          const mot={id:'v',bilans:[{type:'depart',date:1,'deb-vege':'non',
+            'deb-food-love':'cuisine vegane'}]};
+          return _microVege(sans)===false&&_microVege(mot)===true
+            ?true:_echec('rattrapage cassé');})());
+        ok('« ce que tu aimes » est bien fouillé',
+           MICRO_CHAMPS_VEGE.indexOf('deb-food-love')>=0);
+
+        // ── Non-régression : rien de tout ceci côté athlète ───────────────
+        ok('Critère : risquesMicro n\'est appelé QUE par la fiche coach',(()=>{
+          // Deux jets ratés avant celui-ci, et la leçon vaut d'être écrite :
+          // compter les occurrences dans le document comptait mes propres
+          // tests, et chercher « une fonction dont le corps contient l'appel »
+          // par expression régulière attrapait les fonctions VOISINES, pas les
+          // appelantes. On inspecte donc les FONCTIONS ELLES-MÊMES : chaque
+          // fonction globale est interrogée sur son propre code source.
+          const coupables=[];
+          for(const nom of Object.getOwnPropertyNames(window)){
+            let f;
+            try{ f=window[nom]; }catch(e){ continue; }
+            if(typeof f!=='function') continue;
+            if(nom==='risquesMicro'||nom==='renderCoachMicroSection') continue;
+            if(nom==='testExercices'||nom==='testNotifs') continue;
+            let src='';
+            try{ src=Function.prototype.toString.call(f); }catch(e){ continue; }
+            if(/\brisquesMicro\s*\(/.test(src)) coupables.push(nom);
+          }
+          if(coupables.length)
+            return _echec('appelé hors fiche coach par : '+coupables.join(', '));
+          return /\brisquesMicro\s*\(/.test(String(renderCoachMicroSection))
+            ?true:_echec('la fiche coach ne l\'appelle plus');})());
+        ok('MICRO_REFS porte huit nutriments et aucune valeur inventée',(()=>{
+          const cles=Object.keys(MICRO_REFS);
+          if(cles.length!==8) return _echec(cles.length+' entrées');
+          const mauvais=cles.filter(k=>{const r=MICRO_REFS[k];
+            return !(r.H>0)||!(r.F>0)||!r.lib||!r.unite;});
+          return mauvais.length?_echec(mauvais.join(',')):true;})());
+        ok('MICRO_REFS cite sa source dans le code',(()=>{
+          const src=document.documentElement.outerHTML;
+          return /anses\.fr\/fr\/content\/les-references-nutritionnelles/.test(src)
+            ?true:_echec('aucune source citée');})());
+      } finally { currentUser=_sU; }
+    })();
 
     // ══ PLANCHER INDEXÉ SUR LA MASSE MAIGRE ══════════════════════════════
     (()=>{
