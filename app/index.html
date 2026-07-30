@@ -19152,7 +19152,14 @@ function proposerPointDepart(){
   toast('Proposition remplie. Relis, puis enregistre.');
 }
 
+// Toute ouverture de fiche remet la confirmation a zero si elle ne vise pas
+// CET athlete. Le simple fait de changer d'ecran ne doit jamais transporter
+// un accord donne ailleurs.
+function _plOublierSiAutreAthlete(email){
+  if(_plConfirme&&_plConfirme.email!==email) _plConfirme=null;
+}
 function renderCoachNutriSection(c){
+  _plOublierSiAutreAthlete(c&&c.email);
   const el=document.getElementById('ccd-nutrition');
   if(!el||!c) return;
   const nut=c.nutrition||{};
@@ -19259,20 +19266,38 @@ function saveClientNutriMacros(malgrePlancher){
       return false;
     }
     // Premier clic : on montre les chiffres et on attend un geste explicite.
-    if(!malgrePlancher||!_plConfirme){
+    // Sans email, aucune derogation possible : rien a quoi l'attacher.
+    if(malgrePlancher&&!c.email){
+      _plConfirme=null;
+      window._plDerniereViol={email:c.email,liste:viol};
+      renderCoachNutriSection(c);
+      toast('Cet eleve n\'a pas de dossier synchronise : aucune derogation possible','var(--orange)');
+      return false;
+    }
+    if(!malgrePlancher||!_plConfirmeValide(c.email,saisie)){
+      // La case est DECOCHEE : si elle etait cochee pour un autre athlete ou
+      // pour d'autres chiffres, la laisser cochee mentirait sur ce qui a
+      // reellement ete confirme.
+      _plConfirme=null;
       window._plDerniereViol={email:c.email,liste:viol};
       renderCoachNutriSection(c);
       toast(malgrePlancher?'Coche la confirmation pour enregistrer':'Ces valeurs sont sous le plancher : relis-les','var(--orange)');
       return false;
     }
     // Confirmation explicite : on trace QUI, QUAND, et QUOI exactement.
+    // L'email de l'athlete CONCERNE, pas seulement l'identifiant du coach :
+    // deux homonymes se distinguent par lui, jamais par leur nom.
     saisie.confirmeSousPlancher={par:(currentUser&&currentUser.id)||null,
+      email:c.email||null,
       date:Date.now(),violations:viol.map(v=>({champ:v.champ,valeur:v.valeur,plancher:v.plancher}))};
   }
   c.nutrition.macros=saisie;
   c.updatedAt=Date.now();users[c.email]=c;
   const ok=DB.set('users',users);
-  window._plDerniereViol=null; _plConfirme=false;
+  // Apres un echec d'ecriture AUSSI : une confirmation qui survit a un echec
+  // s'appliquerait au clic suivant, sur des chiffres que le coach croit
+  // enregistres.
+  window._plDerniereViol=null; _plConfirme=null;
   toastSync(ok,CLOUD.pushOne(c.email,c),
     viol.length?'Enregistré, confirmation tracée':'Objectifs enregistrés ✓','les objectifs sont');
   renderCoachNutriSection(c);
@@ -22269,8 +22294,52 @@ function plancherKcal(user){
 // Un coach est un professionnel. Le produit n'a pas à décider pour lui — mais
 // il a le devoir de mettre les chiffres sous ses yeux et d'exiger un geste
 // explicite. Sauf antécédent déclaré : là, personne ne passe outre.
-let _plConfirme=false;
-function _plSetConfirme(v){ _plConfirme=!!v; }
+// La confirmation n'est PAS un oui global : c'est un oui donne A CET ATHLETE,
+// SUR CES CHIFFRES. Un booleen partage laissait passer trois scenarios qu'un
+// coach ne signerait jamais :
+//  · cocher pour Anna, ouvrir la fiche de Bruno, enregistrer — Bruno recevait
+//    une derogation que personne ne lui avait accordee ;
+//  · cocher, puis MODIFIER une valeur, puis enregistrer — la derogation
+//    portait sur des chiffres jamais relus ;
+//  · un echec d'enregistrement laissait la case cochee pour la suite.
+// On retient donc l'email ET une empreinte de la saisie.
+let _plConfirme=null;      // {email, empreinte} ou null
+// Empreinte des DIX valeurs saisies. Toute modification, meme d'un gramme,
+// invalide la confirmation — c'est le but.
+function _plEmpreinte(saisie){
+  const col=o=>['kcal','p','g','l','f'].map(k=>{
+    const v=o&&o[k];
+    return (v==null||v==='')?'':String(v);
+  }).join('|');
+  return col(saisie&&saisie.on)+'#'+col(saisie&&saisie.off);
+}
+// Saisie couramment affichee dans le formulaire coach. Meme lecture que
+// saveClientNutriMacros : une seconde lecture divergerait au premier champ
+// ajoute.
+function _plSaisieCourante(){
+  const g=id=>{const v=parseFloat(document.getElementById(id)?.value);return isNaN(v)?undefined:v;};
+  return {
+    on:{kcal:g('ccd-on-kcal'),p:g('ccd-on-p'),g:g('ccd-on-g'),l:g('ccd-on-l'),f:g('ccd-on-f')},
+    off:{kcal:g('ccd-off-kcal'),p:g('ccd-off-p'),g:g('ccd-off-g'),l:g('ccd-off-l'),f:g('ccd-off-f')}
+  };
+}
+// Un athlete SANS EMAIL ne peut pas recevoir de derogation : il n'y a aucun
+// identifiant auquel l'attacher, donc aucun moyen de garantir qu'elle le vise
+// LUI. Le refus est volontaire.
+function _plSetConfirme(v,email,saisie){
+  if(!v){ _plConfirme=null; return; }
+  const em=email||(function(){
+    try{ const c=getOwnedClient(currentClientId); return c&&c.email; }catch(e){ return null; }
+  })();
+  if(!em){ _plConfirme=null; return; }
+  _plConfirme={email:em,empreinte:_plEmpreinte(saisie||_plSaisieCourante())};
+}
+// PURE. Vrai seulement pour l'athlete ET l'empreinte courants.
+function _plConfirmeValide(email,saisie){
+  if(!_plConfirme||!email) return false;
+  if(_plConfirme.email!==email) return false;
+  return _plConfirme.empreinte===_plEmpreinte(saisie);
+}
 function _htmlViolationsCoach(c){
   const viol=(window._plDerniereViol&&window._plDerniereViol.email===(c&&c.email))
     ?window._plDerniereViol.liste:null;
@@ -22283,7 +22352,7 @@ function _htmlViolationsCoach(c){
     ${dur
       ?`<div style="font-size:11px;color:var(--red);line-height:1.6;margin-top:9px;font-weight:700">Un antécédent alimentaire est déclaré au bilan de départ. Cette prescription ne peut pas être enregistrée, et il n'y a pas de dérogation. Reprends les valeurs au-dessus du plancher.</div>`
       :`<label style="display:flex;align-items:flex-start;gap:9px;margin-top:11px;cursor:pointer;text-transform:none;letter-spacing:normal;font-size:inherit;font-weight:400;color:inherit">
-          <input type="checkbox" id="ccd-pl-confirm" ${_plConfirme?'checked':''} onchange="_plSetConfirme(this.checked)"
+          <input type="checkbox" id="ccd-pl-confirm" ${_plConfirmeValide(c&&c.email,_plSaisieCourante())?'checked':''} onchange="_plSetConfirme(this.checked,'${escapeHtml((c&&c.email)||'')}')"
             style="width:18px;height:18px;margin-top:1px;flex-shrink:0;accent-color:var(--red)">
           <span style="font-size:12px;color:#eee;line-height:1.5">Je confirme cette prescription en connaissance de cause.</span>
         </label>
@@ -28951,7 +29020,7 @@ function testExercices(){
         const poser=extra=>{
           const c=_u('H',80,Object.assign({id:'plc',email:'plc@t.fr',coachId:'coPL'},extra||{}));
           const u={}; u[c.email]=c; DB.set('users',u); currentClientId=c.id;
-          window._plDerniereViol=null; _plConfirme=false;
+          window._plDerniereViol=null; _plConfirme=null;
           renderCoachNutriSection(c);
           return c;
         };
@@ -28972,13 +29041,16 @@ function testExercices(){
           return /Sous le plancher/.test(h)&&/1200 kcal/.test(h)&&/1760 kcal/.test(h)
             &&/je confirme cette prescription en connaissance de cause/i.test(h);})());
         ok('Sans la case cochée, « enregistrer malgré » refuse encore',(()=>{
-          _plConfirme=false;
+          _plConfirme=null;
           remplir(1200,150,100,70);
           const r=saveClientNutriMacros(true);
           return r===false&&!((DB.get('users')||{})['plc@t.fr'].nutrition||{}).macros;})());
         ok('Critère : le coach peut confirmer, et la confirmation est TRACÉE',(()=>{
-          _plConfirme=true;
+          // L'empreinte se calcule sur ce qui est A L'ECRAN : on remplit
+          // d'abord, on confirme ensuite. L'inverse confirmerait des champs
+          // vides, et la confirmation serait invalidee au clic.
           remplir(1200,150,100,70);
+          _plSetConfirme(true,'plc@t.fr');
           const r=saveClientNutriMacros(true);
           const m=((DB.get('users')||{})['plc@t.fr'].nutrition||{}).macros;
           if(r!==true||!m) return _echec('enregistrement refusé');
@@ -28995,8 +29067,8 @@ function testExercices(){
           poser({bilans:[{type:'depart',date:Date.now()-100*864e5,'deb-tca':'oui'},
             {type:'suivi',date:Date.now()-2*864e5,'deb-weight':'80','deb-height':'178',
              'deb-age':'32','deb-gender':'Homme'}]});
-          _plConfirme=true;
           remplir(1200,150,100,70);
+          _plSetConfirme(true,'plc@t.fr');
           const r=saveClientNutriMacros(true);
           const m=((DB.get('users')||{})['plc@t.fr'].nutrition||{}).macros;
           return r===false&&!m;})());
@@ -29110,7 +29182,7 @@ function testExercices(){
           &&'restrictionLongue' in SIGNAUX_VIDES;})());
 
       if(sauveUsers) DB.set('users',sauveUsers);
-      window._plDerniereViol=null; _plConfirme=false;
+      window._plDerniereViol=null; _plConfirme=null;
       currentUser=sauveU; currentClientId=sauveCid;
     })();
 
@@ -36188,6 +36260,183 @@ function testExercices(){
         return manque.length?_echec('absents de BILAN_QUESTIONS : '+manque.join(', ')):true;})());
     })();
 
+
+    // ══ LA DÉROGATION SOUS PLANCHER EST NOMINATIVE ═══════════════════════
+    (()=>{
+      const _sU=currentUser, _sCid=currentClientId, _sUsers=DB.get('users');
+      const _saisie=(kcal,p,g,l,f)=>({on:{kcal,p,g,l,f},off:{kcal,p,g,l,f}});
+      try{
+        currentUser={id:'coD2',email:'cod2@t.fr',role:'coach',fname:'K',
+          seenBilans:{},alertStatus:{},studentCodes:[]};
+        // ── L'empreinte ───────────────────────────────────────────────────
+        ok('Deux saisies identiques ont la même empreinte',
+           _plEmpreinte(_saisie(1200,150,100,70,20))===_plEmpreinte(_saisie(1200,150,100,70,20)));
+        ok('Un seul gramme de différence change l\'empreinte',
+           _plEmpreinte(_saisie(1200,150,100,70,20))!==_plEmpreinte(_saisie(1200,150,101,70,20)));
+        ok('Un champ vidé change l\'empreinte',
+           _plEmpreinte(_saisie(1200,150,100,70,20))
+           !==_plEmpreinte({on:{kcal:1200,p:150,g:100,l:70},off:{kcal:1200,p:150,g:100,l:70,f:20}}));
+
+        // ── Le cœur du lot ────────────────────────────────────────────────
+        ok('Critère : coché pour A, évalué pour B → false',(()=>{
+          _plSetConfirme(true,'a@t.fr',_saisie(1200,150,100,70,20));
+          return _plConfirmeValide('b@t.fr',_saisie(1200,150,100,70,20))===false
+            ?true:_echec('la confirmation d\'Anna vaut pour Bruno');})());
+        ok('Critère : coché pour A, kcal modifié, réévalué pour A → false',(()=>{
+          _plSetConfirme(true,'a@t.fr',_saisie(1200,150,100,70,20));
+          return _plConfirmeValide('a@t.fr',_saisie(1100,150,100,70,20))===false
+            ?true:_echec('la confirmation survit à un changement de valeur');})());
+        ok('Critère : coché pour A, rien changé, réévalué pour A → true',(()=>{
+          _plSetConfirme(true,'a@t.fr',_saisie(1200,150,100,70,20));
+          return _plConfirmeValide('a@t.fr',_saisie(1200,150,100,70,20))===true
+            ?true:_echec('la confirmation ne tient pas sur elle-même');})());
+        ok('Décocher efface la confirmation',(()=>{
+          _plSetConfirme(true,'a@t.fr',_saisie(1200,150,100,70,20));
+          _plSetConfirme(false);
+          return _plConfirmeValide('a@t.fr',_saisie(1200,150,100,70,20))===false
+            ?true:_echec('la case décochée confirme encore');})());
+        ok('Critère : un athlète sans email ne peut pas être confirmé',(()=>{
+          _plSetConfirme(true,'',_saisie(1200,150,100,70,20));
+          if(_plConfirme!==null) return _echec('une confirmation sans email existe');
+          return _plConfirmeValide('',_saisie(1200,150,100,70,20))===false
+            ?true:_echec('validée sans email');})());
+        ok('Deux homonymes se distinguent par l\'email, jamais par le nom',(()=>{
+          // Même nom, même saisie, emails différents : un seul est confirmé.
+          _plSetConfirme(true,'dupont1@t.fr',_saisie(1200,150,100,70,20));
+          return _plConfirmeValide('dupont1@t.fr',_saisie(1200,150,100,70,20))===true
+            &&_plConfirmeValide('dupont2@t.fr',_saisie(1200,150,100,70,20))===false
+            ?true:_echec('les homonymes se confondent');})());
+
+        ok('Modifier le SEUL jour OFF invalide la confirmation',(()=>{
+          // Toutes les saisies ci-dessus ont ON et OFF identiques : l'empreinte
+          // pouvait ignorer entièrement la colonne OFF sans qu'un test bronche.
+          // Un coach peut très bien ne toucher qu'au jour de repos.
+          const av={on:{kcal:1200,p:150,g:100,l:70,f:20},
+                    off:{kcal:1100,p:150,g:90,l:70,f:20}};
+          const ap={on:{kcal:1200,p:150,g:100,l:70,f:20},
+                    off:{kcal:1000,p:150,g:90,l:70,f:20}};
+          _plSetConfirme(true,'off@t.fr',av);
+          if(!_plConfirmeValide('off@t.fr',av))
+            return _echec('fixture inutile : la confirmation ne tient pas');
+          return _plConfirmeValide('off@t.fr',ap)===false
+            ?true:_echec('la confirmation survit à un changement du jour OFF');})());
+        ok('Modifier les SEULES fibres invalide la confirmation',(()=>{
+          const av=_saisie(1200,150,100,70,20), ap=_saisie(1200,150,100,70,25);
+          _plSetConfirme(true,'fib@t.fr',av);
+          return _plConfirmeValide('fib@t.fr',ap)===false
+            ?true:_echec('les fibres sortent de l\'empreinte');})());
+
+        // ── Le comportement de bout en bout ───────────────────────────────
+        const poser2=(email,extra)=>{
+          const c=Object.assign({id:'p_'+email,email,role:'athlete',coachId:'coD2',
+            fname:'A',lname:'B',gender:'H',_evol_gender:'H',_evol_height:178,
+            exAlias:{},exMuscles:{},sessions:[],bilans:[{type:'suivi',
+              date:Date.now()-2*864e5,'deb-weight':'80','deb-height':'178',
+              'deb-age':'32','deb-gender':'Homme'}],nutrition:{}},extra||{});
+          const u=DB.get('users')||{}; u[email]=c; DB.set('users',u);
+          currentClientId=c.id;
+          window._plDerniereViol=null; _plConfirme=null;
+          renderCoachNutriSection(c);
+          return c;
+        };
+        const remplir2=(kcal,p,g,l)=>{
+          for(const col of ['on','off']){
+            const v={kcal,p,g,l};
+            for(const k in v){ const e=document.getElementById('ccd-'+col+'-'+k); if(e) e.value=v[k]; }
+          }
+        };
+        ok('Critère : un échec d\'enregistrement remet la confirmation à null',(()=>{
+          poser2('ech@t.fr');
+          remplir2(1200,150,100,70);
+          _plSetConfirme(true,'ech@t.fr');
+          // On casse l'empreinte APRÈS avoir confirmé : l'enregistrement doit
+          // échouer ET oublier la confirmation.
+          remplir2(1100,150,100,70);
+          const r=saveClientNutriMacros(true);
+          if(r!==false) return _echec('l\'enregistrement est passé');
+          return _plConfirme===null?true:_echec('la confirmation a survécu à l\'échec');})());
+        ok('Confirmé pour A, la fiche de B ne l\'hérite pas',(()=>{
+          poser2('anna@t.fr');
+          remplir2(1200,150,100,70);
+          _plSetConfirme(true,'anna@t.fr');
+          if(!_plConfirmeValide('anna@t.fr',_plSaisieCourante()))
+            return _echec('fixture inutile : Anna n\'est pas confirmée');
+          // On ouvre la fiche de Bruno SANS remise à zéro : c'est au RENDU
+          // d'oublier Anna. poser2 nettoyait _plConfirme lui-même, et le test
+          // se contentait donc de vérifier son propre ménage.
+          const u=DB.get('users')||{};
+          const bruno=Object.assign({},u['anna@t.fr'],{id:'p_bruno@t.fr',email:'bruno@t.fr'});
+          u['bruno@t.fr']=bruno; DB.set('users',u); currentClientId=bruno.id;
+          renderCoachNutriSection(bruno);
+          return _plConfirme===null
+            ?true:_echec('la confirmation d\'Anna a suivi jusqu\'à Bruno');})());
+        ok('La case rendue pour B n\'est pas cochée par la confirmation de A',(()=>{
+          poser2('anna2@t.fr');
+          remplir2(1200,150,100,70);
+          saveClientNutriMacros();
+          _plSetConfirme(true,'anna2@t.fr');
+          const u=DB.get('users')||{};
+          const b2=Object.assign({},u['anna2@t.fr'],{id:'p_bru2@t.fr',email:'bru2@t.fr'});
+          u['bru2@t.fr']=b2; DB.set('users',u); currentClientId=b2.id;
+          window._plDerniereViol={email:'bru2@t.fr',liste:[{champ:'kcal',valeur:1200,
+            plancher:1760,message:'1200 kcal sous le plancher de 1760 kcal'}]};
+          const h=_htmlViolationsCoach(b2);
+          if(!/ccd-pl-confirm/.test(h)) return _echec('aucune case rendue');
+          return !/id="ccd-pl-confirm" checked/.test(h)
+            ?true:_echec('la case de Bruno est cochée par la confirmation d\'Anna');})());
+        ok('Critère : sans email, l\'enregistrement sous plancher est refusé',(()=>{
+          const c={id:'p_sansmail',email:'',role:'athlete',coachId:'coD2',fname:'S',
+            gender:'H',_evol_gender:'H',_evol_height:178,exAlias:{},exMuscles:{},
+            sessions:[],bilans:[{type:'suivi',date:Date.now()-2*864e5,
+              'deb-weight':'80','deb-height':'178','deb-age':'32','deb-gender':'Homme'}],
+            nutrition:{}};
+          const u=DB.get('users')||{}; u['_sansmail']=c; DB.set('users',u);
+          currentClientId=c.id;
+          window._plDerniereViol=null; _plConfirme=null;
+          renderCoachNutriSection(c);
+          remplir2(1200,150,100,70);
+          const r=saveClientNutriMacros(true);
+          return r===false&&_plConfirme===null
+            ?true:_echec('la dérogation est passée sans email');})());
+        ok('Critère : confirmeSousPlancher porte l\'email de l\'athlète',(()=>{
+          poser2('trace@t.fr');
+          remplir2(1200,150,100,70);
+          _plSetConfirme(true,'trace@t.fr');
+          const r=saveClientNutriMacros(true);
+          if(r!==true) return _echec('enregistrement refusé');
+          const cf=(((DB.get('users')||{})['trace@t.fr'].nutrition||{}).macros||{}).confirmeSousPlancher;
+          if(!cf) return _echec('aucune trace');
+          return cf.email==='trace@t.fr'&&cf.par==='coD2'&&cf.date>0
+            ?true:_echec(JSON.stringify(cf));})());
+        ok('Après un enregistrement réussi, la confirmation retombe',(()=>{
+          return _plConfirme===null?true:_echec('la confirmation persiste après succès');})());
+        ok('Le blocage TCA reste DUR : aucune dérogation, même confirmée',(()=>{
+          poser2('tca@t.fr',{bilans:[
+            {type:'depart',date:Date.now()-100*864e5,'deb-tca':'oui'},
+            {type:'suivi',date:Date.now()-2*864e5,'deb-weight':'80','deb-height':'178',
+             'deb-age':'32','deb-gender':'Homme'}]});
+          remplir2(1200,150,100,70);
+          _plSetConfirme(true,'tca@t.fr');
+          const r=saveClientNutriMacros(true);
+          const m=((DB.get('users')||{})['tca@t.fr'].nutrition||{}).macros;
+          return r===false&&!m?true:_echec('la dérogation est passée malgré le TCA');})());
+        ok('La case rendue reflète l\'état pour CET athlète',(()=>{
+          poser2('case@t.fr');
+          remplir2(1200,150,100,70);
+          saveClientNutriMacros();            // provoque l'affichage des violations
+          const h1=(document.getElementById('ccd-nutrition')||{}).innerHTML||'';
+          if(!/ccd-pl-confirm/.test(h1)) return _echec('aucune case rendue');
+          if(/id="ccd-pl-confirm" checked/.test(h1)) return _echec('cochée sans confirmation');
+          _plSetConfirme(true,'case@t.fr');
+          renderCoachNutriSection(getOwnedClient(currentClientId));
+          const h2=(document.getElementById('ccd-nutrition')||{}).innerHTML||'';
+          return /checked/.test(h2)?true:_echec('la case ne reflète pas la confirmation');})());
+      } finally {
+        currentUser=_sU; currentClientId=_sCid;
+        if(_sUsers) DB.set('users',_sUsers);
+        window._plDerniereViol=null; _plConfirme=null;
+      }
+    })();
 
     // ══ SEUILS DE CAFÉINE SELON L'ÂGE ════════════════════════════════════
     (()=>{
