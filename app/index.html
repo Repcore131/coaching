@@ -18181,6 +18181,160 @@ function _caffStore(){
   if(!currentUser.nutrition.caffeine.days) currentUser.nutrition.caffeine.days={};
   return currentUser.nutrition.caffeine.days;
 }
+// ── Caféine résiduelle au coucher ──────────────────────────────────────────
+// La demi-vie de la caféine tient ici dans UN chiffre : 5 heures. C'est une
+// MOYENNE DE POPULATION, pas une mesure. Selon le CYP1A2, le tabac, la
+// contraception orale, la grossesse ou l'état du foie, elle va grosso modo de
+// 2 h à 10 h — du simple au quintuple. Rien dans l'app ne mesure quoi que ce
+// soit chez l'athlète : ce qui suit est un ordre de grandeur, et l'affichage
+// le dit à chaque fois qu'il donne un chiffre.
+const DEMI_VIE_CAFEINE_H=5;
+// Bornes d'affichage. Le seuil d'alerte est INCLUSIF : 200 mg pris cinq heures
+// avant le coucher laissent exactement 100 mg, et ce cas doit déjà parler.
+const CAFEINE_RESIDU_ALERTE=100;
+const CAFEINE_RESIDU_CIBLE=50;
+
+function _hhmmEnMin(t){
+  const m=/^(\d{1,2}):(\d{2})$/.exec(String(t==null?'':t).trim());
+  if(!m) return null;
+  const h=+m[1],mn=+m[2];
+  if(h>23||mn>59) return null;
+  return h*60+mn;
+}
+function _minEnHhmm(min){
+  const m=((Math.round(min)%1440)+1440)%1440;
+  return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
+}
+// « 15h » et « 15h30 », comme on l'écrit en français, sans zéro inutile.
+function _libHeure(min){
+  const m=((Math.round(min)%1440)+1440)%1440;
+  const mn=m%60;
+  return Math.floor(m/60)+'h'+(mn?String(mn).padStart(2,'0'):'');
+}
+// Un coucher avant midi désigne la nuit qui vient, donc le lendemain : 00h30
+// devient 24h30. Sans cette convention, toutes les prises de la journée
+// seraient « postérieures au coucher » et compteraient pour zéro, ce qui
+// donnerait 0 mg résiduel à qui se couche à une heure du matin.
+function _coucherEnMin(t){
+  const m=_hhmmEnMin(t);
+  return m==null?null:(m<12*60?m+1440:m);
+}
+
+// PURE : ne lit aucun état, n'écrit rien, ne regarde pas l'heure qu'il est.
+// Pour chaque prise, mg × 0,5^(heures écoulées / demi-vie). Une prise
+// postérieure à l'heure cible compte pour zéro — on ne remonte pas le temps.
+// Une prise sans heure exploitable est ignorée : on ne peut pas la placer, et
+// lui inventer une heure fausserait le total dans un sens inconnu. L'affichage
+// signale ces prises plutôt que de les passer sous silence.
+function cafeineResiduelle(entrees,heureCible){
+  const cible=_coucherEnMin(heureCible);
+  if(cible==null) return 0;
+  let total=0;
+  (entrees||[]).forEach(e=>{
+    const mg=Number(e&&e.mg);
+    const t=_hhmmEnMin(e&&e.time);
+    if(!isFinite(mg)||mg<=0||t==null) return;
+    if(t>cible) return;
+    total+=mg*Math.pow(0.5,(cible-t)/(DEMI_VIE_CAFEINE_H*60));
+  });
+  return Math.round(total);
+}
+function _cafeineSansHeure(entrees){
+  return (entrees||[]).filter(e=>e&&Number(e.mg)>0&&_hhmmEnMin(e.time)==null).length;
+}
+
+// Dernière heure H telle que, si toute prise postérieure à H avait eu lieu à H,
+// il resterait au plus `cible` mg au coucher. Le résidu décroît quand H recule :
+// un balayage par pas de quinze minutes en partant du coucher rend donc la
+// PREMIÈRE valeur qui tient, c'est-à-dire la plus tardive. Rend null quand même
+// tout ramené au début de journée ne suffit pas — on n'annonce pas une heure
+// qui ne tiendrait pas.
+function heureLimiteCafeine(entrees,heureCoucher,cible){
+  const c=_coucherEnMin(heureCoucher);
+  if(c==null) return null;
+  const but=(cible==null?CAFEINE_RESIDU_CIBLE:cible);
+  // Le balayage s'arrête à minuit, PAS en dessous. Avec une borne négative,
+  // _minEnHhmm ramenait −15 min sur 23h45 : la prise repassait après le coucher,
+  // comptait pour zéro, et la fonction annonçait « avant 23h45 » à un athlète
+  // qui venait d'avaler 3000 mg. Faux dans le sens le plus dangereux.
+  for(let h=c;h>=0;h-=15){
+    const decalees=(entrees||[]).map(e=>{
+      const t=_hhmmEnMin(e&&e.time);
+      return t==null?e:Object.assign({},e,{time:_minEnHhmm(Math.min(t,h))});
+    });
+    if(cafeineResiduelle(decalees,heureCoucher)<=but) return ((h%1440)+1440)%1440;
+  }
+  return null;
+}
+
+// Heure de coucher retenue : médiane des quatorze derniers jours, à défaut le
+// dernier relevé, à défaut RIEN. Aucune valeur par défaut, aucun 23 h implicite :
+// sans historique de sommeil, tout ce lot reste invisible.
+// Médiane et non moyenne — une nuit blanche à 4 h du matin ne doit pas déplacer
+// l'heure habituelle de tout le monde.
+function coucherHabituel(user){
+  const log=((user&&user.sleepLog)||[]).filter(e=>e&&e.date&&_hhmmEnMin(e.bed)!=null);
+  if(!log.length) return null;
+  const tri=log.slice().sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  const limite=localISODate(new Date(Date.now()-14*864e5));
+  const recents=tri.filter(e=>String(e.date)>=limite);
+  if(recents.length){
+    // Les couchers d'après minuit sont ramenés sur la même échelle que les
+    // autres (00h30 → 24h30), sinon la médiane serait tirée vers le matin.
+    const v=recents.map(e=>_coucherEnMin(e.bed)).sort((a,b)=>a-b);
+    const m=v.length%2
+      ?v[(v.length-1)/2]
+      :Math.round((v[v.length/2-1]+v[v.length/2])/2);
+    return {min:((m%1440)+1440)%1440,source:'mediane',nuits:recents.length};
+  }
+  const d=tri[tri.length-1];
+  return {min:_hhmmEnMin(d.bed),source:'dernier',nuits:1};
+}
+
+const CAFEINE_NOTE_DEMIVIE="Estimation sur une demi-vie moyenne de 5 h : la vitesse d'élimination varie beaucoup d'une personne à l'autre.";
+
+// Écran Caféine, sous la jauge. Rien si l'heure de coucher est inconnue, rien
+// s'il ne reste plus rien à annoncer.
+function _htmlCafeineCoucher(entrees,user){
+  const c=coucherHabituel(user);
+  if(!c||c.min==null) return '';
+  const bed=_minEnHhmm(c.min);
+  const residu=cafeineResiduelle(entrees,bed);
+  if(residu<1) return '';
+  const alerte=residu>=CAFEINE_RESIDU_ALERTE;
+  const coul=alerte?'var(--warning)':'var(--sub)';
+  const lim=alerte?heureLimiteCafeine(entrees,bed,CAFEINE_RESIDU_CIBLE):null;
+  const sansHeure=_cafeineSansHeure(entrees);
+  return `<div style="background:${alerte?'rgba(245,158,11,.07)':'var(--surface-1)'};border:1px solid ${alerte?'rgba(245,158,11,.28)':'var(--border)'};border-radius:10px;padding:11px 13px;margin-bottom:8px">
+    <div style="font-size:12px;color:${coul};line-height:1.6;font-weight:${alerte?'700':'400'}">Il t'en restera environ ${residu} mg à ton heure de coucher habituelle (${_libHeure(c.min)}).</div>
+    ${lim!=null?`<div style="font-size:12px;color:var(--warning);line-height:1.6;font-weight:700;margin-top:4px">Pour être sous ${CAFEINE_RESIDU_CIBLE} mg, ta dernière prise devrait être avant ${_libHeure(lim)}.</div>`:''}
+    ${sansHeure?`<div style="font-size:11px;color:var(--text-dim);line-height:1.5;margin-top:5px">${sansHeure} prise${sansHeure>1?'s':''} sans heure renseignée n'${sansHeure>1?'entrent':'entre'} pas dans ce calcul.</div>`:''}
+    <div style="font-size:11px;color:var(--text-dim);line-height:1.5;margin-top:5px">${escapeHtml(CAFEINE_NOTE_DEMIVIE)}</div>
+  </div>`;
+}
+
+// Écran Sommeil, la même chose dans l'autre sens : les nuits de la semaine
+// affichée où il restait de la caféine au coucher. L'heure retenue est celle
+// RELEVÉE cette nuit-là — ce n'est pas une hypothèse, c'est une donnée.
+// Aucun jugement sur la nuit : on ne dit pas que le sommeil a été mauvais, on
+// ne relie rien à la durée dormie. On donne le chiffre, c'est tout.
+function _htmlCafeineNuits(user,dates){
+  const log=(user&&user.sleepLog)||[];
+  const jours=(user&&user.nutrition&&user.nutrition.caffeine&&user.nutrition.caffeine.days)||{};
+  const lignes=(dates||[]).map(d=>{
+    const nuit=log.find(e=>e&&e.date===d);
+    if(!nuit||_hhmmEnMin(nuit.bed)==null) return null;
+    const mg=cafeineResiduelle(jours[d]||[],nuit.bed);
+    return mg>=CAFEINE_RESIDU_ALERTE?{date:d,bed:nuit.bed,mg}:null;
+  }).filter(Boolean);
+  if(!lignes.length) return '';
+  const lbl=d=>new Date(d+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'short',day:'numeric'});
+  return `<div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.24);border-radius:14px;padding:16px;margin-bottom:14px">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2.5px;color:var(--warning);text-transform:uppercase;margin-bottom:9px">Caféine au coucher</div>
+    ${lignes.map(l=>`<div style="font-size:12px;color:#ddd;line-height:1.7;text-transform:capitalize">${escapeHtml(lbl(l.date))} <span style="text-transform:none;color:var(--warning);font-weight:700">environ ${l.mg} mg</span><span style="text-transform:none;color:var(--sub)"> encore présents à ${_libHeure(_hhmmEnMin(l.bed))}</span></div>`).join('')}
+    <div style="font-size:11px;color:var(--text-dim);line-height:1.5;margin-top:8px">${escapeHtml(CAFEINE_NOTE_DEMIVIE)}</div>
+  </div>`;
+}
 function getCaffeineDay(dateStr){return(_caffStore()[dateStr]||[]);}
 function addCaffeineEntry(entry){
   const days=_caffStore();
@@ -18251,6 +18405,7 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
     </div>
     <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--surface-2);font-size:var(--fs-xs);color:var(--sub);letter-spacing:.3px">Référence : ${thr.red} mg/j max (EFSA)</div>
   </div>
+  ${isToday?_htmlCafeineCoucher(entries,currentUser):''}
   ${alertHtml}
   ${isToday?'<button class="btn btn-red" onclick="openCaffeineAdd()" style="margin-bottom:20px">+ Enregistrer une prise</button>':''}
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
@@ -20604,6 +20759,7 @@ function loadSleep(containerId='sleep-content'){
         <div style="display:flex;gap:4px">${counts}</div>
       </div>
     </div>
+    ${_htmlCafeineNuits(currentUser,weekDates)}
     ${histHtml}
   `;
 }
@@ -31159,6 +31315,371 @@ function testExercices(){
           if(sale.length) return _echec('valeurs non lisibles : '+sale[0]);
           return va[0]==='Créatine monohydrate'&&vc[0]==='Créatine monohydrate';
         } finally { currentUser=sauveU; currentClientId=sauveC; }})());
+    })();
+
+
+    // ══ CAFÉINE RÉSIDUELLE AU COUCHER ═════════════════════════════════════
+    (()=>{
+      const E=(mg,t)=>({type:'coffee',name:'Café',mg,time:t});
+      const _nuit=(d,bed,wake)=>({date:d,bed,wake,
+        duration:calcSleepDuration(bed,wake)});
+      const _jour=n=>localISODate(new Date(Date.now()-n*864e5));
+      // Athlète avec quatorze nuits à 23h00 : l'heure retenue est 23h00.
+      const _u=(bed,supp)=>Object.assign({id:'_tc',email:'tc@t',exAlias:{},exMuscles:{},
+        sessions:[],sleepLog:bed==null?[]:Array.from({length:14},(x,i)=>_nuit(_jour(i+1),bed,'07:00'))},supp||{});
+
+      // ── La demi-vie est une moyenne, pas une mesure ──────────────────────
+      ok('La demi-vie est de 5 h',DEMI_VIE_CAFEINE_H===5);
+      ok('Elle est annoncée comme une moyenne, jamais comme une mesure',(()=>{
+        const t=CAFEINE_NOTE_DEMIVIE.toLowerCase();
+        if(t.indexOf('moyenne')<0) return _echec('le mot « moyenne » n\'y est pas');
+        // Et la variabilité individuelle est dite, sinon le chiffre se lit
+        // comme une valeur propre à l'athlète.
+        return /varie/.test(t)?true:_echec('la variabilité n\'est pas dite');})());
+
+      // ── cafeineResiduelle : les trois critères chiffrés ──────────────────
+      ok('Critère : 200 mg à 8h, coucher 23h → environ 25 mg',(()=>{
+        const r=cafeineResiduelle([E(200,'08:00')],'23:00');
+        // 15 h = trois demi-vies : 200 → 100 → 50 → 25.
+        return r===25?true:_echec(r+' mg');})());
+      ok('Critère : 200 mg à 18h, coucher 23h → environ 100 mg',(()=>{
+        const r=cafeineResiduelle([E(200,'18:00')],'23:00');
+        return r===100?true:_echec(r+' mg');})());
+      ok('Critère : une prise à 23h30 pour un coucher à 23h compte pour zéro',
+        cafeineResiduelle([E(200,'23:30')],'23:00')===0);
+      ok('Une prise à l\'heure du coucher compte pour son plein',
+        cafeineResiduelle([E(200,'23:00')],'23:00')===200);
+      ok('Les prises s\'additionnent',(()=>{
+        const r=cafeineResiduelle([E(200,'08:00'),E(200,'18:00')],'23:00');
+        return r===125?true:_echec(r+' mg');})());
+      ok('Une demi-vie exactement divise par deux',
+        cafeineResiduelle([E(80,'18:00')],'23:00')===40);
+      ok('Un coucher après minuit ne remet pas tout à zéro',(()=>{
+        // 00h30 désigne la nuit qui vient : 18h00 est bien AVANT, à 6h30 de là.
+        const r=cafeineResiduelle([E(200,'18:00')],'00:30');
+        const att=Math.round(200*Math.pow(0.5,6.5/5));
+        return r===att?true:_echec(r+' mg au lieu de '+att);})());
+      ok('Une prise sans heure est ignorée, pas devinée',(()=>{
+        const a=cafeineResiduelle([E(200,'18:00'),E(300,'')],'23:00');
+        const b=cafeineResiduelle([E(200,'18:00'),E(300,null)],'23:00');
+        const c=cafeineResiduelle([E(200,'18:00'),E(300,'25:99')],'23:00');
+        return a===100&&b===100&&c===100?true:_echec(a+'/'+b+'/'+c);})());
+      ok('Les prises sans heure sont comptées pour être signalées',
+        _cafeineSansHeure([E(200,'18:00'),E(300,''),E(50,null)])===2);
+      ok('Sans heure de coucher exploitable, le résidu est zéro',
+        cafeineResiduelle([E(200,'18:00')],'')===0
+        &&cafeineResiduelle([E(200,'18:00')],null)===0
+        &&cafeineResiduelle([E(200,'18:00')],'nawak')===0);
+      ok('Aucune entrée : zéro, sans erreur',
+        cafeineResiduelle([],'23:00')===0&&cafeineResiduelle(null,'23:00')===0
+        &&cafeineResiduelle(undefined,'23:00')===0);
+      ok('Les mg absurdes sont écartés',
+        cafeineResiduelle([E(0,'18:00'),E(-50,'18:00'),E('abc','18:00'),
+          {mg:200,time:'18:00'}],'23:00')===100);
+      ok('cafeineResiduelle est PURE : elle ne touche ni entrées ni utilisateur',(()=>{
+        const l=[E(200,'08:00'),E(150,'18:00')];
+        const avant=JSON.stringify(l);
+        const u=_u('23:00'); const uAvant=JSON.stringify(u);
+        cafeineResiduelle(l,'23:00');
+        if(JSON.stringify(l)!==avant) return _echec('les entrées ont bougé');
+        return JSON.stringify(u)===uAvant?true:_echec('l\'utilisateur a bougé');})());
+      ok('Deux appels identiques donnent le même résultat',(()=>{
+        const l=[E(200,'08:00'),E(150,'18:00')];
+        return cafeineResiduelle(l,'23:00')===cafeineResiduelle(l,'23:00');})());
+
+      // ── L'heure de coucher retenue ───────────────────────────────────────
+      ok('Critère : sleepLog vide → aucune heure inventée',(()=>{
+        if(coucherHabituel(_u(null))!==null) return _echec('une heure est sortie de nulle part');
+        return coucherHabituel({})===null&&coucherHabituel(null)===null;})());
+      ok('Critère : sleepLog vide → aucun bloc rendu, aucune erreur',(()=>{
+        const h=_htmlCafeineCoucher([E(300,'20:00')],_u(null));
+        return h===''?true:_echec('bloc rendu : '+h.slice(0,60));})());
+      ok('Aucun 23 h par défaut nulle part',(()=>{
+        // Le repli implicite le plus tentant. On vérifie qu'il n'existe pas :
+        // sans sommeil renseigné, il n'y a AUCUN chiffre affiché.
+        const h=_htmlCafeineCoucher([E(400,'21:00')],_u(null));
+        const n=_htmlCafeineNuits(_u(null),[_jour(1),_jour(2)]);
+        return h===''&&n===''?true:_echec('quelque chose est affiché sans sommeil connu');})());
+      ok('L\'heure retenue est la médiane des 14 derniers jours',(()=>{
+        const u=_u(null);
+        u.sleepLog=[_nuit(_jour(1),'23:00','07:00'),_nuit(_jour(2),'22:00','07:00'),
+                    _nuit(_jour(3),'23:30','07:00'),_nuit(_jour(4),'22:30','07:00'),
+                    _nuit(_jour(5),'23:00','07:00')];
+        const c=coucherHabituel(u);
+        if(!c) return _echec('rien');
+        // Triées : 22:00 22:30 23:00 23:00 23:30 → médiane 23:00.
+        return c.min===23*60&&c.source==='mediane'
+          ?true:_echec(_minEnHhmm(c.min)+' / '+c.source);})());
+      ok('Une nuit blanche ne déplace pas l\'heure retenue',(()=>{
+        // C'est tout l'intérêt de la médiane : un coucher à 4h du matin est un
+        // accident, pas une habitude.
+        const u=_u(null);
+        u.sleepLog=[_nuit(_jour(1),'23:00','07:00'),_nuit(_jour(2),'23:00','07:00'),
+                    _nuit(_jour(3),'04:00','11:00'),_nuit(_jour(4),'23:00','07:00'),
+                    _nuit(_jour(5),'23:00','07:00')];
+        const c=coucherHabituel(u);
+        return c&&c.min===23*60?true:_echec(c?_minEnHhmm(c.min):'rien');})());
+      ok('Les couchers d\'après minuit ne tirent pas la médiane vers le matin',(()=>{
+        // 00h30 est PLUS TARD que 23h30, pas vingt-trois heures plus tôt.
+        const u=_u(null);
+        u.sleepLog=[_nuit(_jour(1),'23:00','07:00'),_nuit(_jour(2),'23:30','07:30'),
+                    _nuit(_jour(3),'00:30','08:00')];
+        const c=coucherHabituel(u);
+        return c&&c.min===23*60+30?true:_echec(c?_minEnHhmm(c.min):'rien');})());
+      ok('Rien dans les 14 jours : on prend le dernier relevé',(()=>{
+        const u=_u(null);
+        u.sleepLog=[_nuit(_jour(60),'21:00','06:00'),_nuit(_jour(40),'22:15','07:00')];
+        const c=coucherHabituel(u);
+        if(!c) return _echec('rien');
+        return c.min===22*60+15&&c.source==='dernier'
+          ?true:_echec(_minEnHhmm(c.min)+' / '+c.source);})());
+      ok('Une nuit sans heure de coucher n\'est pas retenue',(()=>{
+        const u=_u(null);
+        u.sleepLog=[{date:_jour(1),bed:'',wake:'07:00'},{date:_jour(2),bed:'22:00',wake:'07:00'}];
+        const c=coucherHabituel(u);
+        return c&&c.min===22*60?true:_echec(c?_minEnHhmm(c.min):'rien');})());
+      ok('coucherHabituel ne modifie pas le journal de sommeil',(()=>{
+        const u=_u('23:00');
+        const avant=JSON.stringify(u.sleepLog);
+        coucherHabituel(u);
+        return JSON.stringify(u.sleepLog)===avant;})());
+
+      // ── L'heure limite, calculée et jamais écrite en dur ─────────────────
+      ok('Critère : l\'heure limite réinjectée donne au plus 50 mg',(()=>{
+        const cas=[[[E(200,'18:00')],'23:00'],[[E(400,'20:00')],'23:00'],
+          [[E(150,'09:00'),E(200,'19:00'),E(80,'21:30')],'23:00'],
+          [[E(300,'21:00')],'00:30']];
+        for(const [l,bed] of cas){
+          const h=heureLimiteCafeine(l,bed,CAFEINE_RESIDU_CIBLE);
+          if(h==null) return _echec('aucune heure pour '+JSON.stringify(l));
+          // On rejoue le scénario : toute prise après l'heure limite y est ramenée.
+          const rejoue=l.map(e=>({...e,time:_minEnHhmm(Math.min(_hhmmEnMin(e.time),h))}));
+          const r=cafeineResiduelle(rejoue,bed);
+          if(r>CAFEINE_RESIDU_CIBLE)
+            return _echec('à '+_libHeure(h)+' il resterait '+r+' mg');
+        }
+        return true;})());
+      ok('L\'heure limite est la PLUS TARDIVE qui tienne',(()=>{
+        // Quinze minutes plus tard, la cible doit être dépassée — sinon on a
+        // conseillé à l'athlète d'arrêter plus tôt que nécessaire.
+        const l=[E(200,'18:00')],bed='23:00';
+        const h=heureLimiteCafeine(l,bed,CAFEINE_RESIDU_CIBLE);
+        if(h==null) return _echec('aucune heure');
+        const plusTard=l.map(e=>({...e,time:_minEnHhmm(Math.min(_hhmmEnMin(e.time),h+15))}));
+        const r=cafeineResiduelle(plusTard,bed);
+        return r>CAFEINE_RESIDU_CIBLE
+          ?true:_echec('à '+_libHeure(h+15)+' il resterait déjà '+r+' mg : trop tôt');})());
+      ok('200 mg pour une cible de 50 mg : deux demi-vies avant le coucher',(()=>{
+        // 200 → 50 demande dix heures pleines : 13h00 pour un coucher à 23h00.
+        const h=heureLimiteCafeine([E(200,'18:00')],'23:00',CAFEINE_RESIDU_CIBLE);
+        return h===13*60?true:_echec(h==null?'rien':_libHeure(h));})());
+      ok('L\'heure limite n\'est écrite nulle part en dur',(()=>{
+        // Elle bouge avec la dose ET avec l'heure de coucher.
+        const a=heureLimiteCafeine([E(200,'18:00')],'23:00',CAFEINE_RESIDU_CIBLE);
+        const b=heureLimiteCafeine([E(400,'18:00')],'23:00',CAFEINE_RESIDU_CIBLE);
+        const c=heureLimiteCafeine([E(200,'18:00')],'22:00',CAFEINE_RESIDU_CIBLE);
+        if(a===b) return _echec('la dose ne change rien');
+        if(a===c) return _echec('l\'heure de coucher ne change rien');
+        return b<a&&c<a;})());
+      ok('Trop de caféine pour tenir la cible : aucune heure annoncée',(()=>{
+        // Même tout ramené au début de journée, 3000 mg ne passent pas sous 50.
+        return heureLimiteCafeine([E(3000,'12:00')],'23:00',CAFEINE_RESIDU_CIBLE)===null;})());
+      ok('Sans heure de coucher, aucune heure limite',
+        heureLimiteCafeine([E(200,'18:00')],'')===null
+        &&heureLimiteCafeine([E(200,'18:00')],null)===null);
+      ok('heureLimiteCafeine ne modifie pas les entrées',(()=>{
+        const l=[E(200,'18:00'),E(100,'21:00')];
+        const avant=JSON.stringify(l);
+        heureLimiteCafeine(l,'23:00',CAFEINE_RESIDU_CIBLE);
+        return JSON.stringify(l)===avant;})());
+
+      // ── La ligne sous la jauge ───────────────────────────────────────────
+      ok('Critère : 200 mg à 8h → la ligne existe et n\'est PAS orange',(()=>{
+        const h=_htmlCafeineCoucher([E(200,'08:00')],_u('23:00'));
+        if(!h) return _echec('aucune ligne');
+        if(h.indexOf('environ 25 mg')<0) return _echec('le chiffre n\'y est pas');
+        if(/var\(--warning\)/.test(h)) return _echec('la ligne est orange à 25 mg');
+        return h.indexOf('dernière prise')<0
+          ?true:_echec('une heure limite est annoncée sans raison');})());
+      ok('Critère : 200 mg à 18h → la ligne est orange et donne l\'heure limite',(()=>{
+        const h=_htmlCafeineCoucher([E(200,'18:00')],_u('23:00'));
+        if(!h) return _echec('aucune ligne');
+        if(h.indexOf('environ 100 mg')<0) return _echec('le chiffre n\'y est pas');
+        if(!/var\(--warning\)/.test(h)) return _echec('la ligne n\'est pas orange');
+        return h.indexOf('devrait être avant 13h')>=0
+          ?true:_echec('heure limite absente ou fausse');})());
+      ok('L\'heure de coucher retenue est affichée avec le chiffre',(()=>{
+        const h=_htmlCafeineCoucher([E(200,'18:00')],_u('22:30'));
+        return h.indexOf('(22h30)')>=0?true:_echec('heure de coucher absente');})());
+      ok('Le seuil orange est inclusif : 100 mg pile parle déjà',(()=>{
+        // 200 mg cinq heures avant le coucher laissent exactement 100 mg. Le
+        // critère du lot dit que ce cas doit être orange.
+        const r=cafeineResiduelle([E(200,'18:00')],'23:00');
+        if(r!==CAFEINE_RESIDU_ALERTE) return _echec('résidu '+r);
+        return /var\(--warning\)/.test(_htmlCafeineCoucher([E(200,'18:00')],_u('23:00')));})());
+      ok('Rien à annoncer : pas de ligne',(()=>{
+        const a=_htmlCafeineCoucher([],_u('23:00'));
+        const b=_htmlCafeineCoucher([E(200,'23:30')],_u('23:00'));
+        return a===''&&b===''?true:_echec('«'+a.slice(0,40)+'» / «'+b.slice(0,40)+'»');})());
+      ok('Les prises sans heure sont signalées, pas escamotées',(()=>{
+        const h=_htmlCafeineCoucher([E(200,'18:00'),E(300,'')],_u('23:00'));
+        return /1 prise sans heure/.test(h)
+          ?true:_echec('300 mg disparaissent du calcul sans un mot');})());
+      ok('Aucun jugement, aucun conseil médical dans la ligne',(()=>{
+        const h=_htmlCafeineCoucher([E(400,'20:00')],_u('23:00'));
+        // La note sur la demi-vie est retirée avant de scanner : elle contient
+        // « 5 h » et « varie », ce qui est justement son rôle.
+        const t=h.split(escapeHtml(CAFEINE_NOTE_DEMIVIE)).join(' ')
+          .toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+        const interdits=['insomnie','trouble','maladie','symptome','tu dors mal',
+          'mauvais sommeil','arrete','tu dois','il faut'];
+        const trouves=interdits.filter(m=>t.indexOf(m)>=0);
+        return trouves.length?_echec(trouves.join(', ')):true;})());
+
+      // ── L'écran Sommeil, dans l'autre sens ───────────────────────────────
+      ok('Critère : seuls les jours au-dessus de 100 mg apparaissent',(()=>{
+        const u=_u(null);
+        u.sleepLog=[_nuit(_jour(1),'23:00','07:00'),_nuit(_jour(2),'23:00','07:00')];
+        u.nutrition={caffeine:{days:{}}};
+        u.nutrition.caffeine.days[_jour(1)]=[E(200,'18:00')];  // 100 mg : oui
+        u.nutrition.caffeine.days[_jour(2)]=[E(200,'08:00')];  //  25 mg : non
+        const h=_htmlCafeineNuits(u,[_jour(1),_jour(2)]);
+        if(!h) return _echec('aucun bloc');
+        if(h.indexOf('environ 100 mg')<0) return _echec('la nuit à 100 mg manque');
+        return h.indexOf('environ 25 mg')<0
+          ?true:_echec('une nuit à 25 mg est affichée');})());
+      ok('Aucune nuit au-dessus du seuil : aucun bloc du tout',(()=>{
+        const u=_u(null);
+        u.sleepLog=[_nuit(_jour(1),'23:00','07:00')];
+        u.nutrition={caffeine:{days:{}}};
+        u.nutrition.caffeine.days[_jour(1)]=[E(100,'08:00')];
+        return _htmlCafeineNuits(u,[_jour(1)])==='';})());
+      ok('L\'heure retenue côté Sommeil est celle RELEVÉE cette nuit-là',(()=>{
+        // Ce n'est pas une hypothèse : la nuit porte son propre coucher.
+        // Mon premier jeu d'essai n'avait qu'UNE nuit : la médiane valait donc
+        // exactement le coucher de cette nuit-là, et la variante qui prenait
+        // l'heure habituelle passait au vert. Il faut une nuit qui SORT de
+        // l'habitude : cinq couchers à 23h00, et la nuit visée à 21h00.
+        const u=_u(null);
+        u.sleepLog=[_nuit(_jour(1),'21:00','06:00'),
+          _nuit(_jour(2),'23:00','07:00'),_nuit(_jour(3),'23:00','07:00'),
+          _nuit(_jour(4),'23:00','07:00'),_nuit(_jour(5),'23:00','07:00'),
+          _nuit(_jour(6),'23:00','07:00')];
+        u.nutrition={caffeine:{days:{}}};
+        u.nutrition.caffeine.days[_jour(1)]=[E(200,'19:00')];
+        // Sonde : sans cet écart, le test ne prouverait rien.
+        const hab=coucherHabituel(u);
+        if(!hab||hab.min!==23*60)
+          return _echec('jeu d\'essai invalide : habituel '+(hab?_minEnHhmm(hab.min):'rien'));
+        const h=_htmlCafeineNuits(u,[_jour(1)]);
+        if(!h) return _echec('aucun bloc');
+        // 2 h avant le coucher relevé (21h00) : 200 × 0,5^0,4 ≈ 152 mg.
+        // Avec l'heure habituelle (23h00) on lirait 4 h, soit 115 mg.
+        const att=Math.round(200*Math.pow(0.5,2/5));
+        const faux=Math.round(200*Math.pow(0.5,4/5));
+        if(h.indexOf('environ '+faux+' mg')>=0)
+          return _echec('l\'heure HABITUELLE a été utilisée à la place du relevé');
+        return h.indexOf('environ '+att+' mg')>=0&&h.indexOf('à 21h')>=0
+          ?true:_echec('attendu '+att+' mg à 21h');})());
+      ok('Une nuit sans caféine enregistrée n\'apparaît pas',(()=>{
+        const u=_u(null);
+        u.sleepLog=[_nuit(_jour(1),'23:00','07:00')];
+        return _htmlCafeineNuits(u,[_jour(1)])==='';})());
+      ok('Un jour avec caféine mais sans nuit relevée n\'apparaît pas',(()=>{
+        const u=_u(null);
+        u.nutrition={caffeine:{days:{}}};
+        u.nutrition.caffeine.days[_jour(1)]=[E(400,'21:00')];
+        return _htmlCafeineNuits(u,[_jour(1)])===''
+          ?true:_echec('une heure de coucher a été supposée');})());
+      ok('Critère : aucun jugement sur la nuit passée',(()=>{
+        const u=_u(null);
+        u.sleepLog=[_nuit(_jour(1),'23:00','04:00')];   // 5 h de sommeil
+        u.nutrition={caffeine:{days:{}}};
+        u.nutrition.caffeine.days[_jour(1)]=[E(300,'20:00')];
+        const h=_htmlCafeineNuits(u,[_jour(1)]);
+        if(!h) return _echec('aucun bloc');
+        // La note sur la demi-vie contient « 5 h » : elle sortirait sur le test
+        // de la durée dormie juste en dessous. On la met de côté.
+        const t=h.split(escapeHtml(CAFEINE_NOTE_DEMIVIE)).join(' ')
+          .toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+        // Ni cause, ni reproche, ni commentaire sur la duree dormie.
+        const interdits=['a cause','explique','mauvaise nuit','mal dormi','courte nuit',
+          'c\'est pourquoi','voila pourquoi','trop peu','insuffisant','tu aurais'];
+        const trouves=interdits.filter(m=>t.indexOf(m)>=0);
+        if(trouves.length) return _echec(trouves.join(', '));
+        // Et la durée dormie n'est même pas mentionnée.
+        return t.indexOf('5h')<0&&t.indexOf('5 h')<0
+          ?true:_echec('la durée de la nuit est commentée');})());
+      ok('_htmlCafeineNuits ne modifie pas l\'utilisateur',(()=>{
+        const u=_u(null);
+        u.sleepLog=[_nuit(_jour(1),'23:00','07:00')];
+        u.nutrition={caffeine:{days:{}}};
+        u.nutrition.caffeine.days[_jour(1)]=[E(300,'20:00')];
+        const avant=JSON.stringify(u);
+        _htmlCafeineNuits(u,[_jour(1)]);
+        return JSON.stringify(u)===avant;})());
+      ok('Aucune date, aucune erreur : le bloc reste vide',(()=>{
+        try{
+          return _htmlCafeineNuits(_u('23:00'),[])===''
+            &&_htmlCafeineNuits(_u('23:00'),null)===''
+            &&_htmlCafeineNuits(null,[_jour(1)])==='';
+        }catch(e){ return _echec('exception : '+e.message); }})());
+
+      // ── NON-RÉGRESSION : seuils, couleurs et total journalier ────────────
+      // Le lot ne doit RIEN changer à la jauge. Les valeurs ci-dessous sont
+      // recopiées en dur : elles tombent si quelqu'un touche aux paliers.
+      ok('Non-régression : les seuils EFSA sont inchangés',(()=>{
+        if(CAFFEINE_MAX_EFSA!==400) return _echec('EFSA '+CAFFEINE_MAX_EFSA);
+        const a=caffeineThresholds(75);
+        if(a.green!==150||a.yellow!==225||a.orange!==400||a.red!==400)
+          return _echec('75 kg : '+JSON.stringify(a));
+        const b=caffeineThresholds(50);
+        if(b.green!==100||b.yellow!==150||b.orange!==275||b.red!==400)
+          return _echec('50 kg : '+JSON.stringify(b));
+        const c=caffeineThresholds(120);
+        return c.green===200&&c.yellow===300&&c.orange===400&&c.red===400
+          ?true:_echec('120 kg : '+JSON.stringify(c));})());
+      ok('Non-régression : les quatre couleurs de la jauge sont inchangées',(()=>{
+        const thr=caffeineThresholds(75);
+        const cas=[[0,'var(--success)'],[149,'var(--success)'],[150,'var(--info)'],
+          [224,'var(--info)'],[225,'var(--warning)'],[399,'var(--warning)'],
+          [400,'var(--danger)'],[900,'var(--danger)']];
+        for(const [mg,att] of cas){
+          const v=_caffeineColor(mg,thr);
+          if(v!==att) return _echec(mg+' mg → '+v+' au lieu de '+att);}
+        return true;})());
+      ok('Non-régression : le total journalier reste la somme des mg',(()=>{
+        // C'est le calcul que fait _renderCaffeineScreen. La ligne résiduelle
+        // ne doit surtout pas s'en mêler.
+        const l=[E(200,'08:00'),E(150,'18:00'),E(80,'23:30'),E(70,'')];
+        const total=l.reduce((s,e)=>s+(e.mg||0),0);
+        return total===500?true:_echec(String(total));})());
+      ok('Non-régression : la jauge affiche le même total et la même couleur',(()=>{
+        const sauveU=currentUser;
+        try{
+          currentUser=_u('23:00');
+          const l=[E(200,'08:00'),E(150,'18:00')];
+          const total=l.reduce((s,e)=>s+(e.mg||0),0);
+          const thr=caffeineThresholds(75);
+          const h=_renderCaffeineBlock(l,total,thr,'screen','2026-01-01',false,true,'Test',75);
+          // Le total dans l'anneau, et la couleur attendue pour 350 mg à 75 kg.
+          if(h.indexOf('>'+total+'</span>')<0) return _echec('le total a changé dans la jauge');
+          if(h.indexOf(_caffeineColor(total,thr))<0) return _echec('la couleur a changé');
+          // Et la ligne résiduelle est bien là, SOUS la jauge et AVANT la liste.
+          const iJauge=h.indexOf('Référence : '+thr.red+' mg/j max (EFSA)');
+          const iLigne=h.indexOf('à ton heure de coucher habituelle');
+          if(iLigne<0) return _echec('la ligne résiduelle manque');
+          return iLigne>iJauge?true:_echec('la ligne est au-dessus de la jauge');
+        } finally { currentUser=sauveU; }})());
+      ok('Non-régression : sur un jour passé, aucune ligne au futur',(()=>{
+        const sauveU=currentUser;
+        try{
+          currentUser=_u('23:00');
+          const h=_renderCaffeineBlock([E(200,'18:00')],200,caffeineThresholds(75),
+            'screen','2026-01-01',false,false,'Hier',75);
+          return h.indexOf('restera')<0
+            ?true:_echec('« il t\'en restera » sur un jour passé');
+        } finally { currentUser=sauveU; }})());
     })();
 
 
