@@ -5753,7 +5753,8 @@ function douleurParExercice(c,jours){
 const _cacheSignaux=new Map();
 function _viderCacheSignaux(){ _cacheSignaux.clear(); }
 const SIGNAUX_VIDES=Object.freeze({douleur:false,douleurDiffuse:false,decrochage:false,
-  plateauMuscle:false,sousMEV:false,volumeHaut:false,formeBasse:false,details:Object.freeze({})});
+  plateauMuscle:false,sousMEV:false,volumeHaut:false,formeBasse:false,
+  restrictionLongue:false,details:Object.freeze({})});
 
 function signauxEntrainement(c){
   // Invité non inscrit : aucun historique d'entraînement chez le coach, donc
@@ -5773,10 +5774,26 @@ function signauxEntrainement(c){
     const l=_seriesDouloureuses(sess);
     emp+=';'+(sess.id||sess.date)+':'+l.length+':'+l.reduce((m,x)=>Math.max(m,x.pain),0);
   }
-  const cle=c.id+'|'+ss.length+'|'+(ss.length?tri[tri.length-1].date:0)+'|'+emp;
+  const _ph=c.phase&&c.phase.type?(c.phase.type+'@'+c.phase.debut):'';
+  const _mk=(()=>{ const m=(c.nutrition||{}).macros;
+    if(!m) return ''; return String((m.on&&m.on.kcal)||'')+'/'+String((m.off&&m.off.kcal)||''); })();
+  const cle=c.id+'|'+ss.length+'|'+(ss.length?tri[tri.length-1].date:0)+'|'+emp+'|'+_ph+'|'+_mk;
   if(_cacheSignaux.has(cle)) return _cacheSignaux.get(cle);
   const r={douleur:false,douleurDiffuse:false,decrochage:false,
-    plateauMuscle:false,sousMEV:false,volumeHaut:false,formeBasse:false,details:{}};
+    plateauMuscle:false,sousMEV:false,volumeHaut:false,formeBasse:false,
+    restrictionLongue:false,details:{}};
+  // La restriction prolongée ne dépend pas des séances : elle se calcule ICI,
+  // avant le retour anticipé. Placée plus bas, un athlète en sèche longue qui
+  // ne journalise aucune séance ne serait jamais remonté au coach.
+  try{
+    if(restrictionProlongee(c)){
+      r.restrictionLongue=true;
+      const _pl=plancherEffectif(c);
+      const _m=(c.nutrition||{}).macros||{};
+      const _bas=Math.min.apply(null,[_m.on,_m.off].filter(x=>x&&Number(x.kcal)>0).map(x=>Number(x.kcal)));
+      r.details.restrictionLongue={semaines:semainesEcoulees(c),kcal:_bas,plancher:_pl.kcal};
+    }
+  }catch(e){}
   if(!ss.length){ _cacheSignaux.set(cle,r); return r; }
 
   // ── Douleur ciblée : même exercice, au moins deux séries ET deux séances ──
@@ -5918,7 +5935,7 @@ function urgencyScore(c){
   if(sg.douleur&&!isAlertSnoozed('douleur',c.id,0,c)) return 9;
   if(sg.douleurDiffuse&&!isAlertSnoozed('douleurdiff',c.id,0,c)) return 8;
   if(sg.decrochage&&!isAlertSnoozed('decrochage',c.id)) return 7;
-  if((sg.plateauMuscle||sg.formeBasse||sg.sousMEV||sg.volumeHaut)&&!isAlertSnoozed('entrainement',c.id)) return 6;
+  if((sg.plateauMuscle||sg.formeBasse||sg.sousMEV||sg.volumeHaut||sg.restrictionLongue)&&!isAlertSnoozed('entrainement',c.id)) return 6;
   // Même priorité que « nouveau bilan » : les deux sont mutuellement exclusifs
   // (hasNewBilan exige au moins un bilan, neverStarted exige aucun), pas d'égalité possible.
   if(neverStarted(c)&&!isAlertSnoozed('nostart',c.id)) return 5;
@@ -6240,6 +6257,9 @@ function _texteSignal(type,c,sg){
     return x.faits+' séries réalisées sur '+x.prevus+' prévues sur les '+x.seances+' dernières séances.';
   }
   if(type==='entrainement'){
+    if(d.restrictionLongue) return 'sèche depuis '+d.restrictionLongue.semaines
+      +' semaines à '+d.restrictionLongue.kcal+' kcal, pour un plancher de '
+      +d.restrictionLongue.plancher+' kcal. Un palier est à envisager.';
     if(d.plateauMuscle) return d.plateauMuscle.lib.toLowerCase()+' en plateau : '
       +d.plateauMuscle.bloques+' exercices sans nouveau maximum depuis '
       +d.plateauMuscle.semaines+' semaines.';
@@ -6269,7 +6289,7 @@ function _lignesEntrainement(clients){
     for(const c of clients){
       if(vus.has(c.id)) continue;
       let sg; try{ sg=signauxEntrainement(c); }catch(e){ continue; }
-      const actif=n.cle?sg[n.cle]:(sg.plateauMuscle||sg.formeBasse||sg.sousMEV||sg.volumeHaut);
+      const actif=n.cle?sg[n.cle]:(sg.plateauMuscle||sg.formeBasse||sg.sousMEV||sg.volumeHaut||sg.restrictionLongue);
       if(!actif) continue;
       if(isAlertSnoozed(n.type,c.id,0,c)) continue;
       const txt=_texteSignal(n.type,c,sg);
@@ -6280,7 +6300,8 @@ function _lignesEntrainement(clients){
       // précédence que _texteSignal, pour que le titre et la phrase parlent
       // toujours du même signal.
       const lib=n.cle?n.lib
-        :((sg.plateauMuscle||sg.formeBasse||sg.sousMEV)?n.lib:'Volume élevé');
+        :(sg.restrictionLongue?'Restriction prolongée'
+          :((sg.plateauMuscle||sg.formeBasse||sg.sousMEV)?n.lib:'Volume élevé'));
       out.push({type:n.type,icon:n.icon,color:n.color,label:lib,list:[c],
         texte:txt,sante:ALERTES_SANTE.includes(n.type)});
     }
@@ -16284,6 +16305,8 @@ function _renderNutriContent(type){
         </div>
       </div>
       ${_htmlDepartAthlete(nut)}
+      ${_htmlPlancherAthlete(currentUser)}
+      ${_htmlPalierAthlete(currentUser)}
       ${_htmlAjustement(currentUser,false)}
       ${_renderStrictMacroRings(nut)}
       ${_renderCycleNutSettings(nut)}`;
@@ -17002,6 +17025,15 @@ function _bloc(p,l,g){
   const kcal=Math.round(4*p+9*l+4*g);
   return {kcal,p,l,g,f:Math.round(FIBRES_PAR_1000*kcal/1000)};
 }
+// Relevement au plancher. Le chemin AUTOMATIQUE n'a aucune dérogation : il ne
+// peut pas produire un jour sous le plancher, même quand le calcul de dépense
+// le demanderait. On remonte les GLUCIDES, protéines et lipides intacts.
+function _relevePlancher(j,user){
+  const pl=plancherKcal(user);
+  if(pl==null||!(j.kcal<pl)) return j;
+  const gMin=Math.ceil((pl-4*j.p-9*j.l)/4);
+  return _bloc(j.p,j.l,Math.max(j.g,gMin));
+}
 
 // opts : { protGparKg, cycle }  — cycle à false donne le MÊME total tous les
 // jours, ce que demandent les athlètes qui ne veulent pas gérer deux colonnes.
@@ -17073,13 +17105,13 @@ function besoinsProposes(user,opts){
   const cycle=o.cycle!==false;
   if(!cycle){
     hypotheses.push('même total tous les jours');
-    const j=_bloc(r.p,r.l,r.g);
+    const j=_relevePlancher(_bloc(r.p,r.l,r.g),user);
     return {source,on:j,off:Object.assign({},j),act,depense,mb,gParKg,modele,cycle:false,hypotheses};
   }
   hypotheses.push('glucides +15 % les jours d\'entraînement, −15 % les jours de repos');
   return {source,
-    on:_bloc(r.p,r.l,Math.round(r.g*(1+CYCLE_GLUC))),
-    off:_bloc(r.p,r.l,Math.round(r.g*(1-CYCLE_GLUC))),
+    on:_relevePlancher(_bloc(r.p,r.l,Math.round(r.g*(1+CYCLE_GLUC))),user),
+    off:_relevePlancher(_bloc(r.p,r.l,Math.round(r.g*(1-CYCLE_GLUC))),user),
     act,depense,mb,gParKg,modele,cycle:true,hypotheses};
 }
 
@@ -17197,7 +17229,8 @@ function renderCoachNutriSection(c){
           <div style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);letter-spacing:1px;text-align:center;background:var(--surface-1);border:1px solid var(--border);border-radius:6px;padding:4px">💤 JOUR OFF</div>
         </div>
         ${macroRows}
-        ${_htmlAjustement(c,true)}
+        ${_htmlViolationsCoach(c)}
+    ${_htmlAjustement(c,true)}
     ${_htmlDepartHypotheses(c)}
         <button onclick="saveClientNutriMacros()" style="width:100%;margin-top:6px;padding:11px 0;background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer">💾 ENREGISTRER LES OBJECTIFS</button>
       </div>
@@ -17232,19 +17265,47 @@ function saveClientNutriDiet(type){
   renderCoachNutriSection(c);
 }
 
-function saveClientNutriMacros(){
+function saveClientNutriMacros(malgrePlancher){
   const users=DB.get('users')||{};
   const c=getOwnedClient(currentClientId,users);
   if(!c) return;
   if(!c.nutrition) c.nutrition={};
   const g=id=>{const v=parseFloat(document.getElementById(id)?.value);return isNaN(v)?undefined:v;};
-  c.nutrition.macros={
+  const saisie={
     on:{kcal:g('ccd-on-kcal'),p:g('ccd-on-p'),g:g('ccd-on-g'),l:g('ccd-on-l'),s:g('ccd-on-s'),f:g('ccd-on-f')},
     off:{kcal:g('ccd-off-kcal'),p:g('ccd-off-p'),g:g('ccd-off-g'),l:g('ccd-off-l'),s:g('ccd-off-s'),f:g('ccd-off-f')},
   };
+  // CONTRÔLE AVANT ÉCRITURE. Rien n'est écrit tant que le coach n'a pas vu.
+  const viol=controlerMacros(saisie,c);
+  const pl=plancherEffectif(c);
+  if(viol.length){
+    // Antécédent alimentaire déclaré : blocage DUR, aucune dérogation. C'est
+    // le seul endroit de l'app où un professionnel ne peut pas passer outre.
+    if(pl.tca){
+      window._plDerniereViol={email:c.email,liste:viol};
+      renderCoachNutriSection(c);
+      toast('Antécédent alimentaire déclaré : impossible d\'enregistrer sous le plancher','var(--red)');
+      return false;
+    }
+    // Premier clic : on montre les chiffres et on attend un geste explicite.
+    if(!malgrePlancher||!_plConfirme){
+      window._plDerniereViol={email:c.email,liste:viol};
+      renderCoachNutriSection(c);
+      toast(malgrePlancher?'Coche la confirmation pour enregistrer':'Ces valeurs sont sous le plancher : relis-les','var(--orange)');
+      return false;
+    }
+    // Confirmation explicite : on trace QUI, QUAND, et QUOI exactement.
+    saisie.confirmeSousPlancher={par:(currentUser&&currentUser.id)||null,
+      date:Date.now(),violations:viol.map(v=>({champ:v.champ,valeur:v.valeur,plancher:v.plancher}))};
+  }
+  c.nutrition.macros=saisie;
   c.updatedAt=Date.now();users[c.email]=c;
   const ok=DB.set('users',users);
-  toastSync(ok,CLOUD.pushOne(c.email,c),'Objectifs enregistrés ✓','les objectifs sont');
+  window._plDerniereViol=null; _plConfirme=false;
+  toastSync(ok,CLOUD.pushOne(c.email,c),
+    viol.length?'Enregistré, confirmation tracée':'Objectifs enregistrés ✓','les objectifs sont');
+  renderCoachNutriSection(c);
+  return true;
 }
 
 function addClientStrictPhoto(input){
@@ -19384,14 +19445,10 @@ const AJUST_VERROU_JOURS=14;       // jamais plus d'un ajustement par quinzaine
 const AJUST_ECART_RELEVES=7;       // deux relevés espacés d'au moins sept jours
 
 // ── Plancher calorique ─────────────────────────────────────────────────────
-// ATTENTION : le lot [A2-03] annoncé n'existe pas dans le code — aucun
-// plancher n'y était défini. Faute de valeur du coach, on prend le
-// MÉTABOLISME AU REPOS déjà calculé par besoinsProposes (Katch quand la masse
-// maigre est mesurable, Mifflin sinon). Ce n'est pas un chiffre inventé : c'est
-// la dépense de l'athlète au repos, et personne ne descend là-dessous sur une
-// proposition automatique.
-// Rend null quand il n'est pas calculable — et dans ce cas AUCUNE baisse n'est
-// proposée. Le sens de la prudence est celui-là, pas l'inverse.
+// Le provisoire — le métabolisme au repos — a été remplacé le jour où le coach
+// a donné ses chiffres. Une seule définition désormais : plancherEffectif et
+// plancherKcal, avec les constantes KCAL_PLANCHER_*. Voir le bloc PLANCHERS
+// NUTRITIONNELS.
 
 // ── La carte : le CONSTAT avant la proposition ─────────────────────────────
 // L'ordre n'est pas cosmétique. Annoncer « −190 kcal » sans dire pourquoi, c'est
@@ -19471,12 +19528,6 @@ function refuserAjustement(){
   loadNutrition();
 }
 
-function plancherKcal(user){
-  try{
-    const b=besoinsProposes(user);
-    return (b&&b.source&&b.mb>0)?b.mb:null;
-  }catch(e){ return null; }
-}
 
 // Vitesse telle qu'elle était à une date donnée : on tronque la série et on
 // rejoue la MÊME régression. Aucun relevé n'est stocké, rien à migrer, et les
@@ -19572,6 +19623,177 @@ function _ajustPlancherAtteint(user){
   const pl=plancherKcal(user);
   if(pl==null) return {plancher:null,kcalApres};
   return kcalApres<pl?{plancher:pl,kcalApres}:null;
+}
+
+
+// ══════════════ PLANCHERS NUTRITIONNELS ═════════════════════════════════════
+// Le lot précédent posait un plancher provisoire — le métabolisme au repos — en
+// attendant la valeur du coach. La voici, et elle remplace le provisoire.
+//
+// Sources des chiffres, telles que le coach les a fixées :
+//   1200 kcal (F) / 1500 kcal (H)  planchers absolus, en dessous desquels
+//     aucune prescription automatique n'a de sens quel que soit le gabarit
+//   22 kcal par kilo               plancher proportionnel : un athlète de
+//     100 kg n'a pas le même sol qu'un de 50 kg
+//   1,6 g de protéines par kilo    borne basse de préservation musculaire
+//   0,6 g de lipides par kilo      borne basse de la fonction hormonale
+// Le plancher effectif en kcal est le PLUS GRAND des deux premiers : l'absolu
+// protège les petits gabarits, le proportionnel les grands.
+const KCAL_PLANCHER_ABS=Object.freeze({F:1200,H:1500});
+const KCAL_PLANCHER_PAR_KG=22;
+const PROT_PLANCHER_G_KG=1.6;
+const LIP_PLANCHER_G_KG=0.6;
+// Antécédent de trouble du comportement alimentaire déclaré au bilan de départ :
+// le plancher monte de 15 %, et la confirmation du coach devient impossible.
+// C'est le seul endroit de l'app où un professionnel ne peut PAS passer outre.
+const PLANCHER_MAJORATION_TCA=1.15;
+
+// Poids de référence : la pesée la plus récente, à défaut le dernier bilan.
+// Rend null quand rien n'est connu — et dans ce cas seul l'absolu s'applique.
+function _poidsPourPlancher(user){
+  try{
+    const s=serieWeight(user);
+    if(s.length) return s[s.length-1].kg;
+  }catch(e){}
+  const bl=((user&&user.bilans)||[]).filter(b=>b&&b.date).slice().sort((a,b)=>a.date-b.date);
+  const b=bl[bl.length-1];
+  const v=b?getBW(b):null;
+  return (v>0)?v:null;
+}
+// Planchers effectifs pour CET athlète. Toujours un objet, jamais null : sans
+// poids connu, les bornes par kilo sont absentes mais l'absolu tient.
+function plancherEffectif(user){
+  const sexe=(user&&(user._evol_gender||user.gender))||'';
+  const abs=isFemale(sexe)?KCAL_PLANCHER_ABS.F:KCAL_PLANCHER_ABS.H;
+  const poids=_poidsPourPlancher(user);
+  let tca=false;
+  try{ tca=aTCA(user); }catch(e){}
+  const maj=tca?PLANCHER_MAJORATION_TCA:1;
+  const parKg=poids!=null?KCAL_PLANCHER_PAR_KG*poids:null;
+  const kcal=Math.round(Math.max(abs,parKg==null?0:parKg)*maj);
+  return {kcal,
+    p:poids!=null?Math.round(PROT_PLANCHER_G_KG*poids*maj*10)/10:null,
+    l:poids!=null?Math.round(LIP_PLANCHER_G_KG*poids*maj*10)/10:null,
+    poids,tca,majoration:maj,abs,parKg:parKg!=null?Math.round(parKg*maj):null};
+}
+// Le plancher que consulte le chemin AUTOMATIQUE. Il n'y a plus qu'une seule
+// définition de plancher dans l'app, celle du coach.
+function plancherKcal(user){
+  const p=plancherEffectif(user);
+  return p.kcal>0?p.kcal:null;
+}
+
+// ── Contrôle PUR : elle constate, elle ne bloque rien ──────────────────────
+// Rend une liste de violations chiffrées. C'est l'appelant qui décide quoi en
+// faire : le coach est averti et peut confirmer, le chemin automatique refuse.
+
+// ── Côté coach : on ne lui interdit pas, on l'oblige à voir ────────────────
+// Un coach est un professionnel. Le produit n'a pas à décider pour lui — mais
+// il a le devoir de mettre les chiffres sous ses yeux et d'exiger un geste
+// explicite. Sauf antécédent déclaré : là, personne ne passe outre.
+let _plConfirme=false;
+function _plSetConfirme(v){ _plConfirme=!!v; }
+function _htmlViolationsCoach(c){
+  const viol=(window._plDerniereViol&&window._plDerniereViol.email===(c&&c.email))
+    ?window._plDerniereViol.liste:null;
+  if(!viol||!viol.length) return '';
+  const pl=plancherEffectif(c);
+  const dur=pl.tca;
+  return `<div style="background:#1a0505;border:1px solid var(--red);border-radius:10px;padding:12px;margin:10px 0">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red);text-transform:uppercase;margin-bottom:7px">Sous le plancher</div>
+    ${viol.map(v=>`<div style="font-size:11px;color:#ddd;line-height:1.6">· ${escapeHtml(v.message)}</div>`).join('')}
+    ${dur
+      ?`<div style="font-size:11px;color:var(--red);line-height:1.6;margin-top:9px;font-weight:700">Un antécédent alimentaire est déclaré au bilan de départ. Cette prescription ne peut pas être enregistrée, et il n'y a pas de dérogation. Reprends les valeurs au-dessus du plancher.</div>`
+      :`<label style="display:flex;align-items:flex-start;gap:9px;margin-top:11px;cursor:pointer;text-transform:none;letter-spacing:normal;font-size:inherit;font-weight:400;color:inherit">
+          <input type="checkbox" id="ccd-pl-confirm" ${_plConfirme?'checked':''} onchange="_plSetConfirme(this.checked)"
+            style="width:18px;height:18px;margin-top:1px;flex-shrink:0;accent-color:var(--red)">
+          <span style="font-size:12px;color:#eee;line-height:1.5">Je confirme cette prescription en connaissance de cause.</span>
+        </label>
+        <button class="btn btn-red btn-sm" style="width:100%;margin-top:9px;letter-spacing:1px" onclick="saveClientNutriMacros(true)">Enregistrer malgré le plancher</button>`}
+    ${blocDisclaimerSante()}
+  </div>`;
+}
+
+// ── Côté athlète : permanent, non masquable ───────────────────────────────
+// Même registre que TEXTE_ARRET_DRAPEAU : on décrit ce qu'on constate, on
+// nomme les signes à surveiller sans les diagnostiquer, on renvoie vers un
+// professionnel, et on rappelle ce que l'app n'est pas. Sans chiffre alarmiste
+// et sans nommer quoi que ce soit.
+const TEXTE_PLANCHER_ATHLETE=["Ces objectifs sont bas pour ton poids.",
+  "Si tu te sens fatigué, frileux, ou si ton sommeil se dégrade, parles-en à ton coach et à un professionnel de santé.",
+  "RepCore n'est pas un dispositif médical."];
+function _htmlPlancherAthlete(user){
+  const nut=(user&&user.nutrition)||{};
+  if(!nut.macros) return '';
+  const viol=controlerMacros(nut.macros,user);
+  if(!viol.length) return '';
+  return `<div style="background:#1a0505;border:1px solid var(--red);border-radius:14px;padding:14px;margin-bottom:18px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red);text-transform:uppercase;margin-bottom:8px">À savoir</div>
+    ${TEXTE_PLANCHER_ATHLETE.map(t=>`<div style="font-size:12.5px;color:#eee;line-height:1.7;margin-bottom:7px">${escapeHtml(t)}</div>`).join('')}
+  </div>`;
+}
+// Invitation au palier, jamais une injonction. Elle ne remplace pas la carte
+// ci-dessus, elle s'y ajoute quand la sèche dure.
+function _htmlPalierAthlete(user){
+  if(!restrictionProlongee(user)) return '';
+  const sem=semainesEcoulees(user);
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:18px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Faire un palier</div>
+    <div style="font-size:12px;color:#ddd;line-height:1.7">Tu es en sèche depuis ${sem} semaines, avec des apports proches de ton plancher. Remonter aux alentours de ta dépense pendant deux ou trois semaines n'annule rien de ce que tu as fait : ça remet du carburant dans les séances et ça facilite la suite. C'est une proposition, tu en parles avec ton coach.</div>
+    ${blocDisclaimerSante()}
+  </div>`;
+}
+
+function controlerMacros(macros,user){
+  const out=[];
+  if(!macros||typeof macros!=='object') return out;
+  const pl=plancherEffectif(user);
+  const jours=('on' in macros||'off' in macros)
+    ? [['on',macros.on],['off',macros.off]]
+    : [['',macros]];
+  for(const [nom,j] of jours){
+    if(!j||typeof j!=='object') continue;
+    const pref=nom?nom+'.':'';
+    const lib=nom==='on'?' les jours ON':(nom==='off'?' les jours OFF':'');
+    const kcal=Number(j.kcal);
+    if(isFinite(kcal)&&kcal>0&&kcal<pl.kcal)
+      out.push({champ:pref+'kcal',valeur:kcal,plancher:pl.kcal,
+        message:kcal+' kcal'+lib+' pour un plancher de '+pl.kcal+' kcal'
+          +(pl.poids!=null?' ('+KCAL_PLANCHER_PAR_KG+' kcal/kg pour '+pl.poids+' kg, minimum absolu '+pl.abs+')':' (minimum absolu, poids inconnu)')
+          +(pl.tca?' — plancher majoré de 15 % : antécédent déclaré au bilan':'')});
+    const p=Number(j.p);
+    if(pl.p!=null&&isFinite(p)&&p>0&&p<pl.p)
+      out.push({champ:pref+'p',valeur:p,plancher:pl.p,
+        message:p+' g de protéines'+lib+' pour un plancher de '+String(pl.p).replace('.',',')+' g ('+PROT_PLANCHER_G_KG+' g/kg)'});
+    const l=Number(j.l);
+    if(pl.l!=null&&isFinite(l)&&l>0&&l<pl.l)
+      out.push({champ:pref+'l',valeur:l,plancher:pl.l,
+        message:l+' g de lipides'+lib+' pour un plancher de '+String(pl.l).replace('.',',')+' g ('+LIP_PLANCHER_G_KG+' g/kg)'});
+  }
+  return out;
+}
+
+// ── Restriction prolongée ──────────────────────────────────────────────────
+// Une sèche qui dure ET des objectifs à ras du plancher. Le seuil est le
+// plancher majoré de 10 % : à 22 kcal/kg pile on est déjà au sol, et attendre
+// d'y être vraiment pour le dire serait attendre trop longtemps.
+const RESTRICTION_SEMAINES=16;
+const RESTRICTION_MARGE=1.1;
+function restrictionProlongee(user){
+  const p=phaseCourante(user);
+  if(!p||p.type!=='seche') return false;
+  const sem=semainesEcoulees(user);
+  if(sem==null||sem<RESTRICTION_SEMAINES) return false;
+  const m=((user&&user.nutrition)||{}).macros;
+  if(!m) return false;
+  const pl=plancherEffectif(user);
+  if(!(pl.poids>0)) return false;
+  const seuil=KCAL_PLANCHER_PAR_KG*pl.poids*pl.majoration*RESTRICTION_MARGE;
+  const kcals=[m.on,m.off].filter(x=>x&&Number(x.kcal)>0).map(x=>Number(x.kcal));
+  if(!kcals.length) return false;
+  // Le plus BAS des deux jours : c'est lui que l'athlète vit le plus souvent
+  // sur une sèche longue.
+  return Math.min.apply(null,kcals)<seuil;
 }
 
 function aTCA(user){
@@ -25947,6 +26169,301 @@ function testExercices(){
 
 
 
+
+    // ══════════════ PLANCHERS NUTRITIONNELS ══════════════
+    (function(){
+      const sauveU=currentUser, sauveCid=currentClientId;
+      const sauveUsers=DB.get('users');
+      const _u=(sexe,poids,extra)=>Object.assign({
+        id:'pl',email:'pl@t.fr',fname:'A',lname:'B',role:'athlete',
+        gender:sexe,_evol_gender:sexe,_evol_height:sexe==='F'?165:178,
+        exAlias:{},exMuscles:{},sessions:[],videos:[],programs:{},sessions_config:[],
+        bilans:poids!=null?[{type:'suivi',date:Date.now()-2*864e5,
+          'deb-weight':String(poids),'deb-height':sexe==='F'?'165':'178',
+          'deb-age':'32','deb-gender':sexe==='F'?'Femme':'Homme'}]:[],
+        nutrition:{}},extra||{});
+
+      // ── Les planchers ──
+      ok('Critère : femme 60 kg → plancher 1320 kcal',(()=>{
+        const pl=plancherEffectif(_u('F',60));
+        return pl.kcal===Math.max(1200,Math.round(22*60))&&pl.kcal===1320;})());
+      ok('Critère : 1300 kcal viole pour cette femme',(()=>{
+        const v=controlerMacros({kcal:1300,p:100,g:100,l:40},_u('F',60));
+        return v.length>0&&v.some(x=>x.champ==='kcal'&&x.plancher===1320&&x.valeur===1300);})());
+      ok('Critère : homme 80 kg → plancher 1760 kcal',
+        plancherEffectif(_u('H',80)).kcal===1760);
+      ok('L\'absolu protège les petits gabarits',(()=>{
+        // Femme de 45 kg : 22 × 45 = 990, l'absolu 1200 l'emporte.
+        return plancherEffectif(_u('F',45)).kcal===1200
+          &&plancherEffectif(_u('H',60)).kcal===1500;})());
+      ok('Le proportionnel protège les grands gabarits',
+        plancherEffectif(_u('H',100)).kcal===2200);
+      ok('Critère : poids inconnu → seul l\'absolu, aucune erreur',(()=>{
+        const u=_u('F',null);
+        const pl=plancherEffectif(u);
+        if(pl.kcal!==1200||pl.p!==null||pl.l!==null) return _echec(JSON.stringify(pl));
+        // Et le contrôle ne lève rien ni ne signale de violation protéique.
+        const v=controlerMacros({kcal:1500,p:40,g:100,l:20},u);
+        return v.every(x=>x.champ==='kcal')&&v.length===0;})());
+      ok('Critère : 40 g de protéines pour 80 kg viole',(()=>{
+        const v=controlerMacros({kcal:2500,p:40,g:400,l:80},_u('H',80));
+        const pv=v.find(x=>x.champ==='p');
+        return !!pv&&pv.plancher===Math.round(1.6*80*10)/10&&pv.valeur===40;})());
+      ok('Les lipides ont leur plancher aussi',(()=>{
+        const v=controlerMacros({kcal:2500,p:150,g:450,l:30},_u('H',80));
+        const lv=v.find(x=>x.champ==='l');
+        return !!lv&&lv.plancher===48;})());
+      ok('Les constantes sont bien celles annoncées',
+        KCAL_PLANCHER_ABS.F===1200&&KCAL_PLANCHER_ABS.H===1500
+        &&KCAL_PLANCHER_PAR_KG===22&&PROT_PLANCHER_G_KG===1.6&&LIP_PLANCHER_G_KG===0.6);
+
+      // ── controlerMacros est PURE et ne bloque rien ──
+      ok('controlerMacros ne modifie ni les macros ni l\'utilisateur',(()=>{
+        const u=_u('H',80);
+        const m={on:{kcal:1200,p:40,g:200,l:20},off:{kcal:1100,p:40,g:180,l:20}};
+        const a=JSON.stringify(u), b=JSON.stringify(m);
+        controlerMacros(m,u);
+        return JSON.stringify(u)===a&&JSON.stringify(m)===b;})());
+      ok('Elle distingue les jours ON et OFF',(()=>{
+        const v=controlerMacros({on:{kcal:2500,p:150,g:400,l:70},
+                                 off:{kcal:1200,p:150,g:100,l:70}},_u('H',80));
+        return v.length===1&&v[0].champ==='off.kcal';})());
+      ok('Des macros vides ou absentes ne violent rien',
+        controlerMacros(null,_u('H',80)).length===0
+        &&controlerMacros({},_u('H',80)).length===0
+        &&controlerMacros({on:{},off:{}},_u('H',80)).length===0);
+      ok('Chaque violation porte un message chiffré',(()=>{
+        const v=controlerMacros({kcal:1300,p:100,g:100,l:40},_u('F',60));
+        return v[0].message.indexOf('1300')>=0&&v[0].message.indexOf('1320')>=0;})());
+
+      // ── Antécédent déclaré : plancher majoré ──
+      ok('Critère : antécédent déclaré → plancher majoré de 15 %',(()=>{
+        const u=_u('H',80,{bilans:[{type:'depart',date:Date.now()-100*864e5,
+          'deb-tca':'anorexie il y a dix ans'},
+          {type:'suivi',date:Date.now()-2*864e5,'deb-weight':'80','deb-height':'178',
+           'deb-age':'32','deb-gender':'Homme'}]});
+        const pl=plancherEffectif(u);
+        return aTCA(u)===true&&pl.tca===true
+          &&pl.kcal===Math.round(1760*1.15)&&pl.majoration===1.15;})());
+      ok('La majoration porte aussi sur protéines et lipides',(()=>{
+        const u=_u('H',80,{bilans:[{type:'depart',date:Date.now()-100*864e5,'deb-tca':'oui'},
+          {type:'suivi',date:Date.now()-2*864e5,'deb-weight':'80','deb-height':'178',
+           'deb-age':'32','deb-gender':'Homme'}]});
+        const pl=plancherEffectif(u);
+        return pl.p===Math.round(1.6*80*1.15*10)/10&&pl.l===Math.round(0.6*80*1.15*10)/10;})());
+      ok('Le message le dit quand le plancher est majoré',(()=>{
+        const u=_u('H',80,{bilans:[{type:'depart',date:Date.now()-100*864e5,'deb-tca':'oui'},
+          {type:'suivi',date:Date.now()-2*864e5,'deb-weight':'80','deb-height':'178',
+           'deb-age':'32','deb-gender':'Homme'}]});
+        const v=controlerMacros({kcal:1800,p:150,g:200,l:70},u);
+        return v.length>0&&/majoré de 15 %/.test(v[0].message);})());
+
+      // ── Le chemin AUTOMATIQUE : blocage dur ──
+      ok('Critère : besoinsProposes ne rend JAMAIS un jour sous le plancher',(()=>{
+        // Femme légère et sédentaire : le calcul de dépense peut passer sous
+        // le plancher, le relèvement doit l'en empêcher.
+        const u=_u('F',45,{sessions_config:[],
+          bilans:[{type:'suivi',date:Date.now()-2*864e5,'deb-weight':'45',
+            'deb-height':'155','deb-age':'55','deb-gender':'Femme'}]});
+        const b=besoinsProposes(u,{protGparKg:1.8});
+        if(!b||b.source===null) return _echec('aucune proposition');
+        const pl=plancherKcal(u);
+        return b.on.kcal>=pl&&b.off.kcal>=pl
+          ?true:_echec('ON '+b.on.kcal+' / OFF '+b.off.kcal+' pour un plancher '+pl);})());
+      ok('Le relèvement passe par les GLUCIDES, pas par les protéines',(()=>{
+        const u=_u('F',45,{bilans:[{type:'suivi',date:Date.now()-2*864e5,'deb-weight':'45',
+          'deb-height':'155','deb-age':'55','deb-gender':'Femme'}]});
+        const b=besoinsProposes(u,{protGparKg:1.8});
+        const pl=plancherKcal(u);
+        // C'est le jour OFF qui est relevé — le ON passe déjà le plancher. Mon
+        // premier jet vérifiait le ON, qui n'est jamais touché : la variante
+        // qui gonflait les protéines passait au vert.
+        const releve=['on','off'].filter(k=>b[k].kcal===pl||b[k].kcal>pl);
+        if(!releve.length) return _echec('aucun jour au plancher');
+        const attP=Math.round(1.8*45), attL=Math.round(0.8*45);
+        const faux=['on','off'].filter(k=>b[k].p!==attP||b[k].l!==attL);
+        return faux.length
+          ?_echec('protéines ou lipides modifiés sur : '+faux.join(', '))
+          :b.off.kcal>=pl;})());
+      ok('Critère : l\'ajustement ne descend jamais sous le plancher',(()=>{
+        // Le garde existe déjà et consulte maintenant le plancher du coach.
+        const src=ajustementPropose.toString();
+        return /plancherKcal\(user\)/.test(src)&&/pl==null\|\|kcalApres<pl/.test(src);})());
+      ok('Le chemin automatique n\'offre AUCUNE confirmation',(()=>{
+        const src=besoinsProposes.toString()+ajustementPropose.toString()
+          +_relevePlancher.toString();
+        return !/confirme|malgre|malgré/i.test(src);})());
+
+      // ── Le coach : voir, puis confirmer ──
+      (function(){
+        currentUser={id:'coPL',email:'copl@t.fr',role:'coach',fname:'K',
+          seenBilans:{},alertStatus:{},studentCodes:[]};
+        const poser=extra=>{
+          const c=_u('H',80,Object.assign({id:'plc',email:'plc@t.fr',coachId:'coPL'},extra||{}));
+          const u={}; u[c.email]=c; DB.set('users',u); currentClientId=c.id;
+          window._plDerniereViol=null; _plConfirme=false;
+          renderCoachNutriSection(c);
+          return c;
+        };
+        const remplir=(kcal,p,g,l)=>{
+          for(const col of ['on','off']){
+            const v={kcal,p,g,l};
+            for(const k in v){ const e=document.getElementById('ccd-'+col+'-'+k); if(e) e.value=v[k]; }
+          }
+        };
+        ok('Sous le plancher, le premier enregistrement est REFUSÉ',(()=>{
+          poser();
+          remplir(1200,150,100,70);
+          const r=saveClientNutriMacros();
+          const m=((DB.get('users')||{})['plc@t.fr'].nutrition||{}).macros;
+          return r===false&&!m;})());
+        ok('Les violations sont affichées, chiffrées, sous le tableau',(()=>{
+          const h=(document.getElementById('ccd-nutrition')||{}).innerHTML||'';
+          return /Sous le plancher/.test(h)&&/1200 kcal/.test(h)&&/1760 kcal/.test(h)
+            &&/je confirme cette prescription en connaissance de cause/i.test(h);})());
+        ok('Sans la case cochée, « enregistrer malgré » refuse encore',(()=>{
+          _plConfirme=false;
+          remplir(1200,150,100,70);
+          const r=saveClientNutriMacros(true);
+          return r===false&&!((DB.get('users')||{})['plc@t.fr'].nutrition||{}).macros;})());
+        ok('Critère : le coach peut confirmer, et la confirmation est TRACÉE',(()=>{
+          _plConfirme=true;
+          remplir(1200,150,100,70);
+          const r=saveClientNutriMacros(true);
+          const m=((DB.get('users')||{})['plc@t.fr'].nutrition||{}).macros;
+          if(r!==true||!m) return _echec('enregistrement refusé');
+          const cf=m.confirmeSousPlancher;
+          return !!cf&&cf.par==='coPL'&&cf.date>0&&Array.isArray(cf.violations)
+            &&cf.violations.length>0&&cf.violations[0].plancher===1760;})());
+        ok('Au-dessus du plancher, aucune confirmation n\'est demandée',(()=>{
+          poser();
+          remplir(2600,150,400,80);
+          const r=saveClientNutriMacros();
+          const m=((DB.get('users')||{})['plc@t.fr'].nutrition||{}).macros;
+          return r===true&&!!m&&m.confirmeSousPlancher===undefined;})());
+        ok('Critère : antécédent déclaré → la confirmation est REFUSÉE',(()=>{
+          poser({bilans:[{type:'depart',date:Date.now()-100*864e5,'deb-tca':'oui'},
+            {type:'suivi',date:Date.now()-2*864e5,'deb-weight':'80','deb-height':'178',
+             'deb-age':'32','deb-gender':'Homme'}]});
+          _plConfirme=true;
+          remplir(1200,150,100,70);
+          const r=saveClientNutriMacros(true);
+          const m=((DB.get('users')||{})['plc@t.fr'].nutrition||{}).macros;
+          return r===false&&!m;})());
+        ok('Et le message d\'échec est explicite, sans case à cocher',(()=>{
+          const h=(document.getElementById('ccd-nutrition')||{}).innerHTML||'';
+          return /pas de dérogation/.test(h)&&!/ccd-pl-confirm/.test(h)
+            &&!/Enregistrer malgré/.test(h);})());
+      })();
+
+      // ── Côté athlète : carte permanente ──
+      ok('Critère : la carte apparaît quand les objectifs sont sous le plancher',(()=>{
+        const u=_u('H',80,{nutrition:{macros:{on:{kcal:1200,p:150,g:100,l:70},
+                                              off:{kcal:1100,p:150,g:80,l:70}}}});
+        const h=_htmlPlancherAthlete(u);
+        return /Ces objectifs sont bas pour ton poids/.test(h)
+          &&/professionnel de santé/.test(h)&&/pas un dispositif médical/.test(h);})());
+      ok('Elle ne s\'affiche pas quand tout est au-dessus',(()=>{
+        const u=_u('H',80,{nutrition:{macros:{on:{kcal:2600,p:150,g:400,l:80},
+                                              off:{kcal:2200,p:150,g:300,l:80}}}});
+        return _htmlPlancherAthlete(u)==='';})());
+      ok('Elle n\'est PAS masquable : aucun bouton de fermeture',(()=>{
+        const u=_u('H',80,{nutrition:{macros:{off:{kcal:1100,p:150,g:80,l:70}}}});
+        const h=_htmlPlancherAthlete(u);
+        return h.length>0&&!/<button/.test(h)&&!/masquer|fermer|✕|×/i.test(h);})());
+      ok('Critère : aucun diagnostic, aucune pathologie nommée, aucun chiffre',(()=>{
+        const u=_u('H',80,{nutrition:{macros:{off:{kcal:1100,p:150,g:80,l:70}}},
+          phase:{type:'seche',debut:Date.now()-120*864e5,definiPar:'athlete',historique:[]}});
+        const d=document.createElement('div');
+        d.innerHTML=_htmlPlancherAthlete(u)+_htmlPalierAthlete(u);
+        // Le disclaimer maison contient « diagnostic » et « s'aggrave » : il dit
+        // justement que l'app n'en pose pas. On l'exclut pour n'éprouver que le
+        // texte écrit par CE lot.
+        const t=(d.textContent||'').split(DISCLAIMER_SANTE).join(' ')
+          .toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+        const interdits=['anorexie','boulimie','tca','trouble','denutrition','carence',
+          'maladie','pathologie','anemie','osteoporose','amenorrhee','diagnostic',
+          'dangereux','grave','risque vital'];
+        const trouve=interdits.filter(m=>t.indexOf(m)>=0);
+        if(trouve.length) return _echec('mots trouvés : '+trouve.join(', '));
+        // Et aucun chiffre alarmiste : la carte de plancher ne cite pas de kcal.
+        return !/\d{3,}/.test((()=>{const x=document.createElement('div');
+          x.innerHTML=_htmlPlancherAthlete(u);return x.textContent||'';})());})());
+      ok('Le registre reste celui de TEXTE_ARRET_DRAPEAU, sans le copier',(()=>{
+        const a=TEXTE_PLANCHER_ATHLETE.join(' ');
+        return /pas un dispositif médical/.test(a)
+          &&TEXTE_ARRET_DRAPEAU.every(t=>a.indexOf(t)<0);})());
+
+      // ── Restriction prolongée ──
+      const _long=(sem,kcal,extra)=>_u('H',80,Object.assign({
+        phase:{type:'seche',debut:Date.now()-sem*7*864e5,definiPar:'athlete',historique:[]},
+        nutrition:{macros:{on:{kcal:kcal+300,p:150,g:200,l:70},off:{kcal,p:150,g:150,l:70}}}},extra||{}));
+      ok('Critère : sèche 16 semaines sous le seuil → vrai',
+        restrictionProlongee(_long(17,1900))===true);
+      ok('Sous 16 semaines : faux, même à ras du plancher',
+        restrictionProlongee(_long(10,1800))===false);
+      ok('Au-dessus du seuil majoré de 10 % : faux',(()=>{
+        // 22 × 80 × 1,1 = 1936. À 2000 kcal on est au-dessus.
+        return restrictionProlongee(_long(20,2000))===false;})());
+      ok('Hors sèche : faux quelle que soit la durée',
+        restrictionProlongee(_long(30,1800,{phase:{type:'masse',
+          debut:Date.now()-30*7*864e5,definiPar:'athlete',historique:[]}}))===false);
+      ok('Sans macros ou sans poids : faux, pas d\'exception',(()=>{
+        const a=_long(20,1800); a.nutrition={};
+        const b=_u('H',null,{phase:{type:'seche',debut:Date.now()-20*7*864e5,
+          definiPar:'athlete',historique:[]},
+          nutrition:{macros:{off:{kcal:1000,p:150,g:100,l:70}}}});
+        return restrictionProlongee(a)===false&&restrictionProlongee(b)===false;})());
+      ok('Critère : elle remonte au coach par le mécanisme EXISTANT, rang 6',(()=>{
+        const sauveCu=currentUser;
+        currentUser={id:'coach',email:'co@t.fr',role:'coach',seenBilans:{},alertStatus:{}};
+        const c=_long(20,1800,{id:'rl',email:'rl@t.fr',createdAt:Date.now()-200*864e5,
+          bilans:[{type:'depart',date:Date.now()-100*864e5,reponseCoach:'vu',reponseDate:1,reponseVue:true},
+            {type:'suivi',date:Date.now()-2*864e5,'deb-weight':'80','deb-height':'178',
+             'deb-age':'32','deb-gender':'Homme'}]});
+        currentUser.seenBilans['rl@t.fr']=Date.now();
+        _viderCacheSignaux();
+        const sg=signauxEntrainement(c);
+        const sc=urgencyScore(c);
+        const l=_lignesEntrainement([c]).filter(x=>x.type==='entrainement');
+        currentUser=sauveCu; _viderCacheSignaux();
+        if(sg.restrictionLongue!==true) return _echec('signal non levé');
+        if(sc!==6) return _echec('rang '+sc+' au lieu de 6');
+        return l.length===1&&l[0].label==='Restriction prolongée'
+          &&/sèche depuis 20 semaines/.test(l[0].texte)
+          &&/palier/.test(l[0].texte);})());
+      ok('Le cache de signaux se rafraîchit quand les MACROS changent',(()=>{
+        // La clé de mémoïsation porte les séances ; sans y ajouter la phase et
+        // les macros, remonter les calories laissait le signal allumé.
+        const c=_long(20,1800,{id:'rl2',email:'rl2@t.fr'});
+        _viderCacheSignaux();
+        const a=signauxEntrainement(c).restrictionLongue;
+        c.nutrition.macros.off.kcal=2400;
+        c.nutrition.macros.on.kcal=2700;
+        const b=signauxEntrainement(c).restrictionLongue;
+        _viderCacheSignaux();
+        return a===true&&b===false
+          ?true:_echec('avant '+a+', après '+b);})());
+      ok('L\'athlète reçoit une INVITATION, pas une injonction',(()=>{
+        const h=_htmlPalierAthlete(_long(20,1800));
+        const d=document.createElement('div'); d.innerHTML=h;
+        const t=d.textContent||'';
+        return /C'est une proposition/.test(t)&&/palier/i.test(t)
+          &&!/tu dois|il faut que|arrête|obligatoire/i.test(t);})());
+      ok('Pas de palier proposé quand la restriction n\'est pas là',
+        _htmlPalierAthlete(_long(10,1800))==='');
+
+      // ── Un seul canal de signaux, pas deux ──
+      ok('Aucun second canal n\'a été créé pour la restriction',(()=>{
+        const src=restrictionProlongee.toString();
+        return !/showNotification|alertStatus|_lignes|todo/i.test(src)
+          &&'restrictionLongue' in SIGNAUX_VIDES;})());
+
+      if(sauveUsers) DB.set('users',sauveUsers);
+      window._plDerniereViol=null; _plConfirme=false;
+      currentUser=sauveU; currentClientId=sauveCid;
+    })();
+
     // ══════════════ AJUSTEMENT PROPOSÉ ══════════════
     (function(){
       const sauveU=currentUser;
@@ -26116,16 +26633,22 @@ function testExercices(){
         // des glucides négatifs.
         return (100-Math.round(Math.round((pl+100)*0.10)/4))>=0
           ?true:_echec('refus dû aux glucides négatifs, pas au plancher');})());
-      ok('Le plancher est le métabolisme au repos, et il est annoncé',(()=>{
+      // Le plancher provisoire (métabolisme au repos) a été remplacé par celui
+      // du coach. Ce test énonce le NOUVEAU contrat au lieu de disparaître.
+      ok('Le plancher est celui du coach, plus le métabolisme au repos',(()=>{
         const u=_ath('seche',-0.15);
         const b=besoinsProposes(u);
-        return plancherKcal(u)===b.mb&&b.mb>0;})());
-      ok('Sans plancher calculable, AUCUNE baisse n\'est proposée',(()=>{
+        const pl=plancherEffectif(u);
+        return plancherKcal(u)===pl.kcal&&pl.kcal!==b.mb
+          &&pl.kcal===Math.max(KCAL_PLANCHER_ABS.H,Math.round(KCAL_PLANCHER_PAR_KG*pl.poids));})());
+      // Le plancher du coach est TOUJOURS calculable : sans poids connu,
+      // l'absolu s'applique. Le cas « pas de plancher » n'existe plus.
+      ok('Le plancher tient même sans taille ni poids connus',(()=>{
         const u=_ath('seche',-0.15);
-        // Taille absente : besoinsProposes rend source:null, donc pas de plancher.
         u._evol_height=null; delete u['init-height'];
-        u.bilans=[{type:'suivi',date:Date.now()-3*864e5,'deb-weight':'80','deb-age':'32','deb-gender':'Homme'}];
-        return plancherKcal(u)===null&&ajustementPropose(u)===null;})());
+        u.bilans=[]; u.weightLog=[];
+        const pl=plancherEffectif(u);
+        return pl.poids===null&&pl.kcal===KCAL_PLANCHER_ABS.H&&plancherKcal(u)===1500;})());
       ok('Une HAUSSE reste possible sans plancher calculable',(()=>{
         const u=_ath('seche',-1.4);
         u._evol_height=null; delete u['init-height'];
