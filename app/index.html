@@ -1826,6 +1826,9 @@ const COACH_PHOTO='icons/coach.jpg';
         <button class="btn btn-outline" onclick="loadSessionManager()" style="font-size:11px;padding:11px;letter-spacing:1.5px">GÉRER MES SÉANCES</button>
       </div>
 
+      <!-- SANTÉ : consignation, aucune interprétation -->
+      <button class="btn btn-outline" onclick="go('s-sante');loadSante()" style="font-size:11px;padding:11px;letter-spacing:1.5px;margin-bottom:14px">TENSION ET ANALYSES</button>
+
       <!-- PHASE -->
       <div id="clh-bandeau-phase"></div>
       <div id="clh-relance-phase"></div>
@@ -2346,6 +2349,17 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- NUTRITION -->
+<!-- SANTÉ : constantes et analyses, consignation seule -->
+<div id="s-sante" class="screen">
+  <div class="topbar"><button class="back-btn" onclick="go('s-client-home')">←</button><span class="topbar-title">Santé</span><span></span></div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <p class="sub" style="font-size:12px;line-height:1.6;margin:0">RepCore conserve tes mesures et tes analyses pour que tu les aies sous la main. Il ne les interprète pas.</p>
+      <div id="sante-content"></div>
+    </div>
+  </div>
+</div>
+
 <div id="s-nutrition" class="screen">
   <div class="topbar"><button class="back-btn" onclick="go('s-client-home')">←</button><span class="topbar-title">Nutrition</span><span></span></div>
   <div class="scroll-area" style="flex:1">
@@ -3472,6 +3486,16 @@ const CLOUD={
       // seenBilans uses email addresses as keys (dots/@ invalid in Firebase) — strip before push
       delete safe.seenBilans;
       delete safe.programPdf; // base64 blob — stocké dans Firebase Storage, pas dans RTDB
+      // Constantes physiologiques et analyses biologiques : elles ne quittent
+      // PAS l'appareil. Le dossier /users est lisible par le coach ; une tension
+      // et un bilan sanguin n'ont rien à y faire, et l'athlète n'a pas à choisir
+      // entre consigner ses valeurs et les garder pour lui.
+      // CONTREPARTIE ASSUMÉE, à dire à l'utilisateur : ces données ne sont ni
+      // sauvegardées ni transférées d'un téléphone à l'autre. Un changement
+      // d'appareil les perd.
+      // Le drapeau général, LUI, part : prévenir le coach est l'un de ses effets.
+      delete safe.constantes;
+      delete safe.analyses;
       // Permettre aux règles RTDB de vérifier qui est le coach de cet athlète
       // Les trois cas doivent être traités EXPLICITEMENT. L'ancienne forme ne
       // touchait à coachEmailKey que lorsqu'un coach était trouvé : après un
@@ -3642,12 +3666,20 @@ const CLOUD={
     const sessMap=new Map();
     [...cloudSessions,...localSessions].forEach(s=>{if(s?.id&&!sessMap.has(s.id))sessMap.set(s.id,s);});
     const allSessions=[...sessMap.values()].sort((a,b)=>(a.date||0)-(b.date||0));
+    // Constantes et analyses ne montent JAMAIS (voir _doPushOne) : le dossier
+    // distant ne les porte donc pas, et l'écrasement ci-dessous les effacerait
+    // à chaque réveil. On les retient AVANT, on les repose APRÈS — même
+    // traitement que les bilans et les séances, pour la même raison.
+    const locConstantes=loc?.constantes;
+    const locAnalyses=loc?.analyses;
     if(!loc||((cloudUser.updatedAt||0)>=(loc.updatedAt||0))){
       merged[email]={...cloudUser};
       delete merged[email].pwd;delete merged[email].pwdHash;
     }
     merged[email].bilans=allBilans;
     merged[email].sessions=allSessions;
+    if(locConstantes!==undefined) merged[email].constantes=locConstantes;
+    if(locAnalyses!==undefined) merged[email].analyses=locAnalyses;
   },
   async pullUser(email){
     const key=email.replace(/\./g,',');
@@ -11866,7 +11898,7 @@ function _htmlCarteDouleur(idx){
   // Un drapeau rouge déjà posé prime, et reste SEUL à l'écran. Proposer
   // « j'allège » à quelqu'un qui a décrit une douleur irradiante reviendrait à
   // l'aider à continuer — c'est exactement ce que l'écran d'arrêt refuse.
-  if(drapeauRougeActif(currentUser)) return '';
+  if(drapeauQuelconqueActif(currentUser)) return '';
   const ex=(woState&&woState.exercises||[])[idx];
   if(!ex||isCardio(ex)) return '';
   const choix=_dlrChoixFait(idx);
@@ -14483,10 +14515,207 @@ function leverDrapeauRouge(u){
   delete u.drapeauRouge;
   return true;
 }
+// ── Drapeaux rouges GÉNÉRAUX ────────────────────────────────────────────────
+// Seconde famille, non musculo-squelettique. Le mécanisme n'est PAS réécrit :
+// poserDrapeauRouge, drapeauRougeActif et leverDrapeauRouge le portent, avec
+// une zone conventionnelle 'general'. Deux mécanismes divergeraient, et c'est
+// le genre de divergence qui finit par laisser un athlète s'entraîner avec une
+// oppression thoracique.
+//
+// Champ SÉPARÉ, u.drapeauGeneral : u.drapeauRouge est un objet unique, et poser
+// un drapeau général dessus effacerait le drapeau articulaire. Le cahier des
+// charges veut les deux visibles et leurs effets cumulés.
+// ── Rendus du module santé ──────────────────────────────────────────────────
+// Aucune couleur autre que la couleur de texte par défaut, aucun tri par
+// « anormalité », aucun score. La seule couleur du module est celle de l'encart
+// d'alerte de tension, qui ne dit rien d'autre que « va voir un médecin ».
+function _fmtDateCourte(iso){
+  const d=new Date(iso);
+  return isNaN(d.getTime())?'':d.toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
+}
+function _htmlAlerteTension(user){
+  const a=alerteTension(user);
+  if(!a.alerte) return '';
+  return `<div style="margin-top:12px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:10px;padding:12px 14px">
+    <div style="font-size:12px;color:#eee;line-height:1.6">${escapeHtml(TENSION_MESSAGE)}</div>
+    ${blocDisclaimerSante()}
+  </div>`;
+}
+function _htmlConstantes(user){
+  const l=(((user&&user.constantes)||[]).filter(e=>e&&e.type==='tension'))
+    .slice().sort((a,b)=>a.date<b.date?-1:1).slice(-10).reverse();
+  if(!l.length) return `<div class="sub" style="font-size:11px;padding:8px 0;line-height:1.6">Aucune mesure enregistrée.</div>`;
+  return l.map(e=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid #161616">
+    <span style="font-size:12px;color:#ddd">${e.sys}/${e.dia}${e.pouls?` · ${e.pouls} bpm`:''}</span>
+    <span class="sub" style="font-size:11px;white-space:nowrap">${escapeHtml(_fmtDateCourte(e.date))}</span>
+  </div>`).join('');
+}
+function _htmlAnalyses(user){
+  const l=((user&&user.analyses)||[]).slice()
+    .sort((a,b)=>a.date<b.date?-1:1).reverse();
+  if(!l.length) return `<div class="sub" style="font-size:11px;padding:10px 0;line-height:1.6">${escapeHtml(ANALYSES_VIDE)}</div>`;
+  return l.map(e=>{
+    const m=marqueurDe(e.marqueur);
+    const ec=ecartAnalyse(user,e);
+    // « +6 depuis le 12 mars » : un fait, pas un jugement. Aucune couleur, aucune
+    // flèche, rien qui suggère qu'une direction vaudrait mieux que l'autre.
+    const ecart=ec?` · ${ec.delta>0?'+':''}${String(ec.delta).replace('.',',')} depuis le ${escapeHtml(_fmtDateCourte(ec.depuis))}`:'';
+    return `<div style="padding:8px 0;border-bottom:1px solid #161616">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+        <span style="font-size:12px;color:#ddd;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml((m&&m.lib)||e.marqueur)}</span>
+        <span style="font-size:12px;color:#fff;font-weight:700;white-space:nowrap">${String(e.valeur).replace('.',',')} ${escapeHtml(e.unite)}</span>
+      </div>
+      <div class="sub" style="font-size:10px;margin-top:2px">${escapeHtml(_fmtDateCourte(e.date))}${escapeHtml(ecart)}</div>
+    </div>`;
+  }).join('');
+}
+function _htmlRelanceAnalyses(user){
+  if(!relanceAnalyses(user)) return '';
+  return `<div style="margin-top:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:11px 13px">
+    <div style="font-size:11px;color:var(--sub);line-height:1.6">Aucune analyse consignée depuis plus de ${ANALYSES_RELANCE_JOURS} jours. Si tu en as fait une, tu peux la ranger ici.</div>
+  </div>`;
+}
+function _htmlDrapeauGeneral(user){
+  const d=drapeauGeneralActif(user);
+  if(!d) return '';
+  return `<div style="margin-top:12px;background:#1a0000;border:1px solid var(--red);border-radius:10px;padding:13px 15px">
+    ${TEXTE_ARRET_GENERAL.map(t=>`<div style="font-size:13px;color:#eee;line-height:1.7;margin-bottom:9px">${escapeHtml(t)}</div>`).join('')}
+    <div class="sub" style="font-size:11px;line-height:1.6">Tu as signalé : ${d.cases.map(c=>escapeHtml(libelleDrapeau(c))).join(', ')}.</div>
+    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="_leverDrapeauGeneralUI()">J'ai vu un médecin, je retire ce signalement</button>
+    ${blocDisclaimerSante()}
+  </div>`;
+}
+function loadSante(){
+  const u=currentUser;
+  const el=document.getElementById('sante-content');
+  if(!el||!u) return;
+  el.innerHTML=`
+    ${_htmlDrapeauGeneral(u)}
+    <div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px">
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:9px">Tension</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <input id="ct-sys" type="number" inputmode="numeric" placeholder="120" aria-label="Systolique" style="width:72px;text-align:center">
+        <span class="sub" style="font-size:13px">/</span>
+        <input id="ct-dia" type="number" inputmode="numeric" placeholder="80" aria-label="Diastolique" style="width:72px;text-align:center">
+        <input id="ct-pouls" type="number" inputmode="numeric" placeholder="bpm" aria-label="Pouls, facultatif" style="width:72px;text-align:center">
+        <button class="btn btn-red btn-sm" style="flex:1;min-width:96px;margin:0" onclick="ajouterTension()">Ajouter</button>
+      </div>
+      ${_htmlAlerteTension(u)}
+      <div style="margin-top:10px">${_htmlConstantes(u)}</div>
+    </div>
+    <div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px">
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:9px">Analyses</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:4px">
+        <select id="an-marqueur" onchange="_majUnites()" style="flex:1;min-width:130px">
+          ${MARQUEURS.map(m=>`<option value="${escapeHtml(m.cle)}">${escapeHtml(m.lib)}</option>`).join('')}
+        </select>
+        <input id="an-valeur" type="number" step="any" inputmode="decimal" placeholder="valeur" aria-label="Valeur" style="width:92px;text-align:center">
+        <select id="an-unite" style="width:104px"></select>
+        <button class="btn btn-red btn-sm" style="flex:1;min-width:96px;margin:0" onclick="ajouterAnalyse()">Ajouter</button>
+      </div>
+      <div style="margin-top:8px">${_htmlAnalyses(u)}</div>
+      <div style="font-size:10px;color:var(--text-faint);line-height:1.6;margin-top:10px">${escapeHtml(ANALYSES_PHRASE)}</div>
+    </div>
+    ${_htmlRelanceAnalyses(u)}
+    <div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px">
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:6px">Signes à ne pas ignorer</div>
+      <div class="sub" style="font-size:11px;line-height:1.6;margin-bottom:9px">Coche ce que tu ressens. RepCore arrêtera ses propositions et te renverra vers un médecin.</div>
+      ${DRAPEAUX_GENERAUX.map(d=>`<label class="hit44" style="display:flex;align-items:center;gap:9px;margin:0 0 6px;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:400;font-size:12px;color:#ddd">
+        <input type="checkbox" class="dg-case" value="${escapeHtml(d.cle)}" style="width:16px;height:16px;margin:0;accent-color:var(--red);flex-shrink:0">
+        ${escapeHtml(d.lib)}
+      </label>`).join('')}
+      <button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="declarerDrapeauGeneral()">Signaler</button>
+    </div>`;
+  _majUnites();
+}
+function _majUnites(){
+  const s=document.getElementById('an-marqueur');
+  const u=document.getElementById('an-unite');
+  if(!s||!u) return;
+  const m=marqueurDe(s.value);
+  u.innerHTML=((m&&m.unites)||[]).map(x=>`<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join('');
+}
+function ajouterTension(){
+  const g=id=>(document.getElementById(id)||{}).value||'';
+  const r=enregistrerConstante(currentUser,g('ct-sys'),g('ct-dia'),g('ct-pouls'));
+  // Refus explicite : la valeur reste à l'écran, rien n'est corrigé en douce.
+  if(!r.ok) return toast(r.raison,'var(--orange)');
+  const ok=saveUser();
+  ['ct-sys','ct-dia','ct-pouls'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  loadSante();
+  toastEcriture(ok,'Mesure enregistrée','la mesure est');
+}
+function ajouterAnalyse(){
+  const g=id=>(document.getElementById(id)||{}).value||'';
+  const r=enregistrerAnalyse(currentUser,g('an-marqueur'),g('an-valeur'),g('an-unite'));
+  if(!r.ok) return toast(r.raison,'var(--orange)');
+  const ok=saveUser();
+  const e=document.getElementById('an-valeur'); if(e) e.value='';
+  loadSante();
+  toastEcriture(ok,'Analyse consignée','l\'analyse est');
+}
+function declarerDrapeauGeneral(){
+  const cases=[...document.querySelectorAll('.dg-case:checked')].map(c=>c.value);
+  if(!cases.length) return toast('Coche au moins un signe','var(--orange)');
+  if(!poserDrapeauGeneral(currentUser,cases)) return;
+  const ok=saveUser();
+  loadSante();
+  toastEcriture(ok,'Signalement enregistré','le signalement est');
+}
+function _leverDrapeauGeneralUI(){
+  if(!confirm('Retirer ce signalement ?')) return;
+  if(!leverDrapeauGeneral(currentUser)) return;
+  const ok=saveUser();
+  loadSante();
+  toastEcriture(ok,'Signalement retiré','le retrait est');
+}
+
+const DRAPEAU_ZONE_GENERALE='general';
+const DRAPEAUX_GENERAUX=Object.freeze([
+  {cle:'thoracique',  lib:'une douleur ou une oppression dans la poitrine'},
+  {cle:'souffle',     lib:'un essoufflement inhabituel, même au repos'},
+  {cle:'palpitations',lib:'des palpitations ou un cœur qui s\'emballe'},
+  {cle:'oedeme',      lib:'les chevilles ou les jambes qui gonflent'},
+  {cle:'ictere',      lib:'les yeux ou la peau qui jaunissent'},
+  {cle:'urines',      lib:'des urines très foncées'},
+  {cle:'cephalee',    lib:'des maux de tête violents et inhabituels'}
+]);
+const TEXTE_ARRET_GENERAL=["Arrête l'entraînement et fais-toi examiner.",
+  "Ces signes demandent l'avis d'un médecin. RepCore n'est pas un dispositif médical et ne peut pas t'aider là-dessus.",
+  "Ton coach a été prévenu."];
+function libelleDrapeau(cle){
+  const d=DRAPEAUX_ROUGES.find(x=>x.cle===cle)||DRAPEAUX_GENERAUX.find(x=>x.cle===cle);
+  return d?d.lib:cle;
+}
+function poserDrapeauGeneral(u,cases){
+  if(!u) return null;
+  const l=(cases||[]).filter(c=>DRAPEAUX_GENERAUX.some(d=>d.cle===c));
+  if(!l.length) return null;
+  u.drapeauGeneral={zone:DRAPEAU_ZONE_GENERALE,cases:l,date:Date.now()};
+  return u.drapeauGeneral;
+}
+function drapeauGeneralActif(u){
+  const d=u&&u.drapeauGeneral;
+  return (d&&Array.isArray(d.cases)&&d.cases.length)?d:null;
+}
+function leverDrapeauGeneral(u){
+  if(!u||!u.drapeauGeneral) return false;
+  if(!u.historiqueDrapeaux) u.historiqueDrapeaux=[];
+  u.historiqueDrapeaux.push(Object.assign({},u.drapeauGeneral,{leve:Date.now()}));
+  if(u.historiqueDrapeaux.length>20) u.historiqueDrapeaux=u.historiqueDrapeaux.slice(-20);
+  delete u.drapeauGeneral;
+  return true;
+}
+// Un drapeau, quelle que soit sa famille. C'est ce que testent les gardes qui
+// suspendent les propositions automatiques.
+function drapeauQuelconqueActif(u){
+  return drapeauRougeActif(u)||drapeauGeneralActif(u);
+}
+
 // Aucun substitut n'est proposé sur une zone sous drapeau rouge — ni sur les
 // autres, tant que le drapeau est levé : on ne trie pas la douleur.
 function substitutsAutorises(u,zone){
-  const d=drapeauRougeActif(u);
+  const d=drapeauQuelconqueActif(u);
   if(!d) return true;
   return false;
 }
@@ -14823,7 +15052,7 @@ function substitutsDe(ex,filtres){
   const zone=filtres&&filtres.zone;
   if(!zone) return [];
   // Sous drapeau rouge, on ne propose rien. C'est la règle qui prime.
-  if(drapeauRougeActif(currentUser)) return [];
+  if(drapeauQuelconqueActif(currentUser)) return [];
   const s=schemaDe(ex,currentUser);
   const ref=s?chargeSchema(s,zone):null;
   if(ref==null) return [];
@@ -16266,7 +16495,7 @@ function _axialContrainteLombaire(user){
 // sur cette zone précise.
 function axialPrioritaire(user){
   let drapeau=false;
-  try{ drapeau=!!drapeauRougeActif(user); }catch(e){}
+  try{ drapeau=!!drapeauQuelconqueActif(user); }catch(e){}
   return drapeau||_axialContrainteLombaire(user);
 }
 
@@ -21000,6 +21229,148 @@ const STEPS_RETENTION_JOURS=180;
 // tracé BRUT : à cette fréquence, une variation d'eau de 1 kg ressemble à une
 // progression. On ajoute la pesée quotidienne et une moyenne mobile, sans rien
 // migrer : les poids déjà présents dans les bilans sont LUS, jamais recopiés.
+// ══════════════ CONSTANTES ET ANALYSES ══════════════
+// Ce module CONSIGNE. Il n'interprète rien, et c'est le point entier :
+// risquesMicro posait déjà des questions sur les bilans sanguins sans pouvoir
+// en enregistrer les réponses. On ferme ce trou sans ouvrir celui d'à côté —
+// aucune borne de référence, aucune couleur, aucun score. Une valeur de
+// laboratoire dépend du labo, du sexe, de l'âge et du contexte : l'app qui
+// oserait la qualifier dirait une bêtise à quelqu'un qui la croirait.
+const CONSTANTES_RETENTION_JOURS=730;      // aligné sur PESEE_RETENTION_JOURS
+// Bornes de SAISIE, pas de normalité : elles écartent une faute de frappe,
+// elles ne disent rien de ce qui est sain. Hors bornes, on REFUSE — jamais de
+// correction silencieuse, comme _recordWeight.
+const TENSION_BORNES={sys:[70,250],dia:[40,150],pouls:[30,220]};
+const TENSION_SEUIL_SYS=140, TENSION_SEUIL_DIA=90;
+const TENSION_MESURES_ALERTE=3;
+const TENSION_ESPACEMENT_H=24;
+function _bornesOk(v,b){
+  const n=Number(v);
+  return isFinite(n)&&n>=b[0]&&n<=b[1];
+}
+// Rend {ok:true,entree} ou {ok:false,raison}. PURE : n'écrit pas.
+function validerTension(sys,dia,pouls,dateISO){
+  if(!_bornesOk(sys,TENSION_BORNES.sys))
+    return {ok:false,raison:'Systolique attendue entre '+TENSION_BORNES.sys[0]+' et '+TENSION_BORNES.sys[1]+'.'};
+  if(!_bornesOk(dia,TENSION_BORNES.dia))
+    return {ok:false,raison:'Diastolique attendue entre '+TENSION_BORNES.dia[0]+' et '+TENSION_BORNES.dia[1]+'.'};
+  if(pouls!==''&&pouls!=null&&!_bornesOk(pouls,TENSION_BORNES.pouls))
+    return {ok:false,raison:'Pouls attendu entre '+TENSION_BORNES.pouls[0]+' et '+TENSION_BORNES.pouls[1]+'.'};
+  const d=dateISO||new Date().toISOString();
+  if(isNaN(new Date(d).getTime())) return {ok:false,raison:'Date illisible.'};
+  const e={date:new Date(d).toISOString(),type:'tension',
+    sys:Number(sys),dia:Number(dia)};
+  if(pouls!==''&&pouls!=null) e.pouls=Number(pouls);
+  return {ok:true,entree:e};
+}
+function enregistrerConstante(user,sys,dia,pouls,dateISO){
+  if(!user) return {ok:false,raison:'Aucun dossier.'};
+  const v=validerTension(sys,dia,pouls,dateISO);
+  if(!v.ok) return v;
+  if(!Array.isArray(user.constantes)) user.constantes=[];
+  user.constantes.push(v.entree);
+  const min=Date.now()-CONSTANTES_RETENTION_JOURS*24*3600*1000;
+  user.constantes=user.constantes
+    .filter(e=>e&&e.date&&new Date(e.date).getTime()>=min)
+    .sort((a,b)=>a.date<b.date?-1:1);
+  return {ok:true,entree:v.entree};
+}
+// PURE. Trois dernières mesures au-dessus du seuil ET espacées de plus de 24 h
+// l'une de l'autre. L'espacement n'est pas un détail : trois relevés pris à
+// cinq minutes d'intervalle un jour de stress ne sont qu'une seule mesure.
+function alerteTension(user){
+  const l=(((user&&user.constantes)||[]).filter(e=>e&&e.type==='tension'&&e.date))
+    .slice().sort((a,b)=>a.date<b.date?-1:1);
+  if(l.length<TENSION_MESURES_ALERTE) return {alerte:false};
+  const trois=l.slice(-TENSION_MESURES_ALERTE);
+  for(const m of trois){
+    if(!(Number(m.sys)>=TENSION_SEUIL_SYS||Number(m.dia)>=TENSION_SEUIL_DIA))
+      return {alerte:false};
+  }
+  for(let i=1;i<trois.length;i++){
+    const dt=new Date(trois[i].date).getTime()-new Date(trois[i-1].date).getTime();
+    if(!(dt>TENSION_ESPACEMENT_H*3600*1000)) return {alerte:false};
+  }
+  return {alerte:true,mesures:trois};
+}
+// Le message ne contient AUCUN chiffre interprété : il rappelle le seuil qui a
+// déclenché l'affichage, et renvoie. Il ne dit pas « ta tension est élevée ».
+const TENSION_MESSAGE='Trois mesures au-dessus de 140/90. RepCore ne peut pas '
+  +'interpréter une tension : fais-la contrôler par un médecin ou en pharmacie.';
+
+// ── Analyses : consignation seule ──────────────────────────────────────────
+// Liste FERMÉE. Aucune entrée ne porte de borne, de min, de max, de référence
+// ni de seuil — un test le vérifie, parce que c'est le genre de champ qu'on
+// ajoute « juste pour aider » six mois plus tard.
+const MARQUEURS=Object.freeze([
+  {cle:'hematocrite',   lib:'Hématocrite',        unites:['%']},
+  {cle:'hemoglobine',   lib:'Hémoglobine',        unites:['g/dL','g/L']},
+  {cle:'ferritine',     lib:'Ferritine',          unites:['µg/L','ng/mL']},
+  {cle:'ldl',           lib:'LDL',                unites:['g/L','mmol/L']},
+  {cle:'hdl',           lib:'HDL',                unites:['g/L','mmol/L']},
+  {cle:'triglycerides', lib:'Triglycérides',      unites:['g/L','mmol/L']},
+  {cle:'asat',          lib:'ASAT',               unites:['UI/L']},
+  {cle:'alat',          lib:'ALAT',               unites:['UI/L']},
+  {cle:'ggt',           lib:'Gamma-GT',           unites:['UI/L']},
+  {cle:'glycemie_jeun', lib:'Glycémie à jeun',    unites:['g/L','mmol/L']},
+  {cle:'hba1c',         lib:'HbA1c',              unites:['%','mmol/mol']},
+  {cle:'creatinine',    lib:'Créatinine',         unites:['mg/L','µmol/L']},
+  {cle:'tsh',           lib:'TSH',                unites:['mUI/L']},
+  {cle:'vitamine_d',    lib:'Vitamine D',         unites:['ng/mL','nmol/L']}
+]);
+function marqueurDe(cle){ return MARQUEURS.find(m=>m.cle===cle)||null; }
+function validerAnalyse(cle,valeur,unite,dateISO){
+  const m=marqueurDe(cle);
+  if(!m) return {ok:false,raison:'Marqueur inconnu.'};
+  const v=Number(valeur);
+  // Pas de borne de normalité : on refuse ce qui n'est pas un nombre positif,
+  // rien de plus. Le reste appartient au médecin.
+  if(!isFinite(v)||v<0) return {ok:false,raison:'Valeur attendue : un nombre positif.'};
+  const u=String(unite||'').trim();
+  if(m.unites.indexOf(u)<0) return {ok:false,raison:'Unité attendue : '+m.unites.join(' ou ')+'.'};
+  const d=dateISO||new Date().toISOString();
+  if(isNaN(new Date(d).getTime())) return {ok:false,raison:'Date illisible.'};
+  return {ok:true,entree:{date:new Date(d).toISOString(),marqueur:cle,valeur:v,unite:u}};
+}
+function enregistrerAnalyse(user,cle,valeur,unite,dateISO){
+  if(!user) return {ok:false,raison:'Aucun dossier.'};
+  const v=validerAnalyse(cle,valeur,unite,dateISO);
+  if(!v.ok) return v;
+  if(!Array.isArray(user.analyses)) user.analyses=[];
+  user.analyses.push(v.entree);
+  user.analyses.sort((a,b)=>a.date<b.date?-1:1);
+  return {ok:true,entree:v.entree};
+}
+// Écart avec le relevé PRÉCÉDENT du même marqueur. Un écart n'est pas un
+// jugement : on dit « +6 depuis le 12 mars », jamais « en hausse, à surveiller ».
+function ecartAnalyse(user,entree){
+  const l=((user&&user.analyses)||[])
+    .filter(e=>e&&e.marqueur===entree.marqueur&&e.unite===entree.unite&&e.date<entree.date)
+    .sort((a,b)=>a.date<b.date?-1:1);
+  const p=l[l.length-1];
+  if(!p) return null;
+  const d=Math.round((entree.valeur-p.valeur)*100)/100;
+  return {delta:d,depuis:p.date,precedente:p.valeur};
+}
+const ANALYSES_PHRASE='Les valeurs de référence dépendent du laboratoire, de ton '
+  +'sexe, de ton âge et de ton contexte. Seul le médecin qui a prescrit l\'analyse '
+  +'peut les interpréter. RepCore les conserve pour que tu les aies sous la main.';
+const ANALYSES_VIDE='Aucune analyse consignée. Ajoute une valeur pour la garder '
+  +'sous la main lors de ton prochain rendez-vous.';
+// Relance : aucune notification, un encart et rien d'autre.
+const ANALYSES_RELANCE_JOURS=90;
+function relanceAnalyses(user,ref){
+  // aPES() est annoncé par le lot A2-01, qui n'est pas livré : la condition est
+  // isolée ici pour s'y brancher sans toucher au reste le jour venu.
+  const pes=(typeof aPES==='function')?(()=>{try{return !!aPES(user);}catch(e){return false;}})():null;
+  if(pes===false) return false;
+  const l=((user&&user.analyses)||[]).filter(e=>e&&e.date);
+  const t=(ref instanceof Date?ref:new Date()).getTime();
+  if(!l.length) return true;
+  const der=l.slice().sort((a,b)=>a.date<b.date?-1:1).pop();
+  return (t-new Date(der.date).getTime())>ANALYSES_RELANCE_JOURS*24*3600*1000;
+}
+
 const PESEE_RETENTION_JOURS=730;
 const PESEE_MIN=25, PESEE_MAX=300;
 const PESEE_FENETRE_MM=7;          // largeur de la moyenne mobile
@@ -21370,6 +21741,10 @@ function _vitesseAuJour(user,jourISO){
 
 function ajustementPropose(user){
   if(!user) return null;
+  // Drapeau rouge, quelle que soit sa famille : aucune proposition automatique.
+  // Suggérer de manger moins à quelqu'un qui décrit une oppression thoracique
+  // reviendrait à l'aider à continuer.
+  try{ if(drapeauQuelconqueActif(user)) return null; }catch(e){}
   const nut=user.nutrition||{};
   // Sans objectif chiffré, il n'y a rien à ajuster.
   if(!nut.macros) return null;
@@ -35407,6 +35782,288 @@ function testExercices(){
         return manque.length?_echec('absents de BILAN_QUESTIONS : '+manque.join(', ')):true;})());
     })();
 
+
+    // ══ CONSTANTES, ANALYSES, DRAPEAUX GÉNÉRAUX ══════════════════════════
+    (()=>{
+      const _sU=currentUser;
+      const _j=(n)=>new Date(Date.now()-n*864e5).toISOString();
+      const _u=(mes)=>({id:'_s',email:'s@t',role:'athlete',exAlias:{},exMuscles:{},
+        sessions:[],bilans:[],constantes:(mes||[]).slice()});
+      const _t=(sys,dia,jours)=>({date:_j(jours),type:'tension',sys,dia,pouls:60});
+      try{
+        // ── Tension ───────────────────────────────────────────────────────
+        ok('Critère : deux mesures à 150/95 → aucune alerte',
+           alerteTension(_u([_t(150,95,4),_t(150,95,2)])).alerte===false);
+        ok('Critère : trois mesures à 150/95 espacées de 2 jours → alerte',(()=>{
+          const r=alerteTension(_u([_t(150,95,6),_t(150,95,4),_t(150,95,2)]));
+          return r.alerte===true&&r.mesures.length===3
+            ?true:_echec(JSON.stringify(r));})());
+        ok('Critère : trois mesures à 150/95 le MÊME jour → aucune alerte',(()=>{
+          const d=_j(2);
+          const m=[{date:d,type:'tension',sys:150,dia:95},
+                   {date:d,type:'tension',sys:150,dia:95},
+                   {date:d,type:'tension',sys:150,dia:95}];
+          return alerteTension(_u(m)).alerte===false
+            ?true:_echec('alerte sur trois mesures simultanées');})());
+        ok('Critère : trois mesures à 135/85 → aucune alerte',
+           alerteTension(_u([_t(135,85,6),_t(135,85,4),_t(135,85,2)])).alerte===false);
+        ok('Une seule mesure sous le seuil suffit à éteindre l\'alerte',
+           alerteTension(_u([_t(150,95,6),_t(120,70,4),_t(150,95,2)])).alerte===false);
+        ok('Le seuil DIASTOLIQUE seul déclenche aussi',
+           alerteTension(_u([_t(120,95,6),_t(120,95,4),_t(120,95,2)])).alerte===true);
+        ok('Aucune constante : aucune alerte, aucune erreur',
+           alerteTension({}).alerte===false&&alerteTension(null).alerte===false);
+        ok('Le message de tension ne qualifie RIEN',
+           !/élevée|haute|hypertension|anormal|inquiétant/i.test(TENSION_MESSAGE)
+           &&/médecin|pharmacie/.test(TENSION_MESSAGE));
+
+        // ── Bornes de saisie ──────────────────────────────────────────────
+        ok('Une systolique hors bornes est REFUSÉE, jamais corrigée',(()=>{
+          const u=_u([]);
+          const r=enregistrerConstante(u,300,90,60);
+          return r.ok===false&&(u.constantes||[]).length===0
+            ?true:_echec(JSON.stringify(r));})());
+        ok('Une diastolique hors bornes est refusée',
+           enregistrerConstante(_u([]),120,10,60).ok===false);
+        ok('Un pouls hors bornes est refusé',
+           enregistrerConstante(_u([]),120,80,400).ok===false);
+        ok('Une saisie valide est conservée telle quelle',(()=>{
+          const u=_u([]);
+          const r=enregistrerConstante(u,128,82,58);
+          if(!r.ok) return _echec(r.raison);
+          const e=u.constantes[0];
+          return e.sys===128&&e.dia===82&&e.pouls===58&&e.type==='tension'
+            ?true:_echec(JSON.stringify(e));})());
+        ok('Le pouls est facultatif',
+           enregistrerConstante(_u([]),128,82,'').ok===true);
+
+        // ── Analyses ──────────────────────────────────────────────────────
+        ok('Critère : MARQUEURS ne porte AUCUNE borne de référence',(()=>{
+          const interdits=['min','max','ref','reference','normal','normale',
+            'seuil','borne','basse','haute','plage','intervalle'];
+          const fautifs=[];
+          for(const m of MARQUEURS){
+            for(const k of Object.keys(m))
+              if(interdits.indexOf(k.toLowerCase())>=0) fautifs.push(m.cle+'.'+k);
+          }
+          return fautifs.length?_echec(fautifs.join(', ')):true;})());
+        ok('MARQUEURS porte les quatorze marqueurs, et rien d\'autre',(()=>{
+          const attendus=['hematocrite','hemoglobine','ferritine','ldl','hdl',
+            'triglycerides','asat','alat','ggt','glycemie_jeun','hba1c',
+            'creatinine','tsh','vitamine_d'];
+          const vus=MARQUEURS.map(m=>m.cle);
+          const manque=attendus.filter(c=>vus.indexOf(c)<0);
+          const trop=vus.filter(c=>attendus.indexOf(c)<0);
+          return (manque.length||trop.length)
+            ?_echec('manque '+manque.join(',')+' / en trop '+trop.join(','))
+            :true;})());
+        ok('Chaque marqueur porte au moins une unité',
+           MARQUEURS.every(m=>Array.isArray(m.unites)&&m.unites.length>0));
+        ok('Critère : un marqueur hors liste est refusé, et DIT pourquoi',(()=>{
+          // Refuser ne suffit pas : un repli qui laisserait passer le marqueur
+          // pour le recaler ensuite sur une liste d'unités vide refuserait
+          // aussi, mais en annonçant « Unité attendue : . » — un message qui
+          // n'apprend rien à qui s'est trompé de marqueur.
+          const r=validerAnalyse('cortisol',10,'µg/L');
+          if(r.ok!==false) return _echec('accepté');
+          return /[Mm]arqueur/.test(r.raison||'')
+            ?true:_echec('raison hors sujet : '+r.raison);})());
+        ok('Une unité hors liste est refusée',
+           validerAnalyse('ferritine',30,'kg').ok===false);
+        ok('Une valeur non numérique est refusée',
+           validerAnalyse('ferritine','abc','µg/L').ok===false);
+        ok('Une analyse valide est consignée telle quelle',(()=>{
+          const u=_u([]);
+          const r=enregistrerAnalyse(u,'ferritine',42,'µg/L');
+          if(!r.ok) return _echec(r.raison);
+          return u.analyses[0].valeur===42&&u.analyses[0].unite==='µg/L'
+            ?true:_echec(JSON.stringify(u.analyses[0]));})());
+        ok('L\'écart se calcule avec le relevé PRÉCÉDENT du même marqueur',(()=>{
+          const u=_u([]);
+          enregistrerAnalyse(u,'ferritine',36,'µg/L',_j(60));
+          enregistrerAnalyse(u,'hemoglobine',14,'g/dL',_j(30));
+          const r=enregistrerAnalyse(u,'ferritine',42,'µg/L',_j(1));
+          const e=ecartAnalyse(u,r.entree);
+          return e&&e.delta===6&&e.precedente===36
+            ?true:_echec(JSON.stringify(e));})());
+        ok('Un premier relevé n\'a aucun écart',(()=>{
+          const u=_u([]);
+          const r=enregistrerAnalyse(u,'tsh',2,'mUI/L');
+          return ecartAnalyse(u,r.entree)===null?true:_echec('un écart est apparu');})());
+        ok('Critère : aucune qualification dans les textes du module',(()=>{
+          const mots=/élevé|elevé|\bbas\b|\bbasse\b|normal|anormal|à surveiller|inquiétant|bon|mauvais/i;
+          const textes=[ANALYSES_PHRASE,ANALYSES_VIDE,TENSION_MESSAGE]
+            .concat(MARQUEURS.map(m=>m.lib));
+          const fautifs=textes.filter(t=>mots.test(t));
+          return fautifs.length?_echec(fautifs.join(' | ')):true;})());
+        ok('La phrase permanente renvoie au médecin prescripteur',
+           /médecin qui a prescrit/.test(ANALYSES_PHRASE));
+
+        // ── Le RENDU, pas seulement les constantes ────────────────────────
+        ok('Critère : le rendu d\'une analyse ne qualifie jamais la valeur',(()=>{
+          const u=_u([]);
+          enregistrerAnalyse(u,'ferritine',36,'µg/L',_j(60));
+          enregistrerAnalyse(u,'ferritine',180,'µg/L',_j(1));
+          enregistrerAnalyse(u,'hemoglobine',9,'g/dL',_j(1));
+          const h=_htmlAnalyses(u);
+          const txt=h.replace(/<[^>]*>/g,' ');
+          const mots=/élevé|elevé|\bbas\b|\bbasse\b|normal|anormal|à surveiller|carence|excès/i;
+          if(mots.test(txt)) return _echec('mot interdit dans : '+txt.slice(0,140));
+          // Une valeur très haute et une très basse sont rendues à l'identique :
+          // aucune couleur, aucune classe, aucun marqueur visuel de l'une ou
+          // l'autre. C'est la garantie qui compte, pas l'absence de mots.
+          const couleurs=h.match(/color:\s*[^;"']+/g)||[];
+          const suspectes=couleurs.filter(c=>/red|orange|green|warning|danger|--red|--orange|--green/i.test(c));
+          return suspectes.length?_echec('couleur de jugement : '+suspectes.join(' | ')):true;})());
+        ok('Le rendu affiche bien l\'écart avec le relevé précédent',(()=>{
+          const u=_u([]);
+          enregistrerAnalyse(u,'ferritine',36,'µg/L',_j(60));
+          enregistrerAnalyse(u,'ferritine',42,'µg/L',_j(1));
+          const txt=_htmlAnalyses(u).replace(/<[^>]*>/g,' ');
+          return /\+6 depuis le/.test(txt)?true:_echec(txt.slice(0,160));})());
+        ok('Sans analyse, un texte d\'invitation et aucune erreur',(()=>{
+          const h=_htmlAnalyses(_u([]));
+          return h.indexOf(ANALYSES_VIDE)>=0&&!/erreur|aucune donnée/i.test(h)
+            ?true:_echec(h.slice(0,120));})());
+        ok('L\'encart de tension n\'apparaît QUE sous alerte',(()=>{
+          const calme=_u([_t(120,70,6),_t(120,70,4),_t(120,70,2)]);
+          const chaud=_u([_t(150,95,6),_t(150,95,4),_t(150,95,2)]);
+          if(_htmlAlerteTension(calme)!=='') return _echec('encart affiché sans alerte');
+          const h=_htmlAlerteTension(chaud);
+          return h.indexOf(TENSION_MESSAGE)>=0&&h.indexOf(DISCLAIMER_SANTE)>=0
+            ?true:_echec('encart incomplet');})());
+        ok('Le bandeau de drapeau général propose de le retirer',(()=>{
+          const u=_u([]);
+          poserDrapeauGeneral(u,['thoracique']);
+          const h=_htmlDrapeauGeneral(u);
+          return /poitrine/.test(h)&&/fais-toi examiner/.test(h)
+            &&/_leverDrapeauGeneralUI/.test(h)
+            ?true:_echec(h.replace(/<[^>]*>/g,' ').slice(0,160));})());
+        ok('La liste déroulante ne propose QUE les marqueurs fermés',(()=>{
+          // Le rendu construit ses options depuis MARQUEURS : aucune saisie
+          // libre n'est atteignable, ce qui est la garantie demandée.
+          const src=String(loadSante);
+          return /MARQUEURS\.map/.test(src)&&!/input[^>]*id="an-marqueur"/.test(src)
+            ?true:_echec('le marqueur est saisissable librement');})());
+
+        // ── Drapeaux généraux ─────────────────────────────────────────────
+        ok('Les sept drapeaux généraux sont là',(()=>{
+          const attendus=['thoracique','souffle','palpitations','oedeme',
+            'ictere','urines','cephalee'];
+          const vus=DRAPEAUX_GENERAUX.map(d=>d.cle);
+          return attendus.every(c=>vus.indexOf(c)>=0)&&vus.length===7
+            ?true:_echec(vus.join(','));})());
+        ok('Une clé hors liste ne pose aucun drapeau général',(()=>{
+          const u={};
+          return poserDrapeauGeneral(u,['inventé'])===null&&!u.drapeauGeneral
+            ?true:_echec('un drapeau est apparu');})());
+        // Un athlète qui reçoit VRAIMENT une proposition : sèche déclarée, six
+        // semaines de pesées quotidiennes, et une perte deux fois trop rapide.
+        // Une fixture pauvre rendrait null pour absence de phase, et le test
+        // passerait au vert même sans le garde-fou — il ne prouverait rien.
+        const _athAjust=()=>{
+          const u={id:'aj',email:'aj@t.fr',role:'athlete',exAlias:{},exMuscles:{},
+            sessions:[],bilans:[],weightLog:[],
+            phase:{type:'seche',debut:Date.now()-60*864e5},
+            nutrition:{macros:{on:{kcal:2500,p:180,l:70,g:270},
+                               off:{kcal:2200,p:180,l:70,g:195}}}};
+          // −1,8 % par semaine : bien au-delà du plancher de la fourchette.
+          let kg=70;
+          for(let j=45;j>=0;j--){
+            u.weightLog.push({date:localISODate(new Date(Date.now()-j*864e5)),
+              kg:Math.round(kg*10)/10});
+            kg-=70*0.018/7;
+          }
+          return u;
+        };
+        ok('La fixture d\'ajustement produit BIEN une proposition sans drapeau',(()=>{
+          const r=ajustementPropose(_athAjust());
+          return r?true:_echec('fixture muette : le test suivant ne prouverait rien');})());
+        ok('Critère : drapeau général posé → ajustementPropose rend null',(()=>{
+          const u=_athAjust();
+          poserDrapeauGeneral(u,['thoracique']);
+          return ajustementPropose(u)===null
+            ?true:_echec('une proposition a été rendue malgré le drapeau');})());
+        ok('Critère : drapeau levé → ajustementPropose reprend son cours',(()=>{
+          const u=_athAjust();
+          poserDrapeauGeneral(u,['thoracique']);
+          leverDrapeauGeneral(u);
+          if(drapeauGeneralActif(u)) return _echec('le drapeau est resté actif');
+          return ajustementPropose(u)?true:_echec('plus aucune proposition après levée');})());
+        ok('Un drapeau ARTICULAIRE coupe aussi la proposition',(()=>{
+          const u=_athAjust();
+          poserDrapeauRouge(u,'rachis-lombaire',['irradiation']);
+          return ajustementPropose(u)===null
+            ?true:_echec('une proposition a été rendue');})());
+        ok('Critère : articulaire ET général cohabitent, les deux visibles',(()=>{
+          const u={};
+          poserDrapeauRouge(u,'rachis-lombaire',['irradiation']);
+          poserDrapeauGeneral(u,['souffle']);
+          return drapeauRougeActif(u)&&drapeauGeneralActif(u)
+            &&drapeauQuelconqueActif(u)
+            ?true:_echec('un drapeau a écrasé l\'autre');})());
+        ok('Lever le général ne touche pas à l\'articulaire',(()=>{
+          const u={};
+          poserDrapeauRouge(u,'rachis-lombaire',['irradiation']);
+          poserDrapeauGeneral(u,['souffle']);
+          leverDrapeauGeneral(u);
+          return drapeauRougeActif(u)&&!drapeauGeneralActif(u)
+            ?true:_echec('l\'articulaire a bougé');})());
+        ok('Un drapeau général suspend les substitutions',(()=>{
+          const sauve=currentUser;
+          try{
+            currentUser={id:'y',exAlias:{},exMuscles:{}};
+            poserDrapeauGeneral(currentUser,['thoracique']);
+            return substitutsAutorises(currentUser,'rachis-lombaire')===false
+              ?true:_echec('les substitutions restent autorisées');
+          } finally { currentUser=sauve; }})());
+        ok('Le libellé d\'un drapeau se lit dans les DEUX familles',
+           /poitrine/.test(libelleDrapeau('thoracique'))
+           &&/bras ou la jambe/.test(libelleDrapeau('irradiation')));
+        ok('Le texte d\'arrêt général ne parle pas de « cette zone »',
+           !/cette zone/.test(TEXTE_ARRET_GENERAL.join(' '))
+           &&/fais-toi examiner/.test(TEXTE_ARRET_GENERAL[0]));
+
+        // ── Ces données ne quittent pas l'appareil ─────────────────────────
+        ok('Critère : constantes et analyses sont retirées de la charge poussée',(()=>{
+          // On lit la charge RÉELLEMENT construite par _doPushOne, pas une
+          // liste de champs déclarée à côté qui pourrait mentir.
+          const src=String(CLOUD._doPushOne);
+          return /delete\s+safe\.constantes/.test(src)&&/delete\s+safe\.analyses/.test(src)
+            ?true:_echec('aucun retrait dans _doPushOne');})());
+        ok('Le drapeau général, lui, PART : le coach doit être prévenu',(()=>{
+          const src=String(CLOUD._doPushOne);
+          return !/delete\s+safe\.drapeauGeneral/.test(src)
+            ?true:_echec('le drapeau général est retenu, le coach ne saura rien');})());
+        ok('Une synchro descendante n\'efface pas les constantes locales',(()=>{
+          // Le dossier distant ne les porte JAMAIS, puisqu'elles ne montent pas.
+          // Sans protection, merged[email]={...cloudUser} les effacerait à
+          // chaque réveil — une perte silencieuse, la pire espèce.
+          const email='sync@t.fr';
+          const merged={};
+          merged[email]={email,updatedAt:1000,
+            constantes:[{date:'2026-01-01T10:00:00.000Z',type:'tension',sys:120,dia:80}],
+            analyses:[{date:'2026-01-01T10:00:00.000Z',marqueur:'tsh',valeur:2,unite:'mUI/L'}],
+            bilans:[],sessions:[]};
+          CLOUD._mergeUser(merged,email,{email,updatedAt:2000,bilans:[],sessions:[]});
+          const r=merged[email];
+          if(!r.constantes||r.constantes.length!==1) return _echec('constantes perdues');
+          return (r.analyses&&r.analyses.length===1)?true:_echec('analyses perdues');})());
+        ok('Une synchro descendante n\'invente pas de constantes',(()=>{
+          const email='sync2@t.fr';
+          const merged={};
+          merged[email]={email,updatedAt:1000,bilans:[],sessions:[]};
+          CLOUD._mergeUser(merged,email,{email,updatedAt:2000,bilans:[],sessions:[]});
+          return merged[email].constantes===undefined
+            ?true:_echec('un champ vide est apparu');})());
+
+        // ── Confidentialité ───────────────────────────────────────────────
+        ok('Critère : constantes et analyses ne sont pas publiables au coach',(()=>{
+          const interdits=['constantes','analyses','drapeauGeneral'];
+          const fautifs=interdits.filter(c=>CLOUD.CHAMPS_PROFIL_COACH.indexOf(c)>=0);
+          return fautifs.length?_echec(fautifs.join(', ')):true;})());
+      } finally { currentUser=_sU; }
+    })();
 
     // ══ DUPLICATION ET DÉCHARGE GROUPÉE ══════════════════════════════════
     (()=>{
