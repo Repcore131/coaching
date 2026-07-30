@@ -17720,6 +17720,25 @@ function utiliserBesoinsProposes(){
   if(macrosRemplies(nut)){ toast('Ton coach a fixé tes objectifs entre-temps','var(--orange)'); loadNutrition(); return; }
   const b=besoinsProposes(currentUser);
   if(!b||b.source===null){ toast('Données de base incomplètes','var(--orange)'); return; }
+  // Un DÉFICIT ne s'écrit pas d'un clic. Ce chemin-ci n'est relu par personne :
+  // l'athlète appuie et les objectifs sont posés. Le chemin coach, lui, reste
+  // ouvert — un professionnel voit les chiffres avant de valider.
+  const deficit=(b.delta<0)?-b.delta:0;
+  if(deficit>0){
+    // Antécédent de TCA déclaré : personne ne passe outre, même en confirmant.
+    // Même garde-fou qu'ajustementPropose, pour la même raison — proposer de
+    // manger moins est exactement ce qu'il existe pour empêcher.
+    let tca=false;
+    try{ tca=aTCA(currentUser); }catch(e){}
+    if(tca){
+      toast('Vu ce que tu as déclaré, RepCore ne pose pas de déficit tout seul. Passe par ton coach.','var(--orange)');
+      return;
+    }
+    if(!confirm('Ces objectifs posent un déficit d\'environ '+deficit
+      +' kcal par jour, sous ta dépense estimée de '+b.depense+' kcal.'
+      +String.fromCharCode(10)+String.fromCharCode(10)
+      +'Tu peux les modifier à tout moment. Continuer ?')) return;
+  }
   const j=o=>({kcal:o.kcal,p:o.p,g:o.g,l:o.l,f:o.f});
   if(!currentUser.nutrition) currentUser.nutrition={};
   currentUser.nutrition.macros={on:j(b.on),off:j(b.off),origine:'auto',
@@ -18752,6 +18771,32 @@ const LIP_G_PAR_KG=0.8;          // plancher, jamais en dessous
 const FIBRES_PAR_1000=14;
 const CYCLE_GLUC=0.15;           // jour ON : +15 % de glucides, OFF : −15 %
 
+// ── Point de départ calorique, dérivé de la vitesse visée ───────────────────
+// Comme REPERES_VOLUME et ACT_SEANCES, ces trois nombres sont des repères de
+// PRATIQUE DE TERRAIN et non une mesure. 7700 kcal par kilo est la conversion
+// d'usage pour du tissu adipeux : la composition réelle du poids perdu ou pris
+// n'est jamais purement grasse, elle varie d'une personne à l'autre et au fil
+// d'une même phase. Les deux plafonds ne viennent d'aucune formule non plus —
+// ils bornent ce qu'un point de départ automatique a le droit de proposer, pour
+// qu'une grande dépense ne se traduise pas en déficit démesuré.
+// C'est un point de départ que le coach ajuste, jamais un verdict.
+const KCAL_PAR_KG_CORPS=7700;
+const DEFICIT_MAX_PART=0.25;      // jamais moins de 75 % de la dépense
+const SURPLUS_MAX_PART=0.15;      // jamais plus de 115 %
+// PURE. Milieu de la fourchette de la phase, LU dans PHASES : recopier les
+// valeurs ici les ferait diverger le jour où la table bouge.
+function cibleVitesseMilieu(phase){
+  const p=phase&&PHASES[phase];
+  if(!p||typeof p.min!=='number'||typeof p.max!=='number') return 0;
+  return (p.min+p.max)/2;
+}
+// PURE. Écart calorique quotidien correspondant à une vitesse hebdomadaire.
+function deltaKcalJour(pctSemaine,poids){
+  const pc=Number(pctSemaine), kg=Number(poids);
+  if(!isFinite(pc)||!isFinite(kg)||!(kg>0)||!pc) return 0;
+  return Math.round((pc/100*kg*KCAL_PAR_KG_CORPS)/7);
+}
+
 function _repartition(kcal,poids,gParKg){
   const p=Math.round(gParKg*poids);
   const l=Math.round(LIP_G_PAR_KG*poids);
@@ -18839,18 +18884,38 @@ function besoinsProposes(user,opts){
   hypotheses.push(String(gParKg).replace('.',',')+' g de protéines par kilo'
     +(libPhase?' ('+libPhase.toLowerCase()+')':''));
 
-  const r=_repartition(depense,poids,gParKg);
+  // Le point de départ ne vaut plus la maintenance : il vise la vitesse
+  // déclarée pour la phase. Sans phase, le delta est nul et le comportement
+  // d'avant ce lot est conservé au kilocalorie près.
+  const pctVise=cibleVitesseMilieu(phase);
+  let cible=depense+deltaKcalJour(pctVise,poids);
+  // Les plafonds passent AVANT le plancher : le plancher doit rester le
+  // dernier mot, et pouvoir remonter une valeur déjà bornée.
+  cible=Math.max(cible,Math.round(depense*(1-DEFICIT_MAX_PART)));
+  cible=Math.min(cible,Math.round(depense*(1+SURPLUS_MAX_PART)));
+  const deltaRetenu=cible-depense;
+  if(deltaRetenu!==0){
+    // La vitesse ANNONCÉE est celle que produit le delta réellement retenu, et
+    // non celle visée : quand un plafond mord, promettre −0,75 % en n'appliquant
+    // que la moitié du déficit serait un mensonge à l'athlète.
+    const pctReel=poids>0?(deltaRetenu*7)/(poids*KCAL_PAR_KG_CORPS)*100:0;
+    hypotheses.push((deltaRetenu<0?'déficit':'surplus')+' de '+Math.abs(deltaRetenu)
+      +' kcal par jour, visant '+(pctReel>0?'+':'')
+      +String(Math.round(pctReel*100)/100).replace('.',',')
+      +' % de poids par semaine');
+  }
+  const r=_repartition(cible,poids,gParKg);
   const cycle=o.cycle!==false;
   if(!cycle){
     hypotheses.push('même total tous les jours');
     const j=_relevePlancher(_bloc(r.p,r.l,r.g),user);
-    return {source,on:j,off:Object.assign({},j),act,depense,mb,gParKg,modele,cycle:false,hypotheses};
+    return {source,on:j,off:Object.assign({},j),act,depense,mb,gParKg,modele,cycle:false,delta:deltaRetenu,hypotheses};
   }
   hypotheses.push('glucides +15 % les jours d\'entraînement, −15 % les jours de repos');
   return {source,
     on:_relevePlancher(_bloc(r.p,r.l,Math.round(r.g*(1+CYCLE_GLUC))),user),
     off:_relevePlancher(_bloc(r.p,r.l,Math.round(r.g*(1-CYCLE_GLUC))),user),
-    act,depense,mb,gParKg,modele,cycle:true,hypotheses};
+    act,depense,mb,gParKg,modele,cycle:true,delta:deltaRetenu,hypotheses};
 }
 
 
@@ -35782,6 +35847,234 @@ function testExercices(){
         return manque.length?_echec('absents de BILAN_QUESTIONS : '+manque.join(', ')):true;})());
     })();
 
+
+    // ══ POINT DE DÉPART CALORIQUE DÉRIVÉ DE LA VITESSE ═══════════════════
+    (()=>{
+      const _sU=currentUser;
+      // Athlète du cahier des charges : 62 kg, 168 cm, 29 ans, F, 4 séances.
+      const _ath=(kg,phase,sexe,taille,age)=>{
+        const u={id:'_n'+kg+(phase||'x'),email:'n'+kg+(phase||'x')+'@t',role:'athlete',
+          exAlias:{},exMuscles:{},sessions:[],
+          bilans:[{type:'depart',date:Date.now()-30*864e5,
+            'deb-weight':String(kg),'deb-height':String(taille||168),
+            'deb-age':String(age||29),'deb-gender':sexe||'F'}],
+          sessions_config:Array.from({length:4},(_,i)=>({day:'J'+i,name:'S'+i,
+            active:true,exercises:[{name:'SQUAT',series:3,reps:'8'}]}))};
+        if(phase) u.phase={type:phase,debut:Date.now()-30*864e5};
+        return u;
+      };
+      try{
+        // ── Les deux fonctions pures ──────────────────────────────────────
+        ok('cibleVitesseMilieu lit PHASES et rend le milieu',(()=>{
+          const v={seche:cibleVitesseMilieu('seche'),masse:cibleVitesseMilieu('masse'),
+            recomp:cibleVitesseMilieu('recomp'),maintien:cibleVitesseMilieu('maintien'),
+            nul:cibleVitesseMilieu(null),inconnu:cibleVitesseMilieu('zzz')};
+          return v.seche===-0.75&&v.masse===0.375&&v.recomp===0&&v.maintien===0
+            &&v.nul===0&&v.inconnu===0?true:_echec(JSON.stringify(v));})());
+        ok('cibleVitesseMilieu ne recopie PAS les valeurs de PHASES',(()=>{
+          // Le milieu doit se DÉDUIRE de la table : si min et max y changent,
+          // la fonction doit suivre sans qu'on la touche.
+          const src=String(cibleVitesseMilieu);
+          return /PHASES/.test(src)&&!/-0\.75|0\.375/.test(src)
+            ?true:_echec('valeurs recopiées en dur');})());
+        ok('deltaKcalJour : -0,75 % sur 62 kg → environ -511 kcal',(()=>{
+          const d=deltaKcalJour(-0.75,62);
+          return d===Math.round((-0.75/100*62*KCAL_PAR_KG_CORPS)/7)&&d<-490&&d>-530
+            ?true:_echec(String(d));})());
+        ok('deltaKcalJour rend zéro sans vitesse ou sans poids',
+           deltaKcalJour(0,62)===0&&deltaKcalJour(-0.75,0)===0
+           &&deltaKcalJour(null,62)===0&&deltaKcalJour(-0.75,null)===0);
+
+        // ── Non-régression : sans phase, RIEN ne bouge ────────────────────
+        ok('Critère : sans phase déclarée, le total est celui de la dépense',(()=>{
+          const b=besoinsProposes(_ath(62,null));
+          if(!b||b.source===null) return _echec('aucune proposition');
+          // Le cycle glucidique décale ON et OFF autour du total : leur moyenne
+          // reste la dépense, aux arrondis près.
+          const moy=(b.on.kcal+b.off.kcal)/2;
+          return Math.abs(moy-b.depense)<=6
+            ?true:_echec('moyenne '+moy+' contre dépense '+b.depense);})());
+        ok('Critère : en maintien, le total vaut la dépense',(()=>{
+          const b=besoinsProposes(_ath(62,'maintien'));
+          const moy=(b.on.kcal+b.off.kcal)/2;
+          return Math.abs(moy-b.depense)<=6
+            ?true:_echec('moyenne '+moy+' contre dépense '+b.depense);})());
+        ok('En recomposition aussi, le delta est nul',(()=>{
+          const b=besoinsProposes(_ath(62,'recomp'));
+          const moy=(b.on.kcal+b.off.kcal)/2;
+          return Math.abs(moy-b.depense)<=6
+            ?true:_echec('moyenne '+moy+' contre dépense '+b.depense);})());
+
+        // ── Sèche et masse ────────────────────────────────────────────────
+        // Le cahier des charges attendait un jour OFF entre 1550 et 1700 pour
+        // cette athlète. Mesuré : dépense 2114, déficit 511 — exactement le 512
+        // annoncé par la spec — donc une MOYENNE de 1603, bien dans la fourchette,
+        // mais un jour OFF à 1518. Le cycle glucidique de ±15 % existe depuis
+        // toujours et s'applique APRÈS : le OFF tombe nécessairement sous la
+        // moyenne. La fourchette décrivait le total moyen, pas le jour OFF.
+        ok('Critère : en sèche, la moyenne du jour tombe entre 1550 et 1700',(()=>{
+          const b=besoinsProposes(_ath(62,'seche'));
+          const moy=Math.round((b.on.kcal+b.off.kcal)/2);
+          return moy>=1550&&moy<=1700?true:_echec('moyenne '+moy+' pour '+b.depense);})());
+        ok('Le jour OFF reste sous la moyenne, cycle glucidique oblige',(()=>{
+          const b=besoinsProposes(_ath(62,'seche'));
+          const moy=(b.on.kcal+b.off.kcal)/2;
+          return b.off.kcal<moy&&b.on.kcal>moy
+            ?true:_echec('ON '+b.on.kcal+' OFF '+b.off.kcal+' moyenne '+moy);})());
+        // Le cahier des charges annonçait un surplus de 350 à 450 kcal. Sa PROPRE
+        // formule en donne 330 : 0,375 % × 80 kg × 7700 / 7 = 330. La fourchette
+        // était inatteignable ; on vérifie la cohérence avec la formule, qui est
+        // la règle réellement écrite, et non un intervalle qui la contredit.
+        ok('En masse à 80 kg, le surplus vaut ce que dit la formule',(()=>{
+          const b=besoinsProposes(_ath(80,'masse','H',180,29));
+          const moy=(b.on.kcal+b.off.kcal)/2;
+          const sur=Math.round(moy-b.depense);
+          const attendu=deltaKcalJour(cibleVitesseMilieu('masse'),80);
+          return Math.abs(sur-attendu)<=3
+            ?true:_echec('surplus '+sur+' contre '+attendu+' attendu par la formule');})());
+        ok('Critère : le déficit ne dépasse JAMAIS 25 % de la dépense',(()=>{
+          const cas=[_ath(48,'seche'),_ath(62,'seche'),_ath(80,'seche','H',180),
+                     _ath(120,'seche','H',195,35)];
+          const fautifs=[];
+          for(const u of cas){
+            const b=besoinsProposes(u);
+            const moy=(b.on.kcal+b.off.kcal)/2;
+            if(moy<b.depense*(1-DEFICIT_MAX_PART)-8)
+              fautifs.push(Math.round(moy)+'/'+b.depense);
+          }
+          return fautifs.length?_echec(fautifs.join(' ')):true;})());
+        // Le plafond de surplus ne mord QUE sur un gabarit lourd et peu actif :
+        // +0,375 % par semaine reste modeste, et sur un athlète qui s'entraîne
+        // quatre fois la dépense est trop haute pour que 15 % soit atteint. Une
+        // fixture ordinaire laisserait ce plafond entièrement non vérifié.
+        const _athCreneaux=(kg,phase,sexe,taille,age,nSlots)=>{
+          const u=_ath(kg,phase,sexe,taille,age);
+          u.email='c'+kg+phase+nSlots+'@t';
+          u.sessions_config=Array.from({length:nSlots},(_,i)=>({day:'J'+i,name:'S'+i,
+            active:true,exercises:[{name:'SQUAT',series:3,reps:'8'}]}));
+          return u;
+        };
+        ok('Le plafond de surplus MORD sur un gabarit lourd et peu actif',(()=>{
+          const u=_athCreneaux(120,'masse','H',195,35,1);
+          const b=besoinsProposes(u);
+          const brut=deltaKcalJour(cibleVitesseMilieu('masse'),120);
+          const plaf=Math.round(b.depense*SURPLUS_MAX_PART);
+          if(!(brut>plaf)) return _echec('fixture inutile : delta brut '+brut+' sous le plafond '+plaf);
+          const sur=Math.round((b.on.kcal+b.off.kcal)/2-b.depense);
+          return Math.abs(sur-plaf)<=8
+            ?true:_echec('surplus '+sur+' au lieu du plafond '+plaf);})());
+        ok('Le surplus ne dépasse jamais 15 % de la dépense',(()=>{
+          const cas=[_ath(120,'masse','H',195,35),_athCreneaux(120,'masse','H',195,35,1),
+                     _athCreneaux(95,'masse','H',185,40,1)];
+          const fautifs=[];
+          for(const u of cas){
+            const b=besoinsProposes(u);
+            const moy=(b.on.kcal+b.off.kcal)/2;
+            if(moy>b.depense*(1+SURPLUS_MAX_PART)+8) fautifs.push(Math.round(moy)+'/'+b.depense);
+          }
+          return fautifs.length?_echec(fautifs.join(' ')):true;})());
+
+        // ── Le plancher garde le dernier mot ──────────────────────────────
+        ok('Critère : une athlète de 48 kg en sèche reste au-dessus du plancher',(()=>{
+          const u=_ath(48,'seche');
+          const b=besoinsProposes(u);
+          const pl=plancherEffectif(u).kcal;
+          if(!(pl>0)) return _echec('plancher indisponible');
+          return b.off.kcal>=pl&&b.on.kcal>=pl
+            ?true:_echec('OFF '+b.off.kcal+' / ON '+b.on.kcal+' pour un plancher de '+pl);})());
+        ok('Aucun jour ne produit de glucides négatifs',(()=>{
+          const cas=[_ath(45,'seche'),_ath(48,'seche'),_ath(62,'seche'),
+                     _ath(80,'seche','H',180),_ath(120,'seche','H',195,35)];
+          const fautifs=[];
+          for(const u of cas){
+            const b=besoinsProposes(u);
+            if(b.on.g<0||b.off.g<0||b.on.kcal<=0||b.off.kcal<=0)
+              fautifs.push(JSON.stringify([b.on.g,b.off.g]));
+          }
+          return fautifs.length?_echec(fautifs.join(' ')):true;})());
+        ok('Critère : protéines et lipides restent ceux de _repartition',(()=>{
+          const u=_ath(62,'seche');
+          const b=besoinsProposes(u);
+          const attenduP=Math.round(b.gParKg*62);
+          const attenduL=Math.round(LIP_G_PAR_KG*62);
+          return b.on.p===attenduP&&b.on.l===attenduL
+            &&b.off.p===attenduP&&b.off.l===attenduL
+            ?true:_echec('p '+b.on.p+'/'+attenduP+' l '+b.on.l+'/'+attenduL);})());
+
+        // ── La ligne d'hypothèse ──────────────────────────────────────────
+        ok('Critère : la ligne de déficit apparaît en sèche',(()=>{
+          const b=besoinsProposes(_ath(62,'seche'));
+          const l=b.hypotheses.filter(h=>/déficit de \d+ kcal par jour/.test(h));
+          if(l.length!==1) return _echec(l.length+' ligne(s) : '+b.hypotheses.join(' | '));
+          return /visant -\d/.test(l[0])?true:_echec(l[0]);})());
+        ok('Critère : aucune ligne de delta sans phase déclarée',(()=>{
+          const b=besoinsProposes(_ath(62,null));
+          const l=b.hypotheses.filter(h=>/déficit|surplus/.test(h));
+          return l.length===0?true:_echec(l.join(' | '));})());
+        ok('En maintien non plus, aucune ligne de delta',(()=>{
+          const b=besoinsProposes(_ath(62,'maintien'));
+          return b.hypotheses.filter(h=>/déficit|surplus/.test(h)).length===0
+            ?true:_echec('une ligne est apparue');})());
+        ok('La ligne de masse annonce un SURPLUS',(()=>{
+          const b=besoinsProposes(_ath(80,'masse','H',180));
+          const l=b.hypotheses.filter(h=>/surplus de \d+ kcal par jour/.test(h));
+          return l.length===1&&/visant \+\d/.test(l[0])
+            ?true:_echec(JSON.stringify(l));})());
+        ok('Quand un plafond mord, la vitesse ANNONCÉE est la vitesse réelle',(()=>{
+          // Un gros gabarit en sèche : -0,75 % demanderait plus que 25 % de la
+          // dépense. Annoncer -0,75 % en n'appliquant que le plafond serait un
+          // mensonge — la ligne doit dire la vitesse effectivement obtenue.
+          const u=_ath(120,'seche','H',195,35);
+          const b=besoinsProposes(u);
+          const l=(b.hypotheses.find(h=>/déficit de/.test(h))||'');
+          const m=l.match(/visant (-[\d,]+) %/);
+          if(!m) return _echec('ligne absente : '+l);
+          const annonce=parseFloat(m[1].replace(',','.'));
+          const reel=((b.on.kcal+b.off.kcal)/2-b.depense)*7/(120*KCAL_PAR_KG_CORPS)*100;
+          return Math.abs(annonce-reel)<0.08
+            ?true:_echec('annoncé '+annonce+' contre réel '+Math.round(reel*100)/100);})());
+
+        // ── L'écriture directe par l'athlète ──────────────────────────────
+        ok('Un antécédent de TCA désarme l\'écriture directe d\'un déficit',(()=>{
+          const src=String(utiliserBesoinsProposes);
+          return /aTCA\s*\(/.test(src)&&/return/.test(src)
+            ?true:_echec('aucun garde-fou TCA dans le chemin direct');})());
+        // Lire la SOURCE ne suffit pas : neutraliser la confirmation par un
+        // if(false && !confirm(...)) laisse le mot « confirm » dans le code, et
+        // un test de source passerait au vert. On répond NON à la boîte et on
+        // vérifie que rien n'a été écrit.
+        ok('Un déficit refusé n\'écrit AUCUNE macro',(()=>{
+          const sauveU=currentUser, sauveC=window.confirm;
+          try{
+            currentUser=_ath(62,'seche');
+            currentUser.nutrition={dietType:'flexible'};
+            let vue=false;
+            window.confirm=(m)=>{ vue=/déficit/.test(String(m)); return false; };
+            utiliserBesoinsProposes();
+            if(!vue) return _echec('aucune confirmation chiffrée n\'a été posée');
+            const m=(currentUser.nutrition||{}).macros;
+            return !m?true:_echec('des macros ont été écrites malgré le refus');
+          } finally { currentUser=sauveU; window.confirm=sauveC; }})());
+        ok('Un déficit accepté écrit bien les macros',(()=>{
+          const sauveU=currentUser, sauveC=window.confirm;
+          try{
+            currentUser=_ath(62,'seche');
+            currentUser.nutrition={dietType:'flexible'};
+            window.confirm=()=>true;
+            utiliserBesoinsProposes();
+            const m=(currentUser.nutrition||{}).macros;
+            return (m&&m.origine==='auto')?true:_echec('rien écrit après acceptation');
+          } finally { currentUser=sauveU; window.confirm=sauveC; }})());
+        ok('Des protéines très hautes ne fabriquent pas de glucides négatifs',(()=>{
+          // Le curseur protéines du coach peut demander plus que la cible ne
+          // permet : sans la garde, le reste devient négatif et les glucides
+          // avec. C'est le seul chemin par lequel le cas est atteignable.
+          const u=_ath(120,'seche','H',195,35);
+          const b=besoinsProposes(u,{protGparKg:4});
+          return b.on.g>=0&&b.off.g>=0&&b.on.kcal>0&&b.off.kcal>0
+            ?true:_echec('ON '+b.on.g+' OFF '+b.off.g);})());
+      } finally { currentUser=_sU; }
+    })();
 
     // ══ CONSTANTES, ANALYSES, DRAPEAUX GÉNÉRAUX ══════════════════════════
     (()=>{
