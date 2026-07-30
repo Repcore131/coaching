@@ -6032,14 +6032,179 @@ function risquesMicro(user,ref){
   return out;
 }
 
+// ══════════════ PROPORTIONS SEGMENTAIRES ══════════════
+// Deux longueurs, deux ratios, et des QUESTIONS au coach. Rien de plus : aucun
+// exercice n'est retiré, remplacé ni masqué, et l'athlète ne voit jamais rien
+// de tout ceci. Même registre que risquesMicro — un constat chiffré, puis une
+// question à poser en séance.
+//
+// Les valeurs de référence sont des REPÈRES DE POPULATION, pas des seuils et
+// encore moins une norme : la longueur de jambe rapportée à la taille tourne
+// autour de 0,46 et celle du bras autour de 0,45 chez l'adulte, avec une
+// dispersion large. Être en dehors n'est ni un défaut ni un diagnostic — c'est
+// une raison de proposer une variante d'un mouvement, jamais de l'interdire.
+const RATIO_JAMBES_REF=0.46;
+const RATIO_BRAS_REF=0.45;
+const RATIO_MARGE=0.03;
+// Comparaison au centième : un entrejambe relevé au centimètre près sur une
+// personne de 180 cm ne porte pas plus de précision que ça, et c'est déjà
+// l'arrondi qu'affiche le motif (« 49 % »). La marge est ATTEINTE, pas
+// dépassée : sinon 0,489 tomberait dedans, alors que le cahier des charges le
+// donne dehors.
+function _horsMarge(ratio,ref){
+  if(ratio==null||!isFinite(ratio)) return false;
+  return Math.abs(Math.round(ratio*100)/100-ref)>=RATIO_MARGE-1e-9;
+}
+// Bornes d'aberration. Une mesure hors de ces bornes n'est pas calculée : elle
+// est signalée à revérifier. Mieux vaut une case vide qu'un ratio faux.
+const LONGUEUR_MIN_CM=30;
+const MORPHO_DISCLAIMER="RepCore n'est pas un dispositif médical. Ces proportions ne disent pas ce qu'il faut faire : elles ouvrent une conversation.";
+// Au-delà, la question du rapport quadriceps / ischios se pose. Ce n'est pas
+// un seuil de risque : c'est le rapport à partir duquel l'écart cesse d'être
+// une préférence d'exercices et mérite d'être vu.
+const DOMINANCE_QI_SIGNAL=2.0;
+
+// Taille en centimètres, lue comme partout ailleurs dans l'app.
+function _tailleCm(user){
+  const bl=((user&&user.bilans)||[]).filter(b=>b&&b.date).slice().sort((a,b)=>a.date-b.date);
+  const b=bl[bl.length-1]||{};
+  const t=parseFloat((user&&(user._evol_height||user['init-height']))
+    ||b['deb-height']||(user&&user.height)||0);
+  return (isFinite(t)&&t>0)?t:null;
+}
+// PURE. Rend {cm} si la mesure tient debout, {motif:'absente'|'aberrante'}
+// sinon. Jamais 0, jamais une valeur devinée.
+function longueurSegment(user,champ){
+  const t=_tailleCm(user);
+  const brut=_dernierChamp(user,champ);
+  if(brut==null||String(brut).trim()==='') return {cm:null,motif:'absente'};
+  const v=parseFloat(String(brut).replace(',','.'));
+  if(!isFinite(v)||v<=0) return {cm:null,motif:'aberrante'};
+  if(v<LONGUEUR_MIN_CM) return {cm:null,motif:'aberrante'};
+  // Un segment plus long que la personne entière : la mesure est fausse, ou
+  // saisie en millimètres. On ne calcule pas, on le dit.
+  if(t!=null&&v>t) return {cm:null,motif:'aberrante'};
+  if(t==null) return {cm:null,motif:'taille-absente'};
+  return {cm:v,motif:null};
+}
+function ratioJambes(user){
+  const l=longueurSegment(user,'deb-entrejambe');
+  const t=_tailleCm(user);
+  return (l.cm!=null&&t)?l.cm/t:null;
+}
+function ratioBras(user){
+  const l=longueurSegment(user,'deb-bras');
+  const t=_tailleCm(user);
+  return (l.cm!=null&&t)?l.cm/t:null;
+}
+
+// Exercices du même schéma moteur, à titre de VARIANTES POSSIBLES. Ce lot
+// n'écarte rien : ces noms sont proposés à côté, jamais à la place.
+function _variantesSchema(schema,combien){
+  const out=[];
+  for(const k in _SCHEMA_INDEX){
+    if(_SCHEMA_INDEX[k]===schema){ out.push(k); if(out.length>=(combien||4)) break; }
+  }
+  return out;
+}
+
+// Rapport des volumes quadriceps / ischios sur les dernières semaines
+// ENTRAÎNÉES, avec le comptage de volume existant et les mêmes bornes que le
+// reste du produit — VOL_COUPURE pour la coupure, VOL_DELTA_MIN pour le
+// minimum exploitable. Rend null si l'un des deux volumes est nul : un rapport
+// à dénominateur nul ne veut rien dire.
+function dominanceQuadIschio(user){
+  let q=0,i=0,n=0,vides=0;
+  for(let k=0;k<=26&&n<VOL_DELTA_N;k++){
+    const c=_calculSemaine(user,_volCleDecalee(k));
+    if(!c.eligibles){ if(++vides>=VOL_COUPURE) break; continue; }
+    vides=0; n++;
+    q+=c.muscles.QUADRICEPS||0;
+    i+=c.muscles.ISCHIOS||0;
+  }
+  if(n<VOL_DELTA_MIN) return null;
+  if(!(q>0)||!(i>0)) return null;
+  return Math.round(q/i*100)/100;
+}
+
+// PURE. Même format que risquesMicro : {cle, lib, motif, question}.
+function questionsMorpho(user){
+  const out=[];
+  if(!user||typeof user!=='object') return out;
+  // Mesures à revérifier : on le dit AVANT tout ratio, puisqu'aucun ratio ne
+  // sera calculé dessus.
+  [['deb-entrejambe','entrejambe'],['deb-bras','longueur de bras']].forEach(([champ,lib])=>{
+    const l=longueurSegment(user,champ);
+    if(l.motif==='aberrante')
+      out.push({cle:'mesure_'+champ,lib:'Mesure à revérifier',
+        motif:'La mesure d\'' + (lib==='entrejambe'?'entrejambe':'un bras')
+          +' saisie au bilan ne tient pas debout : plus longue que la taille, ou trop courte.',
+        question:'Peux-tu la reprendre avec '+
+          (lib==='entrejambe'?'l\'athlète pieds nus, du sol au pubis':'le bras tendu, de l\'acromion à la styloïde')+' ?'});
+  });
+
+  const t=_tailleCm(user);
+  const rj=ratioJambes(user);
+  if(_horsMarge(rj,RATIO_JAMBES_REF)){
+    const longues=rj>RATIO_JAMBES_REF;
+    const v=_variantesSchema(longues?'squat':'charniere-hanche',3);
+    out.push({cle:'jambes',lib:longues?'Jambes longues pour la taille':'Jambes courtes pour la taille',
+      motif:'Entrejambe à '+Math.round(rj*100)+' % de la taille, pour un repère de population autour de '
+        +Math.round(RATIO_JAMBES_REF*100)+' %.'
+        +(v.length?' Variantes du même schéma à essayer : '+v.join(', ')+'.':''),
+      question:'Est-ce que '+(longues?'la profondeur au squat':'l\'amplitude en charnière de hanche')
+        +' te paraît confortable chez '+(t?'lui':'cet athlète')+' ?'});
+  }
+  const rb=ratioBras(user);
+  if(_horsMarge(rb,RATIO_BRAS_REF)){
+    const longs=rb>RATIO_BRAS_REF;
+    const v=_variantesSchema(longs?'poussee-horizontale':'tirage-vertical',3);
+    out.push({cle:'bras',lib:longs?'Bras longs pour la taille':'Bras courts pour la taille',
+      motif:'Longueur de bras à '+Math.round(rb*100)+' % de la taille, pour un repère de population autour de '
+        +Math.round(RATIO_BRAS_REF*100)+' %.'
+        +(v.length?' Variantes du même schéma à essayer : '+v.join(', ')+'.':''),
+      question:'Est-ce que l\'amplitude '+(longs?'au développé couché':'au tirage')
+        +' pose question en séance ?'});
+  }
+  const d=(function(){ try{ return dominanceQuadIschio(user); }catch(e){ return null; } })();
+  if(d!=null&&d>DOMINANCE_QI_SIGNAL){
+    out.push({cle:'quad_ischio',lib:'Quadriceps et ischios déséquilibrés',
+      motif:'Sur les dernières semaines entraînées, le volume quadriceps vaut '
+        +String(d).replace('.',',')+' fois celui des ischios.',
+      question:'Est-ce un choix de programmation en ce moment, ou une habitude à rééquilibrer ?'});
+  }
+  return out;
+}
+
+// Fiche COACH uniquement. Aucune fonction d'affichage athlète n'appelle ceci —
+// un test le vérifie sur le HTML produit par l'accueil et l'écran progression.
+function _htmlQuestionsMorpho(user){
+  const l=(function(){ try{ return questionsMorpho(user); }catch(e){ return []; } })();
+  if(!l.length) return '';
+  return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:5px">Proportions</div>
+    <div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-bottom:12px">Des variantes à envisager, jamais un exercice à retirer.</div>
+    ${l.map(r=>`<div style="border-left:2px solid var(--border);padding-left:11px;margin-bottom:12px">
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(r.lib)}</div>
+      <div style="font-size:12px;color:#ddd;line-height:1.6">${escapeHtml(r.motif)}</div>
+      <div style="font-size:12.5px;color:#fff;line-height:1.6;margin-top:5px;font-weight:600">${escapeHtml(r.question)}</div>
+    </div>`).join('')}
+    <div style="font-size:11px;color:var(--text-dim);line-height:1.55;border-top:1px solid var(--border);padding-top:10px">${escapeHtml(MORPHO_DISCLAIMER)}</div>
+  </div>`;
+}
+
 // Fiche coach UNIQUEMENT. Rien de tout ceci n'est rendu côté athlète : aucune
 // fonction de l'accueil ou de l'écran nutrition n'appelle risquesMicro.
 function renderCoachMicroSection(c){
   const el=document.getElementById('ccd-micro');
   if(!el) return;
   const l=(function(){ try{ return risquesMicro(c); }catch(e){ return []; } })();
-  if(!l.length){ el.innerHTML=''; el.style.display='none'; return; }
+  // Les proportions vivent dans le même emplacement : deux blocs de questions
+  // au coach, même registre, même disclaimer d'esprit.
+  const morpho=_htmlQuestionsMorpho(c);
+  if(!l.length&&!morpho){ el.innerHTML=''; el.style.display='none'; return; }
   el.style.display='block';
+  if(!l.length){ el.innerHTML=morpho; return; }
   el.innerHTML=`<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:5px">À demander en séance</div>
     <div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-bottom:12px">Rien n'est détecté ici : ce sont des questions que le profil rend pertinentes.</div>
@@ -6049,7 +6214,7 @@ function renderCoachMicroSection(c){
       <div style="font-size:12.5px;color:#fff;line-height:1.6;margin-top:5px;font-weight:600">${escapeHtml(r.question)}</div>
     </div>`).join('')}
     <div style="font-size:11px;color:var(--text-dim);line-height:1.55;border-top:1px solid var(--border);padding-top:10px">${escapeHtml(MICRO_DISCLAIMER)}</div>
-  </div>`;
+  </div>`+morpho;
 }
 function urgencyScore(c){
   const lt=(c.bilans||[]).reduce((m,b)=>Math.max(m,b.date),0);
@@ -13941,6 +14106,27 @@ function bBodySchema(prefix){
         </div>
       </div>`;
     }).join('')}
+  </div>
+  ${prefix==='deb'?bLongueurs():''}`;
+}
+// Deux longueurs, facultatives, sous le schéma. Elles ne changent plus une
+// fois adulte : on ne les redemande pas à chaque bilan de suivi.
+function bLongueurs(){
+  const champ=(id,lbl,aide)=>`<div style="margin-bottom:12px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--sub);margin-bottom:3px">${lbl}</div>
+    <div style="font-size:11px;color:var(--text-dim);line-height:1.5;margin-bottom:5px">${aide}</div>
+    <div style="display:flex;align-items:center;background:#0c0c0c;border:1px solid #2b2b2b;border-radius:7px;padding:1px 10px;max-width:170px">
+      <input type="number" inputmode="decimal" step="any" id="${id}" value="${bilData[id]||''}" placeholder="—"
+        oninput="bilData['${id}']=this.value"
+        style="width:100%;min-width:0;background:none;border:none;outline:none;box-shadow:none;color:#fff;font-family:Montserrat,sans-serif;font-weight:800;font-size:14px;text-align:center;padding:6px 0;margin:0">
+      <span style="font-size:var(--fs-xs);color:var(--text-dim);font-weight:700;margin-left:2px">cm</span>
+    </div>
+  </div>`;
+  return `<div style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px">
+    <div style="font-size:11px;font-weight:700;color:#e0e0e0;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Longueurs — facultatif</div>
+    <div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-bottom:12px">Deux mesures qui ne bougent plus une fois adulte. Elles servent à ton coach pour te proposer des variantes d'un mouvement, jamais pour en écarter un.</div>
+    ${champ('deb-entrejambe','Entrejambe','Du sol au pubis, pieds nus, dos au mur.')}
+    ${champ('deb-bras','Longueur de bras','Bras tendu le long du corps, de la pointe de l\'épaule au poignet.')}
   </div>`;
 }
 function bBodyFocus(id,on){
@@ -14000,6 +14186,8 @@ const BILAN_QUESTIONS={
     // Les trois contre-indications d'abord : c'est ce qui conditionne tout le
     // reste de la programmation.
     {k:'deb-health',lbl:'Problèmes de santé / blessures',emoji:'🩺',alerte:true},
+    {k:'deb-entrejambe',lbl:'Entrejambe (cm)',emoji:'📏'},
+    {k:'deb-bras',lbl:'Longueur de bras (cm)',emoji:'📏'},
     {k:'deb-allergies',lbl:'Allergies / régime particulier',emoji:'🥜',alerte:true},
     {k:'deb-tca',lbl:'Troubles du comportement alimentaire',emoji:'🚨',alerte:true},
     {k:'deb-goals',lbl:'Objectifs principaux',emoji:'🎯'},
@@ -34326,6 +34514,310 @@ function testExercices(){
           _htmlChargeAxiale(u,0,G,{});
           return JSON.stringify(u)===avant?true:_echec('le dossier a été écrit');})());
       } finally { currentUser=_sU; }
+    })();
+
+
+    // ══ PROPORTIONS SEGMENTAIRES ══════════════════════════════════════════
+    (()=>{
+      const _sU=currentUser;
+      let _mN=0;
+      // taille lue par _tailleCm, longueurs par _dernierChamp : donc dans un
+      // bilan daté, pas posées à la racine du dossier.
+      const _mo=(taille,entrejambe,bras,extra)=>Object.assign({
+        id:'_mo'+(++_mN),email:'mo'+_mN+'@t',role:'athlete',exAlias:{},exMuscles:{},
+        sessions:[],bilans:[Object.assign({type:'depart',date:Date.now()-30*864e5,
+          'deb-height':taille==null?'':String(taille)},
+          entrejambe==null?{}:{'deb-entrejambe':String(entrejambe)},
+          bras==null?{}:{'deb-bras':String(bras)})]},extra||{});
+
+      // Aides de volume, déclarées AVANT tout test qui les utilise : un const
+      // reste en zone morte tant que sa ligne n'est pas atteinte, et le test
+      // des quatre champs s'en sert maintenant pour peupler la dominance.
+      const _sem=k=>_lundiDeSemaine(_volCleDecalee(k)).getTime()+36e5;
+      const _sets=n=>Array.from({length:n},()=>({weight:'60',reps:'10',rir:'2',done:true}));
+      const _volSem=(q,i,k)=>({id:'s'+k,date:_sem(k),name:'P',slot:0,volume:1,duration:60,
+        data:Object.assign({},q?{'LEG EXTENSION':{sets:_sets(q)}}:{},
+          i?{'LEG CURL ASSIS':{sets:_sets(i)}}:{})});
+
+      // ── Les ratios ────────────────────────────────────────────────────
+      ok('Critère : entrejambe 88 pour 180 → ratio 0,489 et une entrée',(()=>{
+        const u=_mo(180,88,null);
+        const r=ratioJambes(u);
+        if(r==null||Math.abs(r-88/180)>1e-9) return _echec('ratio '+r);
+        if(Math.abs(r-0.489)>0.001) return _echec('ratio '+r.toFixed(3));
+        const q=questionsMorpho(u).filter(x=>x.cle==='jambes');
+        return q.length===1?true:_echec(q.length+' entrée(s)');})());
+      ok('Critère : entrejambe 83 pour 180 → ratio 0,461 et aucune entrée',(()=>{
+        const u=_mo(180,83,null);
+        const r=ratioJambes(u);
+        if(Math.abs(r-0.461)>0.001) return _echec('ratio '+r.toFixed(3));
+        const q=questionsMorpho(u).filter(x=>x.cle==='jambes');
+        return q.length===0?true:_echec('entrée à '+r.toFixed(3));})());
+      ok('Les bornes de la marge sont symétriques',(()=>{
+        // Comparaison au centième, marge ATTEINTE : 0,44 à 0,48 sont dedans,
+        // 0,43 et 0,49 sont dehors. C'est ce qui fait tenir les deux critères
+        // du cahier des charges à la fois.
+        const dedans=[0.44,0.46,0.48].map(x=>Math.round(x*180));
+        const dehors=[0.43,0.49,0.40,0.53].map(x=>Math.round(x*180));
+        const faux=[];
+        dedans.forEach(cm=>{ if(questionsMorpho(_mo(180,cm,null)).some(q=>q.cle==='jambes'))
+          faux.push('dedans '+cm); });
+        dehors.forEach(cm=>{ if(!questionsMorpho(_mo(180,cm,null)).some(q=>q.cle==='jambes'))
+          faux.push('dehors '+cm); });
+        return faux.length?_echec(faux.join(', ')):true;})());
+      ok('Le ratio des bras suit la même règle',(()=>{
+        const court=ratioBras(_mo(180,null,70));
+        const long=ratioBras(_mo(180,null,90));
+        if(Math.abs(court-70/180)>1e-9||Math.abs(long-90/180)>1e-9)
+          return _echec(court+' / '+long);
+        const a=questionsMorpho(_mo(180,null,70)).filter(x=>x.cle==='bras');
+        const b=questionsMorpho(_mo(180,null,90)).filter(x=>x.cle==='bras');
+        const c=questionsMorpho(_mo(180,null,81)).filter(x=>x.cle==='bras');  // 0,45
+        return a.length===1&&b.length===1&&c.length===0
+          ?true:_echec(a.length+' / '+b.length+' / '+c.length);})());
+      ok('Critère : mesure absente → aucune entrée, aucune erreur',(()=>{
+        try{
+          const u=_mo(180,null,null);
+          if(ratioJambes(u)!==null||ratioBras(u)!==null) return _echec('un ratio sort de nulle part');
+          return questionsMorpho(u).length===0?true:_echec('des entrées');
+        }catch(e){ return _echec('exception : '+e.message); }})());
+      ok('Taille absente ou nulle → aucun ratio',(()=>{
+        const a=_mo(null,88,80), b=_mo(0,88,80);
+        return ratioJambes(a)===null&&ratioBras(a)===null
+          &&ratioJambes(b)===null&&ratioBras(b)===null
+          ?true:_echec('ratio calculé sans taille');})());
+      ok('Critère : entrejambe 200 pour 180 → null et « mesure à revérifier »',(()=>{
+        const u=_mo(180,200,null);
+        if(ratioJambes(u)!==null) return _echec('un ratio a été calculé');
+        const q=questionsMorpho(u).filter(x=>x.cle==='mesure_deb-entrejambe');
+        if(q.length!==1) return _echec(q.length+' mention');
+        return /revérifier/i.test(q[0].lib)?true:_echec('«'+q[0].lib+'»');})());
+      ok('Une longueur sous 30 cm est aussi à revérifier',(()=>{
+        const u=_mo(180,25,null);
+        return ratioJambes(u)===null
+          &&questionsMorpho(u).some(x=>x.cle==='mesure_deb-entrejambe')
+          ?true:_echec('non signalée');})());
+      ok('Chaque champ aberrant est signalé SÉPARÉMENT',(()=>{
+        // Le coach doit savoir laquelle reprendre, pas seulement qu'il y en a une.
+        const u=_mo(180,200,10);
+        const cles=questionsMorpho(u).map(x=>x.cle).filter(k=>/^mesure_/.test(k)).sort();
+        return cles.join(',')==='mesure_deb-bras,mesure_deb-entrejambe'
+          ?true:_echec(cles.join(','));})());
+      ok('Une virgule décimale est acceptée',(()=>{
+        const u=_mo(180,'88,5',null);
+        const r=ratioJambes(u);
+        return r!=null&&Math.abs(r-88.5/180)<1e-9?true:_echec(String(r));})());
+      ok('La mesure est reprise du DERNIER bilan qui la porte',(()=>{
+        // _dernierChamp trie par DATE et rend la première valeur non vide.
+        // Mon premier jet mettait le bilan de départ en tête du tableau : lire
+        // bilans[0] donnait le même résultat, et la variante passait au vert.
+        // Le suivi le plus récent est donc placé EN PREMIER, sans la mesure.
+        const u=_mo(180,88,null);
+        u.bilans.unshift({type:'suivi',date:Date.now()-2*864e5,'deb-height':'180'});
+        if(u.bilans[0]['deb-entrejambe'])
+          return _echec('jeu d\'essai invalide : la mesure est dans le premier bilan');
+        const r=ratioJambes(u);
+        return r!=null&&Math.abs(r-88/180)<1e-9
+          ?true:_echec('la mesure a été perdue');})());
+      ok('questionsMorpho ne lève rien sur un dossier vide',(()=>{
+        try{
+          return questionsMorpho({}).length===0&&questionsMorpho(null).length===0
+            &&questionsMorpho(undefined).length===0;
+        }catch(e){ return _echec('exception : '+e.message); }})());
+      ok('questionsMorpho est PURE',(()=>{
+        const u=_mo(180,88,90);
+        const avant=JSON.stringify(u);
+        questionsMorpho(u);
+        return JSON.stringify(u)===avant?true:_echec('le dossier a bougé');})());
+      ok('Chaque entrée porte les quatre champs de risquesMicro',(()=>{
+        const u=_mo(180,95,95);
+        // Avec des séances : sans elles il n'y a pas d'entrée de dominance, et
+        // la variante qui la transformait en injonction passait au vert.
+        u.sessions=[_volSem(12,5,0),_volSem(12,5,1)];
+        const l=questionsMorpho(u);
+        if(!l.some(r=>r.cle==='quad_ischio'))
+          return _echec('jeu d\'essai sans entrée de dominance');
+        if(!l.length) return _echec('aucune entrée à vérifier');
+        const faux=l.filter(r=>!r.cle||!r.lib||!r.motif||!r.question);
+        if(faux.length) return _echec(faux.length+' incomplètes');
+        // Et la question EST une question.
+        const sansQ=l.filter(r=>!/\?\s*$/.test(r.question));
+        return sansQ.length?_echec(sansQ.map(r=>r.cle).join(', ')):true;})());
+      ok('Des variantes du même schéma sont citées, jamais un remplacement',(()=>{
+        const q=questionsMorpho(_mo(180,95,null)).find(x=>x.cle==='jambes');
+        if(!q) return _echec('aucune entrée');
+        // Elles vivent dans le MOTIF : la question doit rester une question,
+        // et se terminer par un point d'interrogation.
+        if(!/Variantes du même schéma/.test(q.motif)) return _echec('aucune variante');
+        // Et elles appartiennent RÉELLEMENT à ce schéma : la variante qui
+        // citait n'importe quel exercice passait au vert, puisque seule la
+        // phrase était vérifiée.
+        const cites=(/Variantes du même schéma à essayer : ([^.]+)\./.exec(q.motif)||[])[1];
+        if(!cites) return _echec('liste illisible');
+        const hors=cites.split(', ').filter(n=>schemaDe({name:n})!=='squat');
+        if(hors.length) return _echec('hors schéma : '+hors.join(', '));
+        const t=(q.motif+' '+q.question).toLowerCase();
+        const interdits=['remplace','retire','évite','supprime','interdit','à la place de'];
+        const trouves=interdits.filter(m=>t.indexOf(m)>=0);
+        return trouves.length?_echec(trouves.join(', ')):true;})());
+
+      // ── Dominance quadriceps / ischios ────────────────────────────────
+      ok('Critère : 24 contre 10 → 2,4 et une entrée',(()=>{
+        const u=_mo(180,null,null);
+        u.sessions=[_volSem(12,5,0),_volSem(12,5,1)];
+        const d=dominanceQuadIschio(u);
+        if(d!==2.4) return _echec('rapport '+d);
+        const q=questionsMorpho(u).filter(x=>x.cle==='quad_ischio');
+        return q.length===1?true:_echec(q.length+' entrée(s)');})());
+      ok('Critère : ischios à zéro → null, aucune entrée',(()=>{
+        const u=_mo(180,null,null);
+        u.sessions=[_volSem(12,0,0),_volSem(12,0,1)];
+        return dominanceQuadIschio(u)===null
+          &&!questionsMorpho(u).some(x=>x.cle==='quad_ischio')
+          ?true:_echec('rapport '+dominanceQuadIschio(u));})());
+      ok('Quadriceps à zéro → null aussi',(()=>{
+        const u=_mo(180,null,null);
+        u.sessions=[_volSem(0,10,0),_volSem(0,10,1)];
+        return dominanceQuadIschio(u)===null?true:_echec(String(dominanceQuadIschio(u)));})());
+      ok('Sous VOL_DELTA_MIN semaines exploitables, aucun rapport',(()=>{
+        // Aligné sur le reste du produit : deux semaines, comme le delta de
+        // volume et la variation de charge axiale.
+        const u=_mo(180,null,null);
+        u.sessions=[_volSem(12,5,0)];
+        return dominanceQuadIschio(u)===null?true:_echec(String(dominanceQuadIschio(u)));})());
+      ok('Un rapport sous le seuil ne dit rien',(()=>{
+        const u=_mo(180,null,null);
+        u.sessions=[_volSem(10,6,0),_volSem(10,6,1)];
+        const d=dominanceQuadIschio(u);
+        if(!(d>1&&d<=DOMINANCE_QI_SIGNAL)) return _echec('rapport '+d+' hors du cas testé');
+        return !questionsMorpho(u).some(x=>x.cle==='quad_ischio')
+          ?true:_echec('entrée à '+d);})());
+      ok('Le seuil de dominance est bien 2,0',DOMINANCE_QI_SIGNAL===2.0);
+      ok('dominanceQuadIschio ne modifie pas le dossier',(()=>{
+        const u=_mo(180,null,null);
+        u.sessions=[_volSem(12,5,0),_volSem(12,5,1)];
+        const avant=JSON.stringify(u);
+        dominanceQuadIschio(u);
+        return JSON.stringify(u)===avant?true:_echec('le dossier a bougé');})());
+
+      // ── Le rendu, côté coach SEULEMENT ────────────────────────────────
+      try{
+        ok('Le bloc s\'affiche sur la fiche coach avec son disclaimer',(()=>{
+          const c=_mo(180,95,null);
+          renderCoachMicroSection(c);
+          const el=document.getElementById('ccd-micro');
+          if(!el) return _echec('emplacement absent');
+          if(el.style.display!=='block') return _echec('emplacement masqué');
+          const t=el.textContent||'';
+          return /Proportions/.test(t)&&t.indexOf(MORPHO_DISCLAIMER)>=0
+            ?true:_echec('«'+t.replace(/\s+/g,' ').slice(0,140)+'»');})());
+        ok('Le bloc des micronutriments n\'a pas été remplacé',(()=>{
+          // Les deux cohabitent dans le même emplacement.
+          const c=_mo(180,95,null,{gender:'Femme',
+            phase:{type:'seche',debut:Date.now()-11*7*864e5},
+            nutrition:{cycleAdaptation:{enabled:true,
+              lastPeriodDate:localISODate(new Date(Date.now()-10*864e5)),cycleLength:28}}});
+          renderCoachMicroSection(c);
+          const t=(document.getElementById('ccd-micro').textContent)||'';
+          return /ferritine/.test(t)&&/Proportions/.test(t)
+            ?true:_echec('«'+t.replace(/\s+/g,' ').slice(0,160)+'»');})());
+        ok('Aucune question : aucun bloc',(()=>{
+          renderCoachMicroSection(_mo(180,83,81));
+          const el=document.getElementById('ccd-micro');
+          // En novembre-mars la saison sort pour tout le monde : on ne teste le
+          // vide que si risquesMicro se tait aussi.
+          if(risquesMicro(_mo(180,83,81)).length) return true;
+          return el.style.display==='none'&&!el.innerHTML
+            ?true:_echec('bloc rendu sans question');})());
+        ok('Aucun exercice n\'est retiré, remplacé ni masqué',(()=>{
+          // On cherche des OPÉRATIONS, pas des mots : mon premier jet tombait
+          // sur ma propre phrase rassurante, « jamais un exercice à retirer ».
+          const src=String(questionsMorpho)+String(_htmlQuestionsMorpho)
+            +String(_variantesSchema);
+          const ops=['.splice(','exercises=','delete ','exclureEx','masquerEx',
+            'EX_GUIDE_BRUT[','SCHEMAS_BRUT['];
+          const t=ops.filter(m=>src.indexOf(m)>=0);
+          if(t.length) return _echec(t.join(', '));
+          // Et la promesse est écrite à l'écran, pas seulement dans le code.
+          return /jamais un exercice à retirer/.test(_htmlQuestionsMorpho(_mo(180,95,null)))
+            ?true:_echec('la promesse n\'est pas affichée');})());
+        ok('Critère : aucun rendu athlète n\'appelle questionsMorpho',(()=>{
+          const cotes=[['loadClientHome',loadClientHome],
+            ['renderVolume',renderVolume],['showProgressTab',showProgressTab],
+            ['_renderNutriContent',_renderNutriContent],['renderNotifs',renderNotifs],
+            ['_blocExo',_blocExo]];
+          const faut=cotes.filter(([n,f])=>/questionsMorpho|ratioJambes|ratioBras|dominanceQuadIschio/.test(String(f)));
+          if(faut.length) return _echec(faut.map(x=>x[0]).join(', '));
+          return /questionsMorpho/.test(String(_htmlQuestionsMorpho))
+            ?true:_echec('la fiche coach ne l\'appelle pas');})());
+        ok('Rien n\'apparaît dans le HTML rendu à l\'athlète',(()=>{
+          // Épreuve par le contenu, pas seulement par le source des fonctions.
+          const sauve=currentUser;
+          try{
+            currentUser=_mo(180,95,95);
+            currentUser.role='athlete'; currentUser.coachId='co';
+            let h='';
+            try{ loadClientHome(); h+=document.getElementById('s-client-home').textContent||''; }catch(e){}
+            try{ go('s-progress'); renderVolume();
+              h+=document.getElementById('progress-content').textContent||''; }catch(e){}
+            const mots=['Proportions','Jambes longues','Jambes courtes','Bras longs',
+              'Bras courts','Mesure à revérifier','déséquilibrés'];
+            const fuites=mots.filter(m=>h.indexOf(m)>=0);
+            return fuites.length?_echec('visible côté athlète : '+fuites.join(', ')):true;
+          } finally { currentUser=sauve; }})());
+        ok('Aucun diagnostic, aucune norme dans les textes',(()=>{
+          const u=_mo(180,95,95);
+          u.sessions=[_volSem(12,5,0),_volSem(12,5,1)];
+          const textes=[];
+          questionsMorpho(u).forEach(r=>textes.push(r.lib,r.motif,r.question));
+          textes.push(MORPHO_DISCLAIMER);
+          const INTERDITS=['anormal','anomalie','pathologie','maladie','diagnostic',
+            'defaut','malformation','deficit','inadapte','incapable','interdit',
+            'ne doit pas','tu ne peux pas','norme','normal'];
+          const trouves=[];
+          textes.forEach(t=>{
+            const n=String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+            INTERDITS.forEach(m=>{ if(n.indexOf(m)>=0&&trouves.indexOf(m)<0)
+              trouves.push(m+' → «'+String(t).slice(0,40)+'»'); });});
+          return trouves.length?_echec(trouves.join(' | ')):true;})());
+      } finally { currentUser=_sU; }
+
+      // ── La saisie, dans le bilan de départ ────────────────────────────
+      ok('Les deux champs sont dans le questionnaire de DÉPART',(()=>{
+        const h=bLongueurs();
+        return /id="deb-entrejambe"/.test(h)&&/id="deb-bras"/.test(h)
+          ?true:_echec('champs absents');})());
+      ok('Ils sont facultatifs et portent leur consigne de mesure',(()=>{
+        const h=bLongueurs();
+        if(!/facultatif/i.test(h)) return _echec('rien ne dit que c\'est facultatif');
+        if(!/pieds nus/.test(h)) return _echec('consigne d\'entrejambe absente');
+        if(!/[Bb]ras tendu/.test(h)) return _echec('consigne de bras absente');
+        // Et ils annoncent à quoi ça sert, sans promettre une adaptation.
+        return /variantes/i.test(h)&&/jamais pour en écarter/.test(h)
+          ?true:_echec('l\'usage n\'est pas annoncé');})());
+      ok('Le schéma de suivi ne les redemande pas',(()=>{
+        // Elles ne changent plus une fois adulte.
+        const sauve=currentUser;
+        try{
+          currentUser={id:'_mb',email:'mb@t',gender:'Homme'};
+          const dep=bBodySchema('deb'), bil=bBodySchema('bil');
+          return /id="deb-entrejambe"/.test(dep)&&!/entrejambe/.test(bil)
+            ?true:_echec('depart:'+/entrejambe/.test(dep)+' suivi:'+/entrejambe/.test(bil));
+        } finally { currentUser=sauve; }})());
+      ok('Les douze mensurations d\'origine sont intactes',(()=>{
+        const sauve=currentUser;
+        try{
+          currentUser={id:'_mb',email:'mb@t',gender:'Homme'};
+          const h=bBodySchema('deb');
+          const douze=['neck','bicep-l','bust','glutes','thigh-l','calf-l',
+            'bicep-r','chest','waist','hips','thigh-r','calf-r'];
+          const manque=douze.filter(k=>h.indexOf('id="deb-'+k+'"')<0);
+          return manque.length?_echec('perdues : '+manque.join(', ')):true;
+        } finally { currentUser=sauve; }})());
+      ok('Les deux champs sont lisibles sur la fiche coach du bilan',(()=>{
+        const cles=(BILAN_QUESTIONS.depart||[]).map(q=>q.k);
+        const manque=['deb-entrejambe','deb-bras'].filter(k=>cles.indexOf(k)<0);
+        return manque.length?_echec('absents de BILAN_QUESTIONS : '+manque.join(', ')):true;})());
     })();
 
 
