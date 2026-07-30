@@ -11693,7 +11693,7 @@ function renderSets(ex,data,idx){
     }
     return `<tr class="${rowCls}${painAlert}">
       <td style="text-align:center;padding:4px 6px">
-        <span style="display:block;font-size:var(--fs-xs);font-weight:800;color:var(--red);line-height:1">${i+1}</span>
+        <span style="display:block;font-size:var(--fs-xs);font-weight:800;color:var(--red);line-height:1">${i+1}${_badgeRecord(idx,i)}</span>
         <span style="font-size:15px;font-weight:900;line-height:1.2"><span style="font-size:var(--fs-xs);font-weight:600">×</span>${s.reps||ex.reps}</span>
       </td>
       ${weightCell}
@@ -11919,6 +11919,9 @@ function toggleSet(i,idx){
   // Décocher ne lance rien et n'annule rien : c'est une correction de saisie,
   // pas un événement d'entraînement.
   if(!avant){
+    // Le record se juge à la validation, contre les séances PASSÉES. Décocher
+    // ne l'efface pas : c'est une correction de saisie, pas un événement.
+    _marquerRecordSiBesoin(idx,i);
     const now=Date.now();
     d.sets[i].reposReel=_reposReelDepuis(d,i,now);
     d.sets[i].tValid=now;
@@ -16006,7 +16009,8 @@ function renderVolume(){
       </div>` : '';
   // Charge axiale : sous les muscles, comme demandé, et sans repère absolu.
   const axial=_htmlChargeAxiale(u,_volDecalage,null,{});
-  document.getElementById('progress-content').innerHTML=nav+alertes+corps+zero+axial+conv+bandeau;
+  document.getElementById('progress-content').innerHTML=
+    nav+alertes+corps+zero+axial+_htmlTonnage(u,_volDecalage)+_htmlRecords(u)+conv+bandeau;
 }
 // Familles reellement pratiquees sur la fenetre affichee : on ne parle de
 // convention que si elle s'applique a quelque chose.
@@ -16191,6 +16195,99 @@ function _fmtAxial(v){ return String(Math.round(v*10)/10).replace('.',','); }
 // paramètre, c'est toute la raison de leur existence.
 let _volCoachDeplie=false;
 
+// ── Les quatre rendus ─────────────────────────────────────────────────────
+// Aucun n'invente de repère : le tonnage se compare à lui-même et le dit, les
+// records sont des faits, le RIR moyen est une moyenne, l'écart est un rapport.
+const TONNAGE_AVERTISSEMENT='Comparable seulement à programme constant : changer d\'exercices change le tonnage sans rien dire de l\'effort.';
+function _fmtKg(v){
+  const n=Math.round(Number(v)||0);
+  return n>=1000?String(Math.round(n/100)/10).replace('.',',')+' t':n+' kg';
+}
+function _htmlTonnage(user,decalage){
+  const t=tonnageSemaine(user,decalage||0);
+  // Une semaine sans séance est un TROU, pas une baisse : on ne trace pas une
+  // chute vers zéro pour une semaine où l'athlète n'est pas venu.
+  const hist=[];
+  for(let k=(decalage||0)+VOL_SEMAINES_MAX-1;k>=(decalage||0);k--){
+    const w=tonnageSemaine(user,k);
+    hist.push({k,kg:w.kg,vide:!w.nSeances});
+  }
+  const max=Math.max(1,...hist.map(x=>x.kg));
+  const barres=hist.map(x=>{
+    const h=x.vide?0:Math.max(4,Math.round(x.kg/max*100));
+    return `<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%" title="${x.vide?'aucune séance':_fmtKg(x.kg)}">`
+      +(x.vide
+        ?`<div style="height:3px;background:repeating-linear-gradient(90deg,#2a2a2a,#2a2a2a 3px,transparent 3px,transparent 6px);border-radius:2px"></div>`
+        :`<div style="height:${h}%;min-height:4px;background:linear-gradient(180deg,var(--red),#7a0000);border-radius:3px 3px 0 0"></div>`)
+      +`</div>`;}).join('');
+  if(!hist.some(x=>!x.vide)) return '';
+  return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
+      <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Tonnage</span>
+      <span style="font-size:12px;font-weight:800;color:#fff">${t.nSeances?_fmtKg(t.kg):'—'}<span style="font-size:10px;color:var(--sub);font-weight:600">${t.nSeances?' · '+t.nSeances+' séance'+(t.nSeances>1?'s':''):' aucune séance'}</span></span>
+    </div>
+    <div style="display:flex;align-items:flex-end;gap:3px;height:54px;margin-bottom:6px">${barres}</div>
+    <div style="font-size:10px;color:var(--text-faint);line-height:1.5">${escapeHtml(TONNAGE_AVERTISSEMENT)}</div>
+  </div>`;
+}
+// Les huit exercices les plus travaillés, par nombre de séries validées.
+const RECORDS_TOP=8;
+function _htmlRecords(user){
+  const compte={};
+  for(const sess of ((user&&user.sessions)||[])){
+    for(const nom of Object.keys((sess&&sess.data)||{})){
+      const d=sess.data[nom];
+      if(!d||!Array.isArray(d.sets)) continue;
+      const k=_aliasPour(exKey(nom),user);
+      if(!k) continue;
+      const n=d.sets.filter(x=>x&&x.done===true&&parseFloat(x.weight)>0).length;
+      if(!n) continue;
+      if(!compte[k]) compte[k]={nom,n:0};
+      compte[k].n+=n;
+    }
+  }
+  const tri=Object.keys(compte).map(k=>compte[k]).sort((a,b)=>b.n-a.n).slice(0,RECORDS_TOP);
+  const lignes=tri.map(x=>({nom:x.nom,rec:recordsExercice(user,x.nom)}))
+    .filter(x=>x.rec&&x.rec.meilleureCharge);
+  if(!lignes.length) return '';
+  const dt=ms=>new Date(ms).toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
+  return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:9px">Records</div>
+    ${lignes.map(x=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:7px">
+      <span style="font-size:11px;color:#ddd;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nom)}</span>
+      <span style="font-size:11px;font-weight:800;color:#fff;white-space:nowrap">${_fmtKg(x.rec.meilleureCharge.kg)}${x.rec.meilleureCharge.reps?` × ${x.rec.meilleureCharge.reps}`:''}<span style="font-size:10px;color:var(--text-faint);font-weight:600"> · ${dt(x.rec.meilleureCharge.date)}</span></span>
+    </div>`).join('')}
+  </div>`;
+}
+// Fiche coach : le RIR moyen des quatre dernières séances.
+const RIR_DERNIERES=4;
+function _htmlRirMoyen(c){
+  const ss=((c&&c.sessions)||[]).filter(x=>x&&x.date&&x.data)
+    .slice().sort((a,b)=>b.date-a.date).slice(0,RIR_DERNIERES);
+  const l=ss.map(x=>({d:x.date,r:rirMoyenSeance(x)})).filter(x=>x.r);
+  if(!l.length) return '';
+  const moy=Math.round(l.reduce((a,x)=>a+x.r.moyenne,0)/l.length*100)/100;
+  const manquantes=l.reduce((a,x)=>a+(x.r.nTotal-x.r.nRenseignees),0);
+  return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+    <div style="font-size:10px;color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">RIR moyen · ${l.length} dernière${l.length>1?'s':''} séance${l.length>1?'s':''}</div>
+    <div style="font-size:11px;color:#ddd">${String(moy).replace('.',',')}${manquantes?`<span style="color:var(--text-faint)"> · ${manquantes} série${manquantes>1?'s':''} sans RIR, exclue${manquantes>1?'s':''} du calcul</span>`:''}</div>
+  </div>`;
+}
+// Fiche coach : ce qui est prescrit contre ce qui est fait.
+function _htmlEcartPrescrit(c){
+  const l=ecartPrescritRealise(c).filter(x=>x.part!=null);
+  if(!l.length) return '';
+  const dits=l.slice(0,6);
+  return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+    <div style="font-size:10px;color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:5px">Prescrit / réalisé</div>
+    ${dits.map(x=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:11px;color:#ddd;margin-bottom:3px">
+      <span>${escapeHtml((MUSCLES[x.muscle]||{}).lib||x.muscle)}</span>
+      <span style="white-space:nowrap;color:var(--sub)">${volAffiche(x.realise)} / ${volAffiche(x.prescrit)} · ${Math.round(x.part*100)} %</span>
+    </div>`).join('')}
+    ${l.length>dits.length?`<div style="font-size:10px;color:var(--text-faint);margin-top:3px">et ${l.length-dits.length} autre${l.length-dits.length>1?'s':''}</div>`:''}
+  </div>`;
+}
+
 function renderVolumeCoach(c){
   const z=document.getElementById('ccd-volume');
   if(!z) return;
@@ -16241,6 +16338,8 @@ function renderVolumeCoach(c){
     ${res.nonRattachees?`<div style="font-size:10px;color:var(--text-faint);margin-top:6px">${res.nonRattachees} série${res.nonRattachees>1?'s':''} non rattachée${res.nonRattachees>1?'s':''}</div>`:''}
     <div style="font-size:10px;color:var(--text-faint);margin-top:8px;line-height:1.5">Repères indicatifs, à ajuster selon l'athlète.</div>
     ${_axPrio?'':_axial}
+    ${_htmlRirMoyen(c)}
+    ${_htmlEcartPrescrit(c)}
     ${_htmlBoutonDecharge(c)}
   </div>`;
 }
@@ -16284,6 +16383,188 @@ function programmerDecharge(){
 // Σ séries × poids de rôle sur les créneaux actifs. Aucune notion d'intensité
 // ici : le RIR n'est pas prescrit, il est constaté. Ce chiffre est donc un
 // MAJORANT du volume dur, pas une prévision.
+// ══════════════ RECORDS, TONNAGE, RIR MOYEN, PRESCRIT / RÉALISÉ ══════════════
+// Quatre indicateurs entièrement DÉRIVÉS. Aucun champ n'est ajouté au dossier :
+// tout se recalcule à la lecture, avec le cache de la détection de plateau —
+// déjà purgé à l'enregistrement d'une séance.
+//
+// Les garde-fous sont ceux de la détection de plateau, RÉUTILISÉS et non
+// réécrits : perfExercice pour le score d'une séance, _marquerAberrations pour
+// la saisie fautive, sansRirDominant pour l'e1RM, et l'exclusion des décharges.
+// Une différence assumée : la série est assemblée sur TOUTES les séances, sans
+// filtre de créneau. Un record est un record — le filtre par créneau de
+// _serieExercice sert à juger un plateau, pas à tenir un palmarès.
+
+// Nom réellement présent dans une séance pour cet exercice, alias compris.
+// _dataDeSeance ferait le travail, mais il résout contre le currentUser GLOBAL :
+// sur la fiche coach, les records d'un athlète se résoudraient alors contre la
+// table d'alias DU COACH. Ici l'utilisateur est explicite.
+function _nomDansSeance(sess,nomEx,user){
+  if(!sess||!sess.data) return null;
+  if(sess.data[nomEx]) return nomEx;
+  const cible=_aliasPour(exKey(nomEx),user);
+  if(!cible) return null;
+  for(const k in sess.data) if(_aliasPour(exKey(k),user)===cible) return k;
+  return null;
+}
+// Série temporelle, tous créneaux confondus, décharges exclues et aberrations
+// marquées. Même forme que _serieExercice, sans le filtre de créneau.
+function _serieRecords(user,nomEx){
+  const out=[];
+  for(const sess of ((user&&user.sessions)||[])){
+    if(!sess||!sess.date||sess.deload) continue;
+    const nom=_nomDansSeance(sess,nomEx,user);
+    if(!nom) continue;
+    const p=perfExercice(sess,nom);
+    if(!p||!(p.score>0)) continue;
+    out.push({date:sess.date,score:p.score,sansRirDominant:p.sansRirDominant,
+      nom,sess});
+  }
+  out.sort((a,b)=>a.date-b.date);
+  return _marquerAberrations(out);
+}
+// PURE. Rend null quand rien n'est retenable.
+function recordsExercice(user,nomEx){
+  if(!user||!nomEx) return null;
+  const cle=(user.email||'?')+'|'+exKey(nomEx)+'|records';
+  if(_cachePlateau[cle]) return _cachePlateau[cle];
+  let mc=null, me=null;
+  for(const pt of _serieRecords(user,nomEx)){
+    if(pt.aberrant) continue;              // saisie probablement fautive
+    const d=pt.sess.data[pt.nom];
+    if(!d||!Array.isArray(d.sets)) continue;
+    for(const s of d.sets){
+      if(!s||s.done!==true) continue;
+      const w=parseFloat(s.weight);
+      if(!(w>0)) continue;
+      const r=_perfReps(s);
+      // Meilleure charge : la plus lourde, et à charge égale la plus longue.
+      if(!mc||w>mc.kg||(w===mc.kg&&(r||0)>(mc.reps||0)))
+        mc={kg:w,reps:(r>0?r:null),date:pt.date};
+      // e1RM : la séance doit avoir ses RIR, et la série rester dans les bornes
+      // où le modèle vaut quelque chose. Au-delà de PERF_REPS_MAX_E1RM,
+      // perfExercice bascule déjà sur le tonnage-série — même règle ici.
+      if(pt.sansRirDominant) continue;
+      if(!(r>0)||r>PERF_REPS_MAX_E1RM) continue;
+      const v=e1rm(w,r,_perfRir(s));
+      if(v>0&&(!me||v>me.valeur)) me={valeur:Math.round(v*10)/10,date:pt.date};
+    }
+  }
+  const res=(mc||me)?{meilleureCharge:mc,meilleurE1rm:me}:null;
+  _cachePlateau[cle]=res;
+  return res;
+}
+
+// ── Tonnage hebdomadaire ──────────────────────────────────────────────────
+// Le tonnage ne dépend PAS du RIR : une séance mal renseignée en est donc
+// exclue du record d'e1RM, mais compte ici entièrement.
+function tonnageSemaine(user,decalageSemaines){
+  const res={kg:0,nSeances:0};
+  const lundi=_lundiDeSemaine(_volCleDecalee(decalageSemaines||0));
+  if(!lundi||!user||!Array.isArray(user.sessions)) return res;
+  const debut=lundi.getTime(), fin=debut+7*86400000;
+  for(const sess of user.sessions){
+    if(!sess||!sess.data) continue;
+    const t=sess.date;
+    if(!(t>=debut&&t<fin)) continue;
+    res.nSeances++;
+    for(const nom of Object.keys(sess.data)){
+      const d=sess.data[nom];
+      if(!d||!Array.isArray(d.sets)||!d.sets.length) continue;
+      // reps forcée en chaîne par précaution : parseReps sait lire un nombre,
+      // mais isCardio fait .toLowerCase() sans garde et a déjà vidé l'écran
+      // Volume deux fois. On normalise à la source plutôt que de parier sur
+      // le chemin emprunté par les aides qui recevront cet ex.
+      const ex={name:nom,reps:String((d.sets[0]&&d.sets[0].reps)||''),
+        methode:d.methode,technique:d.technique};
+      for(const s of d.sets) res.kg+=tonnageSerie(s,ex);
+    }
+  }
+  res.kg=Math.round(res.kg);
+  return res;
+}
+
+// ── RIR moyen d'une séance ────────────────────────────────────────────────
+// Une série SANS RIR est exclue, jamais comptée 0 : la compter zéro
+// transformerait un oubli de saisie en série menée à l'échec.
+function rirMoyenSeance(sess){
+  let somme=0,n=0,total=0;
+  for(const nom of Object.keys((sess&&sess.data)||{})){
+    const d=sess.data[nom];
+    if(!d||!Array.isArray(d.sets)) continue;
+    for(const s of d.sets){
+      if(!s||s.done!==true) continue;
+      total++;
+      if(s.rir===''||s.rir==null) continue;
+      somme+=(s.rir==='echec')?0:(parseInt(s.rir,10)||0);
+      n++;
+    }
+  }
+  if(!n) return null;
+  return {moyenne:Math.round(somme/n*100)/100,nRenseignees:n,nTotal:total};
+}
+
+// ── Prescrit contre réalisé ───────────────────────────────────────────────
+// « Sur 7 jours » = la semaine ISO courante, ce que la fiche coach appelle
+// déjà « Volume 7 jours ». Le calendrier n'est pas réimplémenté.
+function ecartPrescritRealise(user){
+  const out=[];
+  if(!user) return out;
+  const pres=(function(){ try{ return volumePrescrit(user.sessions_config||[],user); }
+    catch(e){ return {muscles:{}}; } })();
+  const c=(function(){ try{ return _calculSemaine(user,_volCleDecalee(0)); }
+    catch(e){ return {muscles:{}}; } })();
+  const noms={};
+  Object.keys(pres.muscles||{}).forEach(m=>{noms[m]=1;});
+  Object.keys(c.muscles||{}).forEach(m=>{noms[m]=1;});
+  Object.keys(noms).forEach(m=>{
+    const p=(pres.muscles||{})[m]||0, r=(c.muscles||{})[m]||0;
+    if(!(p>0)&&!(r>0)) return;
+    out.push({muscle:m,prescrit:Math.round(p*10)/10,realise:Math.round(r*10)/10,
+      // Sans prescription, aucune part : on ne divise pas par zéro pour
+      // annoncer un dépassement infini.
+      part:p>0?Math.round(r/p*100)/100:null});
+  });
+  out.sort((a,b)=>(a.part==null?99:a.part)-(b.part==null?99:b.part));
+  return out;
+}
+
+// ── Nouveau record, au moment de valider une série ────────────────────────
+// La comparaison porte sur les séances PASSÉES : la séance en cours n'est pas
+// encore dans user.sessions, il n'y a donc rien à en retrancher. Le drapeau
+// vit dans un Set de module et JAMAIS sur la série : woState.sessionData est
+// enregistré tel quel en fin de séance, et un champ posé là serait persisté.
+let _recordsVus=new Set();
+function _resetRecordsVus(){ _recordsVus=new Set(); }
+function estNouveauRecord(user,nomEx,serie){
+  if(!user||!nomEx||!serie||serie.done!==true) return false;
+  const w=parseFloat(serie.weight);
+  if(!(w>0)) return false;
+  const r=_perfReps(serie);
+  const rec=recordsExercice(user,nomEx);
+  if(!rec) return true;                    // premier record de cet exercice
+  const mc=rec.meilleureCharge, me=rec.meilleurE1rm;
+  if(mc&&w>mc.kg) return true;
+  if(r>0&&r<=PERF_REPS_MAX_E1RM){
+    const v=e1rm(w,r,_perfRir(serie));
+    if(v>0&&(!me||v>me.valeur)) return true;
+  }
+  return !mc&&!me;
+}
+function _marquerRecordSiBesoin(idx,i){
+  try{
+    const ex=(woState.exercises||[])[idx];
+    const d=woState.sessionData[idx];
+    if(!ex||!d||!d.sets[i]) return;
+    if(estNouveauRecord(currentUser,ex.name,d.sets[i])) _recordsVus.add(idx+':'+i);
+  }catch(e){}
+}
+function _badgeRecord(idx,i){
+  return _recordsVus.has(idx+':'+i)
+    ? `<span title="Nouveau record" style="display:inline-block;font-size:9px;font-weight:800;letter-spacing:.5px;color:#f5c518;background:#1a1400;border:1px solid #4d3d12;border-radius:4px;padding:1px 4px;margin-left:5px;white-space:nowrap">RECORD</span>`
+    : '';
+}
+
 function volumePrescrit(cfg,user){
   const out={muscles:{},nonRattaches:0};
   for(const s of (cfg||[])){
@@ -34818,6 +35099,338 @@ function testExercices(){
         const cles=(BILAN_QUESTIONS.depart||[]).map(q=>q.k);
         const manque=['deb-entrejambe','deb-bras'].filter(k=>cles.indexOf(k)<0);
         return manque.length?_echec('absents de BILAN_QUESTIONS : '+manque.join(', ')):true;})());
+    })();
+
+
+    // ══ RECORDS, TONNAGE, RIR MOYEN, PRESCRIT / RÉALISÉ ═══════════════════
+    (()=>{
+      const _sU=currentUser;
+      let _rN=0;
+      const _sem=k=>_lundiDeSemaine(_volCleDecalee(k)).getTime()+36e5;
+      // Une séance par jour, en remontant : les records ne filtrent pas par
+      // créneau, mais les séances doivent être distinctes dans le temps.
+      const _sc=(jours,data,extra)=>Object.assign({id:'s'+jours+'_'+(++_rN),
+        date:Date.now()-jours*864e5,name:'P',slot:0,volume:1,duration:60,data},extra||{});
+      const _st=(w,r,rir)=>({weight:String(w),reps:String(r),
+        rir:rir===undefined?'2':rir,done:true});
+      const _ath=sessions=>({id:'_rc'+(++_rN),email:'rc'+_rN+'@t',role:'athlete',
+        exAlias:{},exMuscles:{},bilans:[],sessions:sessions||[]});
+      // Cinq séances anodines, pour que _marquerAberrations ait ses prédécesseurs.
+      const _cinq=(nom,w)=>[5,4,3,2,1].map((j,i)=>
+        _sc(20-j,{[nom]:{sets:[_st(w,8),_st(w,8)]}}));
+
+      try{
+        _viderCachePlateau();
+
+        // ── Records ───────────────────────────────────────────────────────
+        ok('Critère : [80×8, 100×8, 95×8] → meilleure charge 100 kg à 8 reps',(()=>{
+          _viderCachePlateau();
+          const u=_ath([_sc(9,{'DEVELOPPE COUCHE BARRE':{sets:[_st(80,8)]}}),
+            _sc(6,{'DEVELOPPE COUCHE BARRE':{sets:[_st(100,8)]}}),
+            _sc(3,{'DEVELOPPE COUCHE BARRE':{sets:[_st(95,8)]}})]);
+          const r=recordsExercice(u,'DEVELOPPE COUCHE BARRE');
+          if(!r||!r.meilleureCharge) return _echec('aucun record');
+          return r.meilleureCharge.kg===100&&r.meilleureCharge.reps===8
+            ?true:_echec(JSON.stringify(r.meilleureCharge));})());
+        ok('À charge égale, la série la plus longue l\'emporte',(()=>{
+          _viderCachePlateau();
+          const u=_ath([_sc(6,{'SQUAT':{sets:[_st(100,5)]}}),
+            _sc(3,{'SQUAT':{sets:[_st(100,9)]}})]);
+          const r=recordsExercice(u,'SQUAT');
+          return r.meilleureCharge.kg===100&&r.meilleureCharge.reps===9
+            ?true:_echec(JSON.stringify(r.meilleureCharge));})());
+        ok('Critère : une série à 1000 kg après cinq séances n\'est aucun record',(()=>{
+          // Le garde-fou d'aberration compare à la médiane des CINQ séances
+          // précédentes : les cinq premiers points ne peuvent pas être marqués,
+          // d'où cinq séances anodines avant celle qui déraille.
+          _viderCachePlateau();
+          const u=_ath(_cinq('SQUAT',100).concat([
+            _sc(1,{'SQUAT':{sets:[_st(1000,8)]}})]));
+          const r=recordsExercice(u,'SQUAT');
+          if(!r||!r.meilleureCharge) return _echec('aucun record du tout');
+          if(r.meilleureCharge.kg===1000) return _echec('la saisie fautive est devenue un record');
+          return r.meilleureCharge.kg===100?true:_echec(String(r.meilleureCharge.kg));})());
+        ok('Critère : une séance de décharge n\'est aucun record',(()=>{
+          _viderCachePlateau();
+          const u=_ath([_sc(6,{'SQUAT':{sets:[_st(100,8)]}}),
+            _sc(3,{'SQUAT':{sets:[_st(140,8)]}},{deload:true})]);
+          const r=recordsExercice(u,'SQUAT');
+          return r.meilleureCharge.kg===100
+            ?true:_echec('record à '+r.meilleureCharge.kg+' kg');})());
+        ok('Une série non validée ne fait aucun record',(()=>{
+          // Une charge saisie mais jamais cochée n'a pas été soulevée.
+          _viderCachePlateau();
+          // La série non cochée doit COHABITER avec une série validée : une
+          // séance sans aucune série validée est déjà écartée par perfExercice,
+          // et le test ne prouverait plus rien.
+          const u=_ath([_sc(6,{'SQUAT':{sets:[_st(100,8)]}}),
+            _sc(3,{'SQUAT':{sets:[_st(100,8),Object.assign(_st(150,8),{done:false})]}})]);
+          const r=recordsExercice(u,'SQUAT');
+          if(!r||!r.meilleureCharge) return _echec('aucun record');
+          return r.meilleureCharge.kg===100
+            ?true:_echec('record à '+r.meilleureCharge.kg+' kg sur une série non cochée');})());
+
+        ok('Critère : un exercice renommé conserve son record',(()=>{
+          _viderCachePlateau();
+          const u=_ath([_sc(9,{'ANCIEN NOM':{sets:[_st(120,6)]}}),
+            _sc(3,{'NOUVEAU NOM':{sets:[_st(100,6)]}})]);
+          u.exAlias={'ANCIEN NOM':'NOUVEAU NOM'};
+          const r=recordsExercice(u,'NOUVEAU NOM');
+          if(!r||!r.meilleureCharge) return _echec('aucun record');
+          return r.meilleureCharge.kg===120
+            ?true:_echec('record à '+r.meilleureCharge.kg+' au lieu de 120');})());
+        ok('Une séance à RIR majoritairement vides ne fait pas de record d\'e1RM',(()=>{
+          // Un RIR vide vaut « à l'échec » dans le modèle : sans cette garde,
+          // une séance mal renseignée deviendrait un record imbattable.
+          _viderCachePlateau();
+          const u=_ath([_sc(6,{'SQUAT':{sets:[_st(100,5,'3'),_st(100,5,'3')]}}),
+            _sc(3,{'SQUAT':{sets:[_st(110,5,''),_st(110,5,'')]}})]);
+          const r=recordsExercice(u,'SQUAT');
+          if(!r) return _echec('aucun record');
+          // La CHARGE, elle, est bien un fait : 110 kg ont été soulevés.
+          if(r.meilleureCharge.kg!==110) return _echec('charge '+r.meilleureCharge.kg);
+          const attendu=Math.round(e1rm(100,5,3)*10)/10;
+          return r.meilleurE1rm&&r.meilleurE1rm.valeur===attendu
+            ?true:_echec('e1RM '+(r.meilleurE1rm?r.meilleurE1rm.valeur:'nul'));})());
+        ok('Au-delà de douze répétitions, l\'e1RM ne concourt pas',(()=>{
+          _viderCachePlateau();
+          const u=_ath([_sc(3,{'SQUAT':{sets:[_st(60,20,'0')]}})]);
+          const r=recordsExercice(u,'SQUAT');
+          return r&&r.meilleureCharge&&!r.meilleurE1rm
+            ?true:_echec(JSON.stringify(r));})());
+        ok('Critère : un historique vide rend null, sans exception',(()=>{
+          try{
+            return recordsExercice(_ath([]),'SQUAT')===null
+              &&recordsExercice(null,'SQUAT')===null
+              &&recordsExercice(_ath([]),'')===null;
+          }catch(e){ return _echec('exception : '+e.message); }})());
+        ok('Une série non validée ne fait pas de record',(()=>{
+          _viderCachePlateau();
+          const u=_ath([_sc(3,{'SQUAT':{sets:[{weight:'200',reps:'5',rir:'2',done:false}]}})]);
+          return recordsExercice(u,'SQUAT')===null?true:_echec('record sur une série non faite');})());
+        ok('recordsExercice est PURE : le dossier n\'est pas modifié',(()=>{
+          _viderCachePlateau();
+          const u=_ath([_sc(3,{'SQUAT':{sets:[_st(100,8)]}})]);
+          const avant=JSON.stringify(u);
+          recordsExercice(u,'SQUAT');
+          return JSON.stringify(u)===avant?true:_echec('le dossier a bougé');})());
+
+        // ── Tonnage ───────────────────────────────────────────────────────
+        ok('Critère : deux séances de 5000 kg → 10000 kg et 2 séances',(()=>{
+          // 100 kg × 10 reps × 5 séries = 5000 kg.
+          const cinq=Array.from({length:5},()=>_st(100,10));
+          const u=_ath([{id:'t1',date:_sem(0),data:{'SQUAT':{sets:cinq}}},
+            {id:'t2',date:_sem(0)+864e5,data:{'SQUAT':{sets:cinq}}}]);
+          const t=tonnageSemaine(u,0);
+          return t.kg===10000&&t.nSeances===2
+            ?true:_echec(t.kg+' kg sur '+t.nSeances+' séances');})());
+        ok('Critère : une semaine sans séance rend zéro, sans erreur',(()=>{
+          try{
+            const t=tonnageSemaine(_ath([]),0);
+            return t.kg===0&&t.nSeances===0?true:_echec(JSON.stringify(t));
+          }catch(e){ return _echec('exception : '+e.message); }})());
+        ok('Le tonnage ignore le RIR : une séance sans RIR compte entièrement',(()=>{
+          const u=_ath([{id:'t3',date:_sem(0),
+            data:{'SQUAT':{sets:[_st(100,10,''),_st(100,10,'')]}}}]);
+          return tonnageSemaine(u,0).kg===2000
+            ?true:_echec(String(tonnageSemaine(u,0).kg));})());
+        ok('L\'isométrie ne fabrique pas de tonnage',(()=>{
+          const u=_ath([{id:'t4',date:_sem(0),
+            data:{'GAINAGE':{methode:'isometrie_max',sets:[_st(80,30)]}}}]);
+          return tonnageSemaine(u,0).kg===0
+            ?true:_echec(String(tonnageSemaine(u,0).kg));})());
+        ok('Une répétition NUMÉRIQUE ne fait pas tomber le tonnage',(()=>{
+          // techniqueDe passe par parseReps, qui appelle toLowerCase.
+          try{
+            const u=_ath([{id:'t5',date:_sem(0),
+              data:{'SQUAT':{sets:[{weight:'100',reps:10,rir:'2',done:true}]}}}]);
+            return tonnageSemaine(u,0).kg===1000
+              ?true:_echec(String(tonnageSemaine(u,0).kg));
+          }catch(e){ return _echec('exception : '+e.message); }})());
+        ok('Une séance hors semaine ne compte pas',(()=>{
+          const u=_ath([{id:'t6',date:_sem(2),data:{'SQUAT':{sets:[_st(100,10)]}}}]);
+          return tonnageSemaine(u,0).kg===0&&tonnageSemaine(u,2).kg===1000
+            ?true:_echec('semaine 0 : '+tonnageSemaine(u,0).kg);})());
+
+        // ── RIR moyen ─────────────────────────────────────────────────────
+        ok('Critère : [RIR 2, vide, échec] → moyenne 1, 2 renseignées, 3 au total',(()=>{
+          const sess={id:'r1',date:Date.now(),data:{'SQUAT':{sets:[
+            _st(100,5,'2'),_st(100,5,''),_st(100,5,'echec')]}}};
+          const r=rirMoyenSeance(sess);
+          if(!r) return _echec('null');
+          return r.moyenne===1&&r.nRenseignees===2&&r.nTotal===3
+            ?true:_echec(JSON.stringify(r));})());
+        ok('Critère : toutes les séries sans RIR → null',(()=>{
+          const sess={id:'r2',date:Date.now(),data:{'SQUAT':{sets:[
+            _st(100,5,''),_st(100,5,null)]}}};
+          return rirMoyenSeance(sess)===null?true:_echec('non null');})());
+        ok('Une série vide n\'est JAMAIS comptée comme un RIR 0',(()=>{
+          // La différence se voit sur la moyenne : (4+4)/2 = 4, et non
+          // (4+4+0)/3 = 2,67.
+          const sess={id:'r3',date:Date.now(),data:{'SQUAT':{sets:[
+            _st(100,5,'4'),_st(100,5,'4'),_st(100,5,'')]}}};
+          const r=rirMoyenSeance(sess);
+          return r.moyenne===4&&r.nRenseignees===2&&r.nTotal===3
+            ?true:_echec(JSON.stringify(r));})());
+        ok('Une séance vide ou absente rend null, sans exception',(()=>{
+          try{
+            return rirMoyenSeance({data:{}})===null&&rirMoyenSeance(null)===null
+              &&rirMoyenSeance({})===null;
+          }catch(e){ return _echec('exception : '+e.message); }})());
+        ok('Les séries non validées ne comptent pas',(()=>{
+          const sess={id:'r4',date:Date.now(),data:{'SQUAT':{sets:[
+            _st(100,5,'2'),{weight:'100',reps:'5',rir:'0',done:false}]}}};
+          const r=rirMoyenSeance(sess);
+          return r.nTotal===1&&r.moyenne===2?true:_echec(JSON.stringify(r));})());
+
+        // ── Prescrit contre réalisé ───────────────────────────────────────
+        ok('Critère : prescrit 20, réalisé 12 → part 0,6',(()=>{
+          _viderCacheVolume();
+          // 20 séries de leg extension prescrites, 12 réalisées : quadriceps.
+          const u=_ath([{id:'e1',date:_sem(0),volume:1,duration:60,
+            data:{'LEG EXTENSION':{sets:Array.from({length:12},()=>_st(60,10))}}}]);
+          u.sessions_config=[{active:true,exercises:[{name:'LEG EXTENSION',series:20,reps:'10'}]}];
+          const l=ecartPrescritRealise(u);
+          const q=l.find(x=>x.muscle==='QUADRICEPS');
+          if(!q) return _echec('quadriceps absent : '+l.map(x=>x.muscle).join(','));
+          return q.prescrit===20&&q.realise===12&&q.part===0.6
+            ?true:_echec(JSON.stringify(q));})());
+        ok('Sans prescription, aucune part n\'est calculée',(()=>{
+          _viderCacheVolume();
+          const u=_ath([{id:'e2',date:_sem(0),volume:1,duration:60,
+            data:{'LEG EXTENSION':{sets:[_st(60,10)]}}}]);
+          u.sessions_config=[];
+          const q=ecartPrescritRealise(u).find(x=>x.muscle==='QUADRICEPS');
+          return q&&q.part===null&&q.realise===1
+            ?true:_echec(JSON.stringify(q));})());
+        ok('Un créneau inactif n\'est pas prescrit',(()=>{
+          _viderCacheVolume();
+          const u=_ath([]);
+          u.sessions_config=[{active:false,exercises:[{name:'LEG EXTENSION',series:20,reps:'10'}]}];
+          return ecartPrescritRealise(u).length===0
+            ?true:_echec('un créneau inactif compte');})());
+        ok('Un dossier vide rend une liste vide, sans exception',(()=>{
+          try{ return ecartPrescritRealise(_ath([])).length===0
+            &&ecartPrescritRealise(null).length===0;
+          }catch(e){ return _echec('exception : '+e.message); }})());
+
+        // ── Le badge « nouveau record » ───────────────────────────────────
+        ok('Une série qui bat la charge est un record',(()=>{
+          _viderCachePlateau();
+          const u=_ath([_sc(3,{'SQUAT':{sets:[_st(100,8)]}})]);
+          return estNouveauRecord(u,'SQUAT',_st(105,8))===true
+            ?true:_echec('non détecté');})());
+        ok('Une série qui bat l\'e1RM sans battre la charge est un record',(()=>{
+          _viderCachePlateau();
+          const u=_ath([_sc(3,{'SQUAT':{sets:[_st(100,5,'2')]}})]);
+          // Même charge, deux répétitions de plus : l'e1RM monte.
+          return estNouveauRecord(u,'SQUAT',_st(100,7,'2'))===true
+            ?true:_echec('non détecté');})());
+        ok('Une série ordinaire n\'est pas un record',(()=>{
+          _viderCachePlateau();
+          const u=_ath([_sc(3,{'SQUAT':{sets:[_st(100,8,'2')]}})]);
+          return estNouveauRecord(u,'SQUAT',_st(80,5,'2'))===false
+            ?true:_echec('faux record');})());
+        ok('La toute première série d\'un exercice est un record',(()=>{
+          _viderCachePlateau();
+          return estNouveauRecord(_ath([]),'SQUAT',_st(60,8))===true
+            ?true:_echec('non détecté');})());
+        ok('Une série non validée n\'est jamais un record',(()=>{
+          _viderCachePlateau();
+          return estNouveauRecord(_ath([]),'SQUAT',
+            {weight:'200',reps:'5',rir:'2',done:false})===false
+            ?true:_echec('record sur une série non faite');})());
+        ok('Le drapeau de record n\'est JAMAIS posé sur la série',(()=>{
+          // woState.sessionData est enregistré tel quel en fin de séance : un
+          // champ posé là serait persisté, ce que ce lot s'interdit.
+          const src=String(_marquerRecordSiBesoin)+String(estNouveauRecord);
+          return !/\.\s*_record\s*=/.test(src)&&/_recordsVus/.test(src)
+            ?true:_echec('le drapeau touche la série');})());
+        ok('Le badge ne sonne rien et ne notifie rien',(()=>{
+          const src=String(_badgeRecord)+String(_marquerRecordSiBesoin);
+          return !/Notification|showNotification|Audio|play\(/.test(src)
+            ?true:_echec('une notification ou un son');})());
+        ok('La ligne de série rend bien le badge',(()=>{
+          // Sans cette vérification, retirer l'appel du gabarit laisse toute la
+          // mécanique de record en place et parfaitement invisible.
+          return /_badgeRecord\(\s*idx\s*,\s*i\s*\)/.test(String(renderSets))
+            ?true:_echec('renderSets n\'appelle plus _badgeRecord');})());
+        ok('Le badge rendu porte le mot RECORD',(()=>{
+          _recordsVus.add('zz9:0');
+          try{
+            const h=_badgeRecord('zz9',0);
+            return /RECORD/.test(h)?true:_echec('badge vide : '+h);
+          } finally { _recordsVus.delete('zz9:0'); }})());
+
+        // ── Les rendus ────────────────────────────────────────────────────
+        ok('La carte Tonnage porte l\'avertissement obligatoire',(()=>{
+          const u=_ath([{id:'v1',date:_sem(0),data:{'SQUAT':{sets:[_st(100,10)]}}}]);
+          const h=_htmlTonnage(u,0);
+          if(!h) return _echec('aucune carte');
+          return /programme constant/.test(h)
+            ?true:_echec('avertissement absent');})());
+        ok('Une semaine vide est un TROU, pas une barre à zéro',(()=>{
+          // L'infobulle ne suffit pas à prouver quoi que ce soit : elle se lit
+          // sur x.vide indépendamment de ce qui est DESSINÉ. On compte donc les
+          // tracés — une seule barre pleine, et un pointillé pour chaque semaine
+          // sans séance.
+          const u=_ath([{id:'v2',date:_sem(3),data:{'SQUAT':{sets:[_st(100,10)]}}}]);
+          const h=_htmlTonnage(u,0);
+          const barres=(h.match(/linear-gradient\(180deg,var\(--red\)/g)||[]).length;
+          const trous=(h.match(/repeating-linear-gradient/g)||[]).length;
+          if(barres!==1) return _echec(barres+' barres pleines au lieu d\'une');
+          return trous===VOL_SEMAINES_MAX-1
+            ?true:_echec(trous+' trous au lieu de '+(VOL_SEMAINES_MAX-1));})());
+        ok('Sans aucune séance, aucune carte Tonnage',
+          _htmlTonnage(_ath([]),0)==='');
+        ok('La carte Records liste les exercices avec leur date',(()=>{
+          _viderCachePlateau();
+          const u=_ath([_sc(6,{'SQUAT':{sets:[_st(100,8)]}}),
+            _sc(3,{'SQUAT':{sets:[_st(120,8)]}})]);
+          const h=_htmlRecords(u);
+          if(!h) return _echec('aucune carte');
+          return /SQUAT/.test(h)&&/120 kg/.test(h)
+            ?true:_echec(h.replace(/<[^>]*>/g,' ').slice(0,120));})());
+        ok('La carte Records se limite à huit exercices',(()=>{
+          _viderCachePlateau();
+          const data={};
+          for(let i=0;i<12;i++) data['EXO '+i]={sets:[_st(50+i,8)]};
+          const u=_ath([_sc(3,data)]);
+          const h=_htmlRecords(u);
+          const n=(h.match(/EXO /g)||[]).length;
+          return n===RECORDS_TOP?true:_echec(n+' exercices');})());
+        ok('Sans historique, aucune carte Records',_htmlRecords(_ath([]))==='');
+        ok('La fiche coach annonce les séries sans RIR exclues',(()=>{
+          const c=_ath([{id:'c1',date:Date.now()-864e5,
+            data:{'SQUAT':{sets:[_st(100,5,'2'),_st(100,5,'')]}}}]);
+          const h=_htmlRirMoyen(c);
+          if(!h) return _echec('aucun bloc');
+          return /1 série sans RIR, exclue du calcul/.test(h)
+            ?true:_echec(h.replace(/<[^>]*>/g,' ').slice(0,140));})());
+        ok('Sans RIR du tout, aucun bloc de RIR moyen',
+          _htmlRirMoyen(_ath([{id:'c2',date:Date.now(),
+            data:{'SQUAT':{sets:[_st(100,5,'')]}}}]))==='');
+        ok('La fiche coach montre l\'écart prescrit / réalisé',(()=>{
+          _viderCacheVolume();
+          const c=_ath([{id:'c3',date:_sem(0),volume:1,duration:60,
+            data:{'LEG EXTENSION':{sets:Array.from({length:12},()=>_st(60,10))}}}]);
+          c.sessions_config=[{active:true,exercises:[{name:'LEG EXTENSION',series:20,reps:'10'}]}];
+          const h=_htmlEcartPrescrit(c);
+          return /Quadriceps/.test(h)&&/60 %/.test(h)
+            ?true:_echec(h.replace(/<[^>]*>/g,' ').slice(0,140));})());
+
+        // ── Aucun champ persisté ─────────────────────────────────────────
+        ok('Aucune des quatre fonctions n\'écrit dans le dossier',(()=>{
+          _viderCachePlateau(); _viderCacheVolume();
+          const u=_ath([{id:'p1',date:_sem(0),volume:1,duration:60,
+            data:{'SQUAT':{sets:[_st(100,8,'2')]}}}]);
+          u.sessions_config=[{active:true,exercises:[{name:'SQUAT',series:4,reps:'8'}]}];
+          const avant=JSON.stringify(u);
+          recordsExercice(u,'SQUAT'); tonnageSemaine(u,0);
+          rirMoyenSeance(u.sessions[0]); ecartPrescritRealise(u);
+          _htmlTonnage(u,0); _htmlRecords(u); _htmlRirMoyen(u); _htmlEcartPrescrit(u);
+          return JSON.stringify(u)===avant?true:_echec('le dossier a été écrit');})());
+      } finally { currentUser=_sU; _viderCachePlateau(); _viderCacheVolume(); }
     })();
 
 
