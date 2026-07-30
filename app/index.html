@@ -19663,7 +19663,11 @@ function _poidsPourPlancher(user){
 // Planchers effectifs pour CET athlète. Toujours un objet, jamais null : sans
 // poids connu, les bornes par kilo sont absentes mais l'absolu tient.
 function plancherEffectif(user){
-  const sexe=(user&&(user._evol_gender||user.gender))||'';
+  // Meme lecture du sexe que besoinsProposes : sans le repli sur le bilan, une
+  // athlete dont le sexe n'existe QUE dans son bilan prend le plancher masculin.
+  const _bl=((user&&user.bilans)||[]).filter(b=>b&&b.date).slice().sort((a,b)=>a.date-b.date);
+  const _b=_bl[_bl.length-1]||{};
+  const sexe=(user&&(user._evol_gender||user.gender))||_b['deb-gender']||'';
   const abs=isFemale(sexe)?KCAL_PLANCHER_ABS.F:KCAL_PLANCHER_ABS.H;
   const poids=_poidsPourPlancher(user);
   let tca=false;
@@ -26643,6 +26647,18 @@ function testExercices(){
           &&pl.kcal===Math.max(KCAL_PLANCHER_ABS.H,Math.round(KCAL_PLANCHER_PAR_KG*pl.poids));})());
       // Le plancher du coach est TOUJOURS calculable : sans poids connu,
       // l'absolu s'applique. Le cas « pas de plancher » n'existe plus.
+      ok('Le sexe se lit dans le bilan quand le champ est absent',(()=>{
+        // Athlète créée par son coach : pas de gender, pas de _evol_gender, le
+        // sexe n'existe que dans le bilan. Le plancher doit voir une femme.
+        const u={id:'z9',email:'z9@t.fr',role:'athlete',weightLog:[{date:Date.now()-864e5,weight:48}],
+          bilans:[{type:'depart',date:Date.now()-9*864e5,'deb-weight':'48','deb-height':'162',
+            'deb-age':'29','deb-gender':'Femme'}]};
+        const pl=plancherEffectif(u);
+        if(pl.abs!==KCAL_PLANCHER_ABS.F) return _echec('plancher absolu '+pl.abs+' au lieu de '+KCAL_PLANCHER_ABS.F);
+        // Et il doit lire le sexe comme besoinsProposes, pas autrement.
+        const bes=besoinsProposes(u,{});
+        const mbF=Math.round(10*48+6.25*162-5*29-161);
+        return bes.mb===mbF&&pl.kcal===Math.max(1200,Math.round(22*48));})());
       ok('Le plancher tient même sans taille ni poids connus',(()=>{
         const u=_ath('seche',-0.15);
         u._evol_height=null; delete u['init-height'];
