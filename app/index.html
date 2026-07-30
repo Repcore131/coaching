@@ -2448,7 +2448,10 @@ const COACH_PHOTO='icons/coach.jpg';
     <div class="pad">
       <div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:12px;padding:14px;margin-bottom:18px">
         <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:4px" id="fja-food-group">—</div>
-        <div style="font-size:15px;font-weight:800;line-height:1.3" id="fja-food-name">—</div>
+        <div style="display:flex;align-items:flex-start;gap:6px">
+          <div style="flex:1;min-width:0;font-size:15px;font-weight:800;line-height:1.3" id="fja-food-name">—</div>
+          <span id="fja-epingle-slot" style="flex-shrink:0"></span>
+        </div>
       </div>
       <div style="margin-bottom:18px">
         <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:8px">Quantité (grammes)</label>
@@ -2465,6 +2468,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <button onclick="setFjaQty(150)" style="flex:1;padding:8px;background:#111;border:1px solid #222;border-radius:8px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;cursor:pointer">150g</button>
           <button onclick="setFjaQty(200)" style="flex:1;padding:8px;background:#111;border:1px solid #222;border-radius:8px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;cursor:pointer">200g</button>
         </div>
+        <div id="fja-portions"></div>
       </div>
       <div id="fja-calc" style="margin-bottom:18px"></div>
       <div style="margin-bottom:20px">
@@ -16770,6 +16774,185 @@ async function _loadCiqual(){
   return _ciqualDB;
 }
 
+// ── Repas proposé : le dernier choisi, sinon l'heure ───────────────────────
+// Le barème est un REPÈRE, pas une vérité : on mange à des heures différentes
+// selon les gens et les jours. Il ne sert qu'à éviter de proposer « Matin » à
+// 21 h. L'athlète change d'un doigt, et son choix tient pour toute la session.
+const FJ_BAREME_REPAS=Object.freeze([
+  {avant:11,repas:'matin'},
+  {avant:15,repas:'dejeuner'},
+  {avant:18,repas:'collation'},
+]);
+const FJ_REPAS_DEFAUT='diner';   // au-delà du dernier seuil
+function repasSelonHeure(ref){
+  const d=(ref instanceof Date)?ref:new Date();
+  const h=d.getHours();
+  for(const b of FJ_BAREME_REPAS) if(h<b.avant) return b.repas;
+  return FJ_REPAS_DEFAUT;
+}
+// Vrai dès que l'athlète a touché un bouton de repas dans cette session. Tant
+// qu'il ne l'a pas fait, on déduit ; après, on respecte son choix.
+let _fjRepasChoisi=false;
+
+// ── Favoris ───────────────────────────────────────────────────────────────
+// recentFoods n'est PAS touché : il continue de se remplir et de s'afficher
+// comme avant. Les favoris sont une liste à part, tenue à la main.
+const FJ_FAV_MAX=20;
+function _fjFavs(){
+  const l=(currentUser&&currentUser.nutrition&&currentUser.nutrition.favoriteFoods)||[];
+  return Array.isArray(l)?l:[];
+}
+function estFavori(id){ return _fjFavs().indexOf(id)>=0; }
+function toggleFavFood(id,ev){
+  if(ev&&ev.stopPropagation) ev.stopPropagation();
+  if(!currentUser.nutrition) currentUser.nutrition={};
+  const l=_fjFavs().slice();
+  const i=l.indexOf(id);
+  if(i>=0) l.splice(i,1);
+  else {
+    if(l.length>=FJ_FAV_MAX){
+      toast('20 favoris au maximum : retires-en un d\'abord','var(--orange)');
+      return false;
+    }
+    l.unshift(id);
+  }
+  currentUser.nutrition.favoriteFoods=l;
+  saveUser();
+  _renderFjRecent();
+  const b=document.getElementById('fja-epingle');
+  if(b&&_fjFood) b.outerHTML=_htmlEpingle(_fjFood.id,true);
+  return true;
+}
+// Dernière quantité RÉELLEMENT utilisée pour cet aliment, lue dans le journal.
+// Stockée nulle part : le journal la porte déjà, et la dupliquer c'est se
+// préparer à afficher un chiffre périmé.
+function _fjDerniereQty(id){
+  const log=(currentUser&&currentUser.nutrition&&currentUser.nutrition.log)||{};
+  const jours=Object.keys(log).sort().reverse();
+  for(const j of jours){
+    const es=((log[j]||{}).entries)||[];
+    for(let i=es.length-1;i>=0;i--)
+      if(es[i]&&es[i].alim_id===id&&Number(es[i].qty)>0) return Number(es[i].qty);
+  }
+  return null;
+}
+function _htmlEpingle(id,grand){
+  const on=estFavori(id);
+  const t=grand?18:15;
+  return `<button id="${grand?'fja-epingle':''}" onclick="toggleFavFood(${id},event)"
+    title="${on?'Retirer des favoris':'Ajouter aux favoris'}"
+    aria-label="${on?'Retirer des favoris':'Ajouter aux favoris'}"
+    style="background:none;border:none;cursor:pointer;padding:${grand?'6px 8px':'4px 6px'};line-height:1;flex-shrink:0;color:${on?'var(--red)':'var(--text-dim)'};font-size:${t}px">${on?'★':'☆'}</button>`;
+}
+
+// ── Portions visuelles ────────────────────────────────────────────────────
+// APPROXIMATIONS, et l'écran le dit. Une paume, un poing et un pouce ne sont
+// pas des instruments de mesure : ils servent à ne pas rester bloqué devant un
+// champ vide quand on n'a pas de balance.
+const FJ_PORTIONS=Object.freeze([
+  {cle:'paume',lib:'Paume',g:120,note:'≈ une paume',
+   groupes:['viandes, oeufs, poissons','produits laitiers']},
+  {cle:'poing',lib:'Poing',g:150,note:'≈ un poing',
+   groupes:['fruits, légumes, légumineuses et oléagineux','produits céréaliers']},
+  {cle:'pouce',lib:'Pouce',g:15,note:'≈ un pouce',
+   groupes:['matières grasses']},
+]);
+const FJ_PORTIONS_NOTE="Repères approximatifs, pas des mesures : ajuste si tu connais le poids.";
+function portionsPourGroupe(groupe){
+  const g=String(groupe==null?'':groupe).toLowerCase().trim();
+  if(!g) return [];
+  return FJ_PORTIONS.filter(p=>p.groupes.some(x=>x.toLowerCase()===g));
+}
+function _htmlPortions(f){
+  const l=portionsPourGroupe(f&&f.g);
+  if(!l.length) return '';
+  return `<div style="display:flex;gap:8px;margin-top:10px">
+    ${l.map(p=>`<button onclick="setFjaQty(${p.g})"
+      style="flex:1;padding:8px;background:#111;border:1px solid #222;border-radius:8px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;cursor:pointer">${p.lib} · ${p.g} g</button>`).join('')}
+  </div>
+  <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:6px;line-height:1.5">${escapeHtml(FJ_PORTIONS_NOTE)}</div>`;
+}
+
+// ── Rejouer un repas, ou la veille ────────────────────────────────────────
+// Rien n'est jamais écrasé : la copie s'AJOUTE. Ce qui vient d'être ajouté est
+// récapitulé avec une annulation, parce qu'une copie qui se trompe de jour ou
+// de repas doit se défaire d'un geste et non à la main, entrée par entrée.
+let _fjDernierAjout=null;   // {date, ids:[...], quoi:'...'}
+function _fjEntrees(date){
+  const log=(currentUser&&currentUser.nutrition&&currentUser.nutrition.log)||{};
+  return ((log[date]||{}).entries)||[];
+}
+// Identifiants NEUFS et distincts. Date.now() seul en donnerait un identique à
+// plusieurs entrées copiées dans la même milliseconde, et l'annulation en
+// retirerait alors plus que prévu.
+function _fjIdsNeufs(dateCible,combien){
+  const pris=_fjEntrees(dateCible).map(e=>Number(e&&e.id)||0);
+  let base=Math.max(Date.now(),...(pris.length?pris:[0]));
+  const out=[];
+  for(let i=1;i<=combien;i++) out.push(base+i);
+  return out;
+}
+function _fjCopier(entrees,dateCible,repas){
+  if(!entrees||!entrees.length) return [];
+  const ids=_fjIdsNeufs(dateCible,entrees.length);
+  return entrees.map((e,i)=>Object.assign({},e,{id:ids[i]},repas?{repas}:{}));
+}
+function _fjAjouter(copies,dateCible,quoi){
+  if(!copies.length) return false;
+  if(!currentUser.nutrition) currentUser.nutrition={};
+  if(!currentUser.nutrition.log) currentUser.nutrition.log={};
+  if(!currentUser.nutrition.log[dateCible]) currentUser.nutrition.log[dateCible]={entries:[]};
+  currentUser.nutrition.log[dateCible].entries.push(...copies);
+  _fjDernierAjout={date:dateCible,ids:copies.map(c=>c.id),quoi};
+  saveUser();
+  _renderFjDaySummary(dateCible);
+  return true;
+}
+function refaireRepas(dateSource,repas){
+  // La cible est AUJOURD'HUI : refaire un repas d'un jour passé dans ce jour
+  // passé n'aurait aucun sens.
+  const cible=localISODate(new Date());
+  const src=_fjEntrees(dateSource).filter(e=>(e.repas||'dejeuner')===repas);
+  if(!src.length){ toast('Rien à recopier dans ce repas','var(--orange)'); return false; }
+  const lib=(FJ_REPAS_LIB[repas]||repas).toLowerCase();
+  return _fjAjouter(_fjCopier(src,cible,repas),cible,src.length+' aliment'
+    +(src.length>1?'s':'')+' ajouté'+(src.length>1?'s':'')+' au '+lib);
+}
+function copierHier(){
+  const cible=localISODate(new Date());
+  const veille=localISODate(new Date(Date.now()-864e5));
+  const src=_fjEntrees(veille);
+  if(!src.length){ toast('Rien d\'enregistré hier : rien à copier','var(--orange)'); return false; }
+  return _fjAjouter(_fjCopier(src,cible,null),cible,src.length+' aliment'
+    +(src.length>1?'s':'')+' repris d\'hier');
+}
+function annulerDernierAjout(){
+  const a=_fjDernierAjout;
+  if(!a) return false;
+  const log=(currentUser.nutrition||{}).log||{};
+  const j=log[a.date];
+  if(!j||!Array.isArray(j.entries)){ _fjDernierAjout=null; return false; }
+  // On retire EXACTEMENT les identifiants ajoutés, rien d'autre : une entrée
+  // saisie à la main entre-temps ne doit pas partir avec.
+  const aRetirer=new Set(a.ids.map(String));
+  j.entries=j.entries.filter(e=>!aRetirer.has(String(e&&e.id)));
+  if(!j.entries.length) delete log[a.date];
+  _fjDernierAjout=null;
+  saveUser();
+  _renderFjDaySummary(a.date);
+  toast('Ajout annulé');
+  return true;
+}
+const FJ_REPAS_LIB=Object.freeze({matin:'Petit-déjeuner',dejeuner:'Déjeuner',
+  diner:'Dîner',collation:'Collation'});
+function _htmlDernierAjout(date){
+  const a=_fjDernierAjout;
+  if(!a||a.date!==date) return '';
+  return `<div style="background:var(--success-bg);border:1px solid var(--success-border);border-radius:10px;padding:10px 12px;margin-bottom:10px;display:flex;align-items:center;gap:10px">
+    <div style="flex:1;min-width:0;font-size:12px;color:var(--success);line-height:1.5">${escapeHtml(a.quoi)}</div>
+    <button onclick="annulerDernierAjout()" style="flex-shrink:0;background:none;border:1px solid var(--success-border);color:var(--success);border-radius:7px;padding:6px 11px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1px;cursor:pointer">ANNULER</button>
+  </div>`;
+}
 function openFoodSearch(date){
   _fjDate=date||localISODate(new Date());
   go('s-food-search');
@@ -16787,22 +16970,39 @@ function _renderFjRecent(){
   const el=document.getElementById('fj-recent-section');
   if(!el||!_ciqualDB) return;
   const ids=currentUser.nutrition?.recentFoods||[];
-  if(!ids.length){el.innerHTML='<div style="padding:20px 16px;font-size:12px;color:var(--text-dim);text-align:center">Commence à saisir pour rechercher un aliment</div>';return;}
+  // Les favoris passent DEVANT les récents, et recentFoods n'est pas touché :
+  // il se remplit et s'affiche exactement comme avant.
+  const favIds=_fjFavs();
+  const favs=favIds.map(id=>_ciqualDB.find(f=>f.id===id)).filter(Boolean);
+  const titre=t=>'<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;padding:14px 16px 6px">'+t+'</div>';
+  const sep='<div style="height:1px;background:#111;margin:6px 0"></div>';
+  const blocFav=favs.length
+    ?titre('Favoris')+favs.map(f=>_fjResultHtml(f,true)).join('')+sep
+    :'';
+  if(!ids.length){
+    el.innerHTML=blocFav+'<div style="padding:20px 16px;font-size:12px;color:var(--text-dim);text-align:center">Commence à saisir pour rechercher un aliment</div>';
+    return;
+  }
   const foods=ids.map(id=>_ciqualDB.find(f=>f.id===id)).filter(Boolean);
-  el.innerHTML='<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;padding:14px 16px 6px">Récents</div>'+
-    foods.map(_fjResultHtml).join('')+
-    '<div style="height:1px;background:#111;margin:6px 0"></div>';
+  el.innerHTML=blocFav+titre('Récents')+
+    foods.map(f=>_fjResultHtml(f,true)).join('')+sep;
 }
 
-function _fjResultHtml(f){
+function _fjResultHtml(f,avecEpingle){
   const _kvBadge=`<span style="font-size:var(--fs-xs);font-weight:800;color:#fb923c;background:#1a0e00;border:1px solid #3a1e00;border-radius:4px;padding:1px 5px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`;
   const kcalSpan=f.k!=null?`<span style="color:var(--red);font-weight:700">${f.k} kcal/100g</span>`:_kvBadge;
-  return `<div class="fj-result" onclick="selectFjFood(${f.id})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-    <div style="font-weight:700;font-size:13px">${escapeHtml(f.n)}</div>
+  // L'épingle n'apparaît que sur les listes de favoris et de récents : les
+  // résultats de recherche restent rendus exactement comme avant.
+  const _ep=avecEpingle?_htmlEpingle(f.id,false):'';
+  const _dq=(avecEpingle&&estFavori(f.id))?_fjDerniereQty(f.id):null;
+  return `<div class="fj-result" onclick="selectFjFood(${f.id})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="display:flex;align-items:center;gap:8px">
+    <div style="flex:1;min-width:0">
+    <div style="font-weight:700;font-size:13px">${escapeHtml(f.n)}${_dq?`<span style="font-size:var(--fs-xs);color:var(--text-dim);font-weight:600"> · ${_dq} g la dernière fois</span>`:''}</div>
     <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;display:flex;gap:10px;align-items:center">
       ${kcalSpan}
       <span>${escapeHtml(f.g)}</span>
     </div>
+    </div>${_ep}
   </div>`;
 }
 
@@ -16845,13 +17045,24 @@ function selectFjFood(id){
   document.getElementById('fja-food-name').textContent=_fjFood.n;
   document.getElementById('fja-food-group').textContent=_fjFood.g||'';
   document.getElementById('fja-qty').value=100;
-  _fjRepas='matin';
+  // Le dernier repas choisi tient pour toute la session ; sans choix, on le
+  // déduit de l'heure. Forcer « Matin » obligeait à re-sélectionner à chaque
+  // aliment, y compris pour trois aliments d'affilée au même dîner.
+  if(!_fjRepasChoisi) _fjRepas=repasSelonHeure();
   document.querySelectorAll('.fj-repas-btn').forEach(b=>b.classList.toggle('active',b.dataset.repas===_fjRepas));
+  // Un favori rouvre sur la quantité réellement utilisée la dernière fois.
+  const _q=document.getElementById('fja-qty');
+  if(_q&&estFavori(_fjFood.id)){ const d=_fjDerniereQty(_fjFood.id); if(d>0) _q.value=d; }
+  const _ep=document.getElementById('fja-epingle-slot');
+  if(_ep) _ep.innerHTML=_htmlEpingle(_fjFood.id,true);
+  const _po=document.getElementById('fja-portions');
+  if(_po) _po.innerHTML=_htmlPortions(_fjFood);
   updateFjaCalc();
 }
 
 function selectRepas(r){
   _fjRepas=r;
+  _fjRepasChoisi=true;
   document.querySelectorAll('.fj-repas-btn').forEach(b=>b.classList.toggle('active',b.dataset.repas===r));
 }
 
@@ -16987,19 +17198,23 @@ function _renderFjDaySummary(date){
           ${tile(tot.l,m.l?m.l+'g':'','lip','#22c55e')}
         </div>
         <div style="display:flex;gap:6px;align-items:stretch">
-          ${tile(tot.s,m.s?m.s+'g':'','sucre ℹ','#a78bfa')}
-          ${tile(tot.fi,m.f?m.f+'g':'','fibres ℹ','#94a3b8')}
           ${tile(tot.sel,'','sel g','#94a3b8')}
+          ${tile(tot.fi,m.f?m.f+'g':'','fibres ℹ','#94a3b8')}
           ${kcalTile}
         </div>
-        <div style="font-size:var(--fs-xs);color:var(--text-dim);text-align:right;margin-top:7px">ℹ sucre & fibres : indicatif</div>
+        <div style="font-size:var(--fs-xs);color:var(--text-dim);text-align:right;margin-top:7px">ℹ fibres : indicatif</div>
         ${_selManquant?`<div style="font-size:var(--fs-xs);color:var(--text-dim);text-align:right;margin-top:3px">sel non compté sur ${_selManquant} aliment${_selManquant>1?'s':''}</div>`:''}
       </div>
     </div>
+    ${_htmlDernierAjout(date)}
+    ${isToday?`<button onclick="copierHier()" style="width:100%;margin-bottom:12px;padding:10px 0;background:none;border:1px dashed #2a2a2a;border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;cursor:pointer">Copier la journée d'hier</button>`:''}
     ${entries.length===0?`<div style="text-align:center;padding:18px 0 8px;color:var(--text-dim);font-size:12px">Aucun aliment enregistré : appuie sur + AJOUTER</div>`:''}
     ${repasOrder.filter(r=>grouped[r]).map(r=>`
       <div style="margin-bottom:14px">
-        <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:6px">${repasLabels[r]}</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div style="flex:1;min-width:0;font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase">${repasLabels[r]}</div>
+          ${!isToday?`<button onclick="refaireRepas('${date}','${r}')" style="flex-shrink:0;background:none;border:1px solid #2a2a2a;border-radius:7px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:.5px;padding:5px 9px;cursor:pointer">Refaire aujourd'hui</button>`:''}
+        </div>
         ${grouped[r].map(e=>`<div class="fj-entry">
           <div style="flex:1;min-width:0">
             <div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(e.nom)}</div>
@@ -32714,6 +32929,366 @@ function testExercices(){
           ['checkWoReminderToday',typeof checkWoReminderToday==='function'?checkWoReminderToday:null]];
         const fautives=f.filter(([n,fn])=>fn&&/risquesMicro/.test(String(fn)));
         return fautives.length?_echec(fautives.map(x=>x[0]).join(', ')):true;})());
+    })();
+
+
+    // ══ JOURNAL ALIMENTAIRE : REPAS, FAVORIS, REJOUER, PORTIONS ═══════════
+    (()=>{
+      const _sU=currentUser, _sSave=window.saveUser, _sLN=window.loadNutrition;
+      const _sDB=_ciqualDB, _sFood=_fjFood, _sDate=_fjDate, _sRepas=_fjRepas;
+      const _sChoisi=_fjRepasChoisi, _sAjout=_fjDernierAjout;
+      const AUJ=localISODate(new Date());
+      const HIER=localISODate(new Date(Date.now()-864e5));
+      const AVHIER=localISODate(new Date(Date.now()-2*864e5));
+      // Un aliment par groupe utile aux raccourcis de portion.
+      const DB=[
+        {id:901,n:'Poulet rôti',g:'viandes, oeufs, poissons',k:170,p:29,c:0,l:6,f:0,e:0.8},
+        {id:902,n:'Riz blanc cuit',g:'produits céréaliers',k:130,p:2.7,c:28,l:0.3,f:0.4,e:0.01},
+        {id:903,n:'Huile d\'olive',g:'matières grasses',k:900,p:0,c:0,l:100,f:0,e:0},
+        {id:904,n:'Pizza margherita',g:'entrées et plats composés',k:250,p:11,c:30,l:9,f:2,e:1.4},
+        {id:905,n:'Brocoli cuit',g:'fruits, légumes, légumineuses et oléagineux',k:35,p:2.8,c:4,l:0.4,f:3,e:0.02},
+      ];
+      const _qty=()=>document.getElementById('fja-qty');
+      const _neuf=()=>{ currentUser={id:'_tfj',email:'tfj@t',exAlias:{},exMuscles:{},
+        sessions:[],nutrition:{}}; };
+      try{
+        window.saveUser=()=>true;
+        window.loadNutrition=()=>{};
+        _ciqualDB=DB;
+
+        // ── 1) Le repas déduit de l'heure ─────────────────────────────────
+        ok('Le barème de l\'heure suit les quatre créneaux',(()=>{
+          const cas=[[7,'matin'],[10,'matin'],[11,'dejeuner'],[13,'dejeuner'],
+            [14,'dejeuner'],[15,'collation'],[17,'collation'],[18,'diner'],
+            [19,'diner'],[23,'diner'],[0,'matin']];
+          for(const [h,att] of cas){
+            const d=new Date(2026,0,15,h,30);
+            const v=repasSelonHeure(d);
+            if(v!==att) return _echec(h+'h → '+v+' au lieu de '+att);}
+          return true;})());
+        ok('Critère : première ouverture à 19h sans choix précédent → Dîner',(()=>{
+          _neuf(); _fjRepasChoisi=false; _fjRepas='matin'; _fjDate=AUJ;
+          // On force l'heure par le barème, puis on éprouve le vrai chemin en
+          // vérifiant qu'il consulte bien repasSelonHeure.
+          if(repasSelonHeure(new Date(2026,0,15,19,0))!=='diner')
+            return _echec('le barème lui-même ne rend pas diner à 19h');
+          if(!/repasSelonHeure\(\)/.test(String(selectFjFood)))
+            return _echec('selectFjFood ne consulte pas l\'heure');
+          selectFjFood(901);
+          // À l'heure du test, le repas doit être celui de l'heure courante et
+          // non « matin » forcé.
+          return _fjRepas===repasSelonHeure()
+            ?true:_echec(_fjRepas+' au lieu de '+repasSelonHeure());})());
+        ok('Critère : trois aliments d\'affilée restent au même repas',(()=>{
+          _neuf(); _fjDate=AUJ; _fjRepasChoisi=false;
+          selectFjFood(901);
+          selectRepas('diner');
+          if(_fjRepas!=='diner') return _echec('la sélection n\'a pas pris');
+          [901,902,903].forEach(id=>{
+            selectFjFood(id);
+            _qty().value=100;
+            saveFoodEntry();
+          });
+          const es=(currentUser.nutrition.log[AUJ]||{}).entries||[];
+          if(es.length!==3) return _echec(es.length+' entrées');
+          const mauvais=es.filter(e=>e.repas!=='diner');
+          return mauvais.length
+            ?_echec(mauvais.length+' entrée(s) hors dîner : '+es.map(e=>e.repas).join(','))
+            :true;})());
+        ok('Un choix de repas survit à l\'aliment suivant, pas à la session',(()=>{
+          _neuf(); _fjDate=AUJ; _fjRepasChoisi=false;
+          selectRepas('collation');
+          selectFjFood(902);
+          if(_fjRepas!=='collation') return _echec('choix perdu : '+_fjRepas);
+          // Nouvelle session : le drapeau repart à faux, on redéduit.
+          _fjRepasChoisi=false;
+          selectFjFood(902);
+          return _fjRepas===repasSelonHeure()
+            ?true:_echec('après remise à zéro : '+_fjRepas);})());
+
+        // ── 2) Favoris ────────────────────────────────────────────────────
+        ok('Épingler et désépingler un aliment',(()=>{
+          _neuf();
+          if(estFavori(901)) return _echec('favori avant tout clic');
+          toggleFavFood(901);
+          if(!estFavori(901)) return _echec('non ajouté');
+          toggleFavFood(901);
+          return !estFavori(901)?true:_echec('non retiré');})());
+        ok('Le plafond de 20 favoris tient',(()=>{
+          _neuf();
+          currentUser.nutrition.favoriteFoods=Array.from({length:20},(x,i)=>1000+i);
+          const r=toggleFavFood(901);
+          return r===false&&_fjFavs().length===20&&!estFavori(901)
+            ?true:_echec(_fjFavs().length+' favoris');})());
+        ok('Critère : un favori apparaît AVANT les récents',(()=>{
+          _neuf();
+          currentUser.nutrition.recentFoods=[902,903];
+          currentUser.nutrition.favoriteFoods=[901];
+          _renderFjRecent();
+          const el=document.getElementById('fj-recent-section');
+          if(!el) return _echec('section absente du DOM');
+          const h=el.innerHTML;
+          const iFav=h.indexOf('Favoris'), iRec=h.indexOf('Récents');
+          const iPoulet=h.indexOf('Poulet'), iRiz=h.indexOf('Riz blanc');
+          if(iFav<0) return _echec('aucun bloc Favoris');
+          if(iRec<0) return _echec('le bloc Récents a disparu');
+          return iFav<iRec&&iPoulet<iRiz
+            ?true:_echec('fav '+iFav+' rec '+iRec+' poulet '+iPoulet+' riz '+iRiz);})());
+        ok('recentFoods continue de fonctionner comme avant',(()=>{
+          // Ni vidé, ni réordonné, ni plafonné autrement : saveFoodEntry le
+          // remplit exactement comme aujourd'hui.
+          _neuf(); _fjDate=AUJ;
+          selectFjFood(901); _qty().value=100; saveFoodEntry();
+          selectFjFood(902); _qty().value=100; saveFoodEntry();
+          const r=currentUser.nutrition.recentFoods;
+          return r.join(',')==='902,901'?true:_echec(r.join(','));})());
+        ok('Épingler ne touche pas à recentFoods',(()=>{
+          // Mon premier test n'épinglait rien : il ne pouvait pas voir les deux
+          // listes se confondre. Ce sont deux listes distinctes.
+          _neuf();
+          currentUser.nutrition.recentFoods=[905,904,902];
+          const avant=currentUser.nutrition.recentFoods.join(',');
+          toggleFavFood(901);
+          toggleFavFood(903);
+          const apres=(currentUser.nutrition.recentFoods||[]).join(',');
+          if(apres!==avant) return _echec('recentFoods est passé de «'+avant+'» à «'+apres+'»');
+          // Et l'inverse : ajouter un aliment ne crée pas de favori.
+          _fjDate=AUJ;
+          selectFjFood(904); _qty().value=100; saveFoodEntry();
+          return _fjFavs().indexOf(904)<0
+            ?true:_echec('un favori est apparu tout seul');})());
+        ok('Critère : un favori pré-remplit sa dernière quantité',(()=>{
+          _neuf(); _fjDate=AUJ;
+          // Une première prise à 175 g, enregistrée dans le journal.
+          selectFjFood(901); _qty().value=175; saveFoodEntry();
+          toggleFavFood(901);
+          _qty().value=100;
+          selectFjFood(901);
+          return Number(_qty().value)===175
+            ?true:_echec('champ à '+_qty().value);})());
+        ok('Un aliment NON favori garde la quantité par défaut',(()=>{
+          _neuf(); _fjDate=AUJ;
+          selectFjFood(902); _qty().value=175; saveFoodEntry();
+          _qty().value=100;
+          selectFjFood(902);
+          return Number(_qty().value)===100
+            ?true:_echec('champ à '+_qty().value);})());
+        ok('La dernière quantité se lit dans le journal, pas ailleurs',(()=>{
+          _neuf();
+          if(_fjDerniereQty(901)!==null) return _echec('une quantité sort de nulle part');
+          currentUser.nutrition.log={};
+          currentUser.nutrition.log[AVHIER]={entries:[{id:1,alim_id:901,qty:80,repas:'matin'}]};
+          currentUser.nutrition.log[HIER]={entries:[{id:2,alim_id:901,qty:140,repas:'diner'}]};
+          // La plus RÉCENTE, pas la première trouvée.
+          return _fjDerniereQty(901)===140?true:_echec(String(_fjDerniereQty(901)));})());
+        ok('L\'épingle n\'apparaît pas dans les résultats de recherche',(()=>{
+          _neuf();
+          const sans=_fjResultHtml(DB[0]);
+          const avec=_fjResultHtml(DB[0],true);
+          return sans.indexOf('toggleFavFood')<0&&avec.indexOf('toggleFavFood')>=0
+            ?true:_echec('sans:'+(sans.indexOf('toggleFavFood')>=0)+' avec:'+(avec.indexOf('toggleFavFood')>=0));})());
+        ok('Le clic sur l\'épingle n\'ouvre pas la fiche de l\'aliment',(()=>{
+          const h=_fjResultHtml(DB[0],true);
+          return /toggleFavFood\(901,event\)/.test(h)
+            &&/stopPropagation/.test(String(toggleFavFood))
+            ?true:_echec('le clic remonterait jusqu\'à selectFjFood');})());
+
+        // ── 3) Portions visuelles ─────────────────────────────────────────
+        ok('Les portions sont contextuelles au groupe',(()=>{
+          const cas=[[DB[0],['paume']],[DB[1],['poing']],[DB[4],['poing']],
+            [DB[2],['pouce']],[DB[3],[]]];
+          for(const [f,att] of cas){
+            const v=portionsPourGroupe(f.g).map(x=>x.cle);
+            if(v.join(',')!==att.join(',')) return _echec(f.n+' → '+(v.join(',')||'rien'));}
+          return true;})());
+        ok('Un groupe vide ou inconnu ne propose rien',
+          portionsPourGroupe('').length===0&&portionsPourGroupe(null).length===0
+          &&portionsPourGroupe('zzz').length===0);
+        ok('Critère : « paume » remplit 120 et le champ reste modifiable',(()=>{
+          _neuf(); _fjDate=AUJ;
+          selectFjFood(901);
+          const po=document.getElementById('fja-portions');
+          if(!po) return _echec('emplacement des portions absent');
+          const b=po.querySelector('button');
+          if(!b) return _echec('aucun bouton de portion');
+          if(!/Paume/.test(b.textContent)) return _echec('«'+b.textContent+'»');
+          b.click();
+          if(Number(_qty().value)!==120) return _echec('champ à '+_qty().value);
+          // Modifiable : ni disabled, ni readonly, et une saisie passe.
+          const i=_qty();
+          if(i.disabled||i.readOnly) return _echec('champ verrouillé');
+          i.value=137; updateFjaCalc();
+          return Number(i.value)===137?true:_echec('champ à '+i.value+' après saisie');})());
+        ok('Les équivalences sont annoncées comme des approximations',(()=>{
+          const t=FJ_PORTIONS_NOTE.toLowerCase();
+          if(!/approximatif/.test(t)) return _echec('«'+FJ_PORTIONS_NOTE+'»');
+          _neuf(); _fjDate=AUJ; selectFjFood(901);
+          const h=document.getElementById('fja-portions').textContent||'';
+          return h.indexOf('approximatifs')>=0
+            ?true:_echec('la note n\'est pas à l\'écran');})());
+        ok('Un aliment sans portion applicable n\'affiche pas la note',(()=>{
+          _neuf(); _fjDate=AUJ; selectFjFood(904);
+          const h=document.getElementById('fja-portions').innerHTML;
+          return h===''?true:_echec('«'+h.slice(0,60)+'»');})());
+
+        // ── 4) Rejouer ────────────────────────────────────────────────────
+        const _e=(id,alim,nom,repas,kcal,qty)=>({id,alim_id:alim,nom,groupe:'',
+          qty:qty||100,repas,kcal,p:10,c:10,l:5,fi:1,sel:0.5});
+        ok('Critère : copier une veille vide ne fait rien, et le dit',(()=>{
+          _neuf(); _fjDernierAjout=null;
+          currentUser.nutrition.log={};
+          // Le « et le dit » compte autant que le « ne fait rien » : sans
+          // garde, _fjAjouter rend déjà false sur une liste vide, et seul le
+          // message disparaîtrait. On capture donc le toast.
+          const vraiToast=window.toast; const dits=[];
+          let r;
+          try{
+            window.toast=m=>{dits.push(String(m));};
+            r=copierHier();
+          } finally { window.toast=vraiToast; }
+          const log=currentUser.nutrition.log||{};
+          if(r!==false||log[AUJ]||_fjDernierAjout!==null)
+            return _echec('r='+r+' log='+JSON.stringify(Object.keys(log)));
+          if(!dits.length) return _echec('rien n\'est dit à l\'athlète');
+          return /hier/i.test(dits.join(' '))
+            ?true:_echec('message muet sur la veille : «'+dits.join(' | ')+'»');})());
+        ok('Critère : la journée d\'hier est recopiée avec de nouveaux id',(()=>{
+          _neuf(); _fjDernierAjout=null;
+          currentUser.nutrition.log={};
+          currentUser.nutrition.log[HIER]={entries:[
+            _e(1,901,'Poulet','matin',170),_e(2,902,'Riz','diner',130)]};
+          copierHier();
+          const es=(currentUser.nutrition.log[AUJ]||{}).entries||[];
+          if(es.length!==2) return _echec(es.length+' entrées copiées');
+          const ids=es.map(e=>e.id);
+          if(new Set(ids.map(String)).size!==2) return _echec('id en doublon : '+ids.join(','));
+          if(ids.some(i=>i===1||i===2)) return _echec('id source réutilisé');
+          // La veille est intacte, et les repas sont conservés.
+          const src=currentUser.nutrition.log[HIER].entries;
+          return src.length===2&&es.map(e=>e.repas).join(',')==='matin,diner'
+            ?true:_echec('source '+src.length+' repas '+es.map(e=>e.repas).join(','));})());
+        ok('La copie s\'AJOUTE, elle n\'écrase rien',(()=>{
+          _neuf(); _fjDernierAjout=null;
+          currentUser.nutrition.log={};
+          currentUser.nutrition.log[HIER]={entries:[_e(1,901,'Poulet','matin',170)]};
+          currentUser.nutrition.log[AUJ]={entries:[_e(9,905,'Brocoli','dejeuner',35)]};
+          copierHier();
+          const es=((currentUser.nutrition.log||{})[AUJ]||{}).entries||[];
+          return es.length===2&&es[0]&&es[0].id===9
+            ?true:_echec(es.length+' entrées, première id '+es[0].id);})());
+        ok('Refaire un repas d\'un jour passé le copie dans AUJOURD\'HUI',(()=>{
+          _neuf(); _fjDernierAjout=null;
+          currentUser.nutrition.log={};
+          currentUser.nutrition.log[AVHIER]={entries:[
+            _e(1,901,'Poulet','diner',170),_e(2,902,'Riz','diner',130),
+            _e(3,905,'Brocoli','matin',35)]};
+          refaireRepas(AVHIER,'diner');
+          const es=(currentUser.nutrition.log[AUJ]||{}).entries||[];
+          if(es.length!==2) return _echec(es.length+' entrées');
+          // Seul le dîner, et rangé au dîner.
+          return es.every(e=>e.repas==='diner')&&es.map(e=>e.nom).sort().join(',')==='Poulet,Riz'
+            ?true:_echec(es.map(e=>e.nom+':'+e.repas).join(' '));})());
+        ok('Refaire un repas vide ne fait rien',(()=>{
+          _neuf(); _fjDernierAjout=null;
+          currentUser.nutrition.log={};
+          currentUser.nutrition.log[AVHIER]={entries:[_e(1,901,'Poulet','matin',170)]};
+          const r=refaireRepas(AVHIER,'diner');
+          return r===false&&!currentUser.nutrition.log[AUJ]
+            ?true:_echec('r='+r);})());
+        ok('Critère : l\'annulation retire exactement les entrées ajoutées',(()=>{
+          _neuf(); _fjDernierAjout=null;
+          currentUser.nutrition.log={};
+          currentUser.nutrition.log[HIER]={entries:[
+            _e(1,901,'Poulet','matin',170),_e(2,902,'Riz','diner',130)]};
+          currentUser.nutrition.log[AUJ]={entries:[_e(9,905,'Brocoli','dejeuner',35)]};
+          copierHier();
+          const apres=(((currentUser.nutrition.log||{})[AUJ]||{}).entries||[]).length;
+          annulerDernierAjout();
+          const es=((currentUser.nutrition.log||{})[AUJ]||{}).entries||[];
+          if(apres!==3) return _echec('après copie : '+apres+' entrées');
+          if(es.length!==1) return _echec('après annulation : '+es.length+' entrées');
+          // Celle qui restait est bien celle saisie à la main.
+          return es[0].id===9?true:_echec('id restant '+es[0].id);})());
+        ok('L\'annulation épargne une entrée saisie APRÈS la copie',(()=>{
+          _neuf(); _fjDernierAjout=null;
+          currentUser.nutrition.log={};
+          currentUser.nutrition.log[HIER]={entries:[_e(1,901,'Poulet','matin',170)]};
+          copierHier();
+          // L'athlète ajoute un aliment à la main juste après.
+          (((currentUser.nutrition.log||{})[AUJ]||{}).entries||[])
+            .push(_e(77,905,'Brocoli','diner',35));
+          annulerDernierAjout();
+          const es=(currentUser.nutrition.log[AUJ]||{}).entries||[];
+          return es.length===1&&es[0].id===77
+            ?true:_echec(es.length+' restantes : '+es.map(e=>e.id).join(','));})());
+        ok('Critère : totaux identiques après une copie puis son annulation',(()=>{
+          _neuf(); _fjDernierAjout=null;
+          currentUser.nutrition.log={};
+          currentUser.nutrition.log[HIER]={entries:[
+            _e(1,901,'Poulet','matin',170),_e(2,902,'Riz','diner',130)]};
+          currentUser.nutrition.log[AUJ]={entries:[_e(9,905,'Brocoli','dejeuner',35)]};
+          const somme=()=>{
+            const es=(currentUser.nutrition.log[AUJ]||{}).entries||[];
+            return es.reduce((a,e)=>({kcal:a.kcal+(e.kcal||0),p:a.p+(e.p||0),
+              c:a.c+(e.c||0),l:a.l+(e.l||0),fi:a.fi+(e.fi||0),
+              sel:a.sel+(e.sel||0)}),{kcal:0,p:0,c:0,l:0,fi:0,sel:0});};
+          const avant=JSON.stringify(somme());
+          copierHier();
+          const pendant=JSON.stringify(somme());
+          annulerDernierAjout();
+          const apres=JSON.stringify(somme());
+          if(pendant===avant) return _echec('la copie n\'a rien changé : le test ne prouve rien');
+          return apres===avant?true:_echec(avant+' puis '+apres);})());
+        ok('Annuler deux fois de suite ne retire rien de plus',(()=>{
+          _neuf(); _fjDernierAjout=null;
+          currentUser.nutrition.log={};
+          currentUser.nutrition.log[HIER]={entries:[_e(1,901,'Poulet','matin',170)]};
+          currentUser.nutrition.log[AUJ]={entries:[_e(9,905,'Brocoli','dejeuner',35)]};
+          copierHier();
+          annulerDernierAjout();
+          const r=annulerDernierAjout();
+          const es=(currentUser.nutrition.log[AUJ]||{}).entries||[];
+          return r===false&&es.length===1?true:_echec('r='+r+' reste '+es.length);})());
+        ok('Le bandeau d\'annulation ne s\'affiche que sur le jour concerné',(()=>{
+          _neuf(); _fjDernierAjout={date:AUJ,ids:[1],quoi:'2 aliments repris d\'hier'};
+          const a=_htmlDernierAjout(AUJ), b=_htmlDernierAjout(HIER);
+          if(!a||a.indexOf('annulerDernierAjout')<0) return _echec('absent sur le bon jour');
+          return b===''?true:_echec('affiché sur un autre jour');})());
+        ok('Sans ajout récent, aucun bandeau',(()=>{
+          _fjDernierAjout=null;
+          return _htmlDernierAjout(AUJ)==='';})());
+        ok('Les deux tables de libellés de repas concordent',(()=>{
+          // repasLabels vit dans _renderFjDaySummary, FJ_REPAS_LIB dans le
+          // bloc : deux sources pour le même mot, autant vérifier qu'elles ne
+          // divergent pas.
+          const src=String(_renderFjDaySummary);
+          const manque=Object.keys(FJ_REPAS_LIB).filter(k=>
+            src.indexOf(k+":'"+FJ_REPAS_LIB[k]+"'")<0);
+          return manque.length?_echec('divergent : '+manque.join(', ')):true;})());
+
+        // ── 5) La tuile sucre s'en va ─────────────────────────────────────
+        ok('La tuile SUCRE a disparu du récapitulatif',(()=>{
+          _neuf(); _fjDernierAjout=null;
+          currentUser.nutrition.log={};
+          currentUser.nutrition.log[AUJ]={entries:[_e(1,901,'Poulet','matin',170)]};
+          currentUser.nutrition.macros={on:{kcal:2000,p:120,g:200,l:60,s:40,f:30},
+            off:{kcal:1800,p:120,g:170,l:60,s:35,f:30}};
+          _renderFjDaySummary(AUJ);
+          const t=(document.getElementById('fj-today-section')||{}).textContent||'';
+          if(/sucre/i.test(t)) return _echec('« sucre » est encore là');
+          // Le sel a pris sa place, avant les fibres.
+          const iSel=t.toLowerCase().indexOf('sel g');
+          const iFib=t.toLowerCase().indexOf('fibres');
+          return iSel>=0&&iFib>iSel?true:_echec('sel '+iSel+' fibres '+iFib);})());
+        ok('La mention indicative ne parle plus du sucre',(()=>{
+          const t=(document.getElementById('fj-today-section')||{}).textContent||'';
+          return /fibres : indicatif/.test(t)&&!/sucre & fibres/.test(t)
+            ?true:_echec('mention inchangée');})());
+      } finally {
+        currentUser=_sU; window.saveUser=_sSave; window.loadNutrition=_sLN;
+        _ciqualDB=_sDB; _fjFood=_sFood; _fjDate=_sDate; _fjRepas=_sRepas;
+        _fjRepasChoisi=_sChoisi; _fjDernierAjout=_sAjout;
+      }
     })();
 
 
