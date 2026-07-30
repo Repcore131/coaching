@@ -17337,12 +17337,161 @@ function deleteClientStrictPhoto(index){
 }
 
 // ======= SUPPLEMENTS =======
-const SUPPLEMENTS_LIST=[
-  'Créatine monohydrate','Whey / Protéine en poudre','BCAA','EAA',
-  'Oméga-3','Vitamine D3','Magnésium','ZMA','Multivitamines',
-  'Glutamine','Bêta-alanine','Citrulline malate','Ashwagandha',
-  'Collagène','Probiotiques',
-];
+// Les 15 noms sont EXACTEMENT ceux d'avant, au caractère près : les dossiers
+// existants stockent le nom saisi, pas un identifiant. Un accent déplacé et
+// l'athlète perd sa fiche. Un test compare la liste caractère par caractère.
+//
+// `preuve` classe la SOLIDITÉ DES PREUVES, jamais l'utilité pour quelqu'un :
+//   A — beaucoup d'études convergentes
+//   B — des résultats encourageants, moins nombreux
+//   C — peu de données, ou des résultats qui se contredisent
+// La caféine a son propre écran (mg, équivalents, historique) : elle n'est pas
+// dupliquée ici, et checkSuppCaffeineRedirect continue d'y renvoyer.
+//
+// Le contenu de ce tableau relève de la responsabilité professionnelle du
+// coach : chiffres et notes sont à relire par lui, pas par le code.
+const SUPPLEMENTS_LIST=Object.freeze([
+  {nom:'Créatine monohydrate',dose:'3 à 5',unite:'g',momentsRecommandes:[],preuve:'A',
+   note:"La régularité compte, l'horaire non : le stock se constitue sur plusieurs semaines.",
+   interactions:[]},
+  {nom:'Whey / Protéine en poudre',dose:'20 à 30',unite:'g',
+   momentsRecommandes:['apres-entrainement','matin'],preuve:'B',
+   note:"Une façon pratique d'atteindre son total de protéines quand un repas n'est pas possible.",
+   interactions:[
+     {avec:'BCAA',message:"Whey et BCAA au même moment : la whey apporte déjà ces acides aminés. L'un des deux suffit."},
+     {avec:'EAA',message:"Whey et EAA au même moment : la whey apporte déjà ces acides aminés. L'un des deux suffit."}]},
+  {nom:'BCAA',dose:'5 à 10',unite:'g',momentsRecommandes:['intra','avant-entrainement'],preuve:'C',
+   note:"Peu d'intérêt quand le total de protéines de la journée est déjà atteint.",
+   interactions:[
+     {avec:'EAA',message:"BCAA et EAA au même moment : les EAA contiennent déjà les BCAA. L'un des deux suffit."}]},
+  {nom:'EAA',dose:'10 à 15',unite:'g',momentsRecommandes:['intra','avant-entrainement'],preuve:'C',
+   note:"Plus complets que les BCAA, même remarque : redondants si le total de protéines est atteint.",
+   interactions:[]},
+  {nom:'Oméga-3',dose:'1 à 2',unite:'g',momentsRecommandes:['midi','soir'],preuve:'B',
+   note:"Avec un repas qui contient du gras : c'est là qu'ils passent le mieux.",
+   interactions:[]},
+  {nom:'Vitamine D3',dose:'1000 à 2000',unite:'UI',momentsRecommandes:['matin','midi'],preuve:'B',
+   note:"Avec un repas gras. Un dosage sanguin vaut mieux que de deviner : parles-en à un professionnel de santé.",
+   interactions:[
+     {avec:'Multivitamines',message:"Vitamine D3 et multivitamines au même moment : la plupart des multivitamines en contiennent déjà. Regarde l'étiquette avant de cumuler."}]},
+  {nom:'Magnésium',dose:'200 à 400',unite:'mg',momentsRecommandes:['soir','coucher'],preuve:'B',
+   note:"Les formes bisglycinate ou citrate sont mieux tolérées que l'oxyde.",
+   interactions:[
+     {avec:'ZMA',message:"Magnésium et ZMA au même moment : le ZMA contient déjà du magnésium, les doses s'additionnent. Espace-les de deux heures, ou n'en garde qu'un."}]},
+  {nom:'ZMA',dose:'1 à 2',unite:'gélule(s)',momentsRecommandes:['coucher'],preuve:'C',
+   note:"Un mélange de zinc, magnésium et vitamine B6 : rien de plus que ses composants pris séparément.",
+   interactions:[
+     {avec:'Multivitamines',message:"ZMA et multivitamines au même moment : le zinc s'additionne. Espace-les de deux heures."}]},
+  {nom:'Multivitamines',dose:'1',unite:'comprimé(s)',momentsRecommandes:['matin'],preuve:'C',
+   note:"Un filet de sécurité quand l'alimentation tourne en rond, pas un remplacement des légumes.",
+   interactions:[]},
+  {nom:'Glutamine',dose:'5',unite:'g',momentsRecommandes:['coucher','apres-entrainement'],preuve:'C',
+   note:"Chez le sportif qui mange assez, les données ne montrent pas grand-chose.",
+   interactions:[]},
+  {nom:'Bêta-alanine',dose:'3 à 6',unite:'g',momentsRecommandes:[],preuve:'B',
+   note:"Elle s'accumule sur plusieurs semaines : l'horaire est indifférent, la régularité non. Des picotements sur la peau sont fréquents et passent en fractionnant les prises.",
+   interactions:[]},
+  {nom:'Citrulline malate',dose:'6 à 8',unite:'g',momentsRecommandes:['avant-entrainement'],preuve:'B',
+   note:"40 à 60 minutes avant la séance, à distance d'un gros repas.",
+   interactions:[]},
+  {nom:'Ashwagandha',dose:'300 à 600',unite:'mg',momentsRecommandes:['soir','coucher'],preuve:'C',
+   note:"Plante dite adaptogène : les données restent minces en contexte sportif.",
+   interactions:[]},
+  {nom:'Collagène',dose:'10 à 15',unite:'g',momentsRecommandes:['avant-entrainement'],preuve:'C',
+   note:"Souvent associé à la vitamine C, une heure avant une séance qui charge les tendons.",
+   interactions:[]},
+  {nom:'Probiotiques',dose:'1',unite:'gélule(s)',momentsRecommandes:['jeun','matin'],preuve:'C',
+   note:"Les souches et les quantités changent énormément d'un produit à l'autre : rien de général à en dire.",
+   interactions:[]},
+]);
+
+// Ce que valent A, B et C, en une phrase et sans jargon. Affiché en permanence
+// sous le tableau, sans bouton de fermeture.
+const SUPP_LEGENDE_PREUVE=Object.freeze([
+  ['A',"Beaucoup d'études sérieuses vont dans le même sens."],
+  ['B',"Des résultats encourageants, mais moins d'études."],
+  ['C',"Peu de données, ou des résultats qui se contredisent."],
+]);
+const SUPP_LEGENDE_PIED="Ce classement parle de la solidité des preuves, pas de ce qui te serait utile à toi. C'est une conversation à avoir avec ton coach.";
+// La même légende côté coach, sans le tutoiement de l'athlète : lui lire
+// « parles-en avec ton coach » dans son propre écran n'avait aucun sens.
+const SUPP_LEGENDE_PIED_COACH="Ce classement parle de la solidité des preuves, pas de ce qui est utile à cet athlète. C'est ton appréciation qui tranche.";
+const SUPP_PREUVE_COULEUR=Object.freeze({A:'#22c55e',B:'#f59e0b',C:'#94a3b8'});
+
+// Rapprochement d'un nom saisi et d'une fiche. On coupe au premier « / » ou
+// « ( » avant de comparer : « Whey » retrouve « Whey / Protéine en poudre », et
+// l'entrée « Oméga-3 (EPA/DHA) » créée par _manageCycleSupplements retrouve la
+// fiche « Oméga-3 ». Les quinze formes réduites sont distinctes — un test le
+// vérifie, sans quoi deux fiches se marcheraient dessus.
+function _suppNorm(s){
+  return String(s||'').split('/')[0].split('(')[0]
+    .normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+}
+function _suppFiche(nom){
+  if(!nom) return null;
+  const exact=SUPPLEMENTS_LIST.find(f=>f.nom===nom);
+  if(exact) return exact;
+  const n=_suppNorm(nom);
+  if(!n) return null;
+  return SUPPLEMENTS_LIST.find(f=>_suppNorm(f.nom)===n)||null;
+}
+function _suppPastille(preuve){
+  const c=SUPP_PREUVE_COULEUR[preuve];
+  if(!c) return '';
+  return `<span title="Niveau de preuve ${preuve}" style="flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:5px;background:${c}1f;border:1px solid ${c}66;color:${c};font-size:10px;font-weight:800;line-height:1">${preuve}</span>`;
+}
+
+// Moment de prise éloigné de celui de la fiche : on le DIT, on ne bloque rien.
+// Une fiche sans moment recommandé (créatine, bêta-alanine) ne produit jamais
+// cette ligne : l'horaire y est indifférent.
+function _suppEcartMoment(s){
+  const f=_suppFiche(s&&s.name);
+  if(!f||!f.momentsRecommandes.length) return '';
+  const pris=(s.timings||[]).filter(id=>TIMINGS_LIST.some(t=>t.id===id));
+  if(!pris.length) return '';
+  if(pris.some(id=>f.momentsRecommandes.includes(id))) return '';
+  const lib=id=>{const t=TIMINGS_LIST.find(x=>x.id===id);return t?t.label.toLowerCase():id;};
+  return 'Placé '+pris.map(lib).join(', ')+'. Le plus souvent, c\'est plutôt '
+    +f.momentsRecommandes.map(lib).join(' ou ')+'.';
+}
+
+// Deux produits en interaction connue QUI PARTAGENT un moment. Sur des moments
+// différents, rien : c'est justement la solution qu'on suggère.
+function _suppInteractions(list){
+  const out=[];
+  const actifs=(list||[]).filter(s=>s&&s.active!==false);
+  for(let i=0;i<actifs.length;i++){
+    for(let j=i+1;j<actifs.length;j++){
+      const a=actifs[i],b=actifs[j];
+      const communs=(a.timings||[]).filter(t=>(b.timings||[]).includes(t));
+      if(!communs.length) continue;
+      const fa=_suppFiche(a.name),fb=_suppFiche(b.name);
+      if(!fa||!fb||fa===fb) continue;
+      // Le message est déclaré d'UN seul côté de la paire : on regarde les deux.
+      const m=(fa.interactions.find(x=>_suppNorm(x.avec)===_suppNorm(fb.nom))
+            ||fb.interactions.find(x=>_suppNorm(x.avec)===_suppNorm(fa.nom))||{}).message;
+      if(m&&out.indexOf(m)<0) out.push(m);
+    }
+  }
+  return out;
+}
+function _htmlSuppInteractions(list){
+  const l=_suppInteractions(list);
+  if(!l.length) return '';
+  return `<div style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.25);border-radius:10px;padding:10px 12px;margin-bottom:12px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:#f59e0b;text-transform:uppercase;margin-bottom:6px">Au même moment</div>
+    ${l.map(m=>`<div style="font-size:11.5px;color:#ddd;line-height:1.6;margin-bottom:4px">· ${escapeHtml(m)}</div>`).join('')}
+  </div>`;
+}
+function _htmlSuppLegende(isCoach){
+  return `<div style="border-top:1px solid var(--border);margin-top:6px;padding-top:11px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Niveau de preuve</div>
+    ${SUPP_LEGENDE_PREUVE.map(([k,t])=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      ${_suppPastille(k)}<span style="font-size:11.5px;color:#ccc;line-height:1.5">${escapeHtml(t)}</span></div>`).join('')}
+    <div style="font-size:11px;color:var(--text-dim);line-height:1.6;margin-top:8px">${escapeHtml(isCoach?SUPP_LEGENDE_PIED_COACH:SUPP_LEGENDE_PIED)}</div>
+  </div>`;
+}
 
 const TIMINGS_LIST=[
   {id:'matin',          label:'Matin'},
@@ -17409,11 +17558,24 @@ function _renderSuppTable(list, isCoach, editFn){
     const realIdx=list.indexOf(s);
     const inactive=s.active===false;
     const others=(s.timings||[]).length-1;
+    // Fiche de référence, quand le nom saisi en retrouve une. Un complément
+    // maison, tapé à la main, s'affiche exactement comme avant.
+    const fiche=_suppFiche(s.name);
+    const ecart=_suppEcartMoment(s);
     return `<div onclick="${editFn}(${realIdx})" style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;border-radius:9px;background:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,0));border:1px solid rgba(255,255,255,.045);margin-bottom:5px;transition:.15s${inactive?';opacity:.42':''}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="width:3px;align-self:stretch;border-radius:3px;background:${color};box-shadow:0 0 7px ${color}99;flex-shrink:0"></div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:700;color:${inactive?'var(--text-dim)':'#fff'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s.name)}${inactive?'<span style="font-size:var(--fs-xs);color:var(--text-dim);margin-left:6px;font-weight:600">désactivé</span>':''}</div>
+        <div style="display:flex;align-items:center;gap:6px;min-width:0">
+          <span style="font-size:13px;font-weight:700;color:${inactive?'var(--text-dim)':'#fff'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s.name)}${inactive?'<span style="font-size:var(--fs-xs);color:var(--text-dim);margin-left:6px;font-weight:600">désactivé</span>':''}</span>
+          ${fiche?_suppPastille(fiche.preuve):''}
+        </div>
+        ${fiche?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px;letter-spacing:.3px">Couramment ${escapeHtml(fiche.dose)} ${escapeHtml(fiche.unite)}</div>`:''}
+        ${fiche?`<details onclick="event.stopPropagation()" style="margin-top:3px">
+          <summary style="font-size:var(--fs-xs);color:var(--sub);font-weight:700;letter-spacing:.5px;cursor:pointer;list-style:none">à savoir ▾</summary>
+          <div style="font-size:11.5px;color:#ccc;line-height:1.6;margin-top:4px;white-space:normal">${escapeHtml(fiche.note)}</div>
+        </details>`:''}
         ${s.notes?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s.notes)}</div>`:''}
+        ${ecart?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:3px;line-height:1.5;white-space:normal">${escapeHtml(ecart)}</div>`:''}
         ${others>0?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px;letter-spacing:.5px">aussi ${others} autre${others>1?'s':''} moment${others>1?'s':''}</div>`:''}
       </div>
       <div style="flex-shrink:0;text-align:right">
@@ -17423,7 +17585,7 @@ function _renderSuppTable(list, isCoach, editFn){
     </div>`;
   };
 
-  return groups.map(g=>{
+  return _htmlSuppInteractions(list)+groups.map(g=>{
     const meta=SUPP_TIMING_META[g.t.id]||{color:'#666',svg:''};
     const c=meta.color;
     return `<div style="margin-bottom:13px">
@@ -17434,7 +17596,7 @@ function _renderSuppTable(list, isCoach, editFn){
       </div>
       <div style="padding-top:6px">${g.items.map(s=>row(s,c)).join('')}</div>
     </div>`;
-  }).join('');
+  }).join('')+_htmlSuppLegende(isCoach);
 }
 
 let _suppReturnToNutrition=false;
@@ -17503,7 +17665,7 @@ function openSuppEdit(idx){
   document.getElementById('supp-caff-warning').style.display='none';
   // Remplir la datalist
   const dl=document.getElementById('supp-name-list');
-  if(dl) dl.innerHTML=SUPPLEMENTS_LIST.map(n=>`<option value="${escapeHtml(n)}">`).join('');
+  if(dl) dl.innerHTML=SUPPLEMENTS_LIST.map(f=>`<option value="${escapeHtml(f.nom)}">`).join('');
   // Grille timings
   const selected=s?s.timings||[]:[];
   const grid=document.getElementById('supp-timings-grid');
@@ -17587,7 +17749,7 @@ function renderCoachSuppSection(c){
           <div>
             <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px">Nom</div>
             <input id="ccd-supp-name" list="ccd-supp-name-list" class="form-input" style="padding:8px 10px;font-size:12px" placeholder="Créatine…" autocomplete="off">
-            <datalist id="ccd-supp-name-list">${SUPPLEMENTS_LIST.map(n=>`<option value="${escapeHtml(n)}">`).join('')}</datalist>
+            <datalist id="ccd-supp-name-list">${SUPPLEMENTS_LIST.map(f=>`<option value="${escapeHtml(f.nom)}">`).join('')}</datalist>
           </div>
           <div>
             <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:4px">Qté</div>
@@ -30669,6 +30831,336 @@ function testExercices(){
       if(sauveSnap) localStorage.setItem('rc_wo_state',sauveSnap);
       currentUser=sauveU; woState=sauveW;
     })();
+
+    // ══ FICHES DE COMPLÉMENTS ═════════════════════════════════════════════
+    (()=>{
+      // Les quinze noms de la liste d'AVANT, recopiés ici en dur. C'est le
+      // point qui casse des données réelles : un dossier stocke le nom saisi,
+      // pas un identifiant. Si quelqu'un « corrige » un accent dans la liste,
+      // ce test tombe avant que l'athlète ne perde sa fiche.
+      const NOMS_HISTORIQUES=['Créatine monohydrate','Whey / Protéine en poudre','BCAA','EAA',
+        'Oméga-3','Vitamine D3','Magnésium','ZMA','Multivitamines',
+        'Glutamine','Bêta-alanine','Citrulline malate','Ashwagandha',
+        'Collagène','Probiotiques'];
+      ok('Critère : les 15 noms sont identiques au caractère près',(()=>{
+        const a=SUPPLEMENTS_LIST.map(f=>f.nom);
+        if(a.length!==15) return _echec(a.length+' entrées au lieu de 15');
+        for(let i=0;i<15;i++)
+          if(a[i]!==NOMS_HISTORIQUES[i])
+            return _echec('rang '+i+' : «'+a[i]+'» au lieu de «'+NOMS_HISTORIQUES[i]+'»');
+        return true;})());
+      ok('La liste est bien figée',(()=>{
+        if(!Object.isFrozen(SUPPLEMENTS_LIST)) return _echec('tableau non figé');
+        try{ SUPPLEMENTS_LIST.push({nom:'X'}); }catch(e){}
+        return SUPPLEMENTS_LIST.length===15;})());
+      ok('Critère : chaque entrée porte un niveau de preuve A, B ou C',(()=>{
+        const faux=SUPPLEMENTS_LIST.filter(f=>['A','B','C'].indexOf(f.preuve)<0);
+        return faux.length?_echec(faux.map(f=>f.nom+':'+f.preuve).join(', ')):true;})());
+      ok('Chaque entrée porte une dose, une unité et une note',(()=>{
+        const faux=SUPPLEMENTS_LIST.filter(f=>!f.dose||!f.unite||!f.note
+          ||!Array.isArray(f.momentsRecommandes)||!Array.isArray(f.interactions));
+        return faux.length?_echec(faux.map(f=>f.nom).join(', ')):true;})());
+      ok('Seule la créatine est classée A',(()=>{
+        const a=SUPPLEMENTS_LIST.filter(f=>f.preuve==='A').map(f=>f.nom);
+        return a.length===1&&a[0]==='Créatine monohydrate'?true:_echec(a.join(', '));})());
+      ok('La caféine n\'est pas dupliquée ici : elle a son écran',
+        !SUPPLEMENTS_LIST.some(f=>/caf[eé]/i.test(f.nom)));
+      ok('Tous les moments recommandés existent dans TIMINGS_LIST',(()=>{
+        const inconnus=[];
+        SUPPLEMENTS_LIST.forEach(f=>f.momentsRecommandes.forEach(id=>{
+          if(!TIMINGS_LIST.some(t=>t.id===id)) inconnus.push(f.nom+':'+id);}));
+        return inconnus.length?_echec(inconnus.join(', ')):true;})());
+      ok('Toute interaction déclarée désigne une fiche existante',(()=>{
+        const inconnus=[];
+        SUPPLEMENTS_LIST.forEach(f=>f.interactions.forEach(x=>{
+          if(!SUPPLEMENTS_LIST.some(g=>g.nom===x.avec)) inconnus.push(f.nom+'→'+x.avec);
+          if(!x.message) inconnus.push(f.nom+'→'+x.avec+' sans message');}));
+        return inconnus.length?_echec(inconnus.join(', ')):true;})());
+
+      // ── Retrouver sa fiche ────────────────────────────────────────────────
+      ok('Critère : un dossier avec « Créatine monohydrate » retrouve sa fiche',(()=>{
+        const f=_suppFiche('Créatine monohydrate');
+        return f&&f.preuve==='A'?true:_echec(f?'preuve '+f.preuve:'fiche introuvable');})());
+      ok('Les quinze noms exacts retrouvent tous leur fiche',(()=>{
+        const perdus=NOMS_HISTORIQUES.filter(n=>_suppFiche(n)===null);
+        return perdus.length?_echec(perdus.join(', ')):true;})());
+      ok('Les quinze formes réduites sont distinctes',(()=>{
+        // Sans quoi deux fiches se répondraient pour un même nom saisi.
+        const v=SUPPLEMENTS_LIST.map(f=>_suppNorm(f.nom));
+        const dbl=v.filter((x,i)=>v.indexOf(x)!==i);
+        return dbl.length?_echec('doublons : '+dbl.join(', ')):v.length===15;})());
+      ok('« Whey » seul retrouve la fiche de la whey',(()=>{
+        const f=_suppFiche('Whey');
+        return f&&f.nom==='Whey / Protéine en poudre'?true:_echec(f?f.nom:'introuvable');})());
+      ok('L\'entrée « Oméga-3 (EPA/DHA) » du cycle retrouve la fiche Oméga-3',(()=>{
+        // C'est le nom que _manageCycleSupplements écrit : il n'est pas dans la
+        // liste au caractère près, et il doit quand même trouver sa fiche.
+        const f=_suppFiche('Oméga-3 (EPA/DHA)');
+        return f&&f.nom==='Oméga-3'?true:_echec(f?f.nom:'introuvable');})());
+      ok('Un complément maison n\'a pas de fiche, et ne casse rien',(()=>{
+        if(_suppFiche('Mon mélange perso')!==null) return _echec('fiche inventée');
+        const h=_renderSuppTable([{name:'Mon mélange perso',dosage_quantity:1,
+          dosage_unit:'g',timings:['matin'],active:true}],false,'openSuppEdit');
+        return h.indexOf('Mon mélange perso')>=0&&h.indexOf('Couramment')<0;})());
+      ok('_suppFiche tolère un nom vide ou absent',
+        _suppFiche('')===null&&_suppFiche(null)===null&&_suppFiche(undefined)===null);
+
+      // ── L'écart de moment : on le dit, on ne bloque pas ───────────────────
+      ok('Critère : un moment éloigné du moment recommandé produit une ligne',(()=>{
+        const l=_suppEcartMoment({name:'Citrulline malate',timings:['coucher']});
+        if(!l) return _echec('aucune ligne');
+        return /coucher/.test(l)&&/avant entra/i.test(l.normalize('NFD').replace(/[̀-ͯ]/g,''));})());
+      ok('Critère : au bon moment, aucune ligne',
+        _suppEcartMoment({name:'Citrulline malate',timings:['avant-entrainement']})==='');
+      ok('Un seul moment juste sur plusieurs suffit à ne rien dire',
+        _suppEcartMoment({name:'Whey / Protéine en poudre',
+          timings:['coucher','apres-entrainement']})==='');
+      ok('Moment indifférent : jamais de ligne d\'écart',(()=>{
+        // Créatine et bêta-alanine n'ont pas de moment recommandé : les placer
+        // au coucher n'a rien d'anormal, et l'app ne doit pas le commenter.
+        const a=_suppEcartMoment({name:'Créatine monohydrate',timings:['coucher']});
+        const b=_suppEcartMoment({name:'Bêta-alanine',timings:['jeun']});
+        return a===''&&b===''?true:_echec('«'+a+'» / «'+b+'»');})());
+      ok('Sans fiche et sans moment, aucune ligne d\'écart',
+        _suppEcartMoment({name:'Truc maison',timings:['coucher']})===''
+        &&_suppEcartMoment({name:'Citrulline malate',timings:[]})==='');
+      ok('L\'écart n\'empêche rien : la ligne reste cliquable et modifiable',(()=>{
+        const h=_renderSuppTable([{name:'Citrulline malate',dosage_quantity:6,
+          dosage_unit:'g',timings:['coucher'],active:true}],false,'openSuppEdit');
+        // Aucun blocage : le onclick d'édition est toujours là, et rien
+        // n'annonce un refus.
+        return h.indexOf('openSuppEdit(0)')>=0&&h.indexOf('disabled')<0
+          &&h.indexOf('Le plus souvent')>=0;})());
+
+      // ── Interactions ──────────────────────────────────────────────────────
+      const _s=(nom,t)=>({name:nom,dosage_quantity:1,dosage_unit:'g',timings:t,active:true});
+      ok('Critère : deux produits en interaction au même moment → une ligne',(()=>{
+        const l=_suppInteractions([_s('Magnésium',['coucher']),_s('ZMA',['coucher'])]);
+        if(l.length!==1) return _echec(l.length+' ligne(s)');
+        return /magn/i.test(l[0])&&/ZMA/.test(l[0]);})());
+      ok('Critère : sur des moments différents, aucune ligne',
+        _suppInteractions([_s('Magnésium',['soir']),_s('ZMA',['coucher'])]).length===0);
+      ok('Le message se trouve quel que soit le côté déclaré',(()=>{
+        // Le message ZMA↔magnésium est déclaré sur la fiche du magnésium. Peu
+        // importe l'ordre dans lequel l'athlète les a saisis.
+        const a=_suppInteractions([_s('Magnésium',['coucher']),_s('ZMA',['coucher'])]);
+        const b=_suppInteractions([_s('ZMA',['coucher']),_s('Magnésium',['coucher'])]);
+        return a.length===1&&b.length===1&&a[0]===b[0];})());
+      ok('BCAA et EAA au même moment sont signalés',(()=>{
+        const l=_suppInteractions([_s('BCAA',['intra']),_s('EAA',['intra'])]);
+        return l.length===1?true:_echec(l.length+' ligne(s)');})());
+      ok('Un moment commun sur plusieurs suffit',
+        _suppInteractions([_s('Magnésium',['soir','coucher']),_s('ZMA',['coucher'])]).length===1);
+      ok('Deux produits sans interaction connue ne disent rien',
+        _suppInteractions([_s('Créatine monohydrate',['matin']),
+          _s('Collagène',['matin'])]).length===0);
+      ok('Un produit ne s\'oppose pas à lui-même',(()=>{
+        // Deux lignes « Magnésium » : c'est la même fiche, pas une interaction.
+        // La garde fa===fb du code est une ceinture : avec les données
+        // actuelles elle ne change rien, puisque aucune fiche ne se déclare
+        // en interaction avec elle-même. C'est CET invariant qu'on éprouve
+        // juste en dessous — retirer la garde seule ne casse rien, et le dire
+        // vaut mieux que de compter une variante qui ne prouve rien.
+        const l=_suppInteractions([_s('Magnésium',['coucher']),_s('Magnésium',['coucher'])]);
+        return l.length===0?true:_echec(l.join(' | '));})());
+      ok('Aucune fiche ne se déclare en interaction avec elle-même',(()=>{
+        const fautives=SUPPLEMENTS_LIST.filter(f=>
+          f.interactions.some(x=>_suppNorm(x.avec)===_suppNorm(f.nom)));
+        return fautives.length?_echec(fautives.map(f=>f.nom).join(', ')):true;})());
+      ok('Deux noms qui pointent la même fiche ne s\'opposent pas',(()=>{
+        // « Whey » et « Whey / Protéine en poudre » désignent la même fiche.
+        const l=_suppInteractions([_s('Whey',['matin']),
+          _s('Whey / Protéine en poudre',['matin'])]);
+        return l.length===0?true:_echec(l.join(' | '));})());
+      ok('Un complément désactivé ne déclenche pas d\'interaction',(()=>{
+        const zma=_s('ZMA',['coucher']); zma.active=false;
+        return _suppInteractions([_s('Magnésium',['coucher']),zma]).length===0;})());
+      ok('Le même message n\'est pas répété deux fois',(()=>{
+        // Deux entrées ZMA et un magnésium : une seule ligne, pas deux.
+        const l=_suppInteractions([_s('Magnésium',['coucher']),
+          _s('ZMA',['coucher']),_s('ZMA',['coucher'])]);
+        return l.length===1?true:_echec(l.length+' lignes');})());
+      ok('La ligne d\'interaction apparaît dans le tableau rendu',(()=>{
+        const h=_renderSuppTable([_s('Magnésium',['coucher']),_s('ZMA',['coucher'])],
+          false,'openSuppEdit');
+        return h.indexOf('Au même moment')>=0&&/deux heures/.test(h);})());
+      ok('_suppInteractions ne modifie pas la liste qu\'on lui passe',(()=>{
+        const l=[_s('Magnésium',['coucher']),_s('ZMA',['coucher'])];
+        const avant=JSON.stringify(l);
+        _suppInteractions(l);
+        return JSON.stringify(l)===avant;})());
+
+      // ── L'affichage ───────────────────────────────────────────────────────
+      ok('La pastille de preuve est à côté du nom',(()=>{
+        const h=_renderSuppTable([_s('Créatine monohydrate',['matin'])],false,'openSuppEdit');
+        const iNom=h.indexOf('Créatine monohydrate');
+        const iPast=h.indexOf('Niveau de preuve A');
+        const iDose=h.indexOf('Couramment');
+        // Entre le nom et la ligne de dose : donc dans le bloc du nom, et pas
+        // seulement quelque part plus bas dans la légende.
+        return iNom>=0&&iPast>iNom&&iPast<iDose
+          ?true:_echec('nom '+iNom+' pastille '+iPast+' dose '+iDose);})());
+      ok('La dose est sous le nom',(()=>{
+        const h=_renderSuppTable([_s('Créatine monohydrate',['matin'])],false,'openSuppEdit');
+        return h.indexOf('Couramment 3 à 5 g')>=0;})());
+      ok('La note n\'est visible qu\'au dépli',(()=>{
+        const d=document.createElement('div');
+        d.innerHTML=_renderSuppTable([_s('Créatine monohydrate',['matin'])],false,'openSuppEdit');
+        const det=d.querySelector('details');
+        if(!det) return _echec('aucun dépli');
+        if(det.open) return _echec('déplié par défaut');
+        const note=SUPPLEMENTS_LIST.find(f=>f.nom==='Créatine monohydrate').note;
+        const bout=note.slice(0,25);
+        if(det.textContent.indexOf(bout)<0) return _echec('la note n\'est pas dans le dépli');
+        // Et nulle part AILLEURS : une note affichée en clair EN PLUS du dépli
+        // passait mon premier test, qui ne regardait que l'intérieur du dépli.
+        det.remove();
+        return d.textContent.indexOf(bout)<0
+          ?true:_echec('la note est aussi affichée hors du dépli');})());
+      ok('Le dépli n\'ouvre pas la fiche d\'édition',(()=>{
+        // Le clic sur « à savoir » est arrêté avant d'atteindre la ligne, sinon
+        // consulter la note ouvrirait le formulaire de modification.
+        const d=document.createElement('div');
+        d.innerHTML=_renderSuppTable([_s('Créatine monohydrate',['matin'])],false,'openSuppEdit');
+        const det=d.querySelector('details');
+        return !!(det&&/stopPropagation/.test(det.getAttribute('onclick')||''));})());
+      ok('Critère : la légende dit ce que valent A, B et C',(()=>{
+        const h=_htmlSuppLegende();
+        // escapeHtml transforme les apostrophes en &#39; : on compare la forme
+        // ÉCHAPPÉE, sinon le test tombe sur un faux négatif.
+        const manque=SUPP_LEGENDE_PREUVE.filter(([k,t])=>h.indexOf(escapeHtml(t))<0);
+        if(manque.length) return _echec('phrases absentes : '+manque.map(x=>x[0]).join(', '));
+        return SUPP_LEGENDE_PREUVE.length===3;})());
+      ok('La légende n\'est pas masquable',(()=>{
+        const h=_htmlSuppLegende();
+        return h.indexOf('<button')<0&&h.indexOf('onclick')<0&&h.indexOf('display:none')<0;})());
+      ok('La légende est présente sous le tableau, athlète comme coach',(()=>{
+        const l=[_s('Créatine monohydrate',['matin'])];
+        const a=_renderSuppTable(l,false,'openSuppEdit');
+        const c=_renderSuppTable(l,true,'openCoachSuppEdit');
+        const cle=escapeHtml(SUPP_LEGENDE_PREUVE[0][1]);
+        if(a.indexOf(cle)<0) return _echec('absente côté athlète');
+        if(c.indexOf(cle)<0) return _echec('absente côté coach');
+        // Sous le tableau, pas au-dessus.
+        return a.indexOf(cle)>a.indexOf('Créatine monohydrate');})());
+      ok('La légende rappelle que ça ne dit pas ce qui est utile à l\'athlète',
+        /coach/.test(SUPP_LEGENDE_PIED)&&/pas de ce qui/.test(SUPP_LEGENDE_PIED));
+      ok('Le pied de la légende suit la surface',(()=>{
+        // Vu sur la capture : le coach lisait « parles-en avec ton coach »
+        // dans son propre écran. Les deux pieds disent la même chose, à la
+        // bonne personne.
+        const a=_htmlSuppLegende(false), c=_htmlSuppLegende(true);
+        if(a.indexOf(escapeHtml(SUPP_LEGENDE_PIED))<0) return _echec('pied athlète absent');
+        if(c.indexOf(escapeHtml(SUPP_LEGENDE_PIED_COACH))<0) return _echec('pied coach absent');
+        if(/ton coach/.test(SUPP_LEGENDE_PIED_COACH)) return _echec('le coach est tutoyé comme un athlète');
+        // Et il descend bien jusqu'au tableau rendu, pas seulement à la fonction.
+        const t=_renderSuppTable([_s('Créatine monohydrate',['matin'])],true,'openCoachSuppEdit');
+        return t.indexOf(escapeHtml(SUPP_LEGENDE_PIED_COACH))>=0
+          ?true:_echec('le tableau coach garde le pied athlète');})());
+
+      // ── Le registre : pratique sportive, jamais médical ───────────────────
+      ok('Critère : aucune indication thérapeutique dans les textes',(()=>{
+        const INTERDITS=['guerit','guerir','traite','traiter','traitement','soigne','soigner',
+          'maladie','pathologie','symptome','diagnostic','ordonnance','prescription',
+          'posologie','remede','therapeutique','carence','deficit','deficience',
+          'inflammatoire','indication','effet secondaire','cure','trouble','guerison'];
+        const textes=[];
+        SUPPLEMENTS_LIST.forEach(f=>{
+          textes.push(f.nom,String(f.dose),f.unite,f.note);
+          f.interactions.forEach(x=>textes.push(x.message));});
+        SUPP_LEGENDE_PREUVE.forEach(([k,t])=>textes.push(t));
+        textes.push(SUPP_LEGENDE_PIED,SUPP_LEGENDE_PIED_COACH);
+        const trouves=[];
+        textes.forEach(t=>{
+          const n=String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+          INTERDITS.forEach(m=>{
+            if(new RegExp('\\b'+m.replace(/ /g,'\\s+')+'\\b').test(n)&&trouves.indexOf(m)<0)
+              trouves.push(m+' → «'+String(t).slice(0,45)+'»');});});
+        return trouves.length?_echec(trouves.join(' | ')):true;})());
+      ok('Aucune dose n\'est présentée comme une prescription',(()=>{
+        // « Couramment », pas « prends », pas « tu dois ».
+        const h=_renderSuppTable([_s('Créatine monohydrate',['matin'])],false,'openSuppEdit');
+        const n=h.toLowerCase();
+        const injonctions=['tu dois','il faut','prescrit','obligatoire','recommand'];
+        const t=injonctions.filter(m=>n.indexOf(m)>=0);
+        return t.length?_echec(t.join(', ')):n.indexOf('couramment')>=0;})());
+
+      // ── Non-régression : le cycle ─────────────────────────────────────────
+      // _manageCycleSupplements n'est pas touchée par ce lot. Ces trois tests
+      // sont là pour le PROUVER, pas pour décrire un comportement nouveau.
+      const _sauveU=currentUser, _sauveSave=window.saveUser;
+      try{
+        window.saveUser=()=>true;   // rien n'est écrit pendant les tests
+        const _luteale=()=>{
+          const j=new Date(Date.now()-25*864e5);
+          return {enabled:true,lastPeriodDate:localISODate(j),cycleLength:28};};
+        const _femme=supps=>({id:'_tc',email:'tc@t',gender:'Femme',exMuscles:{},exAlias:{},
+          sessions:[],nutrition:{cycleAdaptation:_luteale(),supplements:supps||[]}});
+        ok('Non-régression : les oméga-3 sont ajoutés en lutéale tardive',(()=>{
+          currentUser=_femme([]);
+          if(_getCyclePhaseNut(localISODate(new Date()))!=='luteal_late')
+            return _echec('le jeu d\'essai n\'est pas en lutéale tardive');
+          _manageCycleSupplements();
+          const l=currentUser.nutrition.supplements;
+          const auto=l.filter(s=>s._cycleManaged);
+          if(auto.length!==1) return _echec(auto.length+' entrée(s) auto');
+          return auto[0].name==='Oméga-3 (EPA/DHA)'&&auto[0].active===true
+            ?true:_echec(auto[0].name+' actif='+auto[0].active);})());
+        ok('Non-régression : pas de doublon quand l\'athlète a déjà des oméga-3',(()=>{
+          currentUser=_femme([{id:1,name:'Oméga-3',dosage_quantity:2,dosage_unit:'g',
+            timings:['midi'],active:true}]);
+          _manageCycleSupplements();
+          const l=currentUser.nutrition.supplements;
+          if(l.length!==1) return _echec(l.length+' entrées au lieu d\'une');
+          return !l.some(s=>s._cycleManaged);})());
+        ok('Non-régression : appelée deux fois, elle n\'ajoute qu\'une entrée',(()=>{
+          currentUser=_femme([]);
+          _manageCycleSupplements(); _manageCycleSupplements(); _manageCycleSupplements();
+          const auto=currentUser.nutrition.supplements.filter(s=>s._cycleManaged);
+          return auto.length===1?true:_echec(auto.length+' entrées auto');})());
+        ok('Non-régression : hors lutéale, l\'entrée auto est désactivée',(()=>{
+          currentUser=_femme([]);
+          _manageCycleSupplements();
+          currentUser.nutrition.cycleAdaptation.lastPeriodDate=
+            localISODate(new Date(Date.now()-10*864e5));
+          _manageCycleSupplements();
+          const auto=currentUser.nutrition.supplements.find(s=>s._cycleManaged);
+          return auto&&auto.active===false?true:_echec(auto?'actif':'entrée disparue');})());
+        ok('Non-régression : l\'entrée auto du cycle s\'affiche avec sa fiche',(()=>{
+          // Elle porte « Oméga-3 (EPA/DHA) » : elle doit récupérer la pastille B.
+          currentUser=_femme([]);
+          _manageCycleSupplements();
+          const h=_renderSuppTable(currentUser.nutrition.supplements,false,'openSuppEdit');
+          return h.indexOf('Niveau de preuve B')>=0
+            ?true:_echec('pastille absente pour l\'entrée du cycle');})());
+      } finally { currentUser=_sauveU; window.saveUser=_sauveSave; }
+
+      // ── Les deux listes déroulantes ───────────────────────────────────────
+      ok('Les deux datalists proposent les 15 noms',(()=>{
+        // On passe par le VRAI chemin : c'est l'app qui remplit les listes.
+        // Mon premier jet écrivait l'innerHTML lui-même — il ne pouvait donc
+        // pas voir un .map(n=>…) resté en place, il testait son propre code.
+        const sauveU=currentUser, sauveC=currentClientId;
+        try{
+          currentUser={id:'_tdl',email:'tdl@t',exMuscles:{},exAlias:{},sessions:[],nutrition:{}};
+          openSuppEdit(-1);
+          const dl=document.getElementById('supp-name-list');
+          if(!dl) return _echec('datalist athlète absente du DOM');
+          const va=Array.from(dl.querySelectorAll('option')).map(o=>o.value);
+          renderCoachSuppSection({id:'_tdlc',email:'tdlc@t',nutrition:{supplements:[]}});
+          const dc=document.getElementById('ccd-supp-name-list');
+          if(!dc) return _echec('datalist coach absente du DOM');
+          const vc=Array.from(dc.querySelectorAll('option')).map(o=>o.value);
+          if(va.length!==15) return _echec('athlète : '+va.length+' options');
+          if(vc.length!==15) return _echec('coach : '+vc.length+' options');
+          // [object Object] : exactement ce que produirait un .map(n=>…) laissé
+          // en place après le passage aux objets.
+          const sale=va.concat(vc).filter(x=>/object/i.test(x));
+          if(sale.length) return _echec('valeurs non lisibles : '+sale[0]);
+          return va[0]==='Créatine monohydrate'&&vc[0]==='Créatine monohydrate';
+        } finally { currentUser=sauveU; currentClientId=sauveC; }})());
+    })();
+
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
