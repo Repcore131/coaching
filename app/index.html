@@ -15812,7 +15812,9 @@ function renderVolume(){
         ${escapeHtml(TEXTE_CONVENTION_TECHNIQUE)}
         <div style="margin-top:5px">${_techniquesPratiquees(u).map(f=>escapeHtml(LIB_FAMILLE[f]||f)+' : '+_fmtPoidsTech(poidsTechnique(f,u))+(poidsTechniqueSurcharge(f,u)!=null?' (ajusté)':'')).join(' · ')}</div>
       </div>` : '';
-  document.getElementById('progress-content').innerHTML=nav+alertes+corps+zero+conv+bandeau;
+  // Charge axiale : sous les muscles, comme demandé, et sans repère absolu.
+  const axial=_htmlChargeAxiale(u,_volDecalage,null,{});
+  document.getElementById('progress-content').innerHTML=nav+alertes+corps+zero+axial+conv+bandeau;
 }
 // Familles reellement pratiquees sur la fenetre affichee : on ne parle de
 // convention que si elle s'applique a quelque chose.
@@ -15837,6 +15839,159 @@ function _volNav(d){
   _volDecalage=n;
   renderVolume();
 }
+
+// ══════════════ CHARGE AXIALE HEBDOMADAIRE ══════════════
+// AUCUN repère absolu n'est inventé. REPERES_VOLUME exclut volontairement les
+// lombaires faute de consensus de terrain, et cet indicateur ne le contredit
+// pas : il ne compare l'athlète qu'à LUI-MÊME, en variation relative. Il ne
+// dit jamais « trop » ni « élevé », n'entre pas dans urgencyScore et ne
+// déclenche aucune notification. C'est une entrée en conversation, pas une
+// alerte.
+const AXIAL_ZONE='rachis-lombaire';
+const AXIAL_HAUSSE_SIGNAL=0.50;
+const AXIAL_NOTE_REPERE='Repère de terrain, pas une mesure — à regarder avec ton coach.';
+const AXIAL_INVITE_GRILLE='Charge lombaire : pas encore notée. Renseigne la colonne rachis lombaire de tes schémas pour la suivre.';
+
+// Charge lombaire d'un schéma moteur, de 0 à 3.
+// Une zone listée dans `hors` vaut 0 : le schéma A ÉTÉ jugé, il ne charge
+// simplement pas cette articulation. Une note ABSENTE n'est pas un zéro —
+// c'est « pas encore jugé », comme le dit déjà chargeSchema — et on rend null
+// pour que l'appelant puisse le compter au lieu de le confondre avec zéro.
+function chargeLombaireSchema(schema,grille){
+  if(!schema||!SCHEMAS_META[schema]) return null;
+  if((SCHEMAS_META[schema].hors||[]).indexOf(AXIAL_ZONE)>=0) return 0;
+  const g=grille||_grilleCharges();
+  const v=g&&g[schema]&&g[schema][AXIAL_ZONE];
+  return (typeof v==='number'&&isFinite(v)&&v>=CHARGE_MIN&&v<=CHARGE_MAX)?v:null;
+}
+
+// PURE. `grille` est explicite : _grilleCharges() lit currentUser, et sur la
+// fiche coach c'est bien la grille du COACH qui fait foi — mais autant que ce
+// soit un paramètre plutôt qu'un effet de bord.
+//
+// Le rôle musculaire n'entre PAS dans la pondération : une charge axiale n'a
+// pas de muscle primaire ou secondaire, POIDS_ROLE n'aurait rien à pondérer.
+// Restent l'intensité et la technique, comme pour le volume.
+function chargeAxialeSemaine(user,decalageSemaines,grille){
+  const res={points:0,nSeries:0,nExercicesSansSchema:0,nSeriesNonNotees:0,
+    exSansSchema:[],schemasNonNotes:[]};
+  const cle=_volCleDecalee(decalageSemaines||0);
+  const lundi=_lundiDeSemaine(cle);
+  if(!lundi||!user||!Array.isArray(user.sessions)) return res;
+  const debut=lundi.getTime(), fin=debut+7*86400000;
+  const g=grille||_grilleCharges();
+  const vusSans=new Set(), vusNon=new Set();
+  for(const sess of user.sessions){
+    if(!sess||!sess.data) continue;
+    const t=sess.date;
+    if(!(t>=debut&&t<fin)) continue;
+    for(const nom of Object.keys(sess.data)){
+      const d=sess.data[nom];
+      if(!d||!Array.isArray(d.sets)||!d.sets.length) continue;
+      // reps forcée en chaîne : isCardio y appelle .toLowerCase(), et une
+      // valeur numérique ferait tomber tout l'écran volume.
+      const ex={name:nom,reps:String((d.sets[0]&&d.sets[0].reps)||''),
+        methode:d.methode,technique:d.technique};
+      if(isCardio(ex)) continue;
+      let dures=0;
+      for(const s of d.sets){
+        if(!serieEligible(s,ex)) continue;
+        const pi=poidsIntensite(s);
+        if(!pi) continue;
+        dures+=pi*poidsTechnique(techniqueDe(ex),user);
+      }
+      if(!dures) continue;
+      const schema=schemaDe(ex,user);
+      if(!schema){ vusSans.add(nom); continue; }
+      const ch=chargeLombaireSchema(schema,g);
+      if(ch==null){ vusNon.add(schema); res.nSeriesNonNotees+=dures; continue; }
+      res.nSeries+=dures;
+      res.points+=dures*ch;
+    }
+  }
+  res.exSansSchema=[...vusSans];
+  res.schemasNonNotes=[...vusNon];
+  res.nExercicesSansSchema=vusSans.size;
+  const r1=x=>Math.round(x*10)/10;
+  res.points=r1(res.points); res.nSeries=r1(res.nSeries);
+  res.nSeriesNonNotees=r1(res.nSeriesNonNotees);
+  return res;
+}
+
+// Variation contre les VOL_DELTA_N dernières semaines ENTRAÎNÉES. Même
+// parcours que _volMoyennePrecedente : on saute les semaines vides, on
+// s'arrête après VOL_COUPURE vides consécutives, on rend null sous
+// VOL_DELTA_MIN semaines exploitables. Le calendrier n'est pas réimplémenté.
+function variationChargeAxiale(user,grille,decalageSemaines){
+  const dec=decalageSemaines||0;
+  const semaine=chargeAxialeSemaine(user,dec,grille);
+  const vals=[]; let vides=0;
+  for(let n=dec+1;n<=dec+26&&vals.length<VOL_DELTA_N;n++){
+    const c=_calculSemaine(user,_volCleDecalee(n));
+    if(!c.eligibles){ if(++vides>=VOL_COUPURE) break; continue; }
+    vides=0;
+    vals.push(chargeAxialeSemaine(user,n,grille).points);
+  }
+  if(vals.length<VOL_DELTA_MIN)
+    return {semaine,points:semaine.points,moyenne:null,variation:null,semaines:vals.length};
+  const moy=vals.reduce((a,b)=>a+b,0)/vals.length;
+  // Une moyenne nulle ne permet aucune variation relative : on ne divise pas
+  // par zéro pour annoncer une hausse infinie.
+  const v=moy>0?(semaine.points-moy)/moy:null;
+  return {semaine,points:semaine.points,moyenne:moy,variation:v,semaines:vals.length};
+}
+
+// Un athlète a-t-il une contrainte active sur le rachis lombaire ?
+function _axialContrainteLombaire(user){
+  try{ return contraintesActives(user).some(c=>c&&c.zone===AXIAL_ZONE); }
+  catch(e){ return false; }
+}
+// Remontée en haut de la fiche coach : drapeau rouge, ou contrainte déclarée
+// sur cette zone précise.
+function axialPrioritaire(user){
+  let drapeau=false;
+  try{ drapeau=!!drapeauRougeActif(user); }catch(e){}
+  return drapeau||_axialContrainteLombaire(user);
+}
+
+// Rendu commun aux deux écrans. Aucune couleur d'alerte : le gris du texte
+// secondaire, et rien d'autre.
+function _htmlChargeAxiale(user,decalageSemaines,grille,options){
+  const o=options||{};
+  const v=variationChargeAxiale(user,grille,decalageSemaines);
+  const s=v.semaine;
+  // Rien de la semaine : aucune phrase, pas même un zéro.
+  if(!s.nSeries&&!s.nSeriesNonNotees&&!s.nExercicesSansSchema) return '';
+  const lignes=[];
+  // Grille vide : le zéro serait faux, on dit ce qui manque.
+  if(!s.nSeries&&s.nSeriesNonNotees){
+    lignes.push(escapeHtml(AXIAL_INVITE_GRILLE));
+  } else {
+    const pct=v.variation!=null
+      ? ' · '+(v.variation>=0?'+':'−')+Math.round(Math.abs(v.variation)*100)
+        +' % contre '+(v.semaines>1?('tes '+v.semaines+' dernières semaines'):'ta semaine précédente')
+      : '';
+    lignes.push('Charge lombaire : '+_fmtAxial(s.points)+' point'+(s.points>=2?'s':'')+pct);
+  }
+  if(s.nExercicesSansSchema)
+    lignes.push(s.nExercicesSansSchema+' exercice'+(s.nExercicesSansSchema>1?'s':'')
+      +' non rattaché'+(s.nExercicesSansSchema>1?'s':'')+' à un schéma');
+  if(s.nSeries&&s.nSeriesNonNotees)
+    lignes.push(_fmtAxial(s.nSeriesNonNotees)+' série'+(s.nSeriesNonNotees>=2?'s':'')
+      +' sur des schémas dont la charge lombaire n\'est pas notée');
+  const signal=(v.variation!=null&&v.variation>=AXIAL_HAUSSE_SIGNAL)
+    ? '<div style="margin-top:5px">Ta charge lombaire augmente vite cette semaine. '
+      +escapeHtml(AXIAL_NOTE_REPERE)+'</div>'
+    : '';
+  const disclaimer=o.disclaimer
+    ? '<div style="margin-top:6px">'+escapeHtml(DISCLAIMER_SANTE)+'</div>' : '';
+  return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--sub);line-height:1.6">
+    ${lignes.map(t=>'<div>'+t+'</div>').join('')}
+    ${signal}
+    ${disclaimer}
+  </div>`;
+}
+function _fmtAxial(v){ return String(Math.round(v*10)/10).replace('.',','); }
 
 // ══════════════ VOLUME CÔTÉ COACH ══════════════
 // Les repères et la classification sont ceux de L'ATHLÈTE, pas ceux du coach :
@@ -15879,7 +16034,13 @@ function renderVolumeCoach(c){
     : (hors.length?hors.map(x=>ligne(x.m,x.n,x.rep)).join('')
        :`<div style="font-size:11px;color:var(--success);margin-bottom:6px">Tous les muscles travaillés sont dans leur zone.</div>`);
 
-  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:16px">
+  // Drapeau rouge levé, ou contrainte déclarée sur le rachis lombaire : la
+  // charge axiale passe EN TÊTE, avec le disclaimer santé. Sinon elle reste
+  // en bas de bloc, à sa place d'indicateur parmi d'autres.
+  const _axPrio=axialPrioritaire(c);
+  const _axial=_htmlChargeAxiale(c,0,null,{disclaimer:_axPrio});
+  z.innerHTML=(_axPrio?_axial:'')
+    +`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:16px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Volume 7 jours</span>
       <button onclick="_volCoachDeplie=!_volCoachDeplie;renderVolumeCoach(getOwnedClient(currentClientId))" style="background:none;border:none;color:var(--sub);font-size:10px;font-family:Montserrat,sans-serif;cursor:pointer;text-decoration:underline;padding:0">${_volCoachDeplie?'réduire':'voir tout'}</button>
@@ -15887,6 +16048,7 @@ function renderVolumeCoach(c){
     ${corps}
     ${res.nonRattachees?`<div style="font-size:10px;color:var(--text-faint);margin-top:6px">${res.nonRattachees} série${res.nonRattachees>1?'s':''} non rattachée${res.nonRattachees>1?'s':''}</div>`:''}
     <div style="font-size:10px;color:var(--text-faint);margin-top:8px;line-height:1.5">Repères indicatifs, à ajuster selon l'athlète.</div>
+    ${_axPrio?'':_axial}
     ${_htmlBoutonDecharge(c)}
   </div>`;
 }
@@ -33799,6 +33961,290 @@ function testExercices(){
           return src.slice(i,j).indexOf('_decote')<0
             ?true:_echec('la décote entre dans le facteur de cycle');})());
       } finally { currentUser=_sU2; woState=_sW; }
+    })();
+
+
+    // ══ CHARGE AXIALE HEBDOMADAIRE ════════════════════════════════════════
+    (()=>{
+      const _sU=currentUser;
+      // Grille explicite : jamais celle du compte connecté, sinon le test
+      // dépendrait de ce qu'un autre test a laissé dans currentUser.
+      const G={'charniere-hanche':{'rachis-lombaire':3},
+        'isolation-genou':{'rachis-lombaire':0},
+        'poussee-horizontale':{'rachis-lombaire':1}};
+      const _lu=_lundiDeSemaine(_volCleDecalee(0)).getTime()+36e5;
+      const _sets=(n,rir)=>Array.from({length:n},()=>
+        ({weight:'60',reps:'10',rir:rir==null?'2':rir,done:true}));
+      // GOOD MORNING est en charniere-hanche, LEG EXTENSION en isolation-genou.
+      const _seance=(data,quand)=>({id:'sa'+(quand||0),date:(quand||_lu),
+        name:'P',slot:0,volume:1,duration:60,data:data});
+      // _calculSemaine met en cache par e-mail ET par semaine. Deux jeux
+      // d'essai qui partagent un e-mail se relisent l'un l'autre : le second
+      // hérite des semaines entraînées du premier. Un e-mail par fixture.
+      let _axN=0;
+      const _ath=sessions=>({id:'_ax'+(++_axN),email:'ax'+_axN+'@t',role:'athlete',
+        exAlias:{},exMuscles:{},sessions:sessions||[]});
+
+      try{
+        // ── Le comptage ───────────────────────────────────────────────────
+        ok('Critère : 5 séries dures sur un schéma de charge 3 → 15 points',(()=>{
+          const u=_ath([_seance({'GOOD MORNING':{sets:_sets(5)}})]);
+          const r=chargeAxialeSemaine(u,0,G);
+          if(schemaDe({name:'GOOD MORNING'})!=='charniere-hanche')
+            return _echec('le jeu d\'essai n\'est pas en charnière de hanche');
+          return r.points===15&&r.nSeries===5
+            ?true:_echec(r.points+' points, '+r.nSeries+' séries');})());
+        ok('Un schéma noté 0 n\'ajoute aucun point mais compte ses séries',(()=>{
+          const u=_ath([_seance({'LEG EXTENSION':{sets:_sets(4)}})]);
+          const r=chargeAxialeSemaine(u,0,G);
+          return r.points===0&&r.nSeries===4&&r.nSeriesNonNotees===0
+            ?true:_echec(JSON.stringify(r));})());
+        ok('Deux schémas différents s\'additionnent selon leur charge',(()=>{
+          const u=_ath([_seance({'GOOD MORNING':{sets:_sets(3)},
+            'DEVELOPPE COUCHE BARRE':{sets:_sets(4)}})]);
+          const r=chargeAxialeSemaine(u,0,G);
+          // 3×3 + 4×1 = 13, si le développé couché est bien en poussée
+          // horizontale. Le catalogue le nomme « DEVELOPPE COUCHE BARRE » :
+          // « DEVELOPPE COUCHE » tout court n'a pas de schéma.
+          if(schemaDe({name:'DEVELOPPE COUCHE BARRE'})!=='poussee-horizontale')
+            return _echec('schéma inattendu pour le développé couché');
+          return r.points===13?true:_echec(r.points+' points');})());
+        ok('Une répétition NUMÉRIQUE ne fait pas tomber le calcul',(()=>{
+          // isCardio appelle .toLowerCase() sur reps. Trouvé en régressant :
+          // une seule série mal typée en base vidait tout l'écran volume.
+          const u=_ath([_seance({'GOOD MORNING':{sets:[{weight:'60',reps:10,rir:'2',done:true}]}})]);
+          try{
+            const r=chargeAxialeSemaine(u,0,G);
+            return r.points===3?true:_echec(JSON.stringify(r));
+          }catch(e){ return _echec('exception : '+e.message); }})());
+        ok('Le cardio ne produit AUCUNE série dure',(()=>{
+          // C'est ce qui rend la garde isCardio de chargeAxialeSemaine neutre :
+          // serieEligible se termine par « return !isCardio(ex) ». La variante
+          // qui retire la garde passe au vert pour cette raison.
+          const ex={name:'TAPIS DE COURSE',reps:'30 min'};
+          const s0={weight:'0',reps:'30 min',rir:'2',done:true};
+          return serieEligible(s0,ex)===false
+            ?true:_echec('une série de cardio est éligible');})());
+        ok('Critère : un exercice cardio n\'ajoute aucun point',(()=>{
+          const u=_ath([_seance({'TAPIS DE COURSE':{sets:[{weight:'0',reps:'30 min',rir:'2',done:true}]},
+            'GOOD MORNING':{sets:_sets(2)}})]);
+          const r=chargeAxialeSemaine(u,0,G);
+          return r.points===6&&r.nExercicesSansSchema===0
+            ?true:_echec(JSON.stringify(r));})());
+        ok('Critère : un exercice sans schéma est recensé, pas compté',(()=>{
+          const u=_ath([_seance({'MON EXERCICE INVENTE':{sets:_sets(3)}})]);
+          const r=chargeAxialeSemaine(u,0,G);
+          if(schemaDe({name:'MON EXERCICE INVENTE'})) return _echec('il a un schéma');
+          // nSeries doit rester à ZÉRO : compter ces séries reviendrait à dire
+          // qu'on les a jugées. Mon premier jet ne regardait pas ce champ, et
+          // la variante qui les comptait passait au vert.
+          return r.points===0&&r.nSeries===0&&r.nExercicesSansSchema===1
+            &&r.exSansSchema.join()==='MON EXERCICE INVENTE'
+            ?true:_echec(JSON.stringify(r));})());
+        ok('Un schéma NON NOTÉ est compté à part, jamais comme un zéro',(()=>{
+          // La distinction qui fait tout : « pas encore jugé » n'est pas « ne
+          // charge pas ». Sans elle, une grille vide afficherait 0 point et se
+          // lirait comme « aucune charge axiale ».
+          const u=_ath([_seance({'GOOD MORNING':{sets:_sets(5)}})]);
+          const r=chargeAxialeSemaine(u,0,{});
+          return r.points===0&&r.nSeries===0&&r.nSeriesNonNotees===5
+            &&r.schemasNonNotes.join()==='charniere-hanche'
+            ?true:_echec(JSON.stringify(r));})());
+        ok('Une zone listée dans « hors » vaut 0, pas « non notée »',(()=>{
+          // Le schéma A ÉTÉ jugé : il ne charge pas cette articulation.
+          const horsLombaire=Object.keys(SCHEMAS_META)
+            .filter(k=>(SCHEMAS_META[k].hors||[]).indexOf('rachis-lombaire')>=0);
+          if(!horsLombaire.length) return _echec('aucun schéma hors rachis lombaire');
+          const faux=horsLombaire.filter(k=>chargeLombaireSchema(k,{})!==0);
+          return faux.length?_echec(faux.join(', ')):true;})());
+        ok('Une note absente rend null, une note hors bornes aussi',(()=>{
+          if(chargeLombaireSchema('charniere-hanche',{})!==null) return _echec('absente');
+          if(chargeLombaireSchema('charniere-hanche',{'charniere-hanche':{'rachis-lombaire':9}})!==null)
+            return _echec('hors bornes acceptée');
+          if(chargeLombaireSchema('schema-qui-nexiste-pas',G)!==null) return _echec('schéma inconnu');
+          return chargeLombaireSchema('charniere-hanche',G)===3;})());
+        ok('Critère : une semaine vide rend zéro sans erreur',(()=>{
+          try{
+            const r=chargeAxialeSemaine(_ath([]),0,G);
+            const r2=chargeAxialeSemaine(null,0,G);
+            return r.points===0&&r.nSeries===0&&r2.points===0
+              ?true:_echec(JSON.stringify(r));
+          }catch(e){ return _echec('exception : '+e.message); }})());
+        ok('Le RIR pondère la charge axiale comme il pondère le volume',(()=>{
+          // RIR 5 ne compte pas, RIR 4 compte une demi-série : mêmes poids que
+          // le volume, pas une seconde échelle.
+          const u5=_ath([_seance({'GOOD MORNING':{sets:_sets(4,'5')}})]);
+          const u4=_ath([_seance({'GOOD MORNING':{sets:_sets(4,'4')}})]);
+          const a=chargeAxialeSemaine(u5,0,G), b=chargeAxialeSemaine(u4,0,G);
+          return a.points===0&&b.points===6
+            ?true:_echec('RIR5 '+a.points+' / RIR4 '+b.points);})());
+        ok('chargeAxialeSemaine est PURE : rien n\'est modifié',(()=>{
+          const u=_ath([_seance({'GOOD MORNING':{sets:_sets(3)}})]);
+          const avantU=JSON.stringify(u), avantG=JSON.stringify(G);
+          chargeAxialeSemaine(u,0,G);
+          return JSON.stringify(u)===avantU&&JSON.stringify(G)===avantG
+            ?true:_echec('un argument a bougé');})());
+
+        // ── La variation ──────────────────────────────────────────────────
+        const _semJ=n=>_lundiDeSemaine(_volCleDecalee(n)).getTime()+36e5;
+        const _hist=(...pts)=>{
+          // pts[i] = nombre de séries de GOOD MORNING la semaine i (0 = courante)
+          const ss=[];
+          pts.forEach((n,i)=>{ if(n>0) ss.push(_seance({'GOOD MORNING':{sets:_sets(n)}},_semJ(i))); });
+          return _ath(ss);};
+        ok('Critère : une seule semaine d\'historique → aucune variation',(()=>{
+          const v=variationChargeAxiale(_hist(5),G);
+          return v.variation===null&&v.points===15
+            ?true:_echec(JSON.stringify({v:v.variation,p:v.points}));})());
+        ok('Critère : 46 points contre 33 de moyenne → +0,39, sans phrase',(()=>{
+          // Semaines précédentes à 11 séries = 33 points. Semaine courante à
+          // 46/3 séries… on prend des séries entières : 11, 11, 11 puis 15,33.
+          // Plus simple : on vise le RAPPORT, seule chose que le seuil regarde.
+          const v=variationChargeAxiale(_hist(15,11,11,11),G);
+          if(v.moyenne!==33) return _echec('moyenne '+v.moyenne);
+          if(v.points!==45) return _echec('points '+v.points);
+          const att=(45-33)/33;
+          if(Math.abs(v.variation-att)>1e-9) return _echec('variation '+v.variation);
+          return v.variation<AXIAL_HAUSSE_SIGNAL
+            ?true:_echec('au-dessus du seuil : '+v.variation);})());
+        ok('Critère : 60 points contre 33 → +0,82, phrase de signal',(()=>{
+          const v=variationChargeAxiale(_hist(20,11,11,11),G);
+          if(v.points!==60||v.moyenne!==33) return _echec(v.points+' / '+v.moyenne);
+          return v.variation>=AXIAL_HAUSSE_SIGNAL
+            ?true:_echec('variation '+v.variation);})());
+        ok('Le seuil est bien 0,50 et rien d\'autre',AXIAL_HAUSSE_SIGNAL===0.50);
+        ok('La moyenne porte sur les semaines ENTRAÎNÉES, pas sur le calendrier',(()=>{
+          // Une semaine sans séance est sautée, elle ne tire pas la moyenne
+          // vers le bas — c'est la règle du volume, réutilisée telle quelle.
+          const v=variationChargeAxiale(_hist(15,11,0,11,11),G);
+          return v.moyenne===33&&v.semaines===3
+            ?true:_echec('moyenne '+v.moyenne+' sur '+v.semaines+' semaines');})());
+        ok('Trois semaines vides d\'affilée coupent l\'historique',(()=>{
+          // VOL_COUPURE : au-delà, on ne compare plus à un athlète qui n'est
+          // plus le même. Deux semaines exploitables restent nécessaires.
+          const v=variationChargeAxiale(_hist(15,11,0,0,0,11,11),G);
+          return v.variation===null&&v.semaines===1
+            ?true:_echec('semaines retenues : '+v.semaines);})());
+        ok('Une moyenne nulle n\'annonce pas une hausse infinie',(()=>{
+          // Grille où la charnière vaut 0 : les semaines passées valent 0 point.
+          const G0={'charniere-hanche':{'rachis-lombaire':0}};
+          const v=variationChargeAxiale(_hist(15,11,11),G0);
+          return v.moyenne===0&&v.variation===null
+            ?true:_echec('variation '+v.variation);})());
+
+        // ── L'affichage ───────────────────────────────────────────────────
+        ok('La ligne annonce les points et la comparaison',(()=>{
+          const h=_htmlChargeAxiale(_hist(20,11,11,11),0,G,{});
+          if(!/Charge lombaire : 60 points/.test(h)) return _echec(h.slice(0,140));
+          return /\+82 % contre tes 3 dernières semaines/.test(h)
+            ?true:_echec('comparaison absente : '+h.replace(/<[^>]*>/g,' ').slice(0,160));})());
+        ok('Sans comparaison possible, aucun pourcentage n\'est inventé',(()=>{
+          const h=_htmlChargeAxiale(_hist(5),0,G,{});
+          return /Charge lombaire : 15 points/.test(h)&&!/%/.test(h)
+            ?true:_echec(h.replace(/<[^>]*>/g,' ').slice(0,160));})());
+        ok('Critère : la phrase de signal n\'apparaît qu\'au-delà du seuil',(()=>{
+          const bas=_htmlChargeAxiale(_hist(15,11,11,11),0,G,{});
+          const haut=_htmlChargeAxiale(_hist(20,11,11,11),0,G,{});
+          if(/augmente vite/.test(bas)) return _echec('phrase à +39 %');
+          return /Ta charge lombaire augmente vite cette semaine/.test(haut)
+            ?true:_echec('phrase absente à +82 %');})());
+        ok('La phrase de signal porte le rappel « repère de terrain »',(()=>{
+          const h=_htmlChargeAxiale(_hist(20,11,11,11),0,G,{});
+          return /Repère de terrain, pas une mesure — à regarder avec ton coach\./.test(h)
+            ?true:_echec('rappel absent');})());
+        ok('Aucune couleur d\'alerte sur le bloc',(()=>{
+          const h=_htmlChargeAxiale(_hist(20,11,11,11),0,G,{});
+          const interdits=['var(--red)','var(--danger)','var(--warning)','var(--orange)'];
+          const t=interdits.filter(c=>h.indexOf(c)>=0);
+          return t.length?_echec(t.join(', ')):true;})());
+        ok('Critère : aucune valeur absolue n\'est qualifiée',(()=>{
+          const h=_htmlChargeAxiale(_hist(30,11,11,11),0,G,{});
+          const t=h.replace(/<[^>]*>/g,' ').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+          const mots=['trop','eleve','excessif','dangereux','limite','depasse','maximum','anormal'];
+          const trouves=mots.filter(m=>new RegExp('\\b'+m).test(t));
+          return trouves.length?_echec(trouves.join(', ')):true;})());
+        ok('Grille vide : l\'invitation, et pas un zéro trompeur',(()=>{
+          const h=_htmlChargeAxiale(_hist(5),0,{},{});
+          if(/Charge lombaire : 0/.test(h)) return _echec('un zéro est affiché');
+          return h.indexOf(AXIAL_INVITE_GRILLE)>=0
+            ?true:_echec(h.replace(/<[^>]*>/g,' ').slice(0,160));})());
+        ok('Les exercices sans schéma sont annoncés',(()=>{
+          const u=_ath([_seance({'GOOD MORNING':{sets:_sets(5)},
+            'TRUC A MOI':{sets:_sets(2)},'AUTRE TRUC':{sets:_sets(2)}})]);
+          const h=_htmlChargeAxiale(u,0,G,{});
+          return /2 exercices non rattachés à un schéma/.test(h)
+            ?true:_echec(h.replace(/<[^>]*>/g,' ').slice(0,180));})());
+        ok('Les séries sur schéma non noté sont annoncées à part',(()=>{
+          const G2={'poussee-horizontale':{'rachis-lombaire':1}};
+          const u=_ath([_seance({'DEVELOPPE COUCHE BARRE':{sets:_sets(4)},
+            'GOOD MORNING':{sets:_sets(5)}})]);
+          const h=_htmlChargeAxiale(u,0,G2,{});
+          return /5 séries sur des schémas dont la charge lombaire n'est pas notée/.test(h)
+            ?true:_echec(h.replace(/<[^>]*>/g,' ').slice(0,200));})());
+        ok('Semaine sans rien : aucun bloc du tout',
+          _htmlChargeAxiale(_ath([]),0,G,{})==='');
+
+        // ── Remontée en tête sur drapeau ou contrainte ────────────────────
+        ok('Une contrainte lombaire active fait passer l\'indicateur en tête',(()=>{
+          const u=_hist(15,11,11,11);
+          u.contraintesSante=[{id:1,zone:'rachis-lombaire',niveau:'douleur',actif:true}];
+          return axialPrioritaire(u)===true?true:_echec('non prioritaire');})());
+        ok('Une contrainte sur une AUTRE zone ne le fait pas remonter',(()=>{
+          const u=_hist(15,11,11,11);
+          u.contraintesSante=[{id:1,zone:'epaule',niveau:'douleur',actif:true}];
+          return axialPrioritaire(u)===false?true:_echec('remonté à tort');})());
+        ok('Une contrainte lombaire LEVÉE ne le fait pas remonter',(()=>{
+          const u=_hist(15,11,11,11);
+          u.contraintesSante=[{id:1,zone:'rachis-lombaire',niveau:'douleur',actif:false}];
+          return axialPrioritaire(u)===false?true:_echec('remonté sur une contrainte levée');})());
+        ok('En tête, le bloc porte le disclaimer santé existant',(()=>{
+          const h=_htmlChargeAxiale(_hist(15,11,11,11),0,G,{disclaimer:true});
+          return h.indexOf(escapeHtml(DISCLAIMER_SANTE))>=0
+            ?true:_echec('disclaimer absent');})());
+        ok('Sans priorité, pas de disclaimer : il n\'a rien à accompagner',(()=>{
+          const h=_htmlChargeAxiale(_hist(15,11,11,11),0,G,{});
+          return h.indexOf(escapeHtml(DISCLAIMER_SANTE))<0
+            ?true:_echec('disclaimer affiché sans raison');})());
+        ok('La fiche coach place le bloc en haut OU en bas, jamais deux fois',(()=>{
+          const src=String(renderVolumeCoach);
+          if(!/_axPrio\?_axial:''/.test(src)) return _echec('pas de placement en tête');
+          if(!/\$\{_axPrio\?'':_axial\}/.test(src)) return _echec('pas de placement en bas');
+          return (src.split('_htmlChargeAxiale(').length-1)===1
+            ?true:_echec('plusieurs calculs du bloc');})());
+
+        // ── Ce que l'indicateur ne doit PAS faire ────────────────────────
+        ok('Critère : la charge axiale n\'entre pas dans urgencyScore',
+          !/chargeAxiale|variationChargeAxiale/.test(String(urgencyScore)));
+        ok('Critère : aucune notification ne la consulte',(()=>{
+          const f=[['scheduleSuppNotif',typeof scheduleSuppNotif==='function'?scheduleSuppNotif:null],
+            ['checkBilanNotifToday',typeof checkBilanNotifToday==='function'?checkBilanNotifToday:null],
+            ['checkWoReminderToday',typeof checkWoReminderToday==='function'?checkWoReminderToday:null],
+            ['renderNotifs',typeof renderNotifs==='function'?renderNotifs:null]];
+          const faut=f.filter(([n,fn])=>fn&&/chargeAxiale/.test(String(fn)));
+          return faut.length?_echec(faut.map(x=>x[0]).join(', ')):true;})());
+        ok('urgencyScore rend la même valeur avec et sans charge axiale',(()=>{
+          const sauve=currentUser;
+          try{
+            currentUser={id:'co',email:'co@t.fr',role:'coach',seenBilans:{},alertStatus:{}};
+            const base={id:'z1',email:'z1@t.fr',role:'athlete',coachId:'co',fname:'Z',
+              exAlias:{},exMuscles:{},sessions:[],
+              bilans:[{type:'depart',date:Date.now()-30*864e5}],
+              createdAt:Date.now()-60*864e5,status:'COACHING_SUIVI'};
+            currentUser.seenBilans['z1@t.fr']=Date.now();
+            const avant=urgencyScore(JSON.parse(JSON.stringify(base)));
+            const charge=JSON.parse(JSON.stringify(base));
+            charge.sessions=[_seance({'GOOD MORNING':{sets:_sets(20)}})];
+            const apres=urgencyScore(charge);
+            return avant===apres?true:_echec(avant+' puis '+apres);
+          } finally { currentUser=sauve; }})());
+        ok('Aucun champ n\'est persisté par l\'indicateur',(()=>{
+          // Tout est dérivé de sessions et de la grille de charges.
+          const u=_ath([_seance({'GOOD MORNING':{sets:_sets(5)}})]);
+          const avant=JSON.stringify(u);
+          variationChargeAxiale(u,G);
+          _htmlChargeAxiale(u,0,G,{});
+          return JSON.stringify(u)===avant?true:_echec('le dossier a été écrit');})());
+      } finally { currentUser=_sU; }
     })();
 
 

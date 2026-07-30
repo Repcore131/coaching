@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v399';
+const CACHE = 'repcore-v400';
 const SW_DATA = 'repcore-sw-data'; // persistent across updates — not wiped by activate
 
 // Strict nécessaire à l'installabilité PWA (~46 Ko).
