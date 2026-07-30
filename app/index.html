@@ -1109,6 +1109,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
       </div>
       <div style="display:flex;gap:8px">
+        <button onclick="ouvrirComptes()" style="background:none;border:1px solid rgba(255,255,255,.1);color:var(--sub);padding:7px 10px;font-family:Montserrat,sans-serif;font-size:11px;cursor:pointer" title="Changer de compte">⇄</button>
         <button onclick="showCoachCode()" style="background:var(--red-bg);border:1px solid var(--red);color:var(--red-light);padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:2px;text-transform:uppercase;transition:.15s" onmouseover="this.style.background='#1a0000'" onmouseout="this.style.background='var(--red-bg)'">CODE</button>
         <button onclick="logout()" style="background:none;border:1px solid rgba(255,255,255,.1);color:var(--sub);padding:7px 10px;font-family:Montserrat,sans-serif;font-size:11px;cursor:pointer;transition:.15s" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='var(--sub)'">&#8592;</button>
       </div>
@@ -1953,6 +1954,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Objectif</label>
         <textarea id="atp-objective" placeholder="ex: Prise de masse, perte de poids, remise en forme..." style="width:100%;min-height:80px;font-size:13px;padding:11px 14px;box-sizing:border-box;resize:vertical;background:#111;border:1px solid #2a2a2a;color:#fff;font-family:Montserrat,sans-serif;border-radius:4px;line-height:1.5" maxlength="200"></textarea>
       </div>
+      <div class="card" id="atp-comptes"></div>
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);text-align:center">
         <button onclick="logout()" style="background:none;border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:10px 24px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1.5px">DÉCONNEXION</button>
         <!-- Pied athlète : deux clics depuis n'importe quel écran connecté —
@@ -4423,10 +4425,188 @@ window.onload=()=>{
     },150);
   },500);
 };
+
+// ══════════════ PLUSIEURS COMPTES SUR LE MÊME APPAREIL ══════════════════════
+// Un coach qui s'entraîne a deux dossiers : le sien de coach, et le sien
+// d'athlète, avec deux e-mails et deux mots de passe. Il doit pouvoir passer de
+// l'un à l'autre sans se déconnecter.
+//
+// Ce qui rend la chose délicate n'est PAS currentUser — c'est tout ce qui vit à
+// côté de lui et n'appartient qu'à un seul compte :
+//   rc_fb_auth   Firebase Auth ne garde QU'UN jeu de jetons. Chaque compte a
+//                donc le sien, rangé dans le registre, et on échange le slot
+//                actif à la bascule.
+//   woState      une séance en cours appartient à un compte. On REFUSE de
+//                basculer pendant une séance plutôt que de la transporter.
+//   bilData      un bilan à moitié rempli, même raison.
+//   les caches   volume, signaux, plateau : ils portent l'e-mail dans leur clé
+//                pour certains, pas pour tous. On les vide, c'est le seul choix
+//                sûr.
+//   les rappels  ils vivent dans le cache du Service Worker, à l'échelle de
+//                l'APPAREIL et non du compte. Ils suivent donc le compte
+//                ACTIF : basculer replanifie, et le compte en veille ne reçoit
+//                plus de rappel. C'est une limite du navigateur, pas un choix.
+const CPT_CLE='rc_comptes';
+const CPT_MAX=5;
+
+function comptesConnectes(){
+  try{
+    const l=JSON.parse(localStorage.getItem(CPT_CLE)||'[]');
+    return Array.isArray(l)?l.filter(c=>c&&c.email):[];
+  }catch(e){ return []; }
+}
+function _comptesEcrire(l){
+  try{ localStorage.setItem(CPT_CLE,JSON.stringify((l||[]).slice(0,CPT_MAX))); return true; }
+  catch(e){ return false; }
+}
+// Jetons Firebase du compte, tels qu'ils sont dans le slot actif. On relit le
+// stockage plutôt que les champs de CLOUD : c'est lui la source de vérité, et
+// il est réécrit à chaque rafraîchissement de jeton.
+function _jetonsActifs(){
+  try{ return JSON.parse(localStorage.getItem('rc_fb_auth')||'null')||null; }
+  catch(e){ return null; }
+}
+function _jetonsPoser(j){
+  try{
+    if(j) localStorage.setItem('rc_fb_auth',JSON.stringify(j));
+    else localStorage.removeItem('rc_fb_auth');
+  }catch(e){}
+  // On repasse par le chargeur de CLOUD : une seule mécanique de lecture.
+  CLOUD._idToken=null; CLOUD._refreshToken=null; CLOUD._tokenExpiry=0;
+  if(j) CLOUD._loadAuth();
+}
+// Enregistre ou rafraîchit le compte COURANT dans le registre, avec ses jetons.
+// Appelée depuis routeUser : ce seul point couvre le démarrage, la connexion et
+// la bascule, sans toucher aux quatre sorties de doLogin.
+function comptesEnregistrer(u){
+  const user=u||currentUser;
+  if(!user||!user.email) return comptesConnectes();
+  const l=comptesConnectes().filter(c=>c.email!==user.email);
+  l.unshift({email:user.email,fname:user.fname||'',lname:user.lname||'',
+    role:user.role||'athlete',avatar:user.athletePhoto||user.coachPhoto||'',
+    auth:_jetonsActifs(),vuLe:Date.now()});
+  _comptesEcrire(l);
+  return l;
+}
+function compteActif(){ return (currentUser&&currentUser.email)||null; }
+// Bascule interdite pendant une séance ou un bilan : ces deux états sont
+// globaux et n'appartiennent qu'au compte qui les a commencés.
+function peutBasculer(){
+  if(typeof woState==='object'&&woState&&!woState.termine
+     &&woState.exercises&&woState.exercises.length&&woState.startTime)
+    return {ok:false,raison:'Termine ou annule ta séance avant de changer de compte.'};
+  if(typeof bilData==='object'&&bilData&&Object.keys(bilData).length)
+    return {ok:false,raison:'Termine ou quitte ton bilan avant de changer de compte.'};
+  return {ok:true,raison:''};
+}
+// Remise à zéro de tout ce qui n'appartient PAS au compte d'arrivée.
+function _comptesRemiseAZero(){
+  currentClientId=null;
+  try{ if(woState&&woState.timerInterval) clearInterval(woState.timerInterval); }catch(e){}
+  woState={};
+  try{ localStorage.removeItem('rc_wo_state'); }catch(e){}
+  bilData={};
+  try{ _ckEtat={}; _ckStopChrono(); }catch(e){}
+  try{ _viderCacheVolume(); }catch(e){}
+  try{ _viderCacheSignaux(); }catch(e){}
+  try{ _viderCachePlateau(); }catch(e){}
+  try{ closeModal(); }catch(e){}
+}
+function basculerCompte(email){
+  if(!email||email===compteActif()) return false;
+  const g=peutBasculer();
+  if(!g.ok){ toast(g.raison,'var(--orange)'); return false; }
+  const users=DB.get('users')||{};
+  const cible=users[email];
+  if(!cible){ toast('Ce compte n\'est plus sur cet appareil','var(--orange)'); return false; }
+  // Les jetons du compte qu'on quitte sont rangés AVANT tout échange.
+  comptesEnregistrer(currentUser);
+  const entree=comptesConnectes().find(c=>c.email===email);
+  _comptesRemiseAZero();
+  _jetonsPoser(entree&&entree.auth?entree.auth:null);
+  currentUser=cible;
+  DB.set('session',currentUser);
+  comptesEnregistrer(currentUser);
+  // Les rappels suivent le compte actif : voir l'en-tête de ce bloc.
+  try{ if(_notifSupported()&&Notification.permission==='granted'){
+    scheduleSwNotif(); scheduleWoNotif(); scheduleSuppNotif(); } }catch(e){}
+  routeUser();
+  toast('Compte : '+((cible.fname||cible.email)+''));
+  return true;
+}
+function retirerCompte(email){
+  if(!email) return false;
+  if(email===compteActif()){ toast('Déconnecte-toi pour retirer le compte actif','var(--orange)'); return false; }
+  _comptesEcrire(comptesConnectes().filter(c=>c.email!==email));
+  return true;
+}
+// « Ajouter un compte » : on range le compte courant et ses jetons, on vide le
+// slot actif, et on envoie sur l'écran de connexion. Le compte courant reste
+// dans le registre — on ne se déconnecte de rien.
+function ajouterCompte(){
+  const g=peutBasculer();
+  if(!g.ok){ toast(g.raison,'var(--orange)'); return; }
+  comptesEnregistrer(currentUser);
+  _comptesRemiseAZero();
+  _jetonsPoser(null);
+  currentUser=null;
+  try{ DB.del('session'); }catch(e){}
+  go('s-login');
+}
+// Sélecteur. Rendu vide avec un seul compte : un sélecteur à un choix n'a rien
+// à sélectionner, mais le bouton d'ajout reste.
+function htmlSelecteurComptes(){
+  const l=comptesConnectes();
+  const actif=compteActif();
+  const ini=c=>((c.fname||c.email||'?')[0]||'?').toUpperCase()
+    +((c.lname||'')[0]||'').toUpperCase();
+  const ligne=c=>{
+    const est=c.email===actif;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;margin-bottom:6px;
+      background:${est?'#1a0505':'var(--surface-1)'};border:1px solid ${est?'var(--red)':'var(--border)'}">
+      <div style="width:34px;height:34px;border-radius:50%;flex-shrink:0;overflow:hidden;background:var(--surface-2);
+        display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#bbb">
+        ${c.avatar?`<img src="${escapeHtml(c.avatar)}" style="width:100%;height:100%;object-fit:cover">`:escapeHtml(ini(c))}</div>
+      <div style="flex:1;min-width:0;cursor:${est?'default':'pointer'}"${est?'':` onclick="basculerCompte('${escapeHtml(c.email)}')"`}>
+        <div style="font-size:12px;font-weight:800;color:#eee;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(((c.fname||'')+' '+(c.lname||'')).trim()||c.email)}</div>
+        <div style="font-size:10px;color:var(--text-faint)">${c.role==='coach'?'Coach':'Élève'}${est?' · actif':''}</div>
+      </div>
+      ${est?'<span style="font-size:13px;color:var(--red);flex-shrink:0">✓</span>'
+           :`<button onclick="retirerCompte('${escapeHtml(c.email)}');_majSelecteurComptes()" class="hit44"
+              style="flex:0 0 auto;background:none;border:none;color:var(--text-dim);font-size:15px;cursor:pointer;padding:0 4px" title="Retirer">✕</button>`}
+    </div>`;
+  };
+  return `<div id="cpt-selecteur">
+    ${l.length>1?`<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:9px">Mes comptes</div>`:''}
+    ${l.map(ligne).join('')}
+    <button class="btn btn-outline btn-sm" style="width:100%;margin:2px 0 0;letter-spacing:1px;font-size:10px" onclick="ajouterCompte()">+ Ajouter un compte</button>
+    ${l.length>1?`<div style="font-size:10px;color:var(--text-faint);line-height:1.6;margin-top:8px">Les rappels de notification suivent le compte actif : le compte en veille n'en reçoit pas.</div>`:''}
+  </div>`;
+}
+// Modale des comptes. Le profil athlete affiche le selecteur en ligne ; le
+// coach n'a pas d'ecran de profil, il passe par ici depuis son en-tete.
+function ouvrirComptes(){
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',
+    `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
+      <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:16px 16px 0 0;padding:18px;width:100%;max-width:520px;max-height:88vh;overflow:auto">
+        <div style="font-size:15px;font-weight:800;margin-bottom:4px">Changer de compte</div>
+        <div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:14px">Tes comptes restent connectés sur cet appareil. Tu passes de l'un à l'autre sans ressaisir ton mot de passe.</div>
+        ${htmlSelecteurComptes()}
+      </div></div>`);
+}
+function _majSelecteurComptes(){
+  const z=document.getElementById('cpt-selecteur');
+  if(z) z.outerHTML=htmlSelecteurComptes();
+}
+
 function routeUser(){
   if(!currentUser) return go('s-welcome');
   // Session corrompue (objet sans email) : seul cas où la purge est justifiée.
   if(!currentUser.email){silentLogout();return go('s-welcome');}
+  // Registre des comptes de l'appareil. Ici et nulle part ailleurs : ce point
+  // couvre le démarrage, les quatre sorties de doLogin, et la bascule.
+  try{ comptesEnregistrer(currentUser); }catch(e){}
   // Un paquet athlète attend une décision. Le déclencheur est ICI, en tête, et
   // non plus bas avec _pendingBilanOpen : ce paquet vise un appareil de COACH,
   // et la branche coach retourne deux lignes plus loin — le code d'en bas ne
@@ -20044,7 +20224,21 @@ function toastSync(localOk,promesse,succes,perdu){
 function silentLogout(){DB.del('session');currentUser=null;CLOUD.signOut();}
 function logout(){
   if(!confirm('Se déconnecter ?')) return;
-  silentLogout();go('s-welcome');
+  // Le compte quitte le registre : ses jetons viennent d'être révoqués, le
+  // garder en liste promettrait une bascule qui échouerait.
+  const _sortant=compteActif();
+  let _reste=[];
+  try{
+    _comptesEcrire(comptesConnectes().filter(c=>c.email!==_sortant));
+    _reste=comptesConnectes();
+  }catch(e){}
+  silentLogout();
+  // Un autre compte est resté connecté : on l'active au lieu de renvoyer sur
+  // l'écran d'accueil, comme le fait Instagram.
+  const users=DB.get('users')||{};
+  const _suivant=_reste.find(c=>users[c.email]);
+  if(_suivant){ basculerCompte(_suivant.email); return; }
+  go('s-welcome');
 }
 
 // ======= PHOTO PROGRAMME =======
@@ -21461,6 +21655,8 @@ function openAthleteProfile(){
   if(objEl) objEl.value=u.objective||'';
   _atpGender=isFemale(u.gender)?'F':(u.gender?'H':'');
   setAthleteGender(_atpGender);
+  const zc=document.getElementById('atp-comptes');
+  if(zc) zc.innerHTML=htmlSelecteurComptes();
   go('s-athlete-profile');
 }
 function saveAthleteProfile(){
@@ -25524,6 +25720,285 @@ function testExercices(){
 
 
 
+
+
+    // ══════════════ PLUSIEURS COMPTES SUR LE MÊME APPAREIL ══════════════
+    (function(){
+      const sauveU=currentUser, sauveW=woState, sauveCid=currentClientId;
+      const sauveUsers=DB.get('users'), sauveSess=DB.get('session');
+      const sauveReg=localStorage.getItem('rc_comptes');
+      const sauveAuth=localStorage.getItem('rc_fb_auth');
+      const sauveB=(typeof bilData!=='undefined')?bilData:null;
+
+      const _cptU=(em,role,extra)=>Object.assign({id:'i_'+em,email:em,fname:role==='coach'?'Kev':'Kevin',
+        lname:'G',role:role,exAlias:{},exMuscles:{},sessions:[],bilans:[],videos:[],programs:{},
+        sessions_config:[{active:true,name:'P',exercises:[]}],status:'COACHING_SUIVI',
+        accessExpiry:Date.now()+90*864e5},extra||{});
+      const CO='coach@t.fr', AT='athlete@t.fr';
+      const _poser=()=>{
+        const u={}; u[CO]=_cptU(CO,'coach'); u[AT]=_cptU(AT,'athlete');
+        DB.set('users',u);
+        localStorage.removeItem('rc_comptes');
+        woState={}; bilData={}; currentClientId=null;
+        return u;
+      };
+
+      // ── Le registre ──
+      ok('Registre vide au départ, et jamais null',(()=>{
+        localStorage.removeItem('rc_comptes');
+        const l=comptesConnectes();
+        return Array.isArray(l)&&l.length===0;})());
+      ok('Un registre corrompu ne fait pas tomber la lecture',(()=>{
+        localStorage.setItem('rc_comptes','{pas du json');
+        const a=comptesConnectes();
+        localStorage.setItem('rc_comptes','{"pas":"un tableau"}');
+        const b=comptesConnectes();
+        localStorage.removeItem('rc_comptes');
+        return Array.isArray(a)&&a.length===0&&Array.isArray(b)&&b.length===0;})());
+      ok('Enregistrer le compte courant le met en tête, avec son rôle',(()=>{
+        _poser();
+        currentUser=(DB.get('users'))[CO];
+        localStorage.setItem('rc_fb_auth',JSON.stringify({i:'jetonCO',r:'rCO',e:Date.now()+3600000}));
+        const l=comptesEnregistrer(currentUser);
+        return l.length===1&&l[0].email===CO&&l[0].role==='coach'
+          &&l[0].auth&&l[0].auth.i==='jetonCO';})());
+      ok('Enregistrer deux fois le même compte ne le duplique pas',(()=>{
+        comptesEnregistrer(currentUser); comptesEnregistrer(currentUser);
+        return comptesConnectes().length===1;})());
+      ok('Un second compte s\'ajoute et passe en tête',(()=>{
+        currentUser=(DB.get('users'))[AT];
+        localStorage.setItem('rc_fb_auth',JSON.stringify({i:'jetonAT',r:'rAT',e:Date.now()+3600000}));
+        const l=comptesEnregistrer(currentUser);
+        return l.length===2&&l[0].email===AT&&l[1].email===CO;})());
+      ok('Chaque compte garde SES jetons, pas ceux de l\'autre',(()=>{
+        const l=comptesConnectes();
+        const co=l.find(c=>c.email===CO), at=l.find(c=>c.email===AT);
+        return co.auth.i==='jetonCO'&&at.auth.i==='jetonAT';})());
+      ok('Un compte sans e-mail n\'entre pas au registre',(()=>{
+        const avant=comptesConnectes().length;
+        comptesEnregistrer({fname:'X'}); comptesEnregistrer(null);
+        return comptesConnectes().length===avant;})());
+
+      // ── La bascule ──
+      ok('Basculer échange le compte actif ET ses jetons',(()=>{
+        _poser();
+        const u=DB.get('users');
+        currentUser=u[CO];
+        localStorage.setItem('rc_fb_auth',JSON.stringify({i:'jCO',r:'rCO',e:Date.now()+3600000}));
+        comptesEnregistrer(currentUser);
+        currentUser=u[AT];
+        localStorage.setItem('rc_fb_auth',JSON.stringify({i:'jAT',r:'rAT',e:Date.now()+3600000}));
+        comptesEnregistrer(currentUser);
+        // On est sur l'athlète ; on bascule vers le coach.
+        try{ basculerCompte(CO); }catch(e){ return _echec('exception: '+e.message); }
+        const jetons=JSON.parse(localStorage.getItem('rc_fb_auth')||'null');
+        return compteActif()===CO&&currentUser.role==='coach'
+          &&jetons&&jetons.i==='jCO'&&CLOUD._idToken==='jCO';})());
+      ok('La session enregistrée suit la bascule',(()=>{
+        const sess=DB.get('session');
+        return sess&&sess.email===CO;})());
+      ok('Rebasculer revient au premier compte avec SES jetons',(()=>{
+        try{ basculerCompte(AT); }catch(e){ return _echec('exception: '+e.message); }
+        const jetons=JSON.parse(localStorage.getItem('rc_fb_auth')||'null');
+        return compteActif()===AT&&jetons.i==='jAT'&&CLOUD._idToken==='jAT';})());
+      // LE cas que mes premiers tests laissaient passer : Firebase rafraîchit
+      // le jeton pendant l'usage, donc APRÈS l'inscription au registre. Si la
+      // bascule ne resauvegarde pas le slot actif avant de l'échanger, le
+      // registre garde un jeton périmé et le retour sur ce compte ne peut plus
+      // écrire dans le cloud.
+      ok('Un jeton rafraîchi APRÈS l\'inscription est bien capturé',(()=>{
+        _poser();
+        const u=DB.get('users');
+        currentUser=u[CO];
+        localStorage.setItem('rc_fb_auth',JSON.stringify({i:'vieuxCO',r:'r',e:Date.now()+3600000}));
+        comptesEnregistrer(currentUser);
+        currentUser=u[AT];
+        localStorage.setItem('rc_fb_auth',JSON.stringify({i:'jAT',r:'r',e:Date.now()+3600000}));
+        comptesEnregistrer(currentUser);
+        basculerCompte(CO);
+        // Firebase renouvelle le jeton du coach pendant qu'il travaille.
+        localStorage.setItem('rc_fb_auth',JSON.stringify({i:'neufCO',r:'r2',e:Date.now()+3600000}));
+        basculerCompte(AT);
+        const co=comptesConnectes().find(c=>c.email===CO);
+        if(!co||!co.auth) return _echec('jetons du coach perdus');
+        return co.auth.i==='neufCO'
+          ?true:_echec('jeton périmé conservé : '+co.auth.i);})());
+      ok('Basculer vers le compte déjà actif ne fait rien',
+        basculerCompte(compteActif())===false);
+      ok('Basculer vers un compte absent de l\'appareil est refusé',
+        basculerCompte('inconnu@t.fr')===false);
+
+      // ── Ce que la bascule doit IMPÉRATIVEMENT isoler ──
+      ok('Le client ouvert côté coach ne suit pas la bascule',(()=>{
+        _poser();
+        const u=DB.get('users');
+        currentUser=u[CO]; comptesEnregistrer(currentUser);
+        currentUser=u[AT]; comptesEnregistrer(currentUser);
+        currentClientId='un-eleve';
+        basculerCompte(CO);
+        return currentClientId===null;})());
+      ok('Les caches de calcul sont vidés à la bascule',(()=>{
+        _poser();
+        const u=DB.get('users');
+        currentUser=u[CO]; comptesEnregistrer(currentUser);
+        currentUser=u[AT]; comptesEnregistrer(currentUser);
+        // On remplit le cache de volume sous l'identité de l'athlète.
+        _viderCacheVolume();
+        volumeSemaine(currentUser,semaineISO(new Date()));
+        basculerCompte(CO);
+        // Après bascule, le cache ne doit plus porter l'entrée de l'athlète.
+        const src=JSON.stringify(Object.keys(_cacheVolume||{}));
+        return src.indexOf(AT)<0;})());
+      ok('Le brouillon de bilan ne suit pas la bascule',(()=>{
+        _poser();
+        const u=DB.get('users');
+        currentUser=u[CO]; comptesEnregistrer(currentUser);
+        currentUser=u[AT]; comptesEnregistrer(currentUser);
+        bilData={'deb-weight':'80'};
+        // Un bilan en cours BLOQUE la bascule : c'est le comportement voulu.
+        const refus=basculerCompte(CO)===false&&compteActif()===AT;
+        bilData={};
+        const passe=basculerCompte(CO)===true&&Object.keys(bilData).length===0;
+        return refus&&passe;})());
+
+      // ── Le garde-fou de la séance en cours ──
+      ok('Une séance en cours INTERDIT la bascule',(()=>{
+        _poser();
+        const u=DB.get('users');
+        currentUser=u[CO]; comptesEnregistrer(currentUser);
+        currentUser=u[AT]; comptesEnregistrer(currentUser);
+        woState={exercises:[{name:'SQUAT',series:3,reps:'5'}],startTime:Date.now(),
+          sessionData:{0:{sets:[]}},currentEx:0,progName:'P'};
+        const g=peutBasculer();
+        const r=basculerCompte(CO);
+        const reste=compteActif()===AT;
+        woState={};
+        return g.ok===false&&/séance/i.test(g.raison)&&r===false&&reste;})());
+      ok('Une séance TERMINÉE ne bloque plus rien',(()=>{
+        woState={exercises:[{name:'SQUAT',series:3,reps:'5'}],startTime:Date.now(),
+          sessionData:{},termine:true};
+        const g=peutBasculer();
+        woState={};
+        return g.ok===true;})());
+      ok('La séance et son instantané sont effacés à la bascule',(()=>{
+        _poser();
+        const u=DB.get('users');
+        currentUser=u[CO]; comptesEnregistrer(currentUser);
+        currentUser=u[AT]; comptesEnregistrer(currentUser);
+        localStorage.setItem('rc_wo_state','{"exercises":[1],"startTime":1}');
+        woState={};
+        basculerCompte(CO);
+        return localStorage.getItem('rc_wo_state')===null;})());
+
+      // ── Ajouter un compte : on ne se déconnecte de RIEN ──
+      ok('Ajouter un compte garde l\'ancien au registre',(()=>{
+        _poser();
+        currentUser=(DB.get('users'))[CO];
+        localStorage.setItem('rc_fb_auth',JSON.stringify({i:'jCO',r:'r',e:Date.now()+3600000}));
+        comptesEnregistrer(currentUser);
+        try{ ajouterCompte(); }catch(e){ return _echec('exception: '+e.message); }
+        const l=comptesConnectes();
+        return l.length===1&&l[0].email===CO&&l[0].auth.i==='jCO'
+          &&currentUser===null&&!DB.get('session');})());
+      ok('Le slot de jetons est vidé pendant l\'ajout',
+        localStorage.getItem('rc_fb_auth')===null&&CLOUD._idToken===null);
+      ok('Ajouter un compte est refusé pendant une séance',(()=>{
+        _poser();
+        currentUser=(DB.get('users'))[CO];
+        comptesEnregistrer(currentUser);
+        woState={exercises:[{name:'X',series:1,reps:'5'}],startTime:Date.now(),sessionData:{}};
+        ajouterCompte();
+        const garde=currentUser!==null;
+        woState={};
+        return garde;})());
+
+      // ── Retirer un compte ──
+      ok('Retirer un compte en veille le sort du registre',(()=>{
+        _poser();
+        const u=DB.get('users');
+        currentUser=u[CO]; comptesEnregistrer(currentUser);
+        currentUser=u[AT]; comptesEnregistrer(currentUser);
+        const r=retirerCompte(CO);
+        return r===true&&comptesConnectes().length===1
+          &&comptesConnectes()[0].email===AT;})());
+      ok('Retirer le compte ACTIF est refusé',(()=>{
+        const r=retirerCompte(AT);
+        return r===false&&comptesConnectes().some(c=>c.email===AT);})());
+
+      // ── Le sélecteur ──
+      ok('Le sélecteur montre les deux comptes et marque l\'actif',(()=>{
+        _poser();
+        const u=DB.get('users');
+        currentUser=u[CO]; comptesEnregistrer(currentUser);
+        currentUser=u[AT]; comptesEnregistrer(currentUser);
+        const h=htmlSelecteurComptes();
+        return /Mes comptes/.test(h)&&/Coach/.test(h)&&/Élève/.test(h)
+          &&/· actif/.test(h)&&/Ajouter un compte/.test(h);})());
+      ok('Le sélecteur ne propose pas de basculer vers l\'actif',(()=>{
+        const d=document.createElement('div');
+        d.innerHTML=htmlSelecteurComptes();
+        const l=[...d.querySelectorAll('[onclick^="basculerCompte"]')];
+        return l.length===1&&l[0].getAttribute('onclick').indexOf(CO)>=0;})());
+      ok('Avec un seul compte, pas de titre mais le bouton d\'ajout reste',(()=>{
+        _poser();
+        currentUser=(DB.get('users'))[CO];
+        comptesEnregistrer(currentUser);
+        const h=htmlSelecteurComptes();
+        return !/Mes comptes/.test(h)&&/Ajouter un compte/.test(h);})());
+      ok('La limite des rappels est annoncée dès qu\'il y a deux comptes',(()=>{
+        _poser();
+        const u=DB.get('users');
+        currentUser=u[CO]; comptesEnregistrer(currentUser);
+        currentUser=u[AT]; comptesEnregistrer(currentUser);
+        return /le compte en veille n'en reçoit pas/.test(htmlSelecteurComptes());})());
+
+      // ── Se déconnecter bascule sur le compte restant ──
+      ok('La déconnexion retire le compte et active le suivant',(()=>{
+        _poser();
+        const u=DB.get('users');
+        currentUser=u[CO];
+        localStorage.setItem('rc_fb_auth',JSON.stringify({i:'jCO',r:'r',e:Date.now()+3600000}));
+        comptesEnregistrer(currentUser);
+        currentUser=u[AT];
+        localStorage.setItem('rc_fb_auth',JSON.stringify({i:'jAT',r:'r',e:Date.now()+3600000}));
+        comptesEnregistrer(currentUser);
+        const vraiConfirm=window.confirm; window.confirm=()=>true;
+        try{ logout(); }catch(e){ window.confirm=vraiConfirm; return _echec('exception: '+e.message); }
+        window.confirm=vraiConfirm;
+        const l=comptesConnectes();
+        return compteActif()===CO&&l.length===1&&l[0].email===CO;})());
+      ok('Dernier compte : la déconnexion renvoie sur l\'écran d\'accueil',(()=>{
+        const vraiConfirm=window.confirm; window.confirm=()=>true;
+        try{ logout(); }catch(e){ window.confirm=vraiConfirm; return _echec('exception: '+e.message); }
+        window.confirm=vraiConfirm;
+        return currentUser===null&&comptesConnectes().length===0;})());
+
+      // ── routeUser est le seul point d'accroche ──
+      ok('routeUser inscrit le compte au registre, à lui seul',(()=>{
+        _poser();
+        localStorage.removeItem('rc_comptes');
+        currentUser=(DB.get('users'))[AT];
+        try{ routeUser(); }catch(e){ return _echec('exception: '+e.message); }
+        return comptesConnectes().length===1&&comptesConnectes()[0].email===AT;})());
+      ok('Le registre est plafonné',(()=>{
+        localStorage.removeItem('rc_comptes');
+        const u=DB.get('users')||{};
+        for(let i=0;i<CPT_MAX+3;i++){
+          u['x'+i+'@t.fr']=_cptU('x'+i+'@t.fr','athlete');
+          currentUser=u['x'+i+'@t.fr'];
+          comptesEnregistrer(currentUser);
+        }
+        DB.set('users',u);
+        return comptesConnectes().length===CPT_MAX;})());
+
+      if(sauveUsers) DB.set('users',sauveUsers); else DB.del('users');
+      if(sauveSess) DB.set('session',sauveSess); else DB.del('session');
+      if(sauveReg!==null) localStorage.setItem('rc_comptes',sauveReg); else localStorage.removeItem('rc_comptes');
+      if(sauveAuth!==null) localStorage.setItem('rc_fb_auth',sauveAuth); else localStorage.removeItem('rc_fb_auth');
+      try{ CLOUD._idToken=null; CLOUD._refreshToken=null; CLOUD._tokenExpiry=0; CLOUD._loadAuth(); }catch(e){}
+      if(sauveB!==null) bilData=sauveB;
+      currentUser=sauveU; woState=sauveW; currentClientId=sauveCid;
+    })();
 
     // ══════════════ DÉPENSE : PROFESSION + SPORTS ══════════════
     (function(){
