@@ -1144,8 +1144,9 @@ const COACH_PHOTO='icons/coach.jpg';
             <div class="sh-line"></div>
             <h2 style="font-size:16px">MES ATHLÈTES</h2>
           </div>
-          <div style="display:flex;gap:6px;flex-shrink:0">
-            <button class="btn btn-outline btn-sm" onclick="openWaGroupe()" title="Message groupé WhatsApp" aria-label="Message groupé WhatsApp" style="letter-spacing:1px;padding:9px 12px;margin:0;min-height:38px">💬 GROUPÉ</button>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+            <button class="btn btn-outline btn-sm" onclick="openAnnonce()" title="Mot à l'accueil de l'app" aria-label="Mot à l'accueil de l'app" style="letter-spacing:1px;padding:9px 11px;margin:0;min-height:38px">📣 MOT</button>
+            <button class="btn btn-outline btn-sm" onclick="openWaGroupe()" title="Message groupé WhatsApp" aria-label="Message groupé WhatsApp" style="letter-spacing:1px;padding:9px 11px;margin:0;min-height:38px">💬 GROUPÉ</button>
             <button class="btn btn-red btn-sm" onclick="openAddAthlete()" style="letter-spacing:2px;padding:9px 16px;margin:0;min-height:38px">+ AJOUTER</button>
           </div>
         </div>
@@ -1775,6 +1776,9 @@ const COACH_PHOTO='icons/coach.jpg';
 
       <!-- DOULEUR SIGNALÉE -->
       <div id="clh-douleur"></div>
+
+      <!-- MOT DU COACH -->
+      <div id="clh-annonce" style="display:none"></div>
 
       <!-- OBJECTIF -->
 
@@ -6101,6 +6105,183 @@ function _waBoutonTodo(r,idx){
 // Pas de boucle window.open : au-delà de la première, le navigateur les bloque
 // et le coach croirait avoir écrit à tout le monde. Chaque destinataire reçoit
 // son propre lien, donc son propre geste — rien ne peut être avalé en silence.
+// ── Mot du coach : une bannière à l'accueil de l'athlète ───────────────────
+// Ce n'est PAS une notification téléphone : l'app est sur le plan Spark, aucune
+// Cloud Function ne tourne, et rien ne s'abonne au push. La bannière s'affiche
+// à l'ouverture de l'app, et c'est tout ce qu'elle prétend faire.
+//
+// L'accusé de lecture a été écarté volontairement : rien ne remonte au coach.
+// La fermeture est donc mémorisée SUR L'APPAREIL de l'athlète et non dans son
+// dossier — d'une part le coach ne peut pas la voir, d'autre part il ne peut
+// pas la ressusciter en réécrivant le dossier par-dessus une version périmée,
+// ce que l'écrasement du dossier entier rend sinon inévitable. Contrepartie
+// assumée : sur un nouvel appareil, la bannière réapparaît une fois.
+const ANNONCE_MAX=280;
+const ANNONCE_CLE='rc_annonce_lue';
+
+function _annonceLues(){
+  try{ const v=JSON.parse(localStorage.getItem(ANNONCE_CLE)||'{}');
+    return (v&&typeof v==='object')?v:{}; }catch(e){ return {}; }
+}
+function _annonceMarquerLue(email,id){
+  const m=_annonceLues();
+  m[String(email||'')]=String(id||'');
+  try{ localStorage.setItem(ANNONCE_CLE,JSON.stringify(m)); }catch(e){}
+}
+// PURE : rend l'annonce à afficher, ou null. Le tableau des lectures est passé
+// en paramètre pour que la règle soit éprouvable sans toucher au stockage.
+function annonceAAfficher(user,lues){
+  const a=user&&user.annonce;
+  if(!a||typeof a!=='object') return null;
+  const texte=String(a.texte==null?'':a.texte).trim();
+  if(!texte||!a.id) return null;
+  const vu=(lues||{})[String(user.email||'')];
+  if(vu!=null&&String(vu)===String(a.id)) return null;
+  return {id:String(a.id),texte,par:String(a.par==null?'':a.par),date:a.date||null};
+}
+function renderAnnonceAthlete(){
+  const el=document.getElementById('clh-annonce');
+  if(!el) return;
+  const a=annonceAAfficher(currentUser,_annonceLues());
+  if(!a){ el.innerHTML=''; el.style.display='none'; return; }
+  el.style.display='block';
+  const qui=a.par?('Mot de '+a.par):'Mot de ton coach';
+  el.innerHTML=`<div style="background:linear-gradient(135deg,#12000a,#1a0000);border:1px solid rgba(224,32,32,.45);border-radius:12px;padding:14px 16px;margin-bottom:18px;box-shadow:0 6px 18px rgba(0,0,0,.45)">
+    <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
+      <span style="font-size:15px;line-height:1">📣</span>
+      <span style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase">${escapeHtml(qui)}</span>
+    </div>
+    <div style="font-size:13px;color:#eee;line-height:1.65;white-space:pre-wrap">${escapeHtml(a.texte)}</div>
+    <button onclick="fermerAnnonce()" style="width:100%;margin-top:12px;padding:10px 0;background:none;border:1px solid rgba(224,32,32,.5);color:var(--red);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:2px;border-radius:8px;cursor:pointer">OK, J'AI VU</button>
+  </div>`;
+}
+function fermerAnnonce(){
+  const a=annonceAAfficher(currentUser,_annonceLues());
+  if(!a) return;
+  _annonceMarquerLue(currentUser.email,a.id);
+  renderAnnonceAthlete();
+}
+
+// ── Côté coach ────────────────────────────────────────────────────────────
+// Destinataires possibles : ceux dont le dossier existe VRAIMENT sur cet
+// appareil. Un élève connu par son seul code n'a pas de dossier — lui écrire
+// en créerait un faux. Ceux-là sont écartés, mais ANNONCÉS : un coach qui croit
+// avoir écrit à douze personnes alors que l'app n'en a touché que neuf est plus
+// mal informé que s'il n'avait rien fait.
+function _annonceDestinataires(){
+  const users=DB.get('users')||{};
+  const ok=[],hors=[];
+  getClients().forEach(c=>{
+    if(!c._fromCode&&c.email&&users[c.email]) ok.push(c); else hors.push(c);
+  });
+  return {ok,hors};
+}
+function _annonceEnCours(){
+  const {ok}=_annonceDestinataires();
+  const actives=ok.map(c=>c.annonce).filter(a=>a&&a.texte&&a.id);
+  if(!actives.length) return null;
+  const recente=actives.slice().sort((a,b)=>(b.date||0)-(a.date||0))[0];
+  return {texte:String(recente.texte),id:String(recente.id),
+    combien:actives.filter(a=>String(a.id)===String(recente.id)).length};
+}
+function _annTout(v){
+  document.querySelectorAll('.ann-cb').forEach(cb=>{cb.checked=!!v;});
+}
+function openAnnonce(){
+  document.getElementById('modal-overlay')?.remove();
+  const {ok,hors}=_annonceDestinataires();
+  if(!ok.length){
+    toast('Aucun athlète inscrit sur cet appareil : rien à envoyer.','var(--orange)');
+    return;
+  }
+  const encours=_annonceEnCours();
+  const lignes=ok.map(c=>{
+    const nom=((c.fname||'')+' '+(c.lname||'')).trim()||c.email||'Athlète';
+    const dejà=c.annonce&&c.annonce.texte&&encours&&String(c.annonce.id)===String(encours.id);
+    return `<label style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid #181818;cursor:pointer">
+      <input type="checkbox" class="ann-cb" value="${escapeHtml(c.email)}" checked
+        style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:13px">${escapeHtml(nom)}</div>
+        ${dejà?'<div class="sub" style="font-size:var(--fs-xs)">le mot en cours est déjà chez lui</div>':''}
+      </div>
+    </label>`;
+  }).join('');
+  const horsHtml=hors.length
+    ?`<div style="background:var(--warning-bg);border:1px solid var(--warning);border-radius:8px;padding:9px 11px;margin-bottom:10px;font-size:11px;color:var(--warning);line-height:1.55">${hors.length} élève${hors.length>1?'s':''} connu${hors.length>1?'s':''} par son seul code n'appara${hors.length>1?'issent':'ît'} pas ici : sans dossier sur cet appareil, la bannière ne peut pas être posée. Passe par WhatsApp pour ${hors.length>1?'ceux-là':'celui-là'}.</div>`
+    :'';
+  const encoursHtml=encours
+    ?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+        <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:5px">Mot en cours · ${encours.combien} athlète${encours.combien>1?'s':''}</div>
+        <div style="font-size:12px;color:#ddd;line-height:1.55;white-space:pre-wrap">${escapeHtml(encours.texte)}</div>
+        <button class="btn btn-outline btn-sm" style="width:100%;margin:9px 0 0;min-height:40px;color:var(--sub)" onclick="retirerAnnonce()">Retirer ce mot</button>
+      </div>`
+    :'';
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:88vh;overflow-y:auto">
+    <h2 style="margin-bottom:4px">📣 Mot à l'accueil</h2>
+    <p class="sub" style="font-size:12px;margin-bottom:10px">Il s'affiche sur l'accueil de l'app à la prochaine ouverture, et reste jusqu'à ce que l'athlète le ferme. Ce n'est pas une notification : le téléphone ne sonnera pas.</p>
+    ${encoursHtml}
+    ${horsHtml}
+    <label for="ann-texte" style="margin-top:0">Message · ${ANNONCE_MAX} caractères</label>
+    <textarea id="ann-texte" rows="3" maxlength="${ANNONCE_MAX}" style="resize:none" placeholder="La salle est fermée jeudi, on décale à vendredi 18h."></textarea>
+    <div style="display:flex;gap:8px;margin:10px 0 4px">
+      <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="_annTout(true)">Tout cocher</button>
+      <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="_annTout(false)">Tout décocher</button>
+    </div>
+    <div id="ann-liste">${lignes}</div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="closeModal()">Annuler</button>
+      <button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="envoyerAnnonce()">Poser le mot</button>
+    </div>
+  </div></div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+// Un seul mot à la fois : le nouveau remplace l'ancien. Deux bannières
+// empilées sur l'accueil, personne ne les lit.
+function envoyerAnnonce(){
+  const texte=(document.getElementById('ann-texte')?.value||'').trim();
+  if(!texte){ toast('Écris le message d\'abord','var(--orange)'); return; }
+  const emails=Array.from(document.querySelectorAll('.ann-cb'))
+    .filter(cb=>cb.checked).map(cb=>cb.value);
+  if(!emails.length){ toast('Coche au moins un athlète','var(--orange)'); return; }
+  const users=DB.get('users')||{};
+  // Date.now() seul ne suffit pas : deux envois dans la même milliseconde
+  // partageaient un id, et l'athlète qui avait fermé le premier mot ne voyait
+  // jamais le second. Le suffixe garantit que deux mots sont toujours distincts.
+  const id=String(Date.now())+'-'+Math.random().toString(36).slice(2,7);
+  const par=(currentUser&&currentUser.fname)||'';
+  const touches=[];
+  emails.forEach(mail=>{
+    const c=users[mail];
+    if(!c) return;
+    c.annonce={id,texte:texte.slice(0,ANNONCE_MAX),date:Date.now(),par};
+    c.updatedAt=Date.now();
+    users[mail]=c; touches.push(c);
+  });
+  if(!touches.length){ toast('Aucun dossier à mettre à jour','var(--orange)'); return; }
+  const okLocal=DB.set('users',users);
+  closeModal();
+  toastSync(okLocal,Promise.all(touches.map(c=>CLOUD.pushOne(c.email,c))),
+    'Mot posé chez '+touches.length+' athlète'+(touches.length>1?'s':''),'le mot est');
+}
+function retirerAnnonce(){
+  const encours=_annonceEnCours();
+  if(!encours) return;
+  const users=DB.get('users')||{};
+  const touches=[];
+  Object.keys(users).forEach(mail=>{
+    const c=users[mail];
+    if(!c||!c.annonce||String(c.annonce.id)!==String(encours.id)) return;
+    delete c.annonce; c.updatedAt=Date.now();
+    users[mail]=c; touches.push(c);
+  });
+  if(!touches.length) return;
+  const okLocal=DB.set('users',users);
+  closeModal();
+  toastSync(okLocal,Promise.all(touches.map(c=>CLOUD.pushOne(c.email,c))),
+    'Mot retiré','le retrait est');
+}
 function openWaGroupe(rowIdx){
   const source=(typeof rowIdx==='number'&&window._todoRows&&window._todoRows[rowIdx])
     ?window._todoRows[rowIdx]:null;
@@ -9638,6 +9819,7 @@ function loadClientHome(){
   renderCartePesee();
   renderContraintesAthlete();
   renderDouleurAthlete();
+  renderAnnonceAthlete();
   renderBandeauPhase();renderRelancePhase();renderCartePhase();
   renderNutriDots();renderNotifs();renderWoReminderCard();
   const _hasDepart=(currentUser.bilans||[]).some(b=>b.type==='depart');
@@ -31680,6 +31862,343 @@ function testExercices(){
           return h.indexOf('restera')<0
             ?true:_echec('« il t\'en restera » sur un jour passé');
         } finally { currentUser=sauveU; }})());
+    })();
+
+
+    // ══ MOT DU COACH À L'ACCUEIL ══════════════════════════════════════════
+    (()=>{
+      // par===undefined → 'Kevin' ; par==='' → vraiment vide. Mon premier jet
+      // écrivait `par||'Kevin'` : le cas « sans prénom de coach » était donc
+      // impossible à éprouver, le test lisait toujours « Mot de Kevin ».
+      const A=(id,texte,par)=>({id:String(id),texte,date:Date.now(),
+        par:par===undefined?'Kevin':par});
+      const U=(mail,annonce)=>({id:'a'+mail,email:mail,role:'athlete',fname:'Léa',
+        lname:'M',coachId:'co',exAlias:{},exMuscles:{},sessions:[],annonce});
+
+      // ── La règle d'affichage, pure ──────────────────────────────────────
+      ok('Une annonce non lue s\'affiche',(()=>{
+        const a=annonceAAfficher(U('lea@t.fr',A(1,'Salle fermée jeudi.')),{});
+        return a&&a.texte==='Salle fermée jeudi.'&&a.id==='1'
+          ?true:_echec(a?JSON.stringify(a):'rien');})());
+      ok('Une annonce déjà fermée ne revient pas',
+        annonceAAfficher(U('lea@t.fr',A(1,'Coucou')),{'lea@t.fr':'1'})===null);
+      ok('Un NOUVEAU mot réapparaît même si l\'ancien était fermé',(()=>{
+        // La lecture est mémorisée par identifiant, pas par un simple booléen :
+        // sinon le premier mot fermé bâillonnerait tous les suivants.
+        const a=annonceAAfficher(U('lea@t.fr',A(2,'Nouveau')),{'lea@t.fr':'1'});
+        return a&&a.id==='2'?true:_echec(a?a.id:'rien');})());
+      ok('La lecture est par COMPTE : deux comptes sur un appareil',(()=>{
+        // Un coach qui utilise aussi l'app comme athlète, ou deux athlètes sur
+        // le téléphone familial : fermer chez l'un ne ferme pas chez l'autre.
+        const lues={'lea@t.fr':'7'};
+        const l=annonceAAfficher(U('lea@t.fr',A(7,'Mot')),lues);
+        const m=annonceAAfficher(U('max@t.fr',A(7,'Mot')),lues);
+        return l===null&&m!==null?true:_echec('léa '+(l?'voit':'ne voit pas')
+          +' / max '+(m?'voit':'ne voit pas'));})());
+      ok('Sans annonce, rien',(()=>{
+        return annonceAAfficher(U('lea@t.fr',null),{})===null
+          &&annonceAAfficher(U('lea@t.fr',undefined),{})===null
+          &&annonceAAfficher({email:'x@t.fr'},{})===null
+          &&annonceAAfficher(null,{})===null
+          &&annonceAAfficher(undefined,{})===null;})());
+      ok('Une annonce vide ou sans identifiant ne s\'affiche pas',(()=>{
+        const cas=[A(1,''),A(1,'   '),A(1,null),{texte:'sans id'},{id:'',texte:'x'}];
+        const vus=cas.filter(a=>annonceAAfficher(U('lea@t.fr',a),{})!==null);
+        return vus.length?_echec(vus.length+' annonce(s) fantôme'):true;})());
+      ok('Le texte est rendu tel quel, espaces de bord en moins',(()=>{
+        const a=annonceAAfficher(U('lea@t.fr',A(1,'  Deux lignes\nici.  ')),{});
+        return a&&a.texte==='Deux lignes\nici.'?true:_echec(a?'«'+a.texte+'»':'rien');})());
+      ok('annonceAAfficher est PURE',(()=>{
+        const u=U('lea@t.fr',A(1,'Mot')); const lues={'x@t.fr':'9'};
+        const uAvant=JSON.stringify(u), lAvant=JSON.stringify(lues);
+        annonceAAfficher(u,lues);
+        return JSON.stringify(u)===uAvant&&JSON.stringify(lues)===lAvant;})());
+      ok('Un tableau de lectures absent ne fait pas tomber la fonction',(()=>{
+        try{
+          return annonceAAfficher(U('lea@t.fr',A(1,'Mot')),null)!==null
+            &&annonceAAfficher(U('lea@t.fr',A(1,'Mot')),undefined)!==null;
+        }catch(e){ return _echec('exception : '+e.message); }})());
+
+      // ── Le rendu, et la fermeture par le vrai chemin ────────────────────
+      const _sauveU=currentUser;
+      try{
+        ok('La bannière s\'affiche sur l\'accueil, avec le nom du coach',(()=>{
+          localStorage.removeItem(ANNONCE_CLE);
+          currentUser=U('lea@t.fr',A(11,'Salle fermée jeudi, on décale à vendredi 18h.','Kevin'));
+          renderAnnonceAthlete();
+          const el=document.getElementById('clh-annonce');
+          if(!el) return _echec('emplacement absent du DOM');
+          if(el.style.display!=='block') return _echec('emplacement masqué');
+          const t=el.textContent||'';
+          return /Mot de Kevin/.test(t)&&/vendredi 18h/.test(t)
+            ?true:_echec('«'+t.slice(0,70)+'»');})());
+        ok('Sans prénom de coach, la bannière reste lisible',(()=>{
+          localStorage.removeItem(ANNONCE_CLE);
+          currentUser=U('lea@t.fr',A(12,'Un mot',''));
+          renderAnnonceAthlete();
+          const t=document.getElementById('clh-annonce').textContent||'';
+          return /Mot de ton coach/.test(t)?true:_echec('«'+t.slice(0,60)+'»');})());
+        ok('« OK, j\'ai vu » ferme la bannière pour de bon',(()=>{
+          localStorage.removeItem(ANNONCE_CLE);
+          currentUser=U('lea@t.fr',A(13,'Un mot'));
+          renderAnnonceAthlete();
+          const el=document.getElementById('clh-annonce');
+          const btn=el.querySelector('button');
+          if(!btn) return _echec('aucun bouton');
+          btn.click();
+          if(el.style.display!=='none') return _echec('encore visible après le clic');
+          // Et elle ne revient pas au rendu suivant.
+          renderAnnonceAthlete();
+          return el.style.display==='none'&&!el.innerHTML
+            ?true:_echec('revenue au rendu suivant');})());
+        ok('La fermeture survit à un rechargement, pas à un nouveau mot',(()=>{
+          localStorage.removeItem(ANNONCE_CLE);
+          currentUser=U('lea@t.fr',A(14,'Premier'));
+          renderAnnonceAthlete();
+          document.getElementById('clh-annonce').querySelector('button').click();
+          // Rechargement simulé : on relit depuis le stockage.
+          if(annonceAAfficher(currentUser,_annonceLues())!==null)
+            return _echec('la fermeture n\'a pas été retenue');
+          currentUser.annonce=A(15,'Deuxième');
+          return annonceAAfficher(currentUser,_annonceLues())!==null
+            ?true:_echec('le deuxième mot est bâillonné par le premier');})());
+        ok('Le texte du coach ne peut pas injecter de HTML',(()=>{
+          // Il vient d'une saisie synchronisée depuis le cloud : même précaution
+          // que coachName, qui passe par textContent pour cette raison.
+          localStorage.removeItem(ANNONCE_CLE);
+          currentUser=U('lea@t.fr',A(16,'<img src=x onerror="window._annXSS=1">'));
+          renderAnnonceAthlete();
+          const el=document.getElementById('clh-annonce');
+          if(el.querySelector('img')) return _echec('balise injectée');
+          return window._annXSS===undefined
+            ?true:_echec('du script a été exécuté');})());
+        ok('Le retour à la ligne du coach est conservé',(()=>{
+          localStorage.removeItem(ANNONCE_CLE);
+          currentUser=U('lea@t.fr',A(17,'Ligne un\nLigne deux'));
+          renderAnnonceAthlete();
+          const el=document.getElementById('clh-annonce');
+          return /pre-wrap/.test(el.innerHTML)
+            ?true:_echec('les sauts de ligne seraient écrasés');})());
+        ok('Un stockage de lectures corrompu ne casse pas l\'accueil',(()=>{
+          try{
+            localStorage.setItem(ANNONCE_CLE,'{ceci n\'est pas du JSON');
+            currentUser=U('lea@t.fr',A(18,'Un mot'));
+            renderAnnonceAthlete();
+            const ok1=document.getElementById('clh-annonce').style.display==='block';
+            localStorage.setItem(ANNONCE_CLE,'"une chaîne"');
+            renderAnnonceAthlete();
+            const ok2=document.getElementById('clh-annonce').style.display==='block';
+            localStorage.removeItem(ANNONCE_CLE);
+            return ok1&&ok2?true:_echec('la bannière disparaît sur un stockage abîmé');
+          }catch(e){ return _echec('exception : '+e.message); }})());
+        ok('La bannière ne passe pas devant les blocs de santé',(()=>{
+          // Un « point d'étape 💪 » ne doit jamais repousser vers le bas un
+          // signe à faire examiner ni une douleur signalée.
+          const acc=document.getElementById('s-client-home');
+          const h=acc?acc.innerHTML:'';
+          const iC=h.indexOf('id="clh-contraintes"');
+          const iD=h.indexOf('id="clh-douleur"');
+          const iA=h.indexOf('id="clh-annonce"');
+          if(iA<0) return _echec('emplacement absent');
+          return iA>iC&&iA>iD?true:_echec('contraintes '+iC+' douleur '+iD+' annonce '+iA);})());
+        ok('L\'accueil appelle bien le rendu de la bannière',(()=>{
+          // Sans cet appel, tout le reste est du code mort.
+          return /renderAnnonceAthlete\(\)/.test(String(loadClientHome));})());
+      } finally { currentUser=_sauveU; localStorage.removeItem(ANNONCE_CLE); }
+
+      // ── Côté coach : qui peut recevoir, qui ne peut pas ─────────────────
+      const _sauveU2=currentUser, _sauveUsers=DB.get('users');
+      try{
+        currentUser={id:'co',email:'co@t.fr',role:'coach',fname:'Kevin',code:'AB12',
+          studentCodes:[{active:true,studentName:'Zoé Code',code:'ZZ99'}]};
+        const lea=U('lea@t.fr',null), max=U('max@t.fr',null);
+        lea.coachId='co'; max.coachId='co';
+        DB.set('users',{'co@t.fr':currentUser,'lea@t.fr':lea,'max@t.fr':max});
+        ok('Seuls les athlètes ayant un dossier sont destinataires',(()=>{
+          const {ok:dest,hors}=_annonceDestinataires();
+          const mails=dest.map(c=>c.email).sort();
+          if(mails.join(',')!=='lea@t.fr,max@t.fr') return _echec(mails.join(','));
+          // L'élève connu par son seul code est écarté — et compté, pour être dit.
+          return hors.length===1?true:_echec(hors.length+' écarté(s)');})());
+        ok('Un élève issu d\'un code ne porte AUCUN e-mail',(()=>{
+          // C'est cet invariant qui rend la garde !c._fromCode redondante aujourd'hui.
+          const code=getClients().filter(c=>c._fromCode);
+          if(!code.length) return _echec('aucun élève issu d\'un code dans le jeu');
+          const avecMail=code.filter(c=>c.email);
+          return avecMail.length?_echec(avecMail.length+' en portent un'):true;})());
+        ok('_fromCode est écarté EXPLICITEMENT, pas par accident',(()=>{
+          // Le jour où le profil minimal gagnera un e-mail, l'exclusion doit
+          // tenir quand même : sans elle, l'app écrirait un faux dossier.
+          // getClients est remplacée le temps du test — c'est le seul moyen
+          // d'injecter ce cas sans toucher au code de production.
+          const vrai=getClients;
+          try{
+            const us=DB.get('users')||{};
+            us['zoe@t.fr']={id:'_code_1',email:'zoe@t.fr',role:'athlete',fname:'Zoé'};
+            DB.set('users',us);
+            window.getClients=()=>[{id:'a1',email:'lea@t.fr',fname:'Léa'},
+              {id:'_code_1',email:'zoe@t.fr',fname:'Zoé',_fromCode:true}];
+            const {ok:dest,hors}=_annonceDestinataires();
+            const mails=dest.map(c=>c.email);
+            if(mails.indexOf('zoe@t.fr')>=0)
+              return _echec('un élève issu d\'un code est devenu destinataire');
+            return mails.join(',')==='lea@t.fr'&&hors.length===1
+              ?true:_echec('destinataires : '+mails.join(','));
+          } finally { window.getClients=vrai; }})());
+        ok('Les écartés sont ANNONCÉS au coach, pas supprimés en silence',(()=>{
+          document.getElementById('modal-overlay')?.remove();
+          openAnnonce();
+          const m=document.getElementById('modal-overlay');
+          if(!m) return _echec('la fenêtre ne s\'ouvre pas');
+          const t=m.textContent||'';
+          const dit=/1 élève connu par son seul code/.test(t);
+          closeModal();
+          return dit?true:_echec('rien ne dit qu\'un élève a été écarté');})());
+        ok('Poser un mot l\'écrit chez les athlètes cochés, et seulement eux',(()=>{
+          document.getElementById('modal-overlay')?.remove();
+          openAnnonce();
+          document.getElementById('ann-texte').value='Séance décalée à vendredi.';
+          // On décoche Max : il ne doit rien recevoir.
+          const cbs=Array.from(document.querySelectorAll('.ann-cb'));
+          const cbMax=cbs.find(c=>c.value==='max@t.fr');
+          if(!cbMax) return _echec('Max absent de la liste');
+          cbMax.checked=false;
+          envoyerAnnonce();
+          const us=DB.get('users')||{};
+          const a=us['lea@t.fr']&&us['lea@t.fr'].annonce;
+          if(!a||a.texte!=='Séance décalée à vendredi.')
+            return _echec('rien chez Léa');
+          if(a.par!=='Kevin') return _echec('le prénom du coach manque : '+a.par);
+          return !(us['max@t.fr']&&us['max@t.fr'].annonce)
+            ?true:_echec('Max a reçu le mot alors qu\'il était décoché');})());
+        ok('Un texte vide n\'écrit rien',(()=>{
+          const avant=JSON.stringify(DB.get('users'));
+          document.getElementById('modal-overlay')?.remove();
+          openAnnonce();
+          document.getElementById('ann-texte').value='   ';
+          envoyerAnnonce();
+          const apres=JSON.stringify(DB.get('users'));
+          const ferme=!document.getElementById('modal-overlay');
+          if(!ferme) closeModal();
+          return apres===avant&&!ferme
+            ?true:_echec(apres!==avant?'des dossiers ont bougé':'la fenêtre s\'est fermée comme si c\'était parti');})());
+        ok('Aucun athlète coché n\'écrit rien',(()=>{
+          const avant=JSON.stringify(DB.get('users'));
+          document.getElementById('modal-overlay')?.remove();
+          openAnnonce();
+          document.getElementById('ann-texte').value='Un mot';
+          _annTout(false);
+          envoyerAnnonce();
+          const apres=JSON.stringify(DB.get('users'));
+          closeModal();
+          return apres===avant?true:_echec('des dossiers ont bougé');})());
+        ok('Le mot est tronqué à '+ANNONCE_MAX+' caractères',(()=>{
+          document.getElementById('modal-overlay')?.remove();
+          openAnnonce();
+          // maxlength protège la saisie ; on force la valeur pour éprouver le code.
+          document.getElementById('ann-texte').value='x'.repeat(ANNONCE_MAX+50);
+          envoyerAnnonce();
+          const a=(DB.get('users')||{})['lea@t.fr'].annonce;
+          return a&&a.texte.length===ANNONCE_MAX
+            ?true:_echec(a?a.texte.length+' caractères':'rien');})());
+        ok('Un nouveau mot REMPLACE l\'ancien, avec un identifiant neuf',(()=>{
+          // Deux mots posés coup sur coup : c'est ce test qui a montré que
+          // Date.now() seul leur donnait le même identifiant.
+          document.getElementById('modal-overlay')?.remove();
+          openAnnonce();
+          document.getElementById('ann-texte').value='Premier mot';
+          envoyerAnnonce();
+          const id1=(DB.get('users')||{})['lea@t.fr'].annonce.id;
+          openAnnonce();
+          document.getElementById('ann-texte').value='Second mot';
+          envoyerAnnonce();
+          const a=(DB.get('users')||{})['lea@t.fr'].annonce;
+          if(Array.isArray(a)) return _echec('les mots s\'empilent');
+          return a.texte==='Second mot'&&a.id!==id1
+            ?true:_echec('«'+a.texte+'» id '+a.id);})());
+        ok('Le mot en cours est rappelé au coach avec son nombre d\'athlètes',(()=>{
+          document.getElementById('modal-overlay')?.remove();
+          openAnnonce();
+          document.getElementById('ann-texte').value='Le mot du jour';
+          _annTout(true);
+          envoyerAnnonce();
+          const e=_annonceEnCours();
+          if(!e) return _echec('aucun mot en cours');
+          if(e.combien!==2) return _echec(e.combien+' athlète(s) au lieu de 2');
+          openAnnonce();
+          const t=document.getElementById('modal-overlay').textContent||'';
+          closeModal();
+          return /Mot en cours/.test(t)&&/Le mot du jour/.test(t)
+            ?true:_echec('le mot en cours n\'est pas rappelé');})());
+        ok('Retirer le mot l\'enlève partout',(()=>{
+          document.getElementById('modal-overlay')?.remove();
+          openAnnonce();
+          document.getElementById('ann-texte').value='À retirer';
+          _annTout(true);
+          envoyerAnnonce();
+          retirerAnnonce();
+          const us=DB.get('users')||{};
+          const restants=Object.keys(us).filter(m=>us[m]&&us[m].annonce);
+          if(restants.length) return _echec('reste chez : '+restants.join(', '));
+          return _annonceEnCours()===null?true:_echec('encore un mot en cours');})());
+        ok('Retirer sans mot en cours ne fait rien et ne casse rien',(()=>{
+          try{
+            const avant=JSON.stringify(DB.get('users'));
+            retirerAnnonce();
+            return JSON.stringify(DB.get('users'))===avant;
+          }catch(e){ return _echec('exception : '+e.message); }})());
+        ok('Aucun athlète inscrit : la fenêtre ne s\'ouvre pas',(()=>{
+          DB.set('users',{'co@t.fr':currentUser});
+          document.getElementById('modal-overlay')?.remove();
+          openAnnonce();
+          const ouverte=!!document.getElementById('modal-overlay');
+          if(ouverte) closeModal();
+          return !ouverte?true:_echec('fenêtre ouverte sans destinataire possible');})());
+        ok('La rangée « Mes athlètes » ne déborde à aucune largeur de téléphone',(()=>{
+          // Avec deux boutons elle tenait ; le troisième la faisait sortir de
+          // l'écran à 375 px, la largeur d'iPhone la plus courante. Trouvé en
+          // mesurant, pas sur une capture : le rendu sans tête impose son
+          // propre viewport de 481 px et masquait le débordement.
+          const ecran=document.getElementById('s-coach-home');
+          if(!ecran) return _echec('écran coach absent');
+          const h2=Array.from(document.querySelectorAll('h2'))
+            .find(x=>/MES ATHL/.test(x.textContent||''));
+          if(!h2) return _echec('titre « Mes athlètes » introuvable');
+          let row=null,q=h2.parentNode;
+          while(q&&q!==document.body){
+            if(q.style&&q.style.justifyContent==='space-between'){ row=q; break; }
+            q=q.parentNode; }
+          if(!row) return _echec('rangée introuvable');
+          const wAvant=ecran.style.width, mAvant=ecran.style.maxWidth;
+          const actif=document.querySelector('.screen.active');
+          try{
+            // Un écran masqué mesure 0 : sans cette ligne le test comparait 0 à 0
+            // et ne pouvait RIEN détecter. C'est la variante qui l'a montré.
+            go('s-coach-home');
+            const trop=[414,375,320].filter(L=>{
+              ecran.style.width=L+'px'; ecran.style.maxWidth=L+'px';
+              return row.scrollWidth>row.clientWidth+1; });
+            // Sonde : si la rangée ne mesure rien, le test ne prouve rien.
+            if(!(row.clientWidth>0)) return _echec('rangée non affichée : mesure impossible');
+            return trop.length?_echec('déborde à : '+trop.join(', ')+' px'):true;
+          } finally {
+            ecran.style.width=wAvant; ecran.style.maxWidth=mAvant;
+            if(actif&&actif.id) go(actif.id);
+          }})());
+        ok('Le bouton du coach est bien câblé sur openAnnonce',(()=>{
+          const b=Array.from(document.querySelectorAll('button'))
+            .find(x=>/openAnnonce\(\)/.test(x.getAttribute('onclick')||''));
+          if(!b) return _echec('aucun bouton ne l\'appelle');
+          // Et il n'a pas remplacé le message groupé WhatsApp, qui reste le
+          // canal pour joindre quelqu'un hors de l'app.
+          const wa=Array.from(document.querySelectorAll('button'))
+            .find(x=>/openWaGroupe\(\)/.test(x.getAttribute('onclick')||''));
+          return wa?true:_echec('le message groupé WhatsApp a disparu');})());
+      } finally {
+        currentUser=_sauveU2;
+        if(_sauveUsers) DB.set('users',_sauveUsers);
+        document.getElementById('modal-overlay')?.remove();
+      }
     })();
 
 
