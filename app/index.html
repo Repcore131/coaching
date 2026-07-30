@@ -1452,6 +1452,7 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
 
       <!-- Nutrition coach -->
+      <div id="ccd-micro" style="display:none"></div>
       <div id="ccd-nutrition" style="margin-bottom:20px"></div>
       <!-- Compléments coach -->
       <div id="ccd-supplements" style="margin-bottom:20px"></div>
@@ -5921,6 +5922,131 @@ function signauxEntrainement(c){
   return r;
 }
 
+// ── Dépistage par profil : des QUESTIONS au coach, rien d'autre ────────────
+// Toutes les règles reposent sur des données DÉJÀ déclarées : aucune question
+// nouvelle à l'athlète, aucune case à cocher de plus. Si une donnée manque, la
+// règle ne se déclenche pas — on ne déduit rien.
+//
+// Ce bloc ne nomme aucune carence, ne propose aucun complément, ne pose aucun
+// diagnostic. Il produit un constat chiffré puis une question à poser. Il
+// n'entre PAS dans urgencyScore et ne déclenche aucune notification : ce n'est
+// pas une alerte, c'est une aide à la conversation.
+const MICRO_SECHE_SEMAINES=8;      // fer : ancienneté de sèche requise
+const MICRO_SOMMEIL_SEUIL=6;       // magnésium : moyenne en heures
+const MICRO_SOMMEIL_JOURS=14;      // fenêtre d'observation
+// Une moyenne sur deux nuits n'est pas une moyenne sur quinze jours. En dessous
+// de la moitié de la fenêtre, la donnée manque et la règle se tait.
+const MICRO_SOMMEIL_MIN_NUITS=7;
+// Novembre à mars inclus, en indices JavaScript (0 = janvier).
+const MICRO_MOIS_PEU_SOLEIL=Object.freeze([10,11,0,1,2]);
+const MICRO_MOTS_VEGE=Object.freeze(['vegetarien','vegetarienne','vegetalien',
+  'vegetalienne','vegan','vegane','vegetalisme','vegetarisme']);
+// Les trois champs libres du bilan de départ où ce genre de précision se tape
+// en pratique. On ne fouille pas tout le dossier : ailleurs, le mot voudrait
+// dire autre chose.
+const MICRO_CHAMPS_VEGE=Object.freeze(['deb-allergies','deb-food-hate','deb-health']);
+const MICRO_DISCLAIMER="RepCore n'est pas un dispositif médical. Seul un bilan sanguin peut établir une carence.";
+
+function _microNorm(s){
+  return String(s==null?'':s).normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+}
+// Sommeil : moyenne des nuits renseignées dans la fenêtre. Rend null quand il
+// n'y en a pas assez pour que le mot « moyenne » veuille dire quelque chose.
+function _microSommeil(user,ref){
+  const maintenant=(ref instanceof Date)?ref.getTime():Date.now();
+  const limite=localISODate(new Date(maintenant-MICRO_SOMMEIL_JOURS*864e5));
+  const nuits=((user&&user.sleepLog)||[])
+    .filter(e=>e&&e.date&&String(e.date)>=limite&&Number(e.duration)>0)
+    .map(e=>Number(e.duration));
+  if(nuits.length<MICRO_SOMMEIL_MIN_NUITS) return null;
+  return {moyenne:Math.round(nuits.reduce((a,b)=>a+b,0)/nuits.length*10)/10,
+    nuits:nuits.length};
+}
+// Cycle DÉCLARÉ actif : la case activée et une date de dernières règles. C'est
+// la même condition que _manageCycleSupplements — on ne devine pas un cycle.
+function _microCycleActif(user){
+  const c=(user&&user.nutrition&&user.nutrition.cycleAdaptation)||{};
+  return !!(c.enabled&&c.lastPeriodDate);
+}
+function _microVege(user){
+  const bl=((user&&user.bilans)||[]).filter(b=>b&&b.type==='depart');
+  for(const b of bl){
+    for(const champ of MICRO_CHAMPS_VEGE){
+      const t=_microNorm(b[champ]);
+      if(t&&MICRO_MOTS_VEGE.some(m=>t.indexOf(m)>=0)) return true;
+    }
+  }
+  return false;
+}
+
+// PURE : ne lit aucun état global hors constantes, n'écrit rien. `ref` sert aux
+// tests à fixer la date — sans elle, la règle saisonnière serait inéprouvable
+// huit mois par an.
+function risquesMicro(user,ref){
+  const out=[];
+  if(!user||typeof user!=='object') return out;
+  const date=(ref instanceof Date)?ref:new Date();
+  const phase=phaseCourante(user);
+  const enSeche=!!(phase&&phase.type==='seche');
+  const semaines=enSeche
+    ? Math.floor((date.getTime()-phase.debut)/(7*24*3600*1000))
+    : null;
+
+  // ── Fer : sèche longue chez une athlète dont le cycle est suivi ──────────
+  const sexe=(user._evol_gender||user.gender)||'';
+  if(isFemale(sexe)&&_microCycleActif(user)&&semaines!=null&&semaines>=MICRO_SECHE_SEMAINES){
+    out.push({cle:'fer',lib:'Sèche longue et cycle actif',
+      motif:'Sèche depuis '+semaines+' semaines, cycle menstruel suivi dans l\'app.',
+      question:'As-tu un bilan sanguin récent (ferritine) ?'});
+  }
+
+  // ── Saison : de novembre à mars, pour tout le monde ──────────────────────
+  if(MICRO_MOIS_PEU_SOLEIL.indexOf(date.getMonth())>=0){
+    const mois=date.toLocaleDateString('fr-FR',{month:'long'});
+    out.push({cle:'vitamineD',lib:'Saison peu ensoleillée',
+      motif:'Nous sommes en '+mois+' : de novembre à mars, l\'ensoleillement est faible sous nos latitudes.',
+      question:'Le dosage de la vitamine D a-t-il été abordé avec un professionnel de santé ?'});
+  }
+
+  // ── Alimentation végétarienne ou végétalienne déclarée ───────────────────
+  if(_microVege(user)){
+    out.push({cle:'b12_fer_vegetal',lib:'Régime végétarien ou végétalien',
+      motif:'Un régime végétarien ou végétalien est mentionné au bilan de départ.',
+      question:'Un bilan sanguin (B12, ferritine) a-t-il été fait depuis ce changement d\'alimentation ?'});
+  }
+
+  // ── Sommeil court pendant une sèche ──────────────────────────────────────
+  if(enSeche){
+    const s=_microSommeil(user,date);
+    if(s&&s.moyenne<MICRO_SOMMEIL_SEUIL){
+      out.push({cle:'magnesium',lib:'Sommeil court en sèche',
+        motif:'Moyenne de '+String(s.moyenne).replace('.',',')+' h sur '+s.nuits
+          +' nuits renseignées, pendant une sèche.',
+        question:'Est-ce que le sommeil fait partie de ce que vous suivez ensemble en ce moment ?'});
+    }
+  }
+  return out;
+}
+
+// Fiche coach UNIQUEMENT. Rien de tout ceci n'est rendu côté athlète : aucune
+// fonction de l'accueil ou de l'écran nutrition n'appelle risquesMicro.
+function renderCoachMicroSection(c){
+  const el=document.getElementById('ccd-micro');
+  if(!el) return;
+  const l=(function(){ try{ return risquesMicro(c); }catch(e){ return []; } })();
+  if(!l.length){ el.innerHTML=''; el.style.display='none'; return; }
+  el.style.display='block';
+  el.innerHTML=`<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:5px">À demander en séance</div>
+    <div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-bottom:12px">Rien n'est détecté ici : ce sont des questions que le profil rend pertinentes.</div>
+    ${l.map(r=>`<div style="border-left:2px solid var(--border);padding-left:11px;margin-bottom:12px">
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(r.lib)}</div>
+      <div style="font-size:12px;color:#ddd;line-height:1.6">${escapeHtml(r.motif)}</div>
+      <div style="font-size:12.5px;color:#fff;line-height:1.6;margin-top:5px;font-weight:600">${escapeHtml(r.question)}</div>
+    </div>`).join('')}
+    <div style="font-size:11px;color:var(--text-dim);line-height:1.55;border-top:1px solid var(--border);padding-top:10px">${escapeHtml(MICRO_DISCLAIMER)}</div>
+  </div>`;
+}
 function urgencyScore(c){
   const lt=(c.bilans||[]).reduce((m,b)=>Math.max(m,b.date),0);
   // ── Signaux d'entraînement, au-dessus de l'échelle administrative ──
@@ -7068,6 +7194,7 @@ function openClientDetail(cid,_refresh){
   _majDemandesVideo();
   renderClientPdfCard(c);
   renderCoachSessionRecap(c);
+  renderCoachMicroSection(c);
   renderCoachNutriSection(c);
   renderCoachSuppSection(c);
   renderCoachCaffeineSection(c);
@@ -16751,11 +16878,13 @@ function updateFjaCalc(){
   const p=f.p!=null?parseFloat((f.p*r).toFixed(1)):null;
   const c=f.c!=null?parseFloat((f.c*r).toFixed(1)):null;
   const l=f.l!=null?parseFloat((f.l*r).toFixed(1)):null;
+  const sel=f.e!=null?parseFloat((f.e*r).toFixed(2)):null;
   el.innerHTML=`<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:12px;padding:14px;display:flex;justify-content:space-around;text-align:center">
     <div><div class="txt-stat" style="color:var(--red);line-height:1">${kcal??'—'}</div><div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-top:2px">KCAL</div></div>
     <div><div class="txt-stat" style="line-height:1">${p??'—'}</div><div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-top:2px">PROT g</div></div>
     <div><div class="txt-stat" style="line-height:1">${c??'—'}</div><div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-top:2px">GLUC g</div></div>
     <div><div class="txt-stat" style="line-height:1">${l??'—'}</div><div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-top:2px">LIP g</div></div>
+    <div><div class="txt-stat" style="line-height:1">${sel??'—'}</div><div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-top:2px">SEL g</div></div>
   </div>`;
 }
 
@@ -16771,6 +16900,9 @@ function saveFoodEntry(){
     c:f.c!=null?parseFloat((f.c*r).toFixed(1)):null,
     l:f.l!=null?parseFloat((f.l*r).toFixed(1)):null,
     fi:f.f!=null?parseFloat((f.f*r).toFixed(1)):null,
+    // `e` de Ciqual = sel en g/100 g. Deux décimales : au dixième, 0,17 g
+    // deviendrait 0,2 g, et l'écart se cumule sur une journée entière.
+    sel:f.e!=null?parseFloat((f.e*r).toFixed(2)):null,
   };
   if(!currentUser.nutrition) currentUser.nutrition={};
   if(!currentUser.nutrition.log) currentUser.nutrition.log={};
@@ -16809,8 +16941,12 @@ function _renderFjDaySummary(date){
   const m=_getEffectiveMacros(nut,isOn,date);
   const tot=entries.reduce((a,e)=>({
     kcal:a.kcal+(e.kcal||0),p:a.p+(e.p||0),c:a.c+(e.c||0),l:a.l+(e.l||0),
-    s:a.s+(e.s||0),fi:a.fi+(e.fi||0)
-  }),{kcal:0,p:0,c:0,l:0,s:0,fi:0});
+    s:a.s+(e.s||0),fi:a.fi+(e.fi||0),sel:a.sel+(e.sel||0)
+  }),{kcal:0,p:0,c:0,l:0,s:0,fi:0,sel:0});
+  // Les aliments enregistrés avant ce champ, et les 190 aliments de Ciqual qui
+  // n'ont pas de valeur de sel, comptent pour zéro. On le DIT plutôt que
+  // d'afficher un total qui aurait l'air complet.
+  const _selManquant=entries.filter(e=>e&&e.sel==null).length;
   const repasOrder=['matin','dejeuner','diner','collation'];
   const repasLabels={matin:'Petit-déjeuner',dejeuner:'Déjeuner',diner:'Dîner',collation:'Collation'};
   const grouped={};
@@ -16853,9 +16989,11 @@ function _renderFjDaySummary(date){
         <div style="display:flex;gap:6px;align-items:stretch">
           ${tile(tot.s,m.s?m.s+'g':'','sucre ℹ','#a78bfa')}
           ${tile(tot.fi,m.f?m.f+'g':'','fibres ℹ','#94a3b8')}
+          ${tile(tot.sel,'','sel g','#94a3b8')}
           ${kcalTile}
         </div>
         <div style="font-size:var(--fs-xs);color:var(--text-dim);text-align:right;margin-top:7px">ℹ sucre & fibres : indicatif</div>
+        ${_selManquant?`<div style="font-size:var(--fs-xs);color:var(--text-dim);text-align:right;margin-top:3px">sel non compté sur ${_selManquant} aliment${_selManquant>1?'s':''}</div>`:''}
       </div>
     </div>
     ${entries.length===0?`<div style="text-align:center;padding:18px 0 8px;color:var(--text-dim);font-size:12px">Aucun aliment enregistré : appuie sur + AJOUTER</div>`:''}
@@ -32199,6 +32337,383 @@ function testExercices(){
         if(_sauveUsers) DB.set('users',_sauveUsers);
         document.getElementById('modal-overlay')?.remove();
       }
+    })();
+
+
+    // ══ SEL & DÉPISTAGE PAR PROFIL ════════════════════════════════════════
+    (()=>{
+      const JUILLET=new Date(2026,6,15);
+      const JANVIER=new Date(2026,0,15);
+      const _jour=n=>localISODate(new Date(Date.now()-n*864e5));
+
+      // ── SEL : le champ `e` de Ciqual ─────────────────────────────────────
+      const _sauveU=currentUser, _sauveSave=window.saveUser, _sauveLN=window.loadNutrition;
+      const _sauveFood=(typeof _fjFood!=='undefined')?_fjFood:null;
+      const _sauveDate=(typeof _fjDate!=='undefined')?_fjDate:null;
+      try{
+        window.saveUser=()=>true;
+        window.loadNutrition=()=>{};
+        ok('Critère : un aliment ajouté porte un sel cohérent avec `e`',(()=>{
+          currentUser={id:'_ts',email:'ts@t',exAlias:{},exMuscles:{},sessions:[],nutrition:{}};
+          _fjFood={id:1,n:'Jambon',g:'',k:110,p:20,c:1,l:3,f:0,e:2.4};
+          _fjDate='2026-01-05'; _fjRepas='matin';
+          const inp=document.getElementById('fja-qty');
+          if(!inp) return _echec('champ de quantité absent du DOM');
+          inp.value=50;
+          saveFoodEntry();
+          const e=(((currentUser.nutrition.log||{})['2026-01-05']||{}).entries||[])[0];
+          if(!e) return _echec('aucune entrée écrite');
+          // 2,4 g/100 g sur 50 g = 1,2 g.
+          return e.sel===1.2?true:_echec('sel='+e.sel);})());
+        ok('Le sel garde deux décimales',(()=>{
+          currentUser={id:'_ts',email:'ts@t',exAlias:{},exMuscles:{},sessions:[],nutrition:{}};
+          _fjFood={id:2,n:'Dessert',g:'',k:255,p:4.41,c:32.9,l:11.3,f:1.7,e:0.33};
+          _fjDate='2026-01-05'; _fjRepas='matin';
+          document.getElementById('fja-qty').value=50;
+          saveFoodEntry();
+          const e=currentUser.nutrition.log['2026-01-05'].entries[0];
+          // 0,33 × 0,5 = 0,165 → 0,17. Au dixième on aurait écrit 0,2.
+          return e.sel===0.17?true:_echec('sel='+e.sel);})());
+        ok('Un aliment sans valeur de sel écrit null, pas zéro',(()=>{
+          // 190 aliments de Ciqual n'ont pas de champ `e`. Écrire 0 les ferait
+          // passer pour mesurés à zéro, ce qui est faux.
+          currentUser={id:'_ts',email:'ts@t',exAlias:{},exMuscles:{},sessions:[],nutrition:{}};
+          _fjFood={id:3,n:'Inconnu',g:'',k:100,p:1,c:1,l:1,f:1};
+          _fjDate='2026-01-05'; _fjRepas='matin';
+          document.getElementById('fja-qty').value=100;
+          saveFoodEntry();
+          const e=currentUser.nutrition.log['2026-01-05'].entries[0];
+          return e.sel===null?true:_echec('sel='+JSON.stringify(e.sel));})());
+        ok('Le calcul avant enregistrement montre le sel',(()=>{
+          _fjFood={id:4,n:'Jambon',g:'',k:110,p:20,c:1,l:3,f:0,e:2.4};
+          document.getElementById('fja-qty').value=50;
+          updateFjaCalc();
+          const t=(document.getElementById('fja-calc')||{}).textContent||'';
+          return /SEL/.test(t)&&/1\.2/.test(t)?true:_echec('«'+t.replace(/\s+/g,' ').slice(0,90)+'»');})());
+        ok('Les autres macros du calcul n\'ont pas bougé',(()=>{
+          _fjFood={id:5,n:'Jambon',g:'',k:110,p:20,c:1,l:3,f:0,e:2.4};
+          document.getElementById('fja-qty').value=100;
+          updateFjaCalc();
+          const t=(document.getElementById('fja-calc')||{}).textContent||'';
+          return /110/.test(t)&&/20/.test(t)&&/KCAL/.test(t)&&/PROT/.test(t)
+            ?true:_echec('«'+t.replace(/\s+/g,' ').slice(0,90)+'»');})());
+
+        // ── Le récapitulatif du jour ──────────────────────────────────────
+        const _recap=entries=>{
+          currentUser={id:'_ts',email:'ts@t',exAlias:{},exMuscles:{},sessions:[],
+            nutrition:{log:{'2026-01-06':{entries}}}};
+          _renderFjDaySummary('2026-01-06');
+          return (document.getElementById('fj-today-section')||{}).textContent||'';};
+        ok('Le total de sel du jour est affiché',(()=>{
+          // 1,2 + 2,4 = 3,6 : un total qu'aucune autre tuile de l'écran
+          // n'affiche. tile() arrondit au dixième — c'est son comportement
+          // d'origine, et 3,75 s'y affichait « 3.8 ».
+          // Mon premier jet cherchait « 2 », qui figurait déjà dans « 2 prot » :
+          // la variante qui forçait le total de sel à zéro passait au vert.
+          const t=_recap([{id:1,nom:'A',qty:100,repas:'matin',kcal:100,p:1,c:1,l:1,fi:1,sel:1.2},
+            {id:2,nom:'B',qty:100,repas:'matin',kcal:100,p:1,c:1,l:1,fi:1,sel:2.4}])
+            .replace(/\s+/g,' ');
+          // Le chiffre collé à SON étiquette, pas n'importe où dans l'écran.
+          return /3[.,]6\s*sel g/i.test(t)?true:_echec('«'+t.slice(0,160)+'»');})());
+        ok('Critère : une entrée sans sel est SIGNALÉE, pas escamotée',(()=>{
+          const t=_recap([{id:1,nom:'A',qty:100,repas:'matin',kcal:100,p:1,c:1,l:1,fi:1,sel:1.2},
+            {id:2,nom:'Ancien',qty:100,repas:'matin',kcal:100,p:1,c:1,l:1,fi:1}]);
+          return /sel non compté sur 1 aliment/.test(t)
+            ?true:_echec('«'+t.replace(/\s+/g,' ').slice(0,160)+'»');})());
+        ok('Deux entrées sans sel : le pluriel suit',(()=>{
+          const t=_recap([{id:1,nom:'A',qty:100,repas:'matin',kcal:100,sel:null},
+            {id:2,nom:'B',qty:100,repas:'matin',kcal:100}]);
+          return /sel non compté sur 2 aliments/.test(t)
+            ?true:_echec('«'+t.replace(/\s+/g,' ').slice(0,160)+'»');})());
+        ok('Toutes les entrées avec sel : aucune mention',(()=>{
+          const t=_recap([{id:1,nom:'A',qty:100,repas:'matin',kcal:100,p:1,c:1,l:1,fi:1,sel:1.2}]);
+          return t.indexOf('sel non compté')<0?true:_echec('mention affichée à tort');})());
+        ok('Une entrée antérieure n\'écrit rien de neuf dans le dossier',(()=>{
+          // Le récapitulatif ne doit pas « réparer » les entrées en écrivant
+          // sel:0 chez elles : ce serait inventer une mesure.
+          const anc={id:2,nom:'Ancien',qty:100,repas:'matin',kcal:100,p:1,c:1,l:1,fi:1};
+          _recap([anc]);
+          return !('sel' in anc)?true:_echec('un champ sel a été ajouté après coup');})());
+        ok('Aucun seuil, aucune couleur, aucune alerte sur le sel',(()=>{
+          // Un besoin en sodium d'athlète n'a pas de repère grand public : on
+          // affiche le chiffre et on se taît.
+          const t=_recap([{id:1,nom:'A',qty:100,repas:'matin',kcal:100,sel:12}]);
+          const bas=t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+          const mots=['trop de sel','excessif','limite','reduis','attention au sel',
+            'trop sale','depasse'];
+          const trouves=mots.filter(m=>bas.indexOf(m)>=0);
+          return trouves.length?_echec(trouves.join(', ')):true;})());
+      } finally {
+        currentUser=_sauveU; window.saveUser=_sauveSave; window.loadNutrition=_sauveLN;
+        if(_sauveFood!==null) _fjFood=_sauveFood;
+        if(_sauveDate!==null) _fjDate=_sauveDate;
+      }
+
+      // ── risquesMicro : les règles ────────────────────────────────────────
+      const _ath=o=>Object.assign({id:'_tm',email:'tm@t',role:'athlete',
+        exAlias:{},exMuscles:{},sessions:[],bilans:[]},o||{});
+      // Les fixtures sont ancrées sur la date de RÉFÉRENCE du test, pas sur
+      // aujourd'hui : une sèche « de 9 semaines » datée de Date.now() n'en
+      // faisait que 6 vue de juillet, et des nuits « hors fenêtre » y
+      // retombaient. Juillet est le repli, janvier se passe explicitement.
+      const _jourDe=(ref,n)=>localISODate(new Date(ref.getTime()-n*864e5));
+      const _seche=(sem,ref)=>({type:'seche',
+        debut:(ref||JUILLET).getTime()-sem*7*864e5});
+      const _cycle=ref=>({cycleAdaptation:{enabled:true,
+        lastPeriodDate:_jourDe(ref||JUILLET,10),cycleLength:28}});
+      const _nuits=(n,h,ref)=>Array.from({length:n},(x,i)=>
+        ({date:_jourDe(ref||JUILLET,i+1),bed:'00:30',wake:'06:00',duration:h}));
+
+      ok('Critère : un dossier vide ne produit aucun risque de profil',(()=>{
+        // Hors novembre-mars, car la règle saisonnière vaut pour tout le monde
+        // et ne dépend d'aucune donnée du dossier.
+        const cas=[risquesMicro({},JUILLET),risquesMicro(_ath({}),JUILLET),
+          risquesMicro(null,JUILLET),risquesMicro(undefined,JUILLET)];
+        const pleins=cas.filter(l=>!Array.isArray(l)||l.length);
+        return pleins.length?_echec(JSON.stringify(cas)):true;})());
+      ok('Critère : homme, pas de sèche, juillet → aucun risque',(()=>{
+        const u=_ath({gender:'Homme',sleepLog:_nuits(14,5),
+          bilans:[{type:'depart',date:Date.now()-90*864e5,'deb-allergies':'aucune'}]});
+        const l=risquesMicro(u,JUILLET);
+        return l.length===0?true:_echec(l.map(r=>r.cle).join(', '));})());
+      ok('Critère : femme, cycle actif, sèche depuis 9 semaines → le fer sort',(()=>{
+        const u=_ath({gender:'Femme',phase:_seche(9),nutrition:_cycle()});
+        const l=risquesMicro(u,JUILLET);
+        const fer=l.find(r=>r.cle==='fer');
+        if(!fer) return _echec('sorties : '+(l.map(r=>r.cle).join(', ')||'aucune'));
+        return /9 semaines/.test(fer.motif)&&/ferritine/.test(fer.question)
+          ?true:_echec('«'+fer.motif+'» / «'+fer.question+'»');})());
+      ok('Sous 8 semaines de sèche, le fer ne sort pas',
+        !risquesMicro(_ath({gender:'Femme',phase:_seche(7),nutrition:_cycle()}),JUILLET)
+          .some(r=>r.cle==='fer'));
+      ok('Sans cycle DÉCLARÉ actif, le fer ne sort pas',(()=>{
+        // Ni cycle absent, ni case décochée, ni date manquante ne suffisent :
+        // on ne devine pas un cycle.
+        const sans=_ath({gender:'Femme',phase:_seche(12)});
+        const off=_ath({gender:'Femme',phase:_seche(12),
+          nutrition:{cycleAdaptation:{enabled:false,lastPeriodDate:_jour(5)}}});
+        const sansDate=_ath({gender:'Femme',phase:_seche(12),
+          nutrition:{cycleAdaptation:{enabled:true}}});
+        const sortis=[sans,off,sansDate].filter(u=>
+          risquesMicro(u,JUILLET).some(r=>r.cle==='fer'));
+        return sortis.length?_echec(sortis.length+' cas sur 3'):true;})());
+      ok('Chez un homme, le fer ne sort jamais',
+        !risquesMicro(_ath({gender:'Homme',phase:_seche(20),nutrition:_cycle()}),JUILLET)
+          .some(r=>r.cle==='fer'));
+      ok('Hors sèche, le fer ne sort pas',
+        !risquesMicro(_ath({gender:'Femme',
+          phase:{type:'masse',debut:JUILLET.getTime()-90*864e5},
+          nutrition:_cycle()}),JUILLET).some(r=>r.cle==='fer'));
+
+      ok('La saison sort de novembre à mars, et seulement là',(()=>{
+        const u=_ath({gender:'Homme'});
+        const sort=[];
+        for(let m=0;m<12;m++)
+          if(risquesMicro(u,new Date(2026,m,15)).some(r=>r.cle==='vitamineD')) sort.push(m);
+        // 10 = novembre, 11 = décembre, 0 = janvier, 1 = février, 2 = mars.
+        return sort.join(',')==='0,1,2,10,11'?true:_echec('mois : '+sort.join(','));})());
+      ok('La saison vaut pour TOUT LE MONDE, dossier vide compris',(()=>{
+        const l=risquesMicro({},JANVIER);
+        return l.length===1&&l[0].cle==='vitamineD'
+          ?true:_echec(l.map(r=>r.cle).join(', '));})());
+
+      ok('Un régime végétarien déclaré au bilan sort',(()=>{
+        const u=_ath({gender:'Homme',bilans:[{type:'depart',date:Date.now()-60*864e5,
+          'deb-allergies':'Intolérance lactose, végétarien depuis 3 ans'}]});
+        const r=risquesMicro(u,JUILLET).find(x=>x.cle==='b12_fer_vegetal');
+        return r?/B12/.test(r.question):_echec('rien ne sort');})());
+      ok('Végétalien, vegan, accents et casse : tous reconnus',(()=>{
+        const mots=['végétalien','VEGAN','Végane','vegetarienne','Végétarisme'];
+        const rates=mots.filter(m=>!risquesMicro(_ath({bilans:[{type:'depart',
+          date:Date.now()-60*864e5,'deb-allergies':m}]}),JUILLET)
+          .some(r=>r.cle==='b12_fer_vegetal'));
+        return rates.length?_echec('non reconnus : '+rates.join(', ')):true;})());
+      ok('Le mot est cherché dans les champs libres du bilan de DÉPART',(()=>{
+        // Trois champs : régime particulier, aliments détestés, santé.
+        const champs=['deb-allergies','deb-food-hate','deb-health'];
+        const rates=champs.filter(k=>{
+          const b={type:'depart',date:Date.now()-60*864e5}; b[k]='végétarien';
+          return !risquesMicro(_ath({bilans:[b]}),JUILLET)
+            .some(r=>r.cle==='b12_fer_vegetal');});
+        return rates.length?_echec('ignorés : '+rates.join(', ')):true;})());
+      ok('Un bilan de SUIVI ne déclenche pas la règle végétale',(()=>{
+        // La règle est adossée au questionnaire de départ, pas à n'importe quel
+        // texte du dossier.
+        const u=_ath({bilans:[{type:'suivi',date:Date.now()-5*864e5,
+          'deb-allergies':'végétarien'}]});
+        return !risquesMicro(u,JUILLET).some(r=>r.cle==='b12_fer_vegetal');})());
+      ok('Sans mention, la règle végétale se taît',(()=>{
+        const u=_ath({bilans:[{type:'depart',date:Date.now()-60*864e5,
+          'deb-allergies':'aucune','deb-food-hate':'brocolis'}]});
+        return !risquesMicro(u,JUILLET).some(r=>r.cle==='b12_fer_vegetal');})());
+
+      ok('Sommeil court en sèche : la règle sort',(()=>{
+        const u=_ath({phase:_seche(4),sleepLog:_nuits(10,5.5)});
+        const r=risquesMicro(u,JUILLET).find(x=>x.cle==='magnesium');
+        if(!r) return _echec('rien ne sort');
+        return /5,5 h/.test(r.motif)&&/10 nuits/.test(r.motif)
+          ?true:_echec('«'+r.motif+'»');})());
+      ok('Sommeil correct : rien, même en sèche',
+        !risquesMicro(_ath({phase:_seche(4),sleepLog:_nuits(14,7.5)}),JUILLET)
+          .some(r=>r.cle==='magnesium'));
+      ok('Sommeil court HORS sèche : rien',
+        !risquesMicro(_ath({sleepLog:_nuits(14,5)}),JUILLET)
+          .some(r=>r.cle==='magnesium'));
+      ok('Trop peu de nuits renseignées : la donnée manque, la règle se taît',(()=>{
+        // Une moyenne sur deux nuits n'est pas une moyenne sur quinze jours.
+        const u=_ath({phase:_seche(4),sleepLog:_nuits(3,4)});
+        return !risquesMicro(u,JUILLET).some(r=>r.cle==='magnesium')
+          ?true:_echec('déclenchée sur 3 nuits');})());
+      ok('Les nuits hors fenêtre de 14 jours ne comptent pas',(()=>{
+        const u=_ath({phase:_seche(4),sleepLog:Array.from({length:12},(x,i)=>
+          ({date:_jourDe(JUILLET,20+i),bed:'00:30',wake:'05:00',duration:4}))});
+        return !risquesMicro(u,JUILLET).some(r=>r.cle==='magnesium')
+          ?true:_echec('des nuits de plus de 14 jours ont compté');})());
+
+      ok('Plusieurs règles peuvent sortir ensemble',(()=>{
+        const u=_ath({gender:'Femme',phase:_seche(11,JANVIER),
+          sleepLog:_nuits(12,5,JANVIER),
+          bilans:[{type:'depart',date:JANVIER.getTime()-90*864e5,
+            'deb-allergies':'végétarienne'}]});
+        Object.assign(u,{nutrition:_cycle(JANVIER)});
+        const cles=risquesMicro(u,JANVIER).map(r=>r.cle).sort();
+        return cles.join(',')==='b12_fer_vegetal,fer,magnesium,vitamineD'
+          ?true:_echec(cles.join(','));})());
+      ok('risquesMicro est PURE : ni dossier ni date modifiés',(()=>{
+        const u=_ath({gender:'Femme',phase:_seche(11,JANVIER),nutrition:_cycle(JANVIER),
+          sleepLog:_nuits(12,5,JANVIER),bilans:[{type:'depart',
+          date:JANVIER.getTime()-90*864e5,'deb-allergies':'végétarienne'}]});
+        const avant=JSON.stringify(u);
+        const d=new Date(JANVIER.getTime()), dAvant=d.getTime();
+        risquesMicro(u,d);
+        if(JSON.stringify(u)!==avant) return _echec('le dossier a bougé');
+        return d.getTime()===dAvant?true:_echec('la date a bougé');})());
+      ok('Chaque risque porte les quatre champs attendus',(()=>{
+        const u=_ath({gender:'Femme',phase:_seche(11,JANVIER),nutrition:_cycle(JANVIER),
+          sleepLog:_nuits(12,5,JANVIER),bilans:[{type:'depart',
+          date:JANVIER.getTime()-90*864e5,'deb-allergies':'végane'}]});
+        const l=risquesMicro(u,JANVIER);
+        const faux=l.filter(r=>!r.cle||!r.lib||!r.motif||!r.question);
+        return faux.length?_echec(faux.length+' incomplets'):l.length===4;})());
+
+      // ── Le registre : un constat, puis une QUESTION ──────────────────────
+      ok('Critère : chaque sortie est une QUESTION, pas une conclusion',(()=>{
+        const u=_ath({gender:'Femme',phase:_seche(11,JANVIER),nutrition:_cycle(JANVIER),
+          sleepLog:_nuits(12,5,JANVIER),bilans:[{type:'depart',
+          date:JANVIER.getTime()-90*864e5,'deb-allergies':'végane'}]});
+        const l=risquesMicro(u,JANVIER);
+        const sansQ=l.filter(r=>!/\?\s*$/.test(r.question));
+        if(sansQ.length) return _echec('sans point d\'interrogation : '+sansQ.map(r=>r.cle).join(', '));
+        // Et le motif est un constat, donc PAS une question.
+        const motifQ=l.filter(r=>/\?/.test(r.motif));
+        return motifQ.length?_echec('motif interrogatif : '+motifQ.map(r=>r.cle).join(', ')):true;})());
+      ok('Critère : aucune carence nommée, aucun complément, aucun diagnostic',(()=>{
+        const u=_ath({gender:'Femme',phase:_seche(11,JANVIER),nutrition:_cycle(JANVIER),
+          sleepLog:_nuits(12,5,JANVIER),bilans:[{type:'depart',
+          date:JANVIER.getTime()-90*864e5,'deb-allergies':'végane'}]});
+        const l=risquesMicro(u,JANVIER);
+        const textes=[];
+        l.forEach(r=>textes.push(r.lib,r.motif,r.question));
+        const INTERDITS=['carence','deficit','deficience','anemie','manque de',
+          'complement','supplement','supplementation','gelule','comprime',
+          'diagnostic','maladie','pathologie','traitement','soigne','symptome',
+          'osteoporose','tu manques','il te manque','probablement','sans doute',
+          'surement'];
+        const trouves=[];
+        textes.forEach(t=>{
+          const n=_microNorm(t);
+          INTERDITS.forEach(m=>{ if(n.indexOf(m)>=0&&trouves.indexOf(m)<0)
+            trouves.push(m+' → «'+String(t).slice(0,40)+'»'); });});
+        return trouves.length?_echec(trouves.join(' | ')):true;})());
+      ok('Le disclaimer dit exactement ce qui a été demandé',(()=>{
+        const t=MICRO_DISCLAIMER;
+        return /n'est pas un dispositif médical/.test(t)
+          &&/bilan sanguin peut établir une carence/.test(t)
+          ?true:_echec('«'+t+'»');})());
+
+      // ── L'affichage : fiche coach seulement ─────────────────────────────
+      const _sauveU2=currentUser;
+      try{
+        ok('Le bloc s\'affiche sur la fiche coach, avec le disclaimer',(()=>{
+          const c=_ath({gender:'Femme',phase:_seche(11),nutrition:_cycle()});
+          renderCoachMicroSection(c);
+          const el=document.getElementById('ccd-micro');
+          if(!el) return _echec('emplacement absent du DOM');
+          if(el.style.display!=='block') return _echec('emplacement masqué');
+          const t=el.textContent||'';
+          return /ferritine/.test(t)&&t.indexOf(MICRO_DISCLAIMER)>=0
+            ?true:_echec('«'+t.replace(/\s+/g,' ').slice(0,120)+'»');})());
+        ok('Le disclaimer n\'est pas masquable',(()=>{
+          const c=_ath({gender:'Femme',phase:_seche(11),nutrition:_cycle()});
+          renderCoachMicroSection(c);
+          const h=document.getElementById('ccd-micro').innerHTML;
+          // Aucun bouton dans tout le bloc : ni fermeture, ni report.
+          return h.indexOf('<button')<0&&h.indexOf('onclick')<0
+            ?true:_echec('un contrôle permet de le faire disparaître');})());
+        ok('Aucun texte saisi par l\'athlète n\'est recopié dans le bloc',(()=>{
+          // C'est ce qui rend l'échappement défensif plutôt que nécessaire : les
+          // textes produits sont des chaînes FIXES, seuls des nombres varient.
+          // La variante qui retirait escapeHtml passait au vert pour cette
+          // raison — autant éprouver l'invariant, qui est plus fort.
+          const M='ZQXMARQUEUR';
+          const c=_ath({gender:'Femme',phase:_seche(11),nutrition:_cycle(),
+            sleepLog:_nuits(12,5),
+            bilans:[{type:'depart',date:JUILLET.getTime()-60*864e5,
+              'deb-allergies':'végétarien '+M,'deb-food-hate':M,'deb-health':M}]});
+          renderCoachMicroSection(c);
+          const el=document.getElementById('ccd-micro');
+          if(!el||el.style.display!=='block') return _echec('aucun bloc rendu');
+          return el.innerHTML.indexOf(M)<0
+            ?true:_echec('le texte de l\'athlète est recopié dans la fiche');})());
+        ok('Et l\'échappement reste en place, par précaution',(()=>{
+          // Le jour où un motif citerait l'athlète, il passera par escapeHtml.
+          const src=String(renderCoachMicroSection);
+          const champs=['r.lib','r.motif','r.question'];
+          const nus=champs.filter(c=>src.indexOf('escapeHtml('+c+')')<0);
+          return nus.length?_echec('sans escapeHtml : '+nus.join(', ')):true;})());
+        ok('Critère : rien de tout ceci n\'atteint l\'athlète',(()=>{
+          // Aucune fonction d'affichage athlète n'appelle risquesMicro.
+          const cotes=[['loadClientHome',loadClientHome],
+            ['_renderNutriContent',_renderNutriContent],['loadNutrition',loadNutrition],
+            ['renderNotifs',renderNotifs]];
+          const fautives=cotes.filter(([n,f])=>/risquesMicro/.test(String(f)));
+          if(fautives.length) return _echec(fautives.map(x=>x[0]).join(', '));
+          // Et la fonction coach, elle, l'appelle bien.
+          return /risquesMicro/.test(String(renderCoachMicroSection))
+            ?true:_echec('la fiche coach ne l\'appelle pas');})());
+      } finally { currentUser=_sauveU2; }
+
+      // ── NON-RÉGRESSION : urgencyScore et les notifications ──────────────
+      ok('La fiche coach appelle bien le bloc',(()=>{
+        // Sans cet appel, tout le lot est du code mort. La variante qui retirait
+        // la ligne d'openClientDetail passait au vert : je testais la fonction,
+        // pas son branchement.
+        return /renderCoachMicroSection\(/.test(String(openClientDetail))
+          ?true:_echec('openClientDetail ne l\'appelle pas');})());
+      ok('Critère : urgencyScore ne consulte pas les risques de profil',
+        !/risquesMicro/.test(String(urgencyScore)));
+      ok('Critère : urgencyScore rend la même valeur avec et sans risques',(()=>{
+        const sauveU=currentUser;
+        try{
+          currentUser={id:'co',email:'co@t.fr',role:'coach',seenBilans:{},alertStatus:{}};
+          const base={id:'x9',email:'x9@t.fr',role:'athlete',coachId:'co',
+            fname:'Léa',exAlias:{},exMuscles:{},sessions:[],
+            bilans:[{type:'depart',date:Date.now()-30*864e5}],
+            createdAt:Date.now()-60*864e5,status:'COACHING_SUIVI'};
+          currentUser.seenBilans['x9@t.fr']=Date.now();
+          const avant=urgencyScore(JSON.parse(JSON.stringify(base)));
+          // On ajoute EXACTEMENT ce qui déclenche les quatre règles.
+          const apres=urgencyScore(Object.assign(JSON.parse(JSON.stringify(base)),{
+            gender:'Femme',phase:_seche(11),nutrition:_cycle(),sleepLog:_nuits(12,5),
+            bilans:[{type:'depart',date:Date.now()-30*864e5,'deb-allergies':'végane'}]}));
+          return avant===apres?true:_echec(avant+' puis '+apres);
+        } finally { currentUser=sauveU; }})());
+      ok('Aucune notification ne consulte les risques de profil',(()=>{
+        const f=[['scheduleSuppNotif',typeof scheduleSuppNotif==='function'?scheduleSuppNotif:null],
+          ['checkBilanNotifToday',typeof checkBilanNotifToday==='function'?checkBilanNotifToday:null],
+          ['checkWoReminderToday',typeof checkWoReminderToday==='function'?checkWoReminderToday:null]];
+        const fautives=f.filter(([n,fn])=>fn&&/risquesMicro/.test(String(fn)));
+        return fautives.length?_echec(fautives.map(x=>x[0]).join(', ')):true;})());
     })();
 
 
