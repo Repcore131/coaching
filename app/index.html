@@ -21809,7 +21809,65 @@ function vitesseHebdo(serie){
   const pente=num/den;                       // kg par jour
   const courant=pts[pts.length-1].y;
   return {kgSem:pente*7, pctSem:courant?(pente*7)/courant*100:null,
-          points:n, mm7Courant:courant};
+          points:n, mm7Courant:courant, regime:'precis'};
+}
+
+// ── Régime de mesure ÉTENDU ─────────────────────────────────────────────────
+// Le régime PRÉCIS exige une pesée quasi quotidienne pendant un mois : mm7
+// réclame quatre pesées par semaine glissante, et la régression dix valeurs de
+// mm7 sur quatorze jours. Un athlète qui se pèse trois fois par semaine
+// n'obtient donc JAMAIS de vitesse — pas « une vitesse imprécise », rien du
+// tout, et aucune proposition d'ajustement de sa vie.
+//
+// Le régime étendu regarde plus loin et plus grossièrement : quatre semaines,
+// huit pesées BRUTES, régression sur les dates réelles. Il est moins fiable, et
+// c'est pourquoi il corrige par pas RÉDUIT et attend plus longtemps entre deux
+// propositions. On ne compense pas une mesure faible par une correction franche.
+const PESEE_FENETRE_VIT_ETENDUE=28;
+const PESEE_VIT_MIN_PTS_ETENDU=8;        // pesées BRUTES, pas des mm7
+const PESEE_VIT_MIN_SEMAINES_ETENDU=3;   // réparties sur >= 3 semaines
+const AJUST_PAS_ETENDU=0.05;
+const AJUST_VERROU_JOURS_ETENDU=21;
+// Clé de semaine calendaire, via le lundi. Huit pesées faites en trois jours
+// décrivent une humeur, pas une tendance : c'est la RÉPARTITION qui fait la
+// différence entre une vitesse et un accident de mesure.
+function _cleSemaineISO(iso){
+  const [a,m,j]=String(iso).split('-').map(Number);
+  const d=new Date(a,m-1,j);
+  const jour=(d.getDay()+6)%7;            // lundi = 0
+  d.setDate(d.getDate()-jour);
+  return localISODate(d);
+}
+// PURE. Régression par moindres carrés sur les PESÉES BRUTES, pondérée par la
+// DATE RÉELLE et non par l'index : les pesées d'un régime étendu ne sont pas
+// équidistantes, et régresser sur l'index donnerait une pente qui ne
+// correspond à aucune durée.
+function vitesseHebdoEtendue(serie,jourISO){
+  const segs=segmentsWeight(serie);
+  const seg=segs.length?segs[segs.length-1]:null;
+  if(!seg||!seg.length) return null;
+  const fin=jourISO||seg[seg.length-1].date;
+  const debut=_jourPlus(fin,-(PESEE_FENETRE_VIT_ETENDUE-1));
+  const pts=seg.filter(e=>e.date>=debut&&e.date<=fin);
+  if(pts.length<PESEE_VIT_MIN_PTS_ETENDU) return null;
+  const semaines=new Set(pts.map(e=>_cleSemaineISO(e.date)));
+  if(semaines.size<PESEE_VIT_MIN_SEMAINES_ETENDU) return null;
+  // x en JOURS depuis la première pesée retenue.
+  const base=pts[0].date;
+  const xs=pts.map(e=>_joursEntre(base,e.date));
+  const ys=pts.map(e=>e.kg);
+  const n=pts.length;
+  const mx=xs.reduce((a,b)=>a+b,0)/n, my=ys.reduce((a,b)=>a+b,0)/n;
+  let num=0,den=0;
+  for(let i=0;i<n;i++){ num+=(xs[i]-mx)*(ys[i]-my); den+=(xs[i]-mx)*(xs[i]-mx); }
+  if(!den) return null;
+  const pente=num/den;                    // kg par jour
+  // Le poids de référence est la VALEUR AJUSTÉE en fin de fenêtre, pas la
+  // dernière pesée : une pesée haute le dernier jour fausserait le pourcentage.
+  const courant=my+pente*(xs[n-1]-mx);
+  return {kgSem:pente*7, pctSem:courant?(pente*7)/courant*100:null,
+    points:n, nPesees:n, nSemaines:semaines.size, mm7Courant:courant,
+    regime:'etendu'};
 }
 
 // ══════════════════════ PHASE : MASSE / SÈCHE / RECOMP / MAINTIEN ══════════
@@ -21975,6 +22033,13 @@ const AJUST_ECART_RELEVES=7;       // deux relevés espacés d'au moins sept jou
 // une prescription ; dire d'abord ce qui est mesuré, c'est un raisonnement que
 // l'athlète peut suivre et refuser.
 function _fmtPct(v){ return (v>0?'+':'')+String(Math.round(v*100)/100).replace('.',','); }
+function phraseRegimeMesure(a){
+  if(!a) return '';
+  if(a.regime==='etendu')
+    return 'Vitesse estimée sur '+Math.round(PESEE_FENETRE_VIT_ETENDUE/7)+' semaines et '
+      +(a.nPesees||0)+' pesées — moins précise, donc on corrige par petits pas.';
+  return 'Vitesse mesurée sur '+PESEE_FENETRE_VIT+' jours.';
+}
 function _htmlAjustement(user,lectureSeule){
   const nut=(user&&user.nutrition)||{};
   const a=ajustementPropose(user);
@@ -21999,10 +22064,12 @@ function _htmlAjustement(user,lectureSeule){
   const jourLib=a.jour==='off'?'les jours OFF':'les jours d\'entraînement';
   const constat=`Ta ${escapeHtml(ph.apres)} avance à ${_fmtPct(a.mesuree)} % par semaine depuis ${a.semaines} semaine${a.semaines>1?'s':''}, la fourchette visée est ${_fmtPct(a.cible.min)} à ${_fmtPct(a.cible.max)} %.`;
   const propo=`Proposition : ${_fmtPct(a.kcalDelta)} kcal ${jourLib} (${_fmtPct(a.gDelta)} g de glucides).`;
+  const regimeHtml=`<div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-top:6px">${escapeHtml(phraseRegimeMesure(a))}</div>`;
   return `<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:14px;padding:14px;margin-bottom:18px">
     <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:8px">Ajustement proposé</div>
     <div style="font-size:12px;color:#ddd;line-height:1.7;margin-bottom:6px">${constat}</div>
     <div style="font-size:12.5px;color:#fff;font-weight:800;line-height:1.6;margin-bottom:4px">${propo}</div>
+    ${regimeHtml}
     <div style="font-size:10px;color:var(--text-faint);line-height:1.6;margin-bottom:${lectureSeule?'0':'11px'}">Tes protéines et tes lipides ne changent pas. Un seul ajustement par quinzaine.</div>
     ${lectureSeule?'':`<div style="display:flex;gap:8px">
       <button class="btn btn-red btn-sm" style="flex:1;margin:0;letter-spacing:1px" onclick="appliquerAjustement()">Appliquer</button>
@@ -22016,7 +22083,7 @@ function _ajustJournaliser(a,decision){
   const n=currentUser.nutrition;
   if(!Array.isArray(n.ajustHisto)) n.ajustHisto=[];
   n.ajustHisto.push({date:Date.now(),sens:a.sens,jour:a.jour,kcalDelta:a.kcalDelta,
-    gDelta:a.gDelta,mesuree:a.mesuree,decision});
+    gDelta:a.gDelta,mesuree:a.mesuree,regime:a.regime||'precis',decision});
   if(n.ajustHisto.length>12) n.ajustHisto=n.ajustHisto.slice(-12);
   // Le verrou de quinzaine part de la DÉCISION, acceptée ou refusée : dans les
   // deux cas l'athlète a répondu, on ne le relance pas avant quatorze jours.
@@ -22056,7 +22123,12 @@ function refuserAjustement(){
 function _vitesseAuJour(user,jourISO){
   try{
     const s=serieVitesse(user).filter(e=>e&&e.date<=jourISO);
-    return vitesseHebdo(s);
+    // Le regime PRECIS d'abord, toujours. Le regime etendu n'est pas une
+    // alternative offerte : c'est un repli quand la mesure fine est
+    // impossible, et il se paie en pas reduit et en verrou allonge.
+    const fine=vitesseHebdo(s);
+    if(fine) return fine;
+    return vitesseHebdoEtendue(s,jourISO);
   }catch(e){ return null; }
 }
 
@@ -22078,8 +22150,9 @@ function ajustementPropose(user){
   const cible=cibleVitesse(user);
   if(cible.min==null||cible.max==null) return null;
   // Un seul ajustement par quinzaine, accepté OU refusé.
+  // Le verrou depend du regime des releves, qu'on ne connait qu'apres les
+  // avoir lus : on lit d'abord, on verrouille ensuite.
   const der=Number(nut.dernierAjustement)||0;
-  if(der&&Date.now()-der<AJUST_VERROU_JOURS*864e5) return null;
 
   // DEUX relevés, espacés d'au moins sept jours, tous deux hors fourchette et
   // du même côté. Un seul relevé, c'est du bruit.
@@ -22090,6 +22163,14 @@ function ajustementPropose(user){
   const cote=v=>v.pctSem>cible.max?'haut':(v.pctSem<cible.min?'bas':null);
   const c1=cote(v1), c2=cote(v2);
   if(!c1||c1!==c2) return null;
+  // Regimes DIFFERENTS : on retient le plus prudent des deux, pas reduit ET
+  // verrou long. Un athlete qui passe de l'etendu au precis ne doit pas
+  // recevoir deux corrections en quatorze jours parce que sa mesure s'est
+  // affinee entre-temps.
+  const etendu=(v1.regime==='etendu')||(v2.regime==='etendu');
+  const pas=etendu?AJUST_PAS_ETENDU:AJUST_PAS;
+  const verrou=etendu?AJUST_VERROU_JOURS_ETENDU:AJUST_VERROU_JOURS;
+  if(der&&Date.now()-der<verrou*864e5) return null;
 
   // Le jour visé : on freine sur les jours de REPOS et on relance sur les
   // jours d'entraînement. Couper le carburant d'une séance pour ralentir une
@@ -22102,7 +22183,7 @@ function ajustementPropose(user){
 
   // Le pas est porté ENTIÈREMENT par les glucides. Protéines et lipides ne
   // bougent pas : c'est le contrat.
-  const kcalDelta=(sens==='baisse'?-1:1)*Math.round(kcal*AJUST_PAS);
+  const kcalDelta=(sens==='baisse'?-1:1)*Math.round(kcal*pas);
   const gDelta=Math.round(kcalDelta/4);
   const gApres=gl+gDelta;
   if(gApres<0) return null;
@@ -22115,8 +22196,10 @@ function ajustementPropose(user){
   }
 
   const jours=_joursEntre(_jourPlus(aujd,-(PESEE_FENETRE_VIT+AJUST_ECART_RELEVES-1)),aujd);
-  return {sens,pct:Math.round(AJUST_PAS*100),kcalDelta,gDelta,
+  return {sens,pct:Math.round(pas*100),regime:etendu?'etendu':'precis',kcalDelta,gDelta,
     mesuree:Math.round(v1.pctSem*100)/100,
+    nPesees:(v1.nPesees!=null?v1.nPesees:v1.points),
+    nSemaines:(v1.nSemaines!=null?v1.nSemaines:null),
     cible:{min:cible.min,max:cible.max},
     semaines:Math.max(1,Math.round((jours+1)/7)),
     jour,phase:p.type,
@@ -36260,6 +36343,226 @@ function testExercices(){
         return manque.length?_echec('absents de BILAN_QUESTIONS : '+manque.join(', ')):true;})());
     })();
 
+
+    // ══ RÉGIME DE MESURE ÉTENDU ══════════════════════════════════════════
+    (()=>{
+      const _sU=currentUser;
+      const _j=n=>localISODate(new Date(Date.now()-n*864e5));
+      // Série de pesées : liste de {jours avant aujourd'hui, kg}.
+      const _serie=l=>l.map(([j,kg])=>({date:_j(j),kg})).sort((a,b)=>a.date<b.date?-1:1);
+      // Quotidien sur n jours, perte reguliere.
+      const _quotidien=(n,depart,perteParJour)=>{
+        const out=[];
+        for(let i=n-1;i>=0;i--) out.push([i,Math.round((depart-perteParJour*(n-1-i))*10)/10]);
+        return _serie(out);
+      };
+      try{
+        // ── La fonction pure ──────────────────────────────────────────────
+        ok('Critère : 9 pesées sur 28 jours et 4 semaines → régime étendu',(()=>{
+          // Une pesée tous les 3 jours : 0,3,6,...,24 → 9 points, 4 semaines.
+          const l=[];
+          for(let i=0;i<9;i++) l.push([24-i*3,Math.round((80-0.1*i)*10)/10]);
+          const v=vitesseHebdoEtendue(_serie(l),_j(0));
+          if(!v) return _echec('aucune vitesse');
+          if(v.regime!=='etendu') return _echec('régime '+v.regime);
+          if(v.nPesees!==9) return _echec(v.nPesees+' pesées');
+          if(v.nSemaines<3) return _echec(v.nSemaines+' semaines');
+          return v.pctSem!=null&&v.pctSem!==0
+            ?true:_echec('vitesse nulle : '+v.pctSem);})());
+        ok('Critère : 8 pesées dans la MÊME semaine → null',(()=>{
+          // Huit pesées sur six jours consécutifs : le compte y est, la
+          // répartition non. C'est exactement le cas que la règle des trois
+          // semaines existe pour refuser.
+          const l=[[6,80],[5,79.9],[4,79.8],[3,79.7],[2,79.6],[1,79.5],[1,79.4],[0,79.3]];
+          const v=vitesseHebdoEtendue(_serie(l),_j(0));
+          return v===null?true:_echec('une vitesse est sortie : '+JSON.stringify(v));})());
+        ok('Critère : 7 pesées sur 28 jours → null',(()=>{
+          const l=[];
+          for(let i=0;i<7;i++) l.push([27-i*4,80-0.1*i]);
+          return vitesseHebdoEtendue(_serie(l),_j(0))===null
+            ?true:_echec('sept pesées ont suffi');})());
+        ok('Critère : une pesée isolée après 40 jours d\'interruption → rien',(()=>{
+          const l=[];
+          for(let i=0;i<9;i++) l.push([70-i*3,80-0.1*i]);
+          l.push([0,78]);                       // reprise isolée
+          const s=_serie(l);
+          const v=vitesseHebdoEtendue(s,_j(0));
+          // La coupure redémarre la série : le dernier segment n'a qu'un point.
+          return v===null?true:_echec('une vitesse est sortie : '+JSON.stringify(v));})());
+        ok('La régression pondère par la DATE, pas par l\'index',(()=>{
+          // Série volontairement IRRÉGULIÈRE : quatre pesées groupées au début,
+          // quatre à la fin, rien au milieu. La pente vraie est -0,1 kg/jour,
+          // soit -0,7 kg/semaine. Une régression sur l'INDEX rendrait environ
+          // -2,4 kg/semaine, parce qu'elle croirait les huit points
+          // équidistants. L'écart entre les deux réponses est le test.
+          const l=[];
+          for(const t of [0,1,2,3,12,21,22,23,24])
+            l.push([24-t,Math.round((80-0.1*t)*1000)/1000]);
+          const v=vitesseHebdoEtendue(_serie(l),_j(0));
+          if(!v) return _echec('série refusée');
+          if(v.nSemaines<3) return _echec('fixture inutile : '+v.nSemaines+' semaines');
+          return Math.abs(v.kgSem-(-0.7))<0.05
+            ?true:_echec('pente '+Math.round(v.kgSem*1000)/1000+' kg/sem au lieu de -0,7');})());
+        ok('Le poids de référence est la valeur AJUSTÉE, pas la dernière pesée',(()=>{
+          // Toutes mes séries étaient parfaitement linéaires : la valeur ajustée
+          // en fin de fenêtre y égale la dernière pesée, et l'une pouvait donc
+          // remplacer l'autre sans qu'un test bronche. Une pesée haute le
+          // dernier jour — un repas salé, une rétention — est exactement ce
+          // contre quoi l'ajustement protège.
+          const l=[];
+          for(let i=0;i<9;i++) l.push([24-i*3,Math.round((80-0.1*i)*100)/100]);
+          l[l.length-1][1]=Math.round((l[l.length-1][1]+5)*100)/100;   // +5 kg le dernier jour
+          const v=vitesseHebdoEtendue(_serie(l),_j(0));
+          if(!v) return _echec('série refusée');
+          const derniere=_serie(l).slice(-1)[0].kg;
+          return v.mm7Courant<derniere-1
+            ?true:_echec('référence '+Math.round(v.mm7Courant*100)/100
+              +' collée à la dernière pesée '+derniere);})());
+        ok('Le régime précis se NOMME, sans rien changer d\'autre',(()=>{
+          const v=vitesseHebdo(_quotidien(20,80,0.05));
+          if(!v) return _echec('la série quotidienne ne donne plus de vitesse');
+          return v.regime==='precis'?true:_echec('régime '+v.regime);})());
+
+        // ── Le repli, jamais l'inverse ────────────────────────────────────
+        const _ath=(serie,extra)=>Object.assign({id:'re',email:'re@t',role:'athlete',
+          gender:'H',_evol_gender:'H',_evol_height:178,exAlias:{},exMuscles:{},
+          sessions:[],bilans:[],weightLog:serie,
+          phase:{type:'seche',debut:Date.now()-60*864e5},
+          nutrition:{macros:{on:{kcal:2500,p:180,l:70,g:270},
+                             off:{kcal:2200,p:180,l:70,g:195}}}},extra||{});
+        ok('Une série quotidienne reste en régime PRÉCIS',(()=>{
+          const u=_ath(_quotidien(40,80,0.2));
+          const v=_vitesseAuJour(u,_j(0));
+          return v&&v.regime==='precis'
+            ?true:_echec(v?('régime '+v.regime):'aucune vitesse');})());
+        ok('Une série clairsemée bascule en régime ÉTENDU',(()=>{
+          const l=[];
+          for(let i=0;i<12;i++) l.push([33-i*3,Math.round((80-0.25*i)*10)/10]);
+          const u=_ath(_serie(l));
+          const v=_vitesseAuJour(u,_j(0));
+          return v&&v.regime==='etendu'
+            ?true:_echec(v?('régime '+v.regime):'aucune vitesse');})());
+
+        // ── Le pas et le verrou ───────────────────────────────────────────
+        ok('Critère : série quotidienne → pas 10 %, verrou 14 jours',(()=>{
+          const u=_ath(_quotidien(40,80,0.25));
+          const a=ajustementPropose(u);
+          if(!a) return _echec('aucune proposition');
+          if(a.regime!=='precis') return _echec('régime '+a.regime);
+          if(a.pct!==Math.round(AJUST_PAS*100)) return _echec('pas '+a.pct);
+          // Un ajustement d'il y a 15 jours ne bloque plus le régime précis.
+          u.nutrition.dernierAjustement=Date.now()-15*864e5;
+          return ajustementPropose(u)?true:_echec('le verrou de 14 jours n\'est pas levé');})());
+        ok('Critère : série clairsemée → pas 5 %, verrou 21 jours',(()=>{
+          const l=[];
+          for(let i=0;i<12;i++) l.push([33-i*3,Math.round((80-0.5*i)*10)/10]);
+          const u=_ath(_serie(l));
+          const a=ajustementPropose(u);
+          if(!a) return _echec('aucune proposition');
+          if(a.regime!=='etendu') return _echec('régime '+a.regime);
+          if(a.pct!==Math.round(AJUST_PAS_ETENDU*100)) return _echec('pas '+a.pct);
+          // À 15 jours, le verrou étendu tient encore ; à 22 jours il tombe.
+          u.nutrition.dernierAjustement=Date.now()-15*864e5;
+          if(ajustementPropose(u)) return _echec('le verrou de 21 jours ne tient pas');
+          u.nutrition.dernierAjustement=Date.now()-22*864e5;
+          return ajustementPropose(u)?true:_echec('le verrou ne se lève jamais');})());
+        ok('Le pas étendu est bien PLUS PETIT en kcal, pas seulement en %',(()=>{
+          const precis=_ath(_quotidien(40,80,0.25));
+          const l=[]; for(let i=0;i<12;i++) l.push([33-i*3,Math.round((80-0.5*i)*10)/10]);
+          const etendu=_ath(_serie(l));
+          const a=ajustementPropose(precis), b=ajustementPropose(etendu);
+          if(!a||!b) return _echec('une des deux propositions manque');
+          return Math.abs(b.kcalDelta)<Math.abs(a.kcalDelta)
+            ?true:_echec(b.kcalDelta+' contre '+a.kcalDelta);})());
+
+        // ── Les garde-fous, intacts ───────────────────────────────────────
+        ok('Critère : aTCA désarme TOUT, même en régime étendu',(()=>{
+          const l=[]; for(let i=0;i<12;i++) l.push([33-i*3,Math.round((80-0.5*i)*10)/10]);
+          const sans=_ath(_serie(l));
+          if(!ajustementPropose(sans)) return _echec('fixture inutile : aucune proposition sans TCA');
+          const avec=_ath(_serie(l),{bilans:[{type:'depart',date:Date.now()-100*864e5,
+            'deb-tca':'anorexie il y a 4 ans'}]});
+          if(!aTCA(avec)) return _echec('le TCA n\'est pas vu');
+          return ajustementPropose(avec)===null
+            ?true:_echec('une proposition passe malgré le TCA');})());
+        ok('Critère : le plancher reste prioritaire en régime étendu',(()=>{
+          // Perte TROP LENTE : c'est le seul cas où une BAISSE est proposée, et
+          // donc le seul où le plancher a quelque chose à refuser. Une perte
+          // rapide appelle une hausse, que le plancher n'a aucune raison de
+          // bloquer — la première version de ce test ne prouvait rien.
+          const l=[]; for(let i=0;i<12;i++) l.push([33-i*3,Math.round((80-0.03*i)*100)/100]);
+          const u=_ath(_serie(l));
+          const _v=_vitesseAuJour(u,_j(0));
+          if(!_v||_v.regime!=='etendu') return _echec('fixture hors régime étendu');
+          if(!(_v.pctSem>PHASES.seche.max)) return _echec('fixture pas assez lente : '+_v.pctSem);
+          const pl=plancherEffectif(u).kcal;
+          // Des macros JUSTE au-dessus du plancher : la baisse passerait dessous.
+          u.nutrition.macros={on:{kcal:pl+300,p:150,g:40,l:70,f:20},
+                              off:{kcal:pl+40,p:150,g:10,l:70,f:20}};
+          const a=ajustementPropose(u);
+          if(a&&a.sens==='baisse') return _echec('une baisse est proposée sous le plancher');
+          const pa=_ajustPlancherAtteint(u);
+          return pa?true:_echec('le message de plancher ne se déclenche pas');})());
+        ok('Un drapeau rouge coupe aussi le régime étendu',(()=>{
+          const l=[]; for(let i=0;i<12;i++) l.push([33-i*3,Math.round((80-0.5*i)*10)/10]);
+          const u=_ath(_serie(l));
+          poserDrapeauGeneral(u,['thoracique']);
+          return ajustementPropose(u)===null
+            ?true:_echec('une proposition passe malgré le drapeau');})());
+
+        ok('Critère : régimes MIXTES → on retient le plus prudent',(()=>{
+          // Série qui s'est DENSIFIÉE : clairsemée jusqu'à il y a dix-sept
+          // jours, quotidienne depuis. Le relevé d'aujourd'hui est donc précis,
+          // celui d'il y a sept jours est étendu. Aucun test ne couvrait ce cas,
+          // et le choix du régime le plus prudent passait inaperçu.
+          const l=[];
+          for(let t=42;t>14;t-=3) l.push([t,Math.round((80-0.16*(42-t))*100)/100]);
+          for(let t=14;t>=0;t--) l.push([t,Math.round((80-0.16*(42-t))*100)/100]);
+          const u=_ath(_serie(l));
+          const v1=_vitesseAuJour(u,_j(0));
+          const v2=_vitesseAuJour(u,_j(AJUST_ECART_RELEVES));
+          if(!v1||!v2) return _echec('un relevé manque');
+          if(v1.regime===v2.regime)
+            return _echec('fixture inutile : les deux relevés sont en '+v1.regime);
+          const a=ajustementPropose(u);
+          if(!a) return _echec('aucune proposition');
+          // Le plus prudent des deux : pas réduit ET verrou long.
+          if(a.pct!==Math.round(AJUST_PAS_ETENDU*100))
+            return _echec('pas '+a.pct+' % au lieu du pas réduit');
+          u.nutrition.dernierAjustement=Date.now()-15*864e5;
+          return ajustementPropose(u)===null
+            ?true:_echec('le verrou long ne s\'applique pas aux régimes mixtes');})());
+
+        // ── La trace et la phrase ─────────────────────────────────────────
+        ok('Critère : ajustHisto retient le régime de la proposition',(()=>{
+          const sauve=currentUser;
+          try{
+            const l=[]; for(let i=0;i<12;i++) l.push([33-i*3,Math.round((80-0.5*i)*10)/10]);
+            currentUser=_ath(_serie(l));
+            const a=ajustementPropose(currentUser);
+            if(!a) return _echec('aucune proposition');
+            _ajustJournaliser(a,'refuse');
+            const h=(currentUser.nutrition.ajustHisto||[]).slice(-1)[0];
+            return h&&h.regime==='etendu'
+              ?true:_echec(JSON.stringify(h));
+          } finally { currentUser=sauve; }})());
+        ok('La phrase nomme le régime, et dit pourquoi le pas est petit',(()=>{
+          const e=phraseRegimeMesure({regime:'etendu',nPesees:9});
+          const p=phraseRegimeMesure({regime:'precis'});
+          return /4 semaines et 9 pesées/.test(e)&&/moins précise/.test(e)
+            &&/petits pas/.test(e)&&/14 jours/.test(p)&&!/moins précise/.test(p)
+            ?true:_echec(e+' | '+p);})());
+        ok('La phrase est RÉELLEMENT rendue dans le bloc',(()=>{
+          const sauve=currentUser;
+          try{
+            const l=[]; for(let i=0;i<12;i++) l.push([33-i*3,Math.round((80-0.5*i)*10)/10]);
+            currentUser=_ath(_serie(l));
+            const h=_htmlAjustement(currentUser,false);
+            return /moins précise/.test(h)
+              ?true:_echec(h.replace(/<[^>]*>/g,' ').slice(0,180));
+          } finally { currentUser=sauve; }})());
+      } finally { currentUser=_sU; }
+    })();
 
     // ══ LA DÉROGATION SOUS PLANCHER EST NOMINATIVE ═══════════════════════
     (()=>{
