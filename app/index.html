@@ -15810,6 +15810,19 @@ function saveBilanFinal(){
     // Fréquence → currentUser.frequency
     const _freq=bilData['deb-sessions-week'];
     if(_freq) currentUser.frequency=_freq;
+    // Type de suivi nutritionnel → nutrition.dietType. On NE TOUCHE PAS a une
+    // valeur deja fixee : le coach a pu la choisir avant que l'athlete remplisse
+    // son bilan, et son avis prime. Reponse absente : on n'ecrit rien, le defaut
+    // de lecture s'applique.
+    const _dt=_texteReponse(bilData['deb-nutrition-type']);
+    if(_dt&&!((currentUser.nutrition||{}).dietType)){
+      const _n=_microNorm(_dt);
+      const _choix=/flexible/.test(_n)?'flexible':(/strict/.test(_n)?'strict':null);
+      if(_choix){
+        if(!currentUser.nutrition) currentUser.nutrition={};
+        currentUser.nutrition.dietType=_choix;
+      }
+    }
   }
   if(bilData['bil-weight']) currentUser.weight=bilData['bil-weight'];
   if(bilData['deb-weight']) currentUser.weight=bilData['deb-weight'];
@@ -17637,10 +17650,47 @@ function _applyNutCycleModifier(base,isOn,phase,conf){
   return m;
 }
 
+// Le type de diete etait lu a cinq endroits avec DEUX defauts contradictoires :
+// 'flexible' dans le calcul des macros, 'strict' sur les trois ecrans. Un dossier
+// sans dietType recevait donc les modificateurs de cycle menstruel ET l'ajout
+// automatique d'omega-3, pendant que le coach voyait l'interface « strict ».
+// Le commentaire du calcul disait pourtant, noir sur blanc, que l'adaptation ne
+// s'applique qu'en diete flexible.
+//
+// Un seul defaut desormais, et c'est le PRUDENT : sans choix explicite, on
+// n'applique aucune adaptation automatique. Aucune migration n'est ecrite — le
+// defaut vit a la LECTURE, donc les dossiers existants ne sont pas touches.
+const DIETE_DEFAUT='strict';
+const DIETES_CONNUES=Object.freeze(['strict','flexible']);
+// PURE. Une valeur inconnue — corruption, version future — retombe sur le
+// defaut plutot que d'activer un chemin que personne n'a choisi.
+function typeDiete(nut){
+  const v=nut&&nut.dietType;
+  return DIETES_CONNUES.indexOf(v)>=0?v:DIETE_DEFAUT;
+}
+// Encart de TRANSITION. Un dossier peut tres bien avoir l'adaptation de cycle
+// activee et un suivi qui n'est pas flexible : jusqu'ici l'adaptation
+// s'appliquait quand meme cote macros. Maintenant qu'elle ne s'applique plus,
+// la couper EN SILENCE serait pire — l'athlete verrait ses chiffres changer
+// sans explication. On le dit, et on ne touche a rien en base.
+const DIETE_TRANSITION=
+  'Ton adaptation de cycle est active, mais ton suivi n\'est pas en diète '
+  +'flexible : elle ne s\'applique pas à tes macros. Choisis un type de suivi '
+  +'avec ton coach.';
+function _dieteTransitionActive(nut){
+  const c=(nut&&nut.cycleAdaptation)||{};
+  return typeDiete(nut)==='strict'&&!!c.enabled&&!!c.lastPeriodDate;
+}
+function _htmlDieteTransition(nut){
+  if(!_dieteTransitionActive(nut)) return '';
+  return `<div style="margin-top:12px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:10px;padding:11px 13px">
+    <div style="font-size:11px;color:#eee;line-height:1.6">${escapeHtml(DIETE_TRANSITION)}</div>
+  </div>`;
+}
 function _getEffectiveMacros(nut,isOn,dateStr){
   // Ne s'applique qu'en Diète Flexible — toutes les autres diètes retournent la base intacte
   const base=(isOn?nut.macros?.on:nut.macros?.off)||{};
-  if((nut.dietType||'flexible')!=='flexible') return base;
+  if(typeDiete(nut)!=='flexible') return base;
   const conf=nut.cycleAdaptation||{};
   if(!conf.enabled||!conf.lastPeriodDate||!isFemale(currentUser.gender)) return base;
   const phase=_getCyclePhaseNut(dateStr);
@@ -17651,7 +17701,11 @@ function _getEffectiveMacros(nut,isOn,dateStr){
 function _manageCycleSupplements(){
   const conf=_getCycleNutConf();
   const list=_suppStore();
-  if(!conf.enabled||!conf.lastPeriodDate||!isFemale(currentUser.gender)){
+  // L'adaptation de cycle ne vaut qu'en diete flexible — les macros le
+  // respectaient deja, pas les complements. Hors flexible, on desactive ce que
+  // l'app avait ajoute, exactement comme quand le cycle est coupe.
+  const _horsFlexible=typeDiete(currentUser&&currentUser.nutrition)!=='flexible';
+  if(_horsFlexible||!conf.enabled||!conf.lastPeriodDate||!isFemale(currentUser.gender)){
     let ch=false;
     list.forEach(s=>{if(s._cycleManaged&&s.active!==false){s.active=false;ch=true;}});
     if(ch) saveUser();
@@ -17799,7 +17853,7 @@ function saveCycleNutSettings(field,value){
   }
   saveUser();
   _manageCycleSupplements();
-  _renderNutriContent(currentUser.nutrition?.dietType||'flexible');
+  _renderNutriContent(typeDiete(currentUser.nutrition));
 }
 
 function _renderMacroTargets(nut){
@@ -17976,6 +18030,9 @@ function _renderStrictMacroRings(nut){
 
 function _renderNutriContent(type){
   const contentEl=document.getElementById('nut-diet-content');
+  // Encart de transition : il se pose AVANT tout le reste, parce qu'il explique
+  // pourquoi les chiffres affiches en dessous ne portent aucune adaptation.
+  const _transi=_htmlDieteTransition(currentUser&&currentUser.nutrition);
   const fjSec=document.getElementById('fj-today-section');
   if(!contentEl) return;
   const nut=currentUser.nutrition||{};
@@ -18015,6 +18072,7 @@ function _renderStrictDiet(){
   const el=document.getElementById('nut-diet-content');
   if(!el) return;
   const nut=currentUser.nutrition||{};
+  const _transiStrict=_htmlDieteTransition(nut);
   const isCoach=currentUser.role==='coach';
   const photos=nut.strictPhotos||[];
   const days_data=nut.days||{};
@@ -18041,7 +18099,7 @@ function _renderStrictDiet(){
   const coachCircle=coachPhoto
     ?`<img src="${escapeHtml(coachPhoto)}" style="width:54px;height:54px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(255,255,255,.35);box-shadow:0 0 0 4px rgba(0,0,0,.18)">`
     :`<div style="width:54px;height:54px;border-radius:50%;background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff">${icon('dumbbell',22)}</div>`;
-  el.innerHTML=`
+  el.innerHTML=`${_transiStrict}
     <!-- Définition diète stricte -->
     <div class="banner-hero" style="margin-bottom:18px;animation:fadeInUp .3s ease">
       <div style="position:relative;display:flex;gap:14px;align-items:flex-start">
@@ -18128,7 +18186,7 @@ function setNutriRespected(key,val){
   if(!currentUser.nutrition.days[key]) currentUser.nutrition.days[key]={};
   currentUser.nutrition.days[key].respected=val;
   saveUser();
-  const dt=currentUser.nutrition.dietType||'strict';
+  const dt=typeDiete(currentUser.nutrition);
   if(dt==='strict') _renderStrictDiet();
 }
 
@@ -18632,7 +18690,7 @@ function loadNutrition(){
   go('s-nutrition');
   _prefetchCiqual();
   const nut=currentUser.nutrition||{};
-  const dt=nut.dietType||'strict';
+  const dt=typeDiete(nut);
   const sel=document.getElementById('nut-diet-select');
   if(sel) sel.value=dt;
   _renderNutriContent(dt);
@@ -19163,7 +19221,10 @@ function renderCoachNutriSection(c){
   const el=document.getElementById('ccd-nutrition');
   if(!el||!c) return;
   const nut=c.nutrition||{};
-  const dt=nut.dietType||'strict';
+  const dt=typeDiete(nut);
+  // Le coach doit voir la meme chose que son athlete : c'est lui qui tranchera
+  // le type de suivi.
+  const _transi=_htmlDieteTransition(nut);
   const photos=nut.strictPhotos||[];
   const mon=nut.macros?.on||{};
   const moff=nut.macros?.off||{};
@@ -19185,7 +19246,7 @@ function renderCoachNutriSection(c){
       <input id="ccd-off-${f.k}" type="number" min="0" placeholder="${f.ph}" value="${moff[f.k]||''}"
         style="padding:7px 10px;background:#111;border:1px solid #2a2a2a;border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:12px;font-weight:600;outline:none;width:100%;box-sizing:border-box">
     </div>`).join('');
-  el.innerHTML=`
+  el.innerHTML=`${_transi}
     <div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px">
       <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:14px">🍎 Nutrition</div>
       <!-- Type de diète -->
@@ -33756,8 +33817,13 @@ function testExercices(){
         const _luteale=()=>{
           const j=new Date(Date.now()-25*864e5);
           return {enabled:true,lastPeriodDate:localISODate(j),cycleLength:28};};
+        // dietType:'flexible' EXPLICITE : l'adaptation de cycle ne vaut qu'en
+        // diete flexible, et le defaut de lecture est desormais 'strict'. Sans
+        // cette ligne, ces tests decriraient un comportement que le produit
+        // n'a plus.
         const _femme=supps=>({id:'_tc',email:'tc@t',gender:'Femme',exMuscles:{},exAlias:{},
-          sessions:[],nutrition:{cycleAdaptation:_luteale(),supplements:supps||[]}});
+          sessions:[],nutrition:{dietType:'flexible',cycleAdaptation:_luteale(),
+            supplements:supps||[]}});
         ok('Non-régression : les oméga-3 sont ajoutés en lutéale tardive',(()=>{
           currentUser=_femme([]);
           if(_getCyclePhaseNut(localISODate(new Date()))!=='luteal_late')
@@ -36343,6 +36409,181 @@ function testExercices(){
         return manque.length?_echec('absents de BILAN_QUESTIONS : '+manque.join(', ')):true;})());
     })();
 
+
+    // ══ UN SEUL TYPE DE DIÈTE, UN SEUL DÉFAUT ════════════════════════════
+    (()=>{
+      const _sU=currentUser;
+      const _fem=(nut)=>({id:'dt',email:'dt@t',role:'athlete',gender:'Femme',
+        _evol_gender:'Femme',exAlias:{},exMuscles:{},sessions:[],bilans:[],
+        nutrition:nut});
+      // Cycle actif en phase lutéale tardive : la date de dernières règles est
+      // calée pour que _getCyclePhaseNut rende bien 'luteal_late' aujourd'hui.
+      // sensibilite_pms ET jour OFF : ce sont les deux conditions du +4 %.
+      // Sans elles, aucune adaptation ne s'applique jamais, et un test qui
+      // verifie « les macros n'ont pas bouge » passerait sans rien prouver.
+      const _cycle=()=>({enabled:true,sensibilite_pms:true,
+        lastPeriodDate:localISODate(new Date(Date.now()-24*864e5)),cycleLength:28});
+      const _macros=()=>({on:{kcal:2000,p:150,g:200,l:60},
+                          off:{kcal:1800,p:150,g:150,l:60}});
+      try{
+        // ── La fonction pure ──────────────────────────────────────────────
+        ok('Critère : typeDiete({}) === \'strict\'',typeDiete({})==='strict');
+        ok('Critère : typeDiete({dietType:\'flexible\'}) === \'flexible\'',
+           typeDiete({dietType:'flexible'})==='flexible');
+        ok('Critère : une valeur inconnue retombe sur strict',
+           typeDiete({dietType:'zzz'})==='strict');
+        ok('Critère : typeDiete(null) === \'strict\', sans exception',(()=>{
+          try{ return typeDiete(null)==='strict'&&typeDiete(undefined)==='strict'
+            ?true:_echec('mauvais défaut'); }
+          catch(e){ return _echec('exception : '+e.message); }})());
+        ok('Le défaut est bien le PRUDENT, pas flexible',DIETE_DEFAUT==='strict');
+        ok('Critère : plus aucune lecture directe avec défaut local',(()=>{
+          // Le motif est ASSEMBLE a l'execution : ecrit en clair, il se
+          // trouverait lui-meme dans la source de la page et le test ne
+          // pourrait jamais passer.
+          const src=document.documentElement.outerHTML;
+          const re=new RegExp('dietType'+'\\s*\\|\\|','g');
+          const m=src.match(re);
+          return !m?true:_echec(m.length+' occurrence(s) restantes');})());
+
+        // ── Le cœur du défaut : dossier sans dietType ─────────────────────
+        ok('Critère : sans dietType, les macros restent INTACTES',(()=>{
+          const sauve=currentUser;
+          try{
+            const nut={cycleAdaptation:_cycle(),macros:_macros()};
+            currentUser=_fem(nut);
+            const ph=_getCyclePhaseNut(localISODate(new Date()));
+            if(ph!=='luteal_late')
+              return _echec('fixture inutile : phase '+ph+' au lieu de luteal_late');
+            // Jour OFF : c'est la que le +4 % s'appliquerait en flexible.
+            const m=_getEffectiveMacros(nut,false,localISODate(new Date()));
+            return m.kcal===1800&&m.g===150
+              ?true:_echec('macros modifiées : '+JSON.stringify(m));
+          } finally { currentUser=sauve; }})());
+        ok('Critère : avec dietType flexible, le +4 % s\'applique toujours',(()=>{
+          const sauve=currentUser;
+          try{
+            const nut={dietType:'flexible',cycleAdaptation:_cycle(),macros:_macros()};
+            currentUser=_fem(nut);
+            const m=_getEffectiveMacros(nut,false,localISODate(new Date()));
+            return m.kcal>1800
+              ?true:_echec('le comportement flexible a changé : '+JSON.stringify(m));
+          } finally { currentUser=sauve; }})());
+        ok('Une valeur inconnue n\'active PAS l\'adaptation',(()=>{
+          const sauve=currentUser;
+          try{
+            const nut={dietType:'zzz',cycleAdaptation:_cycle(),macros:_macros()};
+            currentUser=_fem(nut);
+            const m=_getEffectiveMacros(nut,false,localISODate(new Date()));
+            return m.kcal===1800?true:_echec(JSON.stringify(m));
+          } finally { currentUser=sauve; }})());
+
+        // ── Les oméga-3 automatiques suivent la même règle ────────────────
+        ok('Critère : sans dietType, aucun oméga-3 n\'est ajouté',(()=>{
+          const sauve=currentUser;
+          try{
+            currentUser=_fem({cycleAdaptation:_cycle(),macros:_macros(),supplements:[]});
+            _manageCycleSupplements();
+            const l=(currentUser.nutrition.supplements)||[];
+            const auto=l.filter(x=>x&&x._cycleManaged&&x.active!==false);
+            return auto.length===0
+              ?true:_echec(auto.length+' complément(s) ajouté(s) : '+auto.map(x=>x.name).join(', '));
+          } finally { currentUser=sauve; }})());
+        ok('En flexible, l\'ajout d\'oméga-3 fonctionne toujours',(()=>{
+          const sauve=currentUser;
+          try{
+            currentUser=_fem({dietType:'flexible',cycleAdaptation:_cycle(),
+              macros:_macros(),supplements:[]});
+            _manageCycleSupplements();
+            const l=(currentUser.nutrition.supplements)||[];
+            return l.some(x=>x&&x._cycleManaged&&/om[eé]ga/i.test(x.name))
+              ?true:_echec('plus aucun oméga-3 en flexible : '+JSON.stringify(l));
+          } finally { currentUser=sauve; }})());
+        ok('Passer de flexible à strict DÉSACTIVE les oméga-3 déjà ajoutés',(()=>{
+          const sauve=currentUser;
+          try{
+            currentUser=_fem({dietType:'flexible',cycleAdaptation:_cycle(),
+              macros:_macros(),supplements:[]});
+            _manageCycleSupplements();
+            currentUser.nutrition.dietType='strict';
+            _manageCycleSupplements();
+            const l=(currentUser.nutrition.supplements)||[];
+            const actifs=l.filter(x=>x&&x._cycleManaged&&x.active!==false);
+            return actifs.length===0
+              ?true:_echec(actifs.length+' resté(s) actif(s)');
+          } finally { currentUser=sauve; }})());
+
+        // ── L'encart de transition ────────────────────────────────────────
+        ok('Critère : l\'encart de transition est présent',(()=>{
+          const nut={cycleAdaptation:_cycle(),macros:_macros()};
+          if(!_dieteTransitionActive(nut)) return _echec('transition non détectée');
+          const h=_htmlDieteTransition(nut);
+          return /adaptation de cycle est active/.test(h)
+            &&/n'est pas en diète flexible/.test(h.replace(/&#39;/g,"'"))
+            ?true:_echec(h.replace(/<[^>]*>/g,' ').slice(0,150));})());
+        ok('Aucun encart en flexible, ni sans cycle',(()=>{
+          if(_htmlDieteTransition({dietType:'flexible',cycleAdaptation:_cycle()})!=='')
+            return _echec('encart affiché en flexible');
+          if(_htmlDieteTransition({cycleAdaptation:{enabled:true}})!=='')
+            return _echec('encart affiché sans date de règles');
+          return _htmlDieteTransition({})===''
+            ?true:_echec('encart affiché sans cycle du tout');})());
+        ok('L\'encart n\'écrit RIEN en base',(()=>{
+          const nut={cycleAdaptation:_cycle(),macros:_macros()};
+          const avant=JSON.stringify(nut);
+          _htmlDieteTransition(nut); _dieteTransitionActive(nut);
+          return JSON.stringify(nut)===avant
+            ?true:_echec('le dossier a été modifié');})());
+        ok('L\'encart est RÉELLEMENT rendu côté athlète',(()=>{
+          const sauve=currentUser;
+          try{
+            currentUser=_fem({cycleAdaptation:_cycle(),macros:_macros()});
+            const el=document.getElementById('nut-diet-content');
+            if(!el) return _echec('conteneur absent');
+            _renderStrictDiet();
+            return /adaptation de cycle est active/.test(el.innerHTML)
+              ?true:_echec('rien dans le rendu strict');
+          } finally { currentUser=sauve; }})());
+
+        // ── Le questionnaire alimente enfin le champ ──────────────────────
+        // On VALIDE un vrai bilan de départ, au lieu de lire la source et de
+        // vérifier une normalisation à côté : le premier jet passait au vert
+        // même quand toutes les réponses étaient rangées en « flexible ».
+        const _bilan=(reponse,nutDepart)=>{
+          const sU=currentUser, sT=bilType, sD=bilData, sSave=window.saveUser;
+          try{
+            window.saveUser=()=>true;
+            currentUser={id:'bq',email:'bq@t',role:'athlete',exAlias:{},exMuscles:{},
+              sessions:[],bilans:[]};
+            if(nutDepart) currentUser.nutrition=nutDepart;
+            bilType='depart';
+            bilData=reponse==null?{}:{'deb-nutrition-type':reponse};
+            try{ saveBilanFinal(); }catch(e){ return {erreur:e.message}; }
+            return {dt:(currentUser.nutrition||{}).dietType};
+          } finally { currentUser=sU; bilType=sT; bilData=sD; window.saveUser=sSave; }
+        };
+        ok('Critère : « Diet flexible… » écrit dietType flexible',(()=>{
+          const r=_bilan('Diet flexible : Conseils personnalisés + calcul via application');
+          if(r.erreur) return _echec('exception : '+r.erreur);
+          return r.dt==='flexible'?true:_echec('dietType '+r.dt);})());
+        ok('« Diet strict… » écrit bien strict, et non flexible',(()=>{
+          const r=_bilan('Diet strict : Plan alimentaire détaillé avec quantités précises');
+          if(r.erreur) return _echec('exception : '+r.erreur);
+          return r.dt==='strict'?true:_echec('dietType '+r.dt);})());
+        ok('Réponse absente → rien n\'est écrit, le défaut de lecture s\'applique',(()=>{
+          const r=_bilan(null);
+          if(r.erreur) return _echec('exception : '+r.erreur);
+          return r.dt===undefined?true:_echec('dietType '+r.dt+' écrit sans réponse');})());
+        ok('Un choix du coach survit à la validation du bilan',(()=>{
+          const r=_bilan('Diet flexible : Conseils personnalisés',{dietType:'strict'});
+          if(r.erreur) return _echec('exception : '+r.erreur);
+          return r.dt==='strict'?true:_echec('le choix du coach a été écrasé en '+r.dt);})());
+        ok('Un dietType déjà fixé par le coach n\'est JAMAIS écrasé',(()=>{
+          const src=String(saveBilanFinal);
+          return /!\(\(currentUser\.nutrition\|\|\{\}\)\.dietType\)/.test(src)
+            ?true:_echec('aucune garde contre l\'écrasement');})());
+      } finally { currentUser=_sU; }
+    })();
 
     // ══ RÉGIME DE MESURE ÉTENDU ══════════════════════════════════════════
     (()=>{
