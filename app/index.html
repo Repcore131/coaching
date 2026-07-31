@@ -19225,6 +19225,10 @@ function renderCoachNutriSection(c){
   // Le coach doit voir la meme chose que son athlete : c'est lui qui tranchera
   // le type de suivi.
   const _transi=_htmlDieteTransition(nut);
+  // Les trois encarts de pause : proposition, pause en cours ou terminee, et
+  // preavis de fin de phase. Fiche COACH uniquement — rien de ce module
+  // n'atteint l'ecran de l'athlete.
+  const _pauseHtml=_htmlPauseProposition(c)+_htmlPauseEnCours(c)+_htmlFinPrevue(c);
   const photos=nut.strictPhotos||[];
   const mon=nut.macros?.on||{};
   const moff=nut.macros?.off||{};
@@ -19246,7 +19250,7 @@ function renderCoachNutriSection(c){
       <input id="ccd-off-${f.k}" type="number" min="0" placeholder="${f.ph}" value="${moff[f.k]||''}"
         style="padding:7px 10px;background:#111;border:1px solid #2a2a2a;border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:12px;font-weight:600;outline:none;width:100%;box-sizing:border-box">
     </div>`).join('');
-  el.innerHTML=`${_transi}
+  el.innerHTML=`${_transi}${_pauseHtml}
     <div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px">
       <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:14px">🍎 Nutrition</div>
       <!-- Type de diète -->
@@ -21989,6 +21993,11 @@ function changerPhase(user,type,finPrevue,definiPar){
     return true;
   }
   if(anc) hist.push({type:anc.type,debut:anc.debut,fin:Date.now()});
+  // La pause appartenait a la phase qu'on quitte.
+  if(anc&&user.phase&&user.phase.pause){
+    try{ _pauseJournaliser(user,'pause_effacee_changement_phase',
+      {de:anc.type,vers:type}); }catch(e){}
+  }
   user.phase={type,debut:Date.now(),finPrevue:finPrevue||null,
     definiPar:definiPar||'athlete',historique:hist.slice(-PHASE_HIST_MAX)};
   return true;
@@ -22029,8 +22038,17 @@ function relancePhase(user){
     return 'La fin que tu avais prévue pour ta '+PHASES[p.type].apres+' est passée. Où en es-tu ?';
   return null;
 }
+const PAUSE_TEXTE_VITESSE='pause diététique en cours : une reprise de poids sur '
+  +'quelques jours est attendue';
 function cibleVitesse(user){
   const p=phaseCourante(user);
+  // Pendant une pause, la fourchette est celle du MAINTIEN et aucune alerte ne
+  // se declenche : reprendre un peu de poids en remontant les calories est le
+  // comportement ATTENDU, pas un derapage. alerteAbs et alerte sont mis a null
+  // explicitement, sinon vitesseAlerte retomberait sur ceux du maintien.
+  if(p&&pauseActive(user))
+    return Object.assign({},PHASES.maintien,{phase:p.type,pause:true,
+      alerte:null,alerteAbs:null,note:PAUSE_TEXTE_VITESSE});
   if(p) return Object.assign({phase:p.type},PHASES[p.type]);
   return {phase:null,min:null,max:null,alerteAbs:PESEE_ALERTE_SANS_PHASE,lib:null};
 }
@@ -22208,6 +22226,10 @@ function ajustementPropose(user){
   // vitesse ni cible ni alerte. Lui proposer de manger moins serait
   // exactement ce que ce garde-fou existe pour empêcher.
   try{ if(aTCA(user)) return null; }catch(e){}
+  // Meme motif pendant une pause : elle EST l'ajustement en cours. En proposer
+  // un second par-dessus reviendrait a corriger une vitesse qu'on a
+  // volontairement suspendue.
+  try{ if(pauseActive(user)) return null; }catch(e){}
   const cible=cibleVitesse(user);
   if(cible.min==null||cible.max==null) return null;
   // Un seul ajustement par quinzaine, accepté OU refusé.
@@ -22570,7 +22592,308 @@ function controlerMacros(macros,user){
 // d'y être vraiment pour le dire serait attendre trop longtemps.
 const RESTRICTION_SEMAINES=16;
 const RESTRICTION_MARGE=1.1;
+// ══════════════════════ PAUSE DIÉTÉTIQUE ══════════════════════
+// restrictionProlongee détecte depuis longtemps une sèche de seize semaines ou
+// plus menée sous le plancher, et le signal remonte au coach avec la phrase
+// « Un palier est à envisager ». Le palier n'existait pas. Le voici : une pause
+// CHIFFRÉE, proposée, jamais appliquée toute seule.
+//
+// Rien n'est automatique dans ce module. Aucune notification n'en part, aucune
+// écriture ne se fait sans un clic, et la fin d'une pause ne se déclenche jamais
+// d'elle-même.
+const PAUSE_JOURS_DEFAUT=12;             // dans la fourchette 10-14
+const PAUSE_JOURS_MIN=10, PAUSE_JOURS_MAX=21;
+const TRANSITION_PALIERS=3;              // paliers hebdomadaires de sortie
+// PURE. Rend l'objet pause quand il est exploitable, null sinon.
+// ATTENTION : une pause DÉPASSÉE reste ACTIVE. Le coach peut être absent une
+// semaine ; redescendre les calories sans décision serait pire que manger à la
+// dépense quelques jours de trop. La fin se demande, elle ne se prend pas.
+function pauseActive(user){
+  const p=user&&user.phase&&user.phase.pause;
+  if(!p||!(p.debut>0)) return null;
+  const j=Number(p.jours);
+  if(!(j>0)) return null;
+  return p;
+}
+// Vrai quand le terme prévu est passé : l'encart de fin s'affiche, la pause
+// reste active.
+function pauseTerminee(user,ref){
+  const p=pauseActive(user);
+  if(!p) return false;
+  const t=(ref instanceof Date)?ref.getTime():Date.now();
+  return t>=p.debut+Number(p.jours)*864e5;
+}
+function pauseJoursRestants(user,ref){
+  const p=pauseActive(user);
+  if(!p) return null;
+  const t=(ref instanceof Date)?ref.getTime():Date.now();
+  return Math.ceil((p.debut+Number(p.jours)*864e5-t)/864e5);
+}
+// Objectifs d'une pause : on monte à la DÉPENSE ESTIMÉE, pas à une maintenance
+// déjà corrigée par la phase. Protéines et lipides ne bougent pas — même
+// contrat qu'appliquerAjustement, et c'est tout l'intérêt : la hausse est
+// portée par les glucides, le reste de l'assiette ne change pas.
+function _pauseMacrosCibles(user,cible){
+  const m=((user&&user.nutrition)||{}).macros;
+  if(!m||!(cible>0)) return null;
+  const un=j=>{
+    const b=m[j];
+    if(!b||!(Number(b.kcal)>0)) return null;
+    const p=Number(b.p)||0, l=Number(b.l)||0;
+    const reste=cible-4*p-9*l;
+    return {kcal:Math.round(cible),p:b.p,l:b.l,
+      g:Math.max(0,Math.round(reste/4)),
+      f:Math.round(FIBRES_PAR_1000*cible/1000)};
+  };
+  const on=un('on'), off=un('off');
+  if(!on||!off) return null;
+  return {on,off};
+}
+// PURE. Ce que la pause proposerait, sans rien écrire. Rend null quand il n'y a
+// rien à proposer — c'est l'appelant qui décide d'afficher.
+function pauseProposee(user){
+  if(!user) return null;
+  if(pauseActive(user)) return null;                 // déjà en pause
+  if(!_restrictionBrute(user)) return null;
+  let dep=null;
+  try{ const b=besoinsProposes(user); dep=b&&b.depense; }catch(e){}
+  if(!(dep>0)) return null;
+  const macros=_pauseMacrosCibles(user,dep);
+  if(!macros) return null;
+  const m=user.nutrition.macros;
+  const bas=Math.min(Number(m.on&&m.on.kcal)||Infinity,Number(m.off&&m.off.kcal)||Infinity);
+  return {jours:PAUSE_JOURS_DEFAUT,kcalCible:Math.round(dep),
+    kcalActuel:isFinite(bas)?bas:null,
+    semaines:semainesEcoulees(user),macros};
+}
+
+// ── Application, fin, transition ────────────────────────────────────────────
+// Tout part d'un CLIC. Aucune de ces fonctions ne s'appelle toute seule.
+// Écriture sur le dossier de l'ATHLÈTE, par la carte des utilisateurs, comme
+// programmerDecharge : _coachEditClient est réservé à l'éditeur de séances.
+function _pauseCible(){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  return c?{users,c}:null;
+}
+function appliquerPause(jours){
+  const r=_pauseCible(); if(!r) return false;
+  const {users,c}=r;
+  if(!c.email){ toast('Cet élève n\'a pas de dossier synchronisé','var(--orange)'); return false; }
+  const prop=pauseProposee(c);
+  if(!prop){ toast('Cette proposition n\'est plus d\'actualité','var(--orange)'); return false; }
+  const j=Math.max(PAUSE_JOURS_MIN,Math.min(PAUSE_JOURS_MAX,parseInt(jours,10)||PAUSE_JOURS_DEFAUT));
+  const m=c.nutrition.macros;
+  // kcalAvant est la SEULE trace de ce qu'il faudra restaurer : on la copie en
+  // profondeur, sinon l'écriture qui suit l'écraserait.
+  const avant=JSON.parse(JSON.stringify({on:m.on||{},off:m.off||{}}));
+  c.phase.pause={debut:Date.now(),jours:j,kcalAvant:avant};
+  c.nutrition.macros=Object.assign({},m,{on:prop.macros.on,off:prop.macros.off,
+    origine:'pause',origineDate:Date.now()});
+  _pauseJournaliser(c,'pause_debut',{jours:j,kcal:prop.kcalCible});
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  _viderCachePlateau(); _viderCacheSignaux();
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Pause de '+j+' jours enregistrée','la pause est');
+  try{ renderCoachNutriSection(getOwnedClient(currentClientId)); }catch(e){}
+  return true;
+}
+// Fin de pause : DEUX sorties, aucune par défaut.
+function reprendreSeche(){
+  const r=_pauseCible(); if(!r) return false;
+  const {users,c}=r;
+  const p=pauseActive(c);
+  if(!p) return false;
+  const av=p.kcalAvant;
+  if(!av||!av.on||!av.off){
+    toast('Les objectifs d\'avant la pause sont introuvables : passe en maintien','var(--orange)');
+    return false;
+  }
+  c.nutrition.macros=Object.assign({},c.nutrition.macros,{on:av.on,off:av.off,
+    origine:'pause_fin',origineDate:Date.now()});
+  delete c.phase.pause;
+  _pauseJournaliser(c,'pause_fin_reprise',{});
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  _viderCachePlateau(); _viderCacheSignaux();
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Sèche reprise','la reprise est');
+  try{ renderCoachNutriSection(getOwnedClient(currentClientId)); }catch(e){}
+  return true;
+}
+// ── Sortie progressive ──────────────────────────────────────────────────────
+// Trois paliers hebdomadaires égaux entre les kcal ACTUELLES et la cible. On ne
+// remonte pas de 500 kcal d'un coup après quatre mois de restriction — et on ne
+// le fait pas non plus en silence : chaque palier est une écriture normale,
+// journalisée, que le coach peut sauter.
+// PURE : rend la liste des paliers, sans rien écrire.
+function paliersTransition(kcalDepart,kcalCible,n){
+  const d=Number(kcalDepart), c=Number(kcalCible);
+  const k=Math.max(1,parseInt(n,10)||TRANSITION_PALIERS);
+  if(!(d>0)||!(c>0)) return [];
+  const out=[];
+  for(let i=1;i<=k;i++) out.push(Math.round(d+(c-d)*i/k));
+  // Le DERNIER palier vaut exactement la cible, quels que soient les arrondis.
+  out[out.length-1]=Math.round(c);
+  return out;
+}
+function _pauseJournaliser(c,quoi,extra){
+  if(!c.nutrition) c.nutrition={};
+  const n=c.nutrition;
+  if(!Array.isArray(n.ajustHisto)) n.ajustHisto=[];
+  n.ajustHisto.push(Object.assign({date:Date.now(),origine:quoi},extra||{}));
+  if(n.ajustHisto.length>12) n.ajustHisto=n.ajustHisto.slice(-12);
+}
+
+// ── Transition en paliers ───────────────────────────────────────────────────
+// Le passage de sèche à maintien ou masse se fait en TRANSITION_PALIERS étapes
+// hebdomadaires. Chaque palier est une écriture normale dans nutrition.macros,
+// journalisée avec origine 'transition'. Protéines et lipides ne bougent pas —
+// même contrat que partout ailleurs dans ce module.
+function ouvrirTransitionMaintien(){
+  const r=_pauseCible(); if(!r) return false;
+  const {c}=r;
+  let dep=null;
+  try{ const b=besoinsProposes(c); dep=b&&b.depense; }catch(e){}
+  if(!(dep>0)){ toast('Dépense non calculable : renseigne le bilan','var(--orange)'); return false; }
+  const m=(c.nutrition||{}).macros||{};
+  const bas=Math.min(Number(m.on&&m.on.kcal)||Infinity,Number(m.off&&m.off.kcal)||Infinity);
+  if(!isFinite(bas)){ toast('Aucun objectif à faire évoluer','var(--orange)'); return false; }
+  const pal=paliersTransition(bas,dep,TRANSITION_PALIERS);
+  if(!pal.length) return false;
+  const txt='Sortie progressive en '+pal.length+' paliers hebdomadaires :'
+    +String.fromCharCode(10)+pal.map((k,i)=>'· semaine '+(i+1)+' : '+k+' kcal').join(String.fromCharCode(10))
+    +String.fromCharCode(10)+String.fromCharCode(10)
+    +'Protéines et lipides ne changent pas. Tu peux appliquer les paliers un par '
+    +'un, ou sauter directement à la cible.';
+  if(!confirm(txt+String.fromCharCode(10)+String.fromCharCode(10)+'Appliquer le PREMIER palier ?')){
+    return false;
+  }
+  return appliquerPalierTransition(0);
+}
+// Applique le palier d'indice i. Le coach peut sauter les paliers en appelant
+// directement le dernier : rien ne verrouille l'ordre, c'est sa décision.
+function appliquerPalierTransition(i){
+  const r=_pauseCible(); if(!r) return false;
+  const {users,c}=r;
+  if(!c.email){ toast('Cet élève n\'a pas de dossier synchronisé','var(--orange)'); return false; }
+  let dep=null;
+  try{ const b=besoinsProposes(c); dep=b&&b.depense; }catch(e){}
+  const m=(c.nutrition||{}).macros||{};
+  const bas=Math.min(Number(m.on&&m.on.kcal)||Infinity,Number(m.off&&m.off.kcal)||Infinity);
+  if(!(dep>0)||!isFinite(bas)) return false;
+  const depart=(c.phase&&c.phase.transition&&c.phase.transition.depart)||bas;
+  const pal=paliersTransition(depart,dep,TRANSITION_PALIERS);
+  const idx=Math.max(0,Math.min(pal.length-1,parseInt(i,10)||0));
+  const cible=pal[idx];
+  const cibles=_pauseMacrosCibles(c,cible);
+  if(!cibles) return false;
+  c.nutrition.macros=Object.assign({},m,{on:cibles.on,off:cibles.off,
+    origine:'transition',origineDate:Date.now()});
+  // Le point de DEPART est fige au premier palier : sans lui, chaque palier
+  // recalculerait la progression depuis la valeur deja relevee, et les trois
+  // paliers ne mèneraient jamais à la cible.
+  if(!c.phase) c.phase={};
+  c.phase.transition={depart,palier:idx+1,total:pal.length,maj:Date.now()};
+  // Une transition met fin a la pause : on ne peut pas etre en pause et en
+  // sortie progressive en meme temps.
+  if(c.phase.pause) delete c.phase.pause;
+  _pauseJournaliser(c,'transition',{palier:idx+1,total:pal.length,kcal:cible});
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  _viderCachePlateau(); _viderCacheSignaux();
+  toastSync(ok,CLOUD.pushOne(c.email,c),
+    'Palier '+(idx+1)+' sur '+pal.length+' appliqué ('+cible+' kcal)','le palier est');
+  try{ renderCoachNutriSection(getOwnedClient(currentClientId)); }catch(e){}
+  return true;
+}
+
+// ── Encarts, fiche COACH uniquement ─────────────────────────────────────────
+// Rien de ce module n'est poussé à l'athlète. C'est une décision de coaching :
+// elle se prend avec le coach, pas seul devant un écran.
+//
+// GARDE-FOU TCA — RÈGLE À FAIRE VALIDER AVANT MISE EN PRODUCTION.
+// Partout ailleurs dans le produit, un antécédent alimentaire déclaré COUPE la
+// fonctionnalité. Ici, la pause reste proposable : elle REMONTE les calories,
+// donc la direction est protectrice, et refuser d'en parler à un coach pour un
+// athlète en restriction depuis quatre mois serait un autre risque. La règle
+// n'est pas tranchée pour autant : elle doit être validée par un professionnel
+// de santé, et l'encart le dit au coach en attendant.
+const PAUSE_MENTION_TCA='Antécédent alimentaire déclaré : cette proposition '
+  +'remonte les calories, mais elle demande ton jugement et, si besoin, un avis '
+  +'médical. Elle n\'est jamais montrée à l\'athlète.';
+function _htmlPauseProposition(c){
+  const prop=pauseProposee(c);
+  if(!prop) return '';
+  let tca=false; try{ tca=aTCA(c); }catch(e){}
+  const phrase='Sèche de '+prop.semaines+' semaines'
+    +(prop.kcalActuel?' à '+prop.kcalActuel+' kcal':'')
+    +'. Pause de '+prop.jours+' jours à '+prop.kcalCible+' kcal ? '
+    +'Protéines et lipides ne changent pas.';
+  return `<div style="margin-top:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">Pause diététique</div>
+    <div style="font-size:12px;color:#ddd;line-height:1.7">${escapeHtml(phrase)}</div>
+    ${tca?`<div style="font-size:11px;color:var(--warning);line-height:1.6;margin-top:8px">${escapeHtml(PAUSE_MENTION_TCA)}</div>`:''}
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn btn-red btn-sm" style="flex:1;margin:0" onclick="appliquerPause(${prop.jours})">Proposer la pause</button>
+      <button class="btn btn-outline btn-sm" style="flex:1;margin:0" onclick="refuserPause()">Pas maintenant</button>
+    </div>
+    ${blocDisclaimerSante()}
+  </div>`;
+}
+// « Pas maintenant » n'écrit RIEN : la proposition reviendra tant que la
+// restriction dure. Ce n'est pas un oubli — c'est le rappel d'un problème qui,
+// lui, ne disparaît pas parce qu'on a fermé un encart.
+function refuserPause(){
+  toast('C\'est noté. La proposition restera tant que la restriction dure.');
+}
+function _htmlPauseEnCours(c){
+  const p=pauseActive(c);
+  if(!p) return '';
+  const fini=pauseTerminee(c);
+  const rest=pauseJoursRestants(c);
+  const peutReprendre=!!(p.kcalAvant&&p.kcalAvant.on&&p.kcalAvant.off);
+  if(!fini){
+    return `<div style="margin-top:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px">
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">Pause en cours</div>
+      <div style="font-size:12px;color:#ddd;line-height:1.7">Pause de ${p.jours} jours, encore ${rest} jour${rest>1?'s':''}. ${escapeHtml(PAUSE_TEXTE_VITESSE.charAt(0).toUpperCase()+PAUSE_TEXTE_VITESSE.slice(1))}.</div>
+    </div>`;
+  }
+  return `<div style="margin-top:12px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:12px;padding:13px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">Pause terminée</div>
+    <div style="font-size:12px;color:#eee;line-height:1.7">Ta pause est terminée. On reprend la sèche, ou on s'arrête là ?</div>
+    ${peutReprendre?'':`<div style="font-size:11px;color:var(--text-dim);line-height:1.6;margin-top:6px">Les objectifs d'avant la pause sont introuvables : seul le passage en maintien reste possible.</div>`}
+    <div style="display:flex;gap:8px;margin-top:10px">
+      ${peutReprendre?`<button class="btn btn-outline btn-sm" style="flex:1;margin:0" onclick="reprendreSeche()">Reprendre la sèche</button>`:''}
+      <button class="btn btn-red btn-sm" style="flex:1;margin:0" onclick="ouvrirTransitionMaintien()">Passer en maintien</button>
+    </div>
+  </div>`;
+}
+// finPrevue : le champ existait et n'était lu que par relancePhase, APRÈS
+// l'échéance. Ici on parle AVANT, pour préparer la sortie. Les deux ne se
+// marchent pas dessus : passé la date, cet encart se tait et relancePhase prend
+// le relais.
+const FIN_PREVUE_PREAVIS_JOURS=14;
+function _htmlFinPrevue(c){
+  const p=phaseCourante(c);
+  if(!p||!p.finPrevue) return '';
+  if(pauseActive(c)) return '';
+  const j=Math.ceil((p.finPrevue-Date.now())/864e5);
+  if(j<0||j>FIN_PREVUE_PREAVIS_JOURS) return '';
+  return `<div style="margin-top:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px">
+    <div style="font-size:12px;color:#ddd;line-height:1.7">Ta ${escapeHtml(PHASES[p.type].apres)} se termine dans ${j} jour${j>1?'s':''}. On prépare la sortie ?</div>
+    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:9px" onclick="ouvrirTransitionMaintien()">Préparer la sortie</button>
+  </div>`;
+}
+
 function restrictionProlongee(user){
+  // Pendant une pause, il n'y a plus rien a signaler : la restriction est
+  // justement en train d'etre levee. Le constat brut, lui, reste disponible
+  // pour la proposition de pause elle-meme.
+  if(pauseActive(user)) return false;
+  return _restrictionBrute(user);
+}
+// PURE. Le CONSTAT, sans tenir compte d'une pause en cours.
+function _restrictionBrute(user){
   const p=phaseCourante(user);
   if(!p||p.type!=='seche') return false;
   const sem=semainesEcoulees(user);
@@ -36410,6 +36733,267 @@ function testExercices(){
     })();
 
 
+    // ══ PAUSE DIÉTÉTIQUE ET SORTIE PROGRESSIVE ═══════════════════════════
+    (()=>{
+      const _sU=currentUser, _sCid=currentClientId, _sUsers=DB.get('users');
+      // Sèche de 18 semaines à 1450 kcal, sous le plancher : le cas exact que
+      // restrictionProlongee détecte depuis toujours sans rien proposer.
+      const _long=(extra)=>Object.assign({
+        id:'pz',email:'pz@t.fr',role:'athlete',coachId:'coPZ',fname:'Léa',lname:'M',
+        gender:'Femme',_evol_gender:'Femme',_evol_height:168,
+        exAlias:{},exMuscles:{},sessions:[],weightLog:[],
+        bilans:[{type:'suivi',date:Date.now()-2*864e5,'deb-weight':'62',
+          'deb-height':'168','deb-age':'29','deb-gender':'Femme'}],
+        sessions_config:Array.from({length:4},(_,i)=>({day:'J'+i,name:'S'+i,
+          active:true,exercises:[{name:'SQUAT',series:3,reps:'8'}]})),
+        phase:{type:'seche',debut:Date.now()-18*7*864e5},
+        nutrition:{macros:{on:{kcal:1450,p:150,g:100,l:50,f:20},
+                           off:{kcal:1450,p:150,g:100,l:50,f:20}}}},extra||{});
+      const _poser=u=>{
+        currentUser={id:'coPZ',email:'copz@t.fr',role:'coach',fname:'K',
+          seenBilans:{},alertStatus:{},studentCodes:[]};
+        const users={}; users[u.email]=u; DB.set('users',users);
+        currentClientId=u.id;
+        return u;
+      };
+      try{
+        // ── La proposition ────────────────────────────────────────────────
+        ok('Critère : restriction prolongée → une pause est proposée',(()=>{
+          const u=_long();
+          if(!_restrictionBrute(u)) return _echec('fixture inutile : aucune restriction');
+          const p=pauseProposee(u);
+          if(!p) return _echec('aucune proposition');
+          return p.jours===PAUSE_JOURS_DEFAUT&&p.kcalCible>1450&&p.semaines>=16
+            ?true:_echec(JSON.stringify({j:p.jours,k:p.kcalCible,s:p.semaines}));})());
+        ok('Critère : rien n\'est écrit tant qu\'aucun clic n\'a eu lieu',(()=>{
+          const u=_long();
+          const avant=JSON.stringify(u.nutrition.macros);
+          pauseProposee(u); _htmlPauseProposition(u);
+          return JSON.stringify(u.nutrition.macros)===avant&&!u.phase.pause
+            ?true:_echec('le dossier a été modifié sans clic');})());
+        ok('L\'encart annonce les DEUX chiffres et le contrat',(()=>{
+          const h=_htmlPauseProposition(_long());
+          const t=h.replace(/<[^>]*>/g,' ');
+          return /1450 kcal/.test(t)&&/18 semaines/.test(t)
+            &&/Protéines et lipides ne changent pas/.test(t)
+            ?true:_echec(t.slice(0,180));})());
+        ok('Une pause déjà active ne propose plus rien',(()=>{
+          const u=_long({phase:{type:'seche',debut:Date.now()-18*7*864e5,
+            pause:{debut:Date.now()-2*864e5,jours:12,kcalAvant:{on:{},off:{}}}}});
+          return pauseProposee(u)===null&&_htmlPauseProposition(u)===''
+            ?true:_echec('une seconde proposition est apparue');})());
+
+        // ── L'application ─────────────────────────────────────────────────
+        ok('Critère : protéines et lipides identiques, seuls glucides et kcal bougent',(()=>{
+          const u=_poser(_long());
+          const avant=JSON.parse(JSON.stringify(u.nutrition.macros));
+          if(!appliquerPause(12)) return _echec('application refusée');
+          const ap=DB.get('users')['pz@t.fr'].nutrition.macros;
+          for(const j of ['on','off']){
+            if(ap[j].p!==avant[j].p) return _echec(j+' : protéines '+ap[j].p+' au lieu de '+avant[j].p);
+            if(ap[j].l!==avant[j].l) return _echec(j+' : lipides '+ap[j].l+' au lieu de '+avant[j].l);
+            if(!(ap[j].kcal>avant[j].kcal)) return _echec(j+' : kcal n\'a pas monté');
+            if(!(ap[j].g>avant[j].g)) return _echec(j+' : glucides n\'ont pas monté');
+          }
+          return true;})());
+        ok('kcalAvant conserve EXACTEMENT les objectifs d\'avant',(()=>{
+          const st=DB.get('users')['pz@t.fr'];
+          const av=st.phase.pause.kcalAvant;
+          return av&&av.on.kcal===1450&&av.off.kcal===1450&&av.on.p===150
+            ?true:_echec(JSON.stringify(av));})());
+
+        // ── Les quatre neutralisations ────────────────────────────────────
+        const _enPause=()=>_long({phase:{type:'seche',debut:Date.now()-18*7*864e5,
+          pause:{debut:Date.now()-3*864e5,jours:12,
+            kcalAvant:{on:{kcal:1450,p:150,g:100,l:50},off:{kcal:1450,p:150,g:100,l:50}}}}});
+        ok('Critère : pause active → ajustementPropose rend null',(()=>{
+          const u=_enPause();
+          return ajustementPropose(u)===null
+            ?true:_echec('une proposition d\'ajustement passe');})());
+        ok('Critère : pause active → vitesseAlerte false même à -2,5 %/semaine',(()=>{
+          const u=_enPause();
+          const c=cibleVitesse(u);
+          if(!c.pause) return _echec('la cible ne porte pas la pause');
+          return vitesseAlerte(-2.5,c)===false&&vitesseAlerte(2.5,c)===false
+            ?true:_echec('une alerte se déclenche pendant la pause');})());
+        ok('Critère : pause active → la fourchette est celle du MAINTIEN',(()=>{
+          const c=cibleVitesse(_enPause());
+          return c.min===PHASES.maintien.min&&c.max===PHASES.maintien.max
+            ?true:_echec(JSON.stringify({min:c.min,max:c.max}));})());
+        ok('La phrase de pause est disponible pour l\'affichage',(()=>{
+          const c=cibleVitesse(_enPause());
+          return /reprise de poids/.test(c.note||'')
+            ?true:_echec('note absente : '+c.note);})());
+        ok('Critère : pause active → restrictionProlongee rend false',(()=>{
+          const u=_enPause();
+          if(!_restrictionBrute(u)) return _echec('fixture inutile : le constat brut est faux');
+          return restrictionProlongee(u)===false
+            ?true:_echec('le signal reste allumé pendant la pause');})());
+        ok('Hors pause, le signal reste bien allumé',
+           restrictionProlongee(_long())===true);
+
+        // Un athlète qui recevrait VRAIMENT un ajustement sans la pause. La
+        // fixture précédente n'avait aucune pesée : ajustementPropose rendait
+        // null de toute façon, et le test ne prouvait rien.
+        const _avecPesees=(pause)=>{
+          const wl=[];
+          let kg=62;
+          for(let j=45;j>=0;j--){
+            wl.push({date:localISODate(new Date(Date.now()-j*864e5)),
+              kg:Math.round(kg*10)/10});
+            kg-=62*0.02/7;                       // -2 % par semaine : hors fourchette
+          }
+          const ph={type:'seche',debut:Date.now()-18*7*864e5};
+          if(pause) ph.pause={debut:Date.now()-3*864e5,jours:12,
+            kcalAvant:{on:{kcal:1450,p:150,g:100,l:50},off:{kcal:1450,p:150,g:100,l:50}}};
+          return _long({weightLog:wl,phase:ph});
+        };
+        ok('La fixture d\'ajustement parle BIEN sans la pause',(()=>{
+          return ajustementPropose(_avecPesees(false))
+            ?true:_echec('fixture muette : le test suivant ne prouverait rien');})());
+        ok('Critère : pause active → ajustementPropose rend null (fixture parlante)',(()=>{
+          return ajustementPropose(_avecPesees(true))===null
+            ?true:_echec('une proposition d\'ajustement passe pendant la pause');})());
+
+        // ── La fin de pause ───────────────────────────────────────────────
+        ok('Critère : pause expirée depuis 30 jours → toujours active',(()=>{
+          const u=_long({phase:{type:'seche',debut:Date.now()-18*7*864e5,
+            pause:{debut:Date.now()-42*864e5,jours:12,
+              kcalAvant:{on:{kcal:1450,p:150,g:100,l:50},off:{kcal:1450,p:150,g:100,l:50}}}}});
+          if(!pauseActive(u)) return _echec('la pause s\'est éteinte toute seule');
+          if(!pauseTerminee(u)) return _echec('le terme n\'est pas vu comme passé');
+          const h=_htmlPauseEnCours(u).replace(/<[^>]*>/g,' ');
+          if(!/On reprend la sèche, ou on s'arrête là/.test(h))
+            return _echec('encart de fin absent : '+h.slice(0,140));
+          // Aucune reprise automatique : les objectifs n'ont pas bougé.
+          return ajustementPropose(u)===null&&restrictionProlongee(u)===false
+            ?true:_echec('quelque chose a repris tout seul');})());
+        ok('Critère : sans kcalAvant, « Reprendre la sèche » n\'est pas proposé',(()=>{
+          const u=_long({phase:{type:'seche',debut:Date.now()-18*7*864e5,
+            pause:{debut:Date.now()-42*864e5,jours:12}}});
+          const h=_htmlPauseEnCours(u);
+          return !/reprendreSeche\(\)/.test(h)&&/ouvrirTransitionMaintien\(\)/.test(h)
+            ?true:_echec('le bouton de reprise est proposé sans objectifs');})());
+        ok('Reprendre la sèche restaure EXACTEMENT kcalAvant',(()=>{
+          const u=_poser(_long({phase:{type:'seche',debut:Date.now()-18*7*864e5,
+            pause:{debut:Date.now()-13*864e5,jours:12,
+              kcalAvant:{on:{kcal:1450,p:150,g:100,l:50,f:20},
+                         off:{kcal:1400,p:150,g:90,l:50,f:20}}}}}));
+          u.nutrition.macros={on:{kcal:1980,p:150,g:230,l:50,f:28},
+                              off:{kcal:1980,p:150,g:230,l:50,f:28}};
+          const users=DB.get('users'); users['pz@t.fr']=u; DB.set('users',users);
+          if(!reprendreSeche()) return _echec('reprise refusée');
+          const ap=DB.get('users')['pz@t.fr'];
+          if(ap.phase.pause) return _echec('la pause n\'a pas été levée');
+          return ap.nutrition.macros.on.kcal===1450&&ap.nutrition.macros.off.kcal===1400
+            ?true:_echec(JSON.stringify(ap.nutrition.macros));})());
+
+        ok('Critère : sans kcalAvant, la reprise est REFUSÉE, pas silencieuse',(()=>{
+          // Le test précédent ne regardait que le bouton. Rien n'empêchait
+          // d'appeler la fonction, et rien ne vérifiait qu'elle refusait.
+          const u=_poser(_long({phase:{type:'seche',debut:Date.now()-18*7*864e5,
+            pause:{debut:Date.now()-42*864e5,jours:12}}}));
+          const avant=JSON.stringify(u.nutrition.macros);
+          // Une reprise qui LEVE une exception est un echec, pas une
+          // detection propre : sans ce filet, la variante fait tomber
+          // toute la suite au lieu de rougir une ligne.
+          let r; try{ r=reprendreSeche(); }
+          catch(e){ return _echec('exception au lieu d\'un refus : '+e.message); }
+          const ap=DB.get('users')['pz@t.fr'];
+          if(r!==false) return _echec('la reprise a été acceptée sans objectifs');
+          if(!ap.phase.pause) return _echec('la pause a été levée malgré le refus');
+          return JSON.stringify(ap.nutrition.macros)===avant
+            ?true:_echec('les objectifs ont bougé');})());
+
+        // ── La sortie progressive ─────────────────────────────────────────
+        ok('Critère : trois paliers, le dernier EXACTEMENT à la cible',(()=>{
+          const p=paliersTransition(1450,1990,3);
+          if(p.length!==3) return _echec(p.length+' paliers');
+          if(p[p.length-1]!==1990) return _echec('dernier palier '+p[p.length-1]);
+          return p[0]<p[1]&&p[1]<p[2]?true:_echec(p.join(' / '));})());
+        ok('Les paliers sont réguliers, pas un saut suivi de deux riens',(()=>{
+          const p=paliersTransition(1450,1990,3);
+          const d=[p[0]-1450,p[1]-p[0],p[2]-p[1]];
+          const max=Math.max.apply(null,d), min=Math.min.apply(null,d);
+          return (max-min)<=2?true:_echec(d.join(' / '));})());
+        ok('Critère : chaque palier est journalisé avec origine transition',(()=>{
+          const u=_poser(_long());
+          if(!appliquerPalierTransition(0)) return _echec('palier refusé');
+          const ap=DB.get('users')['pz@t.fr'];
+          const h=(ap.nutrition.ajustHisto||[]).slice(-1)[0];
+          if(!h||h.origine!=='transition') return _echec(JSON.stringify(h));
+          return ap.nutrition.macros.origine==='transition'
+            ?true:_echec('origine des macros : '+ap.nutrition.macros.origine);})());
+        ok('Trois paliers successifs mènent EXACTEMENT à la cible',(()=>{
+          const u=_poser(_long());
+          let dep=null; try{ dep=besoinsProposes(u).depense; }catch(e){}
+          if(!(dep>0)) return _echec('dépense non calculable');
+          for(let i=0;i<TRANSITION_PALIERS;i++) appliquerPalierTransition(i);
+          const ap=DB.get('users')['pz@t.fr'];
+          return ap.nutrition.macros.on.kcal===Math.round(dep)
+            ?true:_echec(ap.nutrition.macros.on.kcal+' au lieu de '+Math.round(dep));})());
+        ok('Le point de départ est FIGÉ : le palier 2 ne dérive pas',(()=>{
+          // Sans figer le départ, chaque palier repart de la valeur déjà
+          // relevée : le troisième atteint quand même la cible, mais les
+          // intermédiaires sont trop hauts. Un test qui ne regarde que la fin
+          // ne voit rien.
+          const u=_poser(_long());
+          let dep=null; try{ dep=besoinsProposes(u).depense; }catch(e){}
+          if(!(dep>0)) return _echec('dépense non calculable');
+          const attendus=paliersTransition(1450,dep,TRANSITION_PALIERS);
+          appliquerPalierTransition(0);
+          appliquerPalierTransition(1);
+          const k=DB.get('users')['pz@t.fr'].nutrition.macros.on.kcal;
+          return k===attendus[1]
+            ?true:_echec('palier 2 à '+k+' au lieu de '+attendus[1]);})());
+        ok('Un palier ne touche NI aux protéines NI aux lipides',(()=>{
+          const u=_poser(_long());
+          const avant=JSON.parse(JSON.stringify(u.nutrition.macros));
+          appliquerPalierTransition(0);
+          const ap=DB.get('users')['pz@t.fr'].nutrition.macros;
+          return ap.on.p===avant.on.p&&ap.on.l===avant.on.l
+            &&ap.off.p===avant.off.p&&ap.off.l===avant.off.l
+            ?true:_echec(JSON.stringify({p:ap.on.p,l:ap.on.l}));})());
+
+        // ── Changement de phase pendant une pause ─────────────────────────
+        ok('Critère : changer de phase efface la pause et le journalise',(()=>{
+          const u=_enPause();
+          u.nutrition.ajustHisto=[];
+          if(!changerPhase(u,'maintien')) return _echec('changement refusé');
+          if(u.phase.pause) return _echec('la pause a survécu au changement');
+          const h=(u.nutrition.ajustHisto||[]).slice(-1)[0];
+          return h&&h.origine==='pause_effacee_changement_phase'&&h.vers==='maintien'
+            ?true:_echec(JSON.stringify(h));})());
+        ok('Reconduire la MÊME phase ne touche pas à la pause',(()=>{
+          const u=_enPause();
+          changerPhase(u,'seche');
+          return !!u.phase.pause
+            ?true:_echec('la pause a été effacée par une reconduction');})());
+
+        // ── Les interdits ─────────────────────────────────────────────────
+        ok('INTERDIT : aucune notification n\'est déclenchée par ce module',(()=>{
+          const src=String(appliquerPause)+String(reprendreSeche)
+            +String(appliquerPalierTransition)+String(pauseProposee);
+          return !/showNotification|new Notification|registration\.showNotification/.test(src)
+            ?true:_echec('une notification part de ce module');})());
+        ok('Le préavis de fin ne parle qu\'à quatorze jours ou moins',(()=>{
+          const loin=_long({phase:{type:'seche',debut:Date.now()-8*7*864e5,
+            finPrevue:Date.now()+40*864e5}});
+          const proche=_long({phase:{type:'seche',debut:Date.now()-8*7*864e5,
+            finPrevue:Date.now()+9*864e5}});
+          if(_htmlFinPrevue(loin)!=='') return _echec('préavis affiché 40 jours avant');
+          return /se termine dans 9 jours/.test(_htmlFinPrevue(proche).replace(/<[^>]*>/g,' '))
+            ?true:_echec('préavis absent à 9 jours');})());
+        ok('Le préavis se tait pendant une pause',
+           _htmlFinPrevue(_long({phase:{type:'seche',debut:Date.now()-8*7*864e5,
+             finPrevue:Date.now()+9*864e5,
+             pause:{debut:Date.now()-2*864e5,jours:12,kcalAvant:{on:{},off:{}}}}}))==='');
+      } finally {
+        currentUser=_sU; currentClientId=_sCid;
+        if(_sUsers) DB.set('users',_sUsers);
+      }
+    })();
+
     // ══ UN SEUL TYPE DE DIÈTE, UN SEUL DÉFAUT ════════════════════════════
     (()=>{
       const _sU=currentUser;
@@ -37584,7 +38168,11 @@ function testExercices(){
 
         // ── Une seule définition dans l'app ───────────────────────────────
         ok('Critère : restrictionProlongee lit le MÊME plancher',(()=>{
-          const src=String(restrictionProlongee);
+          // La detection a demenage dans _restrictionBrute le jour ou la pause
+          // dietetique a du eteindre le signal sans eteindre le constat. La
+          // propriete verifiee est la meme : une seule definition du plancher,
+          // aucun recalcul local. On inspecte les DEUX fonctions.
+          const src=String(restrictionProlongee)+String(_restrictionBrute);
           if(/KCAL_PLANCHER_PAR_KG\s*\*/.test(src))
             return _echec('recalcul local du plancher');
           return /pl\.kcal/.test(src)?true:_echec('ne lit pas plancherEffectif');})());
