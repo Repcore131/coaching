@@ -1978,6 +1978,23 @@ const COACH_PHOTO='icons/coach.jpg';
           </div>
         </div>
       </div>
+      <!-- ÉTATS DE SANTÉ DÉCLARÉS. Le lot A2-03 devait livrer cette liste et
+           son écran ; il ne l'a pas fait, et deux lots livrés consomment déjà
+           user.etatsSante sans qu'aucun moyen n'existe de le remplir. Voici
+           le mécanisme, avec les deux seules clés dont le code se sert. -->
+      <div class="card" id="atp-etats-card" style="margin-bottom:14px">
+        <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">États de santé déclarés</label>
+        <div id="atp-etats-opts" style="display:flex;flex-direction:column;gap:8px"></div>
+        <div id="atp-thyroide-bloc" style="display:none;margin-top:11px;border-top:1px solid var(--border);padding-top:11px">
+          <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;text-transform:uppercase;font-weight:700;margin-bottom:7px">Ce que ton médecin a dit</div>
+          <div id="atp-thyroide-etats" style="display:flex;flex-direction:column;gap:7px"></div>
+          <label style="display:flex;align-items:center;gap:9px;margin-top:10px;cursor:pointer">
+            <input type="checkbox" id="atp-thyroide-trait" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0">
+            <span style="font-size:12px;color:#ddd;line-height:1.5">Un traitement est en cours</span>
+          </label>
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-top:9px">Ces déclarations sont visibles de ton coach : c'est lui qui ajuste tes repères avec. RepCore ne pose aucun diagnostic et ne demande ni dose, ni molécule, ni résultat d'analyse.</div>
+      </div>
       <div class="card" id="atp-cycle-card" style="margin-bottom:14px;display:none">
         <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Suivi du cycle</label>
         <div id="atp-cycle-opts" style="display:flex;flex-direction:column;gap:8px"></div>
@@ -6258,6 +6275,23 @@ function risquesMicro(user,ref){
       motif:'Sèche depuis '+semaines+' semaines, cycle menstruel suivi dans l\'app.',
       question:'As-tu un bilan sanguin récent (ferritine) ?'});
   }
+
+  // ── Stagnation inexpliquée : la question thyroïdienne, au coach ──────────
+  // Côté COACH, la question est nommée : c'est un professionnel qui parle à
+  // un médecin. Côté athlète, aucune pathologie n'est citée.
+  try{
+    const st=_ajustStagnationBloque(user);
+    if(st){
+      const a=st.adh||{};
+      const pctAdh=(a.cibleMoyenne>0)
+        ?Math.round(100-Math.abs(a.ecartKcal)/a.cibleMoyenne*100):null;
+      out.push({cle:'stagnation',lib:'Stagnation inexpliquée',
+        motif:'Sèche de '+st.semaines+' semaines, adhérence de '
+          +(pctAdh!=null?pctAdh+' %':'—')+' sur '+(a.nJours||0)
+          +' jours journalisés, perte mesurée quasi nulle.',
+        question:'Un bilan thyroïdien récent existe-t-il ?'});
+    }
+  }catch(e){}
 
   // ── SOPK déclaré : on renvoie vers le suivi, on n'affirme rien ───────────
   // Aucun contenu sur le traitement, aucun complément suggéré : une question,
@@ -20090,8 +20124,56 @@ const SOPK_CIBLE_SECHE=Object.freeze({min:-1.0,max:-0.3,alerte:-1.4});
 // entrée dont ce lot a besoin, et A2-03 l'étendra. Aucune question de
 // dépistage, aucun questionnaire de symptômes — une déclaration, rien d'autre.
 const ETATS_DECLARABLES=Object.freeze([
-  Object.freeze({cle:'sopk',lib:'SOPK diagnostiqué par un médecin'})
+  Object.freeze({cle:'sopk',    lib:'SOPK diagnostiqué par un médecin'}),
+  Object.freeze({cle:'thyroide',lib:'Trouble thyroïdien diagnostiqué par un médecin'})
 ]);
+// CONTRAIREMENT à la contraception, ces déclarations sont VISIBLES du coach
+// sans réglage : c'est lui qui ajuste les lipides sous SOPK et qui pose la
+// question du bilan thyroïdien. Les cacher viderait les deux lots de leur
+// effet. La contraception, elle, ne sert à aucune décision de coaching.
+function etatsDeclares(user){
+  const l=(user&&user.etatsSante);
+  if(!Array.isArray(l)) return [];
+  return l.filter(x=>ETATS_DECLARABLES.some(e=>e.cle===x));
+}
+function aEtat(user,cle){ return etatsDeclares(user).indexOf(cle)>=0; }
+// ── Thyroïde : un état, un traitement, RIEN d'autre ───────────────────────
+// Aucune dose, aucune molécule, aucune valeur de TSH — celle-ci relève d'un
+// autre lot, et une valeur biologique ne s'interprète pas ici.
+const THYROIDE_ETATS=Object.freeze([
+  Object.freeze({cle:'hypo',           lib:'Hypothyroïdie'}),
+  Object.freeze({cle:'hyper',          lib:'Hyperthyroïdie'}),
+  Object.freeze({cle:'traitee_stable', lib:'Traitée et stabilisée'})
+]);
+function thyroideDe(user){
+  const t=(user&&user.thyroide)||{};
+  const etat=THYROIDE_ETATS.some(x=>x.cle===t.etat)?t.etat:null;
+  return {etat,traitement:!!t.traitement};
+}
+// ── Correction métabolique : une décision de COACH, jamais un calcul ──────
+// mbMifflin et mbKatch ne dépendent que du gabarit : rien ne permettait
+// d'exprimer un métabolisme inférieur à la prédiction. Ce facteur le permet,
+// et il porte le nom de ce qu'il est — une correction décidée, pas mesurée.
+const CORRECTION_MB_MIN=0.85, CORRECTION_MB_MAX=1.15, CORRECTION_MB_PAS=0.05;
+const CORRECTION_MB_ECHELLE=Object.freeze(
+  Array.from({length:7},(_,i)=>Math.round((CORRECTION_MB_MIN+i*CORRECTION_MB_PAS)*100)/100));
+// Hors bornes après désérialisation, valeur illisible, pas non respecté : on
+// retombe sur 1. Un métabolisme corrigé de moitié par une donnée corrompue
+// serait pire que pas de correction du tout.
+function correctionMB(user){
+  const v=Number((user||{}).correctionMB);
+  if(!isFinite(v)) return 1;
+  if(v<CORRECTION_MB_MIN||v>CORRECTION_MB_MAX) return 1;
+  return Math.round(v*100)/100;
+}
+// SUGGÉRÉE, jamais imposée : le coach voit une proposition et tranche.
+function correctionMBSuggeree(user){
+  const t=thyroideDe(user);
+  if(!aEtat(user,'thyroide')||!t.etat) return 1;
+  if(t.etat==='hypo'&&t.traitement===false) return 0.90;
+  if(t.etat==='hyper') return 1.10;
+  return 1;
+}
 // Défensive : le champ n'existe pas encore dans les dossiers, et un tableau
 // absent ou d'une autre forme ne doit rien casser.
 function aSOPK(user){
@@ -20188,6 +20270,18 @@ function besoinsProposes(user,opts){
   if(mb==null){ mb=mbMifflin(poids,taille,age,sexe); source='mifflin';
     hypotheses.push('tours de mesure absents : estimation sur poids, taille, âge et sexe'); }
   if(mb==null) return {source:null,on:null,off:null,manque:['calcul impossible'],hypotheses};
+  // AVANT le facteur d'activité, et sur le métabolisme de repos seul. Ce
+  // n'est pas une mesure : c'est une décision de coach, et elle se dit.
+  // Le réglage en cours du coach prime sur la valeur enregistrée : c'est ce
+  // qu'il est en train de régler qu'il doit voir.
+  const _corr=(typeof o.correctionMB==='number')
+    ?correctionMB({correctionMB:o.correctionMB}):correctionMB(user);
+  if(_corr!==1){
+    mb=Math.round(mb*_corr);
+    const pct=Math.round((_corr-1)*100);
+    hypotheses.push('métabolisme corrigé de '+(pct>0?'+':'')+pct
+      +' % sur décision du coach');
+  }
 
   // Profession et sports viennent du DERNIER bilan qui les porte. Un athlète
   // qui n'a pas encore refait son bilan garde l'ancien calcul : personne ne
@@ -20332,7 +20426,8 @@ let _propCycle=true;
 function _propReglages(){
   const p=_propProt, l=_propLip;
   return {protGparKg:(typeof p==='number')?p:undefined,
-    lipGparKg:(typeof l==='number')?l:undefined,cycle:_propCycle};
+    lipGparKg:(typeof l==='number')?l:undefined,
+    correctionMB:(typeof _propCorr==='number')?_propCorr:undefined,cycle:_propCycle};
 }
 // Valeur SUGGÉRÉE, jamais imposée : le coach voit une proposition et tranche.
 function lipSuggere(user){
@@ -20351,6 +20446,14 @@ function _htmlSopkAthlete(user){
 function _propSetProt(v){
   const n=parseFloat(v);
   _propProt=isFinite(n)?n:null;
+  const c=getOwnedClient(currentClientId);
+  if(c) renderCoachNutriSection(c);
+}
+let _propCorr=null;      // null = valeur suggérée par le dossier
+function _propSetCorr(v){
+  const n=parseFloat(v);
+  _propCorr=(isFinite(n)&&CORRECTION_MB_ECHELLE.indexOf(Math.round(n*100)/100)>=0)
+    ?Math.round(n*100)/100:null;
   const c=getOwnedClient(currentClientId);
   if(c) renderCoachNutriSection(c);
 }
@@ -20381,12 +20484,27 @@ function _htmlDepartCoach(c){
   const lipSug=lipSuggere(c);
   const lipCour=(typeof _propLip==='number')?_propLip:lipSug;
   const optsLip=LIP_ECHELLE.map(v=>`<option value="${v}"${lipCour===v?' selected':''}>${String(v).replace('.',',')} g/kg lip.${v===lipSug?' · suggéré':''}</option>`).join('');
+  // La correction métabolique. Elle vit en mémoire comme les autres curseurs,
+  // et n'est écrite dans le dossier qu'au bouton d'enregistrement habituel.
+  const corrSug=correctionMBSuggeree(c);
+  const corrCour=(typeof _propCorr==='number')?_propCorr:correctionMB(c);
+  const optsCorr=CORRECTION_MB_ECHELLE.map(v=>{
+    const pct=Math.round((v-1)*100);
+    return `<option value="${v}"${corrCour===v?' selected':''}>MB ${pct>0?'+':''}${pct} %${v===corrSug&&v!==1?' · suggéré':''}</option>`;
+  }).join('');
+  const noteCorr=(corrSug!==1)
+    ?`<div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-bottom:8px">Suggéré d'après ce qu'elle a déclaré. C'est une correction décidée, pas une mesure : à ajuster selon ce que montre la balance.</div>`
+    :'';
   const noteSopk=sopkApplicable(c)
     ?`<div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-bottom:8px">${escapeHtml(SOPK_NOTE_LIPIDES)}</div>`
     :'';
   return `<div style="border-top:1px solid var(--border);padding-top:11px;margin-bottom:12px">
     <div style="display:flex;gap:6px;margin-bottom:8px">
       <select onchange="_propSetProt(this.value)" style="flex:1;min-width:0;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700">${opts}</select>
+      <select onchange="_propSetCorr(this.value)" style="flex:1;min-width:0;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700">${optsCorr}</select>
+    </div>
+    ${noteCorr}
+    <div style="display:flex;gap:6px;margin-bottom:8px">
       <select onchange="_propSetLip(this.value)" style="flex:1;min-width:0;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700">${optsLip}</select>
     </div>
     ${noteSopk}
@@ -23525,10 +23643,16 @@ function _htmlAjustement(user,lectureSeule){
   if(!a){
     // Pas de proposition : soit il n'y a rien à ajuster, soit le plancher
     // l'interdit. Le second cas se dit, il ne se tait pas.
+    // La stagnation passe AVANT le plancher : quand les deux parlent, elle
+    // explique POURQUOI le plancher bloque, et un renvoi médical vaut mieux
+    // que « regarde ton sommeil ». Elle vient APRÈS le blocage de déficit,
+    // testé plus haut, qui reste au-dessus de tout.
+    const _stagHtml=_htmlStagnation(user,lectureSeule);
+    if(_stagHtml&&!lectureSeule) return _defHtml+_stagHtml;
     const pl=_ajustPlancherAtteint(user);
     if(pl&&!lectureSeule) return _defHtml+`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:18px">
       <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">Rythme</div>
-      <div style="font-size:12px;color:#ddd;line-height:1.7">Ta ${escapeHtml(PHASES[(phaseCourante(user)||{}).type].apres)} avance plus lentement que visé, mais je ne te propose pas de baisser : tu serais ${pl.plancher!=null?(pl.regle||'sous ton plancher')+' ('+pl.plancher+' kcal)':'sous ton plancher'}. On regarde ailleurs — sommeil, pas quotidiens, régularité — et on en parle.</div>
+      <div style="font-size:12px;color:#ddd;line-height:1.7">Ta ${escapeHtml(PHASES[(phaseCourante(user)||{}).type].apres)} avance plus lentement que visé, mais je ne te propose pas de baisser : tu serais ${pl.plancher!=null?(pl.regle||'sous ton plancher')+' ('+pl.plancher+' kcal)':'sous ton plancher'}. On regarde ailleurs : sommeil, pas quotidiens, régularité, et s'il n'y a pas une cause médicale.</div>
       ${blocDisclaimerSante()}
     </div>`;
     // Le plancher a la priorite : il vient d'etre teste juste au-dessus et rend
@@ -23693,6 +23817,83 @@ function _ajustAdherenceBloque(user,finISO){
   if(!_adherenceEcarte(adh)) return null;
   return {refus:'adherence',adh};
 }
+// ══════ STAGNATION INEXPLIQUÉE ══════
+// Face à une perte qui s'arrête, le produit ne savait que RÉDUIRE : −10 %,
+// puis « on regarde ailleurs — sommeil, pas quotidiens, régularité ». Trois
+// causes possibles, aucune médicale. Or si les apports sont suivis et que le
+// poids ne bouge pas, continuer à descendre n'est pas une réponse.
+//
+// AUCUNE déclaration n'est requise : c'est le point central. La règle se
+// déclenche sur ce qui est MESURÉ, chez quelqu'un qui n'a rien déclaré.
+const THY_SEM_MIN=8;
+const THY_VITESSE_PLATE=0.15;      // %/semaine, en valeur absolue
+// Aligné sur ADH_JOURS_MIN, et non recopié : deux seuils de couverture qui
+// divergeraient rendraient les deux refus incohérents entre eux.
+const THY_ADH_JOURS_MIN=ADH_JOURS_MIN;
+const THY_ADH_ECART_MAX=0.10;
+// PURE. Toutes les conditions sont cumulatives, et une donnée manquante rend
+// false : on n'accuse pas une stagnation sans savoir ce qui est mangé.
+function stagnationInexpliquee(user,finISO){
+  try{
+    const ph=phaseCourante(user);
+    if(!ph||ph.type!=='seche') return false;
+    const sem=semainesEcoulees(user);
+    if(sem==null||sem<THY_SEM_MIN) return false;
+    const j=finISO||localISODate(new Date());
+    const adh=adherence(user,j);
+    if(!adh||adh.nJours<THY_ADH_JOURS_MIN) return false;
+    if(!(adh.cibleMoyenne>0)) return false;
+    if(Math.abs(adh.ecartKcal)>adh.cibleMoyenne*THY_ADH_ECART_MAX) return false;
+    // QUATRE semaines, donc le régime étendu explicitement : _vitesseAuJour
+    // privilégie la fenêtre de quatorze jours, trop courte pour juger d'un
+    // plateau.
+    const v=vitesseHebdoEtendue(serieVitesse(user),j);
+    if(!v||v.pctSem==null) return false;
+    return Math.abs(v.pctSem)<THY_VITESSE_PLATE;
+  }catch(e){ return false; }
+}
+// Refus MOTIVÉ, exposé séparément — exactement comme _ajustAdherenceBloque et
+// pour la même raison, déjà démontrée : appliquerAjustement lit a.jour puis
+// a.apres.kcal, et un objet de refus y est TRUTHY. Il écrirait une clé
+// parasite dans les macros avant de lever une exception. La spécification
+// demandait ce retour en invoquant le lot d'adhérence comme précédent — c'est
+// précisément le design que ce lot-là avait essayé, prouvé cassant, et rejeté.
+function _ajustStagnationBloque(user,finISO){
+  if(!user) return null;
+  // Même ordre de garde-fous que le refus d'adhérence : ce qui ÉTEINT toute
+  // proposition passe avant. Rien à refuser là où rien n'est proposé.
+  try{ if(drapeauQuelconqueActif(user)) return null; }catch(e){}
+  try{ if(aTCA(user)) return null; }catch(e){}
+  try{ if(pauseActive(user)) return null; }catch(e){}
+  try{ if(paliersDeficit(user)==='blocage') return null; }catch(e){}
+  // L'ADHÉRENCE passe devant : il faut d'abord suivre le plan avant de
+  // chercher une cause médicale. Garde de principe — avec les constantes
+  // actuelles les deux sont mutuellement exclusifs, l'un exigeant un écart
+  // SUPÉRIEUR à 10 % et l'autre INFÉRIEUR ou égal. Elle tient si l'un des
+  // deux seuils bouge un jour.
+  try{ if(_ajustAdherenceBloque(user,finISO)) return null; }catch(e){}
+  const nut=user.nutrition||{};
+  if(!nut.macros) return null;
+  if(!phaseCourante(user)) return null;
+  if(!stagnationInexpliquee(user,finISO)) return null;
+  return {refus:'stagnation_inexpliquee',adh:adherence(user,finISO),
+    semaines:semainesEcoulees(user)};
+}
+// Sans nommer AUCUNE pathologie. « Ce n'est pas ta faute » n'est pas une
+// politesse : c'est la correction d'un produit qui, jusqu'ici, ne pouvait
+// répondre à une stagnation qu'en demandant de manger encore moins.
+const THY_TEXTE_ATHLETE='Tes apports sont suivis et ton poids ne bouge pas. '
+  +'Ce n\'est pas normal, et ce n\'est pas ta faute. Avant de descendre plus '
+  +'bas, parles-en à un médecin : il existe des causes médicales à ça.';
+function _htmlStagnation(user,lectureSeule){
+  const r=_ajustStagnationBloque(user);
+  if(!r) return '';
+  return `<div style="background:var(--surface-1);border:1px solid var(--orange)55;border-radius:14px;padding:14px;margin-bottom:18px">
+    <div style="font-size:var(--fs-xs);color:var(--orange);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">Rythme</div>
+    <div style="font-size:12.5px;color:#eee;line-height:1.75">${escapeHtml(THY_TEXTE_ATHLETE)}</div>
+    ${blocDisclaimerSante()}
+  </div>`;
+}
 // Le texte dit l'écart DANS SON SENS. « Tu manges plus que prévu » et « tu manges
 // moins que prévu » n'appellent pas la même conversation, et une seule phrase
 // pour les deux serait fausse dans un cas sur deux.
@@ -23781,6 +23982,10 @@ function ajustementPropose(user){
   const _aujdAdh=localISODate(new Date());
   const _adh=adherence(user,_aujdAdh);
   if(_adherenceEcarte(_adh)) return null;
+  // Apports suivis et poids immobile : proposer de descendre encore serait
+  // exactement la mauvaise reponse. _ajustStagnationBloque dit POURQUOI a
+  // l'ecran, ici on se tait.
+  try{ if(stagnationInexpliquee(user,_aujdAdh)) return null; }catch(e){}
   const cible=cibleVitesse(user);
   if(cible.min==null||cible.max==null) return null;
   // Un seul ajustement par quinzaine, accepté OU refusé.
@@ -26974,6 +27179,37 @@ const ATP_CYCLE_OPTIONS=Object.freeze([
    'Ménopause, contraception continue, absence de règles, autre'],
   ['jamais_demander','Non, je préfère ne pas suivre ça',''],
 ]);
+let _atpEtats=[];
+let _atpThyEtat=null, _atpThyTrait=false;
+function _renderAtpEtats(){
+  const z=document.getElementById('atp-etats-opts');
+  if(!z) return;
+  z.innerHTML=ETATS_DECLARABLES.map(e=>
+    `<div class="obj-opt${_atpEtats.indexOf(e.cle)>=0?' sel':''}" onclick="basculerAtpEtat('${e.cle}')"
+      role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div style="font-weight:800">${escapeHtml(e.lib)}</div>
+    </div>`).join('');
+  const bloc=document.getElementById('atp-thyroide-bloc');
+  if(bloc) bloc.style.display=(_atpEtats.indexOf('thyroide')>=0)?'block':'none';
+  const zt=document.getElementById('atp-thyroide-etats');
+  if(zt) zt.innerHTML=THYROIDE_ETATS.map(t=>
+    `<div class="obj-opt${_atpThyEtat===t.cle?' sel':''}" onclick="setAtpThyroide('${t.cle}')"
+      role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div style="font-weight:800">${escapeHtml(t.lib)}</div>
+    </div>`).join('');
+  const c=document.getElementById('atp-thyroide-trait');
+  if(c) c.checked=!!_atpThyTrait;
+}
+function basculerAtpEtat(cle){
+  if(!ETATS_DECLARABLES.some(e=>e.cle===cle)) return;
+  const i=_atpEtats.indexOf(cle);
+  if(i>=0) _atpEtats.splice(i,1); else _atpEtats.push(cle);
+  _renderAtpEtats();
+}
+function setAtpThyroide(cle){
+  _atpThyEtat=(THYROIDE_ETATS.some(x=>x.cle===cle)&&_atpThyEtat!==cle)?cle:null;
+  _renderAtpEtats();
+}
 function _renderAtpCycle(){
   const z=document.getElementById('atp-cycle-opts');
   const carte=document.getElementById('atp-cycle-card');
@@ -27020,6 +27256,10 @@ function openAthleteProfile(){
   setAthleteGender(_atpGender);
   _atpCycleSuivi=cycleSuiviDe(u);
   _renderAtpCycle();
+  _atpEtats=etatsDeclares(u).slice();
+  const _thy=thyroideDe(u);
+  _atpThyEtat=_thy.etat; _atpThyTrait=_thy.traitement;
+  _renderAtpEtats();
   const zc=document.getElementById('atp-comptes');
   if(zc) zc.innerHTML=htmlSelecteurComptes();
   go('s-athlete-profile');
@@ -27033,6 +27273,16 @@ function saveAthleteProfile(){
   currentUser.profileWeight=parseFloat(document.getElementById('atp-weight')?.value)||undefined;
   currentUser.gender=_atpGender||currentUser.gender;
   currentUser.objective=(document.getElementById('atp-objective')?.value||'').trim()||undefined;
+  // Les états déclarés. Une liste vide EFFACE : se retirer d'une déclaration
+  // doit être aussi simple que de la faire.
+  currentUser.etatsSante=_atpEtats.slice();
+  if(_atpEtats.indexOf('thyroide')>=0){
+    const c=document.getElementById('atp-thyroide-trait');
+    currentUser.thyroide={etat:_atpThyEtat||undefined,
+      traitement:c?!!c.checked:!!_atpThyTrait};
+  } else {
+    delete currentUser.thyroide;
+  }
   if(_atpCycleSuivi){
     // Repasser à « oui » remet les compteurs à zéro : sinon une proposition
     // d'arrêt déjà faite, ou trois reports déjà comptés, condamneraient la
@@ -31630,13 +31880,17 @@ function testExercices(){
           // Et la note reste prudente : « souvent », « varie », « à ajuster ».
           return /varie beaucoup/.test(SOPK_NOTE_LIPIDES)&&/ajuster/.test(SOPK_NOTE_LIPIDES)
             ?true:_echec('la note ne dit pas son incertitude');})());
-        ok('ETATS_DECLARABLES porte la clé, et rien d\'inventé autour',(()=>{
-          const e=ETATS_DECLARABLES.find(x=>x.cle==='sopk');
-          if(!e) return _echec('clé absente');
-          if(!/diagnostiqué par un médecin/.test(e.lib)) return _echec(e.lib);
-          // Le lot A2-03 étendra la liste ; ce lot n'invente aucune autre entrée.
-          return ETATS_DECLARABLES.length===1
-            ?true:_echec(ETATS_DECLARABLES.length+' entrées');})());
+        ok('ETATS_DECLARABLES porte les clés que le code CONSOMME',(()=>{
+          // La liste ne contient que ce dont le produit se sert réellement :
+          // « sopk » pour les repères de sèche, « thyroide » pour la question
+          // au coach. Le lot A2-03 l'étendra avec sa liste clinique complète ;
+          // rien n'est inventé ici au-delà de ces deux usages.
+          const cles=ETATS_DECLARABLES.map(x=>x.cle).sort().join(',');
+          if(cles!=='sopk,thyroide') return _echec(cles);
+          const sansLib=ETATS_DECLARABLES.filter(x=>!/diagnostiqué par un médecin/.test(x.lib));
+          return sansLib.length
+            ?_echec('libellé sans mention du diagnostic : '+sansLib.map(x=>x.cle).join(', '))
+            :true;})());
 
         // ── Le sélecteur coach ──────────────────────────────────────────
         ok('Le sélecteur de lipides propose toute l\'échelle',(()=>{
@@ -31675,6 +31929,350 @@ function testExercices(){
           return JSON.stringify(LIP_ECHELLE)===avant
             ?true:_echec('l\'échelle a bougé');})());
       } finally { currentUser=_skU; }
+    })();
+
+    // ══════ MÉTABOLISME CORRIGÉ, ET STAGNATION INEXPLIQUÉE ══════
+    // Face à une perte qui s'arrête, le produit ne savait que RÉDUIRE. Et rien
+    // ne permettait d'exprimer un métabolisme inférieur à la prédiction.
+    (()=>{
+      const _tyU=currentUser;
+      const _j=n=>localISODate(new Date(Date.now()-n*864e5));
+      const AUJ=localISODate(new Date());
+      // Dossier paramétrable : semaines de sèche, écart d'adhérence, vitesse.
+      const _ath=(o)=>{
+        const c=o||{};
+        const kg0=70, pct=(c.pctSem!=null)?c.pctSem:-0.05;
+        const wl=[];
+        for(let j=45;j>=0;j--) wl.push({date:_j(j),kg:Math.round((kg0+kg0*(pct/100)/7*(45-j))*100)/100});
+        const cible=2400, log={};
+        const nJ=(c.jours!=null)?c.jours:12;
+        const realise=Math.round(cible*(1+((c.ecart!=null)?c.ecart:0.02)));
+        for(let i=0;i<nJ;i++) log[_j(i)]={entries:[{id:i,nom:'A',qty:100,
+          repas:'matin',kcal:realise,p:150,c:100,l:50,fi:10,sel:1}]};
+        const u={id:'ty'+(c.id||''),email:'ty'+(c.id||'')+'@t',role:'athlete',
+          gender:'H',_evol_gender:'H',_evol_height:178,
+          exAlias:{},exMuscles:{},sessions:[],bilans:[],weightLog:wl,
+          sessions_config:Array.from({length:7},(_,i)=>({day:'J'+i,name:'S',
+            active:false,exercises:[]})),
+          nutrition:{dietType:'strict',log,
+            macros:{on:{kcal:cible,p:150,g:337,l:50},
+                    off:{kcal:cible,p:150,g:337,l:50}}}};
+        if(c.semaines!==0)
+          u.phase={type:'seche',debut:Date.now()-((c.semaines!=null)?c.semaines:10)*7*864e5};
+        if(c.etats) u.etatsSante=c.etats;
+        if(c.thyroide) u.thyroide=c.thyroide;
+        if(c.corr!=null) u.correctionMB=c.corr;
+        return Object.assign(u,c.extra||{});
+      };
+      const _bilan=(u)=>{
+        u.bilans=[{type:'depart',date:Date.now()-200*864e5,'deb-weight':'70',
+          'deb-height':'178','deb-age':'32','deb-gender':'Homme'}];
+        return u;
+      };
+      try{
+        // ── La correction métabolique ────────────────────────────────────
+        ok('Critère : sans correction, la dépense est EXACTEMENT celle d\'avant',(()=>{
+          const u=_bilan(_ath({id:'c0'}));
+          const b=besoinsProposes(u);
+          if(!b||b.source===null) return _echec('aucune proposition');
+          // Le métabolisme vaut la formule, sans coefficient.
+          const mm=masseMaigreDuBilan(u);
+          const attendu=(mm!=null)?mbKatch(mm):mbMifflin(70,178,32,'Homme');
+          if(b.mb!==attendu) return _echec(b.mb+' au lieu de '+attendu);
+          return !b.hypotheses.some(h=>/métabolisme corrigé/.test(h))
+            ?true:_echec('une hypothèse de correction est annoncée');})());
+        ok('Critère : correction 0,90 → métabolisme réduit de 10 %, et c\'est dit',(()=>{
+          const sans=_bilan(_ath({id:'c1'}));
+          const avec=_bilan(_ath({id:'c2',corr:0.90}));
+          const a=besoinsProposes(sans), b=besoinsProposes(avec);
+          if(b.mb!==Math.round(a.mb*0.90)) return _echec(b.mb+' contre '+Math.round(a.mb*0.90));
+          if(!(b.depense<a.depense)) return _echec('la dépense n\'a pas baissé');
+          return b.hypotheses.some(h=>/métabolisme corrigé de -10 % sur décision du coach/.test(h))
+            ?true:_echec(b.hypotheses.join(' | '));})());
+        ok('Une correction au-dessus de 1 s\'annonce avec son signe',(()=>{
+          const b=besoinsProposes(_bilan(_ath({id:'c3',corr:1.10})));
+          return b.hypotheses.some(h=>/métabolisme corrigé de \+10 %/.test(h))
+            ?true:_echec(b.hypotheses.join(' | '));})());
+        ok('Critère : hors bornes ou illisible → traité comme 1',(()=>{
+          const rates=[0.5,1.5,2,-1,'zzz',null,NaN,undefined].filter(v=>
+            correctionMB({correctionMB:v})!==1);
+          if(rates.length) return _echec('acceptées : '+rates.join(', '));
+          // Et les sept valeurs de l'échelle passent.
+          const ko=CORRECTION_MB_ECHELLE.filter(v=>correctionMB({correctionMB:v})!==v);
+          return ko.length?_echec('refusées : '+ko.join(', ')):CORRECTION_MB_ECHELLE.length===7;})());
+        ok('Critère : la correction ne touche PAS au plancher',(()=>{
+          // Le plancher reste indexé sur le poids et la masse maigre. Un
+          // métabolisme corrigé ne doit pas pouvoir l'abaisser.
+          const sans=_bilan(_ath({id:'c4'}));
+          const avec=_bilan(_ath({id:'c5',corr:0.85}));
+          return plancherEffectif(sans).kcal===plancherEffectif(avec).kcal
+            ?true:_echec(plancherEffectif(sans).kcal+' contre '+plancherEffectif(avec).kcal);})());
+        ok('La suggestion suit la déclaration, sans jamais s\'imposer',(()=>{
+          const hypo=_ath({id:'c6',etats:['thyroide'],thyroide:{etat:'hypo',traitement:false}});
+          const traite=_ath({id:'c7',etats:['thyroide'],thyroide:{etat:'hypo',traitement:true}});
+          const hyper=_ath({id:'c8',etats:['thyroide'],thyroide:{etat:'hyper',traitement:false}});
+          const rien=_ath({id:'c9'});
+          const r=[correctionMBSuggeree(hypo),correctionMBSuggeree(traite),
+                   correctionMBSuggeree(hyper),correctionMBSuggeree(rien)];
+          if(JSON.stringify(r)!=='[0.9,1,1.1,1]') return _echec(JSON.stringify(r));
+          // SUGGÉRÉE : le dossier n'est pas modifié pour autant.
+          return correctionMB(hypo)===1
+            ?true:_echec('la suggestion a été appliquée d\'office');})());
+
+        // ── La stagnation inexpliquée ────────────────────────────────────
+        ok('Critère : 10 semaines, adhérence à +2 % sur 12 jours, −0,05 %/sem',(()=>{
+          const u=_ath({id:'s1'});
+          const adh=adherence(u,AUJ);
+          if(!adh||adh.nJours<8) return _echec('fixture muette : adhérence '+JSON.stringify(adh));
+          const v=vitesseHebdoEtendue(serieVitesse(u),AUJ);
+          if(!v||Math.abs(v.pctSem)>=THY_VITESSE_PLATE)
+            return _echec('fixture muette : vitesse '+(v?v.pctSem:'aucune'));
+          return stagnationInexpliquee(u)===true?true:_echec('non détectée');})());
+        ok('Critère : le refus est AFFICHABLE, et ajustementPropose rend null',(()=>{
+          const u=_ath({id:'s2'});
+          if(ajustementPropose(u)!==null) return _echec('une proposition est sortie');
+          const r=_ajustStagnationBloque(u);
+          return r&&r.refus==='stagnation_inexpliquee'
+            ?true:_echec(JSON.stringify(r));})());
+        ok('Le refus n\'est JAMAIS retourné par ajustementPropose',(()=>{
+          // appliquerAjustement lit a.jour puis a.apres.kcal : un objet de refus
+          // y est truthy. Il écrirait une clé parasite dans les macros avant de
+          // lever une exception. Le lot d'adhérence l'avait démontré ; la
+          // spécification de celui-ci demandait pourtant ce retour.
+          const cas=[_ath({id:'s3'}),_ath({id:'s4',ecart:0.25}),_ath({id:'s5',semaines:5})];
+          const rates=cas.map(u=>ajustementPropose(u)).filter(a=>a&&!a.apres);
+          return rates.length?_echec(rates.length+' retour(s) sans .apres'):true;})());
+        ok('Critère : moins de 8 semaines de sèche → false',
+          stagnationInexpliquee(_ath({id:'s6',semaines:5}))===false);
+        ok('Critère : journal vide → false',(()=>{
+          const u=_ath({id:'s7',jours:0});
+          if(adherence(u,AUJ)!==null) return _echec('fixture muette : adhérence non nulle');
+          return stagnationInexpliquee(u)===false?true:_echec('détectée sans journal');})());
+        ok('Couverture insuffisante → false',
+          stagnationInexpliquee(_ath({id:'s8',jours:THY_ADH_JOURS_MIN-1}))===false);
+        ok('Vitesse non calculable → false',(()=>{
+          const u=_ath({id:'s9'}); u.weightLog=[];
+          return stagnationInexpliquee(u)===false?true:_echec('détectée sans pesée');})());
+        ok('C\'est bien la fenêtre de QUATRE SEMAINES qui juge le plateau',(()=>{
+          // Courbe en V : le poids monte pendant deux semaines puis redescend
+          // d'autant. Sur quatre semaines le bilan est nul — c'est un plateau.
+          // Sur les quatorze derniers jours, la baisse est franche. Ma fixture
+          // d'origine, linéaire, rendait les deux fenêtres indiscernables.
+          const u=_ath({id:'w1'});
+          const kg0=70, wl=[];
+          // Sommet a J-14 : montee reguliere de J-28 a J-14, descente
+          // symetrique ensuite. Bilan net nul sur quatre semaines.
+          const kgDe=(j)=>(j>28)?kg0:((j>14)?kg0+(28-j)*0.05:kg0+j*0.05);
+          for(let j=45;j>=0;j--) wl.push({date:_j(j),kg:Math.round(kgDe(j)*100)/100});
+          u.weightLog=wl;
+          const large=vitesseHebdoEtendue(serieVitesse(u),AUJ);
+          const courte=_vitesseAuJour(u,AUJ);
+          if(!large||!courte) return _echec('fixture muette : une vitesse manque');
+          if(!(Math.abs(large.pctSem)<THY_VITESSE_PLATE))
+            return _echec('fixture muette : quatre semaines ne font pas un plateau ('+large.pctSem+')');
+          if(!(Math.abs(courte.pctSem)>=THY_VITESSE_PLATE))
+            return _echec('fixture muette : la fenêtre courte est plate aussi ('+courte.pctSem+')');
+          // Les deux fenêtres divergent : c'est la LARGE qui doit décider.
+          return stagnationInexpliquee(u)===true
+            ?true:_echec('la fenêtre courte a pris la décision');})());
+        ok('Une perte RÉELLE n\'est pas une stagnation',
+          stagnationInexpliquee(_ath({id:'s10',pctSem:-0.6}))===false);
+        ok('Hors sèche, jamais de stagnation',(()=>{
+          const u=_ath({id:'s11'}); u.phase={type:'masse',debut:Date.now()-80*864e5};
+          return stagnationInexpliquee(u)===false?true:_echec('détectée en masse');})());
+        ok('Aucune déclaration n\'est requise : c\'est le point du lot',(()=>{
+          const u=_ath({id:'s12'});
+          if(etatsDeclares(u).length) return _echec('fixture muette : un état est déclaré');
+          return stagnationInexpliquee(u)===true
+            ?true:_echec('la règle exige une déclaration');})());
+        ok('stagnationInexpliquee est PURE',(()=>{
+          const u=_ath({id:'s13'});
+          const avant=JSON.stringify(u);
+          stagnationInexpliquee(u); _ajustStagnationBloque(u);
+          return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
+        ok('Un dossier vide ne lève pas',(()=>{
+          try{
+            return stagnationInexpliquee({})===false&&stagnationInexpliquee(null)===false
+              &&_ajustStagnationBloque(null)===null?true:_echec('mauvais retour');
+          }catch(e){ return _echec('exception : '+e.message); }})());
+
+        // ── Les cumuls, et leur ordre ────────────────────────────────────
+        ok('Critère : adhérence à +25 % → c\'est le refus d\'ADHÉRENCE',(()=>{
+          const u=_ath({id:'x1',ecart:0.25});
+          const adh=_ajustAdherenceBloque(u);
+          if(!adh||adh.refus!=='adherence') return _echec('pas de refus d\'adhérence');
+          // Et la stagnation se tait — les deux seuils sont complémentaires par
+          // construction, l'un exigeant un écart SUPÉRIEUR à 10 % et l'autre
+          // INFÉRIEUR ou égal. La garde de priorité est donc une ceinture.
+          return _ajustStagnationBloque(u)===null&&stagnationInexpliquee(u)===false
+            ?true:_echec('les deux refus coexistent');})());
+        ok('Critère : le blocage de déficit passe AVANT la stagnation',(()=>{
+          const u=_ath({id:'x2',extra:{cycle:{absences:['2026-06-15','2026-07-15']},
+            gender:'Femme',_evol_gender:'Femme'}});
+          if(paliersDeficit(u)!=='blocage') return _echec('fixture muette : '+paliersDeficit(u));
+          if(!stagnationInexpliquee(u)) return _echec('fixture muette : pas de stagnation');
+          if(_ajustStagnationBloque(u)!==null) return _echec('la stagnation parle quand même');
+          const h=_htmlAjustement(u,false);
+          return /prends rendez-vous avec un médecin/.test(h)
+            &&!/ce n&#39;est pas ta faute|ce n'est pas ta faute/.test(h)
+            ?true:_echec('ce n\'est pas le message de blocage qui sort');})());
+        ok('La stagnation passe AVANT le message de plancher',(()=>{
+          const u=_ath({id:'x3'});
+          const h=_htmlAjustement(u,false);
+          if(!/ce n&#39;est pas ta faute|ce n'est pas ta faute/.test(h))
+            return _echec('le message de stagnation manque');
+          return !/On regarde ailleurs/.test(h)
+            ?true:_echec('les deux messages cohabitent');})());
+        ok('Un drapeau rouge éteint tout, stagnation comprise',(()=>{
+          const u=_ath({id:'x4'});
+          poserDrapeauGeneral(u,['thoracique']);
+          return _ajustStagnationBloque(u)===null
+            ?true:_echec('la stagnation parle sous drapeau rouge');})());
+
+        // ── Les deux renvois, et le registre ─────────────────────────────
+        ok('Critère : la fiche coach porte la question thyroïdienne, chiffrée',(()=>{
+          const u=_ath({id:'r1'});
+          const e=(risquesMicro(u)||[]).find(x=>x.cle==='stagnation');
+          if(!e) return _echec('entrée absente');
+          if(!/bilan thyroïdien récent/.test(e.question)) return _echec(e.question);
+          // Les chiffres sont RÉELS, pas décoratifs.
+          if(!/Sèche de 10 semaines/.test(e.motif)) return _echec(e.motif);
+          if(!/sur 12 jours journalisés/.test(e.motif)) return _echec(e.motif);
+          return /adhérence de 9[0-9] %/.test(e.motif)
+            ?true:_echec('adhérence non chiffrée : '+e.motif);})());
+        ok('Et rien quand il n\'y a pas de stagnation',
+          !(risquesMicro(_ath({id:'r2',pctSem:-0.6}))||[]).some(x=>x.cle==='stagnation'));
+        ok('Critère : le rendu ATHLÈTE ne nomme aucune pathologie',(()=>{
+          const u=_ath({id:'r3',etats:['thyroide'],
+            thyroide:{etat:'hypo',traitement:false}});
+          const h=_htmlAjustement(u,false)+_htmlStagnation(u,false)+THY_TEXTE_ATHLETE;
+          const d=document.createElement('div'); d.innerHTML=h;
+          const n=(d.textContent||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+          const interdits=['thyroide','hypothyroidie','hyperthyroidie','tsh',
+            'levothyrox','sopk','syndrome'];
+          const t=interdits.filter(x=>n.indexOf(x)>=0);
+          if(t.length) return _echec('mot interdit : '+t.join(', '));
+          return /pas ta faute/.test(n.replace(/&#39;/g,"'"))||/pas ta faute/.test(d.textContent||'')
+            ?true:_echec('la phrase attendue manque');})());
+        ok('Côté COACH en revanche, la question est nommée',(()=>{
+          const e=(risquesMicro(_ath({id:'r4'}))||[]).find(x=>x.cle==='stagnation');
+          return e&&/thyroïdien/.test(e.question)
+            ?true:_echec('la question est édulcorée');})());
+        ok('Critère : le message de plancher cite désormais la cause médicale',(()=>{
+          // Il énumérait sommeil, pas quotidiens, régularité — et rien de médical.
+          const u=_ath({id:'r5',ecart:0.25});   // stagnation écartée : le plancher parle
+          const src=String(_htmlAjustement);
+          if(/On regarde ailleurs — sommeil, pas quotidiens, régularité — et on en parle/.test(src))
+            return _echec('l\'ancienne énumération est restée');
+          return /s&#39;il n&#39;y a pas une cause médicale|s'il n'y a pas une cause médicale/.test(src)
+            ?true:_echec('la cause médicale n\'a pas été ajoutée');})());
+
+        // ── La déclaration : A2-03 rendu utilisable ──────────────────────
+        ok('Les états déclarés se lisent, se filtrent et se posent',(()=>{
+          if(etatsDeclares({etatsSante:['sopk','zzz','thyroide']}).join(',')!=='sopk,thyroide')
+            return _echec('le filtre laisse passer l\'inconnu');
+          if(etatsDeclares({etatsSante:'sopk'}).length) return _echec('une chaîne est acceptée');
+          return etatsDeclares(null).length===0&&aEtat({etatsSante:['sopk']},'sopk')
+            ?true:_echec('lecture incorrecte');})());
+        ok('thyroideDe filtre les états inconnus',(()=>{
+          const r=[thyroideDe({thyroide:{etat:'hypo',traitement:1}}),
+                   thyroideDe({thyroide:{etat:'zzz'}}),thyroideDe({})];
+          return r[0].etat==='hypo'&&r[0].traitement===true
+            &&r[1].etat===null&&r[2].etat===null&&r[2].traitement===false
+            ?true:_echec(JSON.stringify(r));})());
+        ok('L\'écran de profil permet ENFIN de déclarer un état',(()=>{
+          // Deux lots livrés consommaient user.etatsSante sans qu'aucun moyen
+          // n'existe de le remplir.
+          const sauve=currentUser;
+          try{
+            currentUser=_ath({id:'d1'});
+            const z=document.getElementById('atp-etats-opts');
+            if(!z) return _echec('carte absente du document');
+            openAthleteProfile();
+            const opts=z.querySelectorAll('.obj-opt');
+            if(opts.length!==ETATS_DECLARABLES.length)
+              return _echec(opts.length+' options');
+            basculerAtpEtat('thyroide');
+            setAtpThyroide('hypo');
+            const bloc=document.getElementById('atp-thyroide-bloc');
+            if(!bloc||bloc.style.display==='none') return _echec('le bloc thyroïde reste masqué');
+            const _sv=window.saveUser, _lc=window.loadClientHome, _go=window.go;
+            try{
+              window.saveUser=()=>true; window.loadClientHome=()=>{}; window.go=()=>{};
+              saveAthleteProfile();
+            } finally { window.saveUser=_sv; window.loadClientHome=_lc; window.go=_go; }
+            if(!aEtat(currentUser,'thyroide')) return _echec('rien n\'a été écrit');
+            return thyroideDe(currentUser).etat==='hypo'
+              ?true:_echec('l\'état n\'a pas été enregistré');
+          } finally { currentUser=sauve; }})());
+        ok('Se retirer d\'une déclaration est aussi simple que la faire',(()=>{
+          const sauve=currentUser;
+          try{
+            currentUser=_ath({id:'d2',etats:['thyroide'],thyroide:{etat:'hypo',traitement:true}});
+            openAthleteProfile();
+            basculerAtpEtat('thyroide');
+            const _sv=window.saveUser, _lc=window.loadClientHome, _go=window.go;
+            try{
+              window.saveUser=()=>true; window.loadClientHome=()=>{}; window.go=()=>{};
+              saveAthleteProfile();
+            } finally { window.saveUser=_sv; window.loadClientHome=_lc; window.go=_go; }
+            return etatsDeclares(currentUser).length===0&&!currentUser.thyroide
+              ?true:_echec('la déclaration a survécu');
+          } finally { currentUser=sauve; }})());
+        ok('Aucune dose, aucune molécule, aucune TSH nulle part',(()=>{
+          const sauve=currentUser;
+          try{
+            currentUser=_ath({id:'d3',etats:['thyroide'],thyroide:{etat:'hypo'}});
+            openAthleteProfile();
+            const c=document.getElementById('atp-etats-card');
+            if(!c) return _echec('carte absente');
+            // Les CHAMPS de saisie, pas la prose : la carte dit elle-même
+            // « ne demande ni dose, ni molécule », et balayer son texte
+            // prenait cette phrase pour un champ qui les demande.
+            const champs=Array.from(c.querySelectorAll('input,select,textarea'));
+            const saisie=champs.filter(e=>['text','number','date','search',null,''].indexOf(e.type)>=0
+              ||e.tagName==='SELECT'||e.tagName==='TEXTAREA');
+            if(saisie.length) return _echec(saisie.length+' champ(s) de saisie libre');
+            // Seules des cases à cocher subsistent, et aucune n'appelle un
+            // chiffre.
+            const n=champs.map(e=>[e.id,e.placeholder,e.getAttribute('aria-label')]
+              .filter(Boolean).join(' ')).join(' ')
+              .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+            const interdits=['dose','microgramme','mcg','levothyrox','tsh','t3','t4',
+              'posologie','analyse'];
+            const t=interdits.filter(x=>n.indexOf(x)>=0);
+            if(t.length) return _echec('champ interdit : '+t.join(', '));
+            // Et la phrase qui le dit est bien là.
+            return /ni dose, ni molécule/.test(c.textContent||'')
+              ?true:_echec('la mention de ce qui n\'est pas demandé a disparu');
+          } finally { currentUser=sauve; }})());
+        ok('Le sélecteur de correction est branché côté coach',(()=>{
+          const sauve=currentUser;
+          try{
+            const c=_bilan(_ath({id:'d4',etats:['thyroide'],
+              thyroide:{etat:'hypo',traitement:false}}));
+            currentUser=c;
+            const h=_htmlDepartCoach(c);
+            const manque=CORRECTION_MB_ECHELLE.filter(v=>h.indexOf('value="'+v+'"')<0);
+            if(manque.length) return _echec('absents : '+manque.join(', '));
+            if(!/_propSetCorr\(this\.value\)/.test(h)) return _echec('non branché');
+            return /· suggéré/.test(h)?true:_echec('la suggestion n\'est pas marquée');
+          } finally { currentUser=sauve; }})());
+        ok('Le réglage du coach vit en mémoire, pas dans le dossier',(()=>{
+          const sauve=_propCorr;
+          try{
+            const u=_bilan(_ath({id:'d5'}));
+            const avant=JSON.stringify(u);
+            _propSetCorr(0.85);
+            const r=_propReglages();
+            if(r.correctionMB!==0.85) return _echec('réglage non lu');
+            const b=besoinsProposes(u,r);
+            if(!b.hypotheses.some(h=>/métabolisme corrigé de -15 %/.test(h)))
+              return _echec('le réglage ne parvient pas au calcul');
+            return JSON.stringify(u)===avant
+              ?true:_echec('le dossier a été modifié');
+          } finally { _propCorr=sauve; }})());
+      } finally { currentUser=_tyU; }
     })();
 
     // ══════ PROFIL COACH VISIBLE PAR SES ATHLÈTES ══════
@@ -41182,11 +41780,17 @@ function testExercices(){
       const _jr=n=>localISODate(new Date(Date.now()-n*864e5));
       // Athlète en sèche trop lente : sans la garde d'adhérence, une BAISSE
       // serait proposée. C'est exactement le cas que le lot doit intercepter.
-      const _ath=(nJoursJournal,kcalRealise,extra)=>{
+      // pctSem : par défaut −0,1 %/semaine, « bien trop lent ». Ce défaut est
+      // aussi, exactement, le portrait de la stagnation inexpliquée — sèche
+      // longue, apports suivis, poids immobile. Les deux tests qui doivent
+      // encore voir une PROPOSITION sortir passent donc à −0,3 : toujours hors
+      // fourchette, mais plus un plateau.
+      const _ath=(nJoursJournal,kcalRealise,extra,pctSem)=>{
         const wl=[]; let kg=70;
+        const _pct=(typeof pctSem==='number')?pctSem:-0.1;
         for(let j=45;j>=0;j--){
           wl.push({date:_jr(j),kg:Math.round(kg*100)/100});
-          kg-=70*0.001/7;                       // −0,1 %/sem : bien trop lent
+          kg+=70*(_pct/100)/7;
         }
         const log={};
         for(let i=0;i<(nJoursJournal||0);i++){
@@ -41257,8 +41861,18 @@ function testExercices(){
           const r=_ajustAdherenceBloque(u);
           return r&&r.refus==='adherence'&&r.adh.ecartKcal===450
             ?true:_echec(JSON.stringify(r));})());
-        ok('Critère : 12 jours à 2410 pour 2400 → la proposition est rendue',(()=>{
-          const u=_ath(12,2410);
+        ok('La MÊME adhérence, mais poids immobile → la proposition se tait',(()=>{
+        // La fixture par défaut est un plateau : sèche de 60 jours, apports
+        // suivis à 0,4 % près, −0,1 %/semaine. C'est précisément le cas où
+        // proposer de descendre encore serait la mauvaise réponse.
+        const u=_ath(12,2410);
+        if(!stagnationInexpliquee(u)) return _echec('fixture muette : pas un plateau');
+        if(ajustementPropose(u)!==null) return _echec('une proposition est sortie');
+        const r=_ajustStagnationBloque(u);
+        return r&&r.refus==='stagnation_inexpliquee'
+          ?true:_echec('aucun refus affichable');})());
+      ok('Critère : 12 jours à 2410 pour 2400 → la proposition est rendue',(()=>{
+          const u=_ath(12,2410,null,-0.3);
           const a=adherence(u);
           if(!a||a.ecartKcal!==10) return _echec(JSON.stringify(a));
           return !!ajustementPropose(u)&&_ajustAdherenceBloque(u)===null
@@ -41271,7 +41885,7 @@ function testExercices(){
           return a.verifieParJournal===false
             ?true:_echec('la proposition se dit vérifiée');})());
         ok('Douze jours journalisés marquent la proposition comme VÉRIFIÉE',(()=>{
-          const a=ajustementPropose(_ath(12,2410));
+          const a=ajustementPropose(_ath(12,2410,null,-0.3));
           return a&&a.verifieParJournal===true
             ?true:_echec(JSON.stringify(a&&a.verifieParJournal));})());
         ok('Critère : un écart NÉGATIF important refuse aussi, dans l\'autre sens',(()=>{
