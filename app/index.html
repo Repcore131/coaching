@@ -11285,6 +11285,9 @@ function getCycleFactor(user,dateISO){
   // valeurs ci-dessus. Sans cycle configuré, phaseCycle rend null et on
   // retombe au neutre — le comportement d'avant ce lot.
   const phase=phaseCycle(u,dateISO||localISODate(new Date()));
+  // Périmé, irrégulier, ou rien du tout : on ne dérive RIEN. Un calendrier
+  // qu'on sait faux ne doit pas peser sur une barre.
+  if(!phaseAgissante(phase)) return{factor:1.00,seriesReduce:0};
   const conf=confCycle(u);
   if(phase==='menstrual')
     return conf.intensiteRegles==='difficile'
@@ -11297,7 +11300,10 @@ function getCycleFactor(user,dateISO){
 // s'applique.
 function _cycleOptionSuggeree(user,dateISO){
   const phase=phaseCycle(user||currentUser,dateISO||localISODate(new Date()));
-  if(!phase) return null;
+  // Périmé ou irrégulier : on ne pré-coche RIEN. Suggérer « rien de
+  // particulier » sur un cycle dont on vient de dire qu'on ne sait rien
+  // serait une affirmation de plus.
+  if(!phaseAgissante(phase)) return null;
   if(phase==='menstrual')
     return confCycle(user||currentUser).intensiteRegles==='difficile'
       ?'j1_difficile':'j1_supportable';
@@ -18071,21 +18077,137 @@ function confCycle(user){
     cycleLength:pris(c.cycleLength,a.cycleLength)||28,
     intensiteRegles:pris(c.intensiteRegles,a.intensite_regles)||'supportable',
     sensibilitePms:!!pris(c.sensibilitePms,a.sensibilite_pms),
-    regulier:!!pris(c.regulier,a.regulier)
+    // PAS de !! ici, et c'est capital : « pas déclaré » doit rester distinct
+    // de « déclaré irrégulier ». Avec la coercition, tout dossier n'ayant
+    // jamais rien dit lisait regulier === false, donc cycleIrregulier vrai,
+    // donc PLUS AUCUN ajustement automatique — pour toutes les athlètes à la
+    // fois, et sans un mot.
+    regulier:pris(c.regulier,a.regulier)
   };
 }
-// PURE. L'algorithme est celui de _getCyclePhaseNut, repris au caractère
-// près : ce lot unifie, il n'améliore pas le découpage.
+// ── Le calendrier cesse de projeter à l'infini ────────────────────────────
+// Le modulo faisait tourner le cycle indéfiniment sur une date jamais
+// réactualisée : une athlète dont les règles se sont arrêtées voyait le
+// produit continuer à annoncer des phases, ajuster ses macros et lui ajouter
+// un complément. Ailleurs, le produit refuse systématiquement de calculer sur
+// une donnée insuffisante — besoinsProposes rend source:null, mm7 exige quatre
+// pesées. C'est la même exigence qui s'applique ici.
+const CYCLE_PEREMPTION_MARGE=10;        // jours de grâce au-delà de la longueur
+const CYCLE_REGLES_MAX=24;              // entrées conservées, comme weightLog
+const CYCLE_MIN_CYCLES_OBSERVES=3;      // entrées avant d'oser une longueur
+const CYCLE_ECART_IRREGULIER=4;         // écart-type en jours
+// Un intervalle hors de ces bornes n'est pas un cycle : il est EXCLU du calcul
+// mais CONSERVÉ dans le journal — c'est peut-être l'information la plus utile.
+const CYCLE_INTERVALLE_MIN=15, CYCLE_INTERVALLE_MAX=90;
+// LA serrure : aucun effet automatique — macros, complément, volume, charge —
+// ne doit découler d'autre chose que de ces trois phases. Une liste unique
+// vaut mieux que six comparaisons dispersées qu'on oublierait d'étendre.
+const CYCLE_PHASES_AGISSANTES=Object.freeze(['menstrual','luteal_late','stable']);
+function phaseAgissante(phase){
+  return CYCLE_PHASES_AGISSANTES.indexOf(phase)>=0;
+}
+const CYCLE_MSG_IRREGULIER='Tes cycles varient trop pour qu\'un calendrier soit '
+  +'fiable. Indique-moi comment tu te sens avant chaque séance, c\'est plus juste.';
+// Le journal des règles. Dédoublonné, trié, borné — même mécanique que
+// weightLog, pour la même raison : un jour n'a qu'une valeur.
+function _cycleRegles(user){
+  const c=(user&&user.cycle)||{};
+  const l=(Array.isArray(c.regles)?c.regles:[])
+    .filter(x=>typeof x==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(x));
+  return Array.from(new Set(l)).sort();
+}
+function _cycleIntervalles(user){
+  const l=_cycleRegles(user), out=[];
+  for(let i=1;i<l.length;i++) out.push(_joursEntre(l[i-1],l[i]));
+  return out;
+}
+function _cycleIntervallesRetenus(user){
+  return _cycleIntervalles(user)
+    .filter(x=>x>=CYCLE_INTERVALLE_MIN&&x<=CYCLE_INTERVALLE_MAX);
+}
+// PURE. Médiane des intervalles retenus. Le seuil porte sur les ENTRÉES du
+// journal et non sur les intervalles : trois dates observées font deux
+// intervalles, et c'est ce cas que le critère d'acceptation chiffre.
+function longueurObservee(user){
+  const v=_cycleIntervallesRetenus(user);
+  if(v.length<CYCLE_MIN_CYCLES_OBSERVES-1) return null;
+  const t=v.slice().sort((a,b)=>a-b);
+  const n=t.length;
+  return n%2?t[(n-1)/2]:Math.round((t[n/2-1]+t[n/2])/2);
+}
+// Nombre de cycles sur lesquels la longueur observée repose, pour le dire à
+// l'écran : deux intervalles, c'est trois règles observées.
+function _cyclesObserves(user){
+  const v=_cycleIntervallesRetenus(user);
+  return v.length?v.length+1:0;
+}
+// PURE. La déclaration explicite suffit — elle n'a pas besoin d'un journal
+// pour être vraie. Sinon, c'est la dispersion des intervalles qui parle.
+function cycleIrregulier(user){
+  const c=(user&&user.cycle)||{};
+  if(c.regulier===false) return true;
+  const v=_cycleIntervallesRetenus(user);
+  if(v.length<CYCLE_MIN_CYCLES_OBSERVES-1) return false;
+  const moy=v.reduce((a,b)=>a+b,0)/v.length;
+  const ec=Math.sqrt(v.reduce((a,b)=>a+(b-moy)*(b-moy),0)/v.length);
+  return ec>CYCLE_ECART_IRREGULIER;
+}
+// Jours écoulés depuis la dernière date déclarée, ou null.
+function joursDepuisRegles(user,dateISO){
+  const conf=confCycle(user);
+  if(!conf.lastPeriodDate) return null;
+  const d=Math.floor((new Date((dateISO||localISODate(new Date()))+'T00:00:00')
+    -new Date(conf.lastPeriodDate+'T00:00:00'))/86400000);
+  return d<0?null:d;
+}
+function messageCyclePerime(user,dateISO){
+  const n=joursDepuisRegles(user,dateISO);
+  if(n==null) return '';
+  return 'Ta dernière date de règles remonte à '+n+' jours. Mets-la à jour '
+    +'pour que les ajustements reprennent.';
+}
+// PURE. Plus de modulo : un calendrier qui se répète tout seul finit toujours
+// par mentir. Au-delà de la longueur du cycle plus la marge, on ne sait plus,
+// et on le DIT au lieu de projeter.
 function phaseCycle(user,dateISO){
   const conf=confCycle(user);
   if(!conf.enabled||!conf.lastPeriodDate) return null;
-  const len=Math.max(20,Math.min(40,conf.cycleLength||28));
+  // L'irrégularité passe AVANT tout : un calendrier n'y veut rien dire, quelle
+  // que soit la date.
+  if(cycleIrregulier(user)) return 'irregulier';
+  // La longueur OBSERVÉE prime sur la longueur déclarée dès qu'elle existe.
+  // Bornée comme l'autre : une médiane reste une estimation.
+  const len=Math.max(20,Math.min(40,longueurObservee(user)||conf.cycleLength||28));
   const diffDays=Math.floor((new Date(dateISO+'T00:00:00')-new Date(conf.lastPeriodDate+'T00:00:00'))/86400000);
   if(diffDays<0) return null;
-  const day=(diffDays%len)+1;
-  if(day<=5) return 'menstrual';
-  if(day>=Math.ceil(len*0.80)+1) return 'luteal_late';
+  const jour=diffDays+1;
+  if(jour>len+CYCLE_PEREMPTION_MARGE) return 'perime';
+  if(jour<=5) return 'menstrual';
+  if(jour>=Math.ceil(len*0.80)+1) return 'luteal_late';
   return 'stable';
+}
+// Écritures du journal. Le tableau est borné par la FIN : ce sont les plus
+// anciennes qui sont évincées.
+function _cycleAjouterRegles(user,dateISO){
+  if(!user) return null;
+  if(!user.cycle) user.cycle={};
+  const l=_cycleRegles(user);
+  if(l.indexOf(dateISO)<0) l.push(dateISO);
+  l.sort();
+  user.cycle.regles=l.slice(-CYCLE_REGLES_MAX);
+  user.cycle.lastPeriodDate=dateISO;
+  return user.cycle.regles;
+}
+// Aucune alarme sur une occurrence, aucune notification, jamais. Le champ est
+// consigné, il ne parle pas.
+function _cycleAjouterAbsence(user,dateISO){
+  if(!user) return null;
+  if(!user.cycle) user.cycle={};
+  const l=(Array.isArray(user.cycle.absences)?user.cycle.absences:[])
+    .filter(x=>typeof x==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(x));
+  const s=Array.from(new Set(l.concat([dateISO]))).sort();
+  user.cycle.absences=s.slice(-CYCLE_REGLES_MAX);
+  return user.cycle.absences;
 }
 // Les deux lectures de config qui restaient locales passent par confCycle,
 // sinon elles liraient un cycleAdaptation figé dès qu'un réglage est écrit
@@ -18101,6 +18223,10 @@ function _getCyclePhaseNut(dateStr){
 function _applyNutCycleModifier(base,isOn,phase,conf){
   // Protéines : jamais modifiées — seuls glucides et lipides varient
   const m={...base};
+  // Une phase périmée ou irrégulière n'est pas une phase : elle ne peut rien
+  // ajuster. La garde est ICI, dans la fonction qui applique, et pas
+  // seulement chez ses appelants — c'est la seule qui ne s'oublie pas.
+  if(!phaseAgissante(phase)) return m;
   if(!m.kcal) return m;
   if(phase==='menstrual'&&conf.intensiteRegles==='difficile'){
     // +10g glucides (+40kcal) compensés par lipides → kcal total inchangé
@@ -18171,7 +18297,7 @@ function _getEffectiveMacros(nut,isOn,dateStr,porteur){
   // _getCyclePhaseNut, qui lit currentUser, faisait dire « cycle actif » à
   // l'une et « aucune phase » à l'autre sur un dossier étranger.
   const phase=phaseCycle(_porteur,dateStr);
-  if(!phase||phase==='stable') return base;
+  if(!phaseAgissante(phase)||phase==='stable') return base;
   return _applyNutCycleModifier(base,isOn,phase,conf);
 }
 
@@ -18189,7 +18315,10 @@ function _manageCycleSupplements(){
     return;
   }
   const today=localISODate(new Date());
-  const inLuteal=_getCyclePhaseNut(today)==='luteal_late';
+  // Seule la lutéale tardive AGISSANTE ajoute l'entrée. Périmé et irrégulier
+  // la font retomber dans la branche de désactivation, comme un cycle coupé.
+  const _phSupp=_getCyclePhaseNut(today);
+  const inLuteal=phaseAgissante(_phSupp)&&_phSupp==='luteal_late';
   const hasUserOmega=list.some(s=>!s._cycleManaged&&/om[eé]ga/i.test(s.name));
   if(!hasUserOmega){
     const auto=list.find(s=>s._cycleManaged&&s._cyclePhase==='luteal_late');
@@ -18226,22 +18355,36 @@ function _renderCycleNutSettings(nut){
   const today=localISODate(new Date());
   const isOn=nutIsOnDay(today);
   const base=(isOn?nut.macros?.on:nut.macros?.off)||{};
+  // La longueur observée, quand le journal en porte assez pour la dire.
+  const _obs=longueurObservee(currentUser);
+  const _nObs=_cyclesObserves(currentUser);
+  const obsHtml=_obs
+    ?`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:8px">longueur observée : <strong style="color:#fff">${_obs} jours</strong> (sur ${_nObs} cycle${_nObs>1?'s':''})</div>`
+    :'';
+  // La case d'absence reflète une déclaration du mois en cours, rien de plus.
+  const _abs=((currentUser.cycle||{}).absences)||[];
+  const absenceCeMois=_abs.some(d=>String(d).slice(0,7)===today.slice(0,7));
   let phaseHtml='';
   if(on&&lastP){
     const phase=_getCyclePhaseNut(today);
     const pLabels={
       menstrual:{txt:'Phase menstruelle (J1-5)',color:'#a78bfa'},
       stable:{txt:'Phase stable : référence',color:'var(--green)'},
-      luteal_late:{txt:'Phase lutéale tardive',color:'var(--orange)'}
+      luteal_late:{txt:'Phase lutéale tardive',color:'var(--orange)'},
+      perime:{txt:'Date trop ancienne',color:'var(--sub)'},
+      irregulier:{txt:'Cycles irréguliers',color:'var(--sub)'}
     };
     const pl=phase?pLabels[phase]:null;
-    const eff=phase&&phase!=='stable'?_applyNutCycleModifier(base,isOn,phase,conf):base;
+    const eff=phaseAgissante(phase)&&phase!=='stable'
+      ?_applyNutCycleModifier(base,isOn,phase,conf):base;
     const dKcal=Math.round((eff.kcal||0)-(base.kcal||0));
     const dG=Math.round((eff.g||0)-(base.g||0));
     const dL=parseFloat(((eff.l||0)-(base.l||0)).toFixed(1));
     const hasAdj=dKcal!==0||dG!==0||dL!==0;
     const adjLabel=hasAdj
       ?[dG!==0?`glucides ${dG>0?'+':''}${dG}g`:null,dL!==0?`lipides ${dL>0?'+':''}${dL}g`:null,dKcal!==0?`${dKcal>0?'+':''}${dKcal} kcal`:null].filter(Boolean).join(' · ')
+      :phase==='perime'?messageCyclePerime(currentUser,today)
+      :phase==='irregulier'?CYCLE_MSG_IRREGULIER
       :phase==='luteal_late'&&!conf.sensibilitePms?'Sensibilité PMS désactivée : pas d\'ajustement'
       :phase==='menstrual'&&intens!=='difficile'?'Règles supportables : pas d\'ajustement':'Macros inchangées';
     if(pl) phaseHtml=`<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
@@ -18290,16 +18433,23 @@ function _renderCycleNutSettings(nut){
         </span>
       </label>
     </div>
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border)">
-      <div>
-        <div style="font-size:12px;font-weight:700;color:#fff">Mes cycles sont réguliers</div>
-        <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">À peu près la même longueur d'un mois à l'autre</div>
+    <div style="border-top:1px solid var(--border);padding-top:10px">
+      <!-- DEUX boutons et non un interrupteur : « off » ne saurait pas dire
+           si rien n'a été déclaré ou si les cycles sont irréguliers, et le
+           second couperait tous les ajustements automatiques. Tant que rien
+           n'est choisi, aucun des deux n'est allumé. -->
+      <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:8px">Régularité</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="saveCycleNutSettings('regulier','oui')" style="flex:1;padding:9px 0;border-radius:8px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;border:1.5px solid ${regulier===true?'var(--green)':'#2a2a2a'};background:${regulier===true?'rgba(34,197,94,.12)':'#111'};color:${regulier===true?'var(--green)':'#555'}">Réguliers</button>
+        <button onclick="saveCycleNutSettings('regulier','non')" style="flex:1;padding:9px 0;border-radius:8px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;border:1.5px solid ${regulier===false?'var(--orange)':'#2a2a2a'};background:${regulier===false?'rgba(245,158,11,.12)':'#111'};color:${regulier===false?'var(--orange)':'#555'}">Irréguliers</button>
       </div>
-      <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;margin-left:12px;cursor:pointer">
-        <input type="checkbox" id="cycle-regulier" ${regulier?'checked':''} onchange="saveCycleNutSettings()" style="opacity:0;width:0;height:0;position:absolute">
-        <span style="position:absolute;inset:0;background:${regulier?'var(--red)':'#2a2a2a'};border-radius:12px;transition:.2s;pointer-events:none">
-          <span style="position:absolute;top:3px;left:${regulier?'23':'3'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s"></span>
-        </span>
+      ${obsHtml}
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:10px">
+      <button onclick="declarerReglesAujourdhui()" class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:10px">Mes règles ont commencé aujourd'hui</button>
+      <label style="display:flex;align-items:center;gap:9px;margin-top:10px;cursor:pointer">
+        <input type="checkbox" id="cycle-absence" ${absenceCeMois?'checked':''} onchange="declarerAbsenceCycle(this.checked)" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0">
+        <span style="font-size:12px;color:#ddd;line-height:1.5">Je n'ai pas eu mes règles ce mois-ci</span>
       </label>
     </div>
     ${phaseHtml}
@@ -18324,16 +18474,41 @@ function _renderCycleNutSettings(nut){
 // L'écriture va dans user.cycle, la SEULE cible désormais. Rien n'est recopié
 // depuis nutrition.cycleAdaptation : le repli de confCycle est champ par
 // champ, donc un réglage modifié seul ne fait perdre aucun des autres.
+// « Mes règles ont commencé aujourd'hui » : une entrée au journal ET la date
+// de référence remise à jour. C'est le geste qui fait repartir les
+// ajustements après une péremption.
+function declarerReglesAujourdhui(){
+  _cycleAjouterRegles(currentUser,localISODate(new Date()));
+  const ok=saveUser();
+  _manageCycleSupplements();
+  toastEcriture(ok,'Date enregistrée ✓','la date est');
+  _renderNutriContent(typeDiete(currentUser.nutrition));
+}
+// Consigné, jamais commenté. Aucune alarme sur une occurrence, aucune
+// notification : ce champ est une donnée, pas un message.
+function declarerAbsenceCycle(coche){
+  const mois=localISODate(new Date()).slice(0,7);
+  if(!currentUser.cycle) currentUser.cycle={};
+  if(coche) _cycleAjouterAbsence(currentUser,localISODate(new Date()));
+  else currentUser.cycle.absences=(currentUser.cycle.absences||[])
+    .filter(d=>String(d).slice(0,7)!==mois);
+  saveUser();
+  _renderNutriContent(typeDiete(currentUser.nutrition));
+}
 function saveCycleNutSettings(field,value){
   if(!currentUser.cycle) currentUser.cycle={};
   const conf=currentUser.cycle;
   if(field==='intensite'){
     conf.intensiteRegles=value;
+  } else if(field==='regulier'){
+    // Recliquer le bouton déjà allumé retire la déclaration : on redevient
+    // « pas déclaré », ce qu'aucun interrupteur ne savait exprimer.
+    const v=(value==='oui');
+    conf.regulier=(conf.regulier===v)?undefined:v;
   } else {
     const g=id=>document.getElementById(id);
     if(g('cycle-enabled')) conf.enabled=g('cycle-enabled').checked;
     if(g('cycle-pms')) conf.sensibilitePms=g('cycle-pms').checked;
-    if(g('cycle-regulier')) conf.regulier=g('cycle-regulier').checked;
     if(g('cycle-last-period')&&g('cycle-last-period').value) conf.lastPeriodDate=g('cycle-last-period').value;
     // Ne clamper qu'une valeur COMPLÈTE. Un champ vidé ne doit rien écrire :
     // le clamp le remplacerait par 20 sous les doigts de l'utilisatrice.
@@ -20434,7 +20609,9 @@ function loadSuppEmbedded(){
   const list=_suppStore().filter(s=>s.active!==false);
   const conf=_getCycleNutConf();
   const today=localISODate(new Date());
-  const inLuteal=conf.enabled&&isFemale(currentUser.gender)&&_getCyclePhaseNut(today)==='luteal_late';
+  const _phBan=_getCyclePhaseNut(today);
+  const inLuteal=conf.enabled&&isFemale(currentUser.gender)
+    &&phaseAgissante(_phBan)&&_phBan==='luteal_late';
   const hasUserOmega=inLuteal&&_suppStore().some(s=>!s._cycleManaged&&/om[eé]ga/i.test(s.name));
   const omegaBanner=hasUserOmega
     ?`<div style="margin-bottom:10px;background:rgba(251,146,60,.07);border:1px solid rgba(251,146,60,.22);border-radius:8px;padding:9px 12px;font-size:11px;color:#fb923c;font-weight:700">⚡ Phase lutéale : +2 gélules oméga-3 recommandées aujourd'hui (en plus de ta prise habituelle)</div>`:'';
@@ -29324,7 +29501,7 @@ function testExercices(){
           // dans la source de la page. Les motifs sont assemblés à l'exécution.
           const src=document.documentElement.outerHTML;
           const seuilLuteal=new RegExp('Math\\.ceil\\('+'len'+'\\*0\\.80\\)\\+1','g');
-          const seuilRegles=new RegExp('day'+'<=5','g');
+          const seuilRegles=new RegExp('jour'+'<=5','g');
           const a=src.match(seuilLuteal)||[], b=src.match(seuilRegles)||[];
           if(a.length!==1) return _echec(a.length+' seuils lutéaux au lieu d\'un');
           return b.length===1?true:_echec(b.length+' seuils de règles au lieu d\'un');})());
@@ -29417,12 +29594,14 @@ function testExercices(){
           if(phaseCycle(ref20,AUJ)!=='stable') return _echec('fixture muette (bas)');
           if(phaseCycle(court,AUJ)!=='stable')
             return _echec('borne basse ignorée : '+phaseCycle(court,AUJ));
-          // À 41 jours, len 99 donnerait le jour 42 — stable — alors que
-          // borné à 40 il s'agit du jour 2, menstruel.
+          // À 41 jours, len 99 laisserait le jour 42 en phase stable — le seuil
+          // lutéal serait à 80 — alors que borné à 40 il est lutéal tardif.
+          // La version d'avant s'appuyait sur l'enroulement du modulo, que ce
+          // lot supprime.
           const long=_ath({enabled:true,lastPeriodDate:_jour(41),cycleLength:99});
           const ref40=_ath({enabled:true,lastPeriodDate:_jour(41),cycleLength:40});
-          if(phaseCycle(ref40,AUJ)!=='menstrual') return _echec('fixture muette (haut)');
-          return phaseCycle(long,AUJ)==='menstrual'
+          if(phaseCycle(ref40,AUJ)!=='luteal_late') return _echec('fixture muette (haut)');
+          return phaseCycle(long,AUJ)==='luteal_late'
             ?true:_echec('borne haute ignorée : '+phaseCycle(long,AUJ));})());
         ok('Les deux seuils sont éprouvés à la journée près',(()=>{
           // Les variantes qui déplacent un seuil d'un jour n'étaient attrapées
@@ -29438,10 +29617,14 @@ function testExercices(){
         ok('Une date antérieure aux dernières règles rend null',(()=>{
           const u=_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28});
           return phaseCycle(u,_jour(10))===null?true:_echec('non null');})());
-        ok('Le modulo fait repartir un cycle au suivant',(()=>{
+        ok('Le modulo ne fait PLUS repartir un cycle tout seul',(()=>{
+          // Il rendait « menstruel » au jour 31 d'un cycle de 28, sur une date
+          // que personne n'avait mise à jour. Le calendrier projetait une
+          // information qu'il n'avait pas. Dans la marge de grâce on reste en
+          // fin de cycle ; au-delà, on ne dit plus rien.
           const u=_ath({enabled:true,lastPeriodDate:_jour(30),cycleLength:28});
-          // 30 jours plus tard sur un cycle de 28 : jour 3, donc menstruel.
-          return phaseCycle(u,AUJ)==='menstrual'?true:_echec(phaseCycle(u,AUJ));})());
+          return phaseCycle(u,AUJ)==='luteal_late'
+            ?true:_echec(phaseCycle(u,AUJ));})());
         ok('phaseCycle est PURE : elle n\'écrit rien',(()=>{
           const u=_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28},
             {currentCycle:'ignore'});
@@ -29597,7 +29780,242 @@ function testExercices(){
           if(confCycle(u).regulier!==true) return _echec('non lu');
           currentUser=_ath({enabled:true,lastPeriodDate:_jour(2)});
           const h=_renderCycleNutSettings({macros:{on:{},off:{}}});
-          return /cycle-regulier/.test(h)?true:_echec('absent des réglages');})());
+          // Deux boutons et non un interrupteur : « off » ne saurait pas
+          // distinguer « pas déclaré » de « irréguliers ».
+          return /saveCycleNutSettings\('regulier','oui'\)/.test(h)
+            &&/saveCycleNutSettings\('regulier','non'\)/.test(h)
+            ?true:_echec('les deux boutons manquent');})());
+
+        // ── Le calendrier ne projette plus à l'infini ────────────────────
+        ok('Critère : J-70 sur un cycle de 28 → périmé, et non « stable »',(()=>{
+          const u=_ath({enabled:true,lastPeriodDate:_jour(70),cycleLength:28});
+          const ph=phaseCycle(u,AUJ);
+          return ph==='perime'?true:_echec('phase '+ph);})());
+        ok('Critère : J-24 sur un cycle de 28 → lutéale tardive',(()=>{
+          const u=_ath({enabled:true,lastPeriodDate:_jour(24),cycleLength:28});
+          return phaseCycle(u,AUJ)==='luteal_late'?true:_echec(phaseCycle(u,AUJ));})());
+        ok('Critère : J-3 → menstruel',(()=>{
+          const u=_ath({enabled:true,lastPeriodDate:_jour(3),cycleLength:28});
+          return phaseCycle(u,AUJ)==='menstrual'?true:_echec(phaseCycle(u,AUJ));})());
+        ok('La marge de grâce tient exactement dix jours',(()=>{
+          const a=(n)=>phaseCycle(_ath({enabled:true,lastPeriodDate:_jour(n),
+            cycleLength:28}),AUJ);
+          // Jour 38 = 28 + 10 : encore dedans. Jour 39 : dehors.
+          if(a(37)==='perime') return _echec('périmé dès le jour 38');
+          return a(38)==='perime'?true:_echec('jour 39 : '+a(38));})());
+        ok('Une athlète qui tient sa date à jour ne voit AUCUN changement',(()=>{
+          // Le comportement d'avant ce lot, aux trois jours qui comptent.
+          const a=(n)=>phaseCycle(_ath({enabled:true,lastPeriodDate:_jour(n),
+            cycleLength:28}),AUJ);
+          const rates=[];
+          if(a(0)!=='menstrual') rates.push('J0 : '+a(0));
+          if(a(4)!=='menstrual') rates.push('J-4 : '+a(4));
+          if(a(10)!=='stable') rates.push('J-10 : '+a(10));
+          if(a(23)!=='luteal_late') rates.push('J-23 : '+a(23));
+          return rates.length?_echec(rates.join(', ')):true;})());
+        ok('Une date dans le futur rend toujours null',(()=>{
+          const u=_ath({enabled:true,lastPeriodDate:_jourPlus(AUJ,5),cycleLength:28});
+          return phaseCycle(u,AUJ)===null?true:_echec(phaseCycle(u,AUJ));})());
+        ok('Le message de péremption compte les bons jours',(()=>{
+          const u=_ath({enabled:true,lastPeriodDate:_jour(41),cycleLength:28});
+          const m=messageCyclePerime(u,AUJ);
+          return /remonte à 41 jours/.test(m)&&/Mets-la à jour/.test(m)
+            ?true:_echec(m);})());
+
+        // ── Le journal des règles ────────────────────────────────────────
+        ok('Critère : trois dates espacées de 31 jours → longueur observée 31',(()=>{
+          const u=_ath({enabled:true,lastPeriodDate:_jour(28),
+            regles:[_jour(90),_jour(59),_jour(28)]});
+          return longueurObservee(u)===31?true:_echec(String(longueurObservee(u)));})());
+        ok('Sous le minimum d\'observations, aucune longueur n\'est avancée',(()=>{
+          const u=_ath({enabled:true,regles:[_jour(59),_jour(28)]});
+          return longueurObservee(u)===null?true:_echec(String(longueurObservee(u)));})());
+        ok('Critère : un intervalle de 120 jours est CONSERVÉ mais exclu du calcul',(()=>{
+          // Une longue absence est peut-être l'information la plus importante
+          // du journal : on ne l'efface pas, on refuse juste d'en faire une
+          // moyenne.
+          const u=_ath({enabled:true,regles:[_jour(180),_jour(60),_jour(29),_jour(1)]});
+          if(_cycleRegles(u).length!==4) return _echec('une date a disparu du journal');
+          // Intervalles : 120 (exclu), 31, 28 → médiane de 31 et 28.
+          const l=longueurObservee(u);
+          return l===30?true:_echec('médiane '+l);})());
+        ok('C\'est une MÉDIANE, pas une moyenne',(()=>{
+          // Toutes mes fixtures avaient des intervalles réguliers, où les deux
+          // coïncident : une variante remplaçant la médiane par une moyenne
+          // passait au vert. Avec 21, 28 et 45, la médiane vaut 28 et la
+          // moyenne 31 — c'est justement ce que la médiane protège, un cycle
+          // exceptionnellement long ne doit pas tirer l'estimation.
+          const u=_ath({enabled:true,regles:[_jour(94),_jour(73),_jour(45),_jour(0)]});
+          const v=_cycleIntervallesRetenus(u);
+          if(JSON.stringify(v)!=='[21,28,45]') return _echec('intervalles '+JSON.stringify(v));
+          return longueurObservee(u)===28
+            ?true:_echec('longueur '+longueurObservee(u)+' : moyenne au lieu de médiane ?');})());
+        ok('Un journal déjà porteur de doublons est nettoyé À LA LECTURE',(()=>{
+          // L'écriture dédoublonne déjà, donc mes tests ne voyaient pas si la
+          // lecture le faisait aussi. Un dossier synchronisé depuis deux
+          // appareils, lui, peut très bien porter deux fois la même date — et
+          // un intervalle de zéro jour fausserait la médiane et l'écart-type.
+          const d=_jour(30), e=_jour(2);
+          const u=_ath({enabled:true,regles:[d,d,e,e]});
+          if(_cycleRegles(u).length!==2)
+            return _echec(_cycleRegles(u).length+' entrées après lecture');
+          const v=_cycleIntervalles(u);
+          return JSON.stringify(v)==='[28]'
+            ?true:_echec('intervalles '+JSON.stringify(v));})());
+        ok('Le journal dédoublonne, trie et se borne',(()=>{
+          const u=_ath({});
+          _cycleAjouterRegles(u,_jour(10));
+          _cycleAjouterRegles(u,_jour(40));
+          _cycleAjouterRegles(u,_jour(10));
+          if(u.cycle.regles.length!==2) return _echec('doublon conservé');
+          if(u.cycle.regles[0]>=u.cycle.regles[1]) return _echec('non trié');
+          for(let i=0;i<40;i++) _cycleAjouterRegles(u,_jour(400+i));
+          if(u.cycle.regles.length!==CYCLE_REGLES_MAX)
+            return _echec(u.cycle.regles.length+' entrées');
+          // Ce sont les PLUS ANCIENNES qui sortent.
+          return u.cycle.regles.indexOf(_jour(439))<0
+            ?true:_echec('une ancienne a survécu à la borne');})());
+        ok('Le bouton du jour écrit le journal ET la date de référence',(()=>{
+          const u=_ath({enabled:true,lastPeriodDate:_jour(40),cycleLength:28});
+          if(phaseCycle(u,AUJ)!=='perime') return _echec('fixture muette');
+          _cycleAjouterRegles(u,AUJ);
+          if(u.cycle.lastPeriodDate!==AUJ) return _echec('date non mise à jour');
+          return phaseCycle(u,AUJ)==='menstrual'
+            ?true:_echec('les ajustements ne repartent pas : '+phaseCycle(u,AUJ));})());
+        ok('La longueur observée REMPLACE la longueur déclarée',(()=>{
+          // Au jour 25 : avec la longueur déclarée (28) le seuil lutéal est à
+          // 24, donc lutéale tardive ; avec la longueur observée (35) il est à
+          // 29, donc encore stable. Ma première fixture prenait le jour 30, où
+          // les deux répondent pareil — elle n'éprouvait rien.
+          const journal=[_jour(129),_jour(94),_jour(59),_jour(24)];
+          const u=_ath({enabled:true,cycleLength:28,lastPeriodDate:_jour(24),
+            regles:journal});
+          if(longueurObservee(u)!==35) return _echec('observée '+longueurObservee(u));
+          // La jumelle sans journal, pour prouver que les deux DIVERGENT.
+          const sansJournal=_ath({enabled:true,cycleLength:28,lastPeriodDate:_jour(24)});
+          if(phaseCycle(sansJournal,AUJ)!=='luteal_late')
+            return _echec('fixture muette : la déclarée dit '+phaseCycle(sansJournal,AUJ));
+          return phaseCycle(u,AUJ)==='stable'?true:_echec(phaseCycle(u,AUJ));})());
+
+        // ── L'irrégularité ───────────────────────────────────────────────
+        ok('Critère : des intervalles 26, 38, 27 rendent le cycle irrégulier',(()=>{
+          const u=_ath({enabled:true,lastPeriodDate:_jour(1),cycleLength:28,
+            regles:[_jour(92),_jour(66),_jour(28),_jour(1)]});
+          const v=_cycleIntervallesRetenus(u);
+          if(JSON.stringify(v)!=='[26,38,27]') return _echec('intervalles '+JSON.stringify(v));
+          if(!cycleIrregulier(u)) return _echec('jugé régulier');
+          if(phaseCycle(u,AUJ)!=='irregulier') return _echec('phase '+phaseCycle(u,AUJ));
+          const f=getCycleFactor(Object.assign({currentCycle:'ignore'},u),AUJ);
+          return f.factor===1&&f.seriesReduce===0?true:_echec(JSON.stringify(f));})());
+        ok('Critère : regulier === false sans journal suffit',(()=>{
+          const u=_ath({enabled:true,lastPeriodDate:_jour(3),cycleLength:28,
+            regulier:false});
+          return cycleIrregulier(u)&&phaseCycle(u,AUJ)==='irregulier'
+            ?true:_echec(phaseCycle(u,AUJ));})());
+        ok('LE piège : un dossier qui n\'a RIEN déclaré n\'est pas irrégulier',(()=>{
+          // confCycle coerçait regulier en booléen : « pas déclaré » devenait
+          // false, donc irrégulier, donc PLUS AUCUN ajustement pour tout le
+          // monde d'un coup. C'est ce test qui l'aurait attrapé.
+          const u=_ath({enabled:true,lastPeriodDate:_jour(3),cycleLength:28});
+          if(confCycle(u).regulier!==undefined)
+            return _echec('la déclaration absente vaut '+confCycle(u).regulier);
+          if(cycleIrregulier(u)) return _echec('jugé irrégulier sans rien avoir dit');
+          return phaseCycle(u,AUJ)==='menstrual'?true:_echec(phaseCycle(u,AUJ));})());
+        ok('Des cycles réguliers déclarés le restent',(()=>{
+          const u=_ath({enabled:true,lastPeriodDate:_jour(3),cycleLength:28,
+            regulier:true});
+          return !cycleIrregulier(u)&&phaseCycle(u,AUJ)==='menstrual'
+            ?true:_echec(phaseCycle(u,AUJ));})());
+        ok('Des intervalles serrés ne déclenchent pas l\'irrégularité',(()=>{
+          const u=_ath({enabled:true,regles:[_jour(87),_jour(58),_jour(29),_jour(1)]});
+          return !cycleIrregulier(u)?true:_echec('écart-type surestimé');})());
+
+        // ── LA règle générale : aucun effet hors des trois phases ─────────
+        ok('Critère : aucun effet automatique sur « perime » ni « irregulier »',(()=>{
+          const rates=[];
+          const base={kcal:1800,p:150,g:150,l:60};
+          for(const ph of ['perime','irregulier',null,'zzz']){
+            // Chemin 1 : les macros.
+            const m=_applyNutCycleModifier(base,false,ph,
+              {intensiteRegles:'difficile',sensibilitePms:true});
+            if(m.kcal!==1800||m.g!==150||m.l!==60) rates.push(ph+' : macros modifiées');
+            // Chemin 2 : la charge et le volume.
+            if(phaseAgissante(ph)) rates.push(ph+' : jugée agissante');
+          }
+          // Chemin 3 : la charge, par le vrai chemin.
+          const perime=_ath({enabled:true,lastPeriodDate:_jour(70),cycleLength:28,
+            intensiteRegles:'difficile',sensibilitePms:true});
+          perime.currentCycle='ignore';
+          const f=getCycleFactor(perime,AUJ);
+          if(f.factor!==1||f.seriesReduce!==0) rates.push('charge : '+JSON.stringify(f));
+          // Et rien n'est pré-coché non plus.
+          if(_cycleOptionSuggeree(perime,AUJ)!==null) rates.push('une option est suggérée');
+          return rates.length?_echec(rates.join(' | ')):true;})());
+        ok('Critère : sur une phase périmée, le complément automatique s\'éteint',(()=>{
+          const _sv=window.saveUser;
+          try{
+            window.saveUser=()=>true;
+            currentUser=_ath({enabled:true,lastPeriodDate:_jour(70),cycleLength:28},
+              {gender:'F',nutrition:{dietType:'flexible',supplements:[
+                {id:'a',name:'Oméga-3 (EPA/DHA)',timings:['soir'],active:true,
+                 _cycleManaged:true,_cyclePhase:'luteal_late'}]}});
+            if(phaseCycle(currentUser,AUJ)!=='perime') return _echec('fixture muette');
+            _manageCycleSupplements();
+            const actifs=(currentUser.nutrition.supplements||[])
+              .filter(x=>x._cycleManaged&&x.active!==false);
+            return actifs.length===0?true:_echec(actifs.length+' entrée(s) restée(s) active(s)');
+          } finally { window.saveUser=_sv; }})());
+        ok('Et sur une phase lutéale VRAIE, il reste allumé',(()=>{
+          // La contre-épreuve : sans elle, le test ci-dessus passerait même si
+          // le complément ne s'ajoutait plus jamais.
+          const _sv=window.saveUser;
+          try{
+            window.saveUser=()=>true;
+            currentUser=_ath({enabled:true,lastPeriodDate:_jour(24),cycleLength:28},
+              {gender:'F',nutrition:{dietType:'flexible',supplements:[
+                {id:'a',name:'Oméga-3 (EPA/DHA)',timings:['soir'],active:true,
+                 _cycleManaged:true,_cyclePhase:'luteal_late'}]}});
+            if(phaseCycle(currentUser,AUJ)!=='luteal_late') return _echec('fixture muette');
+            _manageCycleSupplements();
+            const actifs=(currentUser.nutrition.supplements||[])
+              .filter(x=>x._cycleManaged&&x.active!==false);
+            return actifs.length===1?true:_echec('l\'entrée a été éteinte à tort');
+          } finally { window.saveUser=_sv; }})());
+
+        // ── Les absences : consignées, jamais commentées ──────────────────
+        ok('Une absence est consignée sans rien déclencher',(()=>{
+          const u=_ath({});
+          _cycleAjouterAbsence(u,AUJ);
+          _cycleAjouterAbsence(u,AUJ);
+          if(u.cycle.absences.length!==1) return _echec('doublon');
+          // Aucun message alarmant nulle part sur une occurrence.
+          currentUser=_ath({enabled:true,lastPeriodDate:_jour(3),cycleLength:28},
+            {gender:'F',nutrition:{}});
+          currentUser.cycle.absences=[AUJ];
+          const h=_renderCycleNutSettings({macros:{on:{},off:{}}});
+          return !/aménorrh|inquiét|consulte|alerte/i.test(h)
+            ?true:_echec('un message alarmant est apparu');})());
+        ok('Les absences se bornent comme le journal',(()=>{
+          const u=_ath({});
+          for(let i=0;i<40;i++) _cycleAjouterAbsence(u,_jour(i));
+          return u.cycle.absences.length===CYCLE_REGLES_MAX
+            ?true:_echec(u.cycle.absences.length+' entrées');})());
+        ok('Le journal et l\'absence n\'appellent aucune notification',(()=>{
+          const src=String(_cycleAjouterRegles)+String(_cycleAjouterAbsence)
+            +String(declarerAbsenceCycle);
+          return /Notif|notify|scheduleS/i.test(src)
+            ?_echec('une notification est programmée'):true;})());
+        ok('longueurObservee et cycleIrregulier sont PURES',(()=>{
+          const u=_ath({enabled:true,regles:[_jour(92),_jour(66),_jour(28),_jour(1)]});
+          const avant=JSON.stringify(u);
+          longueurObservee(u); cycleIrregulier(u); _cycleIntervallesRetenus(u);
+          return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
+        ok('L\'écran annonce la longueur observée et le nombre de cycles',(()=>{
+          currentUser=_ath({enabled:true,lastPeriodDate:_jour(28),
+            regles:[_jour(90),_jour(59),_jour(28)]},{gender:'F',nutrition:{}});
+          const h=_renderCycleNutSettings({macros:{on:{},off:{}}});
+          return /longueur observée/.test(h)&&/31 jours/.test(h)&&/sur 3 cycles/.test(h)
+            ?true:_echec('mention absente');})());
       } finally { currentUser=_fcU; }
     })();
 
