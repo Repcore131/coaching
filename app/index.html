@@ -17596,6 +17596,97 @@ function refreshMG(){
 
 
 // ======= NUTRITION =======
+// ══════════════ RÉPARTITION PAR REPAS ET REPÈRE PÉRI-SÉANCE ══════════════
+// Deux réponses du questionnaire de départ étaient collectées depuis toujours
+// et n'allaient nulle part : le nombre de repas et le moment d'entraînement.
+// Elles servent ici, et seulement à titre INDICATIF.
+//
+// Ce module ne produit qu'un seul chiffre — les protéines divisées par le
+// nombre de repas — et il ne le présente jamais comme une cible. Aucun gramme
+// de glucides ou de lipides par repas, aucune fenêtre chiffrée, aucune notion
+// de délai après la séance.
+const REPAS_MIN=3, REPAS_MAX=6;
+// PURE. Rend {nRepas, gParRepas} ou null.
+function protParRepas(user,macrosJour){
+  const brut=_dernierChamp(user,'deb-meals-day');
+  const n=parseInt(Array.isArray(brut)?brut[0]:brut,10);
+  if(!(n>=REPAS_MIN&&n<=REPAS_MAX)) return null;
+  const p=Number(macrosJour&&macrosJour.p);
+  if(!(p>0)) return null;
+  return {nRepas:n,gParRepas:Math.round(p/n)};
+}
+function phraseProtParRepas(r){
+  if(!r) return '';
+  return r.nRepas+' repas par jour : environ '+r.gParRepas+' g de protéines par repas.';
+}
+// ── Repère péri-entraînement ────────────────────────────────────────────────
+// TROIS phrases, AUCUN chiffre. Elles ne disent pas quand manger ni combien :
+// elles rappellent où placer une part de glucides déjà comptés dans le total du
+// jour. Le total, lui, ne bouge pas.
+//
+// RÉDACTION À VALIDER PAR LE COACH AVANT MISE EN PRODUCTION.
+// Le registre est celui du produit — un repère de terrain, pas une consigne —
+// mais ces trois phrases n'ont pas encore été relues par Kevin.
+const REPERES_PERI=Object.freeze({
+  'matin':"Séance le matin : place une part de tes glucides au repas précédent, "
+    +"ou juste après si tu t'entraînes à jeun.",
+  'apres-midi':"Séance l'après-midi : le déjeuner porte l'essentiel du travail. "
+    +"Si la séance est loin du repas, une collation avant évite d'arriver à vide.",
+  'soir':"Séance le soir : garde une part de tes glucides pour le repas qui suit, "
+    +"plutôt que de tout placer en début de journée."
+});
+const REPERE_PERI_REGISTRE='Repère de terrain, à ajuster avec ton coach.';
+// Le champ est en choix MULTIPLE : _dernierChamp rend un tableau. On retient la
+// PREMIÈRE valeur reconnue, une seule fois — trois repères affichés côte à côte
+// se contrediraient.
+function _periSeanceCle(user){
+  const brut=_dernierChamp(user,'deb-training-time');
+  const l=Array.isArray(brut)?brut:(brut==null?[]:[brut]);
+  for(const v of l){
+    const n=_microNorm(v);
+    if(!n) continue;
+    if(/matin/.test(n)) return 'matin';
+    if(/apres|midi/.test(n)) return 'apres-midi';
+    if(/soir/.test(n)) return 'soir';
+  }
+  return null;
+}
+// Le repère ne s'affiche QUE les jours d'entraînement. Un jour de repos, il n'y
+// a pas de séance autour de laquelle placer quoi que ce soit.
+function repereSeance(user,dateStr){
+  if(!nutIsOnDay(dateStr)) return null;
+  const c=_periSeanceCle(user);
+  if(!c||!REPERES_PERI[c]) return null;
+  return {cle:c,texte:REPERES_PERI[c]};
+}
+function _htmlReperesRepas(user,macrosJour,dateStr){
+  const pr=protParRepas(user,macrosJour);
+  let per=null;
+  try{ per=repereSeance(user,dateStr); }catch(e){}
+  if(!pr&&!per) return '';
+  return `<div style="margin-top:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:11px 13px">
+    ${pr?`<div style="font-size:11px;color:#ddd;line-height:1.6">${escapeHtml(phraseProtParRepas(pr))}</div>`:''}
+    ${per?`<div style="font-size:11px;color:#ddd;line-height:1.6;margin-top:${pr?'6px':'0'}">${escapeHtml(per.texte)}</div>`:''}
+    <div style="font-size:10px;color:var(--text-faint);line-height:1.5;margin-top:7px">${escapeHtml(REPERE_PERI_REGISTRE)}</div>
+  </div>`;
+}
+
+// Bascule du marqueur péri-séance, à la main. Elle n'écrit QUE ce booléen :
+// aucun total n'est recalculé, aucun objectif n'est touché. C'est une note que
+// l'athlète se laisse à lui-même, et que le coach peut lire.
+function basculerPeriSeance(dateStr,id){
+  const log=((currentUser.nutrition||{}).log)||{};
+  const jour=log[dateStr];
+  if(!jour||!Array.isArray(jour.entries)) return false;
+  const e=jour.entries.find(x=>x&&String(x.id)===String(id));
+  if(!e) return false;
+  e.periSeance=!e.periSeance;
+  const ok=saveUser();
+  toastEcriture(ok,e.periSeance?'Marqué autour de la séance':'Marque retirée','la marque est');
+  try{ _renderFjDaySummary(dateStr); }catch(err){}
+  return true;
+}
+
 function nutIsOnDay(dateStr){
   // Détermine si c'est un jour d'entraînement selon sessions_config
   const cfg=currentUser.sessions_config;
@@ -17964,6 +18055,8 @@ function _renderStrictMacroRings(nut){
   const today=localISODate(new Date());
   const isOn=nutIsOnDay(today);
   const m=_getEffectiveMacros(nut,isOn,today);
+  // Reperes INDICATIFS, sous les totaux : ils ne les modifient pas.
+  const _repHtml=_htmlReperesRepas(currentUser,m,today);
   if(!m.kcal&&!m.p&&!m.g&&!m.l) return '';
   const entries=(nut.log?.[today]?.entries)||[];
   const tot=entries.reduce((a,e)=>({
@@ -18025,6 +18118,7 @@ function _renderStrictMacroRings(nut){
     <div style="height:10px;background:var(--surface-2);border-radius:5px;overflow:visible">
       <div style="height:100%;width:${(kcalPct*100).toFixed(1)}%;background:linear-gradient(90deg,var(--red),#ff4444);border-radius:5px;transition:width .4s ease;box-shadow:0 0 12px rgba(224,32,32,.5)"></div>
     </div>
+    ${_repHtml}
   </div>`;
 }
 
@@ -18552,6 +18646,11 @@ function saveFoodEntry(){
     // `e` de Ciqual = sel en g/100 g. Deux décimales : au dixième, 0,17 g
     // deviendrait 0,2 g, et l'écart se cumule sur une journée entière.
     sel:f.e!=null?parseFloat((f.e*r).toFixed(2)):null,
+    // Marqueur peri-seance, pose a la main par l'athlete. Purement
+    // descriptif : aucun total ne le lit, aucun calcul ne s'en sert.
+    // false et non undefined, pour que basculerPeriSeance ait toujours
+    // une valeur a inverser.
+    periSeance:false,
   };
   // Micronutriments : la cle n'est posee QUE si l'aliment porte la valeur.
   // Trois decimales, l'iode et la B12 se comptant en microgrammes.
@@ -18603,6 +18702,7 @@ function _renderFjDaySummary(date){
   // d'afficher un total qui aurait l'air complet.
   const _selManquant=entries.filter(e=>e&&e.sel==null).length;
   const _microHtml=_htmlCouvertureMicro(currentUser);
+  const _repHtml=_htmlReperesRepas(currentUser,m,date);
   const repasOrder=['matin','dejeuner','diner','collation'];
   const repasLabels={matin:'Petit-déjeuner',dejeuner:'Déjeuner',diner:'Dîner',collation:'Collation'};
   const grouped={};
@@ -18651,6 +18751,7 @@ function _renderFjDaySummary(date){
         ${_selManquant?`<div style="font-size:var(--fs-xs);color:var(--text-dim);text-align:right;margin-top:3px">sel non compté sur ${_selManquant} aliment${_selManquant>1?'s':''}</div>`:''}
       </div>
     </div>
+    ${_repHtml}
     ${_microHtml}
     ${_htmlDernierAjout(date)}
     ${isToday?`<button onclick="copierHier()" style="width:100%;margin-bottom:12px;padding:10px 0;background:none;border:1px dashed #2a2a2a;border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;cursor:pointer">Copier la journée d'hier</button>`:''}
@@ -35850,8 +35951,13 @@ function testExercices(){
             data[n]={sets:[{weight:0,reps:'10',rir:'2',done:true},
               {weight:0,reps:'10',rir:'2',done:true},
               {weight:0,reps:'10',rir:'2',done:true}]};});
+          // La date etait « hier ». Un lundi, hier tombe dans la semaine ISO
+          // PRECEDENTE : _calculSemaine ne voyait plus la seance et le test
+          // echouait un jour sur sept, sans rapport avec le code. On ancre
+          // la seance DANS la semaine courante.
+          const _lundi=_lundiDeSemaine(_volCleDecalee(0)).getTime()+36e5;
           const u={id:'_tv3',email:'tv3@t',role:'athlete',exAlias:{},exMuscles:{},
-            sessions:[{id:'sp',date:Date.now()-864e5,name:'Posing',slot:0,
+            sessions:[{id:'sp',date:_lundi,name:'Posing',slot:0,
               sets:45,setsPlanned:45,volume:0,duration:30,data:data}]};
           currentUser=u;
           const c=_calculSemaine(u,_volCleDecalee(0));
@@ -36732,6 +36838,175 @@ function testExercices(){
         return manque.length?_echec('absents de BILAN_QUESTIONS : '+manque.join(', ')):true;})());
     })();
 
+
+    // ══ RÉPARTITION PAR REPAS ET REPÈRE PÉRI-SÉANCE ══════════════════════
+    (()=>{
+      const _sU=currentUser;
+      const _bil=(champs)=>[Object.assign({type:'depart',date:Date.now()-10*864e5},champs||{})];
+      const _u=(champs,cfgActifs)=>({id:'rp',email:'rp@t',role:'athlete',
+        gender:'H',_evol_gender:'H',exAlias:{},exMuscles:{},sessions:[],
+        bilans:_bil(champs),
+        sessions_config:Array.from({length:7},(_,i)=>({day:'J'+i,name:'S'+i,
+          active:(cfgActifs||[]).indexOf(i)>=0,exercises:[]})),
+        nutrition:{macros:{on:{kcal:2500,p:180,g:250,l:70},
+                           off:{kcal:2200,p:180,g:180,l:70}}}});
+      // Le jour d'aujourd'hui en index sessions_config (lundi = 0).
+      const _idxAuj=()=>{const d=new Date();return (d.getDay()+6)%7;};
+      try{
+        // ── protParRepas ──────────────────────────────────────────────────
+        ok('Critère : p=180 et 4 repas → 45 g par repas',(()=>{
+          const r=protParRepas(_u({'deb-meals-day':'4'}),{p:180});
+          return r&&r.nRepas===4&&r.gParRepas===45
+            ?true:_echec(JSON.stringify(r));})());
+        ok('Critère : deb-meals-day absent → null',
+           protParRepas(_u({}),{p:180})===null);
+        ok('Critère : deb-meals-day hors 3..6 → null',(()=>{
+          return protParRepas(_u({'deb-meals-day':'9'}),{p:180})===null
+            &&protParRepas(_u({'deb-meals-day':'2'}),{p:180})===null
+            ?true:_echec('une valeur hors bornes est acceptée');})());
+        ok('Critère : protéines nulles ou absentes → null',(()=>{
+          return protParRepas(_u({'deb-meals-day':'4'}),{p:0})===null
+            &&protParRepas(_u({'deb-meals-day':'4'}),{})===null
+            &&protParRepas(_u({'deb-meals-day':'4'}),null)===null
+            ?true:_echec('un affichage est produit sans protéines');})());
+        ok('Une réponse non numérique ne produit rien',
+           protParRepas(_u({'deb-meals-day':'quatre'}),{p:180})===null);
+        ok('Les trois autres nombres de repas fonctionnent',(()=>{
+          const v=['3','5','6'].map(n=>protParRepas(_u({'deb-meals-day':n}),{p:180}));
+          return v.every(x=>x&&x.gParRepas>0)&&v[0].gParRepas===60&&v[2].gParRepas===30
+            ?true:_echec(JSON.stringify(v));})());
+        ok('La phrase reste INDICATIVE : « environ », jamais « il faut »',(()=>{
+          const t=phraseProtParRepas({nRepas:4,gParRepas:45});
+          return /environ/.test(t)&&!/il faut|tu dois|objectif/i.test(t)
+            ?true:_echec(t);})());
+
+        // ── Le repère péri-séance ─────────────────────────────────────────
+        ok('Critère : jour ON et « Matin » → le repère matin',(()=>{
+          const u=_u({'deb-training-time':['Matin']},[_idxAuj()]);
+          const sauve=currentUser;
+          try{
+            currentUser=u;
+            const r=repereSeance(u,localISODate(new Date()));
+            return r&&r.cle==='matin'&&/glucides au repas précédent/.test(r.texte)
+              ?true:_echec(JSON.stringify(r));
+          } finally { currentUser=sauve; }})());
+        ok('Critère : jour OFF → aucun repère',(()=>{
+          const u=_u({'deb-training-time':['Matin']},[]);   // aucun créneau actif
+          const sauve=currentUser;
+          try{
+            currentUser=u;
+            return repereSeance(u,localISODate(new Date()))===null
+              ?true:_echec('un repère apparaît un jour de repos');
+          } finally { currentUser=sauve; }})());
+        ok('Critère : plusieurs valeurs cochées → la PREMIÈRE reconnue, une fois',(()=>{
+          const u=_u({'deb-training-time':['Soir','Matin']},[_idxAuj()]);
+          const sauve=currentUser;
+          try{
+            currentUser=u;
+            const r=repereSeance(u,localISODate(new Date()));
+            if(!r) return _echec('aucun repère');
+            if(r.cle!=='soir') return _echec('clé '+r.cle+' au lieu de soir');
+            const h=_htmlReperesRepas(u,{p:180},localISODate(new Date()));
+            const n=(h.match(/Séance le soir|Séance le matin/g)||[]).length;
+            return n===1?true:_echec(n+' repères affichés');
+          } finally { currentUser=sauve; }})());
+        ok('« Après-midi » est reconnu malgré l\'accent et le tiret',(()=>{
+          const u=_u({'deb-training-time':['Après-midi']},[_idxAuj()]);
+          const sauve=currentUser;
+          try{
+            currentUser=u;
+            const r=repereSeance(u,localISODate(new Date()));
+            return r&&r.cle==='apres-midi'?true:_echec(JSON.stringify(r));
+          } finally { currentUser=sauve; }})());
+        ok('deb-training-time absent → aucun repère',(()=>{
+          const u=_u({},[_idxAuj()]);
+          const sauve=currentUser;
+          try{ currentUser=u; return repereSeance(u,localISODate(new Date()))===null
+            ?true:_echec('un repère sans réponse'); }
+          finally { currentUser=sauve; }})());
+
+        // ── Les interdits ─────────────────────────────────────────────────
+        ok('Critère : aucun texte ne parle de « fenêtre anabolique »',(()=>{
+          const t=Object.values(REPERES_PERI).join(' ')+' '+REPERE_PERI_REGISTRE
+            +' '+phraseProtParRepas({nRepas:4,gParRepas:45});
+          return !/fen[êe]tre anabolique|an[ae]bolic window/i.test(t)
+            ?true:_echec('la formule interdite est présente');})());
+        ok('Critère : aucun gramme de glucides ou de lipides par repas',(()=>{
+          const t=Object.values(REPERES_PERI).join(' ');
+          // Aucun chiffre du tout dans les trois phrases.
+          const chiffres=t.match(/\d/g);
+          if(chiffres) return _echec('chiffres trouvés : '+chiffres.join(''));
+          return !/\bg de glucides\b|\bg de lipides\b/i.test(t)
+            ?true:_echec('un gramme par repas est mentionné');})());
+        ok('Aucune recommandation de jeûne intermittent',(()=>{
+          const t=Object.values(REPERES_PERI).join(' ');
+          return !/je[uû]ne intermittent|fasting/i.test(t)
+            ?true:_echec('le jeûne intermittent est évoqué');})());
+        ok('La mention de registre accompagne les repères',(()=>{
+          const u=_u({'deb-meals-day':'4'},[]);
+          const h=_htmlReperesRepas(u,{p:180},localISODate(new Date()));
+          return h.indexOf(REPERE_PERI_REGISTRE)>=0
+            ?true:_echec('la mention manque');})());
+        ok('Aucune notification ne part de ce module',(()=>{
+          const src=String(repereSeance)+String(protParRepas)
+            +String(_htmlReperesRepas)+String(basculerPeriSeance);
+          return !/showNotification|new Notification/.test(src)
+            ?true:_echec('une notification part du module');})());
+
+        ok('Les repères sont RÉELLEMENT rendus sous l\'anneau des macros',(()=>{
+          // Les tests ci-dessus interrogent _htmlReperesRepas en isolation :
+          // on pouvait retirer entièrement son appel du rendu et tout restait
+          // vert, pour une phrase que personne ne verrait jamais.
+          const sauve=currentUser;
+          try{
+            currentUser=_u({'deb-meals-day':'4'},[]);
+            const h=_renderStrictMacroRings(currentUser.nutrition);
+            return /par repas/.test(h)
+              ?true:_echec('les repères n\'apparaissent pas dans l\'anneau');
+          } finally { currentUser=sauve; }})());
+
+        // ── Le marqueur péri-séance ───────────────────────────────────────
+        ok('Critère : le marqueur ne change AUCUN total',(()=>{
+          const sauve=currentUser;
+          try{
+            const j=localISODate(new Date());
+            currentUser=_u({},[]);
+            currentUser.nutrition.log={};
+            currentUser.nutrition.log[j]={entries:[
+              {id:1,nom:'A',qty:100,repas:'matin',kcal:200,p:20,c:10,l:5,fi:2,sel:0.5,periSeance:false}]};
+            const tot=e=>e.reduce((a,x)=>({kcal:a.kcal+(x.kcal||0),p:a.p+(x.p||0)}),{kcal:0,p:0});
+            const avant=JSON.stringify(tot(currentUser.nutrition.log[j].entries));
+            const _s=window.saveUser; window.saveUser=()=>true;
+            try{ basculerPeriSeance(j,1); } finally { window.saveUser=_s; }
+            const e=currentUser.nutrition.log[j].entries[0];
+            if(e.periSeance!==true) return _echec('le marqueur n\'a pas basculé');
+            return JSON.stringify(tot(currentUser.nutrition.log[j].entries))===avant
+              ?true:_echec('un total a bougé');
+          } finally { currentUser=sauve; }})());
+        ok('Le marqueur naît à false, jamais undefined',(()=>{
+          // Un undefined ne se bascule pas proprement et se perd au push.
+          // On inspecte la FONCTION qui crée l'entrée, pas la page entière : le
+          // motif écrit en clair se trouve dans la fixture de ce test même, et
+          // le test restait donc vert après suppression du champ.
+          const src=String(saveFoodEntry);
+          const re=new RegExp('periSeance'+'\\s*:\\s*false');
+          return re.test(src)
+            ?true:_echec('le marqueur n\'est pas initialisé dans saveFoodEntry');})());
+
+        // ── Non-régression sur les totaux journaliers ─────────────────────
+        ok('Critère : _getEffectiveMacros est INCHANGÉ par ce lot',(()=>{
+          const sauve=currentUser;
+          try{
+            const nut={macros:{on:{kcal:2500,p:180,g:250,l:70},
+                               off:{kcal:2200,p:180,g:180,l:70}}};
+            currentUser=_u({},[]);
+            const on=_getEffectiveMacros(nut,true,localISODate(new Date()));
+            const off=_getEffectiveMacros(nut,false,localISODate(new Date()));
+            return on.kcal===2500&&on.p===180&&off.kcal===2200&&off.g===180
+              ?true:_echec(JSON.stringify({on,off}));
+          } finally { currentUser=sauve; }})());
+      } finally { currentUser=_sU; }
+    })();
 
     // ══ PAUSE DIÉTÉTIQUE ET SORTIE PROGRESSIVE ═══════════════════════════
     (()=>{
