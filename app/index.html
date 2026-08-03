@@ -22752,8 +22752,24 @@ function _pauseMacrosCibles(user,cible){
 }
 // PURE. Ce que la pause proposerait, sans rien écrire. Rend null quand il n'y a
 // rien à proposer — c'est l'appelant qui décide d'afficher.
+// INTERRUPTEUR UNIQUE, volontairement a false.
+//
+// Partout ailleurs dans le produit, un antecedent alimentaire declare COUPE la
+// fonctionnalite. La pause faisait exception : elle REMONTE les calories, donc
+// la direction est protectrice, et refuser d en parler a un coach pour un
+// athlete en restriction depuis quatre mois est un autre risque.
+//
+// L argument se defend, mais il n a PAS ete valide par un professionnel de
+// sante. Tant qu il ne l est pas, le produit retombe sur sa regle par defaut :
+// on ne propose rien. Le jour ou l avis arrive, il n y a qu un booleen a
+// basculer — la branche est ecrite, testee, et les deux comportements sont
+// couverts par la suite.
+const PAUSE_PROPOSABLE_SOUS_TCA=false;
 function pauseProposee(user){
   if(!user) return null;
+  if(!PAUSE_PROPOSABLE_SOUS_TCA){
+    try{ if(aTCA(user)) return null; }catch(e){}
+  }
   if(pauseActive(user)) return null;                 // déjà en pause
   if(!_restrictionBrute(user)) return null;
   let dep=null;
@@ -22919,13 +22935,24 @@ function appliquerPalierTransition(i){
 // athlète en restriction depuis quatre mois serait un autre risque. La règle
 // n'est pas tranchée pour autant : elle doit être validée par un professionnel
 // de santé, et l'encart le dit au coach en attendant.
-const PAUSE_MENTION_TCA='Antécédent alimentaire déclaré : cette proposition '
-  +'remonte les calories, mais elle demande ton jugement et, si besoin, un avis '
-  +'médical. Elle n\'est jamais montrée à l\'athlète.';
+const PAUSE_MENTION_TCA='Antécédent alimentaire déclaré : RepCore ne propose pas '
+  +'de pause automatiquement dans ce cas. Une pause reste possible, mais elle se '
+  +'décide avec un professionnel de santé, pas depuis un écran.';
 function _htmlPauseProposition(c){
+  let tca=false; try{ tca=aTCA(c); }catch(e){}
+  // Antecedent declare et interrupteur ferme : on ne se tait pas pour autant.
+  // Le coach doit savoir que la restriction est vue, et pourquoi rien n est
+  // propose — un silence se lirait comme « il n y a rien a signaler ».
+  if(tca&&!PAUSE_PROPOSABLE_SOUS_TCA){
+    if(!_restrictionBrute(c)||pauseActive(c)) return '';
+    return `<div style="margin-top:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px">
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">Restriction prolongée</div>
+      <div style="font-size:12px;color:#ddd;line-height:1.7">${escapeHtml(PAUSE_MENTION_TCA)}</div>
+      ${blocDisclaimerSante()}
+    </div>`;
+  }
   const prop=pauseProposee(c);
   if(!prop) return '';
-  let tca=false; try{ tca=aTCA(c); }catch(e){}
   const phrase='Sèche de '+prop.semaines+' semaines'
     +(prop.kcalActuel?' à '+prop.kcalActuel+' kcal':'')
     +'. Pause de '+prop.jours+' jours à '+prop.kcalCible+' kcal ? '
@@ -37057,6 +37084,43 @@ function testExercices(){
             pause:{debut:Date.now()-2*864e5,jours:12,kcalAvant:{on:{},off:{}}}}});
           return pauseProposee(u)===null&&_htmlPauseProposition(u)===''
             ?true:_echec('une seconde proposition est apparue');})());
+
+        // ── Antécédent alimentaire : la pause suit la règle par défaut ────
+        ok('L\'interrupteur est FERMÉ tant que la règle n\'est pas validée',
+           PAUSE_PROPOSABLE_SOUS_TCA===false);
+        const _longTca=()=>_long({bilans:[
+          {type:'depart',date:Date.now()-200*864e5,'deb-tca':'anorexie il y a 5 ans'},
+          {type:'suivi',date:Date.now()-2*864e5,'deb-weight':'62','deb-height':'168',
+           'deb-age':'29','deb-gender':'Femme'}]});
+        ok('Antécédent déclaré → AUCUNE pause n\'est proposée',(()=>{
+          const u=_longTca();
+          if(!aTCA(u)) return _echec('fixture inutile : l\'antécédent n\'est pas vu');
+          if(!_restrictionBrute(u)) return _echec('fixture inutile : aucune restriction');
+          return pauseProposee(u)===null
+            ?true:_echec('une pause est proposée malgré l\'antécédent');})());
+        ok('Sans antécédent, la proposition existe toujours',(()=>{
+          return pauseProposee(_long())!==null
+            ?true:_echec('la proposition a disparu pour tout le monde');})());
+        ok('Le coach n\'est pas laissé dans le silence pour autant',(()=>{
+          // Ne rien afficher se lirait comme « il n'y a rien à signaler », alors
+          // que la restriction est bien vue. On dit ce qu'on ne fait pas.
+          const h=_htmlPauseProposition(_longTca()).replace(/<[^>]*>/g,' ');
+          if(!/Restriction prolongée/.test(h)) return _echec('rien n\'est affiché');
+          return /professionnel de santé/.test(h)&&!/Proposer la pause/.test(h)
+            ?true:_echec(h.slice(0,180));})());
+        ok('Aucun bouton d\'application n\'est offert sous antécédent',(()=>{
+          const h=_htmlPauseProposition(_longTca());
+          return !/appliquerPause\(/.test(h)
+            ?true:_echec('le bouton d\'application est présent');})());
+        ok('Sans restriction, l\'encart d\'antécédent ne s\'affiche pas non plus',(()=>{
+          const u=_longTca();
+          u.nutrition.macros={on:{kcal:2600,p:150,g:300,l:80},
+                              off:{kcal:2600,p:150,g:300,l:80}};
+          return _htmlPauseProposition(u)===''
+            ?true:_echec('un encart apparaît sans restriction');})());
+        ok('La mention n\'invente aucune posologie ni aucun chiffre',(()=>{
+          return !/\d/.test(PAUSE_MENTION_TCA)
+            ?true:_echec('un chiffre est apparu : '+PAUSE_MENTION_TCA);})());
 
         // ── L'application ─────────────────────────────────────────────────
         ok('Critère : protéines et lipides identiques, seuls glucides et kcal bougent',(()=>{
