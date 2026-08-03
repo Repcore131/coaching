@@ -14426,7 +14426,7 @@ function bSports(id){
     <button type="button" onclick="_bSportAjouter('${id}')" class="btn btn-outline btn-sm"
       style="width:100%;margin:2px 0 0;letter-spacing:1px;font-size:10px">+ Ajouter un sport</button>
     <div data-sports-total style="font-size:11px;color:var(--success);line-height:1.6;margin-top:8px">${total.semaine>0?total.semaine+' kcal par semaine, soit '+total.jour+' kcal par jour ajoutés à ta dépense.':''}</div>
-    <div style="font-size:10px;color:var(--text-faint);line-height:1.6;margin-top:6px">Compte ici TOUT ce que tu fais, séances RepCore incluses — ligne « Musculation ». C'est cette liste qui sert au calcul, elle ne doit rien oublier ni rien compter deux fois.</div>
+    <div style="font-size:10px;color:var(--text-faint);line-height:1.6;margin-top:6px">Compte ici ce que tu fais EN DEHORS de RepCore. Tes créneaux du programme sont déjà comptés à part : si tu ajoutes quand même une ligne « Musculation », elle ne s'additionne pas à eux.</div>
   </div>`;
 }
 function _bRepeindreSports(id){
@@ -19233,6 +19233,110 @@ function facteurActivite(user){
   return {f:Math.round(f*1000)/1000,seances:actifs,pas};
 }
 
+// ── UNE seule convention de dépense ────────────────────────────────────────
+// Deux modèles exclusifs cohabitaient : profession reconnue → NEAT × facteur
+// plus les sports en kcal ; profession inconnue → facteur tiré du NOMBRE DE
+// CRÉNEAUX, sports entièrement ignorés. Deux athlètes identiques obtenaient
+// donc deux dépenses différentes selon que leur intitulé de poste était
+// reconnu, un footballeur voyait ses six heures compter zéro, et un athlète
+// qui n'avait pas listé « Musculation » voyait son entraînement compter zéro.
+//
+// Désormais : le facteur ne couvre JAMAIS le sport, le sport est TOUJOURS
+// ajouté en kcal, et l'entraînement RepCore est compté EXACTEMENT une fois.
+//
+// Conséquence assumée : pour un athlète sans profession reconnue, l'ancien
+// facteur par séances (jusqu'à 1,65) englobait l'entraînement. Le nouveau
+// calcul part de 1,20 et rajoute les créneaux en kcal — la dépense baisse
+// nettement, et c'était précisément le double comptage qu'on corrige.
+const NEAT_BASE=1.20;
+// Facteur d'activité HORS SPORT. ACT_SEANCES n'y participe plus : le nombre de
+// créneaux est du sport, il se compte en kcal, pas en multiplicateur.
+function facteurNEAT(user){
+  const metier=_dernierChamp(user,'deb-job');
+  const prof=facteurProfession(metier);
+  const pas=moyennePas14j(user);
+  if(prof) return {f:prof.f,source:'profession',pas,
+    niveau:prof.niveau,lib:prof.lib,metier};
+  // Sans profession reconnue, les PAS SEULS ajustent la base. Aucun relevé :
+  // on reste à la base et on le dit, plutôt que d'inventer un niveau.
+  if(pas==null) return {f:NEAT_BASE,source:'defaut',pas:null,metier:metier||null};
+  let d=0;
+  for(const x of ACT_PAS) if(pas<=x.max){ d=x.d; break; }
+  const f=Math.min(ACT_MAX,Math.max(ACT_MIN,NEAT_BASE+d));
+  return {f:Math.round(f*1000)/1000,source:'pas',pas,metier:metier||null};
+}
+
+// Durée d'une séance, lue dans un champ de TEXTE LIBRE déjà collecté et
+// jamais exploité jusqu'ici. On sait lire « 45min », « 1h30 », « 1 h », « 90 ».
+// Un nombre nu sous 10 est refusé : « 1,5 » peut vouloir dire une heure et
+// demie comme une minute et demie, et deviner vaudrait moins que le repli.
+const SEANCE_MIN_DEFAUT=60, SEANCE_MIN_MIN=10, SEANCE_MIN_MAX=240;
+function _dureeSeanceMin(user){
+  const brut=_dernierChamp(user,'deb-session-duration');
+  const t=String(brut==null?'':brut).toLowerCase().replace(',','.').trim();
+  const borne=(v)=>(v>=SEANCE_MIN_MIN&&v<=SEANCE_MIN_MAX)?v:null;
+  let v=null;
+  const h=t.match(/(\d+(?:\.\d+)?)\s*h\s*(\d+)?/);
+  if(h) v=borne(Math.round(parseFloat(h[1])*60+(h[2]?parseInt(h[2],10):0)));
+  if(v==null){
+    const m=t.match(/(\d+(?:\.\d+)?)/);
+    // Un nombre nu n'est retenu que s'il ne peut être que des minutes.
+    if(m&&parseFloat(m[1])>=10) v=borne(Math.round(parseFloat(m[1])));
+  }
+  if(v==null) return {min:SEANCE_MIN_DEFAUT,source:'defaut',brut:brut==null?null:String(brut)};
+  return {min:v,source:'declaree',brut:String(brut)};
+}
+
+// Musculation, quel que soit l'accent ou la casse de l'intitulé stocké.
+function _estMusculation(nom){
+  return String(nom||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase().trim()==='musculation';
+}
+// Tout le sport en kcal par jour, entraînement RepCore compris — et compté
+// UNE fois. Les créneaux du programme sont la source de référence ; quand
+// l'athlète a AUSSI déclaré une ligne « Musculation », on ne fait pas la somme
+// des deux : on retient la plus élevée et on le dit.
+//
+// Pourquoi la plus élevée et non les créneaux seuls : ignorer purement la
+// déclaration ferait BAISSER la dépense de tout athlète qui avait déclaré plus
+// d'heures que ses créneaux n'en valent — une régression silencieuse sur des
+// dossiers en cours. Le prix assumé : qui surdéclare garde son chiffre.
+function kcalSportParJour(user){
+  const brut=_dernierChamp(user,'deb-sports');
+  const liste=Array.isArray(brut)?brut:[];
+  const autres=[],muscu=[],inconnus=[];
+  for(const e of liste){
+    if(!e||!e.sport) continue;
+    // Nom RAMENÉ à la clé du barème : reconnue sur une forme normalisée, la
+    // ligne doit être chiffrée sur la clé exacte, sinon ses heures tombent à
+    // zéro sans que personne ne le voie.
+    if(_estMusculation(e.sport)){ muscu.push({...e,sport:'Musculation'}); continue; }
+    // Un sport absent du barème n'est pas compté — mais il est NOMMÉ. Le
+    // passer sous silence laisserait croire qu'il a été pris en compte.
+    if(kcalHeureSport(e.sport,e.intensite)==null&&Number(e.heures)>0){
+      inconnus.push(String(e.sport)); continue; }
+    autres.push(e);
+  }
+  const dAutres=depenseSportsParJour(autres);
+  const dMuscu=depenseSportsParJour(muscu);
+  const creneaux=((user&&user.sessions_config)||[]).filter(x=>x&&x.active).length;
+  const duree=_dureeSeanceMin(user);
+  const kh=kcalHeureSport('Musculation','moderee');
+  const semCreneaux=Math.round(creneaux*(duree.min/60)*kh);
+  const doublon=muscu.length>0&&creneaux>0;
+  let semMuscu,source;
+  if(creneaux>0&&semCreneaux>=dMuscu.semaine){ semMuscu=semCreneaux; source='creneaux'; }
+  else if(dMuscu.semaine>0){ semMuscu=dMuscu.semaine; source='declaree'; }
+  else if(creneaux>0){ semMuscu=semCreneaux; source='creneaux'; }
+  else { semMuscu=0; source='aucune'; }
+  const semaine=dAutres.semaine+semMuscu;
+  return {jour:Math.round(semaine/7),semaine,source,doublon,inconnus,
+    detailMuscu:dMuscu.detail,
+    creneaux,dureeMin:duree.min,dureeSource:duree.source,dureeBrut:duree.brut,
+    semaineMuscu:semMuscu,semaineCreneaux:semCreneaux,semaineDeclaree:dMuscu.semaine,
+    detail:dAutres.detail,autres:dAutres.semaine};
+}
+
 // ── Protéines : le coach choisit, la phase propose ─────────────────────────
 // En grammes par kilo de POIDS DE CORPS. La sèche demande le plus — c'est là
 // qu'il faut protéger le muscle — la prise de masse un cran en dessous, et
@@ -19323,33 +19427,69 @@ function besoinsProposes(user,opts){
   // Profession et sports viennent du DERNIER bilan qui les porte. Un athlète
   // qui n'a pas encore refait son bilan garde l'ancien calcul : personne ne
   // perd sa proposition le jour de la mise à jour.
-  const metier=_dernierChamp(user,'deb-job');
-  const sports=_dernierChamp(user,'deb-sports');
-  const prof=facteurProfession(metier);
-  const sp=depenseSportsParJour(sports);
-  let act,depense,modele;
-  if(prof){
-    // Modèle décomposé : la profession donne le NEAT, les sports s'ajoutent
-    // en kcal. Les créneaux de RepCore ne sont PAS recomptés ici — ils sont
-    // déclarés dans la liste des sports, ligne « Musculation », sinon la même
-    // séance serait payée deux fois.
-    modele='profession';
-    act={f:prof.f,seances:null,pas:null,niveau:prof.niveau,metier};
-    depense=Math.round(mb*prof.f)+sp.jour;
-    hypotheses.push(metier.toLowerCase()+' : '+prof.lib.toLowerCase()+' → facteur '
-      +String(prof.f).replace('.',','));
-    if(sp.jour>0) hypotheses.push('sports déclarés '+sp.detail.join(', ')
-      +' → '+sp.semaine+' kcal par semaine, soit '+sp.jour+' par jour');
-    else hypotheses.push('aucun sport déclaré en dehors de RepCore');
-  } else {
-    modele='seances';
-    act=facteurActivite(user);
-    depense=Math.round(mb*act.f);
-    hypotheses.push(act.seances+' séance'+(act.seances>1?'s':'')+' par semaine'
-      +(act.pas!=null?' et '+act.pas.toLocaleString('fr-FR')+' pas par jour':'')
-      +' → facteur '+String(act.f).replace('.',','));
-    if(metier) hypotheses.push('profession « '+metier+' » non reconnue : barème par séances');
-  }
+  // UN SEUL CHEMIN. Le NEAT ne couvre jamais le sport, le sport est toujours
+  // ajouté en kcal, et l'entraînement RepCore est compté exactement une fois.
+  // Deux athlètes identiques ne diffèrent plus que par leur NEAT.
+  const neat=facteurNEAT(user);
+  const sport=kcalSportParJour(user);
+  const metier=neat.metier;
+  const depense=Math.round(mb*neat.f)+sport.jour;
+  const modele=neat.source;
+  const act={f:neat.f,source:neat.source,pas:neat.pas,seances:sport.creneaux,
+    niveau:neat.niveau||null,metier:metier||null};
+  // Un facteur s'écrit à deux décimales : « NEAT × 1,2 » se lisait comme une
+  // valeur tronquée. Les kcal, elles, restent en entier.
+  const _vf=(x)=>Number(x).toFixed(2).replace('.',',');
+  // ── Le NEAT, nommé et chiffré ──
+  if(neat.source==='profession')
+    hypotheses.push(metier.toLowerCase()+' : '+neat.lib.toLowerCase()
+      +' → NEAT × '+_vf(neat.f));
+  else if(neat.source==='pas')
+    hypotheses.push(neat.pas.toLocaleString('fr-FR')
+      +' pas par jour en moyenne → NEAT × '+_vf(neat.f));
+  else
+    hypotheses.push('ni profession reconnue ni relevé de pas → NEAT × '+_vf(neat.f));
+  // Dire « déduit des pas » sans aucun relevé de pas était faux. La phrase
+  // suit ce qui a RÉELLEMENT servi.
+  if(metier&&neat.source==='pas')
+    hypotheses.push('profession « '+metier+' » non reconnue : NEAT déduit des pas seuls');
+  else if(metier&&neat.source==='defaut')
+    hypotheses.push('profession « '+metier+' » non reconnue, et aucun relevé de pas : NEAT de base');
+  // ── L'entraînement RepCore, valorisé en kcal comme n'importe quel sport ──
+  const _dm=sport.dureeMin;
+  const _dTxt=_dm%60===0?(_dm/60)+' h':(_dm>60?Math.floor(_dm/60)+' h '+(_dm%60):_dm+' min');
+  const _jMuscu=Math.round(sport.semaineMuscu/7);
+  if(sport.source==='creneaux'&&sport.creneaux>0)
+    hypotheses.push(sport.creneaux+' créneau'+(sport.creneaux>1?'x':'')+' RepCore × '
+      +_dTxt+' → '+sport.semaineMuscu+' kcal par semaine, soit '+_jMuscu+' par jour');
+  else if(sport.source==='declaree')
+    // Le détail porte déjà le mot « musculation » : le préfixer le doublait.
+    hypotheses.push((sport.detailMuscu.join(', ')||'musculation déclarée')+' déclarée'
+      +' → '+sport.semaineMuscu+' kcal par semaine, soit '+_jMuscu+' par jour');
+  // ── Le doublon : dit à voix haute, jamais additionné ──
+  if(sport.doublon)
+    hypotheses.push(sport.source==='creneaux'
+      ?'musculation déclarée dans les sports et '+sport.creneaux+' créneau'
+        +(sport.creneaux>1?'x':'')+' actif'+(sport.creneaux>1?'s':'')
+        +' : je compte les créneaux, pas les deux'
+      :'musculation déclarée dans les sports et '+sport.creneaux+' créneau'
+        +(sport.creneaux>1?'x':'')+' actif'+(sport.creneaux>1?'s':'')
+        +' : je retiens la déclaration, plus élevée — jamais les deux');
+  // ── La durée de séance : le repli est DIT, jamais silencieux ──
+  if(sport.creneaux>0&&sport.dureeSource==='defaut')
+    hypotheses.push('durée de séance '+(sport.dureeBrut?'illisible (« '+sport.dureeBrut+' »)'
+      :'non renseignée')+' : '+SEANCE_MIN_DEFAUT+' min retenues');
+  // ── Les autres sports ──
+  if(sport.autres>0)
+    hypotheses.push('sports déclarés '+sport.detail.join(', ')+' → '+sport.autres
+      +' kcal par semaine, soit '+Math.round(sport.autres/7)+' par jour');
+  else if(!sport.doublon&&sport.source!=='declaree')
+    hypotheses.push('aucun sport déclaré en dehors de RepCore');
+  // ── Ce qu'on n'a pas su compter, nommé plutôt que passé sous silence ──
+  if(sport.inconnus.length)
+    hypotheses.push(sport.inconnus.join(', ')+' : sport'+(sport.inconnus.length>1?'s':'')
+      +' non reconnu'+(sport.inconnus.length>1?'s':'')+', non compté'
+      +(sport.inconnus.length>1?'s':''));
   const phase=typePhase(user);
   const gParKg=(typeof o.protGparKg==='number'&&isFinite(o.protGparKg))
     ? o.protGparKg
@@ -19368,28 +19508,46 @@ function besoinsProposes(user,opts){
   cible=Math.max(cible,Math.round(depense*(1-DEFICIT_MAX_PART)));
   cible=Math.min(cible,Math.round(depense*(1+SURPLUS_MAX_PART)));
   const deltaRetenu=cible-depense;
-  if(deltaRetenu!==0){
-    // La vitesse ANNONCÉE est celle que produit le delta réellement retenu, et
-    // non celle visée : quand un plafond mord, promettre −0,75 % en n'appliquant
-    // que la moitié du déficit serait un mensonge à l'athlète.
-    const pctReel=poids>0?(deltaRetenu*7)/(poids*KCAL_PAR_KG_CORPS)*100:0;
-    hypotheses.push((deltaRetenu<0?'déficit':'surplus')+' de '+Math.abs(deltaRetenu)
+  const r=_repartition(cible,poids,gParKg);
+  const cycle=o.cycle!==false;
+  // Les journées sont calculées AVANT d'annoncer quoi que ce soit : le
+  // plancher peut les relever, et c'est le total servi qui décide de la
+  // vitesse réelle.
+  let on,off;
+  if(!cycle){
+    const j=_relevePlancher(_bloc(r.p,r.l,r.g),user);
+    on=j; off=Object.assign({},j);
+  } else {
+    on=_relevePlancher(_bloc(r.p,r.l,Math.round(r.g*(1+CYCLE_GLUC))),user);
+    off=_relevePlancher(_bloc(r.p,r.l,Math.round(r.g*(1-CYCLE_GLUC))),user);
+  }
+  // La vitesse ANNONCÉE est celle que produit le total RÉELLEMENT servi — pas
+  // celle visée, pas même celle retenue après plafond. Quand le plancher relève
+  // les journées de 290 kcal, annoncer −0,55 % pendant qu'on en sert −0,33 %
+  // serait un mensonge à l'athlète. Le défaut existait déjà ; ce lot fait
+  // baisser les dépenses, donc mordre le plancher bien plus souvent, et il
+  // aurait multiplié l'écart par dix.
+  const deltaServi=Math.round((on.kcal+off.kcal)/2)-depense;
+  // La LIGNE dépend de l'intention (deltaRetenu), ses CHIFFRES du total servi.
+  // Sans phase déclarée l'intention est nulle, et l'arrondi du bloc suffisait à
+  // faire apparaître un « surplus de 1 kcal » qui ne veut rien dire.
+  if(deltaRetenu!==0&&deltaServi===0){
+    hypotheses.push('le plancher ramène le total au niveau de la dépense : aucune vitesse de poids visée');
+  } else if(deltaRetenu!==0){
+    const pctReel=poids>0?(deltaServi*7)/(poids*KCAL_PAR_KG_CORPS)*100:0;
+    hypotheses.push((deltaServi<0?'déficit':'surplus')+' de '+Math.abs(deltaServi)
       +' kcal par jour, visant '+(pctReel>0?'+':'')
       +String(Math.round(pctReel*100)/100).replace('.',',')
       +' % de poids par semaine');
   }
-  const r=_repartition(cible,poids,gParKg);
-  const cycle=o.cycle!==false;
-  if(!cycle){
-    hypotheses.push('même total tous les jours');
-    const j=_relevePlancher(_bloc(r.p,r.l,r.g),user);
-    return {source,on:j,off:Object.assign({},j),act,depense,mb,gParKg,modele,cycle:false,delta:deltaRetenu,hypotheses};
-  }
-  hypotheses.push('glucides +15 % les jours d\'entraînement, −15 % les jours de repos');
-  return {source,
-    on:_relevePlancher(_bloc(r.p,r.l,Math.round(r.g*(1+CYCLE_GLUC))),user),
-    off:_relevePlancher(_bloc(r.p,r.l,Math.round(r.g*(1-CYCLE_GLUC))),user),
-    act,depense,mb,gParKg,modele,cycle:true,delta:deltaRetenu,hypotheses};
+  hypotheses.push(cycle
+    ?'glucides +15 % les jours d\'entraînement, −15 % les jours de repos'
+    :'même total tous les jours');
+  // delta reste le delta de CIBLE, avant plancher : c'est lui qui décide si
+  // l'athlète pose un déficit d'un clic, et le garde-fou TCA s'y adosse.
+  // Le remplacer par deltaServi ouvrirait ce chemin dès que le plancher
+  // ramène la journée au niveau de la dépense.
+  return {source,on,off,act,depense,mb,gParKg,modele,cycle,delta:deltaRetenu,hypotheses};
 }
 
 
@@ -22912,10 +23070,10 @@ function _depensePourPlafond(user){
     let mb=(mm!=null)?mbKatch(mm):null;
     if(mb==null) mb=mbMifflin(poids,taille,age,sexe);
     if(!(mb>0)) return null;
-    const metier=_dernierChamp(user,'deb-job');
-    const prof=facteurProfession(metier);
-    if(prof) return Math.round(mb*prof.f)+depenseSportsParJour(_dernierChamp(user,'deb-sports')).jour;
-    return Math.round(mb*facteurActivite(user).f);
+    // MÊME convention que besoinsProposes, et un seul chemin comme lui : deux
+    // formules divergentes borneraient une dépense qui n'est pas celle qu'on
+    // affiche à l'athlète.
+    return Math.round(mb*facteurNEAT(user).f)+kcalSportParJour(user).jour;
   }catch(e){ return null; }
 }
 
@@ -30904,14 +31062,19 @@ function testExercices(){
         const u=_ath({bilans:[_bil(60),_bil(2,{'deb-job':'Comptable'})]});
         const b=besoinsProposes(u);
         return b.modele==='profession'&&b.act.niveau==='sedentaire';})());
-      ok('Profession inconnue : repli sur le barème par séances, et c\'est dit',(()=>{
+      ok('Profession inconnue : le NEAT vient des pas, et c\'est dit',(()=>{
         const u=_ath({bilans:[_bil(60),_bil(2,{'deb-job':'Dresseur de licornes'})]});
         const b=besoinsProposes(u);
-        return b.modele==='seances'
+        return b.modele==='defaut'
           &&b.hypotheses.some(h=>/non reconnue/.test(h));})());
-      ok('Aucune profession : l\'ancien calcul, personne ne perd sa proposition',(()=>{
+      ok('Aucune profession, aucun pas : le NEAT de base, et une proposition',(()=>{
         const b=besoinsProposes(_ath());
-        return b.modele==='seances'&&b.source!==null&&b.on.kcal>0;})());
+        return b.modele==='defaut'&&b.source!==null&&b.on.kcal>0;})());
+      ok('Un relevé de pas suffit à sortir du NEAT par défaut',(()=>{
+        const j=(n,c)=>({date:localISODate(new Date(Date.now()-n*864e5)),count:c});
+        const b=besoinsProposes(_ath({stepsLog:[j(1,13000),j(2,12000)]}));
+        return b.modele==='pas'&&b.act.f>NEAT_BASE
+          ?true:_echec(b.modele+' facteur '+b.act.f);})());
       ok('La profession est retrouvée dans un bilan ANCIEN',(()=>{
         // Elle est posée au bilan de départ et pas redonnée à chaque suivi.
         const u=_ath({bilans:[_bil(200,{'deb-job':'Maçon'}),_bil(60),_bil(2)]});
@@ -30929,14 +31092,30 @@ function testExercices(){
         const assis=besoinsProposes(_ath({bilans:[_bil(2,{'deb-job':'Comptable','deb-sports':sp})]}));
         const lourd=besoinsProposes(_ath({bilans:[_bil(2,{'deb-job':'Maçon','deb-sports':sp})]}));
         return lourd.depense>assis.depense;})());
-      // LE piège du modèle : compter les séances RepCore ET les sports.
-      ok('Les créneaux RepCore ne sont pas recomptés dans le modèle profession',(()=>{
+      // LE piège du modèle : compter les séances RepCore ET les sports. Le test
+      // d'avant affirmait que 1 et 6 créneaux donnaient la MÊME dépense quand la
+      // musculation était déclarée — c'était l'aveu que les créneaux ne
+      // comptaient pas. Ils comptent désormais, et c'est la DÉCLARATION qui
+      // s'efface quand elle est plus basse. Ce qui reste vrai, et qui est le
+      // vrai sujet : les deux ne s'additionnent jamais.
+      ok('Créneaux et musculation déclarée ne s\'additionnent JAMAIS',(()=>{
         const bil={'deb-job':'Comptable','deb-sports':[{sport:'Musculation',intensite:'moderee',heures:4}]};
+        const u=_ath({sessions_config:Array.from({length:6},()=>({active:true})),
+          bilans:[_bil(2,bil)]});
+        const b=besoinsProposes(u);
+        const sp=kcalSportParJour(u);
+        // 6 créneaux × 1 h × 350 = 2100 ; déclaré 4 h × 350 = 1400. La somme
+        // serait 3500 : c'est exactement ce qu'on refuse.
+        if(sp.semaine!==2100) return _echec('semaine '+sp.semaine);
+        return b.depense===Math.round(b.mb*1.15)+Math.round(2100/7)
+          ?true:_echec('dépense '+b.depense);})());
+      ok('Plus de créneaux, plus de dépense — les créneaux comptent enfin',(()=>{
+        const bil={'deb-job':'Comptable'};
         const peu=_ath({sessions_config:[{active:true}],bilans:[_bil(2,bil)]});
         const beaucoup=_ath({sessions_config:Array.from({length:6},()=>({active:true})),
           bilans:[_bil(2,bil)]});
         const a=besoinsProposes(peu), b=besoinsProposes(beaucoup);
-        return a.depense===b.depense
+        return b.depense>a.depense
           ?true:_echec('1 créneau → '+a.depense+', 6 créneaux → '+b.depense);})());
       ok('Les pas ne comptent pas non plus dans le modèle profession',(()=>{
         const j=(n,c)=>({date:localISODate(new Date(Date.now()-n*864e5)),count:c});
@@ -30957,6 +31136,213 @@ function testExercices(){
         const b=besoinsProposes(_ath({bilans:[_bil(2,{'deb-job':'Comptable',
           'deb-sports':[{sport:'Boxe',intensite:'haute',heures:6}]})]}));
         return b.on.g>a.on.g&&b.on.p===a.on.p&&b.on.l===a.on.l;})());
+
+      // ── Une seule convention de dépense ───────────────────────────────
+      // La fixture porte 3 créneaux actifs et aucun relevé de pas.
+      const _KH_MUSCU=kcalHeureSport('Musculation','moderee');   // 350
+      ok('Critère : deux athlètes identiques ne diffèrent QUE par le NEAT',(()=>{
+        // C'était le défaut de fond : l'un voyait ses sports comptés, l'autre
+        // ses créneaux, et les deux dépenses n'étaient pas comparables.
+        const sp=[{sport:'Vélo',intensite:'moderee',heures:3}];
+        // « Employé de bureau » n'est reconnu par AUCUNE famille de métiers —
+        // la première version de ce test comparait donc deux athlètes qui
+        // retombaient tous les deux sur le NEAT par défaut, et un écart nul
+        // valait vrai. Le métier retenu est vérifié ci-dessous.
+        const METIER='Secrétaire';
+        if(!facteurProfession(METIER)) return _echec('fixture muette : '+METIER+' non reconnu');
+        if(facteurProfession('Zzz')) return _echec('fixture muette : Zzz est reconnu');
+        const connu=besoinsProposes(_ath({bilans:[_bil(2,{'deb-job':METIER,'deb-sports':sp})]}));
+        const inconnu=besoinsProposes(_ath({bilans:[_bil(2,{'deb-job':'Zzz','deb-sports':sp})]}));
+        if(connu.mb!==inconnu.mb) return _echec('métabolismes différents');
+        if(connu.act.f===inconnu.act.f) return _echec('fixture muette : même NEAT des deux côtés');
+        const spA=kcalSportParJour(_ath({bilans:[_bil(2,{'deb-job':METIER,'deb-sports':sp})]}));
+        const spB=kcalSportParJour(_ath({bilans:[_bil(2,{'deb-job':'Zzz','deb-sports':sp})]}));
+        if(spA.jour!==spB.jour) return _echec('sport compté différemment : '+spA.jour+' contre '+spB.jour);
+        // L'écart entier s'explique par le seul facteur.
+        const attendu=Math.round(connu.mb*connu.act.f)-Math.round(inconnu.mb*inconnu.act.f);
+        return connu.depense-inconnu.depense===attendu
+          ?true:_echec('écart '+(connu.depense-inconnu.depense)+' pour un NEAT de '+attendu);})());
+      ok('Critère : profession reconnue, 5 créneaux, aucune musculation déclarée → comptés',(()=>{
+        const u=_ath({sessions_config:Array.from({length:5},()=>({active:true})),
+          bilans:[_bil(2,{'deb-job':'Comptable'})]});
+        const b=besoinsProposes(u);
+        const neatSeul=Math.round(b.mb*facteurProfession('Comptable').f);
+        return b.depense>neatSeul
+          ?true:_echec('dépense '+b.depense+' contre NEAT seul '+neatSeul);})());
+      ok('Critère : sans profession, 4 créneaux + football 6 h → le football compte',(()=>{
+        const sansFoot=_ath({sessions_config:Array.from({length:4},()=>({active:true}))});
+        const avecFoot=_ath({sessions_config:Array.from({length:4},()=>({active:true})),
+          bilans:[_bil(2,{'deb-sports':[{sport:'Football',intensite:'moderee',heures:6}]})]});
+        const a=besoinsProposes(sansFoot), c=besoinsProposes(avecFoot);
+        if(c.modele!=='defaut') return _echec('modèle '+c.modele);
+        // 500 kcal/h × 6 = 3000 par semaine, soit 429 par jour.
+        return c.depense-a.depense===Math.round(3000/7)
+          ?true:_echec('écart '+(c.depense-a.depense));})());
+      ok('Critère : musculation 5 h ET 5 créneaux → comptée UNE fois',(()=>{
+        const u=_ath({sessions_config:Array.from({length:5},()=>({active:true})),
+          bilans:[_bil(2,{'deb-job':'Comptable',
+            'deb-sports':[{sport:'Musculation',intensite:'moderee',heures:5}]})]});
+        const sp=kcalSportParJour(u);
+        const creneaux=5*_KH_MUSCU, declare=5*_KH_MUSCU;
+        if(sp.semaine===creneaux+declare) return _echec('les deux ont été additionnés');
+        if(sp.semaine!==Math.max(creneaux,declare)) return _echec('semaine '+sp.semaine);
+        return besoinsProposes(u).hypotheses.some(h=>/jamais les deux|pas les deux/.test(h))
+          ?true:_echec('aucune hypothèse de doublon');})());
+      ok('Le doublon nomme les créneaux et dit lequel il retient',(()=>{
+        const u=_ath({sessions_config:Array.from({length:5},()=>({active:true})),
+          bilans:[_bil(2,{'deb-job':'Comptable',
+            'deb-sports':[{sport:'Musculation',intensite:'moderee',heures:5}]})]});
+        const h=besoinsProposes(u).hypotheses.join(' | ');
+        return /musculation déclarée dans les sports et 5 créneaux actifs/.test(h)
+          ?true:_echec(h);})());
+      ok('Déclaration plus élevée que les créneaux : c\'est elle qu\'on retient',(()=>{
+        // La règle du maximum : ignorer la déclaration ferait BAISSER la dépense
+        // de qui avait déclaré plus d'heures que ses créneaux n'en valent.
+        const u=_ath({sessions_config:[{active:true}],
+          bilans:[_bil(2,{'deb-job':'Comptable',
+            'deb-sports':[{sport:'Musculation',intensite:'moderee',heures:8}]})]});
+        const sp=kcalSportParJour(u);
+        if(sp.source!=='declaree') return _echec('source '+sp.source);
+        if(sp.semaine!==8*_KH_MUSCU) return _echec('semaine '+sp.semaine);
+        return besoinsProposes(u).hypotheses.some(h=>/plus élevée/.test(h))
+          ?true:_echec('le choix n\'est pas dit');})());
+      ok('Critère : la dépense ne baisse pas pour qui avait DÉJÀ déclaré sa musculation',(()=>{
+        // Comparaison à l'ANCIENNE formule, recalculée ici — pas à un nombre
+        // recopié qui vieillirait mal.
+        const rates=[];
+        for(const h of [2,3,4,5,6,8]){
+          const sports=[{sport:'Musculation',intensite:'moderee',heures:h}];
+          const u=_ath({bilans:[_bil(2,{'deb-job':'Comptable','deb-sports':sports})]});
+          const b=besoinsProposes(u);
+          const ancien=Math.round(b.mb*facteurProfession('Comptable').f)
+            +depenseSportsParJour(sports).jour;
+          if(b.depense<ancien) rates.push(h+' h : '+b.depense+' < '+ancien);
+          else if(Math.abs(b.depense-ancien)>ancien*0.03)
+            rates.push(h+' h : écart de '+(b.depense-ancien));
+        }
+        return rates.length?_echec(rates.join(' | ')):true;})());
+      ok('Critère : « 1h30 » donne 90 minutes',(()=>{
+        const u=_ath({bilans:[_bil(2,{'deb-session-duration':'1h30'})]});
+        const sp=kcalSportParJour(u);
+        return sp.dureeMin===90&&sp.dureeSource==='declaree'
+          ?true:_echec(sp.dureeMin+' / '+sp.dureeSource);})());
+      ok('Critère : « bof » donne 60 minutes, et la ligne le dit',(()=>{
+        const u=_ath({bilans:[_bil(2,{'deb-session-duration':'bof'})]});
+        const sp=kcalSportParJour(u);
+        if(sp.dureeMin!==SEANCE_MIN_DEFAUT||sp.dureeSource!=='defaut')
+          return _echec(sp.dureeMin+' / '+sp.dureeSource);
+        return besoinsProposes(u).hypotheses.some(h=>/durée de séance illisible/.test(h))
+          ?true:_echec('le repli est silencieux');})());
+      ok('Les autres écritures de durée sont lues aussi',(()=>{
+        const d=(v)=>kcalSportParJour(_ath({bilans:[_bil(2,{'deb-session-duration':v})]})).dureeMin;
+        const cas=[['45min',45],['1 h',60],['90',90],['2h',120],['1 h 15',75],
+          ['1,5',60],['0',60],['',60],['600',60]];
+        const rates=cas.filter(([v,att])=>d(v)!==att).map(([v,att])=>'«'+v+'» → '+d(v)+' au lieu de '+att);
+        return rates.length?_echec(rates.join(', ')):true;})());
+      ok('La durée change bien la dépense des créneaux',(()=>{
+        const f=(v)=>kcalSportParJour(_ath({sessions_config:Array.from({length:4},()=>({active:true})),
+          bilans:[_bil(2,{'deb-session-duration':v})]})).semaine;
+        return f('1h30')===Math.round(4*1.5*_KH_MUSCU)&&f('1h')===4*_KH_MUSCU
+          ?true:_echec(f('1h30')+' / '+f('1h'));})());
+      ok('Critère : un sport hors barème n\'est pas compté, mais il est NOMMÉ',(()=>{
+        // Le sélecteur du bilan est fermé sur SPORTS_KCAL_H : ce cas ne vient
+        // que d'un dossier ancien ou importé. Il arrive quand même.
+        const u=_ath({bilans:[_bil(2,{'deb-sports':[
+          {sport:'Pétanque',intensite:'moderee',heures:4},
+          {sport:'Vélo',intensite:'moderee',heures:2}]})]});
+        const sp=kcalSportParJour(u);
+        if(sp.inconnus.indexOf('Pétanque')<0) return _echec('non signalé');
+        if(sp.autres!==2*kcalHeureSport('Vélo','moderee')) return _echec('autres '+sp.autres);
+        return besoinsProposes(u).hypotheses.some(h=>/Pétanque.*non reconnu/.test(h))
+          ?true:_echec('absent des hypothèses');})());
+      ok('Aucun créneau et aucun sport : la dépense est le NEAT seul',(()=>{
+        const u=_ath({sessions_config:[],bilans:[_bil(2,{'deb-job':'Comptable'})]});
+        const b=besoinsProposes(u);
+        if(kcalSportParJour(u).jour!==0) return _echec('du sport compté sans rien déclarer');
+        return b.depense===Math.round(b.mb*facteurProfession('Comptable').f)
+          ?true:_echec('dépense '+b.depense);})());
+      ok('Musculation déclarée sans aucun créneau actif : c\'est la seule source',(()=>{
+        const u=_ath({sessions_config:[],
+          bilans:[_bil(2,{'deb-sports':[{sport:'Musculation',intensite:'moderee',heures:5}]})]});
+        const sp=kcalSportParJour(u);
+        return sp.source==='declaree'&&sp.semaine===5*_KH_MUSCU&&!sp.doublon
+          ?true:_echec(sp.source+' / '+sp.semaine+' / doublon '+sp.doublon);})());
+      ok('Une profession reconnue n\'est JAMAIS dite non reconnue',(()=>{
+        // Le repli « non reconnue » se déclenchait aussi quand elle l'était :
+        // la fiche affichait « secrétaire → NEAT × 1,15 » PUIS « profession
+        // « Secrétaire » non reconnue ». Aucun test ne regardait la cohérence
+        // des lignes entre elles.
+        const rates=[];
+        for(const m of ['Comptable','Secrétaire','Infirmier','Maçon']){
+          if(!facteurProfession(m)){ rates.push(m+' : fixture muette'); continue; }
+          const h=besoinsProposes(_ath({bilans:[_bil(2,{'deb-job':m})]})).hypotheses;
+          if(h.some(x=>/non reconnue/.test(x))) rates.push(m);
+        }
+        return rates.length?_echec(rates.join(', ')):true;})());
+      ok('Une profession inconnue est dite inconnue, une seule fois',(()=>{
+        const h=besoinsProposes(_ath({bilans:[_bil(2,{'deb-job':'Zzz'})]})).hypotheses;
+        return h.filter(x=>/non reconnue/.test(x)).length===1
+          ?true:_echec(JSON.stringify(h));})());
+      ok('Le facteur s\'écrit à deux décimales',(()=>{
+        const h=besoinsProposes(_ath()).hypotheses.join(' | ');
+        if(/NEAT × 1,2\b/.test(h)) return _echec('facteur tronqué : '+h);
+        return /NEAT × 1,20/.test(h)?true:_echec(h);})());
+      ok('La ligne de musculation déclarée ne redit pas le mot deux fois',(()=>{
+        const u=_ath({sessions_config:[],
+          bilans:[_bil(2,{'deb-sports':[{sport:'Musculation',intensite:'moderee',heures:5}]})]});
+        const l=besoinsProposes(u).hypotheses.find(x=>/musculation/i.test(x))||'';
+        return (l.match(/musculation/gi)||[]).length===1
+          ?true:_echec(l);})());
+      ok('facteurNEAT : les trois sources, et rien d\'autre',(()=>{
+        const j=(n,c)=>({date:localISODate(new Date(Date.now()-n*864e5)),count:c});
+        const prof=facteurNEAT(_ath({bilans:[_bil(2,{'deb-job':'Comptable'})]}));
+        const pas=facteurNEAT(_ath({stepsLog:[j(1,12000),j(2,11000)]}));
+        const def=facteurNEAT(_ath());
+        if(prof.source!=='profession'||prof.f!==1.15) return _echec('profession : '+JSON.stringify(prof));
+        if(pas.source!=='pas'||pas.f<=NEAT_BASE) return _echec('pas : '+JSON.stringify(pas));
+        return def.source==='defaut'&&def.f===NEAT_BASE
+          ?true:_echec('défaut : '+JSON.stringify(def));})());
+      ok('Le nombre de créneaux ne touche PLUS au facteur',(()=>{
+        // C'était la racine du double comptage : ACT_SEANCES montait jusqu'à
+        // 1,65, un multiplicateur qui englobe l'entraînement.
+        const un=facteurNEAT(_ath({sessions_config:[{active:true}]}));
+        const six=facteurNEAT(_ath({sessions_config:Array.from({length:6},()=>({active:true}))}));
+        return un.f===six.f?true:_echec(un.f+' contre '+six.f);})());
+      ok('Les pas bornent le NEAT entre ACT_MIN et ACT_MAX',(()=>{
+        const j=(n,c)=>({date:localISODate(new Date(Date.now()-n*864e5)),count:c});
+        const bas=facteurNEAT(_ath({stepsLog:[j(1,500)]}));
+        const haut=facteurNEAT(_ath({stepsLog:[j(1,40000)]}));
+        return bas.f>=ACT_MIN&&haut.f<=ACT_MAX&&haut.f>bas.f
+          ?true:_echec(bas.f+' / '+haut.f);})());
+      ok('facteurNEAT et kcalSportParJour n\'écrivent rien',(()=>{
+        const u=_ath({sessions_config:[{active:true}],
+          bilans:[_bil(2,{'deb-job':'Comptable',
+            'deb-sports':[{sport:'Vélo',intensite:'moderee',heures:2}]})]});
+        const avant=JSON.stringify(u);
+        facteurNEAT(u); kcalSportParJour(u); _dureeSeanceMin(u);
+        return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
+      ok('« MUSCULATION » et « musculation » désignent la même ligne',(()=>{
+        const f=(nom)=>kcalSportParJour(_ath({sessions_config:[{active:true}],
+          bilans:[_bil(2,{'deb-sports':[{sport:nom,intensite:'moderee',heures:9}]})]}));
+        const a=f('Musculation'), b=f('MUSCULATION'), c=f('musculation');
+        return a.doublon&&b.doublon&&c.doublon&&a.semaine===b.semaine&&b.semaine===c.semaine
+          ?true:_echec(JSON.stringify([a.doublon,b.doublon,c.doublon]));})());
+      ok('Le plafond du plancher suit la MÊME dépense que la proposition',(()=>{
+        // Deux formules divergentes borneraient une dépense qui n'est pas celle
+        // qu'on affiche. _depensePourPlafond n'est pas exportée : on l'atteint
+        // par le plancher d'un athlète que le plafond fait mordre.
+        const u=_ath({sessions_config:Array.from({length:4},()=>({active:true})),
+          bilans:[_bil(2,{'deb-sports':[{sport:'Football',intensite:'moderee',heures:6}]})]});
+        const b=besoinsProposes(u);
+        const src=String(_depensePourPlafond);
+        return /facteurNEAT/.test(src)&&/kcalSportParJour/.test(src)&&b.depense>0
+          ?true:_echec('le plafond garde son ancienne formule');})());
+      ok('facteurActivite existe toujours et n\'a pas bougé',(()=>{
+        // Elle n'alimente plus la dépense, mais elle reste exportée : la
+        // supprimer sortait du lot.
+        const a=facteurActivite({sessions_config:Array.from({length:5},()=>({active:true}))});
+        return typeof facteurActivite==='function'&&a.f===ACT_SEANCES[5-0]
+          ?true:_echec('facteur '+a.f);})());
 
       // ── Les widgets du bilan ──
       (function(){
@@ -31010,10 +31396,14 @@ function testExercices(){
           const h=bSports('deb-sports');
           bilData={};
           return /1600 kcal par semaine/.test(h)&&/229 kcal par jour/.test(h);})());
-        ok('Le widget dit d\'y compter les séances RepCore',(()=>{
+        ok('Le widget dit que les créneaux RepCore sont comptés à part',(()=>{
+          // Il disait l'inverse — « séances RepCore incluses » — et c'est cette
+          // consigne qui a produit les lignes « Musculation » que le calcul
+          // dédoublonne désormais. Laisser le texte aurait fait saisir une
+          // donnée qu'on écarte ensuite en silence.
           bilData={};
           const h=bSports('deb-sports');
-          return /séances RepCore incluses/.test(h)&&/Musculation/.test(h);})());
+          return /EN DEHORS de RepCore/.test(h)&&/ne s&#39;additionne pas|ne s'additionne pas/.test(h);})());
         ok('Le bilan ne pose plus la question en texte libre',(()=>{
           const src=DEB_STEPS.map(f=>f.toString()).join('');
           return src.indexOf('deb-other-sports')<0&&src.indexOf("bSports('deb-sports')")>=0
@@ -31225,8 +31615,10 @@ function testExercices(){
         ok('La formule et les hypothèses sont écrites sous le tableau',(()=>{
           poser();
           const h=(document.getElementById('ccd-nutrition')||{}).innerHTML||'';
+          // « facteur » est devenu « NEAT × » : le mot seul ne disait pas ce
+          // que le facteur couvre, et c'est tout le sujet du lot.
           return /Katch-McArdle|Mifflin-St Jeor/.test(h)&&/dépense estimée/.test(h)
-            &&/facteur/.test(h);})());
+            &&/NEAT ×/.test(h);})());
         ok('Enregistrer APRÈS avoir proposé écrit bien les valeurs',(()=>{
           poser();
           proposerPointDepart();
@@ -39561,13 +39953,33 @@ function testExercices(){
           return mm!=null&&Math.abs(mm-74)<=1.5
             ?true:_echec('masse maigre obtenue : '+mm);})());
         ok('Critère : homme 120 kg, masse maigre 74 kg → plancher ≈ 2220',(()=>{
+          // Métier lourd AJOUTÉ à la fixture : sans lui, le NEAT tombe à 1,20,
+          // la dépense à 2562, et le plafond de 85 % (2178) mord AVANT la règle
+          // de masse maigre (2220). Le test aurait alors mesuré le plafond en
+          // croyant mesurer la masse maigre. Le cas où le plafond gagne est
+          // éprouvé juste en dessous, à part.
           const u=_athMM(120,74);
+          u.bilans[0]['deb-job']='Maçon';
           const pl=plancherEffectif(u);
           const mm=masseMaigreDuBilan(u);
           const attendu=Math.round(KCAL_PLANCHER_PAR_KG_MM*mm);
           if(pl.regle!=='masse_maigre') return _echec('règle '+pl.regle);
           return Math.abs(pl.kcal-attendu)<=2&&Math.abs(pl.kcal-2220)<=80
             ?true:_echec(pl.kcal+' au lieu de '+attendu);})());
+        ok('Sans métier reconnu, le plafond de 85 % passe DEVANT la masse maigre',(()=>{
+          // Le lot « une seule convention de dépense » fait tomber le NEAT à
+          // 1,20 pour qui n'a pas de profession reconnue. Conséquence directe :
+          // le plafond mord bien plus souvent. Ce n'est pas un accident, c'est
+          // ce que le plafond existe pour faire — et c'est éprouvé ici plutôt
+          // que subi dans une fixture qui prétendait mesurer autre chose.
+          const u=_athMM(120,74);
+          const pl=plancherEffectif(u);
+          const parMM=Math.round(KCAL_PLANCHER_PAR_KG_MM*masseMaigreDuBilan(u));
+          if(pl.kcal>=parMM) return _echec(pl.kcal+' ne descend pas sous '+parMM);
+          const dep=Math.round(mbKatch(masseMaigreDuBilan(u))*NEAT_BASE)
+            +kcalSportParJour(u).jour;
+          return Math.abs(pl.kcal-Math.round(dep*PLANCHER_PLAFOND_DEPENSE))<=2
+            ?true:_echec(pl.kcal+' pour un plafond de '+Math.round(dep*PLANCHER_PLAFOND_DEPENSE));})());
         ok('Critère : homme 140 kg, masse maigre 77 kg → PAS 3080',(()=>{
           const u=_athMM(140,77);
           const pl=plancherEffectif(u);
@@ -39585,7 +39997,10 @@ function testExercices(){
           return pl.kcal===KCAL_PLANCHER_ABS.F&&pl.regle==='absolu'
             ?true:_echec(pl.kcal+' règle '+pl.regle);})());
         ok('Critère : masse maigre incalculable → repli poids total, et il le dit',(()=>{
+          // Même raison qu'au-dessus : sans métier lourd, le plafond de 85 %
+          // rendrait 2368 et le repli poids total (2640) ne serait jamais visible.
           const u=_athSansMesures(120);
+          u.bilans[0]['deb-job']='Maçon';
           if(masseMaigreDuBilan(u)!==null) return _echec('masse maigre calculable, fixture inutile');
           const pl=plancherEffectif(u);
           if(pl.regle!=='poids_total') return _echec('règle '+pl.regle);
@@ -39772,9 +40187,26 @@ function testExercices(){
         // toujours et s'applique APRÈS : le OFF tombe nécessairement sous la
         // moyenne. La fourchette décrivait le total moyen, pas le jour OFF.
         ok('Critère : en sèche, la moyenne du jour tombe entre 1550 et 1700',(()=>{
-          const b=besoinsProposes(_ath(62,'seche'));
+          // La fourchette avait été calée sur une dépense de 2114, produite par
+          // l'ancien facteur par séances (1,55) qui englobait l'entraînement.
+          // Avec le NEAT seul elle tombe à 1837 et la fourchette devient
+          // inatteignable. On rend donc à la fixture une dépense comparable par
+          // un métier reconnu — sans quoi le test ne mesurerait plus la vitesse
+          // visée mais le plafond de déficit.
+          const u=_ath(62,'seche');
+          u.bilans[0]['deb-job']='Infirmier';
+          const b=besoinsProposes(u);
           const moy=Math.round((b.on.kcal+b.off.kcal)/2);
           return moy>=1550&&moy<=1700?true:_echec('moyenne '+moy+' pour '+b.depense);})());
+        ok('Sans métier reconnu, c\'est le plafond de déficit qui décide',(()=>{
+          // Le pendant honnête du test ci-dessus : à 1837 de dépense, viser
+          // −0,75 % par semaine demanderait 28 % de déficit. Le plafond de 25 %
+          // mord, et c'est LUI qu'on éprouve ici.
+          const b=besoinsProposes(_ath(62,'seche'));
+          const plancher=Math.round(b.depense*(1-DEFICIT_MAX_PART));
+          const moy=Math.round((b.on.kcal+b.off.kcal)/2);
+          return moy>=plancher-2
+            ?true:_echec('moyenne '+moy+' sous le plafond de déficit '+plancher);})());
         ok('Le jour OFF reste sous la moyenne, cycle glucidique oblige',(()=>{
           const b=besoinsProposes(_ath(62,'seche'));
           const moy=(b.on.kcal+b.off.kcal)/2;
