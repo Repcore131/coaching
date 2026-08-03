@@ -1726,12 +1726,12 @@ const COACH_PHOTO='icons/coach.jpg';
         <div><label for="calc-pw">Charge précédente (kg)</label><input type="number" id="calc-pw" placeholder="100" oninput="updateCalcTable()"></div>
         <div><label for="calc-pr">Reps réalisées</label><input type="number" id="calc-pr" placeholder="8" oninput="updateCalcTable()"></div>
         <div><label for="calc-prir">RIR réel</label><input type="number" id="calc-prir" placeholder="2" min="0" max="5" oninput="updateCalcTable()"></div>
-        <div id="calc-cycle-adj" style="display:none"><label> Ajust. cycle (−5%)</label>
-          <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
-            <label style="margin:0;text-transform:none;letter-spacing:0;font-size:13px;color:#fff;cursor:pointer">
-              <input type="checkbox" id="calc-cycle-check" onchange="updateCalcTable()" style="width:auto;margin-right:6px">Phase menstruelle (J1-J5)
-            </label>
-          </div>
+        <!-- La case à cocher était une TROISIÈME implémentation du cycle, à
+             côté du modal d'entraînement et du module nutritionnel. Elle est
+             remplacée par la phase calculée : plus rien à cocher, plus rien à
+             contredire. -->
+        <div id="calc-cycle-adj" style="display:none"><label>Ajust. cycle (−5%)</label>
+          <div id="calc-cycle-etat" style="font-size:12px;color:var(--sub);margin-top:10px;line-height:1.5"></div>
         </div>
       </div>
     </div>
@@ -6190,7 +6190,7 @@ function _microSommeil(user,ref){
 // Cycle DÉCLARÉ actif : la case activée et une date de dernières règles. C'est
 // la même condition que _manageCycleSupplements — on ne devine pas un cycle.
 function _microCycleActif(user){
-  const c=(user&&user.nutrition&&user.nutrition.cycleAdaptation)||{};
+  const c=confCycle(user);
   return !!(c.enabled&&c.lastPeriodDate);
 }
 // Vrai si la reponse vaut oui, quelle que soit la forme sous laquelle la case
@@ -11146,6 +11146,7 @@ function startWorkoutSession(idx){
   const sess=cfg[idx];
   window._pendingWorkoutIdx=idx;
   if(cycleDoitDemanderPhase(currentUser)){
+    _cyclePreselectionner();
     document.getElementById('cycle-modal').style.display='flex';
     return;
   }
@@ -11223,7 +11224,7 @@ function repondreCycleChoix(v){
     // « Je l'indiquerai avant mes séances » — celle-ci comprise, sinon la
     // séance qui suit le oui serait la seule à ne pas en tenir compte.
     const m=document.getElementById('cycle-modal');
-    if(m){ m.style.display='flex'; return; }
+    if(m){ _cyclePreselectionner(); m.style.display='flex'; return; }
   }
   currentUser.currentCycle='ignore';
   _cycleLancer();
@@ -11265,14 +11266,55 @@ function isCardio(ex){
   return /\d+\s*(min|sec|h\b|km|m\b)/.test(r)||r.includes('min')||r.includes('cardio');
 }
 
-function getCycleFactor(){
-  const p=currentUser.currentCycle||'ignore';
+// LE RESSENTI DÉCLARÉ PRIME TOUJOURS. Une athlète qui dit « je me sens bien »
+// en pleine phase lutéale n'a pas à se faire retirer une série par un calcul.
+// La dérivation ne parle QUE quand elle n'a rien dit — « je ne sais pas », ou
+// pas de réponse du tout.
+//
+// Les deux paramètres ont un défaut : les appelants existants font
+// getCycleFactor() nu, et les tests aussi.
+function getCycleFactor(user,dateISO){
+  const u=user||currentUser||{};
+  const p=u.currentCycle||'ignore';
   if(p==='j1_difficile') return{factor:0.80,seriesReduce:0};
   if(p==='j1_supportable') return{factor:0.95,seriesReduce:0};
   if(p==='j6_14') return{factor:1.00,seriesReduce:0};
   if(p==='j15_21') return{factor:1.00,seriesReduce:0};
   if(p==='j22_28') return{factor:1.00,seriesReduce:1};
+  // Rien de déclaré : la phase calculée prend le relais, avec EXACTEMENT les
+  // valeurs ci-dessus. Sans cycle configuré, phaseCycle rend null et on
+  // retombe au neutre — le comportement d'avant ce lot.
+  const phase=phaseCycle(u,dateISO||localISODate(new Date()));
+  const conf=confCycle(u);
+  if(phase==='menstrual')
+    return conf.intensiteRegles==='difficile'
+      ?{factor:0.80,seriesReduce:0}:{factor:0.95,seriesReduce:0};
+  if(phase==='luteal_late'&&conf.sensibilitePms) return{factor:1.00,seriesReduce:1};
   return{factor:1.00,seriesReduce:0};
+}
+// Option du modal correspondant à la phase calculée, pour la PRÉ-SÉLECTIONNER.
+// Rien de plus : l'athlète coche ce qu'elle veut, et c'est son choix qui
+// s'applique.
+function _cycleOptionSuggeree(user,dateISO){
+  const phase=phaseCycle(user||currentUser,dateISO||localISODate(new Date()));
+  if(!phase) return null;
+  if(phase==='menstrual')
+    return confCycle(user||currentUser).intensiteRegles==='difficile'
+      ?'j1_difficile':'j1_supportable';
+  if(phase==='luteal_late') return 'j22_28';
+  return 'j15_21';
+}
+// Marque l'option suggérée dans le modal déjà présent dans la page.
+function _cyclePreselectionner(){
+  const z=document.getElementById('cycle-options');
+  if(!z) return null;
+  z.querySelectorAll('.obj-opt').forEach(e=>e.classList.remove('sel'));
+  const v=_cycleOptionSuggeree(currentUser);
+  if(!v) return null;
+  const cible=Array.from(z.querySelectorAll('.obj-opt'))
+    .find(e=>(e.getAttribute('onclick')||'').indexOf("'"+v+"'")>=0);
+  if(cible) cible.classList.add('sel');
+  return v;
 }
 
 function getCycleLabel(){
@@ -18000,29 +18042,71 @@ function setNutriDietType(type){
 }
 
 // ======= CYCLE NUTRITION (Diète Flexible uniquement) =======
-function _getCycleNutConf(){return(currentUser.nutrition||{}).cycleAdaptation||{};}
-
-function _getCyclePhaseNut(dateStr){
-  const conf=_getCycleNutConf();
+// ── UNE seule source de vérité pour le cycle ──────────────────────────────
+// Trois implémentations coexistaient : le modal d'entraînement avec un
+// découpage 28 jours EN DUR dans ses libellés, le module nutritionnel qui
+// CALCULE la phase depuis la date des dernières règles, et une case à cocher
+// dans le calculateur. Sur un cycle de 35 jours à J26, la nutrition disait
+// « stable » — correct — pendant que l'entraînement retirait une série au
+// titre d'un « J22→J28 » qui n'existe pas à cette longueur. Deux verdicts
+// opposés le même jour, sur le même dossier.
+//
+// confCycle lit user.cycle et retombe, CHAMP PAR CHAMP, sur l'ancien
+// nutrition.cycleAdaptation. Champ par champ et non objet par objet : un
+// dossier qui ne modifie qu'un réglage écrit une seule clé dans user.cycle,
+// et un repli en bloc lui ferait perdre sa date de règles au premier clic.
+// AUCUNE migration n'est écrite : le repli vit à la LECTURE.
+function confCycle(user){
+  const u=user||{};
+  const a=(u.nutrition&&u.nutrition.cycleAdaptation)||{};
+  const c=u.cycle||{};
+  const pris=(x,y)=>x!==undefined?x:y;
+  return {
+    // 'enabled' ne figure pas dans la forme annoncée du champ, mais
+    // l'algorithme de phase commence par lui : le retirer changerait le
+    // comportement de tous les dossiers déjà configurés.
+    enabled:!!pris(c.enabled,a.enabled),
+    suivi:pris(c.suivi,u.cycleSuivi),
+    lastPeriodDate:pris(c.lastPeriodDate,a.lastPeriodDate)||null,
+    cycleLength:pris(c.cycleLength,a.cycleLength)||28,
+    intensiteRegles:pris(c.intensiteRegles,a.intensite_regles)||'supportable',
+    sensibilitePms:!!pris(c.sensibilitePms,a.sensibilite_pms),
+    regulier:!!pris(c.regulier,a.regulier)
+  };
+}
+// PURE. L'algorithme est celui de _getCyclePhaseNut, repris au caractère
+// près : ce lot unifie, il n'améliore pas le découpage.
+function phaseCycle(user,dateISO){
+  const conf=confCycle(user);
   if(!conf.enabled||!conf.lastPeriodDate) return null;
   const len=Math.max(20,Math.min(40,conf.cycleLength||28));
-  const diffDays=Math.floor((new Date(dateStr+'T00:00:00')-new Date(conf.lastPeriodDate+'T00:00:00'))/86400000);
+  const diffDays=Math.floor((new Date(dateISO+'T00:00:00')-new Date(conf.lastPeriodDate+'T00:00:00'))/86400000);
   if(diffDays<0) return null;
   const day=(diffDays%len)+1;
   if(day<=5) return 'menstrual';
   if(day>=Math.ceil(len*0.80)+1) return 'luteal_late';
   return 'stable';
 }
+// Les deux lectures de config qui restaient locales passent par confCycle,
+// sinon elles liraient un cycleAdaptation figé dès qu'un réglage est écrit
+// dans user.cycle — et l'adaptation s'arrêterait sans un mot.
+function _getCycleNutConf(){return confCycle(currentUser);}
+
+// Conservé : il reste appelé en une dizaine d'endroits, et le renommer
+// n'apporterait rien. Ce n'est plus qu'un alias.
+function _getCyclePhaseNut(dateStr){
+  return phaseCycle(currentUser,dateStr);
+}
 
 function _applyNutCycleModifier(base,isOn,phase,conf){
   // Protéines : jamais modifiées — seuls glucides et lipides varient
   const m={...base};
   if(!m.kcal) return m;
-  if(phase==='menstrual'&&conf.intensite_regles==='difficile'){
+  if(phase==='menstrual'&&conf.intensiteRegles==='difficile'){
     // +10g glucides (+40kcal) compensés par lipides → kcal total inchangé
     m.g=Math.round((m.g||0)+10);
     m.l=parseFloat(((m.l||0)-40/9).toFixed(1));
-  } else if(phase==='luteal_late'&&!isOn&&conf.sensibilite_pms){
+  } else if(phase==='luteal_late'&&!isOn&&conf.sensibilitePms){
     // +4% OFF uniquement — ~12g glucides, reste en lipides
     // Jamais de restriction automatique — en cas de doute on reste neutre
     const extra=Math.round(m.kcal*0.04);
@@ -18062,7 +18146,9 @@ const DIETE_TRANSITION=
   +'flexible : elle ne s\'applique pas à tes macros. Choisis un type de suivi '
   +'avec ton coach.';
 function _dieteTransitionActive(nut){
-  const c=(nut&&nut.cycleAdaptation)||{};
+  // La config peut désormais vivre dans user.cycle : on la lit par confCycle,
+  // en présentant nut comme la nutrition du dossier courant quand c'est elle.
+  const c=confCycle((nut===((currentUser||{}).nutrition))?currentUser:{nutrition:nut});
   return typeDiete(nut)==='strict'&&!!c.enabled&&!!c.lastPeriodDate;
 }
 function _htmlDieteTransition(nut){
@@ -18071,13 +18157,20 @@ function _htmlDieteTransition(nut){
     <div style="font-size:11px;color:#eee;line-height:1.6">${escapeHtml(DIETE_TRANSITION)}</div>
   </div>`;
 }
-function _getEffectiveMacros(nut,isOn,dateStr){
+function _getEffectiveMacros(nut,isOn,dateStr,porteur){
   // Ne s'applique qu'en Diète Flexible — toutes les autres diètes retournent la base intacte
   const base=(isOn?nut.macros?.on:nut.macros?.off)||{};
   if(typeDiete(nut)!=='flexible') return base;
-  const conf=nut.cycleAdaptation||{};
+  // Le porteur explicite d'abord, le dossier courant ensuite quand c'est bien
+  // sa nutrition, et à défaut la nutrition seule — soit exactement ce que
+  // cette fonction savait lire avant ce lot.
+  const _porteur=porteur||((nut===((currentUser||{}).nutrition))?currentUser:{nutrition:nut});
+  const conf=confCycle(_porteur);
   if(!conf.enabled||!conf.lastPeriodDate||!isFemale(currentUser.gender)) return base;
-  const phase=_getCyclePhaseNut(dateStr);
+  // La phase vient du MÊME dossier que la config. Passer par
+  // _getCyclePhaseNut, qui lit currentUser, faisait dire « cycle actif » à
+  // l'une et « aucune phase » à l'autre sur un dossier étranger.
+  const phase=phaseCycle(_porteur,dateStr);
   if(!phase||phase==='stable') return base;
   return _applyNutCycleModifier(base,isOn,phase,conf);
 }
@@ -18121,12 +18214,15 @@ function _manageCycleSupplements(){
 
 function _renderCycleNutSettings(nut){
   if(!isFemale(currentUser.gender)) return '';
-  const conf=nut.cycleAdaptation||{};
+  // Une seule lecture, celle de confCycle : les réglages écrivent désormais
+  // dans user.cycle, et relire nut.cycleAdaptation afficherait l'état d'avant.
+  const conf=confCycle(currentUser);
   const on=!!conf.enabled;
   const lastP=conf.lastPeriodDate||'';
   const len=conf.cycleLength||28;
-  const intens=conf.intensite_regles||'supportable';
-  const pms=!!conf.sensibilite_pms;
+  const intens=conf.intensiteRegles;
+  const pms=!!conf.sensibilitePms;
+  const regulier=!!conf.regulier;
   const today=localISODate(new Date());
   const isOn=nutIsOnDay(today);
   const base=(isOn?nut.macros?.on:nut.macros?.off)||{};
@@ -18146,7 +18242,7 @@ function _renderCycleNutSettings(nut){
     const hasAdj=dKcal!==0||dG!==0||dL!==0;
     const adjLabel=hasAdj
       ?[dG!==0?`glucides ${dG>0?'+':''}${dG}g`:null,dL!==0?`lipides ${dL>0?'+':''}${dL}g`:null,dKcal!==0?`${dKcal>0?'+':''}${dKcal} kcal`:null].filter(Boolean).join(' · ')
-      :phase==='luteal_late'&&!conf.sensibilite_pms?'Sensibilité PMS désactivée : pas d\'ajustement'
+      :phase==='luteal_late'&&!conf.sensibilitePms?'Sensibilité PMS désactivée : pas d\'ajustement'
       :phase==='menstrual'&&intens!=='difficile'?'Règles supportables : pas d\'ajustement':'Macros inchangées';
     if(pl) phaseHtml=`<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
       <span style="font-size:var(--fs-xs);font-weight:800;color:${pl.color};background:${pl.color}18;border:1px solid ${pl.color}33;border-radius:6px;padding:3px 9px">${pl.txt}</span>
@@ -18194,6 +18290,18 @@ function _renderCycleNutSettings(nut){
         </span>
       </label>
     </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border)">
+      <div>
+        <div style="font-size:12px;font-weight:700;color:#fff">Mes cycles sont réguliers</div>
+        <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">À peu près la même longueur d'un mois à l'autre</div>
+      </div>
+      <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;margin-left:12px;cursor:pointer">
+        <input type="checkbox" id="cycle-regulier" ${regulier?'checked':''} onchange="saveCycleNutSettings()" style="opacity:0;width:0;height:0;position:absolute">
+        <span style="position:absolute;inset:0;background:${regulier?'var(--red)':'#2a2a2a'};border-radius:12px;transition:.2s;pointer-events:none">
+          <span style="position:absolute;top:3px;left:${regulier?'23':'3'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s"></span>
+        </span>
+      </label>
+    </div>
     ${phaseHtml}
   </div>`:'';
   return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:18px">
@@ -18213,16 +18321,19 @@ function _renderCycleNutSettings(nut){
   </div>`;
 }
 
+// L'écriture va dans user.cycle, la SEULE cible désormais. Rien n'est recopié
+// depuis nutrition.cycleAdaptation : le repli de confCycle est champ par
+// champ, donc un réglage modifié seul ne fait perdre aucun des autres.
 function saveCycleNutSettings(field,value){
-  if(!currentUser.nutrition) currentUser.nutrition={};
-  if(!currentUser.nutrition.cycleAdaptation) currentUser.nutrition.cycleAdaptation={};
-  const conf=currentUser.nutrition.cycleAdaptation;
+  if(!currentUser.cycle) currentUser.cycle={};
+  const conf=currentUser.cycle;
   if(field==='intensite'){
-    conf.intensite_regles=value;
+    conf.intensiteRegles=value;
   } else {
     const g=id=>document.getElementById(id);
     if(g('cycle-enabled')) conf.enabled=g('cycle-enabled').checked;
-    if(g('cycle-pms')) conf.sensibilite_pms=g('cycle-pms').checked;
+    if(g('cycle-pms')) conf.sensibilitePms=g('cycle-pms').checked;
+    if(g('cycle-regulier')) conf.regulier=g('cycle-regulier').checked;
     if(g('cycle-last-period')&&g('cycle-last-period').value) conf.lastPeriodDate=g('cycle-last-period').value;
     // Ne clamper qu'une valeur COMPLÈTE. Un champ vidé ne doit rien écrire :
     // le clamp le remplacerait par 20 sous les doigts de l'utilisatrice.
@@ -22928,7 +23039,7 @@ function adherence(user,finISO){
     // Un jour est « journalisé » s'il porte de vraies calories. Une entrée à
     // zéro kcal — un thé, une erreur de saisie — ne fait pas une journée suivie.
     if(!(realise.kcal>0)) continue;
-    const cible=_getEffectiveMacros(nut,nutIsOnDay(j),j);
+    const cible=_getEffectiveMacros(nut,nutIsOnDay(j),j,user);
     // Cible absente ce jour-là : le jour ne dit rien d'un écart, il sort du
     // calcul plutôt que de compter comme un écart de la taille du réalisé.
     if(!cible||!(Number(cible.kcal)>0)) continue;
@@ -24863,7 +24974,15 @@ function openCalc(pw,pr,prir,gender){
   document.getElementById('calc-pw').value=pw||'';
   document.getElementById('calc-pr').value=pr||'';
   document.getElementById('calc-prir').value=prir||'';
-  document.getElementById('calc-cycle-adj').style.display=isFemale(gender)?'block':'none';
+  // Le bloc ne s'affiche plus sur le genre déclaré mais sur ce qui est
+  // RÉELLEMENT calculable : sans cycle configuré, il n'a rien à dire.
+  const _phCalc=phaseCycle(currentUser,localISODate(new Date()));
+  const _zCalc=document.getElementById('calc-cycle-adj');
+  if(_zCalc) _zCalc.style.display=_phCalc?'block':'none';
+  const _eCalc=document.getElementById('calc-cycle-etat');
+  if(_eCalc) _eCalc.textContent=_phCalc==='menstrual'
+    ?'Phase menstruelle : e1RM minoré de 5 %.'
+    :'Hors phase menstruelle : aucun ajustement.';
   document.getElementById('calc-modal').style.display='block';
   updateCalcTable();
 }
@@ -24871,7 +24990,7 @@ function updateCalcTable(){
   const pw=parseFloat(document.getElementById('calc-pw').value)||0;
   const pr=parseFloat(document.getElementById('calc-pr').value)||0;
   const prir=parseFloat(document.getElementById('calc-prir').value)||0;
-  const cycleAdj=document.getElementById('calc-cycle-check')?.checked;
+  const cycleAdj=phaseCycle(currentUser,localISODate(new Date()))==='menstrual';
   if(!pw||!pr){document.getElementById('calc-table-body').innerHTML='<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--sub)">Entre ta charge et tes reps précédentes</td></tr>';document.getElementById('calc-e1rm-display').style.display='none';return;}
   // %1RM = 100 - 2.5 × RIR - 2.5 × (reps - 1)
   const pct=100-2.5*prir-2.5*(pr-1);
@@ -29183,6 +29302,303 @@ function testExercices(){
         _fermer();
         currentUser=_csU; window.saveUser=_csSave; window.launchWorkout=_csLaunch;
       }
+    })();
+
+    // ══════ CYCLE : UNE SEULE SOURCE, UNE SEULE FONCTION DE PHASE ══════
+    // Trois implémentations coexistaient. Sur un cycle de 35 jours à J26, la
+    // nutrition disait « stable » pendant que l'entraînement retirait une série
+    // au titre d'un « J22→J28 » qui n'existe pas à cette longueur.
+    (()=>{
+      const _fcU=currentUser;
+      const _jour=(n)=>localISODate(new Date(Date.now()-n*864e5));
+      const _ath=(cycle,extra)=>Object.assign({id:'ph',email:'ph@t',role:'athlete',
+        gender:'F',exAlias:{},exMuscles:{},programs:{},bilans:[],sessions:[],
+        cycle:cycle||undefined},extra||{});
+      const AUJ=localISODate(new Date());
+      try{
+        // ── Un seul découpage dans tout le fichier ────────────────────────
+        ok('Critère : une SEULE définition de découpage de phases',(()=>{
+          // On cherche les SEUILS, pas les littéraux 'menstrual'/'luteal_late' :
+          // ceux-là apparaissent légitimement dans six comparaisons et dans des
+          // libellés, et une recherche écrite en clair se trouverait elle-même
+          // dans la source de la page. Les motifs sont assemblés à l'exécution.
+          const src=document.documentElement.outerHTML;
+          const seuilLuteal=new RegExp('Math\\.ceil\\('+'len'+'\\*0\\.80\\)\\+1','g');
+          const seuilRegles=new RegExp('day'+'<=5','g');
+          const a=src.match(seuilLuteal)||[], b=src.match(seuilRegles)||[];
+          if(a.length!==1) return _echec(a.length+' seuils lutéaux au lieu d\'un');
+          return b.length===1?true:_echec(b.length+' seuils de règles au lieu d\'un');})());
+        ok('_getCyclePhaseNut n\'est plus qu\'un alias de phaseCycle',(()=>{
+          const src=String(_getCyclePhaseNut);
+          if(!/phaseCycle/.test(src)) return _echec('elle ne délègue pas');
+          // Et le prouver, pas seulement le lire : mêmes réponses.
+          currentUser=_ath({enabled:true,lastPeriodDate:_jour(25),cycleLength:35});
+          const rates=[AUJ,_jour(3),_jour(60)].filter(d=>
+            _getCyclePhaseNut(d)!==phaseCycle(currentUser,d));
+          return rates.length?_echec('réponses divergentes'):true;})());
+
+        // ── LE cas du rapport : 35 jours, J26 ─────────────────────────────
+        ok('Critère : cycle de 35 jours à J26 → phase « stable »',(()=>{
+          const u=_ath({enabled:true,lastPeriodDate:_jour(25),cycleLength:35});
+          const ph=phaseCycle(u,AUJ);
+          return ph==='stable'?true:_echec('phase '+ph);})());
+        ok('Critère : et aucun ajustement quand rien n\'est déclaré',(()=>{
+          const u=_ath({enabled:true,lastPeriodDate:_jour(25),cycleLength:35},
+            {currentCycle:'ignore'});
+          const f=getCycleFactor(u,AUJ);
+          return f.factor===1&&f.seriesReduce===0
+            ?true:_echec(JSON.stringify(f));})());
+        ok('À 28 jours, le MÊME jour 26 tombe bien en lutéale tardive',(()=>{
+          // La preuve que la longueur du cycle est réellement lue : c'est tout
+          // le sujet du rapport.
+          const u=_ath({enabled:true,lastPeriodDate:_jour(25),cycleLength:28,
+            sensibilitePms:true},{currentCycle:'ignore'});
+          const ph=phaseCycle(u,AUJ);
+          if(ph!=='luteal_late') return _echec('phase '+ph);
+          return getCycleFactor(u,AUJ).seriesReduce===1
+            ?true:_echec('aucune série retirée');})());
+
+        // ── Les autres critères de dérivation ─────────────────────────────
+        ok('Critère : 28 jours, J24, sensibilité PMS → une série de moins',(()=>{
+          const u=_ath({enabled:true,lastPeriodDate:_jour(23),cycleLength:28,
+            sensibilitePms:true},{currentCycle:'ignore'});
+          if(phaseCycle(u,AUJ)!=='luteal_late')
+            return _echec('fixture muette : '+phaseCycle(u,AUJ));
+          const f=getCycleFactor(u,AUJ);
+          return f.factor===1&&f.seriesReduce===1?true:_echec(JSON.stringify(f));})());
+        ok('Sans sensibilité PMS, la lutéale tardive ne retire rien',(()=>{
+          const u=_ath({enabled:true,lastPeriodDate:_jour(23),cycleLength:28},
+            {currentCycle:'ignore'});
+          const f=getCycleFactor(u,AUJ);
+          return f.seriesReduce===0?true:_echec(JSON.stringify(f));})());
+        ok('Règles « supportables » → 0,95 ; « difficiles » → 0,80',(()=>{
+          const doux=_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28},
+            {currentCycle:'ignore'});
+          const dur=_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28,
+            intensiteRegles:'difficile'},{currentCycle:'ignore'});
+          if(phaseCycle(doux,AUJ)!=='menstrual') return _echec('fixture muette');
+          const a=getCycleFactor(doux,AUJ), b=getCycleFactor(dur,AUJ);
+          return a.factor===0.95&&b.factor===0.80
+            ?true:_echec(a.factor+' / '+b.factor);})());
+        ok('Critère : le RESSENTI prime sur la phase calculée',(()=>{
+          // Phase « stable », mais l'athlète dit que c'est dur : c'est elle
+          // qui a raison, et on ne la prend pas en défaut.
+          const u=_ath({enabled:true,lastPeriodDate:_jour(10),cycleLength:28},
+            {currentCycle:'j1_difficile'});
+          if(phaseCycle(u,AUJ)!=='stable') return _echec('fixture muette');
+          return getCycleFactor(u,AUJ).factor===0.80
+            ?true:_echec('le calcul a écrasé la réponse');})());
+        ok('« Je me sens bien » n\'est PAS écrasé par une lutéale tardive',(()=>{
+          const u=_ath({enabled:true,lastPeriodDate:_jour(23),cycleLength:28,
+            sensibilitePms:true},{currentCycle:'j6_14'});
+          const f=getCycleFactor(u,AUJ);
+          return f.seriesReduce===0&&f.factor===1
+            ?true:_echec('une réponse explicite a été écrasée : '+JSON.stringify(f));})());
+        ok('Critère : sans date de règles, phaseCycle rend null et rien ne bouge',(()=>{
+          const u=_ath({enabled:true,cycleLength:28},{currentCycle:'ignore'});
+          if(phaseCycle(u,AUJ)!==null) return _echec('une phase est sortie de nulle part');
+          const f=getCycleFactor(u,AUJ);
+          return f.factor===1&&f.seriesReduce===0?true:_echec(JSON.stringify(f));})());
+        ok('Cycle non activé : aucune phase, aucun ajustement',(()=>{
+          const u=_ath({lastPeriodDate:_jour(2),cycleLength:28},{currentCycle:'ignore'});
+          return phaseCycle(u,AUJ)===null&&getCycleFactor(u,AUJ).factor===1
+            ?true:_echec('phase '+phaseCycle(u,AUJ));})());
+
+        // ── L'algorithme, repris au caractère près ────────────────────────
+        ok('Les bornes 20..40 s\'appliquent comme avant',(()=>{
+          // Première version : 19 jours, len 10 contre len 20. Les deux
+          // rendaient 'luteal_late', donc retirer le clamp ne changeait RIEN
+          // et le test passait sur une égalité qui n'éprouvait rien.
+          // Ici les longueurs non bornées rendraient une phase DIFFÉRENTE :
+          // à 12 jours, len 10 donnerait le jour 3 — menstruel — alors que
+          // borné à 20 il s'agit du jour 13, stable.
+          const court=_ath({enabled:true,lastPeriodDate:_jour(12),cycleLength:10});
+          const ref20=_ath({enabled:true,lastPeriodDate:_jour(12),cycleLength:20});
+          if(phaseCycle(ref20,AUJ)!=='stable') return _echec('fixture muette (bas)');
+          if(phaseCycle(court,AUJ)!=='stable')
+            return _echec('borne basse ignorée : '+phaseCycle(court,AUJ));
+          // À 41 jours, len 99 donnerait le jour 42 — stable — alors que
+          // borné à 40 il s'agit du jour 2, menstruel.
+          const long=_ath({enabled:true,lastPeriodDate:_jour(41),cycleLength:99});
+          const ref40=_ath({enabled:true,lastPeriodDate:_jour(41),cycleLength:40});
+          if(phaseCycle(ref40,AUJ)!=='menstrual') return _echec('fixture muette (haut)');
+          return phaseCycle(long,AUJ)==='menstrual'
+            ?true:_echec('borne haute ignorée : '+phaseCycle(long,AUJ));})());
+        ok('Les deux seuils sont éprouvés à la journée près',(()=>{
+          // Les variantes qui déplacent un seuil d'un jour n'étaient attrapées
+          // que par la recherche de motif — donc par l'ÉCRITURE, pas par le
+          // comportement. Ici on encadre les deux frontières.
+          const a=(n)=>phaseCycle(_ath({enabled:true,lastPeriodDate:_jour(n),
+            cycleLength:28}),AUJ);
+          if(a(4)!=='menstrual') return _echec('jour 5 : '+a(4));
+          if(a(5)!=='stable') return _echec('jour 6 : '+a(5));
+          // 28 jours : ceil(22,4)+1 = 24. Le jour 23 est encore stable.
+          if(a(22)!=='stable') return _echec('jour 23 : '+a(22));
+          return a(23)==='luteal_late'?true:_echec('jour 24 : '+a(23));})());
+        ok('Une date antérieure aux dernières règles rend null',(()=>{
+          const u=_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28});
+          return phaseCycle(u,_jour(10))===null?true:_echec('non null');})());
+        ok('Le modulo fait repartir un cycle au suivant',(()=>{
+          const u=_ath({enabled:true,lastPeriodDate:_jour(30),cycleLength:28});
+          // 30 jours plus tard sur un cycle de 28 : jour 3, donc menstruel.
+          return phaseCycle(u,AUJ)==='menstrual'?true:_echec(phaseCycle(u,AUJ));})());
+        ok('phaseCycle est PURE : elle n\'écrit rien',(()=>{
+          const u=_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28},
+            {currentCycle:'ignore'});
+          const avant=JSON.stringify(u);
+          phaseCycle(u,AUJ); confCycle(u); getCycleFactor(u,AUJ);
+          return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
+
+        // ── confCycle : le repli, champ par champ ─────────────────────────
+        ok('Critère : un dossier n\'ayant que cycleAdaptation est lu tel quel',(()=>{
+          const u=_ath(null,{nutrition:{cycleAdaptation:{enabled:true,
+            lastPeriodDate:_jour(2),cycleLength:35,intensite_regles:'difficile',
+            sensibilite_pms:true}}});
+          const c=confCycle(u);
+          if(c.cycleLength!==35) return _echec('longueur '+c.cycleLength);
+          if(c.intensiteRegles!=='difficile') return _echec('intensité '+c.intensiteRegles);
+          if(!c.sensibilitePms) return _echec('PMS perdue');
+          return phaseCycle(u,AUJ)==='menstrual'?true:_echec('phase '+phaseCycle(u,AUJ));})());
+        ok('LE piège : un user.cycle PARTIEL ne fait rien perdre',(()=>{
+          // Une athlète qui bascule le seul interrupteur PMS écrit une clé.
+          // Un repli en bloc lui ferait perdre date et longueur d'un coup.
+          const u=_ath({sensibilitePms:true},{nutrition:{cycleAdaptation:{
+            enabled:true,lastPeriodDate:_jour(23),cycleLength:28}}});
+          const c=confCycle(u);
+          if(c.lastPeriodDate!==_jour(23)) return _echec('date perdue : '+c.lastPeriodDate);
+          if(c.cycleLength!==28) return _echec('longueur perdue : '+c.cycleLength);
+          return phaseCycle(u,AUJ)==='luteal_late'
+            ?true:_echec('phase '+phaseCycle(u,AUJ));})());
+        ok('user.cycle a le dernier mot sur l\'ancien champ',(()=>{
+          const u=_ath({cycleLength:35},{nutrition:{cycleAdaptation:{
+            enabled:true,lastPeriodDate:_jour(25),cycleLength:28}}});
+          return confCycle(u).cycleLength===35&&phaseCycle(u,AUJ)==='stable'
+            ?true:_echec(confCycle(u).cycleLength+' / '+phaseCycle(u,AUJ));})());
+        ok('confCycle sans rien du tout ne lève pas',(()=>{
+          try{
+            const c=confCycle(null), d=confCycle({});
+            return c.enabled===false&&d.cycleLength===28&&d.intensiteRegles==='supportable'
+              ?true:_echec(JSON.stringify(d));
+          }catch(e){ return _echec('exception : '+e.message); }})());
+        ok('Le suivi du lot précédent est lu par confCycle',(()=>{
+          const a=confCycle(_ath(null,{cycleSuivi:'sans_objet'}));
+          const b=confCycle(_ath({suivi:'actif'},{cycleSuivi:'sans_objet'}));
+          return a.suivi==='sans_objet'&&b.suivi==='actif'
+            ?true:_echec(a.suivi+' / '+b.suivi);})());
+
+        ok('Une nutrition étrangère au téléphone garde sa config de cycle',(()=>{
+          // _getEffectiveMacros reçoit une NUTRITION, pas un dossier : sans le
+          // porteur, elle ne peut pas retrouver le user.cycle d'une athlète
+          // qui n'est pas celle du téléphone. Le cas est étroit — il faut une
+          // coach FEMME, la garde isFemale portant sur currentUser — mais il
+          // est réel, et rien ne le couvrait.
+          const cliente={id:'cl',email:'cl@t',gender:'F',
+            cycle:{enabled:true,lastPeriodDate:_jour(23),cycleLength:28,sensibilitePms:true},
+            nutrition:{dietType:'flexible',
+              macros:{on:{kcal:2000,p:150,g:200,l:60},off:{kcal:1800,p:150,g:150,l:60}}}};
+          currentUser=_ath(null,{gender:'F',nutrition:{}});
+          if(phaseCycle(cliente,AUJ)!=='luteal_late')
+            return _echec('fixture muette : '+phaseCycle(cliente,AUJ));
+          const sans=_getEffectiveMacros(cliente.nutrition,false,AUJ);
+          const avec=_getEffectiveMacros(cliente.nutrition,false,AUJ,cliente);
+          if(sans.kcal!==1800) return _echec('sans porteur : '+sans.kcal);
+          return avec.kcal>1800
+            ?true:_echec('le porteur ne sert à rien : '+avec.kcal);})());
+        ok('adherence transmet bien le dossier qu\'elle mesure',(()=>{
+          // Vérification de CÂBLAGE, assumée comme telle : monter douze jours
+          // de journal pour l'éprouver de bout en bout coûterait plus que ce
+          // que ça prouverait. Le mécanisme, lui, est testé juste au-dessus.
+          const src=String(adherence);
+          if(!/_getEffectiveMacros/.test(src))
+            return _echec('adherence ne lit plus les macros effectives');
+          return /_getEffectiveMacros\([\s\S]{0,60}?,\s*user\s*\)/.test(src)
+            ?true:_echec('le dossier n\'est pas transmis');})());
+
+        // ── Le modal pré-sélectionne, il n'impose pas ─────────────────────
+        ok('Critère : le modal pré-sélectionne la phase calculée',(()=>{
+          const z=document.getElementById('cycle-options');
+          if(!z) return _echec('modal absent');
+          currentUser=_ath({enabled:true,lastPeriodDate:_jour(23),cycleLength:28});
+          const v=_cyclePreselectionner();
+          const sel=z.querySelectorAll('.obj-opt.sel');
+          const ok1=v==='j22_28'&&sel.length===1
+            &&(sel[0].getAttribute('onclick')||'').indexOf("'j22_28'")>=0;
+          z.querySelectorAll('.obj-opt').forEach(e=>e.classList.remove('sel'));
+          return ok1?true:_echec('suggérée '+v+', '+sel.length+' option(s) marquée(s)');})());
+        ok('Sans cycle calculable, rien n\'est pré-sélectionné',(()=>{
+          const z=document.getElementById('cycle-options');
+          currentUser=_ath(null);
+          const v=_cyclePreselectionner();
+          const n=z.querySelectorAll('.obj-opt.sel').length;
+          z.querySelectorAll('.obj-opt').forEach(e=>e.classList.remove('sel'));
+          return v===null&&n===0?true:_echec('suggérée '+v+', '+n+' marquée(s)');})());
+        ok('Règles difficiles déclarées : c\'est cette option qui est marquée',(()=>{
+          const u=_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28,
+            intensiteRegles:'difficile'});
+          return _cycleOptionSuggeree(u,AUJ)==='j1_difficile'
+            ?true:_echec(_cycleOptionSuggeree(u,AUJ));})());
+
+        // ── Le calculateur : la case a disparu ────────────────────────────
+        ok('Critère : plus aucune case à cocher dans le calculateur',
+          !document.getElementById('calc-cycle-check'));
+        ok('Le calculateur minore de 5 % en phase menstruelle, et pas ailleurs',(()=>{
+          const g=id=>document.getElementById(id);
+          if(!g('calc-pw')||!g('calc-e1rm-val')) return _echec('calculateur absent');
+          const av={pw:g('calc-pw').value,pr:g('calc-pr').value,prir:g('calc-prir').value};
+          try{
+            g('calc-pw').value='100'; g('calc-pr').value='1'; g('calc-prir').value='0';
+            currentUser=_ath({enabled:true,lastPeriodDate:_jour(10),cycleLength:28});
+            updateCalcTable();
+            const neutre=g('calc-e1rm-val').textContent;
+            currentUser=_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28});
+            updateCalcTable();
+            const regles=g('calc-e1rm-val').textContent;
+            if(neutre!=='100kg') return _echec('hors règles : '+neutre);
+            return regles==='95kg'?true:_echec('en règles : '+regles);
+          } finally {
+            g('calc-pw').value=av.pw; g('calc-pr').value=av.pr; g('calc-prir').value=av.prir;
+          }})());
+        ok('Sans cycle configuré, le calculateur n\'ajuste rien',(()=>{
+          const g=id=>document.getElementById(id);
+          const av={pw:g('calc-pw').value,pr:g('calc-pr').value,prir:g('calc-prir').value};
+          try{
+            g('calc-pw').value='100'; g('calc-pr').value='1'; g('calc-prir').value='0';
+            currentUser=_ath(null);
+            updateCalcTable();
+            return g('calc-e1rm-val').textContent==='100kg'
+              ?true:_echec(g('calc-e1rm-val').textContent);
+          } finally {
+            g('calc-pw').value=av.pw; g('calc-pr').value=av.pr; g('calc-prir').value=av.prir;
+          }})());
+
+        // ── Les réglages écrivent dans user.cycle ─────────────────────────
+        ok('Les réglages écrivent dans user.cycle, plus dans cycleAdaptation',(()=>{
+          const _sv=window.saveUser, _mg=window._manageCycleSupplements,
+                _rn=window._renderNutriContent;
+          try{
+            window.saveUser=()=>true; window._manageCycleSupplements=()=>{};
+            window._renderNutriContent=()=>{};
+            currentUser=_ath(null,{nutrition:{cycleAdaptation:{enabled:true,
+              lastPeriodDate:_jour(23),cycleLength:28}}});
+            saveCycleNutSettings('intensite','difficile');
+            if(!currentUser.cycle||currentUser.cycle.intensiteRegles!=='difficile')
+              return _echec('rien écrit dans user.cycle');
+            if(currentUser.nutrition.cycleAdaptation.intensite_regles!==undefined)
+              return _echec('l\'ancien champ a été touché');
+            // Et la date d'origine survit au passage.
+            return confCycle(currentUser).lastPeriodDate===_jour(23)
+              ?true:_echec('date perdue');
+          } finally {
+            window.saveUser=_sv; window._manageCycleSupplements=_mg;
+            window._renderNutriContent=_rn;
+          }})());
+        ok('Le champ « cycles réguliers » se lit et s\'écrit',(()=>{
+          const u=_ath({regulier:true});
+          if(confCycle(u).regulier!==true) return _echec('non lu');
+          currentUser=_ath({enabled:true,lastPeriodDate:_jour(2)});
+          const h=_renderCycleNutSettings({macros:{on:{},off:{}}});
+          return /cycle-regulier/.test(h)?true:_echec('absent des réglages');})());
+      } finally { currentUser=_fcU; }
     })();
 
     // ══════ PROFIL COACH VISIBLE PAR SES ATHLÈTES ══════
