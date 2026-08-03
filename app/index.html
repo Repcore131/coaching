@@ -18373,44 +18373,127 @@ function _getEffectiveMacros(nut,isOn,dateStr,porteur){
   return _applyNutCycleModifier(base,isOn,phase,conf);
 }
 
-function _manageCycleSupplements(){
-  const conf=_getCycleNutConf();
-  const list=_suppStore();
-  // L'adaptation de cycle ne vaut qu'en diete flexible — les macros le
-  // respectaient deja, pas les complements. Hors flexible, on desactive ce que
-  // l'app avait ajoute, exactement comme quand le cycle est coupe.
-  const _horsFlexible=typeDiete(currentUser&&currentUser.nutrition)!=='flexible';
-  if(_horsFlexible||!conf.enabled||!conf.lastPeriodDate||!isFemale(currentUser.gender)){
-    let ch=false;
-    list.forEach(s=>{if(s._cycleManaged&&s.active!==false){s.active=false;ch=true;}});
-    if(ch) saveUser();
-    return;
-  }
-  const today=localISODate(new Date());
-  // Seule la lutéale tardive AGISSANTE ajoute l'entrée. Périmé et irrégulier
-  // la font retomber dans la branche de désactivation, comme un cycle coupé.
-  const _phSupp=_getCyclePhaseNut(today);
-  const inLuteal=phaseAgissante(_phSupp)&&_phSupp==='luteal_late';
-  const hasUserOmega=list.some(s=>!s._cycleManaged&&/om[eé]ga/i.test(s.name));
-  if(!hasUserOmega){
-    const auto=list.find(s=>s._cycleManaged&&s._cyclePhase==='luteal_late');
-    if(inLuteal){
-      if(!auto){
-        // Dosage : 2 gélules ≈ 1g EPA+DHA — fenêtre anti-inflammatoire courte (5-8j)
-        // Source : Rahbar et al., BJOG 2012 — 1-2g EPA+DHA pour dysménorrhée & inflammation lutéale
-        list.push({id:'cycle_o3_'+Date.now(),name:'Oméga-3 (EPA/DHA)',
-          dosage_quantity:2,dosage_unit:'gélules',timings:['soir'],
-          notes:'Phase lutéale tardive : soutien anti-inflammatoire',
-          active:true,_cycleManaged:true,_cyclePhase:'luteal_late'});
-        saveUser();
-      } else if(auto.active===false){auto.active=true;saveUser();}
-    } else {
-      if(auto&&auto.active!==false){auto.active=false;saveUser();}
-    }
-  } else {
-    const anyActive=list.some(s=>s._cycleManaged&&s.active!==false);
-    if(anyActive){list.forEach(s=>{if(s._cycleManaged&&s.active!==false)s.active=false;});saveUser();}
-  }
+// ── La seule recommandation prescriptive du produit, et elle s'écrivait TOUTE
+// SEULE ─────────────────────────────────────────────────────────────────────
+// _manageCycleSupplements poussait une entrée dans nutrition.supplements sans
+// qu'aucun geste ne l'ait demandée, et un bandeau annonçait « +2 gélules
+// recommandées ». Le pied du tableau des compléments dit pourtant l'inverse,
+// noir sur blanc : « Ce classement parle de la solidité des preuves, pas de ce
+// qui te serait utile à toi. C'est une conversation à avoir avec ton coach. »
+// Et l'oméga-3 est classé B, pas A.
+//
+// CE QUE VAUT LA RÉFÉRENCE, honnêtement. Rahbar et al., BJOG 2012, porte sur
+// la DYSMÉNORRHÉE en population générale — pas sur l'inconfort de fin de cycle,
+// pas chez des athlètes. L'extrapolation n'est pas établie. Et l'incorporation
+// membranaire des oméga-3 se fait sur PLUSIEURS SEMAINES : une prise de cinq à
+// huit jours par cycle est physiologiquement discutable. La référence reste
+// citée parce qu'elle existe ; elle est située parce qu'elle ne suffit pas.
+//
+// D'où : une SUGGESTION, un clic, et un refus mémorisé. Aucune écriture.
+const SUGG_OMEGA3_CLE='omega3_luteal';
+const SUGG_REFUS_MAX=20;
+const SUGG_OMEGA3_TEXTE='Certaines femmes trouvent un bénéfice aux oméga-3 sur '
+  +'l\'inconfort de fin de cycle. Les données sont limitées (niveau de preuve B). '
+  +'Tu veux l\'ajouter à ta liste ?';
+// PURE. Elle ne pousse rien, n'appelle pas saveUser, et ne désactive plus rien.
+function suggestionCycleSupplements(user,dateISO){
+  const u=user||currentUser||{};
+  const nut=u.nutrition||{};
+  // Conditions CONSERVÉES de l'existant : diète flexible, cycle configuré,
+  // athlète femme, lutéale tardive agissante, aucun oméga-3 déjà présent.
+  if(typeDiete(nut)!=='flexible') return null;
+  if(!isFemale(u._evol_gender||u.gender)) return null;
+  const conf=confCycle(u);
+  if(!conf.enabled||!conf.lastPeriodDate) return null;
+  // AJOUTÉE par ce lot, et non conservée : la sensibilité PMS ne conditionnait
+  // rien jusqu'ici. Elle restreint donc la portée — c'est voulu.
+  if(!conf.sensibilitePms) return null;
+  const ph=phaseCycle(u,dateISO||localISODate(new Date()));
+  if(!phaseAgissante(ph)||ph!=='luteal_late') return null;
+  const list=Array.isArray(nut.supplements)?nut.supplements:[];
+  // Quelle qu'en soit l'origine : une entrée déjà là rend la question sans objet.
+  if(list.some(s=>s&&/om[eé]ga/i.test(String(s.name||'')))) return null;
+  const refus=((u.cycle||{}).suggestionsRefusees)||[];
+  if(refus.indexOf(SUGG_OMEGA3_CLE)>=0) return null;
+  const f=_suppFiche('Oméga-3');
+  return {suggere:true,cle:SUGG_OMEGA3_CLE,libelle:SUGG_OMEGA3_TEXTE,
+    preuve:(f&&f.preuve)||'B'};
+}
+// L'entrée créée est EXACTEMENT celle d'avant, champ pour champ : ce lot change
+// qui la décide, pas ce qu'elle contient.
+function accepterSuggestionCycle(){
+  if(!suggestionCycleSupplements(currentUser)) return false;
+  _suppStore().push({id:'cycle_o3_'+Date.now(),name:'Oméga-3 (EPA/DHA)',
+    dosage_quantity:2,dosage_unit:'gélules',timings:['soir'],
+    notes:'Phase lutéale tardive : soutien anti-inflammatoire',
+    active:true,_cycleManaged:true,_cyclePhase:'luteal_late'});
+  const ok=saveUser();
+  toastEcriture(ok,'Ajouté à ta liste ✓','le complément est');
+  try{ _renderNutriContent(typeDiete(currentUser.nutrition)); }catch(e){}
+  return true;
+}
+// Un refus ne se redemande pas au cycle suivant. Il ne se lève que depuis les
+// réglages, par un geste explicite.
+function refuserSuggestionCycle(){
+  if(!currentUser.cycle) currentUser.cycle={};
+  const l=(Array.isArray(currentUser.cycle.suggestionsRefusees)
+    ?currentUser.cycle.suggestionsRefusees:[]).slice();
+  if(l.indexOf(SUGG_OMEGA3_CLE)<0) l.push(SUGG_OMEGA3_CLE);
+  currentUser.cycle.suggestionsRefusees=l.slice(-SUGG_REFUS_MAX);
+  saveUser();
+  try{ _renderNutriContent(typeDiete(currentUser.nutrition)); }catch(e){}
+  return true;
+}
+function revoirSuggestionsCycle(){
+  if(!currentUser.cycle) currentUser.cycle={};
+  currentUser.cycle.suggestionsRefusees=[];
+  saveUser();
+  try{ _renderNutriContent(typeDiete(currentUser.nutrition)); }catch(e){}
+  return true;
+}
+function _htmlSuggestionCycle(user){
+  const s=suggestionCycleSupplements(user||currentUser);
+  if(!s) return '';
+  return `<div style="margin-bottom:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:12px 13px">
+    <div style="font-size:12px;color:#ddd;line-height:1.7">${escapeHtml(s.libelle)}</div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button onclick="accepterSuggestionCycle()" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:10px;letter-spacing:1px">Ajouter</button>
+      <button onclick="refuserSuggestionCycle()" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:10px;letter-spacing:1px;color:var(--sub)">Non merci</button>
+    </div>
+  </div>`;
+}
+// MIGRATION. Les entrées déjà écrites par l'app restent : personne ne se fait
+// retirer une ligne sans le savoir. On dit d'où elle vient, et on laisse le
+// choix — c'est tout ce que ce lot doit à ceux qui l'ont subie.
+function _htmlMigrationCycleSupp(user){
+  const u=user||currentUser||{};
+  const list=((u.nutrition||{}).supplements)||[];
+  if(((u.cycle||{}).migrationSuppVue)) return '';
+  if(!list.some(x=>x&&x._cycleManaged)) return '';
+  return `<div style="margin-bottom:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:12px 13px">
+    <div style="font-size:12px;color:#ddd;line-height:1.7">Cette ligne avait été ajoutée automatiquement par l'app. Tu peux la garder ou la retirer.</div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button onclick="garderSuggestionCycleAuto()" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:10px;letter-spacing:1px">Je la garde</button>
+      <button onclick="retirerSuggestionCycleAuto()" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:10px;letter-spacing:1px;color:var(--sub)">La retirer</button>
+    </div>
+  </div>`;
+}
+function garderSuggestionCycleAuto(){
+  if(!currentUser.cycle) currentUser.cycle={};
+  currentUser.cycle.migrationSuppVue=true;
+  saveUser();
+  try{ _renderNutriContent(typeDiete(currentUser.nutrition)); }catch(e){}
+  return true;
+}
+function retirerSuggestionCycleAuto(){
+  const l=_suppStore();
+  for(let i=l.length-1;i>=0;i--) if(l[i]&&l[i]._cycleManaged) l.splice(i,1);
+  if(!currentUser.cycle) currentUser.cycle={};
+  currentUser.cycle.migrationSuppVue=true;
+  const ok=saveUser();
+  toastEcriture(ok,'Ligne retirée','la suppression est');
+  try{ _renderNutriContent(typeDiete(currentUser.nutrition)); }catch(e){}
+  return true;
 }
 
 function _renderCycleNutSettings(nut){
@@ -18436,6 +18519,8 @@ function _renderCycleNutSettings(nut){
   // La case d'absence reflète une déclaration du mois en cours, rien de plus.
   const _abs=((currentUser.cycle||{}).absences)||[];
   const absenceCeMois=_abs.some(d=>String(d).slice(0,7)===today.slice(0,7));
+  // Un refus ne se lève que d'un geste : sans ce bouton, il serait définitif.
+  const _refusCycle=((((currentUser||{}).cycle)||{}).suggestionsRefusees||[]).length>0;
   let phaseHtml='';
   if(on&&lastP){
     const phase=_getCyclePhaseNut(today);
@@ -18517,6 +18602,10 @@ function _renderCycleNutSettings(nut){
       </div>
       ${obsHtml}
     </div>
+    ${_refusCycle?`<div style="border-top:1px solid var(--border);padding-top:10px">
+      <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.55;margin-bottom:7px">Tu as écarté une suggestion de complément.</div>
+      <button onclick="revoirSuggestionsCycle()" class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:10px">Revoir les suggestions</button>
+    </div>`:''}
     <div style="border-top:1px solid var(--border);padding-top:10px">
       <button onclick="declarerReglesAujourdhui()" class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:10px">Mes règles ont commencé aujourd'hui</button>
       <label style="display:flex;align-items:center;gap:9px;margin-top:10px;cursor:pointer">
@@ -18552,7 +18641,6 @@ function _renderCycleNutSettings(nut){
 function declarerReglesAujourdhui(){
   _cycleAjouterRegles(currentUser,localISODate(new Date()));
   const ok=saveUser();
-  _manageCycleSupplements();
   toastEcriture(ok,'Date enregistrée ✓','la date est');
   _renderNutriContent(typeDiete(currentUser.nutrition));
 }
@@ -18594,7 +18682,6 @@ function saveCycleNutSettings(field,value){
     }
   }
   saveUser();
-  _manageCycleSupplements();
   _renderNutriContent(typeDiete(currentUser.nutrition));
 }
 
@@ -18806,7 +18893,6 @@ function _renderNutriContent(type){
       ${_renderStrictMacroRings(nut)}
       ${_renderCycleNutSettings(nut)}`;
     if(fjSec){fjSec.style.display='block';_renderFjDaySummary(localISODate(new Date()));}
-    _manageCycleSupplements();
   } else {
     if(fjSec) fjSec.style.display='none';
     _renderStrictDiet();
@@ -20689,15 +20775,25 @@ function loadSuppEmbedded(){
   const _phBan=_getCyclePhaseNut(today);
   const inLuteal=conf.enabled&&isFemale(currentUser.gender)
     &&phaseAgissante(_phBan)&&_phBan==='luteal_late';
-  const hasUserOmega=inLuteal&&_suppStore().some(s=>!s._cycleManaged&&/om[eé]ga/i.test(s.name));
-  const omegaBanner=hasUserOmega
-    ?`<div style="margin-bottom:10px;background:rgba(251,146,60,.07);border:1px solid rgba(251,146,60,.22);border-radius:8px;padding:9px 12px;font-size:11px;color:#fb923c;font-weight:700">⚡ Phase lutéale : +2 gélules oméga-3 recommandées aujourd'hui (en plus de ta prise habituelle)</div>`:'';
+  // Le bandeau ne RECOMMANDE plus rien : il rappelle ce que l'athlète a noté.
+  // Sa condition suit ce changement — n'importe quelle entrée d'oméga-3 ACTIVE,
+  // y compris une suggestion acceptée, et plus seulement celles qu'elle avait
+  // saisies elle-même. Et il annonce la quantité RÉELLEMENT enregistrée : le
+  // « +2 gélules » codé en dur mentait à qui en avait noté trois.
+  const _omega=inLuteal
+    ?_suppStore().find(s=>s&&s.active!==false&&/om[eé]ga/i.test(String(s.name||'')))
+    :null;
+  const _omQte=_omega&&_omega.dosage_quantity
+    ?(String(_omega.dosage_quantity).replace('.',',')+' '+(_omega.dosage_unit||'')).trim()
+    :null;
+  const omegaBanner=_omQte
+    ?`<div data-bandeau-cycle style="margin-bottom:10px;background:rgba(251,146,60,.07);border:1px solid rgba(251,146,60,.22);border-radius:8px;padding:9px 12px;font-size:11px;color:#fb923c;font-weight:700">Phase lutéale : tu as noté ${escapeHtml(_omQte)} d'oméga-3 pour aujourd'hui.</div>`:'';
   el.innerHTML=`
     <div style="margin-bottom:12px">
       <h3 style="margin:0;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--sub);display:flex;align-items:center;gap:5px">${icon('pill',11)} Compléments</h3>
     </div>
     <div style="background:var(--dark);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px">
-      ${omegaBanner}${_renderSuppTable(list,false,'openSuppEdit')}
+      ${_htmlMigrationCycleSupp(currentUser)}${_htmlSuggestionCycle(currentUser)}${omegaBanner}${_renderSuppTable(list,false,'openSuppEdit')}
     </div>
     <button onclick="openSuppEdit(-1)" style="background:none;border:1px dashed #2a2a2a;border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;padding:10px 0;width:100%;cursor:pointer;margin-bottom:4px">+ Ajouter un complément</button>
     <div style="height:4px"></div>`;
@@ -30051,11 +30147,9 @@ function testExercices(){
 
         // ── Les réglages écrivent dans user.cycle ─────────────────────────
         ok('Les réglages écrivent dans user.cycle, plus dans cycleAdaptation',(()=>{
-          const _sv=window.saveUser, _mg=window._manageCycleSupplements,
-                _rn=window._renderNutriContent;
+          const _sv=window.saveUser, _rn=window._renderNutriContent;
           try{
-            window.saveUser=()=>true; window._manageCycleSupplements=()=>{};
-            window._renderNutriContent=()=>{};
+            window.saveUser=()=>true; window._renderNutriContent=()=>{};
             currentUser=_ath(null,{nutrition:{cycleAdaptation:{enabled:true,
               lastPeriodDate:_jour(23),cycleLength:28}}});
             saveCycleNutSettings('intensite','difficile');
@@ -30067,8 +30161,7 @@ function testExercices(){
             return confCycle(currentUser).lastPeriodDate===_jour(23)
               ?true:_echec('date perdue');
           } finally {
-            window.saveUser=_sv; window._manageCycleSupplements=_mg;
-            window._renderNutriContent=_rn;
+            window.saveUser=_sv; window._renderNutriContent=_rn;
           }})());
         ok('Le champ « cycles réguliers » se lit et s\'écrit',(()=>{
           const u=_ath({regulier:true});
@@ -30246,36 +30339,38 @@ function testExercices(){
           // Et rien n'est pré-coché non plus.
           if(_cycleOptionSuggeree(perime,AUJ)!==null) rates.push('une option est suggérée');
           return rates.length?_echec(rates.join(' | ')):true;})());
-        ok('Critère : sur une phase périmée, le complément automatique s\'éteint',(()=>{
-          const _sv=window.saveUser;
-          try{
-            window.saveUser=()=>true;
-            currentUser=_ath({enabled:true,lastPeriodDate:_jour(70),cycleLength:28},
-              {gender:'F',nutrition:{dietType:'flexible',supplements:[
-                {id:'a',name:'Oméga-3 (EPA/DHA)',timings:['soir'],active:true,
-                 _cycleManaged:true,_cyclePhase:'luteal_late'}]}});
-            if(phaseCycle(currentUser,AUJ)!=='perime') return _echec('fixture muette');
-            _manageCycleSupplements();
-            const actifs=(currentUser.nutrition.supplements||[])
-              .filter(x=>x._cycleManaged&&x.active!==false);
-            return actifs.length===0?true:_echec(actifs.length+' entrée(s) restée(s) active(s)');
-          } finally { window.saveUser=_sv; }})());
-        ok('Et sur une phase lutéale VRAIE, il reste allumé',(()=>{
+        ok('Critère : sur une phase périmée, aucune suggestion n\'est proposée',(()=>{
+          // RÉÉCRIT. Ce test vérifiait que l'entrée automatique s'ÉTEIGNAIT sur
+          // une phase périmée. Il n'y a plus d'entrée automatique, et une entrée
+          // acceptée n'est plus jamais désactivée par l'app : ce qui doit se
+          // taire, c'est la SUGGESTION.
+          const u=_ath({enabled:true,lastPeriodDate:_jour(70),cycleLength:28,
+            sensibilitePms:true},{gender:'F',nutrition:{dietType:'flexible',supplements:[]}});
+          if(phaseCycle(u,AUJ)!=='perime') return _echec('fixture muette');
+          return suggestionCycleSupplements(u,AUJ)===null
+            ?true:_echec('une suggestion sort sur un cycle périmé');})());
+        ok('Et sur une phase lutéale VRAIE, la suggestion est bien proposée',(()=>{
           // La contre-épreuve : sans elle, le test ci-dessus passerait même si
-          // le complément ne s'ajoutait plus jamais.
-          const _sv=window.saveUser;
-          try{
-            window.saveUser=()=>true;
-            currentUser=_ath({enabled:true,lastPeriodDate:_jour(24),cycleLength:28},
-              {gender:'F',nutrition:{dietType:'flexible',supplements:[
-                {id:'a',name:'Oméga-3 (EPA/DHA)',timings:['soir'],active:true,
-                 _cycleManaged:true,_cyclePhase:'luteal_late'}]}});
-            if(phaseCycle(currentUser,AUJ)!=='luteal_late') return _echec('fixture muette');
-            _manageCycleSupplements();
-            const actifs=(currentUser.nutrition.supplements||[])
-              .filter(x=>x._cycleManaged&&x.active!==false);
-            return actifs.length===1?true:_echec('l\'entrée a été éteinte à tort');
-          } finally { window.saveUser=_sv; }})());
+          // la suggestion ne sortait plus jamais.
+          const u=_ath({enabled:true,lastPeriodDate:_jour(24),cycleLength:28,
+            sensibilitePms:true},{gender:'F',nutrition:{dietType:'flexible',supplements:[]}});
+          if(phaseCycle(u,AUJ)!=='luteal_late') return _echec('fixture muette');
+          const sg=suggestionCycleSupplements(u,AUJ);
+          return sg&&sg.suggere&&sg.cle==='omega3_luteal'
+            ?true:_echec(JSON.stringify(sg));})());
+        ok('Une entrée ACCEPTÉE n\'est plus jamais désactivée par l\'app',(()=>{
+          // C'est l'inverse exact de ce que ce test affirmait il y a deux lots.
+          // Une ligne que l'athlète a choisie lui appartient : l'app n'a pas à
+          // l'éteindre parce que le calendrier a tourné.
+          const u=_ath({enabled:true,lastPeriodDate:_jour(70),cycleLength:28,
+            sensibilitePms:true},{gender:'F',nutrition:{dietType:'flexible',supplements:[
+              {id:'a',name:'Oméga-3 (EPA/DHA)',timings:['soir'],active:true,
+               _cycleManaged:true,_cyclePhase:'luteal_late'}]}});
+          const avant=JSON.stringify(u.nutrition.supplements);
+          suggestionCycleSupplements(u,AUJ);
+          const l=u.nutrition.supplements.filter(x=>x.active!==false);
+          return l.length===1&&JSON.stringify(u.nutrition.supplements)===avant
+            ?true:_echec('l\'entrée a été touchée');})());
 
         // ── Les absences : consignées, jamais commentées ──────────────────
         ok('Une absence est consignée sans rien déclencher',(()=>{
@@ -37430,7 +37525,11 @@ function testExercices(){
         window.saveUser=()=>true;   // rien n'est écrit pendant les tests
         const _luteale=()=>{
           const j=new Date(Date.now()-25*864e5);
-          return {enabled:true,lastPeriodDate:localISODate(j),cycleLength:28};};
+          // sensibilitePms AJOUTÉE : elle ne conditionnait rien jusqu'ici, et
+          // elle conditionne désormais la suggestion. Sans elle, ces fixtures
+          // décriraient un produit qui ne propose plus jamais rien.
+          return {enabled:true,lastPeriodDate:localISODate(j),cycleLength:28,
+            sensibilite_pms:true};};
         // dietType:'flexible' EXPLICITE : l'adaptation de cycle ne vaut qu'en
         // diete flexible, et le defaut de lecture est desormais 'strict'. Sans
         // cette ligne, ces tests decriraient un comportement que le produit
@@ -37438,43 +37537,207 @@ function testExercices(){
         const _femme=supps=>({id:'_tc',email:'tc@t',gender:'Femme',exMuscles:{},exAlias:{},
           sessions:[],nutrition:{dietType:'flexible',cycleAdaptation:_luteale(),
             supplements:supps||[]}});
-        ok('Non-régression : les oméga-3 sont ajoutés en lutéale tardive',(()=>{
+        // RÉÉCRITS. Ces cinq tests décrivaient une ÉCRITURE automatique : l'app
+        // poussait l'entrée d'elle-même, et deux d'entre eux vérifiaient qu'elle
+        // la désactivait ensuite. C'est ce comportement que le lot supprime.
+        // Ce qui est vérifié désormais : la suggestion sort aux mêmes conditions,
+        // rien ne s'écrit sans clic, et l'entrée créée est identique.
+        ok('Critère : en lutéale tardive, la suggestion est PROPOSÉE',(()=>{
           currentUser=_femme([]);
           if(_getCyclePhaseNut(localISODate(new Date()))!=='luteal_late')
             return _echec('le jeu d\'essai n\'est pas en lutéale tardive');
-          _manageCycleSupplements();
-          const l=currentUser.nutrition.supplements;
-          const auto=l.filter(s=>s._cycleManaged);
-          if(auto.length!==1) return _echec(auto.length+' entrée(s) auto');
-          return auto[0].name==='Oméga-3 (EPA/DHA)'&&auto[0].active===true
-            ?true:_echec(auto[0].name+' actif='+auto[0].active);})());
-        ok('Non-régression : pas de doublon quand l\'athlète a déjà des oméga-3',(()=>{
-          currentUser=_femme([{id:1,name:'Oméga-3',dosage_quantity:2,dosage_unit:'g',
-            timings:['midi'],active:true}]);
-          _manageCycleSupplements();
-          const l=currentUser.nutrition.supplements;
-          if(l.length!==1) return _echec(l.length+' entrées au lieu d\'une');
-          return !l.some(s=>s._cycleManaged);})());
-        ok('Non-régression : appelée deux fois, elle n\'ajoute qu\'une entrée',(()=>{
+          const sg=suggestionCycleSupplements(currentUser);
+          if(!sg||!sg.suggere) return _echec('aucune suggestion');
+          return sg.cle==='omega3_luteal'&&sg.preuve==='B'
+            ?true:_echec(JSON.stringify(sg));})());
+        ok('Critère : et RIEN n\'est écrit tant qu\'on n\'a pas cliqué',(()=>{
           currentUser=_femme([]);
-          _manageCycleSupplements(); _manageCycleSupplements(); _manageCycleSupplements();
+          suggestionCycleSupplements(currentUser);
+          suggestionCycleSupplements(currentUser);
+          _htmlSuggestionCycle(currentUser);
+          return currentUser.nutrition.supplements.length===0
+            ?true:_echec(currentUser.nutrition.supplements.length+' entrée(s) écrite(s)');})());
+        ok('Critère : après « Ajouter », l\'entrée est celle d\'avant, champ pour champ',(()=>{
+          currentUser=_femme([]);
+          if(accepterSuggestionCycle()!==true) return _echec('l\'ajout a échoué');
+          const l=currentUser.nutrition.supplements.filter(s=>s._cycleManaged);
+          if(l.length!==1) return _echec(l.length+' entrée(s)');
+          const e=l[0];
+          const att={name:'Oméga-3 (EPA/DHA)',dosage_quantity:2,dosage_unit:'gélules',
+            active:true,_cycleManaged:true,_cyclePhase:'luteal_late'};
+          const faux=Object.keys(att).filter(k=>e[k]!==att[k]);
+          if(faux.length) return _echec(faux.map(k=>k+'='+e[k]).join(', '));
+          if(JSON.stringify(e.timings)!=='["soir"]') return _echec('timings '+JSON.stringify(e.timings));
+          return /anti-inflammatoire/.test(e.notes||'')
+            ?true:_echec('note '+e.notes);})());
+        ok('Critère : deux fois « Ajouter » n\'ajoute pas deux entrées',(()=>{
+          currentUser=_femme([]);
+          accepterSuggestionCycle(); accepterSuggestionCycle(); accepterSuggestionCycle();
           const auto=currentUser.nutrition.supplements.filter(s=>s._cycleManaged);
           return auto.length===1?true:_echec(auto.length+' entrées auto');})());
-        ok('Non-régression : hors lutéale, l\'entrée auto est désactivée',(()=>{
+        ok('Critère : pas de suggestion quand l\'athlète a déjà des oméga-3',(()=>{
+          currentUser=_femme([{id:1,name:'Oméga-3',dosage_quantity:2,dosage_unit:'g',
+            timings:['midi'],active:true}]);
+          if(suggestionCycleSupplements(currentUser)!==null)
+            return _echec('une suggestion malgré des oméga-3 déjà présents');
+          return currentUser.nutrition.supplements.length===1
+            ?true:_echec(currentUser.nutrition.supplements.length+' entrées');})());
+        ok('Critère : après « Non merci », plus jamais de suggestion',(()=>{
           currentUser=_femme([]);
-          _manageCycleSupplements();
+          if(!suggestionCycleSupplements(currentUser)) return _echec('fixture muette');
+          refuserSuggestionCycle();
+          if(suggestionCycleSupplements(currentUser)!==null) return _echec('elle revient');
+          // Y compris un cycle plus tard : la date change, le refus reste.
+          const plusTard=localISODate(new Date(Date.now()+28*864e5));
+          return suggestionCycleSupplements(currentUser,plusTard)===null
+            ?true:_echec('elle revient au cycle suivant');})());
+        ok('Le refus se lève depuis les réglages, et seulement là',(()=>{
+          currentUser=_femme([]);
+          refuserSuggestionCycle();
+          if(suggestionCycleSupplements(currentUser)) return _echec('fixture muette');
+          revoirSuggestionsCycle();
+          return !!suggestionCycleSupplements(currentUser)
+            ?true:_echec('la suggestion ne revient pas après « revoir »');})());
+        ok('La liste des refus est bornée',(()=>{
+          currentUser=_femme([]);
+          currentUser.cycle={suggestionsRefusees:Array.from({length:40},(_,i)=>'x'+i)};
+          refuserSuggestionCycle();
+          const l=currentUser.cycle.suggestionsRefusees;
+          return l.length===SUGG_REFUS_MAX&&l.indexOf('omega3_luteal')>=0
+            ?true:_echec(l.length+' entrées');})());
+        ok('Une entrée ACCEPTÉE reste active hors phase lutéale',(()=>{
+          // Ce test disait l'inverse : « hors lutéale, l'entrée auto est
+          // désactivée ». Elle n'était pas choisie, elle l'est maintenant — et
+          // l'app n'éteint plus ce que l'athlète a décidé.
+          currentUser=_femme([]);
+          accepterSuggestionCycle();
           currentUser.nutrition.cycleAdaptation.lastPeriodDate=
             localISODate(new Date(Date.now()-10*864e5));
-          _manageCycleSupplements();
+          suggestionCycleSupplements(currentUser);
+          loadSuppEmbedded();
           const auto=currentUser.nutrition.supplements.find(s=>s._cycleManaged);
-          return auto&&auto.active===false?true:_echec(auto?'actif':'entrée disparue');})());
-        ok('Non-régression : l\'entrée auto du cycle s\'affiche avec sa fiche',(()=>{
+          return auto&&auto.active!==false
+            ?true:_echec(auto?'désactivée':'entrée disparue');})());
+        ok('Non-régression : l\'entrée du cycle s\'affiche avec sa fiche',(()=>{
           // Elle porte « Oméga-3 (EPA/DHA) » : elle doit récupérer la pastille B.
           currentUser=_femme([]);
-          _manageCycleSupplements();
+          accepterSuggestionCycle();
           const h=_renderSuppTable(currentUser.nutrition.supplements,false,'openSuppEdit');
           return h.indexOf('Niveau de preuve B')>=0
             ?true:_echec('pastille absente pour l\'entrée du cycle');})());
+        ok('Critère : le bandeau ne dit plus « recommandées »',(()=>{
+          currentUser=_femme([]);
+          accepterSuggestionCycle();
+          const z=document.getElementById('supp-embedded');
+          if(!z) return _echec('emplacement absent');
+          const av=z.innerHTML;
+          try{
+            loadSuppEmbedded();
+            // On isole LE BANDEAU par un repère qui lui appartient. Le viser
+            // par son texte le confondait avec deux voisins du même écran :
+            // l'encart de sourcing, qui dit « RepCore ne recommande aucune
+            // marque », et la NOTE de l'entrée, qui dit « Phase lutéale ».
+            const nodes=Array.from(z.querySelectorAll('[data-bandeau-cycle]'));
+            if(nodes.length!==1) return _echec(nodes.length+' bandeau(x) trouvé(s)');
+            const t=nodes[0].textContent||'';
+            if(/recommand/i.test(t)) return _echec('le mot est resté : '+t);
+            // Et il annonce la quantité RÉELLEMENT enregistrée.
+            return /tu as noté 2 gélules d'oméga-3/.test(t)
+              ?true:_echec('le nouveau libellé manque : '+t);
+          } finally { z.innerHTML=av; }})());
+        ok('Le bandeau suit la quantité saisie, il ne l\'invente pas',(()=>{
+          currentUser=_femme([{id:9,name:'Oméga-3',dosage_quantity:3,dosage_unit:'gélules',
+            timings:['soir'],active:true}]);
+          const z=document.getElementById('supp-embedded');
+          const av=z?z.innerHTML:'';
+          try{
+            loadSuppEmbedded();
+            const b=z.querySelector('[data-bandeau-cycle]');
+            return b&&/tu as noté 3 gélules/.test(b.textContent||'')
+              ?true:_echec('quantité codée en dur : '+(b?b.textContent:'aucun bandeau'));
+          } finally { if(z) z.innerHTML=av; }})());
+        ok('La sensibilité PMS conditionne bien la suggestion',(()=>{
+          // Cette condition est AJOUTÉE par ce lot — elle ne conditionnait rien
+          // avant. Toutes mes fixtures la portaient à vrai, donc la retirer ne
+          // se voyait nulle part : la variante qui la supprimait passait au vert.
+          currentUser=_femme([]);
+          if(!suggestionCycleSupplements(currentUser)) return _echec('fixture muette');
+          currentUser.nutrition.cycleAdaptation.sensibilite_pms=false;
+          return suggestionCycleSupplements(currentUser)===null
+            ?true:_echec('une suggestion sort sans sensibilité PMS');})());
+        ok('L\'encart de suggestion est RENDU dans l\'écran, pas seulement calculable',(()=>{
+          // Mes tests appelaient _htmlSuggestionCycle directement : retirer
+          // l'encart de l'écran ne se voyait donc pas.
+          currentUser=_femme([]);
+          const z=document.getElementById('supp-embedded');
+          if(!z) return _echec('emplacement absent');
+          const av=z.innerHTML;
+          try{
+            loadSuppEmbedded();
+            const t=z.textContent||'';
+            if(!/Tu veux l&#39;ajouter à ta liste|Tu veux l'ajouter à ta liste/.test(t))
+              return _echec('l\'encart n\'est pas dans l\'écran');
+            return /accepterSuggestionCycle/.test(z.innerHTML)
+              &&/refuserSuggestionCycle/.test(z.innerHTML)
+              ?true:_echec('les deux boutons manquent');
+          } finally { z.innerHTML=av; }})());
+        ok('« Ajouter » hors phase ne touche à RIEN',(()=>{
+          // Une variante replaçait la désactivation automatique en tête
+          // d'accepterSuggestionCycle : hors phase, elle éteignait les entrées
+          // AVANT de refuser l'ajout. Le refus seul ne suffit pas à le voir.
+          currentUser=_femme([{id:5,name:'Oméga-3 (EPA/DHA)',dosage_quantity:2,
+            dosage_unit:'gélules',timings:['soir'],active:true,_cycleManaged:true}]);
+          currentUser.nutrition.cycleAdaptation.lastPeriodDate=
+            localISODate(new Date(Date.now()-10*864e5));
+          const avant=JSON.stringify(currentUser.nutrition.supplements);
+          const r=accepterSuggestionCycle();
+          if(r!==false) return _echec('l\'ajout a été accepté hors phase');
+          return JSON.stringify(currentUser.nutrition.supplements)===avant
+            ?true:_echec('le dossier a été modifié : '+JSON.stringify(currentUser.nutrition.supplements));})());
+        ok('CRITÈRE DE PRINCIPE : aucun rendu n\'ajoute de complément',(()=>{
+          // Le vrai défaut n'était pas l'entrée, c'était QUI la décidait :
+          // _renderNutriContent — une fonction de RENDU — appelait la fonction
+          // qui écrivait. Afficher l'écran nutrition modifiait le dossier.
+          currentUser=_femme([]);
+          const n0=currentUser.nutrition.supplements.length;
+          const rendus=[
+            ()=>_renderNutriContent(typeDiete(currentUser.nutrition)),
+            ()=>_renderCycleNutSettings(currentUser.nutrition),
+            ()=>loadSuppEmbedded(),
+            ()=>loadSupplements(),
+            ()=>loadNutrition(),
+            ()=>suggestionCycleSupplements(currentUser),
+            ()=>_htmlSuggestionCycle(currentUser),
+            ()=>_htmlMigrationCycleSupp(currentUser)];
+          const rates=[];
+          for(let i=0;i<rendus.length;i++){
+            try{ rendus[i](); }catch(e){}
+            const n=currentUser.nutrition.supplements.length;
+            if(n!==n0) rates.push('rendu '+i+' : '+n0+' → '+n);
+          }
+          return rates.length?_echec(rates.join(' | ')):true;})());
+        ok('La migration conserve l\'entrée et propose le choix',(()=>{
+          currentUser=_femme([{id:7,name:'Oméga-3 (EPA/DHA)',dosage_quantity:2,
+            dosage_unit:'gélules',timings:['soir'],active:true,_cycleManaged:true}]);
+          const h=_htmlMigrationCycleSupp(currentUser);
+          if(!/ajoutée automatiquement par l&#39;app|ajoutée automatiquement par l'app/.test(h))
+            return _echec('message absent');
+          if(currentUser.nutrition.supplements.length!==1)
+            return _echec('l\'entrée a été touchée');
+          // Une fois le choix fait, le message ne revient pas.
+          garderSuggestionCycleAuto();
+          if(_htmlMigrationCycleSupp(currentUser)!=='') return _echec('le message revient');
+          return currentUser.nutrition.supplements.length===1
+            ?true:_echec('l\'entrée a disparu');})());
+        ok('Le retrait de migration enlève l\'entrée, et rien d\'autre',(()=>{
+          currentUser=_femme([{id:7,name:'Oméga-3 (EPA/DHA)',active:true,_cycleManaged:true},
+            {id:8,name:'Créatine monohydrate',active:true}]);
+          retirerSuggestionCycleAuto();
+          const l=currentUser.nutrition.supplements;
+          return l.length===1&&l[0].name==='Créatine monohydrate'
+            ?true:_echec(JSON.stringify(l.map(x=>x.name)));})());
+        ok('Sans entrée automatique, aucun message de migration',
+          _htmlMigrationCycleSupp(_femme([]))==='');
       } finally { currentUser=_sauveU; window.saveUser=_sauveSave; }
 
       // ── Les deux listes déroulantes ───────────────────────────────────────
@@ -40960,38 +41223,44 @@ function testExercices(){
           } finally { currentUser=sauve; }})());
 
         // ── Les oméga-3 automatiques suivent la même règle ────────────────
-        ok('Critère : sans dietType, aucun oméga-3 n\'est ajouté',(()=>{
+        // RÉÉCRITS : ces trois tests portaient sur l'ÉCRITURE automatique et sur
+        // la désactivation qui l'accompagnait. La règle de fond ne change pas —
+        // l'adaptation de cycle ne vaut qu'en diète flexible — mais elle porte
+        // désormais sur la SUGGESTION, pas sur une ligne écrite d'office.
+        ok('Critère : sans dietType, aucune suggestion d\'oméga-3',(()=>{
           const sauve=currentUser;
           try{
             currentUser=_fem({cycleAdaptation:_cycle(),macros:_macros(),supplements:[]});
-            _manageCycleSupplements();
+            const sg=suggestionCycleSupplements(currentUser);
             const l=(currentUser.nutrition.supplements)||[];
-            const auto=l.filter(x=>x&&x._cycleManaged&&x.active!==false);
-            return auto.length===0
-              ?true:_echec(auto.length+' complément(s) ajouté(s) : '+auto.map(x=>x.name).join(', '));
+            if(l.length!==0) return _echec(l.length+' complément(s) écrit(s)');
+            return sg===null?true:_echec('une suggestion sort hors flexible');
           } finally { currentUser=sauve; }})());
-        ok('En flexible, l\'ajout d\'oméga-3 fonctionne toujours',(()=>{
+        ok('En flexible, la suggestion est bien proposée',(()=>{
           const sauve=currentUser;
           try{
             currentUser=_fem({dietType:'flexible',cycleAdaptation:_cycle(),
               macros:_macros(),supplements:[]});
-            _manageCycleSupplements();
-            const l=(currentUser.nutrition.supplements)||[];
-            return l.some(x=>x&&x._cycleManaged&&/om[eé]ga/i.test(x.name))
-              ?true:_echec('plus aucun oméga-3 en flexible : '+JSON.stringify(l));
+            const sg=suggestionCycleSupplements(currentUser);
+            return sg&&sg.suggere
+              ?true:_echec('plus aucune suggestion en flexible');
           } finally { currentUser=sauve; }})());
-        ok('Passer de flexible à strict DÉSACTIVE les oméga-3 déjà ajoutés',(()=>{
+        ok('Passer de flexible à strict ne DÉSACTIVE plus ce qui a été accepté',(()=>{
+          // Ce test affirmait l'inverse. Une ligne acceptée appartient à
+          // l'athlète : changer de type de suivi ne la lui retire pas dans son
+          // dos. Ce qui s'arrête, c'est la suggestion.
           const sauve=currentUser;
           try{
             currentUser=_fem({dietType:'flexible',cycleAdaptation:_cycle(),
               macros:_macros(),supplements:[]});
-            _manageCycleSupplements();
+            if(accepterSuggestionCycle()!==true) return _echec('fixture muette');
             currentUser.nutrition.dietType='strict';
-            _manageCycleSupplements();
+            suggestionCycleSupplements(currentUser);
             const l=(currentUser.nutrition.supplements)||[];
             const actifs=l.filter(x=>x&&x._cycleManaged&&x.active!==false);
-            return actifs.length===0
-              ?true:_echec(actifs.length+' resté(s) actif(s)');
+            if(actifs.length!==1) return _echec(actifs.length+' actif(s) : l\'entrée a été éteinte');
+            return suggestionCycleSupplements(currentUser)===null
+              ?true:_echec('une suggestion sort en strict');
           } finally { currentUser=sauve; }})());
 
         // ── L'encart de transition ────────────────────────────────────────
