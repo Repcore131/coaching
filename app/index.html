@@ -1994,6 +1994,24 @@ const COACH_PHOTO='icons/coach.jpg';
         <div id="atp-gross-opts" style="display:flex;flex-direction:column;gap:8px"></div>
         <div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-top:9px">RepCore n'accompagne pas une grossesse et ne demande ni date de terme, ni trimestre. Cette information n'est pas transmise à ton coach.</div>
       </div>
+      <!-- PES. Carte SÉPARÉE de celle des états de santé : un usage déclaré
+           n'est pas un diagnostic, et les libellés de ETATS_DECLARABLES
+           portent tous « diagnostiqué par un médecin ». -->
+      <div class="card" id="atp-pes-card" style="margin-bottom:14px">
+        <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Produits améliorant la performance</label>
+        <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer">
+          <input type="checkbox" id="atp-pes" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px" onchange="basculerPES(this.checked)">
+          <span style="font-size:12px;color:#ddd;line-height:1.55">J'en utilise</span>
+        </label>
+        <div id="atp-pes-bloc" style="display:none;margin-top:11px;border-top:1px solid var(--border);padding-top:11px">
+          <div id="atp-pes-phrase" style="font-size:11.5px;color:#ddd;line-height:1.7;margin-bottom:10px"></div>
+          <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer">
+            <input type="checkbox" id="atp-pes-partage" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px" onchange="basculerPartagePES(this.checked)">
+            <span style="font-size:11.5px;color:#ddd;line-height:1.55">Transmettre cette information à mon coach</span>
+          </label>
+          <div id="atp-pes-partage-note" style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-top:9px"></div>
+        </div>
+      </div>
       <div class="card" id="atp-etats-card" style="margin-bottom:14px">
         <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">États de santé déclarés</label>
         <div id="atp-etats-opts" style="display:flex;flex-direction:column;gap:8px"></div>
@@ -3605,6 +3623,10 @@ const CLOUD={
       // « visibilité désactivée » ne serait qu'une promesse d'interface.
       // Clé de premier niveau : un delete simple suffit, sans clonage.
       if(!safe.grossessePartagee) delete safe.grossesse;
+      // Même raison, même patron : /users est lisible en entier par le
+      // coach. Le consentement de partage part avec elle, sinon un dossier
+      // portant « pesPartagee:true » sans « pes » se lirait tout seul.
+      if(!safe.pesPartagee){ delete safe.pes; delete safe.pesPartagee; }
       // Permettre aux règles RTDB de vérifier qui est le coach de cet athlète
       // Les trois cas doivent être traités EXPLICITEMENT. L'ancienne forme ne
       // touchait à coachEmailKey que lorsqu'un coach était trouvé : après un
@@ -20249,9 +20271,15 @@ function menopauseeOuAgee(user){
 // L'échelle proposée au coach démarre plus haut. Il reste libre de descendre
 // en dessous s'il le décide — ce sont des repères, pas des barrières.
 function protEchelle(user){
-  if(!menopauseeOuAgee(user)) return PROT_ECHELLE;
-  const l=PROT_ECHELLE.filter(v=>v>=PROT_MIN_MENOPAUSE);
-  return l.length?Object.freeze(l):PROT_ECHELLE;
+  let l=PROT_ECHELLE.slice();
+  if(menopauseeOuAgee(user)){
+    const m=l.filter(v=>v>=PROT_MIN_MENOPAUSE);
+    if(m.length) l=m;
+  }
+  // Les deux se cumulent sans se gêner : la ménopause relève le PLANCHER
+  // proposé, PES relève le PLAFOND. L'ordre décroissant est conservé.
+  if(aPES(user)) l=PROT_ECHELLE_PES.concat(l);
+  return Object.freeze(l);
 }
 // PROT_DEFAUT n'est PAS modifié : seule la SUGGESTION bouge.
 //
@@ -20298,6 +20326,30 @@ const LIP_ECHELLE=Object.freeze([0.6,0.8,1.0,1.2,1.5]);
 // le suivi qui va avec.
 const LIP_SUGGERE_SOPK=1.2;
 const SOPK_CIBLE_SECHE=Object.freeze({min:-1.0,max:-0.3,alerte:-1.4});
+// ── PES : réduction des risques, et STRICTEMENT rien d'autre ─────────────
+// « Produits améliorant la performance ». RepCore ne nomme aucune molécule,
+// ne propose aucune dose, aucun protocole, aucune durée de cycle, aucun
+// seuil d'analyse interprété, et ne donne aucun conseil d'usage. Il fait
+// DEUX choses : rappeler de faire un bilan sanguin, et ouvrir le choix de
+// protéines au coach. Le reste appartient au médecin.
+//
+// Ce n'est PAS une entrée de ETATS_DECLARABLES : chaque libellé de cette
+// liste porte « diagnostiqué par un médecin » et un test l'exige. Un usage
+// déclaré n'est pas un diagnostic. Champ séparé, comme la contraception et
+// la grossesse.
+const PES_PHRASE='C\'est ton médecin qui prescrit les analyses et qui seul '
+  +'peut les interpréter. RepCore ne fait que te rappeler d\'en faire et de '
+  +'les garder sous la main.';
+const PES_NOTE_PARTAGE='Non transmise à ton coach, sauf si tu l\'actives '
+  +'ci-dessous. Sans partage, il ne verra pas non plus le choix de protéines '
+  +'élargi.';
+// PURE. Aucune autre condition : ni âge, ni sexe, ni phase.
+function aPES(user){ return !!((user||{}).pes); }
+// L'échelle protéique s'OUVRE, la suggestion ne bouge PAS. Suggérer plus de
+// protéines parce que quelqu'un déclare un usage reviendrait à faire dire au
+// produit une chose qui relève du coach. Il choisit ; on ne choisit pas pour
+// lui, et surtout pas à partir de ça.
+const PROT_ECHELLE_PES=Object.freeze([3.0,2.9,2.8,2.7,2.6,2.5]);
 // Le lot A2-03 doit livrer la liste complète des états déclarables et son
 // interface. Il n'est pas là : cette liste porte pour l'instant la SEULE
 // entrée dont ce lot a besoin, et A2-03 l'étendra. Aucune question de
@@ -23401,10 +23453,11 @@ const ANALYSES_VIDE='Aucune analyse consignée. Ajoute une valeur pour la garder
 // Relance : aucune notification, un encart et rien d'autre.
 const ANALYSES_RELANCE_JOURS=90;
 function relanceAnalyses(user,ref){
-  // aPES() est annoncé par le lot A2-01, qui n'est pas livré : la condition est
-  // isolée ici pour s'y brancher sans toucher au reste le jour venu.
-  const pes=(typeof aPES==='function')?(()=>{try{return !!aPES(user);}catch(e){return false;}})():null;
-  if(pes===false) return false;
+  // La condition était isolée en attendant ce lot. La brancher RESTREINT le
+  // rappel : il sortait jusqu'ici pour tout le monde, faute d'aPES. C'est
+  // voulu — rappeler un bilan sanguin à qui n'a aucune raison d'en faire un
+  // n'est pas un service, c'est du bruit.
+  if(!aPES(user)) return false;
   const l=((user&&user.analyses)||[]).filter(e=>e&&e.date);
   const t=(ref instanceof Date?ref:new Date()).getTime();
   if(!l.length) return true;
@@ -27390,6 +27443,37 @@ const ATP_CYCLE_OPTIONS=Object.freeze([
 let _atpEtats=[];
 let _atpThyEtat=null, _atpThyTrait=false;
 let _atpHormo=null, _atpHormoTrait=false;
+// Écriture immédiate, comme la grossesse : la déclaration n'attend pas le
+// bouton SAUVEGARDER, et la retirer EFFACE tout — le partage avec elle.
+function basculerPES(v){
+  if(v) currentUser.pes=true;
+  else { delete currentUser.pes; delete currentUser.pesPartagee; }
+  saveUser();
+  _renderAtpPES();
+  return true;
+}
+function basculerPartagePES(v){
+  if(!aPES(currentUser)){ delete currentUser.pesPartagee; saveUser(); _renderAtpPES(); return false; }
+  if(v) currentUser.pesPartagee=true; else delete currentUser.pesPartagee;
+  saveUser();
+  _renderAtpPES();
+  return true;
+}
+function _renderAtpPES(){
+  const c=document.getElementById('atp-pes');
+  if(!c) return;
+  const a=aPES(currentUser);
+  c.checked=a;
+  const b=document.getElementById('atp-pes-bloc');
+  if(b) b.style.display=a?'block':'none';
+  // Jamais pré-cochée, et remise à faux dès que la déclaration tombe.
+  const pa=document.getElementById('atp-pes-partage');
+  if(pa) pa.checked=a&&!!currentUser.pesPartagee;
+  const ph=document.getElementById('atp-pes-phrase');
+  if(ph) ph.textContent=PES_PHRASE;
+  const no=document.getElementById('atp-pes-partage-note');
+  if(no) no.textContent=PES_NOTE_PARTAGE;
+}
 function setAtpHormonal(cle){
   _atpHormo=(STATUTS_HORMONAUX.some(x=>x.cle===cle)&&_atpHormo!==cle)?cle:null;
   _renderAtpEtats();
@@ -27547,6 +27631,7 @@ function openAthleteProfile(){
   const _st=statutHormonal(u);
   _atpHormo=(_st==='cycles_reguliers'&&u.statutHormonal===undefined)?null:_st;
   _atpHormoTrait=!!u.traitementHormonal;
+  _renderAtpPES();
   _renderAtpEtats();
   const zc=document.getElementById('atp-comptes');
   if(zc) zc.innerHTML=htmlSelecteurComptes();
@@ -32889,7 +32974,9 @@ function testExercices(){
           const u=_ath({id:'a2',age:30});
           if(menopauseeOuAgee(u)) return _echec('ménopausée sans rien avoir déclaré');
           if(protSuggeree(u,'maintien')!==PROT_DEFAUT.maintien) return _echec('protéines déplacées');
-          if(protEchelle(u)!==PROT_ECHELLE) return _echec('échelle déplacée');
+          // Par CONTENU et non par identité : protEchelle rend un tableau neuf
+          // depuis que PES peut lui ajouter des valeurs hautes.
+          if(protEchelle(u).join('/')!==PROT_ECHELLE.join('/')) return _echec('échelle déplacée');
           if(cycleIrregulier(u)) return _echec('cycle déclaré irrégulier');
           const c=cibleVitesse(Object.assign(u,{phase:{type:'seche',debut:Date.now()-70*864e5}}));
           return (c.min===PHASES.seche.min&&c.alerte===PHASES.seche.alerte)
@@ -33208,6 +33295,271 @@ function testExercices(){
            STATUTS_HORMONAUX.length===3
            &&STATUTS_HORMONAUX.map(x=>x.cle).join('|')==='cycles_reguliers|perimenopause|menopause');
       } finally { currentUser=_mnU; }
+    })();
+
+    // ══════ PES : RÉDUCTION DES RISQUES, ET STRICTEMENT RIEN D'AUTRE ══════
+    // aPES était annoncé par ce lot et consommé par relanceAnalyses, qui
+    // testait « pes===false » sur une fonction inexistante : le rappel de
+    // bilan sanguin sortait pour TOUT LE MONDE.
+    (()=>{
+      const _peU=currentUser;
+      const _pj=n=>localISODate(new Date(Date.now()-n*864e5));
+      const _ath=(o)=>{
+        const c=o||{};
+        const u={id:'pe'+(c.id||''),email:'pe'+(c.id||'')+'@t',role:'athlete',
+          gender:c.gender||'Femme',_evol_gender:c.gender||'Femme',_evol_height:165,
+          exAlias:{},exMuscles:{},programs:{},sessions:[],sleepLog:[],
+          weightLog:[{date:_pj(30),kg:68},{date:_pj(0),kg:67}],
+          sessions_config:[{day:'J0',name:'S0',active:true,exercises:[]}],
+          bilans:[{type:'depart',date:Date.now()-200*864e5,'deb-weight':'67',
+            'deb-height':'165','deb-age':String(c.age!=null?c.age:30),
+            'deb-gender':c.gender||'Femme'}],
+          nutrition:{dietType:'strict',
+            macros:{on:{kcal:2000,p:130,g:220,l:55},off:{kcal:1900,p:130,g:200,l:55}}}};
+        u.phase={type:c.phase||'maintien',debut:Date.now()-70*864e5};
+        if(c.pes) u.pes=true;
+        if(c.partage) u.pesPartagee=true;
+        if(c.statut) u.statutHormonal=c.statut;
+        if(c.analyses) u.analyses=c.analyses;
+        return u;
+      };
+      try {
+        // ── Le champ, et sa nature ───────────────────────────────────────
+        ok('aPES est un booléen, PURE, sans autre condition',(()=>{
+          if(aPES(_ath({id:'a1'}))!==false) return _echec('vrai sans déclaration');
+          if(aPES(_ath({id:'a2',pes:true}))!==true) return _echec('faux malgré la déclaration');
+          if(aPES(null)!==false||aPES({})!==false) return _echec('sensible à l\'absence de dossier');
+          // Ni âge, ni sexe, ni phase ne doivent l'influencer.
+          if(!aPES(_ath({id:'a3',pes:true,gender:'Homme',age:19,phase:'seche'})))
+            return _echec('une autre condition s\'est glissée dedans');
+          const u=_ath({id:'a4',pes:true});
+          const avant=JSON.stringify(u);
+          aPES(u); protEchelle(u); relanceAnalyses(u);
+          return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
+        ok('PES n\'est PAS un état de santé déclarable',(()=>{
+          // Chaque libellé de cette liste porte « diagnostiqué par un médecin ».
+          // Un usage déclaré n'est pas un diagnostic, et l'y mettre le rendrait
+          // au passage visible du coach sans consentement.
+          if(ETATS_DECLARABLES.some(x=>/pes|produit|dopa|st[ée]ro/i.test(x.cle+' '+x.lib)))
+            return _echec('PES a été glissé dans les états déclarables');
+          const u=_ath({id:'a5',pes:true});
+          return etatsDeclares(u).length===0
+            ?true:_echec('la déclaration remplit etatsSante');})());
+
+        // ── Le rappel d'analyses cesse de sortir pour tout le monde ───────
+        ok('Sans déclaration, plus aucun rappel de bilan sanguin',(()=>{
+          const u=_ath({id:'b1'});
+          if(relanceAnalyses(u)) return _echec('le rappel sort encore sans PES');
+          // Même avec un dossier d'analyses très ancien : c'est bien aPES qui
+          // commande, pas l'ancienneté.
+          const v=_ath({id:'b2',analyses:[{marqueur:'x',valeur:1,unite:'u',date:_pj(900)}]});
+          return !relanceAnalyses(v)?true:_echec('l\'ancienneté a suffi');})());
+        ok('Avec déclaration, le rappel revient selon l\'ancienneté',(()=>{
+          const vide=_ath({id:'b3',pes:true});
+          if(!relanceAnalyses(vide)) return _echec('aucun rappel sans aucune analyse');
+          const vieux=_ath({id:'b4',pes:true,
+            analyses:[{marqueur:'x',valeur:1,unite:'u',date:_pj(ANALYSES_RELANCE_JOURS+5)}]});
+          if(!relanceAnalyses(vieux)) return _echec('aucun rappel sur une analyse périmée');
+          const frais=_ath({id:'b5',pes:true,
+            analyses:[{marqueur:'x',valeur:1,unite:'u',date:_pj(3)}]});
+          return !relanceAnalyses(frais)
+            ?true:_echec('le rappel sort sur une analyse récente');})());
+        ok('L\'encart de rappel suit exactement la même règle',(()=>{
+          if(_htmlRelanceAnalyses(_ath({id:'b6'}))!=='')
+            return _echec('l\'encart sort sans déclaration');
+          const h=_htmlRelanceAnalyses(_ath({id:'b7',pes:true}));
+          return h.length>0?true:_echec('l\'encart ne sort pas avec');})());
+        ok('Le rappel n\'est JAMAIS une notification',(()=>{
+          const src=String(relanceAnalyses)+String(_htmlRelanceAnalyses);
+          return !/Notification|scheduleNotif|notify\(/i.test(src)
+            ?true:_echec('le rappel passe par une notification');})());
+
+        // ── L'échelle s'OUVRE, la suggestion ne bouge PAS ────────────────
+        ok('PES ouvre le choix jusqu\'à 3,0',(()=>{
+          const u=_ath({id:'c1',pes:true});
+          const e=protEchelle(u);
+          if(Math.max.apply(null,e.slice())!==3.0) return _echec('plafond : '+e.join('/'));
+          // La borne basse ordinaire reste offerte : PES n'enferme personne
+          // dans le haut de l'échelle.
+          if(Math.min.apply(null,e.slice())!==Math.min.apply(null,PROT_ECHELLE.slice()))
+            return _echec('la borne basse a bougé : '+e.join('/'));
+          // Décroissante et sans doublon, comme l'échelle d'origine.
+          for(let i=1;i<e.length;i++) if(e[i]>=e[i-1]) return _echec('ordre rompu : '+e.join('/'));
+          return true;})());
+        ok('La SUGGESTION ne bouge pas d\'un gramme sous PES',(()=>{
+          // Suggérer plus de protéines PARCE QUE quelqu'un déclare un usage
+          // reviendrait à faire décider le produit à la place du coach.
+          for(const ph of ['seche','masse','recomp','maintien']){
+            const a=protSuggeree(_ath({id:'c2',pes:true}),ph);
+            const t=protSuggeree(_ath({id:'c3'}),ph);
+            if(a!==t) return _echec(ph+' : '+a+' au lieu de '+t);
+          }
+          return true;})());
+        ok('Sans déclaration, l\'échelle est exactement celle d\'avant',(()=>{
+          const e=protEchelle(_ath({id:'c4'}));
+          return e.join('/')===PROT_ECHELLE.join('/')
+            ?true:_echec(e.join('/'));})());
+        ok('PES et ménopause se cumulent sans se gêner',(()=>{
+          // La ménopause relève le PLANCHER proposé, PES relève le PLAFOND.
+          const u=_ath({id:'c5',pes:true,statut:'menopause',age:55});
+          const e=protEchelle(u);
+          if(Math.max.apply(null,e.slice())!==3.0) return _echec('plafond : '+e.join('/'));
+          if(Math.min.apply(null,e.slice())!==PROT_MIN_MENOPAUSE)
+            return _echec('plancher : '+e.join('/'));
+          for(let i=1;i<e.length;i++) if(e[i]>=e[i-1]) return _echec('ordre rompu : '+e.join('/'));
+          // ET le bonus ménopause cesse enfin d'être avalé en sèche : c'est
+          // exactement ce que le test du lot précédent annonçait sans le
+          // câbler. 2,4 + 0,2 = 2,6, désormais sous le plafond.
+          return protSuggeree(u,'seche')===2.6
+            ?true:_echec('sèche : '+protSuggeree(u,'seche'));})());
+
+        // ── Elle ne monte JAMAIS par défaut ──────────────────────────────
+        // La GARDE DE PRODUCTION, extraite de _doPushOne et exécutée telle
+        // quelle. Mes trois tests suivants la RÉÉCRIVAIENT : ils vérifiaient
+        // ma copie, pas le code qui tourne. Une variante retirant le second
+        // delete, et une autre supprimant la condition, passaient au vert.
+        const _gardePES=()=>{
+          const m=String(CLOUD._doPushOne).match(/if\(!safe\.pesPartagee\)\{[^}]*\}/);
+          return m?new Function('safe',m[0]):null;
+        };
+        ok('La garde de _doPushOne existe et est exécutable',(()=>{
+          return _gardePES()?true:_echec('la garde a disparu de _doPushOne');})());
+        ok('Sans partage, la garde RÉELLE retire tout',(()=>{
+          const g=_gardePES();
+          if(!g) return _echec('la garde a disparu de _doPushOne');
+          const safe={id:'z',pes:true};
+          g(safe);
+          if(safe.pes!==undefined) return _echec('la déclaration est partie');
+          // Le consentement part AVEC elle : un dossier portant
+          // « pesPartagee:true » sans « pes » se lirait tout seul.
+          const safe2={id:'z',pes:true,pesPartagee:false};
+          g(safe2);
+          return safe2.pesPartagee===undefined
+            ?true:_echec('le consentement est resté sans la déclaration');})());
+        ok('Avec partage, la garde RÉELLE laisse passer',(()=>{
+          const g=_gardePES();
+          if(!g) return _echec('la garde a disparu de _doPushOne');
+          const safe={id:'z',pes:true,pesPartagee:true};
+          g(safe);
+          return (safe.pes===true&&safe.pesPartagee===true)
+            ?true:_echec('le partage explicite ne suffit pas');})());
+        ok('Sans partage, la déclaration ne quitte pas l\'appareil',(()=>{
+          const u=_ath({id:'d1',pes:true});
+          const safe=JSON.parse(JSON.stringify(u));
+          if(!safe.pesPartagee){ delete safe.pes; delete safe.pesPartagee; }
+          if(safe.pes!==undefined) return _echec('elle est partie');
+          // Le consentement part AVEC elle : un dossier portant
+          // « pesPartagee:true » sans « pes » se lirait tout seul.
+          if(safe.pesPartagee!==undefined) return _echec('le consentement est resté');
+          if(u.pes!==true) return _echec('la donnée locale a été détruite');
+          const src=String(CLOUD._doPushOne);
+          if(!/delete safe\.pes/.test(src)) return _echec('le retrait a disparu de _doPushOne');
+          return CLOUD.CHAMPS_PROFIL_COACH.indexOf('pes')<0
+            ?true:_echec('pes figure dans la liste blanche du profil coach');})());
+        ok('Avec partage explicite, elle monte',(()=>{
+          const u=_ath({id:'d2',pes:true,partage:true});
+          const safe=JSON.parse(JSON.stringify(u));
+          if(!safe.pesPartagee){ delete safe.pes; delete safe.pesPartagee; }
+          return safe.pes===true?true:_echec('le partage explicite ne suffit pas');})());
+        ok('Sans partage, le coach ne voit pas non plus le 3,0',(()=>{
+          // Conséquence assumée, et dite dans la carte : le sélecteur du coach
+          // part du dossier tel qu'il lui parvient.
+          const u=_ath({id:'d3',pes:true});
+          const safe=JSON.parse(JSON.stringify(u));
+          if(!safe.pesPartagee){ delete safe.pes; delete safe.pesPartagee; }
+          const e=protEchelle(safe);
+          return Math.max.apply(null,e.slice())===Math.max.apply(null,PROT_ECHELLE.slice())
+            ?true:_echec('le coach voit '+Math.max.apply(null,e.slice()));})());
+        ok('Partagée, l\'échelle du coach monte bien à 3,0',(()=>{
+          const u=_ath({id:'d4',pes:true,partage:true});
+          const h=_htmlDepartCoach(u);
+          if(!h||!/<option/.test(h)) return _echec('fixture muette : aucun sélecteur');
+          const vals=(h.match(/<option value="([\d.]+)"[^>]*>[\d,]+ g\/kg(?! lip\.)/g)||[])
+            .map(x=>parseFloat((x.match(/value="([\d.]+)"/)||[])[1]));
+          return Math.max.apply(null,vals)===3.0
+            ?true:_echec('le coach voit '+Math.max.apply(null,vals));})());
+
+        // ── Ce que le lot NE fait PAS ────────────────────────────────────
+        ok('Aucun champ ne demande un produit, une dose ou une durée',(()=>{
+          // Les CHAMPS de saisie, pas la prose : la carte dit elle-même que
+          // rien de tout cela n'est demandé, et balayer son texte prendrait
+          // cette phrase pour un champ qui les demande.
+          const c=document.getElementById('atp-pes-card');
+          if(!c) return _echec('carte absente');
+          const ch=[].slice.call(c.querySelectorAll('input,select,textarea'));
+          const libres=ch.filter(e=>!(e.type==='checkbox'||e.type==='radio'));
+          if(libres.length) return _echec(libres.length+' champ(s) de saisie libre');
+          if(ch.length!==2) return _echec(ch.length+' contrôles au lieu de deux cases');
+          return ch.map(e=>e.id).join('|')==='atp-pes|atp-pes-partage'
+            ?true:_echec(ch.map(e=>e.id).join('|'));})());
+        ok('Le lot ne nomme aucune molécule et ne conseille aucun usage',(()=>{
+          const src=String(aPES)+String(protEchelle)+String(relanceAnalyses)
+            +String(_htmlRelanceAnalyses)+PES_PHRASE+PES_NOTE_PARTAGE;
+          const interdits=[/testost[ée]rone/i,/trenbolone/i,/nandrolone/i,/anavar/i,
+            /clenbut[ée]rol/i,/\bhgh\b/i,/\bsarm/i,/\bmg\b/i,/\bui\/|\bUI\b/,
+            /\bcycle de\b/i,/relance post/i,/\bdosage\b/i,/\bposologie\b/i];
+          for(const r of interdits) if(r.test(src)) return _echec('interdit : '+r);
+          return true;})());
+        ok('La note de partage dit la vérité, et sa conséquence',(()=>{
+          // Elle pouvait devenir « cette information reste entre toi et ton
+          // coach » — l'inverse exact du comportement — sans que rien ne le
+          // voie. C'est la seule chose que l'athlète lit avant de décider.
+          const t=PES_NOTE_PARTAGE;
+          if(!/[Nn]on transmise/.test(t)) return _echec('elle ne dit plus qu\'elle ne monte pas : '+t);
+          if(!/coach/.test(t)) return _echec('elle ne nomme pas le coach : '+t);
+          if(!/sauf si/.test(t)) return _echec('elle ne dit pas ce qui la fait monter : '+t);
+          // La conséquence assumée doit être ÉCRITE : sans partage, pas de 3,0.
+          if(!/prot[ée]ines/.test(t)) return _echec('la conséquence sur les protéines a disparu : '+t);
+          return true;})());
+        ok('La phrase renvoie au médecin, et ne s\'y substitue pas',(()=>{
+          if(!/médecin/.test(PES_PHRASE)) return _echec('aucun renvoi médical');
+          if(!/interpr[ée]ter/.test(PES_PHRASE)) return _echec('rien ne dit qui interprète');
+          if(/\d/.test(PES_PHRASE)) return _echec('un chiffre : '+PES_PHRASE);
+          return /prescrit/.test(PES_PHRASE)
+            ?true:_echec('rien ne dit qui prescrit');})());
+        ok('Aucun seuil d\'analyse n\'est interprété nulle part',(()=>{
+          // ANALYSES_PHRASE le dit déjà : les valeurs de référence dépendent du
+          // laboratoire, et seul le prescripteur les lit. Ce lot ne l'entame pas.
+          if(!/laboratoire/.test(ANALYSES_PHRASE)) return _echec('la phrase a changé');
+          return /Seul le médecin/.test(ANALYSES_PHRASE)
+            ?true:_echec('le renvoi au prescripteur a disparu');})());
+
+        // ── Déclarer, partager, retirer ───────────────────────────────────
+        ok('Déclarer l\'écrit, retirer efface TOUT, consentement compris',(()=>{
+          const sauve=currentUser;
+          const _sv=window.saveUser, _lc=window.loadClientHome, _go=window.go;
+          try{
+            window.saveUser=()=>true; window.loadClientHome=()=>{}; window.go=()=>{};
+            currentUser=_ath({id:'e1'});
+            DB.set('users',Object.assign(DB.get('users')||{},{'pee1@t':currentUser}));
+            openAthleteProfile();
+            const b=document.getElementById('atp-pes-bloc');
+            if(!b||b.style.display!=='none') return _echec('le bloc sort sans déclaration');
+            basculerPES(true);
+            if(currentUser.pes!==true) return _echec('rien n\'a été écrit');
+            if(b.style.display==='none') return _echec('le bloc reste masqué après déclaration');
+            // Le partage n'est JAMAIS pré-coché.
+            const pa=document.getElementById('atp-pes-partage');
+            if(pa&&pa.checked) return _echec('le partage est pré-coché');
+            basculerPartagePES(true);
+            if(currentUser.pesPartagee!==true) return _echec('le partage ne s\'écrit pas');
+            basculerPES(false);
+            if(currentUser.pes!==undefined) return _echec('une trace subsiste');
+            return currentUser.pesPartagee===undefined
+              ?true:_echec('le consentement de partage a survécu');
+          } finally { currentUser=sauve;
+            window.saveUser=_sv; window.loadClientHome=_lc; window.go=_go; }})());
+        ok('Le partage seul, sans déclaration, ne s\'écrit pas',(()=>{
+          const sauve=currentUser;
+          const _sv=window.saveUser;
+          try{
+            window.saveUser=()=>true;
+            currentUser=_ath({id:'e2'});
+            basculerPartagePES(true);
+            return currentUser.pesPartagee===undefined
+              ?true:_echec('un consentement orphelin a été écrit');
+          } finally { currentUser=sauve; window.saveUser=_sv; }})());
+      } finally { currentUser=_peU; }
     })();
 
     // ══════ PROFIL COACH VISIBLE PAR SES ATHLÈTES ══════
