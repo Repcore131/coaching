@@ -6222,6 +6222,22 @@ function risquesMicro(user,ref){
     }
   }
 
+  // ── Hydratation basse déclarée ──────────────────────────────────────────
+  // Une question, pas un verdict : « moins d'un litre » est une DÉCLARATION,
+  // faite une fois au bilan de départ, et elle ne dit rien de ce que l'athlète
+  // boit aujourd'hui. Elle ne se déclenche que quand le contexte la rend
+  // pertinente — une sèche, ou un volume d'entraînement soutenu.
+  {
+    const eau=_texteReponse(_dernierChamp(user,'deb-water'));
+    const basse=eau&&/moins de 1\s*l/i.test(_microNorm(eau));
+    const creneaux=((user.sessions_config)||[]).filter(x=>x&&x.active).length;
+    if(basse&&(enSeche||creneaux>=4)){
+      out.push({cle:'hydratation',lib:'Hydratation basse déclarée',
+        motif:'Il déclare boire moins d\'un litre par jour.',
+        question:'Est-ce que l\'hydratation a été abordée ?'});
+    }
+  }
+
   // ── Alimentation végétarienne ou végétalienne déclarée ───────────────────
   if(_microVege(user)){
     out.push({cle:'b12_fer_vegetal',lib:'Régime végétarien ou végétalien',
@@ -6412,9 +6428,13 @@ function renderCoachMicroSection(c){
   // Les proportions vivent dans le même emplacement : deux blocs de questions
   // au coach, même registre, même disclaimer d'esprit.
   const morpho=_htmlQuestionsMorpho(c);
-  if(!l.length&&!morpho){ el.innerHTML=''; el.style.display='none'; return; }
+  // Restitution, pas question : elle s'affiche meme sans risque a signaler.
+  // Le jour ON se lit sur le planning de L'ATHLETE, pas sur celui du coach :
+  // nutIsOnDay lit currentUser, qui est le coach sur cet ecran.
+  const hydra=_htmlHydratationCoach(c);
+  if(!l.length&&!morpho&&!hydra){ el.innerHTML=''; el.style.display='none'; return; }
   el.style.display='block';
-  if(!l.length){ el.innerHTML=morpho; return; }
+  if(!l.length){ el.innerHTML=morpho+hydra; return; }
   el.innerHTML=`<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:5px">À demander en séance</div>
     <div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-bottom:12px">Rien n'est détecté ici : ce sont des questions que le profil rend pertinentes.</div>
@@ -6424,7 +6444,19 @@ function renderCoachMicroSection(c){
       <div style="font-size:12.5px;color:#fff;line-height:1.6;margin-top:5px;font-weight:600">${escapeHtml(r.question)}</div>
     </div>`).join('')}
     <div style="font-size:11px;color:var(--text-dim);line-height:1.55;border-top:1px solid var(--border);padding-top:10px">${escapeHtml(MICRO_DISCLAIMER)}</div>
-  </div>`+morpho;
+  </div>`+morpho+hydra;
+}
+// Meme rendu que cote athlete, mais le jour ON est celui de l'ATHLETE : sur la
+// fiche coach, nutIsOnDay lirait le planning du coach et annoncerait un repere
+// faux un jour sur deux.
+function _htmlHydratationCoach(c){
+  const cfg=(c&&c.sessions_config)||null;
+  let on=false;
+  if(cfg){
+    const d=new Date();
+    on=!!(cfg[(d.getDay()+6)%7]&&cfg[(d.getDay()+6)%7].active===true);
+  }
+  return _htmlHydratation(c,on);
 }
 function urgencyScore(c){
   const lt=(c.bilans||[]).reduce((m,b)=>Math.max(m,b.date),0);
@@ -13016,9 +13048,113 @@ const FORME_ITEMS=Object.freeze([
 // intensite, satisfaction et hydratation restent écrits à l'identique mais ne
 // sont pas exploités : le premier recoupe le RIR déjà saisi série par série, le
 // dernier est un auto-report sans usage décisionnel ici.
+//
+// L'hydratation est désormais RESTITUÉE ailleurs — hydratationMoyenne, écran
+// progression et fiche coach — mais elle n'entre toujours PAS dans l'indice.
+// La restituer et la faire peser sur un score sont deux choses différentes :
+// la première rend à l'athlète ce qu'il a saisi, la seconde ferait dépendre un
+// verdict d'un curseur qu'on déplace sans y penser en fin de séance.
 
 // Curseur valide : un entier de 0 à 10. Les bornes sont celles du widget, pas
 // celles de la spécification d'origine qui annonçait 1 à 10.
+// ══════════════ HYDRATATION : RESTITUER CE QUI EST DÉJÀ COLLECTÉ ══════════════
+// L'hydratation était collectée DEUX fois et exploitée ZÉRO fois : au bilan de
+// départ, et après chaque séance. On la RESTITUE — on ne la juge pas, et on ne
+// la fait entrer dans aucun indice.
+const HYDRA_FENETRE_JOURS=28;
+const HYDRA_MIN_SEANCES=4;        // en dessous, « moyenne » ne veut rien dire
+// PURE. Rend {moyenne, nSeances} ou null.
+// Une séance sans la valeur est EXCLUE, jamais comptée 0 : compter zéro
+// transformerait un curseur non touché en déclaration de déshydratation.
+function hydratationMoyenne(user,jours){
+  const fen=(jours>0?jours:HYDRA_FENETRE_JOURS)*864e5;
+  const limite=Date.now()-fen;
+  const vals=[];
+  for(const s of ((user&&user.sessions)||[])){
+    if(!s||!s.date||s.date<limite) continue;
+    const v=_valForme(s.metrics&&s.metrics.hydratation);
+    if(v==null) continue;
+    vals.push(v);
+  }
+  if(vals.length<HYDRA_MIN_SEANCES) return null;
+  return {moyenne:Math.round(vals.reduce((a,b)=>a+b,0)/vals.length*10)/10,
+    nSeances:vals.length};
+}
+// ── Repère de besoin ────────────────────────────────────────────────────────
+// Comme REPERES_VOLUME et ACT_SEANCES, ces deux nombres sont des repères de
+// PRATIQUE DE TERRAIN et non une mesure. Le besoin réel dépend de la chaleur,
+// de l'altitude, de ce que l'athlète transpire, de ce qu'il mange et de ce qu'il
+// boit par ailleurs. Aucun calcul ne remplace le fait de regarder la couleur de
+// ses urines, et le texte le dit.
+const EAU_ML_PAR_KG=35;
+const EAU_ML_PAR_SEANCE=500;
+// PURE. Le poids passe par _poidsPourPlancher : une seconde lecture divergerait
+// à la première évolution, exactement comme pour le plancher calorique.
+function besoinEau(user,jourEstOn){
+  const poids=_poidsPourPlancher(user);
+  if(!(poids>0)) return null;
+  const ml=EAU_ML_PAR_KG*poids+(jourEstOn?EAU_ML_PAR_SEANCE:0);
+  return Math.round(ml/100)/10;
+}
+const EAU_REGISTRE='Repère de terrain, pas une mesure — la couleur des urines en '
+  +'dit plus qu\'un calcul.';
+function phraseBesoinEau(user,jourEstOn){
+  const l=besoinEau(user,jourEstOn);
+  if(l==null) return '';
+  return 'Repère : environ '+String(l).replace('.',',')+' L aujourd\'hui'
+    +(jourEstOn?' (jour d\'entraînement)':'')+'. '+EAU_REGISTRE;
+}
+function phraseHydratation(h){
+  if(!h) return '';
+  return 'Hydratation déclarée : '+String(h.moyenne).replace('.',',')+' / '+FORME_MAX
+    +' en moyenne sur '+h.nSeances+' séance'+(h.nSeances>1?'s':'')+'.';
+}
+// Aucune couleur, aucun jugement : deux phrases et le registre qui les encadre.
+function _htmlHydratation(user,jourEstOn){
+  const h=hydratationMoyenne(user);
+  const b=phraseBesoinEau(user,!!jourEstOn);
+  if(!h&&!b) return '';
+  return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Hydratation</div>
+    ${h?`<div style="font-size:12px;color:#ddd;line-height:1.6">${escapeHtml(phraseHydratation(h))}</div>`:''}
+    ${b?`<div style="font-size:11px;color:var(--text-dim);line-height:1.6;margin-top:${h?'6px':'0'}">${escapeHtml(b)}</div>`:''}
+  </div>`;
+}
+// ── Sel sur sept jours ──────────────────────────────────────────────────────
+// On totalise, on ne compare à RIEN. Il n'existe pas de seuil de sodium qui
+// vaille pour un athlète sans savoir ce qu'il transpire, et en affirmer un
+// serait pire que de se taire.
+const SEL_FENETRE_JOURS=7;
+const SEL_REGISTRE='La référence dépend de ton contexte et de ce que tu transpires.';
+function selSemaine(user,ref){
+  const log=((user&&user.nutrition)||{}).log||{};
+  const base=(ref instanceof Date)?ref:new Date();
+  let total=0, nJours=0, manquants=0;
+  for(let i=0;i<SEL_FENETRE_JOURS;i++){
+    const j=localISODate(new Date(base.getTime()-i*864e5));
+    const e=(log[j]&&log[j].entries)||[];
+    if(!e.length) continue;
+    nJours++;
+    for(const x of e){
+      if(!x) continue;
+      if(x.sel==null){ manquants++; continue; }
+      total+=Number(x.sel)||0;
+    }
+  }
+  if(!nJours) return null;
+  return {total:Math.round(total*10)/10,
+    parJour:Math.round(total/nJours*10)/10,nJours,manquants};
+}
+function _htmlSelSemaine(user){
+  const s=selSemaine(user);
+  if(!s) return '';
+  return `<div style="margin-top:10px;font-size:11px;color:var(--text-dim);line-height:1.6">
+    Sel : ${String(s.parJour).replace('.',',')} g par jour en moyenne sur ${s.nJours} jour${s.nJours>1?'s':''} journalisé${s.nJours>1?'s':''}.
+    ${s.manquants?`${s.manquants} aliment${s.manquants>1?'s':''} sans donnée de sel.`:''}
+    ${escapeHtml(SEL_REGISTRE)}
+  </div>`;
+}
+
 function _valForme(v){
   const n=parseInt(v,10);
   return (isFinite(n)&&n>=0&&n<=FORME_MAX)?n:null;
@@ -16530,7 +16666,8 @@ function renderVolume(){
   // Charge axiale : sous les muscles, comme demandé, et sans repère absolu.
   const axial=_htmlChargeAxiale(u,_volDecalage,null,{});
   document.getElementById('progress-content').innerHTML=
-    nav+alertes+corps+zero+axial+_htmlTonnage(u,_volDecalage)+_htmlRecords(u)+conv+bandeau;
+    nav+alertes+corps+zero+axial+_htmlTonnage(u,_volDecalage)+_htmlRecords(u)
+    +_htmlHydratation(u,nutIsOnDay(localISODate(new Date())))+conv+bandeau;
 }
 // Familles reellement pratiquees sur la fenetre affichee : on ne parle de
 // convention que si elle s'applique a quelque chose.
@@ -18753,6 +18890,7 @@ function _renderFjDaySummary(date){
       </div>
     </div>
     ${_repHtml}
+    ${_htmlSelSemaine(currentUser)}
     ${_microHtml}
     ${_htmlDernierAjout(date)}
     ${isToday?`<button onclick="copierHier()" style="width:100%;margin-bottom:12px;padding:10px 0;background:none;border:1px dashed #2a2a2a;border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;cursor:pointer">Copier la journée d'hier</button>`:''}
@@ -36866,6 +37004,190 @@ function testExercices(){
         return manque.length?_echec('absents de BILAN_QUESTIONS : '+manque.join(', ')):true;})());
     })();
 
+
+    // ══ HYDRATATION RESTITUÉE, SANS ENTRER DANS L'INDICE ═════════════════
+    (()=>{
+      const _sU=currentUser;
+      const _j=n=>Date.now()-n*864e5;
+      const _s=(n,hydra,extra)=>Object.assign({id:'h'+n,date:_j(n),name:'S',slot:0,
+        metrics:hydra==null?undefined:{hydratation:String(hydra)}},extra||{});
+      const _u=(sessions,extra)=>Object.assign({id:'hy',email:'hy@t',role:'athlete',
+        gender:'H',_evol_gender:'H',exAlias:{},exMuscles:{},bilans:[],weightLog:[],
+        sessions:sessions||[]},extra||{});
+      try{
+        // ── hydratationMoyenne ────────────────────────────────────────────
+        ok('Critère : douze séances renseignées → moyenne et compte justes',(()=>{
+          const l=[]; for(let i=0;i<12;i++) l.push(_s(i+1,(i%3)+5));  // 5,6,7 répétés
+          const h=hydratationMoyenne(_u(l));
+          if(!h) return _echec('aucune moyenne');
+          return h.nSeances===12&&h.moyenne===6
+            ?true:_echec(JSON.stringify(h));})());
+        ok('Critère : trois séances renseignées → null',(()=>{
+          const l=[_s(1,5),_s(2,6),_s(3,7)];
+          return hydratationMoyenne(_u(l))===null
+            ?true:_echec('une moyenne sort de trois séances');})());
+        ok('Critère : les séances sans metrics sont EXCLUES, jamais comptées 0',(()=>{
+          const base=[_s(1,8),_s(2,8),_s(3,8),_s(4,8)];
+          const avant=hydratationMoyenne(_u(base));
+          const avec=hydratationMoyenne(_u(base.concat([_s(5,null),_s(6,null)])));
+          if(!avant||!avec) return _echec('une des deux moyennes manque');
+          return avant.moyenne===avec.moyenne&&avant.nSeances===avec.nSeances
+            ?true:_echec(JSON.stringify(avant)+' contre '+JSON.stringify(avec));})());
+        ok('Une séance hors fenêtre ne compte pas',(()=>{
+          const l=[_s(1,8),_s(2,8),_s(3,8),_s(4,8),_s(400,2)];
+          const h=hydratationMoyenne(_u(l));
+          return h&&h.nSeances===4&&h.moyenne===8
+            ?true:_echec(JSON.stringify(h));})());
+        ok('Une valeur hors échelle est ignorée comme ailleurs',(()=>{
+          const l=[_s(1,8),_s(2,8),_s(3,8),_s(4,8),_s(5,99)];
+          const h=hydratationMoyenne(_u(l));
+          return h&&h.nSeances===4?true:_echec(JSON.stringify(h));})());
+
+        // ── besoinEau ─────────────────────────────────────────────────────
+        const _u80=()=>_u([],{weightLog:[{date:localISODate(new Date()),kg:80}]});
+        ok('Critère : 80 kg un jour ON → 3,3 L',(()=>{
+          const v=besoinEau(_u80(),true);
+          return v===3.3?true:_echec(String(v));})());
+        ok('Critère : 80 kg un jour OFF → 2,8 L',(()=>{
+          const v=besoinEau(_u80(),false);
+          return v===2.8?true:_echec(String(v));})());
+        ok('Critère : poids inconnu → null, aucun repère',(()=>{
+          const u=_u([]);
+          return besoinEau(u,true)===null&&phraseBesoinEau(u,true)===''
+            ?true:_echec('un repère sort sans poids');})());
+        ok('Le poids passe par _poidsPourPlancher, pas par une lecture parallèle',(()=>{
+          return /_poidsPourPlancher\(/.test(String(besoinEau))
+            ?true:_echec('lecture parallèle du poids');})());
+        ok('La phrase de repère dit que ce n\'est PAS une mesure',(()=>{
+          const t=phraseBesoinEau(_u80(),true);
+          return /pas une mesure/.test(t)&&/urines/.test(t)&&/jour d'entraînement/.test(t)
+            ?true:_echec(t);})());
+
+        // ── L'indice de forme est INTACT ──────────────────────────────────
+        ok('Critère : hydratation n\'entre PAS dans FORME_ITEMS',(()=>{
+          const cles=FORME_ITEMS.map(x=>x.cle);
+          if(cles.indexOf('hydratation')>=0) return _echec('hydratation est entrée dans l\'indice');
+          return cles.length===3&&cles.join()==='fatigue,motivation,sensation'
+            ?true:_echec(cles.join());})());
+        ok('Critère : formeSeance ignore totalement l\'hydratation',(()=>{
+          const a={metrics:{fatigue:'3',motivation:'8',sensation:'7'}};
+          const b={metrics:{fatigue:'3',motivation:'8',sensation:'7',hydratation:'0'}};
+          const c={metrics:{fatigue:'3',motivation:'8',sensation:'7',hydratation:'10'}};
+          const va=formeSeance(a), vb=formeSeance(b), vc=formeSeance(c);
+          return va===vb&&vb===vc&&va!=null
+            ?true:_echec(JSON.stringify([va,vb,vc]));})());
+        ok('Critère : zForme ne bouge pas non plus',(()=>{
+          const mk=h=>{const l=[];
+            for(let i=0;i<10;i++) l.push({id:'z'+i,date:_j(i+2),
+              metrics:Object.assign({fatigue:'4',motivation:'7',sensation:'7'},
+                h==null?{}:{hydratation:String(h)})});
+            return _u(l);};
+          const sess={id:'zz',date:_j(1),metrics:{fatigue:'4',motivation:'7',sensation:'7'}};
+          const a=zForme(sess,mk(null)), b=zForme(sess,mk(0)), c=zForme(sess,mk(10));
+          return JSON.stringify(a)===JSON.stringify(b)
+            &&JSON.stringify(b)===JSON.stringify(c)
+            ?true:_echec(JSON.stringify([a,b,c]));})());
+
+        // ── La règle conversationnelle ────────────────────────────────────
+        const _uEau=(rep,extra)=>_u([],Object.assign({
+          bilans:[{type:'depart',date:_j(30),'deb-water':rep}]},extra||{}));
+        ok('Critère : « Moins de 1L » en sèche → une entrée',(()=>{
+          const u=_uEau('Moins de 1L',{phase:{type:'seche',debut:_j(30)}});
+          const l=risquesMicro(u).filter(x=>x.cle==='hydratation');
+          if(l.length!==1) return _echec(l.length+' entrée(s)');
+          return /moins d'un litre/.test(l[0].motif)
+            &&/abordée/.test(l[0].question)&&/Hydratation basse/.test(l[0].lib)
+            ?true:_echec(JSON.stringify(l[0]));})());
+        ok('Critère : « Entre 3 à 4L » → aucune entrée',(()=>{
+          const u=_uEau('Entre 3 à 4L',{phase:{type:'seche',debut:_j(30)}});
+          return risquesMicro(u).filter(x=>x.cle==='hydratation').length===0
+            ?true:_echec('une entrée est apparue');})());
+        ok('Quatre créneaux actifs suffisent, même sans sèche',(()=>{
+          const u=_uEau('Moins de 1L',{sessions_config:Array.from({length:4},
+            (_,i)=>({day:'J'+i,name:'S',active:true,exercises:[]}))});
+          return risquesMicro(u).filter(x=>x.cle==='hydratation').length===1
+            ?true:_echec('aucune entrée avec quatre créneaux');})());
+        ok('Sans sèche NI volume, la règle se tait',(()=>{
+          const u=_uEau('Moins de 1L',{sessions_config:[
+            {day:'J0',name:'S',active:true,exercises:[]}]});
+          return risquesMicro(u).filter(x=>x.cle==='hydratation').length===0
+            ?true:_echec('la règle parle sans contexte');})());
+        ok('Critère : deb-water absent → aucune règle',(()=>{
+          const u=_u([],{bilans:[{type:'depart',date:_j(30)}],
+            phase:{type:'seche',debut:_j(30)}});
+          return risquesMicro(u).filter(x=>x.cle==='hydratation').length===0
+            ?true:_echec('une entrée sans réponse');})());
+        ok('La règle garde le format EXACT de risquesMicro',(()=>{
+          const u=_uEau('Moins de 1L',{phase:{type:'seche',debut:_j(30)}});
+          const e=risquesMicro(u).filter(x=>x.cle==='hydratation')[0];
+          const k=Object.keys(e).sort().join();
+          return k==='cle,lib,motif,question'?true:_echec(k);})());
+
+        // ── Le sel : aucun seuil ──────────────────────────────────────────
+        ok('Critère : aucun seuil de sodium n\'est affirmé',(()=>{
+          const u=_u([],{nutrition:{log:{}}});
+          const j=localISODate(new Date());
+          u.nutrition.log[j]={entries:[{id:1,sel:3.2},{id:2,sel:1.1}]};
+          const h=_htmlSelSemaine(u).replace(/<[^>]*>/g,' ');
+          if(!/4,3 g par jour/.test(h)) return _echec('total absent : '+h.slice(0,120));
+          // Aucune borne, aucun « maximum », aucun « recommandé ».
+          return !/maximum|recommand|ne dépasse|seuil|limite/i.test(h)
+            &&/dépend de ton contexte/.test(h)
+            ?true:_echec(h.slice(0,160));})());
+        ok('Critère : journal vide → aucun total de sel',
+           _htmlSelSemaine(_u([],{nutrition:{log:{}}}))==='');
+        ok('Les aliments sans donnée de sel sont DITS, pas comptés zéro',(()=>{
+          const u=_u([],{nutrition:{log:{}}});
+          const j=localISODate(new Date());
+          u.nutrition.log[j]={entries:[{id:1,sel:2},{id:2,sel:null},{id:3,sel:null}]};
+          const s=selSemaine(u);
+          if(!s||s.total!==2) return _echec(JSON.stringify(s));
+          return s.manquants===2&&/2 aliments sans donnée/.test(_htmlSelSemaine(u))
+            ?true:_echec('les manquants ne sont pas annoncés');})());
+
+        // ── Les deux rendus, RÉELLEMENT ───────────────────────────────────
+        ok('L\'encart est rendu dans l\'écran progression',(()=>{
+          // Les tests ci-dessus interrogent _htmlHydratation en isolation : on
+          // pouvait retirer entièrement son appel du rendu et tout restait vert,
+          // pour une restitution que personne ne verrait jamais.
+          return /_htmlHydratation\(/.test(document.documentElement.outerHTML)
+            &&/_htmlHydratation\(u,/.test(document.documentElement.outerHTML)
+            ?true:_echec('l\'appel a disparu du rendu de progression');})());
+        ok('La fiche coach lit le planning de L\'ATHLÈTE, pas celui du coach',(()=>{
+          // nutIsOnDay lit currentUser, qui est le COACH sur cet écran : un
+          // repère « jour d'entraînement » y serait faux un jour sur deux.
+          const sauve=currentUser;
+          try{
+            const jourIdx=(new Date().getDay()+6)%7;
+            // Le coach ne s'entraîne PAS aujourd'hui, l'athlète OUI.
+            currentUser={id:'co',email:'co@t',role:'coach',
+              sessions_config:Array.from({length:7},(_,i)=>({day:'J'+i,name:'S',
+                active:false,exercises:[]}))};
+            const ath=_u([],{weightLog:[{date:localISODate(new Date()),kg:80}],
+              sessions_config:Array.from({length:7},(_,i)=>({day:'J'+i,name:'S',
+                active:i===jourIdx,exercises:[]}))});
+            // escapeHtml transforme l'apostrophe en entité : on la redécode,
+            // comme le font déjà les autres tests de rendu du fichier.
+            const h=_htmlHydratationCoach(ath).replace(/<[^>]*>/g,' ')
+              .replace(/&#39;/g,"'");
+            if(!/3,3 L/.test(h))
+              return _echec('le repère ne suit pas le planning de l\'athlète : '+h.slice(0,140));
+            return /jour d'entraînement/.test(h)
+              ?true:_echec('la mention du jour ON manque');
+          } finally { currentUser=sauve; }})());
+
+        // ── Les interdits ─────────────────────────────────────────────────
+        ok('Aucune notification ne part de ce module',(()=>{
+          const src=String(hydratationMoyenne)+String(besoinEau)
+            +String(_htmlHydratation)+String(selSemaine)+String(_htmlSelSemaine);
+          return !/showNotification|new Notification/.test(src)
+            ?true:_echec('une notification part du module');})());
+        ok('Aucune recommandation de supplémentation sodée',(()=>{
+          const t=SEL_REGISTRE+' '+EAU_REGISTRE;
+          return !/suppl[ée]ment|sodium en gélule|pastille de sel|électrolyte/i.test(t)
+            ?true:_echec(t);})());
+      } finally { currentUser=_sU; }
+    })();
 
     // ══ RÉPARTITION PAR REPAS ET REPÈRE PÉRI-SÉANCE ══════════════════════
     (()=>{
