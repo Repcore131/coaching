@@ -1997,6 +1997,14 @@ const COACH_PHOTO='icons/coach.jpg';
       <div class="card" id="atp-etats-card" style="margin-bottom:14px">
         <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">États de santé déclarés</label>
         <div id="atp-etats-opts" style="display:flex;flex-direction:column;gap:8px"></div>
+        <div id="atp-hormo-bloc" style="display:none;margin-top:11px;border-top:1px solid var(--border);padding-top:11px">
+          <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;text-transform:uppercase;font-weight:700;margin-bottom:7px">Statut hormonal</div>
+          <div id="atp-hormo-opts" style="display:flex;flex-direction:column;gap:7px"></div>
+          <label style="display:flex;align-items:center;gap:9px;margin-top:10px;cursor:pointer">
+            <input type="checkbox" id="atp-hormo-trait" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0">
+            <span style="font-size:12px;color:#ddd;line-height:1.5">Un traitement hormonal est en cours</span>
+          </label>
+        </div>
         <div id="atp-thyroide-bloc" style="display:none;margin-top:11px;border-top:1px solid var(--border);padding-top:11px">
           <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;text-transform:uppercase;font-weight:700;margin-bottom:7px">Ce que ton médecin a dit</div>
           <div id="atp-thyroide-etats" style="display:flex;flex-direction:column;gap:7px"></div>
@@ -2400,6 +2408,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar"><button class="back-btn" onclick="go('s-client-home');loadClientHome()">←</button><span class="topbar-title">Évolution</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
+      <div id="prog-encart-osseux"></div>
       <div id="prog-bandeau-phase"></div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px" id="prog-tabs">
         <button class="btn btn-red btn-sm" onclick="showProgressTab('poids',this)" style="white-space:nowrap">️ Poids</button>
@@ -16830,8 +16839,34 @@ function loadPhoto(input,imgId){
 }
 
 // ======= PROGRESS =======
+// UNE seule phrase, une seule fois. Aucun exercice, aucun protocole, aucun
+// chiffre, et surtout aucune affirmation sur la densité osseuse de qui que ce
+// soit : on dit pourquoi continuer, pas ce que vaut son squelette.
+const MENO_ENCART_OSSEUX='Après la ménopause, le travail en charge est ce qui '
+  +'protège le mieux la densité osseuse. C\'est la meilleure raison de continuer.';
+// Le drapeau est posé par un GESTE, jamais par le rendu. Un écran qui écrit
+// dans le dossier est exactement le défaut que le lot des compléments a
+// corrigé, et un test de principe l'interdit désormais.
+function accuserEncartOsseux(){
+  currentUser.encartOsseuxVu=true;
+  saveUser();
+  _renderEncartOsseux();
+  return true;
+}
+function _htmlEncartOsseux(user){
+  const u=user||currentUser;
+  if(!menopauseeOuAgee(u)||((u||{}).encartOsseuxVu)) return '';
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px 14px;margin-bottom:14px">
+    <div style="font-size:12.5px;color:#eee;line-height:1.75">${escapeHtml(MENO_ENCART_OSSEUX)}</div>
+    <button onclick="accuserEncartOsseux()" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:10px;letter-spacing:1px">J'ai compris</button>
+  </div>`;
+}
+function _renderEncartOsseux(){
+  const z=document.getElementById('prog-encart-osseux');
+  if(z) z.innerHTML=_htmlEncartOsseux(currentUser);
+}
 function loadProgress(){
-  go('s-progress');renderBandeauPhase();showProgressTab('poids',document.querySelector('#prog-tabs button'));
+  go('s-progress');_renderEncartOsseux();renderBandeauPhase();showProgressTab('poids',document.querySelector('#prog-tabs button'));
   setTimeout(()=>setupScrollFade(document.getElementById('prog-tabs')),0);
 }
 
@@ -18313,6 +18348,10 @@ function _cyclesObserves(user){
 // PURE. La déclaration explicite suffit — elle n'a pas besoin d'un journal
 // pour être vraie. Sinon, c'est la dispersion des intervalles qui parle.
 function cycleIrregulier(user){
+  // La périménopause EST l'irrégularité : aucune autre condition n'est
+  // requise, et phaseCycle rend 'irregulier'. Le ressenti déclaré avant la
+  // séance reprend la main, ce qui est plus juste qu'un calendrier.
+  if(statutHormonal(user)==='perimenopause'&&_hormonalApplicable(user)) return true;
   const c=(user&&user.cycle)||{};
   if(c.regulier===false) return true;
   const v=_cycleIntervallesRetenus(user);
@@ -20168,6 +20207,77 @@ const PROT_DEFAUT=Object.freeze({seche:2.4,masse:2.2,recomp:2.2,maintien:1.8});
 const PROT_BASE=1.8;
 // L'échelle de la liste déroulante : de 2,4 à 1,8 par pas de 0,1.
 const PROT_ECHELLE=Object.freeze([2.4,2.3,2.2,2.1,2.0,1.9,1.8]);
+// ── Ménopause : des repères ajustés, et RIEN d'autre ──────────────────────
+// L'âge n'intervenait que dans le terme −5 × âge de Mifflin. Une athlète de
+// 54 ans recevait le modal de cycle avant chaque séance, les mêmes
+// fourchettes et le même plancher protéique qu'une athlète de 22 ans.
+//
+// Ce lot ne dit RIEN du traitement hormonal, rien des bouffées de chaleur, du
+// sommeil ou de l'humeur, et n'affirme rien sur la densité osseuse de qui que
+// ce soit. Il ajuste deux repères et mentionne une fois pourquoi continuer.
+const STATUTS_HORMONAUX=Object.freeze([
+  Object.freeze({cle:'cycles_reguliers',lib:'Cycles réguliers'}),
+  Object.freeze({cle:'perimenopause',   lib:'Périménopause'}),
+  Object.freeze({cle:'menopause',       lib:'Ménopause'})
+]);
+const PROT_BONUS_MENOPAUSE=0.2;   // g/kg ajoutés à la SUGGESTION, jamais imposés
+const PROT_MIN_MENOPAUSE=2.0;     // borne basse de l'échelle proposée
+const MENO_AGE_SEUIL=50;
+const MENO_CIBLE_SECHE=Object.freeze({min:-0.8,max:-0.3,alerte:-1.1});
+// Absent = 'cycles_reguliers' : aucun dossier existant ne change.
+function statutHormonal(user){
+  const v=(user||{}).statutHormonal;
+  return STATUTS_HORMONAUX.some(x=>x.cle===v)?v:'cycles_reguliers';
+}
+// Déclaré chez un homme : ignoré, sans erreur et sans message.
+function _hormonalApplicable(user){
+  return isFemale((user&&(user._evol_gender||user.gender))||'');
+}
+// La DÉCLARATION seule ouvre la fourchette de vitesse.
+function menopauseDeclaree(user){
+  return _hormonalApplicable(user)&&statutHormonal(user)==='menopause';
+}
+// L'ÂGE suffit pour le bonus protéique et l'encart : une athlète de 54 ans
+// n'a pas à déclarer quoi que ce soit pour qu'on cesse de lui proposer le
+// plancher protéique d'une femme de 22 ans.
+function menopauseeOuAgee(user){
+  if(!_hormonalApplicable(user)) return false;
+  if(statutHormonal(user)==='menopause') return true;
+  const a=_ageUtilisateur(user);
+  return a!=null&&a>=MENO_AGE_SEUIL;
+}
+// L'échelle proposée au coach démarre plus haut. Il reste libre de descendre
+// en dessous s'il le décide — ce sont des repères, pas des barrières.
+function protEchelle(user){
+  if(!menopauseeOuAgee(user)) return PROT_ECHELLE;
+  const l=PROT_ECHELLE.filter(v=>v>=PROT_MIN_MENOPAUSE);
+  return l.length?Object.freeze(l):PROT_ECHELLE;
+}
+// PROT_DEFAUT n'est PAS modifié : seule la SUGGESTION bouge.
+//
+// Conséquence assumée en sèche : PROT_DEFAUT.seche vaut déjà 2,4, soit la
+// borne haute de l'échelle. Le bonus y est donc entièrement avalé par le
+// plafond, et la suggestion reste 2,4. Il opère bien dans les trois autres
+// phases (2,2 → 2,4 ; 1,8 → 2,0). Le jour où le lot A2-01 portera l'échelle à
+// 3,0, la sèche passera d'elle-même à 2,6.
+function protSuggeree(user,phase){
+  const base=PROT_DEFAUT[phase]||PROT_BASE;
+  if(!menopauseeOuAgee(user)) return base;
+  const ech=protEchelle(user);
+  const haut=Math.max.apply(null,ech.slice());
+  return Math.min(Math.round((base+PROT_BONUS_MENOPAUSE)*10)/10,haut);
+}
+// La fourchette la plus LARGE de plusieurs repères, et l'alerte la plus
+// permissive avec elle : une fourchette large assortie d'une alerte étroite
+// autoriserait une vitesse tout en la signalant.
+function _fourchetteLaPlusLarge(l){
+  const v=(l||[]).filter(Boolean);
+  if(!v.length) return null;
+  const alertes=v.map(x=>x.alerte).filter(x=>typeof x==='number');
+  return {min:Math.min.apply(null,v.map(x=>x.min)),
+          max:Math.max.apply(null,v.map(x=>x.max)),
+          alerte:alertes.length?Math.min.apply(null,alertes):null};
+}
 // VALEUR PAR DÉFAUT, et non plancher : le vrai plancher est
 // LIP_PLANCHER_G_KG (0,6). Le commentaire d'origine disait « plancher, jamais
 // en dessous » — inexact déjà, et franchement trompeur maintenant que la
@@ -20421,7 +20531,9 @@ function besoinsProposes(user,opts){
   const phase=typePhase(user);
   const gParKg=(typeof o.protGparKg==='number'&&isFinite(o.protGparKg))
     ? o.protGparKg
-    : (PROT_DEFAUT[phase]||PROT_BASE);
+    // Une SUGGESTION qui ne serait pas appliquée quand le coach n'a rien réglé
+    // ne serait pas une suggestion : ce serait un affichage.
+    : protSuggeree(user,phase);
   const libPhase=(phase&&PHASES[phase]&&PHASES[phase].lib)||'';
   hypotheses.push(String(gParKg).replace('.',',')+' g de protéines par kilo'
     +(libPhase?' ('+libPhase.toLowerCase()+')':''));
@@ -20546,8 +20658,8 @@ function _htmlDepartCoach(c){
     return `<div style="font-size:10px;color:var(--text-faint);line-height:1.5;margin-bottom:10px">Point de départ calculable dès que son bilan porte ${escapeHtml(m||'les données de base')}.</div>`;
   }
   const phase=typePhase(c);
-  const suggere=PROT_DEFAUT[phase]||PROT_BASE;
-  const opts=PROT_ECHELLE.map(v=>`<option value="${v}"${b.gParKg===v?' selected':''}>${String(v).replace('.',',')} g/kg${v===suggere?' · suggéré':''}</option>`).join('');
+  const suggere=protSuggeree(c,phase);
+  const opts=protEchelle(c).map(v=>`<option value="${v}"${b.gParKg===v?' selected':''}>${String(v).replace('.',',')} g/kg${v===suggere?' · suggéré':''}</option>`).join('');
   // Le g/kg de lipides, réglable pour TOUT LE MONDE. La suggestion se décale
   // sous SOPK, elle ne s'impose pas.
   const lipSug=lipSuggere(c);
@@ -23609,8 +23721,14 @@ function cibleVitesse(user){
   // SOPK déclaré et sèche en cours : la fourchette s'élargit vers le bas et
   // le seuil d'alerte suit. Une perte plus lente n'est pas un déficit
   // insuffisant — c'est ce que la spécification appelle le vrai défaut.
-  if(p&&p.type==='seche'&&sopkApplicable(user))
-    return Object.assign({phase:p.type},PHASES.seche,SOPK_CIBLE_SECHE,{sopk:true});
+  // SOPK et ménopause peuvent se cumuler : on retient la fourchette la plus
+  // large des deux, jamais leur intersection. Deux raisons de perdre plus
+  // lentement ne font pas une raison de perdre plus vite.
+  if(p&&p.type==='seche'&&(sopkApplicable(user)||menopauseDeclaree(user))){
+    const _sk=sopkApplicable(user), _mn=menopauseDeclaree(user);
+    const _f=_fourchetteLaPlusLarge([_sk?SOPK_CIBLE_SECHE:null,_mn?MENO_CIBLE_SECHE:null]);
+    return Object.assign({phase:p.type},PHASES.seche,_f,{sopk:_sk,menopause:_mn});
+  }
   if(p) return Object.assign({phase:p.type},PHASES[p.type]);
   return {phase:null,min:null,max:null,alerteAbs:PESEE_ALERTE_SANS_PHASE,lib:null};
 }
@@ -27271,6 +27389,11 @@ const ATP_CYCLE_OPTIONS=Object.freeze([
 ]);
 let _atpEtats=[];
 let _atpThyEtat=null, _atpThyTrait=false;
+let _atpHormo=null, _atpHormoTrait=false;
+function setAtpHormonal(cle){
+  _atpHormo=(STATUTS_HORMONAUX.some(x=>x.cle===cle)&&_atpHormo!==cle)?cle:null;
+  _renderAtpEtats();
+}
 // La déclaration ÉCRIT tout de suite : un consentement se donne au moment où
 // on le donne, pas au clic d'un bouton « Enregistrer » plus bas dans l'écran.
 function declarerGrossesse(etat){
@@ -27349,6 +27472,17 @@ function _renderAtpEtats(){
     </div>`).join('');
   const c=document.getElementById('atp-thyroide-trait');
   if(c) c.checked=!!_atpThyTrait;
+  // Le statut hormonal n'est proposé qu'à qui il concerne.
+  const bh=document.getElementById('atp-hormo-bloc');
+  if(bh) bh.style.display=_hormonalApplicable(currentUser)?'block':'none';
+  const zh=document.getElementById('atp-hormo-opts');
+  if(zh) zh.innerHTML=STATUTS_HORMONAUX.map(x=>
+    `<div class="obj-opt${_atpHormo===x.cle?' sel':''}" onclick="setAtpHormonal('${x.cle}')"
+      role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div style="font-weight:800">${escapeHtml(x.lib)}</div>
+    </div>`).join('');
+  const ch=document.getElementById('atp-hormo-trait');
+  if(ch) ch.checked=!!_atpHormoTrait;
 }
 function basculerAtpEtat(cle){
   if(!ETATS_DECLARABLES.some(e=>e.cle===cle)) return;
@@ -27410,6 +27544,9 @@ function openAthleteProfile(){
   _atpEtats=etatsDeclares(u).slice();
   const _thy=thyroideDe(u);
   _atpThyEtat=_thy.etat; _atpThyTrait=_thy.traitement;
+  const _st=statutHormonal(u);
+  _atpHormo=(_st==='cycles_reguliers'&&u.statutHormonal===undefined)?null:_st;
+  _atpHormoTrait=!!u.traitementHormonal;
   _renderAtpEtats();
   const zc=document.getElementById('atp-comptes');
   if(zc) zc.innerHTML=htmlSelecteurComptes();
@@ -27434,6 +27571,12 @@ function saveAthleteProfile(){
   } else {
     delete currentUser.thyroide;
   }
+  // Le statut hormonal. Aucun choix = on retire la déclaration.
+  if(_atpHormo) currentUser.statutHormonal=_atpHormo;
+  else delete currentUser.statutHormonal;
+  const _ch=document.getElementById('atp-hormo-trait');
+  if(_atpHormo&&_ch&&_ch.checked) currentUser.traitementHormonal=true;
+  else delete currentUser.traitementHormonal;
   if(_atpCycleSuivi){
     // Repasser à « oui » remet les compteurs à zéro : sinon une proposition
     // d'arrêt déjà faite, ou trois reports déjà comptés, condamneraient la
@@ -32708,6 +32851,363 @@ function testExercices(){
           etatGrossesse(u); grossesseSuspend(u); cibleVitesse(u); ajustementPropose(u);
           return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
       } finally { currentUser=_grU; }
+    })();
+
+    // ══════ MÉNOPAUSE : DEUX REPÈRES, ET RIEN D'AUTRE ══════
+    // L'âge n'entrait que dans le −5 × âge de Mifflin. Une athlète de 54 ans
+    // recevait le modal de cycle avant chaque séance, la fourchette de perte
+    // d'une femme de 22 ans, et la même suggestion de protéines.
+    (()=>{
+      const _mnU=currentUser;
+      const _mj=n=>localISODate(new Date(Date.now()-n*864e5));
+      // age et statut sont indépendants : c'est tout l'enjeu du lot.
+      const _ath=(o)=>{
+        const c=o||{};
+        const u={id:'mn'+(c.id||''),email:'mn'+(c.id||'')+'@t',role:'athlete',
+          gender:c.gender||'Femme',_evol_gender:c.gender||'Femme',_evol_height:165,
+          exAlias:{},exMuscles:{},programs:{},sessions:[],sleepLog:[],
+          weightLog:[{date:_mj(30),kg:68},{date:_mj(0),kg:67}],
+          sessions_config:[{day:'J0',name:'S0',active:true,exercises:[]}],
+          bilans:[{type:'depart',date:Date.now()-200*864e5,'deb-weight':'67',
+            'deb-height':'165','deb-age':String(c.age!=null?c.age:30),
+            'deb-gender':c.gender||'Femme'}],
+          nutrition:{dietType:'strict',
+            macros:{on:{kcal:2000,p:130,g:220,l:55},off:{kcal:1900,p:130,g:200,l:55}}}};
+        u.phase={type:c.phase||'maintien',debut:Date.now()-70*864e5};
+        if(c.statut) u.statutHormonal=c.statut;
+        if(c.sopk) u.etatsSante=['sopk'];
+        if(c.extra) Object.assign(u,c.extra);
+        return u;
+      };
+      try {
+        // ── Le silence vaut « cycles réguliers » ─────────────────────────
+        ok('Statut absent = cycles réguliers',
+           statutHormonal(_ath({id:'a1'}))==='cycles_reguliers'
+           &&statutHormonal(null)==='cycles_reguliers'
+           &&statutHormonal({statutHormonal:'nimporte'})==='cycles_reguliers');
+        ok('Un dossier existant ne change en RIEN',(()=>{
+          const u=_ath({id:'a2',age:30});
+          if(menopauseeOuAgee(u)) return _echec('ménopausée sans rien avoir déclaré');
+          if(protSuggeree(u,'maintien')!==PROT_DEFAUT.maintien) return _echec('protéines déplacées');
+          if(protEchelle(u)!==PROT_ECHELLE) return _echec('échelle déplacée');
+          if(cycleIrregulier(u)) return _echec('cycle déclaré irrégulier');
+          const c=cibleVitesse(Object.assign(u,{phase:{type:'seche',debut:Date.now()-70*864e5}}));
+          return (c.min===PHASES.seche.min&&c.alerte===PHASES.seche.alerte)
+            ?true:_echec('fourchette déplacée : '+JSON.stringify(c));})());
+
+        // ── Déclaré chez un homme : ignoré, sans erreur et sans message ───
+        ok('Le statut déclaré chez un homme est ignoré',(()=>{
+          const h=_ath({id:'a3',gender:'Homme',statut:'menopause',age:58});
+          if(menopauseeOuAgee(h)) return _echec('ménopause reconnue chez un homme');
+          if(menopauseDeclaree(h)) return _echec('déclaration retenue chez un homme');
+          if(protSuggeree(h,'maintien')!==PROT_DEFAUT.maintien) return _echec('protéines déplacées');
+          const pm=_ath({id:'a4',gender:'Homme',statut:'perimenopause'});
+          if(cycleIrregulier(pm)) return _echec('périménopause retenue chez un homme');
+          h.phase={type:'seche',debut:Date.now()-70*864e5};
+          return cibleVitesse(h).min===PHASES.seche.min
+            ?true:_echec('fourchette déplacée chez un homme');})());
+
+        // ── La FOURCHETTE tient à la déclaration, pas à l'âge ─────────────
+        ok('Ménopause déclarée : la sèche s\'élargit vers le haut',(()=>{
+          const u=_ath({id:'a5',statut:'menopause',phase:'seche'});
+          const c=cibleVitesse(u);
+          if(c.min!==MENO_CIBLE_SECHE.min||c.max!==MENO_CIBLE_SECHE.max)
+            return _echec('fourchette : '+JSON.stringify(c));
+          if(c.alerte!==MENO_CIBLE_SECHE.alerte) return _echec('alerte : '+c.alerte);
+          return c.menopause===true?true:_echec('le drapeau manque');})());
+        ok('60 ans sans déclaration ne touche PAS la fourchette',(()=>{
+          // L'âge suffit pour les protéines et l'encart ; il ne suffit pas
+          // pour supposer un statut hormonal qu'elle n'a pas déclaré.
+          const u=_ath({id:'a6',age:60,phase:'seche'});
+          if(!menopauseeOuAgee(u)) return _echec('fixture muette : l\'âge ne porte rien');
+          const c=cibleVitesse(u);
+          return (c.min===PHASES.seche.min&&c.alerte===PHASES.seche.alerte&&!c.menopause)
+            ?true:_echec('l\'âge a suffi à élargir : '+JSON.stringify(c));})());
+        ok('La fourchette ne bouge QUE en sèche',(()=>{
+          const u=_ath({id:'a7',statut:'menopause',phase:'masse'});
+          const c=cibleVitesse(u);
+          return (c.min===PHASES.masse.min&&c.max===PHASES.masse.max)
+            ?true:_echec('la masse a bougé : '+JSON.stringify(c));})());
+
+        // ── Le cumul : la plus LARGE des deux, jamais l'intersection ──────
+        ok('SOPK + ménopause : la fourchette la plus large',(()=>{
+          const u=_ath({id:'a8',statut:'menopause',sopk:true,phase:'seche'});
+          if(!sopkApplicable(u)) return _echec('fixture muette : le SOPK ne prend pas');
+          const c=cibleVitesse(u);
+          // SOPK −1,0/−0,3 et ménopause −0,8/−0,3 : la plus large est −1,0.
+          if(c.min!==Math.min(SOPK_CIBLE_SECHE.min,MENO_CIBLE_SECHE.min))
+            return _echec('min : '+c.min);
+          if(c.max!==Math.max(SOPK_CIBLE_SECHE.max,MENO_CIBLE_SECHE.max))
+            return _echec('max : '+c.max);
+          // Une fourchette large assortie d'une alerte étroite autoriserait
+          // une vitesse tout en la signalant : l'alerte suit la fourchette.
+          if(c.alerte!==Math.min(SOPK_CIBLE_SECHE.alerte,MENO_CIBLE_SECHE.alerte))
+            return _echec('alerte : '+c.alerte);
+          if(c.alerte>c.min) return _echec('l\'alerte est DANS la fourchette : '+c.alerte+' > '+c.min);
+          return (c.sopk&&c.menopause)?true:_echec('un drapeau manque');})());
+        ok('Le SOPK seul est inchangé par ce lot',(()=>{
+          const u=_ath({id:'a9',sopk:true,phase:'seche'});
+          const c=cibleVitesse(u);
+          return (c.min===SOPK_CIBLE_SECHE.min&&c.alerte===SOPK_CIBLE_SECHE.alerte&&!c.menopause)
+            ?true:_echec(JSON.stringify(c));})());
+        ok('_fourchetteLaPlusLarge sans rien rend null',
+           _fourchetteLaPlusLarge([])===null&&_fourchetteLaPlusLarge([null,null])===null);
+
+        // ── Les protéines : une SUGGESTION, jamais une contrainte ─────────
+        ok('Le bonus protéique opère hors sèche',(()=>{
+          const u=_ath({id:'b1',statut:'menopause'});
+          const att={maintien:PROT_DEFAUT.maintien+PROT_BONUS_MENOPAUSE,
+                     masse:PROT_DEFAUT.masse+PROT_BONUS_MENOPAUSE,
+                     recomp:PROT_DEFAUT.recomp+PROT_BONUS_MENOPAUSE};
+          for(const ph in att){
+            const v=protSuggeree(u,ph);
+            if(Math.abs(v-att[ph])>1e-9) return _echec(ph+' : '+v+' au lieu de '+att[ph]);
+          }
+          return true;})());
+        ok('En sèche le bonus est AVALÉ par le plafond, et c\'est assumé',(()=>{
+          // PROT_DEFAUT.seche vaut 2,4, soit déjà la borne haute de l'échelle :
+          // 2,4 + 0,2 plafonné à 2,4. Le critère qui annonçait 2,6 s'annulait
+          // lui-même. Ce test épingle l'arithmétique, pas le chiffre espéré :
+          // le jour où A2-01 portera l'échelle à 3,0, il exigera 2,6 tout seul.
+          const u=_ath({id:'b2',statut:'menopause'});
+          const haut=Math.max.apply(null,protEchelle(u).slice());
+          const attendu=Math.min(PROT_DEFAUT.seche+PROT_BONUS_MENOPAUSE,haut);
+          const v=protSuggeree(u,'seche');
+          if(Math.abs(v-attendu)>1e-9) return _echec('seche : '+v);
+          return v<=haut?true:_echec('la suggestion dépasse l\'échelle');})());
+        ok('L\'échelle proposée démarre à 2,0 sous ménopause',(()=>{
+          const u=_ath({id:'b3',statut:'menopause'});
+          const e=protEchelle(u);
+          if(Math.min.apply(null,e.slice())!==PROT_MIN_MENOPAUSE)
+            return _echec('borne basse : '+e.join('/'));
+          if(Math.max.apply(null,e.slice())!==Math.max.apply(null,PROT_ECHELLE.slice()))
+            return _echec('la borne haute a bougé');
+          return e.every(v=>PROT_ECHELLE.indexOf(v)>=0)
+            ?true:_echec('une valeur inventée est apparue');})());
+        ok('50 ans sans déclaration suffit pour les protéines',(()=>{
+          const u=_ath({id:'b4',age:MENO_AGE_SEUIL});
+          if(protSuggeree(u,'maintien')!==PROT_DEFAUT.maintien+PROT_BONUS_MENOPAUSE)
+            return _echec('le bonus ne vient pas');
+          const j=_ath({id:'b5',age:MENO_AGE_SEUIL-1});
+          return protSuggeree(j,'maintien')===PROT_DEFAUT.maintien
+            ?true:_echec('le bonus sort avant le seuil');})());
+        ok('Les valeurs du lot sont celles-là, écrites en toutes lettres',(()=>{
+          // Mes tests se mesuraient à leurs propres constantes : les mettre à
+          // zéro les laissait au vert. Les chiffres décidés sont épinglés ici,
+          // une fois, en clair.
+          if(PROT_BONUS_MENOPAUSE!==0.2) return _echec('bonus : '+PROT_BONUS_MENOPAUSE);
+          if(PROT_MIN_MENOPAUSE!==2.0) return _echec('borne basse : '+PROT_MIN_MENOPAUSE);
+          if(MENO_AGE_SEUIL!==50) return _echec('seuil d\'âge : '+MENO_AGE_SEUIL);
+          const u=_ath({id:'b9',statut:'menopause'});
+          if(protSuggeree(u,'maintien')!==2.0) return _echec('maintien : '+protSuggeree(u,'maintien'));
+          const q=_ath({id:'b10',age:45});
+          if(menopauseeOuAgee(q)) return _echec('45 ans déclenche déjà quelque chose');
+          return protSuggeree(q,'maintien')===PROT_DEFAUT.maintien
+            ?true:_echec('45 ans reçoit le bonus');})());
+        ok('La fourchette ménopause ne demande JAMAIS de perdre plus vite',(()=>{
+          // C'est le sens même du lot : elle assouplit la cible et avance
+          // l'alerte. Une fourchette plus exigeante que la sèche ordinaire
+          // serait l'inverse exact de ce qu'on a voulu faire.
+          const s=PHASES.seche, m=MENO_CIBLE_SECHE;
+          if(m.min<s.min) return _echec('bas plus agressif : '+m.min+' < '+s.min);
+          if(m.max<s.max) return _echec('haut plus agressif : '+m.max+' < '+s.max);
+          if(m.alerte<s.alerte) return _echec('alerte plus tardive : '+m.alerte);
+          return true;})());
+        ok('PROT_DEFAUT et PROT_ECHELLE ne sont PAS modifiés',
+           PROT_DEFAUT.seche===2.4&&PROT_DEFAUT.maintien===1.8
+           &&PROT_ECHELLE.length===7&&PROT_ECHELLE[PROT_ECHELLE.length-1]===1.8);
+
+        // ── Une suggestion non appliquée serait un affichage ──────────────
+        ok('besoinsProposes applique la suggestion quand rien n\'est réglé',(()=>{
+          const u=_ath({id:'b6',statut:'menopause'});
+          const b=besoinsProposes(u,{});
+          if(!b||b.source===null) return _echec('fixture muette : rien de calculable');
+          if(Math.abs(b.gParKg-protSuggeree(u,'maintien'))>1e-9)
+            return _echec('g/kg retenu : '+b.gParKg);
+          const t=_ath({id:'b7'});
+          const bt=besoinsProposes(t,{});
+          return Math.abs(bt.gParKg-PROT_DEFAUT.maintien)<1e-9
+            ?true:_echec('le témoin a bougé : '+bt.gParKg);})());
+        ok('Le réglage EXPLICITE du coach prime sur la suggestion',(()=>{
+          const u=_ath({id:'b8',statut:'menopause'});
+          const b=besoinsProposes(u,{protGparKg:1.8});
+          return b&&Math.abs(b.gParKg-1.8)<1e-9
+            ?true:_echec('le coach a été écrasé : '+(b&&b.gParKg));})());
+
+        // ── Périménopause : le calendrier n'est plus utilisable ───────────
+        ok('La périménopause SEULE rend le cycle irrégulier',(()=>{
+          const u=_ath({id:'c1',statut:'perimenopause'});
+          if(!cycleIrregulier(u)) return _echec('aucune irrégularité');
+          // Aucune autre condition n'est requise : ni journal, ni déclaration.
+          if((u.cycle||{}).regulier!==undefined) return _echec('fixture impure');
+          const t=_ath({id:'c2'});
+          return !cycleIrregulier(t)?true:_echec('le témoin est irrégulier aussi');})());
+        ok('phaseCycle rend « irregulier » en périménopause',(()=>{
+          const u=_ath({id:'c3',statut:'perimenopause',
+            extra:{cycle:{enabled:true,lastPeriodDate:_mj(6),cycleLength:28}}});
+          const ph=phaseCycle(u,localISODate(new Date()));
+          if(ph!=='irregulier') return _echec('phase : '+ph);
+          if(phaseAgissante(ph)) return _echec('une phase agissante en périménopause');
+          const t=_ath({id:'c4',
+            extra:{cycle:{enabled:true,lastPeriodDate:_mj(6),cycleLength:28}}});
+          return phaseCycle(t,localISODate(new Date()))!=='irregulier'
+            ?true:_echec('le témoin est irrégulier aussi');})());
+        ok('La ménopause déclarée ne force PAS l\'irrégularité',(()=>{
+          // Elle a un autre traitement : la fourchette. Confondre les deux
+          // reviendrait à annoncer des phases à qui n'a plus de cycle.
+          const u=_ath({id:'c5',statut:'menopause'});
+          return !cycleIrregulier(u)?true:_echec('la ménopause passe par l\'irrégularité');})());
+
+        // ── L'encart osseux : une phrase, un geste, puis plus rien ────────
+        ok('L\'encart sort pour qui il concerne, et pour personne d\'autre',(()=>{
+          if(_htmlEncartOsseux(_ath({id:'d1',statut:'menopause'})).length===0)
+            return _echec('absent sous ménopause');
+          if(_htmlEncartOsseux(_ath({id:'d2',age:55})).length===0)
+            return _echec('absent à 55 ans');
+          if(_htmlEncartOsseux(_ath({id:'d3',age:30}))!=='')
+            return _echec('sort à 30 ans');
+          if(_htmlEncartOsseux(_ath({id:'d4',gender:'Homme',age:60}))!=='')
+            return _echec('sort chez un homme de 60 ans');
+          return true;})());
+        ok('L\'encart ne dit rien de la densité osseuse de QUELQU\'UN',(()=>{
+          const t=MENO_ENCART_OSSEUX;
+          if(/\d/.test(t)) return _echec('un chiffre : '+t);
+          if(/ostéoporose|ta densité|votre densité|risque de fracture/i.test(t))
+            return _echec('affirmation sur la personne : '+t);
+          if((t.match(/\./g)||[]).length>2) return _echec('plus de deux phrases');
+          return /densité osseuse/.test(t)?true:_echec('le motif a disparu');})());
+        ok('L\'encart NE S\'ÉCRIT PAS au rendu',(()=>{
+          // Le défaut corrigé par le lot des compléments : un rendu qui écrit.
+          const u=_ath({id:'d5',statut:'menopause'});
+          const avant=JSON.stringify(u);
+          _htmlEncartOsseux(u); menopauseeOuAgee(u); protSuggeree(u,'seche'); cibleVitesse(u);
+          return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
+        ok('« J\'ai compris » le fait taire, et lui seul',(()=>{
+          const sauve=currentUser;
+          try {
+            currentUser=_ath({id:'d6',statut:'menopause'});
+            DB.set('users',Object.assign(DB.get('users')||{},{'mnd6@t':currentUser}));
+            if(_htmlEncartOsseux(currentUser)==='') return _echec('fixture muette');
+            if(!/J&#39;ai compris|J'ai compris/.test(_htmlEncartOsseux(currentUser)))
+              return _echec('aucun bouton pour le faire taire');
+            accuserEncartOsseux();
+            if(currentUser.encartOsseuxVu!==true) return _echec('le drapeau n\'est pas posé');
+            return _htmlEncartOsseux(currentUser)===''
+              ?true:_echec('il revient après avoir été lu');
+          } finally { currentUser=sauve; }})());
+        ok('L\'encart n\'est JAMAIS une notification',(()=>{
+          const src=String(accuserEncartOsseux)+String(_htmlEncartOsseux)+String(_renderEncartOsseux);
+          return !/Notification|showToast|notify|scheduleNotif/i.test(src)
+            ?true:_echec('l\'encart passe par une notification');})());
+        ok('L\'écran d\'évolution porte bien son emplacement',
+           !!document.getElementById('prog-encart-osseux'));
+
+        // ── Ce que le lot NE fait PAS ────────────────────────────────────
+        ok('Aucun champ ne demande un traitement, une dose ou une date',(()=>{
+          // Trois fois de suite, mon propre avertissement a été pris pour un
+          // champ : le balayage porte sur les CHAMPS DE SAISIE, et la phrase
+          // se vérifie à part.
+          const c=document.getElementById('atp-hormo-bloc');
+          if(!c) return _echec('bloc absent');
+          const ch=[].slice.call(c.querySelectorAll('input,select,textarea'));
+          const libres=ch.filter(e=>!(e.type==='checkbox'||e.type==='radio'));
+          if(libres.length) return _echec(libres.length+' champ(s) de saisie libre');
+          if(ch.length!==1) return _echec(ch.length+' contrôles au lieu d\'une case');
+          return ch[0].id==='atp-hormo-trait'?true:_echec(ch[0].id);})());
+        ok('Le lot ne parle ni de symptômes, ni de compléments, ni de THS',(()=>{
+          const src=String(statutHormonal)+String(menopauseeOuAgee)+String(protSuggeree)
+            +String(protEchelle)+String(_htmlEncartOsseux)+MENO_ENCART_OSSEUX
+            +STATUTS_HORMONAUX.map(x=>x.lib).join(' ');
+          const interdits=[/bouffées? de chaleur/i,/traitement hormonal substitutif/i,
+            /\bTHS\b/,/complément/i,/phytoestrogène/i,/soja/i,/insomnie/i,/libido/i];
+          for(const r of interdits) if(r.test(src)) return _echec('interdit : '+r);
+          return true;})());
+        ok('Aucun ajustement automatique n\'est déclenché par le statut',(()=>{
+          // Le statut décale des REPÈRES. Il ne touche ni les macros
+          // enregistrées, ni le volume, ni la charge.
+          const u=_ath({id:'e1',statut:'menopause'});
+          const avant=JSON.stringify(u.nutrition);
+          besoinsProposes(u,{}); cibleVitesse(u); ajustementPropose(u);
+          return JSON.stringify(u.nutrition)===avant
+            ?true:_echec('la nutrition enregistrée a bougé');})());
+        ok('Déclarer le statut l\'écrit, le retirer l\'efface',(()=>{
+          const sauve=currentUser;
+          const _sv=window.saveUser, _lc=window.loadClientHome, _go=window.go;
+          const _enr=()=>{ try{ window.saveUser=()=>true; window.loadClientHome=()=>{};
+            window.go=()=>{}; saveAthleteProfile(); }
+            finally { window.saveUser=_sv; window.loadClientHome=_lc; window.go=_go; } };
+          try{
+            currentUser=_ath({id:'e4'});
+            DB.set('users',Object.assign(DB.get('users')||{},{'mne4@t':currentUser}));
+            openAthleteProfile();
+            const b=document.getElementById('atp-hormo-bloc');
+            if(!b||b.style.display==='none') return _echec('le bloc reste masqué pour elle');
+            setAtpHormonal('menopause');
+            _enr();
+            if(currentUser.statutHormonal!=='menopause')
+              return _echec('rien n\'a été écrit : '+currentUser.statutHormonal);
+            // Se retirer doit être aussi simple que de se déclarer : un second
+            // appui sur le même choix le relâche, et l'enregistrement EFFACE.
+            setAtpHormonal('menopause');
+            _enr();
+            return currentUser.statutHormonal===undefined
+              ?true:_echec('la déclaration a survécu : '+currentUser.statutHormonal);
+          } finally { currentUser=sauve; }})());
+        ok('Le bloc du statut reste masqué pour un homme',(()=>{
+          const sauve=currentUser;
+          try{
+            currentUser=_ath({id:'e5',gender:'Homme'});
+            DB.set('users',Object.assign(DB.get('users')||{},{'mne5@t':currentUser}));
+            openAthleteProfile();
+            const b=document.getElementById('atp-hormo-bloc');
+            return (b&&b.style.display==='none')
+              ?true:_echec('le bloc sort pour un homme');
+          } finally { currentUser=sauve; }})());
+        ok('SOPK sans déclaration : l\'âge n\'élargit toujours pas',(()=>{
+          // Une de mes variantes remplaçait menopauseDeclaree par
+          // menopauseeOuAgee DANS le corps de la branche, où la condition
+          // l'avait déjà filtrée : inerte, sauf pour une athlète SOPK de
+          // 60 ans non déclarée. Ce cas-là n'était couvert par rien.
+          const u=_ath({id:'e6',age:60,sopk:true,phase:'seche'});
+          if(!sopkApplicable(u)) return _echec('fixture muette : le SOPK ne prend pas');
+          if(!menopauseeOuAgee(u)) return _echec('fixture muette : l\'âge ne porte rien');
+          const c=cibleVitesse(u);
+          if(c.menopause) return _echec('l\'âge a suffi à poser le drapeau');
+          return (c.min===SOPK_CIBLE_SECHE.min&&c.max===SOPK_CIBLE_SECHE.max
+                  &&c.alerte===SOPK_CIBLE_SECHE.alerte)
+            ?true:_echec('le SOPK seul a bougé : '+JSON.stringify(c));})());
+        ok('Le sélecteur du coach part bien de l\'échelle décalée',(()=>{
+          // La fonction peut être juste et l'écran l'ignorer : c'est le RENDU
+          // que le coach voit.
+          const u=_ath({id:'e2',statut:'menopause'});
+          const h=_htmlDepartCoach(u);
+          if(!h||!/<option/.test(h)) return _echec('fixture muette : aucun sélecteur');
+          // Le même écran porte l'échelle des LIPIDES, dont la borne haute 1,5
+          // tombait dans un filtre par valeur. On distingue par le libellé.
+          const _prot=t=>(t.match(/<option value="([\d.]+)"[^>]*>[\d,]+ g\/kg(?! lip\.)/g)||[])
+            .map(x=>parseFloat((x.match(/value="([\d.]+)"/)||[])[1]));
+          const prot=_prot(h);
+          if(prot.length!==protEchelle(u).length)
+            return _echec(prot.length+' options au lieu de '+protEchelle(u).length);
+          if(Math.min.apply(null,prot)<PROT_MIN_MENOPAUSE)
+            return _echec('le coach voit encore '+Math.min.apply(null,prot));
+          // Et surtout : QUELLE option porte la mention. Les bonnes valeurs
+          // offertes avec la mauvaise suggestion, c'est le contraire du lot.
+          const _sug=t=>{
+            const m=t.match(/<option value="([\d.]+)"[^>]*>[\d,]+ g\/kg · suggéré/);
+            return m?parseFloat(m[1]):null;
+          };
+          if(_sug(h)!==protSuggeree(u,typePhase(u)))
+            return _echec('mention sur '+_sug(h)+' au lieu de '+protSuggeree(u,typePhase(u)));
+          if(_sug(h)===PROT_DEFAUT[typePhase(u)])
+            return _echec('la mention est restée sur la valeur d\'avant');
+          const tv=_prot(_htmlDepartCoach(_ath({id:'e3'})));
+          return Math.min.apply(null,tv)===Math.min.apply(null,PROT_ECHELLE.slice())
+            ?true:_echec('le témoin a bougé aussi : '+Math.min.apply(null,tv));})());
+        ok('Les trois statuts, et rien de plus',
+           STATUTS_HORMONAUX.length===3
+           &&STATUTS_HORMONAUX.map(x=>x.cle).join('|')==='cycles_reguliers|perimenopause|menopause');
+      } finally { currentUser=_mnU; }
     })();
 
     // ══════ PROFIL COACH VISIBLE PAR SES ATHLÈTES ══════
