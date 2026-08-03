@@ -6468,9 +6468,81 @@ function _htmlQuestionsMorpho(user){
 
 // Fiche coach UNIQUEMENT. Rien de tout ceci n'est rendu côté athlète : aucune
 // fonction de l'accueil ou de l'écran nutrition n'appelle risquesMicro.
+// Côté coach, le score EST montré : c'est un professionnel qui le lit, et il a
+// besoin de savoir sur quoi l'app s'est fondée pour se taire. Côté athlète,
+// aucun chiffre ne descend jamais.
+// PURE. Le format est celui de risquesMicro — {cle, lib, motif, question} —
+// mais la fonction est séparée : risquesMicro parle de micronutriments, et
+// trois de ses tests épinglent la liste exacte de ses clés.
+// UN OU DEUX faits seulement : une question au coach, et RIEN côté athlète.
+function risqueDeficitQuestion(user,jourISO){
+  let rd,pal;
+  try{ rd=risqueDeficitEnergetique(user,jourISO); pal=paliersDeficit(user,jourISO); }
+  catch(e){ return null; }
+  if(!rd||pal!=='aucun'||rd.points<1) return null;
+  return {cle:'deficit',lib:'Éléments qui se cumulent',
+    motif:rd.criteres.map(x=>x.lib.toLowerCase()+' : '+x.valeur).join(' · ')+'.',
+    question:'Comment se passe la récupération en ce moment — fatigue, sommeil, appétit ?'};
+}
+function _htmlDeficitCoach(c){
+  let pal='aucun', r=null;
+  try{ pal=paliersDeficit(c); r=risqueDeficitEnergetique(c); }catch(e){ return ''; }
+  if(pal==='aucun'){
+    // Un ou deux faits : une question, au même endroit et dans le même
+    // registre que les autres. Aucun chiffre, aucun palier annoncé.
+    const q=risqueDeficitQuestion(c);
+    if(!q) return '';
+    return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
+      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(q.lib)}</div>
+      <div style="font-size:12px;color:#ddd;line-height:1.6">${escapeHtml(q.motif)}</div>
+      <div style="font-size:12.5px;color:#fff;line-height:1.6;margin-top:5px;font-weight:600">${escapeHtml(q.question)}</div>
+    </div>`;
+  }
+  if(!r) return '';
+  const bloc=(pal==='blocage');
+  const col=bloc?'var(--red)':'var(--orange)';
+  const leve=((c&&c.cycle)||{}).leveDeficit;
+  const lignes=r.criteres.map(x=>
+    `<div style="font-size:12px;color:#ddd;line-height:1.65">· ${escapeHtml(x.lib)} — ${escapeHtml(String(x.valeur))}</div>`).join('');
+  // La levée est un GESTE du coach, jamais une expiration automatique. Deux
+  // motifs, pas de champ libre : on ne fait pas raconter un dossier médical.
+  const boutons=bloc
+    ?`<div style="display:flex;gap:8px;margin-top:11px">
+        <button onclick="leverDeficit('consulte')" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:10px;letter-spacing:1px">Elle a consulté</button>
+        <button onclick="leverDeficit('regles_revenues')" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:10px;letter-spacing:1px">Les règles sont revenues</button>
+      </div>
+      <div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-top:8px">Après une levée, propose une pause diététique plutôt qu'un retour direct en déficit.</div>`
+    :'';
+  const rappelLeve=leve
+    ?`<div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-top:8px">Levée enregistrée le ${escapeHtml(String(leve.date))} · motif : ${escapeHtml(String(leve.motif||''))}. Une nouvelle absence déclarée la remettra en cause.</div>`
+    :'';
+  return `<div style="background:var(--dark);border:1px solid ${col}55;border-radius:12px;padding:16px;margin-bottom:20px">
+    <div style="font-size:var(--fs-xs);color:${col};letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:6px">${bloc?'Apports bloqués sous le plancher':'Faits qui se cumulent'}</div>
+    <div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-bottom:10px">${r.points} élément${r.points>1?'s':''} relevé${r.points>1?'s':''}. Rien n'est diagnostiqué ici : ce sont des constats mesurés dans l'app.</div>
+    ${lignes}
+    ${bloc?`<div style="font-size:12px;color:#eee;line-height:1.7;margin-top:10px;border-top:1px solid var(--border);padding-top:10px">${escapeHtml(DEF_TEXTE_BLOCAGE)}</div>`:''}
+    ${boutons}${rappelLeve}
+  </div>`;
+}
+// Écrit la levée sur le dossier de l'athlète. Aucune expiration, aucun
+// décompte : elle tient jusqu'à ce qu'une nouvelle absence soit déclarée.
+function leverDeficit(motif){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c) return false;
+  if(['consulte','regles_revenues'].indexOf(motif)<0) return false;
+  if(!c.cycle) c.cycle={};
+  c.cycle.leveDeficit={date:localISODate(new Date()),motif};
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Levée enregistrée','la levée est');
+  try{ renderCoachMicroSection(c); renderCoachNutriSection(c); }catch(e){}
+  return true;
+}
 function renderCoachMicroSection(c){
   const el=document.getElementById('ccd-micro');
   if(!el) return;
+  const def=(function(){ try{ return _htmlDeficitCoach(c); }catch(e){ return ''; } })();
   const l=(function(){ try{ return risquesMicro(c); }catch(e){ return []; } })();
   // Les proportions vivent dans le même emplacement : deux blocs de questions
   // au coach, même registre, même disclaimer d'esprit.
@@ -6479,10 +6551,10 @@ function renderCoachMicroSection(c){
   // Le jour ON se lit sur le planning de L'ATHLETE, pas sur celui du coach :
   // nutIsOnDay lit currentUser, qui est le coach sur cet ecran.
   const hydra=_htmlHydratationCoach(c);
-  if(!l.length&&!morpho&&!hydra){ el.innerHTML=''; el.style.display='none'; return; }
+  if(!l.length&&!morpho&&!hydra&&!def){ el.innerHTML=''; el.style.display='none'; return; }
   el.style.display='block';
-  if(!l.length){ el.innerHTML=morpho+hydra; return; }
-  el.innerHTML=`<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
+  if(!l.length){ el.innerHTML=def+morpho+hydra; return; }
+  el.innerHTML=def+`<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:5px">À demander en séance</div>
     <div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-bottom:12px">Rien n'est détecté ici : ce sont des questions que le profil rend pertinentes.</div>
     ${l.map(r=>`<div style="border-left:2px solid var(--border);padding-left:11px;margin-bottom:12px">
@@ -20163,10 +20235,15 @@ function saveClientNutriMacros(malgrePlancher){
   if(viol.length){
     // Antécédent alimentaire déclaré : blocage DUR, aucune dérogation. C'est
     // le seul endroit de l'app où un professionnel ne peut pas passer outre.
-    if(pl.tca){
+    // La branche est ÉTENDUE, pas dupliquée : un seul endroit dans l'app où
+    // un professionnel ne peut pas passer outre, et il en reste un seul.
+    if(pl.tca||pl.deficit){
       window._plDerniereViol={email:c.email,liste:viol};
       renderCoachNutriSection(c);
-      toast('Antécédent alimentaire déclaré : impossible d\'enregistrer sous le plancher','var(--red)');
+      toast(pl.tca
+        ?'Antécédent alimentaire déclaré : impossible d\'enregistrer sous le plancher'
+        :'Plusieurs signaux de déficit énergétique : impossible d\'enregistrer sous le plancher',
+        'var(--red)');
       return false;
     }
     // Premier clic : on montre les chiffres et on attend un geste explicite.
@@ -23086,14 +23163,53 @@ function phraseRegimeMesure(a){
       +(a.nPesees||0)+' pesées — moins précise, donc on corrige par petits pas.';
   return 'Vitesse mesurée sur '+PESEE_FENETRE_VIT+' jours.';
 }
+// Registre de TEXTE_ARRET_DRAPEAU : on décrit ce qu'on constate, on ne nomme
+// aucune maladie, et on renvoie vers quelqu'un dont c'est le métier. Le mot
+// « RED-S » n'apparaît nulle part, ni « syndrome », ni « diagnostic ».
+const DEF_TEXTE_BLOCAGE='Tu as signalé deux mois sans règles, dans une période '
+  +'de restriction et d\'entraînement soutenu. Ce n\'est pas quelque chose que '
+  +'RepCore peut évaluer, et ce n\'est pas anodin : prends rendez-vous avec un '
+  +'médecin. En attendant, je ne te proposerai plus de réduire tes apports.';
+// Les critères sont nommés en clair, jamais comptés : aucun score chiffré ne
+// descend jusqu'à l'athlète.
+function messageDeficitVigilance(user){
+  let r; try{ r=risqueDeficitEnergetique(user); }catch(e){ return ''; }
+  if(!r||!r.criteres.length) return '';
+  const l=r.criteres.map(c=>c.lib.toLowerCase());
+  return 'Plusieurs éléments se cumulent en ce moment : '+l.join(', ')+'. '
+    +'Je ne te proposerai pas de baisser davantage. C\'est un bon moment pour '
+    +'en parler à ton coach.';
+}
+function _htmlDeficit(user,lectureSeule){
+  let pal='aucun';
+  try{ pal=paliersDeficit(user); }catch(e){}
+  if(pal==='aucun') return '';
+  const bloc=(pal==='blocage');
+  const txt=bloc?DEF_TEXTE_BLOCAGE:messageDeficitVigilance(user);
+  if(!txt) return '';
+  const c=bloc?'var(--red)':'var(--orange)';
+  return `<div style="background:var(--surface-1);border:1px solid ${c}55;border-radius:14px;padding:14px;margin-bottom:18px">
+    <div style="font-size:var(--fs-xs);color:${c};text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">${bloc?'À faire vérifier':'Prudence'}</div>
+    <div style="font-size:12.5px;color:#eee;line-height:1.75">${escapeHtml(txt)}</div>
+    ${blocDisclaimerSante()}
+  </div>`;
+}
 function _htmlAjustement(user,lectureSeule){
   const nut=(user&&user.nutrition)||{};
+  // ORDRE DE PRIORITÉ, décidé et testé : le BLOCAGE remplace tout — il dit
+  // déjà pourquoi rien n'est proposé et renvoie chez le médecin. La VIGILANCE,
+  // elle, s'ajoute AU-DESSUS du message de plancher sans jamais le masquer :
+  // les deux ne disent pas la même chose.
+  let _pal='aucun';
+  try{ _pal=paliersDeficit(user); }catch(e){}
+  if(_pal==='blocage') return _htmlDeficit(user,lectureSeule);
+  const _defHtml=(_pal==='vigilance')?_htmlDeficit(user,lectureSeule):'';
   const a=ajustementPropose(user);
   if(!a){
     // Pas de proposition : soit il n'y a rien à ajuster, soit le plancher
     // l'interdit. Le second cas se dit, il ne se tait pas.
     const pl=_ajustPlancherAtteint(user);
-    if(pl&&!lectureSeule) return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:18px">
+    if(pl&&!lectureSeule) return _defHtml+`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:18px">
       <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">Rythme</div>
       <div style="font-size:12px;color:#ddd;line-height:1.7">Ta ${escapeHtml(PHASES[(phaseCourante(user)||{}).type].apres)} avance plus lentement que visé, mais je ne te propose pas de baisser : tu serais ${pl.plancher!=null?(pl.regle||'sous ton plancher')+' ('+pl.plancher+' kcal)':'sous ton plancher'}. On regarde ailleurs — sommeil, pas quotidiens, régularité — et on en parle.</div>
       ${blocDisclaimerSante()}
@@ -23101,7 +23217,8 @@ function _htmlAjustement(user,lectureSeule){
     // Le plancher a la priorite : il vient d'etre teste juste au-dessus et rend
     // deja son propre bloc. L'adherence ne parle que si le plancher se tait.
     const _adhHtml=_htmlAdherenceRefus(user,lectureSeule);
-    if(_adhHtml) return _adhHtml;
+    if(_adhHtml) return _defHtml+_adhHtml;
+    if(_defHtml) return _defHtml;
     // Historique : le coach doit voir ce qui a été proposé et ce qui a été fait.
     const h=(nut.ajustHisto||[]).slice(-1)[0];
     if(lectureSeule&&h) return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:16px">
@@ -23333,6 +23450,10 @@ function ajustementPropose(user){
   // vitesse ni cible ni alerte. Lui proposer de manger moins serait
   // exactement ce que ce garde-fou existe pour empêcher.
   try{ if(aTCA(user)) return null; }catch(e){}
+  // Déficit énergétique au palier de blocage : MÊME effet que l'antécédent
+  // alimentaire, et pour la même raison. La vigilance, elle, ne coupe que les
+  // BAISSES — elle est appliquée plus bas, une fois le sens connu.
+  try{ if(paliersDeficit(user)==='blocage') return null; }catch(e){}
   // Meme motif pendant une pause : elle EST l'ajustement en cours. En proposer
   // un second par-dessus reviendrait a corriger une vitesse qu'on a
   // volontairement suspendue.
@@ -23387,6 +23508,9 @@ function ajustementPropose(user){
 
   // PRIORITÉ ABSOLUE : le plancher. Sans plancher calculable, aucune baisse.
   if(sens==='baisse'){
+    // Vigilance : plusieurs faits se cumulent. On ne descend plus. Une HAUSSE
+    // reste possible — c'est même souvent ce dont l'athlète a besoin.
+    try{ if(paliersDeficit(user)!=='aucun') return null; }catch(e){}
     const pl=plancherKcal(user);
     if(pl==null||kcalApres<pl) return null;
   }
@@ -23522,7 +23646,14 @@ function _poidsPourPlancher(user){
 }
 // Planchers effectifs pour CET athlète. Toujours un objet, jamais null : sans
 // poids connu, les bornes par kilo sont absentes mais l'absolu tient.
-function plancherEffectif(user){
+// Le paramètre « brut » saute toute majoration. Sans lui, la récursion est
+// fermée : le score de déficit a besoin du plancher pour son critère
+// d'apports, et le plancher a besoin du score pour sa majoration. C'est le
+// même piège que _depensePourPlafond documente déjà plus haut.
+// Le critère lit donc le plancher PHYSIOLOGIQUE — ce qui est d'ailleurs plus
+// juste : comparer des apports à un plancher déjà majoré pour protection
+// reviendrait à déclencher la protection sur elle-même.
+function plancherEffectif(user,brut){
   // Meme lecture du sexe que besoinsProposes : sans le repli sur le bilan, une
   // athlete dont le sexe n'existe QUE dans son bilan prend le plancher masculin.
   const _bl=((user&&user.bilans)||[]).filter(b=>b&&b.date).slice().sort((a,b)=>a.date-b.date);
@@ -23532,7 +23663,13 @@ function plancherEffectif(user){
   const poids=_poidsPourPlancher(user);
   let tca=false;
   try{ tca=aTCA(user); }catch(e){}
-  const maj=tca?PLANCHER_MAJORATION_TCA:1;
+  // Déficit énergétique au palier de blocage : MÊME majoration que
+  // l'antécédent alimentaire, et UNE SEULE FOIS si les deux sont vrais.
+  // Deux majorations successives donneraient 1,3225 — un plancher qu'aucune
+  // sèche ne pourrait plus franchir.
+  let deficit=false;
+  if(!brut){ try{ deficit=(paliersDeficit(user)==='blocage'); }catch(e){} }
+  const maj=(!brut&&(tca||deficit))?PLANCHER_MAJORATION_TCA:1;
   // La masse maigre est PRIORITAIRE quand elle est calculable. Elle ne l'est
   // que si les tours de mesure sont présents et que calcBF rend un nombre —
   // sinon on retombe sur le poids total, et la règle affichée le DIT plutôt que
@@ -23559,7 +23696,7 @@ function plancherEffectif(user){
   return {kcal,regle,
     p:poids!=null?Math.round(PROT_PLANCHER_G_KG*poids*maj*10)/10:null,
     l:poids!=null?Math.round(LIP_PLANCHER_G_KG*poids*maj*10)/10:null,
-    poids,masseMaigre:mm,tca,majoration:maj,abs,plafonne,
+    poids,masseMaigre:mm,tca,deficit,majoration:maj,abs,plafonne,
     proportionnel:proportionnel!=null?Math.round(proportionnel*maj):null,
     parKg:parPoids!=null?Math.round(parPoids*maj):null};
 }
@@ -24057,6 +24194,159 @@ function _restrictionBrute(user){
   return Math.min.apply(null,kcals)<seuil;
 }
 
+// ══════════ DÉFICIT ÉNERGÉTIQUE : DES FAITS, JAMAIS UN DIAGNOSTIC ══════════
+// Le produit sait déjà tout ce qu'il faut, en pièces détachées : une sèche qui
+// dure, des apports collés au plancher, une perte trop rapide, un volume
+// au-dessus du repère haut, des nuits courtes, des douleurs. Personne ne les
+// regardait ENSEMBLE. Et chez une athlète dont la perte s'arrête,
+// ajustementPropose proposait de baisser encore.
+//
+// Ce score n'est pas un diagnostic et n'est JAMAIS montré chiffré à
+// l'athlète : c'est un compteur de faits qui décide quand l'app doit se
+// taire, puis quand elle doit renvoyer vers un médecin.
+//
+// Il n'est PAS conditionné au genre : le déficit énergétique n'est pas
+// exclusivement féminin. Seul le critère d'absence de règles l'est de fait.
+const DEF_SEM_RESTRICTION=12;
+const DEF_PART_PLANCHER=1.15;
+// Alias, et non copies : MICRO_SOMMEIL_SEUIL vaut déjà 6 et
+// MICRO_SOMMEIL_JOURS déjà 14. Deux constantes de même valeur finissent
+// toujours par diverger.
+const DEF_SOMMEIL_SEUIL=MICRO_SOMMEIL_SEUIL;
+const DEF_SOMMEIL_JOURS=MICRO_SOMMEIL_JOURS;
+const DEF_MUSCLES_MRV=2;
+const DEF_POINTS_ABSENCE=3;
+const DEF_SEUIL_VIGILANCE=3;
+const DEF_SEUIL_BLOCAGE=5;
+const DEF_ABSENCES_BLOCAGE=2;
+
+function _moisSuivant(m){
+  const [a,b]=String(m).split('-').map(Number);
+  return b===12?((a+1)+'-01'):(a+'-'+String(b+1).padStart(2,'0'));
+}
+// Date de la levée explicite, ou null. Rien d'automatique, aucune expiration.
+function _leveDeficitDate(user){
+  const l=((user&&user.cycle)||{}).leveDeficit;
+  return (l&&l.date)?String(l.date):null;
+}
+// Plus longue suite de MOIS ADJACENTS portant une absence déclarée. Les
+// absences antérieures à une levée ne comptent plus : c'est ce qui permet au
+// blocage de revenir sur une NOUVELLE déclaration, et seulement sur elle.
+function absencesConsecutives(user,depuisISO){
+  const c=(user&&user.cycle)||{};
+  let l=(Array.isArray(c.absences)?c.absences:[])
+    .filter(x=>typeof x==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(x));
+  if(depuisISO) l=l.filter(x=>x>depuisISO);
+  const mois=Array.from(new Set(l.map(x=>x.slice(0,7)))).sort();
+  if(!mois.length) return 0;
+  let max=1,cour=1;
+  for(let i=1;i<mois.length;i++){
+    cour=(mois[i]===_moisSuivant(mois[i-1]))?cour+1:1;
+    if(cour>max) max=cour;
+  }
+  return max;
+}
+// PURE. Un point par critère rempli, chacun isolé dans son try : un calcul
+// qui casse compte ZÉRO et n'emporte pas les cinq autres avec lui.
+function risqueDeficitEnergetique(user,jourISO){
+  const j=jourISO||localISODate(new Date());
+  const criteres=[];
+  const essai=(cle,lib,fn)=>{
+    try{ const v=fn(); if(v) criteres.push({cle,lib,valeur:v}); }catch(e){}
+  };
+  essai('restriction','Sèche qui dure',()=>{
+    const ph=phaseCourante(user);
+    if(!ph||ph.type!=='seche') return null;
+    const sem=semainesEcoulees(user);
+    return (sem!=null&&sem>=DEF_SEM_RESTRICTION)?(sem+' semaines de sèche'):null;
+  });
+  essai('plancher','Apports collés au plancher',()=>{
+    const m=((user&&user.nutrition)||{}).macros;
+    if(!m) return null;
+    const pl=plancherEffectif(user,true);
+    if(!(pl.kcal>0)) return null;
+    const k=[m.on,m.off].filter(x=>x&&Number(x.kcal)>0).map(x=>Number(x.kcal));
+    if(!k.length) return null;
+    const min=Math.min.apply(null,k);
+    return min<pl.kcal*DEF_PART_PLANCHER
+      ?(min+' kcal pour un plancher de '+pl.kcal):null;
+  });
+  essai('vitesse','Perte rapide',()=>{
+    const seuil=(PHASES.seche||{}).alerte;
+    if(seuil==null) return null;
+    const v=_vitesseAuJour(user,j);
+    if(!v||v.pctSem==null) return null;
+    return v.pctSem<seuil
+      ?(String(Math.round(v.pctSem*100)/100).replace('.',',')+' % par semaine'):null;
+  });
+  essai('volume','Volume au-dessus du repère haut',()=>{
+    // La dernière semaine RÉVOLUE, comme partout ailleurs : la semaine en
+    // cours est incomplète et sous-compterait toujours.
+    const cle=_semainesRevolues(1)[0];
+    if(!cle) return null;
+    const v=volumeSemaine(user,cle)||{};
+    const hauts=[];
+    for(const m in v){
+      const rep=reperesEffectifs(user,m);
+      if(rep&&v[m]>rep.mrv) hauts.push(((MUSCLES[m]||{}).lib||m).toLowerCase());
+    }
+    return hauts.length>=DEF_MUSCLES_MRV?hauts.join(', '):null;
+  });
+  essai('sommeil','Nuits courtes',()=>{
+    const som=_microSommeil(user,new Date(j+'T00:00:00'));
+    if(!som) return null;   // moins de sept nuits : jamais présumé
+    return som.moyenne<DEF_SOMMEIL_SEUIL
+      ?(String(som.moyenne).replace('.',',')+' h sur '+som.nuits+' nuits'):null;
+  });
+  essai('douleur','Douleurs à l\'entraînement',()=>{
+    const sg=signauxEntrainement(user);
+    return (sg&&(sg.douleur||sg.douleurDiffuse))
+      ?'signalées sur les dernières séances':null;
+  });
+  let points=criteres.length;
+  let cons=0,nMois=0;
+  try{
+    const depuis=_leveDeficitDate(user);
+    cons=absencesConsecutives(user,depuis);
+    let l=(((user&&user.cycle)||{}).absences)||[];
+    if(depuis) l=l.filter(x=>x>depuis);
+    nMois=Array.from(new Set(l.map(x=>String(x).slice(0,7)))).length;
+  }catch(e){}
+  if(cons>=DEF_ABSENCES_BLOCAGE){
+    points+=DEF_POINTS_ABSENCE;
+    criteres.push({cle:'absences',lib:'Absence de règles',
+      valeur:cons+' mois de suite'});
+  } else if(nMois>=DEF_ABSENCES_BLOCAGE){
+    // Espacées et non consécutives : DÉCISION EXPLICITE — un point, pas trois.
+    // Deux mois sans règles dans l'année ne disent pas la même chose que deux
+    // mois de suite, mais ils ne sont pas rien non plus.
+    points+=1;
+    criteres.push({cle:'absences_espacees',lib:'Absences de règles espacées',
+      valeur:nMois+' mois signalés'});
+  }
+  return {points,criteres,absencesConsecutives:cons};
+}
+// PURE. Trois paliers. La levée explicite éteint le BLOCAGE tant qu'aucune
+// absence n'est déclarée après elle — sans quoi les points qui l'avaient
+// déclenché la rendraient caduque dans la seconde.
+function paliersDeficit(user,jourISO){
+  let r;
+  try{ r=risqueDeficitEnergetique(user,jourISO); }
+  catch(e){ return 'aucun'; }
+  const leve=!!_leveDeficitDate(user);
+  // absencesConsecutives ne compte QUE les absences postérieures à la levée :
+  // ce qui en sort est donc du NEUF, et rebloque sans être amorti. C'est ce
+  // qui fait revenir le blocage sur une nouvelle déclaration, et seulement
+  // sur elle.
+  if(r.absencesConsecutives>=DEF_ABSENCES_BLOCAGE) return 'blocage';
+  const bloquePoints=(r.points>=DEF_SEUIL_BLOCAGE);
+  if(bloquePoints&&!leve) return 'blocage';
+  // Après une levée, on ne bloque plus mais on ne pousse pas non plus : le
+  // palier retombe au cran du dessous, jamais à zéro.
+  if(bloquePoints&&leve) return 'vigilance';
+  if(r.points>=DEF_SEUIL_VIGILANCE) return 'vigilance';
+  return 'aucun';
+}
 function aTCA(user){
   const dep=((user&&user.bilans)||[]).filter(b=>b&&b.type==='depart').slice(-1)[0];
   if(!dep) return false;
@@ -24080,7 +24370,12 @@ function poidsAffiche(user){
 function renderCartePesee(){
   const z=document.getElementById('clh-pesee');
   if(!z) return;
-  if(!currentUser||aTCA(currentUser)||currentUser.masquerPoids){ z.innerHTML=''; return; }
+  // Même prudence que pour l'antécédent alimentaire : on n'incite pas à se
+  // peser tous les jours quelqu'un dont plusieurs signaux de déficit se
+  // cumulent déjà.
+  let _defBloque=false;
+  try{ _defBloque=(paliersDeficit(currentUser)==='blocage'); }catch(e){}
+  if(!currentUser||aTCA(currentUser)||currentUser.masquerPoids||_defBloque){ z.innerHTML=''; return; }
   const auj=localISODate(new Date());
   const serie=serieWeight(currentUser);
   const dujour=serie.find(e=>e.date===auj);
@@ -30017,6 +30312,390 @@ function testExercices(){
           return /longueur observée/.test(h)&&/31 jours/.test(h)&&/sur 3 cycles/.test(h)
             ?true:_echec('mention absente');})());
       } finally { currentUser=_fcU; }
+    })();
+
+    // ══════ DÉFICIT ÉNERGÉTIQUE : DES FAITS, TROIS PALIERS ══════
+    // Le produit savait déjà tout, en pièces détachées. Personne ne les
+    // regardait ensemble — et chez une athlète dont la perte s'arrête,
+    // ajustementPropose proposait de baisser encore.
+    (()=>{
+      const _dfU=currentUser;
+      const _j=n=>localISODate(new Date(Date.now()-n*864e5));
+      const AUJ=localISODate(new Date());
+      // Semaine RÉVOLUE : c'est celle que lit le critère de volume.
+      const _cleRev=_semainesRevolues(1)[0];
+      const _lundiRev=_lundiDeSemaine(_cleRev).getTime();
+      const _sets=(n,rir,pain)=>Array.from({length:n},()=>Object.assign(
+        {done:true,weight:'40',reps:'10',rir:String(rir)},pain?{pain:String(pain)}:{}));
+      // Un dossier où chaque critère se règle SÉPARÉMENT : c'est ce qui permet
+      // de vérifier qu'aucun n'en entraîne un autre.
+      const _ath=(o)=>{
+        const c=o||{};
+        const u={id:'df'+(c.id||''),email:'df'+(c.id||'')+'@t',role:'athlete',
+          gender:c.gender||'Femme',_evol_gender:c.gender||'Femme',
+          exAlias:{},programs:{},sessions:[],weightLog:[],sleepLog:[],bilans:[],
+          exMuscles:{'DC':{p:['PECTORAUX'],s:[],src:'manuel'},
+                     'SQ':{p:['QUADRICEPS'],s:[],src:'manuel'}},
+          nutrition:{}};
+        u.bilans.push({type:'depart',date:Date.now()-200*864e5,
+          'deb-weight':'52','deb-height':'165','deb-age':'27',
+          'deb-gender':(c.gender||'Femme')});
+        if(c.seche!=null) u.phase={type:'seche',debut:Date.now()-c.seche*7*864e5};
+        if(c.kcal!=null) u.nutrition.macros={on:{kcal:c.kcal,p:120,g:100,l:45},
+                                             off:{kcal:c.kcal,p:120,g:100,l:45}};
+        if(c.sommeil!=null) u.sleepLog=Array.from({length:14},(_,i)=>
+          ({date:_j(i),duration:c.sommeil}));
+        if(c.perteKgJour) u.weightLog=Array.from({length:40},(_,i)=>
+          ({date:_j(39-i),kg:Math.round((52-(39-i)*-c.perteKgJour)*10)/10}));
+        const sess=[];
+        if(c.volume) sess.push({id:'vv',date:_lundiRev+2*864e5,
+          data:{'DC':{sets:_sets(30,2)},'SQ':{sets:_sets(30,2)}}});
+        if(c.douleur) for(let i=0;i<3;i++) sess.push({id:'dd'+i,
+          date:Date.now()-(i+1)*3*864e5,data:{'DC':{sets:_sets(3,2,7)}}});
+        u.sessions=sess;
+        if(c.absences) u.cycle={absences:c.absences};
+        if(c.leve) u.cycle=Object.assign(u.cycle||{},{leveDeficit:c.leve});
+        return u;
+      };
+      const _cpt=(u)=>risqueDeficitEnergetique(u).criteres.map(x=>x.cle).sort();
+      try{
+        _viderCacheVolume(); _viderCacheSignaux();
+
+        // ── Chaque critère parle SEUL ────────────────────────────────────
+        ok('Dossier vide : aucun point, aucun palier, aucune exception',(()=>{
+          try{
+            const r=risqueDeficitEnergetique({});
+            return r.points===0&&paliersDeficit({})==='aucun'&&paliersDeficit(null)==='aucun'
+              ?true:_echec(JSON.stringify(r));
+          }catch(e){ return _echec('exception : '+e.message); }})());
+        ok('Les seuils sont ceux annoncés',(()=>{
+          // Écrits en DUR : les tests ci-dessous bornent leurs fixtures sur les
+          // constantes, et une constante déplacée leur échappait entièrement.
+          const att={DEF_SEM_RESTRICTION:12,DEF_PART_PLANCHER:1.15,
+            DEF_MUSCLES_MRV:2,DEF_POINTS_ABSENCE:3,DEF_SEUIL_VIGILANCE:3,
+            DEF_SEUIL_BLOCAGE:5,DEF_ABSENCES_BLOCAGE:2};
+          const val={DEF_SEM_RESTRICTION,DEF_PART_PLANCHER,DEF_MUSCLES_MRV,
+            DEF_POINTS_ABSENCE,DEF_SEUIL_VIGILANCE,DEF_SEUIL_BLOCAGE,
+            DEF_ABSENCES_BLOCAGE};
+          const faux=Object.keys(att).filter(k=>val[k]!==att[k]);
+          if(faux.length) return _echec(faux.map(k=>k+'='+val[k]).join(', '));
+          // Et les alias de sommeil pointent bien sur les constantes micro.
+          return DEF_SOMMEIL_SEUIL===MICRO_SOMMEIL_SEUIL
+            &&DEF_SOMMEIL_JOURS===MICRO_SOMMEIL_JOURS
+            ?true:_echec('les alias de sommeil ont divergé');})());
+        ok('Le critère de restriction se déclenche seul, à douze semaines',(()=>{
+          // Onze et douze en DUR : borner sur la constante rendait le test
+          // aveugle à son déplacement.
+          const court=_ath({id:'r1',seche:11});
+          const long=_ath({id:'r2',seche:12});
+          return _cpt(court).indexOf('restriction')<0
+            &&_cpt(long).join()==='restriction'
+            ?true:_echec(_cpt(court).join()+' / '+_cpt(long).join());})());
+        ok('Sans phase déclarée, les autres critères restent évaluables',(()=>{
+          const u=_ath({id:'r3',sommeil:5});
+          return _cpt(u).join()==='sommeil'?true:_echec(_cpt(u).join());})());
+        ok('Le critère de sommeil exige SEPT nuits, jamais présumé',(()=>{
+          const u=_ath({id:'s1',sommeil:5});
+          u.sleepLog=u.sleepLog.slice(0,MICRO_SOMMEIL_MIN_NUITS-1);
+          const v=_ath({id:'s2',sommeil:5});
+          return _cpt(u).indexOf('sommeil')<0&&_cpt(v).indexOf('sommeil')>=0
+            ?true:_echec(_cpt(u).join());})());
+        ok('Le score n\'appelle JAMAIS le palier : la boucle reste ouverte',(()=>{
+          // Si le critère lisait le plancher MAJORÉ, plancherEffectif
+          // rappellerait paliersDeficit, qui rappellerait le score, qui
+          // rappellerait le plancher. La pile finit par déborder — et le
+          // try/catch du score AVALE le débordement : le comportement reste
+          // juste, le coût explose, et rien ne se voit. On compte donc les
+          // appels au lieu de regarder le résultat.
+          const u=_ath({id:'p0',kcal:1000,seche:15});
+          const _vrai=window.paliersDeficit;
+          let n=0;
+          try{
+            window.paliersDeficit=function(){ n++; return _vrai.apply(null,arguments); };
+            risqueDeficitEnergetique(u);
+            return n===0?true:_echec(n+' appel(s) au palier depuis le score');
+          } finally { window.paliersDeficit=_vrai; }})());
+        ok('Le critère de plancher lit le plancher BRUT',(()=>{
+          // Sans le mode brut, la majoration se déclencherait sur elle-même :
+          // le score appelle le plancher, qui appelle le score.
+          const u=_ath({id:'p1',kcal:1000});
+          const pl=plancherEffectif(u,true).kcal;
+          if(!(pl>0)) return _echec('plancher nul');
+          const haut=_ath({id:'p2',kcal:Math.round(pl*1.5)});
+          return _cpt(u).indexOf('plancher')>=0&&_cpt(haut).indexOf('plancher')<0
+            ?true:_echec(_cpt(u).join()+' / '+_cpt(haut).join());})());
+        ok('Le critère de volume exige DEUX muscles au-dessus du repère haut',(()=>{
+          _viderCacheVolume();
+          const deux=_ath({id:'v1',volume:true});
+          const cles=_cpt(deux);
+          if(cles.indexOf('volume')<0) return _echec('deux muscles : '+cles.join());
+          const un=_ath({id:'v2'});
+          un.sessions=[{id:'x',date:_lundiRev+2*864e5,data:{'SQ':{sets:_sets(30,2)}}}];
+          _viderCacheVolume();
+          return _cpt(un).indexOf('volume')<0
+            ?true:_echec('un seul muscle a suffi');})());
+        ok('Le critère de douleur réutilise signauxEntrainement',(()=>{
+          _viderCacheSignaux();
+          const u=_ath({id:'d1',douleur:true});
+          const sg=signauxEntrainement(u);
+          if(!sg.douleur&&!sg.douleurDiffuse) return _echec('fixture muette');
+          return _cpt(u).indexOf('douleur')>=0?true:_echec(_cpt(u).join());})());
+        ok('Un critère qui lève une exception compte ZÉRO, pas plus',(()=>{
+          const u=_ath({id:'e1',sommeil:5});
+          const _sauve=window.signauxEntrainement;
+          try{
+            window.signauxEntrainement=()=>{ throw new Error('boum'); };
+            const r=risqueDeficitEnergetique(u);
+            return r.points===1?true:_echec('points '+r.points);
+          } finally { window.signauxEntrainement=_sauve; }})());
+
+        // ── Les absences ─────────────────────────────────────────────────
+        ok('Critère : deux absences consécutives SEULES → blocage',(()=>{
+          const u=_ath({id:'a1',absences:['2026-06-15','2026-07-15']});
+          const r=risqueDeficitEnergetique(u);
+          if(r.absencesConsecutives!==2) return _echec('suite '+r.absencesConsecutives);
+          // TROIS en dur : comparer à la constante suivait sa mutation.
+          if(r.points!==3) return _echec('points '+r.points);
+          return paliersDeficit(u)==='blocage'?true:_echec(paliersDeficit(u));})());
+        ok('Critère : une seule absence ne bloque pas',(()=>{
+          const u=_ath({id:'a2',absences:['2026-06-15']});
+          const r=risqueDeficitEnergetique(u);
+          return r.absencesConsecutives===1&&r.points===0&&paliersDeficit(u)==='aucun'
+            ?true:_echec(JSON.stringify(r));})());
+        ok('Cas limite : deux absences ESPACÉES → un point, pas trois',(()=>{
+          // Décision explicite : deux mois sans règles dans l'année ne disent
+          // pas la même chose que deux mois de suite, mais ce n'est pas rien.
+          const u=_ath({id:'a3',absences:['2026-04-15','2026-06-15']});
+          const r=risqueDeficitEnergetique(u);
+          if(r.absencesConsecutives>=DEF_ABSENCES_BLOCAGE)
+            return _echec('comptées comme consécutives');
+          return r.points===1&&paliersDeficit(u)==='aucun'
+            ?true:_echec('points '+r.points+' palier '+paliersDeficit(u));})());
+        ok('Décembre et janvier sont bien consécutifs',(()=>{
+          const u=_ath({id:'a4',absences:['2025-12-10','2026-01-10']});
+          return risqueDeficitEnergetique(u).absencesConsecutives===2
+            ?true:_echec('passage d\'année raté');})());
+
+        // ── Le cumul, et les paliers ─────────────────────────────────────
+        ok('Critère : cinq faits cumulés → palier de blocage',(()=>{
+          // La fixture du cahier des charges donnait 1480 kcal pour un plancher
+          // de 1200 : 1480 n'est PAS sous 1200 × 1,15 = 1380, et « 22 séries de
+          // quadriceps » ne fait qu'UN muscle là où DEF_MUSCLES_MRV en demande
+          // deux. Elle plafonnait donc à quatre points. Les constantes font foi,
+          // la fixture est corrigée : apports sous le seuil et deux muscles.
+          _viderCacheVolume(); _viderCacheSignaux();
+          const u=_ath({id:'c1',seche:15,kcal:1200,sommeil:5.7,
+            douleur:true,volume:true});
+          const r=risqueDeficitEnergetique(u);
+          const cles=r.criteres.map(x=>x.cle);
+          const manque=['restriction','plancher','sommeil','douleur','volume']
+            .filter(k=>cles.indexOf(k)<0);
+          if(manque.length) return _echec('critères absents : '+manque.join(', '));
+          if(r.points<DEF_SEUIL_BLOCAGE) return _echec('points '+r.points);
+          return paliersDeficit(u)==='blocage'?true:_echec(paliersDeficit(u));})());
+        ok('Critère : trois faits → vigilance, pas blocage',(()=>{
+          _viderCacheSignaux();
+          const u=_ath({id:'c2',seche:15,kcal:1200,sommeil:5.7});
+          const r=risqueDeficitEnergetique(u);
+          if(r.points!==DEF_SEUIL_VIGILANCE) return _echec('points '+r.points);
+          return paliersDeficit(u)==='vigilance'?true:_echec(paliersDeficit(u));})());
+        ok('Deux faits → aucun palier, mais une question au coach',(()=>{
+          const u=_ath({id:'c3',seche:15,sommeil:5.7});
+          if(paliersDeficit(u)!=='aucun') return _echec(paliersDeficit(u));
+          const q=risqueDeficitQuestion(u);
+          return q&&q.cle&&q.lib&&q.motif&&q.question
+            ?true:_echec('pas de question au coach');})());
+        ok('Zéro fait : aucune question au coach non plus',
+          risqueDeficitQuestion(_ath({id:'c4'}))===null);
+        ok('Dès qu\'un palier parle, la question se TAIT',(()=>{
+          // Sinon le coach lirait deux fois la même chose : une question
+          // « à demander en séance » et un bloc d'action juste au-dessus.
+          _viderCacheVolume(); _viderCacheSignaux();
+          const vigil=_ath({id:'c5',seche:15,kcal:1200,sommeil:5.7});
+          const bloque=_ath({id:'c6',absences:['2026-06-15','2026-07-15']});
+          if(paliersDeficit(vigil)!=='vigilance') return _echec('fixture muette (vigilance)');
+          if(paliersDeficit(bloque)!=='blocage') return _echec('fixture muette (blocage)');
+          return risqueDeficitQuestion(vigil)===null&&risqueDeficitQuestion(bloque)===null
+            ?true:_echec('la question sort par-dessus un palier');})());
+        ok('Critère : un athlète MASCULIN atteint le blocage',(()=>{
+          // Le déficit énergétique n'est pas exclusivement féminin : seul le
+          // critère d'absence de règles l'est de fait.
+          _viderCacheVolume(); _viderCacheSignaux();
+          const u=_ath({id:'m1',gender:'Homme',seche:15,kcal:1200,sommeil:5.7,
+            douleur:true,volume:true});
+          return paliersDeficit(u)==='blocage'
+            ?true:_echec(paliersDeficit(u)+' pour '+risqueDeficitEnergetique(u).points+' points');})());
+
+        // ── Les quatre effets du palier de blocage ───────────────────────
+        ok('Critère : blocage → ajustementPropose rend null, HAUSSE comprise',(()=>{
+          // Une baisse est déjà coupée par la vigilance : seule une HAUSSE
+          // isole la garde du blocage. Ma première fixture perdait lentement,
+          // donc l'app voulait BAISSER, et le test passait même sans la garde.
+          const rapide=_ath({id:'b1',seche:15,kcal:1800,perteKgJour:0.12});
+          const temoin=ajustementPropose(rapide);
+          if(!temoin||temoin.sens!=='hausse')
+            return _echec('fixture muette : '+(temoin?temoin.sens:'aucune proposition'));
+          const bloque=_ath({id:'b1b',absences:['2026-06-15','2026-07-15'],
+            seche:15,kcal:1800,perteKgJour:0.12});
+          return ajustementPropose(bloque)===null
+            ?true:_echec('une hausse est sortie malgré le blocage');})());
+        ok('Critère : blocage → le plancher est majoré de 15 %',(()=>{
+          const sain=_ath({id:'b2'});
+          const bloque=_ath({id:'b3',absences:['2026-06-15','2026-07-15']});
+          const a=plancherEffectif(sain).kcal, b=plancherEffectif(bloque).kcal;
+          if(paliersDeficit(bloque)!=='blocage') return _echec('fixture muette');
+          return b===Math.round(a*PLANCHER_MAJORATION_TCA)
+            ?true:_echec(a+' → '+b);})());
+        ok('Critère : antécédent ET blocage → UNE seule majoration',(()=>{
+          const u=_ath({id:'b4',absences:['2026-06-15','2026-07-15']});
+          u.bilans.push({type:'depart',date:Date.now()-100*864e5,
+            'deb-weight':'52','deb-height':'165','deb-age':'27','deb-gender':'Femme',
+            'deb-tca':'anorexie il y a 5 ans'});
+          if(!aTCA(u)) return _echec('fixture muette : pas d\'antécédent');
+          if(paliersDeficit(u)!=='blocage') return _echec('fixture muette : pas de blocage');
+          const pl=plancherEffectif(u);
+          return pl.majoration===PLANCHER_MAJORATION_TCA
+            ?true:_echec('majoration '+pl.majoration+' au lieu de '+PLANCHER_MAJORATION_TCA);})());
+        ok('Critère : blocage → la carte de pesée ne rend rien',(()=>{
+          const z=document.getElementById('clh-pesee');
+          if(!z) return _echec('emplacement absent');
+          const _s=currentUser, _av=z.innerHTML;
+          try{
+            currentUser=_ath({id:'b5'});
+            currentUser.weightLog=Array.from({length:6},(_,i)=>({date:_j(i),kg:52}));
+            renderCartePesee();
+            const avant=z.innerHTML.length;
+            currentUser=_ath({id:'b6',absences:['2026-06-15','2026-07-15']});
+            currentUser.weightLog=Array.from({length:6},(_,i)=>({date:_j(i),kg:52}));
+            renderCartePesee();
+            if(!(avant>0)) return _echec('fixture muette : rien rendu sans blocage');
+            return z.innerHTML===''?true:_echec('la carte est restée');
+          } finally { currentUser=_s; z.innerHTML=_av; }})());
+        ok('Critère : blocage → le plancher est un mur, même avec dérogation',(()=>{
+          const u=_ath({id:'b7',absences:['2026-06-15','2026-07-15']});
+          const pl=plancherEffectif(u);
+          if(!pl.deficit) return _echec('le drapeau deficit manque');
+          // La branche du refus lit pl.tca OU pl.deficit : une seule branche,
+          // étendue, et non deux écrites côte à côte.
+          const src=String(saveClientNutriMacros);
+          return /pl\.tca\s*\|\|\s*pl\.deficit/.test(src)
+            ?true:_echec('la branche de refus n\'a pas été étendue');})());
+
+        // ── Le palier de vigilance ───────────────────────────────────────
+        ok('Critère : vigilance → aucune BAISSE, mais une hausse reste possible',(()=>{
+          const src=String(ajustementPropose);
+          // La garde est posée DANS la branche de baisse, pas au-dessus : une
+          // hausse doit continuer de sortir.
+          const i=src.indexOf("sens==='baisse'");
+          const j=src.indexOf('plancherKcal',i);
+          if(i<0||j<0) return _echec('branche de baisse introuvable');
+          return /paliersDeficit/.test(src.slice(i,j))
+            ?true:_echec('la vigilance ne garde pas la baisse');})());
+        ok('Le message de vigilance nomme les faits, sans aucun chiffre de score',(()=>{
+          _viderCacheSignaux();
+          const u=_ath({id:'g1',seche:15,kcal:1200,sommeil:5.7});
+          const m=messageDeficitVigilance(u);
+          if(!/Plusieurs éléments se cumulent/.test(m)) return _echec(m);
+          if(!/parler à ton coach/.test(m)) return _echec('le renvoi au coach manque');
+          return !/\b\d+\s*points?\b/i.test(m)?true:_echec('un score est annoncé');})());
+
+        // ── L'ordre des messages ─────────────────────────────────────────
+        ok('Cas limite : le message de plancher n\'est pas masqué par la vigilance',(()=>{
+          _viderCacheSignaux();
+          // Perte LENTE : _ajustPlancherAtteint ne parle que dans ce cas —
+          // l'app voudrait baisser, et le plancher l'en empêche. Ma première
+          // fixture perdait 1,6 % par semaine : il n'avait rien à dire.
+          const u=_ath({id:'o1',seche:15,kcal:1200,sommeil:5.7,perteKgJour:0.002});
+          if(paliersDeficit(u)!=='vigilance') return _echec('fixture muette : '+paliersDeficit(u));
+          const pl=_ajustPlancherAtteint(u);
+          const h=_htmlAjustement(u,false);
+          if(!pl) return _echec('fixture muette : le plancher ne parle pas');
+          return /Plusieurs éléments se cumulent/.test(h)&&/Rythme/.test(h)
+            ?true:_echec('un des deux messages a disparu');})());
+        ok('En revanche le BLOCAGE remplace tout : il dit déjà pourquoi',(()=>{
+          const u=_ath({id:'o2',absences:['2026-06-15','2026-07-15'],
+            seche:15,kcal:1200,perteKgJour:0.002});
+          const h=_htmlAjustement(u,false);
+          return /prends rendez-vous avec un médecin/.test(h)&&!/Rythme/.test(h)
+            ?true:_echec('les deux messages cohabitent');})());
+
+        // ── La levée explicite ───────────────────────────────────────────
+        ok('Critère : une levée fait retomber les effets',(()=>{
+          const u=_ath({id:'l1',absences:['2026-06-15','2026-07-15'],
+            leve:{date:'2026-08-01',motif:'consulte'}});
+          if(paliersDeficit(u)==='blocage') return _echec('le blocage tient encore');
+          const pl=plancherEffectif(u);
+          return !pl.deficit&&pl.majoration===1
+            ?true:_echec('le plancher reste majoré');})());
+        ok('Critère : une NOUVELLE absence après la levée ramène le blocage',(()=>{
+          const u=_ath({id:'l2',
+            absences:['2026-06-15','2026-07-15','2026-09-10','2026-10-10'],
+            leve:{date:'2026-08-01',motif:'consulte'}});
+          return paliersDeficit(u)==='blocage'
+            ?true:_echec(paliersDeficit(u));})());
+        ok('Une levée sur des ABSENCES seules éteint tout',(()=>{
+          // Les absences antérieures à la levée ne comptent plus du tout : il
+          // ne reste aucun point, donc aucun palier.
+          const u=_ath({id:'l3',absences:['2026-06-15','2026-07-15'],
+            leve:{date:'2026-08-01',motif:'regles_revenues'}});
+          return paliersDeficit(u)==='aucun'?true:_echec(paliersDeficit(u));})());
+        ok('Une levée sur des POINTS fait retomber d\'un cran, pas à zéro',(()=>{
+          // Sinon les faits qui avaient déclenché le blocage le rallumeraient
+          // dans la seconde, et la levée ne servirait à rien.
+          _viderCacheVolume(); _viderCacheSignaux();
+          const u=_ath({id:'l4',seche:15,kcal:1200,sommeil:5.7,douleur:true,
+            volume:true,leve:{date:'2026-08-01',motif:'consulte'}});
+          if(risqueDeficitEnergetique(u).points<DEF_SEUIL_BLOCAGE)
+            return _echec('fixture muette : '+risqueDeficitEnergetique(u).points+' points');
+          return paliersDeficit(u)==='vigilance'?true:_echec(paliersDeficit(u));})());
+        ok('Aucune expiration automatique de la levée',(()=>{
+          const src=String(paliersDeficit)+String(_leveDeficitDate);
+          return /864e5|Date\.now\(\)\s*-/.test(src)
+            ?_echec('un décompte s\'est glissé dans la levée'):true;})());
+
+        // ── Le registre : jamais un diagnostic ───────────────────────────
+        ok('Critère : aucun rendu athlète ne contient de vocabulaire médical',(()=>{
+          // Motifs assemblés à l'exécution : écrits en clair, ils se
+          // trouveraient eux-mêmes dans la source de la page.
+          _viderCacheSignaux();
+          const bloque=_ath({id:'x1',absences:['2026-06-15','2026-07-15'],seche:15,kcal:1200});
+          const vigil=_ath({id:'x2',seche:15,kcal:1200,sommeil:5.7});
+          const brut=_htmlAjustement(bloque,false)+_htmlAjustement(vigil,false);
+          // Le disclaimer de santé est RETIRÉ du balayage : il contient le mot
+          // « diagnostic » pour dire qu'on n'en pose pas — « pas à poser un
+          // diagnostic ». L'interdire reviendrait à interdire l'avertissement
+          // lui-même. Sa présence est vérifiée juste en dessous.
+          const disc=blocDisclaimerSante();
+          if(brut.indexOf(disc)<0) return _echec('le disclaimer de santé a disparu');
+          const h=brut.split(disc).join(' ')
+            +DEF_TEXTE_BLOCAGE+messageDeficitVigilance(vigil);
+          const n=h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+          const interdits=['red'+'-s','syndrome','diagnostic','triade','amenorrhee'];
+          const t=interdits.filter(m=>n.indexOf(m)>=0);
+          if(t.length) return _echec('vocabulaire interdit : '+t.join(', '));
+          // Et aucun score chiffré : ni « 5 points », ni « 5/6 ».
+          if(/\b\d+\s*points?\b/i.test(h)) return _echec('un score est affiché');
+          return !/\b\d\s*\/\s*6\b/.test(h)?true:_echec('un score fractionnaire est affiché');})());
+        ok('Le blocage renvoie explicitement vers un médecin',
+          /prends rendez-vous avec un médecin/.test(DEF_TEXTE_BLOCAGE)
+          &&/RepCore peut évaluer/.test(DEF_TEXTE_BLOCAGE));
+        ok('Aucune notification n\'est programmée sur ce sujet',(()=>{
+          const src=String(risqueDeficitEnergetique)+String(paliersDeficit)
+            +String(_htmlDeficit)+String(leverDeficit);
+          return /scheduleS|Notification|notify/i.test(src)
+            ?_echec('une notification apparaît'):true;})());
+        ok('Côté COACH, le compte est visible : c\'est lui qui en a besoin',(()=>{
+          _viderCacheSignaux();
+          const u=_ath({id:'x3',seche:15,kcal:1200,sommeil:5.7});
+          const h=_htmlDeficitCoach(u);
+          return /élément/.test(h)&&/Rien n&#39;est diagnostiqué|Rien n'est diagnostiqué/.test(h)
+            ?true:_echec('le bloc coach ne dit pas ce qu\'il est');})());
+        ok('risqueDeficitEnergetique et paliersDeficit sont PURES',(()=>{
+          const u=_ath({id:'z1',seche:15,kcal:1200,sommeil:5.7,absences:['2026-06-15']});
+          const avant=JSON.stringify(u);
+          risqueDeficitEnergetique(u); paliersDeficit(u); plancherEffectif(u);
+          return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
+      } finally { currentUser=_dfU; _viderCacheVolume(); _viderCacheSignaux(); }
     })();
 
     // ══════ PROFIL COACH VISIBLE PAR SES ATHLÈTES ══════
