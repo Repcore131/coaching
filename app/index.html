@@ -1978,6 +1978,11 @@ const COACH_PHOTO='icons/coach.jpg';
           </div>
         </div>
       </div>
+      <div class="card" id="atp-cycle-card" style="margin-bottom:14px;display:none">
+        <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Suivi du cycle</label>
+        <div id="atp-cycle-opts" style="display:flex;flex-direction:column;gap:8px"></div>
+        <div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-top:9px">Ta charge suggérée et ton nombre de séries peuvent être réduits selon ta réponse.</div>
+      </div>
       <div class="card">
         <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Objectif</label>
         <textarea id="atp-objective" placeholder="ex: Prise de masse, perte de poids, remise en forme..." style="width:100%;min-height:80px;font-size:13px;padding:11px 14px;box-sizing:border-box;resize:vertical;background:#111;border:1px solid #2a2a2a;color:#fff;font-family:Montserrat,sans-serif;border-radius:4px;line-height:1.5" maxlength="200"></textarea>
@@ -2028,32 +2033,65 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- CYCLE SELECTOR (modal, femmes) -->
 <div id="cycle-modal" style="display:none;position:fixed;inset:0;background:#000c;z-index:2100;align-items:flex-end;justify-content:center">
-  <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px">
+  <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:6px"> Phase du cycle</h2>
-    <p class="sub" style="font-size:12px;margin-bottom:20px;line-height:1.5">Indique où tu en es dans ton cycle. Les charges et séries seront ajustées automatiquement.</p>
+    <p class="sub" style="font-size:12px;margin-bottom:20px;line-height:1.5">Comment tu te sens aujourd'hui ? Ta charge suggérée et ton nombre de séries peuvent être réduits selon ta réponse.</p>
     <div style="display:flex;flex-direction:column;gap:10px" id="cycle-options">
       <div class="obj-opt" onclick="setCyclePhase('j1_difficile',this)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <div style="font-weight:800">J1→J5 : Menstruations difficiles</div>
+        <div style="font-weight:800">Règles, c'est dur</div>
         <div class="sub" style="font-size:11px;margin-top:3px">Douleurs, fatigue intense, moral bas</div>
       </div>
       <div class="obj-opt" onclick="setCyclePhase('j1_supportable',this)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <div style="font-weight:800">J1→J5 : Menstruations supportables</div>
+        <div style="font-weight:800">Règles, ça va</div>
         <div class="sub" style="font-size:11px;margin-top:3px">Légère gêne, entraînement faisable</div>
       </div>
       <div class="obj-opt" onclick="setCyclePhase('j6_14',this)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <div style="font-weight:800">J6→J14 : Phase folliculaire</div>
-        <div class="sub" style="font-size:11px;margin-top:3px">Énergie optimale, bonne récupération</div>
+        <div style="font-weight:800">Je me sens bien</div>
+        <div class="sub" style="font-size:11px;margin-top:3px">Bonne énergie, bonne récupération</div>
       </div>
       <div class="obj-opt" onclick="setCyclePhase('j15_21',this)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <div style="font-weight:800">J15→J21 : Phase lutéale (début)</div>
-        <div class="sub" style="font-size:11px;margin-top:3px">Légère fatigue, entraînement normal</div>
+        <div style="font-weight:800">Rien de particulier</div>
+        <div class="sub" style="font-size:11px;margin-top:3px">Entraînement normal</div>
       </div>
       <div class="obj-opt" onclick="setCyclePhase('j22_28',this)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <div style="font-weight:800">J22→J28 : Phase lutéale (fin)</div>
-        <div class="sub" style="font-size:11px;margin-top:3px">Fatigue, rétention : volume réduit (−1 série/exercice)</div>
+        <div style="font-weight:800">Fatigue, ballonnements</div>
+        <div class="sub" style="font-size:11px;margin-top:3px">Volume réduit : une série de moins par exercice</div>
       </div>
     </div>
-    <button class="btn btn-outline" style="margin-top:16px" onclick="setCyclePhase('ignore',null)">Ignorer / Pas applicable</button>
+    <button class="btn btn-outline" style="margin-top:16px" onclick="setCyclePhase('ignore',null)">Je ne sais pas / pas aujourd'hui</button>
+  </div>
+</div>
+
+<!-- Écran de CHOIX : la question passe du niveau « chaque séance » au niveau
+     « une fois ». Non bloquant : « plus tard » lance la séance sans rien
+     décider, et au bout de trois reports on cesse de demander. -->
+<div id="cycle-choix-modal" style="display:none;position:fixed;inset:0;background:#000c;z-index:2100;align-items:flex-end;justify-content:center">
+  <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+    <h2 style="margin-bottom:6px">Veux-tu adapter tes séances à ton cycle ?</h2>
+    <p class="sub" style="font-size:12px;margin-bottom:20px;line-height:1.5">Une seule fois. Tu pourras changer d'avis à tout moment dans « Mon profil ».</p>
+    <div style="display:flex;flex-direction:column;gap:10px" id="cycle-choix-options">
+      <div class="obj-opt" onclick="repondreCycleChoix('actif')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+        <div style="font-weight:800">Oui, je l'indiquerai avant mes séances</div>
+      </div>
+      <div class="obj-opt" onclick="repondreCycleChoix('sans_objet')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+        <div style="font-weight:800">Non, ça ne s'applique pas à moi</div>
+        <div class="sub" style="font-size:11px;margin-top:3px">Ménopause, contraception continue, absence de règles, autre</div>
+      </div>
+      <div class="obj-opt" onclick="repondreCycleChoix('jamais_demander')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+        <div style="font-weight:800">Non, je préfère ne pas suivre ça</div>
+      </div>
+    </div>
+    <button class="btn btn-outline" style="margin-top:16px" onclick="reporterCycleChoix()">Plus tard</button>
+  </div>
+</div>
+
+<!-- Cinq « je ne sais pas » d'affilée : la question ne sert plus à rien. -->
+<div id="cycle-arret-modal" style="display:none;position:fixed;inset:0;background:#000c;z-index:2100;align-items:flex-end;justify-content:center">
+  <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+    <h2 style="margin-bottom:6px">On arrête de te demander ?</h2>
+    <p class="sub" style="font-size:12px;margin-bottom:20px;line-height:1.5">Tu as passé la question cinq fois de suite. Tu pourras la réactiver dans « Mon profil ».</p>
+    <button class="btn btn-red" onclick="accepterArretCycle()">Oui, ne plus demander</button>
+    <button class="btn btn-outline" style="margin-top:10px" onclick="refuserArretCycle()">Non, continue de demander</button>
   </div>
 </div>
 
@@ -11097,30 +11135,127 @@ function openSessionPicker(){
   }).join('');
 }
 
+// Le modal de phase s'ouvrait sur le seul critère du GENRE DÉCLARÉ. Une
+// utilisatrice ménopausée, sous contraception continue ou aménorrhéique
+// n'avait que « Ignorer », à recliquer AVANT CHAQUE SÉANCE, sans que sa
+// réponse soit jamais retenue. La question passe du niveau « chaque séance »
+// au niveau « une fois », et le genre ne décide plus que d'une chose : à qui
+// on propose l'écran de choix la première fois.
 function startWorkoutSession(idx){
   const cfg=currentUser.sessions_config||initSessionsConfig();
   const sess=cfg[idx];
-  // Pour les femmes, montrer le sélecteur de cycle
-  if(isFemale(currentUser.gender)){
-    window._pendingWorkoutIdx=idx;
+  window._pendingWorkoutIdx=idx;
+  if(cycleDoitDemanderPhase(currentUser)){
     document.getElementById('cycle-modal').style.display='flex';
-  } else {
-    currentUser.currentCycle='ignore';
-    launchWorkout(sess,idx);
+    return;
   }
+  if(cycleDoitChoisir(currentUser)){
+    document.getElementById('cycle-choix-modal').style.display='flex';
+    return;
+  }
+  currentUser.currentCycle='ignore';
+  launchWorkout(sess,idx);
 }
 
 // ======= CYCLE LOGIC =======
 let _pendingWorkoutIdx=null;
+
+// La préférence, déclarée UNE fois. Absente = jamais répondu.
+const CYCLE_SUIVI_VALEURS=Object.freeze(['actif','sans_objet','jamais_demander']);
+// Trois reports de l'écran de choix suffisent : reposer indéfiniment la même
+// question est exactement ce que ce lot corrige.
+const CYCLE_CHOIX_MAX=3;
+// Cinq « je ne sais pas » d'affilée. Compté sur les SÉANCES, jamais sur des
+// dates : quelqu'un qui s'entraîne une fois par mois n'a pas à être relancé
+// plus vite que quelqu'un qui vient tous les jours.
+const CYCLE_IGNORE_SUITE=5;
+function cycleSuiviDe(user){
+  const v=user&&user.cycleSuivi;
+  return CYCLE_SUIVI_VALEURS.indexOf(v)>=0?v:null;
+}
+// LE GENRE N'ENTRE PAS ICI. Qui a demandé le suivi le reçoit, point.
+function cycleDoitDemanderPhase(user){
+  return cycleSuiviDe(user)==='actif';
+}
+// Le genre ne sert plus qu'à ça : décider à qui la question est POSÉE une
+// première fois. Une réponse déjà donnée, dans un sens ou dans l'autre,
+// ferme le sujet.
+function cycleDoitChoisir(user){
+  if(cycleSuiviDe(user)) return false;
+  if(!isFemale(user&&user.gender)) return false;
+  return ((user&&user.cycleChoixVus)||0)<CYCLE_CHOIX_MAX;
+}
+// Proposé UNE seule fois, et seulement à qui suit vraiment son cycle.
+function cycleArretAProposer(user){
+  if(cycleSuiviDe(user)!=='actif') return false;
+  if(user&&user.cycleArretPropose) return false;
+  return ((user&&user.cycleIgnoresSuite)||0)>=CYCLE_IGNORE_SUITE;
+}
+function _cycleLancer(){
+  const cfg=currentUser.sessions_config||initSessionsConfig();
+  const idx=window._pendingWorkoutIdx||0;
+  launchWorkout(cfg[idx],idx);
+}
 function setCyclePhase(phase,el){
   if(el) document.querySelectorAll('#cycle-options .obj-opt').forEach(e=>e.classList.remove('sel'));
   if(el) el.classList.add('sel');
   currentUser.currentCycle=phase;
+  currentUser.cycleIgnoresSuite=(phase==='ignore')
+    ?(((currentUser.cycleIgnoresSuite)||0)+1):0;
   saveUser();
   document.getElementById('cycle-modal').style.display='none';
-  const cfg=currentUser.sessions_config||initSessionsConfig();
-  const idx=window._pendingWorkoutIdx||0;
-  launchWorkout(cfg[idx],idx);
+  if(cycleArretAProposer(currentUser)){
+    currentUser.cycleArretPropose=true;
+    saveUser();
+    const m=document.getElementById('cycle-arret-modal');
+    if(m){ m.style.display='flex'; return; }
+  }
+  _cycleLancer();
+}
+// L'écran de choix. Aucune de ces réponses ne demande de précision : on ne
+// fait pas raconter une ménopause ou une aménorrhée pour désactiver un modal.
+function repondreCycleChoix(v){
+  const modal=document.getElementById('cycle-choix-modal');
+  if(modal) modal.style.display='none';
+  currentUser.cycleSuivi=(CYCLE_SUIVI_VALEURS.indexOf(v)>=0)?v:'jamais_demander';
+  saveUser();
+  if(currentUser.cycleSuivi==='actif'){
+    // « Je l'indiquerai avant mes séances » — celle-ci comprise, sinon la
+    // séance qui suit le oui serait la seule à ne pas en tenir compte.
+    const m=document.getElementById('cycle-modal');
+    if(m){ m.style.display='flex'; return; }
+  }
+  currentUser.currentCycle='ignore';
+  _cycleLancer();
+}
+// « Plus tard » n'écrit PAS de préférence — mais il compte, sinon le plafond
+// de trois serait incomptable et la question reviendrait sans fin.
+function reporterCycleChoix(){
+  const modal=document.getElementById('cycle-choix-modal');
+  if(modal) modal.style.display='none';
+  const vus=(((currentUser.cycleChoixVus)||0)+1);
+  currentUser.cycleChoixVus=vus;
+  if(vus>=CYCLE_CHOIX_MAX) currentUser.cycleSuivi='jamais_demander';
+  saveUser();
+  currentUser.currentCycle='ignore';
+  _cycleLancer();
+}
+function accepterArretCycle(){
+  const m=document.getElementById('cycle-arret-modal');
+  if(m) m.style.display='none';
+  currentUser.cycleSuivi='jamais_demander';
+  currentUser.currentCycle='ignore';
+  saveUser();
+  _cycleLancer();
+}
+function refuserArretCycle(){
+  const m=document.getElementById('cycle-arret-modal');
+  if(m) m.style.display='none';
+  // La suite repart de zéro : sinon la proposition, déjà faite une fois,
+  // laisserait un compteur bloqué au-dessus du seuil pour toujours.
+  currentUser.cycleIgnoresSuite=0;
+  saveUser();
+  _cycleLancer();
 }
 
 // Détecte si un exercice est cardio (durée) plutôt que force (répétitions + poids)
@@ -11142,11 +11277,15 @@ function getCycleFactor(){
 
 function getCycleLabel(){
   const p=currentUser.currentCycle||'ignore';
-  if(p==='j1_difficile') return{text:' Phase menstruelle : Difficile',color:'var(--cycle-accent)'};
-  if(p==='j1_supportable') return{text:' Phase menstruelle : Supportable',color:'var(--orange)'};
-  if(p==='j6_14') return{text:' Phase folliculaire : Énergie optimale',color:'var(--green)'};
-  if(p==='j15_21') return{text:' Phase lutéale J15-21 : Normal',color:'var(--green)'};
-  if(p==='j22_28') return{text:' Phase lutéale J22-28 : Volume réduit',color:'var(--orange)'};
+  // Du ressenti, pas une position calendaire : une femme sous contraception
+  // continue n'a pas de « J15 », et lire « Phase lutéale J22-28 » quand on a
+  // simplement coché « fatiguée » ne veut rien dire. Les VALEURS et les
+  // couleurs sont inchangées — getCycleFactor ne bouge pas d'un pouce.
+  if(p==='j1_difficile') return{text:'Règles, c\'est dur',color:'var(--cycle-accent)'};
+  if(p==='j1_supportable') return{text:'Règles, ça va',color:'var(--orange)'};
+  if(p==='j6_14') return{text:'Je me sens bien',color:'var(--green)'};
+  if(p==='j15_21') return{text:'Rien de particulier',color:'var(--green)'};
+  if(p==='j22_28') return{text:'Fatigue, ballonnements',color:'var(--orange)'};
   return null;
 }
 
@@ -11832,14 +11971,20 @@ function _blocExo(idx,estSS){
   const _abandon=!!prev&&_decote===null;
   const _rawSug=(prev&&!_abandon)?chargeSuivante(prev.weight,prev.rir,isCW,_decote):null;
   const _sugBrut=_rawSug!=null&&_rawSug>0?_rawSug:null;
-  const isFemme=isFemale(currentUser.gender);
+  // isFemale ne garde plus l'ajustement ni le bandeau : currentCycle ne vaut
+  // autre chose que 'ignore' QUE si l'athlète a répondu au modal de phase, et
+  // ce modal ne s'ouvre QUE sur cycleSuivi === 'actif'. Le test de genre était
+  // donc redondant — et nuisible dès que le réglage devient réversible depuis
+  // le profil : il aurait annulé en silence ce qui vient d'être demandé.
+  // getCycleFactor rend déjà 1 et getCycleLabel déjà null pour 'ignore' :
+  // personne ne change de comportement aujourd'hui.
   // L'ajustement de cycle est intégré À LA CHARGE SUGGÉRÉE, il n'a plus de
   // colonne à lui. Une colonne « CYC » en plus faisait basculer tout le tableau
   // en mode carte : l'écran de séance ne ressemblait plus du tout à celui des
   // hommes, pour une information qui tient dans une phrase. Une seule charge
   // est affichée, celle à mettre sur la barre, et la raison de l'écart est
   // écrite dessous.
-  const _facteurCycle=(isFemme&&cycle.factor!==1.0)?cycle.factor:1;
+  const _facteurCycle=(cycle.factor!==1.0)?cycle.factor:1;
   const sugAjustee=_facteurCycle!==1&&_sugBrut?roundWeight(_sugBrut*_facteurCycle):null;
   const sug=sugAjustee||_sugBrut;
   const isWide=pr.type==='degressive';
@@ -11860,7 +12005,7 @@ function _blocExo(idx,estSS){
         <button class="hit44" id="wo-calc-btn-${idx}" style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:11px;padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Vue tableau</button>
       </div>
 
-      ${cycleLabel&&isFemme&&!estSS?`<div style="background:var(--dark);border:1px solid #2a2a2a;border-radius:3px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#888;letter-spacing:.5px">${cycleLabel.text}</div>`:''}
+      ${cycleLabel&&!estSS?`<div style="background:var(--dark);border:1px solid #2a2a2a;border-radius:3px;padding:10px 14px;margin-bottom:12px;font-size:11px;color:#888;letter-spacing:.5px">${cycleLabel.text}</div>`:''}
 
       ${isCardio(ex)?
         `<div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:10px;padding:14px;margin-bottom:12px;text-align:center">
@@ -25894,6 +26039,35 @@ function uploadAthletePhoto(input){
     toastEcriture(ok,'Photo enregistrée ✓','la photo est');
   });
 }
+// Suivi du cycle, modifiable à tout moment. La carte suit la convention de
+// l'écran : on choisit, puis on enregistre — comme le genre juste au-dessus.
+let _atpCycleSuivi=null;
+const ATP_CYCLE_OPTIONS=Object.freeze([
+  ['actif','Oui, je l\'indiquerai avant mes séances',''],
+  ['sans_objet','Non, ça ne s\'applique pas à moi',
+   'Ménopause, contraception continue, absence de règles, autre'],
+  ['jamais_demander','Non, je préfère ne pas suivre ça',''],
+]);
+function _renderAtpCycle(){
+  const z=document.getElementById('atp-cycle-opts');
+  const carte=document.getElementById('atp-cycle-card');
+  if(!z||!carte) return;
+  // Visible pour qui la question concerne, ET pour quiconque a déjà une
+  // réponse enregistrée : sans quoi un réglage posé ne serait plus annulable.
+  const montrer=isFemale(currentUser&&currentUser.gender)||!!cycleSuiviDe(currentUser);
+  carte.style.display=montrer?'block':'none';
+  if(!montrer) return;
+  z.innerHTML=ATP_CYCLE_OPTIONS.map(([v,titre,sous])=>
+    `<div class="obj-opt${_atpCycleSuivi===v?' sel':''}" onclick="setAtpCycleSuivi('${v}')"
+      role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div style="font-weight:800">${escapeHtml(titre)}</div>
+      ${sous?`<div class="sub" style="font-size:11px;margin-top:3px">${escapeHtml(sous)}</div>`:''}
+    </div>`).join('');
+}
+function setAtpCycleSuivi(v){
+  _atpCycleSuivi=(CYCLE_SUIVI_VALEURS.indexOf(v)>=0)?v:null;
+  _renderAtpCycle();
+}
 let _atpGender='';
 function setAthleteGender(g){
   _atpGender=g;
@@ -25918,6 +26092,8 @@ function openAthleteProfile(){
   if(objEl) objEl.value=u.objective||'';
   _atpGender=isFemale(u.gender)?'F':(u.gender?'H':'');
   setAthleteGender(_atpGender);
+  _atpCycleSuivi=cycleSuiviDe(u);
+  _renderAtpCycle();
   const zc=document.getElementById('atp-comptes');
   if(zc) zc.innerHTML=htmlSelecteurComptes();
   go('s-athlete-profile');
@@ -25931,6 +26107,19 @@ function saveAthleteProfile(){
   currentUser.profileWeight=parseFloat(document.getElementById('atp-weight')?.value)||undefined;
   currentUser.gender=_atpGender||currentUser.gender;
   currentUser.objective=(document.getElementById('atp-objective')?.value||'').trim()||undefined;
+  if(_atpCycleSuivi){
+    // Repasser à « oui » remet les compteurs à zéro : sinon une proposition
+    // d'arrêt déjà faite, ou trois reports déjà comptés, condamneraient la
+    // question que l'athlète vient tout juste de rouvrir.
+    if(currentUser.cycleSuivi!==_atpCycleSuivi){
+      currentUser.cycleIgnoresSuite=0;
+      currentUser.cycleArretPropose=false;
+      currentUser.cycleChoixVus=0;
+    }
+    currentUser.cycleSuivi=_atpCycleSuivi;
+    // Ne plus suivre, c'est aussi ne plus traîner la dernière phase déclarée.
+    if(_atpCycleSuivi!=='actif') currentUser.currentCycle='ignore';
+  }
   toastEcriture(saveUser(),'Profil enregistré ✓','ton profil est');
   go('s-client-home');
   loadClientHome();
@@ -28687,9 +28876,314 @@ function testExercices(){
     ok('Dégressive identique homme et femme',JSON.stringify(_cyDH.col)===JSON.stringify(_cyD.col));
 
     // La bannière de phase reste : c'est une information, pas une colonne.
-    ok('La phase de cycle reste annoncée',/Phase menstruelle/.test(_cyF20.txt));
+    // Le bandeau disait « Phase menstruelle : Difficile ». Les libellés sont
+    // passés au ressenti — les VALEURS et les couleurs, elles, n'ont pas bougé.
+    ok('La phase de cycle reste annoncée',/Règles, c’est dur|Règles, c\'est dur/.test(_cyF20.txt),
+       _cyF20.txt.slice(0,120));
 
     currentUser=_cySauve.u; if(_cySauve.w) woState=_cySauve.w;
+
+    // ══════ SUIVI DU CYCLE : UNE PRÉFÉRENCE, PAS UNE QUESTION PAR SÉANCE ══════
+    // Le modal s'ouvrait sur le seul critère du genre déclaré, et la réponse
+    // n'était jamais retenue : une utilisatrice ménopausée recliquait
+    // « Ignorer » avant CHAQUE séance.
+    (()=>{
+      const _csU=currentUser, _csSave=window.saveUser, _csLaunch=window.launchWorkout;
+      const M=(id)=>document.getElementById(id);
+      const _affiche=(id)=>{ const e=M(id); return !!e&&e.style.display==='flex'; };
+      const _fermer=()=>['cycle-modal','cycle-choix-modal','cycle-arret-modal']
+        .forEach(id=>{ const e=M(id); if(e) e.style.display='none'; });
+      let _lances=0;
+      const _ath=(extra)=>Object.assign({id:'cs',email:'cs@t',fname:'A',role:'athlete',
+        exAlias:{},exMuscles:{},programs:{},bilans:[],sessions:[],
+        sessions_config:[{day:'J0',name:'S0',active:true,exercises:[]}]},extra||{});
+      if(!M('cycle-modal')||!M('cycle-choix-modal')||!M('cycle-arret-modal')){
+        ok('Les trois écrans de cycle existent',false,'markup absent'); return; }
+      ok('Les trois écrans de cycle existent',true);
+      try{
+        window.saveUser=()=>true;
+        window.launchWorkout=()=>{ _lances++; };
+
+        ok('Les deux seuils sont ceux annoncés',(()=>{
+          // Écrits en DUR : les tests ci-dessous bouclent sur les constantes,
+          // et un seuil ramené à 1 leur échappait entièrement.
+          if(CYCLE_IGNORE_SUITE!==5) return _echec('seuil d\'arrêt : '+CYCLE_IGNORE_SUITE);
+          return CYCLE_CHOIX_MAX===3?true:_echec('reports : '+CYCLE_CHOIX_MAX);})());
+        ok('Quatre « ignore » ne déclenchent RIEN',(()=>{
+          // Le pendant du test des cinq : sans lui, avancer le seuil passait
+          // inaperçu parce que la boucle s'arrêtait au seuil elle-même.
+          _fermer();
+          currentUser=_ath({gender:'F',cycleSuivi:'actif'});
+          for(let i=0;i<4;i++){ _fermer(); startWorkoutSession(0); setCyclePhase('ignore',null); }
+          return _affiche('cycle-arret-modal')
+            ?_echec('proposée dès le quatrième'):true;})());
+        // ── getCycleFactor : la serrure directe qui manquait ──
+        ok('Critère : les six valeurs de getCycleFactor sont INCHANGÉES',(()=>{
+          // Aucun test ne l'appelait directement : le bloc cycle ne la vérifiait
+          // qu'à travers une charge rendue. Les six couples sont recopiés ici.
+          const att={j1_difficile:[0.80,0],j1_supportable:[0.95,0],j6_14:[1.00,0],
+            j15_21:[1.00,0],j22_28:[1.00,1],ignore:[1.00,0]};
+          const rates=[];
+          for(const k of Object.keys(att)){
+            currentUser=_ath({currentCycle:k});
+            const f=getCycleFactor();
+            if(f.factor!==att[k][0]||f.seriesReduce!==att[k][1])
+              rates.push(k+' → '+f.factor+'/'+f.seriesReduce);
+          }
+          currentUser=_ath({currentCycle:undefined});
+          const vide=getCycleFactor();
+          if(vide.factor!==1||vide.seriesReduce!==0) rates.push('absent → '+JSON.stringify(vide));
+          return rates.length?_echec(rates.join(', ')):true;})());
+
+        // ── Les quatre branches de startWorkoutSession ──
+        ok('Critère : cycleSuivi « actif » → le modal de phase s\'affiche',(()=>{
+          _fermer(); _lances=0;
+          currentUser=_ath({gender:'F',cycleSuivi:'actif'});
+          startWorkoutSession(0);
+          return _affiche('cycle-modal')&&_lances===0
+            ?true:_echec('modal '+_affiche('cycle-modal')+' lancements '+_lances);})());
+        ok('Critère : cycleSuivi « sans_objet » → aucun modal, séance directe',(()=>{
+          _fermer(); _lances=0;
+          currentUser=_ath({gender:'F',cycleSuivi:'sans_objet'});
+          startWorkoutSession(0);
+          if(_affiche('cycle-modal')||_affiche('cycle-choix-modal'))
+            return _echec('un modal s\'est ouvert');
+          if(currentUser.currentCycle!=='ignore') return _echec(currentUser.currentCycle);
+          const f=getCycleFactor();
+          return _lances===1&&f.factor===1&&f.seriesReduce===0
+            ?true:_echec('lancements '+_lances+' facteur '+JSON.stringify(f));})());
+        ok('Critère : cycleSuivi « jamais_demander » → aucun modal, séance directe',(()=>{
+          _fermer(); _lances=0;
+          currentUser=_ath({gender:'F',cycleSuivi:'jamais_demander'});
+          startWorkoutSession(0);
+          if(_affiche('cycle-modal')||_affiche('cycle-choix-modal'))
+            return _echec('un modal s\'est ouvert');
+          const f=getCycleFactor();
+          return currentUser.currentCycle==='ignore'&&_lances===1
+            &&f.factor===1&&f.seriesReduce===0
+            ?true:_echec(currentUser.currentCycle+' / '+_lances);})());
+        ok('Critère : gender « H » → aucun modal (non-régression)',(()=>{
+          _fermer(); _lances=0;
+          currentUser=_ath({gender:'H'});
+          startWorkoutSession(0);
+          return !_affiche('cycle-modal')&&!_affiche('cycle-choix-modal')
+            &&currentUser.currentCycle==='ignore'&&_lances===1
+            ?true:_echec('lancements '+_lances);})());
+        ok('Critère : gender « F » sans préférence → l\'écran de CHOIX',(()=>{
+          _fermer(); _lances=0;
+          currentUser=_ath({gender:'F'});
+          startWorkoutSession(0);
+          return _affiche('cycle-choix-modal')&&!_affiche('cycle-modal')&&_lances===0
+            ?true:_echec('choix '+_affiche('cycle-choix-modal'));})());
+        ok('Et la séance reste atteignable depuis cet écran',(()=>{
+          // « Plus tard » ne décide rien mais lance bien la séance.
+          _fermer(); _lances=0;
+          currentUser=_ath({gender:'F'});
+          startWorkoutSession(0);
+          reporterCycleChoix();
+          return _lances===1&&!_affiche('cycle-choix-modal')
+            ?true:_echec('lancements '+_lances);})());
+        ok('Cas limite : sans genre déclaré, aucun écran du tout',(()=>{
+          _fermer(); _lances=0;
+          currentUser=_ath({});
+          startWorkoutSession(0);
+          return !_affiche('cycle-modal')&&!_affiche('cycle-choix-modal')&&_lances===1
+            ?true:_echec('un écran est apparu');})());
+
+        // ── L'écran de choix ──
+        ok('Les trois réponses écrivent la préférence, et une seule fois',(()=>{
+          const rates=[];
+          for(const v of ['actif','sans_objet','jamais_demander']){
+            _fermer(); _lances=0;
+            currentUser=_ath({gender:'F'});
+            startWorkoutSession(0);
+            repondreCycleChoix(v);
+            if(currentUser.cycleSuivi!==v) rates.push(v+' → '+currentUser.cycleSuivi);
+            if(_affiche('cycle-choix-modal')) rates.push(v+' : écran resté ouvert');
+            // Et la question ne revient plus.
+            _fermer();
+            startWorkoutSession(0);
+            if(_affiche('cycle-choix-modal')) rates.push(v+' : la question revient');
+          }
+          return rates.length?_echec(rates.join(' | ')):true;})());
+        ok('« Oui » enchaîne sur la phase : la séance en cours en tient compte',(()=>{
+          _fermer(); _lances=0;
+          currentUser=_ath({gender:'F'});
+          startWorkoutSession(0);
+          repondreCycleChoix('actif');
+          return _affiche('cycle-modal')&&_lances===0
+            ?true:_echec('phase '+_affiche('cycle-modal')+' lancements '+_lances);})());
+        ok('Cas limite : « plus tard » n\'écrit rien, trois fois, puis on arrête',(()=>{
+          _fermer(); _lances=0;
+          currentUser=_ath({gender:'F'});
+          for(let i=1;i<=CYCLE_CHOIX_MAX;i++){
+            _fermer();
+            startWorkoutSession(0);
+            if(!_affiche('cycle-choix-modal'))
+              return _echec('l\'écran manque au passage '+i);
+            reporterCycleChoix();
+            if(i<CYCLE_CHOIX_MAX&&cycleSuiviDe(currentUser))
+              return _echec('une préférence a été écrite au passage '+i);
+          }
+          if(currentUser.cycleSuivi!=='jamais_demander')
+            return _echec('après '+CYCLE_CHOIX_MAX+' reports : '+currentUser.cycleSuivi);
+          _fermer();
+          startWorkoutSession(0);
+          return !_affiche('cycle-choix-modal')&&_lances===CYCLE_CHOIX_MAX+1
+            ?true:_echec('la question revient une quatrième fois');})());
+
+        // ── La proposition d'arrêt, comptée sur les SÉANCES ──
+        ok('Critère : 5 réponses « ignore » → la proposition d\'arrêt, UNE fois',(()=>{
+          _fermer(); _lances=0;
+          currentUser=_ath({gender:'F',cycleSuivi:'actif'});
+          for(let i=1;i<=CYCLE_IGNORE_SUITE;i++){
+            _fermer();
+            startWorkoutSession(0);
+            setCyclePhase('ignore',null);
+            if(i<CYCLE_IGNORE_SUITE&&_affiche('cycle-arret-modal'))
+              return _echec('proposée trop tôt, au '+i+'e');
+          }
+          if(!_affiche('cycle-arret-modal')) return _echec('jamais proposée');
+          // Refusée : elle ne revient pas, et la séance part quand même.
+          const avant=_lances;
+          refuserArretCycle();
+          if(_lances!==avant+1) return _echec('la séance n\'est pas partie');
+          for(let i=0;i<CYCLE_IGNORE_SUITE+2;i++){
+            _fermer(); startWorkoutSession(0); setCyclePhase('ignore',null);
+            if(_affiche('cycle-arret-modal')) return _echec('proposée une deuxième fois');
+          }
+          return true;})());
+        ok('Une réponse autre que « ignore » remet le compteur à zéro',(()=>{
+          _fermer();
+          currentUser=_ath({gender:'F',cycleSuivi:'actif'});
+          for(let i=0;i<4;i++){ _fermer(); startWorkoutSession(0); setCyclePhase('ignore',null); }
+          _fermer(); startWorkoutSession(0); setCyclePhase('j6_14',null);
+          if(currentUser.cycleIgnoresSuite!==0) return _echec('compteur '+currentUser.cycleIgnoresSuite);
+          _fermer(); startWorkoutSession(0); setCyclePhase('ignore',null);
+          return !_affiche('cycle-arret-modal')?true:_echec('proposée après une remise à zéro');})());
+        ok('Accepter l\'arrêt ferme la question et lance la séance',(()=>{
+          _fermer(); _lances=0;
+          currentUser=_ath({gender:'F',cycleSuivi:'actif',cycleIgnoresSuite:CYCLE_IGNORE_SUITE-1});
+          startWorkoutSession(0);
+          setCyclePhase('ignore',null);
+          if(!_affiche('cycle-arret-modal')) return _echec('non proposée');
+          accepterArretCycle();
+          if(currentUser.cycleSuivi!=='jamais_demander') return _echec(currentUser.cycleSuivi);
+          _fermer();
+          startWorkoutSession(0);
+          return !_affiche('cycle-modal')&&currentUser.currentCycle==='ignore'
+            ?true:_echec('le modal revient');})());
+
+        // ── Réversible depuis « Mon profil » ──
+        ok('Critère : la préférence se change depuis Mon profil',(()=>{
+          currentUser=_ath({gender:'F',cycleSuivi:'jamais_demander'});
+          openAthleteProfile();
+          const carte=M('atp-cycle-card');
+          if(!carte||carte.style.display==='none') return _echec('carte masquée');
+          const opts=M('atp-cycle-opts').querySelectorAll('.obj-opt');
+          if(opts.length!==3) return _echec(opts.length+' options');
+          setAtpCycleSuivi('actif');
+          saveAthleteProfile();
+          if(currentUser.cycleSuivi!=='actif') return _echec(currentUser.cycleSuivi);
+          _fermer(); _lances=0;
+          startWorkoutSession(0);
+          return _affiche('cycle-modal')?true:_echec('le modal ne revient pas');})());
+        ok('Rouvrir le suivi remet les compteurs à zéro',(()=>{
+          // Sans ça, une proposition d'arrêt déjà faite ou trois reports déjà
+          // comptés condamneraient la question qu'on vient de rouvrir.
+          currentUser=_ath({gender:'F',cycleSuivi:'jamais_demander',
+            cycleIgnoresSuite:9,cycleArretPropose:true,cycleChoixVus:3});
+          openAthleteProfile();
+          setAtpCycleSuivi('actif');
+          saveAthleteProfile();
+          return currentUser.cycleIgnoresSuite===0&&currentUser.cycleArretPropose===false
+            &&currentUser.cycleChoixVus===0
+            ?true:_echec(JSON.stringify([currentUser.cycleIgnoresSuite,
+              currentUser.cycleArretPropose,currentUser.cycleChoixVus]));})());
+        ok('Se retirer du suivi efface la dernière phase déclarée',(()=>{
+          currentUser=_ath({gender:'F',cycleSuivi:'actif',currentCycle:'j1_difficile'});
+          openAthleteProfile();
+          setAtpCycleSuivi('sans_objet');
+          saveAthleteProfile();
+          const f=getCycleFactor();
+          return currentUser.currentCycle==='ignore'&&f.factor===1
+            ?true:_echec(currentUser.currentCycle);})());
+        ok('La carte reste masquée pour qui n\'est pas concerné',(()=>{
+          currentUser=_ath({gender:'H'});
+          openAthleteProfile();
+          const masquee=M('atp-cycle-card').style.display==='none';
+          // Mais visible dès qu'une réponse existe : un réglage posé doit
+          // toujours pouvoir être annulé.
+          currentUser=_ath({gender:'H',cycleSuivi:'actif'});
+          openAthleteProfile();
+          const visible=M('atp-cycle-card').style.display!=='none';
+          return masquee&&visible?true:_echec('masquée '+masquee+' visible '+visible);})());
+
+        // ── Le genre ne commande plus rien de tout ça ──
+        ok('Critère : aucun isFemale ne conditionne le modal de phase',(()=>{
+          const src=String(startWorkoutSession)+String(cycleDoitDemanderPhase);
+          return /isFemale/.test(src)
+            ?_echec('le genre décide encore de l\'ouverture du modal'):true;})());
+        ok('Le genre ne peut plus annuler en silence l\'ajustement demandé',(()=>{
+          // Première version : elle cherchait la garde dans String(renderWoEx).
+          // Le code vit dans _blocExo — la regex ne pouvait RIEN trouver, et le
+          // test était vrai sans rien vérifier. On regarde donc la charge
+          // réellement affichée, ce qui ne dépend d'aucun nom de fonction.
+          const _woAvant=(typeof woState!=='undefined')?woState:null;
+          const monter=(genre)=>{
+            currentUser={email:'cg@t',fname:'T',gender:genre,cycleSuivi:'actif',
+              currentCycle:'j1_difficile',exAlias:{},exMuscles:{},programs:{},bilans:[],
+              sessions:[{id:'cg',date:Date.now()-604800000,slot:2,name:'P',
+                data:{'TIRAGE CG':{sets:[{done:true,weight:'50',reps:'10',rir:'0'}]}}}]};
+            woState={exercises:[{name:'TIRAGE CG',series:3,reps:'10',repos:'02 min',description:''}],
+              currentEx:0,startTime:Date.now(),timerInterval:null,sessionData:{},
+              progName:'P',slot:2,warmup:'',cooldown:''};
+            go('s-workout'); renderWoEx();
+            const c=document.getElementById('wo-content');
+            return Array.from(c.querySelectorAll('div[style*="font-size:27px"]'))
+              .map(d=>d.textContent).join(',');
+          };
+          try{
+            const f=monter('femme'), h=monter('homme');
+            if(f!=='40kg') return _echec('fixture muette : femme → '+f);
+            return h===f?true:_echec('même réponse, charges différentes : '+h+' contre '+f);
+          } finally { if(_woAvant) woState=_woAvant; }})());
+
+        // ── Les libellés ──
+        ok('Critère : le modal de phase ne parle plus en jours de calendrier',(()=>{
+          const h=M('cycle-modal').innerHTML;
+          const cal=[/J1\s*→\s*J5/,/J6\s*→\s*J14/,/J15\s*→\s*J21/,/J22\s*→\s*J28/,
+            /folliculaire/i,/lut[ée]ale/i,/menstruations/i];
+          const restants=cal.filter(r=>r.test(h));
+          return restants.length?_echec(restants.length+' formulations calendaires'):true;})());
+        ok('Les six réponses du modal portent les MÊMES valeurs qu\'avant',(()=>{
+          const h=M('cycle-modal').innerHTML;
+          const manque=['j1_difficile','j1_supportable','j6_14','j15_21','j22_28','ignore']
+            .filter(v=>h.indexOf("setCyclePhase('"+v+"'")<0);
+          return manque.length?_echec('valeurs absentes : '+manque.join(', ')):true;})());
+        ok('Critère : la promesse d\'ajustement automatique est remplacée',(()=>{
+          const h=M('cycle-modal').innerHTML;
+          if(/ajust[ée]es automatiquement/i.test(h)) return _echec('ancienne phrase encore là');
+          return /peuvent être réduits selon ta réponse/.test(h)
+            ?true:_echec('la formulation exacte manque');})());
+        ok('getCycleLabel suit les libellés, sans changer de couleur',(()=>{
+          const att={j1_difficile:'var(--cycle-accent)',j1_supportable:'var(--orange)',
+            j6_14:'var(--green)',j15_21:'var(--green)',j22_28:'var(--orange)'};
+          const rates=[];
+          for(const k of Object.keys(att)){
+            currentUser=_ath({currentCycle:k});
+            const l=getCycleLabel();
+            if(!l||l.color!==att[k]) rates.push(k+' → '+(l?l.color:'null'));
+            if(l&&/J\d|folliculaire|lut[ée]ale|menstruelle/i.test(l.text)) rates.push(k+' : '+l.text);
+          }
+          currentUser=_ath({currentCycle:'ignore'});
+          if(getCycleLabel()!==null) rates.push('ignore rend un libellé');
+          return rates.length?_echec(rates.join(', ')):true;})());
+      } finally {
+        _fermer();
+        currentUser=_csU; window.saveUser=_csSave; window.launchWorkout=_csLaunch;
+      }
+    })();
 
     // ══════ PROFIL COACH VISIBLE PAR SES ATHLÈTES ══════
     // La règle de /users ne va que dans un sens : l'athlète ne peut pas lire le
