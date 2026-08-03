@@ -6259,6 +6259,17 @@ function risquesMicro(user,ref){
       question:'As-tu un bilan sanguin récent (ferritine) ?'});
   }
 
+  // ── SOPK déclaré : on renvoie vers le suivi, on n'affirme rien ───────────
+  // Aucun contenu sur le traitement, aucun complément suggéré : une question,
+  // au même format que les autres.
+  try{
+    if(aSOPK(user)){
+      out.push({cle:'sopk',lib:'SOPK déclaré',
+        motif:'Un SOPK est déclaré dans son dossier.',
+        question:'Le suivi médical est-il en place ? Y a-t-il un traitement en cours ?'});
+    }
+  }catch(e){}
+
   // ── Saison : de novembre à mars, pour tout le monde ──────────────────────
   // Meme motif que hasUserOmega : un complement ACTIF portant le nom du
   // nutriment eteint la regle. La question a deja recu sa reponse, et la
@@ -19005,6 +19016,7 @@ function _renderNutriContent(type){
           </div>
         </div>
       </div>
+      ${_htmlSopkAthlete(currentUser)}
       ${_htmlDepartAthlete(nut)}
       ${_htmlPlancherAthlete(currentUser)}
       ${_htmlPalierAthlete(currentUser)}
@@ -20053,7 +20065,44 @@ const PROT_DEFAUT=Object.freeze({seche:2.4,masse:2.2,recomp:2.2,maintien:1.8});
 const PROT_BASE=1.8;
 // L'échelle de la liste déroulante : de 2,4 à 1,8 par pas de 0,1.
 const PROT_ECHELLE=Object.freeze([2.4,2.3,2.2,2.1,2.0,1.9,1.8]);
-const LIP_G_PAR_KG=0.8;          // plancher, jamais en dessous
+// VALEUR PAR DÉFAUT, et non plancher : le vrai plancher est
+// LIP_PLANCHER_G_KG (0,6). Le commentaire d'origine disait « plancher, jamais
+// en dessous » — inexact déjà, et franchement trompeur maintenant que la
+// valeur est réglable.
+const LIP_G_PAR_KG=0.8;
+// Répartition glucides/lipides réglable POUR TOUT LE MONDE. Seul le g/kg de
+// protéines l'était : tout le reste partait en glucides, soit près de la
+// moitié de l'apport. Ce n'est pas une question de pathologie, c'est une
+// question de réglage qui manquait.
+const LIP_ECHELLE=Object.freeze([0.6,0.8,1.0,1.2,1.5]);
+// ── SOPK : un repère élargi, aucun mode dédié ─────────────────────────────
+// Une athlète avec insulinorésistance recevait ~50 % de son apport en
+// glucides, et sa perte plus lente était lue par ajustementPropose comme un
+// déficit insuffisant — donc comme une raison de baisser encore.
+//
+// RepCore ne dépiste RIEN et n'affirme RIEN sur le traitement : il élargit
+// une fourchette quand un diagnostic médical est déclaré, et il renvoie vers
+// le suivi qui va avec.
+const LIP_SUGGERE_SOPK=1.2;
+const SOPK_CIBLE_SECHE=Object.freeze({min:-1.0,max:-0.3,alerte:-1.4});
+// Le lot A2-03 doit livrer la liste complète des états déclarables et son
+// interface. Il n'est pas là : cette liste porte pour l'instant la SEULE
+// entrée dont ce lot a besoin, et A2-03 l'étendra. Aucune question de
+// dépistage, aucun questionnaire de symptômes — une déclaration, rien d'autre.
+const ETATS_DECLARABLES=Object.freeze([
+  Object.freeze({cle:'sopk',lib:'SOPK diagnostiqué par un médecin'})
+]);
+// Défensive : le champ n'existe pas encore dans les dossiers, et un tableau
+// absent ou d'une autre forme ne doit rien casser.
+function aSOPK(user){
+  const l=(user&&user.etatsSante);
+  return Array.isArray(l)&&l.indexOf('sopk')>=0;
+}
+// L'élargissement ne vaut que là où le champ a un sens. Un homme qui
+// déclarerait un SOPK garde la fourchette standard, sans message d'erreur.
+function sopkApplicable(user){
+  return aSOPK(user)&&isFemale((user&&(user._evol_gender||user.gender))||'');
+}
 const FIBRES_PAR_1000=14;
 const CYCLE_GLUC=0.15;           // jour ON : +15 % de glucides, OFF : −15 %
 
@@ -20083,10 +20132,18 @@ function deltaKcalJour(pctSemaine,poids){
   return Math.round((pc/100*kg*KCAL_PAR_KG_CORPS)/7);
 }
 
-function _repartition(kcal,poids,gParKg){
+// lipGparKg ABSENT = comportement d'avant ce lot, au gramme près. Le plancher
+// de lipides reste le dernier mot : un réglage ne descend pas sous lui.
+function _repartition(kcal,poids,gParKg,lipGparKg){
   const p=Math.round(gParKg*poids);
-  const l=Math.round(LIP_G_PAR_KG*poids);
+  const lkg=(typeof lipGparKg==='number'&&isFinite(lipGparKg))
+    ?Math.max(LIP_PLANCHER_G_KG,lipGparKg):LIP_G_PAR_KG;
+  const l=Math.round(lkg*poids);
   const reste=kcal-4*p-9*l;
+  // Des glucides négatifs n'existent pas. Conséquence assumée et inchangée :
+  // quand protéines et lipides dépassent déjà la cible, le total du jour la
+  // dépasse aussi. Ce n'était qu'atteignable en théorie à 0,8 g/kg ; à 1,5
+  // c'est un cas réel, et un test le nomme.
   const g=Math.max(0,Math.round(reste/4));
   return {p,l,g};
 }
@@ -20104,7 +20161,7 @@ function _relevePlancher(j,user){
   return _bloc(j.p,j.l,Math.max(j.g,gMin));
 }
 
-// opts : { protGparKg, cycle }  — cycle à false donne le MÊME total tous les
+// opts : { protGparKg, lipGparKg, cycle }  — cycle à false donne le MÊME total
 // jours, ce que demandent les athlètes qui ne veulent pas gérer deux colonnes.
 function besoinsProposes(user,opts){
   const o=opts||{};
@@ -20205,6 +20262,12 @@ function besoinsProposes(user,opts){
   const libPhase=(phase&&PHASES[phase]&&PHASES[phase].lib)||'';
   hypotheses.push(String(gParKg).replace('.',',')+' g de protéines par kilo'
     +(libPhase?' ('+libPhase.toLowerCase()+')':''));
+  // Le g/kg de lipides est annoncé DÈS qu'il s'écarte du défaut : un chiffre
+  // qui change la moitié de l'assiette ne doit pas passer sous silence.
+  const lipKg=(typeof o.lipGparKg==='number'&&isFinite(o.lipGparKg))
+    ?Math.max(LIP_PLANCHER_G_KG,o.lipGparKg):LIP_G_PAR_KG;
+  if(lipKg!==LIP_G_PAR_KG)
+    hypotheses.push(String(lipKg).replace('.',',')+' g de lipides par kilo');
 
   // Le point de départ ne vaut plus la maintenance : il vise la vitesse
   // déclarée pour la phase. Sans phase, le delta est nul et le comportement
@@ -20216,7 +20279,7 @@ function besoinsProposes(user,opts){
   cible=Math.max(cible,Math.round(depense*(1-DEFICIT_MAX_PART)));
   cible=Math.min(cible,Math.round(depense*(1+SURPLUS_MAX_PART)));
   const deltaRetenu=cible-depense;
-  const r=_repartition(cible,poids,gParKg);
+  const r=_repartition(cible,poids,gParKg,lipKg);
   const cycle=o.cycle!==false;
   // Les journées sont calculées AVANT d'annoncer quoi que ce soit : le
   // plancher peut les relever, et c'est le total servi qui décide de la
@@ -20264,14 +20327,36 @@ function besoinsProposes(user,opts){
 // curseurs du calcul, pas une donnée de suivi. Rien n'est enregistré tant que
 // le coach n'a pas cliqué sur son bouton habituel.
 let _propProt=null;      // null = valeur suggérée par la phase
+let _propLip=null;       // null = valeur suggérée par le dossier
 let _propCycle=true;
 function _propReglages(){
-  const p=_propProt;
-  return {protGparKg:(typeof p==='number')?p:undefined,cycle:_propCycle};
+  const p=_propProt, l=_propLip;
+  return {protGparKg:(typeof p==='number')?p:undefined,
+    lipGparKg:(typeof l==='number')?l:undefined,cycle:_propCycle};
+}
+// Valeur SUGGÉRÉE, jamais imposée : le coach voit une proposition et tranche.
+function lipSuggere(user){
+  return sopkApplicable(user)?LIP_SUGGERE_SOPK:LIP_G_PAR_KG;
+}
+const SOPK_NOTE_LIPIDES='suggéré — le SOPK répond souvent mieux à une charge '
+  +'glucidique plus basse, mais cela varie beaucoup. À ajuster selon ce '
+  +'qu\'elle constate.';
+const SOPK_RENVOI_ATHLETE='Tu as déclaré un SOPK. RepCore adapte ses repères, '
+  +'mais il ne remplace pas le suivi médical qui va avec.';
+function _htmlSopkAthlete(user){
+  return sopkApplicable(user||currentUser)
+    ?`<div style="font-size:11px;color:var(--text-dim);line-height:1.6;margin-bottom:12px">${escapeHtml(SOPK_RENVOI_ATHLETE)}</div>`
+    :'';
 }
 function _propSetProt(v){
   const n=parseFloat(v);
   _propProt=isFinite(n)?n:null;
+  const c=getOwnedClient(currentClientId);
+  if(c) renderCoachNutriSection(c);
+}
+function _propSetLip(v){
+  const n=parseFloat(v);
+  _propLip=isFinite(n)?n:null;
   const c=getOwnedClient(currentClientId);
   if(c) renderCoachNutriSection(c);
 }
@@ -20291,9 +20376,21 @@ function _htmlDepartCoach(c){
   const phase=typePhase(c);
   const suggere=PROT_DEFAUT[phase]||PROT_BASE;
   const opts=PROT_ECHELLE.map(v=>`<option value="${v}"${b.gParKg===v?' selected':''}>${String(v).replace('.',',')} g/kg${v===suggere?' · suggéré':''}</option>`).join('');
+  // Le g/kg de lipides, réglable pour TOUT LE MONDE. La suggestion se décale
+  // sous SOPK, elle ne s'impose pas.
+  const lipSug=lipSuggere(c);
+  const lipCour=(typeof _propLip==='number')?_propLip:lipSug;
+  const optsLip=LIP_ECHELLE.map(v=>`<option value="${v}"${lipCour===v?' selected':''}>${String(v).replace('.',',')} g/kg lip.${v===lipSug?' · suggéré':''}</option>`).join('');
+  const noteSopk=sopkApplicable(c)
+    ?`<div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-bottom:8px">${escapeHtml(SOPK_NOTE_LIPIDES)}</div>`
+    :'';
   return `<div style="border-top:1px solid var(--border);padding-top:11px;margin-bottom:12px">
     <div style="display:flex;gap:6px;margin-bottom:8px">
       <select onchange="_propSetProt(this.value)" style="flex:1;min-width:0;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700">${opts}</select>
+      <select onchange="_propSetLip(this.value)" style="flex:1;min-width:0;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700">${optsLip}</select>
+    </div>
+    ${noteSopk}
+    <div style="display:flex;gap:6px;margin-bottom:8px">
       <select onchange="_propSetCycle(this.value)" style="flex:1;min-width:0;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700">
         <option value="1"${b.cycle?' selected':''}>Diète cyclée</option>
         <option value="0"${b.cycle?'':' selected'}>Même total 7 j</option>
@@ -23308,6 +23405,11 @@ function cibleVitesse(user){
   if(p&&pauseActive(user))
     return Object.assign({},PHASES.maintien,{phase:p.type,pause:true,
       alerte:null,alerteAbs:null,note:PAUSE_TEXTE_VITESSE});
+  // SOPK déclaré et sèche en cours : la fourchette s'élargit vers le bas et
+  // le seuil d'alerte suit. Une perte plus lente n'est pas un déficit
+  // insuffisant — c'est ce que la spécification appelle le vrai défaut.
+  if(p&&p.type==='seche'&&sopkApplicable(user))
+    return Object.assign({phase:p.type},PHASES.seche,SOPK_CIBLE_SECHE,{sopk:true});
   if(p) return Object.assign({phase:p.type},PHASES[p.type]);
   return {phase:null,min:null,max:null,alerteAbs:PESEE_ALERTE_SANS_PHASE,lib:null};
 }
@@ -24492,7 +24594,10 @@ function risqueDeficitEnergetique(user,jourISO){
       ?(min+' kcal pour un plancher de '+pl.kcal):null;
   });
   essai('vitesse','Perte rapide',()=>{
-    const seuil=(PHASES.seche||{}).alerte;
+    // seuilAlerteSeche et NON cibleVitesse(user).alerte : ce critère vaut
+    // quelle que soit la phase, et l'alerte d'une prise de masse est POSITIVE.
+    // Le comparer à pctSem le déclencherait en permanence.
+    const seuil=seuilAlerteSeche(user);
     if(seuil==null) return null;
     const v=_vitesseAuJour(user,j);
     if(!v||v.pctSem==null) return null;
@@ -24570,6 +24675,12 @@ function paliersDeficit(user,jourISO){
   if(bloquePoints&&leve) return 'vigilance';
   if(r.points>=DEF_SEUIL_VIGILANCE) return 'vigilance';
   return 'aucun';
+}
+// Le seuil de « perte rapide », indépendant de la phase courante : c'est une
+// vitesse de sèche qui sert de référence, y compris chez quelqu'un en masse
+// qui perdrait vite. Sous SOPK, la référence se décale avec la fourchette.
+function seuilAlerteSeche(user){
+  return sopkApplicable(user)?SOPK_CIBLE_SECHE.alerte:((PHASES.seche||{}).alerte);
 }
 function aTCA(user){
   const dep=((user&&user.bilans)||[]).filter(b=>b&&b.type==='depart').slice(-1)[0];
@@ -31259,6 +31370,311 @@ function testExercices(){
           return JSON.stringify(u.nutrition.supplements)===avantSupp
             ?true:_echec('le complément a été touché');})());
       } finally { currentUser=_cnU; }
+    })();
+
+    // ══════ RÉPARTITION RÉGLABLE, ET REPÈRES ÉLARGIS SOUS SOPK ══════
+    // Seul le g/kg de PROTÉINES était réglable : tout le reste partait en
+    // glucides. Et une perte plus lente était lue comme un déficit insuffisant,
+    // donc comme une raison de baisser encore.
+    (()=>{
+      const _skU=currentUser;
+      const _j=n=>localISODate(new Date(Date.now()-n*864e5));
+      const AUJ=localISODate(new Date());
+      const _ath=(o)=>{
+        const c=o||{};
+        const u={id:'sk'+(c.id||''),email:'sk'+(c.id||'')+'@t',role:'athlete',
+          gender:c.gender||'Femme',_evol_gender:c.gender||'Femme',
+          exAlias:{},exMuscles:{},programs:{},sessions:[],weightLog:[],sleepLog:[],
+          bilans:[{type:'depart',date:Date.now()-200*864e5,
+            'deb-weight':String(c.kg||62),'deb-height':'165','deb-age':'29',
+            'deb-gender':(c.gender||'Femme')}],
+          nutrition:{macros:{on:{kcal:1900,p:150,g:180,l:50},
+                             off:{kcal:1800,p:150,g:160,l:50}}}};
+        if(c.sopk) u.etatsSante=['sopk'];
+        if(c.seche!==false) u.phase={type:'seche',debut:Date.now()-40*864e5};
+        if(c.phase) u.phase={type:c.phase,debut:Date.now()-40*864e5};
+        // Perte RÉGULIÈRE au rythme voulu, sur assez de points pour que
+        // vitesseHebdo réponde.
+        if(c.pctSem!=null){
+          const kg0=c.kg||62;
+          const parJour=kg0*(c.pctSem/100)/7;
+          u.weightLog=Array.from({length:40},(_,i)=>
+            ({date:_j(39-i),kg:Math.round((kg0+parJour*(39-i)*-1)*100)/100}));
+        }
+        return u;
+      };
+      try{
+        // ── La répartition, réglable pour TOUT LE MONDE ──────────────────
+        ok('Critère : sans quatrième argument, la répartition est INCHANGÉE',(()=>{
+          // Les valeurs sont recalculées ici à la main, à partir des constantes
+          // d'avant ce lot : 2,4 g/kg de protéines et 0,8 g/kg de lipides.
+          const r=_repartition(2000,62,2.4);
+          const p=Math.round(2.4*62), l=Math.round(0.8*62);
+          const g=Math.max(0,Math.round((2000-4*p-9*l)/4));
+          return r.p===p&&r.l===l&&r.g===g
+            ?true:_echec(JSON.stringify(r)+' au lieu de '+JSON.stringify({p,l,g}));})());
+        ok('Critère : à 1,2 g/kg → 74 g de lipides, glucides réduits d\'autant',(()=>{
+          const base=_repartition(2000,62,2.4);
+          const r=_repartition(2000,62,2.4,1.2);
+          if(r.l!==74) return _echec('lipides '+r.l);
+          if(r.p!==base.p) return _echec('les protéines ont bougé');
+          // Les kcal déplacées vers les lipides sortent des glucides.
+          const attendu=Math.max(0,Math.round((2000-4*r.p-9*r.l)/4));
+          return r.g===attendu&&r.g<base.g
+            ?true:_echec('glucides '+r.g+' au lieu de '+attendu);})());
+        ok('Toute l\'échelle est utilisable, et monotone',(()=>{
+          const l=LIP_ECHELLE.map(v=>_repartition(2000,62,2.4,v));
+          const rates=[];
+          for(let i=1;i<l.length;i++){
+            if(!(l[i].l>l[i-1].l)) rates.push('lipides non croissants au rang '+i);
+            if(!(l[i].g<l[i-1].g)) rates.push('glucides non décroissants au rang '+i);
+          }
+          return rates.length?_echec(rates.join(', ')):LIP_ECHELLE.length===5;})());
+        ok('Le plancher de lipides reste le dernier mot',(()=>{
+          // 0,3 g/kg est sous LIP_PLANCHER_G_KG : c'est le plancher qui gagne.
+          const r=_repartition(2000,62,2.4,0.3);
+          return r.l===Math.round(LIP_PLANCHER_G_KG*62)
+            ?true:_echec('lipides '+r.l);})());
+        ok('Une valeur illisible retombe sur le défaut',(()=>{
+          const base=_repartition(2000,62,2.4);
+          const rates=[NaN,'zzz',null,undefined,Infinity].filter(v=>{
+            const r=_repartition(2000,62,2.4,v);
+            return r.l!==base.l;
+          });
+          return rates.length?_echec(rates.length+' valeur(s) acceptée(s)'):true;})());
+        ok('Les glucides ne deviennent jamais négatifs',(()=>{
+          // Cible basse et lipides hauts : le reste passe sous zéro.
+          const r=_repartition(900,62,2.4,1.5);
+          if(r.g!==0) return _echec('glucides '+r.g);
+          // CONSÉQUENCE ASSUMÉE et inchangée : le total du jour DÉPASSE alors la
+          // cible. C'était théorique à 0,8 g/kg, c'est atteignable à 1,5.
+          const bloc=_bloc(r.p,r.l,r.g);
+          return bloc.kcal>900
+            ?true:_echec('le dépassement n\'a pas lieu : '+bloc.kcal);})());
+
+        // ── Le plancher, et le cas limite du cahier des charges ──────────
+        ok('Critère : 48 kg, lipides à 1,5, gros déficit → le plancher tient',(()=>{
+          const u=_ath({id:'p1',kg:48});
+          const pl=plancherEffectif(u).kcal;
+          if(!(pl>0)) return _echec('plancher nul');
+          const r=_repartition(Math.round(pl*0.6),48,2.4,1.5);
+          const j=_relevePlancher(_bloc(r.p,r.l,r.g),u);
+          return j.kcal>=pl?true:_echec(j.kcal+' sous le plancher '+pl);})());
+        ok('Des lipides ÉLEVÉS ne peuvent pas éloigner du plancher',(()=>{
+          // Démonstration plutôt qu\'affirmation : _relevePlancher ne relève que
+          // si kcal < plancher, et kcal vaut au moins 4p+9l. Monter les lipides
+          // ne fait qu\'augmenter ce minimum. Aucun plafonnement n\'est requis.
+          const u=_ath({id:'p2',kg:48});
+          const pl=plancherEffectif(u).kcal;
+          const rates=LIP_ECHELLE.filter(v=>{
+            const r=_repartition(Math.round(pl*0.5),48,2.4,v);
+            return _relevePlancher(_bloc(r.p,r.l,r.g),u).kcal<pl;
+          });
+          return rates.length?_echec('plancher violé à '+rates.join(', ')):true;})());
+
+        // ── besoinsProposes ─────────────────────────────────────────────
+        ok('besoinsProposes transmet le g/kg de lipides et l\'annonce',(()=>{
+          const u=_ath({id:'b1'});
+          const a=besoinsProposes(u,{lipGparKg:1.2});
+          const d=besoinsProposes(u);
+          if(!a||!a.on) return _echec('aucune proposition');
+          if(!(a.on.l>d.on.l)) return _echec('les lipides n\'ont pas bougé');
+          if(!(a.on.g<d.on.g)) return _echec('les glucides n\'ont pas baissé');
+          if(!a.hypotheses.some(h=>/1,2 g de lipides par kilo/.test(h)))
+            return _echec('hypothèse absente : '+a.hypotheses.join(' | '));
+          // Au défaut, aucune ligne : on n'annonce que ce qui s'écarte.
+          return !d.hypotheses.some(h=>/g de lipides par kilo/.test(h))
+            ?true:_echec('le défaut est annoncé alors qu\'il ne change rien');})());
+
+        // ── La fourchette élargie ───────────────────────────────────────
+        ok('Critère : SOPK + sèche → fourchette −1,0 à −0,3',(()=>{
+          const c=cibleVitesse(_ath({id:'v1',sopk:true}));
+          return c.min===-1.0&&c.max===-0.3
+            ?true:_echec(JSON.stringify({min:c.min,max:c.max}));})());
+        ok('Critère : sans SOPK, la fourchette d\'origine, au chiffre près',(()=>{
+          const c=cibleVitesse(_ath({id:'v2'}));
+          return c.min===PHASES.seche.min&&c.max===PHASES.seche.max
+            ?true:_echec(JSON.stringify({min:c.min,max:c.max}));})());
+        ok('Les autres phases ne bougent pas sous SOPK',(()=>{
+          const rates=['masse','recomp','maintien'].filter(ph=>{
+            const a=cibleVitesse(_ath({id:'v3'+ph,phase:ph,sopk:true}));
+            return a.min!==PHASES[ph].min||a.max!==PHASES[ph].max;
+          });
+          return rates.length?_echec(rates.join(', ')):true;})());
+        ok('Critère : vitesseAlerte à −1,3 → false avec SOPK, true sans',(()=>{
+          const avec=vitesseAlerte(-1.3,cibleVitesse(_ath({id:'v4',sopk:true})));
+          const sans=vitesseAlerte(-1.3,cibleVitesse(_ath({id:'v5'})));
+          return avec===false&&sans===true
+            ?true:_echec('avec '+avec+' sans '+sans);})());
+        ok('Cas limite : SOPK déclaré chez un homme → rien ne change',(()=>{
+          const u=_ath({id:'v6',sopk:true,gender:'Homme'});
+          const c=cibleVitesse(u);
+          if(!aSOPK(u)) return _echec('fixture muette');
+          return c.min===PHASES.seche.min&&c.max===PHASES.seche.max
+            &&lipSuggere(u)===LIP_G_PAR_KG
+            ?true:_echec(JSON.stringify({min:c.min,max:c.max,lip:lipSuggere(u)}));})());
+        ok('Cas limite : retirer « sopk » fait tout retomber',(()=>{
+          const u=_ath({id:'v7',sopk:true});
+          if(cibleVitesse(u).max!==-0.3) return _echec('fixture muette');
+          u.etatsSante=[];
+          const c=cibleVitesse(u);
+          return c.max===PHASES.seche.max&&lipSuggere(u)===LIP_G_PAR_KG
+            &&seuilAlerteSeche(u)===PHASES.seche.alerte
+            ?true:_echec(JSON.stringify({max:c.max,lip:lipSuggere(u)}));})());
+        ok('aSOPK ne casse sur aucune forme de dossier',(()=>{
+          try{
+            const cas=[null,undefined,{},{etatsSante:null},{etatsSante:'sopk'},
+              {etatsSante:{}},{etatsSante:['autre']}];
+            return cas.every(u=>aSOPK(u)===false)
+              ?true:_echec('une forme inattendue rend vrai');
+          }catch(e){ return _echec('exception : '+e.message); }})());
+
+        // ── L'effet sur la proposition d'ajustement ─────────────────────
+        ok('Critère : −0,4 %/sem avec SOPK → AUCUNE baisse proposée',(()=>{
+          const u=_ath({id:'a1',sopk:true,pctSem:-0.4});
+          const v=_vitesseAuJour(u,AUJ);
+          if(!v||v.pctSem==null) return _echec('fixture muette : aucune vitesse');
+          if(!(v.pctSem>-0.6&&v.pctSem<-0.2))
+            return _echec('fixture imprécise : '+v.pctSem);
+          const a=ajustementPropose(u);
+          return (!a||a.sens!=='baisse')
+            ?true:_echec('une baisse est proposée');})());
+        ok('Critère : la MÊME perte sans SOPK sort de la fourchette',(()=>{
+          // La contre-épreuve : sans elle, le test ci-dessus passerait même si
+          // plus aucune baisse n'était jamais proposée.
+          const u=_ath({id:'a2',pctSem:-0.4});
+          const c=cibleVitesse(u);
+          const v=_vitesseAuJour(u,AUJ);
+          if(!(v.pctSem>c.max)) return _echec('vitesse '+v.pctSem+' contre max '+c.max);
+          // Et une baisse est REELLEMENT proposee : sans cette ligne, le test
+          // ci-dessus passerait meme si plus aucune baisse ne sortait jamais.
+          const a2=ajustementPropose(u);
+          return a2&&a2.sens==='baisse'
+            ?true:_echec(a2?a2.sens:'aucune proposition');})());
+
+        // ── L'interaction avec le score de déficit énergétique ──────────
+        ok('Critère : le seuil de « perte rapide » suit la fourchette SOPK',(()=>{
+          const avec=_ath({id:'d1',sopk:true}), sans=_ath({id:'d2'});
+          return seuilAlerteSeche(avec)===-1.4&&seuilAlerteSeche(sans)===-1.2
+            ?true:_echec(seuilAlerteSeche(avec)+' / '+seuilAlerteSeche(sans));})());
+        ok('Le critère de vitesse NE se déclenche pas à −1,3 sous SOPK',(()=>{
+          const u=_ath({id:'d3',sopk:true,pctSem:-1.3});
+          const v=_vitesseAuJour(u,AUJ);
+          if(!v||!(v.pctSem<-1.2&&v.pctSem>-1.4))
+            return _echec('fixture imprécise : '+(v?v.pctSem:'aucune'));
+          const cles=risqueDeficitEnergetique(u).criteres.map(x=>x.cle);
+          if(cles.indexOf('vitesse')>=0) return _echec('le critère se déclenche quand même');
+          // Contre-épreuve : sans SOPK, il se déclenche bien.
+          const t=_ath({id:'d4',pctSem:-1.3});
+          return risqueDeficitEnergetique(t).criteres.map(x=>x.cle).indexOf('vitesse')>=0
+            ?true:_echec('il ne se déclenche plus pour personne');})());
+        ok('Le critère reste indépendant de la phase courante',(()=>{
+          // Un athlète en MASSE qui perd vite est un signal : il doit compter.
+          const u=_ath({id:'d5',phase:'masse',pctSem:-1.6});
+          return risqueDeficitEnergetique(u).criteres.map(x=>x.cle).indexOf('vitesse')>=0
+            ?true:_echec('perdre vite en masse ne compte plus');})());
+        ok('Et il ne se déclenche PAS sur quelqu\'un qui prend du poids',(()=>{
+          // LE piège, pris par le bon bout. Lire cibleVitesse(user).alerte au
+          // lieu du seuil de sèche ferait comparer une PRISE de poids à l'alerte
+          // de la phase de masse, qui vaut +0,75 : « pctSem < 0,75 » est vrai
+          // pour quiconque grossit doucement, et le critère « perte rapide »
+          // se déclencherait sur une prise de masse parfaitement normale.
+          // Ma première version testait l'inverse — un athlète qui PERD en
+          // masse — et la variante passait donc au vert.
+          const u=_ath({id:'d6',phase:'masse',pctSem:0.3});
+          const v=_vitesseAuJour(u,AUJ);
+          if(!v||!(v.pctSem>0.1&&v.pctSem<0.6))
+            return _echec('fixture muette : '+(v?v.pctSem:'aucune vitesse'));
+          if(!(v.pctSem<PHASES.masse.alerte))
+            return _echec('fixture muette : la vitesse dépasse déjà l\'alerte de masse');
+          const cles=risqueDeficitEnergetique(u).criteres.map(x=>x.cle);
+          return cles.indexOf('vitesse')<0
+            ?true:_echec('« perte rapide » compté sur une prise de poids');})());
+
+        // ── Les deux renvois, et le registre ────────────────────────────
+        ok('Critère : la fiche coach porte le renvoi médical',(()=>{
+          const l=risquesMicro(_ath({id:'r1',sopk:true}))||[];
+          const e=l.find(x=>x.cle==='sopk');
+          if(!e) return _echec('entrée absente');
+          return e.lib==='SOPK déclaré'&&/déclaré dans son dossier/.test(e.motif)
+            &&/suivi médical est-il en place/.test(e.question)
+            ?true:_echec(JSON.stringify(e));})());
+        ok('Et rien sans SOPK déclaré',
+          !(risquesMicro(_ath({id:'r2'}))||[]).some(x=>x.cle==='sopk'));
+        ok('Critère : l\'écran athlète porte la phrase, une seule fois',(()=>{
+          const u=_ath({id:'r3',sopk:true});
+          const h=_htmlSopkAthlete(u);
+          const d=document.createElement('div'); d.innerHTML=h;
+          const t=d.textContent||'';
+          if(!/ne remplace pas le suivi médical/.test(t)) return _echec('phrase absente');
+          if((t.match(/SOPK/g)||[]).length!==1) return _echec('répétée');
+          return _htmlSopkAthlete(_ath({id:'r4'}))===''
+            ?true:_echec('elle sort sans SOPK déclaré');})());
+        ok('Critère : aucun dépistage, aucun contenu sur le traitement',(()=>{
+          const u=_ath({id:'r5',sopk:true});
+          let h=_htmlSopkAthlete(u)+SOPK_NOTE_LIPIDES+SOPK_RENVOI_ATHLETE;
+          (risquesMicro(u)||[]).forEach(x=>{ h+=' '+x.lib+' '+x.motif+' '+x.question; });
+          try{ currentUser=u; h+=_htmlDepartCoach(u); }catch(e){}
+          const d=document.createElement('div'); d.innerHTML=h;
+          const n=(d.textContent||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+          // Dépistage : aucune question de symptôme.
+          const depistage=['as-tu des','symptome','pilosite','acne','regles irregulieres',
+            'echographie','testosterone','as-tu deja eu'];
+          const t1=depistage.filter(x=>n.indexOf(x)>=0);
+          if(t1.length) return _echec('dépistage : '+t1.join(', '));
+          // Traitement : aucun contenu affirmatif.
+          const traitement=['metformine','inositol','traitement du sopk','guerir',
+            'mode sopk','regime sopk','plan sopk'];
+          const t2=traitement.filter(x=>n.indexOf(x)>=0);
+          if(t2.length) return _echec('traitement : '+t2.join(', '));
+          // Et la note reste prudente : « souvent », « varie », « à ajuster ».
+          return /varie beaucoup/.test(SOPK_NOTE_LIPIDES)&&/ajuster/.test(SOPK_NOTE_LIPIDES)
+            ?true:_echec('la note ne dit pas son incertitude');})());
+        ok('ETATS_DECLARABLES porte la clé, et rien d\'inventé autour',(()=>{
+          const e=ETATS_DECLARABLES.find(x=>x.cle==='sopk');
+          if(!e) return _echec('clé absente');
+          if(!/diagnostiqué par un médecin/.test(e.lib)) return _echec(e.lib);
+          // Le lot A2-03 étendra la liste ; ce lot n'invente aucune autre entrée.
+          return ETATS_DECLARABLES.length===1
+            ?true:_echec(ETATS_DECLARABLES.length+' entrées');})());
+
+        // ── Le sélecteur coach ──────────────────────────────────────────
+        ok('Le sélecteur de lipides propose toute l\'échelle',(()=>{
+          const sauve=currentUser, sauveId=currentClientId;
+          try{
+            currentUser=_ath({id:'c1'});
+            const h=_htmlDepartCoach(_ath({id:'c1'}));
+            const manque=LIP_ECHELLE.filter(v=>h.indexOf('value="'+v+'"')<0);
+            if(manque.length) return _echec('absents : '+manque.join(', '));
+            return /_propSetLip\(this\.value\)/.test(h)
+              ?true:_echec('le sélecteur n\'est pas branché');
+          } finally { currentUser=sauve; currentClientId=sauveId; }})());
+        ok('La suggestion se décale sous SOPK, et la note l\'accompagne',(()=>{
+          const sopk=_ath({id:'c2',sopk:true}), sans=_ath({id:'c3'});
+          if(lipSuggere(sopk)!==LIP_SUGGERE_SOPK) return _echec('suggestion '+lipSuggere(sopk));
+          if(lipSuggere(sans)!==LIP_G_PAR_KG) return _echec('suggestion sans SOPK');
+          const h=_htmlDepartCoach(sopk);
+          if(h.indexOf(escapeHtml(SOPK_NOTE_LIPIDES))<0) return _echec('note absente');
+          return _htmlDepartCoach(sans).indexOf(escapeHtml(SOPK_NOTE_LIPIDES))<0
+            ?true:_echec('la note sort sans SOPK');})());
+        ok('Le réglage vit en MÉMOIRE, rien n\'est écrit dans le dossier',(()=>{
+          const sauve=_propLip;
+          try{
+            const u=_ath({id:'c4'});
+            const avant=JSON.stringify(u);
+            _propLip=1.5;
+            const r=_propReglages();
+            if(r.lipGparKg!==1.5) return _echec('réglage non lu');
+            besoinsProposes(u,r);
+            return JSON.stringify(u)===avant
+              ?true:_echec('le dossier a été modifié');
+          } finally { _propLip=sauve; }})());
+        ok('_repartition est PURE',(()=>{
+          const avant=JSON.stringify(LIP_ECHELLE);
+          _repartition(2000,62,2.4,1.2); _repartition(2000,62,2.4);
+          return JSON.stringify(LIP_ECHELLE)===avant
+            ?true:_echec('l\'échelle a bougé');})());
+      } finally { currentUser=_skU; }
     })();
 
     // ══════ PROFIL COACH VISIBLE PAR SES ATHLÈTES ══════
