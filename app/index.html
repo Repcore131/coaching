@@ -16997,6 +16997,7 @@ function renderVolumeCoach(c){
     ${_axPrio?'':_axial}
     ${_htmlRirMoyen(c)}
     ${_htmlEcartPrescrit(c)}
+    ${_htmlAdherenceCoach(c)}
     ${_htmlBoutonDecharge(c)}
   </div>`;
 }
@@ -22371,6 +22372,10 @@ function _htmlAjustement(user,lectureSeule){
       <div style="font-size:12px;color:#ddd;line-height:1.7">Ta ${escapeHtml(PHASES[(phaseCourante(user)||{}).type].apres)} avance plus lentement que visé, mais je ne te propose pas de baisser : tu serais ${pl.plancher!=null?(pl.regle||'sous ton plancher')+' ('+pl.plancher+' kcal)':'sous ton plancher'}. On regarde ailleurs — sommeil, pas quotidiens, régularité — et on en parle.</div>
       ${blocDisclaimerSante()}
     </div>`;
+    // Le plancher a la priorite : il vient d'etre teste juste au-dessus et rend
+    // deja son propre bloc. L'adherence ne parle que si le plancher se tait.
+    const _adhHtml=_htmlAdherenceRefus(user,lectureSeule);
+    if(_adhHtml) return _adhHtml;
     // Historique : le coach doit voir ce qui a été proposé et ce qui a été fait.
     const h=(nut.ajustHisto||[]).slice(-1)[0];
     if(lectureSeule&&h) return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:16px">
@@ -22383,7 +22388,8 @@ function _htmlAjustement(user,lectureSeule){
   const jourLib=a.jour==='off'?'les jours OFF':'les jours d\'entraînement';
   const constat=`Ta ${escapeHtml(ph.apres)} avance à ${_fmtPct(a.mesuree)} % par semaine depuis ${a.semaines} semaine${a.semaines>1?'s':''}, la fourchette visée est ${_fmtPct(a.cible.min)} à ${_fmtPct(a.cible.max)} %.`;
   const propo=`Proposition : ${_fmtPct(a.kcalDelta)} kcal ${jourLib} (${_fmtPct(a.gDelta)} g de glucides).`;
-  const regimeHtml=`<div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-top:6px">${escapeHtml(phraseRegimeMesure(a))}</div>`;
+  const regimeHtml=`<div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-top:6px">${escapeHtml(phraseRegimeMesure(a))}</div>`
+    +(a.verifieParJournal?'':`<div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-top:4px">Proposé sans journal alimentaire pour le vérifier.</div>`);
   return `<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:14px;padding:14px;margin-bottom:18px">
     <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:8px">Ajustement proposé</div>
     <div style="font-size:12px;color:#ddd;line-height:1.7;margin-bottom:6px">${constat}</div>
@@ -22451,6 +22457,141 @@ function _vitesseAuJour(user,jourISO){
   }catch(e){ return null; }
 }
 
+// ══════════════════════ ADHÉRENCE AU JOURNAL ══════════════════════
+// ajustementPropose modifiait l'OBJECTIF quand la vitesse ne suivait pas, sans
+// jamais regarder si l'objectif était SUIVI. Il pouvait donc baisser une cible
+// déjà dépassée de 450 kcal par jour — corriger le plan quand c'est l'écart au
+// plan qui explique tout.
+//
+// Aucun score, aucune série de jours réussis, aucun badge : on constate un écart
+// moyen sur une fenêtre, et on s'en sert pour SUSPENDRE une proposition
+// automatique, pas pour noter quelqu'un.
+const ADH_FENETRE_JOURS=14;
+const ADH_JOURS_MIN=8;            // en dessous, aucune conclusion
+const ADH_ECART_PART=0.10;        // 10 % de la cible
+// PURE. Rend {nJours, couverture, ecartKcal, ecartProt, cibleMoyenne} ou null.
+//
+// La cible du jour vient de _getEffectiveMacros — JAMAIS d'un recalcul local.
+// Deux chemins vers la même cible divergeraient à la première évolution du
+// cycle glucidique ou de l'adaptation de cycle, et l'écart mesuré deviendrait
+// un artefact de la divergence.
+function adherence(user,finISO){
+  const nut=(user&&user.nutrition)||{};
+  const log=nut.log||{};
+  if(!nut.macros) return null;
+  const fin=finISO||localISODate(new Date());
+  let n=0, sKcal=0, sProt=0, sCible=0;
+  for(let i=0;i<ADH_FENETRE_JOURS;i++){
+    const j=_jourPlus(fin,-i);
+    const e=(log[j]&&log[j].entries)||[];
+    if(!e.length) continue;
+    const realise=e.reduce((a,x)=>({
+      kcal:a.kcal+(Number(x&&x.kcal)||0),p:a.p+(Number(x&&x.p)||0)}),{kcal:0,p:0});
+    // Un jour est « journalisé » s'il porte de vraies calories. Une entrée à
+    // zéro kcal — un thé, une erreur de saisie — ne fait pas une journée suivie.
+    if(!(realise.kcal>0)) continue;
+    const cible=_getEffectiveMacros(nut,nutIsOnDay(j),j);
+    // Cible absente ce jour-là : le jour ne dit rien d'un écart, il sort du
+    // calcul plutôt que de compter comme un écart de la taille du réalisé.
+    if(!cible||!(Number(cible.kcal)>0)) continue;
+    n++;
+    sKcal+=realise.kcal-Number(cible.kcal);
+    sProt+=realise.p-(Number(cible.p)||0);
+    sCible+=Number(cible.kcal);
+  }
+  if(!n) return null;
+  return {nJours:n,
+    couverture:Math.round(n/ADH_FENETRE_JOURS*100)/100,
+    ecartKcal:Math.round(sKcal/n),
+    ecartProt:Math.round(sProt/n),
+    cibleMoyenne:Math.round(sCible/n)};
+}
+// Vrai quand la couverture suffit ET que l'écart dépasse le seuil.
+function _adherenceEcarte(adh){
+  return !!(adh&&adh.nJours>=ADH_JOURS_MIN
+    &&Math.abs(adh.ecartKcal)>adh.cibleMoyenne*ADH_ECART_PART);
+}
+// Refus MOTIVÉ, exposé séparément — exactement comme _ajustPlancherAtteint.
+//
+// ajustementPropose continue de rendre null : ses trois appelants consomment son
+// retour comme une proposition dès qu'il est truthy, et appliquerAjustement lit
+// a.jour puis a.apres.kcal. Un objet de refus y aurait ecrit une cle parasite
+// dans les macros avant de lever une exception. Le refus doit etre AFFICHABLE,
+// pas RETOURNE par la fonction qui alimente le bouton « Appliquer ».
+function _ajustAdherenceBloque(user,finISO){
+  if(!user) return null;
+  // L'ordre compte : les garde-fous qui ETEIGNENT tout passent avant. Un
+  // athlete sous drapeau rouge, en pause, ou avec un antecedent declare n'a
+  // pas de proposition — donc rien a refuser, et rien a expliquer.
+  try{ if(drapeauQuelconqueActif(user)) return null; }catch(e){}
+  try{ if(aTCA(user)) return null; }catch(e){}
+  try{ if(pauseActive(user)) return null; }catch(e){}
+  const nut=user.nutrition||{};
+  if(!nut.macros) return null;
+  if(!phaseCourante(user)) return null;
+  const adh=adherence(user,finISO);
+  if(!_adherenceEcarte(adh)) return null;
+  return {refus:'adherence',adh};
+}
+// Le texte dit l'écart DANS SON SENS. « Tu manges plus que prévu » et « tu manges
+// moins que prévu » n'appellent pas la même conversation, et une seule phrase
+// pour les deux serait fausse dans un cas sur deux.
+function phraseAdherence(adh){
+  if(!adh) return '';
+  const sur=adh.ecartKcal>0;
+  const n=Math.abs(adh.ecartKcal);
+  return 'Ta vitesse ne suit pas la cible, mais tu es en moyenne '
+    +(sur?'+':'−')+n+' kcal '+(sur?'au-dessus':'en dessous')
+    +' de tes objectifs sur les '+adh.nJours+' jours que tu as journalisés. '
+    +'Modifier l\'objectif ne servirait à rien. On regarde l\'écart ensemble '
+    +'avant de toucher aux chiffres.';
+}
+// Côté ATHLÈTE, ce bloc est MASQUÉ sous antécédent alimentaire déclaré — même
+// prudence que renderCartePesee, qui masque la pesée dans ce cas. Un écart
+// chiffré à ses objectifs est exactement ce qu'on ne met pas sous les yeux de
+// quelqu'un qui a déclaré un antécédent.
+function _htmlAdherenceRefus(user,lectureSeule){
+  const r=_ajustAdherenceBloque(user);
+  if(!r) return '';
+  if(!lectureSeule){
+    let tca=false; try{ tca=aTCA(user); }catch(e){}
+    if(tca) return '';
+  }
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:18px">
+    <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">Rythme</div>
+    <div style="font-size:12px;color:#ddd;line-height:1.7">${escapeHtml(phraseAdherence(r.adh))}</div>
+    ${blocDisclaimerSante()}
+  </div>`;
+}
+// ── Fiche coach ─────────────────────────────────────────────────────────────
+// TOUJOURS affichée au coach, y compris sous antécédent : c'est lui qui doit
+// voir l'écart pour en parler, et c'est précisément le cas où il doit le voir.
+const ADH_CHEAT_REPLI='4 ou plus';
+const ADH_CHEAT_BILANS=3;
+function _htmlAdherenceCoach(c){
+  const adh=adherence(c);
+  if(adh){
+    const s=adh.ecartKcal>0?'+':'−';
+    const sp=adh.ecartProt>0?'+':'−';
+    return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+      <div style="font-size:10px;color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Adhérence</div>
+      <div style="font-size:11px;color:#ddd;line-height:1.6">${adh.nJours} jour${adh.nJours>1?'s':''} journalisé${adh.nJours>1?'s':''} sur ${ADH_FENETRE_JOURS}, ${s}${Math.abs(adh.ecartKcal)} kcal en moyenne, protéines ${sp}${Math.abs(adh.ecartProt)} g.</div>
+    </div>`;
+  }
+  // Repli : aucun jour journalisé, mais l'athlète a déclaré des repas hors
+  // programme dans ses trois derniers bilans de suivi. Un CONSTAT, pas un
+  // jugement — et surtout pas un chiffre, puisqu'on n'en a aucun.
+  const suivis=((c&&c.bilans)||[]).filter(b=>b&&b.type==='suivi'&&b.date)
+    .slice().sort((a,b)=>b.date-a.date).slice(0,ADH_CHEAT_BILANS);
+  if(suivis.length<ADH_CHEAT_BILANS) return '';
+  const tous=suivis.every(b=>_texteReponse(b['bil-cheat-meals'])===ADH_CHEAT_REPLI);
+  if(!tous) return '';
+  return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+    <div style="font-size:10px;color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Adhérence</div>
+    <div style="font-size:11px;color:#ddd;line-height:1.6">Aucun jour journalisé sur ${ADH_FENETRE_JOURS}, et « ${escapeHtml(ADH_CHEAT_REPLI)} » repas hors programme déclarés aux ${ADH_CHEAT_BILANS} derniers bilans.</div>
+  </div>`;
+}
+
 function ajustementPropose(user){
   if(!user) return null;
   // Drapeau rouge, quelle que soit sa famille : aucune proposition automatique.
@@ -22470,6 +22611,12 @@ function ajustementPropose(user){
   // un second par-dessus reviendrait a corriger une vitesse qu'on a
   // volontairement suspendue.
   try{ if(pauseActive(user)) return null; }catch(e){}
+  // Adherence : modifier l'OBJECTIF quand c'est l'ecart au plan qui explique
+  // la vitesse ne sert a rien. On se tait ici, et _ajustAdherenceBloque dit
+  // POURQUOI a l'ecran — meme registre que le plancher.
+  const _aujdAdh=localISODate(new Date());
+  const _adh=adherence(user,_aujdAdh);
+  if(_adherenceEcarte(_adh)) return null;
   const cible=cibleVitesse(user);
   if(cible.min==null||cible.max==null) return null;
   // Un seul ajustement par quinzaine, accepté OU refusé.
@@ -22520,6 +22667,11 @@ function ajustementPropose(user){
 
   const jours=_joursEntre(_jourPlus(aujd,-(PESEE_FENETRE_VIT+AJUST_ECART_RELEVES-1)),aujd);
   return {sens,pct:Math.round(pas*100),regime:etendu?'etendu':'precis',kcalDelta,gDelta,
+    // Couverture insuffisante : la proposition tient, mais elle est annoncee
+    // pour ce qu'elle est — un ajustement decide sans pouvoir verifier que
+    // l'objectif precedent etait suivi.
+    verifieParJournal:!!(_adh&&_adh.nJours>=ADH_JOURS_MIN),
+    adherence:_adh||null,
     mesuree:Math.round(v1.pctSem*100)/100,
     nPesees:(v1.nPesees!=null?v1.nPesees:v1.points),
     nSemaines:(v1.nSemaines!=null?v1.nSemaines:null),
@@ -37004,6 +37156,211 @@ function testExercices(){
         return manque.length?_echec('absents de BILAN_QUESTIONS : '+manque.join(', ')):true;})());
     })();
 
+
+    // ══ ADHÉRENCE AU JOURNAL ═════════════════════════════════════════════
+    (()=>{
+      const _sU=currentUser;
+      const _jr=n=>localISODate(new Date(Date.now()-n*864e5));
+      // Athlète en sèche trop lente : sans la garde d'adhérence, une BAISSE
+      // serait proposée. C'est exactement le cas que le lot doit intercepter.
+      const _ath=(nJoursJournal,kcalRealise,extra)=>{
+        const wl=[]; let kg=70;
+        for(let j=45;j>=0;j--){
+          wl.push({date:_jr(j),kg:Math.round(kg*100)/100});
+          kg-=70*0.001/7;                       // −0,1 %/sem : bien trop lent
+        }
+        const log={};
+        for(let i=0;i<(nJoursJournal||0);i++){
+          log[_jr(i)]={entries:[{id:i,nom:'A',qty:100,repas:'matin',
+            kcal:kcalRealise,p:150,c:100,l:50,fi:10,sel:1}]};
+        }
+        return Object.assign({id:'ad',email:'ad@t.fr',role:'athlete',
+          gender:'H',_evol_gender:'H',_evol_height:178,
+          exAlias:{},exMuscles:{},sessions:[],bilans:[],weightLog:wl,
+          sessions_config:Array.from({length:7},(_,i)=>({day:'J'+i,name:'S',
+            active:false,exercises:[]})),
+          phase:{type:'seche',debut:Date.now()-60*864e5},
+          nutrition:{dietType:'strict',log,
+            // 2400 kcal et non 1800 : a 1800, une baisse de 10 % tombe a 1470,
+            // sous le plancher, et c'est LUI qui suspendrait la proposition.
+            // La fixture ne prouverait alors rien sur l'adherence.
+            macros:{on:{kcal:2400,p:150,g:337,l:50},
+                    off:{kcal:2400,p:150,g:337,l:50}}}},extra||{});
+      };
+      try{
+        // ── La fixture doit PARLER sans la garde ──────────────────────────
+        ok('La fixture propose bien un ajustement sans écart d\'adhérence',(()=>{
+          const u=_ath(0,0);          // journal vide → aucune garde possible
+          return ajustementPropose(u)
+            ?true:_echec('fixture muette : les tests suivants ne prouveraient rien');})());
+
+        // ── adherence ─────────────────────────────────────────────────────
+        ok('Critère : 12 jours à 2850 pour une cible de 2400 → +450',(()=>{
+          const a=adherence(_ath(12,2850));
+          if(!a) return _echec('aucune adhérence');
+          return a.nJours===12&&a.ecartKcal===450&&a.cibleMoyenne===2400
+            ?true:_echec(JSON.stringify(a));})());
+        ok('Critère : journal vide → adherence rend null',
+           adherence(_ath(0,0))===null);
+        ok('Critère : un seul jour → nJours 1, aucun refus',(()=>{
+          const u=_ath(1,2850);
+          const a=adherence(u);
+          if(!a||a.nJours!==1) return _echec(JSON.stringify(a));
+          return _adherenceEcarte(a)===false&&!!ajustementPropose(u)
+            ?true:_echec('un refus est apparu sur un seul jour');})());
+        ok('Un jour à zéro kcal n\'est pas un jour journalisé',(()=>{
+          const u=_ath(0,0);
+          u.nutrition.log[_jr(0)]={entries:[{id:1,kcal:0,p:0}]};
+          return adherence(u)===null
+            ?true:_echec('un thé compte comme une journée suivie');})());
+        ok('Critère : cible absente un jour → ce jour est EXCLU',(()=>{
+          const u=_ath(12,2850);
+          const avant=adherence(u);
+          // On retire les macros : plus aucune cible, donc plus aucun jour.
+          u.nutrition.macros=null;
+          if(adherence(u)!==null) return _echec('des jours comptent sans cible');
+          return avant&&avant.nJours===12?true:_echec('fixture cassée');})());
+        ok('La cible passe par _getEffectiveMacros, pas par un recalcul',(()=>{
+          return /_getEffectiveMacros\(/.test(String(adherence))
+            ?true:_echec('recalcul local de la cible');})());
+
+        // ── Le refus motivé ───────────────────────────────────────────────
+        ok('Critère : 12 jours à +450 → l\'ajustement est SUSPENDU',(()=>{
+          const u=_ath(12,2850);
+          if(ajustementPropose(u)!==null)
+            return _echec('une proposition passe malgré l\'écart');
+          const r=_ajustAdherenceBloque(u);
+          return r&&r.refus==='adherence'&&r.adh.ecartKcal===450
+            ?true:_echec(JSON.stringify(r));})());
+        ok('Critère : 12 jours à 2410 pour 2400 → la proposition est rendue',(()=>{
+          const u=_ath(12,2410);
+          const a=adherence(u);
+          if(!a||a.ecartKcal!==10) return _echec(JSON.stringify(a));
+          return !!ajustementPropose(u)&&_ajustAdherenceBloque(u)===null
+            ?true:_echec('la proposition a été suspendue à tort');})());
+        ok('Critère : 5 jours à 2850 → aucun refus, mention « non vérifié »',(()=>{
+          const u=_ath(5,2850);
+          const a=ajustementPropose(u);
+          if(!a) return _echec('la proposition a été suspendue');
+          if(_ajustAdherenceBloque(u)!==null) return _echec('un refus est apparu');
+          return a.verifieParJournal===false
+            ?true:_echec('la proposition se dit vérifiée');})());
+        ok('Douze jours journalisés marquent la proposition comme VÉRIFIÉE',(()=>{
+          const a=ajustementPropose(_ath(12,2410));
+          return a&&a.verifieParJournal===true
+            ?true:_echec(JSON.stringify(a&&a.verifieParJournal));})());
+        ok('Critère : un écart NÉGATIF important refuse aussi, dans l\'autre sens',(()=>{
+          const u=_ath(12,1800);      // −600 kcal par jour
+          if(ajustementPropose(u)!==null) return _echec('une proposition passe');
+          const r=_ajustAdherenceBloque(u);
+          if(!r) return _echec('aucun refus');
+          const t=phraseAdherence(r.adh);
+          return /−600 kcal en dessous/.test(t)
+            ?true:_echec(t);})());
+        ok('La phrase dit l\'écart DANS SON SENS',(()=>{
+          const sur=phraseAdherence({ecartKcal:450,nJours:12});
+          const sous=phraseAdherence({ecartKcal:-450,nJours:12});
+          return /\+450 kcal au-dessus/.test(sur)&&/−450 kcal en dessous/.test(sous)
+            ?true:_echec(sur+' | '+sous);})());
+
+        // ── L'ordre des garde-fous ────────────────────────────────────────
+        ok('Critère : aTCA → null, et JAMAIS un refus d\'adhérence',(()=>{
+          const u=_ath(12,2850,{bilans:[{type:'depart',date:Date.now()-200*864e5,
+            'deb-tca':'anorexie il y a 5 ans'}]});
+          if(!aTCA(u)) return _echec('fixture inutile : l\'antécédent n\'est pas vu');
+          if(ajustementPropose(u)!==null) return _echec('une proposition passe');
+          return _ajustAdherenceBloque(u)===null
+            ?true:_echec('le refus d\'adhérence court-circuite le garde-fou TCA');})());
+        ok('Critère : rien côté ATHLÈTE sous antécédent déclaré',(()=>{
+          const u=_ath(12,2850,{bilans:[{type:'depart',date:Date.now()-200*864e5,
+            'deb-tca':'boulimie'}]});
+          const h=_htmlAdherenceRefus(u,false);
+          return h===''?true:_echec('un écart chiffré est montré à l\'athlète');})());
+        ok('Un drapeau rouge éteint aussi le refus d\'adhérence',(()=>{
+          const u=_ath(12,2850);
+          poserDrapeauGeneral(u,['thoracique']);
+          return _ajustAdherenceBloque(u)===null
+            ?true:_echec('le refus parle sous drapeau rouge');})());
+        ok('Une pause éteint aussi le refus d\'adhérence',(()=>{
+          const u=_ath(12,2850);
+          u.phase.pause={debut:Date.now()-3*864e5,jours:12,
+            kcalAvant:{on:{kcal:1800},off:{kcal:1800}}};
+          return _ajustAdherenceBloque(u)===null
+            ?true:_echec('le refus parle pendant une pause');})());
+
+        // ── Le plancher reste prioritaire ─────────────────────────────────
+        ok('Critère : plancher atteint ET écart → le PLANCHER est affiché',(()=>{
+          const u=_ath(12,2850);
+          const pl=plancherEffectif(u).kcal;
+          // Des macros juste au-dessus du plancher : une baisse passerait dessous.
+          u.nutrition.macros={on:{kcal:pl+300,p:150,g:40,l:70,f:20},
+                              off:{kcal:pl+40,p:150,g:10,l:70,f:20}};
+          const h=_htmlAjustement(u,false).replace(/<[^>]*>/g,' ');
+          if(!/je ne te propose pas de baisser/.test(h))
+            return _echec('le message de plancher ne sort pas : '+h.slice(0,140));
+          return !/Modifier l'objectif ne servirait à rien/.test(h.replace(/&#39;/g,"'"))
+            ?true:_echec('le message d\'adhérence prend le pas sur le plancher');})());
+
+        // ── Le rendu ──────────────────────────────────────────────────────
+        ok('Le refus est RÉELLEMENT rendu dans le bloc d\'ajustement',(()=>{
+          const h=_htmlAjustement(_ath(12,2850),false)
+            .replace(/<[^>]*>/g,' ').replace(/&#39;/g,"'");
+          return /Modifier l'objectif ne servirait à rien/.test(h)
+            ?true:_echec(h.slice(0,180));})());
+        ok('La mention « non vérifié » est RÉELLEMENT rendue',(()=>{
+          const h=_htmlAjustement(_ath(5,2850),false).replace(/<[^>]*>/g,' ');
+          return /sans journal alimentaire pour le vérifier/.test(h)
+            ?true:_echec(h.slice(0,180));})());
+
+        // ── La fiche coach ────────────────────────────────────────────────
+        ok('Critère : la ligne coach chiffre les deux écarts',(()=>{
+          const h=_htmlAdherenceCoach(_ath(12,2850)).replace(/<[^>]*>/g,' ');
+          return /12 jours journalisés sur 14/.test(h)&&/\+450 kcal/.test(h)
+            &&/protéines/.test(h)?true:_echec(h.slice(0,180));})());
+        ok('La ligne coach s\'affiche MÊME sous antécédent déclaré',(()=>{
+          const u=_ath(12,2850,{bilans:[{type:'depart',date:Date.now()-200*864e5,
+            'deb-tca':'anorexie'}]});
+          return _htmlAdherenceCoach(u)!==''
+            ?true:_echec('le coach ne voit plus l\'écart');})());
+        ok('Critère : repli sur les repas hors programme quand le journal est vide',(()=>{
+          const u=_ath(0,0,{bilans:[
+            {type:'suivi',date:Date.now()-7*864e5,'bil-cheat-meals':'4 ou plus'},
+            {type:'suivi',date:Date.now()-21*864e5,'bil-cheat-meals':'4 ou plus'},
+            {type:'suivi',date:Date.now()-35*864e5,'bil-cheat-meals':'4 ou plus'}]});
+          const h=_htmlAdherenceCoach(u).replace(/<[^>]*>/g,' ');
+          return /Aucun jour journalisé/.test(h)&&/4 ou plus/.test(h)
+            ?true:_echec(h.slice(0,180));})());
+        ok('Deux bilans sur trois ne suffisent pas au repli',(()=>{
+          const u=_ath(0,0,{bilans:[
+            {type:'suivi',date:Date.now()-7*864e5,'bil-cheat-meals':'4 ou plus'},
+            {type:'suivi',date:Date.now()-21*864e5,'bil-cheat-meals':'2'},
+            {type:'suivi',date:Date.now()-35*864e5,'bil-cheat-meals':'4 ou plus'}]});
+          return _htmlAdherenceCoach(u)===''
+            ?true:_echec('le repli parle sur deux bilans');})());
+
+        // ── Les interdits ─────────────────────────────────────────────────
+        ok('Aucun pourcentage coloré ni série de jours côté athlète',(()=>{
+          const h=_htmlAdherenceRefus(_ath(12,2850),false);
+          const coul=(h.match(/color:\s*[^;"']+/g)||[])
+            .filter(x=>/red|orange|green|--red|--orange|--green|danger|warning/i.test(x));
+          if(coul.length) return _echec('couleur de jugement : '+coul.join(' | '));
+          return !/jours d'affilée|série|streak|%\s*d'adhérence/i.test(h)
+            ?true:_echec('une série ou un score apparaît');})());
+        ok('Aucune notification ne part de ce module',(()=>{
+          const src=String(adherence)+String(_ajustAdherenceBloque)
+            +String(_htmlAdherenceRefus)+String(_htmlAdherenceCoach);
+          return !/showNotification|new Notification/.test(src)
+            ?true:_echec('une notification part du module');})());
+        ok('ajustementPropose ne rend JAMAIS un objet de refus',(()=>{
+          // Ses appelants lisent a.jour puis a.apres.kcal des que le retour est
+          // truthy : un objet de refus y ecrirait une cle parasite dans les
+          // macros avant de lever une exception.
+          const u=_ath(12,2850);
+          const a=ajustementPropose(u);
+          if(a===null) return true;
+          return _echec('retour truthy sans .apres : '+JSON.stringify(a));})());
+      } finally { currentUser=_sU; }
+    })();
 
     // ══ HYDRATATION RESTITUÉE, SANS ENTRER DANS L'INDICE ═════════════════
     (()=>{
