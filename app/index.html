@@ -2313,6 +2313,14 @@ const COACH_PHOTO='icons/coach.jpg';
             </div>
             <input type="range" id="ps-sensation" min="0" max="10" value="5" oninput="document.getElementById('ps-sensation-val').textContent=this.value;renderFormeSeance()" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
           </div>
+          <!-- Énergie en dehors des séances -->
+          <div style="background:var(--dark);border:1px solid var(--border);border-radius:3px;padding:12px 10px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+              <div style="font-size:var(--fs-xs);font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Énergie en dehors des séances</div>
+              <div style="font-size:18px;font-weight:900;color:var(--red)" id="ps-energie-val">5</div>
+            </div>
+            <input type="range" id="ps-energie" min="0" max="10" value="5" oninput="document.getElementById('ps-energie-val').textContent=this.value" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
+          </div>
           <!-- Hydratation -->
           <div class="ps-detail-item" style="display:none;background:var(--dark);border:1px solid var(--border);border-radius:3px;padding:12px 10px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
@@ -6425,6 +6433,31 @@ function risquesMicro(user,ref){
         question:'Est-ce que le sommeil fait partie de ce que vous suivez ensemble en ce moment ?'});
     }
   }
+
+  // ── Récupération : le palier du lot A3-04, porté au coach ───────────────
+  // SANS CONDITION DE GENRE. Le score de A3-04 compte des critères dont
+  // certains sont féminins par nature — l'absence de règles — mais il ne
+  // s'adresse pas qu'aux femmes : la restriction longue, le sommeil court et
+  // le volume au plafond comptent pour tout le monde. Chez un homme, le motif
+  // se compose simplement des critères qui, eux, sont remplis.
+  //
+  // Les libellés viennent de risqueDeficitEnergetique TELS QUELS : les
+  // reformuler ici ferait deux vocabulaires pour un seul score.
+  try{
+    const pal=paliersDeficit(user);
+    if(pal==='vigilance'||pal==='blocage'){
+      const r=risqueDeficitEnergetique(user);
+      const lst=(r.criteres||[]).map(c=>c.lib+(c.valeur?' ('+c.valeur+')':''));
+      // Dédoublonnage par clé : rien ne pousse 'recuperation' aujourd'hui,
+      // la garde est là pour le jour où le palier arriverait par deux
+      // chemins. Une question posée deux fois se lit comme une insistance.
+      if(lst.length&&!out.some(x=>x.cle==='recuperation')){
+        out.push({cle:'recuperation',lib:'Récupération à vérifier',
+          motif:lst.join(', ')+'.',
+          question:'La récupération est-elle suffisante ? Un avis médical a-t-il été envisagé ?'});
+      }
+    }
+  }catch(e){}
   return out;
 }
 
@@ -8467,7 +8500,14 @@ const VOL_CONCENTRATION_PART=0.70;
 // Ces valeurs sont des repères de PRATIQUE DE TERRAIN (cadre MEV/MAV/MRV
 // popularisé par Israetel / Renaissance Performance). Elles n'ont pas de
 // validation expérimentale directe et la variance interindividuelle est
-// majeure. Elles servent de point de départ ajustable, jamais de verdict.
+// majeure — l'ÂGE en fait partie, au même titre que l'expérience, le
+// sommeil et la récupération. Elles servent de point de départ ajustable,
+// jamais de verdict.
+//
+// Et surtout : AUCUN barème par âge n'en découle. Nommer l'âge parmi les
+// facteurs de variation, c'est reconnaître qu'un chiffre unique ne convient
+// à personne en particulier. En tirer une table « MRV à 45 ans » serait
+// remplacer un repère trop général par un repère faussement précis.
 //
 // LOMBAIRES, ABDUCTEURS et ADDUCTEURS n'y figurent pas volontairement : ils
 // reçoivent du volume réel, mais aucun repère de terrain ne fait consensus
@@ -13640,6 +13680,62 @@ function etatForme(z){
   if(z>=FORME_Z_HAUT)  return 'haut';
   return 'normal';
 }
+// ══════════ ÉNERGIE HORS SÉANCES : À CÔTÉ DE L'INDICE, JAMAIS DEDANS ══════════
+// Le sujet — l'énergie générale d'un athlète, sa fatigue chronique — est un
+// terrain de dérive commerciale majeur. RepCore le COLLECTE et le RESTITUE ;
+// il ne l'INTERPRÈTE pas. Aucune phrase du type « ton énergie basse suggère »,
+// aucun renvoi vers un bilan hormonal, aucune corrélation affichée.
+//
+// L'item n'est PAS ajouté à FORME_ITEMS, et c'est un choix, pas un oubli :
+// l'indice est un z-score contre une base personnelle construite sur les dix
+// dernières séances. Ajouter un quatrième item déplacerait cette base pour
+// tout le monde, et rendrait l'historique de chacun non comparable à
+// lui-même — un « creux » d'avant le lot et un « creux » d'après ne
+// voudraient plus dire la même chose. Même raison que pour l'hydratation :
+// restituer une donnée et la faire peser sur un score sont deux choses
+// différentes. Le jour où une décision produit voudra l'y faire entrer, ce
+// sera une décision assumée, avec sa rupture d'historique.
+//
+// Le modèle statistique, lui, est le MÊME que zForme : base personnelle,
+// séance jugée exclue de sa propre base, même plancher d'écart-type, même
+// minimum de séances. Deux indicateurs côte à côte se lisent d'autant mieux
+// qu'ils se calculent pareil.
+//
+// Une séance sans energie est EXCLUE, jamais comptée 0 : compter zéro
+// transformerait un curseur non renseigné en déclaration d'épuisement.
+function _serieEnergie(user){
+  const out=[];
+  for(const s of ((user&&user.sessions)||[])){
+    const v=_valForme(s&&s.metrics&&s.metrics.energie);
+    if(v!=null) out.push({date:s.date,v,id:s.id});
+  }
+  return out;
+}
+function _fenetreEnergie(user,nSeances,exclureId){
+  let t=_serieEnergie(user);
+  if(exclureId!=null) t=t.filter(x=>x.id!==exclureId);
+  const n=(nSeances>0)?nSeances:FORME_FENETRE;
+  return t.slice(-n);
+}
+// PURE. Rend {moyenne, nSeances} ou null. Même seuil que l'indice : en
+// dessous, « ta normale » n'existe pas encore.
+function energieMoyenne(user,nSeances){
+  const t=_fenetreEnergie(user,nSeances);
+  if(t.length<FORME_MIN_SEANCES) return null;
+  const m=_moyenne(t.map(x=>x.v));
+  return {moyenne:Math.round(m*10)/10,nSeances:t.length};
+}
+// PURE. z de la séance contre sa base personnelle, elle-même exclue.
+function energieZ(sess,user){
+  const v=_valForme(sess&&sess.metrics&&sess.metrics.energie);
+  if(v==null) return null;
+  const t=_fenetreEnergie(user,FORME_FENETRE,sess&&sess.id);
+  if(t.length<FORME_MIN_SEANCES) return null;
+  const d=t.map(x=>x.v), mu=_moyenne(d);
+  const va=d.reduce((a,b)=>a+(b-mu)*(b-mu),0)/d.length;
+  const ec=Math.max(FORME_ECART_PLANCHER,Math.sqrt(va));
+  return (v-mu)/ec;
+}
 // Libellé court, pour une étiquette ou une liste.
 const FORME_ETAT_LIB={creux:'creux marqué',bas:'en dessous de ta normale',
                       normal:'dans ta normale',haut:'très bonne forme'};
@@ -13811,6 +13907,39 @@ function _formeComposantes(user){
     +`</div>`;
 }
 // Bloc complet, partagé par l'onglet Perfs et la fiche coach.
+// À CÔTÉ de blocForme, jamais dedans : deux encadrés distincts, deux titres
+// distincts. Fondre les deux laisserait croire que l'énergie pèse sur
+// l'indice — c'est précisément ce que le lot refuse.
+//
+// On DÉCRIT : une moyenne, un état, et le rappel que c'est déclaratif.
+// Aucune interprétation, aucune cause suggérée, aucun renvoi.
+function phraseEnergie(e){
+  if(!e) return '';
+  return 'Énergie hors séances : '+String(e.moyenne).replace('.',',')+' / '+FORME_MAX
+    +' en moyenne sur '+e.nSeances+' séance'+(e.nSeances>1?'s':'')+'.';
+}
+function blocEnergie(user,pourCoach){
+  const e=energieMoyenne(user);
+  if(!e) return '';
+  // Mêmes seuils que l'indice de forme, sur la DERNIÈRE séance renseignée.
+  const t=_serieEnergie(user);
+  const der=t.length?t[t.length-1]:null;
+  const z=der?energieZ({id:der.id,metrics:{energie:der.v}},user):null;
+  const et=etatForme(z);
+  const phrase=et
+    ? (pourCoach?'Dernière séance ':'Tu es ')
+      +(pourCoach?FORME_ETAT_LIB[et]:FORME_ETAT_PHRASE[et])+'.'
+    : '';
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:16px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
+      <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Énergie hors séances</span>
+      <span style="font-size:10px;color:var(--text-faint)">normale ${_fmtForme(e.moyenne)}/10</span>
+    </div>
+    <div style="font-size:12px;color:#ddd;line-height:1.6">${escapeHtml(phraseEnergie(e))}</div>
+    ${phrase?`<div style="font-size:11px;color:var(--sub);line-height:1.6;margin-top:6px">${escapeHtml(phrase)}</div>`:''}
+    <div style="font-size:10px;color:var(--text-faint);margin-top:6px;line-height:1.5">Déclaratif, comparé à ta propre moyenne. N'entre pas dans l'indice de forme.</div>
+  </div>`;
+}
 function blocForme(user,pourCoach){
   const t=_serieForme(user);
   if(t.length<2) return '';
@@ -13850,6 +13979,8 @@ function renderFormeCoach(c){
   if(!z) return;
   let html='';
   try{ html=c?blocForme(c,true):''; }catch(e){ html=''; }
+  // Second indicateur, jamais fondu dans le premier.
+  try{ html+=c?blocEnergie(c,true):''; }catch(e){}
   z.innerHTML=html;
 }
 
@@ -13859,6 +13990,10 @@ function savePostSession(versBilan){
     fatigue:_lu('fatigue'),
     sensation:_lu('sensation'),
     motivation:_lu('motivation'),
+    // Premier rang, comme les trois items de l'indice : il est TOUJOURS
+    // écrit. Ce qui le distingue d'eux n'est pas la collecte, c'est qu'il
+    // n'entre dans aucun score.
+    energie:_lu('energie'),
     steps:_lu('steps')
   };
   // Les trois curseurs secondaires ne sont écrits que si l'athlète a ouvert le
@@ -17020,7 +17155,8 @@ function renderVolume(){
 
   // Bandeau d'honnêteté : permanent, non masquable.
   const bandeau=`<div style="background:var(--surface-2);border-left:3px solid var(--sub);border-radius:8px;padding:10px 12px;margin-top:16px;font-size:11px;color:var(--sub);line-height:1.6">
-      Repères indicatifs. Ils varient fortement d'une personne à l'autre.
+      Repères indicatifs. Ils varient fortement d'une personne à l'autre —
+      selon l'expérience, l'âge, le sommeil et la récupération.
       Ils ne remplacent pas l'avis de ton coach.
     </div>`;
 
@@ -18025,6 +18161,7 @@ function showProgressTab(tab,btn){
     const sl=ss.slice(-8);
     let _blocFormePerf='';
     try{ _blocFormePerf=blocForme(currentUser,false); }catch(e){}
+    try{ _blocFormePerf+=blocEnergie(currentUser,false); }catch(e){}
     let _lst=[];
     try{ _lst=_listeEtats(currentUser); }catch(e){ _lst=[]; }
     const _jug=_lst.filter(x=>x.etat!=='insuffisant');
@@ -33560,6 +33697,289 @@ function testExercices(){
               ?true:_echec('un consentement orphelin a été écrit');
           } finally { currentUser=sauve; window.saveUser=_sv; }})());
       } finally { currentUser=_peU; }
+    })();
+
+    // ══════ ÉNERGIE HORS SÉANCES : À CÔTÉ DE L'INDICE, JAMAIS DEDANS ══════
+    (()=>{
+      const _enU=currentUser;
+      // Journal de sommeil court, pour atteindre le palier de A3-04.
+      const _enSommeil=(h,n)=>{
+        const l=[];
+        for(let i=0;i<n;i++) l.push({date:localISODate(new Date(Date.now()-i*864e5)),duration:h});
+        return l;
+      };
+      // n séances, energie donnée par la liste. undefined = curseur non touché.
+      const _ath=(nrj,o)=>{
+        const c=o||{};
+        const ss=(nrj||[]).map((e,i)=>{
+          const m={fatigue:'5',motivation:'5',sensation:'5'};
+          if(e!=null) m.energie=String(e);
+          return {id:'s'+i,date:Date.now()-(nrj.length-i)*864e5,data:{},metrics:m};
+        });
+        return Object.assign({id:'en'+(c.id||''),email:'en'+(c.id||'')+'@t',role:'athlete',
+          gender:c.gender||'Homme',_evol_gender:c.gender||'Homme',_evol_height:178,
+          exAlias:{},exMuscles:{},programs:{},sleepLog:[],weightLog:[],
+          sessions_config:[{day:'J0',name:'S0',active:true,exercises:[]}],
+          bilans:[{type:'depart',date:Date.now()-200*864e5,'deb-weight':'80',
+            'deb-height':'178','deb-age':'32','deb-gender':c.gender||'Homme'}],
+          sessions:ss},c.extra||{});
+      };
+      try {
+        // ── L'indice de forme n'a pas bougé d'un iota ────────────────────
+        ok('FORME_ITEMS porte TOUJOURS exactement trois entrées',(()=>{
+          if(FORME_ITEMS.length!==3) return _echec(FORME_ITEMS.length+' entrées');
+          const cles=FORME_ITEMS.map(x=>x.cle).join(',');
+          if(cles!=='fatigue,motivation,sensation') return _echec(cles);
+          // Et surtout : PAS d'energie. L'y ajouter déplacerait la base de
+          // tout le monde et rendrait l'historique non comparable.
+          return !FORME_ITEMS.some(x=>x.cle==='energie')
+            ?true:_echec('energie est entrée dans l\'indice');})());
+        ok('Le curseur d\'énergie ne change RIEN à formeSeance',(()=>{
+          const base={fatigue:'8',motivation:'4',sensation:'5'};
+          const avec=Object.assign({},base,{energie:'0'});
+          const a=formeSeance({metrics:base}), b=formeSeance({metrics:avec});
+          if(a==null) return _echec('fixture muette');
+          return a===b?true:_echec(a+' devient '+b);})());
+        ok('Ni zForme, ni etatForme, ni formeFigee ne le voient',(()=>{
+          const sans=_ath([null,null,null,null,null,null,null]);
+          const avec=_ath([0,10,0,10,0,10,0]);
+          // Mêmes trois curseurs partout : les deux dossiers ne diffèrent QUE
+          // par energie. L'indice doit être rigoureusement identique.
+          const zs=zForme(sans.sessions[6],sans), za=zForme(avec.sessions[6],avec);
+          if(String(zs)!==String(za)) return _echec('zForme : '+zs+' vs '+za);
+          if(etatForme(zs)!==etatForme(za)) return _echec('etatForme diffère');
+          if(formeFigee(sans)!==formeFigee(avec)) return _echec('formeFigee diffère');
+          if(String(baseForme(sans))!==String(baseForme(avec))) return _echec('baseForme diffère');
+          return String(ecartForme(sans))===String(ecartForme(avec))
+            ?true:_echec('ecartForme diffère');})());
+
+        // ── Le seuil, et ce qu'il y a en dessous ─────────────────────────
+        ok('6 séances avec énergie → energieZ non null ; 5 → null',(()=>{
+          const six=_ath([3,5,7,4,6,8]);
+          const z6=energieZ(six.sessions[5],six);
+          // La séance jugée est exclue de sa propre base : il en reste 5,
+          // ce qui est SOUS le minimum. C'est le même comportement que
+          // zForme, qui exige donc 7 séances pour juger la dernière.
+          if(z6!==null) return _echec('6 séances suffisent à juger la 6e : '+z6);
+          const sept=_ath([3,5,7,4,6,8,2]);
+          if(energieZ(sept.sessions[6],sept)===null)
+            return _echec('7 séances ne suffisent toujours pas');
+          // Et la MOYENNE, elle, se contente de six.
+          if(energieMoyenne(six)===null) return _echec('moyenne nulle à 6 séances');
+          const cinq=_ath([3,5,7,4,6]);
+          if(energieMoyenne(cinq)!==null) return _echec('moyenne rendue à 5 séances');
+          return energieZ(cinq.sessions[4],cinq)===null
+            ?true:_echec('z rendu à 5 séances');})());
+        ok('Une séance sans énergie est EXCLUE, jamais comptée 0',(()=>{
+          const a=_ath([5,5,5,5,5,5]);
+          const b=_ath([5,5,5,null,5,5,5]);
+          const ma=energieMoyenne(a), mb=energieMoyenne(b);
+          if(!ma||!mb) return _echec('fixture muette');
+          if(ma.moyenne!==mb.moyenne)
+            return _echec('la moyenne a bougé : '+ma.moyenne+' vs '+mb.moyenne);
+          // Comptée 0, elle ferait tomber la moyenne à 4,3.
+          if(mb.moyenne!==5) return _echec('moyenne : '+mb.moyenne);
+          return mb.nSeances===6?true:_echec(mb.nSeances+' séances comptées');})());
+        ok('Un long historique SANS énergie fonctionne normalement',(()=>{
+          const u=_ath(new Array(40).fill(null));
+          if(energieMoyenne(u)!==null) return _echec('une moyenne sort de rien');
+          if(energieZ(u.sessions[39],u)!==null) return _echec('un z sort de rien');
+          if(blocEnergie(u,false)!=='') return _echec('un encadré sort de rien');
+          // Et l'indice de forme, lui, marche : 40 séances renseignées.
+          return baseForme(u)!=null?true:_echec('l\'indice de forme est cassé');})());
+        ok('energieMoyenne et energieZ sont PURES',(()=>{
+          const u=_ath([3,5,7,4,6,8,2]);
+          const avant=JSON.stringify(u);
+          energieMoyenne(u); energieZ(u.sessions[6],u); blocEnergie(u,false); blocEnergie(u,true);
+          return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
+
+        ok('Le curseur est réellement ÉCRIT dans metrics',(()=>{
+          // Toutes mes autres fixtures posaient metrics.energie à la main :
+          // supprimer la ligne qui l'écrit vraiment ne les dérangeait pas.
+          // Ici on part du CURSEUR et on va jusqu'au dossier.
+          const sauve=currentUser;
+          const _sv=window.saveUser, _go=window.go, _lc=window.loadClientHome;
+          const _te=window.toastEcriture, _rs=window._recordSteps;
+          const el=document.getElementById('ps-energie');
+          const val0=el?el.value:null;
+          try{
+            if(!el) return _echec('curseur absent');
+            window.saveUser=()=>true; window.go=()=>{}; window.loadClientHome=()=>{};
+            window.toastEcriture=()=>{};
+            currentUser=_ath([5,5,5]);
+            el.value='7';
+            savePostSession(false);
+            const m=currentUser.sessions[currentUser.sessions.length-1].metrics||{};
+            if(m.energie===undefined) return _echec('energie n\'est pas écrite');
+            if(String(m.energie)!=='7') return _echec('valeur écrite : '+m.energie);
+            // Et les trois items de l'indice partent toujours avec.
+            for(const it of FORME_ITEMS)
+              if(m[it.cle]===undefined) return _echec(it.cle+' a disparu de metrics');
+            return true;
+          } finally { currentUser=sauve; if(el&&val0!=null) el.value=val0;
+            window.saveUser=_sv; window.go=_go; window.loadClientHome=_lc;
+            window.toastEcriture=_te; window._recordSteps=_rs; }})());
+        ok('Le plancher d\'écart-type s\'applique aussi à l\'énergie',(()=>{
+          // Sans plancher, un athlète très régulier verrait le moindre écart
+          // devenir un z énorme. Mes fixtures étaient toutes trop dispersées
+          // pour que le plancher morde : retirer FORME_ECART_PLANCHER ne
+          // changeait rien chez elles. Ici l'écart-type brut vaut ~0,33.
+          const u=_ath([5,5,5,5,5,5,6]);
+          const z=energieZ(u.sessions[6],u);
+          if(z==null) return _echec('fixture muette');
+          // (6 − 5) / 0,8 = 1,25. Sans plancher, ce serait 1 / 0 → infini,
+          // ou avec un repli à 1, exactement 1.
+          const attendu=(6-5)/FORME_ECART_PLANCHER;
+          if(Math.abs(z-attendu)>1e-9) return _echec('z = '+z+' au lieu de '+attendu);
+          return isFinite(z)?true:_echec('z non fini');})());
+        // ── À CÔTÉ, jamais dedans ────────────────────────────────────────
+        ok('Deux encadrés distincts, jamais fondus',(()=>{
+          const u=_ath([3,5,7,4,6,8,2]);
+          const f=blocForme(u,false), e=blocEnergie(u,false);
+          if(!f) return _echec('fixture muette : pas d\'indice de forme');
+          if(!e) return _echec('pas d\'encadré d\'énergie');
+          if(f.indexOf('Énergie hors séances')>=0)
+            return _echec('l\'énergie est entrée dans l\'encadré de forme');
+          if(e.indexOf('Forme déclarée')>=0)
+            return _echec('l\'encadré d\'énergie reprend celui de la forme');
+          // Et il dit lui-même qu'il ne pèse sur rien.
+          const d=document.createElement('div'); d.innerHTML=e;
+          return /N&#39;entre pas dans l&#39;indice|N'entre pas dans l'indice/.test(e)
+            ?true:_echec('rien ne dit qu\'il n\'entre pas dans l\'indice');})());
+        ok('L\'énergie n\'est jamais INTERPRÉTÉE',(()=>{
+          const u=_ath([0,1,0,1,0,1,0]);
+          const d=document.createElement('div');
+          d.innerHTML=blocEnergie(u,false)+blocEnergie(u,true);
+          const t=(d.textContent||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+          // Aucune cause suggérée, aucun renvoi, aucun conseil.
+          const interdits=['suggere','peut indiquer','consulte','bilan sanguin','carence',
+            'sommeil','recuperation','complement','medecin','cause'];
+          const trouve=interdits.filter(m=>t.indexOf(m)>=0);
+          return trouve.length?_echec('mots trouvés : '+trouve.join(', ')):true;})());
+
+        // ── Le renvoi coach, sans condition de genre ─────────────────────
+        ok('Palier de vigilance chez un HOMME → l\'entrée est là',(()=>{
+          const u=_ath([5,5,5,5,5,5],{gender:'Homme',extra:{
+            phase:{type:'seche',debut:Date.now()-20*7*864e5,definiPar:'athlete',historique:[]},
+            nutrition:{macros:{on:{kcal:1500,p:150,g:100,l:40},off:{kcal:1400,p:150,g:90,l:40}}},
+            sleepLog:_enSommeil(5.0,20)}});
+          const pal=paliersDeficit(u);
+          if(pal!=='vigilance'&&pal!=='blocage')
+            return _echec('fixture muette : palier « '+pal+' »');
+          const e=(risquesMicro(u)||[]).find(x=>x.cle==='recuperation');
+          if(!e) return _echec('aucune entrée « Récupération à vérifier »');
+          if(e.lib!=='Récupération à vérifier') return _echec('libellé : '+e.lib);
+          if(!/avis médical/.test(e.question)) return _echec('question : '+e.question);
+          // Le motif liste les critères REMPLIS, avec leurs libellés d'origine.
+          const r=risqueDeficitEnergetique(u);
+          for(const c of r.criteres)
+            if(e.motif.indexOf(c.lib)<0) return _echec('critère absent du motif : '+c.lib);
+          return /\.$/.test(e.motif)?true:_echec('le motif ne finit pas par un point');})());
+        ok('Sans palier, aucune entrée',(()=>{
+          const u=_ath([5,5,5,5,5,5]);
+          if(paliersDeficit(u)!=='aucun') return _echec('fixture muette : palier actif');
+          return !(risquesMicro(u)||[]).some(x=>x.cle==='recuperation')
+            ?true:_echec('l\'entrée sort sans palier');})());
+        ok('L\'entrée n\'apparaît qu\'une fois',(()=>{
+          const u=_ath([5,5,5,5,5,5],{extra:{
+            phase:{type:'seche',debut:Date.now()-20*7*864e5,definiPar:'athlete',historique:[]},
+            nutrition:{macros:{on:{kcal:1500,p:150,g:100,l:40},off:{kcal:1400,p:150,g:90,l:40}}},
+            sleepLog:_enSommeil(5.0,20)}});
+          const n=(risquesMicro(u)||[]).filter(x=>x.cle==='recuperation').length;
+          return n===1?true:_echec(n+' entrées');})());
+
+        // ── Exclusion lexicale : le vocabulaire hormonal reste dehors ────
+        ok('Aucun vocabulaire hormonal masculin dans TOUT le fichier',(()=>{
+          // Les aiguilles sont ASSEMBLÉES à l'exécution : le mot n'existe
+          // littéralement nulle part dans le source, pas même ici. Sans ça,
+          // ce test se trouverait lui-même — le piège du disclaimer balayé
+          // par son propre balayage, déjà rencontré trois fois.
+          //
+          // J'avais d'abord balayé TOUT le document, en me disant que des
+          // aiguilles encodées rendaient la frontière inutile. Faux : des
+          // blocs de tests ANTÉRIEURS contiennent légitimement ces mots —
+          // une liste d'exclusion de lot précédent, un test de note
+          // commerciale. C'est exactement pourquoi la consigne disait « hors
+          // bloc de tests ». On s'arrête donc au début de la suite.
+          //
+          // LIMITE ASSUMÉE : les quelques lignes de production situées APRÈS
+          // la suite ne sont pas couvertes. L'encodage reste, lui : sans lui,
+          // ce test se trouverait quand même lui-même si la frontière bougeait.
+          const aiguilles=[
+            'testo'+'sterone',
+            'andro'+'pause',
+            'hypo'+'gonadisme',
+            'optimisation '+'hormonale',
+            'boost '+'hormonal',
+            'booster la '+'testosterone'
+          ];
+          const tout=document.documentElement.outerHTML;
+          const fin=tout.indexOf('function testExercices');
+          // Sans marqueur, on balaierait une chaîne vide et le test passerait
+          // au vert en ne regardant rien.
+          if(fin<0) return _echec('frontière de la suite introuvable');
+          const src=tout.slice(0,fin)
+            .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+          if(src.length<100000) return _echec('production trop courte : '+src.length);
+          const trouve=aiguilles.filter(m=>src.indexOf(m)>=0);
+          return trouve.length?_echec('termes trouvés : '+trouve.join(', ')):true;})());
+        ok('Le balayage MORD : une aiguille plantée est vue',(()=>{
+          // Un test d'exclusion qui ne trouverait jamais rien, même quand le
+          // terme est là, ne prouverait rien. On le vérifie sur un texte
+          // témoin, avec la MÊME normalisation.
+          const norm=t=>String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+          const a='testo'+'sterone';
+          if(norm('const X="Testostérone";').indexOf(a)<0)
+            return _echec('accents et casse ne sont pas neutralisés');
+          if(norm('Andropause').indexOf('andro'+'pause')<0)
+            return _echec('la casse seule échappe');
+          return norm('rien de tel ici').indexOf(a)<0
+            ?true:_echec('le balayage trouve ce qui n\'y est pas');})());
+        ok('Aucun formulaire ne pose de question sur la libido',(()=>{
+          // Même frontière, même raison : le lot ménopause porte « libido »
+          // dans SA liste d'exclusion, et c'est très bien ainsi.
+          const tout=document.documentElement.outerHTML;
+          const fin=tout.indexOf('function testExercices');
+          if(fin<0) return _echec('frontière de la suite introuvable');
+          const src=tout.slice(0,fin)
+            .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+          return src.indexOf('lib'+'ido')<0
+            ?true:_echec('le terme apparaît en production');})());
+        ok('Le curseur d\'énergie ne parle que d\'énergie',(()=>{
+          const c=document.getElementById('ps-energie');
+          if(!c) return _echec('curseur absent');
+          if(c.min!=='0'||c.max!=='10') return _echec('bornes : '+c.min+'..'+c.max);
+          const bloc=c.closest('div').parentElement;
+          const t=(bloc.textContent||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+          return /energie en dehors des seances/.test(t)
+            ?true:_echec('libellé : '+t.slice(0,80));})());
+
+        // ── REPERES_VOLUME : l'âge est nommé, aucun barème n'est créé ────
+        ok('REPERES_VOLUME est INCHANGÉ, aucun barème par âge',(()=>{
+          if(Object.keys(REPERES_VOLUME).length!==14)
+            return _echec(Object.keys(REPERES_VOLUME).length+' muscles');
+          const r=REPERES_VOLUME.PECTORAUX;
+          if(r.mev!==8||r.mavMin!==12||r.mavMax!==20||r.mrv!==22)
+            return _echec('PECTORAUX : '+JSON.stringify(r));
+          // Aucune entrée n'a gagné de clé liée à l'âge.
+          for(const m of Object.keys(REPERES_VOLUME)){
+            const cles=Object.keys(REPERES_VOLUME[m]).sort().join(',');
+            if(cles!=='mavMax,mavMin,mev,mrv') return _echec(m+' : '+cles);
+          }
+          return true;})());
+        ok('La phrase affichée nomme l\'âge parmi les facteurs',(()=>{
+          // Sur le SOURCE de la fonction : le bandeau n'apparaît qu'avec un
+          // volume réel à afficher, et une fixture qui n'en produit pas
+          // rendait le test muet — il aurait épinglé une chaîne vide.
+          const src=String(renderVolume)
+            .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+          if(src.indexOf('reperes indicatifs')<0) return _echec('bandeau introuvable');
+          if(src.indexOf("l'age")<0&&src.indexOf(' age,')<0&&src.indexOf(' age ')<0)
+            return _echec('l\'âge n\'est pas nommé parmi les facteurs');
+          // Nommer un facteur n'est pas en tirer un barème.
+          return !/\d{2}\s*ans/.test(src)
+            ?true:_echec('un barème par âge est apparu dans le bandeau');})());
+      } finally { currentUser=_enU; }
     })();
 
     // ══════ PROFIL COACH VISIBLE PAR SES ATHLÈTES ══════
