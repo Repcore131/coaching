@@ -37214,12 +37214,18 @@ function testExercices(){
           return adherence(u)===null
             ?true:_echec('un thé compte comme une journée suivie');})());
         ok('Critère : cible absente un jour → ce jour est EXCLU',(()=>{
+          // Mettre macros à null sortait d'adherence AVANT la garde par jour :
+          // le test ne prouvait rien sur l'exclusion. Ici les macros existent,
+          // mais la colonne OFF manque — et tous les jours de la fixture sont
+          // des jours OFF, donc chacun se présente avec une cible vide.
           const u=_ath(12,2850);
           const avant=adherence(u);
-          // On retire les macros : plus aucune cible, donc plus aucun jour.
-          u.nutrition.macros=null;
-          if(adherence(u)!==null) return _echec('des jours comptent sans cible');
-          return avant&&avant.nJours===12?true:_echec('fixture cassée');})());
+          if(!avant||avant.nJours!==12) return _echec('fixture cassée');
+          delete u.nutrition.macros.off;
+          const apres=adherence(u);
+          if(apres!==null)
+            return _echec('des jours comptent sans cible : '+JSON.stringify(apres));
+          return true;})());
         ok('La cible passe par _getEffectiveMacros, pas par un recalcul',(()=>{
           return /_getEffectiveMacros\(/.test(String(adherence))
             ?true:_echec('recalcul local de la cible');})());
