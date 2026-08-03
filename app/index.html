@@ -2403,9 +2403,18 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- Nom -->
       <div class="form-group">
         <label class="form-label">Nom du complément</label>
-        <input class="form-input" id="supp-name" list="supp-name-list" placeholder="Ex: Créatine monohydrate" autocomplete="off" oninput="checkSuppCaffeineRedirect(this.value)">
+        <input class="form-input" id="supp-name" list="supp-name-list" placeholder="Ex: Créatine monohydrate" autocomplete="off" oninput="checkSuppCaffeineRedirect(this.value);majSelectForme(this.value)">
         <datalist id="supp-name-list"></datalist>
         <div id="supp-caff-warning" style="display:none;margin-top:8px;background:var(--warning-bg);border:1px solid var(--warning);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--warning)">☕ La caféine a son propre module dédié : utilise la section <strong>Caféine</strong> pour la traquer avec précision (mg, équivalents, historique).</div>
+      </div>
+      <!-- Forme : n'apparaît que pour les produits dont la fiche en porte -->
+      <div class="form-group" id="supp-forme-group" style="display:none">
+        <label class="form-label">Forme <span style="color:var(--sub);font-weight:400">(optionnel)</span></label>
+        <div style="position:relative">
+          <select class="form-input" id="supp-forme" style="appearance:none;-webkit-appearance:none;padding-right:32px" onchange="majNoteForme()"></select>
+          <span style="position:absolute;right:12px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--sub);font-size:11px">▼</span>
+        </div>
+        <div id="supp-forme-note" style="font-size:11.5px;color:var(--text-dim);line-height:1.55;margin-top:6px"></div>
       </div>
       <!-- Dosage -->
       <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
@@ -19655,6 +19664,12 @@ function deleteClientStrictPhoto(index){
 const SUPPLEMENTS_LIST=Object.freeze([
   {nom:'Créatine monohydrate',dose:'3 à 5',unite:'g',momentsRecommandes:[],preuve:'A',
    note:"La régularité compte, l'horaire non : le stock se constitue sur plusieurs semaines.",
+   dureeAvantJugement:4,
+   formes:[
+     {cle:'monohydrate',lib:'Monohydrate',
+      note:"La forme sur laquelle porte la quasi-totalité des travaux."},
+     {cle:'autres',lib:'Autres formes (chlorhydrate, tamponnée…)',
+      note:"Rien ne montre qu'elles fassent mieux que le monohydrate."}],
    interactions:[]},
   {nom:'Whey / Protéine en poudre',dose:'20 à 30',unite:'g',
    momentsRecommandes:['apres-entrainement','matin'],preuve:'B',
@@ -19671,13 +19686,30 @@ const SUPPLEMENTS_LIST=Object.freeze([
    interactions:[]},
   {nom:'Oméga-3',dose:'1 à 2',unite:'g',momentsRecommandes:['midi','soir'],preuve:'B',
    note:"Avec un repas qui contient du gras : c'est là qu'ils passent le mieux.",
+   formes:[
+     {cle:'triglycerides',lib:'Triglycérides (TG)',
+      note:"Mieux absorbée que la forme ester éthylique."},
+     {cle:'esters',lib:'Esters éthyliques (EE)',
+      note:"La plus répandue. Elle passe nettement mieux prise pendant un repas gras."}],
    interactions:[]},
   {nom:'Vitamine D3',dose:'1000 à 2000',unite:'UI',momentsRecommandes:['matin','midi'],preuve:'B',
    note:"Avec un repas gras. Un dosage sanguin vaut mieux que de deviner : parles-en à un professionnel de santé.",
+   formes:[
+     {cle:'huileuse',lib:'Gouttes ou gélule huileuse',
+      note:"Le support est déjà gras : le moment du repas compte moins."},
+     {cle:'seche',lib:'Comprimé sec',
+      note:"À placer pendant un repas qui contient du gras."}],
    interactions:[
      {avec:'Multivitamines',message:"Vitamine D3 et multivitamines au même moment : la plupart des multivitamines en contiennent déjà. Regarde l'étiquette avant de cumuler."}]},
   {nom:'Magnésium',dose:'200 à 400',unite:'mg',momentsRecommandes:['soir','coucher'],preuve:'B',
-   note:"Les formes bisglycinate ou citrate sont mieux tolérées que l'oxyde.",
+   note:"Ici, la forme compte au moins autant que la dose.",
+   formes:[
+     {cle:'bisglycinate',lib:'Bisglycinate',
+      note:"La mieux supportée par l'estomac aux doses courantes."},
+     {cle:'citrate',lib:'Citrate',
+      note:"Bien absorbée. Elle accélère le transit chez certaines personnes."},
+     {cle:'oxyde',lib:'Oxyde',
+      note:"La plus répandue en rayon, et la moins bien absorbée."}],
    interactions:[
      {avec:'ZMA',message:"Magnésium et ZMA au même moment : le ZMA contient déjà du magnésium, les doses s'additionnent. Espace-les de deux heures, ou n'en garde qu'un."}]},
   {nom:'ZMA',dose:'1 à 2',unite:'gélule(s)',momentsRecommandes:['coucher'],preuve:'C',
@@ -19692,12 +19724,14 @@ const SUPPLEMENTS_LIST=Object.freeze([
    interactions:[]},
   {nom:'Bêta-alanine',dose:'3 à 6',unite:'g',momentsRecommandes:[],preuve:'B',
    note:"Elle s'accumule sur plusieurs semaines : l'horaire est indifférent, la régularité non. Des picotements sur la peau sont fréquents et passent en fractionnant les prises.",
+   dureeAvantJugement:4,
    interactions:[]},
   {nom:'Citrulline malate',dose:'6 à 8',unite:'g',momentsRecommandes:['avant-entrainement'],preuve:'B',
    note:"40 à 60 minutes avant la séance, à distance d'un gros repas.",
    interactions:[]},
   {nom:'Ashwagandha',dose:'300 à 600',unite:'mg',momentsRecommandes:['soir','coucher'],preuve:'C',
    note:"Plante dite adaptogène : les données restent minces en contexte sportif.",
+   dureeAvantJugement:4,
    interactions:[]},
   {nom:'Collagène',dose:'10 à 15',unite:'g',momentsRecommandes:['avant-entrainement'],preuve:'C',
    note:"Souvent associé à la vitamine C, une heure avant une séance qui charge les tendons.",
@@ -19847,9 +19881,60 @@ function _suppTimingIcon(id,size,color){
   if(!m) return '';
   return `<svg viewBox="0 0 24 24" fill="none" stroke="${color||m.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="${size}" height="${size}" style="flex-shrink:0">${m.svg}</svg>`;
 }
+// Sourcing et contamination. C'est le SEUL endroit du produit où l'antidopage
+// apparaît, et il doit y apparaître : la contamination croisée d'un complément
+// est une cause documentée de contrôle positif chez des athlètes de bonne foi.
+// Affiché UNE fois sous le tableau et jamais par produit — ce n'est pas une
+// propriété d'un complément, c'est une propriété du rayon. Il s'affiche AUSSI
+// quand la liste est vide : c'est même là qu'il sert le plus, avant le premier
+// achat. Aucune marque n'est nommée, ici ni ailleurs.
+const SUPP_SOURCING="La qualité varie beaucoup d'une marque à l'autre. Si tu concours dans une fédération qui pratique des contrôles antidopage, un complément contaminé suffit à te rendre positif : cherche un contrôle par un laboratoire tiers. RepCore ne recommande aucune marque.";
+// Le même avertissement, à la bonne personne. Même raison que
+// SUPP_LEGENDE_PIED_COACH : le coach n'a pas à se lire tutoyer en athlète.
+const SUPP_SOURCING_COACH="La qualité varie beaucoup d'une marque à l'autre. Si cet athlète concourt dans une fédération qui pratique des contrôles antidopage, un complément contaminé suffit à le rendre positif : oriente-le vers un contrôle par un laboratoire tiers. RepCore ne recommande aucune marque.";
+function _htmlSuppSourcing(isCoach){
+  return `<div style="border-top:1px solid var(--border);margin-top:11px;padding-top:11px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:6px">Qualité et sourcing</div>
+    <div style="font-size:11px;color:var(--text-dim);line-height:1.6">${escapeHtml(isCoach?SUPP_SOURCING_COACH:SUPP_SOURCING)}</div>
+  </div>`;
+}
+
+// Libellé de la forme retenue dans le dossier. Le produit a pu être renommé
+// depuis : la clé stockée ne retrouve alors plus sa fiche, et on rend la clé
+// telle quelle plutôt que de faire disparaître ce que l'athlète avait choisi.
+function _libelleForme(fiche,cle){
+  if(!cle) return '';
+  const f=((fiche&&fiche.formes)||[]).find(x=>x.cle===cle);
+  return f?f.lib:String(cle);
+}
+// « À juger après 4 semaines de prise régulière », et seulement pour les trois
+// produits qui portent le champ. Les autres n'affichent rien : une durée
+// inventée vaudrait moins que pas de durée du tout.
+function phraseDureeJugement(fiche){
+  const n=fiche&&fiche.dureeAvantJugement;
+  if(!(n>0)) return '';
+  return 'À juger après '+n+' semaine'+(n>1?'s':'')+' de prise régulière.';
+}
+// Les formes d'un produit, dans l'ordre de la fiche — de la mieux tolérée à la
+// moins bien. Rangées dans le dépli « à savoir » : c'est une information
+// d'achat, elle n'a pas à occuper la ligne de tous les jours.
+function _htmlFormesFiche(fiche,cleRetenue){
+  const l=(fiche&&fiche.formes)||[];
+  if(!l.length) return '';
+  return `<div style="margin-top:8px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--sub);text-transform:uppercase;margin-bottom:5px">Formes</div>
+    ${l.map(f=>`<div style="font-size:11.5px;color:${f.cle===cleRetenue?'#fff':'#bbb'};line-height:1.55;margin-bottom:4px">
+      <b style="font-weight:800">${escapeHtml(f.lib)}</b> — ${escapeHtml(f.note)}</div>`).join('')}
+  </div>`;
+}
+
 // Compléments regroupés par moment de prise — une section par créneau de la journée
 function _renderSuppTable(list, isCoach, editFn){
-  if(!list.length) return emptyState('pill','Aucun complément renseigné.',null,null,'padding:28px 0');
+  // L'encart sourcing survit à la liste vide : le raccourci d'avant sortait
+  // ici, et l'athlète qui n'a encore rien enregistré est précisément celui
+  // qui n'a encore rien acheté.
+  if(!list.length) return emptyState('pill','Aucun complément renseigné.',null,null,'padding:28px 0')
+    +_htmlSuppSourcing(isCoach);
   const groups=TIMINGS_LIST
     .map(t=>({t,items:list.filter(s=>(s.timings||[]).includes(t.id)).sort((a,b)=>a.name.localeCompare(b.name,'fr'))}))
     .filter(g=>g.items.length);
@@ -19872,9 +19957,12 @@ function _renderSuppTable(list, isCoach, editFn){
           ${fiche?_suppPastille(fiche.preuve):''}
         </div>
         ${fiche?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px;letter-spacing:.3px">Couramment ${escapeHtml(fiche.dose)} ${escapeHtml(fiche.unite)}</div>`:''}
+        ${s.forme?`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;letter-spacing:.3px;font-weight:700">Forme : ${escapeHtml(_libelleForme(fiche,s.forme))}</div>`:''}
+        ${phraseDureeJugement(fiche)?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px;line-height:1.5;white-space:normal">${escapeHtml(phraseDureeJugement(fiche))}</div>`:''}
         ${fiche?`<details onclick="event.stopPropagation()" style="margin-top:3px">
           <summary style="font-size:var(--fs-xs);color:var(--sub);font-weight:700;letter-spacing:.5px;cursor:pointer;list-style:none">à savoir ▾</summary>
           <div style="font-size:11.5px;color:#ccc;line-height:1.6;margin-top:4px;white-space:normal">${escapeHtml(fiche.note)}</div>
+          ${_htmlFormesFiche(fiche,s.forme)}
         </details>`:''}
         ${s.notes?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s.notes)}</div>`:''}
         ${ecart?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:3px;line-height:1.5;white-space:normal">${escapeHtml(ecart)}</div>`:''}
@@ -19898,7 +19986,7 @@ function _renderSuppTable(list, isCoach, editFn){
       </div>
       <div style="padding-top:6px">${g.items.map(s=>row(s,c)).join('')}</div>
     </div>`;
-  }).join('')+_htmlSuppLegende(isCoach);
+  }).join('')+_htmlSuppLegende(isCoach)+_htmlSuppSourcing(isCoach);
 }
 
 let _suppReturnToNutrition=false;
@@ -19968,6 +20056,7 @@ function openSuppEdit(idx){
   // Remplir la datalist
   const dl=document.getElementById('supp-name-list');
   if(dl) dl.innerHTML=SUPPLEMENTS_LIST.map(f=>`<option value="${escapeHtml(f.nom)}">`).join('');
+  majSelectForme(s?s.name:'', s?s.forme:'');
   // Grille timings
   const selected=s?s.timings||[]:[];
   const grid=document.getElementById('supp-timings-grid');
@@ -19976,6 +20065,42 @@ function openSuppEdit(idx){
       onclick="toggleSuppTimingChip(this,'${t.id}')">${t.label}</button>`).join('');
 }
 
+// Le sélecteur de forme suit le nom saisi. Un produit sans formes[] — ou un
+// complément maison tapé à la main — n'en affiche aucun : la fiche se comporte
+// alors exactement comme avant ce lot.
+// La forme DÉJÀ retenue est conservée même quand elle ne figure plus dans la
+// liste du produit (produit renommé, fiche qui a changé) : elle réapparaît en
+// tête, telle quelle. Perdre en silence ce que l'athlète avait choisi serait
+// pire que de garder une clé qu'on ne sait plus traduire.
+function majSelectForme(nom,formeRetenue){
+  const grp=document.getElementById('supp-forme-group');
+  const sel=document.getElementById('supp-forme');
+  if(!grp||!sel) return;
+  const courante=formeRetenue!==undefined?(formeRetenue||''):(sel.value||'');
+  const fiche=_suppFiche(nom);
+  const formes=(fiche&&fiche.formes)||[];
+  if(!formes.length&&!courante){
+    grp.style.display='none'; sel.innerHTML=''; majNoteForme(); return;
+  }
+  const opts=[`<option value="">Non précisée</option>`];
+  if(courante&&!formes.some(f=>f.cle===courante))
+    opts.push(`<option value="${escapeHtml(courante)}">${escapeHtml(courante)}</option>`);
+  formes.forEach(f=>opts.push(`<option value="${escapeHtml(f.cle)}">${escapeHtml(f.lib)}</option>`));
+  sel.innerHTML=opts.join('');
+  sel.value=courante;
+  grp.style.display='block';
+  majNoteForme();
+}
+// La phrase de la forme choisie, sous le sélecteur. C'est l'information utile
+// au moment d'acheter, et elle n'a de sens qu'une fois la forme choisie.
+function majNoteForme(){
+  const sel=document.getElementById('supp-forme');
+  const el=document.getElementById('supp-forme-note');
+  if(!el) return;
+  const fiche=_suppFiche((document.getElementById('supp-name')||{}).value||'');
+  const f=((fiche&&fiche.formes)||[]).find(x=>x.cle===(sel?sel.value:''));
+  el.textContent=f?f.note:'';
+}
 function checkSuppCaffeineRedirect(val){
   const w=document.getElementById('supp-caff-warning');
   if(!w) return;
@@ -20014,8 +20139,18 @@ function saveSuppEntry(){
     return;
   }
   const entry={id:Date.now(),name,dosage_quantity:parseFloat(qty),dosage_unit:unit,timings,notes,active};
+  // Champ optionnel : ABSENT par défaut, jamais posé à vide. Un dossier qui
+  // n'a jamais choisi de forme ne porte pas la clé.
+  const forme=((document.getElementById('supp-forme')||{}).value||'').trim();
+  if(forme) entry.forme=forme;
   const list=_suppStore();
-  if(idx>=0&&idx<list.length){list[idx]={...list[idx],...entry,id:list[idx].id};}
+  if(idx>=0&&idx<list.length){
+    const maj={...list[idx],...entry,id:list[idx].id};
+    // Revenir à « Non précisée » doit EFFACER : le spread, seul, aurait
+    // reconduit l'ancienne forme indéfiniment.
+    if(!forme) delete maj.forme;
+    list[idx]=maj;
+  }
   else{list.push(entry);}
   const ok=saveUser();
   if(currentUser._notifEnabled) scheduleSuppNotif();
@@ -20142,7 +20277,7 @@ function openCoachSuppEdit(idx){
     <div style="margin-bottom:14px">
       <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-bottom:5px">NOM</div>
       <input id="coach-supp-name" list="coach-supp-name-list" class="form-input" style="padding:10px 12px;font-size:13px" placeholder="Créatine…" value="${s?escapeHtml(s.name):''}">
-      <datalist id="coach-supp-name-list">${SUPPLEMENTS_LIST.map(n=>`<option value="${escapeHtml(n)}">`).join('')}</datalist>
+      <datalist id="coach-supp-name-list">${SUPPLEMENTS_LIST.map(f=>`<option value="${escapeHtml(f.nom)}">`).join('')}</datalist>
     </div>
     <div style="display:grid;grid-template-columns:1fr auto;gap:10px;margin-bottom:14px;align-items:end">
       <div>
@@ -34532,6 +34667,9 @@ function testExercices(){
         const textes=[];
         SUPPLEMENTS_LIST.forEach(f=>{
           textes.push(f.nom,String(f.dose),f.unite,f.note);
+          // Le champ formes[] est arrivé après ce test : sans cette ligne, il
+          // serait le seul texte du module hors du registre.
+          (f.formes||[]).forEach(x=>textes.push(x.lib,x.note));
           f.interactions.forEach(x=>textes.push(x.message));});
         SUPP_LEGENDE_PREUVE.forEach(([k,t])=>textes.push(t));
         textes.push(SUPP_LEGENDE_PIED,SUPP_LEGENDE_PIED_COACH);
@@ -34545,10 +34683,345 @@ function testExercices(){
       ok('Aucune dose n\'est présentée comme une prescription',(()=>{
         // « Couramment », pas « prends », pas « tu dois ».
         const h=_renderSuppTable([_s('Créatine monohydrate',['matin'])],false,'openSuppEdit');
-        const n=h.toLowerCase();
+        // L'encart de sourcing est retiré AVANT la recherche : il contient
+        // « RepCore ne recommande aucune marque », qui est l'exact contraire
+        // d'une injonction. Le mot « recommand » reste interdit partout
+        // ailleurs — on ne l'a pas retiré de la liste, on a resserré la zone.
+        const coupe=h.split('Qualité et sourcing');
+        if(coupe.length!==2) return _echec('l\'encart de sourcing a disparu du rendu');
+        const n=coupe[0].toLowerCase();
         const injonctions=['tu dois','il faut','prescrit','obligatoire','recommand'];
         const t=injonctions.filter(m=>n.indexOf(m)>=0);
         return t.length?_echec(t.join(', ')):n.indexOf('couramment')>=0;})());
+
+      // ── Forme, durée avant jugement, sourcing ─────────────────────────────
+      // Le vocabulaire d'allégation, verrouillé sur le modèle du test d'exclusion
+      // de peak week. La liste est reconstruite à partir de morceaux pour que le
+      // texte du test ne se trouve JAMAIS lui-même : la fonction ne lit que les
+      // données, mais l'habitude a déjà coûté deux faux verts cette session.
+      const _MOTS_ALLEGATION=['guerit','guerir','traite','soigne','previent',
+        'augmente la '+'testosterone','brule les graisses','detox'];
+      // Rend la liste des mots trouvés. Une FONCTION, et non un test en dur :
+      // c'est ce qui permet de prouver plus bas qu'elle mord vraiment.
+      const _scanAllegations=(fiches)=>{
+        const textes=[];
+        (fiches||[]).forEach(f=>{
+          textes.push(f.note);
+          (f.formes||[]).forEach(x=>textes.push(x.note));
+          (f.interactions||[]).forEach(x=>textes.push(x.message));});
+        const trouves=[];
+        textes.forEach(t=>{
+          const n=String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+          _MOTS_ALLEGATION.forEach(m=>{
+            if(n.indexOf(m)>=0&&trouves.indexOf(m)<0) trouves.push(m);});});
+        return trouves;
+      };
+      ok('Critère : aucune allégation dans les textes livrés',(()=>{
+        const t=_scanAllegations(SUPPLEMENTS_LIST);
+        return t.length?_echec(t.join(', ')):true;})());
+      // ── Et le test MORD : trois injections, trois échecs ────────────────
+      const _injecte=(champ)=>{
+        const f={nom:'X',note:'rien',formes:[{cle:'a',lib:'A',note:'rien'}],
+                 interactions:[{avec:'Y',message:'rien'}]};
+        const phrase='augmente la '+'testostérone';
+        if(champ==='note') f.note='Ce produit '+phrase+' de façon nette.';
+        if(champ==='forme') f.formes[0].note='Cette forme '+phrase+'.';
+        if(champ==='interaction') f.interactions[0].message='Ensemble, ils '+phrase+'.';
+        return _scanAllegations([f]);
+      };
+      ok('Critère : « augmente la testostérone » dans une NOTE fait échouer le test',
+        _injecte('note').length===1,JSON.stringify(_injecte('note')));
+      ok('La même phrase dans une forme fait échouer le test',
+        _injecte('forme').length===1);
+      ok('La même phrase dans un message d\'interaction fait échouer le test',
+        _injecte('interaction').length===1);
+      ok('Une fiche sans allégation ne déclenche rien',
+        _injecte('rien').length===0);
+      ok('Chacun des huit mots interdits est réellement détecté',(()=>{
+        const rates=_MOTS_ALLEGATION.filter(m=>
+          _scanAllegations([{note:'ce produit '+m+' vraiment'}]).length!==1);
+        return rates.length?_echec('non détectés : '+rates.join(', ')):
+          _MOTS_ALLEGATION.length===8;})());
+
+      // ── Les données ────────────────────────────────────────────────────
+      ok('Critère : Magnésium porte des formes, bisglycinate en premier',(()=>{
+        const f=_suppFiche('Magnésium');
+        if(!f.formes||!f.formes.length) return _echec('aucune forme');
+        return f.formes[0].cle==='bisglycinate'?true:_echec(f.formes[0].cle);})());
+      ok('Critère : Glutamine et Probiotiques n\'ont pas de formes',(()=>{
+        const f=['Glutamine','Probiotiques'].filter(n=>(_suppFiche(n).formes||[]).length);
+        return f.length?_echec(f.join(', ')):true;})());
+      ok('Critère : la créatine se juge après 4 semaines',
+        _suppFiche('Créatine monohydrate').dureeAvantJugement===4);
+      ok('Seuls les quatre produits prévus portent des formes',(()=>{
+        // Remplir par symétrie était le risque : une forme inventée pour la
+        // glutamine vaudrait moins que pas de forme du tout.
+        const a=SUPPLEMENTS_LIST.filter(f=>(f.formes||[]).length).map(f=>f.nom).sort();
+        const att=['Créatine monohydrate','Magnésium','Oméga-3','Vitamine D3'].sort();
+        return JSON.stringify(a)===JSON.stringify(att)?true:_echec(a.join(', '));})());
+      ok('Seuls les trois produits à accumulation portent une durée',(()=>{
+        const a=SUPPLEMENTS_LIST.filter(f=>f.dureeAvantJugement).map(f=>f.nom).sort();
+        const att=['Ashwagandha','Bêta-alanine','Créatine monohydrate'].sort();
+        return JSON.stringify(a)===JSON.stringify(att)?true:_echec(a.join(', '));})());
+      ok('Chaque forme porte une clé, un libellé et une phrase',(()=>{
+        const faux=[];
+        SUPPLEMENTS_LIST.forEach(f=>(f.formes||[]).forEach(x=>{
+          if(!x.cle||!x.lib||!x.note) faux.push(f.nom+':'+(x.cle||'?'));}));
+        return faux.length?_echec(faux.join(', ')):true;})());
+      ok('Les clés de forme sont uniques dans une même fiche',(()=>{
+        const dbl=[];
+        SUPPLEMENTS_LIST.forEach(f=>{
+          const v=(f.formes||[]).map(x=>x.cle);
+          v.forEach((x,i)=>{if(v.indexOf(x)!==i) dbl.push(f.nom+':'+x);});});
+        return dbl.length?_echec(dbl.join(', ')):true;})());
+      ok('Aucun niveau de preuve n\'a bougé',(()=>{
+        // La spécification interdit de toucher à un niveau de preuve sans
+        // justification écrite. Les quinze valeurs sont recopiées ici : la
+        // prochaine main qui en change une devra passer par ce test.
+        const att='A,B,C,C,B,B,B,C,C,C,B,B,C,C,C';
+        const a=SUPPLEMENTS_LIST.map(f=>f.preuve).join(',');
+        return a===att?true:_echec(a);})());
+      ok('Les six messages d\'interaction sont inchangés, au caractère près',(()=>{
+        const att=[
+          "Whey et BCAA au même moment : la whey apporte déjà ces acides aminés. L'un des deux suffit.",
+          "Whey et EAA au même moment : la whey apporte déjà ces acides aminés. L'un des deux suffit.",
+          "BCAA et EAA au même moment : les EAA contiennent déjà les BCAA. L'un des deux suffit.",
+          "Vitamine D3 et multivitamines au même moment : la plupart des multivitamines en contiennent déjà. Regarde l'étiquette avant de cumuler.",
+          "Magnésium et ZMA au même moment : le ZMA contient déjà du magnésium, les doses s'additionnent. Espace-les de deux heures, ou n'en garde qu'un.",
+          "ZMA et multivitamines au même moment : le zinc s'additionne. Espace-les de deux heures."];
+        const a=[];
+        SUPPLEMENTS_LIST.forEach(f=>f.interactions.forEach(x=>a.push(x.message)));
+        if(a.length!==6) return _echec(a.length+' interactions au lieu de 6');
+        for(let i=0;i<6;i++) if(a[i]!==att[i]) return _echec('rang '+i+' : '+a[i]);
+        return true;})());
+
+      // ── L'encart de sourcing ───────────────────────────────────────────
+      ok('Critère : l\'encart de sourcing parle d\'antidopage',
+        /antidopage/.test(SUPP_SOURCING)&&/antidopage/.test(SUPP_SOURCING_COACH));
+      ok('Critère : l\'encart est rendu sous le tableau',(()=>{
+        const h=_renderSuppTable([_s('Créatine monohydrate',['matin'])],false,'openSuppEdit');
+        const i=h.indexOf(escapeHtml(SUPP_SOURCING));
+        if(i<0) return _echec('encart absent');
+        return i>h.indexOf('Créatine monohydrate')?true:_echec('rendu au-dessus du tableau');})());
+      ok('Critère : l\'encart s\'affiche même sans aucun complément',(()=>{
+        const h=_renderSuppTable([],false,'openSuppEdit');
+        return h.indexOf(escapeHtml(SUPP_SOURCING))>=0
+          ?true:_echec('la liste vide sort avant l\'encart');})());
+      ok('L\'encart n\'est rendu QU\'UNE fois, jamais par produit',(()=>{
+        const h=_renderSuppTable([_s('Magnésium',['soir']),_s('Créatine monohydrate',['matin']),
+          _s('Ashwagandha',['coucher'])],false,'openSuppEdit');
+        const n=h.split('Qualité et sourcing').length-1;
+        return n===1?true:_echec(n+' encarts');})());
+      ok('Le coach lit la version qui lui parle',(()=>{
+        const c=_renderSuppTable([_s('Magnésium',['soir'])],true,'openCoachSuppEdit');
+        if(c.indexOf(escapeHtml(SUPP_SOURCING_COACH))<0) return _echec('version coach absente');
+        if(c.indexOf(escapeHtml(SUPP_SOURCING))>=0) return _echec('le coach lit le texte athlète');
+        return !/tu concours/.test(SUPP_SOURCING_COACH);})());
+      ok('Le pied de tableau existant est toujours là, sous l\'encart ou avant',(()=>{
+        // La spécification interdit de le supprimer. L'encart s'ajoute, il ne
+        // remplace rien.
+        const h=_renderSuppTable([_s('Magnésium',['soir'])],false,'openSuppEdit');
+        return h.indexOf(escapeHtml(SUPP_LEGENDE_PIED))>=0
+          ?true:_echec('le pied de légende a disparu');})());
+      ok('Critère : aucune marque, aucun prix, aucun lien d\'achat',(()=>{
+        const h=_renderSuppTable([_s('Magnésium',['soir']),_s('Créatine monohydrate',['matin']),
+          _s('Oméga-3',['midi']),_s('Vitamine D3',['matin'])],false,'openSuppEdit')
+          +_renderSuppTable([],true,'openCoachSuppEdit');
+        const MARQUES=['myprotein','optimum nutrition','bulk','prozis','nutrimuscle',
+          'scitec','biotech','eafit','foodspring','decathlon','amazon','iherb'];
+        const n=h.toLowerCase();
+        const m=MARQUES.filter(x=>n.indexOf(x)>=0);
+        if(m.length) return _echec('marque citée : '+m.join(', '));
+        if(/\d+\s*(€|\$|eur\b|euros?\b)/.test(n)) return _echec('un prix est affiché');
+        const achat=['href=','acheter','commander','promo','code promo','affili'];
+        const a=achat.filter(x=>n.indexOf(x)>=0);
+        return a.length?_echec('lien ou incitation : '+a.join(', ')):true;})());
+
+      // ── La forme retenue dans le dossier ───────────────────────────────
+      ok('_libelleForme traduit une clé connue',
+        _libelleForme(_suppFiche('Magnésium'),'bisglycinate')==='Bisglycinate');
+      ok('_libelleForme rend la clé telle quelle quand la fiche l\'ignore',(()=>{
+        // Produit renommé, fiche changée : on n'efface pas ce que l'athlète a
+        // choisi sous prétexte qu'on ne sait plus le traduire.
+        return _libelleForme(_suppFiche('Magnésium'),'trisel')==='trisel'
+          &&_libelleForme(null,'bisglycinate')==='bisglycinate';})());
+      ok('Sans forme retenue, _libelleForme ne rend rien',
+        _libelleForme(_suppFiche('Magnésium'),'')===''&&_libelleForme(null,null)==='');
+      ok('Critère : la forme retenue s\'affiche sur la ligne',(()=>{
+        const m=_s('Magnésium',['soir']); m.forme='bisglycinate';
+        const h=_renderSuppTable([m],false,'openSuppEdit');
+        return /Forme\s*:\s*Bisglycinate/.test(h)?true:_echec('ligne absente');})());
+      ok('Sans forme retenue, aucune ligne « Forme »',(()=>{
+        const h=_renderSuppTable([_s('Magnésium',['soir'])],false,'openSuppEdit');
+        return /Forme\s*:/.test(h)?_echec('une forme est affichée sans être choisie'):true;})());
+      ok('Produit renommé : la forme reste affichée',(()=>{
+        const x=_s('Mon magnésium à moi',['soir']); x.forme='bisglycinate';
+        const h=_renderSuppTable([x],false,'openSuppEdit');
+        if(_suppFiche(x.name)) return _echec('fixture muette : ce nom retrouve une fiche');
+        return /Forme\s*:\s*bisglycinate/.test(h)?true:_echec('la forme a disparu');})());
+      ok('Le détail des formes est dans le dépli, pas sur la ligne',(()=>{
+        const d=document.createElement('div');
+        d.innerHTML=_renderSuppTable([_s('Magnésium',['soir'])],false,'openSuppEdit');
+        const det=d.querySelector('details');
+        if(!det) return _echec('aucun dépli');
+        if(det.textContent.indexOf('Bisglycinate')<0) return _echec('formes absentes du dépli');
+        det.remove();
+        return d.textContent.indexOf('Bisglycinate')<0
+          ?true:_echec('les formes sont aussi affichées hors du dépli');})());
+      ok('Un produit sans formes n\'affiche aucune section Formes',(()=>{
+        const h=_renderSuppTable([_s('Glutamine',['coucher'])],false,'openSuppEdit');
+        return h.indexOf('>Formes<')<0?true:_echec('section vide affichée');})());
+      ok('Les trois formes du magnésium sont dans l\'ordre de la fiche',(()=>{
+        const h=_renderSuppTable([_s('Magnésium',['soir'])],false,'openSuppEdit');
+        const i=['Bisglycinate','Citrate','Oxyde'].map(x=>h.indexOf(x));
+        return i[0]>=0&&i[0]<i[1]&&i[1]<i[2]?true:_echec(i.join(','));})());
+
+      // ── La durée avant jugement ────────────────────────────────────────
+      ok('Critère : la phrase de durée est celle attendue',
+        phraseDureeJugement(_suppFiche('Créatine monohydrate'))
+          ==='À juger après 4 semaines de prise régulière.',
+        phraseDureeJugement(_suppFiche('Créatine monohydrate')));
+      ok('Sans durée, aucune phrase',
+        phraseDureeJugement(_suppFiche('Glutamine'))===''
+        &&phraseDureeJugement(null)===''&&phraseDureeJugement({dureeAvantJugement:0})==='');
+      ok('La durée est rendue sur la ligne de la créatine',(()=>{
+        const h=_renderSuppTable([_s('Créatine monohydrate',['matin'])],false,'openSuppEdit');
+        return h.indexOf(escapeHtml('À juger après 4 semaines de prise régulière.'))>=0
+          ?true:_echec('phrase absente du rendu');})());
+      ok('Un produit sans durée n\'affiche rien',(()=>{
+        const h=_renderSuppTable([_s('Glutamine',['coucher'])],false,'openSuppEdit');
+        return /À juger après/.test(h)?_echec('durée inventée'):true;})());
+
+      // ── La persistance ─────────────────────────────────────────────────
+      ok('Critère : la forme survit à un aller-retour JSON',(()=>{
+        const u={nutrition:{supplements:[{name:'Magnésium',forme:'bisglycinate'}]}};
+        const r=JSON.parse(JSON.stringify(u));
+        return r.nutrition.supplements[0].forme==='bisglycinate';})());
+      ok('La forme survit à la fusion de synchronisation',(()=>{
+        // CLOUD ne filtre pas nutrition — ni à la montée, ni à la fusion. Ce
+        // test le PROUVE plutôt que de le supposer : c'est exactement ce qui
+        // avait dû être ajouté à la main pour les constantes de santé.
+        const m={};
+        CLOUD._mergeUser(m,'a@t',{email:'a@t',updatedAt:2,
+          nutrition:{supplements:[{name:'Magnésium',forme:'citrate'}]}});
+        const l=(m['a@t'].nutrition||{}).supplements||[];
+        return l.length===1&&l[0].forme==='citrate'?true:_echec(JSON.stringify(l));})());
+      ok('La modification coach ne perd pas la forme choisie par l\'athlète',(()=>{
+        // saveCoachSuppEdit fusionne par spread : le champ qu'il ne connaît pas
+        // doit traverser intact.
+        const avant={id:1,name:'Magnésium',forme:'bisglycinate',timings:['soir']};
+        const entry={name:'Magnésium',dosage_quantity:400,dosage_unit:'mg',
+          timings:['coucher'],notes:'',active:true};
+        const apres={...avant,...entry};
+        return apres.forme==='bisglycinate'?true:_echec('forme perdue');})());
+
+      // ── Le sélecteur du formulaire ─────────────────────────────────────
+      (()=>{
+        const grp=document.getElementById('supp-forme-group');
+        const sel=document.getElementById('supp-forme');
+        const nomEl=document.getElementById('supp-name');
+        if(!grp||!sel||!nomEl){ ok('Le sélecteur de forme existe dans l\'écran',
+          false,'#supp-forme absent du document'); return; }
+        ok('Le sélecteur de forme existe dans l\'écran',true);
+        const _nomAvant=nomEl.value, _affAvant=grp.style.display;
+        try{
+          nomEl.value='Magnésium';
+          majSelectForme('Magnésium','');
+          ok('Magnésium : « Non précisée » plus les trois formes',(()=>{
+            const v=Array.from(sel.options).map(o=>o.value);
+            return JSON.stringify(v)===JSON.stringify(['','bisglycinate','citrate','oxyde'])
+              ?true:_echec(v.join(','));})());
+          ok('Le groupe est visible pour un produit qui a des formes',
+            grp.style.display!=='none');
+          ok('Aucune forme n\'est choisie par défaut',sel.value==='');
+          sel.value='citrate'; majNoteForme();
+          ok('La phrase de la forme choisie s\'affiche sous le sélecteur',
+            (document.getElementById('supp-forme-note').textContent||'').indexOf('transit')>=0);
+          nomEl.value='Glutamine';
+          majSelectForme('Glutamine','');
+          ok('Critère : un produit sans formes n\'affiche aucun sélecteur',
+            grp.style.display==='none');
+          ok('Et la phrase de forme est vidée avec lui',
+            (document.getElementById('supp-forme-note').textContent||'')==='');
+          nomEl.value='Mon mélange perso';
+          majSelectForme('Mon mélange perso','trisel');
+          ok('Une forme retenue que la fiche ignore reste proposée',(()=>{
+            if(grp.style.display==='none') return _echec('sélecteur masqué : la forme est perdue');
+            const v=Array.from(sel.options).map(o=>o.value);
+            return v.indexOf('trisel')>=0&&sel.value==='trisel'
+              ?true:_echec(v.join(','));})());
+        } finally {
+          nomEl.value=_nomAvant; sel.innerHTML=''; grp.style.display=_affAvant;
+          const nf=document.getElementById('supp-forme-note'); if(nf) nf.textContent='';
+        }
+      })();
+      // ── L'écriture dans le dossier ──────────────────────────────────────
+      // saveSuppEntry passe par le DOM et par saveUser : on stube ce qui écrit
+      // et ce qui navigue, on rend le formulaire à son état d'avant, et on
+      // regarde ce qui a ATTERRI dans le dossier. Un test sur le seul code
+      // source aurait laissé passer l'inverse exact de ce qu'on veut vérifier.
+      (()=>{
+        const ids=['supp-name','supp-qty','supp-unit','supp-notes','supp-edit-idx',
+          'supp-forme','supp-timings-grid','supp-active'];
+        const el={}; for(const i of ids) el[i]=document.getElementById(i);
+        if(ids.some(i=>!el[i])){ ok('Le formulaire de complément est complet',false,
+          ids.filter(i=>!el[i]).join(', ')); return; }
+        ok('Le formulaire de complément est complet',true);
+        const av={}; for(const i of ids) av[i]=el[i].type==='checkbox'?el[i].checked:
+          (i==='supp-timings-grid'?el[i].innerHTML:el[i].value);
+        const _u=currentUser,_save=window.saveUser,_toast=window.toastEcriture,
+              _ls=window.loadSupplements,_ln=window.loadNutrition,
+              _sn=window.scheduleSuppNotif;
+        const remplir=(nom,forme,idx)=>{
+          el['supp-name'].value=nom; el['supp-qty'].value='400';
+          el['supp-unit'].value='mg'; el['supp-notes'].value='';
+          el['supp-active'].checked=true; el['supp-edit-idx'].value=String(idx);
+          el['supp-timings-grid'].innerHTML=
+            '<button type="button" class="supp-timing-chip active">Soir</button>';
+          majSelectForme(nom,forme);
+        };
+        try{
+          window.saveUser=()=>true; window.toastEcriture=()=>{};
+          window.loadSupplements=()=>{}; window.loadNutrition=()=>{};
+          window.scheduleSuppNotif=()=>{};
+          currentUser={id:'t',email:'t@t',nutrition:{supplements:[]}};
+          remplir('Magnésium','bisglycinate',-1);
+          saveSuppEntry();
+          const l=currentUser.nutrition.supplements;
+          ok('Critère : la forme choisie est écrite dans le dossier',
+            l.length===1&&l[0].forme==='bisglycinate',JSON.stringify(l[0]));
+          ok('Le moment de prise a bien été lu',
+            JSON.stringify((l[0]||{}).timings)==='["soir"]');
+          remplir('Magnésium','',0);
+          saveSuppEntry();
+          ok('Revenir à « Non précisée » EFFACE la forme',
+            !('forme' in currentUser.nutrition.supplements[0]),
+            JSON.stringify(currentUser.nutrition.supplements[0]));
+          currentUser={id:'t',email:'t@t',nutrition:{supplements:[]}};
+          remplir('Glutamine','',-1);
+          saveSuppEntry();
+          ok('Un produit sans formes n\'écrit aucune clé forme',
+            !('forme' in currentUser.nutrition.supplements[0]));
+        } finally {
+          currentUser=_u; window.saveUser=_save; window.toastEcriture=_toast;
+          window.loadSupplements=_ls; window.loadNutrition=_ln;
+          window.scheduleSuppNotif=_sn;
+          for(const i of ids){
+            if(el[i].type==='checkbox') el[i].checked=av[i];
+            else if(i==='supp-timings-grid') el[i].innerHTML=av[i];
+            else el[i].value=av[i];
+          }
+          const g=document.getElementById('supp-forme-group'); if(g) g.style.display='none';
+          const nf=document.getElementById('supp-forme-note'); if(nf) nf.textContent='';
+        }
+      })();
+      ok('La datalist du coach propose des NOMS, pas des objets',(()=>{
+        // Elle passait la fiche entière à escapeHtml : quinze options
+        // « [object Object] » dans la modale de modification du coach.
+        const src=String(openCoachSuppEdit);
+        if(/\[object/.test(src)) return _echec('objet rendu tel quel');
+        return /coach-supp-name-list[\s\S]{0,80}f\.nom/.test(src)
+          ?true:_echec('la datalist coach ne lit pas f.nom');})());
 
       // ── Non-régression : le cycle ─────────────────────────────────────────
       // _manageCycleSupplements n'est pas touchée par ce lot. Ces trois tests
