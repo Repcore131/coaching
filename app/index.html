@@ -1982,6 +1982,18 @@ const COACH_PHOTO='icons/coach.jpg';
            son écran ; il ne l'a pas fait, et deux lots livrés consomment déjà
            user.etatsSante sans qu'aucun moyen n'existe de le remplir. Voici
            le mécanisme, avec les deux seules clés dont le code se sert. -->
+      <div class="card" id="atp-gross-card" style="margin-bottom:14px">
+        <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Grossesse, allaitement, post-partum</label>
+        <div id="atp-gross-msg" style="display:none;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:12px 13px;margin-bottom:10px"></div>
+        <div id="atp-gross-consent-row" style="margin-bottom:10px">
+          <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer">
+            <input type="checkbox" id="atp-gross-consent" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px">
+            <span style="font-size:11.5px;color:#ddd;line-height:1.55">J'accepte que RepCore conserve cette information pour désactiver ce qui ne me convient pas. Je peux la retirer à tout moment, et elle sera alors effacée.</span>
+          </label>
+        </div>
+        <div id="atp-gross-opts" style="display:flex;flex-direction:column;gap:8px"></div>
+        <div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-top:9px">RepCore n'accompagne pas une grossesse et ne demande ni date de terme, ni trimestre. Cette information n'est pas transmise à ton coach.</div>
+      </div>
       <div class="card" id="atp-etats-card" style="margin-bottom:14px">
         <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">États de santé déclarés</label>
         <div id="atp-etats-opts" style="display:flex;flex-direction:column;gap:8px"></div>
@@ -3578,6 +3590,12 @@ const CLOUD={
       delete safe.constantes;
       delete safe.analyses;
       this._retirerContraceptionSiNonPartagee(safe);
+      // La grossesse ne monte JAMAIS par défaut. coach_public est déjà hors
+      // de portée — c'est le profil DU COACH, filtré par liste blanche — mais
+      // /users est lisible en entier par le coach : sans ce retrait,
+      // « visibilité désactivée » ne serait qu'une promesse d'interface.
+      // Clé de premier niveau : un delete simple suffit, sans clonage.
+      if(!safe.grossessePartagee) delete safe.grossesse;
       // Permettre aux règles RTDB de vérifier qui est le coach de cet athlète
       // Les trois cas doivent être traités EXPLICITEMENT. L'ancienne forme ne
       // touchait à coachEmailKey que lorsqu'un coach était trouvé : après un
@@ -3757,6 +3775,9 @@ const CLOUD={
     // Non partagée, elle n'est jamais montée : le dossier distant ne la porte
     // donc pas, et l'écrasement ci-dessous l'effacerait à chaque réveil.
     const locContra=(loc&&loc.cycle)?loc.cycle.contraception:undefined;
+    // Jamais montée, donc absente du dossier distant : sans cette retenue,
+    // l'écrasement l'effacerait à chaque réveil.
+    const locGross=loc?loc.grossesse:undefined;
     if(!loc||((cloudUser.updatedAt||0)>=(loc.updatedAt||0))){
       merged[email]={...cloudUser};
       delete merged[email].pwd;delete merged[email].pwdHash;
@@ -3765,6 +3786,8 @@ const CLOUD={
     merged[email].sessions=allSessions;
     if(locConstantes!==undefined) merged[email].constantes=locConstantes;
     if(locAnalyses!==undefined) merged[email].analyses=locAnalyses;
+    if(locGross!==undefined&&merged[email]&&merged[email].grossesse===undefined)
+      merged[email].grossesse=locGross;
     if(locContra!==undefined&&merged[email]&&(merged[email].cycle||{}).contraception===undefined){
       merged[email].cycle={...(merged[email].cycle||{}),contraception:locContra};
     }
@@ -11317,12 +11340,17 @@ function cycleSuiviDe(user){
 }
 // LE GENRE N'ENTRE PAS ICI. Qui a demandé le suivi le reçoit, point.
 function cycleDoitDemanderPhase(user){
+  // Traité comme « sans objet », SANS écraser la valeur stockée : la
+  // préférence de l'athlète est intacte et revient telle quelle à la
+  // révocation.
+  if(grossesseSuspend(user)) return false;
   return cycleSuiviDe(user)==='actif';
 }
 // Le genre ne sert plus qu'à ça : décider à qui la question est POSÉE une
 // première fois. Une réponse déjà donnée, dans un sens ou dans l'autre,
 // ferme le sujet.
 function cycleDoitChoisir(user){
+  if(grossesseSuspend(user)) return false;
   if(cycleSuiviDe(user)) return false;
   if(!isFemale(user&&user.gender)) return false;
   return ((user&&user.cycleChoixVus)||0)<CYCLE_CHOIX_MAX;
@@ -16178,7 +16206,7 @@ const BIL_STEPS=[
   // Step 6 : Photos de progression
   ()=>`<div style="margin-bottom:22px"><div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">Photos de progression </div>`+
     `<div style="background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:14px;text-align:center">`+
-    `<div style="font-weight:700;font-size:13px;margin-bottom:6px;color:#fff">Photos de progression</div>`+
+    `<div style="font-weight:700;font-size:13px;margin-bottom:6px;color:#fff">Photos de progression${grossesseSuspend(currentUser)?' <span style="font-weight:600;color:var(--sub)">— facultatif</span>':''}</div>`+
     `<div style="font-size:11px;color:var(--sub);line-height:1.6">Reproduis les 3 poses ci-dessous : même endroit, même lumière qu'au début :<br><strong style="color:var(--red)">Face · Dos · Profil</strong></div></div>`+
     bPhotoCards('bil')+
     `</div>`
@@ -18307,6 +18335,47 @@ function messageCyclePerime(user,dateISO){
   return 'Ta dernière date de règles remonte à '+n+' jours. Mets-la à jour '
     +'pour que les ajustements reprennent.';
 }
+// ══════════ GROSSESSE : LE PRODUIT CESSE DE PRESCRIRE ══════════
+// Chez une athlète enceinte, la sèche restait accessible, ajustementPropose
+// proposait des baisses, le plancher était celui d'une non-enceinte, la
+// limite de caféine restait à 400 mg, le modal de cycle s'affichait avant
+// chaque séance, et la prise de poids ATTENDUE était signalée comme une
+// dérive.
+//
+// RepCore ne devient PAS un accompagnement de grossesse. Il n'y a ici aucune
+// courbe de poids, aucun apport par trimestre, aucun programme prénatal,
+// aucune liste d'exercices : seulement des SUSPENSIONS de ce qui est
+// contre-indiqué, et un renvoi vers qui suit la grossesse.
+const GROSSESSE_ETATS=Object.freeze([
+  Object.freeze({cle:'enceinte',   lib:'Je suis enceinte'}),
+  Object.freeze({cle:'allaitement',lib:'J\'allaite'}),
+  Object.freeze({cle:'post_partum',lib:'Je suis en post-partum'})
+]);
+// PURE. Aucune date de terme, aucun trimestre, aucune date d'accouchement :
+// le produit n'en a pas besoin pour cesser de prescrire.
+function etatGrossesse(user){
+  const e=((user&&user.grossesse)||{}).etat;
+  return GROSSESSE_ETATS.some(x=>x.cle===e)?e:null;
+}
+// Les états qui SUSPENDENT. Le post-partum n'en fait pas partie : il ne
+// suspend rien, il pose une question au moment de repartir en sèche.
+function grossesseSuspend(user){
+  const e=etatGrossesse(user);
+  return e==='enceinte'||e==='allaitement';
+}
+const GROSSESSE_MSG='Merci de me l\'avoir dit. RepCore n\'est pas conçu pour '
+  +'accompagner une grossesse : je désactive les objectifs de perte de poids, '
+  +'les alertes de poids et je baisse ta limite de caféine à 200 mg. Ton suivi '
+  +'et ton entraînement restent disponibles. Pour l\'alimentation et l\'activité '
+  +'pendant ta grossesse, c\'est ton médecin ou ta sage-femme qui te suit.';
+// Sans AUCUN chiffre : le surcoût de la lactation varie trop pour être annoncé,
+// et l'annoncer serait exactement le genre de prescription que ce lot retire.
+const GROSSESSE_MSG_ALLAITEMENT='Ton besoin est plus élevé pendant '
+  +'l\'allaitement, dans une proportion qui varie beaucoup — c\'est à voir avec '
+  +'un professionnel.';
+const GROSSESSE_REFUS_SECHE='Pas d\'objectif de perte de poids pendant cette '
+  +'période. C\'est ton médecin ou ta sage-femme qui suit ce sujet.';
+const GROSSESSE_Q_POSTNATALE='As-tu eu ta visite post-natale ?';
 // ── Contraception : le modèle calendaire ne s'applique pas à tout le monde ──
 // Sous contraception combinée en continu, il n'y a ni ovulation ni phase
 // lutéale physiologique. Le produit demandait pourtant une « date des dernières
@@ -21462,7 +21531,7 @@ function renderCoachCaffeineSection(c){
   if(!el||!c) return;
   const days=c.nutrition?.caffeine?.days||{};
   const wKg=parseFloat(c.weight)||75;
-  const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser));
+  const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser),grossesseSuspend(currentUser));
   // Construire les 28 jours
   const today=new Date();
   const totals28=[];
@@ -21691,7 +21760,7 @@ function _ageUtilisateur(user){
     ||parseFloat((user&&user.age)||0);
   return (v>0)?v:null;
 }
-// grossesse : TODO lot A3-09. Aucun champ de grossesse n'existe aujourd'hui —
+// grossesse : branché. Le champ existe désormais, et les quatre appels passent
 // la note de demi-vie la mentionne, mais rien ne la SAISIT. La branche est
 // écrite et testable ; elle ne s'activera que le jour où A3-09 fournira le
 // champ, et aucun appelant ne passe encore cet argument.
@@ -22048,7 +22117,7 @@ function _renderCaffeineScreen(){
   const entries=getCaffeineDay(date);
   const totalMg=entries.reduce((s,e)=>s+(e.mg||0),0);
   const {weight:wKg,estimated:_wEst}=getUserWeight();
-  const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser));
+  const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser),grossesseSuspend(currentUser));
   document.getElementById('caff-block').innerHTML=_renderCaffeineBlock(entries,totalMg,thr,'screen',date,_wEst,isToday,dateLbl,wKg);
   requestAnimationFrame(()=>_drawCaffeineHistory(wKg));
 }
@@ -22080,7 +22149,7 @@ function _renderCaffeineEmbedded(){
   const entries=getCaffeineDay(date);
   const totalMg=entries.reduce((s,e)=>s+(e.mg||0),0);
   const {weight:wKg,estimated:_wEst}=getUserWeight();
-  const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser));
+  const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser),grossesseSuspend(currentUser));
   el.innerHTML=`
     <div style="margin-bottom:12px">
       <h3 style="margin:0;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--sub);display:flex;align-items:center;gap:5px">${icon('coffee',11)} Caféine</h3>
@@ -22108,7 +22177,7 @@ function _drawCaffeineHistory(wKg,canvasId='caff-history-chart',daysOverride){
   canvas.width=canvas.offsetWidth||340;
   const W=canvas.width,H=canvas.height||140;
   const days=daysOverride!==undefined?daysOverride:_caffStore();
-  const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser));
+  const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser),grossesseSuspend(currentUser));
   const labels=[],data=[];
   for(let i=27;i>=0;i--){
     const d=new Date();d.setDate(d.getDate()-i);
@@ -23459,6 +23528,13 @@ function semainesEcoulees(user){
 // pour un clic qui ne changeait rien.
 function changerPhase(user,type,finPrevue,definiPar){
   if(!user||!PHASES[type]) return false;
+  // La garde est DANS la fonction, pas dans l'écran : le coach passe par le
+  // même chemin, et il ne voit pas forcément la déclaration.
+  if(type==='seche'&&grossesseSuspend(user)) return false;
+  // Post-partum : AUCUN blocage. Une question, et elle passe.
+  if(type==='seche'&&etatGrossesse(user)==='post_partum'){
+    try{ toast(GROSSESSE_Q_POSTNATALE,'var(--orange)'); }catch(e){}
+  }
   const anc=phaseCourante(user);
   const hist=((user.phase&&user.phase.historique)||[]).slice();
   if(anc&&anc.type===type){
@@ -23520,6 +23596,13 @@ function cibleVitesse(user){
   // se declenche : reprendre un peu de poids en remontant les calories est le
   // comportement ATTENDU, pas un derapage. alerteAbs et alerte sont mis a null
   // explicitement, sinon vitesseAlerte retomberait sur ceux du maintien.
+  // Même mécanique que la pause, et pour la même raison : alerte et alerteAbs
+  // à null EXPLICITEMENT, sinon vitesseAlerte retomberait sur ceux de la
+  // phase. La prise de poids attendue cesse ainsi d'être signalée comme une
+  // dérive, sans qu'une ligne de vitesseAlerte ne bouge.
+  if(p&&grossesseSuspend(user))
+    return Object.assign({},PHASES[p.type],{phase:p.type,grossesse:true,
+      alerte:null,alerteAbs:null});
   if(p&&pauseActive(user))
     return Object.assign({},PHASES.maintien,{phase:p.type,pause:true,
       alerte:null,alerteAbs:null,note:PAUSE_TEXTE_VITESSE});
@@ -23972,6 +24055,10 @@ function ajustementPropose(user){
   // alimentaire, et pour la même raison. La vigilance, elle, ne coupe que les
   // BAISSES — elle est appliquée plus bas, une fois le sens connu.
   try{ if(paliersDeficit(user)==='blocage') return null; }catch(e){}
+  // Grossesse ou allaitement : aucune proposition, dans AUCUN sens. Faire
+  // monter les calories serait aussi une prescription, et ce n'est pas ici
+  // que ça se décide.
+  try{ if(grossesseSuspend(user)) return null; }catch(e){}
   // Meme motif pendant une pause : elle EST l'ajustement en cours. En proposer
   // un second par-dessus reviendrait a corriger une vitesse qu'on a
   // volontairement suspendue.
@@ -24760,6 +24847,9 @@ function absencesConsecutives(user,depuisISO){
   // pour quelque chose de normal. « Je préfère ne pas répondre » continue en
   // revanche de compter : on ne sait pas, donc on garde le garde-fou.
   if(contraceptionDe(user)==='continue') return 0;
+  // Enceinte ou allaitante : l'absence de règles est attendue. Bloquer
+  // là-dessus enverrait chez le médecin pour quelque chose de normal.
+  if(grossesseSuspend(user)) return 0;
   const c=(user&&user.cycle)||{};
   let l=(Array.isArray(c.absences)?c.absences:[])
     .filter(x=>typeof x==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(x));
@@ -24845,7 +24935,7 @@ function risqueDeficitEnergetique(user,jourISO){
   // Sous contraception EN CONTINU, aucune des deux branches ne doit compter :
   // absencesConsecutives rend déjà zéro, mais le repli des absences ESPACÉES
   // lisait la liste directement et ajoutait son point malgré tout.
-  if(contraceptionDe(user)==='continue'){ nMois=0; }
+  if(contraceptionDe(user)==='continue'||grossesseSuspend(user)){ nMois=0; }
   if(cons>=DEF_ABSENCES_BLOCAGE){
     points+=DEF_POINTS_ABSENCE;
     criteres.push({cle:'absences',lib:'Absence de règles',
@@ -27181,6 +27271,66 @@ const ATP_CYCLE_OPTIONS=Object.freeze([
 ]);
 let _atpEtats=[];
 let _atpThyEtat=null, _atpThyTrait=false;
+// La déclaration ÉCRIT tout de suite : un consentement se donne au moment où
+// on le donne, pas au clic d'un bouton « Enregistrer » plus bas dans l'écran.
+function declarerGrossesse(etat){
+  if(!GROSSESSE_ETATS.some(x=>x.cle===etat)) return false;
+  const c=document.getElementById('atp-gross-consent');
+  if(c&&!c.checked){ toast('Coche la case pour enregistrer','var(--orange)'); return false; }
+  currentUser.grossesse={etat,declareLe:Date.now()};
+  // Une sèche EN COURS est SUSPENDUE, jamais supprimée : l'historique reste,
+  // et nutrition.macros n'est pas touché. On cesse de faire évoluer les
+  // chiffres, on ne les efface pas.
+  if(grossesseSuspend(currentUser)){
+    const ph=phaseCourante(currentUser);
+    if(ph&&ph.type==='seche'&&currentUser.phase) currentUser.phase.suspendue=true;
+  }
+  saveUser();
+  _renderAtpGrossesse();
+  return true;
+}
+// Révocation : effacement COMPLET, aucun historique conservé. La phase
+// suspendue redevient active telle qu'elle était.
+function revoquerGrossesse(){
+  delete currentUser.grossesse;
+  if(currentUser.phase) delete currentUser.phase.suspendue;
+  saveUser();
+  _renderAtpGrossesse();
+  return true;
+}
+function accuserMessageGrossesse(){
+  if(currentUser.grossesse) currentUser.grossesse.msgVu=true;
+  saveUser();
+  _renderAtpGrossesse();
+  return true;
+}
+// Aucun bandeau permanent : le message se lit une fois, puis disparaît. Rien
+// dans l'écran ne doit laisser deviner l'état à quelqu'un qui regarde par
+// dessus l'épaule.
+function _renderAtpGrossesse(){
+  const z=document.getElementById('atp-gross-opts');
+  if(!z) return;
+  const e=etatGrossesse(currentUser);
+  const g=(currentUser&&currentUser.grossesse)||{};
+  const msg=document.getElementById('atp-gross-msg');
+  if(msg){
+    const aDire=e&&!g.msgVu;
+    msg.style.display=aDire?'block':'none';
+    if(aDire) msg.innerHTML=
+      `<div style="font-size:12px;color:#eee;line-height:1.7">${escapeHtml(GROSSESSE_MSG)}</div>`
+      +(e==='allaitement'
+        ?`<div style="font-size:12px;color:#eee;line-height:1.7;margin-top:9px">${escapeHtml(GROSSESSE_MSG_ALLAITEMENT)}</div>`:'')
+      +`<button onclick="accuserMessageGrossesse()" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:10px;letter-spacing:1px">J'ai compris</button>`;
+  }
+  const cons=document.getElementById('atp-gross-consent-row');
+  if(cons) cons.style.display=e?'none':'block';
+  z.innerHTML=GROSSESSE_ETATS.map(x=>
+    `<div class="obj-opt${e===x.cle?' sel':''}" onclick="declarerGrossesse('${x.cle}')"
+      role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div style="font-weight:800">${escapeHtml(x.lib)}</div>
+    </div>`).join('')
+    +(e?`<button onclick="revoquerGrossesse()" class="btn btn-outline btn-sm" style="width:100%;margin:4px 0 0;font-size:10px;letter-spacing:1px;color:var(--sub)">Retirer cette déclaration</button>`:'');
+}
 function _renderAtpEtats(){
   const z=document.getElementById('atp-etats-opts');
   if(!z) return;
@@ -27256,6 +27406,7 @@ function openAthleteProfile(){
   setAthleteGender(_atpGender);
   _atpCycleSuivi=cycleSuiviDe(u);
   _renderAtpCycle();
+  _renderAtpGrossesse();
   _atpEtats=etatsDeclares(u).slice();
   const _thy=thyroideDe(u);
   _atpThyEtat=_thy.etat; _atpThyTrait=_thy.traitement;
@@ -32273,6 +32424,290 @@ function testExercices(){
               ?true:_echec('le dossier a été modifié');
           } finally { _propCorr=sauve; }})());
       } finally { currentUser=_tyU; }
+    })();
+
+    // ══════ GROSSESSE : LE PRODUIT CESSE DE PRESCRIRE ══════
+    // La sèche restait accessible, les baisses étaient proposées, la caféine
+    // plafonnée à 400 mg, et la prise de poids ATTENDUE signalée comme dérive.
+    (()=>{
+      const _grU=currentUser;
+      const _j=n=>localISODate(new Date(Date.now()-n*864e5));
+      const AUJ=localISODate(new Date());
+      const _ath=(etat,o)=>{
+        const c=o||{}, kg0=62, pct=(c.pctSem!=null)?c.pctSem:0.65;
+        const wl=[];
+        for(let j=45;j>=0;j--) wl.push({date:_j(j),kg:Math.round((kg0+kg0*(pct/100)/7*(45-j))*100)/100});
+        const u={id:'gr'+(c.id||''),email:'gr'+(c.id||'')+'@t',role:'athlete',
+          gender:'Femme',_evol_gender:'Femme',_evol_height:165,
+          exAlias:{},exMuscles:{},programs:{},sessions:[],sleepLog:[],weightLog:wl,
+          sessions_config:[{day:'J0',name:'S0',active:true,exercises:[]}],
+          bilans:[{type:'depart',date:Date.now()-200*864e5,'deb-weight':'62',
+            'deb-height':'165','deb-age':'29','deb-gender':'Femme'}],
+          nutrition:{dietType:'strict',
+            macros:{on:{kcal:2000,p:130,g:220,l:55},off:{kcal:1900,p:130,g:200,l:55}}}};
+        u.phase={type:c.phase||'maintien',debut:Date.now()-((c.semaines||10)*7*864e5)};
+        if(etat) u.grossesse={etat,declareLe:Date.now()};
+        return Object.assign(u,c.extra||{});
+      };
+      try{
+        // ── Non-régression : champ absent ────────────────────────────────
+        ok('Critère : sans déclaration, tout se comporte comme avant',(()=>{
+          const u=_ath(null,{id:'n1'});
+          const rates=[];
+          if(etatGrossesse(u)!==null) rates.push('état lu');
+          if(grossesseSuspend(u)) rates.push('suspension active');
+          if(changerPhase(u,'seche')!==true) rates.push('sèche refusée');
+          const c=cibleVitesse(_ath(null,{id:'n2'}));
+          if(c.alerteAbs!==PHASES.maintien.alerteAbs) rates.push('alerte neutralisée');
+          const t=caffeineThresholds(70,30);
+          if(t.regle==='grossesse') rates.push('caféine plafonnée');
+          return rates.length?_echec(rates.join(', ')):true;})());
+        ok('etatGrossesse filtre ce qu\'elle ne connaît pas',(()=>{
+          const cas=[null,{},{grossesse:{}},{grossesse:{etat:'zzz'}}];
+          if(cas.some(x=>etatGrossesse(x)!==null)) return _echec('une forme inconnue passe');
+          return GROSSESSE_ETATS.map(x=>x.cle).join(',')==='enceinte,allaitement,post_partum'
+            ?true:_echec(GROSSESSE_ETATS.map(x=>x.cle).join(','));})());
+
+        // ── Les suspensions ──────────────────────────────────────────────
+        ok('Critère : enceinte → changerPhase(seche) rend false et n\'écrit RIEN',(()=>{
+          const u=_ath('enceinte',{id:'s1'});
+          const avant=JSON.stringify(u.phase);
+          if(changerPhase(u,'seche')!==false) return _echec('la sèche est passée');
+          if(JSON.stringify(u.phase)!==avant) return _echec('la phase a été touchée');
+          // Les autres phases restent accessibles.
+          return changerPhase(u,'maintien')===true
+            ?true:_echec('le maintien est refusé aussi');})());
+        ok('L\'allaitement refuse la sèche de la même façon',
+          changerPhase(_ath('allaitement',{id:'s2'}),'seche')===false);
+        ok('Critère : une sèche EN COURS est suspendue, rien n\'est supprimé',(()=>{
+          const sauve=currentUser, _sv=window.saveUser;
+          try{
+            window.saveUser=()=>true;
+            currentUser=_ath(null,{id:'s3',phase:'seche'});
+            currentUser.phase.historique=[{type:'masse',debut:1,fin:2}];
+            const histAvant=JSON.stringify(currentUser.phase.historique);
+            const macrosAvant=JSON.stringify(currentUser.nutrition.macros);
+            const cons=document.getElementById('atp-gross-consent');
+            if(cons) cons.checked=true;
+            if(declarerGrossesse('enceinte')!==true) return _echec('déclaration refusée');
+            // Défensif : une variante qui SUPPRIME la phase faisait jeter le
+            // test, ce qui tronquait toute la suite au lieu d'échouer sur lui.
+            if((currentUser.phase||{}).suspendue!==true) return _echec('phase non suspendue');
+            if(JSON.stringify((currentUser.phase||{}).historique)!==histAvant)
+              return _echec('historique modifié');
+            return JSON.stringify(currentUser.nutrition.macros)===macrosAvant
+              ?true:_echec('les macros ont bougé');
+          } finally { currentUser=sauve; window.saveUser=_sv; }})());
+        ok('Critère : enceinte → ajustementPropose rend null, dérive franche ou non',(()=>{
+          const u=_ath('enceinte',{id:'s4',phase:'seche',pctSem:-1.5});
+          const temoin=_ath(null,{id:'s5',phase:'seche',pctSem:-1.5});
+          if(!ajustementPropose(temoin)) return _echec('fixture muette : rien sans grossesse non plus');
+          return ajustementPropose(u)===null?true:_echec('une proposition est sortie');})());
+        ok('Critère : 62 kg, +0,65 %/sem, maintien → vitesseAlerte false',(()=>{
+          const u=_ath('enceinte',{id:'s6'});
+          const sans=_ath(null,{id:'s7'});
+          // Témoin : sans déclaration, cette vitesse EST une alerte.
+          if(vitesseAlerte(0.65,cibleVitesse(sans))!==true)
+            return _echec('fixture muette : pas d\'alerte sans grossesse');
+          const c=cibleVitesse(u);
+          if(c.alerte!==null||c.alerteAbs!==null) return _echec('seuils non neutralisés');
+          return vitesseAlerte(0.65,c)===false?true:_echec('alerte maintenue');})());
+        ok('Critère : enceinte → caffeineThresholds plafonne à 200',(()=>{
+          const t=caffeineThresholds(70,30,true);
+          if(t.orange!==200) return _echec('orange '+t.orange);
+          return t.regle==='grossesse'&&t.plafond===CAFFEINE_MAX_GROSSESSE
+            ?true:_echec(JSON.stringify(t));})());
+        ok('Et les quatre écrans de caféine passent bien l\'argument',(()=>{
+          // Deux noms de fonctions inventes ici faisaient tomber la suite
+          // entiere : on balaye la source rendue, qui existe toujours.
+          const tous=document.documentElement.outerHTML;
+          const nus=(tous.match(/caffeineThresholds\(wKg,_ageUtilisateur\(currentUser\)\)/g)||[]).length;
+          return nus===0?true:_echec(nus+' appel(s) sans le troisième argument');})());
+        ok('Critère : enceinte → aucun modal de cycle, et rien n\'est écrit',(()=>{
+          const u=_ath('enceinte',{id:'s8',extra:{cycleSuivi:'actif'}});
+          const avant=JSON.stringify(u);
+          if(cycleDoitDemanderPhase(u)) return _echec('le modal de phase s\'ouvrirait');
+          if(cycleDoitChoisir(u)) return _echec('l\'écran de choix s\'ouvrirait');
+          // La préférence STOCKÉE n'est pas écrasée.
+          if(cycleSuiviDe(u)!=='actif') return _echec('la préférence a été écrasée');
+          return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
+        ok('Sans grossesse, le modal s\'ouvre toujours',
+          cycleDoitDemanderPhase(_ath(null,{id:'s9',extra:{cycleSuivi:'actif'}}))===true);
+        ok('L\'écran de CHOIX ne s\'ouvre pas non plus',(()=>{
+          // Ma fixture portait déjà cycleSuivi:'actif', ce qui suffit à faire
+          // taire cycleDoitChoisir : la garde de grossesse y était
+          // inatteignable. Sans préférence déclarée, l'écran de choix
+          // s'ouvrirait — c'est LÀ que la garde compte.
+          const sans=_ath(null,{id:'s9b'});
+          if(cycleDoitChoisir(sans)!==true)
+            return _echec('fixture muette : l\'écran ne s\'ouvre pas sans grossesse');
+          const enc=_ath('enceinte',{id:'s9c'});
+          return cycleDoitChoisir(enc)===false
+            ?true:_echec('l\'écran de choix s\'ouvre pendant la grossesse');})());
+        ok('Critère : 2 absences déclarées → le critère d\'absence vaut 0',(()=>{
+          const abs=['2026-06-15','2026-07-15'];
+          const sans=_ath(null,{id:'s10',extra:{cycle:{absences:abs}}});
+          const enc=_ath('enceinte',{id:'s11',extra:{cycle:{absences:abs}}});
+          if(paliersDeficit(sans)!=='blocage') return _echec('fixture muette : '+paliersDeficit(sans));
+          const r=risqueDeficitEnergetique(enc);
+          if(r.absencesConsecutives!==0) return _echec('suite '+r.absencesConsecutives);
+          if(r.criteres.some(c=>/absence/.test(c.cle))) return _echec('un critère d\'absence compte');
+          // Et l'allaitement fait de même.
+          const all=_ath('allaitement',{id:'s12',extra:{cycle:{absences:abs}}});
+          return risqueDeficitEnergetique(all).absencesConsecutives===0
+            ?true:_echec('l\'allaitement compte encore');})());
+        ok('Cas limite : un blocage par D\'AUTRES critères s\'applique quand même',(()=>{
+          // Le blocage reste possible ; simplement, il ne peut plus venir de
+          // l'absence de règles, et son message ne doit pas en parler.
+          const u=_ath('enceinte',{id:'s13',phase:'seche',semaines:15,
+            extra:{sleepLog:Array.from({length:14},(_,i)=>({date:_j(i),duration:5}))}});
+          u.nutrition.macros={on:{kcal:1200,p:130,g:60,l:55},off:{kcal:1200,p:130,g:60,l:55}};
+          const r=risqueDeficitEnergetique(u);
+          if(r.criteres.some(c=>/absence/.test(c.cle))) return _echec('une absence compte');
+          return r.points>0?true:_echec('plus aucun critère ne compte');})());
+
+        // ── Le post-partum ne suspend RIEN ───────────────────────────────
+        ok('Critère : post-partum → aucune suspension, la sèche passe',(()=>{
+          const u=_ath('post_partum',{id:'p1'});
+          if(grossesseSuspend(u)) return _echec('suspension active');
+          if(changerPhase(u,'seche')!==true) return _echec('la sèche est refusée');
+          const c=cibleVitesse(u);
+          return c.alerteAbs!=null||c.alerte!=null
+            ?true:_echec('les alertes ont été neutralisées');})());
+        ok('Et la question post-natale existe, sans blocage',(()=>{
+          if(!/visite post-natale/.test(GROSSESSE_Q_POSTNATALE)) return _echec(GROSSESSE_Q_POSTNATALE);
+          return /post_partum/.test(String(changerPhase))
+            ?true:_echec('la question n\'est pas posée au choix d\'une sèche');})());
+
+        // ── La révocation ────────────────────────────────────────────────
+        ok('Critère : révoquer fait TOUT retomber, sans trace',(()=>{
+          const sauve=currentUser, _sv=window.saveUser;
+          try{
+            window.saveUser=()=>true;
+            currentUser=_ath(null,{id:'r1',phase:'seche'});
+            const cons=document.getElementById('atp-gross-consent');
+            if(cons) cons.checked=true;
+            declarerGrossesse('enceinte');
+            if((currentUser.phase||{}).suspendue!==true) return _echec('fixture muette');
+            revoquerGrossesse();
+            if(currentUser.grossesse!==undefined) return _echec('une trace subsiste');
+            if((currentUser.phase||{}).suspendue!==undefined) return _echec('la phase reste suspendue');
+            if(grossesseSuspend(currentUser)) return _echec('la suspension tient');
+            return changerPhase(currentUser,'seche')===true
+              ?true:_echec('la sèche reste refusée');
+          } finally { currentUser=sauve; window.saveUser=_sv; }})());
+        ok('La déclaration EXIGE le consentement, non pré-coché',(()=>{
+          const sauve=currentUser, _sv=window.saveUser, _ts=window.toast;
+          try{
+            window.saveUser=()=>true; window.toast=()=>{};
+            currentUser=_ath(null,{id:'r2'});
+            const cons=document.getElementById('atp-gross-consent');
+            if(!cons) return _echec('case de consentement absente');
+            cons.checked=false;
+            if(declarerGrossesse('enceinte')!==false) return _echec('déclaré sans consentement');
+            if(currentUser.grossesse!==undefined) return _echec('écrit sans consentement');
+            // Et la case n'est jamais cochée d'avance à l'ouverture.
+            openAthleteProfile();
+            return document.getElementById('atp-gross-consent').checked===false
+              ?true:_echec('pré-cochée');
+          } finally { currentUser=sauve; window.saveUser=_sv; window.toast=_ts; }})());
+
+        // ── Ce qui ne doit PAS sortir de l'appareil ──────────────────────
+        ok('Critère : la déclaration ne monte pas, et coach_public ne la voit jamais',(()=>{
+          const u=_ath('enceinte',{id:'v1'});
+          const safe={...u};
+          if(!safe.grossessePartagee) delete safe.grossesse;
+          if(safe.grossesse!==undefined) return _echec('elle est partie');
+          if(u.grossesse===undefined) return _echec('la donnée locale a été détruite');
+          // coach_public est une liste BLANCHE : la clé ne peut pas y entrer.
+          if(CLOUD.CHAMPS_PROFIL_COACH.indexOf('grossesse')>=0)
+            return _echec('grossesse figure dans la liste blanche');
+          const src=String(CLOUD._doPushOne);
+          return /delete safe\.grossesse/.test(src)
+            ?true:_echec('le retrait n\'est pas câblé dans _doPushOne');})());
+        ok('Une synchronisation ne l\'efface pas',(()=>{
+          const m={}; m['gr@t']=_ath('enceinte',{id:''});
+          CLOUD._mergeUser(m,'gr@t',{email:'gr@t',updatedAt:Date.now()+1000});
+          return etatGrossesse(m['gr@t'])==='enceinte'
+            ?true:_echec('écrasée par la synchro');})());
+
+        // ── Le registre : aucune prescription, aucun bandeau ─────────────
+        ok('Critère : aucun rendu ne prescrit quoi que ce soit',(()=>{
+          const sauve=currentUser;
+          try{
+            currentUser=_ath('enceinte',{id:'z1'});
+            openAthleteProfile();
+            const c=document.getElementById('atp-gross-card');
+            if(!c) return _echec('carte absente');
+            // TROISIÈME lot de suite où mon propre avertissement se fait
+            // attraper : la carte dit « ne demande ni date de terme, ni
+            // trimestre », et balayer sa prose prenait cette phrase pour un
+            // champ qui les demande. On regarde les CHAMPS, et on vérifie la
+            // phrase à part.
+            const champs=Array.from(c.querySelectorAll('input,select,textarea'));
+            const libres=champs.filter(e=>e.type!=='checkbox');
+            if(libres.length) return _echec(libres.length+' champ(s) de saisie libre');
+            let h=champs.map(e=>[e.id,e.placeholder].filter(Boolean).join(' ')).join(' ')
+              +' '+GROSSESSE_MSG+GROSSESSE_MSG_ALLAITEMENT+GROSSESSE_REFUS_SECHE;
+            const n=h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+            const interdits=['trimestre','courbe de poids','prise de poids recommandee',
+              'programme prenatal','exercices deconseilles','exercices recommandes',
+              'kcal de plus','calories supplementaires','date de terme','accouchement'];
+            const t=interdits.filter(x=>n.indexOf(x)>=0);
+            if(t.length) return _echec('contenu interdit : '+t.join(', '));
+            // Et la mention de ce qui n'est PAS demandé est bien là.
+            if(!/ni date de terme, ni trimestre/.test(c.textContent||''))
+              return _echec('la mention a disparu de la carte');
+            // Aucun chiffre dans la phrase d'allaitement.
+            return !/\d/.test(GROSSESSE_MSG_ALLAITEMENT)
+              ?true:_echec('un chiffre dans la phrase d\'allaitement');
+          } finally { currentUser=sauve; }})());
+        ok('Le message se lit UNE fois, puis rien ne subsiste à l\'écran',(()=>{
+          const sauve=currentUser, _sv=window.saveUser;
+          try{
+            window.saveUser=()=>true;
+            currentUser=_ath('enceinte',{id:'z2'});
+            openAthleteProfile();
+            const msg=document.getElementById('atp-gross-msg');
+            if(!msg||msg.style.display==='none') return _echec('le message ne sort pas');
+            const t=msg.textContent||'';
+            if(!/caféine à 200 mg/.test(t)) return _echec('mauvais message');
+            // Le RENVOI MÉDICAL est le cœur du message : sans lui, il ne
+            // reste qu'une liste de désactivations.
+            if(!/ton médecin ou ta sage-femme/.test(t))
+              return _echec('le renvoi médical a disparu');
+            if(!/n&#39;est pas conçu pour accompagner|n'est pas conçu pour accompagner/.test(t))
+              return _echec('le produit ne dit plus ce qu\'il n\'est pas');
+            accuserMessageGrossesse();
+            return msg.style.display==='none'
+              ?true:_echec('le bandeau reste affiché');
+          } finally { currentUser=sauve; window.saveUser=_sv; }})());
+        ok('L\'allaitement ajoute sa phrase, sans chiffre',(()=>{
+          const sauve=currentUser, _sv=window.saveUser;
+          try{
+            window.saveUser=()=>true;
+            currentUser=_ath('allaitement',{id:'z3'});
+            openAthleteProfile();
+            const t=(document.getElementById('atp-gross-msg')||{}).textContent||'';
+            return /varie beaucoup/.test(t)?true:_echec('phrase absente');
+          } finally { currentUser=sauve; window.saveUser=_sv; }})());
+        ok('Les photos de bilan sont marquées facultatives',(()=>{
+          const sauve=currentUser, _sv=window.bilData;
+          try{
+            bilData={};
+            currentUser=_ath('enceinte',{id:'z4'});
+            const h=BIL_STEPS[BIL_STEPS.length-1]();
+            if(!/facultatif/.test(h)) return _echec('mention absente');
+            currentUser=_ath(null,{id:'z5'});
+            return !/facultatif/.test(BIL_STEPS[BIL_STEPS.length-1]())
+              ?true:_echec('la mention sort pour tout le monde');
+          } finally { currentUser=sauve; bilData=_sv||{}; }})());
+        ok('etatGrossesse et grossesseSuspend sont PURES',(()=>{
+          const u=_ath('enceinte',{id:'z6'});
+          const avant=JSON.stringify(u);
+          etatGrossesse(u); grossesseSuspend(u); cibleVitesse(u); ajustementPropose(u);
+          return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
+      } finally { currentUser=_grU; }
     })();
 
     // ══════ PROFIL COACH VISIBLE PAR SES ATHLÈTES ══════
