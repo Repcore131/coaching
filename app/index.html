@@ -3512,6 +3512,23 @@ const CLOUD={
     p.catch(()=>{});
     return p;
   },
+  // La contraception ne monte QUE si l'athlète a activé le partage. Sans ça,
+  // l'interrupteur d'interface ne masquerait rien : la règle de /users laisse
+  // le coach lire le dossier entier, et la donnée serait déjà sur son
+  // téléphone. Même traitement que les constantes, même contrepartie assumée :
+  // non partagée, elle ne survit pas à un changement d'appareil.
+  //
+  // Fonction NOMMÉE et non trois lignes dans _doPushOne : celle-ci est
+  // asynchrone et fait du réseau, donc inéprouvable depuis la suite. Une liste
+  // noire qu'on ne peut pas tester n'est pas une liste noire.
+  _retirerContraceptionSiNonPartagee(safe){
+    if(!safe||!safe.cycle||safe.cycle.contraceptionPartagee) return safe;
+    // safe est une copie PLATE du dossier : safe.cycle est LE MÊME objet que
+    // user.cycle. Sans ce clone, le delete effacerait la vraie donnée locale.
+    safe.cycle={...safe.cycle};
+    delete safe.cycle.contraception;
+    return safe;
+  },
   async _doPushOne(email,user){
     this._setSyncStatus('pending');
     try{
@@ -3543,6 +3560,7 @@ const CLOUD={
       // Le drapeau général, LUI, part : prévenir le coach est l'un de ses effets.
       delete safe.constantes;
       delete safe.analyses;
+      this._retirerContraceptionSiNonPartagee(safe);
       // Permettre aux règles RTDB de vérifier qui est le coach de cet athlète
       // Les trois cas doivent être traités EXPLICITEMENT. L'ancienne forme ne
       // touchait à coachEmailKey que lorsqu'un coach était trouvé : après un
@@ -3719,6 +3737,9 @@ const CLOUD={
     // traitement que les bilans et les séances, pour la même raison.
     const locConstantes=loc?.constantes;
     const locAnalyses=loc?.analyses;
+    // Non partagée, elle n'est jamais montée : le dossier distant ne la porte
+    // donc pas, et l'écrasement ci-dessous l'effacerait à chaque réveil.
+    const locContra=(loc&&loc.cycle)?loc.cycle.contraception:undefined;
     if(!loc||((cloudUser.updatedAt||0)>=(loc.updatedAt||0))){
       merged[email]={...cloudUser};
       delete merged[email].pwd;delete merged[email].pwdHash;
@@ -3727,6 +3748,9 @@ const CLOUD={
     merged[email].sessions=allSessions;
     if(locConstantes!==undefined) merged[email].constantes=locConstantes;
     if(locAnalyses!==undefined) merged[email].analyses=locAnalyses;
+    if(locContra!==undefined&&merged[email]&&(merged[email].cycle||{}).contraception===undefined){
+      merged[email].cycle={...(merged[email].cycle||{}),contraception:locContra};
+    }
   },
   async pullUser(email){
     const key=email.replace(/\./g,',');
@@ -18238,10 +18262,57 @@ function messageCyclePerime(user,dateISO){
   return 'Ta dernière date de règles remonte à '+n+' jours. Mets-la à jour '
     +'pour que les ajustements reprennent.';
 }
+// ── Contraception : le modèle calendaire ne s'applique pas à tout le monde ──
+// Sous contraception combinée en continu, il n'y a ni ovulation ni phase
+// lutéale physiologique. Le produit demandait pourtant une « date des dernières
+// règles » à quelqu'un qui n'en a pas, puis lui projetait des phases, ajustait
+// ses macros et lui suggérait un complément.
+//
+// Aucun nom de produit, aucun dosage, aucune date de début, aucun conseil : la
+// seule chose dont le calcul a besoin est de savoir si un calendrier veut dire
+// quelque chose.
+const CONTRACEPTIONS=Object.freeze([
+  Object.freeze({cle:'aucune',       lib:'Pas de contraception hormonale'}),
+  Object.freeze({cle:'non_hormonale',lib:'Stérilet au cuivre'}),
+  Object.freeze({cle:'cyclique',     lib:'Contraception hormonale avec une pause / des saignements réguliers'}),
+  Object.freeze({cle:'continue',     lib:'Contraception hormonale en continu / pas de saignements'}),
+  Object.freeze({cle:'ne_dit_pas',   lib:'Je préfère ne pas répondre'})
+]);
+const CYCLE_MSG_SANS_CYCLE='Sous contraception en continu, il n\'y a pas de '
+  +'phases à suivre. Tu peux toujours m\'indiquer comment tu te sens avant '
+  +'chaque séance.';
+// Absent = non déclaré, traité comme 'aucune' : aucun dossier existant ne
+// change de comportement du jour au lendemain.
+function contraceptionDe(user){
+  const v=((user&&user.cycle)||{}).contraception;
+  return CONTRACEPTIONS.some(x=>x.cle===v)?v:'aucune';
+}
+// Pas de cycle à modéliser du tout.
+function cycleSansCycle(user){
+  const c=contraceptionDe(user);
+  return c==='continue'||c==='ne_dit_pas';
+}
+// Le calendrier existe — la plaquette — mais il ne décrit AUCUNE physiologie.
+// Les repères de dates tiennent, les ajustements métaboliques non.
+//
+// C'est une fonction SÉPARÉE et non un champ ajouté au retour de phaseCycle :
+// cinquante-six sites comparent son résultat à une chaîne, et un objet y serait
+// truthy sans jamais égaler 'luteal_late'. Rien ne planterait, tous les effets
+// disparaîtraient en silence — y compris ceux qu'on veut garder. Même raison
+// que _ajustAdherenceBloque, exposée à côté d'ajustementPropose plutôt que
+// glissée dans son retour.
+function cycleCalendaireSeul(user){
+  return contraceptionDe(user)==='cyclique';
+}
 // PURE. Plus de modulo : un calendrier qui se répète tout seul finit toujours
 // par mentir. Au-delà de la longueur du cycle plus la marge, on ne sait plus,
 // et on le DIT au lieu de projeter.
 function phaseCycle(user,dateISO){
+  // AVANT la configuration : une athlète sous contraception continue n'a
+  // aucune raison d'avoir renseigné une date de règles, et le message doit
+  // quand même pouvoir s'afficher. Une date renseignée malgré tout est
+  // conservée dans le dossier, simplement inutilisée.
+  if(cycleSansCycle(user)) return 'sans_cycle';
   const conf=confCycle(user);
   if(!conf.enabled||!conf.lastPeriodDate) return null;
   // L'irrégularité passe AVANT tout : un calendrier n'y veut rien dire, quelle
@@ -18292,13 +18363,19 @@ function _getCyclePhaseNut(dateStr){
   return phaseCycle(currentUser,dateStr);
 }
 
-function _applyNutCycleModifier(base,isOn,phase,conf){
+// Le porteur du dossier est passé EXPLICITEMENT. Un canal global aurait été
+// faux dès le second appelant : _renderCycleNutSettings l'appelle aussi.
+function _applyNutCycleModifier(base,isOn,phase,conf,porteur){
   // Protéines : jamais modifiées — seuls glucides et lipides varient
   const m={...base};
   // Une phase périmée ou irrégulière n'est pas une phase : elle ne peut rien
   // ajuster. La garde est ICI, dans la fonction qui applique, et pas
   // seulement chez ses appelants — c'est la seule qui ne s'oublie pas.
   if(!phaseAgissante(phase)) return m;
+  // Contraception cyclique : la plaquette donne un calendrier, pas une
+  // physiologie. On ne déplace pas des glucides sur la foi d'un jour de
+  // comprimé. Le RESSENTI, lui, continue d'agir sur la charge.
+  if(porteur!==undefined&&cycleCalendaireSeul(porteur)) return m;
   if(!m.kcal) return m;
   if(phase==='menstrual'&&conf.intensiteRegles==='difficile'){
     // +10g glucides (+40kcal) compensés par lipides → kcal total inchangé
@@ -18370,7 +18447,7 @@ function _getEffectiveMacros(nut,isOn,dateStr,porteur){
   // l'une et « aucune phase » à l'autre sur un dossier étranger.
   const phase=phaseCycle(_porteur,dateStr);
   if(!phaseAgissante(phase)||phase==='stable') return base;
-  return _applyNutCycleModifier(base,isOn,phase,conf);
+  return _applyNutCycleModifier(base,isOn,phase,conf,_porteur);
 }
 
 // ── La seule recommandation prescriptive du produit, et elle s'écrivait TOUTE
@@ -18410,6 +18487,10 @@ function suggestionCycleSupplements(user,dateISO){
   if(!conf.sensibilitePms) return null;
   const ph=phaseCycle(u,dateISO||localISODate(new Date()));
   if(!phaseAgissante(ph)||ph!=='luteal_late') return null;
+  // Ni sous contraception continue — la phase n'est déjà plus agissante — ni
+  // sous contraception cyclique, où la fin de plaquette n'est pas une phase
+  // lutéale.
+  if(cycleCalendaireSeul(u)) return null;
   const list=Array.isArray(nut.supplements)?nut.supplements:[];
   // Quelle qu'en soit l'origine : une entrée déjà là rend la question sans objet.
   if(list.some(s=>s&&/om[eé]ga/i.test(String(s.name||'')))) return null;
@@ -18521,30 +18602,43 @@ function _renderCycleNutSettings(nut){
   const absenceCeMois=_abs.some(d=>String(d).slice(0,7)===today.slice(0,7));
   // Un refus ne se lève que d'un geste : sans ce bouton, il serait définitif.
   const _refusCycle=((((currentUser||{}).cycle)||{}).suggestionsRefusees||[]).length>0;
+  // Sous contraception cyclique, ce qui se répète est une PLAQUETTE, pas un
+  // cycle : « phase lutéale tardive » décrirait une physiologie qui n'a pas
+  // lieu. Seuls les libellés changent ; les valeurs internes, elles, sont les
+  // mêmes partout. Déclaré ICI et non dans le bloc du bandeau : le texte
+  // d'aide du réglage PMS en a besoin lui aussi, et il est rendu plus bas.
+  const _calSeul=cycleCalendaireSeul(currentUser);
+  const _contra=contraceptionDe(currentUser);
+  const _partage=!!((((currentUser||{}).cycle)||{}).contraceptionPartagee);
   let phaseHtml='';
-  if(on&&lastP){
+  // Sans cycle à suivre, le bandeau s'affiche quand même : c'est LUI qui porte
+  // l'explication, et il n'y a par définition aucune date de règles.
+  if(on&&(lastP||phaseCycle(currentUser,today)==='sans_cycle')){
     const phase=_getCyclePhaseNut(today);
     const pLabels={
-      menstrual:{txt:'Phase menstruelle (J1-5)',color:'#a78bfa'},
-      stable:{txt:'Phase stable : référence',color:'var(--green)'},
-      luteal_late:{txt:'Phase lutéale tardive',color:'var(--orange)'},
+      menstrual:{txt:_calSeul?'Semaine d\'arrêt':'Phase menstruelle (J1-5)',color:'#a78bfa'},
+      stable:{txt:_calSeul?'Milieu de plaquette':'Phase stable : référence',color:'var(--green)'},
+      luteal_late:{txt:_calSeul?'Fin de plaquette':'Phase lutéale tardive',color:'var(--orange)'},
       perime:{txt:'Date trop ancienne',color:'var(--sub)'},
-      irregulier:{txt:'Cycles irréguliers',color:'var(--sub)'}
+      irregulier:{txt:'Cycles irréguliers',color:'var(--sub)'},
+      sans_cycle:{txt:'Pas de phases à suivre',color:'var(--sub)'}
     };
     const pl=phase?pLabels[phase]:null;
     const eff=phaseAgissante(phase)&&phase!=='stable'
-      ?_applyNutCycleModifier(base,isOn,phase,conf):base;
+      ?_applyNutCycleModifier(base,isOn,phase,conf,currentUser):base;
     const dKcal=Math.round((eff.kcal||0)-(base.kcal||0));
     const dG=Math.round((eff.g||0)-(base.g||0));
     const dL=parseFloat(((eff.l||0)-(base.l||0)).toFixed(1));
     const hasAdj=dKcal!==0||dG!==0||dL!==0;
     const adjLabel=hasAdj
       ?[dG!==0?`glucides ${dG>0?'+':''}${dG}g`:null,dL!==0?`lipides ${dL>0?'+':''}${dL}g`:null,dKcal!==0?`${dKcal>0?'+':''}${dKcal} kcal`:null].filter(Boolean).join(' · ')
+      :phase==='sans_cycle'?CYCLE_MSG_SANS_CYCLE
+      :_calSeul?'Repère de plaquette : aucun ajustement de macros'
       :phase==='perime'?messageCyclePerime(currentUser,today)
       :phase==='irregulier'?CYCLE_MSG_IRREGULIER
       :phase==='luteal_late'&&!conf.sensibilitePms?'Sensibilité PMS désactivée : pas d\'ajustement'
       :phase==='menstrual'&&intens!=='difficile'?'Règles supportables : pas d\'ajustement':'Macros inchangées';
-    if(pl) phaseHtml=`<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+    if(pl) phaseHtml=`<div data-phase-cycle style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
       <span style="font-size:var(--fs-xs);font-weight:800;color:${pl.color};background:${pl.color}18;border:1px solid ${pl.color}33;border-radius:6px;padding:3px 9px">${pl.txt}</span>
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:6px">${hasAdj?'Ajust. actif : ':''}<span style="color:${hasAdj?'#fff':'var(--sub)'}">${adjLabel}</span></div>
     </div>`;
@@ -18581,7 +18675,7 @@ function _renderCycleNutSettings(nut){
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border)">
       <div>
         <div style="font-size:12px;font-weight:700;color:#fff">Sensibilité PMS</div>
-        <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">+4% calories jours OFF en phase lutéale tardive</div>
+        <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${_calSeul?'Sans effet sur les macros sous contraception cyclique':'+4% calories jours OFF en phase lutéale tardive'}</div>
       </div>
       <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;margin-left:12px;cursor:pointer">
         <input type="checkbox" id="cycle-pms" ${pms?'checked':''} onchange="saveCycleNutSettings()" style="opacity:0;width:0;height:0;position:absolute">
@@ -18589,6 +18683,28 @@ function _renderCycleNutSettings(nut){
           <span style="position:absolute;top:3px;left:${pms?'23':'3'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s"></span>
         </span>
       </label>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:10px">
+      <!-- Aucun nom de produit, aucun dosage, aucune date de début : la seule
+           chose dont le calcul a besoin est de savoir si un calendrier veut
+           dire quelque chose. RepCore ne donne aucun conseil sur ce sujet. -->
+      <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:8px">Contraception</div>
+      <div style="display:flex;flex-direction:column;gap:7px">
+        ${CONTRACEPTIONS.map(c=>`<button onclick="saveCycleNutSettings('contraception','${c.cle}')"
+          style="text-align:left;padding:9px 11px;border-radius:8px;font-family:Montserrat,sans-serif;font-size:11.5px;font-weight:700;cursor:pointer;line-height:1.45;border:1.5px solid ${_contra===c.cle?'var(--red)':'#2a2a2a'};background:${_contra===c.cle?'rgba(224,32,32,.10)':'#111'};color:${_contra===c.cle?'#fff':'#666'}">${escapeHtml(c.lib)}</button>`).join('')}
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0 2px;margin-top:9px;border-top:1px solid var(--border)">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:#fff">Partager avec mon coach</div>
+          <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;line-height:1.5">Désactivé, cette réponse ne quitte pas ce téléphone — et un changement d'appareil la perd.</div>
+        </div>
+        <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;margin-left:12px;cursor:pointer">
+          <input type="checkbox" id="cycle-contra-partage" ${_partage?'checked':''} onchange="saveCycleNutSettings()" style="opacity:0;width:0;height:0;position:absolute">
+          <span style="position:absolute;inset:0;background:${_partage?'var(--red)':'#2a2a2a'};border-radius:12px;transition:.2s;pointer-events:none">
+            <span style="position:absolute;top:3px;left:${_partage?'23':'3'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s"></span>
+          </span>
+        </label>
+      </div>
     </div>
     <div style="border-top:1px solid var(--border);padding-top:10px">
       <!-- DEUX boutons et non un interrupteur : « off » ne saurait pas dire
@@ -18660,6 +18776,8 @@ function saveCycleNutSettings(field,value){
   const conf=currentUser.cycle;
   if(field==='intensite'){
     conf.intensiteRegles=value;
+  } else if(field==='contraception'){
+    conf.contraception=CONTRACEPTIONS.some(x=>x.cle===value)?value:undefined;
   } else if(field==='regulier'){
     // Recliquer le bouton déjà allumé retire la déclaration : on redevient
     // « pas déclaré », ce qu'aucun interrupteur ne savait exprimer.
@@ -18669,6 +18787,7 @@ function saveCycleNutSettings(field,value){
     const g=id=>document.getElementById(id);
     if(g('cycle-enabled')) conf.enabled=g('cycle-enabled').checked;
     if(g('cycle-pms')) conf.sensibilitePms=g('cycle-pms').checked;
+    if(g('cycle-contra-partage')) conf.contraceptionPartagee=g('cycle-contra-partage').checked;
     if(g('cycle-last-period')&&g('cycle-last-period').value) conf.lastPeriodDate=g('cycle-last-period').value;
     // Ne clamper qu'une valeur COMPLÈTE. Un champ vidé ne doit rien écrire :
     // le clamp le remplacerait par 20 sous les doigts de l'utilisatrice.
@@ -24329,6 +24448,11 @@ function _leveDeficitDate(user){
 // absences antérieures à une levée ne comptent plus : c'est ce qui permet au
 // blocage de revenir sur une NOUVELLE déclaration, et seulement sur elle.
 function absencesConsecutives(user,depuisISO){
+  // Sous contraception EN CONTINU, l'absence de règles est attendue : ce n'est
+  // pas un signal exploitable, et bloquer là-dessus enverrait chez le médecin
+  // pour quelque chose de normal. « Je préfère ne pas répondre » continue en
+  // revanche de compter : on ne sait pas, donc on garde le garde-fou.
+  if(contraceptionDe(user)==='continue') return 0;
   const c=(user&&user.cycle)||{};
   let l=(Array.isArray(c.absences)?c.absences:[])
     .filter(x=>typeof x==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(x));
@@ -24408,6 +24532,10 @@ function risqueDeficitEnergetique(user,jourISO){
     if(depuis) l=l.filter(x=>x>depuis);
     nMois=Array.from(new Set(l.map(x=>String(x).slice(0,7)))).length;
   }catch(e){}
+  // Sous contraception EN CONTINU, aucune des deux branches ne doit compter :
+  // absencesConsecutives rend déjà zéro, mais le repli des absences ESPACÉES
+  // lisait la liste directement et ajoutait son point malgré tout.
+  if(contraceptionDe(user)==='continue'){ nMois=0; }
   if(cons>=DEF_ABSENCES_BLOCAGE){
     points+=DEF_POINTS_ABSENCE;
     criteres.push({cle:'absences',lib:'Absence de règles',
@@ -30791,6 +30919,346 @@ function testExercices(){
           risqueDeficitEnergetique(u); paliersDeficit(u); plancherEffectif(u);
           return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
       } finally { currentUser=_dfU; _viderCacheVolume(); _viderCacheSignaux(); }
+    })();
+
+    // ══════ CONTRACEPTION : LE MODÈLE CALENDAIRE NE VAUT PAS POUR TOUTES ══════
+    // Sous contraception combinée en continu, il n'y a ni ovulation ni phase
+    // lutéale. Le produit réclamait pourtant une date de dernières règles à
+    // quelqu'un qui n'en a pas, puis lui projetait des phases.
+    (()=>{
+      const _cnU=currentUser;
+      const _j=n=>localISODate(new Date(Date.now()-n*864e5));
+      const AUJ=localISODate(new Date());
+      // Lutéale tardive : 24 jours sur un cycle de 28.
+      const _ath=(contra,extra)=>{
+        const c=Object.assign({enabled:true,lastPeriodDate:_j(24),cycleLength:28,
+          sensibilitePms:true},(extra&&extra.cycle)||{});
+        if(contra) c.contraception=contra;
+        return Object.assign({id:'ct',email:'ct@t',role:'athlete',gender:'Femme',
+          _evol_gender:'Femme',exAlias:{},exMuscles:{},programs:{},sessions:[],
+          bilans:[],weightLog:[],sleepLog:[],cycle:c,
+          nutrition:{dietType:'flexible',supplements:[],
+            macros:{on:{kcal:2000,p:150,g:200,l:60},off:{kcal:1800,p:150,g:150,l:60}}}},
+          (extra&&extra.u)||{});
+      };
+      try{
+        // ── La lecture du champ ──────────────────────────────────────────
+        ok('Les cinq valeurs sont celles annoncées',(()=>{
+          const att='aucune,non_hormonale,cyclique,continue,ne_dit_pas';
+          const v=CONTRACEPTIONS.map(x=>x.cle).join(',');
+          if(v!==att) return _echec(v);
+          return CONTRACEPTIONS.every(x=>x.lib&&x.lib.length>3)
+            ?true:_echec('un libellé manque');})());
+        ok('Critère : champ absent → traité comme « aucune », aucune régression',(()=>{
+          const sans=_ath(null);
+          delete sans.cycle.contraception;
+          if(contraceptionDe(sans)!=='aucune') return _echec(contraceptionDe(sans));
+          // Et la phase est EXACTEMENT celle du lot précédent.
+          if(phaseCycle(sans,AUJ)!=='luteal_late') return _echec(phaseCycle(sans,AUJ));
+          return contraceptionDe({})==='aucune'&&contraceptionDe(null)==='aucune'
+            ?true:_echec('le défaut ne tient pas sur un dossier vide');})());
+        ok('Une valeur inconnue retombe sur « aucune »',
+          contraceptionDe({cycle:{contraception:'zzz'}})==='aucune');
+        ok('« aucune » et « non_hormonale » gardent le comportement d\'avant',(()=>{
+          const rates=['aucune','non_hormonale'].filter(c=>
+            phaseCycle(_ath(c),AUJ)!=='luteal_late');
+          return rates.length?_echec(rates.join(', ')):true;})());
+
+        // ── « continue » et « ne_dit_pas » : plus de cycle du tout ────────
+        ok('Critère : « continue » → phaseCycle rend « sans_cycle »',
+          phaseCycle(_ath('continue'),AUJ)==='sans_cycle',
+          phaseCycle(_ath('continue'),AUJ));
+        ok('Critère : « ne_dit_pas » → même résultat',
+          phaseCycle(_ath('ne_dit_pas'),AUJ)==='sans_cycle');
+        ok('Critère : « continue » → aucun effet automatique nulle part',(()=>{
+          const sauve=currentUser;
+          const u=_ath('continue',{u:{currentCycle:'ignore'}});
+          currentUser=u;   // la garde isFemale de _getEffectiveMacros lit le dossier COURANT
+          try{
+          const rates=[];
+          // 1. les macros
+          const m=_getEffectiveMacros(u.nutrition,false,AUJ,u);
+          if(m.kcal!==1800||m.g!==150) rates.push('macros : '+JSON.stringify(m));
+          // 2. la charge et les séries
+          const f=getCycleFactor(u,AUJ);
+          if(f.factor!==1||f.seriesReduce!==0) rates.push('charge : '+JSON.stringify(f));
+          // 3. la suggestion de complément
+          if(suggestionCycleSupplements(u,AUJ)!==null) rates.push('une suggestion sort');
+          // 4. la pré-sélection du modal
+          if(_cycleOptionSuggeree(u,AUJ)!==null) rates.push('une option est pré-cochée');
+          return rates.length?_echec(rates.join(' | ')):true;
+          } finally { currentUser=sauve; }})());
+        ok('« sans_cycle » n\'est pas une phase agissante',
+          phaseAgissante('sans_cycle')===false);
+        ok('Cas limite : « continue » AVEC une date de règles → sans_cycle quand même',(()=>{
+          const u=_ath('continue');
+          if(!u.cycle.lastPeriodDate) return _echec('fixture muette');
+          if(phaseCycle(u,AUJ)!=='sans_cycle') return _echec(phaseCycle(u,AUJ));
+          // La date est CONSERVÉE, simplement inutilisée.
+          return confCycle(u).lastPeriodDate===_j(24)
+            ?true:_echec('la date a été effacée');})());
+        ok('« continue » sans cycle configuré du tout ne lève pas',(()=>{
+          try{
+            const u={cycle:{contraception:'continue'}};
+            return phaseCycle(u,AUJ)==='sans_cycle'?true:_echec(phaseCycle(u,AUJ));
+          }catch(e){ return _echec('exception : '+e.message); }})());
+        ok('Le message de « sans cycle » ne relance ni n\'insiste',(()=>{
+          if(!/pas de phases à suivre/.test(CYCLE_MSG_SANS_CYCLE)) return _echec('message absent');
+          if(!/comment tu te sens/.test(CYCLE_MSG_SANS_CYCLE)) return _echec('le repli ressenti manque');
+          // Aucune injonction, aucune relance, aucun conseil sur la contraception.
+          const n=CYCLE_MSG_SANS_CYCLE.toLowerCase();
+          const interdits=['tu devrais','il faudrait','pense à','change','arrête','consulte'];
+          const t=interdits.filter(x=>n.indexOf(x)>=0);
+          return t.length?_echec('injonction : '+t.join(', ')):true;})());
+
+        // ── « cyclique » : un calendrier, pas une physiologie ─────────────
+        ok('Critère : « cyclique » en fin de plaquette → macros INCHANGÉES',(()=>{
+          // _getEffectiveMacros garde sur isFemale(currentUser.gender) : sans
+          // dossier courant féminin, elle rend la base pour TOUT LE MONDE et le
+          // témoin ci-dessous ne prouvait rien.
+          const sauve=currentUser;
+          try{
+            const u=_ath('cyclique');
+            currentUser=u;
+            if(phaseCycle(u,AUJ)!=='luteal_late') return _echec('fixture muette : '+phaseCycle(u,AUJ));
+            // Le témoin : sans contraception, le +4 % s'applique bien.
+            const t=_ath('aucune');
+            currentUser=t;
+            const temoin=_getEffectiveMacros(t.nutrition,false,AUJ,t);
+            if(!(temoin.kcal>1800)) return _echec('fixture muette : le +4 % ne s\'applique pas');
+            currentUser=u;
+            const m=_getEffectiveMacros(u.nutrition,false,AUJ,u);
+            return m.kcal===1800&&m.g===150
+              ?true:_echec('macros ajustées : '+JSON.stringify(m));
+          } finally { currentUser=sauve; }})());
+        ok('Critère : mais le RESSENTI déclaré agit toujours sur la charge',(()=>{
+          const u=_ath('cyclique',{u:{currentCycle:'j1_difficile'}});
+          const f=getCycleFactor(u,AUJ);
+          return f.factor===0.80?true:_echec(JSON.stringify(f));})());
+        ok('« cyclique » ne suggère aucun complément',
+          suggestionCycleSupplements(_ath('cyclique'),AUJ)===null);
+        ok('Critère : « cyclique » dit « semaine d\'arrêt », jamais « phase menstruelle »',(()=>{
+          const sauve=currentUser;
+          try{
+            currentUser=_ath('cyclique',{cycle:{lastPeriodDate:_j(2)}});
+            if(phaseCycle(currentUser,AUJ)!=='menstrual')
+              return _echec('fixture muette : '+phaseCycle(currentUser,AUJ));
+            // On lit LE BANDEAU DE PHASE, par un repère qui lui appartient : le
+            // texte d'aide du réglage PMS parle lui aussi de « phase lutéale
+            // tardive », et balayer tout l'écran les confondait.
+            const bandeau=(html)=>{
+              const d=document.createElement('div'); d.innerHTML=html;
+              const e=d.querySelector('[data-phase-cycle]');
+              return e?(e.textContent||''):'';
+            };
+            const t1=bandeau(_renderCycleNutSettings(currentUser.nutrition));
+            if(!t1) return _echec('aucun bandeau de phase');
+            if(/[Pp]hase menstruelle/.test(t1)) return _echec('l\'ancien libellé est resté');
+            if(!/[Ss]emaine d'arrêt/.test(t1)) return _echec('le nouveau libellé manque : '+t1);
+            // Et en fin de plaquette.
+            currentUser=_ath('cyclique');
+            const t2=bandeau(_renderCycleNutSettings(currentUser.nutrition));
+            if(/lut[ée]ale tardive/.test(t2)) return _echec('« lutéale tardive » est resté : '+t2);
+            return /[Ff]in de plaquette/.test(t2)?true:_echec('« fin de plaquette » manque : '+t2);
+          } finally { currentUser=sauve; }})());
+        ok('Les VALEURS internes ne changent pas avec les libellés',(()=>{
+          const a=phaseCycle(_ath('cyclique'),AUJ);
+          const b=phaseCycle(_ath('aucune'),AUJ);
+          return a===b&&a==='luteal_late'?true:_echec(a+' / '+b);})());
+        ok('Cas limite : « cyclique » + phase périmée → « perime » l\'emporte',(()=>{
+          const u=_ath('cyclique',{cycle:{lastPeriodDate:_j(70)}});
+          return phaseCycle(u,AUJ)==='perime'?true:_echec(phaseCycle(u,AUJ));})());
+
+        // ── L'interaction avec le score de déficit énergétique ────────────
+        ok('Critère : sous « continue », deux absences ne comptent AUCUN point',(()=>{
+          const abs=['2026-06-15','2026-07-15'];
+          const sans=_ath('aucune',{cycle:{absences:abs}});
+          const cont=_ath('continue',{cycle:{absences:abs}});
+          // Témoin : sans contraception, elles bloquent bien.
+          if(paliersDeficit(sans)!=='blocage') return _echec('fixture muette : '+paliersDeficit(sans));
+          const r=risqueDeficitEnergetique(cont);
+          if(r.absencesConsecutives!==0) return _echec('suite '+r.absencesConsecutives);
+          const aAbs=r.criteres.some(c=>/absence/.test(c.cle));
+          if(aAbs) return _echec('un critère d\'absence est compté');
+          return paliersDeficit(cont)!=='blocage'
+            ?true:_echec('le blocage tient malgré la contraception continue');})());
+        ok('Sous « ne_dit_pas », en revanche, elles comptent toujours',(()=>{
+          // DÉCISION explicite : on ne sait pas, donc on garde le garde-fou.
+          // Une athlète sans contraception hormonale qui préfère ne pas répondre
+          // ne doit pas perdre sa protection.
+          const u=_ath('ne_dit_pas',{cycle:{absences:['2026-06-15','2026-07-15']}});
+          return paliersDeficit(u)==='blocage'
+            ?true:_echec(paliersDeficit(u));})());
+
+        // ── Le partage au coach ──────────────────────────────────────────
+        ok('Critère : sans partage, la réponse NE MONTE PAS',(()=>{
+          const u=_ath('continue');
+          const safe={...u};
+          CLOUD._retirerContraceptionSiNonPartagee(safe);
+          if(safe.cycle.contraception!==undefined)
+            return _echec('la réponse est partie : '+safe.cycle.contraception);
+          // ET la donnée LOCALE est intacte : safe est une copie plate, son
+          // .cycle est le MÊME objet — sans clone, le delete l'aurait effacée.
+          return u.cycle.contraception==='continue'
+            ?true:_echec('la donnée locale a été détruite');})());
+        ok('Avec le partage activé, elle monte',(()=>{
+          const u=_ath('continue',{cycle:{contraceptionPartagee:true}});
+          const safe={...u};
+          CLOUD._retirerContraceptionSiNonPartagee(safe);
+          return safe.cycle.contraception==='continue'
+            ?true:_echec('elle a été retirée malgré le partage');})());
+        ok('Le partage est ÉTEINT par défaut, à l\'écran aussi',(()=>{
+          // Ma première version lisait la FIXTURE, qui ne pose jamais le champ :
+          // elle ne pouvait pas voir un rendu qui cocherait la case d'office.
+          const sauve=currentUser;
+          try{
+            currentUser=_ath('continue');
+            const d=document.createElement('div');
+            d.innerHTML=_renderCycleNutSettings(currentUser.nutrition);
+            const c=d.querySelector('#cycle-contra-partage');
+            if(!c) return _echec('interrupteur absent');
+            if(c.checked) return _echec('coché par défaut');
+            // Et coché quand l'athlète l'a activé.
+            currentUser=_ath('continue',{cycle:{contraceptionPartagee:true}});
+            const d2=document.createElement('div');
+            d2.innerHTML=_renderCycleNutSettings(currentUser.nutrition);
+            return d2.querySelector('#cycle-contra-partage').checked
+              ?true:_echec('l\'activation ne se voit pas');
+          } finally { currentUser=sauve; }})());
+        ok('Le message « sans cycle » est bien RENDU, pas seulement défini',(()=>{
+          // Je vérifiais le contenu de la constante ; la retirer du rendu ne se
+          // voyait donc nulle part.
+          const sauve=currentUser;
+          try{
+            currentUser=_ath('continue');
+            const d=document.createElement('div');
+            d.innerHTML=_renderCycleNutSettings(currentUser.nutrition);
+            const t=d.textContent||'';
+            return /pas de phases à suivre/.test(t)
+              ?true:_echec('le message n\'apparaît pas à l\'écran');
+          } finally { currentUser=sauve; }})());
+        ok('Et il sort MÊME sans date de règles — c\'est tout l\'intérêt',(()=>{
+          // Une athlète sous contraception continue n'a aucune raison d'avoir
+          // renseigné une date. Toutes mes fixtures en portaient une.
+          const sauve=currentUser;
+          try{
+            const u=_ath('continue');
+            delete u.cycle.lastPeriodDate;
+            currentUser=u;
+            if(phaseCycle(u,AUJ)!=='sans_cycle') return _echec(phaseCycle(u,AUJ));
+            const d=document.createElement('div');
+            d.innerHTML=_renderCycleNutSettings(u.nutrition);
+            return /pas de phases à suivre/.test(d.textContent||'')
+              ?true:_echec('rien ne s\'affiche sans date');
+          } finally { currentUser=sauve; }})());
+        ok('Sous contraception cyclique, le réglage PMS ne promet plus de macros',(()=>{
+          // Ce texte annonçait « +4 % calories jours OFF en phase lutéale
+          // tardive » : sous contraception cyclique, cet ajustement ne
+          // s'applique plus, et la phrase devenait fausse.
+          const sauve=currentUser;
+          try{
+            currentUser=_ath('cyclique');
+            const d=document.createElement('div');
+            d.innerHTML=_renderCycleNutSettings(currentUser.nutrition);
+            const t=d.textContent||'';
+            if(/\+4% calories/.test(t)) return _echec('la promesse est restée');
+            if(!/[Ss]ans effet sur les macros/.test(t)) return _echec('rien ne le dit');
+            // Et sans contraception, la phrase d'origine tient.
+            currentUser=_ath('aucune');
+            const d2=document.createElement('div');
+            d2.innerHTML=_renderCycleNutSettings(currentUser.nutrition);
+            return /\+4% calories/.test(d2.textContent||'')
+              ?true:_echec('la phrase d\'origine a disparu');
+          } finally { currentUser=sauve; }})());
+        ok('Une valeur inconnue n\'est pas ÉCRITE dans le dossier',(()=>{
+          // contraceptionDe la filtre à la lecture, donc le comportement ne
+          // change pas — mais elle serait stockée puis synchronisée telle quelle.
+          const sauve=currentUser, _sv=window.saveUser, _rn=window._renderNutriContent;
+          try{
+            window.saveUser=()=>true; window._renderNutriContent=()=>{};
+            currentUser=_ath('cyclique');
+            saveCycleNutSettings('contraception','zzz');
+            if(currentUser.cycle.contraception!==undefined)
+              return _echec('valeur écrite : '+currentUser.cycle.contraception);
+            // Et une valeur valide, elle, s'écrit bien.
+            saveCycleNutSettings('contraception','continue');
+            return currentUser.cycle.contraception==='continue'
+              ?true:_echec('une valeur valide n\'a pas été écrite');
+          } finally {
+            currentUser=sauve; window.saveUser=_sv; window._renderNutriContent=_rn;
+          }})());
+        ok('Une synchronisation ne l\'efface pas quand elle n\'est pas partagée',(()=>{
+          const m={};
+          m['ct@t']=_ath('continue');
+          // Le dossier distant ne la porte pas, puisqu'elle n'est jamais montée.
+          CLOUD._mergeUser(m,'ct@t',{email:'ct@t',updatedAt:Date.now()+1000,
+            cycle:{enabled:true,lastPeriodDate:_j(24),cycleLength:28}});
+          return (m['ct@t'].cycle||{}).contraception==='continue'
+            ?true:_echec('la réponse a été écrasée par la synchro');})());
+        ok('Critère : aucun rendu coach ne montre la réponse sans partage',(()=>{
+          const c=_ath('continue');
+          let h='';
+          try{ h+=_htmlDeficitCoach(c); }catch(e){}
+          try{ h+=(risquesMicro(c)||[]).map(r=>r.lib+' '+r.motif+' '+r.question).join(' '); }catch(e){}
+          try{ h+=_htmlHydratationCoach(c); }catch(e){}
+          const libs=CONTRACEPTIONS.map(x=>x.lib);
+          const fuites=libs.filter(l=>h.indexOf(l)>=0);
+          if(fuites.length) return _echec('libellé visible : '+fuites.join(', '));
+          return h.indexOf('contraception')<0&&h.indexOf('Contraception')<0
+            ?true:_echec('le mot apparaît dans un rendu coach');})());
+
+        // ── Le registre : aucun conseil, aucune donnée de produit ─────────
+        ok('Aucun champ ne demande le produit, le dosage ou la date de début',(()=>{
+          const sauve=currentUser;
+          try{
+            currentUser=_ath('cyclique');
+            // Le TEXTE affiché, pas la source : mon propre commentaire dit
+            // « aucune date de début », et un balayage du HTML brut le prenait
+            // pour un champ demandant une date de début.
+            const d=document.createElement('div');
+            d.innerHTML=_renderCycleNutSettings(currentUser.nutrition);
+            const n=(d.textContent||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+            const interdits=['marque','posologie','dosage de','nom du produit',
+              'depuis quand','date de debut','mg par jour'];
+            const t=interdits.filter(x=>n.indexOf(x)>=0);
+            if(t.length) return _echec('champ interdit : '+t.join(', '));
+            // Et aucun conseil.
+            const conseils=['tu devrais changer','parles-en a ton medecin pour changer',
+              'mieux vaut arreter','nous recommandons'];
+            const c2=conseils.filter(x=>n.indexOf(x)>=0);
+            return c2.length?_echec('conseil : '+c2.join(', ')):true;
+          } finally { currentUser=sauve; }})());
+        ok('Le champ n\'est PAS dans le questionnaire de départ',(()=>{
+          const src=DEB_STEPS.map(f=>f.toString()).join('');
+          return src.indexOf('contraception')<0
+            ?true:_echec('il a été ajouté au bilan de départ');})());
+        ok('Les cinq choix sont proposés dans les réglages',(()=>{
+          const sauve=currentUser;
+          try{
+            currentUser=_ath('aucune');
+            const h=_renderCycleNutSettings(currentUser.nutrition);
+            const manque=CONTRACEPTIONS.filter(c=>
+              h.indexOf("saveCycleNutSettings('contraception','"+c.cle+"')")<0);
+            return manque.length?_echec('absents : '+manque.map(x=>x.cle).join(', ')):true;
+          } finally { currentUser=sauve; }})());
+        ok('contraceptionDe, cycleSansCycle et cycleCalendaireSeul sont PURES',(()=>{
+          const u=_ath('cyclique');
+          const avant=JSON.stringify(u);
+          contraceptionDe(u); cycleSansCycle(u); cycleCalendaireSeul(u); phaseCycle(u,AUJ);
+          return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
+        ok('Cas limite : passer à « continue » fait retomber les effets',(()=>{
+          const u=_ath('aucune',{u:{currentCycle:'ignore'}});
+          u.nutrition.supplements=[{id:1,name:'Oméga-3 (EPA/DHA)',active:true,_cycleManaged:true}];
+          const avantSupp=JSON.stringify(u.nutrition.supplements);
+          u.cycle.contraception='continue';
+          const f=getCycleFactor(u,AUJ);
+          const m=_getEffectiveMacros(u.nutrition,false,AUJ,u);
+          if(f.factor!==1||f.seriesReduce!==0) return _echec('charge : '+JSON.stringify(f));
+          if(m.kcal!==1800) return _echec('macros : '+m.kcal);
+          // L'entrée qu'elle avait ACCEPTÉE reste : elle lui appartient.
+          return JSON.stringify(u.nutrition.supplements)===avantSupp
+            ?true:_echec('le complément a été touché');})());
+      } finally { currentUser=_cnU; }
     })();
 
     // ══════ PROFIL COACH VISIBLE PAR SES ATHLÈTES ══════
