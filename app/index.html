@@ -6739,9 +6739,12 @@ function renderCoachMicroSection(c){
   // Le jour ON se lit sur le planning de L'ATHLETE, pas sur celui du coach :
   // nutIsOnDay lit currentUser, qui est le coach sur cet ecran.
   const hydra=_htmlHydratationCoach(c);
-  if(!l.length&&!morpho&&!hydra&&!def){ el.innerHTML=''; el.style.display='none'; return; }
+  // Restitution, comme l'hydratation : elle s'affiche sans qu'aucun seuil ne
+  // soit franchi, et n'entre dans aucun score d'urgence.
+  let recup=''; try{ recup=_htmlRecuperationCoach(c); }catch(e){}
+  if(!l.length&&!morpho&&!hydra&&!def&&!recup){ el.innerHTML=''; el.style.display='none'; return; }
   el.style.display='block';
-  if(!l.length){ el.innerHTML=def+morpho+hydra; return; }
+  if(!l.length){ el.innerHTML=def+recup+morpho+hydra; return; }
   el.innerHTML=def+`<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:5px">À demander en séance</div>
     <div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-bottom:12px">Rien n'est détecté ici : ce sont des questions que le profil rend pertinentes.</div>
@@ -6751,7 +6754,7 @@ function renderCoachMicroSection(c){
       <div style="font-size:12.5px;color:#fff;line-height:1.6;margin-top:5px;font-weight:600">${escapeHtml(r.question)}</div>
     </div>`).join('')}
     <div style="font-size:11px;color:var(--text-dim);line-height:1.55;border-top:1px solid var(--border);padding-top:10px">${escapeHtml(MICRO_DISCLAIMER)}</div>
-  </div>`+morpho+hydra;
+  </div>`+recup+morpho+hydra;
 }
 // Meme rendu que cote athlete, mais le jour ON est celui de l'ATHLETE : sur la
 // fiche coach, nutIsOnDay lirait le planning du coach et annoncerait un repere
@@ -19442,6 +19445,7 @@ function _renderNutriContent(type){
       ${_htmlDepartAthlete(nut)}
       ${_htmlPlancherAthlete(currentUser)}
       ${_htmlPalierAthlete(currentUser)}
+      ${_htmlRecuperationAthlete(currentUser)}
       ${_htmlAjustement(currentUser,false)}
       ${_renderStrictMacroRings(nut)}
       ${_renderCycleNutSettings(nut)}`;
@@ -24878,6 +24882,153 @@ function _htmlPalierAthlete(user){
   </div>`;
 }
 
+// ══════════ RÉCUPÉRATION : AGRÉGER L'EXISTANT, N'ALERTER DE RIEN ══════════
+// Quatre données de récupération étaient collectées et exploitées SÉPARÉMENT.
+// Ce score les rassemble pour UNE conversation avec le coach, et pour
+// alimenter une suggestion de décharge qui, elle, exigera deux motifs
+// distincts. Il ne déclenche RIEN à lui seul.
+//
+// AUCUNE notification, aucun score montré à l'athlète, aucune couleur
+// d'alerte, aucun second système parallèle. Et aucun vocabulaire de
+// physiologie hormonale ou de surmenage : on décrit ce qui a été saisi.
+//
+// LE VOLUME N'EST PAS RECALCULÉ. signauxEntrainement porte déjà volumeHaut,
+// mis en cache et restitué au coach. En écrire un second calcul, c'est
+// s'exposer à ce que les deux se contredisent un jour.
+//
+// Le critère de FORME, lui, reste distinct de signauxEntrainement.formeBasse,
+// et c'est délibéré : formeBasse compare la MOYENNE des trois dernières à la
+// base, ce critère-ci exige que les trois soient individuellement en creux ou
+// en dessous. Une bonne séance entre deux mauvaises fait tomber le second
+// sans faire tomber le premier. Deux questions différentes, deux réponses.
+const RECUP_SEANCES_FORME=3;
+const RECUP_MUSCLES_MRV=2;
+const RECUP_SEUIL_SUGGESTION=2;   // motif pour la décharge (lot A1-05)
+const RECUP_SEUIL_MESSAGE=3;      // phrase à l'athlète
+// Le sommeil réutilise MICRO_SOMMEIL_SEUIL et MICRO_SOMMEIL_MIN_NUITS via
+// _microSommeil : aucune constante nouvelle, aucun second calcul. Deux
+// constantes de même valeur finissent par diverger — DEF_SOMMEIL_SEUIL a
+// été aliasé pour cette raison exacte.
+//
+// PURE. Un point par critère, chacun isolé dans son try/catch : un critère
+// qui jette compte 0 et les autres restent lisibles. Un dossier vide rend
+// {points:0, criteres:[]} sans lever quoi que ce soit.
+function scoreRecuperation(user){
+  const criteres=[];
+  const u=user||{};
+  const essai=(cle,fn)=>{ try{ const v=fn(); if(v) criteres.push(Object.assign({cle},v)); }catch(e){} };
+
+  // (a) Les trois dernières séances TOUTES en creux ou en dessous.
+  essai('forme',()=>{
+    // Curseurs jamais bougés : l'indice ne mesure rien, et le produit le sait
+    // déjà. On ne compte pas un critère sur une donnée qu'on sait muette.
+    if(formeFigee(u)) return null;
+    const t=_serieForme(u);
+    if(t.length<RECUP_SEANCES_FORME) return null;
+    const der=t.slice(-RECUP_SEANCES_FORME);
+    for(const x of der){
+      const e=etatForme(zForme({id:x.id,metrics:x.metrics},u));
+      if(e!=='creux'&&e!=='bas') return null;
+    }
+    return {lib:'Forme en creux',valeur:RECUP_SEANCES_FORME+' séances'};
+  });
+
+  // (b) Le sommeil, par _microSommeil et pas autrement.
+  essai('sommeil',()=>{
+    const s=_microSommeil(u);
+    if(!s||!(s.moyenne<MICRO_SOMMEIL_SEUIL)) return null;
+    return {lib:'Sommeil court',
+      valeur:_recupHeures(s.moyenne)+' sur '+s.nuits+' nuits'};
+  });
+
+  // (c) Le stress DÉCLARÉ au dernier bilan de suivi. Il était affiché au
+  // coach et lu par aucun calcul.
+  essai('stress',()=>{
+    const b=((u.bilans)||[]).filter(x=>x&&x.type!=='depart'&&x.date)
+      .sort((a,b2)=>a.date-b2.date);
+    if(!b.length) return null;
+    const v=_texteReponse(b[b.length-1]['bil-stress']);
+    if(!v) return null;
+    const n=_microNorm(v);
+    if(!/^(beaucoup|enormement)$/.test(n)) return null;
+    return {lib:'Stress déclaré élevé',valeur:v};
+  });
+
+  // (d) Le volume sur la dernière semaine révolue.
+  //
+  // J'AI D'ABORD GARDÉ CE CRITÈRE derrière signauxEntrainement.volumeHaut,
+  // en me disant que réutiliser valait mieux que recalculer. C'était faux, et
+  // c'est le reproche exact que je fais à formeBasse deux paragraphes plus
+  // haut : volumeHaut répond à « UN muscle est-il au-dessus du repère DEUX
+  // semaines de suite », ce critère-ci à « COMBIEN de muscles le sont cette
+  // semaine ». Deux questions différentes. M'appuyer sur l'une pour répondre
+  // à l'autre durcissait le critère en silence, d'une semaine à deux.
+  //
+  // _recupMusclesHauts est donc l'UNIQUE endroit où ce score compare un
+  // volume à un MRV, et il ne double aucun calcul existant.
+  essai('volume',()=>{
+    const n=_recupMusclesHauts(u);
+    if(n<RECUP_MUSCLES_MRV) return null;
+    return {lib:'Volume au-dessus du repère',valeur:n+' muscles'};
+  });
+
+  return {points:criteres.length,criteres:criteres};
+}
+// « 5 h 20 » plutôt que « 5,3 h » : c'est ainsi qu'on parle d'une nuit.
+function _recupHeures(h){
+  const t=Math.round(h*60);
+  return Math.floor(t/60)+' h '+String(t%60).padStart(2,'0');
+}
+// Compte les muscles au-dessus de leur MRV sur la dernière semaine RÉVOLUE.
+// Le signal volumeHaut de signauxEntrainement exige DEUX semaines
+// consécutives et n'en NOMME qu'un seul ; ici on a besoin du compte. Même
+// fenêtre que lui — _semainesRevolues — pour que les deux parlent du même
+// intervalle : une semaine en cours, incomplète, sous-compterait toujours.
+function _recupMusclesHauts(user){
+  let n=0;
+  const [s1]=_semainesRevolues(2);
+  const v=volumeSemaine(user,s1)||{};
+  for(const m in v){
+    const rep=reperesEffectifs(user,m);
+    if(rep&&v[m]>rep.mrv) n++;
+  }
+  return n;
+}
+// ── Le branchement de la décharge, prêt et NON câblé ─────────────────────
+// dechargeSuggeree est annoncée par le lot A1-05, qui n'est pas livré :
+// grep en rend zéro occurrence. La condition est isolée ici pour s'y brancher
+// sans toucher au reste le jour venu. Même patron que la condition aPES de
+// relanceAnalyses, qui a attendu son lot au même endroit.
+//
+// Le score compte pour UN motif, jamais deux : il ne doit pas court-circuiter
+// l'exigence de deux signaux concordants. Un score seul ne décharge personne.
+function motifRecuperation(user){
+  try{ return scoreRecuperation(user).points>=RECUP_SEUIL_SUGGESTION
+    ?{cle:'recuperation',lib:'Récupération'}:null; }catch(e){ return null; }
+}
+// ── Restitution coach : les critères REMPLIS, sans score ni couleur ──────
+function _htmlRecuperationCoach(c){
+  const r=scoreRecuperation(c);
+  if(!r.points) return '';
+  const ligne=r.criteres.map(x=>x.lib.toLowerCase()+' ('+x.valeur+')').join(' · ');
+  return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:5px">Récupération</div>
+    <div style="font-size:12px;color:#ddd;line-height:1.7">${escapeHtml(ligne)}.</div>
+    <div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-top:8px">Ce qui va dans le même sens en ce moment, d'après ce qu'elle ou il a saisi. Aucun seuil n'est franchi : c'est une conversation à avoir.</div>
+  </div>`;
+}
+// ── Restitution athlète : UNE phrase, à partir du seuil ──────────────────
+// Aucune étiquette, aucun score, aucune couleur. Le chiffre reste dedans.
+const RECUP_PHRASE_ATHLETE='Ton sommeil, ton ressenti et ton volume vont dans '
+  +'le même sens en ce moment. Ça vaut le coup d\'en parler à ton coach.';
+function _htmlRecuperationAthlete(user){
+  let r;
+  try{ r=scoreRecuperation(user); }catch(e){ return ''; }
+  if(r.points<RECUP_SEUIL_MESSAGE) return '';
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:18px">
+    <div style="font-size:12px;color:#ddd;line-height:1.7">${escapeHtml(RECUP_PHRASE_ATHLETE)}</div>
+  </div>`;
+}
 function controlerMacros(macros,user){
   const out=[];
   if(!macros||typeof macros!=='object') return out;
@@ -34752,6 +34903,326 @@ function testExercices(){
           return /coach/.test(TRAITEMENT_MENTION)
             ?true:_echec('elle ne dit pas qui le lit');})());
       } finally { currentUser=_trU; }
+    })();
+
+    // ══════ RÉCUPÉRATION : AGRÉGER L'EXISTANT, N'ALERTER DE RIEN ══════
+    (()=>{
+      const _rcU=currentUser;
+      const _rj=n=>localISODate(new Date(Date.now()-n*864e5));
+      // Séances portant un indice de forme. base = la note des séances de
+      // BASE, der = celle des dernières, ce qui pilote le z.
+      const _seances=(base,der,nDer)=>{
+        const out=[];
+        const n=10;
+        for(let i=0;i<n;i++){
+          const v=(i>=n-(nDer||0))?der:base;
+          out.push({id:'s'+i,date:Date.now()-(n-i)*864e5,data:{},
+            metrics:{fatigue:String(10-v),motivation:String(v),sensation:String(v)}});
+        }
+        return out;
+      };
+      const _ath=(o)=>{
+        const c=o||{};
+        const u={id:'rc'+(c.id||''),email:'rc'+(c.id||'')+'@t',role:'athlete',
+          gender:'Homme',_evol_gender:'Homme',_evol_height:178,
+          exAlias:{},exMuscles:{},programs:{},weightLog:[],
+          sessions_config:[{day:'J0',name:'S0',active:true,exercises:[]}],
+          bilans:[],sleepLog:[],sessions:[]};
+        if(c.forme) u.sessions=_seances(c.forme.base,c.forme.der,c.forme.n);
+        if(c.sessions) u.sessions=c.sessions;
+        if(c.nuits){
+          for(let i=0;i<c.nuits.n;i++)
+            u.sleepLog.push({date:_rj(i),duration:c.nuits.h});
+        }
+        if(c.stress) u.bilans.push({type:'coaching',date:Date.now()-3*864e5,
+          'bil-stress':c.stress});
+        if(c.extra) Object.assign(u,c.extra);
+        return u;
+      };
+      // Volume : des séries dures sur la semaine RÉVOLUE, au-dessus du MRV.
+      // Le calcul résout les muscles par le NOM de l'exercice ; user.exMuscles
+      // fait foi et court-circuite le guide. C'est le chemin qu'empruntent
+      // déjà les fixtures de volume existantes.
+      const _volume=(muscles)=>{
+        // _semainesRevolues rend des clés « 2026-W31 », pas des dates : les
+        // découper sur le tiret donnait NaN et une séance hors de toute
+        // semaine. _lundiDeSemaine est le convertisseur du produit.
+        const [s1]=_semainesRevolues(2);
+        const lundi=_lundiDeSemaine(s1);
+        const t=new Date(lundi.getFullYear(),lundi.getMonth(),lundi.getDate()+1).getTime();
+        const data={}, exM={};
+        muscles.forEach(mu=>{
+          const nom='EXO '+mu;
+          const rep=REPERES_VOLUME[mu];
+          const sets=[];
+          // reps en CHAÎNE : isCardio fait ex.reps.toLowerCase(), et un
+          // nombre y jetait, ce qui tronquait toute la suite.
+          // done:true est EXIGE par serieEligible — une serie non realisee
+          // ne compte nulle part, et c'est pourquoi la fixture rendait zero.
+          for(let i=0;i<rep.mrv+4;i++) sets.push({reps:'8',weight:50,rir:0,done:true});
+          data[nom]={sets:sets};
+          exM[exKey(nom)]={p:[mu],s:[],src:'m'};
+        });
+        return {sess:[{id:'v1',date:t,data:data}],exMuscles:exM};
+      };
+      try {
+        // ── Le dossier vide ne lève rien ─────────────────────────────────
+        ok('Dossier vide → {points:0, criteres:[]}, aucune exception',(()=>{
+          for(const u of [{},null,undefined,{sessions:null},{bilans:'x'}]){
+            let r;
+            try{ r=scoreRecuperation(u); }catch(e){ return _echec('exception : '+e.message); }
+            if(!r||r.points!==0) return _echec('points : '+(r&&r.points));
+            if(!Array.isArray(r.criteres)||r.criteres.length)
+              return _echec('criteres : '+JSON.stringify(r&&r.criteres));
+          }
+          return true;})());
+        ok('scoreRecuperation est PURE',(()=>{
+          const u=_ath({id:'a1',forme:{base:8,der:2,n:3},nuits:{n:14,h:5.3},
+            stress:'Énormément'});
+          const avant=JSON.stringify(u);
+          scoreRecuperation(u); _htmlRecuperationCoach(u); _htmlRecuperationAthlete(u);
+          return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
+
+        // ── Le cas à quatre points ───────────────────────────────────────
+        ok('Forme + sommeil + stress + volume → points === 4',(()=>{
+          const v=_volume(['PECTORAUX','DORSAUX']);
+          const u=_ath({id:'a2',nuits:{n:14,h:5.3},stress:'Énormément'});
+          // Les séances de forme ET la séance de volume dans le même dossier.
+          u.sessions=_seances(8,2,3).concat(v.sess);
+          u.exMuscles=v.exMuscles;
+          if(_recupMusclesHauts(u)<RECUP_MUSCLES_MRV)
+            return _echec('fixture muette : '+_recupMusclesHauts(u)+' muscles hauts');
+          const r=scoreRecuperation(u);
+          const cles=r.criteres.map(x=>x.cle).sort().join(',');
+          if(r.points!==4) return _echec('points '+r.points+' — '+cles);
+          return cles==='forme,sommeil,stress,volume'?true:_echec(cles);})());
+
+        // ── Chaque critère, isolément ────────────────────────────────────
+        ok('formeFigee : le critère de forme ne compte pas',(()=>{
+          // Curseurs jamais bougés : l'indice ne mesure rien.
+          const u=_ath({id:'b1',forme:{base:5,der:5,n:3}});
+          if(!formeFigee(u)) return _echec('fixture muette : l\'indice n\'est pas figé');
+          return scoreRecuperation(u).points===0
+            ?true:_echec(JSON.stringify(scoreRecuperation(u)));})());
+        ok('Moins de 3 séances : le critère de forme ne compte pas',(()=>{
+          const u=_ath({id:'b2'});
+          u.sessions=[{id:'s0',date:Date.now()-864e5,data:{},
+            metrics:{fatigue:'8',motivation:'2',sensation:'2'}}];
+          return scoreRecuperation(u).points===0
+            ?true:_echec(JSON.stringify(scoreRecuperation(u)));})());
+        ok('Le critère de forme ne se lève qu\'à partir de 7 séances',(()=>{
+          // MESURÉ, pas supposé. Mes deux gardes — formeFigee et
+          // t.length<RECUP_SEANCES_FORME — sont en réalité INATTEIGNABLES :
+          // zForme rend déjà null quand l'indice est figé, et exige 6 séances
+          // de BASE, la séance jugée étant exclue de la sienne. Le premier
+          // point de forme possible est donc à SEPT séances, pas à trois.
+          //
+          // Deux variantes régressées sont passées au vert pour cette raison,
+          // et non parce qu'un test manquait. Les gardes restent — elles
+          // disent l'intention et protègent si zForme change — mais c'est ce
+          // seuil-ci, le vrai, qui est désormais épinglé.
+          for(const n of [3,4,5,6]){
+            const u=_ath({id:'j'+n,forme:{base:8,der:2,n:3}});
+            u.sessions=u.sessions.slice(-n);
+            if(scoreRecuperation(u).criteres.some(x=>x.cle==='forme'))
+              return _echec('le critère se lève à '+n+' séances');
+          }
+          const sept=_ath({id:'j7',forme:{base:8,der:2,n:3}});
+          sept.sessions=sept.sessions.slice(-7);
+          return scoreRecuperation(sept).criteres.some(x=>x.cle==='forme')
+            ?true:_echec('le critère ne se lève pas à 7 séances');})());
+        ok('Une seule bonne séance sur trois annule le critère',(()=>{
+          // Ce qui le distingue de signauxEntrainement.formeBasse, qui compare
+          // une MOYENNE : une bonne séance entre deux mauvaises ne le fait pas
+          // tomber, lui.
+          const trois=_ath({id:'b3',forme:{base:8,der:2,n:3}});
+          if(!scoreRecuperation(trois).criteres.some(x=>x.cle==='forme'))
+            return _echec('fixture muette : le critère ne se lève pas');
+          const u=_ath({id:'b4',forme:{base:8,der:2,n:3}});
+          // La séance du MILIEU des trois redevient bonne.
+          const i=u.sessions.length-2;
+          u.sessions[i].metrics={fatigue:'2',motivation:'8',sensation:'8'};
+          return !scoreRecuperation(u).criteres.some(x=>x.cle==='forme')
+            ?true:_echec('le critère tient malgré une bonne séance');})());
+        ok('6 nuits à 5 h : le critère sommeil ne compte pas',(()=>{
+          const six=_ath({id:'c1',nuits:{n:MICRO_SOMMEIL_MIN_NUITS-1,h:5}});
+          if(scoreRecuperation(six).criteres.some(x=>x.cle==='sommeil'))
+            return _echec('il compte à '+(MICRO_SOMMEIL_MIN_NUITS-1)+' nuits');
+          const sept=_ath({id:'c2',nuits:{n:MICRO_SOMMEIL_MIN_NUITS,h:5}});
+          return scoreRecuperation(sept).criteres.some(x=>x.cle==='sommeil')
+            ?true:_echec('il ne compte pas à '+MICRO_SOMMEIL_MIN_NUITS+' nuits');})());
+        ok('Sommeil au-dessus du seuil : le critère ne compte pas',(()=>{
+          const u=_ath({id:'c3',nuits:{n:14,h:MICRO_SOMMEIL_SEUIL+0.5}});
+          return !scoreRecuperation(u).criteres.some(x=>x.cle==='sommeil')
+            ?true:_echec('il compte au-dessus du seuil');})());
+        ok('Le seuil de sommeil est CELUI de MICRO_SOMMEIL, pas un doublon',(()=>{
+          // Deux constantes de même valeur finissent par diverger.
+          const src=String(scoreRecuperation)+String(_recupMusclesHauts);
+          if(/RECUP_SOMMEIL|SOMMEIL_HEURES|=\s*6\b/.test(src))
+            return _echec('une constante de sommeil a été recréée');
+          return /MICRO_SOMMEIL_SEUIL/.test(src)
+            ?true:_echec('MICRO_SOMMEIL_SEUIL n\'est plus lu');})());
+        ok('bil-stress « Un peu » : le critère ne compte pas',(()=>{
+          for(const v of ['Pas du tout','Un peu']){
+            const u=_ath({id:'d'+v.length,stress:v});
+            if(scoreRecuperation(u).criteres.some(x=>x.cle==='stress'))
+              return _echec('« '+v+' » compte');
+          }
+          for(const v of ['Beaucoup','Énormément']){
+            const u=_ath({id:'e'+v.length,stress:v});
+            if(!scoreRecuperation(u).criteres.some(x=>x.cle==='stress'))
+              return _echec('« '+v+' » ne compte pas');
+          }
+          return true;})());
+        ok('Aucun bilan de suivi : le critère de stress ne compte pas',(()=>{
+          const u=_ath({id:'d1'});
+          if(scoreRecuperation(u).criteres.some(x=>x.cle==='stress'))
+            return _echec('il compte sans bilan');
+          // Un bilan de DÉPART n'est pas un bilan de suivi.
+          const v=_ath({id:'d2'});
+          v.bilans=[{type:'depart',date:Date.now()-90*864e5,'bil-stress':'Énormément'}];
+          return !scoreRecuperation(v).criteres.some(x=>x.cle==='stress')
+            ?true:_echec('le bilan de départ a compté');})());
+        ok('Le stress lu est celui du DERNIER bilan de suivi',(()=>{
+          const u=_ath({id:'d3'});
+          u.bilans=[{type:'coaching',date:Date.now()-30*864e5,'bil-stress':'Énormément'},
+                    {type:'coaching',date:Date.now()-2*864e5,'bil-stress':'Un peu'}];
+          return !scoreRecuperation(u).criteres.some(x=>x.cle==='stress')
+            ?true:_echec('un ancien bilan a été lu');})());
+        ok('Un seul muscle au-dessus du MRV ne suffit pas',(()=>{
+          const un=_volume(['PECTORAUX']);
+          const u=_ath({id:'f1'}); u.sessions=un.sess; u.exMuscles=un.exMuscles;
+          _viderCacheSignaux();
+          if(_recupMusclesHauts(u)!==1) return _echec('fixture : '+_recupMusclesHauts(u));
+          if(scoreRecuperation(u).criteres.some(x=>x.cle==='volume'))
+            return _echec('un seul muscle a suffi');
+          const deux=_volume(['PECTORAUX','DORSAUX']);
+          const v=_ath({id:'f2'}); v.sessions=deux.sess; v.exMuscles=deux.exMuscles;
+          _viderCacheSignaux();
+          if(_recupMusclesHauts(v)<RECUP_MUSCLES_MRV)
+            return _echec('fixture muette : '+_recupMusclesHauts(v)+' muscles');
+          return true;})());
+        ok('Un SEUL endroit compare un volume à un MRV dans ce score',(()=>{
+          // J'avais écrit l'inverse : ce test exigeait que scoreRecuperation
+          // passe par signauxEntrainement. Ça durcissait le critère d'une
+          // semaine à deux sans que rien ne le dise. Ce qu'il faut garantir
+          // n'est pas la réutilisation, c'est l'UNICITÉ : une seule fonction
+          // du score compare un volume à un repère.
+          if(/\.mrv/.test(String(scoreRecuperation)))
+            return _echec('scoreRecuperation compare un MRV lui-même');
+          if(!/\.mrv/.test(String(_recupMusclesHauts)))
+            return _echec('_recupMusclesHauts ne compare plus rien');
+          // Et la fenêtre est bien UNE semaine révolue, pas deux.
+          return /_semainesRevolues/.test(String(_recupMusclesHauts))
+            ?true:_echec('la fenêtre du volume a changé');})());
+
+        // ── La restitution ───────────────────────────────────────────────
+        ok('Coach : les critères REMPLIS, avec leurs valeurs',(()=>{
+          const u=_ath({id:'g1',nuits:{n:14,h:5.3},stress:'Énormément'});
+          u.sessions=_seances(8,2,3);
+          const h=_htmlRecuperationCoach(u);
+          if(!h) return _echec('aucun encart');
+          const d=document.createElement('div'); d.innerHTML=h;
+          const t=d.textContent||'';
+          if(!/Récupération/.test(t)) return _echec('titre absent');
+          if(!/5 h 18|5 h 1\d/.test(t)) return _echec('la valeur de sommeil manque : '+t);
+          if(!/3 séances/.test(t)) return _echec('la valeur de forme manque');
+          if(!/Énormément/.test(t)) return _echec('la valeur de stress manque');
+          // AUCUN score chiffré, aucune couleur d'alerte.
+          if(/\b3\s*\/\s*4|\bscore\b|\b3 points?\b/i.test(t))
+            return _echec('un score est affiché : '+t);
+          return !/var\(--red\)|var\(--orange\)|#e0202|warning/i.test(h)
+            ?true:_echec('une couleur d\'alerte est utilisée');})());
+        ok('Coach : aucun encart quand rien n\'est rempli',(()=>{
+          return _htmlRecuperationCoach(_ath({id:'g2'}))===''
+            ?true:_echec('l\'encart sort à vide');})());
+        ok('Athlète : la phrase à 3 points, ABSENTE à 2',(()=>{
+          const deux=_ath({id:'h1',nuits:{n:14,h:5.3},stress:'Énormément'});
+          if(scoreRecuperation(deux).points!==2)
+            return _echec('fixture : '+scoreRecuperation(deux).points+' points');
+          if(_htmlRecuperationAthlete(deux)!=='')
+            return _echec('la phrase sort à 2 points');
+          const trois=_ath({id:'h2',nuits:{n:14,h:5.3},stress:'Énormément'});
+          trois.sessions=_seances(8,2,3);
+          if(scoreRecuperation(trois).points!==3)
+            return _echec('fixture : '+scoreRecuperation(trois).points+' points');
+          const h=_htmlRecuperationAthlete(trois);
+          if(!h) return _echec('la phrase manque à 3 points');
+          const d=document.createElement('div'); d.innerHTML=h;
+          return (d.textContent||'').indexOf('en parler à ton coach')>=0
+            ?true:_echec('phrase : '+d.textContent);})());
+        ok('Athlète : AUCUN chiffre, aucune étiquette, aucune couleur',(()=>{
+          const u=_ath({id:'h3',nuits:{n:14,h:5.3},stress:'Énormément'});
+          u.sessions=_seances(8,2,3);
+          const h=_htmlRecuperationAthlete(u);
+          const d=document.createElement('div'); d.innerHTML=h;
+          const t=d.textContent||'';
+          if(/\d/.test(t)) return _echec('un chiffre : '+t);
+          if(/var\(--red\)|var\(--orange\)|warning/i.test(h))
+            return _echec('une couleur d\'alerte');
+          return t.trim()===RECUP_PHRASE_ATHLETE
+            ?true:_echec('texte inattendu : '+t);})());
+
+        // ── Le motif de décharge, préparé et NON câblé ───────────────────
+        ok('Le score compte pour UN motif, jamais deux',(()=>{
+          const deux=_ath({id:'i1',nuits:{n:14,h:5.3},stress:'Énormément'});
+          if(scoreRecuperation(deux).points!==RECUP_SEUIL_SUGGESTION)
+            return _echec('fixture : '+scoreRecuperation(deux).points);
+          const m=motifRecuperation(deux);
+          if(!m) return _echec('aucun motif au seuil');
+          if(Array.isArray(m)) return _echec('le motif est une LISTE : '+m.length);
+          if(m.cle!=='recuperation') return _echec('clé : '+m.cle);
+          // Sous le seuil, aucun motif.
+          const un=_ath({id:'i2',stress:'Énormément'});
+          if(scoreRecuperation(un).points!==1)
+            return _echec('fixture : '+scoreRecuperation(un).points);
+          return motifRecuperation(un)===null
+            ?true:_echec('un motif sous le seuil');})());
+        ok('dechargeSuggeree n\'existe pas : le lot A1-05 n\'est pas livré',(()=>{
+          // Le point de branchement est PRÊT et non câblé, comme la condition
+          // aPES de relanceAnalyses l'a été avant son lot. Ce test tombera le
+          // jour où A1-05 arrivera, et c'est exactement ce qu'on veut : il
+          // rappellera qu'il y a une ligne à brancher.
+          if(typeof dechargeSuggeree==='function')
+            return _echec('A1-05 est arrivé : brancher motifRecuperation dedans');
+          return typeof motifRecuperation==='function'
+            ?true:_echec('le point de branchement a disparu');})());
+
+        // ── Ce que le lot NE fait PAS ────────────────────────────────────
+        ok('Aucun vocabulaire de surmenage dans la PRODUCTION',(()=>{
+          // Aiguilles assemblées à l'exécution : sans ça, ce test se trouve
+          // lui-même — piège rencontré trois fois. Et production SEULE : le
+          // module d'analyses laisse consigner un cortisol, ce qui est
+          // légitime, et un test l'exerce.
+          const aiguilles=['corti'+'sol','surentra'+'inement','over'+'training',
+            'over'+'reaching','burn'+'out'];
+          const tout=document.documentElement.outerHTML;
+          const fin=tout.indexOf('function testExercices');
+          if(fin<0) return _echec('frontière de la suite introuvable');
+          const prod=tout.slice(0,fin)
+            .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+          if(prod.length<100000) return _echec('production trop courte');
+          const t=aiguilles.filter(m=>prod.indexOf(m)>=0);
+          return t.length?_echec('trouvés : '+t.join(', ')):true;})());
+        ok('Ce lot ne planifie AUCUNE notification',(()=>{
+          const src=String(scoreRecuperation)+String(_htmlRecuperationCoach)
+            +String(_htmlRecuperationAthlete)+String(motifRecuperation)
+            +String(_recupMusclesHauts);
+          return !/showNotification|scheduleNotif|Notification|periodicsync|registration\./i.test(src)
+            ?true:_echec('une notification est planifiée');})());
+        ok('Aucun seuil de sommeil ni de forme n\'a été recréé',(()=>{
+          if(RECUP_SEANCES_FORME!==3) return _echec('séances : '+RECUP_SEANCES_FORME);
+          if(RECUP_MUSCLES_MRV!==2) return _echec('muscles : '+RECUP_MUSCLES_MRV);
+          if(RECUP_SEUIL_SUGGESTION!==2) return _echec('suggestion : '+RECUP_SEUIL_SUGGESTION);
+          if(RECUP_SEUIL_MESSAGE!==3) return _echec('message : '+RECUP_SEUIL_MESSAGE);
+          return MICRO_SOMMEIL_SEUIL===6&&MICRO_SOMMEIL_MIN_NUITS===7
+            ?true:_echec('les constantes de sommeil ont bougé');})());
+        ok('sleepColor et l\'affichage hebdo ne sont pas touchés',(()=>{
+          if(typeof sleepColor!=='function') return _echec('sleepColor a disparu');
+          const src=String(sleepColor);
+          return !/scoreRecuperation|RECUP_/.test(src)
+            ?true:_echec('sleepColor a été modifié');})());
+      } finally { currentUser=_rcU; }
     })();
 
     // ══════ PROFIL COACH VISIBLE PAR SES ATHLÈTES ══════
