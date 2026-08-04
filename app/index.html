@@ -3642,14 +3642,24 @@ const CLOUD={
       // sauvegardées ni transférées d'un téléphone à l'autre. Un changement
       // d'appareil les perd.
       // Le drapeau général, LUI, part : prévenir le coach est l'un de ses effets.
-      delete safe.constantes;
-      delete safe.analyses;
+      // MÊME autorité que santeBlocsPrives, qui décide de ce qui part vers
+      // sante_privee. Deux tables séparées finiraient par diverger, et un
+      // bloc à la fois envoyé au nœud privé ET laissé dans users/ serait le
+      // pire des deux mondes : illisible pour l'athlète, lisible du coach.
+      // Un test vérifie que les deux listes coïncident exactement.
+      for(const bloc of Object.keys(SANTE_CHAMPS)){
+        if(santeVisibleCoach(user,bloc)) continue;
+        for(const champ of SANTE_CHAMPS[bloc]) delete safe[champ];
+      }
       this._retirerContraceptionSiNonPartagee(safe);
       // La grossesse ne monte JAMAIS par défaut. coach_public est déjà hors
       // de portée — c'est le profil DU COACH, filtré par liste blanche — mais
       // /users est lisible en entier par le coach : sans ce retrait,
       // « visibilité désactivée » ne serait qu'une promesse d'interface.
-      // Clé de premier niveau : un delete simple suffit, sans clonage.
+      // Le consentement de partage part AVEC la déclaration quand elle ne
+      // monte pas : un dossier portant « pesPartagee:true » sans « pes » se
+      // lirait tout seul. La déclaration elle-même, elle, est déjà retirée
+      // par la boucle ci-dessus.
       if(!safe.grossessePartagee) delete safe.grossesse;
       // Même raison, même patron : /users est lisible en entier par le
       // coach. Le consentement de partage part avec elle, sinon un dossier
@@ -3711,6 +3721,23 @@ const CLOUD={
           throw refus;
         }
       }
+      // ── Santé privée : écrire d'abord, supprimer ensuite ─────────────
+      // L'ORDRE EST CRITIQUE et non négociable. Si la connexion tombe entre
+      // les deux, la donnée existe en double — désagréable, réparable au
+      // prochain envoi. Dans l'autre sens elle n'existe plus nulle part.
+      //
+      // Cet envoi est indépendant de celui du dossier : son échec ne doit pas
+      // empêcher le reste de partir, et un dossier sans bloc masqué n'écrit
+      // rien du tout plutôt que d'écraser le nœud par un objet vide.
+      try{
+        const prives=santeBlocsPrives(user);
+        if(Object.keys(prives).length){
+          prives.maj=Date.now();
+          await fetch(this._urlSantePrivee(safeKey)+'?auth='+token,
+            {method:'PUT',headers:{'Content-Type':'application/json'},
+             body:JSON.stringify(prives)});
+        }
+      }catch(e){ console.error('[RepCore] sante_privee push:',e); }
       const url=this._fbUrl.replace('users.json','users/'+safeKey+'.json');
       const corps=JSON.stringify(safe);
       const opts={method:'PUT',headers:{'Content-Type':'application/json'},body:corps};
@@ -3851,6 +3878,20 @@ const CLOUD={
       merged[email].cycle={...(merged[email].cycle||{}),contraception:locContra};
     }
   },
+  // Les blocs masqués vivent hors de users/ : sans cette lecture, un athlète
+  // qui change d'appareil retrouvait son dossier SANS eux — exactement ce que
+  // ce nœud existe pour éviter.
+  async pullSantePrivee(email){
+    const key=email.replace(/\./g,',');
+    const ctrl=new AbortController();setTimeout(()=>ctrl.abort(),6000);
+    try{
+      const token=await this._getToken();
+      if(!token) return null;
+      const r=await fetch(this._urlSantePrivee(key)+'?auth='+token,{signal:ctrl.signal});
+      if(r.ok){ const d=await r.json(); if(d) return d; }
+    }catch(e){}
+    return null;
+  },
   async pullUser(email){
     const key=email.replace(/\./g,',');
     const base=this._fbUrl.replace('users.json','users/'+key+'.json');
@@ -3879,6 +3920,21 @@ const CLOUD={
   // ne peut se déclencher de son côté. C'est un jugement de métier publié
   // volontairement, au même titre que la photo ou la bannière.
   CHAMPS_PROFIL_COACH:['fname','lname','teamName','catchphrase','coachPhoto','promoBanners','phone','chargesSchema'],
+  // ── Santé privée : ce que le coach ne voit pas, et qui survit quand même ──
+  // La règle de /users donne au coach un accès LECTURE ET ÉCRITURE sur le
+  // dossier entier de ses athlètes, sans granularité. Les blocs non partagés
+  // étaient donc SUPPRIMÉS avant l'envoi, faute de mieux — et chaque lot
+  // concerné portait la même contrepartie en commentaire : « non partagée,
+  // elle ne survit pas à un changement d'appareil ».
+  //
+  // Ce nœud-ci la répare. Même confidentialité, mais sauvegardée : les règles
+  // n'y mentionnent pas coachEmailKey, donc le coach ne peut ni le lire, ni y
+  // écrire, ni savoir qu'il existe.
+  //
+  // ON NE DÉPLACE AUCUN CHAMP. Les blocs restent là où huit lots livrés les
+  // ont mis ; ce qui change, c'est leur DESTINATION à l'envoi. Une couche
+  // de lecture, pas une migration.
+  _urlSantePrivee(key){ return this._fbUrl.replace('users.json','sante_privee/'+key+'.json'); },
   _urlProfilCoach(key){ return this._fbUrl.replace('users.json','coach_public/'+key+'.json'); },
 
   async pushProfilCoach(user){
@@ -5981,6 +6037,61 @@ function douleurParExercice(c,jours){
   return Object.values(parEx).sort((a,b)=>b.n-a.n||b.derniere-a.derniere);
 }
 
+// ══════════ VISIBILITÉ COACH : DES DÉFAUTS EXPLICITES, PAS DEVINÉS ══════════
+// Quatre blocs sont visibles du coach par défaut parce qu'il en a besoin pour
+// décider : le cycle règle des repères nutritionnels, les états déclarés font
+// ajuster les lipides et poser la question du bilan, le traitement change la
+// lecture d'une prise de poids, le statut hormonal décale la fourchette.
+//
+// Quatre ne le sont PAS, et le défaut compte plus que le réglage : personne
+// ne va chercher un interrupteur qu'il ignore. Grossesse et PES relèvent de
+// l'intime avant de relever du coaching ; constantes et analyses sont des
+// données médicales brutes que RepCore conserve sans les interpréter.
+//
+// MODIFIABLE PAR L'ATHLÈTE SEULEMENT. Aucune fonction d'écriture n'est
+// exposée côté coach, et un test le vérifie.
+const SANTE_BLOCS=Object.freeze(['cycle','etats','traitement','statutHormonal',
+  'grossesse','pes','constantes','analyses']);
+const SANTE_VISIBLE_DEFAUT=Object.freeze({
+  cycle:true, etats:true, traitement:true, statutHormonal:true,
+  grossesse:false, pes:false, constantes:false, analyses:false
+});
+// PURE. Rend le défaut du bloc quand l'athlète n'a rien réglé, et false pour
+// un bloc inconnu : un nom mal orthographié ne doit pas ouvrir une visibilité.
+function santeVisibleCoach(user,bloc){
+  if(SANTE_BLOCS.indexOf(bloc)<0) return false;
+  const v=(((user||{}).sante)||{}).visibleCoach;
+  if(v&&typeof v[bloc]==='boolean') return v[bloc];
+  // Repli sur les interrupteurs déjà livrés, à leur emplacement historique.
+  // Aucune écriture, aucune migration : on LIT là où la donnée se trouve.
+  const u=user||{};
+  if(bloc==='grossesse'&&typeof u.grossessePartagee==='boolean') return u.grossessePartagee;
+  if(bloc==='pes'&&typeof u.pesPartagee==='boolean') return u.pesPartagee;
+  if(bloc==='cycle'&&u.cycle&&typeof u.cycle.contraceptionPartagee==='boolean')
+    return u.cycle.contraceptionPartagee;
+  return SANTE_VISIBLE_DEFAUT[bloc];
+}
+// Les blocs masqués, et OÙ ils vivent dans le dossier. C'est la seule table
+// qui fasse le lien entre un nom de bloc et un champ : la garder unique évite
+// qu'un envoi et un effacement divergent un jour.
+const SANTE_CHAMPS=Object.freeze({
+  grossesse:['grossesse'],
+  pes:['pes'],
+  constantes:['constantes'],
+  analyses:['analyses']
+});
+// PURE. Ce qui doit partir vers sante_privee pour ce dossier.
+function santeBlocsPrives(user){
+  const out={};
+  for(const bloc of Object.keys(SANTE_CHAMPS)){
+    if(santeVisibleCoach(user,bloc)) continue;
+    for(const champ of SANTE_CHAMPS[bloc]){
+      const v=(user||{})[champ];
+      if(v!==undefined&&v!==null) out[champ]=v;
+    }
+  }
+  return out;
+}
 const _cacheSignaux=new Map();
 function _viderCacheSignaux(){ _cacheSignaux.clear(); }
 const SIGNAUX_VIDES=Object.freeze({douleur:false,douleurDiffuse:false,decrochage:false,
@@ -28455,6 +28566,14 @@ async function requestAccountDeletion(){
         +(fbTok?'?auth='+fbTok:''),{method:'DELETE'});
     }catch(e){}
 
+    // 1 bis. Sante privee. Elle vit HORS de users/ : supprimer le dossier la
+    //    laisserait intacte, ce qui serait un manquement RGPD — des donnees
+    //    de sante survivant a la suppression du compte qui les portait.
+    try{
+      await fetch(CLOUD._urlSantePrivee(safeKey)+(fbTok?'?auth='+fbTok:''),
+        {method:'DELETE'});
+    }catch(e){}
+
     // 2. Fiche programme PDF dans Storage. Chemin encode en entier : le nom
     //    d'objet contient des barres obliques qui doivent etre echappees.
     if(fbTok){
@@ -35223,6 +35342,207 @@ function testExercices(){
           return !/scoreRecuperation|RECUP_/.test(src)
             ?true:_echec('sleepColor a été modifié');})());
       } finally { currentUser=_rcU; }
+    })();
+
+    // ══════ SANTÉ PRIVÉE : HORS DE PORTÉE DU COACH, PAR CONSTRUCTION ══════
+    (()=>{
+      const _spU=currentUser;
+      const _ath=(o)=>Object.assign({id:'sp',email:'sp@t',role:'athlete',
+        gender:'Femme',_evol_gender:'Femme',exAlias:{},exMuscles:{},programs:{},
+        sessions:[],bilans:[],sleepLog:[],weightLog:[]},o||{});
+      // Reproduit EXACTEMENT la boucle de _doPushOne, extraite de son source :
+      // tester une copie ne prouverait rien — leçon du lot PES.
+      const _garde=()=>{
+        const m=String(CLOUD._doPushOne)
+          .match(/for\(const bloc of Object\.keys\(SANTE_CHAMPS\)\)\{[\s\S]*?\n\s*\}/);
+        return m?new Function('safe','user','santeVisibleCoach','SANTE_CHAMPS',m[0]):null;
+      };
+      const _pousser=(u)=>{
+        const g=_garde();
+        if(!g) return null;
+        const safe={...u};
+        g(safe,u,santeVisibleCoach,SANTE_CHAMPS);
+        return safe;
+      };
+      try {
+        // ── Les défauts, et leur sens ────────────────────────────────────
+        ok('Les huit blocs, et leurs défauts explicites',(()=>{
+          if(SANTE_BLOCS.length!==8) return _echec(SANTE_BLOCS.length+' blocs');
+          const attendus={cycle:true,etats:true,traitement:true,statutHormonal:true,
+            grossesse:false,pes:false,constantes:false,analyses:false};
+          for(const b of SANTE_BLOCS){
+            const v=santeVisibleCoach(_ath({}),b);
+            if(v!==attendus[b]) return _echec(b+' : '+v+' au lieu de '+attendus[b]);
+          }
+          return true;})());
+        ok('grossesse et pes valent false par défaut',
+           santeVisibleCoach(_ath({}),'grossesse')===false
+           &&santeVisibleCoach(_ath({}),'pes')===false);
+        ok('Un bloc INCONNU n\'ouvre aucune visibilité',(()=>{
+          // Un nom mal orthographié ne doit pas rendre true par accident.
+          for(const b of ['','grosesse','GROSSESSE','__proto__','toString',null,undefined])
+            if(santeVisibleCoach(_ath({}),b)!==false) return _echec('« '+b+' » rend true');
+          return true;})());
+        ok('santeVisibleCoach est PURE et supporte un dossier vide',(()=>{
+          for(const u of [null,undefined,{},{sante:null},{sante:{visibleCoach:null}}])
+            for(const b of SANTE_BLOCS){
+              let v; try{ v=santeVisibleCoach(u,b); }catch(e){ return _echec('exception : '+e.message); }
+              if(typeof v!=='boolean') return _echec(b+' rend '+typeof v);
+            }
+          const u=_ath({grossesse:{etat:'enceinte'},pes:true});
+          const avant=JSON.stringify(u);
+          SANTE_BLOCS.forEach(b=>santeVisibleCoach(u,b));
+          santeBlocsPrives(u);
+          return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
+        ok('Le repli lit les interrupteurs DÉJÀ livrés, sans les déplacer',(()=>{
+          // Aucune migration : on lit là où huit lots ont mis la donnée.
+          if(santeVisibleCoach(_ath({grossessePartagee:true}),'grossesse')!==true)
+            return _echec('grossessePartagee ignoré');
+          if(santeVisibleCoach(_ath({pesPartagee:true}),'pes')!==true)
+            return _echec('pesPartagee ignoré');
+          if(santeVisibleCoach(_ath({cycle:{contraceptionPartagee:false}}),'cycle')!==false)
+            return _echec('contraceptionPartagee ignoré');
+          // Et le réglage EXPLICITE de user.sante prime sur le repli.
+          const u=_ath({grossessePartagee:true,sante:{visibleCoach:{grossesse:false}}});
+          return santeVisibleCoach(u,'grossesse')===false
+            ?true:_echec('le repli a primé sur le réglage explicite');})());
+
+        // ── Un bloc masqué ne part JAMAIS dans users/ ────────────────────
+        ok('La garde de _doPushOne existe et est exécutable',(()=>{
+          return _garde()?true:_echec('la garde a disparu de _doPushOne');})());
+        ok('Aucun bloc masqué dans la charge envoyée vers users/',(()=>{
+          const u=_ath({grossesse:{etat:'enceinte',declareLe:1},pes:true,
+            constantes:[{type:'tension',valeur:12,unite:'',date:'2026-01-01'}],
+            analyses:[{marqueur:'ferritine',valeur:30,unite:'ng/mL',date:'2026-01-01'}]});
+          const safe=_pousser(u);
+          if(!safe) return _echec('la garde a disparu de _doPushOne');
+          for(const champ of ['grossesse','pes','constantes','analyses'])
+            if(safe[champ]!==undefined) return _echec(champ+' est parti vers users/');
+          // Et la donnée LOCALE est intacte : on filtre une copie.
+          return u.grossesse&&u.pes&&u.constantes.length&&u.analyses.length
+            ?true:_echec('la donnée locale a été détruite');})());
+        ok('Un bloc EXPLICITEMENT partagé, lui, part bien',(()=>{
+          const u=_ath({grossesse:{etat:'enceinte',declareLe:1},
+            sante:{visibleCoach:{grossesse:true}}});
+          const safe=_pousser(u);
+          return (safe&&safe.grossesse)?true:_echec('le partage explicite ne suffit pas');})());
+
+        // ── Ce qui part vers le nœud privé ───────────────────────────────
+        ok('santeBlocsPrives et la garde décident la MÊME chose',(()=>{
+          // Deux tables qui divergent, c'est un bloc à la fois envoyé au nœud
+          // privé ET laissé dans users/ : le pire des deux mondes.
+          const cas=[{},{grossessePartagee:true},{pesPartagee:true},
+            {sante:{visibleCoach:{constantes:true,analyses:true}}}];
+          for(const extra of cas){
+            const u=_ath(Object.assign({grossesse:{etat:'enceinte',declareLe:1},pes:true,
+              constantes:[{type:'t',valeur:1,unite:'',date:'2026-01-01'}],
+              analyses:[{marqueur:'m',valeur:1,unite:'u',date:'2026-01-01'}]},extra));
+            const prives=Object.keys(santeBlocsPrives(u)).sort();
+            const safe=_pousser(u);
+            if(!safe) return _echec('la garde a disparu');
+            const retires=['grossesse','pes','constantes','analyses']
+              .filter(c=>safe[c]===undefined).sort();
+            if(prives.join(',')!==retires.join(','))
+              return _echec('privés='+prives.join(',')+' retirés='+retires.join(','));
+          }
+          return true;})());
+        ok('Chaque bloc survit à un aller-retour JSON',(()=>{
+          const u=_ath({grossesse:{etat:'enceinte',declareLe:1712345678901,msgVu:true},
+            pes:true,
+            constantes:[{type:'tension',valeur:12.5,valeur2:8,unite:'',date:'2026-01-01'}],
+            analyses:[{marqueur:'ferritine',valeur:30.5,unite:'ng/mL',date:'2026-01-01'}]});
+          const prives=santeBlocsPrives(u);
+          const apres=JSON.parse(JSON.stringify(prives));
+          if(JSON.stringify(apres)!==JSON.stringify(prives))
+            return _echec('la sérialisation altère les blocs');
+          if(apres.grossesse.declareLe!==1712345678901) return _echec('horodatage perdu');
+          if(apres.constantes[0].valeur!==12.5) return _echec('décimale perdue');
+          return apres.pes===true?true:_echec('booléen perdu');})());
+        ok('Aucun bloc masqué vide n\'est ENVOYÉ',(()=>{
+          // Je vérifiais que santeBlocsPrives rend {} — pas que l'envoi s'en
+          // abstient. Une variante remplaçant la garde de longueur par « if
+          // (true) » passait donc au vert, et un dossier sans rien à cacher
+          // aurait ÉCRASÉ le nœud distant par un objet vide. On exécute la
+          // vraie garde, avec fetch instrumenté.
+          const m=String(CLOUD._doPushOne)
+            .match(/const prives=santeBlocsPrives\(user\);[\s\S]*?\n\s*\}\n/);
+          if(!m) return _echec('l\'envoi vers sante_privee a disparu');
+          const corps='(async(user,santeBlocsPrives,fetch,_url,token)=>{'
+            +m[0].replace(/this\._urlSantePrivee\(safeKey\)/g,'_url')+'})';
+          let n=0, charge=null;
+          const faux=(u,o)=>{ n++; try{ charge=JSON.parse(o&&o.body||'null'); }catch(e){}
+            return Promise.resolve({ok:true}); };
+          const lancer=eval(corps);
+          // Rien à cacher : AUCUN appel.
+          lancer(_ath({}),santeBlocsPrives,faux,'/u','t');
+          if(n!==0) return _echec(n+' envoi(s) pour un dossier sans bloc masqué');
+          // Quelque chose à cacher : un appel, et la charge le porte.
+          lancer(_ath({grossesse:{etat:'enceinte',declareLe:1},pes:true}),
+            santeBlocsPrives,faux,'/u','t');
+          if(n!==1) return _echec(n+' envoi(s) au lieu d\'un');
+          if(!charge||!charge.grossesse||charge.pes!==true)
+            return _echec('charge : '+JSON.stringify(charge));
+          // Et elle est horodatée, pour que la fusion sache qui est récent.
+          return typeof charge.maj==='number'
+            ?true:_echec('la charge n\'est pas horodatée');})());
+
+        // ── L'ordre d'écriture, et la suppression ────────────────────────
+        ok('Écrire d\'abord, supprimer ensuite',(()=>{
+          // Si la connexion tombe entre les deux, la donnée existe en double —
+          // réparable. Dans l'autre sens elle n'existe plus nulle part.
+          const src=String(CLOUD._doPushOne);
+          const iPrive=src.indexOf('_urlSantePrivee');
+          const iUsers=src.indexOf("'users/'+safeKey");
+          if(iPrive<0) return _echec('l\'envoi vers sante_privee a disparu');
+          if(iUsers<0) return _echec('l\'envoi vers users a disparu');
+          return iPrive<iUsers
+            ?true:_echec('users/ est écrit AVANT le nœud privé');})());
+        ok('Le coach n\'a aucun chemin vers sante_privee',(()=>{
+          // Ni dans la liste blanche du profil coach, ni dans une fonction qui
+          // le lirait pour lui.
+          for(const c of ['grossesse','pes','constantes','analyses'])
+            if(CLOUD.CHAMPS_PROFIL_COACH.indexOf(c)>=0)
+              return _echec(c+' figure dans la liste blanche du profil coach');
+          if(typeof CLOUD.pullSantePrivee!=='function')
+            return _echec('la relecture a disparu');
+          // Elle ne prend qu'un email et ne consulte aucune clé de coach.
+          return !/coachEmailKey|coachId/.test(String(CLOUD.pullSantePrivee))
+            ?true:_echec('la relecture regarde une clé de coach');})());
+        ok('La suppression de compte efface sante_privee',(()=>{
+          // L'oublier serait un manquement RGPD : des données de santé
+          // survivant au compte qui les portait.
+          const src=String(requestAccountDeletion);
+          if(!/_urlSantePrivee/.test(src))
+            return _echec('sante_privee n\'est pas supprimé');
+          const i=src.indexOf('_urlSantePrivee');
+          return /DELETE/.test(src.slice(i,i+240))
+            ?true:_echec('sante_privee est mentionné mais pas supprimé');})());
+
+        // ── Le repli de lecture, sans migration ──────────────────────────
+        ok('confCycle se replie sur cycleAdaptation, SANS rien écrire',(()=>{
+          const u=_ath({nutrition:{cycleAdaptation:{enabled:true,
+            lastPeriodDate:'2026-01-05',cycleLength:30,
+            intensite_regles:'difficile',sensibilite_pms:true}}});
+          const avant=JSON.stringify(u);
+          const c=confCycle(u);
+          if(c.cycleLength!==30) return _echec('cycleLength : '+c.cycleLength);
+          if(c.intensiteRegles!=='difficile') return _echec('intensite : '+c.intensiteRegles);
+          if(c.sensibilitePms!==true) return _echec('pms : '+c.sensibilitePms);
+          return JSON.stringify(u)===avant
+            ?true:_echec('une migration a été écrite');})());
+        ok('Sans cycle NI cycleAdaptation : un objet, aucune exception',(()=>{
+          let c; try{ c=confCycle(_ath({})); }catch(e){ return _echec('exception : '+e.message); }
+          if(!c||typeof c!=='object') return _echec('rend '+typeof c);
+          return (c.enabled===false||!c.enabled)&&c.lastPeriodDate===null
+            ?true:_echec(JSON.stringify(c));})());
+        ok('AUCUNE migration n\'est écrite au chargement',(()=>{
+          // Le lot est une couche de LECTURE. Rien ne doit déplacer un champ
+          // vers user.sante, ni au démarrage ni ailleurs.
+          const src=String(santeVisibleCoach)+String(santeBlocsPrives)+String(confCycle);
+          if(/\.sante\s*=|sante\.cycle\s*=|delete\s+user\./.test(src))
+            return _echec('une écriture vers user.sante existe');
+          return true;})());
+      } finally { currentUser=_spU; }
     })();
 
     // ══════ PROFIL COACH VISIBLE PAR SES ATHLÈTES ══════
@@ -47334,11 +47654,24 @@ function testExercices(){
 
         // ── Ces données ne quittent pas l'appareil ─────────────────────────
         ok('Critère : constantes et analyses sont retirées de la charge poussée',(()=>{
-          // On lit la charge RÉELLEMENT construite par _doPushOne, pas une
-          // liste de champs déclarée à côté qui pourrait mentir.
-          const src=String(CLOUD._doPushOne);
-          return /delete\s+safe\.constantes/.test(src)&&/delete\s+safe\.analyses/.test(src)
-            ?true:_echec('aucun retrait dans _doPushOne');})());
+          // Ce test épinglait le TEXTE « delete safe.constantes ». Les deux
+          // retraits passent désormais par la boucle sur SANTE_CHAMPS, seule
+          // autorité de ce qui monte — le texte a changé, l'effet non. On
+          // EXÉCUTE donc la garde de production plutôt que de la lire : c'est
+          // ce qu'elle FAIT qui compte, et une copie ne prouverait rien.
+          const m=String(CLOUD._doPushOne)
+            .match(/for\(const bloc of Object\.keys\(SANTE_CHAMPS\)\)\{[\s\S]*?\n\s*\}/);
+          if(!m) return _echec('la garde a disparu de _doPushOne');
+          const g=new Function('safe','user','santeVisibleCoach','SANTE_CHAMPS',m[0]);
+          const u={id:'x',email:'x@t',
+            constantes:[{type:'tension',valeur:12,unite:'',date:'2026-01-01'}],
+            analyses:[{marqueur:'ferritine',valeur:30,unite:'ng/mL',date:'2026-01-01'}]};
+          const safe={...u};
+          g(safe,u,santeVisibleCoach,SANTE_CHAMPS);
+          if(safe.constantes!==undefined) return _echec('les constantes montent');
+          if(safe.analyses!==undefined) return _echec('les analyses montent');
+          return (u.constantes.length&&u.analyses.length)
+            ?true:_echec('la donnée locale a été détruite');})());
         ok('Le drapeau général, lui, PART : le coach doit être prévenu',(()=>{
           const src=String(CLOUD._doPushOne);
           return !/delete\s+safe\.drapeauGeneral/.test(src)

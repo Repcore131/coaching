@@ -58,6 +58,73 @@
       }
     },
 
+    // ── Sante privee : hors de portee du coach, par construction ───────────
+    // La regle de /users donne au coach un acces LECTURE ET ECRITURE sur le
+    // dossier entier de ses athletes, sans aucune granularite. Les blocs que
+    // l athlete choisit de ne pas partager — grossesse, produits ameliorant la
+    // performance, constantes, analyses — etaient donc SUPPRIMES avant l envoi,
+    // faute de mieux. Ils ne survivaient pas a un changement d appareil, et
+    // chaque lot concerne portait cette contrepartie en commentaire.
+    //
+    // Ce noeud la repare : meme confidentialite, mais sauvegardee. Ni .read ni
+    // .write ne mentionnent coachEmailKey — un coach ne peut pas lire ce noeud,
+    // ne peut pas y ecrire, et ne peut pas savoir qu il existe.
+    //
+    // Meme patron que coach_public : exposition champ par champ, validations de
+    // type et de longueur, et "$autre" qui refuse tout champ non prevu. Une
+    // liste blanche cote regles vaut mieux qu une liste noire cote client :
+    // celle-ci tient meme si le client est modifie.
+    "sante_privee": {
+      "$emailKey": {
+        ".read": "auth != null && auth.token.email.replace('.', ',') === $emailKey",
+        ".write": "auth != null && auth.token.email.replace('.', ',') === $emailKey",
+
+        // Grossesse, allaitement, post-partum. Ni date de terme, ni trimestre :
+        // le produit ne les demande pas, les regles ne les acceptent pas.
+        "grossesse": {
+          "etat": { ".validate": "newData.isString() && newData.val().length < 40" },
+          "declareLe": { ".validate": "newData.isNumber()" },
+          "msgVu": { ".validate": "newData.isBoolean()" },
+          "$autre": { ".validate": false }
+        },
+
+        // Produits ameliorant la performance : le FAIT, et rien d autre.
+        // Aucune molecule, aucune dose, aucune duree — donc aucun champ pour
+        // les recevoir.
+        "pes": { ".validate": "newData.isBoolean()" },
+
+        // Contraception : le type declare, pas le produit.
+        "contraception": { ".validate": "newData.isString() && newData.val().length < 40" },
+
+        // Constantes physiologiques relevees par l athlete.
+        "constantes": {
+          "$i": {
+            "type": { ".validate": "newData.isString() && newData.val().length < 40" },
+            "valeur": { ".validate": "newData.isNumber()" },
+            "valeur2": { ".validate": "newData.isNumber()" },
+            "unite": { ".validate": "newData.isString() && newData.val().length < 20" },
+            "date": { ".validate": "newData.isString() && newData.val().length < 30" },
+            "$autre": { ".validate": false }
+          }
+        },
+
+        // Resultats d analyses. RepCore les CONSERVE, ne les interprete pas :
+        // aucun champ de valeur de reference, aucun champ de verdict.
+        "analyses": {
+          "$i": {
+            "marqueur": { ".validate": "newData.isString() && newData.val().length < 60" },
+            "valeur": { ".validate": "newData.isNumber()" },
+            "unite": { ".validate": "newData.isString() && newData.val().length < 20" },
+            "date": { ".validate": "newData.isString() && newData.val().length < 30" },
+            "$autre": { ".validate": false }
+          }
+        },
+
+        "maj": { ".validate": "newData.isNumber()" },
+        "$autre": { ".validate": false }
+      }
+    },
+
     "deleted_accounts": {
       ".read": false,
       ".write": false
