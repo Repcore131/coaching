@@ -10895,8 +10895,7 @@ function loadClientHome(){
   // les metriques : elle reste consultable dans l'onglet Perfs.
   const _sv=document.getElementById('clh-streak-val');
   if(_sv) _sv.textContent=s;
-  const h=new Date().getHours();
-  document.getElementById('clh-greeting').textContent=(h<12?'Bonjour,':'Bonsoir,')+' '+u.fname+'.';
+  document.getElementById('clh-greeting').textContent=salutation()+' '+u.fname+'.';
   const _dStr=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
   document.getElementById('clh-date').textContent=_dStr.charAt(0).toUpperCase()+_dStr.slice(1);
   // ── Trois chiffres d'entraînement ──
@@ -23518,6 +23517,36 @@ function getStepsWeek(){
 // reste ouverte au passage de minuit.
 let _stepsDate=null, _sleepDate=null;
 function _jourSteps(){ return _stepsDate||localISODate(new Date()); }
+// ── Bonjour / bonsoir ────────────────────────────────────────────────────
+// La bascule etait a MIDI : « Bonsoir » des 12 h 01, ce qui n a de sens
+// nulle part. Bornes retenues : bonjour de 5 h a 17 h, bonsoir de 17 h a 5 h.
+//
+// L HEURE EST CELLE DE PARIS, explicitement, et pas celle de l appareil.
+// Consequence assumee : un athlete en deplacement hors de France lira
+// « Bonsoir » a une heure ou il fait encore jour chez lui. C est le choix
+// demande — le produit parle depuis le fuseau de son coach.
+//
+// PURE, et l heure est INJECTABLE : sans ce parametre, on ne pourrait tester
+// les bornes qu en attendant 17 h.
+const SALUT_DEBUT_JOUR=5, SALUT_DEBUT_SOIR=17;
+function _heureParis(d){
+  const base=(d instanceof Date)?d:new Date();
+  // Intl plutot qu un decalage code en dur : l heure d ete change deux fois
+  // par an, et un +1 fixe serait faux la moitie de l annee.
+  try{
+    const h=new Intl.DateTimeFormat('fr-FR',{timeZone:'Europe/Paris',hour:'2-digit',
+      hourCycle:'h23'}).format(base);
+    const n=parseInt(h,10);
+    if(isFinite(n)&&n>=0&&n<=23) return n;
+  }catch(e){}
+  // Fuseau indisponible : on retombe sur l heure de l appareil plutot que de
+  // ne rien dire du tout.
+  return base.getHours();
+}
+function salutation(d){
+  const h=(typeof d==='number')?d:_heureParis(d);
+  return (h>=SALUT_DEBUT_JOUR&&h<SALUT_DEBUT_SOIR)?'Bonjour,':'Bonsoir,';
+}
 function _jourSleep(){ return _sleepDate||localISODate(new Date()); }
 function changeStepsDate(v){ _stepsDate=(v&&v!==localISODate(new Date()))?v:null; _rerenderLifestyle(); }
 function changeSleepDate(v){ _sleepDate=(v&&v!==localISODate(new Date()))?v:null; _rerenderLifestyle(); }
@@ -35633,6 +35662,65 @@ function testExercices(){
           return /_htmlHydratation\(/.test(String(_htmlHydratationNut))
             ?true:_echec('une seconde implémentation est apparue');})());
       } finally { currentUser=_ecU; window.saveUser=_sv; }
+    })();
+
+    // ══════ BONJOUR / BONSOIR : LES BORNES, HEURE DE PARIS ══════
+    (()=>{
+      try {
+        ok('Les vingt-quatre heures, une par une',(()=>{
+          // La bascule était à MIDI : « Bonsoir » dès 12 h 01. On énumère
+          // plutôt que d'échantillonner — vingt-quatre cas, autant les faire
+          // tous, et les bornes ne peuvent plus glisser d'une heure sans que
+          // ce test le dise.
+          const attendu=h=>(h>=5&&h<17)?'Bonjour,':'Bonsoir,';
+          for(let h=0;h<24;h++){
+            const v=salutation(h);
+            if(v!==attendu(h)) return _echec(h+' h → '+v);
+          }
+          return true;})());
+        ok('Les quatre bornes exactes',(()=>{
+          // 4 h 59 encore le soir, 5 h le matin ; 16 h 59 le matin, 17 h le soir.
+          if(salutation(4)!=='Bonsoir,') return _echec('4 h : '+salutation(4));
+          if(salutation(5)!=='Bonjour,') return _echec('5 h : '+salutation(5));
+          if(salutation(16)!=='Bonjour,') return _echec('16 h : '+salutation(16));
+          if(salutation(17)!=='Bonsoir,') return _echec('17 h : '+salutation(17));
+          // Et minuit reste le soir.
+          return salutation(0)==='Bonsoir,'?true:_echec('minuit : '+salutation(0));})());
+        ok('Midi dit BONJOUR, ce qui était le défaut signalé',
+           salutation(12)==='Bonjour,'&&salutation(13)==='Bonjour,'
+           &&salutation(15)==='Bonjour,');
+        ok('Les bornes sont des constantes nommées, pas des nombres épars',
+           SALUT_DEBUT_JOUR===5&&SALUT_DEBUT_SOIR===17
+           &&/SALUT_DEBUT_JOUR/.test(String(salutation))
+           &&/SALUT_DEBUT_SOIR/.test(String(salutation)));
+        ok('L\'heure est celle de PARIS, pas celle de l\'appareil',(()=>{
+          // Un décalage codé en dur serait faux la moitié de l'année :
+          // l'heure d'été change deux fois par an.
+          const src=String(_heureParis);
+          if(!/Europe\/Paris/.test(src)) return _echec('le fuseau n\'est plus nommé');
+          if(/[+-]\s*[12]\s*\)|\+1;/.test(src)) return _echec('un décalage codé en dur');
+          // Elle rend une heure valide, quelle que soit la date.
+          for(const d of [new Date('2026-01-15T12:00:00Z'),new Date('2026-07-15T12:00:00Z')]){
+            const h=_heureParis(d);
+            if(!(typeof h==='number'&&h>=0&&h<=23)) return _echec('rend '+h);
+          }
+          // Janvier : UTC+1 → 13 h. Juillet : UTC+2 → 14 h. C'est le passage
+          // à l'heure d'été, et c'est précisément ce qu'un +1 fixe raterait.
+          const hiver=_heureParis(new Date('2026-01-15T12:00:00Z'));
+          const ete=_heureParis(new Date('2026-07-15T12:00:00Z'));
+          if(hiver!==13) return _echec('15 janvier 12 h UTC → '+hiver+' h');
+          return ete===14?true:_echec('15 juillet 12 h UTC → '+ete+' h');})());
+        ok('salutation est PURE et ne lit aucun dossier',(()=>{
+          const src=String(salutation);
+          if(/currentUser|DB\.|localStorage/.test(src))
+            return _echec('elle lit autre chose que l\'heure');
+          // Deux appels de suite rendent la même chose.
+          return salutation(9)===salutation(9)?true:_echec('non déterministe');})());
+        ok('L\'accueil athlète utilise bien salutation()',(()=>{
+          const src=String(loadClientHome);
+          if(!/salutation\(\)/.test(src)) return _echec('l\'accueil ne l\'appelle pas');
+          return !/h<12/.test(src)?true:_echec('l\'ancienne bascule de midi subsiste');})());
+      } finally {}
     })();
 
     // ══════ PROFIL COACH VISIBLE PAR SES ATHLÈTES ══════
