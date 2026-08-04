@@ -6867,6 +6867,15 @@ function renderCoachMicroSection(c){
     <div style="font-size:11px;color:var(--text-dim);line-height:1.55;border-top:1px solid var(--border);padding-top:10px">${escapeHtml(MICRO_DISCLAIMER)}</div>
   </div>`+recup+morpho+hydra;
 }
+// L'hydratation vivait sur l'écran de PROGRESSION et dans la fiche coach, mais
+// pas sur l'écran nutrition — alors que le sel et les fibres, eux, y sont.
+// On l'y ajoute : c'est là qu'on la cherche. Aucun retrait ailleurs, un appel
+// de plus, et le même bloc — pas une seconde implémentation.
+function _htmlHydratationNut(user){
+  const u=user||currentUser;
+  try{ return _htmlHydratation(u,nutIsOnDay(localISODate(new Date()))); }
+  catch(e){ return ''; }
+}
 // Meme rendu que cote athlete, mais le jour ON est celui de l'ATHLETE : sur la
 // fiche coach, nutIsOnDay lirait le planning du coach et annoncerait un repere
 // faux un jour sur deux.
@@ -19559,6 +19568,7 @@ function _renderNutriContent(type){
       ${_htmlRecuperationAthlete(currentUser)}
       ${_htmlAjustement(currentUser,false)}
       ${_renderStrictMacroRings(nut)}
+      ${_htmlHydratationNut(currentUser)}
       ${_renderCycleNutSettings(nut)}`;
     if(fjSec){fjSec.style.display='block';_renderFjDaySummary(localISODate(new Date()));}
   } else {
@@ -20107,7 +20117,16 @@ function _renderFjDaySummary(date){
   // d'afficher un total qui aurait l'air complet.
   const _selManquant=entries.filter(e=>e&&e.sel==null).length;
   const _microHtml=_htmlCouvertureMicro(currentUser);
-  const _repHtml=_htmlReperesRepas(currentUser,m,date);
+  // Le repère de répartition est rendu par _renderStrictMacroRings, sous la
+  // carte des objectifs. Il l'était AUSSI ici : les deux blocs s'affichant
+  // ensemble dès que le journal est visible, la même phrase apparaissait
+  // deux fois à l'écran.
+  //
+  // C'est la carte des objectifs qui le garde : le repère explique comment
+  // répartir la CIBLE de protéines, sa place est avec elle. Et c'est le seul
+  // des deux emplacements qui subsiste en diète stricte, où le journal est
+  // masqué — le retirer là-bas priverait ces athlètes du repère.
+  const _repHtml='';
   const repasOrder=['matin','dejeuner','diner','collation'];
   const repasLabels={matin:'Petit-déjeuner',dejeuner:'Déjeuner',diner:'Dîner',collation:'Collation'};
   const grouped={};
@@ -35543,6 +35562,77 @@ function testExercices(){
             return _echec('une écriture vers user.sante existe');
           return true;})());
       } finally { currentUser=_spU; }
+    })();
+
+    // ══════ ÉCRAN NUTRITION : UNE SEULE FOIS CHACUN ══════
+    (()=>{
+      const _ecU=currentUser;
+      const _sv=window.saveUser;
+      const _ath=()=>{
+        const u={id:'ec',email:'ec@t',role:'athlete',gender:'Homme',_evol_gender:'Homme',
+          _evol_height:178,exAlias:{},exMuscles:{},programs:{},sessions:[],
+          weightLog:[{date:localISODate(new Date()),kg:80}],profileWeight:80,weight:80,
+          sessions_config:[{day:'J0',name:'S0',active:true,exercises:[]}],
+          bilans:[{type:'depart',date:Date.now()-100*864e5,'deb-weight':'80',
+            'deb-height':'178','deb-age':'32','deb-gender':'Homme',
+            'deb-meals-day':'4','deb-train-time':'Le matin'}],
+          phase:{type:'seche',debut:Date.now()-30*864e5},sleepLog:[],
+          nutrition:{dietType:'flexible',
+            macros:{on:{kcal:3000,p:285,g:243,l:98},off:{kcal:2800,p:285,g:220,l:98}},log:{}}};
+        for(let i=0;i<8;i++) u.sessions.push({id:'s'+i,date:Date.now()-i*864e5,data:{},
+          metrics:{fatigue:'5',motivation:'5',sensation:'5',hydratation:String(4+(i%3))}});
+        return u;
+      };
+      const _texte=()=>{
+        const u=_ath();
+        currentUser=u;
+        DB.set('users',Object.assign(DB.get('users')||{},{'ec@t':u}));
+        loadNutrition();
+        return (document.getElementById('s-nutrition').textContent||'');
+      };
+      try {
+        window.saveUser=()=>true;
+        ok('Le repère de répartition n\'apparaît QU\'UNE FOIS',(()=>{
+          // Il était rendu par _renderStrictMacroRings ET par
+          // _renderFjDaySummary : les deux s'affichant ensemble dès que le
+          // journal est visible, la même phrase sortait deux fois à l'écran.
+          const t=_texte();
+          const n=(t.match(/repas par jour/g)||[]).length;
+          if(n===0) return _echec('fixture muette : le repère ne sort pas');
+          if(n!==1) return _echec(n+' occurrences de « repas par jour »');
+          const m=(t.match(/Séance le matin/g)||[]).length;
+          return m<=1?true:_echec(m+' occurrences de « Séance le matin »');})());
+        ok('Il reste rendu par la carte des OBJECTIFS, pas par le journal',(()=>{
+          // C'est la carte des objectifs qui le garde : le repère explique
+          // comment répartir la CIBLE, et c'est le seul des deux emplacements
+          // qui subsiste en diète stricte, où le journal est masqué.
+          if(!/_htmlReperesRepas\(/.test(String(_renderStrictMacroRings)))
+            return _echec('la carte des objectifs ne le rend plus');
+          return !/_htmlReperesRepas\(/.test(String(_renderFjDaySummary))
+            ?true:_echec('le journal le rend encore');})());
+        ok('L\'hydratation est SUR l\'écran nutrition, une seule fois',(()=>{
+          // Elle vivait sur la progression et dans la fiche coach, mais pas
+          // ici — alors que le sel et les fibres y sont.
+          const t=_texte();
+          const n=(t.match(/Hydratation déclarée/g)||[]).length;
+          if(n===0) return _echec('l\'hydratation est absente de l\'écran nutrition');
+          return n===1?true:_echec(n+' blocs d\'hydratation');})());
+        ok('Le repère de besoin en eau s\'affiche avec elle',(()=>{
+          const t=_texte();
+          if(!/Repère : environ/.test(t)) return _echec('aucun repère de besoin');
+          // Repère de terrain, jamais une prescription.
+          return /couleur des urines/.test(t)
+            ?true:_echec('le registre « repère de terrain » a disparu');})());
+        ok('Elle reste AUSSI sur la progression et en fiche coach',(()=>{
+          // Rien n'a été retiré : un appel a été ajouté.
+          if(!/_htmlHydratation\(/.test(String(renderVolume)))
+            return _echec('retirée de l\'écran de progression');
+          if(!/_htmlHydratation\(/.test(String(_htmlHydratationCoach)))
+            return _echec('retirée de la fiche coach');
+          // Et le bloc de l'écran nutrition réutilise le MÊME rendu.
+          return /_htmlHydratation\(/.test(String(_htmlHydratationNut))
+            ?true:_echec('une seconde implémentation est apparue');})());
+      } finally { currentUser=_ecU; window.saveUser=_sv; }
     })();
 
     // ══════ PROFIL COACH VISIBLE PAR SES ATHLÈTES ══════
