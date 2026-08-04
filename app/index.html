@@ -228,6 +228,18 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 .metric-box::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--red) var(--pct,0%),transparent var(--pct,0%))}
 .metric-val{font-size:32px;font-family:'Bebas Neue',Impact,sans-serif;letter-spacing:0;line-height:1}
 .metric-label{font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;margin-top:6px;font-weight:700}
+/* Sur un écran de 320 px, trois encadrés côte à côte laissent 59 px de contenu
+   chacun. « 1200kg » en Bebas 32 en demande 79, et .metric-box porte
+   overflow:hidden : le chiffre n'était pas débordé, il était COUPÉ — sans rien
+   qui le signale. Un volume tronqué se lit comme un autre volume.
+   On rend la place au lieu de rogner le texte : moins de padding latéral, un
+   corps plus petit, un interlettrage réduit sur le libellé. Rien ne change
+   au-dessus de 360 px. */
+@media (max-width:360px){
+  .metric-box{padding:14px 4px}
+  .metric-val{font-size:22px}
+  .metric-label{letter-spacing:1px}
+}
 
 /* ====== EXERCISE / SERIES TABLE ====== */
 .exercise-card{background:var(--surface-1);border-radius:4px;margin-bottom:12px;overflow:hidden;border:1px solid var(--border)}
