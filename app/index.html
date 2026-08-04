@@ -1739,12 +1739,11 @@ const COACH_PHOTO='icons/coach.jpg';
         <div><label for="calc-pr">Reps réalisées</label><input type="number" id="calc-pr" placeholder="8" oninput="updateCalcTable()"></div>
         <div><label for="calc-prir">RIR réel</label><input type="number" id="calc-prir" placeholder="2" min="0" max="5" oninput="updateCalcTable()"></div>
         <!-- La case à cocher était une TROISIÈME implémentation du cycle, à
-             côté du modal d'entraînement et du module nutritionnel. Elle est
-             remplacée par la phase calculée : plus rien à cocher, plus rien à
-             contredire. -->
-        <div id="calc-cycle-adj" style="display:none"><label>Ajust. cycle (−5%)</label>
-          <div id="calc-cycle-etat" style="font-size:12px;color:var(--sub);margin-top:10px;line-height:1.5"></div>
-        </div>
+             côté du modal d'entraînement et du module nutritionnel. Elle a été
+             remplacée par la phase calculée ; le bloc d'AJUSTEMENT qui restait
+             a disparu à son tour avec l'abattement de 5 %. Ce qui subsiste est
+             une phrase, déplacée SOUS le tableau : elle informe, elle ne
+             corrige aucun chiffre. -->
       </div>
     </div>
     <div id="calc-e1rm-display" style="background:linear-gradient(135deg,#1a0000,#2a0000);border:1px solid #7f1d1d;border-radius:12px;padding:14px;margin-bottom:16px;display:none">
@@ -1766,6 +1765,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <tbody id="calc-table-body"></tbody>
       </table>
     </div>
+    <div id="calc-cycle-etat" style="font-size:12px;color:var(--sub);line-height:1.6;margin-top:14px;display:none"></div>
     <div style="height:30px"></div>
   </div>
 </div>
@@ -26533,29 +26533,68 @@ function openCalc(pw,pr,prir,gender){
   document.getElementById('calc-pw').value=pw||'';
   document.getElementById('calc-pr').value=pr||'';
   document.getElementById('calc-prir').value=prir||'';
-  // Le bloc ne s'affiche plus sur le genre déclaré mais sur ce qui est
-  // RÉELLEMENT calculable : sans cycle configuré, il n'a rien à dire.
-  const _phCalc=phaseCycle(currentUser,localISODate(new Date()));
-  const _zCalc=document.getElementById('calc-cycle-adj');
-  if(_zCalc) _zCalc.style.display=_phCalc?'block':'none';
-  const _eCalc=document.getElementById('calc-cycle-etat');
-  if(_eCalc) _eCalc.textContent=_phCalc==='menstrual'
-    ?'Phase menstruelle : e1RM minoré de 5 %.'
-    :'Hors phase menstruelle : aucun ajustement.';
+  // La phrase est posée par updateCalcTable, appelée juste en dessous : elle
+  // suit la saisie au lieu d'être figée à l'ouverture.
   document.getElementById('calc-modal').style.display='block';
   updateCalcTable();
+}
+// ══════════ L'ESTIMATION DU MAXIMUM NE DÉPEND PLUS D'AUCUNE PHASE ══════════
+// L'abattement de 5 % sur l'e1RM inversait le raisonnement : une performance
+// diminuée par la phase implique un maxi réel PLUS HAUT, pas plus bas.
+// L'ajustement de la charge du jour appartient à getCycleFactor, pas à
+// l'estimation du maximum. Ne pas réintroduire.
+//
+// Il était de surcroît appliqué à l'e1RM, qui remplit ENSUITE toute la table
+// reps × RIR : l'abattement contaminait des charges projetées pour des jours
+// où la phase n'a plus cours. Et il n'a jamais porté la moindre référence,
+// contrairement au reste du produit.
+//
+// Ce qui le remplace ne touche à AUCUN chiffre : une phrase, qui dit dans
+// quel sens lire l'estimation. PURE.
+const CALC_PHRASE_DIFFICILE='Tu as indiqué une journée difficile. Cette '
+  +'estimation part de ta performance du jour : ton maxi réel est '
+  +'probablement un peu plus haut.';
+const CALC_PHRASE_PMS='Tu as signalé être sensible au syndrome prémenstruel. '
+  +'Cette estimation part de ta performance du jour : ton maxi réel est '
+  +'probablement un peu plus haut.';
+function phraseCalcCycle(user,dateISO){
+  const u=user||currentUser||{};
+  // phaseCycle ne regarde QUE user.cycle : elle ne sait rien du genre, et
+  // rendait donc « menstrual » pour un dossier masculin portant un cycle
+  // configuré. La garde est ici, comme _hormonalApplicable ailleurs.
+  if(!isFemale((u._evol_gender||u.gender)||'')) return '';
+  // Le RESSENTI déclaré avant la séance prime sur le calendrier : c'est la
+  // même hiérarchie que getCycleFactor, et pour la même raison — ce qu'elle
+  // dit du jour vaut mieux qu'une date.
+  const r=u.currentCycle;
+  if(r==='j1_difficile'||r==='j1_supportable') return CALC_PHRASE_DIFFICILE;
+  const phase=phaseCycle(u,dateISO||localISODate(new Date()));
+  // Périmé, irrégulier, sans cycle ou rien du tout : AUCUNE phrase. On ne
+  // commente pas un état qu'on ne connaît pas.
+  if(!phaseAgissante(phase)) return '';
+  if(phase==='menstrual') return CALC_PHRASE_DIFFICILE;
+  if(phase==='luteal_late'&&confCycle(u).sensibilitePms) return CALC_PHRASE_PMS;
+  return '';
+}
+function _renderCalcCycle(){
+  const z=document.getElementById('calc-cycle-etat');
+  if(!z) return;
+  const t=phraseCalcCycle(currentUser);
+  z.textContent=t;
+  z.style.display=t?'block':'none';
 }
 function updateCalcTable(){
   const pw=parseFloat(document.getElementById('calc-pw').value)||0;
   const pr=parseFloat(document.getElementById('calc-pr').value)||0;
   const prir=parseFloat(document.getElementById('calc-prir').value)||0;
-  const cycleAdj=phaseCycle(currentUser,localISODate(new Date()))==='menstrual';
+  // Posée AVANT toute sortie anticipée : elle informe indépendamment de
+  // l'estimation, y compris quand celle-ci est refusée.
+  _renderCalcCycle();
   if(!pw||!pr){document.getElementById('calc-table-body').innerHTML='<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--sub)">Entre ta charge et tes reps précédentes</td></tr>';document.getElementById('calc-e1rm-display').style.display='none';return;}
   // %1RM = 100 - 2.5 × RIR - 2.5 × (reps - 1)
   const pct=100-2.5*prir-2.5*(pr-1);
   if(pct<=0){document.getElementById('calc-table-body').innerHTML='<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--orange)">Nombre de reps ou RIR trop élevé : réduis les valeurs</td></tr>';document.getElementById('calc-e1rm-display').style.display='none';return;}
-  let e1rm=pw/(pct/100);
-  if(cycleAdj) e1rm=e1rm*0.95; // Ajustement phase menstruelle -5%
+  const e1rm=pw/(pct/100);
   document.getElementById('calc-e1rm-val').textContent=Math.round(e1rm)+'kg';
   document.getElementById('calc-e1rm-display').style.display='block';
   const repsRange=[3,4,5,6,7,8,10,12,15,20];
@@ -31301,23 +31340,178 @@ function testExercices(){
         // ── Le calculateur : la case a disparu ────────────────────────────
         ok('Critère : plus aucune case à cocher dans le calculateur',
           !document.getElementById('calc-cycle-check'));
-        ok('Le calculateur minore de 5 % en phase menstruelle, et pas ailleurs',(()=>{
+        // CE TEST EXIGEAIT L'INVERSE, et il a été RETOURNÉ, pas supprimé :
+        // il demandait 95kg en phase menstruelle. L'abattement inversait le
+        // raisonnement — une performance diminuée implique un maxi réel plus
+        // HAUT — et contaminait toute la table reps × RIR.
+        ok('Le calculateur ne minore PLUS RIEN, quelle que soit la phase',(()=>{
           const g=id=>document.getElementById(id);
           if(!g('calc-pw')||!g('calc-e1rm-val')) return _echec('calculateur absent');
           const av={pw:g('calc-pw').value,pr:g('calc-pr').value,prir:g('calc-prir').value};
           try{
             g('calc-pw').value='100'; g('calc-pr').value='1'; g('calc-prir').value='0';
+            const lu=()=>{updateCalcTable();return g('calc-e1rm-val').textContent;};
             currentUser=_ath({enabled:true,lastPeriodDate:_jour(10),cycleLength:28});
-            updateCalcTable();
-            const neutre=g('calc-e1rm-val').textContent;
+            const neutre=lu();
             currentUser=_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28});
-            updateCalcTable();
-            const regles=g('calc-e1rm-val').textContent;
+            const regles=lu();
+            currentUser=_ath({enabled:true,lastPeriodDate:_jour(25),cycleLength:28,
+              sensibilitePms:true});
+            const lut=lu();
             if(neutre!=='100kg') return _echec('hors règles : '+neutre);
-            return regles==='95kg'?true:_echec('en règles : '+regles);
+            if(regles!=='100kg') return _echec('en règles : '+regles);
+            return lut==='100kg'?true:_echec('lutéale tardive : '+lut);
           } finally {
             g('calc-pw').value=av.pw; g('calc-pr').value=av.pr; g('calc-prir').value=av.prir;
           }})());
+        ok('Toute la TABLE est libre de l\'abattement, pas seulement l\'e1RM',(()=>{
+          // C'était le second défaut : l'e1RM minoré remplissait ensuite les
+          // quarante cases, donc des charges projetées pour des jours où la
+          // phase n'a plus cours.
+          const g=id=>document.getElementById(id);
+          const av={pw:g('calc-pw').value,pr:g('calc-pr').value,prir:g('calc-prir').value};
+          try{
+            g('calc-pw').value='100'; g('calc-pr').value='1'; g('calc-prir').value='0';
+            const cases=()=>{updateCalcTable();
+              return [].slice.call(document.querySelectorAll('#calc-table-body td'))
+                .map(x=>x.textContent).join('|');};
+            currentUser=_ath({enabled:true,lastPeriodDate:_jour(10),cycleLength:28});
+            const a=cases();
+            currentUser=_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28});
+            const b=cases();
+            if(a.length<50) return _echec('fixture muette : table vide');
+            return a===b?true:_echec('la table diffère selon la phase');
+          } finally {
+            g('calc-pw').value=av.pw; g('calc-pr').value=av.pr; g('calc-prir').value=av.prir;
+          }})());
+        ok('Aucun « * 0.95 » ne subsiste dans updateCalcTable',(()=>{
+          const src=String(updateCalcTable).replace(/\s+/g,'');
+          if(/\*0\.95/.test(src)) return _echec('l\'abattement est revenu');
+          if(/cycleAdj/.test(src)) return _echec('la variable est revenue');
+          // Et le commentaire de non-réintroduction est là, en amont.
+          //
+          // TROISIÈME FOIS que ce piège m'attrape : je cherchais la phrase
+          // dans TOUT le document, et je la trouvais dans le motif de ce
+          // test-là. Supprimer le commentaire de production ne dérangeait
+          // donc rien. Aiguille assemblée à l'exécution, et balayage de la
+          // PRODUCTION seule — les deux, parce qu'aucun des deux ne suffit.
+          const aig='Ne pas ré'+'introduire';
+          const tout=document.documentElement.outerHTML;
+          const fin=tout.indexOf('function testExercices');
+          if(fin<0) return _echec('frontière de la suite introuvable');
+          const prod=tout.slice(0,fin);
+          if(prod.length<100000) return _echec('production trop courte');
+          return prod.indexOf(aig)>=0
+            ?true:_echec('le commentaire de non-réintroduction a disparu');})());
+
+        // ── La phrase informative : elle dit, elle ne corrige pas ────────
+        ok('Phase menstruelle : la phrase est là, et dit le bon SENS',(()=>{
+          const u=_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28});
+          const t=phraseCalcCycle(u,AUJ);
+          if(!t) return _echec('aucune phrase');
+          if(!/plus haut/.test(t)) return _echec('le sens est perdu : '+t);
+          if(/plus bas|minor|réduit/i.test(t)) return _echec('sens inversé : '+t);
+          return !/\d/.test(t)?true:_echec('un chiffre : '+t);})());
+        ok('Phase stable : aucune phrase',(()=>{
+          const t=phraseCalcCycle(_ath({enabled:true,lastPeriodDate:_jour(10),
+            cycleLength:28}),AUJ);
+          return t===''?true:_echec(t);})());
+        ok('Lutéale tardive : la phrase ne sort QUE sous sensibilité PMS',(()=>{
+          const sans=_ath({enabled:true,lastPeriodDate:_jour(25),cycleLength:28});
+          if(phaseCycle(sans,AUJ)!=='luteal_late')
+            return _echec('fixture muette : phase '+phaseCycle(sans,AUJ));
+          if(phraseCalcCycle(sans,AUJ)!=='') return _echec('elle sort sans sensibilité');
+          const avec=_ath({enabled:true,lastPeriodDate:_jour(25),cycleLength:28,
+            sensibilitePms:true});
+          const t=phraseCalcCycle(avec,AUJ);
+          return (t&&/plus haut/.test(t))?true:_echec('phrase : '+t);})());
+        ok('Le RESSENTI déclaré prime sur le calendrier',(()=>{
+          // Même hiérarchie que getCycleFactor : ce qu'elle dit du jour vaut
+          // mieux qu'une date.
+          const u=_ath({enabled:true,lastPeriodDate:_jour(10),cycleLength:28});
+          if(phraseCalcCycle(u,AUJ)!=='') return _echec('fixture muette');
+          for(const r of ['j1_difficile','j1_supportable']){
+            const v=Object.assign({},u,{currentCycle:r});
+            if(!phraseCalcCycle(v,AUJ)) return _echec('rien pour '+r);
+          }
+          const ign=Object.assign({},u,{currentCycle:'ignore'});
+          return phraseCalcCycle(ign,AUJ)===''
+            ?true:_echec('« ignore » produit une phrase');})());
+        ok('Périmé, irrégulier, sans cycle : AUCUNE phrase',(()=>{
+          // On ne commente pas un état qu'on ne connaît pas.
+          const perime=_ath({enabled:true,lastPeriodDate:_jour(80),cycleLength:28});
+          if(phaseCycle(perime,AUJ)!=='perime')
+            return _echec('fixture : '+phaseCycle(perime,AUJ));
+          if(phraseCalcCycle(perime,AUJ)!=='') return _echec('phrase sur périmé');
+          const irr=_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28,
+            regulier:false});
+          if(phraseCalcCycle(irr,AUJ)!=='') return _echec('phrase sur irrégulier');
+          return phraseCalcCycle(_ath(null),AUJ)===''
+            ?true:_echec('phrase sans cycle configuré');})());
+        ok('Utilisateur masculin : aucune phrase',(()=>{
+          const h=_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28},{gender:'H',
+            _evol_gender:'Homme'});
+          const t=phraseCalcCycle(h,AUJ);
+          // Le cycle n'est pas calculable chez lui ; s'il l'était par accident,
+          // la phrase ne doit toujours pas sortir.
+          return t===''?true:_echec(t);})());
+        ok('phraseCalcCycle est PURE',(()=>{
+          const u=_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28});
+          const avant=JSON.stringify(u);
+          phraseCalcCycle(u,AUJ);
+          return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
+        ok('La phrase sort MÊME quand l\'estimation est refusée',(()=>{
+          const g=id=>document.getElementById(id);
+          const av={pw:g('calc-pw').value,pr:g('calc-pr').value,prir:g('calc-prir').value};
+          try{
+            currentUser=_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28});
+            // Saisie vide : pas d'e1RM du tout.
+            g('calc-pw').value=''; g('calc-pr').value=''; g('calc-prir').value='';
+            updateCalcTable();
+            const z=g('calc-cycle-etat');
+            if(!z) return _echec('zone absente');
+            if(!z.textContent) return _echec('phrase absente sur saisie vide');
+            // Reps aberrantes : l'estimation est refusée, la phrase reste.
+            g('calc-pw').value='100'; g('calc-pr').value='60'; g('calc-prir').value='5';
+            updateCalcTable();
+            if(!z.textContent) return _echec('phrase absente sur refus de domaine');
+            // Et elle disparaît quand elle n'a plus lieu d'être.
+            currentUser=_ath({enabled:true,lastPeriodDate:_jour(10),cycleLength:28});
+            updateCalcTable();
+            return (!z.textContent&&z.style.display==='none')
+              ?true:_echec('elle reste hors phase : '+z.textContent);
+          } finally {
+            g('calc-pw').value=av.pw; g('calc-pr').value=av.pr; g('calc-prir').value=av.prir;
+          }})());
+        ok('La zone de texte est SOUS le tableau, et il n\'y en a qu\'une',(()=>{
+          const n=document.querySelectorAll('#calc-cycle-etat').length;
+          if(n!==1) return _echec(n+' zones de texte de cycle');
+          if(document.getElementById('calc-cycle-adj'))
+            return _echec('le bloc d\'ajustement est revenu');
+          const z=document.getElementById('calc-cycle-etat');
+          const t=document.getElementById('calc-table-body');
+          if(!z||!t) return _echec('éléments absents');
+          // compareDocumentPosition : la zone suit le tableau dans l'ordre du
+          // document. FOLLOWING vaut 4.
+          return (t.compareDocumentPosition(z)&4)!==0
+            ?true:_echec('la zone est au-dessus du tableau');})());
+        ok('getCycleFactor rend EXACTEMENT ce qu\'il rendait',(()=>{
+          // Non-régression stricte : ce lot ne doit pas l'effleurer.
+          const att={j1_difficile:[0.80,0],j1_supportable:[0.95,0],
+            j6_14:[1.00,0],j15_21:[1.00,0],j22_28:[1.00,1]};
+          for(const k of Object.keys(att)){
+            const f=getCycleFactor(_ath(null,{currentCycle:k}),AUJ);
+            if(f.factor!==att[k][0]||f.seriesReduce!==att[k][1])
+              return _echec(k+' : '+JSON.stringify(f));
+          }
+          const m=getCycleFactor(_ath({enabled:true,lastPeriodDate:_jour(2),
+            cycleLength:28,intensiteRegles:'difficile'}),AUJ);
+          if(m.factor!==0.80) return _echec('menstruel difficile : '+m.factor);
+          const l=getCycleFactor(_ath({enabled:true,lastPeriodDate:_jour(25),
+            cycleLength:28,sensibilitePms:true}),AUJ);
+          if(l.seriesReduce!==1) return _echec('lutéale PMS : '+JSON.stringify(l));
+          return !/phraseCalcCycle|CALC_PHRASE/.test(String(getCycleFactor))
+            ?true:_echec('getCycleFactor a été touché');})());
         ok('Sans cycle configuré, le calculateur n\'ajuste rien',(()=>{
           const g=id=>document.getElementById(id);
           const av={pw:g('calc-pw').value,pr:g('calc-pr').value,prir:g('calc-prir').value};
