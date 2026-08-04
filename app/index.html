@@ -2024,6 +2024,14 @@ const COACH_PHOTO='icons/coach.jpg';
           <div id="atp-pes-partage-note" style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-top:9px"></div>
         </div>
       </div>
+      <!-- Familles de traitement. Carte SÉPARÉE de celle des états de santé :
+           un traitement n'est pas un diagnostic, et les libellés de
+           ETATS_DECLARABLES portent tous « diagnostiqué par un médecin ». -->
+      <div class="card" id="atp-trait-card" style="margin-bottom:14px;display:none">
+        <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Familles de traitement</label>
+        <div id="atp-trait-opts" style="display:flex;flex-direction:column;gap:8px"></div>
+        <div id="atp-trait-note" style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-top:9px"></div>
+      </div>
       <div class="card" id="atp-etats-card" style="margin-bottom:14px">
         <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">États de santé déclarés</label>
         <div id="atp-etats-opts" style="display:flex;flex-direction:column;gap:8px"></div>
@@ -6444,6 +6452,18 @@ function risquesMicro(user,ref){
           +' nuits renseignées, pendant une sèche.',
         question:'Est-ce que le sommeil fait partie de ce que vous suivez ensemble en ce moment ?'});
     }
+  }
+
+  // ── Traitement déclaré ──────────────────────────────────────────────────
+  // La CASE seule. Le motif ne reprend RIEN du texte libre : le coach le lit
+  // dans les réponses au bilan, pas dans une entrée générée.
+  if(traitementDeclare(user)){
+    const fam=famillesTraitement(user)
+      .map(c=>(FAMILLES_TRAITEMENT.find(f=>f.cle===c)||{}).lib).filter(Boolean);
+    out.push({cle:'traitement',lib:'Traitement déclaré',
+      motif:'Un traitement régulier est déclaré.'
+        +(fam.length?' Familles indiquées : '+fam.join(', ')+'.':''),
+      question:'A-t-il été pris en compte dans les objectifs ?'});
   }
 
   // ── Récupération : le palier du lot A3-04, porté au coach ───────────────
@@ -15186,6 +15206,8 @@ const BILAN_QUESTIONS={
     {k:'deb-health',lbl:'Problèmes de santé / blessures',emoji:'🩺',alerte:true},
     {k:'deb-entrejambe',lbl:'Entrejambe (cm)',emoji:'📏'},
     {k:'deb-bras',lbl:'Longueur de bras (cm)',emoji:'📏'},
+    {k:'deb-traitement',lbl:'Traitement médicamenteux régulier',emoji:'💊',alerte:true},
+    {k:'deb-traitement-detail',lbl:'Traitement — précisions',emoji:'💊'},
     {k:'deb-allergies',lbl:'Allergies / régime particulier',emoji:'🥜',alerte:true},
     {k:'deb-tca',lbl:'Troubles du comportement alimentaire',emoji:'🚨',alerte:true},
     {k:'deb-goals',lbl:'Objectifs principaux',emoji:'🎯'},
@@ -15237,6 +15259,55 @@ function _texteReponse(val){
 // (Une lecture par mots-clés existe ailleurs — _aAntecedentLombaire — mais
 // elle ne fait que REMONTER des protocoles de prévention dans une liste, sans
 // jamais rien écarter ni avertir. C'est la limite à ne pas franchir.)
+// ══════════ TRAITEMENTS : POSER LA QUESTION, NE JAMAIS LIRE LA RÉPONSE ══════
+// Un athlète sous corticothérapie voyait sa prise de poids signalée comme une
+// dérive, alors que c'est un effet attendu de son traitement.
+//
+// La CASE seule produit les effets. Le TEXTE n'est lu par AUCUN calcul, et
+// c'est la même décision que pour deb-health juste au-dessus, pour la même
+// raison : un détecteur de mots-clés sur « je ne prends plus de cortisone »
+// se trompe, et un faux positif apprend à ignorer les avertissements. Le
+// texte va au coach, qui est un humain. Un test interdit sa lecture.
+const TRAITEMENT_MENTION='Ce texte n\'est lu que par ton coach, '
+  +'l\'application ne l\'analyse pas.';
+const TRAITEMENT_VITESSE='Ta vitesse sort de la fourchette habituelle — un '
+  +'traitement en cours peut l\'expliquer, parles-en à ton coach.';
+// Familles FACULTATIVES, dans les réglages et non dans l'accueil.
+//
+// PAS dans ETATS_DECLARABLES : chaque libellé de cette liste porte
+// « diagnostiqué par un médecin » — un test l'exige — et un TRAITEMENT n'est
+// pas un diagnostic. « thyroidien » viendrait de surcroît s'asseoir à côté du
+// « thyroide » existant, qui est la pathologie : deux axes, une seule liste,
+// on ne s'y retrouverait plus.
+//
+// Aucune dose, aucune molécule, aucune date, et AUCUNE exhaustivité
+// recherchée : quatre familles dont l'effet sur le poids ou le métabolisme
+// est connu du coach. Le reste passe par le texte libre.
+const FAMILLES_TRAITEMENT=Object.freeze([
+  Object.freeze({cle:'thyroidien',    lib:'Traitement thyroïdien'}),
+  Object.freeze({cle:'corticoide',    lib:'Corticoïdes'}),
+  Object.freeze({cle:'antidiabetique',lib:'Antidiabétiques'}),
+  Object.freeze({cle:'betabloquant',  lib:'Bêtabloquants'})
+]);
+// PURE. La case, et rien d'autre. Le texte n'entre pas dans la condition :
+// une case cochée sans un mot produit exactement les mêmes effets.
+function traitementDeclare(user){ return !!((user||{}).traitementEnCours); }
+function famillesTraitement(user){
+  const l=(user&&user.famillesTraitement);
+  if(!Array.isArray(l)) return [];
+  return l.filter(x=>FAMILLES_TRAITEMENT.some(f=>f.cle===x));
+}
+const TRAITEMENT_REVUE_JOURS=180;
+// PURE. Semestrielle, et seulement semestrielle : ni à chaque bilan, ni en
+// notification. Un dossier qui n'a jamais répondu est dû — sinon la question
+// ne sortirait jamais pour personne.
+function traitementARevoir(user,ref){
+  if(!traitementDeclare(user)) return false;
+  const d=(user||{}).traitementRevuLe;
+  if(!d) return true;
+  const t=(ref instanceof Date?ref:new Date()).getTime();
+  return (t-new Date(d).getTime())>TRAITEMENT_REVUE_JOURS*864e5;
+}
 const ZONES_CONTRAINTE=Object.freeze([
   {cle:'rachis-lombaire',lib:'bas du dos'},
   {cle:'rachis-cervical',lib:'nuque'},
@@ -16375,6 +16446,16 @@ const BIL_STEPS=[
     `<div>${bC('bil-stress',['Pas du tout','Un peu','Beaucoup','Énormément'])}</div>`+
     bLbl('Si tu es stressé, peux-tu me donner des précisions sur ce qui te préoccupe en ce moment ?')+bTA('bil-stress-detail','Ce qui te préoccupe...')
   ),
+  // Step 5 bis : le traitement, SEMESTRIELLEMENT et pas plus souvent.
+  // Rend une chaîne VIDE le reste du temps : bSec n'est même pas appelé, il
+  // n'y a donc ni titre ni cadre orphelin. Aucune réponse n'est exigée —
+  // rien ici ne conditionne la validation du bilan, et c'est délibéré : une
+  // question de santé qui bloque un bilan se répond au hasard.
+  ()=>traitementARevoir(currentUser)?bSec('Traitement',
+    bLbl('Ton traitement a-t-il changé depuis la dernière fois ?')+
+    `<div>${bC('bil-traitement-change',['Non, rien n\'a changé','Oui, il a changé','Je ne prends plus de traitement'])}</div>`+
+    `<div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-top:8px">${escapeHtml(TRAITEMENT_MENTION)}</div>`
+  ):'',
   // Step 5 : Objectif — texte libre uniquement. L'engagement chiffré a été
   // retiré du produit ; ce texte reste lu par _objectifTexte pour suggérer
   // une phase.
@@ -16405,6 +16486,14 @@ const DEB_STEPS=[
     bLbl('Et ton rythme de travail ?')+
     `<div>${bC('deb-work-rhythm',['Plein temps','Partiel','En arrêt'])}</div>`+
     bLbl('As-tu des problèmes de santé ou des blessures ?  (Si oui, précise)')+bT('deb-health','Ex: Hernie discale, entorse...')+
+    // La CASE d'abord : c'est elle qui agit. Le texte est facultatif, et la
+    // mention qui l'accompagne est AFFICHÉE, pas seulement commentée.
+    `<label style="display:flex;align-items:flex-start;gap:9px;margin-top:10px;cursor:pointer">
+      <input type="checkbox" id="deb-traitement" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px"${bilData['deb-traitement']?' checked':''} onchange="bilData['deb-traitement']=this.checked">
+      <span style="font-size:12px;color:#ddd;line-height:1.55">Je suis un traitement médicamenteux régulier</span>
+    </label>`+
+    bT('deb-traitement-detail','Si tu veux préciser (facultatif)')+
+    `<div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-top:6px">${escapeHtml(TRAITEMENT_MENTION)}</div>`+
     // Étape FACULTATIVE. Le texte libre ci-dessus n'est jamais analysé : si
     // l'athlète veut que l'app en tienne compte, il le structure ici lui-même.
     `<div style="margin-top:8px;background:var(--surface-2);border-radius:10px;padding:11px 13px">
@@ -16508,6 +16597,26 @@ function saveBilanFinal(){
         currentUser.nutrition.dietType=_choix;
       }
     }
+  }
+  // Traitement : la CASE va dans le dossier, le TEXTE aussi mais il n'est lu
+  // par aucun calcul. Décocher fait retomber les effets et CONSERVE le texte —
+  // il ne disparaît qu'à effacement explicite, sinon une case décochée par
+  // erreur détruirait ce que l'athlète avait pris le temps d'écrire.
+  if(bilType==='depart'){
+    if(bilData['deb-traitement']) currentUser.traitementEnCours=true;
+    else delete currentUser.traitementEnCours;
+    const _td=(bilData['deb-traitement-detail']||'').trim();
+    if(_td) currentUser.traitementDetail=_td;
+  }
+  // La revue semestrielle. On horodate dès que la question a été POSÉE et
+  // qu'une réponse existe : sans réponse, la date ne bouge pas et la question
+  // reviendra au bilan suivant plutôt que de disparaître six mois.
+  const _rep=_texteReponse(bilData['bil-traitement-change']);
+  if(_rep){
+    currentUser.traitementRevuLe=Date.now();
+    // « Je ne prends plus de traitement » : la case retombe, et le TEXTE
+    // reste — même règle que partout ailleurs dans ce lot.
+    if(/ne prends plus/i.test(_rep)) delete currentUser.traitementEnCours;
   }
   if(bilData['bil-weight']) currentUser.weight=bilData['bil-weight'];
   if(bilData['deb-weight']) currentUser.weight=bilData['deb-weight'];
@@ -21360,6 +21469,19 @@ const SUPP_SOURCING="La qualité varie beaucoup d'une marque à l'autre. Si tu c
 // Le même avertissement, à la bonne personne. Même raison que
 // SUPP_LEGENDE_PIED_COACH : le coach n'a pas à se lire tutoyer en athlète.
 const SUPP_SOURCING_COACH="La qualité varie beaucoup d'une marque à l'autre. Si cet athlète concourt dans une fédération qui pratique des contrôles antidopage, un complément contaminé suffit à le rendre positif : oriente-le vers un contrôle par un laboratoire tiers. RepCore ne recommande aucune marque.";
+// Générique, et le rester : aucune interaction n'est nommée, aucun complément
+// n'est déconseillé, aucun texte n'est lu. On dit qu'il existe une question à
+// poser, et à QUI la poser — c'est tout ce que le produit peut honnêtement
+// faire depuis une case à cocher.
+const TRAITEMENT_SUPP='Tu as déclaré un traitement régulier. Avant d\'ajouter '
+  +'un complément, demande à ton médecin ou à ton pharmacien : c\'est à eux '
+  +'de dire si l\'un peut gêner l\'autre.';
+function _htmlTraitementSupp(user){
+  if(!traitementDeclare(user||currentUser)) return '';
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:12px 13px;margin-bottom:14px">
+    <div style="font-size:12px;color:#ddd;line-height:1.7">${escapeHtml(TRAITEMENT_SUPP)}</div>
+  </div>`;
+}
 function _htmlSuppSourcing(isCoach){
   return `<div style="border-top:1px solid var(--border);margin-top:11px;padding-top:11px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:6px">Qualité et sourcing</div>
@@ -21476,6 +21598,7 @@ function loadSupplements(){
       </div>
       <button onclick="openSuppEdit(-1)" style="background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;padding:8px 14px;border-radius:8px;cursor:pointer">+ AJOUTER</button>
     </div>
+    ${_htmlTraitementSupp(currentUser)}
     <div style="background:var(--dark);border:1px solid var(--border);border-radius:14px;padding:14px">
       ${_renderSuppTable(list,false,'openSuppEdit')}
     </div>
@@ -23920,6 +24043,20 @@ function cibleVitesse(user){
   if(p&&pauseActive(user))
     return Object.assign({},PHASES.maintien,{phase:p.type,pause:true,
       alerte:null,alerteAbs:null,note:PAUSE_TEXTE_VITESSE});
+  // Traitement déclaré : la vitesse cesse d'être signalée comme une dérive,
+  // et la phrase dit POURQUOI plutôt que de se taire. Même mécanique que la
+  // pause et la grossesse — alerte et alerteAbs à null EXPLICITEMENT — et
+  // pas une ligne de vitesseAlerte ne bouge : elle est PURE et ne reçoit pas
+  // le dossier, la garder de l'intérieur exigerait de changer sa signature.
+  //
+  // Placé APRÈS la grossesse et la pause, qui portent leurs propres messages,
+  // et AVANT le SOPK : sous traitement, élargir une fourchette n'aurait pas de
+  // sens puisqu'on cesse d'alerter tout court. La fourchette AFFICHÉE reste
+  // celle de la phase — on ne prétend pas savoir laquelle viser sous
+  // traitement, on cesse seulement de crier.
+  if(p&&traitementDeclare(user))
+    return Object.assign({},PHASES[p.type],{phase:p.type,traitement:true,
+      alerte:null,alerteAbs:null,note:TRAITEMENT_VITESSE});
   // SOPK déclaré et sèche en cours : la fourchette s'élargit vers le bas et
   // le seuil d'alerte suit. Une perte plus lente n'est pas un déficit
   // insuffisant — c'est ce que la spécification appelle le vrai défaut.
@@ -27592,6 +27729,36 @@ const ATP_CYCLE_OPTIONS=Object.freeze([
 let _atpEtats=[];
 let _atpThyEtat=null, _atpThyTrait=false;
 let _atpHormo=null, _atpHormoTrait=false;
+let _atpFamilles=[];
+// Facultatif, et réversible d'un geste. Aucune dose, aucune molécule,
+// aucune date : quatre cases, et rien à saisir.
+function basculerFamilleTraitement(cle){
+  if(!FAMILLES_TRAITEMENT.some(f=>f.cle===cle)) return false;
+  const i=_atpFamilles.indexOf(cle);
+  if(i>=0) _atpFamilles.splice(i,1); else _atpFamilles.push(cle);
+  currentUser.famillesTraitement=_atpFamilles.slice();
+  saveUser();
+  _renderAtpTraitement();
+  return true;
+}
+function _renderAtpTraitement(){
+  const c=document.getElementById('atp-trait-card');
+  if(!c) return;
+  // La carte n'existe que pour qui a coché la case au bilan : proposer des
+  // familles à qui ne déclare aucun traitement serait poser la question deux
+  // fois, et par la bande.
+  const on=traitementDeclare(currentUser);
+  c.style.display=on?'block':'none';
+  if(!on) return;
+  const z=document.getElementById('atp-trait-opts');
+  if(z) z.innerHTML=FAMILLES_TRAITEMENT.map(f=>
+    `<div class="obj-opt${_atpFamilles.indexOf(f.cle)>=0?' sel':''}" onclick="basculerFamilleTraitement('${f.cle}')"
+      role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div style="font-weight:800">${escapeHtml(f.lib)}</div>
+    </div>`).join('');
+  const n=document.getElementById('atp-trait-note');
+  if(n) n.textContent=TRAITEMENT_MENTION;
+}
 // Écriture immédiate, comme la grossesse : la déclaration n'attend pas le
 // bouton SAUVEGARDER, et la retirer EFFACE tout — le partage avec elle.
 function basculerPES(v){
@@ -27781,6 +27948,8 @@ function openAthleteProfile(){
   _atpHormo=(_st==='cycles_reguliers'&&u.statutHormonal===undefined)?null:_st;
   _atpHormoTrait=!!u.traitementHormonal;
   _renderAtpPES();
+  _atpFamilles=famillesTraitement(u).slice();
+  _renderAtpTraitement();
   _renderAtpEtats();
   const zc=document.getElementById('atp-comptes');
   if(zc) zc.innerHTML=htmlSelecteurComptes();
@@ -33992,6 +34161,403 @@ function testExercices(){
           return !/\d{2}\s*ans/.test(src)
             ?true:_echec('un barème par âge est apparu dans le bandeau');})());
       } finally { currentUser=_enU; }
+    })();
+
+    // ══════ TRAITEMENTS : POSER LA QUESTION, NE JAMAIS LIRE LA RÉPONSE ══════
+    (()=>{
+      const _trU=currentUser;
+      const _tj=n=>localISODate(new Date(Date.now()-n*864e5));
+      const _ath=(o)=>{
+        const c=o||{};
+        const wl=[];
+        const pct=(c.pctSem!=null)?c.pctSem:1.2;
+        for(let j=45;j>=0;j--) wl.push({date:_tj(j),kg:Math.round((80+80*(pct/100)/7*(45-j))*100)/100});
+        const u={id:'tr'+(c.id||''),email:'tr'+(c.id||'')+'@t',role:'athlete',
+          gender:'Homme',_evol_gender:'Homme',_evol_height:178,
+          exAlias:{},exMuscles:{},programs:{},sessions:[],sleepLog:[],weightLog:wl,
+          sessions_config:[{day:'J0',name:'S0',active:true,exercises:[]}],
+          bilans:[{type:'depart',date:Date.now()-200*864e5,'deb-weight':'80',
+            'deb-height':'178','deb-age':'32','deb-gender':'Homme'}],
+          nutrition:{dietType:'strict',
+            macros:{on:{kcal:2600,p:170,g:280,l:80},off:{kcal:2500,p:170,g:260,l:80}}}};
+        u.phase={type:c.phase||'masse',debut:Date.now()-(c.semaines||10)*7*864e5,
+          definiPar:'athlete',historique:[]};
+        if(c.trait) u.traitementEnCours=true;
+        if(c.detail) u.traitementDetail=c.detail;
+        if(c.familles) u.famillesTraitement=c.familles;
+        if(c.revuLe!=null) u.traitementRevuLe=Date.now()-c.revuLe*864e5;
+        if(c.extra) Object.assign(u,c.extra);
+        return u;
+      };
+      try {
+        // ── La case, et rien d'autre ─────────────────────────────────────
+        ok('traitementDeclare tient à la CASE, jamais au texte',(()=>{
+          if(traitementDeclare(_ath({id:'a1'}))) return _echec('vrai sans déclaration');
+          if(!traitementDeclare(_ath({id:'a2',trait:true}))) return _echec('faux malgré la case');
+          // Un texte SANS la case ne déclenche rien : c'est le sens même du lot.
+          if(traitementDeclare(_ath({id:'a3',detail:'cortisone 5 mg'})))
+            return _echec('le texte seul a suffi');
+          // Et la case SANS texte déclenche tout.
+          const vide=_ath({id:'a4',trait:true});
+          if(vide.traitementDetail!==undefined) return _echec('fixture impure');
+          return traitementDeclare(vide)?true:_echec('la case seule ne suffit pas');})());
+        ok('traitementDeclare et famillesTraitement sont PURES',(()=>{
+          const u=_ath({id:'a5',trait:true,detail:'x',familles:['corticoide']});
+          const avant=JSON.stringify(u);
+          traitementDeclare(u); famillesTraitement(u); cibleVitesse(u); risquesMicro(u);
+          return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
+
+        // ── La dérive de poids cesse d'être signalée ─────────────────────
+        ok('Case non cochée : vitesseAlerte se comporte comme avant',(()=>{
+          const u=_ath({id:'b1'});
+          const c=cibleVitesse(u);
+          if(c.alerte!==PHASES.masse.alerte) return _echec('alerte : '+c.alerte);
+          if(c.traitement) return _echec('le drapeau sort sans déclaration');
+          // +1,2 %/sem en masse, alerte à +0,75 : signalé, comme aujourd'hui.
+          return vitesseAlerte(1.2,c)===true
+            ?true:_echec('la dérive n\'est plus signalée');})());
+        ok('Case cochée : vitesseAlerte(1.2, cibleVitesse) === false',(()=>{
+          // La spec demandait vitesseAlerte(1.2, PHASES.masse) === false, ce qui
+          // exigerait qu'une fonction PURE aille lire le dossier. On neutralise
+          // par la CIBLE, comme la pause et la grossesse déjà livrées : même
+          // effet observable, et pas une ligne de vitesseAlerte ne bouge.
+          const u=_ath({id:'b2',trait:true});
+          const c=cibleVitesse(u);
+          if(!c.traitement) return _echec('le drapeau manque');
+          if(c.alerte!==null||c.alerteAbs!==null)
+            return _echec('alerte='+c.alerte+' alerteAbs='+c.alerteAbs);
+          if(vitesseAlerte(1.2,c)!==false) return _echec('la dérive est encore signalée');
+          // Une vitesse ÉNORME ne doit pas passer entre les mailles non plus.
+          if(vitesseAlerte(9,c)!==false) return _echec('9 %/sem alerte encore');
+          return c.note===TRAITEMENT_VITESSE?true:_echec('phrase : '+c.note);})());
+        ok('Case cochée SANS texte : les effets s\'appliquent quand même',(()=>{
+          const u=_ath({id:'b3',trait:true});
+          if(u.traitementDetail!==undefined) return _echec('fixture impure');
+          const c=cibleVitesse(u);
+          if(vitesseAlerte(1.2,c)!==false) return _echec('la dérive est signalée');
+          return (risquesMicro(u)||[]).some(x=>x.cle==='traitement')
+            ?true:_echec('aucune entrée coach');})());
+        ok('La phrase dit POURQUOI, sans rien prescrire',(()=>{
+          const t=TRAITEMENT_VITESSE;
+          if(!/traitement en cours/.test(t)) return _echec('le motif a disparu');
+          if(!/ton coach/.test(t)) return _echec('aucun renvoi au coach');
+          if(/\d/.test(t)) return _echec('un chiffre : '+t);
+          const interdits=[/arr[êe]te/i,/diminue/i,/augmente ta dose/i,/m[ée]dicament/i];
+          for(const r of interdits) if(r.test(t)) return _echec('interdit : '+r);
+          return true;})());
+
+        // ── Les priorités, en cumul ──────────────────────────────────────
+        ok('Le PLANCHER reste prioritaire sur la phrase de traitement',(()=>{
+          // Le plancher est un message d'écran, produit ailleurs et par une
+          // autre fonction : la phrase de vitesse ne peut pas le masquer. On
+          // vérifie qu'il sort toujours, traitement déclaré ou non.
+          const u=_ath({id:'c1',trait:true,phase:'seche',semaines:20,pctSem:-1.4,extra:{
+            nutrition:{macros:{on:{kcal:1500,p:150,g:100,l:40},off:{kcal:1400,p:150,g:90,l:40}}}}});
+          const h=_htmlPlancherAthlete(u);
+          const t=_ath({id:'c2',phase:'seche',semaines:20,pctSem:-1.4,extra:{
+            nutrition:{macros:{on:{kcal:1500,p:150,g:100,l:40},off:{kcal:1400,p:150,g:90,l:40}}}}});
+          const ht=_htmlPlancherAthlete(t);
+          if(ht&&!h) return _echec('le traitement a fait disparaître le plancher');
+          return true;})());
+        ok('Le palier « blocage » de A3-04 reste prioritaire',(()=>{
+          const sl=[];
+          for(let i=0;i<20;i++) sl.push({date:_tj(i),duration:5.0});
+          const u=_ath({id:'c3',trait:true,phase:'seche',semaines:20,pctSem:-1.4,extra:{
+            nutrition:{macros:{on:{kcal:1500,p:150,g:100,l:40},off:{kcal:1400,p:150,g:90,l:40}}},
+            sleepLog:sl,cycle:{absences:[_tj(10),_tj(40),_tj(70)]}}});
+          const pal=paliersDeficit(u);
+          if(pal==='aucun') return _echec('fixture muette : aucun palier');
+          // Le palier vit dans son propre encadré et n'est pas éteint par le
+          // traitement : les deux se lisent, celui du palier d'abord.
+          const h=_htmlPalierAthlete(u);
+          if(!h) return _echec('le palier ne s\'affiche plus');
+          const t=_ath({id:'c4',phase:'seche',semaines:20,pctSem:-1.4,extra:{
+            nutrition:{macros:{on:{kcal:1500,p:150,g:100,l:40},off:{kcal:1400,p:150,g:90,l:40}}},
+            sleepLog:sl,cycle:{absences:[_tj(10),_tj(40),_tj(70)]}}});
+          return paliersDeficit(t)===pal
+            ?true:_echec('le traitement a changé le palier : '+paliersDeficit(t));})());
+        ok('Grossesse et pause passent AVANT le traitement',(()=>{
+          // Elles portent leurs propres messages ; le traitement ne doit pas
+          // les écraser au passage.
+          const g=_ath({id:'c5',trait:true,gender:'Femme',extra:{
+            gender:'Femme',_evol_gender:'Femme',grossesse:{etat:'enceinte',declareLe:Date.now()}}});
+          const cg=cibleVitesse(g);
+          if(!cg.grossesse) return _echec('la grossesse a été écrasée');
+          if(cg.traitement) return _echec('les deux drapeaux sortent');
+          return true;})());
+
+        // ── L'entrée coach ───────────────────────────────────────────────
+        ok('L\'entrée coach dit le fait, pas le contenu',(()=>{
+          const u=_ath({id:'d1',trait:true,detail:'prednisone 5 mg le matin'});
+          const e=(risquesMicro(u)||[]).find(x=>x.cle==='traitement');
+          if(!e) return _echec('aucune entrée');
+          if(e.lib!=='Traitement déclaré') return _echec('libellé : '+e.lib);
+          if(!/pris en compte dans les objectifs/.test(e.question))
+            return _echec('question : '+e.question);
+          // Le motif ne REPREND PAS le texte libre : le coach le lit dans les
+          // réponses au bilan, pas dans une entrée générée.
+          const tout=e.lib+' '+e.motif+' '+e.question;
+          if(/prednisone|5 mg|le matin/i.test(tout)) return _echec('le texte a fuité : '+e.motif);
+          return true;})());
+        ok('Sans déclaration, aucune entrée',(()=>{
+          return !(risquesMicro(_ath({id:'d2'}))||[]).some(x=>x.cle==='traitement')
+            ?true:_echec('l\'entrée sort sans déclaration');})());
+        ok('Les familles remontent, sans dose ni molécule',(()=>{
+          const u=_ath({id:'d3',trait:true,familles:['corticoide','betabloquant','inconnue']});
+          if(famillesTraitement(u).length!==2) return _echec('une clé inventée est acceptée');
+          const e=(risquesMicro(u)||[]).find(x=>x.cle==='traitement');
+          if(!/Corticoïdes/.test(e.motif)) return _echec('motif : '+e.motif);
+          return !/\d/.test(e.motif)?true:_echec('un chiffre dans le motif : '+e.motif);})());
+
+        // ── LE TEXTE N'EST LU PAR AUCUN CALCUL ───────────────────────────
+        ok('traitementDetail n\'est lu par AUCUNE fonction de calcul',(()=>{
+          // Aiguille assemblée à l'exécution : sans ça, ce test se trouverait
+          // lui-même. On énumère les fonctions qui DÉCIDENT quelque chose.
+          const a='traitement'+'Detail';
+          const calculs={cibleVitesse,vitesseAlerte,ajustementPropose,besoinsProposes,
+            risqueDeficitEnergetique,paliersDeficit,risquesMicro,plancherEffectif,
+            zForme,formeSeance,energieZ,energieMoyenne,phaseCycle,protSuggeree,
+            protEchelle,correctionMB,traitementDeclare,famillesTraitement,
+            traitementARevoir,relanceAnalyses,aPES};
+          const fautifs=Object.keys(calculs).filter(n=>{
+            try{ return String(calculs[n]).indexOf(a)>=0; }catch(e){ return false; }
+          });
+          return fautifs.length?_echec('lisent le texte : '+fautifs.join(', ')):true;})());
+        ok('traitementDetail n\'apparaît qu\'aux endroits ATTENDUS',(()=>{
+          // Balayage de la PRODUCTION seule — les blocs de tests portent
+          // légitimement le nom du champ. Le champ doit être ÉCRIT et AFFICHÉ,
+          // donc on ne peut pas exiger zéro : on borne le nombre d'occurrences
+          // pour qu'une lecture nouvelle ne passe pas inaperçue.
+          const a='traitement'+'Detail';
+          const tout=document.documentElement.outerHTML;
+          const fin=tout.indexOf('function testExercices');
+          if(fin<0) return _echec('frontière de la suite introuvable');
+          const prod=tout.slice(0,fin);
+          if(prod.length<100000) return _echec('production trop courte : '+prod.length);
+          const n=prod.split(a).length-1;
+          // 1 écriture dans saveBilanFinal. Toute occurrence supplémentaire est
+          // une lecture à justifier, et ce test à mettre à jour SCIEMMENT.
+          return n<=1?true:_echec(n+' occurrences en production au lieu de 1');})());
+        ok('deb-health garde ses DEUX lecteurs, et pas un de plus',(()=>{
+          // La spec en annonçait un seul — _aAntecedentLombaire. Il y en a deux :
+          // MICRO_CHAMPS_VEGE balaie aussi deb-health pour l'entrée végétale de
+          // risquesMicro. Aucun des deux n'écarte ni n'avertit ; on les admet
+          // NOMMÉMENT pour qu'un troisième ne s'ajoute pas en silence.
+          const h='deb-'+'health';
+          const decideurs={contraintesPourExercice,ajouterContrainte,poserDrapeauRouge,
+            cibleVitesse,vitesseAlerte,ajustementPropose,besoinsProposes,
+            paliersDeficit,risqueDeficitEnergetique,plancherEffectif};
+          const fautifs=Object.keys(decideurs).filter(n=>{
+            try{ return String(decideurs[n]).indexOf(h)>=0; }catch(e){ return false; }
+          });
+          if(fautifs.length) return _echec('lisent deb-health : '+fautifs.join(', '));
+          // Et les deux exceptions sont TOUJOURS là, inchangées.
+          if(String(_aAntecedentLombaire).indexOf(h)<0)
+            return _echec('_aAntecedentLombaire ne le lit plus');
+          return MICRO_CHAMPS_VEGE.indexOf(h)>=0
+            ?true:_echec('MICRO_CHAMPS_VEGE ne le lit plus');})());
+        ok('_aAntecedentLombaire n\'écarte toujours RIEN',(()=>{
+          const src=String(_aAntecedentLombaire);
+          if(/return\s*\[\]|filter|splice|delete/.test(src))
+            return _echec('il a commencé à écarter');
+          return /^function[^{]*\{[\s\S]*return\s+\/[^/]+\/\.test\(txt\);\s*\}$/.test(src.trim())
+            ?true:_echec('sa forme a changé : '+src.slice(0,120));})());
+
+        // ── Aucune dose, aucune molécule, nulle part ─────────────────────
+        ok('Les quatre familles, sans aucun champ de dose',(()=>{
+          if(FAMILLES_TRAITEMENT.length!==4) return _echec(FAMILLES_TRAITEMENT.length+' familles');
+          const cles=FAMILLES_TRAITEMENT.map(f=>f.cle).sort().join(',');
+          if(cles!=='antidiabetique,betabloquant,corticoide,thyroidien') return _echec(cles);
+          for(const f of FAMILLES_TRAITEMENT){
+            const k=Object.keys(f).sort().join(',');
+            if(k!=='cle,lib') return _echec(f.cle+' porte '+k);
+            if(/\d/.test(f.lib)) return _echec('un chiffre dans '+f.lib);
+          }
+          return true;})());
+        ok('ETATS_DECLARABLES n\'a PAS reçu les familles',(()=>{
+          // Un traitement n'est pas un diagnostic, et chaque libellé de cette
+          // liste porte « diagnostiqué par un médecin ».
+          const cles=ETATS_DECLARABLES.map(x=>x.cle).sort().join(',');
+          if(cles!=='sopk,thyroide') return _echec(cles);
+          return !ETATS_DECLARABLES.some(x=>FAMILLES_TRAITEMENT.some(f=>f.cle===x.cle))
+            ?true:_echec('une famille s\'est glissée dedans');})());
+        ok('Aucun champ de dose, de molécule ou de posologie nulle part',(()=>{
+          const src=(String(_renderAtpTraitement)+TRAITEMENT_MENTION+TRAITEMENT_SUPP
+            +TRAITEMENT_VITESSE+FAMILLES_TRAITEMENT.map(f=>f.lib).join(' '))
+            .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+          const interdits=['posologie','dosage',' mg','molecule','comprime','matin et soir'];
+          const t=interdits.filter(m=>src.indexOf(m)>=0);
+          return t.length?_echec('trouvés : '+t.join(', ')):true;})());
+        ok('La mention de non-analyse est AFFICHÉE, pas seulement commentée',(()=>{
+          if(!/analyse pas/.test(TRAITEMENT_MENTION))
+            return _echec('la mention ne dit plus rien : '+TRAITEMENT_MENTION);
+          if(!/ton coach/.test(TRAITEMENT_MENTION)) return _echec('elle ne dit pas à qui');
+          // Elle sort dans le questionnaire de départ.
+          const h=DEB_STEPS[0]();
+          if(h.indexOf('deb-traitement-detail')<0) return _echec('le champ manque à l\'étape 1');
+          if(h.indexOf('deb-traitement')<0) return _echec('la case manque à l\'étape 1');
+          const d=document.createElement('div'); d.innerHTML=h;
+          return (d.textContent||'').indexOf('analyse pas')>=0
+            ?true:_echec('la mention n\'est pas affichée');})());
+        ok('Le message compléments reste GÉNÉRIQUE',(()=>{
+          if(_htmlTraitementSupp(_ath({id:'e1'}))!=='') return _echec('il sort sans déclaration');
+          const h=_htmlTraitementSupp(_ath({id:'e2',trait:true,detail:'prednisone'}));
+          if(!h) return _echec('il ne sort pas avec');
+          if(/prednisone/i.test(h)) return _echec('le texte a fuité');
+          // Aucun complément nommé, aucune interaction affirmée.
+          if(/cr[ée]atine|oméga|magn[ée]sium|vitamine/i.test(h))
+            return _echec('un complément est nommé');
+          return /médecin|pharmacien/.test(h)?true:_echec('aucun renvoi');})());
+
+        // ── La relance, semestrielle et jamais bloquante ─────────────────
+        ok('La relance n\'apparaît pas avant 180 jours',(()=>{
+          if(traitementARevoir(_ath({id:'f1'}))) return _echec('elle sort sans déclaration');
+          // Jamais répondu : elle est due, sinon elle ne sortirait jamais.
+          if(!traitementARevoir(_ath({id:'f2',trait:true}))) return _echec('jamais due');
+          if(traitementARevoir(_ath({id:'f3',trait:true,revuLe:0})))
+            return _echec('due le jour même');
+          if(traitementARevoir(_ath({id:'f4',trait:true,revuLe:TRAITEMENT_REVUE_JOURS-1})))
+            return _echec('due à '+(TRAITEMENT_REVUE_JOURS-1)+' jours');
+          return traitementARevoir(_ath({id:'f5',trait:true,revuLe:TRAITEMENT_REVUE_JOURS+1}))
+            ?true:_echec('pas due à '+(TRAITEMENT_REVUE_JOURS+1)+' jours');})());
+        ok('L\'étape ne s\'affiche que quand elle est due',(()=>{
+          const sauve=currentUser;
+          const _sv=bilData;
+          try{
+            bilData={};
+            currentUser=_ath({id:'f6',trait:true,revuLe:10});
+            const l=BIL_STEPS.map(f=>{try{return f();}catch(e){return '';}}).join('');
+            if(l.indexOf('bil-traitement-change')>=0)
+              return _echec('elle sort à 10 jours');
+            currentUser=_ath({id:'f7',trait:true,revuLe:200});
+            const l2=BIL_STEPS.map(f=>{try{return f();}catch(e){return '';}}).join('');
+            return l2.indexOf('bil-traitement-change')>=0
+              ?true:_echec('elle ne sort pas à 200 jours');
+          } finally { currentUser=sauve; bilData=_sv; }})());
+        ok('Elle ne bloque JAMAIS la validation',(()=>{
+          // Aucune garde ne mentionne ce champ : rien ne peut refuser de valider
+          // un bilan parce qu'il n'a pas été rempli.
+          const c='bil-traitement-'+'change';
+          const gardes={saveBilanFinal};
+          for(const n of Object.keys(gardes)){
+            const src=String(gardes[n]);
+            const i=src.indexOf(c);
+            if(i<0) continue;
+            // Il est LU pour horodater, jamais pour refuser.
+            if(/return\s+toast|return\s+false|throw/.test(src.slice(i-200,i+200)))
+              return _echec(n+' peut refuser la validation');
+          }
+          return true;})());
+
+        ok('Les chiffres du lot sont ceux-là, écrits en toutes lettres',(()=>{
+          // TROISIÈME FOIS que je me fais prendre : mes tests se mesuraient à
+          // TRAITEMENT_REVUE_JOURS, donc le mettre à 30 les laissait au vert.
+          // Le lot ménopause avait déjà eu ce trou, et j'avais annoncé l'avoir
+          // corrigé. Le chiffre décidé s'épingle ici, une fois, en clair.
+          if(TRAITEMENT_REVUE_JOURS!==180) return _echec('délai : '+TRAITEMENT_REVUE_JOURS);
+          const u=_ath({id:'h1',trait:true,revuLe:179});
+          if(traitementARevoir(u)) return _echec('due à 179 jours');
+          return traitementARevoir(_ath({id:'h2',trait:true,revuLe:181}))
+            ?true:_echec('pas due à 181 jours');})());
+        ok('La case du bilan est réellement ÉCRITE dans le dossier',(()=>{
+          // Toutes mes autres fixtures posaient traitementEnCours à la main :
+          // supprimer la ligne qui l'écrit vraiment ne les dérangeait pas. Même
+          // trou que le curseur d'énergie du lot précédent, non suivi jusqu'à
+          // metrics. On part de bilData et on va jusqu'au dossier.
+          const sauve=currentUser, _bt=bilType, _bd=bilData;
+          const _sv=window.saveUser, _go=window.go, _lc=window.loadClientHome;
+          const _te=window.toastEcriture;
+          try{
+            window.saveUser=()=>true; window.go=()=>{}; window.loadClientHome=()=>{};
+            window.toastEcriture=()=>{};
+            currentUser=_ath({id:'h3'});
+            bilType='depart';
+            bilData={'deb-traitement':true,'deb-traitement-detail':'  un texte  '};
+            saveBilanFinal();
+            if(currentUser.traitementEnCours!==true)
+              return _echec('la case n\'est pas écrite');
+            if(currentUser.traitementDetail!=='un texte')
+              return _echec('le texte : '+currentUser.traitementDetail);
+            // Et décocher retire la case SANS toucher au texte.
+            bilData={'deb-traitement':false};
+            saveBilanFinal();
+            if(currentUser.traitementEnCours!==undefined)
+              return _echec('la case survit à un décochage');
+            return currentUser.traitementDetail==='un texte'
+              ?true:_echec('le texte a été détruit');
+          } finally { currentUser=sauve; bilType=_bt; bilData=_bd;
+            window.saveUser=_sv; window.go=_go; window.loadClientHome=_lc;
+            window.toastEcriture=_te; }})());
+        ok('Sans réponse, la revue ne s\'horodate PAS',(()=>{
+          // Sinon la question disparaîtrait six mois pour quelqu'un qui n'a
+          // rien répondu — l'inverse exact de ce qu'une relance doit faire.
+          const sauve=currentUser, _bt=bilType, _bd=bilData;
+          const _sv=window.saveUser, _go=window.go, _lc=window.loadClientHome;
+          const _te=window.toastEcriture;
+          try{
+            window.saveUser=()=>true; window.go=()=>{}; window.loadClientHome=()=>{};
+            window.toastEcriture=()=>{};
+            currentUser=_ath({id:'h4',trait:true});
+            bilType='coaching';
+            bilData={};
+            saveBilanFinal();
+            if(currentUser.traitementRevuLe!==undefined)
+              return _echec('horodatée sans réponse');
+            if(!traitementARevoir(currentUser)) return _echec('la question a disparu');
+            // Avec une réponse, elle s'horodate et se tait.
+            bilData={'bil-traitement-change':'Non, rien n\'a changé'};
+            saveBilanFinal();
+            if(!(currentUser.traitementRevuLe>0)) return _echec('pas horodatée malgré la réponse');
+            return !traitementARevoir(currentUser)
+              ?true:_echec('elle revient tout de suite');
+          } finally { currentUser=sauve; bilType=_bt; bilData=_bd;
+            window.saveUser=_sv; window.go=_go; window.loadClientHome=_lc;
+            window.toastEcriture=_te; }})());
+        ok('« Je ne prends plus » fait retomber la case, pas le texte',(()=>{
+          const sauve=currentUser, _bt=bilType, _bd=bilData;
+          const _sv=window.saveUser, _go=window.go, _lc=window.loadClientHome;
+          const _te=window.toastEcriture;
+          try{
+            window.saveUser=()=>true; window.go=()=>{}; window.loadClientHome=()=>{};
+            window.toastEcriture=()=>{};
+            currentUser=_ath({id:'h5',trait:true,detail:'garde-moi'});
+            bilType='coaching';
+            bilData={'bil-traitement-change':'Je ne prends plus de traitement'};
+            saveBilanFinal();
+            if(currentUser.traitementEnCours!==undefined) return _echec('la case tient');
+            return currentUser.traitementDetail==='garde-moi'
+              ?true:_echec('le texte a été détruit');
+          } finally { currentUser=sauve; bilType=_bt; bilData=_bd;
+            window.saveUser=_sv; window.go=_go; window.loadClientHome=_lc;
+            window.toastEcriture=_te; }})());
+        // ── Le dossier, et ce qui en sort ────────────────────────────────
+        ok('Décocher fait retomber les effets et CONSERVE le texte',(()=>{
+          const u=_ath({id:'g1',trait:true,detail:'un texte écrit à la main'});
+          delete u.traitementEnCours;
+          if(traitementDeclare(u)) return _echec('les effets tiennent encore');
+          if(vitesseAlerte(1.2,cibleVitesse(u))!==true)
+            return _echec('la dérive n\'est plus signalée');
+          if((risquesMicro(u)||[]).some(x=>x.cle==='traitement'))
+            return _echec('l\'entrée coach reste');
+          return u.traitementDetail==='un texte écrit à la main'
+            ?true:_echec('le texte a été détruit');})());
+        ok('Le champ ne peut pas entrer dans coach_public',(()=>{
+          // coach_public porte le profil DU COACH, filtré par liste blanche :
+          // la clé ne peut structurellement pas y arriver.
+          for(const k of ['traitementEnCours','traitementDetail','famillesTraitement'])
+            if(CLOUD.CHAMPS_PROFIL_COACH.indexOf(k)>=0)
+              return _echec(k+' figure dans la liste blanche');
+          return true;})());
+        ok('L\'athlète est prévenu DANS l\'app, pas seulement dans privacy.html',(()=>{
+          // privacy.html est un fichier séparé, non chargeable depuis la suite :
+          // son entrée « traitements médicamenteux » a été ajoutée et relue à la
+          // main. Ce que ce test garantit, lui, c'est que l'athlète le lit AU
+          // MOMENT où il écrit — une politique qu'il faut aller chercher ne
+          // prévient personne.
+          if(!/analyse pas/.test(TRAITEMENT_MENTION)) return _echec('la mention a disparu');
+          return /coach/.test(TRAITEMENT_MENTION)
+            ?true:_echec('elle ne dit pas qui le lit');})());
+      } finally { currentUser=_trU; }
     })();
 
     // ══════ PROFIL COACH VISIBLE PAR SES ATHLÈTES ══════
