@@ -17231,6 +17231,114 @@ function serieDure(s,m,ex,user){
 // _lundiDe est la seule définition de « début de semaine » du fichier, déjà
 // employée par updateStreak et renderNutriDots : on la réutilise plutôt que
 // d'en introduire une seconde qui finirait par diverger.
+// ══════ BLOC D'ENTRAÎNEMENT (programme sur plusieurs semaines) ══════
+// sessions_config décrit UNE semaine type, et c'est tout ce que RepCore savait
+// dire : le même sept-jours répété indéfiniment. Un bloc de dix semaines avec
+// une décharge en cinquième et une montée de volume n'avait aucune existence.
+//
+// CE MODÈLE NE REMPLACE PAS sessions_config, IL LE DATE.
+// Le gabarit reste sessions_config — intact, lu par tous les écrans existants.
+// `programme` ajoute par-dessus : une date de départ, une durée, les semaines
+// de décharge, et les ÉCARTS au gabarit semaine par semaine. Un bloc sans
+// écart ne stocke donc rien de plus qu'un entier et une date.
+//
+//   user.programme = {
+//     debut:    <ms>     lundi de la première semaine du bloc
+//     semaines: <int>    durée, 1 à 24
+//     decharges:[<int>]  indices de semaines de décharge, 0 pour la première
+//     ecarts:   { '<semaine>': { '<créneau>': {exercises,name,notes,...} } }
+//   }
+//
+// POURQUOI DES ÉCARTS ET NON DES COPIES : un bloc de douze semaines copié
+// intégralement, c'est douze fois sept séances dans le document de l'athlète,
+// relu ET réécrit à chaque envoi. Mesuré au lot d'archivage : le dossier moyen
+// pèse déjà 1,7 Mo. Un écart ne pèse que ce qu'il change.
+const PROG_SEMAINES_MAX=24;
+const PROG_SEMAINES_MIN=1;
+
+// PURE. Le programme, ou null s'il est absent, incomplet ou corrompu. AUCUNE
+// exception ne sort d'ici : un dossier abîmé fait disparaître la vue, il ne
+// casse pas l'écran.
+function programmeDe(user){
+  const u=_dossier(user);
+  const p=u&&u.programme;
+  if(!p||typeof p!=='object') return null;
+  const debut=Number(p.debut);
+  if(!isFinite(debut)||debut<=0) return null;
+  const n=Math.round(Number(p.semaines));
+  if(!isFinite(n)||n<PROG_SEMAINES_MIN||n>PROG_SEMAINES_MAX) return null;
+  // Les décharges hors bloc sont IGNORÉES, pas rejetées : un bloc raccourci
+  // après coup ne doit pas devenir illisible.
+  const dech=Array.isArray(p.decharges)
+    ? p.decharges.map(x=>Math.round(Number(x))).filter(x=>isFinite(x)&&x>=0&&x<n)
+    : [];
+  const ec=(p.ecarts&&typeof p.ecarts==='object'&&!Array.isArray(p.ecarts))?p.ecarts:{};
+  return {debut:_lundiDe(new Date(debut)).getTime(),semaines:n,
+    decharges:[...new Set(dech)].sort((a,b)=>a-b),ecarts:ec};
+}
+// PURE. L'index de semaine d'une date dans le bloc, ou null si la date tombe
+// hors bloc. Zéro pour la première semaine.
+function indexSemaineBloc(user,date){
+  const p=programmeDe(user);
+  if(!p) return null;
+  const t=(date instanceof Date)?date.getTime():Number(date||Date.now());
+  if(!isFinite(t)) return null;
+  const lundi=_lundiDe(new Date(t)).getTime();
+  const i=Math.round((lundi-p.debut)/604800000);
+  return (i>=0&&i<p.semaines)?i:null;
+}
+// PURE. La semaine EFFECTIVE à une date : le gabarit, plus les écarts de cette
+// semaine-là. Rend null hors bloc ou sans programme.
+//
+// AUCUN EFFET DE BORD, et c'est la propriété qui compte : une vue qui parcourt
+// vingt-quatre semaines l'appelle vingt-quatre fois, y compris sur des semaines
+// FUTURES. Si elle écrivait quoi que ce soit, consulter un programme le
+// modifierait.
+function getSemaineEffective(user,date){
+  const p=programmeDe(user);
+  if(!p) return null;
+  const i=indexSemaineBloc(user,date);
+  if(i===null) return null;
+  const u=_dossier(user);
+  const gabarit=Array.isArray(u&&u.sessions_config)?u.sessions_config:[];
+  const ecSem=p.ecarts[String(i)]||{};
+  // Copie DÉFENSIVE : l'appelant reçoit une vue, pas une référence sur le
+  // dossier. Sans elle, un écran qui trie ou complète le tableau rendu
+  // modifierait le programme de l'athlète sans qu'aucune écriture soit écrite.
+  const creneaux=gabarit.map((sc,idx)=>{
+    const e=ecSem[String(idx)];
+    const base=Object.assign({},sc||{});
+    base.exercises=((sc&&sc.exercises)||[]).map(x=>Object.assign({},x));
+    if(!e||typeof e!=='object') return base;
+    const fusion=Object.assign(base,e);
+    if(Array.isArray(e.exercises))
+      fusion.exercises=e.exercises.map(x=>Object.assign({},x));
+    return fusion;
+  });
+  const lundi=new Date(p.debut+i*604800000);
+  return {index:i,cle:semaineISO(lundi),lundi:lundi.getTime(),
+    decharge:p.decharges.indexOf(i)>=0,
+    // « Passée » se juge sur la semaine COURANTE, pas sur l'instant : une
+    // semaine en cours n'est ni finie ni future, et la grille l'encadre.
+    courante:semaineISO(lundi)===semaineISO(new Date()),
+    future:lundi.getTime()>_lundiDe(new Date()).getTime(),
+    creneaux,
+    // Le nombre de séances RÉELLEMENT prévues cette semaine-là : c'est lui
+    // qui change entre une semaine normale et une décharge.
+    seancesPrevues:creneaux.filter(c=>c&&c.active).length};
+}
+// PURE. Toutes les semaines du bloc, dans l'ordre. Vide sans programme.
+function semainesDuBloc(user){
+  const p=programmeDe(user);
+  if(!p) return [];
+  const out=[];
+  for(let i=0;i<p.semaines;i++){
+    const w=getSemaineEffective(user,new Date(p.debut+i*604800000));
+    if(w) out.push(w);
+  }
+  return out;
+}
+
 function semaineISO(date){
   const lundi=_lundiDe(date);
   // ISO 8601 : la semaine 1 est celle qui contient le premier jeudi de
@@ -42904,6 +43012,137 @@ function testExercices(){
           // Et il court-circuite : sans return, le rattachement suivrait.
           return /if\(_annoncerDejaRattache\(coach\)\)return;/.test(src)
             ?true:_echec('le garde ne court-circuite pas');})());
+        // ── F-31 : le bloc d'entraînement ────────────────────────────────
+        // Un lundi fixe, pour que les assertions ne dépendent pas du jour où
+        // elles tournent : le lundi de la semaine en cours.
+        const _lun=_lundiDe(new Date()).getTime();
+        const _prog=(o)=>Object.assign({email:'a@t',id:'a1',role:'athlete',
+          sessions_config:[
+            {day:'Lundi',name:'HAUT',active:true,notes:'',exercises:[
+              {name:'DEVELOPPE COUCHE',series:4,reps:'8',repos:'02 min'}]},
+            {day:'Mardi',name:'BAS',active:true,notes:'',exercises:[
+              {name:'SQUAT',series:5,reps:'5',repos:'03 min'}]},
+            {day:'Mercredi',name:'',active:false,notes:'',exercises:[]}]},o||{});
+        ok('Un programme absent ou corrompu ne lève AUCUNE exception',(()=>{
+          // Un dossier abîmé fait disparaître la vue, il ne casse pas l'écran.
+          const cas=[undefined,null,0,'',[],'programme',{},{debut:0},{debut:_lun},
+            {debut:_lun,semaines:0},{debut:_lun,semaines:99},{debut:_lun,semaines:'huit'},
+            {debut:'hier',semaines:8},{debut:NaN,semaines:8},
+            {debut:_lun,semaines:8,decharges:'oui'},{debut:_lun,semaines:8,ecarts:[]}];
+          for(const c of cas){
+            const u=_prog({programme:c});
+            let r;
+            try{ r=programmeDe(u); indexSemaineBloc(u,new Date()); 
+                 getSemaineEffective(u,new Date()); semainesDuBloc(u); }
+            catch(e){ return _echec('exception sur '+JSON.stringify(c)+' : '+e.message); }
+            // Les cas valides de cette liste : aucun. Tous doivent rendre null.
+            if(c&&c.debut===_lun&&c.semaines===8&&(c.decharges==='oui'||Array.isArray(c.ecarts))){
+              // decharges/ecarts mal typés ne DOIVENT PAS invalider le bloc :
+              // on ignore le champ, on ne jette pas le programme.
+              if(!r) return _echec('un champ annexe mal typé invalide tout le bloc');
+              continue;
+            }
+            if(r) return _echec('programme accepté à tort : '+JSON.stringify(c));
+          }
+          return true;})());
+        ok('Les bornes du bloc tiennent : 1 à 24 semaines',(()=>{
+          if(programmeDe(_prog({programme:{debut:_lun,semaines:PROG_SEMAINES_MIN}}))===null)
+            return _echec('le minimum est refusé');
+          if(programmeDe(_prog({programme:{debut:_lun,semaines:PROG_SEMAINES_MAX}}))===null)
+            return _echec('le maximum est refusé');
+          if(programmeDe(_prog({programme:{debut:_lun,semaines:PROG_SEMAINES_MAX+1}})))
+            return _echec('au-delà du maximum est accepté');
+          // La date de début est ramenée au LUNDI : un bloc démarré un jeudi
+          // ne décale pas toutes ses semaines d'un demi-cran.
+          const jeudi=_lun+3*86400000;
+          const r=programmeDe(_prog({programme:{debut:jeudi,semaines:4}}));
+          return r&&r.debut===_lun?true:_echec('le début n\'est pas ramené au lundi');})());
+        ok('Une décharge hors bloc est IGNORÉE, pas rejetée',(()=>{
+          // Un bloc raccourci après coup ne doit pas devenir illisible.
+          const r=programmeDe(_prog({programme:{debut:_lun,semaines:4,decharges:[1,9,-2,1,'3']}}));
+          if(!r) return _echec('le bloc est rejeté');
+          if(r.decharges.join()!=='1,3') return _echec('décharges retenues : '+r.decharges.join());
+          return true;})());
+        ok('indexSemaineBloc situe une date, et rend null hors bloc',(()=>{
+          const u=_prog({programme:{debut:_lun,semaines:4}});
+          if(indexSemaineBloc(u,new Date(_lun))!==0) return _echec('la première semaine n\'est pas 0');
+          // N'importe quel jour de la semaine donne le même index.
+          if(indexSemaineBloc(u,new Date(_lun+6*86400000))!==0) return _echec('le dimanche bascule');
+          if(indexSemaineBloc(u,new Date(_lun+7*86400000))!==1) return _echec('la deuxième semaine');
+          if(indexSemaineBloc(u,new Date(_lun+3*7*86400000))!==3) return _echec('la dernière semaine');
+          if(indexSemaineBloc(u,new Date(_lun+4*7*86400000))!==null) return _echec('après la fin');
+          return indexSemaineBloc(u,new Date(_lun-86400000))===null
+            ?true:_echec('avant le début');})());
+        ok('getSemaineEffective n\'écrit RIEN, même sur une semaine future',(()=>{
+          // LA propriété qui compte : une vue qui parcourt 24 semaines l'appelle
+          // 24 fois. Si elle écrivait, consulter un programme le modifierait.
+          const u=_prog({programme:{debut:_lun,semaines:12,decharges:[4],
+            ecarts:{'2':{'0':{name:'HAUT LOURD'}}}}});
+          const avant=JSON.stringify(u);
+          for(let i=0;i<12;i++) getSemaineEffective(u,new Date(_lun+i*7*86400000));
+          semainesDuBloc(u); indexSemaineBloc(u,new Date());
+          if(JSON.stringify(u)!==avant) return _echec('le dossier a été modifié');
+          // Copie DÉFENSIVE : modifier le résultat ne doit pas toucher le
+          // gabarit. Sans elle, un écran qui trie le tableau rendu modifierait
+          // le programme de l'athlète sans qu'aucune écriture soit écrite.
+          const w=getSemaineEffective(u,new Date(_lun));
+          w.creneaux[0].name='SABOTAGE';
+          w.creneaux[0].exercises[0].series=99;
+          w.creneaux.length=0;
+          if(u.sessions_config[0].name!=='HAUT') return _echec('le gabarit a été modifié');
+          if(u.sessions_config[0].exercises[0].series!==4) return _echec('un exercice a été modifié');
+          return getSemaineEffective(u,new Date(_lun)).creneaux.length===3
+            ?true:_echec('le gabarit a été vidé');})());
+        ok('Les écarts se posent SUR le gabarit, semaine par semaine',(()=>{
+          // Un bloc de douze semaines copié intégralement, c'est douze fois
+          // sept séances dans le document de l'athlète. Un écart ne pèse que
+          // ce qu'il change.
+          const u=_prog({programme:{debut:_lun,semaines:6,decharges:[3],
+            ecarts:{'1':{'0':{name:'HAUT LOURD'}},
+                    '3':{'0':{exercises:[{name:'DEVELOPPE COUCHE',series:2,reps:'8'}]},
+                         '1':{active:false}}}}});
+          const s0=getSemaineEffective(u,new Date(_lun));
+          if(s0.creneaux[0].name!=='HAUT') return _echec('semaine 0 : '+s0.creneaux[0].name);
+          if(s0.decharge) return _echec('la semaine 0 est dite en décharge');
+          const s1=getSemaineEffective(u,new Date(_lun+7*86400000));
+          if(s1.creneaux[0].name!=='HAUT LOURD') return _echec('l\'écart de nom n\'est pas appliqué');
+          // Un écart partiel ne DÉTRUIT pas le reste du créneau.
+          if(!s1.creneaux[0].exercises.length) return _echec('les exercices ont disparu');
+          if(s1.creneaux[0].exercises[0].series!==4) return _echec('les séries ont bougé');
+          const s3=getSemaineEffective(u,new Date(_lun+3*7*86400000));
+          if(!s3.decharge) return _echec('la décharge n\'est pas signalée');
+          if(s3.creneaux[0].exercises[0].series!==2) return _echec('la décharge ne réduit pas le volume');
+          if(s3.creneaux[1].active!==false) return _echec('le créneau désactivé reste actif');
+          if(s3.seancesPrevues!==1) return _echec('séances prévues : '+s3.seancesPrevues);
+          // Une semaine sans écart rend le gabarit nu.
+          const s2=getSemaineEffective(u,new Date(_lun+2*7*86400000));
+          return (s2.creneaux[0].name==='HAUT'&&s2.seancesPrevues===2)
+            ?true:_echec('semaine sans écart altérée');})());
+        ok('Une semaine FUTURE se résout comme une autre',(()=>{
+          // C'est ce qui rendra le prévisionnel possible : la grille lit une
+          // semaine à venir sans que rien n'ait été loggé.
+          const u=_prog({programme:{debut:_lun,semaines:8}});
+          const w=getSemaineEffective(u,new Date(_lun+5*7*86400000));
+          if(!w) return _echec('une semaine future ne se résout pas');
+          if(!w.future) return _echec('elle n\'est pas marquée future');
+          if(w.courante) return _echec('elle est dite courante');
+          if(!w.creneaux.length) return _echec('elle n\'a pas de créneaux');
+          // La semaine en cours est courante, et n'est PAS future.
+          const c=getSemaineEffective(u,new Date(_lun+2*86400000));
+          if(!c.courante) return _echec('la semaine en cours n\'est pas dite courante');
+          return !c.future?true:_echec('la semaine en cours est dite future');})());
+        ok('semainesDuBloc rend le bloc entier, dans l\'ordre',(()=>{
+          const u=_prog({programme:{debut:_lun,semaines:10,decharges:[4,9]}});
+          const l=semainesDuBloc(u);
+          if(l.length!==10) return _echec(l.length+' semaines au lieu de 10');
+          for(let i=0;i<10;i++) if(l[i].index!==i) return _echec('ordre rompu en '+i);
+          if(!l[4].decharge||!l[9].decharge) return _echec('décharges perdues');
+          if(l[0].decharge) return _echec('décharge inventée');
+          // Les clés ISO se suivent sans trou.
+          const cles=new Set(l.map(w=>w.cle));
+          if(cles.size!==10) return _echec('deux semaines partagent une clé');
+          return semainesDuBloc(_prog({})).length===0
+            ?true:_echec('un dossier sans programme rend des semaines');})());
         ok('fichesBanque rend un tableau vide, jamais null',(()=>{
           const sauve=_banque;
           try{
