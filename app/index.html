@@ -2946,6 +2946,10 @@ const COACH_PHOTO='icons/coach.jpg';
     <span></span>
   </div>
   <div class="scroll-area pad">
+    <!-- Emplacement VIDE. La carte Capacité y est INSÉRÉE par loadMetrics, et
+         seulement pour le créateur : masquer par CSS laisserait le contenu
+         dans le DOM, lisible par qui inspecte la page. -->
+    <div id="mt-capacite"></div>
     <div id="mt-corps"></div>
     <p class="sub" style="font-size:11px;line-height:1.6;margin-top:20px;border-top:1px solid var(--border);padding-top:14px">
       Compteurs agrégés par jour. Aucun cookie, aucun identifiant, aucune donnée
@@ -3101,6 +3105,116 @@ const RCM_EVENEMENTS=['landing_view','welcome_view','role_selected_coach','role_
   'code_entered','code_valid','code_invalid','register_started','register_completed',
   'subscribe_viewed','paypal_clicked','subscription_activated',
   'first_workout_started','first_workout_completed','first_bilan_completed'];
+// ══════════ SONDE DE QUOTA : UNE PENTE, PAS UNE VÉRITÉ ══════════
+// Le plan Spark plafonne à 10 Go téléchargés par mois, et le dépassement est
+// SILENCIEUX : l'application cesse simplement de répondre. Cette sonde ne
+// remplace pas la console Firebase — elle donne une pente pour voir venir.
+//
+// AGRÉGATION LOCALE UNIQUEMENT. Rien ne remonte au réseau : le nœud metrics
+// fige quinze noms d'événements dans database.rules.json, et y ajouter des
+// octets exigerait de redéployer les règles. Surtout, une sonde qui se
+// mesure elle-même en consommant du quota serait une drôle de sonde.
+// Conséquence dite à l'écran : ce compteur ne voit que CET appareil.
+//
+// Le quota compté est celui de RTDB. Firebase Auth (identitytoolkit,
+// securetoken) et Storage (le PDF de programme) ont leurs propres quotas :
+// les additionner gonflerait le chiffre d'un facteur inconnu.
+const QUOTA_MOIS_OCTETS=10*Math.pow(2,30);
+const SEUIL_ALERTE=0.70;
+const SEUIL_DEGRADATION=0.85;
+const QUOTA_PREFIXE='rc_quota_';
+// Clé RECALCULÉE à chaque écriture, jamais mise en cache : une session
+// ouverte à cheval sur deux mois doit basculer d'elle-même.
+function _quotaCle(d){
+  const x=(d instanceof Date)?d:new Date();
+  return QUOTA_PREFIXE+x.getFullYear()+String(x.getMonth()+1).padStart(2,'0');
+}
+// PURE au sens du réseau : elle ne fait qu'écrire dans localStorage.
+// « complet » vaut faux tant que ce navigateur n'a pas OUVERT le mois
+// lui-même. Un localStorage purgé — ITP Safari efface au bout de 7 jours —
+// repart donc à zéro EN LE DISANT, au lieu d'afficher un 0 qui passerait
+// pour une absence de trafic.
+function _quotaCompter(sens,octets){
+  try{
+    const n=Number(octets);
+    if(!(n>0)) return null;
+    if(sens!=='in'&&sens!=='out') return null;
+    const cle=_quotaCle();
+    let e=null;
+    try{ e=JSON.parse(localStorage.getItem(cle)||'null'); }catch(err){}
+    if(!e||typeof e!=='object') e={in:0,out:0,n:0,debut:Date.now(),complet:false};
+    e[sens]=(Number(e[sens])||0)+n;
+    e.n=(Number(e.n)||0)+1;
+    e.maj=Date.now();
+    localStorage.setItem(cle,JSON.stringify(e));
+    return e;
+  }catch(err){ return null; }   // quota localStorage saturé : on n'en meurt pas
+}
+// Marque le mois comme OUVERT par ce navigateur. Appelée une fois au
+// démarrage : à partir de là, le relevé est complet pour cet appareil.
+function _quotaOuvrirMois(){
+  try{
+    const cle=_quotaCle();
+    let e=null;
+    try{ e=JSON.parse(localStorage.getItem(cle)||'null'); }catch(err){}
+    if(e&&e.complet) return e;
+    // Un mois deja entame SANS drapeau : les octets deja comptes sont bons,
+    // mais le debut du mois a pu etre manque. On ne ment pas dessus.
+    const neuf=e&&typeof e==='object'
+      ? Object.assign({},e,{complet:e.debut&&_memeMoisQue(e.debut)})
+      : {in:0,out:0,n:0,debut:Date.now(),complet:_premierDuMois()};
+    localStorage.setItem(cle,JSON.stringify(neuf));
+    return neuf;
+  }catch(err){ return null; }
+}
+function _premierDuMois(){ return new Date().getDate()===1; }
+function _memeMoisQue(ts){
+  const a=new Date(ts), b=new Date();
+  return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()
+    &&a.getDate()===1;
+}
+// PURE. L'état du mois courant, prêt à afficher. Rend toujours un objet :
+// l'absence de relevé est un ÉTAT, pas une erreur.
+function etatQuota(){
+  let e=null;
+  try{ e=JSON.parse(localStorage.getItem(_quotaCle())||'null'); }catch(err){}
+  const oct=e?((Number(e.in)||0)+(Number(e.out)||0)):0;
+  const part=oct/QUOTA_MOIS_OCTETS;
+  return {octets:oct, entrant:e?(Number(e.in)||0):0, sortant:e?(Number(e.out)||0):0,
+    appels:e?(Number(e.n)||0):0, part:part,
+    complet:!!(e&&e.complet), releve:!!e,
+    maj:e&&e.maj?e.maj:null, debut:e&&e.debut?e.debut:null,
+    alerte:part>=SEUIL_ALERTE, degrade:part>=SEUIL_DEGRADATION};
+}
+// PURE. Projection à pente constante : la date à laquelle le quota serait
+// franchi si le rythme observé se maintenait. Rend null quand la pente n'a
+// pas de sens — pas assez de recul, ou trafic nul.
+function projectionQuota(etat,ref){
+  const e=etat||etatQuota();
+  if(!e.debut||!(e.octets>0)) return null;
+  const t=(ref instanceof Date?ref:new Date()).getTime();
+  const jours=(t-e.debut)/864e5;
+  if(jours<1) return null;            // moins d'un jour : aucune pente fiable
+  const parJour=e.octets/jours;
+  if(!(parJour>0)) return null;
+  const restant=QUOTA_MOIS_OCTETS-e.octets;
+  if(restant<=0) return {depasse:true,date:null,joursRestants:0};
+  return {depasse:false,date:new Date(t+(restant/parJour)*864e5),
+    joursRestants:Math.round(restant/parJour)};
+}
+// La DÉGRADATION, et sa limite. Elle ne touche QUE deux choses : la période
+// de synchronisation périodique et le préchargement de Ciqual. Jamais
+// l'écriture d'une séance, jamais un drapeau rouge, jamais un plancher.
+// Un garde-fou de coût qui empêcherait de journaliser une douleur serait un
+// défaut, pas une protection.
+const SYNC_PERIODE_MS=300000;         // 5 min
+const SYNC_PERIODE_DEGRADEE_MS=1800000; // 30 min
+function quotaDegrade(){
+  try{ return etatQuota().degrade; }catch(e){ return false; }
+}
+function periodeSync(){
+  return quotaDegrade()?SYNC_PERIODE_DEGRADEE_MS:SYNC_PERIODE_MS;
+}
 const RCM_BASE='https://repcore-sync-default-rtdb.firebaseio.com/metrics';
 function rcm(nom){
   try{
@@ -3741,9 +3855,11 @@ const CLOUD={
         const prives=santeBlocsPrives(user);
         if(Object.keys(prives).length){
           prives.maj=Date.now();
+          const _cp=JSON.stringify(prives);
+          try{ _quotaCompter('out',_cp.length); }catch(e){}
           await fetch(this._urlSantePrivee(safeKey)+'?auth='+token,
             {method:'PUT',headers:{'Content-Type':'application/json'},
-             body:JSON.stringify(prives)});
+             body:_cp});
         }
       }catch(e){ console.error('[RepCore] sante_privee push:',e); }
       const url=this._fbUrl.replace('users.json','users/'+safeKey+'.json');
@@ -3759,6 +3875,11 @@ const CLOUD={
       // meurt avant la fin.
       if(document.hidden&&corps.length<60000) opts.keepalive=true;
       const r=await fetch(url+'?auth='+token,opts);
+      // Sortant : le corps envoyé. Entrant : la réponse de Firebase, qui
+      // renvoie l'objet écrit — d'où le doublement du coût par envoi.
+      try{ _quotaCompter('out',corps.length);
+        const cl=Number(r.headers.get('content-length'));
+        if(cl>0) _quotaCompter('in',cl); }catch(e){}
       this._setSyncStatus(r.ok);
       if(!r.ok) throw new Error('Erreur serveur '+r.status+' ('+r.statusText+')');
       // Le nœud distant est à jour : plus rien à rejouer pour cette clé, et le
@@ -3896,7 +4017,12 @@ const CLOUD={
       const token=await this._getToken();
       if(!token) return null;
       const r=await fetch(this._urlSantePrivee(key)+'?auth='+token,{signal:ctrl.signal});
-      if(r.ok){ const d=await r.json(); if(d) return d; }
+      if(r.ok){
+        const t=await r.text();
+        try{ _quotaCompter('in',t.length); }catch(e){}
+        const d=t?JSON.parse(t):null;
+        if(d) return d;
+      }
     }catch(e){}
     return null;
   },
@@ -3908,7 +4034,15 @@ const CLOUD={
       const token=await this._getToken();
       const url=token?base+'?auth='+token:base;
       const r=await fetch(url,{signal:ctrl.signal});
-      if(r.ok){const d=await r.json();if(d) return d;}
+      if(r.ok){
+        // .text() puis JSON.parse plutôt que .json() : c'est le seul moyen
+        // de connaître la taille reçue quand content-length manque, ce qui
+        // est le cas sous compression.
+        const t=await r.text();
+        try{ _quotaCompter('in',t.length); }catch(e){}
+        const d=t?JSON.parse(t):null;
+        if(d) return d;
+      }
     }catch{}
     return null;
   },
@@ -4701,7 +4835,7 @@ window.onload=()=>{
             loadClientHome();
           }
         }catch(e){console.warn('sync periodique :',e);}
-      },300000);
+      },periodeSync());
       // Le passage à 5 minutes rendrait l'app molle au retour d'arrière-plan :
       // un athlète qui rouvre son téléphone attendrait jusqu'à 5 min pour voir
       // la correction de son coach. Le retour au premier plan déclenche donc
@@ -4896,6 +5030,9 @@ function _majSelecteurComptes(){
 }
 
 function routeUser(){
+  // Marque le mois comme suivi par CE navigateur. Sans cet appel, un relevé
+  // ne saurait pas distinguer « aucun trafic » de « compteur effacé ».
+  try{ _quotaOuvrirMois(); }catch(e){}
   // Une seule fois par chargement, et après que l'écran d'arrivée soit peint.
   setTimeout(_pastilleServiParCache,900);
   if(!currentUser) return go('s-welcome');
@@ -20293,9 +20430,75 @@ function _pastilleServiParCache(){
   try{ toast('Hors ligne — version en cache','var(--sub)'); }catch(e){}
   return true;
 }
+// ── Carte « Capacité », créateur seulement ──────────────────────────────
+// C'est une PENTE, pas une vérité, et l'écran le dit deux fois plutôt qu'une :
+// la console Firebase reste la seule source faisant foi. Un chiffre affiché
+// sans cette réserve serait pris pour une mesure.
+const QUOTA_REGISTRE='Estimation CLIENT, mesurée sur cet appareil seulement — '
+  +'sans déduplication entre appareils, et sans le trafic de tes athlètes. '
+  +'La console Firebase est la seule source faisant foi.';
+function _fmtOctets(n){
+  const u=['o','Ko','Mo','Go'];
+  let v=Number(n)||0,i=0;
+  while(v>=1024&&i<u.length-1){ v/=1024; i++; }
+  return (i?v.toFixed(v<10?2:1):Math.round(v))+' '+u[i];
+}
+// PURE. Rend '' pour qui n'est pas le créateur : la carte n'existe alors
+// PAS dans le DOM, elle n'est pas masquée.
+function _htmlCapacite(user){
+  const u=user||currentUser;
+  if(!u||u.email!==CREATOR_EMAIL) return '';
+  const e=etatQuota();
+  const pj=projectionQuota(e);
+  const pct=(e.part*100);
+  // Un relevé qui n'a pas vu le début du mois n'annonce pas de pourcentage :
+  // un chiffre partiel présenté comme complet est pire qu'une absence.
+  const chiffre=e.complet
+    ? _fmtOctets(e.octets)+' · '+(pct<0.1?'<0,1':pct.toFixed(1)).replace('.',',')+' %'
+    : 'relevé incomplet';
+  const nComptes=(()=>{ try{ return Object.keys(DB.get('users')||{}).length; }catch(x){ return 0; } })();
+  const poids=(()=>{
+    try{
+      const us=Object.values(DB.get('users')||{});
+      if(!us.length) return null;
+      let tot=0,photos=0;
+      for(const x of us){
+        const s1=JSON.stringify(x).length; tot+=s1;
+        const sans=JSON.stringify(x,(k,v)=>
+          (typeof v==='string'&&v.indexOf('data:image')===0)?undefined:v).length;
+        photos+=(s1-sans);
+      }
+      return {moyen:Math.round(tot/us.length),partPhotos:tot?photos/tot:0};
+    }catch(x){ return null; }
+  })();
+  const l=(t,v)=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:3px 0">
+    <span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:#eee">${escapeHtml(v)}</span></div>`;
+  return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:9px">Capacité</div>
+    ${l('Ce mois-ci',chiffre)}
+    ${e.complet?l('Quota mensuel',_fmtOctets(QUOTA_MOIS_OCTETS)):''}
+    ${l('Appels réseau comptés',String(e.appels))}
+    ${l('Comptes sur cet appareil',String(nComptes))}
+    ${poids?l('Poids moyen d\'un dossier',_fmtOctets(poids.moyen)):''}
+    ${poids&&poids.partPhotos>0.02?l('dont photos',Math.round(poids.partPhotos*100)+' %'):''}
+    ${pj?l('Franchissement projeté',pj.depasse?'quota déjà dépassé':(pj.date.toLocaleDateString('fr-FR')+' (~'+pj.joursRestants+' j)')):''}
+    ${l('Dernier relevé',e.maj?new Date(e.maj).toLocaleString('fr-FR'):'aucun')}
+    ${e.degrade?`<div style="margin-top:10px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--orange);line-height:1.6">Au-delà de ${Math.round(SEUIL_DEGRADATION*100)} % : synchronisation périodique ralentie à ${Math.round(SYNC_PERIODE_DEGRADEE_MS/60000)} min et préchargement de la base alimentaire suspendu. Journalisation et envoi des séances INCHANGÉS.</div>`
+      :e.alerte?`<div style="margin-top:10px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--orange);line-height:1.6">Au-delà de ${Math.round(SEUIL_ALERTE*100)} % du quota estimé.</div>`:''}
+    <div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-top:10px">${escapeHtml(QUOTA_REGISTRE)}</div>
+  </div>`;
+}
+function _renderCapacite(){
+  const z=document.getElementById('mt-capacite');
+  if(z) z.innerHTML=_htmlCapacite(currentUser);
+}
 let _ciqualPrefetchAsked=false;
 function _prefetchCiqual(){
   if(_ciqualPrefetchAsked) return;
+  // 852 Ko en une fois : c'est le premier poste à suspendre quand le quota
+  // se tend. La recherche d'aliment continue de fonctionner EN LIGNE ;
+  // seule sa disponibilité hors-ligne est reportée.
+  if(quotaDegrade()) return;
   _ciqualPrefetchAsked=true;
   try{
     navigator.serviceWorker?.ready
@@ -27928,6 +28131,7 @@ async function loadMetrics(){
     return;
   }
   go('s-metrics');
+  _renderCapacite();
   const corps=document.getElementById('mt-corps');
   if(!corps) return;
   corps.innerHTML='<div class="sub" style="font-size:12px">Chargement…</div>';
@@ -36170,6 +36374,214 @@ function testExercices(){
           return /const\\s\+CACHE/.test(src)||/CACHE/.test(src)
             ?true:_echec('elle n\'extrait pas CACHE');})());
       } finally {}
+    })();
+
+    // ══════ QUOTA : UNE PENTE, PAS UNE VÉRITÉ ══════
+    (()=>{
+      const _qU=currentUser;
+      const _cle=_quotaCle();
+      const _sauve=localStorage.getItem(_cle);
+      const _poser=(o)=>localStorage.setItem(_cle,JSON.stringify(o));
+      try {
+        // ── Les seuils ───────────────────────────────────────────────────
+        ok('Les trois seuils sont ordonnés et bornés',(()=>{
+          if(QUOTA_MOIS_OCTETS!==10*Math.pow(2,30))
+            return _echec('quota : '+QUOTA_MOIS_OCTETS);
+          for(const [n,v] of [['alerte',SEUIL_ALERTE],['dégradation',SEUIL_DEGRADATION]]){
+            if(!(typeof v==='number'&&v>0&&v<1)) return _echec(n+' hors ]0,1[ : '+v);
+          }
+          if(!(SEUIL_ALERTE<SEUIL_DEGRADATION))
+            return _echec('alerte '+SEUIL_ALERTE+' >= dégradation '+SEUIL_DEGRADATION);
+          return (SEUIL_ALERTE===0.70&&SEUIL_DEGRADATION===0.85)
+            ?true:_echec(SEUIL_ALERTE+' / '+SEUIL_DEGRADATION);})());
+        ok('La période dégradée est plus LONGUE que la normale',(()=>{
+          if(!(SYNC_PERIODE_DEGRADEE_MS>SYNC_PERIODE_MS))
+            return _echec(SYNC_PERIODE_DEGRADEE_MS+' <= '+SYNC_PERIODE_MS);
+          return (SYNC_PERIODE_MS===300000&&SYNC_PERIODE_DEGRADEE_MS===1800000)
+            ?true:_echec('5 min / 30 min attendus');})());
+
+        // ── Un compteur effacé dit « incomplet », jamais « 0 » ───────────
+        ok('Compteur remis à zéro → « incomplet », pas un zéro trompeur',(()=>{
+          localStorage.removeItem(_cle);
+          const e=etatQuota();
+          if(e.releve) return _echec('un relevé est annoncé alors qu\'il n\'y en a pas');
+          if(e.complet) return _echec('annoncé complet sans relevé');
+          if(e.octets!==0) return _echec('octets : '+e.octets);
+          // Et la carte affiche le mot, pas le chiffre.
+          const sauve=currentUser;
+          try{
+            currentUser={email:CREATOR_EMAIL,role:'coach'};
+            const h=_htmlCapacite(currentUser);
+            const d=document.createElement('div'); d.innerHTML=h;
+            const t=d.textContent||'';
+            if(!/relevé incomplet/.test(t)) return _echec('la carte n\'annonce pas l\'incomplétude');
+            return !/0,0 %/.test(t)?true:_echec('un pourcentage est affiché quand même');
+          } finally { currentUser=sauve; }})());
+        ok('Un mois OUVERT par ce navigateur devient complet',(()=>{
+          localStorage.removeItem(_cle);
+          _poser({in:0,out:0,n:0,debut:Date.now(),complet:true});
+          return etatQuota().complet===true
+            ?true:_echec('le drapeau ne remonte pas');})());
+
+        // ── Le comptage ──────────────────────────────────────────────────
+        ok('Journaliser fait monter le compteur d\'un ordre plausible',(()=>{
+          localStorage.removeItem(_cle);
+          _poser({in:0,out:0,n:0,debut:Date.now(),complet:true});
+          const avant=etatQuota().octets;
+          // Un document d'athlète représentatif : ordre de la centaine de Ko.
+          _quotaCompter('out',131892);
+          _quotaCompter('in',131892);
+          const e=etatQuota();
+          if(e.octets<=avant) return _echec('le compteur n\'a pas bougé');
+          if(e.appels!==2) return _echec(e.appels+' appels comptés');
+          if(e.sortant!==131892||e.entrant!==131892)
+            return _echec('in='+e.entrant+' out='+e.sortant);
+          // Ordre de grandeur : entre 100 Ko et 10 Mo pour un envoi.
+          return (e.octets>100000&&e.octets<10*1024*1024)
+            ?true:_echec('ordre de grandeur : '+e.octets);})());
+        ok('_quotaCompter refuse ce qui n\'est pas un octet',(()=>{
+          localStorage.removeItem(_cle);
+          _poser({in:0,out:0,n:0,debut:Date.now(),complet:true});
+          for(const [sens,v] of [['out',0],['out',-5],['out',NaN],['out',null],
+                                 ['travers',10],['',10]])
+            if(_quotaCompter(sens,v)!==null) return _echec(sens+'/'+v+' accepté');
+          return etatQuota().appels===0?true:_echec('un appel a été compté');})());
+        ok('La clé de mois est RECALCULÉE, jamais mise en cache',(()=>{
+          // Une session ouverte à cheval sur deux mois doit basculer seule.
+          const a=_quotaCle(new Date('2026-01-15T12:00:00'));
+          const b=_quotaCle(new Date('2026-02-01T00:30:00'));
+          if(a===b) return _echec('même clé pour deux mois');
+          if(!/^rc_quota_2026(01|02)$/.test(a)) return _echec('format : '+a);
+          return /_quotaCle\(\)/.test(String(_quotaCompter))
+            ?true:_echec('la clé est figée dans _quotaCompter');})());
+
+        // ── La projection ────────────────────────────────────────────────
+        ok('Pas de projection sans recul ni sans trafic',(()=>{
+          if(projectionQuota({octets:1000,debut:Date.now()-3600000})!==null)
+            return _echec('une pente sur moins d\'un jour');
+          if(projectionQuota({octets:0,debut:Date.now()-10*864e5})!==null)
+            return _echec('une pente sur zéro octet');
+          return projectionQuota({octets:100,debut:null})===null
+            ?true:_echec('une pente sans date de début');})());
+        ok('La projection est une pente constante, vérifiable',(()=>{
+          // 1 Go en 10 jours → 100 Mo/jour → les 9 Go restants en ~92 jours.
+          const pj=projectionQuota({octets:Math.pow(2,30),debut:Date.now()-10*864e5});
+          if(!pj||pj.depasse) return _echec('aucune projection');
+          const att=Math.round((QUOTA_MOIS_OCTETS-Math.pow(2,30))/(Math.pow(2,30)/10)/864e5*864e5/864e5);
+          if(Math.abs(pj.joursRestants-90)>5) return _echec(pj.joursRestants+' j au lieu de ~90');
+          return pj.date instanceof Date?true:_echec('pas de date');})());
+        ok('Quota déjà dépassé : la projection le DIT',(()=>{
+          const pj=projectionQuota({octets:QUOTA_MOIS_OCTETS+1,debut:Date.now()-5*864e5});
+          return (pj&&pj.depasse===true&&pj.joursRestants===0)
+            ?true:_echec(JSON.stringify(pj));})());
+
+        // ── La carte n'EXISTE PAS hors créateur ──────────────────────────
+        ok('Aucune carte Capacité pour un coach ou un athlète',(()=>{
+          // Elle n'est pas MASQUÉE : elle n'est pas créée. Un masquage CSS
+          // laisserait le contenu lisible par qui inspecte la page.
+          for(const u of [{email:'coach@t',role:'coach'},{email:'ath@t',role:'athlete'},null])
+            if(_htmlCapacite(u)!=='') return _echec('carte rendue pour '+JSON.stringify(u));
+          const sauve=currentUser;
+          try{
+            currentUser={email:'coach@t',role:'coach'};
+            _renderCapacite();
+            const z=document.getElementById('mt-capacite');
+            if(!z) return _echec('emplacement absent');
+            if((z.innerHTML||'').length) return _echec('du contenu subsiste dans le DOM');
+            return !/Capacité/.test(z.textContent||'')
+              ?true:_echec('le mot subsiste');
+          } finally { currentUser=sauve; }})());
+        ok('Le créateur, lui, voit la carte et sa réserve',(()=>{
+          localStorage.removeItem(_cle);
+          _poser({in:5e8,out:5e8,n:40,debut:Date.now()-10*864e5,complet:true});
+          const h=_htmlCapacite({email:CREATOR_EMAIL,role:'coach'});
+          if(!h) return _echec('aucune carte pour le créateur');
+          const d=document.createElement('div'); d.innerHTML=h;
+          const t=d.textContent||'';
+          if(!/Capacité/.test(t)) return _echec('titre absent');
+          // La réserve est OBLIGATOIRE : sans elle, une estimation passe pour
+          // une mesure.
+          if(!/console Firebase/.test(t)) return _echec('aucun renvoi à la console Firebase');
+          if(!/Estimation CLIENT/.test(t)) return _echec('la nature du chiffre n\'est pas dite');
+          return /sans déduplication/.test(t)
+            ?true:_echec('le multi-appareils n\'est pas signalé');})());
+
+        // ── La dégradation, et sa LIMITE ─────────────────────────────────
+        ok('Au-delà de 85 % : période à 30 min, Ciqual suspendu',(()=>{
+          localStorage.removeItem(_cle);
+          _poser({in:0,out:Math.ceil(QUOTA_MOIS_OCTETS*0.86),n:9,
+            debut:Date.now()-10*864e5,complet:true});
+          const e=etatQuota();
+          if(!e.degrade) return _echec('la dégradation ne se déclenche pas à 86 %');
+          if(!e.alerte) return _echec('l\'alerte devrait l\'accompagner');
+          if(periodeSync()!==SYNC_PERIODE_DEGRADEE_MS)
+            return _echec('période : '+periodeSync());
+          return /quotaDegrade\(\)/.test(String(_prefetchCiqual))
+            ?true:_echec('Ciqual n\'est pas suspendu');})());
+        ok('Entre 70 et 85 % : alerte SANS dégradation',(()=>{
+          localStorage.removeItem(_cle);
+          _poser({in:0,out:Math.ceil(QUOTA_MOIS_OCTETS*0.75),n:9,
+            debut:Date.now()-10*864e5,complet:true});
+          const e=etatQuota();
+          if(!e.alerte) return _echec('aucune alerte à 75 %');
+          if(e.degrade) return _echec('dégradation à 75 %');
+          return periodeSync()===SYNC_PERIODE_MS
+            ?true:_echec('la période a changé : '+periodeSync());})());
+        ok('La dégradation n\'empêche JAMAIS d\'écrire une séance',(()=>{
+          // Un garde-fou de coût qui bloquerait la journalisation d'une
+          // douleur serait un défaut, pas une protection.
+          localStorage.removeItem(_cle);
+          _poser({in:0,out:QUOTA_MOIS_OCTETS*2,n:99,
+            debut:Date.now()-10*864e5,complet:true});
+          if(!quotaDegrade()) return _echec('fixture muette');
+          // Aucune fonction d'écriture ne consulte le quota.
+          const ecrivains={finishWorkout,woPersist:(typeof woPersist==='function'?woPersist:null),
+            saveBilanFinal,_recordWeight,saveUser};
+          const fautifs=Object.keys(ecrivains).filter(n=>{
+            const f=ecrivains[n]; if(!f) return false;
+            return /quotaDegrade|SEUIL_DEGRADATION|etatQuota/.test(String(f));
+          });
+          if(fautifs.length) return _echec('consultent le quota : '+fautifs.join(', '));
+          // Et _doPushOne non plus : l'envoi doit partir, dégradé ou non.
+          return !/if\(quotaDegrade\(\)\)\s*return/.test(String(CLOUD._doPushOne))
+            ?true:_echec('_doPushOne renonce à envoyer sous dégradation');})());
+        ok('Aucune fonctionnalité de SÉCURITÉ n\'est dégradée',(()=>{
+          const sensibles={drapeauGeneralActif:(typeof drapeauGeneralActif==='function'?drapeauGeneralActif:null),
+            plancherEffectif,risquesMicro,aTCA:(typeof aTCA==='function'?aTCA:null),
+            paliersDeficit};
+          const fautifs=Object.keys(sensibles).filter(n=>{
+            const f=sensibles[n]; if(!f) return false;
+            return /quotaDegrade|SEUIL_DEGRADATION|etatQuota/.test(String(f));
+          });
+          return fautifs.length?_echec('dégradés : '+fautifs.join(', ')):true;})());
+
+        // ── Aucune donnée personnelle, aucune remontée ───────────────────
+        ok('La sonde ne remonte RIEN au réseau',(()=>{
+          const src=String(_quotaCompter)+String(_quotaOuvrirMois)+String(etatQuota)
+            +String(projectionQuota)+String(_htmlCapacite);
+          if(/fetch\(|XMLHttpRequest|sendBeacon|RCM_BASE|rcm\(/.test(src))
+            return _echec('un appel réseau existe dans la sonde');
+          // Et ce qu'elle stocke ne contient ni email, ni identifiant.
+          localStorage.removeItem(_cle);
+          _quotaCompter('out',1234);
+          const brut=localStorage.getItem(_cle)||'';
+          if(/@|email|fname|lname|\bid\b/i.test(brut))
+            return _echec('donnée personnelle stockée : '+brut);
+          const o=JSON.parse(brut);
+          const cles=Object.keys(o).sort().join(',');
+          return cles==='complet,debut,in,maj,n,out'
+            ?true:_echec('clés stockées : '+cles);})());
+        ok('Ni Auth ni Storage ne sont comptés dans le quota RTDB',(()=>{
+          // Ils ont leurs propres quotas : les additionner gonflerait le
+          // chiffre d'un facteur inconnu.
+          const src=String(CLOUD._getToken)+String(CLOUD.createAuthAccount||'');
+          return !/_quotaCompter/.test(src)
+            ?true:_echec('un appel Auth est compté comme du RTDB');})());
+      } finally {
+        currentUser=_qU;
+        if(_sauve===null) localStorage.removeItem(_cle);
+        else localStorage.setItem(_cle,_sauve);
+      }
     })();
 
     // ══════ PROFIL COACH VISIBLE PAR SES ATHLÈTES ══════
