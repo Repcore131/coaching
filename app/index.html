@@ -839,7 +839,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- Cet écran est lu AVANT l'inscription, donc par de futurs coachs affiliés.
            L'ancienne formule promettait « des codes d'accès gratuits » que seul le
            créateur peut émettre : la promesse ne pouvait pas être tenue. -->
-      <div style="font-size:11px;color:rgba(255,255,255,.82);line-height:1.6"><strong style="color:#fff">Ton compte coach est gratuit</strong>, sans abonnement : son ouverture demande un code d'invitation du créateur. Tu génères ensuite tes propres codes à donner à tes athlètes : ils les rattachent à ton suivi.<br><br>Tes athlètes, eux, paient <strong style="color:#fff">9,95 €/mois</strong> pour accéder à l'app. Les accès gratuits sont réservés au créateur de RepCore.</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.82);line-height:1.6"><strong style="color:#fff">Ton compte coach est gratuit</strong>, sans abonnement : son ouverture demande un code d'invitation du créateur. Tu génères ensuite tes propres codes à donner à tes athlètes : chaque code les rattache à ton suivi et leur ouvre l'accès pour la durée que tu choisis, <strong style="color:#fff">jusqu'à 12 mois</strong>.</div>
     </div>
   </div>
 </div>
@@ -1241,7 +1241,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <!-- Notice pour coachs non-créateur — géré dans loadStudentCodes() -->
         <div id="sc-noncreatormsg" style="display:none;background:var(--info-bg);border:1px solid var(--info-border);border-radius:14px;padding:18px;margin-bottom:24px">
           <div style="font-size:11px;font-weight:800;color:var(--info);letter-spacing:2px;margin-bottom:10px">ACCÈS ÉLÈVES</div>
-          <p style="font-size:12px;color:#aaa;line-height:1.7;margin:0">Les codes d'accès gratuits sont réservés exclusivement au créateur de RepCore.<br><br>Tes élèves peuvent accéder à l'application en souscrivant directement via PayPal (9,95€/mois). Les paiements sont centralisés sur le compte du créateur : tu n'as rien à configurer.</p>
+          <p style="font-size:12px;color:#aaa;line-height:1.7;margin:0">Chaque code que tu génères ouvre l'accès à ton athlète pour la durée choisie, jusqu'à 12 mois. Passé ce délai, tu lui en donnes un nouveau.</p>
         </div>
         <div>
           <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
@@ -1355,7 +1355,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
 
         <h2 style="margin-bottom:4px">Paiements</h2>
-        <p class="sub" style="font-size:12px;margin-bottom:20px">Tous les abonnements (9,95€/mois) sont centralisés sur le compte RepCore. Seul le créateur peut émettre des codes d'accès gratuits. Les élèves des autres coachs souscrivent directement via PayPal : les paiements reviennent exclusivement au créateur de l'application.</p>
+        <p class="sub" style="font-size:12px;margin-bottom:20px">Abonnements souscrits directement dans l'application, par les athlètes inscrits sans code de coach.</p>
 
         <!-- Stats -->
         <div style="display:flex;gap:10px;margin-bottom:20px">
@@ -3046,34 +3046,31 @@ const POLICY_VERSION='2026-07';
 // depuis l'interface utilisateur.
 //
 // CREATOR_EMAIL : compte propriétaire de l'application RepCore.
-//   — Seul autorisé à émettre des codes d'accès GRATUITS (1 / 3 / 6 / 12 mois).
-//   — C'est le compte PayPal de ce mail qui perçoit TOUS les paiements athlètes,
-//     qu'ils appartiennent au créateur ou à un autre coach.
-//   — Les autres coachs ne peuvent pas générer de codes gratuits ;
-//     leurs élèves doivent souscrire via PayPal (9,95 EUR/mois).
+//   — Seul autorisé à émettre des codes d'INVITATION COACH.
+//   — C'est le compte PayPal de ce mail qui perçoit les abonnements souscrits
+//     dans l'application, par les athlètes inscrits SANS code de coach.
 //
-// ── PARTAGE DE REVENU AVEC LES COACHS AFFILIÉS : NON DÉCIDÉ ────────────────
-// Ce qui est IMPLÉMENTÉ aujourd'hui, sans ambiguïté :
-//   • 100 % des 9,95 EUR/mois vont sur le PayPal de CREATOR_EMAIL. Il n'existe
-//     aucun mécanisme de reversement, ni automatique ni manuel, dans ce code.
-//   • Un code émis par un coach affilié (creatorFree:false) sert uniquement à
-//     rattacher l'athlète à ce coach — voir doAthleteCode et l'activation
-//     PayPal, qui ne reprend du code que coachId et coachName.
-//   • payload.expiry n'est PAS utilisé après paiement : l'athlète devient
-//     AUTONOMIE_PREMIUM sur abonnement PayPal. La « durée d'accès » choisie par
-//     un affilié au moment de créer un compte n'a donc aucun effet.
+// ── OCTROI D'ACCÈS PAR UN COACH AFFILIÉ ────────────────────────────────────
+// CE BLOC DISAIT L'INVERSE, et il se déclarait faisant foi. Il est réécrit
+// avec le lot R-03 plutôt que corrigé ligne à ligne : un commentaire faux est
+// pire qu'absent, il invite à défaire ce qu'il décrit mal.
 //
-// Ce qui n'est PAS décidé : si, et selon quelle règle, un coach affilié touche
-// une part de l'abonnement de ses athlètes. Tant que ce point reste ouvert,
-// AUCUN écran ne doit le promettre, même implicitement — et l'interface a été
-// alignée en conséquence : le coach affilié lit partout qu'il ne peut pas
-// offrir d'accès et que ses élèves paient l'app directement.
+// Ce qui est IMPLÉMENTÉ, sans ambiguïté :
+//   • Un coach affilié accorde l'accès à ses athlètes, pour la durée qu'il
+//     choisit et JUSQU'À 12 MOIS par code. Le plafond est vérifié DEUX fois :
+//     à la génération et à la consommation. Un athlète invité par un affilié
+//     ne rencontre plus d'écran de paiement.
+//   • Le paywall subsiste pour l'inscription AUTONOME, sans code.
+//   • payload.grantedBy vaut 'creator' ou 'coach'. Absent — code émis avant
+//     ce lot — il est lu comme 'creator' : aucun code ancien ne change de
+//     comportement.
 //
-// Si un partage est un jour décidé, les trois points à modifier sont :
-//   1. ce commentaire, qui fait foi ;
-//   2. _genAccessCode / creatorFree, qui porte déjà l'identité du coach ;
-//   3. l'écran Monétisation (pp-mrr), qui agrège aujourd'hui le chiffre total
-//      sans distinguer la part de chaque coach.
+// CE QUI N'EXISTE TOUJOURS PAS, ET C'EST DÉLIBÉRÉ : aucun mécanisme de
+// reversement, ni automatique ni manuel. Encaisser pour le compte d'un tiers
+// est une activité d'intermédiaire de paiement, réglementée — ce produit ne
+// s'en approche pas. Et aucun écran ne promet de gratuité illimitée ni de
+// nombre d'athlètes garanti : une limitation technique annoncée comme un
+// avantage devient une promesse contractuelle dont on ne revient pas.
 const CREATOR_EMAIL='guellec.coachingpro@gmail.com';
 
 // ── Mesure de tunnel ────────────────────────────────────────────────────────
@@ -5714,8 +5711,14 @@ function _appliquerPayloadCode(payload){
     if(!coach.clients.includes(currentUser.id)) coach.clients.push(currentUser.id);
     users[coach.email]=coach;
   }
-  if(payload.creatorFree){
-    // Code créateur : accès gratuit immédiat
+  // R-03 : l'octroi ne dépend plus de creatorFree. Un code de type 'athlete',
+  // émis par le créateur OU par un affilié, ouvre l'accès. Le paywall ne
+  // subsiste que pour l'inscription AUTONOME, sans code — ce chemin-ci n'y
+  // passe pas.
+  const _mois=_moisAutorises(payload);
+  const _octroi=payload.creatorFree||(payload.type||'athlete')==='athlete';
+  if(_octroi){
+    // Accès accordé immédiatement
     currentUser.coachId=payload.coachId;
     currentUser.coachName=payload.coachName||'Coach';
     // Pose EXPLICITE, depuis le code et non depuis le cache local : c'est la
@@ -5725,7 +5728,15 @@ function _appliquerPayloadCode(payload){
       ||((payload.coachEmail||'').replace(/\./g,','))||null;
     if(_ck) currentUser.coachEmailKey=_ck;
     currentUser.status='COACHING_SUIVI';
-    currentUser.accessExpiry=payload.expiry;
+    // Le plafond est RE-VÉRIFIÉ ici, à la consommation : le payload vient du
+    // réseau, et une vérification côté émetteur seule ne protège de rien.
+    // On recalcule l'échéance depuis months plutôt que de faire confiance à
+    // expiry, qu'un code forgé porterait à dix ans.
+    const _exp=_mois>0?Date.now()+_mois*_MONTH_MS:payload.expiry;
+    // Un athlète DÉJÀ payant garde la date la plus lointaine : saisir un code
+    // de coach ne doit jamais raccourcir un accès acheté.
+    currentUser.accessExpiry=Math.max(Number(currentUser.accessExpiry)||0,
+      Number(_exp)||0)||_exp;
     users[currentUser.email]=currentUser;
     const _u1=DB.set('users',users),_s1=DB.set('session',currentUser);
     // Envoi immediat : sans lui, le coach ne voit rien tant que l'athlete
@@ -5736,7 +5747,7 @@ function _appliquerPayloadCode(payload){
     toastEcriture(_u1&&_s1,'Accès activé ✓','ton accès est');
     _apresRattachement();
   } else {
-    // Code affilié : paiement 9,95€/mois requis
+    // Code NON athlète (invitation coach) : le paiement reste le chemin
     sessionStorage.setItem('pendingCodePayload',JSON.stringify(payload));
     users[currentUser.email]=currentUser;
     DB.set('users',users);
@@ -7588,8 +7599,24 @@ function renderTodoBlock(clients){
 // comme un manque d'assiduité alors que l'élève ne peut tout simplement pas
 // entrer. Le coach doit savoir ce qu'il reste à faire.
 function _enAttenteAbonnement(c){return !c._fromCode&&c.status==='FREE';}
+// R-03 : accès expiré = LECTURE SEULE, jamais suppression. Le dossier, les
+// séances, les bilans et l'historique restent intacts et consultables par le
+// coach ; c'est l'athlète qui ne peut plus entrer tant qu'un nouveau code ne
+// lui a pas été donné. Rien ici n'efface quoi que ce soit — et un test le
+// vérifie, parce qu'une suppression est irréversible et qu'un jour quelqu'un
+// trouvera plus simple de « nettoyer ».
+//
+// PURE, et distincte de _enAttenteAbonnement : un athlète FREE n'a jamais eu
+// d'accès, un athlète expiré en a eu un. Les deux méritent des mots
+// différents sur la fiche.
+function _accesExpire(c){
+  if(!c||c._fromCode||c.role==='coach') return false;
+  if((c.status||'FREE')!=='COACHING_SUIVI') return false;
+  return !!c.accessExpiry&&Date.now()>=c.accessExpiry;
+}
 function renderClientRow(c){
   const badge=_enAttenteAbonnement(c)?'<span class="badge badge-orange">⏳ Abonnement à souscrire</span>'
+    :_accesExpire(c)?'<span class="badge badge-gray">Lecture seule</span>'
     :hasNewBilan(c)?'<span class="badge badge-orange">Nouveau bilan</span>':needsAlert(c)?'<span class="badge badge-red">Alerte</span>':isActive(c)?'<span class="badge badge-green">Actif</span>':'<span class="badge badge-gray">Inactif</span>';
   const lastSession=c.sessions?.length?c.sessions[c.sessions.length-1].date:0;
   const lastBilan=c.bilans?.length?c.bilans[c.bilans.length-1].date:0;
@@ -7904,7 +7931,8 @@ function openClientDetail(cid,_refresh){
   document.getElementById('ccd-badge').innerHTML=c._fromCode
     ?'<span class="badge badge-orange">⏳ En attente d\'inscription</span>'
     // Même verdict que la liste : les deux écrans doivent dire la même chose.
-    :_enAttenteAbonnement(c)?'<span class="badge badge-orange">⏳ Abonnement à souscrire : 9,95 €/mois</span>'
+    :_enAttenteAbonnement(c)?'<span class="badge badge-orange">⏳ Abonnement à souscrire</span>'
+    :_accesExpire(c)?'<span class="badge badge-gray">Lecture seule — accès expiré</span>'
     :_newBil?'<span class="badge badge-orange"> Nouveau bilan</span>'
     :needsAlert(c)?'<span class="badge badge-red"> Bilan en retard</span>':isActive(c)?'<span class="badge badge-green"> Actif</span>':'<span class="badge badge-gray">Inactif</span>';
   const _pd=document.getElementById('ccd-profile-details');
@@ -27641,7 +27669,7 @@ function openAddAthlete(){
     <h2 style="margin-bottom:6px">➕ Ajouter un athlète</h2>
     <p class="sub" style="margin-bottom:8px;font-size:12px">${estCreateur
       ?'Crée le compte et active l\'accès en une seule étape. Ton élève se connectera avec l\'email et le mot de passe que tu saisis ici.'
-      :'Crée le compte de ton élève : il se connectera avec l\'email et le mot de passe que tu saisis ici. Son accès sera activé après souscription à <strong style="color:#ddd">9,95 €/mois</strong> : les accès gratuits sont réservés au créateur de RepCore.'}</p>
+      :'Crée le compte de ton élève : il se connectera avec l\'email et le mot de passe que tu saisis ici. Son accès est ouvert pour la durée choisie ci-dessous.'}</p>
     <div><label style="margin-top:10px" for="aa-fname">Prénom</label><input id="aa-fname" placeholder="Prénom de l'athlète"></div>
     <div><label style="margin-top:10px" for="aa-lname">Nom</label><input id="aa-lname" placeholder="Nom de l'athlète"></div>
     <div><label style="margin-top:10px" for="aa-email">Email</label><input type="email" id="aa-email" placeholder="email@exemple.com"></div>
@@ -27671,8 +27699,9 @@ async function createAthlete(){
   const em=document.getElementById('aa-email').value.trim().toLowerCase();
   const pw=document.getElementById('aa-pwd').value.trim();
   const gn=document.getElementById('aa-gender').value;
-  // Le sélecteur de durée n'existe que pour le créateur : pour un affilié,
-  // payload.expiry n'est jamais lu après paiement (voir le bloc CREATOR_EMAIL).
+  // Le sélecteur existe pour tous depuis R-03 : la durée choisie par un
+  // affilié est désormais celle de l'accès qu'il accorde. Le repli à 3 mois
+  // couvre le cas où le sélecteur n'est pas rendu.
   const months=parseInt(document.getElementById('aa-duration')?.value)||3;
   const estCreateur=currentUser.email===CREATOR_EMAIL;
   const _err=m=>{const e=document.getElementById('aa-err');e.textContent=m;e.style.display='block';};
@@ -27728,16 +27757,12 @@ async function createAthlete(){
     return;
   }
   if(tel) athlete.phone=tel;
-  // Un affilié n'accorde aucun accès : son code part en creatorFree:false et
-  // renvoie l'athlète vers le paiement. Écrire COACHING_SUIVI ici affichait sur
-  // son tableau de bord un élève « suivi » qui, lui, se heurtait au paywall.
-  // status:'FREE' est ce que routeUser attend pour l'envoyer vers s-client-code.
-  if(estCreateur){
-    athlete.status='COACHING_SUIVI';
-    athlete.accessExpiry=expiry;
-  } else {
-    athlete.status='FREE';
-  }
+  // R-03 : un affilié accorde l'accès comme le créateur. L'ancien code posait
+  // FREE ici, ce qui envoyait l'athlète sur s-client-code — le défaut même
+  // que ce lot corrige. Le plafond a déjà été appliqué par _genAccessCode,
+  // qui refuse au-delà : expiry est donc dans les clous.
+  athlete.status='COACHING_SUIVI';
+  athlete.accessExpiry=expiry;
   if(!currentUser.studentCodes) currentUser.studentCodes=[];
   currentUser.studentCodes.push({...payload,token,usedBy:fn+' '+ln,athleteEmail:em,active:true,redeemed:true,createdAt:Date.now()});
   if(!currentUser.clients) currentUser.clients=[];
@@ -27755,11 +27780,11 @@ async function createAthlete(){
   // connectant depuis son propre téléphone : annoncer « il peut se connecter »
   // serait un mensonge coûteux.
   // Le message d'un affilié ne parle plus d'accès : il n'en accorde aucun.
-  const messageFinal=estCreateur
-    ?(motDePasseActif
-      ? '✓ '+fn+' créé : il peut se connecter avec cet email et ce mot de passe. Accès jusqu\'au '+exp+' (code copié)'
-      : '✓ '+fn+' rattaché : il avait déjà un compte, il garde SON mot de passe. Accès jusqu\'au '+exp+' (code copié)')
-    :'Compte préparé. '+fn+' devra souscrire à 9,95 €/mois pour activer son accès (code copié)';
+  // Le message ne distingue plus créateur et affilié : les deux accordent
+  // l'accès, et annoncer autre chose serait faux.
+  const messageFinal=motDePasseActif
+    ? '✓ '+fn+' créé : il peut se connecter avec cet email et ce mot de passe. Accès jusqu\'au '+exp+' (code copié)'
+    : '✓ '+fn+' rattaché : il avait déjà un compte, il garde SON mot de passe. Accès jusqu\'au '+exp+' (code copié)';
   toastSync(okU&&okS,envoi,messageFinal,'le compte est');
   loadCoachHome();
 }
@@ -28682,6 +28707,24 @@ function _adminOffboardSelected(){
 // ── Access codes via Firebase RTDB (sans Cloud Functions — plan Spark) ──
 // Format: RC-XXXX-XXXX stocké dans /rc_codes/{code} du RTDB
 const _MONTH_MS=30*24*60*60*1000;
+// ── R-03 : un coach affilié accorde l'accès, dans une limite dure ────────
+// Le plafond est vérifié DEUX fois — à la génération ET à la consommation.
+// Une seule vérification côté émetteur ne protège de rien : le code est un
+// objet distant, et rien n'empêche d'en poser un à la main dans /rc_codes.
+const CODE_MOIS_MAX_AFFILIE=12;
+// Un code émis AVANT ce lot ne porte pas grantedBy. Il est lu comme
+// 'creator' : sa branche d'octroi est exactement celle d'avant, et aucun code
+// en circulation ne change de comportement. Migration implicite, sans écriture.
+function _octroyePar(payload){
+  const v=(payload||{}).grantedBy;
+  return (v==='coach'||v==='creator')?v:'creator';
+}
+// PURE. Le plafond ne s'applique qu'aux affiliés : le créateur reste libre.
+function _moisAutorises(payload){
+  const m=Number((payload||{}).months);
+  if(!(m>0)) return 0;
+  return _octroyePar(payload)==='coach'?Math.min(m,CODE_MOIS_MAX_AFFILIE):m;
+}
 function _rcRandCode(){
   const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let s='RC-';
@@ -28702,6 +28745,12 @@ async function _genAccessCode(studentName,months,type){
   const codeId='sc_'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
   const code=_rcRandCode();
   const isCreator=currentUser.email===CREATOR_EMAIL;
+  // Refus EXPLICITE plutôt que rabotage silencieux : un coach qui demande
+  // 24 mois doit savoir qu'il n'en obtiendra pas 24, pas découvrir 12 plus
+  // tard sur le dossier de son athlète.
+  if(!isCreator&&months>CODE_MOIS_MAX_AFFILIE)
+    throw new Error('Durée maximale : '+CODE_MOIS_MAX_AFFILIE+' mois par code. '
+      +'Tu pourras en générer un nouveau à l\'échéance.');
   const payload={
     coachId:currentUser.id,
     coachName:(currentUser.fname||'')+' '+(currentUser.lname||''),
@@ -28715,7 +28764,12 @@ async function _genAccessCode(studentName,months,type){
     coachCode:currentUser.code||null,
     studentName,expiry,months,codeId,
     type:type||'athlete',
-    creatorFree:isCreator
+    // creatorFree est CONSERVÉ tel quel : des codes en circulation le portent,
+    // et _appliquerPayloadCode s'en sert encore pour eux. grantedBy le double
+    // sans le remplacer — retirer un champ d'un code déjà distribué le
+    // casserait.
+    creatorFree:isCreator,
+    grantedBy:isCreator?'creator':'coach'
   };
   const url=_rcCodesUrl(code)+(fbTok?'?auth='+fbTok:'');
   const r=await fetch(url,{method:'PUT',headers:{'Content-Type':'application/json'},
@@ -35721,6 +35775,214 @@ function testExercices(){
           if(!/salutation\(\)/.test(src)) return _echec('l\'accueil ne l\'appelle pas');
           return !/h<12/.test(src)?true:_echec('l\'ancienne bascule de midi subsiste');})());
       } finally {}
+    })();
+
+    // ══════ R-03 : ACCÈS ACCORDÉ PAR UN COACH AFFILIÉ ══════
+    (()=>{
+      const _acU=currentUser;
+      const MOIS=30*24*60*60*1000;
+      const _code=(o)=>Object.assign({coachId:'c1',coachName:'Coach T',
+        coachEmail:'coach@t.fr',coachEmailKey:'coach@t,fr',studentName:'A B',
+        type:'athlete',months:3,expiry:Date.now()+3*MOIS,codeId:'sc_1'},o||{});
+      const _ath=(o)=>Object.assign({id:'ac',email:'ac@t',role:'athlete',fname:'A',
+        exAlias:{},exMuscles:{},programs:{},sessions:[],bilans:[],
+        sessions_config:[{active:true}]},o||{});
+      try {
+        // ── L'octroi ─────────────────────────────────────────────────────
+        ok('Un code de coach affilié OUVRE l\'accès',(()=>{
+          const sauve=currentUser;
+          const _sv=window.saveUser,_cp=CLOUD.pushOne,_ar=window._apresRattachement;
+          const _te=window.toastEcriture,_ov=window._oublierCodeVerifie;
+          try{
+            window.saveUser=()=>true; CLOUD.pushOne=()=>Promise.resolve();
+            window._apresRattachement=()=>{}; window.toastEcriture=()=>{};
+            window._oublierCodeVerifie=()=>{};
+            currentUser=_ath({status:'FREE'});
+            DB.set('users',Object.assign(DB.get('users')||{},{'ac@t':currentUser}));
+            _appliquerPayloadCode(_code({grantedBy:'coach',months:3,
+              expiry:Date.now()+3*MOIS}));
+            if(currentUser.status!=='COACHING_SUIVI')
+              return _echec('statut : '+currentUser.status);
+            // +3 mois, à un jour près : Date.now() bouge entre les deux appels.
+            const ecart=Math.abs(currentUser.accessExpiry-(Date.now()+3*MOIS));
+            if(ecart>864e5) return _echec('échéance décalée de '+Math.round(ecart/864e5)+' j');
+            if(currentUser.coachEmailKey!=='coach@t,fr')
+              return _echec('clé coach : '+currentUser.coachEmailKey);
+            // ET l'écran d'arrivée n'est PAS le paywall.
+            return checkAccess(currentUser)===true
+              ?true:_echec('checkAccess refuse encore');
+          } finally { currentUser=sauve; window.saveUser=_sv; CLOUD.pushOne=_cp;
+            window._apresRattachement=_ar; window.toastEcriture=_te;
+            window._oublierCodeVerifie=_ov; }})());
+        ok('routeUser n\'envoie plus cet athlète sur s-client-code',(()=>{
+          // Le défaut R-03 : status FREE → go('s-client-code'). Un athlète
+          // COACHING_SUIVI non expiré ne doit pas y passer.
+          const u=_ath({status:'COACHING_SUIVI',accessExpiry:Date.now()+3*MOIS});
+          if(!checkAccess(u)) return _echec('checkAccess refuse');
+          const src=String(routeUser);
+          // La seule branche vers s-client-code reste celle du statut FREE.
+          const m=src.match(/if\(s==='FREE'\)\s*return go\('s-client-code'\)/);
+          return m?true:_echec('la garde FREE a changé de forme');})());
+
+        // ── Le plafond, vérifié DEUX fois ────────────────────────────────
+        ok('Plafond : 12 mois, et un affilié ne peut pas le dépasser',(()=>{
+          if(CODE_MOIS_MAX_AFFILIE!==12) return _echec('plafond : '+CODE_MOIS_MAX_AFFILIE);
+          // À la CONSOMMATION : un code forgé à 24 mois est ramené à 12.
+          if(_moisAutorises(_code({grantedBy:'coach',months:24}))!==12)
+            return _echec('24 mois acceptés d\'un affilié');
+          if(_moisAutorises(_code({grantedBy:'coach',months:6}))!==6)
+            return _echec('6 mois refusés à tort');
+          // Le créateur, lui, reste libre.
+          return _moisAutorises(_code({grantedBy:'creator',months:24}))===24
+            ?true:_echec('le créateur est plafonné');})());
+        ok('Un code forgé à 24 mois n\'ouvre que 12 mois',(()=>{
+          const sauve=currentUser;
+          const _sv=window.saveUser,_cp=CLOUD.pushOne,_ar=window._apresRattachement;
+          const _te=window.toastEcriture,_ov=window._oublierCodeVerifie;
+          try{
+            window.saveUser=()=>true; CLOUD.pushOne=()=>Promise.resolve();
+            window._apresRattachement=()=>{}; window.toastEcriture=()=>{};
+            window._oublierCodeVerifie=()=>{};
+            currentUser=_ath({status:'FREE'});
+            DB.set('users',Object.assign(DB.get('users')||{},{'ac@t':currentUser}));
+            // expiry MENT : dix ans. C'est months qui fait foi.
+            _appliquerPayloadCode(_code({grantedBy:'coach',months:24,
+              expiry:Date.now()+120*MOIS}));
+            const mois=(currentUser.accessExpiry-Date.now())/MOIS;
+            return (mois>11.5&&mois<12.5)
+              ?true:_echec(Math.round(mois)+' mois accordés');
+          } finally { currentUser=sauve; window.saveUser=_sv; CLOUD.pushOne=_cp;
+            window._apresRattachement=_ar; window.toastEcriture=_te;
+            window._oublierCodeVerifie=_ov; }})());
+        ok('_genAccessCode REFUSE au-delà du plafond, avec un message',(()=>{
+          const src=String(_genAccessCode);
+          if(!/CODE_MOIS_MAX_AFFILIE/.test(src)) return _echec('aucun plafond à la génération');
+          // Refus explicite, pas rabotage silencieux.
+          return /throw new Error/.test(src)
+            ?true:_echec('la durée est rabotée sans le dire');})());
+
+        // ── Aucune régression rétroactive ────────────────────────────────
+        ok('Un code ANCIEN, sans grantedBy, est lu comme « creator »',(()=>{
+          // Migration implicite : aucun code en circulation ne change de
+          // comportement, et rien n'est réécrit.
+          if(_octroyePar(_code({}))!=='creator') return _echec('défaut incorrect');
+          if(_octroyePar(_code({grantedBy:undefined}))!=='creator') return _echec('undefined');
+          if(_octroyePar(_code({grantedBy:'nimporte'}))!=='creator') return _echec('valeur inconnue');
+          if(_octroyePar(_code({grantedBy:'coach'}))!=='coach') return _echec('coach perdu');
+          // Et un code ancien de 24 mois n'est PAS plafonné : il vaut créateur.
+          return _moisAutorises(_code({months:24}))===24
+            ?true:_echec('un code ancien a été plafonné rétroactivement');})());
+        ok('creatorFree est CONSERVÉ dans le payload',(()=>{
+          // Des codes en circulation le portent ; le retirer les casserait.
+          return /creatorFree:isCreator/.test(String(_genAccessCode))
+            ?true:_echec('creatorFree a disparu du payload');})());
+
+        // ── L'expiration : lecture seule, JAMAIS suppression ─────────────
+        ok('Accès expiré = lecture seule, et rien n\'est supprimé',(()=>{
+          const u=_ath({status:'COACHING_SUIVI',accessExpiry:Date.now()-864e5,
+            sessions:[{id:'s1',date:Date.now()-3*864e5,data:{}}],
+            bilans:[{type:'coaching',date:Date.now()-2*864e5}]});
+          if(!_accesExpire(u)) return _echec('l\'expiration n\'est pas vue');
+          const avant=JSON.stringify(u);
+          _accesExpire(u); renderClientRow(u);
+          if(JSON.stringify(u)!==avant) return _echec('le dossier a été modifié');
+          // Séances et bilans INTACTS : c'est le point qui compte.
+          if(!u.sessions.length||!u.bilans.length) return _echec('des données ont disparu');
+          const badge=renderClientRow(u);
+          return /Lecture seule/.test(badge)
+            ?true:_echec('aucun badge de lecture seule');})());
+        ok('Aucun chemin de ce lot ne supprime un compte',(()=>{
+          const src=String(_accesExpire)+String(_enAttenteAbonnement)
+            +String(_octroyePar)+String(_moisAutorises);
+          return !/delete\s+users\[|removeUser|supprimerCompte|\.splice\(/.test(src)
+            ?true:_echec('une suppression existe dans le chemin d\'expiration');})());
+        ok('Un accès NON expiré n\'est pas marqué lecture seule',(()=>{
+          if(_accesExpire(_ath({status:'COACHING_SUIVI',accessExpiry:Date.now()+864e5})))
+            return _echec('marqué expiré alors qu\'il reste du temps');
+          if(_accesExpire(_ath({status:'COACHING_SUIVI'})))
+            return _echec('sans échéance = expiré');
+          if(_accesExpire(_ath({status:'FREE'})))
+            return _echec('un FREE est marqué expiré');
+          return !_accesExpire(_ath({role:'coach'}))
+            ?true:_echec('un coach est marqué expiré');})());
+
+        // ── L'athlète déjà payant ────────────────────────────────────────
+        ok('Un athlète déjà payant garde la date la plus LOINTAINE',(()=>{
+          const sauve=currentUser;
+          const _sv=window.saveUser,_cp=CLOUD.pushOne,_ar=window._apresRattachement;
+          const _te=window.toastEcriture,_ov=window._oublierCodeVerifie;
+          try{
+            window.saveUser=()=>true; CLOUD.pushOne=()=>Promise.resolve();
+            window._apresRattachement=()=>{}; window.toastEcriture=()=>{};
+            window._oublierCodeVerifie=()=>{};
+            const loin=Date.now()+24*MOIS;
+            currentUser=_ath({status:'COACHING_SUIVI',accessExpiry:loin});
+            DB.set('users',Object.assign(DB.get('users')||{},{'ac@t':currentUser}));
+            _appliquerPayloadCode(_code({grantedBy:'coach',months:3}));
+            return currentUser.accessExpiry===loin
+              ?true:_echec('un accès acheté a été raccourci');
+          } finally { currentUser=sauve; window.saveUser=_sv; CLOUD.pushOne=_cp;
+            window._apresRattachement=_ar; window.toastEcriture=_te;
+            window._oublierCodeVerifie=_ov; }})());
+
+        // ── Le paywall autonome SUBSISTE ─────────────────────────────────
+        ok('Sans code, un athlète reste FREE et voit l\'abonnement',(()=>{
+          const u=_ath({status:'FREE'});
+          if(checkAccess(u)) return _echec('un FREE a accès');
+          // La branche de routeUser est intacte.
+          return /s-client-code/.test(String(routeUser))
+            ?true:_echec('le paywall autonome a disparu');})());
+
+        // ── Les textes ───────────────────────────────────────────────────
+        ok('Aucun texte de centralisation des paiements ne subsiste',(()=>{
+          // Aiguilles assemblées à l'exécution, production seule : sans les
+          // deux, ce test se trouve lui-même.
+          const aig=['centralis'+'és sur le compte','paiements sont '+'centralisés',
+            'reviennent exclusivement au '+'créateur','vont sur le PayPal de '+'CREATOR_EMAIL'];
+          const tout=document.documentElement.outerHTML;
+          const fin=tout.indexOf('function testExercices');
+          if(fin<0) return _echec('frontière de la suite introuvable');
+          const prod=tout.slice(0,fin);
+          if(prod.length<100000) return _echec('production trop courte');
+          const t=aig.filter(m=>prod.indexOf(m)>=0);
+          return t.length?_echec('trouvés : '+t.join(' | ')):true;})());
+        ok('Aucune promesse de gratuité illimitée n\'a pris leur place',(()=>{
+          // Une limitation technique annoncée comme un avantage devient une
+          // promesse contractuelle dont on ne revient pas.
+          const tout=document.documentElement.outerHTML;
+          const prod=tout.slice(0,tout.indexOf('function testExercices'))
+            .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+          const interdits=['gratuit sans limite','sans plafond','athletes illimites',
+            'autant d athletes que tu veux','gratuit a vie'];
+          const t=interdits.filter(m=>prod.indexOf(m)>=0);
+          return t.length?_echec('promesse trouvée : '+t.join(' | ')):true;})());
+
+        // ── R-02 : les six points de restauration ────────────────────────
+        ok('R-02 : les six gardes role!==coach sont TOUTES là',(()=>{
+          // Elles étaient corrigées mais rien ne les protégeait : un seul oubli
+          // renverrait un coach sur s-client-code, et rien ne le dirait.
+          const tout=document.documentElement.outerHTML;
+          const prod=tout.slice(0,tout.indexOf('function testExercices'));
+          const n=(prod.match(/role!=='coach'&&\(\w+\.status\|\|'FREE'\)==='FREE'/g)||[]).length;
+          return n>=6?true:_echec(n+' gardes au lieu de 6 au moins');})());
+        ok('R-01 : APP_BASE_URL est dérivée, jamais codée en dur',(()=>{
+          if(typeof APP_BASE_URL!=='string'||!APP_BASE_URL) return _echec('vide');
+          const tout=document.documentElement.outerHTML;
+          const prod=tout.slice(0,tout.indexOf('function testExercices'));
+          // Les balises Open Graph du <head> portent LÉGITIMEMENT l'URL
+          // absolue : un robot d'indexation n'a pas de location. Mon premier
+          // motif les attrapait et faisait échouer R-01 sur un faux positif.
+          // R-01 porte sur les liens d'invitation et le QR — donc sur le JS.
+          // Les <meta> vivent APRÈS un premier <script> dans le head :
+          // découper à partir de <script> ne les excluait pas. On les retire
+          // explicitement — c est le seul cas légitime d URL absolue.
+          const js=prod.replace(/<meta[^>]*>/gi,'');
+          if(js.length<100000) return _echec('production trop courte');
+          if(/repcore131\.github\.io/i.test(js))
+            return _echec('URL de dépôt codée en dur dans le JS');
+          return /APP_BASE_URL/.test(js)
+            ?true:_echec('APP_BASE_URL n\'est plus consommée');})());
+      } finally { currentUser=_acU; }
     })();
 
     // ══════ PROFIL COACH VISIBLE PAR SES ATHLÈTES ══════
