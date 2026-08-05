@@ -1190,11 +1190,14 @@ const COACH_PHOTO='icons/coach.jpg';
       <div class="pad">
         <div style="display:flex;gap:10px;margin-bottom:20px;padding-top:4px">
           <div class="metric-box"><div class="metric-val" id="ch-total">0</div><div class="metric-label">Athlètes</div></div>
-          <div class="metric-box"><div class="metric-val" id="ch-active" style="color:var(--green)">0</div><div class="metric-label">Actifs</div></div>
+          <div class="metric-box"><div class="metric-val" id="ch-active" style="color:var(--green)">0</div><div class="metric-label">Actifs 14 j</div></div>
           <div class="metric-box"><div class="metric-val" id="ch-alerts" style="color:var(--red)">0</div><div class="metric-label">Alertes</div></div>
         </div>
         <!-- Premiers pas. Rempli par _renderPremiersPas, et seulement tant que
              le coach n'a aucun athlète : au-delà, ch-todo a mieux à dire. -->
+        <!-- Compteur permanent. Rempli par loadCoachHome avec le cache DEJA
+             lu : le relire couterait 130 ms a 40 athletes. -->
+        <div id="ch-paliers"></div>
         <div id="ch-premiers-pas"></div>
         <div id="ch-todo"></div>
         <button onclick="openCoachPrograms()" class="content-card" style="width:100%;margin-bottom:16px;padding:13px 16px;background:linear-gradient(135deg,#0d0d0d,#1a0000);border:1px solid #2a0000;border-left:3px solid var(--red);border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px;text-align:left;display:flex;align-items:center;justify-content:space-between">
@@ -3590,6 +3593,50 @@ function countActiveAthletesFiable(coach,users){
 }
 // PURE. Le palier qui convient au nombre d'athlètes donné. Sert à nommer le
 // palier SUIVANT dans un bandeau ; il ne décide rien et ne bloque rien.
+// ── Suivi de palier : ce que le coach a déjà vu, et depuis quand ─────────
+// user.paliers = { dernierAvertissement: ISO|null, cyclesAuDessus: number }
+//
+// L'HORODATAGE EST EN ISO, contrairement au reste du dossier qui compte en
+// millisecondes. C'est délibéré : ce champ se lit à l'œil dans la console
+// Firebase quand un coach conteste une alerte, et onze octets de plus sur
+// UN champ ne pèsent rien face à ça.
+//
+// UN CYCLE = UN MOIS CALENDAIRE, un incrément au plus. Le cahier des charges
+// dit « 2 cycles consécutifs » sans définir le cycle ; compter par ouverture
+// d'application ferait franchir le seuil en deux clics, compter en jours
+// glissants ferait dépendre la facturation de l'heure d'ouverture.
+const PALIERS_CYCLES_MAX=24;   // deux ans : au-delà, le compteur ne dit plus rien
+// PURE. Rend l'état, avec ses défauts, SANS écrire. Un dossier qui n'a
+// jamais dépassé ne porte pas la clé — même doctrine qu'au lot F-19.
+function paliersDe(user){
+  const u=_dossier(user);
+  const p=(u&&u.paliers)||{};
+  const n=p.cyclesAuDessus;
+  return {
+    dernierAvertissement:(typeof p.dernierAvertissement==='string')?p.dernierAvertissement:null,
+    cyclesAuDessus:(typeof n==='number'&&isFinite(n)&&n>=0)?Math.min(n,PALIERS_CYCLES_MAX):0
+  };
+}
+// PURE. La clé de cycle d'une date : « 2026-08 ». C'est elle qui garantit
+// « un incrément au plus par mois ».
+function _cyclePalier(d){
+  const x=(d instanceof Date)?d:new Date(d||Date.now());
+  return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0');
+}
+// Écrit l'état. Rend l'objet écrit. N'enregistre pas : l'appelant le fait,
+// comme partout ailleurs — mélanger décision et persistance rend la
+// première inéprouvable.
+function _ecrirePaliers(user,champs){
+  const u=_dossier(user);
+  if(!u) return null;
+  const cur=paliersDe(u);
+  const suiv=Object.assign({},cur,champs||{});
+  suiv.cyclesAuDessus=Math.max(0,Math.min(PALIERS_CYCLES_MAX,
+    Math.round(Number(suiv.cyclesAuDessus)||0)));
+  u.paliers=suiv;
+  return suiv;
+}
+
 function coachPalierRequis(n){
   const p=COACH_PALIERS.find(x=>n<=x.quota);
   return p?p.cle:'pro';
@@ -3679,6 +3726,47 @@ const LIBRE_ATTENTE_TEXTE='Les '+LIBRE_MAX+' comptes gratuits ouverts sont pris.
 function _quotaTexte(q){ return q===Infinity?'sans limite':String(q); }
 // Le palier PAYANT qui vient après le palier courant, s'il en existe un.
 // Rend null au sommet : « prix du palier suivant » n'a alors aucun sens.
+// Le bandeau permanent du tableau de bord. « N / M athlètes actifs » et le
+// palier, en clair.
+//
+// `users` EST OBLIGATOIRE ET DÉJÀ LU. Mesuré : DB.get('users') coûte 130 ms
+// à 40 athlètes — c'est le JSON.parse du cache, pas le comptage, qui pèse
+// (0,11 ms). Rendre ce bandeau sans lui passer le cache déjà en main
+// bloquerait le fil principal huit images à chaque ouverture.
+function _htmlBandeauPaliers(coach,users){
+  const u=coach||currentUser;
+  if(!u||u.role!=='coach') return '';
+  const cle=coachPlanDe(u);
+  const pal=COACH_PALIERS.find(x=>x.cle===cle)||COACH_PALIERS[0];
+  const quota=getCoachQuota(cle);
+  const fiable=countActiveAthletesFiable(u,users);
+  const n=countActiveAthletes(u,users);
+  // Le compteur se tait plutôt que d'annoncer un chiffre faux : sur un
+  // appareil neuf, le cache est vide et « 0 / 15 » mentirait.
+  const compte=fiable?(n+' / '+_quotaTexte(quota)+' athlètes actifs')
+    :'athlètes actifs : en cours de synchronisation';
+  const depasse=fiable&&n>quota;
+  return '<div style="display:flex;align-items:center;gap:10px;background:var(--surface-1);'
+    +'border:1px solid '+(depasse?'var(--orange)':'var(--border)')+';border-radius:12px;'
+    +'padding:10px 13px;margin-bottom:14px">'
+    +'<div style="flex:1;min-width:0">'
+    +'<div style="font-weight:800;font-size:12.5px">'+escapeHtml(compte)+'</div>'
+    +'<div class="sub" style="font-size:10.5px;margin-top:2px">Palier '+escapeHtml(pal.titre)
+    +(pal.prix?(' — '+pal.prix+' € par mois'):' — gratuit')+'</div></div>'
+    +'<button class="btn btn-outline btn-sm" style="flex-shrink:0;min-height:38px" '
+    +'onclick="ouvrirMonAbonnement()">Changer</button>'
+    +'</div>';
+}
+// Un seul chemin vers l'écran d'abonnement : l'onglet qui le porte. Le
+// dupliquer ferait diverger les deux.
+function ouvrirMonAbonnement(){
+  go('s-coach-home');
+  coachTab('monetisation');
+  const z=document.getElementById('coach-abo');
+  if(z) z.scrollIntoView({block:'start'});
+  return true;
+}
+
 function _palierSuivant(cle){
   const i=COACH_PALIERS.findIndex(x=>x.cle===cle);
   return (i>=0&&i+1<COACH_PALIERS.length)?COACH_PALIERS[i+1]:null;
@@ -9024,7 +9112,11 @@ function loadCoachHome(){
     try{ CLOUD.pushProfilCoach(currentUser); }catch(e){} }
   go('s-coach-home');
   // Pousser les données locales vers Firebase dès l'ouverture (récupère les saves pré-v144)
-  if(CLOUD.canWrite()) CLOUD.push(DB.get('users')||{});
+  // UNE seule lecture du cache pour tout l'ecran : elle sert a la poussee
+  // ci-dessous ET au bandeau de paliers. Mesure : 130 ms a 40 athletes,
+  // c'est le JSON.parse qui pese, pas le comptage.
+  const _cacheUsers=DB.get('users')||{};
+  if(CLOUD.canWrite()) CLOUD.push(_cacheUsers);
   // Sans await : le tableau de bord s'affiche tout de suite avec ce qu'on a,
   // et se complete quand les codes ont repondu.
   _rafraichirCodesEleves();
@@ -9047,6 +9139,10 @@ function loadCoachHome(){
   if(mobileHeader) mobileHeader.style.display='flex';
   if(tabsBar){tabsBar.style.display='flex';tabsBar.style.visibility='visible';}
   const clients=getClients();
+  try{
+    const _zp=document.getElementById('ch-paliers');
+    if(_zp) _zp.innerHTML=_htmlBandeauPaliers(u,_cacheUsers);
+  }catch(e){}
   document.getElementById('ch-total').textContent=clients.length;
   document.getElementById('ch-active').textContent=clients.filter(c=>isActive(c)).length;
   document.getElementById('ch-alerts').textContent=clients.filter(c=>needsAlert(c)).length;
@@ -41772,6 +41868,137 @@ function testExercices(){
             return h.indexOf('4 × 8')>=0?true:_echec('la prescription a disparu');
           } finally { currentUser=sauve; _apIdx=sauveIdx;
             const z=document.getElementById('ap-contenu'); if(z) z.innerHTML=''; }})());
+        // ── Paliers, étape 2 : compteur permanent et user.paliers ────────
+        // Fabrique : un athlète rattaché à c1, dont la dernière séance date
+        // de `j` jours. `j` null = aucune séance.
+        const _athP=(id,j)=>({id,email:id+'@t',role:'athlete',coachId:'c1',
+          sessions:(j==null)?[]:[{id:'s',date:Date.now()-j*86400000}]});
+        const _cacheP=(n,j)=>{const m={'c@t':{id:'c1',email:'c@t',role:'coach'}};
+          for(let k=0;k<n;k++) m['a'+k+'@t']=_athP('a'+k,j==null?null:j); return m;};
+        ok('paliersDe rend ses défauts sans RIEN écrire',(()=>{
+          // Même doctrine qu'à F-19 : un dossier qui n'a jamais dépassé ne
+          // porte pas la clé. Retro-écrire coûterait un PUT du document
+          // entier par coach pour n'apprendre à personne ce que l'absence dit.
+          const u={id:'c1',email:'c@t',role:'coach'};
+          const avant=JSON.stringify(u);
+          const p=paliersDe(u);
+          if(p.dernierAvertissement!==null) return _echec('avertissement : '+p.dernierAvertissement);
+          if(p.cyclesAuDessus!==0) return _echec('cycles : '+p.cyclesAuDessus);
+          if(JSON.stringify(u)!==avant) return _echec('le dossier a été modifié : '+JSON.stringify(u));
+          // Valeurs aberrantes : on ne les propage pas.
+          const sale={id:'c1',role:'coach',paliers:{dernierAvertissement:1234,cyclesAuDessus:-5}};
+          const q=paliersDe(sale);
+          if(q.dernierAvertissement!==null) return _echec('un nombre est pris pour une date ISO');
+          if(q.cyclesAuDessus!==0) return _echec('un compte négatif passe : '+q.cyclesAuDessus);
+          const trop={id:'c1',role:'coach',paliers:{cyclesAuDessus:9999}};
+          return paliersDe(trop).cyclesAuDessus===PALIERS_CYCLES_MAX
+            ?true:_echec('le compteur n\'est pas borné : '+paliersDe(trop).cyclesAuDessus);})());
+        ok('_ecrirePaliers borne, arrondit, et n\'enregistre pas lui-même',(()=>{
+          const u={id:'c1',email:'c@t',role:'coach'};
+          const r=_ecrirePaliers(u,{cyclesAuDessus:2,dernierAvertissement:'2026-08-05T10:00:00.000Z'});
+          if(!r||r.cyclesAuDessus!==2) return _echec('écriture : '+JSON.stringify(r));
+          if(u.paliers.dernierAvertissement!=='2026-08-05T10:00:00.000Z')
+            return _echec('la date n\'est pas posée');
+          // Bornes des deux côtés.
+          if(_ecrirePaliers(u,{cyclesAuDessus:-3}).cyclesAuDessus!==0) return _echec('borne basse');
+          if(_ecrirePaliers(u,{cyclesAuDessus:1e6}).cyclesAuDessus!==PALIERS_CYCLES_MAX)
+            return _echec('borne haute');
+          if(_ecrirePaliers(u,{cyclesAuDessus:2.7}).cyclesAuDessus!==3) return _echec('arrondi');
+          // Décision et persistance restent séparées.
+          if(/saveUser\(/.test(String(_ecrirePaliers))) return _echec('_ecrirePaliers enregistre');
+          // Et un null explicite ne vaut pas « l'utilisateur courant ».
+          return _ecrirePaliers(null,{cyclesAuDessus:1})===null
+            ?true:_echec('un null explicite est accepté');})());
+        ok('Un cycle est un MOIS calendaire, pas une ouverture d\'app',(()=>{
+          // Compter par ouverture ferait franchir le seuil en deux clics ;
+          // compter en jours glissants ferait dépendre la facturation de
+          // l'heure d'ouverture.
+          if(_cyclePalier(new Date(2026,7,5))!=='2026-08') return _echec(_cyclePalier(new Date(2026,7,5)));
+          if(_cyclePalier(new Date(2026,0,31))!=='2026-01') return _echec('janvier');
+          if(_cyclePalier(new Date(2026,11,1))!=='2026-12') return _echec('décembre');
+          // Deux instants du MÊME mois donnent la même clé : c'est ce qui
+          // garantit « un incrément au plus par cycle ».
+          return _cyclePalier(new Date(2026,7,1))===_cyclePalier(new Date(2026,7,28))
+            ?true:_echec('deux jours du même mois donnent deux cycles');})());
+        ok('Le bandeau annonce N / M et le palier, avec son prix',(()=>{
+          const c={id:'c1',email:'c@t',role:'coach',coachPlan:'coach',coachSubActive:true};
+          const h=_htmlBandeauPaliers(c,_cacheP(12,3));
+          if(h.indexOf('12 / 15 athlètes actifs')<0) return _echec('compte : '+h.slice(0,160));
+          if(h.indexOf('Coach')<0) return _echec('le palier n\'est pas nommé');
+          if(h.indexOf('19 € par mois')<0) return _echec('le prix n\'est pas dit');
+          // Le palier libre est gratuit, et le bandeau le dit ainsi.
+          const libre=_htmlBandeauPaliers({id:'c1',email:'c@t',role:'coach'},_cacheP(1,3));
+          if(libre.indexOf('1 / 1 athlètes actifs')<0) return _echec('libre : '+libre.slice(0,140));
+          if(libre.indexOf('gratuit')<0) return _echec('le palier libre n\'est pas dit gratuit');
+          // Le palier pro n'annonce pas un quota numérique.
+          const pro=_htmlBandeauPaliers({id:'c1',email:'c@t',role:'coach',coachPlan:'pro',coachSubActive:true},_cacheP(40,3));
+          return pro.indexOf('40 / sans limite')>=0
+            ?true:_echec('pro : '+pro.slice(0,140));})());
+        ok('Le bandeau se TAIT quand le cache ne sait rien',(()=>{
+          // Sur un appareil neuf, « 0 / 15 » mentirait à un coach qui suit
+          // douze personnes.
+          const c={id:'c1',email:'c@t',role:'coach',coachPlan:'coach'};
+          const h=_htmlBandeauPaliers(c,{});
+          if(h.indexOf('en cours de synchronisation')<0) return _echec('il annonce un chiffre : '+h.slice(0,140));
+          if(/0 \/ 15/.test(h)) return _echec('« 0 / 15 » est affiché quand même');
+          // Et il ne se rend pas du tout pour un non-coach.
+          return _htmlBandeauPaliers({id:'a',email:'a@t',role:'athlete'},_cacheP(3,3))===''
+            ?true:_echec('un athlète voit le bandeau de paliers');})());
+        ok('Le bandeau NE RELIT PAS le cache : on le lui passe',(()=>{
+          // Mesuré : DB.get('users') coûte 130 ms à 40 athlètes — c'est le
+          // JSON.parse, pas le comptage (0,11 ms). Le relire à chaque rendu
+          // bloquerait le fil principal huit images.
+          if(/DB\.get\(/.test(String(_htmlBandeauPaliers)))
+            return _echec('le bandeau relit le cache lui-même');
+          // Et loadCoachHome ne lit qu'UNE fois pour la poussée et le bandeau.
+          const src=String(loadCoachHome);
+          if(src.indexOf('_cacheUsers')<0) return _echec('la lecture n\'est pas réutilisée');
+          const n=(src.match(/DB\.get\('users'\)/g)||[]).length;
+          return n===1?true:_echec(n+' lectures du cache dans loadCoachHome');})());
+        ok('Le dépassement se VOIT sans rien bloquer',(()=>{
+          const c={id:'c1',email:'c@t',role:'coach',coachPlan:'coach',coachSubActive:true};
+          const sous=_htmlBandeauPaliers(c,_cacheP(12,3));
+          const sur=_htmlBandeauPaliers(c,_cacheP(17,3));
+          if(sur.indexOf('17 / 15')<0) return _echec('le compte réel n\'est pas dit');
+          // La bordure change, et c'est tout : aucun blocage, aucun message
+          // comminatoire dans le bandeau.
+          if(sous.indexOf('var(--orange)')>=0) return _echec('le bandeau alerte sous le quota');
+          return sur.indexOf('var(--orange)')>=0
+            ?true:_echec('le dépassement ne se voit pas');})());
+        ok('Les deux « actifs » de l\'écran ne se contredisent plus',(()=>{
+          // isActive() compte 14 jours sur séance OU bilan OU création ;
+          // countActiveAthletes compte 60 jours sur les séances seules. Deux
+          // chiffres sous le même mot, sur le même écran, était le piège.
+          const tout=document.documentElement.outerHTML;
+          const prod=tout.slice(0,tout.indexOf('function testExercices'));
+          if(prod.indexOf('>Actifs 14 j<')<0) return _echec('la case du tableau de bord n\'est pas datée');
+          if(prod.indexOf('metric-label">Actifs<')>=0) return _echec('un libellé « Actifs » nu subsiste');
+          // Les deux définitions restent DISTINCTES : aligner l'une sur
+          // l'autre changerait la facturation.
+          if(!/14\*864e5/.test(String(isActive))) return _echec('isActive a changé de fenêtre');
+          return COACH_ACTIF_JOURS===60
+            ?true:_echec('COACH_ACTIF_JOURS='+COACH_ACTIF_JOURS);})());
+        ok('AUCUN chemin de code ne modifie coachPlan tout seul',(()=>{
+          // Critère nº5, et c'est une assertion de NON-RÉGRESSION : elle doit
+          // échouer le jour où quelqu'un ajoute une bascule automatique.
+          // C'est exactement le grief documenté contre Fitr.
+          const tout=document.documentElement.outerHTML;
+          const prod=tout.slice(0,tout.indexOf('function testExercices'));
+          // Aiguilles assemblées : sans ça, ce test se trouve lui-même.
+          const ecritures=prod.split('coachPlan'+'=').length-1
+            +(prod.split('coachPlan'+" =").length-1);
+          // UNE seule écriture en production : la création du compte, dans
+          // doRegister. Toute autre est une bascule automatique.
+          if(ecritures!==1) return _echec(ecritures+' écritures de coachPlan au lieu d\'une');
+          if(String(doRegister).indexOf("user.coachPlan='libre'")<0)
+            return _echec('l\'écriture unique n\'est pas celle de la création');
+          // Et rien dans le comptage ni dans le bandeau n'y touche.
+          for(const f of [countActiveAthletes,coachPalierRequis,_htmlBandeauPaliers,
+                          paliersDe,_ecrirePaliers,loadCoachHome]){
+            if(/coachPlan\s*=[^=]/.test(String(f)))
+              return _echec((f.name||'?')+' écrit coachPlan');
+          }
+          return true;})());
         ok('fichesBanque rend un tableau vide, jamais null',(()=>{
           const sauve=_banque;
           try{
