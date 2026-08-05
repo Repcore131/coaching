@@ -119,16 +119,33 @@
         "contraception": { ".validate": "newData.isString() && newData.val().length < 40" },
 
         // Constantes physiologiques relevees par l athlete.
+        // Constantes physiologiques relevees par l athlete.
+        //
+        // CES REGLES ONT ETE ECRITES SUR UNE SUPPOSITION, et la supposition
+        // etait fausse : elles declaraient {valeur, valeur2, unite} alors que
+        // le client emet {sys, dia, pouls} depuis toujours. Aucune constante
+        // n aurait pu monter — Firebase rejette TOUT le PUT sur un champ hors
+        // liste blanche, silencieusement. Ce sont les regles qui sont alignees
+        // sur le client, pas l inverse : sys/dia/pouls sont les noms justes
+        // d une tension, valeur/valeur2 ne veulent rien dire.
+        //
+        // La liste blanche reste STRICTE : on nomme des champs, on n ouvre pas
+        // le noeud. Les bornes reprennent TENSION_BORNES cote client.
         "constantes": {
           "$i": {
             "type": { ".validate": "newData.isString() && newData.val().length < 40" },
-            "valeur": { ".validate": "newData.isNumber()" },
-            "valeur2": { ".validate": "newData.isNumber()" },
-            "unite": { ".validate": "newData.isString() && newData.val().length < 20" },
+            "sys": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 300" },
+            "dia": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 200" },
+            "pouls": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 300" },
             "date": { ".validate": "newData.isString() && newData.val().length < 30" },
             "$autre": { ".validate": false }
           }
         },
+
+        // Horodatage de la migration locale vers ce noeud. Sans lui en liste
+        // blanche, l ecriture ENTIERE serait rejetee — c est le meme piege que
+        // celui des constantes, une clef de trop suffit.
+        "migre": { ".validate": "newData.isNumber()" },
 
         // Resultats d analyses. RepCore les CONSERVE, ne les interprete pas :
         // aucun champ de valeur de reference, aucun champ de verdict.

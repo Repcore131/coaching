@@ -3865,6 +3865,10 @@ const CLOUD={
         const prives=santeBlocsPrives(user);
         if(Object.keys(prives).length){
           prives.maj=Date.now();
+          // Horodatage de migration : il DOIT figurer en liste blanche des
+          // règles, sinon l'écriture entière est rejetée. Une clef de trop
+          // suffit — c'est le piège qui a rendu constantes inécrivables.
+          prives.migre=Date.now();
           const _cp=JSON.stringify(prives);
           try{ _quotaCompter('out',_cp.length); }catch(e){}
           await fetch(this._urlSantePrivee(safeKey)+'?auth='+token,
@@ -3991,10 +3995,13 @@ const CLOUD={
     const sessMap=new Map();
     [...cloudSessions,...localSessions].forEach(s=>{if(s?.id&&!sessMap.has(s.id))sessMap.set(s.id,s);});
     const allSessions=[...sessMap.values()].sort((a,b)=>(a.date||0)-(b.date||0));
-    // Constantes et analyses ne montent JAMAIS (voir _doPushOne) : le dossier
-    // distant ne les porte donc pas, et l'écrasement ci-dessous les effacerait
-    // à chaque réveil. On les retient AVANT, on les repose APRÈS — même
+    // Constantes et analyses ne montent pas dans users/ — elles vivent dans
+    // sante_privee, hors de portée du coach. Le dossier distant lu ici ne les
+    // porte donc toujours pas, et l'écrasement ci-dessous les effacerait à
+    // chaque réveil. On les retient AVANT, on les repose APRÈS — même
     // traitement que les bilans et les séances, pour la même raison.
+    // Leur relecture depuis le nœud privé se fait ailleurs, en asynchrone :
+    // voir _migrerSantePriveeLocale, appelée au démarrage.
     const locConstantes=loc?.constantes;
     const locAnalyses=loc?.analyses;
     // Non partagée, elle n'est jamais montée : le dossier distant ne la porte
@@ -4313,6 +4320,18 @@ function _validateCoachPkg(o){
     role:'coach'
   };
 }
+// ⚠ CE PAQUET N'EST PAS UNE REPONSE DE PORTABILITE. NE PAS L'UTILISER POUR CA.
+//
+// Il retient DOUZE champs sur les quelque quatre-vingt-dix que porte un
+// dossier : ni constantes, ni analyses, ni cycle, ni grossesse, ni PES, ni
+// traitement, ni etats de sante, ni statut hormonal, ni sommeil, ni pesees,
+// ni programmes. C'est un TRANSFERT FONCTIONNEL d'un appareil a un autre,
+// concu pour redemarrer vite — pas un export.
+//
+// Le RGPD art. 15 (acces) et art. 20 (portabilite) exigent l'INTEGRALITE des
+// donnees traitees, y compris celles du noeud sante_privee. Repondre a une
+// demande avec ce paquet serait une reponse INCOMPLETE, donc un manquement.
+// L'export complet est le lot F-10, et il vient APRES.
 function _validateAthletePkg(o){
   if(typeof o!=='object'||o===null||o.role!=='athlete') return null;
   if(typeof o.id!=='string'||!o.id||o.id.length>100) return null;
@@ -5047,6 +5066,10 @@ function routeUser(){
   // Marque le mois comme suivi par CE navigateur. Sans cet appel, un relevé
   // ne saurait pas distinguer « aucun trafic » de « compteur effacé ».
   try{ _quotaOuvrirMois(); }catch(e){}
+  // Relevés de santé : union locale ↔ nœud privé. Différée, pour ne pas
+  // retarder l'écran d'arrivée d'un aller-retour réseau. Idempotente : la
+  // rejouer à chaque démarrage ne crée aucun doublon.
+  setTimeout(()=>{ try{ _migrerSantePriveeLocale(); }catch(e){} },2000);
   // Une seule fois par chargement, et après que l'écran d'arrivée soit peint.
   setTimeout(_pastilleServiParCache,900);
   if(!currentUser) return go('s-welcome');
@@ -6256,6 +6279,66 @@ const SANTE_CHAMPS=Object.freeze({
   analyses:['analyses']
 });
 // PURE. Ce qui doit partir vers sante_privee pour ce dossier.
+// ══════ MIGRATION DES RELEVÉS VERS sante_privee ══════
+// constantes et analyses étaient retirées avant envoi, faute de nœud où les
+// mettre : elles ne survivaient pas à un changement d'appareil, et un
+// localStorage purgé les emportait. Le nœud existe désormais ; ce lot les y
+// écrit et les relit.
+//
+// LE SCHÉMA DES RÈGLES ÉTAIT FAUX et rejetait tout : elles déclaraient
+// {valeur, valeur2, unite} là où le client émet {sys, dia, pouls}. Firebase
+// refuse le PUT ENTIER sur un champ hors liste blanche, sans un mot. Ce sont
+// les règles qui ont été alignées sur le client.
+//
+// UNION PAR DATE, jamais écrasement. Deux appareils qui relèvent chacun une
+// tension le même jour doivent garder les deux ; c'est la date ISO complète
+// qui dédoublonne, à la milliseconde.
+function _unionParDate(a,b){
+  const out=[];
+  const vus=new Set();
+  for(const l of [Array.isArray(a)?a:[],Array.isArray(b)?b:[]]){
+    for(const e of l){
+      if(!e||typeof e!=='object'||!e.date) continue;
+      // La clé porte TOUT le contenu, pas seulement la date : deux relevés
+      // différents au même horodatage — une tension et un pouls saisis
+      // ensemble — ne doivent pas s'annuler.
+      const k=JSON.stringify(e);
+      if(vus.has(k)) continue;
+      vus.add(k);
+      out.push(e);
+    }
+  }
+  return out.sort((x,y)=>x.date<y.date?-1:(x.date>y.date?1:0));
+}
+// IDEMPOTENTE : deux exécutions produisent le même état. Le drapeau `migre`
+// n'est pas une garde d'exécution — c'est un horodatage. La garde, c'est
+// l'union elle-même : rejouer ne crée aucun doublon.
+//
+// AUCUNE DONNÉE LOCALE N'EST SUPPRIMÉE. localStorage reste un cache, jamais
+// une source unique. Si l'écriture distante échoue, le local est intact et
+// la migration se rejoue au prochain démarrage.
+async function _migrerSantePriveeLocale(){
+  try{
+    const u=currentUser;
+    if(!u||!u.email||u.role==='coach') return null;
+    if(!CLOUD.ok||!CLOUD.ok()) return null;
+    const dist=await CLOUD.pullSantePrivee(u.email);
+    const cst=_unionParDate(u.constantes,dist&&dist.constantes);
+    const ana=_unionParDate(u.analyses,dist&&dist.analyses);
+    // Rien des deux côtés : pas d'écriture à vide, qui écraserait le nœud.
+    if(!cst.length&&!ana.length) return null;
+    // Le LOCAL est enrichi le premier : même si l'envoi échoue, l'athlète
+    // récupère ce que l'autre appareil avait déjà écrit.
+    if(cst.length) u.constantes=cst;
+    if(ana.length) u.analyses=ana;
+    try{ saveUser(); }catch(e){}
+    // L'envoi passe par le chemin NORMAL : santeBlocsPrives collecte les
+    // deux séries, _doPushOne les écrit dans sante_privee. Un second chemin
+    // d'écriture divergerait un jour de celui-ci.
+    await CLOUD.pushOne(u.email,u);
+    return {constantes:cst.length,analyses:ana.length};
+  }catch(e){ console.warn('[RepCore] migration santé privée :',e); return null; }
+}
 function santeBlocsPrives(user){
   const out={};
   for(const bloc of Object.keys(SANTE_CHAMPS)){
@@ -36955,6 +37038,101 @@ function testExercices(){
       } finally { currentUser=_ccU; }
     })();
 
+    // ══════ MIGRATION DES RELEVÉS VERS sante_privee ══════
+    (()=>{
+      const _mgU=currentUser;
+      const _c=(d,sys,dia)=>({date:d,type:'tension',sys:sys,dia:dia});
+      const _a=(d,v)=>({date:d,marqueur:'ferritine',valeur:v,unite:'ng/mL'});
+      try {
+        ok('L\'union par date ne perd rien et ne double rien',(()=>{
+          const A=[_c('2026-01-01T08:00:00.000Z',120,80),_c('2026-01-03T08:00:00.000Z',122,81)];
+          const B=[_c('2026-01-02T08:00:00.000Z',118,79),_c('2026-01-03T08:00:00.000Z',122,81)];
+          const u=_unionParDate(A,B);
+          if(u.length!==3) return _echec(u.length+' entrées au lieu de 3');
+          // Triées par date croissante.
+          for(let i=1;i<u.length;i++) if(u[i].date<u[i-1].date) return _echec('non trié');
+          // Union COMMUTATIVE : l'ordre des appareils ne change rien.
+          return JSON.stringify(_unionParDate(B,A).map(x=>x.date))
+            ===JSON.stringify(u.map(x=>x.date))
+            ?true:_echec('l\'union dépend de l\'ordre des sources');})());
+        ok('Deux relevés DIFFÉRENTS au même horodatage sont gardés',(()=>{
+          // Une tension et une autre saisies dans la même seconde ne doivent
+          // pas s'annuler : la clé porte tout le contenu, pas la seule date.
+          const d='2026-01-01T08:00:00.000Z';
+          const u=_unionParDate([_c(d,120,80)],[_c(d,130,85)]);
+          return u.length===2?true:_echec(u.length+' entrée(s)');})());
+        ok('L\'union ignore ce qui n\'a pas de date',(()=>{
+          const u=_unionParDate([{type:'tension',sys:120},null,'x',_c('2026-01-01T08:00:00.000Z',120,80)],
+            [undefined,{date:''}]);
+          return u.length===1?true:_echec(u.length+' entrées');})());
+        ok('L\'union est IDEMPOTENTE : deux passes, même état',(()=>{
+          const A=[_c('2026-01-01T08:00:00.000Z',120,80),_a('2026-01-02T08:00:00.000Z',30)];
+          const p1=_unionParDate(A,[]);
+          const p2=_unionParDate(p1,A);
+          const p3=_unionParDate(p2,p1);
+          return JSON.stringify(p1)===JSON.stringify(p2)
+            &&JSON.stringify(p2)===JSON.stringify(p3)
+            ?true:_echec('l\'état diverge : '+p1.length+'/'+p2.length+'/'+p3.length);})());
+        ok('La migration n\'écrit RIEN quand il n\'y a rien',(()=>{
+          // Un PUT à vide écraserait le nœud distant : c'est exactement la
+          // perte qu'on cherche à empêcher.
+          const src=String(_migrerSantePriveeLocale);
+          return /if\(!cst\.length&&!ana\.length\) return null;/.test(src)
+            ?true:_echec('aucune garde contre l\'écriture à vide');})());
+        ok('La migration ne SUPPRIME jamais le local',(()=>{
+          const src=String(_migrerSantePriveeLocale);
+          if(/delete\s+u\.constantes|delete\s+u\.analyses|localStorage\.removeItem/.test(src))
+            return _echec('une suppression locale existe');
+          // Le local est enrichi AVANT l'envoi : un échec réseau laisse
+          // l'athlète avec ce que l'autre appareil avait déjà écrit.
+          const iLocal=src.indexOf('saveUser()');
+          const iEnvoi=src.indexOf('CLOUD.pushOne');
+          return (iLocal>=0&&iEnvoi>iLocal)
+            ?true:_echec('l\'envoi précède l\'enregistrement local');})());
+        ok('Un échec d\'envoi ne fait pas tomber la migration',(()=>{
+          const src=String(_migrerSantePriveeLocale);
+          return /catch\(e\)\{[^}]*return null/.test(src.replace(/\s+/g,''))
+            ||/\}catch\(e\)\{/.test(src)
+            ?true:_echec('aucune garde autour de l\'envoi');})());
+        ok('Le drapeau « migre » part AVEC les blocs privés',(()=>{
+          // Sans lui en liste blanche des règles, l'écriture ENTIÈRE est
+          // rejetée : une clef de trop suffit.
+          const src=String(CLOUD._doPushOne);
+          return /prives\.migre=Date\.now\(\)/.test(src)
+            ?true:_echec('le drapeau n\'est pas posé');})());
+        ok('Le coach ne gagne AUCUN accès au nœud privé',(()=>{
+          for(const c of ['constantes','analyses'])
+            if(CLOUD.CHAMPS_PROFIL_COACH.indexOf(c)>=0)
+              return _echec(c+' est publié au coach');
+          if(santeVisibleCoach({},'constantes')!==false) return _echec('constantes visibles');
+          if(santeVisibleCoach({},'analyses')!==false) return _echec('analyses visibles');
+          return !/coachEmailKey|coachId/.test(String(CLOUD.pullSantePrivee))
+            ?true:_echec('la relecture regarde une clé de coach');})());
+        ok('La relecture est BRANCHÉE au démarrage',(()=>{
+          // Écrite et jamais relue, la donnée ne survivrait toujours pas à un
+          // changement d'appareil.
+          const src=String(routeUser);
+          if(!/_migrerSantePriveeLocale/.test(src))
+            return _echec('aucun appel au démarrage');
+          return /pullSantePrivee/.test(String(_migrerSantePriveeLocale))
+            ?true:_echec('la migration ne lit pas le nœud distant');})());
+        ok('athletepkg porte son interdiction de portabilité',(()=>{
+          // Douze champs sur quatre-vingt-dix : répondre à une demande d'accès
+          // avec ce paquet serait une réponse incomplète, donc un manquement.
+          const tout=document.documentElement.outerHTML;
+          const fin=tout.indexOf('function testExercices');
+          if(fin<0) return _echec('frontière de la suite introuvable');
+          const prod=tout.slice(0,fin);
+          const i=prod.indexOf('function _validateAthletePkg');
+          if(i<0) return _echec('_validateAthletePkg introuvable');
+          const amont=prod.slice(Math.max(0,i-1400),i);
+          if(!/PAS UNE REPONSE DE PORTABILITE/.test(amont))
+            return _echec('aucune interdiction au point de définition');
+          return /F-10/.test(amont)
+            ?true:_echec('le lot d\'export n\'est pas nommé');})());
+      } finally { currentUser=_mgU; }
+    })();
+
     // ══════ PROFIL COACH VISIBLE PAR SES ATHLÈTES ══════
     // La règle de /users ne va que dans un sens : l'athlète ne peut pas lire le
     // dossier de son coach. Sur son téléphone, le stockage local ne contient
@@ -49088,6 +49266,29 @@ function testExercices(){
           if(safe.analyses!==undefined) return _echec('les analyses montent');
           return (u.constantes.length&&u.analyses.length)
             ?true:_echec('la donnée locale a été détruite');})());
+        // VOLET (b) — AJOUTÉ, et non substitué : le volet (a) ci-dessus reste
+        // vrai et le restera. Ne pas monter dans users/ ne suffisait plus à
+        // décrire ce qu'on veut : jusqu'à ce lot, les relevés n'allaient NULLE
+        // PART, et un changement d'appareil les perdait. Une assertion qui ne
+        // vérifie qu'une absence laisse passer la disparition complète.
+        ok('…et elles montent BIEN dans sante_privee',(()=>{
+          const u={id:'x',email:'x@t',
+            constantes:[{date:'2026-01-01T08:00:00.000Z',type:'tension',sys:120,dia:80}],
+            analyses:[{date:'2026-01-01T08:00:00.000Z',marqueur:'ferritine',valeur:30,unite:'ng/mL'}]};
+          const prives=santeBlocsPrives(u);
+          if(!prives.constantes||!prives.constantes.length)
+            return _echec('les constantes ne partent pas vers le nœud privé');
+          if(!prives.analyses||!prives.analyses.length)
+            return _echec('les analyses ne partent pas vers le nœud privé');
+          // Et la FORME est celle que les règles acceptent. Un champ hors
+          // liste blanche fait rejeter TOUT le PUT, sans un mot.
+          const c=prives.constantes[0];
+          const okC=Object.keys(c).sort().join(',');
+          if(!/^date,dia,sys,type$/.test(okC)&&!/^date,dia,pouls,sys,type$/.test(okC))
+            return _echec('champs de constante : '+okC);
+          const a=prives.analyses[0];
+          return Object.keys(a).sort().join(',')==='date,marqueur,unite,valeur'
+            ?true:_echec('champs d\'analyse : '+Object.keys(a).sort().join(','));})());
         ok('Le drapeau général, lui, PART : le coach doit être prévenu',(()=>{
           const src=String(CLOUD._doPushOne);
           return !/delete\s+safe\.drapeauGeneral/.test(src)
