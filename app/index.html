@@ -5247,6 +5247,14 @@ function _validateAthletePkg(o){
       const athlete=_validateAthletePkg(rawA);
       if(athlete) window._pendingAthletePkg=athlete;
     }
+    // ── Invitation ouverte ────────────────────────────────────────────
+    // Le code de l'invitation voyage a cote du profil coach. On le retient
+    // pour deux choses : marquer « ouvert », et pre-remplir le champ code.
+    const inv=params.get('inv');
+    if(inv&&/^[A-Z0-9-]{6,20}$/.test(inv)){
+      window._invitationCode=inv;
+      _armerMarqueurOuverture(inv);
+    }
     const st=params.get('s');
     if(!CLOUD.canWrite()&&st) CLOUD.configure(atob(st));
     const _bilanDeepLink=params.get('bilan')==='1';
@@ -31726,7 +31734,7 @@ async function createAthlete(){
   athlete.status='COACHING_SUIVI';
   athlete.accessExpiry=expiry;
   if(!currentUser.studentCodes) currentUser.studentCodes=[];
-  currentUser.studentCodes.push({...payload,token,usedBy:fn+' '+ln,athleteEmail:em,active:true,redeemed:true,createdAt:Date.now()});
+  currentUser.studentCodes.push({...payload,token,usedBy:fn+' '+ln,athleteEmail:em,active:true,redeemed:true,createdAt:Date.now(),etat:'cree',creeLe:new Date().toISOString()});
   if(!currentUser.clients) currentUser.clients=[];
   currentUser.clients.push(uid);
   athlete.updatedAt=Date.now();users[em]=athlete;
@@ -32775,6 +32783,100 @@ function _rcCodesUrl(code){
 // type : 'athlete' (défaut, code d'accès élève) ou 'coach' (invitation à créer
 // un compte coach). Le type est écrit dans le nœud RTDB et re-vérifié à la
 // consommation : un code élève ne peut pas ouvrir un compte coach.
+// ══════ OUVERTURE RÉELLE, PAS UN APERÇU ══════
+// LE FAUX POSITIF GARANTI de ce lot : WhatsApp, Messenger et consorts
+// chargent la page pour en fabriquer un aperçu. Compter cette visite comme
+// une ouverture ferait dire au coach « il a vu » alors que personne n'a rien
+// vu — et c'est exactement le genre d'information fausse qui pousse à
+// relancer quelqu'un pour rien.
+//
+// DEUX ANCRAGES, dont un seul suffit, et qu'un robot d'aperçu ne franchit :
+//   • un pointerdown : quelqu'un a touché l'écran ;
+//   • quatre secondes de page VISIBLE : un aperçu ne reste pas au premier
+//     plan quatre secondes, et document.visibilityState le dit.
+// Le second couvre le cas de l'athlète qui lit sans toucher.
+const INV_DELAI_OUVERTURE_MS=4000;
+let _invMarqueurArme=false;
+function _armerMarqueurOuverture(code){
+  if(_invMarqueurArme||!code) return false;
+  _invMarqueurArme=true;
+  let fait=false;
+  const declencher=()=>{
+    if(fait) return;
+    fait=true;
+    document.removeEventListener('pointerdown',declencher,true);
+    _marquerEtatInvitation(code,'ouvert',{ouvertLe:new Date().toISOString()});
+  };
+  document.addEventListener('pointerdown',declencher,true);
+  // Le compte a rebours ne tourne que page visible. Un onglet ouvert en
+  // arriere-plan par un apercu ne l'atteint jamais.
+  let visible=0;
+  const tic=setInterval(()=>{
+    if(fait){ clearInterval(tic); return; }
+    if(document.visibilityState==='visible') visible+=500;
+    if(visible>=INV_DELAI_OUVERTURE_MS){ clearInterval(tic); declencher(); }
+  },500);
+  return true;
+}
+
+// ══════ ÉTAT D'UNE INVITATION ══════
+// Un coach qui envoie un lien ne sait rien de ce qu'il devient. Trois états,
+// et une seule direction : envoyé → ouvert → créé. On ne redescend jamais.
+//
+// CE QU'ON N'ÉCRIT PAS DANS /rc_codes : rien de nominatif au-delà du prénom
+// et du nom que le coach a lui-même saisis. Pas d'e-mail, pas de téléphone.
+// Le nœud est en lecture PUBLIQUE — c'est ce qui permet à un athlète sans
+// compte de valider son code — donc tout ce qu'on y met est lisible par
+// quiconque connaît le code.
+const INV_ETATS=Object.freeze(['envoye','ouvert','cree']);
+// PURE. Rend le rang d'un état, -1 s'il est inconnu. C'est lui qui garantit
+// le sens unique.
+function _rangEtat(e){ return INV_ETATS.indexOf(e); }
+// PURE. L'état est-il une progression ? Un aperçu de messagerie qui repasse
+// après la création du compte ne doit pas ramener l'invitation à « ouvert ».
+function etatProgresse(avant,apres){
+  const a=_rangEtat(avant), b=_rangEtat(apres);
+  if(b<0) return false;
+  return b>(a<0?-1:a);
+}
+// PURE. L'état affichable d'un code, avec son repli : un code écrit avant ce
+// lot n'a pas de champ `etat`, et se lit « créé » s'il a été consommé,
+// « envoyé » sinon. Aucune migration, aucun rattrapage.
+function etatInvitation(c){
+  if(!c) return null;
+  if(_rangEtat(c.etat)>=0) return c.etat;
+  return (c.redeemed===true)?'cree':'envoye';
+}
+const INV_ETAT_LIB=Object.freeze({envoye:'Envoyée',ouvert:'Ouverte',cree:'Compte créé'});
+
+// Écrit une progression d'état sur le nœud distant. PATCH et non PUT : on ne
+// touche qu'aux champs de suivi, jamais au reste du code.
+// Rend true si l'écriture est partie ET a abouti.
+//
+// SANS JETON, ET C'EST VOULU : l'athlète marque « ouvert » avant d'avoir un
+// compte. La règle RTDB borne cette écriture à `etat` et `ouvertLe`, sur un
+// nœud existant, et pour cette seule transition.
+async function _marquerEtatInvitation(code,etat,champs){
+  if(!code||_rangEtat(etat)<0) return false;
+  try{
+    const ctrl=new AbortController(); setTimeout(()=>ctrl.abort(),6000);
+    const lu=await fetch(_rcCodesUrl(code),{signal:ctrl.signal});
+    if(!lu.ok) return false;
+    const t=await lu.text();
+    try{ _quotaCompter('in',t.length); }catch(e){}
+    const d=t?JSON.parse(t):null;
+    if(!d) return false;
+    // Sens unique. Un aperçu tardif ne fait pas reculer un compte déjà créé.
+    if(!etatProgresse(etatInvitation(d),etat)) return false;
+    const corps=JSON.stringify(Object.assign({etat},champs||{}));
+    const tok=await CLOUD._getToken().catch(()=>null);
+    const r=await fetch(_rcCodesUrl(code)+(tok?'?auth='+tok:''),
+      {method:'PATCH',headers:{'Content-Type':'application/json'},body:corps});
+    try{ _quotaCompter('out',corps.length); }catch(e){}
+    return r.ok;
+  }catch(e){ return false; }
+}
+
 async function _genAccessCode(studentName,months,type){
   const fbTok=await CLOUD._getToken();
   const expiry=Date.now()+months*_MONTH_MS;
@@ -32799,6 +32901,11 @@ async function _genAccessCode(studentName,months,type){
     coachEmailKey:(currentUser.email||'').replace(/\./g,',')||null,
     coachCode:currentUser.code||null,
     studentName,expiry,months,codeId,
+    // Prénom et nom séparés : le tableau des invitations en attente les
+    // affiche, et recomposer un prénom depuis « studentName » se trompe dès
+    // qu'un nom en porte deux.
+    prenom:String(studentName||'').trim().split(/\s+/)[0]||'',
+    nom:String(studentName||'').trim().split(/\s+/).slice(1).join(' '),
     type:type||'athlete',
     // creatorFree est CONSERVÉ tel quel : des codes en circulation le portent,
     // et _appliquerPayloadCode s'en sert encore pour eux. grantedBy le double
@@ -32807,9 +32914,27 @@ async function _genAccessCode(studentName,months,type){
     creatorFree:isCreator,
     grantedBy:isCreator?'creator':'coach'
   };
+  // Hors ligne, la generation ne peut PAS aboutir : le code doit exister
+  // cote serveur avant d'etre transmis, sinon l'athlete recevrait un lien
+  // mort. On le dit franchement, et on ne met rien en file : une invitation
+  // qui partirait plus tard, sans que le coach le sache, est pire.
+  if(typeof navigator!=='undefined'&&navigator.onLine===false)
+    throw new Error('Tu es hors ligne : le code doit etre enregistre avant '
+      +'d\'etre envoye. Reconnecte-toi et reessaie — rien n\'a ete cree.');
   const url=_rcCodesUrl(code)+(fbTok?'?auth='+fbTok:'');
-  const r=await fetch(url,{method:'PUT',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({...payload,token:code,active:true,redeemed:false,createdAt:Date.now()})});
+  let r;
+  try{
+    r=await fetch(url,{method:'PUT',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({...payload,token:code,active:true,redeemed:false,createdAt:Date.now(),
+      // L'état de départ. Les trois dates restent nulles : elles se posent
+      // aux transitions, et une date absente vaut « ce n'est pas arrivé ».
+      etat:'envoye',ouvertLe:null,creeLe:null,relanceLe:null})});
+  }catch(e){
+    // Reseau coupe en cours de route : « Failed to fetch » ne dit rien a
+    // personne. On traduit, et on redit que rien n'a ete cree.
+    throw new Error('Le code n\'a pas pu etre enregistre : verifie ta connexion. '
+      +'Rien n\'a ete cree, tu peux reessayer.');
+  }
   if(!r.ok) throw new Error('Erreur sauvegarde du code ('+r.status+') : vérifie ta connexion.');
   return {token:code,payload};
 }
@@ -32927,8 +33052,12 @@ async function _verifyAccessCode(raw,athleteName){
   if(data.redeemed&&data.athleteEmail&&data.athleteEmail!==currentUser.email)
     throw new Error('Ce code a déjà été utilisé par un autre compte.');
   if(!data.redeemed&&currentUser.email){
+    // `etat` et `creeLe` partent DANS LA MEME ecriture que `redeemed` : une
+    // seconde requete pourrait echouer seule, et le coach verrait « ouvert »
+    // sur une invitation deja transformee.
     await fetch(url,{method:'PATCH',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({redeemed:true,athleteEmail:currentUser.email,usedBy:athleteName||data.studentName})});
+      body:JSON.stringify({redeemed:true,athleteEmail:currentUser.email,usedBy:athleteName||data.studentName,
+        etat:'cree',creeLe:new Date().toISOString()})});
   }
   return {valid:true,payload:data};
 }
@@ -42240,6 +42369,103 @@ function testExercices(){
           const u=_coachP(0,{paliers:{dernierAvertissement:new Date().toISOString(),cyclesAuDessus:1}});
           return majCyclesPaliers(u,_cacheP(16,3))===null
             ?true:_echec('un mois déjà compté déclenche une écriture');})());
+        // ── Invitations, étape 2 : l'état et ses trois transitions ───────
+        ok('Une invitation émise part à « envoye »',(()=>{
+          // Le champ est posé dans le corps même du PUT : une seconde requête
+          // pourrait échouer seule et laisser un code sans état.
+          const src=String(_genAccessCode).replace(/\s+/g,'');
+          if(src.indexOf("etat:'envoye'")<0) return _echec('l\'état initial n\'est pas posé');
+          for(const c of ['ouvertLe:null','creeLe:null','relanceLe:null'])
+            if(src.indexOf(c)<0) return _echec('champ manquant : '+c);
+          // Prénom et nom séparés : recomposer un prénom depuis « studentName »
+          // se trompe dès qu'un nom en porte deux.
+          if(src.indexOf('prenom:')<0||src.indexOf('nom:')<0) return _echec('prénom/nom absents');
+          return true;})());
+        ok('L\'état ne redescend JAMAIS',(()=>{
+          // Un aperçu de messagerie qui repasse après la création du compte ne
+          // doit pas ramener l'invitation à « ouvert ».
+          if(!etatProgresse('envoye','ouvert')) return _echec('envoye → ouvert refusé');
+          if(!etatProgresse('ouvert','cree')) return _echec('ouvert → cree refusé');
+          if(!etatProgresse('envoye','cree')) return _echec('envoye → cree refusé');
+          if(etatProgresse('cree','ouvert')) return _echec('cree → ouvert accepté');
+          if(etatProgresse('ouvert','envoye')) return _echec('ouvert → envoye accepté');
+          if(etatProgresse('cree','cree')) return _echec('un état identique est dit progression');
+          if(etatProgresse('envoye','inconnu')) return _echec('un état inventé est accepté');
+          // Depuis rien : la première pose est une progression.
+          return etatProgresse(null,'envoye')&&etatProgresse(undefined,'ouvert')
+            ?true:_echec('la première pose est refusée');})());
+        ok('Un code d\'avant ce lot se lit sans migration',(()=>{
+          // Aucun rattrapage, aucune écriture de masse : l'absence de champ
+          // se lit, elle ne se répare pas.
+          if(etatInvitation({token:'X'})!=='envoye') return _echec('code nu : '+etatInvitation({token:'X'}));
+          if(etatInvitation({token:'X',redeemed:true})!=='cree') return _echec('code consommé');
+          if(etatInvitation({token:'X',etat:'ouvert'})!=='ouvert') return _echec('état explicite ignoré');
+          // Un état inventé retombe sur la déduction, il n'est pas propagé.
+          if(etatInvitation({token:'X',etat:'bidon',redeemed:true})!=='cree')
+            return _echec('un état inventé passe');
+          return etatInvitation(null)===null?true:_echec('null rend autre chose que null');})());
+        ok('_marquerEtatInvitation refuse les régressions AVANT d\'écrire',(()=>{
+          // Le sens unique est vérifié côté client, et la règle RTDB le tient
+          // aussi côté serveur : deux verrous, pas un.
+          const src=String(_marquerEtatInvitation).replace(/\s+/g,'');
+          if(src.indexOf('if(!etatProgresse(')<0) return _echec('aucune vérification de sens');
+          const iLire=src.indexOf("method:'PATCH'"), iTest=src.indexOf('etatProgresse(');
+          if(!(iTest<iLire)) return _echec('le PATCH part avant la vérification');
+          // PATCH et non PUT : on ne touche qu'aux champs de suivi.
+          if(/method:'PUT'/.test(src)) return _echec('un PUT écraserait le code entier');
+          return true;})());
+        ok('L\'ouverture exige une VRAIE ouverture, pas un aperçu',(()=>{
+          // Le faux positif garanti de ce lot : WhatsApp charge la page pour
+          // fabriquer son aperçu. Deux ancrages qu'un robot ne franchit pas.
+          const src=String(_armerMarqueurOuverture);
+          if(src.indexOf('pointerdown')<0) return _echec('aucun ancrage sur l\'interaction');
+          if(src.indexOf("visibilityState==='visible'")<0)
+            return _echec('le délai ne vérifie pas la visibilité');
+          if(INV_DELAI_OUVERTURE_MS<3000) return _echec('délai trop court : '+INV_DELAI_OUVERTURE_MS);
+          // Un seul armement, et une seule pose : deux appels ne comptent pas
+          // deux ouvertures.
+          if(src.indexOf('_invMarqueurArme')<0) return _echec('l\'armement n\'est pas unique');
+          return /if\(fait\)return;/.test(src.replace(/\s+/g,''))
+            ?true:_echec('le déclenchement peut se produire deux fois');})());
+        ok('La création de compte marque « cree » dans la MÊME écriture',(()=>{
+          // Une seconde requête pourrait échouer seule, et le coach verrait
+          // « ouvert » sur une invitation déjà transformée.
+          const src=String(_verifyAccessCode||function(){}).replace(/\s+/g,'');
+          const cible=src||String(window._verifyAccessCode||'');
+          const tout=[...document.querySelectorAll('script')].filter(x=>!x.src)
+            .map(x=>x.textContent).join('\n');
+          const prod=tout.slice(0,tout.indexOf('function testExercices')).replace(/\s+/g,'');
+          if(prod.indexOf("redeemed:true,athleteEmail:currentUser.email")<0)
+            return _echec('le chemin de consommation a changé de forme');
+          if(prod.indexOf("usedBy:athleteName||data.studentName,etat:'cree',creeLe:")<0)
+            return _echec('« cree » ne part pas avec « redeemed »');
+          return true;})());
+        ok('AUCUN service d\'envoi n\'est appelé : ni e-mail, ni SMS',(()=>{
+          // Contrainte fondatrice : coût zéro. Aiguilles assemblées à
+          // l'exécution, source seul — sinon ce test se trouve lui-même.
+          const tout=[...document.querySelectorAll('script')].filter(x=>!x.src)
+            .map(x=>x.textContent).join('\n');
+          const prod=tout.slice(0,tout.indexOf('function testExercices'));
+          if(prod.length<100000) return _echec('source trop court');
+          const bannis=['sendgrid'+'.com','api.mailgun'+'.net','api.twilio'+'.com',
+            'api.brevo'+'.com','api.sendinblue'+'.com','api.postmarkapp'+'.com',
+            'api.resend'+'.com','api.emailjs'+'.com','smtp'+'.'];
+          const t=bannis.filter(m=>prod.indexOf(m)>=0);
+          if(t.length) return _echec('service d\'envoi : '+t.join(', '));
+          // Le transport reste le partage natif ou WhatsApp, déjà déclaré.
+          return prod.indexOf('wa.me')>=0
+            ?true:_echec('le seul transport déclaré a disparu');})());
+        ok('Hors ligne, la génération DIT non — sans file silencieuse',(()=>{
+          // Une invitation qui partirait plus tard, sans que le coach le
+          // sache, est pire qu'un refus.
+          const src=String(_genAccessCode);
+          if(src.indexOf('navigator.onLine===false')<0) return _echec('aucun garde hors ligne');
+          if(!/rien n\\?'a ete cree/.test(src)) return _echec('le message ne dit pas que rien n\'a été créé');
+          // Le « Failed to fetch » du navigateur est traduit.
+          if(src.indexOf('}catch(e){')<0) return _echec('l\'échec réseau n\'est pas attrapé');
+          // Et rien n'est mis en file.
+          return !/_enfiler\(|_queueRetry\(/.test(src)
+            ?true:_echec('la génération met en file');})());
         ok('fichesBanque rend un tableau vide, jamais null',(()=>{
           const sauve=_banque;
           try{

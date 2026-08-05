@@ -230,7 +230,41 @@
     "rc_codes": {
       "$code": {
         ".read": true,
-        ".write": "auth != null && (!data.exists() || data.child('coachEmailKey').val() === auth.token.email.replace('.', ',') || (data.child('redeemed').val() !== true && newData.child('redeemed').val() === true && newData.child('coachEmailKey').val() === data.child('coachEmailKey').val()))",
+
+        // Une QUATRIEME voie s ajoute ici, et une seule : l ouverture du lien
+        // par quelqu un qui n a PAS encore de compte. C est tout l objet du
+        // suivi d invitation — un athlete qui ouvre le lien avant de s inscrire
+        // ne peut par definition pas etre authentifie.
+        //
+        // Elle est bornee a l os :
+        //   - le noeud doit DEJA exister : on ne peut pas creer un code ainsi ;
+        //   - l etat doit passer a 'ouvert', et seulement depuis un etat qui
+        //     n est ni 'ouvert' ni 'cree' — le sens unique est tenu par le
+        //     serveur, pas seulement par le client ;
+        //   - redeemed, active et coachEmailKey doivent rester IDENTIQUES.
+        //     Sans ces trois egalites, un PATCH {etat:'ouvert', active:false}
+        //     desactiverait le code au passage : c est exactement le cheval de
+        //     Troie que les .validate par champ ont deja ferme une fois.
+        //
+        // CE QU ON ACCEPTE, ET QU IL FAUT SAVOIR : quiconque connait un code
+        // valide peut le marquer « ouvert ». Le rayon d action est celui du
+        // lien lui-meme — l athlete, ou celui a qui il l a transfere. Sans
+        // serveur, une telemetrie d ouverture est necessairement falsifiable ;
+        // la difference avec /metrics, qui accepte l ecriture sans rien
+        // connaitre, est qu il faut ici detenir le code.
+        ".write": "(auth != null && (!data.exists() || data.child('coachEmailKey').val() === auth.token.email.replace('.', ',') || (data.child('redeemed').val() !== true && newData.child('redeemed').val() === true && newData.child('coachEmailKey').val() === data.child('coachEmailKey').val()))) || (data.exists() && newData.child('etat').val() === 'ouvert' && data.child('etat').val() !== 'ouvert' && data.child('etat').val() !== 'cree' && newData.child('redeemed').val() === data.child('redeemed').val() && newData.child('active').val() === data.child('active').val() && newData.child('coachEmailKey').val() === data.child('coachEmailKey').val())",
+
+        // Trois etats, dans cet ordre, et rien d autre.
+        "etat":     { ".validate": "newData.isString() && newData.val().matches(/^(envoye|ouvert|cree)$/)" },
+        // Horodatages ISO. Bornes en longueur : un champ texte libre dans un
+        // noeud public finit par porter autre chose qu une date.
+        "ouvertLe":  { ".validate": "newData.isString() && newData.val().length < 40" },
+        "creeLe":    { ".validate": "newData.isString() && newData.val().length < 40" },
+        "relanceLe": { ".validate": "newData.isString() && newData.val().length < 40" },
+        // Prenom et nom saisis par le coach. RIEN D AUTRE de nominatif n entre
+        // ici : le noeud est en lecture publique.
+        "prenom": { ".validate": "newData.isString() && newData.val().length < 60" },
+        "nom":    { ".validate": "newData.isString() && newData.val().length < 60" },
 
         "coachEmailKey": { ".validate": "!data.exists() || data.val() === newData.val()" },
         "coachId":       { ".validate": "!data.exists() || data.val() === newData.val()" },
