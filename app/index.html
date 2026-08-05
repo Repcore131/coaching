@@ -1578,10 +1578,13 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar">
     <button class="back-btn" onclick="go('s-coach-client')">←</button>
     <span class="topbar-title" id="csm-title">Séances</span>
-    <button onclick="saveCoachSessions()" style="background:var(--red);border:none;color:#fff;padding:7px 16px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:3px">SAUVEGARDER</button>
+    <button onclick="saveCoachSessions()" style="background:var(--red);border:none;color:#fff;padding:7px 14px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:3px">PUBLIER</button>
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
+      <!-- Rempli par loadCoachSessionSlots : il dit quand un travail
+           attend encore une publication. -->
+      <div id="cs-bandeau-brouillon"></div>
       <p class="sub" style="font-size:12px;margin-bottom:12px;line-height:1.6">Active/désactive les jours et modifie chaque séance. Le Programme Fondation est pré-chargé jusqu'à personnalisation.</p>
       <!-- Versions precedentes. Le confirm d'application d'un modele promet
            « rollback possible » et _snapshotSessionsConfig ecrit bien
@@ -11043,6 +11046,10 @@ function openCoachSessions(){
   if(!c) return;
   if(c._fromCode){toast('Cet athlète n\'a pas encore créé son compte.','var(--orange)');return;}
   _coachEditClient=JSON.parse(JSON.stringify(c));
+  // Un brouillon plus récent que le publié : on PROPOSE de le reprendre, on
+  // ne l'impose pas. L'imposer écraserait sans le dire un programme que le
+  // coach a peut-être publié depuis un autre appareil.
+  try{ _proposerBrouillon(); }catch(e){}
   const sc=_coachEditClient.sessions_config;
   // _evol_gender n'existe qu'à partir du premier bilan. Un athlète créé par le
   // coach porte son genre dans .gender et rien d'autre : lu seul, _evol_gender
@@ -11120,6 +11127,10 @@ function loadCoachSessionSlots(){
   // Redessine aussi l'historique : l'ecran peut etre rouvert apres qu'un
   // modele a ete applique, donc apres qu'une version a ete archivee.
   try{renderSessionsHistory();}catch(e){}
+  try{
+    const _bb=document.getElementById('cs-bandeau-brouillon');
+    if(_bb) _bb.innerHTML=_htmlBandeauBrouillon();
+  }catch(e){}
   const c=_coachEditClient;
   if(!c?.sessions_config) return;
   const sessions=c.sessions_config;
@@ -11226,6 +11237,144 @@ function openCoachSessionExercises(idx){
   renderProgEx();go('s-coach-program');
   _progExDirty=false;
 }
+// ══════ BROUILLON DE PROGRAMME ══════
+// Il vit dans le dossier DU COACH, pas dans celui de l'athlète. Trois raisons,
+// dans cet ordre :
+//   • l'athlète ne doit rien voir — le mettre chez lui l'exposerait à son
+//     propre export RGPD, où il lirait un programme non publié ;
+//   • le document de l'athlète est relu ET réécrit à chaque envoi : y ajouter
+//     un second jeu de séances doublerait son poids pour rien ;
+//   • c'est le travail du coach, il appartient au coach.
+const BROUILLON_MAX=30;
+// Trente jours : au-delà, un brouillon décrit un athlète qui a changé, et le
+// restaurer ferait plus de mal que de bien. On ne le SUPPRIME pas pour autant
+// — voir _brouillonsElaguer, qui ne retire que le surnombre.
+const BROUILLON_PEREMPTION_J=30;
+function _brouillons(user){
+  const u=_dossier(user);
+  if(!u) return {};
+  if(!u.brouillonsProg||typeof u.brouillonsProg!=='object') u.brouillonsProg={};
+  return u.brouillonsProg;
+}
+// PURE. Rend le brouillon d'un athlète, ou null. Un brouillon périmé est rendu
+// quand même, avec son âge : c'est à l'écran de le dire, pas à la lecture de
+// le cacher.
+function brouillonDe(athleteId,user){
+  const b=_brouillons(user)[athleteId];
+  return (b&&Array.isArray(b.sessions_config))?b:null;
+}
+function brouillonAgeJours(b){
+  return (b&&b.at)?Math.floor((Date.now()-b.at)/86400000):null;
+}
+function brouillonEstPerime(b){
+  const a=brouillonAgeJours(b);
+  return a!==null&&a>BROUILLON_PEREMPTION_J;
+}
+// Ne garde que les BROUILLON_MAX plus récents. On élague par date, jamais par
+// péremption : un brouillon vieux de six mois reste celui du coach, et le
+// supprimer d'office lui ferait perdre du travail sans le lui demander.
+function _brouillonsElaguer(user){
+  const u=_dossier(user); if(!u) return;
+  const b=_brouillons(u);
+  const cles=Object.keys(b);
+  if(cles.length<=BROUILLON_MAX) return;
+  cles.sort((x,y)=>(b[y].at||0)-(b[x].at||0));
+  for(const c of cles.slice(BROUILLON_MAX)) delete b[c];
+}
+// Enregistre l'état courant de _coachEditClient comme brouillon. N'ÉCRIT PAS
+// chez l'athlète : c'est tout l'objet du brouillon.
+//
+// Les photos de séance sont ÉCARTÉES. Elles sont en base64, et le dossier du
+// coach est poussé en entier à chaque synchro : sept jours de photos y
+// ajouteraient plusieurs mégaoctets. Elles restent dans _coachEditClient et
+// repartent à la publication ; seule la reprise APRÈS fermeture les perd, et
+// c'est un compromis assumé plutôt qu'un quota explosé.
+function enregistrerBrouillon(user){
+  const u=_dossier(user);
+  const c=_coachEditClient;
+  if(!u||u.role!=='coach'||!c||!c.id||!Array.isArray(c.sessions_config)) return false;
+  _brouillons(u)[c.id]={
+    at:Date.now(),
+    nom:c.fname||'',
+    sessions_config:c.sessions_config.map(sc=>({
+      day:sc.day, name:sc.name||'', active:!!sc.active, notes:sc.notes||'',
+      warmup:sc.warmup||'', cooldown:sc.cooldown||'',
+      exercises:(sc.exercises||[]).map(e=>Object.assign({},e))
+    }))
+  };
+  _brouillonsElaguer(u);
+  return true;
+}
+function oublierBrouillon(athleteId,user){
+  const u=_dossier(user); if(!u||!athleteId) return false;
+  const b=_brouillons(u);
+  if(!(athleteId in b)) return false;
+  delete b[athleteId];
+  return true;
+}
+// PURE. Le brouillon diffère-t-il de ce qui est publié ? Sert au bandeau : un
+// brouillon identique au publié n'a rien à annoncer, et l'annoncer quand même
+// apprendrait au coach à ignorer le bandeau.
+function brouillonDiffere(b,publie){
+  if(!b||!Array.isArray(b.sessions_config)) return false;
+  const net=cfg=>JSON.stringify((cfg||[]).map(s=>({
+    d:s.day,n:s.name||'',a:!!s.active,no:s.notes||'',w:s.warmup||'',c:s.cooldown||'',
+    e:(s.exercises||[]).map(x=>({n:x.name||'',s:x.series,r:x.reps,p:x.repos,
+      d:x.description||'',ss:!!x.ss,t:x.methode||null}))
+  })));
+  return net(b.sessions_config)!==net(publie);
+}
+
+// Propose la reprise d'un brouillon. Rend true s'il a été repris.
+function _proposerBrouillon(){
+  const c=_coachEditClient;
+  if(!c||!c.id) return false;
+  const b=brouillonDe(c.id);
+  if(!b) return false;
+  if(!brouillonDiffere(b,c.sessions_config)){
+    // Identique au publié : rien à reprendre, et le brouillon a fait son
+    // temps. On le retire pour ne pas reposer la question à chaque ouverture.
+    if(oublierBrouillon(c.id)) try{ saveUser(); }catch(e){}
+    return false;
+  }
+  const age=brouillonAgeJours(b);
+  const quand=age===0?"aujourd'hui":(age===1?'hier':('il y a '+age+' jours'));
+  const vieux=brouillonEstPerime(b)
+    ?'\n\nIl a plus de '+BROUILLON_PEREMPTION_J+' jours : vérifie qu\'il correspond encore à cet athlète.'
+    :'';
+  const ok=confirm('Tu as un brouillon non publié pour cet athlète ('+quand+').'
+    +vieux+'\n\nOK : reprendre le brouillon.\nAnnuler : repartir du programme publié.');
+  if(!ok){
+    if(oublierBrouillon(c.id)) try{ saveUser(); }catch(e){}
+    return false;
+  }
+  // Les photos ne sont pas dans le brouillon : on les REPREND du publié
+  // plutôt que de les perdre.
+  const parJour={}; (c.sessions_config||[]).forEach(sc=>{ parJour[sc.day]=sc; });
+  c.sessions_config=b.sessions_config.map(sc=>{
+    const anc=parJour[sc.day]||{};
+    return Object.assign({},sc,{photo:anc.photo||null,photo2:anc.photo2||null});
+  });
+  toast('Brouillon repris','var(--green)');
+  return true;
+}
+// Le bandeau de l'écran des séances : il DIT qu'un travail n'est pas encore
+// chez l'athlète. Sans lui, un coach croit avoir publié parce qu'il a vu
+// « Séance enregistrée ».
+function _htmlBandeauBrouillon(){
+  const c=_coachEditClient;
+  if(!c||!c.id) return '';
+  const users=DB.get('users')||{};
+  const publie=(Object.values(users).find(u=>u&&u.id===c.id)||{}).sessions_config||[];
+  if(!brouillonDiffere({sessions_config:c.sessions_config},publie)) return '';
+  return '<div style="background:linear-gradient(135deg,#2a1a00,#160e00);border:1.5px solid var(--orange);'
+    +'border-radius:12px;padding:12px 14px;margin-bottom:14px">'
+    +'<div style="font-weight:900;font-size:11px;color:var(--orange);text-transform:uppercase;'
+    +'letter-spacing:1px;margin-bottom:5px">Non publié</div>'
+    +'<div style="font-size:12px;color:var(--sub);line-height:1.6">Ces modifications ne sont pas '
+    +'encore chez ton athlète. Il voit toujours son programme précédent. '
+    +'Touche PUBLIER, en haut de cet écran, quand tu as terminé.</div></div>';
+}
 function saveCoachSessions(){
   const c=_coachEditClient;
   if(!c) return;
@@ -11247,6 +11396,9 @@ function saveCoachSessions(){
   _marquerCommePublie(c.sessions_config);
   c.updatedAt=Date.now();
   users[emailKey]=c;
+  // Publié : le brouillon n'a plus de raison d'être, et le garder ferait
+  // proposer une reprise vers un état identique à la prochaine ouverture.
+  if(oublierBrouillon(c.id)) try{ saveUser(); }catch(e){}
   const localOk=DB.set('users',users);
   // « Enregistrement… » écraserait l'avertissement de quota émis par DB.set.
   if(localOk) toast('Enregistrement…');
@@ -12769,7 +12921,12 @@ function saveProgram(){
       sc.name=_f('prog-name');sc.notes=_f('prog-notes');
       sc.warmup=_f('prog-warmup');sc.cooldown=_f('prog-cooldown');
       _progEditorCtx={mode:'clientProgram'};
-      toast(' Séance sauvegardée !');
+      // Le brouillon est posé ICI, et non à chaque frappe : une écriture par
+      // séance terminée suffit à ne rien perdre, et le dossier du coach n'est
+      // pas réécrit à chaque caractère tapé.
+      // Il n'atteint PAS l'athlète : c'est saveCoachSessions qui publie.
+      if(enregistrerBrouillon()) try{ saveUser(); }catch(e){}
+      toast('Séance enregistrée en brouillon');
       go('s-coach-sessions');loadCoachSessionSlots();return;
     }
     // L'athlete edite sa propre seance depuis le gestionnaire de seances
@@ -39631,6 +39788,134 @@ function testExercices(){
               return _echec('champ non recopié : '+champ);
           }
           return true;})());
+        // ── Constructeur, lot 3 : le brouillon qui survit ────────────────
+        // Le jeu d'essai : un coach, un athlète, deux jours de séances.
+        const _cfg=(n)=>[{day:'Lundi',name:'HAUT',active:true,notes:'',warmup:'',cooldown:'',
+            exercises:[{name:n||'SQUAT',series:3,reps:'10',repos:'02 min',description:''}]},
+          {day:'Mardi',name:'BAS',active:false,notes:'',warmup:'',cooldown:'',exercises:[]}];
+        ok('Le brouillon vit chez le COACH, jamais chez l\'athlète',(()=>{
+          // Le mettre chez l'athlète l'exposerait à son propre export RGPD,
+          // où il lirait un programme non publié. Et le document de l'athlète
+          // est relu ET réécrit à chaque envoi : un second jeu de séances y
+          // doublerait son poids.
+          const coach={id:'c1',email:'c@t',role:'coach'};
+          const athlete={id:'a1',email:'a@t',role:'athlete',sessions_config:_cfg()};
+          const sauveC=currentUser, sauveE=_coachEditClient;
+          try{
+            currentUser=coach;
+            _coachEditClient=JSON.parse(JSON.stringify(athlete));
+            _coachEditClient.sessions_config[0].exercises[0].name='SOULEVE DE TERRE';
+            if(!enregistrerBrouillon()) return _echec('brouillon refusé');
+            if(!coach.brouillonsProg||!coach.brouillonsProg['a1'])
+              return _echec('rien écrit chez le coach');
+            // L'athlète n'a RIEN reçu.
+            if(athlete.brouillonsProg) return _echec('un brouillon est chez l\'athlète');
+            if(athlete.sessions_config[0].exercises[0].name!=='SQUAT')
+              return _echec('le programme publié a bougé : '+athlete.sessions_config[0].exercises[0].name);
+            return true;
+          } finally { currentUser=sauveC; _coachEditClient=sauveE; }})());
+        ok('Un ATHLÈTE ne peut pas écrire de brouillon',(()=>{
+          const a={id:'a1',email:'a@t',role:'athlete'};
+          const sauveC=currentUser, sauveE=_coachEditClient;
+          try{
+            currentUser=a;
+            _coachEditClient={id:'x',sessions_config:_cfg()};
+            if(enregistrerBrouillon()) return _echec('accepté pour un athlète');
+            return !a.brouillonsProg||!Object.keys(a.brouillonsProg).length
+              ?true:_echec('un brouillon a été écrit malgré le refus');
+          } finally { currentUser=sauveC; _coachEditClient=sauveE; }})());
+        ok('Les PHOTOS ne partent pas dans le brouillon',(()=>{
+          // Elles sont en base64, et le dossier du coach est poussé en entier
+          // à chaque synchro : sept jours de photos y ajouteraient plusieurs
+          // mégaoctets. Compromis assumé, pas un oubli.
+          const coach={id:'c1',email:'c@t',role:'coach'};
+          const sauveC=currentUser, sauveE=_coachEditClient;
+          try{
+            currentUser=coach;
+            _coachEditClient={id:'a1',fname:'A',sessions_config:_cfg()};
+            _coachEditClient.sessions_config[0].photo='data:image/png;base64,AAAA';
+            _coachEditClient.sessions_config[0].photo2='data:image/png;base64,BBBB';
+            enregistrerBrouillon();
+            const j=JSON.stringify(coach.brouillonsProg['a1']);
+            return j.indexOf('base64')<0?true:_echec('une photo est dans le brouillon');
+          } finally { currentUser=sauveC; _coachEditClient=sauveE; }})());
+        ok('brouillonDiffere ne crie que s\'il y a une VRAIE différence',(()=>{
+          // Un bandeau qui s'allume pour rien apprend à l'ignorer.
+          const pub=_cfg();
+          if(brouillonDiffere({sessions_config:_cfg()},pub))
+            return _echec('deux programmes identiques sont dits différents');
+          const mod=_cfg(); mod[0].exercises[0].series=4;
+          if(!brouillonDiffere({sessions_config:mod},pub)) return _echec('un changement de séries passe inaperçu');
+          const ren=_cfg('DEVELOPPE COUCHE');
+          if(!brouillonDiffere({sessions_config:ren},pub)) return _echec('un exercice changé passe inaperçu');
+          const act=_cfg(); act[1].active=true;
+          if(!brouillonDiffere({sessions_config:act},pub)) return _echec('un jour activé passe inaperçu');
+          // Une photo ajoutée ne compte PAS : elle n'est pas dans le brouillon,
+          // donc la signaler ferait clignoter un bandeau qu'on ne peut pas éteindre.
+          const ph=_cfg(); ph[0].photo='data:image/png;base64,XX';
+          if(brouillonDiffere({sessions_config:ph},pub)) return _echec('une photo déclenche le bandeau');
+          return !brouillonDiffere(null,pub)&&!brouillonDiffere({},pub)
+            ?true:_echec('un brouillon absent est dit différent');})());
+        ok('La publication EFFACE le brouillon',(()=>{
+          // Sinon la prochaine ouverture proposerait de reprendre un état
+          // identique à ce qui vient d'être publié.
+          const src=String(saveCoachSessions);
+          if(src.indexOf('oublierBrouillon')<0) return _echec('la publication ne l\'efface pas');
+          const iEcrit=src.indexOf('users[emailKey]=c'), iOubli=src.indexOf('oublierBrouillon');
+          // APRÈS l'écriture : effacer avant, sur un envoi qui échoue, perdrait
+          // le travail des deux côtés.
+          return (iEcrit>=0&&iOubli>iEcrit)
+            ?true:_echec('le brouillon est effacé avant l\'écriture');})());
+        ok('Le brouillon est BORNÉ, et c\'est le plus ancien qui part',(()=>{
+          const coach={id:'c1',email:'c@t',role:'coach',brouillonsProg:{}};
+          for(let i=0;i<BROUILLON_MAX+5;i++)
+            coach.brouillonsProg['ath'+i]={at:1000+i,sessions_config:[]};
+          _brouillonsElaguer(coach);
+          const cles=Object.keys(coach.brouillonsProg);
+          if(cles.length!==BROUILLON_MAX) return _echec(cles.length+' brouillons');
+          if(cles.indexOf('ath0')>=0) return _echec('le plus ancien est resté');
+          return cles.indexOf('ath'+(BROUILLON_MAX+4))>=0
+            ?true:_echec('le plus récent a été élagué');})());
+        ok('Un brouillon périmé est RENDU, avec son âge — jamais caché',(()=>{
+          // Le cacher ferait disparaître du travail sans le dire. C'est à
+          // l'écran d'avertir, pas à la lecture de trancher.
+          const coach={id:'c1',email:'c@t',role:'coach',brouillonsProg:{
+            'a1':{at:Date.now()-(BROUILLON_PEREMPTION_J+10)*86400000,sessions_config:_cfg()},
+            'a2':{at:Date.now()-2*86400000,sessions_config:_cfg()}}};
+          const vieux=brouillonDe('a1',coach);
+          if(!vieux) return _echec('un brouillon périmé est caché');
+          if(!brouillonEstPerime(vieux)) return _echec('il n\'est pas signalé comme périmé');
+          if(brouillonAgeJours(vieux)<BROUILLON_PEREMPTION_J) return _echec('âge mal calculé');
+          const frais=brouillonDe('a2',coach);
+          if(brouillonEstPerime(frais)) return _echec('un brouillon de 2 jours est dit périmé');
+          if(brouillonAgeJours(frais)!==2) return _echec('âge : '+brouillonAgeJours(frais));
+          // Et _brouillonsElaguer n'élague PAS sur la péremption.
+          _brouillonsElaguer(coach);
+          return brouillonDe('a1',coach)?true:_echec('l\'élagage a supprimé un brouillon périmé');})());
+        ok('La reprise d\'un brouillon est PROPOSÉE, jamais imposée',(()=>{
+          // L'imposer écraserait sans le dire un programme publié depuis un
+          // autre appareil.
+          const src=String(_proposerBrouillon);
+          if(src.indexOf('confirm(')<0) return _echec('aucune confirmation demandée');
+          // Un refus efface le brouillon plutôt que de reposer la question à
+          // chaque ouverture.
+          if(src.indexOf('oublierBrouillon')<0) return _echec('un refus ne referme rien');
+          // Et les photos sont reprises du publié, pas perdues.
+          return /photo:anc\.photo/.test(src.replace(/\s+/g,''))
+            ?true:_echec('les photos sont perdues à la reprise');})());
+        ok('Le constructeur garde tout ce qu\'il savait déjà faire',(()=>{
+          // Ce lot n'ajoute QUE le brouillon. Réorganisation, supersets et
+          // duplications existaient ; les casser en passant serait le vrai
+          // risque de ce lot.
+          for(const f of ['_pxDragDebut','_pxDeplacerParFleche','_dupliquerExUI',
+                          'coachCopyDay','_normaliserSS','_groupesEx']){
+            if(typeof window[f]!=='function') return _echec('disparu : '+f);
+          }
+          // La poignée n'est portée que par la TÊTE d'un groupe : un superset
+          // se déplace d'un bloc.
+          const src=String(_pxDragDebut);
+          return /g\[0\]===i/.test(src.replace(/\s+/g,''))
+            ?true:_echec('la poignée ne se limite plus à la tête de groupe');})());
         ok('fichesBanque rend un tableau vide, jamais null',(()=>{
           const sauve=_banque;
           try{
