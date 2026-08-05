@@ -1198,6 +1198,9 @@ const COACH_PHOTO='icons/coach.jpg';
         <!-- Compteur permanent. Rempli par loadCoachHome avec le cache DEJA
              lu : le relire couterait 130 ms a 40 athletes. -->
         <div id="ch-paliers"></div>
+        <!-- Alerte anti-falaise et propositions de palier. Jamais bloquante,
+             jamais une bascule : elle DIT, le coach decide. -->
+        <div id="ch-alerte-palier"></div>
         <div id="ch-premiers-pas"></div>
         <div id="ch-todo"></div>
         <button onclick="openCoachPrograms()" class="content-card" style="width:100%;margin-bottom:16px;padding:13px 16px;background:linear-gradient(135deg,#0d0d0d,#1a0000);border:1px solid #2a0000;border-left:3px solid var(--red);border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px;text-align:left;display:flex;align-items:center;justify-content:space-between">
@@ -3726,6 +3729,111 @@ const LIBRE_ATTENTE_TEXTE='Les '+LIBRE_MAX+' comptes gratuits ouverts sont pris.
 function _quotaTexte(q){ return q===Infinity?'sans limite':String(q); }
 // Le palier PAYANT qui vient après le palier courant, s'il en existe un.
 // Rend null au sommet : « prix du palier suivant » n'a alors aucun sens.
+// ── Deux cycles au-dessus, et seulement alors ───────────────────────────
+// Un coach qui oscille autour d'un seuil ne doit jamais être facturé sur un
+// pic. On ne PROPOSE le palier supérieur qu'après deux mois consécutifs
+// au-dessus — et proposer reste proposer : rien ne bascule.
+//
+// DEUX CHAMPS SUFFISENT, sans en inventer un troisième :
+//   cyclesAuDessus       le nombre de mois consécutifs au-dessus du quota ;
+//   dernierAvertissement la date du dernier mois COMPTÉ — c'est elle qui
+//                        garantit « un incrément au plus par cycle ».
+// Retomber au niveau ou en dessous remet le compteur à zéro : « consécutifs »
+// veut dire consécutifs.
+const PALIERS_CYCLES_AVANT_PROPOSITION=2;
+// Met à jour le compteur de cycles. Rend l'état écrit, ou null si rien n'a
+// changé. N'ENREGISTRE PAS : l'appelant le fait.
+function majCyclesPaliers(coach,users){
+  const u=_dossier(coach);
+  if(!u||u.role!=='coach') return null;
+  // Un compte qu'on ne sait pas compter ne compte pas : sur un appareil
+  // neuf, le cache est vide et tout paraîtrait « en dessous ».
+  if(!countActiveAthletesFiable(u,users)) return null;
+  const n=countActiveAthletes(u,users);
+  const quota=getCoachQuota(coachPlanDe(u));
+  const etat=paliersDe(u);
+  if(!(n>quota)){
+    // Au niveau ou en dessous : le compteur repart de zéro. On ne touche pas
+    // à la date — elle ne sert qu'à empêcher un double comptage mensuel.
+    if(etat.cyclesAuDessus===0) return null;
+    return _ecrirePaliers(u,{cyclesAuDessus:0});
+  }
+  const cycleCourant=_cyclePalier();
+  const dejaCompte=etat.dernierAvertissement
+    &&_cyclePalier(new Date(etat.dernierAvertissement))===cycleCourant;
+  if(dejaCompte) return null;              // un incrément au plus par mois
+  return _ecrirePaliers(u,{cyclesAuDessus:etat.cyclesAuDessus+1,
+    dernierAvertissement:new Date().toISOString()});
+}
+
+// PURE. Ce qu'il y a à DIRE au coach, ou null. Elle ne décide rien, n'écrit
+// rien, et ne bloque rien — trois propriétés qu'une assertion vérifie.
+//
+// Trois cas, dans cet ordre de priorité :
+//   falaise   : il est à un athlète du palier suivant. On le prévient AVANT
+//               qu'il le subisse, avec le prix exact.
+//   montee    : deux cycles au-dessus. On propose, on n'impose pas.
+//   descente  : il paie pour plus qu'il n'utilise — fin de saison, athlètes
+//               partis. Personne ne le lui dirait sinon.
+function alertePalier(coach,users){
+  const u=_dossier(coach);
+  if(!u||u.role!=='coach') return null;
+  if(!countActiveAthletesFiable(u,users)) return null;
+  const cle=coachPlanDe(u);
+  const n=countActiveAthletes(u,users);
+  const quota=getCoachQuota(cle);
+  const suivant=_palierSuivant(cle);
+  // ── Falaise : N === M-1, et il existe un palier au-dessus ─────────────
+  if(suivant&&quota!==Infinity&&n===quota-1){
+    return {type:'falaise',palier:suivant.cle,
+      titre:'Au prochain athlète, ton palier passe à '+suivant.titre
+        +' — '+suivant.prix+' €/mois.',
+      texte:'Tu peux ajouter cet athlète sans changer de palier maintenant. '
+        +'Rien n\'est prélevé tant que tu ne l\'as pas décidé toi-même.'};
+  }
+  // ── Montée : au-dessus depuis deux cycles ─────────────────────────────
+  if(suivant&&n>quota){
+    const c=paliersDe(u).cyclesAuDessus;
+    if(c<PALIERS_CYCLES_AVANT_PROPOSITION) return null;   // un pic ne compte pas
+    return {type:'montee',palier:suivant.cle,
+      titre:'Tu suis '+n+' athlètes depuis '+c+' mois, pour un palier qui en '
+        +'prévoit '+_quotaTexte(quota)+'.',
+      texte:'Le palier '+suivant.titre+' est à '+suivant.prix+' €/mois. '
+        +'Rien ne change tant que tu ne le choisis pas : tes athlètes gardent '
+        +'tout leur accès, et ton prix actuel reste le tien.'};
+  }
+  // ── Descente : il paie pour plus qu'il n'utilise ──────────────────────
+  const inf=COACH_PALIERS.filter(x=>x.quota>=n&&x.prix<(COACH_PALIERS.find(y=>y.cle===cle)||{}).prix);
+  if(inf.length){
+    const cible=inf[0];
+    return {type:'descente',palier:cible.cle,
+      titre:'Tu suis '+n+' athlète'+(n>1?'s':'')+' : le palier '+cible.titre
+        +' te suffirait.',
+      texte:(cible.prix?('Il est à '+cible.prix+' €/mois. '):'Il est gratuit. ')
+        +'Le changement prend effet à la fin de la période déjà réglée, '
+        +'quand tu veux — aucune fenêtre, aucun préavis.'};
+  }
+  return null;
+}
+// Le rendu. Aucun bouton de fermeture : ce n'est pas une interruption, c'est
+// une ligne d'information qui disparaît d'elle-même quand la situation change.
+function _htmlAlertePalier(coach,users){
+  const a=alertePalier(coach,users);
+  if(!a) return '';
+  const chaud=(a.type!=='descente');
+  const bord=chaud?'var(--orange)':'var(--green)';
+  return '<div style="background:var(--surface-1);border:1px solid '+bord+';'
+    +'border-left:3px solid '+bord+';border-radius:0 12px 12px 0;padding:11px 13px;'
+    +'margin-bottom:14px">'
+    +'<div style="font-weight:800;font-size:12px;color:'+bord+';line-height:1.5">'
+    +escapeHtml(a.titre)+'</div>'
+    +'<div class="sub" style="font-size:11px;margin-top:5px;line-height:1.6">'
+    +escapeHtml(a.texte)+'</div>'
+    +'<button class="btn btn-outline btn-sm" style="margin-top:9px;width:100%;min-height:44px" '
+    +'onclick="ouvrirMonAbonnement()">Changer de palier</button>'
+    +'</div>';
+}
+
 // Le bandeau permanent du tableau de bord. « N / M athlètes actifs » et le
 // palier, en clair.
 //
@@ -9142,6 +9250,12 @@ function loadCoachHome(){
   try{
     const _zp=document.getElementById('ch-paliers');
     if(_zp) _zp.innerHTML=_htmlBandeauPaliers(u,_cacheUsers);
+    // Le comptage de cycles se fait ICI, une fois par ouverture du tableau
+    // de bord, avec le cache deja lu. Il n ecrit dans le dossier que quand
+    // le mois change : un enregistrement par mois, pas un par affichage.
+    if(majCyclesPaliers(u,_cacheUsers)) try{ saveUser(); }catch(e){}
+    const _za=document.getElementById('ch-alerte-palier');
+    if(_za) _za.innerHTML=_htmlAlertePalier(u,_cacheUsers);
   }catch(e){}
   document.getElementById('ch-total').textContent=clients.length;
   document.getElementById('ch-active').textContent=clients.filter(c=>isActive(c)).length;
@@ -41036,13 +41150,19 @@ function testExercices(){
         // COACH_PALIERS, et un prix recopié dans du balisage finirait un jour
         // par diverger de la constante qui facture.
         ok('Aucun prix coach n\'est écrit en dur dans le source',(()=>{
-          // Les deux prix coach ne doivent apparaître nulle part dans le
-          // source — ni dans un écran, ni dans un commentaire, sinon ce test
-          // s'y trouve lui-même.
-          const tout=document.documentElement.outerHTML;
-          const prod=tout.slice(0,tout.indexOf('function testExercices'));
+          // LE SOURCE, ET NON LE DOM RENDU. Cette assertion scannait
+          // outerHTML, qui contient ce que les écrans ont affiché : dès qu'un
+          // coach ouvrait son tableau de bord, l'alerte anti-falaise y écrivait
+          // « 39 € » — légitimement, depuis COACH_PALIERS — et le test tombait.
+          // Page fraîche : vert. Après rendu : rouge. Une assertion qui dépend
+          // de ce qui a été affiché avant elle ne vaut rien.
+          // Le texte des <script> inline, lui, ne bouge jamais.
+          const scripts=[...document.querySelectorAll('script')]
+            .filter(x=>!x.src).map(x=>x.textContent).join('\n');
+          const prod=scripts.slice(0,scripts.indexOf('function testExercices'));
+          if(prod.length<100000) return _echec('source trop court : '+prod.length);
           const t=['19'+' €','39'+' €'].filter(m=>prod.indexOf(m)>=0);
-          if(t.length) return _echec('un prix coach est déjà affiché : '+t.join(', '));
+          if(t.length) return _echec('un prix coach est écrit en dur : '+t.join(', '));
           // Et le paywall autonome reste intact : ce lot ne l'a pas touché.
           return /9,95/.test(String(loadAccessGate))
             ?true:_echec('la mention autonome a disparu de loadAccessGate');})());
@@ -41999,6 +42119,127 @@ function testExercices(){
               return _echec((f.name||'?')+' écrit coachPlan');
           }
           return true;})());
+        // ── Paliers, étape 3 : falaise, deux cycles, descente ────────────
+        // Un coach au palier « coach » : quota 15, palier suivant « pro » à 39 €.
+        const _coachP=(n,extra)=>Object.assign({id:'c1',email:'c@t',role:'coach',
+          coachPlan:'coach',coachSubActive:true},extra||{});
+        const _moisPrecedent=()=>{const d=new Date(); d.setMonth(d.getMonth()-1);
+          return d.toISOString();};
+        ok('Critère : 14 actifs sur un quota de 15 → l\'alerte annonce 39 €',(()=>{
+          // La falaise se dit AVANT d'être subie, avec le prix exact. Un
+          // avertissement sans chiffre ne prévient de rien.
+          const a=alertePalier(_coachP(),_cacheP(14,3));
+          if(!a) return _echec('aucune alerte à 14 / 15');
+          if(a.type!=='falaise') return _echec('type : '+a.type);
+          if(a.titre.indexOf('39 €/mois')<0) return _echec('prix absent : '+a.titre);
+          if(a.titre.indexOf('Pro')<0) return _echec('le palier suivant n\'est pas nommé');
+          // Et elle dit explicitement que rien ne bascule.
+          if(!/sans changer de palier/.test(a.texte)) return _echec('texte : '+a.texte);
+          // À 13, il est trop tôt ; à 15, la falaise est passée.
+          const av=alertePalier(_coachP(),_cacheP(13,3));
+          if(av&&av.type==='falaise') return _echec('alerte prématurée à 13 / 15');
+          const ap=alertePalier(_coachP(),_cacheP(15,3));
+          return !(ap&&ap.type==='falaise')
+            ?true:_echec('la falaise est encore annoncée à 15 / 15');})());
+        ok('Critère : 16 actifs pendant UN cycle → rien n\'est proposé',(()=>{
+          // Un coach qui oscille autour d'un seuil ne doit jamais être
+          // facturé sur un pic.
+          const u=_coachP(0,{paliers:{dernierAvertissement:null,cyclesAuDessus:1}});
+          const a=alertePalier(u,_cacheP(16,3));
+          if(a&&a.type==='montee') return _echec('une montée est proposée dès le premier cycle');
+          // Zéro cycle non plus.
+          const z=alertePalier(_coachP(),_cacheP(16,3));
+          return !(z&&z.type==='montee')
+            ?true:_echec('une montée est proposée sans aucun cycle');})());
+        ok('Critère : 16 actifs pendant DEUX cycles → proposé, jamais appliqué',(()=>{
+          const u=_coachP(0,{paliers:{dernierAvertissement:null,cyclesAuDessus:2}});
+          const avant=u.coachPlan;
+          const a=alertePalier(u,_cacheP(16,3));
+          if(!a||a.type!=='montee') return _echec('aucune proposition après deux cycles');
+          if(a.titre.indexOf('2 mois')<0) return _echec('la durée n\'est pas dite : '+a.titre);
+          if(a.texte.indexOf('39 €/mois')<0) return _echec('prix absent : '+a.texte);
+          // LE POINT QUI COMPTE : le palier n'a pas bougé, et le texte le dit.
+          if(u.coachPlan!==avant) return _echec('le palier a changé tout seul : '+u.coachPlan);
+          if(!/Rien ne change tant que tu ne le choisis pas/.test(a.texte))
+            return _echec('le texte ne promet pas l\'inaction');
+          // Les athlètes gardent leur accès : c'est dit, et rien ne bloque.
+          return /gardent tout leur accès/.test(a.texte)
+            ?true:_echec('le sort des athlètes n\'est pas dit');})());
+        ok('« Consécutifs » veut dire consécutifs : retomber remet à zéro',(()=>{
+          const u=_coachP(0,{paliers:{dernierAvertissement:_moisPrecedent(),cyclesAuDessus:1}});
+          // Retombé à 12 sur un quota de 15 : le compteur repart de zéro.
+          const r=majCyclesPaliers(u,_cacheP(12,3));
+          if(!r||r.cyclesAuDessus!==0) return _echec('compteur : '+JSON.stringify(r));
+          // Et un second passage ne réécrit rien : il est déjà à zéro.
+          return majCyclesPaliers(u,_cacheP(12,3))===null
+            ?true:_echec('une écriture inutile est faite');})());
+        ok('Le compteur s\'incrémente UNE fois par mois, pas par affichage',(()=>{
+          // Sans ça, ouvrir le tableau de bord deux fois suffirait à franchir
+          // le seuil des deux cycles.
+          const u=_coachP(0,{paliers:{dernierAvertissement:_moisPrecedent(),cyclesAuDessus:1}});
+          const r1=majCyclesPaliers(u,_cacheP(16,3));
+          if(!r1||r1.cyclesAuDessus!==2) return _echec('premier passage : '+JSON.stringify(r1));
+          // Le mois est désormais celui d'aujourd'hui : deuxième passage inerte.
+          if(majCyclesPaliers(u,_cacheP(16,3))!==null) return _echec('deuxième passage du même mois compté');
+          if(paliersDe(u).cyclesAuDessus!==2) return _echec('le compteur a bougé : '+paliersDe(u).cyclesAuDessus);
+          // Et il reste borné.
+          const t=_coachP(0,{paliers:{dernierAvertissement:_moisPrecedent(),cyclesAuDessus:PALIERS_CYCLES_MAX}});
+          majCyclesPaliers(t,_cacheP(16,3));
+          return paliersDe(t).cyclesAuDessus===PALIERS_CYCLES_MAX
+            ?true:_echec('la borne saute : '+paliersDe(t).cyclesAuDessus);})());
+        ok('Un cache non fiable ne fait NI alerte NI comptage',(()=>{
+          // Sur un appareil neuf le cache est vide : tout paraîtrait « en
+          // dessous », et le compteur se remettrait à zéro à tort.
+          const u=_coachP(0,{paliers:{dernierAvertissement:_moisPrecedent(),cyclesAuDessus:2}});
+          if(alertePalier(u,{})!==null) return _echec('une alerte sort d\'un cache vide');
+          if(majCyclesPaliers(u,{})!==null) return _echec('le compteur bouge sur un cache vide');
+          if(paliersDe(u).cyclesAuDessus!==2) return _echec('le compteur a été remis à zéro');
+          // Un athlète ne reçoit jamais d'alerte de palier.
+          return alertePalier({id:'a',email:'a@t',role:'athlete'},_cacheP(16,3))===null
+            ?true:_echec('un athlète reçoit une alerte de palier');})());
+        ok('La descente est PROPOSÉE, sans fenêtre ni préavis',(()=>{
+          // Fin de saison, les athlètes sont partis : personne ne dirait au
+          // coach qu'il paie pour plus qu'il n'utilise.
+          const pro=_coachP(0,{coachPlan:'pro'});
+          const a=alertePalier(pro,_cacheP(3,3));
+          if(!a||a.type!=='descente') return _echec('aucune descente proposée : '+(a&&a.type));
+          if(a.palier!=='coach') return _echec('palier proposé : '+a.palier);
+          if(a.texte.indexOf('19 €/mois')<0) return _echec('prix absent : '+a.texte);
+          if(!/aucune fenêtre, aucun préavis/.test(a.texte)) return _echec('le texte impose une contrainte');
+          if(!/fin de la période déjà réglée/.test(a.texte)) return _echec('l\'effet n\'est pas daté');
+          // Un seul athlète : le palier libre suffit, et il est gratuit.
+          const b=alertePalier(pro,_cacheP(1,3));
+          if(!b||b.palier!=='libre') return _echec('à 1 athlète, palier proposé : '+(b&&b.palier));
+          if(!/gratuit/.test(b.texte)) return _echec('le palier libre n\'est pas dit gratuit');
+          // Et le palier n'a pas bougé.
+          return pro.coachPlan==='pro'?true:_echec('le palier a changé : '+pro.coachPlan);})());
+        ok('alertePalier n\'écrit RIEN et ne bloque RIEN',(()=>{
+          // Elle dit, le coach décide. Trois propriétés, trois vérifications.
+          const u=_coachP(0,{paliers:{dernierAvertissement:null,cyclesAuDessus:2}});
+          const avant=JSON.stringify(u);
+          alertePalier(u,_cacheP(16,3));
+          alertePalier(u,_cacheP(14,3));
+          alertePalier(u,_cacheP(1,3));
+          if(JSON.stringify(u)!==avant) return _echec('le dossier a été modifié');
+          const src=String(alertePalier);
+          if(/coachPlan\s*=[^=]/.test(src)) return _echec('elle écrit coachPlan');
+          if(/saveUser\(|_ecrirePaliers\(/.test(src)) return _echec('elle enregistre');
+          // Et le rendu porte le bouton, jamais une bascule.
+          const h=_htmlAlertePalier(u,_cacheP(16,3));
+          if(h.indexOf('ouvrirMonAbonnement()')<0) return _echec('aucun chemin vers l\'abonnement');
+          return h.indexOf('coachPlan')<0
+            ?true:_echec('le rendu touche au palier');})());
+        ok('Le tableau de bord n\'enregistre que quand le mois change',(()=>{
+          // Un enregistrement par mois, pas un par affichage : saveUser pousse
+          // le document entier, et le document d'un coach n'est pas petit.
+          const src=String(loadCoachHome).replace(/\s+/g,'');
+          if(src.indexOf('if(majCyclesPaliers(u,_cacheUsers))')<0)
+            return _echec('l\'enregistrement n\'est pas conditionné au retour');
+          // majCyclesPaliers rend null quand il n'y a rien à écrire : c'est
+          // cette valeur qui porte la condition.
+          const u=_coachP(0,{paliers:{dernierAvertissement:new Date().toISOString(),cyclesAuDessus:1}});
+          return majCyclesPaliers(u,_cacheP(16,3))===null
+            ?true:_echec('un mois déjà compté déclenche une écriture');})());
         ok('fichesBanque rend un tableau vide, jamais null',(()=>{
           const sauve=_banque;
           try{
