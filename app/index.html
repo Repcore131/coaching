@@ -1755,14 +1755,14 @@ const COACH_PHOTO='icons/coach.jpg';
             <div style="font-size:22px;margin-bottom:3px">✏️</div>
             <div style="font-size:var(--fs-xs);color:var(--green);font-weight:700">Coller liens</div>
           </div>
-          <div onclick="document.getElementById('prog-photo2-input').click()"
+          <div id="prog-photo2-photo" onclick="document.getElementById('prog-photo2-input').click()"
             style="flex:1;border:1px dashed #2a2a2a;border-radius:8px;padding:10px;text-align:center;cursor:pointer"
             onmouseover="this.style.borderColor='#555'" onmouseout="this.style.borderColor='#2a2a2a'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
             <input type="file" id="prog-photo2-input" accept="image/*" style="display:none" onchange="loadProgPhoto2(this)">
             <div style="font-size:22px;margin-bottom:3px">📷</div>
             <div style="font-size:var(--fs-xs);color:var(--sub);font-weight:700">Photo</div>
           </div>
-          <div onclick="document.getElementById('prog-pdf-links-input').click()"
+          <div id="prog-photo2-pdf" onclick="document.getElementById('prog-pdf-links-input').click()"
             style="flex:1;border:1px dashed #2a2a2a;border-radius:8px;padding:10px;text-align:center;cursor:pointer"
             onmouseover="this.style.borderColor='#555'" onmouseout="this.style.borderColor='#2a2a2a'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
             <input type="file" id="prog-pdf-links-input" accept="application/pdf" style="display:none" onchange="importVideoLinksFromPdf(this)">
@@ -11501,7 +11501,9 @@ function renderClientPdfCard(c){
     </div>
     <button onclick="removeCoachPdf()" style="background:none;border:none;color:var(--text-dim);font-size:18px;cursor:pointer;padding:4px;flex-shrink:0">×</button>
   </div>`:'';
-  const parseBtn=hasPdf?`<button onclick="triggerPdfProgrammeImport(${JSON.stringify(c.email)})" style="width:100%;margin-bottom:10px;padding:11px;background:linear-gradient(180deg,#0a1a00,#080f00);border:1px solid #1a3a0a;border-radius:6px;color:var(--green);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px;text-transform:uppercase;display:flex;align-items:center;justify-content:center;gap:7px"> Lire PDF → Importer les séances</button>`:'';
+  // Drapeau baisse : le bouton d'extraction ne s'affiche plus du tout. Le
+  // PDF lui-meme reste consultable — c'est la fiche programme de l'athlete.
+  const parseBtn=(hasPdf&&_importLegacyOuvert())?`<button onclick="triggerPdfProgrammeImport(${JSON.stringify(c.email)})" style="width:100%;margin-bottom:10px;padding:11px;background:linear-gradient(180deg,#0a1a00,#080f00);border:1px solid #1a3a0a;border-radius:6px;color:var(--green);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px;text-transform:uppercase;display:flex;align-items:center;justify-content:center;gap:7px"> Lire PDF → Importer les séances</button>`:'';
   el.innerHTML=`${existHtml}${parseBtn}
     <label style="display:block;cursor:pointer;margin-bottom:10px">
       <input type="file" accept=".pdf,application/pdf" onchange="uploadCoachPdfInline(this)" style="display:none">
@@ -11568,6 +11570,48 @@ function saveCoachPdfLinkInline(){
 // même clé, donc renommer un exercice ne coupe plus son historique de charge.
 // Ce n'est PAS une clé de stockage : rien n'est écrit sous cette forme dans
 // sessions[n].data, qui reste indexé par le nom en clair.
+// ══════ IMPORT PDF / OCR — DÉPRÉCIÉ ══════
+// Le coach construisait ses séances hors de l'application, les importait en
+// PDF ou en photo, et une reconnaissance de texte en extrayait les exercices.
+// Ce chemin est fermé : il perdait de l'information, se trompait de lecture,
+// et la banque d'exercices le rend inutile.
+//
+// DÉSACTIVÉ, PAS SUPPRIMÉ. Le code d'extraction reste entier derrière ce
+// drapeau. Le remettre à true rouvre le parcours exactement comme avant —
+// c'est la seule façon honnête de couper une fonctionnalité dont on ne peut
+// pas prouver que plus personne ne s'en sert.
+//
+// CE QUI N'EST PAS COUPÉ, et qu'il ne faut pas couper :
+//   • les téléversements de photo de séance : cette photo est AUSSI la
+//     vignette affichée dans le sélecteur de séances de l'athlète. Retirer
+//     l'upload retirerait la vignette ;
+//   • le collage MANUEL de liens YouTube — ce n'est pas de l'extraction ;
+//   • la fiche programme PDF, les vidéos d'exécution, les photos de bilan,
+//     la photo du coach : quatre chemins de fichier qui n'ont jamais eu de
+//     rapport avec l'import de séance.
+//
+// Les SÉANCES DÉJÀ IMPORTÉES restent lisibles et exécutables. On coupe une
+// entrée, on ne détruit rien.
+const LEGACY_PDF_IMPORT=false;
+// Garde unique. Toutes les fonctions d'extraction passent par elle : une
+// garde par fonction finirait par en oublier une.
+function _importLegacyOuvert(){ return LEGACY_PDF_IMPORT===true; }
+function _refusImportLegacy(){
+  toast('L\'import de séance par PDF ou photo a été remplacé par la banque '
+    +'d\'exercices.','var(--orange)');
+  return false;
+}
+// Masque les commandes d'extraction. Appelée par les écrans qui les portent ;
+// elle ne touche à rien d'autre, et surtout pas aux zones de téléversement.
+function _appliquerDeprecationImport(){
+  if(_importLegacyOuvert()) return false;
+  for(const id of ['prog-analyze-btn','prog-photo2-photo','prog-photo2-pdf']){
+    const e=document.getElementById(id);
+    if(e) e.style.setProperty('display','none','important');
+  }
+  return true;
+}
+
 // ══════ BANQUE D'EXERCICES ══════
 // 406 fiches : illustration, guide d'exécution, repos, liens vidéo. Elles
 // viennent du guide du coach, extraites par scripts/seed_exercices.py.
@@ -12719,6 +12763,10 @@ function renderProgEx(){
   // Le bouton n'apparait que pour un coach : la banque lui est reservee.
   const _bq=document.getElementById('prog-banque');
   if(_bq) _bq.style.display=peutConsulterBanque()?'block':'none';
+  // Et les commandes d'extraction disparaissent tant que LEGACY_PDF_IMPORT
+  // est baisse. Ici et non a l'ouverture de l'ecran : renderProgEx est le
+  // seul point par lequel TOUS les chemins d'edition passent.
+  try{ _appliquerDeprecationImport(); }catch(e){}
   setTimeout(()=>{try{_rendreSuggestionsProto();}catch(e){}},0);
   // Sync chips
   for(let n=1;n<=10;n++){const c=document.getElementById('exo-chip-'+n);if(c)c.classList.toggle('active',n===progEx.length);}
@@ -13427,7 +13475,7 @@ function loadSessionManager(){
                 <button onclick="removeSessionPhoto(${i})" style="background:rgba(198,15,8,.8);color:#fff;border:none;padding:6px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;min-height:44px">Supprimer</button>
               </div>
             </div>
-            <button id="analyze-btn-${i}" onclick="analyzePhotoWithClaude(${i})" style="width:100%;margin-top:8px;padding:12px;background:linear-gradient(180deg,#1a0000,#110000);border:1px solid #3a0a0a;border-radius:3px;color:var(--red-light);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:1.5px;text-transform:uppercase">
+            <button id="analyze-btn-${i}" onclick="analyzePhotoWithClaude(${i})" style="${_importLegacyOuvert()?'':'display:none!important;'}width:100%;margin-top:8px;padding:12px;background:linear-gradient(180deg,#1a0000,#110000);border:1px solid #3a0a0a;border-radius:3px;color:var(--red-light);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:1.5px;text-transform:uppercase">
                Lire & importer les exercices (IA)
             </button>`:
             `<label style="display:block;margin-top:6px;cursor:pointer">
@@ -30340,7 +30388,9 @@ let progPhotoData=null, progPhoto2Data=null, _pdfVideoLinks=null;
 function _updateAnalyzeBtn(){
   const btn=document.getElementById('prog-analyze-btn');
   if(!btn) return;
-  btn.style.display=progPhotoData?'flex':'none';
+  // Drapeau baisse : le bouton d'analyse ne s'affiche jamais, meme avec une
+  // photo chargee. La photo, elle, reste — c'est la vignette de la seance.
+  btn.style.display=(progPhotoData&&_importLegacyOuvert())?'flex':'none';
 }
 function loadProgPhoto(input){
   const f=input.files[0];if(!f) return;
@@ -30371,6 +30421,7 @@ function clearProgPhoto(){
   _updateAnalyzeBtn();
 }
 function loadProgPhoto2(input){
+  if(!_importLegacyOuvert()) return _refusImportLegacy();
   const f=input.files[0];if(!f) return;
   compressImage(f,1600,0.92,data=>{
     progPhoto2Data=data;
@@ -30418,6 +30469,7 @@ function savePastedLinks(){
 }
 
 async function importVideoLinksFromPdf(input){
+  if(!_importLegacyOuvert()) return _refusImportLegacy();
   const file=input.files[0];
   if(!file) return;
   input.value='';
@@ -30485,6 +30537,7 @@ async function importVideoLinksFromPdf(input){
   }
 }
 async function analyzeProgPhotos(){
+  if(!_importLegacyOuvert()) return _refusImportLegacy();
   if(!progPhotoData){toast('Ajoute d\'abord la photo de séance.','var(--orange)');return;}
   const btn=document.getElementById('prog-analyze-btn');
   const reset=()=>{if(btn){btn.innerHTML=' Analyser les 2 photos → Importer les exercices';btn.disabled=false;}};
@@ -30695,6 +30748,10 @@ function dataURLtoBlob(dataURL){
 }
 
 async function _ocrImage(dataUrl,opts={}){
+  // DERNIER VERROU. api.ocr.space n'est appelé QUE par l'import de séance —
+  // les huit appelants ont été relevés un par un. Drapeau baissé, plus une
+  // seule requête ne part vers ce sous-traitant, quel que soit le chemin.
+  if(!_importLegacyOuvert()) throw new Error('Reconnaissance de texte désactivée.');
   const blob=dataURLtoBlob(dataUrl);
   const fd=new FormData();
   fd.append('file',blob,'img.jpg');
@@ -30756,6 +30813,7 @@ function _buildVideoLinksArray(rawText, links, exercises){
 }
 
 async function analyzePhotoWithClaude(idx){
+  if(!_importLegacyOuvert()) return _refusImportLegacy();
   const cfg=currentUser.sessions_config;
   const photo=cfg[idx].photo;
   if(!photo) return;
@@ -31178,6 +31236,7 @@ function _driveOpenUrl(s){
 }
 
 async function parsePdfProgramme(source){
+  if(!_importLegacyOuvert()) throw new Error('Import PDF désactivé.');
   // Drive/Dropbox : détection immédiate avant tout chargement CDN
   if(typeof source==='string'&&_isDriveLink(source)) throw new Error('DRIVE_CORS:'+source);
   await _loadPdfJs();
@@ -31208,6 +31267,7 @@ async function parsePdfProgramme(source){
 }
 
 async function triggerPdfProgrammeImport(email){
+  if(!_importLegacyOuvert()) return _refusImportLegacy();
   const users=DB.get('users')||{};
   const c=users[email]||Object.values(users).find(u=>u.email===email);
   if(!c){toast('Athlète introuvable.','var(--orange)');return;}
@@ -31304,6 +31364,7 @@ function showDrivePdfModal(driveUrl,targetEmail){
 }
 
 async function _parsePdfFromDriveFile(input){
+  if(!_importLegacyOuvert()) return _refusImportLegacy();
   const f=input.files[0];if(!f) return;
   const targetEmail=_pendingPdfTarget;
   closeModal();
@@ -41599,6 +41660,118 @@ function testExercices(){
             return html.indexOf('bqChoisir')<0&&html.indexOf('ouvrirBanque')<0
               ?true:_echec('un chemin vers la banque subsiste dans son formulaire');
           } finally { currentUser=sauve; progEx=[]; }})());
+        // ── Lot 5 : dépréciation de l'import PDF / OCR ───────────────────
+        ok('LEGACY_PDF_IMPORT est à false, littéralement',(()=>{
+          // Littéral en dur : un test qui lit la constante qu'il vérifie
+          // resterait vert si quelqu'un la remettait à true.
+          if(LEGACY_PDF_IMPORT!==false) return _echec('drapeau = '+LEGACY_PDF_IMPORT);
+          return _importLegacyOuvert()===false
+            ?true:_echec('la garde ne suit pas le drapeau');})());
+        ok('TOUTES les fonctions d\'extraction refusent, drapeau baissé',(()=>{
+          // Le cahier des charges est explicite : une règle d'accès ne se
+          // résume jamais à un bouton masqué. Chaque fonction se garde.
+          const attendues=['analyzeProgPhotos','analyzePhotoWithClaude',
+            'importVideoLinksFromPdf','loadProgPhoto2','parsePdfProgramme',
+            'triggerPdfProgrammeImport','_parsePdfFromDriveFile','_ocrImage'];
+          for(const nom of attendues){
+            const f=window[nom];
+            if(typeof f!=='function') return _echec('disparue : '+nom);
+            if(String(f).indexOf('_importLegacyOuvert()')<0)
+              return _echec(nom+' n\'est pas gardée');
+          }
+          return true;})());
+        ok('Le code d\'extraction est DÉSACTIVÉ, pas supprimé',(()=>{
+          // Couper une fonctionnalité dont on ne peut pas prouver que plus
+          // personne ne s'en sert, c'est la désactiver — pas l'effacer.
+          // Remettre le drapeau à true doit tout rouvrir.
+          for(const nom of ['analyzeProgPhotos','parsePdfProgramme','_ocrImage',
+                            'importVideoLinksFromPdf','_loadPdfJs']){
+            if(typeof window[nom]!=='function') return _echec('supprimée : '+nom);
+          }
+          // Le corps est toujours là : une fonction réduite à son refus ferait
+          // moins de 200 caractères.
+          if(String(analyzeProgPhotos).length<400) return _echec('analyzeProgPhotos est vidée');
+          if(String(_ocrImage).indexOf('ocr.space')<0&&String(_ocrImage).length<300)
+            return _echec('_ocrImage est vidée');
+          return true;})());
+        ok('Le sous-traitant OCR n\'est plus appelé du tout',(()=>{
+          // api.ocr.space n'est appelé QUE par l'import de séance : on a
+          // vérifié les huit appelants. Drapeau baissé, plus une requête ne
+          // part vers ce sous-traitant.
+          let parti=false;
+          const vrai=window.fetch;
+          window.fetch=function(u){ parti=true; return Promise.reject(new Error('bloqué')); };
+          try{
+            let refus=false;
+            _ocrImage('data:image/png;base64,AAAA').catch(()=>{refus=true;});
+            if(parti) return _echec('une requête est partie malgré le drapeau');
+          } finally { window.fetch=vrai; }
+          return true;})());
+        ok('Le téléversement de PHOTO n\'est pas coupé : c\'est la vignette',(()=>{
+          // La photo de séance est AUSSI la vignette du sélecteur côté
+          // athlète. Retirer l'upload retirerait la vignette — c'est le piège
+          // de ce lot, et il est nommé.
+          for(const nom of ['loadProgPhoto','uploadSessionPhoto','dropProgPhoto']){
+            if(typeof window[nom]!=='function') return _echec('disparue : '+nom);
+            if(String(window[nom]).indexOf('_importLegacyOuvert')>=0)
+              return _echec(nom+' a été gardée à tort');
+          }
+          // La zone de dépôt est toujours dans le DOM.
+          return document.getElementById('prog-photo-input')
+            ?true:_echec('la zone de téléversement a disparu');})());
+        ok('Les QUATRE autres chemins de fichier sont intacts',(()=>{
+          // Vidéo d'exécution, photos de bilan, photo du coach, fiche
+          // programme PDF : aucun rapport avec l'import de séance, et les
+          // couper aurait été le vrai dégât collatéral.
+          for(const nom of ['uploadVideoFile','addBilanPhoto','uploadCoachPhoto',
+                            'uploadAthletePdf','uploadCoachPdfInline','loadExImage']){
+            if(typeof window[nom]!=='function') return _echec('disparue : '+nom);
+            if(String(window[nom]).indexOf('_importLegacyOuvert')>=0)
+              return _echec(nom+' a été gardée à tort');
+          }
+          return true;})());
+        ok('Le collage MANUEL de liens survit : ce n\'est pas de l\'extraction',(()=>{
+          if(typeof togglePasteLiens!=='function') return _echec('la zone de collage a disparu');
+          if(String(togglePasteLiens).indexOf('_importLegacyOuvert')>=0)
+            return _echec('le collage manuel a été gardé à tort');
+          return document.getElementById('prog-paste-input')
+            ?true:_echec('le champ de collage n\'est plus dans le DOM');})());
+        ok('Aucune commande d\'extraction n\'est atteignable dans le parcours',(()=>{
+          // Critère d'acceptation nº1. On rend l'éditeur et on regarde ce qui
+          // est RÉELLEMENT visible, plutôt que de faire confiance au drapeau.
+          const sauve=currentUser, sauveEx=progEx;
+          try{
+            currentUser={id:'c1',email:'c@t',role:'coach'};
+            progEx=[{name:'SQUAT',series:3,reps:'10',repos:'01 min',description:''}];
+            renderProgEx();
+            for(const id of ['prog-analyze-btn','prog-photo2-photo','prog-photo2-pdf']){
+              const e=document.getElementById(id);
+              if(!e) continue;                       // absent : encore mieux
+              const d=(e.style.display||'').toLowerCase();
+              if(d!=='none') return _echec(id+' est visible (display='+d+')');
+            }
+            return true;
+          } finally { currentUser=sauve; progEx=sauveEx; }})());
+        ok('Une séance issue d\'un import RESTE lisible et exécutable',(()=>{
+          // On coupe une entrée, on ne détruit rien. Une séance écrite par
+          // l'ancien parcours doit continuer de s'ouvrir, de s'estimer et de
+          // se lancer.
+          const sess={day:'Lundi',name:'IMPORTÉE',active:true,
+            photo:'data:image/png;base64,AAAA',   // vignette d'époque
+            notes:'Séance importée depuis un PDF.',
+            exercises:[{name:'DEVELOPPE COUCHE BARRE',series:4,reps:'8',repos:'02 min',
+              description:'Consigne extraite du PDF à l\'époque.'}]};
+          const r=resumeSeance(sess);
+          if(!r||r.exercices!==1||r.series!==4) return _echec('résumé : '+JSON.stringify(r));
+          const sauve=currentUser, sauveIdx=_apIdx;
+          try{
+            currentUser={id:'a',email:'a@t',role:'athlete',sessions_config:[sess]};
+            if(!ouvrirApercuSeance(0)) return _echec('l\'aperçu refuse une séance importée');
+            const h=document.getElementById('ap-contenu').innerHTML;
+            if(h.indexOf('Consigne extraite')<0) return _echec('la consigne d\'époque a disparu');
+            return h.indexOf('4 × 8')>=0?true:_echec('la prescription a disparu');
+          } finally { currentUser=sauve; _apIdx=sauveIdx;
+            const z=document.getElementById('ap-contenu'); if(z) z.innerHTML=''; }})());
         ok('fichesBanque rend un tableau vide, jamais null',(()=>{
           const sauve=_banque;
           try{
