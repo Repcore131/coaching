@@ -1799,6 +1799,13 @@ const COACH_PHOTO='icons/coach.jpg';
           <button id="exo-chip-10" class="exo-chip" onclick="setExerciseCount(10)">10</button>
         </div>
       </div>
+      <!-- Ouvert uniquement pour un coach : loadProgEditor le montre ou le
+           masque. Un athlete qui edite SA seance (mode athlete du meme
+           ecran) n a pas acces a la banque. -->
+      <div id="prog-banque" style="display:none;margin-bottom:12px">
+        <button class="btn btn-outline" style="width:100%" onclick="ajouterDepuisBanque()">
+          + Depuis la banque</button>
+      </div>
       <div id="prog-exercises"></div>
       <div><label for="prog-notes">Notes pour l'athlète</label><textarea id="prog-notes" rows="3" placeholder="Conseils, focus, intensité..."></textarea></div>
       <div style="height:30px"></div>
@@ -3009,6 +3016,32 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- ══════ BIBLIOTHÈQUE DE PROTOCOLES ══════ -->
+<!-- ══════ BANQUE D'EXERCICES (coach) ══════
+     Ecran plein, pas une modale : sur un telephone, une modale de
+     selection avec recherche, filtres et liste longue se bat avec le
+     clavier virtuel. Le retour arriere ferme l'ecran, geste connu. -->
+<div id="s-coach-banque" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="fermerBanque()">←</button>
+    <span class="topbar-title">Banque d'exercices</span>
+    <span id="bq-compte" style="font-size:11px;color:var(--sub);min-width:38px;text-align:right"></span>
+  </div>
+  <div style="padding:10px 14px 0;flex-shrink:0">
+    <input id="bq-q" type="search" placeholder="Chercher un exercice…" autocomplete="off"
+      spellcheck="false" oninput="_bqSaisie()" style="width:100%;font-size:14px;padding:11px 14px">
+    <div style="display:flex;gap:8px;margin-top:9px">
+      <button id="bq-tab-banque" class="pf-chip active" style="flex:1;min-height:34px" onclick="bqOnglet('banque')">BANQUE</button>
+      <button id="bq-tab-perso" class="pf-chip" style="flex:1;min-height:34px" onclick="bqOnglet('perso')">MES EXERCICES</button>
+    </div>
+    <!-- Filtres : une rangee par famille, defilement horizontal. Empiler
+         quatre listes verticalement mangerait tout l'ecran du telephone. -->
+    <div id="bq-filtres" style="margin-top:9px"></div>
+  </div>
+  <div class="scroll-area" style="flex:1;padding:4px 14px 20px">
+    <div id="bq-liste"></div>
+  </div>
+</div>
+
 <div id="s-protocoles" class="screen">
   <div class="topbar">
     <button class="back-btn" onclick="_pfRetourner()">←</button>
@@ -11470,6 +11503,466 @@ function oublierBanque(){
   try{ localStorage.removeItem(BANQUE_CLE); }catch(e){}
 }
 
+// ══════ ÉCRAN « BANQUE D'EXERCICES » ══════
+// Le sélecteur rend un exercice à qui l'a ouvert. Il ne sait RIEN de ce
+// qu'on en fera : c'est l'appelant qui décide, et c'est ce qui permettra au
+// lot 3 de le brancher sur le constructeur de séance sans le rouvrir.
+let _bqCb=null, _bqRetour='s-coach-home', _bqOnglet='banque', _bqFiltres={}, _bqTimer=null;
+// 250 ms : en dessous, chaque frappe relance un tri sur 400 fiches ; au-delà,
+// la liste traîne derrière le doigt.
+const BQ_DEBOUNCE_MS=250;
+// Au-delà, on n'affiche pas tout : 400 lignes d'un coup font ramer le rendu
+// et personne ne fait défiler jusqu'en bas. On le DIT plutôt que de tronquer
+// en silence.
+const BQ_MAX_LIGNES=60;
+
+// Les familles de filtres, dans l'ordre d'utilité réelle : on cherche
+// d'abord par muscle, puis par ce qu'on a sous la main.
+const BQ_FAMILLES=Object.freeze([
+  {cle:'muscle',   lib:'Muscle',   valeurs:()=>Object.keys(MUSCLES),
+   libelle:v=>(MUSCLES[v]||{}).lib||v},
+  {cle:'materiel', lib:'Matériel', valeurs:()=>_bqValeurs('materiel'), libelle:v=>v},
+  {cle:'schema',   lib:'Schéma',   valeurs:()=>_bqValeurs('schema'),
+   libelle:v=>SCHEMA_LIB[v]||v},
+  {cle:'niveau',   lib:'Niveau',   valeurs:()=>['debutant','intermediaire','avance'], libelle:v=>v},
+]);
+// Les valeurs RÉELLEMENT présentes dans le catalogue : proposer un filtre
+// qui ne rend rien est pire que ne pas le proposer.
+function _bqValeurs(champ){
+  const v=new Set();
+  for(const f of catalogueCoach()) if(f&&f[champ]) v.add(f[champ]);
+  return [...v].sort();
+}
+async function ouvrirBanque(cb,retour){
+  if(!peutConsulterBanque()){ toast('Réservé aux coachs.','var(--orange)'); return false; }
+  _bqCb=(typeof cb==='function')?cb:null;
+  _bqRetour=retour||(document.querySelector('.screen.active')||{}).id||'s-coach-home';
+  _bqOnglet='banque'; _bqFiltres={};
+  const q=document.getElementById('bq-q'); if(q) q.value='';
+  go('s-coach-banque');
+  _bqRendre();                       // ce qu'on a déjà, tout de suite
+  await chargerIndexIllustrations();
+  await chargerBanque();
+  _bqRendre();
+  return true;
+}
+function fermerBanque(){ _bqCb=null; go(_bqRetour||'s-coach-home'); }
+function bqOnglet(o){
+  _bqOnglet=o;
+  for(const [id,actif] of [['bq-tab-banque',o==='banque'],['bq-tab-perso',o==='perso']]){
+    const b=document.getElementById(id); if(b) b.classList.toggle('active',actif);
+  }
+  _bqRendre();
+}
+function _bqSaisie(){ clearTimeout(_bqTimer); _bqTimer=setTimeout(_bqRendre,BQ_DEBOUNCE_MS); }
+function _bqBasculerFiltre(cle,val){
+  _bqFiltres[cle]=(_bqFiltres[cle]===val)?null:val;
+  if(!_bqFiltres[cle]) delete _bqFiltres[cle];
+  _bqRendre();
+}
+// Choisir un exercice : on le note en récent, on l'enregistre, et on rend la
+// main à l'appelant. L'écran se ferme — c'est le geste le plus fréquent, il
+// ne doit pas demander un second tap.
+function bqChoisir(slug){
+  const f=ficheBanque(slug)||catalogueCoach().find(x=>x.slug===slug);
+  if(!f) return false;
+  noterRecent(slug);
+  try{ saveUser(); }catch(e){}
+  const cb=_bqCb;
+  fermerBanque();
+  if(cb) try{ cb(f); }catch(e){ console.error('[RepCore] banque :',e); }
+  return true;
+}
+function bqFavori(slug,ev){
+  if(ev&&ev.stopPropagation) ev.stopPropagation();
+  basculerFavori(slug);
+  try{ saveUser(); }catch(e){}
+  _bqRendre();
+}
+
+// ── Rendu ────────────────────────────────────────────────────────────────
+function _bqLigne(f){
+  const img=illustrationDe(f.nom);
+  const fav=estFavoriExo(f.slug);
+  const sous=[(f.muscles||[]).slice(0,2).map(m=>(MUSCLES[m]||{}).lib||m).join(', '),
+    f.materiel||''].filter(Boolean).join(' · ');
+  return `<div onclick="bqChoisir('${escapeHtml(f.slug)}')" role="button" tabindex="0"
+    onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
+    style="display:flex;align-items:center;gap:11px;background:var(--surface-1);
+    border:1px solid var(--border);border-radius:12px;padding:9px 11px;margin-bottom:8px;
+    cursor:pointer;min-height:56px">
+    ${img?`<img src="${escapeHtml(img)}" alt="" loading="lazy" width="52" height="38"
+      style="width:52px;height:38px;object-fit:cover;border-radius:7px;background:#fff;flex-shrink:0">`
+      // Pas d'illustration : un cadre neutre de la MÊME taille. Sans lui, la
+      // ligne se décalerait et la liste deviendrait un escalier.
+      :`<div style="width:52px;height:38px;border-radius:7px;background:var(--surface-2);
+        border:1px solid var(--border);flex-shrink:0"></div>`}
+    <div style="flex:1;min-width:0">
+      <div style="font-weight:800;font-size:12.5px;line-height:1.3">${escapeHtml(f.nom)}${f.perso?' <span style="color:var(--sub);font-weight:600">· perso</span>':''}</div>
+      ${sous?`<div class="sub" style="font-size:10.5px;margin-top:2px">${escapeHtml(sous)}</div>`:''}
+    </div>
+    <button onclick="bqFavori('${escapeHtml(f.slug)}',event)" aria-label="Favori"
+      style="background:none;border:none;font-size:18px;line-height:1;cursor:pointer;width:40px;
+      height:40px;min-width:40px;display:flex;align-items:center;justify-content:center;
+      color:${fav?'var(--orange)':'var(--text-faint)'};flex-shrink:0">${fav?'★':'☆'}</button>
+    <button onclick="ouvrirFicheBanque('${escapeHtml(f.slug)}',event)" aria-label="Détail"
+      style="background:none;border:none;font-size:16px;line-height:1;cursor:pointer;width:40px;
+      height:40px;min-width:40px;display:flex;align-items:center;justify-content:center;
+      color:var(--sub);flex-shrink:0">ⓘ</button>
+  </div>`;
+}
+function _bqSection(titre,fiches){
+  if(!fiches.length) return '';
+  return `<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2px;font-weight:800;
+    text-transform:uppercase;margin:12px 0 7px">${escapeHtml(titre)}</div>`
+    +fiches.map(_bqLigne).join('');
+}
+function _bqRendreFiltres(){
+  const z=document.getElementById('bq-filtres'); if(!z) return;
+  z.innerHTML=BQ_FAMILLES.map(fam=>{
+    const vals=fam.valeurs();
+    if(!vals.length) return '';
+    return `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch">`
+      +vals.map(v=>`<button class="pf-chip${_bqFiltres[fam.cle]===v?' active':''}"
+        onclick="_bqBasculerFiltre('${fam.cle}','${escapeHtml(String(v))}')">${escapeHtml(fam.libelle(v))}</button>`).join('')
+      +`</div>`;
+  }).join('');
+}
+function _bqRendre(){
+  const z=document.getElementById('bq-liste'); if(!z) return;
+  _bqRendreFiltres();
+  const q=(document.getElementById('bq-q')||{}).value||'';
+  const filtres=Object.assign({},_bqFiltres);
+  if(_bqOnglet==='perso') filtres.perso=true;
+  const res=rechercherBanque(q,filtres);
+  const cpt=document.getElementById('bq-compte');
+  if(cpt) cpt.textContent=res.length?String(res.length):'';
+
+  if(!banqueEstChargee()&&_bqOnglet==='banque'&&!exercicesPerso().length){
+    z.innerHTML=emptyState('folder','<strong style="font-size:14px">Banque indisponible</strong>'
+      +'<br><span style="font-size:12px;display:inline-block;margin-top:6px">Elle n\'a pas encore '
+      +'été téléchargée sur cet appareil. Reconnecte-toi au réseau et rouvre cet écran.</span>');
+    return;
+  }
+  if(!res.length){
+    z.innerHTML=emptyState('search',_bqOnglet==='perso'
+      ?'<strong style="font-size:14px">Aucun exercice personnel</strong><br>'
+        +'<span style="font-size:12px;display:inline-block;margin-top:6px">Crée le tien avec le bouton ci-dessous.</span>'
+      :'Aucun exercice ne correspond.')
+      +(_bqOnglet==='perso'?_bqBoutonCreer():'');
+    return;
+  }
+  // Recherche vide et aucun filtre : on met à portée de pouce ce qu'il
+  // réutilise. Un coach revient toujours aux mêmes quarante exercices.
+  const nu=!q.trim()&&!Object.keys(_bqFiltres).length;
+  let html='';
+  if(nu&&_bqOnglet==='banque'){
+    const rec=fichesDeSlugs(recentsCoach()).slice(0,8);
+    const fav=fichesDeSlugs(favorisCoach()).filter(f=>!rec.some(r=>r.slug===f.slug));
+    html+=_bqSection('Récents',rec);
+    html+=_bqSection('Favoris',fav);
+    const vus=new Set([...rec,...fav].map(f=>f.slug));
+    const reste=res.filter(f=>!vus.has(f.slug));
+    html+=_bqSection('Tous les exercices',reste.slice(0,BQ_MAX_LIGNES));
+    if(reste.length>BQ_MAX_LIGNES) html+=_bqTrop(reste.length-BQ_MAX_LIGNES);
+  } else {
+    html+=res.slice(0,BQ_MAX_LIGNES).map(_bqLigne).join('');
+    if(res.length>BQ_MAX_LIGNES) html+=_bqTrop(res.length-BQ_MAX_LIGNES);
+  }
+  if(_bqOnglet==='perso') html+=_bqBoutonCreer();
+  z.innerHTML=html;
+}
+// On DIT ce qu'on ne montre pas. Une liste tronquée en silence se lit comme
+// une liste complète.
+function _bqTrop(n){
+  return `<div class="sub" style="font-size:11px;text-align:center;padding:12px 8px;line-height:1.6">`
+    +n+` autre${n>1?'s':''} exercice${n>1?'s':''} ne ${n>1?'sont':'est'} pas affiché${n>1?'s':''}.`
+    +` Précise ta recherche ou pose un filtre.</div>`;
+}
+function _bqBoutonCreer(){
+  return '<button class="btn btn-red" style="margin-top:14px;width:100%" onclick="ouvrirCreationExo()">'
+    +'+ Créer un exercice</button>';
+}
+
+// ── Fiche complète ───────────────────────────────────────────────────────
+function ouvrirFicheBanque(slug,ev){
+  if(ev&&ev.stopPropagation) ev.stopPropagation();
+  const f=catalogueCoach().find(x=>x.slug===slug);
+  if(!f) return false;
+  const img=illustrationDe(f.nom);
+  const l=(t,v)=>v?`<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:3px 0">`
+    +`<span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:#eee;text-align:right">${escapeHtml(v)}</span></div>`:'';
+  const liste=(titre,arr)=>(arr&&arr.length)?`<div style="margin-top:12px">`
+    +`<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:5px">${escapeHtml(titre)}</div>`
+    +`<ul style="margin:0 0 0 16px;padding:0;font-size:12px;color:#bbb;line-height:1.6">`
+    +arr.map(x=>`<li style="margin-bottom:4px">${escapeHtml(x)}</li>`).join('')+`</ul></div>`:'';
+  // Variantes : les exercices du MÊME schéma moteur. C'est la seule parenté
+  // que les données portent réellement — inventer une liste de variantes
+  // serait un jugement de métier qu'aucune donnée ne soutient ici.
+  const variantes=f.schema?catalogueCoach().filter(x=>x.schema===f.schema&&x.slug!==f.slug).slice(0,6):[];
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;animation:fadeIn .3s ease">
+    <h2 style="margin-bottom:10px;font-size:16px">${escapeHtml(f.nom)}</h2>
+    ${img?`<img src="${escapeHtml(img)}" alt="${escapeHtml(f.nom)}" style="width:100%;max-height:260px;object-fit:contain;background:#fff;border-radius:10px;margin-bottom:12px">`
+      :`<div class="sub" style="font-size:11px;text-align:center;padding:16px;background:var(--surface-1);border-radius:10px;margin-bottom:12px">Aucune illustration pour cet exercice.</div>`}
+    ${l('Muscles',(f.muscles||[]).map(m=>(MUSCLES[m]||{}).lib||m).join(', '))}
+    ${l('Schéma',SCHEMA_LIB[f.schema]||f.schema||'')}
+    ${l('Matériel',f.materiel||'')}
+    ${l('Niveau',f.niveau||'')}
+    ${f.unilateral?l('Unilatéral','oui'):''}
+    ${l('Repos conseillé',f.repos||'')}
+    ${f.execution?`<div style="margin-top:12px"><div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:5px">Exécution</div>
+      <div style="font-size:12px;color:#bbb;line-height:1.65">${escapeHtml(f.execution)}</div></div>`:''}
+    ${liste('Erreurs fréquentes',f.erreurs)}
+    ${liste('Consignes',f.consignes)}
+    ${(f.videos||[]).map(v=>`<a href="https://youtu.be/${escapeHtml(v.id)}" target="_blank" rel="noopener" style="display:block;margin-top:9px;font-size:12px;color:var(--link)">▶ Vidéo technique${v.lib?' — '+escapeHtml(v.lib):''}</a>`).join('')}
+    ${variantes.length?`<div style="margin-top:14px"><div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Même schéma moteur</div>
+      ${variantes.map(v=>`<button class="pf-chip" style="margin:0 5px 5px 0" onclick="closeModal();ouvrirFicheBanque('${escapeHtml(v.slug)}')">${escapeHtml(v.nom)}</button>`).join('')}</div>`:''}
+    <button class="btn btn-red" style="margin-top:16px" onclick="closeModal();bqChoisir('${escapeHtml(f.slug)}')">Ajouter à la séance</button>
+    ${f.perso?`<button class="btn btn-outline" style="margin-top:9px;color:var(--red-light)" onclick="_supprimerExoPerso('${escapeHtml(f.slug)}')">Supprimer cet exercice</button>`:''}
+    <button class="btn btn-outline" style="margin-top:9px" onclick="closeModal()">Fermer</button>
+  </div></div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+  return true;
+}
+function _supprimerExoPerso(slug){
+  if(!confirm('Supprimer cet exercice de tes exercices personnels ?')) return false;
+  const ok=supprimerExercicePerso(slug);
+  if(ok){ try{ saveUser(); }catch(e){} }
+  closeModal(); _bqRendre();
+  return ok;
+}
+
+// ── Création d'un exercice personnel ─────────────────────────────────────
+function ouvrirCreationExo(){
+  if(!peutConsulterBanque()){ toast('Réservé aux coachs.','var(--orange)'); return false; }
+  const opt=(v,lib,sel)=>`<option value="${escapeHtml(v)}"${sel?' selected':''}>${escapeHtml(lib)}</option>`;
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;animation:fadeIn .3s ease">
+    <h2 style="margin-bottom:4px;font-size:16px">Créer un exercice</h2>
+    <p class="sub" style="font-size:11px;margin-bottom:12px;line-height:1.6">Il n'appartient qu'à toi : aucun autre coach ne le voit. L'illustration est facultative — il n'y en aura pas.</p>
+    <label for="ce-nom">Nom</label>
+    <input id="ce-nom" placeholder="Ex : TIRAGE POITRINE PRISE NEUTRE" autocapitalize="characters">
+    <label for="ce-muscle" style="margin-top:10px">Muscle principal</label>
+    <select id="ce-muscle">${opt('','— aucun —',true)}${Object.keys(MUSCLES).map(m=>opt(m,MUSCLES[m].lib)).join('')}</select>
+    <label for="ce-schema" style="margin-top:10px">Schéma moteur</label>
+    <select id="ce-schema">${opt('','— aucun —',true)}${Object.keys(SCHEMA_LIB).map(k=>opt(k,SCHEMA_LIB[k])).join('')}</select>
+    <label for="ce-materiel" style="margin-top:10px">Matériel</label>
+    <select id="ce-materiel">${opt('','— non précisé —',true)}${_bqValeurs('materiel').map(v=>opt(v,v)).join('')}</select>
+    <label for="ce-exec" style="margin-top:10px">Exécution (facultatif)</label>
+    <textarea id="ce-exec" rows="4" placeholder="Ce que l'athlète doit faire, étape par étape."></textarea>
+    <div id="ce-err" style="color:var(--red-light);font-size:12px;margin-top:8px;display:none"></div>
+    <button class="btn btn-red" style="margin-top:14px" onclick="_validerCreationExo()">Créer</button>
+    <button class="btn btn-outline" style="margin-top:9px" onclick="closeModal()">Annuler</button>
+  </div></div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+  setTimeout(()=>document.getElementById('ce-nom')?.focus(),80);
+  return true;
+}
+function _validerCreationExo(){
+  const v=id=>(document.getElementById(id)||{}).value||'';
+  const m=v('ce-muscle');
+  const r=creerExercicePerso({nom:v('ce-nom'),muscles:m?[m]:[],schema:v('ce-schema')||null,
+    materiel:v('ce-materiel')||null,execution:v('ce-exec')});
+  if(!r.ok){
+    const e=document.getElementById('ce-err');
+    if(e){ e.textContent=r.raison; e.style.display='block'; }
+    return false;
+  }
+  try{ saveUser(); }catch(e){}
+  closeModal();
+  bqOnglet('perso');
+  toast('Exercice créé ✓','var(--green)');
+  return true;
+}
+
+// ── Recherche, favoris, récents, exercices du coach ──────────────────────
+// Tout ce bloc est PUR et travaille sur des listes qu'on lui passe : la
+// suite l'éprouve sans toucher au stockage ni au réseau.
+
+// Les exercices que le coach a écrits lui-même. Ils vivent dans SON dossier :
+// un autre coach ne peut structurellement pas les voir, aucune règle à écrire
+// pour ça. Le préfixe garantit qu'un slug perso n'écrasera jamais une fiche
+// de la banque, même si le coach nomme son exercice « Développé couché ».
+const EXO_PERSO_PREFIXE='perso-';
+const EXO_PERSO_MAX=200;
+const EXO_FAVORIS_MAX=60;
+// Vingt : un coach réutilise toujours les mêmes quarante exercices, et les
+// vingt derniers suffisent à couvrir la séance en cours sans noyer l'écran.
+const EXO_RECENTS_MAX=20;
+
+// undefined → l'utilisateur courant. null → PERSONNE. Toute fonction de ce
+// bloc qui accepte un `user` passe par ici : la règle est écrite une fois.
+function _dossier(user){ return (user===undefined)?currentUser:user; }
+function exercicesPerso(user){
+  const u=_dossier(user);
+  return Array.isArray(u&&u.exCustom)?u.exCustom:[];
+}
+// Banque officielle + exercices du coach. C'est CETTE liste que le sélecteur
+// parcourt ; les deux sources se distinguent par `perso`.
+function catalogueCoach(user){
+  const perso=exercicesPerso(user).map(f=>Object.assign({},f,{perso:true}));
+  return fichesBanque().concat(perso);
+}
+
+// PURE. Normalisation de recherche : minuscules, sans accents, sans
+// ponctuation. « Développé couché » et « DEVELOPPE COUCHE » doivent se
+// rejoindre, et « poulie/élastique » se couper en deux mots.
+function _normRech(s){
+  return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9]+/g,' ').trim();
+}
+// PURE. Tous les mots de la requête doivent être présents, dans n'importe
+// quel ordre. « couche barre » trouve « DÉVELOPPÉ COUCHÉ BARRE » ; un ET et
+// non un OU, sinon deux mots élargissent au lieu de resserrer.
+function _correspond(fiche,mots,user){
+  if(!mots.length) return true;
+  let foin=_normRech(fiche.nom)+' '+_normRech(fiche.slug);
+  // Les renommages du coach servent d'alias : s'il appelle le développé
+  // couché « DC », taper « DC » doit le trouver.
+  const a=(_dossier(user)||{}).exAlias;
+  if(a) for(const k of Object.keys(a))
+    if(exKey(a[k])===exKey(fiche.nom)) foin+=' '+_normRech(k);
+  return mots.every(m=>foin.indexOf(m)>=0);
+}
+// PURE. Filtres : un critère non renseigné ne filtre rien. Les critères se
+// cumulent en ET — c'est ce qu'on attend en resserrant une recherche.
+function _passeFiltres(f,ft){
+  if(!ft) return true;
+  if(ft.muscle&&!(f.muscles||[]).includes(ft.muscle)) return false;
+  if(ft.materiel&&f.materiel!==ft.materiel) return false;
+  if(ft.schema&&f.schema!==ft.schema) return false;
+  if(ft.niveau&&f.niveau!==ft.niveau) return false;
+  if(ft.perso&&!f.perso) return false;
+  return true;
+}
+// PURE. Rend les fiches correspondantes, les plus courtes d'abord à égalité
+// de pertinence : « SQUAT » doit sortir avant « SQUAT BULGARE HALTÈRE » quand
+// on tape « squat ».
+function rechercherBanque(q,filtres,source,user){
+  const liste=source||catalogueCoach(user);
+  const mots=_normRech(q).split(' ').filter(Boolean);
+  const out=[];
+  for(const f of liste){
+    if(!f||!f.slug) continue;
+    if(!_passeFiltres(f,filtres)) continue;
+    if(!_correspond(f,mots,user)) continue;
+    out.push(f);
+  }
+  const n=q?_normRech(q):'';
+  out.sort((a,b)=>{
+    if(n){
+      const ea=_normRech(a.nom)===n?0:1, eb=_normRech(b.nom)===n?0:1;
+      if(ea!==eb) return ea-eb;               // égalité exacte d'abord
+      const da=_normRech(a.nom).indexOf(n), db=_normRech(b.nom).indexOf(n);
+      if(da>=0&&db<0) return -1;
+      if(db>=0&&da<0) return 1;
+    }
+    const la=(a.nom||'').length, lb=(b.nom||'').length;
+    if(la!==lb) return la-lb;
+    return String(a.nom||'').localeCompare(String(b.nom||''));
+  });
+  return out;
+}
+
+// ── Favoris ──────────────────────────────────────────────────────────────
+function favorisCoach(user){
+  const u=_dossier(user);
+  return Array.isArray(u&&u.exFavoris)?u.exFavoris:[];
+}
+// estFavoriExo et non estFavori : ce dernier existe deja pour les ALIMENTS
+// (l. ~21168). Deux declarations du meme nom, et la derniere du fichier
+// gagne en silence — le piege qui a fait disparaitre ficheBanque au lot 1.
+function estFavoriExo(slug,user){ return favorisCoach(user).indexOf(slug)>=0; }
+// Bascule et rend le nouvel état. N'ÉCRIT PAS : l'appelant enregistre, comme
+// partout ailleurs — mélanger décision et persistance rend la première
+// inéprouvable.
+function basculerFavori(slug,user){
+  const u=_dossier(user);
+  if(!u||!slug) return false;
+  if(!Array.isArray(u.exFavoris)) u.exFavoris=[];
+  const i=u.exFavoris.indexOf(slug);
+  if(i>=0){ u.exFavoris.splice(i,1); return false; }
+  u.exFavoris.push(slug);
+  if(u.exFavoris.length>EXO_FAVORIS_MAX) u.exFavoris=u.exFavoris.slice(-EXO_FAVORIS_MAX);
+  return true;
+}
+// ── Récents ──────────────────────────────────────────────────────────────
+function recentsCoach(user){
+  const u=_dossier(user);
+  return Array.isArray(u&&u.exRecents)?u.exRecents:[];
+}
+// Le plus récent en tête, sans doublon. Un exercice repris remonte au lieu
+// d'apparaître deux fois.
+function noterRecent(slug,user){
+  const u=_dossier(user);
+  if(!u||!slug) return recentsCoach(u);
+  const l=recentsCoach(u).filter(x=>x!==slug);
+  l.unshift(slug);
+  u.exRecents=l.slice(0,EXO_RECENTS_MAX);
+  return u.exRecents;
+}
+// PURE. Les fiches correspondant à une liste de slugs, dans CET ordre, en
+// sautant celles qui n'existent plus — un exercice retiré de la banque ne
+// doit pas laisser un trou ni une ligne vide.
+function fichesDeSlugs(slugs,user){
+  const cat=catalogueCoach(user);
+  const par={}; for(const f of cat) par[f.slug]=f;
+  return (slugs||[]).map(s=>par[s]).filter(Boolean);
+}
+
+// ── Exercices écrits par le coach ────────────────────────────────────────
+// Le slug est dérivé du nom, préfixé, et rendu unique par un suffixe
+// numérique : deux exercices persos du même nom sont peu probables mais pas
+// impossibles, et un slug écrasé ferait disparaître le premier.
+function _slugPerso(nom,existants){
+  const base=EXO_PERSO_PREFIXE+(exSlug(nom)||'exercice');
+  if(existants.indexOf(base)<0) return base;
+  for(let i=2;i<500;i++) if(existants.indexOf(base+'-'+i)<0) return base+'-'+i;
+  return base+'-'+Date.now();
+}
+// Rend la fiche créée, ou null avec la raison. N'ÉCRIT PAS dans le stockage.
+function creerExercicePerso(champs,user){
+  const u=_dossier(user);
+  if(!u||u.role!=='coach') return {ok:false,raison:'Réservé aux coachs.'};
+  const nom=String((champs||{}).nom||'').trim().toUpperCase();
+  if(nom.length<3) return {ok:false,raison:'Donne un nom d\'au moins 3 caractères.'};
+  if(!Array.isArray(u.exCustom)) u.exCustom=[];
+  if(u.exCustom.length>=EXO_PERSO_MAX)
+    return {ok:false,raison:'Tu as atteint '+EXO_PERSO_MAX+' exercices personnels.'};
+  // Un nom déjà pris dans la banque officielle n'est PAS refusé : un coach a
+  // le droit d'avoir sa propre version d'un mouvement. Les deux coexistent,
+  // le préfixe les distingue.
+  if(u.exCustom.some(f=>exKey(f.nom)===exKey(nom)))
+    return {ok:false,raison:'Tu as déjà un exercice personnel de ce nom.'};
+  const f={
+    slug:_slugPerso(nom,u.exCustom.map(x=>x.slug)),
+    nom,
+    muscles:Array.isArray(champs.muscles)?champs.muscles.slice(0,4):[],
+    schema:champs.schema||null,
+    materiel:champs.materiel||null,
+    niveau:champs.niveau||'debutant',
+    unilateral:!!champs.unilateral,
+    execution:String(champs.execution||'').trim().slice(0,1200),
+    // Pas d'illustration : le coach n'en fournit pas, et le cahier des
+    // charges l'autorise explicitement. L'écran affiche alors un cadre
+    // neutre, non cliquable.
+    image:null, repos:'', videos:[], tags:[], erreurs:[], consignes:[]
+  };
+  u.exCustom.push(f);
+  return {ok:true,fiche:f};
+}
+function supprimerExercicePerso(slug,user){
+  const u=_dossier(user);
+  if(!u||!Array.isArray(u.exCustom)) return false;
+  const n=u.exCustom.length;
+  u.exCustom=u.exCustom.filter(f=>f.slug!==slug);
+  // Il sort aussi des favoris et des récents, sinon il y laisserait un trou.
+  if(Array.isArray(u.exFavoris)) u.exFavoris=u.exFavoris.filter(x=>x!==slug);
+  if(Array.isArray(u.exRecents)) u.exRecents=u.exRecents.filter(x=>x!==slug);
+  return u.exCustom.length<n;
+}
+
 function exKey(nom){
   return String(nom||'')
     .toUpperCase()
@@ -11988,7 +12481,39 @@ function _progExTechnique(i,cle){
   renderProgEx();
 }
 
+// Ajoute un exercice de la banque a la fin du programme en cours.
+//
+// ON RECOPIE le nom, l'execution et le repos dans progEx, et on GARDE le
+// slug a cote. La recopie n'est pas un choix esthetique : l'athlete n'a pas
+// acces a la banque — la regle RTDB la lui ferme — et il n'y a pas de
+// serveur pour hydrater sa seance. Sans copie, il verrait une ligne sans
+// consigne. Le slug, lui, sert a retrouver l'illustration, qui est publique.
+//
+// Consequence assumee, deja dite au lot 1 : corriger une description dans la
+// banque ne met pas a jour les seances deja ecrites.
+function ajouterDepuisBanque(){
+  return ouvrirBanque(f=>{
+    if(!Array.isArray(progEx)) progEx=[];
+    progEx.push({
+      name:f.nom,
+      series:3, reps:'10', repos:f.repos||'01 min',
+      description:f.execution||'',
+      // videoUrl est le champ que la vue seance lit deja : on ne cree pas
+      // un second canal pour la meme chose.
+      videoUrl:(f.videos&&f.videos[0])?('https://youtu.be/'+f.videos[0].id):'',
+      videoUrl2:'',
+      exSlug:f.slug,
+      image:null
+    });
+    _progExDirty=true;
+    renderProgEx();
+    toast('« '+f.nom+' » ajouté ✓','var(--green)');
+  },'s-coach-program');
+}
 function renderProgEx(){
+  // Le bouton n'apparait que pour un coach : la banque lui est reservee.
+  const _bq=document.getElementById('prog-banque');
+  if(_bq) _bq.style.display=peutConsulterBanque()?'block':'none';
   setTimeout(()=>{try{_rendreSuggestionsProto();}catch(e){}},0);
   // Sync chips
   for(let n=1;n<=10;n++){const c=document.getElementById('exo-chip-'+n);if(c)c.classList.toggle('active',n===progEx.length);}
@@ -38917,6 +39442,195 @@ function testExercices(){
             return /oublierBanque\(\)/.test(String(silentLogout))
               ?true:_echec('la déconnexion n\'oublie pas la banque');
           } finally { _banque=sauve; try{localStorage.removeItem(BANQUE_CLE);}catch(e){} }})());
+        // ── Banque, lot 2 : recherche, favoris, récents, exercices persos ─
+        // Un catalogue de test : sept fiches qui couvrent les cas qui
+        // comptent — accents, ponctuation, préfixes communs, doublon de nom.
+        const _cat=[
+          {slug:'squat',nom:'SQUAT',muscles:['QUADRICEPS'],schema:'squat',materiel:'barre',niveau:'intermediaire'},
+          {slug:'squat-bulgare-haltere',nom:'SQUAT BULGARE HALTERE',muscles:['QUADRICEPS','FESSIERS'],schema:'fente',materiel:'halteres',niveau:'intermediaire'},
+          {slug:'developpe-couche-barre',nom:'DÉVELOPPÉ COUCHÉ BARRE',muscles:['PECTORAUX'],schema:'poussee-horizontale',materiel:'barre',niveau:'intermediaire'},
+          {slug:'curl-barre-poulie-elastique',nom:'CURL BARRE POULIE/ÉLASTIQUE',muscles:['BICEPS'],schema:'isolation-coude',materiel:'poulie',niveau:'debutant'},
+          {slug:'leg-extension',nom:'LEG EXTENSION',muscles:['QUADRICEPS'],schema:'isolation-genou',materiel:'machine guidee',niveau:'debutant'},
+          {slug:'perso-mon-squat',nom:'MON SQUAT',muscles:['QUADRICEPS'],schema:'squat',materiel:null,niveau:'debutant',perso:true},
+          {slug:'gainage',nom:'GAINAGE',muscles:['ABDOS'],schema:'gainage-tronc',materiel:'poids du corps',niveau:'debutant'}];
+        ok('La recherche ignore accents, casse et ponctuation',(()=>{
+          // _normRech D'ABORD, sur son contrat. L'intégration seule ne suffit
+          // pas : le foin contient le nom ET le slug, or le slug est déjà sans
+          // accent par construction. Un test qui n'interroge que le résultat
+          // final reste vert même si la normalisation des accents disparaît —
+          // c'est exactement ce qui s'est produit.
+          if(_normRech('DÉVELOPPÉ COUCHÉ')!=='developpe couche')
+            return _echec('_normRech : '+_normRech('DÉVELOPPÉ COUCHÉ'));
+          if(_normRech('poulie/élastique')!=='poulie elastique')
+            return _echec('ponctuation : '+_normRech('poulie/élastique'));
+          if(_normRech('  Ischio-jambiers  ')!=='ischio jambiers')
+            return _echec('bords : '+JSON.stringify(_normRech('  Ischio-jambiers  ')));
+          if(_normRech(null)!==''||_normRech(undefined)!=='')
+            return _echec('une entrée vide ne rend pas une chaîne vide');
+          // Et le NOM seul doit suffire, sans l'aide du slug : on interroge
+          // une fiche dont le slug ne contient pas le mot cherché.
+          const piege=[{slug:'x1',nom:'ÉLÉVATION LATÉRALE'}];
+          if(rechercherBanque('elevation',null,piege,{}).length!==1)
+            return _echec('sans le renfort du slug, l\'accent n\'est plus géré');
+          const n=q=>rechercherBanque(q,null,_cat,{}).map(f=>f.slug);
+          if(n('developpe couche')[0]!=='developpe-couche-barre')
+            return _echec('sans accent : '+n('developpe couche'));
+          if(n('DÉVELOPPÉ')[0]!=='developpe-couche-barre') return _echec('avec accents et majuscules');
+          // « poulie/élastique » : la barre oblique doit se lire comme un
+          // séparateur, pas comme une lettre.
+          if(n('poulie elastique')[0]!=='curl-barre-poulie-elastique')
+            return _echec('ponctuation : '+n('poulie elastique'));
+          return n('')/*tout*/.length===7?true:_echec('une requête vide ne rend pas tout');})());
+        ok('Deux mots RESSERRENT la recherche, ils ne l\'élargissent pas',(()=>{
+          // Un OU au lieu d'un ET rendrait « squat barre » plus large que
+          // « squat » — l'inverse de ce qu'on attend en précisant.
+          const un=rechercherBanque('squat',null,_cat,{}).length;
+          const deux=rechercherBanque('squat bulgare',null,_cat,{}).length;
+          if(!(deux<un)) return _echec('« squat bulgare » ('+deux+') n\'est pas plus étroit que « squat » ('+un+')');
+          if(deux!==1) return _echec('attendu 1, obtenu '+deux);
+          // Les mots dans le désordre trouvent quand même.
+          return rechercherBanque('bulgare squat',null,_cat,{}).length===1
+            ?true:_echec('l\'ordre des mots compte');})());
+        ok('L\'exercice EXACT sort en tête, jamais noyé dans ses variantes',(()=>{
+          // Le jeu d'essai est RETOURNÉ : « SQUAT » y est présenté en dernier.
+          // Sans ça, l'ordre d'entrée le mettait déjà en tête et le test
+          // restait vert même sans aucun tri.
+          const envers=_cat.slice().reverse();
+          const r=rechercherBanque('squat',null,envers,{});
+          if(!r[0]||r[0].slug!=='squat') return _echec('en tête : '+(r[0]&&r[0].slug));
+          // Second critère, à défaut d'égalité exacte : le nom le plus court
+          // d'abord. « MON SQUAT » avant « SQUAT BULGARE HALTERE ».
+          const noms=r.map(f=>f.nom);
+          const iCourt=noms.indexOf('MON SQUAT'), iLong=noms.indexOf('SQUAT BULGARE HALTERE');
+          return (iCourt>=0&&iLong>=0&&iCourt<iLong)
+            ?true:_echec('ordre des variantes : '+noms.join(' / '));})());
+        ok('Les filtres se CUMULENT en ET',(()=>{
+          const f=(o)=>rechercherBanque('',o,_cat,{}).map(x=>x.slug);
+          if(f({muscle:'QUADRICEPS'}).length!==4) return _echec('muscle : '+f({muscle:'QUADRICEPS'}));
+          if(f({materiel:'barre'}).length!==2) return _echec('matériel : '+f({materiel:'barre'}));
+          const deux=f({muscle:'QUADRICEPS',materiel:'barre'});
+          if(deux.length!==1||deux[0]!=='squat') return _echec('cumul : '+deux);
+          // Un critère non renseigné ne filtre rien.
+          if(f({muscle:null,materiel:null}).length!==7) return _echec('un filtre vide filtre');
+          // Et l'onglet « mes exercices » ne montre QUE les persos.
+          const pe=f({perso:true});
+          return (pe.length===1&&pe[0]==='perso-mon-squat')
+            ?true:_echec('onglet perso : '+pe);})());
+        ok('Les renommages du coach servent d\'alias de recherche',(()=>{
+          // Un coach qui appelle le développé couché « DC » doit le trouver en
+          // tapant « DC ». C'est le mécanisme exAlias, déjà là, réutilisé.
+          const u={exAlias:{'DC':'DEVELOPPE COUCHE BARRE'}};
+          const avec=rechercherBanque('DC',null,_cat,u).map(f=>f.slug);
+          if(avec[0]!=='developpe-couche-barre') return _echec('avec alias : '+avec);
+          return rechercherBanque('DC',null,_cat,{}).length===0
+            ?true:_echec('sans alias, « DC » trouve quand même quelque chose');})());
+        ok('Favoris : bascule, borne, et AUCUNE écriture au passage',(()=>{
+          const u={role:'coach',email:'c@t'};
+          if(estFavoriExo('squat',u)) return _echec('favori avant toute bascule');
+          if(basculerFavori('squat',u)!==true) return _echec('la bascule ne rend pas true');
+          if(!estFavoriExo('squat',u)) return _echec('pas retenu');
+          if(basculerFavori('squat',u)!==false) return _echec('la seconde bascule ne rend pas false');
+          if(estFavoriExo('squat',u)) return _echec('pas retiré');
+          // La borne tient, et c'est le PLUS ANCIEN qui part.
+          for(let i=0;i<EXO_FAVORIS_MAX+10;i++) basculerFavori('f'+i,u);
+          if(u.exFavoris.length!==EXO_FAVORIS_MAX) return _echec('borne : '+u.exFavoris.length);
+          if(u.exFavoris.indexOf('f0')>=0) return _echec('le plus ancien est resté');
+          if(u.exFavoris[u.exFavoris.length-1]!=='f'+(EXO_FAVORIS_MAX+9))
+            return _echec('le plus récent n\'est pas en queue');
+          // Décision et persistance restent séparées : la fonction n'enregistre
+          // pas, l'appelant le fait. Sinon elle serait inéprouvable.
+          return !/saveUser\(/.test(String(basculerFavori))
+            ?true:_echec('basculerFavori enregistre elle-même');})());
+        ok('Récents : le plus récent en tête, sans doublon, borné',(()=>{
+          const u={role:'coach',email:'c@t'};
+          noterRecent('a',u); noterRecent('b',u); noterRecent('c',u);
+          if(u.exRecents.join()!=='c,b,a') return _echec('ordre : '+u.exRecents.join());
+          // Un exercice repris REMONTE au lieu d'apparaître deux fois.
+          noterRecent('a',u);
+          if(u.exRecents.join()!=='a,c,b') return _echec('reprise : '+u.exRecents.join());
+          for(let i=0;i<EXO_RECENTS_MAX+5;i++) noterRecent('r'+i,u);
+          if(u.exRecents.length!==EXO_RECENTS_MAX) return _echec('borne : '+u.exRecents.length);
+          return u.exRecents[0]==='r'+(EXO_RECENTS_MAX+4)
+            ?true:_echec('le dernier noté n\'est pas en tête');})());
+        ok('fichesDeSlugs saute les disparus au lieu de laisser un trou',(()=>{
+          const u={role:'coach',email:'c@t',exCustom:[]};
+          const sauve=_banque;
+          try{
+            _banque=_indexerBanque(_cat.filter(f=>!f.perso));
+            const r=fichesDeSlugs(['squat','exercice-supprime','gainage'],u);
+            if(r.length!==2) return _echec(r.length+' fiches au lieu de 2');
+            // L'ORDRE demandé est conservé : c'est celui des récents.
+            return (r[0].slug==='squat'&&r[1].slug==='gainage')
+              ?true:_echec('ordre perdu : '+r.map(x=>x.slug));
+          } finally { _banque=sauve; }})());
+        ok('Un exercice perso est PROPRE à son coach, et préfixé',(()=>{
+          const u={role:'coach',email:'c@t'};
+          const r=creerExercicePerso({nom:'mon tirage maison',muscles:['DORSAUX']},u);
+          if(!r.ok) return _echec(r.raison);
+          // Le préfixe garantit qu'un perso n'écrasera JAMAIS une fiche de la
+          // banque, même si le coach lui donne le nom d'un exercice officiel.
+          if(r.fiche.slug.indexOf(EXO_PERSO_PREFIXE)!==0) return _echec('slug : '+r.fiche.slug);
+          if(r.fiche.image!==null) return _echec('une illustration est inventée');
+          // Il vit dans le dossier du coach : un autre coach ne peut pas le
+          // voir, aucune règle serveur à écrire pour ça.
+          if(exercicesPerso({role:'coach',email:'autre@t'}).length)
+            return _echec('un autre coach le voit');
+          // Deux fois le même nom : refusé, avec une raison lisible.
+          const r2=creerExercicePerso({nom:'MON TIRAGE MAISON'},u);
+          if(r2.ok) return _echec('le doublon est accepté');
+          if(!/déjà/.test(r2.raison)) return _echec('raison : '+r2.raison);
+          // Un nom trop court aussi.
+          if(creerExercicePerso({nom:'ab'},u).ok) return _echec('un nom de 2 lettres passe');
+          return true;})());
+        ok('Un ATHLÈTE ne peut pas créer d\'exercice perso',(()=>{
+          const a={role:'athlete',email:'a@t'};
+          const r=creerExercicePerso({nom:'TIRAGE INTERDIT'},a);
+          if(r.ok) return _echec('accepté pour un athlète');
+          if(a.exCustom&&a.exCustom.length) return _echec('un exercice a été écrit malgré le refus');
+          return !creerExercicePerso({nom:'X TIRAGE'},null).ok
+            ?true:_echec('accepté sans dossier');})());
+        ok('Supprimer un perso le retire AUSSI des favoris et des récents',(()=>{
+          const u={role:'coach',email:'c@t'};
+          const r=creerExercicePerso({nom:'EXERCICE JETABLE'},u);
+          basculerFavori(r.fiche.slug,u); noterRecent(r.fiche.slug,u);
+          if(!supprimerExercicePerso(r.fiche.slug,u)) return _echec('suppression refusée');
+          if(exercicesPerso(u).length) return _echec('encore dans la liste');
+          if(estFavoriExo(r.fiche.slug,u)) return _echec('reste en favori');
+          if(recentsCoach(u).indexOf(r.fiche.slug)>=0) return _echec('reste en récent');
+          return true;})());
+        ok('L\'écran de banque est derrière la garde de rôle de go()',(()=>{
+          // s-coach-banque et non s-banque : le préfixe fait hériter la garde
+          // existante. Un cas particulier de plus dans cette condition aurait
+          // été un oubli en puissance.
+          if(!document.getElementById('s-coach-banque')) return _echec('l\'écran n\'existe pas');
+          const g=String(go);
+          if(!/id\.startsWith\('s-coach-'\)/.test(g)) return _echec('la garde de préfixe a disparu');
+          // Et il n'est PAS dans la liste des exceptions.
+          const exc=(g.match(/\['s-coach-home','s-coach-entry'\]/)||[])[0];
+          if(!exc) return _echec('la liste d\'exceptions a changé de forme');
+          // ouvrirBanque refuse aussi de son côté : deux gardes, pas une.
+          return /peutConsulterBanque\(\)/.test(String(ouvrirBanque))
+            ?true:_echec('ouvrirBanque n\'a plus de garde');})());
+        ok('Le sélecteur ne décide RIEN de ce qu\'on fera de l\'exercice',(()=>{
+          // Il rend une fiche à qui l'a ouvert. C'est ce qui permettra au lot 3
+          // de le brancher ailleurs sans le rouvrir.
+          const src=String(bqChoisir);
+          if(!/cb\(f\)/.test(src)) return _echec('aucun rappel n\'est appelé');
+          if(/progEx/.test(src)) return _echec('le sélecteur connaît le constructeur');
+          // Et il note le récent AVANT de rendre la main : sinon un exercice
+          // choisi puis annulé disparaîtrait des récents.
+          const iRec=src.indexOf('noterRecent'), iCb=src.indexOf('cb(f)');
+          return (iRec>=0&&iRec<iCb)?true:_echec('le récent est noté après le rappel');})());
+        ok('L\'ajout depuis la banque RECOPIE la consigne pour l\'athlète',(()=>{
+          // L'athlète n'a pas accès à la banque — la règle RTDB la lui ferme —
+          // et il n'y a pas de serveur pour hydrater sa séance. Sans recopie,
+          // il verrait une ligne sans consigne.
+          const src=String(ajouterDepuisBanque);
+          for(const champ of ['description:f.execution','name:f.nom','exSlug:f.slug']){
+            if(src.replace(/\s+/g,'').indexOf(champ.replace(/\s+/g,''))<0)
+              return _echec('champ non recopié : '+champ);
+          }
+          return true;})());
         ok('fichesBanque rend un tableau vide, jamais null',(()=>{
           const sauve=_banque;
           try{
