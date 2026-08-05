@@ -852,7 +852,7 @@ const COACH_PHOTO='icons/coach.jpg';
                + _verifyCoachInvite). Le compte EST gratuit — l'encart tarifs le
                dit — mais il n'est pas ouvert : c'est la condition d'entrée, pas
                le prix, qui devait figurer sur le bouton qu'elle gouverne. -->
-          <div class="sub" style="font-size:11px;margin-top:3px">Nouveau coach : code d'invitation requis</div>
+          <div class="sub" style="font-size:11px;margin-top:3px">Gratuit pour votre premier client, sans carte bancaire</div>
         </div>
         <div style="margin-left:auto;color:var(--sub);font-size:18px">›</div>
       </div>
@@ -881,7 +881,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- Cet écran est lu AVANT l'inscription, donc par de futurs coachs affiliés.
            L'ancienne formule promettait « des codes d'accès gratuits » que seul le
            créateur peut émettre : la promesse ne pouvait pas être tenue. -->
-      <div style="font-size:11px;color:rgba(255,255,255,.82);line-height:1.6"><strong style="color:#fff">Ton compte coach est gratuit</strong>, sans abonnement : son ouverture demande un code d'invitation du créateur. Tu génères ensuite tes propres codes à donner à tes athlètes : chaque code les rattache à ton suivi et leur ouvre l'accès pour la durée que tu choisis, <strong style="color:#fff">jusqu'à 12 mois</strong>.</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.82);line-height:1.6"><strong style="color:#fff">Gratuit pour votre premier client</strong>, sans limite de durée et sans carte bancaire. Au-delà, un palier suit le nombre d'athlètes que tu accompagnes. Tu génères tes propres codes à donner à tes athlètes : chaque code les rattache à ton suivi et leur ouvre l'accès pour la durée que tu choisis, <strong style="color:#fff">jusqu'à 12 mois</strong>.</div>
     </div>
   </div>
 </div>
@@ -1029,6 +1029,17 @@ const COACH_PHOTO='icons/coach.jpg';
     <div class="row2">
       <div class="role-card" id="role-coach" onclick="selectRole('coach')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><div class="role-icon" data-icon="users"></div><div style="font-weight:800;font-size:15px">COACH</div><div class="sub" style="font-size:11px;margin-top:4px">Gérer mes athlètes</div></div>
       <div class="role-card" id="role-athlete" onclick="selectRole('athlete')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><div class="role-icon" data-icon="dumbbell"></div><div style="font-weight:800;font-size:15px">ATHLÈTE</div><div class="sub" style="font-size:11px;margin-top:4px">Suivre ma progression</div></div>
+    </div>
+    <!-- Promesse affichée à l'inscription. « Premier client », jamais une
+         durée : un compte Libre ne se referme pas, et annoncer un essai de
+         N jours dirait exactement le contraire de ce que le produit fait. -->
+    <div id="r-promesse-coach" style="display:none;font-size:11px;color:var(--green);line-height:1.6;background:rgba(35,180,90,.07);border:1px solid rgba(35,180,90,.25);border-radius:10px;padding:10px 12px"></div>
+    <!-- Le chemin historique, CONSERVÉ et replié. Un code d'invitation reste
+         valide et se comporte exactement comme avant ; il n'est simplement
+         plus obligatoire. -->
+    <div id="r-invite-repli" style="display:none">
+      <button type="button" onclick="ouvrirInviteCoach()" class="btn btn-outline btn-sm" style="width:100%">
+        J'ai un code d'invitation</button>
     </div>
     <div style="display:flex;align-items:flex-start;gap:10px;margin-top:4px;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px">
       <!-- Deux consentements DISTINCTS, et non un seul.
@@ -1182,6 +1193,9 @@ const COACH_PHOTO='icons/coach.jpg';
           <div class="metric-box"><div class="metric-val" id="ch-active" style="color:var(--green)">0</div><div class="metric-label">Actifs</div></div>
           <div class="metric-box"><div class="metric-val" id="ch-alerts" style="color:var(--red)">0</div><div class="metric-label">Alertes</div></div>
         </div>
+        <!-- Premiers pas. Rempli par _renderPremiersPas, et seulement tant que
+             le coach n'a aucun athlète : au-delà, ch-todo a mieux à dire. -->
+        <div id="ch-premiers-pas"></div>
         <div id="ch-todo"></div>
         <button onclick="openCoachPrograms()" class="content-card" style="width:100%;margin-bottom:16px;padding:13px 16px;background:linear-gradient(135deg,#0d0d0d,#1a0000);border:1px solid #2a0000;border-left:3px solid var(--red);border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px;text-align:left;display:flex;align-items:center;justify-content:space-between">
           <span>🗂️ MES PROGRAMMES (H/F)</span>
@@ -3497,6 +3511,81 @@ function coachPalierRequis(n){
 function coachQuotaDepasse(coach,users){
   return countActiveAthletes(coach,users)>getCoachQuota(coachPlanDe(coach));
 }
+
+// ── Plafond de comptes Libres ────────────────────────────────────────────
+// 200 comptes gratuits, c'est ce que le plan Spark peut porter sans que le
+// service se dégrade pour ceux qui l'utilisent déjà.
+//
+// POURQUOI UN NŒUD DÉDIÉ, ET PAS LA SONDE F-07 : etatQuota compte les octets
+// de CE navigateur dans localStorage. Elle ne sait rien du nombre de comptes
+// existants, et ne peut pas le savoir. Le nœud metrics, lui, compte PAR JOUR,
+// exige auth != null en lecture — or on décide AVANT que le visiteur ait un
+// compte — mêle athlètes et coachs, et surtout accepte l'écriture SANS
+// authentification : un plafond fondé dessus se ferait pousser à dix millions
+// par n'importe qui, et fermerait l'inscription à tout le monde.
+//
+// Ce compteur-ci est lisible sans jeton (le visiteur n'en a pas encore) et
+// ne peut qu'être incrémenté de un, par la règle RTDB. Il ne dit RIEN de
+// personne : c'est un entier.
+// LA phrase, écrite une fois. Elle promet un CLIENT, jamais une durée : un
+// compte Libre ne se referme pas, et « essai de N jours » dirait exactement
+// le contraire. Elle ne promet pas non plus la gratuité AU-DELÀ du premier —
+// une limitation technique annoncée comme un avantage devient une promesse
+// contractuelle dont on ne revient pas.
+const PROMESSE_COACH='Gratuit pour votre premier client, sans limite de durée, '
+  +'sans carte bancaire.';
+const LIBRE_MAX=200;
+function _urlCoachsLibres(){
+  return CLOUD._fbUrl.replace('/users.json','/coachs_libres.json');
+}
+// Rend le nombre, ou NULL quand on ne sait pas. Les deux ne se confondent
+// pas : un zéro bloquerait à tort si on le prenait pour un plafond atteint,
+// et un null doit LAISSER PASSER — voir placeLibreDisponible.
+async function lireCompteurLibres(){
+  try{
+    const ctrl=new AbortController(); setTimeout(()=>ctrl.abort(),5000);
+    const r=await fetch(_urlCoachsLibres(),{signal:ctrl.signal});
+    if(!r.ok) return null;
+    const t=await r.text();
+    try{ _quotaCompter('in',t.length); }catch(e){}
+    const d=t?JSON.parse(t):null;
+    if(d===null||d===undefined) return 0;   // nœud absent = aucun compte encore
+    const n=(typeof d==='object')?d.n:d;
+    return (typeof n==='number'&&isFinite(n)&&n>=0)?n:null;
+  }catch(e){ return null; }
+}
+// EN CAS DE DOUTE, ON LAISSE PASSER. Un plafond qui se referme sur une panne
+// réseau transforme une limite de capacité en panne d'inscription — et c'est
+// l'inverse du service rendu. Le pire cas est 201 comptes Libres.
+async function placeLibreDisponible(){
+  const n=await lireCompteurLibres();
+  if(n===null) return true;
+  return n<LIBRE_MAX;
+}
+// Incrément de un, en meilleur effort. Son échec ne doit JAMAIS empêcher une
+// inscription qui a déjà abouti : un compte créé et non compté est un écart
+// d'un sur deux cents, un compte refusé parce que le compteur n'a pas répondu
+// est une porte fermée au nez de quelqu'un.
+async function incrementerCompteurLibres(){
+  try{
+    const n=await lireCompteurLibres();
+    if(n===null) return false;
+    const corps=JSON.stringify({n:n+1});
+    const tok=await CLOUD._getToken().catch(()=>null);
+    const r=await fetch(_urlCoachsLibres()+(tok?'?auth='+tok:''),
+      {method:'PUT',headers:{'Content-Type':'application/json'},body:corps});
+    try{ _quotaCompter('out',corps.length); }catch(e){}
+    return r.ok;
+  }catch(e){ return false; }
+}
+// Ce que voit un coach quand il n'y a plus de place. AUCUN document n'est
+// écrit : ni dossier local, ni nœud distant. On dit ce qui se passe et on
+// laisse une adresse — pas de formulaire, pas de collecte, pas d'e-mail
+// sortant à envoyer.
+const LIBRE_ATTENTE_TEXTE='Les '+LIBRE_MAX+' comptes gratuits ouverts sont pris. '
+  +'Ce n\'est pas un refus : c\'est la capacité de l\'hébergement, et elle se '
+  +'libère. Écris à '+CREATOR_EMAIL+' pour être prévenu dès qu\'une place se '
+  +'rouvre — aucun compte n\'a été créé, et rien n\'a été enregistré.';
 // Le quota, en toutes lettres. Infinity ne s'affiche pas.
 function _quotaTexte(q){ return q===Infinity?'sans limite':String(q); }
 // Le palier PAYANT qui vient après le palier courant, s'il en existe un.
@@ -5833,6 +5922,15 @@ function selectRole(r){
   // Deux compteurs distincts plutôt qu'une propriété « role » : la validation
   // serveur n'accepte que des entiers, elle ne peut donc pas laisser passer une
   // valeur libre — le rôle reste une étape, pas une donnée attachée à quelqu'un.
+  // Promesse et dépliant d'invitation : réservés au rôle coach. Un athlète a
+  // son propre chemin de code, et lui en montrer un second l'enverrait dans
+  // le mauvais.
+  const _pc=document.getElementById('r-promesse-coach');
+  const _ri=document.getElementById('r-invite-repli');
+  // Le texte vient de la constante : deux exemplaires de la même phrase
+  // finiraient par diverger, et c'est celle-ci que les assertions verrouillent.
+  if(_pc){ _pc.textContent=PROMESSE_COACH; _pc.style.display=(r==='coach')?'block':'none'; }
+  if(_ri) _ri.style.display=(r==='coach')?'block':'none';
   rcmVue(r==='coach'?'role_selected_coach':'role_selected_athlete');
 }
 // Consomme l'intention de retour posée par goRegisterPourSouscrire. Renvoie
@@ -5869,9 +5967,28 @@ async function doRegister(){
       +' ans révolus. L\'application traite des données de santé, et le consentement '
       +'d\'un mineur plus jeune ne peut pas être recueilli ici.');
   if(!selRole) return showErr('r-err','Sélectionne ton rôle.');
-  // Échec rapide : inutile de créer un compte Firebase pour refuser ensuite.
-  if(selRole==='coach'&&!_INVITE_RE.test(_coachInviteCode()))
-    return showErr('r-err','Les comptes coach sont sur invitation. Passe par « CRÉER MON COMPTE » depuis l\'espace coach et saisis ton code.');
+  // LE VERROU EST LEVÉ. Un coach inconnu crée son compte sans code, et démarre
+  // au palier Libre — un athlète suivi, sans carte bancaire et sans durée.
+  //
+  // Ce que cette levée ne change PAS : rien, dans le parcours coach, ne relit
+  // le code après l'inscription. Les pouvoirs d'un coach découlent de son rôle
+  // et, pour quatre écrans, de son adresse. Le code était un portier, pas un
+  // système de droits.
+  //
+  // Et il ne fermait pas grand-chose : la règle de /rc_codes/$code accorde
+  // l'écriture dès que le nœud n'existe pas, donc n'importe quel titulaire de
+  // compte pouvait déjà fabriquer son propre code d'invitation coach.
+  //
+  // Un code SAISI reste exigé au format : mieux vaut refuser tout de suite
+  // qu'après la création du compte Firebase.
+  if(selRole==='coach'&&_coachInviteCode()&&!_INVITE_RE.test(_coachInviteCode()))
+    return showErr('r-err','Ce code d\'invitation est mal formé (format RC-XXXX-XXXX). Efface-le pour continuer sans code.');
+  // Plafond de capacité. ICI, avant CLOUD.signIn : refuser plus bas laisserait
+  // derrière soi un compte Firebase Auth sans dossier applicatif.
+  // Un coach porteur d'un code d'invitation n'est PAS concerné : il a été
+  // invité, la place lui était réservée.
+  if(selRole==='coach'&&!_coachInviteCode()&&!(await placeLibreDisponible()))
+    return showErr('r-err',LIBRE_ATTENTE_TEXTE);
   // Les deux consentements sont exiges SEPAREMENT, et refuses avec des messages
   // distincts : dire « accepte les conditions » a quelqu'un qui a coche les
   // conditions mais pas les donnees de sante le laisse chercher.
@@ -5895,7 +6012,15 @@ async function doRegister(){
     // de pouvoir demontrer. Pousse tel quel vers RTDB : _doPushOne ne retire que
     // les champs sensibles (mots de passe, blobs), jamais celui-ci.
     consent:{cgu:true,health:true,at:Date.now(),policyVersion:POLICY_VERSION}};
-  if(selRole==='coach'){user.code=genCode();user.clients=[];}
+  if(selRole==='coach'){
+    user.code=genCode();user.clients=[];
+    // Écrit À LA CRÉATION, pas rétro-écrit sur les dossiers existants : deux
+    // clés sur un dossier neuf ne coûtent rien, et le palier devient lisible
+    // tel quel au lieu d'être déduit d'une absence.
+    user.coachPlan='libre';
+    user.coachSubActive=false;
+    user.coachPlanSince=Date.now();
+  }
   // Authentifier Firebase AVANT de sauvegarder → le push 2s plus tard aura un token valide.
   // Si l'auth échoue on n'écrit RIEN localement : sinon un compte fantôme est créé
   // sur l'appareil (email deja pris chez Firebase, mauvais mot de passe, hors ligne...)
@@ -5946,7 +6071,10 @@ async function doRegister(){
   // Consommation de l'invitation : ICI et pas plus haut, pour ne pas brûler un
   // code au profit de quelqu'un qui ne fait que récupérer un compte existant
   // (branche cloudUser ci-dessus, qui sort avant d'arriver là).
-  if(selRole==='coach'){
+  // Sans code saisi, il n'y a rien à consommer et rien à refuser : le compte
+  // se crée au palier Libre. Avec un code, le comportement est EXACTEMENT
+  // celui d'avant ce lot — verification serveur, PATCH redeemed, refus parlant.
+  if(selRole==='coach'&&_coachInviteCode()){
     try{ await _verifyCoachInvite(_coachInviteCode(),em); }
     catch(e){ return showErr('r-err',e.message||'Invitation refusée.'); }
   }
@@ -5958,6 +6086,10 @@ async function doRegister(){
   // refusée) ne sont pas des inscriptions abouties et ne doivent pas compter.
   rcm('register_completed');
   if(selRole==='coach'){
+    // Compté seulement maintenant : les deux sorties précédentes (compte déjà
+    // présent, invitation refusée) ne sont pas des inscriptions abouties.
+    // Un coach invité ne consomme pas une place Libre.
+    if(!_coachInviteCode()) incrementerCompteurLibres();
     _clearCoachInvite();
     document.getElementById('coach-code-val').textContent=user.code;
     go('s-coach-code');
@@ -6152,11 +6284,18 @@ function showErr(id,msg){const e=document.getElementById(id);e.textContent=msg;e
 // formulaire. Le contrôle de forme est fait ici pour attraper les fautes de
 // frappe tout de suite ; la validité réelle est vérifiée et le code consommé
 // dans doRegister, seul moment où l'on dispose d'un jeton Firebase.
+// Ouvre l'inscription coach DIRECTEMENT. La modale de code n'a pas disparu :
+// elle est devenue ouvrirInviteCoach(), atteignable depuis le dépliant de
+// l'écran d'inscription. On ouvre une porte, on n'en condamne pas une.
 function goRegisterCoach(){
+  go('s-register');
+  setTimeout(()=>selectRole('coach'),50);
+}
+function ouvrirInviteCoach(){
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease">
     <h2 style="margin-bottom:6px">Code d'invitation coach</h2>
-    <p class="sub" style="font-size:12px;margin-bottom:12px;line-height:1.6">Les comptes coach sont sur invitation. Demande ton code au créateur de RepCore : il est à usage unique.</p>
+    <p class="sub" style="font-size:12px;margin-bottom:12px;line-height:1.6">Tu n'en as pas besoin pour créer ton compte. Si le créateur de RepCore t'a remis un code, saisis-le ici : il est à usage unique.</p>
     <label for="ci-code" style="margin-top:0">Ton code</label>
     <input id="ci-code" placeholder="RC-XXXX-XXXX" autocapitalize="characters" autocomplete="off" spellcheck="false" style="font-family:monospace;letter-spacing:1px" onkeydown="if(event.key==='Enter'){event.preventDefault();_validerInviteCoach()}">
     <div id="ci-err" style="color:var(--red-light);font-size:12px;margin-top:8px;display:none"></div>
@@ -6177,6 +6316,8 @@ function _validerInviteCoach(){
   }
   try{sessionStorage.setItem('rc_coach_invite',v);}catch(e){}
   closeModal();
+  // On y est déjà quand la modale vient du dépliant ; go() est idempotent et
+  // couvre le cas d'un appel depuis ailleurs.
   go('s-register');
   setTimeout(()=>{
     selectRole('coach');
@@ -8591,7 +8732,53 @@ function renderDouleurAthlete(){
   z.innerHTML=html;
 }
 
+// Trois actions, et pas une de plus : un coach qui vient d'ouvrir son compte
+// ne sait pas par où commencer, et une liste de dix liens ne l'aide pas.
+//
+// L'IMPORT PASSE PAR UN ATHLÈTE, et c'est dit. L'analyse d'une fiche PDF ou
+// photo vit dans s-coach-program, l'éditeur du programme D'UN athlète
+// (prog-photo2, analyzeProgPhotos) : sans athlète, l'écran n'est pas
+// atteignable. Plutôt que d'inventer une quatrième porte, la carte annonce
+// l'ordre réel des opérations.
+const PREMIERS_PAS=Object.freeze([
+  Object.freeze({icone:'👤', titre:'Inviter mon premier athlète',
+    detail:'Un code à lui transmettre, et il te rejoint.',
+    action:'openAddAthlete()'}),
+  Object.freeze({icone:'🗂️', titre:'Créer un programme',
+    detail:'Un modèle Homme/Femme, réutilisable pour tous.',
+    action:'openCoachPrograms()'}),
+  Object.freeze({icone:'📄', titre:'Importer une fiche existante',
+    detail:'PDF ou photo. L\'import se fait dans le programme d\'un athlète : commence par en ajouter un.',
+    action:'openAddAthlete()'}),
+]);
+// `clients` est injectable : la suite l'éprouve sans toucher au stockage.
+function _renderPremiersPas(clients){
+  const z=document.getElementById('ch-premiers-pas');
+  if(!z) return false;
+  const n=(clients||[]).length;
+  // Un seul athlète suffit à faire disparaître le bloc : il a compris.
+  if(n>0){ z.innerHTML=''; return false; }
+  z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);'
+    +'border-radius:14px;padding:18px;margin-bottom:18px">'
+    +'<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;'
+    +'text-transform:uppercase;margin-bottom:6px">Premiers pas</div>'
+    +'<div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:14px">'
+    +escapeHtml(PROMESSE_COACH)+'</div>'
+    +PREMIERS_PAS.map(a=>'<div onclick="'+a.action+'" role="button" tabindex="0" '
+      +'onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();this.click()}" '
+      +'style="display:flex;align-items:flex-start;gap:12px;background:var(--surface-2);'
+      +'border:1px solid var(--border);border-radius:12px;padding:13px 14px;margin-bottom:9px;'
+      +'cursor:pointer;min-height:44px">'
+      +'<div style="font-size:19px;line-height:1.2;flex-shrink:0">'+a.icone+'</div>'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-weight:800;font-size:13px">'+escapeHtml(a.titre)+'</div>'
+      +'<div class="sub" style="font-size:11px;margin-top:3px;line-height:1.5">'+escapeHtml(a.detail)+'</div>'
+      +'</div><div style="color:var(--sub);font-size:18px;flex-shrink:0">›</div></div>').join('')
+    +'</div>';
+  return true;
+}
 function renderTodoBlock(clients){
+  _renderPremiersPas(clients);
   const el=document.getElementById('ch-todo');if(!el) return;
   const now=Date.now(),SOON=14*864e5;
   const lt=c=>(c.bilans||[]).reduce((m,b)=>Math.max(m,b.date),0);
@@ -30035,13 +30222,19 @@ function _clearCoachInvite(){try{sessionStorage.removeItem('rc_coach_invite');}c
 // lire rc_codes. Conséquence assumée : un code refusé laisse un compte Firebase
 // Auth sans dossier applicatif — état inoffensif, identique à une inscription
 // abandonnée, que la tentative suivante avec le même mot de passe rattrape.
-// LIMITE CONNUE — l'usage unique n'est PAS garanti par le serveur. Le PATCH
-// redeemed part du CLIENT, et database.rules.json ouvre /rc_codes/{code} en
-// ecriture a tout compte authentifie : n'importe quel titulaire de compte peut
-// techniquement remettre redeemed a false. Le controle est donc de meme nature
-// que le reste — client seul. Le commentaire precedent attribuait cette
-// garantie au serveur, ce qui invitait a relacher la verification cliente.
-// Fermer ce trou demande une regle .validate sur redeemed, ou un serveur.
+// CE QUE LE SERVEUR GARANTIT, ET CE QU'IL NE GARANTIT PAS. Relu sur
+// database.rules.json : le retour en arriere EST bloque. La regle de
+// /rc_codes/$code n'accorde l'ecriture d'un noeud existant que si
+// data.redeemed !== true ET newData.redeemed === true — remettre redeemed a
+// false est donc refuse par Firebase, pas seulement par le client. Le
+// commentaire precedent affirmait l'inverse ; il invitait a relacher une
+// verification qui, elle, tient.
+//
+// CE QUI RESTE OUVERT, et qu'il faut savoir : la meme regle accorde
+// l'ecriture des que le noeud N'EXISTE PAS. N'importe quel compte
+// authentifie peut donc CREER /rc_codes/RC-XXXX-XXXX avec type:'coach'. Le
+// verrou d'invitation n'a jamais ferme que la porte principale — raison de
+// plus pour ne pas faire reposer de droits dessus, ce que ce lot acte.
 async function _verifyCoachInvite(raw,email){
   const code=String(raw||'').trim().toUpperCase();
   if(!_INVITE_RE.test(code)) throw new Error('Code d\'invitation mal formé (format RC-XXXX-XXXX).');
@@ -38482,6 +38675,188 @@ function testExercices(){
             'periode d'+'\'essai','premier mois '+'offert','gratuitement '+'pendant'];
           const t=aig.filter(m=>prod.indexOf(m)>=0);
           return t.length?_echec('promesse de durée : '+t.join(' | ')):true;})());
+
+        // ── Inscription coach en self-service ────────────────────────────
+        // La suite ne portait AUCUNE assertion sur doRegister ni sur
+        // _INVITE_RE : la non-régression demandée n'avait rien à préserver.
+        // On décrit donc d'abord ce que le chemin par code fait, AVANT de
+        // vérifier que la levée du verrou ne l'a pas touché.
+        ok('Le chemin par CODE est intact : format, vérification, consommation',(()=>{
+          // Le format d'abord — c'est lui qui garde la porte historique.
+          if(!_INVITE_RE.test('RC-A1B2-C3D4')) return _echec('un code valide est refusé');
+          for(const faux of ['RC-A1B2-C3D','rc-a1b2-c3d4','RC-A1B2C3D4','','RC-A1B2-C3D4X'])
+            if(_INVITE_RE.test(faux)) return _echec('code accepté à tort : '+JSON.stringify(faux));
+          // La vérification serveur et la consommation existent toujours et
+          // sont toujours CÂBLÉES dans doRegister. On lit les sources réelles.
+          const dr=String(doRegister);
+          if(!/_verifyCoachInvite\(_coachInviteCode\(\),em\)/.test(dr))
+            return _echec('la consommation de l\'invitation a disparu de doRegister');
+          const vc=String(_verifyCoachInvite);
+          for(const garde of ["data.type!=='coach'",'data.active','data.expiry','data.redeemed'])
+            if(vc.indexOf(garde)<0) return _echec('garde perdue dans _verifyCoachInvite : '+garde);
+          return /redeemed:true/.test(vc)?true:_echec('le PATCH redeemed a disparu');})());
+        ok('Un code MAL FORMÉ est refusé AVANT toute création de compte',(()=>{
+          // Refuser après CLOUD.signIn laisserait derrière soi un compte
+          // Firebase Auth sans dossier : le refus doit précéder l'appel.
+          const dr=String(doRegister);
+          const iRefus=dr.indexOf('_INVITE_RE.test(_coachInviteCode())');
+          // L'APPEL, pas sa mention : la chaîne « CLOUD.signIn » figure
+          // d'abord dans le commentaire qui explique l'ordre, et un test
+          // ancré dessus mesure la position d'un commentaire.
+          const iAuth=dr.indexOf('await CLOUD.signIn(');
+          if(iRefus<0) return _echec('plus aucun contrôle de format du code');
+          if(iAuth<0) return _echec('l\'appel à CLOUD.signIn est introuvable');
+          return iRefus<iAuth?true:_echec('le contrôle de format vient APRÈS signIn');})());
+        ok('La garde de format est EXÉCUTÉE, pas seulement présente',(()=>{
+          // La position ne prouve rien : « if(false && ...) » garde la
+          // sous-chaîne au bon endroit et ne refuse plus rien. On extrait donc
+          // la CONDITION RÉELLE de doRegister et on l'exécute.
+          const dr=String(doRegister);
+          const ligne=dr.split('\n').find(l=>l.indexOf('_INVITE_RE.test(_coachInviteCode())')>=0
+            &&l.trim().indexOf('if(')===0);
+          if(!ligne) return _echec('la ligne de garde est introuvable');
+          const t=ligne.trim();
+          const cond=t.slice(3,t.lastIndexOf(')'));
+          let f;
+          try{ f=new Function('selRole','_coachInviteCode','_INVITE_RE','return ('+cond+');'); }
+          catch(e){ return _echec('condition inexécutable : '+e.message); }
+          const RE=/^RC-[A-Z0-9]{4}-[A-Z0-9]{4}$/;
+          // Coach SANS code : aucun refus. C'est toute la levée du verrou.
+          if(f('coach',()=>'',RE)) return _echec('un coach sans code est encore refusé');
+          // Coach avec code MAL FORMÉ : refus.
+          if(!f('coach',()=>'RC-XX',RE)) return _echec('un code mal formé passe');
+          // Coach avec code valide : aucun refus.
+          if(f('coach',()=>'RC-A1B2-C3D4',RE)) return _echec('un code valide est refusé');
+          // Athlète : la garde ne le concerne jamais, même avec un code cassé.
+          return !f('athlete',()=>'RC-XX',RE)
+            ?true:_echec('la garde coach s\'applique à un athlète');})());
+        ok('LE VERROU EST LEVÉ : plus aucun refus faute de code',(()=>{
+          // L'ancien garde refusait dès que le code n'était pas valide. Le
+          // nouveau ne se déclenche QUE si un code a été saisi. On l'éprouve
+          // sur la source réelle plutôt que sur l'intention.
+          const dr=String(doRegister);
+          // La condition doit exiger la PRÉSENCE d'un code avant de tester le
+          // format. Sans ce membre, l'absence de code redeviendrait un refus.
+          if(!/_coachInviteCode\(\)&&!_INVITE_RE\.test\(_coachInviteCode\(\)\)/.test(dr.replace(/\s+/g,'')))
+            return _echec('le refus ne dépend pas de la présence d\'un code');
+          // Et le message d'orientation vers le créateur a disparu du chemin.
+          const tout=document.documentElement.outerHTML;
+          const prod=tout.slice(0,tout.indexOf('function testExercices'));
+          const aig=['Demande ton code au '+'créateur','code d\'invitation '+'requis',
+            'comptes coach sont '+'sur invitation'];
+          const t=aig.filter(m=>prod.indexOf(m)>=0);
+          return t.length?_echec('le chemin dit encore : '+t.join(' | ')):true;})());
+        ok('Un compte coach neuf naît « libre », quota 1, sans abonnement',(()=>{
+          // Les trois champs sont ÉCRITS à la création, pas déduits d'une
+          // absence : le critère porte sur l'égalité stricte.
+          const dr=String(doRegister).replace(/\s+/g,'');
+          if(dr.indexOf("user.coachPlan='libre'")<0) return _echec('coachPlan n\'est pas posé');
+          if(dr.indexOf('user.coachSubActive=false')<0) return _echec('coachSubActive n\'est pas posé');
+          // Et ce qu'ils valent une fois lus. Littéraux en dur, jamais la
+          // constante : un test qui lit ce qu'il vérifie ne vérifie rien.
+          const neuf={id:'c9',email:'c9@t',role:'coach',coachPlan:'libre',coachSubActive:false};
+          if(coachPlanDe(neuf)!=='libre') return _echec('plan lu : '+coachPlanDe(neuf));
+          if(getCoachQuota(coachPlanDe(neuf))!==1) return _echec('quota : '+getCoachQuota(coachPlanDe(neuf)));
+          // Le palier libre est ACTIF sans abonnement : c'est tout son objet.
+          return coachSubActif(neuf)?true:_echec('un compte libre est réputé inactif');})());
+        ok('Un coach « libre » n\'est privé d\'AUCUNE fonctionnalité',(()=>{
+          // Seul le VOLUME discrimine. Aucun écran, aucune action ne doit se
+          // conditionner au palier — on lit les sources réelles des points
+          // d'entrée que le cahier des charges nomme.
+          const neuf={id:'c9',email:'c9@t',role:'coach',coachPlan:'libre',coachSubActive:false};
+          for(const f of [openCoachPrograms,openAddAthlete,exporterMesDonnees,checkAccess]){
+            const src=String(f);
+            if(/coachPlanDe|coachSubActif|coachSubActive|getCoachQuota/.test(src))
+              return _echec('le palier conditionne '+(f.name||'?'));
+          }
+          // Et l'éditeur de programme lui est ouvert : go() garde les écrans
+          // s-coach-* derrière le rôle, pas derrière un paiement.
+          return /role!=='coach'/.test(String(go))
+            ?true:_echec('la garde d\'écran ne repose plus sur le rôle');})());
+        ok('placeLibreDisponible LAISSE PASSER quand elle ne sait pas',(()=>{
+          // Un plafond qui se referme sur une panne réseau transforme une
+          // limite de capacité en panne d'inscription. Le pire cas admis est
+          // un compte de trop ; le pire cas refusé est une porte fermée.
+          const src=String(placeLibreDisponible).replace(/\s+/g,'');
+          if(src.indexOf('n===null')<0) return _echec('le cas « je ne sais pas » n\'est pas distingué');
+          if(!/n===null\)returntrue/.test(src)) return _echec('l\'inconnu ne laisse pas passer');
+          return /n<LIBRE_MAX/.test(src)?true:_echec('la comparaison au plafond a disparu');})());
+        ok('Le plafond atteint N\'ÉCRIT AUCUN document',(()=>{
+          if(LIBRE_MAX!==200) return _echec('LIBRE_MAX = '+LIBRE_MAX);
+          const dr=String(doRegister);
+          const iPlafond=dr.indexOf('placeLibreDisponible');
+          const iAuth=dr.indexOf('await CLOUD.signIn(');   // l'appel, pas sa mention
+          const iEcrit=dr.indexOf('users[em]=user');
+          if(iPlafond<0) return _echec('le plafond n\'est pas branché');
+          // AVANT signIn : refuser plus bas laisserait un compte Firebase Auth
+          // orphelin — exactement ce que le contrôle d'âge évite déjà.
+          if(!(iPlafond<iAuth)) return _echec('le plafond est testé APRÈS signIn');
+          if(!(iPlafond<iEcrit)) return _echec('le plafond est testé après l\'écriture locale');
+          // Un coach INVITÉ n'est pas concerné : sa place lui était réservée.
+          if(!/!_coachInviteCode\(\)&&!\(awaitplaceLibreDisponible\(\)\)/.test(dr.replace(/\s+/g,'')))
+            return _echec('le plafond s\'applique aussi aux coachs invités');
+          // Le texte de liste d'attente ne demande rien et ne collecte rien.
+          if(!/aucun compte n'a été créé/.test(LIBRE_ATTENTE_TEXTE))
+            return _echec('le texte ne dit pas qu\'aucun compte n\'a été créé');
+          return LIBRE_ATTENTE_TEXTE.indexOf(CREATOR_EMAIL)>=0
+            ?true:_echec('aucune adresse où se signaler');})());
+        ok('Un e-mail déjà inscrit N\'ÉCRASE JAMAIS le dossier existant',(()=>{
+          const dr=String(doRegister);
+          const iCloud=dr.indexOf('const cloudUser=await CLOUD.pullUser(em)');
+          const iEcrit=dr.indexOf('users[em]=user;DB.set');
+          if(iCloud<0||iEcrit<0) return _echec('structure de doRegister inattendue');
+          if(!(iCloud<iEcrit)) return _echec('le dossier distant est lu APRÈS l\'écriture');
+          // La branche doit SORTIR. Sans return, elle retomberait sur
+          // l'écriture et remplacerait le dossier par un objet vierge.
+          const branche=dr.slice(iCloud,iEcrit);
+          if(branche.indexOf('return')<0) return _echec('la branche ne sort pas');
+          // Et le message est explicite, avec la proposition de connexion.
+          return /existe déjà/.test(branche)
+            ?true:_echec('aucun message explicite sur le compte existant');})());
+        ok('Les premiers pas : trois actions, et seulement sans athlète',(()=>{
+          const z=document.getElementById('ch-premiers-pas');
+          if(!z) return _echec('emplacement absent du DOM');
+          try{
+            if(PREMIERS_PAS.length!==3) return _echec(PREMIERS_PAS.length+' actions');
+            _renderPremiersPas([]);
+            const h=z.innerHTML;
+            for(const a of PREMIERS_PAS) if(h.indexOf(a.titre)<0)
+              return _echec('action manquante : '+a.titre);
+            // La promesse vient de la constante, pas d'une recopie.
+            if(h.indexOf(escapeHtml(PROMESSE_COACH))<0)
+              return _echec('la promesse n\'est pas affichée');
+            // UN athlète suffit à faire disparaître le bloc.
+            _renderPremiersPas([{id:'a1'}]);
+            return (z.innerHTML||'')===''
+              ?true:_echec('le bloc subsiste avec un athlète');
+          } finally { z.innerHTML=''; }})());
+        ok('La promesse dit un CLIENT, jamais une durée',(()=>{
+          // Écrite une seule fois : deux exemplaires finiraient par diverger.
+          if(!/premier client/i.test(PROMESSE_COACH)) return _echec('le premier client n\'est pas nommé');
+          if(!/sans limite de durée/i.test(PROMESSE_COACH)) return _echec('la durée n\'est pas dite illimitée');
+          if(!/sans carte bancaire/i.test(PROMESSE_COACH)) return _echec('la carte bancaire n\'est pas exclue');
+          // Aucune promesse AU-DELÀ du premier client : une limitation
+          // technique annoncée comme un avantage devient contractuelle.
+          const bas=PROMESSE_COACH.toLowerCase();
+          for(const m of ['illimit','sans limite de nombre','autant que','tous tes clients'])
+            if(bas.indexOf(m)>=0) return _echec('promesse trop large : '+m);
+          return true;})());
+        ok('Le dépliant d\'invitation ne s\'ouvre QUE pour le rôle coach',(()=>{
+          const pc=document.getElementById('r-promesse-coach');
+          const ri=document.getElementById('r-invite-repli');
+          if(!pc||!ri) return _echec('le dépliant est absent du DOM');
+          const sauve=selRole;
+          try{
+            selectRole('athlete');
+            if(ri.style.display!=='none') return _echec('un athlète voit le dépliant coach');
+            if(pc.style.display!=='none') return _echec('un athlète voit la promesse coach');
+            selectRole('coach');
+            if(ri.style.display==='none') return _echec('le coach ne voit pas le dépliant');
+            if(pc.textContent!==PROMESSE_COACH) return _echec('la promesse affichée diverge de la constante');
+            // La modale historique existe toujours et reste atteignable.
+            return typeof ouvrirInviteCoach==='function'
+              ?true:_echec('le chemin par code n\'est plus atteignable');
+          } finally { if(sauve) selectRole(sauve); }})());
 
         // ── Aucun texte n'affirme l'effectivité chez PayPal ──────────────
         ok('Le texte est en obligation de MOYENS, pas de résultat',(()=>{

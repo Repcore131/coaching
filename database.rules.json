@@ -265,6 +265,31 @@
           ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 10000000 && (!data.exists() || newData.val() > data.val()) && $evenement.matches(/^(landing_view|welcome_view|role_selected_coach|role_selected_athlete|code_entered|code_valid|code_invalid|register_started|register_completed|subscribe_viewed|paypal_clicked|subscription_activated|first_workout_started|first_workout_completed|first_bilan_completed)$/)"
         }
       }
+    },
+
+    // Nombre de comptes coach ouverts au palier Libre. UN ENTIER, et rien
+    // d autre : aucune identite, aucune date, aucune donnee de sante. Il sert
+    // a fermer l inscription gratuite au-dela de LIBRE_MAX, plafond de ce que
+    // le plan Spark porte sans degrader le service de ceux qui l utilisent.
+    //
+    // Lecture PUBLIQUE, et c est necessaire : la decision se prend avant que
+    // le visiteur ait un compte, donc avant qu il ait un jeton.
+    //
+    // Ecriture reservee aux comptes authentifies, et bornee a « +1 ». La
+    // difference avec /metrics est deliberee : metrics accepte l ecriture sans
+    // authentification, ce qui rend ses compteurs gonflables par quiconque —
+    // acceptable pour une mesure de tunnel, disqualifiant pour un plafond, qui
+    // se ferait pousser a dix millions et fermerait l inscription a tout le
+    // monde. Ici, un compte est necessaire, et chaque ecriture n avance que
+    // d une unite : ouvrir 200 fausses places demande 200 comptes Firebase.
+    //
+    // Aucune remise a zero, aucun saut : n doit valoir exactement le precedent
+    // plus un, ou 1 si le noeud n existe pas encore.
+    "coachs_libres": {
+      ".read": true,
+      ".write": "auth != null && newData.hasChild('n') && ((!data.exists() && newData.child('n').val() === 1) || (data.exists() && newData.child('n').val() === data.child('n').val() + 1))",
+      "n": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 1000000" },
+      "$autre": { ".validate": false }
     }
   }
 }
