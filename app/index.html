@@ -1371,12 +1371,15 @@ const COACH_PHOTO='icons/coach.jpg';
           <div id="cloud-sw-version" style="font-size:10px;color:var(--text-faint);margin-bottom:12px"></div>
         </div>
 
-        <!-- Mes données : article 15 (accès) et article 20 (portabilité). -->
+        <!-- Mes données : article 15 (accès) et article 20 (portabilité).
+             Cet écran est celui du COACH. Le bloc jumeau, pour l'athlète, vit
+             dans s-client-reglages : livré au lot F-10, il n'était visible que
+             d'ici, où aucun athlète ne passe jamais. -->
         <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px">
           <div style="font-weight:800;font-size:14px;margin-bottom:4px">Mes données</div>
           <div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:12px">Tout ce que RepCore conserve à ton sujet, dans un fichier que tu gardes. Disponible à tout moment, même si ton accès a expiré.</div>
           <button class="btn btn-red" style="width:100%;margin-bottom:8px" onclick="exporterMesDonnees()">Télécharger tout ce que RepCore sait de moi</button>
-          <button class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:10px" onclick="voirContenuExport()">Voir ce que contient l'export</button>
+          <button class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:10px" onclick="voirContenuExport('exp-manifeste')">Voir ce que contient l'export</button>
           <div id="exp-manifeste" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:10px"></div>
           <div id="cloud-qr-btn" style="display:none;margin-bottom:12px">
             <button class="btn btn-red" onclick="CLOUD.showQR()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg> Scanner sur un autre appareil →</button>
@@ -1800,6 +1803,37 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- CLIENT HOME -->
+<!-- ══════ RÉGLAGES ATHLÈTE ══════
+     Il n'en existait AUCUN : les quatre blocs de « réglages » — contact coach,
+     version, export de données, suppression de compte — vivaient tous dans
+     s-coach-home. Un athlète n'y passe jamais. C'est ce qui rendait
+     « Mon abonnement en un tap depuis les réglages » sans point de départ, et
+     c'est ce qui rendait l'export du lot F-10 inaccessible à qui il est
+     destiné. -->
+<div id="s-client-reglages" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="go('s-client-home');clientTab('home')">←</button>
+    <span class="topbar-title">Réglages</span>
+    <span></span>
+  </div>
+  <div class="scroll-area pad">
+    <!-- Mon abonnement. Créé conditionnellement : un athlète en accès
+         gratuit par code coach n'a pas d'abonnement, et un bloc vide qui
+         parle de résiliation ne lui dirait rien de bon. -->
+    <div id="cr-abo"></div>
+
+    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px">
+      <div style="font-weight:800;font-size:14px;margin-bottom:4px">Mes données</div>
+      <div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:12px">Tout ce que RepCore conserve à ton sujet, dans un fichier que tu gardes. Disponible à tout moment, même si ton accès a expiré.</div>
+      <button class="btn btn-red" style="width:100%;margin-bottom:8px" onclick="exporterMesDonnees()">Télécharger tout ce que RepCore sait de moi</button>
+      <button class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:10px" onclick="voirContenuExport('cr-manifeste')">Voir ce que contient l'export</button>
+      <div id="cr-manifeste" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:10px"></div>
+    </div>
+
+    <div id="cr-version" style="font-size:10px;color:var(--text-faint);text-align:center;margin-bottom:20px"></div>
+  </div>
+</div>
+
 <div id="s-client-home" class="screen">
   <!-- Brand header athlete -->
   <div style="background:#090909;border-bottom:1px solid rgba(255,255,255,.22);box-shadow:0 4px 20px rgba(0,0,0,.9);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:relative;z-index:2;flex-shrink:0">
@@ -1829,6 +1863,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <p class="sub" id="clh-coach" style="margin-top:2px;font-size:11px;letter-spacing:.5px;text-transform:uppercase"></p>
         <a id="clh-contact-link" href="#" target="_blank" rel="noopener" style="display:none;font-size:11px;color:var(--red);font-weight:700;letter-spacing:.5px;margin-top:6px;text-decoration:none;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg> Un souci ? Contacte ton coach</a>
         <div id="clh-contact-note" style="display:none;font-size:10px;color:var(--text-faint);line-height:1.5;margin-top:4px"></div>
+        <a href="#" onclick="ouvrirReglagesAthlete();return false" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--sub);font-weight:700;letter-spacing:.5px;margin-top:6px;text-decoration:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;flex-shrink:0"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.31.4.55.71.66H21a2 2 0 1 1 0 4h-.09c-.31.11-.57.35-.71.66z"/></svg> Réglages</a>
       </div>
 
       <!-- COACH BANNER -->
@@ -3040,6 +3075,15 @@ const COACH_PHOTO='icons/coach.jpg';
            plan annuel côté PayPal. -->
       <div id="sub-paliers" style="display:flex;gap:10px;margin-bottom:16px"></div>
       <div id="sub-pending-info" style="display:none"></div>
+      <!-- Renoncement au droit de rétractation, art. L221-28 13°.
+           DÉCOCHÉE PAR DÉFAUT et jamais posée par le code : sans cet accord
+           exprès, un service pleinement fourni resterait rétractable 14 jours.
+           Le bouton PayPal est inactif tant qu'elle ne l'est pas. -->
+      <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;margin-bottom:10px;text-align:left">
+        <input type="checkbox" id="sub-renonciation" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px" onchange="_majRenonciation(this.checked)">
+        <span id="sub-renonc-txt" style="font-size:11px;color:#ddd;line-height:1.55"></span>
+      </label>
+      <div id="sub-renonc-msg" style="font-size:10px;color:var(--text-faint);line-height:1.5;margin-bottom:8px">Coche la case ci-dessus pour activer le paiement.</div>
       <div id="paypal-btn-container" style="min-height:48px">
         <button class="btn btn-red" onclick="initPaypalSubscription()" id="paypal-loading-btn">Souscrire</button>
       </div>
@@ -3308,6 +3352,203 @@ const SUB_PALIERS=[
    planId:()=>PAYPAL_PLAN_ID},
 ];
 function _paliersDispo(){return SUB_PALIERS.filter(p=>!!p.planId());}
+// ══════ RÉSILIATION EN LIGNE ET RENONCEMENT À LA RÉTRACTATION ══════
+// L215-1-1 du code de la consommation, applicable depuis le 01/06/2023 :
+// résilier doit être aussi simple que souscrire. Ici, trois clics depuis
+// l'accueil — Réglages, Résilier, Confirmer. AUCUN écran de rétention,
+// aucune remise de dernière minute, aucun « êtes-vous vraiment sûr » répété :
+// la friction volontaire est exactement ce que la loi interdit.
+//
+// CE QUE REPCORE NE PEUT PAS FAIRE, et qu'aucun texte ne prétendra : annuler
+// l'abonnement CHEZ PAYPAL. Le paiement est 100 % côté client, il n'y a pas
+// de serveur pour appeler leur API. On enregistre la demande, on donne les
+// étapes PayPal EN COMPLÉMENT — jamais en remplacement — et on s'engage à
+// rembourser tout prélèvement postérieur (CGV §7). Obligation de moyens,
+// dite comme telle.
+//
+// L'ABSENCE DES DEUX CHAMPS EST UN ÉTAT VALIDE. Aucune migration : les
+// accesseurs rendent un objet vide, partout.
+const RESIL_MOTIFS=Object.freeze(['Trop cher','Je n\'utilise plus l\'app',
+  'Je change de coach','Objectif atteint','Autre']);
+const RESIL_FILE='rc_resil_file';
+// PURE. L'état d'abonnement, toujours un objet.
+function abonnementDe(user){
+  const a=(user||{}).abonnement;
+  return (a&&typeof a==='object')?a:{};
+}
+// PURE. Une résiliation déjà demandée n'est pas redemandable.
+function resiliationDemandee(user){
+  const r=abonnementDe(user).resiliationDemandee;
+  return (r&&typeof r==='object'&&typeof r.ts==='number')?r:null;
+}
+// PURE. Le renoncement au droit de rétractation. JAMAIS coché par défaut :
+// l'absence du champ vaut refus, et rien dans le code ne le pose à true de
+// lui-même — un test l'interdit.
+function renonciationRetractation(user){
+  const x=abonnementDe(user).renonciationRetractation;
+  if(!x||typeof x!=='object') return {accepte:false,ts:null};
+  return {accepte:x.accepte===true,ts:(typeof x.ts==='number')?x.ts:null};
+}
+// PURE. Qui a un abonnement à résilier ? Pas celui qui accède gratuitement
+// par code coach : il n'a rien souscrit, et lui parler de résiliation serait
+// lui parler d'un contrat qui n'existe pas.
+function aUnAbonnement(user){
+  const u=user||{};
+  if(u.role==='coach') return false;
+  if(u.status==='AUTONOMIE_PREMIUM') return true;
+  // Un abonnement déjà résilié reste affichable : l'accès court jusqu'au terme.
+  return !!resiliationDemandee(u)||!!u.paypalSubscriptionId;
+}
+// La date de fin d'accès. L'accès reste OUVERT jusqu'au terme de la période
+// réglée : on ne coupe rien à la confirmation.
+function finAccesAbonnement(user){
+  const u=user||{};
+  if(typeof u.accessExpiry==='number'&&u.accessExpiry>0) return u.accessExpiry;
+  const a=abonnementDe(u);
+  if(typeof a.prochaineEcheance==='number') return a.prochaineEcheance;
+  return null;
+}
+// LA FILE HORS LIGNE. La demande est enregistrée localement d'abord — c'est
+// elle qui fait foi pour l'utilisateur — et rejouée à la reconnexion. Elle
+// ne se rejoue QU'UNE FOIS : la clé est vidée dès que l'envoi aboutit.
+function _fileResilLire(){
+  try{ const x=JSON.parse(localStorage.getItem(RESIL_FILE)||'null');
+    return (x&&typeof x==='object')?x:null; }catch(e){ return null; }
+}
+function _fileResilPoser(email,ts){
+  try{ localStorage.setItem(RESIL_FILE,JSON.stringify({email:email,ts:ts})); }catch(e){}
+}
+function _fileResilVider(){ try{ localStorage.removeItem(RESIL_FILE); }catch(e){} }
+async function _rejouerResiliation(){
+  const f=_fileResilLire();
+  if(!f||!f.email) return false;
+  if(!currentUser||currentUser.email!==f.email) return false;
+  if(!CLOUD.ok||!CLOUD.ok()) return false;
+  try{
+    await CLOUD.pushOne(currentUser.email,currentUser);
+    _fileResilVider();   // exactement une fois
+    return true;
+  }catch(e){ return false; }
+}
+// Le motif est FACULTATIF, toujours. Il n'est jamais bloquant, et une chaîne
+// vide est un motif parfaitement acceptable.
+function demanderResiliation(motif){
+  const u=currentUser;
+  if(!u) return false;
+  if(resiliationDemandee(u)) return false;   // pas redemandable
+  if(!u.abonnement||typeof u.abonnement!=='object') u.abonnement={};
+  const ts=Date.now();
+  u.abonnement.resiliationDemandee={ts:ts,motif:String(motif||'').slice(0,300)};
+  // Le LOCAL d'abord : hors ligne, l'utilisateur doit voir son accusé.
+  try{ saveUser(); }catch(e){}
+  _fileResilPoser(u.email,ts);
+  // Puis l'envoi. S'il aboutit, la file se vide ; sinon elle sera rejouée.
+  _rejouerResiliation();
+  return true;
+}
+// La case de renoncement. JAMAIS appelée avec true par le code : seul un
+// geste de l'utilisateur passe par ici.
+function _majRenonciation(accepte){
+  const u=currentUser;
+  if(!u) return false;
+  if(!u.abonnement||typeof u.abonnement!=='object') u.abonnement={};
+  u.abonnement.renonciationRetractation=
+    accepte===true?{accepte:true,ts:Date.now()}:{accepte:false,ts:null};
+  try{ saveUser(); }catch(e){}
+  _majBoutonPaypal();
+  return true;
+}
+function _majBoutonPaypal(){
+  const z=document.getElementById('paypal-btn-container');
+  const ok=renonciationRetractation(currentUser).accepte;
+  if(z){
+    z.style.opacity=ok?'1':'.35';
+    z.style.pointerEvents=ok?'auto':'none';
+  }
+  const m=document.getElementById('sub-renonc-msg');
+  if(m) m.style.display=ok?'none':'block';
+}
+const RENONC_TEXTE='Je demande expressément que l\'accès soit ouvert '
+  +'immédiatement et je reconnais perdre mon droit de rétractation de 14 jours '
+  +'une fois le service pleinement fourni (art. L221-28 13°).';
+// Les étapes PayPal, EN COMPLÉMENT de la demande enregistrée. RepCore ne peut
+// pas vérifier qu'elles ont été faites, et ne prétend pas le contraire.
+const RESIL_PAYPAL=Object.freeze([
+  'Ouvre paypal.com et connecte-toi.',
+  'Va dans Réglages, puis Paiements, puis Gérer les paiements automatiques.',
+  'Sélectionne RepCore, puis Annuler.'
+]);
+function ouvrirReglagesAthlete(){
+  go('s-client-reglages');
+  _renderAbonnement();
+  const v=document.getElementById('cr-version');
+  if(v) versionSW().then(x=>{ if(x) v.textContent='RepCore · '+x; });
+  return true;
+}
+// Ouvre directement l'écran d'abonnement — un tap depuis les réglages.
+function ouvrirEcranAbonnement(){
+  ouvrirReglagesAthlete();
+  const z=document.getElementById('cr-abo');
+  if(z) z.scrollIntoView({block:'start'});
+  return true;
+}
+// Créé CONDITIONNELLEMENT : un accès gratuit par code coach ne voit ni
+// l'écran d'abonnement ni la case. Rien dans le DOM, pas un bloc masqué.
+function _renderAbonnement(){
+  const z=document.getElementById('cr-abo');
+  if(!z) return false;
+  const u=currentUser;
+  if(!aUnAbonnement(u)){ z.innerHTML=''; return false; }
+  const r=resiliationDemandee(u);
+  const fin=finAccesAbonnement(u);
+  const finTxt=fin?new Date(fin).toLocaleDateString('fr-FR'):'la fin de la période réglée';
+  const pal=SUB_PALIERS.find(x=>x.cle===(abonnementDe(u).palier))||SUB_PALIERS[1];
+  const l=(t,v)=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:3px 0">
+    <span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:#eee">${escapeHtml(v)}</span></div>`;
+  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px">
+    <div style="font-weight:800;font-size:14px;margin-bottom:8px">Mon abonnement</div>
+    ${l('Formule',(pal&&pal.titre)||'Mensuel')}
+    ${l('Prix',((pal&&pal.prix)||'9,95 €')+' '+((pal&&pal.periode)||'par mois'))}
+    ${fin?l(r?'Accès jusqu\'au':'Prochaine échéance',finTxt):''}
+    ${r?`<div style="margin-top:12px;background:var(--surface-2);border-radius:10px;padding:12px 13px">
+        <div style="font-size:12px;color:#eee;line-height:1.7;margin-bottom:8px">Résiliation demandée le ${escapeHtml(new Date(r.ts).toLocaleDateString('fr-FR'))}. Ton accès reste ouvert jusqu'au ${escapeHtml(finTxt)}.</div>
+        <div style="font-size:11px;color:var(--sub);line-height:1.7">${escapeHtml(RESIL_MOYENS)}</div>
+        <ol style="font-size:11px;color:#ddd;line-height:1.8;margin:8px 0 0 18px">${RESIL_PAYPAL.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')}</ol>
+      </div>`
+      :`<button class="btn btn-outline" style="width:100%;margin-top:12px;letter-spacing:1px" onclick="_ouvrirResiliation()">Résilier mon abonnement</button>
+        <div id="cr-resil" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px"></div>`}
+  </div>`;
+  return true;
+}
+// UN écran de confirmation, avec un motif FACULTATIF. Pas de rétention, pas
+// de remise, pas de second « êtes-vous sûr » : c'est exactement la friction
+// que L215-1-1 interdit.
+function _ouvrirResiliation(){
+  const z=document.getElementById('cr-resil');
+  if(!z) return false;
+  z.style.display='block';
+  z.innerHTML=`<div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:8px">Si tu veux nous dire pourquoi — c'est facultatif, et ça ne change rien à ta résiliation.</div>
+    <select id="resil-motif" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:#fff;padding:11px 13px;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;margin-bottom:8px">
+      <option value="">Sans réponse</option>
+      ${RESIL_MOTIFS.map(m=>'<option value="'+escapeHtml(m)+'">'+escapeHtml(m)+'</option>').join('')}
+    </select>
+    <input id="resil-libre" type="text" maxlength="300" placeholder="Préciser (facultatif)" style="width:100%;font-size:13px;padding:10px 12px;margin-bottom:10px">
+    <button class="btn btn-red" style="width:100%;margin:0" onclick="_confirmerResiliation()">Confirmer la résiliation</button>`;
+  return true;
+}
+function _confirmerResiliation(){
+  const m=(document.getElementById('resil-motif')||{}).value||'';
+  const l=(document.getElementById('resil-libre')||{}).value||'';
+  const motif=[m,l].filter(Boolean).join(' — ');
+  if(!demanderResiliation(motif)){ toast('Résiliation déjà enregistrée.','var(--sub)'); return false; }
+  _renderAbonnement();
+  toast('Résiliation enregistrée ✓','var(--green)');
+  return true;
+}
+const RESIL_MOYENS='Ta demande est enregistrée. RepCore ne peut pas annuler '
+  +'l\'abonnement à ta place chez PayPal : le paiement est géré directement '
+  +'entre toi et eux. Fais les trois étapes ci-dessous. Si un prélèvement '
+  +'partait malgré tout après cette demande, il te serait remboursé (CGV §7).';
 // Palier retenu. L'annuel est pré-sélectionné quand il existe ; sinon le
 // premier disponible, pour qu'aucun état ne laisse la sélection vide.
 let _subPalier=null;
@@ -5075,6 +5316,10 @@ function routeUser(){
   // Marque le mois comme suivi par CE navigateur. Sans cet appel, un relevé
   // ne saurait pas distinguer « aucun trafic » de « compteur effacé ».
   try{ _quotaOuvrirMois(); }catch(e){}
+  // Une résiliation demandée hors ligne attend dans la file : on la rejoue
+  // dès qu'un dossier est chargé. Exactement une fois — la file se vide au
+  // premier envoi qui aboutit.
+  setTimeout(()=>{ try{ _rejouerResiliation(); }catch(e){} },1500);
   // Relevés de santé : union locale ↔ nœud privé. Différée, pour ne pas
   // retarder l'écran d'arrivée d'un aller-retour réseau. Idempotente : la
   // rejouer à chaque démarrage ne crée aucun doublon.
@@ -6577,8 +6822,10 @@ async function exporterMesDonnees(){
   return true;
 }
 // Voir AVANT de télécharger : ce qui sort, et surtout ce qui ne sort pas.
-async function voirContenuExport(){
-  const z=document.getElementById('exp-manifeste');
+async function voirContenuExport(cible){
+  // Deux écrans l'appellent — celui du coach et celui de l'athlète — et un
+  // même identifiant ne peut pas exister deux fois. La cible est passée.
+  const z=document.getElementById(cible||'exp-manifeste');
   if(!z) return false;
   z.style.display='block';
   z.innerHTML='<div class="sub" style="font-size:12px">Lecture…</div>';
@@ -29928,6 +30175,15 @@ function _planIdChoisi(){
   return p?p.planId():'';
 }
 function loadSubscribePage(mode,payload){
+  // La case est REMISE À SON ÉTAT STOCKÉ à chaque ouverture, et cet état est
+  // faux par défaut. Elle n'est jamais cochée par le code.
+  try{
+    const t=document.getElementById('sub-renonc-txt');
+    if(t) t.textContent=RENONC_TEXTE;
+    const c=document.getElementById('sub-renonciation');
+    if(c) c.checked=renonciationRetractation(currentUser).accepte;
+    _majBoutonPaypal();
+  }catch(e){}
   // L'écran est atteignable sans compte : c'est justement là que le prix doit
   // être visible avant toute inscription. Mais PayPal ne peut pas être lancé
   // dans cet état — onApprove écrit dans currentUser, qui vaut null. On propose
@@ -37573,6 +37829,249 @@ function testExercices(){
           return /revokeObjectURL/.test(src)
             ?true:_echec('l\'URL objet n\'est jamais révoquée');})());
       } finally { currentUser=_exU; }
+    })();
+
+    // ══════ RÉSILIATION EN LIGNE ET RENONCEMENT ══════
+    (()=>{
+      const _abU=currentUser;
+      const _sauveFile=localStorage.getItem(RESIL_FILE);
+      const _ath=(o)=>Object.assign({id:'ab',email:'ab@t',role:'athlete',fname:'A',
+        status:'AUTONOMIE_PREMIUM',paymentStatus:'active',
+        accessExpiry:Date.now()+20*864e5},o||{});
+      try {
+        // ── L'absence des champs est un ÉTAT VALIDE ──────────────────────
+        ok('Aucun champ d\'abonnement : tout répond sans exception',(()=>{
+          for(const u of [null,undefined,{},{abonnement:null},{abonnement:'x'},
+                          {abonnement:{}}]){
+            let a,r,x;
+            try{ a=abonnementDe(u); r=resiliationDemandee(u); x=renonciationRetractation(u); }
+            catch(e){ return _echec('exception : '+e.message); }
+            if(typeof a!=='object') return _echec('abonnementDe rend '+typeof a);
+            if(r!==null) return _echec('une résiliation sortie de nulle part');
+            if(x.accepte!==false||x.ts!==null) return _echec(JSON.stringify(x));
+          }
+          return true;})());
+
+        // ── La case n'est JAMAIS cochée par le code ──────────────────────
+        ok('renonciationRetractation : structure et refus par défaut',(()=>{
+          const x=renonciationRetractation(_ath());
+          if(Object.keys(x).sort().join(',')!=='accepte,ts')
+            return _echec('structure : '+Object.keys(x).join(','));
+          if(x.accepte!==false) return _echec('accepté par défaut');
+          // Une valeur douteuse ne vaut pas acceptation.
+          for(const v of ['true',1,{},[],'oui']){
+            const u=_ath({abonnement:{renonciationRetractation:{accepte:v,ts:1}}});
+            if(renonciationRetractation(u).accepte!==false)
+              return _echec(JSON.stringify(v)+' vaut acceptation');
+          }
+          // Seul true strict passe, et il est horodaté.
+          const u=_ath({abonnement:{renonciationRetractation:{accepte:true,ts:1712345}}});
+          const y=renonciationRetractation(u);
+          return (y.accepte===true&&y.ts===1712345)
+            ?true:_echec(JSON.stringify(y));})());
+        ok('Le code ne coche JAMAIS la case de lui-même',(()=>{
+          // Aucun chemin ne pose accepte:true sans passer par _majRenonciation,
+          // qui n'est appelée que par le onchange de la case.
+          const tout=document.documentElement.outerHTML;
+          const fin=tout.indexOf('function testExercices');
+          if(fin<0) return _echec('frontière introuvable');
+          const prod=tout.slice(0,fin);
+          // Un seul endroit écrit accepte:true, et c'est _majRenonciation.
+          const n=(prod.match(/accepte:true/g)||[]).length;
+          if(n!==1) return _echec(n+' écritures de accepte:true en production');
+          if(!/accepte:true/.test(String(_majRenonciation)))
+            return _echec('ce n\'est pas _majRenonciation qui l\'écrit');
+          // Et le markup ne porte pas checked.
+          const c=document.getElementById('sub-renonciation');
+          if(!c) return _echec('case absente');
+          if(c.hasAttribute('checked')) return _echec('cochée dans le markup');
+          return c.type==='checkbox'?true:_echec('type : '+c.type);})());
+        ok('Sans la case, le bouton PayPal est INACTIF',(()=>{
+          const sauve=currentUser;
+          const _sv=window.saveUser;
+          try{
+            window.saveUser=()=>true;
+            currentUser=_ath();
+            _majRenonciation(false);
+            const z=document.getElementById('paypal-btn-container');
+            if(!z) return _echec('conteneur absent');
+            if(z.style.pointerEvents!=='none') return _echec('bouton actif sans accord');
+            _majRenonciation(true);
+            if(z.style.pointerEvents!=='auto') return _echec('bouton inactif malgré l\'accord');
+            // Et l'horodatage est posé.
+            return typeof renonciationRetractation(currentUser).ts==='number'
+              ?true:_echec('accord non horodaté');
+          } finally { currentUser=sauve; window.saveUser=_sv; }})());
+        ok('Le texte de renoncement cite l\'article',(()=>{
+          if(!/L221-28/.test(RENONC_TEXTE)) return _echec(RENONC_TEXTE);
+          if(!/expressément/.test(RENONC_TEXTE)) return _echec('la demande n\'est pas expresse');
+          return /14 jours/.test(RENONC_TEXTE)
+            ?true:_echec('le délai n\'est pas dit');})());
+
+        // ── Une résiliation déjà demandée n'est pas redemandable ─────────
+        ok('Une résiliation déjà demandée n\'est pas redemandable',(()=>{
+          const sauve=currentUser;
+          const _sv=window.saveUser;
+          try{
+            window.saveUser=()=>true;
+            localStorage.removeItem(RESIL_FILE);
+            currentUser=_ath();
+            if(demanderResiliation('Trop cher')!==true) return _echec('la première échoue');
+            const r1=resiliationDemandee(currentUser);
+            if(typeof r1.ts!=='number') return _echec('ts : '+typeof r1.ts);
+            if(r1.motif!=='Trop cher') return _echec('motif : '+r1.motif);
+            // La seconde est refusée, et n'écrase pas la première.
+            if(demanderResiliation('Autre')!==false) return _echec('redemandable');
+            return resiliationDemandee(currentUser).ts===r1.ts
+              ?true:_echec('la demande initiale a été écrasée');
+          } finally { currentUser=sauve; window.saveUser=_sv; }})());
+        ok('Le motif est TOUJOURS facultatif',(()=>{
+          const sauve=currentUser;
+          const _sv=window.saveUser;
+          try{
+            window.saveUser=()=>true;
+            for(const m of [undefined,null,'',0]){
+              localStorage.removeItem(RESIL_FILE);
+              currentUser=_ath();
+              if(demanderResiliation(m)!==true) return _echec('bloqué sur motif '+JSON.stringify(m));
+              if(resiliationDemandee(currentUser).motif!=='')
+                return _echec('motif inventé : '+resiliationDemandee(currentUser).motif);
+            }
+            return true;
+          } finally { currentUser=sauve; window.saveUser=_sv; }})());
+        ok('L\'accès n\'est PAS coupé à la confirmation',(()=>{
+          const sauve=currentUser;
+          const _sv=window.saveUser;
+          try{
+            window.saveUser=()=>true;
+            localStorage.removeItem(RESIL_FILE);
+            const fin=Date.now()+20*864e5;
+            currentUser=_ath({accessExpiry:fin});
+            demanderResiliation('');
+            if(!checkAccess(currentUser)) return _echec('l\'accès a été coupé');
+            if(currentUser.accessExpiry!==fin) return _echec('l\'échéance a bougé');
+            if(currentUser.status!=='AUTONOMIE_PREMIUM') return _echec('le statut a changé');
+            return finAccesAbonnement(currentUser)===fin
+              ?true:_echec('fin d\'accès : '+finAccesAbonnement(currentUser));
+          } finally { currentUser=sauve; window.saveUser=_sv; }})());
+        ok('Aucun écran de rétention, aucune remise, aucune friction',(()=>{
+          const src=String(_ouvrirResiliation)+String(_confirmerResiliation)
+            +String(demanderResiliation);
+          const interdits=[/confirm\(/,/es-tu s[ûu]r/i,/vraiment/i,/remise/i,
+            /offre sp[ée]ciale/i,/rester/i,/-\s*50\s*%/];
+          for(const r of interdits) if(r.test(src)) return _echec('friction : '+r);
+          // Un seul écran de confirmation, pas deux.
+          return (String(_ouvrirResiliation).match(/Confirmer la résiliation/g)||[]).length===1
+            ?true:_echec('plusieurs confirmations');})());
+
+        // ── La file hors ligne rejoue EXACTEMENT une fois ────────────────
+        ok('La file hors ligne rejoue exactement une fois',(()=>{
+          const sauve=currentUser;
+          const _sv=window.saveUser,_ok=CLOUD.ok,_pu=CLOUD.pushOne;
+          let envois=0;
+          try{
+            window.saveUser=()=>true;
+            CLOUD.ok=()=>true;
+            CLOUD.pushOne=()=>{ envois++; return Promise.resolve(); };
+            localStorage.removeItem(RESIL_FILE);
+            currentUser=_ath();
+            demanderResiliation('');
+            // La demande pose la file ET tente l'envoi.
+            if(envois!==1) return _echec(envois+' envois à la demande');
+            return true;
+          } finally { currentUser=sauve; window.saveUser=_sv;
+            CLOUD.ok=_ok; CLOUD.pushOne=_pu; }})());
+        ok('Hors ligne : la demande est enregistrée et mise en file',(()=>{
+          const sauve=currentUser;
+          const _sv=window.saveUser,_ok=CLOUD.ok;
+          try{
+            window.saveUser=()=>true;
+            CLOUD.ok=()=>false;             // hors ligne
+            localStorage.removeItem(RESIL_FILE);
+            currentUser=_ath();
+            if(demanderResiliation('')!==true) return _echec('refusée hors ligne');
+            // L'accusé existe pour l'utilisateur : le local fait foi.
+            if(!resiliationDemandee(currentUser)) return _echec('rien enregistré localement');
+            const f=JSON.parse(localStorage.getItem(RESIL_FILE)||'null');
+            if(!f||f.email!=='ab@t') return _echec('file non posée');
+            return typeof f.ts==='number'?true:_echec('file sans horodatage');
+          } finally { currentUser=sauve; window.saveUser=_sv; CLOUD.ok=_ok; }})());
+        ok('La file se vide au premier envoi qui aboutit',(()=>{
+          const sauve=currentUser;
+          const _sv=window.saveUser,_ok=CLOUD.ok,_pu=CLOUD.pushOne;
+          try{
+            window.saveUser=()=>true; CLOUD.ok=()=>true;
+            CLOUD.pushOne=()=>Promise.resolve();
+            currentUser=_ath();
+            _fileResilPoser('ab@t',Date.now());
+            // _rejouerResiliation est async : on éprouve la logique de vidage.
+            const src=String(_rejouerResiliation);
+            if(!/_fileResilVider\(\)/.test(src)) return _echec('la file n\'est jamais vidée');
+            const i=src.indexOf('CLOUD.pushOne'), j=src.indexOf('_fileResilVider');
+            // Le vidage vient APRÈS l'envoi : sinon un échec perdrait la demande.
+            return (i>=0&&j>i)?true:_echec('la file est vidée avant l\'envoi');
+          } finally { currentUser=sauve; window.saveUser=_sv;
+            CLOUD.ok=_ok; CLOUD.pushOne=_pu; }})());
+
+        // ── Accès gratuit par code coach : rien du tout ──────────────────
+        ok('Un accès gratuit par code coach ne voit ni écran ni case',(()=>{
+          const gratuit={id:'g',email:'g@t',role:'athlete',status:'COACHING_SUIVI',
+            accessExpiry:Date.now()+60*864e5,coachId:'c1'};
+          if(aUnAbonnement(gratuit)) return _echec('un abonnement lui est prêté');
+          const sauve=currentUser;
+          try{
+            currentUser=gratuit;
+            _renderAbonnement();
+            const z=document.getElementById('cr-abo');
+            if(!z) return _echec('emplacement absent');
+            // Rien dans le DOM : pas un bloc masqué.
+            return (z.innerHTML||'')===''
+              ?true:_echec('du contenu subsiste : '+(z.innerHTML||'').slice(0,60));
+          } finally { currentUser=sauve; }})());
+        ok('Un coach non plus n\'a d\'écran d\'abonnement',
+          !aUnAbonnement({role:'coach',email:'c@t',status:'AUTONOMIE_PREMIUM'}));
+
+        // ── Aucun texte n'affirme l'effectivité chez PayPal ──────────────
+        ok('Le texte est en obligation de MOYENS, pas de résultat',(()=>{
+          if(!/ne peut pas annuler/.test(RESIL_MOYENS))
+            return _echec('le texte laisse croire à une annulation automatique');
+          if(!/rembours/.test(RESIL_MOYENS))
+            return _echec('aucun engagement de remboursement');
+          if(!/CGV/.test(RESIL_MOYENS)) return _echec('la clause n\'est pas citée');
+          // Les étapes PayPal sont données EN COMPLÉMENT, pas en remplacement.
+          if(RESIL_PAYPAL.length!==3) return _echec(RESIL_PAYPAL.length+' étapes');
+          return /paypal\.com/i.test(RESIL_PAYPAL.join(' '))
+            ?true:_echec('les étapes ne nomment pas PayPal');})());
+
+        // ── Trois clics depuis l'accueil ─────────────────────────────────
+        ok('Trois clics depuis l\'accueil : Réglages, Résilier, Confirmer',(()=>{
+          // 1. L'accueil porte le lien vers les réglages.
+          const acc=document.getElementById('s-client-home');
+          if(!acc||!/ouvrirReglagesAthlete\(\)/.test(acc.innerHTML||''))
+            return _echec('aucun accès aux réglages depuis l\'accueil');
+          // 2. L'écran de réglages existe et porte l'emplacement d'abonnement.
+          const reg=document.getElementById('s-client-reglages');
+          if(!reg) return _echec('écran de réglages absent');
+          if(!document.getElementById('cr-abo')) return _echec('emplacement d\'abonnement absent');
+          // 3. Le bouton de résiliation, puis la confirmation.
+          if(!/_ouvrirResiliation\(\)/.test(String(_renderAbonnement)))
+            return _echec('aucun bouton de résiliation');
+          return /_confirmerResiliation\(\)/.test(String(_ouvrirResiliation))
+            ?true:_echec('aucune confirmation');})());
+        ok('L\'export F-10 est enfin atteignable par un athlète',(()=>{
+          // Il vivait dans s-coach-home, où aucun athlète ne passe : le code
+          // était bon, l'emplacement faux. Erreur du lot précédent.
+          const reg=document.getElementById('s-client-reglages');
+          if(!reg) return _echec('écran de réglages absent');
+          const h=reg.innerHTML||'';
+          if(!/exporterMesDonnees\(\)/.test(h)) return _echec('aucun bouton d\'export');
+          return /cr-manifeste/.test(h)
+            ?true:_echec('aucun aperçu du contenu');})());
+      } finally {
+        currentUser=_abU;
+        if(_sauveFile===null) localStorage.removeItem(RESIL_FILE);
+        else localStorage.setItem(RESIL_FILE,_sauveFile);
+      }
     })();
 
     // ══════ PROFIL COACH VISIBLE PAR SES ATHLÈTES ══════

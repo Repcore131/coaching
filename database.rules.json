@@ -17,6 +17,31 @@
           "$autre": { ".validate": false }
         },
 
+        // ── Abonnement : liste blanche, meme patron que sante_privee ───────
+        // Le coach n a AUCUN besoin de lire ces champs — il ne decide ni du
+        // paiement ni de la resiliation. La regle .read du parent le laisse
+        // techniquement passer, mais rien dans le produit ne l y amene, et la
+        // liste blanche empeche qu un champ imprevu vienne s y loger.
+        //
+        // renonciationRetractation.accepte porte un consentement JURIDIQUE
+        // (art. L221-28 13 du code de la consommation) : il doit rester un
+        // booleen horodate, jamais un texte libre ou un objet arbitraire.
+        "abonnement": {
+          "palier": { ".validate": "newData.isString() && newData.val().length < 40" },
+          "prochaineEcheance": { ".validate": "newData.isNumber()" },
+          "resiliationDemandee": {
+            "ts": { ".validate": "newData.isNumber()" },
+            "motif": { ".validate": "newData.isString() && newData.val().length < 300" },
+            "$autre": { ".validate": false }
+          },
+          "renonciationRetractation": {
+            "accepte": { ".validate": "newData.isBoolean()" },
+            "ts": { ".validate": "newData.isNumber()" },
+            "$autre": { ".validate": false }
+          },
+          "$autre": { ".validate": false }
+        },
+
         "coachEmailKey": {
           ".validate": "auth.token.email.replace('.', ',') === $emailKey || (data.exists() && newData.val() === data.val())"
         }
