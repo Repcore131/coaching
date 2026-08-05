@@ -3081,6 +3081,21 @@ const COACH_PHOTO='icons/coach.jpg';
      Ecran plein, pas une modale : sur un telephone, une modale de
      selection avec recherche, filtres et liste longue se bat avec le
      clavier virtuel. Le retour arriere ferme l'ecran, geste connu. -->
+<!-- ══════ GRILLE DE CHARGE (coach) ══════
+     s-coach-charge et non s-charge : le prefixe fait heriter la garde de
+     role de go(), qui renvoie tout non-coach vers son accueil. C est un
+     instrument de programmation, pas un ecran d athlete. -->
+<div id="s-coach-charge" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="go('s-coach-home')">←</button>
+    <span class="topbar-title">Charge du bloc</span>
+    <button onclick="exporterGrilleCharge()" style="background:none;border:none;color:var(--sub);font-size:18px;cursor:pointer;padding:6px 10px" aria-label="Exporter en image">⤓</button>
+  </div>
+  <div class="scroll-area" style="flex:1;padding:12px 14px 20px">
+    <div id="gc-contenu"></div>
+  </div>
+</div>
+
 <div id="s-coach-banque" class="screen">
   <div class="topbar">
     <button class="back-btn" onclick="fermerBanque()">←</button>
@@ -17231,6 +17246,260 @@ function serieDure(s,m,ex,user){
 // _lundiDe est la seule définition de « début de semaine » du fichier, déjà
 // employée par updateStreak et renderNutriDots : on la réutilise plutôt que
 // d'en introduire une seconde qui finirait par diverger.
+// LES COULEURS DE ZONE. Elles reprennent VOL_ZONES, qui sert deja a l ecran
+// de volume de l athlete : deux palettes pour la meme notion finiraient par
+// se contredire.
+const GC_COULEURS=Object.freeze({
+  'sous-MEV' :'#6f6f6f',
+  'MEV-MAV'  :'#3b82f6',
+  'MAV-MRV'  :'#22c55e',
+  'sur-MRV'  :'#e05050'
+});
+// L athlete courant de la grille. Le coach ouvre la grille DEPUIS une fiche.
+let _gcAthlete=null;
+function ouvrirGrilleCharge(athlete){
+  if(!currentUser||currentUser.role!=='coach'){ toast('Réservé aux coachs.','var(--orange)'); return false; }
+  _gcAthlete=athlete||_coachEditClient||null;
+  go('s-coach-charge');
+  _rendreGrilleCharge();
+  return true;
+}
+function _rendreGrilleCharge(){
+  const z=document.getElementById('gc-contenu');
+  if(!z) return false;
+  const u=_gcAthlete;
+  const cases=grilleCharge(u);
+  if(!cases.length){
+    // Programme absent, corrompu, ou aucun muscle jugeable : la vue
+    // disparait, elle ne s affiche pas a moitie.
+    z.innerHTML=emptyState('calendar','<strong style="font-size:14px">Aucun bloc à afficher</strong>'
+      +'<br><span style="font-size:12px;display:inline-block;margin-top:6px">Cet athlète n\'a pas '
+      +'de bloc d\'entraînement daté, ou aucun de ses muscles n\'a de repère de volume.</span>');
+    return false;
+  }
+  const semaines=[...new Set(cases.map(c=>c.index))].sort((a,b)=>a-b);
+  const muscles=[...new Set(cases.map(c=>c.muscle))];
+  const par={}; for(const c of cases) par[c.index+'|'+c.muscle]=c;
+  const meta={}; for(const c of cases) meta[c.index]={prevision:c.prevision,decharge:c.decharge,courante:c.courante};
+  const th='padding:4px 5px;font-size:9.5px;font-weight:800;color:var(--sub);'
+    +'text-transform:uppercase;letter-spacing:.5px;white-space:nowrap';
+  let h='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">'
+    +'<table style="border-collapse:separate;border-spacing:2px;min-width:100%">'
+    +'<tr><th style="'+th+';text-align:left;position:sticky;left:0;background:var(--bg)">Muscle</th>';
+  for(const i of semaines){
+    const m=meta[i]||{};
+    h+='<th style="'+th+';text-align:center'+(m.decharge?';color:var(--info)':'')+'">'
+      +'S'+(i+1)+(m.decharge?'<br>déch.':'')+'</th>';
+  }
+  h+='</tr>';
+  for(const mu of muscles){
+    h+='<tr><td style="'+th+';text-align:left;position:sticky;left:0;background:var(--bg)">'
+      +escapeHtml((MUSCLES[mu]||{}).lib||mu)+'</td>';
+    for(const i of semaines){
+      const c=par[i+'|'+mu];
+      const m=meta[i]||{};
+      const fond=c&&c.repere?GC_COULEURS[c.repere]:'#2a2a2a';
+      // L intensite de fond suit le tonnage relatif : une case a 1 est pleine,
+      // une case a 0,2 est presque effacee. La couleur dit la ZONE, l opacite
+      // dit la CHARGE — deux informations, un seul carre.
+      const alpha=c?(0.18+0.82*(c.tonnageRelatif||0)):0.18;
+      const style='min-width:38px;text-align:center;border-radius:6px;padding:6px 4px;'
+        +'font-size:11px;font-weight:800;color:#fff;background:'+fond+';opacity:'+alpha.toFixed(2)
+        // Previsionnel : pointille. Une case vide ne dit rien, une case
+        // pointillee dit « c est ce qui est prevu, rien n a encore ete fait ».
+        +(m.prevision?';outline:1px dashed rgba(255,255,255,.55);outline-offset:-2px':'')
+        +(m.courante?';box-shadow:0 0 0 2px var(--red)':'');
+      const titre=escapeHtml(((MUSCLES[mu]||{}).lib||mu)+' — S'+(i+1)+' : '
+        +(c?c.series:0)+' séries'+(c&&c.repere?(' ('+c.repere+')'):'')
+        +(m.prevision?' — prévisionnel':''));
+      h+='<td><div title="'+titre+'" aria-label="'+titre+'" style="'+style+'">'
+        +(c?c.series:0)+'</div></td>';
+    }
+    h+='</tr>';
+  }
+  h+='</table></div>';
+  // La legende, parce qu un damier de couleurs sans legende ne se lit pas.
+  h+='<div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:12px">'
+    +Object.keys(GC_COULEURS).map(k=>'<span style="display:inline-flex;align-items:center;gap:5px;'
+      +'font-size:10px;color:var(--sub)"><span style="width:11px;height:11px;border-radius:3px;'
+      +'background:'+GC_COULEURS[k]+'"></span>'+escapeHtml(k)+'</span>').join('')
+    +'<span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--sub)">'
+    +'<span style="width:11px;height:11px;border-radius:3px;border:1px dashed var(--sub)"></span>prévisionnel</span>'
+    +'</div>';
+  h+='<p class="sub" style="font-size:10.5px;line-height:1.6;margin-top:12px">Lecture seule. '
+    +'L\'intensité de la case suit la charge relative à la semaine la plus chargée du bloc.</p>';
+  z.innerHTML=h;
+  return true;
+}
+
+// ══════ EXPORT IMAGE ══════
+// Canvas et rien d autre : pas de bibliotheque de graphiques.
+//
+// CE QUE L IMAGE NE CONTIENT PAS, ET C EST LE POINT : aucun nom, aucune date
+// de naissance, aucune donnee de sante. Elle porte des libelles de muscles,
+// des numeros de semaine et des nombres de series. Un coach l envoie a son
+// athlete ; elle peut aussi finir n importe ou.
+function _gcLignesExport(u){
+  const cases=grilleCharge(u);
+  if(!cases.length) return null;
+  const semaines=[...new Set(cases.map(c=>c.index))].sort((a,b)=>a-b);
+  const muscles=[...new Set(cases.map(c=>c.muscle))];
+  const par={}; for(const c of cases) par[c.index+'|'+c.muscle]=c;
+  return {semaines,muscles,par};
+}
+function dessinerGrilleCharge(u){
+  const d=_gcLignesExport(u);
+  if(!d) return null;
+  const LARG_MUS=104, CASE=44, HAUT=30, MARGE=14;
+  const cv=document.createElement('canvas');
+  cv.width=MARGE*2+LARG_MUS+d.semaines.length*CASE;
+  cv.height=MARGE*2+HAUT*(d.muscles.length+1)+26;
+  const g=cv.getContext('2d');
+  g.fillStyle='#0b0b0b'; g.fillRect(0,0,cv.width,cv.height);
+  g.font='600 11px sans-serif'; g.textBaseline='middle';
+  g.fillStyle='#8a8a8a';
+  d.semaines.forEach((i,k)=>{
+    g.textAlign='center';
+    g.fillText('S'+(i+1),MARGE+LARG_MUS+k*CASE+CASE/2,MARGE+HAUT/2);
+  });
+  d.muscles.forEach((mu,r)=>{
+    const y=MARGE+HAUT*(r+1)+HAUT/2;
+    g.textAlign='left'; g.fillStyle='#8a8a8a';
+    g.fillText(((MUSCLES[mu]||{}).lib||mu).slice(0,15),MARGE,y);
+    d.semaines.forEach((i,k)=>{
+      const c=d.par[i+'|'+mu];
+      const x=MARGE+LARG_MUS+k*CASE;
+      g.globalAlpha=c?(0.18+0.82*(c.tonnageRelatif||0)):0.18;
+      g.fillStyle=(c&&c.repere)?GC_COULEURS[c.repere]:'#2a2a2a';
+      g.fillRect(x+2,y-HAUT/2+2,CASE-4,HAUT-4);
+      g.globalAlpha=1;
+      g.fillStyle='#fff'; g.textAlign='center';
+      g.fillText(String(c?c.series:0),x+CASE/2,y);
+    });
+  });
+  g.fillStyle='#5a5a5a'; g.textAlign='left'; g.font='600 10px sans-serif';
+  g.fillText('RepCore — charge du bloc, séries pondérées par muscle',MARGE,cv.height-MARGE);
+  return cv;
+}
+function exporterGrilleCharge(){
+  const cv=dessinerGrilleCharge(_gcAthlete);
+  if(!cv){ toast('Rien à exporter.','var(--orange)'); return false; }
+  try{
+    cv.toBlob(b=>{
+      if(!b) return;
+      const url=URL.createObjectURL(b);
+      const a=document.createElement('a');
+      // Aucun nom d athlete dans le fichier non plus.
+      a.href=url; a.download='repcore-charge-bloc.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),4000);
+    },'image/png');
+  }catch(e){ toast('Export impossible sur cet appareil.','var(--orange)'); return false; }
+  return true;
+}
+
+// ══════ GRILLE DE CHARGE : semaines × muscles ══════
+// Une lecture en un écran de la trajectoire d'un bloc. LECTURE SEULE : rien
+// ici n'écrit, et aucune assertion ne doit pouvoir prouver le contraire.
+//
+// CE QUE « tonnageRelatif » MESURE, ET POURQUOI PAS DES KILOS.
+// Le volume par muscle de RepCore est une somme de SÉRIES PONDÉRÉES : chaque
+// série vaut son poids d'intensité (table RIR) multiplié par son poids de rôle
+// (primaire 1, secondaire 0,5). C'est cette mesure que MEV/MAV/MRV comparent,
+// et c'est elle qui décide de la couleur d'une case.
+// Calculer en plus un tonnage en kilos par muscle demanderait une SECONDE
+// attribution, avec ses propres arrondis — deux mesures du même effort qui
+// divergeraient au premier exercice mal classé. `tonnageRelatif` est donc la
+// même grandeur, normalisée sur la semaine la plus chargée du bloc, comme la
+// règle 4 le demande. Un seul modèle de volume, pas deux.
+const GRILLE_SEMAINES_MAX=24;
+// PURE. La zone d'un volume face à ses repères. Rend null sans repère : un
+// muscle qu'on ne sait pas juger n'est pas jugé, il est écarté.
+function _repereDe(v,r){
+  if(!r) return null;
+  if(v<r.mev) return 'sous-MEV';
+  if(v<r.mavMin) return 'MEV-MAV';
+  if(v<=r.mrv) return 'MAV-MRV';
+  return 'sur-MRV';
+}
+// PURE. Le volume PRÉVISIONNEL d'une semaine, lu sur le gabarit. Sert aux
+// semaines qui n'ont rien de loggé — une case vide ne dit rien, une case
+// prévisionnelle dit ce qui est prévu.
+//
+// Le RIR n'est pas prescrit dans le gabarit : on compte donc chaque série à
+// POIDS_RIR_ABSENT, exactement comme le fait le calcul réel devant une série
+// sans RIR. Prévisionnel et réalisé se comparent alors sur la même échelle.
+function _volumePrevisionnel(semaine,user){
+  const out={};
+  for(const c of ((semaine&&semaine.creneaux)||[])){
+    if(!c||!c.active) continue;
+    for(const ex of (c.exercises||[])){
+      if(!ex||!ex.name) continue;
+      const n=Math.max(0,parseInt(ex.series,10)||0);
+      if(!n) continue;
+      let cls=null;
+      try{ cls=isCardio(ex)?VOL_CARDIO:resoudreMusclesLecture(ex.name,ex,user); }catch(e){ cls=null; }
+      if(!cls||cls===VOL_CARDIO) continue;
+      const pi=n*POIDS_RIR_ABSENT;
+      for(const m of (cls.p||[])) out[m]=(out[m]||0)+pi*POIDS_ROLE.PRIMAIRE;
+      for(const m of (cls.s||[])) out[m]=(out[m]||0)+pi*POIDS_ROLE.SECONDAIRE;
+    }
+  }
+  return out;
+}
+// PURE, et AUCUNE ÉCRITURE. Rend un tableau plat de cases.
+//
+// `debut` et `fin` sont des index de semaine dans le bloc, bornés au bloc :
+// demander la semaine 40 d'un bloc de 10 ne produit ni erreur ni case.
+// Sans programme, sans repère, sans rien : tableau vide. La vue disparaît,
+// elle ne casse pas.
+function grilleCharge(user,opts){
+  const u=_dossier(user);
+  const semaines=semainesDuBloc(u);
+  if(!semaines.length) return [];
+  const o=opts||{};
+  const d=Math.max(0,Math.round(Number(o.debut)||0));
+  const f=Math.min(semaines.length-1,
+    (o.fin===undefined||o.fin===null)?semaines.length-1:Math.round(Number(o.fin)));
+  if(!(f>=d)) return [];
+  const fenetre=semaines.slice(d,Math.min(f+1,d+GRILLE_SEMAINES_MAX));
+  // Les muscles JUGEABLES, et eux seuls. Un muscle sans repère n'est pas
+  // affiché — règle 3. LOMBAIRES, ABDUCTEURS et ADDUCTEURS en font partie, et
+  // c'est une perte réelle : le lombaire est précisément celui dont la charge
+  // cumulée fait le plus de dégâts. Un coach qui remplit user.reperesVolume
+  // les fait réapparaître.
+  const muscles=Object.keys(MUSCLES).filter(m=>!!reperesEffectifs(u,m));
+  // Premier passage : les volumes bruts, et le maximum du bloc pour la
+  // normalisation de la règle 4.
+  const brut=[];
+  let max=0;
+  for(const w of fenetre){
+    let vols=null, prevision=false;
+    try{ vols=volumeSemaine(u,w.cle)||{}; }catch(e){ vols={}; }
+    const rien=!Object.keys(vols).some(m=>vols[m]>0);
+    if(rien){ vols=_volumePrevisionnel(w,u); prevision=true; }
+    brut.push({w,vols,prevision});
+    for(const m of muscles) if((vols[m]||0)>max) max=vols[m];
+  }
+  const out=[];
+  for(const {w,vols,prevision} of brut){
+    for(const m of muscles){
+      const v=vols[m]||0;
+      out.push({
+        semaine:w.cle, index:w.index, muscle:m,
+        series:Math.round(v*10)/10,
+        // Normalisé sur la semaine la plus chargée du bloc : 1 au maximum,
+        // jamais au-delà. Bloc entièrement vide : 0 partout, pas une division
+        // par zéro.
+        tonnageRelatif:max>0?Math.round((v/max)*1000)/1000:0,
+        repere:_repereDe(v,reperesEffectifs(u,m)),
+        prevision, decharge:!!w.decharge, courante:!!w.courante
+      });
+    }
+  }
+  return out;
+}
+
 // ══════ BLOC D'ENTRAÎNEMENT (programme sur plusieurs semaines) ══════
 // sessions_config décrit UNE semaine type, et c'est tout ce que RepCore savait
 // dire : le même sept-jours répété indéfiniment. Un bloc de dix semaines avec
@@ -43143,6 +43412,151 @@ function testExercices(){
           if(cles.size!==10) return _echec('deux semaines partagent une clé');
           return semainesDuBloc(_prog({})).length===0
             ?true:_echec('un dossier sans programme rend des semaines');})());
+        // ── Grille de charge ────────────────────────────────────────────
+        const _lunG=_lundiDe(new Date()).getTime();
+        // Un dossier avec un bloc de 4 semaines et des seances loggees sur
+        // les deux premieres. Les deux suivantes n'ont rien : previsionnel.
+        const _seanceG=(t,nom,series,poids)=>({id:'s_'+t+nom,date:t,name:'S',
+          data:{[nom]:{sets:Array.from({length:series},()=>({weight:poids,reps:'8',rir:1,done:true})),
+            methode:null,technique:'normale'}}});
+        const _dossierG=(o)=>Object.assign({email:'g@t',id:'g1',role:'athlete',
+          programme:{debut:_lunG-2*7*86400000,semaines:4,decharges:[3]},
+          sessions_config:[{day:'Lundi',name:'HAUT',active:true,exercises:[
+            {name:'DEVELOPPE COUCHE BARRE',series:4,reps:'8',repos:'02 min'}]}],
+          sessions:[
+            _seanceG(_lunG-2*7*86400000+86400000,'DEVELOPPE COUCHE BARRE',8,80),
+            _seanceG(_lunG-7*86400000+86400000,'DEVELOPPE COUCHE BARRE',4,80)]},o||{});
+        ok('grilleCharge n\'écrit RIEN dans le dossier',(()=>{
+          // Lecture seule : une vue qui modifie ce qu'elle affiche est un piège.
+          const u=_dossierG();
+          const avant=JSON.stringify(u);
+          _viderCacheVolume();
+          grilleCharge(u); grilleCharge(u,{debut:1,fin:2}); grilleCharge(u,{debut:99});
+          if(JSON.stringify(u)!==avant) return _echec('le dossier a été modifié');
+          // Et aucune écriture nulle part dans la source.
+          for(const f of [grilleCharge,_volumePrevisionnel,_repereDe]){
+            if(/saveUser\(|DB\.set\(/.test(String(f)))
+              return _echec((f.name||'?')+' écrit');
+          }
+          return true;})());
+        ok('Un muscle SANS repère est absent de la sortie',(()=>{
+          // Règle 3. LOMBAIRES, ABDUCTEURS et ADDUCTEURS n'ont pas de repère :
+          // trois muscles sur dix-sept, et le lombaire est justement celui
+          // dont la charge cumulée fait le plus de dégâts.
+          _viderCacheVolume();
+          const g=grilleCharge(_dossierG());
+          const vus=new Set(g.map(c=>c.muscle));
+          for(const m of ['LOMBAIRES','ABDUCTEURS','ADDUCTEURS'])
+            if(vus.has(m)) return _echec(m+' est affiché sans repère');
+          if(!vus.has('PECTORAUX')) return _echec('un muscle AVEC repère est absent');
+          // Un coach qui fournit ses propres bornes le fait réapparaître.
+          _viderCacheVolume();
+          const u2=_dossierG({reperesVolume:{LOMBAIRES:{mev:4,mavMin:8,mavMax:14,mrv:18}}});
+          return new Set(grilleCharge(u2).map(c=>c.muscle)).has('LOMBAIRES')
+            ?true:_echec('un repère fourni par le coach ne suffit pas');})());
+        ok('Une semaine sans donnée rend le PRÉVISIONNEL du gabarit',(()=>{
+          // Une case vide ne dit rien ; une case prévisionnelle dit ce qui est
+          // prévu. Les semaines 2 et 3 du bloc n'ont aucune séance loggée.
+          _viderCacheVolume();
+          const g=grilleCharge(_dossierG());
+          const s0=g.filter(c=>c.index===0&&c.muscle==='PECTORAUX')[0];
+          const s2=g.filter(c=>c.index===2&&c.muscle==='PECTORAUX')[0];
+          if(!s0||!s2) return _echec('cases manquantes');
+          if(s0.prevision) return _echec('une semaine loggée est dite prévisionnelle');
+          if(!s2.prevision) return _echec('une semaine vide n\'est pas prévisionnelle');
+          // Et la valeur vient bien du gabarit : 4 séries prescrites, comptées
+          // au poids « RIR absent », en primaire.
+          const attendu=Math.round(4*POIDS_RIR_ABSENT*POIDS_ROLE.PRIMAIRE*10)/10;
+          if(s2.series!==attendu) return _echec('prévisionnel '+s2.series+' au lieu de '+attendu);
+          // La décharge est signalée sur la bonne semaine.
+          const s3=g.filter(c=>c.index===3&&c.muscle==='PECTORAUX')[0];
+          if(!s3.decharge) return _echec('la décharge n\'est pas signalée');
+          return !s0.decharge?true:_echec('une décharge est inventée');})());
+        ok('Le tonnage relatif : la semaine la plus chargée vaut 1',(()=>{
+          // Règle 4. Aucune valeur au-dessus, aucune division par zéro.
+          _viderCacheVolume();
+          const g=grilleCharge(_dossierG());
+          const t=g.map(c=>c.tonnageRelatif);
+          if(t.some(x=>!isFinite(x))) return _echec('une valeur n\'est pas un nombre');
+          if(t.some(x=>x>1)) return _echec('une valeur dépasse 1 : '+Math.max(...t));
+          if(t.some(x=>x<0)) return _echec('une valeur est négative');
+          if(Math.max(...t)!==1) return _echec('aucune case ne vaut 1 : '+Math.max(...t));
+          // Un bloc entièrement vide : 0 partout, pas de NaN.
+          _viderCacheVolume();
+          const vide=_dossierG({sessions:[],sessions_config:[]});
+          const gv=grilleCharge(vide);
+          return gv.every(c=>c.tonnageRelatif===0)
+            ?true:_echec('un bloc vide produit des valeurs non nulles');})());
+        ok('Un volume à 120 % du MRV rend « sur-MRV »',(()=>{
+          const r={mev:8,mavMin:12,mavMax:20,mrv:22};
+          if(_repereDe(22*1.2,r)!=='sur-MRV') return _echec('120 % : '+_repereDe(26.4,r));
+          // Les bornes, une par une.
+          if(_repereDe(0,r)!=='sous-MEV') return _echec('zéro');
+          if(_repereDe(7.9,r)!=='sous-MEV') return _echec('juste sous le MEV');
+          if(_repereDe(8,r)!=='MEV-MAV') return _echec('au MEV pile');
+          if(_repereDe(11.9,r)!=='MEV-MAV') return _echec('juste sous le MAV');
+          if(_repereDe(12,r)!=='MAV-MRV') return _echec('au MAV pile');
+          if(_repereDe(22,r)!=='MAV-MRV') return _echec('au MRV pile');
+          if(_repereDe(22.1,r)!=='sur-MRV') return _echec('juste au-dessus du MRV');
+          return _repereDe(99,null)===null?true:_echec('sans repère, un jugement est rendu');})());
+        ok('Un programme corrompu ne produit ni exception ni écran blanc',(()=>{
+          // Règle 7. La vue disparaît, elle ne casse pas.
+          for(const prog of [undefined,null,{},{debut:'hier'},{debut:_lunG,semaines:0},
+                             {debut:_lunG,semaines:99},[],'programme']){
+            let g;
+            try{ _viderCacheVolume(); g=grilleCharge(_dossierG({programme:prog})); }
+            catch(e){ return _echec('exception sur '+JSON.stringify(prog)+' : '+e.message); }
+            if(!Array.isArray(g)) return _echec('sortie non tableau');
+            if(g.length) return _echec('des cases sortent d\'un programme corrompu');
+          }
+          // Et une fenêtre absurde ne produit ni erreur ni case.
+          _viderCacheVolume();
+          if(grilleCharge(_dossierG(),{debut:40,fin:60}).length)
+            return _echec('une fenêtre hors bloc produit des cases');
+          return grilleCharge(_dossierG(),{debut:3,fin:0}).length===0
+            ?true:_echec('une fenêtre inversée produit des cases');})());
+        ok('L\'export image ne contient AUCUNE donnée de santé ni nom',(()=>{
+          // Règle 5. Le coach l'envoie à son athlète ; elle peut aussi finir
+          // n'importe où. On lit le TEXTE réellement dessiné, en interceptant
+          // fillText — inspecter le code source ne prouverait rien.
+          const u=_dossierG({fname:'Amandine',lname:'Delacroix',
+            email:'amandine.delacroix@example.test',
+            grossesse:{etat:'enceinte'},pes:true,
+            constantes:[{type:'tension',sys:128,dia:82,date:'2026-08-01'}],
+            analyses:[{nom:'Ferritine',valeur:18}],
+            cycle:{contraception:'sterilet'},_evol_gender:'F',age:'34',
+            birthdate:'1992-03-14'});
+          const cv=document.createElement('canvas');
+          const g=cv.getContext('2d');
+          const ecrits=[];
+          const vrai=CanvasRenderingContext2D.prototype.fillText;
+          const vraiCreate=document.createElement.bind(document);
+          CanvasRenderingContext2D.prototype.fillText=function(t){ ecrits.push(String(t)); return vrai.apply(this,arguments); };
+          let dessin=null;
+          try{ _viderCacheVolume(); dessin=dessinerGrilleCharge(u); }
+          finally{ CanvasRenderingContext2D.prototype.fillText=vrai; }
+          if(!dessin) return _echec('aucun dessin produit');
+          if(!ecrits.length) return _echec('rien n\'a été écrit sur le canvas');
+          const tout=ecrits.join(' | ').toLowerCase();
+          const interdits=['amandine','delacroix','example.test','enceinte','sterilet',
+            'ferritine','1992','128','82','34'];
+          const fuites=interdits.filter(m=>tout.indexOf(m)>=0);
+          if(fuites.length) return _echec('fuite dans l\'image : '+fuites.join(', '));
+          // Ce qu'elle DOIT contenir : des libellés de muscle et des semaines.
+          return /pectoraux/i.test(tout)&&/s1/i.test(tout)
+            ?true:_echec('l\'image ne porte pas ce qu\'elle devrait : '+tout.slice(0,90));})());
+        ok('La grille est derrière la garde de rôle, et lecture seule',(()=>{
+          // Instrument de programmation : jamais chez l'athlète. Et aucune
+          // édition depuis la vue — règle 1.
+          if(!document.getElementById('s-coach-charge')) return _echec('l\'écran n\'existe pas');
+          if(!/id\.startsWith\('s-coach-'\)/.test(String(go)))
+            return _echec('la garde de préfixe a disparu');
+          const src=String(_rendreGrilleCharge);
+          for(const m of ['onchange=','oninput=','contenteditable'])
+            if(src.indexOf(m)>=0) return _echec('la vue porte une édition : '+m);
+          // Un seul onclick dans la vue : aucun. L'export est dans la topbar.
+          return /peutConsulterBanque|role!=='coach'/.test(String(ouvrirGrilleCharge))
+            ?true:_echec('ouvrirGrilleCharge n\'a pas de garde de rôle');})());
         ok('fichesBanque rend un tableau vide, jamais null',(()=>{
           const sauve=_banque;
           try{
