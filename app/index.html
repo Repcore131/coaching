@@ -3078,6 +3078,26 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
+<!-- ══════ APERÇU DE SÉANCE (athlète) ══════
+     Ce que l'athlète voit AVANT de commencer. Objectif tenu en une phrase :
+     tout scanner en dix secondes. Le bouton « Commencer » est collant en bas
+     — sur une séance de dix exercices, il serait sinon hors de portée du
+     pouce sans faire défiler jusqu'au bout. -->
+<div id="s-seance-apercu" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="fermerApercu()">←</button>
+    <span class="topbar-title" id="ap-titre">Ma séance</span>
+    <span></span>
+  </div>
+  <div class="scroll-area" style="flex:1;padding:0 14px 14px">
+    <div id="ap-contenu"></div>
+  </div>
+  <div style="flex-shrink:0;padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+       background:var(--bg);border-top:1px solid var(--border)">
+    <button class="btn btn-red" style="width:100%;letter-spacing:1.5px" onclick="commencerDepuisApercu()">COMMENCER</button>
+  </div>
+</div>
+
 <div id="s-protocoles" class="screen">
   <div class="topbar">
     <button class="back-btn" onclick="_pfRetourner()">←</button>
@@ -13697,6 +13717,10 @@ function startWorkoutSession(idx){
     return;
   }
   currentUser.currentCycle='ignore';
+  // L'aperçu s'intercale ICI, après les questions de cycle et non avant :
+  // les poser par-dessus un écran de séance qu'on vient d'ouvrir enchaînerait
+  // deux interruptions.
+  if(ouvrirApercuSeance(idx)) return;
   launchWorkout(sess,idx);
 }
 
@@ -14100,6 +14124,190 @@ function _nomSeance(sessConfig,slotIdx){
   const jour=(sessConfig&&sessConfig.day)
     ||((typeof slotIdx==='number'&&DAYS[slotIdx])||'');
   return jour?('Séance '+jour):'Séance';
+}
+// ══════ ILLUSTRATION D'EXERCICE ══════
+// La vignette de l'encart CONSIGNE. Rend une chaîne VIDE quand il n'y a pas
+// d'illustration : le texte reprend alors toute la largeur, et rien ne
+// ressemble à une image qui n'a pas chargé.
+//
+// Une seule taille de fichier, et c'est délibéré : les illustrations font
+// 267×150 px pour ~7,5 Ko. Servir une vignette séparée aurait ajouté 1,5 Mo
+// au dépôt pour économiser trois kilo-octets par affichage. Mesuré au lot 1.
+function _htmlVignetteExo(ex){
+  const img=illustrationDe((ex||{}).name);
+  if(!img) return '';
+  const nom=String((ex||{}).name||'');
+  return `<button type="button" onclick="ouvrirIllustration('${escapeHtml(nom).replace(/'/g,"&#39;")}')"
+    aria-label="Agrandir l'illustration de ${escapeHtml(nom)}"
+    style="flex-shrink:0;padding:0;border:1px solid var(--border);border-radius:8px;
+    background:#fff;cursor:zoom-in;line-height:0;width:96px;height:70px">
+    <img src="${escapeHtml(img)}" alt="" loading="lazy" width="96" height="70"
+      style="width:96px;height:70px;object-fit:cover;border-radius:7px;display:block"></button>`;
+}
+// La visionneuse plein écran. TROIS façons de fermer, comme demandé :
+// toucher hors de l'image, la croix, et un glissement vers le bas. Trois
+// parce qu'aucune n'est évidente pour tout le monde — et qu'une visionneuse
+// dont on ne sait pas sortir est pire que pas de visionneuse.
+const ILLUS_SEUIL_GLISSEMENT=60;   // px avant de considérer que c'est un geste
+function ouvrirIllustration(nom){
+  const img=illustrationDe(nom);
+  if(!img) return false;
+  const ov=document.createElement('div');
+  ov.id='illus-plein';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:9999;'
+    +'display:flex;flex-direction:column;align-items:center;justify-content:center;'
+    +'padding:20px;touch-action:none';
+  ov.innerHTML='<button type="button" aria-label="Fermer" data-fermer="1"'
+    +' style="position:absolute;top:calc(12px + env(safe-area-inset-top));right:14px;'
+    +'width:44px;height:44px;border-radius:50%;background:#ffffff1f;border:none;color:#fff;'
+    +'font-size:20px;line-height:1;cursor:pointer">×</button>'
+    +'<img src="'+escapeHtml(img)+'" alt="'+escapeHtml(String(nom||''))+'"'
+    +' style="max-width:96vw;max-height:76vh;object-fit:contain;border-radius:10px;background:#fff">'
+    +'<div style="font-size:12px;color:#fff;font-weight:800;letter-spacing:.5px;'
+    +'margin-top:14px;text-align:center">'+escapeHtml(String(nom||''))+'</div>'
+    +'<div style="font-size:11px;color:#ffffff8a;margin-top:6px">Touche à côté, la croix, ou glisse vers le bas</div>';
+  const fermer=()=>{ try{ ov.remove(); }catch(e){} };
+  ov.addEventListener('click',e=>{
+    // L'image elle-même ne ferme pas : on peut vouloir la regarder de près
+    // sans que le moindre contact la fasse disparaître.
+    if(e.target.tagName==='IMG') return;
+    fermer();
+  });
+  let y0=null;
+  ov.addEventListener('pointerdown',e=>{ y0=e.clientY; });
+  ov.addEventListener('pointerup',e=>{
+    if(y0!=null&&(e.clientY-y0)>ILLUS_SEUIL_GLISSEMENT) fermer();
+    y0=null;
+  });
+  document.body.appendChild(ov);
+  return true;
+}
+
+// ══════ APERÇU DE SÉANCE ══════
+// Estimation de durée. Les hypothèses sont ÉCRITES, parce qu'un chiffre sans
+// hypothèse se lit comme une promesse :
+//   • 40 s par série effectuée — une série de musculation dépasse rarement
+//     ce temps, échauffement et mise en place exclus ;
+//   • le repos prescrit entre les séries, lu par parseRepos qui existe déjà ;
+//   • le dernier repos de la séance n'est pas compté : on ne se repose pas
+//     après avoir fini.
+// C'est une estimation, l'écran le dit avec un « ~ ».
+const APERCU_SEC_PAR_SERIE=40;
+const APERCU_REPOS_DEFAUT=90;
+// PURE. Rend {exercices, series, minutes} ou null si la séance est vide.
+function resumeSeance(sess){
+  const exos=((sess||{}).exercises)||[];
+  if(!exos.length) return null;
+  let series=0, sec=0;
+  for(const ex of exos){
+    const n=Math.max(1,parseInt(ex.series,10)||0);
+    series+=n;
+    let repos=parseRepos(ex.repos);
+    if(!(repos>0)) repos=APERCU_REPOS_DEFAUT;
+    sec+=n*APERCU_SEC_PAR_SERIE+(n-1)*repos;
+    sec+=repos;                       // repos entre cet exercice et le suivant
+  }
+  let repos=parseRepos(exos[exos.length-1].repos);
+  if(!(repos>0)) repos=APERCU_REPOS_DEFAUT;
+  sec-=repos;                         // ...sauf après le dernier
+  return {exercices:exos.length,series,minutes:Math.max(1,Math.round(sec/60))};
+}
+// PURE. « 3 × 10 » ou « 3 × 8-12 ». Le format des reps du coach est conservé
+// tel quel : le normaliser ferait dire à l'écran autre chose que la fiche.
+function _apSeriesReps(ex){
+  const n=parseInt(ex.series,10);
+  const r=String(ex.reps||'').trim();
+  if(!n&&!r) return '';
+  return (n?n:'?')+(r?(' × '+r):'');
+}
+let _apIdx=null;
+// L'aperçu remplace le lancement direct : startWorkoutSession y passe.
+function ouvrirApercuSeance(idx){
+  const cfg=currentUser.sessions_config||initSessionsConfig();
+  const sess=cfg[idx];
+  if(!sess||!(sess.exercises||[]).length){
+    toast('Aucun exercice dans cette séance.','var(--red)'); return false;
+  }
+  _apIdx=idx;
+  go('s-seance-apercu');
+  _renderApercu();
+  // Les illustrations arrivent après le premier rendu : l'écran s'affiche
+  // tout de suite, les vignettes se posent ensuite.
+  chargerIndexIllustrations().then(()=>{ if(_apIdx===idx) _renderApercu(); });
+  return true;
+}
+function fermerApercu(){ _apIdx=null; go('s-client-home'); }
+function commencerDepuisApercu(){
+  const idx=_apIdx;
+  if(idx==null) return false;
+  const cfg=currentUser.sessions_config||initSessionsConfig();
+  const sess=cfg[idx];
+  if(!sess) return false;
+  _apIdx=null;
+  launchWorkout(sess,idx);
+  return true;
+}
+// Une ligne dépliable. <details> natif : il gère le clavier, le lecteur
+// d'écran et l'état ouvert/fermé sans une ligne de JavaScript.
+function _apLigne(ex,i){
+  const img=illustrationDe(ex.name);
+  const sr=_apSeriesReps(ex);
+  const l=(t,v)=>v?`<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:2px 0">`
+    +`<span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:#eee;text-align:right">${escapeHtml(String(v))}</span></div>`:'';
+  const note=(ex.description||ex.note||'').trim();
+  return `<details style="background:var(--surface-1);border:1px solid var(--border);
+    border-radius:12px;margin-bottom:8px;overflow:hidden">
+    <summary style="display:flex;align-items:center;gap:11px;padding:9px 11px;cursor:pointer;
+      list-style:none;min-height:56px">
+      ${img?`<img src="${escapeHtml(img)}" alt="" loading="lazy" width="52" height="38"
+        style="width:52px;height:38px;object-fit:cover;border-radius:7px;background:#fff;flex-shrink:0">`
+        :`<div style="width:52px;height:38px;border-radius:7px;background:var(--surface-2);
+          border:1px solid var(--border);flex-shrink:0"></div>`}
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:800;font-size:12.5px;line-height:1.3">${escapeHtml(ex.name||'Exercice '+(i+1))}</div>
+        ${sr?`<div class="sub" style="font-size:11px;margin-top:2px">${escapeHtml(sr)}</div>`:''}
+      </div>
+      <span style="color:var(--sub);font-size:13px;flex-shrink:0;width:24px;text-align:center">▾</span>
+    </summary>
+    <div style="padding:2px 13px 12px 13px;border-top:1px solid var(--border)">
+      ${l('Séries',ex.series)}
+      ${l('Répétitions',ex.reps)}
+      ${l('Repos',ex.repos)}
+      ${l('Tempo',ex.tempo)}
+      ${l('Charge cible',ex.charge||ex.poids||'')}
+      ${l('RIR',ex.rir)}
+      ${note?`<div style="margin-top:8px;font-size:12px;color:#bbb;line-height:1.6;
+        border-left:2px solid var(--border);padding-left:9px">${escapeHtml(note)}</div>`:''}
+    </div>
+  </details>`;
+}
+function _renderApercu(){
+  const z=document.getElementById('ap-contenu');
+  if(!z||_apIdx==null) return false;
+  const cfg=currentUser.sessions_config||[];
+  const sess=cfg[_apIdx];
+  if(!sess) return false;
+  const t=document.getElementById('ap-titre');
+  if(t) t.textContent=_nomSeance(sess,_apIdx);
+  const r=resumeSeance(sess);
+  const chiffre=(v,lib)=>`<div style="flex:1;text-align:center;background:var(--surface-1);
+    border:1px solid var(--border);border-radius:10px;padding:9px 6px">
+    <div style="font-size:17px;font-weight:900;color:#fff;line-height:1">${escapeHtml(String(v))}</div>
+    <div class="sub" style="font-size:10px;margin-top:3px;text-transform:uppercase;letter-spacing:.5px">${escapeHtml(lib)}</div></div>`;
+  const notes=(sess.notes||'').trim();
+  z.innerHTML=
+    `<div style="display:flex;gap:8px;margin:12px 0 14px">
+      ${chiffre(r?r.exercices:0,'exercices')}
+      ${chiffre(r?r.series:0,'séries')}
+      ${chiffre(r?('~'+r.minutes+' min'):'—','durée')}
+    </div>`
+    +(notes?`<div style="background:var(--surface-1);border:1px solid var(--border);
+      border-left:3px solid var(--red);border-radius:0 10px 10px 0;padding:11px 13px;margin-bottom:14px">
+      <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:1.5px;font-weight:800;
+      text-transform:uppercase;margin-bottom:4px">Mot de ton coach</div>
+      <div style="font-size:12px;color:#bbb;line-height:1.65">${escapeHtml(notes)}</div></div>`:'')
+    +(sess.exercises||[]).map(_apLigne).join('');
+  return true;
 }
 function launchWorkout(sessConfig,slotIdx){
   if(!sessConfig?.exercises?.length){toast('Aucun exercice dans cette séance.','var(--red)');return;}
@@ -14630,10 +14838,13 @@ function _blocExo(idx,estSS){
 
       ${_htmlMonteeCharge(sug,ex,idx)}
       ${_blocContrainteSeance(ex,idx)}
-      ${(ex.description||ex.note||ex.tempo)?`<div style="background:var(--surface-2);border-radius:10px;padding:11px 14px;margin-bottom:12px">
+      ${(ex.description||ex.note||ex.tempo||illustrationDe(ex.name))?`<div style="background:var(--surface-2);border-radius:10px;padding:11px 14px;margin-bottom:12px">
         <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--red);margin-bottom:5px">CONSIGNE</div>
         ${blocTempo(ex)}
-        <div style="font-size:12px;color:#bbb;line-height:1.6">${escapeHtml(ex.description||'')}${ex.note&&!(ex.description||'').includes(ex.note)?(ex.description?'<br>':'')+escapeHtml(ex.note):''}</div>
+        <div style="display:flex;gap:11px;align-items:flex-start">
+          ${_htmlVignetteExo(ex)}
+          <div style="flex:1;min-width:0;font-size:12px;color:#bbb;line-height:1.6">${escapeHtml(ex.description||'')}${ex.note&&!(ex.description||'').includes(ex.note)?(ex.description?'<br>':'')+escapeHtml(ex.note):''}</div>
+        </div>
       </div>`:''}
 
       ${normaliserUrlVideo(ex.videoUrl)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl))}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:12px;background:#08081a;border:1px solid #2a2a5a;border-radius:10px;padding:11px 14px;margin-bottom:12px;text-decoration:none;color:#7799ff">
@@ -41217,6 +41428,177 @@ function testExercices(){
           const src=String(_pxDragDebut);
           return /g\[0\]===i/.test(src.replace(/\s+/g,''))
             ?true:_echec('la poignée ne se limite plus à la tête de groupe');})());
+        // ── Côté athlète, lot 4 : aperçu, illustration, saisie libre ─────
+        const _sess=(ex)=>({day:'Lundi',name:'HAUT',active:true,notes:'',exercises:ex});
+        ok('resumeSeance compte les exercices, les séries, et estime la durée',(()=>{
+          const r=resumeSeance(_sess([
+            {name:'SQUAT',series:4,reps:'8',repos:'02 min'},
+            {name:'DIPS',series:3,reps:'10',repos:'01 min'}]));
+          if(!r) return _echec('aucun résumé');
+          if(r.exercices!==2) return _echec('exercices : '+r.exercices);
+          if(r.series!==7) return _echec('séries : '+r.series);
+          // Le calcul, à la main, avec les hypothèses ÉCRITES dans le code :
+          //   SQUAT : 4×40 s + 3×120 s de repos            = 520 s
+          //   + le repos qui sépare les deux exercices     = 120 s
+          //   DIPS  : 3×40 s + 2×60 s de repos             = 240 s
+          //   pas de repos après le dernier                =   0 s
+          //   total 880 s → 15 min
+          if(r.minutes!==15) return _echec('durée : '+r.minutes+' min au lieu de 15');
+          // Le dernier repos n'est PAS compté : on ne se repose pas après
+          // avoir fini. Une séance d'un seul exercice le montre nettement.
+          const un=resumeSeance(_sess([{name:'X',series:1,reps:'10',repos:'05 min'}]));
+          if(un.minutes!==1) return _echec('un exercice, une série : '+un.minutes+' min');
+          return resumeSeance(_sess([]))===null&&resumeSeance(null)===null
+            ?true:_echec('une séance vide rend un résumé');})());
+        ok('Un repos illisible retombe sur le repli, pas sur zéro',(()=>{
+          // parseRepos rend null sur « », « au feeling », « ? ». Et null NE
+          // DONNE PAS NaN : il se coerce en 0 dans une multiplication. Sans
+          // repli, la durée ne casse donc pas — elle devient silencieusement
+          // trop courte, ce qui est pire qu'une erreur visible.
+          // On compare à un repos de 90 s écrit en toutes lettres : les deux
+          // estimations doivent être IDENTIQUES.
+          const ref=resumeSeance(_sess([{name:'X',series:3,reps:'10',repos:'01 min 30'}]));
+          if(!ref||ref.minutes<2) return _echec('référence inattendue : '+(ref&&ref.minutes));
+          for(const r of ['','au feeling','?',null,undefined]){
+            const v=resumeSeance(_sess([{name:'X',series:3,reps:'10',repos:r}]));
+            if(!v||!isFinite(v.minutes))
+              return _echec('repos '+JSON.stringify(r)+' → '+(v&&v.minutes));
+            if(v.minutes!==ref.minutes)
+              return _echec('repos '+JSON.stringify(r)+' estimé '+v.minutes
+                +' min au lieu de '+ref.minutes+' : le repli ne s\'applique pas');
+          }
+          // Et le repli vaut bien la constante annoncée, pas un chiffre en dur
+          // recopié ailleurs.
+          return APERCU_REPOS_DEFAUT===90?true:_echec('APERCU_REPOS_DEFAUT='+APERCU_REPOS_DEFAUT);})());
+        ok('_apSeriesReps garde le format du coach, il ne le normalise pas',(()=>{
+          // « 8-12 » doit rester « 8-12 » : le réécrire ferait dire à l'écran
+          // autre chose que la fiche.
+          if(_apSeriesReps({series:3,reps:'8-12'})!=='3 × 8-12')
+            return _echec(_apSeriesReps({series:3,reps:'8-12'}));
+          if(_apSeriesReps({series:4,reps:'10 par jambe'})!=='4 × 10 par jambe')
+            return _echec('format libre perdu');
+          if(_apSeriesReps({series:'',reps:''})!=='') return _echec('rien ne devrait s\'afficher');
+          return _apSeriesReps({series:'',reps:'10'})==='? × 10'
+            ?true:_echec('séries absentes : '+_apSeriesReps({series:'',reps:'10'}));})());
+        ok('L\'aperçu s\'intercale AVANT le lancement, pas après',(()=>{
+          // Le poser après reviendrait à montrer un résumé d'une séance déjà
+          // commencée. On lit la source réelle de startWorkoutSession.
+          const src=String(startWorkoutSession).replace(/\s+/g,'');
+          const iAp=src.indexOf('ouvrirApercuSeance'), iLan=src.indexOf('launchWorkout(sess,idx)');
+          if(iAp<0) return _echec('l\'aperçu n\'est pas branché');
+          if(!(iAp<iLan)) return _echec('l\'aperçu vient après le lancement');
+          // Et il court-circuite : sans le return, la séance démarrerait
+          // DERRIÈRE l'aperçu.
+          return /if\(ouvrirApercuSeance\(idx\)\)return;/.test(src)
+            ?true:_echec('l\'aperçu ne court-circuite pas le lancement');})());
+        ok('L\'aperçu refuse une séance vide plutôt que d\'ouvrir un écran nu',(()=>{
+          const sauve=currentUser;
+          try{
+            currentUser={id:'a',email:'a@t',role:'athlete',sessions_config:[_sess([])]};
+            if(ouvrirApercuSeance(0)) return _echec('une séance vide a été ouverte');
+            return !ouvrirApercuSeance(99)?true:_echec('un indice inexistant a été ouvert');
+          } finally { currentUser=sauve; }})());
+        ok('L\'aperçu affiche vignette, séries × reps, et le détail replié',(()=>{
+          const sauve=currentUser, sauveIdx=_apIdx;
+          const sauveIndex=_exoIndex;
+          try{
+            _exoIndex=new Set(['souleve-de-terre']);
+            currentUser={id:'a',email:'a@t',role:'athlete',sessions_config:[_sess([
+              {name:'SOULEVE DE TERRE',series:4,reps:'6',repos:'03 min',tempo:'3-0-1-0',
+               description:'Dos droit, barre près des tibias.'},
+              {name:'EXERCICE SANS IMAGE',series:3,reps:'12',repos:'01 min'}])]};
+            currentUser.sessions_config[0].notes='Séance lourde, échauffe-toi bien.';
+            _apIdx=0;
+            if(!_renderApercu()) return _echec('le rendu a échoué');
+            const z=document.getElementById('ap-contenu');
+            const h=z.innerHTML;
+            // Le mot du coach, en haut.
+            if(h.indexOf('Séance lourde')<0) return _echec('la note du coach est absente');
+            // Les trois chiffres d'en-tête.
+            const txt=z.innerText.replace(/\s+/g,' ');
+            if(!/2 exercices/i.test(txt)) return _echec('compte d\'exercices : '+txt.slice(0,80));
+            if(!/7 s[ée]ries/i.test(txt)) return _echec('compte de séries : '+txt.slice(0,80));
+            // Séries × reps sur chaque ligne.
+            if(h.indexOf('4 × 6')<0||h.indexOf('3 × 12')<0) return _echec('séries × reps absent');
+            // Une vignette pour celui qui en a une, un cadre neutre pour l'autre.
+            if(z.querySelectorAll('img').length!==1) return _echec('vignettes : '+z.querySelectorAll('img').length);
+            // Le détail est REPLIÉ : <details> sans `open`.
+            const det=z.querySelectorAll('details');
+            if(det.length!==2) return _echec('lignes dépliables : '+det.length);
+            if([...det].some(d=>d.open)) return _echec('une ligne est déjà dépliée');
+            // Et le détail contient bien la prescription.
+            if(h.indexOf('3-0-1-0')<0) return _echec('le tempo n\'est pas dans le détail');
+            return h.indexOf('Dos droit')>=0?true:_echec('la note de l\'exercice est absente');
+          } finally { currentUser=sauve; _apIdx=sauveIdx; _exoIndex=sauveIndex;
+            const z=document.getElementById('ap-contenu'); if(z) z.innerHTML=''; }})());
+        ok('Un exercice SANS illustration ne rend aucune balise image',(()=>{
+          // Le cahier des charges : placeholder neutre, non cliquable, et le
+          // layout ne se casse pas. Une chaîne vide suffit — le texte reprend
+          // toute la largeur, et rien ne ressemble à une image cassée.
+          const sauve=_exoIndex;
+          try{
+            _exoIndex=new Set(['souleve-de-terre']);
+            const sans=_htmlVignetteExo({name:'EXERCICE INVENTE'});
+            if(sans!=='') return _echec('du balisage est rendu : '+sans.slice(0,60));
+            if(_htmlVignetteExo({})!==''||_htmlVignetteExo(null)!=='')
+              return _echec('un exercice vide rend du balisage');
+            const avec=_htmlVignetteExo({name:'SOULEVE DE TERRE'});
+            if(avec.indexOf('<img')<0) return _echec('aucune image pour un exercice qui en a une');
+            // Cliquable, et annoncé comme tel aux lecteurs d'écran.
+            if(avec.indexOf('ouvrirIllustration')<0) return _echec('la vignette n\'ouvre rien');
+            return avec.indexOf('aria-label')>=0?true:_echec('aucun libellé accessible');
+          } finally { _exoIndex=sauve; }})());
+        ok('La visionneuse se ferme de TROIS façons, et pas sur l\'image',(()=>{
+          const sauve=_exoIndex;
+          try{
+            _exoIndex=new Set(['souleve-de-terre']);
+            if(ouvrirIllustration('EXERCICE INVENTE')) return _echec('ouverte sans illustration');
+            if(!ouvrirIllustration('SOULEVE DE TERRE')) return _echec('refusée alors qu\'une image existe');
+            const ov=document.getElementById('illus-plein');
+            if(!ov) return _echec('la visionneuse n\'est pas dans le DOM');
+            if(!ov.querySelector('[data-fermer]')) return _echec('aucune croix');
+            // Toucher l'IMAGE ne ferme pas : on peut vouloir la regarder.
+            ov.querySelector('img').dispatchEvent(new MouseEvent('click',{bubbles:true}));
+            if(!document.getElementById('illus-plein')) return _echec('un tap sur l\'image ferme');
+            // Le glissement vers le bas ferme.
+            ov.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,clientY:100}));
+            ov.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,clientY:100+ILLUS_SEUIL_GLISSEMENT+10}));
+            if(document.getElementById('illus-plein')) return _echec('le glissement ne ferme pas');
+            // Un glissement TROP COURT ne ferme pas : sinon un simple tap
+            // imprécis fermerait sans qu'on l'ait voulu.
+            ouvrirIllustration('SOULEVE DE TERRE');
+            const ov2=document.getElementById('illus-plein');
+            ov2.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,clientY:100}));
+            ov2.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,clientY:110}));
+            if(!document.getElementById('illus-plein')) return _echec('un glissement de 10 px ferme');
+            // Et le fond ferme.
+            ov2.dispatchEvent(new MouseEvent('click',{bubbles:true}));
+            return !document.getElementById('illus-plein')
+              ?true:_echec('le fond ne ferme pas');
+          } finally { _exoIndex=sauve;
+            const r=document.getElementById('illus-plein'); if(r) r.remove(); }})());
+        ok('Un athlète AUTONOME n\'a aucun accès à la banque dans son formulaire',(()=>{
+          // Le cahier des charges est explicite : aucune autocomplétion, aucune
+          // suggestion, aucun catalogue. Sa saisie est 100 % libre.
+          const auto={id:'a',email:'a@t',role:'athlete',status:'AUTONOMIE_PREMIUM',coachId:null};
+          if(peutConsulterBanque(auto)) return _echec('il peut consulter la banque');
+          const sauve=currentUser;
+          try{
+            currentUser=auto;
+            // Le bouton « Depuis la banque » est masqué par renderProgEx.
+            const z=document.getElementById('prog-banque');
+            if(!z) return _echec('l\'emplacement du bouton a disparu');
+            progEx=[{name:'MON EXERCICE',series:3,reps:'10',repos:'01 min',description:''}];
+            renderProgEx();
+            if(z.style.display!=='none') return _echec('le bouton de banque lui est offert');
+            // Et ouvrir la banque lui est refusé, bouton ou pas.
+            if(peutConsulterBanque()) return _echec('la garde d\'ouverture le laisse passer');
+            // Sa ligne d'exercice reste en saisie libre : un champ texte, pas
+            // une liste déroulante alimentée par la banque.
+            const html=document.getElementById('prog-exercises').innerHTML;
+            return html.indexOf('bqChoisir')<0&&html.indexOf('ouvrirBanque')<0
+              ?true:_echec('un chemin vers la banque subsiste dans son formulaire');
+          } finally { currentUser=sauve; progEx=[]; }})());
         ok('fichesBanque rend un tableau vide, jamais null',(()=>{
           const sauve=_banque;
           try{
