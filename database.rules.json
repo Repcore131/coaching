@@ -40,6 +40,28 @@
         "phone": {
           ".validate": "newData.isString() && newData.val().length < 40"
         },
+
+        // ── Contact : lisible SEULEMENT si le coach a consenti ─────────────
+        // Le .read du parent ouvre coach_public a tout athlete rattache. Un
+        // enfant ne peut pas etre plus permissif que son parent, mais il peut
+        // etre plus RESTRICTIF : ce noeud n est lisible que si mode vaut autre
+        // chose que 'aucun' ET qu un consentement est horodate.
+        //
+        // Le proprietaire, lui, se lit toujours : sans quoi le coach ne
+        // pourrait plus relire son propre reglage pour l afficher.
+        "contact": {
+          ".read": "auth != null && (auth.token.email.replace('.', ',') === $emailKey || (data.child('mode').val() !== 'aucun' && data.child('mode').exists() && data.child('consentAt').exists()))",
+          "mode": {
+            ".validate": "newData.isString() && newData.val().matches(/^(aucun|whatsapp|email)$/)"
+          },
+          "consentAt": {
+            ".validate": "newData.isString() && newData.val().length < 40"
+          },
+          "horaires": {
+            ".validate": "newData.isString() && newData.val().length < 200"
+          },
+          "$autre": { ".validate": false }
+        },
         "coachPhoto": {
           ".validate": "newData.isString() && newData.val().length < 400000"
         },

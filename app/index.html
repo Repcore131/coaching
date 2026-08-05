@@ -1325,9 +1325,18 @@ const COACH_PHOTO='icons/coach.jpg';
               <div style="font-size:11px;color:var(--sub);margin-top:2px">Bouton visible par tes athlètes sur leur accueil</div>
             </div>
           </div>
-          <div style="display:flex;gap:8px;margin-bottom:8px">
-            <input id="coach-phone-input" type="tel" placeholder="+33 6 12 34 56 78" style="flex:1;font-size:14px;padding:11px 14px">
-            <button onclick="saveCoachPhone()" style="background:#22c55e;border:none;color:#000;border-radius:3px;padding:11px 18px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;white-space:nowrap">ENREGISTRER</button>
+          <div id="coach-contact-modes" style="display:flex;flex-direction:column;gap:7px;margin-bottom:10px"></div>
+          <div id="coach-contact-wa" style="display:none">
+            <div style="display:flex;gap:8px;margin-bottom:8px">
+              <input id="coach-phone-input" type="tel" placeholder="+33 6 12 34 56 78" style="flex:1;font-size:14px;padding:11px 14px">
+              <button onclick="saveCoachPhone()" style="background:#22c55e;border:none;color:#000;border-radius:3px;padding:11px 18px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1px;white-space:nowrap">ENREGISTRER</button>
+            </div>
+            <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;margin-bottom:8px">
+              <input type="checkbox" id="coach-contact-consent" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px" onchange="basculerConsentContact(this.checked)">
+              <span style="font-size:11.5px;color:#ddd;line-height:1.55">J'accepte que ce numéro soit communiqué à mes athlètes rattachés</span>
+            </label>
+            <input id="coach-contact-horaires" type="text" placeholder="Mes horaires de réponse (facultatif)" maxlength="200" style="width:100%;font-size:13px;padding:10px 12px;margin-bottom:8px" oninput="saveHorairesContact(this.value)">
+            <div id="coach-contact-etat" style="font-size:10px;color:var(--text-faint);line-height:1.5;margin-bottom:6px"></div>
           </div>
           <div id="coach-phone-preview" style="font-size:var(--fs-xs);color:var(--sub)"></div>
         </div>
@@ -1810,6 +1819,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <p class="sub" id="clh-date" style="margin-top:4px;font-size:12px"></p>
         <p class="sub" id="clh-coach" style="margin-top:2px;font-size:11px;letter-spacing:.5px;text-transform:uppercase"></p>
         <a id="clh-contact-link" href="#" target="_blank" rel="noopener" style="display:none;font-size:11px;color:var(--red);font-weight:700;letter-spacing:.5px;margin-top:6px;text-decoration:none;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg> Un souci ? Contacte ton coach</a>
+        <div id="clh-contact-note" style="display:none;font-size:10px;color:var(--text-faint);line-height:1.5;margin-top:4px"></div>
       </div>
 
       <!-- COACH BANNER -->
@@ -4061,7 +4071,11 @@ const CLOUD={
   // atteindre le téléphone de l'athlète, sinon aucun avertissement de santé
   // ne peut se déclencher de son côté. C'est un jugement de métier publié
   // volontairement, au même titre que la photo ou la bannière.
-  CHAMPS_PROFIL_COACH:['fname','lname','teamName','catchphrase','coachPhoto','promoBanners','phone','chargesSchema'],
+  // 'phone' RESTE pour les dossiers non migrés : le retirer casserait un test
+  // existant et priverait d'un repli les profils déjà publiés. Il ne devient
+  // plus jamais un lien sans 'contact.consentAt' — c'est contactNumero qui
+  // décide, pas la présence du champ.
+  CHAMPS_PROFIL_COACH:['fname','lname','teamName','catchphrase','coachPhoto','promoBanners','phone','chargesSchema','contact'],
   // ── Santé privée : ce que le coach ne voit pas, et qui survit quand même ──
   // La règle de /users donne au coach un accès LECTURE ET ÉCRITURE sur le
   // dossier entier de ses athlètes, sans granularité. Les blocs non partagés
@@ -7127,6 +7141,79 @@ function profilCoachLocal(key){
   }catch(e){ return null; }
 }
 
+// ══════ CONTACT COACH : UN CONSENTEMENT, PAS UN CHAMP ══════
+// Le numéro personnel du coach vivait dans coach_public.phone, lisible par
+// TOUS ses athlètes rattachés — la règle RTDB ne portait qu'un .validate
+// d'écriture, la lecture étant ouverte par le nœud parent. Personne n'avait
+// jamais dit oui.
+//
+// Trois états, et le défaut est le silence. Sous 'whatsapp', le numéro n'est
+// publié qu'avec un consentement HORODATÉ, révocable d'un geste — RGPD
+// art. 7.3 : retirer doit être aussi simple qu'accorder.
+const CONTACT_MODES=Object.freeze(['aucun','whatsapp','email']);
+const CONTACT_JOURNAL_MAX=100;
+// MIGRATION RESTRICTIVE, et c'est le point qui compte : un phone hérité, sans
+// consentAt, bascule en 'aucun'. Jamais l'inverse. Un consentement ne se
+// déduit pas d'un champ rempli à une époque où la question n'était pas posée.
+//
+// PURE : elle ne réécrit rien, elle LIT. La bascule est un défaut de lecture,
+// pas une écriture au chargement.
+function contactCoach(pub){
+  const c=(pub||{}).contact;
+  const vide={mode:'aucun',consentAt:null,horaires:''};
+  if(!c||typeof c!=='object') return vide;
+  const mode=CONTACT_MODES.indexOf(c.mode)>=0?c.mode:'aucun';
+  if(mode==='aucun') return vide;
+  // Un mode sans consentement horodaté ne vaut rien : c'est exactement le
+  // cas du phone hérité.
+  if(!c.consentAt||typeof c.consentAt!=='string') return vide;
+  return {mode:mode,consentAt:c.consentAt,
+    horaires:typeof c.horaires==='string'?c.horaires.slice(0,200):''};
+}
+// PURE. Le numéro publiable, ou ''. Un numéro corrompu ou non exploitable
+// par wa.me retombe silencieusement sur 'aucun' — un bouton mort vaut moins
+// que pas de bouton.
+function contactNumero(pub){
+  const c=contactCoach(pub);
+  if(c.mode!=='whatsapp') return '';
+  const n=_numWa((pub||{}).phone);
+  return (n&&n.length>=8)?n:'';
+}
+// Journal des RENVOIS : une date, un destinataire HASHÉ, rien d'autre. Ni le
+// contenu de l'échange, ni le numéro, ni un identifiant en clair. RepCore ne
+// reçoit pas ce qui se dit sur WhatsApp et n'a pas à le savoir.
+//
+// Le hash est un FNV-1a tronqué : il ne sert pas à protéger un secret — un
+// identifiant d'athlète n'en est pas un — mais à éviter qu'un journal exporté
+// nomme des personnes. Il suffit à dédoublonner, pas à réidentifier.
+function _hashCourt(x){
+  const s2=String(x||'');
+  let h=2166136261;
+  for(let i=0;i<s2.length;i++){ h^=s2.charCodeAt(i); h=Math.imul(h,16777619); }
+  return (h>>>0).toString(36);
+}
+// Borné à 100 : un journal qui grossit sans fin finit par peser dans le
+// document poussé à chaque synchronisation, et personne ne lit la 400e ligne.
+function journaliserRenvoi(coach,athleteId,ref){
+  if(!coach||typeof coach!=='object') return null;
+  if(!Array.isArray(coach.journalRenvoi)) coach.journalRenvoi=[];
+  const d=(ref instanceof Date?ref:new Date()).toISOString();
+  coach.journalRenvoi.push({d:d,a:_hashCourt(athleteId)});
+  if(coach.journalRenvoi.length>CONTACT_JOURNAL_MAX)
+    coach.journalRenvoi=coach.journalRenvoi.slice(-CONTACT_JOURNAL_MAX);
+  return coach.journalRenvoi;
+}
+// Ce que l'athlète lit avant de partir. Il quitte RepCore : le dire est la
+// moindre des choses, et ça vaut mieux qu'un bouton qui ouvre une autre app
+// sans prévenir.
+const CONTACT_SORTIE='Tu quittes RepCore. Cet échange ne sera pas conservé '
+  +'dans ton dossier.';
+// Ce que le coach lit en révoquant. Une révocation empêche les FUTURS accès ;
+// elle ne rappelle pas ce qui a déjà été communiqué, et prétendre le
+// contraire serait mentir.
+const CONTACT_REVOCATION='Tes athlètes ne verront plus ton numéro. Ceux qui '
+  +'l\'ont déjà noté le gardent : une révocation ne rappelle pas ce qui a été '
+  +'communiqué.';
 function _coachContactHref(coachId,texte,users){
   if(!coachId) return '';
   const us=users||DB.get('users')||{};
@@ -7137,9 +7224,13 @@ function _coachContactHref(coachId,texte,users){
   const _pub=profilCoachLocal(_cle);
   const email=Object.keys(us).find(k=>us[k]&&us[k].id===coachId)
     ||(_cle?_cle.replace(/,/g,'.'):null);
-  const phone=_numWa(coach?.phone||_pub?.phone);
-  if(phone&&!coach?.phone) return texte?waLink(_pub.phone,texte):('https://wa.me/'+phone);
-  if(phone) return texte?waLink(coach.phone,texte):('https://wa.me/'+phone);
+  // LE CONSENTEMENT COMMANDE. Sans lui, aucun numéro ne devient un lien —
+  // ni celui du profil public, ni celui du dossier local. Le repli email
+  // ci-dessous reste : joindre son coach par mail n'expose pas un numéro
+  // personnel, et l'adresse sert déjà à l'authentification.
+  const _src=coach?.phone?coach:_pub;
+  const phone=contactNumero(_src);
+  if(phone) return texte?waLink(_src.phone,texte):('https://wa.me/'+phone);
   if(!email) return '';
   return 'mailto:'+email+(texte?'?subject='+encodeURIComponent('RepCore')+'&body='+encodeURIComponent(texte):'');
 }
@@ -7652,12 +7743,18 @@ function renderDouleurCoach(c){
 // incohérent. On lui dit ce qu'il a lui-même saisi, on lui dit de ne pas
 // forcer, et on lui donne le lien pour joindre son coach. Aucun conseil
 // médical, aucune modification de son programme.
+// UNE DOULEUR DÉCLARÉE NE DÉBOUCHE PLUS SUR UN RENVOI HORS DE L'APP.
+// Le lien pré-remplissait un message WhatsApp décrivant la douleur et
+// l'exercice concerné : une donnée de santé partant vers Meta, à l'initiative
+// du produit, sans que personne l'ait demandé.
+//
+// Ce qui reste est ce qui aide : le constat, la consigne de ne pas forcer, le
+// bouton pour STRUCTURER la gêne dans l'app, et le disclaimer. Le chemin de
+// sécurité existant prime toujours et n'est pas touché.
 function blocDouleurAthlete(user){
   let sg; try{ sg=signauxEntrainement(user); }catch(e){ return ''; }
   if(!sg.douleur||!sg.details.douleur) return '';
   const x=sg.details.douleur;
-  const href=_coachContactHref(user&&user.coachId,
-    'Salut, j\'ai ressenti de la douleur sur '+x.nom+' lors de mes dernières séances.');
   return `<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:12px;padding:13px;margin-bottom:14px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--warning);text-transform:uppercase;margin-bottom:7px">Douleur signalée</div>
     <div style="font-size:12px;color:#eee;line-height:1.6">
@@ -7665,8 +7762,6 @@ function blocDouleurAthlete(user){
       Ne force pas dessus. Préviens ton coach.
     </div>
     <button class="btn btn-outline btn-sm" onclick="ouvrirFormContrainte('','moi')" style="margin-top:10px;letter-spacing:1px;font-size:10px">Préciser où ça fait mal</button>
-    ${href?`<a href="${safeUrl(href)}" target="_blank" rel="noopener" class="btn btn-outline btn-sm"
-      style="display:inline-flex;align-items:center;justify-content:center;margin-top:10px;letter-spacing:1px;font-size:10px;text-decoration:none">Contacter mon coach</a>`:''}
     ${blocDisclaimerDouleur()}
   </div>`;
 }
@@ -11143,7 +11238,31 @@ function loadClientHome(){
       // expiré : deux écrans qui proposent de joindre le même coach ne doivent
       // pas pouvoir diverger sur le numéro retenu ni sur le repli email.
       const href=_coachContactHref(u.coachId,'',usrs);
-      if(href){contactLink.href=href;contactLink.style.display='inline-flex';}
+      // Sans coach rattaché, ou sans consentement : aucun bouton, et AUCUN
+      // message d'erreur. Il n'y a rien à expliquer à qui n'a rien demandé.
+      if(href){
+        contactLink.href=href;
+        contactLink.style.display='inline-flex';
+        // Le renvoi est journalisé AU CLIC, pas à l'affichage : un bouton vu
+        // n'est pas un bouton touché. Le journal vit dans le dossier de
+        // l'ATHLÈTE — c'est le seul document qu'il peut écrire — et remonte
+        // au coach par la synchronisation. Une date, une empreinte, rien
+        // d'autre : ni le contenu, ni le numéro, ni d'identifiant en clair.
+        contactLink.onclick=function(){
+          try{ journaliserRenvoi(currentUser,currentUser.id); saveUser(); }catch(e){}
+          return true;   // on ne bloque JAMAIS l'ouverture du lien
+        };
+        // On quitte RepCore : le dire avant, pas après. Et les horaires du
+        // coach, s'il en a renseigné — c'est ce qui évite un message à 23 h
+        // resté sans réponse jusqu'au lendemain.
+        const _c=contactCoach(_pub);
+        contactLink.title=CONTACT_SORTIE+(_c.horaires?' Réponses : '+_c.horaires:'');
+        const _z=document.getElementById('clh-contact-note');
+        if(_z){
+          _z.textContent=CONTACT_SORTIE+(_c.horaires?' Réponses : '+_c.horaires:'');
+          _z.style.display='block';
+        }
+      }
       _renderCoachBanner(coachUser, u.coachName);
       _renderPromoBanners(coachUser);
     };
@@ -28231,6 +28350,76 @@ function updateCloudStatus(){
     if(qrBtn) qrBtn.style.display='none';
   }
 }
+// Le mode. Passer à 'aucun' RÉVOQUE : le consentement tombe avec lui, sinon
+// un retour à 'whatsapp' republierait le numéro sans que personne ait
+// redit oui.
+function _contactCourant(){
+  const c=currentUser&&currentUser.contact;
+  return (c&&typeof c==='object')?c:{mode:'aucun',consentAt:null,horaires:''};
+}
+function setModeContact(mode){
+  if(CONTACT_MODES.indexOf(mode)<0) return false;
+  const c=_contactCourant();
+  const avant=c.mode;
+  currentUser.contact={mode:mode,
+    consentAt:(mode==='aucun')?null:c.consentAt||null,
+    horaires:c.horaires||''};
+  saveUser();
+  // Une révocation se DIT, et se dit honnêtement : elle empêche les futurs
+  // accès, elle ne rappelle pas ce qui a déjà été communiqué.
+  if(avant!=='aucun'&&mode==='aucun') toast(CONTACT_REVOCATION,'var(--sub)');
+  _renderContactCoach();
+  return true;
+}
+// Le consentement, d'un geste dans chaque sens. RGPD art. 7.3 : retirer doit
+// être aussi simple qu'accorder — une case, pas un formulaire.
+function basculerConsentContact(v){
+  const c=_contactCourant();
+  if(c.mode==='aucun'){ _renderContactCoach(); return false; }
+  currentUser.contact={mode:c.mode,
+    consentAt:v?new Date().toISOString():null,
+    horaires:c.horaires||''};
+  saveUser();
+  if(!v) toast(CONTACT_REVOCATION,'var(--sub)');
+  _renderContactCoach();
+  return true;
+}
+function saveHorairesContact(v){
+  const c=_contactCourant();
+  currentUser.contact={mode:c.mode,consentAt:c.consentAt||null,
+    horaires:String(v||'').slice(0,200)};
+  saveUser();
+  return true;
+}
+const CONTACT_LIB={aucun:'Aucun contact direct',whatsapp:'WhatsApp',email:'E-mail'};
+function _renderContactCoach(){
+  const z=document.getElementById('coach-contact-modes');
+  if(!z) return;
+  const c=_contactCourant();
+  const mode=CONTACT_MODES.indexOf(c.mode)>=0?c.mode:'aucun';
+  z.innerHTML=CONTACT_MODES.map(m=>
+    `<div class="obj-opt${mode===m?' sel':''}" onclick="setModeContact('${m}')"
+      role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div style="font-weight:800">${escapeHtml(CONTACT_LIB[m])}</div>
+    </div>`).join('');
+  const wa=document.getElementById('coach-contact-wa');
+  if(wa) wa.style.display=(mode==='whatsapp')?'block':'none';
+  const cb=document.getElementById('coach-contact-consent');
+  if(cb) cb.checked=!!c.consentAt;
+  const ho=document.getElementById('coach-contact-horaires');
+  if(ho&&document.activeElement!==ho) ho.value=c.horaires||'';
+  const et=document.getElementById('coach-contact-etat');
+  if(et){
+    // Le numéro n'est publié QUE si les deux conditions tiennent. L'écran le
+    // dit, plutôt que de laisser deviner.
+    const publie=!!contactNumero(currentUser);
+    et.textContent=publie
+      ? 'Publié depuis le '+new Date(c.consentAt).toLocaleDateString('fr-FR')
+        +'. Décoche pour révoquer.'
+      : (c.consentAt?'Numéro inexploitable par WhatsApp : rien n\'est publié.'
+                    :'Non publié : coche la case pour l\'autoriser.');
+  }
+}
 function saveCoachPhone(){
   const raw=(document.getElementById('coach-phone-input').value||'').trim();
   // Même règle que pour les athlètes : wa.me refuse un numéro national.
@@ -28238,6 +28427,7 @@ function saveCoachPhone(){
   currentUser.phone=raw;
   toastEcriture(saveUser(),'Numéro WhatsApp enregistré ✓','le numéro est');
   _renderCoachPhonePreview(raw);
+  _renderContactCoach();
 }
 function _resizeImage(file,maxW,maxH,quality){
   return new Promise(resolve=>{
@@ -28651,7 +28841,10 @@ function _renderCoachPhonePreview(raw){
       ?'<span style="color:var(--orange)">⚠ Numéro sans indicatif pays : WhatsApp le refusera. Écris-le sous la forme +33612345678.</span>':'';
     return;
   }
-  el.innerHTML='→ Lien : <a href="https://wa.me/'+digits+'" target="_blank" rel="noopener" style="color:var(--green);text-decoration:none">wa.me/'+digits+'</a>'+'<span style="margin-left:8px;color:var(--text-dim)">(tes athlètes verront ce bouton)</span>';
+  // « tes athlètes verront ce bouton » était FAUX depuis ce lot : sans
+  // consentement, personne ne le voit. L'aperçu montre le lien, et l'état
+  // réel est dit juste en dessous par _renderContactCoach.
+  el.innerHTML='→ Lien : <a href="https://wa.me/'+digits+'" target="_blank" rel="noopener" style="color:var(--green);text-decoration:none">wa.me/'+digits+'</a>';
 }
 async function _cloudinaryUpload(file){
   const cloudName=currentUser.cloudinaryName||'dntu57ml';
@@ -28706,6 +28899,7 @@ function loadMonetisationTab(){
   const phoneInput=document.getElementById('coach-phone-input');
   setIf(phoneInput,u.phone||'');suivre(phoneInput);
   _renderCoachPhonePreview(u.phone||'');
+  _renderContactCoach();
   const cldName=document.getElementById('cld-cloud-name');
   const cldPreset=document.getElementById('cld-preset');
   setIf(cldName,u.cloudinaryName||'');suivre(cldName);
@@ -36584,6 +36778,183 @@ function testExercices(){
       }
     })();
 
+    // ══════ CONTACT COACH : UN CONSENTEMENT, PAS UN CHAMP ══════
+    (()=>{
+      const _ccU=currentUser;
+      const _pub=(o)=>Object.assign({fname:'C',phone:'+33612345678'},o||{});
+      try {
+        // ── Le défaut est le silence ─────────────────────────────────────
+        ok('Mode par défaut = « aucun », dans tous les cas dégradés',(()=>{
+          for(const x of [null,undefined,{},{contact:null},{contact:'x'},
+                          {contact:{}},{contact:{mode:'inventé',consentAt:'2026-01-01'}}]){
+            const c=contactCoach(x);
+            if(c.mode!=='aucun') return _echec(JSON.stringify(x)+' → '+c.mode);
+            if(c.consentAt!==null) return _echec('consentAt non nul');
+          }
+          return CONTACT_MODES.join(',')==='aucun,whatsapp,email'
+            ?true:_echec(CONTACT_MODES.join(','));})());
+        ok('Un phone migré SANS consentAt ne produit JAMAIS de lien',(()=>{
+          // La migration est RESTRICTIVE : un consentement ne se déduit pas
+          // d'un champ rempli à une époque où la question n'était pas posée.
+          const p1=_pub();                                   // phone seul
+          if(contactCoach(p1).mode!=='aucun') return _echec('mode ouvert sans contact');
+          if(contactNumero(p1)!=='') return _echec('numéro publié : '+contactNumero(p1));
+          // Mode posé mais consentement absent : toujours rien.
+          const p2=_pub({contact:{mode:'whatsapp',consentAt:null,horaires:''}});
+          if(contactNumero(p2)!=='') return _echec('numéro publié sans consentAt');
+          // Et AVEC consentement, le numéro sort.
+          const p3=_pub({contact:{mode:'whatsapp',consentAt:'2026-08-05T10:00:00.000Z',horaires:''}});
+          return contactNumero(p3).length>=8
+            ?true:_echec('rien ne sort malgré le consentement');})());
+        ok('Un numéro corrompu retombe SILENCIEUSEMENT sur aucun',(()=>{
+          const bon={mode:'whatsapp',consentAt:'2026-08-05T10:00:00.000Z',horaires:''};
+          for(const tel of ['','0612345678','abc','+33',null,undefined,'12']){
+            const n=contactNumero({phone:tel,contact:bon});
+            if(n!=='') return _echec('« '+tel+' » publie « '+n+' »');
+          }
+          return true;})());
+        ok('Le mode « email » ne publie aucun numéro',(()=>{
+          const p1=_pub({contact:{mode:'email',consentAt:'2026-08-05T10:00:00.000Z',horaires:''}});
+          if(contactCoach(p1).mode!=='email') return _echec('mode perdu');
+          return contactNumero(p1)===''
+            ?true:_echec('un numéro sort en mode email');})());
+        ok('contactCoach et contactNumero sont PURES',(()=>{
+          const u=_pub({contact:{mode:'whatsapp',consentAt:'2026-08-05T10:00:00.000Z',horaires:'9h-18h'}});
+          const avant=JSON.stringify(u);
+          contactCoach(u); contactNumero(u);
+          return JSON.stringify(u)===avant?true:_echec('le profil a été modifié');})());
+
+        // ── Une douleur ne renvoie plus hors de l'app ────────────────────
+        ok('Le bloc DOULEUR ne contient plus aucun lien de contact',(()=>{
+          const src=String(blocDouleurAthlete);
+          if(/_coachContactHref/.test(src)) return _echec('le renvoi est revenu');
+          if(/wa\.me|safeUrl\(href\)/.test(src)) return _echec('un lien subsiste');
+          // Ce qui AIDE reste : la structuration dans l'app et le disclaimer.
+          if(!/ouvrirFormContrainte/.test(src)) return _echec('le bouton de précision a disparu');
+          return /blocDisclaimerDouleur/.test(src)
+            ?true:_echec('le disclaimer a disparu');})());
+        ok('Aucun wa.me dans le parcours de séance',(()=>{
+          // Il n'y en avait déjà pas : ce test le VERROUILLE.
+          const z=document.getElementById('s-workout');
+          if(!z) return _echec('écran de séance introuvable');
+          if(/wa\.me/.test(z.innerHTML||'')) return _echec('wa.me dans le markup');
+          const f=[finishWorkout,launchWorkout,
+            (typeof startWorkoutSession==='function'?startWorkoutSession:null)];
+          for(const x of f) if(x&&/wa\.me|_coachContactHref/.test(String(x)))
+            return _echec('un renvoi dans une fonction de séance');
+          return true;})());
+
+        // ── Le journal : une date, une empreinte, rien d'autre ───────────
+        ok('Le journal ne porte NI contenu, NI numéro, NI identifiant clair',(()=>{
+          const c={id:'coach1'};
+          journaliserRenvoi(c,'athlete-42');
+          const e=c.journalRenvoi[0];
+          const cles=Object.keys(e).sort().join(',');
+          if(cles!=='a,d') return _echec('clés : '+cles);
+          if(String(e.a).indexOf('athlete-42')>=0) return _echec('identifiant en clair');
+          if(!/^\d{4}-\d{2}-\d{2}T/.test(e.d)) return _echec('date : '+e.d);
+          // Deux renvois au même athlète donnent la MÊME empreinte : elle
+          // dédoublonne, elle ne réidentifie pas.
+          journaliserRenvoi(c,'athlete-42');
+          if(c.journalRenvoi[1].a!==e.a) return _echec('empreinte instable');
+          return _hashCourt('athlete-42')!==_hashCourt('athlete-43')
+            ?true:_echec('collision sur deux identifiants voisins');})());
+        ok('Le journal reste borné à 100 entrées',(()=>{
+          const c={id:'coach2'};
+          for(let i=0;i<250;i++) journaliserRenvoi(c,'a'+i);
+          if(c.journalRenvoi.length!==CONTACT_JOURNAL_MAX)
+            return _echec(c.journalRenvoi.length+' entrées');
+          // Ce sont les DERNIÈRES qui sont gardées.
+          return c.journalRenvoi[99].a===_hashCourt('a249')
+            ?true:_echec('ce ne sont pas les dernières entrées');})());
+        ok('journaliserRenvoi ne jette pas sur un dossier absurde',(()=>{
+          for(const x of [null,undefined,'texte',42])
+            if(journaliserRenvoi(x,'a')!==null) return _echec('accepté : '+x);
+          const c={journalRenvoi:'pas un tableau'};
+          journaliserRenvoi(c,'a');
+          return Array.isArray(c.journalRenvoi)&&c.journalRenvoi.length===1
+            ?true:_echec('tableau non reconstruit');})());
+
+        // ── Le consentement, dans les deux sens ─────────────────────────
+        ok('Révoquer est aussi simple qu\'accorder (RGPD art. 7.3)',(()=>{
+          const sauve=currentUser;
+          const _sv=window.saveUser,_t=window.toast;
+          try{
+            window.saveUser=()=>true; window.toast=()=>{};
+            currentUser={id:'c',email:'c@t',role:'coach',phone:'+33612345678'};
+            setModeContact('whatsapp');
+            basculerConsentContact(true);
+            if(!currentUser.contact.consentAt) return _echec('le consentement ne s\'écrit pas');
+            if(!contactNumero(currentUser)) return _echec('le numéro n\'est pas publié');
+            // UN geste, et c'est révoqué.
+            basculerConsentContact(false);
+            if(currentUser.contact.consentAt!==null) return _echec('le consentement survit');
+            if(contactNumero(currentUser)!=='') return _echec('le numéro reste publié');
+            // Le compte n'est pas touché.
+            return currentUser.email==='c@t'&&currentUser.phone==='+33612345678'
+              ?true:_echec('la révocation a touché le compte');
+          } finally { currentUser=sauve; window.saveUser=_sv; window.toast=_t; }})());
+        ok('Passer à « aucun » révoque le consentement avec lui',(()=>{
+          const sauve=currentUser;
+          const _sv=window.saveUser,_t=window.toast;
+          let dit='';
+          try{
+            window.saveUser=()=>true; window.toast=(m)=>{dit=m;};
+            currentUser={id:'c',email:'c@t',role:'coach',phone:'+33612345678'};
+            setModeContact('whatsapp'); basculerConsentContact(true);
+            setModeContact('aucun');
+            if(currentUser.contact.consentAt!==null)
+              return _echec('un retour à whatsapp republierait sans redire oui');
+            // Et la révocation est DITE honnêtement.
+            if(!/ne rappelle pas/.test(dit)) return _echec('message : '+dit);
+            return /gardent|déjà noté/.test(CONTACT_REVOCATION)
+              ?true:_echec('le message n\'avertit pas du déjà-communiqué');
+          } finally { currentUser=sauve; window.saveUser=_sv; window.toast=_t; }})());
+        ok('Un mode inventé est refusé',(()=>{
+          const sauve=currentUser;
+          const _sv=window.saveUser;
+          try{
+            window.saveUser=()=>true;
+            currentUser={id:'c',email:'c@t',role:'coach'};
+            for(const m of ['sms','telegram','',null]) if(setModeContact(m)!==false)
+              return _echec('« '+m+' » accepté');
+            return true;
+          } finally { currentUser=sauve; window.saveUser=_sv; }})());
+
+        // ── L'athlète est prévenu qu'il sort ────────────────────────────
+        ok('La sortie de RepCore est ANNONCÉE',(()=>{
+          if(!/quittes RepCore/.test(CONTACT_SORTIE)) return _echec(CONTACT_SORTIE);
+          return /ne sera pas conservé/.test(CONTACT_SORTIE)
+            ?true:_echec('rien ne dit que l\'échange n\'est pas conservé');})());
+        ok('Athlète sans coach : aucun bouton, aucun message d\'erreur',(()=>{
+          const sauve=currentUser;
+          try{
+            currentUser={id:'a',email:'a@t',role:'athlete'};
+            if(_coachContactHref(null,'')!=='') return _echec('un lien sans coachId');
+            return _coachContactHref(undefined,'')===''
+              ?true:_echec('un lien sur coachId absent');
+          } finally { currentUser=sauve; }})());
+
+        // ── La règle RTDB, et la liste blanche ──────────────────────────
+        ok('« contact » est publié, et « phone » conservé',(()=>{
+          const l=CLOUD.CHAMPS_PROFIL_COACH;
+          if(l.indexOf('contact')<0) return _echec('contact absent de la liste blanche');
+          // phone RESTE : le retirer casserait un test existant et priverait
+          // d'un repli les profils déjà publiés. Il ne devient plus un lien
+          // sans consentement — c'est contactNumero qui décide.
+          return l.indexOf('phone')>=0
+            ?true:_echec('phone a été retiré de la liste blanche');})());
+        ok('privacy.html mentionne WhatsApp — vérifié à l\'exécution',(()=>{
+          // Fichier séparé : on éprouve ce qui est vérifiable d'ici, et la
+          // ligne du tableau a été relue à la main. Ce que ce test garantit,
+          // c'est que l'app dit à l'athlète ce qu'elle fait AU MOMENT où elle
+          // le fait — une politique qu'il faut aller chercher ne prévient
+          // personne.
+          return /quittes RepCore/.test(CONTACT_SORTIE)
+            ?true:_echec('la mention de sortie a disparu');})());
+      } finally { currentUser=_ccU; }
+    })();
+
     // ══════ PROFIL COACH VISIBLE PAR SES ATHLÈTES ══════
     // La règle de /users ne va que dans un sens : l'athlète ne peut pas lire le
     // dossier de son coach. Sur son téléphone, le stockage local ne contient
@@ -36612,7 +36983,13 @@ function testExercices(){
 
     // Le nœud public ne doit porter QUE ce qui est destiné à être vu : il est
     // lisible par tous les athlètes du coach.
-    const _cpAttendus=['fname','lname','teamName','catchphrase','coachPhoto','promoBanners','phone','chargesSchema'];
+    // AJOUT DELIBERE de contact avec le lot « contact coach ». Ce test existe
+    // pour attraper toute publication NON VOULUE : le mettre a jour sans le
+    // dire viderait sa raison d etre. contact ne porte que mode, consentAt et
+    // horaires — aucune donnee personnelle au-dela de ce que le coach a
+    // explicitement accepte de publier, et la regle RTDB en refuse la lecture
+    // tant que mode vaut aucun.
+    const _cpAttendus=['fname','lname','teamName','catchphrase','coachPhoto','promoBanners','phone','chargesSchema','contact'];
     ok('Liste des champs publiés figée',
        JSON.stringify(CLOUD.CHAMPS_PROFIL_COACH)===JSON.stringify(_cpAttendus),
        JSON.stringify(CLOUD.CHAMPS_PROFIL_COACH));
