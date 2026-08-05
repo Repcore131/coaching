@@ -39,7 +39,17 @@
 <meta name="twitter:image" content="https://repcore131.github.io/coaching/icons/og-image.png">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192x192.png">
-<script>if('serviceWorker' in navigator){
+<script>
+// La page a-t-elle ete servie depuis le cache ? Le service worker ne peut pas
+// toucher au DOM : il pose un en-tete X-RepCore-Cache sur la copie servie, et
+// c'est ici qu'on le lit. performance.getEntries porte le document lui-meme.
+window._rcServiParCache=(()=>{
+  try{
+    const e=performance.getEntriesByType('navigation')[0];
+    return !!(e&&e.transferSize===0&&e.decodedBodySize>0);
+  }catch(err){ return false; }
+})();
+if('serviceWorker' in navigator){
   navigator.serviceWorker.register('./sw.js').then(reg=>{
     reg.update();
     navigator.serviceWorker.addEventListener('controllerchange',()=>{
@@ -1349,6 +1359,7 @@ const COACH_PHOTO='icons/coach.jpg';
             </div>
           </div>
           <p class="sub" style="font-size:11px;line-height:1.6;margin-bottom:14px">Synchronisation automatique et sécurisée. Tes données sont partagées en temps réel sur tous tes appareils connectés avec les mêmes identifiants.</p>
+          <div id="cloud-sw-version" style="font-size:10px;color:var(--text-faint);margin-bottom:12px"></div>
           <div id="cloud-qr-btn" style="display:none;margin-bottom:12px">
             <button class="btn btn-red" onclick="CLOUD.showQR()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg> Scanner sur un autre appareil →</button>
           </div>
@@ -4885,6 +4896,8 @@ function _majSelecteurComptes(){
 }
 
 function routeUser(){
+  // Une seule fois par chargement, et après que l'écran d'arrivée soit peint.
+  setTimeout(_pastilleServiParCache,900);
   if(!currentUser) return go('s-welcome');
   // Session corrompue (objet sans email) : seul cas où la purge est justifiée.
   if(!currentUser.email){silentLogout();return go('s-welcome');}
@@ -11978,6 +11991,8 @@ function _nomSeance(sessConfig,slotIdx){
 }
 function launchWorkout(sessConfig,slotIdx){
   if(!sessConfig?.exercises?.length){toast('Aucun exercice dans cette séance.','var(--red)');return;}
+  // APRÈS le garde : une séance avortée ne doit pas bloquer une mise à jour.
+  _swSeance('SEANCE_EN_COURS');
   // « Première » déduit de l'historique réel, jamais d'un drapeau local : un
   // drapeau se perdrait au changement d'appareil et recompterait la même
   // première séance. Après le garde ci-dessus, pour ne pas compter un
@@ -12909,6 +12924,9 @@ function woNav(dir){
   woState.currentEx=grs[nxt][0];renderWoEx();woPersist();
 }
 function finishWorkout(incomplete=false){
+  // En PREMIER : si le reste échoue, le SW ne doit pas rester bloqué en
+  // attente sur une séance qui, elle, est bel et bien finie.
+  _swSeance('SEANCE_TERMINEE');
   localStorage.removeItem('rc_wo_state');
   // Marque posée AVANT tout le reste : à partir d'ici, plus aucune écriture
   // du snapshot n'est possible, quel que soit le chemin.
@@ -20229,6 +20247,52 @@ function _renderFjDaySummary(date){
 // Demande au Service Worker de mettre la base Ciqual (672 Ko) en cache.
 // Appelé au premier affichage de l'écran nutrition seulement : la recherche
 // d'aliment marchera hors-ligne ensuite, sans alourdir le 1er chargement.
+// ── Signaux de séance vers le service worker ─────────────────────────────
+// skipWaiting() était inconditionnel : un nouveau SW prenait le contrôle en
+// pleine séance, après avoir purgé le cache. Le client ne rechargeait pas
+// — controllerchange le retient déjà — mais les requêtes suivantes passaient
+// par un cache vide, et une séance hors ligne pouvait perdre ses assets.
+//
+// Deux messages, rien de plus : le SW décide, le client se contente de dire
+// où il en est. Silencieux si le SW n'est pas prêt — ce n'est pas une erreur.
+function _swSeance(type){
+  try{
+    navigator.serviceWorker?.ready
+      .then(reg=>reg.active?.postMessage({type}))
+      .catch(()=>{});
+  }catch(e){}
+}
+// Version du cache du SW, pour l'écran de synchronisation. Lue DANS sw.js
+// plutôt que recopiée ici : deux sources finiraient par diverger.
+let _swVersionCache=null;
+async function versionSW(){
+  if(_swVersionCache!==null) return _swVersionCache;
+  try{
+    const r=await fetch('./sw.js',{cache:'no-store'});
+    if(!r.ok) return (_swVersionCache='');
+    const t=await r.text();
+    const m=t.match(/const\s+CACHE\s*=\s*'([^']+)'/);
+    return (_swVersionCache=(m?m[1]:''));
+  }catch(e){ return (_swVersionCache=''); }
+}
+function _renderVersionSW(){
+  const z=document.getElementById('cloud-sw-version');
+  if(!z) return;
+  versionSW().then(v=>{ if(v) z.textContent='Version '+v; });
+}
+// Pastille : la page vient du cache, on le DIT. Un affichage rapide obtenu
+// sur une copie n'est pas la même chose qu'un affichage à jour, et laisser
+// croire le contraire est le vrai risque du délai de garde.
+//
+// toast() dure 2,8 s et existe déjà : une seconde pastille serait un second
+// mécanisme à maintenir pour trois secondes d'affichage.
+let _pastilleCacheFaite=false;
+function _pastilleServiParCache(){
+  if(_pastilleCacheFaite||!window._rcServiParCache) return false;
+  _pastilleCacheFaite=true;
+  try{ toast('Hors ligne — version en cache','var(--sub)'); }catch(e){}
+  return true;
+}
 let _ciqualPrefetchAsked=false;
 function _prefetchCiqual(){
   if(_ciqualPrefetchAsked) return;
@@ -27949,6 +28013,7 @@ function coachTab(tab){
 }
 
 function updateCloudStatus(){
+  _renderVersionSW();
   const el=document.getElementById('cloud-status');
   const qrBtn=document.getElementById('cloud-qr-btn');
   if(!el) return;
@@ -30160,6 +30225,73 @@ function _pfUtiliser(slug){
 // du source évalué — on peut donc simuler une heure sans toucher à la page.
 //
 // À lancer depuis la console : await testNotifs()
+// Les assertions sur sw.js vivent ICI et non dans testExercices : lire le
+// fichier exige un fetch, donc de l'asynchrone. testNotifs l'est déjà.
+// src est FOURNI par testNotifs, qui charge deja sw.js : un second fetch
+// serait un second point de defaillance pour la meme lecture.
+// R est le tableau de resultats de testNotifs : _testSW y pousse directement,
+// ce qui lui evite de reinventer le report du message d echec.
+function _testSW(R,src){
+  let _m='';
+  const _echec=m=>{ _m=m; return false; };
+  const ok=(n,c)=>{ R.push({n,ok:!!c,d:c?'':_m}); _m=''; };
+  ok('sw.js est lisible depuis la suite',(()=>{
+    return src.length>3000?true:_echec('source vide ou tronquée ('+src.length+' o)');})());
+  if(!src) return;
+  ok('ASSETS contient ./index.html',(()=>{
+    const m=src.match(/const\s+ASSETS\s*=\s*\[([^\]]*)\]/);
+    if(!m) return _echec('ASSETS introuvable');
+    if(m[1].indexOf("'./index.html'")<0)
+      return _echec('index.html absent : ' + m[1].trim());
+    // Les deux autres restent : ils font l'installabilité PWA.
+    return /manifest\.json/.test(m[1])?true:_echec('manifest.json a disparu');})());
+  ok('Le délai de garde existe et vaut au plus 2500 ms',(()=>{
+    const m=src.match(/const\s+SW_DELAI_RESEAU_MS\s*=\s*(\d+)/);
+    if(!m) return _echec('SW_DELAI_RESEAU_MS introuvable');
+    const v=parseInt(m[1],10);
+    if(!(v>0)) return _echec('valeur : '+v);
+    return v<=2500?true:_echec(v+' ms, au-delà du plafond');})());
+  ok('index.html n\'est PAS passé en cache-first',(()=>{
+    // La mise à jour doit rester rapide : le réseau est toujours lancé,
+    // le cache ne sert que si la course est perdue.
+    if(!/Promise\.race/.test(src)) return _echec('aucune course : le délai ne joue pas');
+    return /const reseau\s*=\s*fetch\(/.test(src)
+      ?true:_echec('le réseau n\'est plus lancé d\'emblée');})());
+  ok('Aucune requête cross-origin n\'est interceptée',(()=>{
+    // Ce garde protège Firebase : sans lui le SW renvoie du HTML là où du
+    // JSON est attendu.
+    return /if \(!url\.startsWith\(self\.location\.origin\)\) return;/.test(src)
+      ?true:_echec('le garde cross-origin a disparu');})());
+  ok('activate ne purge QUE si le nouveau cache porte index.html',(()=>{
+    if(!/await neuf\.match\('\.\/index\.html'\)/.test(src))
+      return _echec('aucune vérification avant purge');
+    const i=src.indexOf("if (await neuf.match('./index.html'))");
+    const j=src.indexOf('caches.delete(k)',i<0?0:i);
+    return (i>=0&&j>i)?true:_echec('la purge précède la vérification');})());
+  ok('Ciqual est RECOPIÉ, pas retéléchargé, à l\'activation',(()=>{
+    if(!/neuf\.put\(CIQUAL_URL/.test(src)) return _echec('aucun report de Ciqual');
+    // Et surtout pas un add(), qui repartirait chercher 852 Ko.
+    const bloc=src.slice(src.indexOf("addEventListener('activate'"),
+      src.indexOf("addEventListener('fetch'"));
+    return !/\.add\(CIQUAL_URL/.test(bloc)
+      ?true:_echec('activate retélécharge Ciqual');})());
+  ok('skipWaiting est CONDITIONNÉ par la séance en cours',(()=>{
+    if(!/_seanceEnCours/.test(src)) return _echec('aucun état de séance');
+    const m=src.match(/if \(_seanceEnCours\) _attenteFinSeance = true;\s*\r?\n\s*else self\.skipWaiting\(\);/);
+    if(!m) return _echec('skipWaiting n\'est pas conditionné');
+    // Et la fin de séance le débloque, sinon la mise à jour n'arriverait jamais.
+    return /SEANCE_TERMINEE[\s\S]{0,200}self\.skipWaiting\(\)/.test(src)
+      ?true:_echec('la fin de séance ne débloque pas la bascule');})());
+  ok('SW_DATA reste hors de portée de la purge',(()=>{
+    // Rappels de bilan, de séance et de compléments vivent dedans.
+    return /k !== SW_DATA/.test(src)
+      ?true:_echec('SW_DATA peut être supprimé');})());
+  ok('Les handlers de notification ne sont pas touchés',(()=>{
+    for(const h of ['periodicsync','notificationclick','push'])
+      if(src.indexOf("addEventListener('"+h+"'")<0)
+        return _echec(h+' a disparu');
+    return true;})());
+}
 async function testNotifs(){
   const R=[]; const ok=(n,c,d)=>R.push({n,ok:!!c,d:d||''});
   let src='';
@@ -30382,6 +30514,11 @@ async function testNotifs(){
     }
   }
 
+
+    // Assertions du lot « SW : demarrage garanti ». Elles lisent le source deja
+  // charge ci-dessus.
+  try{ _testSW(R,src); }
+  catch(e){ R.push({n:'Assertions SW',ok:false,d:e.message}); }
 
   const ko=R.filter(r=>!r.ok);
   console.log('%c'+R.length+' vérifications Service Worker, '+ko.length+' en échec',
@@ -35983,6 +36120,56 @@ function testExercices(){
           return /APP_BASE_URL/.test(js)
             ?true:_echec('APP_BASE_URL n\'est plus consommée');})());
       } finally { currentUser=_acU; }
+    })();
+
+    // ══════ SERVICE WORKER : CE QUE LE CLIENT ÉMET ══════
+    (()=>{
+      try {
+        ok('SEANCE_EN_COURS est émis au lancement d\'une séance',(()=>{
+          // Et SEANCE_TERMINEE à la fin, sinon un SW resterait bloqué en
+          // attente sur une séance finie depuis longtemps.
+          const l=String(launchWorkout), f=String(finishWorkout);
+          if(!/_swSeance\('SEANCE_EN_COURS'\)/.test(l))
+            return _echec('launchWorkout n\'émet rien');
+          if(!/_swSeance\('SEANCE_TERMINEE'\)/.test(f))
+            return _echec('finishWorkout n\'émet rien');
+          // L'émission est APRÈS le garde de launchWorkout : une séance
+          // avortée ne doit pas retenir une mise à jour.
+          const iGarde=l.indexOf('Aucun exercice dans cette séance');
+          const iEmit=l.indexOf("_swSeance('SEANCE_EN_COURS')");
+          if(!(iGarde>=0&&iEmit>iGarde))
+            return _echec('l\'émission précède le garde');
+          // Et la fin l'émet en PREMIER : si le reste échoue, le SW ne doit
+          // pas rester bloqué.
+          return f.indexOf("_swSeance('SEANCE_TERMINEE')")
+            <f.indexOf('rc_wo_state')
+            ?true:_echec('l\'émission de fin n\'est pas en premier');})());
+        ok('_swSeance est silencieux sans service worker',(()=>{
+          const src=String(_swSeance);
+          if(!/try\{/.test(src)||!/catch/.test(src))
+            return _echec('aucune garde : une absence de SW jetterait');
+          let err=null;
+          try{ _swSeance('SEANCE_EN_COURS'); }catch(e){ err=e.message; }
+          return err?_echec('exception : '+err):true;})());
+        ok('La pastille ne sort QU\'UNE fois, et seulement depuis le cache',(()=>{
+          const src=String(_pastilleServiParCache);
+          if(!/_rcServiParCache/.test(src)) return _echec('elle ne lit pas l\'origine');
+          const sauve=window._rcServiParCache, fait=_pastilleCacheFaite;
+          try{
+            window._rcServiParCache=false; _pastilleCacheFaite=false;
+            if(_pastilleServiParCache()!==false) return _echec('elle sort hors cache');
+            window._rcServiParCache=true;
+            if(_pastilleServiParCache()!==true) return _echec('elle ne sort pas depuis le cache');
+            return _pastilleServiParCache()===false
+              ?true:_echec('elle sort deux fois');
+          } finally { window._rcServiParCache=sauve; _pastilleCacheFaite=fait; }})());
+        ok('La version du SW est LUE dans sw.js, pas recopiée',(()=>{
+          // Deux sources de vérité finiraient par diverger.
+          const src=String(versionSW);
+          if(!/fetch\('\.\/sw\.js'/.test(src)) return _echec('elle ne lit pas sw.js');
+          return /const\\s\+CACHE/.test(src)||/CACHE/.test(src)
+            ?true:_echec('elle n\'extrait pas CACHE');})());
+      } finally {}
     })();
 
     // ══════ PROFIL COACH VISIBLE PAR SES ATHLÈTES ══════

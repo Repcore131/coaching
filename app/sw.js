@@ -1,10 +1,24 @@
-const CACHE = 'repcore-v441';
+const CACHE = 'repcore-v442';
 const SW_DATA = 'repcore-sw-data'; // persistent across updates — not wiped by activate
 
-// Strict nécessaire à l'installabilité PWA (~46 Ko).
-// Le reste (icônes 512, logo, base Ciqual de 672 Ko) est mis en cache à la
-// demande par le handler fetch, ou préchargé explicitement — voir PREFETCH_CIQUAL.
-const ASSETS = ['./manifest.json', './icons/icon-192x192.png'];
+// DÉLAI DE GARDE sur index.html. Le handler était en network-first avec un
+// simple .catch() : celui-ci ne joue que sur ÉCHEC, jamais sur LENTEUR. En
+// « lie-fi » — un réseau qui répond au DNS et ne transporte rien — la promesse
+// ne rejette pas, elle PEND, et l'athlète en sous-sol regarde un écran blanc
+// aussi longtemps que le navigateur tolère la requête.
+const SW_DELAI_RESEAU_MS = 2500;
+
+// index.html EST dans ASSETS depuis ce lot. Sans lui, la copie hors-ligne ne
+// se constituait qu'au premier passage réussi du handler fetch, et activate la
+// détruisait à chaque déploiement.
+const ASSETS = ['./index.html', './manifest.json', './icons/icon-192x192.png'];
+
+// Une séance en cours interdit la bascule. Le client poste SEANCE_EN_COURS au
+// lancement et SEANCE_TERMINEE à la fin ; tant que ce drapeau est levé, le
+// nouveau SW reste en attente. Prendre le contrôle en pleine séance, c'est
+// purger le cache sous les pieds de quelqu'un qui est peut-être hors ligne.
+let _seanceEnCours = false;
+let _attenteFinSeance = false;
 
 self.addEventListener('install', e => {
   // allSettled et non addAll : un asset manquant ou en erreur ne doit plus
@@ -14,7 +28,10 @@ self.addEventListener('install', e => {
       .then(c => Promise.allSettled(ASSETS.map(a => c.add(a))))
       .catch(() => {})
   );
-  self.skipWaiting();
+  // Conditionné : voir _seanceEnCours. Sans séance en cours, comportement
+  // inchangé — la mise à jour reste immédiate.
+  if (_seanceEnCours) _attenteFinSeance = true;
+  else self.skipWaiting();
 });
 
 // Préchargement différé et non bloquant de la base alimentaire (672 Ko).
@@ -24,6 +41,14 @@ self.addEventListener('install', e => {
 const CIQUAL_URL = './data/ciqual.json';
 let _ciqualPrefetch = null;
 self.addEventListener('message', e => {
+  // Séance en cours : on retient la bascule. À la fin, si un SW attendait,
+  // il prend la main immédiatement — l'utilisateur n'a rien à faire.
+  if (e.data?.type === 'SEANCE_EN_COURS') { _seanceEnCours = true; return; }
+  if (e.data?.type === 'SEANCE_TERMINEE') {
+    _seanceEnCours = false;
+    if (_attenteFinSeance) { _attenteFinSeance = false; self.skipWaiting(); }
+    return;
+  }
   if (e.data?.type !== 'PREFETCH_CIQUAL') return;
   if (_ciqualPrefetch) return;            // une seule tentative par cycle de vie du SW
   _ciqualPrefetch = caches.open(CACHE)
@@ -34,10 +59,53 @@ self.addEventListener('message', e => {
     .catch(() => { _ciqualPrefetch = null; }); // échec (hors ligne) : réessayable
 });
 
+// ACTIVATION. L'ancienne version supprimait TOUT cache dont le nom différait,
+// sans regarder ce que le nouveau contenait. Or activate s'exécute avant que
+// le nouveau cache porte autre chose que les ASSETS : chaque déploiement
+// détruisait la copie hors-ligne d'index.html ET les 852 Ko de Ciqual, que
+// rien ne remplaçait tant que l'utilisateur n'avait pas rouvert l'écran
+// nutrition EN LIGNE.
+//
+// Deux changements : on RECOPIE Ciqual de l'ancien cache vers le nouveau
+// (852 Ko économisés par déploiement, et il survit hors ligne), et on ne
+// supprime un ancien cache QUE si le nouveau porte bien index.html. Sinon on
+// le garde un cycle de plus : un cache de trop coûte de la place, un cache
+// manquant coûte l'application.
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys =>
-    Promise.all(keys.filter(k => k !== CACHE && k !== SW_DATA).map(k => caches.delete(k)))
-  ));
+  e.waitUntil((async () => {
+    try {
+      const neuf = await caches.open(CACHE);
+      const cles = await caches.keys();
+      const anciens = cles.filter(k => k !== CACHE && k !== SW_DATA);
+      // 1. Report de Ciqual, depuis le premier ancien cache qui le porte.
+      if (!(await neuf.match(CIQUAL_URL))) {
+        for (const k of anciens) {
+          try {
+            const vieux = await caches.open(k);
+            const r = await vieux.match(CIQUAL_URL);
+            if (r) { await neuf.put(CIQUAL_URL, r.clone()); break; }
+          } catch (err) {}
+        }
+      }
+      // 2. Report d'index.html si ASSETS a échoué (hors ligne à l'install).
+      if (!(await neuf.match('./index.html'))) {
+        for (const k of anciens) {
+          try {
+            const vieux = await caches.open(k);
+            const r = await vieux.match('./index.html');
+            if (r) { await neuf.put('./index.html', r.clone()); break; }
+          } catch (err) {}
+        }
+      }
+      // 3. Purge SOUS CONDITION. Le nouveau cache doit être utilisable.
+      if (await neuf.match('./index.html')) {
+        await Promise.all(anciens.map(k => caches.delete(k)));
+      } else {
+        console.warn('[RepCore SW] index.html absent du cache', CACHE,
+          '— anciens caches conservés un cycle de plus');
+      }
+    } catch (err) { console.error('[RepCore SW] activate:', err); }
+  })());
   self.clients.claim();
 });
 
@@ -47,15 +115,40 @@ self.addEventListener('fetch', e => {
   // Sinon le SW renverrait index.html (HTML) en fallback offline, ce qui fait planter
   // tout appel fetch() qui attend du JSON — notamment generateAccessToken.
   if (!url.startsWith(self.location.origin)) return;
-  // index.html : network-first (toujours à jour), fallback cache si offline
+  // index.html : network-first AVEC DÉLAI DE GARDE. Toujours pas cache-first —
+  // la mise à jour doit rester rapide — mais le réseau ne peut plus retenir
+  // l'affichage au-delà de SW_DELAI_RESEAU_MS quand une copie existe.
   if (url.includes('index.html') || url.endsWith('/') || url.endsWith('/coaching/')) {
-    e.respondWith(
-      fetch(e.request).then(r => {
+    e.respondWith((async () => {
+      const reseau = fetch(e.request).then(r => {
+        // La mise en cache est DÉTACHÉE de la réponse servie : si le quota
+        // est saturé, on journalise et on sert quand même. Un put qui échoue
+        // ne doit pas casser un affichage qui, lui, fonctionne.
         const clone = r.clone();
-        caches.open(CACHE).then(c => c.put('./index.html', clone));
+        caches.open(CACHE).then(c => c.put('./index.html', clone))
+          .catch(err => console.warn('[RepCore SW] put index.html:', err));
         return r;
-      }).catch(() => caches.match('./index.html'))
-    );
+      });
+      const enCache = await caches.match('./index.html');
+      // Aucune copie : on attend le réseau, quel que soit le temps. Servir
+      // une page blanche plus vite n'est pas un progrès. Si le réseau échoue
+      // AUSSI, le rejet remonte et le navigateur affiche son écran d'erreur —
+      // explicite, et jamais une page vide.
+      if (!enCache) return reseau;
+      // Course. Le perdant n'est pas annulé : la réponse réseau arrivée après
+      // le délai met le cache à jour pour le lancement suivant, sans remplacer
+      // l'écran déjà affiché.
+      const attente = new Promise(resolve => setTimeout(() => {
+        // En-tête ajouté à la COPIE servie : le SW ne peut pas toucher au DOM,
+        // c'est le client qui lit cet en-tête et pose la pastille.
+        const h = new Headers(enCache.headers);
+        h.set('X-RepCore-Cache', '1');
+        resolve(enCache.blob().then(b => new Response(b, {
+          status: enCache.status, statusText: enCache.statusText, headers: h
+        })));
+      }, SW_DELAI_RESEAU_MS));
+      return Promise.race([reseau.catch(() => attente), attente]);
+    })());
     return;
   }
   // Assets same-origin : cache-first, sans fallback HTML (évite de servir HTML à la place d'un asset)
