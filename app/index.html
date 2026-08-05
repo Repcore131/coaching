@@ -60,7 +60,43 @@ if('serviceWorker' in navigator){
     });
   });
 }</script>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<!-- Encodeur QR local. Charge avec la page : 10 Ko, et il remplace un appel
+     reseau a chaque ouverture de la fenetre de synchronisation. -->
+<script src="./vendor/qr.js"></script>
+<style>
+/* Polices AUTO-HEBERGEES. Avant ce lot, chaque visiteur transmettait son
+   adresse IP a Google — le service de polices distantes — AVANT
+   tout consentement, pour un benefice nul : les memes fichiers, servis depuis
+   notre propre domaine, arrivent plus vite et ne parlent a personne.
+
+   Montserrat est UNE police VARIABLE : les sept URL de graisses servies par
+   Google pointaient vers le meme fichier, meme empreinte MD5. 38 Ko couvrent
+   300 a 900 ; telecharger les sept en aurait pese 272.
+
+   Sous-ensemble LATIN de base uniquement : l application est en francais.
+
+   font-display: swap — le texte s affiche IMMEDIATEMENT dans la police de
+   repli, puis bascule. Un swap est un clignotement ; un block serait un ecran
+   vide, et c est bien pire. */
+@font-face{
+  font-family:'Montserrat';
+  font-style:normal;
+  font-weight:100 900;   /* variable : toute la plage en un fichier */
+  font-display:swap;
+  src:url('fonts/montserrat-var-latin.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face{
+  font-family:'Bebas Neue';
+  font-style:normal;
+  font-weight:400;
+  font-display:swap;
+  src:url('fonts/bebasneue-400-latin.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+/* Repli COMPLET, pour un navigateur sans woff2 ou un fichier manquant. */
+:root{--pile-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans',sans-serif;--pile-titre:Impact,'Arial Narrow Bold','Haettenschweiler','Franklin Gothic Bold',sans-serif}
+</style>
 <style>
 html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{--bg:#080808;--red:#E02020;--red2:#b81515;--red-bg:#0d0000;--red-glow:#FF3345;--red-light:color-mix(in srgb,var(--red) 70%,white);--dark:#0f0f0f;--surface-1:#111111;--surface-2:#181818;--surface-3:#1e1e1e;--border:#242424;--sub:#8a8a8a;--text:#efefef;
@@ -132,14 +168,14 @@ select option{background:#111}
 label{display:block;font-size:var(--fs-xs);font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;margin-top:16px}
 
 /* ====== TYPOGRAPHY ====== */
-h1{font-family:'Bebas Neue',sans-serif;font-size:32px;font-weight:900;line-height:1.05;letter-spacing:0.5px}
-h2{font-family:'Bebas Neue',sans-serif;font-size:24px;font-weight:800;letter-spacing:0.5px}
+h1{font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:32px;font-weight:900;line-height:1.05;letter-spacing:0.5px}
+h2{font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:24px;font-weight:800;letter-spacing:0.5px}
 h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
-.brand-font{font-family:'Bebas Neue',sans-serif;font-weight:900;letter-spacing:1px}
-.txt-hero{font-family:'Bebas Neue',sans-serif;font-size:44px;line-height:1}
-.txt-title{font-family:'Bebas Neue',sans-serif;font-size:32px}
-.txt-stat{font-family:'Bebas Neue',sans-serif;font-size:24px}
-.txt-stat-sm{font-family:'Bebas Neue',sans-serif;font-size:18px}
+.brand-font{font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-weight:900;letter-spacing:1px}
+.txt-hero{font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:44px;line-height:1}
+.txt-title{font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:32px}
+.txt-stat{font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:24px}
+.txt-stat-sm{font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:18px}
 .red{color:var(--red)}.sub{color:var(--sub);font-size:13px}
 .pad{padding:24px 20px}.gap{gap:12px;display:flex;flex-direction:column}
 .row{display:flex;align-items:center;gap:10px}.row2{display:flex;gap:10px}
@@ -164,8 +200,6 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
 .accent-line{width:32px;height:2px;background:var(--red);display:block;margin-bottom:12px}
 
 /* topbar red stripe: now via border-bottom */
-
-
 /* ====== TABS ====== */
 /* Barre d'accueil iOS / geste de retour Android : sans ce retrait, la dernière
    rangée d'onglets passe sous l'indicateur système et devient intappable. */
@@ -231,8 +265,6 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
    a chaque affichage de la barre. */
 :root{--tabbar-h:64px}
 body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
-
-
 /* ====== METRIC BOXES ====== */
 .metric-box{background:repeating-linear-gradient(-50deg,transparent,transparent 14px,rgba(255,255,255,.016) 14px,rgba(255,255,255,.016) 15px),linear-gradient(160deg,#1e1e1e,#0d0d0d);border-radius:2px;padding:16px 12px;text-align:center;flex:1;border:1px solid rgba(255,255,255,.07);border-left:3px solid var(--red);position:relative;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,255,255,.06),0 0 0 1px rgba(224,32,32,.08)}
 .metric-box::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--red) var(--pct,0%),transparent var(--pct,0%))}
@@ -569,7 +601,7 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 .gsl-opt.sel .gsl-lbl{color:#fff;text-shadow:0 0 8px rgba(255,255,255,.6)}
 /* Curseur néon 1-10 (motivation) */
 .bsl-wrap{background:var(--surface-1);border:1px solid #222;border-radius:12px;padding:18px 16px 14px;text-align:center}
-.bsl-value{font-family:'Bebas Neue',sans-serif;font-size:44px;line-height:1;transition:.15s}
+.bsl-value{font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:44px;line-height:1;transition:.15s}
 .bsl-value .bsl-max{font-size:20px;color:var(--text-dim);margin-left:2px}
 .bsl-feedback{font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;margin:4px 0 14px;min-height:13px;transition:.15s}
 .bslider{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:3px;background:#1a1a1a;outline:none;margin:0;padding:0;border:none;box-shadow:none}
@@ -937,8 +969,6 @@ const COACH_PHOTO='icons/coach.jpg';
 
   </div>
 </div>
-
-
 <!-- LOGIN -->
 <div id="s-login" class="screen">
   <div class="topbar" style="border-bottom:1px solid var(--border)">
@@ -1891,10 +1921,6 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
 
 
-
-
-
-
       <!-- DÉMARRER SÉANCE — hero card -->
       <div style="background:linear-gradient(135deg,#0f0000,#160000);border:1px solid #2a0000;border-radius:4px;padding:20px;margin-bottom:14px;position:relative;overflow:hidden">
         <div style="position:absolute;right:0;top:0;width:3px;height:100%;background:var(--red)"></div>
@@ -2813,7 +2839,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="position:absolute;left:50%;top:-34px;transform:translateX(-50%);width:120px;height:90px;border-radius:50%;background:radial-gradient(circle,rgba(224,32,32,.15),transparent 68%);pointer-events:none"></div>
         <div style="position:relative;text-align:center">
           <div style="margin-bottom:9px;color:#ff3b30;filter:drop-shadow(0 0 9px rgba(224,32,32,.75))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:30px;height:30px;display:inline-block;vertical-align:middle"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:19px;letter-spacing:2.5px;color:#fff;text-transform:uppercase;margin-bottom:12px;text-shadow:0 0 12px rgba(255,255,255,.3)">Partager une vidéo</div>
+          <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:19px;letter-spacing:2.5px;color:#fff;text-transform:uppercase;margin-bottom:12px;text-shadow:0 0 12px rgba(255,255,255,.3)">Partager une vidéo</div>
           <!-- Le nom était jusqu'ici DÉDUIT de l'URL (« Vidéo YouTube ») ou du
                nom de fichier. Deux vidéos de deux exercices différents
                s'appelaient donc pareil, et le coach devait ouvrir chacune pour
@@ -2833,7 +2859,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="margin-top:12px;background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp .4s ease">
         <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div>
         <div style="position:relative">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2.2px;margin-bottom:11px;color:#8a8a8a;text-transform:uppercase">Ou upload direct : sans YouTube / Drive</div>
+          <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:14px;letter-spacing:2.2px;margin-bottom:11px;color:#8a8a8a;text-transform:uppercase">Ou upload direct : sans YouTube / Drive</div>
           <label for="vid-file-input" style="display:flex;align-items:center;justify-content:center;gap:9px;padding:13px;border:1.5px dashed #2f2f2f;border-radius:10px;cursor:pointer;font-size:12.5px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#cfcfcf;background:linear-gradient(180deg,#111,#0c0c0c);box-shadow:inset 0 1px 0 rgba(255,255,255,.03);transition:.2s">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:17px;height:17px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Choisir un fichier vidéo
             <input id="vid-file-input" type="file" accept="video/*" style="display:none" onchange="uploadVideoFile(this)">
@@ -2847,8 +2873,6 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
   </div>
 </div>
-
-
 <!-- STEPS -->
 <div id="s-steps" class="screen">
   <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
@@ -2884,14 +2908,14 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
         <div style="width:3px;height:22px;background:var(--red);border-radius:2px;box-shadow:0 0 10px rgba(224,32,32,.9)"></div>
         <span style="display:inline-flex;color:#ff3b30;filter:drop-shadow(0 0 6px rgba(224,32,32,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M2 17h18a2 2 0 0 0 2-2c0-1.6-1.2-2.3-2.8-2.9l-4.4-1.7a3 3 0 0 1-1.3-1L11.6 6.4a1.4 1.4 0 0 0-2.2-.2L7.6 8.1 2 8.1z"/><path d="M2 17v2h20v-2"/></svg></span>
-        <span style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;color:#fff;text-transform:uppercase;text-shadow:0 0 14px rgba(255,255,255,.35)">MES PAS</span>
+        <span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:20px;letter-spacing:3px;color:#fff;text-transform:uppercase;text-shadow:0 0 14px rgba(255,255,255,.35)">MES PAS</span>
       </div>
       <div id="lifestyle-steps-content"></div>
       <div class="divider" style="margin:28px 0"></div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
         <div style="width:3px;height:22px;background:#60a5fa;border-radius:2px;box-shadow:0 0 10px rgba(96,165,250,.9)"></div>
         <span style="display:inline-flex;color:#60a5fa;filter:drop-shadow(0 0 6px rgba(96,165,250,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>
-        <span style="font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:3px;color:#fff;text-transform:uppercase;text-shadow:0 0 14px rgba(255,255,255,.35)">MON SOMMEIL</span>
+        <span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:20px;letter-spacing:3px;color:#fff;text-transform:uppercase;text-shadow:0 0 14px rgba(255,255,255,.35)">MON SOMMEIL</span>
       </div>
       <div id="lifestyle-sleep-content"></div>
     </div>
@@ -2916,8 +2940,6 @@ const COACH_PHOTO='icons/coach.jpg';
   <button class="tab-btn" data-tab="lifestyle" data-icon="user" onclick="clientTab('lifestyle')">Lifestyle</button>
   <button class="tab-btn" data-tab="evolution" data-icon="trending-up" onclick="clientTab('evolution')">Évolution</button>
 </div>
-
-
 <!-- ══════ ACCESS GATE ══════ -->
 <div id="s-access-gate" class="screen" style="background:#060606;justify-content:center;padding:32px 24px;position:relative;overflow:hidden">
   <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(-55deg,transparent,transparent 18px,rgba(198,15,8,.025) 18px,rgba(198,15,8,.025) 19px);pointer-events:none"></div>
@@ -4467,18 +4489,30 @@ const CLOUD={
   },
 
   // Générer le QR code pour ouvrir l'app sur un autre appareil (sync Firebase auto)
+  // QR genere LOCALEMENT depuis ce lot. Il passait par un service tiers qui
+  // recevait l'adresse IP de chaque personne ouvrant cette fenetre, pour
+  // dessiner des carres noirs. L'encodeur vit dans vendor/qr.js : meme taille,
+  // meme niveau de correction M, meme rendu.
   showQR(){
     const url=APP_BASE_URL;
-    const qrUrl='https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(url);
     const modal=document.createElement('div');
     modal.style.cssText='position:fixed;inset:0;background:#000c;z-index:9999;display:flex;align-items:center;justify-content:center';
     modal.innerHTML=`<div style="background:#111;border:1px solid #222;border-radius:20px;padding:28px;text-align:center;max-width:300px;width:90%">
       <div style="font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:2px;margin-bottom:16px">Scanner sur un autre appareil</div>
-      <img src="${qrUrl}" style="width:220px;height:220px;border-radius:12px;background:#fff;padding:8px">
+      <div id="qr-zone" style="width:220px;height:220px;border-radius:12px;background:#fff;padding:8px;margin:0 auto;display:flex;align-items:center;justify-content:center"></div>
       <p style="font-size:11px;color:#888;margin-top:12px;line-height:1.6">Ouvre l'app RepCore sur ton téléphone, scanne ce QR → sync configurée automatiquement</p>
       <button onclick="this.closest('div').parentElement.remove()" style="margin-top:16px;background:var(--red);border:none;color:#fff;padding:10px 24px;border-radius:8px;font-family:Montserrat,sans-serif;font-size:12px;font-weight:700;cursor:pointer">Fermer</button>
     </div>`;
     document.body.appendChild(modal);
+    // APRES insertion dans le DOM : un canvas a besoin d'un parent rendu.
+    // Et si l'encodeur manque, on donne l'adresse en clair plutot qu'un carre
+    // blanc — un QR absent ne doit pas etre un cul-de-sac.
+    try{
+      const z=modal.querySelector('#qr-zone');
+      const cv=(window.RepCoreQR&&RepCoreQR.versCanvas)?RepCoreQR.versCanvas(url,204):null;
+      if(z&&cv){ cv.style.width='204px'; cv.style.height='204px'; z.appendChild(cv); }
+      else if(z){ z.innerHTML='<div style="font-size:11px;color:#666;text-align:center;padding:12px;line-height:1.6">QR indisponible sur cet appareil. Ouvre cette adresse sur l&#39;autre :<br><b style="color:#111;word-break:break-all">'+escapeHtml(url)+'</b></div>'; }
+    }catch(e){}
   }
 };
 
@@ -8294,8 +8328,6 @@ function _lignesEntrainement(clients){
   }
   return out;
 }
-
-
 // ── Bloc « Douleur » de la fiche client ─────────────────────────────────────
 // Trente jours d'historique, par exercice, trié par nombre d'occurrences. La
 // donnée existait depuis toujours dans sessions[n].data et ne remontait nulle
@@ -8401,7 +8433,7 @@ function renderTodoBlock(clients){
   el.innerHTML=`<div style="background:#0c0000;border:1px solid #2a0000;border-radius:4px;margin-bottom:20px;overflow:hidden">
     <div style="padding:9px 14px;display:flex;align-items:center;justify-content:space-between;background:#0f0000;border-bottom:1px solid #1e0000">
       <span style="font-size:var(--fs-xs);font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:2px">⚡ À traiter</span>
-      <span style="background:var(--red);color:#fff;font-size:11px;font-weight:900;padding:1px 8px;border-radius:10px;font-family:'Bebas Neue',sans-serif;letter-spacing:1px">${unique}</span>
+      <span style="background:var(--red);color:#fff;font-size:11px;font-weight:900;padding:1px 8px;border-radius:10px;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px">${unique}</span>
     </div>
     ${renderDataList(vues,(r,idx)=>{
       // XSS stocké : le prénom est saisi par l'athlète lui-même et atterrissait
@@ -9439,8 +9471,6 @@ const FONDATION_H=[
   {day:'Dimanche',name:'',active:false,photo:null,photo2:null,warmup:'',notes:'',_foundation:true,exercises:[]}
 ];
 // ===== fin PROGRAMME FONDATION =====
-
-
 // ══════════════ CLASSIFICATION MUSCULAIRE DES EXERCICES ══════════════
 // Couche d'identité posée PAR-DESSUS les noms d'exercices, sans rien migrer :
 // aucune donnée existante n'est réécrite, aucun exercice n'est renommé.
@@ -11120,8 +11150,6 @@ function tonnageSerie(s,ex){
 function repsPourTonnage(ex){
   return techniqueDe(ex)==='isometrie'?0:repsToNumber(ex&&ex.reps);
 }
-
-
 // ══════════════ TEMPS DE REPOS ══════════════
 // ex.repos est et reste une CHAÎNE EN TEXTE LIBRE : « 2 min », « 1 min 30 »,
 // « au feeling ». On la lit, on ne la réécrit jamais, et on n'impose aucun
@@ -11242,7 +11270,7 @@ function _peindreRepos(){
         <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);font-weight:800">
           ${fini?'Repos terminé':'Repos'}${woState.reposLib?' · '+escapeHtml(woState.reposLib):''}
         </div>
-        <div style="font-size:26px;font-weight:800;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;color:${coul};line-height:1.1">
+        <div style="font-size:26px;font-weight:800;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px;color:${coul};line-height:1.1">
           ${fini?'+':''}${_fmtRepos(reste)}
         </div>
       </div>
@@ -13139,7 +13167,7 @@ function _compteurRelances(idx){
   const faites=(d&&d.relancesFaites)||0;
   return `<div style="display:flex;align-items:center;gap:9px;margin-top:9px;flex-wrap:wrap">
     <span style="font-size:11px;color:var(--sub)">Relances :</span>
-    <span id="rel-n-${idx}" style="font-size:16px;font-weight:800;font-family:'Bebas Neue',sans-serif;letter-spacing:1px">${faites}</span>
+    <span id="rel-n-${idx}" style="font-size:16px;font-weight:800;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px">${faites}</span>
     <button onclick="_ajouterRelance(${idx})" class="hit44" style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#eee;font-size:16px;font-weight:800;min-width:38px;min-height:34px;cursor:pointer">+</button>
     ${faites?`<button onclick="_retirerRelance(${idx})" class="hit44" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:14px;min-width:34px;min-height:34px;cursor:pointer">−</button>`:''}
   </div>`;
@@ -13530,8 +13558,6 @@ function renderSets(ex,data,idx){
   // après coup sur une série déjà validée.
   _majCarteDouleur(idx);
 }
-
-
 // ══════════════ DOULEUR RÉPÉTÉE DANS LA SÉANCE EN COURS ════════════════════
 // Détection PURE et LOCALE : on compte les séries VALIDÉES de CE seul exercice,
 // dans CETTE seule séance. Rien n'est lu dans l'historique, rien n'y est écrit.
@@ -14222,8 +14248,6 @@ function renderPlateauxCoach(c){
     ${PERF_ENCADRE}
   </div>`;
 }
-
-
 // ══════════════ TROIS CHIFFRES D'ENTRAÎNEMENT ══════════════
 // L'accueil mettait en avant le nombre total de séances, les semaines de suite
 // et le poids. Deux comptent des présences, aucun ne parle d'entraînement. On
@@ -14322,8 +14346,6 @@ function _messageFinSeance(sets,setsPlanned,duration,records,delta,jour,incomple
   if(p>0&&n===p) return tete+'Séance complète.';
   return tete+'C\'est enregistré.';
 }
-
-
 // Peuplement des trois cases de l'accueil. Chaque case dit ce qui lui manque
 // plutôt que d'afficher un chiffre qu'elle ne peut pas calculer : un « 0 »
 // sans historique se lit comme un échec, un « — » se lit comme une attente.
@@ -14353,8 +14375,6 @@ function _majMetriquesAccueil(u){
   if(!ex) met('clh-m3','—','Pas encore assez d\'historique.');
   else met('clh-m3',String(ex.enProgres),ex.enProgres+' sur '+ex.total+' ce mois-ci');
 }
-
-
 // ── Volume par créneau, dans l'onglet Perfs ─────────────────────────────────
 // Le graphique mélangeait tous les créneaux : une séance jambes et une séance
 // bras dans le même histogramme, où la première écrase la seconde sans que
@@ -14484,9 +14504,9 @@ function buildSessionComparison(vol,data){
           <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
           <path d="M9.4 4.9 C8.6 6.1 8.6 7.7 9.6 8.8 M14.6 4.9 C15.4 6.1 15.4 7.7 14.4 8.8" stroke-width=".9"/>
         </g>
-        <text x="100" y="157" text-anchor="middle" font-family="'Bebas Neue',sans-serif" font-size="34" letter-spacing="4" fill="url(#wdSilver)" stroke="#43474e" stroke-width=".7" paint-order="stroke">RECORD</text>
+        <text x="100" y="157" text-anchor="middle" font-family="'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif" font-size="34" letter-spacing="4" fill="url(#wdSilver)" stroke="#43474e" stroke-width=".7" paint-order="stroke">RECORD</text>
       </svg></div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:2px;color:#e8ebef;margin-top:12px;line-height:1;text-shadow:0 0 10px rgba(255,255,255,.25)">NOUVEAU RECORD</div>
+      <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:22px;letter-spacing:2px;color:#e8ebef;margin-top:12px;line-height:1;text-shadow:0 0 10px rgba(255,255,255,.25)">NOUVEAU RECORD</div>
       <div style="font-size:13px;font-weight:800;color:#fff;margin-top:5px">${best.curMax}kg : ${escapeHtml(best.nm)}</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:3px">était ${best.histMax}kg${records.length>1?' · +'+(records.length-1)+' autre'+(records.length>2?'s':'')+' record'+(records.length>2?'s':'')+' battu'+(records.length>2?'s':''):''}</div>
     </div>`;
@@ -16643,8 +16663,6 @@ function substitutsAutorises(u,zone){
   if(!d) return true;
   return false;
 }
-
-
 // ── Formulaire de déclaration, réutilisé aux trois points d'entrée ──────────
 // Un seul formulaire : bilan de départ, fiche coach, et parcours douleur en
 // séance. Trois portes, une seule pièce — sinon les trois divergent.
@@ -16826,8 +16844,6 @@ function renderContraintesAthlete(){
   try{ h=currentUser?blocDrapeauRouge(currentUser):''; }catch(e){ h=''; }
   z.innerHTML=h;
 }
-
-
 // ══════════════ SCHÉMAS MOTEURS ══════════════
 // Les 408 exercices du guide, rangés par SCHÉMA MOTEUR. Un rowing est un
 // tirage horizontal : c'est descriptif, ça se vérifie, et c'est pour ça que
@@ -16900,8 +16916,6 @@ function schemaDe(ex,user){
   }catch(e){}
   return null;
 }
-
-
 // ── Charges articulaires : les notes du coach ───────────────────────────────
 // Une note par (schéma, zone), de 0 à 3. Elles vivent sur le dossier du COACH
 // — c'est son jugement de métier, pas une préférence d'athlète — et voyagent
@@ -16991,8 +17005,6 @@ function substitutsDe(ex,filtres){
   }
   return out.sort((a,b)=>a.charge-b.charge);
 }
-
-
 // ── Écran de saisie des charges articulaires ────────────────────────────────
 // Une ligne par schéma, une case par zone concernée. Les exemples d'exercices
 // sont sous les yeux : c'est ce qui permet de noter « charnière de hanche »
@@ -17076,8 +17088,6 @@ function _chAbrege(z){
   return ({'rachis-lombaire':'lomb','rachis-cervical':'cerv','epaule':'épaule','coude':'coude',
     'poignet':'poign','hanche':'hanche','genou':'genou','cheville':'chev'})[z]||z;
 }
-
-
 // ── Contre-indication croisée avec l'exercice ───────────────────────────────
 // Cette partie attendait FB-06 : sans note de charge articulaire,
 // contraintesPourExercice rendait toujours un tableau vide. Les notes du coach
@@ -17573,8 +17583,6 @@ const DEB_STEPS=[
     bPhotoCards('deb')+
     `</div>`
 ];
-
-
 function saveBilanFinal(){
   const n=(currentUser.bilans||[]).filter(b=>b.type===bilType).length+1;
   const bi=Object.assign({type:bilType,date:Date.now(),num:n},bilData);
@@ -17900,7 +17908,7 @@ function showBilanNotifPrompt(){
   m.style.cssText='position:fixed;inset:0;background:#000b;z-index:8000;display:flex;align-items:flex-end;justify-content:center';
   m.innerHTML=`<div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:28px 24px 40px;width:100%;max-width:480px;animation:slideUp .35s ease">
     <div style="text-align:center;font-size:40px;margin-bottom:12px"></div>
-    <h2 style="text-align:center;margin-bottom:8px;font-size:17px;font-family:'Bebas Neue',sans-serif;letter-spacing:.5px">Active les rappels bilan</h2>
+    <h2 style="text-align:center;margin-bottom:8px;font-size:17px;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:.5px">Active les rappels bilan</h2>
     <p style="text-align:center;color:var(--sub);font-size:12px;line-height:1.7;margin-bottom:24px">
       Reçois une notification <strong style="color:#fff">tous les 2 samedis à 7h00</strong><br>pour ne jamais oublier ton bilan coaching.
     </p>
@@ -18049,7 +18057,7 @@ function openWoReminderConfig(){
     </div>
     <label style="font-size:11px;display:block;margin-bottom:6px">Heure du rappel</label>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
-      <select id="wrd-hour" style="flex:1;font-size:16px;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;padding:10px;background:var(--surface-1);border:1px solid var(--border);color:var(--text);border-radius:6px">${hourOpts}</select>
+      <select id="wrd-hour" style="flex:1;font-size:16px;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px;padding:10px;background:var(--surface-1);border:1px solid var(--border);color:var(--text);border-radius:6px">${hourOpts}</select>
       <div style="display:flex;flex-direction:column;gap:6px">
         <button id="wrd-min-0" onclick="wrdSetMin(0)" style="border-radius:4px;padding:6px 12px;font-size:11px;font-weight:800;font-family:Montserrat,sans-serif;cursor:pointer;background:${curM===0?'var(--red)':'transparent'};border:1px solid ${curM===0?'var(--red)':'var(--border)'};color:${curM===0?'#fff':'var(--sub)'}">:00</button>
         <button id="wrd-min-30" onclick="wrdSetMin(30)" style="border-radius:4px;padding:6px 12px;font-size:11px;font-weight:800;font-family:Montserrat,sans-serif;cursor:pointer;background:${curM===30?'var(--red)':'transparent'};border:1px solid ${curM===30?'var(--red)':'var(--border)'};color:${curM===30?'#fff':'var(--sub)'}">:30</button>
@@ -18211,8 +18219,6 @@ const MEAS=[
   {k:'bust',l:'Tour de Buste',color:'#fb923c'},
   {k:'neck',l:'Tour de Cou',color:'#94a3b8'},
 ];
-
-
 // ══════════════ ONGLET VOLUME (ATHLÈTE) ══════════════
 let _volDecalage=0;                 // 0 = semaine courante, 1 = la précédente…
 const VOL_SEMAINES_MAX=12;          // profondeur de navigation offerte
@@ -19346,21 +19352,21 @@ function showProgressTab(tab,btn){
             <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:4px;color:#ff5a5a;text-transform:uppercase;white-space:nowrap;text-shadow:0 0 9px rgba(224,32,32,.65)">RepCore</div>
             <div style="flex:1;max-width:52px;height:1px;background:linear-gradient(90deg,rgba(224,32,32,.85),transparent)"></div>
           </div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:38px;line-height:.96;letter-spacing:2px;color:#fff;text-shadow:0 0 22px rgba(255,255,255,.42),0 0 44px rgba(224,32,32,.35)">MA TRANSFORMATION</div>
+          <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:38px;line-height:.96;letter-spacing:2px;color:#fff;text-shadow:0 0 22px rgba(255,255,255,.42),0 0 44px rgba(224,32,32,.35)">MA TRANSFORMATION</div>
           <div style="width:46px;height:2.5px;background:linear-gradient(90deg,#ff3b30,#8d0000);border-radius:2px;margin:9px auto 0;box-shadow:0 0 12px rgba(224,32,32,.85)"></div>
           <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2.8px;color:#7a7a7a;text-transform:uppercase;margin-top:8px">${period?period+' de travail':'Suivi photo'} &nbsp;·&nbsp; ${bl.length} bilan${bl.length>1?'s':''}</div>
         </div>
         ${dW!=null?`<div style="display:flex;justify-content:center;gap:9px;margin:11px 0 13px">
           <div style="flex:1;max-width:112px;background:linear-gradient(180deg,#131313,#0b0b0b);border:1px solid #232323;border-radius:10px;padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)">
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;line-height:1;color:#8a8a8a">${wFirst}<span style="font-size:11px">kg</span></div>
+            <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:22px;line-height:1;color:#8a8a8a">${wFirst}<span style="font-size:11px">kg</span></div>
             <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:var(--text-dim);margin-top:3px;font-weight:800">DÉPART</div>
           </div>
           <div style="flex:1;max-width:112px;background:linear-gradient(160deg,#c10000,#6d0000);border:1px solid rgba(255,90,90,.42);border-radius:10px;padding:8px 6px;text-align:center;box-shadow:0 0 20px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.18)">
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;line-height:1;color:#fff;text-shadow:0 0 12px rgba(255,255,255,.9)">${wLast}<span style="font-size:11px">kg</span></div>
+            <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:22px;line-height:1;color:#fff;text-shadow:0 0 12px rgba(255,255,255,.9)">${wLast}<span style="font-size:11px">kg</span></div>
             <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:rgba(255,255,255,.8);margin-top:3px;font-weight:800">AUJOURD'HUI</div>
           </div>
           <div style="flex:1;max-width:112px;background:linear-gradient(180deg,#131313,#0b0b0b);border:1px solid ${dCol}44;border-radius:10px;padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 0 16px ${dCol}22">
-            <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;line-height:1;color:${dCol};text-shadow:0 0 12px ${dCol}bb">${dW>0?'+':''}${dW}<span style="font-size:11px">kg</span></div>
+            <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:22px;line-height:1;color:${dCol};text-shadow:0 0 12px ${dCol}bb">${dW>0?'+':''}${dW}<span style="font-size:11px">kg</span></div>
             <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:${dCol}aa;margin-top:3px;font-weight:800">ÉVOLUTION</div>
           </div>
         </div>`:'<div style="height:8px"></div>'}
@@ -19372,7 +19378,7 @@ function showProgressTab(tab,btn){
                 const isLast=i===bl.length-1;
                 return `<td style="padding:4px 4px 7px;text-align:center;min-width:${cellW}px">
                   <div style="display:inline-block;padding:3px 9px;border-radius:20px;background:${isLast?'linear-gradient(160deg,#c10000,#6d0000)':'#141414'};border:1px solid ${isLast?'rgba(255,90,90,.45)':'#222'};box-shadow:${isLast?'0 0 14px rgba(224,32,32,.5)':'none'}">
-                    <span style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1.5px;color:${isLast?'#fff':'#7a7a7a'};${isLast?'text-shadow:0 0 9px rgba(255,255,255,.7)':''}">B${i+1}</span>
+                    <span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:13px;letter-spacing:1.5px;color:${isLast?'#fff':'#7a7a7a'};${isLast?'text-shadow:0 0 9px rgba(255,255,255,.7)':''}">B${i+1}</span>
                   </div>
                   <div style="font-size:var(--fs-xs);font-weight:800;color:${isLast?'#ff7a7a':'#3f3f3f'};margin-top:3px;letter-spacing:.5px">${getBW(bl[i])?getBW(bl[i])+'KG':''}</div>
                 </td>`;
@@ -19382,7 +19388,7 @@ function showProgressTab(tab,btn){
             ${poses.map(([key,lbl,poseImg])=>`<tr>
               <td style="padding:5px 4px;vertical-align:middle;text-align:center">
                 <img src="${poseImg}" alt="${lbl}" style="height:52px;max-width:52px;object-fit:contain;filter:drop-shadow(0 0 7px rgba(255,255,255,.55));display:block;margin:0 auto 4px">
-                <div style="font-family:'Bebas Neue',sans-serif;font-size:11px;letter-spacing:1.4px;color:#fff;text-shadow:0 0 9px rgba(255,255,255,.4);white-space:nowrap">${lbl}</div>
+                <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:11px;letter-spacing:1.4px;color:#fff;text-shadow:0 0 9px rgba(255,255,255,.4);white-space:nowrap">${lbl}</div>
               </td>
               ${bl.map((b,i)=>{
                 const src=getP(b,key);
@@ -19400,7 +19406,7 @@ function showProgressTab(tab,btn){
         <!-- Pied facon signature -->
         <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,.06)">
           <img src="./icons/logo.png" alt="" style="width:20px;height:20px;border-radius:5px;object-fit:cover;opacity:.9">
-          <span style="font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:3px;color:#6a6a6a">REPCORE</span>
+          <span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:13px;letter-spacing:3px;color:#6a6a6a">REPCORE</span>
           <span style="font-size:var(--fs-xs);color:var(--text-dim);letter-spacing:1.5px;font-weight:700">· GUELLEC COACHING PRO</span>
         </div>
       </div>
@@ -19427,8 +19433,6 @@ function refreshMG(){
   saveUser();
   showProgressTab('masseGrasse',document.querySelector('#prog-tabs .btn-red'));
 }
-
-
 // ======= NUTRITION =======
 // ══════════════ RÉPARTITION PAR REPAS ET REPÈRE PÉRI-SÉANCE ══════════════
 // Deux réponses du questionnaire de départ étaient collectées depuis toujours
@@ -20278,8 +20282,6 @@ function _renderMacroTargets(nut){
     </div>
   </div>`;
 }
-
-
 // ── Proposition côté athlète ───────────────────────────────────────────────
 // Elle ne s'affiche QUE si personne n'a rempli les objectifs. Dès qu'un coach
 // a écrit des macros, cette carte disparaît : le coach prime, toujours, et il
@@ -20403,7 +20405,7 @@ function _renderStrictMacroRings(nut){
     :`<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:5px;padding:3px 10px;letter-spacing:1px">${icon('moon',10)} JOUR OFF</span>`;
   return `<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 8px 24px rgba(0,0,0,.35);animation:fadeInUp .3s ease">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div style="display:inline-flex;align-items:center;gap:7px;font-family:'Bebas Neue',sans-serif;font-size:17px;color:#ff3b30;text-transform:uppercase;letter-spacing:3px;text-shadow:0 0 8px rgba(224,32,32,.85),0 0 20px rgba(224,32,32,.45)"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('target',13)}</span>OBJECTIFS DU JOUR</div>
+      <div style="display:inline-flex;align-items:center;gap:7px;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:17px;color:#ff3b30;text-transform:uppercase;letter-spacing:3px;text-shadow:0 0 8px rgba(224,32,32,.85),0 0 20px rgba(224,32,32,.45)"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('target',13)}</span>OBJECTIFS DU JOUR</div>
       <span style="display:inline-flex;align-items:center;gap:6px">${badgePhase(currentUser)}${dayBadge}</span>
     </div>
     <div style="display:flex;justify-content:space-around;margin-bottom:16px">
@@ -20518,7 +20520,7 @@ function _renderStrictDiet(){
     <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:18px;margin-bottom:12px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.45);animation:fadeInUp .3s ease">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:relative">
-        <div style="display:inline-flex;align-items:center;gap:7px;font-family:'Bebas Neue',sans-serif;font-size:15px;color:#ff3b30;text-transform:uppercase;letter-spacing:2.5px;margin-bottom:14px;text-shadow:0 0 8px rgba(224,32,32,.8),0 0 18px rgba(224,32,32,.4)"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('check',13)}</span>J'AI RESPECTÉ MON PLAN AUJOURD'HUI</div>
+        <div style="display:inline-flex;align-items:center;gap:7px;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;color:#ff3b30;text-transform:uppercase;letter-spacing:2.5px;margin-bottom:14px;text-shadow:0 0 8px rgba(224,32,32,.8),0 0 18px rgba(224,32,32,.4)"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('check',13)}</span>J'AI RESPECTÉ MON PLAN AUJOURD'HUI</div>
         <div style="display:flex;gap:10px">
           <button onclick="setNutriRespected('${todayKey}',true)" style="flex:1;padding:14px 0;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;letter-spacing:1.5px;cursor:pointer;background:${respYes?'linear-gradient(160deg,#1a9c4d,#0f5c2e)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${respYes?'#fff':'#4a4a4a'};border:2px solid ${respYes?'#22c55e':'#1f1f1f'};box-shadow:${respYes?'0 0 20px rgba(34,197,94,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${respYes?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">✓ OUI</button>
           <button onclick="setNutriRespected('${todayKey}',false)" style="flex:1;padding:14px 0;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;letter-spacing:1.5px;cursor:pointer;background:${respNo?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${respNo?'#fff':'#4a4a4a'};border:2px solid ${respNo?'var(--red)':'#1f1f1f'};box-shadow:${respNo?'0 0 20px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${respNo?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">✗ NON</button>
@@ -20531,7 +20533,7 @@ function _renderStrictDiet(){
         <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 13px,rgba(255,255,255,.015) 13px,rgba(255,255,255,.015) 14px);pointer-events:none"></div>
         <div style="position:absolute;left:50%;top:-28px;transform:translateX(-50%);width:80px;height:80px;border-radius:50%;background:radial-gradient(circle,${streak>0?'rgba(34,197,94,.2)':'rgba(224,32,32,.13)'},transparent 68%);pointer-events:none"></div>
         <div style="position:relative">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:44px;line-height:1;color:${streak>0?'#22c55e':'#ff3b30'};text-shadow:0 0 12px ${streak>0?'rgba(34,197,94,.85)':'rgba(224,32,32,.8)'},0 0 26px ${streak>0?'rgba(34,197,94,.4)':'rgba(224,32,32,.35)'}">${streak}</div>
+          <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:44px;line-height:1;color:${streak>0?'#22c55e':'#ff3b30'};text-shadow:0 0 12px ${streak>0?'rgba(34,197,94,.85)':'rgba(224,32,32,.8)'},0 0 26px ${streak>0?'rgba(34,197,94,.4)':'rgba(224,32,32,.35)'}">${streak}</div>
           <div style="font-size:var(--fs-xs);color:${streak>0?'rgba(34,197,94,.75)':'rgba(255,90,90,.7)'};letter-spacing:2px;margin-top:5px;text-transform:uppercase;font-weight:800">Jours consécutifs</div>
         </div>
       </div>
@@ -20539,7 +20541,7 @@ function _renderStrictDiet(){
         <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 13px,rgba(255,255,255,.015) 13px,rgba(255,255,255,.015) 14px);pointer-events:none"></div>
         <div style="position:absolute;left:50%;top:-28px;transform:translateX(-50%);width:80px;height:80px;border-radius:50%;background:radial-gradient(circle,rgba(245,197,24,.16),transparent 68%);pointer-events:none"></div>
         <div style="position:relative">
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:44px;line-height:1;color:#f5c518;text-shadow:0 0 12px rgba(245,197,24,.8),0 0 26px rgba(245,197,24,.35)">${weekScore}<span style="font-size:19px;color:rgba(255,255,255,.35);text-shadow:none">/${answered||7}</span></div>
+          <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:44px;line-height:1;color:#f5c518;text-shadow:0 0 12px rgba(245,197,24,.8),0 0 26px rgba(245,197,24,.35)">${weekScore}<span style="font-size:19px;color:rgba(255,255,255,.35);text-shadow:none">/${answered||7}</span></div>
           <div style="font-size:var(--fs-xs);color:rgba(245,197,24,.7);letter-spacing:2px;margin-top:5px;text-transform:uppercase;font-weight:800">Cette semaine</div>
         </div>
       </div>
@@ -21029,7 +21031,7 @@ function _renderFjDaySummary(date){
   const kcalTile=`<div style="flex:1.25;min-width:0;background:linear-gradient(145deg,#c10000 0%,#8d0000 55%,#5a0000 100%);border:1px solid rgba(255,90,90,.45);border-radius:10px;padding:9px 8px;text-align:center;position:relative;overflow:hidden;box-shadow:0 0 18px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.16)">
     <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(0,0,0,.14) 11px,rgba(0,0,0,.14) 12px);pointer-events:none"></div>
     <div style="position:relative">
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:#fff;line-height:1;letter-spacing:1px;text-shadow:0 0 8px rgba(255,255,255,.95),0 0 20px rgba(255,255,255,.5)">${Math.round(tot.kcal)}${m.kcal?`<span style="font-size:11px;opacity:.65;letter-spacing:0;text-shadow:none"> / ${m.kcal}</span>`:''}</div>
+      <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:26px;color:#fff;line-height:1;letter-spacing:1px;text-shadow:0 0 8px rgba(255,255,255,.95),0 0 20px rgba(255,255,255,.5)">${Math.round(tot.kcal)}${m.kcal?`<span style="font-size:11px;opacity:.65;letter-spacing:0;text-shadow:none"> / ${m.kcal}</span>`:''}</div>
       <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.85);letter-spacing:2.5px;margin-top:3px;text-transform:uppercase;font-weight:800;text-shadow:0 0 6px rgba(255,255,255,.5)">KCAL</div>
     </div>
   </div>`;
@@ -22038,8 +22040,6 @@ function besoinsProposes(user,opts){
   // ramène la journée au niveau de la dépense.
   return {source,on,off,act,depense,mb,gParKg,modele,cycle,delta:deltaRetenu,hypotheses};
 }
-
-
 // ── Réglages de la proposition, côté coach ─────────────────────────────────
 // Ils vivent en mémoire, PAS dans le dossier de l'athlète : ce sont les
 // curseurs du calcul, pas une donnée de suivi. Rien n'est enregistré tant que
@@ -22692,7 +22692,7 @@ function _renderSuppTable(list, isCoach, editFn){
         ${others>0?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px;letter-spacing:.5px">aussi ${others} autre${others>1?'s':''} moment${others>1?'s':''}</div>`:''}
       </div>
       <div style="flex-shrink:0;text-align:right">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:21px;line-height:1;color:${color};text-shadow:0 0 9px ${color}88">${s.dosage_quantity||'—'}</div>
+        <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:21px;line-height:1;color:${color};text-shadow:0 0 9px ${color}88">${s.dosage_quantity||'—'}</div>
         <div style="font-size:var(--fs-xs);color:#666;letter-spacing:.8px;margin-top:1px;text-transform:uppercase">${s.dosage_quantity?escapeHtml(s.dosage_unit||''):''}</div>
       </div>
     </div>`;
@@ -22704,7 +22704,7 @@ function _renderSuppTable(list, isCoach, editFn){
     return `<div style="margin-bottom:13px">
       <div style="display:flex;align-items:center;gap:8px;padding:7px 11px;border-radius:9px 9px 0 0;background:linear-gradient(90deg,${c}22,${c}06 65%,transparent);border-left:3px solid ${c};box-shadow:inset 0 1px 0 rgba(255,255,255,.05)">
         <span style="display:inline-flex;filter:drop-shadow(0 0 5px ${c}cc)">${_suppTimingIcon(g.t.id,14,c)}</span>
-        <span style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2px;color:${c};text-transform:uppercase;text-shadow:0 0 9px ${c}88">${g.t.label}</span>
+        <span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2px;color:${c};text-transform:uppercase;text-shadow:0 0 9px ${c}88">${g.t.label}</span>
         <span style="margin-left:auto;font-size:var(--fs-xs);font-weight:800;color:${c};opacity:.65;letter-spacing:1px">${g.items.length}</span>
       </div>
       <div style="padding-top:6px">${g.items.map(s=>row(s,c)).join('')}</div>
@@ -23136,7 +23136,7 @@ function renderCoachCaffeineSection(c){
         </div>
         <div style="flex:1;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">
           <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;margin-bottom:5px">PIC 28J</div>
-          <div style="font-size:${peakMg>999?'18':'24'}px;font-family:'Bebas Neue',sans-serif;color:${colPeak};line-height:1">${peakMg||'—'}</div>
+          <div style="font-size:${peakMg>999?'18':'24'}px;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;color:${colPeak};line-height:1">${peakMg||'—'}</div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${peakMg?peakStr:'—'}</div>
         </div>
       </div>
@@ -23562,7 +23562,7 @@ function _htmlCafeineNuits(user,dates){
   if(!lignes.length) return '';
   const lbl=d=>new Date(d+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'short',day:'numeric'});
   return `<div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.24);border-radius:14px;padding:16px;margin-bottom:14px">
-    <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2.5px;color:var(--warning);text-transform:uppercase;margin-bottom:9px">Caféine au coucher</div>
+    <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:var(--warning);text-transform:uppercase;margin-bottom:9px">Caféine au coucher</div>
     ${lignes.map(l=>`<div style="font-size:12px;color:#ddd;line-height:1.7;text-transform:capitalize">${escapeHtml(lbl(l.date))} <span style="text-transform:none;color:var(--warning);font-weight:700">environ ${l.mg} mg</span><span style="text-transform:none;color:var(--sub)"> encore présents à ${_libHeure(_hhmmEnMin(l.bed))}</span></div>`).join('')}
     <div style="font-size:11px;color:var(--text-dim);line-height:1.5;margin-top:8px">${escapeHtml(CAFEINE_NOTE_DEMIVIE)}</div>
   </div>`;
@@ -24262,7 +24262,7 @@ function _renderTsAnnotations(annotations,opts={}){
     ?sorted.map((t,i)=>{
         const isAudio=!!t.audioUrl;
         return `<div style="display:flex;align-items:${isAudio?'flex-start':'center'};gap:8px;padding:6px 0;border-bottom:1px solid var(--surface-2)">
-          <span onclick="const _v=document.getElementById('${videoId}');if(_v)_v.currentTime=tsToSecs('${t.ts}')" style="font-family:'Bebas Neue',sans-serif;font-size:13px;color:var(--red);flex-shrink:0;min-width:36px;margin-top:${isAudio?'3px':'0'};cursor:pointer" title="▶ ${t.ts}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${t.ts}</span>
+          <span onclick="const _v=document.getElementById('${videoId}');if(_v)_v.currentTime=tsToSecs('${t.ts}')" style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:13px;color:var(--red);flex-shrink:0;min-width:36px;margin-top:${isAudio?'3px':'0'};cursor:pointer" title="▶ ${t.ts}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${t.ts}</span>
           ${isAudio
             ?`<div style="flex:1"><audio src="${t.audioUrl}" controls style="height:32px;width:100%;margin-bottom:2px"></audio><div style="font-size:var(--fs-xs);color:var(--sub);display:flex;align-items:center;gap:4px">${icon('mic',12)} message audio</div></div>`
             :`<span style="flex:1;font-size:12px">${escapeHtml(t.note)}</span>`}
@@ -24313,7 +24313,7 @@ function openVideoCorrection(email,videoId){
       <label style="margin-top:0">Repères par timestamp <span class="badge badge-gray" style="font-size:var(--fs-xs);margin-left:4px">optionnel</span></label>
       <div id="vc-ts-list" style="margin:6px 0 10px"></div>
       <div style="display:flex;gap:6px;align-items:center">
-        <input id="vc-ts-time" placeholder="0:45" style="width:62px;flex-shrink:0;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:15px;padding:8px 4px" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('vc-ts-note').focus();}">
+        <input id="vc-ts-time" placeholder="0:45" style="width:62px;flex-shrink:0;text-align:center;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;padding:8px 4px" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('vc-ts-note').focus();}">
         <input id="vc-ts-note" placeholder="Ex : genoux qui rentrent" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addTsAnnotation();}">
         <button class="btn btn-outline btn-sm" style="flex-shrink:0;padding:9px 12px" onclick="addTsAnnotation()">+</button>
       </div>
@@ -24322,7 +24322,7 @@ function openVideoCorrection(email,videoId){
     <div style="margin-top:12px;padding:12px;background:#080808;border:1px solid var(--surface-2);border-radius:10px">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--sub);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> Message audio</div>
       <div style="display:flex;gap:6px;margin-bottom:6px">
-        <input id="vc-audio-ts" placeholder="0:45" style="width:62px;flex-shrink:0;text-align:center;font-family:'Bebas Neue',sans-serif;font-size:15px;padding:8px 4px">
+        <input id="vc-audio-ts" placeholder="0:45" style="width:62px;flex-shrink:0;text-align:center;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;padding:8px 4px">
         <button id="vc-audio-btn" class="btn btn-outline btn-sm" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px" onclick="toggleAudioRec()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> Démarrer l'enregistrement</button>
       </div>
       <div id="vc-audio-preview" style="display:none;margin-top:8px">
@@ -24575,7 +24575,7 @@ function _bandeauJour(inputId,jour,handler){
   const lbl=estAuj?"Aujourd'hui"
     :new Date(jour+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long'});
   return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-    <div style="flex:1;min-width:0;font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2.5px;color:${estAuj?'#8a8a8a':'var(--red)'};text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${lbl}</div>
+    <div style="flex:1;min-width:0;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:${estAuj?'#8a8a8a':'var(--red)'};text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${lbl}</div>
     ${estAuj?'':`<button onclick="${handler}('')" title="Revenir à aujourd'hui" style="flex:none;background:#141414;border:1px solid #2a2a2a;color:var(--sub);border-radius:7px;padding:6px 9px;font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:.5px;cursor:pointer">AUJ.</button>`}
     <input type="date" id="${inputId}" value="${jour}" min="${min}" max="${auj}" onchange="${handler}(this.value)" aria-label="Choisir le jour" style="flex:0 0 auto;width:138px;box-sizing:border-box;background:#101010;border:1px solid #2a2a2a;color:#ccc;border-radius:7px;padding:6px 8px;font-family:Montserrat,sans-serif;font-size:11px;color-scheme:dark">
   </div>`;
@@ -24654,7 +24654,7 @@ function loadSteps(containerId='steps-content'){
     }).join('');
     histHtml=`<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4)">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div>
-      <div style="position:relative"><div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:6px">Historique</div>
+      <div style="position:relative"><div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:6px">Historique</div>
       ${rows}</div>
     </div>`;
   }
@@ -24677,15 +24677,15 @@ function loadSteps(containerId='steps-content'){
     <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);animation:fadeInUp .3s ease">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:relative">
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:13px">Objectifs de pas</div>
+        <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:13px">Objectifs de pas</div>
         <div style="display:flex;gap:10px;margin-bottom:12px">
           <div style="flex:1;min-width:0">
             <div style="font-size:var(--fs-xs);font-weight:800;color:#ff5a5a;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">JOUR ON <span style="font-size:var(--fs-xs);font-weight:600;color:var(--text-dim)">entraînement</span></div>
-            <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:22px;text-align:center;padding:11px 6px;background:linear-gradient(180deg,#0a0000,#0f0303);border:1px solid #3a0d0d;border-radius:9px;color:#ff5a5a;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;box-shadow:inset 0 2px 7px rgba(0,0,0,.6),0 0 12px rgba(224,32,32,.12);text-shadow:0 0 10px rgba(224,32,32,.6)">
+            <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:22px;text-align:center;padding:11px 6px;background:linear-gradient(180deg,#0a0000,#0f0303);border:1px solid #3a0d0d;border-radius:9px;color:#ff5a5a;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px;box-shadow:inset 0 2px 7px rgba(0,0,0,.6),0 0 12px rgba(224,32,32,.12);text-shadow:0 0 10px rgba(224,32,32,.6)">
           </div>
           <div style="flex:1;min-width:0">
             <div style="font-size:var(--fs-xs);font-weight:800;color:#7aa7d9;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">JOUR OFF <span style="font-size:var(--fs-xs);font-weight:600;color:var(--text-dim)">repos</span></div>
-            <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:22px;text-align:center;padding:11px 6px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:9px;color:#7aa7d9;font-family:'Bebas Neue',sans-serif;letter-spacing:1px;box-shadow:inset 0 2px 7px rgba(0,0,0,.6),0 0 12px rgba(96,165,250,.1);text-shadow:0 0 10px rgba(96,165,250,.5)">
+            <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:22px;text-align:center;padding:11px 6px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:9px;color:#7aa7d9;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px;box-shadow:inset 0 2px 7px rgba(0,0,0,.6),0 0 12px rgba(96,165,250,.1);text-shadow:0 0 10px rgba(96,165,250,.5)">
           </div>
         </div>
         <button onclick="saveStepsGoals()" style="width:100%;padding:12px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:#fff;border-radius:9px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 18px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:0 0 9px rgba(255,255,255,.4)">Enregistrer les objectifs</button>
@@ -24697,14 +24697,14 @@ function loadSteps(containerId='steps-content'){
       <div style="position:absolute;right:-22px;top:-22px;width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,.055);pointer-events:none"></div>
       <div style="position:relative">
         <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:8px">Moyenne hebdomadaire</div>
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:56px;line-height:.95;color:#fff;letter-spacing:1px;text-shadow:0 0 16px rgba(255,255,255,.85),0 0 34px rgba(255,255,255,.4)">${fmt(weekAvg)}</div>
+        <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:56px;line-height:.95;color:#fff;letter-spacing:1px;text-shadow:0 0 16px rgba(255,255,255,.85),0 0 34px rgba(255,255,255,.4)">${fmt(weekAvg)}</div>
         <div style="font-size:11px;color:rgba(255,255,255,.62);margin-top:6px">pas / jour &nbsp;·&nbsp; ${withData.length} / 7 jours renseignés</div>
         <div style="margin-top:14px;display:flex;justify-content:center;gap:14px">
-          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">OBJECTIF ON</div><div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:#fff;margin-top:2px;text-shadow:0 0 10px rgba(255,255,255,.55)">${goals.on.toLocaleString('fr-FR')}</div></div>
+          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">OBJECTIF ON</div><div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:21px;color:#fff;margin-top:2px;text-shadow:0 0 10px rgba(255,255,255,.55)">${goals.on.toLocaleString('fr-FR')}</div></div>
           <div style="width:1px;background:rgba(255,255,255,.18)"></div>
-          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">OBJECTIF OFF</div><div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:rgba(255,255,255,.8);margin-top:2px">${goals.off.toLocaleString('fr-FR')}</div></div>
+          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">OBJECTIF OFF</div><div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:21px;color:rgba(255,255,255,.8);margin-top:2px">${goals.off.toLocaleString('fr-FR')}</div></div>
           <div style="width:1px;background:rgba(255,255,255,.18)"></div>
-          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">TOTAL SEMAINE</div><div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:#fff;margin-top:2px;text-shadow:0 0 10px rgba(255,255,255,.55)">${fmt(withData.reduce((s,d)=>s+d.count,0))}</div></div>
+          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">TOTAL SEMAINE</div><div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:21px;color:#fff;margin-top:2px;text-shadow:0 0 10px rgba(255,255,255,.55)">${fmt(withData.reduce((s,d)=>s+d.count,0))}</div></div>
         </div>
       </div>
     </div>
@@ -24715,13 +24715,13 @@ function loadSteps(containerId='steps-content'){
       <div style="position:relative">
         ${_bandeauJour('steps-date-input',selStr,'changeStepsDate')}
         <div style="display:flex;gap:8px;margin-bottom:11px">
-          <button onclick="stepsToggleType('on')" style="flex:1;padding:10px 4px;border-radius:9px;border:2px solid ${todayType==='on'?'var(--red)':'#1f1f1f'};background:${todayType==='on'?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='on'?'#fff':'#4a4a4a'};font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='on'?'0 0 18px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='on'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">JOUR ON</button>
-          <button onclick="stepsToggleType('off')" style="flex:1;padding:10px 4px;border-radius:9px;border:2px solid ${todayType==='off'?'#60a5fa':'#1f1f1f'};background:${todayType==='off'?'linear-gradient(160deg,#1d4f80,#0b2740)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='off'?'#fff':'#4a4a4a'};font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='off'?'0 0 18px rgba(96,165,250,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='off'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">JOUR OFF</button>
+          <button onclick="stepsToggleType('on')" style="flex:1;padding:10px 4px;border-radius:9px;border:2px solid ${todayType==='on'?'var(--red)':'#1f1f1f'};background:${todayType==='on'?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='on'?'#fff':'#4a4a4a'};font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='on'?'0 0 18px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='on'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">JOUR ON</button>
+          <button onclick="stepsToggleType('off')" style="flex:1;padding:10px 4px;border-radius:9px;border:2px solid ${todayType==='off'?'#60a5fa':'#1f1f1f'};background:${todayType==='off'?'linear-gradient(160deg,#1d4f80,#0b2740)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='off'?'#fff':'#4a4a4a'};font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='off'?'0 0 18px rgba(96,165,250,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='off'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">JOUR OFF</button>
         </div>
         ${todayGoalHintHtml}
         <input type="number" id="steps-today-input" placeholder="0" min="0" max="99999"
           value="${todayEntry&&todayEntry.count!=null?todayEntry.count:''}"
-          style="width:100%;box-sizing:border-box;font-size:44px;text-align:center;padding:14px 10px;background:linear-gradient(180deg,#070707,#0d0d0d);border:1px solid #242424;border-radius:10px;color:#fff;font-family:'Bebas Neue',sans-serif;letter-spacing:2px;margin-bottom:11px;box-shadow:inset 0 3px 10px rgba(0,0,0,.65);text-shadow:0 0 16px rgba(255,255,255,.45)">
+          style="width:100%;box-sizing:border-box;font-size:44px;text-align:center;padding:14px 10px;background:linear-gradient(180deg,#070707,#0d0d0d);border:1px solid #242424;border-radius:10px;color:#fff;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:2px;margin-bottom:11px;box-shadow:inset 0 3px 10px rgba(0,0,0,.65);text-shadow:0 0 16px rgba(255,255,255,.45)">
         <button onclick="saveSteps()" style="width:100%;padding:13px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:#fff;border-radius:9px;font-family:Montserrat,sans-serif;font-size:12px;font-weight:800;letter-spacing:2.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:0 0 10px rgba(255,255,255,.45)">Sauver</button>
         ${todayProgressHtml}
       </div>
@@ -24731,7 +24731,7 @@ function loadSteps(containerId='steps-content'){
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:relative">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:15px">
-          <span style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Cette semaine</span>
+          <span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Cette semaine</span>
           <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--text-dim)"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--red);vertical-align:middle;box-shadow:0 0 6px rgba(224,32,32,.9)"></span> ON &nbsp;<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#60a5fa;vertical-align:middle;box-shadow:0 0 6px rgba(96,165,250,.8)"></span> OFF</span>
         </div>
         <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:7px;border-bottom:1px solid rgba(255,255,255,.05)">${bars}</div>
@@ -25426,8 +25426,6 @@ function refuserAjustement(){
   toastEcriture(ok,'C\'est noté, on garde comme ça','ton choix est');
   loadNutrition();
 }
-
-
 // Vitesse telle qu'elle était à une date donnée : on tronque la série et on
 // rejoue la MÊME régression. Aucun relevé n'est stocké, rien à migrer, et les
 // garde-fous PESEE_VIT_MIN_PTS et PESEE_MM_MIN s'appliquent tels quels
@@ -25798,8 +25796,6 @@ function _ajustPlancherAtteint(user){
   if(pl==null) return {plancher:null,kcalApres,regle:null};
   return kcalApres<pl?{plancher:pl,kcalApres,regle:libelleReglePlancher(ple)}:null;
 }
-
-
 // ══════════════ PLANCHERS NUTRITIONNELS ═════════════════════════════════════
 // Le lot précédent posait un plancher provisoire — le métabolisme au repos — en
 // attendant la valeur du coach. La voici, et elle remplace le provisoire.
@@ -26750,8 +26746,6 @@ function aTCA(user){
   const txt=_texteReponse(dep['deb-tca']);
   return !!txt&&!_RIEN_DECLARE.test(txt);
 }
-
-
 // ── Pesée du jour, sur l'accueil athlète ────────────────────────────────────
 // La carte n'apparaît PAS en mode neutre : inciter à se peser tous les jours
 // est précisément ce qu'on ne veut pas faire à quelqu'un qui a déclaré un
@@ -26795,7 +26789,7 @@ function renderCartePesee(){
       <input type="number" id="pesee-input" inputmode="decimal" step="0.1"
         min="${PESEE_MIN}" max="${PESEE_MAX}" placeholder="${der?der.kg:'—'}"
         value="${dujour?dujour.kg:''}"
-        style="flex:1;min-width:0;box-sizing:border-box;font-size:20px;text-align:center;padding:10px 6px;background:var(--dark);border:1px solid var(--border);border-radius:9px;color:#f0f0f0;font-family:'Bebas Neue',sans-serif;letter-spacing:1px">
+        style="flex:1;min-width:0;box-sizing:border-box;font-size:20px;text-align:center;padding:10px 6px;background:var(--dark);border:1px solid var(--border);border-radius:9px;color:#f0f0f0;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px">
       <button class="btn btn-red btn-sm" onclick="savePesee()" style="height:44px;padding:0 18px;letter-spacing:1px;white-space:nowrap">${dujour?'Corriger':'Valider'}</button>
     </div>
     <div style="font-size:11px;color:var(--sub);margin-top:8px;line-height:1.5">${sous}</div>
@@ -26817,8 +26811,6 @@ function savePesee(){
   toast('Pesée enregistrée 👍');
   renderCartePesee();
 }
-
-
 // ── Onglet Poids : points bruts + moyenne mobile ────────────────────────────
 // Tracé en SVG et non au canevas parce qu'il faut deux choses que
 // multiLineChart ne sait pas faire : un axe des abscisses en DATES (les pesées
@@ -26884,7 +26876,7 @@ function _blocVitesse(user){
   else if(Math.abs(v.pctSem)<0.15) phrase='Poids stable sur les deux dernières semaines.';
   else phrase='Variation régulière, sans à-coup.';
   return `<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
-      <span style="font-size:22px;font-weight:800;color:${c};font-family:'Bebas Neue',sans-serif;letter-spacing:1px">${signe}${v.kgSem.toFixed(2)} kg</span>
+      <span style="font-size:22px;font-weight:800;color:${c};font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px">${signe}${v.kgSem.toFixed(2)} kg</span>
       <span style="font-size:12px;color:var(--sub)">par semaine</span>
       <span style="font-size:12px;color:${c};font-weight:700">${signe}${v.pctSem.toFixed(2)} %</span>
     </div>
@@ -26944,8 +26936,6 @@ function togglePoidsMasque(){
   showProgressTab('poids',document.querySelector('#prog-tabs button'));
   renderCartePesee();
 }
-
-
 // ── Poids, vue coach ────────────────────────────────────────────────────────
 // Le coach voit la vitesse de son athlète, et surtout : il est PRÉVENU quand
 // l'athlète est en mode neutre. Sans cet encart, le coach verrait un écran de
@@ -26983,7 +26973,7 @@ function blocPoidsCoach(user){
       <span style="font-size:10px;color:var(--text-faint)">dernière pesée le ${_fmtJourCourt(der.date)}</span>
     </div>
     <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
-      <span style="font-size:22px;font-weight:800;color:#f0f0f0;font-family:'Bebas Neue',sans-serif;letter-spacing:1px">${der.kg} kg</span>
+      <span style="font-size:22px;font-weight:800;color:#f0f0f0;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px">${der.kg} kg</span>
       ${moy!=null?`<span style="font-size:11px;color:var(--sub)">moyenne 7 j ${moy.toFixed(1)} kg</span>`:''}
     </div>
     ${v?`<div style="font-size:12px;font-weight:700;color:${c};margin-top:6px">
@@ -27001,8 +26991,6 @@ function renderPoidsCoach(c){
   try{ html=c?blocPoidsCoach(c):''; }catch(e){ html=''; }
   z.innerHTML=html;
 }
-
-
 // ── Choix de phase, côté athlète ────────────────────────────────────────────
 // La carte est REFUSABLE et ne revient pas : un refus écrit une date dans
 // user.phaseRefusee et la carte disparaît définitivement de l'accueil. Sans ce
@@ -27134,8 +27122,6 @@ function badgePhase(user){
   if(!p) return '';
   return `<span style="display:inline-flex;align-items:center;font-size:var(--fs-xs);font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:20px;padding:3px 9px;letter-spacing:1px;text-transform:uppercase">${PHASES[p.type].lib}</span>`;
 }
-
-
 // ── Sélecteur de phase, côté coach ──────────────────────────────────────────
 // Le coach décide POUR son athlète : definiPar vaut 'coach'. La phase est
 // écrite dans le dossier de l'athlète et poussée, comme la case de décharge.
@@ -27261,8 +27247,6 @@ function stepsToggleType(type){
   _rerenderLifestyle();
 }
 
-
-
 // ======= SLEEP =======
 function getSleepWeek(){
   const today=new Date(),dow=today.getDay();
@@ -27339,7 +27323,7 @@ function loadSleep(containerId='sleep-content'){
       const badge=e.duration>=7&&e.duration<=9?'Idéal':'';
       return `<div style="font-size:12px;font-weight:600;color:#aaa;text-transform:capitalize">${lbl}</div><div style="display:flex;align-items:center;gap:10px"><div style="font-size:var(--fs-xs);color:var(--sub)">${e.bed} → ${e.wake}</div>${badge?`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--green)">${badge}</span>`:''}<div style="font-size:14px;font-weight:800;color:${col}">${e.duration}h</div></div>`;
     },{pad:'9px 0',justify:'space-between',gap:0,border:'#111'});
-    histHtml=`<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4)"><div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div><div style="position:relative"><div style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:6px">Historique</div>${rows}</div></div>`;
+    histHtml=`<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4)"><div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div><div style="position:relative"><div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:6px">Historique</div>${rows}</div></div>`;
   }
 
   document.getElementById(containerId).innerHTML=`
@@ -27349,12 +27333,12 @@ function loadSleep(containerId='sleep-content'){
       <div style="position:absolute;left:14px;top:12px;color:rgba(255,255,255,.16)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
       <div style="position:relative">
         <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:8px">Moyenne hebdomadaire</div>
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:56px;line-height:.95;color:${weekAvg?avgColor:'rgba(255,255,255,.55)'};letter-spacing:1px;text-shadow:0 0 16px ${weekAvg?avgColor:'rgba(255,255,255,.4)'},0 0 34px ${weekAvg?avgColor+'66':'transparent'}">${weekAvg?weekAvg+'h':'—'}</div>
+        <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:56px;line-height:.95;color:${weekAvg?avgColor:'rgba(255,255,255,.55)'};letter-spacing:1px;text-shadow:0 0 16px ${weekAvg?avgColor:'rgba(255,255,255,.4)'},0 0 34px ${weekAvg?avgColor+'66':'transparent'}">${weekAvg?weekAvg+'h':'—'}</div>
         <div style="font-size:11px;color:rgba(255,255,255,.55);margin-top:6px">heures / nuit &nbsp;·&nbsp; ${withData.length} / 7 nuits renseignées</div>
         <div style="margin-top:14px;display:flex;justify-content:center;gap:16px">
-          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">OPTIMAL</div><div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:var(--green);margin-top:2px;text-shadow:0 0 11px rgba(34,197,94,.7)">7 – 9 h</div></div>
+          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">OPTIMAL</div><div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:21px;color:var(--green);margin-top:2px;text-shadow:0 0 11px rgba(34,197,94,.7)">7 – 9 h</div></div>
           <div style="width:1px;background:rgba(255,255,255,.15)"></div>
-          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">TOTAL SEMAINE</div><div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:${weekTotal!=null?avgColor:'rgba(255,255,255,.5)'};margin-top:2px;text-shadow:0 0 11px ${weekTotal!=null?avgColor+'99':'transparent'}">${weekTotal!=null?weekTotal+'h':'—'}</div></div>
+          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">TOTAL SEMAINE</div><div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:21px;color:${weekTotal!=null?avgColor:'rgba(255,255,255,.5)'};margin-top:2px;text-shadow:0 0 11px ${weekTotal!=null?avgColor+'99':'transparent'}">${weekTotal!=null?weekTotal+'h':'—'}</div></div>
         </div>
       </div>
     </div>
@@ -27367,14 +27351,14 @@ function loadSleep(containerId='sleep-content'){
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px">
           <div>
             <div style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-xs);font-weight:800;color:#60a5fa;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(96,165,250,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>Coucher</div>
-            <input type="time" id="sleep-bed-input" value="${todayEntry?.bed||''}" oninput="updateSleepPreview()" style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;text-align:center;padding:11px 4px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:9px;color:#9cc4ee;width:100%;box-sizing:border-box;box-shadow:inset 0 2px 7px rgba(0,0,0,.6);text-shadow:0 0 10px rgba(96,165,250,.5)">
+            <input type="time" id="sleep-bed-input" value="${todayEntry?.bed||''}" oninput="updateSleepPreview()" style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:22px;letter-spacing:1px;text-align:center;padding:11px 4px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:9px;color:#9cc4ee;width:100%;box-sizing:border-box;box-shadow:inset 0 2px 7px rgba(0,0,0,.6);text-shadow:0 0 10px rgba(96,165,250,.5)">
           </div>
           <div>
             <div style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-xs);font-weight:800;color:#f5c518;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(245,197,24,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><circle cx="12" cy="12" r="4.5"/><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="4.2" y1="4.2" x2="6" y2="6"/><line x1="18" y1="18" x2="19.8" y2="19.8"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.2" y1="19.8" x2="6" y2="18"/><line x1="18" y1="6" x2="19.8" y2="4.2"/></svg></span>Lever</div>
-            <input type="time" id="sleep-wake-input" value="${todayEntry?.wake||''}" oninput="updateSleepPreview()" style="font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;text-align:center;padding:11px 4px;background:linear-gradient(180deg,#0d0900,#120e03);border:1px solid #4d3d12;border-radius:9px;color:#f0d98a;width:100%;box-sizing:border-box;box-shadow:inset 0 2px 7px rgba(0,0,0,.6);text-shadow:0 0 10px rgba(245,197,24,.45)">
+            <input type="time" id="sleep-wake-input" value="${todayEntry?.wake||''}" oninput="updateSleepPreview()" style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:22px;letter-spacing:1px;text-align:center;padding:11px 4px;background:linear-gradient(180deg,#0d0900,#120e03);border:1px solid #4d3d12;border-radius:9px;color:#f0d98a;width:100%;box-sizing:border-box;box-shadow:inset 0 2px 7px rgba(0,0,0,.6);text-shadow:0 0 10px rgba(245,197,24,.45)">
           </div>
         </div>
-        <div id="sleep-preview" style="text-align:center;font-size:12px;color:#6a6a6a;margin-bottom:11px;min-height:26px">${todayEntry?.duration!=null?`<span style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:${sleepColor(todayEntry.duration)};text-shadow:0 0 13px ${sleepColor(todayEntry.duration)}aa">${todayEntry.duration}h</span> de sommeil`:''}</div>
+        <div id="sleep-preview" style="text-align:center;font-size:12px;color:#6a6a6a;margin-bottom:11px;min-height:26px">${todayEntry?.duration!=null?`<span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:26px;color:${sleepColor(todayEntry.duration)};text-shadow:0 0 13px ${sleepColor(todayEntry.duration)}aa">${todayEntry.duration}h</span> de sommeil`:''}</div>
         <button onclick="saveSleep()" style="width:100%;padding:13px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:#fff;border-radius:9px;font-family:Montserrat,sans-serif;font-size:12px;font-weight:800;letter-spacing:2.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:0 0 10px rgba(255,255,255,.45)">Enregistrer</button>
       </div>
     </div>
@@ -27383,7 +27367,7 @@ function loadSleep(containerId='sleep-content'){
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:relative">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:15px">
-          <span style="font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Cette semaine</span>
+          <span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Cette semaine</span>
           <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--text-dim)"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#22c55e;vertical-align:middle;box-shadow:0 0 6px rgba(34,197,94,.9)"></span> 7-9H</span>
         </div>
         <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:7px;border-bottom:1px solid rgba(255,255,255,.05)">${bars}</div>
@@ -28419,14 +28403,28 @@ function importOcrExercises(idx,maxN){
 // ======= LECTURE PDF → SÉANCES =======
 let _pendingPdfSeances=null, _pendingPdfTarget=null;
 
+// pdf.js 3.11.174, RAPATRIE dans app/vendor/. Il etait charge depuis un CDN,
+// qui recevait donc l adresse IP de chaque athlete ouvrant sa fiche programme.
+// Chargement toujours DYNAMIQUE : 312 Ko ne doivent pas peser sur le demarrage
+// de qui n ouvre jamais de PDF.
+//
+// LE WORKER N EST PAS RAPATRIE, et c est un arbitrage : il pese 1 061 Ko a lui
+// seul, contre 312 pour la bibliotheque. workerSrc laisse VIDE fait basculer
+// pdf.js en mode « fake worker » — le meme code tourne dans le fil principal.
+// Contrepartie assumee : le rendu d un gros PDF peut figer l ecran une seconde.
+// Deux appels d API sont utilises en tout, getDocument et workerSrc ; ce n est
+// pas le genre d usage qui justifie un megaoctet de plus dans le depot.
 async function _loadPdfJs(){
   if(window.pdfjsLib) return;
   await new Promise((res,rej)=>{
     const s=document.createElement('script');
-    s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.src='./vendor/pdf.min.js';
     s.onload=res;s.onerror=rej;document.head.appendChild(s);
   });
-  window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  // Chaine VIDE et non une URL : pdf.js sait tourner sans worker, mais il faut
+  // le lui dire explicitement. Laisser la valeur par defaut le ferait chercher
+  // un fichier absent et echouer.
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc='';
 }
 
 async function _pdfPageToText(page){
@@ -28804,8 +28802,6 @@ function initLogos(){
   const ph=document.getElementById('welcome-photo');if(ph)ph.src=COACH_PHOTO;
 }
 document.addEventListener('DOMContentLoaded',initLogos);
-
-
 // ═══════════════════════════════════════════════════
 // MONETISATION — Coach tabs
 // ═══════════════════════════════════════════════════
@@ -29751,8 +29747,6 @@ function _adminOffboardSelected(){
   if(!id){toast('Sélectionne un coach','var(--orange)');return;}
   offboardCoach(id);
 }
-
-
 // ── Access codes via Firebase RTDB (sans Cloud Functions — plan Spark) ──
 // Format: RC-XXXX-XXXX stocké dans /rc_codes/{code} du RTDB
 const _MONTH_MS=30*24*60*60*1000;
@@ -30324,8 +30318,6 @@ function renderPaypalButton(planId,coachId){
     }
   }).render('#paypal-buttons-inner');
 }
-
-
 // ══════════════ UI DE CLASSIFICATION MUSCULAIRE ══════════════
 
 // Ligne « Muscles » sous le champ Reps de l'éditeur d'exercice.
@@ -31200,8 +31192,6 @@ function _pfUtiliser(slug){
   if((document.getElementById(_pfCible)?.value||'').trim()!==avant) _pfRetourner();
   else _pfRendre();
 }
-
-
 // ══════════════ TESTS DE LA COUCHE D'IDENTITÉ D'EXERCICE ══════════════
 // Exécutable depuis la console : testExercices().
 // Ne touche à AUCUNE donnée réelle : currentUser est sauvegardé puis restauré.
@@ -31506,8 +31496,6 @@ async function testNotifs(){
       _viderCachePlateau(); _viderCacheSignaux();
     }
   }
-
-
     // Assertions du lot « SW : demarrage garanti ». Elles lisent le source deja
   // charge ci-dessus.
   try{ _testSW(R,src); }
@@ -38058,6 +38046,120 @@ function testExercices(){
             return _echec('aucun bouton de résiliation');
           return /_confirmerResiliation\(\)/.test(String(_ouvrirResiliation))
             ?true:_echec('aucune confirmation');})());
+        // ── Aucun tiers non déclaré ──────────────────────────────────────
+        ok('testAucunTiersNonDeclare : aucun tiers retiré n\'est revenu',(()=>{
+          // LE VERROU DU LOT. Il doit ÉCHOUER si un CDN réapparaît — c'est tout
+          // son intérêt : retirer un tiers ne tient que si quelque chose
+          // empêche son retour.
+          //
+          // Les aiguilles sont ASSEMBLÉES à l'exécution. Sans ça, ce test se
+          // trouverait lui-même. C'est le piège qui m'a attrapé cinq fois sur
+          // ce chantier, dont deux dans ce lot : une fois dans un commentaire
+          // @font-face, une fois dans l'en-tête de qr.js.
+          const bannis=['fonts.googleapis'+'.com','fonts.gstatic'+'.com',
+            'cdnjs.cloudflare'+'.com','api.qrserver'+'.com',
+            'cdn.jsdelivr'+'.net','unpkg'+'.com','ajax.googleapis'+'.com'];
+          const tout=document.documentElement.outerHTML;
+          const fin=tout.indexOf('function testExercices');
+          if(fin<0) return _echec('frontière de la suite introuvable');
+          const prod=tout.slice(0,fin);
+          if(prod.length<500000) return _echec('production trop courte : '+prod.length);
+          const t=bannis.filter(d=>prod.indexOf(d)>=0);
+          return t.length?_echec('tiers retiré de retour : '+t.join(', ')):true;})());
+        ok('Tout domaine du source figure dans privacy.html',(()=>{
+          // L'INCLUSION, dans ce sens-là : un domaine dans le code sans ligne
+          // dans la politique est un manquement ; l'inverse ne l'est pas.
+          // privacy.html est un fichier séparé que la suite ne charge pas, donc
+          // la liste est recopiée. Chaque entrée renvoie à sa ligne, relue le
+          // 5 août 2026 — si la politique change, cette liste doit suivre.
+          const declares=[
+            'googleapis.com',        // Firebase (l. 76) — stockage, auth, jetons
+            'firebaseio.com',        // Firebase (l. 76) — base temps réel
+            'cloudfunctions.net',    // Firebase (l. 76) — fonction de synchro
+            'cloudinary.com',        // l. 211 — hébergement des photos
+            'ocr.space',             // l. 223 — lecture des étiquettes
+            'paypal.com',            // l. 156 — abonnement
+            'wa.me',                 // l. 217 — WhatsApp Ireland
+            'youtube.com','youtu.be',// l. 241 — vidéos d'exercices
+            'drive.google.com',      // l. 249 — pièces jointes du coach
+            // Ces deux-là ne sont contactés par personne : w3.org est l'espace
+            // de noms XML des SVG (jamais téléchargé), anses.fr et repcore131
+            // sont des liens que l'utilisateur clique, pas des requêtes.
+            'w3.org','anses.fr','repcore131.github.io'];
+          const tout=document.documentElement.outerHTML;
+          const prod=tout.slice(0,tout.indexOf('function testExercices'));
+          const trouves=new Set();
+          const re=/https?:\/\/([a-zA-Z0-9.-]+)/g;
+          let m;
+          while((m=re.exec(prod))!==null){
+            const d=m[1].toLowerCase();
+            // Forme d'un vrai domaine. Le source contient des gabarits comme
+            // « https://... » et « https://x » : ce ne sont pas des hôtes, et
+            // les lister comme autorisés reviendrait à autoriser du bruit.
+            if(!/^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(d)) continue;
+            if(!declares.some(x=>d===x||d.endsWith('.'+x))) trouves.add(d);
+          }
+          return trouves.size?_echec('non déclaré(s) : '+[...trouves].join(', ')):true;})());
+        ok('Les ressources rapatriées sont bien LOCALES',(()=>{
+          // Un chemin relatif, jamais une URL : troquer un CDN contre un autre
+          // n'aurait rien réglé.
+          const src=String(_loadPdfJs);
+          if(!/'\.\/vendor\/pdf\.min\.js'/.test(src))
+            return _echec('pdf.js n\'est pas chargé en local');
+          // Worker explicitement désactivé, pas laissé au défaut : sinon pdf.js
+          // irait chercher un fichier absent. C'est aussi 1 061 Ko économisés.
+          if(!/workerSrc=''/.test(src.replace(/\s+/g,'')))
+            return _echec('workerSrc n\'est pas vidé');
+          if(typeof RepCoreQR!=='object'||typeof RepCoreQR.versCanvas!=='function')
+            return _echec('l\'encodeur QR local est absent');
+          return !/qrUrl/.test(String(CLOUD.showQR))
+            ?true:_echec('showQR construit encore une URL distante');})());
+        ok('Le QR local produit une matrice qu\'un lecteur peut lire',(()=>{
+          // Des carrés noirs ne prouvent rien : on vérifie la structure qu'un
+          // lecteur cherche AVANT de décoder quoi que ce soit.
+          const m=RepCoreQR.matrice('https://exemple.test/a');
+          if(!m) return _echec('aucune matrice');
+          const n=m.length;
+          if((n-17)%4!==0||n<21) return _echec('taille invalide : '+n);
+          const f=(r,c)=>m[r][c]===1&&m[r+6][c]===1&&m[r][c+6]===1
+            &&m[r+3][c+3]===1&&m[r+1][c+1]===0;
+          if(!f(0,0)||!f(0,n-7)||!f(n-7,0)) return _echec('motifs de repérage absents');
+          for(let c=8;c<n-8;c++) if(m[6][c]!==((c%2===0)?1:0))
+            return _echec('horloge rompue en '+c);
+          if(m[n-8][8]!==1) return _echec('module noir absent');
+          let noirs=0; for(let r=0;r<n;r++) for(let c=0;c<n;c++) noirs+=m[r][c];
+          const pct=noirs*100/(n*n);
+          if(pct<35||pct>65) return _echec('densité aberrante : '+Math.round(pct)+' %');
+          // Deux textes différents donnent deux matrices différentes : sans ça,
+          // un encodeur qui rendrait toujours le même dessin passerait.
+          const m2=RepCoreQR.matrice('https://exemple.test/b');
+          if(!m2||JSON.stringify(m)===JSON.stringify(m2))
+            return _echec('deux textes donnent la même matrice');
+          // Trop long : REFUSÉ, jamais tronqué en silence.
+          return RepCoreQR.matrice('x'.repeat(500))===null
+            ?true:_echec('une URL trop longue est acceptée');})());
+        ok('Le repli de police est complet, jamais un texte invisible',(()=>{
+          // Relevé par l'audit interne : .txt-hero (44 px), .txt-title (32 px) et
+          // .txt-stat (24 px) déclaraient « 'Bebas Neue', sans-serif » sans repli
+          // CONDENSÉ. Un Arial de 44 px ne tient pas dans la place d'un Bebas de
+          // 44 px. Tant que la police venait du réseau le cas était rare ;
+          // auto-hébergée, c'est celui de tout navigateur sans woff2.
+          const tout=document.documentElement.outerHTML;
+          const prod=tout.slice(0,tout.indexOf('function testExercices'));
+          const nus=(prod.match(/'Bebas Neue',\s*sans-serif/g)||[]).length;
+          if(nus) return _echec(nus+' pile(s) sans repli condensé');
+          if(!/Arial Narrow/.test(prod)) return _echec('aucune police condensée en repli');
+          // font-display:swap — le texte s'affiche pendant le chargement. Le
+          // point-virgule est exigé : sans lui, le commentaire qui explique la
+          // règle juste au-dessus suffirait à valider le test.
+          const c=prod.replace(/\s+/g,'');
+          const swaps=(c.match(/font-display:swap;/g)||[]).length;
+          const faces=(c.match(/@font-face\{/g)||[]).length;
+          if(faces<2) return _echec('seulement '+faces+' @font-face');
+          if(swaps<faces) return _echec(swaps+' swap pour '+faces+' @font-face');
+          // Les deux polices sont servies depuis le dépôt, pas d'une URL.
+          const srcs=(c.match(/src:url\('fonts\/[a-z0-9.-]+\.woff2'\)/g)||[]).length;
+          return srcs>=faces?true:_echec(srcs+' source(s) locale(s) pour '+faces+' @font-face');})());
         ok('L\'export F-10 est enfin atteignable par un athlète',(()=>{
           // Il vivait dans s-coach-home, où aucun athlète ne passe : le code
           // était bon, l'emplacement faux. Erreur du lot précédent.
@@ -38718,8 +38820,6 @@ function testExercices(){
        document.querySelectorAll('.ps-detail-item').length===3,
        String(document.querySelectorAll('.ps-detail-item').length));
     ok('Le bouton de dépliage existe',!!document.getElementById('ps-detail-btn'));
-
-
     // ══════════════ SUIVI DU POIDS ══════════════
     const _pj=n=>localISODate(new Date(2026,0,1+n));            // jour n de la série
     const _ps=(n,f)=>{const s=[];for(let i=0;i<=n;i++)s.push({date:_pj(i),kg:f(i)});return s;};
@@ -38854,8 +38954,6 @@ function testExercices(){
     // nuancée n'est PAS lue comme une absence de trouble.
     ok('« non, jamais eu » bascule quand même en mode neutre',
        aTCA(_dep('non, jamais eu'))===true);
-
-
     // ── Garde-fou TCA : aucun chemin d'affichage ne le contourne ──
     // Série volontairement alarmante : −1,5 kg/sem sur 60 kg, soit −2,66 %/sem,
     // au-delà du seuil de TOUTES les phases. Si un chemin laissait passer la
@@ -38933,8 +39031,6 @@ function testExercices(){
        (_courbePesee(_ps(20,()=>80)).match(/<circle/g)||[]).length===21);
     ok('Une série parfaitement plate ne divise pas par zéro',
        !/NaN|Infinity/.test(_courbePesee(_ps(20,()=>80))));
-
-
     // ══════════════ PHASE ══════════════
     const _mkPh=(t,jours,fin)=>({phase:{type:t,debut:Date.now()-(jours||0)*864e5,
       finPrevue:fin||null,definiPar:'athlete',historique:[]}});
@@ -39122,8 +39218,6 @@ function testExercices(){
       return typePhase(u)===null&&libPhase(u)===null&&cibleVitesse(u).phase===null
         &&couleurEvolution(u,-3)==='var(--sub)'&&blocPoids(u).length>0
         &&zoneVolume(16,_rpPh,u).cle==='PROGRES';})());
-
-
     // ── UI de la phase ──
     (function(){
       const sauveU=currentUser, sauveCh=_phChoix;
@@ -39257,8 +39351,6 @@ function testExercices(){
       // Et l'écriture existe bien, dans appliquerAjustement et là seulement.
       return /macros\[a\.jour\]=/.test(appliquerAjustement.toString())
         &&!/macros\[/.test(refuserAjustement.toString());})());
-
-
     // ── Sèche qui dure ET antécédent déclaré : le coach est prévenu ──
     // Seul endroit où le garde-fou retire de l'information au coach (la courbe
     // de vitesse) : on la lui rend sous une autre forme, sans rien montrer de
@@ -39291,8 +39383,6 @@ function testExercices(){
       u.phase.debut=new Date(2025,0,1).getTime();
       const h=blocPoids(u);
       return !/par semaine|moyennes glissantes|Sèche longue|40 semaines/.test(h);})());
-
-
     // ══════════════ SIGNAUX D'ENTRAÎNEMENT ══════════════
     const _sgJ=n=>Date.now()-n*864e5;
     // Séance : sets réalisés / prévus, et un dictionnaire {exercice:[douleurs]}.
@@ -39426,14 +39516,6 @@ function testExercices(){
       const c=_sgAth([_sgSess(9,{},10,10),_sgSess(6,{},10,10),_sgSess(3,{},10,10)],
         {id:'p5',email:'p5@t.fr',bilans:[{type:'depart',date:_sgJ(40),reponseCoach:'vu et répondu',reponseDate:1,reponseVue:true}]});
       const v=urgencyScore(c); currentUser=sauveU; return v===4;})());
-
-
-
-
-
-
-
-
 
 
 
@@ -42624,8 +42706,6 @@ function testExercices(){
         return isAlertSnoozed('overdue','r1')===true;})());
       currentUser=sauveU;
     })();
-
-
     // ── Contenu des alertes, plafond, disclaimer ──
     (function(){
       const sauveU=currentUser;
@@ -42774,8 +42854,6 @@ function testExercices(){
       currentUser=sauveU;
       window._perfSignaux=Math.round(ms);
       return ms<300;})(),'mesuré : '+(window._perfSignaux||'?')+' ms');
-
-
     // ══════════════ TECHNIQUES D'INTENSIFICATION ══════════════
     // ── NON-RÉGRESSION DÉGRESSIVE : test BLOQUANT ──
     // Un exercice '10 PUIS 20' sans aucun champ nouveau doit se comporter
@@ -42922,8 +43000,6 @@ function testExercices(){
     ok('Une série normale n\'affiche aucune bannière',
        banniereTechnique({name:'X',reps:'10'},0)==='');
     ok('Une série normale n\'affiche aucun badge',badgeTechnique({name:'X',reps:'10'})==='');
-
-
     // ══════════════ TEMPS DE REPOS ══════════════
     // ── parseRepos : toutes les écritures rencontrées dans les programmes ──
     const _rpCas=[
@@ -43098,8 +43174,6 @@ function testExercices(){
       const ex={repos:'1 min 30'};
       parseRepos(ex.repos); _reposApresSerie&&0;
       return ex.repos==='1 min 30';})());
-
-
     // ══════════════ CONTRAINTES DE SANTÉ ══════════════
     // ── Matrice complète : 4 niveaux × 4 charges articulaires ──
     // La fiche mécanique par exercice n'existe pas encore (FB-06). On l'INJECTE
@@ -43254,8 +43328,6 @@ function testExercices(){
     ok('contreIndications ne lit PAS contraintesSante',(()=>{
       const b=[{type:'depart',date:1,'deb-health':'non'}];
       return contreIndications(b).length===0;})());
-
-
     // ── Tableau de bord : le drapeau rouge en tête, non reportable ──
     (function(){
       const sauveU=currentUser;
@@ -43325,8 +43397,6 @@ function testExercices(){
     ok('Aucune analyse du texte libre dans le formulaire',
        !/deb-health|bil-health/.test(String(_htmlFormContrainte))
        &&!/deb-health/.test(String(_ctValider)));
-
-
     // ══════════════ SCHÉMAS MOTEURS ET CHARGES ARTICULAIRES ══════════════
     // Les quinze poses de posing ont quitté EX_GUIDE_BRUT pour EX_GUIDE_POSING :
     // elles restent des exercices du guide, avec un schéma moteur, mais sans
@@ -43429,8 +43499,6 @@ function testExercices(){
       // SCHEMAS_META ne porte que des libellés, des effectifs et les zones
       // hors périmètre. Aucune charge de 1 à 3 n'y est inscrite.
       return !Object.values(SCHEMAS_META).some(m=>m.charges||m.contraintes);})());
-
-
     // ══════════════ TROIS CHIFFRES D'ENTRAÎNEMENT ══════════════
     const _acJ=n=>Date.now()-n*864e5;
     const _acS=(jours,vol,data)=>({id:'s'+jours+'_'+Math.round(Math.random()*1e9),
@@ -43545,8 +43613,6 @@ function testExercices(){
       return _quotaSemaine(u)===3;})());
     ok('Aucun créneau actif : le quota ne descend pas sous un',
       _quotaSemaine({sessions_config:[]})>=1);
-
-
     // ── Les trois cases de l'accueil ──
     (function(){
       const sauveU=currentUser;
@@ -43675,8 +43741,6 @@ function testExercices(){
         return _htmlVolumeCreneau(currentUser)===''&&_perfCreneauCourant(currentUser)===null;})());
       currentUser=sauveU; _perfCreneau=sauveC;
     })();
-
-
     // ══════════════ CONTRE-INDICATION CROISÉE : LA PARTIE DÉBLOQUÉE ══════════════
     // Elle attendait les notes de charge articulaire. On les pose ici pour
     // vérifier la chaîne complète, sans dépendre de la grille réelle du coach.
@@ -43814,8 +43878,6 @@ function testExercices(){
        &&/_appAuPremierPlan()/.test(String(checkWoReminderToday)));
     ok("Aucun requireInteraction:true ne subsiste dans l'app",
        !/requireInteraction:(s*)true/.test(String(checkBilanNotifToday)+String(checkWoReminderToday)));
-
-
     // ══════════════ NON-RÉGRESSION DU CIRCUIT VIDÉO ══════════════
     // Écrits AVANT de généraliser le composant de chips, qui est aujourd'hui
     // câblé en dur sur l'écran de retour vidéo. Ils doivent rester verts après.
@@ -43905,8 +43967,6 @@ function testExercices(){
       return /data-qc="Garde le dos droit"/.test(h)&&/insertQC\(/.test(h);})());
     ok('_renderQuickCommentChips : sans zone, aucune exception',(()=>{
       try{ _renderQuickCommentChips(); return true; }catch(e){ return false; }})());
-
-
     // ══════════════ RÉPONSE DU COACH AU BILAN ══════════════
     const _rbB=(jours,extra)=>Object.assign({type:'suivi',date:Date.now()-jours*864e5,
       'bil-weight':'80'},extra||{});
@@ -44127,8 +44187,6 @@ function testExercices(){
       const b=_rbB(2,{'bil-motivation':'8'});
       const h=renderReponsesBilans([b],{id:'c1',email:'c1@t.fr',fname:'Léa',bilans:[b]});
       return !/Les chiffres de poids sont masqués/.test(h);})());
-
-
     // ══════════════ REPRISE DE SÉANCE : LA SÉANCE TERMINÉE NE REVIENT PAS ══════════════
     // Bug constaté en production : une séance terminée réapparaissait « à finir »
     // sur l'accueil. finishWorkout supprimait le snapshot mais ne vidait pas
@@ -45052,8 +45110,6 @@ function testExercices(){
           return va[0]==='Créatine monohydrate'&&vc[0]==='Créatine monohydrate';
         } finally { currentUser=sauveU; currentClientId=sauveC; }})());
     })();
-
-
     // ══ CAFÉINE RÉSIDUELLE AU COUCHER ═════════════════════════════════════
     (()=>{
       const E=(mg,t)=>({type:'coffee',name:'Café',mg,time:t});
@@ -45417,8 +45473,6 @@ function testExercices(){
             ?true:_echec('« il t\'en restera » sur un jour passé');
         } finally { currentUser=sauveU; }})());
     })();
-
-
     // ══ MOT DU COACH À L'ACCUEIL ══════════════════════════════════════════
     (()=>{
       // par===undefined → 'Kevin' ; par==='' → vraiment vide. Mon premier jet
@@ -45754,8 +45808,6 @@ function testExercices(){
         document.getElementById('modal-overlay')?.remove();
       }
     })();
-
-
     // ══ SEL & DÉPISTAGE PAR PROFIL ════════════════════════════════════════
     (()=>{
       const JUILLET=new Date(2026,6,15);
@@ -46131,8 +46183,6 @@ function testExercices(){
         const fautives=f.filter(([n,fn])=>fn&&/risquesMicro/.test(String(fn)));
         return fautives.length?_echec(fautives.map(x=>x[0]).join(', ')):true;})());
     })();
-
-
     // ══ JOURNAL ALIMENTAIRE : REPAS, FAVORIS, REJOUER, PORTIONS ═══════════
     (()=>{
       const _sU=currentUser, _sSave=window.saveUser, _sLN=window.loadNutrition;
@@ -46491,8 +46541,6 @@ function testExercices(){
         _fjRepasChoisi=_sChoisi; _fjDernierAjout=_sAjout;
       }
     })();
-
-
     // ══ GUIDE DES MUSCLES : ABDUCTIONS ET POSING ══════════════════════════
     (()=>{
       const _u={id:'_tv',email:'tv@t',exAlias:{},exMuscles:{},sessions:[]};
@@ -46757,8 +46805,6 @@ function testExercices(){
           ?_echec(orphelins.length+' sans muscle : '+orphelins.slice(0,5).join(', '))
           :true;})());
     })();
-
-
     // ══ REPRISE APRÈS COUPURE : DÉCOTE DE LA CHARGE SUGGÉRÉE ══════════════
     (()=>{
       // ── La fonction pure ──────────────────────────────────────────────
@@ -46989,8 +47035,6 @@ function testExercices(){
             ?true:_echec('la décote entre dans le facteur de cycle');})());
       } finally { currentUser=_sU2; woState=_sW; }
     })();
-
-
     // ══ CHARGE AXIALE HEBDOMADAIRE ════════════════════════════════════════
     (()=>{
       const _sU=currentUser;
@@ -47273,8 +47317,6 @@ function testExercices(){
           return JSON.stringify(u)===avant?true:_echec('le dossier a été écrit');})());
       } finally { currentUser=_sU; }
     })();
-
-
     // ══ PROPORTIONS SEGMENTAIRES ══════════════════════════════════════════
     (()=>{
       const _sU=currentUser;
@@ -47577,8 +47619,6 @@ function testExercices(){
         const manque=['deb-entrejambe','deb-bras'].filter(k=>cles.indexOf(k)<0);
         return manque.length?_echec('absents de BILAN_QUESTIONS : '+manque.join(', ')):true;})());
     })();
-
-
     // ══ ADHÉRENCE AU JOURNAL ═════════════════════════════════════════════
     (()=>{
       const _sU=currentUser;
@@ -50807,8 +50847,6 @@ function testExercices(){
           return JSON.stringify(u)===avant?true:_echec('le dossier a été écrit');})());
       } finally { currentUser=_sU; _viderCachePlateau(); _viderCacheVolume(); }
     })();
-
-
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
 

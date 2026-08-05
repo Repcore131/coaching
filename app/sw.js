@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v447';
+const CACHE = 'repcore-v448';
 const SW_DATA = 'repcore-sw-data'; // persistent across updates — not wiped by activate
 
 // DÉLAI DE GARDE sur index.html. Le handler était en network-first avec un
@@ -11,7 +11,15 @@ const SW_DELAI_RESEAU_MS = 2500;
 // index.html EST dans ASSETS depuis ce lot. Sans lui, la copie hors-ligne ne
 // se constituait qu'au premier passage réussi du handler fetch, et activate la
 // détruisait à chaque déploiement.
-const ASSETS = ['./index.html', './manifest.json', './icons/icon-192x192.png'];
+// vendor/qr.js et les deux polices : rapatries pour supprimer trois tiers.
+// Ils entrent dans ASSETS car ils sont demandes au PREMIER affichage — une
+// police absente donne un texte de repli, un encodeur absent donne un QR
+// absent. pdf.min.js, lui, est charge dynamiquement : il rejoint le cache par
+// le handler fetch a la premiere ouverture d un PDF, et y reste pour
+// l ouverture suivante, hors ligne comprise.
+const ASSETS = ['./index.html', './manifest.json', './icons/icon-192x192.png',
+  './vendor/qr.js', './fonts/montserrat-var-latin.woff2',
+  './fonts/bebasneue-400-latin.woff2'];
 
 // Une séance en cours interdit la bascule. Le client poste SEANCE_EN_COURS au
 // lancement et SEANCE_TERMINEE à la fin ; tant que ce drapeau est levé, le
