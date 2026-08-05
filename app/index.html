@@ -1315,6 +1315,11 @@ const COACH_PHOTO='icons/coach.jpg';
           </div>
         </div>
 
+        <!-- Mon abonnement. Rempli par _renderAbonnementCoach, appele par
+             loadMonetisationTab : cette carte s adresse a TOUS les coachs,
+             contrairement au bloc du tunnel juste au-dessus. -->
+        <div id="coach-abo"></div>
+
         <!-- 🏷️ Identité coach / team -->
         <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px">
           <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:14px">Identité de la team</div>
@@ -3491,6 +3496,83 @@ function coachPalierRequis(n){
 // suivi punirait l'athlète pour une affaire entre le coach et nous.
 function coachQuotaDepasse(coach,users){
   return countActiveAthletes(coach,users)>getCoachQuota(coachPlanDe(coach));
+}
+// Le quota, en toutes lettres. Infinity ne s'affiche pas.
+function _quotaTexte(q){ return q===Infinity?'sans limite':String(q); }
+// Le palier PAYANT qui vient après le palier courant, s'il en existe un.
+// Rend null au sommet : « prix du palier suivant » n'a alors aucun sens.
+function _palierSuivant(cle){
+  const i=COACH_PALIERS.findIndex(x=>x.cle===cle);
+  return (i>=0&&i+1<COACH_PALIERS.length)?COACH_PALIERS[i+1]:null;
+}
+// « Mon abonnement », côté coach.
+//
+// LES TROIS CARTES SONT TOUJOURS MONTRÉES, mais le bouton de paiement
+// n'apparaît QUE sur un palier dont le plan PayPal existe. Le cahier des
+// charges demandait les deux : « trois cartes » et « une carte dont le
+// planId est vide ne s'affiche pas ». Appliquée à la lettre, la seconde
+// règle donne aujourd'hui un écran d'abonnement à ZÉRO carte, puisque
+// aucun des deux plans n'est encore créé sur PayPal. On garde donc
+// l'échelle visible — le coach doit savoir où il se situe — et on ne
+// propose de payer que ce qui est réellement payable. Aucun état
+// « bientôt disponible » : les boutons apparaîtront d'eux-mêmes le jour
+// où les deux constantes seront remplies.
+function _renderAbonnementCoach(users){
+  const z=document.getElementById('coach-abo');
+  if(!z) return false;
+  const u=currentUser;
+  if(!u||u.role!=='coach'){ z.innerHTML=''; return false; }
+  const cle=coachPlanDe(u), pal=COACH_PALIERS.find(x=>x.cle===cle)||COACH_PALIERS[0];
+  const quota=getCoachQuota(cle);
+  const fiable=countActiveAthletesFiable(u,users);
+  const n=countActiveAthletes(u,users);
+  const depasse=fiable&&n>quota;
+  const suivant=_palierSuivant(cle);
+  const l=(t,v)=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:3px 0">`
+    +`<span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:#eee">${escapeHtml(v)}</span></div>`;
+  // Le compteur ne ment pas quand il ne sait pas. `users` ne contient que ce
+  // que la synchronisation a rapatrié : sur un appareil neuf, annoncer
+  // « 0 / 15 » à un coach qui suit douze personnes serait pire que se taire.
+  const compteur=fiable?(n+' / '+_quotaTexte(quota)+' athlètes actifs')
+    :'en cours de synchronisation';
+  const cartes=COACH_PALIERS.map(x=>{
+    const ici=x.cle===cle, id=x.planId();
+    return `<div style="flex:1;min-width:140px;border:2px solid ${ici?'var(--red)':'#2a2a2a'};
+      background:${ici?'rgba(224,32,32,.08)':'transparent'};border-radius:12px;padding:13px 12px;text-align:center">
+      <div style="font-size:var(--fs-xs);color:${ici?'var(--red)':'var(--sub)'};font-weight:800;
+        text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">${escapeHtml(x.titre)}</div>
+      <div style="font-size:20px;font-weight:900;color:#fff;line-height:1">${x.prix===0?'Gratuit':escapeHtml(x.prix+' €')}</div>
+      <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:3px">${escapeHtml(x.periode||'')}</div>
+      <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:6px;line-height:1.5">${escapeHtml(x.detail)}</div>
+      ${(id&&!ici)?`<button class="btn btn-red btn-sm" style="margin-top:10px;width:100%"
+        onclick="souscrireCoach('${x.cle}')">Choisir ${escapeHtml(x.titre)}</button>`:''}
+    </div>`;
+  }).join('');
+  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px">
+    <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:14px">Mon abonnement</div>
+    ${l('Formule',pal.titre)}
+    ${l('Athlètes',compteur)}
+    ${suivant?l('Palier suivant',suivant.titre+' — '+suivant.prix+' € '+suivant.periode):''}
+    ${depasse?`<div style="margin-top:10px;background:var(--warning-bg);border:1px solid var(--warning-border);
+      border-radius:8px;padding:9px 11px;font-size:11px;color:var(--orange);line-height:1.6">
+      Tu suis ${n} athlètes pour un palier qui en prévoit ${_quotaTexte(quota)}.
+      Rien n'est bloqué : tes athlètes gardent tout leur accès.</div>`:''}
+    <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:14px">${cartes}</div>
+    <button class="btn btn-outline btn-sm" style="margin-top:14px;width:100%"
+      onclick="exporterMesDonnees()">Exporter toutes mes données</button>
+  </div>`;
+  return true;
+}
+// Souscription d'un palier coach. Elle passe par le MÊME écran PayPal que
+// l'abonnement autonome : un second chemin de paiement divergerait un jour
+// de celui-ci. Sans plan créé, la fonction refuse plutôt que d'ouvrir une
+// page qui échouera au moment de payer.
+function souscrireCoach(cle){
+  const p=COACH_PALIERS.find(x=>x.cle===cle);
+  if(!p||!p.planId()){ toast('Ce palier n\'est pas encore ouvert au paiement.','var(--orange)'); return false; }
+  try{ sessionStorage.setItem('rc_palier_coach',cle); }catch(e){}
+  go('s-subscribe');
+  return true;
 }
 // ══════ RÉSILIATION EN LIGNE ET RENONCEMENT À LA RÉTRACTATION ══════
 // L215-1-1 du code de la consommation, applicable depuis le 01/06/2023 :
@@ -29586,6 +29668,7 @@ function loadMonetisationTab(){
     el.addEventListener('input',()=>{el.dataset.dirty='1';});
   };
   updateCloudStatus();
+  _renderAbonnementCoach();
   const u=currentUser;
   // Identité coach
   const photoCircle=document.getElementById('coach-photo-circle');
@@ -38134,7 +38217,11 @@ function testExercices(){
             return (z.innerHTML||'')===''
               ?true:_echec('du contenu subsiste : '+(z.innerHTML||'').slice(0,60));
           } finally { currentUser=sauve; }})());
-        ok('Un coach non plus n\'a d\'écran d\'abonnement',
+        // Renommée à l'étape 5, CONDITION INCHANGÉE. L'ancien intitulé est
+        // devenu faux : un coach a désormais SA carte, `#coach-abo`. Ce que
+        // cette assertion vérifie, et qui reste vrai, c'est qu'il n'a pas la
+        // carte d'abonnement ATHLÈTE — celle des 9,95 €.
+        ok('Un coach n\'a pas la carte d\'abonnement ATHLÈTE',
           !aUnAbonnement({role:'coach',email:'c@t',status:'AUTONOMIE_PREMIUM'}));
 
         // ── Bascule du payeur, étape 2 : la mécanique, sans interface ────
@@ -38259,10 +38346,15 @@ function testExercices(){
           coachPlanDe(c);coachSubActif(c);coachQuotaDepasse(c,{});
           countActiveAthletes(c,{});countActiveAthletesFiable(c,{});
           return JSON.stringify(c)===avant?true:_echec('le dossier a été modifié : '+JSON.stringify(c));})());
-        ok('Étape 2 : la mécanique n\'a EFFLEURÉ aucun écran',(()=>{
-          // Le contrat de cette étape est « zéro changement d'interface ». Les
-          // deux prix coach ne doivent apparaître nulle part dans la page —
-          // ni dans un écran, ni dans un commentaire, sinon ce test s'y trouve.
+        // Renommée à l'étape 5, CONDITION INCHANGÉE. Le contrat « zéro
+        // interface » ne valait que pour l'étape 2 ; l'invariant durable, lui,
+        // est qu'un prix coach ne s'écrit JAMAIS en dur : il vient de
+        // COACH_PALIERS, et un prix recopié dans du balisage finirait un jour
+        // par diverger de la constante qui facture.
+        ok('Aucun prix coach n\'est écrit en dur dans le source',(()=>{
+          // Les deux prix coach ne doivent apparaître nulle part dans le
+          // source — ni dans un écran, ni dans un commentaire, sinon ce test
+          // s'y trouve lui-même.
           const tout=document.documentElement.outerHTML;
           const prod=tout.slice(0,tout.indexOf('function testExercices'));
           const t=['19'+' €','39'+' €'].filter(m=>prod.indexOf(m)>=0);
@@ -38270,6 +38362,126 @@ function testExercices(){
           // Et le paywall autonome reste intact : ce lot ne l'a pas touché.
           return /9,95/.test(String(loadAccessGate))
             ?true:_echec('la mention autonome a disparu de loadAccessGate');})());
+
+        // ── Bascule du payeur, étape 5 : l'écran « Mon abonnement » ──────
+        ok('_palierSuivant : libre → coach → pro, puis plus rien',(()=>{
+          const a=_palierSuivant('libre'), b=_palierSuivant('coach');
+          if(!a||a.cle!=='coach') return _echec('après libre : '+(a&&a.cle));
+          if(!b||b.cle!=='pro') return _echec('après coach : '+(b&&b.cle));
+          // Au sommet, « prix du palier suivant » n'a aucun sens : null, et
+          // surtout pas un rebouclage sur le premier.
+          return _palierSuivant('pro')===null?true:_echec('pro a un suivant');})());
+        ok('_quotaTexte n\'affiche jamais « Infinity » ni « null »',(()=>{
+          const t=_quotaTexte(Infinity);
+          if(/Infinity|null|undefined/.test(t)) return _echec('affiché : '+t);
+          return (t==='sans limite'&&_quotaTexte(15)==='15')
+            ?true:_echec('libellés inattendus : '+t+' / '+_quotaTexte(15));})());
+        ok('La carte coach ne se rend QUE pour un coach',(()=>{
+          const z=document.getElementById('coach-abo');
+          if(!z) return _echec('emplacement absent du DOM');
+          const sauve=currentUser;
+          try{
+            currentUser={id:'c1',email:'c@t',role:'athlete'};
+            _renderAbonnementCoach({});
+            if((z.innerHTML||'')!=='') return _echec('un athlète voit la carte coach');
+            currentUser={id:'c1',email:'c@t',role:'coach'};
+            _renderAbonnementCoach({});
+            return /Mon abonnement/.test(z.innerHTML)
+              ?true:_echec('le coach ne voit rien');
+          } finally { currentUser=sauve; z.innerHTML=''; }})());
+        ok('Le compteur se TAIT plutôt que d\'annoncer un chiffre faux',(()=>{
+          const z=document.getElementById('coach-abo');
+          const sauve=currentUser;
+          try{
+            currentUser={id:'c1',email:'c@t',role:'coach'};
+            // Cache vide : rien n'a été rapatrié, le compte ne veut rien dire.
+            _renderAbonnementCoach({});
+            if(!/en cours de synchronisation/.test(z.innerHTML))
+              return _echec('un compte est annoncé sur un cache vide');
+            if(/0 \/ 1 athlètes/.test(z.innerHTML)) return _echec('« 0 / 1 » est affiché quand même');
+            // Cache peuplé : le compte s'affiche.
+            const m={a:{id:'a',role:'athlete',coachId:'c1',sessions:[{id:'s',date:Date.now()}]}};
+            _renderAbonnementCoach(m);
+            return /1 \/ 1 athlètes actifs/.test(z.innerHTML)
+              ?true:_echec('compte absent : '+z.innerHTML.slice(0,120));
+          } finally { currentUser=sauve; z.innerHTML=''; }})());
+        ok('Aucun bouton de paiement sur un palier sans plan PayPal',(()=>{
+          // LE POINT QUI COMPTE. Un bouton qui mène à un écran de paiement
+          // vide fait perdre la vente ET la confiance. Tant que les deux
+          // constantes sont vides, l'échelle reste visible mais rien n'est
+          // cliquable — et le jour où elles seront remplies, les boutons
+          // apparaîtront sans qu'une ligne bouge.
+          const z=document.getElementById('coach-abo');
+          const sauve=currentUser;
+          try{
+            currentUser={id:'c1',email:'c@t',role:'coach'};
+            _renderAbonnementCoach({});
+            const h=z.innerHTML;
+            const boutons=(h.match(/souscrireCoach\(/g)||[]).length;
+            const payables=COACH_PALIERS.filter(x=>!!x.planId()&&x.cle!=='libre').length;
+            if(boutons!==payables)
+              return _echec(boutons+' bouton(s) pour '+payables+' palier(s) payable(s)');
+            // Les trois cartes RESTENT affichées : le coach doit voir l'échelle.
+            for(const x of COACH_PALIERS) if(h.indexOf(x.titre)<0)
+              return _echec('la carte « '+x.titre+' » a disparu');
+            return true;
+          } finally { currentUser=sauve; z.innerHTML=''; }})());
+        ok('souscrireCoach REFUSE un palier sans plan, et ne navigue pas',(()=>{
+          const avant=document.querySelector('.screen.active');
+          const r=souscrireCoach('coach');
+          if(r!==false) return _echec('la souscription a été acceptée');
+          if(souscrireCoach('palier-invente')!==false) return _echec('un palier inventé est accepté');
+          return document.querySelector('.screen.active')===avant
+            ?true:_echec('l\'écran a changé');})());
+        ok('L\'export est offert au coach QUEL QUE SOIT son palier',(()=>{
+          // Article 15 : le droit d'accès ne se conditionne pas à un paiement.
+          const z=document.getElementById('coach-abo');
+          const sauve=currentUser;
+          try{
+            for(const d of [{},{coachPlan:'libre'},{coachPlan:'pro',coachSubActive:true},
+                            {coachPlan:'coach',coachSubActive:false}]){
+              currentUser=Object.assign({id:'c1',email:'c@t',role:'coach'},d);
+              _renderAbonnementCoach({});
+              if(!/exporterMesDonnees\(\)/.test(z.innerHTML))
+                return _echec('export absent pour '+JSON.stringify(d));
+            }
+            return true;
+          } finally { currentUser=sauve; z.innerHTML=''; }})());
+        ok('Le dépassement de quota DIT qu\'il ne bloque rien',(()=>{
+          const z=document.getElementById('coach-abo');
+          const sauve=currentUser;
+          try{
+            currentUser={id:'c1',email:'c@t',role:'coach'};   // palier libre, quota 1
+            const m={};
+            for(let i=0;i<3;i++) m['a'+i]={id:'a'+i,role:'athlete',coachId:'c1',
+              sessions:[{id:'s',date:Date.now()}]};
+            _renderAbonnementCoach(m);
+            const h=z.innerHTML;
+            if(!/3 \/ 1 athlètes actifs/.test(h)) return _echec('le compte réel n\'est pas dit');
+            return /Rien n'est bloqué/.test(h)
+              ?true:_echec('le dépassement ne rassure pas sur l\'accès des athlètes');
+          } finally { currentUser=sauve; z.innerHTML=''; }})());
+        ok('Aucune promesse de durée : ni « essai », ni « 14 jours »',(()=>{
+          // La promesse est le PREMIER CLIENT, sans durée. « Essai 14 jours »
+          // dirait exactement le contraire, et un compte Libre ne se referme
+          // jamais. Aiguilles assemblées, production seule.
+          //
+          // « 14 jours » N'EST PAS dans la liste, et c'est délibéré : la chaîne
+          // figure sept fois en production comme DÉLAI LÉGAL DE RÉTRACTATION
+          // (L221-18) et dans la renonciation expresse. L'interdire reviendrait
+          // à interdire une mention obligatoire. Ce qu'on traque, c'est le mot
+          // « essai », pas un nombre de jours.
+          //
+          // L'apostrophe est DANS l'aiguille : la normalisation retire les
+          // accents, jamais les apostrophes. « periode d essai » n'aurait
+          // jamais rien trouvé.
+          const tout=document.documentElement.outerHTML;
+          const prod=tout.slice(0,tout.indexOf('function testExercices'))
+            .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+          const aig=['essai '+'gratuit','jours d'+'\'essai','jours '+'gratuits',
+            'periode d'+'\'essai','premier mois '+'offert','gratuitement '+'pendant'];
+          const t=aig.filter(m=>prod.indexOf(m)>=0);
+          return t.length?_echec('promesse de durée : '+t.join(' | ')):true;})());
 
         // ── Aucun texte n'affirme l'effectivité chez PayPal ──────────────
         ok('Le texte est en obligation de MOYENS, pas de résultat',(()=>{
