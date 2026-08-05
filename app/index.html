@@ -7614,7 +7614,13 @@ const SIGNAUX_VIDES=Object.freeze({douleur:false,douleurDiffuse:false,decrochage
   plateauMuscle:false,sousMEV:false,volumeHaut:false,formeBasse:false,
   restrictionLongue:false,details:Object.freeze({})});
 
-function signauxEntrainement(c){
+// opts.complet : ne PAS court-circuiter les signaux de rang 6 quand un rang
+// superieur est deja acquis. Le classement n en a pas besoin — un 6 ne peut
+// pas depasser un 9 deja obtenu — mais celui qui SCORE, si : sans cette
+// option, un athlete douloureux ET en surcharge de volume pesait MOINS qu un
+// athlete seulement en surcharge, l inverse de ce qu on mesure.
+function signauxEntrainement(c,opts){
+  const _complet=!!(opts&&opts.complet);
   // Invité non inscrit : aucun historique d'entraînement chez le coach, donc
   // aucun signal. Cohérent avec les exclusions déjà présentes d'urgencyScore.
   if(!c||c._fromCode) return SIGNAUX_VIDES;
@@ -7635,7 +7641,7 @@ function signauxEntrainement(c){
   const _ph=c.phase&&c.phase.type?(c.phase.type+'@'+c.phase.debut):'';
   const _mk=(()=>{ const m=(c.nutrition||{}).macros;
     if(!m) return ''; return String((m.on&&m.on.kcal)||'')+'/'+String((m.off&&m.off.kcal)||''); })();
-  const cle=c.id+'|'+ss.length+'|'+(ss.length?tri[tri.length-1].date:0)+'|'+emp+'|'+_ph+'|'+_mk;
+  const cle=c.id+'|'+ss.length+'|'+(ss.length?tri[tri.length-1].date:0)+'|'+emp+'|'+_ph+'|'+_mk+(_complet?'|C':'');
   if(_cacheSignaux.has(cle)) return _cacheSignaux.get(cle);
   const r={douleur:false,douleurDiffuse:false,decrochage:false,
     plateauMuscle:false,sousMEV:false,volumeHaut:false,formeBasse:false,
@@ -7710,7 +7716,7 @@ function signauxEntrainement(c){
   // Ce n'est pas une approximation. Un signal de niveau 6 ne peut pas dépasser
   // un 7, 8 ou 9 déjà obtenu : le classement est identique, et on épargne le
   // parcours complet de l'historique pour les athlètes déjà en tête.
-  if(r.douleur||r.douleurDiffuse||r.decrochage){ _cacheSignaux.set(cle,r); return r; }
+  if(!_complet&&(r.douleur||r.douleurDiffuse||r.decrochage)){ _cacheSignaux.set(cle,r); return r; }
 
   try{
     const mus=musclesEnPlateau(c);
@@ -7773,6 +7779,270 @@ function signauxEntrainement(c){
 
   _cacheSignaux.set(cle,r);
   return r;
+}
+
+// ══════════════ FATIGUE ACCUMULÉE ══════════════
+// PROPOSER une semaine de décharge, motivée par des chiffres. JAMAIS la
+// déclencher : aucune écriture sur `deload` sans un geste explicite du coach.
+//
+// CE CALCUL NE MESURE RIEN DE NEUF, ET C'EST VOULU.
+// Quatre des cinq signaux demandés existaient déjà, calculés, chiffrés et mis
+// en cache dans signauxEntrainement : volumeHaut, plateauMuscle (qui porte
+// aussi la régression), formeBasse, douleur et douleurDiffuse. Les recalculer
+// avec des règles voisines mais différentes — « ≥ 1 primaire ou ≥ 2 muscles »
+// contre « deux semaines révolues consécutives » — aurait produit deux verdicts
+// divergents sur le même athlète. scoreFatigue LIT donc signauxEntrainement et
+// se contente de pondérer. Un seul calcul, une seule vérité, et aucun seuil
+// existant n'est touché.
+//
+// LA DOULEUR RÉUTILISE LE SEUIL DUR EXISTANT (série ≥ 4, sur ≥ 2 séries ET
+// ≥ 2 séances, ou ≥ 6 séries diffuses sur quatorze jours). Une « moyenne ≥ 3 »
+// aurait été un SECOND seuil de douleur, plus bas que celui que l'application
+// défend partout ailleurs, et verrouillé par une assertion.
+const FATIGUE_SEUIL=60;              // score à partir duquel on propose
+const FATIGUE_SEMAINES_MIN=3;        // en dessous, aucun verdict
+const FATIGUE_SOMMEIL_J=21;          // un refus met la détection en sommeil
+const FATIGUE_REPORT_J=7;            // un report la décale d'une semaine
+const FATIGUE_COUPURE_J=21;          // au-delà, les compteurs repartent de zéro
+// Les poids, EXPOSÉS et non cachés : c'est ce qui permet au coach de discuter
+// la proposition au lieu de la subir.
+const FATIGUE_POIDS=Object.freeze({
+  volumeHaut:35, regression:25, plateau:15, douleur:15, forme:10
+});
+// PURE. Le sous-dossier fatigue, quel que soit l'état du document. Un champ
+// corrompu ne doit ni lever d'exception ni faire disparaître l'écran coach.
+function fatigueDe(user){
+  const f=user&&user.fatigue;
+  if(!f||typeof f!=='object'||Array.isArray(f)) return null;
+  const pa=(f.propositionActive&&typeof f.propositionActive==='object'
+    &&!Array.isArray(f.propositionActive))?f.propositionActive:null;
+  return {
+    score:isFinite(Number(f.score))?Number(f.score):0,
+    motifs:Array.isArray(f.motifs)?f.motifs.filter(m=>m&&typeof m==='object'):[],
+    calculeLe:isFinite(Number(f.calculeLe))?Number(f.calculeLe):0,
+    sommeilJusquA:isFinite(Number(f.sommeilJusquA))?Number(f.sommeilJusquA):0,
+    suspendue:f.suspendue===true,
+    propositionActive:(pa&&pa.statut==='ouverte')?pa:null
+  };
+}
+// PURE. La détection est SUSPENDUE sans jamais dire pourquoi.
+//
+// L'athlète décide si son coach voit sa grossesse : _sanitizeForCoach efface
+// le champ quand elle ne l'a pas partagé. Une carte qui annoncerait « détection
+// suspendue pour raison de santé » la révélerait donc à celui à qui elle a
+// choisi de ne rien dire. Le drapeau `suspendue` est écrit CÔTÉ ATHLÈTE, au
+// moment où elle déclare ou révoque — un point de sauvegarde qui existe déjà,
+// donc pas une écriture de plus — et il ne porte AUCUN motif.
+function fatigueSuspendue(c){
+  if(!c) return true;
+  const f=fatigueDe(c);
+  if(f&&f.suspendue) return true;
+  try{ if(grossesseSuspend(c)) return true; }catch(e){}
+  try{ if(drapeauQuelconqueActif(c)) return true; }catch(e){}
+  return false;
+}
+// Écrit le drapeau neutre. Appelée aux transitions de grossesse, jamais en
+// boucle : elle ne provoque aucune sauvegarde à elle seule.
+function majSuspensionFatigue(user){
+  const u=_dossier(user);
+  if(!u) return false;
+  let susp=false;
+  try{ susp=grossesseSuspend(u); }catch(e){}
+  if(!u.fatigue||typeof u.fatigue!=='object'||Array.isArray(u.fatigue)) u.fatigue={};
+  if(susp) u.fatigue.suspendue=true; else delete u.fatigue.suspendue;
+  // Une détection suspendue ne laisse pas une proposition ouverte derrière
+  // elle : elle serait appliquée sans que rien ne la recalcule.
+  if(susp) delete u.fatigue.propositionActive;
+  return susp;
+}
+// PURE. Le nombre de semaines révolues CONSÉCUTIVES portant au moins une
+// séance, en partant de la plus récente. Sert de garde d'exploitabilité.
+function _semainesFatigue(user,dateRef){
+  const ss=((user&&user.sessions)||[]).filter(x=>x&&x.date);
+  if(!ss.length) return 0;
+  const ref=(dateRef instanceof Date)?dateRef.getTime():Number(dateRef||Date.now());
+  // Reprise après une coupure longue : les compteurs repartent de zéro. Ce
+  // n'est pas de la fatigue accumulée, c'est un retour.
+  const derniere=ss.reduce((m,x)=>Math.max(m,x.date),0);
+  if(ref-derniere>=FATIGUE_COUPURE_J*864e5) return 0;
+  const lundi=_lundiDe(new Date(ref)).getTime();
+  let n=0;
+  for(let i=1;i<=FATIGUE_SEMAINES_MIN+9;i++){
+    const d=lundi-i*604800000, f=d+604800000;
+    if(ss.some(x=>x.date>=d&&x.date<f)) n++; else break;
+  }
+  return n;
+}
+// PURE, AUCUNE ÉCRITURE. Rend {score, motifs, exploitable}.
+//
+// Chaque motif porte sa valeur ET son unité : une proposition sans motif chiffré
+// serait une injonction, et l'application n'en produit pas.
+function scoreFatigue(user,dateRef){
+  const vide={score:0,motifs:[],exploitable:false};
+  if(!user) return vide;
+  const semaines=_semainesFatigue(user,dateRef);
+  if(semaines<FATIGUE_SEMAINES_MIN) return vide;
+  let sg=null;
+  try{ sg=signauxEntrainement(user,{complet:true}); }catch(e){ return vide; }
+  if(!sg) return vide;
+  const d=sg.details||{};
+  const motifs=[]; let score=0;
+  const pousser=(code,libelle,valeur,unite,poids)=>{
+    motifs.push({code,libelle,valeur,unite}); score+=poids; };
+  if(sg.volumeHaut&&d.volumeHaut){
+    pousser('volume','Volume au-dessus du MRV sur '+(d.volumeHaut.lib||d.volumeHaut.muscle),
+      Math.round((d.volumeHaut.s1||0)*10)/10,'séries pondérées (MRV '+d.volumeHaut.mrv+')',
+      FATIGUE_POIDS.volumeHaut);
+  }
+  // Plateau et régression viennent du MÊME calcul par muscle : on les sépare
+  // parce qu'un recul ne se lit pas comme une stagnation.
+  // _listeEtats est le parcours DEJA partage entre l ecran de plateaux et
+  // signauxEntrainement : meme detecteur, memes seuils, meme cache. On le lit
+  // au niveau de l EXERCICE et non de l agregat musculaire de musclesEnPlateau,
+  // qui exige deux primaires en plateau sur un meme muscle — un critere de
+  // remontee au coach, trop strict pour peser une fatigue.
+  let recul=0, stagne=0, nomRecul=null, nomStagne=null;
+  try{
+    for(const x of _listeEtats(user)){
+      if(x.etat==='regression'){ recul++; if(!nomRecul) nomRecul=x.nom; }
+      else if(x.etat==='plateau'){ stagne++; if(!nomStagne) nomStagne=x.nom; }
+    }
+  }catch(e){}
+  if(recul){
+    pousser('regression','Recul sur '+String(nomRecul||'').toLowerCase(),
+      recul,recul>1?'exercices':'exercice',FATIGUE_POIDS.regression);
+  }
+  if(stagne){
+    pousser('plateau','Plateau sur '+String(nomStagne||'').toLowerCase(),
+      stagne,stagne>1?'exercices':'exercice',FATIGUE_POIDS.plateau);
+  }
+  if(sg.douleur&&d.douleur){
+    pousser('douleur','Douleur répétée sur '+String(d.douleur.nom||'').toLowerCase(),
+      d.douleur.series,'séries douloureuses',FATIGUE_POIDS.douleur);
+  }else if(sg.douleurDiffuse&&d.douleurDiffuse){
+    pousser('douleur','Douleur diffuse sur '+d.douleurDiffuse.jours+' jours',
+      d.douleurDiffuse.series,'séries douloureuses',FATIGUE_POIDS.douleur);
+  }
+  if(sg.formeBasse&&d.formeBasse){
+    pousser('forme','Indice de forme sous sa base habituelle',
+      d.formeBasse.ecart,'points sous '+d.formeBasse.base,FATIGUE_POIDS.forme);
+  }
+  return {score,motifs,exploitable:true,semaines};
+}
+// PURE. La semaine visée : l'index dans le bloc quand F-31 en fournit un, la
+// clé ISO sinon. Les deux voyagent, la carte se sert de ce qu'elle a.
+function _semaineFatigue(user,dateRef){
+  const dt=(dateRef instanceof Date)?dateRef:new Date(Number(dateRef||Date.now()));
+  let idx=null;
+  try{ idx=indexSemaineBloc(user,dt); }catch(e){}
+  return {cle:semaineISO(dt),index:(typeof idx==='number')?idx:null};
+}
+// La décharge DÉJÀ planifiée qui suit la semaine visée, s'il y en a une : la
+// carte propose alors de l'AVANCER au lieu d'en ajouter une seconde.
+function dechargePlanifieeApres(user,index){
+  if(typeof index!=='number') return null;
+  let pr=null;
+  try{ pr=programmeDe(user); }catch(e){}
+  if(!pr) return null;
+  const suivantes=pr.decharges.filter(x=>x>index);
+  return suivantes.length?suivantes[0]:null;
+}
+// Évalue et ÉCRIT la proposition dans le dossier — mais jamais sur `deload`.
+// Rend la proposition ouverte, ou null. Une seule à la fois par athlète.
+function evaluerPropositionDecharge(user,dateRef){
+  const u=_dossier(user);
+  if(!u) return null;
+  if(fatigueSuspendue(u)) return null;
+  const now=(dateRef instanceof Date)?dateRef.getTime():Number(dateRef||Date.now());
+  const f=fatigueDe(u);
+  if(f&&f.sommeilJusquA>now) return null;
+  if(f&&f.propositionActive) return f.propositionActive;
+  const r=scoreFatigue(u,now);
+  if(!r.exploitable||r.score<FATIGUE_SEUIL) return null;
+  // Règle 3, tenue par le code et pas seulement par le commentaire : une
+  // proposition sans motif chiffré ne sort pas d'ici.
+  if(!r.motifs.length) return null;
+  if(!u.fatigue||typeof u.fatigue!=='object'||Array.isArray(u.fatigue)) u.fatigue={};
+  const sem=_semaineFatigue(u,now);
+  u.fatigue.score=r.score;
+  u.fatigue.motifs=r.motifs;
+  u.fatigue.calculeLe=now;
+  u.fatigue.propositionActive={semaineProposee:sem.cle,semaineIndex:sem.index,
+    creeLe:now,statut:'ouverte'};
+  return u.fatigue.propositionActive;
+}
+// Lecture SANS calcul : c'est elle que le tri des athlètes appelle, sur des
+// dizaines de dossiers. Recalculer un score à chaque rendu de liste coûterait
+// cinq millisecondes par athlète pour une information déjà écrite.
+function propositionDechargeOuverte(c){
+  const f=fatigueDe(c);
+  return (f&&f.propositionActive)?f.propositionActive:null;
+}
+function _fermerProposition(u){ if(u&&u.fatigue) delete u.fatigue.propositionActive; }
+// Un refus met la détection en sommeil vingt-et-un jours POUR CET ATHLÈTE.
+function refuserDecharge(user){
+  const u=_dossier(user);
+  if(!u||!propositionDechargeOuverte(u)) return false;
+  if(!u.fatigue) u.fatigue={};
+  u.fatigue.sommeilJusquA=Date.now()+FATIGUE_SOMMEIL_J*864e5;
+  _fermerProposition(u);
+  return true;
+}
+// Un report la décale d'une semaine, sans l'enterrer.
+function reporterDecharge(user){
+  const u=_dossier(user);
+  if(!u||!propositionDechargeOuverte(u)) return false;
+  if(!u.fatigue) u.fatigue={};
+  u.fatigue.sommeilJusquA=Date.now()+FATIGUE_REPORT_J*864e5;
+  _fermerProposition(u);
+  return true;
+}
+// APPLIQUE. Le seul point du lot qui touche à la décharge, et il n'est atteint
+// que par un clic du coach.
+//
+// Deux représentations de la décharge cohabitent : le booléen `deload` des
+// créneaux, sans date, et `programme.decharges`, des index de semaines. Quand
+// un bloc existe, on écrit dans le BLOC — et si une décharge était déjà prévue
+// plus loin, on l'AVANCE au lieu d'en ajouter une seconde. Sans bloc, on
+// retombe sur le geste existant : `deload` sur les créneaux actifs, les
+// inactifs intacts.
+function appliquerDecharge(user,semaine){
+  const u=_dossier(user);
+  if(!u) return false;
+  const idx=(typeof semaine==='number')?semaine:null;
+  let pr=null;
+  try{ pr=programmeDe(u); }catch(e){}
+  let fait=false;
+  if(pr&&idx!==null&&idx>=0&&idx<pr.semaines){
+    const avancee=dechargePlanifieeApres(u,idx);
+    const l=pr.decharges.filter(x=>x!==avancee);
+    if(l.indexOf(idx)<0) l.push(idx);
+    u.programme.decharges=l.sort((a,b)=>a-b);
+    fait=true;
+  }else{
+    const cfg=Array.isArray(u.sessions_config)?u.sessions_config:[];
+    const actifs=cfg.filter(x=>x&&x.active);
+    if(!actifs.length) return false;
+    actifs.forEach(x=>{ x.deload=true; });
+    fait=true;
+  }
+  if(!fait) return false;
+  _fermerProposition(u);
+  // Les caches portent des verdicts que la décharge change : une séance de
+  // décharge sort de la détection de plateau.
+  try{ _viderCachePlateau(); _viderCacheVolume(); _cacheSignaux.clear(); }catch(e){}
+  return true;
+}
+// LE PONT. Une semaine planifiée en décharge dans le bloc ne posait `deload`
+// sur AUCUNE séance : le bandeau ne s'allumait pas, et les séances de cette
+// semaine continuaient d'entrer dans la détection de plateau — alors qu'une
+// décharge cochée à la main, elle, en sortait. Deux décharges, deux
+// comportements. PURE, aucune écriture.
+function semaineEstDecharge(user,date){
+  try{
+    const w=getSemaineEffective(user,date||new Date());
+    return !!(w&&w.decharge);
+  }catch(e){ return false; }
 }
 
 // ── Dépistage par profil : des QUESTIONS au coach, rien d'autre ────────────
@@ -8422,7 +8692,12 @@ function urgencyScore(c){
   if(sg.douleur&&!isAlertSnoozed('douleur',c.id,0,c)) return 9;
   if(sg.douleurDiffuse&&!isAlertSnoozed('douleurdiff',c.id,0,c)) return 8;
   if(sg.decrochage&&!isAlertSnoozed('decrochage',c.id)) return 7;
-  if((sg.plateauMuscle||sg.formeBasse||sg.sousMEV||sg.volumeHaut||sg.restrictionLongue)&&!isAlertSnoozed('entrainement',c.id)) return 6;
+  // La proposition de décharge se BRANCHE ici plutôt que de créer une seconde
+  // échelle : elle est dérivée de ces signaux-là, elle appartient donc au même
+  // rang. Lecture d'un champ déjà écrit, aucun calcul — ce tri passe sur tous
+  // les athlètes du coach à chaque rendu de liste.
+  if((sg.plateauMuscle||sg.formeBasse||sg.sousMEV||sg.volumeHaut||sg.restrictionLongue
+     ||propositionDechargeOuverte(c))&&!isAlertSnoozed('entrainement',c.id)) return 6;
   // Même priorité que « nouveau bilan » : les deux sont mutuellement exclusifs
   // (hasNewBilan exige au moins un bilan, neverStarted exige aucun), pas d'égalité possible.
   if(neverStarted(c)&&!isAlertSnoozed('nostart',c.id)) return 5;
@@ -14693,7 +14968,11 @@ function launchWorkout(sessConfig,slotIdx){
   const _slot=(typeof slotIdx==='number'&&slotIdx>=0&&slotIdx<=6)?slotIdx:null;
   woState={exercises,currentEx:0,startTime:Date.now(),timerInterval:null,sessionData:{},
     progName:_nomSeance(sessConfig,_slot),sessionPhoto:sessConfig.photo||null,
-    deload:!!sessConfig.deload,
+    // Cochée à la main par le coach, OU planifiée dans le bloc : les deux
+    // valent décharge. Sans cette seconde branche, une semaine prévue en
+    // décharge n'allumait pas le bandeau et ses séances restaient comptées
+    // dans la détection de plateau.
+    deload:!!sessConfig.deload||semaineEstDecharge(currentUser),
     // Une demande du coach vaut case cochée d'avance. Amorcée ICI et non à
     // chaque rendu : sans quoi un décochage serait réécrit à la seconde
     // suivante et l'athlète n'aurait pas la main.
@@ -20965,8 +21244,54 @@ function renderVolumeCoach(c){
     ${_htmlRirMoyen(c)}
     ${_htmlEcartPrescrit(c)}
     ${_htmlAdherenceCoach(c)}
+    ${_htmlCarteDecharge(c)}
     ${_htmlBoutonDecharge(c)}
   </div>`;
+}
+// La carte de proposition. Elle NOMME ses motifs chiffrés : un coach doit
+// pouvoir discuter la proposition, donc la refuser en connaissance de cause.
+// Le score lui-même n'est écrit nulle part côté athlète — règle 5.
+function _htmlCarteDecharge(c){
+  let pr=null;
+  try{ pr=evaluerPropositionDecharge(c); }catch(e){ return ''; }
+  if(!pr) return '';
+  const f=fatigueDe(c)||{motifs:[]};
+  if(!f.motifs.length) return '';   // règle 3 : jamais de proposition muette
+  const av=dechargePlanifieeApres(c,pr.semaineIndex);
+  const titre=(av!==null&&typeof pr.semaineIndex==='number')
+    ?'Avancer la décharge prévue en semaine '+(av+1)+' à la semaine '+(pr.semaineIndex+1)
+    :'Décharge suggérée';
+  const sem=(typeof pr.semaineIndex==='number')?('semaine '+(pr.semaineIndex+1)+' du bloc')
+    :('semaine '+escapeHtml(String(pr.semaineProposee)));
+  return `<div style="margin-top:10px;background:var(--info-bg);border:1px solid var(--info-border);border-radius:10px;padding:12px 13px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--info);text-transform:uppercase;margin-bottom:6px">`
+    +escapeHtml(titre)+`</div>
+    <div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:8px">Sur la `
+    +escapeHtml(sem)+`. Proposition, pas décision : rien n'est appliqué tant que tu ne cliques pas.</div>`
+    +f.motifs.map(m=>`<div style="font-size:11px;color:#ddd;line-height:1.6;border-left:2px solid var(--info);padding-left:9px;margin-bottom:5px">`
+      +escapeHtml(String(m.libelle||''))+` — <b>`+escapeHtml(String(m.valeur))+`</b> `
+      +escapeHtml(String(m.unite||''))+`</div>`).join('')
+    +`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
+      <button class="btn btn-outline btn-sm" style="flex:1;min-width:96px;letter-spacing:.5px;font-size:10px" onclick="cdAppliquer()">Appliquer</button>
+      <button class="btn btn-outline btn-sm" style="flex:1;min-width:96px;letter-spacing:.5px;font-size:10px" onclick="cdReporter()">Reporter</button>
+      <button class="btn btn-outline btn-sm" style="flex:1;min-width:96px;letter-spacing:.5px;font-size:10px" onclick="cdRefuser()">Refuser</button>
+    </div></div>`;
+}
+function _cdCible(){ try{ return getOwnedClient(currentClientId); }catch(e){ return null; } }
+function _cdApres(c,msg){ saveUser(); toast(msg); try{ renderVolumeCoach(c); }catch(e){} }
+function cdAppliquer(){
+  const c=_cdCible(); if(!c) return false;
+  const pr=propositionDechargeOuverte(c); if(!pr) return false;
+  if(!appliquerDecharge(c,pr.semaineIndex)) { toast('Aucun créneau actif à décharger.','var(--orange)'); return false; }
+  _cdApres(c,'Décharge appliquée'); return true;
+}
+function cdReporter(){
+  const c=_cdCible(); if(!c||!reporterDecharge(c)) return false;
+  _cdApres(c,'Reportée d\'une semaine'); return true;
+}
+function cdRefuser(){
+  const c=_cdCible(); if(!c||!refuserDecharge(c)) return false;
+  _cdApres(c,'Proposition écartée'); return true;
 }
 // Decharge programmee sur TOUS les creneaux actifs. Elle reutilise le booleen
 // deload existant, le meme que la case a cocher de l'editeur de seances : rien
@@ -32770,6 +33095,10 @@ function declarerGrossesse(etat){
     const ph=phaseCourante(currentUser);
     if(ph&&ph.type==='seche'&&currentUser.phase) currentUser.phase.suspendue=true;
   }
+  // Drapeau NEUTRE, sans motif : le coach saura que la détection est en pause,
+  // pas pourquoi. Posé sur un saveUser qui existe déjà — aucune écriture de
+  // plus sur un plan Spark où chaque sauvegarde est un PUT du document entier.
+  majSuspensionFatigue(currentUser);
   saveUser();
   _renderAtpGrossesse();
   return true;
@@ -32779,6 +33108,7 @@ function declarerGrossesse(etat){
 function revoquerGrossesse(){
   delete currentUser.grossesse;
   if(currentUser.phase) delete currentUser.phase.suspendue;
+  majSuspensionFatigue(currentUser);
   saveUser();
   _renderAtpGrossesse();
   return true;
@@ -43757,6 +44087,320 @@ function testExercices(){
           return !/ouvrirRemplacement/.test(_htmlBoutonRemplacer(0,{name:'COURSE',reps:'20 min'})+'x')
             ?true:_echec('un cardio porte le bouton');})());
         _restaurer();
+        })();
+        // ── Fatigue accumulée ────────────────────────────────────────────
+        (()=>{
+        const _fSauve=currentUser;
+        const _fLun=_lundiDe(new Date()).getTime();
+        // Une séance par semaine, même créneau. weight × 20 reps donne un score
+        // en « volume-serie » : on pilote le recul exactement, sans e1RM.
+        // CHAQUE dossier a son propre e-mail : le cache de volume est indexé
+        // dessus, et deux fixtures homonymes se contamineraient.
+        let _fN=0;
+        const _fUser=(poids,nSets,painSur,semaines)=>{
+          const mail='fat'+(++_fN)+'@t';
+          const ks=semaines||[6,5,4,3,2,1];
+          const sessions=ks.map((k,i)=>{
+            const sets=[];
+            for(let j=0;j<nSets;j++){
+              const st={done:true,weight:String(poids[i]),reps:'20',rir:'2'};
+              if(painSur&&painSur.indexOf(k)>=0&&j<2) st.pain=SIG_PAIN_SEUIL+1;
+              sets.push(st);
+            }
+            return {id:'f'+k,date:_fLun-k*604800000+86400000,slot:0,name:'P',
+              sets:nSets,setsPlanned:nSets,
+              data:{'DEVELOPPE COUCHE BARRE':{sets,methode:null,technique:'normale'}}};
+          });
+          return {email:mail,id:mail,role:'athlete',exAlias:{},exMuscles:{},sessions};
+        };
+        const _fPurge=()=>{ _viderCacheVolume(); _viderCachePlateau();
+          try{ _cacheSignaux.clear(); }catch(e){} };
+        ok('Moins de trois semaines de données : aucun verdict',(()=>{
+          // Règle 2. Deux semaines ne disent rien, et la vue disparaît plutôt
+          // que de rendre un chiffre construit sur rien.
+          _fPurge();
+          const u=_fUser([5,5],30,null,[2,1]);
+          const r=scoreFatigue(u);
+          if(r.exploitable) return _echec('exploitable à deux semaines');
+          if(r.score!==0) return _echec('un score sort quand même : '+r.score);
+          if(r.motifs.length) return _echec('des motifs sortent quand même');
+          if(evaluerPropositionDecharge(u)) return _echec('une proposition est créée');
+          if(u.fatigue&&u.fatigue.propositionActive) return _echec('une trace est écrite');
+          // Trois semaines : le verdict devient possible.
+          _fPurge();
+          return scoreFatigue(_fUser([5,5,5],30,null,[3,2,1])).exploitable
+            ?true:_echec('trois semaines ne suffisent toujours pas');})());
+        ok('Volume à 120 % du MRV : le motif est CHIFFRÉ, pas une étiquette',(()=>{
+          // Règle 3. Le MRV des pectoraux est 22 : trente séries pondérées sont
+          // à 136 % — au-dessus sur les deux semaines révolues, comme le veut
+          // le signal existant.
+          _fPurge();
+          const u=_fUser([5,5,5,5,5,5],30,null);
+          const r=scoreFatigue(u);
+          if(r.score<FATIGUE_POIDS.volumeHaut)
+            return _echec('score '+r.score+' sous le poids du volume');
+          const m=r.motifs.filter(x=>x.code==='volume')[0];
+          if(!m) return _echec('aucun motif de volume');
+          if(!isFinite(m.valeur)||m.valeur<=0) return _echec('valeur non chiffrée : '+m.valeur);
+          if(!m.unite||!/MRV/.test(m.unite)) return _echec('le repère n\'est pas dit');
+          const rep=reperesEffectifs(u,'PECTORAUX');
+          return m.valeur>rep.mrv?true:_echec(m.valeur+' n\'est pas au-dessus de '+rep.mrv);})());
+        ok('Le seuil est la SEULE porte, et il propose À ÉGALITÉ',(()=>{
+          // Ton critère parlait de 61 et 59 : les poids (35/25/15/15/10) ne
+          // produisent aucune de ces deux valeurs. On teste donc la vraie borne,
+          // celle qui porte le risque : 50 en dessous, et 60 PILE — un « > » au
+          // lieu d'un « >= » se verrait ici, et nulle part ailleurs.
+          _fPurge();
+          const bas=_fUser([5,5,5,5,5,5],30,null);          // volume + plateau
+          const rb=scoreFatigue(bas);
+          if(rb.score>=FATIGUE_SEUIL) return _echec('le cas bas vaut '+rb.score);
+          if(evaluerPropositionDecharge(bas)) return _echec('proposition à '+rb.score);
+          _fPurge();
+          const pile=_fUser([5,5,5,5,5,3],30,null);         // volume + recul
+          const rp=scoreFatigue(pile);
+          if(rp.score!==FATIGUE_SEUIL) return _echec('le cas pile vaut '+rp.score);
+          const pr=evaluerPropositionDecharge(pile);
+          if(!pr) return _echec('aucune proposition au seuil exact');
+          if(pr.statut!=='ouverte') return _echec('statut '+pr.statut);
+          if(!(pile.fatigue.motifs||[]).length) return _echec('proposition sans motif');
+          // Règle 9 : une seule ouverte à la fois.
+          const encore=evaluerPropositionDecharge(pile);
+          return encore&&encore.creeLe===pr.creeLe
+            ?true:_echec('une seconde proposition est créée');})());
+        ok('La douleur ne TRONQUE plus le score',(()=>{
+          // signauxEntrainement s'arrête aux signaux de rang 6 dès qu'une douleur
+          // est acquise : légitime pour classer, faux pour peser. Sans l'option
+          // « complet », un athlète douloureux ET en surcharge comptait MOINS
+          // qu'un athlète seulement en surcharge.
+          _fPurge();
+          const sans=_fUser([5,5,5,5,5,3],30,null);
+          const rs=scoreFatigue(sans);
+          _fPurge();
+          const avec=_fUser([5,5,5,5,5,3],30,[1,2]);
+          const ra=scoreFatigue(avec);
+          if(ra.score<=rs.score)
+            return _echec('avec douleur '+ra.score+' ≤ sans douleur '+rs.score);
+          if(!ra.motifs.some(m=>m.code==='douleur')) return _echec('pas de motif douleur');
+          if(!ra.motifs.some(m=>m.code==='volume')) return _echec('le volume a été perdu');
+          // Et le CLASSEMENT, lui, garde son court-circuit : rien n'a changé
+          // pour urgencyScore.
+          _fPurge();
+          const court=signauxEntrainement(avec);
+          return (court.douleur&&!court.volumeHaut)
+            ?true:_echec('le court-circuit du classement a sauté');})());
+        ok('Un refus met la détection en sommeil 21 jours, même à score maximal',(()=>{
+          // Règle 4.
+          _fPurge();
+          const u=_fUser([5,5,5,5,5,3],30,[1,2]);           // volume+recul+douleur
+          if(!evaluerPropositionDecharge(u)) return _echec('aucune proposition initiale');
+          if(!refuserDecharge(u)) return _echec('le refus échoue');
+          if(propositionDechargeOuverte(u)) return _echec('la proposition reste ouverte');
+          _fPurge();
+          if(evaluerPropositionDecharge(u)) return _echec('une proposition revient tout de suite');
+          // Vingt jours plus tard : toujours rien. Vingt-deux : elle revient.
+          _fPurge();
+          if(evaluerPropositionDecharge(u,Date.now()+20*864e5))
+            return _echec('une proposition revient au vingtième jour');
+          _fPurge();
+          const j=u.fatigue.sommeilJusquA;
+          const jours=Math.round((j-Date.now())/864e5);
+          if(jours!==FATIGUE_SOMMEIL_J) return _echec('sommeil de '+jours+' jours');
+          // Un REPORT, lui, ne dort qu'une semaine.
+          _fPurge();
+          const v=_fUser([5,5,5,5,5,3],30,null);
+          evaluerPropositionDecharge(v);
+          if(!reporterDecharge(v)) return _echec('le report échoue');
+          return Math.round((v.fatigue.sommeilJusquA-Date.now())/864e5)===FATIGUE_REPORT_J
+            ?true:_echec('le report ne dure pas une semaine');})());
+        ok('Grossesse : aucune proposition, et le drapeau NE DIT PAS pourquoi',(()=>{
+          // Règle 6, et le piège qu'elle contient. _sanitizeForCoach efface
+          // `grossesse` quand l'athlète ne l'a pas partagée : une carte qui
+          // annoncerait « suspendue pour raison de santé » la révélerait à
+          // celui à qui elle a choisi de ne rien dire. Le drapeau est donc
+          // neutre, et il suffit à lui seul.
+          _fPurge();
+          const u=_fUser([5,5,5,5,5,3],30,[1,2]);
+          u.grossesse={etat:'enceinte',declareLe:Date.now()};
+          if(scoreFatigue(u).score<FATIGUE_SEUIL) return _echec('le score ne dépasse pas le seuil');
+          if(evaluerPropositionDecharge(u)) return _echec('une proposition sort malgré la grossesse');
+          if(_htmlCarteDecharge(u)!=='') return _echec('la carte s\'affiche');
+          // Le drapeau seul, SANS aucune donnée de santé lisible : c'est le cas
+          // réel côté coach, où le champ a été effacé.
+          _fPurge();
+          const v=_fUser([5,5,5,5,5,3],30,[1,2]);
+          v.fatigue={suspendue:true};
+          if(!fatigueSuspendue(v)) return _echec('le drapeau neutre ne suspend pas');
+          if(evaluerPropositionDecharge(v)) return _echec('une proposition sort malgré le drapeau');
+          const carte=_htmlCarteDecharge(v);
+          if(carte!=='') return _echec('la carte s\'affiche sur un dossier suspendu');
+          // majSuspensionFatigue pose et retire le drapeau, sans jamais écrire
+          // de motif à côté.
+          const w={email:'g@t',role:'athlete',grossesse:{etat:'enceinte'}};
+          majSuspensionFatigue(w);
+          if(w.fatigue.suspendue!==true) return _echec('le drapeau n\'est pas posé');
+          if(JSON.stringify(w.fatigue).indexOf('gross')>=0
+            ||JSON.stringify(w.fatigue).indexOf('enceinte')>=0)
+            return _echec('un motif de santé a été écrit dans fatigue');
+          delete w.grossesse; majSuspensionFatigue(w);
+          // Un drapeau rouge suspend aussi, et il est DÉJÀ visible du coach.
+          const x=_fUser([5,5,5,5,5,3],30,null);
+          poserDrapeauRouge(x,'epaule',['irradiation']);
+          const susp=fatigueSuspendue(x);
+          leverDrapeauRouge(x);
+          return (w.fatigue.suspendue===undefined&&susp)
+            ?true:_echec('drapeau non retiré, ou drapeau rouge sans effet');})());
+        ok('Appliquer : les créneaux ACTIFS seulement, et sur un GESTE du coach',(()=>{
+          // Règle 1. Rien avant le clic, et les créneaux inactifs sont intacts.
+          _fPurge();
+          const u=_fUser([5,5,5,5,5,3],30,null);
+          u.sessions_config=[{active:true,name:'Push',exercises:[]},
+                             {active:false,name:'',exercises:[]},
+                             {active:true,name:'Pull',exercises:[],deload:false}];
+          const avant=JSON.stringify(u.sessions_config);
+          const pr=evaluerPropositionDecharge(u);
+          if(!pr) return _echec('aucune proposition');
+          if(JSON.stringify(u.sessions_config)!==avant)
+            return _echec('ÉVALUER a écrit sur les créneaux');
+          if(!appliquerDecharge(u,pr.semaineIndex)) return _echec('l\'application échoue');
+          if(u.sessions_config[0].deload!==true||u.sessions_config[2].deload!==true)
+            return _echec('un créneau actif n\'est pas déchargé');
+          if(u.sessions_config[1].deload!==undefined)
+            return _echec('un créneau INACTIF a été touché');
+          if(propositionDechargeOuverte(u)) return _echec('la proposition reste ouverte');
+          // Aucun créneau actif : on refuse, on ne fait pas semblant.
+          const v=_fUser([5,5,5,5,5,3],30,null);
+          v.sessions_config=[{active:false,name:'',exercises:[]}];
+          return appliquerDecharge(v,0)===false
+            ?true:_echec('une décharge sans créneau actif est annoncée faite');})());
+        ok('Avec un bloc, la décharge est AVANCÉE, jamais dupliquée',(()=>{
+          // Le lot précédent a daté les blocs : une décharge prévue en semaine 6
+          // qu'on avance en semaine 4 doit BOUGER, sinon l'athlète en reçoit deux.
+          _fPurge();
+          const u=_fUser([5,5,5,5,5,3],30,null);
+          u.programme={debut:_fLun-3*604800000,semaines:8,decharges:[5]};
+          u.sessions_config=[{active:true,name:'Push',exercises:[]}];
+          const pr=evaluerPropositionDecharge(u);
+          if(!pr) return _echec('aucune proposition');
+          if(pr.semaineIndex!==3) return _echec('semaine visée '+pr.semaineIndex);
+          if(dechargePlanifieeApres(u,3)!==5) return _echec('la décharge prévue n\'est pas vue');
+          if(!appliquerDecharge(u,3)) return _echec('l\'application échoue');
+          if(u.programme.decharges.join()!=='3')
+            return _echec('décharges : '+u.programme.decharges.join());
+          if(u.sessions_config[0].deload) return _echec('le booléen a été écrit EN PLUS du bloc');
+          // Sans décharge prévue plus loin, on AJOUTE au lieu d'avancer.
+          const v=_fUser([5,5,5,5,5,3],30,null);
+          v.programme={debut:_fLun-3*604800000,semaines:8,decharges:[1]};
+          appliquerDecharge(v,3);
+          return v.programme.decharges.join()==='1,3'
+            ?true:_echec('décharges : '+v.programme.decharges.join());})());
+        ok('Le PONT : une semaine planifiée en décharge en est vraiment une',(()=>{
+          // Défaut antérieur au lot : getSemaineEffective annonçait la décharge,
+          // mais aucune séance ne portait `deload`. Le bandeau ne s'allumait pas
+          // et ces séances restaient comptées dans la détection de plateau,
+          // alors qu'une décharge cochée à la main en sortait. Deux décharges,
+          // deux comportements.
+          const u={email:'pont@t',role:'athlete',
+            programme:{debut:_fLun,semaines:4,decharges:[0]},
+            sessions_config:[{active:true,name:'P',exercises:[]}]};
+          if(!semaineEstDecharge(u,new Date(_fLun+86400000)))
+            return _echec('la semaine planifiée n\'est pas vue comme décharge');
+          if(semaineEstDecharge(u,new Date(_fLun+8*86400000)))
+            return _echec('une semaine normale est dite en décharge');
+          // Sans programme : ni exception, ni décharge inventée.
+          if(semaineEstDecharge({email:'x@t'},new Date())) return _echec('sans bloc, décharge inventée');
+          // Et le démarrage de séance lit bien les DEUX sources.
+          return /deload:!!sessConfig\.deload\|\|semaineEstDecharge/.test(String(launchWorkout))
+            ?true:_echec('le démarrage de séance ne lit pas le bloc');})());
+        ok('Reprise après vingt-cinq jours : les compteurs repartent de zéro',(()=>{
+          // Règle 7. Ce n'est pas de la fatigue accumulée, c'est un retour.
+          _fPurge();
+          const u=_fUser([5,5,5,5,5,3],30,null);
+          // On recule tout l'historique de vingt-cinq jours : plus rien de récent.
+          u.sessions.forEach(s=>{ s.date-=25*864e5; });
+          const r=scoreFatigue(u);
+          if(r.exploitable) return _echec('exploitable après la coupure');
+          if(r.score!==0) return _echec('score '+r.score+' après la coupure');
+          if(evaluerPropositionDecharge(u)) return _echec('une proposition survit à la coupure');
+          // Et une coupure AU MILIEU coupe aussi la série consécutive.
+          _fPurge();
+          const v=_fUser([5,5,5],30,null,[6,5,1]);
+          return !scoreFatigue(v).exploitable
+            ?true:_echec('un trou de quatre semaines passe pour du continu');})());
+        ok('Un dossier fatigue corrompu ne casse ni le calcul ni la carte',(()=>{
+          // Règle 7 du §7 : la vue disparaît, elle ne casse pas.
+          for(const f of [null,0,'',[],'fatigue',{score:'beaucoup'},{motifs:'oui'},
+                          {propositionActive:'ouverte'},{propositionActive:[]},
+                          {propositionActive:{statut:'zorglub'}},{sommeilJusquA:'demain'}]){
+            const u={email:'k@t',id:'k1',role:'athlete',sessions:[],fatigue:f};
+            let c;
+            try{ fatigueDe(u); scoreFatigue(u); evaluerPropositionDecharge(u);
+                 propositionDechargeOuverte(u); c=_htmlCarteDecharge(u); }
+            catch(e){ return _echec('exception sur '+JSON.stringify(f)+' : '+e.message); }
+            if(c!=='') return _echec('une carte sort d\'un dossier corrompu');
+          }
+          return true;})());
+        ok('Le score n\'atteint JAMAIS une vue athlète',(()=>{
+          // Règle 5. Un athlète qui lit « 75 » l'interprète, et il n'a aucun
+          // moyen de savoir ce que le chiffre pèse.
+          const appelants=String(_htmlCarteDecharge);
+          if(!/renderVolumeCoach/.test(String(_cdApres)))
+            return _echec('la carte se rafraîchit ailleurs que sur l\'écran coach');
+          // La carte n'est posée QU'À un endroit, et c'est un rendu coach.
+          const src=String(renderVolumeCoach);
+          if(!/_htmlCarteDecharge\(c\)/.test(src))
+            return _echec('la carte n\'est pas dans le rendu coach');
+          // Aucune vue athlète ne lit le score ni les motifs.
+          for(const f of [renderFormeSeance,blocForme,_blocContrainteSeance,renderDouleurAthlete]){
+            const t=String(f);
+            if(/scoreFatigue|propositionDechargeOuverte|_htmlCarteDecharge|fatigue\.score|fatigue\.motifs/.test(t))
+              return _echec((f.name||'?')+' lit la fatigue');
+          }
+          // Et un rendu athlète réel ne laisse échapper ni le chiffre ni le motif.
+          _fPurge();
+          const u=_fUser([5,5,5,5,5,3],30,[1,2]);
+          evaluerPropositionDecharge(u);
+          const marque=String((u.fatigue.motifs[0]||{}).libelle||'');
+          currentUser=u;
+          let rendu='';
+          try{ rendu=String(blocForme(u,false))+String(_blocContrainteSeance({name:'SQUAT'},0)); }catch(e){}
+          if(marque&&rendu.indexOf(marque)>=0) return _echec('un motif fuit côté athlète');
+          return rendu.indexOf(String(u.fatigue.score))>=0&&u.fatigue.score>0
+            ?_echec('le score fuit côté athlète'):true;})());
+        ok('La proposition se BRANCHE sur le score d\'urgence, sans recalculer',(()=>{
+          // §7 : pas de second système d'alerte. Et le tri passe sur tous les
+          // athlètes du coach à chaque rendu de liste : y recalculer un score
+          // coûterait cinq millisecondes par dossier.
+          const lecture=String(propositionDechargeOuverte);
+          if(/scoreFatigue|signauxEntrainement|musclesEnPlateau|volumeSemaine/.test(lecture))
+            return _echec('la lecture recalcule');
+          if(!/propositionDechargeOuverte\(c\)/.test(String(urgencyScore)))
+            return _echec('urgencyScore ne lit pas la proposition');
+          const c={id:'z1',email:'z@t',sessions:[],bilans:[{date:Date.now()}],
+            status:'COACHING_SUIVI',lastActivity:Date.now(),
+            fatigue:{propositionActive:{statut:'ouverte',creeLe:Date.now()}}};
+          try{ _cacheSignaux.clear(); }catch(e){}
+          if(urgencyScore(c)!==6) return _echec('rang '+urgencyScore(c)+' au lieu de 6');
+          // Une proposition FERMÉE ne remonte rien.
+          c.fatigue.propositionActive.statut='refusee';
+          try{ _cacheSignaux.clear(); }catch(e){}
+          return urgencyScore(c)!==6
+            ?true:_echec('une proposition fermée remonte encore');})());
+        ok('Aucune écriture sur deload hors appliquerDecharge',(()=>{
+          // Règle 1, vérifiée sur le CODE et pas seulement sur un scénario.
+          for(const f of [scoreFatigue,evaluerPropositionDecharge,refuserDecharge,
+                          reporterDecharge,fatigueDe,fatigueSuspendue,semaineEstDecharge]){
+            const t=String(f);
+            if(/\.deload\s*=/.test(t)) return _echec((f.name||'?')+' écrit sur deload');
+          }
+          // scoreFatigue est PURE : elle ne touche pas au dossier.
+          _fPurge();
+          const u=_fUser([5,5,5,5,5,3],30,[1,2]);
+          const avant=JSON.stringify(u);
+          scoreFatigue(u); scoreFatigue(u,Date.now());
+          return JSON.stringify(u)===avant
+            ?true:_echec('scoreFatigue a modifié le dossier');})());
+        currentUser=_fSauve;
+        _fPurge();
         })();
         ok('fichesBanque rend un tableau vide, jamais null',(()=>{
           const sauve=_banque;
