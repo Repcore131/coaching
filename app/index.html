@@ -6909,6 +6909,55 @@ async function _appliquerCodeApresInscription(){
   }
 }
 
+// PURE. L athlete est-il deja rattache, et a qui ? Rend le nom du coach, ou
+// null. On lit le dossier, pas l ecran.
+function coachActuelDe(user){
+  const u=_dossier(user);
+  if(!u||!u.coachId) return null;
+  const nom=String(u.coachName||'').trim();
+  if(nom) return nom;
+  const c=Object.values(DB.get('users')||{}).find(x=>x&&x.id===u.coachId);
+  return c?((c.fname||'')+' '+(c.lname||'')).trim()||'ton coach':'ton coach';
+}
+// PURE. Le lien recu designe-t-il le coach qu on a deja ? Deux cas tres
+// differents : rouvrir SON propre lien est anodin, en ouvrir un AUTRE est un
+// changement de coach, et ca ne se fait pas par inadvertance.
+function _memeCoachQueLien(coachDuLien,user){
+  const u=_dossier(user);
+  if(!u||!u.coachId||!coachDuLien) return false;
+  return String(coachDuLien.id||'')===String(u.coachId);
+}
+// Le message dedie. Rend true quand il a pris la main — l appelant s arrete
+// alors la, et AUCUN second rattachement n a lieu.
+function _annoncerDejaRattache(coachDuLien){
+  const actuel=coachActuelDe();
+  if(!actuel) return false;
+  const meme=_memeCoachQueLien(coachDuLien);
+  const nomLien=coachDuLien?(((coachDuLien.fname||'')+' '+(coachDuLien.lname||'')).trim()||'ce coach'):'ce coach';
+  const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
+    +'background:#000c;z-index:1000;display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" style="background:var(--surface-2);'
+    +'border-radius:20px 20px 0 0;padding:18px 20px 22px;width:100%;max-width:480px;'
+    +'animation:fadeIn .3s ease">'
+    +'<h2 style="margin-bottom:8px;font-size:16px">Tu es déjà suivi</h2>'
+    +'<p class="sub" style="font-size:12px;line-height:1.65;margin-bottom:14px">'
+    +(meme
+      ? ('Ton accès avec <strong style="color:#ddd">'+escapeHtml(actuel)+'</strong> est déjà '
+        +'actif : ce lien ne sert plus à rien, tu peux le laisser de côté. '
+        +'Rien n\'a été modifié.')
+      : ('Tu es actuellement suivi par <strong style="color:#ddd">'+escapeHtml(actuel)+'</strong>, '
+        +'et ce lien vient de <strong style="color:#ddd">'+escapeHtml(nomLien)+'</strong>. '
+        +'Changer de coach ne se fait pas en ouvrant un lien : demande à '
+        +escapeHtml(actuel)+' de te libérer, puis rouvre celui-ci. '
+        +'<strong style="color:#ddd">Rien n\'a été modifié.</strong>'))
+    +'</p>'
+    +'<button class="btn btn-red" style="min-height:46px" onclick="closeModal();go(\'s-client-home\')">'
+    +'Revenir à mon accueil</button>'
+    +'<button class="btn btn-outline" style="margin-top:9px;min-height:44px" onclick="closeModal()">Fermer</button>'
+    +'</div></div>';
+  document.body.insertAdjacentHTML('beforeend',html);
+  return true;
+}
 async function doLinkCoach(){
   const raw=document.getElementById('cc-code').value.trim();
   if(!raw){return showErr('cc-err','Entre un code ou lien coach.');}
@@ -6920,6 +6969,10 @@ async function doLinkCoach(){
     if(pkg){
       const coach=_validateCoachPkg(JSON.parse(decodeURIComponent(escape(atob(pkg)))));
       if(coach){
+        // DEJA RATTACHE : on le DIT, et on s'arrete la. Ni erreur muette, ni
+        // second rattachement — changer de coach ne se fait pas en ouvrant
+        // un lien.
+        if(_annoncerDejaRattache(coach)) return;
         const users=DB.get('users')||{};
         users[coach.email]=Object.assign(users[coach.email]||{},coach);
         DB.set('users',users);
@@ -42809,6 +42862,48 @@ function testExercices(){
           if(h.indexOf('Autre méthode')<0) return _echec('le dépliant de repli n\'existe pas');
           return h.indexOf('id="inv-prenom"')>=0&&h.indexOf('id="inv-nom"')>=0
             ?true:_echec('le formulaire unifié est absent');})());
+        // ── Athlète déjà rattaché qui rouvre un lien ─────────────────────
+        ok('Un athlète déjà rattaché reçoit un message DÉDIÉ',(()=>{
+          // Ni erreur muette, ni second rattachement. Et deux situations très
+          // différentes : rouvrir SON lien est anodin, en ouvrir un AUTRE est
+          // un changement de coach.
+          const sauve=currentUser;
+          try{
+            currentUser={id:'a1',email:'a@t',role:'athlete',coachId:'c1',coachName:'Kevin G'};
+            if(coachActuelDe()!=='Kevin G') return _echec('coach lu : '+coachActuelDe());
+            // Son propre coach.
+            if(!_annoncerDejaRattache({id:'c1',fname:'Kevin',lname:'G'}))
+              return _echec('aucun message pour son propre lien');
+            let m=document.getElementById('modal-overlay');
+            if(!m) return _echec('la modale n\'est pas dans le DOM');
+            let t=m.innerText;
+            if(t.indexOf('Kevin G')<0) return _echec('le coach n\'est pas nommé');
+            if(!/Rien n'a été modifié/.test(t)) return _echec('on ne dit pas que rien n\'a bougé');
+            closeModal();
+            // Un AUTRE coach : le message change, et il dit quoi faire.
+            if(!_annoncerDejaRattache({id:'c2',fname:'Autre',lname:'Coach'}))
+              return _echec('aucun message pour un autre lien');
+            m=document.getElementById('modal-overlay'); t=m.innerText;
+            if(t.indexOf('Autre Coach')<0) return _echec('le coach du lien n\'est pas nommé');
+            if(!/de te libérer/.test(t)) return _echec('la marche à suivre n\'est pas donnée');
+            closeModal();
+            // Un athlète SANS coach n'est pas interrompu.
+            currentUser={id:'a2',email:'b@t',role:'athlete',coachId:null};
+            return !_annoncerDejaRattache({id:'c1',fname:'Kevin',lname:'G'})
+              ?true:_echec('un athlète libre est bloqué');
+          } finally { currentUser=sauve; closeModal(); }})());
+        ok('Le lien d\'un athlète déjà rattaché ne rattache RIEN',(()=>{
+          // Le garde est posé AVANT toute écriture : ni DB.set, ni linkToCoach.
+          const src=String(doLinkCoach).replace(/\s+/g,'');
+          const iGarde=src.indexOf('_annoncerDejaRattache(coach)');
+          const iEcrit=src.indexOf("DB.set('users'");
+          const iLien=src.indexOf('linkToCoach(coach)');
+          if(iGarde<0) return _echec('aucun garde dans doLinkCoach');
+          if(!(iGarde<iEcrit)) return _echec('le garde vient après l\'écriture locale');
+          if(!(iGarde<iLien)) return _echec('le garde vient après le rattachement');
+          // Et il court-circuite : sans return, le rattachement suivrait.
+          return /if\(_annoncerDejaRattache\(coach\)\)return;/.test(src)
+            ?true:_echec('le garde ne court-circuite pas');})());
         ok('fichesBanque rend un tableau vide, jamais null',(()=>{
           const sauve=_banque;
           try{
