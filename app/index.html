@@ -3374,6 +3374,124 @@ const SUB_PALIERS=[
    planId:()=>PAYPAL_PLAN_ID},
 ];
 function _paliersDispo(){return SUB_PALIERS.filter(p=>!!p.planId());}
+
+// ══════ BASCULE DU PAYEUR — LE COACH PAIE, L'ATHLÈTE RATTACHÉ NON ══════
+// Ce bloc n'installe QUE la mécanique de comptage et de palier. Il ne touche
+// à aucun écran, ne modifie ni checkAccess ni le rattachement, et n'écrit
+// rien dans aucun dossier. Tant que l'étape suivante n'est pas passée, un
+// athlète continue exactement comme avant.
+//
+// PAS DE VALEUR PAR DÉFAUT ÉCRITE DANS LES DOSSIERS. Les quatre champs
+// n'apparaissent que le jour où un coach choisit un palier. Un dossier qui
+// n'a jamais rien choisi ne porte aucune des quatre clés et se lit « libre,
+// inactif » par les accesseurs ci-dessous — même patron que `methode` sur
+// une série normale. Retro-écrire un défaut coûterait un PUT du document
+// entier par coach pour n'apprendre à personne ce que l'absence dit déjà.
+const COACH_PLANS=Object.freeze(['libre','coach','pro']);
+// Même forme que SUB_PALIERS, y compris `planId()` : _paliersDispo s'applique
+// tel quel, et une carte dont le plan PayPal n'existe pas encore ne s'affiche
+// pas du tout plutôt que d'échouer au moment de payer.
+//
+// TROIS paliers. Il n'y en a pas de quatrième, et `libre` n'est pas une offre
+// de lancement : c'est le palier permanent de qui suit une seule personne.
+// Son quota est une limitation technique, JAMAIS annoncée comme un avantage —
+// une gratuité promise publiquement devient contractuelle et ne se reprend pas.
+const PAYPAL_PLAN_ID_COACH='';   // à créer sur developer.paypal.com — 19 EUR/mois
+const PAYPAL_PLAN_ID_PRO='';     // idem — 39 EUR/mois
+const COACH_PALIERS=Object.freeze([
+  Object.freeze({cle:'libre', titre:'Libre', prix:0, quota:1,
+   periode:'', detail:'Un athlète suivi, sans carte bancaire et sans durée.',
+   planId:()=>''}),
+  Object.freeze({cle:'coach', titre:'Coach', prix:19, quota:15,
+   periode:'par mois', detail:'Jusqu\'à quinze athlètes actifs.',
+   planId:()=>PAYPAL_PLAN_ID_COACH}),
+  Object.freeze({cle:'pro', titre:'Pro', prix:39, quota:Infinity,
+   periode:'par mois', detail:'Sans limite de nombre.',
+   planId:()=>PAYPAL_PLAN_ID_PRO}),
+]);
+// Infinity NE DOIT JAMAIS partir dans un dossier : JSON.stringify le rend
+// `null`, et un quota null se relirait comme zéro. Il ne vit que dans cette
+// constante, jamais dans un champ persisté — un test le vérifie.
+
+// Fenêtre d'activité. 60 jours : un athlète qui n'a pas posé une séance
+// depuis deux mois ne coûte rien à suivre, et le facturer serait facturer
+// du vide. Le seuil est UN, pas zéro : ouvrir l'application ne suffit pas,
+// il faut avoir travaillé.
+const COACH_ACTIF_JOURS=60;
+const COACH_ACTIF_SEANCES_MIN=1;
+
+// PURE. Rend 'libre' pour tout dossier qui n'a rien choisi, et pour toute
+// valeur inconnue : un palier inventé ne doit jamais valoir plus qu'aucun.
+function coachPlanDe(coach){
+  const v=(coach||{}).coachPlan;
+  return COACH_PLANS.indexOf(v)>=0?v:'libre';
+}
+// PURE. Le quota du palier, jamais celui du dossier : un dossier ne porte
+// pas son propre plafond, sinon il suffirait de l'éditer pour l'augmenter.
+function getCoachQuota(plan){
+  const p=COACH_PALIERS.find(x=>x.cle===plan);
+  return p?p.quota:1;   // palier inconnu → le plus restrictif
+}
+// PURE. L'abonnement coach est-il actif ? Le palier `libre` est actif SANS
+// abonnement : c'est tout son objet. Pour les deux autres, il faut le
+// drapeau, et c'est un drapeau D'INTERFACE, pas de sécurité — il vit dans
+// users/<clé>, où l'athlète comme le coach ont le droit d'écriture et où
+// aucun .validate ne s'applique. Le dire ici plutôt que de laisser croire
+// à une garantie serveur qui n'existe pas.
+function coachSubActif(coach){
+  if(!coach) return false;
+  return coachPlanDe(coach)==='libre'?true:!!coach.coachSubActive;
+}
+// Compte les athlètes ACTIFS d'un coach.
+//
+// LECTURE DU CACHE LOCAL, ET C'EST UNE LIMITE RÉELLE : `users` ne contient
+// que ce que syncRelevantUsers a rapatrié. Sur un appareil neuf, le compte
+// vaut 0 tant que la synchronisation n'a pas tourné. Tout affichage bâti
+// là-dessus doit savoir dire « en cours » plutôt qu'un chiffre faux — d'où
+// le second membre du couple, `countActiveAthletesFiable`.
+//
+// `users` est injectable pour que la suite puisse l'éprouver sans toucher
+// au stockage réel.
+function countActiveAthletes(coach,users){
+  const id=(coach||{}).id;
+  if(!id) return 0;
+  const tous=users||DB.get('users')||{};
+  const limite=Date.now()-COACH_ACTIF_JOURS*86400000;
+  let n=0;
+  for(const u of Object.values(tous)){
+    if(!u||u.role==='coach') continue;
+    if(u.coachId!==id) continue;
+    // Une séance SUFFISAMMENT RÉCENTE. On compte, on ne se contente pas de
+    // regarder la dernière : un tableau non trié ne se lit pas par la fin.
+    let vues=0;
+    for(const sess of (u.sessions||[])){
+      if(sess&&sess.date>=limite&&++vues>=COACH_ACTIF_SEANCES_MIN) break;
+    }
+    if(vues>=COACH_ACTIF_SEANCES_MIN) n++;
+  }
+  return n;
+}
+// Le compte est-il digne d'être affiché ? Faux tant qu'aucun dossier
+// d'athlète n'est en cache alors que le coach en déclare : afficher « 0 / 15 »
+// à un coach qui suit douze personnes serait pire que ne rien afficher.
+function countActiveAthletesFiable(coach,users){
+  const id=(coach||{}).id;
+  if(!id) return false;
+  const tous=users||DB.get('users')||{};
+  return Object.values(tous).some(u=>u&&u.role!=='coach'&&u.coachId===id);
+}
+// PURE. Le palier qui convient au nombre d'athlètes donné. Sert à nommer le
+// palier SUIVANT dans un bandeau ; il ne décide rien et ne bloque rien.
+function coachPalierRequis(n){
+  const p=COACH_PALIERS.find(x=>n<=x.quota);
+  return p?p.cle:'pro';
+}
+// PURE. Le quota est-il dépassé ? Le dépassement ALERTE, il ne bloque
+// jamais un rattachement : refuser un athlète parce qu'un paiement n'a pas
+// suivi punirait l'athlète pour une affaire entre le coach et nous.
+function coachQuotaDepasse(coach,users){
+  return countActiveAthletes(coach,users)>getCoachQuota(coachPlanDe(coach));
+}
 // ══════ RÉSILIATION EN LIGNE ET RENONCEMENT À LA RÉTRACTATION ══════
 // L215-1-1 du code de la consommation, applicable depuis le 01/06/2023 :
 // résilier doit être aussi simple que souscrire. Ici, trois clics depuis
@@ -38018,6 +38136,140 @@ function testExercices(){
           } finally { currentUser=sauve; }})());
         ok('Un coach non plus n\'a d\'écran d\'abonnement',
           !aUnAbonnement({role:'coach',email:'c@t',status:'AUTONOMIE_PREMIUM'}));
+
+        // ── Bascule du payeur, étape 2 : la mécanique, sans interface ────
+        // Fabrique d'athlètes : `j` = jours depuis la dernière séance.
+        // Un athlète SANS séance porte un tableau vide, pas d'absence de clé :
+        // les deux existent en vrai, et les deux doivent compter pour zéro.
+        const _ath2=(id,coachId,j,nb)=>({id,email:id+'@t',role:'athlete',coachId,
+          sessions:(j==null)?[]:Array.from({length:nb||1},(_,k)=>
+            ({id:'s'+k,date:Date.now()-j*86400000}))});
+        ok('COACH_PALIERS : trois paliers, aux prix et quotas ATTENDUS',(()=>{
+          // Littéraux en dur, JAMAIS COACH_PALIERS[i].prix : un test qui lit la
+          // constante qu'il vérifie passe au vert quand on change la constante.
+          // C'est l'erreur que j'ai faite deux fois sur ce chantier.
+          if(COACH_PALIERS.length!==3) return _echec(COACH_PALIERS.length+' paliers');
+          const attendu=[['libre',0,1],['coach',19,15],['pro',39,Infinity]];
+          for(let i=0;i<3;i++){
+            const [cle,prix,quota]=attendu[i], p=COACH_PALIERS[i];
+            if(p.cle!==cle) return _echec('rang '+i+' : '+p.cle+' au lieu de '+cle);
+            if(p.prix!==prix) return _echec(cle+' à '+p.prix+' au lieu de '+prix);
+            if(p.quota!==quota) return _echec(cle+' : quota '+p.quota+' au lieu de '+quota);
+          }
+          return true;})());
+        ok('Aucun palier à 79, ni dans la constante ni dans le source',(()=>{
+          // Aiguille assemblée à l'exécution + production seule : sans les deux,
+          // ce test se trouve lui-même.
+          if(COACH_PALIERS.some(p=>p.prix===79)) return _echec('un palier à 79 existe');
+          const tout=document.documentElement.outerHTML;
+          const prod=tout.slice(0,tout.indexOf('function testExercices'));
+          const aig=['79'+' €','79'+'€','prix:'+'79'];
+          const t=aig.filter(m=>prod.indexOf(m)>=0);
+          return t.length?_echec('trouvé : '+t.join(', ')):true;})());
+        ok('getCoachQuota rend 1, 15 et l\'infini — et 1 sur un palier inventé',(()=>{
+          if(getCoachQuota('libre')!==1) return _echec('libre : '+getCoachQuota('libre'));
+          if(getCoachQuota('coach')!==15) return _echec('coach : '+getCoachQuota('coach'));
+          if(getCoachQuota('pro')!==Infinity) return _echec('pro : '+getCoachQuota('pro'));
+          // Un palier inventé ne doit JAMAIS valoir plus qu'aucun palier.
+          if(getCoachQuota('platine')!==1) return _echec('un palier inventé ouvre '+getCoachQuota('platine'));
+          return getCoachQuota(undefined)===1?true:_echec('sans palier : '+getCoachQuota(undefined));})());
+        ok('coachPlanDe : rien de choisi et valeur inventée se lisent « libre »',(()=>{
+          if(coachPlanDe({id:'c'})!=='libre') return _echec('dossier vierge : '+coachPlanDe({id:'c'}));
+          if(coachPlanDe(null)!=='libre') return _echec('sans dossier');
+          if(coachPlanDe({coachPlan:'platine'})!=='libre') return _echec('un palier inventé est retenu');
+          return coachPlanDe({coachPlan:'pro'})==='pro'?true:_echec('un palier réel est perdu');})());
+        ok('coachSubActif : « libre » est actif sans abonnement, pas les autres',(()=>{
+          if(!coachSubActif({id:'c'})) return _echec('le palier libre est réputé inactif');
+          if(coachSubActif({id:'c',coachPlan:'coach'}))
+            return _echec('un palier payant est actif sans son drapeau');
+          if(!coachSubActif({id:'c',coachPlan:'coach',coachSubActive:true}))
+            return _echec('le drapeau ne suffit pas');
+          return !coachSubActif(null)?true:_echec('aucun dossier vaut actif');})());
+        ok('countActiveAthletes : 0, 1, N, et le 61ᵉ jour ne compte plus',(()=>{
+          const c={id:'c1'};
+          if(countActiveAthletes(c,{})!==0) return _echec('cache vide ≠ 0');
+          if(countActiveAthletes(c,{a:_ath2('a','c1',5)})!==1) return _echec('un actif ≠ 1');
+          const trois={a:_ath2('a','c1',1),b:_ath2('b','c1',30),d:_ath2('d','c1',59)};
+          if(countActiveAthletes(c,trois)!==3) return _echec('trois actifs → '+countActiveAthletes(c,trois));
+          // 61 jours : au-delà de la fenêtre. 59 : dedans. La borne est
+          // éprouvée des DEUX côtés, sinon un décalage d'un jour passerait.
+          if(countActiveAthletes(c,{a:_ath2('a','c1',61)})!==0)
+            return _echec('un athlète inactif depuis 61 jours est encore compté');
+          if(countActiveAthletes(c,{a:_ath2('a','c1',59)})!==1)
+            return _echec('un athlète actif il y a 59 jours n\'est pas compté');
+          // Sans aucune séance : rattaché, mais pas actif.
+          if(countActiveAthletes(c,{a:_ath2('a','c1',null)})!==0)
+            return _echec('un athlète sans séance est compté actif');
+          return true;})());
+        ok('countActiveAthletes ne compte QUE les athlètes de CE coach',(()=>{
+          const c={id:'c1'};
+          const m={a:_ath2('a','c1',3),b:_ath2('b','c2',3),
+            // Un coach traîne dans le même cache et porte lui aussi des séances.
+            z:{id:'z',role:'coach',coachId:'c1',sessions:[{id:'s',date:Date.now()}]}};
+          const n=countActiveAthletes(c,m);
+          if(n!==1) return _echec('attendu 1, obtenu '+n);
+          return countActiveAthletes({},m)===0?true:_echec('un coach sans id compte quand même');})());
+        ok('Le compte se déclare NON FIABLE quand le cache est vide',(()=>{
+          // Un appareil neuf n'a rien rapatrié : afficher « 0 / 15 » à un coach
+          // qui suit douze personnes serait pire que ne rien afficher.
+          const c={id:'c1'};
+          if(countActiveAthletesFiable(c,{})) return _echec('cache vide déclaré fiable');
+          // Rattaché mais inactif : le cache EST peuplé, le compte est fiable
+          // et vaut zéro. Fiabilité et valeur sont deux questions distinctes.
+          if(!countActiveAthletesFiable(c,{a:_ath2('a','c1',null)}))
+            return _echec('un athlète connu mais inactif rend le compte non fiable');
+          return !countActiveAthletesFiable(c,{b:_ath2('b','c2',3)})
+            ?true:_echec('les athlètes d\'un AUTRE coach rendent le compte fiable');})());
+        ok('Le dépassement ALERTE et ne bloque AUCUN rattachement',(()=>{
+          const c={id:'c1',coachPlan:'coach',coachSubActive:true};
+          const m={};for(let i=0;i<16;i++) m['a'+i]=_ath2('a'+i,'c1',3);
+          if(countActiveAthletes(c,m)!==16) return _echec('16 attendus');
+          if(!coachQuotaDepasse(c,m)) return _echec('16 sur un quota de 15 ne dépasse pas');
+          if(coachQuotaDepasse({id:'c1',coachPlan:'pro'},m))
+            return _echec('le palier pro connaît une limite');
+          // LE POINT QUI COMPTE : aucun chemin de rattachement ne consulte le
+          // quota. On lit les fonctions RÉELLES, on ne se fie pas à l'intention.
+          for(const f of [linkToCoach,checkAccess]){
+            if(/coachQuotaDepasse|getCoachQuota|countActiveAthletes/.test(String(f)))
+              return _echec('le quota est consulté par '+(f.name||'?'));
+          }
+          return true;})());
+        ok('coachPalierRequis nomme le palier suivant sans rien décider',(()=>{
+          const att=[[0,'libre'],[1,'libre'],[2,'coach'],[15,'coach'],[16,'pro'],[900,'pro']];
+          for(const [n,c] of att) if(coachPalierRequis(n)!==c)
+            return _echec(n+' athlètes → '+coachPalierRequis(n)+' au lieu de '+c);
+          return true;})());
+        ok('L\'infini ne part JAMAIS dans un dossier',(()=>{
+          // JSON.stringify rend `null` pour Infinity, et un quota null se
+          // relirait comme zéro. D'où la règle : le quota vit dans la constante,
+          // jamais dans un champ persisté.
+          if(JSON.parse(JSON.stringify({q:Infinity})).q!==null)
+            return _echec('la prémisse est fausse, ce test ne veut rien dire');
+          const c={id:'c1',coachPlan:'pro',coachSubActive:true,coachPlanSince:1,coachPlanCycle:'mensuel'};
+          coachPlanDe(c);getCoachQuota(coachPlanDe(c));countActiveAthletes(c,{});
+          coachQuotaDepasse(c,{});coachSubActif(c);
+          const j=JSON.stringify(c);
+          if(/quota/.test(j)) return _echec('un quota a été écrit dans le dossier');
+          return j.indexOf('null')<0?true:_echec('un null est apparu : '+j);})());
+        ok('Aucun défaut n\'est rétro-écrit dans un dossier vierge',(()=>{
+          // Écrire les quatre champs partout coûterait un PUT du document entier
+          // par coach, pour n'apprendre à personne ce que l'absence dit déjà.
+          const c={id:'c1'};
+          const avant=JSON.stringify(c);
+          coachPlanDe(c);coachSubActif(c);coachQuotaDepasse(c,{});
+          countActiveAthletes(c,{});countActiveAthletesFiable(c,{});
+          return JSON.stringify(c)===avant?true:_echec('le dossier a été modifié : '+JSON.stringify(c));})());
+        ok('Étape 2 : la mécanique n\'a EFFLEURÉ aucun écran',(()=>{
+          // Le contrat de cette étape est « zéro changement d'interface ». Les
+          // deux prix coach ne doivent apparaître nulle part dans la page —
+          // ni dans un écran, ni dans un commentaire, sinon ce test s'y trouve.
+          const tout=document.documentElement.outerHTML;
+          const prod=tout.slice(0,tout.indexOf('function testExercices'));
+          const t=['19'+' €','39'+' €'].filter(m=>prod.indexOf(m)>=0);
+          if(t.length) return _echec('un prix coach est déjà affiché : '+t.join(', '));
+          // Et le paywall autonome reste intact : ce lot ne l'a pas touché.
+          return /9,95/.test(String(loadAccessGate))
+            ?true:_echec('la mention autonome a disparu de loadAccessGate');})());
 
         // ── Aucun texte n'affirme l'effectivité chez PayPal ──────────────
         ok('Le texte est en obligation de MOYENS, pas de résultat',(()=>{
