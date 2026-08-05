@@ -11330,6 +11330,146 @@ function saveCoachPdfLinkInline(){
 // même clé, donc renommer un exercice ne coupe plus son historique de charge.
 // Ce n'est PAS une clé de stockage : rien n'est écrit sous cette forme dans
 // sessions[n].data, qui reste indexé par le nom en clair.
+// ══════ BANQUE D'EXERCICES ══════
+// 406 fiches : illustration, guide d'exécution, repos, liens vidéo. Elles
+// viennent du guide du coach, extraites par scripts/seed_exercices.py.
+//
+// DEUX MOITIÉS, DEUX ENDROITS, ET C'EST DÉLIBÉRÉ :
+//
+//   • Les ILLUSTRATIONS sont des fichiers statiques de app/exercices/,
+//     servis publiquement. C'est ce qui permet à un athlète de voir l'image
+//     des exercices que son coach lui a prescrits SANS qu'on lui ouvre le
+//     catalogue. Il n'y a pas de serveur ici : sans ce choix, il faudrait
+//     une couche d'hydratation qui n'existe pas.
+//
+//   • Les MÉTADONNÉES vivent dans le nœud RTDB /exercices, en lecture
+//     réservée aux coachs par database.rules.json. C'est le seul contrôle
+//     d'accès RÉEL dont ce projet dispose. Un athlète qui appelle cette URL
+//     reçoit 401, et ce n'est pas une question de bouton masqué.
+//
+// LE GUIDE D'EXÉCUTION VU PAR L'ATHLÈTE ne vient donc PAS de la banque : il
+// est recopié dans sessions_config[].exercises[].description au moment où le
+// coach prescrit — ce que l'application fait déjà depuis toujours. La
+// conséquence, qu'il faut connaître : corriger une description dans la banque
+// ne met pas à jour les séances déjà écrites. Sans serveur, c'est le prix.
+const EXO_IMG_DOSSIER='exercices/';
+const EXO_INDEX_URL=EXO_IMG_DOSSIER+'index.json';
+const BANQUE_CLE='rc_banque_exos';
+// Une semaine : la banque ne bouge qu'à un nouveau seeding, et 256 Ko relus
+// à chaque ouverture pèseraient sur un quota de 10 Go partagé par tout le
+// monde. Le coach peut forcer la relecture.
+const BANQUE_TTL_MS=7*24*3600*1000;
+
+// Slug : la MÊME normalisation que exKey, plus les espaces en tirets. C'est
+// le seul lien entre un nom d'exercice et son illustration ; toute divergence
+// avec le script de seeding casserait 406 images d'un coup. Un test l'éprouve
+// sur des cas réels.
+function exSlug(nom){ const k=exKey(nom); return k?k.toLowerCase().replace(/ /g,'-'):''; }
+
+// Index PUBLIC des illustrations disponibles : rien qu'une liste de slugs.
+// Elle ne divulgue rien — les 416 noms sont en clair dans ce fichier depuis
+// toujours — et elle évite 406 requêtes 404 sur les exercices sans image.
+let _exoIndex=null, _exoIndexEnCours=null;
+async function chargerIndexIllustrations(){
+  if(_exoIndex) return _exoIndex;
+  if(_exoIndexEnCours) return _exoIndexEnCours;
+  _exoIndexEnCours=(async()=>{
+    try{
+      const r=await fetch(EXO_INDEX_URL);
+      if(!r.ok) throw new Error(r.status);
+      const l=await r.json();
+      _exoIndex=new Set(Array.isArray(l)?l:[]);
+    }catch(e){ _exoIndex=new Set(); }   // pas d'index : aucune image, pas d'erreur
+    _exoIndexEnCours=null;
+    return _exoIndex;
+  })();
+  return _exoIndexEnCours;
+}
+// PURE. Rend le chemin de l'illustration, ou null. Null tant que l'index
+// n'est pas chargé : jamais une URL qui produirait une image cassée.
+function illustrationDe(nom){
+  const sl=exSlug(nom);
+  if(!sl||!_exoIndex||!_exoIndex.has(sl)) return null;
+  return EXO_IMG_DOSSIER+sl+'.webp';
+}
+
+// ── Accès à la banque : coachs seulement ─────────────────────────────────
+// Garde D'INTERFACE. La vraie barrière est dans database.rules.json, et elle
+// tient même si celle-ci saute.
+function peutConsulterBanque(user){
+  // undefined → l'utilisateur courant. null → PERSONNE. Les deux ne disent
+  // pas la même chose, et les confondre ferait répondre « oui » à une
+  // question posée sur aucun dossier.
+  const u=(user===undefined)?currentUser:user;
+  return !!(u&&u.role==='coach');
+}
+let _banque=null;
+function _banqueUrl(){ return CLOUD._fbUrl.replace('/users.json','/exercices.json'); }
+// Rend le tableau des fiches, ou [] tant que rien n'est chargé. Ne charge
+// rien de lui-même : le chargement est explicite, et réservé aux coachs.
+function fichesBanque(){ return _banque?_banque.liste:[]; }
+function banqueEstChargee(){ return !!_banque; }
+// PURE. Retrouve une fiche par slug OU par nom, en passant par l'alias de
+// l'utilisateur : un exercice renommé doit continuer de trouver sa fiche.
+//
+// ficheBanque et NON ficheExercice : ce dernier nom est déjà pris depuis
+// FB-06 par la fiche de CONTRAINTES ARTICULAIRES (l. ~16930). Deux
+// déclarations du même nom, et c'est la dernière du fichier qui gagne —
+// silencieusement.
+function ficheBanque(ref,user){
+  if(!_banque||!ref) return null;
+  const direct=_banque.parSlug[ref];
+  if(direct) return direct;
+  const k=_aliasPour(exKey(ref),user||currentUser);
+  return _banque.parSlug[k.toLowerCase().replace(/ /g,'-')]||null;
+}
+function _indexerBanque(liste){
+  const parSlug={};
+  for(const f of (liste||[])) if(f&&f.slug) parSlug[f.slug]=f;
+  return {liste:(liste||[]),parSlug,at:Date.now()};
+}
+// Réseau d'abord, cache ensuite. Un coach hors ligne garde la banque qu'il
+// avait ; un coach qui n'y a jamais accédé n'a rien, et l'écran le dira
+// plutôt que de tourner dans le vide.
+async function chargerBanque(force){
+  if(!peutConsulterBanque()) return null;
+  if(_banque&&!force) return _banque;
+  if(!force){
+    try{
+      const brut=localStorage.getItem(BANQUE_CLE);
+      if(brut){
+        const d=JSON.parse(brut);
+        if(d&&Array.isArray(d.exercices)&&(Date.now()-(d.at||0))<BANQUE_TTL_MS){
+          _banque=_indexerBanque(d.exercices);
+          return _banque;
+        }
+      }
+    }catch(e){}
+  }
+  try{
+    const tok=await CLOUD._getToken();
+    if(!tok) return _banque;
+    const ctrl=new AbortController(); setTimeout(()=>ctrl.abort(),8000);
+    const r=await fetch(_banqueUrl()+'?auth='+tok,{signal:ctrl.signal});
+    if(!r.ok) return _banque;                 // 401 pour un athlète : normal
+    const t=await r.text();
+    try{ _quotaCompter('in',t.length); }catch(e){}
+    const d=t?JSON.parse(t):null;
+    const liste=(d&&Array.isArray(d.exercices))?d.exercices:null;
+    if(!liste) return _banque;
+    _banque=_indexerBanque(liste);
+    try{ localStorage.setItem(BANQUE_CLE,JSON.stringify({at:Date.now(),exercices:liste})); }catch(e){}
+  }catch(e){}
+  return _banque;
+}
+// Vidage du cache local. Appelé à la déconnexion : la banque est réservée
+// aux coachs, elle n'a rien à faire dans le stockage d'un athlète qui se
+// connecterait ensuite sur le même appareil.
+function oublierBanque(){
+  _banque=null;
+  try{ localStorage.removeItem(BANQUE_CLE); }catch(e){}
+}
+
 function exKey(nom){
   return String(nom||'')
     .toUpperCase()
@@ -27980,7 +28120,7 @@ function toastSync(localOk,promesse,succes,perdu){
       return false;
     });
 }
-function silentLogout(){DB.del('session');currentUser=null;CLOUD.signOut();}
+function silentLogout(){DB.del('session');currentUser=null;CLOUD.signOut();oublierBanque();}
 function logout(){
   if(!confirm('Se déconnecter ?')) return;
   // Le compte quitte le registre : ses jetons viennent d'être révoqués, le
@@ -38675,6 +38815,118 @@ function testExercices(){
             'periode d'+'\'essai','premier mois '+'offert','gratuitement '+'pendant'];
           const t=aig.filter(m=>prod.indexOf(m)>=0);
           return t.length?_echec('promesse de durée : '+t.join(' | ')):true;})());
+
+        // ── Banque d'exercices, lot 1 : le modèle ────────────────────────
+        ok('exSlug produit EXACTEMENT le slug du script de seeding',(()=>{
+          // LE POINT DE RUPTURE DU LOT. exSlug côté application et slugifier()
+          // côté Python doivent rendre la même chaîne : c'est le seul lien
+          // entre un nom d'exercice et son illustration. La moindre
+          // divergence casse 406 images d'un coup, en silence.
+          // Les paires ci-dessous sont RECOPIÉES de banque.json, pas
+          // recalculées : un test qui refait le calcul qu'il vérifie ne
+          // vérifie rien.
+          const paires=[
+            ['ABDUCTION DEBOUT POULIE/ELASTIQUE','abduction-debout-poulie-elastique'],
+            ['CALF EXTENSION (MACHINE)','calf-extension-machine'],
+            ['CURL BARRE POULIE/ÉLASTIQUE','curl-barre-poulie-elastique'],
+            ['CURL CONCENTRÉ','curl-concentre'],
+            ['3D ABDUCTOR','3d-abductor'],
+            ['DÉVELOPPÉ COUCHÉ BARRE','developpe-couche-barre'],
+            ['AB CRUNCH BENCH','ab-crunch-bench']];
+          for(const [nom,attendu] of paires){
+            const obtenu=exSlug(nom);
+            if(obtenu!==attendu) return _echec(nom+' → '+obtenu+' au lieu de '+attendu);
+          }
+          return exSlug('')===''&&exSlug(null)===''
+            ?true:_echec('un nom vide ne rend pas une chaîne vide');})());
+        ok('illustrationDe ne rend JAMAIS une URL sans image derrière',(()=>{
+          // Un exercice sans illustration doit rendre null, pas un chemin qui
+          // produirait une image cassée. C'est ce que le cahier des charges
+          // appelle « ne pas casser le layout ».
+          const sauve=_exoIndex;
+          try{
+            _exoIndex=null;   // index pas encore chargé
+            if(illustrationDe('DÉVELOPPÉ COUCHÉ BARRE')!==null)
+              return _echec('une URL est rendue avant le chargement de l\'index');
+            _exoIndex=new Set(['developpe-couche-barre']);
+            if(illustrationDe('DÉVELOPPÉ COUCHÉ BARRE')!=='exercices/developpe-couche-barre.webp')
+              return _echec('chemin inattendu : '+illustrationDe('DÉVELOPPÉ COUCHÉ BARRE'));
+            // Exercice absent de l'index : null, sans exception.
+            if(illustrationDe('EXERCICE QUI N EXISTE PAS')!==null)
+              return _echec('un exercice inconnu rend une URL');
+            return illustrationDe('')===null&&illustrationDe(null)===null
+              ?true:_echec('un nom vide rend une URL');
+          } finally { _exoIndex=sauve; }})());
+        ok('peutConsulterBanque : coach oui, athlète NON',(()=>{
+          if(!peutConsulterBanque({role:'coach',email:'c@t'})) return _echec('un coach est refusé');
+          if(peutConsulterBanque({role:'athlete',email:'a@t'})) return _echec('un athlète est accepté');
+          if(peutConsulterBanque({email:'x@t'})) return _echec('un dossier sans rôle est accepté');
+          // Le créateur est coach : il passe par la même porte, pas par une
+          // exception qui finirait par diverger.
+          if(!peutConsulterBanque({role:'coach',email:CREATOR_EMAIL})) return _echec('le créateur est refusé');
+          return !peutConsulterBanque(null)?true:_echec('aucun dossier vaut autorisé');})());
+        ok('chargerBanque REFUSE un athlète sans même toucher au réseau',(()=>{
+          // La vraie barrière est dans database.rules.json — un athlète reçoit
+          // 401. Celle-ci lui évite une requête inutile, et surtout elle
+          // garantit qu'aucun chemin d'interface ne peuplera _banque pour lui.
+          const src=String(chargerBanque).replace(/\s+/g,'');
+          if(src.indexOf('if(!peutConsulterBanque())returnnull')<0)
+            return _echec('la garde d\'entrée a disparu');
+          const iGarde=String(chargerBanque).indexOf('peutConsulterBanque');
+          const iFetch=String(chargerBanque).indexOf('fetch(');
+          return (iGarde>=0&&iFetch>iGarde)
+            ?true:_echec('le réseau est appelé avant la garde');})());
+        ok('L\'URL de la banque vise bien /exercices',(()=>{
+          const u=_banqueUrl();
+          if(!/\/exercices\.json$/.test(u)) return _echec('URL : '+u);
+          return u.indexOf('users.json')<0?true:_echec('l\'URL pointe encore sur users');})());
+        ok('ficheBanque retrouve par slug, par nom, et par alias',(()=>{
+          const sauve=_banque;
+          try{
+            _banque=_indexerBanque([{slug:'developpe-couche-barre',nom:'DÉVELOPPÉ COUCHÉ BARRE',
+              execution:'Descendre la barre jusqu\'aux pectoraux.'}]);
+            if(!ficheBanque('developpe-couche-barre')) return _echec('introuvable par slug');
+            if(!ficheBanque('Développé couché barre')) return _echec('introuvable par nom');
+            if(ficheBanque('EXERCICE INCONNU')) return _echec('un inconnu rend une fiche');
+            // L'alias de l'utilisateur DOIT être traversé : un exercice
+            // renommé par le coach continue de trouver sa fiche.
+            const u={exAlias:{'DC BARRE':'DEVELOPPE COUCHE BARRE'}};
+            return ficheBanque('DC barre',u)?true:_echec('l\'alias n\'est pas traversé');
+          } finally { _banque=sauve; }})());
+        ok('La banque n\'écrit RIEN dans le dossier de l\'utilisateur',(()=>{
+          // Elle est volumineuse — 256 Ko — et chaque écriture du dossier le
+          // lit ET le réécrit. L'y recopier ferait exploser le quota.
+          for(const f of [exSlug,illustrationDe,ficheBanque,fichesBanque,
+                          peutConsulterBanque,banqueEstChargee,_indexerBanque]){
+            const src=String(f);
+            if(/saveUser\(|DB\.set\(|currentUser\.[a-z]+\s*=[^=]/.test(src))
+              return _echec((f.name||'?')+' écrit dans le dossier');
+          }
+          // Et le cache local est bien un cache local, pas le dossier.
+          return /localStorage/.test(String(chargerBanque))
+            ?true:_echec('la banque n\'est pas mise en cache localement');})());
+        ok('oublierBanque efface la mémoire ET le cache',(()=>{
+          const sauve=_banque;
+          try{
+            _banque=_indexerBanque([{slug:'x',nom:'X'}]);
+            localStorage.setItem(BANQUE_CLE,'{"at":1,"exercices":[]}');
+            oublierBanque();
+            if(banqueEstChargee()) return _echec('la banque est encore en mémoire');
+            if(localStorage.getItem(BANQUE_CLE)) return _echec('le cache local subsiste');
+            // Et la déconnexion y passe : silentLogout est le chemin obligé.
+            return /oublierBanque\(\)/.test(String(silentLogout))
+              ?true:_echec('la déconnexion n\'oublie pas la banque');
+          } finally { _banque=sauve; try{localStorage.removeItem(BANQUE_CLE);}catch(e){} }})());
+        ok('fichesBanque rend un tableau vide, jamais null',(()=>{
+          const sauve=_banque;
+          try{
+            _banque=null;
+            const v=fichesBanque();
+            if(!Array.isArray(v)||v.length) return _echec('sans banque : '+JSON.stringify(v));
+            if(banqueEstChargee()) return _echec('banqueEstChargee ment');
+            _banque=_indexerBanque([{slug:'a',nom:'A'},{slug:'b',nom:'B'}]);
+            return fichesBanque().length===2?true:_echec('mauvais compte');
+          } finally { _banque=sauve; }})());
 
         // ── Inscription coach en self-service ────────────────────────────
         // La suite ne portait AUCUNE assertion sur doRegister ni sur

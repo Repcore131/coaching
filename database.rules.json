@@ -290,6 +290,29 @@
       ".write": "auth != null && newData.hasChild('n') && ((!data.exists() && newData.child('n').val() === 1) || (data.exists() && newData.child('n').val() === data.child('n').val() + 1))",
       "n": { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() < 1000000" },
       "$autre": { ".validate": false }
+    },
+
+    // Banque d exercices : 406 fiches, illustration mise a part.
+    //
+    // LECTURE RESERVEE AUX COACHS, et c est le SEUL controle d acces reel dont
+    // ce projet dispose : il n y a pas de serveur, pas de middleware, pas
+    // d endpoint a proteger. Un athlete qui appelle cette URL avec son jeton
+    // recoit 401, et ce n est pas une question d interface.
+    // Le createur est coach, il passe donc par la meme regle.
+    //
+    // CE QUI N EST PAS PROTEGE, ET QU IL FAUT SAVOIR : les ILLUSTRATIONS sont
+    // des fichiers statiques de app/exercices/, servis publiquement par GitHub
+    // Pages. Leur URL est devinable depuis le nom de l exercice. C est assume :
+    // les proteger demanderait un serveur. Et c est ce qui permet a un athlete
+    // de voir l illustration des exercices que son coach lui a prescrits sans
+    // qu on lui ouvre le catalogue — exactement ce que le cahier des charges
+    // demande, obtenu sans couche d hydratation cote serveur.
+    //
+    // ECRITURE : le createur seul. Le seeding est un acte de publication, pas
+    // une action de produit ; aucun ecran n ecrit ici.
+    "exercices": {
+      ".read": "auth != null && root.child('users').child(auth.token.email.replace('.', ',')).child('role').val() === 'coach'",
+      ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'"
     }
   }
 }
