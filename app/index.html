@@ -15161,6 +15161,7 @@ function _blocExo(idx,estSS){
             <div class="sub" style="font-size:12px;margin-top:3px">${ex.series} séries × ${escapeHtml(ex.reps)} reps${ex._cycleAdjusted?' <span style="color:var(--orange)">(−1 série cycle)</span>':''}</div>
           </div>
         </div>
+        ${_htmlBoutonRemplacer(idx,ex)}
         <button class="hit44" id="wo-calc-btn-${idx}" style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:11px;padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Vue tableau</button>
       </div>
 
@@ -19392,6 +19393,102 @@ function _jeRemplace(idx){
           </div></div>`).join('')}
         ${blocDisclaimerSante()}
       </div></div>`);
+}
+// ── Remplacer sans attendre la douleur ────────────────────────────────────
+// Le bouton « Je remplace » n'existait que derrière TROIS portes en série :
+// une contrainte déclarée, une zone notée par le coach, et un autre schéma
+// noté strictement moins chargeant. L'athlète à qui la machine est prise, ou
+// qui ne sent pas le mouvement, n'avait aucun chemin — et le seul qui
+// existait passait par la déclaration d'une douleur.
+//
+// LA SOURCE EST LOCALE, ET CE N'EST PAS UN RACCOURCI. La banque d'exercices
+// est réservée aux coachs, côté interface ET côté règles Firebase ; en séance,
+// c'est l'athlète qui est connecté. Les noms du guide sont dans le fichier :
+// disponibles hors ligne, sans requête, et sans dépendre du plan Spark.
+//
+// CE LOT NE CLASSE RIEN. La liste est alphabétique et ne dépend ni du schéma
+// moteur ni des muscles de l'exercice remplacé. Le classement par pertinence
+// est le lot suivant, et l'écran le dit à l'athlète plutôt que de laisser
+// croire à un tri qui n'existe pas.
+const REMPL_MAX_LISTE=40;
+let _remplNoms=null, _remplIdx=null;
+// PURE une fois construite. Les noms du guide, sans le posing — poser n'est
+// pas un mouvement de remplacement.
+function _nomsRemplacement(){
+  if(_remplNoms) return _remplNoms;
+  const v=new Set();
+  for(const sc in SCHEMAS_BRUT){
+    if(sc==='posing') continue;
+    for(const n of SCHEMAS_BRUT[sc].split('~')) if(n) v.add(n);
+  }
+  _remplNoms=[...v].sort();
+  return _remplNoms;
+}
+// PURE. Les candidats, filtrés par la recherche. L'exercice courant ne se
+// propose pas lui-même. Tous les mots doivent être présents, comme dans la
+// banque : un ET, pas un OU.
+function candidatsRemplacement(nomCourant,q){
+  const cur=exKey(nomCourant||'');
+  const mots=_normRech(q).split(' ').filter(Boolean);
+  return _nomsRemplacement().filter(n=>{
+    if(exKey(n)===cur) return false;
+    if(!mots.length) return true;
+    const c=_normRech(n);
+    return mots.every(m=>c.indexOf(m)>=0);
+  });
+}
+// Le bouton. Rien sur un cardio — il n'y a pas de mouvement à échanger — et
+// rien sous drapeau : tant qu'un drapeau est levé, l'app ne propose plus, elle
+// renvoie. C'est la même règle que pour les substituts de contrainte.
+function _htmlBoutonRemplacer(idx,ex){
+  if(!ex||!ex.name) return '';
+  if(isCardio(ex)) return '';
+  if(drapeauQuelconqueActif(currentUser)) return '';
+  return `<button class="hit44" onclick="ouvrirRemplacement(${idx})"
+    style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:11px;padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;flex-shrink:0">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>Remplacer</button>`;
+}
+function ouvrirRemplacement(idx){
+  const ex=((typeof woState!=='undefined'&&woState&&woState.exercises)||[])[idx];
+  if(!ex) return false;
+  if(drapeauQuelconqueActif(currentUser)){
+    toast('Rien n\'est proposé tant que le drapeau est levé.','var(--orange)'); return false; }
+  _remplIdx=idx;
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',
+    `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
+      <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:16px 16px 0 0;padding:18px;width:100%;max-width:520px;max-height:88vh;display:flex;flex-direction:column">
+        <div style="font-size:15px;font-weight:800;margin-bottom:3px">Remplacer pour aujourd'hui</div>
+        <div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:10px">
+          Ton programme n'est pas modifié. Ton coach verra l'échange.
+          Choisis toi-même : l'app ne trie pas encore ces mouvements pour toi.
+        </div>
+        <input id="rempl-q" type="search" inputmode="search" placeholder="Chercher un mouvement"
+          oninput="_rendreListeRemplacement()" style="width:100%;margin-bottom:10px">
+        <div id="rempl-liste" style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch"></div>
+      </div></div>`);
+  _rendreListeRemplacement();
+  return true;
+}
+function _rendreListeRemplacement(){
+  const z=document.getElementById('rempl-liste');
+  if(!z) return false;
+  const ex=((typeof woState!=='undefined'&&woState&&woState.exercises)||[])[_remplIdx]||{};
+  const q=(document.getElementById('rempl-q')||{}).value||'';
+  const l=candidatsRemplacement(ex.name,q);
+  if(!l.length){
+    z.innerHTML='<div style="font-size:11px;color:var(--sub);line-height:1.6;padding:8px 2px">'
+      +'Aucun mouvement ne correspond. Efface ta recherche pour revoir la liste.</div>';
+    return true;
+  }
+  const vus=l.slice(0,REMPL_MAX_LISTE);
+  // Le reste n'est pas caché en silence : on dit combien, et quoi faire.
+  z.innerHTML=vus.map(n=>`<button onclick="_appliquerSubstitut(${_remplIdx},${JSON.stringify(n).replace(/"/g,'&quot;')})"
+      class="hit44" style="display:block;width:100%;text-align:left;min-height:44px;background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:6px;font-size:12px;color:#ddd;cursor:pointer">`
+      +escapeHtml(n.toLowerCase())+'</button>').join('')
+    +(l.length>vus.length?'<div style="font-size:10.5px;color:var(--text-faint);line-height:1.6;padding:4px 2px 2px">'
+      +(l.length-vus.length)+' autres mouvements. Affine ta recherche pour les voir.</div>':'');
+  return true;
 }
 function _appliquerSubstitut(idx,nom){
   const ex=(woState.exercises||[])[idx];
@@ -43557,6 +43654,110 @@ function testExercices(){
           // Un seul onclick dans la vue : aucun. L'export est dans la topbar.
           return /peutConsulterBanque|role!=='coach'/.test(String(ouvrirGrilleCharge))
             ?true:_echec('ouvrirGrilleCharge n\'a pas de garde de rôle');})());
+        // ── Substitution lot 1 : le bouton ───────────────────────────────
+        (()=>{
+        const _woAv=(typeof woState!=='undefined')?woState:undefined;
+        const _usAv=currentUser;
+        const _restaurer=()=>{ woState=_woAv; currentUser=_usAv; };
+        currentUser={id:'a1',email:'a@t',role:'athlete',fname:'A'};
+        ok('Le bouton Remplacer existe SANS aucune douleur déclarée',(()=>{
+          // Le cas qui n'existait pas : aucun chemin vers la substitution ne
+          // s'ouvrait sans qu'une gêne soit d'abord déclarée.
+          const h=_htmlBoutonRemplacer(0,{name:'DEVELOPPE COUCHE BARRE',series:4,reps:'8'});
+          if(!/ouvrirRemplacement\(0\)/.test(h)) return _echec('aucun bouton');
+          if(!/Remplacer/.test(h)) return _echec('le bouton n\'est pas nommé');
+          // Et il est bien posé dans le rendu de l'exercice, pas seulement
+          // défini dans le vide.
+          return /_htmlBoutonRemplacer\(idx,ex\)/.test(String(_blocExo))
+            ?true:_echec('le bouton n\'est pas rendu par _blocExo');})());
+        ok('Aucun bouton Remplacer sur un cardio',
+           _htmlBoutonRemplacer(0,{name:'COURSE',reps:'20 min'})==='' 
+           &&_htmlBoutonRemplacer(0,{name:''})==='' 
+           &&_htmlBoutonRemplacer(0,null)==='');
+        ok('Sous drapeau, aucun bouton et aucune ouverture',(()=>{
+          // Même règle que les substituts de contrainte : tant qu'un drapeau
+          // est levé, l'app ne propose plus, elle renvoie.
+          woState={exercises:[{name:'DEVELOPPE COUCHE BARRE',series:4,reps:'8'}],
+            sessionData:{},currentEx:0};
+          poserDrapeauRouge(currentUser,'epaule',['irradiation']);
+          const h=_htmlBoutonRemplacer(0,woState.exercises[0]);
+          const ouvert=ouvrirRemplacement(0);
+          const modale=!!document.getElementById('modal-overlay');
+          leverDrapeauRouge(currentUser);
+          if(h!=='') return _echec('le bouton reste affiché sous drapeau');
+          if(ouvert!==false) return _echec('l\'écran s\'ouvre quand même');
+          if(modale) return _echec('une modale a été posée sous drapeau');
+          // Drapeau levé : le bouton revient.
+          return _htmlBoutonRemplacer(0,woState.exercises[0])!==''
+            ?true:_echec('le bouton ne revient pas après la levée');})());
+        ok('La liste ne propose jamais l\'exercice courant lui-même',(()=>{
+          const l=candidatsRemplacement('DEVELOPPE COUCHE BARRE','');
+          if(!l.length) return _echec('liste vide');
+          if(l.some(n=>exKey(n)===exKey('DEVELOPPE COUCHE BARRE')))
+            return _echec('l\'exercice courant se propose lui-même');
+          // Le posing n'est pas un mouvement de remplacement.
+          if(l.some(n=>/DOUBLE BICEPS|LAT SPREAD|VACUUM/.test(n)))
+            return _echec('le posing est proposé');
+          return true;})());
+        ok('La recherche ignore accents et casse, et exige TOUS les mots',(()=>{
+          const a=candidatsRemplacement('','couché barre');
+          if(!a.length) return _echec('« couché barre » ne rend rien');
+          if(!a.some(n=>exKey(n)==='DEVELOPPE COUCHE BARRE'))
+            return _echec('le mouvement exact est absent');
+          // Un ET, pas un OU : « couché » seul rend plus que « couché barre ».
+          if(candidatsRemplacement('','couche').length<=a.length)
+            return _echec('deux mots élargissent au lieu de resserrer');
+          // Une requête qui ne correspond à rien rend zéro, pas tout.
+          return candidatsRemplacement('','zorglub').length===0
+            ?true:_echec('une requête absurde rend des résultats');})());
+        ok('Le lot 1 ne CLASSE rien : la liste ne dépend pas de l\'exercice',(()=>{
+          // Garde-fou de périmètre. Si un tri par pertinence apparaissait ici,
+          // le lot 2 aurait été livré en douce avec le lot 1.
+          const a=candidatsRemplacement('DEVELOPPE COUCHE BARRE','');
+          const b=candidatsRemplacement('LEG CURL ASSIS','');
+          const communs=a.filter(n=>b.indexOf(n)>=0);
+          const ordreA=communs.map(n=>a.indexOf(n));
+          for(let i=1;i<ordreA.length;i++) if(ordreA[i]<ordreA[i-1])
+            return _echec('l\'ordre change selon l\'exercice remplacé');
+          // Et l'ordre est bien alphabétique, pas un classement déguisé.
+          const trie=a.slice().sort();
+          return a.join('|')===trie.join('|')
+            ?true:_echec('la liste n\'est pas alphabétique');})());
+        ok('Choisir remplace pour aujourd\'hui, sans toucher au programme',(()=>{
+          // Réutilise _appliquerSubstitut tel quel : journal, séries remises à
+          // zéro, sessions_config intact.
+          currentUser={id:'a1',email:'a@t',role:'athlete',
+            sessions_config:[{day:'Lundi',name:'HAUT',active:true,
+              exercises:[{name:'DEVELOPPE COUCHE BARRE',series:4,reps:'8'}]}]};
+          woState={exercises:[{name:'DEVELOPPE COUCHE BARRE',series:4,reps:'8'}],
+            sessionData:{0:{sets:[{weight:'40',reps:'10',done:true}]}},
+            currentEx:0,startTime:Date.now(),progName:'Push'};
+          const ouvert=ouvrirRemplacement(0);
+          if(!ouvert) return _echec('la modale ne s\'ouvre pas');
+          if(!document.getElementById('rempl-liste')) return _echec('aucune liste rendue');
+          _appliquerSubstitut(0,'LEG EXTENSION');
+          if(woState.exercises[0].name!=='LEG EXTENSION') return _echec('l\'exercice n\'a pas changé');
+          if(currentUser.sessions_config[0].exercises[0].name!=='DEVELOPPE COUCHE BARRE')
+            return _echec('le PROGRAMME a été modifié');
+          if((woState.substitutions||[]).length!==1) return _echec('aucun journal');
+          if(woState.substitutions[0].de!=='DEVELOPPE COUCHE BARRE'
+            ||woState.substitutions[0].vers!=='LEG EXTENSION') return _echec('journal faux');
+          if(woState.sessionData[0].sets.some(x=>x.weight))
+            return _echec('les charges de l\'exercice précédent ont été gardées');
+          closeModal();
+          return true;})());
+        ok('Le bouton conditionnel « Je remplace » reste conditionnel',(()=>{
+          // Le nouveau bouton est rendu par _blocExo, PAS par le bloc de
+          // contrainte : l'assertion qui verrouille « sans substitut, aucun
+          // bouton » ne doit pas pouvoir être satisfaite par le nouveau.
+          currentUser={id:'a1',email:'a@t',role:'athlete'};
+          const src=String(_blocContrainteSeance);
+          if(/_htmlBoutonRemplacer|ouvrirRemplacement/.test(src))
+            return _echec('le bloc de contrainte rend le bouton inconditionnel');
+          return !/ouvrirRemplacement/.test(_htmlBoutonRemplacer(0,{name:'COURSE',reps:'20 min'})+'x')
+            ?true:_echec('un cardio porte le bouton');})());
+        _restaurer();
+        })();
         ok('fichesBanque rend un tableau vide, jamais null',(()=>{
           const sauve=_banque;
           try{
