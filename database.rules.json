@@ -6,6 +6,17 @@
 
         ".write": "auth != null && (\n  auth.token.email.replace('.', ',') === $emailKey ||\n  (data.child('coachEmailKey').val() !== null &&\n   auth.token.email.replace('.', ',') === data.child('coachEmailKey').val())\n)",
 
+        // Journal RGPD : la DATE du dernier export, et rien d autre. Ni son
+        // contenu, ni sa taille, ni ce qui a ete demande. /users n a pas de
+        // "$autre": false — l ecriture passerait donc sans cette regle — mais
+        // on nomme le champ pour qu il soit BORNE et que la structure reste
+        // lisible : un journal qui grossirait sans contrainte finirait par
+        // porter autre chose qu une date.
+        "rgpd": {
+          "dernierExport": { ".validate": "newData.isNumber()" },
+          "$autre": { ".validate": false }
+        },
+
         "coachEmailKey": {
           ".validate": "auth.token.email.replace('.', ',') === $emailKey || (data.exists() && newData.val() === data.val())"
         }

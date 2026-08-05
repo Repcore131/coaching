@@ -1369,6 +1369,15 @@ const COACH_PHOTO='icons/coach.jpg';
           </div>
           <p class="sub" style="font-size:11px;line-height:1.6;margin-bottom:14px">Synchronisation automatique et sécurisée. Tes données sont partagées en temps réel sur tous tes appareils connectés avec les mêmes identifiants.</p>
           <div id="cloud-sw-version" style="font-size:10px;color:var(--text-faint);margin-bottom:12px"></div>
+        </div>
+
+        <!-- Mes données : article 15 (accès) et article 20 (portabilité). -->
+        <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px">
+          <div style="font-weight:800;font-size:14px;margin-bottom:4px">Mes données</div>
+          <div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:12px">Tout ce que RepCore conserve à ton sujet, dans un fichier que tu gardes. Disponible à tout moment, même si ton accès a expiré.</div>
+          <button class="btn btn-red" style="width:100%;margin-bottom:8px" onclick="exporterMesDonnees()">Télécharger tout ce que RepCore sait de moi</button>
+          <button class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:10px" onclick="voirContenuExport()">Voir ce que contient l'export</button>
+          <div id="exp-manifeste" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:10px"></div>
           <div id="cloud-qr-btn" style="display:none;margin-bottom:12px">
             <button class="btn btn-red" onclick="CLOUD.showQR()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg> Scanner sur un autre appareil →</button>
           </div>
@@ -6338,6 +6347,253 @@ async function _migrerSantePriveeLocale(){
     await CLOUD.pushOne(u.email,u);
     return {constantes:cst.length,analyses:ana.length};
   }catch(e){ console.warn('[RepCore] migration santé privée :',e); return null; }
+}
+// ══════════ EXPORT INTÉGRAL — ARTICLES 15 ET 20 ══════════
+// Un export incomplet est PIRE qu'une absence d'export : il donne l'illusion
+// d'avoir répondu. Tout ce qui n'est pas exportable est donc NOMMÉ dans le
+// manifeste, avec sa raison.
+//
+// LE PIÈGE CENTRAL : un export bâti sur le seul objet currentUser raterait
+// constantes, analyses, grossesse et pes — ils vivent dans sante_privee,
+// hors de users/. On lit les DEUX nœuds, explicitement.
+//
+// Et un fait mesuré, contraire à ce qu'on croit souvent ici : cycle,
+// contraception, SOPK, thyroïde, traitements et statut hormonal vivent dans
+// users/, PAS dans sante_privee — ils sont délibérément visibles du coach,
+// qui ajuste des repères avec. L'export les prend donc par le premier nœud.
+//
+// _validateAthletePkg n'est PAS réutilisée : douze champs sur quatre-vingt-dix.
+const EXPORT_AVERTISSEMENT='CE FICHIER CONTIENT DES DONNÉES DE SANTÉ EN CLAIR. '
+  +'Il n\'est ni chiffré ni protégé par mot de passe. Ne le dépose pas sur un '
+  +'service partagé et ne l\'envoie pas par un canal que tu ne maîtrises pas.';
+// Catégories annoncées dans privacy.html qui ne PEUVENT pas figurer, et
+// pourquoi. Les taire rendrait l'export silencieusement incomplet.
+const EXPORT_NON_INCLUS=Object.freeze([
+  Object.freeze({categorie:'Photos de plan alimentaire (diète stricte)',
+    raison:'Stockées uniquement sur cet appareil (localStorage), jamais synchronisées : elles ne font partie d\'aucun dossier.'}),
+  Object.freeze({categorie:'Fichiers vidéo d\'exécution',
+    raison:'Hébergés chez Cloudinary. Seules les URL figurent dans « medias » ; les fichiers se demandent par écrit.'}),
+  Object.freeze({categorie:'Fiche programme au format PDF',
+    raison:'Hébergée chez Firebase Storage. Seule l\'URL figure dans « medias ».'}),
+  Object.freeze({categorie:'Jeton d\'authentification',
+    raison:'Secret technique de connexion. L\'exporter reviendrait à exporter un mot de passe.'}),
+  Object.freeze({categorie:'Profil de ton coach',
+    raison:'Données d\'un tiers. Un export ne contient jamais les données de quelqu\'un d\'autre.'}),
+  Object.freeze({categorie:'Compteurs techniques (quota, mesure de tunnel)',
+    raison:'Agrégats anonymes sans lien avec ton compte : ils ne te concernent pas individuellement.'}),
+  Object.freeze({categorie:'Brouillon de séance en cours',
+    raison:'État transitoire de l\'écran, effacé à la fin de la séance.'})
+]);
+// Les URL de médias, sans les fichiers. Ta règle : aucun contenu embarqué.
+function _exportMedias(u){
+  const out=[];
+  try{
+    for(const v of (u.videos||[])) if(v&&v.url)
+      out.push({type:'video',url:v.url,exercice:v.exercice||v.nom||'',date:v.date||null});
+  }catch(e){}
+  try{ if(u.programPdfUrl) out.push({type:'pdf',url:u.programPdfUrl,nom:u.programPdfName||''}); }catch(e){}
+  try{
+    for(const b of (u.bilans||[]))
+      for(const k of Object.keys(b||{}))
+        if(/photo/i.test(k)&&typeof b[k]==='string'&&/^https?:/.test(b[k]))
+          out.push({type:'photo',url:b[k],date:b.date||null});
+  }catch(e){}
+  return out;
+}
+const EXPORT_MEDIAS_MARCHE='Ces fichiers ne sont pas inclus dans l\'export. '
+  +'Les URL ci-dessus permettent de les télécharger tant qu\'ils existent. '
+  +'Pour en obtenir une copie durable, écris à '+CREATOR_EMAIL+' en '
+  +'mentionnant ton adresse de compte : la réponse est due sous un mois '
+  +'(RGPD art. 12.3).';
+// Charge les DEUX nœuds. Réseau d'abord, cache local en repli — et le
+// manifeste DIT lequel a servi. Un export amputé qui ne se déclare pas
+// amputé est un piège pour celui qui s'en sert.
+//
+// DISPONIBLE SUR UN COMPTE EXPIRÉ, IMPAYÉ, OU SANS COACH. Règle cardinale :
+// le droit d'accès ne se suspend pas pour défaut de paiement.
+async function _chargerExportComplet(user){
+  const u=user||currentUser;
+  if(!u||!u.email) return null;
+  const src={profil:'local',sante_privee:'absent'};
+  const notes=[];
+  // 1. Le dossier. Le local fait foi s'il est plus complet : c'est lui que
+  // l'utilisateur voit, et un export doit refléter ce qu'il a sous les yeux.
+  let profil={...u};
+  try{
+    if(CLOUD.ok&&CLOUD.ok()){
+      const dist=await CLOUD.pullUser(u.email);
+      if(dist&&typeof dist==='object'){
+        profil=Object.assign({},dist,u);   // le local prime, champ par champ
+        src.profil='réseau + local';
+      } else {
+        notes.push('Le dossier distant n\'a pas pu être lu : cet export repose sur les données de cet appareil. Il peut manquer ce qui a été saisi ailleurs et pas encore redescendu.');
+      }
+    } else {
+      notes.push('Hors ligne au moment de l\'export : seules les données de cet appareil y figurent.');
+    }
+  }catch(e){
+    notes.push('Lecture du dossier distant en échec ('+(e&&e.message||'erreur')+') : export construit sur cet appareil.');
+  }
+  // Jamais dans un export : ce sont des secrets, pas des données personnelles.
+  for(const k of ['pwd','pwdHash','_st','_stb64','_sk']) delete profil[k];
+  // 2. Le nœud privé. SANS LUI, l'export raterait exactement l'article 9.
+  let prive=null;
+  try{
+    if(CLOUD.ok&&CLOUD.ok()){
+      prive=await CLOUD.pullSantePrivee(u.email);
+      if(prive) src.sante_privee='réseau';
+    }
+  }catch(e){
+    notes.push('Lecture du nœud de santé privée en échec : les relevés locaux sont utilisés à la place.');
+  }
+  // Repli local : santeBlocsPrives sait exactement ce qui y vit.
+  const local=santeBlocsPrives(u);
+  if(!prive&&Object.keys(local).length){ prive=local; src.sante_privee='local'; }
+  else if(prive){
+    // Union, jamais écrasement : un relevé local non encore monté doit sortir.
+    for(const k of ['constantes','analyses'])
+      if(local[k]) prive[k]=_unionParDate(prive[k],local[k]);
+    for(const k of ['grossesse','pes'])
+      if(prive[k]===undefined&&local[k]!==undefined) prive[k]=local[k];
+  }
+  return {profil:profil,prive:prive||{},sources:src,notes:notes};
+}
+// Le manifeste : ce qu'il y a, et surtout ce qu'il n'y a PAS.
+function _manifesteExport(paquet){
+  const pr=paquet.profil||{}, pv=paquet.prive||{};
+  const presentes=[];
+  const inspecter=(obj,noeud)=>{
+    for(const k of Object.keys(obj||{})){
+      const v=obj[k];
+      if(v===undefined||v===null) continue;
+      if(Array.isArray(v)&&!v.length) continue;
+      presentes.push({cle:k,noeud:noeud,
+        entrees:Array.isArray(v)?v.length:(typeof v==='object'?Object.keys(v).length:1)});
+    }
+  };
+  inspecter(pr,'users');
+  inspecter(pv,'sante_privee');
+  return {
+    genere_le:new Date().toISOString(),
+    politique_acceptee:((pr.consent||{}).policyVersion)||null,
+    politique_courante:POLICY_VERSION,
+    sources:paquet.sources,
+    avertissements:paquet.notes||[],
+    categories_incluses:presentes,
+    categories_non_incluses:EXPORT_NON_INCLUS.map(x=>({categorie:x.categorie,raison:x.raison})),
+    a_savoir:'Cet export est un INSTANTANÉ. Il n\'est pas conçu pour être réimporté dans RepCore. '
+      +'Les catégories non incluses ci-dessus sont listées pour que tu saches ce qui manque et pourquoi : '
+      +'un export silencieusement incomplet ne vaudrait rien.'
+  };
+}
+// ── CSV : trois séries, pour qui veut ouvrir un tableur ─────────────────
+// Le JSON répond à l'article 20 — format structuré, lisible par machine. Le
+// CSV répond à l'usage réel : ouvrir ses pesées dans un tableur sans savoir
+// ce qu'est un JSON.
+function _csvEchap(v){
+  const t=(v===undefined||v===null)?'':String(v);
+  // Point-virgule comme séparateur : Excel en français découpe là-dessus.
+  return /[";\n\r]/.test(t)?'"'+t.replace(/"/g,'""')+'"':t;
+}
+function _csv(lignes){
+  // BOM UTF-8 : sans lui, Excel affiche « SÃ©ance » au lieu de « Séance ».
+  return '\ufeff'+lignes.map(l=>l.map(_csvEchap).join(';')).join('\r\n');
+}
+function _csvSeances(u){
+  const l=[['date','seance','exercice','serie','charge_kg','repetitions','rir','douleur']];
+  for(const s2 of ((u&&u.sessions)||[])){
+    const d=s2&&s2.date?new Date(s2.date).toISOString():'';
+    const nom=(s2&&s2.name)||'';
+    const data=(s2&&s2.data)||{};
+    for(const ex of Object.keys(data)){
+      const sets=(data[ex]&&data[ex].sets)||[];
+      sets.forEach((st,i)=>l.push([d,nom,ex,i+1,
+        st&&st.weight,st&&st.reps,st&&st.rir,st&&st.pain]));
+    }
+  }
+  return _csv(l);
+}
+function _csvJournalAlimentaire(u){
+  const l=[['jour','repas','aliment','quantite','kcal','proteines_g','glucides_g','lipides_g','sel_g','fibres_g']];
+  const log=(((u&&u.nutrition)||{}).log)||{};
+  for(const jour of Object.keys(log).sort()){
+    for(const e of ((log[jour]&&log[jour].entries)||[]))
+      l.push([jour,e&&e.repas,e&&e.nom,e&&e.qte,e&&e.kcal,e&&e.p,e&&e.c,e&&e.l,e&&e.sel,e&&e.fibres]);
+  }
+  return _csv(l);
+}
+function _csvPesees(u){
+  const l=[['date','poids_kg']];
+  for(const e of ((u&&u.weightLog)||[])) if(e&&e.date) l.push([e.date,e.kg]);
+  return _csv(l);
+}
+// Un téléchargement, et l'URL objet RÉVOQUÉE : sans révocation, le blob reste
+// en mémoire jusqu'au rechargement de la page — et un export de dossier
+// complet pèse.
+function _telecharger(nom,contenu,type){
+  try{
+    const b=new Blob([contenu],{type:type||'application/json;charset=utf-8'});
+    const url=URL.createObjectURL(b);
+    const a=document.createElement('a');
+    a.href=url; a.download=nom;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>{ try{ URL.revokeObjectURL(url); }catch(e){} },4000);
+    return true;
+  }catch(e){ console.error('[RepCore] export :',e); return false; }
+}
+function _nomFichierExport(ext){
+  const d=new Date();
+  const j=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')
+    +'-'+String(d.getDate()).padStart(2,'0');
+  return 'repcore-mes-donnees-'+j+'.'+ext;
+}
+// L'export complet, disponible SANS CONDITION : compte expiré, impayé, coach
+// parti. Le droit d'accès ne se suspend pas pour défaut de paiement, et rien
+// ici ne consulte checkAccess ni le statut.
+async function exporterMesDonnees(){
+  const u=currentUser;
+  if(!u||!u.email){ toast('Aucun dossier à exporter.','var(--orange)'); return false; }
+  toast('Préparation de ton export…','var(--sub)');
+  const paquet=await _chargerExportComplet(u);
+  if(!paquet){ toast('Export impossible : dossier illisible.','var(--red)'); return false; }
+  const doc={
+    _avertissement:EXPORT_AVERTISSEMENT,
+    manifeste:_manifesteExport(paquet),
+    profil:paquet.profil,
+    sante_privee:paquet.prive,
+    medias:{fichiers:_exportMedias(paquet.profil),marche_a_suivre:EXPORT_MEDIAS_MARCHE}
+  };
+  _telecharger(_nomFichierExport('json'),JSON.stringify(doc,null,2));
+  _telecharger('repcore-seances.csv',_csvSeances(paquet.profil),'text/csv;charset=utf-8');
+  _telecharger('repcore-journal-alimentaire.csv',_csvJournalAlimentaire(paquet.profil),'text/csv;charset=utf-8');
+  _telecharger('repcore-pesees.csv',_csvPesees(paquet.profil),'text/csv;charset=utf-8');
+  // LA DATE SEULE. Ni le contenu, ni la taille, ni ce qui a été demandé.
+  try{
+    if(!u.rgpd||typeof u.rgpd!=='object') u.rgpd={};
+    u.rgpd.dernierExport=Date.now();
+    saveUser();
+  }catch(e){}
+  toast('Export téléchargé ✓','var(--green)');
+  return true;
+}
+// Voir AVANT de télécharger : ce qui sort, et surtout ce qui ne sort pas.
+async function voirContenuExport(){
+  const z=document.getElementById('exp-manifeste');
+  if(!z) return false;
+  z.style.display='block';
+  z.innerHTML='<div class="sub" style="font-size:12px">Lecture…</div>';
+  const paquet=await _chargerExportComplet(currentUser);
+  if(!paquet){ z.innerHTML='<div class="sub" style="font-size:12px">Dossier illisible.</div>'; return false; }
+  const m=_manifesteExport(paquet);
+  const lst=(t,items)=>`<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;text-transform:uppercase;font-weight:700;margin:10px 0 6px">${escapeHtml(t)}</div>`
+    +items.map(x=>`<div style="font-size:11.5px;color:#ddd;line-height:1.6;padding:2px 0">${x}</div>`).join('');
+  z.innerHTML=lst('Inclus ('+m.categories_incluses.length+')',
+      m.categories_incluses.map(c=>escapeHtml(c.cle)+' <span style="color:var(--text-faint)">· '+escapeHtml(c.noeud)+' · '+c.entrees+'</span>'))
+    +lst('NON inclus ('+m.categories_non_incluses.length+')',
+      m.categories_non_incluses.map(c=>'<b>'+escapeHtml(c.categorie)+'</b><br><span style="color:var(--text-faint)">'+escapeHtml(c.raison)+'</span>'))
+    +(m.avertissements.length?lst('À savoir',m.avertissements.map(escapeHtml)):'')
+    +`<div style="font-size:10px;color:var(--text-faint);line-height:1.5;margin-top:10px">${escapeHtml(EXPORT_AVERTISSEMENT)}</div>`;
+  return true;
 }
 function santeBlocsPrives(user){
   const out={};
@@ -37131,6 +37387,192 @@ function testExercices(){
           return /F-10/.test(amont)
             ?true:_echec('le lot d\'export n\'est pas nommé');})());
       } finally { currentUser=_mgU; }
+    })();
+
+    // ══════ EXPORT INTÉGRAL — ARTICLES 15 ET 20 ══════
+    (()=>{
+      const _exU=currentUser;
+      // Une athlète ayant déclaré les SIX catégories du critère.
+      const _six=()=>({id:'ex',email:'ex@t',role:'athlete',fname:'A',
+        gender:'Femme',_evol_gender:'Femme',
+        exAlias:{},exMuscles:{},programs:{},sessions:[],bilans:[],
+        weightLog:[{date:'2026-01-01',kg:62}],sleepLog:[],
+        cycle:{enabled:true,lastPeriodDate:'2026-01-01',contraception:'sterilet_cuivre'},
+        grossesse:{etat:'enceinte',declareLe:1},
+        etatsSante:['sopk','thyroide'],
+        thyroide:{etat:'hypo',traitement:true},
+        pes:true,
+        statutHormonal:'perimenopause',
+        constantes:[{date:'2026-01-01T08:00:00.000Z',type:'tension',sys:120,dia:80}],
+        analyses:[{date:'2026-01-02T08:00:00.000Z',marqueur:'ferritine',valeur:30,unite:'ng/mL'}],
+        nutrition:{dietType:'flexible',log:{}}});
+      try {
+        // ── testExportContientSantePrivee ────────────────────────────────
+        ok('testExportContientSantePrivee : les SIX catégories sortent',(()=>{
+          const u=_six();
+          // Hors ligne : _chargerExportComplet est async, on éprouve ici la
+          // COMPOSITION du document, qui est la partie déterminante.
+          const paquet={profil:{...u},prive:santeBlocsPrives(u),
+            sources:{profil:'local',sante_privee:'local'},notes:[]};
+          const doc={_avertissement:EXPORT_AVERTISSEMENT,
+            manifeste:_manifesteExport(paquet),profil:paquet.profil,
+            sante_privee:paquet.prive,
+            medias:{fichiers:_exportMedias(paquet.profil)}};
+          const txt=JSON.stringify(doc);
+          // Les six, quelle que soit leur SOURCE : cycle, contraception,
+          // SOPK, thyroïde et statut hormonal vivent dans users/ ; grossesse
+          // et PES dans sante_privee. Un test qui n'interrogerait qu'un nœud
+          // passerait au vert en ratant la moitié.
+          const attendus=[['cycle','"cycle"'],['contraception','sterilet_cuivre'],
+            ['grossesse','"enceinte"'],['SOPK','"sopk"'],
+            ['thyroïde','"hypo"'],['PES','"pes":true']];
+          const manquants=attendus.filter(x=>txt.indexOf(x[1])<0).map(x=>x[0]);
+          if(manquants.length) return _echec('absents : '+manquants.join(', '));
+          // Et les deux blocs qui ne vivent QUE dans le nœud privé.
+          if(!doc.sante_privee.constantes||!doc.sante_privee.constantes.length)
+            return _echec('constantes absentes du nœud privé');
+          return (doc.sante_privee.analyses&&doc.sante_privee.analyses.length)
+            ?true:_echec('analyses absentes du nœud privé');})());
+        ok('L\'export ne se construit PAS sur le seul currentUser',(()=>{
+          // Le piège central : constantes, analyses, grossesse et pes vivent
+          // hors de users/. Un export bâti sur un seul objet les raterait.
+          const src=String(_chargerExportComplet);
+          if(!/pullSantePrivee/.test(src)) return _echec('le nœud privé n\'est jamais lu');
+          return /pullUser/.test(src)
+            ?true:_echec('le dossier distant n\'est jamais lu');})());
+        ok('athletepkg n\'est JAMAIS réutilisé par l\'export',(()=>{
+          // Douze champs sur quatre-vingt-dix : ce serait une réponse
+          // incomplète, donc un manquement.
+          const src=String(_chargerExportComplet)+String(exporterMesDonnees)
+            +String(_manifesteExport)+String(_exportMedias);
+          return !/_validateAthletePkg|athletepkg/.test(src)
+            ?true:_echec('le paquet de transfert est réutilisé');})());
+
+        // ── testExportNeContientPasDeTiers ───────────────────────────────
+        ok('testExportNeContientPasDeTiers : aucune donnée d\'autrui',(()=>{
+          const u=_six();
+          u.coachName='Coach Machin'; u.coachId='c1';
+          const paquet={profil:{...u},prive:{},sources:{},notes:[]};
+          const txt=JSON.stringify({profil:paquet.profil,
+            manifeste:_manifesteExport(paquet)});
+          // Le nom du coach figure parce que c'est UNE DONNÉE DE L'ATHLÈTE :
+          // savoir qui le suit le concerne. Ce qui ne doit pas sortir, c'est
+          // le DOSSIER du coach, et celui d'un autre athlète.
+          if(/rc_coach_profil|coachPhoto|promoBanners|chargesSchema/.test(txt))
+            return _echec('le profil du coach a fuité');
+          // Aucun autre dossier d'athlète.
+          if(/"clients"\s*:/.test(txt)) return _echec('une liste de clients figure');
+          // Et le profil du coach est nommé « non inclus », avec sa raison.
+          const m=_manifesteExport(paquet);
+          const t=m.categories_non_incluses.find(x=>/coach/i.test(x.categorie));
+          if(!t) return _echec('le profil du coach n\'est pas déclaré non inclus');
+          return /tiers/i.test(t.raison)
+            ?true:_echec('la raison ne dit pas que c\'est un tiers');})());
+        ok('Aucun secret d\'authentification dans l\'export',(()=>{
+          const src=String(_chargerExportComplet);
+          for(const k of ['pwd','pwdHash','_st','_sk'])
+            if(src.indexOf("'"+k+"'")<0) return _echec(k+' n\'est pas retiré');
+          return /delete profil\[k\]/.test(src)
+            ?true:_echec('le retrait n\'est pas effectué');})());
+
+        // ── testExportDisponibleSurCompteExpire ──────────────────────────
+        ok('testExportDisponibleSurCompteExpire : rien ne le conditionne',(()=>{
+          // Règle cardinale : le droit d'accès ne se suspend pas pour défaut
+          // de paiement, ni parce que le coach est parti.
+          const src=String(exporterMesDonnees)+String(_chargerExportComplet);
+          const gardes=['checkAccess','_enAttenteAbonnement','accessExpiry',
+            'paymentStatus','COACHING_SUIVI','coachId'];
+          const trouves=gardes.filter(g=>src.indexOf(g)>=0);
+          if(trouves.length) return _echec('conditionné par : '+trouves.join(', '));
+          // Et un dossier expiré produit bien un document complet.
+          const u=_six();
+          u.status='COACHING_SUIVI'; u.accessExpiry=Date.now()-30*864e5;
+          u.coachId=null; u.coachName=null;
+          if(checkAccess(u)) return _echec('fixture muette : l\'accès n\'est pas expiré');
+          const paquet={profil:{...u},prive:santeBlocsPrives(u),sources:{},notes:[]};
+          const m=_manifesteExport(paquet);
+          return m.categories_incluses.length>5
+            ?true:_echec(m.categories_incluses.length+' catégories seulement');})());
+
+        // ── Le manifeste dit ce qui MANQUE ───────────────────────────────
+        ok('Le manifeste liste des catégories NON incluses, avec leur raison',(()=>{
+          const m=_manifesteExport({profil:_six(),prive:{},sources:{},notes:[]});
+          if(!Array.isArray(m.categories_non_incluses)||m.categories_non_incluses.length<1)
+            return _echec('aucune catégorie non incluse déclarée');
+          for(const c of m.categories_non_incluses){
+            if(!c.categorie||!c.raison) return _echec('entrée incomplète : '+JSON.stringify(c));
+            if(c.raison.length<20) return _echec('raison trop courte : '+c.raison);
+          }
+          // Les catégories de privacy.html qui n'existent nulle part sont
+          // nommément citées.
+          const t=m.categories_non_incluses.map(x=>x.categorie).join(' | ');
+          if(!/plan alimentaire/i.test(t)) return _echec('les photos de plan ne sont pas déclarées');
+          return /vid[ée]o/i.test(t)?true:_echec('les vidéos ne sont pas déclarées');})());
+        ok('Le manifeste dit d\'OÙ viennent les données',(()=>{
+          const m=_manifesteExport({profil:{a:1},prive:{b:2},
+            sources:{profil:'local',sante_privee:'absent'},
+            notes:['Hors ligne au moment de l\'export.']});
+          if(!m.sources||m.sources.profil!=='local') return _echec('source non déclarée');
+          // Un export amputé qui ne se DÉCLARE pas amputé est un piège.
+          return (m.avertissements&&m.avertissements.length===1)
+            ?true:_echec('l\'avertissement d\'exhaustivité est perdu');})());
+        ok('L\'avertissement « données de santé en clair » est en TÊTE',(()=>{
+          if(!/DONNÉES DE SANTÉ EN CLAIR/.test(EXPORT_AVERTISSEMENT))
+            return _echec(EXPORT_AVERTISSEMENT);
+          // Première clé du document : elle se lit avant tout le reste.
+          const src=String(exporterMesDonnees);
+          const i=src.indexOf('_avertissement:EXPORT_AVERTISSEMENT');
+          const j=src.indexOf('profil:paquet.profil');
+          return (i>=0&&j>i)?true:_echec('l\'avertissement n\'est pas en tête');})());
+
+        // ── Les médias : des URL, jamais des fichiers ────────────────────
+        ok('Aucun contenu de média n\'est embarqué',(()=>{
+          const u=_six();
+          u.videos=[{url:'https://res.cloudinary.com/x/v/1.mp4',exercice:'Squat'}];
+          u.bilans=[{date:1,'bil-photo-face':'data:image/jpeg;base64,AAAA'}];
+          const md=_exportMedias(u);
+          const txt=JSON.stringify(md);
+          if(/data:image|base64/.test(txt)) return _echec('un fichier est embarqué');
+          if(!md.some(x=>x.type==='video')) return _echec('la vidéo n\'est pas listée');
+          // La marche à suivre pour les obtenir est donnée.
+          return /art\. 12\.3|un mois/i.test(EXPORT_MEDIAS_MARCHE)
+            ?true:_echec('aucun délai de réponse annoncé');})());
+
+        // ── Le journal : la date SEULE ───────────────────────────────────
+        ok('rgpd.dernierExport ne porte QUE la date',(()=>{
+          const src=String(exporterMesDonnees);
+          if(!/rgpd\.dernierExport=Date\.now\(\)/.test(src.replace(/\s+/g,'')))
+            return _echec('l\'horodatage n\'est pas posé');
+          // Ni contenu, ni taille, ni ce qui a été demandé.
+          const i=src.indexOf('u.rgpd.dernierExport');
+          const bloc=src.slice(i,i+200);
+          return !/taille|contenu|categories|JSON\.stringify/.test(bloc)
+            ?true:_echec('autre chose que la date est journalisé');})());
+
+        // ── Le CSV ───────────────────────────────────────────────────────
+        ok('Les CSV sont lisibles par un tableur français',(()=>{
+          const u=_six();
+          u.sessions=[{date:Date.now(),name:'Push;test',data:{
+            'DEVELOPPE "COUCHE"':{sets:[{weight:60,reps:'10',rir:2}]}}}];
+          const c=_csvSeances(u);
+          if(c.charCodeAt(0)!==0xFEFF) return _echec('pas de BOM : les accents casseront');
+          if(c.indexOf(';')<0) return _echec('séparateur inattendu');
+          // Un point-virgule ou un guillemet DANS une valeur ne casse pas la
+          // colonne : il est échappé.
+          if(c.indexOf('"Push;test"')<0) return _echec('le point-virgule n\'est pas échappé');
+          if(c.indexOf('""COUCHE""')<0) return _echec('le guillemet n\'est pas doublé');
+          // Les trois séries existent et ont un en-tête.
+          for(const f of [_csvJournalAlimentaire,_csvPesees])
+            if(String(f(u)).split('\r\n')[0].indexOf(';')<0)
+              return _echec('en-tête manquant');
+          return true;})());
+        ok('L\'URL objet est RÉVOQUÉE après usage',(()=>{
+          // Sans révocation, le blob reste en mémoire jusqu'au rechargement —
+          // et un dossier complet pèse.
+          const src=String(_telecharger);
+          return /revokeObjectURL/.test(src)
+            ?true:_echec('l\'URL objet n\'est jamais révoquée');})());
+      } finally { currentUser=_exU; }
     })();
 
     // ══════ PROFIL COACH VISIBLE PAR SES ATHLÈTES ══════
