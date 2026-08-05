@@ -1076,7 +1076,21 @@ const COACH_PHOTO='icons/coach.jpg';
     <div class="code-display" id="coach-code-val" style="margin:16px 0">——</div>
 
     <!-- ACTION PRINCIPALE : lien d'invitation -->
-    <button class="btn btn-red" style="width:100%;margin-bottom:12px" onclick="copyCoachInviteLink()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="9" y="2" width="6" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> Copier le lien d'invitation</button>
+    <!-- Bouton UNIFIE : un prenom, un nom, et le lien part. Le lien porte
+         desormais un code emis pour CETTE personne — c est lui qui rend
+         l invitation tracable. L ancien bouton generique reste dans le
+         depliant « autre methode », avec le code court et le QR. -->
+    <div style="display:flex;gap:8px;margin-bottom:9px">
+      <input id="inv-prenom" placeholder="Prénom" autocomplete="off" style="flex:1;min-width:0;font-size:14px">
+      <input id="inv-nom" placeholder="Nom" autocomplete="off" style="flex:1;min-width:0;font-size:14px">
+    </div>
+    <div id="inv-err" style="color:var(--red-light);font-size:12px;margin-bottom:8px;display:none;line-height:1.5"></div>
+    <button class="btn btn-red" style="width:100%;margin-bottom:10px;min-height:46px" onclick="_envoyerInvitation()">
+      Inviter et partager le lien</button>
+    <details style="margin-bottom:12px">
+      <summary style="cursor:pointer;font-size:11px;color:var(--sub);padding:6px 0">Autre méthode</summary>
+      <div style="padding-top:6px">
+    <button class="btn btn-outline" style="width:100%;margin-bottom:12px" onclick="copyCoachInviteLink()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="9" y="2" width="6" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> Copier le lien d'invitation</button>
     <p class="sub" style="font-size:11px;line-height:1.6;margin-bottom:20px">Envoie ce lien à ton athlète par WhatsApp ou SMS.<br>Il le colle dans le champ code → lié instantanément.</p>
 
     <!-- Info code court -->
@@ -1084,6 +1098,8 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="font-size:var(--fs-xs);color:var(--text-dim);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px">⚠️ Code court (même appareil uniquement)</div>
       <p style="font-size:11px;color:var(--text-dim);line-height:1.6;margin:0">Le code GCP ci-dessus ne fonctionne que si le coach et l'athlète utilisent le même téléphone/ordi. Pour un autre appareil, utilise le lien d'invitation.</p>
     </div>
+      </div>
+    </details>
 
     <div style="border-top:1px solid var(--surface-2);margin-bottom:16px;padding-top:16px">
       <button class="btn btn-outline" style="width:100%;margin-bottom:12px;color:var(--orange);border-color:#7c2d1244" onclick="regenCoachCode()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Régénérer mon code</button>
@@ -1198,6 +1214,9 @@ const COACH_PHOTO='icons/coach.jpg';
         <!-- Compteur permanent. Rempli par loadCoachHome avec le cache DEJA
              lu : le relire couterait 130 ms a 40 athletes. -->
         <div id="ch-paliers"></div>
+        <!-- Invitations emises qui n ont pas abouti. Rempli par
+             _rendreInvitations, appele par loadCoachHome. -->
+        <div id="ch-invitations"></div>
         <!-- Alerte anti-falaise et propositions de palier. Jamais bloquante,
              jamais une bascule : elle DIT, le coach decide. -->
         <div id="ch-alerte-palier"></div>
@@ -6347,7 +6366,7 @@ async function doRegister(){
       // aucune raison de ressaisir un code qu'il vient de valider.
       if(await _appliquerCodeApresInscription()) return;
       go('s-client-code');
-      const enAttente=localStorage.getItem('pendingCode');
+      const enAttente=localStorage.getItem('pendingCode')||window._invitationCode;
       if(enAttente){
         const inp=document.getElementById('cc-code');
         if(inp) inp.value=enAttente;
@@ -9264,6 +9283,7 @@ function loadCoachHome(){
     if(majCyclesPaliers(u,_cacheUsers)) try{ saveUser(); }catch(e){}
     const _za=document.getElementById('ch-alerte-palier');
     if(_za) _za.innerHTML=_htmlAlertePalier(u,_cacheUsers);
+    _rendreInvitations();
   }catch(e){}
   document.getElementById('ch-total').textContent=clients.length;
   document.getElementById('ch-active').textContent=clients.filter(c=>isActive(c)).length;
@@ -32783,6 +32803,203 @@ function _rcCodesUrl(code){
 // type : 'athlete' (défaut, code d'accès élève) ou 'coach' (invitation à créer
 // un compte coach). Le type est écrit dans le nœud RTDB et re-vérifié à la
 // consommation : un code élève ne peut pas ouvrir un compte coach.
+// ══════ INVITATIONS EN ATTENTE ══════
+// 48 h entre deux relances. Ce n'est pas une limite technique : c'est ce qui
+// sépare un rappel d'un harcèlement. Le coach n'a pas envie de passer pour
+// un importun, et l'interface ne doit pas l'y aider.
+const RELANCE_DELAI_MS=48*3600*1000;
+// PURE. Les invitations qui n'ont pas abouti, la plus récente d'abord.
+// Un code désactivé n'y figure pas : le coach l'a révoqué, il n'attend rien.
+function invitationsEnAttente(user){
+  const u=_dossier(user);
+  return ((u&&u.studentCodes)||[])
+    .filter(c=>c&&c.token&&c.active!==false&&etatInvitation(c)!=='cree')
+    .slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+}
+// PURE. Peut-on relancer ? Rend {ok, reste} — `reste` en heures, pour le
+// dire plutôt que de griser un bouton sans explication.
+function relancePossible(c,maintenant){
+  const t=maintenant||Date.now();
+  const d=(c&&c.relanceLe)?Date.parse(c.relanceLe):NaN;
+  if(!isFinite(d)) return {ok:true,reste:0};
+  const ecoule=t-d;
+  if(ecoule>=RELANCE_DELAI_MS) return {ok:true,reste:0};
+  return {ok:false,reste:Math.ceil((RELANCE_DELAI_MS-ecoule)/3600000)};
+}
+// PURE. Le lien d'invitation d'un code donné : le profil du coach ET le code.
+// Le profil permet à l'appareil de l'athlète d'afficher son coach sans
+// serveur ; le code, lui, est ce qui rend l'invitation traçable.
+function lienInvitation(code,user){
+  const u=_dossier(user);
+  if(!u||!code) return '';
+  const payload={id:u.id,fname:u.fname,lname:u.lname,email:u.email,
+    code:u.code,role:'coach'};
+  const encoded=btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+  return APP_BASE_URL+'?coachpkg='+encoded+'&inv='+encodeURIComponent(code);
+}
+// Le retour à la ligne d'un message WhatsApp. Nommé pour ne pas le confondre
+// avec celui du code source, et déclaré AVANT son usage : un const n'est pas
+// hissé, et s'appuyer sur l'ordre d'appel pour que ça tienne est fragile.
+const NL_MSG='\n\n';
+// PURE. Le message de relance. Pré-rédigé, jamais envoyé automatiquement :
+// la relance est un geste du coach, pas une tâche de fond.
+function messageRelance(c,user){
+  const u=_dossier(user);
+  const prenom=(c&&(c.prenom||String(c.studentName||'').split(' ')[0]))||'';
+  const nom=((u&&u.fname)||'').trim();
+  return (prenom?('Salut '+prenom+', '):'Salut, ')
+    +'je t\'ai préparé ton accès RepCore'+(nom?(' — c\'est '+nom):'')+'. '
+    +'Tu peux le récupérer ici quand tu veux, le lien n\'expire pas :'+NL_MSG
+    +lienInvitation(c&&c.token,u);
+}
+
+// Le rendu de la section « En attente ». Une ligne par invitation, avec son
+// état, sa date, et le seul geste qui serve : relancer.
+function _htmlInvitationsEnAttente(user){
+  const u=_dossier(user);
+  if(!u||u.role!=='coach') return '';
+  const l=invitationsEnAttente(u);
+  if(!l.length) return '';
+  const d=(iso)=>{ if(!iso) return ''; const t=Date.parse(iso);
+    return isFinite(t)?new Date(t).toLocaleDateString('fr-FR'):''; };
+  const lignes=l.map(c=>{
+    const e=etatInvitation(c);
+    const quand=(e==='ouvert')?d(c.ouvertLe):(c.createdAt?new Date(c.createdAt).toLocaleDateString('fr-FR'):'');
+    const r=relancePossible(c);
+    const nom=((c.prenom||'')+' '+(c.nom||'')).trim()||c.studentName||'Invitation';
+    const couleur=(e==='ouvert')?'var(--green)':'var(--sub)';
+    return '<div style="display:flex;align-items:center;gap:10px;background:var(--surface-2);'
+      +'border:1px solid var(--border);border-radius:10px;padding:9px 11px;margin-bottom:7px">'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-weight:800;font-size:12.5px">'+escapeHtml(nom)+'</div>'
+      +'<div class="sub" style="font-size:10.5px;margin-top:2px;color:'+couleur+'">'
+      +escapeHtml(INV_ETAT_LIB[e]||e)+(quand?(' · '+escapeHtml(quand)):'')+'</div></div>'
+      +(r.ok
+        ? '<button class="btn btn-outline btn-sm" style="flex-shrink:0;min-height:40px" '
+          +'onclick="relancerInvitation('+JSON.stringify(c.token)+')">Relancer</button>'
+        // Griser sans dire pourquoi apprend a cliquer dans le vide. On dit
+        // le temps qui reste.
+        : '<span class="sub" style="font-size:10px;flex-shrink:0;text-align:right;'
+          +'line-height:1.4;max-width:96px">Relancé<br>encore '+r.reste+' h</span>')
+      +'</div>';
+  }).join('');
+  return '<div style="margin-bottom:18px">'
+    +'<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2px;font-weight:800;'
+    +'text-transform:uppercase;margin-bottom:8px">En attente ('+l.length+')</div>'
+    +lignes+'</div>';
+}
+// Relancer : on ouvre WhatsApp avec le message pré-rédigé, et on horodate.
+// L'horodatage part MEME si le coach referme WhatsApp sans envoyer : on ne
+// peut pas savoir ce qu'il a fait dans une autre application, et compter
+// large protège l'athlète d'être relancé trois fois de suite.
+function relancerInvitation(token){
+  const u=currentUser;
+  if(!u||u.role!=='coach') return false;
+  const c=((u.studentCodes)||[]).find(x=>x&&x.token===token);
+  if(!c) return false;
+  const r=relancePossible(c);
+  if(!r.ok){
+    toast('Déjà relancé. Attends encore '+r.reste+' h — un rappel de trop se '
+      +'retient plus qu\'un rappel utile.','var(--orange)');
+    return false;
+  }
+  const msg=messageRelance(c,u);
+  c.relanceLe=new Date().toISOString();
+  try{ saveUser(); }catch(e){}
+  // L'horodatage part aussi sur le nœud, pour que le coach retrouve l'état
+  // depuis un autre appareil. Sans jeton ce PATCH échouera — ce n'est pas
+  // grave, la limite locale a déjà joué.
+  try{ _marquerRelanceDistante(c.token,c.relanceLe); }catch(e){}
+  try{ window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank','noopener'); }catch(e){}
+  _rendreInvitations();
+  return true;
+}
+async function _marquerRelanceDistante(code,iso){
+  try{
+    const tok=await CLOUD._getToken().catch(()=>null);
+    if(!tok) return false;
+    const r=await fetch(_rcCodesUrl(code)+'?auth='+tok,
+      {method:'PATCH',headers:{'Content-Type':'application/json'},
+       body:JSON.stringify({relanceLe:iso})});
+    return r.ok;
+  }catch(e){ return false; }
+}
+function _rendreInvitations(){
+  const z=document.getElementById('ch-invitations');
+  if(z) z.innerHTML=_htmlInvitationsEnAttente(currentUser);
+  return !!z;
+}
+
+// Le geste complet : emettre le code, copier le lien, ouvrir le partage
+// natif. Un seul tap pour le cas courant.
+async function _envoyerInvitation(){
+  const v=id=>((document.getElementById(id)||{}).value||'').trim();
+  const err=document.getElementById('inv-err');
+  const dire=(m)=>{ if(err){ err.textContent=m; err.style.display='block'; } };
+  if(err) err.style.display='none';
+  const r=await inviterAthlete(v('inv-prenom'),v('inv-nom'));
+  if(!r.ok){ dire(r.raison); return false; }
+  const p1=document.getElementById('inv-prenom'), p2=document.getElementById('inv-nom');
+  if(p1) p1.value=''; if(p2) p2.value='';
+  // Le presse-papier D ABORD : si le partage natif est refuse ou absent, le
+  // coach a quand meme le lien. L inverse le laisserait les mains vides.
+  try{ if(navigator.clipboard) await navigator.clipboard.writeText(r.lien); }catch(e){}
+  let partage=false;
+  try{
+    if(navigator.share){
+      await navigator.share({title:'Ton accès RepCore',text:messageRelance(r.invitation,currentUser)});
+      partage=true;
+    }
+  }catch(e){}   // annule par l utilisateur : ce n est pas une erreur
+  toast(partage?'Invitation envoyée ✓':'✓ Lien copié — envoie-le à '
+    +(r.invitation.prenom||'ton athlète'),'var(--green)');
+  _rendreInvitations();
+  return true;
+}
+
+// ══════ INVITER SANS CRÉER DE DOSSIER ══════
+// Le lien d'invitation ne transportait AUCUN code : c'était le profil du
+// coach, réutilisable par n'importe qui, sans destinataire. Rien à tracer.
+// Émettre un code demandait de créer le dossier de l'athlète — donc de
+// connaître son e-mail avant même de l'avoir invité.
+//
+// Ce chemin-ci émet un code pour une PERSONNE NOMMÉE, sans rien créer
+// d'autre. Le dossier naîtra quand elle s'inscrira.
+const INV_MOIS_DEFAUT=12;
+// PURE. Deux invitations pour la même personne, c'est une erreur de saisie.
+// Dédoublonnage sur prénom+nom normalisés : le formulaire ne demande pas
+// d'e-mail, et en demander un ajouterait une donnée nominative dans un nœud
+// public que le cahier des charges limite au prénom et au nom.
+function _clePersonne(prenom,nom){
+  return exKey((prenom||'')+' '+(nom||''));
+}
+function invitationExistante(prenom,nom,user){
+  const k=_clePersonne(prenom,nom);
+  if(!k) return null;
+  return invitationsEnAttente(user).find(c=>_clePersonne(c.prenom,c.nom)===k
+    ||exKey(c.studentName||'')===k)||null;
+}
+async function inviterAthlete(prenom,nom){
+  const u=currentUser;
+  if(!u||u.role!=='coach') return {ok:false,raison:'Réservé aux coachs.'};
+  const pn=String(prenom||'').trim(), nm=String(nom||'').trim();
+  if(pn.length<2) return {ok:false,raison:'Donne au moins un prénom.'};
+  const deja=invitationExistante(pn,nm,u);
+  if(deja) return {ok:false,raison:'Tu as déjà une invitation en attente pour '
+    +((deja.prenom||deja.studentName||'cette personne'))+'. Relance-la plutôt '
+    +'que d\'en créer une seconde.',existante:deja};
+  let gen;
+  try{ gen=await _genAccessCode((pn+' '+nm).trim(),INV_MOIS_DEFAUT); }
+  catch(e){ return {ok:false,raison:e.message||'Impossible de créer l\'invitation.'}; }
+  const entree={...gen.payload,token:gen.token,active:true,redeemed:false,
+    createdAt:Date.now(),etat:'envoye',ouvertLe:null,creeLe:null,relanceLe:null,
+    prenom:pn,nom:nm};
+  if(!u.studentCodes) u.studentCodes=[];
+  u.studentCodes.push(entree);
+  try{ saveUser(); }catch(e){}
+  return {ok:true,invitation:entree,lien:lienInvitation(gen.token,u)};
+}
+
 // ══════ OUVERTURE RÉELLE, PAS UN APERÇU ══════
 // LE FAUX POSITIF GARANTI de ce lot : WhatsApp, Messenger et consorts
 // chargent la page pour en fabriquer un aperçu. Compter cette visite comme
@@ -32844,8 +33061,13 @@ function etatProgresse(avant,apres){
 // « envoyé » sinon. Aucune migration, aucun rattrapage.
 function etatInvitation(c){
   if(!c) return null;
+  // redeemed PRIME. Un compte existe ou n'existe pas, et c'est ce champ qui
+  // le dit — un `etat` reste en arriere ferait relancer quelqu'un qui a deja
+  // son acces. C'est aussi ce qui couvre les codes emis avant ce lot, qui
+  // portent redeemed:true et aucun etat.
+  if(c.redeemed===true) return 'cree';
   if(_rangEtat(c.etat)>=0) return c.etat;
-  return (c.redeemed===true)?'cree':'envoye';
+  return 'envoye';
 }
 const INV_ETAT_LIB=Object.freeze({envoye:'Envoyée',ouvert:'Ouverte',cree:'Compte créé'});
 
@@ -42466,6 +42688,127 @@ function testExercices(){
           // Et rien n'est mis en file.
           return !/_enfiler\(|_queueRetry\(/.test(src)
             ?true:_echec('la génération met en file');})());
+        // ── Invitations, étapes 3 et 4 : en attente, relance, dédoublonnage ─
+        const _inv=(t,etat,extra)=>Object.assign({token:t,active:true,createdAt:Date.now(),
+          prenom:'Léa',nom:'Martin',etat},extra||{});
+        ok('Deux relances à moins de 48 h : la seconde est refusée',(()=>{
+          // Ce n'est pas une limite technique : c'est ce qui sépare un rappel
+          // d'un harcèlement.
+          const jamais=_inv('T1','envoye');
+          if(!relancePossible(jamais).ok) return _echec('une invitation jamais relancée est bloquée');
+          const t0=Date.now();
+          const fraiche=_inv('T2','envoye',{relanceLe:new Date(t0-3600000).toISOString()});
+          const r=relancePossible(fraiche,t0);
+          if(r.ok) return _echec('relance acceptée une heure après');
+          // On DIT le temps qui reste : griser sans expliquer apprend à
+          // cliquer dans le vide.
+          if(r.reste!==47) return _echec('reste annoncé : '+r.reste+' h au lieu de 47');
+          // À 48 h pile, c'est bon.
+          const vieille=_inv('T3','envoye',{relanceLe:new Date(t0-RELANCE_DELAI_MS).toISOString()});
+          if(!relancePossible(vieille,t0).ok) return _echec('refusée à 48 h pile');
+          // Une date illisible ne bloque pas : mieux vaut une relance de trop
+          // qu'un bouton mort pour toujours.
+          return relancePossible(_inv('T4','envoye',{relanceLe:'pas une date'})).ok
+            ?true:_echec('une date illisible bloque définitivement');})());
+        ok('La liste « En attente » exclut les abouties et les révoquées',(()=>{
+          const u={id:'c1',email:'c@t',role:'coach',studentCodes:[
+            _inv('A','envoye'),
+            _inv('B','ouvert'),
+            _inv('C','cree'),                       // aboutie
+            _inv('D','envoye',{active:false}),      // révoquée
+            {token:'E',active:true,createdAt:Date.now(),redeemed:true},  // avant ce lot : aucun etat
+            _inv('F','envoye',{redeemed:true})]};   // etat reste en arriere
+          const l=invitationsEnAttente(u).map(c=>c.token);
+          if(l.indexOf('C')>=0) return _echec('une invitation aboutie reste en attente');
+          if(l.indexOf('D')>=0) return _echec('une invitation révoquée reste en attente');
+          if(l.indexOf('E')>=0) return _echec('un code consommé sans champ etat reste en attente');
+          // redeemed PRIME sur un etat reste en arriere : sans ca, le coach
+          // relancerait quelqu'un qui a deja son acces.
+          if(l.indexOf('F')>=0) return _echec('un etat perime l\'emporte sur redeemed');
+          if(l.length!==2) return _echec('attendu 2, obtenu '+l.length+' : '+l.join(','));
+          return invitationsEnAttente({id:'c',email:'c@t',role:'coach'}).length===0
+            ?true:_echec('un coach sans code a des invitations');})());
+        ok('Le lien d\'invitation porte le code, et le profil du coach',(()=>{
+          // Sans le code, il n'y a rien à tracer : c'était le lien générique
+          // d'avant ce lot, réutilisable par n'importe qui, sans destinataire.
+          const u={id:'c1',email:'c@t',role:'coach',fname:'K',lname:'G',code:'RC-AAAA-1111'};
+          const l=lienInvitation('RC-BBBB-2222',u);
+          if(l.indexOf('inv=RC-BBBB-2222')<0) return _echec('le code n\'est pas dans le lien : '+l);
+          if(l.indexOf('coachpkg=')<0) return _echec('le profil coach a disparu du lien');
+          // Le profil est décodable et ne porte rien de plus que le nécessaire.
+          const pkg=new URL(l).searchParams.get('coachpkg');
+          const d=JSON.parse(decodeURIComponent(escape(atob(pkg))));
+          for(const k of Object.keys(d))
+            if(['id','fname','lname','email','code','role'].indexOf(k)<0)
+              return _echec('champ de trop dans le lien : '+k);
+          return lienInvitation('',u)===''?true:_echec('un code vide produit un lien');})());
+        ok('Le message de relance contient le lien, et ne promet pas d\'expiration',(()=>{
+          // Un lien qui n'expire pas est une promesse tenable : c'est le grief
+          // documenté contre les liens expirables.
+          const u={id:'c1',email:'c@t',role:'coach',fname:'Kevin',lname:'G',code:'RC-A-1'};
+          const m=messageRelance(_inv('RC-CCCC-3333','envoye'),u);
+          if(m.indexOf('RC-CCCC-3333')<0) return _echec('le lien est absent du message');
+          if(m.indexOf('Léa')<0) return _echec('le prénom n\'est pas repris');
+          if(m.indexOf('Kevin')<0) return _echec('le coach ne se nomme pas');
+          return /n\\?'expire pas/.test(m)?true:_echec('le message ne dit pas que le lien dure');})());
+        ok('Le dédoublonnage se fait sur le prénom et le nom',(()=>{
+          // Le formulaire ne demande pas d'e-mail, et en demander un ajouterait
+          // une donnée nominative dans un nœud public.
+          const u={id:'c1',email:'c@t',role:'coach',studentCodes:[_inv('A','envoye')]};
+          if(!invitationExistante('Léa','Martin',u)) return _echec('doublon exact non vu');
+          if(!invitationExistante('lea','martin',u)) return _echec('casse et accents non normalisés');
+          if(!invitationExistante('  LÉA  ','MARTIN',u)) return _echec('espaces non normalisés');
+          if(invitationExistante('Léa','Dupont',u)) return _echec('un homonyme partiel est confondu');
+          // Une invitation ABOUTIE ne bloque pas une nouvelle : le coach peut
+          // réinviter quelqu'un qui a supprimé son compte.
+          const v={id:'c1',email:'c@t',role:'coach',studentCodes:[_inv('A','cree')]};
+          return !invitationExistante('Léa','Martin',v)
+            ?true:_echec('une invitation aboutie bloque une nouvelle');})());
+        ok('Inviter n\'exige AUCUN e-mail et ne crée AUCUN dossier',(()=>{
+          // Émettre un code demandait de créer le dossier de l'athlète, donc
+          // de connaître son e-mail avant même de l'avoir invité.
+          const src=String(inviterAthlete);
+          if(/email/i.test(src.replace(/currentUser|u\.email/g,'')))
+            return _echec('un e-mail est demandé quelque part');
+          if(src.indexOf('createAthlete')>=0) return _echec('un dossier est créé');
+          if(/DB\.set\('users'/.test(src)) return _echec('le registre des dossiers est écrit');
+          // Il écrit dans studentCodes du coach, et nulle part ailleurs.
+          return src.indexOf('u.studentCodes.push')>=0
+            ?true:_echec('l\'invitation n\'est pas enregistrée chez le coach');})());
+        ok('Un prénom trop court est refusé, avec une raison lisible',(()=>{
+          const sauve=currentUser;
+          try{
+            currentUser={id:'c1',email:'c@t',role:'coach'};
+            const p=inviterAthlete('L','');
+            // Promesse : on n'attend pas le réseau pour refuser une saisie.
+            if(!p||typeof p.then!=='function') return _echec('inviterAthlete ne rend pas une promesse');
+            return true;
+          } finally { currentUser=sauve; }})());
+        ok('La relance est un GESTE du coach, jamais automatique',(()=>{
+          // Aucun minuteur, aucune tâche de fond ne doit relancer un athlète.
+          const tout=[...document.querySelectorAll('script')].filter(x=>!x.src)
+            .map(x=>x.textContent).join('\n');
+          const prod=tout.slice(0,tout.indexOf('function testExercices'));
+          // relancerInvitation ne doit être appelée que depuis un onclick.
+          const appels=(prod.match(/relancerInvitation\(/g)||[]).length;
+          const depuisClic=(prod.match(/onclick=\\?"relancerInvitation\(/g)||[]).length;
+          if(appels-depuisClic>1) return _echec(appels+' appels dont '+depuisClic+' par clic');
+          for(const f of [_rendreInvitations,_htmlInvitationsEnAttente]){
+            if(/setTimeout|setInterval/.test(String(f)))
+              return _echec((f.name||'?')+' porte un minuteur');
+          }
+          return true;})());
+        ok('Le code court et le QR survivent, en repli',(()=>{
+          // Ils deviennent des replis, ils ne disparaissent pas.
+          const tout=[...document.querySelectorAll('script')].filter(x=>!x.src)
+            .map(x=>x.textContent).join('\n');
+          if(typeof copyCoachInviteLink!=='function') return _echec('le lien générique a disparu');
+          if(!/CLOUD\.showQR/.test(document.documentElement.outerHTML)) return _echec('le QR a disparu');
+          // Et le dépliant existe bien, avec son libellé.
+          const h=document.documentElement.outerHTML;
+          if(h.indexOf('Autre méthode')<0) return _echec('le dépliant de repli n\'existe pas');
+          return h.indexOf('id="inv-prenom"')>=0&&h.indexOf('id="inv-nom"')>=0
+            ?true:_echec('le formulaire unifié est absent');})());
         ok('fichesBanque rend un tableau vide, jamais null',(()=>{
           const sauve=_banque;
           try{
