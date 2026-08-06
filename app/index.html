@@ -32947,6 +32947,90 @@ function coachSetPhase(t){
   toastSync(ok,envoi,phaseCourante(c)?PHASES[t].lib+' enregistrée':'Phase retirée','la phase est');
 }
 
+// ── Import des pas et du sommeil par capture d'écran ────────────────────────
+// L'analyse est VOLONTAIREMENT indépendante de la mise en page. Le texte rendu
+// par la lecture des captures réelles n'est pas régulier : la valeur tombe
+// tantôt sur la ligne de la date (« 5 août - 25% 3 003 »), tantôt sur celle du
+// dessus (« 4 844 » puis « 6 août » 60% »). Les noms de jours sont peu fiables
+// — « jeudi » ressort en « Ja) » — et les anneaux de progression laissent du
+// bruit (J, N, D, >). Seule la DATE se lit de façon sûre : c'est donc elle qui
+// sert d'ancre, jamais le jour de la semaine ni la position dans l'écran.
+const _CAP_MOIS=['janvier','février','mars','avril','mai','juin','juillet',
+  'août','septembre','octobre','novembre','décembre'];
+// Comparaison sans accent ni casse : « août » et « aout » doivent tomber juste,
+// et un mois abrégé (« juil. ») se résout par préfixe d'au moins trois lettres.
+function _capSansAccent(s){
+  return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase();
+}
+function _capMoisVersNumero(mot){
+  const m=_capSansAccent(mot).replace(/\.$/,'');
+  if(m.length<3) return 0;
+  for(let i=0;i<12;i++){
+    if(_capSansAccent(_CAP_MOIS[i]).startsWith(m)) return i+1;
+  }
+  return 0;
+}
+function _capEntiers(ligne){
+  // Les pourcentages partent AVANT la recherche : sinon « 5 août - 25% 3 003 »
+  // rendrait 25, qui est un pourcentage d'objectif, pas un nombre de pas.
+  const propre=String(ligne).replace(/\d+\s*%/g,' ');
+  // \s couvre déjà l'espace fine insécable et l'insécable, les deux séparateurs
+  // de milliers rencontrés sur les captures.
+  return [...propre.matchAll(/\d[\d\s]*\d|\d/g)]
+    .map(m=>parseInt(m[0].replace(/\s/g,''),10))
+    .filter(n=>Number.isFinite(n));
+}
+function _capDuree(ligne){
+  const m=/(\d{1,2})\s*h\s*(\d{1,2})\s*m/i.exec(String(ligne));
+  if(!m) return null;
+  const mins=(+m[1])*60+(+m[2]);
+  // Même plafond que calcSleepDuration : au-delà de 18 h ce n'est pas une nuit.
+  if(mins<=0||mins>18*60) return null;
+  // Même conversion que l'app, au dixième d'heure près.
+  return Math.round(mins/6)/10;
+}
+function _analyserCaptureStats(texte,aujourdhui){
+  const ref=aujourdhui instanceof Date?aujourdhui:new Date();
+  const lignes=String(texte||'').split('\n').map(l=>l.trim());
+  const type=lignes.some(l=>_capDuree(l)!=null)?'sommeil':'pas';
+  const reDate=/(\d{1,2})\s*([A-Za-zÀ-ÿ]{3,})\.?/g;
+  const vus={};
+  let ignorees=0;
+  for(let i=0;i<lignes.length;i++){
+    reDate.lastIndex=0;
+    let m;
+    while((m=reDate.exec(lignes[i]))){
+      const jour=+m[1], mois=_capMoisVersNumero(m[2]);
+      if(!mois||jour<1||jour>31) continue;
+      // Année absente des captures. On prend l'année en cours, et si la date
+      // obtenue tombe dans le futur on recule d'un an : sans quoi tout import
+      // fait début janvier serait daté d'un an en avance.
+      let annee=ref.getFullYear();
+      let d=new Date(annee,mois-1,jour,12,0,0);
+      if(d.getTime()>ref.getTime()+864e5){ annee--; d=new Date(annee,mois-1,jour,12,0,0); }
+      if(d.getMonth()!==mois-1) continue; // 31 février et consorts
+      const cle=annee+'-'+String(mois).padStart(2,'0')+'-'+String(jour).padStart(2,'0');
+      if(vus[cle]!=null) continue;
+      // LA RÈGLE : la valeur est sur la ligne de la date, sinon sur celle du
+      // dessus. Sans valeur, la date est abandonnée — c'est ce qui écarte tout
+      // seul la ligne d'en-tête « 31 juil. — 6 août », qui n'en porte aucune.
+      let valeur=null;
+      for(const l of [lignes[i], i>0?lignes[i-1]:'']){
+        if(type==='sommeil'){
+          const d2=_capDuree(l);
+          if(d2!=null){ valeur=d2; break; }
+        }else{
+          const cands=_capEntiers(l).filter(n=>n>=100&&n<=99999);
+          if(cands.length){ valeur=Math.max(...cands); break; }
+        }
+      }
+      if(valeur==null){ ignorees++; continue; }
+      vus[cle]=valeur;
+    }
+  }
+  const jours=Object.keys(vus).sort().map(k=>({date:k,valeur:vus[k]}));
+  return {type:jours.length?type:null, jours, ignorees};
+}
 function _recordSteps(dateStr,count){
   const n=parseInt(count,10);
   // 0 est une valeur légitime saisie à la main (« je n'ai pas marché »), d'où
@@ -60577,6 +60661,83 @@ function testExercices(){
           return /recomposition/i.test(h)?true:_echec('la raison n\'est pas nommée');})());
       } finally { currentUser=_sU; }
     })();
+
+    // ── Import par capture : analyse du texte OCR — 14 cas ──
+    // Les deux chaînes ci-dessous sont le texte RÉELLEMENT rendu par le lecteur
+    // sur les captures Garmin de Kevin. Leur désordre est le sujet du test : ne
+    // pas les « nettoyer », c'est lui qui a dicté la règle d'association.
+    const _capPas=`€ Pas :
+1j 7j 4s Ta
+
+“ 31 juil. — 6 août
+Ja) 4 844 J
+6 août » 60%
+mercredi N
+5 août - 25% 3 003
+mardi 6 242 >
+4 août » 52%
+lundi N
+3 août » 25% 3 096
+dimanche 2 814 D
+2 août * 23%
+samedi
+1 août - 34% 4 150 >
+vendredi
+31 juillet - 29% 3 546 ,`;
+    const _capSom=`€ Sommeil :
+{ 7j 4s Ta
+
+“ 31 juil. — 6 août
+
+jeudi 79 6h 35m
+6 août Score Durée
+mercredi 54 7h 10m
+5 août Score Durée
+mardi 86 8h 20m
+4 août Score Durée
+lundi 73 6h 4m
+3 août Score Durée
+dimanche 53 7h 5m
+2 août Score Durée
+samedi 69 6h 19m
+1 août Score Durée
+vendredi 78 6h 44m
+31 juillet Score Durée`;
+    const _aPas=_analyserCaptureStats(_capPas,new Date('2026-08-06T12:00:00'));
+    const _aSom=_analyserCaptureStats(_capSom,new Date('2026-08-06T12:00:00'));
+
+    ok('Capture de pas reconnue comme telle',_aPas.type==='pas');
+    ok('Capture de sommeil reconnue comme telle',_aSom.type==='sommeil');
+    ok('Sept journées de pas, pas huit',_aPas.jours.length===7,
+       'lu '+_aPas.jours.length+' : l\'en-tête « 31 juil. — 6 août » a dû passer');
+    ok('Sept nuits, pas huit',_aSom.jours.length===7);
+    ok('Les sept totaux de pas sont exacts',
+       JSON.stringify(_aPas.jours.map(j=>j.valeur))
+         ===JSON.stringify([3546,4150,2814,3096,6242,3003,4844]),
+       'lu '+JSON.stringify(_aPas.jours.map(j=>j.valeur)));
+    ok('Les sept durées sont converties comme l\'app le fait',
+       JSON.stringify(_aSom.jours.map(j=>j.valeur))
+         ===JSON.stringify([6.7,6.3,7.1,6.1,8.3,7.2,6.6]),
+       'lu '+JSON.stringify(_aSom.jours.map(j=>j.valeur)));
+    ok('Les dates sont datées de l\'année en cours',
+       _aPas.jours[6].date==='2026-08-06'&&_aPas.jours[0].date==='2026-07-31');
+    ok('Un pourcentage n\'est jamais pris pour un total de pas',
+       !_aPas.jours.some(j=>[60,25,52,23,34,29].includes(j.valeur)));
+    ok('Un score de sommeil n\'est jamais pris pour une durée',
+       !_aSom.jours.some(j=>[79,54,86,73,53,69,78].includes(j.valeur)));
+    ok('Une valeur sur la ligne du dessus est bien rattachée',
+       _aPas.jours.find(j=>j.date==='2026-08-06').valeur===4844);
+    ok('Une valeur sur la ligne de la date est bien rattachée',
+       _aPas.jours.find(j=>j.date==='2026-08-05').valeur===3003);
+    ok('Une capture de janvier lue en janvier date de l\'année précédente',
+       _analyserCaptureStats('mardi 8 000\n31 décembre - 50%',
+         new Date('2027-01-03T12:00:00')).jours[0].date==='2026-12-31');
+    ok('Une nuit de plus de 18 h est refusée',
+       _analyserCaptureStats('lundi 19h 30m\n3 août Score',
+         new Date('2026-08-06T12:00:00')).jours.length===0);
+    ok('Un texte sans aucune date ne rend rien, sans lever',
+       _analyserCaptureStats('bonjour ceci n\'est pas une capture',
+         new Date('2026-08-06T12:00:00')).jours.length===0);
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
