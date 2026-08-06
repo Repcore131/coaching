@@ -130,6 +130,33 @@
           ".validate": "newData.isString() && newData.val().length < 400000"
         },
         "promoBanners": {},
+
+        // ── Canal : les DEUX seuls morceaux qui doivent etre connus sans ouvrir
+        // l onglet. Ils sont ici, et pas dans /canaux, parce que coach_public
+        // est DEJA telecharge a chaque ouverture de l accueil athlete : les y
+        // loger ne coute aucune requete de plus, alors qu aller les chercher
+        // dans /canaux en couterait une par lancement d application, pour tout
+        // le monde, y compris ceux qui n ouvrent jamais le canal.
+        //
+        // canalDernier : l horodatage du message le plus recent. C est la sonde
+        // qui allume la pastille — un entier, pas un fil. Meme idiome que
+        // pullUpdatedAt, pour la meme raison.
+        //
+        // canalEpingle : une COPIE du message epingle, celui qui s affiche en
+        // banniere d accueil. La duplication avec /canaux/messages est
+        // deliberee : sans elle, afficher la banniere obligerait a tirer le fil
+        // entier a chaque ouverture. Elle est bornee aux memes longueurs que le
+        // message d origine.
+        "canalDernier": { ".validate": "newData.isNumber()" },
+        "canalEpingle": {
+          "id":    { ".validate": "newData.isString() && newData.val().length < 40" },
+          "at":    { ".validate": "newData.isNumber() && newData.val() > 0" },
+          "titre": { ".validate": "newData.isString() && newData.val().length <= 80" },
+          "texte": { ".validate": "newData.isString() && newData.val().length <= 1000" },
+          "lien":  { ".validate": "newData.isString() && newData.val().length <= 500" },
+          "$autre": { ".validate": false }
+        },
+
         "chargesSchema": {
           "$schema": {
             "$zone": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 3" }
@@ -141,6 +168,110 @@
         "$autre": {
           ".validate": false
         }
+      }
+    },
+
+    // ── Canal du coach : un fil de diffusion, lu par ses athletes ──────────
+    // POURQUOI CE NOEUD N EST PAS DANS coach_public : coach_public est
+    // retelecharge EN ENTIER a chaque ouverture de l accueil athlete, pour la
+    // photo et la phrase du coach. Y loger le fil ferait descendre tous les
+    // messages a chaque lancement de l app, y compris quand personne n ouvre le
+    // canal. Ici, rien ne descend tant que l onglet n est pas ouvert. Le plafond
+    // du plan Spark est un VOLUME MENSUEL, pas un nombre d utilisateurs : c est
+    // cette difference-la qui decide s il est franchi.
+    //
+    // Le test de lecture est le meme que celui de coach_public : le proprietaire,
+    // ou un athlete dont le coachEmailKey designe ce coach. Un athlete SANS coach
+    // referent recoit 401 — l onglet grise cote application n est qu un affichage,
+    // la serrure est ici.
+    // IL N Y A VOLONTAIREMENT AUCUN .read SUR $coachKey. En RTDB les regles
+    // CASCADENT : un .read accorde sur un parent ne peut PAS etre repris par un
+    // enfant, seulement elargi. Poser ici la lecture « le coach ou ses athletes »
+    // aurait donc ouvert /reactions au groupe entier, et la separation ci-dessous
+    // n aurait rien protege du tout. La lecture est accordee un cran plus bas,
+    // noeud par noeud, ce qui est le seul moyen d en fermer un.
+    // Consequence cote client, assumee : le fil se lit en deux requetes
+    // (messages, puis compteurs) au lieu d une. C est aussi ce qui garantit que
+    // l athlete ne telecharge jamais /reactions.
+    "canaux": {
+      "$coachKey": {
+
+        // Les messages : le coach ecrit, personne d autre. Liste blanche stricte
+        // et longueurs bornees — un noeud lu par tout un groupe ne doit pas
+        // pouvoir accueillir un champ imprevu ni un texte sans fin.
+        "messages": {
+          ".read": "auth != null && (auth.token.email.replace('.', ',') === $coachKey || root.child('users').child(auth.token.email.replace('.', ',')).child('coachEmailKey').val() === $coachKey)",
+          ".write": "auth != null && auth.token.email.replace('.', ',') === $coachKey",
+          "$msgId": {
+            "at":      { ".validate": "newData.isNumber() && newData.val() > 0" },
+            "titre":   { ".validate": "newData.isString() && newData.val().length <= 80" },
+            "texte":   { ".validate": "newData.isString() && newData.val().length <= 1000" },
+            "lien":    { ".validate": "newData.isString() && newData.val().length <= 500" },
+            "epingle": { ".validate": "newData.isBoolean()" },
+            "$autre":  { ".validate": false }
+          }
+        },
+
+        // Compteurs PUBLICS, un entier par emoji. C est ce qui donne l affichage
+        // « 9 💪 » des canaux Instagram SANS exposer qui est qui : le detail
+        // nominatif vit dans /reactions, ferme. Sans cette separation, lire le
+        // compteur reviendrait a lire la liste des athletes du coach — RepCore
+        // n a jamais laisse un athlete apprendre l existence d un autre.
+        //
+        // L athlete ne peut faire varier un compteur que de UN, dans un sens ou
+        // dans l autre : poser sa reaction, ou la retirer. L increment serveur
+        // ({".sv":{"increment":1}}) est resolu AVANT l evaluation des regles,
+        // donc .validate voit bien le nombre final.
+        //
+        // Le coach, lui, ecrit la valeur qu il veut : c est ce qui lui permet de
+        // resynchroniser un compteur ayant derive d avec /reactions, quand un
+        // telephone a lache entre les deux ecritures.
+        //
+        // CE QU ON ACCEPTE, ET QU IL FAUT SAVOIR : un athlete rattache qui sait
+        // appeler cette URL peut gonfler un compteur en poussant +1 en boucle.
+        // Meme compromis assume que /metrics et /coachs_libres — a ceci pres
+        // qu il faut ici etre authentifie ET rattache a ce coach precis. Le gain
+        // de l attaque est nul et son auteur est identifie.
+        // L ecriture athlete exige newData.exists() : sans cela, un athlete
+        // pouvait SUPPRIMER le compteur et le remettre a zero d un coup. Un
+        // .validate ne l aurait pas arrete — Firebase ne valide pas une
+        // suppression, il ne consulte que .write.
+        "compteurs": {
+          ".read": "auth != null && (auth.token.email.replace('.', ',') === $coachKey || root.child('users').child(auth.token.email.replace('.', ',')).child('coachEmailKey').val() === $coachKey)",
+          "$msgId": {
+            "$emoji": {
+              ".write": "auth != null && (auth.token.email.replace('.', ',') === $coachKey || (newData.exists() && root.child('users').child(auth.token.email.replace('.', ',')).child('coachEmailKey').val() === $coachKey))",
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100000 && (auth.token.email.replace('.', ',') === $coachKey || (!data.exists() && newData.val() === 1) || (data.exists() && (newData.val() === data.val() + 1 || newData.val() === data.val() - 1)))"
+            }
+          }
+        },
+
+        // Qui a reagi, et avec quoi. C est tout ce qui separe « 9 personnes ont
+        // reagi », qui est public, de « voici lesquelles », qui ne l est pas.
+        //
+        // INDEXE PAR ATHLETE PUIS PAR MESSAGE, et non l inverse. Range par
+        // message, un athlete aurait eu besoin d une requete PAR MESSAGE pour
+        // retrouver ses propres reactions — vingt appels pour afficher un fil.
+        // Range par athlete, il en fait UN et recoit toutes les siennes. Le coach
+        // lit le noeud entier et pivote en memoire, ce qui ne coute rien : ce
+        // sont ses propres athletes.
+        //
+        // Les deux .read sont a des profondeurs differentes, et c est le fond de
+        // l affaire : celui du coach porte sur /reactions et cascade donc sur
+        // tout ; celui de l athlete est un cran plus bas et ne couvre que sa
+        // propre feuille. Un athlete ne peut pas lister /reactions.
+        "reactions": {
+          ".read": "auth != null && auth.token.email.replace('.', ',') === $coachKey",
+          "$athleteKey": {
+            ".read":  "auth != null && auth.token.email.replace('.', ',') === $athleteKey",
+            ".write": "auth != null && auth.token.email.replace('.', ',') === $athleteKey && root.child('users').child($athleteKey).child('coachEmailKey').val() === $coachKey",
+            "$msgId": {
+              ".validate": "newData.isString() && newData.val().length <= 8"
+            }
+          }
+        },
+
+        "$autre": { ".validate": false }
       }
     },
 

@@ -45,8 +45,24 @@ d'utilisateurs, c'est un **volume de 10 Go par mois**.
 
 Fil vertical, du plus récent au plus ancien, 20 messages chargés. Chaque carte
 porte une date relative, un titre optionnel, le texte (retours à la ligne
-conservés), et si un lien est présent une carte cliquable avec vignette, domaine
-et titre, qui ouvre le navigateur hors de l'app.
+conservés), et si un lien est présent une carte cliquable qui ouvre le
+navigateur hors de l'app.
+
+**Vignette — la limite est réelle.** Sans serveur, le navigateur ne peut pas
+lire les balises Open Graph d'une page distante : RepCore ne peut donc afficher
+ni le titre ni l'image d'un lien Instagram, Drive ou d'un site quelconque. Seul
+YouTube fait exception, son image se déduisant de l'identifiant. La carte montre
+donc **le domaine**, et une vignette pour les seuls liens YouTube. Pour tout le
+reste, inventer une vignette serait mentir.
+
+**Conséquence de confidentialité, à connaître.** Cette vignette est chargée
+depuis `img.youtube.com` : ouvrir l'onglet Canal transmet alors l'adresse IP de
+l'athlète à Google, **sans qu'il ait rien touché**. C'est le seul appel
+automatique à un tiers ajouté par ce lot, dans un projet qui a par ailleurs
+banni tous ses CDN. `privacy.html` a été corrigé en conséquence — il affirmait
+jusqu'ici que YouTube n'était contacté que « si vous ouvrez une de ces vidéos »,
+ce qui n'est plus vrai. Retirer la vignette supprimerait cet appel : c'est une
+ligne à enlever, si le choix se révèle indésirable.
 
 Sous chaque message, quatre emojis — 👍 ❤️ 💪 🔥 — chacun avec son compteur
 public. Un tap pose la réaction, un second la retire, un tap sur un autre emoji
@@ -179,9 +195,24 @@ voyage plus dans chaque dossier.
 5. Bascule de la bannière d'accueil sur le message épinglé, puis retrait du
    code `annonce`.
 
-**Barre d'onglets.** Elle ne bascule en défilement qu'en dessous de 340 px
-aujourd'hui, avec six onglets. Le seuil devra monter, et la mesure se fait
-réellement à 375 px et 320 px — pas à l'estime.
+**Barre d'onglets — mesuré, pas estimé.** Sept onglets à 11 px réclament
+**406 px** : la barre débordait donc sur 375 px *et* 390 px, c'est-à-dire sur la
+majorité des iPhone, et pas seulement sur les très petits écrans comme le
+laissait croire le seuil de 340 px. Trois réglages ont été mesurés sur un clone
+non contraint, police chargée :
+
+| Réglage | Largeur nécessaire | Tient à partir de |
+|---|---|---|
+| 11 px / 3 px (l'existant) | 406 px | 412 px |
+| 10,5 px / 2 px | 375 px | 375 px, sans marge |
+| **10 px / 2 px (retenu)** | **359 px** | **360 px** |
+
+Retenu : 10 px / 2 px sous 420 px, et défilement sous 360 px (le seuil passe de
+340 à 359 px). **Les sept libellés restent entiers.** L'alternative — garder
+11 px en abrégeant « Évolution » en « Évol » (355 px) — a été écartée : une
+police rapetissée se corrige, un onglet renommé désoriente un athlète qui
+l'utilise depuis des mois. La contrepartie est réelle et assumée : 1 px de
+police en moins sur tous les onglets, pour tous les écrans sous 420 px.
 
 **Tests.** En bac à sable : copie du dépôt dans le scratchpad, `fetch` vers
 Firebase et Cloudinary neutralisé, comptes semés directement en `localStorage`.
