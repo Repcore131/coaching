@@ -32948,6 +32948,64 @@ function coachSetPhase(t){
 }
 
 // ── Import des pas et du sommeil par capture d'écran ────────────────────────
+// Le moteur de lecture est LOURD. Il n'est chargé QUE lorsqu'un athlète envoie
+// une capture : le charger au démarrage ferait payer ce poids à tous ceux qui
+// ne s'en serviront jamais. Une fois chargé, le Service Worker le garde.
+// Tous les chemins sont locaux : sans ces options, la bibliothèque irait
+// chercher son cœur et ses données de langue sur un CDN — ce que le projet a
+// banni, et ce qui ferait sortir la capture de santé du téléphone.
+let _lecteurTexte=null, _lecteurTextePromesse=null;
+const _TESS='./vendor/tesseract/';
+// Valide un module WebAssembly minimal qui utilise une instruction vectorielle
+// (v128). S'il est refusé, l'appareil ne sait pas exécuter le cœur SIMD, et le
+// lui envoyer ferait échouer la lecture au lieu de la ralentir.
+let _simdCache=null;
+function _simdDisponible(){
+  if(_simdCache!==null) return _simdCache;
+  try{
+    _simdCache=WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,0,0,1,5,1,
+      96,0,1,123,3,2,1,0,10,10,1,8,0,65,0,253,15,253,98,11]));
+  }catch(e){ _simdCache=false; }
+  return _simdCache;
+}
+function _chargerScript(src){
+  return new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src=src; s.onload=resolve;
+    s.onerror=()=>reject(new Error('Chargement impossible : '+src));
+    document.head.appendChild(s);
+  });
+}
+async function _chargerLecteurTexte(){
+  if(_lecteurTexte) return _lecteurTexte;
+  if(_lecteurTextePromesse) return _lecteurTextePromesse;
+  _lecteurTextePromesse=(async()=>{
+    if(!window.Tesseract) await _chargerScript(_TESS+'tesseract.min.js');
+    _lecteurTexte=await window.Tesseract.createWorker('fra',1,{
+      workerPath:_TESS+'worker.min.js',
+      // Le cœur est DÉSIGNÉ, pas laissé au choix de la bibliothèque. Livrée un
+      // dossier, elle réclame d'elle-même la variante correspondant au jeu
+      // d'instructions du navigateur — relaxedsimd, simd ou aucune — et un 404
+      // n'entraîne AUCUN repli : le chargement échoue sèchement. Les couvrir
+      // toutes coûterait 11,4 Mo pour un gain nul, relaxedsimd n'étant pas
+      // plus rapide que simd (mesuré : 1658 ms contre 1705 ms).
+      // On tranche donc nous-mêmes entre deux variantes seulement. Mesure sur
+      // la capture de Kevin : 1705 ms avec SIMD, 3328 ms sans. Les appareils
+      // récents y gagnent le double, les anciens continuent de fonctionner au
+      // lieu d'échouer sec.
+      corePath:_TESS+(_simdDisponible()?'tesseract-core-simd-lstm.wasm.js'
+                                        :'tesseract-core-lstm.wasm.js'),
+      langPath:_TESS,
+    });
+    return _lecteurTexte;
+  })();
+  return _lecteurTextePromesse;
+}
+async function _lireCaptureStats(dataUrl){
+  const w=await _chargerLecteurTexte();
+  const {data}=await w.recognize(dataUrl);
+  return (data&&data.text)||'';
+}
 // L'analyse est VOLONTAIREMENT indépendante de la mise en page. Le texte rendu
 // par la lecture des captures réelles n'est pas régulier : la valeur tombe
 // tantôt sur la ligne de la date (« 5 août - 25% 3 003 »), tantôt sur celle du

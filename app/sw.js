@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v474';
+const CACHE = 'repcore-v475';
 const SW_DATA = 'repcore-sw-data'; // persistent across updates — not wiped by activate
 
 // DÉLAI DE GARDE sur index.html. Le handler était en network-first avec un
@@ -14,9 +14,11 @@ const SW_DELAI_RESEAU_MS = 2500;
 // vendor/qr.js et les deux polices : rapatries pour supprimer trois tiers.
 // Ils entrent dans ASSETS car ils sont demandes au PREMIER affichage — une
 // police absente donne un texte de repli, un encodeur absent donne un QR
-// absent. pdf.min.js, lui, est charge dynamiquement : il rejoint le cache par
-// le handler fetch a la premiere ouverture d un PDF, et y reste pour
-// l ouverture suivante, hors ligne comprise.
+// absent. pdf.min.js et le moteur de lecture des captures, eux, sont charges
+// dynamiquement : ils rejoignent le cache par le handler fetch au premier
+// usage, et y restent pour le suivant, hors ligne compris. Cela n a ete VRAI
+// qu a partir du lot qui a ajoute le put dans la branche generique du handler :
+// avant lui, celle-ci lisait le cache sans jamais l alimenter.
 const ASSETS = ['./index.html', './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './fonts/montserrat-var-latin.woff2',
   './fonts/bebasneue-400-latin.woff2'];
@@ -159,10 +161,27 @@ self.addEventListener('fetch', e => {
     })());
     return;
   }
-  // Assets same-origin : cache-first, sans fallback HTML (évite de servir HTML à la place d'un asset)
-  e.respondWith(
-    caches.match(e.request).then(r => r || fetch(e.request))
-  );
+  // Assets same-origin : cache-first, sans fallback HTML (évite de servir HTML
+  // a la place d un asset). La reponse reseau REJOINT desormais le cache : sans
+  // ce put, la branche lisait le cache sans jamais l alimenter, et vendor/
+  // pdf.min.js etait retelecharge a CHAQUE ouverture de PDF sans jamais
+  // fonctionner hors ligne — contrairement a ce que le commentaire d ASSETS
+  // affirmait. Meme cause pour le moteur de lecture des captures.
+  e.respondWith((async () => {
+    const enCache = await caches.match(e.request);
+    if (enCache) return enCache;
+    const r = await fetch(e.request);
+    // Mise en cache DETACHEE de la reponse servie, comme pour index.html : un
+    // quota sature ne doit pas casser un affichage qui fonctionne. Seules les
+    // reponses completes et valides sont conservees — une 404 ou une reponse
+    // partielle en cache serait pire que pas de cache du tout.
+    if (r && r.ok && r.status === 200) {
+      const clone = r.clone();
+      caches.open(CACHE).then(c => c.put(e.request, clone))
+        .catch(err => console.warn('[RepCore SW] put asset:', err));
+    }
+    return r;
+  })());
 });
 
 // ─── SW data store (Cache API key/value, survives SW updates) ───────────────

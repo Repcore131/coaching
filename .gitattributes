@@ -1,0 +1,9 @@
+# Fichiers du moteur de lecture des captures : JAMAIS de conversion de fins de
+# ligne. Un .gz dont les CRLF auraient ete reecrits est irrecuperable, et les
+# .wasm.js portent du binaire encode qui ne survivrait pas davantage. Sans cette
+# regle, un poste ou core.autocrlf vaut true les corromprait au prochain
+# checkout, silencieusement.
+app/vendor/tesseract/** -text
+*.gz -text
+*.wasm -text
+*.woff2 -text
