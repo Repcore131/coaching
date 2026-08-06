@@ -9305,6 +9305,367 @@ function _texteSignal(type,c,sg){
   }
   return '';
 }
+// ══════════════ AJUSTER DEPUIS L'ALERTE ══════════════
+// Corriger l'exercice à l'origine d'un signal sans quitter l'accueil coach.
+// AUCUN NOUVEAU CHAMP : ce lot n'écrit que dans sessions_config, par le chemin
+// déjà employé par removeCoachPdf — resolveClient, DB.set, CLOUD.pushOne. Ce
+// n'est pas un second chemin d'écriture : saveCoachSessions, lui, lit
+// _coachEditClient et finit par un go() qui ferait quitter l'écran.
+const AJ_ACTIONS=Object.freeze(['substituer','retirer_serie']);
+// PURE. La clé de rapprochement, et la SEULE correcte.
+//
+// Le nom porté par un signal vient de sessions[n].data — le nom tel qu'il a
+// été JOURNALISÉ — et pas de sessions_config. Mesuré : un programme portant
+// « DÉVELOPPÉ COUCHÉ BARRE » le lundi et « DEVELOPPE COUCHE BARRE » le jeudi
+// produit un signal sur « developpe couche barre ». Les trois chaînes sont
+// différentes et les trois exKey sont identiques. Comparer des chaînes ne
+// trouverait rien, silencieusement.
+function _ajCle(nom){
+  const k=exKey(nom||'');
+  if(!k) return '';
+  try{ return resoudreAlias(k)||k; }catch(e){ return k; }
+}
+// PURE. L'exercice à l'origine d'un signal, ou null.
+//
+// DEUX SIGNAUX SUR HUIT PORTENT UN NOM, et c'est une propriété du signal, pas
+// une lacune à combler : une séance écourtée, une forme basse ou une sèche
+// longue ne désignent aucun mouvement. Pour ceux-là, null est la vérité, et
+// la feuille n'offrira que le report.
+//
+// Le plateau est le cas intermédiaire : details.plateauMuscle ne porte qu'un
+// COMPTE d'exercices bloqués, mais _listeEtats — la source AMONT du même
+// calcul, déjà mise en cache — porte leurs noms. `user` est donc un troisième
+// argument FACULTATIF : sans lui la fonction garde exactement le contrat
+// (type, details), avec lui elle sait aussi remonter un plateau.
+function exerciceDuSignal(type,details,user){
+  const d=details||{};
+  if(type==='douleur'&&d.douleur&&d.douleur.nom)
+    return {nom:d.douleur.nom,tous:((d.douleurTous||[]).map(x=>x&&x.nom).filter(Boolean))||[]};
+  if(type==='douleurdiff'&&d.douleurDiffuse&&(d.douleurDiffuse.exercices||[]).length)
+    return {nom:d.douleurDiffuse.exercices[0],tous:d.douleurDiffuse.exercices.slice()};
+  if(type==='entrainement'&&d.plateauMuscle&&user){
+    try{
+      const m=d.plateauMuscle.muscle;
+      const bloques=_listeEtats(user).filter(x=>x&&(x.etat==='plateau'||x.etat==='regression'));
+      const dans=bloques.filter(x=>{
+        let cls=null;
+        try{ cls=resoudreMusclesLecture(x.nom,{name:x.nom},user); }catch(e){ return false; }
+        return cls&&cls!==VOL_CARDIO&&(cls.p||[]).indexOf(m)>=0;
+      });
+      if(dans.length) return {nom:dans[0].nom,tous:dans.map(x=>x.nom)};
+    }catch(e){}
+  }
+  return null;
+}
+// PURE. TOUS les créneaux où un exercice apparaît, actifs ou non — un créneau
+// désactivé reste un créneau du programme, et l'omettre ferait mentir le choix
+// « ce jour / tous les jours ».
+function creneauxDeLExercice(sessionsConfig,nom){
+  const out=[];
+  const cible=_ajCle(nom);
+  if(!cible||!Array.isArray(sessionsConfig)) return out;
+  sessionsConfig.forEach((sc,slot)=>{
+    ((sc&&sc.exercises)||[]).forEach((ex,idxExercice)=>{
+      if(ex&&_ajCle(ex.name)===cible)
+        out.push({slot,idxExercice,jour:(sc.day||''),nomSeance:(sc.name||''),
+          active:!!sc.active,nomEcrit:ex.name||''});
+    });
+  });
+  return out;
+}
+// PURE. Les substituts, AVEC ceux qui ne conviennent pas.
+//
+// Un exercice écarté est rendu, marqué compatible:false et motivé — jamais
+// retiré en silence. Le coach doit voir que la variante à laquelle il pense a
+// été examinée et pourquoi elle est écartée ; une liste amputée le laisserait
+// croire qu'elle n'existe pas.
+//
+// Deux familles, dans cet ordre : les variantes du MÊME schéma moteur, qui
+// gardent l'effet d'entraînement, puis — seulement si une contrainte pèse —
+// les schémas dont la charge sur la zone est STRICTEMENT plus basse. La
+// seconde famille réutilise la grille du coach, elle n'en invente pas une.
+function substitutsPour(nom,contraintes){
+  const out=[];
+  let sch=null;
+  try{ sch=schemaDe({name:nom}); }catch(e){ sch=null; }
+  const zones=((contraintes||[]).filter(c=>c&&c.zone&&c.actif!==false).map(c=>c.zone));
+  // Le verdict d'un schéma face aux zones contraintes. Une charge NON NOTÉE
+  // ne déclenche rien : tant que le coach n'a pas jugé, l'app ne juge pas.
+  const juger=(s)=>{
+    for(const z of zones){
+      let ch=null;
+      try{ ch=chargeSchema(s,z); }catch(e){ ch=null; }
+      if(ch!=null&&ch>=SEUIL_CONTRAINTE_EX)
+        return {compatible:false,motif:'sollicite '+libZone(z)+' ('+ch+'/3), zone déclarée sensible'};
+    }
+    return {compatible:true,motif:''};
+  };
+  const cible=_ajCle(nom);
+  const vus=new Set();
+  if(sch){
+    const v=juger(sch);
+    for(const n of ((SCHEMAS_BRUT[sch]||'').split('~'))){
+      if(!n) continue;
+      const k=_ajCle(n);
+      if(!k||k===cible||vus.has(k)) continue;
+      vus.add(k);
+      out.push({nom:n,compatible:v.compatible,motif:v.motif,schema:sch,memeSchema:true});
+    }
+  }
+  // Si le schéma d'origine est écarté, on va chercher ailleurs — sinon la
+  // liste ne contiendrait que des exercices grisés.
+  if(sch&&zones.length&&!juger(sch).compatible){
+    for(const s2 in SCHEMAS_META){
+      if(s2===sch) continue;
+      const v2=juger(s2);
+      if(!v2.compatible) continue;
+      // Une charge NOTÉE et plus basse : un schéma jamais jugé n'est pas
+      // proposé comme refuge, on ne sait pas ce qu'il vaut.
+      let connue=false;
+      for(const z of zones){ let c2=null; try{ c2=chargeSchema(s2,z); }catch(e){} if(c2!=null) connue=true; }
+      if(!connue) continue;
+      for(const n of ((SCHEMAS_BRUT[s2]||'').split('~')).slice(0,6)){
+        if(!n) continue;
+        const k=_ajCle(n);
+        if(!k||k===cible||vus.has(k)) continue;
+        vus.add(k);
+        out.push({nom:n,compatible:true,motif:'',schema:s2,memeSchema:false});
+      }
+    }
+  }
+  return out;
+}
+// PURE, NE MUTE PAS SON ENTRÉE. Rend un nouveau sessions_config.
+//
+// « Seances » et non « appliquerAjustement » tout court : ce dernier nom etait
+// deja pris par l ajustement de MACROS nutritionnelles. Deux declarations de
+// fonction du meme nom ne produisent aucune erreur — la seconde ecrase la
+// premiere en silence, et c est la mienne qui disparaissait.
+function appliquerAjustementSeances(sessionsConfig,cibles,action){
+  const src=Array.isArray(sessionsConfig)?sessionsConfig:[];
+  const out=src.map(sc=>Object.assign({},sc,{
+    exercises:((sc&&sc.exercises)||[]).map(x=>Object.assign({},x))}));
+  const type=(action||{}).type;
+  if(AJ_ACTIONS.indexOf(type)<0) return out;
+  for(const c of (cibles||[])){
+    if(!c) continue;
+    const sc=out[c.slot];
+    if(!sc||!Array.isArray(sc.exercises)) continue;
+    const ex=sc.exercises[c.idxExercice];
+    if(!ex) continue;
+    if(type==='retirer_serie'){
+      const n=Math.max(0,parseInt(ex.series,10)||0);
+      // Jamais zéro : un exercice à zéro série n'est pas un exercice allégé,
+      // c'est un exercice supprimé — et ce lot ne supprime rien.
+      ex.series=Math.max(1,n-1);
+    }else if(type==='substituer'){
+      const nv=String((action.nom||'')).trim();
+      if(!nv) continue;
+      ex.name=nv;
+      // L'image base64 de l'exercice remplacé ne suit JAMAIS : elle montrerait
+      // le mouvement qu'on vient justement de retirer.
+      delete ex.image;
+      // Et tout ce qui DÉCRIVAIT l'ancien mouvement ne décrit plus le nouveau.
+      delete ex.description; delete ex.note; delete ex.tempo;
+      delete ex.videoUrl; delete ex.justificationContrainte;
+      // ss et le rang sont conservés : on écrit À LA MÊME POSITION, donc le
+      // chaînage de superset et l'ordre de la séance tiennent tout seuls.
+    }
+  }
+  return out;
+}
+
+// ── La feuille ─────────────────────────────────────────────────────────────
+let _ajCtx=null;
+// Le bouton n'apparaît QUE sur les lignes de signal d'entraînement : elles
+// portent un athlète et sa donnée (list:[c]), là où les lignes administratives
+// portent un groupe. Aucune action de masse n'est donc possible — la règle
+// « un athlète, un geste » se tient par la structure des lignes.
+function _ajBouton(r,idx){
+  if(!r||!r.texte||r.type==='drapeau') return '';
+  return '<button class="hit44" onclick="event.stopPropagation();ouvrirAjustement('+idx+')"'
+    +' title="Ajuster le programme" aria-label="Ajuster le programme"'
+    +' style="background:none;border:none;color:var(--sub);font-size:15px;cursor:pointer;'
+    +'min-width:44px;min-height:44px;flex-shrink:0;border-radius:4px">⚙</button>';
+}
+function ouvrirAjustement(idx){
+  const r=window._todoRows&&window._todoRows[idx];
+  if(!r||!r.list||!r.list.length) return false;
+  const c=r.list[0];
+  let sg=null;
+  try{ sg=signauxEntrainement(c); }catch(e){ sg=null; }
+  const ex=sg?exerciceDuSignal(r.type,sg.details,c):null;
+  _ajCtx={idx,type:r.type,clientId:c.id,exercice:ex,portee:'jour',
+    creneaux:ex?creneauxDeLExercice(c.sessions_config,ex.nom):[],
+    slotChoisi:null,liste:false};
+  if(_ajCtx.creneaux.length) _ajCtx.slotChoisi=_ajCtx.creneaux[0].slot;
+  closeModal();
+  document.body.insertAdjacentHTML('beforeend',
+    '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">'
+    +'<div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:16px 16px 0 0;padding:18px;width:100%;max-width:480px;max-height:88vh;display:flex;flex-direction:column">'
+    +'<div id="aj-corps" style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch"></div>'
+    +'</div></div>');
+  _ajRendre();
+  return true;
+}
+function _ajClient(){
+  if(!_ajCtx) return null;
+  try{ return getOwnedClient(_ajCtx.clientId); }catch(e){ return null; }
+}
+function _ajCibles(){
+  if(!_ajCtx) return [];
+  const l=_ajCtx.creneaux||[];
+  if(_ajCtx.portee==='tous') return l;
+  return l.filter(x=>x.slot===_ajCtx.slotChoisi);
+}
+function _ajRendre(){
+  const z=document.getElementById('aj-corps');
+  if(!z||!_ajCtx) return false;
+  const c=_ajClient();
+  if(!c){ z.innerHTML='<div style="font-size:12px;color:var(--sub);line-height:1.6">Athlète introuvable.</div>'; return false; }
+  const nom=((c.fname||'')+' '+(c.lname||'')).trim()||'Athlète';
+  let sg=null; try{ sg=signauxEntrainement(c); }catch(e){}
+  const txt=sg?_texteSignal(_ajCtx.type,c,sg):'';
+  let h='<div style="font-size:15px;font-weight:800;margin-bottom:3px">'+escapeHtml(nom)+'</div>'
+    +'<div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:12px">'+escapeHtml(txt)+'</div>';
+  // RÈGLE 1. Sous drapeau rouge, AUCUNE action de programmation. Le produit
+  // suspend et renvoie ; il ne prescrit pas par-dessus. La garde est ici et
+  // pas seulement dans l'ordre des lignes du tableau de bord : rien ne
+  // garantit cet ordre à l'avenir.
+  let drap=null; try{ drap=drapeauRougeActif(c); }catch(e){}
+  if(drap||(function(){try{return drapeauQuelconqueActif(c);}catch(e){return false;}})()){
+    z.innerHTML=h+'<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:10px;padding:12px 13px">'
+      +'<div style="font-size:12px;color:#eee;line-height:1.6">Un drapeau est levé sur ce dossier. '
+      +'Aucun ajustement de programme n\'est proposé tant qu\'il n\'est pas levé.</div>'
+      +blocDisclaimerSante()+'</div>';
+    return true;
+  }
+  const ci=_rappelContreIndication(c);
+  if(ci) h+='<div style="font-size:11px;color:var(--orange);line-height:1.6;margin-bottom:12px">'+escapeHtml(ci.trim())+'</div>';
+  const ex=_ajCtx.exercice;
+  const cr=_ajCtx.creneaux||[];
+  if(!ex){
+    h+='<div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:12px">'
+      +'Ce signal ne désigne aucun exercice en particulier : il porte sur l\'ensemble '
+      +'de la semaine. Il n\'y a rien à substituer ici.</div>';
+  }else if(!cr.length){
+    h+='<div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:12px">'
+      +'<b>'+escapeHtml(ex.nom.toLowerCase())+'</b> ne figure plus dans le programme actuel : '
+      +'il a été fait, puis retiré ou renommé. Rien à ajuster.</div>';
+  }else{
+    h+='<div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:6px">Exercice concerné</div>'
+      +'<div style="font-size:13px;font-weight:800;margin-bottom:8px">'+escapeHtml(ex.nom.toLowerCase())+'</div>';
+    // RÈGLE 5 : présent deux jours, le choix est EXPLICITE. Jamais implicite.
+    if(cr.length>1){
+      h+='<div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:6px">'
+        +'Présent sur '+cr.length+' créneaux. Sur lequel agir ?</div>'
+        +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'
+        +cr.map(x=>'<button onclick="ajPortee(\'jour\','+x.slot+')" class="hit44" style="min-height:44px;'
+          +'background:'+((_ajCtx.portee==='jour'&&_ajCtx.slotChoisi===x.slot)?'var(--red)':'var(--surface-1)')+';'
+          +'border:1px solid var(--border);border-radius:8px;padding:8px 11px;font-size:11px;color:#ddd;cursor:pointer">'
+          +escapeHtml((x.jour||('créneau '+(x.slot+1)))+(x.active?'':' (inactif)'))+'</button>').join('')
+        +'<button onclick="ajPortee(\'tous\',null)" class="hit44" style="min-height:44px;'
+        +'background:'+(_ajCtx.portee==='tous'?'var(--red)':'var(--surface-1)')+';'
+        +'border:1px solid var(--border);border-radius:8px;padding:8px 11px;font-size:11px;color:#ddd;cursor:pointer">Tous les jours</button>'
+        +'</div>';
+    }else{
+      h+='<div style="font-size:11px;color:var(--text-faint);line-height:1.6;margin-bottom:12px">'
+        +escapeHtml(cr[0].jour||('Créneau '+(cr[0].slot+1)))+(cr[0].active?'':' · créneau inactif')+'</div>';
+    }
+    h+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'
+      +'<button class="btn btn-outline btn-sm" style="flex:1;min-width:120px;margin:0;min-height:44px;letter-spacing:.5px;font-size:10px" onclick="ajListeSubstituts()">Substituer</button>'
+      +'<button class="btn btn-outline btn-sm" style="flex:1;min-width:120px;margin:0;min-height:44px;letter-spacing:.5px;font-size:10px" onclick="ajRetirerSerie()">Retirer une série</button>'
+      +'</div>';
+    // « Baisser l'intensité » n'est PAS rendu : aucun champ d'intensité
+    // prescrite n'existe sur un exercice de sessions_config. L'action
+    // apparaîtra le jour où le champ existera, pas avant.
+    if(_ajCtx.liste){
+      let subs=[];
+      try{ subs=substitutsPour(ex.nom,contraintesActives(c)); }catch(e){ subs=[]; }
+      if(!subs.length){
+        h+='<div style="font-size:11px;color:var(--sub);line-height:1.6;padding:6px 0">'
+          +'Aucun substitut à proposer : le schéma moteur de cet exercice n\'est pas renseigné.</div>';
+      }else{
+        // Les utilisables d'abord. Sans ce tri, une contrainte qui écarte tout
+        // un schéma remplissait la fenêtre de lignes grises et repoussait les
+        // seuls exercices cliquables hors de l'écran.
+        const ordonnes=subs.slice().sort((a,b)=>(b.compatible?1:0)-(a.compatible?1:0));
+        const vus=ordonnes.slice(0,30);
+        h+=vus.map(x=>'<button '+(x.compatible?'onclick="ajSubstituer('+JSON.stringify(x.nom).replace(/"/g,'&quot;')+')"':'disabled')
+          +' class="hit44" style="display:block;width:100%;text-align:left;min-height:44px;'
+          +'background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:9px 12px;'
+          +'margin-bottom:6px;font-size:12px;cursor:'+(x.compatible?'pointer':'not-allowed')+';'
+          +'color:'+(x.compatible?'#ddd':'var(--text-faint)')+';opacity:'+(x.compatible?'1':'.55')+'">'
+          +escapeHtml(x.nom.toLowerCase())
+          // RÈGLE 7 : écarté, GRISÉ, motivé — jamais masqué en silence.
+          +(x.compatible?'':'<div style="font-size:10px;color:var(--orange);line-height:1.5;margin-top:3px">'+escapeHtml(x.motif)+'</div>')
+          +'</button>').join('');
+        if(ordonnes.length>vus.length)
+          h+='<div style="font-size:10.5px;color:var(--text-faint);line-height:1.6;padding:2px 0 6px">'
+            +(ordonnes.length-vus.length)+' autres mouvements ne sont pas affichés, tous écartés '
+            +'pour la même raison.</div>';
+      }
+    }
+  }
+  h+='<button class="btn btn-outline btn-sm" style="width:100%;margin:4px 0 0;min-height:44px;letter-spacing:.5px;font-size:10px" onclick="ajReporter()">Reporter 7 jours</button>'
+    +'<div style="font-size:10px;color:var(--text-faint);line-height:1.6;margin-top:9px">'
+    +'Chaque modification archive le programme précédent : tu peux revenir en arrière depuis la fiche.</div>';
+  z.innerHTML=h;
+  return true;
+}
+function ajPortee(mode,slot){
+  if(!_ajCtx) return false;
+  _ajCtx.portee=(mode==='tous')?'tous':'jour';
+  if(mode!=='tous') _ajCtx.slotChoisi=slot;
+  _ajRendre();
+  return true;
+}
+function ajListeSubstituts(){ if(!_ajCtx) return false; _ajCtx.liste=true; _ajRendre(); return true; }
+// Le seul point d'écriture du lot.
+function _ajEcrire(action){
+  if(!_ajCtx) return false;
+  const res=(function(){ try{ return resolveClient(_ajCtx.clientId); }catch(e){ return null; } })();
+  if(!res) return false;
+  const c=res.c, users=res.users;
+  // La garde de la règle 1 est reposée ICI : entre l'ouverture de la feuille
+  // et le clic, un drapeau a pu être levé sur un autre appareil.
+  let bloque=false;
+  try{ bloque=drapeauQuelconqueActif(c); }catch(e){}
+  if(bloque){ toast('Un drapeau est levé : aucun ajustement.','var(--orange)'); return false; }
+  const cibles=_ajCibles();
+  if(!cibles.length){ toast('Aucun créneau à modifier.','var(--orange)'); return false; }
+  // RÈGLE 2 : instantané AVANT modification. Aucune exception.
+  _pushSessionsHistory(c);
+  c.sessions_config=appliquerAjustementSeances(c.sessions_config,cibles,action);
+  c.updatedAt=Date.now();
+  users[c.email]=c;
+  const ok=DB.set('users',users);
+  // RÈGLE 6 : le signal ne s'éteint QUE si l'action a porté sur l'exercice qui
+  // l'a déclenché. La douleur vit dans l'HISTORIQUE : changer le programme ne
+  // la fera pas disparaître du calcul, et le seul levier d'extinction existant
+  // est le report. On le pose donc, mais seulement dans ce cas.
+  const vise=_ajCtx.exercice&&_ajCtx.exercice.nom;
+  const touche=cibles.some(x=>_ajCle(x.nomEcrit)===_ajCle(vise));
+  if(vise&&touche){ try{ reporterAlerte(_ajCtx.type,c); saveUser(); }catch(e){} }
+  closeModal();
+  _ajCtx=null;
+  try{ renderTodoBlock(getClients()); }catch(e){}
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Programme ajusté','l\'ajustement est');
+  return true;
+}
+function ajRetirerSerie(){ return _ajEcrire({type:'retirer_serie'}); }
+function ajSubstituer(nom){ return _ajEcrire({type:'substituer',nom}); }
+function ajReporter(){
+  const c=_ajClient();
+  if(!c||!_ajCtx) return false;
+  try{ reporterAlerte(_ajCtx.type,c); saveUser(); }catch(e){ return false; }
+  closeModal();
+  _ajCtx=null;
+  try{ renderTodoBlock(getClients()); }catch(e){}
+  toast('Reporté 7 jours');
+  return true;
+}
+
 // Lignes par athlète, dans l'ordre de priorité. Un athlète n'apparaît qu'une
 // fois : son signal le plus grave. Sinon un athlète qui cumule douleur,
 // décrochage et plateau occuperait trois des huit lignes à lui seul.
@@ -9506,7 +9867,7 @@ function renderTodoBlock(clients){
       const corps=r.texte
         ? `<div style="flex:1;min-width:0"><span style="font-size:12px;font-weight:800;color:#fff">${nomA}</span><span style="font-size:12px;font-weight:700;color:${r.color}"> · ${r.label}</span><div style="font-size:11px;color:var(--sub);line-height:1.5;margin-top:2px">${escapeHtml(r.texte)}</div></div>`
         : `<div style="flex:1;min-width:0"><span style="font-size:12px;font-weight:700;color:#fff">${r.list.length>1?r.list.length+' ':''}</span><span style="font-size:12px;font-weight:700;color:${r.color}">${r.label}</span><span style="font-size:11px;color:var(--sub)"> · ${names}</span></div>`;
-      return{html:`<span style="font-size:15px;flex-shrink:0;align-self:flex-start;margin-top:1px">${r.icon}</span>${corps}${_waBoutonTodo(r,idx)}${r.nonReportable?'':`<button onclick="event.stopPropagation();dismissTodoRow(${idx})" title="Snoozer 7 jours" style="background:none;border:none;color:var(--text-dim);font-size:15px;cursor:pointer;padding:4px 8px;flex-shrink:0;transition:color .15s;border-radius:4px" onmouseover="this.style.color='var(--sub)'" onmouseout="this.style.color='#444'">✕</button>`}`,
+      return{html:`<span style="font-size:15px;flex-shrink:0;align-self:flex-start;margin-top:1px">${r.icon}</span>${corps}${_ajBouton(r,idx)}${_waBoutonTodo(r,idx)}${r.nonReportable?'':`<button onclick="event.stopPropagation();dismissTodoRow(${idx})" title="Snoozer 7 jours" style="background:none;border:none;color:var(--text-dim);font-size:15px;cursor:pointer;padding:4px 8px;flex-shrink:0;transition:color .15s;border-radius:4px" onmouseover="this.style.color='var(--sub)'" onmouseout="this.style.color='#444'">✕</button>`}`,
       onClick:`openClientDetail('${r.list[0].id}')`,style:'cursor:pointer;transition:background .15s;'};
     },{pad:'10px 14px',gap:10,border:'#180000',hover:'#140000'})}
     ${restant?`<div style="padding:8px 14px;font-size:11px;color:var(--sub);border-top:1px solid #180000">+ ${restant} autre${restant>1?'s':''}</div>`:''}
@@ -44886,6 +45247,297 @@ function testExercices(){
           }
           return true;})());
         currentUser=_jSauve; currentClientId=_jCid;
+        })();
+        // ── Ajuster depuis l'alerte ──────────────────────────────────────
+        (()=>{
+        const _axU=currentUser, _axC=currentClientId;
+        const _axLun=_lundiDe(new Date()).getTime();
+        // Le programme écrit « DÉVELOPPÉ COUCHÉ BARRE » le lundi et
+        // « DEVELOPPE COUCHE BARRE » le jeudi : le MÊME exercice, deux
+        // orthographes. L'historique, lui, porte le nom tel qu'il a été
+        // journalisé. Trois chaînes différentes, une seule clé.
+        const _axCfg=()=>[
+          {day:'Lundi',name:'HAUT',active:true,exercises:[
+            {name:'DÉVELOPPÉ COUCHÉ BARRE',series:4,reps:'8',repos:'02 min',ss:false,
+             image:'data:image/png;base64,AAAA',description:'coudes serrés',videoUrl:'u'},
+            {name:'ROWING BARRE',series:4,reps:'8',ss:true}]},
+          {day:'Mardi',name:'',active:false,exercises:[]},
+          {day:'Jeudi',name:'HAUT 2',active:true,exercises:[
+            {name:'DEVELOPPE COUCHE BARRE',series:3,reps:'10'}]}];
+        const _axAthlete=(o)=>{
+          const seance=(k)=>({id:'x'+k,date:_axLun-k*604800000+86400000,slot:0,name:'HAUT',
+            sets:8,setsPlanned:8,
+            data:{'developpe couche barre':{sets:[
+              {done:true,weight:60,reps:'8',rir:'1',pain:SIG_PAIN_SEUIL+1},
+              {done:true,weight:60,reps:'8',rir:'1',pain:SIG_PAIN_SEUIL+1}],
+              methode:null,technique:'normale'}}});
+          return Object.assign({id:'ax1',email:'ax@t',role:'athlete',coachId:'axc',
+            fname:'Léa',lname:'M',exAlias:{},exMuscles:{},bilans:[],
+            sessions_config:_axCfg(),
+            sessions:[seance(3),seance(2),seance(1)]},o||{});
+        };
+        const _axSignaux=(u)=>{
+          _viderCacheVolume(); _viderCachePlateau();
+          try{ _cacheSignaux.clear(); }catch(e){}
+          return signauxEntrainement(u);
+        };
+        ok('Le nom du signal se rejoint par exKey, JAMAIS par la chaîne',(()=>{
+          // Le piège central du lot. details.douleur.nom vient de sessions[n].data,
+          // pas de sessions_config : une comparaison de chaînes ne trouverait
+          // rien, et elle ne le dirait pas.
+          const u=_axAthlete();
+          const sg=_axSignaux(u);
+          const ex=exerciceDuSignal('douleur',sg.details);
+          if(!ex||!ex.nom) return _echec('aucun exercice remonté');
+          if(ex.nom==='DÉVELOPPÉ COUCHÉ BARRE') return _echec('le nom est déjà celui du programme');
+          // La chaîne brute ne correspond à aucun exercice du programme…
+          const brut=u.sessions_config.filter(sc=>(sc.exercises||[]).some(x=>x.name===ex.nom));
+          if(brut.length) return _echec('la comparaison brute trouve quelque chose');
+          // …mais la clé les trouve tous les DEUX.
+          const cr=creneauxDeLExercice(u.sessions_config,ex.nom);
+          if(cr.length!==2) return _echec(cr.length+' créneaux au lieu de 2');
+          if(cr[0].slot!==0||cr[1].slot!==2) return _echec('slots : '+cr.map(x=>x.slot).join(','));
+          if(cr[0].idxExercice!==0||cr[1].idxExercice!==0) return _echec('mauvais rang');
+          // Un créneau INACTIF est parcouru quand même : l'omettre ferait mentir
+          // le choix « ce jour / tous les jours ».
+          const u2=_axAthlete();
+          u2.sessions_config[2].active=false;
+          if(creneauxDeLExercice(u2.sessions_config,ex.nom).length!==2)
+            return _echec('un créneau inactif est ignoré');
+          if(creneauxDeLExercice(u2.sessions_config,ex.nom)[1].active!==false)
+            return _echec('l\'inactivité n\'est pas signalée');
+          // Et un exercice absent du programme rend une liste vide, pas une erreur.
+          return creneauxDeLExercice(u.sessions_config,'MOUVEMENT ZORGLUB').length===0
+            ?true:_echec('un exercice absent trouve des créneaux');})());
+        ok('exerciceDuSignal : deux signaux portent un nom, les autres NON',(()=>{
+          // Ce n'est pas une lacune à combler : une séance écourtée, une forme
+          // basse ou une sèche longue ne désignent aucun mouvement.
+          const d={douleur:{nom:'SQUAT',painMax:5,seances:2,series:4},
+            douleurTous:[{nom:'SQUAT'},{nom:'FENTES BARRE'}],
+            douleurDiffuse:{series:7,exercices:['SQUAT','ROWING BARRE'],jours:14,painMax:5},
+            decrochage:{faits:12,prevus:24,seances:3,ratio:0.5},
+            formeBasse:{moy:4,base:7,ecart:3},
+            restrictionLongue:{semaines:16,kcal:1400,plancher:1600},
+            sousMEV:{muscle:'PECTORAUX',lib:'Pectoraux',mev:8,s1:2,s2:2},
+            volumeHaut:{muscle:'PECTORAUX',lib:'Pectoraux',mrv:22,s1:30,s2:30}};
+          if((exerciceDuSignal('douleur',d)||{}).nom!=='SQUAT') return _echec('douleur');
+          if((exerciceDuSignal('douleur',d)||{}).tous.length!==2) return _echec('douleurTous perdu');
+          if((exerciceDuSignal('douleurdiff',d)||{}).nom!=='SQUAT') return _echec('douleur diffuse');
+          for(const t of ['decrochage','entrainement','inconnu'])
+            if(exerciceDuSignal(t,d)) return _echec(t+' désigne un exercice');
+          // Sans details, sans rien : null, pas d'exception.
+          for(const x of [null,undefined,{},{douleur:{}},{douleurDiffuse:{exercices:[]}}]){
+            try{ if(exerciceDuSignal('douleur',x)) return _echec('un exercice sort de '+JSON.stringify(x)); }
+            catch(e){ return _echec('exception : '+e.message); }
+          }
+          // Le plateau : le nom n'est PAS dans details, mais _listeEtats le porte.
+          // Le troisième argument est FACULTATIF — sans lui, le contrat
+          // (type, details) est inchangé.
+          const u=_axAthlete();
+          const dp={plateauMuscle:{muscle:'PECTORAUX',lib:'Pectoraux',bloques:2,semaines:5}};
+          if(exerciceDuSignal('entrainement',dp)) return _echec('à deux arguments, le plateau remonte un nom');
+          try{ exerciceDuSignal('entrainement',dp,u); }
+          catch(e){ return _echec('exception avec user : '+e.message); }
+          return true;})());
+        ok('appliquerAjustementSeances NE MUTE PAS son entrée',(()=>{
+          const cfg=_axCfg();
+          const empreinte=JSON.stringify(cfg);
+          const cibles=[{slot:0,idxExercice:0},{slot:2,idxExercice:0}];
+          const a=appliquerAjustementSeances(cfg,cibles,{type:'retirer_serie'});
+          if(JSON.stringify(cfg)!==empreinte) return _echec('l\'entrée a été modifiée');
+          if(a===cfg) return _echec('le même objet est rendu');
+          if(a[0]===cfg[0]) return _echec('un créneau est partagé');
+          if(a[0].exercises[0]===cfg[0].exercises[0]) return _echec('un exercice est partagé');
+          if(a[0].exercises[0].series!==3) return _echec('séries : '+a[0].exercises[0].series);
+          if(a[2].exercises[0].series!==2) return _echec('jeudi : '+a[2].exercises[0].series);
+          // Jamais zéro : un exercice à zéro série est un exercice supprimé, et
+          // ce lot ne supprime rien.
+          let x=appliquerAjustementSeances(cfg,[{slot:2,idxExercice:0}],{type:'retirer_serie'});
+          for(let i=0;i<9;i++) x=appliquerAjustementSeances(x,[{slot:2,idxExercice:0}],{type:'retirer_serie'});
+          if(x[2].exercises[0].series!==1) return _echec('descendu à '+x[2].exercises[0].series);
+          // Une action inconnue ne fait RIEN, et rend quand même une copie.
+          const rien=appliquerAjustementSeances(cfg,cibles,{type:'zorglub'});
+          if(JSON.stringify(rien)!==empreinte) return _echec('une action inconnue modifie');
+          if(rien===cfg) return _echec('une action inconnue rend l\'entrée elle-même');
+          // Des cibles absurdes ne lèvent rien.
+          try{ appliquerAjustementSeances(cfg,[{slot:99,idxExercice:0},{slot:0,idxExercice:99},null],
+            {type:'retirer_serie'}); }
+          catch(e){ return _echec('exception sur cible absurde : '+e.message); }
+          return true;})());
+        ok('Substituer : même rang, même ss, et JAMAIS l\'image du remplacé',(()=>{
+          const cfg=_axCfg();
+          // L'exercice remplacé porte une image base64, une description et une
+          // vidéo : elles décrivent le mouvement qu'on vient de retirer.
+          const av=cfg[0].exercises[0];
+          if(!av.image||!av.description) return _echec('la fixture n\'a pas d\'image');
+          const r=appliquerAjustementSeances(cfg,[{slot:0,idxExercice:0}],
+            {type:'substituer',nom:'DEVELOPPE INCLINE HALTERE'});
+          const nv=r[0].exercises[0];
+          if(nv.name!=='DEVELOPPE INCLINE HALTERE') return _echec('le nom n\'a pas changé');
+          if(nv.image!==undefined) return _echec('l\'image a suivi');
+          if(nv.description!==undefined) return _echec('la description a suivi');
+          if(nv.videoUrl!==undefined) return _echec('la vidéo a suivi');
+          // Le rang et le chaînage de superset tiennent.
+          if(nv.ss!==false) return _echec('ss perdu');
+          if(nv.series!==4||nv.reps!=='8'||nv.repos!=='02 min') return _echec('la prescription a bougé');
+          if(r[0].exercises[1].name!=='ROWING BARRE'||r[0].exercises[1].ss!==true)
+            return _echec('le maillon suivant du superset a bougé');
+          if(r[0].exercises.length!==2) return _echec('le nombre d\'exercices a changé');
+          // Un substitut vide ne remplace rien.
+          const vide=appliquerAjustementSeances(cfg,[{slot:0,idxExercice:0}],{type:'substituer',nom:'  '});
+          return vide[0].exercises[0].name==='DÉVELOPPÉ COUCHÉ BARRE'
+            ?true:_echec('un nom vide a remplacé');})());
+        ok('substitutsPour n\'en MASQUE aucun : écarté = grisé + motif',(()=>{
+          // Règle 7. Une liste amputée laisserait le coach croire que la
+          // variante à laquelle il pense n'existe pas.
+          const u=_axAthlete();
+          u.chargesSchema={'poussee-horizontale':{'epaule':3},'tirage-horizontal':{'epaule':0}};
+          currentUser=u;
+          const sans=substitutsPour('DEVELOPPE COUCHE BARRE',[]);
+          if(!sans.length) return _echec('aucun substitut sans contrainte');
+          if(sans.some(x=>!x.compatible)) return _echec('un exercice est écarté sans contrainte');
+          if(sans.some(x=>_ajCle(x.nom)===_ajCle('DEVELOPPE COUCHE BARRE')))
+            return _echec('l\'exercice se propose lui-même');
+          // Contrainte à l'épaule : le schéma entier est écarté, mais TOUS les
+          // exercices restent présents, grisés et motivés.
+          const avec=substitutsPour('DEVELOPPE COUCHE BARRE',[{zone:'epaule',niveau:'eviter',actif:true}]);
+          const memeSchema=avec.filter(x=>x.memeSchema);
+          if(memeSchema.length!==sans.length)
+            return _echec('des exercices ont disparu : '+memeSchema.length+' contre '+sans.length);
+          if(memeSchema.some(x=>x.compatible)) return _echec('un exercice de l\'épaule reste compatible');
+          if(memeSchema.some(x=>!x.motif)) return _echec('un exercice est écarté sans motif');
+          if(!/epaule|paule/i.test(memeSchema[0].motif)) return _echec('le motif ne dit pas quelle zone');
+          // Et un refuge est proposé, sinon la liste ne serait QUE grise.
+          if(!avec.some(x=>x.compatible&&!x.memeSchema))
+            return _echec('aucun schéma de repli n\'est proposé');
+          // Une charge NON NOTÉE ne déclenche rien : tant que le coach n'a pas
+          // jugé, l'app ne juge pas.
+          u.chargesSchema={};
+          const nonNote=substitutsPour('DEVELOPPE COUCHE BARRE',[{zone:'epaule',actif:true}]);
+          if(nonNote.some(x=>!x.compatible)) return _echec('une zone non notée écarte quand même');
+          // Un exercice sans schéma moteur : liste vide, pas d'exception.
+          return substitutsPour('MOUVEMENT ZORGLUB',[]).length===0
+            ?true:_echec('un exercice sans schéma rend des substituts');})());
+        ok('Écriture : instantané AVANT, et exactement UNE entrée',(()=>{
+          // Règle 2. Aucune exception.
+          const coach={id:'axc',email:'axcoach@t',role:'coach',fname:'K'};
+          const u=_axAthlete();
+          const users={}; users['ax@t']=u; users['axcoach@t']=coach;
+          DB.set('users',users); currentUser=coach; currentClientId='ax1';
+          const sg=_axSignaux(u);
+          const ex=exerciceDuSignal('douleur',sg.details);
+          _ajCtx={idx:0,type:'douleur',clientId:'ax1',exercice:ex,portee:'jour',
+            creneaux:creneauxDeLExercice(u.sessions_config,ex.nom),slotChoisi:0,liste:false};
+          const avantH=(u.sessions_config_history||[]).length;
+          const avantCfg=JSON.stringify(u.sessions_config);
+          if(!_ajEcrire({type:'substituer',nom:'DEVELOPPE INCLINE HALTERE'}))
+            return _echec('l\'écriture échoue');
+          const apres=(DB.get('users')||{})['ax@t'];
+          const h=apres.sessions_config_history||[];
+          if(h.length!==avantH+1) return _echec(h.length+' entrées d\'historique');
+          if(JSON.stringify(h[0].sessions_config)!==avantCfg)
+            return _echec('l\'instantané n\'est pas l\'état AVANT');
+          // Critère : Y au même rang, même ss, sans l'image de X.
+          const nv=apres.sessions_config[0].exercises[0];
+          if(nv.name!=='DEVELOPPE INCLINE HALTERE') return _echec('lundi non modifié');
+          if(nv.image!==undefined) return _echec('l\'image a suivi');
+          if(nv.ss!==false) return _echec('ss perdu');
+          // « ce jour » : JEUDI EST INTACT.
+          if(apres.sessions_config[2].exercises[0].name!=='DEVELOPPE COUCHE BARRE')
+            return _echec('jeudi a été modifié alors que la portée était « ce jour »');
+          // Règle 6 : le signal s'éteint, parce que l'action a porté sur
+          // l'exercice qui l'a déclenché.
+          if(!isAlertSnoozed('douleur','ax1',0,apres)) return _echec('le signal ne s\'éteint pas');
+          _ajCtx=null;
+          return true;})());
+        ok('« Tous les jours » touche les deux créneaux, et pas plus',(()=>{
+          const coach={id:'axc',email:'axcoach@t',role:'coach'};
+          const u=_axAthlete();
+          const users={}; users['ax@t']=u; users['axcoach@t']=coach;
+          DB.set('users',users); currentUser=coach; currentClientId='ax1';
+          const sg=_axSignaux(u);
+          const ex=exerciceDuSignal('douleur',sg.details);
+          _ajCtx={idx:0,type:'douleur',clientId:'ax1',exercice:ex,portee:'tous',
+            creneaux:creneauxDeLExercice(u.sessions_config,ex.nom),slotChoisi:0,liste:false};
+          if(!_ajEcrire({type:'retirer_serie'})) return _echec('l\'écriture échoue');
+          const a=(DB.get('users')||{})['ax@t'];
+          if(a.sessions_config[0].exercises[0].series!==3) return _echec('lundi : '+a.sessions_config[0].exercises[0].series);
+          if(a.sessions_config[2].exercises[0].series!==2) return _echec('jeudi : '+a.sessions_config[2].exercises[0].series);
+          // Le voisin de superset n'a pas bougé.
+          if(a.sessions_config[0].exercises[1].series!==4) return _echec('le voisin a bougé');
+          _ajCtx=null;
+          return true;})());
+        ok('Drapeau levé : AUCUNE action de programmation',(()=>{
+          // Règle 1. Le produit suspend et renvoie ; il ne prescrit pas
+          // par-dessus. La garde est reposée à l'ÉCRITURE et pas seulement au
+          // rendu : entre l'ouverture de la feuille et le clic, un drapeau a pu
+          // être levé sur un autre appareil.
+          const coach={id:'axc',email:'axcoach@t',role:'coach'};
+          const u=_axAthlete();
+          poserDrapeauRouge(u,'epaule',['irradiation']);
+          const users={}; users['ax@t']=u; users['axcoach@t']=coach;
+          DB.set('users',users); currentUser=coach; currentClientId='ax1';
+          const avant=JSON.stringify(u.sessions_config);
+          const avantH=(u.sessions_config_history||[]).length;
+          _ajCtx={idx:0,type:'douleur',clientId:'ax1',exercice:{nom:'DEVELOPPE COUCHE BARRE',tous:[]},
+            portee:'tous',creneaux:creneauxDeLExercice(u.sessions_config,'DEVELOPPE COUCHE BARRE'),
+            slotChoisi:0,liste:false};
+          if(_ajEcrire({type:'retirer_serie'})!==false) return _echec('l\'écriture passe sous drapeau');
+          const a=(DB.get('users')||{})['ax@t'];
+          if(JSON.stringify(a.sessions_config)!==avant) return _echec('le programme a bougé');
+          if((a.sessions_config_history||[]).length!==avantH)
+            return _echec('un instantané a été posé pour rien');
+          // Et le rendu ne propose rien non plus.
+          const z=document.createElement('div'); z.id='aj-corps'; document.body.appendChild(z);
+          try{
+            _ajRendre();
+            const t=document.getElementById('aj-corps').innerText;
+            if(/Substituer|Retirer une série/.test(t)) return _echec('une action est rendue sous drapeau');
+            if(!/drapeau/i.test(t)) return _echec('le renvoi n\'est pas dit');
+          } finally { z.remove(); leverDrapeauRouge(u); _ajCtx=null; }
+          return true;})());
+        ok('Le bouton d\'ajustement : signaux seulement, 44 px, aucun geste de masse',(()=>{
+          // Règle 8. Les lignes administratives portent un GROUPE d'athlètes :
+          // leur donner ce bouton ouvrirait une action de masse.
+          if(_ajBouton({type:'bilan',label:'Nouveau bilan',list:[{id:'a'},{id:'b'}]},0)!=='')
+            return _echec('une ligne administrative porte le bouton');
+          if(_ajBouton({type:'drapeau',texte:'x',list:[{id:'a'}]},0)!=='')
+            return _echec('la ligne drapeau porte le bouton');
+          const h=_ajBouton({type:'douleur',texte:'douleur sur X',list:[{id:'a'}]},3);
+          if(!/ouvrirAjustement\(3\)/.test(h)) return _echec('aucun bouton sur une ligne de signal');
+          if(!/min-height:44px/.test(h)||!/min-width:44px/.test(h))
+            return _echec('la cible n\'est pas de 44 px');
+          if(!/event\.stopPropagation/.test(h))
+            return _echec('le clic ouvrirait aussi la fiche client');
+          // Et il est réellement posé dans la ligne, à côté du bouton de contact.
+          return /_ajBouton\(r,idx\)\}\$\{_waBoutonTodo\(r,idx\)\}/.test(String(renderTodoBlock))
+            ?true:_echec('le bouton n\'est pas rendu dans la ligne');})());
+        ok('NON-RÉGRESSION : urgencyScore et les seuils sont intacts',(()=>{
+          // Rien de ce lot n'entre dans le score d'urgence ni dans un seuil.
+          if(SIG_PAIN_SEUIL!==4||SIG_DOULEUR_MIN_SEANCES!==2||SIG_SEANCES!==3)
+            return _echec('un seuil de signal a bougé');
+          if(MIN_SEANCES!==4||MIN_JOURS!==21||SEUIL_REGRESSION!==0.95)
+            return _echec('un seuil de plateau a bougé');
+          for(const f of [urgencyScore,signauxEntrainement,_texteSignal]){
+            const t=String(f);
+            if(/appliquerAjustementSeances|substitutsPour|creneauxDeLExercice|exerciceDuSignal|_ajCtx/.test(t))
+              return _echec((f.name||'?')+' a été contaminé par le lot');
+          }
+          // Les six paliers d'origine, recalculés ici.
+          const now=Date.now();
+          const nu={id:'p1',email:'p1@t',bilans:[],sessions:[],status:'COACHING_SUIVI'};
+          const ac={id:'p2',email:'p2@t',bilans:[{date:now}],sessions:[{date:now,data:{}}],
+            status:'COACHING_SUIVI',lastActivity:now};
+          try{ _cacheSignaux.clear(); }catch(e){}
+          const avant=[urgencyScore(nu),urgencyScore(ac)];
+          // Le même dossier, après un ajustement : le score ne bouge pas.
+          const ac2=Object.assign({},ac,{sessions_config:_axCfg(),
+            sessions_config_history:[{ts:now,sessions_config:_axCfg()}]});
+          try{ _cacheSignaux.clear(); }catch(e){}
+          const apres=[urgencyScore(nu),urgencyScore(ac2)];
+          return avant.join()===apres.join()
+            ?true:_echec('avant '+avant.join()+', après '+apres.join());})());
+        currentUser=_axU; currentClientId=_axC; _ajCtx=null;
         })();
         ok('fichesBanque rend un tableau vide, jamais null',(()=>{
           const sauve=_banque;
