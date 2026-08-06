@@ -9213,16 +9213,6 @@ function canalDomaine(lien){
   const m=/^https?:\/\/([^/?#]+)/i.exec(s);
   return m?m[1].replace(/^www\./i,''):'';
 }
-// PURE. YouTube est le SEUL cas où une vignette réelle est possible sans
-// serveur : l'image se déduit de l'identifiant. Pour tout autre lien, il n'y a
-// pas de vignette — la lire supposerait d'aller chercher les balises Open Graph
-// de la page distante, ce qu'aucun navigateur n'autorise depuis le client.
-function canalVignette(lien){
-  const s=String(lien==null?'':lien).trim();
-  const m=/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/i.exec(s);
-  return m?('https://img.youtube.com/vi/'+m[1]+'/mqdefault.jpg'):'';
-}
-
 // ── L'onglet : verrou et pastille ───────────────────────────────────────────
 function _majOngletCanal(){
   const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="canal"]');
@@ -9348,13 +9338,21 @@ function _canalCarte(m,compteurs,mienne){
 // « javascript: », et cette confusion exacte a déjà produit une faille sur le
 // lien des bannières promo. rel="noopener" : sans lui, la page ouverte garde
 // une référence sur window.opener et peut rediriger l'app.
+// AUCUNE VIGNETTE, ET C'EST UN CHOIX. Une image d'apercu YouTube etait affichee
+// ici : elle etait chargee depuis img.youtube.com, donc ouvrir l'onglet Canal
+// transmettait l'adresse IP de l'athlete a Google SANS qu'il ait rien touche.
+// C'etait le seul appel automatique a un tiers de toute l'application, dans un
+// projet qui a par ailleurs retire tous ses CDN et dont une regle de test
+// echoue si l'un d'eux revient. Retiree a la demande de Kevin.
+// La carte montre donc le DOMAINE, et rien de plus — pour les autres liens
+// (reseaux sociaux, Drive) c'etait de toute facon la seule chose affichable :
+// sans serveur, un navigateur ne peut pas lire les balises Open Graph d'une
+// page distante.
 function _canalCarteLien(lien){
-  const vignette=canalVignette(lien);
   const dom=canalDomaine(lien);
   if(safeUrlRaw(lien)==='#') return '';
   return `<a href="${safeUrl(lien)}" target="_blank" rel="noopener noreferrer"
     style="display:block;margin-top:12px;border:1px solid var(--border);border-radius:10px;overflow:hidden;text-decoration:none;background:var(--surface-2)">
-    ${vignette?`<img src="${safeUrl(vignette)}" alt="" loading="lazy" style="width:100%;display:block;aspect-ratio:16/9;object-fit:cover">`:''}
     <div style="display:flex;align-items:center;gap:9px;padding:11px 13px">
       <span style="display:inline-flex;color:var(--info);flex-shrink:0">${icon('link',15)}</span>
       <span style="flex:1;min-width:0;font-size:12px;color:var(--info);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(dom||'Ouvrir le lien')}</span>
@@ -9570,7 +9568,7 @@ function openMessageCanal(msgId){
     <textarea id="cm-texte" rows="5" maxlength="${CANAL_TEXTE_MAX}" style="resize:none" placeholder="J'ai publié une nouvelle vidéo sur le soulevé de terre. Regardez-la avant jeudi.">${escapeHtml(m.texte||'')}</textarea>
     <label for="cm-lien" style="margin-top:12px">Lien (optionnel)</label>
     <input id="cm-lien" type="url" maxlength="${CANAL_LIEN_MAX}" value="${escapeHtml(m.lien||'')}" placeholder="Colle ici l'adresse de ta publication">
-    <div class="sub" style="font-size:11px;margin-top:5px;line-height:1.5">Réseaux sociaux, vidéo, Drive, tableur… Le lien s'ouvre dans le navigateur. Seul un lien YouTube affiche une vignette : elle est chargée depuis Google, qui voit alors la connexion de tes athlètes.</div>
+    <div class="sub" style="font-size:11px;margin-top:5px;line-height:1.5">Réseaux sociaux, vidéo, Drive, tableur… Tes athlètes voient le nom du site et ouvrent le lien d'un tap, dans leur navigateur. Aucune image d'aperçu n'est chargée : rien n'est demandé à un autre site tant que personne n'a touché le lien.</div>
     <label style="display:flex;align-items:center;gap:10px;margin-top:14px;cursor:pointer">
       <input id="cm-epingle" type="checkbox" ${m.epingle?'checked':''} style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <span style="font-size:12px;line-height:1.5">Épingler à l'accueil<br><span class="sub" style="font-size:11px">Un seul message à la fois : celui-ci remplacera l'épinglé actuel.</span></span>
@@ -54535,17 +54533,23 @@ function testExercices(){
         canalDomaine('https://www.instagram.com/p/abc')==='instagram.com');
       ok('Un lien sans schéma ne produit pas de domaine',
         canalDomaine('instagram.com/p/abc')==='');
-      ok('Une vignette YouTube se déduit de l\'identifiant',(()=>{
-        const a=canalVignette('https://youtu.be/lUuPEpfdgrs');
-        const b=canalVignette('https://www.youtube.com/watch?v=lUuPEpfdgrs');
-        const c=canalVignette('https://www.youtube.com/shorts/lUuPEpfdgrs');
-        return a===b&&b===c&&/lUuPEpfdgrs\/mqdefault\.jpg$/.test(a)
-          ?true:_echec(a+' / '+b+' / '+c);})());
-      ok('Hors YouTube, aucune vignette n\'est inventée',(()=>{
-        // Sans serveur, lire l'Open Graph d'une page distante est impossible
-        // depuis le navigateur. Afficher une fausse vignette serait pire.
-        return canalVignette('https://instagram.com/p/abc')===''
-            && canalVignette('')===''&&canalVignette(null)==='';})());
+      ok('AUCUNE image n\'est chargée par la carte de lien',(()=>{
+        // LE VERROU DU RETRAIT DE LA VIGNETTE. Une image d'aperçu YouTube était
+        // chargée depuis img.youtube.com : ouvrir l'onglet suffisait à envoyer
+        // l'adresse IP de l'athlète à Google, sans un seul geste de sa part.
+        // Ce test doit ÉCHOUER si une balise img revient ici — c'est tout son
+        // intérêt, exactement comme le verrou qui garde les CDN dehors.
+        const liens=['https://youtu.be/lUuPEpfdgrs',
+          'https://www.youtube.com/watch?v=lUuPEpfdgrs',
+          'https://www.youtube.com/shorts/lUuPEpfdgrs',
+          'https://instagram.com/p/abc','https://drive.google.com/file/d/x/view'];
+        const fautifs=liens.filter(l=>/<img|img\.youtube|background-image/i.test(_canalCarteLien(l)));
+        return fautifs.length?_echec('image chargée pour : '+fautifs.join(', ')):true;})());
+      ok('La carte de lien ne montre que le domaine',(()=>{
+        const h=_canalCarteLien('https://www.instagram.com/p/abc');
+        const box=document.createElement('div'); box.innerHTML=h;
+        return /instagram\.com/.test(box.innerText||'')&&!box.querySelector('img')
+          ?true:_echec('«'+(box.innerText||'').slice(0,60)+'»');})());
       ok('La carte de lien REFUSE javascript: — safeUrl, pas escapeHtml',(()=>{
         // escapeHtml laisse passer « javascript: » : la confusion exacte qui a
         // déjà produit une faille sur le lien des bannières promo.
