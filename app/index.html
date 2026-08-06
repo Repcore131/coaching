@@ -214,14 +214,24 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
    largeur (62px a 375px), ce qui etrangle « ÉVOLUTION » — qui en demande 63 —
    tout en gaspillant la moitie de la case de « BILAN ». En partant de la
    largeur du texte, chacun prend ce qu'il lui faut et se partage le reste. */
-@media(max-width:420px){.tab-btn{letter-spacing:0;padding:6px 3px;flex:1 1 auto}}
-/* Tres petits ecrans (iPhone SE = 320px) : six libelles a 11px ne tiennent pas,
-   quoi qu'on rogne. Plutot que de rapetisser le texte ou de le tronquer, la
-   barre defile — les deux derniers onglets s'atteignent d'un glissement, et
-   aucun libelle ne devient illisible. */
-@media(max-width:340px){
+/* SEPT onglets depuis l'ajout du Canal, et c'est ce qui a impose de rogner ici.
+   MESURE, pas estimation (clone non contraint, Montserrat chargee) :
+     11px / 3px  -> 406px  il faut 412px d'ecran : deborde sur 375 ET 390,
+                           donc sur la majorite des iPhone ;
+     10.5px/ 2px -> 375px  tient de justesse, aucune marge ;
+     10px  / 2px -> 359px  tient des 360px — Galaxy, Pixel, iPhone 12/13/14.
+   On garde les SEPT libelles entiers plutot que d'abreger « Evolution », qui
+   est un ecran installe depuis des mois : rapetisser une police se corrige, un
+   onglet renomme desoriente. La contrepartie est reelle et assumee — 10px au
+   lieu de 11 sous 420px de large. */
+@media(max-width:420px){.tab-btn{letter-spacing:0;padding:6px 2px;font-size:10px;flex:1 1 auto}}
+/* Sous 360px (iPhone SE = 320px) : meme a 10px, 359px ne rentrent plus. Plutot
+   que de rapetisser encore ou de tronquer, la barre defile — les derniers
+   onglets s'atteignent d'un glissement, et aucun libelle ne devient illisible.
+   Le seuil etait a 340px avec six onglets ; le septieme le remonte a 359px. */
+@media(max-width:359px){
   .tab-bar{overflow-x:auto}
-  .tab-btn{flex:0 0 auto;padding:6px 9px}
+  .tab-btn{flex:0 0 auto;padding:6px 9px;font-size:10px}
 }
 /* Onglet actif : trois signaux cumulés — teinte plus claire (#ff5a5a sur #0c0c0c
    = 6,4:1), halo sur l'icône, et liseré supérieur. Le liseré est un repère de
@@ -243,6 +253,15 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
   border-radius:50%;background:var(--red);border:1.5px solid #0c0c0c;
   box-shadow:0 0 6px rgba(224,32,32,.9);display:none;pointer-events:none}
 .tab-dot.on{display:block}
+/* Onglet verrouille (canal sans coach rattache). Le cadenas occupe la place de
+   la pastille, jamais les deux a la fois : un onglet inaccessible n'a rien de
+   neuf a signaler. L'opacite reste au-dessus de .5 pour que le libelle demeure
+   lisible — un onglet qu'on veut voir desire ne doit pas devenir illisible. */
+.tab-lock{position:absolute;top:2px;left:calc(50% + 4px);font-size:10px;line-height:1;
+  display:none;pointer-events:none}
+.tab-btn.verrou{opacity:.55}
+.tab-btn.verrou .tab-lock{display:block}
+.tab-btn.verrou .tab-dot{display:none}
 /* La barre d'onglets athlete vivait DANS #s-client-home : elle disparaissait
    donc des que l'athlete ouvrait Nutrition ou Videos, et passer de l'un a
    l'autre imposait un detour par l'accueil (2 taps). Sortie des ecrans et
@@ -1236,7 +1255,7 @@ const COACH_PHOTO='icons/coach.jpg';
             <h2 style="font-size:16px">MES ATHLÈTES</h2>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
-            <button class="btn btn-outline btn-sm" onclick="openAnnonce()" title="Mot à l'accueil de l'app" aria-label="Mot à l'accueil de l'app" style="letter-spacing:1px;padding:9px 11px;margin:0;min-height:38px">📣 MOT</button>
+            <button class="btn btn-outline btn-sm" onclick="loadCanalCoach()" title="Canal : écrire à tous mes athlètes" aria-label="Canal : écrire à tous mes athlètes" style="letter-spacing:1px;padding:9px 11px;margin:0;min-height:38px">📣 CANAL</button>
             <button class="btn btn-outline btn-sm" onclick="openWaGroupe()" title="Message groupé WhatsApp" aria-label="Message groupé WhatsApp" style="letter-spacing:1px;padding:9px 11px;margin:0;min-height:38px">💬 GROUPÉ</button>
             <button class="btn btn-red btn-sm" onclick="openAddAthlete()" style="letter-spacing:2px;padding:9px 16px;margin:0;min-height:38px">+ AJOUTER</button>
           </div>
@@ -2987,6 +3006,39 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- LIFESTYLE (Steps + Sommeil) -->
+<!-- ══════ CANAL — CÔTÉ COACH ══════
+     Nommé s-coach-canal et non s-canal-coach : le garde de rôle de go() filtre
+     sur le préfixe « s-coach- ». L'écran est donc protégé sans une ligne de
+     plus, et le resterait si quelqu'un le rendait atteignable autrement. -->
+<div id="s-coach-canal" class="screen">
+  <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
+    <button class="back-btn" onclick="go('s-coach-home')">←</button>
+    <span class="topbar-title">Mon canal</span>
+    <span></span>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <p class="sub" style="font-size:12px;line-height:1.6;margin-bottom:14px">Un seul exemplaire pour tous tes athlètes suivis, y compris ceux que tu n'as jamais ouverts sur cet appareil. Ils le découvrent à leur prochaine ouverture de l'app : leur téléphone ne sonnera pas.</p>
+      <button class="btn btn-red btn-sm" style="width:100%;margin:0 0 16px;min-height:46px" onclick="openMessageCanal('')">+ NOUVEAU MESSAGE</button>
+      <div id="canal-coach-fil"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ CANAL DU COACH (athlète) ══════
+     Fil de diffusion : le coach écrit, l'athlète lit et réagit. Aucun champ de
+     saisie ici, c'est délibéré — le canal n'est pas une messagerie. -->
+<div id="s-canal" class="screen">
+  <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
+    <button class="back-btn" onclick="go('s-client-home')">←</button>
+    <span class="topbar-title">Canal</span>
+    <span></span>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad"><div id="canal-fil"></div></div>
+  </div>
+</div>
+
 <div id="s-lifestyle" class="screen">
   <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
     <button class="back-btn" onclick="go('s-client-home')">←</button>
@@ -3029,6 +3081,12 @@ const COACH_PHOTO='icons/coach.jpg';
   <button class="tab-btn" data-tab="videos" data-icon="video" onclick="clientTab('videos')"><span class="tab-dot" aria-hidden="true"></span>Vidéos</button>
   <button class="tab-btn" data-tab="lifestyle" data-icon="user" onclick="clientTab('lifestyle')">Lifestyle</button>
   <button class="tab-btn" data-tab="evolution" data-icon="trending-up" onclick="clientTab('evolution')">Évolution</button>
+  <!-- Sans coach rattaché, ce bouton reste VISIBLE et grisé plutôt que masqué :
+       l'athlète autonome doit voir ce dont il ne dispose pas. aria-disabled et
+       non l'attribut disabled — ce dernier le sortirait du parcours clavier et
+       n'annoncerait aucune raison, alors qu'il mène justement à la saisie du
+       code coach. -->
+  <button class="tab-btn" data-tab="canal" data-icon="bell" onclick="clientTab('canal')"><span class="tab-dot" aria-hidden="true"></span><span class="tab-lock" aria-hidden="true">🔒</span>Canal</button>
 </div>
 <!-- ══════ ACCESS GATE ══════ -->
 <div id="s-access-gate" class="screen" style="background:#060606;justify-content:center;padding:32px 24px;position:relative;overflow:hidden">
@@ -4970,7 +5028,12 @@ const CLOUD={
   // existant et priverait d'un repli les profils déjà publiés. Il ne devient
   // plus jamais un lien sans 'contact.consentAt' — c'est contactNumero qui
   // décide, pas la présence du champ.
-  CHAMPS_PROFIL_COACH:['fname','lname','teamName','catchphrase','coachPhoto','promoBanners','phone','chargesSchema','contact'],
+  // canalDernier et canalEpingle DOIVENT figurer ici. pushProfilCoach fait un
+  // PUT du profil ENTIER reconstruit depuis cette seule liste : un champ ecrit
+  // separement dans coach_public serait efface a la prochaine sauvegarde de
+  // profil, sans erreur ni trace. La banniere epinglee aurait disparu le jour
+  // ou le coach change sa photo.
+  CHAMPS_PROFIL_COACH:['fname','lname','teamName','catchphrase','coachPhoto','promoBanners','phone','chargesSchema','contact','canalDernier','canalEpingle'],
   // ── Santé privée : ce que le coach ne voit pas, et qui survit quand même ──
   // La règle de /users donne au coach un accès LECTURE ET ÉCRITURE sur le
   // dossier entier de ses athlètes, sans granularité. Les blocs non partagés
@@ -5021,6 +5084,97 @@ const CLOUD={
       return d;
     }catch(e){ return null; }
   },
+  // ── Canal du coach ────────────────────────────────────────────────────────
+  // Un noeud A PART de coach_public, et c'est tout l'intérêt : coach_public est
+  // retéléchargé EN ENTIER à chaque ouverture de l'accueil athlète, pour la
+  // photo et la phrase du coach. Le fil, lui, ne descend que quand l'onglet
+  // s'ouvre. Le plafond du plan Spark est un volume mensuel — c'est cette
+  // différence-là qui décide s'il est franchi.
+  //
+  // Trois sous-noeuds, trois portées de lecture différentes, imposées par les
+  // règles : messages et compteurs sont lus par le groupe, reactions ne l'est
+  // que par son auteur et par le coach. Il n'y a donc AUCUN appel qui tire le
+  // canal entier — il n'existe pas de .read sur /canaux/{coach}.
+  _urlCanal(key,sous){ return this._fbUrl.replace('users.json','canaux/'+key+'/'+sous+'.json'); },
+
+  // LÈVE quand la requête échoue, et ne rend null QUE si Firebase a répondu
+  // « ce nœud est vide ». Avaler l'erreur confondait « ton coach n'a rien
+  // publié » et « je n'ai pas pu demander » : l'athlète hors ligne lisait
+  // « Rien pour le moment », et c'est le coach qui en portait le blâme. Même
+  // faute que _doPushOne, qui affichait « ✓ sauvegardé » sans rien envoyer.
+  async _canalGet(key,sous){
+    if(!key) throw new Error('Canal introuvable.');
+    const ctrl=new AbortController();
+    const minuteur=setTimeout(()=>ctrl.abort(),8000);
+    try{
+      const token=await this._getToken();
+      if(!token) throw new Error('Session expirée.');
+      const r=await fetch(this._urlCanal(key,sous)+'?auth='+token,{signal:ctrl.signal});
+      if(!r.ok) throw new Error('Canal : '+r.status);
+      return await r.json();
+    } finally { clearTimeout(minuteur); }
+  },
+
+  // LÈVE au lieu de renvoyer false. Les écritures du coach passent par
+  // toastSync, qui a besoin d'une promesse REJETÉE pour dire « pas enregistré » :
+  // _doPushOne a déjà coûté un audit entier pour avoir résolu en silence quand
+  // rien ne partait, et affiché « ✓ sauvegardé » trente fois pour rien.
+  async _canalPut(key,sous,valeur,methode){
+    const token=await this._getToken();
+    if(!token) throw new Error('Non connecté : le canal n\'a pas pu être écrit.');
+    const r=await fetch(this._urlCanal(key,sous)+'?auth='+token,{
+      method:methode||'PUT',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(valeur)});
+    if(!r.ok){
+      let msg=''+r.status;
+      try{const d=await r.json();msg=d.error||msg;}catch(e){}
+      throw new Error('Canal : '+msg);
+    }
+    return true;
+  },
+
+  pullCanalMessages(key){ return this._canalGet(key,'messages'); },
+  pullCanalCompteurs(key){ return this._canalGet(key,'compteurs'); },
+  // Réservé au coach : les règles refusent ce chemin à un athlète.
+  pullCanalReactions(key){ return this._canalGet(key,'reactions'); },
+  // L'athlète ne lit QUE sa propre feuille — d'où l'indexation par athlète puis
+  // par message : une requête rend toutes ses réactions, au lieu d'une par
+  // message affiché.
+  pullMesReactions(key,athleteKey){ return this._canalGet(key,'reactions/'+athleteKey); },
+
+  ecrireMessageCanal(key,msgId,msg){ return this._canalPut(key,'messages/'+msgId,msg); },
+  // PATCH et non PUT : le PUT sur /messages remplacerait tout le fil. Sert à
+  // dépingler l'ancien et épingler le nouveau d'une seule écriture.
+  patcherMessagesCanal(key,patch){ return this._canalPut(key,'messages',patch,'PATCH'); },
+  async supprimerMessageCanal(key,msgId){
+    await this._canalPut(key,'messages/'+msgId,null,'DELETE');
+    // Les compteurs du message disparaissent avec lui : les laisser ferait
+    // grossir un noeud que plus rien ne lit. Cet appel-ci peut échouer sans
+    // conséquence visible, le message n'est déjà plus affiché.
+    try{ await this._canalPut(key,'compteurs/'+msgId,null,'DELETE'); }catch(e){}
+    return true;
+  },
+
+  poserReaction(key,athleteKey,msgId,emoji){
+    return this._canalPut(key,'reactions/'+athleteKey+'/'+msgId,emoji);
+  },
+  retirerReaction(key,athleteKey,msgId){
+    return this._canalPut(key,'reactions/'+athleteKey+'/'+msgId,null,'DELETE');
+  },
+  // L'incrément est calculé PAR LE SERVEUR : deux athlètes qui réagissent dans
+  // la même seconde s'ajoutent tous les deux. Un lire-puis-écrire côté client
+  // en aurait perdu un.
+  bougerCompteur(key,msgId,emoji,delta){
+    return this._canalPut(key,'compteurs/'+msgId+'/'+encodeURIComponent(emoji),
+      {'.sv':{increment:delta}});
+  },
+  // Réservé au coach : les règles ne bornent son écriture ni à +1 ni à -1,
+  // justement pour qu'il puisse réparer un compteur ayant dérivé.
+  fixerCompteur(key,msgId,emoji,valeur){
+    return this._canalPut(key,'compteurs/'+msgId+'/'+encodeURIComponent(emoji),valeur);
+  },
+
   // Sonde de fraicheur : un entier, pas un dossier. Le dossier complet d'un
   // athlete actif pese plusieurs dizaines de kilo-octets ; son updatedAt en
   // pese une vingtaine. C'est ce rapport qui fait tout le gain.
@@ -6102,7 +6256,8 @@ const TABBAR_ECRANS={
   's-nutrition':'nutrition',
   's-videos':'videos',
   's-lifestyle':'lifestyle',
-  's-progress':'evolution'
+  's-progress':'evolution',
+  's-canal':'canal'
 };
 // Hauteur mesurée, pas devinée : elle dépend des icônes injectées au boot et de
 // l'échelle typographique (--fs-xs). Une constante en dur laisserait soit une
@@ -6164,6 +6319,7 @@ function _majTabbar(id){
   // vus, qu'ils viennent d'arriver par la synchro ou d'être consultés à
   // l'instant.
   _majPastilleVideos();
+  _majOngletCanal();
   _majPastilleBilan();
 }
 function go(id){
@@ -8955,183 +9111,539 @@ function _waBoutonTodo(r,idx){
 // Pas de boucle window.open : au-delà de la première, le navigateur les bloque
 // et le coach croirait avoir écrit à tout le monde. Chaque destinataire reçoit
 // son propre lien, donc son propre geste — rien ne peut être avalé en silence.
-// ── Mot du coach : une bannière à l'accueil de l'athlète ───────────────────
-// Ce n'est PAS une notification téléphone : l'app est sur le plan Spark, aucune
-// Cloud Function ne tourne, et rien ne s'abonne au push. La bannière s'affiche
-// à l'ouverture de l'app, et c'est tout ce qu'elle prétend faire.
+// ══ CANAL DU COACH ══════════════════════════════════════════════════════════
+// Un fil de diffusion, pas une messagerie : le coach écrit, l'athlète lit et
+// réagit. Il n'y a AUCUN champ de saisie côté athlète, et c'est délibéré — un
+// fil où douze athlètes se répondent exposerait leurs prénoms les uns aux
+// autres, ce que RepCore n'a jamais fait.
 //
-// L'accusé de lecture a été écarté volontairement : rien ne remonte au coach.
-// La fermeture est donc mémorisée SUR L'APPAREIL de l'athlète et non dans son
-// dossier — d'une part le coach ne peut pas la voir, d'autre part il ne peut
-// pas la ressusciter en réécrivant le dossier par-dessus une version périmée,
-// ce que l'écrasement du dossier entier rend sinon inévitable. Contrepartie
-// assumée : sur un nouvel appareil, la bannière réapparaît une fois.
-const ANNONCE_MAX=280;
-const ANNONCE_CLE='rc_annonce_lue';
+// CE MODULE REMPLACE « Mot du coach ». L'ancien recopiait le message dans le
+// dossier de CHAQUE athlète : les athlètes connus par leur seul code ne le
+// recevaient jamais, l'historique était perdu à chaque nouveau mot, et le texte
+// repartait vers Firebase à chaque sauvegarde de dossier. Ici, un seul
+// exemplaire vit dans /canaux/{coach}, et le dossier des athlètes n'est pas
+// touché du tout. Le champ `annonce` des anciens dossiers devient inerte, sans
+// migration — même traitement que welcomeAudio lors du retrait du message vocal.
+//
+// CE QUI N'EST PAS PROMIS : le téléphone ne sonnera pas. Le plan Spark ne fait
+// tourner aucune Cloud Function et rien ne s'abonne au push. Un message se
+// découvre à l'ouverture de l'app, et les écrans le disent.
+const CANAL_TITRE_MAX=80;
+const CANAL_TEXTE_MAX=1000;
+const CANAL_LIEN_MAX=500;
+// Le fil affiché est borné. Ce n'est pas une pagination — au-delà, les messages
+// restent dans Firebase mais ne descendent plus. Vingt cartes couvrent
+// largement l'usage d'un coach, et bornent ce qui transite.
+const CANAL_MAX_AFFICHES=20;
+const CANAL_EMOJIS=['👍','❤️','💪','🔥'];
+const CANAL_VU_CLE='rc_canal_vu';
 
-function _annonceLues(){
-  try{ const v=JSON.parse(localStorage.getItem(ANNONCE_CLE)||'{}');
+// Clé Firebase du canal à consulter. Le coach lit le sien, l'athlète celui de
+// son coach. cleCoachDe() ne convient pas pour le coach : elle sort sur
+// `if(!u.coachId) return null`, et un coach n'a pas de coachId.
+function canalCle(u){
+  if(!u||!u.email) return null;
+  if(u.role==='coach') return u.email.replace(/\./g,',');
+  return cleCoachDe(u);
+}
+// L'onglet est ouvert si — et seulement si — un coach est rattaché. LE GRISÉ
+// N'EST PAS LA PROTECTION : les règles refusent la lecture de /canaux à qui n'a
+// pas le coachEmailKey correspondant. Trafiquer le HTML ne donne rien.
+function canalAccessible(u){
+  return !!(u&&u.role==='athlete'&&(u.coachId||u.coachEmailKey));
+}
+
+// ── Lectures mémorisées SUR L'APPAREIL, jamais dans le dossier ──────────────
+// Le coach ne peut donc pas voir qui a lu, et ne peut pas rallumer une pastille
+// en réécrivant un dossier périmé par-dessus — ce que l'écrasement du dossier
+// entier rend sinon inévitable. Même raisonnement que rc_annonce_lue.
+// Contrepartie assumée : sur un appareil neuf, le fil apparaît une fois non lu.
+function _canalVus(){
+  try{ const v=JSON.parse(localStorage.getItem(CANAL_VU_CLE)||'{}');
     return (v&&typeof v==='object')?v:{}; }catch(e){ return {}; }
 }
-function _annonceMarquerLue(email,id){
-  const m=_annonceLues();
-  m[String(email||'')]=String(id||'');
-  try{ localStorage.setItem(ANNONCE_CLE,JSON.stringify(m)); }catch(e){}
+function _canalMarquerVu(email,at){
+  const m=_canalVus();
+  m[String(email||'')]=Number(at)||Date.now();
+  try{ localStorage.setItem(CANAL_VU_CLE,JSON.stringify(m)); }catch(e){}
 }
-// PURE : rend l'annonce à afficher, ou null. Le tableau des lectures est passé
-// en paramètre pour que la règle soit éprouvable sans toucher au stockage.
-function annonceAAfficher(user,lues){
-  const a=user&&user.annonce;
-  if(!a||typeof a!=='object') return null;
-  const texte=String(a.texte==null?'':a.texte).trim();
-  if(!texte||!a.id) return null;
-  const vu=(lues||{})[String(user.email||'')];
-  if(vu!=null&&String(vu)===String(a.id)) return null;
-  return {id:String(a.id),texte,par:String(a.par==null?'':a.par),date:a.date||null};
+// PURE. Le profil coach est passé en paramètre : la règle est éprouvable sans
+// toucher ni au stockage ni au réseau.
+//
+// canalDernier vit dans coach_public, PAS dans /canaux, et c'est ce qui rend la
+// pastille gratuite : coach_public est déjà retéléchargé à chaque ouverture de
+// l'accueil pour la photo et la phrase du coach. Aller chercher l'horodatage
+// dans /canaux coûterait une requête par lancement d'app, à tout le monde, y
+// compris à ceux qui n'ouvrent jamais l'onglet.
+function canalNonLu(user,profil,vus){
+  if(!canalAccessible(user)) return false;
+  const dernier=Number(profil&&profil.canalDernier)||0;
+  if(!dernier) return false;
+  const vu=Number((vus||{})[String(user.email||'')])||0;
+  return dernier>vu;
 }
-function renderAnnonceAthlete(){
-  const el=document.getElementById('clh-annonce');
-  if(!el) return;
-  const a=annonceAAfficher(currentUser,_annonceLues());
-  if(!a){ el.innerHTML=''; el.style.display='none'; return; }
-  el.style.display='block';
-  const qui=a.par?('Mot de '+a.par):'Mot de ton coach';
-  el.innerHTML=`<div style="background:linear-gradient(135deg,#12000a,#1a0000);border:1px solid rgba(224,32,32,.45);border-radius:12px;padding:14px 16px;margin-bottom:18px;box-shadow:0 6px 18px rgba(0,0,0,.45)">
-    <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
-      <span style="font-size:15px;line-height:1">📣</span>
-      <span style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase">${escapeHtml(qui)}</span>
-    </div>
-    <div style="font-size:13px;color:#eee;line-height:1.65;white-space:pre-wrap">${escapeHtml(a.texte)}</div>
-    <button onclick="fermerAnnonce()" style="width:100%;margin-top:12px;padding:10px 0;background:none;border:1px solid rgba(224,32,32,.5);color:var(--red);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:2px;border-radius:8px;cursor:pointer">OK, J'AI VU</button>
-  </div>`;
+// PURE. Le message épinglé, tel qu'il doit s'afficher en bannière d'accueil.
+function canalEpingleAAfficher(profil){
+  const e=profil&&profil.canalEpingle;
+  if(!e||typeof e!=='object') return null;
+  const texte=String(e.texte==null?'':e.texte).trim();
+  const titre=String(e.titre==null?'':e.titre).trim();
+  if(!texte&&!titre) return null;
+  return {id:String(e.id||''),titre,texte,lien:String(e.lien||''),at:Number(e.at)||0};
 }
-function fermerAnnonce(){
-  const a=annonceAAfficher(currentUser,_annonceLues());
-  if(!a) return;
-  _annonceMarquerLue(currentUser.email,a.id);
-  renderAnnonceAthlete();
+// PURE. L'objet Firebase → un tableau ordonné : l'épinglé d'abord, puis du plus
+// récent au plus ancien. Object.keys ne garantit aucun ordre, et Firebase rend
+// bien un objet, pas un tableau.
+function canalTrier(messages){
+  if(!messages||typeof messages!=='object') return [];
+  return Object.keys(messages)
+    .map(id=>Object.assign({id},messages[id]))
+    .filter(m=>m&&(m.texte||m.titre))
+    .sort((a,b)=>{
+      if(!!a.epingle!==!!b.epingle) return a.epingle?-1:1;
+      return (Number(b.at)||0)-(Number(a.at)||0);
+    })
+    .slice(0,CANAL_MAX_AFFICHES);
+}
+// PURE. Le domaine affiché sur la carte de lien. Sans serveur ni requête
+// croisée, RepCore ne peut pas lire le titre d'une page distante : le domaine
+// est la seule chose honnête à montrer.
+function canalDomaine(lien){
+  const s=String(lien==null?'':lien).trim();
+  const m=/^https?:\/\/([^/?#]+)/i.exec(s);
+  return m?m[1].replace(/^www\./i,''):'';
+}
+// PURE. YouTube est le SEUL cas où une vignette réelle est possible sans
+// serveur : l'image se déduit de l'identifiant. Pour tout autre lien, il n'y a
+// pas de vignette — la lire supposerait d'aller chercher les balises Open Graph
+// de la page distante, ce qu'aucun navigateur n'autorise depuis le client.
+function canalVignette(lien){
+  const s=String(lien==null?'':lien).trim();
+  const m=/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/i.exec(s);
+  return m?('https://img.youtube.com/vi/'+m[1]+'/mqdefault.jpg'):'';
 }
 
-// ── Côté coach ────────────────────────────────────────────────────────────
-// Destinataires possibles : ceux dont le dossier existe VRAIMENT sur cet
-// appareil. Un élève connu par son seul code n'a pas de dossier — lui écrire
-// en créerait un faux. Ceux-là sont écartés, mais ANNONCÉS : un coach qui croit
-// avoir écrit à douze personnes alors que l'app n'en a touché que neuf est plus
-// mal informé que s'il n'avait rien fait.
-function _annonceDestinataires(){
-  const users=DB.get('users')||{};
-  const ok=[],hors=[];
-  getClients().forEach(c=>{
-    if(!c._fromCode&&c.email&&users[c.email]) ok.push(c); else hors.push(c);
-  });
-  return {ok,hors};
+// ── L'onglet : verrou et pastille ───────────────────────────────────────────
+function _majOngletCanal(){
+  const btn=document.querySelector('#client-tabbar .tab-btn[data-tab="canal"]');
+  if(!btn) return;
+  const ouvert=canalAccessible(currentUser);
+  btn.classList.toggle('verrou',!ouvert);
+  // aria-disabled et non l'attribut disabled : le bouton reste atteignable au
+  // clavier et mène à la saisie du code coach. Un onglet verrouillé qu'on ne
+  // peut même pas atteindre n'expliquerait jamais comment le déverrouiller.
+  if(ouvert) btn.removeAttribute('aria-disabled');
+  else btn.setAttribute('aria-disabled','true');
+  const dot=btn.querySelector('.tab-dot');
+  const neuf=ouvert&&canalNonLu(currentUser,profilCoachLocal(canalCle(currentUser)),_canalVus());
+  if(dot) dot.classList.toggle('on',!!neuf);
+  if(!ouvert) btn.setAttribute('aria-label','Canal : réservé aux athlètes suivis');
+  else if(neuf) btn.setAttribute('aria-label','Canal : nouveau message du coach');
+  else btn.removeAttribute('aria-label');
 }
-function _annonceEnCours(){
-  const {ok}=_annonceDestinataires();
-  const actives=ok.map(c=>c.annonce).filter(a=>a&&a.texte&&a.id);
-  if(!actives.length) return null;
-  const recente=actives.slice().sort((a,b)=>(b.date||0)-(a.date||0))[0];
-  return {texte:String(recente.texte),id:String(recente.id),
-    combien:actives.filter(a=>String(a.id)===String(recente.id)).length};
+
+// ── L'écran athlète ─────────────────────────────────────────────────────────
+function loadCanal(){
+  if(!canalAccessible(currentUser)){ _canalPorteFermee(); return; }
+  go('s-canal');
+  const fil=document.getElementById('canal-fil');
+  if(fil) fil.innerHTML='<div class="sub" style="text-align:center;padding:40px 0;font-size:12px">Chargement du canal…</div>';
+  _canalCharger();
 }
-function _annTout(v){
-  document.querySelectorAll('.ann-cb').forEach(cb=>{cb.checked=!!v;});
-}
-function openAnnonce(){
+// La carte proposée à l'athlète sans coach. Elle mène EXACTEMENT là où mène
+// déjà la carte de l'accueil quand aucun coach n'est rattaché : deux portes
+// visibles, une seule destination.
+function _canalPorteFermee(){
   document.getElementById('modal-overlay')?.remove();
-  const {ok,hors}=_annonceDestinataires();
-  if(!ok.length){
-    toast('Aucun athlète inscrit sur cet appareil : rien à envoyer.','var(--orange)');
+  document.body.insertAdjacentHTML('beforeend',
+  `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px">
+    <div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Canal verrouillé" style="background:var(--surface-2);border:1px solid var(--border);border-radius:16px;padding:22px 20px;width:100%;max-width:360px;animation:fadeIn .25s ease;text-align:center">
+      <div style="font-size:28px;line-height:1;margin-bottom:10px">🔒</div>
+      <h2 style="margin-bottom:8px;font-size:16px">Canal réservé aux athlètes suivis</h2>
+      <p class="sub" style="font-size:12px;line-height:1.6;margin-bottom:16px">Ton coach y publie ses annonces, ses formations et ses documents. Entre ton code coach pour y accéder.</p>
+      <button class="btn btn-red btn-sm" style="width:100%;margin:0 0 8px;min-height:44px" onclick="closeModal();go('s-client-code')">J'AI UN CODE COACH</button>
+      <button class="btn btn-outline btn-sm" style="width:100%;margin:0;min-height:44px" onclick="closeModal()">Plus tard</button>
+    </div></div>`);
+}
+
+async function _canalCharger(){
+  const cle=canalCle(currentUser);
+  const fil=document.getElementById('canal-fil');
+  if(!fil) return;
+  if(!cle||!CLOUD.ok()){
+    fil.innerHTML=_canalVide('Canal indisponible hors connexion.','Reviens quand tu auras du réseau.');
     return;
   }
-  const encours=_annonceEnCours();
-  const lignes=ok.map(c=>{
-    const nom=((c.fname||'')+' '+(c.lname||'')).trim()||c.email||'Athlète';
-    const dejà=c.annonce&&c.annonce.texte&&encours&&String(c.annonce.id)===String(encours.id);
-    return `<label style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid #181818;cursor:pointer">
-      <input type="checkbox" class="ann-cb" value="${escapeHtml(c.email)}" checked
-        style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:700;font-size:13px">${escapeHtml(nom)}</div>
-        ${dejà?'<div class="sub" style="font-size:var(--fs-xs)">le mot en cours est déjà chez lui</div>':''}
-      </div>
-    </label>`;
+  const moi=(currentUser.email||'').replace(/\./g,',');
+  // Trois requêtes indépendantes. Elles ne peuvent PAS être fusionnées en une
+  // seule sur /canaux/{coach} : il n'existe volontairement aucun .read à ce
+  // niveau, sans quoi /reactions — qui porte les identifiants — serait descendu
+  // par cascade chez tout le groupe.
+  //
+  // Les messages sont SEULS à pouvoir faire échouer l'écran. Un compteur ou une
+  // réaction qui ne descend pas se remplace par zéro sans mentir à personne ;
+  // un fil qui ne descend pas doit le dire, jamais s'afficher vide.
+  let msgs;
+  try{ msgs=await CLOUD.pullCanalMessages(cle); }
+  catch(e){
+    fil.innerHTML=`<div style="text-align:center;padding:44px 20px">
+      <div style="font-size:28px;line-height:1;margin-bottom:12px;opacity:.5">📡</div>
+      <div style="font-weight:800;font-size:14px;margin-bottom:6px">Canal injoignable</div>
+      <div class="sub" style="font-size:12px;line-height:1.6;margin-bottom:16px">Ce n'est pas que ton coach n'a rien publié : la demande n'a pas abouti.</div>
+      <button class="btn btn-outline btn-sm" style="min-height:42px;margin:0" onclick="_canalCharger()">Réessayer</button></div>`;
+    return;
+  }
+  const [compteurs,miennes]=await Promise.all([
+    CLOUD.pullCanalCompteurs(cle).catch(()=>null),
+    CLOUD.pullMesReactions(cle,moi).catch(()=>null)
+  ]);
+  window._canalCompteurs=compteurs||{};
+  window._canalMiennes=miennes||{};
+  // Mémorisée : _canalRepeindre repart de cette liste après chaque réaction.
+  // Sans elle, le compteur touché ne changeait jamais à l'écran.
+  const liste=canalTrier(msgs);
+  window._canalListe=liste;
+  fil.innerHTML=liste.length
+    ? liste.map(m=>_canalCarte(m,window._canalCompteurs[m.id]||{},window._canalMiennes[m.id]||'')).join('')
+    : _canalVide('Rien pour le moment.','Ton coach publiera ici ses annonces et ses liens.');
+  // Marqué lu au plus récent AFFICHÉ, et non à Date.now() : si un message
+  // arrive pendant le chargement, l'horodater à maintenant l'enterrerait sans
+  // qu'il ait jamais été montré.
+  const plusRecent=liste.reduce((x,m)=>Math.max(x,Number(m.at)||0),0);
+  if(plusRecent) _canalMarquerVu(currentUser.email,plusRecent);
+  _majOngletCanal();
+}
+function _canalVide(titre,sous){
+  return `<div style="text-align:center;padding:48px 20px">
+    <div style="font-size:30px;line-height:1;margin-bottom:12px;opacity:.5">📭</div>
+    <div style="font-weight:800;font-size:14px;margin-bottom:6px">${escapeHtml(titre)}</div>
+    <div class="sub" style="font-size:12px;line-height:1.6">${escapeHtml(sous)}</div></div>`;
+}
+// La carte d'un message. `mienne` est l'emoji déjà posé par cet athlète, ou ''.
+function _canalCarte(m,compteurs,mienne){
+  const lien=String(m.lien||'').trim();
+  const boutons=CANAL_EMOJIS.map(e=>{
+    const n=Number(compteurs[e])||0;
+    const actif=mienne===e;
+    return `<button onclick="basculerReaction('${escapeHtml(m.id)}','${escapeHtml(e)}')"
+      aria-pressed="${actif?'true':'false'}"
+      style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;min-height:38px;padding:0 4px;
+        background:${actif?'var(--red-bg)':'transparent'};border:1px solid ${actif?'var(--red)':'var(--border)'};
+        border-radius:20px;cursor:pointer;font-size:14px;color:${actif?'#fff':'var(--text-dim)'};
+        font-family:Montserrat,sans-serif;font-weight:700">
+      <span aria-hidden="true">${e}</span><span style="font-size:11px">${n}</span></button>`;
   }).join('');
-  const horsHtml=hors.length
-    ?`<div style="background:var(--warning-bg);border:1px solid var(--warning);border-radius:8px;padding:9px 11px;margin-bottom:10px;font-size:11px;color:var(--warning);line-height:1.55">${hors.length} élève${hors.length>1?'s':''} connu${hors.length>1?'s':''} par son seul code n'appara${hors.length>1?'issent':'ît'} pas ici : sans dossier sur cet appareil, la bannière ne peut pas être posée. Passe par WhatsApp pour ${hors.length>1?'ceux-là':'celui-là'}.</div>`
-    :'';
-  const encoursHtml=encours
-    ?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px">
-        <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:5px">Mot en cours · ${encours.combien} athlète${encours.combien>1?'s':''}</div>
-        <div style="font-size:12px;color:#ddd;line-height:1.55;white-space:pre-wrap">${escapeHtml(encours.texte)}</div>
-        <button class="btn btn-outline btn-sm" style="width:100%;margin:9px 0 0;min-height:40px;color:var(--sub)" onclick="retirerAnnonce()">Retirer ce mot</button>
-      </div>`
-    :'';
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:88vh;overflow-y:auto">
-    <h2 style="margin-bottom:4px">📣 Mot à l'accueil</h2>
-    <p class="sub" style="font-size:12px;margin-bottom:10px">Il s'affiche sur l'accueil de l'app à la prochaine ouverture, et reste jusqu'à ce que l'athlète le ferme. Ce n'est pas une notification : le téléphone ne sonnera pas.</p>
-    ${encoursHtml}
-    ${horsHtml}
-    <label for="ann-texte" style="margin-top:0">Message · ${ANNONCE_MAX} caractères</label>
-    <textarea id="ann-texte" rows="3" maxlength="${ANNONCE_MAX}" style="resize:none" placeholder="La salle est fermée jeudi, on décale à vendredi 18h."></textarea>
-    <div style="display:flex;gap:8px;margin:10px 0 4px">
-      <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="_annTout(true)">Tout cocher</button>
-      <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="_annTout(false)">Tout décocher</button>
+  return `<div style="background:var(--surface-1);border:1px solid ${m.epingle?'rgba(224,32,32,.45)':'var(--border)'};border-radius:14px;padding:15px 16px;margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      ${m.epingle?'<span style="font-size:var(--fs-xs);color:var(--red);font-weight:800;letter-spacing:1.5px;text-transform:uppercase">📌 Épinglé</span>':''}
+      <span class="sub" style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase">${escapeHtml(ago(Number(m.at)||Date.now()))}</span>
     </div>
-    <div id="ann-liste">${lignes}</div>
-    <div style="display:flex;gap:8px;margin-top:14px">
+    ${m.titre?`<div style="font-weight:800;font-size:14px;margin-bottom:6px;line-height:1.4">${escapeHtml(m.titre)}</div>`:''}
+    ${m.texte?`<div style="font-size:13px;color:#ddd;line-height:1.65;white-space:pre-wrap">${escapeHtml(m.texte)}</div>`:''}
+    ${lien?_canalCarteLien(lien):''}
+    <div style="display:flex;gap:6px;margin-top:12px">${boutons}</div>
+  </div>`;
+}
+// safeUrl et non escapeHtml sur le href : escapeHtml laisse passer
+// « javascript: », et cette confusion exacte a déjà produit une faille sur le
+// lien des bannières promo. rel="noopener" : sans lui, la page ouverte garde
+// une référence sur window.opener et peut rediriger l'app.
+function _canalCarteLien(lien){
+  const vignette=canalVignette(lien);
+  const dom=canalDomaine(lien);
+  if(safeUrlRaw(lien)==='#') return '';
+  return `<a href="${safeUrl(lien)}" target="_blank" rel="noopener noreferrer"
+    style="display:block;margin-top:12px;border:1px solid var(--border);border-radius:10px;overflow:hidden;text-decoration:none;background:var(--surface-2)">
+    ${vignette?`<img src="${safeUrl(vignette)}" alt="" loading="lazy" style="width:100%;display:block;aspect-ratio:16/9;object-fit:cover">`:''}
+    <div style="display:flex;align-items:center;gap:9px;padding:11px 13px">
+      <span style="display:inline-flex;color:var(--info);flex-shrink:0">${icon('link',15)}</span>
+      <span style="flex:1;min-width:0;font-size:12px;color:var(--info);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(dom||'Ouvrir le lien')}</span>
+      <span class="sub" style="font-size:var(--fs-xs);flex-shrink:0">Ouvrir ↗</span>
+    </div></a>`;
+}
+
+// ── Réactions ───────────────────────────────────────────────────────────────
+// Deux écritures, pas une : la réaction nominative dans /reactions, fermée, et
+// le compteur public dans /compteurs. C'est cette séparation qui donne le
+// « 9 💪 » d'Instagram sans que les athlètes apprennent l'existence les uns des
+// autres — un compteur lisible par tous ne porte aucun identifiant.
+//
+// L'affichage est repeint AVANT le réseau : sur mobile, attendre l'aller-retour
+// donne un bouton qui semble mort. Si l'écriture échoue, on remet l'état
+// d'avant et on le dit — plutôt qu'un compteur qui ment.
+async function basculerReaction(msgId,emoji){
+  if(!canalAccessible(currentUser)) return;
+  const cle=canalCle(currentUser);
+  const moi=(currentUser.email||'').replace(/\./g,',');
+  if(!cle||!CLOUD.ok()){ toast('Réaction impossible hors connexion','var(--orange)'); return; }
+  const miennes=window._canalMiennes||(window._canalMiennes={});
+  const compteurs=window._canalCompteurs||(window._canalCompteurs={});
+  const avant=miennes[msgId]||'';
+  const apres=(avant===emoji)?'':emoji;
+  const c=compteurs[msgId]||(compteurs[msgId]={});
+  // Le compteur ne descend jamais sous zéro : les règles rejettent une valeur
+  // négative, et un affichage à -1 serait de toute façon absurde.
+  if(avant) c[avant]=Math.max(0,(Number(c[avant])||0)-1);
+  if(apres) c[apres]=(Number(c[apres])||0)+1;
+  if(apres) miennes[msgId]=apres; else delete miennes[msgId];
+  _canalRepeindre(msgId);
+  try{
+    // La réaction D'ABORD, les compteurs ENSUITE — jamais en parallèle. Lancées
+    // ensemble, un échec de la réaction laissait quand même partir le « +1 » :
+    // le compteur public gagnait un point que /reactions ne portait pas, et
+    // seule la resynchronisation manuelle du coach pouvait le rattraper.
+    // Sérialisées, un échec de la réaction n'écrit aucun compteur du tout.
+    if(apres) await CLOUD.poserReaction(cle,moi,msgId,apres);
+    else await CLOUD.retirerReaction(cle,moi,msgId);
+    const compte=[];
+    if(avant) compte.push(CLOUD.bougerCompteur(cle,msgId,avant,-1));
+    if(apres) compte.push(CLOUD.bougerCompteur(cle,msgId,apres,1));
+    await Promise.all(compte);
+  }catch(e){
+    if(avant) c[avant]=(Number(c[avant])||0)+1;
+    if(apres) c[apres]=Math.max(0,(Number(c[apres])||0)-1);
+    if(avant) miennes[msgId]=avant; else delete miennes[msgId];
+    _canalRepeindre(msgId);
+    toast('Réaction non enregistrée','var(--orange)');
+  }
+}
+// Repeint le fil entier depuis l'état en mémoire. Repeindre la seule carte
+// touchée demanderait de la retrouver dans le DOM par un identifiant, alors que
+// le fil fait vingt cartes au plus : le gain serait nul et le risque de
+// désynchronisation réel.
+function _canalRepeindre(){
+  const fil=document.getElementById('canal-fil');
+  if(!fil||!window._canalListe) return;
+  fil.innerHTML=window._canalListe.map(m=>
+    _canalCarte(m,(window._canalCompteurs||{})[m.id]||{},(window._canalMiennes||{})[m.id]||'')).join('');
+}
+
+// ── La bannière d'accueil, alimentée par le message épinglé ─────────────────
+// Elle remplace celle du « Mot du coach ». La source n'est plus un champ du
+// dossier de l'athlète mais coach_public.canalEpingle — donc UN exemplaire pour
+// tout le monde, mis à jour d'une écriture, et qui atteint aussi les athlètes
+// connus par leur seul code, que l'ancien système ne touchait jamais.
+function renderEpingleAccueil(){
+  const el=document.getElementById('clh-annonce');
+  if(!el) return;
+  const e=canalAccessible(currentUser)
+    ? canalEpingleAAfficher(profilCoachLocal(canalCle(currentUser))) : null;
+  if(!e){ el.innerHTML=''; el.style.display='none'; return; }
+  el.style.display='block';
+  const lien=String(e.lien||'').trim();
+  el.innerHTML=`<div style="background:linear-gradient(135deg,#12000a,#1a0000);border:1px solid rgba(224,32,32,.45);border-radius:12px;padding:14px 16px;margin-bottom:18px;box-shadow:0 6px 18px rgba(0,0,0,.45)">
+    <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
+      <span style="font-size:15px;line-height:1" aria-hidden="true">📣</span>
+      <span style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase">Mot de ton coach</span>
+    </div>
+    ${e.titre?`<div style="font-weight:800;font-size:14px;margin-bottom:6px;line-height:1.4">${escapeHtml(e.titre)}</div>`:''}
+    ${e.texte?`<div style="font-size:13px;color:#eee;line-height:1.65;white-space:pre-wrap">${escapeHtml(e.texte)}</div>`:''}
+    ${lien&&safeUrlRaw(lien)!=='#'?`<a href="${safeUrl(lien)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:10px;font-size:12px;color:var(--info);font-weight:700">${escapeHtml(canalDomaine(lien)||'Ouvrir le lien')} ↗</a>`:''}
+    <button onclick="clientTab('canal')" style="width:100%;margin-top:12px;padding:10px 0;background:none;border:1px solid rgba(224,32,32,.5);color:var(--red);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:2px;border-radius:8px;cursor:pointer">VOIR LE CANAL</button>
+  </div>`;
+}
+
+// ══ CANAL — CÔTÉ COACH ══════════════════════════════════════════════════════
+function loadCanalCoach(){
+  if(currentUser?.role!=='coach') return;
+  go('s-coach-canal');
+  const fil=document.getElementById('canal-coach-fil');
+  if(fil) fil.innerHTML='<div class="sub" style="text-align:center;padding:36px 0;font-size:12px">Chargement…</div>';
+  _canalChargerCoach();
+}
+async function _canalChargerCoach(){
+  const cle=canalCle(currentUser);
+  const fil=document.getElementById('canal-coach-fil');
+  if(!fil) return;
+  if(!cle||!CLOUD.ok()){
+    fil.innerHTML=_canalVide('Canal indisponible hors connexion.','Reconnecte-toi pour écrire.');
+    return;
+  }
+  // Le coach seul peut lire /reactions : c'est ce qui lui donne les prénoms.
+  // Même règle que côté athlète, et elle compte DAVANTAGE ici : un coach qui
+  // voit son canal vide à cause d'un réseau capricieux le republierait en
+  // double, chez tout le monde.
+  let msgs,compteurs,reactions;
+  try{
+    msgs=await CLOUD.pullCanalMessages(cle);
+    [compteurs,reactions]=await Promise.all([
+      CLOUD.pullCanalCompteurs(cle).catch(()=>null),
+      CLOUD.pullCanalReactions(cle).catch(()=>null)
+    ]);
+  }catch(e){
+    fil.innerHTML=`<div style="text-align:center;padding:40px 20px">
+      <div style="font-size:28px;line-height:1;margin-bottom:12px;opacity:.5">📡</div>
+      <div style="font-weight:800;font-size:14px;margin-bottom:6px">Canal injoignable</div>
+      <div class="sub" style="font-size:12px;line-height:1.6;margin-bottom:16px">Ne republie pas : tes messages sont peut-être déjà là. La demande n'a pas abouti.</div>
+      <button class="btn btn-outline btn-sm" style="min-height:42px;margin:0" onclick="_canalChargerCoach()">Réessayer</button></div>`;
+    return;
+  }
+  window._canalMsgsCoach=msgs||{};
+  const liste=canalTrier(msgs);
+  const vrai=canalDecompteVrai(reactions);
+  fil.innerHTML=liste.length
+    ? liste.map(m=>_canalCarteCoach(m,(compteurs||{})[m.id]||{},vrai[m.id]||{},reactions||{})).join('')
+    : _canalVide('Ton canal est vide.','Le premier message apparaîtra chez tous tes athlètes.');
+}
+// PURE. /reactions est rangé par athlète puis par message ; le décompte, lui,
+// se lit par message. C'est ce pivot-là, et rien d'autre.
+// Il fait autorité sur /compteurs : celui-ci peut avoir dérivé si un téléphone
+// a lâché entre les deux écritures.
+function canalDecompteVrai(reactions){
+  const out={};
+  if(!reactions||typeof reactions!=='object') return out;
+  Object.keys(reactions).forEach(athleteKey=>{
+    const parMsg=reactions[athleteKey];
+    if(!parMsg||typeof parMsg!=='object') return;
+    Object.keys(parMsg).forEach(msgId=>{
+      const e=parMsg[msgId];
+      if(!e) return;
+      if(!out[msgId]) out[msgId]={};
+      out[msgId][e]=(out[msgId][e]||0)+1;
+    });
+  });
+  return out;
+}
+// PURE. Les prénoms de ceux qui ont posé un emoji donné. Le coach lit les
+// dossiers de SES athlètes, ce que les règles lui accordent déjà.
+function canalPrenoms(reactions,msgId,emoji){
+  const users=DB.get('users')||{};
+  const noms=[];
+  Object.keys(reactions||{}).forEach(k=>{
+    if((reactions[k]||{})[msgId]!==emoji) return;
+    const c=users[k.replace(/,/g,'.')];
+    noms.push((c&&(c.fname||c.email))||k.replace(/,/g,'.'));
+  });
+  return noms.sort((a,b)=>String(a).localeCompare(String(b)));
+}
+function _canalCarteCoach(m,compteurs,vrai,reactions){
+  const derive=CANAL_EMOJIS.some(e=>(Number(compteurs[e])||0)!==(Number(vrai[e])||0));
+  const lignes=CANAL_EMOJIS.filter(e=>(Number(vrai[e])||0)>0).map(e=>{
+    const noms=canalPrenoms(reactions,m.id,e);
+    return `<div style="display:flex;gap:8px;align-items:flex-start;font-size:12px;padding:3px 0">
+      <span aria-hidden="true">${e}</span><span style="font-weight:800">${noms.length}</span>
+      <span class="sub" style="flex:1;min-width:0;line-height:1.5">${escapeHtml(noms.join(', '))}</span></div>`;
+  }).join('');
+  const lien=String(m.lien||'').trim();
+  return `<div style="background:var(--surface-1);border:1px solid ${m.epingle?'rgba(224,32,32,.45)':'var(--border)'};border-radius:14px;padding:15px 16px;margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      ${m.epingle?'<span style="font-size:var(--fs-xs);color:var(--red);font-weight:800;letter-spacing:1.5px;text-transform:uppercase">📌 Épinglé</span>':''}
+      <span class="sub" style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase">${escapeHtml(ago(Number(m.at)||Date.now()))}</span>
+    </div>
+    ${m.titre?`<div style="font-weight:800;font-size:14px;margin-bottom:6px;line-height:1.4">${escapeHtml(m.titre)}</div>`:''}
+    ${m.texte?`<div style="font-size:13px;color:#ddd;line-height:1.65;white-space:pre-wrap">${escapeHtml(m.texte)}</div>`:''}
+    ${lien&&safeUrlRaw(lien)!=='#'?`<a href="${safeUrl(lien)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:9px;font-size:12px;color:var(--info);font-weight:700">${escapeHtml(canalDomaine(lien)||'lien')} ↗</a>`:''}
+    ${lignes?`<div style="margin-top:11px;padding-top:10px;border-top:1px solid var(--border)">${lignes}</div>`
+            :'<div class="sub" style="margin-top:11px;padding-top:10px;border-top:1px solid var(--border);font-size:11px">Aucune réaction pour l\'instant.</div>'}
+    ${derive?`<button class="btn btn-outline btn-sm" style="width:100%;margin:9px 0 0;min-height:38px;color:var(--orange);border-color:var(--orange)" onclick="resyncCompteursCanal('${escapeHtml(m.id)}')">Le compteur public a dérivé — resynchroniser</button>`:''}
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:40px" onclick="openMessageCanal('${escapeHtml(m.id)}')">Modifier</button>
+      <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:40px;color:var(--sub)" onclick="supprimerMessageCanal('${escapeHtml(m.id)}')">Supprimer</button>
+    </div></div>`;
+}
+// Le compteur public est ramené sur le décompte vrai. Les règles laissent le
+// coach écrire la valeur qu'il veut — précisément pour cette réparation-là.
+async function resyncCompteursCanal(msgId){
+  const cle=canalCle(currentUser);
+  if(!cle) return;
+  try{
+    const reactions=await CLOUD.pullCanalReactions(cle);
+    const vrai=(canalDecompteVrai(reactions))[msgId]||{};
+    await Promise.all(CANAL_EMOJIS.map(e=>CLOUD.fixerCompteur(cle,msgId,e,Number(vrai[e])||0)));
+    toast('Compteurs resynchronisés');
+    _canalChargerCoach();
+  }catch(e){ toast('Resynchronisation impossible : '+e.message,'var(--orange)'); }
+}
+
+function openMessageCanal(msgId){
+  document.getElementById('modal-overlay')?.remove();
+  const m=(msgId&&(window._canalMsgsCoach||{})[msgId])||{};
+  window._canalEdite=msgId||'';
+  document.body.insertAdjacentHTML('beforeend',
+  `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" role="dialog" aria-modal="true" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:88vh;overflow-y:auto">
+    <h2 style="margin-bottom:4px">${msgId?'Modifier le message':'Nouveau message'}</h2>
+    <p class="sub" style="font-size:12px;margin-bottom:12px;line-height:1.55">Il apparaît dans le canal de tous tes athlètes suivis, à leur prochaine ouverture de l'app. Ce n'est pas une notification : leur téléphone ne sonnera pas.</p>
+    <label for="cm-titre">Titre (optionnel) · ${CANAL_TITRE_MAX} caractères</label>
+    <input id="cm-titre" type="text" maxlength="${CANAL_TITRE_MAX}" value="${escapeHtml(m.titre||'')}" placeholder="Nouvelle vidéo technique">
+    <label for="cm-texte" style="margin-top:12px">Message · ${CANAL_TEXTE_MAX} caractères</label>
+    <textarea id="cm-texte" rows="5" maxlength="${CANAL_TEXTE_MAX}" style="resize:none" placeholder="J'ai publié une nouvelle vidéo sur le soulevé de terre. Regardez-la avant jeudi.">${escapeHtml(m.texte||'')}</textarea>
+    <label for="cm-lien" style="margin-top:12px">Lien (optionnel)</label>
+    <input id="cm-lien" type="url" maxlength="${CANAL_LIEN_MAX}" value="${escapeHtml(m.lien||'')}" placeholder="Colle ici l'adresse de ta publication">
+    <div class="sub" style="font-size:11px;margin-top:5px;line-height:1.5">Réseaux sociaux, vidéo, Drive, tableur… Le lien s'ouvre dans le navigateur. Seul un lien YouTube affiche une vignette : elle est chargée depuis Google, qui voit alors la connexion de tes athlètes.</div>
+    <label style="display:flex;align-items:center;gap:10px;margin-top:14px;cursor:pointer">
+      <input id="cm-epingle" type="checkbox" ${m.epingle?'checked':''} style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
+      <span style="font-size:12px;line-height:1.5">Épingler à l'accueil<br><span class="sub" style="font-size:11px">Un seul message à la fois : celui-ci remplacera l'épinglé actuel.</span></span>
+    </label>
+    <div style="display:flex;gap:8px;margin-top:16px">
       <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:44px" onclick="closeModal()">Annuler</button>
-      <button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="envoyerAnnonce()">Poser le mot</button>
+      <button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="enregistrerMessageCanal()">${msgId?'Enregistrer':'Publier'}</button>
     </div>
-  </div></div>`;
-  document.body.insertAdjacentHTML('beforeend',html);
+  </div></div>`);
 }
-// Un seul mot à la fois : le nouveau remplace l'ancien. Deux bannières
-// empilées sur l'accueil, personne ne les lit.
-function envoyerAnnonce(){
-  const texte=(document.getElementById('ann-texte')?.value||'').trim();
-  if(!texte){ toast('Écris le message d\'abord','var(--orange)'); return; }
-  const emails=Array.from(document.querySelectorAll('.ann-cb'))
-    .filter(cb=>cb.checked).map(cb=>cb.value);
-  if(!emails.length){ toast('Coche au moins un athlète','var(--orange)'); return; }
-  const users=DB.get('users')||{};
-  // Date.now() seul ne suffit pas : deux envois dans la même milliseconde
-  // partageaient un id, et l'athlète qui avait fermé le premier mot ne voyait
-  // jamais le second. Le suffixe garantit que deux mots sont toujours distincts.
-  const id=String(Date.now())+'-'+Math.random().toString(36).slice(2,7);
-  const par=(currentUser&&currentUser.fname)||'';
-  const touches=[];
-  emails.forEach(mail=>{
-    const c=users[mail];
-    if(!c) return;
-    c.annonce={id,texte:texte.slice(0,ANNONCE_MAX),date:Date.now(),par};
-    c.updatedAt=Date.now();
-    users[mail]=c; touches.push(c);
-  });
-  if(!touches.length){ toast('Aucun dossier à mettre à jour','var(--orange)'); return; }
-  const okLocal=DB.set('users',users);
+
+async function enregistrerMessageCanal(){
+  const titre=(document.getElementById('cm-titre')?.value||'').trim().slice(0,CANAL_TITRE_MAX);
+  const texte=(document.getElementById('cm-texte')?.value||'').trim().slice(0,CANAL_TEXTE_MAX);
+  const lienBrut=(document.getElementById('cm-lien')?.value||'').trim().slice(0,CANAL_LIEN_MAX);
+  const epingle=!!document.getElementById('cm-epingle')?.checked;
+  if(!titre&&!texte){ toast('Écris au moins un titre ou un message','var(--orange)'); return; }
+  // Un lien saisi mais invalide est REFUSÉ, pas silencieusement vidé : le coach
+  // croirait l'avoir publié, et l'athlète ne verrait jamais rien.
+  if(lienBrut&&safeUrlRaw(lienBrut)==='#'){
+    toast('Le lien doit commencer par https://','var(--orange)'); return;
+  }
+  const cle=canalCle(currentUser);
+  if(!cle||!CLOUD.ok()){ toast('Publication impossible hors connexion','var(--orange)'); return; }
+  // Date.now() seul ne suffit pas : deux publications dans la même milliseconde
+  // partageraient un identifiant et l'une écraserait l'autre.
+  const id=window._canalEdite||('m'+Date.now()+'-'+Math.random().toString(36).slice(2,7));
+  const ancien=(window._canalMsgsCoach||{})[id]||{};
+  const msg={at:Number(ancien.at)||Date.now(),titre,texte,lien:lienBrut,epingle};
   closeModal();
-  toastSync(okLocal,Promise.all(touches.map(c=>CLOUD.pushOne(c.email,c))),
-    'Mot posé chez '+touches.length+' athlète'+(touches.length>1?'s':''),'le mot est');
+  try{
+    // Dépingler les autres AVANT d'épingler celui-ci, et d'un seul PATCH : deux
+    // bannières empilées sur l'accueil, personne ne les lit.
+    if(epingle){
+      const patch={};
+      Object.keys(window._canalMsgsCoach||{}).forEach(k=>{
+        if(k!==id&&(window._canalMsgsCoach[k]||{}).epingle) patch[k+'/epingle']=false;
+      });
+      if(Object.keys(patch).length) await CLOUD.patcherMessagesCanal(cle,patch);
+    }
+    await CLOUD.ecrireMessageCanal(cle,id,msg);
+    // La sonde de pastille et la copie épinglée vivent dans coach_public, qui
+    // est déjà téléchargé à chaque ouverture d'accueil : c'est ce qui rend la
+    // bannière et la pastille gratuites côté athlète.
+    currentUser.canalDernier=Date.now();
+    if(epingle) currentUser.canalEpingle={id,at:msg.at,titre,texte,lien:lienBrut};
+    else if(currentUser.canalEpingle&&currentUser.canalEpingle.id===id) delete currentUser.canalEpingle;
+    saveUser();
+    await CLOUD.pushProfilCoach(currentUser);
+    toast(window._canalEdite?'Message modifié':'Message publié');
+  }catch(e){
+    toast('Non publié : '+e.message,'var(--orange)');
+  }
+  window._canalEdite='';
+  _canalChargerCoach();
 }
-function retirerAnnonce(){
-  const encours=_annonceEnCours();
-  if(!encours) return;
-  const users=DB.get('users')||{};
-  const touches=[];
-  Object.keys(users).forEach(mail=>{
-    const c=users[mail];
-    if(!c||!c.annonce||String(c.annonce.id)!==String(encours.id)) return;
-    delete c.annonce; c.updatedAt=Date.now();
-    users[mail]=c; touches.push(c);
-  });
-  if(!touches.length) return;
-  const okLocal=DB.set('users',users);
-  closeModal();
-  toastSync(okLocal,Promise.all(touches.map(c=>CLOUD.pushOne(c.email,c))),
-    'Mot retiré','le retrait est');
+
+async function supprimerMessageCanal(msgId){
+  if(!confirm('Supprimer ce message du canal ? Il disparaîtra chez tous tes athlètes.')) return;
+  const cle=canalCle(currentUser);
+  if(!cle) return;
+  try{
+    await CLOUD.supprimerMessageCanal(cle,msgId);
+    if(currentUser.canalEpingle&&currentUser.canalEpingle.id===msgId){
+      delete currentUser.canalEpingle;
+      saveUser();
+      await CLOUD.pushProfilCoach(currentUser);
+    }
+    toast('Message supprimé');
+  }catch(e){ toast('Suppression impossible : '+e.message,'var(--orange)'); }
+  _canalChargerCoach();
 }
+
 function openWaGroupe(rowIdx){
   const source=(typeof rowIdx==='number'&&window._todoRows&&window._todoRows[rowIdx])
     ?window._todoRows[rowIdx]:null;
@@ -14313,7 +14825,7 @@ function loadClientHome(){
   renderCartePesee();
   renderContraintesAthlete();
   renderDouleurAthlete();
-  renderAnnonceAthlete();
+  renderEpingleAccueil();
   renderBandeauPhase();renderRelancePhase();renderCartePhase();
   renderNutriDots();renderNotifs();renderWoReminderCard();
   const _hasDepart=(currentUser.bilans||[]).some(b=>b.type==='depart');
@@ -14617,6 +15129,7 @@ function clientTab(tab){
   else if(tab==='videos') loadVideos();
   else if(tab==='lifestyle') loadLifestyle();
   else if(tab==='evolution') loadProgress();
+  else if(tab==='canal') loadCanal();
 }
 
 // ======= SESSION MANAGER =======
@@ -45923,7 +46436,15 @@ function testExercices(){
     // horaires — aucune donnee personnelle au-dela de ce que le coach a
     // explicitement accepte de publier, et la regle RTDB en refuse la lecture
     // tant que mode vaut aucun.
-    const _cpAttendus=['fname','lname','teamName','catchphrase','coachPhoto','promoBanners','phone','chargesSchema','contact'];
+    // AJOUT DELIBERE de canalDernier et canalEpingle avec le lot « canal ».
+    // Meme regle que ci-dessus : ce test a attrape la modification, et c est
+    // exactement ce qu on lui demande. Ce que ces deux champs exposent aux
+    // athletes du coach : un horodatage, et une COPIE d un message que le coach
+    // a lui-meme ecrit POUR eux — donc rien qu il n ait deja decide de publier.
+    // Ils sont ici et non dans /canaux parce que coach_public est deja
+    // retelecharge a chaque ouverture d accueil : la pastille et la banniere ne
+    // coutent ainsi aucune requete.
+    const _cpAttendus=['fname','lname','teamName','catchphrase','coachPhoto','promoBanners','phone','chargesSchema','contact','canalDernier','canalEpingle'];
     ok('Liste des champs publiés figée',
        JSON.stringify(CLOUD.CHAMPS_PROFIL_COACH)===JSON.stringify(_cpAttendus),
        JSON.stringify(CLOUD.CHAMPS_PROFIL_COACH));
@@ -53186,340 +53707,202 @@ function testExercices(){
             ?true:_echec('« il t\'en restera » sur un jour passé');
         } finally { currentUser=sauveU; }})());
     })();
-    // ══ MOT DU COACH À L'ACCUEIL ══════════════════════════════════════════
+    // ══ CANAL DU COACH ════════════════════════════════════════════════════
     (()=>{
-      // par===undefined → 'Kevin' ; par==='' → vraiment vide. Mon premier jet
-      // écrivait `par||'Kevin'` : le cas « sans prénom de coach » était donc
-      // impossible à éprouver, le test lisait toujours « Mot de Kevin ».
-      const A=(id,texte,par)=>({id:String(id),texte,date:Date.now(),
-        par:par===undefined?'Kevin':par});
-      const U=(mail,annonce)=>({id:'a'+mail,email:mail,role:'athlete',fname:'Léa',
-        lname:'M',coachId:'co',exAlias:{},exMuscles:{},sessions:[],annonce});
+      const M=(id,at,o)=>Object.assign({at,texte:'Texte '+id},o||{});
+      const U=(mail,coach)=>({id:'a'+mail,email:mail,role:'athlete',fname:'Léa',
+        lname:'M',coachId:coach===undefined?'co':coach,exAlias:{},exMuscles:{},sessions:[]});
 
-      // ── La règle d'affichage, pure ──────────────────────────────────────
-      ok('Une annonce non lue s\'affiche',(()=>{
-        const a=annonceAAfficher(U('lea@t.fr',A(1,'Salle fermée jeudi.')),{});
-        return a&&a.texte==='Salle fermée jeudi.'&&a.id==='1'
-          ?true:_echec(a?JSON.stringify(a):'rien');})());
-      ok('Une annonce déjà fermée ne revient pas',
-        annonceAAfficher(U('lea@t.fr',A(1,'Coucou')),{'lea@t.fr':'1'})===null);
-      ok('Un NOUVEAU mot réapparaît même si l\'ancien était fermé',(()=>{
-        // La lecture est mémorisée par identifiant, pas par un simple booléen :
-        // sinon le premier mot fermé bâillonnerait tous les suivants.
-        const a=annonceAAfficher(U('lea@t.fr',A(2,'Nouveau')),{'lea@t.fr':'1'});
-        return a&&a.id==='2'?true:_echec(a?a.id:'rien');})());
+      // ── L'accès : c'est le rattachement, pas l'abonnement ───────────────
+      ok('Un athlète rattaché a le canal ouvert',
+        canalAccessible(U('lea@t.fr'))===true);
+      ok('Un athlète SANS coach a le canal verrouillé',
+        canalAccessible(U('lea@t.fr',null))===false);
+      ok('Un athlète rattaché par coachEmailKey seul y a droit aussi',(()=>{
+        // Le rattachement par code pose coachEmailKey sans toujours poser
+        // coachId : ne tester que coachId aurait verrouillé ces athlètes-là.
+        const u=U('lea@t.fr',null); u.coachEmailKey='kev@t,fr';
+        return canalAccessible(u)===true;})());
+      ok('Le coach n\'a pas l\'onglet athlète',(()=>{
+        const c=U('kev@t.fr'); c.role='coach';
+        return canalAccessible(c)===false;})());
+
+      // ── La clé du canal à consulter ─────────────────────────────────────
+      ok('Le coach lit SON canal, pas celui d\'un autre',(()=>{
+        // cleCoachDe() sort sur « if(!u.coachId) return null » : appliquée au
+        // coach elle rendait null, et son propre canal était introuvable.
+        const c={email:'kev@t.fr',role:'coach'};
+        return canalCle(c)==='kev@t,fr'?true:_echec(String(canalCle(c)));})());
+      ok('L\'athlète lit le canal de SON coach',(()=>{
+        const u=U('lea@t.fr'); u.coachEmailKey='kev@t,fr';
+        return canalCle(u)==='kev@t,fr'?true:_echec(String(canalCle(u)));})());
+
+      // ── La pastille : une sonde, pas un fil ─────────────────────────────
+      ok('Un message plus récent que la dernière visite allume la pastille',
+        canalNonLu(U('lea@t.fr'),{canalDernier:5000},{'lea@t.fr':4000})===true);
+      ok('Déjà vu : la pastille reste éteinte',
+        canalNonLu(U('lea@t.fr'),{canalDernier:5000},{'lea@t.fr':5000})===false);
+      ok('Jamais visité : le premier message allume la pastille',
+        canalNonLu(U('lea@t.fr'),{canalDernier:5000},{})===true);
+      ok('Canal vide : rien à signaler',
+        canalNonLu(U('lea@t.fr'),{},{})===false);
+      ok('Sans coach, jamais de pastille',
+        canalNonLu(U('lea@t.fr',null),{canalDernier:9e9},{})===false);
       ok('La lecture est par COMPTE : deux comptes sur un appareil',(()=>{
         // Un coach qui utilise aussi l'app comme athlète, ou deux athlètes sur
-        // le téléphone familial : fermer chez l'un ne ferme pas chez l'autre.
-        const lues={'lea@t.fr':'7'};
-        const l=annonceAAfficher(U('lea@t.fr',A(7,'Mot')),lues);
-        const m=annonceAAfficher(U('max@t.fr',A(7,'Mot')),lues);
-        return l===null&&m!==null?true:_echec('léa '+(l?'voit':'ne voit pas')
-          +' / max '+(m?'voit':'ne voit pas'));})());
-      ok('Sans annonce, rien',(()=>{
-        return annonceAAfficher(U('lea@t.fr',null),{})===null
-          &&annonceAAfficher(U('lea@t.fr',undefined),{})===null
-          &&annonceAAfficher({email:'x@t.fr'},{})===null
-          &&annonceAAfficher(null,{})===null
-          &&annonceAAfficher(undefined,{})===null;})());
-      ok('Une annonce vide ou sans identifiant ne s\'affiche pas',(()=>{
-        const cas=[A(1,''),A(1,'   '),A(1,null),{texte:'sans id'},{id:'',texte:'x'}];
-        const vus=cas.filter(a=>annonceAAfficher(U('lea@t.fr',a),{})!==null);
-        return vus.length?_echec(vus.length+' annonce(s) fantôme'):true;})());
-      ok('Le texte est rendu tel quel, espaces de bord en moins',(()=>{
-        const a=annonceAAfficher(U('lea@t.fr',A(1,'  Deux lignes\nici.  ')),{});
-        return a&&a.texte==='Deux lignes\nici.'?true:_echec(a?'«'+a.texte+'»':'rien');})());
-      ok('annonceAAfficher est PURE',(()=>{
-        const u=U('lea@t.fr',A(1,'Mot')); const lues={'x@t.fr':'9'};
-        const uAvant=JSON.stringify(u), lAvant=JSON.stringify(lues);
-        annonceAAfficher(u,lues);
-        return JSON.stringify(u)===uAvant&&JSON.stringify(lues)===lAvant;})());
-      ok('Un tableau de lectures absent ne fait pas tomber la fonction',(()=>{
-        try{
-          return annonceAAfficher(U('lea@t.fr',A(1,'Mot')),null)!==null
-            &&annonceAAfficher(U('lea@t.fr',A(1,'Mot')),undefined)!==null;
-        }catch(e){ return _echec('exception : '+e.message); }})());
+        // le téléphone familial : lire chez l'un n'éteint pas chez l'autre.
+        const vus={'lea@t.fr':5000};
+        return canalNonLu(U('lea@t.fr'),{canalDernier:5000},vus)===false
+            && canalNonLu(U('max@t.fr'),{canalDernier:5000},vus)===true;})());
 
-      // ── Le rendu, et la fermeture par le vrai chemin ────────────────────
+      // ── L'ordre du fil ──────────────────────────────────────────────────
+      ok('L\'épinglé passe devant, même plus ancien',(()=>{
+        const l=canalTrier({a:M('a',100),b:M('b',900),c:M('c',50,{epingle:true})});
+        return l[0].id==='c'?true:_echec(l.map(x=>x.id).join(','));})());
+      ok('Le reste va du plus récent au plus ancien',(()=>{
+        const l=canalTrier({a:M('a',100),b:M('b',900),c:M('c',500)});
+        return l.map(x=>x.id).join(',')==='b,c,a'
+          ?true:_echec(l.map(x=>x.id).join(','));})());
+      ok('Firebase rend un OBJET, pas un tableau — l\'ordre est reconstruit',(()=>{
+        // Object.keys ne garantit rien : sans tri explicite, le fil sortait
+        // dans l'ordre d'insertion de Firebase, qui n'est pas chronologique.
+        const l=canalTrier({z:M('z',1),a:M('a',2)});
+        return l[0].id==='a'?true:_echec(l.map(x=>x.id).join(','));})());
+      ok('Le fil est borné à '+CANAL_MAX_AFFICHES+' messages',(()=>{
+        const o={}; for(let i=0;i<40;i++) o['m'+i]=M('m'+i,i);
+        return canalTrier(o).length===CANAL_MAX_AFFICHES
+          ?true:_echec(String(canalTrier(o).length));})());
+      ok('Un fil absent ne fait pas tomber la fonction',
+        canalTrier(null).length===0&&canalTrier(undefined).length===0
+        &&canalTrier('bidon').length===0);
+      ok('Un message sans titre NI texte est écarté',(()=>{
+        const l=canalTrier({a:{at:5,titre:'',texte:''},b:M('b',9)});
+        return l.length===1&&l[0].id==='b'?true:_echec(String(l.length));})());
+
+      // ── Le lien ─────────────────────────────────────────────────────────
+      ok('Le domaine s\'affiche sans le www',
+        canalDomaine('https://www.instagram.com/p/abc')==='instagram.com');
+      ok('Un lien sans schéma ne produit pas de domaine',
+        canalDomaine('instagram.com/p/abc')==='');
+      ok('Une vignette YouTube se déduit de l\'identifiant',(()=>{
+        const a=canalVignette('https://youtu.be/lUuPEpfdgrs');
+        const b=canalVignette('https://www.youtube.com/watch?v=lUuPEpfdgrs');
+        const c=canalVignette('https://www.youtube.com/shorts/lUuPEpfdgrs');
+        return a===b&&b===c&&/lUuPEpfdgrs\/mqdefault\.jpg$/.test(a)
+          ?true:_echec(a+' / '+b+' / '+c);})());
+      ok('Hors YouTube, aucune vignette n\'est inventée',(()=>{
+        // Sans serveur, lire l'Open Graph d'une page distante est impossible
+        // depuis le navigateur. Afficher une fausse vignette serait pire.
+        return canalVignette('https://instagram.com/p/abc')===''
+            && canalVignette('')===''&&canalVignette(null)==='';})());
+      ok('La carte de lien REFUSE javascript: — safeUrl, pas escapeHtml',(()=>{
+        // escapeHtml laisse passer « javascript: » : la confusion exacte qui a
+        // déjà produit une faille sur le lien des bannières promo.
+        const h=_canalCarteLien('javascript:alert(1)');
+        return h===''?true:_echec('«'+h.slice(0,60)+'»');})());
+      ok('Un lien https produit bien une carte, avec rel="noopener"',(()=>{
+        const h=_canalCarteLien('https://instagram.com/p/abc');
+        return /noopener/.test(h)&&/instagram\.com/.test(h)
+          ?true:_echec('«'+h.slice(0,80)+'»');})());
+
+      // ── Le pivot du décompte coach ──────────────────────────────────────
+      ok('Le décompte pivote /reactions, rangé par athlète, vers le message',(()=>{
+        const r={'a@t,fr':{m1:'👍',m2:'🔥'},'b@t,fr':{m1:'👍'},'c@t,fr':{m1:'💪'}};
+        const v=canalDecompteVrai(r);
+        return v.m1['👍']===2&&v.m1['💪']===1&&v.m2['🔥']===1
+          ?true:_echec(JSON.stringify(v));})());
+      ok('Un nœud de réactions vide ne fait pas tomber le décompte',
+        JSON.stringify(canalDecompteVrai(null))==='{}'
+        &&JSON.stringify(canalDecompteVrai({a:null}))==='{}');
+      ok('canalDecompteVrai est PURE',(()=>{
+        const r={'a@t,fr':{m1:'👍'}};
+        const avant=JSON.stringify(r);
+        canalDecompteVrai(r);
+        return JSON.stringify(r)===avant;})());
+
+      // ── La bannière d'accueil, désormais alimentée par l'épinglé ────────
+      ok('Sans épinglé, pas de bannière',
+        canalEpingleAAfficher({})===null&&canalEpingleAAfficher(null)===null);
+      ok('Un épinglé vide de titre ET de texte ne s\'affiche pas',
+        canalEpingleAAfficher({canalEpingle:{id:'m1',titre:' ',texte:' '}})===null);
+      ok('Un épinglé avec le seul titre s\'affiche quand même',(()=>{
+        const e=canalEpingleAAfficher({canalEpingle:{id:'m1',titre:'Salle fermée',texte:''}});
+        return e&&e.titre==='Salle fermée'?true:_echec(JSON.stringify(e));})());
+
       const _sauveU=currentUser;
       try{
-        ok('La bannière s\'affiche sur l\'accueil, avec le nom du coach',(()=>{
-          localStorage.removeItem(ANNONCE_CLE);
-          currentUser=U('lea@t.fr',A(11,'Salle fermée jeudi, on décale à vendredi 18h.','Kevin'));
-          renderAnnonceAthlete();
+        ok('La bannière d\'accueil rend le message épinglé',(()=>{
+          currentUser=U('lea@t.fr');
+          try{ localStorage.setItem('rc_coach_profil',JSON.stringify({key:null,
+            d:{canalEpingle:{id:'m1',at:Date.now(),titre:'Nouvelle vidéo',
+               texte:'Regardez-la avant jeudi.',lien:''}}})); }catch(e){}
+          renderEpingleAccueil();
           const el=document.getElementById('clh-annonce');
           if(!el) return _echec('emplacement absent du DOM');
           if(el.style.display!=='block') return _echec('emplacement masqué');
           const t=el.textContent||'';
-          return /Mot de Kevin/.test(t)&&/vendredi 18h/.test(t)
+          return /Nouvelle vidéo/.test(t)&&/avant jeudi/.test(t)
             ?true:_echec('«'+t.slice(0,70)+'»');})());
-        ok('Sans prénom de coach, la bannière reste lisible',(()=>{
-          localStorage.removeItem(ANNONCE_CLE);
-          currentUser=U('lea@t.fr',A(12,'Un mot',''));
-          renderAnnonceAthlete();
-          const t=document.getElementById('clh-annonce').textContent||'';
-          return /Mot de ton coach/.test(t)?true:_echec('«'+t.slice(0,60)+'»');})());
-        ok('« OK, j\'ai vu » ferme la bannière pour de bon',(()=>{
-          localStorage.removeItem(ANNONCE_CLE);
-          currentUser=U('lea@t.fr',A(13,'Un mot'));
-          renderAnnonceAthlete();
+        ok('Sans coach rattaché, la bannière reste muette',(()=>{
+          // Le profil coach en cache peut survivre à un détachement : sans ce
+          // garde, l'ex-athlète continuait de voir le mot de son ancien coach.
+          currentUser=U('lea@t.fr',null);
+          renderEpingleAccueil();
+          return document.getElementById('clh-annonce').style.display==='none'
+            ?true:_echec('la bannière s\'affiche sans coach');})());
+        ok('La bannière échappe le HTML du coach',(()=>{
+          currentUser=U('lea@t.fr');
+          try{ localStorage.setItem('rc_coach_profil',JSON.stringify({key:null,
+            d:{canalEpingle:{id:'m2',at:Date.now(),titre:'',
+               texte:'<img src=x onerror=alert(1)>',lien:''}}})); }catch(e){}
+          renderEpingleAccueil();
           const el=document.getElementById('clh-annonce');
-          const btn=el.querySelector('button');
-          if(!btn) return _echec('aucun bouton');
-          btn.click();
-          if(el.style.display!=='none') return _echec('encore visible après le clic');
-          // Et elle ne revient pas au rendu suivant.
-          renderAnnonceAthlete();
-          return el.style.display==='none'&&!el.innerHTML
-            ?true:_echec('revenue au rendu suivant');})());
-        ok('La fermeture survit à un rechargement, pas à un nouveau mot',(()=>{
-          localStorage.removeItem(ANNONCE_CLE);
-          currentUser=U('lea@t.fr',A(14,'Premier'));
-          renderAnnonceAthlete();
-          document.getElementById('clh-annonce').querySelector('button').click();
-          // Rechargement simulé : on relit depuis le stockage.
-          if(annonceAAfficher(currentUser,_annonceLues())!==null)
-            return _echec('la fermeture n\'a pas été retenue');
-          currentUser.annonce=A(15,'Deuxième');
-          return annonceAAfficher(currentUser,_annonceLues())!==null
-            ?true:_echec('le deuxième mot est bâillonné par le premier');})());
-        ok('Le texte du coach ne peut pas injecter de HTML',(()=>{
-          // Il vient d'une saisie synchronisée depuis le cloud : même précaution
-          // que coachName, qui passe par textContent pour cette raison.
-          localStorage.removeItem(ANNONCE_CLE);
-          currentUser=U('lea@t.fr',A(16,'<img src=x onerror="window._annXSS=1">'));
-          renderAnnonceAthlete();
-          const el=document.getElementById('clh-annonce');
-          if(el.querySelector('img')) return _echec('balise injectée');
-          return window._annXSS===undefined
-            ?true:_echec('du script a été exécuté');})());
-        ok('Le retour à la ligne du coach est conservé',(()=>{
-          localStorage.removeItem(ANNONCE_CLE);
-          currentUser=U('lea@t.fr',A(17,'Ligne un\nLigne deux'));
-          renderAnnonceAthlete();
-          const el=document.getElementById('clh-annonce');
-          return /pre-wrap/.test(el.innerHTML)
-            ?true:_echec('les sauts de ligne seraient écrasés');})());
-        ok('Un stockage de lectures corrompu ne casse pas l\'accueil',(()=>{
-          try{
-            localStorage.setItem(ANNONCE_CLE,'{ceci n\'est pas du JSON');
-            currentUser=U('lea@t.fr',A(18,'Un mot'));
-            renderAnnonceAthlete();
-            const ok1=document.getElementById('clh-annonce').style.display==='block';
-            localStorage.setItem(ANNONCE_CLE,'"une chaîne"');
-            renderAnnonceAthlete();
-            const ok2=document.getElementById('clh-annonce').style.display==='block';
-            localStorage.removeItem(ANNONCE_CLE);
-            return ok1&&ok2?true:_echec('la bannière disparaît sur un stockage abîmé');
-          }catch(e){ return _echec('exception : '+e.message); }})());
-        ok('La bannière ne passe pas devant les blocs de santé',(()=>{
-          // Un « point d'étape 💪 » ne doit jamais repousser vers le bas un
-          // signe à faire examiner ni une douleur signalée.
-          const acc=document.getElementById('s-client-home');
-          const h=acc?acc.innerHTML:'';
-          const iC=h.indexOf('id="clh-contraintes"');
-          const iD=h.indexOf('id="clh-douleur"');
-          const iA=h.indexOf('id="clh-annonce"');
-          if(iA<0) return _echec('emplacement absent');
-          return iA>iC&&iA>iD?true:_echec('contraintes '+iC+' douleur '+iD+' annonce '+iA);})());
-        ok('L\'accueil appelle bien le rendu de la bannière',(()=>{
-          // Sans cet appel, tout le reste est du code mort.
-          return /renderAnnonceAthlete\(\)/.test(String(loadClientHome));})());
-      } finally { currentUser=_sauveU; localStorage.removeItem(ANNONCE_CLE); }
-
-      // ── Côté coach : qui peut recevoir, qui ne peut pas ─────────────────
-      const _sauveU2=currentUser, _sauveUsers=DB.get('users');
-      try{
-        currentUser={id:'co',email:'co@t.fr',role:'coach',fname:'Kevin',code:'AB12',
-          studentCodes:[{active:true,studentName:'Zoé Code',code:'ZZ99'}]};
-        const lea=U('lea@t.fr',null), max=U('max@t.fr',null);
-        lea.coachId='co'; max.coachId='co';
-        DB.set('users',{'co@t.fr':currentUser,'lea@t.fr':lea,'max@t.fr':max});
-        ok('Seuls les athlètes ayant un dossier sont destinataires',(()=>{
-          const {ok:dest,hors}=_annonceDestinataires();
-          const mails=dest.map(c=>c.email).sort();
-          if(mails.join(',')!=='lea@t.fr,max@t.fr') return _echec(mails.join(','));
-          // L'élève connu par son seul code est écarté — et compté, pour être dit.
-          return hors.length===1?true:_echec(hors.length+' écarté(s)');})());
-        ok('Un élève issu d\'un code ne porte AUCUN e-mail',(()=>{
-          // C'est cet invariant qui rend la garde !c._fromCode redondante aujourd'hui.
-          const code=getClients().filter(c=>c._fromCode);
-          if(!code.length) return _echec('aucun élève issu d\'un code dans le jeu');
-          const avecMail=code.filter(c=>c.email);
-          return avecMail.length?_echec(avecMail.length+' en portent un'):true;})());
-        ok('_fromCode est écarté EXPLICITEMENT, pas par accident',(()=>{
-          // Le jour où le profil minimal gagnera un e-mail, l'exclusion doit
-          // tenir quand même : sans elle, l'app écrirait un faux dossier.
-          // getClients est remplacée le temps du test — c'est le seul moyen
-          // d'injecter ce cas sans toucher au code de production.
-          const vrai=getClients;
-          try{
-            const us=DB.get('users')||{};
-            us['zoe@t.fr']={id:'_code_1',email:'zoe@t.fr',role:'athlete',fname:'Zoé'};
-            DB.set('users',us);
-            window.getClients=()=>[{id:'a1',email:'lea@t.fr',fname:'Léa'},
-              {id:'_code_1',email:'zoe@t.fr',fname:'Zoé',_fromCode:true}];
-            const {ok:dest,hors}=_annonceDestinataires();
-            const mails=dest.map(c=>c.email);
-            if(mails.indexOf('zoe@t.fr')>=0)
-              return _echec('un élève issu d\'un code est devenu destinataire');
-            return mails.join(',')==='lea@t.fr'&&hors.length===1
-              ?true:_echec('destinataires : '+mails.join(','));
-          } finally { window.getClients=vrai; }})());
-        ok('Les écartés sont ANNONCÉS au coach, pas supprimés en silence',(()=>{
-          document.getElementById('modal-overlay')?.remove();
-          openAnnonce();
-          const m=document.getElementById('modal-overlay');
-          if(!m) return _echec('la fenêtre ne s\'ouvre pas');
-          const t=m.textContent||'';
-          const dit=/1 élève connu par son seul code/.test(t);
-          closeModal();
-          return dit?true:_echec('rien ne dit qu\'un élève a été écarté');})());
-        ok('Poser un mot l\'écrit chez les athlètes cochés, et seulement eux',(()=>{
-          document.getElementById('modal-overlay')?.remove();
-          openAnnonce();
-          document.getElementById('ann-texte').value='Séance décalée à vendredi.';
-          // On décoche Max : il ne doit rien recevoir.
-          const cbs=Array.from(document.querySelectorAll('.ann-cb'));
-          const cbMax=cbs.find(c=>c.value==='max@t.fr');
-          if(!cbMax) return _echec('Max absent de la liste');
-          cbMax.checked=false;
-          envoyerAnnonce();
-          const us=DB.get('users')||{};
-          const a=us['lea@t.fr']&&us['lea@t.fr'].annonce;
-          if(!a||a.texte!=='Séance décalée à vendredi.')
-            return _echec('rien chez Léa');
-          if(a.par!=='Kevin') return _echec('le prénom du coach manque : '+a.par);
-          return !(us['max@t.fr']&&us['max@t.fr'].annonce)
-            ?true:_echec('Max a reçu le mot alors qu\'il était décoché');})());
-        ok('Un texte vide n\'écrit rien',(()=>{
-          const avant=JSON.stringify(DB.get('users'));
-          document.getElementById('modal-overlay')?.remove();
-          openAnnonce();
-          document.getElementById('ann-texte').value='   ';
-          envoyerAnnonce();
-          const apres=JSON.stringify(DB.get('users'));
-          const ferme=!document.getElementById('modal-overlay');
-          if(!ferme) closeModal();
-          return apres===avant&&!ferme
-            ?true:_echec(apres!==avant?'des dossiers ont bougé':'la fenêtre s\'est fermée comme si c\'était parti');})());
-        ok('Aucun athlète coché n\'écrit rien',(()=>{
-          const avant=JSON.stringify(DB.get('users'));
-          document.getElementById('modal-overlay')?.remove();
-          openAnnonce();
-          document.getElementById('ann-texte').value='Un mot';
-          _annTout(false);
-          envoyerAnnonce();
-          const apres=JSON.stringify(DB.get('users'));
-          closeModal();
-          return apres===avant?true:_echec('des dossiers ont bougé');})());
-        ok('Le mot est tronqué à '+ANNONCE_MAX+' caractères',(()=>{
-          document.getElementById('modal-overlay')?.remove();
-          openAnnonce();
-          // maxlength protège la saisie ; on force la valeur pour éprouver le code.
-          document.getElementById('ann-texte').value='x'.repeat(ANNONCE_MAX+50);
-          envoyerAnnonce();
-          const a=(DB.get('users')||{})['lea@t.fr'].annonce;
-          return a&&a.texte.length===ANNONCE_MAX
-            ?true:_echec(a?a.texte.length+' caractères':'rien');})());
-        ok('Un nouveau mot REMPLACE l\'ancien, avec un identifiant neuf',(()=>{
-          // Deux mots posés coup sur coup : c'est ce test qui a montré que
-          // Date.now() seul leur donnait le même identifiant.
-          document.getElementById('modal-overlay')?.remove();
-          openAnnonce();
-          document.getElementById('ann-texte').value='Premier mot';
-          envoyerAnnonce();
-          const id1=(DB.get('users')||{})['lea@t.fr'].annonce.id;
-          openAnnonce();
-          document.getElementById('ann-texte').value='Second mot';
-          envoyerAnnonce();
-          const a=(DB.get('users')||{})['lea@t.fr'].annonce;
-          if(Array.isArray(a)) return _echec('les mots s\'empilent');
-          return a.texte==='Second mot'&&a.id!==id1
-            ?true:_echec('«'+a.texte+'» id '+a.id);})());
-        ok('Le mot en cours est rappelé au coach avec son nombre d\'athlètes',(()=>{
-          document.getElementById('modal-overlay')?.remove();
-          openAnnonce();
-          document.getElementById('ann-texte').value='Le mot du jour';
-          _annTout(true);
-          envoyerAnnonce();
-          const e=_annonceEnCours();
-          if(!e) return _echec('aucun mot en cours');
-          if(e.combien!==2) return _echec(e.combien+' athlète(s) au lieu de 2');
-          openAnnonce();
-          const t=document.getElementById('modal-overlay').textContent||'';
-          closeModal();
-          return /Mot en cours/.test(t)&&/Le mot du jour/.test(t)
-            ?true:_echec('le mot en cours n\'est pas rappelé');})());
-        ok('Retirer le mot l\'enlève partout',(()=>{
-          document.getElementById('modal-overlay')?.remove();
-          openAnnonce();
-          document.getElementById('ann-texte').value='À retirer';
-          _annTout(true);
-          envoyerAnnonce();
-          retirerAnnonce();
-          const us=DB.get('users')||{};
-          const restants=Object.keys(us).filter(m=>us[m]&&us[m].annonce);
-          if(restants.length) return _echec('reste chez : '+restants.join(', '));
-          return _annonceEnCours()===null?true:_echec('encore un mot en cours');})());
-        ok('Retirer sans mot en cours ne fait rien et ne casse rien',(()=>{
-          try{
-            const avant=JSON.stringify(DB.get('users'));
-            retirerAnnonce();
-            return JSON.stringify(DB.get('users'))===avant;
-          }catch(e){ return _echec('exception : '+e.message); }})());
-        ok('Aucun athlète inscrit : la fenêtre ne s\'ouvre pas',(()=>{
-          DB.set('users',{'co@t.fr':currentUser});
-          document.getElementById('modal-overlay')?.remove();
-          openAnnonce();
-          const ouverte=!!document.getElementById('modal-overlay');
-          if(ouverte) closeModal();
-          return !ouverte?true:_echec('fenêtre ouverte sans destinataire possible');})());
-        ok('La rangée « Mes athlètes » ne déborde à aucune largeur de téléphone',(()=>{
-          // Avec deux boutons elle tenait ; le troisième la faisait sortir de
-          // l'écran à 375 px, la largeur d'iPhone la plus courante. Trouvé en
-          // mesurant, pas sur une capture : le rendu sans tête impose son
-          // propre viewport de 481 px et masquait le débordement.
-          const ecran=document.getElementById('s-coach-home');
-          if(!ecran) return _echec('écran coach absent');
-          const h2=Array.from(document.querySelectorAll('h2'))
-            .find(x=>/MES ATHL/.test(x.textContent||''));
-          if(!h2) return _echec('titre « Mes athlètes » introuvable');
-          let row=null,q=h2.parentNode;
-          while(q&&q!==document.body){
-            if(q.style&&q.style.justifyContent==='space-between'){ row=q; break; }
-            q=q.parentNode; }
-          if(!row) return _echec('rangée introuvable');
-          const wAvant=ecran.style.width, mAvant=ecran.style.maxWidth;
-          const actif=document.querySelector('.screen.active');
-          try{
-            // Un écran masqué mesure 0 : sans cette ligne le test comparait 0 à 0
-            // et ne pouvait RIEN détecter. C'est la variante qui l'a montré.
-            go('s-coach-home');
-            const trop=[414,375,320].filter(L=>{
-              ecran.style.width=L+'px'; ecran.style.maxWidth=L+'px';
-              return row.scrollWidth>row.clientWidth+1; });
-            // Sonde : si la rangée ne mesure rien, le test ne prouve rien.
-            if(!(row.clientWidth>0)) return _echec('rangée non affichée : mesure impossible');
-            return trop.length?_echec('déborde à : '+trop.join(', ')+' px'):true;
-          } finally {
-            ecran.style.width=wAvant; ecran.style.maxWidth=mAvant;
-            if(actif&&actif.id) go(actif.id);
-          }})());
-        ok('Le bouton du coach est bien câblé sur openAnnonce',(()=>{
-          const b=Array.from(document.querySelectorAll('button'))
-            .find(x=>/openAnnonce\(\)/.test(x.getAttribute('onclick')||''));
-          if(!b) return _echec('aucun bouton ne l\'appelle');
-          // Et il n'a pas remplacé le message groupé WhatsApp, qui reste le
-          // canal pour joindre quelqu'un hors de l'app.
-          const wa=Array.from(document.querySelectorAll('button'))
-            .find(x=>/openWaGroupe\(\)/.test(x.getAttribute('onclick')||''));
-          return wa?true:_echec('le message groupé WhatsApp a disparu');})());
+          return el.querySelector('img')===null
+            ?true:_echec('une balise img a été injectée');})());
       } finally {
-        currentUser=_sauveU2;
-        if(_sauveUsers) DB.set('users',_sauveUsers);
-        document.getElementById('modal-overlay')?.remove();
+        currentUser=_sauveU;
+        try{ localStorage.removeItem('rc_coach_profil'); }catch(e){}
+        renderEpingleAccueil();
       }
+
+      // ── Le câblage : l'onglet, l'écran, le bouton coach ─────────────────
+      ok('L\'onglet Canal existe dans la barre athlète',
+        !!document.querySelector('#client-tabbar .tab-btn[data-tab="canal"]'));
+      ok('L\'onglet Canal porte une pastille ET un cadenas',(()=>{
+        const b=document.querySelector('#client-tabbar .tab-btn[data-tab="canal"]');
+        return b&&b.querySelector('.tab-dot')&&b.querySelector('.tab-lock')
+          ?true:_echec('pastille ou cadenas manquant');})());
+      ok('L\'écran athlète et l\'écran coach existent tous les deux',
+        !!document.getElementById('s-canal')&&!!document.getElementById('s-coach-canal'));
+      ok('L\'écran coach est protégé par le préfixe s-coach-',(()=>{
+        // go() filtre sur ce préfixe : le nommer s-canal-coach l'aurait rendu
+        // atteignable par un athlète sans qu'une seule ligne le signale.
+        return document.getElementById('s-coach-canal')!==null
+          &&document.getElementById('s-canal-coach')===null;})());
+      ok('s-canal est routé vers l\'onglet canal',
+        TABBAR_ECRANS['s-canal']==='canal');
+      ok('Le bouton du coach est câblé sur le canal',(()=>{
+        const b=Array.from(document.querySelectorAll('button'))
+          .find(x=>/loadCanalCoach\(\)/.test(x.getAttribute('onclick')||''));
+        if(!b) return _echec('aucun bouton ne l\'appelle');
+        // Et il n'a pas remplacé le message groupé WhatsApp, qui reste le
+        // canal pour joindre quelqu'un hors de l'app.
+        const wa=Array.from(document.querySelectorAll('button'))
+          .find(x=>/openWaGroupe\(\)/.test(x.getAttribute('onclick')||''));
+        return wa?true:_echec('le message groupé WhatsApp a disparu');})());
+      ok('canalDernier et canalEpingle voyagent dans le profil public',(()=>{
+        // pushProfilCoach fait un PUT du profil ENTIER reconstruit depuis cette
+        // liste : hors d'elle, les deux champs seraient effacés au premier
+        // changement de photo, et la bannière disparaîtrait sans un mot.
+        const l=CLOUD.CHAMPS_PROFIL_COACH;
+        return l.indexOf('canalDernier')>=0&&l.indexOf('canalEpingle')>=0
+          ?true:_echec(l.join(','));})());
+      ok('Le « Mot du coach » a bien été retiré, pas laissé en double',(()=>{
+        // Deux systèmes d'annonce sur le même accueil, c'est la situation que
+        // le code d'origine décrivait déjà comme illisible.
+        return typeof window.openAnnonce==='undefined'
+          &&typeof window.annonceAAfficher==='undefined'
+          ?true:_echec('l\'ancien système répond encore');})());
     })();
     // ══ SEL & DÉPISTAGE PAR PROFIL ════════════════════════════════════════
     (()=>{
