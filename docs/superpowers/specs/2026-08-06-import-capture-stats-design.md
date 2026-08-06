@@ -48,10 +48,15 @@ Ce que ça résout, et qu'aucune des voies précédentes ne résolvait :
 
 ## Décisions tranchées par Kevin
 
-1. **Lecture via OCR.space**, le service déjà branché dans l'app (`_ocrImage`), plutôt
-   qu'un moteur embarqué. Conséquence assumée : la capture santé de l'athlète transite
-   par un tiers. Elle impose une mention explicite à l'écran et une mise à jour de
-   `privacy.html` — voir « Vie privée ».
+1. **Lecture embarquée, aucun appel tiers.** Premier choix retenu : réutiliser
+   `_ocrImage` / OCR.space. Abandonné après lecture du code — `LEGACY_PDF_IMPORT=false`
+   (l. 13315) coupe volontairement ce sous-traitant, `_ocrImage` lève une exception
+   quel que soit le chemin, et le commentaire de la garde unique interdit explicitement
+   d'en poser une seconde à côté. Réutiliser OCR.space aurait donc voulu dire rouvrir
+   une porte fermée en connaissance de cause, pour y envoyer des captures de santé.
+   Retenu à la place : **Tesseract auto-hébergé dans le dépôt**, exécuté sur l'appareil.
+   Rien ne sort du téléphone, la garde unique reste fermée, et `LEGACY_PDF_IMPORT` n'est
+   pas touché.
 2. **Écriture directe, sans écran de confirmation.** Le risque a été posé (une valeur
    mal lue s'installe sans que personne ne la voie) et accepté au nom de la fluidité.
    Les garde-fous ci-dessous compensent sans ajouter d'étape.
@@ -64,12 +69,21 @@ Un cadre en bas de la page **Pas** et en bas de la page **Sommeil** :
 > remplis automatiquement. L'image n'est pas conservée.
 
 1. L'athlète choisit une photo (appareil ou galerie).
-2. L'image part à `_ocrImage`, qui rend du texte brut.
+2. Le moteur embarqué se charge (à la demande, jamais au démarrage de l'app) et rend
+   du texte brut. L'image ne quitte pas l'appareil.
 3. L'analyseur extrait les couples (date, valeur).
 4. Les journées valides sont écrites immédiatement.
 5. Un toast récapitule ce qui est entré : « 7 jours enregistrés, 31 juil. → 6 août ».
 
 L'image est relâchée dès l'étape 3. Aucun chemin ne la stocke.
+
+**Poids et chargement.** Le moteur pèse ≈ 4,1 Mo (`tesseract-core-simd-lstm.wasm`
+2,79 Mo, `fra.traineddata` 1,19 Mo, ≈ 170 Ko de scripts), servis depuis le dépôt et
+jamais depuis un CDN — le projet les a tous bannis. Chargement **paresseux** : un
+athlète qui n'utilise jamais l'import ne télécharge rien. Le Service Worker les met en
+cache au premier usage. Prévoir la variante non-SIMD en repli pour les appareils
+anciens ; Tesseract choisit seul, mais le fichier doit être présent sinon la requête
+tombe en 404.
 
 ## L'analyse de la capture
 
@@ -86,6 +100,26 @@ L'image est relâchée dès l'étape 3. Aucun chemin ne la stocke.
   que l'app : `Math.round(mins/6)/10`. Le score Garmin (`79`) est ignoré ; comme le
   pourcentage côté pas, il est adjacent à la date et ne doit pas être pris pour la
   valeur cherchée.
+
+**Règle d'association — établie sur le texte réellement rendu, pas supposée.** La
+lecture des deux captures de référence a montré que la mise en page ne se lit pas de
+façon régulière : la valeur tombe tantôt sur la ligne de la date (`5 août - 25% 3 003`),
+tantôt sur la ligne juste au-dessus (`4 844` puis `6 août » 60%`). Les noms de jours
+sont peu fiables — `jeudi` est ressorti en `Ja)`. Les anneaux de progression produisent
+du bruit (`J`, `N`, `D`, `>`).
+
+D'où la règle, unique pour les deux types de capture :
+
+> Pour chaque date reconnue, chercher une valeur **sur sa propre ligne**, sinon **sur la
+> ligne précédente**. Si aucune valeur n'est trouvée, la date est abandonnée.
+
+Elle a trois vertus vérifiées sur les captures réelles : elle s'appuie sur la date, seul
+élément lu de façon fiable ; elle absorbe les deux mises en page observées ; et elle
+**élimine d'elle-même la ligne d'en-tête** (`31 juil. — 6 août`), qui ne porte aucune
+valeur et serait sinon comptée comme un huitième jour.
+
+Les pourcentages (`60%`) sont retirés de la ligne **avant** d'y chercher un entier, puis
+on retient le plus grand entier restant — sans quoi `5 août - 25% 3 003` rendrait 25.
 
 **Nature de la capture** — déduite du contenu, pas demandée à l'athlète : la présence
 de durées `XhYm` désigne une capture de sommeil, sinon des pas. Le même cadre accepte
@@ -143,17 +177,17 @@ les deux pages.
 
 ## Vie privée
 
-Le point sensible de cette fonctionnalité. « La capture n'apparaît pas sur le compte »
-règle son stockage, pas sa **transmission** : l'image part chez OCR.space pour être lue.
+Le choix de la lecture embarquée règle la question à la racine : **l'image ne quitte
+jamais l'appareil**, il n'y a aucun sous-traitant à déclarer et aucun appel réseau à
+l'usage. C'est la seule option cohérente avec ce que le projet a réellement fait — le
+verrou `LEGACY_PDF_IMPORT` sur OCR.space, et le retrait de la vignette YouTube du canal.
 
-Le projet vient précisément de retirer la vignette YouTube du canal du coach pour
-n'avoir aucun appel tiers automatique. La cohérence exige donc :
+Reste à écrire, parce que l'absence de transmission ne se devine pas :
 
-- une phrase dans le cadre lui-même, avant tout envoi, disant où va l'image et qu'elle
-  n'est pas conservée — l'athlète doit le savoir au moment où il choisit, pas dans un
-  document qu'il n'ouvrira jamais ;
-- une entrée correspondante dans `privacy.html`, au même endroit que les autres appels
-  tiers.
+- une phrase dans le cadre lui-même : la capture est lue **sur le téléphone**, elle
+  n'est ni envoyée ni conservée ;
+- une entrée dans `privacy.html` disant la même chose — un lecteur qui voit « import de
+  capture » doit pouvoir vérifier que rien ne part, plutôt que de le supposer.
 
 ## Tests
 
@@ -177,16 +211,21 @@ Garmin Connect en français, l'une pour les pas, l'autre pour le sommeil. Attend
 Le test doit vérifier explicitement qu'aucun pourcentage (`60 %`) ni score (`79`) n'a
 été pris pour une valeur, et que les sept journées portent la bonne date.
 
-**À vérifier sur appel OCR réel, pas seulement sur texte simulé** : la lecture d'une
-capture n'a jamais été éprouvée sur ce genre d'écran, et l'import de fiches programme
-a déjà montré que l'OCR se comporte autrement que prévu sur les mises en page en
-tableau.
+**Faisabilité déjà démontrée, avant écriture du plan.** Le moteur embarqué a été passé
+sur les deux captures réelles : **14 valeurs sur 14**, dates comprises, aucune erreur,
+≈ 1,2 s par image. L'inversion du blanc sur noir s'est révélée inutile — les deux modes
+rendent le même texte. C'est ce résultat qui a permis de retenir la lecture embarquée
+sans pari.
 
 ## Risques connus
 
-- **Fiabilité de l'OCR non démontrée** sur ce type de capture. À mesurer avant de
-  livrer ; si le taux d'erreur est mauvais, la décision « écriture directe » mérite
-  d'être rouverte avec Kevin.
+- **Poids embarqué.** ≈ 4,1 Mo ajoutés au dépôt, plus la variante non-SIMD de repli.
+  Sans chargement paresseux, tous les athlètes le paieraient sans jamais s'en servir :
+  c'est le point à ne pas rater à la mise en œuvre.
 - **Captures d'autres marques non testées.** L'analyse générique est conçue pour, mais
   seul Garmin Connect est vérifié à ce stade.
 - **Langue.** Les mois sont reconnus en français. Une capture en anglais ne sera pas lue.
+- **Lecture éprouvée sur ordinateur, pas encore sur téléphone.** Le résultat 14/14 vient
+  d'une exécution locale. Le moteur est le même en navigateur, mais la durée sur un
+  téléphone d'entrée de gamme reste à mesurer — c'est ce qui décide s'il faut un
+  indicateur de progression pendant la lecture.
