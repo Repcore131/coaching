@@ -23270,6 +23270,20 @@ function nutIsOnDay(dateStr){
   return cfg[idx]?.active===true;
 }
 function setNutriDietType(type){
+  // Deuxième garde, au MOMENT de l'écriture : désactiver l'option de la liste
+  // ne protège que la souris. Le champ reste atteignable au clavier et depuis
+  // la console, et c'est ici que le refus doit tenir.
+  if(type==='strict'){
+    const a=accesDieteStricte(currentUser);
+    if(!a.ok){
+      toast(a.raison==='sans_coach'
+        ?'La diète stricte est composée par un coach : il t\'en faut un.'
+        :'Ton coach ne t\'a pas encore ouvert la diète stricte.','var(--orange)');
+      const s=document.getElementById('nut-diet-select');
+      if(s) s.value=typeDiete(currentUser.nutrition||{});
+      return;
+    }
+  }
   if(!currentUser.nutrition) currentUser.nutrition={};
   currentUser.nutrition.dietType=type;
   saveUser();
@@ -24199,9 +24213,60 @@ function _renderNutriContent(type){
   }
 }
 
+// L'écran verrouillé. Il reprend la forme des accès réservés de
+// l'application — cadenas, contenu grisé — mais il ne se contente PAS de
+// fermer : il dit pourquoi, et il propose une sortie. Un athlète qui n'a pas
+// de coach n'attend rien de personne ; le laisser devant une porte close sans
+// lui montrer la diète flexible, qui elle fonctionne en autonomie, serait le
+// bloquer pour rien.
+const STRICT_VERROU=Object.freeze({
+  sans_coach:Object.freeze({
+    titre:'Réservé au suivi coaché',
+    texte:'La diète stricte est un plan alimentaire composé repas par repas '
+      +'par ton coach. Sans coach, il n\'y a personne pour l\'écrire.',
+    action:'La diète flexible, elle, te suit en autonomie : tu fixes tes '
+      +'macros et tu manges ce que tu veux dans ces limites.'
+  }),
+  non_valide:Object.freeze({
+    titre:'Ton coach ne l\'a pas encore ouverte',
+    texte:'Ton coach prépare ton plan alimentaire. Tu y auras accès dès '
+      +'qu\'il te l\'aura ouvert — tu n\'as rien à faire.',
+    action:'En attendant, tu peux suivre ta nutrition en diète flexible.'
+  })
+});
+function _htmlStrictVerrou(raison){
+  const v=STRICT_VERROU[raison]||STRICT_VERROU.non_valide;
+  return `<div style="position:relative;border:1px solid var(--border);border-radius:16px;padding:26px 20px;text-align:center;background:linear-gradient(180deg,var(--surface-1),var(--dark));overflow:hidden">
+    <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(-55deg,transparent,transparent 16px,rgba(255,255,255,.018) 16px,rgba(255,255,255,.018) 17px);pointer-events:none"></div>
+    <div style="position:relative">
+      <div style="color:var(--text-dim);line-height:0;margin-bottom:14px">${icon('lock',40)}</div>
+      <div style="font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:19px;letter-spacing:2.5px;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">Diète stricte</div>
+      <div style="font-size:13px;font-weight:800;color:#ddd;margin-bottom:10px">${escapeHtml(v.titre)}</div>
+      <p style="margin:0 0 10px;font-size:12px;color:var(--sub);line-height:1.65">${escapeHtml(v.texte)}</p>
+      <p style="margin:0 0 18px;font-size:11.5px;color:var(--text-faint);line-height:1.6">${escapeHtml(v.action)}</p>
+      <button class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:11px" onclick="setNutriDietType('flexible')">Passer en diète flexible</button>
+      ${raison==='sans_coach'?`<button class="btn btn-outline btn-sm" style="width:100%;margin:8px 0 0;letter-spacing:1px;font-size:11px" onclick="go('s-client-code')">J'ai un code coach</button>`:''}
+    </div>
+  </div>`;
+}
+
 function _renderStrictDiet(){
   const el=document.getElementById('nut-diet-content');
   if(!el) return;
+  // LE VERROU PASSE AVANT TOUT. Rien du plan — ni les macros, ni les repas,
+  // ni la liste de courses — ne doit être construit pour quelqu'un qui n'y a
+  // pas droit : un écran grisé par-dessus un contenu rendu se contourne.
+  //
+  // L'encart de transition, LUI, reste au-dessus du verrou : il ne parle pas
+  // du plan mais des réglages de cycle de l'athlète, et il dit précisément
+  // qu'ils ne s'appliquent pas hors diète flexible. Le masquer laisserait une
+  // adaptation active sans effet et sans explication.
+  const _acces=accesDieteStricte(currentUser);
+  if(!_acces.ok){
+    el.innerHTML=_htmlDieteTransition(currentUser&&currentUser.nutrition)
+      +_htmlStrictVerrou(_acces.raison);
+    return;
+  }
   // Les sources du plan sont des identifiants Ciqual : sans la table, elles
   // s'afficheraient toutes « aliment introuvable ». On rend une première fois
   // sans elle — l'écran ne doit pas rester blanc — puis on recommence.
@@ -24385,7 +24450,10 @@ function planOrdreRepas(cle){
 // interrupteur, exactement comme dans les tableurs, où les deux versions d'un
 // même programme ne diffèrent que par ces lignes-là.
 const PLAN_PORTIONS=Object.freeze({
-  oeuf:      Object.freeze({lib:'Œuf entier',     u:'œuf',    p:6,   c:0,    l:5}),
+  // Œuf : la valeur Ciqual de « Œuf cru » (12,8 / 0,06 / 9,83 pour 100 g)
+  // ramenée à un œuf moyen de 50 g. Le tableur écrivait 6 / 0 / 5 — même
+  // chose à un dixième près, mais celle-ci est traçable.
+  oeuf:      Object.freeze({lib:'Œuf entier',     u:'œuf',    p:6.4, c:0.03, l:4.92}),
   yaourt:    Object.freeze({lib:'Petit yaourt',   u:'yaourt', p:5.4, c:5,    l:3.8}),
   whey:      Object.freeze({lib:'Whey isolate',   u:'scoop',  p:25,  c:1.6,  l:1,  comp:true}),
   creme_riz: Object.freeze({lib:'Crème de riz',   u:'scoop',  p:0,   c:37,   l:0}),
@@ -24398,7 +24466,9 @@ const PLAN_PORTIONS=Object.freeze({
   // est ici et non prise dans Ciqual pour une seule raison : c'est la ligne
   // dont le tableur calcule la quantité par paliers de poids, et
   // amandesSuggerees a besoin de la reconnaître pour proposer ce nombre.
-  amandes:   Object.freeze({lib:'Amandes',        u:'g',      p:22.5,c:8.5,  l:52.5})
+  // Les valeurs, elles, sont bien celles de Ciqual (« Amande, émondée, sans
+  // sel ajouté », 15041) et non celles du tableur.
+  amandes:   Object.freeze({lib:'Amandes',        u:'g',      p:21.4,c:8.76, l:52.5})
 });
 // Une unité en grammes ou en millilitres se compte POUR 100 ; tout le reste se
 // compte à la pièce. Une seule règle, lisible, plutôt qu'un drapeau à tenir à
@@ -24441,6 +24511,377 @@ const PLAN_JOURS_SEMAINE=7;
 const PLAN_NOTE_CUISSON='Les quantités sont à peser CRUES. Cuisson al dente '
   +'de préférence : des pâtes trop cuites ont un index glycémique plus élevé '
   +'que les mêmes pâtes al dente.';
+const PLAN_NOTE_CHEATMEAL=Object.freeze([
+  'Un seul cheatmeal par semaine : un repas avec les aliments habituellement proscrits.',
+  'Favoriser les cheatmeals salés — pâtes bolognaise, pizza, burger — plutôt que sucrés.'
+]);
+const PLAN_NOTE_INDICATIF='Ce programme alimentaire est proposé à titre '
+  +'indicatif, en tant qu\'exemple adapté à tes besoins.';
+
+// ══════════ LES CATALOGUES DU COACH, RATTACHÉS À CIQUAL ═══════════════════
+// Les cinquante sources des tableurs .ods, rattachées une par une aux entrées
+// Anses. TOUT EST EN CRU OU EN SEC : c'est la consigne même du tableur
+// (« les quantités sont à peser CRUES »), et huit de ses lignes de glucides
+// portaient pourtant une valeur d'aliment cuit. Les remettre en sec rend la
+// liste homogène — l'athlète pèse toujours avant cuisson — et divise les
+// portions de légumineuses par environ deux et demi.
+//
+// Restent en cuit les seules préparations qui n'existent pas autrement :
+// patate douce au four, frites, chips.
+//
+// « Le riz brun » a disparu de la liste : une fois les deux ramenés au cru,
+// c'est le même aliment que « Le riz complet ».
+const PLAN_CAT_PROTEINES=Object.freeze([
+  Object.freeze({lib:'Farine d\'amande déshuilée',p:52,hors:true}), // rien d'équivalent chez Anses
+  28812,   // Jambon sec — 28,7
+  26053,   // Thon, cru — 24,0
+  20515,   // Pois cassé, sec — 23,8
+  26034,   // Sardine, à l'huile, appertisée, égouttée — 23,3 (n'existe pas crue en boîte)
+  26180,   // Thon à l'huile de tournesol, appertisé, égoutté — 23,3
+  26037,   // Saumon fumé — 22,2 (fumé par nature)
+  6250,    // Bœuf, steak haché 5% MG cru — 21,9
+  15041,   // Amande, émondée, sans sel ajouté — 21,4
+  6002,    // Bœuf, épaule crue — 21,4
+  28204,   // Porc, filet mignon cru — 21,2
+  36003,   // Poulet, viande crue — 20,9
+  20516,   // Pois chiche, sec — 20,5
+  15034,   // Lin, graine — 19,0
+  15044,   // Pistache, grillée, sans sel ajouté — 18,4
+  40106,   // Foie, veau, cru — 15,5
+  22000,   // Œuf cru — 12,8
+  32140,   // Flocons d'avoine — 10,6
+  20359,   // Lentille, sèche (aliment moyen) — 25,1
+  19644    // Fromage blanc, nature, 0% MG — 7,3
+]);
+const PLAN_CAT_GLUCIDES=Object.freeze([
+  9119,    // Riz thaï ou basmati, cru — 78,4
+  7352,    // Galette de riz complet soufflé — 77,9
+  9614,    // Polenta ou semoule de maïs, précuite, à cuire — 74,0
+  9102,    // Riz complet, cru — 71,4
+  9080,    // Blé dur complet, précuit, à cuire — 67,7
+  9870,    // Pâtes sèches, au blé complet, crues — 67,6
+  9690,    // Boulgour de blé, cru — 65,8
+  9415,    // Farine de blé tendre ou froment T150 — 64,9
+  13011,   // Datte, chair et peau, sans noyau, sèche — 64,7
+  Object.freeze({lib:'Spaghetti de pois chiches',c:60,hors:true}),
+  9340,    // Quinoa, cru — 58,1
+  32140,   // Flocons d'avoine — 57,7
+  7815,    // Tortilla souple (à garnir), à base de blé — 53,0 (pas de version complète)
+  20516,   // Pois chiche, sec — 47,5
+  20515,   // Pois cassé, sec — 47,5
+  20525,   // Haricot rouge, sec — 46,1
+  20359,   // Lentille, sèche (aliment moyen) — 44,5
+  7110,    // Pain complet ou intégral (T150) — 41,2
+  20518,   // Fève, sèche — 33,3
+  53100,   // Banane plantain, crue — 29,6
+  20812,   // Farine de pulpe de patate douce — 50,1
+  13005,   // Banane, chair sans peau, crue — 19,7
+  4101,    // Patate douce, crue — 17,1
+  4008,    // Pomme de terre, sans peau, crue — 16,2
+  // Les quatre préparations de l'encadré « si vous disposez d'un Airfryer ».
+  // Elles n'existent que cuites, donc elles restent cuites.
+  4102,    // Patate douce, cuite (au four) — 16,3
+  4027,    // Pomme de terre sautée/rissolée, préfrite, surgelée, cuite — 23,0
+  Object.freeze({lib:'Frites de patate douce (maison)',c:20,hors:true}),
+  Object.freeze({lib:'Chips de légumes faits maison',c:18,hors:true})
+]);
+
+// ══════════ LA TABLE DES FRUITS ═══════════════════════════════════════════
+// Reprise TELLE QUELLE du tableur, sur demande du coach. Aucun calcul : ce
+// sont des équivalences de portion, les mêmes pour tout le monde et dans tous
+// les programmes. Elle s'affiche sous les sources de glucides, là où le
+// tableur la place, et la ligne « une portion de fruit au choix » du
+// squelette y renvoie.
+const PLAN_FRUITS=Object.freeze([
+  Object.freeze({n:'Banane',       q:'1 petite banane (env. 90 g)'}),
+  Object.freeze({n:'Pomme',        q:'1 petite pomme (env. 130 g)'}),
+  Object.freeze({n:'Orange',       q:'1 orange moyenne (env. 160 g)'}),
+  Object.freeze({n:'Raisin',       q:'30 à 35 raisins (~95 g)'}),
+  Object.freeze({n:'Mangue',       q:'1/2 mangue moyenne (env. 110 g)'}),
+  Object.freeze({n:'Ananas',       q:'2 tranches moyennes (~120 g)'}),
+  Object.freeze({n:'Pêche',        q:'1 grande pêche (env. 140 g)'}),
+  Object.freeze({n:'Poire',        q:'1 petite poire (env. 130 g)'}),
+  Object.freeze({n:'Kiwi',         q:'2 kiwis moyens (~130 g)'}),
+  Object.freeze({n:'Cerises',      q:'environ 15 cerises (~110 g)'}),
+  Object.freeze({n:'Fraises',      q:'250 g'}),
+  Object.freeze({n:'Framboises',   q:'300 g'}),
+  Object.freeze({n:'Myrtilles',    q:'140 g'}),
+  Object.freeze({n:'Melon (cantaloup)',q:'1/4 de melon (~160 g)'}),
+  Object.freeze({n:'Pastèque',     q:'1/8 de pastèque (~300 g)'}),
+  Object.freeze({n:'Nectarine',    q:'1 grosse nectarine (~150 g)'}),
+  Object.freeze({n:'Abricots',     q:'3 gros abricots (~130 g)'}),
+  Object.freeze({n:'Prunes',       q:'2 à 3 prunes moyennes (~130 g)'}),
+  Object.freeze({n:'Groseilles',   q:'250 g'}),
+  Object.freeze({n:'Pamplemousse', q:'1/2 pamplemousse (~180 g)'})
+]);
+
+// ══════════ LES PRÉ-MODÈLES ═══════════════════════════════════════════════
+// Les squelettes des quatre tableurs, ligne par ligne et dans leur ordre.
+// « c » marque une ligne de complément : elle ne s'affiche qu'en version avec
+// compléments, et c'est le seul effet de cet interrupteur — exactement comme
+// entre les deux versions d'un même tableur.
+//
+// IL N'Y A PAS DE MODÈLE DE SÈCHE FEMME : le tableur correspondant n'existe
+// pas encore. L'écran de composition le dit au lieu de servir en silence un
+// modèle d'homme.
+// Trois marques, et chacune correspond à une différence RÉELLE entre les deux
+// tableurs d'une même paire :
+//   comp      la ligne est un complément ; en version sans, elle est remplacée
+//             par son substitut, ou retirée s'il n'y en a pas ;
+//   avecSeul  la ligne n'existe que dans la version avec (les amandes, que le
+//             coach retire pour compenser le lait protéiné ajouté) ;
+//   sansSeul  la ligne n'existe que dans la version sans (les dattes séchées
+//             pendant la séance, qui remplacent les glucides de la malto) ;
+//   noteSans  le texte de la note change (« Sous forme de SHAKER » devient
+//             « Dans un bol mélanger » quand il n'y a plus de poudre).
+const _L={
+  note:(r,t,ts)=>({r,note:t,noteSans:ts||null}),
+  fruit:(r)=>({r,fruit:true}),
+  srcP:(r)=>({r,src:'p'}),
+  srcC:(r)=>({r,src:'c'}),
+  ciq:(r,id,q,o)=>Object.assign({r,ciqual:id,q,u:'g'},o||{}),
+  por:(r,p,q,o)=>Object.assign({r,portion:p,q},o||{}),
+  auto:(r,p,a,o)=>Object.assign({r,portion:p,auto:a},o||{}),
+  lib:(r,n,q,u,p,g,l,o)=>Object.assign({r,libre:n,q,u,p,c:g,l},o||{})
+};
+const _C={comp:true},_AV={avecSeul:true},_SA={sansSeul:true},_CAV={comp:true};
+// Les lignes communes aux quatre modèles : midi et soir sont toujours bâtis
+// autour des deux sources au choix. C'est LE motif du tableur.
+function _planRepasSource(r,huile,legumes){
+  const out=[_L.srcP(r),_L.srcC(r)];
+  if(huile) out.push(_L.ciq(r,17130,huile));            // Huile de colza
+  if(legumes) out.push(_L.lib(r,'Un bol de légumes',legumes,'g',1,4,0));
+  out.push(_L.por(r,'creatine',2,_C));
+  return out;
+}
+const PLAN_MODELES=Object.freeze({
+  // ── SÈCHE HOMME ────────────────────────────────────────────────────────
+  seche_H:Object.freeze([].concat(
+    [_L.note('petit_dej','Sous forme de PANCAKES'),
+     _L.auto('petit_dej','oeuf','oeufs'),
+     _L.ciq('petit_dej',19644,250),                     // Fromage blanc 0%
+     _L.note('petit_dej','À consommer à côté'),
+     _L.por('petit_dej','omega3',2,_C),
+     _L.por('petit_dej','multivit',1,_C)],
+    [_L.fruit('collation1'),
+     _L.por('collation1','whey',1,_C),
+     _L.auto('collation1','amandes','amandes',_AV),
+     _L.por('collation1','yaourt',6)],
+    _planRepasSource('midi',10,200),
+    [_L.note('avant','Sous forme de SHAKER','Dans un bol mélanger'),
+     _L.por('avant','whey',1,_C),
+     _L.por('avant','creme_riz',1,_C),
+     _L.ciq('avant',31008,30)],                         // Miel
+    [_L.note('pendant','Dans une gourde de 1,5 L d\'eau'),
+     _L.por('pendant','malto',1,_C),
+     _L.lib('pendant','Sel iodé',1,'pincée',0,0,0)],
+    _planRepasSource('soir',10,200),
+    [_L.ciq('soir',19644,250)]                          // Fromage blanc du soir
+  )),
+  // ── SÈCHE FEMME ────────────────────────────────────────────────────────
+  // Deux différences avec le modèle homme, relevées dans le tableur : le lait
+  // protéiné y est à 400 mL et non 500, et il n'y a pas de maltodextrine du
+  // tout — le Pulco citron est là dans les deux versions.
+  seche_F:Object.freeze([].concat(
+    [_L.note('petit_dej','Sous forme de PANCAKES'),
+     _L.auto('petit_dej','oeuf','oeufs'),
+     _L.ciq('petit_dej',19644,150),
+     _L.note('petit_dej','À consommer à côté'),
+     _L.por('petit_dej','omega3',2,_C),
+     _L.por('petit_dej','multivit',1,_C)],
+    [_L.fruit('collation1'),
+     _L.por('collation1','whey',1,{comp:true,sub:{libre:'Lait protéiné (soja)',q:400,u:'mL',p:5,c:2.5,l:1.8}}),
+     _L.auto('collation1','amandes','amandes'),
+     _L.por('collation1','yaourt',3,_AV)],
+    _planRepasSource('midi',0,150),
+    [_L.note('avant','Sous forme de SHAKER','Dans un bol mélanger'),
+     _L.por('avant','whey',1,{comp:true,sub:{libre:'Lait protéiné (soja)',q:400,u:'mL',p:5,c:2.5,l:1.8}}),
+     _L.por('avant','creme_riz',1,_C)],
+    [_L.note('pendant','Dans une gourde de 1,5 L d\'eau'),
+     _L.lib('pendant','Pulco citron',200,'mL',0.2,1.6,0),
+     _L.lib('pendant','Sel iodé',1,'pincée',0,0,0)],
+    _planRepasSource('soir',15,150)
+  )),
+  // ── PRISE DE MASSE HOMME ───────────────────────────────────────────────
+  masse_H:Object.freeze([].concat(
+    [_L.note('petit_dej','Sous forme de PANCAKES'),
+     _L.auto('petit_dej','oeuf','oeufs'),
+     _L.ciq('petit_dej',19644,250),
+     _L.por('petit_dej','creme_riz',1,_C),
+     _L.note('petit_dej','À consommer à côté'),
+     _L.por('petit_dej','omega3',2,_C),
+     _L.por('petit_dej','multivit',1,_C),
+     _L.fruit('petit_dej')],
+    [_L.por('collation1','whey',1,_C),
+     _L.auto('collation1','amandes','amandes',_AV),
+     _L.por('collation1','yaourt',6)],
+    _planRepasSource('midi',10,150),
+    [_L.note('avant','Sous forme de SHAKER','Dans un bol mélanger'),
+     _L.por('avant','whey',1,_C),
+     _L.por('avant','creme_riz',1.5,_C),
+     _L.ciq('avant',31008,30)],
+    [_L.note('pendant','Dans une gourde de 1,5 L d\'eau'),
+     _L.por('pendant','malto',2,_C),
+     _L.lib('pendant','Sel iodé',1,'pincée',0,0,0),
+     _L.ciq('pendant',13011,25,_SA)],                   // Dattes séchées ~5
+    _planRepasSource('soir',10,150)
+  )),
+  // ── PRISE DE MASSE FEMME ───────────────────────────────────────────────
+  masse_F:Object.freeze([].concat(
+    [_L.note('petit_dej','Sous forme de PANCAKES'),
+     _L.auto('petit_dej','oeuf','oeufs'),
+     _L.ciq('petit_dej',19644,150),
+     _L.por('petit_dej','creme_riz',1,_C),
+     _L.note('petit_dej','À consommer à côté'),
+     _L.por('petit_dej','omega3',2,_C),
+     _L.por('petit_dej','multivit',1,_C),
+     _L.fruit('petit_dej')],
+    [_L.por('collation1','whey',1,_C),
+     _L.auto('collation1','amandes','amandes',_AV),
+     _L.por('collation1','yaourt',3)],
+    _planRepasSource('midi',15,150),
+    [_L.note('avant','Sous forme de SHAKER','Dans un bol mélanger'),
+     _L.por('avant','whey',1,_C),
+     _L.por('avant','creme_riz',1,_C),
+     _L.ciq('avant',31008,20)],
+    [_L.note('pendant','Dans une gourde de 1,5 L d\'eau'),
+     _L.por('pendant','malto',1,_C),
+     _L.lib('pendant','Sel iodé',1,'pincée',0,0,0),
+     _L.ciq('pendant',13011,15,_SA)],                   // Dattes séchées ~3
+    _planRepasSource('soir',0,150)
+  ))
+});
+// Les substitutions de la version SANS compléments, relevées entre les deux
+// tableurs de chaque paire : là où le coach retire la whey, il met du lait
+// protéiné ; là où il retire la crème de riz et la maltodextrine, il met des
+// flocons d'avoine et du Pulco citron. Ce n'est donc pas « masquer les lignes
+// de complément », c'est les REMPLACER — et l'apport reste couvert.
+const PLAN_SUBSTITUTS_SANS_COMP=Object.freeze({
+  whey:      Object.freeze({libre:'Lait protéiné (soja)',q:500,u:'mL',p:5,c:2.5,l:1.8}),
+  creme_riz: Object.freeze({ciqual:32140,q:60,u:'g'}),        // Flocons d'avoine
+  malto:     Object.freeze({libre:'Pulco citron',q:200,u:'mL',p:0.2,c:1.6,l:0}),
+  omega3:    null, multivit:null, creatine:null, collagene:null
+});
+// Une note sans rien en dessous est un titre qui ne titre plus rien : elle
+// arrive quand la version sans compléments vide le groupe qu'elle annonçait
+// (« À consommer à côté » au-dessus de l'oméga 3 et de la multivitamine).
+function _planNettoyerNotes(sq){
+  const garder=[];
+  for(let i=0;i<sq.length;i++){
+    const it=sq[i];
+    if(it.note==null){ garder.push(it); continue; }
+    let utile=false;
+    for(let j=i+1;j<sq.length;j++){
+      if(sq[j].repas!==it.repas) break;
+      if(sq[j].note!=null) break;
+      utile=true; break;
+    }
+    if(utile) garder.push(it);
+  }
+  return garder;
+}
+
+// Quel modèle pour cet athlète ? Rend null quand il n'y en a pas — et c'est
+// un état parfaitement valide, que l'écran doit nommer.
+function planModeleCle(user){
+  return planModeleSuggere(user).cle;
+}
+// La phase déclarée n'est PAS toujours là, et quand elle l'est elle ne dit pas
+// toujours sèche ou masse : recomposition et maintien sont des phases
+// parfaitement valides pour lesquelles il n'existe aucun tableur. Un écran de
+// composition vide en face d'un coach qui attend son modèle est une panne,
+// pas une position prudente.
+//
+// On cherche donc plus loin : la phase d'abord, puis l'objectif écrit dans le
+// profil ou relevé au bilan de départ. Et on DIT d'où vient la déduction —
+// « d'après son objectif » ne vaut pas « d'après sa phase », et le coach doit
+// pouvoir corriger en connaissance de cause.
+const PLAN_MOTS_SECHE=/s[eè]ch|perte de poids|maigrir|affiner|perdre du gras|d[eé]finition/i;
+const PLAN_MOTS_MASSE=/prise de (masse|muscle)|prise de poids|masse|volume|grossir|prendre du muscle/i;
+function _planNormObjectif(user){
+  const u=user||{};
+  return [u.objective,u.bilanGoals].filter(Boolean).join(' ');
+}
+function planModeleSuggere(user){
+  const f=_planFemme(user);
+  const pour=(fam)=>fam+'_'+(f?'F':'H');
+  let t=null;
+  try{ t=typePhase(user); }catch(e){}
+  if(t==='seche') return {cle:pour('seche'),source:'phase'};
+  if(t==='masse') return {cle:pour('masse'),source:'phase'};
+  const o=_planNormObjectif(user);
+  if(o){
+    // La sèche est testée en premier : « perte de poids et prise de muscle »
+    // est une réponse courante au bilan, et c'est la restriction qui pilote
+    // la structure du plan.
+    if(PLAN_MOTS_SECHE.test(o)) return {cle:pour('seche'),source:'objectif'};
+    if(PLAN_MOTS_MASSE.test(o)) return {cle:pour('masse'),source:'objectif'};
+  }
+  return {cle:null,source:null};
+}
+// La famille d'un modèle : c'est elle qui porte les paliers de périodisation.
+function planModeleFamille(cle){
+  return (cle&&cle.indexOf('seche')===0)?'seche':(cle&&cle.indexOf('masse')===0)?'masse':null;
+}
+function planModeleLib(cle){
+  return cle==='seche_H'?'Sèche homme'
+    :cle==='seche_F'?'Sèche femme'
+    :cle==='masse_H'?'Prise de masse homme'
+    :cle==='masse_F'?'Prise de masse femme':'';
+}
+// Construit un plan COMPLET depuis le modèle : squelette, catalogues, paliers.
+// Rend null s'il n'y a pas de modèle pour cet athlète.
+function planDepuisModele(user,avecComplements,cleForcee){
+  const cle=cleForcee||planModeleCle(user);
+  if(!cle||!PLAN_MODELES[cle]) return null;
+  const poids=_planPoids(user),femme=_planFemme(user);
+  const avec=!!avecComplements;
+  let squelette=[];
+  for(const m of PLAN_MODELES[cle]){
+    let it=Object.assign({},m);
+    const r=it.r; delete it.r; it.repas=r;
+    if(it.avecSeul&&!avec) continue;
+    if(it.sansSeul&&avec) continue;
+    delete it.avecSeul; delete it.sansSeul;
+    // La note change de texte quand la poudre disparaît.
+    if(it.note!=null){
+      if(!avec&&it.noteSans) it.note=it.noteSans;
+      delete it.noteSans;
+      squelette.push(it); continue;
+    }
+    // Version sans compléments : la ligne est REMPLACÉE quand le coach a un
+    // substitut, retirée sinon.
+    // Le substitut de la ligne prime sur celui de la table : le lait protéiné
+    // est à 400 mL dans les tableurs femme et à 500 dans ceux d'homme.
+    if(it.comp&&!avec){
+      const sub=it.sub||PLAN_SUBSTITUTS_SANS_COMP[it.portion];
+      if(!sub) continue;
+      it=Object.assign({repas:r},sub);
+    }
+    delete it.sub;
+    // Les deux lignes que le tableur chiffrait par paliers de poids.
+    if(it.auto){
+      const n=(it.auto==='oeufs')?oeufsSuggeres(poids,femme):amandesSuggerees(poids,femme);
+      it.q=(n>0)?n:1;
+      delete it.auto;
+    }
+    squelette.push(it);
+  }
+  squelette=_planNettoyerNotes(squelette);
+  for(const it of squelette) it.id=_cplId();
+  // Les paliers viennent du MODÈLE, pas de la phase déclarée. Un athlète noté
+  // en recomposition à qui le coach pose un modèle de sèche doit recevoir les
+  // paliers de sèche — 0,85 puis 0,80, 0,75, 0,65 — et non le « Toute la
+  // durée ×1 » de la recomposition, qui ne périodise rien. Le coach les édite
+  // ensuite comme n'importe quelle ligne.
+  const fam=planModeleFamille(cle);
+  const paliers=(fam&&PLAN_PHASES_DEFAUT[fam])
+    ?PLAN_PHASES_DEFAUT[fam].map(x=>Object.assign({},x)):null;
+  return {v:PLAN_V,avecComplements:avec,nRepasSourcesLibres:null,
+    squelette,
+    sources:{proteines:PLAN_CAT_PROTEINES.slice(),glucides:PLAN_CAT_GLUCIDES.slice()},
+    phases:paliers,courses:{jours:{},stock:{}},modele:cle};
+}
 
 function _planNb(v){
   if(v==null||v==='') return null;
@@ -24476,6 +24917,44 @@ function _planCiqual(id){
   if(!Array.isArray(_ciqualDB)) return null;
   return _ciqualDB.find(f=>f&&f.id===id)||null;
 }
+
+// ══════════════ L'ACCÈS À LA DIÈTE STRICTE ════════════════════════════════
+// La diète stricte n'est pas un mode de suivi qu'on choisit dans une liste :
+// c'est un programme que le coach compose ligne par ligne pour UN athlète.
+// Sans coach, il n'y a rien à afficher. Et un athlète dont le coach n'a pas
+// encore ouvert l'accès verrait un écran vide qu'il prendrait pour une panne.
+// Dans les deux cas l'écran se verrouille, et il DIT lequel des deux cas
+// s'applique — un verrou muet est le pire des deux mondes.
+//
+// LA COMPATIBILITÉ EST LE POINT DÉLICAT. Le champ n'existe dans aucun dossier
+// aujourd'hui : le lire comme « non validé » couperait d'un coup l'accès à
+// tous les athlètes qui suivent déjà une diète stricte. Absent vaut donc
+// « validé » dès que le dossier porte une trace d'usage — un plan, une photo
+// de plan, ou une seule journée cochée. Personne ne perd ce qu'il utilise ;
+// les nouveaux, eux, attendent que leur coach ouvre la porte.
+function _strictUsageExistant(user){
+  const n=(user&&user.nutrition)||{};
+  if(planActif(user)) return true;
+  if(Array.isArray(n.strictPhotos)&&n.strictPhotos.length) return true;
+  const d=n.days||{};
+  for(const k in d) if(d[k]&&(d[k].respected===true||d[k].respected===false)) return true;
+  return false;
+}
+// PURE. Rend {ok, raison} — jamais un simple booléen : c'est la RAISON qui
+// décide de ce que l'écran verrouillé raconte, et les deux ne se déduisent
+// pas l'une de l'autre.
+function accesDieteStricte(user){
+  if(!user) return {ok:false,raison:'sans_coach'};
+  // Le coach passe : il consulte l'écran de son athlète depuis sa fiche.
+  if(user.role==='coach') return {ok:true,raison:null};
+  if(!user.coachId) return {ok:false,raison:'sans_coach'};
+  const v=((user.nutrition)||{}).strictAcces;
+  if(v===true) return {ok:true,raison:null};
+  if(v===false) return {ok:false,raison:'non_valide'};
+  return _strictUsageExistant(user)
+    ?{ok:true,raison:'usage_existant'}
+    :{ok:false,raison:'non_valide'};
+}
 // Les fonctions de ce module reçoivent TOUTES leur résolveur d'aliment en
 // dernier argument. Ce n'est pas de la décoration : c'est ce qui rend le
 // moteur testable sans charger 873 Ko de Ciqual, et vérifiable sur les valeurs
@@ -24486,9 +24965,16 @@ function _planResolveur(chercher){
 // Une ligne du squelette est-elle retenue ? Les lignes de complément ne
 // comptent qu'en version « avec compléments », et les marqueurs de source
 // libre ne portent aucun aliment : ils disent « ici, une source au choix ».
+// Trois sortes de lignes ne portent AUCUN aliment et ne comptent donc nulle
+// part : le marqueur « source au choix », la ligne de fruit qui renvoie à la
+// table des équivalences, et la note du coach (« Sous forme de PANCAKES »,
+// « Dans une gourde de 1,5 L ») que le tableur écrit au-dessus d'un groupe.
+function planLigneTexte(item){
+  return !!(item&&(item.src||item.fruit||item.note));
+}
 function planLigneRetenue(plan,item){
   if(!item) return false;
-  if(item.src) return false;
+  if(planLigneTexte(item)) return false;
   if(item.comp&&!(plan&&plan.avecComplements)) return false;
   return true;
 }
@@ -24523,6 +25009,8 @@ function planMacrosItem(item,chercher){
 // Nom affiché d'une ligne, quelle que soit son origine.
 function planNomItem(item,chercher){
   if(!item) return '';
+  if(item.note) return String(item.note);
+  if(item.fruit) return 'Une portion de fruit au choix';
   if(item.src) return item.src==='p'
     ?'Une source de protéines au choix':'Une source de glucides au choix';
   if(item.libre) return String(item.libre);
@@ -24553,8 +25041,13 @@ function planCouverture(plan,chercher){
     const cle=item.repas||'petit_dej';
     if(!parRepas[cle]) parRepas[cle]={p:0,c:0,l:0,kcal:0,lignes:[]};
     const nom=planNomItem(item,res);
-    if(item.src){
-      parRepas[cle].lignes.push({item,nom,macros:null,source:item.src});
+    // Les lignes de texte gardent leur PLACE dans le repas — c'est tout leur
+    // intérêt : « Sous forme de PANCAKES » n'a de sens qu'au-dessus des œufs.
+    // Elles ne comptent dans aucune macro et ne figurent pas dans irresolus,
+    // qui ne parle que d'aliments qu'on n'a pas su chiffrer.
+    if(planLigneTexte(item)){
+      parRepas[cle].lignes.push({item,nom,macros:null,
+        source:item.src||null,fruit:!!item.fruit,note:!!item.note});
       continue;
     }
     const m=planMacrosItem(item,res);
@@ -24614,20 +25107,43 @@ function planGrammage(restant,nSources,per100){
 // PURE. Les deux catalogues, chacun avec le grammage de chaque source.
 // Triés par quantité croissante, comme dans le tableur : le coach lit d'un
 // coup d'œil ce qui pèse le moins dans l'assiette.
+// Une entrée de catalogue est soit un identifiant Ciqual, soit un objet
+// {lib, p, c} pour les trois aliments que la table Anses ne porte pas —
+// farine d'amande déshuilée, spaghetti de pois chiches, chips de légumes
+// maison. Ils gardent la valeur du coach, et ils le DISENT : « hors Ciqual »
+// s'affiche à côté, pour que personne ne prenne plus tard ce chiffre pour une
+// donnée Anses ni pour une erreur de rattachement.
+//
+// La clé sert d'identifiant de ligne dans la liste de courses ET dans des
+// attributs onclick : elle est donc contrainte à l'alphanumérique, comme les
+// identifiants de ligne de squelette et pour la même raison.
+function planSourceRef(src,macro,chercher){
+  if(src==null) return null;
+  if(typeof src==='object'){
+    const lib=String(src.lib||'Source');
+    return {cle:'x'+lib.replace(/[^A-Za-z0-9]/g,'').slice(0,24)||'x',
+      id:null,nom:lib,groupe:'',per100:_planNb(src[macro]),
+      horsCiqual:true,introuvable:false};
+  }
+  const f=_planResolveur(chercher)(src);
+  if(!f) return {cle:'c'+src,id:src,nom:'Aliment introuvable (#'+src+')',groupe:'',
+    per100:null,horsCiqual:false,introuvable:true};
+  return {cle:'c'+src,id:src,nom:f.n,groupe:f.g||'',per100:_planNb(f[macro]),
+    horsCiqual:false,introuvable:false};
+}
 function planSources(plan,restant,chercher){
   const res=_planResolveur(chercher);
   const faire=(macro)=>{
     const n=planNbSources(plan,macro);
     const out=[];
-    for(const id of planCatalogue(plan,macro==='p'?'p':'c')){
-      const f=res(id);
-      if(!f){ out.push({id,nom:'Aliment introuvable (#'+id+')',per100:null,q:null,
-        introuvable:true}); continue; }
-      const per100=_planNb(f[macro]);
-      const q=planGrammage(restant&&restant[macro],n,per100);
-      out.push({id,nom:f.n,groupe:f.g||'',per100,q,
+    const cat=planCatalogue(plan,macro==='p'?'p':'c');
+    for(let i=0;i<cat.length;i++){
+      const r=planSourceRef(cat[i],macro,res);
+      if(!r) continue;
+      const q=planGrammage(restant&&restant[macro],n,r.per100);
+      out.push(Object.assign({},r,{index:i,q,
         excessif:(q!=null&&q>PLAN_QTE_ALERTE),
-        inexploitable:(per100==null||!(per100>0))});
+        inexploitable:(!r.introuvable&&(r.per100==null||!(r.per100>0)))}));
     }
     out.sort((a,b)=>{
       if(a.q==null&&b.q==null) return 0;
@@ -24758,9 +25274,15 @@ function _planCleCourse(item,i){
 // « 42 œuf » sur une liste de courses se lit comme une faute d'accord, et
 // c'est le coach qui la porterait. L'unité vient soit de PLAN_PORTIONS, soit
 // de sa saisie : on n'ajoute le pluriel que s'il manque.
+// Les SYMBOLES d'unité sont invariables : « 999 gs » et « 200 mLs » se
+// lisaient comme une faute. Seuls les noms communs s'accordent — œuf, scoop,
+// gélule, yaourt, dose, pincée.
+const PLAN_UNITES_INVARIABLES=Object.freeze(
+  ['g','kg','mg','ml','cl','dl','l','gr','kcal','%']);
 function planUnitePluriel(n,unite){
   const u=String(unite==null?'':unite);
-  return (Math.abs(_planNb(n)||0)>=2&&u&&!/s$/i.test(u))?u+'s':u;
+  if(!u||PLAN_UNITES_INVARIABLES.indexOf(u.toLowerCase())>=0) return u;
+  return (Math.abs(_planNb(n)||0)>=2&&!/s$/i.test(u))?u+'s':u;
 }
 function planFormatQte(g,unite){
   const v=_planNb(g);
@@ -24805,7 +25327,7 @@ function planListeCourses(plan,porteur,chercher){
   for(const [macro,bloc] of [['p',src.proteines],['c',src.glucides]]){
     let totJours=0;
     for(const s of bloc.liste){
-      const cle='c'+s.id;
+      const cle=s.cle;
       const j=nJours(cle,0);
       totJours+=j;
       if(!(j>0)) continue;
@@ -24871,6 +25393,7 @@ function planAlertes(plan,porteur,chercher){
 let _cplPlan=null;
 let _cplCible=null;      // ce que la recherche d'aliment va remplir
 let _cplPliage={};       // repas repliés, purement visuel
+let _cplNeuf=false;      // la composition vient d'un modèle, pas encore relue
 
 function _cplId(){
   return 'l'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
@@ -24889,8 +25412,13 @@ function _cplCopie(p){
   return {v:PLAN_V,
     avecComplements:!!src.avecComplements,
     nRepasSourcesLibres:_planNb(src.nRepasSourcesLibres),
+    modele:src.modele||null,
     squelette:planSquelette(src).map(x=>Object.assign({},x,{id:_cplIdSain(x.id)})),
-    sources:{proteines:planCatalogue(src,'p').slice(),glucides:planCatalogue(src,'c').slice()},
+    // Les sources hors Ciqual sont des OBJETS : les copier à plat les ferait
+    // partager entre la copie de travail et le dossier, et une retouche
+    // toucherait les deux.
+    sources:{proteines:planCatalogue(src,'p').map(x=>typeof x==='object'?Object.assign({},x):x),
+             glucides:planCatalogue(src,'c').map(x=>typeof x==='object'?Object.assign({},x):x)},
     phases:Array.isArray(src.phases)?src.phases.map(x=>Object.assign({},x)):null,
     courses:{jours:Object.assign({},((src.courses||{}).jours)||{}),
              stock:Object.assign({},((src.courses||{}).stock)||{})}};
@@ -24904,15 +25432,48 @@ function _cplAthlete(){
   vue.nutrition=Object.assign({},c.nutrition||{},{plan:_cplPlan});
   return vue;
 }
+// Le pré-modèle se pose SEULEMENT quand il n'y a rien. Un plan déjà composé
+// n'est jamais écrasé à l'ouverture d'un écran : ce serait perdre le travail
+// du coach sur un simple geste de navigation. Pour le remplacer, il y a un
+// bouton, et il demande confirmation.
 function ouvrirPlanCoach(){
   const c=getOwnedClient(currentClientId);
   if(!c) return;
-  _cplPlan=_cplCopie(planDe(c));
+  const existant=planDe(c);
+  const vide=!planActif(c);
+  _cplPlan=vide?(planDepuisModele(c,(existant&&existant.avecComplements)||false)
+                 ||_cplCopie(existant))
+               :_cplCopie(existant);
+  _cplNeuf=vide&&!!_cplPlan.modele;
   _cplCible=null; _cplPliage={};
   go('s-coach-plan');
   renderPlanCoach();
   // Ciqual pèse 873 Ko : on affiche d'abord, on complète les noms ensuite.
   _loadCiqual().then(()=>renderPlanCoach());
+}
+// Poser un modèle. Le geste écrase la composition en cours, donc il se
+// confirme — SAUF quand il n'y a rien à écraser, où demander confirmation
+// pour remplacer du vide serait une friction gratuite. Et il n'écrit rien en
+// base : le coach relit et enregistre comme d'habitude.
+function cplPoserModele(cle){
+  const c=getOwnedClient(currentClientId);
+  if(!c) return;
+  const m=planDepuisModele(c,_cplPlan?_cplPlan.avecComplements:false,cle);
+  if(!m){ toast('Modèle inconnu','var(--orange)'); return; }
+  if(planActif({nutrition:{plan:_cplPlan}})&&!_cplIntact()
+     &&!confirm('Remplacer toute la composition en cours par le modèle « '
+       +planModeleLib(m.modele)+' » ?'+String.fromCharCode(10)
+       +String.fromCharCode(10)+'Rien n\'est enregistré tant que tu n\'as pas cliqué sur Enregistrer.')) return;
+  _cplPlan=m; _cplNeuf=true; _cplPliage={};
+  renderPlanCoach();
+  toast('Modèle « '+planModeleLib(m.modele)+' » posé. Relis, ajuste, puis enregistre.');
+}
+// Conservé : d'anciens écrans peuvent encore l'appeler.
+function cplRepartirDuModele(){
+  const c=getOwnedClient(currentClientId);
+  if(!c) return;
+  const s=planModeleSuggere(c);
+  cplPoserModele((_cplPlan&&_cplPlan.modele)||s.cle||'seche_H');
 }
 
 // ── Recherche d'aliment, en surcouche ─────────────────────────────────────
@@ -25004,9 +25565,46 @@ function planCoachChoisirAliment(id){
 function _cplLigne(lid){
   return _cplPlan?_cplPlan.squelette.find(x=>x&&x.id===lid):null;
 }
+// Basculer l'interrupteur ne suffit PAS quand la composition sort d'un
+// modèle : entre les deux versions d'un tableur, le coach ne masque pas la
+// whey, il la REMPLACE par du lait protéiné. Tant que rien n'a été retouché,
+// on rejoue donc le modèle dans l'autre version. Dès que la composition a été
+// modifiée à la main, on ne touche plus à rien — écraser son travail sur un
+// clic d'interrupteur serait pire que le manque de substitution — et le
+// bouton « Repartir du modèle » reste là pour le faire volontairement.
+// « Intact » se CONSTATE, il ne se retient pas dans un drapeau : on regénère
+// le modèle et on compare. Un booléen qu'il faudrait penser à baisser dans
+// les douze fonctions de retouche finirait par mentir le jour où on en
+// ajoute une treizième.
+function _cplIntact(){
+  if(!_cplPlan||!_cplPlan.modele) return false;
+  const c=_cplAthlete();
+  // On regénère LE modèle réellement posé, pas celui que la phase suggère :
+  // le coach a pu en choisir un autre, et comparer au suggéré déclarerait sa
+  // composition « retouchée » alors qu'il n'y a pas touché.
+  const m=c&&planDepuisModele(c,_cplPlan.avecComplements,_cplPlan.modele);
+  if(!m) return false;
+  const nu=(p)=>JSON.stringify({
+    s:planSquelette(p).map(x=>{const y=Object.assign({},x); delete y.id; return y;}),
+    p:planCatalogue(p,'p'),g:planCatalogue(p,'c'),
+    ph:p.phases||null,n:p.nRepasSourcesLibres==null?null:p.nRepasSourcesLibres});
+  return nu(_cplPlan)===nu(m);
+}
 function cplToggleComplements(){
   if(!_cplPlan) return;
-  _cplPlan.avecComplements=!_cplPlan.avecComplements;
+  const vise=!_cplPlan.avecComplements;
+  if(_cplIntact()){
+    const c=_cplAthlete();
+    const m=c&&planDepuisModele(c,vise,_cplPlan.modele);
+    if(m){
+      const courses=_cplPlan.courses;
+      _cplPlan=m; _cplPlan.courses=courses;
+      renderPlanCoach();
+      toast(vise?'Compléments réintégrés au modèle':'Compléments remplacés par leurs équivalents');
+      return;
+    }
+  }
+  _cplPlan.avecComplements=vise;
   renderPlanCoach();
 }
 function cplSetNSources(v){
@@ -25048,6 +25646,19 @@ function cplAjouterLibre(repas){
   _cplPlan.squelette.push({id:_cplId(),repas,libre:'',q:1,u:'g',p:0,c:0,l:0});
   renderPlanCoach();
 }
+// La note du coach : « Sous forme de PANCAKES », « Dans une gourde de 1,5 L ».
+// Elle ne compte nulle part, mais elle est la moitié de l'instruction — sans
+// elle, l'athlète a une liste d'ingrédients et pas une recette.
+function cplAjouterNote(repas){
+  if(!_cplPlan) return;
+  _cplPlan.squelette.push({id:_cplId(),repas,note:''});
+  renderPlanCoach();
+}
+function cplAjouterFruit(repas){
+  if(!_cplPlan) return;
+  _cplPlan.squelette.push({id:_cplId(),repas,fruit:true});
+  renderPlanCoach();
+}
 function cplSupprimerLigne(lid){
   if(!_cplPlan) return;
   const i=_cplPlan.squelette.findIndex(x=>x&&x.id===lid);
@@ -25061,15 +25672,18 @@ function cplSetChamp(lid,champ,v){
   const l=_cplLigne(lid);
   if(!l) return;
   if(champ==='libre') l.libre=String(v||'');
+  else if(champ==='note') l.note=String(v||'');
   else if(champ==='u') l.u=String(v||'g');
   else l[champ]=_planNb(v);
   _cplRafraichirApercu();
 }
-function cplRetirerSource(macro,id){
+// Retrait par INDICE et non par identifiant : une source hors Ciqual est un
+// objet, et indexOf sur un objet recopié ne le retrouverait jamais.
+function cplRetirerSource(macro,index){
   if(!_cplPlan) return;
   const l=macro==='p'?_cplPlan.sources.proteines:_cplPlan.sources.glucides;
-  const i=l.indexOf(id);
-  if(i>=0) l.splice(i,1);
+  const i=Number(index);
+  if(i>=0&&i<l.length) l.splice(i,1);
   renderPlanCoach();
 }
 function _cplPaliers(){
@@ -25228,6 +25842,19 @@ function _cplHtmlLigne(item){
         <div style="font-size:10px;color:var(--text-faint);line-height:1.5;margin-top:2px">Ce repas compte dans la division des sources.</div>
       </div>${sup}</div>`;
   }
+  if(item.fruit){
+    return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--surface-2)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:700;color:#f5c518">${escapeHtml(nom)}</div>
+        <div style="font-size:10px;color:var(--text-faint);line-height:1.5;margin-top:2px">Renvoie à la table des équivalences de fruits, la même pour tous.</div>
+      </div>${sup}</div>`;
+  }
+  if(item.note!=null){
+    return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--surface-2)">
+      <input value="${escapeHtml(item.note)}" placeholder="Note de préparation (ex : sous forme de PANCAKES)" oninput="cplSetChamp('${item.id}','note',this.value)"
+        style="flex:1;min-width:0;padding:6px 8px;background:#111;border:1px dashed var(--border);border-radius:7px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11.5px;font-style:italic;box-sizing:border-box">
+      ${sup}</div>`;
+  }
   const m=planMacrosItem(item);
   const champNom=item.libre!=null
     ? `<input value="${escapeHtml(item.libre)}" placeholder="Nom de la ligne" oninput="cplSetChamp('${item.id}','libre',this.value)"
@@ -25253,6 +25880,41 @@ function _cplHtmlLigne(item){
       ${sup}
     </div>
     ${macrosMain}
+  </div>`;
+}
+// Le bandeau de modèle. Il porte TOUJOURS les quatre choix : quand rien n'a
+// pu être déduit, un écran vide laissait le coach tout composer à la main —
+// exactement ce que ce lot existe pour éviter. Et même quand la déduction est
+// bonne, il doit pouvoir en changer d'un clic sans aller modifier la phase de
+// son athlète.
+const PLAN_MODELES_LISTE=Object.freeze(['seche_H','seche_F','masse_H','masse_F']);
+function _cplHtmlModele(c){
+  const s=planModeleSuggere(c);
+  const pose=_cplPlan&&_cplPlan.modele;
+  const choix=PLAN_MODELES_LISTE.map(k=>{
+    const actif=(pose===k);
+    return `<button onclick="cplPoserModele('${k}')"
+      style="flex:1 1 46%;padding:9px 6px;border-radius:9px;cursor:pointer;font-family:Montserrat,sans-serif;font-size:10.5px;font-weight:800;letter-spacing:.4px;line-height:1.3;border:1.5px solid ${actif?'var(--red)':'#2a2a2a'};background:${actif?'rgba(224,32,32,.12)':'#111'};color:${actif?'#fff':'#8a8a8a'}">${escapeHtml(planModeleLib(k))}</button>`;
+  }).join('');
+  let entete;
+  if(pose){
+    entete=_cplNeuf
+      ?'Composition posée depuis le modèle <b>'+escapeHtml(planModeleLib(pose))
+        +'</b>. Relis-la, ajuste les quantités, puis enregistre — rien n\'est encore parti chez l\'athlète.'
+      :'Cette composition part du modèle <b>'+escapeHtml(planModeleLib(pose))+'</b>.';
+  } else if(s.cle){
+    entete='Modèle suggéré pour cet athlète : <b>'+escapeHtml(planModeleLib(s.cle))+'</b>'
+      +(s.source==='objectif'?' — d\'après son objectif, faute de phase déclarée.':' — d\'après sa phase.');
+  } else {
+    let t=null; try{ t=typePhase(c); }catch(e){}
+    entete=(t?'Sa phase est en '+escapeHtml(PHASES[t]?PHASES[t].lib.toLowerCase():t)
+        +', pour laquelle il n\'existe pas de tableur.'
+      :'Ni phase ni objectif déclarés pour cet athlète.')
+      +' Choisis le modèle à poser :';
+  }
+  return `<div style="background:${_cplNeuf?'var(--info-bg)':'var(--surface-1)'};border:1px solid ${_cplNeuf?'var(--info-border)':'var(--border)'};border-radius:12px;padding:12px;margin-bottom:14px">
+    <div style="font-size:11px;color:#ddd;line-height:1.6;margin-bottom:9px">${entete}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">${choix}</div>
   </div>`;
 }
 function renderPlanCoach(){
@@ -25293,6 +25955,8 @@ function renderPlanCoach(){
           <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:10px;letter-spacing:.5px" onclick="cplAjouterLibre('${cle}')">+ Ligne libre</button>
           <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:10px;letter-spacing:.5px" onclick="cplAjouterMarqueur('${cle}','p')">+ Source protéines au choix</button>
           <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:10px;letter-spacing:.5px" onclick="cplAjouterMarqueur('${cle}','c')">+ Source glucides au choix</button>
+          <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:10px;letter-spacing:.5px" onclick="cplAjouterFruit('${cle}')">+ Portion de fruit au choix</button>
+          <button class="btn btn-outline btn-sm" style="margin:0;flex:1 1 46%;font-size:10px;letter-spacing:.5px" onclick="cplAjouterNote('${cle}')">+ Note de préparation</button>
           <select onchange="if(this.value){cplAjouterPortion('${cle}',this.value);this.value='';}"
             style="flex:1 1 100%;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700">
             <option value="">+ Portion à la pièce (œuf, scoop, gélule…)</option>${optionsPortions}
@@ -25306,15 +25970,17 @@ function renderPlanCoach(){
     return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:10px">
       <div style="font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:${couleur};margin-bottom:3px">${titre}</div>
       <div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-bottom:8px">${ids.length} source${ids.length>1?'s':''} · le restant se divise par ${n} repas. L'athlète permute librement dans cette liste sans dérégler ses macros.</div>
-      ${ids.map(id=>{
-        const f=_planCiqual(id);
-        const per=f?_planNb(f[macro]):null;
+      ${ids.map((src,i)=>{
+        const r=planSourceRef(src,macro);
+        const per=r?r.per100:null;
+        const marque=r&&r.horsCiqual
+          ?'<span style="font-size:9px;font-weight:800;letter-spacing:.5px;padding:1px 5px;border-radius:8px;border:1px solid var(--border);color:var(--sub);margin-left:5px">HORS CIQUAL</span>':'';
         return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--surface-2)">
           <div style="flex:1;min-width:0">
-            <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(f?f.n:'Aliment introuvable (#'+id+')')}</div>
-            <div style="font-size:10px;color:${(per>0)?'var(--text-faint)':'var(--orange)'}">${per==null?'valeur absente de Ciqual':String(per).replace('.',',')+' g / 100 g'}</div>
+            <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r?r.nom:'—')}${marque}</div>
+            <div style="font-size:10px;color:${(per>0)?'var(--text-faint)':'var(--orange)'}">${per==null?'valeur absente de la table':String(per).replace('.',',')+' g / 100 g'}</div>
           </div>
-          <button onclick="cplRetirerSource('${macro}',${id})" aria-label="Retirer du catalogue"
+          <button onclick="cplRetirerSource('${macro}',${i})" aria-label="Retirer du catalogue"
             style="background:none;border:none;color:var(--text-dim);font-size:15px;cursor:pointer;padding:4px 2px;line-height:1;flex-shrink:0">✕</button>
         </div>`;
       }).join('')}
@@ -25335,6 +26001,7 @@ function renderPlanCoach(){
       <div style="font-size:17px;font-weight:900;line-height:1.2;margin-top:2px">${escapeHtml(nom)}</div>
       ${dt!=='strict'?`<div style="font-size:11px;color:var(--orange);line-height:1.6;margin-top:6px">Cet athlète est en diète flexible : il ne verra pas ce plan tant que tu n'auras pas basculé son suivi en diète stricte sur sa fiche.</div>`:''}
     </div>
+    ${_cplHtmlModele(c)}
     <div id="cpl-alertes">${_cplHtmlAlertes()}</div>
     <div id="cpl-apercu" style="margin-bottom:16px">${_cplHtmlApercu()}</div>
 
@@ -25454,39 +26121,51 @@ function _htmlPlanAthlete(user){
     <div style="font-size:9px;color:var(--sub);letter-spacing:1px;font-weight:700;margin-top:4px">${lib}</div>
   </div>`;
 
+  // LE SOUS-TABLEAU. Deux colonnes et pas une de plus : la source, et ce
+  // qu'il faut peser à CE repas. La valeur pour 100 g a été retirée sur
+  // demande du coach — elle servait au calcul, pas à l'athlète, qui n'a
+  // besoin que du nombre à mettre sur la balance.
   const listeSources=(macro)=>{
     const b=macro==='p'?src.proteines:src.glucides;
     if(!b.liste.length) return `<div style="font-size:11px;color:var(--text-dim);line-height:1.6">Ton coach n'a pas encore posé de sources ici.</div>`;
-    return b.liste.map(s=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--surface-2)">
-      <div style="flex:1;min-width:0">
-        <div style="font-size:12.5px;font-weight:600;line-height:1.35">${escapeHtml(s.nom)}</div>
-        ${s.per100!=null?`<div style="font-size:10px;color:var(--text-faint);margin-top:2px">${String(s.per100).replace('.',',')} g ${macro==='p'?'de protéines':'de glucides'} pour 100 g</div>`:''}
-      </div>
-      <div style="flex-shrink:0;text-align:right">
-        <div style="font-size:15px;font-weight:900;color:${s.excessif?'var(--orange)':'#fff'};line-height:1">${s.q==null?'—':Math.round(s.q)}<span style="font-size:10px;color:var(--sub);font-weight:400"> g</span></div>
-      </div>
+    return b.liste.map(s=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--surface-2)">
+      <div style="flex:1;min-width:0;font-size:12.5px;font-weight:600;line-height:1.35">${escapeHtml(s.nom)}</div>
+      <div style="flex-shrink:0;font-size:15px;font-weight:900;color:${s.excessif?'var(--orange)':'#fff'};line-height:1">${s.q==null?'—':Math.round(s.q)}<span style="font-size:10px;color:var(--sub);font-weight:400"> g</span></div>
     </div>`).join('');
   };
+  const cartouche=(titre,couleur,corps)=>`<div style="padding:9px 0;border-top:1px solid var(--surface-2)">
+    <div style="font-size:12px;font-weight:800;color:${couleur};letter-spacing:.3px;margin-bottom:6px">${escapeHtml(titre)}</div>
+    <div style="background:var(--dark);border:1px solid var(--border);border-radius:10px;padding:4px 11px 9px">${corps}</div>
+  </div>`;
+
+  // La table des fruits, telle quelle. Aucun calcul : ce sont des
+  // équivalences de portion, les mêmes dans tous les programmes du coach.
+  const tableFruits=()=>PLAN_FRUITS.map(f=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-top:1px solid var(--surface-2)">
+      <span style="font-size:12px;flex-shrink:0;font-weight:600">${escapeHtml(f.n)}</span>
+      <span style="font-size:11px;color:var(--sub);text-align:right">${escapeHtml(f.q)}</span>
+    </div>`).join('');
 
   // Les repas, dans l'ordre du plan. Un marqueur de source n'affiche pas un
-  // aliment : il déplie la liste dans laquelle l'athlète choisit.
+  // aliment : il déplie juste sous lui la liste dans laquelle l'athlète
+  // choisit — c'est la forme du tableur, et c'est ce qui rend le plan
+  // utilisable sans faire d'aller-retour.
   const cles=Object.keys(couv.parRepas).sort((a,b)=>planOrdreRepas(a)-planOrdreRepas(b));
   const blocRepas=cles.map(cle=>{
     const r=couv.parRepas[cle];
     const lignes=r.lignes.map(x=>{
-      if(x.source) return `<div style="padding:9px 0;border-top:1px solid var(--surface-2)">
-        <div style="font-size:12px;font-weight:800;color:${x.source==='p'?'#60a5fa':'var(--green)'};letter-spacing:.3px;margin-bottom:6px">${escapeHtml(x.nom)}</div>
-        <div style="background:var(--dark);border:1px solid var(--border);border-radius:10px;padding:4px 11px 9px">
-          ${listeSources(x.source)}
-        </div>
+      if(x.note) return `<div style="padding:8px 0 2px;font-size:11.5px;font-style:italic;color:var(--sub);line-height:1.5">${escapeHtml(x.nom)}</div>`;
+      if(x.source) return cartouche(x.nom,x.source==='p'?'#60a5fa':'var(--green)',listeSources(x.source));
+      // La ligne de fruit RENVOIE à la table, elle ne la recopie pas : le
+      // tableur écrit « se référer au tableau plus bas », et vingt lignes
+      // répétées à chaque repas noieraient le reste du programme.
+      if(x.fruit) return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--surface-2)">
+        <div style="flex:1;min-width:0;font-size:12.5px;font-weight:700;color:#f5c518;line-height:1.35">${escapeHtml(x.nom)}</div>
+        <div style="font-size:10px;color:var(--sub);flex-shrink:0;text-align:right">voir la table<br>des fruits</div>
       </div>`;
       const q=_planNb(x.item&&x.item.q);
       const u=planUniteItem(x.item);
       return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--surface-2)">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:12.5px;font-weight:600;line-height:1.35">${escapeHtml(x.nom)}</div>
-          ${x.macros?`<div style="font-size:10px;color:var(--text-faint);margin-top:2px">P ${Math.round(x.macros.p)} · G ${Math.round(x.macros.c)} · L ${Math.round(x.macros.l)}</div>`:''}
-        </div>
+        <div style="flex:1;min-width:0;font-size:12.5px;font-weight:600;line-height:1.35">${escapeHtml(x.nom)}</div>
         <div style="font-size:13px;font-weight:800;flex-shrink:0">${q==null?'—':(Math.round(q*100)/100).toString().replace('.',',')}<span style="font-size:10px;color:var(--sub);font-weight:400"> ${escapeHtml(planUnitePluriel(q,u))}</span></div>
       </div>`;
     }).join('');
@@ -25508,6 +26187,17 @@ function _htmlPlanAthlete(user){
     </div>`).join('')}
   </div>`:'';
 
+  // La table des fruits en pied de programme, comme dans le tableur : elle y
+  // est même si aucun repas n'appelle de fruit, parce qu'elle sert aussi de
+  // référence générale.
+  const blocFruits=`<div style="margin-bottom:18px">
+    <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px">1 portion de fruits</div>
+    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:10px 13px">${tableFruits()}</div>
+  </div>`;
+  const blocCheat=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:12px 13px;margin-bottom:14px">
+    ${PLAN_NOTE_CHEATMEAL.map(t=>`<div style="font-size:11.5px;color:#ddd;line-height:1.6;margin-bottom:4px">${escapeHtml(t)}</div>`).join('')}
+  </div>`;
+
   let lc=null;
   try{ lc=planListeCourses(plan,user); }catch(e){}
   const courses=(lc&&lc.lignes.length)?`<div style="margin-bottom:18px">
@@ -25527,7 +26217,8 @@ function _htmlPlanAthlete(user){
     :'';
 
   return `<div style="margin-bottom:22px">
-    <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:5px">${icon('target',12)} Ton programme du jour</div>
+    <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:4px;display:flex;align-items:center;gap:5px">${icon('target',12)} Programme nutritionnel</div>
+    <div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-bottom:12px">${escapeHtml(PLAN_NOTE_INDICATIF)}</div>
     <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:14px;margin-bottom:12px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:11px;gap:8px">
         <span style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);letter-spacing:1.5px;text-transform:uppercase">${isOn?'Jour d\'entraînement':'Jour de repos'}</span>
@@ -25544,7 +26235,9 @@ function _htmlPlanAthlete(user){
     ${negatif}
     ${blocRepas}
     ${blocOrphelins}
+    ${blocFruits}
     ${courses}
+    ${blocCheat}
     <div style="font-size:10px;color:var(--text-faint);line-height:1.6">${escapeHtml(PLAN_NOTE_CUISSON)}</div>
   </div>`;
 }
@@ -26180,7 +26873,19 @@ function loadNutrition(){
   const nut=currentUser.nutrition||{};
   const dt=typeDiete(nut);
   const sel=document.getElementById('nut-diet-select');
-  if(sel) sel.value=dt;
+  if(sel){
+    // L'option verrouillée reste VISIBLE, avec son cadenas. La retirer ferait
+    // croire que la diète stricte n'existe pas, alors qu'elle est seulement
+    // fermée — et un athlète qui ne sait pas qu'elle existe ne la demandera
+    // jamais à son coach.
+    const _a=accesDieteStricte(currentUser);
+    const _opt=sel.querySelector('option[value="strict"]');
+    if(_opt){
+      _opt.disabled=!_a.ok;
+      _opt.textContent=_a.ok?'Diète Stricte':'Diète Stricte 🔒';
+    }
+    sel.value=dt;
+  }
   _renderNutriContent(dt);
   loadSuppEmbedded();
   loadCaffeineEmbedded();
@@ -27132,6 +27837,32 @@ function proposerPointDepart(){
 function _plOublierSiAutreAthlete(email){
   if(_plConfirme&&_plConfirme.email!==email) _plConfirme=null;
 }
+// L'interrupteur d'accès, avec sous les yeux du coach CE QUE VOIT SON
+// ATHLÈTE. Un interrupteur qui dit seulement « ouvert / fermé » laisse croire
+// qu'il règle un détail ; celui-ci annonce l'écran d'en face.
+function _htmlStrictAccesCoach(c){
+  const a=accesDieteStricte(c);
+  const ouvert=a.ok;
+  const herite=(a.raison==='usage_existant');
+  return `<div style="background:var(--dark);border:1px solid ${ouvert?'var(--border)':'var(--warning-border)'};border-radius:12px;padding:13px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:700;color:#fff">Accès à la diète stricte</div>
+        <div style="font-size:10px;color:${ouvert?'var(--text-faint)':'var(--orange)'};line-height:1.55;margin-top:3px">${ouvert
+          ?'Ton athlète voit son plan, ses sources et sa liste de courses.'
+          :'Ton athlète voit un écran verrouillé. Il ne verra rien tant que tu n\'auras pas ouvert.'}</div>
+      </div>
+      <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer">
+        <input type="checkbox" ${ouvert?'checked':''} onchange="saveClientStrictAcces(this.checked)" style="opacity:0;width:0;height:0;position:absolute">
+        <span style="position:absolute;inset:0;background:${ouvert?'var(--success)':'#2a2a2a'};border-radius:12px;transition:.2s;pointer-events:none">
+          <span style="position:absolute;top:3px;left:${ouvert?'23':'3'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s"></span>
+        </span>
+      </label>
+    </div>
+    ${herite?`<div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-top:8px">Ouvert d'office : cet athlète suivait déjà une diète stricte avant que ce réglage existe.</div>`:''}
+  </div>`;
+}
+
 // Résumé du plan sur la fiche client, et la porte d'entrée vers sa
 // composition. Volontairement court : la fiche client porte déjà beaucoup, et
 // tout ce qui se règle vraiment se règle sur l'écran dédié.
@@ -27166,6 +27897,7 @@ function _htmlPlanResumeCoach(c){
       ${pal?`<br>Palier « ${escapeHtml(pal.lib)} » ×${String(pal.mult).replace('.',',')}`:''}
     </div>
     ${alertes.length?`<div style="font-size:11px;color:var(--orange);line-height:1.6;margin-top:6px">${alertes.length} point${alertes.length>1?'s':''} à regarder dans la composition.</div>`:''}
+    ${accesDieteStricte(c).ok?'':`<div style="font-size:11px;color:var(--orange);line-height:1.6;margin-top:6px">Ce plan est prêt mais ton athlète ne le voit pas : l'accès à la diète stricte est fermé, juste au-dessus.</div>`}
     ${bouton('MODIFIER LE PLAN')}
   </div>`;
 }
@@ -27231,6 +27963,8 @@ function renderCoachNutriSection(c){
     ${_htmlDepartHypotheses(c)}
         <button onclick="saveClientNutriMacros()" style="width:100%;margin-top:6px;padding:11px 0;background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer">💾 ENREGISTRER LES OBJECTIFS</button>
       </div>
+      <!-- Accès à la diète stricte -->
+      ${dt==='strict'?_htmlStrictAccesCoach(c):''}
       <!-- Plan alimentaire composé (stricte uniquement) -->
       ${dt==='strict'?_htmlPlanResumeCoach(c):''}
       <!-- Plan photos (stricte uniquement) -->
@@ -27261,6 +27995,23 @@ function saveClientNutriDiet(type){
   c.updatedAt=Date.now();users[c.email]=c;
   const ok=DB.set('users',users);
   toastSync(ok,CLOUD.pushOne(c.email,c),'Type de diète enregistré ✓','la diète est');
+  renderCoachNutriSection(c);
+}
+
+// L'ouverture de l'accès est un geste EXPLICITE du coach, et il est réversible.
+// Il n'est pas déduit de la présence d'un plan : composer et publier sont deux
+// moments différents, et le coach doit pouvoir travailler son plan pendant
+// plusieurs jours sans que son athlète voie le chantier.
+function saveClientStrictAcces(ouvert){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c) return;
+  if(!c.nutrition) c.nutrition={};
+  c.nutrition.strictAcces=!!ouvert;
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  toastSync(ok,CLOUD.pushOne(c.email,c),
+    ouvert?'Diète stricte ouverte à l\'athlète ✓':'Diète stricte refermée','l\'accès est');
   renderCoachNutriSection(c);
 }
 
@@ -59062,10 +59813,14 @@ function testExercices(){
           return (m&&Math.abs(m.p-17.5)<1e-9&&Math.abs(m.c-11.25)<1e-9&&Math.abs(m.l-1.25)<1e-9)
             ?true:_echec(JSON.stringify(m));})());
         ok('Une ligne à la pièce se compte PAR UNITÉ',(()=>{
-          // 6 œufs à 6 g de protéines et 5 g de lipides → 36 et 30, exactement
-          // les cellules Q10 et S10 de la sèche homme.
+          // 6 œufs. La valeur par pièce vient de Ciqual (« Œuf cru », 12,8 g
+          // de protéines et 9,83 g de lipides pour 100 g, ramenés à un œuf de
+          // 50 g) et non plus des 6 / 5 du tableur : 38,4 et 29,5 au lieu de
+          // 36 et 30. L'écart d'un gramme et demi est le prix d'une valeur
+          // traçable jusqu'à l'Anses.
           const m=planMacrosItem({portion:'oeuf',q:6},_ch);
-          return (m&&m.p===36&&m.l===30&&m.c===0)?true:_echec(JSON.stringify(m));})());
+          return (m&&Math.abs(m.p-38.4)<1e-6&&Math.abs(m.l-29.52)<1e-6&&Math.abs(m.c-0.18)<1e-6)
+            ?true:_echec(JSON.stringify(m));})());
         ok('Les macros écrites à la main priment sur toute autre origine',(()=>{
           const m=planMacrosItem({ciqual:1,q:100,u:'g',p:99,c:0,l:0},_ch);
           return (m&&m.p===99)?true:_echec(JSON.stringify(m));})());
@@ -59257,6 +60012,28 @@ function testExercices(){
             &&planFormatQte(3,'gélules')==='3 gélules'&&planFormatQte(2,'scoop')==='2 scoops')
             ?true:_echec([planFormatQte(6,'œuf'),planFormatQte(1,'œuf'),
               planFormatQte(3,'gélules'),planFormatQte(2,'scoop')].join(' | '));})());
+        ok('Les symboles d\'unité restent invariables : jamais « 999 gs »',(()=>{
+          const f=(n,u)=>planUnitePluriel(n,u);
+          const faux=[];
+          for(const [n,u,att] of [[999,'g','g'],[200,'mL','mL'],[2,'kg','kg'],
+                                  [3,'L','L'],[2,'œuf','œufs'],[1,'g','g']])
+            if(f(n,u)!==att) faux.push(n+' '+u+' → '+f(n,u));
+          return faux.length?_echec(faux.join(', ')):true;})());
+        ok('La ligne de fruit RENVOIE à la table, elle ne la recopie pas',(()=>{
+          const u=_pa({nutrition:Object.assign(_macros({kcal:2600,p:200,g:300,l:70,f:36}),
+            {plan:{squelette:[{id:'f1',repas:'collation1',fruit:true},
+              {id:'f2',repas:'petit_dej',fruit:true},
+              {id:'a',repas:'midi',ciqual:4,q:250,u:'g'}],
+             sources:{proteines:[],glucides:[]}}})});
+          const _s=currentUser,_sDB=_ciqualDB;
+          let h='';
+          try{ currentUser=u; _ciqualDB=Object.keys(_AL).map(k=>_AL[k]); h=_htmlPlanAthlete(u); }
+          finally{ currentUser=_s; _ciqualDB=_sDB; }
+          // Deux lignes de fruit dans le plan, et pourtant la table des
+          // équivalences ne doit apparaître QU'UNE fois, en pied de programme.
+          const n=(h.match(/Pamplemousse/g)||[]).length;
+          if(n!==1) return _echec('la table est rendue '+n+' fois');
+          return /voir la table/.test(h)?true:_echec('le renvoi manque sur la ligne de fruit');})());
 
         // ── Non-régression : un dossier sans plan ne change de rien ──
         ok('Sans plan : planDe rend null et planActif rend faux',(()=>{
@@ -59405,6 +60182,395 @@ function testExercices(){
         ok('Son identifiant commence par « s-coach- », donc go() le refuse à un athlète',
            document.getElementById('s-coach-plan')!==null
            &&'s-coach-plan'.indexOf('s-coach-')===0);
+
+        // ══════ LES CATALOGUES ET LES PRÉ-MODÈLES ══════
+        ok('Les deux catalogues ont la taille des listes du tableur',
+           PLAN_CAT_PROTEINES.length===20&&PLAN_CAT_GLUCIDES.length===28,
+           PLAN_CAT_PROTEINES.length+' / '+PLAN_CAT_GLUCIDES.length);
+        ok('Chaque entrée est un identifiant Ciqual ou une source nommée',(()=>{
+          const faux=[];
+          for(const [nom,cat,macro] of [['prot',PLAN_CAT_PROTEINES,'p'],['gluc',PLAN_CAT_GLUCIDES,'c']])
+            cat.forEach((s,i)=>{
+              if(typeof s==='number'){ if(!(s>0)||s!==Math.floor(s)) faux.push(nom+'['+i+'] '+s); return; }
+              if(typeof s!=='object'||!s.lib) { faux.push(nom+'['+i+'] sans libellé'); return; }
+              if(!(_planNb(s[macro])>0)) faux.push(nom+'['+i+'] '+s.lib+' sans valeur');
+            });
+          return faux.length?_echec(faux.join(', ')):true;})());
+        ok('Les 48 sources Ciqual se rattachent TOUTES à une entrée réelle',(()=>{
+          // Cette assertion a besoin de la table en mémoire. Si elle manque,
+          // on le DIT plutôt que de passer : c'est le seul test du lot qui
+          // vérifie que les identifiants relevés à la main sont les bons.
+          if(!Array.isArray(_ciqualDB)||!_ciqualDB.length)
+            return _echec('table Ciqual non chargée — lance « await _loadCiqual() » avant testExercices()');
+          const faux=[];
+          for(const [nom,cat,macro] of [['prot',PLAN_CAT_PROTEINES,'p'],['gluc',PLAN_CAT_GLUCIDES,'c']])
+            for(const s of cat){
+              if(typeof s!=='number') continue;
+              const f=_planCiqual(s);
+              if(!f){ faux.push(nom+' #'+s+' introuvable'); continue; }
+              if(!(_planNb(f[macro])>0)) faux.push(nom+' '+f.n+' n\'apporte pas cette macro');
+            }
+          return faux.length?_echec(faux.join(', ')):true;})());
+        ok('Les quatre sources hors Ciqual gardent la valeur du coach',(()=>{
+          // Quatre et non trois : aux deux absentes de la table (farine
+          // d'amande déshuilée, spaghetti de pois chiches) et aux chips de
+          // légumes maison s'ajoutent les frites de patate douce, que Ciqual
+          // ne porte que sous forme de purée ou de pulpe cuite.
+          const hors=[].concat(PLAN_CAT_PROTEINES.slice(),PLAN_CAT_GLUCIDES.slice())
+            .filter(s=>typeof s==='object');
+          if(hors.length!==4) return _echec(hors.length+' sources hors Ciqual');
+          if(hors.some(s=>!s.lib)) return _echec('une source hors Ciqual sans libellé');
+          const fa=PLAN_CAT_PROTEINES.find(s=>typeof s==='object');
+          return (fa&&fa.p===52)?true:_echec(JSON.stringify(fa));})());
+        ok('planSourceRef lit indifféremment un identifiant ou un objet',(()=>{
+          const a=planSourceRef(4,'p',(id)=>({id:4,n:'FB',p:7,c:4.5,l:0.5}));
+          const b=planSourceRef({lib:'Farine d\'amande',p:52},'p');
+          if(!a||a.cle!=='c4'||a.per100!==7||a.horsCiqual) return _echec(JSON.stringify(a));
+          return (b&&b.horsCiqual===true&&b.per100===52&&/^x[A-Za-z0-9]*$/.test(b.cle))
+            ?true:_echec(JSON.stringify(b));})());
+        ok('La clé d\'une source hors Ciqual ne peut pas porter de code',(()=>{
+          const r=planSourceRef({lib:"a');alert(1);//",p:9},'p');
+          return /^x[A-Za-z0-9]{0,24}$/.test(r.cle)?true:_echec(r.cle);})());
+
+        ok('Les quatre modèles existent, un par phase et par sexe',(()=>{
+          const c=Object.keys(PLAN_MODELES).sort().join(',');
+          return c==='masse_F,masse_H,seche_F,seche_H'?true:_echec(c);})());
+        ok('Le sexe et la phase choisissent le bon modèle, sans exception',(()=>{
+          const faux=[];
+          for(const [g,t,att] of [['H','seche','seche_H'],['F','seche','seche_F'],
+                                  ['H','masse','masse_H'],['F','masse','masse_F']]){
+            const v=planModeleCle(_pa({gender:g,phase:_phase(t,1)}));
+            if(v!==att) faux.push(g+'/'+t+' → '+String(v));
+          }
+          return faux.length?_echec(faux.join(', ')):true;})());
+        ok('Sans phase NI objectif, aucun modèle n\'est posé au hasard',
+           planModeleCle(_pa({}))===null&&planDepuisModele(_pa({}),true)===null);
+        ok('À défaut de phase, l\'objectif écrit désigne le modèle',(()=>{
+          // Le vrai cas de terrain : un athlète en recomposition, ou sans
+          // phase du tout, laissait l'écran de composition entièrement vide.
+          const faux=[];
+          const cas=[
+            [{objective:'Sèche pour l\'été'},'seche_H','objectif'],
+            [{objective:'Prise de masse'},'masse_H','objectif'],
+            [{bilanGoals:'Perte de poids · Bien-être général'},'seche_H','objectif'],
+            [{bilanGoals:'Prise de muscle'},'masse_H','objectif'],
+            [{objective:'Rester en forme'},null,null]
+          ];
+          for(const [extra,att,src] of cas){
+            const s=planModeleSuggere(_pa(Object.assign({gender:'H'},extra)));
+            if(s.cle!==att||s.source!==src)
+              faux.push(JSON.stringify(extra)+' → '+String(s.cle)+'/'+String(s.source));
+          }
+          return faux.length?_echec(faux.join(', ')):true;})());
+        ok('Une phase de recomposition n\'empêche plus de poser un modèle',(()=>{
+          const u=_pa({gender:'F',phase:_phase('recomp',1),objective:'Perte de poids'});
+          const s=planModeleSuggere(u);
+          if(s.cle!=='seche_F') return _echec(String(s.cle));
+          return planDepuisModele(u,true)!==null?true:_echec('aucun plan construit');})());
+        ok('La phase prime sur l\'objectif quand elle sait répondre',(()=>{
+          const s=planModeleSuggere(_pa({gender:'H',phase:_phase('masse',1),
+            objective:'Perte de poids'}));
+          return (s.cle==='masse_H'&&s.source==='phase')?true:_echec(JSON.stringify(s));})());
+        ok('Le coach peut forcer n\'importe lequel des quatre modèles',(()=>{
+          const u=_pa({gender:'H',phase:_phase('recomp',1)});
+          const faux=[];
+          for(const k of PLAN_MODELES_LISTE){
+            const m=planDepuisModele(u,true,k);
+            if(!m) faux.push(k+' refusé');
+            else if(m.modele!==k) faux.push(k+' → '+m.modele);
+          }
+          return faux.length?_echec(faux.join(', ')):true;})());
+        ok('Les paliers viennent du MODÈLE, pas de la phase déclarée',(()=>{
+          // Un athlète noté en recomposition à qui on pose une sèche doit
+          // recevoir 0,85 / 0,80 / 0,75 / 0,65, et non le « ×1 » de la
+          // recomposition qui ne périodise rien.
+          const u=_pa({gender:'H',phase:_phase('recomp',1)});
+          const m=planDepuisModele(u,true,'seche_H');
+          const mult=(m.phases||[]).map(x=>x.mult).join('/');
+          return mult==='0.85/0.8/0.75/0.65'?true:_echec(mult||'aucun palier');})());
+        ok('Chaque modèle porte deux repas à source libre, protéines ET glucides',(()=>{
+          const faux=[];
+          for(const [cle,u] of [['seche_H',_pa({gender:'H',phase:_phase('seche',1)})],
+                                ['seche_F',_pa({gender:'F',phase:_phase('seche',1)})],
+                                ['masse_H',_pa({gender:'H',phase:_phase('masse',1)})],
+                                ['masse_F',_pa({gender:'F',phase:_phase('masse',1)})]])
+            for(const avec of [true,false]){
+              const m=planDepuisModele(u,avec);
+              if(!m){ faux.push(cle+' absent'); continue; }
+              if(m.modele!==cle) faux.push(cle+' → '+m.modele);
+              if(planNbSources(m,'p')!==2) faux.push(cle+(avec?'/avec':'/sans')+' prot '+planNbSources(m,'p'));
+              if(planNbSources(m,'c')!==2) faux.push(cle+(avec?'/avec':'/sans')+' gluc '+planNbSources(m,'c'));
+            }
+          return faux.length?_echec(faux.join(', ')):true;})());
+        ok('Le modèle pose les deux catalogues complets',(()=>{
+          const m=planDepuisModele(_pa({gender:'H',phase:_phase('seche',1)}),true);
+          return (planCatalogue(m,'p').length===20&&planCatalogue(m,'c').length===28)
+            ?true:_echec(planCatalogue(m,'p').length+' / '+planCatalogue(m,'c').length);})());
+
+        // ══════ AVEC / SANS COMPLÉMENTS ══════
+        ok('Sans compléments : la whey devient du lait protéiné, pas un trou',(()=>{
+          const u=_pa({gender:'H',phase:_phase('seche',1)});
+          const avec=planDepuisModele(u,true), sans=planDepuisModele(u,false);
+          const nomsA=avec.squelette.map(x=>planNomItem(x,_ch)).join('|');
+          const nomsS=sans.squelette.map(x=>planNomItem(x,_ch)).join('|');
+          if(!/Whey/.test(nomsA)) return _echec('la whey manque en version avec');
+          if(/Whey|Maltodextrine|Oméga 3|Multivitamine|Créatine/.test(nomsS))
+            return _echec('un complément a survécu : '+nomsS);
+          return /Lait protéiné/.test(nomsS)?true:_echec('aucun substitut : '+nomsS);})());
+        ok('Les substituts couvrent bien whey, crème de riz et maltodextrine',(()=>{
+          const s=PLAN_SUBSTITUTS_SANS_COMP;
+          for(const k of ['whey','creme_riz','malto']) if(!s[k]) return _echec(k+' sans substitut');
+          for(const k of ['omega3','multivit','creatine']) if(s[k]) return _echec(k+' ne devrait pas être remplacé');
+          return true;})());
+        ok('Une note dont le groupe se vide disparaît avec lui',(()=>{
+          // « À consommer à côté » n'annonce plus rien une fois l'oméga 3 et
+          // la multivitamine retirés : elle ne doit pas rester seule.
+          const u=_pa({gender:'H',phase:_phase('seche',1)});
+          const sans=planDepuisModele(u,false);
+          const pd=sans.squelette.filter(x=>x.repas==='petit_dej');
+          return !pd.some(x=>/À consommer à côté/.test(x.note||''))
+            ?true:_echec(JSON.stringify(pd.map(x=>planNomItem(x,_ch))));})());
+        ok('La note de préparation change quand la poudre disparaît',(()=>{
+          const u=_pa({gender:'H',phase:_phase('seche',1)});
+          const a=planDepuisModele(u,true).squelette.filter(x=>x.repas==='avant');
+          const s=planDepuisModele(u,false).squelette.filter(x=>x.repas==='avant');
+          return (/SHAKER/.test(a[0].note||'')&&/bol mélanger/.test(s[0].note||''))
+            ?true:_echec((a[0].note||'')+' / '+(s[0].note||''));})());
+        ok('Aucune ligne de modèle ne conserve ses marques de construction',(()=>{
+          for(const [g,t] of [['H','seche'],['F','seche'],['H','masse'],['F','masse']]){
+            const u=_pa({gender:g,phase:_phase(t,1)});
+            for(const avec of [true,false])
+              for(const it of planDepuisModele(u,avec).squelette)
+                for(const k of ['r','auto','avecSeul','sansSeul','noteSans','sub'])
+                  if(k in it) return _echec('« '+k+' » subsiste sur '+planNomItem(it,_ch));
+          }
+          return true;})());
+        ok('Le substitut de la ligne prime sur celui de la table',(()=>{
+          // 400 mL de lait protéiné chez la femme, 500 chez l'homme.
+          const f=planDepuisModele(_pa({gender:'F',phase:_phase('seche',1)}),false);
+          const h=planDepuisModele(_pa({gender:'H',phase:_phase('seche',1)}),false);
+          const qf=(f.squelette.find(x=>/Lait protéiné/.test(x.libre||''))||{}).q;
+          const qh=(h.squelette.find(x=>/Lait protéiné/.test(x.libre||''))||{}).q;
+          return (qf===400&&qh===500)?true:_echec(String(qf)+' / '+String(qh));})());
+        ok('Chaque ligne du modèle reçoit un identifiant propre',(()=>{
+          const m=planDepuisModele(_pa({gender:'H',phase:_phase('seche',1)}),true);
+          const ids=m.squelette.map(x=>x.id);
+          if(ids.some(x=>!/^[A-Za-z0-9]{1,32}$/.test(x))) return _echec('identifiant mal formé');
+          return new Set(ids).size===ids.length?true:_echec('doublon d\'identifiant');})());
+
+        // ══════ LES DEUX LIGNES CHIFFRÉES PAR LE POIDS ══════
+        ok('Le modèle pré-remplit les œufs et les amandes selon le poids',(()=>{
+          const faux=[];
+          // 54 kg / femme → 2 œufs et 15 g d'amandes : exactement les nombres
+          // qu'affichent les tableurs de sèche et de prise de masse femme.
+          for(const [poids,femme,oe,am] of [[100,false,6,25],[54,true,2,15],[75,false,5,22]]){
+            const u=_pa({gender:femme?'F':'H','init-weight':poids,
+              phase:_phase('seche',1)});
+            const m=planDepuisModele(u,true);
+            if(!m){ faux.push(poids+' kg : aucun modèle'); continue; }
+            const o=m.squelette.find(x=>x.portion==='oeuf');
+            const a=m.squelette.find(x=>x.portion==='amandes');
+            if(!o||o.q!==oe) faux.push(poids+' kg → '+(o?o.q:'?')+' œufs au lieu de '+oe);
+            if(!a||a.q!==am) faux.push(poids+' kg → '+(a?a.q:'?')+' g d\'amandes au lieu de '+am);
+          }
+          return faux.length?_echec(faux.join(', ')):true;})());
+        ok('Sans poids connu, la quantité retombe sur 1 et rien ne casse',(()=>{
+          const u=_pa({gender:'H',phase:_phase('seche',1)});
+          delete u['init-weight'];
+          const m=planDepuisModele(u,true);
+          const o=m.squelette.find(x=>x.portion==='oeuf');
+          return (o&&o.q===1)?true:_echec(JSON.stringify(o));})());
+
+        // ══════ LA TABLE DES FRUITS ══════
+        ok('La table des fruits porte les vingt lignes du tableur',(()=>{
+          if(PLAN_FRUITS.length!==20) return _echec(PLAN_FRUITS.length+' fruits');
+          const faux=PLAN_FRUITS.filter(f=>!f.n||!f.q);
+          return faux.length?_echec('ligne incomplète'):true;})());
+        ok('Elle ne calcule RIEN : ce sont des équivalences fixes',(()=>{
+          const b=PLAN_FRUITS.find(x=>x.n==='Banane');
+          return (b&&/90 g/.test(b.q))?true:_echec(JSON.stringify(b));})());
+
+        // ══════ LES LIGNES DE TEXTE ══════
+        ok('Une note et une ligne de fruit ne comptent dans aucune macro',(()=>{
+          const plan={squelette:[{id:'n1',repas:'midi',note:'Sous forme de PANCAKES'},
+            {id:'f1',repas:'midi',fruit:true},
+            {id:'a1',repas:'midi',ciqual:5,q:100,u:'g'}]};
+          const c=planCouverture(plan,_ch);
+          if(c.p!==21) return _echec('la couverture vaut '+c.p);
+          if(c.irresolus.length) return _echec('une ligne de texte est passée pour un aliment');
+          return c.parRepas.midi.lignes.length===3
+            ?true:_echec(c.parRepas.midi.lignes.length+' lignes rendues');})());
+        ok('Elles n\'apparaissent pas non plus dans la liste de courses',(()=>{
+          const u=_pa({nutrition:Object.assign(_macros({kcal:2600,p:200,g:300,l:70,f:36}),
+            {plan:{squelette:[{id:'n1',repas:'midi',note:'Note'},
+              {id:'f1',repas:'midi',fruit:true},
+              {id:'a1',repas:'midi',ciqual:4,q:250,u:'g'}]}})});
+          const l=planListeCourses(planDe(u),u,_ch).lignes;
+          return l.length===1?true:_echec(l.map(x=>x.lib).join(', '));})());
+
+        // ══════ LE RÉCAPITULATIF DE L'ATHLÈTE ══════
+        ok('Le sous-tableau de sources ne porte plus la valeur pour 100 g',(()=>{
+          const u=_pa({nutrition:Object.assign(_macros({kcal:2600,p:200,g:300,l:70,f:36}),
+            {plan:{squelette:[{id:'b',repas:'midi',src:'p'},{id:'c',repas:'soir',src:'p'}],
+             sources:{proteines:[5],glucides:[]}}})});
+          const _s=currentUser,_sDB=_ciqualDB;
+          let h='';
+          try{ currentUser=u; _ciqualDB=Object.keys(_AL).map(k=>_AL[k]); h=_htmlPlanAthlete(u); }
+          finally{ currentUser=_s; _ciqualDB=_sDB; }
+          if(!/Volaille/.test(h)) return _echec('la source n\'est pas rendue');
+          if(/pour 100 g/.test(h)) return _echec('la valeur pour 100 g est encore là');
+          return /\d+<span[^>]*> g<\/span>/.test(h)?true:_echec('la quantité par repas manque');})());
+        ok('Le récapitulatif porte la table des fruits et les notes de cheatmeal',(()=>{
+          const u=_pa({nutrition:Object.assign(_macros({kcal:2600,p:200,g:300,l:70,f:36}),
+            {plan:{squelette:[{id:'a',repas:'midi',ciqual:4,q:250,u:'g'}],
+             sources:{proteines:[],glucides:[]}}})});
+          const _s=currentUser,_sDB=_ciqualDB;
+          let h='';
+          try{ currentUser=u; _ciqualDB=Object.keys(_AL).map(k=>_AL[k]); h=_htmlPlanAthlete(u); }
+          finally{ currentUser=_s; _ciqualDB=_sDB; }
+          if(!/1 portion de fruits/i.test(h)) return _echec('la table des fruits manque');
+          if(!/Pamplemousse/.test(h)) return _echec('la table des fruits est tronquée');
+          if(!/cheatmeal/i.test(h)) return _echec('les notes de cheatmeal manquent');
+          return /Programme nutritionnel/i.test(h)?true:_echec('le titre du tableur manque');})());
+        ok('Une note du coach se lit dans le récapitulatif, à sa place',(()=>{
+          const u=_pa({nutrition:Object.assign(_macros({kcal:2600,p:200,g:300,l:70,f:36}),
+            {plan:{squelette:[{id:'n',repas:'petit_dej',note:'Sous forme de PANCAKES'},
+              {id:'a',repas:'petit_dej',ciqual:4,q:250,u:'g'}],
+             sources:{proteines:[],glucides:[]}}})});
+          const _s=currentUser,_sDB=_ciqualDB;
+          let h='';
+          try{ currentUser=u; _ciqualDB=Object.keys(_AL).map(k=>_AL[k]); h=_htmlPlanAthlete(u); }
+          finally{ currentUser=_s; _ciqualDB=_sDB; }
+          return /PANCAKES/.test(h)?true:_echec('la note ne ressort pas');})());
+
+        // ══════ LE PRÉ-REMPLISSAGE NE DÉTRUIT RIEN ══════
+        ok('L\'ouverture ne pose le modèle que si le plan est VIDE',(()=>{
+          const s=String(ouvrirPlanCoach);
+          if(s.indexOf('planActif')<0) return _echec('aucune garde sur le plan existant');
+          return s.indexOf('planDepuisModele')>=0
+            ?true:_echec('le modèle n\'est jamais posé');})());
+        // ══════ LE VERROU D'ACCÈS ══════
+        ok('Sans coach, la diète stricte est fermée et la raison est nommée',(()=>{
+          const u=_pa({coachId:null});
+          const a=accesDieteStricte(u);
+          return (a.ok===false&&a.raison==='sans_coach')?true:_echec(JSON.stringify(a));})());
+        ok('Avec un coach mais sans validation, elle est fermée aussi',(()=>{
+          const a=accesDieteStricte(_pa({coachId:'u_c'}));
+          return (a.ok===false&&a.raison==='non_valide')?true:_echec(JSON.stringify(a));})());
+        ok('Le coach ouvre, et l\'accès s\'ouvre',(()=>{
+          const u=_pa({coachId:'u_c',nutrition:{dietType:'strict',strictAcces:true}});
+          return accesDieteStricte(u).ok===true?true:_echec('toujours fermé');})());
+        ok('Le coach referme, et rien ne rouvre l\'accès dans son dos',(()=>{
+          // Refus EXPLICITE : même un athlète qui a déjà un plan et un
+          // historique reste dehors. Sinon l'interrupteur ne servirait à rien.
+          const u=_pa({coachId:'u_c',nutrition:{dietType:'strict',strictAcces:false,
+            strictPhotos:['x'],days:{'2026-01-01':{respected:true}},
+            plan:{squelette:[{id:'a',repas:'midi',ciqual:4,q:100,u:'g'}]}}});
+          return accesDieteStricte(u).ok===false?true:_echec('la fermeture n\'a pas tenu');})());
+        ok('Un athlète qui suivait DÉJÀ une stricte ne perd pas son accès',(()=>{
+          // Le champ n'existe dans aucun dossier au moment où ce lot arrive :
+          // le lire comme « non validé » couperait tout le monde d'un coup.
+          const faux=[];
+          const cas=[
+            ['un plan composé',{plan:{squelette:[{id:'a',repas:'midi',ciqual:4,q:100,u:'g'}]}}],
+            ['une photo de plan',{strictPhotos:['data:image/png;base64,x']}],
+            ['une journée cochée',{days:{'2026-01-01':{respected:true}}}],
+            ['une journée non respectée',{days:{'2026-01-02':{respected:false}}}]
+          ];
+          for(const [lib,nut] of cas){
+            const u=_pa({coachId:'u_c',nutrition:Object.assign({dietType:'strict'},nut)});
+            const a=accesDieteStricte(u);
+            if(!a.ok) faux.push(lib);
+            else if(a.raison!=='usage_existant') faux.push(lib+' → raison '+a.raison);
+          }
+          return faux.length?_echec('coupé sur : '+faux.join(', ')):true;})());
+        ok('Un dossier vide ne passe PAS pour un usage existant',(()=>{
+          const u=_pa({coachId:'u_c',nutrition:{dietType:'strict',strictPhotos:[],days:{},
+            plan:{v:1,squelette:[],sources:{proteines:[],glucides:[]}}}});
+          return accesDieteStricte(u).ok===false?true:_echec('un plan vide a ouvert l\'accès');})());
+        ok('Le coach, lui, voit toujours l\'écran de son athlète',
+           accesDieteStricte({role:'coach'}).ok===true);
+        ok('Verrouillé, RIEN du plan n\'est construit ni rendu',(()=>{
+          // Un contenu rendu puis grisé se contourne. On vérifie qu'aucun
+          // grammage, aucun repas, aucune source n'atteint la page.
+          const u=_pa({coachId:null,nutrition:Object.assign(_macros({kcal:2600,p:200,g:300,l:70,f:36}),
+            {plan:{squelette:[{id:'a',repas:'midi',ciqual:4,q:250,u:'g'},{id:'b',repas:'soir',src:'p'}],
+             sources:{proteines:[5],glucides:[]}}})});
+          const _s=currentUser,_sDB=_ciqualDB;
+          let h='';
+          try{
+            currentUser=u; _ciqualDB=Object.keys(_AL).map(k=>_AL[k]);
+            const el=document.getElementById('nut-diet-content');
+            if(!el) return _echec('nut-diet-content absent');
+            _renderStrictDiet();
+            h=el.innerHTML;
+          } finally { currentUser=_s; _ciqualDB=_sDB; }
+          if(!/Diète stricte/.test(h)) return _echec('le verrou ne s\'affiche pas');
+          if(/Volaille|Fromage blanc|Repas du midi/i.test(h))
+            return _echec('du contenu de plan a fuité derrière le verrou');
+          return /Passer en diète flexible/.test(h)
+            ?true:_echec('aucune sortie proposée');})());
+        ok('Le verrou dit LEQUEL des deux cas s\'applique',(()=>{
+          const sans=_htmlStrictVerrou('sans_coach'), non=_htmlStrictVerrou('non_valide');
+          if(!/Réservé au suivi coaché/.test(sans)) return _echec('cas sans coach muet');
+          if(!/pas encore ouverte/.test(non)) return _echec('cas non validé muet');
+          if(!/code coach/.test(sans)) return _echec('aucune sortie pour l\'athlète sans coach');
+          return !/code coach/.test(non)?true:_echec('on propose un code à qui a déjà un coach');})());
+        ok('Choisir « stricte » est refusé quand l\'accès est fermé',(()=>{
+          const _s=currentUser, _sSave=window.saveUser, _sToast=window.toast;
+          let msg='';
+          try{
+            window.saveUser=()=>true; window.toast=(m)=>{ msg=String(m); };
+            currentUser=_pa({coachId:'u_c',nutrition:{dietType:'flexible'}});
+            setNutriDietType('strict');
+            if(typeDiete(currentUser.nutrition)==='strict')
+              return _echec('la diète stricte a été posée malgré le verrou');
+            return /pas encore ouvert/.test(msg)?true:_echec('refus muet : « '+msg+' »');
+          } finally { currentUser=_s; window.saveUser=_sSave; window.toast=_sToast; }})());
+        ok('Et il reste possible de repasser en flexible depuis le verrou',(()=>{
+          const _s=currentUser, _sSave=window.saveUser;
+          try{
+            window.saveUser=()=>true;
+            currentUser=_pa({coachId:null,nutrition:{dietType:'strict'}});
+            setNutriDietType('flexible');
+            return typeDiete(currentUser.nutrition)==='flexible'
+              ?true:_echec('la sortie ne fonctionne pas');
+          } finally { currentUser=_s; window.saveUser=_sSave; }})());
+        ok('L\'ouverture de l\'accès passe par le contrôle d\'appartenance',(()=>{
+          const s=String(saveClientStrictAcces);
+          if(s.indexOf('getOwnedClient')<0) return _echec('aucun contrôle d\'appartenance');
+          return s.indexOf('updatedAt')>=0?true:_echec('updatedAt absent');})());
+
+        ok('Poser un modèle demande confirmation et n\'écrit rien en base',(()=>{
+          const s=String(cplPoserModele);
+          if(s.indexOf('confirm')<0) return _echec('aucune confirmation');
+          if(s.indexOf('_cplIntact')<0)
+            return _echec('on confirmerait même par-dessus une composition intacte');
+          return (s.indexOf('DB.set')<0&&s.indexOf('CLOUD.push')<0)
+            ?true:_echec('ce geste écrit en base');})());
+        ok('Le bandeau propose TOUJOURS les quatre modèles',(()=>{
+          // C'est le correctif du terrain : l'écran restait vide, sans aucune
+          // porte de sortie, dès que la phase ne disait ni sèche ni masse.
+          const _sC=currentClientId, _sPlan=_cplPlan, _sU=currentUser, _sUsers=DB.get('users');
+          const _sPush=CLOUD.push;
+          let h='';
+          try{
+            CLOUD.push=()=>Promise.resolve();
+            DB.set('users',{'reco@t':{id:'u_reco',email:'reco@t',role:'athlete',
+              coachId:'u_cc',gender:'H',bilans:[],sessions:[],
+              phase:{type:'recomp',debut:Date.now()-3*864e5},
+              nutrition:{dietType:'strict'}}});
+            currentUser={id:'u_cc',email:'cc@t',role:'coach'};
+            currentClientId='u_reco'; _cplPlan=_cplCopie(null);
+            h=_cplHtmlModele(getOwnedClient('u_reco'));
+          } finally {
+            currentClientId=_sC; _cplPlan=_sPlan; currentUser=_sU;
+            if(_sUsers) DB.set('users',_sUsers); else localStorage.removeItem('rc_users');
+            CLOUD.push=_sPush;
+          }
+          const manque=PLAN_MODELES_LISTE.filter(k=>h.indexOf("cplPoserModele('"+k+"')")<0);
+          if(manque.length) return _echec('modèles absents du bandeau : '+manque.join(', '));
+          return /recomposition/i.test(h)?true:_echec('la raison n\'est pas nommée');})());
       } finally { currentUser=_sU; }
     })();
 
