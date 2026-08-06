@@ -33031,6 +33031,31 @@ function _analyserCaptureStats(texte,aujourdhui){
   const jours=Object.keys(vus).sort().map(k=>({date:k,valeur:vus[k]}));
   return {type:jours.length?type:null, jours, ignorees};
 }
+// Écrit sans écran de validation — décision de Kevin, actée dans la spec. La
+// sûreté ne vient donc pas d'une relecture par l'athlète mais du REJET : les
+// valeurs impossibles sont refusées par _recordSteps / _recordSleep eux-mêmes,
+// et le nombre de journées remplacées ressort dans le toast pour qu'un
+// écrasement ne soit jamais muet.
+function _appliquerCaptureStats(analyse){
+  const res={ecrits:0,remplaces:0,du:null,au:null};
+  if(!analyse||!analyse.jours||!analyse.jours.length) return res;
+  const aujourd=localISODate(new Date());
+  for(const j of analyse.jours){
+    if(j.date>aujourd) continue; // une capture ne renseigne jamais le futur
+    const avant=analyse.type==='sommeil'
+      ? (currentUser.sleepLog||[]).some(e=>e.date===j.date)
+      : (currentUser.stepsLog||[]).some(e=>e.date===j.date);
+    const pose=analyse.type==='sommeil'
+      ? _recordSleep(j.date,{duration:j.valeur})
+      : _recordSteps(j.date,j.valeur);
+    if(!pose) continue;
+    res.ecrits++;
+    if(avant) res.remplaces++;
+    if(!res.du||j.date<res.du) res.du=j.date;
+    if(!res.au||j.date>res.au) res.au=j.date;
+  }
+  return res;
+}
 function _recordSteps(dateStr,count){
   const n=parseInt(count,10);
   // 0 est une valeur légitime saisie à la main (« je n'ai pas marché »), d'où
@@ -33213,6 +33238,26 @@ function loadSleep(containerId='sleep-content'){
     ${histHtml}
   `;
 }
+// Jumelle de _recordSteps : une date, une nuit, écrasement plutôt qu'empilement.
+// Extraite de saveSleep pour que l'import par capture n'ait pas à redire les
+// règles de conservation. bed et wake sont FACULTATIFS : une nuit venue d'une
+// capture ne porte que sa durée, l'écran de la montre n'affichant ni l'heure de
+// coucher ni celle de lever.
+function _recordSleep(dateStr,{bed,wake,duration}={}){
+  const d=Number(duration);
+  // Même plafond que calcSleepDuration : au-delà de 18 h ce n'est pas une nuit.
+  if(!dateStr||!Number.isFinite(d)||d<=0||d>18) return false;
+  if(!currentUser.sleepLog) currentUser.sleepLog=[];
+  const entry={date:dateStr,duration:d};
+  if(bed) entry.bed=bed;
+  if(wake) entry.wake=wake;
+  const idx=currentUser.sleepLog.findIndex(e=>e.date===dateStr);
+  if(idx>=0) currentUser.sleepLog[idx]=entry;
+  else currentUser.sleepLog.push(entry);
+  const cutoff=localISODate(new Date(Date.now()-180*24*3600*1000));
+  currentUser.sleepLog=currentUser.sleepLog.filter(e=>e.date>=cutoff);
+  return true;
+}
 function saveSleep(){
   const bed=document.getElementById('sleep-bed-input')?.value;
   const wake=document.getElementById('sleep-wake-input')?.value;
@@ -33220,13 +33265,7 @@ function saveSleep(){
   const duration=calcSleepDuration(bed,wake);
   if(duration===null) return toast('Heures invalides : vérifie la saisie','var(--orange)');
   const jour=_jourSleep();
-  if(!currentUser.sleepLog) currentUser.sleepLog=[];
-  const idx=currentUser.sleepLog.findIndex(e=>e.date===jour);
-  const entry={date:jour,bed,wake,duration};
-  if(idx>=0) currentUser.sleepLog[idx]=entry;
-  else currentUser.sleepLog.push(entry);
-  const cutoff=localISODate(new Date(Date.now()-180*24*3600*1000));
-  currentUser.sleepLog=currentUser.sleepLog.filter(e=>e.date>=cutoff);
+  if(!_recordSleep(jour,{bed,wake,duration})) return toast('Nuit invalide','var(--orange)');
   const suffixe=jour===localISODate(new Date())
     ? ''
     : ' pour le '+new Date(jour+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'long'});
@@ -60738,6 +60777,29 @@ vendredi 78 6h 44m
     ok('Un texte sans aucune date ne rend rien, sans lever',
        _analyserCaptureStats('bonjour ceci n\'est pas une capture',
          new Date('2026-08-06T12:00:00')).jours.length===0);
+
+    // ── Import par capture : écriture — 6 cas ──
+    currentUser.stepsLog=[]; currentUser.sleepLog=[];
+    const _rApp=_appliquerCaptureStats(_analyserCaptureStats(_capPas,
+      new Date('2026-08-06T12:00:00')));
+    ok('Les sept journées de pas sont écrites',_rApp.ecrits===7,
+       'ecrits '+_rApp.ecrits);
+    ok('Aucune journée remplacée sur un journal vide',_rApp.remplaces===0);
+    ok('La plage de dates est rapportée',
+       _rApp.du==='2026-07-31'&&_rApp.au==='2026-08-06',
+       'du '+_rApp.du+' au '+_rApp.au);
+    ok('Le total du 6 août est bien dans stepsLog',
+       (currentUser.stepsLog.find(e=>e.date==='2026-08-06')||{}).count===4844);
+    const _rApp2=_appliquerCaptureStats(_analyserCaptureStats(_capPas,
+      new Date('2026-08-06T12:00:00')));
+    ok('Un second import compte les journées comme remplacées',_rApp2.remplaces===7,
+       'remplaces '+_rApp2.remplaces);
+    ok('Une nuit importée n\'a ni coucher ni lever, mais une durée',
+       (()=>{ currentUser.sleepLog=[];
+         _appliquerCaptureStats(_analyserCaptureStats(_capSom,
+           new Date('2026-08-06T12:00:00')));
+         const n=currentUser.sleepLog.find(e=>e.date==='2026-08-04');
+         return n&&n.duration===8.3&&!n.bed&&!n.wake; })());
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
