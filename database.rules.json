@@ -42,6 +42,34 @@
           "$autre": { ".validate": false }
         },
 
+        // ── Journal de coach : des notes privees, dans le dossier DU COACH ──
+        // LA CONFIDENTIALITE NE VIENT PAS D ICI, elle vient du .read ci-dessus :
+        // il n ouvre la lecture qu au proprietaire et au coach DE ce document,
+        // celui que designe son coachEmailKey. Un athlete n est jamais le coach
+        // de son coach — le dossier du coach lui est ferme par construction, et
+        // aucune regle nouvelle n etait necessaire pour cela.
+        //
+        // CE BLOC BORNE, il ne protege pas. /users/$emailKey n a pas de
+        // "$autre": false — l ecriture passerait donc sans lui. Mais chaque
+        // sauvegarde est un PUT du document ENTIER : un champ de texte libre non
+        // borne, dans un document reecrit a chaque fois, finit par deborder le
+        // quota. Meme patron que rgpd et abonnement, pour la meme raison.
+        //
+        // La longueur est celle de NOTE_TEXTE_MAX cote client. Les etiquettes
+        // sont la liste fermee de NOTE_TAGS ; null est accepte, c est l absence
+        // d etiquette.
+        "coachNotes": {
+          "$athleteId": {
+            "$i": {
+              "id":    { ".validate": "newData.isString() && newData.val().length < 40" },
+              "at":    { ".validate": "newData.isNumber() && newData.val() > 0" },
+              "texte": { ".validate": "newData.isString() && newData.val().length <= 600" },
+              "tag":   { ".validate": "newData.val() === null || (newData.isString() && newData.val().matches(/^(blessure|materiel|perso|methode)$/))" },
+              "$autre": { ".validate": false }
+            }
+          }
+        },
+
         "coachEmailKey": {
           ".validate": "auth.token.email.replace('.', ',') === $emailKey || (data.exists() && newData.val() === data.val())"
         }

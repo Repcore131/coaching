@@ -1551,6 +1551,9 @@ const COACH_PHOTO='icons/coach.jpg';
            laisser au fond du questionnaire de départ revenait à demander au
            coach de s'en souvenir. Rempli par openClientDetail. -->
       <div id="ccd-alertes" style="display:none;margin-bottom:14px"></div>
+      <!-- Journal du coach. En TETE de fiche : c est la premiere chose qu on
+           veut relire avant de parler a quelqu un. -->
+      <div id="ccd-journal" style="margin-bottom:14px"></div>
       <!-- Modèle appliqué : renseigné par openClientDetail -->
       <div id="ccd-assigned-prog" style="display:none;font-size:11px;color:var(--sub);margin-bottom:10px;padding:8px 12px;background:var(--surface-1);border-left:2px solid var(--red);border-radius:0 6px 6px 0;line-height:1.5"></div>
       <!-- Lien WhatsApp de l'athlète : libellé et cible posés par openClientDetail -->
@@ -4663,6 +4666,11 @@ const CLOUD={
         if(santeVisibleCoach(user,bloc)) continue;
         for(const champ of SANTE_CHAMPS[bloc]) delete safe[champ];
       }
+      // JOURNAL DE COACH — derniere barriere avant le reseau. Les notes vivent
+      // dans le dossier du coach ; ce PUT-ci peut viser le dossier d un ATHLETE,
+      // et une copie de commodite y serait lisible par lui. On ne retire donc
+      // le champ que lorsque le document poussé n est PAS celui de l emetteur.
+      if(!currentUser||email!==currentUser.email) delete safe.coachNotes;
       this._retirerContraceptionSiNonPartagee(safe);
       // La grossesse ne monte JAMAIS par défaut. coach_public est déjà hors
       // de portée — c'est le profil DU COACH, filtré par liste blanche — mais
@@ -7379,6 +7387,13 @@ const EXPORT_NON_INCLUS=Object.freeze([
     raison:'Secret technique de connexion. L\'exporter reviendrait à exporter un mot de passe.'}),
   Object.freeze({categorie:'Profil de ton coach',
     raison:'Données d\'un tiers. Un export ne contient jamais les données de quelqu\'un d\'autre.'}),
+  // Une note ECRITE PAR le coach mais PORTANT SUR l athlete est la donnee
+  // personnelle de l athlete (art. 15), pas celle d un tiers. La ranger sous
+  // « profil de ton coach » rendrait ce manifeste faux — or il existe
+  // exactement pour dire ce qui manque et pourquoi.
+  Object.freeze({categorie:'Notes privées de ton coach à ton sujet',
+    raison:'Elles sont enregistrées dans le dossier de ton coach, auquel RepCore ne te donne pas accès : '
+      +'cet export ne peut pas les contenir. Elles te sont néanmoins communicables — demande-les-lui.'}),
   Object.freeze({categorie:'Compteurs techniques (quota, mesure de tunnel)',
     raison:'Agrégats anonymes sans lien avec ton compte : ils ne te concernent pas individuellement.'}),
   Object.freeze({categorie:'Brouillon de séance en cours',
@@ -9803,6 +9818,258 @@ function toggleSCard(hdr){
 // ======= FIN RÉCAP SÉANCES COACH =======
 // Retourne l'élève seulement s'il appartient au coach courant ; toast + null sinon.
 // Passe `users` (déjà chargé) pour éviter un double DB.get dans les fonctions d'écriture.
+// ══════════════ JOURNAL DE COACH ══════════════
+// Un fil de notes horodatées par athlète. Il vit dans le document DU COACH,
+// jamais dans celui de l'athlète, et ce choix n'est pas une commodité : c'est
+// ce qui rend la note inaccessible à l'athlète MÊME s'il interroge la base
+// directement.
+//
+// POURQUOI AUCUNE RÈGLE RTDB NOUVELLE N'EST NÉCESSAIRE POUR LA CONFIDENTIALITÉ.
+// La règle de /users/$emailKey n'ouvre la lecture qu'au propriétaire et au
+// coach DE ce document — celui que désigne son champ coachEmailKey. Un athlète
+// n'est jamais le coach de son coach : le dossier du coach lui est fermé par
+// construction. Une règle a tout de même été ajoutée, mais pour BORNER le
+// champ, pas pour le protéger : chaque saveUser est un PUT du document entier,
+// et un texte libre non borné dans un document réécrit à chaque sauvegarde
+// finit par déborder le quota.
+//
+// CE QUI RESTE VRAI ET QU'IL FAUT SAVOIR : si le dossier d'un coach portait un
+// jour coachEmailKey — un coach qui serait lui-même l'athlète d'un autre —
+// cet autre coach lirait le dossier entier, notes comprises. Aucun écran ne
+// pose ce champ sur un coach aujourd'hui.
+//
+// CONSÉQUENCE GRATUITE : urgencyScore reçoit le dossier de L'ATHLÈTE. Une note
+// ne peut pas entrer dans le score d'urgence, même par accident.
+const NOTE_TAGS=Object.freeze(['blessure','materiel','perso','methode']);
+const NOTE_TAG_LIB=Object.freeze({blessure:'Blessure',materiel:'Matériel',
+  perso:'Perso',methode:'Méthode'});
+const NOTE_TEXTE_MAX=600;
+const NOTE_MAX_PAR_ATHLETE=200;
+const NOTE_APERCU=3;
+// Affichée AU MOMENT de la saisie, pas dans une politique qu'il faudrait aller
+// chercher. RepCore ne peut pas automatiser la communication de cette note :
+// l'export de l'athlète lit SON dossier, et la note n'y est pas. C'est donc une
+// obligation manuelle du coach, et elle est écrite comme telle.
+const NOTE_MENTION='Note privée : elle reste dans ton dossier et l\'athlète ne '
+  +'la voit nulle part dans l\'application. Mais elle porte sur lui — elle lui '
+  +'est donc communicable s\'il exerce son droit d\'accès, et RepCore ne peut '
+  +'pas le faire à ta place. Écris ce que tu assumerais de lui montrer.';
+// PURE. Le fil d'un athlète, quel que soit l'état du champ. Une entrée sans
+// identifiant ou sans date est écartée : elle ne serait ni supprimable ni
+// triable.
+function _notesFil(coachNotes,athleteId){
+  if(!coachNotes||typeof coachNotes!=='object'||Array.isArray(coachNotes)) return [];
+  const l=coachNotes[athleteId];
+  if(!Array.isArray(l)) return [];
+  return l.filter(n=>n&&typeof n==='object'&&n.id&&isFinite(Number(n.at)));
+}
+// PURE. Copie de surface du dictionnaire, fils clonés : c'est ce qui permet aux
+// deux fonctions d'écriture de ne jamais toucher leur entrée.
+function _notesCopie(notes){
+  const out={};
+  if(notes&&typeof notes==='object'&&!Array.isArray(notes))
+    for(const k in notes) out[k]=Array.isArray(notes[k])?notes[k].slice():notes[k];
+  return out;
+}
+// PURE. Deux notes écrites dans la même milliseconde ne doivent pas partager
+// un identifiant : la suppression unitaire en effacerait deux.
+function _noteId(fil,at){
+  const base='n'+at;
+  if(!fil.some(n=>n.id===base)) return base;
+  for(let i=2;i<9999;i++){ const c=base+'-'+i; if(!fil.some(n=>n.id===c)) return c; }
+  return base+'-'+fil.length;
+}
+// PURE, NE MUTE RIEN. Rend {ok:true,notes,note} ou {ok:false,raison}.
+function noteAjouter(notes,athleteId,texte,tag,now){
+  const id=String(athleteId||'');
+  if(!id) return {ok:false,raison:'Aucun athlète sélectionné.'};
+  // Un élève créé par code n'a pas encore de dossier : son identifiant est
+  // provisoire (_code_…) et changera à son inscription. Une note posée dessus
+  // serait orpheline le jour où il s'inscrit — on la refuse plutôt que de la
+  // perdre en silence.
+  if(id.indexOf('_code_')===0)
+    return {ok:false,raison:'Cet élève n\'a pas encore de dossier : la note serait perdue à son inscription.'};
+  const t=String(texte||'').trim().slice(0,NOTE_TEXTE_MAX);
+  if(!t) return {ok:false,raison:'Écris quelque chose.'};
+  const fil=_notesFil(notes,id);
+  if(fil.length>=NOTE_MAX_PAR_ATHLETE)
+    return {ok:false,raison:'Ce fil est plein ('+NOTE_MAX_PAR_ATHLETE+' notes). Supprime avant d\'ajouter.'};
+  const at=isFinite(Number(now))?Number(now):Date.now();
+  const note={id:_noteId(fil,at),at,texte:t,tag:NOTE_TAGS.indexOf(tag)>=0?tag:null};
+  const sortie=_notesCopie(notes);
+  sortie[id]=[note].concat(fil);
+  return {ok:true,notes:sortie,note};
+}
+// PURE, NE MUTE RIEN. Suppression DÉFINITIVE : pas de corbeille, pas de
+// marqueur de suppression. Un fil vidé disparaît du dictionnaire plutôt que
+// d'y laisser un tableau vide que chaque PUT réécrirait.
+function noteSupprimer(notes,athleteId,noteId){
+  const id=String(athleteId||'');
+  const fil=_notesFil(notes,id);
+  if(!fil.some(n=>n.id===noteId)) return {ok:false,raison:'Note introuvable.'};
+  const sortie=_notesCopie(notes);
+  const reste=fil.filter(n=>n.id!==noteId);
+  if(reste.length) sortie[id]=reste; else delete sortie[id];
+  return {ok:true,notes:sortie};
+}
+// PURE. Plein texte sur TOUS les fils, via norm — insensible aux accents et à
+// la casse. Tous les mots doivent être présents : un ET, pas un OU, sinon deux
+// mots élargissent au lieu de resserrer. Trié du plus récent au plus ancien.
+function notesRecherche(coachNotes,requete){
+  const out=[];
+  if(!coachNotes||typeof coachNotes!=='object'||Array.isArray(coachNotes)) return out;
+  const mots=norm(requete).split(/\s+/).filter(Boolean);
+  for(const id of Object.keys(coachNotes)){
+    for(const n of _notesFil(coachNotes,id)){
+      if(mots.length){
+        const c=norm(n.texte)+' '+norm(NOTE_TAG_LIB[n.tag]||n.tag||'');
+        if(!mots.every(m=>c.indexOf(m)>=0)) continue;
+      }
+      out.push({athleteId:id,note:n});
+    }
+  }
+  return out.sort((a,b)=>b.note.at-a.note.at);
+}
+// PURE. Les n dernières notes d'un fil, la plus récente en tête.
+function notesDernieres(coachNotes,athleteId,n){
+  const k=(isFinite(Number(n))&&Number(n)>0)?Math.round(Number(n)):NOTE_APERCU;
+  return _notesFil(coachNotes,athleteId).slice().sort((a,b)=>b.at-a.at).slice(0,k);
+}
+
+// ── Le bloc en fiche client ────────────────────────────────────────────────
+let _jrQ='', _jrTout=false;
+function _jrDate(at){
+  try{ return new Date(at).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'2-digit'}); }
+  catch(e){ return ''; }
+}
+// Le prénom derrière un identifiant, pour la recherche transversale. Sans
+// getOwnedClient : celui-ci affiche un toast quand il ne trouve pas, et une
+// recherche sur douze fils en produirait douze.
+function _jrNom(id){
+  const u=Object.values(DB.get('users')||{}).find(x=>x&&x.id===id);
+  if(!u) return 'Athlète retiré';
+  return ((u.fname||'')+' '+(u.lname||'')).trim()||u.email||'Sans nom';
+}
+function _jrHtmlNote(n,nom){
+  return '<div style="border-left:2px solid var(--border);padding:0 0 0 10px;margin-bottom:9px">'
+    +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">'
+    +'<span style="font-size:10px;color:var(--text-faint);letter-spacing:.5px">'
+    +escapeHtml(_jrDate(n.at))+(nom?' · '+escapeHtml(nom):'')
+    +(n.tag?' · <span style="color:var(--sub)">'+escapeHtml(NOTE_TAG_LIB[n.tag]||n.tag)+'</span>':'')
+    +'</span>'
+    +'<button class="hit44" onclick="jrSupprimer('+JSON.stringify(n.id).replace(/"/g,'&quot;')+')"'
+    +' aria-label="Supprimer cette note" style="background:none;border:none;color:var(--text-faint);'
+    +'font-size:16px;line-height:1;cursor:pointer;min-width:44px;min-height:44px;margin:-12px -10px -12px 0;'
+    +'flex-shrink:0">×</button></div>'
+    +'<div style="font-size:12px;color:#ddd;line-height:1.6;white-space:pre-wrap;word-break:break-word">'
+    +escapeHtml(n.texte)+'</div></div>';
+}
+function renderJournalCoach(c){
+  const z=document.getElementById('ccd-journal');
+  if(!z) return false;
+  if(!currentUser||currentUser.role!=='coach'){ z.innerHTML=''; return false; }
+  const cn=currentUser.coachNotes;
+  const id=(c&&c.id)||'';
+  const surCode=String(id).indexOf('_code_')===0;
+  let corps;
+  if(_jrQ){
+    // Recherche transversale : tous les fils, pas seulement celui-ci.
+    const res=notesRecherche(cn,_jrQ);
+    corps=res.length
+      ?res.map(o=>_jrHtmlNote(o.note,_jrNom(o.athleteId))).join('')
+      :'<div style="font-size:11px;color:var(--sub);line-height:1.6;padding:4px 0 8px">'
+       +'Aucune note ne contient ça. Efface la recherche pour revoir ce fil.</div>';
+  }else{
+    const fil=_notesFil(cn,id);
+    const vues=_jrTout?fil.slice().sort((a,b)=>b.at-a.at):notesDernieres(cn,id,NOTE_APERCU);
+    corps=fil.length
+      ?vues.map(n=>_jrHtmlNote(n,null)).join('')
+        +(fil.length>vues.length||_jrTout
+          ?'<button onclick="jrBasculerTout()" style="background:none;border:none;color:var(--link);'
+           +'font-family:inherit;font-size:11px;text-decoration:underline;cursor:pointer;padding:2px 0;'
+           +'min-height:34px">'+(_jrTout?'réduire':'tout voir ('+fil.length+')')+'</button>'
+          :'')
+      :'<div style="font-size:11px;color:var(--sub);line-height:1.6;padding:4px 0 8px">'
+       +'Aucune note. Ce fil ne sert qu\'à toi : ce qu\'il a dit, ce qui a coincé, '
+       +'ce qu\'il faudra reprendre.</div>';
+  }
+  const opts=NOTE_TAGS.map(t=>'<option value="'+t+'">'+escapeHtml(NOTE_TAG_LIB[t])+'</option>').join('');
+  z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px">'
+    +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:9px">'
+    +'<span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Journal</span>'
+    +'</div>'
+    +'<input id="jr-q" type="search" inputmode="search" placeholder="Chercher dans tous tes fils"'
+    +' value="'+escapeHtml(_jrQ)+'" oninput="jrChercher()" style="width:100%;margin-bottom:10px">'
+    +corps
+    +(surCode
+      ?'<div style="font-size:10.5px;color:var(--text-faint);line-height:1.6;border-top:1px solid var(--border);padding-top:9px;margin-top:4px">'
+       +'Cet élève n\'a pas encore de dossier : le journal s\'ouvrira à son inscription.</div>'
+      :'<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px">'
+       +'<textarea id="jr-texte" rows="2" maxlength="'+NOTE_TEXTE_MAX+'" placeholder="Ce que tu veux retrouver la prochaine fois"'
+       +' style="width:100%;resize:vertical"></textarea>'
+       +'<div style="display:flex;gap:6px;margin-top:7px">'
+       +'<select id="jr-tag" style="flex:1;min-width:0"><option value="">— sans étiquette —</option>'+opts+'</select>'
+       +'<button class="btn btn-outline btn-sm" style="flex:0 0 auto;margin:0;letter-spacing:.5px;font-size:10px" onclick="jrAjouter()">Noter</button>'
+       +'</div>'
+       +'<div style="font-size:10px;color:var(--text-faint);line-height:1.6;margin-top:8px">'+escapeHtml(NOTE_MENTION)+'</div>'
+       +'</div>')
+    +'</div>';
+  return true;
+}
+function _jrRafraichir(){
+  try{ renderJournalCoach(getOwnedClient(currentClientId)); }catch(e){}
+}
+function jrChercher(){
+  const e=document.getElementById('jr-q');
+  _jrQ=e?e.value:'';
+  _jrTout=false;
+  _jrRafraichir();
+  // Le champ est reconstruit par le rendu : on lui rend le curseur, sinon on
+  // ne peut pas taper deux lettres de suite.
+  const n=document.getElementById('jr-q');
+  if(n){ n.focus(); try{ n.setSelectionRange(n.value.length,n.value.length); }catch(e2){} }
+  return true;
+}
+function jrBasculerTout(){ _jrTout=!_jrTout; _jrRafraichir(); return true; }
+function jrAjouter(){
+  const c=getOwnedClient(currentClientId);
+  if(!c) return false;
+  const t=(document.getElementById('jr-texte')||{}).value||'';
+  const tag=(document.getElementById('jr-tag')||{}).value||null;
+  const r=noteAjouter(currentUser.coachNotes,c.id,t,tag,Date.now());
+  if(!r.ok){ toast(r.raison,'var(--orange)'); return false; }
+  currentUser.coachNotes=r.notes;
+  // saveUser rend faux quand localStorage déborde : la note serait alors dans
+  // le cloud et pas sur l'appareil. On ne montre pas un « ✓ » dans ce cas.
+  const ok=saveUser();
+  _jrQ=''; _jrTout=false;
+  _jrRafraichir();
+  toastEcriture(ok,'Noté','la note est');
+  return true;
+}
+function jrSupprimer(noteId){
+  const c=getOwnedClient(currentClientId);
+  if(!c) return false;
+  // « Pas de corbeille » est une règle de STOCKAGE, pas une raison de détruire
+  // sans avertir. Rien ici ne se récupère.
+  if(!confirm('Supprimer cette note ? Elle ne sera pas récupérable.')) return false;
+  // La recherche est transversale : la note à supprimer n'appartient pas
+  // forcément au fil affiché.
+  let cible=c.id;
+  if(!_notesFil(currentUser.coachNotes,cible).some(n=>n.id===noteId)){
+    const trouve=notesRecherche(currentUser.coachNotes,'').find(o=>o.note.id===noteId);
+    if(!trouve) return false;
+    cible=trouve.athleteId;
+  }
+  const r=noteSupprimer(currentUser.coachNotes,cible,noteId);
+  if(!r.ok){ toast(r.raison,'var(--orange)'); return false; }
+  currentUser.coachNotes=r.notes;
+  const ok=saveUser();
+  _jrRafraichir();
+  toastEcriture(ok,'Note supprimée','la suppression est');
+  return true;
+}
+
 function getOwnedClient(cid,users){
   if(!currentUser) return null;
   if(cid?.startsWith('_code_')){
@@ -9823,6 +10090,7 @@ function openClientDetail(cid,_refresh){
   if(!c) return;
   // Volume de la semaine en cours, calcule avec la classification et les
   // reperes de L ATHLETE.
+  try{ renderJournalCoach(c); }catch(e){}
   try{ renderVolumeCoach(c); }catch(e){}
   try{ renderPlateauxCoach(c); }catch(e){}
   try{ renderDouleurCoach(c); }catch(e){}
@@ -44401,6 +44669,223 @@ function testExercices(){
             ?true:_echec('scoreFatigue a modifié le dossier');})());
         currentUser=_fSauve;
         _fPurge();
+        })();
+        // ── Journal de coach ─────────────────────────────────────────────
+        (()=>{
+        const _jSauve=currentUser, _jCid=currentClientId;
+        const _jT0=new Date('2026-03-02T09:00:00').getTime();
+        // Un dictionnaire de départ, deux athlètes, quatre notes.
+        const _jNotes=()=>({
+          'a1':[{id:'n3',at:_jT0+3000,texte:'Douleur à l\'ÉPAULE droite au développé',tag:'blessure'},
+                {id:'n1',at:_jT0+1000,texte:'Préfère les machines',tag:'perso'}],
+          'a2':[{id:'n2',at:_jT0+2000,texte:'Pas de rack chez lui',tag:'materiel'},
+                {id:'n4',at:_jT0+4000,texte:'Tempo lent sur le squat',tag:'methode'}]});
+        ok('noteAjouter NE MUTE PAS son entrée',(()=>{
+          // La propriété qui compte : l'appelant assigne le résultat. S'il
+          // mutait, une note refusée plus loin serait déjà écrite.
+          const av=_jNotes();
+          const empreinte=JSON.stringify(av);
+          const r=noteAjouter(av,'a1','une note de plus','perso',_jT0+9000);
+          if(!r.ok) return _echec('refusée : '+r.raison);
+          if(JSON.stringify(av)!==empreinte) return _echec('l\'entrée a été modifiée');
+          if(r.notes===av) return _echec('le même objet est rendu');
+          if(r.notes.a1===av.a1) return _echec('le fil est partagé avec l\'entrée');
+          if(r.notes.a1.length!==3) return _echec('fil de '+r.notes.a1.length);
+          if(r.notes.a1[0].id!==r.note.id) return _echec('la note n\'est pas en tête');
+          if(r.notes.a2!==av.a2&&JSON.stringify(r.notes.a2)!==JSON.stringify(av.a2))
+            return _echec('l\'autre fil a été altéré');
+          // noteSupprimer suit le même contrat.
+          const av2=_jNotes(); const e2=JSON.stringify(av2);
+          const d=noteSupprimer(av2,'a1','n1');
+          if(!d.ok) return _echec('suppression refusée');
+          if(JSON.stringify(av2)!==e2) return _echec('la suppression a muté l\'entrée');
+          if(d.notes.a1.length!==1) return _echec('reste '+d.notes.a1.length);
+          // Un fil vidé DISPARAÎT, il ne laisse pas un tableau vide que chaque
+          // PUT réécrirait.
+          const d2=noteSupprimer(noteSupprimer(_jNotes(),'a1','n1').notes,'a1','n3');
+          if('a1' in d2.notes) return _echec('un fil vide subsiste');
+          // Supprimer une note inexistante ne rend pas ok.
+          return noteSupprimer(_jNotes(),'a1','zorglub').ok===false
+            ?true:_echec('une suppression fantôme réussit');})());
+        ok('notesRecherche ignore accents et casse, sur TOUS les fils',(()=>{
+          const n=_jNotes();
+          const r=notesRecherche(n,'EPAULE');
+          if(r.length!==1) return _echec('« EPAULE » rend '+r.length);
+          if(r[0].athleteId!=='a1') return _echec('mauvais athlète');
+          if(notesRecherche(n,'épaule').length!==1) return _echec('l\'accent casse la recherche');
+          if(notesRecherche(n,'ÉpAuLe').length!==1) return _echec('la casse casse la recherche');
+          // Transversale : une requête large ramène les deux athlètes.
+          const tous=notesRecherche(n,'');
+          if(tous.length!==4) return _echec('sans requête : '+tous.length+' au lieu de 4');
+          if(new Set(tous.map(o=>o.athleteId)).size!==2) return _echec('un seul fil est parcouru');
+          // Triée du plus récent au plus ancien, TOUS FILS CONFONDUS.
+          for(let i=1;i<tous.length;i++) if(tous[i].note.at>tous[i-1].note.at)
+            return _echec('l\'ordre n\'est pas décroissant');
+          if(tous[0].note.id!=='n4') return _echec('la plus récente est '+tous[0].note.id);
+          // Un ET, pas un OU.
+          if(notesRecherche(n,'douleur epaule').length!==1) return _echec('deux mots ne trouvent plus');
+          if(notesRecherche(n,'douleur rack').length!==0) return _echec('deux mots élargissent');
+          // L'étiquette est cherchable, et une requête absurde ne rend rien.
+          if(!notesRecherche(n,'materiel').length) return _echec('l\'étiquette n\'est pas cherchable');
+          return notesRecherche(n,'zorglub').length===0
+            ?true:_echec('une requête absurde rend des résultats');})());
+        ok('Un dictionnaire de notes corrompu ne lève AUCUNE exception',(()=>{
+          for(const cn of [null,undefined,0,'',[],'notes',{a1:'texte'},{a1:[null]},
+                           {a1:[{texte:'sans id ni date'}]},{a1:[{id:'x'}]},
+                           {a1:[{id:'x',at:'hier',texte:'t'}]}]){
+            try{
+              if(_notesFil(cn,'a1').length&&!Array.isArray(cn)) return _echec('une entrée invalide est retenue');
+              notesRecherche(cn,'x'); notesDernieres(cn,'a1',3);
+              noteSupprimer(cn,'a1','x');
+              const r=noteAjouter(cn,'a1','texte',null,_jT0);
+              if(!r.ok) return _echec('ajout refusé sur '+JSON.stringify(cn));
+              if(r.notes.a1.length!==1) return _echec('le fil réparé porte '+r.notes.a1.length+' notes');
+            }catch(e){ return _echec('exception sur '+JSON.stringify(cn)+' : '+e.message); }
+          }
+          return true;})());
+        ok('Les bornes du journal : texte, étiquette, quota',(()=>{
+          if(noteAjouter({},'a1','   ',null,_jT0).ok) return _echec('un texte vide passe');
+          if(noteAjouter({},'','du texte',null,_jT0).ok) return _echec('sans athlète, ça passe');
+          // Un élève créé par code n'a pas encore de dossier : sa note serait
+          // orpheline le jour de son inscription.
+          const c=noteAjouter({},'_code_abc','du texte',null,_jT0);
+          if(c.ok) return _echec('une note est posée sur un élève sans dossier');
+          if(!/inscription/.test(c.raison)) return _echec('la raison ne dit pas pourquoi');
+          // Le texte est TRONQUÉ, pas refusé : on ne perd pas ce qui a été écrit.
+          const long=noteAjouter({},'a1','x'.repeat(NOTE_TEXTE_MAX+500),null,_jT0);
+          if(!long.ok) return _echec('un texte long est refusé');
+          if(long.note.texte.length!==NOTE_TEXTE_MAX)
+            return _echec('longueur '+long.note.texte.length);
+          // Une étiquette inconnue devient null, elle n'est pas conservée telle
+          // quelle : la règle RTDB la refuserait et le PUT ENTIER échouerait.
+          if(noteAjouter({},'a1','t','zorglub',_jT0).note.tag!==null)
+            return _echec('une étiquette inconnue est conservée');
+          for(const t of NOTE_TAGS)
+            if(noteAjouter({},'a1','t',t,_jT0).note.tag!==t) return _echec(t+' est perdue');
+          // Quota de fil.
+          const plein={a1:Array.from({length:NOTE_MAX_PAR_ATHLETE},(_,i)=>
+            ({id:'p'+i,at:_jT0+i,texte:'t',tag:null}))};
+          const q=noteAjouter(plein,'a1','encore',null,_jT0);
+          if(q.ok) return _echec('le quota ne bloque pas');
+          // Deux notes dans la MÊME milliseconde ne partagent pas d'identifiant :
+          // sinon la suppression unitaire en effacerait deux.
+          const u1=noteAjouter({},'a1','une',null,_jT0);
+          const u2=noteAjouter(u1.notes,'a1','deux',null,_jT0);
+          return u1.note.id!==u2.note.id
+            ?true:_echec('deux notes partagent l\'identifiant '+u1.note.id);})());
+        ok('notesDernieres rend les n plus récentes, la plus récente en tête',(()=>{
+          const n=_jNotes();
+          const d=notesDernieres(n,'a1',1);
+          if(d.length!==1||d[0].id!=='n3') return _echec('rendu : '+JSON.stringify(d.map(x=>x.id)));
+          if(notesDernieres(n,'a1').length!==2) return _echec('le défaut ne rend pas tout le fil court');
+          if(notesDernieres(n,'a1',99).length!==2) return _echec('n plus grand que le fil');
+          if(notesDernieres(n,'inconnu',3).length) return _echec('un fil inexistant rend des notes');
+          // Et rien de tout cela n'atteint le dossier. La garantie ne vient pas
+          // de notesDernieres mais de _notesFil, qui rend un tableau DÉTACHÉ :
+          // c'est donc lui qu'on épingle. Une première version de ce test
+          // comparait le dossier avant et après l'appel — elle ne pouvait pas
+          // échouer, et une régression délibérée l'a laissée verte.
+          const fil=_notesFil(n,'a2');
+          if(fil===n.a2) return _echec('_notesFil rend le tableau du dossier');
+          fil.sort((a,b)=>b.at-a.at); fil.push({id:'zz',at:0,texte:'x',tag:null}); fil.length=1;
+          if(n.a2.length!==2) return _echec('le fil du dossier a été modifié');
+          if(n.a2[0].id!=='n2') return _echec('le fil du dossier a été trié sur place');
+          const av=JSON.stringify(n.a2);
+          notesDernieres(n,'a2',1);
+          return JSON.stringify(n.a2)===av
+            ?true:_echec('notesDernieres a modifié le dossier');})());
+        ok('ÉTANCHÉITÉ : la note ne peut atteindre aucune vue athlète',(()=>{
+          // Critère central. Trois barrières, et on les éprouve toutes les trois.
+          // 1. coach_public est le SEUL canal coach → athlète. Liste blanche.
+          if(CLOUD.CHAMPS_PROFIL_COACH.indexOf('coachNotes')>=0)
+            return _echec('coachNotes figure dans la liste blanche de coach_public');
+          // 2. _doPushOne retire le champ de tout document qui n'est PAS celui
+          // de l'émetteur — une copie de commodité dans le dossier d'un athlète
+          // y serait lisible par lui.
+          if(!/email!==currentUser\.email\) delete safe\.coachNotes/.test(String(CLOUD._doPushOne)))
+            return _echec('la garde de _doPushOne a disparu');
+          // 3. Aucune vue athlète ne lit le journal.
+          for(const f of [blocForme,_blocContrainteSeance,renderDouleurAthlete,
+                          renderFormeSeance,_manifesteExport,_csvSeances,_csvPesees]){
+            const t=String(f);
+            if(/coachNotes|notesRecherche|notesDernieres|renderJournalCoach|_notesFil/.test(t))
+              return _echec((f.name||'?')+' lit le journal');
+          }
+          // Et un dossier d'athlète SÉRIALISÉ ne porte jamais la clé, même si
+          // une copie fautive l'y avait glissée.
+          const athlete={id:'a1',email:'a@t',role:'athlete',coachNotes:{a1:[{id:'n1',at:1,texte:'SECRET',tag:null}]}};
+          const safe={...athlete};
+          if(athlete.email!=='c@t') delete safe.coachNotes;
+          if(JSON.stringify(safe).indexOf('SECRET')>=0)
+            return _echec('le secret survit à la sérialisation');
+          return true;})());
+        ok('L\'export athlète NOMME les notes qu\'il ne contient pas',(()=>{
+          // Une note écrite PAR le coach mais PORTANT SUR l'athlète est la
+          // donnée personnelle de l'athlète (art. 15), pas celle d'un tiers.
+          // La ranger sous « profil de ton coach » rendrait le manifeste FAUX,
+          // or il existe précisément pour dire ce qui manque et pourquoi.
+          const e=EXPORT_NON_INCLUS.filter(x=>/note/i.test(x.categorie))[0];
+          if(!e) return _echec('les notes ne sont pas déclarées');
+          if(!/coach/i.test(e.raison)) return _echec('la raison ne dit pas où elles sont');
+          if(!/demande/i.test(e.raison)) return _echec('elle ne dit pas quoi faire');
+          // Et le manifeste la porte réellement.
+          const m=_manifesteExport({profil:{},prive:{},sources:{},notes:[]});
+          return (m.categories_non_incluses||[]).some(x=>/note/i.test(x.categorie))
+            ?true:_echec('le manifeste ne la reprend pas');})());
+        ok('Le coach est prévenu AU MOMENT où il écrit',(()=>{
+          // Une obligation qu'il faut aller chercher dans privacy.html ne
+          // prévient personne. Et la mention ne doit pas laisser croire que
+          // l'export s'en charge : il ne le peut pas.
+          if(!/droit d\'acc/.test(NOTE_MENTION)) return _echec('le droit d\'accès n\'est pas dit');
+          if(!/ne peut pas le faire/.test(NOTE_MENTION))
+            return _echec('la mention laisse croire que RepCore s\'en charge');
+          currentUser={id:'c9',email:'c9@t',role:'coach',coachNotes:{}};
+          const u={};u['a@t']={id:'aj1',email:'a@t',role:'athlete',coachId:'c9',fname:'Léa'};
+          u['c9@t']=currentUser;
+          DB.set('users',u); currentClientId='aj1';
+          // L'ÉLÉMENT RÉEL de la fiche, pas un div fabriqué : deux nœuds de même
+          // identifiant et getElementById rend le premier du document — le test
+          // écrirait dans l'un et lirait l'autre. S'en servir prouve du même coup
+          // que le bloc est câblé dans l'écran.
+          const z=document.getElementById('ccd-journal');
+          if(!z) return _echec('le bloc journal n\'existe pas dans la fiche client');
+          const _zAvant=z.innerHTML;
+          try{
+            renderJournalCoach(u['a@t']);
+            if(z.innerText.indexOf('droit d\'accès')<0||z.innerText.indexOf('ne peut pas le faire')<0)
+              return _echec('la mention n\'est pas rendue');
+            if(!/Aucune note/.test(z.innerText)) return _echec('l\'état vide ne se dit pas');
+            // Un élève sans dossier : pas de champ de saisie du tout.
+            renderJournalCoach({id:'_code_zz',fname:'X'});
+            if(z.querySelector('#jr-texte')) return _echec('un élève sans dossier peut être noté');
+            if(!/pas encore de dossier/.test(z.innerText)) return _echec('on ne dit pas pourquoi');
+            // Et le journal n'est rendu QUE pour un coach.
+            currentUser={id:'x',email:'x@t',role:'athlete'};
+            renderJournalCoach(u['a@t']);
+            return z.innerHTML===''
+              ?true:_echec('le journal se rend pour un athlète');
+          } finally { z.innerHTML=_zAvant; }})());
+        ok('urgencyScore rend la MÊME valeur avec et sans notes',(()=>{
+          // Règle 4. Une note n'est pas un signal. Le stockage côté coach le
+          // garantit — urgencyScore reçoit le dossier de l'ATHLÈTE — mais on
+          // l'éprouve plutôt que de le supposer.
+          const base=()=>({id:'u1',email:'u@t',role:'athlete',sessions:[],
+            bilans:[{date:Date.now()}],status:'COACHING_SUIVI',lastActivity:Date.now()});
+          const sans=base();
+          const avec=Object.assign(base(),{coachNotes:{u1:[
+            {id:'n1',at:Date.now(),texte:'douleur épaule grave',tag:'blessure'}]}});
+          try{ _cacheSignaux.clear(); }catch(e){}
+          const a=urgencyScore(sans);
+          try{ _cacheSignaux.clear(); }catch(e){}
+          const b=urgencyScore(avec);
+          if(a!==b) return _echec('sans '+a+', avec '+b);
+          // Et le code d'urgence ne mentionne jamais le journal.
+          for(const f of [urgencyScore,signauxEntrainement]){
+            if(/coachNotes|notesRecherche|_notesFil/.test(String(f)))
+              return _echec((f.name||'?')+' lit le journal');
+          }
+          return true;})());
+        currentUser=_jSauve; currentClientId=_jCid;
         })();
         ok('fichesBanque rend un tableau vide, jamais null',(()=>{
           const sauve=_banque;
