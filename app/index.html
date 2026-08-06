@@ -30491,6 +30491,7 @@ function loadSteps(containerId='steps-content'){
     </div>
 
     ${histHtml}
+    ${_htmlCadreImportCapture()}
   `;
 }
 // ── Journal de pas : point d'écriture unique ────────────────────────────────
@@ -33114,6 +33115,67 @@ function _appliquerCaptureStats(analyse){
   }
   return res;
 }
+// Cadre commun aux deux pages. Le MÊME bloc accepte les deux types de capture :
+// la nature est déduite du contenu, pas de la page d'où il est ouvert. Un élève
+// qui envoie sa capture de sommeil depuis la page Pas obtient quand même ses
+// nuits, plutôt qu'un refus qu'il ne comprendrait pas.
+// AUCUN identifiant ici, volontairement : l'écran Lifestyle rend les pages Pas
+// et Sommeil en même temps, donc ce cadre existe en DEUX exemplaires dans le
+// document. Des id les auraient dupliqués, et getElementById aurait toujours
+// rendu le premier — le bouton « Lecture en cours… » se serait affiché sur
+// l'autre page. On navigue donc de proche en proche : le bouton déclenche le
+// champ qui le précède, le gestionnaire retrouve le bouton qui le suit.
+function _htmlCadreImportCapture(){
+  return `
+    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:14px;animation:fadeInUp .5s ease">
+      <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:9px">Pas noté tes stats ?</div>
+      <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:11px">
+        Envoie la capture d'écran de ton application de montre — pas ou sommeil, vue 7 jours de préférence : les chiffres sont lus et remplis tout seuls.
+        <b style="color:#8a8a8a">La capture est lue sur ton téléphone. Elle n'est ni envoyée ni conservée.</b>
+      </div>
+      <input type="file" accept="image/*" style="display:none" onchange="importerCaptureStats(this)">
+      <button onclick="this.previousElementSibling.click()" style="width:100%;padding:13px;background:linear-gradient(180deg,#131313,#0c0c0c);border:1px solid #2a2a2a;color:#c9c9c9;border-radius:9px;font-family:Montserrat,sans-serif;font-size:12px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer">Envoyer une capture</button>
+    </div>`;
+}
+async function importerCaptureStats(input){
+  const f=input&&input.files&&input.files[0];
+  input.value='';
+  if(!f) return;
+  const btn=input.nextElementSibling;
+  const libelle=btn?btn.textContent:'';
+  // La première lecture télécharge le moteur, et la reconnaissance elle-même
+  // prend quelques secondes sur un téléphone. Sans ce retour visuel, l'athlète
+  // croit que rien ne se passe et renvoie sa capture une deuxième fois.
+  if(btn){ btn.disabled=true; btn.textContent='Lecture en cours…'; }
+  try{
+    const dataUrl=await new Promise((res,rej)=>{
+      const r=new FileReader();
+      r.onload=()=>res(r.result);
+      r.onerror=()=>rej(new Error('Image illisible'));
+      r.readAsDataURL(f);
+    });
+    const texte=await _lireCaptureStats(dataUrl);
+    const analyse=_analyserCaptureStats(texte,new Date());
+    if(!analyse.jours.length){
+      return toast('Je n\'ai rien pu lire sur cette image. Essaie la vue 7 jours de ton application de montre.','var(--orange)');
+    }
+    const r=_appliquerCaptureStats(analyse);
+    if(!r.ecrits) return toast('Rien à enregistrer sur cette capture.','var(--orange)');
+    const quoi=analyse.type==='sommeil'?'nuit':'journée';
+    const fmt=d=>new Date(d+'T12:00:00').toLocaleDateString('fr-FR',{day:'numeric',month:'short'});
+    const plage=r.du===r.au?fmt(r.du):fmt(r.du)+' → '+fmt(r.au);
+    // L'écrasement n'est jamais muet : sans écran de validation, ce compte est
+    // la seule chose qui dit à l'athlète qu'une saisie a été remplacée.
+    const remplacees=r.remplaces?', dont '+r.remplaces+' remplacée'+(r.remplaces>1?'s':''):'';
+    toastEcriture(saveUser(),
+      r.ecrits+' '+quoi+(r.ecrits>1?'s':'')+' ('+plage+')'+remplacees,'tes stats sont');
+    _rerenderLifestyle();
+  }catch(err){
+    toast(err&&err.message?err.message:'Lecture impossible','var(--orange)');
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent=libelle; }
+  }
+}
 function _recordSteps(dateStr,count){
   const n=parseInt(count,10);
   // 0 est une valeur légitime saisie à la main (« je n'ai pas marché »), d'où
@@ -33294,6 +33356,7 @@ function loadSleep(containerId='sleep-content'){
     </div>
     ${_htmlCafeineNuits(currentUser,weekDates)}
     ${histHtml}
+    ${_htmlCadreImportCapture()}
   `;
 }
 // Jumelle de _recordSteps : une date, une nuit, écrasement plutôt qu'empilement.
