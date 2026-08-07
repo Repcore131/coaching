@@ -600,17 +600,41 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
 .p4{width:100%;border-collapse:collapse;table-layout:fixed}
 .p4 th{background:var(--p4);color:#0a0a0a;font-size:9px;font-weight:900;letter-spacing:.7px;text-transform:uppercase;padding:5px 7px;text-align:left}
 .p4 th:nth-child(2n){text-align:right}
-.p4 td{padding:5px 7px;border-top:1px solid rgba(255,255,255,.05);vertical-align:top}
-.p4 .p4-n{width:31%;font-size:11px;font-weight:600;line-height:1.3;color:#e8e8e8}
-.p4 .p4-q{width:19%;text-align:right;font-size:12px;font-weight:800;line-height:1.3;color:#fff;white-space:nowrap}
+.p4 td{padding:4px 7px;vertical-align:middle}
+/* Zébrage : deux gris très proches, l'un un cran plus clair que l'autre. Le
+   filet horizontal a disparu — il faisait double emploi avec l'alternance, et
+   deux séparateurs pour une seule frontière alourdissent une table déjà dense.
+   L'écart est volontairement faible (.045 contre .012) : il doit guider l'œil
+   d'une ligne à l'autre, pas découper la table en bandes. */
+.p4 tbody tr:nth-child(odd){background:rgba(255,255,255,.045)}
+.p4 tbody tr:nth-child(even){background:rgba(255,255,255,.012)}
+/* UNE SEULE LIGNE PAR ALIMENT. Les noms Ciqual sont des libellés de
+   nomenclature, pas des noms d'usage : « Thon à l'huile de tournesol, entier,
+   appertisé, égoutté » tenait sur six lignes et faisait dérailler tout le
+   tableau. Aucune taille de police ne fait tenir 54 caractères dans 100 px —
+   la coupure est donc assumée, avec le nom complet dans l'attribut title.
+   La colonne de nom prend deux tiers de sa moitié : la quantité fait « 250 g »
+   et n'a besoin de rien de plus. */
+/* Les largeurs se posent sur les EN-TÊTES, pas sur les cellules : en
+   table-layout:fixed, le navigateur ne regarde que la première rangée et
+   ignore tout ce qui est déclaré plus bas. Posées sur .p4-n/.p4-q, elles
+   n'avaient aucun effet et les quatre colonnes tombaient à 25 % chacune —
+   « Jambon sec » se faisait tronquer dans 57 px. */
+.p4 th:nth-child(1),.p4 th:nth-child(3){width:34%}
+.p4 th:nth-child(2),.p4 th:nth-child(4){width:16%}
+.p4 .p4-n{font-size:10px;font-weight:600;line-height:1.4;color:#e8e8e8;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.p4 .p4-q{text-align:right;font-size:11px;font-weight:800;line-height:1.4;color:#fff;white-space:nowrap}
 /* Filet vertical entre les deux moitiés, sinon l'œil saute d'une paire à
    l'autre sans savoir laquelle va avec laquelle. */
 .p4 td:nth-child(3),.p4 th:nth-child(3){border-left:1px solid rgba(255,255,255,.09)}
-/* Variante « texte » : la table des fruits porte des quantités rédigées
-   (« 30 à 35 raisins (~95 g) »), qui doivent pouvoir revenir à la ligne. */
+/* Variante « texte » : la table des fruits porte des quantités RÉDIGÉES
+   (« 30 à 35 raisins (~95 g) »). Elles gardent le droit de revenir à la ligne —
+   les tronquer ferait disparaître le grammage, qui est toute l'information.
+   Leurs noms, eux, sont courts et tiennent sur une ligne comme les autres. */
+.p4-txt th:nth-child(1),.p4-txt th:nth-child(3){width:27%}
+.p4-txt th:nth-child(2),.p4-txt th:nth-child(4){width:23%}
 .p4-txt .p4-q{white-space:normal;font-size:10px;font-weight:600;color:var(--sub);text-align:left}
-.p4-txt .p4-n{width:26%}
-.p4-txt .p4-q{width:24%}
 .row-inactive{opacity:.5}
 .row-alert{background:var(--danger-bg)!important;border-left:3px solid var(--red)}
 .row-target{background:var(--red);color:#fff;border-radius:4px}
@@ -26317,10 +26341,17 @@ function _htmlPlanAthlete(user){
   // liste de 28 glucides tenait sur 28 lignes, elle en occupe 14. La quantité
   // affichée est celle à consommer À CE REPAS — pas la valeur pour 100 g, qui
   // sert au calcul et pas à l'athlète.
+  // Le libellé Ciqual porte parfois « (aliment moyen) » : une convention de la
+  // table Anses qui désigne l'entrée moyennée d'une famille. Elle ne dit rien à
+  // l'athlète et coûte seize caractères sur une ligne qui en tient une
+  // vingtaine. Seule cette parenthèse-là est retirée — les autres qualificatifs
+  // (« cru », « égoutté ») changent le poids à peser et restent.
+  const nomCourt=n=>String(n||'').replace(/\s*\(aliment moyen\)/gi,'').trim();
   const tableau4=(lignes,couleur,texte)=>{
     if(!lignes.length) return `<div style="font-size:11px;color:var(--text-dim);line-height:1.6;padding:6px 2px">Ton coach n'a pas encore posé de sources ici.</div>`;
+    // title porte le nom ENTIER : la ligne est coupée, la donnée ne l'est pas.
     const cell=l=>l
-      ? `<td class="p4-n">${escapeHtml(l.nom)}</td><td class="p4-q"${l.alerte?' style="color:var(--orange)"':''}>${l.qte}</td>`
+      ? `<td class="p4-n" title="${escapeHtml(l.nom)}">${escapeHtml(nomCourt(l.nom))}</td><td class="p4-q"${l.alerte?' style="color:var(--orange)"':''}>${l.qte}</td>`
       : `<td class="p4-n"></td><td class="p4-q"></td>`;
     let corps='';
     for(let i=0;i<lignes.length;i+=2) corps+=`<tr>${cell(lignes[i])}${cell(lignes[i+1])}</tr>`;
@@ -60485,7 +60516,11 @@ function testExercices(){
           // qui l'appelle. Elle est donc rendue autant de fois qu'appelée,
           // plus une en pied — ce qui ne coûte rien à l'écran puisque tout
           // est replié, et épargne un aller-retour à chaque fruit.
-          const n=(h.match(/Pamplemousse/g)||[]).length;
+          // Comptage par le DOM, pas par chaîne : le nom de l'aliment figure
+          // AUSSI dans l'attribut title — la ligne est coupée, la donnée non —
+          // donc un match textuel compte chaque table deux fois.
+          const dd=document.createElement('div'); dd.innerHTML=h;
+          const n=dd.querySelectorAll('table.p4-txt').length;
           if(n!==3) return _echec('table rendue '+n+' fois, attendu 3 (2 fruits + le pied)');
           if(/voir la table/.test(h)) return _echec('l\'ancien renvoi est resté');
           // Repliée : rien de la table ne doit s'afficher sans un geste.
