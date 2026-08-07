@@ -27250,7 +27250,17 @@ function _htmlPlanAthlete(user){
     const lignes=r.lignes.map(x=>{
       if(x.note) return `<div class="plan-note">${escapeHtml(x.nom)}</div>`;
       if(x.source) return cartouche(x.nom,x.source);
-      if(x.fruit) return cartoucheFruit(x.nom);
+      // La ligne de fruit est une LIGNE, pas une table. Elle l'a été : la table
+      // s'ouvrait sous chaque ligne qui l'appelle, pour éviter l'aller-retour
+      // vers le pied de programme. Mais un plan qui place un fruit à trois
+      // repas affichait alors la même table de vingt lignes quatre fois — trois
+      // fois dans les repas, une fois en pied. Kevin l'a signalé comme un
+      // défaut. Elle est donc rendue UNE SEULE FOIS, en pied de programme, où
+      // le tableur la met déjà et où elle sert aussi de référence générale.
+      if(x.fruit) return `<div class="plan-l">
+        <div class="plan-nom" style="color:${PL_COUL.fruit}">${escapeHtml(x.nom)}</div>
+        <div style="font-size:10px;color:var(--text-faint);flex-shrink:0">table en pied</div>
+      </div>`;
       const q=_planNb(x.item&&x.item.q);
       const u=planUniteItem(x.item);
       return `<div class="plan-l">
@@ -61439,7 +61449,7 @@ function testExercices(){
                                   [3,'L','L'],[2,'œuf','œufs'],[1,'g','g']])
             if(f(n,u)!==att) faux.push(n+' '+u+' → '+f(n,u));
           return faux.length?_echec(faux.join(', ')):true;})());
-        ok('La ligne de fruit OUVRE la table sous elle, repliée',(()=>{
+        ok('La table des fruits n\'est rendue QU\'UNE FOIS, en pied',(()=>{
           const u=_pa({nutrition:Object.assign(_macros({kcal:2600,p:200,g:300,l:70,f:36}),
             {plan:{squelette:[{id:'f1',repas:'collation1',fruit:true},
               {id:'f2',repas:'petit_dej',fruit:true},
@@ -61449,18 +61459,20 @@ function testExercices(){
           let h='';
           try{ currentUser=u; _ciqualDB=Object.keys(_AL).map(k=>_AL[k]); h=_htmlPlanAthlete(u); }
           finally{ currentUser=_s; _ciqualDB=_sDB; }
-          // RÈGLE INVERSÉE, sur demande explicite du coach. « Voir la table »
-          // renvoyait en pied de programme : il fallait quitter le repas,
-          // chercher, puis revenir. La table s'ouvre désormais SOUS la ligne
-          // qui l'appelle. Elle est donc rendue autant de fois qu'appelée,
-          // plus une en pied — ce qui ne coûte rien à l'écran puisque tout
-          // est replié, et épargne un aller-retour à chaque fruit.
+          // RÈGLE RE-INVERSÉE, sur signalement de Kevin. Elle avait été mise
+          // sous CHAQUE ligne de fruit pour épargner l'aller-retour vers le
+          // pied ; conséquence non vue à l'époque : un plan qui place un fruit
+          // à trois repas affichait la même table de vingt lignes quatre fois.
+          // Une seule table, en pied, là où le tableur la met.
           // Comptage par le DOM, pas par chaîne : le nom de l'aliment figure
           // AUSSI dans l'attribut title — la ligne est coupée, la donnée non —
           // donc un match textuel compte chaque table deux fois.
           const dd=document.createElement('div'); dd.innerHTML=h;
           const n=dd.querySelectorAll('table.p4-txt').length;
-          if(n!==3) return _echec('table rendue '+n+' fois, attendu 3 (2 fruits + le pied)');
+          if(n!==1) return _echec('table rendue '+n+' fois, attendu 1 (le pied seul)');
+          // Les lignes de fruit restent VISIBLES dans leur repas.
+          if((h.match(/Une portion de fruit au choix/g)||[]).length!==2)
+            return _echec('les deux lignes de fruit ne sont pas toutes les deux affichées');
           if(/voir la table/.test(h)) return _echec('l\'ancien renvoi est resté');
           // Repliée : rien de la table ne doit s'afficher sans un geste.
           if(/<details class="plan-src"\s+open/.test(h)) return _echec('un volet est ouvert par défaut');
