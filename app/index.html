@@ -602,7 +602,13 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
    des tableurs d'origine. Le texte de l'en-tête est SOMBRE : sur du jaune ou
    du vert plein, du blanc tombe sous le seuil de contraste. */
 .p4{width:100%;border-collapse:collapse;table-layout:fixed}
-.p4 th{background:var(--p4);color:#0a0a0a;font-size:9px;font-weight:900;letter-spacing:.4px;text-transform:uppercase;padding:5px 5px;text-align:left}
+/* overflow:hidden sur l'en-tête est un GARDE-FOU, pas un ajustement.
+   « QUANTITÉ » demandait 58 px pour 42 disponibles : le libellé sortait de sa
+   cellule et se posait par-dessus le suivant, les quatre titres se
+   chevauchaient. Il est raccourci en « QTÉ » (24 px), et cette règle garantit
+   qu'aucun libellé futur ne pourra recommencer — il sera coupé, jamais
+   superposé. */
+.p4 th{background:var(--p4);color:#0a0a0a;font-size:9px;font-weight:900;letter-spacing:.4px;text-transform:uppercase;padding:5px 5px;text-align:left;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .p4 th:nth-child(2n){text-align:right}
 .p4 td{padding:4px 5px;vertical-align:middle}
 /* Zébrage : deux gris très proches, l'un un cran plus clair que l'autre. Le
@@ -26373,7 +26379,7 @@ function _htmlPlanAthlete(user){
     let corps='';
     for(let i=0;i<lignes.length;i+=2) corps+=`<tr>${cell(lignes[i])}${cell(lignes[i+1])}</tr>`;
     return `<table class="p4${texte?' p4-txt':''}" style="--p4:${couleur}">
-      <thead><tr><th>Aliment</th><th>Quantité</th><th>Aliment</th><th>Quantité</th></tr></thead>
+      <thead><tr><th>Aliment</th><th>Qté</th><th>Aliment</th><th>Qté</th></tr></thead>
       <tbody>${corps}</tbody></table>`;
   };
   const listeSources=(macro)=>{
