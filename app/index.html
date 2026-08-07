@@ -26110,6 +26110,11 @@ function planAlertes(plan,porteur,chercher){
 let _cplPlan=null;
 let _cplCible=null;      // ce que la recherche d'aliment va remplir
 let _cplPliage={};       // repas repliés, purement visuel
+// Catalogues dépliés, par macro. Il FAUT s'en souvenir : le bloc des sources
+// est repeint à chaque frappe pour recalculer les grammages, et un <details>
+// se refermerait sous les doigts du coach à chaque chiffre saisi ailleurs.
+let _cplSrcOuvert={};
+function cplNoterSources(macro,ouvert){ _cplSrcOuvert[macro]=!!ouvert; }
 let _cplNeuf=false;      // la composition vient d'un modèle, pas encore relue
 
 function _cplId(){
@@ -26475,7 +26480,6 @@ function _cplHtmlApercu(){
   const cib=planCiblesJour(c,true,null);
   const couv=planCouverture(_cplPlan);
   const rest=planRestant(cib,couv);
-  const src=planSources(_cplPlan,rest);
   if(!(cib.kcal>0))
     return `<div style="font-size:11px;color:var(--orange);line-height:1.6">Aucun objectif enregistré pour cet athlète : fixe d'abord ses macros sur sa fiche, les grammages en découlent.</div>`;
   const lig=(lib,cible,couvert,restant,unite)=>`
@@ -26489,17 +26493,12 @@ function _cplHtmlApercu(){
   const bandeauPalier=pal
     ? `<div style="font-size:10px;color:var(--text-faint);line-height:1.5;margin-bottom:8px">Palier « ${escapeHtml(pal.lib)} » · ×${String(pal.mult).replace('.',',')} · ${ordinalSemaine(pal.semaine)} de la phase${cib.plancherAtteint?' · relevé au plancher calorique':''}. Le multiplicateur agit sur les GLUCIDES : protéines et lipides restent ceux que tu as fixés.</div>`
     : `<div style="font-size:10px;color:var(--text-faint);line-height:1.5;margin-bottom:8px">Aucune phase déclarée pour cet athlète : les cibles sont celles de sa fiche, sans multiplicateur.</div>`;
-  const bloc=(titre,b,macro)=>{
-    if(!b.liste.length) return '';
-    return `<div style="margin-top:10px">
-      <div style="font-size:10px;font-weight:800;color:${PLAN_COULEURS[macro]};letter-spacing:1px;margin-bottom:4px">${titre} · réparti sur ${b.nSources} repas</div>
-      ${b.liste.slice(0,4).map(s=>`<div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;color:#ccc;padding:2px 0">
-        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(s.nom)}</span>
-        <span style="font-weight:800;color:${s.excessif?'var(--orange)':'#fff'};flex-shrink:0">${s.q==null?'—':Math.round(s.q)+' g'}</span>
-      </div>`).join('')}
-      ${b.liste.length>4?`<div style="font-size:10px;color:var(--text-faint);margin-top:2px">+ ${b.liste.length-4} autre${b.liste.length-4>1?'s':''}</div>`:''}
-    </div>`;
-  };
+  // L'aperçu montrait ici les quatre premières sources de chaque macro, suivies
+  // d'un « + N autres ». C'était une version tronquée des deux tableaux du bas
+  // de l'écran, qui portent maintenant la liste ENTIÈRE avec les mêmes
+  // grammages : deux affichages du même chiffre, dont un incomplet. Seul le
+  // tableau reste. L'aperçu garde ce qu'il est seul à dire — cible, couvert,
+  // restant.
   return `<div class="plan-card" style="margin-bottom:0">
     <div class="plan-titre"><span class="plan-titre-t">Aperçu · jour d'entraînement</span></div>
     <div class="plan-corps" style="padding-top:10px">
@@ -26514,8 +26513,6 @@ function _cplHtmlApercu(){
     ${lig('GLUCIDES',cib.c||0,couv.c,rest.c||0,' g')}
     ${lig('LIPIDES',cib.l||0,couv.l,rest.l||0,' g')}
     ${lig('CALORIES',cib.kcal||0,couv.kcal,(cib.kcal||0)-couv.kcal,'')}
-    ${bloc('Sources de protéines',src.proteines,'p')}
-    ${bloc('Sources de glucides',src.glucides,'c')}
     </div>
   </div>`;
 }
@@ -26564,7 +26561,9 @@ function _cplHtmlSources(){
       <div class="plan-corps">
       <div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin:7px 0 6px">Le restant se divise par ${n} repas. L'athlète permute librement dans cette liste sans dérégler ses macros.</div>
       ${table}
-      <div style="font-size:9px;color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin:13px 0 1px">Modifier le catalogue</div>
+      <details class="plan-src"${_cplSrcOuvert[macro]?' open':''} ontoggle="cplNoterSources('${macro}',this.open)">
+        <summary style="color:var(--sub)">Modifier le catalogue<span class="plan-src-nb">${ids.length}</span></summary>
+        <div class="plan-src-liste">
       ${ids.map((s,i)=>{
         const r=planSourceRef(s,macro);
         const per=r?r.per100:null;
@@ -26581,6 +26580,8 @@ function _cplHtmlSources(){
       }).join('')}
       <button class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:10px;letter-spacing:.5px"
         onclick="ouvrirRecherchePlan({mode:'source',macro:'${macro}'})">+ Ajouter une source</button>
+        </div>
+      </details>
       </div>
     </div>`;
   };
