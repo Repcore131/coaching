@@ -10311,6 +10311,19 @@ async function supprimerMessageCanal(msgId){
 }
 
 function openWaGroupe(rowIdx){
+  // RepCore n envoie rien : il ouvre des conversations, une par athlete.
+  // Le plafond protege d un geste qu on ne pourrait plus arreter.
+  try{
+    if(!currentUser.journalGroupe) currentUser.journalGroupe=[];
+    const _dest=getClients().filter(c=>c&&!c._fromCode);
+    const _g=templateEnvoiGroupe(_dest,currentUser.journalGroupe);
+    if(!_g.ok){
+      toast(_g.demandes+' athlètes : au-delà de '+_g.max+', prépare-les en deux fois.','var(--orange)');
+      return false;
+    }
+    if(currentUser.journalGroupe.length>50) currentUser.journalGroupe=currentUser.journalGroupe.slice(-50);
+    saveUser();
+  }catch(e){}
   const source=(typeof rowIdx==='number'&&window._todoRows&&window._todoRows[rowIdx])
     ?window._todoRows[rowIdx]:null;
   const tous=getClients().filter(c=>!c._fromCode);
@@ -31700,15 +31713,175 @@ const QC_BILAN_DEFAULTS=[
   {label:'Écarts',text:"Les écarts ne sont pas un problème à cette fréquence."},
   {label:'Mesures',text:"Pense à reprendre les mesures dans les mêmes conditions."}
 ];
+
+// ── La bibliothèque, côté écran ───────────────────────────────────────────
+// UN SEUL système : _getQC ne lit plus `quickComments` mais la bibliothèque de
+// modèles, en la migrant à la première lecture. Les chips existantes et
+// insertQC ne changent pas de forme — ce sont les mêmes appels, avec une autre
+// source. C'est ce qui permet d'absorber sans rien casser.
+const TPL_CAT_LIB=Object.freeze({technique:'Technique',motivation:'Motivation',
+  nutrition:'Nutrition',administratif:'Administratif',absence:'Absence'});
+// Le contexte de la zone de composition. Rempli par qui ouvre la feuille :
+// c'est lui qui sait de quel exercice et de quel athlète on parle.
+let _tplContexte={};
+function tplContexte(c){ _tplContexte=c||{}; }
+
+function _tplListe(){
+  if(!currentUser) return [];
+  if(!Array.isArray(currentUser.msgTemplates)||!currentUser.msgTemplates.length){
+    currentUser.msgTemplates=templateMigrerCommentaires(currentUser);
+    try{ saveUser(); }catch(e){}
+  }
+  return currentUser.msgTemplates.slice().sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+}
+// La feuille « Modèles ». Rangée par catégorie, recherche par TITRE — le corps
+// n'est pas cherché : on cherche le modèle qu'on connaît, pas un mot perdu.
+function ouvrirModeles(cible){
+  const l=_tplListe();
+  window._tplCible=cible||'vc-general';
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 18px 22px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">
+    <h2 style="margin-bottom:2px">Modèles</h2>
+    <p class="sub" style="font-size:11.5px;margin-bottom:10px">Le texte reste modifiable après insertion : rien ne part sans que tu l'aies relu.</p>
+    <input id="tpl-rech" placeholder="Rechercher un titre…" oninput="_tplFiltrer()" autocomplete="off"
+      style="width:100%;font-size:14px;padding:10px 12px;box-sizing:border-box;margin-bottom:10px">
+    <div id="tpl-liste"></div>
+    <button class="btn btn-outline" style="margin-top:12px;width:100%" onclick="ouvrirGestionModeles()">Gérer mes modèles</button>
+    <button class="btn btn-outline" style="margin-top:8px;width:100%" onclick="closeModal()">Fermer</button>
+  </div></div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+  _tplFiltrer();
+}
+function _tplFiltrer(){
+  const z=document.getElementById('tpl-liste');
+  if(!z) return;
+  const q=((document.getElementById('tpl-rech')||{}).value||'').toLowerCase().trim();
+  const l=_tplListe().filter(t=>!q||String(t.titre||'').toLowerCase().indexOf(q)>=0);
+  if(!l.length){
+    z.innerHTML=`<div class="sub" style="font-size:12px;padding:14px 2px;line-height:1.6">${q?'Aucun modèle ne porte ce titre.':'Aucun modèle. Crée le premier depuis « Gérer mes modèles ».'}</div>`;
+    return;
+  }
+  const parCat={};
+  for(const t of l) (parCat[t.cat]=parCat[t.cat]||[]).push(t);
+  z.innerHTML=Object.keys(TPL_CAT_LIB).filter(c=>parCat[c]).map(c=>`
+    <div style="font-size:9px;color:var(--sub);letter-spacing:1.6px;font-weight:800;text-transform:uppercase;margin:12px 0 6px">${escapeHtml(TPL_CAT_LIB[c])}</div>
+    ${parCat[c].map(t=>{
+      const v=templateVariables(t.corps);
+      return `<button type="button" onclick="tplInserer('${escapeHtml(t.id)}')"
+        style="width:100%;text-align:left;min-height:44px;padding:9px 11px;margin-bottom:6px;border-radius:9px;cursor:pointer;
+          background:#111;border:1px solid #2b2b2b;color:#ddd;font-family:Montserrat,sans-serif">
+        <div style="font-size:12.5px;font-weight:800;color:#fff">${escapeHtml(t.titre)}</div>
+        <div style="font-size:11px;color:var(--sub);line-height:1.5;margin-top:3px">${escapeHtml(t.corps)}</div>
+        ${v.length?`<div style="font-size:10px;color:var(--text-faint);margin-top:4px">Variables : ${v.map(x=>escapeHtml(x)).join(', ')}</div>`:''}
+      </button>`;}).join('')}`).join('');
+}
+// L'INSERTION résout les variables. Une variable non résolue ne bloque pas
+// l'insertion — elle bloque l'ENVOI, et le champ est surligné pour qu'on la
+// voie. « Bravo {prénom} » ne doit jamais partir tel quel.
+function tplInserer(id){
+  const t=_tplListe().find(x=>x&&x.id===id);
+  if(!t) return false;
+  const cible=window._tplCible||'vc-general';
+  const ta=document.getElementById(cible);
+  if(!ta) return false;
+  const r=templateResoudre(t.corps,_tplContexte);
+  ta.value=templateInserer(ta.value,t,_tplContexte);
+  closeModal();
+  ta.focus();
+  if(r.manquantes.length){
+    _tplSurligner(ta,true);
+    toast('À compléter : '+r.manquantes.join(', '),'var(--orange)');
+  } else _tplSurligner(ta,false);
+  return true;
+}
+function _tplSurligner(ta,ko){
+  if(!ta) return;
+  ta.style.borderColor=ko?'var(--orange)':'';
+  ta.style.boxShadow=ko?'0 0 0 2px rgba(245,158,11,.25)':'';
+}
+// Garde-fou d'envoi. Appelé par les écrans qui envoient : tant qu'une variable
+// reconnue subsiste dans le texte, on refuse et on surligne.
+function tplVerifierAvantEnvoi(cible){
+  const ta=document.getElementById(cible);
+  if(!ta) return true;
+  const r=templateResoudre(ta.value,{});
+  const reste=templateVariables(ta.value);
+  if(!reste.length){ _tplSurligner(ta,false); return true; }
+  _tplSurligner(ta,true);
+  ta.focus();
+  toast('Une variable n\'est pas remplie : '+reste.join(', '),'var(--orange)');
+  return false;
+}
+// ── Gestion : créer, modifier, supprimer ──────────────────────────────────
+function ouvrirGestionModeles(){
+  closeModal();
+  const l=_tplListe();
+  const opts=(sel)=>Object.keys(TPL_CAT_LIB).map(c=>`<option value="${c}"${c===sel?' selected':''}>${escapeHtml(TPL_CAT_LIB[c])}</option>`).join('');
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 18px 22px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">
+    <h2 style="margin-bottom:2px">Mes modèles</h2>
+    <p class="sub" style="font-size:11.5px;margin-bottom:12px">Variables reconnues : {prénom}, {exercice}, {séance}, {charge}. Elles sont remplies au moment où tu insères le modèle.</p>
+    ${l.map(t=>`<div style="border:1px solid var(--border);border-radius:10px;padding:9px 10px;margin-bottom:8px">
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="flex:1;min-width:0;font-size:12.5px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(t.titre)}</div>
+        <span style="flex-shrink:0;font-size:9px;color:var(--sub);letter-spacing:1px;text-transform:uppercase">${escapeHtml(TPL_CAT_LIB[t.cat]||t.cat)}</span>
+        <button onclick="tplSupprimer('${escapeHtml(t.id)}')" aria-label="Supprimer ce modèle"
+          style="flex-shrink:0;min-width:44px;min-height:38px;background:none;border:1px solid #3a1a1a;border-radius:8px;color:var(--red);cursor:pointer">✕</button>
+      </div>
+      <textarea oninput="tplMajCorps('${escapeHtml(t.id)}',this.value)" rows="2"
+        style="width:100%;margin-top:7px;font-size:12px;box-sizing:border-box">${escapeHtml(t.corps)}</textarea>
+    </div>`).join('')}
+    <div style="border:1px dashed var(--border);border-radius:10px;padding:10px;margin-top:6px">
+      <input id="tpl-n-titre" placeholder="Titre (ex : Genoux)" maxlength="40" style="width:100%;font-size:13px;margin-bottom:6px;box-sizing:border-box">
+      <select id="tpl-n-cat" style="width:100%;font-size:13px;margin-bottom:6px">${opts('technique')}</select>
+      <textarea id="tpl-n-corps" rows="2" placeholder="Texte du modèle…" style="width:100%;font-size:13px;box-sizing:border-box"></textarea>
+      <button class="btn btn-red btn-sm" style="width:100%;margin-top:8px" onclick="tplCreer()">Ajouter ce modèle</button>
+    </div>
+    <button class="btn btn-outline" style="margin-top:10px;width:100%" onclick="closeModal()">Fermer</button>
+  </div></div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+function tplCreer(){
+  const titre=((document.getElementById('tpl-n-titre')||{}).value||'').trim();
+  const corps=((document.getElementById('tpl-n-corps')||{}).value||'').trim();
+  const cat=((document.getElementById('tpl-n-cat')||{}).value||'technique');
+  if(!titre||!corps) return toast('Un titre et un texte, au minimum.','var(--orange)');
+  const l=_tplListe();
+  currentUser.msgTemplates=l.concat([{id:'tpl'+Date.now(),cat:cat,
+    titre:titre.slice(0,40),corps:corps,createdAt:Date.now()}]);
+  toastEcriture(saveUser(),'Modèle ajouté ✓','le modèle est');
+  ouvrirGestionModeles();
+}
+function tplMajCorps(id,v){
+  const t=(currentUser.msgTemplates||[]).find(x=>x&&x.id===id);
+  if(!t) return;
+  t.corps=String(v||'');
+  try{ saveUser(); }catch(e){}
+}
+// Un modèle supprimé ne doit PAS vider un brouillon en cours : l'insertion a
+// copié le TEXTE, jamais une référence. Il n'y a donc rien à faire ici — le
+// brouillon vit sa vie. Ce commentaire est là pour qu'on ne « répare » pas ça.
+function tplSupprimer(id){
+  const l=_tplListe().filter(x=>x&&x.id!==id);
+  currentUser.msgTemplates=l;
+  toastEcriture(saveUser(),'Modèle supprimé','le modèle est');
+  ouvrirGestionModeles();
+}
 // « liste » est facultatif et vaut 'video' par defaut : tous les appels
 // existants gardent exactement leur comportement.
+// ABSORPTION. Il n existe plus deux systemes : les chips lisent la MEME
+// bibliotheque de modeles que la feuille « Modeles », filtree par categorie.
+// La forme rendue est inchangee ({id,label,text,pos}), donc insertQC et le
+// rendu des chips ne bougent pas d une ligne.
+//
+// Les deux jeux restent DISTINCTS : melanger « Garde le dos droit » et
+// « Bonne semaine » n aurait pas plus de sens qu avant.
+const QC_CATS_VIDEO=Object.freeze(['technique','motivation']);
+const QC_CATS_BILAN=Object.freeze(['motivation','nutrition','administratif','absence']);
 function _getQC(liste){
-  if(liste==='bilan') return QC_BILAN_DEFAULTS.map((c,i)=>({id:'qcb'+i,label:c.label,text:c.text,pos:i}));
-  if(!currentUser.quickComments?.length){
-    currentUser.quickComments=QC_DEFAULTS.map((c,i)=>({id:'qcd'+i,label:c.label,text:c.text,pos:i}));
-    saveUser();
-  }
-  return currentUser.quickComments.slice().sort((a,b)=>(a.pos??99)-(b.pos??99));
+  const cats=(liste==='bilan')?QC_CATS_BILAN:QC_CATS_VIDEO;
+  return _tplListe().filter(t=>t&&cats.indexOf(t.cat)>=0)
+    .map((t,i)=>({id:t.id,label:t.titre,text:t.corps,pos:i}));
 }
 // Le composant etait cable en dur sur l'ecran de retour video : la zone
 // '#qc-chips' et la cible '#vc-general' etaient ecrites dans le code. On les
@@ -31722,7 +31895,9 @@ function _renderQuickCommentChips(liste){
   const qcs=_getQC(liste);
   el.innerHTML=(qcs.length?qcs.map(c=>`<button data-qc="${escapeHtml(c.text)}" onclick="insertQC(this.dataset.qc,'${cible}')" style="flex-shrink:0;background:var(--surface-2);border:1px solid var(--border);border-radius:20px;padding:0 14px;height:44px;color:var(--text);font-family:Montserrat,sans-serif;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.label)}</button>`).join(''):'')
     // La liste du bilan est fixe : pas de bouton de gestion.
-    +(bilan?'':`<button onclick="openQCManager()" style="flex-shrink:0;background:transparent;border:1px dashed var(--border);border-radius:20px;padding:0 14px;height:44px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;cursor:pointer;white-space:nowrap">${icon('edit-2',13)} Gérer</button>`);
+    // La feuille complete est atteignable des DEUX zones : c est la meme
+    // bibliotheque, il n y a plus de raison de la reserver a la video.
+    +`<button onclick="ouvrirModeles('${cible}')" style="flex-shrink:0;background:transparent;border:1px dashed var(--border);border-radius:20px;padding:0 14px;height:44px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;cursor:pointer;white-space:nowrap">${icon('edit-2',13)} Modèles</button>`;
 }
 function insertQC(text,cible){
   const ta=document.getElementById(cible||'vc-general');if(!ta)return;
@@ -31733,37 +31908,11 @@ function insertQC(text,cible){
   ta.value=before+ins+after;
   const p=s+ins.length;ta.setSelectionRange(p,p);ta.focus();
 }
-function openQCManager(){
-  const qcs=_getQC();
-  const rows=qcs.map((c,i)=>`<div id="qcr-${c.id}" style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--surface-2)">
-    <div style="flex:1;min-width:0">
-      <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.label)}</div>
-      ${c.text!==c.label?`<div style="font-size:var(--fs-xs);color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.text)}</div>`:''}
-    </div>
-    <button data-i="${i}" onclick="qcUp(+this.dataset.i)" ${i===0?'disabled':''} style="background:none;border:none;font-size:16px;cursor:pointer;padding:4px;min-width:28px;color:var(--sub);${i===0?'opacity:.3':''}">↑</button>
-    <button data-i="${i}" onclick="qcDown(+this.dataset.i)" ${i===qcs.length-1?'disabled':''} style="background:none;border:none;font-size:16px;cursor:pointer;padding:4px;min-width:28px;color:var(--sub);${i===qcs.length-1?'opacity:.3':''}">↓</button>
-    <button data-id="${c.id}" onclick="qcEditRow(this.dataset.id)" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--sub);font-size:11px;cursor:pointer;padding:5px 9px">✏️</button>
-    <button data-id="${c.id}" onclick="qcDel(this.dataset.id)" style="background:none;border:1px solid #3a1a1a;border-radius:4px;color:var(--red);font-size:11px;cursor:pointer;padding:5px 9px">✕</button>
-  </div>`).join('');
-  document.getElementById('qcm-overlay')?.remove();
-  document.body.insertAdjacentHTML('beforeend',`<div id="qcm-overlay" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
-  <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:20px 20px 32px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-      <h2 style="margin:0;font-size:16px">✏️ Commentaires-types</h2>
-      <button onclick="document.getElementById('qcm-overlay').remove()" style="background:none;border:none;color:var(--sub);font-size:22px;cursor:pointer;line-height:1">✕</button>
-    </div>
-    <div id="qcm-list">${rows||'<div class="sub" style="padding:12px 0;text-align:center">Aucun commentaire : ajoute-en ci-dessous.</div>'}</div>
-    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--surface-2)">
-      <label style="margin:0 0 6px;font-size:11px;display:block">Ajouter un commentaire</label>
-      <div style="display:flex;gap:8px;margin-top:6px">
-        <input id="qc-new-label" placeholder="Texte de la chip (max 40 car.)" maxlength="40" style="flex:1;font-size:12px">
-        <button onclick="qcAdd()" style="background:var(--red);border:none;color:#fff;border-radius:3px;padding:9px 14px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap">+ Ajouter</button>
-      </div>
-      <input id="qc-new-text" placeholder="Texte inséré si différent du label (facultatif)" maxlength="120" style="width:100%;box-sizing:border-box;font-size:11px;margin-top:6px">
-    </div>
-    <button onclick="qcReset()" style="margin-top:10px;background:none;border:1px solid #2a2a2a;border-radius:3px;color:var(--text-dim);font-size:11px;padding:8px;cursor:pointer;font-family:Montserrat,sans-serif;width:100%">Réinitialiser aux 6 valeurs par défaut</button>
-  </div></div>`);
-}
+// ABSORBE. L ancien gestionnaire ecrivait dans `quickComments`, que _getQC ne
+// lit plus : le laisser en place aurait donne un ecran ou l on modifie des
+// textes qui ne s affichent nulle part. Il renvoie vers l editeur unique.
+// Les fonctions qc* qui suivent ne sont plus atteignables depuis l interface.
+function openQCManager(){ return ouvrirGestionModeles(); }
 function qcAdd(){
   const label=(document.getElementById('qc-new-label')?.value||'').trim();
   const text=(document.getElementById('qc-new-text')?.value||'').trim()||label;
@@ -55705,12 +55854,25 @@ function testExercices(){
       const r=currentUser._lastFbNotif;
       currentUser=sauve;
       return r===undefined;})());
-    ok('_getQC : la liste par défaut compte six commentaires',(()=>{
+    // ABSORPTION : les chips ne lisent plus QC_DEFAULTS mais la bibliotheque
+    // de modeles. Le premier texte reste celui d'avant, et rien n'est perdu.
+    ok('_getQC : la liste vidéo vient des modèles technique et motivation',(()=>{
       const sauve=currentUser;
-      currentUser=_vdU([],{quickComments:null});
+      currentUser=_vdU([],{quickComments:null,msgTemplates:null});
       const l=_getQC();
+      const attendu=TPL_DEFAUTS.filter(t=>QC_CATS_VIDEO.indexOf(t.cat)>=0).length;
       currentUser=sauve;
-      return l.length===QC_DEFAULTS.length&&l.length===6&&l[0].text==='Garde le dos droit';})());
+      if(l.length!==attendu) return _echec(l.length+' au lieu de '+attendu);
+      if(l[0].text!=='Garde le dos droit') return _echec('premier : '+l[0].text);
+      return l.every(x=>x.id&&x.label&&x.text)?true:_echec('une chip est incomplète');})());
+    ok('_getQC : AUCUN texte des commentaires rapides n\'a été perdu',(()=>{
+      const sauve=currentUser;
+      currentUser=_vdU([],{quickComments:null,msgTemplates:null});
+      const tous=_getQC().concat(_getQC('bilan')).map(x=>x.text);
+      currentUser=sauve;
+      const manque=QC_DEFAULTS.concat(QC_BILAN_DEFAULTS)
+        .filter(c=>tous.indexOf(c.text)<0).map(c=>c.label);
+      return manque.length?_echec('perdus : '+manque.join(', ')):true;})());
     ok('_getQC : la liste de l\'utilisateur est respectée et triée',(()=>{
       const sauve=currentUser;
       currentUser=_vdU([],{quickComments:[{id:'x',label:'B',text:'bb',pos:1},{id:'y',label:'A',text:'aa',pos:0}]});
@@ -55949,10 +56111,18 @@ function testExercices(){
       const h=renderReponsesBilans([b],{id:'c1',email:'c1@t.fr',fname:'Léa',bilans:[b]});
       return /rb-texte/.test(h)&&/Envoyer ma réponse/.test(h)
         &&/Ce que tu retiens de ce bilan, et ce qu'on ajuste\./.test(h.replace(/&#39;/g,"'"));})());
-    ok('Côté coach : les cinq chips de bilan sont distinctes des chips vidéo',(()=>{
-      const l=_getQC('bilan');
-      return l.length===5&&l[0].text==='Bonne semaine, le poids évolue comme prévu.'
-        &&!l.some(x=>x.text==='Garde le dos droit');})());
+    ok('Côté coach : aucune consigne technique dans les chips de bilan',(()=>{
+      // Le cloisonnement qui comptait n'etait pas un partage etanche mais
+      // ceci : « Garde le dos droit » n'a rien a faire dans un retour de
+      // bilan. La motivation, elle, sert aux deux zones.
+      const sauve=currentUser;
+      currentUser=_vdU([],{quickComments:null,msgTemplates:null});
+      const b=_getQC('bilan');
+      currentUser=sauve;
+      if(!b.length) return _echec('liste de bilan vide');
+      const tech=TPL_DEFAUTS.filter(t=>t.cat==='technique').map(t=>t.corps);
+      const fuite=b.filter(x=>tech.indexOf(x.text)>=0).map(x=>x.label);
+      return fuite.length?_echec('consigne technique dans le bilan : '+fuite.join(', ')):true;})());
     ok('Antécédent déclaré : la mention de masquage apparaît',(()=>{
       const b=_rbB(2,{'bil-motivation':'8'});
       const c={id:'c1',email:'c1@t.fr',fname:'Léa',bilans:[{type:'depart','deb-tca':'anorexie'},b]};
