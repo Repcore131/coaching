@@ -1406,6 +1406,23 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- ACTIVITÉ DU PORTEFEUILLE. Lecture seule : cet écran n'émet aucune
      notification et ne modifie aucun état. -->
+<!-- FILE DE REPRISE. Ecran du coach seul. Aucune ecriture dans le dossier
+     d un athlete : les trois actions ecrivent chez le coach. -->
+<div id="s-coach-file" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="loadCoachHome()">←</button>
+    <span class="topbar-title">Reprise</span><span></span>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
+      <h1 style="font-size:20px;line-height:1.3;font-weight:900;margin-bottom:4px">À relancer</h1>
+      <p class="sub" style="font-size:11.5px;line-height:1.6;margin-bottom:16px">Assiduité seulement. Une douleur ou un drapeau rouge n'arrive jamais ici : il garde sa ligne dans « À traiter ».</p>
+      <div id="cfr-body"></div>
+    </div>
+  </div>
+</div>
+
 <div id="s-coach-activite" class="screen">
   <div class="topbar">
     <button class="back-btn" onclick="loadCoachHome()">←</button>
@@ -9376,6 +9393,7 @@ function renderPilotage(clients){
     ${_pilBande('a','Depuis ta dernière visite',corpsA,ch.length?String(ch.length):'—')}
     ${_pilBande('b','Portefeuille',corpsB,String(p.total))}
     ${_pilBande('c','Charge de travail',corpsC,String(g.bilansSansReponse+g.videosEnAttente))}
+    <button onclick="loadFileReprise()" style="width:100%;min-height:44px;margin-top:8px;background:none;border:1px solid var(--border);border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer">À relancer →</button>
     <button onclick="loadCoachActivite()" style="width:100%;min-height:44px;margin-top:8px;background:none;border:1px solid var(--border);border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer">Activité du portefeuille →</button>`;
 }
 // La visite est horodatée À LA SORTIE de l'écran, pas à l'entrée : la datant à
@@ -10565,6 +10583,123 @@ function frRelancesSemaine(coach,now){
   for(const e of ((coach&&coach.journalRelance)||[]))
     if(e&&e.at>=lundi&&e.at<=t) vus.add(e.clientId);
   return vus.size;
+}
+
+// ── L'écran de la file ────────────────────────────────────────────────────
+// Écran du COACH seul. Il ne modifie jamais le dossier d'un athlète : les
+// trois actions écrivent dans le dossier du coach (alertStatus, relances,
+// journalRelance) et nulle part ailleurs.
+const FR_DUREES=Object.freeze([7,14,30]);
+let _frDuree=FR_DUREES[0];
+function frSetDuree(j){ _frDuree=Number(j)||FR_DUREES[0]; }
+
+function _frClient(id){
+  try{ return getClients().find(c=>c&&c.id===id)||null; }catch(e){ return null; }
+}
+// (a) RELANCER. RepCore ne connaît pas le numéro de l'athlète : le lien porte
+// le TEXTE, le contact se choisit dans WhatsApp. Sur poste fixe, où wa.me et
+// sms: n'ouvrent rien d'utile, le texte part dans le presse-papiers.
+function frRelancer(id){
+  const c=_frClient(id);
+  if(!c) return false;
+  const texte=_frTexteRelance(c,Date.now());
+  try{
+    window.open('https://wa.me/?text='+encodeURIComponent(texte),'_blank','noopener');
+  }catch(e){}
+  frCopier(texte);
+  return true;
+}
+function frCopier(texte){
+  const fini=()=>toast('Texte copié : colle-le dans ta conversation.');
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(texte).then(fini,()=>_frCopieRepli(texte));
+      return true;
+    }
+  }catch(e){}
+  return _frCopieRepli(texte);
+}
+function _frCopieRepli(texte){
+  try{
+    const z=document.createElement('textarea');
+    z.value=texte; z.style.position='fixed'; z.style.left='-9999px';
+    document.body.appendChild(z); z.select();
+    document.execCommand('copy'); z.remove();
+    toast('Texte copié : colle-le dans ta conversation.');
+    return true;
+  }catch(e){ toast('Copie impossible sur cet appareil.','var(--orange)'); return false; }
+}
+// (b) MARQUER RELANCÉ : le repère chez le coach, PLUS la mise en veille par le
+// mécanisme existant. (c) REPORTER : la mise en veille seule.
+function frMarquer(id,avecRelance){
+  const c=_frClient(id);
+  if(!c) return false;
+  let sg=null; try{ sg=signauxEntrainement(c); }catch(e){}
+  const type=_frType(c,sg);
+  try{ reporterAlerte(type,c,_frDuree); }catch(e){}
+  if(avecRelance) frMarquerRelance(currentUser,c,_frDuree);
+  toastEcriture(saveUser(),
+    avecRelance?('Relance notée · en veille '+_frDuree+' j'):('Reporté de '+_frDuree+' j'),
+    'le report est');
+  renderFileReprise();
+  return true;
+}
+function renderFileReprise(){
+  const el=document.getElementById('cfr-body');
+  if(!el) return;
+  let ath=[];
+  try{ ath=getClients(); }catch(e){
+    el.innerHTML='<div class="sub" style="font-size:12px;padding:16px 2px">Impossible de lire ton portefeuille pour l\'instant.</div>';
+    return;
+  }
+  const f=fileReprise(ath,currentUser,Date.now());
+  const sem=frRelancesSemaine(currentUser,Date.now());
+  const tete=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;
+      background:var(--surface-1);border:1px solid var(--border);border-radius:11px;padding:11px 13px;margin-bottom:12px">
+      <span style="font-size:11.5px;color:#ddd;line-height:1.5">Relancés cette semaine</span>
+      <span style="font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:22px;color:var(--red);
+        text-shadow:0 0 9px rgba(224,32,32,.6)">${sem}</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <span style="font-size:10px;color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase">Mettre en veille</span>
+      <select onchange="frSetDuree(this.value)" aria-label="Durée de mise en veille"
+        style="min-height:38px;padding:6px 9px;border-radius:8px;background:#101010;border:1px solid #303030;
+          color:#ddd;font-family:Montserrat,sans-serif;font-size:11.5px">
+        ${FR_DUREES.map(j=>`<option value="${j}"${j===_frDuree?' selected':''}>${j} jours</option>`).join('')}
+      </select>
+    </div>`;
+  if(!f.lignes.length){
+    el.innerHTML=tete+`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;
+      padding:22px 16px;text-align:center;font-size:12px;color:var(--text-dim);line-height:1.6">
+      Personne à relancer. Les athlètes en pause déclarée et ceux qui portent un signal de santé n'entrent jamais ici — ils gardent leur ligne dans « À traiter ».</div>`;
+    return;
+  }
+  const bouton=(lib,act,fort)=>`<button type="button" onclick="${act}"
+    style="flex:1;min-width:0;min-height:44px;padding:8px 6px;border-radius:9px;cursor:pointer;
+      font-family:Montserrat,sans-serif;font-size:10.5px;font-weight:800;letter-spacing:.3px;
+      background:${fort?'rgba(224,32,32,.14)':'#111'};border:1px solid ${fort?'var(--red)':'#2e2e2e'};
+      color:${fort?'#fff':'var(--sub)'}">${escapeHtml(lib)}</button>`;
+  el.innerHTML=tete+f.lignes.map(r=>`<div style="background:linear-gradient(180deg,#151515,#0e0e0e);
+      border:1px solid #232323;border-left:3px solid var(--red);border-radius:11px;
+      padding:11px 12px;margin-bottom:9px;box-shadow:0 5px 15px rgba(0,0,0,.45)">
+      <div style="display:flex;align-items:baseline;gap:8px">
+        <span style="font-size:13.5px;font-weight:900;color:#fff">${escapeHtml(r.prenom||'Athlète')}</span>
+        <span style="margin-left:auto;font-size:10px;color:var(--text-faint);flex-shrink:0">${r.jours==null?'aucune séance':r.jours+' j sans séance'}</span>
+      </div>
+      ${r.signal?`<div style="font-size:11.5px;color:#bbb;line-height:1.55;margin-top:4px">${escapeHtml(r.signal)}</div>`:''}
+      ${r.relanceDepuis!=null?`<div style="font-size:10px;color:var(--green);margin-top:4px">Relancé il y a ${r.relanceDepuis} j</div>`:''}
+      <div style="display:flex;gap:6px;margin-top:9px">
+        ${bouton('Relancer',"frRelancer('"+r.id+"')",true)}
+        ${bouton('Marquer relancé',"frMarquer('"+r.id+"',true)")}
+        ${bouton('Reporter',"frMarquer('"+r.id+"',false)")}
+      </div>
+    </div>`).join('')
+    +(f.reste?`<div class="sub" style="font-size:11px;padding:6px 2px">et ${f.reste} autre${f.reste>1?'s':''} — traite ceux-ci d'abord.</div>`:'')
+    +`<div style="font-size:10px;color:var(--text-faint);line-height:1.6;margin-top:10px">Le message est préparé, pas envoyé : tu choisis le contact et tu relis avant d'appuyer. Il ne contient aucune information de santé — le canal n'est pas chiffré.</div>`;
+}
+function loadFileReprise(){
+  go('s-coach-file');
+  renderFileReprise();
 }
 function _rappelContreIndication(c){
   let ci=[];
