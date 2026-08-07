@@ -2250,9 +2250,10 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
         <h1 id="clh-greeting" style="font-size:22px;line-height:1.3;font-weight:900"></h1>
         <p class="sub" id="clh-date" style="margin-top:4px;font-size:12px"></p>
-        <p class="sub" id="clh-coach" style="margin-top:2px;font-size:11px;letter-spacing:.5px;text-transform:uppercase"></p>
+        <!-- La ligne « Coach : … » a été retirée : la carte du coach, juste en
+             dessous, porte déjà son nom, sa photo et sa phrase. Le cas « sans
+             coach » y est traité aussi, par une invitation à saisir un code. -->
         <a id="clh-contact-link" href="#" target="_blank" rel="noopener" style="display:none;font-size:11px;color:var(--red);font-weight:700;letter-spacing:.5px;margin-top:6px;text-decoration:none;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg> Un souci ? Contacte ton coach</a>
-        <div id="clh-contact-note" style="display:none;font-size:10px;color:var(--text-faint);line-height:1.5;margin-top:4px"></div>
         <a href="#" onclick="ouvrirReglagesAthlete();return false" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--sub);font-weight:700;letter-spacing:.5px;margin-top:6px;text-decoration:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;flex-shrink:0"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.31.4.55.71.66H21a2 2 0 1 1 0 4h-.09c-.31.11-.57.35-.71.66z"/></svg> Réglages</a>
       </div>
 
@@ -15061,14 +15062,6 @@ function loadClientHome(){
   // Avatar athlète
   const avatar=document.getElementById('clh-athlete-avatar');
   if(avatar) avatar.innerHTML=u.athletePhoto?`<img src="${escapeHtml(u.athletePhoto)}" style="width:100%;height:100%;object-fit:cover">`:ini(u.fname,u.lname);
-  const coachEl=document.getElementById('clh-coach');
-  if(u.coachName){
-    // textContent et non innerHTML : coachName vient de DB.get('users'),
-    // donc d'une valeur saisie par le coach et synchronisée depuis le cloud.
-    coachEl.textContent='Coach: '+(u.coachName||'');
-  } else {
-    coachEl.textContent='Sans coach assigné';
-  }
   const s=streakSemaines(u);
   // Le compteur de l'en-tete subsiste, reduit. La case « Semaines » a quitte
   // les metriques : elle reste consultable dans l'onglet Perfs.
@@ -15161,13 +15154,11 @@ function loadClientHome(){
         // On quitte RepCore : le dire avant, pas après. Et les horaires du
         // coach, s'il en a renseigné — c'est ce qui évite un message à 23 h
         // resté sans réponse jusqu'au lendemain.
+        // Le paragraphe visible sous le lien a été retiré à la demande de
+        // Kevin. La mention reste portée par l'info-bulle du lien et par
+        // privacy.html — voir la note de la constante CONTACT_SORTIE.
         const _c=contactCoach(_pub);
         contactLink.title=CONTACT_SORTIE+(_c.horaires?' Réponses : '+_c.horaires:'');
-        const _z=document.getElementById('clh-contact-note');
-        if(_z){
-          _z.textContent=CONTACT_SORTIE+(_c.horaires?' Réponses : '+_c.horaires:'');
-          _z.style.display='block';
-        }
       }
       _renderCoachBanner(coachUser, u.coachName);
       _renderPromoBanners(coachUser);
@@ -15249,10 +15240,18 @@ function loadClientHome(){
     el.innerHTML=`<div style="position:relative;overflow:hidden;border-radius:14px;background:#0c0c0c;border-top:2px solid var(--red);border-left:3px solid var(--red);border-right:1px solid #1e1e1e;border-bottom:1px solid rgba(180,0,0,0.18)">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 18px,rgba(255,255,255,0.013) 18px,rgba(255,255,255,0.013) 19px);pointer-events:none"></div>
       <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 0% 50%,rgba(210,0,0,0.2) 0%,transparent 65%);pointer-events:none"></div>
-      <div style="display:flex;align-items:center;padding:20px 18px 20px 20px;gap:16px;position:relative">
+      <!-- La photo n'est plus centrée sur la hauteur : elle est calée EN HAUT,
+           et le bandeau « COACH » occupe l'espace laissé libre sous elle. Le
+           bandeau déborde de 20 px vers la gauche — la valeur exacte du
+           padding de cette rangée — pour venir mourir sur le bord rouge de la
+           carte, comme une étiquette cousue et non un bouton posé. -->
+      <div style="display:flex;align-items:stretch;padding:20px 18px 20px 20px;gap:16px;position:relative">
+        <div style="flex-shrink:0;display:flex;flex-direction:column;width:72px;gap:12px">
         ${photo
-          ?`<div style="flex-shrink:0;width:72px;height:72px;border-radius:50%;overflow:hidden;border:2px solid rgba(210,0,0,0.55);box-shadow:0 0 0 5px rgba(200,0,0,0.07),0 8px 28px rgba(0,0,0,0.7)"><img src="${photo}" style="width:100%;height:100%;object-fit:cover;display:block"></div>`
-          :`<div style="flex-shrink:0;width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,var(--surface-3),#080808);border:2px solid rgba(210,0,0,0.55);box-shadow:0 0 0 5px rgba(200,0,0,0.07),0 8px 28px rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center">${icon('dumbbell',28)}</div>`}
+          ?`<div style="width:72px;height:72px;border-radius:50%;overflow:hidden;border:2px solid rgba(210,0,0,0.55);box-shadow:0 0 0 5px rgba(200,0,0,0.07),0 8px 28px rgba(0,0,0,0.7)"><img src="${photo}" style="width:100%;height:100%;object-fit:cover;display:block"></div>`
+          :`<div style="width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,var(--surface-3),#080808);border:2px solid rgba(210,0,0,0.55);box-shadow:0 0 0 5px rgba(200,0,0,0.07),0 8px 28px rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center">${icon('dumbbell',28)}</div>`}
+          <div style="margin-top:auto;margin-left:-20px;width:92px;text-align:center;background:var(--red);color:#fff;font-size:10px;font-weight:900;letter-spacing:2.5px;padding:5px 0;border-radius:0 7px 7px 0;box-shadow:0 6px 18px rgba(224,32,32,0.3)">COACH</div>
+        </div>
         <div style="flex:1;min-width:0">
           ${team?`<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:4px;font-weight:900;text-transform:uppercase;margin-bottom:5px">${escapeHtml(team)}</div>`:''}
           <div class="txt-stat" style="letter-spacing:2px;line-height:0.95;background:linear-gradient(135deg,#ffffff 30%,#888 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:${phrase?'8':'0'}px">${escapeHtml(name.trim())}</div>
@@ -24666,9 +24665,56 @@ function planLibRepas(cle){
   const r=PLAN_REPAS.find(x=>x.cle===cle);
   return r?r.lib:String(cle||'Repas');
 }
-function planOrdreRepas(cle){
-  const i=PLAN_REPAS.findIndex(x=>x.cle===cle);
+// ── Le moment de la séance ────────────────────────────────────────────────
+// Les trois repas de séance ne sont pas à une heure fixe : ils suivent
+// l'entraînement. Qui s'entraîne le matin les prend avant midi, qui s'entraîne
+// le soir les prend après le repas du soir. Ils se déplacent donc ENSEMBLE :
+// séparer « Pendant » de son « Avant » et de son « Après » ne veut rien dire.
+//
+// Le vocabulaire est celui de _periSeanceCle (matin / apres-midi / soir), déjà
+// employé par le repère péri-séance. Deux listes de moments qui divergeraient
+// finiraient par se contredire sur le même écran.
+const PLAN_SEANCE=Object.freeze(['avant','pendant','apres']);
+// Le bloc se pose juste APRÈS ce repas-là. « apres-midi » redonne exactement
+// l'ordre d'origine : c'est la valeur par défaut, donc aucun plan déjà composé
+// ne bouge tant que le coach n'a rien choisi.
+const PLAN_ANCRE_SEANCE=Object.freeze({'matin':'petit_dej','apres-midi':'midi','soir':'soir'});
+const PLAN_MOMENT_DEFAUT='apres-midi';
+const PLAN_MOMENTS=Object.freeze([
+  Object.freeze({cle:'matin',      lib:'Matin'}),
+  Object.freeze({cle:'apres-midi', lib:'Après-midi'}),
+  Object.freeze({cle:'soir',       lib:'Soir'})
+]);
+function planMomentLib(cle){
+  const m=PLAN_MOMENTS.find(x=>x.cle===cle);
+  return m?m.lib:planMomentLib(PLAN_MOMENT_DEFAUT);
+}
+// PURE. L'ordre des repas pour un moment donné : la liste de base, le bloc
+// séance retiré, puis réinséré derrière son ancre.
+function planOrdreCles(moment){
+  const m=PLAN_ANCRE_SEANCE[moment]?moment:PLAN_MOMENT_DEFAUT;
+  const ancre=PLAN_ANCRE_SEANCE[m];
+  const out=[];
+  for(const r of PLAN_REPAS){
+    if(PLAN_SEANCE.indexOf(r.cle)>=0) continue;
+    out.push(r.cle);
+    if(r.cle===ancre) out.push.apply(out,PLAN_SEANCE);
+  }
+  return out;
+}
+function planOrdreRepas(cle,moment){
+  const i=planOrdreCles(moment).indexOf(cle);
   return i<0?PLAN_REPAS.length:i;
+}
+// Ce que le coach a choisi ; à défaut ce que l'athlète a répondu au
+// questionnaire de départ ; à défaut l'ordre d'origine. Le coach n'a donc rien
+// à saisir quand la réponse de l'athlète suffit, et il garde le dernier mot.
+function planMoment(plan,user){
+  const v=plan&&plan.momentSeance;
+  if(PLAN_ANCRE_SEANCE[v]) return v;
+  let q=null;
+  try{ q=user?_periSeanceCle(user):null; }catch(e){}
+  return PLAN_ANCRE_SEANCE[q]?q:PLAN_MOMENT_DEFAUT;
 }
 // ── Ce que Ciqual ne sait pas dire ────────────────────────────────────────
 // La table Anses donne des grammes pour 100 g, et rien d'autre. Un œuf, un
@@ -25684,6 +25730,10 @@ function _cplCopie(p){
     avecComplements:!!src.avecComplements,
     nRepasSourcesLibres:_planNb(src.nRepasSourcesLibres),
     modele:src.modele||null,
+    // null = « suit la réponse de l'athlète ». Une valeur inconnue arrivant de
+    // la base retombe sur null plutôt que de figer un ordre que personne ne
+    // sait relire.
+    momentSeance:PLAN_ANCRE_SEANCE[src.momentSeance]?src.momentSeance:null,
     squelette:planSquelette(src).map(x=>Object.assign({},x,{id:_cplIdSain(x.id)})),
     // Les sources hors Ciqual sont des OBJETS : les copier à plat les ferait
     // partager entre la copie de travail et le dossier, et une retouche
@@ -25985,22 +26035,16 @@ function cplSupprimerPalier(i){
   if(l[i]) l.splice(i,1);
   renderPlanCoach();
 }
-function cplSetJours(cle,v){
-  if(!_cplPlan) return;
-  if(!_cplPlan.courses) _cplPlan.courses={jours:{},stock:{}};
-  const n=_planNb(v);
-  if(n==null||n<0) delete _cplPlan.courses.jours[cle];
-  else _cplPlan.courses.jours[cle]=Math.round(n);
-  _cplRafraichirApercu();
-}
-function cplSetStock(cle,v){
-  if(!_cplPlan) return;
-  if(!_cplPlan.courses) _cplPlan.courses={jours:{},stock:{}};
-  const n=_planNb(v);
-  if(n==null||n<=0) delete _cplPlan.courses.stock[cle];
-  else _cplPlan.courses.stock[cle]=n;
-  _cplRafraichirApercu();
-}
+// La liste de courses a QUITTÉ l'écran de composition : le coach n'a pas à
+// saisir des jours et des stocks. Côté athlète elle reste, et se calcule seule
+// — planListeCourses compte déjà chaque ligne de repas sur PLAN_JOURS_SEMAINE
+// quand rien n'est renseigné. Les plans où des jours ont déjà été saisis
+// gardent leurs valeurs : _cplCopie recopie toujours `courses`, seuls les
+// champs de saisie ont disparu.
+//
+// Ce qui n'est plus atteignable : régler les jours ligne par ligne, déclarer un
+// stock, et faire entrer les sources interchangeables dans la liste (elles
+// valent 0 jour par défaut — on ne peut pas deviner laquelle il choisira).
 
 // ── Rendu ─────────────────────────────────────────────────────────────────
 function _cplMacroTxt(m){
@@ -26019,8 +26063,11 @@ function _cplRafraichirApercu(){
   if(z) z.innerHTML=_cplHtmlApercu();
   const a=document.getElementById('cpl-alertes');
   if(a) a.innerHTML=_cplHtmlAlertes();
-  const co=document.getElementById('cpl-courses');
-  if(co) co.innerHTML=_cplHtmlCourses();
+  // Les grammages des sources dépendent du restant : ils doivent se refaire à
+  // la frappe, comme l'aperçu. Ce bloc ne contient aucun champ de saisie, le
+  // repeindre ne peut donc pas voler le focus.
+  const so=document.getElementById('cpl-sources');
+  if(so) so.innerHTML=_cplHtmlSources();
 }
 function _cplHtmlApercu(){
   const c=_cplAthlete();
@@ -26083,26 +26130,61 @@ function _cplHtmlAlertes(){
     ${l.map(x=>`<div style="font-size:11px;color:#eee;line-height:1.6;margin-bottom:4px">• ${escapeHtml(x)}</div>`).join('')}
   </div>`;
 }
-function _cplHtmlCourses(){
+// Les deux catalogues, dans la mise en forme EXACTE de la fiche de l'athlète —
+// même fonction de tableau, mêmes lignes, mêmes couleurs. Le coach voit ce que
+// l'autre côté affichera, et les grammages se refont à chaque retouche : c'est
+// _cplRafraichirApercu qui repeint ce bloc, comme l'aperçu des macros.
+//
+// Les commandes d'édition restent DESSOUS, hors du tableau. Le tableau dit ce
+// que l'athlète mange ; la liste dit ce que le coach a mis au catalogue, avec
+// la valeur pour 100 g et la marque « hors Ciqual » qui n'ont leur place ni
+// l'une ni l'autre sur l'écran de l'athlète.
+function _cplHtmlSources(){
   const c=_cplAthlete();
   if(!c) return '';
-  let lc;
-  try{ lc=planListeCourses(_cplPlan,c); }catch(e){ return ''; }
-  if(!lc.lignes.length)
-    return `<div style="font-size:11px;color:var(--text-dim);line-height:1.6">La liste se remplit dès qu'une ligne de repas ou une source reçoit un nombre de jours.</div>`;
-  const ligne=(l)=>`<div style="display:grid;grid-template-columns:1fr 54px 54px 82px;gap:6px;align-items:center;padding:6px 0;border-top:1px solid var(--surface-2)">
-    <div style="font-size:11.5px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l.lib)}</div>
-    ${_cplInput(l.jours,`cplSetJours('${l.cle}',this.value)`,'100%')}
-    ${_cplInput(l.stock||null,`cplSetStock('${l.cle}',this.value)`,'100%')}
-    <div style="font-size:12px;font-weight:800;text-align:right;color:var(--green)">${planFormatQte(l.qte,l.unite)}</div>
-  </div>`;
-  return `<div style="display:grid;grid-template-columns:1fr 54px 54px 82px;gap:6px;margin-bottom:2px">
-      <div></div>
-      <div style="font-size:9px;font-weight:800;color:var(--text-faint);letter-spacing:.5px;text-align:center">JOURS</div>
-      <div style="font-size:9px;font-weight:800;color:var(--text-faint);letter-spacing:.5px;text-align:center">STOCK</div>
-      <div style="font-size:9px;font-weight:800;color:var(--text-faint);letter-spacing:.5px;text-align:right">À ACHETER</div>
-    </div>
-    ${lc.lignes.map(ligne).join('')}`;
+  let src=null;
+  try{
+    const cib=planCiblesJour(c,true,null);
+    src=planSources(_cplPlan,planRestant(cib,planCouverture(_cplPlan)));
+  }catch(e){}
+  const bloc=(macro,titre)=>{
+    const ids=planCatalogue(_cplPlan,macro);
+    const n=planNbSources(_cplPlan,macro);
+    const col=PLAN_COULEURS[macro];
+    const rgba=(a)=>macro==='p'?`rgba(255,59,48,${a})`:`rgba(245,197,24,${a})`;
+    const b=src?(macro==='p'?src.proteines:src.glucides):null;
+    const table=b
+      ?planTableau4(planLignesSources(b),col,false,'Aucune source à ce catalogue : ajoutes-en une ci-dessous.')
+      :`<div style="font-size:11px;color:var(--orange);line-height:1.6;padding:6px 2px">Grammages indisponibles tant que ses macros ne sont pas fixées sur sa fiche.</div>`;
+    return `<div class="plan-card">
+      <div class="plan-titre" style="background:linear-gradient(90deg,${rgba(.55)},${rgba(.3)} 62%,${rgba(.1)});border-left-color:${col}">
+        <span class="plan-titre-t">${titre}</span>
+        <span style="margin-left:auto;flex-shrink:0;font-size:10px;font-weight:700;color:rgba(255,255,255,.85)">${ids.length} source${ids.length>1?'s':''} · ÷ ${n}</span>
+      </div>
+      <div class="plan-corps">
+      <div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin:7px 0 6px">Le restant se divise par ${n} repas. L'athlète permute librement dans cette liste sans dérégler ses macros.</div>
+      ${table}
+      <div style="font-size:9px;color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin:13px 0 1px">Modifier le catalogue</div>
+      ${ids.map((s,i)=>{
+        const r=planSourceRef(s,macro);
+        const per=r?r.per100:null;
+        const marque=r&&r.horsCiqual
+          ?'<span style="font-size:9px;font-weight:800;letter-spacing:.5px;padding:1px 5px;border-radius:8px;border:1px solid var(--border);color:var(--sub);margin-left:5px">HORS CIQUAL</span>':'';
+        return `<div class="plan-l">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:11.5px;font-weight:600;line-height:1.35">${escapeHtml(r?r.nom:'—')}${marque}</div>
+            <div style="font-size:10px;color:${(per>0)?'var(--text-faint)':'var(--orange)'}">${per==null?'valeur absente de la table':String(per).replace('.',',')+' g / 100 g'}</div>
+          </div>
+          <button onclick="cplRetirerSource('${macro}',${i})" aria-label="Retirer du catalogue"
+            style="background:none;border:none;color:var(--text-dim);font-size:15px;cursor:pointer;padding:4px 2px;line-height:1;flex-shrink:0">✕</button>
+        </div>`;
+      }).join('')}
+      <button class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:10px;letter-spacing:.5px"
+        onclick="ouvrirRecherchePlan({mode:'source',macro:'${macro}'})">+ Ajouter une source</button>
+      </div>
+    </div>`;
+  };
+  return bloc('p','Protéines')+bloc('c','Glucides');
 }
 function _cplHtmlLigne(item){
   const nom=planNomItem(item);
@@ -26193,6 +26275,37 @@ function _cplHtmlModele(c){
     <div style="display:flex;flex-wrap:wrap;gap:6px">${choix}</div>
   </div>`;
 }
+// Le sélecteur vit JUSTE AU-DESSUS du squelette : c'est lui qui en change
+// l'ordre, le lire ailleurs obligerait à faire l'aller-retour pour comprendre
+// pourquoi les repas ont bougé.
+function _cplHtmlMoment(c,moment){
+  const pose=(_cplPlan&&_cplPlan.momentSeance)||null;
+  let q=null; try{ q=_periSeanceCle(c); }catch(e){}
+  const choix=PLAN_MOMENTS.map(m=>{
+    const actif=(moment===m.cle);
+    return `<button onclick="cplSetMoment('${m.cle}')"
+      style="flex:1 1 30%;padding:9px 6px;border-radius:9px;cursor:pointer;font-family:Montserrat,sans-serif;font-size:10.5px;font-weight:800;letter-spacing:.4px;line-height:1.3;border:1.5px solid ${actif?'var(--red)':'#2a2a2a'};background:${actif?'rgba(224,32,32,.12)':'#111'};color:${actif?'#fff':'#8a8a8a'}">${escapeHtml(m.lib)}</button>`;
+  }).join('');
+  // D'où vient la valeur affichée. Sans cette phrase, un coach qui n'a rien
+  // choisi croit avoir choisi.
+  const source=pose
+    ?('Ton choix.'+(q&&q!==pose?' Son questionnaire dit « '+escapeHtml(planMomentLib(q))+' ».':''))
+    :(q?'D\'après son questionnaire de départ.':'Aucune réponse à son questionnaire : position d\'origine.');
+  const retour=pose
+    ?`<button onclick="cplSetMoment('')" style="background:none;border:none;color:var(--text-dim);font-family:Montserrat,sans-serif;font-size:10px;text-decoration:underline;cursor:pointer;padding:8px 0 0">Suivre sa réponse plutôt que la mienne</button>`
+    :'';
+  return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:14px">
+    <div style="font-size:12px;font-weight:700;color:#fff">Moment de la séance</div>
+    <div style="font-size:10px;color:var(--text-faint);line-height:1.5;margin:2px 0 9px">« Avant séance », « Pendant la séance » et « Après séance » se déplacent ensemble à cet endroit de la journée. ${source}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">${choix}</div>
+    ${retour}
+  </div>`;
+}
+function cplSetMoment(v){
+  if(!_cplPlan) return;
+  _cplPlan.momentSeance=PLAN_ANCRE_SEANCE[v]?v:null;
+  renderPlanCoach();
+}
 function renderPlanCoach(){
   const el=document.getElementById('cpl-body');
   if(!el) return;
@@ -26206,7 +26319,8 @@ function renderPlanCoach(){
     const k=it.repas||'petit_dej';
     (parRepas[k]=parRepas[k]||[]).push(it);
   }
-  const clesUtilisees=Object.keys(parRepas).sort((a,b)=>planOrdreRepas(a)-planOrdreRepas(b));
+  const moment=planMoment(_cplPlan,c);
+  const clesUtilisees=Object.keys(parRepas).sort((a,b)=>planOrdreRepas(a,moment)-planOrdreRepas(b,moment));
   const optionsPortions=Object.keys(PLAN_PORTIONS).map(k=>{
     const po=PLAN_PORTIONS[k];
     return `<option value="${k}">${escapeHtml(po.lib)}${po.comp?' (complément)':''}</option>`;
@@ -26251,37 +26365,6 @@ function renderPlanCoach(){
   // Le catalogue prend la couleur de sa macro sur tout le bandeau, comme la
   // fiche de l'athlète : le coach retrouve d'un coup d'œil le bloc rouge des
   // protéines et le bloc jaune des glucides.
-  const blocCatalogue=(macro,titre)=>{
-    const ids=planCatalogue(_cplPlan,macro);
-    const n=planNbSources(_cplPlan,macro);
-    const col=PLAN_COULEURS[macro];
-    const rgba=(a)=>macro==='p'?`rgba(255,59,48,${a})`:`rgba(245,197,24,${a})`;
-    return `<div class="plan-card">
-      <div class="plan-titre" style="background:linear-gradient(90deg,${rgba(.55)},${rgba(.3)} 62%,${rgba(.1)});border-left-color:${col}">
-        <span class="plan-titre-t">${titre}</span>
-        <span style="margin-left:auto;flex-shrink:0;font-size:10px;font-weight:700;color:rgba(255,255,255,.85)">${ids.length} source${ids.length>1?'s':''} · ÷ ${n}</span>
-      </div>
-      <div class="plan-corps">
-      <div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin:7px 0 4px">Le restant se divise par ${n} repas. L'athlète permute librement dans cette liste sans dérégler ses macros.</div>
-      ${ids.map((src,i)=>{
-        const r=planSourceRef(src,macro);
-        const per=r?r.per100:null;
-        const marque=r&&r.horsCiqual
-          ?'<span style="font-size:9px;font-weight:800;letter-spacing:.5px;padding:1px 5px;border-radius:8px;border:1px solid var(--border);color:var(--sub);margin-left:5px">HORS CIQUAL</span>':'';
-        return `<div class="plan-l">
-          <div style="flex:1;min-width:0">
-            <div style="font-size:11.5px;font-weight:600;line-height:1.35">${escapeHtml(r?r.nom:'—')}${marque}</div>
-            <div style="font-size:10px;color:${(per>0)?'var(--text-faint)':'var(--orange)'}">${per==null?'valeur absente de la table':String(per).replace('.',',')+' g / 100 g'}</div>
-          </div>
-          <button onclick="cplRetirerSource('${macro}',${i})" aria-label="Retirer du catalogue"
-            style="background:none;border:none;color:var(--text-dim);font-size:15px;cursor:pointer;padding:4px 2px;line-height:1;flex-shrink:0">✕</button>
-        </div>`;
-      }).join('')}
-      <button class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:10px;letter-spacing:.5px"
-        onclick="ouvrirRecherchePlan({mode:'source',macro:'${macro}'})">+ Ajouter une source</button>
-      </div>
-    </div>`;
-  };
   const paliers=Array.isArray(_cplPlan.phases)?_cplPlan.phases:planPaliers(null,c);
   const pc=planPalierCourant(_cplPlan,c);
   const noteMasse=(()=>{
@@ -26322,16 +26405,13 @@ function renderPlanCoach(){
     </div>
 
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:9px">Squelette de repas</div>
+    ${_cplHtmlMoment(c,moment)}
     ${clesUtilisees.map(blocRepas).join('')}
     <select onchange="if(this.value){cplAjouterMarqueur(this.value,'p');this.value='';}"
       style="width:100%;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;margin-bottom:18px">
       <option value="">+ Ouvrir un nouveau repas…</option>
-      ${PLAN_REPAS.filter(r=>clesUtilisees.indexOf(r.cle)<0).map(r=>`<option value="${r.cle}">${escapeHtml(r.lib)}</option>`).join('')}
+      ${planOrdreCles(moment).filter(k=>clesUtilisees.indexOf(k)<0).map(k=>`<option value="${k}">${escapeHtml(planLibRepas(k))}</option>`).join('')}
     </select>
-
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:9px">Sources interchangeables</div>
-    ${blocCatalogue('p','Protéines')}
-    ${blocCatalogue('c','Glucides')}
 
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:9px">Périodisation</div>
     <div class="plan-card" style="margin-bottom:18px"><div class="plan-corps" style="padding-top:11px">
@@ -26353,11 +26433,8 @@ function renderPlanCoach(){
       <button class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:10px;letter-spacing:.5px" onclick="cplAjouterPalier()">+ Ajouter un palier</button>
     </div></div>
 
-    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:9px">Liste de courses</div>
-    <div class="plan-card" style="margin-bottom:18px"><div class="plan-corps" style="padding-top:11px">
-      <div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-bottom:6px">Nombre de jours où chaque ligne est consommée, et ce qu'il reste déjà en stock. Le total des jours d'une macro doit faire ${PLAN_JOURS_SEMAINE}.</div>
-      <div id="cpl-courses">${_cplHtmlCourses()}</div>
-    </div></div>
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:9px">Sources interchangeables</div>
+    <div id="cpl-sources">${_cplHtmlSources()}</div>
 
     <div style="font-size:10px;color:var(--text-faint);line-height:1.6;margin-bottom:16px">${escapeHtml(PLAN_NOTE_CUISSON)}</div>
     <button class="btn btn-red" onclick="savePlanCoach()" style="font-size:12px;letter-spacing:1px">ENREGISTRER LE PLAN</button>
@@ -26398,6 +26475,44 @@ function supprimerPlanCoach(){
 // LECTURE SEULE, sans exception. L'athlète permute ses sources dans sa tête et
 // dans son assiette ; il ne modifie rien ici, et aucun bouton ne le laisse
 // croire qu'il le pourrait.
+// ── Le tableau de sources, PARTAGÉ par les deux écrans ────────────────────
+// Il vivait dans _htmlPlanAthlete. Le coach en a besoin à l'identique : il doit
+// voir ce que son athlète verra, sans qu'une seconde mise en forme se mette à
+// diverger de la première au premier retouchage.
+//
+// Le libellé Ciqual porte parfois « (aliment moyen) » : une convention de la
+// table Anses qui désigne l'entrée moyennée d'une famille. Elle ne dit rien à
+// l'athlète et coûte seize caractères sur une ligne qui en tient une
+// vingtaine. Seule cette parenthèse-là est retirée — les autres qualificatifs
+// (« cru », « égoutté ») changent le poids à peser et restent.
+function planNomCourt(n){
+  return String(n||'').replace(/\s*\(aliment moyen\)/gi,'').trim();
+}
+// TABLEAU À 4 COLONNES : deux paires (aliment, quantité) côte à côte. Une
+// liste de 28 glucides tenait sur 28 lignes, elle en occupe 14. La quantité
+// affichée est celle à consommer À CE REPAS — pas la valeur pour 100 g, qui
+// sert au calcul et pas à celui qui mange.
+function planTableau4(lignes,couleur,texte,vide){
+  // Sans `vide`, la phrase reste au caractère près celle de la fiche athlète :
+  // ce lot déplace du code, il ne réécrit aucun texte vu par un athlète.
+  if(!lignes.length) return `<div style="font-size:11px;color:var(--text-dim);line-height:1.6;padding:6px 2px">${vide?escapeHtml(vide):'Ton coach n\'a pas encore posé de sources ici.'}</div>`;
+  // title porte le nom ENTIER : la ligne est coupée, la donnée ne l'est pas.
+  const cell=l=>l
+    ? `<td class="p4-n" title="${escapeHtml(l.nom)}">${escapeHtml(planNomCourt(l.nom))}</td><td class="p4-q"${l.alerte?' style="color:var(--orange)"':''}>${l.qte}</td>`
+    : `<td class="p4-n"></td><td class="p4-q"></td>`;
+  let corps='';
+  for(let i=0;i<lignes.length;i+=2) corps+=`<tr>${cell(lignes[i])}${cell(lignes[i+1])}</tr>`;
+  return `<table class="p4${texte?' p4-txt':''}" style="--p4:${couleur}">
+    <thead><tr><th>Aliment</th><th>Qté</th><th>Aliment</th><th>Qté</th></tr></thead>
+    <tbody>${corps}</tbody></table>`;
+}
+// Les lignes du tableau pour une macro, depuis le résultat de planSources.
+// Une seule traduction « bloc de sources → lignes de tableau », partagée elle
+// aussi : c'est là que se joue l'égalité stricte entre les deux écrans.
+function planLignesSources(bloc){
+  return (bloc&&bloc.liste?bloc.liste:[]).map(s=>({nom:s.nom,
+    qte:(s.q==null?'—':Math.round(s.q)+' g'),alerte:s.excessif}));
+}
 function _htmlPlanAthlete(user){
   if(!planActif(user)) return '';
   const plan=planDe(user);
@@ -26422,33 +26537,10 @@ function _htmlPlanAthlete(user){
   // Code couleur commun aux deux écrans du plan — voir PLAN_COULEURS.
   const PL_COUL=PLAN_COULEURS;
 
-  // TABLEAU À 4 COLONNES : deux paires (aliment, quantité) côte à côte. Une
-  // liste de 28 glucides tenait sur 28 lignes, elle en occupe 14. La quantité
-  // affichée est celle à consommer À CE REPAS — pas la valeur pour 100 g, qui
-  // sert au calcul et pas à l'athlète.
-  // Le libellé Ciqual porte parfois « (aliment moyen) » : une convention de la
-  // table Anses qui désigne l'entrée moyennée d'une famille. Elle ne dit rien à
-  // l'athlète et coûte seize caractères sur une ligne qui en tient une
-  // vingtaine. Seule cette parenthèse-là est retirée — les autres qualificatifs
-  // (« cru », « égoutté ») changent le poids à peser et restent.
-  const nomCourt=n=>String(n||'').replace(/\s*\(aliment moyen\)/gi,'').trim();
-  const tableau4=(lignes,couleur,texte)=>{
-    if(!lignes.length) return `<div style="font-size:11px;color:var(--text-dim);line-height:1.6;padding:6px 2px">Ton coach n'a pas encore posé de sources ici.</div>`;
-    // title porte le nom ENTIER : la ligne est coupée, la donnée ne l'est pas.
-    const cell=l=>l
-      ? `<td class="p4-n" title="${escapeHtml(l.nom)}">${escapeHtml(nomCourt(l.nom))}</td><td class="p4-q"${l.alerte?' style="color:var(--orange)"':''}>${l.qte}</td>`
-      : `<td class="p4-n"></td><td class="p4-q"></td>`;
-    let corps='';
-    for(let i=0;i<lignes.length;i+=2) corps+=`<tr>${cell(lignes[i])}${cell(lignes[i+1])}</tr>`;
-    return `<table class="p4${texte?' p4-txt':''}" style="--p4:${couleur}">
-      <thead><tr><th>Aliment</th><th>Qté</th><th>Aliment</th><th>Qté</th></tr></thead>
-      <tbody>${corps}</tbody></table>`;
-  };
-  const listeSources=(macro)=>{
-    const b=macro==='p'?src.proteines:src.glucides;
-    return tableau4(b.liste.map(s=>({nom:s.nom,
-      qte:(s.q==null?'—':Math.round(s.q)+' g'),alerte:s.excessif})),PL_COUL[macro],false);
-  };
+  // Le tableau à 4 colonnes est monté au niveau du fichier : l'écran de
+  // composition du coach affiche EXACTEMENT le même, voir planTableau4.
+  const listeSources=(macro)=>planTableau4(
+    planLignesSources(macro==='p'?src.proteines:src.glucides),PL_COUL[macro],false);
   // REPLIÉ PAR DÉFAUT, et c'est tout l'objet de ce lot. Le catalogue complet
   // s'ouvrait dans CHAQUE repas qui appelle une source : sur un plan de prise
   // de masse, la même liste de 48 lignes était traversée trois fois avant
@@ -26470,7 +26562,7 @@ function _htmlPlanAthlete(user){
   // La table des fruits, telle quelle. Aucun calcul : ce sont des
   // équivalences de portion, les mêmes dans tous les programmes du coach.
   // Variante « texte » du tableau : les quantités sont rédigées, pas chiffrées.
-  const tableFruits=()=>tableau4(
+  const tableFruits=()=>planTableau4(
     PLAN_FRUITS.map(f=>({nom:f.n,qte:escapeHtml(f.q)})),PL_COUL.fruit,true);
   // « Voir la table des fruits » renvoyait vers un bloc situé tout en bas du
   // programme : il fallait sortir du repas, chercher, puis revenir. La table
@@ -26485,7 +26577,8 @@ function _htmlPlanAthlete(user){
   // aliment : il déplie juste sous lui la liste dans laquelle l'athlète
   // choisit — c'est la forme du tableur, et c'est ce qui rend le plan
   // utilisable sans faire d'aller-retour.
-  const cles=Object.keys(couv.parRepas).sort((a,b)=>planOrdreRepas(a)-planOrdreRepas(b));
+  const moment=planMoment(plan,user);
+  const cles=Object.keys(couv.parRepas).sort((a,b)=>planOrdreRepas(a,moment)-planOrdreRepas(b,moment));
   // Total du repas — même calcul et même libellé que la fiche coach.
   const totalRepas=(r)=>planTotalRepasHtml(planTotalRepas(r,rest,nSrc));
   const blocRepas=cles.map(cle=>{
