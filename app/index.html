@@ -1404,6 +1404,23 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
+<!-- ACTIVITÉ DU PORTEFEUILLE. Lecture seule : cet écran n'émet aucune
+     notification et ne modifie aucun état. -->
+<div id="s-coach-activite" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="loadCoachHome()">←</button>
+    <span class="topbar-title">Activité</span><span></span>
+  </div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
+      <h1 style="font-size:20px;line-height:1.3;font-weight:900;margin-bottom:4px">Ton portefeuille</h1>
+      <p class="sub" style="font-size:11.5px;line-height:1.6;margin-bottom:16px">Treize mois glissants, sur ce qui a été enregistré dans RepCore. Aucun montant, aucune comparaison à d'autres coachs.</p>
+      <div id="cact-body"></div>
+    </div>
+  </div>
+</div>
+
 <div id="s-coach-home" class="screen" style="flex-direction:column;height:100vh;height:100dvh;overflow:hidden">
 
   <!-- SIDEBAR (desktop only) -->
@@ -9354,7 +9371,8 @@ function renderPilotage(clients){
     </div>
     ${_pilBande('a','Depuis ta dernière visite',corpsA,ch.length?String(ch.length):'—')}
     ${_pilBande('b','Portefeuille',corpsB,String(p.total))}
-    ${_pilBande('c','Charge de travail',corpsC,String(g.bilansSansReponse+g.videosEnAttente))}`;
+    ${_pilBande('c','Charge de travail',corpsC,String(g.bilansSansReponse+g.videosEnAttente))}
+    <button onclick="loadCoachActivite()" style="width:100%;min-height:44px;margin-top:8px;background:none;border:1px solid var(--border);border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer">Activité du portefeuille →</button>`;
 }
 // La visite est horodatée À LA SORTIE de l'écran, pas à l'entrée : la datant à
 // l'entrée, la bande A serait vide dès la seconde ouverture de la journée.
@@ -11128,6 +11146,286 @@ async function _rafraichirCodesEleves(){
     // requete est longue, il a pu naviguer ailleurs entre-temps.
     if(document.getElementById('s-coach-home')?.classList.contains('active')) loadCoachHome();
   }
+}
+
+// ══════════════ ACTIVITÉ DU PORTEFEUILLE — 13 MOIS GLISSANTS ══════════════
+// Six fonctions PURES, sans DOM, sans réseau. Elles ne lisent que le tableau
+// d'athlètes déjà en mémoire (getClients → localStorage), et n'ajoutent aucun
+// champ : tout est dérivé de sessions[], createdAt et phase.
+//
+// AUCUN CHIFFRE D'ARGENT, aucun classement, aucune moyenne de marché :
+// RepCore ne connaît ni le prix de vente du coach, ni les autres coachs.
+//
+// AUCUNE DONNÉE DE SANTÉ NE SORT D'ICI. _estEnPause rend un booléen et rien
+// d'autre : ni la cause, ni le champ qui l'a déclenchée. C'est volontaire —
+// « en pause » se dit, « enceinte » ne se dit pas.
+const ACT_MOIS=13;
+const ACT_SORTIE_JOURS=60;      // sans séance depuis ce délai = sortie
+const ACT_MIN_ATHLETES=5;       // en dessous, ni médiane ni tendance
+const ACT_FENETRE_SEM=4;        // fenêtre de complétion
+
+function _actMoisCle(d){
+  const p=n=>(n<10?'0':'')+n;
+  return d.getFullYear()+'-'+p(d.getMonth()+1);
+}
+function _actDebutMois(d){ return new Date(d.getFullYear(),d.getMonth(),1).getTime(); }
+function _actSessions(a){
+  const l=(a&&a.sessions)||[];
+  return Array.isArray(l)?l.filter(s=>s&&typeof s.date==='number'&&s.date>0):[];
+}
+// PURE. Au moins une séance loggée dans [debut, fin[. C'est LA définition
+// d'« actif », elle n'existe qu'ici, et l'écran l'affiche mot pour mot.
+function _estActifSurPeriode(a,debut,fin){
+  for(const s of _actSessions(a)) if(s.date>=debut&&s.date<fin) return true;
+  return false;
+}
+// PURE. Vrai si l'athlète est en pause DÉCLARÉE, quelle qu'en soit la cause.
+// La cause n'est jamais rendue : quatre situations, un seul booléen.
+//
+// LIMITE ASSUMÉE : une grossesse NON PARTAGÉE est retirée du dossier avant
+// qu'il n'arrive chez le coach (CLOUD, « if(!safe.grossessePartagee) delete
+// safe.grossesse »). Elle est donc invisible ici, et l'athlète sera comptée
+// comme sortie. On ne la devine pas — l'écran dit la limite au lieu de la
+// contourner.
+function _estEnPause(a){
+  if(!a) return false;
+  try{ if(pauseActive(a)) return true; }catch(e){}
+  try{ if(drapeauRougeActif(a)) return true; }catch(e){}
+  const g=a.grossesse;
+  if(g&&(g.etat==='enceinte'||g.etat==='allaitement'||g.actif===true)) return true;
+  const e=a.etatGrossesse;
+  if(e==='enceinte'||e==='allaitement') return true;
+  return false;
+}
+// PURE. Treize entrées au plus, la plus ancienne d'abord. La fenêtre s'arrête
+// au premier mois où le coach avait au moins un athlète : un coach de trois
+// mois voit trois barres, pas dix à zéro suivies de trois.
+function _actifsParMois(athletes,now){
+  const l=Array.isArray(athletes)?athletes.filter(Boolean):[];
+  // AUCUN athlète : aucune barre. Sans ce retour, `plusVieux` restait à
+  // l'infini, le garde-fou ci-dessous ne se déclenchait jamais, et un coach
+  // qui vient de s'inscrire lisait treize mois à zéro — soit exactement le
+  // faux effondrement que cette fenêtre doit éviter.
+  if(!l.length) return [];
+  const d=(now instanceof Date)?new Date(now):new Date(now||Date.now());
+  let plusVieux=Infinity;
+  for(const a of l){
+    const c=Number(a.createdAt);
+    if(isFinite(c)&&c>0&&c<plusVieux) plusVieux=c;
+    for(const s of _actSessions(a)) if(s.date<plusVieux) plusVieux=s.date;
+  }
+  const out=[];
+  for(let i=ACT_MOIS-1;i>=0;i--){
+    const m=new Date(d.getFullYear(),d.getMonth()-i,1);
+    const debut=m.getTime();
+    const fin=new Date(d.getFullYear(),d.getMonth()-i+1,1).getTime();
+    // Rien avant le premier athlète : on n'affiche pas des zéros trompeurs.
+    if(isFinite(plusVieux)&&fin<=plusVieux) continue;
+    let n=0;
+    for(const a of l) if(_estActifSurPeriode(a,debut,fin)) n++;
+    out.push({mois:_actMoisCle(m),actifs:n});
+  }
+  return out;
+}
+// PURE. Entrées et sorties du TRIMESTRE en cours.
+// Une pause déclarée n'est JAMAIS une sortie : c'est tout l'objet du compteur
+// séparé — un coach qui lit « 4 sorties » alors que trois sont des pauses
+// prend une décision sur un chiffre faux.
+function _entreesSorties(athletes,now){
+  const l=Array.isArray(athletes)?athletes.filter(Boolean):[];
+  const d=(now instanceof Date)?new Date(now):new Date(now||Date.now());
+  const t=d.getTime();
+  const trim=Math.floor(d.getMonth()/3);
+  const debut=new Date(d.getFullYear(),trim*3,1).getTime();
+  const limite=t-ACT_SORTIE_JOURS*864e5;
+  let entrees=0,sorties=0,pauses=0;
+  for(const a of l){
+    const c=Number(a.createdAt);
+    if(isFinite(c)&&c>=debut&&c<=t) entrees++;
+    if(_estEnPause(a)){ pauses++; continue; }
+    const ses=_actSessions(a);
+    if(!ses.length) continue;                 // jamais démarré : pas une sortie
+    let dernier=0;
+    for(const s of ses) if(s.date>dernier) dernier=s.date;
+    if(dernier<limite) sorties++;
+  }
+  return {entrees,sorties,pauses,depuis:debut,seuilJours:ACT_SORTIE_JOURS};
+}
+function _actMediane(l){
+  if(!l.length) return null;
+  const t=l.slice().sort((a,b)=>a-b);
+  return t.length%2?t[(t.length-1)/2]:(t[t.length/2-1]+t[t.length/2])/2;
+}
+// PURE. Ancienneté médiane en SEMAINES. null sous cinq athlètes : une médiane
+// sur trois personnes ne dit rien et se lirait comme un fait.
+function _ancienneteMediane(athletes,now){
+  const l=Array.isArray(athletes)?athletes.filter(Boolean):[];
+  if(l.length<ACT_MIN_ATHLETES) return null;
+  const t=(now instanceof Date)?now.getTime():(typeof now==='number'?now:Date.now());
+  const sem=[];
+  for(const a of l){
+    const c=Number(a.createdAt);
+    if(isFinite(c)&&c>0&&c<=t) sem.push((t-c)/(7*864e5));
+  }
+  const m=_actMediane(sem);
+  return m==null?null:Math.round(m);
+}
+// PURE. Taux de complétion moyen sur quatre semaines, et sa tendance face aux
+// quatre précédentes. null sous cinq athlètes, pour la même raison.
+//
+// « tendance » vaut 'hausse' | 'stable' | 'baisse' — jamais un pourcentage de
+// progression, qui se lirait comme une projection.
+function _completionMoyenne(athletes,now){
+  const l=Array.isArray(athletes)?athletes.filter(Boolean):[];
+  if(l.length<ACT_MIN_ATHLETES) return null;
+  const t=(now instanceof Date)?now.getTime():(typeof now==='number'?now:Date.now());
+  const fen=ACT_FENETRE_SEM*7*864e5;
+  const taux=(debut,fin)=>{
+    let faites=0,prevues=0;
+    for(const a of l){
+      if(_estEnPause(a)) continue;             // une pause ne pénalise personne
+      let p=0;
+      try{ p=Number(seancesPrevuesParSemaine(a))||0; }catch(e){}
+      if(!(p>0)) continue;
+      prevues+=p*ACT_FENETRE_SEM;
+      for(const s of _actSessions(a)) if(s.date>=debut&&s.date<fin) faites++;
+    }
+    return prevues>0?(faites/prevues):null;
+  };
+  const recent=taux(t-fen,t);
+  if(recent==null) return null;
+  const avant=taux(t-2*fen,t-fen);
+  let tendance='stable';
+  if(avant!=null){
+    const ecart=recent-avant;
+    if(ecart>0.05) tendance='hausse';
+    else if(ecart<-0.05) tendance='baisse';
+  }
+  return {taux:Math.round(recent*100),tendance:(avant==null?null:tendance),
+    semaines:ACT_FENETRE_SEM};
+}
+
+// ── L'écran, quatre cartes, barres en CSS pur ─────────────────────────────
+// Aucune bibliothèque, aucun canevas : des <div> dont la hauteur est un
+// pourcentage. Aucune notification n'est émise, aucun état n'est modifié —
+// cet écran LIT, il n'écrit rien.
+const ACT_MOIS_LIB=['janv.','févr.','mars','avr.','mai','juin','juil.','août',
+  'sept.','oct.','nov.','déc.'];
+function _actLibMois(cle){
+  const m=/^(\d{4})-(\d{2})$/.exec(String(cle||''));
+  if(!m) return String(cle||'');
+  return ACT_MOIS_LIB[+m[2]-1]+' '+m[1].slice(2);
+}
+function _actCarte(titre,corps,note){
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px 14px;margin-bottom:12px">
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:9px">${escapeHtml(titre)}</div>
+    ${corps}
+    ${note?`<div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-top:9px">${note}</div>`:''}
+  </div>`;
+}
+function _actChiffre(n,lib,couleur){
+  return `<div style="flex:1;min-width:0;text-align:center">
+    <div style="font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:26px;line-height:1;color:${couleur||'#fff'}">${n}</div>
+    <div style="font-size:9px;color:var(--sub);letter-spacing:1px;font-weight:800;text-transform:uppercase;margin-top:5px;line-height:1.25">${escapeHtml(lib)}</div>
+  </div>`;
+}
+function renderCoachActivite(){
+  const el=document.getElementById('cact-body');
+  if(!el) return;
+  // ── État « chargement » ──
+  // Le cache local peut être vide sur un appareil neuf : afficher 0 serait un
+  // faux effondrement. countActiveAthletesFiable existe exactement pour ça.
+  let fiable=true;
+  try{ fiable=countActiveAthletesFiable(currentUser,DB.get('users')||{}); }catch(e){}
+  let ath=[];
+  try{ ath=getClients().filter(c=>c&&!c._fromCode); }catch(e){
+    el.innerHTML=`<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:12px;padding:14px;font-size:12px;color:#eee;line-height:1.6">Impossible de lire ton portefeuille pour l'instant. Reviens dans un moment.</div>`;
+    return;
+  }
+  if(!fiable&&!ath.length){
+    el.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:22px 14px;text-align:center;font-size:12px;color:var(--text-dim);line-height:1.6">Synchronisation en cours…<div style="font-size:11px;color:var(--text-faint);margin-top:6px">Tes dossiers arrivent sur cet appareil. Les chiffres seraient faux avant.</div></div>`;
+    return;
+  }
+  // ── État « 0 athlète » ──
+  if(!ath.length){
+    el.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:22px 16px;text-align:center">
+      <div style="font-size:13px;font-weight:800;color:#fff;margin-bottom:6px">Pas encore d'athlète</div>
+      <div style="font-size:11.5px;color:var(--text-dim);line-height:1.6">Cet écran se remplira tout seul dès qu'un athlète aura rejoint ton suivi et enregistré sa première séance.</div>
+    </div>`;
+    return;
+  }
+  const now=Date.now();
+  const mois=_actifsParMois(ath,now);
+  const es=_entreesSorties(ath,now);
+  const anc=_ancienneteMediane(ath,now);
+  const comp=_completionMoyenne(ath,now);
+  const partiel=ath.length<ACT_MIN_ATHLETES;
+  // ── Carte 1 : actifs par mois ──
+  const maxi=mois.reduce((m,x)=>Math.max(m,x.actifs),0)||1;
+  const barres=mois.map(x=>{
+    const h=Math.round(x.actifs/maxi*100);
+    return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px">
+      <div style="font-size:9px;color:${x.actifs?'#ddd':'var(--text-faint)'};font-weight:800">${x.actifs}</div>
+      <div style="width:100%;height:64px;display:flex;align-items:flex-end">
+        <div style="width:100%;height:${Math.max(h,2)}%;background:${x.actifs?'linear-gradient(180deg,var(--red),#8d0000)':'#242424'};border-radius:3px 3px 0 0"></div>
+      </div>
+      <div style="font-size:8px;color:var(--text-faint);letter-spacing:.2px;white-space:nowrap;transform:rotate(-45deg);transform-origin:center;height:22px">${escapeHtml(_actLibMois(x.mois))}</div>
+    </div>`;
+  }).join('');
+  const c1=_actCarte('Athlètes actifs par mois',
+    `<div style="display:flex;gap:3px;align-items:flex-end">${barres}</div>`,
+    'Fenêtre réellement disponible : '+mois.length+' mois. <b>Actif</b> veut dire : au moins une séance enregistrée dans le mois.');
+  // ── Carte 2 : entrées et sorties du trimestre ──
+  const c2=_actCarte('Ce trimestre',
+    `<div style="display:flex;gap:8px">
+      ${_actChiffre(es.entrees,'Arrivées','var(--green)')}
+      ${_actChiffre(es.sorties,'Sans séance','var(--orange)')}
+      ${_actChiffre(es.pauses,'En pause','#8a8a8a')}
+    </div>`,
+    '« Sans séance » : aucune séance depuis '+es.seuilJours+' jours. Un athlète en pause déclarée n\'y figure jamais — et la raison de sa pause n\'est pas affichée ici.');
+  // ── Carte 3 : ancienneté ──
+  const c3=_actCarte('Ancienneté',
+    anc==null
+      ? `<div style="font-size:12px;color:var(--text-dim);line-height:1.6">${ath.length} athlète${ath.length>1?'s':''} suivi${ath.length>1?'s':''}. La médiane n'a pas de sens en dessous de ${ACT_MIN_ATHLETES} : elle reste masquée.</div>`
+      : `<div style="display:flex;gap:8px">${_actChiffre(anc,'Semaines (médiane)')}${_actChiffre(ath.length,'Athlètes')}</div>`,
+    anc==null?null:'La moitié de tes athlètes te suit depuis plus longtemps, l\'autre moitié depuis moins.');
+  // ── Carte 4 : complétion ──
+  const fleche=comp&&comp.tendance==='hausse'?'▲':comp&&comp.tendance==='baisse'?'▼':'=';
+  const coulT=comp&&comp.tendance==='hausse'?'var(--green)':comp&&comp.tendance==='baisse'?'var(--orange)':'var(--sub)';
+  const c4=_actCarte('Séances faites sur séances prévues',
+    comp==null
+      ? `<div style="font-size:12px;color:var(--text-dim);line-height:1.6">Masqué en dessous de ${ACT_MIN_ATHLETES} athlètes, ou tant qu'aucun programme n'est configuré.</div>`
+      : `<div style="display:flex;gap:8px;align-items:center">
+          ${_actChiffre(comp.taux+' %','sur '+comp.semaines+' semaines')}
+          <div style="flex:1;min-width:0;text-align:center">
+            <div style="font-size:22px;line-height:1;color:${coulT}">${comp.tendance?fleche:'—'}</div>
+            <div style="font-size:9px;color:var(--sub);letter-spacing:1px;font-weight:800;text-transform:uppercase;margin-top:6px">${comp.tendance?escapeHtml(comp.tendance):'pas de repère'}</div>
+          </div>
+        </div>`,
+    comp==null?null:'Comparé aux '+comp.semaines+' semaines précédentes. Les athlètes en pause n\'y comptent pas.');
+  el.innerHTML=c1+c2+c3+c4+_actParagraphe(ath,mois,es,anc,comp,partiel);
+}
+// UN SEUL paragraphe, FACTUEL. Il décrit ce qui est mesuré, il ne prédit rien,
+// ne compare à personne et ne chiffre aucun revenu.
+function _actParagraphe(ath,mois,es,anc,comp,partiel){
+  const p=[];
+  p.push('Tu suis '+ath.length+' athlète'+(ath.length>1?'s':'')+'.');
+  if(mois.length>=2){
+    const d=mois[mois.length-1].actifs, v=mois[mois.length-2].actifs;
+    p.push(d===v?('Autant d\'athlètes actifs ce mois-ci que le mois dernier ('+d+').')
+      :('Ce mois-ci, '+d+' athlète'+(d>1?'s':'')+' actif'+(d>1?'s':'')+', contre '+v+' le mois dernier.'));
+  }
+  if(es.sorties) p.push(es.sorties+' athlète'+(es.sorties>1?'s n\'ont':' n\'a')+' plus enregistré de séance depuis '+es.seuilJours+' jours.');
+  if(es.pauses) p.push(es.pauses+' '+(es.pauses>1?'sont':'est')+' en pause déclarée.');
+  if(partiel) p.push('En dessous de '+ACT_MIN_ATHLETES+' athlètes, les médianes et les tendances restent masquées : elles se liraient comme des faits alors qu\'elles n\'en sont pas.');
+  p.push('Ces chiffres décrivent ce qui a été enregistré dans RepCore, rien d\'autre.');
+  return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:13px 14px;font-size:11.5px;color:#ddd;line-height:1.7">${escapeHtml(p.join(' '))}
+    <div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-top:8px">Une pause non déclarée — ou déclarée sans être partagée avec toi — n'est pas visible ici : elle apparaîtra comme une absence de séance.</div>
+  </div>`;
+}
+function loadCoachActivite(){
+  go('s-coach-activite');
+  renderCoachActivite();
 }
 function loadCoachHome(){
   // Publication de rattrapage : les coachs qui ont rempli leur profil AVANT
@@ -50296,6 +50594,71 @@ function testExercices(){
           return _dispoTracerSante('bilan')===false
             ?true:_echec('trace écrite sans signal de santé');
         } finally { currentUser=sauve; window.saveUser=_sv; }})());
+    })();
+
+    // ── ACTIVITÉ DU PORTEFEUILLE ──────────────────────────────────────────
+    (function(){
+      const N=new Date(2026,7,15,12,0).getTime();
+      const J=n=>N-n*864e5;
+      const _a=o=>Object.assign({id:'a',createdAt:J(400),sessions:[],prevues:3},o||{});
+      const _s=(...j)=>j.map(n=>({date:J(n)}));
+      const six=[_a({id:'1',sessions:_s(3)}),_a({id:'2',sessions:_s(80)}),_a({id:'3'}),
+        _a({id:'4',phase:{pause:{debut:J(10),jours:30}}}),_a({id:'5',sessions:_s(1)}),
+        _a({id:'6',sessions:_s(5)})];
+
+      ok('Les six fonctions du tableau de bord sont PURES',(()=>{
+        const avant=JSON.stringify(six);
+        _actifsParMois(six,N); _entreesSorties(six,N); _ancienneteMediane(six,N);
+        _completionMoyenne(six,N); _estActifSurPeriode(six[0],0,N); _estEnPause(six[0]);
+        return JSON.stringify(six)===avant?true:_echec('un dossier a été modifié');})());
+
+      ok('_estEnPause couvre les QUATRE causes, sans jamais en dire laquelle',(()=>{
+        const cas=[['pause déclarée',{phase:{pause:{debut:J(5),jours:21}}}],
+          ['drapeau rouge',{drapeauRouge:{zone:'dos',cases:['irradie']}}],
+          ['grossesse',{grossesse:{etat:'enceinte'}}],
+          ['allaitement',{grossesse:{etat:'allaitement'}}]];
+        for(const [lib,o] of cas){
+          const r=_estEnPause(_a(o));
+          if(r!==true) return _echec(lib+' non retenue');
+          if(typeof r!=='boolean') return _echec(lib+' rend autre chose qu\x27un booléen');
+        }
+        return _estEnPause(_a({}))===false?true:_echec('un dossier sain compté en pause');})());
+
+      ok('_ancienneteMediane rend null sous 5 athlètes',(()=>{
+        const trois=[_a({id:'1'}),_a({id:'2'}),_a({id:'3'})];
+        if(_ancienneteMediane(trois,N)!==null) return _echec('médiane rendue à 3 athlètes');
+        if(_completionMoyenne(trois,N)!==null) return _echec('complétion rendue à 3 athlètes');
+        return _ancienneteMediane(six,N)!==null?true:_echec('masquée à 6 athlètes');})());
+
+      ok('AUCUN champ de santé, AUCUN nom, dans la sortie des agrégats',(()=>{
+        const s=_a({id:'zz',fname:'Prénom',lname:'Nom',sessions:_s(3),
+          grossesse:{etat:'enceinte',terme:'2026-12'},
+          drapeauRouge:{zone:'lombaires',cases:['irradie']},
+          pes:{actif:true},etatsSante:['sopk','thyroide']});
+        const out=JSON.stringify([_actifsParMois([s],N),_entreesSorties([s],N),
+          _ancienneteMediane([s],N),_completionMoyenne([s],N)]);
+        if(/enceinte|terme|lombaires|irradie|sopk|thyroide|grossesse|drapeau/i.test(out))
+          return _echec('donnée de santé exposée : '+out);
+        return /Prénom|Nom|zz/.test(out)?_echec('un athlète est nommé : '+out):true;})());
+
+      ok('Coach sans athlète : aucune barre, pas treize zéros',(()=>{
+        if(_actifsParMois([],N).length!==0) return _echec(_actifsParMois([],N).length+' barres');
+        return _actifsParMois(null,N).length===0?true:_echec('tableau absent mal traité');})());
+
+      ok('Une pause déclarée n\x27est JAMAIS comptée comme sortie',(()=>{
+        const l=[];
+        for(let i=0;i<4;i++) l.push(_a({id:'x'+i,sessions:_s(70+i)}));
+        l.push(_a({id:'g',sessions:_s(70),grossesse:{etat:'enceinte'}}));
+        const r=_entreesSorties(l,N);
+        if(r.sorties!==4) return _echec('sorties = '+r.sorties+', attendu 4');
+        return r.pauses===1?true:_echec('pauses = '+r.pauses+', attendu 1');})());
+
+      ok('L\x27écran d\x27activité n\x27émet aucune notification et n\x27écrit rien',(()=>{
+        for(const f of [_actifsParMois,_entreesSorties,_ancienneteMediane,
+                        _completionMoyenne,_estEnPause,_estActifSurPeriode,renderCoachActivite])
+          if(/showNotification|saveUser\(|DB\.set|CLOUD\.push/.test(String(f)))
+            return _echec('une fonction de ce lot écrit ou notifie');
+        return true;})());
     })();
 
     // ── douleur ciblée ──
