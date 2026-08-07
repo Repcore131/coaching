@@ -27717,24 +27717,31 @@ function lcChoisir(cle,val){
   const n=Number(String(val||'').split('|')[1]);
   z.textContent=(isFinite(n)&&n>0)?planFormatQte(Math.round(n*LC_REPAS),'g'):'—';
 }
-function lcCocher(cle,el){
-  const coche=!!(el&&el.checked);
+// « En stock » ou « à acheter ». Le champ enregistré reste `coursesAchat` :
+// l'ancienne case cochée valait déjà « je l'ai », les dossiers existants se
+// relisent donc sans migration.
+function lcStock(cle,el){
+  const stock=!!(el&&el.value==='stock');
   try{
     if(currentUser){
       if(!currentUser.nutrition) currentUser.nutrition={};
       if(!currentUser.nutrition.coursesAchat) currentUser.nutrition.coursesAchat={};
-      if(coche) currentUser.nutrition.coursesAchat[cle]=true;
+      if(stock) currentUser.nutrition.coursesAchat[cle]=true;
       else delete currentUser.nutrition.coursesAchat[cle];
       saveUser();
     }
   }catch(e){}
-  // Le trait et le gris suivent la case immédiatement, sans attendre un rendu.
+  // Le gris et le trait suivent le menu immédiatement : on est au milieu d'une
+  // liste, un rendu complet remettrait le défilement à zéro.
   try{
+    el.style.background=stock?'rgba(34,197,94,.10)':'#101010';
+    el.style.borderColor=stock?'rgba(34,197,94,.42)':'#303030';
+    el.style.color=stock?'var(--green)':'var(--sub)';
     const ligne=el.closest('div');
     const nom=ligne.children[1], qte=ligne.children[2];
-    if(nom){ nom.style.color=coche?'var(--text-faint)':'#ddd';
-      nom.style.textDecoration=coche?'line-through':'none'; }
-    if(qte) qte.style.color=coche?'var(--text-faint)':'#fff';
+    if(nom){ nom.style.color=stock?'var(--text-faint)':'#ddd';
+      nom.style.textDecoration=stock?'line-through':'none'; }
+    if(qte) qte.style.color=stock?'var(--text-faint)':'#fff';
   }catch(e){}
 }
 function _htmlPlanAthlete(user){
@@ -27861,9 +27868,28 @@ function _htmlPlanAthlete(user){
       ${cartoucheFruit('Table des équivalences')}
     </div>
   </div>`;
-  const blocCheat=`<div class="plan-card" style="margin-bottom:14px">
-    <div class="plan-corps" style="padding-top:12px">
-      ${PLAN_NOTE_CHEATMEAL.map(t=>`<div style="font-size:11.5px;color:#ddd;line-height:1.6;margin-bottom:4px">${escapeHtml(t)}</div>`).join('')}
+  // PANNEAU D'ATTENTION. Le cheatmeal est la seule règle du plan qu'on
+  // transgresse volontairement : elle ne doit pas se lire comme les autres.
+  // Rouge translucide, halo néon, filet diagonal, et un bandeau d'en-tête —
+  // c'est un panneau routier, pas un paragraphe.
+  const blocCheat=`<div style="position:relative;overflow:hidden;border-radius:12px;margin-bottom:14px;
+    background:linear-gradient(180deg,rgba(224,32,32,.13),rgba(224,32,32,.05));
+    border:1px solid rgba(255,90,90,.42);
+    box-shadow:0 0 20px rgba(224,32,32,.30),inset 0 1px 0 rgba(255,255,255,.07)">
+    <div style="position:absolute;inset:0;pointer-events:none;
+      background:repeating-linear-gradient(-50deg,transparent,transparent 13px,rgba(0,0,0,.16) 13px,rgba(0,0,0,.16) 14px)"></div>
+    <div style="position:relative;display:flex;align-items:center;gap:8px;padding:9px 13px;
+      background:linear-gradient(90deg,rgba(224,32,32,.55),rgba(140,0,0,.22) 70%,transparent);
+      border-bottom:1px solid rgba(255,90,90,.30)">
+      <span style="font-size:15px;line-height:1;filter:drop-shadow(0 0 6px rgba(255,90,90,.95))">⚠</span>
+      <span style="font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:15px;
+        letter-spacing:3px;color:#fff;text-transform:uppercase;
+        text-shadow:0 0 9px rgba(255,90,90,.95),0 0 20px rgba(224,32,32,.55)">Attention</span>
+    </div>
+    <div style="position:relative;padding:11px 13px 12px">
+      ${PLAN_NOTE_CHEATMEAL.map(t=>`<div style="display:flex;gap:8px;align-items:flex-start;font-size:11.5px;color:#f0dede;line-height:1.65;padding:4px 0;border-top:1px solid rgba(255,90,90,.14)">
+        <span style="color:#ff6b6b;flex-shrink:0;font-weight:900">•</span>
+        <span>${escapeHtml(t)}</span></div>`).join('')}
     </div>
   </div>`;
 
@@ -27873,14 +27899,22 @@ function _htmlPlanAthlete(user){
   // dans un magasin. D'où un cadre franchement plus gris, sans le liseré rouge
   // des cartes de repas — on doit voir d'un coup d'œil qu'on a quitté le
   // programme et qu'on est passé à la corvée.
-  const ligneCourse=(lib,qte,cle,coche)=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid #262626">
-      <label style="flex-shrink:0;display:inline-flex;align-items:center;cursor:pointer;min-width:44px;min-height:44px;justify-content:center;margin:-11px 0">
-        <input type="checkbox" ${coche?'checked':''} onchange="lcCocher('${cle}',this)"
-          aria-label="À acheter : ${escapeHtml(lib)}"
-          style="width:18px;height:18px;accent-color:var(--green);cursor:pointer">
-      </label>
-      <span style="flex:1;min-width:0;font-size:11.5px;color:${coche?'var(--text-faint)':'#ddd'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${coche?'text-decoration:line-through':''}">${escapeHtml(lib)}</span>
-      <span style="font-size:12px;font-weight:800;color:${coche?'var(--text-faint)':'#fff'};flex-shrink:0">${qte}</span>
+  // UNE CASE NE SUFFISAIT PAS. Cochée, elle voulait dire « fait » sans dire
+  // quoi : déjà au placard, ou acheté ce matin ? Un menu à deux entrées le dit.
+  // « En stock » grise la ligne — elle reste lisible, mais elle sort de la
+  // corvée du jour.
+  const ligneCourse=(lib,qte,cle,stock)=>`<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px solid #262626">
+      <select onchange="lcStock('${cle}',this)" aria-label="État : ${escapeHtml(lib)}"
+        style="flex-shrink:0;width:104px;min-height:38px;padding:6px 7px;border-radius:8px;cursor:pointer;
+          background:${stock?'rgba(34,197,94,.10)':'#101010'};
+          border:1px solid ${stock?'rgba(34,197,94,.42)':'#303030'};
+          color:${stock?'var(--green)':'var(--sub)'};
+          font-family:Montserrat,sans-serif;font-size:10.5px;font-weight:800;letter-spacing:.3px">
+        <option value=""${stock?'':' selected'}>À acheter</option>
+        <option value="stock"${stock?' selected':''}>En stock</option>
+      </select>
+      <span style="flex:1;min-width:0;font-size:11.5px;color:${stock?'var(--text-faint)':'#ddd'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${stock?'text-decoration:line-through':''}">${escapeHtml(lib)}</span>
+      <span style="font-size:12px;font-weight:800;color:${stock?'var(--text-faint)':'#fff'};flex-shrink:0">${qte}</span>
     </div>`;
   // Les sources sont INTERCHANGEABLES : la liste ne peut pas deviner laquelle
   // l'athlète prendra. Deux lignes par macro, où il choisit lui-même, et le
@@ -27907,9 +27941,10 @@ function _htmlPlanAthlete(user){
   const courses=(lc&&lc.lignes.length)?`<div style="background:#141414;border:1px solid #2f2f2f;border-radius:12px;padding:13px 14px;margin-bottom:14px">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
       <span style="font-size:var(--fs-xs);color:#cfcfcf;letter-spacing:2px;font-weight:800;text-transform:uppercase;display:inline-flex;align-items:center;gap:6px">${icon('clipboard',13)} Liste de courses</span>
-      <span style="font-size:9px;color:var(--text-faint);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;flex-shrink:0">À acheter</span>
+      <span style="font-size:9px;color:var(--text-faint);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;flex-shrink:0">Stock</span>
     </div>
       ${lc.lignes.filter(l=>l.qte>0).map(l=>ligneCourse(l.lib,planFormatQte(l.qte,l.unite),l.cle,!!achats[l.cle])).join('')}
+      ${''/* les quatre lignes « au choix » suivent, hors du marquage stock */}
       ${auChoix('p',0)}${auChoix('p',1)}
       ${auChoix('c',0)}${auChoix('c',1)}
       <div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-top:9px">Calculée sur un jour d'entraînement, le plus chargé : mieux vaut un reste qu'une rupture en milieu de semaine. Les lignes « au choix » comptent un repas multiplié par ${LC_REPAS}.</div>
