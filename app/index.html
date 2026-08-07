@@ -3094,6 +3094,12 @@ const COACH_PHOTO='icons/coach.jpg';
           <button class="fj-repas-btn" data-repas="dejeuner" onclick="selectRepas('dejeuner')">Déjeuner</button>
           <button class="fj-repas-btn" data-repas="diner" onclick="selectRepas('diner')">Dîner</button>
           <button class="fj-repas-btn" data-repas="collation" onclick="selectRepas('collation')">Collation</button>
+          <!-- « Nuit » et non « Nocturne » : MESURE, pas estimation (clone non
+               contraint, Montserrat chargée). À 375 px la rangée dispose de
+               335 px ; les cinq boutons en réclament 309,2 et tiennent sur une
+               ligne. « Nocturne » en réclame ~70 comme « Déjeuner » et fait
+               déborder. Le libellé long vit dans FJ_REPAS_LIB, pas ici. -->
+          <button class="fj-repas-btn" data-repas="coucher" onclick="selectRepas('coucher')">Nuit</button>
         </div>
       </div>
       <button class="btn btn-red" onclick="saveFoodEntry()" style="font-size:13px;letter-spacing:1px">AJOUTER AU JOURNAL</button>
@@ -24650,7 +24656,11 @@ const PLAN_REPAS=Object.freeze([
   Object.freeze({cle:'pendant',    lib:'Pendant la séance'}),
   Object.freeze({cle:'apres',      lib:'Après séance'}),
   Object.freeze({cle:'soir',       lib:'Repas du soir'}),
-  Object.freeze({cle:'collation2', lib:'Collation 2'})
+  Object.freeze({cle:'collation2', lib:'Collation 2'}),
+  // Absent des tableurs, demandé après coup. Il se range en dernier parce que
+  // l'ordre d'affichage du plan EST l'ordre de ce tableau, et qu'aucun repas ne
+  // vient après celui-là dans la journée.
+  Object.freeze({cle:'coucher',    lib:'Avant de se coucher'})
 ]);
 function planLibRepas(cle){
   const r=PLAN_REPAS.find(x=>x.cle===cle);
@@ -26767,7 +26777,7 @@ function annulerDernierAjout(){
   return true;
 }
 const FJ_REPAS_LIB=Object.freeze({matin:'Petit-déjeuner',dejeuner:'Déjeuner',
-  diner:'Dîner',collation:'Collation'});
+  diner:'Dîner',collation:'Collation',coucher:'Avant de se coucher'});
 function _htmlDernierAjout(date){
   const a=_fjDernierAjout;
   if(!a||a.date!==date) return '';
@@ -27003,8 +27013,10 @@ function _renderFjDaySummary(date){
   // des deux emplacements qui subsiste en diète stricte, où le journal est
   // masqué — le retirer là-bas priverait ces athlètes du repère.
   const _repHtml='';
-  const repasOrder=['matin','dejeuner','diner','collation'];
-  const repasLabels={matin:'Petit-déjeuner',dejeuner:'Déjeuner',diner:'Dîner',collation:'Collation'};
+  // « coucher » ferme la journée. Il passe après « Collation », qui n'est pas à
+  // une heure fixe et sert déjà de fourre-tout en fin de liste.
+  const repasOrder=['matin','dejeuner','diner','collation','coucher'];
+  const repasLabels={matin:'Petit-déjeuner',dejeuner:'Déjeuner',diner:'Dîner',collation:'Collation',coucher:'Avant de se coucher'};
   const grouped={};
   entries.forEach(e=>{const r=e.repas||'dejeuner';if(!grouped[r])grouped[r]=[];grouped[r].push(e);});
   const dayBadge=isOn
