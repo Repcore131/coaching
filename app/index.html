@@ -1654,6 +1654,31 @@ const COACH_PHOTO='icons/coach.jpg';
           </div>
           <button onclick="saveCoachIdentity()" style="width:100%;background:var(--red);border:none;color:#fff;border-radius:3px;padding:12px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px">ENREGISTRER</button>
         </div>
+        <!-- DISPONIBILITE. Ce que l athlete lit AVANT de t ecrire. Le compteur
+             de delai reel, lui, ne quitte jamais cet ecran. -->
+        <div class="card" style="margin-bottom:14px">
+          <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Disponibilité</label>
+          <div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-bottom:10px">Ce que tes athlètes liront juste avant de t'écrire. Tant que tu n'as rien déclaré, rien ne s'affiche chez eux.</div>
+          <label style="font-size:11px;color:#ddd;display:block;margin-bottom:6px">Délai de réponse habituel (heures)</label>
+          <input id="coach-dispo-delai" type="number" min="1" max="168" placeholder="24" style="width:100%;font-size:16px;padding:11px 14px;box-sizing:border-box;margin-bottom:8px">
+          <div id="coach-dispo-apercu" style="font-size:11px;color:var(--text-faint);line-height:1.55;margin-bottom:12px"></div>
+          <div style="border-top:1px solid var(--border);padding-top:12px">
+            <label style="display:flex;align-items:center;gap:9px;cursor:pointer;min-height:44px">
+              <input type="checkbox" id="coach-dispo-abs" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0">
+              <span style="font-size:12px;color:#ddd">Je suis absent</span>
+            </label>
+            <div style="display:flex;gap:8px;margin-bottom:8px">
+              <div style="flex:1"><label style="font-size:10px;color:var(--sub);display:block;margin-bottom:4px">Du</label>
+                <input id="coach-dispo-du" type="date" style="width:100%;font-size:14px;padding:9px 10px;box-sizing:border-box"></div>
+              <div style="flex:1"><label style="font-size:10px;color:var(--sub);display:block;margin-bottom:4px">Au (obligatoire)</label>
+                <input id="coach-dispo-au" type="date" style="width:100%;font-size:14px;padding:9px 10px;box-sizing:border-box"></div>
+            </div>
+            <input id="coach-dispo-msg" type="text" maxlength="140" placeholder="Message affiché à tes athlètes (facultatif)" style="width:100%;font-size:13px;padding:11px 14px;box-sizing:border-box">
+            <div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-top:8px">Une date de fin est obligatoire, 90 jours au plus. L'absence s'éteint toute seule : tu n'as rien à décocher au retour. Elle n'empêche jamais un athlète de t'écrire.</div>
+          </div>
+          <button onclick="saveCoachDispo()" style="width:100%;background:var(--red);border:none;color:#fff;border-radius:3px;padding:12px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px;margin-top:12px">ENREGISTRER</button>
+          <div id="coach-dispo-median" style="font-size:11px;color:#ddd;line-height:1.6;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)"></div>
+        </div>
 
         <!-- 🖼️ Bannières publicitaires -->
         <div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:14px;padding:18px;margin-bottom:18px">
@@ -2259,6 +2284,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <!-- La ligne « Coach : … » a été retirée : la carte du coach, juste en
              dessous, porte déjà son nom, sa photo et sa phrase. Le cas « sans
              coach » y est traité aussi, par une invitation à saisir un code. -->
+        <div id="clh-dispo"></div>
         <a id="clh-contact-link" href="#" target="_blank" rel="noopener" style="display:none;font-size:11px;color:var(--red);font-weight:700;letter-spacing:.5px;margin-top:6px;text-decoration:none;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg> Un souci ? Contacte ton coach</a>
         <a href="#" onclick="ouvrirReglagesAthlete();return false" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--sub);font-weight:700;letter-spacing:.5px;margin-top:6px;text-decoration:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;flex-shrink:0"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.31.4.55.71.66H21a2 2 0 1 1 0 4h-.09c-.31.11-.57.35-.71.66z"/></svg> Réglages</a>
       </div>
@@ -5279,7 +5305,7 @@ const CLOUD={
   // separement dans coach_public serait efface a la prochaine sauvegarde de
   // profil, sans erreur ni trace. La banniere epinglee aurait disparu le jour
   // ou le coach change sa photo.
-  CHAMPS_PROFIL_COACH:['fname','lname','teamName','catchphrase','coachPhoto','promoBanners','phone','chargesSchema','contact','canalDernier','canalEpingle'],
+  CHAMPS_PROFIL_COACH:['fname','lname','teamName','catchphrase','coachPhoto','promoBanners','phone','chargesSchema','contact','canalDernier','canalEpingle','dispo'],
   // ── Santé privée : ce que le coach ne voit pas, et qui survit quand même ──
   // La règle de /users donne au coach un accès LECTURE ET ÉCRITURE sur le
   // dossier entier de ses athlètes, sans granularité. Les blocs non partagés
@@ -9478,6 +9504,153 @@ const CONTACT_SORTIE='Tu quittes RepCore. Cet échange ne sera pas conservé '
 const CONTACT_REVOCATION='Tes athlètes ne verront plus ton numéro. Ceux qui '
   +'l\'ont déjà noté le gardent : une révocation ne rappelle pas ce qui a été '
   +'communiqué.';
+
+// ══════════════ CADRE DE DISPONIBILITÉ DU COACH ═══════════════════════════
+// Le coach déclare un délai de réponse HABITUEL et des plages ; l'athlète le
+// lit au moment où il écrit. Un mode absence daté informe — il n'empêche
+// jamais un envoi.
+//
+// AUCUNE PROMESSE. Le vocabulaire est « habituellement », jamais « garanti »
+// ni « sous 24 h maximum » : un délai affiché ne doit pas se lire comme un
+// engagement contractuel. Une assertion l'interdit littéralement.
+//
+// FUSEAUX. L'app ne stocke le fuseau de personne. Les heures déclarées sont
+// donc comparées à l'horloge LOCALE de qui regarde — l'athlète voit son heure
+// à lui, ce que demande la règle 8. Limite assumée et à dire : un coach à
+// Montréal qui déclare 9 h-19 h sera lu 9 h-19 h par un athlète à Paris.
+const DISPO_ABSENCE_MAX_J=90;
+const DISPO_DELAI_MIN_H=1, DISPO_DELAI_MAX_H=168;   // 1 h à 7 jours
+const DISPO_MEDIAN_FENETRE_J=30;
+
+function _dispoMinutes(hhmm){
+  const m=/^(\d{1,2}):(\d{2})$/.exec(String(hhmm||'').trim());
+  if(!m) return null;
+  const h=+m[1], mn=+m[2];
+  if(!(h>=0&&h<=23&&mn>=0&&mn<=59)) return null;
+  return h*60+mn;
+}
+// PURE. Vrai si `now` tombe dans l'une des plages déclarées.
+//
+// Une plage dont la fin est AVANT le début traverse minuit (22:00 → 02:00) :
+// elle vaut alors du début à minuit le jour dit, et de minuit à la fin le
+// LENDEMAIN. L'ignorer aurait rendu toute plage de nuit systématiquement
+// fausse, sans que rien ne le signale.
+function dispoEstDansPlage(dispo,now){
+  const l=(dispo&&Array.isArray(dispo.plages))?dispo.plages:[];
+  if(!l.length) return false;
+  const d=(now instanceof Date)?now:new Date(now||Date.now());
+  const jour=d.getDay(), min=d.getHours()*60+d.getMinutes();
+  const veille=(jour+6)%7;
+  for(const p of l){
+    if(!p) continue;
+    const deb=_dispoMinutes(p.debut), fin=_dispoMinutes(p.fin);
+    if(deb==null||fin==null) continue;
+    const j=Number(p.jour);
+    if(!(j>=0&&j<=6)) continue;
+    if(deb<fin){ if(j===jour&&min>=deb&&min<fin) return true; }
+    else if(deb>fin){
+      // Traverse minuit : la soirée du jour dit, puis le petit matin du suivant.
+      if(j===jour&&min>=deb) return true;
+      if(j===veille&&min<fin) return true;
+    }
+  }
+  return false;
+}
+// PURE. Une absence doit porter une date de FIN : sans elle, elle ne s'éteint
+// jamais et l'athlète ne sait pas quand revenir. Quatre-vingt-dix jours au
+// plus, renouvelable — au-delà ce n'est plus une absence, c'est un arrêt.
+function absenceValide(absence,now){
+  if(!absence) return false;
+  const t=(now instanceof Date)?now.getTime():(typeof now==='number'?now:Date.now());
+  const au=_dispoTs(absence.au);
+  if(au==null) return false;                       // date de fin OBLIGATOIRE
+  const du=_dispoTs(absence.du);
+  const debut=(du==null)?t:du;
+  if(au<=debut) return false;                      // une fin avant le début n'est pas une absence
+  return (au-debut)<=DISPO_ABSENCE_MAX_J*864e5;
+}
+function _dispoTs(v){
+  if(v==null||v==='') return null;
+  if(typeof v==='number') return isFinite(v)?v:null;
+  const t=Date.parse(v);
+  return isFinite(t)?t:null;
+}
+// L'absence s'éteint TOUTE SEULE à sa date de fin : le coach n'a rien à
+// décocher au retour, et un oubli ne laisse pas un bandeau mensonger.
+function absenceEnCours(dispo,now){
+  const a=dispo&&dispo.absence;
+  if(!a||a.actif!==true) return false;
+  const t=(now instanceof Date)?now.getTime():(typeof now==='number'?now:Date.now());
+  if(!absenceValide(a,t)) return false;
+  const du=_dispoTs(a.du), au=_dispoTs(a.au);
+  if(du!=null&&t<du) return false;
+  return t<au;
+}
+function _dispoDateCourte(ts){
+  try{ return new Date(ts).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}); }
+  catch(e){ return ''; }
+}
+// PURE. Le texte que lit l'athlète. Chaîne vide = aucun cadre déclaré, donc
+// rien à afficher : mieux vaut le silence qu'un délai inventé.
+function dispoLibelle(dispo,now){
+  if(!dispo) return '';
+  if(absenceEnCours(dispo,now)){
+    const au=_dispoTs(dispo.absence.au);
+    return 'Absent jusqu\'au '+_dispoDateCourte(au);
+  }
+  const h=Number(dispo.delaiH);
+  if(!(h>=DISPO_DELAI_MIN_H&&h<=DISPO_DELAI_MAX_H)) return '';
+  // « habituellement » : c'est une habitude constatée, pas un engagement.
+  if(h<24) return 'Répond habituellement sous '+Math.round(h)+' h';
+  const j=Math.round(h/24);
+  return j<=1?'Répond habituellement sous 24 h'
+             :'Répond habituellement sous '+j+' jours';
+}
+// PURE. Délai médian de réponse en heures, sur les trente derniers jours.
+// RÉSERVÉ AU COACH : ce n'est pas un score, il ne sort jamais vers l'athlète
+// ni vers un tiers. La liste blanche CHAMPS_PROFIL_COACH l'en empêche
+// structurellement — il n'y figure pas, et une assertion le vérifie.
+function delaiMedianReponse(echanges,now){
+  const t=(now instanceof Date)?now.getTime():(typeof now==='number'?now:Date.now());
+  const limite=t-DISPO_MEDIAN_FENETRE_J*864e5;
+  const h=[];
+  for(const e of (Array.isArray(echanges)?echanges:[])){
+    if(!e) continue;
+    const envoi=_dispoTs(e.date), rep=_dispoTs(e.reponseDate);
+    if(envoi==null||rep==null) continue;
+    if(rep<envoi) continue;                 // horodatage incohérent : on l'écarte
+    if(envoi<limite) continue;
+    h.push((rep-envoi)/36e5);
+  }
+  if(!h.length) return null;
+  h.sort((a,b)=>a-b);
+  const m=h.length%2
+    ? h[(h.length-1)/2]
+    : (h[h.length/2-1]+h[h.length/2])/2;
+  return Math.round(m*10)/10;
+}
+// Les bilans sont le SEUL échange horodaté des deux côtés : l'athlète envoie
+// (b.date), le coach répond (b.reponseDate). Le contact direct sort de l'app
+// et la vidéo ne porte pas de date de réponse exploitable.
+function dispoEchangesDe(clients){
+  const out=[];
+  for(const c of (Array.isArray(clients)?clients:[]))
+    for(const b of ((c&&c.bilans)||[]))
+      if(b&&b.date&&b.reponseDate) out.push({date:b.date,reponseDate:b.reponseDate});
+  return out;
+}
+// LA SANTÉ PASSE AVANT L'INTENDANCE. Drapeau rouge ou douleur au-dessus du
+// seuil : le cadre de disponibilité ne s'applique pas, et une trace est
+// écrite. Elle remonte par la synchronisation ordinaire — sans serveur, c'est
+// l'appareil du coach qui lèvera la notification à sa prochaine ouverture.
+function dispoSanteForce(user){
+  try{
+    if(drapeauRougeActif(user)) return 'drapeau';
+    const sg=signauxEntrainement(user);
+    if(sg&&(sg.douleur||sg.douleurDiffuse)) return 'douleur';
+  }catch(e){}
+  return null;
+}
 function _coachContactHref(coachId,texte,users){
   if(!coachId) return '';
   const us=users||DB.get('users')||{};
@@ -15730,6 +15903,7 @@ function loadClientHome(){
   }
   // `users` sert plus bas à _applyCoachData : il reste, la carte PDF non.
   const users=DB.get('users')||{};
+  _majBandeauDispo('clh-dispo');
   const contactLink=document.getElementById('clh-contact-link');
   if(contactLink&&u.coachId){
     // Déclarée AVANT _applyCoachData : le rapatriement plus bas s'en sert
@@ -20299,7 +20473,9 @@ function renderBilStep(){
   document.getElementById('bil-progress').style.width=((bilStep+1)/total*100)+'%';
   document.getElementById('bil-next-btn').textContent=bilStep===total-1?'Valider ':'Suivant →';
   document.getElementById('bil-back-btn').style.visibility='visible';
-  document.getElementById('bil-content').innerHTML='<div class="pad">'+steps[bilStep]()+'</div>';
+  // Le cadre de disponibilite se lit AVANT d ecrire, pas apres l envoi.
+  document.getElementById('bil-content').innerHTML='<div class="pad">'
+    +htmlBandeauDispo()+steps[bilStep]()+'</div>';
   const skipBtn=document.getElementById('bil-skip-depart');
   if(skipBtn) skipBtn.style.display=(bilType==='depart'&&!currentUser?.bilans?.some(b=>b.type==='depart'))?'block':'none';
   _bilBrancherAutoSave();
@@ -22176,6 +22352,10 @@ const DEB_STEPS=[
     `</div>`
 ];
 function saveBilanFinal(){
+  // LA SANTE PASSE AVANT L INTENDANCE. Drapeau rouge ou douleur au-dessus du
+  // seuil : on ecrit la trace quoi qu il arrive, absence du coach comprise.
+  // Elle remonte par la synchronisation, et l appareil du coach la relevera.
+  try{ _dispoTracerSante('bilan'); }catch(e){}
   const n=(currentUser.bilans||[]).filter(b=>b.type===bilType).length+1;
   const bi=Object.assign({type:bilType,date:Date.now(),num:n},bilData);
   // Le bilan est validé : le brouillon n'a plus de raison d'être, et le laisser
@@ -36209,6 +36389,129 @@ function saveCoachIdentity(){
   setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},300);
   toastEcriture(ok,'Identité de la team enregistrée ✓','l\'identité est');
 }
+
+// ── Le cadre de disponibilité, côté écran ─────────────────────────────────
+// Côté coach : une section de réglages. Côté athlète : un bandeau AVANT la
+// zone de saisie, jamais après l'envoi. Le compteur de délai médian n'existe
+// que sur l'écran du coach — il n'est pas dans CHAMPS_PROFIL_COACH, donc il
+// ne peut pas partir vers l'athlète, et une assertion le vérifie.
+const DISPO_TRACES_MAX=50;
+function _dispoLireDate(id){
+  const el=document.getElementById(id);
+  const v=el&&el.value?String(el.value).trim():'';
+  if(!v) return null;
+  const t=Date.parse(v+'T00:00:00');
+  return isFinite(t)?t:null;
+}
+function saveCoachDispo(){
+  if(!currentUser) return;
+  const dEl=document.getElementById('coach-dispo-delai');
+  const brut=dEl&&dEl.value!==''?Number(dEl.value):null;
+  if(brut!=null&&!(brut>=DISPO_DELAI_MIN_H&&brut<=DISPO_DELAI_MAX_H)){
+    toast('Le délai doit tenir entre 1 h et 7 jours.','var(--orange)'); return;
+  }
+  const actif=!!(document.getElementById('coach-dispo-abs')||{}).checked;
+  const du=_dispoLireDate('coach-dispo-du');
+  const au=_dispoLireDate('coach-dispo-au');
+  const msg=((document.getElementById('coach-dispo-msg')||{}).value||'').trim().slice(0,140);
+  if(actif){
+    // REFUS EXPLICITE, pas un silence : une absence sans fin ne s'éteint
+    // jamais et l'athlète ne sait pas quand revenir.
+    if(au==null){ toast('Une date de fin est obligatoire pour une absence.','var(--orange)'); return; }
+    if(!absenceValide({du,au},Date.now())){
+      toast('Absence impossible : la fin doit suivre le début, et 90 jours au plus.','var(--orange)');
+      return;
+    }
+  }
+  const anc=(currentUser.dispo&&currentUser.dispo.plages)||[];
+  currentUser.dispo={delaiH:(brut!=null?Math.round(brut):null),plages:anc,
+    absence:{actif:actif,du:du,au:au,message:msg}};
+  CLOUD.pushProfilCoach(currentUser);
+  const ok=saveUser();
+  setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch(e){}},300);
+  toastEcriture(ok,'Disponibilité enregistrée ✓','le cadre de disponibilité est');
+  _chargerDispoCoach(currentUser);
+}
+function _dispoAAAAMMJJ(ts){
+  if(ts==null) return '';
+  const d=new Date(ts);
+  const p=n=>(n<10?'0':'')+n;
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
+}
+function _chargerDispoCoach(u){
+  const d=(u&&u.dispo)||{};
+  const set=(id,v)=>{const e=document.getElementById(id); if(e) e.value=v;};
+  set('coach-dispo-delai',d.delaiH!=null?d.delaiH:'');
+  const a=d.absence||{};
+  const cb=document.getElementById('coach-dispo-abs');
+  if(cb) cb.checked=a.actif===true;
+  set('coach-dispo-du',_dispoAAAAMMJJ(a.du));
+  set('coach-dispo-au',_dispoAAAAMMJJ(a.au));
+  set('coach-dispo-msg',a.message||'');
+  // Aperçu : le coach lit EXACTEMENT ce que son athlète lira.
+  const ap=document.getElementById('coach-dispo-apercu');
+  if(ap){
+    const t=dispoLibelle(d,Date.now());
+    ap.textContent=t?('Tes athlètes liront : « '+t+' »')
+                    :'Rien n\'est affiché tant que tu n\'as pas déclaré de délai.';
+  }
+  // ── Le compteur, POUR LE COACH SEUL ──
+  // Ce n'est pas un score et il ne quitte pas cet écran : ni la liste blanche
+  // du profil public, ni aucun rendu athlète ne le portent.
+  const md=document.getElementById('coach-dispo-median');
+  if(md){
+    let m=null;
+    try{ m=delaiMedianReponse(dispoEchangesDe(getClients()),Date.now()); }catch(e){}
+    md.innerHTML=(m==null)
+      ?'<span style="color:var(--text-faint)">Pas encore assez de bilans répondus pour calculer ton délai réel.</span>'
+      :'Ton délai réel médian sur '+DISPO_MEDIAN_FENETRE_J+' jours : <b>'
+        +(m<24?(Math.round(m*10)/10).toString().replace('.',',')+' h'
+              :(Math.round(m/2.4)/10).toString().replace('.',',')+' jours')
+        +'</b> <span style="color:var(--text-faint)">— visible de toi seul.</span>';
+  }
+}
+// ── Côté athlète : le bandeau, AVANT la saisie ────────────────────────────
+// Il informe, il ne censure pas : aucun envoi n'est bloqué, différé ni filtré.
+// Quand un signal de santé est levé, on le dit — la santé passe avant
+// l'intendance, et le message part de toute façon.
+function htmlBandeauDispo(){
+  let d=null;
+  try{ d=(profilCoachLocal(cleCoachDe(currentUser))||{}).dispo||null; }catch(e){}
+  const txt=dispoLibelle(d,Date.now());
+  const sante=dispoSanteForce(currentUser);
+  if(!txt&&!sante) return '';
+  const abs=(()=>{ try{ return absenceEnCours(d,Date.now()); }catch(e){ return false; } })();
+  const msg=(abs&&d&&d.absence&&d.absence.message)?d.absence.message:'';
+  const couleur=abs?'var(--orange)':'var(--sub)';
+  const fond=abs?'var(--warning-bg)':'var(--surface-1)';
+  const bord=abs?'var(--warning-border)':'var(--border)';
+  return `<div style="background:${fond};border:1px solid ${bord};border-radius:10px;padding:10px 12px;margin-bottom:12px">
+    ${txt?`<div style="font-size:11.5px;color:${couleur};font-weight:700;line-height:1.5">${escapeHtml(txt)}</div>`:''}
+    ${msg?`<div style="font-size:11px;color:#ddd;line-height:1.55;margin-top:4px">${escapeHtml(msg)}</div>`:''}
+    ${sante?`<div style="font-size:11px;color:var(--red);line-height:1.55;margin-top:${txt||msg?'6':'0'}px;font-weight:700">Ce que tu signales touche ta santé : ton coach en est averti quoi qu'il arrive.</div>`
+           :`<div style="font-size:10px;color:var(--text-faint);line-height:1.5;margin-top:4px">Tu peux écrire quand tu veux : rien n'est bloqué.</div>`}
+  </div>`;
+}
+function _majBandeauDispo(id){
+  const el=document.getElementById(id);
+  if(el) el.innerHTML=htmlBandeauDispo();
+}
+// La TRACE. Sans serveur, l'appareil de l'athlète ne peut pas faire sonner
+// celui du coach : on écrit donc la trace dans le dossier de l'athlète, elle
+// remonte par la synchronisation ordinaire, et c'est l'appareil du coach qui
+// la relèvera à sa prochaine ouverture. Le mode absence n'y change rien.
+function _dispoTracerSante(contexte){
+  try{
+    const motif=dispoSanteForce(currentUser);
+    if(!motif||!currentUser) return false;
+    if(!Array.isArray(currentUser.tracesSante)) currentUser.tracesSante=[];
+    currentUser.tracesSante.push({quand:Date.now(),motif:motif,ou:String(contexte||'')});
+    if(currentUser.tracesSante.length>DISPO_TRACES_MAX)
+      currentUser.tracesSante=currentUser.tracesSante.slice(-DISPO_TRACES_MAX);
+    saveUser();
+    return true;
+  }catch(e){ return false; }
+}
 function addCoachBannerRow(imageUrl, linkUrl){
   const list=document.getElementById('coach-banners-list');
   if(!list) return;
@@ -36634,6 +36937,7 @@ function loadMonetisationTab(){
   setIf(teamNameEl,u.teamName||'');suivre(teamNameEl);
   const catchEl=document.getElementById('coach-catchphrase');
   setIf(catchEl,u.catchphrase||'');suivre(catchEl);
+  _chargerDispoCoach(u);
   const bannerList=document.getElementById('coach-banners-list');
   if(bannerList){bannerList.innerHTML='';(u.promoBanners||[]).forEach(b=>addCoachBannerRow(b.imageUrl,b.linkUrl));}
   const phoneInput=document.getElementById('coach-phone-input');
@@ -49913,6 +50217,85 @@ function testExercices(){
           if(src.indexOf(frag)<0) return _echec('palier '+rang+' introuvable');
         return true;})());
       currentUser=sauveU;
+    })();
+
+    // ── CADRE DE DISPONIBILITÉ ────────────────────────────────────────────
+    (function(){
+      const T=Date.UTC(2026,7,7);
+      const D=(j,h,m)=>new Date(2026,7,2+j,h,m);   // 02/08/2026 = dimanche
+      ok('absenceValide REFUSE une absence sans date de fin',(()=>{
+        if(absenceValide({du:T,au:null},T)!==false) return _echec('au=null accepté');
+        return absenceValide({du:T,au:undefined},T)===false
+          ?true:_echec('au absent accepté');})());
+      ok('absenceValide REFUSE au-delà de 90 jours',(()=>{
+        if(absenceValide({du:T,au:T+91*864e5},T)!==false) return _echec('91 jours accepté');
+        return absenceValide({du:T,au:T+90*864e5},T)===true
+          ?true:_echec('90 jours pile refusé');})());
+      ok('dispoEstDansPlage gère une plage qui traverse minuit',(()=>{
+        const nuit={plages:[{jour:5,debut:'22:00',fin:'02:00'}]};
+        if(dispoEstDansPlage(nuit,D(5,23,0))!==true) return _echec('vendredi 23 h hors plage');
+        if(dispoEstDansPlage(nuit,D(6,1,0))!==true) return _echec('samedi 01 h hors plage');
+        if(dispoEstDansPlage(nuit,D(6,3,0))!==false) return _echec('samedi 03 h encore dedans');
+        return dispoEstDansPlage(nuit,D(0,1,0))===false
+          ?true:_echec('dimanche 01 h compté à tort');})());
+      ok('dispoLibelle ne promet JAMAIS rien',(()=>{
+        const l=[1,12,24,48,168].map(h=>dispoLibelle({delaiH:h},T));
+        l.push(dispoLibelle({delaiH:24,absence:{actif:true,du:T,au:T+5*864e5}},T+864e5));
+        const faux=l.filter(x=>/garanti|maximum|au plus tard|s\x27engage/i.test(x));
+        if(faux.length) return _echec('promesse : '+faux.join(' | '));
+        return l.filter(Boolean).every(x=>/habituellement|Absent/.test(x))
+          ?true:_echec('vocabulaire inattendu : '+l.join(' | '));})());
+      ok('L\x27absence s\x27éteint seule à sa date de fin',(()=>{
+        const d={absence:{actif:true,du:T,au:T+5*864e5}};
+        if(absenceEnCours(d,T+864e5)!==true) return _echec('pas en cours pendant');
+        return absenceEnCours(d,T+6*864e5)===false
+          ?true:_echec('toujours en cours après la fin');})());
+      ok('Le délai médian ne sort JAMAIS vers l\x27athlète',(()=>{
+        // La liste blanche est le seul canal coach → athlète : il suffit qu\x27il
+        // n\x27y figure pas pour qu\x27aucune vue athlète ne puisse le porter.
+        const l=CLOUD.CHAMPS_PROFIL_COACH;
+        if(l.indexOf('dispo')<0) return _echec('dispo absent : il serait effacé au prochain push');
+        if(l.indexOf('delaiMedian')>=0) return _echec('delaiMedian est publié');
+        const vue={};
+        const u={id:'c',role:'coach',dispo:{delaiH:24},delaiMedian:7.5,tracesSante:[{quand:1}]};
+        for(const c of l) if(u[c]!=null) vue[c]=u[c];
+        return (vue.delaiMedian===undefined&&vue.tracesSante===undefined&&vue.dispo)
+          ?true:_echec(JSON.stringify(Object.keys(vue)));})());
+      ok('Le bandeau athlète ne calcule aucun délai médian',(()=>{
+        return String(htmlBandeauDispo).indexOf('delaiMedianReponse')<0
+          ?true:_echec('le bandeau interroge le compteur privé');})());
+      ok('delaiMedianReponse : médiane, fenêtre de 30 jours, incohérences écartées',(()=>{
+        const e=[{date:T-2*864e5,reponseDate:T-2*864e5+2*36e5},
+                 {date:T-3*864e5,reponseDate:T-3*864e5+10*36e5},
+                 {date:T-4*864e5,reponseDate:T-4*864e5+6*36e5}];
+        if(delaiMedianReponse(e,T)!==6) return _echec('médiane = '+delaiMedianReponse(e,T));
+        if(delaiMedianReponse([],T)!==null) return _echec('liste vide : pas null');
+        if(delaiMedianReponse([{date:T-60*864e5,reponseDate:T-60*864e5+36e5}],T)!==null)
+          return _echec('hors fenêtre compté');
+        return delaiMedianReponse([{date:T,reponseDate:T-36e5}],T)===null
+          ?true:_echec('réponse antérieure à l\x27envoi comptée');})());
+      ok('Le mode absence n\x27empêche AUCUN envoi',(()=>{
+        // Rien dans ce lot ne doit pouvoir arrêter une saisie : on vérifie
+        // qu\x27aucune fonction du cadre ne touche à l\x27envoi du bilan.
+        for(const f of [htmlBandeauDispo,dispoLibelle,absenceEnCours,_dispoTracerSante])
+          if(/preventDefault|return false;[\s\S]*envoi|disabled|readOnly/.test(String(f)))
+            return _echec('une fonction du cadre bloque une saisie');
+        return String(saveBilanFinal).indexOf('absenceEnCours')<0
+          ?true:_echec('l\x27envoi du bilan consulte l\x27absence');})());
+      ok('Douleur ou drapeau : la trace part, mode absence compris',(()=>{
+        const sauve=currentUser, _sv=window.saveUser;
+        try{
+          window.saveUser=()=>true;
+          currentUser={id:'a',email:'a@t.fr',role:'athlete',
+            drapeauRouge:{zone:'dos',cases:['irradie'],date:Date.now()}};
+          if(_dispoTracerSante('bilan')!==true) return _echec('aucune trace écrite');
+          if(!(currentUser.tracesSante||[]).length) return _echec('trace vide');
+          if(currentUser.tracesSante[0].motif!=='drapeau')
+            return _echec('motif : '+currentUser.tracesSante[0].motif);
+          currentUser={id:'b',email:'b@t.fr',role:'athlete'};
+          return _dispoTracerSante('bilan')===false
+            ?true:_echec('trace écrite sans signal de santé');
+        } finally { currentUser=sauve; window.saveUser=_sv; }})());
     })();
 
     // ── douleur ciblée ──
