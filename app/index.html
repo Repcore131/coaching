@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -131,10 +131,134 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
   body{border-left:1px solid #1a0000;border-right:1px solid #1a0000;box-shadow:0 0 100px rgba(198,15,8,.12);min-height:100vh;min-height:100dvh}
 }
 /* ── DESKTOP COACH DASHBOARD ── */
-/* Desktop coach: simple column layout, sidebar hidden */
+/* Etat par DEFAUT, valable a toute largeur : barre laterale eteinte, barre
+   d'onglets allumee. Ces deux regles ne sont plus l'etat final — elles sont le
+   point de depart que le bloc @media(min-width:1025px) ci-dessous inverse, et
+   lui seul. Le rapport entre les deux est donc : ici l'inconditionnel, la-bas
+   le contexte. Ne pas retirer le !important : loadCoachHome repose les deux
+   valeurs en inline a chaque rafraichissement, et sans lui le bloc large ne
+   pourrait pas les reprendre. */
 #ch-sidebar{display:none!important}
 #coach-tabs-bar{display:flex!important}
 #s-coach-home{height:100vh;height:100dvh;overflow:hidden}
+
+/* ══════════ ÉCRAN LARGE COACH — POINT DE RUPTURE 1025 px ══════════
+   Lot 1/3 : on ne fait qu'ELARGIR LE CORPS. Ni barre latérale, ni deux
+   colonnes, ni tableaux : ils viennent ensuite, et chacun s'appuie sur la
+   place ouverte ici.
+
+   min-width:1025px et non 1024 : une tablette en paysage fait exactement
+   1024, et rien ne doit y bouger. Le seuil est donc STRICTEMENT au-dessus.
+
+   Pourquoi `body:has(<ecran>.active)` et non une classe posee au login :
+   un compte peut etre coach ET athlete, et bascule de l'un a l'autre sans
+   rechargement (basculerCompte). Le role STOCKE mentirait donc la moitie du
+   temps. `.active` est pose par go() a chaque navigation, quel que soit le
+   chemin emprunte — c'est l'ECRAN REELLEMENT AFFICHE, seule verite ici.
+   :has() est disponible sur tous les navigateurs cibles depuis fin 2023 ; un
+   navigateur qui l'ignore laisse tomber le selecteur entier et garde les
+   480 px — la degradation est le comportement ACTUEL, jamais une casse.
+
+   1440 px et non `none` : au-dela, une ligne de texte depasse la centaine de
+   caracteres et l'oeil perd le debut de la ligne suivante. margin:0 auto est
+   deja sur body l. 127 : la zone reste centree sans y toucher.
+
+   Trois ecrans coach sont VOLONTAIREMENT absents de cette liste :
+   · s-coach-entry et s-coach-code sont des ecrans de connexion. Etaler un
+     champ de code sur 1440 px n'affiche rien de plus.
+   · s-coach-program est l'editeur d'exercices PARTAGE : un athlete y entre
+     pour SA propre seance (go(), l. 6332). L'elargir sur le seul prefixe
+     `s-coach-` casserait la regle « ecrans athlete : rien ne change ».
+   Toute reprise de cette liste doit reconduire ces trois exclusions. */
+@media(min-width:1025px){
+  body:has(#s-coach-home.active),
+  body:has(#s-coach-client.active),
+  body:has(#s-coach-sessions.active),
+  body:has(#s-coach-programs.active),
+  body:has(#s-coach-prog-template.active),
+  body:has(#s-coach-prog-assign.active),
+  body:has(#s-coach-decharge.active),
+  body:has(#s-coach-bilan-evo.active),
+  body:has(#s-coach-plan.active),
+  body:has(#s-coach-canal.active),
+  body:has(#s-coach-charge.active),
+  body:has(#s-coach-banque.active),
+  body:has(#s-charges.active){max-width:1440px}
+
+  /* ── BARRE LATERALE — s-coach-home UNIQUEMENT ──
+     #ch-sidebar est un ENFANT de #s-coach-home : elle n'existe que sur cet
+     ecran. La rendre « persistante » sur s-coach-client ou s-coach-sessions
+     imposerait de DEPLACER le noeud hors de son ecran — ce que « aucun
+     element ajoute au document » exclut. Elle vit ici, et ici seul.
+
+     display:flex!important : la barre est eteinte par TROIS couches — la
+     regle globale plus haut, l'attribut inline sur le noeud, et loadCoachHome
+     qui repose display:none toutes les 30 secondes. Une declaration author
+     !important passe devant l'inline, et devant l'autre !important puisqu'elle
+     est plus specifique : (0,2,1,1) contre (0,1,0,0). AUCUNE ligne de JS n'a
+     donc besoin de changer — c'est ce qui garde ce lot purement CSS.
+
+     overflow-y:auto : #s-coach-home porte height:100dvh;overflow:hidden. Sans
+     cela, une liste d'onglets plus haute que l'ecran serait coupee net. */
+  body:has(#s-coach-home.active) #s-coach-home{flex-direction:row!important}
+  body:has(#s-coach-home.active) #ch-sidebar{
+    display:flex!important;width:260px;flex-shrink:0;overflow-y:auto}
+
+  /* Regle 7. La barre d'onglets SUBSISTE dans le document et reste la
+     navigation sous 1025 px ; au-dessus, la barre laterale porte les memes
+     trois destinations, et les afficher ENSEMBLE serait exactement la
+     duplication interdite. On eteint l'une pendant que l'autre est allumee.
+     !important : loadCoachHome repose display:flex en inline. */
+  body:has(#s-coach-home.active) #coach-tabs-bar{display:none!important}
+
+  /* L'en-tete RESTE : il porte le selecteur de compte ⇄, et ouvrirComptes()
+     n'a aucun autre point d'entree dans tout le fichier. On lui retire son
+     seul bloc d'identite — que la barre laterale affiche deja — et il devient
+     une barre d'actions alignee a droite. Rien n'est perdu.
+
+     !important sur ces deux-la : l'en-tete porte justify-content:space-between
+     et son bloc d'identite display:flex, tous deux en attribut style= en dur.
+     Une declaration ordinaire, si specifique soit-elle, perd contre l'inline. */
+  body:has(#s-coach-home.active) #ch-mobile-header>div:first-child{display:none!important}
+  body:has(#s-coach-home.active) #ch-mobile-header{justify-content:flex-end!important}
+
+  /* Pied legal en double : la barre laterale porte le sien, la zone
+     principale le sien. Ce dernier n'existe QUE parce que la barre etait
+     eteinte — son propre commentaire le dit. Elle est rallumee : le doublon
+     s'efface. */
+  body:has(#s-coach-home.active) #ch-main-area>div:last-child{display:none}
+
+  /* ── LISTE D'ATHLETES EN TABLEAU ──
+     display:contents sur le bloc central : ses quatre enfants (nom, activite,
+     objectif, phase) remontent comme cellules de la grille au lieu de rester
+     empiles dans une seule colonne. C'est ce qui transforme la carte en ligne
+     de tableau sans toucher au balisage.
+
+     Les cellules optionnelles sont TOUJOURS emises par renderClientRow, vides
+     le cas echeant, et rallumees ici : une colonne qui disparait sur certaines
+     lignes desaligne toutes les autres, et un tableau desaligne ne se lit plus.
+     Sous 1025 px, `.cr-obj:empty` les efface — la carte empilee est intacte.
+
+     transform:none au survol : soulever une ligne d'un pixel la decale de ses
+     voisines. On garde la couleur, qui suffit a designer la ligne visee. */
+  body:has(#s-coach-home.active) #ch-clients-list .client-row{
+    display:grid;
+    grid-template-columns:44px minmax(150px,1.3fr) minmax(140px,1.1fr) minmax(120px,1.2fr) minmax(90px,.8fr) 180px;
+    align-items:center;gap:16px;margin-bottom:2px}
+  body:has(#s-coach-home.active) #ch-clients-list .client-row>div:nth-child(2){display:contents}
+  body:has(#s-coach-home.active) #ch-clients-list .client-row>*{margin-top:0}
+  body:has(#s-coach-home.active) #ch-clients-list .cr-obj,
+  body:has(#s-coach-home.active) #ch-clients-list .cr-phase{display:block}
+  body:has(#s-coach-home.active) #ch-clients-list .client-row:hover{transform:none}
+
+  /* ── DOSSIER ATHLETE EN DEUX COLONNES ──
+     align-items:start est ce qui fait tenir la chose : sans lui, chaque bloc
+     s'etirerait a la hauteur du plus haut de sa rangee et le dossier serait
+     un damier de vides. Les blocs gardent leur hauteur propre et se posent en
+     deux colonnes dans l'ordre du document. */
+  body:has(#s-coach-client.active) #s-coach-client>.scroll-area>.pad{
+    display:grid;grid-template-columns:1fr 1fr;gap:0 24px;align-items:start}
+}
 
 /* ====== GRAIN TEXTURE GLOBAL ====== */
 body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;opacity:1;
@@ -407,6 +531,46 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
 .client-row{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--surface-1);border-radius:0 2px 2px 0;margin-bottom:6px;cursor:pointer;border:1px solid var(--border);border-left:3px solid var(--red);transition:all .15s}
 .client-row:hover{background:var(--red-bg);border-color:var(--red);box-shadow:0 4px 16px rgba(224,32,32,0.12);transform:translateY(-1px)}
 .client-row:active{transform:scale(.99);box-shadow:none}
+/* Cellules optionnelles de la ligne athlete. renderClientRow les emet
+   TOUJOURS, vides quand l'objectif ou la phase manquent, pour que le tableau
+   du grand ecran garde un nombre de colonnes constant. Vides, elles ne doivent
+   rien occuper ici : sous 1025 px la ligne est une carte empilee, et un div
+   vide y ajouterait sa marge. Le bloc @media(min-width:1025px) les rallume. */
+.cr-obj:empty,.cr-phase:empty{display:none}
+/* ══════════ PLAN ALIMENTAIRE — DIÈTE STRICTE ══════════
+   Même langage visuel que la diète flexible : carte en dégradé, filet
+   diagonal, ombre portée, titre en Bebas sur un bandeau accentué. Le plan
+   était jusqu'ici une suite de rectangles plats, sans relief ni hiérarchie,
+   au milieu d'un écran dont tout le reste est en cartes.
+
+   ET SURTOUT : les catalogues de sources — 20 protéines, 28 glucides — se
+   dépliaient EN ENTIER dans chaque repas qui en appelait un. Mesuré sur un
+   plan de prise de masse : 6 740 px de défilement, la même liste de 48 lignes
+   traversée trois fois. Ils sont désormais repliés et annoncent leur nombre :
+   la liste reste à UN geste, là où elle sert — c'est ce que le tableur
+   d'origine cherchait — mais elle ne noie plus le programme. */
+.plan-card{position:relative;overflow:hidden;background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;margin-bottom:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.45)}
+.plan-card::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none}
+.plan-card>*{position:relative}
+.plan-titre{display:flex;align-items:center;gap:8px;padding:9px 13px;background:linear-gradient(90deg,rgba(224,32,32,.16),rgba(224,32,32,.04) 65%,transparent);border-left:3px solid var(--red);font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:15px;letter-spacing:2px;text-transform:uppercase;color:#fff;text-shadow:0 0 9px rgba(224,32,32,.55)}
+.plan-corps{padding:1px 13px 10px}
+/* Le filet SÉPARE, il n'encadre pas : la première ligne n'en porte pas, sinon
+   il doublait le bord du bandeau de titre juste au-dessus. */
+.plan-l{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid rgba(255,255,255,.055)}
+.plan-l:first-child{border-top:none}
+.plan-nom{flex:1;min-width:0;font-size:12.5px;font-weight:600;line-height:1.35}
+.plan-q{flex-shrink:0;font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:20px;line-height:1;letter-spacing:.5px;color:#fff}
+.plan-q u{font-family:Montserrat,sans-serif;font-size:10px;color:var(--sub);font-weight:400;letter-spacing:0;text-decoration:none}
+.plan-note{padding:9px 0 2px;font-size:11.5px;font-style:italic;color:var(--sub);line-height:1.5}
+/* Catalogue de sources, replié. min-height 44px : c'est une commande, elle
+   suit la même règle de cible tactile que le reste de l'application. */
+.plan-src{margin:9px 0 3px;border:1px solid var(--border);border-radius:10px;background:var(--dark);overflow:hidden}
+.plan-src>summary{list-style:none;cursor:pointer;min-height:44px;padding:9px 12px;display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;line-height:1.35}
+.plan-src>summary::-webkit-details-marker{display:none}
+.plan-src>summary::after{content:'▾';margin-left:auto;flex-shrink:0;font-size:12px;color:var(--sub);transition:transform .18s}
+.plan-src[open]>summary::after{transform:rotate(180deg)}
+.plan-src-nb{flex-shrink:0;font-size:10px;font-weight:700;color:var(--text-faint);letter-spacing:.5px;white-space:nowrap}
+.plan-src-liste{padding:0 12px 9px}
 .row-inactive{opacity:.5}
 .row-alert{background:var(--danger-bg)!important;border-left:3px solid var(--red)}
 .row-target{background:var(--red);color:#fff;border-radius:4px}
@@ -10417,10 +10581,15 @@ function renderClientRow(c){
     ?`<img src="${escapeHtml(c.athletePhoto)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
     :escapeHtml(ini(c.fname,c.lname));
   const _objDisplay=c.objective||c.bilanGoals||'';
-  const objLine=_objDisplay?`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(_objDisplay)}</div>`:'';
+  // Objectif et phase sont emis MEME absents, avec un contenu vide. Sur grand
+  // ecran la ligne devient une ligne de tableau, et une cellule qui disparait
+  // sur les seules lignes sans objectif decalerait toutes les colonnes qui la
+  // suivent. `.cr-obj:empty{display:none}` les efface sous 1025 px : la carte
+  // empilee du telephone est rigoureusement celle d'avant.
+  const objLine=`<div class="cr-obj" style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_objDisplay?escapeHtml(_objDisplay):''}</div>`;
   // Phase : rien du tout quand elle est absente, ce qui est le cas par defaut.
   const _ph=phaseCourante(c);
-  const phLine=_ph?`<div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:2px">${PHASES[_ph.type].lib} · ${ordinalSemaine(semainesPhase(c))}</div>`:'';
+  const phLine=`<div class="cr-phase" style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:2px">${_ph?PHASES[_ph.type].lib+' · '+ordinalSemaine(semainesPhase(c)):''}</div>`;
   const _nm=(escapeHtml(c.fname||'')+' '+escapeHtml(c.lname||'')).trim()||'Profil incomplet';
   return `<div class="client-row${!hasNewBilan(c)&&!needsAlert(c)&&!isActive(c)?' row-inactive':''}" onclick="openClientDetail('${c.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <div class="avatar" style="width:44px;height:44px;font-size:15px;overflow:hidden;flex-shrink:0">${avatarHtml}</div>
@@ -24272,8 +24441,6 @@ function _renderStrictDiet(){
   if(planActif(currentUser)&&!_ciqualDB) _loadCiqual().then(()=>_renderStrictDiet());
   const nut=currentUser.nutrition||{};
   const _transiStrict=_htmlDieteTransition(nut);
-  const isCoach=currentUser.role==='coach';
-  const photos=nut.strictPhotos||[];
   const days_data=nut.days||{};
   const today=new Date();
   const todayKey=localISODate(today);
@@ -24310,15 +24477,15 @@ function _renderStrictDiet(){
         </div>
       </div>
     </div>
-    <!-- Plan en photo. Le bloc DISPARAÎT quand il n'y a ni photo ni coach à
-         l'écran et qu'un plan composé existe : « Plan alimentaire à venir »
-         juste au-dessus d'un plan complet se lisait comme une contradiction. -->
-    ${(photos.length||isCoach||!planActif(currentUser))?`
+    <!-- Plan alimentaire pas encore composé. Le bloc DISPARAÎT dès qu'un plan
+         existe : « Plan alimentaire à venir » juste au-dessus d'un plan complet
+         se lisait comme une contradiction. Le plan en photo a été retiré : le
+         coach compose désormais le plan dans l'application, il ne le dépose
+         plus en image. -->
+    ${!planActif(currentUser)?`
     <div style="margin-bottom:20px">
-      <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:5px">${icon('clipboard',12)} ${planActif(currentUser)?'Plan en photo':'Plan alimentaire'}</div>
-      ${photos.length===0&&!isCoach?`<div style="background:var(--surface-1);border:1px dashed #2a2a2a;border-radius:12px;padding:32px 16px;text-align:center;color:var(--text-dim);font-size:12px"><div style="margin-bottom:8px;opacity:.3">${icon('clipboard',32)}</div>Plan alimentaire à venir</div>`:''}
-      ${photos.map((src,i)=>`<div style="margin-bottom:10px;position:relative"><img src="${escapeHtml(src)}" style="width:100%;border-radius:12px;display:block;border:1px solid var(--surface-2)" onclick="viewNutriPhoto(${i})" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${isCoach?`<button onclick="deleteStrictPhoto(${i})" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.85);border:none;color:#fff;border-radius:50%;width:28px;height:28px;font-size:14px;cursor:pointer;line-height:1;padding:0">✕</button>`:''}</div>`).join('')}
-      ${isCoach?`<label style="display:flex;align-items:center;justify-content:center;gap:10px;padding:14px;background:#111;border:1.5px dashed #2a2a2a;border-radius:12px;cursor:pointer;margin-top:${photos.length?'8':'0'}px">${icon('camera',18)}<span style="font-size:11px;font-weight:700;color:var(--sub);letter-spacing:1px">AJOUTER UNE PHOTO</span><input type="file" accept="image/*" capture="environment" style="display:none" onchange="addStrictPhoto(this)"></label>`:''}
+      <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:5px">${icon('clipboard',12)} Plan alimentaire</div>
+      <div style="background:var(--surface-1);border:1px dashed #2a2a2a;border-radius:12px;padding:32px 16px;text-align:center;color:var(--text-dim);font-size:12px"><div style="margin-bottom:8px;opacity:.3">${icon('clipboard',32)}</div>Plan alimentaire à venir</div>
     </div>`:''}
     <!-- Le plan composé par le coach : repas imposés et sources interchangeables -->
     ${_htmlPlanAthlete(currentUser)}
@@ -24352,36 +24519,6 @@ function _renderStrictDiet(){
         </div>
       </div>
     </div>`;
-}
-
-function addStrictPhoto(input){
-  const file=input?.files?.[0];
-  if(!file) return;
-  compressImage(file,1400,0.85,b64=>{
-    if(!currentUser.nutrition) currentUser.nutrition={};
-    if(!Array.isArray(currentUser.nutrition.strictPhotos)) currentUser.nutrition.strictPhotos=[];
-    currentUser.nutrition.strictPhotos.push(b64);
-    saveUser();
-    _renderStrictDiet();
-  });
-}
-
-function deleteStrictPhoto(index){
-  const arr=currentUser.nutrition?.strictPhotos;
-  if(!arr) return;
-  arr.splice(index,1);
-  saveUser();
-  _renderStrictDiet();
-}
-
-function viewNutriPhoto(index){
-  const src=currentUser.nutrition?.strictPhotos?.[index];
-  if(!src) return;
-  const ov=document.createElement('div');
-  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9999;display:flex;align-items:center;justify-content:center';
-  ov.onclick=()=>ov.remove();
-  ov.innerHTML=`<img src="${escapeHtml(src)}" style="max-width:96%;max-height:90vh;border-radius:8px;object-fit:contain">`;
-  document.body.appendChild(ov);
 }
 
 function setNutriRespected(key,val){
@@ -24930,6 +25067,13 @@ function _planCiqual(id){
 // « validé » dès que le dossier porte une trace d'usage — un plan, une photo
 // de plan, ou une seule journée cochée. Personne ne perd ce qu'il utilise ;
 // les nouveaux, eux, attendent que leur coach ouvre la porte.
+//
+// strictPhotos EST UN CHAMP MORT DEPUIS LE RETRAIT DU PLAN EN PHOTO. Plus rien
+// ne l'écrit — ni l'athlète ni le coach n'ont de bouton pour en ajouter. Il
+// n'est conservé QU'ICI, en lecture, et pour une seule raison : un athlète dont
+// la seule trace d'usage était une photo perdrait son accès à la diète stricte
+// le jour où cette ligne disparaîtrait. Elle regarde le passé, elle ne fabrique
+// plus rien. À ne retirer qu'après une purge des dossiers, jamais avant.
 function _strictUsageExistant(user){
   const n=(user&&user.nutrition)||{};
   if(planActif(user)) return true;
@@ -26114,9 +26258,13 @@ function _htmlPlanAthlete(user){
   const src=planSources(plan,rest);
   const nSrc={p:src.proteines.nSources,c:src.glucides.nSources};
 
-  const tuile=(lib,val,unite,couleur)=>`<div style="flex:1;min-width:0;background:var(--surface-1);border-radius:9px;padding:9px 4px;text-align:center">
-    <div style="font-size:15px;font-weight:900;color:${couleur};line-height:1">${val==null?'—':Math.round(val)}<span style="font-size:9px;color:var(--sub);font-weight:400">${unite}</span></div>
-    <div style="font-size:9px;color:var(--sub);letter-spacing:1px;font-weight:700;margin-top:4px">${lib}</div>
+  // Chiffres en Bebas avec halo : c'est la typographie que la diète flexible
+  // donne déjà à ses compteurs et l'écran strict à ses scores. Les mêmes
+  // valeurs se lisaient ici en Montserrat 15, deux fois plus petites que le
+  // « 44 » des jours consécutifs juste en dessous — la hiérarchie était inversée.
+  const tuile=(lib,val,unite,couleur)=>`<div style="flex:1;min-width:0;background:rgba(255,255,255,.028);border:1px solid rgba(255,255,255,.05);border-radius:10px;padding:10px 4px;text-align:center">
+    <div style="font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:26px;line-height:1;color:${couleur};text-shadow:0 0 10px ${couleur}66">${val==null?'—':Math.round(val)}<span style="font-family:Montserrat,sans-serif;font-size:9px;color:var(--sub);font-weight:400">${unite}</span></div>
+    <div style="font-size:9px;color:var(--sub);letter-spacing:1.4px;font-weight:800;margin-top:5px">${lib}</div>
   </div>`;
 
   // LE SOUS-TABLEAU. Deux colonnes et pas une de plus : la source, et ce
@@ -26126,21 +26274,34 @@ function _htmlPlanAthlete(user){
   const listeSources=(macro)=>{
     const b=macro==='p'?src.proteines:src.glucides;
     if(!b.liste.length) return `<div style="font-size:11px;color:var(--text-dim);line-height:1.6">Ton coach n'a pas encore posé de sources ici.</div>`;
-    return b.liste.map(s=>`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--surface-2)">
-      <div style="flex:1;min-width:0;font-size:12.5px;font-weight:600;line-height:1.35">${escapeHtml(s.nom)}</div>
-      <div style="flex-shrink:0;font-size:15px;font-weight:900;color:${s.excessif?'var(--orange)':'#fff'};line-height:1">${s.q==null?'—':Math.round(s.q)}<span style="font-size:10px;color:var(--sub);font-weight:400"> g</span></div>
+    return b.liste.map(s=>`<div class="plan-l">
+      <div class="plan-nom">${escapeHtml(s.nom)}</div>
+      <div class="plan-q"${s.excessif?' style="color:var(--orange)"':''}>${s.q==null?'—':Math.round(s.q)}<u> g</u></div>
     </div>`).join('');
   };
-  const cartouche=(titre,couleur,corps)=>`<div style="padding:9px 0;border-top:1px solid var(--surface-2)">
-    <div style="font-size:12px;font-weight:800;color:${couleur};letter-spacing:.3px;margin-bottom:6px">${escapeHtml(titre)}</div>
-    <div style="background:var(--dark);border:1px solid var(--border);border-radius:10px;padding:4px 11px 9px">${corps}</div>
-  </div>`;
+  // REPLIÉ PAR DÉFAUT, et c'est tout l'objet de ce lot. Le catalogue complet
+  // s'ouvrait dans CHAQUE repas qui appelle une source : sur un plan de prise
+  // de masse, la même liste de 48 lignes était traversée trois fois avant
+  // d'atteindre la table des fruits. Elle reste exactement où elle sert — un
+  // geste, pas un aller-retour, ce que cherchait le tableur d'origine — mais
+  // le programme se lit maintenant d'un coup d'œil.
+  // Le nombre est DANS le résumé : un volet fermé qui ne dit pas ce qu'il
+  // contient ne donne aucune raison de l'ouvrir.
+  const cartouche=(titre,couleur,macro)=>{
+    const b=macro==='p'?src.proteines:src.glucides;
+    const n=b.liste.length;
+    return `<details class="plan-src">
+      <summary style="color:${couleur}">${escapeHtml(titre)}
+        <span class="plan-src-nb">${n?n+(n>1?' choix':' choix'):'—'}</span></summary>
+      <div class="plan-src-liste">${listeSources(macro)}</div>
+    </details>`;
+  };
 
   // La table des fruits, telle quelle. Aucun calcul : ce sont des
   // équivalences de portion, les mêmes dans tous les programmes du coach.
-  const tableFruits=()=>PLAN_FRUITS.map(f=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-top:1px solid var(--surface-2)">
-      <span style="font-size:12px;flex-shrink:0;font-weight:600">${escapeHtml(f.n)}</span>
-      <span style="font-size:11px;color:var(--sub);text-align:right">${escapeHtml(f.q)}</span>
+  const tableFruits=()=>PLAN_FRUITS.map(f=>`<div class="plan-l" style="padding:6px 0">
+      <span class="plan-nom">${escapeHtml(f.n)}</span>
+      <span style="font-size:11px;color:var(--sub);text-align:right;flex-shrink:0">${escapeHtml(f.q)}</span>
     </div>`).join('');
 
   // Les repas, dans l'ordre du plan. Un marqueur de source n'affiche pas un
@@ -26151,25 +26312,25 @@ function _htmlPlanAthlete(user){
   const blocRepas=cles.map(cle=>{
     const r=couv.parRepas[cle];
     const lignes=r.lignes.map(x=>{
-      if(x.note) return `<div style="padding:8px 0 2px;font-size:11.5px;font-style:italic;color:var(--sub);line-height:1.5">${escapeHtml(x.nom)}</div>`;
-      if(x.source) return cartouche(x.nom,x.source==='p'?'#60a5fa':'var(--green)',listeSources(x.source));
+      if(x.note) return `<div class="plan-note">${escapeHtml(x.nom)}</div>`;
+      if(x.source) return cartouche(x.nom,x.source==='p'?'#60a5fa':'var(--green)',x.source);
       // La ligne de fruit RENVOIE à la table, elle ne la recopie pas : le
       // tableur écrit « se référer au tableau plus bas », et vingt lignes
       // répétées à chaque repas noieraient le reste du programme.
-      if(x.fruit) return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--surface-2)">
-        <div style="flex:1;min-width:0;font-size:12.5px;font-weight:700;color:#f5c518;line-height:1.35">${escapeHtml(x.nom)}</div>
-        <div style="font-size:10px;color:var(--sub);flex-shrink:0;text-align:right">voir la table<br>des fruits</div>
+      if(x.fruit) return `<div class="plan-l">
+        <div class="plan-nom" style="font-weight:700;color:#f5c518">${escapeHtml(x.nom)}</div>
+        <div style="font-size:10px;color:var(--sub);flex-shrink:0;text-align:right;line-height:1.4">voir la table<br>des fruits</div>
       </div>`;
       const q=_planNb(x.item&&x.item.q);
       const u=planUniteItem(x.item);
-      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--surface-2)">
-        <div style="flex:1;min-width:0;font-size:12.5px;font-weight:600;line-height:1.35">${escapeHtml(x.nom)}</div>
-        <div style="font-size:13px;font-weight:800;flex-shrink:0">${q==null?'—':(Math.round(q*100)/100).toString().replace('.',',')}<span style="font-size:10px;color:var(--sub);font-weight:400"> ${escapeHtml(planUnitePluriel(q,u))}</span></div>
+      return `<div class="plan-l">
+        <div class="plan-nom">${escapeHtml(x.nom)}</div>
+        <div class="plan-q">${q==null?'—':(Math.round(q*100)/100).toString().replace('.',',')}<u> ${escapeHtml(planUnitePluriel(q,u))}</u></div>
       </div>`;
     }).join('');
-    return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:12px 13px;margin-bottom:10px">
-      <div style="font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#fff">${escapeHtml(planLibRepas(cle))}</div>
-      ${lignes}
+    return `<div class="plan-card">
+      <div class="plan-titre">${escapeHtml(planLibRepas(cle))}</div>
+      <div class="plan-corps">${lignes}</div>
     </div>`;
   }).join('');
 
@@ -26178,34 +26339,47 @@ function _htmlPlanAthlete(user){
     const b=m==='p'?src.proteines:src.glucides;
     return b.liste.length>0&&!planSquelette(plan).some(x=>x&&x.src===m);
   });
-  const blocOrphelins=orphelins.length?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:12px 13px;margin-bottom:10px">
-    ${orphelins.map(m=>`<div style="margin-bottom:6px">
-      <div style="font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:${m==='p'?'#60a5fa':'var(--green)'};margin-bottom:4px">Tes sources de ${m==='p'?'protéines':'glucides'} · à répartir sur ${nSrc[m]} repas</div>
-      ${listeSources(m)}
-    </div>`).join('')}
+  const blocOrphelins=orphelins.length?`<div class="plan-card">
+    <div class="plan-titre">Sources à répartir</div>
+    <div class="plan-corps">
+      ${orphelins.map(m=>cartouche(
+        'Tes sources de '+(m==='p'?'protéines':'glucides')+' · à répartir sur '+nSrc[m]+' repas',
+        m==='p'?'#60a5fa':'var(--green)',m)).join('')}
+    </div>
   </div>`:'';
 
   // La table des fruits en pied de programme, comme dans le tableur : elle y
   // est même si aucun repas n'appelle de fruit, parce qu'elle sert aussi de
   // référence générale.
-  const blocFruits=`<div style="margin-bottom:18px">
-    <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px">1 portion de fruits</div>
-    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:10px 13px">${tableFruits()}</div>
+  // Repliée comme les catalogues, et pour la même raison : vingt équivalences
+  // de portion sont une RÉFÉRENCE qu'on consulte, pas une consigne du jour.
+  // Dépliée, elle s'intercalait entre le programme et la liste de courses.
+  const blocFruits=`<div class="plan-card">
+    <div class="plan-titre" style="background:linear-gradient(90deg,rgba(245,197,24,.16),rgba(245,197,24,.04) 65%,transparent);border-left-color:#f5c518;text-shadow:0 0 9px rgba(245,197,24,.5)">1 portion de fruits</div>
+    <div class="plan-corps">
+      <details class="plan-src">
+        <summary style="color:#f5c518">Table des équivalences
+          <span class="plan-src-nb">${PLAN_FRUITS.length} fruits</span></summary>
+        <div class="plan-src-liste">${tableFruits()}</div>
+      </details>
+    </div>
   </div>`;
-  const blocCheat=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:12px 13px;margin-bottom:14px">
-    ${PLAN_NOTE_CHEATMEAL.map(t=>`<div style="font-size:11.5px;color:#ddd;line-height:1.6;margin-bottom:4px">${escapeHtml(t)}</div>`).join('')}
+  const blocCheat=`<div class="plan-card" style="margin-bottom:14px">
+    <div class="plan-corps" style="padding-top:12px">
+      ${PLAN_NOTE_CHEATMEAL.map(t=>`<div style="font-size:11.5px;color:#ddd;line-height:1.6;margin-bottom:4px">${escapeHtml(t)}</div>`).join('')}
+    </div>
   </div>`;
 
   let lc=null;
   try{ lc=planListeCourses(plan,user); }catch(e){}
-  const courses=(lc&&lc.lignes.length)?`<div style="margin-bottom:18px">
-    <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:5px">${icon('clipboard',12)} Liste de courses</div>
-    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:12px 13px">
-      ${lc.lignes.filter(l=>l.qte>0).map(l=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid var(--surface-2)">
-        <span style="font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l.lib)}</span>
+  const courses=(lc&&lc.lignes.length)?`<div class="plan-card">
+    <div class="plan-titre" style="background:linear-gradient(90deg,rgba(34,197,94,.16),rgba(34,197,94,.04) 65%,transparent);border-left-color:var(--green);text-shadow:0 0 9px rgba(34,197,94,.5)">${icon('clipboard',13)} Liste de courses</div>
+    <div class="plan-corps">
+      ${lc.lignes.filter(l=>l.qte>0).map(l=>`<div class="plan-l" style="padding:7px 0">
+        <span class="plan-nom" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l.lib)}</span>
         <span style="font-size:12px;font-weight:800;color:var(--green);flex-shrink:0">${planFormatQte(l.qte,l.unite)}</span>
       </div>`).join('')}
-      <div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-top:8px">Calculée sur un jour d'entraînement, le plus chargé : mieux vaut un reste qu'une rupture en milieu de semaine.</div>
+      <div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-top:9px">Calculée sur un jour d'entraînement, le plus chargé : mieux vaut un reste qu'une rupture en milieu de semaine.</div>
     </div>
   </div>`:'';
 
@@ -27913,7 +28087,6 @@ function renderCoachNutriSection(c){
   // preavis de fin de phase. Fiche COACH uniquement — rien de ce module
   // n'atteint l'ecran de l'athlete.
   const _pauseHtml=_htmlPauseProposition(c)+_htmlPauseEnCours(c)+_htmlFinPrevue(c);
-  const photos=nut.strictPhotos||[];
   const mon=nut.macros?.on||{};
   const moff=nut.macros?.off||{};
   const fields=[
@@ -27965,22 +28138,6 @@ function renderCoachNutriSection(c){
       ${dt==='strict'?_htmlStrictAccesCoach(c):''}
       <!-- Plan alimentaire composé (stricte uniquement) -->
       ${dt==='strict'?_htmlPlanResumeCoach(c):''}
-      <!-- Plan photos (stricte uniquement) -->
-      ${dt==='strict'?`
-        <div>
-          <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:5px">${icon('camera',12)} Plan en photo</div>
-          ${photos.map((src,i)=>`
-            <div style="position:relative;margin-bottom:8px">
-              <img src="${escapeHtml(src)}" style="width:100%;border-radius:8px;display:block;border:1px solid var(--border)">
-              <button onclick="deleteClientStrictPhoto(${i})" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.8);border:none;color:#fff;border-radius:50%;width:26px;height:26px;font-size:13px;cursor:pointer;line-height:1;padding:0">✕</button>
-            </div>`).join('')}
-          <label style="display:flex;align-items:center;justify-content:center;gap:10px;padding:13px;background:#111;border:1.5px dashed #2a2a2a;border-radius:10px;cursor:pointer;margin-top:${photos.length?'4':'0'}px">
-            <span style="font-size:16px">📷</span>
-            <span style="font-size:11px;font-weight:700;color:var(--sub);letter-spacing:1px">AJOUTER UNE PHOTO</span>
-            <input type="file" accept="image/*" capture="environment" style="display:none" onchange="addClientStrictPhoto(this)">
-          </label>
-        </div>`
-      :`<div style="font-size:11px;color:var(--text-dim);text-align:center;margin-top:4px">Journal libre : pas de plan photo à configurer</div>`}
     </div>`;
 }
 
@@ -28077,34 +28234,6 @@ function saveClientNutriMacros(malgrePlancher){
     viol.length?'Enregistré, confirmation tracée':'Objectifs enregistrés ✓','les objectifs sont');
   renderCoachNutriSection(c);
   return true;
-}
-
-function addClientStrictPhoto(input){
-  const file=input?.files?.[0];
-  if(!file) return;
-  compressImage(file,1400,0.85,b64=>{
-    const users=DB.get('users')||{};
-    const c=getOwnedClient(currentClientId,users);
-    if(!c) return;
-    if(!c.nutrition) c.nutrition={};
-    if(!Array.isArray(c.nutrition.strictPhotos)) c.nutrition.strictPhotos=[];
-    c.nutrition.strictPhotos.push(b64);
-    c.updatedAt=Date.now();users[c.email]=c;
-    // Photo base64 dans le dossier de l'athlète : le cas de débordement le
-    // plus probable côté coach.
-    const ok=DB.set('users',users);
-    toastSync(ok,CLOUD.pushOne(c.email,c),'Photo ajoutée ✓','la photo est');
-    renderCoachNutriSection(c);
-  });
-}
-
-function deleteClientStrictPhoto(index){
-  const users=DB.get('users')||{};
-  const c=getOwnedClient(currentClientId,users);
-  if(!c||!c.nutrition?.strictPhotos) return;
-  c.nutrition.strictPhotos.splice(index,1);
-  c.updatedAt=Date.now();users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
-  renderCoachNutriSection(c);
 }
 
 // ======= SUPPLEMENTS =======
@@ -60921,6 +61050,77 @@ vendredi 78 6h 44m
            new Date('2026-08-06T12:00:00')));
          const n=currentUser.sleepLog.find(e=>e.date==='2026-08-04');
          return n&&n.duration===8.3&&!n.bed&&!n.wake; })());
+
+    // ══ Disposition coach en ecran large — bloc @media(min-width:1025px) ══
+    // On lit le TEXTE de la feuille inline, pas le CSSOM : on veut assertir
+    // sur ce qui est ECRIT dans le fichier livre, pas sur ce qu'un moteur en a
+    // reconstruit. Meme principe que _testSW pour sw.js, sans l'asynchrone —
+    // aucune mesure, aucun rendu, aucune fenetre a redimensionner.
+    const ECRANS_LARGE=['s-coach-home','s-coach-client','s-coach-sessions',
+      's-coach-programs','s-coach-prog-template','s-coach-prog-assign',
+      's-coach-decharge','s-coach-bilan-evo','s-coach-plan','s-coach-canal',
+      's-coach-charge','s-coach-banque','s-charges'];
+    // Les commentaires tombent AVANT la recherche, jamais apres : plusieurs
+    // d'entre eux CITENT « @media(min-width:1025px) » en toutes lettres pour
+    // expliquer le rapport entre l'etat par defaut et le contexte large. Un
+    // indexOf sur la source brute s'arretait sur la premiere citation et
+    // decoupait la regle voisine — la sonde tombait alors que le CSS etait bon.
+    const _cssNu=Array.from(document.querySelectorAll('style'))
+      .map(s=>s.textContent).join('\n').replace(/\/\*[\s\S]*?\*\//g,'');
+    const _cssLarge=(()=>{
+      const css=_cssNu;
+      const i=css.indexOf('@media(min-width:1025px)');
+      if(i<0) return null;
+      // Decoupage par comptage d'accolades : le bloc en contient lui-meme.
+      const j=css.indexOf('{',i);
+      let p=0;
+      for(let k=j;k<css.length;k++){
+        if(css[k]==='{') p++;
+        else if(css[k]==='}'){ p--; if(!p) return css.slice(j+1,k); }
+      }
+      return null;
+    })();
+    ok('La regle @media(min-width:1025px) existe',!!_cssLarge);
+    // Selecteurs = ce qui precede chaque accolade ouvrante, commentaires otes.
+    const _selLarge=!_cssLarge?[]:_cssLarge
+      .split('}').map(b=>b.split('{')[0]).join(',')
+      .split(',').map(s=>s.trim()).filter(Boolean);
+    ok('Le bloc porte au moins un selecteur',_selLarge.length>0,
+       _selLarge.length+' selecteur(s)');
+    // Identifiants ENTIERS, jamais des sous-chaines : `#s-coach-programs`
+    // CONTIENT `#s-coach-program`, qui est l'editeur PARTAGE avec l'athlete.
+    // Un includes() rendrait un verdict faux dans les deux sens — verifie.
+    const _idsDe=s=>(s.match(/#[a-zA-Z0-9_-]+/g)||[]).map(x=>x.slice(1));
+    ok('100 % des selecteurs sont portes par un ecran coach',(()=>{
+      const hors=_selLarge.filter(s=>!_idsDe(s).some(id=>ECRANS_LARGE.includes(id)));
+      return hors.length
+        ?_echec(hors.length+' hors contexte coach : '+hors.join(' | ')):true;})());
+    ok('Aucun ecran athlete ne figure dans le bloc',(()=>{
+      const athlete=Array.from(document.querySelectorAll('.screen'))
+        .map(e=>e.id).filter(id=>!ECRANS_LARGE.includes(id));
+      const fuites=_selLarge.filter(s=>_idsDe(s).some(id=>athlete.includes(id)));
+      return fuites.length?_echec('ecran(s) athlete : '+fuites.join(' | ')):true;})());
+    // Ces trois-la sont exclus VOLONTAIREMENT : deux ecrans de connexion, et
+    // l'editeur d'exercices ou un athlete entre pour sa propre seance.
+    ok('s-coach-program, s-coach-entry et s-coach-code restent hors du bloc',(()=>{
+      const interdits=['s-coach-program','s-coach-entry','s-coach-code'];
+      const vus=_selLarge.filter(s=>_idsDe(s).some(id=>interdits.includes(id)));
+      return vus.length?_echec('present(s) : '+vus.join(' | ')):true;})());
+    ok('Le seuil est STRICTEMENT au-dessus de 1024 px',
+       !!_cssLarge&&!/@media\(min-width:(?:1024|1023)px\)/.test(_cssNu));
+    // Le tableau du grand ecran compte sur un nombre de colonnes constant.
+    ok('renderClientRow emet toujours les cellules objectif et phase',(()=>{
+      const src=renderClientRow.toString();
+      if(src.indexOf('class="cr-obj"')<0) return _echec('cellule objectif conditionnelle');
+      if(src.indexOf('class="cr-phase"')<0) return _echec('cellule phase conditionnelle');
+      // Et elles sont bien VIDES quand la donnee manque, sinon `:empty` ne
+      // les effacerait pas et la carte du telephone gagnerait deux marges.
+      const h=renderClientRow({id:'x',fname:'A',lname:'B'});
+      const d=document.createElement('div'); d.innerHTML=h;
+      const o=d.querySelector('.cr-obj'), p=d.querySelector('.cr-phase');
+      if(!o||!p) return _echec('cellules absentes du rendu');
+      return (o.innerHTML===''&&p.innerHTML==='')
+        ?true:_echec('cellule non vide : "'+o.innerHTML+'" / "'+p.innerHTML+'"');})());
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
