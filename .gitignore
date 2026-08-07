@@ -2,3 +2,18 @@ node_modules/
 .claude/
 *.log
 .gstack/
+
+# Documents de travail, volontairement HORS du depot. Ce depot est publie tel
+# quel sur repcore131.github.io : tout ce qui y entre devient lisible par
+# n importe qui, et l historique git est permanent. Les audits experts et la
+# cartographie technique decrivent les entrailles de l app — ils restent sur le
+# disque, ils ne partent pas en ligne.
+AUDIT_INVENTAIRE.md
+AUDIT_REPCORE.md
+AUDIT_REPCORE.pdf
+audit/
+docs/audit/
+
+# Copies de travail de l application. Publiee, une copie ancienne servirait une
+# version perimee de l app a qui en connait l adresse.
+app/b55.html
