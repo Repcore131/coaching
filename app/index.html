@@ -17400,24 +17400,51 @@ function commencerDepuisApercu(){
 function _apLigne(ex,i){
   const img=illustrationDe(ex.name);
   const sr=_apSeriesReps(ex);
-  const l=(t,v)=>v?`<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:2px 0">`
-    +`<span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:#eee;text-align:right">${escapeHtml(String(v))}</span></div>`:'';
+  // Lignes zébrées et valeur en gras : déplié, ce panneau se lit debout entre
+  // deux séries, pas assis au calme.
+  const l=(t,v)=>v?`<div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;
+      font-size:12.5px;padding:6px 2px;border-top:1px solid rgba(255,255,255,.05)">`
+    +`<span style="color:var(--sub);letter-spacing:.4px">${escapeHtml(t)}</span>`
+    +`<span style="color:#fff;font-weight:800;text-align:right">${escapeHtml(String(v))}</span></div>`:'';
   const note=(ex.description||ex.note||'').trim();
-  return `<details style="background:var(--surface-1);border:1px solid var(--border);
-    border-radius:12px;margin-bottom:8px;overflow:hidden">
-    <summary style="display:flex;align-items:center;gap:11px;padding:9px 11px;cursor:pointer;
-      list-style:none;min-height:56px">
-      ${img?`<img src="${escapeHtml(img)}" alt="" loading="lazy" width="52" height="38"
-        style="width:52px;height:38px;object-fit:cover;border-radius:7px;background:#fff;flex-shrink:0">`
-        :`<div style="width:52px;height:38px;border-radius:7px;background:var(--surface-2);
-          border:1px solid var(--border);flex-shrink:0"></div>`}
+  // LA VIGNETTE NE RECADRE PLUS. `cover` coupait les bords de chaque
+  // illustration : sur un pendulum squat, la machine sortait du cadre et il ne
+  // restait qu'un morceau de cuisse. `contain` montre l'image ENTIÈRE, quitte
+  // à laisser du blanc autour, et le carré passe de 52×38 à 76×76 — c'est la
+  // vignette qu'on reconnaît d'un coup d'œil en salle, pas une décoration.
+  const vign=img
+    ? `<div style="position:relative;flex-shrink:0;width:76px;height:76px;border-radius:10px;
+         background:#fff;border:1px solid rgba(255,255,255,.14);overflow:hidden;
+         box-shadow:0 4px 14px rgba(0,0,0,.55),inset 0 0 0 1px rgba(0,0,0,.06)">
+        <img src="${escapeHtml(img)}" alt="" loading="lazy" width="76" height="76"
+          style="width:100%;height:100%;object-fit:contain;display:block"></div>`
+    : `<div style="flex-shrink:0;width:76px;height:76px;border-radius:10px;
+         background:linear-gradient(145deg,#181818,#0d0d0d);border:1px solid #262626;
+         display:flex;align-items:center;justify-content:center;color:#3a3a3a;
+         box-shadow:inset 0 1px 0 rgba(255,255,255,.04)">${icon('dumbbell',26)}</div>`;
+  return `<details style="position:relative;background:linear-gradient(180deg,#161616,#0f0f0f);
+    border:1px solid #232323;border-left:3px solid var(--red);border-radius:12px;
+    margin-bottom:9px;overflow:hidden;
+    box-shadow:0 6px 18px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.045)">
+    <div style="position:absolute;inset:0;pointer-events:none;
+      background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px)"></div>
+    <summary style="position:relative;display:flex;align-items:center;gap:12px;padding:11px 12px;
+      cursor:pointer;list-style:none;min-height:56px">
+      <span style="flex-shrink:0;width:22px;font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;
+        font-size:19px;line-height:1;color:var(--red);text-shadow:0 0 9px rgba(224,32,32,.75);
+        text-align:center">${i+1}</span>
+      ${vign}
       <div style="flex:1;min-width:0">
-        <div style="font-weight:800;font-size:12.5px;line-height:1.3">${escapeHtml(ex.name||'Exercice '+(i+1))}</div>
-        ${sr?`<div class="sub" style="font-size:11px;margin-top:2px">${escapeHtml(sr)}</div>`:''}
+        <div style="font-weight:900;font-size:14px;line-height:1.25;letter-spacing:.2px;
+          text-transform:uppercase;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6)">${escapeHtml(ex.name||'Exercice '+(i+1))}</div>
+        ${sr?`<div style="display:inline-block;margin-top:6px;padding:3px 9px;border-radius:6px;
+          background:rgba(224,32,32,.12);border:1px solid rgba(224,32,32,.32);
+          font-size:12px;font-weight:800;color:#ff6b6b;letter-spacing:.5px">${escapeHtml(sr)}</div>`:''}
       </div>
-      <span style="color:var(--sub);font-size:13px;flex-shrink:0;width:24px;text-align:center">▾</span>
+      <span style="color:var(--sub);font-size:15px;flex-shrink:0;width:22px;text-align:center">▾</span>
     </summary>
-    <div style="padding:2px 13px 12px 13px;border-top:1px solid var(--border)">
+    <div style="position:relative;padding:2px 14px 13px 14px;border-top:1px solid rgba(255,255,255,.07);
+      background:rgba(0,0,0,.28)">
       ${l('Séries',ex.series)}
       ${l('Répétitions',ex.reps)}
       ${l('Repos',ex.repos)}
@@ -17438,16 +17465,30 @@ function _renderApercu(){
   const t=document.getElementById('ap-titre');
   if(t) t.textContent=_nomSeance(sess,_apIdx);
   const r=resumeSeance(sess);
-  const chiffre=(v,lib)=>`<div style="flex:1;text-align:center;background:var(--surface-1);
-    border:1px solid var(--border);border-radius:10px;padding:9px 6px">
-    <div style="font-size:17px;font-weight:900;color:#fff;line-height:1">${escapeHtml(String(v))}</div>
-    <div class="sub" style="font-size:10px;margin-top:3px;text-transform:uppercase;letter-spacing:.5px">${escapeHtml(lib)}</div></div>`;
+  // Les trois chiffres passent en Bebas avec halo, comme les compteurs de la
+  // diète et les scores : c'est la typographie que l'app donne déjà à ses
+  // nombres, et elle se lit d'un mètre. La durée est la tuile ROUGE — c'est la
+  // seule des trois qui décide si on a le temps de faire la séance maintenant.
+  const chiffre=(v,lib,fort)=>`<div style="flex:${fort?'1.3':'1'};min-width:0;position:relative;overflow:hidden;
+    text-align:center;border-radius:11px;padding:11px 6px;
+    background:${fort?'linear-gradient(145deg,#c10000 0%,#8d0000 55%,#5a0000 100%)':'linear-gradient(180deg,#161616,#0e0e0e)'};
+    border:1px solid ${fort?'rgba(255,90,90,.45)':'#232323'};
+    box-shadow:${fort?'0 0 18px rgba(224,32,32,.38),':''}inset 0 1px 0 rgba(255,255,255,${fort?'.16':'.05'}),0 6px 16px rgba(0,0,0,.5)">
+    <div style="position:absolute;inset:0;pointer-events:none;
+      background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(0,0,0,.13) 11px,rgba(0,0,0,.13) 12px)"></div>
+    <div style="position:relative">
+      <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler',sans-serif;
+        font-size:27px;line-height:1;color:#fff;letter-spacing:.5px;
+        text-shadow:0 0 9px rgba(255,255,255,${fort?'.95':'.35'}),0 0 22px rgba(255,255,255,${fort?'.5':'.15'})">${escapeHtml(String(v))}</div>
+      <div style="font-size:9px;margin-top:5px;text-transform:uppercase;letter-spacing:1.6px;font-weight:800;
+        color:${fort?'rgba(255,255,255,.88)':'var(--sub)'}">${escapeHtml(lib)}</div>
+    </div></div>`;
   const notes=(sess.notes||'').trim();
   z.innerHTML=
     `<div style="display:flex;gap:8px;margin:12px 0 14px">
       ${chiffre(r?r.exercices:0,'exercices')}
       ${chiffre(r?r.series:0,'séries')}
-      ${chiffre(r?('~'+r.minutes+' min'):'—','durée')}
+      ${chiffre(r?('~'+r.minutes+' min'):'—','durée',true)}
     </div>`
     +(notes?`<div style="background:var(--surface-1);border:1px solid var(--border);
       border-left:3px solid var(--red);border-radius:0 10px 10px 0;padding:11px 13px;margin-bottom:14px">
