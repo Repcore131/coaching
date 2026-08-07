@@ -552,16 +552,32 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
 .plan-card{position:relative;overflow:hidden;background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;margin-bottom:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.45)}
 .plan-card::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none}
 .plan-card>*{position:relative}
-.plan-titre{display:flex;align-items:center;gap:8px;padding:9px 13px;background:linear-gradient(90deg,rgba(224,32,32,.16),rgba(224,32,32,.04) 65%,transparent);border-left:3px solid var(--red);font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:15px;letter-spacing:2px;text-transform:uppercase;color:#fff;text-shadow:0 0 9px rgba(224,32,32,.55)}
-.plan-corps{padding:1px 13px 10px}
+/* Bandeau de repas. Rouge FRANC et texturé : le dégradé précédent partait de
+   .16 d'opacité et se perdait dans le fond au tiers de la largeur — de loin,
+   les repas ne se détachaient plus les uns des autres. Le filet diagonal est
+   celui de la carte, mais deux fois plus dense, ce qui donne au bandeau sa
+   matière sans ajouter d'image.
+   Le halo du titre est BLANC : posé en rouge sur un fond devenu rouge, il
+   n'éclairait plus rien. */
+.plan-titre{position:relative;display:flex;align-items:baseline;gap:9px;padding:9px 13px;border-left:3px solid #ff2d2d;overflow:hidden;
+  background:linear-gradient(90deg,rgba(224,32,32,.62),rgba(190,18,18,.34) 62%,rgba(120,10,10,.12))}
+.plan-titre::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(-52deg,transparent,transparent 7px,rgba(0,0,0,.16) 7px,rgba(0,0,0,.16) 8px)}
+.plan-titre>*{position:relative}
+.plan-titre-t{font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:16px;letter-spacing:2.2px;text-transform:uppercase;color:#fff;
+  text-shadow:0 0 6px rgba(255,255,255,.9),0 0 14px rgba(255,255,255,.5),0 0 26px rgba(255,120,120,.45)}
+/* Total du repas : petit, italique, poussé à droite. Il ne doit jamais
+   concurrencer le nom du repas — c'est un repère, pas un titre. */
+.plan-macros{margin-left:auto;flex-shrink:0;font-style:italic;font-size:10px;font-weight:600;color:rgba(255,255,255,.82);letter-spacing:.2px;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.plan-corps{padding:1px 13px 8px}
 /* Le filet SÉPARE, il n'encadre pas : la première ligne n'en porte pas, sinon
    il doublait le bord du bandeau de titre juste au-dessus. */
-.plan-l{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid rgba(255,255,255,.055)}
+.plan-l{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid rgba(255,255,255,.055)}
 .plan-l:first-child{border-top:none}
-.plan-nom{flex:1;min-width:0;font-size:12.5px;font-weight:600;line-height:1.35}
+.plan-nom{flex:1;min-width:0;font-size:12.5px;font-weight:600;line-height:1.3}
 .plan-q{flex-shrink:0;font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:20px;line-height:1;letter-spacing:.5px;color:#fff}
 .plan-q u{font-family:Montserrat,sans-serif;font-size:10px;color:var(--sub);font-weight:400;letter-spacing:0;text-decoration:none}
-.plan-note{padding:9px 0 2px;font-size:11.5px;font-style:italic;color:var(--sub);line-height:1.5}
+.plan-note{padding:7px 0 1px;font-size:11.5px;font-style:italic;color:var(--sub);line-height:1.45}
 /* Catalogue de sources, replié. min-height 44px : c'est une commande, elle
    suit la même règle de cible tactile que le reste de l'application. */
 .plan-src{margin:9px 0 3px;border:1px solid var(--border);border-radius:10px;background:var(--dark);overflow:hidden}
@@ -570,7 +586,31 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
 .plan-src>summary::after{content:'▾';margin-left:auto;flex-shrink:0;font-size:12px;color:var(--sub);transition:transform .18s}
 .plan-src[open]>summary::after{transform:rotate(180deg)}
 .plan-src-nb{flex-shrink:0;font-size:10px;font-weight:700;color:var(--text-faint);letter-spacing:.5px;white-space:nowrap}
-.plan-src-liste{padding:0 12px 9px}
+.plan-src-liste{padding:0 10px 9px}
+/* ── Tableau à 4 colonnes : deux paires (aliment, quantité) côte à côte ──
+   Une liste de 28 glucides tenait sur 28 lignes ; elle en occupe 14. C'est la
+   même raison que le repli des volets — la hauteur — poussée d'un cran.
+   table-layout:fixed est obligatoire : sans lui, une seule ligne longue
+   (« Thon à l'huile de tournesol, entier, appertisé, égoutté ») redistribue
+   toutes les colonnes et les deux moitiés cessent de s'aligner.
+   La couleur de l'en-tête vient de --p4, posé par l'appelant : rouge pour les
+   protéines, jaune pour les glucides, vert pour les fruits — le code couleur
+   des tableurs d'origine. Le texte de l'en-tête est SOMBRE : sur du jaune ou
+   du vert plein, du blanc tombe sous le seuil de contraste. */
+.p4{width:100%;border-collapse:collapse;table-layout:fixed}
+.p4 th{background:var(--p4);color:#0a0a0a;font-size:9px;font-weight:900;letter-spacing:.7px;text-transform:uppercase;padding:5px 7px;text-align:left}
+.p4 th:nth-child(2n){text-align:right}
+.p4 td{padding:5px 7px;border-top:1px solid rgba(255,255,255,.05);vertical-align:top}
+.p4 .p4-n{width:31%;font-size:11px;font-weight:600;line-height:1.3;color:#e8e8e8}
+.p4 .p4-q{width:19%;text-align:right;font-size:12px;font-weight:800;line-height:1.3;color:#fff;white-space:nowrap}
+/* Filet vertical entre les deux moitiés, sinon l'œil saute d'une paire à
+   l'autre sans savoir laquelle va avec laquelle. */
+.p4 td:nth-child(3),.p4 th:nth-child(3){border-left:1px solid rgba(255,255,255,.09)}
+/* Variante « texte » : la table des fruits porte des quantités rédigées
+   (« 30 à 35 raisins (~95 g) »), qui doivent pouvoir revenir à la ligne. */
+.p4-txt .p4-q{white-space:normal;font-size:10px;font-weight:600;color:var(--sub);text-align:left}
+.p4-txt .p4-n{width:26%}
+.p4-txt .p4-q{width:24%}
 .row-inactive{opacity:.5}
 .row-alert{background:var(--danger-bg)!important;border-left:3px solid var(--red)}
 .row-target{background:var(--red);color:#fff;border-radius:4px}
@@ -26267,17 +26307,31 @@ function _htmlPlanAthlete(user){
     <div style="font-size:9px;color:var(--sub);letter-spacing:1.4px;font-weight:800;margin-top:5px">${lib}</div>
   </div>`;
 
-  // LE SOUS-TABLEAU. Deux colonnes et pas une de plus : la source, et ce
-  // qu'il faut peser à CE repas. La valeur pour 100 g a été retirée sur
-  // demande du coach — elle servait au calcul, pas à l'athlète, qui n'a
-  // besoin que du nombre à mettre sur la balance.
+  // CODE COULEUR DES TABLEURS D'ORIGINE, repris tel quel : les protéines en
+  // rouge, les glucides en jaune, les fruits en vert. C'est ce que le coach et
+  // ses athlètes lisent depuis des années sur le papier ; leur donner d'autres
+  // couleurs dans l'application les obligeait à traduire à chaque lecture.
+  const PL_COUL={p:'#ff3b30',c:'#f5c518',fruit:'#22c55e'};
+
+  // TABLEAU À 4 COLONNES : deux paires (aliment, quantité) côte à côte. Une
+  // liste de 28 glucides tenait sur 28 lignes, elle en occupe 14. La quantité
+  // affichée est celle à consommer À CE REPAS — pas la valeur pour 100 g, qui
+  // sert au calcul et pas à l'athlète.
+  const tableau4=(lignes,couleur,texte)=>{
+    if(!lignes.length) return `<div style="font-size:11px;color:var(--text-dim);line-height:1.6;padding:6px 2px">Ton coach n'a pas encore posé de sources ici.</div>`;
+    const cell=l=>l
+      ? `<td class="p4-n">${escapeHtml(l.nom)}</td><td class="p4-q"${l.alerte?' style="color:var(--orange)"':''}>${l.qte}</td>`
+      : `<td class="p4-n"></td><td class="p4-q"></td>`;
+    let corps='';
+    for(let i=0;i<lignes.length;i+=2) corps+=`<tr>${cell(lignes[i])}${cell(lignes[i+1])}</tr>`;
+    return `<table class="p4${texte?' p4-txt':''}" style="--p4:${couleur}">
+      <thead><tr><th>Aliment</th><th>Quantité</th><th>Aliment</th><th>Quantité</th></tr></thead>
+      <tbody>${corps}</tbody></table>`;
+  };
   const listeSources=(macro)=>{
     const b=macro==='p'?src.proteines:src.glucides;
-    if(!b.liste.length) return `<div style="font-size:11px;color:var(--text-dim);line-height:1.6">Ton coach n'a pas encore posé de sources ici.</div>`;
-    return b.liste.map(s=>`<div class="plan-l">
-      <div class="plan-nom">${escapeHtml(s.nom)}</div>
-      <div class="plan-q"${s.excessif?' style="color:var(--orange)"':''}>${s.q==null?'—':Math.round(s.q)}<u> g</u></div>
-    </div>`).join('');
+    return tableau4(b.liste.map(s=>({nom:s.nom,
+      qte:(s.q==null?'—':Math.round(s.q)+' g'),alerte:s.excessif})),PL_COUL[macro],false);
   };
   // REPLIÉ PAR DÉFAUT, et c'est tout l'objet de ce lot. Le catalogue complet
   // s'ouvrait dans CHAQUE repas qui appelle une source : sur un plan de prise
@@ -26287,40 +26341,61 @@ function _htmlPlanAthlete(user){
   // le programme se lit maintenant d'un coup d'œil.
   // Le nombre est DANS le résumé : un volet fermé qui ne dit pas ce qu'il
   // contient ne donne aucune raison de l'ouvrir.
-  const cartouche=(titre,couleur,macro)=>{
+  const cartouche=(titre,macro)=>{
     const b=macro==='p'?src.proteines:src.glucides;
     const n=b.liste.length;
     return `<details class="plan-src">
-      <summary style="color:${couleur}">${escapeHtml(titre)}
-        <span class="plan-src-nb">${n?n+(n>1?' choix':' choix'):'—'}</span></summary>
+      <summary style="color:${PL_COUL[macro]}">${escapeHtml(titre)}
+        <span class="plan-src-nb">${n?n+' choix':'—'}</span></summary>
       <div class="plan-src-liste">${listeSources(macro)}</div>
     </details>`;
   };
 
   // La table des fruits, telle quelle. Aucun calcul : ce sont des
   // équivalences de portion, les mêmes dans tous les programmes du coach.
-  const tableFruits=()=>PLAN_FRUITS.map(f=>`<div class="plan-l" style="padding:6px 0">
-      <span class="plan-nom">${escapeHtml(f.n)}</span>
-      <span style="font-size:11px;color:var(--sub);text-align:right;flex-shrink:0">${escapeHtml(f.q)}</span>
-    </div>`).join('');
+  // Variante « texte » du tableau : les quantités sont rédigées, pas chiffrées.
+  const tableFruits=()=>tableau4(
+    PLAN_FRUITS.map(f=>({nom:f.n,qte:escapeHtml(f.q)})),PL_COUL.fruit,true);
+  // « Voir la table des fruits » renvoyait vers un bloc situé tout en bas du
+  // programme : il fallait sortir du repas, chercher, puis revenir. La table
+  // s'ouvre désormais SOUS la ligne qui l'appelle, dans le repas concerné.
+  const cartoucheFruit=(titre)=>`<details class="plan-src">
+    <summary style="color:${PL_COUL.fruit}">${escapeHtml(titre)}
+      <span class="plan-src-nb">${PLAN_FRUITS.length} fruits</span></summary>
+    <div class="plan-src-liste">${tableFruits()}</div>
+  </details>`;
 
   // Les repas, dans l'ordre du plan. Un marqueur de source n'affiche pas un
   // aliment : il déplie juste sous lui la liste dans laquelle l'athlète
   // choisit — c'est la forme du tableur, et c'est ce qui rend le plan
   // utilisable sans faire d'aller-retour.
   const cles=Object.keys(couv.parRepas).sort((a,b)=>planOrdreRepas(a)-planOrdreRepas(b));
+  // TOTAL DU REPAS. planCouverture ne compte que les aliments IMPOSÉS : une
+  // source « au choix » n'a pas d'aliment, donc pas de macros, tant que
+  // l'athlète n'a pas choisi. Mais le grammage de cette source est calculé
+  // POUR atteindre une cible — restant / nombre de repas qui se la partagent —
+  // et c'est un chiffre certain, quel que soit l'aliment retenu. On l'ajoute
+  // donc à la macro visée. Les macros collatérales de l'aliment choisi, elles,
+  // restent inconnues : le total est un ORDRE DE GRANDEUR, et le libellé le dit.
+  const totalRepas=(r)=>{
+    let p=r.p||0,c=r.c||0,l=r.l||0;
+    for(const x of r.lignes){
+      if(!x.source) continue;
+      const cible=_planNb(rest[x.source]);
+      if(cible==null||!(cible>0)) continue;
+      const n=nSrc[x.source]||1;
+      if(x.source==='p') p+=cible/n; else c+=cible/n;
+    }
+    const kcal=4*p+4*c+9*l;
+    if(!(kcal>0)) return '';
+    return `<span class="plan-macros" title="Ordre de grandeur : les macros secondaires de la source choisie ne sont pas comptées">~${Math.round(kcal)} kcal · ${Math.round(p)}P ${Math.round(c)}G ${Math.round(l)}L</span>`;
+  };
   const blocRepas=cles.map(cle=>{
     const r=couv.parRepas[cle];
     const lignes=r.lignes.map(x=>{
       if(x.note) return `<div class="plan-note">${escapeHtml(x.nom)}</div>`;
-      if(x.source) return cartouche(x.nom,x.source==='p'?'#60a5fa':'var(--green)',x.source);
-      // La ligne de fruit RENVOIE à la table, elle ne la recopie pas : le
-      // tableur écrit « se référer au tableau plus bas », et vingt lignes
-      // répétées à chaque repas noieraient le reste du programme.
-      if(x.fruit) return `<div class="plan-l">
-        <div class="plan-nom" style="font-weight:700;color:#f5c518">${escapeHtml(x.nom)}</div>
-        <div style="font-size:10px;color:var(--sub);flex-shrink:0;text-align:right;line-height:1.4">voir la table<br>des fruits</div>
-      </div>`;
+      if(x.source) return cartouche(x.nom,x.source);
+      if(x.fruit) return cartoucheFruit(x.nom);
       const q=_planNb(x.item&&x.item.q);
       const u=planUniteItem(x.item);
       return `<div class="plan-l">
@@ -26329,7 +26404,7 @@ function _htmlPlanAthlete(user){
       </div>`;
     }).join('');
     return `<div class="plan-card">
-      <div class="plan-titre">${escapeHtml(planLibRepas(cle))}</div>
+      <div class="plan-titre"><span class="plan-titre-t">${escapeHtml(planLibRepas(cle))}</span>${totalRepas(r)}</div>
       <div class="plan-corps">${lignes}</div>
     </div>`;
   }).join('');
@@ -26340,11 +26415,11 @@ function _htmlPlanAthlete(user){
     return b.liste.length>0&&!planSquelette(plan).some(x=>x&&x.src===m);
   });
   const blocOrphelins=orphelins.length?`<div class="plan-card">
-    <div class="plan-titre">Sources à répartir</div>
+    <div class="plan-titre"><span class="plan-titre-t">Sources à répartir</span></div>
     <div class="plan-corps">
       ${orphelins.map(m=>cartouche(
         'Tes sources de '+(m==='p'?'protéines':'glucides')+' · à répartir sur '+nSrc[m]+' repas',
-        m==='p'?'#60a5fa':'var(--green)',m)).join('')}
+        m)).join('')}
     </div>
   </div>`:'';
 
@@ -26355,13 +26430,10 @@ function _htmlPlanAthlete(user){
   // de portion sont une RÉFÉRENCE qu'on consulte, pas une consigne du jour.
   // Dépliée, elle s'intercalait entre le programme et la liste de courses.
   const blocFruits=`<div class="plan-card">
-    <div class="plan-titre" style="background:linear-gradient(90deg,rgba(245,197,24,.16),rgba(245,197,24,.04) 65%,transparent);border-left-color:#f5c518;text-shadow:0 0 9px rgba(245,197,24,.5)">1 portion de fruits</div>
+    <div class="plan-titre" style="background:linear-gradient(90deg,rgba(34,197,94,.55),rgba(22,140,66,.3) 62%,rgba(10,80,36,.1));border-left-color:#2ee06a">
+      <span class="plan-titre-t">1 portion de fruits</span></div>
     <div class="plan-corps">
-      <details class="plan-src">
-        <summary style="color:#f5c518">Table des équivalences
-          <span class="plan-src-nb">${PLAN_FRUITS.length} fruits</span></summary>
-        <div class="plan-src-liste">${tableFruits()}</div>
-      </details>
+      ${cartoucheFruit('Table des équivalences')}
     </div>
   </div>`;
   const blocCheat=`<div class="plan-card" style="margin-bottom:14px">
@@ -26373,11 +26445,12 @@ function _htmlPlanAthlete(user){
   let lc=null;
   try{ lc=planListeCourses(plan,user); }catch(e){}
   const courses=(lc&&lc.lignes.length)?`<div class="plan-card">
-    <div class="plan-titre" style="background:linear-gradient(90deg,rgba(34,197,94,.16),rgba(34,197,94,.04) 65%,transparent);border-left-color:var(--green);text-shadow:0 0 9px rgba(34,197,94,.5)">${icon('clipboard',13)} Liste de courses</div>
+    <div class="plan-titre" style="background:linear-gradient(90deg,rgba(255,255,255,.16),rgba(255,255,255,.05) 62%,transparent);border-left-color:#9a9a9a">
+      <span class="plan-titre-t">${icon('clipboard',13)} Liste de courses</span></div>
     <div class="plan-corps">
-      ${lc.lignes.filter(l=>l.qte>0).map(l=>`<div class="plan-l" style="padding:7px 0">
+      ${lc.lignes.filter(l=>l.qte>0).map(l=>`<div class="plan-l">
         <span class="plan-nom" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l.lib)}</span>
-        <span style="font-size:12px;font-weight:800;color:var(--green);flex-shrink:0">${planFormatQte(l.qte,l.unite)}</span>
+        <span style="font-size:12px;font-weight:800;color:#ddd;flex-shrink:0">${planFormatQte(l.qte,l.unite)}</span>
       </div>`).join('')}
       <div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-top:9px">Calculée sur un jour d'entraînement, le plus chargé : mieux vaut un reste qu'une rupture en milieu de semaine.</div>
     </div>
@@ -60396,7 +60469,7 @@ function testExercices(){
                                   [3,'L','L'],[2,'œuf','œufs'],[1,'g','g']])
             if(f(n,u)!==att) faux.push(n+' '+u+' → '+f(n,u));
           return faux.length?_echec(faux.join(', ')):true;})());
-        ok('La ligne de fruit RENVOIE à la table, elle ne la recopie pas',(()=>{
+        ok('La ligne de fruit OUVRE la table sous elle, repliée',(()=>{
           const u=_pa({nutrition:Object.assign(_macros({kcal:2600,p:200,g:300,l:70,f:36}),
             {plan:{squelette:[{id:'f1',repas:'collation1',fruit:true},
               {id:'f2',repas:'petit_dej',fruit:true},
@@ -60406,11 +60479,58 @@ function testExercices(){
           let h='';
           try{ currentUser=u; _ciqualDB=Object.keys(_AL).map(k=>_AL[k]); h=_htmlPlanAthlete(u); }
           finally{ currentUser=_s; _ciqualDB=_sDB; }
-          // Deux lignes de fruit dans le plan, et pourtant la table des
-          // équivalences ne doit apparaître QU'UNE fois, en pied de programme.
+          // RÈGLE INVERSÉE, sur demande explicite du coach. « Voir la table »
+          // renvoyait en pied de programme : il fallait quitter le repas,
+          // chercher, puis revenir. La table s'ouvre désormais SOUS la ligne
+          // qui l'appelle. Elle est donc rendue autant de fois qu'appelée,
+          // plus une en pied — ce qui ne coûte rien à l'écran puisque tout
+          // est replié, et épargne un aller-retour à chaque fruit.
           const n=(h.match(/Pamplemousse/g)||[]).length;
-          if(n!==1) return _echec('la table est rendue '+n+' fois');
-          return /voir la table/.test(h)?true:_echec('le renvoi manque sur la ligne de fruit');})());
+          if(n!==3) return _echec('table rendue '+n+' fois, attendu 3 (2 fruits + le pied)');
+          if(/voir la table/.test(h)) return _echec('l\'ancien renvoi est resté');
+          // Repliée : rien de la table ne doit s'afficher sans un geste.
+          if(/<details class="plan-src"\s+open/.test(h)) return _echec('un volet est ouvert par défaut');
+          return /plan-src-nb">20 fruits/.test(h)
+            ?true:_echec('le volet n\'annonce pas ce qu\'il contient');})());
+        ok('Les catalogues sortent en tableau à 4 colonnes, en-tête coloré',(()=>{
+          const u=_pa({nutrition:Object.assign(_macros({kcal:2600,p:200,g:300,l:70,f:36}),
+            {plan:{squelette:[{id:'a',repas:'midi',src:'p'},{id:'b',repas:'soir',src:'c'}],
+             sources:{proteines:[5,9],glucides:[5]}}})});
+          const _s=currentUser,_sDB=_ciqualDB;
+          let h='';
+          try{ currentUser=u; _ciqualDB=Object.keys(_AL).map(k=>_AL[k]); h=_htmlPlanAthlete(u); }
+          finally{ currentUser=_s; _ciqualDB=_sDB; }
+          const d=document.createElement('div'); d.innerHTML=h;
+          const tables=d.querySelectorAll('table.p4');
+          if(!tables.length) return _echec('aucun tableau à 4 colonnes');
+          // Quatre en-têtes : aliment, quantité, aliment, quantité.
+          const mauvais=[...tables].filter(t=>t.querySelectorAll('thead th').length!==4);
+          if(mauvais.length) return _echec(mauvais.length+' tableau(x) sans 4 colonnes');
+          // Chaque ligne porte 4 cellules, même la dernière quand le nombre
+          // de sources est impair : sinon la moitié droite se décale.
+          const lignesCourtes=[...tables].flatMap(t=>[...t.querySelectorAll('tbody tr')])
+            .filter(r=>r.children.length!==4);
+          if(lignesCourtes.length) return _echec(lignesCourtes.length+' ligne(s) incomplète(s)');
+          // Code couleur des tableurs : protéines rouge, glucides jaune.
+          if(!/--p4:#ff3b30/.test(h)) return _echec('les protéines ne sont pas en rouge');
+          if(!/--p4:#f5c518/.test(h)) return _echec('les glucides ne sont pas en jaune');
+          return true;})());
+        ok('Chaque repas affiche son total de macros',(()=>{
+          const u=_pa({nutrition:Object.assign(_macros({kcal:2600,p:200,g:300,l:70,f:36}),
+            {plan:{squelette:[{id:'a',repas:'midi',ciqual:4,q:250,u:'g'}],
+             sources:{proteines:[],glucides:[]}}})});
+          const _s=currentUser,_sDB=_ciqualDB;
+          let h='';
+          try{ currentUser=u; _ciqualDB=Object.keys(_AL).map(k=>_AL[k]); h=_htmlPlanAthlete(u); }
+          finally{ currentUser=_s; _ciqualDB=_sDB; }
+          const d=document.createElement('div'); d.innerHTML=h;
+          const m=d.querySelector('.plan-macros');
+          if(!m) return _echec('aucun total de repas');
+          // Le tilde n'est pas décoratif : les macros secondaires de la source
+          // choisie ne sont pas comptables, et le total ne doit pas se donner
+          // pour exact.
+          return /^~\d+ kcal · \d+P \d+G \d+L$/.test(m.textContent.trim())
+            ?true:_echec('format inattendu : '+m.textContent.trim());})());
 
         // ── Non-régression : un dossier sans plan ne change de rien ──
         ok('Sans plan : planDe rend null et planActif rend faux',(()=>{
