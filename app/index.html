@@ -31358,7 +31358,7 @@ function _videoEmbed(url,vidId='vc-video'){
   if(!url) return '';
   const ytM=url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);
   if(ytM) return `<iframe src="https://www.youtube.com/embed/${ytM[1]}" frameborder="0" allowfullscreen style="width:100%;height:190px;border-radius:8px;margin-top:8px"></iframe>`;
-  if(/\.(mp4|mov|webm|mkv)(\?|$)/i.test(url)) return `<video id="${vidId}" src="${url}" controls preload="none" style="width:100%;border-radius:8px;margin-top:8px;max-height:220px;background:#000"></video>`;
+  if(/\.(mp4|mov|webm|mkv)(\?|$)/i.test(url)) return `<video id="${vidId}" src="${url}" controls preload="none" playsinline webkit-playsinline style="width:100%;border-radius:8px;margin-top:8px;max-height:220px;background:#000"></video>`;
   return `<a href="${url}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:10px 14px;background:var(--surface-2);border-radius:8px;color:var(--red);font-size:12px;font-weight:700;text-decoration:none">▶ Voir la vidéo</a>`;
 }
 
@@ -31699,18 +31699,275 @@ function qcReset(){
   toastEcriture(saveUser(),'Liste réinitialisée ✓','la liste est');openQCManager();_renderQuickCommentChips();
 }
 // ======= VIDEO CORRECTION =======
+
+// ══════════════ LECTEUR DE CORRECTION — RALENTI, IMAGE PAR IMAGE ══════════
+// Tout se passe dans l'élément <video> LOCAL. Aucune transformation n'est
+// demandée à Cloudinary ni à Firebase Storage : le coût serveur est
+// strictement nul, le fichier téléchargé est le même qu'avant.
+//
+// AUCUN CHAMP AJOUTÉ AU DOCUMENT user par ce lot — sauf `sec` sur une
+// annotation, qui est la seule façon de garder la précision que le ralenti
+// fait justement gagner (voir _vcAnnoterIci).
+const VID_FPS_DEFAUT=30;
+const VID_RATES=[0.25,0.5,1];
+const VID_BOUCLE_MAX_S=10;      // au-delà, on retéléchargerait le média entier
+const VID_DUREE_MIN_BOUCLE=2;   // sous 2 s, une boucle n'a aucun sens
+
+// PURE côté effet : pose la vitesse et rend celle réellement appliquée.
+// iOS REMET parfois playbackRate à 1 après un play() : l'appelant réapplique
+// sur l'évènement 'play', c'est pour ça que la fonction est idempotente.
+function videoSetRate(el,rate){
+  const r=Number(rate);
+  if(!el||!(r>0)) return null;
+  try{ el.playbackRate=r; }catch(e){ return null; }
+  return el.playbackRate;
+}
+// Le fps n'est donné par AUCUNE API. requestVideoFrameCallback permet de
+// l'estimer (Safari 15.4+, Chrome 83+) ; ailleurs on rend 30 et l'écran le
+// dit. Mieux vaut un repli annoncé qu'une exactitude prétendue.
+function videoDetectFps(el){
+  const f=el&&Number(el._rcFps);
+  return (isFinite(f)&&f>0)?f:VID_FPS_DEFAUT;
+}
+// Mesure asynchrone, quand le navigateur la permet. Elle ne bloque rien :
+// tant qu'elle n'a pas abouti, videoDetectFps rend 30.
+function _videoMesurerFps(el,fini){
+  if(!el||typeof el.requestVideoFrameCallback!=='function'){ if(fini) fini(VID_FPS_DEFAUT,false); return; }
+  let t0=null,f0=null,n=0;
+  const pas=(now,meta)=>{
+    if(t0==null){ t0=meta.mediaTime; f0=meta.presentedFrames; }
+    else{
+      const dt=meta.mediaTime-t0, df=meta.presentedFrames-f0;
+      if(dt>0.4&&df>0){
+        const fps=df/dt;
+        el._rcFps=Math.round(fps*100)/100;
+        // Écart franc à un fps entier : la cadence est variable (téléphones
+        // récents qui filment en 30-60 adaptatif). On le DIT.
+        el._rcFpsVariable=Math.abs(fps-Math.round(fps))>0.6;
+        if(fini) fini(videoDetectFps(el),!!el._rcFpsVariable);
+        return;
+      }
+    }
+    if(++n<180) el.requestVideoFrameCallback(pas);
+    else if(fini) fini(VID_FPS_DEFAUT,false);
+  };
+  try{ el.requestVideoFrameCallback(pas); }catch(e){ if(fini) fini(VID_FPS_DEFAUT,false); }
+}
+// Une image en avant ou en arrière. La vidéo est mise en PAUSE : avancer
+// d'une image pendant la lecture n'a pas de sens, la lecture reprendrait
+// aussitôt par-dessus.
+function videoStepFrame(el,direction,fps){
+  if(!el) return null;
+  const f=(fps>0)?fps:videoDetectFps(el);
+  const d=(direction<0)?-1:1;
+  try{ el.pause(); }catch(e){}
+  const duree=Number(el.duration);
+  let t=Number(el.currentTime||0)+d*(1/f);
+  if(t<0) t=0;
+  if(isFinite(duree)&&duree>0&&t>duree) t=duree;
+  try{ el.currentTime=t; }catch(e){ return null; }
+  return t;
+}
+// Boucle de segment. Bornée à dix secondes : au-delà, la lecture en boucle
+// finirait par retélécharger le média entier à chaque tour, ce qui coûterait
+// de la bande passante à l'athlète pour rien.
+function videoSetLoop(el,a,b){
+  if(!el) return null;
+  const d1=Number(a), d2=Number(b);
+  if(!(isFinite(d1)&&isFinite(d2))) return null;
+  const debut=Math.max(0,Math.min(d1,d2)), fin=Math.max(d1,d2);
+  if(!(fin>debut)) return null;
+  if((fin-debut)>VID_BOUCLE_MAX_S) return null;   // REFUS explicite
+  el._rcLoop={a:debut,b:fin};
+  if(!el._rcLoopFn){
+    el._rcLoopFn=()=>{
+      const l=el._rcLoop;
+      if(!l) return;
+      if(el.currentTime>=l.b||el.currentTime<l.a-0.05){
+        try{ el.currentTime=l.a; }catch(e){}
+      }
+    };
+    el.addEventListener('timeupdate',el._rcLoopFn);
+  }
+  return {a:debut,b:fin};
+}
+function videoClearLoop(el){
+  if(!el) return false;
+  el._rcLoop=null;
+  if(el._rcLoopFn){ el.removeEventListener('timeupdate',el._rcLoopFn); el._rcLoopFn=null; }
+  return true;
+}
+// PURE. Secondes → « m:ss ». Le libellé reste au format que la liste connaît
+// déjà ; la précision, elle, part dans le champ `sec` (voir _vcAnnoterIci).
+function secsToTs(sec){
+  const s=Math.max(0,Math.floor(Number(sec)||0));
+  return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
+}
+
+// ── La barre de commandes, sous la vidéo ──────────────────────────────────
+// Tant que les métadonnées ne sont pas là, les commandes sont DÉSACTIVÉES —
+// pas masquées : une barre qui apparaît après coup fait sauter la mise en
+// page et laisse croire à un défaut.
+//
+// Sur une vidéo YouTube, il n'y a pas d'élément <video> à piloter : la barre
+// ne s'affiche pas du tout. La piloter demanderait l'API iframe de YouTube,
+// c'est-à-dire un script externe — exclu.
+function htmlLecteurCorrection(vidId){
+  const b=(lib,act,titre,extra)=>`<button type="button" onclick="${act}" title="${escapeHtml(titre)}"
+    aria-label="${escapeHtml(titre)}" ${extra||''} disabled
+    style="min-width:44px;min-height:44px;padding:8px 10px;border-radius:9px;cursor:pointer;
+      background:#111;border:1px solid #2e2e2e;color:#ddd;font-family:Montserrat,sans-serif;
+      font-size:11px;font-weight:800;letter-spacing:.3px">${lib}</button>`;
+  return `<div id="rc-barre-${vidId}" data-vid="${vidId}" style="margin-top:8px;background:#101010;
+    border:1px solid #262626;border-radius:11px;padding:9px 10px">
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <span style="font-size:9px;color:var(--sub);letter-spacing:1.4px;font-weight:800;text-transform:uppercase">Vitesse</span>
+      ${VID_RATES.map(r=>`<button type="button" onclick="rcVitesse('${vidId}',${r})"
+        data-rate="${r}" disabled aria-pressed="false"
+        aria-label="Lire à ${String(r).replace('.',',')} fois la vitesse normale"
+        style="min-width:44px;min-height:38px;padding:6px 9px;border-radius:8px;cursor:pointer;
+          background:#111;border:1px solid #2e2e2e;color:var(--sub);
+          font-family:Montserrat,sans-serif;font-size:11px;font-weight:800">${String(r).replace('.',',')}×</button>`).join('')}
+      <span id="rc-badge-${vidId}" aria-live="polite"
+        style="margin-left:auto;font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:16px;
+        color:var(--red);letter-spacing:1px;text-shadow:0 0 9px rgba(224,32,32,.7)">1×</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap">
+      ${b('◀ 1','rcPas(\''+vidId+'\',-1)','Reculer d\'une image (flèche gauche)','data-cmd="pas"')}
+      ${b('1 ▶','rcPas(\''+vidId+'\',1)','Avancer d\'une image (flèche droite)','data-cmd="pas"')}
+      <span id="rc-fps-${vidId}" style="font-size:10px;color:var(--text-faint);letter-spacing:.3px"></span>
+    </div>
+    <div id="rc-boucle-${vidId}" style="display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap">
+      ${b('A','rcMarque(\''+vidId+'\',\'a\')','Poser le début de la boucle ici','data-cmd="ab"')}
+      ${b('B','rcMarque(\''+vidId+'\',\'b\')','Poser la fin de la boucle ici','data-cmd="ab"')}
+      ${b('Effacer la boucle','rcEffacerBoucle(\''+vidId+'\')','Effacer la boucle','data-cmd="ab"')}
+      <span id="rc-ab-${vidId}" aria-live="polite" style="font-size:10px;color:var(--text-faint)"></span>
+    </div>
+    <div style="margin-top:8px">
+      ${b('Annoter ici','rcAnnoterIci(\''+vidId+'\')','Créer une annotation au temps exact affiché','data-cmd="note" style="width:100%"')}
+    </div>
+  </div>`;
+}
+function _rcVideo(vidId){ return document.getElementById(vidId); }
+function _rcActiver(vidId,ok){
+  const z=document.getElementById('rc-barre-'+vidId);
+  if(!z) return;
+  z.querySelectorAll('button').forEach(b=>{ b.disabled=!ok; b.style.opacity=ok?'1':'.45'; });
+}
+function rcVitesse(vidId,r){
+  const v=_rcVideo(vidId);
+  const applique=videoSetRate(v,r);
+  if(applique==null) return false;
+  const z=document.getElementById('rc-barre-'+vidId);
+  if(z) z.querySelectorAll('button[data-rate]').forEach(b=>{
+    const actif=Math.abs(Number(b.dataset.rate)-applique)<1e-6;
+    b.setAttribute('aria-pressed',actif?'true':'false');
+    b.style.borderColor=actif?'var(--red)':'#2e2e2e';
+    b.style.background=actif?'rgba(224,32,32,.12)':'#111';
+    b.style.color=actif?'#fff':'var(--sub)';
+  });
+  const badge=document.getElementById('rc-badge-'+vidId);
+  if(badge) badge.textContent=String(applique).replace('.',',')+'×';
+  if(v) v._rcRate=applique;
+  return true;
+}
+function rcPas(vidId,dir){
+  const v=_rcVideo(vidId);
+  if(!v) return false;
+  videoStepFrame(v,dir,videoDetectFps(v));
+  return true;
+}
+function rcMarque(vidId,quel){
+  const v=_rcVideo(vidId);
+  if(!v) return false;
+  v._rcAB=v._rcAB||{};
+  v._rcAB[quel]=Number(v.currentTime)||0;
+  const {a,b}=v._rcAB;
+  const z=document.getElementById('rc-ab-'+vidId);
+  if(a!=null&&b!=null){
+    const r=videoSetLoop(v,a,b);
+    if(!r){
+      if(z) z.textContent='Segment trop long : '+VID_BOUCLE_MAX_S+' s au maximum.';
+      return false;
+    }
+    if(z) z.textContent='Boucle '+secsToTs(r.a)+' → '+secsToTs(r.b);
+  } else if(z) z.textContent=(quel==='a'?'A':'B')+' posé à '+secsToTs(v._rcAB[quel]);
+  return true;
+}
+function rcEffacerBoucle(vidId){
+  const v=_rcVideo(vidId);
+  if(!v) return false;
+  videoClearLoop(v); v._rcAB={};
+  const z=document.getElementById('rc-ab-'+vidId);
+  if(z) z.textContent='';
+  return true;
+}
+// « Annoter ici ». Le timecode enregistré est le temps RÉEL de la vidéo, pas
+// le temps perçu au ralenti : currentTime ne dépend pas de playbackRate.
+function rcAnnoterIci(vidId){
+  const v=_rcVideo(vidId);
+  if(!v) return false;
+  const t=Number(v.currentTime)||0;
+  const champ=document.getElementById('vc-ts-time');
+  if(champ){ champ.value=secsToTs(t); champ.dataset.sec=String(Math.round(t*10)/10); }
+  const note=document.getElementById('vc-ts-note');
+  if(note) note.focus();
+  return true;
+}
+// Câblage. Appelé après l'insertion de la modale.
+function rcInitLecteur(vidId){
+  const v=_rcVideo(vidId);
+  const z=document.getElementById('rc-barre-'+vidId);
+  if(!v||!z) return false;
+  const pret=()=>{
+    _rcActiver(vidId,true);
+    // Vidéo trop courte : la boucle de segment n'a aucun sens, on la masque.
+    const d=Number(v.duration);
+    const bo=document.getElementById('rc-boucle-'+vidId);
+    if(bo&&isFinite(d)&&d<VID_DUREE_MIN_BOUCLE) bo.style.display='none';
+    _videoMesurerFps(v,(fps,variable)=>{
+      const f=document.getElementById('rc-fps-'+vidId);
+      if(!f) return;
+      f.textContent=variable
+        ?'Cadence variable : le pas est approché ('+Math.round(fps)+' i/s).'
+        :((v._rcFps?Math.round(fps):VID_FPS_DEFAUT)+' i/s'+(v._rcFps?'':' (estimation par défaut)'));
+    });
+  };
+  if(v.readyState>=1) pret(); else v.addEventListener('loadedmetadata',pret,{once:true});
+  // iOS remet playbackRate à 1 apres un play() : on le repose.
+  v.addEventListener('play',()=>{ if(v._rcRate&&v._rcRate!==1) videoSetRate(v,v._rcRate); });
+  // Flèches gauche/droite = image par image. IGNORÉES quand le focus est dans
+  // un champ de saisie : sinon on casserait le déplacement du curseur, et la
+  // modale en contient deux.
+  if(!z._rcClavier){
+    z._rcClavier=true;
+    const modale=z.closest('#modal-overlay')||document;
+    modale.addEventListener('keydown',e=>{
+      const c=e.target&&e.target.tagName;
+      if(c==='INPUT'||c==='TEXTAREA'||c==='SELECT') return;
+      if(e.key==='ArrowLeft'){ e.preventDefault(); rcPas(vidId,-1); }
+      else if(e.key==='ArrowRight'){ e.preventDefault(); rcPas(vidId,1); }
+    });
+  }
+  rcVitesse(vidId,1);
+  return true;
+}
 function tsToSecs(ts){
   const p=ts.split(':').map(Number);
   return p.length===3?p[0]*3600+p[1]*60+p[2]:p[0]*60+(p[1]||0);
 }
 function _renderTsAnnotations(annotations,opts={}){
   const{readonly=false,videoId='vc-video'}=opts;
-  const sorted=[...(annotations!=null?annotations:(window._tsAnnotations||[]))].sort((a,b)=>tsToSecs(a.ts)-tsToSecs(b.ts));
+  // `sec` porte le dixieme de seconde que le ralenti fait gagner ; `ts` reste
+  // le libelle m:ss. Les annotations d avant ce lot n ont pas `sec` et se
+  // trient exactement comme avant.
+  const _tsSec=x=>(x&&isFinite(Number(x.sec)))?Number(x.sec):tsToSecs(x.ts);
+  const sorted=[...(annotations!=null?annotations:(window._tsAnnotations||[]))].sort((a,b)=>_tsSec(a)-_tsSec(b));
   const html=sorted.length
     ?sorted.map((t,i)=>{
         const isAudio=!!t.audioUrl;
         return `<div style="display:flex;align-items:${isAudio?'flex-start':'center'};gap:8px;padding:6px 0;border-bottom:1px solid var(--surface-2)">
-          <span onclick="const _v=document.getElementById('${videoId}');if(_v)_v.currentTime=tsToSecs('${t.ts}')" style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:13px;color:var(--red);flex-shrink:0;min-width:36px;margin-top:${isAudio?'3px':'0'};cursor:pointer" title="▶ ${t.ts}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${t.ts}</span>
+          <span onclick="const _v=document.getElementById('${videoId}');if(_v)_v.currentTime=${(t&&isFinite(Number(t.sec)))?Number(t.sec):'tsToSecs(\''+t.ts+'\')'}" style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:13px;color:var(--red);flex-shrink:0;min-width:36px;margin-top:${isAudio?'3px':'0'};cursor:pointer" title="▶ ${t.ts}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${t.ts}</span>
           ${isAudio
             ?`<div style="flex:1"><audio src="${t.audioUrl}" controls style="height:32px;width:100%;margin-bottom:2px"></audio><div style="font-size:var(--fs-xs);color:var(--sub);display:flex;align-items:center;gap:4px">${icon('mic',12)} message audio</div></div>`
             :`<span style="flex:1;font-size:12px">${escapeHtml(t.note)}</span>`}
@@ -31728,7 +31985,14 @@ function addTsAnnotation(){
   if(!ts||!note) return toast('Renseigne le repère et la note','var(--orange)');
   if(!/^\d+:\d{2}$/.test(ts)) return toast('Format invalide : utilise m:ss (ex: 0:45 ou 1:30)','var(--orange)');
   if(!window._tsAnnotations) window._tsAnnotations=[];
-  window._tsAnnotations.push({ts,note});
+  // `sec` n existe que si le timecode vient de « Annoter ici » : saisi a la
+  // main, le champ m:ss ne porte pas de dixieme, et on n en invente pas.
+  const _brut=document.getElementById('vc-ts-time');
+  const _sec=_brut&&_brut.dataset?Number(_brut.dataset.sec):NaN;
+  const _e={ts,note};
+  if(isFinite(_sec)&&Math.abs(_sec-tsToSecs(ts))<1) _e.sec=_sec;
+  window._tsAnnotations.push(_e);
+  if(_brut&&_brut.dataset) delete _brut.dataset.sec;
   document.getElementById('vc-ts-time').value='';
   document.getElementById('vc-ts-note').value='';
   _renderTsAnnotations();
@@ -31752,6 +32016,7 @@ function openVideoCorrection(email,videoId){
     <h2 style="margin-bottom:2px">✏️ Corriger</h2>
     <p class="sub" style="font-size:12px;margin-bottom:12px">${escapeHtml(v.name)} · ${new Date(v.date).toLocaleDateString('fr-FR')}</p>
     ${_videoEmbed(v.url)}
+    ${/\.(mp4|mov|webm|mkv)(\?|$)/i.test(v.url||'')?htmlLecteurCorrection('vc-video'):''}
     <div style="margin-top:14px">
       <label style="margin-top:0">Commentaire général</label>
       <div id="qc-chips" style="display:flex;gap:6px;overflow-x:auto;padding:6px 0 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch;margin-bottom:4px"></div>
@@ -31795,6 +32060,9 @@ function openVideoCorrection(email,videoId){
   document.body.insertAdjacentHTML('beforeend',html);
   _renderTsAnnotations();
   _renderQuickCommentChips();
+  // La barre de correction n'existe que pour un vrai <video> : sur une vidéo
+  // YouTube, htmlLecteurCorrection n'a rien produit et rcInitLecteur sort.
+  try{ rcInitLecteur('vc-video'); }catch(e){}
 }
 function saveVideoCorrection(){
   const general=(document.getElementById('vc-general')?.value||'').trim();
@@ -50734,6 +51002,92 @@ function testExercices(){
           if(/showNotification|saveUser\(|DB\.set|CLOUD\.push/.test(String(f)))
             return _echec('une fonction de ce lot écrit ou notifie');
         return true;})());
+    })();
+
+    // ── LECTEUR DE CORRECTION ─────────────────────────────────────────────
+    (function(){
+      const _v=(o)=>Object.assign({currentTime:0,duration:30,playbackRate:1,paused:true,
+        pause(){this.paused=true;},_ec:{},
+        addEventListener(t,f){(this._ec[t]=this._ec[t]||[]).push(f);},
+        removeEventListener(t,f){const l=this._ec[t]||[];const i=l.indexOf(f);if(i>=0)l.splice(i,1);},
+        _feu(t){(this._ec[t]||[]).slice().forEach(f=>f());}},o||{});
+
+      ok('videoStepFrame avance d\x27exactement 1/fps',(()=>{
+        const v=_v({currentTime:5});
+        const t=videoStepFrame(v,1,30);
+        if(Math.abs(t-5-1/30)>1e-6) return _echec('t = '+t);
+        const w=_v({currentTime:5});
+        if(Math.abs(videoStepFrame(w,1,60)-5-1/60)>1e-6) return _echec('60 fps faux');
+        return v.paused===true?true:_echec('la vidéo n\x27a pas été mise en pause');})());
+
+      ok('videoDetectFps retombe sur 30',(()=>{
+        if(videoDetectFps(_v())!==30) return _echec('sans mesure : '+videoDetectFps(_v()));
+        if(videoDetectFps(null)!==30) return _echec('élément absent');
+        if(videoDetectFps(_v({_rcFps:0}))!==30) return _echec('mesure absurde retenue');
+        return videoDetectFps(_v({_rcFps:59.94}))===59.94
+          ?true:_echec('une mesure valable doit primer');})());
+
+      ok('videoSetLoop REFUSE un segment de plus de 10 s',(()=>{
+        const v=_v();
+        if(videoSetLoop(v,3,14)!==null) return _echec('11 s accepté');
+        if(!videoSetLoop(v,3,13)) return _echec('10 s pile refusé');
+        return videoSetLoop(v,5,5)===null?true:_echec('segment nul accepté');})());
+
+      ok('La boucle ramène la lecture au point A',(()=>{
+        const v=_v();
+        videoSetLoop(v,3,7);
+        v.currentTime=7.01; v._feu('timeupdate');
+        if(v.currentTime!==3) return _echec('à 7 s : '+v.currentTime);
+        videoClearLoop(v);
+        v.currentTime=9; v._feu('timeupdate');
+        if(v.currentTime!==9) return _echec('boucle non effacée');
+        return (v._ec.timeupdate||[]).length===0
+          ?true:_echec('l\x27écouteur est resté accroché');})());
+
+      ok('Le ralenti ne change PAS le timecode enregistré',(()=>{
+        // currentTime est le temps réel du média : il ne dépend pas de
+        // playbackRate. C'est ce qui garantit la règle 2.
+        const v=_v({currentTime:14.2,playbackRate:0.5});
+        return secsToTs(v.currentTime)==='0:14'
+          ?true:_echec(secsToTs(v.currentTime));})());
+
+      ok('NON-RÉGRESSION : le tri des annotations, étendu et non réécrit',(()=>{
+        // Deux annotations dans la MÊME seconde : seul `sec` les départage.
+        // Et les annotations d'avant ce lot, sans `sec`, se trient comme avant.
+        const f=x=>(x&&isFinite(Number(x.sec)))?Number(x.sec):tsToSecs(x.ts);
+        const l=[{ts:'0:20',note:'c'},{ts:'0:14',note:'b',sec:14.2},
+          {ts:'0:14',note:'a',sec:14.05},{ts:'0:05',note:'z'}];
+        const o=l.slice().sort((a,b)=>f(a)-f(b)).map(x=>x.note).join('');
+        if(o!=='zabc') return _echec('ordre : '+o);
+        const anc=[{ts:'1:00',note:'x'},{ts:'0:30',note:'y'}];
+        const o2=anc.slice().sort((a,b)=>f(a)-f(b)).map(x=>x.note).join('');
+        if(o2!=='yx') return _echec('anciennes annotations : '+o2);
+        return /_tsSec/.test(String(_renderTsAnnotations))
+          ?true:_echec('la liste n\x27utilise pas le comparateur étendu');})());
+
+      ok('NON-RÉGRESSION : le timecode reste actionnable au clavier',(()=>{
+        const h=_renderTsAnnotations([{ts:'0:45',note:'genoux'}],{readonly:true,videoId:'x'});
+        if(h.indexOf('tabindex="0"')<0) return _echec('le repère n\x27est plus focusable');
+        if(h.indexOf('role="button"')<0) return _echec('le rôle a disparu');
+        return /event\.key===.Enter./.test(h)
+          ?true:_echec('la touche Entrée ne l\x27actionne plus');})());
+
+      ok('Aucune transformation n\x27est demandée au service de médias',(()=>{
+        for(const f of [videoSetRate,videoStepFrame,videoSetLoop,videoClearLoop,videoDetectFps])
+          if(/fetch\(|cloudinary|\/upload\/|XMLHttpRequest/i.test(String(f)))
+            return _echec('une fonction du lecteur sort sur le réseau');
+        return true;})());
+
+      ok('playsinline est posé : sans lui, iOS reprend les contrôles',(()=>{
+        const h=_videoEmbed('https://x.test/a.mp4');
+        if(h.indexOf('playsinline')<0) return _echec('playsinline absent');
+        return h.indexOf('webkit-playsinline')>=0
+          ?true:_echec('le repli des anciens iOS manque');})());
+
+      ok('Vidéo YouTube : aucune barre de correction',(()=>{
+        // L'iframe n'est pas pilotable sans le script externe de YouTube.
+        const h=_videoEmbed('https://youtu.be/abcdefghijk');
+        return h.indexOf('rc-barre')<0?true:_echec('une barre inerte a été posée');})());
     })();
 
     // ── douleur ciblée ──
