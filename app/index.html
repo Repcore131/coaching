@@ -1512,6 +1512,10 @@ const COACH_PHOTO='icons/coach.jpg';
           </div>
         </div>
         <div class="sub" style="font-size:11px;margin-bottom:14px;font-family:monospace;letter-spacing:2px" id="ch-code-small"></div>
+        <!-- Barre de pilotage : trois compteurs qui filtrent la liste, et trois
+             volets de contexte. HORS de #ch-clients-list, comme la recherche,
+             pour survivre au rafraichissement. -->
+        <div id="ch-pilotage" style="margin-bottom:12px"></div>
         <!-- Barre de recherche et filtres. VOLONTAIREMENT HORS de
              #ch-clients-list : c'est ce conteneur-la que le rafraichissement
              reecrit. Places dedans, la saisie et la puce active seraient
@@ -1820,6 +1824,7 @@ const COACH_PHOTO='icons/coach.jpg';
            Santé, allergies et TCA conditionnent toute la programmation : les
            laisser au fond du questionnaire de départ revenait à demander au
            coach de s'en souvenir. Rempli par openClientDetail. -->
+      <div id="ccd-pourquoi"></div>
       <div id="ccd-alertes" style="display:none;margin-bottom:14px"></div>
       <!-- Journal du coach. En TETE de fiche : c est la premiere chose qu on
            veut relire avant de parler a quelqu un. -->
@@ -6564,6 +6569,12 @@ function _majTabbar(id){
   _majPastilleBilan();
 }
 function go(id){
+  // Sortie de l ecran multi-athletes : on date la visite. Seule ecriture de ce
+  // lot, et elle ne part que si le coach quitte vraiment cet ecran-la.
+  try{
+    const _cur=document.querySelector('.screen.active');
+    if(_cur&&_cur.id==='s-coach-home'&&id!=='s-coach-home') _pilMarquerVisite();
+  }catch(e){}
   const _safe=['s-splash','s-welcome','s-coach-home','s-client-home','s-coach-entry','s-athlete-entry'];
   if(window._swUpdatePending&&_safe.includes(id)){location.reload();return;}
   // Filet de sécurité UI — le vrai contrôle d'accès reste côté données/serveur (P02).
@@ -9129,18 +9140,18 @@ function urgencyScore(c){
 //
 // urgencyScore n'est ni lue de travers ni contournée : le seuil ci-dessous est
 // un simple filtre sur sa sortie. Elle reste verrouillée par ses tests.
-const PF_SEUIL_TRAITER=7;         // « à traiter » = les motifs cliniques
-const PF_EXPIRE_JOURS=14;         // même fenêtre que le palier 3 d'urgence
-const PF_VISITE_DEFAUT_JOURS=7;   // première visite : on couvre une semaine
-const PF_CHANGEMENTS_MAX=12;
-const PF_PROGRAMME_FIGE_SEMAINES=6;
+const PIL_SEUIL_TRAITER=7;         // « à traiter » = les motifs cliniques
+const PIL_EXPIRE_JOURS=14;         // même fenêtre que le palier 3 d'urgence
+const PIL_VISITE_DEFAUT_JOURS=7;   // première visite : on couvre une semaine
+const PIL_CHANGEMENTS_MAX=12;
+const PIL_PROGRAMME_FIGE_SEMAINES=6;
 
 // Reprend MOT POUR MOT la condition du palier 3 d'urgencyScore. La recopier
 // ailleurs ferait remonter comme « expire bientôt » tout athlète sans date,
 // alors qu'une date absente vaut accès ILLIMITÉ (voir checkAccess).
-function _pfAccesExpire(c,now){
+function _pilAccesExpire(c,now){
   return !!(c&&!c._fromCode&&c.status==='COACHING_SUIVI'&&c.accessExpiry
-    &&(c.accessExpiry-now)>0&&(c.accessExpiry-now)<PF_EXPIRE_JOURS*864e5);
+    &&(c.accessExpiry-now)>0&&(c.accessExpiry-now)<PIL_EXPIRE_JOURS*864e5);
 }
 
 // PURE. Les signaux qui ont produit le score de cet athlète, du plus grave au
@@ -9184,7 +9195,7 @@ function expliquerUrgence(c){
     }
   }catch(e){}
   try{ if(!c._fromCode&&needsAlert(c)) ajout('Bilan en retard',4,dernier); }catch(e){}
-  if(_pfAccesExpire(c,Date.now())) ajout('Accès qui expire',3,c.accessExpiry);
+  if(_pilAccesExpire(c,Date.now())) ajout('Accès qui expire',3,c.accessExpiry);
   return out.sort((a,b)=>b.gravite-a.gravite);
 }
 
@@ -9197,7 +9208,7 @@ function agregerPortefeuille(clients,opts){
   const o=opts||{};
   const now=(typeof o.now==='number')?o.now:Date.now();
   const depuis=(typeof o.depuis==='number'&&o.depuis>0)
-    ?o.depuis:(now-PF_VISITE_DEFAUT_JOURS*864e5);
+    ?o.depuis:(now-PIL_VISITE_DEFAUT_JOURS*864e5);
   let aTraiter=0,decrochage=0,accesExpirent=0;
   const changements=[];
   const portefeuille={total:0,actifs:0,jamaisDemarres:0,enAttente:0};
@@ -9211,12 +9222,12 @@ function agregerPortefeuille(clients,opts){
     let jamais=false;
     try{ jamais=neverStarted(c); }catch(e){}
     if(jamais) portefeuille.jamaisDemarres++;
-    try{ if(urgencyScore(c)>=PF_SEUIL_TRAITER) aTraiter++; }catch(e){}
+    try{ if(urgencyScore(c)>=PIL_SEUIL_TRAITER) aTraiter++; }catch(e){}
     // ② et ③ : mêmes exclusions qu'urgencyScore — invité non inscrit et
     // athlète jamais démarré n'ont rien à écourter ni d'accès à renouveler.
-    if(!invite&&!jamais){
+    if(_pilEligibleSignaux(c)){
       try{ if(signauxEntrainement(c).decrochage) decrochage++; }catch(e){}
-      if(_pfAccesExpire(c,now)) accesExpirent++;
+      if(_pilAccesExpire(c,now)) accesExpirent++;
     }
     charge.bilansSansReponse+=bilansSansReponse(c);
     charge.videosEnAttente+=((c.videos||[]).filter(v=>v&&!v.feedbackDate).length);
@@ -9238,7 +9249,112 @@ function agregerPortefeuille(clients,opts){
   }
   changements.sort((a,b)=>b.date-a.date);
   return {aTraiter,decrochage,accesExpirent,changements,portefeuille,charge,
-    depuis,max:PF_CHANGEMENTS_MAX};
+    depuis,max:PIL_CHANGEMENTS_MAX};
+}
+
+// ══════════════ PILOTAGE — LA BARRE, LES BANDES, L'EXPLICATION ════════════
+// AUCUN nouvel écran : trois compteurs et trois volets posés en tête de la
+// liste existante, qui filtrent cette liste-là. Le grief n° 1 du métier est la
+// complexité : ce lot ne doit rien ajouter à parcourir, seulement raccourcir
+// le chemin vers ce qui compte.
+//
+// L'état déplié est MÉMORISÉ : ce bloc est repeint à chaque rendu de liste, et
+// un <details> se refermerait sous les doigts du coach à chaque frappe dans la
+// recherche.
+let _pilOuvert={};
+let _pilVoirTout=false;
+function pilNoterBande(cle,ouvert){ _pilOuvert[cle]=!!ouvert; }
+function pilVoirTout(){ _pilVoirTout=true; renderPilotage(); }
+
+// Un athlète compte dans ② et ③ aux MÊMES conditions que dans l'agrégation.
+// Une seule définition : deux copies finiraient par donner un compteur qui ne
+// correspond plus à la liste qu'il filtre.
+function _pilEligibleSignaux(c){
+  if(!c||c._fromCode||!c.email) return false;
+  try{ if(neverStarted(c)) return false; }catch(e){}
+  return true;
+}
+
+function _pilCompteur(cle,lib,n,couleur){
+  const vide=!(n>0);
+  const actif=(_filtreClients===cle);
+  return `<button onclick="setFiltreClients('${actif?'tous':cle}')"
+    aria-pressed="${actif?'true':'false'}"
+    style="flex:1 1 0;min-width:0;min-height:44px;padding:9px 6px;border-radius:10px;cursor:pointer;font-family:Montserrat,sans-serif;text-align:center;
+      border:1.5px solid ${actif?couleur:(vide?'#242424':'#2e2e2e')};
+      background:${actif?'rgba(224,32,32,.10)':'#111'}">
+    <div style="font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:24px;line-height:1;color:${vide?'#5a5a5a':couleur}">${n}</div>
+    <div style="font-size:9px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;line-height:1.25;margin-top:5px;color:${vide?'#5a5a5a':'#bbb'}">${lib}</div>
+  </button>`;
+}
+function _pilBande(cle,titre,corps,resume){
+  return `<details class="plan-src" style="margin:0 0 6px"${_pilOuvert[cle]?' open':''} ontoggle="pilNoterBande('${cle}',this.open)">
+    <summary style="color:var(--sub)">${titre}<span class="plan-src-nb">${resume||''}</span></summary>
+    <div class="plan-src-liste" style="font-size:11.5px;color:#ddd;line-height:1.7">${corps}</div>
+  </details>`;
+}
+function renderPilotage(clients){
+  const el=document.getElementById('ch-pilotage');
+  if(!el) return;
+  const l=clients||(typeof getClients==='function'?getClients():[]);
+  let r;
+  try{ r=agregerPortefeuille(l,{depuis:currentUser&&currentUser.lastCoachVisit}); }
+  catch(e){ el.innerHTML=''; return; }
+  // ── Bande A : depuis la dernière visite ──
+  const ch=r.changements;
+  const montres=_pilVoirTout?ch:ch.slice(0,r.max);
+  const dateCourte=t=>new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
+  const corpsA=ch.length
+    ? montres.map(x=>`<div style="padding:2px 0"><span style="color:var(--text-faint)">${dateCourte(x.date)}</span> · <b>${escapeHtml(x.qui)}</b> ${escapeHtml(x.quoi)}</div>`).join('')
+      +(ch.length>montres.length?`<button onclick="pilVoirTout()" style="background:none;border:none;color:var(--red);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;padding:8px 0 0;text-decoration:underline">Voir tout (${ch.length})</button>`:'')
+    : 'Rien de neuf depuis ta dernière visite.';
+  // ── Bande B : portefeuille, quatre nombres en une ligne ──
+  const p=r.portefeuille;
+  const corpsB=`${p.total} athlète${p.total>1?'s':''} · ${p.actifs} actif${p.actifs>1?'s':''} · `
+    +`${p.jamaisDemarres} jamais démarré${p.jamaisDemarres>1?'s':''} · ${p.enAttente} en attente d'inscription`;
+  // ── Bande C : charge de travail ──
+  // « Programmes figés » n'y figure pas : aucun horodatage de programme
+  // n'existe au dossier, et l'inventer donnerait un nombre faux en silence.
+  const g=r.charge;
+  const corpsC=(g.bilansSansReponse||g.videosEnAttente)
+    ? `${g.bilansSansReponse} bilan${g.bilansSansReponse>1?'s':''} sans réponse · `
+      +`${g.videosEnAttente} vidéo${g.videosEnAttente>1?'s':''} en attente de correction`
+    : 'Rien en attente de ta part.';
+  el.innerHTML=`
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      ${_pilCompteur('pf-traiter','À traiter',r.aTraiter,'#E02020')}
+      ${_pilCompteur('pf-decrochage','Séances écourtées',r.decrochage,'#f5c518')}
+      ${_pilCompteur('pf-acces','Accès qui expirent',r.accesExpirent,'#22c55e')}
+    </div>
+    ${_pilBande('a','Depuis ta dernière visite',corpsA,ch.length?String(ch.length):'—')}
+    ${_pilBande('b','Portefeuille',corpsB,String(p.total))}
+    ${_pilBande('c','Charge de travail',corpsC,String(g.bilansSansReponse+g.videosEnAttente))}`;
+}
+// La visite est horodatée À LA SORTIE de l'écran, pas à l'entrée : la datant à
+// l'entrée, la bande A serait vide dès la seconde ouverture de la journée.
+// C'est la SEULE écriture de tout ce lot.
+function _pilMarquerVisite(){
+  try{
+    if(!currentUser||currentUser.role!=='coach') return;
+    currentUser.lastCoachVisit=Date.now();
+    _pilVoirTout=false;
+    saveUser();
+  }catch(e){}
+}
+// PURE. Le bloc « Pourquoi cet athlète est ici », sur sa fiche.
+function _htmlPourquoiIci(c){
+  let l=[];
+  try{ l=expliquerUrgence(c); }catch(e){ return ''; }
+  if(!l.length) return '';
+  const dateCourte=t=>new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--red);border-radius:10px;padding:11px 13px;margin-bottom:14px">
+    <div style="font-size:9px;color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:7px">Pourquoi cet athlète est ici</div>
+    ${l.map(x=>`<div style="display:flex;align-items:baseline;gap:8px;padding:3px 0">
+      <span style="flex-shrink:0;font-size:9px;font-weight:900;color:${x.gravite>=7?'var(--red)':'var(--sub)'};min-width:16px">${x.gravite}</span>
+      <span style="flex:1;min-width:0;font-size:11.5px;color:#ddd;line-height:1.5">${escapeHtml(x.motif)}</span>
+      <span style="flex-shrink:0;font-size:10px;color:var(--text-faint)">${x.date?dateCourte(x.date):''}</span>
+    </div>`).join('')}
+  </div>`;
 }
 // ── Liens WhatsApp pré-remplis ──────────────────────────────────────────────
 // AUCUNE messagerie n'est implémentée : on ouvre le WhatsApp du coach avec le
@@ -10101,14 +10217,20 @@ function renderClientList(clients){
   if(q) vus=vus.filter(c=>norm((c.fname||'')+' '+(c.lname||'')).includes(q));
   if(_filtreClients==='traiter') vus=vus.filter(c=>needsAlert(c)||hasNewBilan(c));
   else if(_filtreClients==='attente') vus=vus.filter(c=>c._fromCode||!c.email);
+  // Les trois compteurs de la barre. MEMES predicats que agregerPortefeuille :
+  // un compteur qui n'ouvre pas exactement sa propre liste serait pire que pas
+  // de compteur du tout.
+  else if(_filtreClients==='pf-traiter') vus=vus.filter(c=>urgencyScore(c)>=PIL_SEUIL_TRAITER);
+  else if(_filtreClients==='pf-decrochage') vus=vus.filter(c=>_pilEligibleSignaux(c)&&signauxEntrainement(c).decrochage);
+  else if(_filtreClients==='pf-acces') vus=vus.filter(c=>_pilEligibleSignaux(c)&&_pilAccesExpire(c,Date.now()));
   vus.sort((a,b)=>urgencyScore(b)-urgencyScore(a));
   // Bilans auxquels le coach n'a pas encore ecrit. « Sans reponse » et non
   // « non lus » : ouvrir ne compte plus.
+  renderPilotage(tous);
+  // La ligne « Bilans sans reponse » a demenage dans la bande « Charge de
+  // travail » : l'afficher aussi ici serait la dire deux fois.
   const _sr=document.getElementById('ch-sans-reponse');
-  if(_sr){
-    const n=tous.reduce((a,c)=>a+bilansSansReponse(c),0);
-    _sr.textContent=n?('Bilans sans réponse : '+n):'';
-  }
+  if(_sr) _sr.textContent='';
   const cnt=document.getElementById('ch-count');
   if(cnt) cnt.textContent=vus.length+'/'+tous.length+' athlete'+(tous.length>1?'s':'');
   // Position de defilement preservee : reecrire innerHTML la remet a zero.
@@ -11353,6 +11475,8 @@ function openClientDetail(cid,_refresh){
     currentUser.seenBilans[c.email]=Math.max(...c.bilans.map(b=>b.date));
     saveUser();
   }
+  const _pq=document.getElementById('ccd-pourquoi');
+  if(_pq) _pq.innerHTML=_htmlPourquoiIci(c);
   document.getElementById('ccd-badge').innerHTML=c._fromCode
     ?'<span class="badge badge-orange">⏳ En attente d\'inscription</span>'
     // Même verdict que la liste : les deux écrans doivent dire la même chose.
@@ -49690,8 +49814,8 @@ function testExercices(){
 
       // Le seuil ① EST celui d'urgencyScore, pas une copie divergente.
       ok('Le seuil « a traiter » vaut 7, et rien ne le contourne',(()=>{
-        if(PF_SEUIL_TRAITER!==7) return _echec('seuil = '+PF_SEUIL_TRAITER);
-        return /urgencyScore\(c\)>=PF_SEUIL_TRAITER/.test(String(agregerPortefeuille))
+        if(PIL_SEUIL_TRAITER!==7) return _echec('seuil = '+PIL_SEUIL_TRAITER);
+        return /urgencyScore\(c\)>=PIL_SEUIL_TRAITER/.test(String(agregerPortefeuille))
           ?true:_echec('l\'agregation n\'interroge pas urgencyScore');})());
       // NON-RÉGRESSION : ce lot n'a pas touché à urgencyScore.
       ok('NON-REGRESSION : urgencyScore intacte apres ce lot',(()=>{
