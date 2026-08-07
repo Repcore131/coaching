@@ -7588,10 +7588,14 @@ function isAlertSnoozed(type,clientId,latestBilanTs,client){
 }
 // Report d'un athlète pour un type donné. Extrait de dismissTodoRow pour que
 // la ligne par athlète et la ligne groupée écrivent exactement la même chose.
-function reporterAlerte(type,c){
+function reporterAlerte(type,c,jours){
   if(!currentUser.alertStatus) currentUser.alertStatus={};
   const lt=(c.bilans||[]).reduce((m,b)=>Math.max(m,b.date),0);
-  const st={s:'ignoré',until:Date.now()+7*864e5,at:Date.now(),
+  // `jours` est FACULTATIF : sans lui, les sept jours d avant. Les appels
+  // existants ne changent donc pas d un iota, et il n existe toujours qu un
+  // seul mecanisme de mise en veille.
+  const _j=(Number(jours)>0)?Number(jours):7;
+  const st={s:'ignoré',until:Date.now()+_j*864e5,at:Date.now(),
     seenUpTo:type==='bilan'?lt:0};
   if(ALERTES_SANTE.includes(type)){
     // Niveau de douleur au moment du report : sans cette référence,
@@ -10461,6 +10465,107 @@ const TODO_MAX_LIGNES=8;
 // croisement que contreIndications permettait depuis toujours sans avoir
 // jamais été fait : le coach lisait « douleur épaule » d'un côté et « épaule
 // droite opérée en 2023 » de l'autre, sans que rien ne les rapproche.
+
+// ══════════════ FILE DE REPRISE ══════════════════════════════════════════
+// Une file d'ASSIDUITÉ, et rien d'autre. Elle lit urgencyScore sans le
+// modifier, et n'accepte que les niveaux où le sujet est la présence : 7
+// (séances écourtées), 5 (jamais démarré, nouveau bilan), 4 (bilan en retard).
+//
+// CE QUI N'Y ENTRE JAMAIS : le drapeau rouge (10) et les douleurs (9, 8). Ils
+// gardent leur ligne propre dans « À traiter », non reportable, dont la
+// formulation est un renvoi médical. Le palier 6 est exclu lui aussi : il
+// mélange du volume d'entraînement et de la restriction calorique prolongée,
+// qui est de la santé. Une file de relance n'est pas le bon endroit.
+//
+// AUCUN CANAL D'ENVOI n'est créé : RepCore prépare un texte, l'humain envoie.
+const FR_NIVEAUX=Object.freeze([7,5,4]);
+const FR_MAX_LIGNES=TODO_MAX_LIGNES;      // même plafond que « À traiter »
+const FR_VEILLE_DEFAUT_J=7;
+
+// PURE. Ce dossier a-t-il sa place dans la file ?
+// Trois exclusions dures : la santé, la pause déclarée, l'invité non inscrit.
+function _frEligible(c){
+  if(!c||c._fromCode||!c.email) return false;
+  try{ if(drapeauRougeActif(c)) return false; }catch(e){}        // règle 1
+  try{ if(_estEnPause(c)) return false; }catch(e){}              // règle 6
+  let s=0;
+  try{ s=urgencyScore(c); }catch(e){ return false; }
+  return FR_NIVEAUX.indexOf(s)>=0;
+}
+// PURE. Jours écoulés depuis la dernière séance enregistrée, ou null.
+function _frAnciennete(c,now){
+  const t=(typeof now==='number')?now:Date.now();
+  let dernier=0;
+  for(const s of ((c&&c.sessions)||[])) if(s&&s.date>dernier) dernier=s.date;
+  if(!dernier) return null;
+  return Math.max(0,Math.floor((t-dernier)/864e5));
+}
+// PURE. Jours depuis la dernière relance notée par le coach, ou null.
+// Le repère vit dans le dossier du COACH : rien n'est écrit chez l'athlète.
+function _frRelanceDepuis(coach,c,now){
+  const t=(typeof now==='number')?now:Date.now();
+  const r=((coach&&coach.relances)||{})[c&&c.id];
+  if(!(r>0)) return null;
+  return Math.max(0,Math.floor((t-r)/864e5));
+}
+// PURE. La file, ordonnée par urgence décroissante puis par ancienneté.
+function fileReprise(clients,coach,now){
+  const t=(typeof now==='number')?now:Date.now();
+  const l=(Array.isArray(clients)?clients:[]).filter(_frEligible);
+  const rows=l.map(c=>{
+    let sg=null; try{ sg=signauxEntrainement(c); }catch(e){}
+    let texte='';
+    try{ texte=_texteSignal(_frType(c,sg),c,sg)||''; }catch(e){}
+    return {id:c.id,prenom:(c.fname||'').trim(),score:urgencyScore(c),
+      signal:texte,jours:_frAnciennete(c,t),relanceDepuis:_frRelanceDepuis(coach,c,t)};
+  });
+  rows.sort((a,b)=>(b.score-a.score)||((b.jours||0)-(a.jours||0)));
+  return {lignes:rows.slice(0,FR_MAX_LIGNES),reste:Math.max(0,rows.length-FR_MAX_LIGNES),
+    total:rows.length};
+}
+// Le type de signal à faire décrire par _texteSignal, qu'on ne réécrit pas.
+function _frType(c,sg){
+  if(sg&&sg.decrochage) return 'decrochage';
+  try{ if(neverStarted(c)) return 'nostart'; }catch(e){}
+  try{ if(hasNewBilan(c)) return 'bilan'; }catch(e){}
+  return 'overdue';
+}
+// PURE. Le texte pré-rempli.
+//
+// RÈGLE RGPD DURE : le canal est NON CHIFFRÉ. Aucune donnée de santé n'entre
+// ici — ni douleur, ni cycle, ni SOPK, ni thyroïde, ni PES, ni grossesse. Le
+// texte ne parle que de PRÉSENCE, et il est construit à partir d'un gabarit
+// fixe : il ne recopie jamais _texteSignal, qui, lui, peut nommer une douleur.
+function _frTexteRelance(c,now){
+  const p=((c&&c.fname)||'').trim();
+  const j=_frAnciennete(c,now);
+  const nom=p?p:'toi';
+  if(j==null) return 'Salut '+nom+", je n'ai pas encore vu de séance de ta part. "
+    +"Dis-moi si tu veux qu'on cale ça ensemble.";
+  return 'Salut '+nom+", je n'ai pas vu de séance depuis "+j+" jour"+(j>1?'s':'')+'. '
+    +"Dis-moi où tu en es, on ajuste si besoin.";
+}
+// Marquage « relancé ». Écrit UNIQUEMENT dans le dossier du coach, et met le
+// signal en veille par le mécanisme EXISTANT — aucun second système.
+function frMarquerRelance(coach,c,jours){
+  if(!coach||!c) return false;
+  if(!coach.relances) coach.relances={};
+  coach.relances[c.id]=Date.now();
+  if(!coach.journalRelance) coach.journalRelance=[];
+  coach.journalRelance.push({at:Date.now(),clientId:c.id});
+  if(coach.journalRelance.length>200) coach.journalRelance=coach.journalRelance.slice(-200);
+  return true;
+}
+// PURE. Nombre d'athlètes relancés depuis lundi.
+function frRelancesSemaine(coach,now){
+  const t=(typeof now==='number')?now:Date.now();
+  const d=new Date(t);
+  const lundi=new Date(d.getFullYear(),d.getMonth(),d.getDate()-((d.getDay()+6)%7)).getTime();
+  const vus=new Set();
+  for(const e of ((coach&&coach.journalRelance)||[]))
+    if(e&&e.at>=lundi&&e.at<=t) vus.add(e.clientId);
+  return vus.size;
+}
 function _rappelContreIndication(c){
   let ci=[];
   try{ ci=contreIndications(c.bilans); }catch(e){ ci=[]; }
