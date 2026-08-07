@@ -569,7 +569,7 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
 /* Total du repas : petit, italique, poussé à droite. Il ne doit jamais
    concurrencer le nom du repas — c'est un repère, pas un titre. */
 .plan-macros{margin-left:auto;flex-shrink:0;font-style:italic;font-size:10px;font-weight:600;color:rgba(255,255,255,.82);letter-spacing:.2px;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.6)}
-.plan-corps{padding:1px 13px 8px}
+.plan-corps{padding:1px 9px 8px}
 /* Le filet SÉPARE, il n'encadre pas : la première ligne n'en porte pas, sinon
    il doublait le bord du bandeau de titre juste au-dessus. */
 .plan-l{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid rgba(255,255,255,.055)}
@@ -586,7 +586,11 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
 .plan-src>summary::after{content:'▾';margin-left:auto;flex-shrink:0;font-size:12px;color:var(--sub);transition:transform .18s}
 .plan-src[open]>summary::after{transform:rotate(180deg)}
 .plan-src-nb{flex-shrink:0;font-size:10px;font-weight:700;color:var(--text-faint);letter-spacing:.5px;white-space:nowrap}
-.plan-src-liste{padding:0 10px 9px}
+/* Marges internes rognées au strict nécessaire : entre le bord de l'écran et
+   le texte d'un nom, la chaîne .pad → .plan-card → .plan-corps → .plan-src →
+   .plan-src-liste → cellule prélevait 50 px sur 375. Chaque pixel rendu ici
+   est un caractère de plus sur la ligne. */
+.plan-src-liste{padding:0 4px 8px}
 /* ── Tableau à 4 colonnes : deux paires (aliment, quantité) côte à côte ──
    Une liste de 28 glucides tenait sur 28 lignes ; elle en occupe 14. C'est la
    même raison que le repli des volets — la hauteur — poussée d'un cran.
@@ -598,9 +602,9 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
    des tableurs d'origine. Le texte de l'en-tête est SOMBRE : sur du jaune ou
    du vert plein, du blanc tombe sous le seuil de contraste. */
 .p4{width:100%;border-collapse:collapse;table-layout:fixed}
-.p4 th{background:var(--p4);color:#0a0a0a;font-size:9px;font-weight:900;letter-spacing:.7px;text-transform:uppercase;padding:5px 7px;text-align:left}
+.p4 th{background:var(--p4);color:#0a0a0a;font-size:9px;font-weight:900;letter-spacing:.4px;text-transform:uppercase;padding:5px 5px;text-align:left}
 .p4 th:nth-child(2n){text-align:right}
-.p4 td{padding:4px 7px;vertical-align:middle}
+.p4 td{padding:4px 5px;vertical-align:middle}
 /* Zébrage : deux gris très proches, l'un un cran plus clair que l'autre. Le
    filet horizontal a disparu — il faisait double emploi avec l'alternance, et
    deux séparateurs pour une seule frontière alourdissent une table déjà dense.
@@ -619,12 +623,25 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
    table-layout:fixed, le navigateur ne regarde que la première rangée et
    ignore tout ce qui est déclaré plus bas. Posées sur .p4-n/.p4-q, elles
    n'avaient aucun effet et les quatre colonnes tombaient à 25 % chacune —
-   « Jambon sec » se faisait tronquer dans 57 px. */
-.p4 th:nth-child(1),.p4 th:nth-child(3){width:34%}
-.p4 th:nth-child(2),.p4 th:nth-child(4){width:16%}
-.p4 .p4-n{font-size:10px;font-weight:600;line-height:1.4;color:#e8e8e8;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.p4 .p4-q{text-align:right;font-size:11px;font-weight:800;line-height:1.4;color:#fff;white-space:nowrap}
+   « Jambon sec » se faisait tronquer dans 57 px.
+   36/14 et non 34/16 : la quantité affiche « 156 g », elle n'a besoin que de
+   sa largeur de texte. Tout le reste va au nom. */
+.p4 th:nth-child(1),.p4 th:nth-child(3){width:36%}
+.p4 th:nth-child(2),.p4 th:nth-child(4){width:14%}
+/* LE NOM ENTIER, TOUJOURS. La coupure à l'ellipse cachait deux noms sur trois :
+   « Pomme de terre sautée/poêlée/rissolée, préfrite, surgelée, cuite » demande
+   326 px a 10 px, et la carte entière en fait 335. Aucune taille de police ne
+   fait tenir ça sur une ligne dans un quart de largeur — le retour à la ligne
+   est donc rétabli, et c'est lui qui garantit qu'on lit tout.
+   9 px : sous le plancher de 11 px que s'impose le reste de l'application, mais
+   c'est ici un tableau de référence qu'on ouvre pour comparer des grammages,
+   pas un libellé d'action. Chaque point de police en moins retire une ligne aux
+   noms longs.
+   overflow-wrap:anywhere pour « sautée/poêlée/rissolée » : sans lui ce mot de
+   22 caractères sans espace déborde la colonne au lieu de se couper. */
+.p4 .p4-n{font-size:9px;font-weight:600;line-height:1.35;color:#e8e8e8;
+  white-space:normal;overflow-wrap:anywhere;hyphens:auto}
+.p4 .p4-q{text-align:right;font-size:11px;font-weight:800;line-height:1.35;color:#fff;white-space:nowrap}
 /* Filet vertical entre les deux moitiés, sinon l'œil saute d'une paire à
    l'autre sans savoir laquelle va avec laquelle. */
 .p4 td:nth-child(3),.p4 th:nth-child(3){border-left:1px solid rgba(255,255,255,.09)}
