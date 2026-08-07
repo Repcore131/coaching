@@ -2363,7 +2363,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div class="card">
         <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--sub);margin-bottom:10px">Nutrition</div>
         <div id="clh-nutri-rings"></div>
-        <div id="clh-nutri-sem-label" style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:8px">Cette semaine</div>
+        <div id="clh-nutri-sem-label" style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin:16px 0 8px">Cette semaine</div>
         <div style="display:flex;gap:6px" id="clh-nutri-dots"></div>
         <div style="margin-top:10px;font-size:12px">Score: <span style="font-weight:800;color:var(--green)" id="clh-nutri-score">—</span></div>
       </div>
@@ -15686,10 +15686,13 @@ function getProgram(){
 // à mesure de ses saisies — même source que l'écran Nutrition.
 //
 // STRICTE : il ne saisit rien, il suit le plan du coach. Son journal est donc
-// vide, et des anneaux à zéro donneraient l'impression qu'il n'a rien mangé.
-// Ils se remplissent à la validation de la journée : valider, en stricte, veut
-// dire « j'ai suivi le plan », donc les cibles sont atteintes par construction.
-// Tant qu'il n'a pas validé, ils restent vides — on ne remplit rien à sa place.
+// vide, et des anneaux à zéro donneraient l'impression qu'il n'a rien mangé
+// alors qu'il n'a simplement rien à saisir.
+//
+// Ce qui commande ici, c'est le COACH, pas la validation quotidienne de
+// l'athlète : dès que la stricte lui est ouverte (accesDieteStricte), ses
+// apports SONT ceux du plan, et la carte affiche donc les objectifs atteints.
+// Sans accès ouvert, on n'affiche pas des chiffres qui ne s'appuient sur rien.
 function renderNutriAnneaux(){
   const el=document.getElementById('clh-nutri-rings');
   if(!el) return;
@@ -15702,14 +15705,15 @@ function renderNutriAnneaux(){
   if(!m.p&&!m.g&&!m.l){ el.innerHTML=''; return; }
   let tot;
   if(typeDiete(nut)==='strict'){
-    const valide=nut.days?.[today]?.respected===true;
-    tot=valide?{p:m.p||0,c:m.g||0,l:m.l||0,kcal:m.kcal||0}:{p:0,c:0,l:0,kcal:0};
+    let ouvert=false;
+    try{ ouvert=!!accesDieteStricte(currentUser).ok; }catch(e){}
+    tot=ouvert?{p:m.p||0,c:m.g||0,l:m.l||0,kcal:m.kcal||0}:{p:0,c:0,l:0,kcal:0};
   } else {
     const entries=(nut.log?.[today]?.entries)||[];
     tot=entries.reduce((a,e)=>({kcal:a.kcal+(e.kcal||0),p:a.p+(e.p||0),
       c:a.c+(e.c||0),l:a.l+(e.l||0)}),{kcal:0,p:0,c:0,l:0});
   }
-  el.innerHTML=htmlAnneauxMacros(tot,m,'14px');
+  el.innerHTML=htmlAnneauxMacros(tot,m,'12px')+htmlLigneCalories(tot,m);
 }
 function renderNutriDots(){
   renderNutriAnneaux();
@@ -24807,6 +24811,19 @@ function htmlAnneauxMacros(tot,m,marge){
     ${ring(tot.l,m.l,'#22c55e','Lipides')}
   </div>`;
 }
+// La ligne Calories et sa barre, PARTAGÉES elles aussi, pour la même raison
+// que les anneaux : deux écrans qui affichent le même total ne doivent pas
+// pouvoir diverger sur son arrondi ni sur le plafonnement de la barre.
+function htmlLigneCalories(tot,m){
+  const pct=m.kcal?Math.min((tot.kcal||0)/m.kcal,1):0;
+  return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700">Calories</span>
+      <span style="font-size:11px;font-weight:800;color:var(--red)">${Math.round(tot.kcal||0)}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400">${m.kcal?' / '+m.kcal+' kcal':' kcal'}</span></span>
+    </div>
+    <div style="height:10px;background:var(--surface-2);border-radius:5px;overflow:visible">
+      <div style="height:100%;width:${(pct*100).toFixed(1)}%;background:linear-gradient(90deg,var(--red),#ff4444);border-radius:5px;transition:width .4s ease;box-shadow:0 0 12px rgba(224,32,32,.5)"></div>
+    </div>`;
+}
 function _renderStrictMacroRings(nut){
   const today=localISODate(new Date());
   const isOn=nutIsOnDay(today);
@@ -24818,7 +24835,6 @@ function _renderStrictMacroRings(nut){
   const tot=entries.reduce((a,e)=>({
     kcal:a.kcal+(e.kcal||0),p:a.p+(e.p||0),c:a.c+(e.c||0),l:a.l+(e.l||0)
   }),{kcal:0,p:0,c:0,l:0});
-  const kcalPct=m.kcal?Math.min((tot.kcal||0)/m.kcal,1):0;
   const dayBadge=isOn
     ?`<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--success);background:var(--success-bg);border:1px solid var(--success-border);border-radius:5px;padding:3px 10px;letter-spacing:1px">${icon('zap',10)} JOUR ON</span>`
     :`<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:5px;padding:3px 10px;letter-spacing:1px">${icon('moon',10)} JOUR OFF</span>`;
@@ -24828,13 +24844,7 @@ function _renderStrictMacroRings(nut){
       <span style="display:inline-flex;align-items:center;gap:6px">${badgePhase(currentUser)}${dayBadge}</span>
     </div>
     ${htmlAnneauxMacros(tot,m,'16px')}
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-      <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700">Calories</span>
-      <span style="font-size:11px;font-weight:800;color:var(--red)">${Math.round(tot.kcal||0)}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400">${m.kcal?' / '+m.kcal+' kcal':' kcal'}</span></span>
-    </div>
-    <div style="height:10px;background:var(--surface-2);border-radius:5px;overflow:visible">
-      <div style="height:100%;width:${(kcalPct*100).toFixed(1)}%;background:linear-gradient(90deg,var(--red),#ff4444);border-radius:5px;transition:width .4s ease;box-shadow:0 0 12px rgba(224,32,32,.5)"></div>
-    </div>
+    ${htmlLigneCalories(tot,m)}
     ${_repHtml}
   </div>`;
 }
