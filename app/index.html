@@ -31567,6 +31567,121 @@ async function uploadVideoFile(input){
   }
 }
 // ======= QUICK COMMENTS =======
+
+// ══════════════ MODÈLES DE MESSAGE ═══════════════════════════════════════
+// Une seule bibliothèque, dans le document du coach. Elle ABSORBE les
+// commentaires rapides : il n'existe plus deux systèmes côte à côte.
+//
+// DOCTRINE. RepCore suspend, élargit une fourchette et renvoie — il ne
+// prescrit pas. Aucun modèle livré par défaut ne dit quoi faire de sa santé :
+// une assertion l'interdit, et le vocabulaire des défauts s'y tient.
+//
+// AUCUNE IA, aucun service tiers : ce sont des textes que le coach écrit.
+const TPL_CATS=Object.freeze(['technique','motivation','nutrition','administratif','absence']);
+const TPL_GROUPE_MAX=50;
+// Les quatre variables reconnues, accentuées ou non. Tout le reste entre
+// accolades est laissé TEL QUEL : « {mon truc} » n'est pas une variable, et
+// prétendre le contraire ferait disparaître du texte du coach.
+const TPL_VARS=Object.freeze({'prénom':'prenom','prenom':'prenom',
+  'exercice':'exercice','séance':'seance','seance':'seance','charge':'charge'});
+// Athlète sans prénom : on ne montre JAMAIS « {prénom} » à l'écran. Ce mot-là
+// est la seule valeur de repli du lot ; change-le ici si le ton ne va pas.
+const TPL_PRENOM_NEUTRE='toi';
+
+// PURE. Les variables reconnues d'un corps, sans doublon, dans l'ordre.
+function templateVariables(corps){
+  const out=[];
+  const re=/\{([^{}]{1,20})\}/g;
+  let m;
+  while((m=re.exec(String(corps||'')))){
+    const cle=TPL_VARS[m[1].trim().toLowerCase()];
+    if(cle&&out.indexOf(cle)<0) out.push(cle);
+  }
+  return out;
+}
+// PURE. Rend {texte, manquantes[]}.
+//
+// Le PRÉNOM ne bloque jamais : un athlète sans prénom renseigné existe, et le
+// coach ne doit pas rester coincé pour ça — d'où le repli neutre. Les trois
+// autres bloquent : « beau travail sur {exercice} » sans exercice ne veut
+// rien dire, et l'envoyer tel quel serait pire que ne rien envoyer.
+function templateResoudre(corps,contexte){
+  const c=contexte||{};
+  const manquantes=[];
+  const texte=String(corps||'').replace(/\{([^{}]{1,20})\}/g,(brut,nom)=>{
+    const cle=TPL_VARS[String(nom).trim().toLowerCase()];
+    if(!cle) return brut;                       // pas une variable : on n'y touche pas
+    const v=c[cle];
+    if(v!=null&&String(v).trim()!=='') return String(v).trim();
+    if(cle==='prenom') return TPL_PRENOM_NEUTRE;
+    if(manquantes.indexOf(cle)<0) manquantes.push(cle);
+    return brut;                                // laissée VISIBLE : elle doit sauter aux yeux
+  });
+  return {texte,manquantes};
+}
+// PURE. Le modèle résolu, inséré dans le brouillon. Même règle de séparation
+// que insertQC, qu'il remplace : un point si le texte précédent n'en a pas.
+function templateInserer(brouillon,modele,contexte){
+  const b=String(brouillon||'');
+  const corps=(modele&&modele.corps!=null)?modele.corps:String(modele||'');
+  const r=templateResoudre(corps,contexte);
+  const sep=(b&&!/[\s\n]$/.test(b))?'. ':'';
+  return b+sep+r.texte;
+}
+// Les six commentaires vidéo et les cinq du bilan, en modèles. Le TEXTE est
+// repris mot pour mot : la migration ne réécrit rien.
+const TPL_DEFAUTS=Object.freeze([
+  {cat:'technique',  titre:'Dos droit',           corps:'Garde le dos droit'},
+  {cat:'technique',  titre:'Descends plus bas',   corps:'Descends plus bas'},
+  {cat:'technique',  titre:'Souffle',             corps:"Souffle sur l'effort"},
+  {cat:'technique',  titre:'Genoux',              corps:"Attention aux genoux qui rentrent vers l'intérieur"},
+  {cat:'motivation', titre:'Beau travail !',      corps:'Beau travail'},
+  {cat:'motivation', titre:'Belle progression',   corps:'Belle progression depuis la dernière séance'},
+  {cat:'motivation', titre:'Bonne semaine',       corps:'Bonne semaine, le poids évolue comme prévu.'},
+  {cat:'administratif',titre:'On ajuste',         corps:'On ajuste le programme, je te mets ça à jour.'},
+  {cat:'technique',  titre:'Sommeil',             corps:'Le sommeil me préoccupe plus que le reste : on en parle ?'},
+  {cat:'nutrition',  titre:'Écarts',              corps:"Les écarts ne sont pas un problème à cette fréquence."},
+  {cat:'administratif',titre:'Mesures',           corps:'Pense à reprendre les mesures dans les mêmes conditions.'}
+]);
+// Migration SANS PERTE et IDEMPOTENTE.
+//
+// L'ordre choisi par le coach (`pos`) n'a pas de champ équivalent dans le
+// nouveau format : il est reporté dans `createdAt`, dont le tri croissant
+// reproduit exactement l'ancien classement. C'est un détournement, il est dit
+// ici pour qu'on ne s'étonne pas de dates toutes voisines.
+function templateMigrerCommentaires(user){
+  if(!user) return [];
+  if(Array.isArray(user.msgTemplates)&&user.msgTemplates.length) return user.msgTemplates;
+  const base=Date.now();
+  const out=[];
+  const anciens=Array.isArray(user.quickComments)?user.quickComments.slice() : [];
+  anciens.sort((a,b)=>((a&&a.pos)||0)-((b&&b.pos)||0));
+  anciens.forEach((c,i)=>{
+    if(!c) return;
+    const corps=String(c.text!=null?c.text:'');
+    if(!corps.trim()) return;
+    out.push({id:'tpl'+base+'_'+i,cat:'technique',
+      titre:String(c.label||corps).slice(0,40),corps:corps,createdAt:base+i});
+  });
+  // Aucun commentaire personnalisé : on sème la bibliothèque par défaut, qui
+  // contient AUSSI les cinq phrases du retour de bilan — elles étaient figées
+  // dans le code, elles deviennent modifiables et supprimables.
+  if(!out.length)
+    TPL_DEFAUTS.forEach((t,i)=>out.push({id:'tpld'+i,cat:t.cat,titre:t.titre,
+      corps:t.corps,createdAt:base+i}));
+  return out;
+}
+// Le plafond de l'envoi groupé. RepCore N'ENVOIE RIEN lui-même : il prépare
+// des ouvertures de conversation, une par athlète. Le plafond protège donc
+// d'un geste qu'on ne pourrait plus arrêter, pas d'un coût serveur.
+function templateEnvoiGroupe(destinataires,journal){
+  const l=Array.isArray(destinataires)?destinataires.filter(Boolean):[];
+  if(l.length>TPL_GROUPE_MAX)
+    return {ok:false,raison:'plafond',max:TPL_GROUPE_MAX,demandes:l.length};
+  if(Array.isArray(journal))
+    journal.push({quand:Date.now(),nb:l.length});
+  return {ok:true,nb:l.length};
+}
 const QC_DEFAULTS=[
   {label:'Dos droit',text:"Garde le dos droit"},
   {label:'Descends plus bas',text:"Descends plus bas"},
