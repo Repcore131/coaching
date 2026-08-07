@@ -9120,6 +9120,126 @@ function urgencyScore(c){
   if(isActive(c)) return 2;
   return 1;
 }
+
+// ══════════════ PILOTAGE DU PORTEFEUILLE — AGRÉGATION SEULE ═══════════════
+// Deux fonctions PURES posées au-dessus de l'existant. Elles ne calculent rien
+// de neuf : elles comptent ce qu'urgencyScore et signauxEntrainement disent
+// déjà, sur le tableau que renderClientList a DÉJÀ en mémoire. Aucune lecture
+// réseau, aucune écriture.
+//
+// urgencyScore n'est ni lue de travers ni contournée : le seuil ci-dessous est
+// un simple filtre sur sa sortie. Elle reste verrouillée par ses tests.
+const PF_SEUIL_TRAITER=7;         // « à traiter » = les motifs cliniques
+const PF_EXPIRE_JOURS=14;         // même fenêtre que le palier 3 d'urgence
+const PF_VISITE_DEFAUT_JOURS=7;   // première visite : on couvre une semaine
+const PF_CHANGEMENTS_MAX=12;
+const PF_PROGRAMME_FIGE_SEMAINES=6;
+
+// Reprend MOT POUR MOT la condition du palier 3 d'urgencyScore. La recopier
+// ailleurs ferait remonter comme « expire bientôt » tout athlète sans date,
+// alors qu'une date absente vaut accès ILLIMITÉ (voir checkAccess).
+function _pfAccesExpire(c,now){
+  return !!(c&&!c._fromCode&&c.status==='COACHING_SUIVI'&&c.accessExpiry
+    &&(c.accessExpiry-now)>0&&(c.accessExpiry-now)<PF_EXPIRE_JOURS*864e5);
+}
+
+// PURE. Les signaux qui ont produit le score de cet athlète, du plus grave au
+// moins grave, chacun avec sa date de déclenchement quand elle existe.
+//
+// `date` vaut null quand le signal n'en porte pas — une douleur diffuse est
+// une fenêtre de quatorze jours, un décrochage un ratio sur trois séances :
+// aucun des deux n'a d'instant. Inventer une date serait pire que l'absence.
+function expliquerUrgence(c){
+  const out=[];
+  if(!c) return out;
+  const ajout=(motif,gravite,date)=>out.push({motif,gravite,
+    date:(typeof date==='number'&&date>0)?date:null});
+  const dr=drapeauRougeActif(c);
+  if(dr) ajout('Drapeau rouge déclaré',10,dr.date||dr.quand);
+  let sg=SIGNAUX_VIDES;
+  try{ sg=signauxEntrainement(c); }catch(e){}
+  const det=sg.details||{};
+  if(sg.douleur){
+    const d=det.douleur;
+    const dates=(d&&Array.isArray(d.dates)&&d.dates.length)?Math.max.apply(null,d.dates):null;
+    ajout('Douleur répétée'+(d&&d.nom?' — '+d.nom:''),9,dates);
+  }
+  if(sg.douleurDiffuse) ajout('Douleur diffuse',8,null);
+  if(sg.decrochage) ajout('Séances écourtées',7,null);
+  // Palier 6 : cliniques eux aussi, mais SOUS le seuil « à traiter ». Ils
+  // figurent dans l'explication — c'est bien pourquoi l'athlète est là.
+  if(sg.plateauMuscle) ajout('Plateau musculaire',6,null);
+  if(sg.formeBasse) ajout('Forme déclarée basse',6,null);
+  if(sg.sousMEV) ajout('Volume sous le minimum efficace',6,null);
+  if(sg.volumeHaut) ajout('Volume élevé',6,null);
+  if(sg.restrictionLongue) ajout('Restriction calorique prolongée',6,null);
+  try{ if(propositionDechargeOuverte(c)) ajout('Décharge proposée',6,null); }catch(e){}
+  const bils=(c.bilans||[]).filter(b=>b&&typeof b.date==='number');
+  const dernier=bils.length?bils[bils.length-1].date:null;
+  try{ if(neverStarted(c)) ajout('Jamais démarré',5,c.createdAt); }catch(e){}
+  try{
+    if(hasNewBilan(c)){
+      const sans=bils.filter(b=>!b.reponseCoach);
+      ajout('Bilan sans réponse',5,sans.length?sans[sans.length-1].date:dernier);
+    }
+  }catch(e){}
+  try{ if(!c._fromCode&&needsAlert(c)) ajout('Bilan en retard',4,dernier); }catch(e){}
+  if(_pfAccesExpire(c,Date.now())) ajout('Accès qui expire',3,c.accessExpiry);
+  return out.sort((a,b)=>b.gravite-a.gravite);
+}
+
+// PURE. Ne mute NI le tableau reçu, NI les dossiers qu'il contient.
+//
+// `opts.now` et `opts.depuis` existent pour les tests : sans eux, la fonction
+// lit l'horloge et la dernière visite du coach.
+function agregerPortefeuille(clients,opts){
+  const l=Array.isArray(clients)?clients:[];
+  const o=opts||{};
+  const now=(typeof o.now==='number')?o.now:Date.now();
+  const depuis=(typeof o.depuis==='number'&&o.depuis>0)
+    ?o.depuis:(now-PF_VISITE_DEFAUT_JOURS*864e5);
+  let aTraiter=0,decrochage=0,accesExpirent=0;
+  const changements=[];
+  const portefeuille={total:0,actifs:0,jamaisDemarres:0,enAttente:0};
+  const charge={bilansSansReponse:0,videosEnAttente:0};
+  for(const c of l){
+    if(!c) continue;
+    portefeuille.total++;
+    const invite=!!(c._fromCode||!c.email);
+    if(invite) portefeuille.enAttente++;
+    try{ if(isActive(c)) portefeuille.actifs++; }catch(e){}
+    let jamais=false;
+    try{ jamais=neverStarted(c); }catch(e){}
+    if(jamais) portefeuille.jamaisDemarres++;
+    try{ if(urgencyScore(c)>=PF_SEUIL_TRAITER) aTraiter++; }catch(e){}
+    // ② et ③ : mêmes exclusions qu'urgencyScore — invité non inscrit et
+    // athlète jamais démarré n'ont rien à écourter ni d'accès à renouveler.
+    if(!invite&&!jamais){
+      try{ if(signauxEntrainement(c).decrochage) decrochage++; }catch(e){}
+      if(_pfAccesExpire(c,now)) accesExpirent++;
+    }
+    charge.bilansSansReponse+=bilansSansReponse(c);
+    charge.videosEnAttente+=((c.videos||[]).filter(v=>v&&!v.feedbackDate).length);
+    // ── Depuis la dernière visite ──
+    const nom=((c.fname||'')+' '+(c.lname||'')).trim()||c.email||'Athlète';
+    for(const b of (c.bilans||[]))
+      if(b&&typeof b.date==='number'&&b.date>depuis)
+        changements.push({date:b.date,qui:nom,id:c.id,quoi:'a envoyé un bilan'});
+    for(const s of (c.sessions||[]))
+      if(s&&typeof s.date==='number'&&s.date>depuis)
+        changements.push({date:s.date,qui:nom,id:c.id,quoi:'a fait une séance'});
+    for(const v of (c.videos||[]))
+      if(v&&typeof v.date==='number'&&v.date>depuis)
+        changements.push({date:v.date,qui:nom,id:c.id,quoi:'a envoyé une vidéo'});
+    const dr=drapeauRougeActif(c);
+    const drd=dr&&(dr.date||dr.quand);
+    if(typeof drd==='number'&&drd>depuis)
+      changements.push({date:drd,qui:nom,id:c.id,quoi:'a levé un drapeau rouge'});
+  }
+  changements.sort((a,b)=>b.date-a.date);
+  return {aTraiter,decrochage,accesExpirent,changements,portefeuille,charge,
+    depuis,max:PF_CHANGEMENTS_MAX};
+}
 // ── Liens WhatsApp pré-remplis ──────────────────────────────────────────────
 // AUCUNE messagerie n'est implémentée : on ouvre le WhatsApp du coach avec le
 // destinataire et le texte déjà écrits. Le coach relit et envoie lui-même.
@@ -49469,6 +49589,119 @@ function testExercices(){
       const inact={id:'n6',email:'n6@t.fr',sessions:[],bilans:[{type:'depart',date:_sgJ(20),reponseCoach:'vu et répondu',reponseDate:1,reponseVue:true}],
         createdAt:_sgJ(60),_fromCode:true};
       ok('urgencyScore 1 : inactif',urgencyScore(inact)===1,String(urgencyScore(inact)));
+      currentUser=sauveU;
+    })();
+
+    // ── PILOTAGE DU PORTEFEUILLE : agrégation seule, aucun calcul neuf ──
+    (function(){
+      const sauveU=currentUser;
+      currentUser={id:'coach',email:'co@t.fr',role:'coach',seenBilans:{},alertStatus:{}};
+      const J=n=>Date.now()-n*864e5;
+      const _ath=(id,extra)=>Object.assign({id:id,email:id+'@t.fr',fname:'A',lname:id,
+        sessions:[],bilans:[{type:'depart',date:J(3),reponseCoach:'ok',reponseDate:1,reponseVue:true}],
+        videos:[],createdAt:J(60)},extra||{});
+
+      // PURETÉ : ni le tableau ni les dossiers ne bougent.
+      ok('agregerPortefeuille ne mute pas ce qu\'on lui donne',(()=>{
+        const a=_ath('p1'),b=_ath('p2',{status:'COACHING_SUIVI',accessExpiry:Date.now()+5*864e5});
+        const liste=[a,b];
+        const avant=JSON.stringify(liste), avantLong=liste.length;
+        agregerPortefeuille(liste);
+        if(liste.length!==avantLong) return _echec('le tableau a change de taille');
+        return JSON.stringify(liste)===avant?true:_echec('un dossier a ete modifie');})());
+
+      // CRITÈRE : 3 athlètes dont 1 drapeau rouge → ① vaut 1.
+      ok('Trois athletes, un drapeau rouge : a traiter = 1',(()=>{
+        currentUser.seenBilans={'d1@t.fr':Date.now(),'d2@t.fr':Date.now(),'d3@t.fr':Date.now()};
+        const r=agregerPortefeuille([
+          _ath('d1',{drapeauRouge:{zone:'epaule',cases:['irradie'],date:J(1)}}),
+          _ath('d2'),_ath('d3')]);
+        return r.aTraiter===1?true:_echec('aTraiter = '+r.aTraiter);})());
+
+      // CRITÈRE : sans alerte, les trois compteurs valent 0 (l'UI les grise, jamais ne les masque).
+      ok('Portefeuille sans alerte : les trois compteurs a zero',(()=>{
+        currentUser.seenBilans={'s1@t.fr':Date.now(),'s2@t.fr':Date.now()};
+        const r=agregerPortefeuille([_ath('s1'),_ath('s2')]);
+        return (r.aTraiter===0&&r.decrochage===0&&r.accesExpirent===0)
+          ?true:_echec(r.aTraiter+'/'+r.decrochage+'/'+r.accesExpirent);})());
+
+      // CRITÈRE : jamais démarré → ni ② ni ③, comme urgencyScore l'exclut.
+      ok('Jamais demarre : hors de decrochage et hors des acces qui expirent',(()=>{
+        const nu=_ath('j1',{bilans:[],createdAt:J(10),status:'COACHING_SUIVI',
+          accessExpiry:Date.now()+5*864e5});
+        const r=agregerPortefeuille([nu]);
+        if(!neverStarted(nu)) return _echec('le cas de test n\'est pas « jamais demarre »');
+        return (r.decrochage===0&&r.accesExpirent===0&&r.portefeuille.jamaisDemarres===1)
+          ?true:_echec(r.decrochage+'/'+r.accesExpirent);})());
+
+      // L'invité non inscrit est exclu lui aussi.
+      ok('Invite non inscrit : hors de decrochage et des acces',(()=>{
+        const r=agregerPortefeuille([_ath('i1',{_fromCode:true,status:'COACHING_SUIVI',
+          accessExpiry:Date.now()+5*864e5})]);
+        return (r.decrochage===0&&r.accesExpirent===0&&r.portefeuille.enAttente===1)
+          ?true:_echec(r.decrochage+'/'+r.accesExpirent+'/'+r.portefeuille.enAttente);})());
+
+      // ③ reprend la condition du palier 3 : une date ABSENTE vaut illimite.
+      ok('Acces sans date : ne compte pas comme « expire bientot »',(()=>{
+        currentUser.seenBilans={'a1@t.fr':Date.now(),'a2@t.fr':Date.now()};
+        const r=agregerPortefeuille([
+          _ath('a1',{status:'COACHING_SUIVI',accessExpiry:null}),
+          _ath('a2',{status:'COACHING_SUIVI',accessExpiry:Date.now()+5*864e5})]);
+        return r.accesExpirent===1?true:_echec('accesExpirent = '+r.accesExpirent);})());
+
+      // La bande A par defaut : sept jours.
+      ok('Sans derniere visite, la bande A couvre sept jours',(()=>{
+        const r=agregerPortefeuille([_ath('v1',{sessions:[{date:J(3),sets:10,setsPlanned:10}]})]);
+        const ecart=Math.round((r.depuis-(Date.now()-7*864e5))/6e4);
+        if(Math.abs(ecart)>2) return _echec('depuis decale de '+ecart+' min');
+        return r.changements.length===1?true:_echec(r.changements.length+' changement(s)');})());
+      ok('Les changements sont tries du plus recent au plus ancien',(()=>{
+        const r=agregerPortefeuille([_ath('v2',{sessions:[
+          {date:J(5),sets:10,setsPlanned:10},{date:J(1),sets:10,setsPlanned:10}]})],
+          {depuis:J(30)});
+        const d=r.changements.map(x=>x.date);
+        for(let i=1;i<d.length;i++) if(d[i-1]<d[i]) return _echec('ordre casse');
+        return d.length>=2?true:_echec(d.length+' changement(s)');})());
+
+      // expliquerUrgence : tri par gravite DECROISSANTE.
+      ok('expliquerUrgence trie par gravite decroissante',(()=>{
+        const c=_ath('e1',{drapeauRouge:{zone:'dos',cases:['irradie'],date:J(2)},
+          bilans:[{type:'depart',date:J(40)}]});
+        const l=expliquerUrgence(c);
+        if(l.length<2) return _echec('un seul motif : '+JSON.stringify(l));
+        for(let i=1;i<l.length;i++)
+          if(l[i-1].gravite<l[i].gravite) return _echec('ordre casse : '+l.map(x=>x.gravite).join(','));
+        return l[0].gravite===10?true:_echec('en tete : '+l[0].gravite);})());
+      ok('expliquerUrgence rend motif, gravite et date',(()=>{
+        const c=_ath('e2',{drapeauRouge:{zone:'dos',cases:['irradie'],date:J(2)}});
+        const p=expliquerUrgence(c)[0];
+        if(!p||typeof p.motif!=='string'||!p.motif) return _echec('motif absent');
+        if(typeof p.gravite!=='number') return _echec('gravite absente');
+        return (p.date===null||typeof p.date==='number')?true:_echec('date invalide');})());
+      ok('expliquerUrgence ne mute pas le dossier',(()=>{
+        const c=_ath('e3',{drapeauRouge:{zone:'dos',cases:['irradie'],date:J(2)}});
+        const avant=JSON.stringify(c);
+        expliquerUrgence(c);
+        return JSON.stringify(c)===avant?true:_echec('le dossier a ete modifie');})());
+      ok('Un dossier sans rien a signaler ne produit aucun motif',(()=>{
+        currentUser.seenBilans={'e4@t.fr':Date.now()};
+        return expliquerUrgence(_ath('e4')).length===0
+          ?true:_echec(JSON.stringify(expliquerUrgence(_ath('e4'))));})());
+
+      // Le seuil ① EST celui d'urgencyScore, pas une copie divergente.
+      ok('Le seuil « a traiter » vaut 7, et rien ne le contourne',(()=>{
+        if(PF_SEUIL_TRAITER!==7) return _echec('seuil = '+PF_SEUIL_TRAITER);
+        return /urgencyScore\(c\)>=PF_SEUIL_TRAITER/.test(String(agregerPortefeuille))
+          ?true:_echec('l\'agregation n\'interroge pas urgencyScore');})());
+      // NON-RÉGRESSION : ce lot n'a pas touché à urgencyScore.
+      ok('NON-REGRESSION : urgencyScore intacte apres ce lot',(()=>{
+        const src=String(urgencyScore);
+        if(src.indexOf('PF_')>=0) return _echec('urgencyScore a ete contaminee par le lot');
+        for(const [rang,frag] of [[10,'drapeauRougeActif(c)) return 10'],
+          [9,'sg.douleur&&'],[8,'sg.douleurDiffuse&&'],[7,'sg.decrochage&&'],
+          [4,'needsAlert(c)&&'],[3,'14*864e5']])
+          if(src.indexOf(frag)<0) return _echec('palier '+rang+' introuvable');
+        return true;})());
       currentUser=sauveU;
     })();
 
