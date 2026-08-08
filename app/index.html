@@ -27526,15 +27526,14 @@ function planUniteItem(item){
 // compter pour zéro : un aliment Ciqual retiré d'une version à l'autre ferait
 // autrement grossir le restant en silence, et donc les grammages proposés.
 // ── Deux apports que le squelette ne nomme pas, et qui comptent quand même ──
-// Le tableur les porte, mais en dur et sans les dire : la ligne « une portion
-// de fruit au choix » vaut 20 g de glucides dans les huit fichiers, et le
-// total des lipides se termine par un « +20 » littéral qui n'a aucune ligne en
-// face. Ce +20, c'est l'HUILE DE CUISSON : elle n'est écrite nulle part parce
-// qu'on ne la pèse pas, mais elle est bien mangée.
+// Une ligne « une portion de fruit au choix » vaut 20 g de glucides : toutes
+// les portions de la table sont calibrées ainsi, et le tableur porte ce 20
+// dans ses huit fichiers.
 //
-// Elle vaut 10 g par repas cuisiné. Les huit programmes ont deux repas à
-// source libre — midi et soir — d'où le 20 du tableur. Le compter par repas
-// plutôt qu'en bloc le rend juste le jour où un programme en compte trois.
+// Et 10 g de lipides sont ajoutés au total, une fois, en forfait : c'est
+// l'HUILE DE CUISSON. Elle n'est écrite nulle part parce qu'on ne la pèse
+// pas, mais elle est bien mangée. Un forfait, pas un calcul — ni par repas,
+// ni par ligne.
 //
 // Ne pas les compter gonflait le restant, donc les grammages des sources :
 // l'athlète pesait plus que sa cible, tous les jours.
@@ -27543,19 +27542,6 @@ const PLAN_HUILE_CUISSON_LIP=10;
 function _planConst(plan,champ,defaut){
   const v=_planNb(plan&&plan[champ]);
   return (v!=null&&v>=0)?v:defaut;
-}
-// Combien de repas sont réellement cuisinés : ceux qui portent une source au
-// choix. On ne compte pas les sources, on compte les REPAS — midi qui porte
-// une protéine ET un glucide reste un seul repas, donc une seule huile.
-function planNbRepasCuisines(plan){
-  const vus={};
-  for(const it of planSquelette(plan)) if(it&&it.src) vus[it.repas||'petit_dej']=1;
-  const n=Object.keys(vus).length;
-  if(n>0) return n;
-  // Aucun marqueur posé : on retombe sur le réglage du coach s'il en a mis un,
-  // sinon zéro — sans repas à source libre, il n'y a rien à cuisiner.
-  const forc=_planNb(plan&&plan.nRepasSourcesLibres);
-  return (forc!=null&&forc>=1)?Math.round(forc):0;
 }
 function planCouverture(plan,chercher){
   const res=_planResolveur(chercher);
@@ -27593,15 +27579,13 @@ function planCouverture(plan,chercher){
     parRepas[cle].p+=m.p; parRepas[cle].c+=m.c; parRepas[cle].l+=m.l; parRepas[cle].kcal+=m.kcal;
     parRepas[cle].lignes.push({item,nom,macros:m});
   }
-  // L'huile de cuisson, une fois pour toutes, à la fin : elle n'appartient à
-  // aucune ligne, donc elle n'est rattachée à aucun repas.
-  const parHuile=_planConst(plan,'huileCuissonG',PLAN_HUILE_CUISSON_LIP);
-  const nCuisines=planNbRepasCuisines(plan);
-  const huile=parHuile*nCuisines;
+  // L'huile de cuisson, une fois pour toutes, à la fin : un forfait, pas un
+  // calcul. Elle n'appartient à aucune ligne et ne se compte pas par repas.
+  const huile=_planConst(plan,'huileCuissonG',PLAN_HUILE_CUISSON_LIP);
   if(huile>0){ tot.l+=huile; tot.kcal+=9*huile; }
   return {p:tot.p,c:tot.c,l:tot.l,kcal:tot.kcal,parRepas,irresolus,
     fruits:{n:nFruits,parPortion:gFruit,glucides:nFruits*gFruit},
-    huileCuisson:{repas:nCuisines,parRepas:parHuile,lipides:huile}};
+    huileCuisson:{lipides:huile}};
 }
 
 // PURE. Le restant, et le fait qu'il soit négatif dit à voix haute.
@@ -28386,8 +28370,7 @@ function _cplHtmlImplicites(couv){
   const bouts=[];
   if(f&&f.n>0) bouts.push(f.n+' portion'+(f.n>1?'s':'')+' de fruit à '
     +f.parPortion+' g de glucides');
-  if(h&&h.lipides>0) bouts.push(h.lipides+' g de lipides d\'huile de cuisson ('
-    +h.parRepas+' g × '+h.repas+' repas cuisiné'+(h.repas>1?'s':'')+')');
+  if(h&&h.lipides>0) bouts.push(h.lipides+' g de lipides d\'huile de cuisson');
   if(!bouts.length) return '';
   return `<div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-top:9px;padding-top:8px;border-top:1px solid var(--surface-2)">Compté dans le squelette sans ligne dédiée : ${escapeHtml(bouts.join(' · '))}.</div>`;
 }
@@ -29083,7 +29066,7 @@ function _htmlPlanAthlete(user){
 function _htmlHuileCuissonAthlete(couv){
   const h=couv&&couv.huileCuisson;
   if(!h||!(h.lipides>0)) return '';
-  return `<div style="font-size:10px;color:var(--text-faint);line-height:1.6;margin-bottom:10px">Tes lipides incluent déjà ${h.lipides} g d'huile de cuisson (${h.parRepas} g par repas cuisiné) : inutile de la peser, elle est comptée.</div>`;
+  return `<div style="font-size:10px;color:var(--text-faint);line-height:1.6;margin-bottom:10px">Tes lipides incluent déjà ${h.lipides} g d'huile de cuisson : inutile de la peser, elle est comptée.</div>`;
 }
 
 // ======= JOURNAL ALIMENTAIRE (Ciqual 2025) =======
@@ -64726,14 +64709,16 @@ function testExercices(){
         // ══════ LES DEUX APPORTS QUE LE SQUELETTE NE NOMME PAS ══════
         ok('Une portion de fruit vaut 20 g de glucides, comme dans les huit tableurs',(()=>{
           if(PLAN_FRUIT_GLUCIDES!==20) return _echec('constante à '+PLAN_FRUIT_GLUCIDES);
-          const plan={squelette:[{id:'f',repas:'collation1',fruit:true}]};
+          // Forfait d'huile éteint : on isole ce que le FRUIT apporte, sans
+          // quoi les 10 g de lipides du forfait passeraient pour les siens.
+          const plan={squelette:[{id:'f',repas:'collation1',fruit:true}],huileCuissonG:0};
           const c=planCouverture(plan,_ch);
           if(c.c!==20) return _echec('glucides couverts : '+c.c);
           if(c.p!==0||c.l!==0) return _echec('le fruit apporte autre chose que des glucides');
           return c.kcal===80?true:_echec('kcal : '+c.kcal);})());
         ok('Deux portions de fruit comptent deux fois',(()=>{
           const plan={squelette:[{id:'a',repas:'petit_dej',fruit:true},
-            {id:'b',repas:'collation1',fruit:true}]};
+            {id:'b',repas:'collation1',fruit:true}],huileCuissonG:0};
           const c=planCouverture(plan,_ch);
           return (c.c===40&&c.fruits.n===2)?true:_echec(JSON.stringify(c.fruits));})());
         ok('Le fruit compte dans le repas où il est posé',(()=>{
@@ -64741,32 +64726,29 @@ function testExercices(){
           const c=planCouverture(plan,_ch);
           return c.parRepas.collation1.c===20
             ?true:_echec(String(c.parRepas.collation1.c));})());
-        ok('L\'huile de cuisson ajoute 10 g de lipides PAR repas cuisiné',(()=>{
+        ok('L\'huile de cuisson ajoute 10 g de lipides, en FORFAIT',(()=>{
           if(PLAN_HUILE_CUISSON_LIP!==10) return _echec('constante à '+PLAN_HUILE_CUISSON_LIP);
-          // Deux repas à source libre — midi et soir — comme dans les huit
-          // tableurs : le total fait donc 20, exactement leur « +20 » en dur.
           const plan={squelette:[{id:'a',repas:'midi',src:'p'},{id:'b',repas:'midi',src:'c'},
             {id:'c',repas:'soir',src:'p'},{id:'d',repas:'soir',src:'c'}]};
           const c=planCouverture(plan,_ch);
-          if(c.huileCuisson.repas!==2)
-            return _echec(c.huileCuisson.repas+' repas cuisinés au lieu de 2');
-          return (c.l===20&&c.huileCuisson.lipides===20)?true:_echec('lipides : '+c.l);})());
-        ok('Un repas qui porte DEUX sources ne compte qu\'une huile',(()=>{
-          // On compte les repas, pas les sources : midi avec une protéine et
-          // un glucide reste une seule poêle.
-          const plan={squelette:[{id:'a',repas:'midi',src:'p'},{id:'b',repas:'midi',src:'c'}]};
-          const c=planCouverture(plan,_ch);
-          return (c.huileCuisson.repas===1&&c.l===10)?true:_echec(JSON.stringify(c.huileCuisson));})());
-        ok('Trois repas cuisinés donnent 30 g, et pas toujours 20',(()=>{
-          const plan={squelette:[{id:'a',repas:'midi',src:'p'},{id:'b',repas:'soir',src:'p'},
-            {id:'c',repas:'collation1',src:'p'}]};
-          return planCouverture(plan,_ch).l===30
-            ?true:_echec(String(planCouverture(plan,_ch).l));})());
-        ok('Sans repas à source libre, aucune huile n\'est ajoutée',(()=>{
-          const plan={squelette:[{id:'a',repas:'midi',ciqual:4,q:100,u:'g'}]};
-          const c=planCouverture(plan,_ch);
-          return (c.huileCuisson.lipides===0&&c.huileCuisson.repas===0)
-            ?true:_echec(JSON.stringify(c.huileCuisson));})());
+          return (c.l===10&&c.huileCuisson.lipides===10)?true:_echec('lipides : '+c.l);})());
+        ok('Le forfait ne dépend NI du nombre de repas NI du nombre de sources',(()=>{
+          // Le tableur ajoutait 20 parce qu'il avait deux repas cuisinés. Ici
+          // c'est 10, une fois, quoi qu'il y ait dans le squelette.
+          const cas=[
+            [[{id:'a',repas:'midi',src:'p'}],'un seul repas'],
+            [[{id:'a',repas:'midi',src:'p'},{id:'b',repas:'midi',src:'c'}],'deux sources, un repas'],
+            [[{id:'a',repas:'midi',src:'p'},{id:'b',repas:'soir',src:'p'},
+              {id:'c',repas:'collation1',src:'p'}],'trois repas'],
+            [[{id:'a',repas:'midi',ciqual:4,q:100,u:'g'}],'aucune source libre'],
+            [[],'squelette vide']
+          ];
+          const faux=[];
+          for(const [sq,lib] of cas){
+            const c=planCouverture({squelette:sq},_ch);
+            if(c.huileCuisson.lipides!==10) faux.push(lib+' → '+c.huileCuisson.lipides+' g');
+          }
+          return faux.length?_echec(faux.join(', ')):true;})());
         ok('Les deux montants réduisent RÉELLEMENT le restant, donc les grammages',(()=>{
           // C'est tout l'enjeu : sans eux, l'athlète pesait plus que sa cible.
           const sq=[{id:'a',repas:'midi',src:'c'},{id:'b',repas:'soir',src:'c'},
@@ -64776,9 +64758,9 @@ function testExercices(){
           const couv=planCouverture(plan,_ch);
           const r=planRestant(cib,couv);
           if(r.c!==280) return _echec('restant glucides '+r.c+' au lieu de 280');
-          if(r.l!==50) return _echec('restant lipides '+r.l+' au lieu de 50');
+          if(r.l!==60) return _echec('restant lipides '+r.l+' au lieu de 60');
           const q=planSources(plan,r,_ch).glucides.liste[0].q;
-          // 280 / 2 repas / 0,80 = 175 g, contre 187 g sans ces deux apports.
+          // 280 / 2 repas / 0,80 = 175 g, contre 187 g sans le fruit.
           return _pres(q,175)?true:_echec('grammage '+Math.round(q));})());
         ok('Le coach peut corriger les deux montants sur son plan',(()=>{
           const sq=[{id:'a',repas:'midi',src:'p'},{id:'f',repas:'collation1',fruit:true}];
@@ -64789,16 +64771,15 @@ function testExercices(){
           const c=planCouverture({squelette:sq,fruitGlucidesG:0,huileCuissonG:0},_ch);
           return (c.c===0&&c.l===0)?true:_echec('c='+c.c+' l='+c.l);})());
         ok('Les deux montants sont ANNONCÉS au coach, pas ajoutés en douce',(()=>{
-          const couv={fruits:{n:2,parPortion:20,glucides:40},
-            huileCuisson:{repas:2,parRepas:10,lipides:20}};
-          const h=_cplHtmlImplicites(couv);
+          const h=_cplHtmlImplicites({fruits:{n:2,parPortion:20,glucides:40},
+            huileCuisson:{lipides:10}});
           if(!/2 portions de fruit à 20 g/.test(h)) return _echec('les fruits ne sont pas dits');
-          return /20 g de lipides d'huile de cuisson/.test(h.replace(/&#39;/g,"'"))
+          return /10 g de lipides d'huile de cuisson/.test(h.replace(/&#39;/g,"'"))
             ?true:_echec('l\'huile n\'est pas dite : '+h.replace(/<[^>]*>/g,' ').slice(0,140));})());
         ok('Et annoncés à l\'athlète, qui refait ses totaux à la main',(()=>{
-          const h=_htmlHuileCuissonAthlete({huileCuisson:{repas:2,parRepas:10,lipides:20}});
-          if(!/20 g d/.test(h)) return _echec('le montant n\'est pas dit');
-          return _htmlHuileCuissonAthlete({huileCuisson:{repas:0,parRepas:10,lipides:0}})===''
+          const h=_htmlHuileCuissonAthlete({huileCuisson:{lipides:10}});
+          if(!/10 g d/.test(h)) return _echec('le montant n\'est pas dit');
+          return _htmlHuileCuissonAthlete({huileCuisson:{lipides:0}})===''
             ?true:_echec('la phrase sort même sans huile');})());
         ok('La ligne de fruit affiche sa valeur dans le programme de l\'athlète',(()=>{
           const u=_pa({nutrition:Object.assign(_macros({kcal:2600,p:200,g:300,l:70,f:36}),
