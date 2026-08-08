@@ -10482,6 +10482,262 @@ function _triTaux(c){
   let r=null; try{ r=tauxCompletion(c,Date.now()); }catch(e){}
   return (r&&r.interpretable)?r.taux:-1;   // les non-interpretables en fin de liste
 }
+
+// ══════════════ RITE DE FIN DE CYCLE — 28 JOURS ══════════════════════════
+// Un point d'étape chiffré, et un nouveau départ. AUCUN objet de
+// périodisation n'est créé : nommer une période, c'est écrire une chaîne dans
+// `rites[]`, rien de plus. Pas de programme, pas de phase, pas de cycle dans
+// le modèle de données.
+//
+// AUCUN INDICATEUR N'EST RECALCULÉ : tout est lu des fonctions existantes
+// (tauxCompletion, e1rm, volumeSemaine, REPERES_VOLUME, mm7).
+const RITE_JOURS=28;
+const RITE_INACTIF_MAX_J=14;      // au-delà, ce n'est plus un cycle, c'est une reprise
+
+// PURE. L'échéance se calcule sur l'ÉCART EN JOURS depuis l'inscription,
+// jamais sur le quantième : un athlète inscrit un 31 janvier a son rite au
+// 28 février + 0 jour d'écart, pas « le 31 » d'un mois qui n'en a pas.
+function riteEcheance(u,now){
+  const t=(typeof now==='number')?now:Date.now();
+  const c=Number(u&&u.createdAt)||0;
+  if(!c||t<c) return {cycle:0,echu:false,jours:0};
+  const jours=Math.floor((t-c)/864e5);
+  const cycle=Math.floor(jours/RITE_JOURS);
+  return {cycle,echu:cycle>=1,jours};
+}
+// PURE. Le rite a-t-il déjà été tenu pour ce cycle ?
+function riteTenu(u,cycle){
+  for(const r of ((u&&u.rites)||[])) if(r&&Number(r.cycle)===Number(cycle)) return true;
+  return false;
+}
+// PURE. Faut-il l'afficher ? Rend {ok, raison}.
+//
+// Il ne s'affiche PAS sur un drapeau rouge, une grossesse-suspension, une
+// inactivité de plus de quatorze jours, ou une période sans la moindre
+// séance. Dans ces quatre cas, un point d'étape chiffré serait au mieux vide,
+// au pire déplacé.
+function riteAAfficher(u,now){
+  const t=(typeof now==='number')?now:Date.now();
+  const e=riteEcheance(u,t);
+  if(!e.echu) return {ok:false,raison:'pas_echu',cycle:e.cycle};
+  if(riteTenu(u,e.cycle)) return {ok:false,raison:'deja_tenu',cycle:e.cycle};
+  try{ if(drapeauRougeActif(u)) return {ok:false,raison:'drapeau',cycle:e.cycle}; }catch(err){}
+  const g=u&&u.grossesse&&u.grossesse.etat;
+  if(g==='enceinte'||g==='allaitement') return {ok:false,raison:'suspendu',cycle:e.cycle};
+  const ses=((u&&u.sessions)||[]).filter(s=>s&&s.date>0);
+  let dernier=0;
+  for(const s of ses) if(s.date>dernier) dernier=s.date;
+  // Plus de quatorze jours sans rien : ce cas relève de la file de reprise,
+  // pas d'un bilan de cycle.
+  if(!dernier||(t-dernier)>RITE_INACTIF_MAX_J*864e5)
+    return {ok:false,raison:'inactif',cycle:e.cycle};
+  const debut=t-RITE_JOURS*864e5;
+  if(!ses.some(s=>s.date>=debut&&s.date<=t))
+    return {ok:false,raison:'aucune_seance',cycle:e.cycle};
+  return {ok:true,raison:null,cycle:e.cycle,depuis:debut};
+}
+// PURE. Le nom de la période suivante. Le coach peut la nommer ; sinon un
+// numéro. Ce nom est une ÉTIQUETTE, il ne pilote rien.
+function riteNomPeriode(u,cycle){
+  const r=((u&&u.rites)||[]).slice().reverse().find(x=>x&&x.nom);
+  return (r&&r.nom)?String(r.nom):('Cycle '+(Number(cycle)+1));
+}
+// PURE. Les records de la fenêtre, lus avec l'e1rm EXISTANT : meilleure
+// performance de la période contre la meilleure d'avant, par exercice.
+function _riteRecords(u,debut,fin){
+  const av={},ap={};
+  for(const s of ((u&&u.sessions)||[])){
+    if(!s||!s.date) continue;
+    const cible=(s.date>=debut&&s.date<=fin)?ap:((s.date<debut)?av:null);
+    if(!cible) continue;
+    for(const ex of ((s.exercises)||[])){
+      const nom=ex&&ex.name; if(!nom) continue;
+      for(const set of ((ex.sets)||[])){
+        if(!set||set.done===false) continue;
+        const w=parseFloat(set.weight)||0, r=parseFloat(set.repsDone!=null?set.repsDone:set.reps)||0;
+        if(!(w>0&&r>0)) continue;
+        let v=0; try{ v=e1rm(w,r,(set.rir==='echec')?0:(parseInt(set.rir)||0)); }catch(err){ v=w; }
+        if(!(cible[nom]>v)) cible[nom]=v;
+      }
+    }
+  }
+  const out=[];
+  for(const nom in ap) if(!(av[nom]>=ap[nom])) out.push({nom,valeur:Math.round(ap[nom])});
+  out.sort((a,b)=>b.valeur-a.valeur);
+  return out;
+}
+// PURE. Le contenu du rite. Il LIT, il ne calcule pas.
+function riteContenu(u,now){
+  const t=(typeof now==='number')?now:Date.now();
+  const debut=t-RITE_JOURS*864e5;
+  const ses=((u&&u.sessions)||[]).filter(s=>s&&s.date>=debut&&s.date<=t);
+  let taux=null; try{ taux=tauxCompletion(u,t); }catch(e){}
+  // Le volume par muscle contre MEV/MAV/MRV, lu tel quel.
+  let vol=null;
+  try{ vol=volumeSemaine(u,localISODate(new Date(t))); }catch(e){}
+  const muscles=[];
+  if(vol) for(const m in vol){
+    const rep=(typeof REPERES_VOLUME!=='undefined')?REPERES_VOLUME[m]:null;
+    muscles.push({muscle:m,series:vol[m],mev:rep&&rep.mev,mav:rep&&rep.mav,mrv:rep&&rep.mrv});
+  }
+  // PHASE LUTÉALE : aucune minoration n'existe dans le fichier (le facteur de
+  // charge y vaut 1,00, seule la SÉRIE est réduite). On ne minore donc rien —
+  // on MENTIONNE la phase, pour que la lecture se fasse en contexte.
+  let mentionPhase=false;
+  try{ mentionPhase=(typeof phaseCycle==='function')
+    &&phaseCycle(u,localISODate(new Date(t)))==='luteal_late'; }catch(e){}
+  return {seances:ses.length,taux:taux,records:_riteRecords(u,debut,t),
+    muscles:muscles,mentionPhase:mentionPhase,depuis:debut,jusqua:t};
+}
+// Le bilan bimensuel de la même semaine, s'il existe : on le RÉFÉRENCE, on ne
+// le rejoue pas. À fréquence hebdomadaire, la coïncidence arrive une fois sur
+// quatre — ce n'est pas un cas rare.
+function riteBilanDeLaSemaine(u,now){
+  const t=(typeof now==='number')?now:Date.now();
+  const sem=7*864e5;
+  const l=((u&&u.bilans)||[]).filter(b=>b&&b.type!=='depart'&&b.date>t-sem&&b.date<=t);
+  return l.length?l[l.length-1]:null;
+}
+
+// ── L'écran du rite ───────────────────────────────────────────────────────
+// NON BLOQUANT : il se ferme, il ne se subit pas. Aucune notification — il
+// s'affiche à l'ouverture de l'app, et seulement si riteAAfficher le permet.
+//
+// AUCUNE ÉCRITURE AU CHARGEMENT : `rites[]` n'est écrit qu'à la fermeture, et
+// ne porte alors que la date si l'athlète n'a rien répondu.
+function _riteLigne(lib,val,note){
+  return `<div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;
+    padding:7px 0;border-top:1px solid rgba(255,255,255,.06)">
+    <span style="font-size:11.5px;color:var(--sub)">${escapeHtml(lib)}</span>
+    <span style="font-size:13px;font-weight:800;color:#fff;text-align:right">${val}${note?`<span style="font-size:10px;color:var(--text-faint);font-weight:400"> ${escapeHtml(note)}</span>`:''}</span>
+  </div>`;
+}
+function ouvrirRite(cycle){
+  const u=currentUser;
+  const c=riteContenu(u,Date.now());
+  const bil=riteBilanDeLaSemaine(u,Date.now());
+  const nom=riteNomPeriode(u,cycle);
+  window._riteCycle=cycle;
+  // Tendance de poids : LUE, jamais recalculee.
+  let vit=null;
+  try{ vit=vitesseHebdo(serieWeight(u)); }catch(e){}
+  const tauxLib=(c.taux&&c.taux.interpretable)?(c.taux.taux+' %'):'—';
+  const muscles=c.muscles.filter(m=>m.mev!=null).slice(0,14);
+  const html=`<div id="modal-overlay" onclick="fermerRite()" style="position:fixed;inset:0;background:#000c;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 18px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:2px">
+      <h2 style="margin:0">4 semaines</h2>
+      <button onclick="fermerRite()" aria-label="Fermer" style="min-width:44px;min-height:44px;background:none;border:none;color:var(--sub);font-size:22px;cursor:pointer">×</button>
+    </div>
+    <p class="sub" style="font-size:11.5px;margin-bottom:14px;line-height:1.6">Un point d'étape, pas une note. Tu peux fermer cet écran à tout moment.</p>
+
+    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:11px;padding:11px 13px;margin-bottom:10px">
+      ${_riteLigne('Séances réalisées',c.seances)}
+      ${_riteLigne('Séances faites sur prévues',tauxLib,c.taux?c.taux.fenetre:'')}
+      ${vit&&vit.vitesse!=null?_riteLigne('Tendance de poids',(vit.vitesse>0?'+':'')+String(Math.round(vit.vitesse*100)/100).replace('.',',')+' %/sem'):''}
+    </div>
+
+    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:11px;padding:11px 13px;margin-bottom:10px">
+      <div style="font-size:9px;color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Records battus</div>
+      ${c.records.length
+        ? c.records.slice(0,6).map(r=>_riteLigne(r.nom,r.valeur+' <span style="font-size:10px;color:var(--sub);font-weight:400">e1RM</span>')).join('')
+        : '<div style="font-size:11.5px;color:var(--text-dim);line-height:1.6">Aucun record sur la période. Ce n\'est pas un échec : la progression n\'est pas linéaire.</div>'}
+      ${c.mentionPhase?'<div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-top:8px">Relevé en phase lutéale tardive : une baisse y est attendue, et n\'a pas la même signification qu\'une régression.</div>':''}
+    </div>
+
+    ${muscles.length?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:11px;padding:11px 13px;margin-bottom:10px">
+      <div style="font-size:9px;color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Volume par muscle</div>
+      ${muscles.map(m=>_riteLigne(m.muscle,m.series+' séries','MEV '+m.mev+' · MAV '+m.mav+' · MRV '+m.mrv)).join('')}
+    </div>`:''}
+
+    ${bil?`<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:11px;padding:11px 13px;margin-bottom:10px;font-size:11.5px;color:#ddd;line-height:1.6">
+      Ton bilan de cette semaine est déjà enregistré : il n'est pas redemandé ici.</div>`:''}
+
+    <label style="margin-top:0">Une question à ton coach&nbsp;?</label>
+    <textarea id="rite-question" rows="2" placeholder="Facultatif — ce que tu veux lui demander pour la suite"></textarea>
+
+    <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
+      <div style="font-size:12px;font-weight:800;color:#fff;margin-bottom:2px">${escapeHtml(nom)}</div>
+      <div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-bottom:9px">Tes jours et ton heure d'entraînement pour les 4 prochaines semaines. Nommer cette période ne crée aucun programme : c'est une étiquette.</div>
+      <div id="rite-jours" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px">
+        ${['L','Ma','Me','J','V','S','D'].map((j,i)=>`<button type="button" data-j="${i}" onclick="riteJour(${i},this)"
+          style="flex:1;min-width:40px;min-height:44px;border-radius:9px;cursor:pointer;background:#111;border:1px solid #2e2e2e;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800">${j}</button>`).join('')}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:11px;color:var(--sub)">Heure</span>
+        <input id="rite-heure" type="number" min="0" max="23" value="${(currentUser._woReminderHour??18)}"
+          style="width:70px;font-size:15px;padding:9px 10px;text-align:center;box-sizing:border-box">
+      </div>
+    </div>
+
+    <button class="btn btn-red" style="margin-top:14px;width:100%" onclick="validerRite()">Enregistrer et repartir</button>
+    <button class="btn btn-outline" style="margin-top:8px;width:100%" onclick="fermerRite()">Plus tard</button>
+  </div></div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+  window._riteJours=(currentUser._woReminderDays||[]).slice();
+  (window._riteJours||[]).forEach(i=>{
+    const b=document.querySelector('#rite-jours button[data-j="'+i+'"]');
+    if(b) riteJour(i,b,true);
+  });
+}
+function riteJour(i,el,forcer){
+  if(!window._riteJours) window._riteJours=[];
+  const k=window._riteJours.indexOf(i);
+  const actif=forcer?true:(k<0);
+  if(actif&&k<0) window._riteJours.push(i);
+  if(!actif&&k>=0) window._riteJours.splice(k,1);
+  el.style.background=actif?'rgba(224,32,32,.14)':'#111';
+  el.style.borderColor=actif?'var(--red)':'#2e2e2e';
+  el.style.color=actif?'#fff':'var(--sub)';
+}
+// Fermeture SANS réponse : on note la date du rite, et RIEN d'autre. Le
+// critère est explicite — aucune écriture hors la date.
+function fermerRite(){
+  _riteEnregistrer(null,false);
+  closeModal();
+}
+function validerRite(){
+  const q=((document.getElementById('rite-question')||{}).value||'').trim();
+  _riteEnregistrer(q,true);
+  closeModal();
+  toast('Nouveau cycle noté.');
+}
+function _riteEnregistrer(question,avecReglages){
+  try{
+    const u=currentUser;
+    if(!u) return false;
+    if(!Array.isArray(u.rites)) u.rites=[];
+    if(riteTenu(u,window._riteCycle)) return false;
+    const e={cycle:window._riteCycle,date:Date.now(),reponseCoach:null};
+    if(question) e.question=question;
+    u.rites.push(e);
+    if(u.rites.length>24) u.rites=u.rites.slice(-24);
+    // Les jours et l'heure vont dans les CHAMPS DE RAPPEL EXISTANTS : aucun
+    // objet de périodisation n'est créé.
+    if(avecReglages){
+      const h=parseInt((document.getElementById('rite-heure')||{}).value,10);
+      if(Array.isArray(window._riteJours)&&window._riteJours.length){
+        u._woReminderDays=window._riteJours.slice().sort((a,b)=>a-b);
+        u._woReminderEnabled=true;
+      }
+      if(h>=0&&h<=23) u._woReminderHour=h;
+    }
+    saveUser();
+    return true;
+  }catch(e){ return false; }
+}
+// Appelé à l'ouverture de l'accueil athlète. Ne s'affiche que si TOUT est
+// réuni, et ne bloque jamais l'accès à l'application.
+function riteAfficherSiBesoin(){
+  try{
+    if(!currentUser||currentUser.role==='coach') return false;
+    if(document.getElementById('modal-overlay')) return false;   // une modale suffit
+    const v=riteAAfficher(currentUser,Date.now());
+    if(!v.ok) return false;
+    ouvrirRite(v.cycle);
+    return true;
+  }catch(e){ return false; }
+}
 function renderClientList(clients){
   const el=document.getElementById('ch-clients-list');
   if(!el) return;
@@ -11320,6 +11576,23 @@ function renderTodoBlock(clients){
   if(newBil.length) rows.push({type:'bilan',icon:'📥',color:'var(--orange)',label:'Nouveau'+(newBil.length>1?'x bilans à lire':' bilan à lire'),list:newBil});
   if(overdue.length) rows.push({type:'overdue',icon:icon('alert-triangle',15),color:'var(--red)',label:'Bilan'+(overdue.length>1?'s':'')+' en retard',list:overdue});
   if(expiring.length) rows.push({type:'expiring',icon:'⏳',color:'var(--orange)',label:'Accès expire dans <14j',list:expiring});
+  // RITE DE FIN DE CYCLE : niveau administratif. urgencyScore ne le connaît
+  // pas et ne le connaîtra pas — la ligne se voit, elle ne remonte personne.
+  // Elle se reporte comme les autres, via dismissTodoRow, qui n'écrit que dans
+  // alertStatus du COACH : le dossier de l'athlète n'est jamais touché.
+  // Relance UNIQUE : si le cycle précédent est déjà resté sans réponse, le
+  // suivant ne redemande rien.
+  const _rites=clients.filter(c=>{
+    if(!c||c._fromCode) return false;
+    const l=(c.rites||[]).filter(r=>r&&r.date);
+    if(!l.length) return false;
+    const der=l[l.length-1];
+    if(der.reponseCoach) return false;
+    const avant=l[l.length-2];
+    return !(avant&&!avant.reponseCoach);      // deja relance une fois : plus rien
+  });
+  if(_rites.length) rows.push({type:'rite',icon:'📆',color:'var(--sub)',
+    label:'Bilan de 4 semaines à lire',list:_rites});
   if(noProg.length) rows.push({type:'noprog',icon:'📋',color:'var(--sub)',label:'Sans programme',list:noProg});
   if(!rows.length){ window._todoRows=[]; el.innerHTML=''; return; }
   // Un tableau de bord qui affiche trente alertes n'oriente plus rien. Les
@@ -16450,6 +16723,9 @@ function loadClientHome(){
   // Vérification rappel bilan (samedi toutes les 2 semaines, 7h)
   setTimeout(checkBilanNotifToday, 800);
   setTimeout(checkWoReminderToday, 1100);
+  // Rite de fin de cycle : il s AFFICHE, il ne notifie pas, et il ne bloque
+  // jamais l acces. riteAAfficher decide seule.
+  setTimeout(()=>{ try{ riteAfficherSiBesoin(); }catch(e){} },1400);
   const u=currentUser;
   // clh-avatar replaced by logo badge
   document.getElementById('clh-name').textContent=((u.fname||'')+' '+(u.lname||'')).trim()||'Profil incomplet';
@@ -55112,6 +55388,73 @@ function testExercices(){
         zTodo.innerHTML=gTodo;
       }
       currentUser=sauveU;
+    })();
+
+    // ── Rite de fin de cycle : les cinq critères d'acceptation ──
+    (function(){
+      const sauveU=currentUser;
+      const N=Date.now(), J=n=>N-n*864e5;
+      const ath=o=>Object.assign({id:'r1',createdAt:J(30),
+        sessions:[{date:J(2),exercises:[{name:'Squat',sets:[{weight:100,reps:5,rir:2}]}]}]},o||{});
+
+      // Critère : inscrit un 31 janvier, le rite tombe à createdAt + 28 jours,
+      // et surtout PAS « le 31 » d'un mois de février qui n'en a pas.
+      const j31=new Date(2026,0,31,10,0).getTime();
+      ok('Critère 1 : inscrit le 31 janvier, rite au 28e jour (28/02)',(()=>{
+        const u={createdAt:j31,sessions:[{date:j31+27*864e5}]};
+        if(riteEcheance(u,j31+27*864e5).echu) return false;
+        if(!riteEcheance(u,j31+28*864e5).echu) return false;
+        const d=new Date(j31+28*864e5);
+        return d.getMonth()===1&&d.getDate()===28;})(),
+        new Date(j31+28*864e5).toLocaleDateString('fr-FR'));
+
+      // Critère : drapeau rouge actif à J28 → aucun rite.
+      ok('Critère 2 : drapeau rouge actif, aucun rite',
+        riteAAfficher(ath({drapeauRouge:{zone:'dos',cases:['irradie']}}),N).raison==='drapeau');
+
+      // Critère : zéro séance sur la période → aucun rite.
+      ok('Critère 3 : aucune séance sur la période, aucun rite',
+        riteAAfficher(ath({sessions:[{date:J(200)}]}),N).raison==='inactif');
+      ok('Plus de 14 jours d\'arrêt : c\'est une reprise, pas un cycle',
+        riteAAfficher(ath({sessions:[{date:J(20)}]}),N).raison==='inactif');
+
+      // Critère : un bilan bimensuel la même semaine est RÉFÉRENCÉ, pas rejoué.
+      ok('Critère 4 : le bilan de la semaine est référencé, jamais dupliqué',(()=>{
+        const u=ath({bilans:[{type:'coaching',date:J(2)}]});
+        if(!riteBilanDeLaSemaine(u,N)) return false;
+        return riteBilanDeLaSemaine(ath({bilans:[{type:'coaching',date:J(20)}]}),N)===null;})());
+
+      // Critère : fermé sans réponse ⇒ aucune écriture hors la date du rite.
+      ok('Critère 5 : fermé sans répondre, seule la date est écrite',(()=>{
+        const u=ath({_woReminderDays:[1,3],_woReminderHour:19});
+        currentUser=u;
+        if(!riteAfficherSiBesoin()) return false;
+        if(u.rites) return false;                 // rien à l'affichage
+        window._riteJours=[0,1,2,3,4,5,6];
+        const ch=document.getElementById('rite-heure'); if(ch) ch.value='7';
+        fermerRite();
+        const cles=Object.keys(u.rites[0]).sort().join(',');
+        return u.rites.length===1&&cles==='cycle,date,reponseCoach'
+          &&JSON.stringify(u._woReminderDays)==='[1,3]'&&u._woReminderHour===19;})());
+
+      // Validé : les réglages vont dans les champs de rappel EXISTANTS.
+      ok('Validé : jours et heure écrits dans _woReminderDays/_woReminderHour',(()=>{
+        const u=ath({_woReminderDays:[1],_woReminderHour:19});
+        currentUser=u;
+        if(!riteAfficherSiBesoin()) return false;
+        window._riteJours=[4,0,2];
+        const ch=document.getElementById('rite-heure'); if(ch) ch.value='7';
+        validerRite();
+        return JSON.stringify(u._woReminderDays)==='[0,2,4]'&&u._woReminderHour===7
+          &&u.periodisation===undefined&&!('phase' in u.rites[0]);})());
+
+      ok('Le rite ne se tient qu\'une fois par cycle',(()=>{
+        const u=ath();
+        currentUser=u; riteAfficherSiBesoin(); fermerRite();
+        return riteAAfficher(u,N).raison==='deja_tenu'&&!riteAfficherSiBesoin();})());
+
+      currentUser=sauveU;
+      try{ closeModal(); }catch(e){}
     })();
 
     // ── Bloc douleur de la fiche client ──
