@@ -1565,6 +1565,12 @@ const COACH_PHOTO='icons/coach.jpg';
             <button class="ch-chip" data-filtre="attente" onclick="setFiltreClients('attente')">En attente d'inscription</button>
           </div>
           <div class="sub" id="ch-count" style="font-size:11px;letter-spacing:.5px"></div>
+          <!-- Colonne triable : urgence par defaut, taux a la demande. -->
+          <div style="display:flex;gap:6px;align-items:center">
+            <span style="font-size:9px;color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase">Trier</span>
+            <button class="ch-chip actif" data-tri="urgence" onclick="setTriClients('urgence');this.classList.add('actif');this.nextElementSibling.classList.remove('actif')">Urgence</button>
+            <button class="ch-chip" data-tri="taux" onclick="setTriClients('taux');this.classList.add('actif');this.previousElementSibling.classList.remove('actif')">Séances faites</button>
+          </div>
           <div class="sub" id="ch-sans-reponse" style="font-size:11px;letter-spacing:.5px;color:var(--orange)"></div>
           <button onclick="openDechargeGroupee()" class="btn btn-outline btn-sm" style="width:100%;margin:2px 0 0">Décharge groupée</button>
         </div>
@@ -1876,6 +1882,9 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
       <div style="display:flex;gap:10px;margin-bottom:16px">
         <div class="metric-box"><div class="metric-val" id="ccd-streak">0</div><div class="metric-label">Semaines</div></div>
+        <!-- Le taux de complétion, à côté de la série. Rempli par
+             openClientDetail via htmlTauxCompletion. -->
+        <div class="metric-box" id="ccd-taux"></div>
         <div class="metric-box"><div class="metric-val" id="ccd-sessions">0</div><div class="metric-label">Séances</div></div>
         <div class="metric-box"><div class="metric-val" id="ccd-weight">—</div><div class="metric-label">Poids</div></div>
       </div>
@@ -8097,7 +8106,7 @@ function santeBlocsPrives(user){
 }
 const _cacheSignaux=new Map();
 function _viderCacheSignaux(){ _cacheSignaux.clear(); }
-const SIGNAUX_VIDES=Object.freeze({douleur:false,douleurDiffuse:false,decrochage:false,
+const SIGNAUX_VIDES=Object.freeze({douleur:false,douleurDiffuse:false,decrochage:false,chuteAssiduite:false,
   plateauMuscle:false,sousMEV:false,volumeHaut:false,formeBasse:false,
   restrictionLongue:false,details:Object.freeze({})});
 
@@ -8130,7 +8139,7 @@ function signauxEntrainement(c,opts){
     if(!m) return ''; return String((m.on&&m.on.kcal)||'')+'/'+String((m.off&&m.off.kcal)||''); })();
   const cle=c.id+'|'+ss.length+'|'+(ss.length?tri[tri.length-1].date:0)+'|'+emp+'|'+_ph+'|'+_mk+(_complet?'|C':'');
   if(_cacheSignaux.has(cle)) return _cacheSignaux.get(cle);
-  const r={douleur:false,douleurDiffuse:false,decrochage:false,
+  const r={douleur:false,douleurDiffuse:false,decrochage:false,chuteAssiduite:false,
     plateauMuscle:false,sousMEV:false,volumeHaut:false,formeBasse:false,
     restrictionLongue:false,details:{}};
   // La restriction prolongée ne dépend pas des séances : elle se calcule ICI,
@@ -8205,6 +8214,17 @@ function signauxEntrainement(c,opts){
   // parcours complet de l'historique pour les athlètes déjà en tête.
   if(!_complet&&(r.douleur||r.douleurDiffuse||r.decrochage)){ _cacheSignaux.set(cle,r); return r; }
 
+  // CHUTE D ASSIDUITE. Le taux de completion ne declenche AUCUNE notification :
+  // il n alimente que ce signal-la, et seulement si la tendance perd plus de
+  // TC_TENDANCE_CHUTE points. Un taux bas mais STABLE ne remonte rien - c est
+  // une mesure, pas un jugement.
+  try{
+    const _tc=tauxCompletion(c,Date.now());
+    if(_tc&&_tc.interpretable&&_tc.tendance!=null&&_tc.tendance<-TC_TENDANCE_CHUTE){
+      r.chuteAssiduite=true;
+      r.details.chuteAssiduite={taux:_tc.taux,tendance:_tc.tendance,fenetre:_tc.fenetre};
+    }
+  }catch(e){}
   try{
     const mus=musclesEnPlateau(c);
     if(mus.length){
@@ -9183,7 +9203,7 @@ function urgencyScore(c){
   // échelle : elle est dérivée de ces signaux-là, elle appartient donc au même
   // rang. Lecture d'un champ déjà écrit, aucun calcul — ce tri passe sur tous
   // les athlètes du coach à chaque rendu de liste.
-  if((sg.plateauMuscle||sg.formeBasse||sg.sousMEV||sg.volumeHaut||sg.restrictionLongue
+  if((sg.plateauMuscle||sg.formeBasse||sg.sousMEV||sg.volumeHaut||sg.restrictionLongue||sg.chuteAssiduite
      ||propositionDechargeOuverte(c))&&!isAlertSnoozed('entrainement',c.id)) return 6;
   // Même priorité que « nouveau bilan » : les deux sont mutuellement exclusifs
   // (hasNewBilan exige au moins un bilan, neverStarted exige aucun), pas d'égalité possible.
@@ -10434,6 +10454,34 @@ function setFiltreClients(f){
   });
   renderClientList();
 }
+
+// PURE. Le taux tel qu il s affiche : un chiffre, une fleche, et la fenetre
+// ECRITE A COTE. Aucune couleur d alerte, aucun palier, aucun libelle
+// qualitatif - la fleche dit le sens, elle ne dit pas si c est bien.
+function htmlTauxCompletion(u,compact){
+  let r=null;
+  try{ r=tauxCompletion(u,Date.now()); }catch(e){}
+  if(!r) return '';
+  const val=tauxCompletionLib(r), fl=tauxCompletionFleche(r);
+  const gris=!r.interpretable;
+  if(compact) return `<span title="${escapeHtml(r.fenetre)}" style="font-size:11px;font-weight:800;
+    color:${gris?'var(--text-faint)':'#ddd'};white-space:nowrap">${escapeHtml(val)}`
+    +`${fl?' '+fl:''}</span>`;
+  return `<div style="text-align:center">
+    <div style="font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:22px;line-height:1;
+      color:${gris?'var(--text-faint)':'#fff'}">${escapeHtml(val)}<span style="font-size:14px;color:var(--sub)">${fl?' '+fl:''}</span></div>
+    <div style="font-size:9px;color:var(--sub);letter-spacing:1px;font-weight:800;text-transform:uppercase;margin-top:4px">Séances faites</div>
+    <div style="font-size:9px;color:var(--text-faint);margin-top:2px">${escapeHtml(r.fenetre)}</div>
+  </div>`;
+}
+// Tri du portefeuille. L urgence reste le tri PAR DEFAUT : le taux est une
+// mesure, pas une file d action.
+let _triClients='urgence';
+function setTriClients(t){ _triClients=(t==='taux')?'taux':'urgence'; renderClientList(); }
+function _triTaux(c){
+  let r=null; try{ r=tauxCompletion(c,Date.now()); }catch(e){}
+  return (r&&r.interpretable)?r.taux:-1;   // les non-interpretables en fin de liste
+}
 function renderClientList(clients){
   const el=document.getElementById('ch-clients-list');
   if(!el) return;
@@ -10449,7 +10497,8 @@ function renderClientList(clients){
   else if(_filtreClients==='pf-traiter') vus=vus.filter(c=>urgencyScore(c)>=PIL_SEUIL_TRAITER);
   else if(_filtreClients==='pf-decrochage') vus=vus.filter(c=>_pilEligibleSignaux(c)&&signauxEntrainement(c).decrochage);
   else if(_filtreClients==='pf-acces') vus=vus.filter(c=>_pilEligibleSignaux(c)&&_pilAccesExpire(c,Date.now()));
-  vus.sort((a,b)=>urgencyScore(b)-urgencyScore(a));
+  if(_triClients==='taux') vus.sort((a,b)=>_triTaux(b)-_triTaux(a));
+  else vus.sort((a,b)=>urgencyScore(b)-urgencyScore(a));
   // Bilans auxquels le coach n'a pas encore ecrit. « Sans reponse » et non
   // « non lus » : ouvrir ne compte plus.
   renderPilotage(tous);
@@ -11528,35 +11577,36 @@ function _ancienneteMediane(athletes,now){
 //
 // « tendance » vaut 'hausse' | 'stable' | 'baisse' — jamais un pourcentage de
 // progression, qui se lirait comme une projection.
+// DELEGUE a tauxCompletion. Cette fonction calculait son propre taux sur quatre
+// semaines, avec une regle differente : elle ecartait l athlete ENTIER s il
+// etait en pause, la ou tauxCompletion ecarte les SEMAINES suspendues. Deux
+// chiffres pour la meme question, sur deux ecrans. Il n en reste qu un.
 function _completionMoyenne(athletes,now){
   const l=Array.isArray(athletes)?athletes.filter(Boolean):[];
   if(l.length<ACT_MIN_ATHLETES) return null;
   const t=(now instanceof Date)?now.getTime():(typeof now==='number'?now:Date.now());
-  const fen=ACT_FENETRE_SEM*7*864e5;
-  const taux=(debut,fin)=>{
-    let faites=0,prevues=0;
+  const moy=(instant)=>{
+    let somme=0,n=0;
     for(const a of l){
-      if(_estEnPause(a)) continue;             // une pause ne pénalise personne
-      let p=0;
-      try{ p=Number(seancesPrevuesParSemaine(a))||0; }catch(e){}
-      if(!(p>0)) continue;
-      prevues+=p*ACT_FENETRE_SEM;
-      for(const s of _actSessions(a)) if(s.date>=debut&&s.date<fin) faites++;
+      let r=null;
+      try{ r=tauxCompletion(a,instant); }catch(e){}
+      if(r&&r.interpretable){ somme+=r.taux; n++; }
     }
-    return prevues>0?(faites/prevues):null;
+    return n?(somme/n):null;
   };
-  const recent=taux(t-fen,t);
+  const recent=moy(t);
   if(recent==null) return null;
-  const avant=taux(t-2*fen,t-fen);
+  const avant=moy(t-TC_JOURS*864e5);
   let tendance='stable';
   if(avant!=null){
     const ecart=recent-avant;
-    if(ecart>0.05) tendance='hausse';
-    else if(ecart<-0.05) tendance='baisse';
+    if(ecart>5) tendance='hausse';
+    else if(ecart<-5) tendance='baisse';
   }
-  return {taux:Math.round(recent*100),tendance:(avant==null?null:tendance),
-    semaines:ACT_FENETRE_SEM};
+  return {taux:Math.round(recent),tendance:(avant==null?null:tendance),
+    semaines:TC_SEMAINES};
 }
+
 
 // ── L'écran, quatre cartes, barres en CSS pur ─────────────────────────────
 // Aucune bibliothèque, aucun canevas : des <div> dont la hauteur est un
@@ -12250,6 +12300,10 @@ function openClientDetail(cid,_refresh){
     } else _ap.style.display='none';
   }
   document.getElementById('ccd-streak').textContent=streakSemaines(c)+'';
+  // Le taux se lit A COTE de la serie : deux mesures d assiduite, une seule
+  // lecture. Aucun palier, aucune couleur d alerte.
+  const _tcz=document.getElementById('ccd-taux');
+  if(_tcz) _tcz.innerHTML=htmlTauxCompletion(c,false);
   document.getElementById('ccd-sessions').textContent=(c.sessions||[]).length;
   const lb=c.bilans?.length?c.bilans[c.bilans.length-1]:null;
   document.getElementById('ccd-weight').textContent=lb&&getBW(lb)?getBW(lb)+'kg':'—';
@@ -20034,6 +20088,112 @@ function streakSemaines(u){
   if(!s||!u.lastSession) return s;
   return _streakPerime(u,Date.now()) ? 0 : s;
 }
+
+// ══════════════ TAUX DE COMPLÉTION — 4 SEMAINES GLISSANTES ═══════════════
+// Une MESURE, pas un jugement. Aucun palier, aucune médaille, aucun libellé
+// qualitatif, aucune couleur d'alerte : un pourcentage, une flèche, et la
+// fenêtre écrite à côté. Le chiffre ne déclenche aucune notification.
+//
+// Les semaines suspendues sortent du DÉNOMINATEUR : une pause déclarée ou un
+// drapeau rouge ne sont pas des échecs d'assiduité, et les compter comme tels
+// serait punir quelqu'un d'avoir dit qu'il allait mal.
+const TC_SEMAINES=4;
+const TC_JOURS=TC_SEMAINES*7;
+const TC_ANCIENNETE_MIN_J=21;     // rien avant trois semaines
+const TC_REPRISE_J=60;            // au-delà, c'est une reprise, pas un échec
+const TC_TENDANCE_CHUTE=25;       // points perdus au-delà desquels le signal 6
+const TC_FENETRE_LIB='4 dernières semaines';
+
+// PURE. Les bornes des périodes suspendues, en millisecondes.
+//
+// LA GROSSESSE N'EN FAIT PAS PARTIE, et c'est un choix. Le champ ne porte que
+// `declareLe` : aucune date de fin n'est conservée, même après l'accouchement.
+// L'utiliser comme borne de départ ferait fondre le dénominateur
+// indéfiniment. Elle rend donc le taux NON INTERPRÉTABLE (voir plus bas) —
+// « — » plutôt qu'un chiffre faux, et jamais un échec.
+function _tcSuspensions(u){
+  const out=[];
+  const p=u&&u.phase&&u.phase.pause;
+  if(p&&p.debut>0&&Number(p.jours)>0) out.push({a:p.debut,b:p.debut+Number(p.jours)*864e5});
+  const d=u&&u.drapeauRouge;
+  if(d&&d.date>0) out.push({a:d.date,b:Infinity});      // actif : il court encore
+  for(const h of ((u&&u.historiqueDrapeaux)||[]))
+    if(h&&h.date>0&&h.leve>0) out.push({a:h.date,b:h.leve});
+  return out;
+}
+// PURE. Une semaine [debut, fin[ est-elle suspendue ? Le moindre recouvrement
+// suffit : une semaine à moitié sous drapeau rouge n'est pas une semaine
+// d'entraînement normale.
+function _tcSemaineSuspendue(susp,debut,fin){
+  for(const s of susp) if(s.a<fin&&s.b>debut) return true;
+  return false;
+}
+function _tcSessions(u){
+  const l=(u&&u.sessions)||[];
+  return Array.isArray(l)?l.filter(s=>s&&typeof s.date==='number'&&s.date>0):[];
+}
+// PURE. Le taux sur une fenêtre, ou null si toutes les semaines sont suspendues.
+function _tcSurFenetre(u,quota,susp,fin){
+  let faites=0,semaines=0;
+  for(let i=TC_SEMAINES-1;i>=0;i--){
+    const b=fin-i*7*864e5, a=b-7*864e5;
+    if(_tcSemaineSuspendue(susp,a,b)) continue;         // hors dénominateur
+    semaines++;
+    for(const s of _tcSessions(u)) if(s.date>=a&&s.date<b) faites++;
+  }
+  if(!semaines) return null;
+  // BORNAGE STRICT : dépasser son quota ne donne pas 130 %.
+  return {taux:Math.min(100,Math.round(faites/(quota*semaines)*100)),semaines};
+}
+// PURE. {taux, tendance, fenetre, interpretable}.
+function tauxCompletion(u,now){
+  const t=(typeof now==='number')?now:Date.now();
+  const nul={taux:null,tendance:null,fenetre:TC_FENETRE_LIB,interpretable:false,raison:null};
+  if(!u) return Object.assign({},nul,{raison:'inconnu'});
+  // Programme sans AUCUNE séance active : seancesPrevuesParSemaine force le
+  // quota à 1, ce qui produirait un taux inventé. On ne dit rien plutôt.
+  const actives=((u.sessions_config)||[]).filter(s=>s&&s.active).length;
+  if(!actives) return Object.assign({},nul,{raison:'sans_programme'});
+  // Grossesse ou allaitement : voir _tcSuspensions. Pas d'échec, pas de
+  // chiffre — la période n'a pas de fin connue.
+  const g=u.grossesse&&u.grossesse.etat;
+  if(g==='enceinte'||g==='allaitement')
+    return Object.assign({},nul,{raison:'suspendu'});
+  // Moins de trois semaines d'ancienneté : rien à interpréter.
+  const cree=Number(u.createdAt)||0;
+  if(!cree||(t-cree)<TC_ANCIENNETE_MIN_J*864e5)
+    return Object.assign({},nul,{raison:'trop_recent'});
+  const ses=_tcSessions(u).slice().sort((a,b)=>a.date-b.date);
+  // Reprise : une longue absence suivie d'un retour. Afficher 0 % ferait
+  // porter à quelqu'un qui revient le poids des semaines où il n'était pas là.
+  const dansFenetre=ses.filter(s=>s.date>=t-TC_JOURS*864e5);
+  if(dansFenetre.length){
+    const avant=ses.filter(s=>s.date<dansFenetre[0].date);
+    if(avant.length&&(dansFenetre[0].date-avant[avant.length-1].date)>=TC_REPRISE_J*864e5)
+      return Object.assign({},nul,{raison:'reprise'});
+  }
+  const quota=Math.max(1,Number(seancesPrevuesParSemaine(u))||1);
+  const susp=_tcSuspensions(u);
+  const rec=_tcSurFenetre(u,quota,susp,t);
+  if(!rec) return Object.assign({},nul,{raison:'suspendu'});
+  const pre=_tcSurFenetre(u,quota,susp,t-TC_JOURS*864e5);
+  return {taux:rec.taux,tendance:pre?(rec.taux-pre.taux):null,
+    fenetre:TC_FENETRE_LIB,interpretable:true,raison:null,semaines:rec.semaines};
+}
+// PURE. Ce que l'écran affiche : un chiffre, ou un mot. JAMAIS un palier.
+function tauxCompletionLib(r){
+  if(!r||!r.interpretable){
+    if(r&&r.raison==='reprise') return 'reprise';
+    return '—';
+  }
+  return r.taux+' %';
+}
+function tauxCompletionFleche(r){
+  if(!r||!r.interpretable||r.tendance==null) return '';
+  if(r.tendance>=3) return '▲';
+  if(r.tendance<=-3) return '▼';
+  return '=';
+}
 function updateStreak(){
   const now=Date.now();
   // Même prédicat que l'affichage : la valeur stockée et la valeur montrée ne
@@ -24714,6 +24874,7 @@ function showProgressTab(tab,btn){
     c.innerHTML=`<div style="display:flex;gap:10px;margin-bottom:16px">
       <div class="metric-box"><div class="metric-val">${ss.length}</div><div class="metric-label">Total</div></div>
       <div class="metric-box"><div class="metric-val">${streakSemaines(currentUser)}</div><div class="metric-label">Semaines</div></div>
+        <div class="metric-box">${htmlTauxCompletion(currentUser,false)}</div>
       <div class="metric-box"><div class="metric-val">${ss.length?Math.round(ss.reduce((s,x)=>s+(x.duration||0),0)/ss.length):0}min</div><div class="metric-label">Durée</div></div>
     </div>
     ${_blocFormePerf}
