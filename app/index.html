@@ -1927,6 +1927,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="ccd-bilans"></div>
       <div id="ccd-volume"></div>
       <div id="ccd-plateaux"></div>
+      <div id="ccd-habitudes"></div>
       <div id="ccd-suspension"></div>
       <div id="ccd-douleur"></div>
       <div id="ccd-phase"></div>
@@ -2430,6 +2431,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="clh-prog-exercises" style="margin-bottom:14px"></div>
 
       <div id="clh-wo-reminder-row"></div>
+      <div id="clh-habitudes"></div>
       <div id="clh-notifs"></div>
 
       <!-- NUTRITION : le jour en haut, la semaine en bas, un seul cadre.
@@ -2820,14 +2822,10 @@ const COACH_PHOTO='icons/coach.jpg';
             </div>
             <input type="range" id="ps-fatigue" min="0" max="10" value="5" oninput="document.getElementById('ps-fatigue-val').textContent=this.value;renderFormeSeance()" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
           </div>
-          <!-- Intensité -->
-          <div class="ps-detail-item" style="display:none;background:var(--dark);border:1px solid var(--border);border-radius:3px;padding:12px 10px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-              <div style="font-size:var(--fs-xs);font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Intensité</div>
-              <div style="font-size:18px;font-weight:900;color:var(--red)" id="ps-intensite-val">5</div>
-            </div>
-            <input type="range" id="ps-intensite" min="0" max="10" value="5" oninput="document.getElementById('ps-intensite-val').textContent=this.value" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
-          </div>
+          <!-- F-61 : le curseur d'INTENSITÉ a été RETIRÉ. Il était écrit après
+               chaque séance et lu par rien, et il recoupait le RIR déjà saisi
+               série par série. On cesse de le demander ; les valeurs déjà
+               enregistrées restent dans les dossiers, rien n'est effacé. -->
           <!-- Satisfaction -->
           <div class="ps-detail-item" style="display:none;background:var(--dark);border:1px solid var(--border);border-radius:3px;padding:12px 10px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
@@ -8227,6 +8225,17 @@ function signauxEntrainement(c,opts){
       r.details.chuteAssiduite={taux:_tc.taux,tendance:_tc.tendance,fenetre:_tc.fenetre};
     }
   }catch(e){}
+  // ── Habitudes sous le seuil ──
+  // Un signal d'INTENDANCE, jamais de santé : il rejoint le niveau 6 et n'y
+  // bouge plus. Sans habitude assignée, il ne se lève pas — l'absence n'est
+  // pas un manquement.
+  try{
+    if(habSignalBas(c)){
+      r.habitudesBasses=true;
+      r.details.habitudesBasses={taux:habTauxGlobal(c,HAB_SIGNAL_JOURS),
+        jours:HAB_SIGNAL_JOURS,seuil:HAB_SIGNAL_SEUIL};
+    }
+  }catch(e){}
   try{
     const mus=musclesEnPlateau(c);
     if(mus.length){
@@ -9205,7 +9214,11 @@ function urgencyScore(c){
   // échelle : elle est dérivée de ces signaux-là, elle appartient donc au même
   // rang. Lecture d'un champ déjà écrit, aucun calcul — ce tri passe sur tous
   // les athlètes du coach à chaque rendu de liste.
+  // REGLE 4 : les habitudes entrent ICI et nulle part ailleurs. Un terme de
+  // plus dans une disjonction qui en comptait sept, au meme rang. La sante
+  // passe avant l intendance, et cocher une case est de l intendance.
   if((sg.plateauMuscle||sg.formeBasse||sg.sousMEV||sg.volumeHaut||sg.restrictionLongue||sg.chuteAssiduite
+     ||sg.habitudesBasses
      ||propositionDechargeOuverte(c))&&!isAlertSnoozed('entrainement',c.id)) return 6;
   // Même priorité que « nouveau bilan » : les deux sont mutuellement exclusifs
   // (hasNewBilan exige au moins un bilan, neverStarted exige aucun), pas d'égalité possible.
@@ -12503,6 +12516,7 @@ function openClientDetail(cid,_refresh){
   try{ renderPlateauxCoach(c); }catch(e){}
   try{ renderDouleurCoach(c); }catch(e){}
   try{ renderLeveeCoach(c); }catch(e){}
+  try{ renderHabitudesCoach(c); }catch(e){}
   // Chips de reponse au bilan : la zone n'existe qu'apres le rendu des
   // reponses, on la peuple donc ici et non a la construction du bloc.
   setTimeout(()=>{ try{ _renderQuickCommentChips('bilan'); }catch(e){} },0);
@@ -16767,6 +16781,7 @@ function loadClientHome(){
   renderEpingleAccueil();
   renderBandeauPhase();renderRelancePhase();renderCartePhase();
   renderSuspension();
+  renderHabitudes();
   renderNutriDots();renderNotifs();renderWoReminderCard();
   const _hasDepart=(currentUser.bilans||[]).some(b=>b.type==='depart');
   const _firstCard=document.getElementById('clh-first-bilan-card');
@@ -17024,6 +17039,19 @@ function renderNutriAnneaux(){
   }
   el.innerHTML=htmlAnneauxMacros(tot,m,'12px')+htmlLigneCalories(tot,m);
 }
+// PURE. Une ligne de sept pastilles, lundi -> dimanche.
+// `vals` : true (vert), false (rouge), null/undefined (neutre).
+// Extrait de renderNutriDots pour etre partage — pas reecrit : le balisage est
+// celui d origine, octet pour octet, seule la taille est parametrable.
+const _DOTS_JOURS=['L','M','M','J','V','S','D'];
+function _htmlLigneDots(vals,taille,libelles){
+  const t=taille>0?taille:28;
+  const lib=Array.isArray(libelles)?libelles:_DOTS_JOURS;
+  return (vals||[]).map((val,i)=>{
+    const bg=val===true?'var(--green)':val===false?'var(--red)':'var(--border)';
+    return `<div style="flex:1;text-align:center"><div style="width:${t}px;height:${t}px;border-radius:50%;background:${bg};margin:0 auto"></div><div style="font-size:var(--fs-xs);color:var(--sub);margin-top:3px">${lib[i]}</div></div>`;
+  }).join('');
+}
 function renderNutriDots(){
   renderNutriAnneaux();
   const today=new Date(),wk=new Date(today);
@@ -17033,11 +17061,11 @@ function renderNutriDots(){
   const days=['L','M','M','J','V','S','D'],nut=currentUser.nutrition||{};
   // Semaine courante (lundi → dimanche) — même source que _renderStrictDiet : nutrition.days[key].respected
   const weekKeys=days.map((_,i)=>{const dt=new Date(wk);dt.setDate(wk.getDate()+i);return localISODate(dt);});
-  document.getElementById('clh-nutri-dots').innerHTML=days.map((d,i)=>{
-    const val=nut.days?.[weekKeys[i]]?.respected;
-    const bg=val===true?'var(--green)':val===false?'var(--red)':'var(--border)';
-    return `<div style="flex:1;text-align:center"><div style="width:28px;height:28px;border-radius:50%;background:${bg};margin:0 auto"></div><div style="font-size:var(--fs-xs);color:var(--sub);margin-top:3px">${d}</div></div>`;
-  }).join('');
+  // Le balisage de la ligne est passe dans _htmlLigneDots, partage avec la
+  // vue hebdomadaire des habitudes. Meme pastille, meme ordre, meme code —
+  // deux rendus de la meme chose auraient diverge des la premiere retouche.
+  document.getElementById('clh-nutri-dots').innerHTML=
+    _htmlLigneDots(weekKeys.map(k=>nut.days?.[k]?.respected),28,days);
   const score=weekKeys.filter(k=>nut.days?.[k]?.respected===true).length;
   const scoreEl=document.getElementById('clh-nutri-score');
   scoreEl.textContent=score+'/7';
@@ -19133,7 +19161,7 @@ function finishWorkout(incomplete=false){
   // Le retour au calme n'a de sens qu'ici, une fois la dernière série faite.
   document.getElementById('wd-cooldown').innerHTML=_carteProtocole(woState&&woState.cooldown,'Fin de séance','var(--accent-blue)','wd-cooldown-body');
   // Reset sliders post-séance
-  ['fatigue','intensite','satisfaction','sensation','hydratation','motivation'].forEach(m=>{
+  ['fatigue','satisfaction','sensation','hydratation','motivation'].forEach(m=>{
     const el=document.getElementById('ps-'+m);const vl=document.getElementById('ps-'+m+'-val');
     if(el){el.value=5;}if(vl)vl.textContent='5';
   });
@@ -19803,15 +19831,17 @@ const FORME_ITEMS=Object.freeze([
   {cle:'motivation',lib:'motivation', inverse:false},
   {cle:'sensation', lib:'sensations', inverse:false}
 ]);
-// intensite, satisfaction et hydratation restent écrits à l'identique mais ne
-// sont pas exploités : le premier recoupe le RIR déjà saisi série par série, le
-// dernier est un auto-report sans usage décisionnel ici.
+// F-61 EST LIVRÉE : plus aucun curseur n'est collecté sans être rendu.
 //
-// L'hydratation est désormais RESTITUÉE ailleurs — hydratationMoyenne, écran
-// progression et fiche coach — mais elle n'entre toujours PAS dans l'indice.
-// La restituer et la faire peser sur un score sont deux choses différentes :
-// la première rend à l'athlète ce qu'il a saisi, la seconde ferait dépendre un
-// verdict d'un curseur qu'on déplace sans y penser en fin de séance.
+// L'hydratation et la satisfaction sont RESTITUÉES ailleurs —
+// hydratationMoyenne, satisfactionMoyenne, écran progression et fiche coach —
+// mais aucune des deux n'entre dans l'indice. La restituer et la faire peser
+// sur un score sont deux choses différentes : la première rend à l'athlète ce
+// qu'il a saisi, la seconde ferait dépendre un verdict d'un curseur qu'on
+// déplace sans y penser en fin de séance.
+//
+// L'INTENSITÉ, elle, a été retirée de l'écran : elle doublait le RIR saisi
+// série par série. Les dossiers qui la portent restent lisibles.
 
 // Curseur valide : un entier de 0 à 10. Les bornes sont celles du widget, pas
 // celles de la spécification d'origine qui annonçait 1 à 10.
@@ -19876,6 +19906,57 @@ function _htmlHydratation(user,jourEstOn){
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Hydratation</div>
     ${h?`<div style="font-size:12px;color:#ddd;line-height:1.6">${escapeHtml(phraseHydratation(h))}</div>`:''}
     ${b?`<div style="font-size:11px;color:var(--text-dim);line-height:1.6;margin-top:${h?'6px':'0'}">${escapeHtml(b)}</div>`:''}
+  </div>`;
+}
+
+// ══════════════ F-61 : SATISFACTION — RESTITUER CE QUI EST COLLECTÉ ═══════
+// Le curseur de satisfaction était écrit après chaque séance et lu par RIEN.
+// Trois ans de valeurs, jamais rendues. On le RESTITUE, exactement comme
+// l'hydratation avant lui : une moyenne, une fenêtre, et le rappel que c'est
+// déclaratif.
+//
+// IL N'ENTRE PAS DANS L'INDICE DE FORME, et c'est délibéré : restituer une
+// donnée et la faire peser sur un verdict sont deux choses différentes. Une
+// séance ratée mais satisfaisante n'est pas une bonne séance, et l'inverse non
+// plus. L'assertion qui épingle formeSeance reste vraie, mot pour mot.
+//
+// Le curseur d'INTENSITÉ, lui, est retiré : il recoupait le RIR déjà saisi
+// série par série. Restituer un doublon n'aurait fait qu'ajouter un chiffre de
+// plus à lire. Les valeurs déjà écrites restent dans les dossiers — on cesse
+// d'en demander, on n'efface rien.
+const SATIS_FENETRE_JOURS=28;
+const SATIS_MIN_SEANCES=4;        // en dessous, « moyenne » ne veut rien dire
+// PURE. Rend {moyenne, nSeances} ou null. Une séance sans la valeur est
+// EXCLUE, jamais comptée 0 : un curseur non touché n'est pas une déclaration
+// d'insatisfaction. Même règle que hydratationMoyenne.
+function satisfactionMoyenne(user,jours){
+  const fen=(jours>0?jours:SATIS_FENETRE_JOURS)*864e5;
+  const limite=Date.now()-fen;
+  const vals=[];
+  for(const s of ((user&&user.sessions)||[])){
+    if(!s||!s.date||s.date<limite) continue;
+    const v=_valForme(s.metrics&&s.metrics.satisfaction);
+    if(v==null) continue;
+    vals.push(v);
+  }
+  if(vals.length<SATIS_MIN_SEANCES) return null;
+  return {moyenne:Math.round(vals.reduce((a,b)=>a+b,0)/vals.length*10)/10,
+    nSeances:vals.length};
+}
+function phraseSatisfaction(s){
+  if(!s) return '';
+  return 'Satisfaction déclarée : '+String(s.moyenne).replace('.',',')+' / '+FORME_MAX
+    +' en moyenne sur '+s.nSeances+' séance'+(s.nSeances>1?'s':'')+'.';
+}
+// Aucune couleur, aucun palier, aucun jugement : une phrase et son registre.
+// On ne dit pas si 6/10 est bien ou mal — on ne le sait pas.
+function _htmlSatisfaction(user){
+  const s=satisfactionMoyenne(user);
+  if(!s) return '';
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:16px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Satisfaction des séances</div>
+    <div style="font-size:12px;color:#ddd;line-height:1.6">${escapeHtml(phraseSatisfaction(s))}</div>
+    <div style="font-size:10px;color:var(--text-faint);margin-top:6px;line-height:1.5">Déclaratif. N'entre pas dans l'indice de forme : une séance dure peut satisfaire, une séance facile peut décevoir.</div>
   </div>`;
 }
 // ── Sel sur sept jours ──────────────────────────────────────────────────────
@@ -20297,6 +20378,7 @@ function renderFormeCoach(c){
   try{ html=c?blocForme(c,true):''; }catch(e){ html=''; }
   // Second indicateur, jamais fondu dans le premier.
   try{ html+=c?blocEnergie(c,true):''; }catch(e){}
+  try{ html+=c?_htmlSatisfaction(c):''; }catch(e){}
   z.innerHTML=html;
 }
 
@@ -20317,7 +20399,6 @@ function savePostSession(versBilan){
   // que personne n'a rien répondu. Quand ils sont renseignés, ils partent au
   // même format qu'avant : rien à migrer, rien à relire autrement.
   if(_psDetailOuvert){
-    metrics.intensite=_lu('intensite');
     metrics.satisfaction=_lu('satisfaction');
     metrics.hydratation=_lu('hydratation');
   }
@@ -20405,6 +20486,183 @@ function streakSemaines(u){
 }
 
 
+
+// ══════════════ TROIS HABITUDES, UNE PASTILLE ═════════════════════════════
+// Trois comportements hors salle, un appui par jour, aucun écran nouveau.
+//
+// CE QUI N'EST PAS ASSIGNABLE, et pourquoi. Une habitude ne peut porter ni sur
+// un poids, ni sur une mesure corporelle, ni sur une restriction alimentaire.
+// Ce ne sont pas des habitudes, ce sont des données de santé — et le garde-fou
+// TCA du module nutrition ne les couvrirait pas ici : il surveille les apports
+// déclarés, pas une case cochée. « Perdre 2 kg » et « sauter le petit-déjeuner »
+// entreraient dans le dossier sans qu'aucun filet ne les voie passer.
+const HAB_MAX=3;
+const HAB_RETRO_JOURS=2;          // J-2 accepté, J-3 refusé
+const HAB_FENETRE_JOURS=28;       // le pourcentage affiché au coach
+const HAB_SIGNAL_JOURS=14;
+const HAB_SIGNAL_SEUIL=40;        // en dessous, une entrée de NIVEAU 6
+const HAB_LIBELLE_MAX=40;
+const HAB_CATALOGUE=Object.freeze([
+  {cle:'sommeil',    lib:'Dormir assez'},
+  {cle:'pas',        lib:'Atteindre mes pas'},
+  {cle:'hydratation',lib:'Boire régulièrement'},
+  {cle:'proteines',  lib:'Protéines à chaque repas'},
+  {cle:'mobilite',   lib:'Faire ma mobilité'},
+  {cle:'marche',     lib:'Marcher'},
+  {cle:'coucher',    lib:'Me coucher à heure fixe'}
+]);
+// Un poids, une mesure, une restriction. Les motifs sont larges à dessein :
+// en cas de doute on REFUSE, et le coach reformule. Le coût d'un refus est un
+// message ; le coût d'un faux négatif est une consigne de restriction inscrite
+// au dossier d'un athlète.
+const HAB_MOTIFS_INTERDITS=Object.freeze([
+  {re:/\b\d+\s*(kg|kilo|kilos|g|grammes?|lbs?|livres?)\b/i,          quoi:'un poids'},
+  {re:/\bpoids\b|\bpeser\b|\bpèse\b|\bpese\b|\bbalance\b|\bimc\b/i,  quoi:'un poids'},
+  {re:/\bmaigrir\b|\bmincir\b|\bs[ée]cher\b|\bperdre du (gras|ventre|poids)\b/i, quoi:'un poids'},
+  // Les motifs de MESURE passent avant le « perdre N » générique : « perdre
+  // 3 cm » est une mesure, pas un poids, et le refus doit nommer la bonne
+  // raison — un coach à qui on répond de travers reformule de travers.
+  {re:/\bmasse grasse\b|\btour de (taille|hanches?|bras|cuisses?)\b|\bmensurations?\b/i, quoi:'une mesure corporelle'},
+  {re:/\b\d+\s*(cm|centim[èe]tres?)\b/i,                             quoi:'une mesure corporelle'},
+  {re:/\bperdre\b\s*\d|\bprendre\b\s*\d/i,                           quoi:'un poids'},
+  {re:/\bsauter\b.*\b(repas|petit[- ]d[ée]jeuner|d[ée]jeuner|d[îi]ner|go[ûu]ter)\b/i, quoi:'une restriction alimentaire'},
+  {re:/\bje[ûu]ne\b|\bje[ûu]ner\b|\bjeune intermittent\b|\bfasting\b/i, quoi:'une restriction alimentaire'},
+  {re:/\b(ne pas|arr[êe]ter de|supprimer|[ée]liminer|bannir|interdire|se priver|priver)\b.*\b(manger|sucre|gras|glucides?|pain|f[ée]culents?|dessert|alcool)\b/i, quoi:'une restriction alimentaire'},
+  {re:/\bsans (sucre|gras|glucides?|f[ée]culents?|pain)\b|\bz[ée]ro (sucre|glucides?)\b/i, quoi:'une restriction alimentaire'},
+  {re:/\bd[ée]ficit\b|\brestriction\b|\bprivation\b|\bd[ée]tox\b/i,   quoi:'une restriction alimentaire'}
+]);
+// Sous grossesse déclarée, la barre monte : RIEN de nutritionnel en saisie
+// libre. Le catalogue reste ouvert — aucune de ses sept entrées n'est
+// restrictive — mais un libellé écrit à la main qui parle de nourriture est
+// refusé, parce qu'on ne peut pas garantir ce qu'il dira.
+const HAB_MOTIF_NUTRI=/\b(manger|repas|calorie|kcal|glucide|lipide|prot[ée]ine|sucre|gras|f[ée]culent|portion|assiette|di[èe]te|r[ée]gime|collation|grignot)/i;
+// PURE. Valide un libellé d'habitude. Rend {ok:true} ou {ok:false, raison}.
+// `duCatalogue` : une entrée de HAB_CATALOGUE est déjà relue — aucune des sept
+// n'est restrictive. La règle 9 vise la SAISIE LIBRE, dont on ne peut rien
+// garantir. Sans cette distinction, « Protéines à chaque repas » serait refusé
+// à une femme enceinte, alors que c'est précisément ce qu'on lui conseille.
+function habitudeLibelleValide(lib,porteur,duCatalogue){
+  const t=String(lib==null?'':lib).trim();
+  if(!t) return {ok:false,raison:'Donne un libellé.'};
+  if(t.length>HAB_LIBELLE_MAX)
+    return {ok:false,raison:'Quarante caractères au maximum ('+t.length+' saisis).'};
+  for(const m of HAB_MOTIFS_INTERDITS)
+    if(m.re.test(t)) return {ok:false,
+      raison:'Une habitude ne peut pas porter sur '+m.quoi+'. C\'est une donnée de santé, et elle n\'a pas sa place dans une case à cocher.'};
+  let enceinte=false;
+  try{ const g=porteur&&porteur.grossesse&&porteur.grossesse.etat;
+    enceinte=(g==='enceinte'||g==='allaitement'); }catch(e){}
+  if(enceinte&&!duCatalogue&&HAB_MOTIF_NUTRI.test(t))
+    return {ok:false,raison:'Grossesse ou allaitement déclarés : aucune habitude nutritionnelle écrite à la main. Passe par la liste.'};
+  return {ok:true};
+}
+// PURE.
+function habitudesDe(u){
+  const l=(u&&u.habitudes);
+  return Array.isArray(l)?l.filter(h=>h&&h.cle):[];
+}
+// ÉCRIT. PLAFOND DUR : le quatrième ajout est REFUSÉ, jamais un écrasement.
+// La fonction rend {ok, raison} — l'appelant affiche la raison, il ne devine
+// pas pourquoi rien ne s'est passé.
+function habitudeAjouter(u,cle,libelle){
+  if(!u) return {ok:false,raison:'Aucun athlète.'};
+  const k=String(cle||'').trim();
+  if(!k) return {ok:false,raison:'Clé manquante.'};
+  const l=habitudesDe(u);
+  if(l.some(h=>h.cle===k)) return {ok:false,raison:'Cette habitude est déjà assignée.'};
+  if(l.length>=HAB_MAX)
+    return {ok:false,raison:'Trois habitudes au maximum. Retires-en une avant d\'en ajouter une autre.'};
+  const cat=HAB_CATALOGUE.find(x=>x.cle===k);
+  const lib=cat?cat.lib:String(libelle||'').trim();
+  const v=habitudeLibelleValide(lib,u,!!cat);
+  if(!v.ok) return v;
+  u.habitudes=l.concat([{cle:k,libelle:lib}]);
+  return {ok:true};
+}
+// ÉCRIT. RÈGLE 8 : l'historique est CONSERVÉ. On retire la ligne, pas les
+// coches — l'athlète les a faites, elles lui appartiennent, et un coach qui
+// remet l'habitude un mois plus tard retrouve tout.
+function habitudeRetirer(u,cle){
+  if(!u) return false;
+  const l=habitudesDe(u);
+  const n=l.filter(h=>h.cle!==cle);
+  if(n.length===l.length) return false;
+  u.habitudes=n;
+  return true;
+}
+// PURE. RÈGLE 7 : rétroactif jusqu'à J-2, jamais le futur. La date locale fait
+// foi, via localISODate — pas l'UTC, qui décale la journée d'un athlète à
+// 23 h en hiver.
+function habJourValide(dateISO,now){
+  const t=(typeof now==='number')?now:Date.now();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(dateISO||''))) return false;
+  for(let i=0;i<=HAB_RETRO_JOURS;i++)
+    if(localISODate(new Date(t-i*864e5))===dateISO) return true;
+  return false;
+}
+// PURE.
+function habCoche(u,cle,dateISO){
+  const j=((u&&u.habitudesLog)||{})[dateISO];
+  return Array.isArray(j)&&j.indexOf(cle)>=0;
+}
+// ÉCRIT. Un appui bascule. AUCUNE notification n'est émise, ni à la coche ni à
+// l'absence de coche : une pastille grise ne réveille personne.
+function habBasculer(u,cle,dateISO,now){
+  if(!u||!habJourValide(dateISO,now)) return false;
+  if(!habitudesDe(u).some(h=>h.cle===cle)) return false;
+  if(!u.habitudesLog||typeof u.habitudesLog!=='object') u.habitudesLog={};
+  const j=Array.isArray(u.habitudesLog[dateISO])?u.habitudesLog[dateISO].slice():[];
+  const i=j.indexOf(cle);
+  if(i<0) j.push(cle); else j.splice(i,1);
+  if(j.length) u.habitudesLog[dateISO]=j; else delete u.habitudesLog[dateISO];
+  return true;
+}
+// PURE. RÈGLE 6 : une FENÊTRE GLISSANTE, jamais un compteur remis à zéro. Un
+// compteur qui retombe à zéro punit une journée manquée par un mois de perte ;
+// un pourcentage la dilue, ce qui est exactement ce qu'elle mérite.
+//
+// Le jour COURANT est exclu du dénominateur : à 8 h du matin, personne n'a
+// encore rien coché, et le compter ferait chuter le taux tous les matins.
+function habTaux(u,cle,jours,now){
+  const t=(typeof now==='number')?now:Date.now();
+  const n=(jours>0?jours:HAB_FENETRE_JOURS);
+  let faits=0,total=0;
+  for(let i=1;i<=n;i++){
+    const d=localISODate(new Date(t-i*864e5));
+    total++;
+    if(habCoche(u,cle,d)) faits++;
+  }
+  return total?Math.round(faits/total*100):null;
+}
+// PURE. Le taux toutes habitudes confondues, ou null s'il n'y en a aucune.
+function habTauxGlobal(u,jours,now){
+  const l=habitudesDe(u);
+  if(!l.length) return null;
+  const taux=l.map(h=>habTaux(u,h.cle,jours,now));
+  return Math.round(taux.reduce((a,b)=>a+b,0)/taux.length);
+}
+// PURE. Sept booléens, lundi → dimanche, pour la ligne de pastilles.
+function habSemaine(u,cle,now){
+  const t=(typeof now==='number')?now:Date.now();
+  const lundi=_lundiDe(new Date(t));
+  const out=[];
+  for(let i=0;i<7;i++){
+    const d=new Date(lundi); d.setDate(lundi.getDate()+i);
+    const iso=localISODate(d);
+    out.push(d.getTime()>t?null:habCoche(u,cle,iso));
+  }
+  return out;
+}
+// PURE. Le signal coach. RÈGLE 4 : il n'ira JAMAIS au-dessus du niveau 6 — il
+// rejoint la disjonction existante, au même rang que le plateau et la forme
+// basse. La santé passe avant l'intendance, et une habitude est de
+// l'intendance.
+function habSignalBas(u,now){
+  const l=habitudesDe(u);
+  if(!l.length) return false;
+  const g=habTauxGlobal(u,HAB_SIGNAL_JOURS,now);
+  return g!=null&&g<HAB_SIGNAL_SEUIL;
+}
 // ══════════════ COULOIR DE RETOUR ═════════════════════════════════════════
 // Une sortie au dispositif de détection : suspendre sans punir, puis rouvrir
 // un chemin. RepCore ne décide JAMAIS de la levée — elle appartient au coach.
@@ -24104,6 +24362,132 @@ function coachLeverDrapeau(quoi){
   toastEcriture(ok,'Pause levée','la levée est');
   return true;
 }
+
+// ── La ligne de pastilles, côté athlète ────────────────────────────────────
+// AUCUN ÉCRAN NOUVEAU, aucun formulaire : une ligne sur l'accueil, un appui
+// par habitude. RÈGLE 2 : sans assignation, la ligne n'est pas rendue du tout
+// — pas de cadre vide, pas d'invitation à en créer.
+function htmlHabitudes(u){
+  const l=habitudesDe(u);
+  if(!l.length) return '';
+  const auj=localISODate(new Date());
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:10px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">
+      <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Aujourd'hui</span>
+      <span style="font-size:10px;color:var(--text-faint)">un appui, c'est tout</span>
+    </div>
+    <div style="display:flex;gap:8px">
+      ${l.map(h=>{
+        const on=habCoche(u,h.cle,auj);
+        return `<button type="button" onclick="habAppui('${escapeHtml(h.cle)}')"
+          aria-pressed="${on?'true':'false'}"
+          style="flex:1;min-width:0;min-height:44px;border-radius:10px;cursor:pointer;padding:8px 6px;
+            font-family:Montserrat,sans-serif;font-size:10.5px;font-weight:800;line-height:1.35;
+            background:${on?'rgba(34,197,94,.13)':'#111'};border:1px solid ${on?'var(--green)':'#2e2e2e'};
+            color:${on?'#fff':'var(--sub)'}">
+          <span style="display:block;font-size:15px;margin-bottom:2px">${on?'●':'○'}</span>
+          ${escapeHtml(h.libelle||h.cle)}
+        </button>`;}).join('')}
+    </div>
+    ${l.map(h=>_htmlHabSemaine(u,h)).join('')}
+  </div>`;
+}
+// La vue hebdomadaire L→D. Elle emprunte le rendu de renderNutriDots — même
+// pastille, même ordre, même vocabulaire visuel — via le fragment partagé
+// _htmlLigneDots. renderNutriDots n'est PAS réécrite : elle délègue désormais
+// son propre balisage au même fragment, et garde son élément, sa source de
+// données et son score.
+function _htmlHabSemaine(u,h){
+  const sem=habSemaine(u,h.cle);
+  const n=sem.filter(x=>x===true).length;
+  return `<div style="margin-top:11px;padding-top:10px;border-top:1px solid rgba(255,255,255,.05)">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:5px">
+      <span style="font-size:10.5px;color:var(--sub);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(h.libelle||h.cle)}</span>
+      <span style="font-size:10.5px;color:var(--text-faint);flex-shrink:0">${n}/7</span>
+    </div>
+    <div style="display:flex;gap:6px">${_htmlLigneDots(sem,18)}</div>
+  </div>`;
+}
+function habAppui(cle){
+  const auj=localISODate(new Date());
+  if(!habBasculer(currentUser,cle,auj)) return false;
+  saveUser();
+  renderHabitudes();
+  return true;
+}
+function renderHabitudes(){
+  const z=document.getElementById('clh-habitudes');
+  if(!z) return;
+  let h=''; try{ h=htmlHabitudes(currentUser); }catch(e){ h=''; }
+  z.innerHTML=h;
+}
+
+// ── Côté coach : la sélection, et le pourcentage ───────────────────────────
+function htmlHabitudesCoach(c){
+  const l=habitudesDe(c);
+  const g=habTauxGlobal(c);
+  const dispo=HAB_CATALOGUE.filter(x=>!l.some(h=>h.cle===x.cle));
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:16px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
+      <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Habitudes</span>
+      <span style="font-size:10px;color:var(--text-faint)">${l.length}/${HAB_MAX}</span>
+    </div>
+    ${l.length
+      ? l.map(h=>`<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px solid rgba(255,255,255,.05)">
+          <span style="flex:1;min-width:0;font-size:12px;color:#ddd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(h.libelle||h.cle)}</span>
+          <span style="font-size:12px;font-weight:800;color:#fff;flex-shrink:0">${habTaux(c,h.cle)}&nbsp;%</span>
+          <button onclick="habCoachRetirer('${escapeHtml(h.cle)}')" aria-label="Retirer"
+            style="min-width:44px;min-height:44px;background:none;border:none;color:var(--sub);font-size:17px;cursor:pointer;flex-shrink:0">×</button>
+        </div>`).join('')
+      : '<div style="font-size:11.5px;color:var(--text-dim);line-height:1.6">Aucune habitude assignée. Rien ne s\'affiche chez l\'athlète tant que tu n\'en poses pas.</div>'}
+    ${g!=null?`<div style="font-size:11px;color:var(--sub);line-height:1.6;margin-top:9px;padding-top:9px;border-top:1px solid var(--border)">Moyenne sur ${HAB_FENETRE_JOURS} jours : ${g}&nbsp;%. Fenêtre glissante, le jour en cours n'est pas compté.</div>`:''}
+    ${l.length>=HAB_MAX
+      ? '<div style="font-size:11px;color:var(--text-faint);line-height:1.6;margin-top:9px">Trois au maximum. Retires-en une pour en ajouter une autre.</div>'
+      : `<div style="margin-top:10px">
+          <select id="hab-cat" style="width:100%;margin-bottom:7px">
+            <option value="">— choisir dans la liste —</option>
+            ${dispo.map(x=>`<option value="${x.cle}">${escapeHtml(x.lib)}</option>`).join('')}
+          </select>
+          <input id="hab-libre" maxlength="${HAB_LIBELLE_MAX}" placeholder="ou saisis-en une (${HAB_LIBELLE_MAX} caractères max)" style="width:100%;box-sizing:border-box">
+          <button class="btn btn-outline btn-sm" style="width:100%;margin-top:7px" onclick="habCoachAjouter()">Ajouter</button>
+        </div>`}
+    <div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-top:9px">Ni poids, ni mesure, ni restriction alimentaire : ce sont des données de santé, elles ne se cochent pas.</div>
+  </div>`;
+}
+function renderHabitudesCoach(c){
+  const z=document.getElementById('ccd-habitudes');
+  if(!z) return;
+  let h=''; try{ h=c?htmlHabitudesCoach(c):''; }catch(e){ h=''; }
+  z.innerHTML=h;
+}
+function habCoachAjouter(){
+  const c=getOwnedClient(currentClientId);
+  if(!c) return false;
+  const cat=(document.getElementById('hab-cat')||{}).value||'';
+  const libre=((document.getElementById('hab-libre')||{}).value||'').trim();
+  if(!cat&&!libre) return toast('Choisis une habitude ou saisis-en une','var(--orange)');
+  // Le libellé libre porte sa propre clé, dérivée du texte : deux habitudes
+  // écrites pareil sont la même habitude, et l'historique suit.
+  const cle=cat||('libre-'+exKey(libre).toLowerCase().replace(/ /g,'-').slice(0,24));
+  const r=habitudeAjouter(c,cle,libre);
+  if(!r.ok) return toast(r.raison,'var(--orange)');
+  const ok=saveUser();
+  try{ CLOUD.pushOne(c.email,c); }catch(e){}
+  renderHabitudesCoach(c);
+  toastEcriture(ok,'Habitude ajoutée','l\'habitude est');
+  return true;
+}
+function habCoachRetirer(cle){
+  const c=getOwnedClient(currentClientId);
+  if(!c) return false;
+  if(!confirm('Retirer cette habitude ? Les coches déjà faites sont conservées.')) return false;
+  if(!habitudeRetirer(c,cle)) return false;
+  const ok=saveUser();
+  try{ CLOUD.pushOne(c.email,c); }catch(e){}
+  renderHabitudesCoach(c);
+  toastEcriture(ok,'Habitude retirée','le retrait est');
+  return true;
+}
 function renderWoReminderCard(){
   const el=document.getElementById('clh-wo-reminder-row');if(!el)return;
   const u=currentUser;
@@ -25478,6 +25862,9 @@ function showProgressTab(tab,btn){
     let _blocFormePerf='';
     try{ _blocFormePerf=blocForme(currentUser,false); }catch(e){}
     try{ _blocFormePerf+=blocEnergie(currentUser,false); }catch(e){}
+    // F-61 : la satisfaction est RENDUE. Encadre distinct, comme l'energie :
+    // la fondre dans la forme laisserait croire qu'elle pese sur l'indice.
+    try{ _blocFormePerf+=_htmlSatisfaction(currentUser); }catch(e){}
     let _lst=[];
     try{ _lst=_listeEtats(currentUser); }catch(e){ _lst=[]; }
     const _jug=_lst.filter(x=>x.etat!=='insuffisant');
@@ -51333,8 +51720,42 @@ function testExercices(){
        &&Math.abs(formeSeance(_fS('abc',4,5))-4.5)<1e-9,String(formeSeance(_fS('abc',4,5))));
     ok('Valeur hors bornes ignorée',
        formeSeance(_fS(99,4,5))!=null&&Math.abs(formeSeance(_fS(99,4,5))-4.5)<1e-9);
-    ok('Les trois curseurs non exploités n\'entrent pas dans le calcul',
+    // Restituées ailleurs, mais TOUJOURS hors de l'indice : c'est le point de
+    // F-61 et il ne bouge pas. Rendre une donnée n'est pas la faire peser.
+    ok('Les curseurs restitués hors indice n\'entrent pas dans le calcul',
        formeSeance(_fS(8,4,5))===formeSeance(_fS(8,4,5,{intensite:'9',satisfaction:'1',hydratation:'0'})));
+    // F-61 : plus AUCUN champ collecté sans être rendu. La liste des six est
+    // confrontée à ses consommateurs réels, pas à une intention.
+    ok('F-61 : les six métriques historiques sont toutes consommées ou retirées',(()=>{
+      const u={sessions:Array.from({length:6},(_,i)=>({id:'f'+i,date:Date.now()-i*864e5,
+        metrics:{fatigue:'5',motivation:'5',sensation:'5',hydratation:'6',satisfaction:'7'}}))};
+      const consomme={
+        fatigue:formeSeance(u.sessions[0])!=null,
+        motivation:formeSeance(u.sessions[0])!=null,
+        sensation:formeSeance(u.sessions[0])!=null,
+        hydratation:hydratationMoyenne(u)!=null,
+        satisfaction:satisfactionMoyenne(u)!=null,
+        intensite:!document.getElementById('ps-intensite')};   // retirée = plus collectée
+      const orphelines=Object.keys(consomme).filter(k=>!consomme[k]);
+      return orphelines.length===0?true:_echec('orphelines : '+orphelines.join(', '));})());
+    ok('F-61 : la satisfaction est RENDUE à l\'athlète et au coach',(()=>{
+      const u={sessions:Array.from({length:5},(_,i)=>({id:'s'+i,date:Date.now()-i*864e5,
+        metrics:{satisfaction:'7'}}))};
+      const h=_htmlSatisfaction(u);
+      if(h==='') return _echec('aucun bloc rendu');
+      if(!/7 \/ 10/.test(h.replace(/<[^>]*>/g,' '))) return _echec('la moyenne n\'apparaît pas');
+      // Aucun jugement : ni palier, ni couleur d'alerte, ni conseil.
+      const txt=h.replace(/<[^>]*>/g,' ');
+      return !/bien|mauvais|faible|excellent|attention|améliore/i.test(txt)
+        ?true:_echec('jugement dans le texte');})());
+    ok('Moins de quatre séances : aucune moyenne de satisfaction',
+       satisfactionMoyenne({sessions:[{id:'a',date:Date.now(),metrics:{satisfaction:'7'}}]})===null);
+    ok('Un curseur non touché n\'est pas compté zéro',(()=>{
+      const u={sessions:Array.from({length:5},(_,i)=>({id:'z'+i,date:Date.now()-i*864e5,
+        metrics:i<4?{satisfaction:'8'}:{}}))};
+      const r=satisfactionMoyenne(u);
+      return r&&r.nSeances===4&&r.moyenne===8
+        ?true:_echec(JSON.stringify(r));})());
 
     // ── base et écart ──
     const _fU=(vals)=>({email:'fo@t.fr',sessions:vals.map((v,i)=>{
@@ -51424,9 +51845,14 @@ function testExercices(){
     ok('Base récente non signalée',baseFormeDatee(_fU([6,6,6,6,6,6].map(_fV)))===false);
 
     // ── non-régression : savePostSession écrit toujours les six champs ──
-    ok('Les six curseurs existent toujours dans l\'écran',
-       ['fatigue','intensite','satisfaction','sensation','hydratation','motivation']
+    // F-61 : le curseur d'INTENSITÉ a été retiré — il était écrit et lu par
+    // rien, et doublait le RIR. L'assertion a suivi : cinq curseurs, et une
+    // vérification EXPLICITE que le sixième n'est plus demandé.
+    ok('Les cinq curseurs restants existent dans l\'écran',
+       ['fatigue','satisfaction','sensation','hydratation','motivation']
          .every(m=>document.getElementById('ps-'+m)));
+    ok('F-61 : le curseur d\'intensité n\'est plus demandé',
+       !document.getElementById('ps-intensite'));
     ok('Une séance enregistrée avant la livraison reste lisible',
        formeSeance({id:'old',date:1,metrics:{fatigue:'5',intensite:'5',satisfaction:'5',
          sensation:'5',hydratation:'5',motivation:'5',steps:'8000'}})===5);
@@ -51477,8 +51903,10 @@ function testExercices(){
 
     // ── Écriture conditionnelle des trois curseurs secondaires ──
     ok('Le repli est fermé par défaut',_psDetailOuvert===false);
-    ok('Les trois curseurs secondaires sont bien marqués',
-       document.querySelectorAll('.ps-detail-item').length===3,
+    // F-61 : l'intensité a quitté l'écran, il reste DEUX curseurs repliés —
+    // satisfaction et hydratation, tous deux désormais restitués ailleurs.
+    ok('Les deux curseurs secondaires restants sont bien marqués',
+       document.querySelectorAll('.ps-detail-item').length===2,
        String(document.querySelectorAll('.ps-detail-item').length));
     ok('Le bouton de dépliage existe',!!document.getElementById('ps-detail-btn'));
     // ══════════════ SUIVI DU POIDS ══════════════
@@ -55827,6 +56255,106 @@ function testExercices(){
         streakSemaines({streak:5,lastSession:J(30),sessions_config:cfg(3)})===0);
       ok('streakSemaines rend la valeur stockee quand elle tient',
         streakSemaines({streak:5,lastSession:J(2),sessions_config:cfg(3)})===5);
+    })();
+
+    // ── Trois habitudes : les cinq critères d'acceptation ──
+    (function(){
+      const sauveU=currentUser;
+      const N=Date.now();
+      const iso=n=>localISODate(new Date(N-n*864e5));
+
+      // Critère 1 : la quatrième est refusée, les trois premières intactes.
+      ok('Critère 1 : la 4e habitude est refusée, les 3 premières intactes',(()=>{
+        const u={};
+        if(!habitudeAjouter(u,'sommeil').ok) return _echec('la 1re a échoué');
+        habitudeAjouter(u,'pas'); habitudeAjouter(u,'mobilite');
+        const r=habitudeAjouter(u,'marche');
+        if(r.ok) return _echec('la 4e est passée');
+        if(!/trois/i.test(r.raison)) return _echec('refus muet : '+r.raison);
+        return habitudesDe(u).map(h=>h.cle).join(',')==='sommeil,pas,mobilite'
+          ?true:_echec('les 3 ont bougé : '+habitudesDe(u).map(h=>h.cle).join(','));})());
+
+      // Critère 2 : sans habitude, aucune ligne et aucun nœud.
+      ok('Critère 2 : aucune habitude, aucune ligne rendue et aucun nœud écrit',(()=>{
+        const u={};
+        if(htmlHabitudes(u)!=='') return _echec('une ligne est rendue');
+        return (u.habitudes===undefined&&u.habitudesLog===undefined)
+          ?true:_echec('un nœud a été écrit');})());
+
+      // Critère 3 : le garde-fou santé, à la création.
+      ok('Critère 3 : « perdre 2 kg » et « sauter le petit-déjeuner » sont refusés',(()=>{
+        const a=habitudeLibelleValide('perdre 2 kg',{});
+        const b=habitudeLibelleValide('sauter le petit-déjeuner',{});
+        if(a.ok) return _echec('« perdre 2 kg » accepté');
+        if(b.ok) return _echec('« sauter le petit-déjeuner » accepté');
+        if(a.raison.indexOf('poids')<0) return _echec('mauvais motif : '+a.raison);
+        if(b.raison.indexOf('restriction')<0) return _echec('mauvais motif : '+b.raison);
+        // Et rien n'est écrit au dossier.
+        const u={};
+        habitudeAjouter(u,'libre-x','perdre 2 kg');
+        return habitudesDe(u).length===0?true:_echec('écrit malgré le refus');})());
+      ok('Une habitude ordinaire reste acceptée',
+        habitudeLibelleValide('Marcher 30 minutes',{}).ok===true);
+
+      // Critère 4 : J−3 refusée, J−2 acceptée.
+      ok('Critère 4 : coche à J−3 refusée, à J−2 acceptée',(()=>{
+        const u={habitudes:[{cle:'sommeil',libelle:'Dormir assez'}]};
+        if(habBasculer(u,'sommeil',iso(3),N)) return _echec('J−3 acceptée');
+        if(u.habitudesLog) return _echec('J−3 a écrit un nœud');
+        if(!habBasculer(u,'sommeil',iso(2),N)) return _echec('J−2 refusée');
+        return habCoche(u,'sommeil',iso(2))?true:_echec('J−2 non enregistrée');})());
+
+      // Critère 5 : 30 % sur 14 jours → niveau ≤ 6, zéro notification.
+      ok('Critère 5 : taux bas sur 14 j → une entrée de niveau 6 au plus',(()=>{
+        const u={id:'hb1',email:'hb1@t.fr',createdAt:N-90*864e5,
+          habitudes:[{cle:'sommeil',libelle:'Dormir assez'}],habitudesLog:{},
+          sessions:[{date:N-2*864e5,sets:10,setsPlanned:10}],
+          bilans:[{type:'depart',date:N-3*864e5,reponseCoach:'ok',reponseDate:1,reponseVue:true}]};
+        for(let i=1;i<=4;i++) u.habitudesLog[iso(i)]=['sommeil'];   // 4/14 = 29 %
+        if(!habSignalBas(u,N)) return _echec('le signal ne se lève pas');
+        const sg=signauxEntrainement(u,{force:true});
+        if(!sg.habitudesBasses) return _echec('signauxEntrainement ignore les habitudes');
+        const sauve=currentUser;
+        currentUser={id:'c',email:'c@t.fr',role:'coach',seenBilans:{'hb1@t.fr':N},alertStatus:{}};
+        const n=urgencyScore(u);
+        currentUser=sauve;
+        // RÈGLE 4 : jamais au-dessus de 6.
+        return n<=6?true:_echec('niveau '+n);})());
+      ok('Règle 3 : aucune notification n\'est émise pour une pastille',(()=>{
+        const src=String(habBasculer)+String(htmlHabitudes)+String(habSignalBas);
+        return !/Notification|showNotification|periodicSync/.test(src)
+          ?true:_echec('une notification a été trouvée');})());
+
+      // Règle 8 : historique conservé.
+      ok('Règle 8 : habitude retirée, historique conservé et ligne masquée',(()=>{
+        const u={habitudes:[{cle:'sommeil',libelle:'Dormir assez'}],
+          habitudesLog:{[iso(1)]:['sommeil']}};
+        habitudeRetirer(u,'sommeil');
+        if(habitudesDe(u).length) return _echec('la ligne subsiste');
+        if(htmlHabitudes(u)!=='') return _echec('elle s\'affiche encore');
+        return (u.habitudesLog[iso(1)]||[]).indexOf('sommeil')>=0
+          ?true:_echec('l\'historique a été effacé');})());
+
+      // Règle 6 : fenêtre glissante, jamais un compteur.
+      ok('Règle 6 : le jour en cours est hors du dénominateur',(()=>{
+        const u={habitudes:[{cle:'a',libelle:'A'}],habitudesLog:{}};
+        for(let i=1;i<=28;i++) u.habitudesLog[iso(i)]=['a'];
+        return habTaux(u,'a',28,N)===100
+          ?true:_echec(habTaux(u,'a',28,N)+' % — le jour en cours est compté');})());
+
+      // Réutilisation : renderNutriDots n'a pas été réécrite.
+      ok('renderNutriDots délègue son balisage sans changer de comportement',(()=>{
+        const src=String(renderNutriDots);
+        if(!/_htmlLigneDots/.test(src)) return _echec('la délégation n\'est pas là');
+        if(!/clh-nutri-dots/.test(src)) return _echec('l\'élément a changé');
+        if(!/respected/.test(src)) return _echec('la source de données a changé');
+        return /clh-nutri-score/.test(src)?true:_echec('le score a disparu');})());
+      ok('La ligne de pastilles rend bien sept jours',(()=>{
+        const h=_htmlLigneDots([true,false,null,true,true,false,null],28);
+        return (h.match(/border-radius:50%/g)||[]).length===7
+          ?true:_echec((h.match(/border-radius:50%/g)||[]).length+' pastilles');})());
+
+      currentUser=sauveU;
     })();
 
     // ── Couloir de retour : les cinq criteres d'acceptation ──
