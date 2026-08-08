@@ -1927,6 +1927,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="ccd-bilans"></div>
       <div id="ccd-volume"></div>
       <div id="ccd-plateaux"></div>
+      <div id="ccd-suspension"></div>
       <div id="ccd-douleur"></div>
       <div id="ccd-phase"></div>
       <div id="ccd-forme"></div>
@@ -2424,6 +2425,7 @@ const COACH_PHOTO='icons/coach.jpg';
            lot 5 de la suite de tests pose qu on DESACTIVE une fonctionnalite
            au lieu de l effacer tant qu on ne peut pas prouver que plus
            personne ne s en sert. Seules les portes d entree partent. -->
+      <div id="clh-suspension"></div>
       <!-- EXERCICES DU PROGRAMME (inline dans Accueil) -->
       <div id="clh-prog-exercises" style="margin-bottom:14px"></div>
 
@@ -12500,6 +12502,7 @@ function openClientDetail(cid,_refresh){
   try{ renderVolumeCoach(c); }catch(e){}
   try{ renderPlateauxCoach(c); }catch(e){}
   try{ renderDouleurCoach(c); }catch(e){}
+  try{ renderLeveeCoach(c); }catch(e){}
   // Chips de reponse au bilan : la zone n'existe qu'apres le rendu des
   // reponses, on la peuple donc ici et non a la construction du bloc.
   setTimeout(()=>{ try{ _renderQuickCommentChips('bilan'); }catch(e){} },0);
@@ -16720,6 +16723,12 @@ function phraseDuJour(d){
 }
 function loadClientHome(){
   go('s-client-home');
+  // COULOIR DE RETOUR. La synchronisation vient AVANT les rappels : elle
+  // décide s'ils ont le droit de partir. Elle n'écrit que si l'état a changé,
+  // et re-désarme la copie du service worker dans ce cas.
+  try{
+    if(suspensionSynchroniser(currentUser)){ saveUser(); scheduleWoNotif(); }
+  }catch(e){}
   // Vérification rappel bilan (samedi toutes les 2 semaines, 7h)
   setTimeout(checkBilanNotifToday, 800);
   setTimeout(checkWoReminderToday, 1100);
@@ -16757,6 +16766,7 @@ function loadClientHome(){
   renderDouleurAthlete();
   renderEpingleAccueil();
   renderBandeauPhase();renderRelancePhase();renderCartePhase();
+  renderSuspension();
   renderNutriDots();renderNotifs();renderWoReminderCard();
   const _hasDepart=(currentUser.bilans||[]).some(b=>b.type==='depart');
   const _firstCard=document.getElementById('clh-first-bilan-card');
@@ -18114,7 +18124,9 @@ function launchWorkout(sessConfig,slotIdx){
     // valent décharge. Sans cette seconde branche, une semaine prévue en
     // décharge n'allumait pas le bandeau et ses séances restaient comptées
     // dans la détection de plateau.
-    deload:!!sessConfig.deload||semaineEstDecharge(currentUser),
+    // RETOUR DE SUSPENSION : proposition, decochable. Elle ne touche pas
+    // sessions_config, qui appartient au coach.
+    deload:!!sessConfig.deload||semaineEstDecharge(currentUser)||repriseDeloadPropose(currentUser),
     // Une demande du coach vaut case cochée d'avance. Amorcée ICI et non à
     // chaque rendu : sans quoi un décochage serait réécrit à la seconde
     // suivante et l'athlète n'aurait pas la main.
@@ -18451,6 +18463,7 @@ function renderWoEx(){
 
   document.getElementById('wo-content').innerHTML=`
     <div class="anim-in">
+      ${(()=>{ try{ return htmlRepriseSeance(currentUser); }catch(e){ return ''; } })()}
       ${woState.deload?`<div style="display:flex;align-items:center;gap:9px;background:var(--info-bg);border:1px solid var(--info-border);border-radius:10px;padding:10px 13px;margin-bottom:12px">
         <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--info);flex-shrink:0">DÉCHARGE</span>
         <span style="font-size:11px;color:#bbb;line-height:1.5">Semaine allégée voulue par ton coach. Elle ne comptera pas comme un recul.</span>
@@ -19087,7 +19100,19 @@ function finishWorkout(incomplete=false){
   _viderCachePlateau();
   _viderCacheSignaux();
   _viderCacheVolume();
-  updateStreak();saveUser();
+  // RÈGLE 7 : la séance est ENREGISTRÉE quoi qu'il arrive. On marque seulement
+  // qu'elle a eu lieu hors couloir, pour que rien ne la confonde plus tard
+  // avec une séance ordinaire. L'app ne l'a pas empêchée et ne l'efface pas.
+  try{ if(suspensionEtat(currentUser).actif) sess.horsSuspension=true; }catch(e){}
+  // La séance de retour consomme la reprise : le bandeau ne s'installe pas.
+  if(currentUser._reprise) delete currentUser._reprise;
+  updateStreak();
+  // La détection tourne APRÈS la séance : trois séances douloureuses de suite
+  // se referment ici, pas au prochain lancement de l'app.
+  try{
+    if(suspensionSynchroniser(currentUser)) scheduleWoNotif();
+  }catch(e){}
+  saveUser();
   document.getElementById('wd-time').textContent=mins+'min';
   // « 5/12 » plutôt que « 5 » : l'écart devient lisible au lieu d'être noyé.
   // Même formatage que la fiche coach, via fmtSeries — les deux écrans parlent
@@ -20353,18 +20378,180 @@ function ecartNormalJours(u){
 // fois par semaine ne doit pas être jugé comme celui qui s'entraîne cinq fois.
 function _streakPerime(u,now){
   if(!u||!u.lastSession) return false;
-  const jours=Math.floor((now-u.lastSession)/864e5);
+  // UNE SUSPENSION N'EST PAS UNE ABSENCE. Sans cette ligne, un athlète sous
+  // drapeau rouge pendant trois semaines verrait son compteur tomber à zéro
+  // avant même la levée, et le gel n'aurait servi à rien. Le décompte reprend
+  // à la LEVÉE, pas à la dernière séance.
+  let depart=u.lastSession;
+  try{ depart=Math.max(depart,_suspFinDerniere(u)); }catch(e){}
+  const jours=Math.floor((now-depart)/864e5);
   return jours>ecartNormalJours(u)+7;
 }
 // Valeur à AFFICHER. Le compteur stocké ne bouge qu'à la fin d'une séance ;
 // sans ce calcul, un athlète à l'arrêt depuis un mois verrait encore son
 // ancien score en ouvrant l'app.
 function streakSemaines(u){
+  // SOUS SUSPENSION, LA VALEUR EST GELÉE — c'est le cœur de la règle 2. Elle
+  // ne monte pas (updateStreak s'en charge) et elle ne tombe pas. Au-delà de
+  // quatre-vingt-dix jours elle repart de zéro, et suspensionMessageReprise
+  // le dit : jamais silencieusement.
+  try{
+    const sp=suspensionEtat(u);
+    if(sp.actif) return sp.jours>SUSP_ZERO_JOURS?0:sp.streakGele;
+  }catch(e){}
   const s=(u&&u.streak)||0;
   if(!s||!u.lastSession) return s;
   return _streakPerime(u,Date.now()) ? 0 : s;
 }
 
+
+// ══════════════ COULOIR DE RETOUR ═════════════════════════════════════════
+// Une sortie au dispositif de détection : suspendre sans punir, puis rouvrir
+// un chemin. RepCore ne décide JAMAIS de la levée — elle appartient au coach.
+//
+// À LIRE AVANT : le signal coach existant se déclenche à DEUX séances sur
+// trois (SIG_DOULEUR_MIN_SEANCES), et une assertion verrouille ce deux. La
+// suspension, elle, demande TROIS séances CONSÉCUTIVES du même mouvement :
+// c'est une règle plus stricte, dans des fonctions SÉPARÉES. Le détecteur de
+// signal n'est pas touché, pas plus que le module de douleur.
+const SUSP_DOULEUR_SEANCES=3;
+const SUSP_ZERO_JOURS=90;
+
+// PURE. Douleur maximale déclarée par mouvement, séance par séance, en ordre
+// chronologique. Une série non validée compte : une douleur saisie est une
+// douleur saisie — même règle que _seriesDouloureuses, qu'on ne réécrit pas.
+function _suspSerieParMouvement(u){
+  const out={};
+  const ss=((u&&u.sessions)||[]).filter(s=>s&&s.date>0).slice().sort((a,b)=>a.date-b.date);
+  for(const s of ss){
+    const d=(s&&s.data)||{};
+    for(const nom of Object.keys(d)){
+      const sets=((d[nom]&&d[nom].sets)||[]);
+      if(!sets.length) continue;
+      let max=0;
+      for(const st of sets){
+        const p=parseInt(st&&st.pain,10);
+        if(isFinite(p)&&p>max) max=p;
+      }
+      const k=exKey(nom);
+      const e=out[k]=out[k]||{nom,l:[]};
+      e.l.push({date:s.date,pain:max});
+    }
+  }
+  return out;
+}
+// PURE. RÈGLE 8 : un mouvement que le coach a remplacé ne suspend plus rien.
+// La suspension ne portait que sur lui, elle part avec lui.
+function _suspAuProgramme(u,nom){
+  const k=exKey(nom);
+  for(const s of ((u&&u.sessions_config)||[])){
+    if(!s||!s.active) continue;
+    for(const ex of ((s.exercises)||[])) if(ex&&exKey(ex.name)===k) return true;
+  }
+  return false;
+}
+// PURE. Le mouvement qui suspend, ou null.
+//
+// « Trois séances consécutives » se compte sur les séances OÙ LE MOUVEMENT EST
+// FAIT, et non sur les séances de l'athlète. Un développé fait une fois par
+// semaine n'apparaît jamais trois fois de suite dans les trois dernières
+// séances : compté autrement, la règle ne se déclencherait jamais.
+function douleurSuspendante(u){
+  const par=_suspSerieParMouvement(u);
+  let best=null;
+  for(const k in par){
+    const e=par[k], l=e.l;
+    if(l.length<SUSP_DOULEUR_SEANCES) continue;
+    const der=l.slice(-SUSP_DOULEUR_SEANCES);
+    if(!der.every(x=>x.pain>=SIG_PAIN_SEUIL)) continue;
+    if(!_suspAuProgramme(u,e.nom)) continue;                  // règle 8
+    const c={nom:e.nom,seances:SUSP_DOULEUR_SEANCES,
+      painMax:der.reduce((m,x)=>Math.max(m,x.pain),0),
+      depuis:der[0].date,derniere:der[der.length-1].date};
+    if(!best||c.derniere>best.derniere) best=c;
+  }
+  return best;
+}
+// PURE. L'état de suspension. Nœud absent = état initial : {actif:false}, et
+// l'absence n'est pas une valeur.
+//
+// La CAUSE est consignée, jamais interprétée : le couloir ne qualifie rien.
+// Le nœud existant FAIT FOI tant qu'il est actif — un drapeau levé puis reposé
+// dans la semaine ne redémarre pas un second gel, sinon la valeur gelée serait
+// celle d'après la première suspension, c'est-à-dire zéro.
+function suspensionEtat(u,now){
+  const t=(typeof now==='number')?now:Date.now();
+  const s=(u&&u.suspension)||null;
+  let cause=null,mouvement=null,debut=0;
+  try{ const g=drapeauGeneralActif(u); if(g){ cause='general'; debut=g.date||0; } }catch(e){}
+  if(!cause){ try{ const d=drapeauRougeActif(u); if(d){ cause='drapeau'; debut=d.date||0; } }catch(e){} }
+  if(!cause){
+    const m=douleurSuspendante(u);
+    if(m){ cause='douleur'; mouvement=m.nom; debut=m.depuis; }
+  }
+  if(!cause) return {actif:false,cause:null,debut:0,streakGele:0,jours:0,mouvement:null};
+  const ouvert=!!(s&&s.actif&&s.debut>0);
+  const d0=ouvert?s.debut:(debut||t);
+  const gel=ouvert?Math.max(0,Number(s.streakGele)||0):Math.max(0,Number((u&&u.streak)||0));
+  return {actif:true,cause:ouvert?(s.cause||cause):cause,debut:d0,streakGele:gel,
+    jours:Math.max(0,Math.floor((t-d0)/864e5)),
+    mouvement:mouvement||(ouvert?(s.mouvement||null):null)};
+}
+// PURE. La valeur gelée. Le champ du dossier est `suspension.streakGele` ; cet
+// accesseur est la SEULE lecture, pour qu'il n'existe jamais deux copies de la
+// même vérité.
+function _streakGele(u){ return suspensionEtat(u).streakGele; }
+// PURE. RÈGLE 9 : au-delà de quatre-vingt-dix jours, la série repart de zéro.
+// Jamais silencieusement — cette fonction porte la phrase qui le dit.
+function suspensionRemiseAZero(u,now){
+  const sp=suspensionEtat(u,now);
+  return !!(sp.actif&&sp.jours>SUSP_ZERO_JOURS&&sp.streakGele>0);
+}
+function suspensionMessageReprise(u,now){
+  if(!suspensionRemiseAZero(u,now)) return '';
+  const sp=suspensionEtat(u,now);
+  return 'Ton compteur de semaines repart de zéro : il était en pause depuis '
+    +sp.jours+' jours. Ce n\'est pas un recul, c\'est un point de départ.';
+}
+// PURE. Fin de la dernière suspension refermée, 0 s'il n'y en a jamais eu.
+// Sert à _streakPerime : une suspension n'est pas une absence.
+function _suspFinDerniere(u){
+  const s=(u&&u.suspension)||null;
+  return (s&&!s.actif&&s.fin>0)?s.fin:0;
+}
+// ÉCRIT. Le SEUL point d'écriture du couloir. Il ouvre le nœud à la pose, le
+// referme à la levée, et ne touche à rien entre les deux. Aucune donnée n'est
+// effacée : refermer, c'est poser `actif:false` et une date de fin.
+function suspensionSynchroniser(u,now){
+  if(!u) return false;
+  const t=(typeof now==='number')?now:Date.now();
+  const sp=suspensionEtat(u,t);
+  const s=u.suspension||null;
+  const ouvert=!!(s&&s.actif);
+  if(sp.actif&&!ouvert){
+    u.suspension={actif:true,cause:sp.cause,debut:sp.debut,
+      streakGele:sp.streakGele,mouvement:sp.mouvement||null,fin:0};
+    return true;
+  }
+  if(!sp.actif&&ouvert){
+    // LEVÉE. La série repart de sa valeur gelée — sauf au-delà de quatre-
+    // vingt-dix jours, où elle repart de zéro et où le message le dit.
+    const jours=Math.max(0,Math.floor((t-s.debut)/864e5));
+    u.streak=(jours>SUSP_ZERO_JOURS)?0:Math.max(0,Number(s.streakGele)||0);
+    if(!u.streak) u.streakWeek=null;
+    u.suspension=Object.assign({},s,{actif:false,fin:t});
+    u._reprise={depuis:t,cause:s.cause||null,mouvement:s.mouvement||null,
+      remiseAZero:jours>SUSP_ZERO_JOURS,jours};
+    return true;
+  }
+  return false;
+}
+// PURE. Y a-t-il un retour en cours ? La séance de retour est la PREMIÈRE
+// séance après la levée : le drapeau se consomme, il ne s'installe pas.
+function repriseEnCours(u){
+  const r=(u&&u._reprise)||null;
+  return (r&&r.depuis>0)?r:null;
+}
 // ══════════════ TAUX DE COMPLÉTION — 4 SEMAINES GLISSANTES ═══════════════
 // Une MESURE, pas un jugement. Aucun palier, aucune médaille, aucun libellé
 // qualitatif, aucune couleur d'alerte : un pourcentage, une flèche, et la
@@ -20395,6 +20582,11 @@ function _tcSuspensions(u){
   if(d&&d.date>0) out.push({a:d.date,b:Infinity});      // actif : il court encore
   for(const h of ((u&&u.historiqueDrapeaux)||[]))
     if(h&&h.date>0&&h.leve>0) out.push({a:h.date,b:h.leve});
+  // SUSPENSION POUR DOULEUR RÉPÉTÉE. Elle n'est pas un drapeau, et sans cette
+  // ligne ses semaines resteraient au dénominateur : l'athlète serait compté
+  // absent d'un entraînement que l'application venait de suspendre.
+  const sp=u&&u.suspension;
+  if(sp&&sp.debut>0) out.push({a:sp.debut,b:sp.actif?Infinity:(sp.fin||Infinity)});
   return out;
 }
 // PURE. Une semaine [debut, fin[ est-elle suspendue ? Le moindre recouvrement
@@ -20472,6 +20664,13 @@ function tauxCompletionFleche(r){
 }
 function updateStreak(){
   const now=Date.now();
+  // RÈGLE 2 : le gel est un gel, pas un crédit. Sous suspension le compteur ne
+  // monte pas — et il ne se périme pas non plus. `lastSession` continue
+  // d'avancer : l'athlète a le droit de s'entraîner et de journaliser
+  // (règle 7), on ne lui retire pas la trace de ce qu'il a fait.
+  try{
+    if(suspensionEtat(currentUser,now).actif){ currentUser.lastSession=now; return; }
+  }catch(e){}
   // Même prédicat que l'affichage : la valeur stockée et la valeur montrée ne
   // peuvent pas diverger.
   if(_streakPerime(currentUser,now)){
@@ -22224,7 +22423,7 @@ function _htmlDrapeauGeneral(user){
   return `<div style="margin-top:12px;background:#1a0000;border:1px solid var(--red);border-radius:10px;padding:13px 15px">
     ${TEXTE_ARRET_GENERAL.map(t=>`<div style="font-size:13px;color:#eee;line-height:1.7;margin-bottom:9px">${escapeHtml(t)}</div>`).join('')}
     <div class="sub" style="font-size:11px;line-height:1.6">Tu as signalé : ${d.cases.map(c=>escapeHtml(libelleDrapeau(c))).join(', ')}.</div>
-    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="_leverDrapeauGeneralUI()">J'ai vu un médecin, je retire ce signalement</button>
+    <div style="font-size:11px;color:var(--text-dim);line-height:1.6;margin-top:9px">Ton coach le voit de son côté. C'est lui qui retire ce signalement quand tu l'as vu avec un médecin.</div>
     ${blocDisclaimerSante()}
   </div>`;
 }
@@ -22305,13 +22504,11 @@ function declarerDrapeauGeneral(){
   loadSante();
   toastEcriture(ok,'Signalement enregistré','le signalement est');
 }
-function _leverDrapeauGeneralUI(){
-  if(!confirm('Retirer ce signalement ?')) return;
-  if(!leverDrapeauGeneral(currentUser)) return;
-  const ok=saveUser();
-  loadSante();
-  toastEcriture(ok,'Signalement retiré','le retrait est');
-}
+// _leverDrapeauGeneralUI A ÉTÉ RETIRÉE. C'était le seul chemin de levée qui
+// existait en production, et il appartenait à l'ATHLÈTE — l'inverse de la
+// règle. La levée passe désormais par coachLeverDrapeau, côté coach, unique
+// point de sortie du produit. La fonction leverDrapeauGeneral, elle, n'a pas
+// bougé : c'est son appelant qui a changé de camp.
 
 const DRAPEAU_ZONE_GENERALE='general';
 const DRAPEAUX_GENERAUX=Object.freeze([
@@ -23743,9 +23940,14 @@ async function scheduleWoNotif(){
   if(!('serviceWorker' in navigator))return;
   const u=currentUser;
   try{
+    // Le service worker notifie SEUL, sans la page : couper la bannière ne
+    // suffit pas, il faut désarmer sa copie. Sans cette ligne, un athlète sous
+    // drapeau rouge continuerait de recevoir « ta séance est au programme ».
+    let _susp=false;
+    try{ _susp=suspensionEtat(u).actif; }catch(e){}
     const c=await caches.open('repcore-sw-data');
     await c.put('/wo-reminder',new Response(JSON.stringify({
-      enabled:true,
+      enabled:!_susp,
       hour:u._woReminderHour??18,
       days:u._woReminderDays||[],
       noms:_nomsSeancesParJour(u),
@@ -23774,6 +23976,134 @@ async function scheduleSuppNotif(){
     }
   }catch(e){}
 }
+
+// ── L'écran de suspension, côté athlète ────────────────────────────────────
+// AUCUN MOT AJOUTÉ. Le texte est TEXTE_ARRET_DRAPEAU / TEXTE_ARRET_GENERAL,
+// déjà relu et déjà testé, plus le disclaimer de douleur. Rien ne qualifie la
+// blessure, rien n'annonce un délai, rien ne nomme de structure au-delà de la
+// zone que l'athlète a lui-même cochée.
+function _suspTextes(cause){
+  if(cause==='general') return (typeof TEXTE_ARRET_GENERAL!=='undefined')?TEXTE_ARRET_GENERAL:[];
+  if(cause==='drapeau') return TEXTE_ARRET_DRAPEAU;
+  // Douleur répétée : on ne DIAGNOSTIQUE pas, on constate ce qui a été saisi
+  // et on renvoie. Même sortie que les drapeaux, sans le vocabulaire d'alerte.
+  return ['On met l\'entraînement en pause sur ce mouvement.',
+    'RepCore n\'est pas un dispositif médical. Une douleur qui revient demande l\'avis d\'un médecin ou d\'un kinésithérapeute.',
+    'Ton coach le voit de son côté.'];
+}
+function htmlSuspension(u){
+  const sp=suspensionEtat(u);
+  if(!sp.actif) return '';
+  const zone=(()=>{ try{ const d=drapeauRougeActif(u); return d?d.zone:''; }catch(e){ return ''; } })();
+  const msg=suspensionMessageReprise(u);
+  return `<div style="background:#1a0000;border:1px solid var(--red);border-radius:12px;padding:15px 16px;margin-bottom:16px">
+    ${_suspTextes(sp.cause).map(t=>`<div style="font-size:13px;color:#eee;line-height:1.7;margin-bottom:9px">${escapeHtml(t)}</div>`).join('')}
+    ${sp.mouvement?`<div class="sub" style="font-size:11px;line-height:1.6">Mouvement concerné : ${escapeHtml(sp.mouvement)}.</div>`:''}
+    ${zone?`<div class="sub" style="font-size:11px;line-height:1.6">Zone concernée : ${escapeHtml(zone)}.</div>`:''}
+    <div style="font-size:11px;color:var(--text-dim);line-height:1.6;margin-top:9px">Ton compteur de semaines est gelé à ${sp.streakGele}. Il ne descend pas pendant la pause. Tes rappels de séance sont coupés, ton réglage est conservé.</div>
+    <div style="font-size:11px;color:var(--text-dim);line-height:1.6;margin-top:7px">Tu peux continuer à noter ce que tu fais : rien n'est bloqué, rien n'est effacé. Seul ton coach peut lever cette pause.</div>
+    ${msg?`<div style="font-size:11px;color:var(--text-faint);line-height:1.6;margin-top:7px">${escapeHtml(msg)}</div>`:''}
+    ${blocDisclaimerDouleur()}
+  </div>`;
+}
+function renderSuspension(){
+  const z=document.getElementById('clh-suspension');
+  if(!z) return;
+  let h=''; try{ h=htmlSuspension(currentUser); }catch(e){ h=''; }
+  z.innerHTML=h;
+}
+
+// ── La séance de retour ────────────────────────────────────────────────────
+// RÈGLE 5 : le volume réduit est PROPOSÉ. La proposition ne touche jamais
+// `sessions_config` — c'est le plan du coach, et décocher ne doit pas le
+// réécrire. Elle vit dans une surcharge par séance, que l'athlète maîtrise.
+function repriseDeloadPropose(u){
+  const r=repriseEnCours(u);
+  return !!(r&&u&&u._repriseDeload!==false);
+}
+function toggleRepriseDeload(val){
+  currentUser._repriseDeload=!!val;
+  woState.deload=!!val;
+  saveUser();
+  try{ renderWorkoutHeader&&renderWorkoutHeader(); }catch(e){}
+}
+// Le mouvement incriminé, rappelé avec la contre-indication au dossier.
+// _rappelContreIndication rend un FRAGMENT commençant par une espace, prévu
+// pour être concaténé à une phrase coach : on le rogne.
+function htmlRepriseSeance(u){
+  const r=repriseEnCours(u);
+  if(!r) return '';
+  let ci='';
+  try{ ci=_rappelContreIndication(u).trim(); }catch(e){ ci=''; }
+  const zero=r.remiseAZero?suspensionMessageReprise(u):'';
+  return `<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:12px;padding:14px 16px;margin-bottom:12px">
+    <div style="font-size:9px;color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:7px">Séance de retour</div>
+    <div style="font-size:12px;color:#ddd;line-height:1.65">Ton coach a levé la pause. Cette séance t'est proposée en volume réduit — tu peux décocher.</div>
+    ${r.mouvement?`<div style="font-size:11px;color:var(--sub);line-height:1.6;margin-top:7px">Mouvement à l'origine de la pause : <strong style="color:#fff">${escapeHtml(r.mouvement)}</strong>.</div>`:''}
+    ${ci?`<div style="font-size:11px;color:var(--sub);line-height:1.6;margin-top:5px">${escapeHtml(ci)}</div>`:''}
+    ${zero?`<div style="font-size:11px;color:var(--text-faint);line-height:1.6;margin-top:7px">${escapeHtml(zero)}</div>`:''}
+    <label class="hit44" style="display:flex;align-items:center;gap:9px;margin:11px 0 0;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:400;font-size:11.5px;color:var(--sub)">
+      <input type="checkbox" ${repriseDeloadPropose(u)?'checked':''} onchange="toggleRepriseDeload(this.checked)" style="width:16px;height:16px;margin:0;accent-color:var(--info);flex-shrink:0">
+      Volume réduit pour cette séance
+    </label>
+    ${blocDisclaimerDouleur()}
+  </div>`;
+}
+
+// ── La porte de sortie, côté coach ─────────────────────────────────────────
+// ELLE N'EXISTAIT POUR AUCUN DRAPEAU. `leverDrapeauRouge` n'était appelée que
+// depuis les bancs de test : en production, un drapeau posé ne se retirait
+// jamais. Le couloir n'a de sortie que si cette porte existe.
+//
+// RÈGLE 1 : c'est le SEUL point de levée du produit. Le code ne lève rien de
+// lui-même, et l'athlète non plus — le bouton qu'il avait sur son écran santé
+// est passé ici.
+function htmlLeveeCoach(c){
+  const sp=(()=>{ try{ return suspensionEtat(c); }catch(e){ return {actif:false}; } })();
+  const dr=(()=>{ try{ return drapeauRougeActif(c); }catch(e){ return null; } })();
+  const dg=(()=>{ try{ return drapeauGeneralActif(c); }catch(e){ return null; } })();
+  if(!sp.actif&&!dr&&!dg) return '';
+  const lignes=[];
+  if(dg) lignes.push('Signes généraux signalés : '+dg.cases.map(x=>libelleDrapeau(x)).join(', ')+'.');
+  if(dr) lignes.push('Drapeau rouge sur '+dr.zone+' : '+dr.cases.map(x=>{
+    const d=DRAPEAUX_ROUGES.find(y=>y.cle===x); return d?d.lib:x; }).join(', ')+'.');
+  if(sp.cause==='douleur'&&sp.mouvement)
+    lignes.push('Douleur à 4 ou plus sur '+sp.mouvement+', '+SUSP_DOULEUR_SEANCES+' séances de suite.');
+  return `<div style="background:#1a0000;border:1px solid var(--red);border-radius:12px;padding:14px 16px;margin-bottom:16px">
+    <div style="font-size:9px;color:var(--red);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:8px">Entraînement suspendu</div>
+    ${lignes.map(t=>`<div style="font-size:12px;color:#eee;line-height:1.65;margin-bottom:5px">${escapeHtml(t)}</div>`).join('')}
+    ${sp.actif?`<div style="font-size:11px;color:var(--sub);line-height:1.6;margin-top:7px">Depuis ${sp.jours} jour${sp.jours>1?'s':''}. Compteur de semaines gelé à ${sp.streakGele}, rappels coupés, semaines hors du taux de complétion.</div>`:''}
+    <div style="font-size:11px;color:var(--text-dim);line-height:1.6;margin-top:8px">Toi seul peux lever cette pause. RepCore ne le fera jamais à ta place.</div>
+    ${dg?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="coachLeverDrapeau('general')">Lever le signalement général</button>`:''}
+    ${dr?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="coachLeverDrapeau('articulaire')">Lever le drapeau rouge</button>`:''}
+    ${blocDisclaimerDouleur()}
+  </div>`;
+}
+function renderLeveeCoach(c){
+  const z=document.getElementById('ccd-suspension');
+  if(!z) return;
+  let h=''; try{ h=c?htmlLeveeCoach(c):''; }catch(e){ h=''; }
+  z.innerHTML=h;
+}
+function coachLeverDrapeau(quoi){
+  const c=getOwnedClient(currentClientId);
+  if(!c) return false;
+  const lib=(quoi==='general')?'ce signalement général':'ce drapeau rouge';
+  if(!confirm('Lever '+lib+' ? L\'entraînement reprendra, avec une séance de retour en volume réduit.')) return false;
+  let fait=false;
+  try{ fait=(quoi==='general')?leverDrapeauGeneral(c):leverDrapeauRouge(c); }catch(e){ fait=false; }
+  if(!fait) return false;
+  // La synchronisation referme le nœud et rend sa valeur à la série. Elle est
+  // appelée ICI, sur le dossier de l'athlète, avant la remontée.
+  try{ suspensionSynchroniser(c); }catch(e){}
+  const ok=saveUser();
+  try{ CLOUD.pushOne(c.email,c); }catch(e){}
+  try{ _viderCacheSignaux(); }catch(e){}
+  renderLeveeCoach(c);
+  try{ renderDouleurCoach(c); }catch(e){}
+  toastEcriture(ok,'Pause levée','la levée est');
+  return true;
+}
 function renderWoReminderCard(){
   const el=document.getElementById('clh-wo-reminder-row');if(!el)return;
   const u=currentUser;
@@ -23798,6 +24128,10 @@ function renderWoReminderCard(){
 }
 function checkWoReminderToday(){
   if(!currentUser||currentUser.role!=='athlete')return;
+  // SOUS SUSPENSION, AUCUN RAPPEL. Convoquer à l'entraînement quelqu'un à qui
+  // on vient de dire d'arrêter serait le pire des deux mondes. Le réglage
+  // n'est PAS effacé : il reprend seul à la levée.
+  try{ if(suspensionEtat(currentUser).actif) return; }catch(e){}
   if(!currentUser._woReminderEnabled)return;
   const days=currentUser._woReminderDays||[];if(!days.length)return;
   const now=new Date();
@@ -27191,10 +27525,44 @@ function planUniteItem(item){
 // « irresolus » nomme les lignes qu'on n'a pas su chiffrer au lieu de les
 // compter pour zéro : un aliment Ciqual retiré d'une version à l'autre ferait
 // autrement grossir le restant en silence, et donc les grammages proposés.
+// ── Deux apports que le squelette ne nomme pas, et qui comptent quand même ──
+// Le tableur les porte, mais en dur et sans les dire : la ligne « une portion
+// de fruit au choix » vaut 20 g de glucides dans les huit fichiers, et le
+// total des lipides se termine par un « +20 » littéral qui n'a aucune ligne en
+// face. Ce +20, c'est l'HUILE DE CUISSON : elle n'est écrite nulle part parce
+// qu'on ne la pèse pas, mais elle est bien mangée.
+//
+// Elle vaut 10 g par repas cuisiné. Les huit programmes ont deux repas à
+// source libre — midi et soir — d'où le 20 du tableur. Le compter par repas
+// plutôt qu'en bloc le rend juste le jour où un programme en compte trois.
+//
+// Ne pas les compter gonflait le restant, donc les grammages des sources :
+// l'athlète pesait plus que sa cible, tous les jours.
+const PLAN_FRUIT_GLUCIDES=20;
+const PLAN_HUILE_CUISSON_LIP=10;
+function _planConst(plan,champ,defaut){
+  const v=_planNb(plan&&plan[champ]);
+  return (v!=null&&v>=0)?v:defaut;
+}
+// Combien de repas sont réellement cuisinés : ceux qui portent une source au
+// choix. On ne compte pas les sources, on compte les REPAS — midi qui porte
+// une protéine ET un glucide reste un seul repas, donc une seule huile.
+function planNbRepasCuisines(plan){
+  const vus={};
+  for(const it of planSquelette(plan)) if(it&&it.src) vus[it.repas||'petit_dej']=1;
+  const n=Object.keys(vus).length;
+  if(n>0) return n;
+  // Aucun marqueur posé : on retombe sur le réglage du coach s'il en a mis un,
+  // sinon zéro — sans repas à source libre, il n'y a rien à cuisiner.
+  const forc=_planNb(plan&&plan.nRepasSourcesLibres);
+  return (forc!=null&&forc>=1)?Math.round(forc):0;
+}
 function planCouverture(plan,chercher){
   const res=_planResolveur(chercher);
   const tot={p:0,c:0,l:0,kcal:0};
   const parRepas={},irresolus=[];
+  const gFruit=_planConst(plan,'fruitGlucidesG',PLAN_FRUIT_GLUCIDES);
+  let nFruits=0;
   for(const item of planSquelette(plan)){
     if(item.comp&&!(plan&&plan.avecComplements)) continue;
     const cle=item.repas||'petit_dej';
@@ -27205,7 +27573,17 @@ function planCouverture(plan,chercher){
     // Elles ne comptent dans aucune macro et ne figurent pas dans irresolus,
     // qui ne parle que d'aliments qu'on n'a pas su chiffrer.
     if(planLigneTexte(item)){
-      parRepas[cle].lignes.push({item,nom,macros:null,
+      // À une exception près : le fruit. Il ne nomme pas d'aliment — l'athlète
+      // choisit dans la table — mais toutes les portions de cette table sont
+      // équivalentes, et le coach les a calibrées à 20 g de glucides.
+      let mf=null;
+      if(item.fruit&&gFruit>0){
+        mf={p:0,c:gFruit,l:0,kcal:4*gFruit};
+        tot.c+=gFruit; tot.kcal+=mf.kcal;
+        parRepas[cle].c+=gFruit; parRepas[cle].kcal+=mf.kcal;
+        nFruits++;
+      }
+      parRepas[cle].lignes.push({item,nom,macros:mf,
         source:item.src||null,fruit:!!item.fruit,note:!!item.note});
       continue;
     }
@@ -27215,7 +27593,15 @@ function planCouverture(plan,chercher){
     parRepas[cle].p+=m.p; parRepas[cle].c+=m.c; parRepas[cle].l+=m.l; parRepas[cle].kcal+=m.kcal;
     parRepas[cle].lignes.push({item,nom,macros:m});
   }
-  return {p:tot.p,c:tot.c,l:tot.l,kcal:tot.kcal,parRepas,irresolus};
+  // L'huile de cuisson, une fois pour toutes, à la fin : elle n'appartient à
+  // aucune ligne, donc elle n'est rattachée à aucun repas.
+  const parHuile=_planConst(plan,'huileCuissonG',PLAN_HUILE_CUISSON_LIP);
+  const nCuisines=planNbRepasCuisines(plan);
+  const huile=parHuile*nCuisines;
+  if(huile>0){ tot.l+=huile; tot.kcal+=9*huile; }
+  return {p:tot.p,c:tot.c,l:tot.l,kcal:tot.kcal,parRepas,irresolus,
+    fruits:{n:nFruits,parPortion:gFruit,glucides:nFruits*gFruit},
+    huileCuisson:{repas:nCuisines,parRepas:parHuile,lipides:huile}};
 }
 
 // PURE. Le restant, et le fait qu'il soit négatif dit à voix haute.
@@ -27987,8 +28373,23 @@ function _cplHtmlApercu(){
     ${lig('GLUCIDES',cib.c||0,couv.c,rest.c||0,' g')}
     ${lig('LIPIDES',cib.l||0,couv.l,rest.l||0,' g')}
     ${lig('CALORIES',cib.kcal||0,couv.kcal,(cib.kcal||0)-couv.kcal,'')}
+    ${_cplHtmlImplicites(couv)}
     </div>
   </div>`;
+}
+// Ce que la colonne « squelette » contient SANS qu'aucune ligne le porte.
+// Le tableur ajoutait ces deux montants en dur, sans les écrire nulle part :
+// le coach voyait un total qu'il ne pouvait pas refaire à la main. Ici ils
+// sont dits, chiffrés, et le coach peut les corriger.
+function _cplHtmlImplicites(couv){
+  const f=couv&&couv.fruits, h=couv&&couv.huileCuisson;
+  const bouts=[];
+  if(f&&f.n>0) bouts.push(f.n+' portion'+(f.n>1?'s':'')+' de fruit à '
+    +f.parPortion+' g de glucides');
+  if(h&&h.lipides>0) bouts.push(h.lipides+' g de lipides d\'huile de cuisson ('
+    +h.parRepas+' g × '+h.repas+' repas cuisiné'+(h.repas>1?'s':'')+')');
+  if(!bouts.length) return '';
+  return `<div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-top:9px;padding-top:8px;border-top:1px solid var(--surface-2)">Compté dans le squelette sans ligne dédiée : ${escapeHtml(bouts.join(' · '))}.</div>`;
 }
 function _cplHtmlAlertes(){
   const c=_cplAthlete();
@@ -28514,9 +28915,13 @@ function _htmlPlanAthlete(user){
       // fois dans les repas, une fois en pied. Kevin l'a signalé comme un
       // défaut. Elle est donc rendue UNE SEULE FOIS, en pied de programme, où
       // le tableur la met déjà et où elle sert aussi de référence générale.
+      // Elle porte sa VALEUR : toutes les portions de la table sont calibrées
+      // à la même quantité de glucides, et c'est elle qui compte dans le
+      // total du repas. Afficher « table en pied » seul laissait croire que
+      // la ligne n'apportait rien.
       if(x.fruit) return `<div class="plan-l">
         <div class="plan-nom" style="color:${PL_COUL.fruit}">${escapeHtml(x.nom)}</div>
-        <div style="font-size:10px;color:var(--text-faint);flex-shrink:0">table en pied</div>
+        <div class="plan-q">${x.macros?Math.round(x.macros.c):'—'}<u> g de glucides</u></div>
       </div>`;
       const q=_planNb(x.item&&x.item.q);
       const u=planUniteItem(x.item);
@@ -28667,8 +29072,18 @@ function _htmlPlanAthlete(user){
     ${blocFruits}
     ${courses}
     ${blocCheat}
+    ${_htmlHuileCuissonAthlete(couv)}
     <div style="font-size:10px;color:var(--text-faint);line-height:1.6">${escapeHtml(PLAN_NOTE_CUISSON)}</div>
   </div>`;
+}
+// L'huile de cuisson est comptée dans les macros de l'athlète alors qu'aucune
+// ligne ne la porte. Le dire n'est pas de la décoration : sans cette phrase,
+// quelqu'un qui refait ses totaux à la main trouve un écart de vingt grammes
+// de lipides et croit à une erreur.
+function _htmlHuileCuissonAthlete(couv){
+  const h=couv&&couv.huileCuisson;
+  if(!h||!(h.lipides>0)) return '';
+  return `<div style="font-size:10px;color:var(--text-faint);line-height:1.6;margin-bottom:10px">Tes lipides incluent déjà ${h.lipides} g d'huile de cuisson (${h.parRepas} g par repas cuisiné) : inutile de la peser, elle est comptée.</div>`;
 }
 
 // ======= JOURNAL ALIMENTAIRE (Ciqual 2025) =======
@@ -50468,7 +50883,12 @@ function testExercices(){
     // Ils sont ici et non dans /canaux parce que coach_public est deja
     // retelecharge a chaque ouverture d accueil : la pastille et la banniere ne
     // coutent ainsi aucune requete.
-    const _cpAttendus=['fname','lname','teamName','catchphrase','coachPhoto','promoBanners','phone','chargesSchema','contact','canalDernier','canalEpingle'];
+    // `dispo` est entré ici au lot « cadre de disponibilité » : c'est l'horaire
+    // que le coach CHOISIT de publier, et l'athlète en a besoin pour savoir
+    // quand une réponse est attendue. L'épingle avait été oubliée — elle a
+    // sonné, c'est son travail. Le délai médian de réponse, lui, n'y est pas
+    // et n'y sera jamais.
+    const _cpAttendus=['fname','lname','teamName','catchphrase','coachPhoto','promoBanners','phone','chargesSchema','contact','canalDernier','canalEpingle','dispo'];
     ok('Liste des champs publiés figée',
        JSON.stringify(CLOUD.CHAMPS_PROFIL_COACH)===JSON.stringify(_cpAttendus),
        JSON.stringify(CLOUD.CHAMPS_PROFIL_COACH));
@@ -51750,7 +52170,18 @@ function testExercices(){
         const r=agregerPortefeuille([_ath('v1',{sessions:[{date:J(3),sets:10,setsPlanned:10}]})]);
         const ecart=Math.round((r.depuis-(Date.now()-7*864e5))/6e4);
         if(Math.abs(ecart)>2) return _echec('depuis decale de '+ecart+' min');
-        return r.changements.length===1?true:_echec(r.changements.length+' changement(s)');})());
+        // Le gabarit _ath porte TOUJOURS un bilan de depart a J-3 : la bande en
+        // attrape donc deux, la seance et le bilan. Attendre 1 revenait a
+        // ignorer ma propre fixture, et l assertion ne testait pas la bande.
+        const dedans=r.changements.every(x=>x.date>r.depuis);
+        if(!dedans) return _echec('un changement hors bande');
+        return r.changements.length===2
+          ?true:_echec(r.changements.length+' changement(s) : '+r.changements.map(x=>x.quoi).join(' / '));})());
+      ok('Un evenement anterieur a la bande en est exclu',(()=>{
+        const r=agregerPortefeuille([_ath('v1b',{sessions:[{date:J(20),sets:10,setsPlanned:10}],
+          bilans:[{type:'depart',date:J(20),reponseCoach:'ok',reponseDate:1,reponseVue:true}]})]);
+        return r.changements.length===0
+          ?true:_echec(r.changements.length+' changement(s) a vingt jours');})());
       ok('Les changements sont tries du plus recent au plus ancien',(()=>{
         const r=agregerPortefeuille([_ath('v2',{sessions:[
           {date:J(5),sets:10,setsPlanned:10},{date:J(1),sets:10,setsPlanned:10}]})],
@@ -55387,6 +55818,135 @@ function testExercices(){
           return !!currentUser.alertStatus['douleur-'+vise];})());
         zTodo.innerHTML=gTodo;
       }
+      currentUser=sauveU;
+    })();
+
+    // ── Le compteur de semaines : le filet, pose AVANT le couloir ──
+    // streakSemaines, _streakPerime et ecartNormalJours n'avaient AUCUNE
+    // assertion nommee : les soixante-dix resultats contenant « serie »
+    // parlaient tous de series d'exercice. Le gel se branche dessus, il fallait
+    // d'abord savoir ce qu'on branchait.
+    (function(){
+      const N=Date.now(), J=n=>N-n*864e5;
+      const cfg=n=>Array.from({length:n},()=>({active:true,exercises:[]}));
+      ok('Trois seances par semaine : ecart normal de 4 jours',
+        ecartNormalJours({sessions_config:cfg(3)})===4,
+        String(ecartNormalJours({sessions_config:cfg(3)})));
+      ok('Une seance par semaine : ecart normal de 8 jours',
+        ecartNormalJours({sessions_config:cfg(1)})===8);
+      ok('La peremption suit le RYTHME, pas le calendrier',(()=>{
+        const trois={streak:5,lastSession:J(12),sessions_config:cfg(3)};
+        const une={streak:5,lastSession:J(12),sessions_config:cfg(1)};
+        // Douze jours : perdu a trois seances par semaine, garde a une seule.
+        return _streakPerime(trois,N)&&!_streakPerime(une,N);})());
+      ok('Sans derniere seance, rien ne se perime',_streakPerime({streak:5},N)===false);
+      ok('streakSemaines affiche zero quand la serie est perimee',
+        streakSemaines({streak:5,lastSession:J(30),sessions_config:cfg(3)})===0);
+      ok('streakSemaines rend la valeur stockee quand elle tient',
+        streakSemaines({streak:5,lastSession:J(2),sessions_config:cfg(3)})===5);
+    })();
+
+    // ── Couloir de retour : les cinq criteres d'acceptation ──
+    (function(){
+      const sauveU=currentUser;
+      const N=Date.now(), J=n=>N-n*864e5;
+      const CFG=[{active:true,exercises:[{name:'DEVELOPPE COUCHE'}]},
+                 {active:true,exercises:[{name:'DEVELOPPE COUCHE'}]},
+                 {active:true,exercises:[{name:'DEVELOPPE COUCHE'}]}];
+      const ath=o=>Object.assign({id:'cr1',email:'cr1@t.fr',streak:6,lastSession:J(2),
+        sessions_config:JSON.parse(JSON.stringify(CFG)),sessions:[]},o||{});
+      const drap=j=>({zone:'epaule',cases:['irradiation'],date:J(j)});
+
+      // Critere 1 : drapeau pose avec serie a 6.
+      ok('Critere 1 : drapeau pose, _streakGele vaut 6 et la serie ne decroit pas',(()=>{
+        const u=ath({drapeauRouge:drap(3)});
+        suspensionSynchroniser(u,N);
+        if(_streakGele(u)!==6) return _echec('gel = '+_streakGele(u));
+        if(streakSemaines(u)!==6) return _echec('affichage = '+streakSemaines(u));
+        // Trente jours plus tard, la ou _streakPerime aurait rendu zero.
+        u.suspension.debut=J(30);
+        return streakSemaines(u)===6?true:_echec('a 30 j : '+streakSemaines(u));})());
+
+      // Critere 2 : leve puis repose dans la semaine.
+      ok('Critere 2 : leve puis repose dans la semaine, aucun double redemarrage',(()=>{
+        const u=ath({drapeauRouge:drap(6)});
+        suspensionSynchroniser(u,N);
+        u.streak=0;
+        delete u.drapeauRouge; suspensionSynchroniser(u,N);
+        if(u.streak!==6) return _echec('la levee n a pas rendu la valeur : '+u.streak);
+        u.drapeauRouge=drap(0); suspensionSynchroniser(u,N);
+        return _streakGele(u)===6?true:_echec('regel a '+_streakGele(u));})());
+
+      // Critere 3 : levee, seance suivante avec deload propose et decochable.
+      ok('Critere 3 : levee, decharge proposee et decochable, serie repartie de 6',(()=>{
+        const u=ath({streak:6,lastSession:J(40),drapeauRouge:drap(35)});
+        currentUser=u;
+        suspensionSynchroniser(u,N);
+        delete u.drapeauRouge; suspensionSynchroniser(u,N);
+        if(u.streak!==6) return _echec('serie = '+u.streak);
+        if(streakSemaines(u)!==6) return _echec('affichage = '+streakSemaines(u));
+        if(!repriseDeloadPropose(u)) return _echec('aucune decharge proposee');
+        const h=htmlRepriseSeance(u);
+        if(!/toggleRepriseDeload/.test(h)) return _echec('la case n est pas decochable');
+        toggleRepriseDeload(false);
+        if(repriseDeloadPropose(u)) return _echec('le decochage n a pas pris');
+        // REGLE 5 : le plan du coach n a pas bouge.
+        return u.sessions_config.every(s=>!s.deload)
+          ?true:_echec('sessions_config a ete ecrit');})());
+
+      // Critere 4 : suspension de 100 jours.
+      ok('Critere 4 : cent jours, serie a zero ET message de reprise',(()=>{
+        const u=ath({streak:6,drapeauRouge:drap(100)});
+        suspensionSynchroniser(u,N);
+        if(streakSemaines(u)!==0) return _echec('serie = '+streakSemaines(u));
+        const m=suspensionMessageReprise(u,N);
+        if(!m) return _echec('aucun message : la remise a zero serait silencieuse');
+        delete u.drapeauRouge; suspensionSynchroniser(u,N);
+        return u.streak===0?true:_echec('apres levee : '+u.streak);})());
+
+      // Critere 5 : le vocabulaire de l ecran de suspension.
+      ok('Critere 5 : aucun delai de reprise ni structure anatomique a l ecran',(()=>{
+        const u1=ath({drapeauRouge:drap(3)});
+        const u2=ath({sessions:[{date:J(20),data:{'DEVELOPPE COUCHE':{sets:[{pain:5}]}}},
+                                {date:J(13),data:{'DEVELOPPE COUCHE':{sets:[{pain:5}]}}},
+                                {date:J(6), data:{'DEVELOPPE COUCHE':{sets:[{pain:5}]}}}]});
+        suspensionSynchroniser(u1,N); suspensionSynchroniser(u2,N);
+        const txt=(htmlSuspension(u1)+' '+htmlSuspension(u2)).replace(/<[^>]*>/g,' ');
+        const delai=/\b\d+\s*(jours?|semaines?|mois)\s*(de\s*)?(repos|arrêt|pause|reprise)|(dans|d'ici)\s+\d+\s*(jours?|semaines?|mois)/i;
+        const clinique=/tendinite|tendinopathie|hernie|discale|rupture|déchirure|lésion|entorse|arthrose|bursite|inflammation|coiffe|rotateur|ménisque|ligament|tendon|cartilage|lombalgie/i;
+        if(delai.test(txt)) return _echec('delai annonce : '+(delai.exec(txt)||[''])[0]);
+        if(clinique.test(txt)) return _echec('terme clinique : '+(clinique.exec(txt)||[''])[0]);
+        return /dispositif médical/.test(txt)
+          ?true:_echec('le non-diagnostic a disparu');})());
+
+      // Regle 7 : la journalisation n est jamais bloquee.
+      ok('Regle 7 : sous suspension, le compteur ne monte pas mais la seance passe',(()=>{
+        const u=ath({drapeauRouge:drap(3)});
+        currentUser=u; suspensionSynchroniser(u,N);
+        const avant=u.streak;
+        updateStreak();
+        return u.streak===avant&&u.lastSession>J(1)
+          ?true:_echec('streak '+u.streak+' / lastSession');})());
+
+      // Regle 8 : le mouvement remplace par le coach ne suspend plus.
+      ok('Regle 8 : mouvement remplace par le coach, la suspension part avec lui',(()=>{
+        const s=[{date:J(20),data:{'DEVELOPPE COUCHE':{sets:[{pain:5}]}}},
+                 {date:J(13),data:{'DEVELOPPE COUCHE':{sets:[{pain:5}]}}},
+                 {date:J(6), data:{'DEVELOPPE COUCHE':{sets:[{pain:5}]}}}];
+        if(!douleurSuspendante(ath({sessions:s}))) return _echec('non detecte au depart');
+        const remplace=ath({sessions:s,sessions_config:[{active:true,exercises:[{name:'DIPS'}]}]});
+        return douleurSuspendante(remplace)===null
+          ?true:_echec('la suspension survit au remplacement');})());
+
+      // Regle 1 : le produit ne leve jamais de lui-meme.
+      ok('Regle 1 : aucune levee automatique, et un seul bouton — celui du coach',(()=>{
+        const u=ath({drapeauRouge:drap(200)});
+        suspensionSynchroniser(u,N);
+        // Deux cents jours : la serie tombe a zero, le drapeau reste.
+        if(streakSemaines(u)!==0) return _echec('serie non remise a zero');
+        return !!drapeauRougeActif(u)
+          ?true:_echec('le drapeau a ete leve tout seul');})());
+
       currentUser=sauveU;
     })();
 
@@ -62692,12 +63252,16 @@ function testExercices(){
           const h=_htmlAlerteTension(chaud);
           return h.indexOf(TENSION_MESSAGE)>=0&&h.indexOf(DISCLAIMER_SANTE)>=0
             ?true:_echec('encart incomplet');})());
-        ok('Le bandeau de drapeau général propose de le retirer',(()=>{
+        // RÈGLE 1 : l'athlète ne retire plus rien lui-même. Le bandeau dit ce
+        // qui a été signalé et RENVOIE au coach, qui est le seul à pouvoir
+        // lever. L'assertion a suivi le déplacement du bouton.
+        ok('Le bandeau de drapeau général renvoie au coach, sans bouton de retrait',(()=>{
           const u=_u([]);
           poserDrapeauGeneral(u,['thoracique']);
           const h=_htmlDrapeauGeneral(u);
-          return /poitrine/.test(h)&&/fais-toi examiner/.test(h)
-            &&/_leverDrapeauGeneralUI/.test(h)
+          if(/_leverDrapeauGeneralUI|leverDrapeauGeneral\(/.test(h))
+            return _echec('l\'athlète peut encore lever son propre signalement');
+          return /poitrine/.test(h)&&/fais-toi examiner/.test(h)&&/coach/i.test(h)
             ?true:_echec(h.replace(/<[^>]*>/g,' ').slice(0,160));})());
         ok('La liste déroulante ne propose QUE les marqueurs fermés',(()=>{
           // Le rendu construit ses options depuis MARQUEURS : aucune saisie
@@ -63542,10 +64106,15 @@ function testExercices(){
           const plan={squelette:[{id:'a',repas:'midi',ciqual:999,q:100,u:'g'}]};
           const c=planCouverture(plan,_ch);
           return (c.p===0&&c.irresolus.length===1)?true:_echec(JSON.stringify(c.irresolus));})());
-        ok('Le marqueur « source au choix » ne compte dans aucune macro',(()=>{
-          const plan={squelette:[{id:'a',repas:'midi',src:'p'}]};
+        ok('Le marqueur « source au choix » n\'apporte par lui-même aucun aliment',(()=>{
+          // Il apporte quand même l'huile de cuisson du repas qu'il désigne —
+          // c'est un montant nommé à part, et le test juste au-dessous le
+          // vérifie. Ce qu'on contrôle ici : le marqueur ne fabrique ni
+          // protéine, ni glucide, et ne passe pas pour un aliment illisible.
+          const plan={squelette:[{id:'a',repas:'midi',src:'p'}],huileCuissonG:0};
           const c=planCouverture(plan,_ch);
-          return (c.p===0&&c.kcal===0&&!c.irresolus.length)?true:_echec(JSON.stringify(c));})());
+          return (c.p===0&&c.c===0&&c.l===0&&c.kcal===0&&!c.irresolus.length)
+            ?true:_echec(JSON.stringify(c));})());
 
         // ── L'interrupteur « avec compléments » ──
         ok('Un complément ne compte QUE dans la version avec compléments',(()=>{
@@ -64154,12 +64723,101 @@ function testExercices(){
           return (b&&/90 g/.test(b.q))?true:_echec(JSON.stringify(b));})());
 
         // ══════ LES LIGNES DE TEXTE ══════
-        ok('Une note et une ligne de fruit ne comptent dans aucune macro',(()=>{
+        // ══════ LES DEUX APPORTS QUE LE SQUELETTE NE NOMME PAS ══════
+        ok('Une portion de fruit vaut 20 g de glucides, comme dans les huit tableurs',(()=>{
+          if(PLAN_FRUIT_GLUCIDES!==20) return _echec('constante à '+PLAN_FRUIT_GLUCIDES);
+          const plan={squelette:[{id:'f',repas:'collation1',fruit:true}]};
+          const c=planCouverture(plan,_ch);
+          if(c.c!==20) return _echec('glucides couverts : '+c.c);
+          if(c.p!==0||c.l!==0) return _echec('le fruit apporte autre chose que des glucides');
+          return c.kcal===80?true:_echec('kcal : '+c.kcal);})());
+        ok('Deux portions de fruit comptent deux fois',(()=>{
+          const plan={squelette:[{id:'a',repas:'petit_dej',fruit:true},
+            {id:'b',repas:'collation1',fruit:true}]};
+          const c=planCouverture(plan,_ch);
+          return (c.c===40&&c.fruits.n===2)?true:_echec(JSON.stringify(c.fruits));})());
+        ok('Le fruit compte dans le repas où il est posé',(()=>{
+          const plan={squelette:[{id:'a',repas:'collation1',fruit:true}]};
+          const c=planCouverture(plan,_ch);
+          return c.parRepas.collation1.c===20
+            ?true:_echec(String(c.parRepas.collation1.c));})());
+        ok('L\'huile de cuisson ajoute 10 g de lipides PAR repas cuisiné',(()=>{
+          if(PLAN_HUILE_CUISSON_LIP!==10) return _echec('constante à '+PLAN_HUILE_CUISSON_LIP);
+          // Deux repas à source libre — midi et soir — comme dans les huit
+          // tableurs : le total fait donc 20, exactement leur « +20 » en dur.
+          const plan={squelette:[{id:'a',repas:'midi',src:'p'},{id:'b',repas:'midi',src:'c'},
+            {id:'c',repas:'soir',src:'p'},{id:'d',repas:'soir',src:'c'}]};
+          const c=planCouverture(plan,_ch);
+          if(c.huileCuisson.repas!==2)
+            return _echec(c.huileCuisson.repas+' repas cuisinés au lieu de 2');
+          return (c.l===20&&c.huileCuisson.lipides===20)?true:_echec('lipides : '+c.l);})());
+        ok('Un repas qui porte DEUX sources ne compte qu\'une huile',(()=>{
+          // On compte les repas, pas les sources : midi avec une protéine et
+          // un glucide reste une seule poêle.
+          const plan={squelette:[{id:'a',repas:'midi',src:'p'},{id:'b',repas:'midi',src:'c'}]};
+          const c=planCouverture(plan,_ch);
+          return (c.huileCuisson.repas===1&&c.l===10)?true:_echec(JSON.stringify(c.huileCuisson));})());
+        ok('Trois repas cuisinés donnent 30 g, et pas toujours 20',(()=>{
+          const plan={squelette:[{id:'a',repas:'midi',src:'p'},{id:'b',repas:'soir',src:'p'},
+            {id:'c',repas:'collation1',src:'p'}]};
+          return planCouverture(plan,_ch).l===30
+            ?true:_echec(String(planCouverture(plan,_ch).l));})());
+        ok('Sans repas à source libre, aucune huile n\'est ajoutée',(()=>{
+          const plan={squelette:[{id:'a',repas:'midi',ciqual:4,q:100,u:'g'}]};
+          const c=planCouverture(plan,_ch);
+          return (c.huileCuisson.lipides===0&&c.huileCuisson.repas===0)
+            ?true:_echec(JSON.stringify(c.huileCuisson));})());
+        ok('Les deux montants réduisent RÉELLEMENT le restant, donc les grammages',(()=>{
+          // C'est tout l'enjeu : sans eux, l'athlète pesait plus que sa cible.
+          const sq=[{id:'a',repas:'midi',src:'c'},{id:'b',repas:'soir',src:'c'},
+            {id:'f',repas:'collation1',fruit:true}];
+          const plan={squelette:sq,sources:{proteines:[],glucides:[10]}};
+          const cib={p:200,c:300,l:70};
+          const couv=planCouverture(plan,_ch);
+          const r=planRestant(cib,couv);
+          if(r.c!==280) return _echec('restant glucides '+r.c+' au lieu de 280');
+          if(r.l!==50) return _echec('restant lipides '+r.l+' au lieu de 50');
+          const q=planSources(plan,r,_ch).glucides.liste[0].q;
+          // 280 / 2 repas / 0,80 = 175 g, contre 187 g sans ces deux apports.
+          return _pres(q,175)?true:_echec('grammage '+Math.round(q));})());
+        ok('Le coach peut corriger les deux montants sur son plan',(()=>{
+          const sq=[{id:'a',repas:'midi',src:'p'},{id:'f',repas:'collation1',fruit:true}];
+          const c=planCouverture({squelette:sq,fruitGlucidesG:15,huileCuissonG:5},_ch);
+          return (c.c===15&&c.l===5)?true:_echec('c='+c.c+' l='+c.l);})());
+        ok('Un montant mis à zéro éteint bien l\'apport',(()=>{
+          const sq=[{id:'a',repas:'midi',src:'p'},{id:'f',repas:'collation1',fruit:true}];
+          const c=planCouverture({squelette:sq,fruitGlucidesG:0,huileCuissonG:0},_ch);
+          return (c.c===0&&c.l===0)?true:_echec('c='+c.c+' l='+c.l);})());
+        ok('Les deux montants sont ANNONCÉS au coach, pas ajoutés en douce',(()=>{
+          const couv={fruits:{n:2,parPortion:20,glucides:40},
+            huileCuisson:{repas:2,parRepas:10,lipides:20}};
+          const h=_cplHtmlImplicites(couv);
+          if(!/2 portions de fruit à 20 g/.test(h)) return _echec('les fruits ne sont pas dits');
+          return /20 g de lipides d'huile de cuisson/.test(h.replace(/&#39;/g,"'"))
+            ?true:_echec('l\'huile n\'est pas dite : '+h.replace(/<[^>]*>/g,' ').slice(0,140));})());
+        ok('Et annoncés à l\'athlète, qui refait ses totaux à la main',(()=>{
+          const h=_htmlHuileCuissonAthlete({huileCuisson:{repas:2,parRepas:10,lipides:20}});
+          if(!/20 g d/.test(h)) return _echec('le montant n\'est pas dit');
+          return _htmlHuileCuissonAthlete({huileCuisson:{repas:0,parRepas:10,lipides:0}})===''
+            ?true:_echec('la phrase sort même sans huile');})());
+        ok('La ligne de fruit affiche sa valeur dans le programme de l\'athlète',(()=>{
+          const u=_pa({nutrition:Object.assign(_macros({kcal:2600,p:200,g:300,l:70,f:36}),
+            {plan:{squelette:[{id:'f',repas:'collation1',fruit:true}],
+             sources:{proteines:[],glucides:[]}}})});
+          const _s=currentUser,_sDB=_ciqualDB;
+          let h='';
+          try{ currentUser=u; _ciqualDB=Object.keys(_AL).map(k=>_AL[k]); h=_htmlPlanAthlete(u); }
+          finally{ currentUser=_s; _ciqualDB=_sDB; }
+          return /20<u> g de glucides<\/u>/.test(h)
+            ?true:_echec('la valeur n\'apparaît pas sur la ligne');})());
+
+        ok('Une note ne compte dans aucune macro, le fruit compte ses glucides',(()=>{
           const plan={squelette:[{id:'n1',repas:'midi',note:'Sous forme de PANCAKES'},
             {id:'f1',repas:'midi',fruit:true},
             {id:'a1',repas:'midi',ciqual:5,q:100,u:'g'}]};
           const c=planCouverture(plan,_ch);
-          if(c.p!==21) return _echec('la couverture vaut '+c.p);
+          if(c.p!==21) return _echec('la couverture protéique vaut '+c.p);
+          if(c.c!==20) return _echec('le fruit n\'apporte pas ses 20 g : '+c.c);
           if(c.irresolus.length) return _echec('une ligne de texte est passée pour un aliment');
           return c.parRepas.midi.lignes.length===3
             ?true:_echec(c.parRepas.midi.lignes.length+' lignes rendues');})());
