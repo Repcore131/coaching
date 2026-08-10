@@ -62610,6 +62610,62 @@ function testExercices(){
         const h=_htmlLigneDots([true,false,null,true,true,false,null],28);
         return (h.match(/border-radius:50%/g)||[]).length===7
           ?true:_echec((h.match(/border-radius:50%/g)||[]).length+' pastilles');})());
+      // ── LE COMPTAGE, ET PAS SEULEMENT SON VOCABULAIRE ────────────────
+      // L'assertion ci-dessus est LEXICALE : elle cherche « respected » dans
+      // le texte de la fonction. Elle serait restée verte pendant toute la
+      // régression — un mauvais chemin de lecture contient le mot lui aussi.
+      // Celle-ci pilote le vrai rendu et lit les vraies pastilles.
+      ok('Les pastilles et le score lisent nutrition.days[k].respected',(()=>{
+        if(!document.getElementById('clh-nutri-dots')
+          ||!document.getElementById('clh-nutri-score'))
+          return _echec('les emplacements n\'existent pas');
+        const _sv=currentUser, _ss=window.saveUser;
+        try{
+          window.saveUser=()=>true;
+          currentUser={id:'nd',email:'nd@t',role:'athlete',exAlias:{},exMuscles:{},
+            programs:{},sessions:[],bilans:[],nutrition:{days:{}}};
+          const auj=localISODate(new Date());
+          const lire=()=>{
+            renderNutriDots();
+            const dots=[...document.querySelectorAll('#clh-nutri-dots > div > div:first-child')]
+              .map(d=>{const b=d.style.background;
+                return /green/.test(b)?'v':/red/.test(b)?'r':/border/.test(b)?'g':'?';});
+            const el=document.getElementById('clh-nutri-score');
+            return {dots:dots.join(''),score:el.textContent,couleur:el.style.color};
+          };
+          // 1. Rien de renseigné : sept pastilles neutres, zéro.
+          let e=lire();
+          if(e.dots!=='ggggggg') return _echec('au départ : '+e.dots);
+          if(e.score!=='0/7') return _echec('au départ : '+e.score);
+          // 2. « OUI » aujourd'hui : une verte, et le score monte d'un.
+          currentUser.nutrition.days[auj]={respected:true};
+          e=lire();
+          if((e.dots.match(/v/g)||[]).length!==1) return _echec('après OUI : '+e.dots);
+          if(e.score!=='1/7') return _echec('après OUI : '+e.score);
+          // 3. « NON » : une rouge, et le score REDESCEND — répondre non
+          //    n'incrémente jamais.
+          currentUser.nutrition.days[auj]={respected:false};
+          e=lire();
+          if((e.dots.match(/r/g)||[]).length!==1) return _echec('après NON : '+e.dots);
+          if(e.score!=='0/7') return _echec('après NON : '+e.score);
+          if((e.dots.match(/g/g)||[]).length!==6)
+            return _echec('les jours non renseignés ne sont pas neutres : '+e.dots);
+          // 4. LE CLOISONNEMENT. Un « oui » d'il y a neuf jours ne compte pas :
+          //    c'est le defaut qui avait fait deriver le score.
+          const vieux=new Date(); vieux.setDate(vieux.getDate()-9);
+          currentUser.nutrition.days[localISODate(vieux)]={respected:true};
+          currentUser.nutrition.days[auj]={respected:true};
+          e=lire();
+          if(e.score!=='1/7') return _echec('la semaine passée est comptée : '+e.score);
+          // 5. La couleur est celle du score « Cette semaine » de la diète.
+          const attendue=(String(_renderStrictDiet).match(/color:(#f5c518)/)||[])[1];
+          if(!attendue) return _echec('la couleur de référence a changé de forme');
+          const rgb=e.couleur.replace(/[^0-9,]/g,'').split(',').map(Number);
+          const hex='#'+rgb.map(n=>n.toString(16).padStart(2,'0')).join('');
+          return hex===attendue
+            ?true:_echec('couleur '+hex+' au lieu de '+attendue);
+        } finally { currentUser=_sv; window.saveUser=_ss; }})());
+
 
       currentUser=sauveU;
     })();
