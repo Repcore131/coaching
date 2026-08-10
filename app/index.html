@@ -9879,7 +9879,16 @@ function _coachContactHref(coachId,texte,users){
   // ni celui du profil public, ni celui du dossier local. Le repli email
   // ci-dessous reste : joindre son coach par mail n'expose pas un numéro
   // personnel, et l'adresse sert déjà à l'authentification.
-  const _src=coach?.phone?coach:_pub;
+  //
+  // ON CHOISIT LA SOURCE QUI PORTE UN NUMÉRO CONSENTI, pas celle qui porte
+  // un numéro. L'ancien « coach?.phone ? coach : _pub » se décidait sur la
+  // seule présence d'un phone : un dossier coach portant un numéro hérité,
+  // sans objet `contact`, masquait le profil public qui, lui, portait le
+  // consentement. contactNumero rendait '' et « Un souci ? » retombait sur
+  // le mail alors que le WhatsApp était publié.
+  // Aucune permission n'est relâchée : contactNumero exige toujours
+  // mode==='whatsapp' ET un consentAt horodaté, sur la source retenue.
+  const _src=contactNumero(coach)?coach:_pub;
   const phone=contactNumero(_src);
   if(phone) return texte?waLink(_src.phone,texte):('https://wa.me/'+phone);
   if(!email) return '';
@@ -53064,6 +53073,64 @@ function testExercices(){
           if(contactCoach(p1).mode!=='email') return _echec('mode perdu');
           return contactNumero(p1)===''
             ?true:_echec('un numéro sort en mode email');})());
+        ok('« Un souci ? » mène au WhatsApp EN PREMIER, le mail en repli',(()=>{
+          // Le lien se décidait sur la présence d'un NUMÉRO — « coach?.phone ?
+          // coach : _pub » — alors que c'est le CONSENTEMENT qui commande, et
+          // qu'il vit dans le profil public. Un dossier coach portant un
+          // numéro hérité, sans objet contact, masquait ce profil : le lien
+          // dégringolait sur mailto alors que le coach avait publié son
+          // WhatsApp.
+          const _cu=currentUser,_db=DB.get('users');
+          const CLE='rc_coach_profil',_pf=localStorage.getItem(CLE);
+          const poser=(contact)=>localStorage.setItem(CLE,JSON.stringify(
+            {key:'kev@coach,fr',d:{phone:'+33612345678',contact:contact}}));
+          const lien=(dossier)=>_coachContactHref('c1','',{'kev@coach.fr':dossier});
+          const CONSENTI={mode:'whatsapp',consentAt:'2026-08-01T10:00:00.000Z'};
+          try{
+            currentUser={email:'lea@t.fr',id:'a1',role:'athlete',coachId:'c1',
+              coachEmailKey:'kev@coach,fr'};
+            poser(CONSENTI);
+            const base={id:'c1',email:'kev@coach.fr'};
+            // 1. Dossier du coach absent — le cas ordinaire sur le téléphone
+            //    de l'athlète : le profil public suffit.
+            if(lien(base).indexOf('https://wa.me/33612345678')!==0)
+              return _echec('sans dossier coach : '+lien(base));
+            // 2. LE DÉFAUT : un numéro hérité au dossier, sans consentement
+            //    dans CE dossier. Le profil public porte pourtant le
+            //    consentement — c'est lui qui doit décider.
+            const herite={...base,phone:'+33612345678'};
+            if(lien(herite).indexOf('https://wa.me/')!==0)
+              return _echec('un numéro hérité renvoie encore au mail : '+lien(herite));
+            // 3. Dossier complet : inchangé.
+            const complet={...base,phone:'+33612345678',contact:CONSENTI};
+            if(lien(complet).indexOf('https://wa.me/')!==0)
+              return _echec('dossier complet : '+lien(complet));
+            // LE CONSENTEMENT RESTE MAÎTRE. Aucune permission n'est relâchée :
+            // c'est le coach qui choisit son canal, pas l'application.
+            poser({mode:'email',consentAt:'2026-08-01T10:00:00.000Z'});
+            if(lien(herite).indexOf('mailto:')!==0)
+              return _echec('le mode « e-mail » ne tient plus : '+lien(herite));
+            poser({mode:'aucun'});
+            if(lien(herite).indexOf('mailto:')!==0)
+              return _echec('le retrait du consentement ne tient plus : '+lien(herite));
+            // Et sans coach du tout, aucun lien — rien à expliquer à qui n'a
+            // rien demandé.
+            return _coachContactHref('','',{})===''
+              ?true:_echec('un lien sort sans coach rattaché');
+          } finally { currentUser=_cu; if(_db) DB.set('users',_db);
+            if(_pf===null) localStorage.removeItem(CLE);
+            else localStorage.setItem(CLE,_pf); }})());
+        ok('Le lien « Un souci ? » existe, et il ANNONCE la sortie',(()=>{
+          const a=document.getElementById('clh-contact-link');
+          if(!a) return _echec('le lien de contact a disparu de l\'accueil');
+          const t=(a.textContent||'').replace(/\s+/g,' ').trim();
+          if(!/Un souci/.test(t)) return _echec('libellé : '+t);
+          // On quitte RepCore : le dire AVANT, pas après.
+          if(!/quittes RepCore/i.test(CONTACT_SORTIE))
+            return _echec('la mention de sortie a changé : '+CONTACT_SORTIE);
+          return /rel="noopener"/.test(a.outerHTML)&&a.target==='_blank'
+            ?true:_echec('le lien s\'ouvre sans noopener, ou dans l\'app');})());
+
         ok('contactCoach et contactNumero sont PURES',(()=>{
           const u=_pub({contact:{mode:'whatsapp',consentAt:'2026-08-05T10:00:00.000Z',horaires:'9h-18h'}});
           const avant=JSON.stringify(u);
