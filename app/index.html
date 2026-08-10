@@ -57044,6 +57044,81 @@ function testExercices(){
              const r=cleCoachDe({coachId:'c9'});
              DB.set('users',s); return r==='k@c,fr';})());
     ok('Sans coach du tout, aucune clé',cleCoachDe({})===null&&cleCoachDe(null)===null);
+    // ══════ RÉVOCATION DU COACH : LA CLÉ DOIT TOMBER ══════
+    // coachEmailKey n'est pas un champ d'affichage : les règles RTDB
+    // accordent au coach la lecture ET l'écriture du dossier de l'athlète
+    // sur la seule foi de cette valeur. Tant qu'elle reste, l'ex-coach garde
+    // ses droits côté serveur, quoi qu'affiche l'application.
+    ok('Les trois cas de coachEmailKey, joués sur le code embarqué',(()=>{
+      // On découpe le bloc dans la source de la fonction livrée et on
+      // l'exécute. _doPushOne étant asynchrone, l'appeler entier ne dirait
+      // rien de synchrone ; ce découpage-ci fait répondre le vrai code.
+      const src=String(CLOUD._doPushOne);
+      const i0=src.indexOf('if(safe.coachId){');
+      const i1=src.indexOf('if(safe.sessions_config)',i0);
+      if(i0<0||i1<0) return _echec('bloc coachEmailKey introuvable dans _doPushOne');
+      let jouer;
+      try{ jouer=new Function('safe','DB',src.slice(i0,i1)+';return safe;'); }
+      catch(e){ return _echec('bloc non exécutable : '+e.message); }
+      const CO={id:'c1',email:'kevin.pro@mail.com'};
+      const cache={get:()=>({k:CO})}, vide={get:()=>({})};
+      // 1. Coach rattaché et connu : la clé porte son adresse encodée. Les
+      //    DEUX points doivent être remplacés, pas seulement le premier.
+      const a=jouer({coachId:'c1'},cache);
+      if(a.coachEmailKey!=='kevin,pro@mail,com')
+        return _echec('coach rattaché : '+JSON.stringify(a.coachEmailKey));
+      // 2. Coach rattaché mais absent du cache — l'appareil neuf, où
+      //    l'athlète a saisi un code sans avoir jamais vu la fiche. Écraser
+      //    à null ici annulerait à chaque push la clé posée au rattachement,
+      //    et le coach n'obtiendrait jamais l'accès.
+      const b=jouer({coachId:'c1',coachEmailKey:'kevin,pro@mail,com'},vide);
+      if(b.coachEmailKey!=='kevin,pro@mail,com')
+        return _echec('coach hors cache : la clé a été perdue');
+      const c=jouer({coachId:'c1'},vide);
+      if(c.coachEmailKey!==null)
+        return _echec('hors cache sans clé antérieure : '+JSON.stringify(c.coachEmailKey));
+      // 3. LE CRITÈRE. « Libérer » et la suppression du compte coach mettent
+      //    tous deux coachId à null avant de pousser.
+      const d=jouer({coachId:null,coachEmailKey:'kevin,pro@mail,com'},cache);
+      if(d.coachEmailKey!==null)
+        return _echec('après révocation, la clé survit : '+JSON.stringify(d.coachEmailKey));
+      // null et undefined ne sont PAS interchangeables : c'est la valeur
+      // null transmise qui fait supprimer la clé côté serveur. undefined
+      // disparaîtrait du JSON, et Firebase laisserait l'ancienne en place.
+      return JSON.stringify(d).indexOf('"coachEmailKey":null')>=0
+        ?true:_echec('null ne survit pas à la sérialisation : '+JSON.stringify(d));})());
+    ok('Les deux chemins de révocation délient PUIS poussent',(()=>{
+      // Poser coachId à null sans pousser laisserait la clé intacte côté
+      // serveur : l'application afficherait « libéré » pendant que l'ex-coach
+      // continuerait de lire et d'écrire.
+      const off=String(executeOffboard);
+      if(!/a\.coachId=targetId;/.test(off))
+        return _echec('« Libérer » ne pose plus coachId');
+      if(!/envois\.push\(CLOUD\.pushOne\(a\.email,a\)\)/.test(off))
+        return _echec('« Libérer » ne pousse plus les athlètes déliés');
+      // En mode « free », targetId reste null : c'est ce qui fait tomber la
+      // clé au push suivant, par la branche else de _doPushOne.
+      if(!/action==='free'/.test(off))
+        return _echec('le mode « libérer sans coach » a disparu');
+      const del=String(requestAccountDeletion);
+      if(!/u\.coachId=null;/.test(del))
+        return _echec('la suppression du compte coach ne délie plus');
+      return /CLOUD\.pushOne\(k,u\)/.test(del)
+        ?true:_echec('la déliaison n\'est plus poussée');})());
+    ok('Un coach ne peut pas se prolonger l\'accès : la règle est un .validate',(()=>{
+      // Les .write CASCADENT : accordés sur un ancêtre, aucun descendant ne
+      // peut les reprendre. Le .write de /users/$emailKey accorde déjà
+      // l'écriture au coach — un « .write » posé sur coachEmailKey serait
+      // purement décoratif. Seul un .validate, qui ne cascade pas, peut
+      // restreindre un champ dont le parent est ouvert.
+      // database.rules.json est un fichier séparé que la suite ne charge
+      // pas : le contrôle qui l'évalue vraiment est check_revoc.js, qui
+      // rejoue les règles des deux côtés. Ce qui suit garde la RAISON, pour
+      // qu'elle ne se perde pas si quelqu'un veut « simplifier » en .write.
+      const d=String(CLOUD._doPushOne);
+      return d.indexOf('coachEmailKey')>=0
+        ?true:_echec('_doPushOne ne touche plus à coachEmailKey');})());
+
 
     localStorage.setItem('rc_coach_profil',JSON.stringify({key:'kevin@coach,fr',
       d:{teamName:'RepCore',promoBanners:[{imageUrl:'https://x/y.jpg'}]}}));
