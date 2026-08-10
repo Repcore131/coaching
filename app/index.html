@@ -53558,6 +53558,63 @@ function testExercices(){
           // ouvrirBanque refuse aussi de son côté : deux gardes, pas une.
           return /peutConsulterBanque\(\)/.test(String(ouvrirBanque))
             ?true:_echec('ouvrirBanque n\'a plus de garde');})());
+        // ── L'EXCEPTION DE L'ÉDITEUR PARTAGÉ ────────────────────────────
+        // s-coach-program n'est pas un écran coach : c'est l'éditeur
+        // d'exercices que l'athlète ouvre pour SA propre séance, depuis
+        // « Gérer mes séances ». La garde de préfixe le bloquait, et le seul
+        // signal qui distingue les deux usages est _progEditorCtx.mode — posé
+        // par openSessionExercises AVANT l'appel à go(). L'ordre compte :
+        // inversé, l'athlète serait éjecté de son propre éditeur.
+        //
+        // Cette exception n'était verrouillée par RIEN. Un refactor de
+        // _progEditorCtx aurait fait revenir la régression en silence.
+        ok('L\'athlète atteint l\'éditeur pour SA séance, et lui seul',(()=>{
+          const _sv=currentUser, _sc=_progEditorCtx, _st=window.toast;
+          const vus=[];
+          // _actif vit dans une AUTRE portée de la suite : on redéfinit le
+          // sien plutôt que d'en dépendre à distance.
+          const _ec=()=>(document.querySelector('.screen.active')||{}).id;
+          try{
+            window.toast=(m)=>{ vus.push(String(m)); };
+            currentUser={id:'ge',email:'ge@t',role:'athlete',exAlias:{},
+              exMuscles:{},programs:{},sessions:[],bilans:[],nutrition:{},
+              sessions_config:[{day:'Lundi',name:'S',active:true,exercises:[]}]};
+            // 1. En contexte d'édition athlète : l'écran s'ouvre, sans refus.
+            _progEditorCtx={mode:'athlete',sessionIdx:0};
+            vus.length=0;
+            go('s-coach-program');
+            if(_ec()!=='s-coach-program')
+              return _echec('l\'athlète est éjecté : '+_ec());
+            if(vus.some(m=>/Accès réservé au coach/.test(m)))
+              return _echec('un refus est prononcé');
+            // 2. HORS de ce contexte, le même écran reste fermé.
+            _progEditorCtx={mode:'clientProgram'};
+            vus.length=0;
+            go('s-coach-program');
+            if(_ec()==='s-coach-program')
+              return _echec('l\'éditeur s\'ouvre sans contexte d\'édition');
+            if(!vus.some(m=>/Accès réservé au coach/.test(m)))
+              return _echec('aucun refus prononcé');
+            // 3. Les VRAIS écrans coach restent fermés, MÊME en contexte
+            //    athlète : c'est ce qui prouve que l'exception n'a pas
+            //    affaibli la garde.
+            const interdits=['s-coach-sessions','s-coach-programs',
+              's-coach-client','s-coach-prog-template','s-coach-banque'];
+            const passes=[];
+            for(const id of interdits){
+              _progEditorCtx={mode:'athlete',sessionIdx:0};
+              go(id);
+              if(_ec()===id) passes.push(id);
+            }
+            if(passes.length) return _echec('atteints : '+passes.join(', '));
+            // 4. L'ORDRE dans openSessionExercises : le contexte AVANT go().
+            const src=String(openSessionExercises);
+            const iCtx=src.indexOf('_progEditorCtx={mode:\'athlete\'');
+            const iGo=src.indexOf('go(\'s-coach-program\')');
+            if(iCtx<0||iGo<0) return _echec('la séquence a changé de forme');
+            return iCtx<iGo?true:_echec('le contexte est posé APRÈS go()');
+          } finally { currentUser=_sv; _progEditorCtx=_sc; window.toast=_st; }})());
+
         ok('Le sélecteur ne décide RIEN de ce qu\'on fera de l\'exercice',(()=>{
           // Il rend une fiche à qui l'a ouvert. C'est ce qui permettra au lot 3
           // de le brancher ailleurs sans le rouvrir.
