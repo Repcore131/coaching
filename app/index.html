@@ -15445,10 +15445,14 @@ function _validerCreationExo(){
     if(e){ e.textContent=r.raison; e.style.display='block'; }
     return false;
   }
-  try{ saveUser(); }catch(e){}
+  // L'exercice n'existe pour l'instant que dans currentUser : si le quota
+  // déborde, il disparaît au rechargement. L'annoncer créé sans le savoir
+  // envoyait le coach construire une séance autour d'un exercice perdu.
+  let ok=false;
+  try{ ok=saveUser(); }catch(e){}
   closeModal();
   bqOnglet('perso');
-  toast('Exercice créé ✓','var(--green)');
+  toastEcriture(ok,'Exercice créé ✓','l\'exercice est');
   return true;
 }
 
@@ -16453,8 +16457,9 @@ function saveProgram(){
       // séance terminée suffit à ne rien perdre, et le dossier du coach n'est
       // pas réécrit à chaque caractère tapé.
       // Il n'atteint PAS l'athlète : c'est saveCoachSessions qui publie.
-      if(enregistrerBrouillon()) try{ saveUser(); }catch(e){}
-      toast('Séance enregistrée en brouillon');
+      let broOk=false;
+      if(enregistrerBrouillon()){ try{ broOk=saveUser(); }catch(e){} }
+      toastEcriture(broOk,'Séance enregistrée en brouillon','le brouillon est');
       go('s-coach-sessions');loadCoachSessionSlots();return;
     }
     // L'athlete edite sa propre seance depuis le gestionnaire de seances
@@ -40358,8 +40363,7 @@ function savePesee(){
   if(ant&&Math.abs(v-ant.kg)>PESEE_ECART_CONFIRM
      &&!confirm('Écart de '+Math.abs(v-ant.kg).toFixed(1)+' kg avec ta dernière pesée ('+ant.kg+' kg).\n\nC\'est bien '+v+' kg ?')) return;
   if(!_recordWeight(auj,v)){ toast('⚠️ Pesée refusée','var(--red)'); return; }
-  saveUser();
-  toast('Pesée enregistrée 👍');
+  toastEcriture(saveUser(),'Pesée enregistrée 👍','ta pesée est');
   renderCartePesee();
 }
 // ── Onglet Poids : points bruts + moyenne mobile ────────────────────────────
@@ -40601,9 +40605,9 @@ function confirmerPhase(){
   if(!changerPhase(currentUser,t,null,'athlete')) return;
   currentUser.phaseRefusee=null;
   _phChoix=null;
-  saveUser();
+  const ok=saveUser();
   closeModal();
-  toast(PHASES[t].lib+' enregistrée 👍');
+  toastEcriture(ok,PHASES[t].lib+' enregistrée 👍','ta phase est');
   if(document.getElementById('clh-phase')) loadClientHome();
   const bp=document.getElementById('prog-bandeau-phase');
   if(bp) renderBandeauPhase();
@@ -42851,9 +42855,15 @@ function _resizeImage(file,maxW,maxH,quality){
 }
 function uploadCoachPhoto(input){
   const f=input.files[0];if(!f) return;
-  if(f.size>3*1024*1024){toast('Image trop lourde (max 3 Mo)','var(--orange)');return;}
+  // 20 Mo, comme les envois de PDF de ce fichier. L'ancien plafond de 3 Mo
+  // datait d'avant la compression : il refusait une photo de téléphone
+  // ordinaire pour protéger un quota que le redimensionnement en 200×200
+  // rend hors d'atteinte. Ce qui reste plafonné, c'est le décodage.
+  if(f.size>20*1024*1024){toast('Image trop lourde (max 20 Mo)','var(--orange)');return;}
   _resizeImage(f,200,200,0.80).then(b64=>{
-    if(!b64) return;
+    // Le silence d'avant était le pire des cas : rien ne changeait à
+    // l'écran, et rien ne disait pourquoi.
+    if(!b64){toast('Image illisible : réessaie avec une autre photo','var(--orange)');return;}
     currentUser.coachPhoto=b64;
     CLOUD.pushProfilCoach(currentUser);
     const ok=saveUser();
@@ -43063,9 +43073,11 @@ function _renderPromoBanners(coach){
 }
 function uploadAthletePhoto(input){
   const f=input.files[0];if(!f) return;
-  if(f.size>3*1024*1024){toast('Image trop lourde (max 3 Mo)','var(--orange)');return;}
+  // Même raison que pour l'avatar du coach : la compression en 300×300 rend
+  // la taille du fichier d'origine indifférente au quota.
+  if(f.size>20*1024*1024){toast('Image trop lourde (max 20 Mo)','var(--orange)');return;}
   _resizeImage(f,300,300,0.80).then(b64=>{
-    if(!b64) return;
+    if(!b64){toast('Image illisible : réessaie avec une autre photo','var(--orange)');return;}
     currentUser.athletePhoto=b64;
     const ok=saveUser();
     const circle=document.getElementById('atp-photo-circle');
@@ -52604,6 +52616,88 @@ function testExercices(){
           const bloc=src.slice(src.indexOf('QuotaExceededError'),iPush);
           return bloc.indexOf('return')<0
             ?true:_echec('un return est revenu dans le catch');})());
+        ok('saveUser PROPAGE l\'échec du quota, il ne le perd pas',(()=>{
+          // DB.set rend son succès depuis longtemps ; encore faut-il que
+          // saveUser le remonte, sinon les 55 appelants qui lisent son retour
+          // annoncent un « ✓ » sur une écriture qui n'a pas eu lieu.
+          const _si=Storage.prototype.setItem, _t=window.toast, _p=CLOUD.push,
+                _cu=currentUser, _cw=CLOUD.canWrite;
+          try{
+            let ecritures=0;
+            window.toast=()=>{};
+            CLOUD.push=()=>{};
+            CLOUD.canWrite=()=>false;
+            currentUser={email:'q@t.fr',id:'q',role:'athlete'};
+            Storage.prototype.setItem=function(){
+              ecritures++;
+              const e=new Error('quota'); e.name='QuotaExceededError'; throw e; };
+            const r=saveUser();
+            if(r!==false) return _echec('saveUser rend '+r+' malgré un quota plein');
+            // LES DEUX écritures sont tentées. Un && évalué à la volée
+            // court-circuiterait la seconde : le dossier partirait au cloud
+            // mais la session locale ne serait même pas essayée.
+            if(ecritures!==2) return _echec(ecritures+' écriture(s) tentée(s) au lieu de 2');
+            // Et quand tout va bien, il rend bien true — sans quoi
+            // l'assertion ci-dessus passerait avec un saveUser qui rendrait
+            // toujours false.
+            Storage.prototype.setItem=function(){};
+            return saveUser()===true
+              ?true:_echec('saveUser ne rend pas true quand l\'écriture réussit');
+          } finally { Storage.prototype.setItem=_si; window.toast=_t; CLOUD.push=_p;
+                     currentUser=_cu; CLOUD.canWrite=_cw; }})());
+        ok('toastEcriture n\'affiche JAMAIS le succès quand rien n\'est écrit',(()=>{
+          const _t=window.toast;
+          try{
+            const vus=[];
+            window.toast=(m)=>{ vus.push(String(m)); };
+            const r=toastEcriture(false,'Pesée enregistrée ✓','ta pesée est');
+            if(r!==false) return _echec('toastEcriture rend '+r+' sur un échec');
+            if(!vus.length) return _echec('aucun message');
+            // Le message doit être EXPLICITE, pas un silence ni un « ✓ ».
+            if(vus[0].indexOf('✓')>=0) return _echec('un « ✓ » s\'affiche : '+vus[0]);
+            if(!/[Ss]tockage plein/.test(vus[0])) return _echec('message : '+vus[0]);
+            // Et il nomme ce qui est perdu : « ta pesée est … » — l'accord
+            // vient de l'appelant, le helper ne le devine pas.
+            if(vus[0].indexOf('ta pesée est')<0) return _echec('la chose perdue n\'est pas nommée');
+            vus.length=0;
+            return toastEcriture(true,'Pesée enregistrée ✓','ta pesée est')===true
+                   && vus[0]==='Pesée enregistrée ✓'
+              ?true:_echec('le succès n\'est plus annoncé : '+vus[0]);
+          } finally { window.toast=_t; }})());
+        ok('Une photo de téléphone de 8 Mo est acceptée par les deux avatars',(()=>{
+          // L'ancien plafond de 3 Mo datait d'avant la compression : il
+          // refusait une photo d'appareil photo ordinaire pour protéger un
+          // quota que le redimensionnement en 200×200 rend hors d'atteinte.
+          const _ri=_resizeImage, _t=window.toast;
+          try{
+            let passe=0; const vus=[];
+            // Une promesse qui ne se résout jamais : la suite est synchrone,
+            // et on ne veut aucun effet différé — ni écriture, ni toast tardif.
+            _resizeImage=()=>{ passe++; return new Promise(()=>{}); };
+            window.toast=(m)=>{ vus.push(String(m)); };
+            const photo8Mo={files:[{size:8*1024*1024,type:'image/jpeg'}]};
+            uploadCoachPhoto(photo8Mo);
+            uploadAthletePhoto(photo8Mo);
+            if(passe!==2) return _echec(passe+' avatar(s) sur 2 ont laissé passer 8 Mo'
+                                        +(vus.length?' — '+vus[0]:''));
+            if(vus.length) return _echec('un refus s\'affiche : '+vus[0]);
+            // TÉMOIN : le plafond existe toujours. Sans lui, un fichier de
+            // 200 Mo partirait au décodage et ferait tomber l'onglet.
+            passe=0;
+            uploadCoachPhoto({files:[{size:200*1024*1024,type:'image/jpeg'}]});
+            if(passe!==0) return _echec('plus aucun plafond : 200 Mo passent');
+            return vus.length&&/trop lourde/.test(vus[0])
+              ?true:_echec('le refus ne dit pas pourquoi : '+vus[0]);
+          } finally { _resizeImage=_ri; window.toast=_t; }})());
+        ok('Une image illisible le DIT, sur les deux avatars',(()=>{
+          // Le « if(!b64) return; » d'avant était le pire des cas : rien ne
+          // changeait à l'écran, et rien ne disait pourquoi.
+          const manque=['uploadCoachPhoto','uploadAthletePhoto'].filter(n=>{
+            const src=String(window[n]);
+            return !/Image illisible/.test(src);
+          });
+          return manque.length?_echec('silencieux : '+manque.join(', ')):true;})());
+
 
 
         ok('Aucune fonctionnalité de SÉCURITÉ n\'est dégradée',(()=>{
