@@ -55980,6 +55980,73 @@ function testExercices(){
             return _echec('le texte ne dit pas qu\'aucun compte n\'a été créé');
           return LIBRE_ATTENTE_TEXTE.indexOf(CREATOR_EMAIL)>=0
             ?true:_echec('aucune adresse où se signaler');})());
+
+        // ── UNE AUTH REFUSÉE N'ÉCRIT RIEN ───────────────────────────────
+        // Les assertions voisines vérifient l'ORDRE des gardes par rapport à
+        // CLOUD.signIn. Aucune ne vérifiait le RETOUR de signIn lui-même :
+        // sans cette garde, un email déjà pris chez Firebase avec un mauvais
+        // mot de passe laissait un compte fantôme sur l'appareil, qui bloquait
+        // ensuite la vraie connexion.
+        //
+        // Ces trois assertions sont STRUCTURELLES, et c'est assumé :
+        // testExercices est synchrone alors que doRegister cède la main sur
+        // « await CLOUD.signIn ». Un test qui appellerait doRegister se
+        // terminerait AVANT que la garde s'exécute et passerait à vide — ce
+        // serait pire que pas de test. Le comportement, lui, a été vérifié en
+        // navigateur : rc_users et rc_session inchangés, pullUser jamais
+        // atteint, et les trois phrases rendues.
+        ok('La garde d\'auth précède TOUTE écriture locale',(()=>{
+          const dr=String(doRegister);
+          const iAuth=dr.indexOf('await CLOUD.signIn(');
+          const iGarde=dr.indexOf('if(!authOk)');
+          const iUsers=dr.indexOf("DB.set('users'");
+          const iSess=dr.indexOf("DB.set('session'");
+          if(iAuth<0) return _echec('l\'appel à CLOUD.signIn est introuvable');
+          if(iGarde<0) return _echec('la garde !authOk a disparu');
+          if(!(iAuth<iGarde)) return _echec('la garde précède l\'appel');
+          if(iUsers<0) return _echec('plus aucune écriture users : ancre perdue');
+          if(!(iGarde<iUsers)) return _echec('une écriture users précède la garde');
+          if(iSess>=0&&!(iGarde<iSess)) return _echec('une écriture session précède la garde');
+          // Et rien ne s'écrit ENTRE l'appel et la garde.
+          return dr.slice(iAuth,iGarde).indexOf('DB.set')<0
+            ?true:_echec('une écriture se glisse entre signIn et la garde');})());
+        ok('La garde est EXÉCUTÉE, pas seulement présente',(()=>{
+          // Même méthode que la garde de format du code d'invitation : la
+          // position ne prouve rien — « if(false && !authOk) » la garderait au
+          // bon endroit sans plus rien refuser. On extrait la CONDITION RÉELLE
+          // et on l'exécute sur les deux valeurs qui comptent.
+          const dr=String(doRegister);
+          const ligne=dr.split('\n').find(l=>l.indexOf('if(!authOk)')>=0);
+          if(!ligne) return _echec('la ligne de garde est introuvable');
+          const t=ligne.trim();
+          const cond=t.slice(3,t.lastIndexOf(')'));
+          let f;
+          try{ f=new Function('authOk','return ('+cond+');'); }
+          catch(e){ return _echec('condition illisible : '+cond); }
+          if(f(false)!==true) return _echec('un refus ne déclenche pas la garde');
+          if(f(true)!==false) return _echec('un succès déclenche la garde');
+          // Et le corps de la garde SORT vraiment.
+          const apres=dr.slice(dr.indexOf('if(!authOk)'));
+          const fin=apres.indexOf('\n  }');
+          return apres.slice(0,fin>0?fin:400).indexOf('return ')>=0
+            ?true:_echec('la garde ne retourne pas');})());
+        ok('Les trois motifs de refus ont chacun leur phrase',(()=>{
+          // Un message unique aurait envoyé chercher un mot de passe oublié
+          // quelqu'un qui est simplement hors ligne.
+          const dr=String(doRegister);
+          if(dr.indexOf("_signInErr==='wrong_password'")<0)
+            return _echec('le cas « compte déjà pris » n\'est plus distingué');
+          if(dr.indexOf("_signInErr==='network'")<0)
+            return _echec('le cas hors ligne n\'est plus distingué');
+          if(!/Se connecter/.test(dr)||!/Mot de passe oublié/.test(dr))
+            return _echec('le message ne dit pas quoi faire');
+          if(!/Pas de connexion/.test(dr))
+            return _echec('le message hors ligne a disparu');
+          if(!/Réessaie/.test(dr)) return _echec('aucun repli pour les autres erreurs');
+          // Et signIn pose bien ces deux motifs, sinon les branches sont mortes.
+          const si=String(CLOUD.signIn);
+          return /_signInErr='wrong_password'/.test(si)&&/_signInErr='network'/.test(si)
+            ?true:_echec('signIn ne pose plus ces motifs');})());
         ok('Un e-mail déjà inscrit N\'ÉCRASE JAMAIS le dossier existant',(()=>{
           const dr=String(doRegister);
           const iCloud=dr.indexOf('const cloudUser=await CLOUD.pullUser(em)');
