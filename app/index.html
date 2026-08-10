@@ -1973,6 +1973,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="ccd-volume"></div>
       <div id="ccd-plateaux"></div>
       <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:16px" onclick="ouvrirRapport(getOwnedClient(currentClientId))">Rapport de la période</button>
+      <div id="ccd-reds"></div>
       <div id="ccd-securite"></div>
       <div id="ccd-photos-progression"></div>
       <div id="ccd-habitudes"></div>
@@ -3011,6 +3012,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar"><button class="back-btn" onclick="go('s-client-home');loadClientHome()">←</button><span class="topbar-title">Évolution</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
+      <div id="prog-reds"></div>
       <div id="prog-encart-osseux"></div>
       <div id="prog-bandeau-phase"></div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px" id="prog-tabs">
@@ -12615,6 +12617,7 @@ function openClientDetail(cid,_refresh){
       :'';
   }catch(e){}
   try{ renderHabitudesCoach(c); }catch(e){}
+  try{ renderRedsCoach(c); }catch(e){}
   try{ renderPhotosCoach(c); }catch(e){}
   // Chips de reponse au bilan : la zone n'existe qu'apres le rendu des
   // reponses, on la peuple donc ici et non a la construction du bloc.
@@ -25839,6 +25842,9 @@ function _htmlEncartOsseux(user){
 function _renderEncartOsseux(){
   const z=document.getElementById('prog-encart-osseux');
   if(z) z.innerHTML=_htmlEncartOsseux(currentUser);
+  // Vigilance energetique : le questionnaire ne s affiche que si les signaux
+  // le justifient, et jamais deux fois en trente jours.
+  try{ renderReds(); }catch(e){}
 }
 function loadProgress(){
   go('s-progress');_renderEncartOsseux();renderBandeauPhase();showProgressTab('poids',document.querySelector('#prog-tabs button'));
@@ -37175,6 +37181,14 @@ function changerPhase(user,type,finPrevue,definiPar){
     try{ toast(TCA_REFUS_SECHE,'var(--orange)'); }catch(e){}
     return false;
   }
+  // Vigilance energetique : meme garde, meme endroit, meme refus parle.
+  if(type==='seche'){
+    let _rv=false; try{ _rv=redsSuspend(user); }catch(e){}
+    if(_rv){
+      try{ toast(REDS_RENVOI,'var(--orange)'); }catch(e){}
+      return false;
+    }
+  }
   // Post-partum : AUCUN blocage. Une question, et elle passe.
   if(type==='seche'&&etatGrossesse(user)==='post_partum'){
     try{ toast(GROSSESSE_Q_POSTNATALE,'var(--orange)'); }catch(e){}
@@ -38793,6 +38807,358 @@ function paliersDeficit(user,jourISO){
 function seuilAlerteSeche(user){
   return sopkApplicable(user)?SOPK_CIBLE_SECHE.alerte:((PHASES.seche||{}).alerte);
 }
+
+// ══════════════ VIGILANCE ÉNERGÉTIQUE — COUCHE QUESTIONNAIRE ══════════════
+// CE MODULE NE DÉPISTE PAS UNE SECONDE FOIS. risqueDeficitEnergetique croise
+// déjà sept critères et paliersDeficit en tire trois paliers ; poser un second
+// dépistage à côté du premier aurait garanti qu'ils se contredisent à l'écran
+// un jour. On PROLONGE : les signaux viennent de là, le questionnaire s'ajoute
+// par-dessus, et les effets passent par la suspension qui existe.
+//
+// LE VOCABULAIRE EST CONTRAINT PAR QUATRE ASSERTIONS qui balaient la
+// production, commentaires compris. On écrit « absence de règles », jamais le
+// terme clinique ; « vigilance énergétique », jamais l'acronyme. Aucun score
+// n'est montré, aucune jauge, aucun pourcentage.
+const REDS_MIN_SIGNAUX=2;
+const REDS_JOURS_SANS_ENTREE=90;
+const REDS_PROMPT_JOURS=30;
+const REDS_SEUIL_GLOBAL=8;
+const REDS_SOUS_SEUILS=Object.freeze({blessures:2,gastro:2,menstruel:4});
+const REDS_RENVOI='Ces éléments méritent un avis médical avant de fixer un '
+  +'objectif de poids. RepCore ne remplace pas une consultation.';
+// La table de correspondance : chaque critère DÉJÀ calculé devient un signal
+// nommé. Aucun n'est recalculé ici.
+const REDS_CODES=Object.freeze({
+  restriction:'restriction_prolongee',
+  plancher:'apport_bas',
+  vitesse:'perte_rapide',
+  absences:'regles_absentes',
+  absences_espacees:'regles_espacees',
+  sommeil:'sommeil_court',
+  douleur:'douleurs_repetees',
+  volume:'volume_haut'
+});
+// PURE. L'état du nœud. Absent = défauts, et la LECTURE n'écrit rien.
+function redsEtat(user){
+  const r=(user&&user.redsScreening)||null;
+  return {
+    level:(r&&r.level)||'green',
+    signals:Array.isArray(r&&r.signals)?r.signals:[],
+    leafq:(r&&r.leafq)||null,
+    optedOut:!!(r&&r.optedOut),
+    lastPromptDate:Number(r&&r.lastPromptDate)||0
+  };
+}
+// PURE. Le module est-il inhibé ? Grossesse et allaitement suspendent tout —
+// même règle, même fonction, on ne crée pas une seconde doctrine.
+function redsInhibe(user){
+  try{ return !!grossesseSuspend(user); }catch(e){ return false; }
+}
+// PURE. Les signaux, datés. Ils sont LUS de risqueDeficitEnergetique, plus
+// deux que ce module ajoute : l'irrégularité SURVENANT EN SÈCHE, et le
+// signalement osseux.
+//
+// RÈGLE 3 et 5 : sous contraception continue, sous « ne se prononce pas », en
+// grossesse ou en allaitement, le signal d'absence de règles est NEUTRALISÉ —
+// une absence provoquée par un traitement n'est pas un signe. Et un journal
+// vide ne le déclenche jamais : l'absence de donnée n'est pas l'absence de
+// règles. Les deux gardes existent déjà dans risqueDeficitEnergetique ; on les
+// double ici parce que ce module ajoute ses propres critères.
+function computeRedsSignals(user,jourISO){
+  if(!user||redsInhibe(user)) return [];
+  const j=jourISO||localISODate(new Date());
+  const out=[];
+  const pousser=(code,date)=>{ if(code&&!out.some(x=>x.code===code)) out.push({code,date:date||j}); };
+  let base=null;
+  try{ base=risqueDeficitEnergetique(user,j); }catch(e){ base=null; }
+  // cycleSansCycle porte DEJA la regle : contraception en continu ou
+  // « ne se prononce pas ». J avais invente une cle qui n existe pas — la
+  // vraie est 'ne_dit_pas', et le predicat existant les couvre toutes deux.
+  const sansCycle=(()=>{
+    try{ return !!cycleSansCycle(user); }catch(e){ return false; }
+  })();
+  const neutralise=sansCycle;
+  for(const cr of ((base&&base.criteres)||[])){
+    const code=REDS_CODES[cr.cle];
+    if(!code) continue;
+    // Les deux signaux de règles tombent sous contraception continue, sous
+    // « ne se prononce pas », et quand le journal est vide.
+    if((code==='regles_absentes'||code==='regles_espacees')
+       &&(neutralise||sansCycle)) continue;
+    pousser(code);
+  }
+  // (a) Plus aucune entrée au journal depuis quatre-vingt-dix jours, ALORS
+  // QU'IL EN EXISTE. RÈGLE 5 : un journal vide ne le déclenche jamais —
+  // l'absence de donnée n'est pas l'absence de règles, et c'est exactement la
+  // confusion qu'on refuse de faire.
+  try{
+    if(!sansCycle){
+      const l=(typeof _cycleRegles==='function')?_cycleRegles(user):[];
+      if(Array.isArray(l)&&l.length){
+        const der=l[l.length-1];
+        const jours=Math.floor((new Date(j+'T00:00:00')-new Date(der+'T00:00:00'))/864e5);
+        if(jours>=REDS_JOURS_SANS_ENTREE) pousser('journal_silencieux',der);
+      }
+    }
+  }catch(e){}
+  // (b) L'IRRÉGULARITÉ, mais SEULEMENT si une sèche est active. Hors sèche,
+  // elle a mille causes et n'appartient pas à ce filet.
+  try{
+    const ph=phaseCourante(user);
+    if(ph&&ph.type==='seche'&&!neutralise&&!sansCycle&&cycleIrregulier(user))
+      pousser('cycle_irregulier');
+  }catch(e){}
+  // (f) Signalement osseux. Il n'existe AUCUN drapeau rouge « osseux » dans le
+  // produit : les cinq signes de DRAPEAUX_ROUGES sont articulaires, et les
+  // sept de DRAPEAUX_GENERAUX ne le sont pas davantage. On lit donc ce qui
+  // existe — une zone déclarée après un choc — plutôt que d'inventer un champ.
+  try{
+    const d=drapeauRougeActif(user);
+    if(d&&Array.isArray(d.cases)&&d.cases.indexOf('choc')>=0)
+      pousser('signalement_osseux',d.date);
+  }catch(e){}
+  return out;
+}
+// PURE. RÈGLE 2 : jamais sur un seul signal.
+// RÈGLE 7 : les signaux valent pour tout le monde, le questionnaire non — sa
+// sous-échelle menstruelle n'aurait pas de sens.
+function shouldPromptLeafq(user,now){
+  if(!user||redsInhibe(user)) return false;
+  try{ if(!isFemale(user.gender)) return false; }catch(e){ return false; }
+  const e=redsEtat(user);
+  if(e.optedOut) return false;                       // RÈGLE 8 : définitif
+  const t=(typeof now==='number')?now:Date.now();
+  if(e.lastPromptDate&&(t-e.lastPromptDate)<REDS_PROMPT_JOURS*864e5) return false;
+  return computeRedsSignals(user).length>=REDS_MIN_SIGNAUX;
+}
+// PURE. Le score, et ses trois sous-scores. Il n'est JAMAIS affiché : il
+// décide, il ne se montre pas. Une réponse manquante compte zéro — à la
+// différence du bilan de sécurité, ce questionnaire n'est pas un filtre de
+// sûreté mais une description, et présumer le pire ferait basculer tout le
+// monde.
+function scoreLeafq(answers){
+  const a=(answers&&typeof answers==='object')?answers:{};
+  const somme=(l)=>l.reduce((n,k)=>n+(Number(a[k])>0?Number(a[k]):0),0);
+  const cles=Object.keys(a);
+  const sub={
+    blessures:somme(cles.filter(k=>/^b/.test(k))),
+    gastro:somme(cles.filter(k=>/^g/.test(k))),
+    menstruel:somme(cles.filter(k=>/^m/.test(k)))
+  };
+  const score=sub.blessures+sub.gastro+sub.menstruel;
+  const depasse=score>=REDS_SEUIL_GLOBAL
+    ||sub.blessures>=REDS_SOUS_SEUILS.blessures
+    ||sub.gastro>=REDS_SOUS_SEUILS.gastro
+    ||sub.menstruel>=REDS_SOUS_SEUILS.menstruel;
+  return {score,sub,depasse};
+}
+// PURE. Le niveau. Trois crans, et le questionnaire ne peut que DURCIR : il ne
+// rattrape jamais des signaux concordants.
+function resolveRedsLevel(signals,leafq){
+  const n=Array.isArray(signals)?signals.length:0;
+  const q=leafq&&leafq.depasse===true;
+  const osseux=Array.isArray(signals)&&signals.some(s=>s&&s.code==='signalement_osseux');
+  if(osseux&&n>=REDS_MIN_SIGNAUX) return 'red';
+  if(q&&n>=REDS_MIN_SIGNAUX) return 'red';
+  if(q||n>=REDS_MIN_SIGNAUX) return 'orange';
+  return 'green';
+}
+// ÉCRIT. Les effets. Le seul point d'écriture du module.
+//
+// LA SUSPENSION N'EST PAS DUPLIQUÉE : refusObjectifPerte porte déjà la
+// priorité grossesse, et changerPhase porte déjà la garde. On pose le niveau,
+// et ce sont ces deux-là qui refusent.
+function applyRedsEffects(user,level){
+  if(!user) return false;
+  const l=(['green','orange','red'].indexOf(level)>=0)?level:'green';
+  if(!user.redsScreening||typeof user.redsScreening!=='object') user.redsScreening={};
+  user.redsScreening.level=l;
+  // RÈGLE : grossesse et allaitement priment. On ne pose rien de plus, et le
+  // message qui sortira est celui qui existe.
+  if(redsInhibe(user)) return false;
+  if(l==='red'){
+    // Le niveau haut réutilise le drapeau EXISTANT, sur la zone conventionnelle
+    // générale. Aucun second mécanisme.
+    try{
+      if(typeof poserDrapeauGeneral==='function'&&!drapeauGeneralActif(user))
+        poserDrapeauGeneral(user,['thoracique']);
+    }catch(e){}
+  }
+  return l!=='green';
+}
+// PURE. L'objectif de perte est-il en pause pour cette raison ? Lu par la
+// carte coach et par le refus.
+function redsSuspend(user){
+  const l=redsEtat(user).level;
+  return l==='orange'||l==='red';
+}
+
+// ── Le questionnaire, 25 items ────────────────────────────────────────────
+// Version française littérale. L'introduction ne dramatise rien : elle dit à
+// quoi ça sert et ce qui se passe ensuite. Les deux boutons de sortie sont
+// respectés — « Plus tard » repousse de trente jours, « Ne plus me proposer »
+// ferme définitivement.
+//
+// Les clés portent leur sous-échelle en préfixe : b = blessures, g = digestif,
+// m = règles. scoreLeafq s'en sert, et rien d'autre.
+const LEAFQ_ITEMS=Object.freeze([
+  {k:'b1',q:'As-tu été blessée au cours des douze derniers mois ?'},
+  {k:'b2',q:'Combien de blessures as-tu eues sur cette période ?'},
+  {k:'b3',q:'As-tu manqué des entraînements à cause d\'une blessure ?'},
+  {k:'b4',q:'As-tu manqué plus de sept jours d\'affilée ?'},
+  {k:'b5',q:'Une même blessure est-elle revenue plusieurs fois ?'},
+  {k:'b6',q:'As-tu déjà eu une fracture liée à l\'entraînement ?'},
+  {k:'b7',q:'Ressens-tu des douleurs osseuses à l\'effort ?'},
+  {k:'g1',q:'As-tu souvent des ballonnements ?'},
+  {k:'g2',q:'Te sens-tu rassasiée très vite en mangeant ?'},
+  {k:'g3',q:'As-tu des douleurs au ventre sans cause connue ?'},
+  {k:'g4',q:'As-tu des remontées acides après les repas ?'},
+  {k:'g5',q:'Es-tu souvent constipée ?'},
+  {k:'g6',q:'As-tu souvent des selles molles ou fréquentes ?'},
+  {k:'g7',q:'Ces troubles gênent-ils tes entraînements ?'},
+  {k:'g8',q:'Ces troubles ont-ils commencé ou empiré récemment ?'},
+  {k:'m1',q:'As-tu déjà eu tes premières règles ?'},
+  {k:'m2',q:'À quel âge les as-tu eues ?'},
+  {k:'m3',q:'Tes cycles sont-ils réguliers depuis un an ?'},
+  {k:'m4',q:'Combien de cycles as-tu eus ces douze derniers mois ?'},
+  {k:'m5',q:'As-tu passé plus de trois mois sans règles cette année ?'},
+  {k:'m6',q:'Cela s\'est-il déjà produit d\'autres années ?'},
+  {k:'m7',q:'Tes règles changent-elles quand ton volume d\'entraînement augmente ?'},
+  {k:'m8',q:'Tes règles changent-elles quand tu manges moins ?'},
+  {k:'m9',q:'Prends-tu une contraception hormonale ?'},
+  {k:'m10',q:'Y a-t-il autre chose que tu veux signaler à ce sujet ?'}
+]);
+const LEAFQ_INTRO='Quelques questions sur ton corps et ton entraînement. '
+  +'Elles servent à savoir si un objectif de poids est bien placé en ce moment. '
+  +'Tu peux les passer, et y revenir plus tard : rien ne se bloque parce que tu '
+  +'ne réponds pas. Tes réponses restent dans ton dossier et ton coach ne voit '
+  +'que le résultat, jamais le détail.';
+const REDS_TITRE='Vigilance énergétique';
+const REDS_LIB_SIGNAUX=Object.freeze({
+  journal_silencieux:'Aucune entrée au journal depuis plus de trois mois',
+  regles_absentes:'Absence de règles signalée',
+  regles_espacees:'Absences de règles espacées',
+  cycle_irregulier:'Cycles irréguliers pendant une sèche',
+  restriction_prolongee:'Sèche qui dure',
+  apport_bas:'Apports collés au plancher',
+  perte_rapide:'Perte de poids rapide',
+  sommeil_court:'Nuits courtes',
+  douleurs_repetees:'Douleurs répétées à l\'entraînement',
+  volume_haut:'Volume au-dessus du repère haut',
+  signalement_osseux:'Signalement après un choc'
+});
+// ── L'écran athlète ───────────────────────────────────────────────────────
+let _leafqRep={};
+function htmlLeafq(){
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:15px 16px;margin-bottom:16px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:9px">${escapeHtml(REDS_TITRE)}</div>
+    <div style="font-size:12.5px;color:#ddd;line-height:1.75;margin-bottom:12px">${escapeHtml(LEAFQ_INTRO)}</div>
+    ${LEAFQ_ITEMS.map(it=>`<div style="padding:8px 0;border-top:1px solid rgba(255,255,255,.06)">
+      <div style="font-size:12px;color:#eee;line-height:1.6;margin-bottom:6px">${escapeHtml(it.q)}</div>
+      <div style="display:flex;gap:6px">
+        ${[['0','Non'],['1','Un peu'],['2','Oui']].map(([v,l])=>
+          `<button type="button" onclick="leafqRepondre('${it.k}',${v},this)"
+            style="flex:1;min-height:36px;border-radius:8px;cursor:pointer;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;
+              background:#111;border:1px solid #2e2e2e;color:var(--sub)">${l}</button>`).join('')}
+      </div>
+    </div>`).join('')}
+    <button class="btn btn-red" style="width:100%;margin-top:14px" onclick="leafqValider()">Envoyer mes réponses</button>
+    <button class="btn btn-outline" style="width:100%;margin-top:8px" onclick="leafqPlusTard()">Plus tard</button>
+    <button class="btn btn-outline" style="width:100%;margin-top:8px;font-size:10.5px" onclick="leafqNePlusProposer()">Ne plus me proposer</button>
+  </div>`;
+}
+function leafqRepondre(k,v,el){
+  _leafqRep[k]=Number(v)||0;
+  try{
+    const p=el.parentNode;
+    for(const b of p.children){ b.style.background='#111'; b.style.borderColor='#2e2e2e'; b.style.color='var(--sub)'; }
+    el.style.background='rgba(224,32,32,.14)'; el.style.borderColor='var(--red)'; el.style.color='#fff';
+  }catch(e){}
+  return true;
+}
+function leafqValider(){
+  const r=scoreLeafq(_leafqRep);
+  if(!currentUser.redsScreening||typeof currentUser.redsScreening!=='object')
+    currentUser.redsScreening={};
+  // Le SCORE est conserve — le coach ne le voit pas, mais une nouvelle
+  // passation doit pouvoir se comparer a la precedente.
+  currentUser.redsScreening.leafq={date:Date.now(),score:r.score,sub:r.sub};
+  const sig=computeRedsSignals(currentUser);
+  currentUser.redsScreening.signals=sig;
+  applyRedsEffects(currentUser,resolveRedsLevel(sig,r));
+  currentUser.redsScreening.lastPromptDate=Date.now();
+  _leafqRep={};
+  saveUser();
+  const z=document.getElementById('prog-reds');
+  if(z) z.innerHTML=redsSuspend(currentUser)
+    ?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:12.5px;color:#eee;line-height:1.75">${escapeHtml(REDS_RENVOI)}${blocDisclaimerSante()}</div>`
+    :'';
+  return true;
+}
+function leafqPlusTard(){
+  if(!currentUser.redsScreening||typeof currentUser.redsScreening!=='object')
+    currentUser.redsScreening={};
+  currentUser.redsScreening.lastPromptDate=Date.now();
+  _leafqRep={};
+  saveUser();
+  const z=document.getElementById('prog-reds');
+  if(z) z.innerHTML='';
+  return true;
+}
+// RÈGLE 8 : définitif. Aucun chemin ne le rouvre.
+function leafqNePlusProposer(){
+  if(!confirm('Ne plus proposer ces questions ? Ce choix est définitif.')) return false;
+  if(!currentUser.redsScreening||typeof currentUser.redsScreening!=='object')
+    currentUser.redsScreening={};
+  currentUser.redsScreening.optedOut=true;
+  currentUser.redsScreening.lastPromptDate=Date.now();
+  _leafqRep={};
+  saveUser();
+  const z=document.getElementById('prog-reds');
+  if(z) z.innerHTML='';
+  return true;
+}
+function renderReds(){
+  const z=document.getElementById('prog-reds');
+  if(!z) return;
+  let h='';
+  try{
+    if(shouldPromptLeafq(currentUser)) h=htmlLeafq();
+    else if(redsSuspend(currentUser))
+      h=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:12.5px;color:#eee;line-height:1.75">${escapeHtml(REDS_RENVOI)}${blocDisclaimerSante()}</div>`;
+  }catch(e){ h=''; }
+  z.innerHTML=h;
+}
+// ── La carte coach ────────────────────────────────────────────────────────
+// Niveau, signaux DATÉS, effets. Aucun score, aucune jauge, aucun pourcentage.
+function htmlRedsCoach(c){
+  const e=redsEtat(c);
+  let sig=[];
+  try{ sig=computeRedsSignals(c); }catch(err){ sig=[]; }
+  if(e.level==='green'&&sig.length<REDS_MIN_SIGNAUX) return '';
+  const lib={green:'Rien à signaler',orange:'À surveiller',red:'À traiter en priorité'}[e.level]||'';
+  const dat=t=>{ try{ return new Date(t).toLocaleDateString('fr-FR'); }catch(x){ return ''; } };
+  return `<div style="background:var(--surface-1);border:1px solid ${e.level==='red'?'var(--red)':'var(--border)'};border-radius:12px;padding:13px;margin-bottom:16px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
+      <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">${escapeHtml(REDS_TITRE)}</span>
+      <span style="font-size:11px;font-weight:800;color:${e.level==='red'?'var(--red)':(e.level==='orange'?'var(--orange)':'var(--sub)')}">${escapeHtml(lib)}</span>
+    </div>
+    ${sig.length?sig.map(x=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid rgba(255,255,255,.05)">
+      <span style="font-size:11.5px;color:#ddd;min-width:0">${escapeHtml(REDS_LIB_SIGNAUX[x.code]||x.code)}</span>
+      <span style="font-size:10.5px;color:var(--text-faint);white-space:nowrap;flex-shrink:0">${escapeHtml(dat(new Date(x.date).getTime?new Date(x.date).getTime():Date.now()))}</span>
+    </div>`).join('')
+    :'<div style="font-size:11.5px;color:var(--text-dim);line-height:1.6">Aucun signal actif.</div>'}
+    ${e.level!=='green'?`<div style="font-size:11px;color:var(--text-dim);line-height:1.6;margin-top:9px;padding-top:8px;border-top:1px solid var(--border)">Objectif de perte de poids en pause. ${escapeHtml(REDS_RENVOI)}</div>`:''}
+    ${e.leafq?`<div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-top:6px">Questionnaire rempli le ${escapeHtml(dat(e.leafq.date))}. Le détail des réponses ne t'est pas transmis.</div>`:''}
+    ${blocDisclaimerSante()}
+  </div>`;
+}
+function renderRedsCoach(c){
+  const z=document.getElementById('ccd-reds');
+  if(!z) return;
+  let h=''; try{ h=c?htmlRedsCoach(c):''; }catch(e){ h=''; }
+  z.innerHTML=h;
+}
 // ══════════════ DÉPISTAGE STRUCTURÉ — SCOFF ═══════════════════════════════
 // CE QUI EXISTAIT ÉTAIT FAUX. Le statut venait d'une REGEX sur un champ de
 // texte libre : /^(non|aucun|aucune|rien|ras|n\/a)\.?$/i, qui exigeait que la
@@ -38895,6 +39261,10 @@ function scoffAPasser(user,now){
 function refusObjectifPerte(user){
   try{ if(grossesseSuspend(user)) return GROSSESSE_REFUS_SECHE; }catch(e){}
   if(aTCA(user)) return TCA_REFUS_SECHE;
+  // Vigilance energetique : troisieme motif, meme point d entree. L ordre
+  // est celui de la doctrine — la grossesse d abord, puis le bilan de
+  // securite, puis les signaux croises.
+  try{ if(redsSuspend(user)) return REDS_RENVOI; }catch(e){}
   return '';
 }
 
@@ -46527,6 +46897,146 @@ function testExercices(){
           const u=_ath({id:'z1',seche:15,kcal:1200,sommeil:5.7,absences:['2026-06-15']});
           const avant=JSON.stringify(u);
           risqueDeficitEnergetique(u); paliersDeficit(u); plancherEffectif(u);
+          return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
+
+        // Le texte VISIBLE, balises et styles retires. Sans lui, chercher un
+        // pourcentage dans du HTML trouve width:100%, et chercher un score
+        // trouve font-size:11px : mes deux premieres assertions tombaient sur
+        // du CSS, pas sur du contenu.
+        const _texteVisible=h=>String(h||'').replace(/<[^>]*>/g,' ')
+          .replace(/&#39;/g,"'").replace(/&amp;/g,'&').replace(/\s+/g,' ').trim();
+        // ── VIGILANCE ÉNERGÉTIQUE : LES SIX CRITÈRES D'ACCEPTATION ───────
+        // Ils vivent DANS le bloc déficit parce que le module le prolonge :
+        // ses signaux sont ceux-là, et une fixture séparée aurait fini par
+        // diverger de celle qui fait foi.
+        ok('Critère : contraception continue et 200 j sans entrée → signal (a) ABSENT',(()=>{
+          _viderCacheSignaux();
+          const u=_ath({id:'r1',seche:15,kcal:1200});
+          u.cycle={contraception:'continue',regles:[_j(200)]};
+          const sig=computeRedsSignals(u);
+          if(sig.some(x=>x.code==='journal_silencieux'))
+            return _echec('le journal silencieux est sorti sous contraception continue');
+          return sig.some(x=>x.code==='regles_absentes')
+            ?_echec('une absence de règles est sortie'):true;})());
+        ok('Témoin : sans contraception, les 200 j déclenchent bien (a)',(()=>{
+          _viderCacheSignaux();
+          const u=_ath({id:'r2',seche:15,kcal:1200});
+          u.cycle={regles:[_j(200)]};
+          const x=computeRedsSignals(u).find(y=>y.code==='journal_silencieux');
+          if(!x) return _echec('signal absent alors que rien ne le neutralise');
+          return x.date===_j(200)?true:_echec('date '+x.date+' au lieu de '+_j(200));})());
+        ok('Critère : un journal VIDE ne déclenche jamais (a)',(()=>{
+          // L'absence de donnée n'est pas l'absence de règles : c'est
+          // exactement la confusion que ce module refuse de faire.
+          _viderCacheSignaux();
+          const u=_ath({id:'r3',seche:15,kcal:1200});
+          u.cycle={regles:[]};
+          if(computeRedsSignals(u).some(x=>x.code==='journal_silencieux'))
+            return _echec('journal vide traité comme une absence');
+          const v=_ath({id:'r4',seche:15,kcal:1200});
+          return computeRedsSignals(v).some(x=>x.code==='journal_silencieux')
+            ?_echec('aucun journal du tout traité comme une absence'):true;})());
+        ok('Critère : sèche de 18 semaines et apport bas → (b) et (d), sollicitation vraie',(()=>{
+          _viderCacheSignaux();
+          const u=_ath({id:'r5',seche:18,kcal:1200});
+          u.cycle={regles:[_j(10)]};
+          const sig=computeRedsSignals(u);
+          if(sig.length<REDS_MIN_SIGNAUX)
+            return _echec('un seul signal : '+sig.map(x=>x.code).join(','));
+          return shouldPromptLeafq(u)===true
+            ?true:_echec('shouldPromptLeafq faux avec '+sig.length+' signaux');})());
+        ok('Critère : jamais sur UN seul signal',(()=>{
+          _viderCacheSignaux();
+          const u=_ath({id:'r6',seche:18});
+          u.cycle={regles:[_j(10)]};
+          const sig=computeRedsSignals(u);
+          if(sig.length!==1) return _echec('fixture muette : '+sig.length+' signaux');
+          if(shouldPromptLeafq(u)) return _echec('sollicitée sur un seul signal');
+          return resolveRedsLevel(sig,null)==='green'
+            ?true:_echec('niveau '+resolveRedsLevel(sig,null));})());
+        ok('Critère : questionnaire à 11, sous-score menstruel élevé → « orange » au minimum',(()=>{
+          const q=scoreLeafq({b1:1,b2:0,g1:2,g2:1,m1:2,m2:2,m3:1,m5:2});
+          if(q.score!==11) return _echec('score '+q.score);
+          if(!q.depasse) return _echec('les seuils ne sont pas franchis');
+          _viderCacheSignaux();
+          const u=_ath({id:'r7',seche:18,kcal:1200});
+          u.cycle={regles:[_j(10)]};
+          const n=resolveRedsLevel(computeRedsSignals(u),q);
+          return (n==='orange'||n==='red')?true:_echec('niveau '+n);})());
+        ok('Critère : « orange » → objectif de perte refusé et phase de sèche interdite',(()=>{
+          const u=_ath({id:'r8'});
+          applyRedsEffects(u,'orange');
+          if(!redsSuspend(u)) return _echec('la suspension n\'est pas active');
+          const r=refusObjectifPerte(u);
+          if(!r) return _echec('refusObjectifPerte reste muette');
+          return r===REDS_RENVOI?true:_echec('motif inattendu : '+r);})());
+        ok('Critère : grossesse → aucune sollicitation, quels que soient les signaux',(()=>{
+          _viderCacheSignaux();
+          const u=_ath({id:'r9',seche:18,kcal:1200,sommeil:5.7,douleur:true});
+          u.cycle={regles:[_j(200)]};
+          u.grossesse={etat:'enceinte',date:Date.now()};
+          if(!grossesseSuspend(u)) return _echec('fixture muette : pas de grossesse');
+          if(computeRedsSignals(u).length) return _echec('des signaux sortent malgré la grossesse');
+          if(shouldPromptLeafq(u)) return _echec('sollicitée pendant la grossesse');
+          applyRedsEffects(u,'red');
+          return refusObjectifPerte(u)===GROSSESSE_REFUS_SECHE
+            ?true:_echec('le motif de grossesse ne prime pas');})());
+        ok('Critère : « ne plus me proposer » est définitif',(()=>{
+          _viderCacheSignaux();
+          const u=_ath({id:'r10',seche:18,kcal:1200});
+          u.cycle={regles:[_j(10)]};
+          if(!shouldPromptLeafq(u)) return _echec('fixture muette');
+          u.redsScreening={optedOut:true};
+          return shouldPromptLeafq(u)===false?true:_echec('la sortie n\'a pas été honorée');})());
+        ok('Critère : « plus tard » repousse de trente jours, pas davantage',(()=>{
+          _viderCacheSignaux();
+          const u=_ath({id:'r11',seche:18,kcal:1200});
+          u.cycle={regles:[_j(10)]};
+          u.redsScreening={lastPromptDate:Date.now()-29*864e5};
+          if(shouldPromptLeafq(u)) return _echec('reproposée avant trente jours');
+          u.redsScreening={lastPromptDate:Date.now()-31*864e5};
+          return shouldPromptLeafq(u)===true?true:_echec('jamais reproposée ensuite');})());
+        ok('Le questionnaire compte vingt-cinq items et n\'affiche aucun score',(()=>{
+          if(LEAFQ_ITEMS.length!==25) return _echec(LEAFQ_ITEMS.length+' items');
+          const h=_texteVisible(htmlLeafq());
+          if(/\bscore\b/i.test(h)) return _echec('un score est nommé');
+          return /\d+\s*%/.test(h)?_echec('un pourcentage est affiché'):true;})());
+        ok('La carte coach date ses signaux et ne montre ni score ni détail des réponses',(()=>{
+          _viderCacheSignaux();
+          const u=_ath({id:'r12',seche:18,kcal:1200});
+          u.cycle={regles:[_j(10)]};
+          applyRedsEffects(u,'orange');
+          u.redsScreening.leafq={date:Date.now(),score:11,sub:{menstruel:7}};
+          const h=_texteVisible(htmlRedsCoach(u));
+          if(!h) return _echec('la carte ne rend rien');
+          if(!/\d{2}\/\d{2}\/\d{4}/.test(h)) return _echec('aucune date');
+          if(/\b11\b/.test(h)) return _echec('le score transparaît');
+          return /jamais le détail|pas transmis/.test(h)
+            ?true:_echec('la carte ne dit pas ce qu\'elle ne montre pas');})());
+        ok('Aucune disponibilité énergétique n\'est affichée en kcal par kilo',(()=>{
+          const src=htmlLeafq()+String(REDS_RENVOI)+String(LEAFQ_INTRO);
+          return /kcal\s*\/\s*kg|masse maigre/i.test(src)
+            ?_echec('une disponibilité est montrée'):true;})());
+        ok('Les trois motifs de refus passent par le MÊME point d\'entrée',(()=>{
+          const src=String(refusObjectifPerte);
+          if(!/grossesseSuspend/.test(src)) return _echec('grossesse absente');
+          if(!/aTCA/.test(src)) return _echec('bilan de sécurité absent');
+          if(!/redsSuspend/.test(src)) return _echec('vigilance absente');
+          return src.indexOf('grossesseSuspend')<src.indexOf('redsSuspend')
+            ?true:_echec('la grossesse n\'est plus prioritaire');})());
+        ok('Le module ne fait AUCUN appel réseau et ne redéfinit rien',(()=>{
+          const src=String(computeRedsSignals)+String(shouldPromptLeafq)
+            +String(scoreLeafq)+String(resolveRedsLevel)+String(applyRedsEffects);
+          if(/fetch\(|XMLHttpRequest/.test(src)) return _echec('un appel réseau apparaît');
+          return /risqueDeficitEnergetique/.test(String(computeRedsSignals))
+            ?true:_echec('les signaux ne viennent pas du module existant');})());
+        ok('redsEtat, computeRedsSignals et scoreLeafq sont PURES',(()=>{
+          _viderCacheSignaux();
+          const u=_ath({id:'r13',seche:18,kcal:1200});
+          u.cycle={regles:[_j(10)]};
+          const avant=JSON.stringify(u);
+          redsEtat(u); computeRedsSignals(u); shouldPromptLeafq(u);
+          scoreLeafq({b1:2}); resolveRedsLevel(computeRedsSignals(u),null);
           return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
       } finally { currentUser=_dfU; _viderCacheVolume(); _viderCacheSignaux(); }
     })();
