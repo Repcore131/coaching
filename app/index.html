@@ -52444,6 +52444,76 @@ function testExercices(){
           // n'a pas eu lieu.
           return /localOk&&e&&e\._actionnable/.test(src)
             ?true:_echec('la condition sur l\'écriture locale a sauté');})());
+        // ── STOCKAGE PLEIN : LE CLOUD PART QUAND MÊME ───────────────────
+        // L'ancien code faisait `return` DANS le catch de quota : l'envoi au
+        // cloud etait saute, et un stockage sature faisait perdre la donnee des
+        // DEUX cotes a la fois. Le pire des deux mondes, et invisible — la
+        // sauvegarde semblait juste ne rien faire.
+        //
+        // Soixante-trois assertions manipulent DB.set ; aucune ne portait sur
+        // ce comportement-la.
+        ok('Quota dépassé : la donnée part au cloud, et l\'utilisateur est prévenu',(()=>{
+          const _si=Storage.prototype.setItem, _t=window.toast, _p=CLOUD.push;
+          try{
+            const vus=[]; let pushs=0, recu=null;
+            window.toast=(m)=>{ vus.push(String(m)); };
+            CLOUD.push=(v)=>{ pushs++; recu=v; };
+            Storage.prototype.setItem=function(){
+              const e=new Error('quota'); e.name='QuotaExceededError'; throw e; };
+            const donnees={'q@t.fr':{id:'q'}};
+            const r=DB.set('users',donnees);
+            // 1. L'ENVOI A LIEU. C'est tout l'objet de la reecriture.
+            if(pushs!==1) return _echec('CLOUD.push appelé '+pushs+' fois');
+            if(recu!==donnees) return _echec('le push ne reçoit pas les données');
+            // 2. Le retour DIT que le local a echoue : les appelants s'en
+            //    servent pour nuancer leur message.
+            if(r!==false) return _echec('retour '+r+' au lieu de false');
+            // 3. L'utilisateur est prevenu, et le message dit les DEUX choses :
+            //    c'est envoye, mais indisponible hors ligne.
+            if(!vus.length) return _echec('aucun avertissement');
+            if(!/hors ligne/.test(vus[0])) return _echec('message : '+vus[0]);
+            // 4. Le code 22 est l'autre forme du meme defaut, selon le
+            //    navigateur : les deux doivent etre reconnues.
+            pushs=0;
+            Storage.prototype.setItem=function(){ const e=new Error('quota'); e.code=22; throw e; };
+            if(DB.set('users',donnees)!==false||pushs!==1)
+              return _echec('le code 22 n\'est pas reconnu comme un quota');
+            return true;
+          } finally { Storage.prototype.setItem=_si; window.toast=_t; CLOUD.push=_p; }})());
+        ok('Une erreur qui N\'EST PAS un quota remonte, elle n\'est pas avalée',(()=>{
+          // Le catch ne doit pas devenir un fourre-tout : une ecriture refusee
+          // pour une autre raison — mode prive, stockage desactive — doit se
+          // voir, pas se deguiser en « stockage plein ».
+          const _si=Storage.prototype.setItem, _t=window.toast, _p=CLOUD.push;
+          try{
+            const vus=[]; let pushs=0;
+            window.toast=(m)=>{ vus.push(String(m)); };
+            CLOUD.push=()=>{ pushs++; };
+            Storage.prototype.setItem=function(){ throw new Error('SecurityError'); };
+            let remonte=false;
+            try{ DB.set('users',{}); }catch(e){ remonte=(e.message==='SecurityError'); }
+            if(!remonte) return _echec('l\'erreur a été avalée');
+            if(vus.length) return _echec('un message de quota s\'affiche à tort');
+            return pushs===0
+              ?true:_echec('un push part malgré une erreur inconnue');
+          } finally { Storage.prototype.setItem=_si; window.toast=_t; CLOUD.push=_p; }})());
+        ok('Le push est HORS du catch, et le retour vient en dernier',(()=>{
+          // La position est le coeur de la correction : un `return` glisse dans
+          // le catch redonnerait exactement le defaut d'origine, et les trois
+          // assertions ci-dessus resteraient vertes si le push venait AVANT
+          // l'ecriture locale.
+          const src=String(DB.set);
+          const iCatch=src.indexOf('catch');
+          const iPush=src.indexOf("k==='users'");
+          const iRet=src.indexOf('return localOk');
+          if(iCatch<0||iPush<0||iRet<0) return _echec('la forme de DB.set a changé');
+          if(!(iCatch<iPush)) return _echec('le push précède le catch');
+          if(!(iPush<iRet)) return _echec('le retour précède le push');
+          // Aucun `return` entre la reconnaissance du quota et la fin du catch.
+          const bloc=src.slice(src.indexOf('QuotaExceededError'),iPush);
+          return bloc.indexOf('return')<0
+            ?true:_echec('un return est revenu dans le catch');})());
+
 
         ok('Aucune fonctionnalité de SÉCURITÉ n\'est dégradée',(()=>{
           const sensibles={drapeauGeneralActif:(typeof drapeauGeneralActif==='function'?drapeauGeneralActif:null),
