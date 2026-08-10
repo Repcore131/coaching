@@ -59800,6 +59800,164 @@ function testExercices(){
         bilData={};
         const passe=basculerCompte(CO)===true&&Object.keys(bilData).length===0;
         return refus&&passe;})());
+      // ══════ LE BROUILLON DE BILAN : SON CYCLE DE VIE ══════
+      // Un bilan coaching fait sept étapes. Sans persistance, un appel reçu
+      // au milieu renvoyait l'athlète à la première question, et il ne
+      // recommençait pas. Ce qui suit tient les cinq moments : écrire,
+      // relire, refuser, restaurer, effacer.
+      ok('Le brouillon écrit l\'étape et les réponses — JAMAIS les photos',(()=>{
+        const _sv=localStorage.getItem(BIL_DRAFT_KEY);
+        const _st=window.setTimeout, _bt=bilType, _bs=bilStep, _bd=bilData;
+        try{
+          // La sauvegarde est déboucée à 400 ms ; on exécute son corps tout
+          // de suite pour l'éprouver vraiment plutôt que la décrire.
+          window.setTimeout=(f)=>{ f(); return 0; };
+          bilType='coaching'; bilStep=2;
+          bilData={poids:'72.4',douleurs:['genou'],'bil-photo-face':'data:image/jpeg;base64,XXXX'};
+          _bilSaveDraft();
+          const d=JSON.parse(localStorage.getItem(BIL_DRAFT_KEY)||'null');
+          if(!d) return _echec('rien n\'a été écrit');
+          if(d.bilType!=='coaching'||d.bilStep!==2)
+            return _echec('type/étape : '+d.bilType+'/'+d.bilStep);
+          if(d.bilData.poids!=='72.4'||!Array.isArray(d.bilData.douleurs))
+            return _echec('réponses perdues : '+JSON.stringify(d.bilData));
+          if(!d.ts) return _echec('aucun horodatage : la péremption ne peut plus jouer');
+          // LES PHOTOS SONT EXCLUES. Elles pèsent des centaines de Ko et
+          // vivent déjà dans rc_pendingphoto_* : les recopier ferait déborder
+          // le quota sur la saisie même qu'on cherche à sauver.
+          return Object.keys(d.bilData).some(k=>k.includes('photo'))
+            ?_echec('une photo est entrée dans le brouillon'):true;
+        } finally { window.setTimeout=_st; bilType=_bt; bilStep=_bs; bilData=_bd;
+          if(_sv===null) localStorage.removeItem(BIL_DRAFT_KEY);
+          else localStorage.setItem(BIL_DRAFT_KEY,_sv); }})());
+      ok('Un brouillon d\'un autre type, périmé ou vide n\'est pas proposé',(()=>{
+        const _sv=localStorage.getItem(BIL_DRAFT_KEY);
+        try{
+          const poser=o=>localStorage.setItem(BIL_DRAFT_KEY,JSON.stringify(o));
+          const plein={bilType:'coaching',bilStep:2,bilData:{poids:'72'},ts:Date.now()};
+          poser(plein);
+          if(!_bilLoadDraft('coaching')) return _echec('un brouillon valide est rejeté');
+          // Un questionnaire de départ abandonné ne doit pas s'inviter dans
+          // un bilan de suivi : les questions ne sont pas les mêmes.
+          if(_bilLoadDraft('depart')) return _echec('le type n\'est plus vérifié');
+          // La péremption est encadrée, jamais testée sur la borne exacte :
+          // quelques millisecondes s'écoulent entre l'écriture et la lecture.
+          poser({...plein,ts:Date.now()-6.9*24*3600*1000});
+          if(!_bilLoadDraft('coaching')) return _echec('6,9 jours est refusé à tort');
+          poser({...plein,ts:Date.now()-7.1*24*3600*1000});
+          if(_bilLoadDraft('coaching')) return _echec('7,1 jours est encore accepté');
+          // Ouvrir puis refermer sans rien saisir ne doit rien proposer.
+          if(_bilDraftRempli({bilData:{}})!==0) return _echec('un brouillon vide compte');
+          if(_bilDraftRempli({bilData:{a:'',b:null,c:[]}})!==0)
+            return _echec('des champs vides comptent comme des réponses');
+          if(_bilDraftRempli({bilData:{a:'x',b:['y']}})!==2)
+            return _echec('le décompte des réponses est faux');
+          // Un contenu illisible ne fait pas tomber l'écran.
+          localStorage.setItem(BIL_DRAFT_KEY,'{pas du json');
+          return _bilLoadDraft('coaching')===null
+            ?true:_echec('un brouillon corrompu est accepté');
+        } finally { if(_sv===null) localStorage.removeItem(BIL_DRAFT_KEY);
+          else localStorage.setItem(BIL_DRAFT_KEY,_sv); }})());
+      ok('Accepter la reprise restaure l\'étape, les réponses ET la photo',(()=>{
+        const _sv=localStorage.getItem(BIL_DRAFT_KEY), _cf=window.confirm;
+        const _bt=bilType, _bs=bilStep, _bd=bilData, _go=window.go, _r=window.renderBilStep;
+        const CLE='rc_pendingphoto_bil-photo-face';
+        const _ph=localStorage.getItem(CLE);
+        try{
+          window.go=()=>{}; window.renderBilStep=()=>{};
+          localStorage.setItem(BIL_DRAFT_KEY,JSON.stringify({bilType:'coaching',bilStep:2,
+            bilData:{poids:'72.4',douleurs:['genou','epaule']},ts:Date.now()}));
+          localStorage.setItem(CLE,'data:image/jpeg;base64,PHOTOFACE');
+          let question=null;
+          window.confirm=(m)=>{question=m;return true;};
+          openBilan('coaching');
+          if(!question) return _echec('aucune proposition de reprise');
+          // La question DIT où l'athlète en était : « reprendre ? » tout court
+          // ne lui permet pas de décider.
+          if(!/étape 3/.test(question)) return _echec('la proposition ne situe pas : '+question);
+          if(bilStep!==2) return _echec('étape restaurée : '+bilStep);
+          if(bilData.poids!=='72.4'||bilData.douleurs?.length!==2)
+            return _echec('réponses : '+JSON.stringify(bilData));
+          // La photo ne vient PAS du brouillon : elle est relue dans sa
+          // propre clé. C'est tout l'intérêt de ne pas l'y avoir mise.
+          if(bilData['bil-photo-face']!=='data:image/jpeg;base64,PHOTOFACE')
+            return _echec('la photo n\'est pas restaurée');
+          return true;
+        } finally { window.confirm=_cf; window.go=_go; window.renderBilStep=_r;
+          bilType=_bt; bilStep=_bs; bilData=_bd;
+          if(_ph===null) localStorage.removeItem(CLE); else localStorage.setItem(CLE,_ph);
+          if(_sv===null) localStorage.removeItem(BIL_DRAFT_KEY);
+          else localStorage.setItem(BIL_DRAFT_KEY,_sv); }})());
+      ok('Refuser la reprise efface TOUT, photos en attente comprises',(()=>{
+        // Sinon les photos refusées reviendraient s'inviter au bilan suivant.
+        const _sv=localStorage.getItem(BIL_DRAFT_KEY), _cf=window.confirm;
+        const _bt=bilType, _bs=bilStep, _bd=bilData, _go=window.go, _r=window.renderBilStep;
+        const CLE='rc_pendingphoto_bil-photo-face';
+        const _ph=localStorage.getItem(CLE);
+        try{
+          window.go=()=>{}; window.renderBilStep=()=>{};
+          localStorage.setItem(BIL_DRAFT_KEY,JSON.stringify({bilType:'coaching',bilStep:2,
+            bilData:{poids:'72.4'},ts:Date.now()}));
+          localStorage.setItem(CLE,'data:image/jpeg;base64,PHOTOFACE');
+          window.confirm=()=>false;
+          openBilan('coaching');
+          if(bilStep!==0) return _echec('l\'étape n\'est pas repartie de zéro : '+bilStep);
+          if(Object.keys(bilData).length) return _echec('des réponses survivent');
+          if(localStorage.getItem(BIL_DRAFT_KEY)) return _echec('le brouillon survit au refus');
+          return localStorage.getItem(CLE)===null
+            ?true:_echec('la photo en attente survit et reviendra plus tard');
+        } finally { window.confirm=_cf; window.go=_go; window.renderBilStep=_r;
+          bilType=_bt; bilStep=_bs; bilData=_bd;
+          if(_ph===null) localStorage.removeItem(CLE); else localStorage.setItem(CLE,_ph);
+          if(_sv===null) localStorage.removeItem(BIL_DRAFT_KEY);
+          else localStorage.setItem(BIL_DRAFT_KEY,_sv); }})());
+      ok('Valider ou abandonner le bilan efface le brouillon',(()=>{
+        // saveBilanFinal écrit dans le dossier et fait du réseau : on vérifie
+        // que l'effacement y est appelé, puis on éprouve l'effacement
+        // lui-même, qui est synchrone.
+        const manque=[['saveBilanFinal',String(saveBilanFinal)],
+                      ['skipFirstBilan',String(skipFirstBilan)]]
+          .filter(([n,src])=>!/_bilClearDraft\(\)/.test(src)).map(([n])=>n);
+        if(manque.length) return _echec('n\'efface pas le brouillon : '+manque.join(', '));
+        const _sv=localStorage.getItem(BIL_DRAFT_KEY);
+        const CLE='rc_pendingphoto_bil-photo-face';
+        const _ph=localStorage.getItem(CLE);
+        try{
+          localStorage.setItem(BIL_DRAFT_KEY,'{"bilType":"coaching","bilStep":2,"bilData":{"a":"1"},"ts":'+Date.now()+'}');
+          localStorage.setItem(CLE,'X');
+          _bilClearDraft(); _bilPurgerPhotos('coaching');
+          if(localStorage.getItem(BIL_DRAFT_KEY)) return _echec('le brouillon survit');
+          if(localStorage.getItem(CLE)) return _echec('la photo en attente survit');
+          // TÉMOIN : la purge est ciblée par type. Un questionnaire de départ
+          // ne doit pas emporter les photos d'un bilan de suivi.
+          localStorage.setItem(CLE,'X');
+          _bilPurgerPhotos('depart');
+          return localStorage.getItem(CLE)==='X'
+            ?true:_echec('la purge n\'est pas ciblée par type');
+        } finally { if(_ph===null) localStorage.removeItem(CLE); else localStorage.setItem(CLE,_ph);
+          if(_sv===null) localStorage.removeItem(BIL_DRAFT_KEY);
+          else localStorage.setItem(BIL_DRAFT_KEY,_sv); }})());
+      ok('La carte de reprise de l\'accueil existe et ne ment pas',(()=>{
+        const el=document.getElementById('clh-resume-bilan');
+        if(!el) return _echec('la carte de reprise de bilan est absente de l\'accueil');
+        if(!document.getElementById('clh-resume-bilan-name')
+           ||!document.getElementById('clh-resume-bilan-sub'))
+          return _echec('la carte n\'a pas ses deux lignes');
+        // Elle doit mener à la reprise, pas rouvrir un bilan neuf.
+        const clic=el.getAttribute('onclick')||'';
+        if(!/bilResumeAndGo\(\)/.test(clic)) return _echec('la carte ne reprend pas : '+clic);
+        // Et si le brouillon a disparu entre-temps, la carte se retire au
+        // lieu d'ouvrir un bilan vide.
+        const _sv=localStorage.getItem(BIL_DRAFT_KEY), _d=el.style.display;
+        try{
+          localStorage.removeItem(BIL_DRAFT_KEY);
+          el.style.display='block';
+          bilResumeAndGo();
+          return el.style.display==='none'
+            ?true:_echec('la carte reste affichée sans brouillon');
+        } finally { el.style.display=_d;
+          if(_sv!==null) localStorage.setItem(BIL_DRAFT_KEY,_sv); }})());
+
 
       // ── Le garde-fou de la séance en cours ──
       ok('Une séance en cours INTERDIT la bascule',(()=>{
