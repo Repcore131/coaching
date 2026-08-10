@@ -66000,6 +66000,63 @@ function testExercices(){
         const l=[E(200,'08:00'),E(150,'18:00'),E(80,'23:30'),E(70,'')];
         const total=l.reduce((s,e)=>s+(e.mg||0),0);
         return total===500?true:_echec(String(total));})());
+      // ── LA LÉGENDE DIT CE QUE L'ANNEAU FAIT ─────────────────────────────
+      // Les seuils et les huit couleurs sont deja epingles ci-dessus. Ce qui ne
+      // l'etait pas : que les nombres AFFICHES sous la jauge soient les memes
+      // que ceux dont _caffeineColor se sert. Aujourd'hui ils le sont par
+      // construction, mais rien n'attraperait une puce passee a thr.red — a
+      // 50 kg la legende annoncerait « <400mg elevé » pendant que l'anneau
+      // passe au rouge des 275.
+      ok('La légende reprend EXACTEMENT les bornes de _caffeineColor',(()=>{
+        const sauveU=currentUser;
+        try{
+          currentUser=_u('23:00');
+          for(const kg of [50,75,120]){
+            const thr=caffeineThresholds(kg);
+            const h=_renderCaffeineBlock([E(10,'08:00')],10,thr,'screen','2026-01-01',false,true,'T',kg);
+            const txt=h.replace(/<[^>]*>/g,' ').replace(/&lt;/g,'<').replace(/&ge;/g,'>=')
+              .replace(/&nbsp;/g,' ').replace(/\s+/g,' ');
+            // Les quatre puces, dans l'ordre ou _caffeineColor les franchit.
+            const attendus=[
+              ['<'+thr.green+'mg', 'var(--success)'],
+              ['<'+thr.yellow+'mg','var(--info)'],
+              ['<'+thr.orange+'mg','var(--warning)'],
+              ['>='+thr.orange+'mg','var(--danger)']];
+            for(const [libelle] of attendus)
+              if(txt.indexOf(libelle)<0)
+                return _echec(kg+' kg : puce « '+libelle+' » absente de la légende');
+            // Et la couleur JUSTE SOUS chaque borne est bien celle annoncee.
+            if(_caffeineColor(thr.green-1,thr)!=='var(--success)')
+              return _echec(kg+' kg : sous le vert, la couleur ne suit pas');
+            if(_caffeineColor(thr.yellow-1,thr)!=='var(--info)')
+              return _echec(kg+' kg : sous le jaune, la couleur ne suit pas');
+            if(_caffeineColor(thr.orange-1,thr)!=='var(--warning)')
+              return _echec(kg+' kg : sous l\'orange, la couleur ne suit pas');
+            if(_caffeineColor(thr.orange,thr)!=='var(--danger)')
+              return _echec(kg+' kg : l\'anneau ne passe pas au rouge à '+thr.orange);
+            // La reference EFSA est la, et vaut le plafond reglementaire.
+            if(txt.indexOf('Référence : '+thr.red+' mg/j max (EFSA)')<0)
+              return _echec(kg+' kg : la référence EFSA a disparu');
+          }
+          return true;
+        } finally { currentUser=sauveU; }})());
+      ok('Les paliers restent ORDONNÉS, à tout poids et sous chaque règle',(()=>{
+        // C'est l'invariant qui rend un palier vivant. Inverse — orange
+        // au-dessus de red, ou red sous orange — une borne devient morte et
+        // l'anneau ne change plus de couleur la ou la legende le promet.
+        const rates=[];
+        const verifier=(t,quoi)=>{
+          if(!t) { rates.push(quoi+' : rien'); return; }
+          if(!(t.green<t.yellow)) rates.push(quoi+' : vert >= jaune');
+          if(!(t.yellow<t.orange)) rates.push(quoi+' : jaune >= orange');
+          if(!(t.orange<=t.red)) rates.push(quoi+' : orange > rouge ('+t.orange+' > '+t.red+')');
+          if(t.orange>CAFFEINE_MAX_EFSA) rates.push(quoi+' : orange dépasse la référence');
+        };
+        for(let kg=40;kg<=130;kg+=5) verifier(caffeineThresholds(kg),kg+' kg');
+        verifier(caffeineThresholds(60,16),'mineur');
+        verifier(caffeineThresholds(60,30,true),'grossesse');
+        return rates.length?_echec(rates.slice(0,3).join(' · ')):true;})());
+
       ok('Non-régression : la jauge affiche le même total et la même couleur',(()=>{
         const sauveU=currentUser;
         try{
