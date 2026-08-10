@@ -1973,6 +1973,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="ccd-volume"></div>
       <div id="ccd-plateaux"></div>
       <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:16px" onclick="ouvrirRapport(getOwnedClient(currentClientId))">Rapport de la période</button>
+      <div id="ccd-dossier"></div>
       <div id="ccd-prises"></div>
       <div id="ccd-pp"></div>
       <div id="ccd-reds"></div>
@@ -2571,6 +2572,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-top:9px">RepCore n'accompagne pas une grossesse et ne demande ni date de terme, ni trimestre. Cette information n'est pas transmise à ton coach.</div>
       </div>
       <div id="atp-pp"></div>
+  <div id="atp-dossier" style="margin-bottom:14px"></div>
   <!-- PES. Carte SÉPARÉE de celle des états de santé : un usage déclaré
            n'est pas un diagnostic, et les libellés de ETATS_DECLARABLES
            portent tous « diagnostiqué par un médecin ». -->
@@ -5081,6 +5083,28 @@ const CLOUD={
   // Fonction NOMMÉE et non trois lignes dans _doPushOne : celle-ci est
   // asynchrone et fait du réseau, donc inéprouvable depuis la suite. Une liste
   // noire qu'on ne peut pas tester n'est pas une liste noire.
+  // Les DATES de declaration suivent exactement le meme sort que les blocs
+  // qu elles datent. Une date qui existe est une declaration qui existe :
+  // laisser `sante.declare.pes` monter aurait revele le PES a un coach a
+  // qui l athlete ne l a pas partage, et le journal aurait fait pire encore
+  // en gardant la trace des retraits.
+  //
+  // Meme patron que _retirerContraceptionSiNonPartagee : safe est une copie
+  // PLATE, donc safe.sante est LE MEME objet que user.sante. Sans le clone,
+  // le delete effacerait la vraie donnee locale.
+  _retirerDatesNonPartagees(safe,user){
+    if(!safe||!safe.sante||typeof safe.sante!=='object') return safe;
+    const vu=b=>{ try{ return santeVisibleCoach(user,b)===true; }catch(e){ return false; } };
+    safe.sante={...safe.sante};
+    if(safe.sante.declare&&typeof safe.sante.declare==='object'){
+      const d={...safe.sante.declare};
+      for(const b of Object.keys(d)) if(!vu(b)) delete d[b];
+      safe.sante.declare=d;
+    }
+    if(Array.isArray(safe.sante.journal))
+      safe.sante.journal=safe.sante.journal.filter(e=>e&&vu(e.bloc));
+    return safe;
+  },
   _retirerContraceptionSiNonPartagee(safe){
     if(!safe||!safe.cycle||safe.cycle.contraceptionPartagee) return safe;
     // safe est une copie PLATE du dossier : safe.cycle est LE MÊME objet que
@@ -5133,6 +5157,7 @@ const CLOUD={
       // le champ que lorsque le document poussé n est PAS celui de l emetteur.
       if(!currentUser||email!==currentUser.email) delete safe.coachNotes;
       this._retirerContraceptionSiNonPartagee(safe);
+      this._retirerDatesNonPartagees(safe,user);
       // La grossesse ne monte JAMAIS par défaut. coach_public est déjà hors
       // de portée — c'est le profil DU COACH, filtré par liste blanche — mais
       // /users est lisible en entier par le coach : sans ce retrait,
@@ -12622,6 +12647,7 @@ function openClientDetail(cid,_refresh){
   try{ renderHabitudesCoach(c); }catch(e){}
   try{ renderRedsCoach(c); }catch(e){}
   try{ renderPostPartumCoach(c); }catch(e){}
+  try{ renderDossierSanteCoach(c); }catch(e){}
   try{ renderRepartitionPrisesCoach(c); }catch(e){}
   try{ renderPhotosCoach(c); }catch(e){}
   // Chips de reponse au bilan : la zone n'existe qu'apres le rendu des
@@ -27248,6 +27274,322 @@ function phraseProtParRepas(r){
   return r.nRepas+' repas par jour : environ '+r.gParRepas+' g de protéines par repas.';
 }
 
+
+// ══════════════ DOSSIER SANTÉ HORMONALE : LIRE, DATER, RENDRE ═════════════
+// AUCUNE LOGIQUE MÉTIER NOUVELLE. Ce module ne décide rien : il lit les états
+// déjà déclarés, nomme les effets déjà appliqués ailleurs, et les horodate.
+//
+// L'AUDIT A TROUVÉ UNE SEULE DÉCLARATION SUR SIX DÉJÀ DATÉE — `grossesse`
+// porte `declareLe` depuis son lot d'origine. Les cinq autres s'écrivaient
+// nues. On les date À LEUR EMPLACEMENT, sans créer de nœud parallèle : la
+// consigne « ne rien recopier » est tenue, et deux copies d'une donnée de
+// santé finiraient de toute façon par diverger.
+//
+// LE PIÈGE, ET IL EST GRAVE : une date de déclaration EST une donnée de
+// santé. Savoir qu'une date existe pour `pes`, c'est savoir que le PES a été
+// déclaré. Les dates suivent donc EXACTEMENT le même filtre réseau que les
+// blocs eux-mêmes — voir _retirerDatesNonPartagees, appelée dans _doPushOne
+// au même endroit que les autres retraits.
+const DOSSIER_BLOCS=Object.freeze([
+  Object.freeze({bloc:'cycle',         lib:'Contraception'}),
+  Object.freeze({bloc:'statutHormonal',lib:'Statut hormonal'}),
+  Object.freeze({bloc:'etats',         lib:'États déclarés'}),
+  Object.freeze({bloc:'traitement',    lib:'Thyroïde'}),
+  Object.freeze({bloc:'grossesse',     lib:'Grossesse, allaitement, post-partum'}),
+  Object.freeze({bloc:'pes',           lib:'Produits déclarés'})
+]);
+const DOSSIER_DATE_INCONNUE='date inconnue';
+const DOSSIER_VIDE='Rien n\'est déclaré. Cet écran n\'affiche que ce que tu as '
+  +'renseigné toi-même, et il reste vide tant que tu ne déclares rien.';
+const DOSSIER_ART9='DONNÉES DE SANTÉ — ARTICLE 9 DU RGPD. Ce dossier contient '
+  +'des données relatives à la santé, dont le traitement relève du régime '
+  +'renforcé de l\'article 9. Il n\'est ni chiffré ni protégé par mot de passe : '
+  +'ne le dépose pas sur un service partagé.';
+const DOSSIER_JOURNAL_MAX=120;
+// PURE. La date de déclaration d'un bloc, ou null. `grossesse` est lue à son
+// emplacement historique — on ne migre pas une donnée qui fonctionne.
+function dateDeclaration(user,bloc){
+  const u=user||{};
+  if(bloc==='grossesse'){
+    const d=Number(((u.grossesse)||{}).declareLe);
+    return d>0?d:null;
+  }
+  const d=Number((((u.sante)||{}).declare||{})[bloc]);
+  return d>0?d:null;
+}
+// ÉCRIT. Pose la date, et journalise. Appelée depuis les écrans de
+// déclaration EXISTANTS, jamais toute seule.
+//
+// RÈGLE 4 : le journal survit au retrait. Il est PURGEABLE — purgerJournalSante
+// existe pour ça — mais une déclaration retirée laisse sa trace datée, sans
+// quoi « l'effet a-t-il été appliqué à cette date ? » n'a plus de réponse.
+//
+// EXCEPTION DOCUMENTÉE : `grossesse`. revoquerGrossesse efface TOUT, sans
+// historique, et c'est une décision antérieure verrouillée par un test. La
+// défaire pour ce lot reviendrait à conserver la trace datée d'une grossesse
+// révoquée — exactement ce que cette décision protégeait.
+function marquerDeclaration(user,bloc,cle,action){
+  if(!user) return false;
+  if(!DOSSIER_BLOCS.some(x=>x.bloc===bloc)) return false;
+  const t=Date.now();
+  if(!user.sante||typeof user.sante!=='object') user.sante={};
+  if(bloc!=='grossesse'){
+    if(!user.sante.declare||typeof user.sante.declare!=='object') user.sante.declare={};
+    if(action==='retire') delete user.sante.declare[bloc];
+    else user.sante.declare[bloc]=t;
+  }
+  if(bloc==='grossesse') return true;          // journal tenu par son module
+  const j=Array.isArray(user.sante.journal)?user.sante.journal:[];
+  j.push({bloc,cle:String(cle||''),action:(action==='retire')?'retire':'declare',date:t});
+  user.sante.journal=j.slice(-DOSSIER_JOURNAL_MAX);
+  return true;
+}
+// ÉCRIT. La purge RGPD. Elle ne touche à AUCUNE déclaration active : elle
+// efface l'historique, et lui seul.
+function purgerJournalSante(user){
+  if(!user||!user.sante) return false;
+  delete user.sante.journal;
+  return true;
+}
+// PURE. Le journal d'un dossier, filtré par ce que le lecteur a le droit de
+// voir. Le filtre est le MÊME que partout ailleurs.
+function journalSante(user,pourCoach){
+  const j=Array.isArray(((user||{}).sante||{}).journal)?user.sante.journal:[];
+  if(!pourCoach) return j.slice();
+  return j.filter(e=>{ try{ return santeVisibleCoach(user,e.bloc)===true; }catch(x){ return false; } });
+}
+// ── Ce que chaque bloc DÉCLARE, en clair ─────────────────────────────────
+// PURE. Rend [{bloc, lib, valeur, date}] — jamais un état nu sans son bloc.
+// RÈGLE 1 : rien qui n'ait été déclaré. Les valeurs par défaut ne comptent pas
+// pour des déclarations : « aucune contraception » et « cycles réguliers » sont
+// ce que rend le produit quand personne n'a rien dit.
+function etatsDeclaresDossier(user,pourCoach){
+  const u=user||{};
+  const out=[];
+  const lib=b=>(DOSSIER_BLOCS.find(x=>x.bloc===b)||{}).lib||b;
+  const visible=b=>{ if(!pourCoach) return true;
+    try{ return santeVisibleCoach(u,b)===true; }catch(e){ return false; } };
+  const pousser=(bloc,valeur)=>{ if(!valeur||!visible(bloc)) return;
+    out.push({bloc,lib:lib(bloc),valeur,date:dateDeclaration(u,bloc)}); };
+  try{
+    const c=contraceptionDe(u);
+    if(c&&c!=='aucune')
+      pousser('cycle',(CONTRACEPTIONS.find(x=>x.cle===c)||{}).lib||c);
+  }catch(e){}
+  try{
+    const h=statutHormonal(u);
+    if(h&&h!=='cycles_reguliers'&&_hormonalApplicable(u))
+      pousser('statutHormonal',(STATUTS_HORMONAUX.find(x=>x.cle===h)||{}).lib||h);
+  }catch(e){}
+  try{
+    const l=etatsDeclares(u);
+    for(const cle of l)
+      pousser('etats',(ETATS_DECLARABLES.find(x=>x.cle===cle)||{}).lib||cle);
+  }catch(e){}
+  try{
+    const t=thyroideDe(u);
+    if(t&&t.etat)
+      pousser('traitement',(THYROIDE_ETATS.find(x=>x.cle===t.etat)||{}).lib||t.etat
+        +(t.traitement?' · traitement en cours':''));
+  }catch(e){}
+  try{
+    const g=etatGrossesse(u);
+    if(g) pousser('grossesse',(GROSSESSE_ETATS.find(x=>x.cle===g)||{}).lib||g);
+  }catch(e){}
+  // RÈGLE 3 : le PES n'apparaît QUE si pesPartagee est vrai. Sans exception.
+  // Côté réseau il n'atteint même pas le coach ; ici on le redit à
+  // l'affichage, parce qu'une seule barrière est une barrière qu'on oublie.
+  try{ if(aPES(u)) pousser('pes','Produits déclarés'); }catch(e){}
+  return out;
+}
+// ── Les effets EN COURS ──────────────────────────────────────────────────
+// PURE. Chacun sous la forme « effet — cause — date ». RÈGLE 2 : jamais un
+// état nu, toujours l'effet et sa cause.
+//
+// AUCUN EFFET N'EST CALCULÉ ICI. Chaque ligne interroge la fonction qui décide
+// déjà, ailleurs, et se contente de la nommer.
+function effetsEnCours(user,pourCoach){
+  const u=user||{};
+  const out=[];
+  const visible=b=>{ if(!pourCoach) return true;
+    try{ return santeVisibleCoach(u,b)===true; }catch(e){ return false; } };
+  const add=(effet,bloc,cause)=>{ if(!visible(bloc)) return;
+    out.push({effet,bloc,cause,date:dateDeclaration(u,bloc)}); };
+  try{
+    if(grossesseSuspend(u)){
+      const g=etatGrossesse(u);
+      const cause=(GROSSESSE_ETATS.find(x=>x.cle===g)||{}).lib||g;
+      add('Objectifs de perte de poids désactivés','grossesse',cause);
+      add('Alertes de poids désactivées','grossesse',cause);
+      add('Limite de caféine abaissée à '+CAFFEINE_MAX_GROSSESSE+' mg','grossesse',cause);
+    }
+  }catch(e){}
+  try{
+    if(sopkApplicable(u))
+      add('Fourchette de vitesse de sèche élargie','etats','SOPK déclaré');
+  }catch(e){}
+  try{
+    if(menopauseDeclaree(u))
+      add('Fourchette de vitesse de sèche élargie','statutHormonal','Ménopause déclarée');
+  }catch(e){}
+  try{
+    if(menopauseeOuAgee(u)){
+      add('Échelle protéique relevée','statutHormonal','Ménopause ou âge déclaré');
+      add('Repère de protéines par prise relevé','statutHormonal','Ménopause ou âge déclaré');
+    }
+  }catch(e){}
+  try{
+    if(aEtat(u,'thyroide')&&correctionMBSuggeree(u)!==1)
+      add('Correction du métabolisme suggérée au coach','traitement',
+        (THYROIDE_ETATS.find(x=>x.cle===thyroideDe(u).etat)||{}).lib||'Trouble déclaré');
+  }catch(e){}
+  try{
+    if(aPES(u)) add('Échelle protéique ouverte vers le haut','pes','Produits déclarés');
+  }catch(e){}
+  try{
+    if(cycleSansCycle(u))
+      add('Modèle calendaire de cycle désactivé','cycle',
+        (CONTRACEPTIONS.find(x=>x.cle===contraceptionDe(u))||{}).lib||'Contraception déclarée');
+  }catch(e){}
+  try{
+    const f=ppFenetre(u);
+    if(f) add('Impacts non proposés tant que la fenêtre court','grossesse',
+      'Date d\'accouchement renseignée');
+  }catch(e){}
+  return out;
+}
+// ── Les renvois médicaux ─────────────────────────────────────────────────
+// ARBITRAGE. Aucun renvoi n'est journalisé à l'émission — ce sont huit
+// constantes de texte qui s'affichent et ne laissent pas de trace. Les
+// journaliser aurait été une écriture nouvelle, contraire au « cet écran lit,
+// il ne décide pas ». On rend donc les renvois ACTUELLEMENT ACTIFS, datés par
+// la déclaration qui les cause : traçable, et sans rien inventer.
+function renvoisEnCours(user,pourCoach){
+  const u=user||{};
+  const out=[];
+  const visible=b=>{ if(!pourCoach) return true;
+    try{ return santeVisibleCoach(u,b)===true; }catch(e){ return false; } };
+  const add=(texte,bloc)=>{ if(!visible(bloc)) return;
+    out.push({texte,bloc,date:dateDeclaration(u,bloc)}); };
+  try{ if(grossesseSuspend(u)) add(GROSSESSE_REFUS_SECHE,'grossesse'); }catch(e){}
+  try{ if(sopkApplicable(u)) add(SOPK_RENVOI_ATHLETE,'etats'); }catch(e){}
+  try{ if(aPES(u)) add(PES_PHRASE,'pes'); }catch(e){}
+  try{ const r=ppRenvoi(u); if(r) add(r,'grossesse'); }catch(e){}
+  return out;
+}
+// PURE. LE DOSSIER. Un seul point d'entrée, une seule notion de « pour qui ».
+function dossierSante(user,pourCoach){
+  return {
+    pourCoach:!!pourCoach,
+    etats:etatsDeclaresDossier(user,pourCoach),
+    effets:effetsEnCours(user,pourCoach),
+    renvois:renvoisEnCours(user,pourCoach),
+    journal:journalSante(user,pourCoach)
+  };
+}
+function dossierSanteVide(d){
+  return !d||(!d.etats.length&&!d.effets.length&&!d.renvois.length);
+}
+// ── Le rendu, commun aux deux écrans ─────────────────────────────────────
+// RÈGLE 5 : aucune interprétation, aucun score, aucune synthèse, aucune
+// tendance, aucun graphique. Trois listes, et rien d'autre.
+function _dossDate(t){
+  if(!(t>0)) return DOSSIER_DATE_INCONNUE;
+  try{ return new Date(t).toLocaleDateString('fr-FR'); }catch(e){ return DOSSIER_DATE_INCONNUE; }
+}
+function _htmlDossierSante(user,pourCoach){
+  let d=null;
+  try{ d=dossierSante(user,pourCoach); }catch(e){ d=null; }
+  if(!d) return '';
+  if(dossierSanteVide(d))
+    return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:14px 16px;font-size:12px;color:#ddd;line-height:1.75">${escapeHtml(DOSSIER_VIDE)}</div>`;
+  const titre=t=>`<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin:14px 0 7px">${escapeHtml(t)}</div>`;
+  const ligne=(g,dr)=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid rgba(255,255,255,.06)">
+      <span style="font-size:11.5px;color:#ddd;line-height:1.6;min-width:0">${g}</span>
+      <span style="font-size:10.5px;color:var(--text-faint);white-space:nowrap;flex-shrink:0">${escapeHtml(dr)}</span>
+    </div>`;
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px 15px">
+    ${titre('Ce qui est déclaré')}
+    ${d.etats.length?d.etats.map(x=>ligne(escapeHtml(x.valeur),_dossDate(x.date))).join('')
+      :'<div style="font-size:11.5px;color:var(--text-dim);line-height:1.6">Rien de déclaré.</div>'}
+    ${titre('Ce que RepCore applique')}
+    ${d.effets.length?d.effets.map(x=>ligne(
+        escapeHtml(x.effet)+' <span style="color:var(--text-dim)">— '+escapeHtml(x.cause)+'</span>',
+        _dossDate(x.date))).join('')
+      :'<div style="font-size:11.5px;color:var(--text-dim);line-height:1.6">Aucun effet en cours.</div>'}
+    ${d.renvois.length?titre('Ce vers quoi RepCore renvoie')
+      +d.renvois.map(x=>ligne(escapeHtml(x.texte),_dossDate(x.date))).join(''):''}
+    ${d.journal.length?titre('Historique des déclarations')
+      +d.journal.slice().reverse().map(x=>ligne(
+        escapeHtml((DOSSIER_BLOCS.find(y=>y.bloc===x.bloc)||{}).lib||x.bloc)
+        +' <span style="color:var(--text-dim)">— '+(x.action==='retire'?'retiré':'déclaré')+'</span>',
+        _dossDate(x.date))).join(''):''}
+    ${blocDisclaimerSante()}
+  </div>`;
+}
+function renderDossierSante(){
+  const z=document.getElementById('atp-dossier');
+  if(!z) return;
+  let h=''; try{ h=_htmlDossierSante(currentUser,false); }catch(e){ h=''; }
+  z.innerHTML=h;
+}
+function _htmlDossierSanteCoachSrc(c){ return _htmlDossierSante(c,true); }
+function renderDossierSanteCoach(c){
+  const z=document.getElementById('ccd-dossier');
+  if(!z) return;
+  let h=''; try{ h=c?_htmlDossierSante(c,true):''; }catch(e){ h=''; }
+  z.innerHTML=h;
+}
+// ── L'export ─────────────────────────────────────────────────────────────
+// PURE. Le dossier sous forme sérialisable, avertissement en TÊTE. Il rejoint
+// le flux d'export EXISTANT plutôt que d'en ouvrir un second qui divergerait.
+function exportDossierSante(user){
+  const d=dossierSante(user,false);
+  return {
+    _avertissement:DOSSIER_ART9,
+    genereLe:new Date().toISOString(),
+    etats:d.etats.map(x=>({bloc:x.bloc,valeur:x.valeur,
+      declare_le:x.date?new Date(x.date).toISOString():null})),
+    effets:d.effets.map(x=>({effet:x.effet,cause:x.cause,
+      depuis:x.date?new Date(x.date).toISOString():null})),
+    renvois:d.renvois.map(x=>({texte:x.texte,
+      depuis:x.date?new Date(x.date).toISOString():null})),
+    historique:d.journal.map(x=>({bloc:x.bloc,action:x.action,
+      date:x.date?new Date(x.date).toISOString():null}))
+  };
+}
+function exportDossierSanteTexte(user){
+  const e=exportDossierSante(user);
+  const l=[e._avertissement,''];
+  l.push('Généré le '+e.genereLe,'');
+  l.push('— CE QUI EST DÉCLARÉ —');
+  e.etats.forEach(x=>l.push('  '+x.valeur+'  ['+(x.declare_le||DOSSIER_DATE_INCONNUE)+']'));
+  if(!e.etats.length) l.push('  (rien)');
+  l.push('','— CE QUE REPCORE APPLIQUE —');
+  e.effets.forEach(x=>l.push('  '+x.effet+' — '+x.cause+'  ['+(x.depuis||DOSSIER_DATE_INCONNUE)+']'));
+  if(!e.effets.length) l.push('  (aucun)');
+  l.push('','— RENVOIS —');
+  e.renvois.forEach(x=>l.push('  '+x.texte+'  ['+(x.depuis||DOSSIER_DATE_INCONNUE)+']'));
+  if(!e.renvois.length) l.push('  (aucun)');
+  l.push('','— HISTORIQUE —');
+  e.historique.forEach(x=>l.push('  '+x.bloc+' '+x.action+'  ['+(x.date||DOSSIER_DATE_INCONNUE)+']'));
+  if(!e.historique.length) l.push('  (vide)');
+  return l.join('\n');
+}
+function telechargerDossierSante(){
+  try{
+    _telecharger('repcore-dossier-sante.txt',exportDossierSanteTexte(currentUser),'text/plain;charset=utf-8');
+    toast('Dossier téléchargé ✓','var(--green)');
+    return true;
+  }catch(e){ toast('Export impossible.','var(--red)'); return false; }
+}
+function purgerHistoriqueSante(){
+  if(!confirm('Effacer l\'historique des déclarations ? Les déclarations actives ne sont pas touchées. Ce choix est définitif.')) return false;
+  purgerJournalSante(currentUser);
+  saveUser();
+  renderDossierSante();
+  return true;
+}
 // ══════════════ PLANCHER PROTÉIQUE PAR PRISE ═══════════════════════════════
 // COUCHE D'AFFICHAGE. Le moteur de macros n'est pas touché : aucune de ces
 // fonctions n'écrit, ne recalcule un total, ni ne modifie protSuggeree.
@@ -28527,6 +28869,9 @@ function saveCycleNutSettings(field,value){
   if(field==='intensite'){
     conf.intensiteRegles=value;
   } else if(field==='contraception'){
+    try{ if(conf.contraception!==value)
+      marquerDeclaration(currentUser,'cycle',value,
+        (value&&value!=='aucune')?'declare':'retire'); }catch(e){}
     conf.contraception=CONTRACEPTIONS.some(x=>x.cle===value)?value:undefined;
   } else if(field==='regulier'){
     // Recliquer le bouton déjà allumé retire la déclaration : on redevient
@@ -42745,6 +43090,7 @@ function _renderAtpTraitement(){
 function basculerPES(v){
   if(v) currentUser.pes=true;
   else { delete currentUser.pes; delete currentUser.pesPartagee; }
+  try{ marquerDeclaration(currentUser,'pes','pes',v?'declare':'retire'); }catch(e){}
   saveUser();
   _renderAtpPES();
   return true;
@@ -42796,6 +43142,7 @@ function declarerGrossesse(etat){
   saveUser();
   _renderAtpGrossesse();
   try{ _renderPostPartum(); }catch(e){}
+  try{ renderDossierSante(); }catch(e){}
   return true;
 }
 // Révocation : effacement COMPLET, aucun historique conservé. La phase
@@ -42807,6 +43154,7 @@ function revoquerGrossesse(){
   saveUser();
   _renderAtpGrossesse();
   try{ _renderPostPartum(); }catch(e){}
+  try{ renderDossierSante(); }catch(e){}
   return true;
 }
 function accuserMessageGrossesse(){
@@ -42814,6 +43162,7 @@ function accuserMessageGrossesse(){
   saveUser();
   _renderAtpGrossesse();
   try{ _renderPostPartum(); }catch(e){}
+  try{ renderDossierSante(); }catch(e){}
   return true;
 }
 // Aucun bandeau permanent : le message se lit une fois, puis disparaît. Rien
@@ -42933,6 +43282,7 @@ function openAthleteProfile(){
   _renderAtpCycle();
   _renderAtpGrossesse();
   try{ _renderPostPartum(); }catch(e){}
+  try{ renderDossierSante(); }catch(e){}
   _atpEtats=etatsDeclares(u).slice();
   const _thy=thyroideDe(u);
   _atpThyEtat=_thy.etat; _atpThyTrait=_thy.traitement;
@@ -42958,6 +43308,11 @@ function saveAthleteProfile(){
   currentUser.objective=(document.getElementById('atp-objective')?.value||'').trim()||undefined;
   // Les états déclarés. Une liste vide EFFACE : se retirer d'une déclaration
   // doit être aussi simple que de la faire.
+  // On compare AVANT d ecrire : une sauvegarde de profil qui ne touche pas
+  // aux etats ne doit pas rajeunir leur date de declaration.
+  const _avEtats=(etatsDeclares(currentUser)||[]).slice().sort().join(',');
+  const _avThy=((currentUser.thyroide||{}).etat)||'';
+  const _avHormo=currentUser.statutHormonal||'';
   currentUser.etatsSante=_atpEtats.slice();
   if(_atpEtats.indexOf('thyroide')>=0){
     const c=document.getElementById('atp-thyroide-trait');
@@ -42969,6 +43324,17 @@ function saveAthleteProfile(){
   // Le statut hormonal. Aucun choix = on retire la déclaration.
   if(_atpHormo) currentUser.statutHormonal=_atpHormo;
   else delete currentUser.statutHormonal;
+  try{
+    const _apEtats=(etatsDeclares(currentUser)||[]).slice().sort().join(',');
+    if(_apEtats!==_avEtats)
+      marquerDeclaration(currentUser,'etats',_apEtats,_apEtats?'declare':'retire');
+    const _apThy=((currentUser.thyroide||{}).etat)||'';
+    if(_apThy!==_avThy)
+      marquerDeclaration(currentUser,'traitement',_apThy,_apThy?'declare':'retire');
+    const _apHormo=currentUser.statutHormonal||'';
+    if(_apHormo!==_avHormo)
+      marquerDeclaration(currentUser,'statutHormonal',_apHormo,_apHormo?'declare':'retire');
+  }catch(e){}
   const _ch=document.getElementById('atp-hormo-trait');
   if(_atpHormo&&_ch&&_ch.checked) currentUser.traitementHormonal=true;
   else delete currentUser.traitementHormonal;
@@ -47813,6 +48179,192 @@ function testExercices(){
       } finally { currentUser=_dfU; _viderCacheVolume(); _viderCacheSignaux(); }
     })();
 
+
+    // ══════ DOSSIER SANTÉ HORMONALE : LIRE, DATER, RENDRE ══════
+    // L'ecran n'invente aucun etat ni aucun effet : chaque ligne interroge la
+    // fonction qui decide deja ailleurs. Ces assertions verifient donc surtout
+    // ce qu'il NE fait pas — inventer une date, montrer un bloc non partage,
+    // produire une synthese.
+    (()=>{
+      const _dsU=currentUser;
+      const _mk=(o)=>Object.assign({id:'ds',email:'ds@t',role:'athlete',
+        gender:'Femme',_evol_gender:'Femme',exAlias:{},exMuscles:{},programs:{},
+        sessions:[],bilans:[],nutrition:{}},o||{});
+      try{
+        ok('Critère : aucune déclaration → écran vide et message, aucune relance',(()=>{
+          const u=_mk();
+          const d=dossierSante(u,false);
+          if(!dossierSanteVide(d))
+            return _echec(JSON.stringify({e:d.etats.length,f:d.effets.length,r:d.renvois.length}));
+          const h=_htmlDossierSante(u,false);
+          if(h.indexOf(escapeHtml(DOSSIER_VIDE))<0) return _echec('message absent');
+          // Aucune relance : pas de bouton, pas d'invitation a declarer.
+          return /onclick|declare|Ajouter|Renseigne/i.test(h.replace(/DOSSIER_VIDE/,''))
+            &&!/n'affiche que ce que tu as/.test(h)
+            ?_echec('une relance est proposée'):true;})());
+        ok('Critère : allaitement → « objectifs de perte désactivés », cause et date',(()=>{
+          const t=Date.now()-40*864e5;
+          const u=_mk({grossesse:{etat:'allaitement',declareLe:t}});
+          if(!grossesseSuspend(u)) return _echec('fixture muette');
+          const e=effetsEnCours(u,false)
+            .find(x=>/perte de poids désactivés/.test(x.effet));
+          if(!e) return _echec('ligne absente');
+          if(!/allaite/i.test(e.cause)) return _echec('cause : '+e.cause);
+          if(e.date!==t) return _echec('date : '+e.date);
+          const h=_htmlDossierSante(u,false);
+          return h.indexOf(new Date(t).toLocaleDateString('fr-FR'))>=0
+            ?true:_echec('la date ne sort pas au rendu');})());
+        ok('Critère : pesPartagee absent → ZÉRO « pes » dans le rendu coach',(()=>{
+          const u=_mk({pes:true});
+          if(!aPES(u)) return _echec('fixture muette');
+          if(santeVisibleCoach(u,'pes')) return _echec('partagé sans consentement');
+          const h=_htmlDossierSanteCoachSrc(u);
+          if(/pes|produits déclarés/i.test(h.replace(/[a-z]*pes[a-z]*/gi,m=>
+            /^(pesee|pesees|pesanteur|depense|depenses)$/i.test(m)?'':m)))
+            return _echec('« pes » apparaît côté coach');
+          // Et l'athlete, elle, le voit dans SON dossier.
+          return _htmlDossierSante(u,false).indexOf('Produits déclarés')>=0
+            ?true:_echec('l\'athlète ne voit pas sa propre déclaration');})());
+        ok('Le partage ouvert fait apparaître le PES, et lui seul change',(()=>{
+          const u=_mk({pes:true,pesPartagee:true});
+          if(!santeVisibleCoach(u,'pes')) return _echec('le partage n\'ouvre rien');
+          const d=dossierSante(u,true);
+          return d.etats.some(x=>x.bloc==='pes')
+            ?true:_echec('toujours absent malgré le partage');})());
+        ok('LE FILTRE RÉSEAU : les DATES suivent le sort de leur bloc',(()=>{
+          // Une date qui existe est une declaration qui existe. Sans ce
+          // retrait, le lot aurait ouvert une fuite que six autres barrieres
+          // ferment.
+          const u=_mk({pes:true});
+          marquerDeclaration(u,'pes','pes','declare');
+          if(!(u.sante.declare.pes>0)) return _echec('la date n\'est pas posée');
+          const safe={...u};
+          CLOUD._retirerDatesNonPartagees(safe,u);
+          if(safe.sante.declare.pes!==undefined)
+            return _echec('la date du PES monte au réseau');
+          if((safe.sante.journal||[]).some(e=>e.bloc==='pes'))
+            return _echec('le journal du PES monte au réseau');
+          // Et la copie LOCALE n'est pas touchee : safe est une copie plate.
+          if(!(u.sante.declare.pes>0)) return _echec('la donnée locale a été effacée');
+          // Un bloc partage, lui, passe.
+          const v=_mk({etatsSante:['sopk']});
+          marquerDeclaration(v,'etats','sopk','declare');
+          const sv={...v};
+          CLOUD._retirerDatesNonPartagees(sv,v);
+          return sv.sante.declare.etats>0
+            ?true:_echec('un bloc partagé est retiré à tort');})());
+        ok('Critère : retrait → effet absent, entrée d\'historique conservée',(()=>{
+          const u=_mk({etatsSante:['sopk']});
+          marquerDeclaration(u,'etats','sopk','declare');
+          if(!effetsEnCours(u,false).some(x=>/sèche élargie/.test(x.effet)))
+            return _echec('fixture muette : aucun effet');
+          // Le retrait.
+          u.etatsSante=[];
+          marquerDeclaration(u,'etats','','retire');
+          if(effetsEnCours(u,false).some(x=>x.bloc==='etats'))
+            return _echec('l\'effet survit au retrait');
+          if(etatsDeclaresDossier(u,false).some(x=>x.bloc==='etats'))
+            return _echec('l\'état survit au retrait');
+          const j=journalSante(u,false).filter(x=>x.bloc==='etats');
+          if(j.length!==2) return _echec(j.length+' entrées d\'historique');
+          if(j[1].action!=='retire') return _echec('le retrait n\'est pas tracé');
+          // Et la date de declaration active, elle, est bien retiree.
+          return dateDeclaration(u,'etats')===null
+            ?true:_echec('une date active subsiste');})());
+        ok('RÈGLE 4 : l\'historique est PURGEABLE, sans toucher aux déclarations',(()=>{
+          const u=_mk({etatsSante:['sopk']});
+          marquerDeclaration(u,'etats','sopk','declare');
+          if(!journalSante(u,false).length) return _echec('fixture muette');
+          purgerJournalSante(u);
+          if(journalSante(u,false).length) return _echec('l\'historique survit');
+          // La declaration ACTIVE et son effet ne sont pas touches.
+          if(!aEtat(u,'sopk')) return _echec('la déclaration a été effacée');
+          return dateDeclaration(u,'etats')>0
+            ?true:_echec('la date active a été effacée');})());
+        ok('Critère : l\'export porte l\'avertissement article 9 en PREMIÈRE ligne',(()=>{
+          const u=_mk({etatsSante:['sopk']});
+          const j=exportDossierSante(u);
+          if(Object.keys(j)[0]!=='_avertissement')
+            return _echec('première clé : '+Object.keys(j)[0]);
+          if(!/article 9/i.test(j._avertissement))
+            return _echec('l\'article 9 n\'est pas cité');
+          const t=exportDossierSanteTexte(u);
+          const l1=t.split('\n')[0];
+          return l1===DOSSIER_ART9
+            ?true:_echec('première ligne du texte : '+l1.slice(0,60));})());
+        ok('Aucune date n\'est INVENTÉE : « date inconnue » pour l\'ancien',(()=>{
+          // Les dossiers anterieurs n'ont pas de date. En fabriquer une —
+          // Date.now() a la lecture, ou la date du dernier bilan — aurait
+          // produit un dossier faux, ce qui est pire qu'un dossier incomplet.
+          const u=_mk({etatsSante:['sopk']});      // declare SANS marquer
+          if(dateDeclaration(u,'etats')!==null)
+            return _echec('une date sort de nulle part');
+          const e=etatsDeclaresDossier(u,false).find(x=>x.bloc==='etats');
+          if(!e||e.date!==null) return _echec('date fabriquée : '+(e&&e.date));
+          const h=_htmlDossierSante(u,false);
+          if(h.indexOf(DOSSIER_DATE_INCONNUE)<0) return _echec('« date inconnue » absente');
+          return _dossDate(0)===DOSSIER_DATE_INCONNUE&&_dossDate(null)===DOSSIER_DATE_INCONNUE
+            ?true:_echec('_dossDate invente une date');})());
+        ok('RÈGLE 1 : une valeur PAR DÉFAUT n\'est pas une déclaration',(()=>{
+          // contraceptionDe rend 'aucune' et statutHormonal 'cycles_reguliers'
+          // quand personne n'a rien dit : les afficher aurait invente des
+          // declarations que l'athlete n'a jamais faites.
+          const u=_mk();
+          if(contraceptionDe(u)!=='aucune') return _echec('fixture muette');
+          if(statutHormonal(u)!=='cycles_reguliers') return _echec('fixture muette');
+          const d=dossierSante(u,false);
+          return d.etats.length===0
+            ?true:_echec('déclarations inventées : '+d.etats.map(x=>x.bloc).join(','));})());
+        ok('RÈGLE 2 : chaque effet porte sa cause, jamais un état nu',(()=>{
+          const u=_mk({grossesse:{etat:'enceinte',declareLe:Date.now()},
+            etatsSante:['sopk'],statutHormonal:'menopause'});
+          const l=effetsEnCours(u,false);
+          if(!l.length) return _echec('fixture muette');
+          const sans=l.filter(x=>!x.effet||!x.cause||!x.bloc);
+          return sans.length?_echec(sans.length+' effets sans cause'):true;})());
+        ok('RÈGLE 5 : aucune synthèse, aucun score, aucun graphique',(()=>{
+          const u=_mk({grossesse:{etat:'enceinte',declareLe:Date.now()},
+            etatsSante:['sopk','thyroide'],thyroide:{etat:'hypo',traitement:false},
+            statutHormonal:'menopause',pes:true});
+          const h=_htmlDossierSante(u,false);
+          if(/<svg|<canvas|drawLine|drawPie/.test(h)) return _echec('un graphique est rendu');
+          const txt=h.replace(/<[^>]*>/g,' ').toLowerCase();
+          const interdits=['score','profil hormonal','tendance','synthèse','risque global',
+            'sur 10','points','évolution'];
+          const t=interdits.filter(x=>txt.indexOf(x)>=0);
+          return t.length?_echec('interprétation : '+t.join(', ')):true;})());
+        ok('RÈGLE 7 : aucun terme diagnostique non déclaré par l\'athlète',(()=>{
+          // Un dossier VIERGE ne doit contenir aucun vocabulaire clinique : le
+          // rendu ne nomme que ce qui vient d'une declaration.
+          const u=_mk();
+          const txt=_htmlDossierSante(u,false).replace(/<[^>]*>/g,' ')
+            .toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+          const mots=['sopk','thyroide','hypothyroidie','menopause','grossesse',
+            'allaitement','contraception','insulino','endometriose','diabete'];
+          const t=mots.filter(x=>txt.indexOf(x)>=0);
+          return t.length?_echec('terme non déclaré : '+t.join(', ')):true;})());
+        ok('Le module LIT : il ne décide d\'aucun effet lui-même',(()=>{
+          // Chaque ligne interroge la fonction qui decide deja. Si effetsEnCours
+          // se mettait a calculer, il finirait par contredire le produit.
+          const src=String(effetsEnCours);
+          const appels=['grossesseSuspend','sopkApplicable','menopauseDeclaree',
+            'menopauseeOuAgee','correctionMBSuggeree','aPES','cycleSansCycle','ppFenetre'];
+          const manque=appels.filter(a=>src.indexOf(a+'(')<0);
+          if(manque.length) return _echec('n\'interroge pas : '+manque.join(', '));
+          // Aucun seuil chiffre en dur, hormis la constante de cafeine deja
+          // definie ailleurs.
+          return /[<>]=?\s*\d|\d+\s*\*/.test(src.replace(/CAFFEINE_MAX_GROSSESSE/g,''))
+            ?_echec('un seuil est calculé ici'):true;})());
+        ok('dossierSante et ses trois lecteurs sont PURS',(()=>{
+          const u=_mk({grossesse:{etat:'enceinte',declareLe:Date.now()},
+            etatsSante:['sopk'],pes:true});
+          const avant=JSON.stringify(u);
+          dossierSante(u,false); dossierSante(u,true);
+          etatsDeclaresDossier(u,true); effetsEnCours(u,true); renvoisEnCours(u,true);
+          journalSante(u,true); dateDeclaration(u,'etats'); exportDossierSante(u);
+          return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
+      } finally { currentUser=_dsU; }
+    })();
     // ══════ CONTRACEPTION : LE MODÈLE CALENDAIRE NE VAUT PAS POUR TOUTES ══════
     // Sous contraception combinée en continu, il n'y a ni ovulation ni phase
     // lutéale. Le produit réclamait pourtant une date de dernières règles à
