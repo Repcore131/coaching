@@ -6526,7 +6526,7 @@ function htmlSelecteurComptes(){
       <div style="width:34px;height:34px;border-radius:50%;flex-shrink:0;overflow:hidden;background:var(--surface-2);
         display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#bbb">
         ${c.avatar?`<img src="${escapeHtml(c.avatar)}" style="width:100%;height:100%;object-fit:cover">`:escapeHtml(ini(c))}</div>
-      <div style="flex:1;min-width:0;cursor:${est?'default':'pointer'}"${est?'':` onclick="basculerCompte('${escapeHtml(c.email)}')"`}>
+      <div style="flex:1;min-width:0;cursor:${est?'default':'pointer'}"${est?'':` onclick="basculerCompte('${escapeHtml(c.email)}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"`}>
         <div style="font-size:12px;font-weight:800;color:#eee;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(((c.fname||'')+' '+(c.lname||'')).trim()||c.email)}</div>
         <div style="font-size:10px;color:var(--text-faint)">${c.role==='coach'?'Coach':'Élève'}${est?' · actif':''}</div>
       </div>
@@ -23334,7 +23334,7 @@ function _bMetierSaisie(id,val){
     // resterait ouverte par-dessus la suite du formulaire.
     const exact=!!niveauMetier(val);
     zs.style.display=(l.length&&!exact)?'block':'none';
-    zs.innerHTML=l.map(m=>`<div onclick="_bMetierChoisi('${id}',this.dataset.n)" data-n="${escapeHtml(m.nom)}"
+    zs.innerHTML=l.map(m=>`<div onclick="_bMetierChoisi('${id}',this.dataset.n)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" data-n="${escapeHtml(m.nom)}"
       style="padding:9px 12px;font-size:12px;color:#ddd;cursor:pointer;border-bottom:1px solid var(--border)">
       ${escapeHtml(m.nom)}<span style="color:var(--text-faint);font-size:10px"> · ${escapeHtml(m.fam)}</span></div>`).join('');
   }
@@ -24436,7 +24436,7 @@ function renderCharges(){
     const ouvert=_chSchemaOuvert===s;
     return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:9px 10px;margin-bottom:6px">
       <div style="display:flex;align-items:center;gap:3px;min-width:max-content">
-        <div style="flex:0 0 132px;cursor:pointer" onclick="_chSchemaOuvert=${ouvert?'null':"'"+s+"'"};renderCharges()">
+        <div style="flex:0 0 132px;cursor:pointer" onclick="_chSchemaOuvert=${ouvert?'null':"'"+s+"'"};renderCharges()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
           <div style="font-size:12px;font-weight:800;color:#eee;line-height:1.25">${escapeHtml(m.lib)}</div>
           <div style="font-size:9px;color:var(--text-faint)">${m.nb} exercices${ouvert?'':' · voir'}</div>
         </div>
@@ -42454,6 +42454,19 @@ function openAddAthlete(){
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
 }
+// Échap ferme la modale, quand le fond la ferme deja au clic. Le balisage
+// porte l'intention : `onclick="closeModal()"` sur l'overlay signifie
+// « renvoyable », `onclick=""` signifie « il faut trancher ». On ne cree
+// donc aucune politique nouvelle, on rend la meme accessible au clavier.
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape') return;
+  const ov=document.getElementById('modal-overlay');
+  if(!ov) return;
+  const oc=ov.getAttribute('onclick')||'';
+  if(oc.indexOf('closeModal')<0&&oc.indexOf('this.remove')<0) return;
+  e.preventDefault();
+  try{ closeModal(); }catch(x){ ov.remove(); }
+});
 function closeModal(){
   if(typeof _audioMediaRecorder!=='undefined'&&_audioMediaRecorder&&_audioMediaRecorder.state==='recording') cancelAudioAnnotation();
   document.getElementById('modal-overlay')?.remove();
@@ -61820,7 +61833,11 @@ function testExercices(){
           const cas=[
             ['10 jours, aucun bilan',      b({id:'n1',createdAt:J(10)}),                    true],
             ['1 jour seulement',           b({id:'n2',createdAt:J(1)}),                     false],
-            ['exactement 3 jours',         b({id:'n3',createdAt:J(3)}),                     false],
+            // 3 jours PILE serait instable : quelques millisecondes passent
+            // entre la construction de la fixture et l'evaluation, et l'ecart
+            // franchit le seuil. On encadre la borne au lieu de s'asseoir
+            // dessus — mon premier jet passait par chance.
+            ['un peu moins de 3 jours',    b({id:'n3',createdAt:J(2.9)}),                   false],
             ['un peu plus de 3 jours',     b({id:'n4',createdAt:J(3.1)}),                   true],
             ['a un bilan',                 b({id:'n5',createdAt:J(10),bilans:[{date:1}]}),  false],
             ['invité par code',            b({id:'n6',createdAt:J(10),_fromCode:true}),     false],
