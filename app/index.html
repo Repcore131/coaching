@@ -52512,6 +52512,98 @@ function testExercices(){
               return _echec('badge : '+b.textContent);
           } finally { CLOUD._lastSync=_sv; try{ CLOUD._updateSyncBadge(); }catch(e){} }
           return true;})());
+        ok('La file de renvoi survit à la session, sans doublon',(()=>{
+          // Elle vit dans localStorage et non en mémoire : c'est ce qui lui
+          // permet d'être rejouée au démarrage suivant, des heures plus tard.
+          const _sv=localStorage.getItem(CLOUD._QUEUE_KEY);
+          try{
+            CLOUD._ecrireFile([]);
+            CLOUD._enfiler('lea@t.fr');
+            CLOUD._enfiler('lea@t.fr');
+            if(CLOUD.enAttenteDeSync()!==1)
+              return _echec('doublon : '+CLOUD.enAttenteDeSync()+' entrée(s)');
+            CLOUD._enfiler('max@t.fr');
+            // La relecture passe par localStorage, pas par une variable :
+            // c'est LA propriété qui fait tenir la file entre deux sessions.
+            const brut=JSON.parse(localStorage.getItem(CLOUD._QUEUE_KEY)||'[]');
+            if(brut.length!==2||brut[0]!=='lea@t.fr'||brut[1]!=='max@t.fr')
+              return _echec('contenu persisté : '+JSON.stringify(brut));
+            CLOUD._defiler('lea@t.fr');
+            if(CLOUD.enAttenteDeSync()!==1||CLOUD._lireFile()[0]!=='max@t.fr')
+              return _echec('le défilage a retiré la mauvaise clé');
+            // Une clé vide ne doit pas entrer : elle ferait boucler viderFile
+            // sur un dossier introuvable.
+            CLOUD._enfiler('');CLOUD._enfiler(null);
+            if(CLOUD.enAttenteDeSync()!==1) return _echec('une clé vide est entrée');
+            // Bornée à 50 : une file non bornée saturerait le stockage
+            // qu'elle est censée soulager. On garde les PLUS RÉCENTES.
+            CLOUD._ecrireFile(Array.from({length:60},(_,i)=>'u'+i+'@t.fr'));
+            const f=CLOUD._lireFile();
+            if(f.length!==50) return _echec('borne : '+f.length+' entrées');
+            return (f[0]==='u10@t.fr'&&f[49]==='u59@t.fr')
+              ?true:_echec('la borne garde les mauvaises : '+f[0]+'…'+f[49]);
+          } finally { if(_sv===null) localStorage.removeItem(CLOUD._QUEUE_KEY);
+                      else localStorage.setItem(CLOUD._QUEUE_KEY,_sv); }})());
+        ok('Un renvoi impossible ne VIDE pas la file',(()=>{
+          // Le pire défaut possible ici : croire avoir renvoyé et défiler des
+          // clés qui n'ont jamais été envoyées. La donnée serait alors perdue
+          // pour de bon, sans que personne ne le sache.
+          // viderFile est asynchrone, mais son garde s'exécute AVANT tout
+          // await : la file est donc observable immédiatement après l'appel.
+          const _sv=localStorage.getItem(CLOUD._QUEUE_KEY), _cw=CLOUD.canWrite;
+          try{
+            CLOUD._ecrireFile(['lea@t.fr','max@t.fr']);
+            CLOUD.canWrite=()=>false;
+            CLOUD.viderFile().catch(()=>{});
+            if(CLOUD.enAttenteDeSync()!==2)
+              return _echec('la file a été vidée sans pouvoir envoyer : '
+                            +CLOUD.enAttenteDeSync()+' restante(s)');
+            // TÉMOIN : le garde porte bien sur canWrite, et non sur autre
+            // chose qui rendrait l'assertion vraie par accident.
+            const src=String(CLOUD.viderFile);
+            return /!this\.canWrite\(\)/.test(src)
+              ?true:_echec('viderFile ne consulte plus canWrite');
+          } finally { CLOUD.canWrite=_cw;
+                      if(_sv===null) localStorage.removeItem(CLOUD._QUEUE_KEY);
+                      else localStorage.setItem(CLOUD._QUEUE_KEY,_sv); }})());
+        ok('Tout échec d\'envoi passe par le MÊME entonnoir vers la file',(()=>{
+          // La file se remplit dans le catch de _doPushOne, et nulle part
+          // ailleurs : c'est ce qui fait que les ~50 appelants
+          // « fire-and-forget » en bénéficient sans s'en occuper. Le brancher
+          // sur le seul garde de jeton laisserait dehors le réseau coupé et
+          // les 5xx, qui sont les causes les plus fréquentes.
+          const src=String(CLOUD._doPushOne);
+          const iCatch=src.lastIndexOf('catch');
+          if(iCatch<0) return _echec('plus de catch dans _doPushOne');
+          const fin=src.slice(iCatch);
+          if(fin.indexOf('_enfiler(email)')<0)
+            return _echec('l\'échec ne remplit plus la file');
+          if(fin.indexOf('_queueRetry()')<0)
+            return _echec('aucune relance n\'est armée');
+          // Une erreur non rejouable — le refus d'écraser un nœud plus riche —
+          // ne doit PAS être remise en file : elle se reproduirait à chaque
+          // palier, indéfiniment.
+          if(fin.indexOf('_nonRejouable')<0)
+            return _echec('les erreurs non rejouables reviendraient en boucle');
+          // Et l'erreur continue de remonter : c'est elle que toastSync
+          // transforme en message pour l'utilisateur.
+          return /throw e;/.test(fin)
+            ?true:_echec('l\'erreur est avalée : les appelants croiront au succès');})());
+        ok('La file est rejouée au démarrage ET après authentification',(()=>{
+          // Deux moments, deux raisons : au démarrage on rattrape ce qui est
+          // resté d'une session précédente ; après signIn on rattrape ce qui
+          // a échoué faute de jeton — le cas même que le lot vise.
+          const dep=(typeof _rcDemarrage==='function'?String(_rcDemarrage):'')
+                   +String(CLOUD.signIn);
+          const src=document.documentElement.outerHTML;
+          const prod=src.slice(0,src.indexOf('function testExercices'));
+          const apresSignIn=String(CLOUD.signIn).indexOf('viderFile()')>=0;
+          if(!apresSignIn) return _echec('aucun renvoi après authentification');
+          // Au démarrage : hors de signIn, il existe au moins un autre appel.
+          const total=(prod.match(/viderFile\(\)/g)||[]).length;
+          return total>=3
+            ?true:_echec('seulement '+total+' point(s) de renvoi');})());
+
         ok('pushOne pose UN filet central, et rend la promesse BRUTE',(()=>{
           // Une trentaine d'appelants font `CLOUD.pushOne(...)` sans rien en
           // faire. Depuis que la garde jette, chacun produirait un rejet non
