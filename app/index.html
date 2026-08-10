@@ -9925,9 +9925,19 @@ function _waTexteTodo(type,c){
   // aucun conseil : ni « arrête cet exercice », ni « baisse la charge », ni
   // quoi que ce soit qui ressemble à un avis médical. C'est au coach d'écrire
   // la suite, le texte n'est qu'une amorce qu'il relit avant d'envoyer.
+  //
+  // ET IL NE NOMME PAS LA DOULEUR. Même règle que _frTexteRelance : le canal
+  // est NON CHIFFRÉ, aucune donnée de santé n'y entre. Ce texte disait « je
+  // vois que tu as noté de la douleur sur tes dernières séances » — un fait
+  // de santé, écrit en clair, sur un fil que l'athlète n'a pas choisi et que
+  // n'importe qui lisant son téléphone voit. Le projet a par ailleurs retiré
+  // tout lien de contact du bloc DOULEUR pour cette raison exacte.
+  // Le message garde toute son utilité : il demande un point AVANT la
+  // prochaine séance. Le coach sait pourquoi il écrit ; le message ne le dit
+  // pas, et c'est l'athlète qui nomme ce qu'il veut nommer.
   if(type==='douleur'||type==='douleurdiff')
-    return 'Salut '+p+', je vois que tu as noté de la douleur sur tes dernières séances. '
-      +'Dis-moi où exactement et à quel moment ça se déclenche, qu\'on en parle avant ta prochaine séance 💪';
+    return 'Salut '+p+', j\'aimerais faire un point avec toi avant ta prochaine '
+      +'séance. Dis-moi quand tu es dispo 💪';
   if(type==='decrochage')
     return 'Salut '+p+', je vois que tes dernières séances n\'ont pas été terminées. '
       +'Dis-moi ce qui bloque : le temps, la fatigue, un exercice en particulier ? 💪';
@@ -64537,6 +64547,77 @@ function testExercices(){
         {id:'at4',email:'at4@t.fr'}));
       return !/glace|anti-inflammatoire|repos complet|kiné|étire|masse|médicament|arrête la musculation/i.test(h);})());
     // Aucun message pré-rempli ne doit prescrire quoi que ce soit.
+    // ══════ LIENS WHATSAPP : LE DESTINATAIRE, ET CE QU'ON ÉCRIT ══════
+    ok('AUCUN texte pré-rempli ne nomme une donnée de santé',(()=>{
+      // RÈGLE RGPD DURE, déjà portée par _frTexteRelance : le canal n'est
+      // pas chiffré, l'athlète n'a pas choisi ce fil, et n'importe qui
+      // regardant son téléphone lit la notification. _waTexteTodo y
+      // écrivait « je vois que tu as noté de la douleur sur tes dernières
+      // séances » — un fait de santé, en clair. Le projet avait pourtant
+      // retiré tout lien de contact du bloc DOULEUR pour cette raison.
+      const interdits=/douleur|blessure|cycle|règles|menstru|SOPK|thyro[iï]|PES|grossesse|enceinte|allaite|traitement|médicament|pathologie|diagnostic/i;
+      const types=['overdue','nostart','expiring','bilan','noprog','douleur',
+                   'douleurdiff','decrochage','entrainement','inconnu'];
+      const fuites=[];
+      for(const t of types){
+        const a=_waTexteTodo(t,{fname:'Léa',bilans:[{date:Date.now()-20*864e5}],
+          createdAt:Date.now()-30*864e5,accessExpiry:Date.now()+5*864e5});
+        if(interdits.test(a)) fuites.push('individuel/'+t+' : '+a.slice(0,60));
+        const b=_waCorpsGroupe(t);
+        if(interdits.test(b)) fuites.push('groupé/'+t+' : '+b.slice(0,60));
+      }
+      if(fuites.length) return _echec(fuites.join(' | '));
+      // TÉMOIN : le filtre mord vraiment. Sans lui, cette assertion
+      // passerait quel que soit le texte.
+      if(!interdits.test('Salut Léa, ta douleur au genou'))
+        return _echec('le filtre ne reconnaît plus une donnée de santé');
+      // Le message de douleur reste UTILE : il demande un point avant la
+      // prochaine séance. Se taire n'est pas la même chose que ne rien dire.
+      const d=_waTexteTodo('douleur',{fname:'Léa'});
+      return /point|dispo|séance/i.test(d)
+        ?true:_echec('le message de douleur ne demande plus rien : '+d);})());
+    ok('waLink construit un destinataire exploitable, ou aucun',(()=>{
+      // wa.me exige l'indicatif pays SANS zéro de tête. Un numéro national
+      // ouvre WhatsApp sur un contact vide, et le coach croit avoir écrit.
+      const l=waLink('+33 6 12 34 56 78','Salut Léa 💪');
+      if(l.indexOf('https://wa.me/33612345678?text=')!==0)
+        return _echec('numéro mal normalisé : '+l);
+      // Le texte est ENCODÉ : un « ? » ou un « & » dans un prénom
+      // tronquerait sinon le message.
+      if(l.indexOf(encodeURIComponent('Salut Léa 💪'))<0)
+        return _echec('le texte n\'est pas encodé');
+      const amp=waLink('+33612345678','A&B ? C');
+      if(amp.indexOf('A%26B%20%3F%20C')<0) return _echec('& et ? mal encodés : '+amp);
+      // Un numéro national est REFUSÉ, pas rafistolé : _numWa rend vide.
+      if(_numWa('0612345678')!=='') return _echec('le zéro de tête est accepté');
+      // Sans numéro, le lien reste valide et laisse choisir le contact —
+      // c'est délibéré, et le libellé du bouton le dit ailleurs.
+      const sans=waLink('','Salut');
+      return sans.indexOf('https://wa.me/?text=')===0
+        ?true:_echec('sans numéro, le lien est cassé : '+sans);})());
+    ok('Une ligne « À traiter » à UN athlète = un vrai lien, un seul clic',(()=>{
+      // Critère du lot : relancer prend UN clic. Un <button> qui ferait
+      // window.open serait bloqué par le navigateur dans la moitié des cas.
+      const c={fname:'Léa',phone:'+33612345678',bilans:[{date:Date.now()-20*864e5}]};
+      const h=_waBoutonTodo({type:'overdue',list:[c]},0);
+      if(h.indexOf('<a ')!==0) return _echec('ce n\'est pas un lien : '+h.slice(0,40));
+      if(h.indexOf('wa.me/33612345678')<0) return _echec('mauvais destinataire');
+      if(h.indexOf('target="_blank"')<0||h.indexOf('rel="noopener"')<0)
+        return _echec('le lien s\'ouvre dans l\'app, ou sans noopener');
+      // Le texte est déjà rédigé, et il porte le prénom.
+      if(h.indexOf(encodeURIComponent('Salut Léa'))<0)
+        return _echec('le message n\'est pas pré-rempli');
+      // Sans numéro, le bouton reste — mais son libellé ne promet pas un
+      // destinataire résolu.
+      const sans=_waBoutonTodo({type:'overdue',list:[{fname:'Léa'}]},0);
+      if(sans.indexOf('pas de numéro enregistré')<0)
+        return _echec('le bouton sans numéro ment sur le destinataire');
+      // Plusieurs athlètes : on passe par la sélection groupée, où chaque
+      // envoi reste un geste distinct.
+      const multi=_waBoutonTodo({type:'overdue',list:[c,{fname:'Max'}]},2);
+      return /openWaGroupe\(2\)/.test(multi)
+        ?true:_echec('plusieurs athlètes n\'ouvrent pas la sélection groupée');})());
+
     ok('Les messages WhatsApp ne prescrivent rien',
        ['douleur','douleurdiff','decrochage','entrainement'].every(t=>
          !/arrête|baisse la charge|retire|glace|anti-inflammatoire|repos complet|médicament/i
