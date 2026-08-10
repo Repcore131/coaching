@@ -61350,6 +61350,84 @@ function testExercices(){
           const vise=window._todoRows[0].list[0].id;
           dismissTodoRow(0);
           return !!currentUser.alertStatus['douleur-'+vise];})());
+        // ── « INSCRIT, N'A JAMAIS COMMENCÉ » ────────────────────────────
+        // La catégorie existait, son prédicat aussi, et RIEN ne les tenait :
+        // ni le seuil de trois jours, ni l'exclusion des invités, ni la place
+        // en tête, ni le libellé, ni le score. Un seuil déplacé d'un chiffre
+        // serait passé inaperçu.
+        ok('neverStarted : trois jours, aucun bilan, et pas un invité',(()=>{
+          const J=n=>Date.now()-n*864e5;
+          const b=o=>Object.assign({role:'athlete',bilans:[]},o);
+          const cas=[
+            ['10 jours, aucun bilan',      b({id:'n1',createdAt:J(10)}),                    true],
+            ['1 jour seulement',           b({id:'n2',createdAt:J(1)}),                     false],
+            ['exactement 3 jours',         b({id:'n3',createdAt:J(3)}),                     false],
+            ['un peu plus de 3 jours',     b({id:'n4',createdAt:J(3.1)}),                   true],
+            ['a un bilan',                 b({id:'n5',createdAt:J(10),bilans:[{date:1}]}),  false],
+            ['invité par code',            b({id:'n6',createdAt:J(10),_fromCode:true}),     false],
+            ['createdAt absent',           b({id:'n7'}),                                    true]
+          ];
+          const rates=cas.filter(([,c,att])=>neverStarted(c)!==att).map(([n])=>n);
+          if(rates.length) return _echec(rates.join(' · '));
+          // createdAt absent = compte anterieur au champ : traite comme ancien,
+          // donc SIGNALE. Le taire aurait cache les dossiers les plus vieux.
+          return neverStarted(b({id:'n7'}))===true
+            ?true:_echec('un compte sans createdAt est ignoré');})());
+        ok('Le score d\'urgence vaut 5, et ne chevauche pas « nouveau bilan »',(()=>{
+          // urgencyScore est verrouillee par ailleurs : on la LIT, on n'y
+          // touche pas. Les deux predicats sont mutuellement exclusifs —
+          // hasNewBilan exige au moins un bilan, neverStarted exige aucun.
+          const _sv=currentUser;
+          try{
+            currentUser={id:'co',email:'co@t.fr',role:'coach',alertStatus:{}};
+            const c={id:'s1',email:'s1@t.fr',role:'athlete',bilans:[],
+              createdAt:Date.now()-10*864e5,sessions:[],sessions_config:[]};
+            if(urgencyScore(c)!==5) return _echec('score '+urgencyScore(c));
+            if(hasNewBilan(c)) return _echec('les deux prédicats se chevauchent');
+            // Mis en veille, il retombe au rang commun.
+            currentUser.alertStatus['nostart-s1']={s:'ignoré',until:Date.now()+7*864e5};
+            return urgencyScore(c)!==5
+              ?true:_echec('le report ne fait pas retomber le score');
+          } finally { currentUser=_sv; }})());
+        ok('La ligne sort EN TÊTE, avec son libellé et le prénom',(()=>{
+          const _sv=currentUser, _ss=window.saveUser;
+          const z=document.getElementById('ch-todo');
+          const _av=z?z.innerHTML:null;
+          try{
+            window.saveUser=()=>true;
+            currentUser={id:'co',email:'co@t.fr',role:'coach',alertStatus:{}};
+            const J=n=>Date.now()-n*864e5;
+            const b=o=>Object.assign({role:'athlete',status:'COACHING_SUIVI',
+              bilans:[],sessions:[],sessions_config:[],nutrition:{}},o);
+            const l=[
+              b({id:'a1',email:'a1@t.fr',fname:'Amandine',createdAt:J(10)}),
+              b({id:'a3',email:'a3@t.fr',fname:'Chloe',createdAt:J(10),
+                 bilans:[{type:'depart',date:J(5)}]})];
+            renderTodoBlock(l);
+            const rows=window._todoRows||[];
+            const i=rows.findIndex(r=>r.type==='nostart');
+            if(i<0) return _echec('aucune ligne nostart');
+            // AVANT la ligne des bilans — c'est tout l'objet du placement.
+            const j=rows.findIndex(r=>r.type==='bilan');
+            if(j>=0&&i>j) return _echec('nostart passe APRÈS les bilans');
+            if(rows[i].list.length!==1||rows[i].list[0].id!=='a1')
+              return _echec('mauvais athlète : '+rows[i].list.map(c=>c.id).join(','));
+            if(!/jamais commencé/.test(rows[i].label))
+              return _echec('libellé : '+rows[i].label);
+            const txt=z?z.innerText:'';
+            if(z&&txt.indexOf('Amandine')<0) return _echec('le prénom ne sort pas');
+            // Et le report marche sur CE type sans liste a etendre :
+            // dismissTodoRow est agnostique et passe r.type a reporterAlerte.
+            dismissTodoRow(i);
+            if(!isAlertSnoozed('nostart','a1')) return _echec('le report n\'a rien écrit');
+            renderTodoBlock(l);
+            return !(window._todoRows||[]).some(r=>r.type==='nostart')
+              ?true:_echec('la ligne survit au report');
+          } finally {
+            currentUser=_sv; window.saveUser=_ss;
+            if(z&&_av!==null) z.innerHTML=_av;
+          }})());
+
         zTodo.innerHTML=gTodo;
       }
       currentUser=sauveU;
