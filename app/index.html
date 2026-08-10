@@ -3617,7 +3617,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1;padding:0 14px 14px">
     <div id="ap-contenu"></div>
   </div>
-  <div style="flex-shrink:0;padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+  <div style="flex-shrink:0;padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));
        background:var(--bg);border-top:1px solid var(--border)">
     <button class="btn btn-red" style="width:100%;letter-spacing:1.5px" onclick="commencerDepuisApercu()">COMMENCER</button>
   </div>
@@ -18156,7 +18156,7 @@ function ouvrirIllustration(nom){
     +'display:flex;flex-direction:column;align-items:center;justify-content:center;'
     +'padding:20px;touch-action:none';
   ov.innerHTML='<button type="button" aria-label="Fermer" data-fermer="1"'
-    +' style="position:absolute;top:calc(12px + env(safe-area-inset-top));right:14px;'
+    +' style="position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:14px;'
     +'width:44px;height:44px;border-radius:50%;background:#ffffff1f;border:none;color:#fff;'
     +'font-size:20px;line-height:1;cursor:pointer">×</button>'
     +'<img src="'+escapeHtml(img)+'" alt="'+escapeHtml(String(nom||''))+'"'
@@ -53079,6 +53079,86 @@ function testExercices(){
           if(!/ouvrirFormContrainte/.test(src)) return _echec('le bouton de précision a disparu');
           return /blocDisclaimerDouleur/.test(src)
             ?true:_echec('le disclaimer a disparu');})());
+        // ══════ ÉCRANS À ENCOCHE ══════
+        // Trois réglages qui ne se voient jamais sur un écran de bureau, et dont
+        // l'absence rend l'app inutilisable sur un iPhone récent en PWA.
+        ok('Le viewport COUVRE l\'écran — sans quoi env() vaut toujours zéro',(()=>{
+          const m=document.querySelector('meta[name="viewport"]');
+          if(!m) return _echec('aucun meta viewport');
+          const c=(m.getAttribute('content')||'').replace(/\s+/g,'');
+          // Sans viewport-fit=cover, le navigateur laisse les barres noires et
+          // env(safe-area-inset-*) rend 0 : tous les calc ci-dessous deviennent
+          // décoratifs, et le titre repasse sous l'heure système.
+          if(c.indexOf('viewport-fit=cover')<0) return _echec('viewport-fit manquant : '+c);
+          if(c.indexOf('width=device-width')<0) return _echec('largeur non liée à l\'appareil');
+          return /initial-scale=1(\.0)?/.test(c)
+            ?true:_echec('échelle initiale absente : '+c);})());
+        ok('Chaque 100vh est doublé d\'un 100dvh, et dans cet ordre',(()=>{
+          // Sur mobile, 100vh vaut la hauteur SANS la barre d'URL : un écran en
+          // 100vh déborde tant que la barre est déployée, et les boutons du bas
+          // passent sous le pli. 100dvh suit la hauteur réelle.
+          // L'ordre compte : le repli d'abord, la valeur moderne ensuite — un
+          // navigateur qui ignore dvh garde vh, les autres écrasent avec dvh.
+          const tout=document.documentElement.outerHTML;
+          const prod=tout.slice(0,tout.indexOf('function testExercices'));
+          const orphelins=[];
+          for(const ligne of prod.split('\n')){
+            const t=ligne.trim();
+            if(t.startsWith('/*')||t.startsWith('//')||t.startsWith('*')) continue;
+            const re=/([a-z-]+)\s*:\s*(?:calc\()?[^;"]*100vh/g; let m;
+            while((m=re.exec(ligne))!==null){
+              const apres=ligne.slice(m.index);
+              if(!new RegExp(m[1]+'\\s*:[^;"]*100dvh').test(apres))
+                orphelins.push(m[1]+' — '+t.slice(0,70));
+            }
+          }
+          if(orphelins.length) return _echec(orphelins.length+' sans repli dvh : '+orphelins[0]);
+          // TÉMOIN : la recherche trouve bien quelque chose. Sans lui, une regex
+          // cassée rendrait « aucun orphelin » quel que soit le fichier.
+          return (prod.match(/100dvh/g)||[]).length>=6
+            ?true:_echec('trop peu de 100dvh : la recherche ne mord pas');})());
+        ok('Les trois barres réservent la place de l\'encoche',(()=>{
+          // .topbar et #ch-mobile-header en haut, .tab-bar en bas. Sans ces
+          // calc, l'heure système recouvre le titre et la barre d'onglets passe
+          // sous le trait tactile.
+          const attendus=[['.topbar','padding-top','top'],
+                          ['.tab-bar','padding-bottom','bottom']];
+          const regles=[];
+          for(const sh of document.styleSheets){
+            try{ for(const r of sh.cssRules) if(r.selectorText&&r.style) regles.push(r); }catch(e){}
+          }
+          for(const [sel,prop,cote] of attendus){
+            const r=regles.filter(x=>x.selectorText.split(',').some(t=>t.trim()===sel)).pop();
+            if(!r) return _echec('règle '+sel+' introuvable');
+            const v=r.style.getPropertyValue(prop);
+            if(v.indexOf('safe-area-inset-'+cote)<0)
+              return _echec(sel+' '+prop+' ne réserve rien : '+v);
+            // Le repli 0px est OBLIGATOIRE : sans lui, un navigateur qui ignore
+            // env() invalide la déclaration ENTIÈRE et l'élément perd aussi son
+            // padding de base. L'échec cesse d'être gracieux.
+            if(!/env\(safe-area-inset-[a-z]+,\s*0px\)/.test(v))
+              return _echec(sel+' : env() sans repli — la déclaration entière saute : '+v);
+          }
+          // L'en-tête mobile du canal porte le même calc, en style direct.
+          const h=document.getElementById('ch-mobile-header');
+          if(!h) return _echec('en-tête mobile du canal absent');
+          const st=h.getAttribute('style')||'';
+          return /padding-top:\s*calc\([^)]*env\(safe-area-inset-top,\s*0px\)/.test(st)
+            ?true:_echec('l\'en-tête du canal ne réserve pas l\'encoche : '+st.slice(0,90));})());
+        ok('Les calc de sécurité sont du CSS VALIDE, pas des lignes mortes',(()=>{
+          // Une déclaration invalide est ignorée en silence : la seule preuve
+          // qu'elle tient est que le style CALCULÉ la reflète. Hors encoche, les
+          // insets valent 0 — on doit donc retrouver exactement la base.
+          const t=document.querySelector('.topbar');
+          if(!t) return _echec('aucune .topbar dans le document');
+          const pt=parseFloat(getComputedStyle(t).paddingTop);
+          if(!(pt>=14)) return _echec('padding-top calculé : '+pt+'px, la déclaration a sauté');
+          const b=document.querySelector('.tab-bar');
+          if(!b) return _echec('aucune .tab-bar');
+          const pb=parseFloat(getComputedStyle(b).paddingBottom);
+          return pb>=10
+            ?true:_echec('padding-bottom calculé : '+pb+'px, la déclaration a sauté');})());
+
         ok('Aucun wa.me dans le parcours de séance',(()=>{
           // Il n'y en avait déjà pas : ce test le VERROUILLE.
           const z=document.getElementById('s-workout');
