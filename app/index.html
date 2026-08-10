@@ -21,13 +21,20 @@
      l'aperçu se réduit à un lien nu, sans vignette.
      Les dimensions sont déclarées pour que Facebook et WhatsApp sachent qu'il
      s'agit d'une grande image avant même de l'avoir téléchargée — sans elles,
-     le premier partage tombe souvent sur une petite carte. -->
+      le premier partage tombe souvent sur une petite carte.
+     CES TROIS URL NE PASSENT PAS PAR APP_BASE_URL, et ne le peuvent pas :
+     les metas sont lues par des robots qui n'executent aucun JavaScript,
+     et qui recuperent la page bien avant que la moindre constante existe.
+     Elles pointent vers la RACINE du site — la meme cible que la landing
+     page et les billets du blog — et non vers le sous-dossier de l'app.
+     check_urls.js verifie hors ligne que chacune correspond a un fichier
+     reel du depot : c'est ainsi qu'on a trouve le 404 de icons/. -->
 <meta name="description" content="Ton coach te suit à chaque séance : charges ajustées à ta phase de cycle, ta fiche papier importée par photo, et la base Ciqual consultable hors ligne.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://repcore131.github.io/coaching/">
 <meta property="og:title" content="RepCore — Ton coach te suit à chaque séance">
 <meta property="og:description" content="Ton coach te suit à chaque séance : charges ajustées à ta phase de cycle, ta fiche papier importée par photo, et la base Ciqual consultable hors ligne.">
-<meta property="og:image" content="https://repcore131.github.io/coaching/icons/og-image.png">
+<meta property="og:image" content="https://repcore131.github.io/coaching/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="RepCore — Ton coach te suit à chaque séance">
@@ -36,7 +43,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="RepCore — Ton coach te suit à chaque séance">
 <meta name="twitter:description" content="Ton coach te suit à chaque séance : charges ajustées à ta phase de cycle, ta fiche papier importée par photo, et la base Ciqual consultable hors ligne.">
-<meta name="twitter:image" content="https://repcore131.github.io/coaching/icons/og-image.png">
+<meta name="twitter:image" content="https://repcore131.github.io/coaching/og-image.png">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icons/icon-192x192.png">
 <script>
