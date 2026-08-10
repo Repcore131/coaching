@@ -52379,6 +52379,72 @@ function testExercices(){
           // Et _doPushOne non plus : l'envoi doit partir, dégradé ou non.
           return !/if\(quotaDegrade\(\)\)\s*return/.test(String(CLOUD._doPushOne))
             ?true:_echec('_doPushOne renonce à envoyer sous dégradation');})());
+        // ── SANS JETON : ÉCHOUER FRANCHEMENT ────────────────────────────
+        // L'ancien `if(!token) return;` laissait le badge fige sur
+        // « Synchronisation en cours » : l'utilisateur croyait ses donnees
+        // envoyees. Trois proprietes tiennent la correction, et aucune n'etait
+        // verifiee.
+        ok('Sans jeton, le badge passe en échec AVANT que l\'erreur parte',(()=>{
+          const src=String(CLOUD._doPushOne);
+          const m=src.match(/if\(!token\)\{[\s\S]{0,600}?\n      \}/);
+          if(!m) return _echec('la garde de jeton a disparu');
+          const g=m[0];
+          if(g.indexOf('_setSyncStatus(false)')<0)
+            return _echec('le badge n\'est plus mis à jour');
+          if(g.indexOf('throw')<0) return _echec('la garde ne remonte plus rien');
+          // L'ORDRE : le badge d'abord. Une erreur jetee avant laisserait le
+          // badge sur « en cours », soit exactement le defaut d'origine.
+          if(!(g.indexOf('_setSyncStatus(false)')<g.indexOf('throw')))
+            return _echec('l\'erreur part avant la mise à jour du badge');
+          // Et l'erreur est ACTIONNABLE : se reconnecter est quelque chose que
+          // l'utilisateur peut faire, contrairement a « réseau coupé ».
+          if(g.indexOf('_actionnable=true')<0)
+            return _echec('l\'erreur n\'est plus marquée actionnable');
+          // Le badge dit bien « Échec ».
+          const _sv=CLOUD._lastSync;
+          try{
+            CLOUD._setSyncStatus(false);
+            const b=document.querySelector('.coach-sync-badge, .rc-sync-badge');
+            if(b&&!/Échec/.test(b.textContent))
+              return _echec('badge : '+b.textContent);
+          } finally { CLOUD._lastSync=_sv; try{ CLOUD._updateSyncBadge(); }catch(e){} }
+          return true;})());
+        ok('pushOne pose UN filet central, et rend la promesse BRUTE',(()=>{
+          // Une trentaine d'appelants font `CLOUD.pushOne(...)` sans rien en
+          // faire. Depuis que la garde jette, chacun produirait un rejet non
+          // capture. Le filet est pose UNE fois, dans pushOne — pas .catch()
+          // recopie sur cinquante lignes, dont on en oublierait la moitie.
+          //
+          // MAIS il doit rendre la promesse TELLE QUELLE : `return p.catch(…)`
+          // aurait avale l'erreur pour TOUT LE MONDE, y compris toastSync qui
+          // en a besoin pour afficher le message. C'est la difference entre les
+          // deux ecritures, et elle ne se voit pas a la lecture rapide.
+          const src=String(CLOUD.pushOne);
+          if(!/p\.catch\(\(\)=>\{\}\)/.test(src))
+            return _echec('le filet central a disparu');
+          if(!/return p;/.test(src))
+            return _echec('la promesse n\'est plus rendue telle quelle');
+          // Preuve par l'IDENTITE : ce que rend pushOne est l'objet meme que
+          // _doPushOne a produit. Un .catch intercale en creerait un autre.
+          const _dp=CLOUD._doPushOne;
+          try{
+            const P=Promise.reject(new Error('temoin'));
+            P.catch(()=>{});                       // le test ne doit rien laisser fuir
+            CLOUD._doPushOne=()=>P;
+            const rendu=CLOUD.pushOne('t@t.fr',{});
+            return rendu===P
+              ?true:_echec('pushOne rend une AUTRE promesse : les appelants perdent l\'erreur');
+          } finally { CLOUD._doPushOne=_dp; }})());
+        ok('toastSync remonte le message actionnable, et lui seul',(()=>{
+          const src=String(toastSync);
+          if(!/_actionnable/.test(src))
+            return _echec('toastSync ne distingue plus les erreurs actionnables');
+          // UNIQUEMENT si l'ecriture locale a reussi : sinon « enregistrée sur
+          // cet appareil » serait faux, et on promettrait une sauvegarde qui
+          // n'a pas eu lieu.
+          return /localOk&&e&&e\._actionnable/.test(src)
+            ?true:_echec('la condition sur l\'écriture locale a sauté');})());
+
         ok('Aucune fonctionnalité de SÉCURITÉ n\'est dégradée',(()=>{
           const sensibles={drapeauGeneralActif:(typeof drapeauGeneralActif==='function'?drapeauGeneralActif:null),
             plancherEffectif,risquesMicro,aTCA:(typeof aTCA==='function'?aTCA:null),
