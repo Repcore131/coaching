@@ -56068,6 +56068,113 @@ function testExercices(){
           for(const garde of ["data.type!=='coach'",'data.active','data.expiry','data.redeemed'])
             if(vc.indexOf(garde)<0) return _echec('garde perdue dans _verifyCoachInvite : '+garde);
           return /redeemed:true/.test(vc)?true:_echec('le PATCH redeemed a disparu');})());
+
+        // ── LE TUNNEL D'ACQUISITION ─────────────────────────────────────
+        // Rien ne couvrait doAthleteCode, ni l'ouverture directe du lien : le
+        // chemin qui transforme une invitation en athlete inscrit n'avait
+        // AUCUNE assertion. C'est pourtant le seul par lequel un athlete entre.
+        //
+        // La branche du paquet d'URL est SYNCHRONE — elle rend la main avant le
+        // moindre await — donc observable depuis une suite synchrone. La branche
+        // du code RC-XXXX-XXXX, elle, interroge le serveur : on ne l'appelle pas.
+        ok('Critère : coller le lien complet mène à l\'inscription, coach lié',(()=>{
+          const _sv=currentUser, _su=localStorage.getItem('rc_users');
+          const _pc=localStorage.getItem('pendingCode'), _ss=window.saveUser;
+          try{
+            window.saveUser=()=>true;
+            localStorage.setItem('rc_users','{}');
+            localStorage.removeItem('pendingCode');
+            const coach={id:'c7',fname:'Kevin',lname:'Guellec',email:'kg@t.fr',
+              code:'RC-KGKG-7777',role:'coach'};
+            const b64=btoa(unescape(encodeURIComponent(JSON.stringify(coach))));
+            const champ=document.getElementById('ae-code');
+            if(!champ) return _echec('le champ ae-code a disparu');
+            go('s-athlete-entry');
+            champ.value=APP_BASE_URL+'?coachpkg='+b64;
+            doAthleteCode();
+            const ec=(document.querySelector('.screen.active')||{}).id;
+            if(ec!=='s-register') return _echec('arrivé sur '+ec);
+            if(!(DB.get('users')||{})['kg@t.fr'])
+              return _echec('le coach n\'a pas été enregistré');
+            if(localStorage.getItem('pendingCode')!=='RC-KGKG-7777')
+              return _echec('pendingCode : '+localStorage.getItem('pendingCode'));
+            // Le role est pose dans un setTimeout : on epingle l'appel plutot
+            // que d'attendre, une suite synchrone ne peut pas l'observer.
+            return /selectRole\('athlete'\)/.test(String(doAthleteCode))
+              ?true:_echec('le rôle athlète n\'est plus présélectionné');
+          } finally { currentUser=_sv; window.saveUser=_ss;
+            if(_su!==null) localStorage.setItem('rc_users',_su);
+            if(_pc!==null) localStorage.setItem('pendingCode',_pc);
+            else localStorage.removeItem('pendingCode'); }})());
+        ok('La casse est préservée tant que ce n\'est pas un code court',(()=>{
+          // La charge base64 est SENSIBLE A LA CASSE : c'est ce qui faisait
+          // echouer tout collage de lien dans ce champ. La normalisation ne
+          // vaut que pour les codes courts.
+          const champ=document.getElementById('ae-code');
+          if(!champ) return _echec('champ absent');
+          const oi=champ.getAttribute('oninput')||'';
+          for(const prefixe of ['http','RCACCESS','RCLINK'])
+            if(oi.indexOf("startsWith('"+prefixe+"')")<0)
+              return _echec('« '+prefixe+' » n\'est plus épargné par la mise en majuscules');
+          if(/text-transform:\s*uppercase/.test(champ.getAttribute('style')||''))
+            return _echec('le champ force les majuscules en CSS');
+          // Et doAthleteCode lit la valeur BRUTE avant toute normalisation.
+          const src=String(doAthleteCode);
+          const iRaw=src.indexOf('.value||');
+          const iMaj=src.indexOf('.toUpperCase()');
+          return (iRaw>=0&&iMaj>iRaw)
+            ?true:_echec('la mise en majuscules précède la lecture brute');})());
+        ok('Critère : un code inconnu ne recommande pas ce qui vient d\'échouer',(()=>{
+          const _sv=currentUser, _su=localStorage.getItem('rc_users');
+          try{
+            localStorage.setItem('rc_users','{}');
+            const champ=document.getElementById('ae-code');
+            const err=document.getElementById('ae-err');
+            if(!champ||!err) return _echec('champ ou zone d\'erreur absents');
+            champ.value='PASUNCODE';
+            err.textContent=''; err.style.display='none';
+            doAthleteCode();
+            if(err.style.display==='none') return _echec('aucun message affiché');
+            const t=err.textContent;
+            if(!/aucun coach/.test(t)) return _echec('message : '+t.slice(0,60));
+            // Il DIT quoi faire, et ne renvoie pas vers la saisie qui vient
+            // d'echouer.
+            if(!/lien complet/.test(t)) return _echec('le message ne dit pas quoi faire');
+            return /renvoyer|redemande/.test(t)
+              ?true:_echec('le message n\'offre aucune issue');
+          } finally { currentUser=_sv;
+            if(_su!==null) localStorage.setItem('rc_users',_su); }})());
+        ok('Critère : l\'ouverture directe ouvre, remplit et annonce',(()=>{
+          // Le bloc vit dans window.onload, qu'on ne peut pas rejouer : on
+          // verifie ses trois effets sur le balisage reel, puis que le bloc les
+          // produit bien. Un toast ephemere — l'ancien comportement — obligeait
+          // l'athlete a retrouver puis ressaisir son code lui-meme.
+          const zone=document.getElementById('ae-code-zone');
+          const inp=document.getElementById('ae-code');
+          const ban=document.getElementById('ae-coach-banner');
+          if(!zone||!inp||!ban) return _echec('un des trois éléments manque');
+          const _z=zone.style.display, _v=inp.value, _b=ban.style.display, _bt=ban.textContent;
+          try{
+            zone.style.display='none';
+            const c={fname:'Kevin',lname:'Guellec',code:'RC-KGKG-7777'};
+            if(zone.style.display==='none') aeToggleCode();
+            inp.value=c.code||'';
+            ban.textContent='Coach '+((c.fname||c.lname||'?').trim())+' reconnu : valide pour créer ton compte';
+            ban.style.display='block';
+            if(zone.style.display==='none') return _echec('l\'accordéon reste fermé');
+            if(inp.value!=='RC-KGKG-7777') return _echec('champ : '+inp.value);
+            if(!/Coach Kevin reconnu/.test(ban.textContent))
+              return _echec('bannière : '+ban.textContent);
+            // Et le bloc de demarrage fait bien ces trois choses.
+            const tout=document.documentElement.outerHTML;
+            const prod=tout.slice(0,tout.indexOf('function testExercices'));
+            for(const [m,q] of [['aeToggleCode()','ouvrir l\'accordéon'],
+                                ["getElementById('ae-code')",'pré-remplir le champ'],
+                                ["getElementById('ae-coach-banner')",'afficher la bannière']])
+              if(prod.indexOf(m)<0) return _echec('le démarrage ne sait plus '+q);
+            return true;
+          } finally { zone.style.display=_z; inp.value=_v;
+            ban.style.display=_b; ban.textContent=_bt; }})());
         ok('Un code MAL FORMÉ est refusé AVANT toute création de compte',(()=>{
           // Refuser après CLOUD.signIn laisserait derrière soi un compte
           // Firebase Auth sans dossier : le refus doit précéder l'appel.
