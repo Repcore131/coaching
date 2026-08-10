@@ -12737,7 +12737,7 @@ function openClientDetail(cid,_refresh){
   if(_ap){
     if(c.assignedProgramName){
       _ap.innerHTML='<strong style="color:#ddd">Programme :</strong> '+escapeHtml(c.assignedProgramName)
-        +(c.assignedProgramAt?' : assigné le '+new Date(c.assignedProgramAt).toLocaleDateString('fr-FR'):'');
+        +(c.assignedProgramAt?' — assigné le '+new Date(c.assignedProgramAt).toLocaleDateString('fr-FR'):'');
       _ap.style.display='block';
     } else _ap.style.display='none';
   }
@@ -14446,7 +14446,10 @@ function setClientPhone(){
 function _assignerModele(a,prog,genre){
   const base=(genre==='F'?prog.sessions_F:prog.sessions_H)||[];
   _pushSessionsHistory(a); // sauvegarde avant écrasement — rollback possible
-  a.sessions_config=_marquerCommePublie(base.map(s=>({...s,exercises:(s.exercises||[]).map(e=>({...e}))})));
+  // Clone PROFOND. A plat, le tableau `sets` restait partagé : l'athlète
+  // retouchait ses séries et le modèle du coach bougeait avec — donc aussi
+  // toutes les assignations suivantes de ce modèle.
+  a.sessions_config=_marquerCommePublie(JSON.parse(JSON.stringify(base)));
   a.assignedProgramName=prog.name||'Programme';
   a.assignedProgramAt=Date.now();
   a.updatedAt=Date.now();
@@ -72231,6 +72234,165 @@ function testExercices(){
         // programme abouti d'un athlète en modèle. Trois gestes, aucun écran
         // nouveau — et cinq des sept fonctions qui les portent n'étaient
         // tenues par rien.
+        // ══════ APPLIQUER UN MODÈLE DEPUIS LA FICHE ══════
+        // Le geste qui remplace le programme d'un athlète. C'est le plus
+        // destructeur de l'écran coach, et il n'était tenu par rien.
+        ok('Le cœur d\'assignation écrit les séances ET la trace du modèle',(()=>{
+          // Un seul endroit écrit sessions_config et le nom du modèle : les
+          // deux chemins — assignation en masse et fiche — ne peuvent donc
+          // pas diverger, et la fiche affiche toujours le bon nom.
+          const modele={name:'Fondation',sessions_H:[
+            {day:'Lundi',name:'PUSH',active:true,
+             exercises:[{name:'DC',series:4,sets:[{kg:60}]}]}],
+            sessions_F:[{day:'Lundi',name:'PUSH F',active:true,exercises:[{name:'SQUAT'}]}]};
+          const a={id:'a1',fname:'Léa'};
+          const avant=Date.now()-1;
+          _assignerModele(a,modele,'H');
+          if(a.assignedProgramName!=='Fondation')
+            return _echec('nom du modèle : '+a.assignedProgramName);
+          if(!(a.assignedProgramAt>=avant)) return _echec('aucune date d\'assignation');
+          if(!(a.updatedAt>=avant)) return _echec('updatedAt n\'est pas rafraîchi');
+          if(a.sessions_config?.length!==1) return _echec('les séances n\'ont pas suivi');
+          // Le GENRE demandé, pas l'autre.
+          if(a.sessions_config[0].name!=='PUSH') return _echec('mauvaise version : '+a.sessions_config[0].name);
+          const b={id:'a2'};
+          _assignerModele(b,modele,'F');
+          if(b.sessions_config[0].name!=='PUSH F') return _echec('la version F n\'est pas prise');
+          // COPIE PROFONDE, et dans CE sens-là surtout : l'athlète retouche
+          // ses séries, le modèle du coach ne doit pas bouger — sinon la
+          // retouche d'un seul athlète partirait dans toutes les
+          // assignations suivantes de ce modèle.
+          a.sessions_config[0].exercises[0].sets.push({kg:99});
+          if(modele.sessions_H[0].exercises[0].sets.length!==1)
+            return _echec('le modèle du coach a bougé avec l\'athlète');
+          // Et l'inverse : deux athlètes servis par le même modèle restent
+          // indépendants l'un de l'autre.
+          const c={id:'a3'};
+          _assignerModele(c,modele,'H');
+          c.sessions_config[0].exercises[0].sets.push({kg:1});
+          return a.sessions_config[0].exercises[0].sets.length===2
+            ?true:_echec('deux athlètes partagent leurs séries');})());
+        ok('L\'ancien programme est photographié AVANT d\'être écrasé',(()=>{
+          // La confirmation promet « rollback possible » : sans instantané,
+          // c'est une promesse creuse et le travail du coach est perdu.
+          const src=String(_assignerModele);
+          const iSnap=src.indexOf('_pushSessionsHistory');
+          const iEcrit=src.indexOf('a.sessions_config=');
+          if(iSnap<0) return _echec('plus aucun instantané avant écrasement');
+          return iSnap<iEcrit
+            ?true:_echec('l\'instantané est pris APRÈS l\'écrasement');})());
+        ok('La modale liste les modèles, compte les séances, et présélectionne le genre',(()=>{
+          const _cu=currentUser,_cc=window.currentClientId,_t=window.toast;
+          const _gc=window.getOwnedClient;
+          try{
+            window.toast=()=>{};
+            currentUser={email:'c@t.fr',id:'c1',role:'coach',coachPrograms:[
+              {id:'p1',name:'Fondation',
+               sessions_H:[{day:'Lundi',active:true,exercises:[{name:'DC'}]},
+                           {day:'Mardi',active:true,exercises:[{name:'SQ'}]}],
+               sessions_F:[{day:'Lundi',active:true,exercises:[{name:'DC'}]}]}]};
+            currentClientId='a1';
+            // Une athlète femme : le sélecteur doit s'ouvrir sur F, ce qui
+            // ramène le geste à deux appuis dans le cas courant.
+            window.getOwnedClient=()=>({id:'a1',fname:'Léa',gender:'F'});
+            closeModal(); openApplyTemplate();
+            const ov=document.getElementById('modal-overlay');
+            if(!ov) return _echec('la modale ne s\'ouvre pas');
+            const t=(ov.innerText||ov.textContent||'').replace(/\s+/g,' ');
+            if(t.indexOf('Fondation')<0) return _echec('le modèle n\'est pas listé');
+            // Le décompte réutilise _cptCount : 2 séances H, 1 séance F.
+            if(!/2 séances H/.test(t)||!/1 séances F/.test(t))
+              return _echec('le décompte est faux : '+t.slice(0,90));
+            const bF=document.getElementById('at-g-F-0');
+            if(!bF) return _echec('aucun sélecteur de genre');
+            const choisi=bF.style.background&&bF.style.background.indexOf('--red')>=0;
+            if(!choisi) return _echec('le genre n\'est pas présélectionné sur F');
+            closeModal();
+            // Et sur un homme, c'est H.
+            window.getOwnedClient=()=>({id:'a1',fname:'Max',gender:'H'});
+            openApplyTemplate();
+            const bH=document.getElementById('at-g-H-0');
+            const ok2=bH&&bH.style.background&&bH.style.background.indexOf('--red')>=0;
+            closeModal();
+            return ok2?true:_echec('le genre n\'est pas présélectionné sur H');
+          } finally { closeModal(); currentUser=_cu; window.currentClientId=_cc;
+                      window.toast=_t; window.getOwnedClient=_gc; }})());
+        ok('Sans aucun modèle, la modale ne s\'ouvre pas — elle le DIT',(()=>{
+          // Une modale vide laisse le coach chercher ce qu'il a mal fait.
+          const _cu=currentUser,_t=window.toast,_gc=window.getOwnedClient;
+          try{
+            const vus=[];
+            window.toast=(m)=>{vus.push(String(m));};
+            window.getOwnedClient=()=>({id:'a1',fname:'Léa'});
+            currentUser={email:'c@t.fr',id:'c1',role:'coach',coachPrograms:[]};
+            closeModal(); openApplyTemplate();
+            if(document.getElementById('modal-overlay')) return _echec('une modale vide s\'ouvre');
+            if(!vus.length||!/Aucun modèle/.test(vus[0]))
+              return _echec('rien n\'explique : '+vus.join(' | '));
+            // Un athlète qui n'a pas encore créé son compte non plus : rien
+            // à écraser, et pousser sur un dossier inexistant ne mènerait à rien.
+            vus.length=0;
+            currentUser.coachPrograms=[{id:'p1',name:'F',sessions_H:[],sessions_F:[]}];
+            window.getOwnedClient=()=>({id:'a1',fname:'Léa',_fromCode:true});
+            openApplyTemplate();
+            if(document.getElementById('modal-overlay'))
+              return _echec('la modale s\'ouvre sur un athlète sans compte');
+            return vus.length&&/pas encore créé son compte/.test(vus[0])
+              ?true:_echec('rien n\'explique le refus : '+vus.join(' | '));
+          } finally { closeModal(); currentUser=_cu; window.toast=_t;
+                      window.getOwnedClient=_gc; }})());
+        ok('Remplacer un programme existant demande confirmation, et la respecte',(()=>{
+          const _cu=currentUser,_cc=window.currentClientId,_t=window.toast,_c=window.confirm,
+                _oc=window.openClientDetail,_p=CLOUD.pushOne,_si=Storage.prototype.setItem;
+          try{
+            window.toast=()=>{}; window.openClientDetail=()=>{};
+            CLOUD.pushOne=()=>Promise.resolve();
+            const modele={id:'p1',name:'Fondation',
+              sessions_H:[{day:'Lundi',name:'NEUF',active:true,exercises:[{name:'DC'}]}],sessions_F:[]};
+            currentUser={email:'c@t.fr',id:'c1',role:'coach',coachPrograms:[modele]};
+            currentClientId='a1';
+            const poser=()=>{ const u={'lea@t.fr':{id:'a1',email:'lea@t.fr',fname:'Léa',
+              sessions_config:[{day:'Lundi',name:'ANCIEN',active:true,exercises:[{name:'X'}]}]}};
+              DB.set('users',u); return u; };
+            _atGenre={0:'H'};
+            // 1. Le coach refuse : RIEN ne doit bouger.
+            poser(); window.confirm=()=>false;
+            applyTemplateToClient(0);
+            let a=(DB.get('users')||{})['lea@t.fr'];
+            if(a.sessions_config[0].name!=='ANCIEN')
+              return _echec('le refus n\'a pas été respecté');
+            if(a.assignedProgramName) return _echec('une trace est écrite malgré le refus');
+            // 2. Il accepte : le programme est remplacé et tracé.
+            let question=null;
+            window.confirm=(m)=>{question=m;return true;};
+            _atGenre={0:'H'};
+            applyTemplateToClient(0);
+            a=(DB.get('users')||{})['lea@t.fr'];
+            if(a.sessions_config[0].name!=='NEUF') return _echec('le modèle n\'a pas été appliqué');
+            if(a.assignedProgramName!=='Fondation') return _echec('la trace manque');
+            // La question NOMME le modèle et promet le rollback — promesse que
+            // l'assertion sur l'instantané vérifie par ailleurs.
+            if(!/Fondation/.test(question||'')) return _echec('la question ne nomme pas le modèle');
+            return /rollback/.test(question||'')
+              ?true:_echec('la question ne mentionne pas le retour en arrière');
+          } finally { currentUser=_cu; window.currentClientId=_cc; window.toast=_t;
+            window.confirm=_c; window.openClientDetail=_oc; CLOUD.pushOne=_p;
+            Storage.prototype.setItem=_si; }})());
+        ok('La fiche affiche le modèle appliqué ET sa date',(()=>{
+          // « Programme : Fondation — assigné le 25/07 ». Sans la date, le
+          // coach ne sait pas si le programme date d'hier ou de six mois.
+          const src=String(openClientDetail);
+          if(src.indexOf('assignedProgramName')<0)
+            return _echec('la fiche ne lit plus le nom du modèle');
+          if(src.indexOf('assignedProgramAt')<0)
+            return _echec('la fiche n\'affiche plus la date');
+          if(!/Programme\s*:/.test(src)) return _echec('l\'étiquette « Programme : » a disparu');
+          // Le nom vient du coach : il DOIT être échappé avant d'entrer dans
+          // le HTML de la fiche.
+          const i=src.indexOf('assignedProgramName');
+          return /escapeHtml\(c\.assignedProgramName\)/.test(src)
+            ?true:_echec('le nom du modèle entre dans le HTML sans échappement');})());
+
         ok('Dupliquer un modèle : copie PROFONDE, source intacte',(()=>{
           const _cu=currentUser,_t=window.toast;
           try{
