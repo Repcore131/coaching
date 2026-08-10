@@ -56904,25 +56904,40 @@ function testExercices(){
           // L'INCLUSION, dans ce sens-là : un domaine dans le code sans ligne
           // dans la politique est un manquement ; l'inverse ne l'est pas.
           // privacy.html est un fichier séparé que la suite ne charge pas, donc
-          // la liste est recopiée. Chaque entrée renvoie à sa ligne, relue le
-          // 5 août 2026 — si la politique change, cette liste doit suivre.
+          // la liste est RECOPIÉE — et une liste recopiée dérive. Celle-ci
+          // avait fini par annoncer deux domaines comme déclarés alors que la
+          // politique ne les nommait pas. C'est pourquoi le contrôle qui fait
+          // foi vit désormais hors du fichier : check_domaines.js lit les DEUX
+          // fichiers et vérifie aussi le sens inverse — un sous-traitant
+          // déclaré qui ne traite plus rien est une déclaration fausse, et
+          // c'est ainsi qu'ont été retirés QR Server et Cloudflare.
+          // Ce qui suit reste le garde-fou de proximité : renvois relus le
+          // 10 août 2026, à tenir à jour avec la politique.
           const declares=[
-            'googleapis.com',        // Firebase (l. 76) — stockage, auth, jetons
-            'firebaseio.com',        // Firebase (l. 76) — base temps réel
-            'cloudfunctions.net',    // Firebase (l. 76) — fonction de synchro
-            'cloudinary.com',        // l. 211 — vidéos, audio, et photos de
+            'googleapis.com',        // l. 197 auth et jetons, l. 209 stockage
+            'firebaseio.com',        // l. 203 — base temps réel
+            'cloudinary.com',        // l. 221 — vidéos, audio, et photos de
                                      // progression PARTAGÉES : la ligne a été
                                      // élargie le 8 août 2026, et elle dit ce
                                      // qu'une révocation ne peut pas faire.
-            'openfoodfacts.org',     // l. 217 — produits de marque, recherche
-            'ocr.space',             // l. 223 — lecture des étiquettes
-            'paypal.com',            // l. 156 — abonnement
-            'wa.me',                 // l. 217 — WhatsApp Ireland
-            'youtube.com','youtu.be',// l. 241 — vidéos d'exercices
-            'drive.google.com',      // l. 249 — pièces jointes du coach
-            // Ces deux-là ne sont contactés par personne : w3.org est l'espace
-            // de noms XML des SVG (jamais téléchargé), anses.fr et repcore131
-            // sont des liens que l'utilisateur clique, pas des requêtes.
+            'openfoodfacts.org',     // l. 215 — produits de marque, recherche
+            'ocr.space',             // l. 233 — hors service, la ligne le dit
+            'paypal.com',            // l. 239 — abonnement
+            'wa.me',                 // l. 227 — WhatsApp Ireland
+            'youtube.com','youtu.be',// l. 251 — vidéos d'exercices. youtu.be est
+                                     // la forme que l'app CONSTRUIT elle-même :
+                                     // elle manquait à la politique jusqu'au
+                                     // 10 août 2026.
+            'drive.google.com',      // l. 257 — programme ou vidéo dont le coach
+                                     // a collé le lien, que l'app réécrit en URL
+                                     // Google avant de l'ouvrir.
+            // Ce qui suit n'est PAS déclaré, et ne doit pas l'être : rien
+            // n'est contacté. cloudfunctions.net n'apparaît que dans _callFn,
+            // vestige sans aucun appelant — le déclarer sous-traitant serait
+            // aussi faux que d'omettre un sous-traitant réel. w3.org est
+            // l'espace de noms XML des SVG (jamais téléchargé) ; anses.fr et
+            // repcore131 sont des liens que l'utilisateur clique.
+            'cloudfunctions.net',
             'w3.org','anses.fr','repcore131.github.io'];
           const tout=document.documentElement.outerHTML;
           const prod=tout.slice(0,tout.indexOf('function testExercices'));

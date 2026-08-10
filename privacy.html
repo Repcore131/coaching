@@ -248,15 +248,21 @@
           <td>États-Unis, CCT + Data Privacy Framework</td>
         </tr>
         <tr>
-          <td><strong>YouTube</strong> (Google LLC)<br><code>www.youtube.com</code></td>
+          <td><strong>YouTube</strong> (Google LLC)<br><code>www.youtube.com</code><br><code>youtu.be</code></td>
           <td>Lecture des vidéos de démonstration que votre coach a associées à un exercice, ou qu'il partage dans le canal</td>
           <td>Adresse IP et cookies YouTube, uniquement si vous ouvrez une de ces vidéos. Les liens partagés par votre coach dans le canal n'affichent aucune image d'aperçu : rien n'est demandé à YouTube tant que vous n'avez pas touché le lien.</td>
+          <td>États-Unis, CCT + Data Privacy Framework</td>
+        </tr>
+        <tr>
+          <td><strong>Google Drive</strong> (Google LLC)<br><code>drive.google.com</code></td>
+          <td>Ouverture d'un programme ou d'une vidéo dont votre coach a collé le lien. RepCore réécrit ce lien en une adresse Google d'affichage direct.</td>
+          <td>Adresse IP et cookies Google, uniquement si vous touchez le lien — vous quittez alors RepCore. Aucune donnée de votre profil n'accompagne l'ouverture. Si votre coach colle un lien vers un autre hébergeur (Dropbox par exemple), RepCore le transmet sans le modifier et ce prestataire n'intervient pas pour son compte.</td>
           <td>États-Unis, CCT + Data Privacy Framework</td>
         </tr>
       </tbody>
     </table>
   </div>
-  <p class="note">Aucun autre service tiers n'est contacté par l'application : la mesure d'audience décrite au point 6 bis n'ajoute aucun destinataire, ses compteurs étant écrits dans la base Firebase déjà listée ci-dessus. Les liens WhatsApp et Google Drive éventuellement affichés ne sont ouverts que si vous les touchez, et vous quittez alors RepCore.</p>
+  <p class="note">Aucun autre service tiers n'est contacté par l'application : la mesure d'audience décrite au point 6 bis n'ajoute aucun destinataire, ses compteurs étant écrits dans la base Firebase déjà listée ci-dessus. Les quatre dernières lignes de ce tableau — WhatsApp, YouTube, Google Drive — ne sont sollicitées que si vous touchez un lien, et vous quittez alors RepCore.</p>
 
   <div class="card">
     <div class="card-title">Stockage local (localStorage)</div>
@@ -270,8 +276,8 @@
 
   <h2>5 bis. Transferts hors Union européenne</h2>
   <p>Une partie des sous-traitants ci-dessus traite les données depuis les États-Unis. Ces transferts sont encadrés par les <strong>clauses contractuelles types</strong> adoptées par la Commission européenne, au titre de l'<strong>article 46.2.c du RGPD</strong>.</p>
-  <p>Pour les prestataires qui y adhèrent (Google, Microsoft/GitHub et Cloudflare), les transferts bénéficient en outre de la <strong>décision d'adéquation du 10 juillet 2023</strong> relative au <em>cadre de protection des données UE-États-Unis</em> (EU-US Data Privacy Framework), qui reconnaît un niveau de protection substantiellement équivalent à celui du droit européen.</p>
-  <p>Pour les prestataires ne relevant d'aucune décision d'adéquation, le transfert reste fondé sur les seules clauses contractuelles types. C'est le cas de QR Server, auquel n'est transmise que l'adresse publique de l'application, et d'OCR.space, auquel plus aucune donnée n'est transmise depuis la désactivation de la lecture de photo.</p>
+  <p>Pour les prestataires qui y adhèrent (Google et Microsoft/GitHub), les transferts bénéficient en outre de la <strong>décision d'adéquation du 10 juillet 2023</strong> relative au <em>cadre de protection des données UE-États-Unis</em> (EU-US Data Privacy Framework), qui reconnaît un niveau de protection substantiellement équivalent à celui du droit européen.</p>
+  <p>Pour les prestataires ne relevant d'aucune décision d'adéquation, le transfert reste fondé sur les seules clauses contractuelles types. C'est le cas de Cloudinary, et d'OCR.space auquel plus aucune donnée n'est transmise depuis la désactivation de la lecture de photo.</p>
   <p>Vous pouvez obtenir une copie des garanties applicables en écrivant à l'adresse indiquée au point 9.</p>
 
   <h2>6. Durée de conservation</h2>
