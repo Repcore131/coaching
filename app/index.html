@@ -66187,6 +66187,63 @@ function testExercices(){
         const h=_canalCarteLien('https://instagram.com/p/abc');
         return /noopener/.test(h)&&/instagram\.com/.test(h)
           ?true:_echec('«'+h.slice(0,80)+'»');})());
+      // ── SORTIR DE L'ATTRIBUT href ───────────────────────────────────────
+      // Valider le schema ne suffit pas : « https://x" autofocus=" » passe le
+      // test http(s) puis referme le guillemet du href et ouvre un attribut de
+      // son choix. C'est ce que safeUrl ajoute a safeUrlRaw, et rien ne le
+      // verifiait — l'assertion voisine ne couvre que « javascript: ».
+      ok('safeUrl empêche de SORTIR de l\'attribut href',(()=>{
+        const attaque='https://x" autofocus="';
+        // Le schema est valide : safeUrlRaw le laisse passer, et c'est normal.
+        if(safeUrlRaw(attaque)!==attaque)
+          return _echec('safeUrlRaw devrait rendre l\'URL telle quelle');
+        // safeUrl, lui, echappe.
+        if(safeUrl(attaque).indexOf('"')>=0)
+          return _echec('un guillemet survit : '+safeUrl(attaque));
+        // Et la PREUVE par le parseur : on rend le lien et on compte les
+        // attributs. Une chaine echappee n'en produit que trois.
+        const d=document.createElement('div');
+        d.innerHTML='<a href="'+safeUrl(attaque)+'" target="_blank" rel="noopener">l</a>';
+        const a=d.querySelector('a');
+        if(!a) return _echec('aucun lien rendu');
+        if(a.hasAttribute('autofocus')) return _echec('autofocus a été injecté');
+        if([...a.attributes].length!==3)
+          return _echec('attributs : '+[...a.attributes].map(x=>x.name).join(','));
+        // TEMOIN : sans echappement, l'injection REUSSIT. Sans lui, le test
+        // ci-dessus passerait meme si le navigateur ignorait l'attribut.
+        const t=document.createElement('div');
+        t.innerHTML='<a href="'+attaque+'" target="_blank">l</a>';
+        return t.querySelector('a').hasAttribute('autofocus')
+          ?true:_echec('le témoin n\'injecte rien : le test ne prouve plus rien');})());
+      ok('Les deux fonctions restent RÉPARTIES selon leur usage',(()=>{
+        // safeUrlRaw dans un attribut rouvrirait la faille ci-dessus ; safeUrl
+        // dans window.open casserait l'adresse — un & devenu &amp; perd les
+        // parametres. Les deux erreurs sont symetriques et silencieuses.
+        const tout=document.documentElement.outerHTML;
+        const prod=tout.slice(0,tout.indexOf('function testExercices'));
+        const dansAttribut=(prod.match(/href="\$\{safeUrlRaw\(/g)||[]).length;
+        if(dansAttribut) return _echec(dansAttribut+' attribut(s) href utilisent safeUrlRaw');
+        const dansOpen=(prod.match(/window\.open\(safeUrl\(/g)||[]).length;
+        if(dansOpen) return _echec(dansOpen+' appel(s) window.open utilisent safeUrl');
+        // Le chemin PDF prend bien la forme brute, et le dit.
+        if(!/safeUrlRaw\(raw\)/.test(String(_openPdfSrc)))
+          return _echec('_openPdfSrc n\'utilise plus safeUrlRaw');
+        // Et safeUrl reste bati SUR safeUrlRaw : deux validations separees
+        // finiraient par diverger.
+        return /safeUrlRaw\(u\)/.test(String(safeUrl))
+          ?true:_echec('safeUrl ne s\'appuie plus sur safeUrlRaw');})());
+      ok('Un lien externe garde ses paramètres, et les schémas douteux tombent',(()=>{
+        // La raison d'etre de safeUrlRaw : ouvrir un PDF dont l'adresse porte
+        // plusieurs parametres.
+        const u='https://exemple.test/p.pdf?a=1&b=2';
+        if(safeUrlRaw(u)!==u) return _echec('l\'adresse brute a été altérée');
+        if(safeUrl(u).indexOf('&amp;')<0)
+          return _echec('safeUrl n\'échappe plus l\'esperluette');
+        const rates=['javascript:alert(1)','JaVaScRiPt:alert(1)',' javascript:alert(1)',
+          'data:text/html,x','vbscript:m','//evil.test/x','',null]
+          .filter(v=>safeUrlRaw(v)!=='#'||safeUrl(v)!=='#');
+        return rates.length?_echec('laissé passer : '+rates.join(' · ')):true;})());
+
 
       // ── Le pivot du décompte coach ──────────────────────────────────────
       ok('Le décompte pivote /reactions, rangé par athlète, vers le message',(()=>{
