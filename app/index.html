@@ -1665,7 +1665,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
 
         <div id="sc-generate-card" style="background:var(--dark);border:1px solid #2a0000;border-radius:14px;padding:18px;margin-bottom:24px">
-          <div style="font-size:11px;font-weight:800;color:var(--red);letter-spacing:2px;margin-bottom:14px">NOUVEAU CODE GRATUIT</div>
+          <div style="font-size:11px;font-weight:800;color:var(--red);letter-spacing:2px;margin-bottom:14px">NOUVEAU CODE D'ACCÈS</div>
           <div style="margin-bottom:12px"><label for="sc-name">Nom de l'élève</label><input id="sc-name" placeholder="Ex: Marie Martin"></div>
           <div style="margin-bottom:14px">
             <label for="sc-duration">Durée d'accès</label>
@@ -1676,7 +1676,7 @@ const COACH_PHOTO='icons/coach.jpg';
               <option value="12">12 mois - 1 an</option>
             </select>
           </div>
-          <button class="btn btn-red" onclick="generateStudentCode()" style="letter-spacing:1px">Générer le code accès gratuit</button>
+          <button class="btn btn-red" onclick="generateStudentCode()" style="letter-spacing:1px">Générer le code d'accès</button>
           <div id="sc-result" style="display:none;margin-top:16px">
             <div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:10px;padding:16px">
               <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;margin-bottom:8px">CODE ACCÈS GÉNÉRÉ</div>
@@ -42450,9 +42450,9 @@ function importPdfSeances(){
 
 // ======= COACH: AJOUTER ATHLÈTE DIRECTEMENT =======
 function openAddAthlete(){
-  // Un coach affilié ne peut PAS activer d'accès : ses élèves passent par
-  // PayPal. Annoncer « active l'accès en une seule étape » lui faisait promettre
-  // à son élève quelque chose que l'app ne lui donnerait jamais.
+  // Les deux accordent l'accès depuis R-03. La phrase diffère seulement
+  // parce que l'affilié est plafonné à 12 mois par code et le créateur non :
+  // annoncer la même durée aux deux serait faux pour l'un des deux.
   const estCreateur=currentUser?.email===CREATOR_EMAIL;
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:90vh;overflow-y:auto">
@@ -42466,12 +42466,12 @@ function openAddAthlete(){
     <div><label style="margin-top:10px" for="aa-pwd">Mot de passe (provisoire, 6 caractères minimum)</label><input type="text" id="aa-pwd" placeholder="Ex: repcore123"></div>
     <div><label style="margin-top:10px" for="aa-phone">Numéro WhatsApp <span style="color:var(--sub);font-weight:400">(facultatif)</span></label><input type="tel" id="aa-phone" placeholder="+33612345678" inputmode="tel"><div class="sub" style="font-size:var(--fs-xs);margin-top:4px">Avec l'indicatif pays. Sert à ouvrir WhatsApp pré-rempli depuis sa fiche.</div></div>
     <div><label style="margin-top:10px" for="aa-gender">Genre</label><select id="aa-gender"><option value="H">Homme</option><option value="F">Femme</option></select></div>
-    ${estCreateur?`<div><label style="margin-top:10px" for="aa-duration">Durée d'accès</label><select id="aa-duration" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:#fff;padding:12px 14px;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;cursor:pointer">
+    ${`<div><label style="margin-top:10px" for="aa-duration">Durée d'accès</label><select id="aa-duration" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:#fff;padding:12px 14px;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;cursor:pointer">
       <option value="1">1 mois</option>
       <option value="3" selected>3 mois (recommandé)</option>
       <option value="6">6 mois</option>
       <option value="12">12 mois</option>
-    </select></div>`:''}
+    </select></div>`}
     <div id="aa-err" style="color:var(--red-light);font-size:12px;margin-top:8px;display:none"></div>
     <div style="position:sticky;bottom:0;height:36px;background:linear-gradient(transparent,var(--surface-2));pointer-events:none;margin-top:-36px"></div>
     <button class="btn btn-red" style="margin-top:10px" onclick="createAthlete()">${estCreateur?'Créer et activer l\'accès':'Créer le compte'}</button>
@@ -42582,9 +42582,9 @@ async function createAthlete(){
   // Sans synchronisation, l'athlète ne trouvera pas son dossier en se
   // connectant depuis son propre téléphone : annoncer « il peut se connecter »
   // serait un mensonge coûteux.
-  // Le message d'un affilié ne parle plus d'accès : il n'en accorde aucun.
   // Le message ne distingue plus créateur et affilié : les deux accordent
-  // l'accès, et annoncer autre chose serait faux.
+  // l'accès, et annoncer autre chose serait faux. (La ligne qui disait
+  // l'inverse datait d'avant R-03 et n'avait pas été retirée.)
   const messageFinal=motDePasseActif
     ? '✓ '+fn+' créé : il peut se connecter avec cet email et ce mot de passe. Accès jusqu\'au '+exp+' (code copié)'
     : '✓ '+fn+' rattaché : il avait déjà un compte, il garde SON mot de passe. Accès jusqu\'au '+exp+' (code copié)';
@@ -44329,11 +44329,13 @@ function _copierInviteCoach(){
 }
 
 async function generateStudentCode(){
-  // Seul le créateur (CREATOR_EMAIL) peut générer des codes d'accès gratuits.
-  if(currentUser.email!==CREATOR_EMAIL){
-    toast('Seul l\'administrateur RepCore peut générer des codes gratuits.','var(--red)');
-    return;
-  }
+  // Depuis R-03, un coach affilié accorde l'accès à ses athlètes : lui
+  // refuser la génération ici contredisait l'encart juste au-dessus, qui
+  // lui annonce « chaque code que tu génères ouvre l'accès à ton athlète ».
+  // Le PLAFOND, lui, subsiste : _genAccessCode refuse au-delà de
+  // CODE_MOIS_MAX_AFFILIE et le dit, plutôt que de raboter en silence.
+  // Seule l'invitation COACH reste réservée au créateur — c'est lui qui
+  // décide qui rejoint la plateforme.
   const name=document.getElementById('sc-name').value.trim();
   const months=parseInt(document.getElementById('sc-duration').value)||3;
   if(!name){toast('Entre le nom de l\'élève');return;}
@@ -44375,7 +44377,12 @@ function loadStudentCodes(){
   const isCreator=currentUser.email===CREATOR_EMAIL;
   const genCard=document.getElementById('sc-generate-card');
   const nonCreatorMsg=document.getElementById('sc-noncreatormsg');
-  if(genCard) genCard.style.display=isCreator?'':'none';
+  // La carte de génération s'affiche pour TOUS les coachs : l'affilié en a
+  // l'usage, et la lui cacher pendant que l'encart lui promet des codes
+  // était la contradiction la plus visible de cet écran.
+  if(genCard) genCard.style.display='';
+  // L'encart reste réservé à l'affilié : il porte le plafond de 12 mois,
+  // qui ne s'applique pas au créateur.
   if(nonCreatorMsg) nonCreatorMsg.style.display=isCreator?'none':'';
   // L'invitation coach suit la même règle : réservée au créateur.
   const inviteCard=document.getElementById('sc-coach-invite-card');
@@ -52026,6 +52033,98 @@ function testExercices(){
         sessions_config:[{active:true}]},o||{});
       try {
         // ── L'octroi ─────────────────────────────────────────────────────
+        // ══════ CE QUE L'AFFILIÉ LIT, DES DEUX CÔTÉS ══════
+        // Le critère : une promesse IDENTIQUE dans l'onglet CODES et dans la
+        // modale « Ajouter un athlète ». Les deux surfaces accordent le même
+        // accès ; elles doivent l'annoncer pareil, et donner les mêmes moyens.
+        ok('Un affilié peut réellement générer un code — le formulaire lui est ouvert',(()=>{
+          const _cu=currentUser,_t=window.toast;
+          try{
+            window.toast=()=>{};
+            currentUser={email:'affilie@t.fr',id:'c1',role:'coach',fname:'A',lname:'B',studentCodes:[]};
+            loadStudentCodes();
+            const carte=document.getElementById('sc-generate-card');
+            if(!carte) return _echec('la carte de génération n\'existe pas');
+            if(carte.style.display==='none')
+              return _echec('la carte est cachée à un affilié, alors que l\'encart lui promet des codes');
+            // L'encart qui porte le plafond, lui, ne s'adresse qu'à l'affilié.
+            const note=document.getElementById('sc-noncreatormsg');
+            if(!note||note.style.display==='none')
+              return _echec('l\'affilié ne voit pas le plafond qui le concerne');
+            // L'invitation COACH reste au créateur : c'est lui qui décide qui
+            // rejoint la plateforme, et cela n'a rien à voir avec l'accès élève.
+            const inv=document.getElementById('sc-coach-invite-card');
+            if(inv&&inv.style.display!=='none')
+              return _echec('un affilié peut inviter des coachs');
+            // Et l'appel lui-même ne le refuse plus.
+            const src=String(generateStudentCode);
+            if(/administrateur RepCore peut générer/.test(src))
+              return _echec('la génération refuse encore un affilié');
+            // Le PLAFOND, lui, subsiste — vérifié par _genAccessCode.
+            return /CODE_MOIS_MAX_AFFILIE/.test(String(_genAccessCode))
+              ?true:_echec('le plafond a disparu avec le refus');
+          } finally { currentUser=_cu; window.toast=_t; }})());
+        ok('Le créateur garde ce qui n\'appartient qu\'à lui',(()=>{
+          const _cu=currentUser,_t=window.toast;
+          try{
+            window.toast=()=>{};
+            currentUser={email:CREATOR_EMAIL,id:'c0',role:'coach',fname:'K',lname:'G',studentCodes:[]};
+            loadStudentCodes();
+            const inv=document.getElementById('sc-coach-invite-card');
+            if(!inv||inv.style.display==='none')
+              return _echec('le créateur ne peut plus inviter de coach');
+            // Le plafond de 12 mois ne le concerne pas : l'encart qui l'annonce
+            // ne doit pas s'afficher chez lui.
+            const note=document.getElementById('sc-noncreatormsg');
+            return (!note||note.style.display==='none')
+              ?true:_echec('le créateur lit un plafond qui ne s\'applique pas à lui');
+          } finally { currentUser=_cu; window.toast=_t; }})());
+        ok('La modale d\'ajout donne à TOUS le choix de la durée',(()=>{
+          // createAthlete lit #aa-duration avec un repli muet à 3 mois. Rendu
+          // pour le seul créateur, l'affilié recevait 3 mois sans le savoir —
+          // alors que la phrase juste au-dessus lui annonce « pour la durée
+          // choisie ci-dessous ». Les deux surfaces doivent aussi offrir les
+          // MÊMES durées, sinon la promesse diffère d'un écran à l'autre.
+          const _cu=currentUser,_t=window.toast;
+          const lire=(email)=>{
+            currentUser={email,id:'c1',role:'coach',fname:'A',lname:'B',studentCodes:[]};
+            closeModal();
+            if(typeof openAddAthlete!=='function') return null;
+            openAddAthlete();
+            const sel=document.getElementById('aa-duration');
+            const opts=sel?[...sel.options].map(o=>o.value).join(','):null;
+            const ov=document.getElementById('modal-overlay');
+            const txt=ov?(ov.innerText||ov.textContent||'').replace(/\s+/g,' '):'';
+            closeModal();
+            return {opts,txt};
+          };
+          try{
+            window.toast=()=>{};
+            const aff=lire('affilie@t.fr');
+            if(!aff) return _echec('la modale d\'ajout est introuvable');
+            if(!aff.opts) return _echec('aucun sélecteur de durée pour un affilié');
+            const cre=lire(CREATOR_EMAIL);
+            if(cre.opts!==aff.opts)
+              return _echec('durées différentes : affilié '+aff.opts+' vs créateur '+cre.opts);
+            // Aucune option ne dépasse le plafond, sinon l'affilié choisirait
+            // une durée que la génération lui refuserait ensuite.
+            const trop=aff.opts.split(',').map(Number).filter(m=>m>CODE_MOIS_MAX_AFFILIE);
+            if(trop.length) return _echec('durée proposée au-delà du plafond : '+trop.join(', '));
+            // Et la phrase promet bien un accès, des deux côtés.
+            if(!/accès/i.test(aff.txt)) return _echec('la modale ne parle plus d\'accès à l\'affilié');
+            return /accès/i.test(cre.txt)
+              ?true:_echec('la modale ne parle plus d\'accès au créateur');
+          } finally { currentUser=_cu; window.toast=_t; closeModal(); }})());
+        ok('Le libellé du formulaire est vrai pour les DEUX',(()=>{
+          // « Code GRATUIT » se lit bien chez le créateur, qui offre l'accès au
+          // nom de RepCore. Chez l'affilié, l'arrangement est le sien : le mot
+          // laissait croire que RepCore prend en charge son élève.
+          const c=document.getElementById('sc-generate-card');
+          if(!c) return _echec('carte absente');
+          const t=(c.innerText||c.textContent||'').replace(/\s+/g,' ');
+          return !/gratuit/i.test(t)
+            ?true:_echec('le mot « gratuit » subsiste : '+t.slice(0,80));})());
+
         ok('Un code de coach affilié OUVRE l\'accès',(()=>{
           const sauve=currentUser;
           const _sv=window.saveUser,_cp=CLOUD.pushOne,_ar=window._apresRattachement;
