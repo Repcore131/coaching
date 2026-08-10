@@ -52835,6 +52835,106 @@ function testExercices(){
           const bloc=src.slice(src.indexOf('QuotaExceededError'),iPush);
           return bloc.indexOf('return')<0
             ?true:_echec('un return est revenu dans le catch');})());
+        // ══════ PHOTOS HORS LIGNE : ÉCRIRE, PRÉVENIR, PURGER ══════
+        ok('_setPhotoLS dit la vérité : écrit, ou rend false ET prévient',(()=>{
+          // Cinq sites écrivent des photos dans localStorage. Trois avalaient
+          // l'échec en silence : la photo disparaissait au rechargement
+          // suivant, derrière un « ✓ » vert.
+          const _si=Storage.prototype.setItem, _t=window.toast;
+          try{
+            const vus=[];
+            window.toast=(m)=>{vus.push(String(m));};
+            // 1. Écriture qui aboutit : true, et aucun bruit.
+            const CLE='rc_photo_test_'+Date.now();
+            if(_setPhotoLS(CLE,'X')!==true) return _echec('une écriture réussie ne rend pas true');
+            if(localStorage.getItem(CLE)!=='X') return _echec('rien n\'a été écrit');
+            localStorage.removeItem(CLE);
+            if(vus.length) return _echec('un message s\'affiche sur un succès');
+            // 2. Quota : false, ET l'utilisateur est prévenu. Les deux formes
+            //    du défaut selon le navigateur.
+            for(const faire of [()=>{const e=new Error('q');e.name='QuotaExceededError';throw e;},
+                                ()=>{const e=new Error('q');e.code=22;throw e;}]){
+              vus.length=0;
+              Storage.prototype.setItem=faire;
+              if(_setPhotoLS(CLE,'X')!==false) return _echec('le quota ne rend pas false');
+              if(!vus.length) return _echec('le quota ne prévient personne');
+              if(!/[Ss]tockage plein/.test(vus[0])) return _echec('message : '+vus[0]);
+              // Le message DIT ce qui est perdu : hors ligne, pas tout court.
+              if(!/hors ligne/.test(vus[0])) return _echec('le message ne dit pas ce qui est perdu');
+            }
+            // 3. Une erreur qui N'EST PAS un quota rend false elle aussi —
+            //    l'appelant doit la traiter — mais ne se déguise pas en
+            //    « stockage plein ».
+            vus.length=0;
+            Storage.prototype.setItem=()=>{throw new Error('SecurityError');};
+            if(_setPhotoLS(CLE,'X')!==false) return _echec('une autre erreur rend true');
+            return !vus.length
+              ?true:_echec('une erreur inconnue se déguise en quota : '+vus[0]);
+          } finally { Storage.prototype.setItem=_si; window.toast=_t; }})());
+        ok('Critère : un bilan photo qui déborde le dit, au lieu d\'un « ✓ »',(()=>{
+          // saveBilanFinal fait du réseau : on éprouve la DÉCISION, qui est
+          // ce que le critère du lot vise. Le succès doit dépendre des DEUX
+          // écritures — le dossier ET l'ancrage photo.
+          const src=String(saveBilanFinal);
+          if(src.indexOf('_setPhotoLS(')<0)
+            return _echec('les photos ne passent plus par le helper');
+          if(!/ancrageOk=false/.test(src))
+            return _echec('un échec d\'ancrage n\'est plus retenu');
+          if(!/enregistre&&ancrageOk/.test(src))
+            return _echec('le « ✓ » ne dépend plus des deux écritures');
+          // Et le repli NOMME le stockage, sinon l'athlète ne sait pas quoi
+          // faire de l'avertissement.
+          const i=src.indexOf('enregistre&&ancrageOk');
+          const suite=src.slice(i,i+320);
+          if(!/Stockage plein/.test(suite))
+            return _echec('le repli ne parle plus de stockage : '+suite.slice(0,90));
+          // Il dit aussi que le cloud a bien reçu : c'est ce qui distingue
+          // « perdu » de « absent de cet appareil ».
+          return /cloud/i.test(suite)
+            ?true:_echec('le repli ne dit pas que le cloud a la copie');})());
+        ok('La purge garde les trois derniers bilans, de CHAQUE utilisateur',(()=>{
+          // Sur le téléphone d'un coach, ces clés ne portent que la date, pas
+          // l'identité : purger d'après les seuls bilans de currentUser
+          // effacerait les photos de tous ses élèves.
+          const _sv=DB.get('users');
+          const cles=[];
+          const poser=(k,v)=>{cles.push(k);localStorage.setItem(k,v);};
+          try{
+            Object.keys(localStorage).filter(k=>k.startsWith('rc_photo_'))
+              .forEach(k=>{cles.push(k);localStorage.removeItem(k);});
+            DB.set('users',{
+              'a@t.fr':{bilans:[{date:900},{date:800},{date:700},{date:600}]},
+              'b@t.fr':{bilans:[{date:500}]}});
+            [900,800,700,600,500].forEach(d=>poser('rc_photo_'+d+'_bil-photo-face','X'));
+            poser('rc_photo_zzz_bil-photo-face','X');   // format inattendu
+            poser('rc_autre_600_x','X');                // pas une photo
+            const n=purgerPhotosAnciennes();
+            const reste=k=>localStorage.getItem(k)!==null;
+            // Les trois derniers de A, et LE bilan de B.
+            for(const d of [900,800,700,500])
+              if(!reste('rc_photo_'+d+'_bil-photo-face')) return _echec(d+' a été purgé à tort');
+            if(reste('rc_photo_600_bil-photo-face')) return _echec('le 4e bilan de A survit');
+            if(n!==1) return _echec(n+' suppression(s) au lieu de 1');
+            // Ce qu'on ne comprend pas, on n'y touche pas.
+            if(!reste('rc_photo_zzz_bil-photo-face')) return _echec('une clé au format inattendu a été supprimée');
+            if(!reste('rc_autre_600_x')) return _echec('une clé étrangère a été supprimée');
+            // Aucun bilan connu : on ne sait pas ce qui sert encore, donc on
+            // ne supprime RIEN. Supprimer serait pire que garder.
+            DB.set('users',{});
+            return purgerPhotosAnciennes()===0
+              ?true:_echec('la purge frappe alors qu\'aucun bilan n\'est connu');
+          } finally { cles.forEach(k=>localStorage.removeItem(k));
+                      if(_sv) DB.set('users',_sv); }})());
+        ok('La purge tourne AU DÉMARRAGE, pas seulement à la demande',(()=>{
+          // Sans appel au démarrage, le ménage n'a lieu qu'après le débordement
+          // qu'il est censé éviter.
+          const tout=document.documentElement.outerHTML;
+          const prod=tout.slice(0,tout.indexOf('function testExercices'));
+          const n=(prod.match(/purgerPhotosAnciennes\(\)/g)||[]).length;
+          if(n<2) return _echec('la purge n\'est appelée que '+n+' fois : définition seule ?');
+          return _PHOTO_BILANS_GARDES===3
+            ?true:_echec('le nombre de bilans gardés a changé : '+_PHOTO_BILANS_GARDES);})());
+
         ok('saveUser PROPAGE l\'échec du quota, il ne le perd pas',(()=>{
           // DB.set rend son succès depuis longtemps ; encore faut-il que
           // saveUser le remonte, sinon les 55 appelants qui lisent son retour
