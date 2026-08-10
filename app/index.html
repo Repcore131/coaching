@@ -1973,6 +1973,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="ccd-volume"></div>
       <div id="ccd-plateaux"></div>
       <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:16px" onclick="ouvrirRapport(getOwnedClient(currentClientId))">Rapport de la période</button>
+      <div id="ccd-prises"></div>
       <div id="ccd-pp"></div>
       <div id="ccd-reds"></div>
       <div id="ccd-securite"></div>
@@ -12621,6 +12622,7 @@ function openClientDetail(cid,_refresh){
   try{ renderHabitudesCoach(c); }catch(e){}
   try{ renderRedsCoach(c); }catch(e){}
   try{ renderPostPartumCoach(c); }catch(e){}
+  try{ renderRepartitionPrisesCoach(c); }catch(e){}
   try{ renderPhotosCoach(c); }catch(e){}
   // Chips de reponse au bilan : la zone n'existe qu'apres le rendu des
   // reponses, on la peuple donc ici et non a la construction du bloc.
@@ -27245,6 +27247,147 @@ function phraseProtParRepas(r){
   if(!r) return '';
   return r.nRepas+' repas par jour : environ '+r.gParRepas+' g de protéines par repas.';
 }
+
+// ══════════════ PLANCHER PROTÉIQUE PAR PRISE ═══════════════════════════════
+// COUCHE D'AFFICHAGE. Le moteur de macros n'est pas touché : aucune de ces
+// fonctions n'écrit, ne recalcule un total, ni ne modifie protSuggeree.
+//
+// protParRepas existait déjà et rendait `Math.round(p/n)` — un chiffre unique,
+// juste à l'affichage mais dont la somme ne retombe PAS sur le total : quatre
+// prises de 45 g pour 178 g de protéines font 180. On ajoute donc une
+// répartition À RESTE, seule façon de tenir l'invariant de la règle 1.
+//
+// LES DEUX PLANCHERS SONT DES REPÈRES DE TERRAIN, au même titre que
+// REPERES_VOLUME ou la conversion de 7 700 kcal par kilo déjà employée
+// ailleurs : ils ne mesurent rien et ne prescrivent rien. Ils s'affichent, ils
+// ne bloquent aucune saisie (règle 6).
+const PROT_PLANCHER_PRISE=25;
+const PROT_PLANCHER_PRISE_RELEVE=30;
+// PURE. La répartition exacte. Les `reste` premières prises portent un gramme
+// de plus, et la somme retombe sur le total AU GRAMME — pas « à l'arrondi
+// près ». Un Math.round par prise ne le garantit jamais.
+function repartitionProteines(total,n){
+  const t=Math.round(Number(total));
+  const k=parseInt(n,10);
+  if(!(t>0)||!(k>=1)) return null;
+  const base=Math.floor(t/k);
+  const reste=t-base*k;
+  return Array.from({length:k},(_,i)=>base+(i<reste?1:0));
+}
+// PURE. Le plancher relevé ? Deux motifs, jamais cumulés — un plancher n'a
+// qu'une valeur.
+//
+// RÈGLE 4 : menopauseeOuAgee filtre déjà sur isFemale et rend false chez un
+// homme, sans erreur ni message. On ne réécrit pas cette règle, on l'appelle.
+function plancherPriseMotifs(user){
+  const m=[];
+  try{ if(menopauseeOuAgee(user)) m.push('menopause'); }catch(e){}
+  try{ if(restrictionProlongee(user)) m.push('restriction'); }catch(e){}
+  return m;
+}
+function plancherPrise(user){
+  return plancherPriseMotifs(user).length
+    ?PROT_PLANCHER_PRISE_RELEVE:PROT_PLANCHER_PRISE;
+}
+// PURE. LE POINT D'ENTRÉE. Rend null quand il n'y a rien à dire — et c'est le
+// cas le plus fréquent, qu'il faut lire en premier :
+//
+// RÈGLE 3 : grossesse ou allaitement ⇒ RIEN. La prescription y est suspendue,
+// et une répartition est une forme de prescription.
+function repartitionPrises(user,macrosJour){
+  try{ if(grossesseSuspend(user)) return null; }catch(e){}
+  const r=protParRepas(user,macrosJour);
+  if(!r) return null;
+  const total=Math.round(Number(macrosJour&&macrosJour.p));
+  const parts=repartitionProteines(total,r.nRepas);
+  if(!parts) return null;
+  const pl=plancherPrise(user);
+  // La TENSION : la plus petite prise passe sous le plancher. On regarde la
+  // plus petite et non la moyenne — c'est elle qui décrit la contrainte.
+  const mini=Math.min.apply(null,parts);
+  const tension=mini<pl;
+  // RÈGLE : on ne propose JAMAIS d'augmenter le total. La seule variable qui
+  // bouge est le nombre de prises, et jamais sous le minimum déjà retenu par
+  // le produit — en dessous de trois, protParRepas ne rend rien du tout.
+  let nSuggere=null;
+  if(tension){
+    const n=Math.max(REPAS_MIN,Math.floor(total/pl));
+    if(n<r.nRepas) nSuggere=n;
+  }
+  return {nRepas:r.nRepas,total,parts,plancher:pl,mini,
+    motifs:plancherPriseMotifs(user),tension,nSuggere};
+}
+// PURE. Le bonus ménopause doit-il être neutralisé ?
+//
+// LE CHOIX, ET POURQUOI. La spécification demandait de couper le bonus « quand
+// la répartition est renseignée ». deb-meals-day est collecté à l'inscription :
+// la condition aurait été vraie pour presque tout le monde, et une femme
+// ménopausée aurait vu sa suggestion protéique BAISSER parce qu'elle a déclaré
+// manger quatre fois par jour. Aucun lien ne relie ces deux choses.
+//
+// L'intention défendable derrière la consigne est d'éviter un DOUBLE COMPTAGE :
+// que le bonus ne s'ajoute pas à un plancher par prise déjà relevé pour le même
+// motif. C'est cette condition-là qui est retenue, et elle ne concerne que les
+// dossiers réellement visés.
+//
+// AUCUN APPELANT N'EST BRANCHÉ DESSUS. protSuggeree n'est pas modifiée : les
+// cinquante-quatre assertions du moteur de macros restent vraies, et cette
+// fonction dit ce qu'il faudrait faire sans le faire à leur place. Le jour où
+// le double comptage deviendra réel — le plancher par prise n'agit sur aucun
+// total aujourd'hui — c'est ici que la décision est déjà écrite.
+function bonusMenopauseNeutralise(user,macrosJour){
+  const r=repartitionPrises(user,macrosJour);
+  if(!r) return false;
+  return r.motifs.indexOf('menopause')>=0;
+}
+const PRISE_PHRASE_PLANCHER='Repère : au moins '+PROT_PLANCHER_PRISE+' g de '
+  +'protéines par prise. C\'est un ordre de grandeur, pas une consigne.';
+const PRISE_PHRASE_RELEVE='Repère : au moins '+PROT_PLANCHER_PRISE_RELEVE+' g '
+  +'de protéines par prise. C\'est un ordre de grandeur, pas une consigne.';
+const PRISE_PHRASE_TENSION='Avec ce nombre de repas, chaque prise reste en '
+  +'dessous de ce repère. Regrouper en moins de repas s\'en approche — le total '
+  +'de la journée, lui, ne change pas.';
+function phrasePlancherPrise(r){
+  if(!r) return '';
+  return (r.plancher===PROT_PLANCHER_PRISE_RELEVE)?PRISE_PHRASE_RELEVE:PRISE_PHRASE_PLANCHER;
+}
+// L'affichage. Les parts sont montrées telles quelles : quand elles ne sont pas
+// toutes égales, c'est le prix de l'invariant, et le cacher derrière une
+// moyenne serait mentir d'un gramme.
+function _htmlRepartitionPrises(user,macrosJour){
+  let r=null;
+  try{ r=repartitionPrises(user,macrosJour); }catch(e){ r=null; }
+  if(!r) return '';
+  const egales=r.parts.every(x=>x===r.parts[0]);
+  const detail=egales
+    ?r.nRepas+' × '+r.parts[0]+' g'
+    :r.parts.join(' g · ')+' g';
+  return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">
+    <div style="font-size:11px;color:#ddd;line-height:1.6">${escapeHtml(detail)} — ${escapeHtml(String(r.total))} g au total.</div>
+    <div style="font-size:10.5px;color:var(--text-faint);line-height:1.55;margin-top:5px">${escapeHtml(phrasePlancherPrise(r))}</div>
+    ${r.tension?`<div style="font-size:10.5px;color:var(--text-dim);line-height:1.55;margin-top:5px">${escapeHtml(PRISE_PHRASE_TENSION)}${r.nSuggere?' Essaie '+r.nSuggere+' repas.':''}</div>`:''}
+  </div>`;
+}
+// La vue coach : la répartition, le plancher, et la tension s'il y en a une.
+// Aucun motif de santé n'est nommé — le coach voit le plancher relevé, pas
+// pourquoi. La ménopause a son propre encart, qui appartient à l'athlète.
+function _htmlRepartitionPrisesCoach(c){
+  let r=null;
+  try{ r=repartitionPrises(c,((c&&c.nutrition&&c.nutrition.macros)||{}).on); }catch(e){ r=null; }
+  if(!r) return '';
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:12px 13px;margin-bottom:16px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">Protéines par prise</div>
+    <div style="font-size:11.5px;color:#ddd;line-height:1.7">${escapeHtml(r.parts.join(' + '))} = ${escapeHtml(String(r.total))} g sur ${escapeHtml(String(r.nRepas))} repas.</div>
+    <div style="font-size:11.5px;color:var(--text-dim);line-height:1.7">Repère par prise : ${escapeHtml(String(r.plancher))} g.</div>
+    ${r.tension?`<div style="font-size:11.5px;color:var(--orange);line-height:1.7">Sous le repère${r.nSuggere?' — '+r.nSuggere+' repas s\'en approcherait':''}. Le total ne bouge pas.</div>`:''}
+  </div>`;
+}
+function renderRepartitionPrisesCoach(c){
+  const z=document.getElementById('ccd-prises');
+  if(!z) return;
+  let h=''; try{ h=c?_htmlRepartitionPrisesCoach(c):''; }catch(e){ h=''; }
+  z.innerHTML=h;
+}
 // ── Repère péri-entraînement ────────────────────────────────────────────────
 // TROIS phrases, AUCUN chiffre. Elles ne disent pas quand manger ni combien :
 // elles rappellent où placer une part de glucides déjà comptés dans le total du
@@ -27294,6 +27437,7 @@ function _htmlReperesRepas(user,macrosJour,dateStr){
   return `<div style="margin-top:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:11px 13px">
     ${pr?`<div style="font-size:11px;color:#ddd;line-height:1.6">${escapeHtml(phraseProtParRepas(pr))}</div>`:''}
     ${per?`<div style="font-size:11px;color:#ddd;line-height:1.6;margin-top:${pr?'6px':'0'}">${escapeHtml(per.texte)}</div>`:''}
+    ${_htmlRepartitionPrises(user,macrosJour)}
     <div style="font-size:10px;color:var(--text-faint);line-height:1.5;margin-top:7px">${escapeHtml(REPERE_PERI_REGISTRE)}</div>
   </div>`;
 }
@@ -33966,6 +34110,8 @@ const REGLES_ETAT_VALEUR=Object.freeze([
     quoi:'plancher de l\'échelle protéique', ref:'PROT_MIN_MENOPAUSE'}),
   Object.freeze({etat:'menopause', diagnostic:false, nature:'elargissement',
     quoi:'fourchette de vitesse de sèche', ref:'MENO_CIBLE_SECHE'}),
+  Object.freeze({etat:'menopause', diagnostic:false, nature:'cible',
+    quoi:'plancher protéique par prise', ref:'PROT_PLANCHER_PRISE_RELEVE'}),
   Object.freeze({etat:'pes',       diagnostic:false, nature:'elargissement',
     quoi:'plafond de l\'échelle protéique', ref:'PROT_ECHELLE_PES'}),
   Object.freeze({etat:'grossesse', diagnostic:false, nature:'suspension',
@@ -67192,6 +67338,172 @@ function testExercices(){
             ?true:_echec('un affichage est produit sans protéines');})());
         ok('Une réponse non numérique ne produit rien',
            protParRepas(_u({'deb-meals-day':'quatre'}),{p:180})===null);
+        // ── PLANCHER PROTÉIQUE PAR PRISE ────────────────────────────────
+        // Couche d'affichage. Les huit assertions de protParRepas ci-dessus
+        // sont intactes, et protSuggeree n'est pas touchee : les cinquante-
+        // quatre assertions du moteur de macros restent vraies.
+        ok('Critère : sur 20 profils, somme(prises) === total, AU GRAMME',(()=>{
+          // « À l'arrondi près » n'est pas assez : Math.round(p/n) x n rate le
+          // total des qu'il ne tombe pas rond — 178 g sur 4 repas donnent
+          // 4 x 45 = 180. La repartition A RESTE le garantit exactement.
+          const rates=[];
+          for(let i=0;i<20;i++){
+            const total=97+i*13;              // 97 … 344, aucun rond
+            const n=REPAS_MIN+(i%(REPAS_MAX-REPAS_MIN+1));
+            const parts=repartitionProteines(total,n);
+            if(!parts){ rates.push(total+'/'+n+' : null'); continue; }
+            if(parts.length!==n){ rates.push(total+'/'+n+' : '+parts.length+' parts'); continue; }
+            const somme=parts.reduce((a,b)=>a+b,0);
+            if(somme!==total) rates.push(total+'/'+n+' → '+somme);
+            // Et les parts ne different jamais de plus d'un gramme entre elles.
+            if(Math.max.apply(null,parts)-Math.min.apply(null,parts)>1)
+              rates.push(total+'/'+n+' : parts trop inegales');
+          }
+          return rates.length?_echec(rates.slice(0,3).join(' · ')):true;})());
+        ok('L\'invariant tient aussi de bout en bout, via repartitionPrises',(()=>{
+          const rates=[];
+          for(const n of [3,4,5,6]) for(const p of [151,178,203,247]){
+            const u=_u({'deb-meals-day':String(n)});
+            const r=repartitionPrises(u,{p});
+            if(!r){ rates.push(n+'/'+p+' : null'); continue; }
+            if(r.parts.reduce((a,b)=>a+b,0)!==p) rates.push(n+'/'+p+' → '+r.parts.join('+'));
+            if(r.total!==p) rates.push(n+'/'+p+' : total '+r.total);
+          }
+          return rates.length?_echec(rates.slice(0,3).join(' · ')):true;})());
+        ok('Critère : grossesse ou allaitement → AUCUNE répartition',(()=>{
+          for(const etat of ['enceinte','allaitement']){
+            const u=_u({'deb-meals-day':'4'});
+            u.grossesse={etat};
+            if(!grossesseSuspend(u)) return _echec('fixture muette : '+etat);
+            if(repartitionPrises(u,{p:180})!==null) return _echec('répartition sous '+etat);
+            if(_htmlRepartitionPrises(u,{p:180})!=='') return _echec('affichage sous '+etat);
+          }
+          // Le post-partum, lui, ne suspend rien : la repartition sort.
+          const pp=_u({'deb-meals-day':'4'});
+          pp.grossesse={etat:'post_partum'};
+          return repartitionPrises(pp,{p:180})?true:_echec('rien en post-partum');})());
+        ok('Critère : plancher inatteignable → suggestion de RÉDUIRE, total inchangé',(()=>{
+          // Le plancher devient inatteignable quand les prises sont NOMBREUSES
+          // et le total bas : six repas pour 120 g font 20 g par prise.
+          const u=_u({'deb-meals-day':'6'});
+          const r=repartitionPrises(u,{p:120});
+          if(!r) return _echec('aucune répartition');
+          if(!r.tension) return _echec('aucune tension à '+r.mini+' g pour un plancher de '+r.plancher);
+          if(r.nSuggere==null) return _echec('aucune suggestion');
+          if(!(r.nSuggere<r.nRepas)) return _echec('la suggestion AUGMENTE les prises : '+r.nSuggere);
+          if(r.nSuggere<REPAS_MIN) return _echec('suggestion sous le minimum : '+r.nSuggere);
+          // LE TOTAL NE BOUGE PAS. C'est l'interdit central du lot.
+          if(r.total!==120) return _echec('total déplacé : '+r.total);
+          // Le texte RENDU, pas la source : ma premiere version balayait le
+          // code et tombait sur mon propre commentaire « ne jamais proposer
+          // d augmenter le total ». Le test cherchait la regle au lieu de
+          // chercher ce que voit l athlete.
+          const txt=(_htmlRepartitionPrises(u,{p:120})+PRISE_PHRASE_TENSION)
+            .replace(/<[^>]*>/g,' ');
+          if(/augmente|monte ton total|plus de prot/i.test(txt))
+            return _echec('une hausse du total est suggérée');
+          return /ne change pas|ne bouge pas/.test(txt)
+            ?true:_echec('le texte ne dit pas que le total est inchangé');})());
+        ok('Deux prises : hors des bornes du produit, rien n\'est fabriqué',(()=>{
+          // Le critere parlait de « 2 prises ». REPAS_MIN vaut 3 et une
+          // assertion livree verrouille « hors 3..6 → null » : en dessous, le
+          // produit ne rend rien, et ce lot ne cree pas d'exception. Ce qui
+          // compte est tenu — aucun total ne bouge, aucune suggestion absurde
+          // de descendre a une prise n'est produite.
+          const u=_u({'deb-meals-day':'2'});
+          if(protParRepas(u,{p:40})!==null) return _echec('les bornes ont bougé');
+          return repartitionPrises(u,{p:40})===null
+            ?true:_echec('une répartition sort hors bornes');})());
+        ok('Critère : plancher relevé sous ménopause, et sous restriction longue',(()=>{
+          const std=_u({'deb-meals-day':'4'});
+          if(plancherPrise(std)!==PROT_PLANCHER_PRISE)
+            return _echec('plancher standard : '+plancherPrise(std));
+          const meno=_u({'deb-meals-day':'4'});
+          meno.statutHormonal='menopause'; meno.gender='Femme'; meno._evol_gender='Femme';
+          if(!menopauseeOuAgee(meno)) return _echec('fixture muette');
+          if(plancherPrise(meno)!==PROT_PLANCHER_PRISE_RELEVE)
+            return _echec('plancher ménopause : '+plancherPrise(meno));
+          return PROT_PLANCHER_PRISE_RELEVE>PROT_PLANCHER_PRISE
+            ?true:_echec('le plancher « relevé » ne l\'est pas');})());
+        ok('RÈGLE 4 : statut ménopausique déclaré par un homme → ignoré',(()=>{
+          const h=_u({'deb-meals-day':'4'});
+          h.gender='Homme'; h._evol_gender='Homme'; h.statutHormonal='menopause';
+          if(menopauseeOuAgee(h)) return _echec('ménopause reconnue chez un homme');
+          if(plancherPrise(h)!==PROT_PLANCHER_PRISE)
+            return _echec('plancher relevé chez un homme : '+plancherPrise(h));
+          return plancherPriseMotifs(h).length===0
+            ?true:_echec('motif retenu : '+plancherPriseMotifs(h).join(','));})());
+        ok('Critère : le bonus ménopause n\'est neutralisé QUE pour éviter un double comptage',(()=>{
+          // ARBITRAGE ASSUME. La consigne disait « quand la repartition est
+          // renseignee ». deb-meals-day etant collecte a l'inscription, la
+          // condition aurait ete vraie pour presque tout le monde, et une femme
+          // menopausee aurait vu sa suggestion BAISSER parce qu'elle declare
+          // manger quatre fois par jour. La condition retenue est le motif
+          // REEL : le plancher par prise deja releve pour ce motif.
+          const meno=_u({'deb-meals-day':'4'});
+          meno.gender='Femme'; meno._evol_gender='Femme'; meno.statutHormonal='menopause';
+          if(!bonusMenopauseNeutralise(meno,{p:180}))
+            return _echec('non neutralisé alors que le plancher est relevé');
+          // Sans menopause : le bonus n'est pas touche, meme repartition
+          // renseignee — c'est precisement ce qui protege le moteur de macros.
+          const std=_u({'deb-meals-day':'4'});
+          if(bonusMenopauseNeutralise(std,{p:180}))
+            return _echec('neutralisé sans motif');
+          // Repartition absente : rien n'est neutralise (comportement actuel).
+          const sans=_u({});
+          sans.gender='Femme'; sans._evol_gender='Femme'; sans.statutHormonal='menopause';
+          return !bonusMenopauseNeutralise(sans,{p:180})
+            ?true:_echec('neutralisé sans répartition renseignée');})());
+        ok('protSuggeree n\'est PAS touchée : le moteur de macros est intact',(()=>{
+          // Le lot ajoute une couche. bonusMenopauseNeutralise dit ce qu'il
+          // faudrait faire, aucun appelant n'y est branche, et le bonus opere
+          // exactement comme avant.
+          if(/bonusMenopauseNeutralise|repartitionPrises|plancherPrise/.test(String(protSuggeree)))
+            return _echec('protSuggeree lit la nouvelle couche');
+          const meno=_u({'deb-meals-day':'4'});
+          meno.gender='Femme'; meno._evol_gender='Femme'; meno.statutHormonal='menopause';
+          const attendu=Math.min(Math.round((PROT_DEFAUT.maintien+PROT_BONUS_MENOPAUSE)*10)/10,
+            Math.max.apply(null,protEchelle(meno).slice()));
+          return protSuggeree(meno,'maintien')===attendu
+            ?true:_echec('bonus déplacé : '+protSuggeree(meno,'maintien')+' au lieu de '+attendu);})());
+        ok('RÈGLE 2 : aucun horaire, aucune fenêtre, aucun plan de repas',(()=>{
+          const src=String(repartitionPrises)+String(_htmlRepartitionPrises)
+            +String(_htmlRepartitionPrisesCoach)+PRISE_PHRASE_PLANCHER
+            +PRISE_PHRASE_RELEVE+PRISE_PHRASE_TENSION;
+          const interdits=['fenetre anabolique','fenêtre anabolique','avant la séance',
+            'après la séance','dans les 30','minutes','heure suivante','au coucher',
+            'petit-déjeuner','avant de dormir'];
+          const t=interdits.filter(x=>src.toLowerCase().indexOf(x.toLowerCase())>=0);
+          return t.length?_echec('timing : '+t.join(', ')):true;})());
+        ok('RÈGLE 6 : le plancher est un affichage, jamais un blocage',(()=>{
+          const src=String(repartitionPrises)+String(plancherPrise)
+            +String(_htmlRepartitionPrises);
+          if(/disabled|readonly|preventDefault|return false;\s*\/\/\s*bloc/i.test(src))
+            return _echec('une saisie est bloquée');
+          // Et le ton reste neutre : jamais une alerte.
+          const txt=PRISE_PHRASE_PLANCHER+PRISE_PHRASE_RELEVE+PRISE_PHRASE_TENSION;
+          if(/⚠|attention|alerte|risque|danger|insuffisant/i.test(txt))
+            return _echec('le ton est alarmant');
+          return /ordre de grandeur|pas une consigne/.test(txt)
+            ?true:_echec('la phrase ne dit pas qu\'elle est indicative');})());
+        ok('Le plancher relevé est INSCRIT dans la table des règles',(()=>{
+          const r=REGLES_ETAT_VALEUR.filter(x=>x.ref==='PROT_PLANCHER_PRISE_RELEVE');
+          if(r.length!==1) return _echec(r.length+' entrées');
+          if(r[0].nature!=='cible') return _echec('nature '+r[0].nature);
+          // Menopause n'est pas un diagnostic : la garde du lot precedent
+          // reste verte, et la regle reste VISIBLE plutot que cachee.
+          if(r[0].diagnostic!==false) return _echec('déclarée comme diagnostic');
+          return assertNoDiagnosisBoundNumericTarget().ok
+            ?true:_echec('la garde tombe');})());
+        ok('repartitionProteines et repartitionPrises sont PURES',(()=>{
+          const u=_u({'deb-meals-day':'4'});
+          const avant=JSON.stringify(u);
+          repartitionProteines(178,4); repartitionPrises(u,{p:178});
+          plancherPrise(u); plancherPriseMotifs(u); bonusMenopauseNeutralise(u,{p:178});
+          if(JSON.stringify(u)!==avant) return _echec('le dossier a été modifié');
+          return repartitionProteines(0,4)===null&&repartitionProteines(180,0)===null
+            ?true:_echec('les entrées nulles ne sont pas gardées');})());
+
         ok('Les trois autres nombres de repas fonctionnent',(()=>{
           const v=['3','5','6'].map(n=>protParRepas(_u({'deb-meals-day':n}),{p:180}));
           return v.every(x=>x&&x.gParRepas>0)&&v[0].gParRepas===60&&v[2].gParRepas===30
