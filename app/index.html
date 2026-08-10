@@ -69448,6 +69448,64 @@ function testExercices(){
             const w=getUserWeight();
             return w.weight===82&&w.estimated===false?true:_echec(JSON.stringify(w));
           } finally { currentUser=sauve; }})());
+        ok('DEUX bilans ne cassent plus l\'écran : le tri est NUMÉRIQUE',(()=>{
+          // Le bug d'origine : bilan.date est un timestamp, et l'ancien tri
+          // par localeCompare levait une TypeError dès le SECOND bilan — les
+          // nombres n'ont pas cette méthode. Un seul bilan ne déclenchait
+          // rien, puisque sort() n'appelle pas le comparateur. Tout l'écran
+          // Caféine tombait donc au deuxième bilan, et pas avant.
+          const sauve=currentUser;
+          try{
+            currentUser={id:'cf',email:'cf@t',role:'athlete',
+              bilans:[{type:'depart',date:1000,'deb-age':'40'},
+                      {type:'suivi', date:2000,'bil-note':'rien'}]};
+            let w;
+            try{ w=getUserWeight(); }
+            catch(e){ return _echec('exception au 2e bilan : '+e.message); }
+            if(w.weight!==CAFFEINE_POIDS_DEFAUT||w.estimated!==true)
+              return _echec(JSON.stringify(w));
+            // Et le tri CHOISIT bien : le plus récent gagne, quel que soit
+            // l'ordre du tableau. Un tri qui ne planterait plus mais rendrait
+            // le mauvais bilan passerait le test ci-dessus.
+            currentUser={id:'cf2',email:'cf2@t',role:'athlete',
+              bilans:[{type:'suivi', date:9000,'bil-weight':'70'},
+                      {type:'depart',date:1000,'deb-weight':'55'}]};
+            const a=getUserWeight();
+            if(a.weight!==70) return _echec('ordre décroissant : '+a.weight);
+            currentUser.bilans.reverse();
+            const b=getUserWeight();
+            if(b.weight!==70) return _echec('ordre croissant : '+b.weight);
+            // Le tri est fait sur une COPIE : le dossier n'est pas réordonné
+            // sous les pieds des autres lecteurs.
+            return currentUser.bilans[0].date===1000
+              ?true:_echec('le tableau du dossier a été réordonné');
+          } finally { currentUser=sauve; }})());
+        ok('F-27 : repli sur profileWeight, et weight garde la priorité',(()=>{
+          const sauve=currentUser;
+          try{
+            currentUser={id:'p1',email:'p1@t',role:'athlete',profileWeight:75,bilans:[]};
+            let w=getUserWeight();
+            if(w.weight!==75||w.estimated!==false)
+              return _echec('profileWeight seul : '+JSON.stringify(w));
+            // weight PRIME : c'est la valeur du bilan, plus récente que
+            // l'écran Mon profil.
+            currentUser={id:'p2',email:'p2@t',role:'athlete',
+              weight:82,profileWeight:75,bilans:[]};
+            w=getUserWeight();
+            if(w.weight!==82) return _echec('profileWeight prime sur weight : '+w.weight);
+            // Une valeur illisible ne fait pas tomber le repli suivant.
+            currentUser={id:'p3',email:'p3@t',role:'athlete',
+              weight:'',profileWeight:'68',bilans:[]};
+            w=getUserWeight();
+            if(w.weight!==68) return _echec('un poids vide bloque le repli : '+JSON.stringify(w));
+            // Et zéro n'est pas un poids.
+            currentUser={id:'p4',email:'p4@t',role:'athlete',
+              weight:0,profileWeight:0,bilans:[]};
+            w=getUserWeight();
+            return w.weight===CAFFEINE_POIDS_DEFAUT&&w.estimated===true
+              ?true:_echec('zéro accepté comme poids : '+JSON.stringify(w));
+          } finally { currentUser=sauve; }})());
+
 
         // ── L'âge lu par le MÊME chemin que le reste ──────────────────────
         ok('L\'âge se lit dans le dernier bilan qui le porte',(()=>{
