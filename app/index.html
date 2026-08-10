@@ -53505,6 +53505,76 @@ function testExercices(){
           // Et le bouton PayPal n'est pas monte dans cette branche.
           return !/paypal\.Buttons/.test(branche)
             ?true:_echec('PayPal est initialisé sans compte');})());
+        ok('Critère : après inscription, le visiteur RETROUVE l\'abonnement',(()=>{
+          // Sans ce retour, quelqu'un venu pour payer atterrissait sur l'ecran
+          // de code — un ecran qui ne le concerne pas — et devait renaviguer
+          // pour retrouver ce qu'il etait venu faire.
+          const _sa=sessionStorage.getItem('rc_apres_inscription');
+          const _act=[...document.querySelectorAll('.screen.active')].map(e=>e.id);
+          const _sr=(typeof selRole!=='undefined')?selRole:null;
+          try{
+            // L'intention voyage en sessionStorage et NON dans une variable :
+            // l'inscription authentifie aupres de Firebase, et un rechargement
+            // en cours de route perdrait le fil.
+            sessionStorage.removeItem('rc_apres_inscription');
+            goRegisterPourSouscrire();
+            if(sessionStorage.getItem('rc_apres_inscription')!=='s-subscribe')
+              return _echec('l\'intention n\'est pas mémorisée');
+            if((document.querySelector('.screen.active')||{}).id!=='s-register')
+              return _echec('le CTA ne mène pas à l\'inscription');
+            if(typeof selRole!=='undefined'&&selRole!=='athlete')
+              return _echec('le rôle athlète n\'est pas présélectionné : '+selRole);
+            // Le retour CONSOMME l'intention : sans cela, la prochaine
+            // inscription — celle d'un athlete venu avec un code — repartirait
+            // vers l'abonnement sans raison.
+            const revenu=_retourApresInscription();
+            if(!revenu) return _echec('le retour ne se déclenche pas');
+            if((document.querySelector('.screen.active')||{}).id!=='s-subscribe')
+              return _echec('le retour ne ramène pas à l\'abonnement');
+            if(sessionStorage.getItem('rc_apres_inscription')!==null)
+              return _echec('l\'intention survit et se rejouera');
+            // Et sans intention posee, il ne s'en mele pas.
+            return _retourApresInscription()===false
+              ?true:_echec('le retour se déclenche sans intention');
+          } finally {
+            if(_sa===null) sessionStorage.removeItem('rc_apres_inscription');
+            else sessionStorage.setItem('rc_apres_inscription',_sa);
+            if(_sr!==null) selRole=_sr;
+            document.querySelectorAll('.screen.active').forEach(e=>e.classList.remove('active'));
+            _act.forEach(id=>document.getElementById(id)?.classList.add('active')); }})());
+        ok('Le retour est branché sur les DEUX sorties de doRegister',(()=>{
+          // Compte neuf et compte deja existant : les deux doivent ramener.
+          // Une seule des deux branchee laisserait la moitie des visiteurs
+          // devant l'ecran de code.
+          const dr=String(doRegister);
+          const n=(dr.match(/_retourApresInscription\(\)/g)||[]).length;
+          if(n<2) return _echec(n+' branche(s) seulement');
+          // Sur le chemin du compte neuf, il PRECEDE l'ecran de code — sinon
+          // il ne servirait jamais.
+          // Les DEUX index sont cherches a partir de register_completed :
+          // « go('s-client-code') » apparait AUSSI dans la branche du compte
+          // deja existant, plus haut, et mon premier jet le comparait a un
+          // retour situe plus bas — il tombait sur un faux negatif.
+          const iDep=dr.indexOf('register_completed');
+          const iRet=dr.indexOf('_retourApresInscription()',iDep);
+          const iCode=dr.indexOf("go('s-client-code')",iDep);
+          if(iRet<0||iCode<0) return _echec('structure de sortie inattendue');
+          return iRet<iCode
+            ?true:_echec('l\'écran de code passe avant le retour');})());
+        ok('Les trois cartes de l\'entrée athlète disent où elles mènent',(()=>{
+          const z=document.getElementById('s-athlete-entry');
+          if(!z) return _echec('écran absent');
+          const t=(z.innerText||z.textContent||'').replace(/\s+/g,' ');
+          // « JE REVIENS » n'indiquait pas qu'il s'agissait de la connexion.
+          if(/JE REVIENS/i.test(t)) return _echec('le libellé ambigu subsiste');
+          const manque=["J'AI UN CODE","J'AI DÉJÀ UN COMPTE","JE N'AI PAS DE CODE"]
+            .filter(x=>t.indexOf(x)<0);
+          if(manque.length) return _echec('cartes manquantes : '+manque.join(' · '));
+          // Et l'encart presente les DEUX voies, pas un code obligatoire.
+          if(!/[Ss]ans code/.test(t)) return _echec('l\'encart ne présente pas la voie autonome');
+          return /compris dans son suivi/.test(t)
+            ?true:_echec('l\'encart ne dit plus que le code rend l\'accès gratuit');})());
+
         ok('L\'écran coach dit ce que le COACH paie ET ce que ses athlètes paient',(()=>{
           // L'encart ne parlait que du coach : il pouvait s'inscrire, puis
           // recruter, sans savoir quel prix annoncer a ses athletes.
