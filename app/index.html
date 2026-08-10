@@ -14146,7 +14146,9 @@ function _boutonsCopieJour(fn,i){
 }
 function _copierSeance(src,dst){
   dst.name=src.name||'';
-  dst.exercises=(src.exercises||[]).map(e=>({...e}));
+  // Clone PROFOND, comme dupliquerSeance : le {...e} par exercice laissait
+  // partage tout objet imbriqué, et modifier la copie touchait la source.
+  dst.exercises=JSON.parse(JSON.stringify(src.exercises||[]));
   dst.warmup=src.warmup||'';
   dst.cooldown=src.cooldown||'';
   dst.notes=src.notes||'';
@@ -14675,7 +14677,11 @@ function saveCoachSessionsAsTemplate(){
   const copie=()=>src.map(s=>({
     day:s.day,name:s.name||'',active:!!s.active,notes:s.notes||'',
     warmup:s.warmup||'',cooldown:s.cooldown||'',photo:null,photo2:null,
-    exercises:(s.exercises||[]).map(e=>({...e}))
+    // Clone PROFOND. Sans lui, un tableau imbriqué restait partagé entre le
+    // modèle et le dossier de l'athlète dont il est tiré — et entre les deux
+    // onglets H et F, que copie() est justement appelée deux fois pour rendre
+    // indépendants.
+    exercises:JSON.parse(JSON.stringify(s.exercises||[]))
   }));
   if(!currentUser.coachPrograms) currentUser.coachPrograms=[];
   currentUser.coachPrograms.push({
@@ -72219,6 +72225,163 @@ function testExercices(){
       const _ex=n=>({name:n,series:3,reps:'8',repos:'2 min'});
       try{
         // ── Duplication de séance ─────────────────────────────────────────
+        // ══════ LES TROIS COPIES DU COACH ══════
+        // « Repartir de ce qui existe » plutôt que tout ressaisir : dupliquer
+        // un modèle, recopier une séance sur un autre jour, transformer le
+        // programme abouti d'un athlète en modèle. Trois gestes, aucun écran
+        // nouveau — et cinq des sept fonctions qui les portent n'étaient
+        // tenues par rien.
+        ok('Dupliquer un modèle : copie PROFONDE, source intacte',(()=>{
+          const _cu=currentUser,_t=window.toast;
+          try{
+            window.toast=()=>{};
+            currentUser={email:'c@t.fr',id:'c1',role:'coach',coachPrograms:[
+              {id:'p1',name:'Prise de masse',createdAt:1,
+               sessions_H:[{day:'Lundi',name:'PUSH',active:true,
+                            exercises:[{name:'DC',series:4,sets:[{kg:60}]}]}],
+               sessions_F:[]}]};
+            duplicateCoachProgTemplate(0);
+            const L=currentUser.coachPrograms;
+            if(L.length!==2) return _echec(L.length+' programme(s) au lieu de 2');
+            const c=L[1];
+            if(c.name!=='Prise de masse (copie)') return _echec('nom : '+c.name);
+            if(c.id===L[0].id) return _echec('la copie garde l\'identifiant de la source');
+            if(c.createdAt===1) return _echec('la date de création n\'est pas rafraîchie');
+            // LA COPIE EST PROFONDE. Un tableau imbriqué resté partagé ferait
+            // qu'éditer « Prise de masse v2 » modifierait « Prise de masse ».
+            c.sessions_H[0].exercises[0].sets.push({kg:99});
+            c.sessions_H[0].name='MODIFIE';
+            if(L[0].sessions_H[0].exercises[0].sets.length!==1)
+              return _echec('les séries sont partagées avec la source');
+            if(L[0].sessions_H[0].name!=='PUSH')
+              return _echec('le nom de la source a bougé');
+            // Un index hors bornes ne doit rien créer.
+            const avant=currentUser.coachPrograms.length;
+            duplicateCoachProgTemplate(99);
+            return currentUser.coachPrograms.length===avant
+              ?true:_echec('un index inconnu crée un programme');
+          } finally { currentUser=_cu; window.toast=_t; }})());
+        ok('Copier une séance sur un autre jour : tout est repris, rien n\'est lié',(()=>{
+          const _cu=currentUser,_i=window._editProgTemplateIdx,_g=window._editProgTemplateGender,
+                _t=window.toast,_c=window.confirm,_l=window.loadProgTemplateSlots;
+          try{
+            window.toast=()=>{}; window.confirm=()=>true; window.loadProgTemplateSlots=()=>{};
+            const jours=['Lundi','Mardi','Mercredi','Jeudi'];
+            currentUser={email:'c@t.fr',id:'c1',role:'coach',coachPrograms:[{id:'p1',name:'P',
+              sessions_H:jours.map((d,k)=>k===0
+                ?{day:d,name:'PUSH',active:true,warmup:'W',cooldown:'C',notes:'N',_foundation:true,
+                  exercises:[{name:'DC',series:4,sets:[{kg:60}]}]}
+                :{day:d,name:'',active:false,exercises:[]}),sessions_F:[]}]};
+            _editProgTemplateIdx=0; _editProgTemplateGender='H';
+            cptCopyDay(0,3);                       // lundi → jeudi
+            const S=currentUser.coachPrograms[0].sessions_H;
+            // Les cinq champs demandés, et le jour cible ACTIVÉ — sans quoi la
+            // séance recopiée resterait invisible pour l'athlète.
+            if(S[3].active!==true) return _echec('le jour cible reste inactif');
+            if(S[3].name!=='PUSH'||S[3].warmup!=='W'||S[3].cooldown!=='C'||S[3].notes!=='N')
+              return _echec('un champ n\'a pas été repris');
+            if(S[3].exercises.length!==1||S[3].exercises[0].name!=='DC')
+              return _echec('les exercices n\'ont pas suivi');
+            // Une séance recopiée volontairement n'est plus un exemple.
+            if(S[3]._foundation!==undefined) return _echec('le marqueur d\'exemple survit');
+            // PROFONDE : sans cela, éditer le jeudi modifiait le lundi.
+            S[3].exercises[0].sets.push({kg:99});
+            if(S[0].exercises[0].sets.length!==1)
+              return _echec('les séries sont partagées entre les deux jours');
+            // L'écriture appartient au bouton SAUVEGARDER de l'écran : cette
+            // fonction ne doit RIEN persister.
+            const src=String(cptCopyDay);
+            return src.indexOf('saveUser()')<0
+              ?true:_echec('cptCopyDay écrit alors que l\'écran ne le fait qu\'au bouton');
+          } finally { currentUser=_cu; window._editProgTemplateIdx=_i;
+            window._editProgTemplateGender=_g; window.toast=_t; window.confirm=_c;
+            window.loadProgTemplateSlots=_l; }})());
+        ok('Écraser une séance déjà écrite demande confirmation',(()=>{
+          // C'est le seul endroit de ce lot où l'on peut détruire du travail.
+          const plein={day:'Jeudi',active:true,exercises:[{name:'X'},{name:'Y'}]};
+          const vide={day:'Jeudi',active:false,exercises:[]};
+          const inactifMaisRempli={day:'Jeudi',active:false,exercises:[{name:'X'}]};
+          const _c=window.confirm;
+          try{
+            let question=null;
+            window.confirm=(m)=>{question=m;return false;};
+            if(_confirmerEcrasement({day:'Lundi'},vide)!==true)
+              return _echec('un créneau vide demande confirmation pour rien');
+            if(question) return _echec('une question est posée sur un créneau vide');
+            if(_confirmerEcrasement({day:'Lundi'},inactifMaisRempli)!==true)
+              return _echec('un créneau inactif demande confirmation pour rien');
+            const r=_confirmerEcrasement({day:'Lundi'},plein);
+            if(r!==false) return _echec('le refus n\'est pas respecté');
+            if(!question) return _echec('aucune confirmation sur un créneau rempli');
+            // La question DIT ce qui va disparaître : « 2 exercices », et d'où
+            // vient le remplacement. Sans cela le coach ne peut pas décider.
+            return /2 exercices/.test(question)&&/Lundi/.test(question)&&/Jeudi/.test(question)
+              ?true:_echec('la question ne situe pas : '+question);
+          } finally { window.confirm=_c; }})());
+        ok('Le programme d\'un athlète devient un modèle assignable',(()=>{
+          const _cu=currentUser,_ce=window._coachEditClient,_p=window.prompt,_t=window.toast;
+          try{
+            window.toast=()=>{};
+            currentUser={email:'c@t.fr',id:'c1',role:'coach'};
+            _coachEditClient={fname:'Léa',sessions_config:[
+              {day:'Lundi',name:'PUSH',active:true,warmup:'W',cooldown:'C',notes:'N',
+               photo:'data:image/jpeg;base64,LOURD',photo2:'x',
+               exercises:[{name:'DC',series:4,sets:[{kg:60}]}]},
+              {day:'Mardi',name:'',active:false,exercises:[]}]};
+            window.prompt=()=>'Prise de masse Léa';
+            saveCoachSessionsAsTemplate();
+            const L=currentUser.coachPrograms||[];
+            if(L.length!==1) return _echec(L.length+' modèle(s) créé(s)');
+            const m=L[0];
+            if(m.name!=='Prise de masse Léa') return _echec('nom : '+m.name);
+            // LES DEUX GENRES sont pré-remplis, à charge pour le coach
+            // d'adapter l'onglet F.
+            if(!m.sessions_H?.length||!m.sessions_F?.length)
+              return _echec('un des deux genres est vide');
+            // Les photos sont écartées : du base64 dans un dossier poussé en
+            // entier à chaque synchronisation.
+            if(m.sessions_H[0].photo!==null||m.sessions_H[0].photo2!==null)
+              return _echec('une photo est partie dans le modèle');
+            // H et F doivent être INDÉPENDANTS l'un de l'autre…
+            m.sessions_H[0].exercises[0].sets.push({kg:99});
+            if(m.sessions_F[0].exercises[0].sets.length!==1)
+              return _echec('les deux genres partagent leurs séries');
+            // …et le modèle indépendant du dossier de l'athlète, sans quoi
+            // retoucher le modèle modifierait le programme en cours de Léa.
+            if(_coachEditClient.sessions_config[0].exercises[0].sets.length!==1)
+              return _echec('le modèle partage ses séries avec l\'athlète');
+            return true;
+          } finally { currentUser=_cu; window._coachEditClient=_ce;
+                      window.prompt=_p; window.toast=_t; }})());
+        ok('Un programme vide ne devient pas un modèle, et le dit',(()=>{
+          // Un modèle sans exercice est un piège : il s'assigne, et l'athlète
+          // se retrouve sans séance.
+          const _cu=currentUser,_ce=window._coachEditClient,_p=window.prompt,_t=window.toast;
+          try{
+            const vus=[];
+            window.toast=(m)=>{vus.push(String(m));};
+            let demande=false;
+            window.prompt=()=>{demande=true;return 'X';};
+            currentUser={email:'c@t.fr',id:'c1',role:'coach'};
+            _coachEditClient={fname:'Léa',sessions_config:[
+              {day:'Lundi',name:'',active:true,exercises:[]},
+              {day:'Mardi',name:'PUSH',active:false,exercises:[{name:'DC'}]}]};
+            saveCoachSessionsAsTemplate();
+            if((currentUser.coachPrograms||[]).length)
+              return _echec('un modèle vide a été créé');
+            if(demande) return _echec('le nom est demandé avant de vérifier le contenu');
+            if(!vus.length||!/Aucune séance/.test(vus[0]))
+              return _echec('rien n\'explique le refus : '+vus.join(' | '));
+            // Nom vide ou annulation : on n'écrit rien non plus.
+            _coachEditClient.sessions_config[0]={day:'Lundi',name:'P',active:true,
+              exercises:[{name:'DC'}]};
+            window.prompt=()=>null;
+            saveCoachSessionsAsTemplate();
+            return !(currentUser.coachPrograms||[]).length
+              ?true:_echec('annuler la question crée quand même un modèle');
+          } finally { currentUser=_cu; window._coachEditClient=_ce;
+                      window.prompt=_p; window.toast=_t; }})());
+
         ok('Critère : la duplication copie tous les exercices',(()=>{
           const cfg=[_jour('Lundi','PUSH',[_ex('SQUAT'),_ex('DIPS')]),
                      _jour('Mardi','',[],false)];
