@@ -52090,6 +52090,56 @@ function testExercices(){
           const prod=tout.slice(0,tout.indexOf('function testExercices'));
           const n=(prod.match(/role!=='coach'&&\(\w+\.status\|\|'FREE'\)==='FREE'/g)||[]).length;
           return n>=6?true:_echec(n+' gardes au lieu de 6 au moins');})());
+        ok('R-02 bis : un coach FREE arrive sur s-coach-home, session INTACTE',(()=>{
+          // R-02 ci-dessus COMPTE les gardes. Six gardes bien placées mais
+          // menant au mauvais écran passeraient ce comptage sans rien prouver.
+          // Celle-ci rejoue la décision du démarrage et regarde où elle mène,
+          // puis vérifie que la session n'a pas été purgée au passage — c'était
+          // le vrai dégât du défaut : un coach déconnecté à chaque rechargement.
+          const _sv=currentUser, _sc=currentClientId;
+          const _su=localStorage.getItem('rc_users');
+          const _ss=localStorage.getItem('rc_session');
+          const _ec=()=>(document.querySelector('.screen.active')||{}).id;
+          try{
+            const coach={id:'u_r2',email:'r2coach@t.fr',fname:'K',lname:'G',
+              role:'coach',status:'FREE',code:'RC-R2AA-BBBB',clients:[],
+              sessions:[],bilans:[],nutrition:{},videos:[],exAlias:{},exMuscles:{},
+              programs:{},coachPlan:'libre'};
+            localStorage.setItem('rc_users',JSON.stringify({'r2coach@t.fr':coach}));
+            localStorage.setItem('rc_session',JSON.stringify(coach));
+            currentUser=coach;
+            // 1. checkAccess ne refuse JAMAIS un coach, quel que soit son statut.
+            if(checkAccess(coach)!==true)
+              return _echec('checkAccess refuse un coach FREE');
+            // 2. La branche du démarrage, rejouée telle quelle.
+            let branche;
+            if(!coach.email) branche='logout';
+            else if(coach.role!=='coach'&&(coach.status||'FREE')==='FREE') branche='s-client-code';
+            else if(sessionStorage.getItem('rc_paypal_return')) branche='s-subscribe';
+            else branche='routeUser';
+            if(branche!=='routeUser') return _echec('branche : '+branche);
+            // 3. Et elle mène bien à l'accueil COACH.
+            try{ routeUser(); }catch(e){ return _echec('exception : '+e.message); }
+            if(_ec()!=='s-coach-home') return _echec('arrivé sur '+_ec());
+            // 4. LA SESSION SURVIT. C'était le dégât réel.
+            if(!localStorage.getItem('rc_session'))
+              return _echec('rc_session a été purgé');
+            if(!currentUser) return _echec('currentUser a été annulé');
+            // 5. TÉMOIN : l'exclusion ne déborde pas sur les athlètes. Un
+            //    athlète FREE doit TOUJOURS partir sur s-client-code, sans quoi
+            //    la correction aurait ouvert l'app à qui n'a pas de code.
+            const ath=Object.assign({},coach,{role:'athlete',email:'r2ath@t.fr'});
+            const brAth=(ath.role!=='coach'&&(ath.status||'FREE')==='FREE')
+              ?'s-client-code':'routeUser';
+            if(brAth!=='s-client-code') return _echec('un athlète FREE échappe à la garde');
+            return checkAccess(ath)===false
+              ?true:_echec('checkAccess laisse passer un athlète FREE');
+          } finally {
+            currentUser=_sv; currentClientId=_sc;
+            if(_su===null) localStorage.removeItem('rc_users'); else localStorage.setItem('rc_users',_su);
+            if(_ss===null) localStorage.removeItem('rc_session'); else localStorage.setItem('rc_session',_ss);
+          }})());
+
         ok('R-01 : APP_BASE_URL est dérivée, jamais codée en dur',(()=>{
           if(typeof APP_BASE_URL!=='string'||!APP_BASE_URL) return _echec('vide');
           const tout=document.documentElement.outerHTML;
