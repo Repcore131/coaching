@@ -52547,6 +52547,81 @@ function testExercices(){
           const src=String(CLOUD._getToken)+String(CLOUD.createAuthAccount||'');
           return !/_quotaCompter/.test(src)
             ?true:_echec('un appel Auth est compté comme du RTDB');})());
+        // ── CRÉER UN ÉLÈVE SANS SE DÉCONNECTER ──────────────────────────
+        // La modale annonce au coach que son eleve pourra se connecter avec le
+        // mot de passe saisi. Sans compte Firebase Auth, cette promesse etait
+        // vide — pire, l'email restant inconnu d'Auth, le repli signUp de
+        // CLOUD.signIn laissait n'importe qui prendre le compte avec le mot de
+        // passe de son choix.
+        //
+        // Ces assertions sont STRUCTURELLES : createAuthAccount et createAthlete
+        // sont asynchrones, la suite ne l'est pas. Le comportement a ete verifie
+        // en navigateur — jetons du coach intacts sur les quatre chemins,
+        // coachId / status / accessExpiry poses, et rien d'ecrit en cas d'echec
+        // reseau.
+        ok('createAuthAccount n\'écrit AUCUN jeton, et n\'en demande pas',(()=>{
+          if(typeof CLOUD.createAuthAccount!=='function')
+            return _echec('la méthode a disparu');
+          const src=String(CLOUD.createAuthAccount);
+          // Elle ne pose NI l'un NI l'autre : c'est ce qui la distingue de
+          // signIn, qui les ecrase tous les deux.
+          if(/this\._idToken\s*=/.test(src)) return _echec('elle écrit _idToken');
+          if(/this\._refreshToken\s*=/.test(src)) return _echec('elle écrit _refreshToken');
+          if(/_saveAuth\(\)/.test(src)) return _echec('elle persiste une session');
+          // Mieux que d'ignorer le jeton : ne pas le demander. Rien a ignorer,
+          // donc rien qui puisse fuiter dans la session.
+          if(!/returnSecureToken:false/.test(src))
+            return _echec('elle demande encore un jeton');
+          if(src.indexOf('accounts:signUp')<0)
+            return _echec('elle n\'appelle plus signUp');
+          // Les quatre motifs d'echec sont distingues : « mot de passe trop
+          // faible » et « pas de connexion » n'appellent pas la meme action.
+          const manque=['EMAIL_EXISTS','WEAK_PASSWORD','INVALID_EMAIL']
+            .filter(m=>src.indexOf(m)<0);
+          return manque.length?_echec('motifs perdus : '+manque.join(', ')):true;})());
+        ok('Le compte Auth est créé AVANT que l\'athlète soit écrit',(()=>{
+          const src=String(createAthlete);
+          const iAuth=src.indexOf('CLOUD.createAuthAccount(');
+          const iEcrit=src.indexOf('users[em]=athlete');
+          const iSet=src.indexOf("DB.set('users'");
+          if(iAuth<0) return _echec('createAthlete n\'appelle plus createAuthAccount');
+          if(iEcrit<0) return _echec('ancre d\'écriture perdue');
+          if(!(iAuth<iEcrit)) return _echec('l\'athlète est écrit avant la création du compte');
+          if(iSet>=0&&!(iAuth<iSet)) return _echec('DB.set précède la création du compte');
+          // Un echec autre que « compte deja existant » SORT : sinon la fiche
+          // existerait sans que le mot de passe annonce ouvre quoi que ce soit.
+          const bloc=src.slice(iAuth,iEcrit);
+          if(bloc.indexOf('return')<0) return _echec('aucune sortie sur échec');
+          // Et le compte deja existant N'EST PAS un echec : on rattache.
+          return /err==='exists'/.test(bloc)
+            ?true:_echec('un compte déjà existant bloque le rattachement');})());
+        ok('L\'interface ne promet pas un mot de passe qu\'elle n\'a pas posé',(()=>{
+          // Quand l'eleve avait deja un compte, le coach ne peut PAS changer son
+          // mot de passe sans le connaitre. Annoncer l'inverse enverrait l'eleve
+          // essayer une combinaison qui ne marche pas.
+          const src=String(createAthlete);
+          if(src.indexOf('motDePasseActif')<0)
+            return _echec('les deux cas ne sont plus distingués');
+          const m=src.match(/motDePasseActif\s*\?([\s\S]{0,400}?);/);
+          if(!m) return _echec('le message ne dépend plus du cas');
+          const t=m[1];
+          if(!/il peut se connecter avec cet email et ce mot de passe/.test(t))
+            return _echec('le cas du compte neuf a changé de message');
+          return /garde SON mot de passe/.test(t)
+            ?true:_echec('le cas du compte existant ne dit plus que le mot de passe reste le sien');})());
+        ok('Le rattachement est complet : coach, statut, échéance',(()=>{
+          const src=String(createAthlete);
+          const manque=[['coachId:currentUser.id','le lien au coach'],
+                        ["status='COACHING_SUIVI'",'le statut d\'accès'],
+                        ['accessExpiry=expiry',"l'échéance"]]
+            .filter(([m])=>src.replace(/\s/g,'').indexOf(m.replace(/\s/g,''))<0)
+            .map(([,q])=>q);
+          if(manque.length) return _echec('perdu : '+manque.join(' · '));
+          // Le statut n'est PAS FREE : c'est ce defaut qui envoyait l'eleve sur
+          // l'ecran de code alors que son coach venait de lui ouvrir l'acces.
+          return !/athlete\.status\s*=\s*'FREE'/.test(src)
+            ?true:_echec('l\'athlète est créé en FREE');})());
+
       } finally {
         currentUser=_qU;
         if(_sauve===null) localStorage.removeItem(_cle);
