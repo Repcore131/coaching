@@ -56531,6 +56531,64 @@ function testExercices(){
           // Et le message est explicite, avec la proposition de connexion.
           return /existe déjà/.test(branche)
             ?true:_echec('aucun message explicite sur le compte existant');})());
+        // ── LA DÉFENSE EN PROFONDEUR DE _doPushOne ──────────────────────
+        // La branche de doRegister ci-dessus est le premier filet. Celui-ci est
+        // le dernier : il refuse d'ecraser un noeud distant PLUS RECENT par un
+        // objet PLUS PAUVRE, quel que soit le chemin qui a mene la. Il n'etait
+        // couvert par rien — et c'est precisement le garde-fou qui compte quand
+        // tous les autres ont cede.
+        ok('La garde de fraîcheur existe, et refuse AVANT d\'envoyer',(()=>{
+          const src=String(CLOUD._doPushOne);
+          const iPull=src.indexOf('await this.pullUser(email)');
+          const iPut=src.indexOf("method:'PUT'");
+          if(iPull<0) return _echec('le dossier distant n\'est plus relu avant l\'envoi');
+          if(iPut>=0&&!(iPull<iPut)) return _echec('la relecture suit l\'envoi');
+          const bloc=src.slice(iPull,iPut>0?iPut:src.length);
+          if(bloc.indexOf('throw')<0) return _echec('la garde n\'interrompt plus rien');
+          // Un refus DELIBERE ne doit pas repartir dans la file de reprise :
+          // il echouerait a l'identique a chaque demarrage, indefiniment.
+          if(bloc.indexOf('_nonRejouable')<0)
+            return _echec('le refus repartirait dans la file de reprise');
+          return bloc.indexOf('_actionnable')>=0
+            ?true:_echec('le refus est noyé dans le message générique');})());
+        ok('Le volume compte les séances ET les bilans, sans jamais jeter',(()=>{
+          // On extrait la definition REELLE et on l'execute : recopier la
+          // formule dans le test la laisserait diverger en silence.
+          const src=String(CLOUD._doPushOne);
+          const m=src.match(/const volume=([^;]+);/);
+          if(!m) return _echec('la mesure de volume a changé de forme');
+          let f;
+          try{ f=new Function('return ('+m[1]+')')(); }
+          catch(e){ return _echec('formule illisible : '+m[1].slice(0,50)); }
+          const cas=[[{sessions:[1,2,3],bilans:[1,2]},5],[{sessions:[],bilans:[]},0],
+                     [{sessions:[1]},1],[{bilans:[1,2]},2],[{},0],[null,0],[undefined,0]];
+          const rates=cas.filter(([o,att])=>{ try{ return f(o)!==att; }catch(e){ return true; } })
+            .map(([o])=>JSON.stringify(o));
+          return rates.length?_echec('volume faux pour : '+rates.join(' · ')):true;})());
+        ok('Les deux comparaisons sont STRICTES, et c\'est ce qui rend la garde vivable',(()=>{
+          // updatedAt en >= refuserait tout envoi a horodatage egal : la
+          // sauvegarde normale cesserait de partir. Le volume en <= refuserait
+          // un envoi de meme richesse, donc la plupart des mises a jour.
+          // Les deux erreurs bloqueraient le produit sans rien proteger de plus.
+          const src=String(CLOUD._doPushOne).replace(/\s/g,'');
+          if(src.indexOf('(distant.updatedAt||0)>(safe.updatedAt||0)')<0)
+            return _echec('la comparaison des dates a changé, ou n\'est plus stricte');
+          if(src.indexOf('volume(safe)<volume(distant)')<0)
+            return _echec('la comparaison des volumes a changé, ou n\'est plus stricte');
+          // La table de decision, rejouee sur la vraie regle.
+          const V=o=>(((o&&o.sessions)||[]).length)+(((o&&o.bilans)||[]).length);
+          const refuse=(d,sf)=>!!(d&&(d.updatedAt||0)>(sf.updatedAt||0)&&V(sf)<V(d));
+          const S=n=>Array.from({length:n},(_,i)=>i);
+          const cas=[
+            ['distant plus récent ET plus riche',  {updatedAt:2,sessions:S(9),bilans:S(4)}, {updatedAt:1,sessions:[],bilans:[]},   true],
+            ['distant plus récent, volume égal',   {updatedAt:2,sessions:S(3),bilans:S(2)}, {updatedAt:1,sessions:S(3),bilans:S(2)},false],
+            ['distant plus récent mais plus pauvre',{updatedAt:2,sessions:S(1),bilans:[]},  {updatedAt:1,sessions:S(9),bilans:S(4)},false],
+            ['distant plus ancien',                {updatedAt:1,sessions:S(9),bilans:S(4)}, {updatedAt:2,sessions:[],bilans:[]},   false],
+            ['horodatages égaux',                  {updatedAt:2,sessions:S(9),bilans:S(4)}, {updatedAt:2,sessions:[],bilans:[]},   false],
+            ['aucun distant',                      null,                                    {updatedAt:1,sessions:[],bilans:[]},   false]];
+          const rates=cas.filter(([,d,sf,att])=>refuse(d,sf)!==att).map(([n])=>n);
+          return rates.length?_echec(rates.join(' · ')):true;})());
+
         ok('Les premiers pas : trois actions, et seulement sans athlète',(()=>{
           const z=document.getElementById('ch-premiers-pas');
           if(!z) return _echec('emplacement absent du DOM');
