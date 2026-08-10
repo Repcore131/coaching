@@ -33033,7 +33033,6 @@ const LIP_ECHELLE=Object.freeze([0.6,0.8,1.0,1.2,1.5]);
 // RepCore ne dépiste RIEN et n'affirme RIEN sur le traitement : il élargit
 // une fourchette quand un diagnostic médical est déclaré, et il renvoie vers
 // le suivi qui va avec.
-const LIP_SUGGERE_SOPK=1.2;
 const SOPK_CIBLE_SECHE=Object.freeze({min:-1.0,max:-0.3,alerte:-1.4});
 // ── PES : réduction des risques, et STRICTEMENT rien d'autre ─────────────
 // « Produits améliorant la performance ». RepCore ne nomme aucune molécule,
@@ -33531,12 +33530,134 @@ function _htmlVitesseCoach(c){
   </div>`;
 }
 // Valeur SUGGÉRÉE, jamais imposée : le coach voit une proposition et tranche.
+// Elle ne dépend plus d'aucun état de santé — voir REGLES_ETAT_VALEUR et la
+// garde qui l'accompagne juste en dessous.
 function lipSuggere(user){
-  return sopkApplicable(user)?LIP_SUGGERE_SOPK:LIP_G_PAR_KG;
+  return LIP_G_PAR_KG;
 }
-const SOPK_NOTE_LIPIDES='suggéré — le SOPK répond souvent mieux à une charge '
-  +'glucidique plus basse, mais cela varie beaucoup. À ajuster selon ce '
-  +'qu\'elle constate.';
+
+// ══════ AUCUNE CIBLE CHIFFRÉE NE DÉPEND D'UN DIAGNOSTIC ═══════════════════
+// Le produit portait une règle qui contredisait sa propre doctrine : sous SOPK
+// « diagnostiqué par un médecin », les lipides passaient à 1,2 g/kg. RepCore
+// suspend, élargit, renvoie — il ne prescrit pas. Et la guideline
+// internationale (Teede et al., J Clin Endocrinol Metab 2023;108(10):2447)
+// conclut qu'AUCUNE répartition de macronutriments n'a démontré de supériorité
+// dans le SOPK. La règle affirmait donc quelque chose de faux, avec l'autorité
+// d'un chiffre.
+//
+// CE QUI EST RETIRÉ : l'automatisme. CE QUI RESTE : la liberté du coach de
+// fixer 1,2 g/kg à la main — l'échelle des lipides ne bouge pas.
+//
+// LA TABLE ci-dessous recense TOUTES les règles liant une valeur numérique à
+// un état de santé déclaré, y compris celles qu'on garde. Une règle qu'on ne
+// nomme pas est une règle qu'on ne peut pas garder honnête.
+//
+//   diagnostic : l'état figure dans ETATS_DECLARABLES, dont chaque libellé
+//                porte « diagnostiqué par un médecin » (un test l'exige).
+//   nature     : 'cible' fixe une valeur · 'elargissement' ouvre une
+//                fourchette ou une échelle · 'suspension' coupe un objectif ·
+//                'correction_mb' déplace le métabolisme estimé.
+const REGLES_ETAT_VALEUR=Object.freeze([
+  Object.freeze({etat:'sopk',      diagnostic:true,  nature:'elargissement',
+    quoi:'fourchette de vitesse de sèche', ref:'SOPK_CIBLE_SECHE'}),
+  Object.freeze({etat:'thyroide',  diagnostic:true,  nature:'correction_mb',
+    quoi:'correction du métabolisme suggérée', ref:'correctionMBSuggeree'}),
+  Object.freeze({etat:'menopause', diagnostic:false, nature:'cible',
+    quoi:'bonus de protéines suggéré', ref:'PROT_BONUS_MENOPAUSE'}),
+  Object.freeze({etat:'menopause', diagnostic:false, nature:'elargissement',
+    quoi:'plancher de l\'échelle protéique', ref:'PROT_MIN_MENOPAUSE'}),
+  Object.freeze({etat:'menopause', diagnostic:false, nature:'elargissement',
+    quoi:'fourchette de vitesse de sèche', ref:'MENO_CIBLE_SECHE'}),
+  Object.freeze({etat:'pes',       diagnostic:false, nature:'elargissement',
+    quoi:'plafond de l\'échelle protéique', ref:'PROT_ECHELLE_PES'}),
+  Object.freeze({etat:'grossesse', diagnostic:false, nature:'suspension',
+    quoi:'objectif de perte et alertes', ref:'grossesseSuspend'}),
+  Object.freeze({etat:'tca',       diagnostic:false, nature:'suspension',
+    quoi:'majoration du plancher calorique', ref:'PLANCHER_MAJORATION_TCA'})
+]);
+// LA GARDE. Elle échoue si une CIBLE de macronutriment est conditionnée à un
+// DIAGNOSTIC. Les deux mots comptent :
+//
+// — « diagnostic » exclut la ménopause, qui est une étape de vie et non une
+//   entrée d'ETATS_DECLARABLES. Son bonus protéique reste une cible et il est
+//   inscrit comme telle dans la table : la garde ne le couvre pas, elle ne le
+//   cache pas non plus.
+// — « macronutriment » exclut la correction métabolique thyroïdienne, qui est
+//   liée à un diagnostic mais ne fixe aucune macro. Elle repose d'ailleurs sur
+//   un fait d'une autre nature : un métabolisme abaissé sous hypothyroïdie non
+//   traitée se mesure, alors que la supériorité d'une répartition dans le SOPK
+//   ne s'est jamais démontrée. Le jour où quelqu'un voudra la retirer, ce sera
+//   une décision produit distincte, avec ses propres sources.
+function assertNoDiagnosisBoundNumericTarget(){
+  const fautes=REGLES_ETAT_VALEUR.filter(r=>r.diagnostic&&r.nature==='cible');
+  return {ok:fautes.length===0,
+    fautes:fautes.map(r=>r.etat+' → '+r.quoi+' ('+r.ref+')')};
+}
+// La note qui remplace le chiffre. Elle cite sa source et son année, et ne
+// porte AUCUNE valeur : c'est tout l'objet du lot.
+const SOPK_NOTE_LIPIDES='Aucune répartition de macronutriments n\'a démontré '
+  +'de supériorité dans le SOPK (guideline internationale 2023). Adaptez selon '
+  +'la tolérance de l\'athlète et l\'avis du praticien qui la suit.';
+// ── Migration : rien ne change en silence ────────────────────────────────
+// Le g/kg de lipides n'a JAMAIS été persisté — _propLip vit en mémoire et le
+// dossier ne garde que les grammes. Il n'existe donc aucun plan « portant
+// 1,2 g/kg » à repérer : ce qui existe, c'est un plan dont les lipides VALENT
+// 1,2 × poids. La détection est donc une présomption, et le bandeau est écrit
+// pour rester vrai dans les deux cas — règle automatique retirée, ou valeur
+// choisie par le coach, qui reste libre de la choisir encore.
+const SOPK_MIGRATION_TITRE='Règle de lipides retirée';
+const SOPK_MIGRATION_TEXTE='La suggestion automatique de lipides sous SOPK a '
+  +'été retirée : aucune répartition n\'a démontré de supériorité. Au prochain '
+  +'recalcul, la suggestion revient au standard. Le plan enregistré n\'a pas '
+  +'été modifié, et si vous aviez fixé cette valeur vous-même, rien ne vous '
+  +'empêche de la reprendre.';
+const SOPK_LIP_ANCIENNE_REGLE=1.2;
+// PURE. Le plan de cette athlète ressemble-t-il à ce que produisait la règle ?
+// Tolérance d'un gramme : les grammes sont arrondis, et un poids relevé après
+// coup décale légèrement le produit.
+function planSousAncienneRegleSopk(c){
+  if(!c||!sopkApplicable(c)) return false;
+  const m=((c.nutrition||{}).macros)||{};
+  const l=Number((m.on&&m.on.l));
+  if(!isFinite(l)||!(l>0)) return false;
+  let poids=null;
+  try{ poids=_planPoids(c); }catch(e){ poids=null; }
+  if(!(poids>0)) return false;
+  const ancien=Math.round(SOPK_LIP_ANCIENNE_REGLE*poids);
+  const standard=Math.round(LIP_G_PAR_KG*poids);
+  // Si les deux coïncident, il n'y a rien à annoncer : la valeur ne bougera pas.
+  if(ancien===standard) return false;
+  return Math.abs(l-ancien)<=1;
+}
+function migrationSopkVue(c){
+  return !!(((c||{}).migrations||{}).sopkLipidRuleRemoved);
+}
+function migrationSopkADire(c){
+  return planSousAncienneRegleSopk(c)&&!migrationSopkVue(c);
+}
+function _htmlMigrationSopk(c){
+  if(!migrationSopkADire(c)) return '';
+  return `<div style="background:var(--surface-1);border:1px solid var(--warning-border);border-radius:12px;padding:13px;margin-bottom:12px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">${escapeHtml(SOPK_MIGRATION_TITRE)}</div>
+    <div style="font-size:11.5px;color:#ddd;line-height:1.7">${escapeHtml(SOPK_MIGRATION_TEXTE)}</div>
+    <button onclick="accuserMigrationSopk()" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:10px;letter-spacing:1px">J'ai lu</button>
+  </div>`;
+}
+// ÉCRIT, et seulement sur un clic : l'indicateur est posé par le coach, pas
+// par un rendu. Un bandeau qui s'efface tout seul au premier affichage
+// disparaîtrait le jour où la fiche s'ouvre par accident.
+function accuserMigrationSopk(){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c||!c.email) return false;
+  if(!c.migrations||typeof c.migrations!=='object') c.migrations={};
+  c.migrations.sopkLipidRuleRemoved=true;
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Noté','la note est');
+  try{ renderCoachNutriSection(c); }catch(e){}
+  return true;
+}
 const SOPK_RENVOI_ATHLETE='Tu as déclaré un SOPK. RepCore adapte ses repères, '
   +'mais il ne remplace pas le suivi médical qui va avec.';
 function _htmlSopkAthlete(user){
@@ -33575,7 +33696,7 @@ function _htmlDepartCoach(c){
   const b=besoinsProposes(c,_propReglages());
   if(!b||b.source===null){
     const m=(b&&b.manque||[]).join(', ');
-    return `<div style="font-size:10px;color:var(--text-faint);line-height:1.5;margin-bottom:10px">Point de départ calculable dès que son bilan porte ${escapeHtml(m||'les données de base')}.</div>`;
+    return `${_htmlMigrationSopk(c)}<div style="font-size:10px;color:var(--text-faint);line-height:1.5;margin-bottom:10px">Point de départ calculable dès que son bilan porte ${escapeHtml(m||'les données de base')}.</div>`;
   }
   const phase=typePhase(c);
   const suggere=protSuggeree(c,phase);
@@ -33599,7 +33720,7 @@ function _htmlDepartCoach(c){
   const noteSopk=sopkApplicable(c)
     ?`<div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-bottom:8px">${escapeHtml(SOPK_NOTE_LIPIDES)}</div>`
     :'';
-  return `<div style="border-top:1px solid var(--border);padding-top:11px;margin-bottom:12px">
+  return `${_htmlMigrationSopk(c)}<div style="border-top:1px solid var(--border);padding-top:11px;margin-bottom:12px">
     <div style="display:flex;gap:6px;margin-bottom:8px">
       <select onchange="_propSetProt(this.value)" style="flex:1;min-width:0;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700">${opts}</select>
       <select onchange="_propSetCorr(this.value)" style="flex:1;min-width:0;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700">${optsCorr}</select>
@@ -47636,9 +47757,12 @@ function testExercices(){
             'mode sopk','regime sopk','plan sopk'];
           const t2=traitement.filter(x=>n.indexOf(x)>=0);
           if(t2.length) return _echec('traitement : '+t2.join(', '));
-          // Et la note reste prudente : « souvent », « varie », « à ajuster ».
-          return /varie beaucoup/.test(SOPK_NOTE_LIPIDES)&&/ajuster/.test(SOPK_NOTE_LIPIDES)
-            ?true:_echec('la note ne dit pas son incertitude');})());
+          // La note portait son incertitude en mots vagues (« varie beaucoup »).
+          // Elle porte maintenant sa SOURCE et son ANNEE, ce qui est verifiable.
+          if(!/guideline internationale 2023/.test(SOPK_NOTE_LIPIDES))
+            return _echec('la note ne cite pas sa source');
+          return /supériorité/.test(SOPK_NOTE_LIPIDES)
+            ?true:_echec('la note ne dit pas ce que dit la source');})());
         ok('ETATS_DECLARABLES porte les clés que le code CONSOMME',(()=>{
           // La liste ne contient que ce dont le produit se sert réellement :
           // « sopk » pour les repères de sèche, « thyroide » pour la question
@@ -47651,6 +47775,110 @@ function testExercices(){
             ?_echec('libellé sans mention du diagnostic : '+sansLib.map(x=>x.cle).join(', '))
             :true;})());
 
+
+        // ── AUCUNE CIBLE CHIFFRÉE LIÉE À UN DIAGNOSTIC ──────────────────
+        ok('Critère : assertNoDiagnosisBoundNumericTarget() passe',(()=>{
+          const r=assertNoDiagnosisBoundNumericTarget();
+          return r.ok?true:_echec('cibles restantes : '+r.fautes.join(' · '));})());
+        ok('La garde TOMBERAIT si on rebranchait une cible sur un diagnostic',(()=>{
+          // Une garde qu'aucune entrée ne fait tomber ne prouve rien. On lui
+          // soumet la règle qu'on vient de retirer, sans toucher à la table.
+          const faux=REGLES_ETAT_VALEUR.concat([
+            {etat:'sopk',diagnostic:true,nature:'cible',quoi:'lipides',ref:'témoin'}]);
+          const fautes=faux.filter(r=>r.diagnostic&&r.nature==='cible');
+          return fautes.length===1?true:_echec(fautes.length+' fautes détectées');})());
+        ok('La table nomme les états déclarables du produit',(()=>{
+          // Une règle absente de la table échappe à la garde : la table doit
+          // couvrir au moins les deux diagnostics que le produit consomme.
+          const etats=REGLES_ETAT_VALEUR.map(r=>r.etat);
+          const manque=ETATS_DECLARABLES.map(x=>x.cle).filter(c=>etats.indexOf(c)<0);
+          if(manque.length) return _echec('états non recensés : '+manque.join(', '));
+          const natures=['cible','elargissement','suspension','correction_mb'];
+          const inconnue=REGLES_ETAT_VALEUR.filter(r=>natures.indexOf(r.nature)<0);
+          return inconnue.length?_echec('nature inconnue : '+inconnue[0].nature):true;})());
+        ok('LIP_SUGGERE_SOPK n\'existe plus : la règle est retirée, pas débranchée',(()=>{
+          if(typeof LIP_SUGGERE_SOPK!=='undefined') return _echec('la constante survit');
+          return !/sopkApplicable|aSOPK|etatsSante|aEtat/.test(String(lipSuggere))
+            ?true:_echec('lipSuggere lit encore un état de santé');})());
+        ok('Critère : la note ne porte AUCUNE valeur chiffrée',(()=>{
+          if(/\d/.test(SOPK_NOTE_LIPIDES.replace('2023','')))
+            return _echec('un chiffre autre que l\'année : '+SOPK_NOTE_LIPIDES);
+          return /g\s*\/\s*kg|gramme/i.test(SOPK_NOTE_LIPIDES)
+            ?_echec('une unité de dose apparaît'):true;})());
+        ok('Critère : la fourchette de vitesse de sèche reste élargie sous SOPK',(()=>{
+          // CE QUI NE DEVAIT PAS PARTIR. L'élargissement n'est pas une cible :
+          // il ouvre, il ne fixe pas.
+          const u=_ath({id:'c5',sopk:true,phase:'seche'});
+          const c=cibleVitesse(u);
+          if(c.min!==SOPK_CIBLE_SECHE.min) return _echec('min '+c.min);
+          return c.sopk===true?true:_echec('la fourchette n\'est plus marquée SOPK');})());
+        ok('Le coach garde la liberté de fixer 1,2 g/kg à la main',(()=>{
+          // On retire l'automatisme, pas la liberté : l'échelle est intacte et
+          // le réglage manuel arrive bien dans le calcul.
+          if(LIP_ECHELLE.indexOf(1.2)<0) return _echec('1,2 a disparu de l\'échelle');
+          const u=_ath({id:'c6',sopk:true});
+          const b=besoinsProposes(u,{lipGparKg:1.2});
+          if(!b||b.source===null) return _echec('fixture muette');
+          const t=besoinsProposes(u,{});
+          return b.on.l>t.on.l?true:_echec('le réglage manuel ne change rien');})());
+        ok('Critère : glucides recalculés, bilan non dépassé, plancher respecté',(()=>{
+          const u=_ath({id:'c7',sopk:true});
+          const b=besoinsProposes(u,{});
+          if(!b||b.source===null) return _echec('fixture muette');
+          const j=b.on, tot=4*j.p+9*j.l+4*j.g;
+          if(Math.abs(tot-j.kcal)>4) return _echec('bilan '+tot+' contre '+j.kcal);
+          if(j.g<0) return _echec('glucides négatifs');
+          // Le plancher lipidique n'a pas bougé, et le retrait ne l'approche pas.
+          const poids=_planPoids(u);
+          return j.l>=Math.round(LIP_PLANCHER_G_KG*poids)
+            ?true:_echec('lipides '+j.l+' sous le plancher');})());
+
+        // ── Le bandeau de migration ────────────────────────────────────
+        ok('Critère : un plan bâti sous l\'ancienne règle affiche le bandeau',(()=>{
+          const u=_ath({id:'c8',sopk:true});
+          const poids=_planPoids(u);
+          if(!(poids>0)) return _echec('fixture sans poids');
+          u.nutrition={macros:{on:{kcal:1800,p:144,l:Math.round(1.2*poids),g:100},
+                               off:{kcal:1800,p:144,l:Math.round(1.2*poids),g:100}}};
+          if(!planSousAncienneRegleSopk(u)) return _echec('plan non reconnu');
+          return migrationSopkADire(u)?true:_echec('bandeau muet');})());
+        ok('Critère : le bandeau ne s\'affiche qu\'une fois',(()=>{
+          const u=_ath({id:'c9',sopk:true});
+          const poids=_planPoids(u);
+          u.nutrition={macros:{on:{kcal:1800,p:144,l:Math.round(1.2*poids),g:100},off:{}}};
+          if(!migrationSopkADire(u)) return _echec('fixture muette');
+          if(_htmlDepartCoach(u).indexOf(escapeHtml(SOPK_MIGRATION_TITRE))<0)
+            return _echec('le bandeau ne sort pas de la fiche');
+          u.migrations={sopkLipidRuleRemoved:true};
+          if(migrationSopkADire(u)) return _echec('reproposé après lecture');
+          return _htmlDepartCoach(u).indexOf(escapeHtml(SOPK_MIGRATION_TITRE))<0
+            ?true:_echec('le bandeau sort encore');})());
+        ok('Le bandeau se tait quand le plan est au standard, ou sans SOPK',(()=>{
+          const u=_ath({id:'c10',sopk:true});
+          const poids=_planPoids(u);
+          u.nutrition={macros:{on:{kcal:1800,p:144,l:Math.round(LIP_G_PAR_KG*poids),g:100},off:{}}};
+          if(migrationSopkADire(u)) return _echec('annoncé sur un plan déjà standard');
+          const v=_ath({id:'c11'});
+          v.nutrition={macros:{on:{kcal:1800,p:144,l:Math.round(1.2*_planPoids(v)),g:100},off:{}}};
+          if(migrationSopkADire(v)) return _echec('annoncé sans SOPK déclaré');
+          const w=_ath({id:'c12',sopk:true});
+          return migrationSopkADire(w)?_echec('annoncé sans plan enregistré'):true;})());
+        ok('Le bandeau dit que le plan n\'a PAS été modifié',(()=>{
+          // Règle 3 : aucune modification rétroactive silencieuse. Le texte doit
+          // le dire, sinon le coach cherchera un changement qui n'a pas eu lieu.
+          if(!/n'a pas été modifié/.test(SOPK_MIGRATION_TEXTE))
+            return _echec('le texte ne le dit pas');
+          if(!/prochain recalcul/.test(SOPK_MIGRATION_TEXTE))
+            return _echec('le texte ne dit pas quand la valeur change');
+          return /fixé cette valeur vous-même/.test(SOPK_MIGRATION_TEXTE)
+            ?true:_echec('le texte ne couvre pas le réglage manuel');})());
+        ok('planSousAncienneRegleSopk et la garde sont PURES',(()=>{
+          const u=_ath({id:'c13',sopk:true});
+          u.nutrition={macros:{on:{kcal:1800,p:144,l:Math.round(1.2*_planPoids(u)),g:100},off:{}}};
+          const avant=JSON.stringify(u);
+          planSousAncienneRegleSopk(u); migrationSopkADire(u); migrationSopkVue(u);
+          assertNoDiagnosisBoundNumericTarget();
+          return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
         // ── Le sélecteur coach ──────────────────────────────────────────
         ok('Le sélecteur de lipides propose toute l\'échelle',(()=>{
           const sauve=currentUser, sauveId=currentClientId;
@@ -47662,10 +47890,23 @@ function testExercices(){
             return /_propSetLip\(this\.value\)/.test(h)
               ?true:_echec('le sélecteur n\'est pas branché');
           } finally { currentUser=sauve; currentClientId=sauveId; }})());
-        ok('La suggestion se décale sous SOPK, et la note l\'accompagne',(()=>{
+        // Cette assertion verrouillait 1,2 g/kg sous SOPK. Elle a ete
+        // REMPLACEE, pas retiree : elle verifie maintenant l'absence de la
+        // regle. La note, elle, doit toujours sortir — c'est elle qui porte
+        // desormais ce que le produit a le droit de dire.
+        ok('Critère : SOPK → lipides identiques, à profil égal',(()=>{
           const sopk=_ath({id:'c2',sopk:true}), sans=_ath({id:'c3'});
-          if(lipSuggere(sopk)!==LIP_SUGGERE_SOPK) return _echec('suggestion '+lipSuggere(sopk));
-          if(lipSuggere(sans)!==LIP_G_PAR_KG) return _echec('suggestion sans SOPK');
+          if(lipSuggere(sopk)!==lipSuggere(sans))
+            return _echec(lipSuggere(sopk)+' contre '+lipSuggere(sans));
+          if(lipSuggere(sopk)!==LIP_G_PAR_KG) return _echec('suggestion '+lipSuggere(sopk));
+          // Le calcul complet, et pas seulement la suggestion : c'est lui qui
+          // arrive dans l'assiette.
+          const a=besoinsProposes(sopk,{}), b=besoinsProposes(sans,{});
+          if(!a||a.source===null||!b||b.source===null) return _echec('fixture muette');
+          if(a.on.l!==b.on.l) return _echec('lipides '+a.on.l+' contre '+b.on.l);
+          return a.on.g===b.on.g?true:_echec('glucides '+a.on.g+' contre '+b.on.g);})());
+        ok('Critère : la note sourcée accompagne toujours le SOPK, et elle seule',(()=>{
+          const sopk=_ath({id:'c2b',sopk:true}), sans=_ath({id:'c3b'});
           const h=_htmlDepartCoach(sopk);
           if(h.indexOf(escapeHtml(SOPK_NOTE_LIPIDES))<0) return _echec('note absente');
           return _htmlDepartCoach(sans).indexOf(escapeHtml(SOPK_NOTE_LIPIDES))<0
