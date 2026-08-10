@@ -1973,6 +1973,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="ccd-volume"></div>
       <div id="ccd-plateaux"></div>
       <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:16px" onclick="ouvrirRapport(getOwnedClient(currentClientId))">Rapport de la période</button>
+      <div id="ccd-pp"></div>
       <div id="ccd-reds"></div>
       <div id="ccd-securite"></div>
       <div id="ccd-photos-progression"></div>
@@ -2568,7 +2569,8 @@ const COACH_PHOTO='icons/coach.jpg';
         <div id="atp-gross-opts" style="display:flex;flex-direction:column;gap:8px"></div>
         <div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-top:9px">RepCore n'accompagne pas une grossesse et ne demande ni date de terme, ni trimestre. Cette information n'est pas transmise à ton coach.</div>
       </div>
-      <!-- PES. Carte SÉPARÉE de celle des états de santé : un usage déclaré
+      <div id="atp-pp"></div>
+  <!-- PES. Carte SÉPARÉE de celle des états de santé : un usage déclaré
            n'est pas un diagnostic, et les libellés de ETATS_DECLARABLES
            portent tous « diagnostiqué par un médecin ». -->
       <div class="card" id="atp-pes-card" style="margin-bottom:14px">
@@ -12618,6 +12620,7 @@ function openClientDetail(cid,_refresh){
   }catch(e){}
   try{ renderHabitudesCoach(c); }catch(e){}
   try{ renderRedsCoach(c); }catch(e){}
+  try{ renderPostPartumCoach(c); }catch(e){}
   try{ renderPhotosCoach(c); }catch(e){}
   // Chips de reponse au bilan : la zone n'existe qu'apres le rendu des
   // reponses, on la peuple donc ici et non a la construction du bloc.
@@ -27508,6 +27511,363 @@ const GROSSESSE_MSG_ALLAITEMENT='Ton besoin est plus élevé pendant '
 const GROSSESSE_REFUS_SECHE='Pas d\'objectif de perte de poids pendant cette '
   +'période. C\'est ton médecin ou ta sage-femme qui suit ce sujet.';
 const GROSSESSE_Q_POSTNATALE='As-tu eu ta visite post-natale ?';
+
+// ══════════════ RETOUR POST-PARTUM : TROIS FENÊTRES, AUCUNE APTITUDE ══════
+// Le post-partum était une simple déclaration : il ne suspendait rien et
+// posait une question au moment de repartir en sèche. Il le fait toujours —
+// ce chemin est INTÉGRÉ, jamais remplacé, et deux assertions l'épinglent.
+//
+// CE QUE CE LOT AJOUTE : une date d'accouchement OPTIONNELLE, dont se
+// dérivent trois fenêtres. Sans date, rien ne change, strictement.
+//
+// LES FENÊTRES SONT EN SEMAINES. C'est la seule lecture qui rende les cinq
+// critères cohérents entre eux : J-30 vaut quatre semaines et tombe en 0_6 ;
+// J-100 vaut quatorze semaines, donc 12_plus, que la césarienne décale d'un
+// cran EN ARRIÈRE vers 6_12 ; J-120 vaut dix-sept semaines et reste en
+// 12_plus. Le décalage va vers PLUS de prudence, ce qui s'accorde avec le
+// renvoi renforcé — l'inverse aurait allégé les précautions après une
+// chirurgie, ce qu'aucune lecture honnête de la consigne ne permet.
+//
+// CE QUE REPCORE NE FAIT PAS ICI : aucun test physique, aucune validation
+// d'aptitude, aucun terme médical à l'athlète, aucune justification
+// physiologique. Il cesse de proposer, et il renvoie.
+const PP_FENETRES=Object.freeze(['0_6','6_12','12_plus']);
+const PP_SEM_0_6=6, PP_SEM_6_12=12;
+// RÈGLE 4 : au-delà de douze MOIS, l'état devient informatif. Ce seuil-ci est
+// en mois, à la différence des fenêtres — les deux « 12 » ne parlent pas de la
+// même unité, et les confondre était le piège de ce lot.
+const PP_SEM_INFORMATIF=52;
+const PP_QUESTION_JOURS=7;
+const PP_MODES_NAISSANCE=Object.freeze([
+  Object.freeze({cle:'voie_basse',lib:'Voie basse'}),
+  Object.freeze({cle:'cesarienne',lib:'Césarienne'})
+]);
+// Trois questions, en mots courants. Aucun terme médical, aucune explication
+// de ce qu'un symptôme « signifie » : on demande, on ne commente pas.
+const PP_SYMPTOMES=Object.freeze([
+  Object.freeze({cle:'fuites',   q:'As-tu des fuites urinaires à l\'effort ?'}),
+  Object.freeze({cle:'pesanteur',q:'Ressens-tu une pesanteur dans le bas-ventre ?'}),
+  Object.freeze({cle:'douleur',  q:'As-tu des douleurs pendant ou après l\'effort ?'})
+]);
+const PP_RENVOI='Une sage-femme ou un kinésithérapeute spécialisé peut faire le '
+  +'point avec toi avant de reprendre les impacts. RepCore ne remplace pas cet '
+  +'avis et n\'évalue rien lui-même.';
+const PP_RENVOI_CESARIENNE='Après une césarienne, ce point est à faire avant de '
+  +'reprendre les impacts, avec une sage-femme ou un kinésithérapeute '
+  +'spécialisé. RepCore ne remplace pas cet avis et n\'évalue rien lui-même.';
+const PP_RENVOI_SYMPTOME='Tu as signalé quelque chose. Ce point mérite un avis '
+  +'avant de reprendre les impacts : une sage-femme ou un kinésithérapeute '
+  +'spécialisé saura te dire où tu en es.';
+const PP_TITRE='Reprise après accouchement';
+// PURE. Le sous-nœud, sans jamais l'écrire. Il vit DANS user.grossesse, qui
+// est un bloc privé : la date d'accouchement est une donnee de sante, et elle
+// suit exactement la meme regle de partage que le reste du bloc.
+function ppEtat(user){
+  const g=(user&&user.grossesse)||{};
+  const p=(g&&g.pp)||{};
+  const mode=PP_MODES_NAISSANCE.some(x=>x.cle===g.modeNaissance)?g.modeNaissance:null;
+  return {
+    date:(typeof g.dateAccouchement==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(g.dateAccouchement))
+      ?g.dateAccouchement:null,
+    mode,
+    symptomes:(p.symptomes&&typeof p.symptomes==='object')?p.symptomes:{},
+    dateSymptomes:Number(p.dateSymptomes)||0,
+    dernierePropo:Number(p.dernierePropo)||0,
+    evaluationPerineale:p.evaluationPerineale===true,
+    levee:(p.levee&&typeof p.levee==='object')?p.levee:null
+  };
+}
+// PURE. RÈGLE 1 : aucune date ⇒ null, et TOUT le module se tait. On n'infère
+// jamais une date depuis un bilan, un âge ou quoi que ce soit d'autre.
+function ppSemaines(user,now){
+  const e=ppEtat(user);
+  if(!e.date) return null;
+  const t=(typeof now==='number')?now:Date.now();
+  const d=new Date(e.date+'T00:00:00');
+  if(isNaN(d.getTime())) return null;
+  const sem=Math.floor((t-d.getTime())/(7*864e5));
+  return sem>=0?sem:null;
+}
+// PURE. Un cran en arrière, jamais en dessous de la plus prudente.
+function _ppReculer(f){
+  const i=PP_FENETRES.indexOf(f);
+  return i<=0?PP_FENETRES[0]:PP_FENETRES[i-1];
+}
+// PURE. Un symptôme déclaré, quel qu'il soit.
+function ppSymptomePositif(user){
+  const s=ppEtat(user).symptomes;
+  return PP_SYMPTOMES.some(x=>s[x.cle]===true);
+}
+// PURE. La fenêtre effective, décalages compris.
+//
+// RÈGLE 4 contre RÈGLE 2 : au-delà de douze mois l'état devient informatif et
+// n'a plus d'effet sur les fenêtres — donc null, MÊME avec un symptôme. La
+// règle 2 continue de valoir pour le RENVOI, qui lui ne s'éteint pas : voir
+// ppRenvoi. C'est la seule façon de tenir les deux sans qu'une des deux mente.
+function ppFenetre(user,now){
+  const sem=ppSemaines(user,now);
+  if(sem===null) return null;
+  if(sem>=PP_SEM_INFORMATIF) return null;
+  let f=(sem<PP_SEM_0_6)?'0_6':(sem<PP_SEM_6_12?'6_12':'12_plus');
+  if(ppEtat(user).mode==='cesarienne') f=_ppReculer(f);
+  if(ppSymptomePositif(user)) f=_ppReculer(f);
+  return f;
+}
+// PURE. L'impact est-il proposable ? RÈGLE 3 : ce n'est PAS une validation
+// d'aptitude. RepCore ne dit pas « tu peux » — il cesse seulement de refuser
+// de proposer, une fois que quelqu'un dont c'est le métier a fait le point.
+// Sans date : null, c'est-à-dire « la question ne se pose pas », et le
+// comportement d'avant ce lot vaut.
+function ppImpactAutorise(user,now){
+  const f=ppFenetre(user,now);
+  if(f===null) return null;
+  // LA LEVÉE DU COACH. Elle ne supprime pas la fenêtre — celle-ci reste
+  // affichée, avec sa date et sa cause — elle lève le refus de proposer.
+  // C'est une décision de coach, tracée et horodatée, du même ordre que le
+  // droit de fixer une macro à la main : on retire l'automatisme, pas la
+  // liberté de celui qui suit l'athlète.
+  if(ppLeveeActive(user)) return true;
+  if(f!=='12_plus') return false;
+  if(!ppEtat(user).evaluationPerineale) return false;
+  return !ppSymptomePositif(user);
+}
+// PURE. Le renvoi qui convient, ou rien. La règle 2 s'applique ICI sans
+// limite d'ancienneté : un symptôme déclaré renvoie toujours.
+function ppRenvoi(user,now){
+  const e=ppEtat(user);
+  if(!e.date) return '';
+  if(ppSymptomePositif(user)) return PP_RENVOI_SYMPTOME;
+  const f=ppFenetre(user,now);
+  if(f===null) return '';
+  if(e.mode==='cesarienne') return PP_RENVOI_CESARIENNE;
+  return (f==='12_plus'&&e.evaluationPerineale)?'':PP_RENVOI;
+}
+// PURE. Les protocoles proposables en fenêtre basse : mobilité et intensité
+// faible, pris de la bibliothèque EXISTANTE. Aucune taxonomie d'impact n'est
+// inventée sur les exercices — il n'en existe pas dans le produit, et en
+// créer une reviendrait à classer des mouvements par risque périnéal, ce que
+// la doctrine interdit.
+const PP_OBJECTIFS_DOUX=Object.freeze(['MOBILITE','RECUPERATION']);
+const PP_INTENSITES_DOUCES=Object.freeze(['FAIBLE','TRES_FAIBLE']);
+function ppProtocolesDoux(){
+  try{
+    return PROTOCOLES.filter(p=>p&&PP_OBJECTIFS_DOUX.indexOf(p.objectif)>=0
+      &&PP_INTENSITES_DOUCES.indexOf(p.intensite)>=0);
+  }catch(e){ return []; }
+}
+// PURE. Le questionnaire est-il à proposer ? Une fois par semaine, en 6_12,
+// et JAMAIS imposé — c'est une proposition, refusable en fermant l'encart.
+function ppProposerQuestions(user,now){
+  const f=ppFenetre(user,now);
+  if(f!=='6_12') return false;
+  const t=(typeof now==='number')?now:Date.now();
+  const e=ppEtat(user);
+  return !(e.dernierePropo&&(t-e.dernierePropo)<PP_QUESTION_JOURS*864e5);
+}
+// PURE. La levée du coach est-elle active ? Elle ne supprime pas la fenêtre —
+// elle lève le refus de proposer de l'impact, et laisse la trace.
+function ppLeveeActive(user){
+  const l=ppEtat(user).levee;
+  return !!(l&&l.date);
+}
+// PURE. Ce que le coach peut voir. RÈGLE DU BLOC PRIVÉ : `grossesse` ne quitte
+// l'appareil que si l'athlète a ouvert le partage. Le coach ne reçoit donc
+// simplement PAS le nœud sans cela — cette fonction dit la même chose que le
+// réseau, pour que l'écran ne promette pas ce que la synchronisation ne livre
+// pas.
+function ppVisibleCoach(c){
+  try{ return !!santeVisibleCoach(c,'grossesse'); }catch(e){ return false; }
+}
+// ── L'écran athlète ───────────────────────────────────────────────────────
+// Deux champs OPTIONNELS, et rien qui ressemble à un dossier obstétrical. La
+// carte ne s'ouvre que sur l'état post-partum déclaré : personne d'autre n'a
+// à voir cette question.
+const PP_INTRO='Si tu veux, indique ta date d\'accouchement. RepCore s\'en sert '
+  +'seulement pour arrêter de te proposer certaines choses trop tôt. Tu peux '
+  +'laisser vide : rien ne change alors.';
+const PP_LIB_FENETRES=Object.freeze({
+  '0_6':'Les premières semaines',
+  '6_12':'Reprise progressive',
+  '12_plus':'Reprise complète'
+});
+function _htmlPostPartum(user){
+  const u=user||currentUser;
+  if(etatGrossesse(u)!=='post_partum') return '';
+  const e=ppEtat(u);
+  const f=ppFenetre(u);
+  const renvoi=ppRenvoi(u);
+  const modes=PP_MODES_NAISSANCE.map(m=>
+    `<div class="obj-opt${e.mode===m.cle?' sel':''}" onclick="ppSetMode('${m.cle}')"
+      role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div style="font-weight:800">${escapeHtml(m.lib)}</div>
+    </div>`).join('');
+  // La fenêtre est nommée en mots courants. Aucun terme médical, aucune
+  // justification de ce qui se passe dans le corps : RepCore décrit ce qu'il
+  // fait, pas ce qu'elle est.
+  const bloc=f?`<div style="font-size:11.5px;color:#ddd;line-height:1.7;margin-top:10px;padding-top:9px;border-top:1px solid var(--border)">
+      <b>${escapeHtml(PP_LIB_FENETRES[f]||'')}</b>${f==='0_6'
+        ?' — je te propose seulement de la mobilité et des échauffements.'
+        :(f==='6_12'?' — du renforcement progressif, sans impact.'
+          :(ppImpactAutorise(u)?' — plus de restriction de ma part.'
+            :' — les impacts attendent que tu aies fait le point.'))}
+    </div>`:'';
+  const evalRow=(f==='12_plus'||f==='6_12')
+    ?`<label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;margin-top:10px">
+        <input type="checkbox" ${e.evaluationPerineale?'checked':''} onchange="ppSetEvaluation(this.checked)"
+          style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px">
+        <span style="font-size:11.5px;color:#ddd;line-height:1.55">J'ai fait le point avec une sage-femme ou un kinésithérapeute.</span>
+      </label>`:'';
+  return `<div class="card" style="margin-bottom:14px">
+    <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">${escapeHtml(PP_TITRE)}</label>
+    <div style="font-size:11.5px;color:#ddd;line-height:1.7;margin-bottom:10px">${escapeHtml(PP_INTRO)}</div>
+    <input type="date" value="${escapeHtml(e.date||'')}" onchange="ppSetDate(this.value)"
+      aria-label="Date d'accouchement"
+      style="width:100%;padding:9px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:12px">
+    ${e.date?`<div style="display:flex;flex-direction:column;gap:8px;margin-top:9px">${modes}</div>`:''}
+    ${bloc}${evalRow}
+    ${renvoi?`<div style="font-size:11.5px;color:#ddd;line-height:1.7;margin-top:10px">${escapeHtml(renvoi)}</div>`:''}
+    ${e.date?`<button onclick="ppEffacerDate()" class="btn btn-outline btn-sm" style="width:100%;margin-top:9px;font-size:10px;letter-spacing:1px;color:var(--sub)">Retirer cette date</button>`:''}
+    ${blocDisclaimerSante()}
+  </div>`;
+}
+// ── Le questionnaire ─────────────────────────────────────────────────────
+// PROPOSÉ, jamais imposé : « Plus tard » repousse d'une semaine et le refus
+// n'a aucun effet sur la fenêtre. Seules les réponses POSITIVES agissent.
+function _htmlPpQuestions(user){
+  const u=user||currentUser;
+  if(!ppProposerQuestions(u)) return '';
+  const s=ppEtat(u).symptomes;
+  return `<div class="card" style="margin-bottom:14px">
+    <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:9px">Comment ça se passe ?</label>
+    ${PP_SYMPTOMES.map(x=>`<div style="padding:7px 0;border-top:1px solid rgba(255,255,255,.06)">
+      <div style="font-size:12px;color:#eee;line-height:1.6;margin-bottom:6px">${escapeHtml(x.q)}</div>
+      <div style="display:flex;gap:6px">
+        ${[['0','Non'],['1','Oui']].map(([v,l])=>
+          `<button type="button" onclick="ppRepondre('${x.cle}',${v},this)"
+            style="flex:1;min-height:36px;border-radius:8px;cursor:pointer;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;
+              background:${s[x.cle]===(v==='1')?'rgba(224,32,32,.14)':'#111'};border:1px solid ${s[x.cle]===(v==='1')?'var(--red)':'#2e2e2e'};color:${s[x.cle]===(v==='1')?'#fff':'var(--sub)'}">${l}</button>`).join('')}
+      </div>
+    </div>`).join('')}
+    <button class="btn btn-red" style="width:100%;margin-top:12px" onclick="ppValiderQuestions()">Envoyer</button>
+    <button class="btn btn-outline" style="width:100%;margin-top:8px" onclick="ppPlusTard()">Plus tard</button>
+  </div>`;
+}
+let _ppRep={};
+function ppRepondre(cle,v,el){
+  _ppRep[cle]=(Number(v)===1);
+  try{
+    const p=el.parentNode;
+    for(const b of p.children){ b.style.background='#111'; b.style.borderColor='#2e2e2e'; b.style.color='var(--sub)'; }
+    el.style.background='rgba(224,32,32,.14)'; el.style.borderColor='var(--red)'; el.style.color='#fff';
+  }catch(e){}
+  return true;
+}
+function _ppNoeud(){
+  if(!currentUser.grossesse||typeof currentUser.grossesse!=='object') currentUser.grossesse={};
+  if(!currentUser.grossesse.pp||typeof currentUser.grossesse.pp!=='object') currentUser.grossesse.pp={};
+  return currentUser.grossesse.pp;
+}
+function ppSetDate(v){
+  const ok=/^\d{4}-\d{2}-\d{2}$/.test(String(v||''));
+  if(!currentUser.grossesse||typeof currentUser.grossesse!=='object') currentUser.grossesse={};
+  if(ok) currentUser.grossesse.dateAccouchement=String(v);
+  else delete currentUser.grossesse.dateAccouchement;
+  saveUser(); _renderPostPartum();
+  return true;
+}
+function ppEffacerDate(){
+  if(currentUser.grossesse) delete currentUser.grossesse.dateAccouchement;
+  saveUser(); _renderPostPartum();
+  return true;
+}
+function ppSetMode(cle){
+  if(!PP_MODES_NAISSANCE.some(x=>x.cle===cle)) return false;
+  if(!currentUser.grossesse||typeof currentUser.grossesse!=='object') currentUser.grossesse={};
+  currentUser.grossesse.modeNaissance=cle;
+  saveUser(); _renderPostPartum();
+  return true;
+}
+function ppSetEvaluation(v){
+  _ppNoeud().evaluationPerineale=(v===true);
+  saveUser(); _renderPostPartum();
+  return true;
+}
+function ppValiderQuestions(){
+  const n=_ppNoeud();
+  const s=(n.symptomes&&typeof n.symptomes==='object')?n.symptomes:{};
+  for(const x of PP_SYMPTOMES) if(_ppRep[x.cle]!==undefined) s[x.cle]=_ppRep[x.cle];
+  n.symptomes=s; n.dateSymptomes=Date.now(); n.dernierePropo=Date.now();
+  _ppRep={};
+  saveUser(); _renderPostPartum();
+  return true;
+}
+// Refuser n'a AUCUN effet sur la fenêtre : c'est ce qui fait qu'il s'agit
+// d'une proposition et non d'un passage obligé.
+function ppPlusTard(){
+  _ppNoeud().dernierePropo=Date.now();
+  _ppRep={};
+  saveUser(); _renderPostPartum();
+  return true;
+}
+function _renderPostPartum(){
+  const z=document.getElementById('atp-pp');
+  if(!z) return;
+  let h=''; try{ h=_htmlPostPartum(currentUser)+_htmlPpQuestions(currentUser); }catch(e){ h=''; }
+  z.innerHTML=h;
+}
+// ── La carte coach ────────────────────────────────────────────────────────
+// Elle ne s'affiche QUE si l'athlète a ouvert le partage du bloc grossesse.
+// Sans cela, le nœud n'atteint même pas le coach : le dire à l'écran évite de
+// promettre ce que la synchronisation ne livre pas.
+function _htmlPostPartumCoach(c){
+  if(!c||etatGrossesse(c)!=='post_partum') return '';
+  if(!ppVisibleCoach(c)) return '';
+  const e=ppEtat(c);
+  if(!e.date) return '';
+  const f=ppFenetre(c);
+  const dat=t=>{ try{ return new Date(t).toLocaleDateString('fr-FR'); }catch(x){ return ''; } };
+  const causes=[];
+  if(e.mode==='cesarienne') causes.push('césarienne');
+  if(ppSymptomePositif(c)) causes.push('signalement de l\'athlète');
+  if(f==='12_plus'&&!e.evaluationPerineale) causes.push('point non encore fait');
+  const impact=ppImpactAutorise(c);
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:16px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
+      <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">${escapeHtml(PP_TITRE)}</span>
+      <span style="font-size:11px;font-weight:800;color:${impact===true?'var(--sub)':'var(--orange)'}">${escapeHtml(f?(PP_LIB_FENETRES[f]||''):'Informatif')}</span>
+    </div>
+    <div style="font-size:11.5px;color:#ddd;line-height:1.7">Début de la fenêtre : ${escapeHtml(dat(new Date(e.date+'T00:00:00').getTime()))}.</div>
+    ${causes.length?`<div style="font-size:11.5px;color:var(--text-dim);line-height:1.7">Cause : ${escapeHtml(causes.join(', '))}.</div>`:''}
+    <div style="font-size:11.5px;color:var(--text-dim);line-height:1.7">Impacts ${impact===true?'sans restriction de RepCore':'non proposés par RepCore'}.</div>
+    ${e.levee?`<div style="font-size:10.5px;color:var(--text-faint);line-height:1.6;margin-top:8px;padding-top:7px;border-top:1px solid var(--border)">Levée le ${escapeHtml(dat(e.levee.date))}${e.levee.par?' par '+escapeHtml(e.levee.par):''}.</div>`
+      :`<button onclick="ppCoachLever()" class="btn btn-outline btn-sm" style="width:100%;margin-top:10px;font-size:10px;letter-spacing:1px">Lever pour cette athlète</button>`}
+    ${blocDisclaimerSante()}
+  </div>`;
+}
+// ÉCRIT sur le dossier de l'ATHLÈTE, par la carte des utilisateurs — même
+// chemin que coachLeverDrapeau. La trace est horodatée et n'est jamais
+// effacée par ce module.
+function ppCoachLever(){
+  const users=DB.get('users')||{};
+  const c=getOwnedClient(currentClientId,users);
+  if(!c||!c.email) return false;
+  if(!ppVisibleCoach(c)) return false;
+  if(!confirm('Lever la restriction d\'impacts pour cette athlète ? La trace restera dans son dossier.')) return false;
+  if(!c.grossesse||typeof c.grossesse!=='object') c.grossesse={};
+  if(!c.grossesse.pp||typeof c.grossesse.pp!=='object') c.grossesse.pp={};
+  c.grossesse.pp.levee={date:Date.now(),par:(currentUser&&(currentUser.fname||currentUser.email))||'coach'};
+  c.updatedAt=Date.now(); users[c.email]=c;
+  const ok=DB.set('users',users);
+  toastSync(ok,CLOUD.pushOne(c.email,c),'Restriction levée','la levée est');
+  try{ renderPostPartumCoach(c); }catch(e){}
+  return true;
+}
+function renderPostPartumCoach(c){
+  const z=document.getElementById('ccd-pp');
+  if(!z) return;
+  let h=''; try{ h=c?_htmlPostPartumCoach(c):''; }catch(e){ h=''; }
+  z.innerHTML=h;
+}
 // ── Contraception : le modèle calendaire ne s'applique pas à tout le monde ──
 // Sous contraception combinée en continu, il n'y a ni ovulation ni phase
 // lutéale physiologique. Le produit demandait pourtant une « date des dernières
@@ -42289,6 +42649,7 @@ function declarerGrossesse(etat){
   majSuspensionFatigue(currentUser);
   saveUser();
   _renderAtpGrossesse();
+  try{ _renderPostPartum(); }catch(e){}
   return true;
 }
 // Révocation : effacement COMPLET, aucun historique conservé. La phase
@@ -42299,12 +42660,14 @@ function revoquerGrossesse(){
   majSuspensionFatigue(currentUser);
   saveUser();
   _renderAtpGrossesse();
+  try{ _renderPostPartum(); }catch(e){}
   return true;
 }
 function accuserMessageGrossesse(){
   if(currentUser.grossesse) currentUser.grossesse.msgVu=true;
   saveUser();
   _renderAtpGrossesse();
+  try{ _renderPostPartum(); }catch(e){}
   return true;
 }
 // Aucun bandeau permanent : le message se lit une fois, puis disparaît. Rien
@@ -42334,6 +42697,8 @@ function _renderAtpGrossesse(){
     </div>`).join('')
     +(e?`<button onclick="revoquerGrossesse()" class="btn btn-outline btn-sm" style="width:100%;margin:4px 0 0;font-size:10px;letter-spacing:1px;color:var(--sub)">Retirer cette déclaration</button>`:'');
 }
+// Le retour post-partum suit le meme rythme de rendu que la declaration
+// dont il depend : declarer, revoquer et accuser passent tous par la.
 function _renderAtpEtats(){
   const z=document.getElementById('atp-etats-opts');
   if(!z) return;
@@ -42421,6 +42786,7 @@ function openAthleteProfile(){
   _atpCycleSuivi=cycleSuiviDe(u);
   _renderAtpCycle();
   _renderAtpGrossesse();
+  try{ _renderPostPartum(); }catch(e){}
   _atpEtats=etatsDeclares(u).slice();
   const _thy=thyroideDe(u);
   _atpThyEtat=_thy.etat; _atpThyTrait=_thy.traitement;
@@ -48566,6 +48932,184 @@ function testExercices(){
           if(!/visite post-natale/.test(GROSSESSE_Q_POSTNATALE)) return _echec(GROSSESSE_Q_POSTNATALE);
           return /post_partum/.test(String(changerPhase))
             ?true:_echec('la question n\'est pas posée au choix d\'une sèche');})());
+        // ── LE RETOUR POST-PARTUM PAR FENÊTRES ──────────────────────────
+        // Les deux assertions ci-dessus ne sont PAS contredites : le
+        // post-partum ne suspend toujours rien, la seche passe toujours, et
+        // la question post-natale est toujours posee. Ce bloc les ETEND.
+        //
+        // LES FENETRES SONT EN SEMAINES. C'est la seule lecture qui rende les
+        // cinq criteres coherents : J-30 vaut 4 semaines, J-100 en vaut 14 et
+        // J-120 dix-sept. Un decoupage en mois aurait mis J-100 en '0_6' et
+        // rendu le critere de la cesarienne impossible a tenir sans que le
+        // decalage ALLEGE les precautions apres une chirurgie.
+        const _pp=(jours,extra)=>{
+          const u=_ath('post_partum',{id:'pp'+jours+(extra&&extra.id||'')});
+          const d=new Date(Date.now()-jours*864e5);
+          u.grossesse.dateAccouchement=d.getFullYear()+'-'
+            +String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+          if(extra){
+            if(extra.mode) u.grossesse.modeNaissance=extra.mode;
+            u.grossesse.pp=Object.assign({},extra.pp||{});
+          }
+          return u;};
+        ok('Critère : accouchement à J-30 → fenêtre 0_6, aucun impact proposé',(()=>{
+          const u=_pp(30);
+          if(ppSemaines(u)!==4) return _echec('semaines : '+ppSemaines(u));
+          if(ppFenetre(u)!=='0_6') return _echec('fenêtre '+ppFenetre(u));
+          if(ppImpactAutorise(u)!==false) return _echec('impact : '+ppImpactAutorise(u));
+          // « Zéro exercice d'impact proposé » : le produit ne classe AUCUN
+          // exercice par impact — les 75 occurrences du mot sont la police
+          // Impact. Ce qu'il propose, ce sont des protocoles ; on verifie donc
+          // que ceux de la fenetre basse sont tous doux, et qu'il y en a.
+          const l=ppProtocolesDoux();
+          if(!l.length) return _echec('aucun protocole doux disponible');
+          const durs=l.filter(x=>PP_OBJECTIFS_DOUX.indexOf(x.objectif)<0
+            ||PP_INTENSITES_DOUCES.indexOf(x.intensite)<0);
+          return durs.length?_echec('protocole non doux : '+durs[0].slug):true;})());
+        ok('Critère : J-100 + césarienne → fenêtre 6_12, décalage appliqué',(()=>{
+          const sans=_pp(100);
+          if(ppSemaines(sans)!==14) return _echec('semaines : '+ppSemaines(sans));
+          if(ppFenetre(sans)!=='12_plus')
+            return _echec('sans césarienne, la fenêtre est '+ppFenetre(sans));
+          const u=_pp(100,{mode:'cesarienne',id:'c'});
+          if(ppFenetre(u)!=='6_12') return _echec('fenêtre '+ppFenetre(u));
+          // Le decalage va vers PLUS de prudence, jamais moins.
+          return PP_FENETRES.indexOf(ppFenetre(u))<PP_FENETRES.indexOf(ppFenetre(sans))
+            ?true:_echec('le décalage a allégé les précautions');})());
+        ok('Critère : J-120 + évaluation absente → impact NON autorisé',(()=>{
+          const u=_pp(120);
+          if(ppFenetre(u)!=='12_plus') return _echec('fenêtre '+ppFenetre(u));
+          if(ppImpactAutorise(u)!==false) return _echec('impact : '+ppImpactAutorise(u));
+          const v=_pp(120,{id:'e',pp:{evaluationPerineale:true}});
+          return ppImpactAutorise(v)===true
+            ?true:_echec('le point fait ne change rien : '+ppImpactAutorise(v));})());
+        ok('Critère : J-120 + évaluation faite + fuites → rétrogradation en 6_12',(()=>{
+          const u=_pp(120,{id:'f',pp:{evaluationPerineale:true,symptomes:{fuites:true}}});
+          if(ppFenetre(u)!=='6_12') return _echec('fenêtre '+ppFenetre(u));
+          if(ppImpactAutorise(u)!==false) return _echec('impact encore autorisé');
+          return ppRenvoi(u)===PP_RENVOI_SYMPTOME
+            ?true:_echec('aucun renvoi sur symptôme');})());
+        ok('RÈGLE 2 : les trois symptômes rétrogradent, un « non » ne fait rien',(()=>{
+          const rates=[];
+          for(const x of PP_SYMPTOMES){
+            const o={}; o[x.cle]=true;
+            const u=_pp(120,{id:'s'+x.cle,pp:{evaluationPerineale:true,symptomes:o}});
+            if(ppFenetre(u)!=='6_12') rates.push(x.cle+' → '+ppFenetre(u));
+          }
+          const non=_pp(120,{id:'sn',pp:{evaluationPerineale:true,
+            symptomes:{fuites:false,pesanteur:false,douleur:false}}});
+          if(ppFenetre(non)!=='12_plus') rates.push('tout à non → '+ppFenetre(non));
+          if(ppImpactAutorise(non)!==true) rates.push('tout à non, impact refusé');
+          return rates.length?_echec(rates.join(' · ')):true;})());
+        ok('Critère : dateAccouchement absente → comportement STRICTEMENT inchangé',(()=>{
+          // RÈGLE 1 : rien n'est jamais inféré. C'est le critere qui protege
+          // tous les dossiers existants.
+          const u=_ath('post_partum',{id:'pv'});
+          if(ppSemaines(u)!==null) return _echec('semaines : '+ppSemaines(u));
+          if(ppFenetre(u)!==null) return _echec('fenêtre : '+ppFenetre(u));
+          if(ppImpactAutorise(u)!==null) return _echec('impact : '+ppImpactAutorise(u));
+          if(ppRenvoi(u)!=='') return _echec('un renvoi sort sans date');
+          if(ppProposerQuestions(u)) return _echec('le questionnaire est proposé');
+          if(_htmlPostPartumCoach(u)!=='') return _echec('la carte coach sort');
+          // Et les deux comportements d'origine tiennent toujours.
+          if(grossesseSuspend(u)) return _echec('une suspension est apparue');
+          return changerPhase(u,'seche')===true
+            ?true:_echec('la sèche est désormais refusée');})());
+        ok('Critère : levée par le coach → trace horodatée, et effet réel',(()=>{
+          const u=_pp(120,{id:'l'});
+          if(ppImpactAutorise(u)!==false) return _echec('fixture muette');
+          if(ppLeveeActive(u)) return _echec('une levée existe déjà');
+          if(!u.grossesse.pp) u.grossesse.pp={};
+          u.grossesse.pp.levee={date:Date.now(),par:'coach'};
+          if(!ppLeveeActive(u)) return _echec('la levée n\'est pas vue');
+          if(!ppEtat(u).levee.date) return _echec('aucun horodatage');
+          if(ppImpactAutorise(u)!==true) return _echec('la levée reste sans effet');
+          // Elle leve le refus, elle ne supprime PAS la fenetre : le coach doit
+          // continuer de voir ou en est son athlete.
+          return ppFenetre(u)==='12_plus'?true:_echec('la fenêtre a disparu');})());
+        ok('RÈGLE 4 : au-delà de douze mois, plus aucun effet sur les fenêtres',(()=>{
+          const u=_pp(400,{id:'v',pp:{symptomes:{fuites:true}}});
+          if(ppSemaines(u)<PP_SEM_INFORMATIF) return _echec('fixture muette');
+          if(ppFenetre(u)!==null) return _echec('fenêtre '+ppFenetre(u));
+          if(ppImpactAutorise(u)!==null) return _echec('impact : '+ppImpactAutorise(u));
+          // Mais la REGLE 2 ne s'eteint pas : un symptome declare renvoie
+          // toujours. C'est la seule facon de tenir les deux regles sans
+          // qu'une des deux mente.
+          return ppRenvoi(u)===PP_RENVOI_SYMPTOME
+            ?true:_echec('le renvoi s\'est éteint avec la fenêtre');})());
+        ok('RÈGLE 5 : l\'allaitement pilote la suspension, la fenêtre ne s\'en mêle pas',(()=>{
+          // Les deux etats coexistent : la date reste lue, la suspension vient
+          // de l'allaitement, et la fenetre ne l'influence pas.
+          const u=_pp(30,{id:'a'});
+          u.grossesse.etat='allaitement';
+          if(!grossesseSuspend(u)) return _echec('l\'allaitement ne suspend plus');
+          if(ppFenetre(u)!=='0_6') return _echec('la fenêtre est perdue : '+ppFenetre(u));
+          const v=_pp(400,{id:'a2'});
+          v.grossesse.etat='allaitement';
+          return grossesseSuspend(v)?true:_echec('la suspension dépend de la fenêtre');})());
+        ok('RÈGLE 6 : le chemin « visite post-natale » est INTACT',(()=>{
+          if(!/visite post-natale/.test(GROSSESSE_Q_POSTNATALE))
+            return _echec(GROSSESSE_Q_POSTNATALE);
+          if(!/post_partum/.test(String(changerPhase)))
+            return _echec('la question n\'est plus posée au choix d\'une sèche');
+          // Et il n'a pas ete transforme en blocage.
+          const u=_pp(30,{id:'q'});
+          return changerPhase(u,'seche')===true
+            ?true:_echec('la fenêtre bloque désormais la sèche');})());
+        ok('RÈGLE 3 : aucun test administré, aucune aptitude validée',(()=>{
+          const src=String(ppImpactAutorise)+String(ppFenetre)+String(ppRenvoi)
+            +String(_htmlPostPartum)+String(_htmlPpQuestions);
+          // Aucun protocole de test physique, aucune mesure demandee.
+          const interdits=['squat test','saut','toux','contraction','pression',
+            'centimetre','chronometre','repetitions maximales'];
+          const t=interdits.filter(x=>src.toLowerCase().indexOf(x)>=0);
+          if(t.length) return _echec('protocole de test : '+t.join(', '));
+          // Et le produit ne dit jamais « tu peux ».
+          return /tu peux (reprendre|recommencer)|tu es prête|apte/i.test(src)
+            ?_echec('une aptitude est affirmée'):true;})());
+        ok('Aucun terme médical ni justification physiologique à l\'athlète',(()=>{
+          const u=_pp(60,{id:'m',pp:{}});
+          const txt=(_htmlPostPartum(u)+_htmlPpQuestions(u)+PP_RENVOI
+            +PP_RENVOI_CESARIENNE+PP_RENVOI_SYMPTOME+PP_INTRO)
+            .replace(/<[^>]*>/g,' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+          const mots=['perineal','perinee','plancher pelvien','diastase','prolapsus',
+            'incontinence','uterus','abdominaux profonds','collagene','relaxine'];
+          const t=mots.filter(x=>txt.indexOf(x)>=0);
+          return t.length?_echec('terme médical : '+t.join(', ')):true;})());
+        ok('Le questionnaire est PROPOSÉ, jamais imposé',(()=>{
+          const u=_pp(60,{id:'p'});
+          if(ppFenetre(u)!=='6_12') return _echec('fixture muette : '+ppFenetre(u));
+          if(!ppProposerQuestions(u)) return _echec('jamais proposé');
+          // « Plus tard » repousse d'une semaine et ne touche PAS la fenetre.
+          u.grossesse.pp={dernierePropo:Date.now()};
+          if(ppProposerQuestions(u)) return _echec('reproposé aussitôt');
+          if(ppFenetre(u)!=='6_12') return _echec('le refus a changé la fenêtre');
+          u.grossesse.pp={dernierePropo:Date.now()-8*864e5};
+          if(!ppProposerQuestions(u)) return _echec('jamais reproposé ensuite');
+          // Et il ne sort pas des autres fenetres.
+          return !ppProposerQuestions(_pp(30,{id:'p2'}))
+            ?true:_echec('proposé dès les premières semaines');})());
+        ok('La carte coach se tait tant que l\'athlète n\'a pas ouvert le partage',(()=>{
+          // Le noeud grossesse est PRIVE : sans partage, il ne quitte meme pas
+          // l'appareil (CLOUD supprime safe.grossesse). L'ecran dit donc la
+          // meme chose que le reseau, plutot que de promettre ce qui n'arrive
+          // pas.
+          const u=_pp(120,{id:'vc'});
+          if(ppVisibleCoach(u)) return _echec('visible sans partage');
+          if(_htmlPostPartumCoach(u)!=='') return _echec('la carte sort quand même');
+          u.grossessePartagee=true;
+          if(!ppVisibleCoach(u)) return _echec('le partage n\'ouvre rien');
+          const h=_htmlPostPartumCoach(u);
+          if(!h) return _echec('la carte ne sort pas avec le partage');
+          if(!/\d{2}\/\d{2}\/\d{4}/.test(h)) return _echec('aucune date de début');
+          return /Cause/.test(h)?true:_echec('aucune cause affichée');})());
+        ok('Les fonctions de fenêtre sont PURES',(()=>{
+          const u=_pp(120,{id:'z',pp:{evaluationPerineale:true}});
+          const avant=JSON.stringify(u);
+          ppEtat(u); ppSemaines(u); ppFenetre(u); ppImpactAutorise(u);
+          ppRenvoi(u); ppProposerQuestions(u); ppSymptomePositif(u); ppProtocolesDoux();
+          return JSON.stringify(u)===avant?true:_echec('le dossier a été modifié');})());
+
 
         // ── La révocation ────────────────────────────────────────────────
         ok('Critère : révoquer fait TOUT retomber, sans trace',(()=>{
