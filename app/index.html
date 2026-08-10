@@ -1201,9 +1201,12 @@ const COACH_PHOTO='icons/coach.jpg';
     <div style="background:rgba(224,32,32,.07);border:1px solid rgba(224,32,32,.24);border-radius:10px;padding:14px 16px;margin-top:4px">
       <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:var(--red);font-weight:700;margin-bottom:6px">ℹ️ ESPACE COACH : TARIFS</div>
       <!-- Cet écran est lu AVANT l'inscription, donc par de futurs coachs affiliés.
-           L'ancienne formule promettait « des codes d'accès gratuits » que seul le
+           L'encart disait ce que le COACH paie, jamais ce que ses athlètes
+             paient. On ne dit pas non plus « compte coach gratuit » tout court :
+             c'est vrai pour UN athlète, puis les paliers Coach et Pro s'appliquent.
+             L'ancienne formule promettait « des codes d'accès gratuits » que seul le
            créateur peut émettre : la promesse ne pouvait pas être tenue. -->
-      <div style="font-size:11px;color:rgba(255,255,255,.82);line-height:1.6"><strong style="color:#fff">Gratuit pour votre premier client</strong>, sans limite de durée et sans carte bancaire. Au-delà, un palier suit le nombre d'athlètes que tu accompagnes. Tu génères tes propres codes à donner à tes athlètes : chaque code les rattache à ton suivi et leur ouvre l'accès pour la durée que tu choisis, <strong style="color:#fff">jusqu'à 12 mois</strong>.</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.82);line-height:1.6"><strong style="color:#fff">Gratuit pour votre premier client</strong>, sans limite de durée et sans carte bancaire. Au-delà, un palier suit le nombre d'athlètes que tu accompagnes. Tu génères tes propres codes à donner à tes athlètes : chaque code les rattache à ton suivi et leur ouvre l'accès pour la durée que tu choisis, <strong style="color:#fff">jusqu'à 12 mois</strong>. <strong style="color:#fff">Tes athlètes ne paient rien</strong> tant qu'ils utilisent un de tes codes. Sans code, l'accès en autonomie leur coûte 9,95&nbsp;€/mois, sans engagement.</div>
     </div>
   </div>
 </div>
@@ -53448,6 +53451,77 @@ function testExercices(){
           // Et le paywall autonome reste intact : ce lot ne l'a pas touché.
           return /9,95/.test(String(loadAccessGate))
             ?true:_echec('la mention autonome a disparu de loadAccessGate');})());
+        // ── LE PRIX AVANT LE COMPTE ─────────────────────────────────────
+        // Un visiteur doit atteindre 9,95 €/mois en DEUX clics, sans avoir
+        // saisi la moindre donnee. Rien ne tenait ce parcours — et c'est celui
+        // qui decide si quelqu'un s'inscrit ou referme.
+        ok('Critère : deux clics de l\'accueil au prix, sans rien saisir',(()=>{
+          const _sv=currentUser;
+          const _act=[...document.querySelectorAll('.screen.active')].map(e=>e.id);
+          try{
+            currentUser=null;
+            document.querySelectorAll('.screen.active').forEach(e=>e.classList.remove('active'));
+            document.getElementById('s-welcome').classList.add('active');
+            // Clic 1 : un BOUTON natif, atteignable au clavier sans rien ajouter.
+            const b=[...document.querySelectorAll('#s-welcome button')]
+              .find(e=>/ATHL/i.test(e.innerText||''));
+            if(!b) return _echec('« espace athlète » introuvable sur l\'accueil');
+            b.click();
+            if((document.querySelector('.screen.active')||{}).id!=='s-athlete-entry')
+              return _echec('le premier clic ne mène pas à l\'espace athlète');
+            // Clic 2 : la carte, qui doit PORTER le prix — un libellé muet
+            // obligerait a cliquer pour l'apprendre, donc a trois clics.
+            const carte=[...document.querySelectorAll('#s-athlete-entry [role="button"],#s-athlete-entry div[onclick]')]
+              .find(e=>/PAS DE CODE/i.test(e.innerText||''));
+            if(!carte) return _echec('la carte « je n\'ai pas de code » a disparu');
+            const lib=(carte.innerText||'').replace(/\s+/g,' ');
+            if(lib.indexOf('9,95')<0) return _echec('la carte n\'annonce pas le prix : '+lib.slice(0,60));
+            carte.click();
+            if((document.querySelector('.screen.active')||{}).id!=='s-subscribe')
+              return _echec('le second clic ne mène pas à l\'abonnement');
+            // Et AUCUN champ de saisie personnelle sur le chemin.
+            const champs=document.querySelectorAll('#s-subscribe input[type="email"],#s-subscribe input[type="password"]');
+            return champs.length===0
+              ?true:_echec(champs.length+' champ(s) personnel(s) sur l\'écran de prix');
+          } finally { currentUser=_sv;
+            document.querySelectorAll('.screen.active').forEach(e=>e.classList.remove('active'));
+            _act.forEach(id=>document.getElementById(id)?.classList.add('active')); }})());
+        ok('Sans compte : le prix s\'affiche, PayPal ne démarre PAS',(()=>{
+          // onApprove ecrit dans currentUser. Lancer PayPal a null creerait un
+          // abonnement que personne ne pourrait rattacher — un paiement encaisse
+          // sans dossier.
+          const src=String(loadSubscribePage);
+          const iPaliers=src.indexOf('_renderSubPaliers()');
+          const iTest=src.indexOf('if(!currentUser)');
+          if(iPaliers<0||iTest<0) return _echec('la structure de l\'écran a changé');
+          // Les paliers sont rendus AVANT le test : c'est ce qui rend le prix
+          // visible sans compte.
+          if(!(iPaliers<iTest)) return _echec('le prix n\'est rendu qu\'après le test de connexion');
+          const branche=src.slice(iTest,iTest+900);
+          if(!/Créer mon compte pour souscrire/.test(branche))
+            return _echec('aucun appel à l\'action de remplacement');
+          if(!/goRegisterPourSouscrire/.test(branche))
+            return _echec('le retour vers l\'abonnement n\'est plus posé');
+          // Et le bouton PayPal n'est pas monte dans cette branche.
+          return !/paypal\.Buttons/.test(branche)
+            ?true:_echec('PayPal est initialisé sans compte');})());
+        ok('L\'écran coach dit ce que le COACH paie ET ce que ses athlètes paient',(()=>{
+          // L'encart ne parlait que du coach : il pouvait s'inscrire, puis
+          // recruter, sans savoir quel prix annoncer a ses athletes.
+          const z=document.getElementById('s-coach-entry');
+          if(!z) return _echec('écran coach absent');
+          const t=(z.innerText||z.textContent||'').replace(/\s+/g,' ');
+          if(!/[Gg]ratuit pour votre premier client/.test(t))
+            return _echec('la gratuité du premier client n\'est plus dite');
+          if(t.indexOf('9,95')<0&&t.indexOf('9,95')<0)
+            return _echec('le tarif des athlètes n\'est pas annoncé au coach');
+          if(!/ne paient rien/.test(t))
+            return _echec('la gratuité par code n\'est plus dite');
+          // On ne promet PAS un compte coach gratuit tout court : c'est vrai
+          // pour UN athlète, puis les paliers s'appliquent.
+          return !/compte coach (est )?gratuit\b/i.test(t)
+            ?true:_echec('l\'écran promet un compte coach gratuit sans réserve');})());
+
 
         // ── Bascule du payeur, étape 5 : l'écran « Mon abonnement » ──────
         ok('_palierSuivant : libre → coach → pro, puis plus rien',(()=>{
