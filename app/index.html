@@ -101,6 +101,27 @@ if('serviceWorker' in navigator){
   src:url('fonts/bebasneue-400-latin.woff2') format('woff2');
   unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
 }
+/* ====== TYPOGRAPHIE MAISON ======
+   Alphabet dessine a la main par Kevin Guellec (depot Repcore131/FontApp),
+   vectorise depuis les planches PNG et assemble en woff2. Deux graisses :
+   Contour pour les gros titres, Plein pour les plus petits.
+   Capitales uniquement — les minuscules sont mappees sur les capitales dans
+   la police elle-meme, donc un titre non passe en majuscules par le CSS
+   s'affiche quand meme, au lieu de sortir vide. */
+@font-face{
+  font-family:'RepCore Contour';
+  font-style:normal;
+  font-weight:400;
+  font-display:swap;
+  src:url('fonts/repcore-contour.woff2?v=1') format('woff2');
+}
+@font-face{
+  font-family:'RepCore Plein';
+  font-style:normal;
+  font-weight:400;
+  font-display:swap;
+  src:url('fonts/repcore-plein.woff2?v=1') format('woff2');
+}
 /* Repli COMPLET, pour un navigateur sans woff2 ou un fichier manquant. */
 :root{--pile-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans',sans-serif;--pile-titre:Impact,'Arial Narrow Bold','Haettenschweiler','Franklin Gothic Bold',sans-serif}
 </style>
@@ -299,14 +320,14 @@ select option{background:#111}
 label{display:block;font-size:var(--fs-xs);font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;margin-top:16px}
 
 /* ====== TYPOGRAPHY ====== */
-h1{font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:32px;font-weight:900;line-height:1.05;letter-spacing:0.5px}
-h2{font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:24px;font-weight:800;letter-spacing:0.5px}
+h1{font-family:'RepCore Contour','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:32px;font-weight:900;line-height:1.05;letter-spacing:0.5px}
+h2{font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:24px;font-weight:800;letter-spacing:0.5px}
 h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
-.brand-font{font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-weight:900;letter-spacing:1px}
-.txt-hero{font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:44px;line-height:1}
-.txt-title{font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:32px}
-.txt-stat{font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:24px}
-.txt-stat-sm{font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:18px}
+.brand-font{font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-weight:900;letter-spacing:1px}
+.txt-hero{font-family:'RepCore Contour','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:44px;line-height:1}
+.txt-title{font-family:'RepCore Contour','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:32px}
+.txt-stat{font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:24px}
+.txt-stat-sm{font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:18px}
 .red{color:var(--red)}.sub{color:var(--sub);font-size:13px}
 .pad{padding:24px 20px}.gap{gap:12px;display:flex;flex-direction:column}
 .row{display:flex;align-items:center;gap:10px}.row2{display:flex;gap:10px}
@@ -418,7 +439,7 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 /* ====== METRIC BOXES ====== */
 .metric-box{background:repeating-linear-gradient(-50deg,transparent,transparent 14px,rgba(255,255,255,.016) 14px,rgba(255,255,255,.016) 15px),linear-gradient(160deg,#1e1e1e,#0d0d0d);border-radius:2px;padding:16px 12px;text-align:center;flex:1;border:1px solid rgba(255,255,255,.07);border-left:3px solid var(--red);position:relative;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,255,255,.06),0 0 0 1px rgba(224,32,32,.08)}
 .metric-box::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--red) var(--pct,0%),transparent var(--pct,0%))}
-.metric-val{font-size:32px;font-family:'Bebas Neue',Impact,sans-serif;letter-spacing:0;line-height:1}
+.metric-val{font-size:32px;font-family:'RepCore Contour','Bebas Neue',Impact,sans-serif;letter-spacing:0;line-height:1}
 .metric-label{font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;margin-top:6px;font-weight:700}
 /* Sur un écran de 320 px, trois encadrés côte à côte laissent 59 px de contenu
    chacun. « 1200kg » en Bebas 32 en demande 79, et .metric-box porte
@@ -571,7 +592,7 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
 .plan-titre::after{content:'';position:absolute;inset:0;pointer-events:none;
   background:repeating-linear-gradient(-52deg,transparent,transparent 7px,rgba(0,0,0,.16) 7px,rgba(0,0,0,.16) 8px)}
 .plan-titre>*{position:relative}
-.plan-titre-t{font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:16px;letter-spacing:2.2px;text-transform:uppercase;color:#fff;
+.plan-titre-t{font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:16px;letter-spacing:2.2px;text-transform:uppercase;color:#fff;
   text-shadow:0 0 6px rgba(255,255,255,.9),0 0 14px rgba(255,255,255,.5),0 0 26px rgba(255,120,120,.45)}
 /* Total du repas : petit, italique, poussé à droite. Il ne doit jamais
    concurrencer le nom du repas — c'est un repère, pas un titre. */
@@ -582,7 +603,7 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
 .plan-l{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid rgba(255,255,255,.055)}
 .plan-l:first-child{border-top:none}
 .plan-nom{flex:1;min-width:0;font-size:12.5px;font-weight:600;line-height:1.3}
-.plan-q{flex-shrink:0;font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:20px;line-height:1;letter-spacing:.5px;color:#fff}
+.plan-q{flex-shrink:0;font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:20px;line-height:1;letter-spacing:.5px;color:#fff}
 .plan-q u{font-family:Montserrat,sans-serif;font-size:10px;color:var(--sub);font-weight:400;letter-spacing:0;text-decoration:none}
 .plan-note{padding:7px 0 1px;font-size:11.5px;font-style:italic;color:var(--sub);line-height:1.45}
 /* Catalogue de sources, replié. min-height 44px : c'est une commande, elle
@@ -705,8 +726,12 @@ input[type=file]{display:none}
 #ch-main-area{display:flex!important;flex-direction:column!important;flex:1!important;min-height:0!important;overflow:hidden!important}
 
 /* ====== METAL MANIA — TITRES PRINCIPAUX ====== */
-h1,h2,.topbar-title{font-family:'Bebas Neue','Bebas Neue',Impact,'Arial Black',sans-serif!important;letter-spacing:1px}
-h3,.metric-val{font-family:'Bebas Neue',Impact,'Arial Black',sans-serif!important;letter-spacing:0.5px}
+/* Scinde : h1 fait 26 px et prend le Contour, h2 (20) et .topbar-title
+   (14) restent en Plein — a leur taille le trait creux disparaitrait. */
+h1{font-family:'RepCore Contour','Bebas Neue',Impact,'Arial Black',sans-serif!important;letter-spacing:1px}
+h2,.topbar-title{font-family:'RepCore Plein','Bebas Neue',Impact,'Arial Black',sans-serif!important;letter-spacing:1px}
+h3{font-family:'RepCore Plein','Bebas Neue',Impact,'Arial Black',sans-serif!important;letter-spacing:0.5px}
+.metric-val{font-family:'RepCore Contour','Bebas Neue',Impact,'Arial Black',sans-serif!important;letter-spacing:0.5px}
 h1{font-size:26px;text-transform:uppercase}
 h2{font-size:20px;text-transform:uppercase}
 h3{font-size:16px;text-transform:uppercase}
@@ -799,10 +824,10 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
 .progress-fill{height:100%;background:linear-gradient(90deg,var(--red),#ff4040);border-radius:0;transition:.5s}
 
 /* ====== TOPBAR TITLE ====== */
-.topbar-title{font-family:'Bebas Neue',Impact,sans-serif!important;font-size:14px!important;letter-spacing:2px!important;text-transform:uppercase}
+.topbar-title{font-family:'RepCore Plein','Bebas Neue',Impact,sans-serif!important;font-size:14px!important;letter-spacing:2px!important;text-transform:uppercase}
 
 /* ====== AVATAR REDESIGN ====== */
-.avatar{width:44px;height:44px;border-radius:2px;background:var(--red-bg);border:1px solid var(--red);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;flex-shrink:0;letter-spacing:1px;color:var(--red);font-family:'Bebas Neue',Impact,sans-serif}
+.avatar{width:44px;height:44px;border-radius:2px;background:var(--red-bg);border:1px solid var(--red);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;flex-shrink:0;letter-spacing:1px;color:var(--red);font-family:'RepCore Plein','Bebas Neue',Impact,sans-serif}
 
 /* ====== BADGE REDESIGN ====== */
 .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:1px;font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:1.5px}
@@ -878,7 +903,7 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 .gsl-opt.sel .gsl-lbl{color:#fff;text-shadow:0 0 8px rgba(255,255,255,.6)}
 /* Curseur néon 1-10 (motivation) */
 .bsl-wrap{background:var(--surface-1);border:1px solid #222;border-radius:12px;padding:18px 16px 14px;text-align:center}
-.bsl-value{font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:44px;line-height:1;transition:.15s}
+.bsl-value{font-family:'RepCore Contour','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:44px;line-height:1;transition:.15s}
 .bsl-value .bsl-max{font-size:20px;color:var(--text-dim);margin-left:2px}
 .bsl-feedback{font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;margin:4px 0 14px;min-height:13px;transition:.15s}
 .bslider{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:3px;background:#1a1a1a;outline:none;margin:0;padding:0;border:none;box-shadow:none}
@@ -922,7 +947,7 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 .rap-bloc{margin-bottom:22px}
 .rap-bloc h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--sub);
   font-weight:800;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
-.rap-titre{font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:30px;letter-spacing:2px;line-height:1}
+.rap-titre{font-family:'RepCore Contour','Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:30px;letter-spacing:2px;line-height:1}
 .rap-sous{font-size:13px;font-weight:800;margin-top:5px}
 .rap-meta{font-size:10.5px;color:var(--text-faint);margin-top:3px}
 .rap-grille{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:11px}
@@ -1109,17 +1134,17 @@ const COACH_PHOTO='icons/coach.jpg';
   <div style="padding:32px 28px 48px;padding:min(32px,4dvh) 28px min(48px,6dvh);flex-shrink:0;z-index:1;animation:wSlideUp 0.7s cubic-bezier(.16,1,.3,1) 0.55s both;opacity:0">
     <!-- ESPACE COACH — bevel 3D inset + glow rouge -->
     <button onclick="go('s-coach-entry')"
-      style="width:100%;padding:20px;background:#E02020;color:#fff;border:none;font-family:'Bebas Neue','Anton',sans-serif;font-size:13px;font-weight:800;letter-spacing:4px;cursor:pointer;text-transform:uppercase;margin-bottom:12px;transition:.15s;box-shadow:inset 0 2px 0 rgba(255,255,255,.24),inset 0 -3px 0 rgba(0,0,0,.45),0 6px 28px rgba(224,32,32,.5)"
+      style="width:100%;padding:20px;background:#E02020;color:#fff;border:none;font-family:'RepCore Plein','Bebas Neue','Anton',sans-serif;font-size:13px;font-weight:800;letter-spacing:4px;cursor:pointer;text-transform:uppercase;margin-bottom:12px;transition:.15s;box-shadow:inset 0 2px 0 rgba(255,255,255,.24),inset 0 -3px 0 rgba(0,0,0,.45),0 6px 28px rgba(224,32,32,.5)"
       onmouseover="this.style.background='#c91a1a'" onmouseout="this.style.background='#E02020'">ESPACE COACH</button>
     <!-- ESPACE ATHLÈTE — bevel subtil -->
     <button onclick="go('s-athlete-entry')"
-      style="width:100%;padding:20px;background:rgba(255,255,255,.04);color:#fff;border:1px solid rgba(255,255,255,.15);font-family:'Bebas Neue','Anton',sans-serif;font-size:13px;font-weight:800;letter-spacing:4px;cursor:pointer;text-transform:uppercase;transition:.15s;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),inset 0 -2px 0 rgba(0,0,0,.4),0 4px 18px rgba(0,0,0,.55)"
+      style="width:100%;padding:20px;background:rgba(255,255,255,.04);color:#fff;border:1px solid rgba(255,255,255,.15);font-family:'RepCore Plein','Bebas Neue','Anton',sans-serif;font-size:13px;font-weight:800;letter-spacing:4px;cursor:pointer;text-transform:uppercase;transition:.15s;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),inset 0 -2px 0 rgba(0,0,0,.4),0 4px 18px rgba(0,0,0,.55)"
       onmouseover="this.style.borderColor='rgba(224,32,32,.6)';this.style.color='#E02020'" onmouseout="this.style.borderColor='rgba(255,255,255,.15)';this.style.color='#fff'">ESPACE ATHLÈTE</button>
     <button id="install-btn" onclick="installApp()"
-      style="display:none;width:100%;margin-top:12px;padding:14px;background:transparent;color:#E02020;border:1px solid rgba(224,32,32,.35);font-family:'Bebas Neue','Anton',sans-serif;font-size:12px;font-weight:800;letter-spacing:3px;cursor:pointer;text-transform:uppercase;align-items:center;justify-content:center;gap:8px;transition:.15s;box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 4px 14px rgba(0,0,0,.4)"
+      style="display:none;width:100%;margin-top:12px;padding:14px;background:transparent;color:#E02020;border:1px solid rgba(224,32,32,.35);font-family:'RepCore Plein','Bebas Neue','Anton',sans-serif;font-size:12px;font-weight:800;letter-spacing:3px;cursor:pointer;text-transform:uppercase;align-items:center;justify-content:center;gap:8px;transition:.15s;box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 4px 14px rgba(0,0,0,.4)"
       onmouseover="this.style.background='rgba(224,32,32,.08)'" onmouseout="this.style.background='transparent'">⬇ Installer l'app sur ce téléphone</button>
     <button id="ios-install-btn" onclick="showIosInstallGuide()"
-      style="display:none;width:100%;margin-top:12px;padding:14px;background:transparent;color:#E02020;border:1px solid rgba(224,32,32,.35);font-family:'Bebas Neue','Anton',sans-serif;font-size:12px;font-weight:800;letter-spacing:3px;cursor:pointer;text-transform:uppercase;align-items:center;justify-content:center;gap:8px;transition:.15s;box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 4px 14px rgba(0,0,0,.4)"
+      style="display:none;width:100%;margin-top:12px;padding:14px;background:transparent;color:#E02020;border:1px solid rgba(224,32,32,.35);font-family:'RepCore Plein','Bebas Neue','Anton',sans-serif;font-size:12px;font-weight:800;letter-spacing:3px;cursor:pointer;text-transform:uppercase;align-items:center;justify-content:center;gap:8px;transition:.15s;box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 4px 14px rgba(0,0,0,.4)"
       onmouseover="this.style.background='rgba(224,32,32,.08)'" onmouseout="this.style.background='transparent'">📲 Installer l'app</button>
   </div>
 
@@ -1471,7 +1496,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
-      <h1 style="font-size:20px;line-height:1.3;font-weight:900;margin-bottom:4px">À relancer</h1>
+      <h1 style="font-family:'RepCore Plein','Bebas Neue',Impact,sans-serif!important;font-size:20px;line-height:1.3;font-weight:900;margin-bottom:4px">À relancer</h1>
       <p class="sub" style="font-size:11.5px;line-height:1.6;margin-bottom:16px">Assiduité seulement. Une douleur ou un drapeau rouge n'arrive jamais ici : il garde sa ligne dans « À traiter ».</p>
       <div id="cfr-body"></div>
     </div>
@@ -1486,7 +1511,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
-      <h1 style="font-size:20px;line-height:1.3;font-weight:900;margin-bottom:4px">Ton portefeuille</h1>
+      <h1 style="font-family:'RepCore Plein','Bebas Neue',Impact,sans-serif!important;font-size:20px;line-height:1.3;font-weight:900;margin-bottom:4px">Ton portefeuille</h1>
       <p class="sub" style="font-size:11.5px;line-height:1.6;margin-bottom:16px">Treize mois glissants, sur ce qui a été enregistré dans RepCore. Aucun montant, aucune comparaison à d'autres coachs.</p>
       <div id="cact-body"></div>
     </div>
@@ -1542,7 +1567,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <img src="./icons/logo.png" style="display:block;width:52px;height:52px;flex-shrink:0">
         <div>
           <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:4px;font-weight:700;text-transform:uppercase;margin-bottom:2px">COACH</div>
-          <div style="font-size:14px;font-family:'Bebas Neue',Impact,sans-serif;letter-spacing:1px;line-height:1" id="ch-name"></div>
+          <div style="font-size:14px;font-family:'RepCore Plein','Bebas Neue',Impact,sans-serif;letter-spacing:1px;line-height:1" id="ch-name"></div>
           <span class="coach-sync-badge rc-sync-badge" style="font-size:var(--fs-xs);font-weight:700;letter-spacing:.3px;display:block;margin-top:2px"></span>
         </div>
       </div>
@@ -2368,7 +2393,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="clh-athlete-avatar" style="width:48px;height:48px;border-radius:50%;background:var(--surface-2);border:2px solid #2a2a2a;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
       <div>
         <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:4px;font-weight:700;text-transform:uppercase;margin-bottom:2px">MON PROFIL</div>
-        <div style="font-size:14px;font-family:'Bebas Neue',Impact,sans-serif;letter-spacing:1px;line-height:1" id="clh-name"></div>
+        <div style="font-size:14px;font-family:'RepCore Plein','Bebas Neue',Impact,sans-serif;letter-spacing:1px;line-height:1" id="clh-name"></div>
         <span id="clh-sync-badge" class="rc-sync-badge"></span>
       </div>
     </div>
@@ -2385,7 +2410,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <div class="pad">
       <div style="margin-bottom:20px">
         <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
-        <h1 id="clh-greeting" style="font-size:22px;line-height:1.3;font-weight:900"></h1>
+        <h1 id="clh-greeting" style="font-family:'RepCore Plein','Bebas Neue',Impact,sans-serif!important;font-size:22px;line-height:1.3;font-weight:900"></h1>
         <p class="sub" id="clh-date" style="margin-top:4px;font-size:12px"></p>
         <p id="clh-phrase" style="margin-top:7px;font-size:12px;line-height:1.55;color:var(--text-dim);font-style:italic"></p>
         <!-- La ligne « Coach : … » a été retirée : la carte du coach, juste en
@@ -3339,7 +3364,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="position:absolute;left:50%;top:-34px;transform:translateX(-50%);width:120px;height:90px;border-radius:50%;background:radial-gradient(circle,rgba(224,32,32,.15),transparent 68%);pointer-events:none"></div>
         <div style="position:relative;text-align:center">
           <div style="margin-bottom:9px;color:#ff3b30;filter:drop-shadow(0 0 9px rgba(224,32,32,.75))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:30px;height:30px;display:inline-block;vertical-align:middle"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
-          <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:19px;letter-spacing:2.5px;color:#fff;text-transform:uppercase;margin-bottom:12px;text-shadow:0 0 12px rgba(255,255,255,.3)">Partager une vidéo</div>
+          <div style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:19px;letter-spacing:2.5px;color:#fff;text-transform:uppercase;margin-bottom:12px;text-shadow:0 0 12px rgba(255,255,255,.3)">Partager une vidéo</div>
           <!-- Le nom était jusqu'ici DÉDUIT de l'URL (« Vidéo YouTube ») ou du
                nom de fichier. Deux vidéos de deux exercices différents
                s'appelaient donc pareil, et le coach devait ouvrir chacune pour
@@ -3359,7 +3384,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="margin-top:12px;background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp .4s ease">
         <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div>
         <div style="position:relative">
-          <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:14px;letter-spacing:2.2px;margin-bottom:11px;color:#8a8a8a;text-transform:uppercase">Ou upload direct : sans YouTube / Drive</div>
+          <div style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:14px;letter-spacing:2.2px;margin-bottom:11px;color:#8a8a8a;text-transform:uppercase">Ou upload direct : sans YouTube / Drive</div>
           <label for="vid-file-input" style="display:flex;align-items:center;justify-content:center;gap:9px;padding:13px;border:1.5px dashed #2f2f2f;border-radius:10px;cursor:pointer;font-size:12.5px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#cfcfcf;background:linear-gradient(180deg,#111,#0c0c0c);box-shadow:inset 0 1px 0 rgba(255,255,255,.03);transition:.2s">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:17px;height:17px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Choisir un fichier vidéo
             <input id="vid-file-input" type="file" accept="video/*" style="display:none" onchange="uploadVideoFile(this)">
@@ -3474,14 +3499,14 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
         <div style="width:3px;height:22px;background:var(--red);border-radius:2px;box-shadow:0 0 10px rgba(224,32,32,.9)"></div>
         <span style="display:inline-flex;color:#ff3b30;filter:drop-shadow(0 0 6px rgba(224,32,32,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M2 17h18a2 2 0 0 0 2-2c0-1.6-1.2-2.3-2.8-2.9l-4.4-1.7a3 3 0 0 1-1.3-1L11.6 6.4a1.4 1.4 0 0 0-2.2-.2L7.6 8.1 2 8.1z"/><path d="M2 17v2h20v-2"/></svg></span>
-        <span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:20px;letter-spacing:3px;color:#fff;text-transform:uppercase;text-shadow:0 0 14px rgba(255,255,255,.35)">MES PAS</span>
+        <span style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:20px;letter-spacing:3px;color:#fff;text-transform:uppercase;text-shadow:0 0 14px rgba(255,255,255,.35)">MES PAS</span>
       </div>
       <div id="lifestyle-steps-content"></div>
       <div class="divider" style="margin:28px 0"></div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
         <div style="width:3px;height:22px;background:#60a5fa;border-radius:2px;box-shadow:0 0 10px rgba(96,165,250,.9)"></div>
         <span style="display:inline-flex;color:#60a5fa;filter:drop-shadow(0 0 6px rgba(96,165,250,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>
-        <span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:20px;letter-spacing:3px;color:#fff;text-transform:uppercase;text-shadow:0 0 14px rgba(255,255,255,.35)">MON SOMMEIL</span>
+        <span style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:20px;letter-spacing:3px;color:#fff;text-transform:uppercase;text-shadow:0 0 14px rgba(255,255,255,.35)">MON SOMMEIL</span>
       </div>
       <div id="lifestyle-sleep-content"></div>
     </div>
@@ -9521,7 +9546,7 @@ function _pilCompteur(cle,lib,n,couleur){
     style="flex:1 1 0;min-width:0;min-height:44px;padding:9px 6px;border-radius:10px;cursor:pointer;font-family:Montserrat,sans-serif;text-align:center;
       border:1.5px solid ${actif?couleur:(vide?'#242424':'#2e2e2e')};
       background:${actif?'rgba(224,32,32,.10)':'#111'}">
-    <div style="font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:24px;line-height:1;color:${vide?'#5a5a5a':couleur}">${n}</div>
+    <div style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:24px;line-height:1;color:${vide?'#5a5a5a':couleur}">${n}</div>
     <div style="font-size:9px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;line-height:1.25;margin-top:5px;color:${vide?'#5a5a5a':'#bbb'}">${lib}</div>
   </button>`;
 }
@@ -10622,7 +10647,7 @@ function htmlTauxCompletion(u,compact){
     color:${gris?'var(--text-faint)':'#ddd'};white-space:nowrap">${escapeHtml(val)}`
     +`${fl?' '+fl:''}</span>`;
   return `<div style="text-align:center">
-    <div style="font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:22px;line-height:1;
+    <div style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:22px;line-height:1;
       color:${gris?'var(--text-faint)':'#fff'}">${escapeHtml(val)}<span style="font-size:14px;color:var(--sub)">${fl?' '+fl:''}</span></div>
     <div style="font-size:9px;color:var(--sub);letter-spacing:1px;font-weight:800;text-transform:uppercase;margin-top:4px">Séances faites</div>
     <div style="font-size:9px;color:var(--text-faint);margin-top:2px">${escapeHtml(r.fenetre)}</div>
@@ -11116,7 +11141,7 @@ function renderFileReprise(){
   const tete=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;
       background:var(--surface-1);border:1px solid var(--border);border-radius:11px;padding:11px 13px;margin-bottom:12px">
       <span style="font-size:11.5px;color:#ddd;line-height:1.5">Relancés cette semaine</span>
-      <span style="font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:22px;color:var(--red);
+      <span style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:22px;color:var(--red);
         text-shadow:0 0 9px rgba(224,32,32,.6)">${sem}</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
@@ -11764,7 +11789,7 @@ function renderTodoBlock(clients){
   el.innerHTML=`<div style="background:#0c0000;border:1px solid #2a0000;border-radius:4px;margin-bottom:20px;overflow:hidden">
     <div style="padding:9px 14px;display:flex;align-items:center;justify-content:space-between;background:#0f0000;border-bottom:1px solid #1e0000">
       <span style="font-size:var(--fs-xs);font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:2px">⚡ À traiter</span>
-      <span style="background:var(--red);color:#fff;font-size:11px;font-weight:900;padding:1px 8px;border-radius:10px;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px">${unique}</span>
+      <span style="background:var(--red);color:#fff;font-size:11px;font-weight:900;padding:1px 8px;border-radius:10px;font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px">${unique}</span>
     </div>
     ${renderDataList(vues,(r,idx)=>{
       // XSS stocké : le prénom est saisi par l'athlète lui-même et atterrissait
@@ -12055,7 +12080,7 @@ function _actCarte(titre,corps,note){
 }
 function _actChiffre(n,lib,couleur){
   return `<div style="flex:1;min-width:0;text-align:center">
-    <div style="font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:26px;line-height:1;color:${couleur||'#fff'}">${n}</div>
+    <div style="font-family:'RepCore Contour','Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:26px;line-height:1;color:${couleur||'#fff'}">${n}</div>
     <div style="font-size:9px;color:var(--sub);letter-spacing:1px;font-weight:800;text-transform:uppercase;margin-top:5px;line-height:1.25">${escapeHtml(lib)}</div>
   </div>`;
 }
@@ -15970,7 +15995,7 @@ function _peindreRepos(){
         <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);font-weight:800">
           ${fini?'Repos terminé':'Repos'}${woState.reposLib?' · '+escapeHtml(woState.reposLib):''}
         </div>
-        <div style="font-size:26px;font-weight:800;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px;color:${coul};line-height:1.1">
+        <div style="font-size:26px;font-weight:800;font-family:'RepCore Contour','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px;color:${coul};line-height:1.1">
           ${fini?'+':''}${_fmtRepos(reste)}
         </div>
       </div>
@@ -18260,7 +18285,7 @@ function _apLigne(ex,i){
       background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px)"></div>
     <summary style="position:relative;display:flex;align-items:center;gap:12px;padding:11px 12px;
       cursor:pointer;list-style:none;min-height:56px">
-      <span style="flex-shrink:0;width:22px;font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;
+      <span style="flex-shrink:0;width:22px;font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,sans-serif;
         font-size:19px;line-height:1;color:var(--red);text-shadow:0 0 9px rgba(224,32,32,.75);
         text-align:center">${i+1}</span>
       ${vign}
@@ -18307,7 +18332,7 @@ function _renderApercu(){
     <div style="position:absolute;inset:0;pointer-events:none;
       background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(0,0,0,.13) 11px,rgba(0,0,0,.13) 12px)"></div>
     <div style="position:relative">
-      <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler',sans-serif;
+      <div style="font-family:'RepCore Contour','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler',sans-serif;
         font-size:27px;line-height:1;color:#fff;letter-spacing:.5px;
         text-shadow:0 0 9px rgba(255,255,255,${fort?'.95':'.35'}),0 0 22px rgba(255,255,255,${fort?'.5':'.15'})">${escapeHtml(String(v))}</div>
       <div style="font-size:9px;margin-top:5px;text-transform:uppercase;letter-spacing:1.6px;font-weight:800;
@@ -18642,7 +18667,7 @@ function _compteurRelances(idx){
   const faites=(d&&d.relancesFaites)||0;
   return `<div style="display:flex;align-items:center;gap:9px;margin-top:9px;flex-wrap:wrap">
     <span style="font-size:11px;color:var(--sub)">Relances :</span>
-    <span id="rel-n-${idx}" style="font-size:16px;font-weight:800;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px">${faites}</span>
+    <span id="rel-n-${idx}" style="font-size:16px;font-weight:800;font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px">${faites}</span>
     <button onclick="_ajouterRelance(${idx})" class="hit44" style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#eee;font-size:16px;font-weight:800;min-width:38px;min-height:34px;cursor:pointer">+</button>
     ${faites?`<button onclick="_retirerRelance(${idx})" class="hit44" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:14px;min-width:34px;min-height:34px;cursor:pointer">−</button>`:''}
   </div>`;
@@ -19996,9 +20021,9 @@ function buildSessionComparison(vol,data){
           <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
           <path d="M9.4 4.9 C8.6 6.1 8.6 7.7 9.6 8.8 M14.6 4.9 C15.4 6.1 15.4 7.7 14.4 8.8" stroke-width=".9"/>
         </g>
-        <text x="100" y="157" text-anchor="middle" font-family="'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif" font-size="34" letter-spacing="4" fill="url(#wdSilver)" stroke="#43474e" stroke-width=".7" paint-order="stroke">RECORD</text>
+        <text x="100" y="157" text-anchor="middle" font-family="'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif" font-size="34" letter-spacing="4" fill="url(#wdSilver)" stroke="#43474e" stroke-width=".7" paint-order="stroke">RECORD</text>
       </svg></div>
-      <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:22px;letter-spacing:2px;color:#e8ebef;margin-top:12px;line-height:1;text-shadow:0 0 10px rgba(255,255,255,.25)">NOUVEAU RECORD</div>
+      <div style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:22px;letter-spacing:2px;color:#e8ebef;margin-top:12px;line-height:1;text-shadow:0 0 10px rgba(255,255,255,.25)">NOUVEAU RECORD</div>
       <div style="font-size:13px;font-weight:800;color:#fff;margin-top:5px">${best.curMax}kg : ${escapeHtml(best.nm)}</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:3px">était ${best.histMax}kg${records.length>1?' · +'+(records.length-1)+' autre'+(records.length>2?'s':'')+' record'+(records.length>2?'s':'')+' battu'+(records.length>2?'s':''):''}</div>
     </div>`;
@@ -25420,7 +25445,7 @@ function showBilanNotifPrompt(){
   m.style.cssText='position:fixed;inset:0;background:#000b;z-index:8000;display:flex;align-items:flex-end;justify-content:center';
   m.innerHTML=`<div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:28px 24px 40px;width:100%;max-width:480px;animation:slideUp .35s ease">
     <div style="text-align:center;font-size:40px;margin-bottom:12px"></div>
-    <h2 style="text-align:center;margin-bottom:8px;font-size:17px;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:.5px">Active les rappels bilan</h2>
+    <h2 style="text-align:center;margin-bottom:8px;font-size:17px;font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:.5px">Active les rappels bilan</h2>
     <p style="text-align:center;color:var(--sub);font-size:12px;line-height:1.7;margin-bottom:24px">
       Reçois une notification <strong style="color:#fff">tous les 2 samedis à 7h00</strong><br>pour ne jamais oublier ton bilan coaching.
     </p>
@@ -25832,7 +25857,7 @@ function openWoReminderConfig(){
     </div>
     <label style="font-size:11px;display:block;margin-bottom:6px">Heure du rappel</label>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
-      <select id="wrd-hour" style="flex:1;font-size:16px;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px;padding:10px;background:var(--surface-1);border:1px solid var(--border);color:var(--text);border-radius:6px">${hourOpts}</select>
+      <select id="wrd-hour" style="flex:1;font-size:16px;font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px;padding:10px;background:var(--surface-1);border:1px solid var(--border);color:var(--text);border-radius:6px">${hourOpts}</select>
       <div style="display:flex;flex-direction:column;gap:6px">
         <button id="wrd-min-0" onclick="wrdSetMin(0)" style="border-radius:4px;padding:6px 12px;font-size:11px;font-weight:800;font-family:Montserrat,sans-serif;cursor:pointer;background:${curM===0?'var(--red)':'transparent'};border:1px solid ${curM===0?'var(--red)':'var(--border)'};color:${curM===0?'#fff':'var(--sub)'}">:00</button>
         <button id="wrd-min-30" onclick="wrdSetMin(30)" style="border-radius:4px;padding:6px 12px;font-size:11px;font-weight:800;font-family:Montserrat,sans-serif;cursor:pointer;background:${curM===30?'var(--red)':'transparent'};border:1px solid ${curM===30?'var(--red)':'var(--border)'};color:${curM===30?'#fff':'var(--sub)'}">:30</button>
@@ -27189,21 +27214,21 @@ function showProgressTab(tab,btn){
             <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:4px;color:#ff5a5a;text-transform:uppercase;white-space:nowrap;text-shadow:0 0 9px rgba(224,32,32,.65)">RepCore</div>
             <div style="flex:1;max-width:52px;height:1px;background:linear-gradient(90deg,rgba(224,32,32,.85),transparent)"></div>
           </div>
-          <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:38px;line-height:.96;letter-spacing:2px;color:#fff;text-shadow:0 0 22px rgba(255,255,255,.42),0 0 44px rgba(224,32,32,.35)">MA TRANSFORMATION</div>
+          <div style="font-family:'RepCore Contour','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:38px;line-height:.96;letter-spacing:2px;color:#fff;text-shadow:0 0 22px rgba(255,255,255,.42),0 0 44px rgba(224,32,32,.35)">MA TRANSFORMATION</div>
           <div style="width:46px;height:2.5px;background:linear-gradient(90deg,#ff3b30,#8d0000);border-radius:2px;margin:9px auto 0;box-shadow:0 0 12px rgba(224,32,32,.85)"></div>
           <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2.8px;color:#7a7a7a;text-transform:uppercase;margin-top:8px">${period?period+' de travail':'Suivi photo'} &nbsp;·&nbsp; ${bl.length} bilan${bl.length>1?'s':''}</div>
         </div>
         ${dW!=null?`<div style="display:flex;justify-content:center;gap:9px;margin:11px 0 13px">
           <div style="flex:1;max-width:112px;background:linear-gradient(180deg,#131313,#0b0b0b);border:1px solid #232323;border-radius:10px;padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)">
-            <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:22px;line-height:1;color:#8a8a8a">${wFirst}<span style="font-size:11px">kg</span></div>
+            <div style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:22px;line-height:1;color:#8a8a8a">${wFirst}<span style="font-size:11px">kg</span></div>
             <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:var(--text-dim);margin-top:3px;font-weight:800">DÉPART</div>
           </div>
           <div style="flex:1;max-width:112px;background:linear-gradient(160deg,#c10000,#6d0000);border:1px solid rgba(255,90,90,.42);border-radius:10px;padding:8px 6px;text-align:center;box-shadow:0 0 20px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.18)">
-            <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:22px;line-height:1;color:#fff;text-shadow:0 0 12px rgba(255,255,255,.9)">${wLast}<span style="font-size:11px">kg</span></div>
+            <div style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:22px;line-height:1;color:#fff;text-shadow:0 0 12px rgba(255,255,255,.9)">${wLast}<span style="font-size:11px">kg</span></div>
             <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:rgba(255,255,255,.8);margin-top:3px;font-weight:800">AUJOURD'HUI</div>
           </div>
           <div style="flex:1;max-width:112px;background:linear-gradient(180deg,#131313,#0b0b0b);border:1px solid ${dCol}44;border-radius:10px;padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 0 16px ${dCol}22">
-            <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:22px;line-height:1;color:${dCol};text-shadow:0 0 12px ${dCol}bb">${dW>0?'+':''}${dW}<span style="font-size:11px">kg</span></div>
+            <div style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:22px;line-height:1;color:${dCol};text-shadow:0 0 12px ${dCol}bb">${dW>0?'+':''}${dW}<span style="font-size:11px">kg</span></div>
             <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:${dCol}aa;margin-top:3px;font-weight:800">ÉVOLUTION</div>
           </div>
         </div>`:'<div style="height:8px"></div>'}
@@ -27215,7 +27240,7 @@ function showProgressTab(tab,btn){
                 const isLast=i===bl.length-1;
                 return `<td style="padding:4px 4px 7px;text-align:center;min-width:${cellW}px">
                   <div style="display:inline-block;padding:3px 9px;border-radius:20px;background:${isLast?'linear-gradient(160deg,#c10000,#6d0000)':'#141414'};border:1px solid ${isLast?'rgba(255,90,90,.45)':'#222'};box-shadow:${isLast?'0 0 14px rgba(224,32,32,.5)':'none'}">
-                    <span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:13px;letter-spacing:1.5px;color:${isLast?'#fff':'#7a7a7a'};${isLast?'text-shadow:0 0 9px rgba(255,255,255,.7)':''}">B${i+1}</span>
+                    <span style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:13px;letter-spacing:1.5px;color:${isLast?'#fff':'#7a7a7a'};${isLast?'text-shadow:0 0 9px rgba(255,255,255,.7)':''}">B${i+1}</span>
                   </div>
                   <div style="font-size:var(--fs-xs);font-weight:800;color:${isLast?'#ff7a7a':'#3f3f3f'};margin-top:3px;letter-spacing:.5px">${getBW(bl[i])?getBW(bl[i])+'KG':''}</div>
                 </td>`;
@@ -27225,7 +27250,7 @@ function showProgressTab(tab,btn){
             ${poses.map(([key,lbl,poseImg])=>`<tr>
               <td style="padding:5px 4px;vertical-align:middle;text-align:center">
                 <img src="${poseImg}" alt="${lbl}" style="height:52px;max-width:52px;object-fit:contain;filter:drop-shadow(0 0 7px rgba(255,255,255,.55));display:block;margin:0 auto 4px">
-                <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:11px;letter-spacing:1.4px;color:#fff;text-shadow:0 0 9px rgba(255,255,255,.4);white-space:nowrap">${lbl}</div>
+                <div style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:11px;letter-spacing:1.4px;color:#fff;text-shadow:0 0 9px rgba(255,255,255,.4);white-space:nowrap">${lbl}</div>
               </td>
               ${bl.map((b,i)=>{
                 const src=getP(b,key);
@@ -27243,7 +27268,7 @@ function showProgressTab(tab,btn){
         <!-- Pied facon signature -->
         <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,.06)">
           <img src="./icons/logo.png" alt="" style="width:20px;height:20px;border-radius:5px;object-fit:cover;opacity:.9">
-          <span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:13px;letter-spacing:3px;color:#6a6a6a">REPCORE</span>
+          <span style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:13px;letter-spacing:3px;color:#6a6a6a">REPCORE</span>
           <span style="font-size:var(--fs-xs);color:var(--text-dim);letter-spacing:1.5px;font-weight:700">· GUELLEC COACHING PRO</span>
         </div>
       </div>
@@ -29301,7 +29326,7 @@ function _renderStrictMacroRings(nut){
     :`<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:5px;padding:3px 10px;letter-spacing:1px">${icon('moon',10)} JOUR OFF</span>`;
   return `<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 8px 24px rgba(0,0,0,.35);animation:fadeInUp .3s ease">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div style="display:inline-flex;align-items:center;gap:7px;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:17px;color:#ff3b30;text-transform:uppercase;letter-spacing:3px;text-shadow:0 0 8px rgba(224,32,32,.85),0 0 20px rgba(224,32,32,.45)"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('target',13)}</span>OBJECTIFS DU JOUR</div>
+      <div style="display:inline-flex;align-items:center;gap:7px;font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:17px;color:#ff3b30;text-transform:uppercase;letter-spacing:3px;text-shadow:0 0 8px rgba(224,32,32,.85),0 0 20px rgba(224,32,32,.45)"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('target',13)}</span>OBJECTIFS DU JOUR</div>
       <span style="display:inline-flex;align-items:center;gap:6px">${badgePhase(currentUser)}${dayBadge}</span>
     </div>
     ${htmlAnneauxMacros(tot,m,'16px')}
@@ -29379,7 +29404,7 @@ function _htmlStrictVerrou(raison){
     <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(-55deg,transparent,transparent 16px,rgba(255,255,255,.018) 16px,rgba(255,255,255,.018) 17px);pointer-events:none"></div>
     <div style="position:relative">
       <div style="color:var(--text-dim);line-height:0;margin-bottom:14px">${icon('lock',40)}</div>
-      <div style="font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:19px;letter-spacing:2.5px;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">Diète stricte</div>
+      <div style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:19px;letter-spacing:2.5px;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">Diète stricte</div>
       <div style="font-size:13px;font-weight:800;color:#ddd;margin-bottom:10px">${escapeHtml(v.titre)}</div>
       <p style="margin:0 0 10px;font-size:12px;color:var(--sub);line-height:1.65">${escapeHtml(v.texte)}</p>
       <p style="margin:0 0 18px;font-size:11.5px;color:var(--text-faint);line-height:1.6">${escapeHtml(v.action)}</p>
@@ -29465,7 +29490,7 @@ function _renderStrictDiet(){
     <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:18px;margin-bottom:12px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.45);animation:fadeInUp .3s ease">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:relative">
-        <div style="display:inline-flex;align-items:center;gap:7px;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;color:#ff3b30;text-transform:uppercase;letter-spacing:2.5px;margin-bottom:14px;text-shadow:0 0 8px rgba(224,32,32,.8),0 0 18px rgba(224,32,32,.4)"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('check',13)}</span>J'AI RESPECTÉ MON PLAN AUJOURD'HUI</div>
+        <div style="display:inline-flex;align-items:center;gap:7px;font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;color:#ff3b30;text-transform:uppercase;letter-spacing:2.5px;margin-bottom:14px;text-shadow:0 0 8px rgba(224,32,32,.8),0 0 18px rgba(224,32,32,.4)"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('check',13)}</span>J'AI RESPECTÉ MON PLAN AUJOURD'HUI</div>
         <div style="display:flex;gap:10px">
           <button onclick="setNutriRespected('${todayKey}',true)" style="flex:1;padding:14px 0;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;letter-spacing:1.5px;cursor:pointer;background:${respYes?'linear-gradient(160deg,#1a9c4d,#0f5c2e)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${respYes?'#fff':'#4a4a4a'};border:2px solid ${respYes?'#22c55e':'#1f1f1f'};box-shadow:${respYes?'0 0 20px rgba(34,197,94,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${respYes?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">✓ OUI</button>
           <button onclick="setNutriRespected('${todayKey}',false)" style="flex:1;padding:14px 0;border-radius:10px;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;letter-spacing:1.5px;cursor:pointer;background:${respNo?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${respNo?'#fff':'#4a4a4a'};border:2px solid ${respNo?'var(--red)':'#1f1f1f'};box-shadow:${respNo?'0 0 20px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${respNo?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">✗ NON</button>
@@ -29478,7 +29503,7 @@ function _renderStrictDiet(){
         <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 13px,rgba(255,255,255,.015) 13px,rgba(255,255,255,.015) 14px);pointer-events:none"></div>
         <div style="position:absolute;left:50%;top:-28px;transform:translateX(-50%);width:80px;height:80px;border-radius:50%;background:radial-gradient(circle,${streak>0?'rgba(34,197,94,.2)':'rgba(224,32,32,.13)'},transparent 68%);pointer-events:none"></div>
         <div style="position:relative">
-          <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:44px;line-height:1;color:${streak>0?'#22c55e':'#ff3b30'};text-shadow:0 0 12px ${streak>0?'rgba(34,197,94,.85)':'rgba(224,32,32,.8)'},0 0 26px ${streak>0?'rgba(34,197,94,.4)':'rgba(224,32,32,.35)'}">${streak}</div>
+          <div style="font-family:'RepCore Contour','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:44px;line-height:1;color:${streak>0?'#22c55e':'#ff3b30'};text-shadow:0 0 12px ${streak>0?'rgba(34,197,94,.85)':'rgba(224,32,32,.8)'},0 0 26px ${streak>0?'rgba(34,197,94,.4)':'rgba(224,32,32,.35)'}">${streak}</div>
           <div style="font-size:var(--fs-xs);color:${streak>0?'rgba(34,197,94,.75)':'rgba(255,90,90,.7)'};letter-spacing:2px;margin-top:5px;text-transform:uppercase;font-weight:800">Jours consécutifs</div>
         </div>
       </div>
@@ -29486,7 +29511,7 @@ function _renderStrictDiet(){
         <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 13px,rgba(255,255,255,.015) 13px,rgba(255,255,255,.015) 14px);pointer-events:none"></div>
         <div style="position:absolute;left:50%;top:-28px;transform:translateX(-50%);width:80px;height:80px;border-radius:50%;background:radial-gradient(circle,rgba(245,197,24,.16),transparent 68%);pointer-events:none"></div>
         <div style="position:relative">
-          <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:44px;line-height:1;color:#f5c518;text-shadow:0 0 12px rgba(245,197,24,.8),0 0 26px rgba(245,197,24,.35)">${weekScore}<span style="font-size:19px;color:rgba(255,255,255,.35);text-shadow:none">/${answered||7}</span></div>
+          <div style="font-family:'RepCore Contour','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:44px;line-height:1;color:#f5c518;text-shadow:0 0 12px rgba(245,197,24,.8),0 0 26px rgba(245,197,24,.35)">${weekScore}<span style="font-size:19px;color:rgba(255,255,255,.35);text-shadow:none">/${answered||7}</span></div>
           <div style="font-size:var(--fs-xs);color:rgba(245,197,24,.7);letter-spacing:2px;margin-top:5px;text-transform:uppercase;font-weight:800">Cette semaine</div>
         </div>
       </div>
@@ -31510,7 +31535,7 @@ function _htmlPlanAthlete(user){
   // valeurs se lisaient ici en Montserrat 15, deux fois plus petites que le
   // « 44 » des jours consécutifs juste en dessous — la hiérarchie était inversée.
   const tuile=(lib,val,unite,couleur)=>`<div style="flex:1;min-width:0;background:rgba(255,255,255,.028);border:1px solid rgba(255,255,255,.05);border-radius:10px;padding:10px 4px;text-align:center">
-    <div style="font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:26px;line-height:1;color:${couleur};text-shadow:0 0 10px ${couleur}66">${val==null?'—':Math.round(val)}<span style="font-family:Montserrat,sans-serif;font-size:9px;color:var(--sub);font-weight:400">${unite}</span></div>
+    <div style="font-family:'RepCore Contour','Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:26px;line-height:1;color:${couleur};text-shadow:0 0 10px ${couleur}66">${val==null?'—':Math.round(val)}<span style="font-family:Montserrat,sans-serif;font-size:9px;color:var(--sub);font-weight:400">${unite}</span></div>
     <div style="font-size:9px;color:var(--sub);letter-spacing:1.4px;font-weight:800;margin-top:5px">${lib}</div>
   </div>`;
 
@@ -31635,7 +31660,7 @@ function _htmlPlanAthlete(user){
       background:linear-gradient(90deg,rgba(224,32,32,.55),rgba(140,0,0,.22) 70%,transparent);
       border-bottom:1px solid rgba(255,90,90,.30)">
       <span style="font-size:15px;line-height:1;filter:drop-shadow(0 0 6px rgba(255,90,90,.95))">⚠</span>
-      <span style="font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:15px;
+      <span style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:15px;
         letter-spacing:3px;color:#fff;text-transform:uppercase;
         text-shadow:0 0 9px rgba(255,90,90,.95),0 0 20px rgba(224,32,32,.55)">Attention</span>
     </div>
@@ -33244,7 +33269,7 @@ function _renderFjDaySummary(date){
   const kcalTile=`<div style="flex:1.25;min-width:0;background:linear-gradient(145deg,#c10000 0%,#8d0000 55%,#5a0000 100%);border:1px solid rgba(255,90,90,.45);border-radius:10px;padding:9px 8px;text-align:center;position:relative;overflow:hidden;box-shadow:0 0 18px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.16)">
     <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(0,0,0,.14) 11px,rgba(0,0,0,.14) 12px);pointer-events:none"></div>
     <div style="position:relative">
-      <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:26px;color:#fff;line-height:1;letter-spacing:1px;text-shadow:0 0 8px rgba(255,255,255,.95),0 0 20px rgba(255,255,255,.5)">${Math.round(tot.kcal)}${m.kcal?`<span style="font-size:11px;opacity:.65;letter-spacing:0;text-shadow:none"> / ${m.kcal}</span>`:''}</div>
+      <div style="font-family:'RepCore Contour','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:26px;color:#fff;line-height:1;letter-spacing:1px;text-shadow:0 0 8px rgba(255,255,255,.95),0 0 20px rgba(255,255,255,.5)">${Math.round(tot.kcal)}${m.kcal?`<span style="font-size:11px;opacity:.65;letter-spacing:0;text-shadow:none"> / ${m.kcal}</span>`:''}</div>
       <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.85);letter-spacing:2.5px;margin-top:3px;text-transform:uppercase;font-weight:800;text-shadow:0 0 6px rgba(255,255,255,.5)">KCAL</div>
     </div>
   </div>`;
@@ -35249,7 +35274,7 @@ function _renderSuppTable(list, isCoach, editFn){
         ${others>0?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px;letter-spacing:.5px">aussi ${others} autre${others>1?'s':''} moment${others>1?'s':''}</div>`:''}
       </div>
       <div style="flex-shrink:0;text-align:right">
-        <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:21px;line-height:1;color:${color};text-shadow:0 0 9px ${color}88">${s.dosage_quantity||'—'}</div>
+        <div style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:21px;line-height:1;color:${color};text-shadow:0 0 9px ${color}88">${s.dosage_quantity||'—'}</div>
         <div style="font-size:var(--fs-xs);color:#666;letter-spacing:.8px;margin-top:1px;text-transform:uppercase">${s.dosage_quantity?escapeHtml(s.dosage_unit||''):''}</div>
       </div>
     </div>`;
@@ -35261,7 +35286,7 @@ function _renderSuppTable(list, isCoach, editFn){
     return `<div style="margin-bottom:13px">
       <div style="display:flex;align-items:center;gap:8px;padding:7px 11px;border-radius:9px 9px 0 0;background:linear-gradient(90deg,${c}22,${c}06 65%,transparent);border-left:3px solid ${c};box-shadow:inset 0 1px 0 rgba(255,255,255,.05)">
         <span style="display:inline-flex;filter:drop-shadow(0 0 5px ${c}cc)">${_suppTimingIcon(g.t.id,14,c)}</span>
-        <span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2px;color:${c};text-transform:uppercase;text-shadow:0 0 9px ${c}88">${g.t.label}</span>
+        <span style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2px;color:${c};text-transform:uppercase;text-shadow:0 0 9px ${c}88">${g.t.label}</span>
         <span style="margin-left:auto;font-size:var(--fs-xs);font-weight:800;color:${c};opacity:.65;letter-spacing:1px">${g.items.length}</span>
       </div>
       <div style="padding-top:6px">${g.items.map(s=>row(s,c)).join('')}</div>
@@ -35693,7 +35718,7 @@ function renderCoachCaffeineSection(c){
         </div>
         <div style="flex:1;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">
           <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;margin-bottom:5px">PIC 28J</div>
-          <div style="font-size:${peakMg>999?'18':'24'}px;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;color:${colPeak};line-height:1">${peakMg||'—'}</div>
+          <div style="font-size:${peakMg>999?'18':'24'}px;font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;color:${colPeak};line-height:1">${peakMg||'—'}</div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${peakMg?peakStr:'—'}</div>
         </div>
       </div>
@@ -36119,7 +36144,7 @@ function _htmlCafeineNuits(user,dates){
   if(!lignes.length) return '';
   const lbl=d=>new Date(d+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'short',day:'numeric'});
   return `<div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.24);border-radius:14px;padding:16px;margin-bottom:14px">
-    <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:var(--warning);text-transform:uppercase;margin-bottom:9px">Caféine au coucher</div>
+    <div style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:var(--warning);text-transform:uppercase;margin-bottom:9px">Caféine au coucher</div>
     ${lignes.map(l=>`<div style="font-size:12px;color:#ddd;line-height:1.7;text-transform:capitalize">${escapeHtml(lbl(l.date))} <span style="text-transform:none;color:var(--warning);font-weight:700">environ ${l.mg} mg</span><span style="text-transform:none;color:var(--sub)"> encore présents à ${_libHeure(_hhmmEnMin(l.bed))}</span></div>`).join('')}
     <div style="font-size:11px;color:var(--text-dim);line-height:1.5;margin-top:8px">${escapeHtml(CAFEINE_NOTE_DEMIVIE)}</div>
   </div>`;
@@ -37189,7 +37214,7 @@ function htmlLecteurCorrection(vidId){
           background:#111;border:1px solid #2e2e2e;color:var(--sub);
           font-family:Montserrat,sans-serif;font-size:11px;font-weight:800">${String(r).replace('.',',')}×</button>`).join('')}
       <span id="rc-badge-${vidId}" aria-live="polite"
-        style="margin-left:auto;font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:16px;
+        style="margin-left:auto;font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:16px;
         color:var(--red);letter-spacing:1px;text-shadow:0 0 9px rgba(224,32,32,.7)">1×</span>
     </div>
     <div style="display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap">
@@ -37327,7 +37352,7 @@ function _renderTsAnnotations(annotations,opts={}){
     ?sorted.map((t,i)=>{
         const isAudio=!!t.audioUrl;
         return `<div style="display:flex;align-items:${isAudio?'flex-start':'center'};gap:8px;padding:6px 0;border-bottom:1px solid var(--surface-2)">
-          <span onclick="const _v=document.getElementById('${videoId}');if(_v)_v.currentTime=${(t&&isFinite(Number(t.sec)))?Number(t.sec):'tsToSecs(\''+t.ts+'\')'}" style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:13px;color:var(--red);flex-shrink:0;min-width:36px;margin-top:${isAudio?'3px':'0'};cursor:pointer" title="▶ ${t.ts}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${t.ts}</span>
+          <span onclick="const _v=document.getElementById('${videoId}');if(_v)_v.currentTime=${(t&&isFinite(Number(t.sec)))?Number(t.sec):'tsToSecs(\''+t.ts+'\')'}" style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:13px;color:var(--red);flex-shrink:0;min-width:36px;margin-top:${isAudio?'3px':'0'};cursor:pointer" title="▶ ${t.ts}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${t.ts}</span>
           ${isAudio
             ?`<div style="flex:1"><audio src="${t.audioUrl}" controls style="height:32px;width:100%;margin-bottom:2px"></audio><div style="font-size:var(--fs-xs);color:var(--sub);display:flex;align-items:center;gap:4px">${icon('mic',12)} message audio</div></div>`
             :`<span style="flex:1;font-size:12px">${escapeHtml(t.note)}</span>`}
@@ -37386,7 +37411,7 @@ function openVideoCorrection(email,videoId){
       <label style="margin-top:0">Repères par timestamp <span class="badge badge-gray" style="font-size:var(--fs-xs);margin-left:4px">optionnel</span></label>
       <div id="vc-ts-list" style="margin:6px 0 10px"></div>
       <div style="display:flex;gap:6px;align-items:center">
-        <input id="vc-ts-time" placeholder="0:45" style="width:62px;flex-shrink:0;text-align:center;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;padding:8px 4px" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('vc-ts-note').focus();}">
+        <input id="vc-ts-time" placeholder="0:45" style="width:62px;flex-shrink:0;text-align:center;font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;padding:8px 4px" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('vc-ts-note').focus();}">
         <input id="vc-ts-note" placeholder="Ex : genoux qui rentrent" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addTsAnnotation();}">
         <button class="btn btn-outline btn-sm" style="flex-shrink:0;padding:9px 12px" onclick="addTsAnnotation()">+</button>
       </div>
@@ -37395,7 +37420,7 @@ function openVideoCorrection(email,videoId){
     <div style="margin-top:12px;padding:12px;background:#080808;border:1px solid var(--surface-2);border-radius:10px">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--sub);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> Message audio</div>
       <div style="display:flex;gap:6px;margin-bottom:6px">
-        <input id="vc-audio-ts" placeholder="0:45" style="width:62px;flex-shrink:0;text-align:center;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;padding:8px 4px">
+        <input id="vc-audio-ts" placeholder="0:45" style="width:62px;flex-shrink:0;text-align:center;font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;padding:8px 4px">
         <button id="vc-audio-btn" class="btn btn-outline btn-sm" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px" onclick="toggleAudioRec()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg> Démarrer l'enregistrement</button>
       </div>
       <div id="vc-audio-preview" style="display:none;margin-top:8px">
@@ -37651,7 +37676,7 @@ function _bandeauJour(inputId,jour,handler){
   const lbl=estAuj?"Aujourd'hui"
     :new Date(jour+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long'});
   return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-    <div style="flex:1;min-width:0;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:${estAuj?'#8a8a8a':'var(--red)'};text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${lbl}</div>
+    <div style="flex:1;min-width:0;font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:${estAuj?'#8a8a8a':'var(--red)'};text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${lbl}</div>
     ${estAuj?'':`<button onclick="${handler}('')" title="Revenir à aujourd'hui" style="flex:none;background:#141414;border:1px solid #2a2a2a;color:var(--sub);border-radius:7px;padding:6px 9px;font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:.5px;cursor:pointer">AUJ.</button>`}
     <input type="date" id="${inputId}" value="${jour}" min="${min}" max="${auj}" onchange="${handler}(this.value)" aria-label="Choisir le jour" style="flex:0 0 auto;width:138px;box-sizing:border-box;background:#101010;border:1px solid #2a2a2a;color:#ccc;border-radius:7px;padding:6px 8px;font-family:Montserrat,sans-serif;font-size:11px;color-scheme:dark">
   </div>`;
@@ -37730,7 +37755,7 @@ function loadSteps(containerId='steps-content'){
     }).join('');
     histHtml=`<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4)">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div>
-      <div style="position:relative"><div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:6px">Historique</div>
+      <div style="position:relative"><div style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:6px">Historique</div>
       ${rows}</div>
     </div>`;
   }
@@ -37753,15 +37778,15 @@ function loadSteps(containerId='steps-content'){
     <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);animation:fadeInUp .3s ease">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:relative">
-        <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:13px">Objectifs de pas</div>
+        <div style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:13px">Objectifs de pas</div>
         <div style="display:flex;gap:10px;margin-bottom:12px">
           <div style="flex:1;min-width:0">
             <div style="font-size:var(--fs-xs);font-weight:800;color:#ff5a5a;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">JOUR ON <span style="font-size:var(--fs-xs);font-weight:600;color:var(--text-dim)">entraînement</span></div>
-            <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:22px;text-align:center;padding:11px 6px;background:linear-gradient(180deg,#0a0000,#0f0303);border:1px solid #3a0d0d;border-radius:9px;color:#ff5a5a;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px;box-shadow:inset 0 2px 7px rgba(0,0,0,.6),0 0 12px rgba(224,32,32,.12);text-shadow:0 0 10px rgba(224,32,32,.6)">
+            <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:22px;text-align:center;padding:11px 6px;background:linear-gradient(180deg,#0a0000,#0f0303);border:1px solid #3a0d0d;border-radius:9px;color:#ff5a5a;font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px;box-shadow:inset 0 2px 7px rgba(0,0,0,.6),0 0 12px rgba(224,32,32,.12);text-shadow:0 0 10px rgba(224,32,32,.6)">
           </div>
           <div style="flex:1;min-width:0">
             <div style="font-size:var(--fs-xs);font-weight:800;color:#7aa7d9;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">JOUR OFF <span style="font-size:var(--fs-xs);font-weight:600;color:var(--text-dim)">repos</span></div>
-            <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:22px;text-align:center;padding:11px 6px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:9px;color:#7aa7d9;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px;box-shadow:inset 0 2px 7px rgba(0,0,0,.6),0 0 12px rgba(96,165,250,.1);text-shadow:0 0 10px rgba(96,165,250,.5)">
+            <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:22px;text-align:center;padding:11px 6px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:9px;color:#7aa7d9;font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px;box-shadow:inset 0 2px 7px rgba(0,0,0,.6),0 0 12px rgba(96,165,250,.1);text-shadow:0 0 10px rgba(96,165,250,.5)">
           </div>
         </div>
         <button onclick="saveStepsGoals()" style="width:100%;padding:12px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:#fff;border-radius:9px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 18px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:0 0 9px rgba(255,255,255,.4)">Enregistrer les objectifs</button>
@@ -37773,14 +37798,14 @@ function loadSteps(containerId='steps-content'){
       <div style="position:absolute;right:-22px;top:-22px;width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,.055);pointer-events:none"></div>
       <div style="position:relative">
         <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:8px">Moyenne hebdomadaire</div>
-        <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:56px;line-height:.95;color:#fff;letter-spacing:1px;text-shadow:0 0 16px rgba(255,255,255,.85),0 0 34px rgba(255,255,255,.4)">${fmt(weekAvg)}</div>
+        <div style="font-family:'RepCore Contour','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:56px;line-height:.95;color:#fff;letter-spacing:1px;text-shadow:0 0 16px rgba(255,255,255,.85),0 0 34px rgba(255,255,255,.4)">${fmt(weekAvg)}</div>
         <div style="font-size:11px;color:rgba(255,255,255,.62);margin-top:6px">pas / jour &nbsp;·&nbsp; ${withData.length} / 7 jours renseignés</div>
         <div style="margin-top:14px;display:flex;justify-content:center;gap:14px">
-          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">OBJECTIF ON</div><div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:21px;color:#fff;margin-top:2px;text-shadow:0 0 10px rgba(255,255,255,.55)">${goals.on.toLocaleString('fr-FR')}</div></div>
+          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">OBJECTIF ON</div><div style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:21px;color:#fff;margin-top:2px;text-shadow:0 0 10px rgba(255,255,255,.55)">${goals.on.toLocaleString('fr-FR')}</div></div>
           <div style="width:1px;background:rgba(255,255,255,.18)"></div>
-          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">OBJECTIF OFF</div><div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:21px;color:rgba(255,255,255,.8);margin-top:2px">${goals.off.toLocaleString('fr-FR')}</div></div>
+          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">OBJECTIF OFF</div><div style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:21px;color:rgba(255,255,255,.8);margin-top:2px">${goals.off.toLocaleString('fr-FR')}</div></div>
           <div style="width:1px;background:rgba(255,255,255,.18)"></div>
-          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">TOTAL SEMAINE</div><div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:21px;color:#fff;margin-top:2px;text-shadow:0 0 10px rgba(255,255,255,.55)">${fmt(withData.reduce((s,d)=>s+d.count,0))}</div></div>
+          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">TOTAL SEMAINE</div><div style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:21px;color:#fff;margin-top:2px;text-shadow:0 0 10px rgba(255,255,255,.55)">${fmt(withData.reduce((s,d)=>s+d.count,0))}</div></div>
         </div>
       </div>
     </div>
@@ -37791,13 +37816,13 @@ function loadSteps(containerId='steps-content'){
       <div style="position:relative">
         ${_bandeauJour('steps-date-input',selStr,'changeStepsDate')}
         <div style="display:flex;gap:8px;margin-bottom:11px">
-          <button onclick="stepsToggleType('on')" style="flex:1;padding:10px 4px;border-radius:9px;border:2px solid ${todayType==='on'?'var(--red)':'#1f1f1f'};background:${todayType==='on'?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='on'?'#fff':'#4a4a4a'};font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='on'?'0 0 18px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='on'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">JOUR ON</button>
-          <button onclick="stepsToggleType('off')" style="flex:1;padding:10px 4px;border-radius:9px;border:2px solid ${todayType==='off'?'#60a5fa':'#1f1f1f'};background:${todayType==='off'?'linear-gradient(160deg,#1d4f80,#0b2740)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='off'?'#fff':'#4a4a4a'};font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='off'?'0 0 18px rgba(96,165,250,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='off'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">JOUR OFF</button>
+          <button onclick="stepsToggleType('on')" style="flex:1;padding:10px 4px;border-radius:9px;border:2px solid ${todayType==='on'?'var(--red)':'#1f1f1f'};background:${todayType==='on'?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='on'?'#fff':'#4a4a4a'};font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='on'?'0 0 18px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='on'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">JOUR ON</button>
+          <button onclick="stepsToggleType('off')" style="flex:1;padding:10px 4px;border-radius:9px;border:2px solid ${todayType==='off'?'#60a5fa':'#1f1f1f'};background:${todayType==='off'?'linear-gradient(160deg,#1d4f80,#0b2740)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='off'?'#fff':'#4a4a4a'};font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='off'?'0 0 18px rgba(96,165,250,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='off'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">JOUR OFF</button>
         </div>
         ${todayGoalHintHtml}
         <input type="number" id="steps-today-input" placeholder="0" min="0" max="99999"
           value="${todayEntry&&todayEntry.count!=null?todayEntry.count:''}"
-          style="width:100%;box-sizing:border-box;font-size:44px;text-align:center;padding:14px 10px;background:linear-gradient(180deg,#070707,#0d0d0d);border:1px solid #242424;border-radius:10px;color:#fff;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:2px;margin-bottom:11px;box-shadow:inset 0 3px 10px rgba(0,0,0,.65);text-shadow:0 0 16px rgba(255,255,255,.45)">
+          style="width:100%;box-sizing:border-box;font-size:44px;text-align:center;padding:14px 10px;background:linear-gradient(180deg,#070707,#0d0d0d);border:1px solid #242424;border-radius:10px;color:#fff;font-family:'RepCore Contour','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:2px;margin-bottom:11px;box-shadow:inset 0 3px 10px rgba(0,0,0,.65);text-shadow:0 0 16px rgba(255,255,255,.45)">
         <button onclick="saveSteps()" style="width:100%;padding:13px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:#fff;border-radius:9px;font-family:Montserrat,sans-serif;font-size:12px;font-weight:800;letter-spacing:2.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:0 0 10px rgba(255,255,255,.45)">Sauver</button>
         ${todayProgressHtml}
       </div>
@@ -37807,7 +37832,7 @@ function loadSteps(containerId='steps-content'){
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:relative">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:15px">
-          <span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Cette semaine</span>
+          <span style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Cette semaine</span>
           <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--text-dim)"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--red);vertical-align:middle;box-shadow:0 0 6px rgba(224,32,32,.9)"></span> ON &nbsp;<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#60a5fa;vertical-align:middle;box-shadow:0 0 6px rgba(96,165,250,.8)"></span> OFF</span>
         </div>
         <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:7px;border-bottom:1px solid rgba(255,255,255,.05)">${bars}</div>
@@ -40345,7 +40370,7 @@ function renderCartePesee(){
       <input type="number" id="pesee-input" inputmode="decimal" step="0.1"
         min="${PESEE_MIN}" max="${PESEE_MAX}" placeholder="${der?der.kg:'—'}"
         value="${dujour?dujour.kg:''}"
-        style="flex:1;min-width:0;box-sizing:border-box;font-size:20px;text-align:center;padding:10px 6px;background:var(--dark);border:1px solid var(--border);border-radius:9px;color:#f0f0f0;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px">
+        style="flex:1;min-width:0;box-sizing:border-box;font-size:20px;text-align:center;padding:10px 6px;background:var(--dark);border:1px solid var(--border);border-radius:9px;color:#f0f0f0;font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px">
       <button class="btn btn-red btn-sm" onclick="savePesee()" style="height:44px;padding:0 18px;letter-spacing:1px;white-space:nowrap">${dujour?'Corriger':'Valider'}</button>
     </div>
     <div style="font-size:11px;color:var(--sub);margin-top:8px;line-height:1.5">${sous}</div>
@@ -40431,7 +40456,7 @@ function _blocVitesse(user){
   else if(Math.abs(v.pctSem)<0.15) phrase='Poids stable sur les deux dernières semaines.';
   else phrase='Variation régulière, sans à-coup.';
   return `<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
-      <span style="font-size:22px;font-weight:800;color:${c};font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px">${signe}${v.kgSem.toFixed(2)} kg</span>
+      <span style="font-size:22px;font-weight:800;color:${c};font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px">${signe}${v.kgSem.toFixed(2)} kg</span>
       <span style="font-size:12px;color:var(--sub)">par semaine</span>
       <span style="font-size:12px;color:${c};font-weight:700">${signe}${v.pctSem.toFixed(2)} %</span>
     </div>
@@ -40528,7 +40553,7 @@ function blocPoidsCoach(user){
       <span style="font-size:10px;color:var(--text-faint)">dernière pesée le ${_fmtJourCourt(der.date)}</span>
     </div>
     <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
-      <span style="font-size:22px;font-weight:800;color:#f0f0f0;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px">${der.kg} kg</span>
+      <span style="font-size:22px;font-weight:800;color:#f0f0f0;font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px">${der.kg} kg</span>
       ${moy!=null?`<span style="font-size:11px;color:var(--sub)">moyenne 7 j ${moy.toFixed(1)} kg</span>`:''}
     </div>
     ${v?`<div style="font-size:12px;font-weight:700;color:${c};margin-top:6px">
@@ -40932,7 +40957,7 @@ function _appliquerCaptureStats(analyse){
 function _htmlCadreImportCapture(){
   return `
     <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:14px;animation:fadeInUp .5s ease">
-      <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:9px">Pas noté tes stats ?</div>
+      <div style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:9px">Pas noté tes stats ?</div>
       <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:11px">
         Envoie la capture d'écran de ton application de montre — pas ou sommeil, vue 7 jours de préférence : les chiffres sont lus et remplis tout seuls.
         <b style="color:#8a8a8a">La capture est lue sur ton téléphone. Elle n'est ni envoyée ni conservée.</b>
@@ -41106,7 +41131,7 @@ function loadSleep(containerId='sleep-content'){
       const badge=e.duration>=7&&e.duration<=9?'Idéal':'';
       return `<div style="font-size:12px;font-weight:600;color:#aaa;text-transform:capitalize">${lbl}</div><div style="display:flex;align-items:center;gap:10px"><div style="font-size:var(--fs-xs);color:var(--sub)">${e.bed} → ${e.wake}</div>${badge?`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--green)">${badge}</span>`:''}<div style="font-size:14px;font-weight:800;color:${col}">${e.duration}h</div></div>`;
     },{pad:'9px 0',justify:'space-between',gap:0,border:'#111'});
-    histHtml=`<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4)"><div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div><div style="position:relative"><div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:6px">Historique</div>${rows}</div></div>`;
+    histHtml=`<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4)"><div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div><div style="position:relative"><div style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:6px">Historique</div>${rows}</div></div>`;
   }
 
   document.getElementById(containerId).innerHTML=`
@@ -41116,12 +41141,12 @@ function loadSleep(containerId='sleep-content'){
       <div style="position:absolute;left:14px;top:12px;color:rgba(255,255,255,.16)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
       <div style="position:relative">
         <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:8px">Moyenne hebdomadaire</div>
-        <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:56px;line-height:.95;color:${weekAvg?avgColor:'rgba(255,255,255,.55)'};letter-spacing:1px;text-shadow:0 0 16px ${weekAvg?avgColor:'rgba(255,255,255,.4)'},0 0 34px ${weekAvg?avgColor+'66':'transparent'}">${weekAvg?weekAvg+'h':'—'}</div>
+        <div style="font-family:'RepCore Contour','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:56px;line-height:.95;color:${weekAvg?avgColor:'rgba(255,255,255,.55)'};letter-spacing:1px;text-shadow:0 0 16px ${weekAvg?avgColor:'rgba(255,255,255,.4)'},0 0 34px ${weekAvg?avgColor+'66':'transparent'}">${weekAvg?weekAvg+'h':'—'}</div>
         <div style="font-size:11px;color:rgba(255,255,255,.55);margin-top:6px">heures / nuit &nbsp;·&nbsp; ${withData.length} / 7 nuits renseignées</div>
         <div style="margin-top:14px;display:flex;justify-content:center;gap:16px">
-          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">OPTIMAL</div><div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:21px;color:var(--green);margin-top:2px;text-shadow:0 0 11px rgba(34,197,94,.7)">7 – 9 h</div></div>
+          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">OPTIMAL</div><div style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:21px;color:var(--green);margin-top:2px;text-shadow:0 0 11px rgba(34,197,94,.7)">7 – 9 h</div></div>
           <div style="width:1px;background:rgba(255,255,255,.15)"></div>
-          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">TOTAL SEMAINE</div><div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:21px;color:${weekTotal!=null?avgColor:'rgba(255,255,255,.5)'};margin-top:2px;text-shadow:0 0 11px ${weekTotal!=null?avgColor+'99':'transparent'}">${weekTotal!=null?weekTotal+'h':'—'}</div></div>
+          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">TOTAL SEMAINE</div><div style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:21px;color:${weekTotal!=null?avgColor:'rgba(255,255,255,.5)'};margin-top:2px;text-shadow:0 0 11px ${weekTotal!=null?avgColor+'99':'transparent'}">${weekTotal!=null?weekTotal+'h':'—'}</div></div>
         </div>
       </div>
     </div>
@@ -41134,14 +41159,14 @@ function loadSleep(containerId='sleep-content'){
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px">
           <div>
             <div style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-xs);font-weight:800;color:#60a5fa;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(96,165,250,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>Coucher</div>
-            <input type="time" id="sleep-bed-input" value="${todayEntry?.bed||''}" oninput="updateSleepPreview()" style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:22px;letter-spacing:1px;text-align:center;padding:11px 4px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:9px;color:#9cc4ee;width:100%;box-sizing:border-box;box-shadow:inset 0 2px 7px rgba(0,0,0,.6);text-shadow:0 0 10px rgba(96,165,250,.5)">
+            <input type="time" id="sleep-bed-input" value="${todayEntry?.bed||''}" oninput="updateSleepPreview()" style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:22px;letter-spacing:1px;text-align:center;padding:11px 4px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:9px;color:#9cc4ee;width:100%;box-sizing:border-box;box-shadow:inset 0 2px 7px rgba(0,0,0,.6);text-shadow:0 0 10px rgba(96,165,250,.5)">
           </div>
           <div>
             <div style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-xs);font-weight:800;color:#f5c518;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(245,197,24,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><circle cx="12" cy="12" r="4.5"/><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="4.2" y1="4.2" x2="6" y2="6"/><line x1="18" y1="18" x2="19.8" y2="19.8"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.2" y1="19.8" x2="6" y2="18"/><line x1="18" y1="6" x2="19.8" y2="4.2"/></svg></span>Lever</div>
-            <input type="time" id="sleep-wake-input" value="${todayEntry?.wake||''}" oninput="updateSleepPreview()" style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:22px;letter-spacing:1px;text-align:center;padding:11px 4px;background:linear-gradient(180deg,#0d0900,#120e03);border:1px solid #4d3d12;border-radius:9px;color:#f0d98a;width:100%;box-sizing:border-box;box-shadow:inset 0 2px 7px rgba(0,0,0,.6);text-shadow:0 0 10px rgba(245,197,24,.45)">
+            <input type="time" id="sleep-wake-input" value="${todayEntry?.wake||''}" oninput="updateSleepPreview()" style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:22px;letter-spacing:1px;text-align:center;padding:11px 4px;background:linear-gradient(180deg,#0d0900,#120e03);border:1px solid #4d3d12;border-radius:9px;color:#f0d98a;width:100%;box-sizing:border-box;box-shadow:inset 0 2px 7px rgba(0,0,0,.6);text-shadow:0 0 10px rgba(245,197,24,.45)">
           </div>
         </div>
-        <div id="sleep-preview" style="text-align:center;font-size:12px;color:#6a6a6a;margin-bottom:11px;min-height:26px">${todayEntry?.duration!=null?`<span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:26px;color:${sleepColor(todayEntry.duration)};text-shadow:0 0 13px ${sleepColor(todayEntry.duration)}aa">${todayEntry.duration}h</span> de sommeil`:''}</div>
+        <div id="sleep-preview" style="text-align:center;font-size:12px;color:#6a6a6a;margin-bottom:11px;min-height:26px">${todayEntry?.duration!=null?`<span style="font-family:'RepCore Contour','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:26px;color:${sleepColor(todayEntry.duration)};text-shadow:0 0 13px ${sleepColor(todayEntry.duration)}aa">${todayEntry.duration}h</span> de sommeil`:''}</div>
         <button onclick="saveSleep()" style="width:100%;padding:13px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:#fff;border-radius:9px;font-family:Montserrat,sans-serif;font-size:12px;font-weight:800;letter-spacing:2.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:0 0 10px rgba(255,255,255,.45)">Enregistrer</button>
       </div>
     </div>
@@ -41150,7 +41175,7 @@ function loadSleep(containerId='sleep-content'){
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:relative">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:15px">
-          <span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Cette semaine</span>
+          <span style="font-family:'RepCore Plein','Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Cette semaine</span>
           <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;color:var(--text-dim)"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#22c55e;vertical-align:middle;box-shadow:0 0 6px rgba(34,197,94,.9)"></span> 7-9H</span>
         </div>
         <div style="display:flex;align-items:flex-end;gap:4px;height:80px;margin-bottom:7px;border-bottom:1px solid rgba(255,255,255,.05)">${bars}</div>
@@ -57197,7 +57222,7 @@ function testExercices(){
           if(faces<2) return _echec('seulement '+faces+' @font-face');
           if(swaps<faces) return _echec(swaps+' swap pour '+faces+' @font-face');
           // Les deux polices sont servies depuis le dépôt, pas d'une URL.
-          const srcs=(c.match(/src:url\('fonts\/[a-z0-9.-]+\.woff2'\)/g)||[]).length;
+          const srcs=(c.match(/src:url\('fonts\/[a-z0-9.-]+\.woff2(\?v=[0-9]+)?'\)/g)||[]).length;
           return srcs>=faces?true:_echec(srcs+' source(s) locale(s) pour '+faces+' @font-face');})());
         ok('L\'export F-10 est enfin atteignable par un athlète',(()=>{
           // Il vivait dans s-coach-home, où aucun athlète ne passe : le code
