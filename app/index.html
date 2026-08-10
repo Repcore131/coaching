@@ -53939,6 +53939,89 @@ function testExercices(){
               rates.push(mode+' : un champ est posé à part');
           }
           return rates.length?_echec(rates.join(' · ')):true;})());
+
+        // ── L'IMPORT OCR CÔTÉ COACH ─────────────────────────────────────
+        // Il etait purement INOPERANT : _athleteSessionIdx() rend null hors
+        // mode athlete, et currentUser.sessions_config[null] levait une
+        // TypeError. Le correctif fait passer le coach par progEx, dont
+        // saveProgram sait deja router la destination. Rien ne le couvrait.
+        ok('Critère : l\'import OCR remplit l\'éditeur, pour les DEUX cibles coach',(()=>{
+          const _sv=currentUser, _sc=_progEditorCtx, _se=_coachEditClient;
+          const _sco=window.confirm, _ss=window.saveUser;
+          try{
+            window.confirm=()=>true; window.saveUser=()=>true;
+            currentUser={id:'oc',email:'oc@t',role:'coach',fname:'K',exAlias:{},
+              exMuscles:{},programs:{},sessions:[],bilans:[],nutrition:{},
+              coachPrograms:[{nom:'M',sessions_F:[],
+                sessions_H:[{day:'Lundi',name:'MOD',active:true,
+                  exercises:[{name:'ANCIEN'}]}]}]};
+            _coachEditClient={id:'oa',email:'oa@t',role:'athlete',fname:'A',
+              sessions_config:[{day:'Lundi',name:'ATH',active:true,
+                exercises:[{name:'ANCIEN ATH'}]}]};
+            _editProgTemplateIdx=0; _editProgTemplateGender='H';
+            const ocr=[{name:'SQUAT',series:4,reps:'8',repos:'2 min',description:''},
+                       {name:'DC',series:3,reps:'10',repos:'90 sec',description:''}];
+            // (b) Le MODELE.
+            openProgTemplateSessionExercises(0);
+            showOcrReviewModal(ocr,_athleteSessionIdx(),[]);
+            // L'index passe vaut bien null : c'est lui qui faisait tout tomber.
+            if(_athleteSessionIdx()!==null)
+              return _echec('un index de séance athlète sort en mode modèle');
+            importOcrExercises(_athleteSessionIdx(),ocr.length);
+            if(progEx.map(e=>e.name).join(',')!=='SQUAT,DC')
+              return _echec('modèle, éditeur : '+progEx.map(e=>e.name).join(','));
+            document.getElementById('prog-name').value='MOD';
+            saveProgram();
+            const mod=currentUser.coachPrograms[0].sessions_H[0].exercises.map(e=>e.name);
+            if(mod.join(',')!=='SQUAT,DC') return _echec('modèle, persisté : '+mod.join(','));
+            // (c) La SEANCE D'UN ATHLETE.
+            openCoachSessionExercises(0);
+            showOcrReviewModal(ocr,_athleteSessionIdx(),[]);
+            importOcrExercises(_athleteSessionIdx(),ocr.length);
+            if(progEx.map(e=>e.name).join(',')!=='SQUAT,DC')
+              return _echec('athlète, éditeur : '+progEx.map(e=>e.name).join(','));
+            document.getElementById('prog-name').value='ATH';
+            saveProgram();
+            const ath=_coachEditClient.sessions_config[0].exercises.map(e=>e.name);
+            return ath.join(',')==='SQUAT,DC'
+              ?true:_echec('athlète, persisté : '+ath.join(','));
+          } finally { currentUser=_sv; _progEditorCtx=_sc; _coachEditClient=_se;
+            window.confirm=_sco; window.saveUser=_ss; try{ closeModal(); }catch(e){} }})());
+        ok('Critère : un coach ne touche JAMAIS à son propre sessions_config',(()=>{
+          // On PIEGE la propriete : toute lecture comme toute ecriture se
+          // compte. C'est le seul moyen de prouver l'absence d'acces — chercher
+          // la chaine dans le source ne dirait pas si la branche est atteinte.
+          const _sv=currentUser, _sc=_progEditorCtx, _se=_coachEditClient;
+          const _sco=window.confirm, _ss=window.saveUser;
+          try{
+            window.confirm=()=>true; window.saveUser=()=>true;
+            let acces=0;
+            const coach={id:'oc2',email:'oc2@t',role:'coach',fname:'K',exAlias:{},
+              exMuscles:{},programs:{},sessions:[],bilans:[],nutrition:{},
+              coachPrograms:[{nom:'M',sessions_F:[],
+                sessions_H:[{day:'Lundi',name:'MOD',active:true,exercises:[]}]}]};
+            Object.defineProperty(coach,'sessions_config',{configurable:true,
+              get(){ acces++; return undefined; }, set(){ acces++; }});
+            currentUser=coach;
+            _editProgTemplateIdx=0; _editProgTemplateGender='H';
+            openProgTemplateSessionExercises(0);
+            const ocr=[{name:'SQUAT',series:4,reps:'8',repos:'2 min',description:''}];
+            showOcrReviewModal(ocr,_athleteSessionIdx(),[]);
+            importOcrExercises(_athleteSessionIdx(),ocr.length);
+            if(acces) return _echec(acces+' accès au sessions_config du coach');
+            // Et la branche coach SORT avant la partie athlete : loadSessionManager
+            // n'y est jamais atteint.
+            const src=String(importOcrExercises);
+            const iCoach=src.indexOf("role==='coach'");
+            const iLoad=src.indexOf('loadSessionManager()');
+            const iRet=src.indexOf('return;',iCoach);
+            if(iCoach<0) return _echec('la branche coach a disparu');
+            if(iLoad>=0&&!(iRet<iLoad))
+              return _echec('loadSessionManager est atteignable par un coach');
+            return progEx.map(e=>e.name).join(',')==='SQUAT'
+              ?true:_echec('l\'éditeur n\'a pas été rempli');
+          } finally { currentUser=_sv; _progEditorCtx=_sc; _coachEditClient=_se;
+            window.confirm=_sco; window.saveUser=_ss; try{ closeModal(); }catch(e){} }})());
         ok('Un ATHLÈTE ne peut pas écrire de brouillon',(()=>{
           const a={id:'a1',email:'a@t',role:'athlete'};
           const sauveC=currentUser, sauveE=_coachEditClient;
