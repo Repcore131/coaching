@@ -53661,6 +53661,91 @@ function testExercices(){
               return _echec('le programme publié a bougé : '+athlete.sessions_config[0].exercises[0].name);
             return true;
           } finally { currentUser=sauveC; _coachEditClient=sauveE; }})());
+        // ── LE CONTEXTE UNIQUE DE L'ÉDITEUR : LA CIBLE D'ÉCRITURE ───────
+        // Trois drapeaux globaux décidaient autrefois où saveProgram écrivait.
+        // Ils pouvaient rester positionnés : ouvrir une séance de MODÈLE, en
+        // revenir, puis sauvegarder la séance d'un ATHLÈTE écrivait dans le
+        // modèle. _progEditorCtx les remplace, et chaque point d'entrée le
+        // pose EN ENTIER — c'est ce « en entier » qui ferme le bug, puisqu'il
+        // écrase le mode précédent au lieu de s'ajouter à lui.
+        //
+        // Rien ne le vérifiait. Un test lexical n'aurait rien prouvé ici : la
+        // question n'est pas quel mot le code contient, mais dans QUEL objet
+        // il écrit.
+        ok('Critère : modèle puis athlète → l\'écriture va chez l\'athlète',(()=>{
+          const _sv=currentUser, _se=_coachEditClient, _sc=_progEditorCtx;
+          const _sco=window.confirm, _ss=window.saveUser;
+          try{
+            window.confirm=()=>true; window.saveUser=()=>true;
+            currentUser={id:'c1',email:'c@t',role:'coach',exAlias:{},exMuscles:{},
+              programs:{},sessions:[],bilans:[],nutrition:{},
+              coachPrograms:[{nom:'M',sessions_F:[],
+                sessions_H:[{day:'Lundi',name:'MOD',active:true,
+                  exercises:[{name:'MODELE SQUAT',series:5,reps:'5'}]}]}]};
+            _coachEditClient={id:'a1',email:'a@t',role:'athlete',fname:'A',
+              sessions_config:[{day:'Lundi',name:'ATH',active:true,
+                exercises:[{name:'ATH DC',series:3,reps:'10'}]}]};
+            _editProgTemplateIdx=0; _editProgTemplateGender='H';
+            // 1. Une séance de MODÈLE, puis retour par la flèche.
+            openProgTemplateSessionExercises(0);
+            if(_progEditorCtx.mode!=='template')
+              return _echec('mode '+_progEditorCtx.mode+' à l\'ouverture du modèle');
+            const bb=document.querySelector('#s-coach-program .back-btn');
+            if(!bb) return _echec('pas de bouton retour');
+            bb.onclick();
+            // 2. La séance d'un ATHLÈTE : le contexte est REMPLACÉ, pas complété.
+            openCoachSessionExercises(0);
+            if(_progEditorCtx.mode!=='coachClient')
+              return _echec('mode '+_progEditorCtx.mode+' à l\'ouverture athlète');
+            if(_progEditorCtx.progIdx!==undefined||_progEditorCtx.gender!==undefined)
+              return _echec('des champs du modèle survivent : '+JSON.stringify(_progEditorCtx));
+            progEx.push({name:'AJOUT COACH',series:4,reps:'8'});
+            document.getElementById('prog-name').value='ATH';
+            saveProgram();
+            // 3. L'écriture est allée chez l'ATHLÈTE, et le MODÈLE n'a pas bougé.
+            const ath=_coachEditClient.sessions_config[0].exercises.map(x=>x.name);
+            if(ath.indexOf('AJOUT COACH')<0)
+              return _echec('rien chez l\'athlète : '+ath.join(','));
+            const mod=currentUser.coachPrograms[0].sessions_H[0].exercises.map(x=>x.name);
+            if(mod.join(',')!=='MODELE SQUAT')
+              return _echec('LE MODÈLE A ÉTÉ ÉCRASÉ : '+mod.join(','));
+            // 4. Et le retour se fait sur l'écran des séances du coach.
+            const ec=(document.querySelector('.screen.active')||{}).id;
+            if(ec!=='s-coach-sessions') return _echec('retour sur '+ec);
+            return _progEditorCtx.mode==='clientProgram'
+              ?true:_echec('contexte non relâché : '+_progEditorCtx.mode);
+          } finally { currentUser=_sv; _coachEditClient=_se; _progEditorCtx=_sc;
+            window.confirm=_sco; window.saveUser=_ss; }})());
+        ok('Les trois anciens drapeaux ont bien disparu du code',(()=>{
+          // Ils ne subsistent que dans le commentaire qui explique leur
+          // remplacement. Un seul qui repartirait rouvrirait le bug.
+          const noms=['_editProgTemplateSessionIdx','_editingCoachSessionIdx',
+            '_editingSessionIdx'];
+          const vivants=noms.filter(n=>{
+            try{ return eval('typeof '+n)!=='undefined'; }catch(e){ return false; }});
+          if(vivants.length) return _echec('encore définis : '+vivants.join(', '));
+          // Et saveProgram route sur le MODE, pas sur des drapeaux.
+          const src=String(saveProgram);
+          const manque=['template','coachClient','athlete']
+            .filter(m=>src.indexOf("case '"+m+"'")<0);
+          if(manque.length) return _echec('cas absents du switch : '+manque.join(', '));
+          return /switch\(_ctx\.mode\)/.test(src)
+            ?true:_echec('saveProgram ne route plus sur le mode');})());
+        ok('Chaque point d\'entrée pose le contexte EN ENTIER',(()=>{
+          // C'est la propriété qui ferme le bug : une affectation complète
+          // écrase le mode précédent. Un Object.assign ou un champ posé à part
+          // le rouvrirait.
+          const rates=[];
+          for(const [f,mode] of [[openProgTemplateSessionExercises,'template'],
+                                 [openCoachSessionExercises,'coachClient'],
+                                 [openSessionExercises,'athlete']]){
+            const src=String(f);
+            if(src.indexOf("_progEditorCtx={mode:'"+mode+"'")<0)
+              rates.push(mode+' : affectation partielle ou absente');
+            if(/_progEditorCtx\.[a-zA-Z]+\s*=/.test(src))
+              rates.push(mode+' : un champ est posé à part');
+          }
+          return rates.length?_echec(rates.join(' · ')):true;})());
         ok('Un ATHLÈTE ne peut pas écrire de brouillon',(()=>{
           const a={id:'a1',email:'a@t',role:'athlete'};
           const sauveC=currentUser, sauveE=_coachEditClient;
