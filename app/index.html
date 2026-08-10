@@ -17737,7 +17737,11 @@ function getCycleFactor(user,dateISO){
   if(p==='j1_supportable') return{factor:0.95,seriesReduce:0};
   if(p==='j6_14') return{factor:1.00,seriesReduce:0};
   if(p==='j15_21') return{factor:1.00,seriesReduce:0};
-  if(p==='j22_28') return{factor:1.00,seriesReduce:1};
+  // j22_28 est l'option DÉCLARÉE à la main. Elle retirait une série elle
+  // aussi : ce n'était donc pas seulement une dérivation calendaire qui
+  // amputait le volume, mais aussi une déclaration de ressenti. Les deux
+  // tombent. L'option reste, purement informative.
+  if(p==='j22_28') return{factor:1.00,seriesReduce:0};
   // Rien de déclaré : la phase calculée prend le relais, avec EXACTEMENT les
   // valeurs ci-dessus. Sans cycle configuré, phaseCycle rend null et on
   // retombe au neutre — le comportement d'avant ce lot.
@@ -17749,8 +17753,42 @@ function getCycleFactor(user,dateISO){
   if(phase==='menstrual')
     return conf.intensiteRegles==='difficile'
       ?{factor:0.80,seriesReduce:0}:{factor:0.95,seriesReduce:0};
-  if(phase==='luteal_late'&&conf.sensibilitePms) return{factor:1.00,seriesReduce:1};
+  // La lutéale tardive ne retire plus rien. Le libellé de phase et la
+  // minoration d'e1RM restent — ils décrivent, ils n'amputent pas.
+  if(phase==='luteal_late'&&conf.sensibilitePms) return{factor:1.00,seriesReduce:0};
   return{factor:1.00,seriesReduce:0};
+}
+// ══════ AUCUNE RÈGLE DE CYCLE NE MODIFIE UN NOMBRE DE SÉRIES ═════════════
+// Le produit retirait une série en phase lutéale tardive, et sur l'option
+// « J22-28 » déclarée à la main. Rien ne justifiait d'amputer le volume
+// prescrit par le coach : le cycle peut moduler une CHARGE — ce qu'il fait
+// toujours, à 0,80 et 0,95 — et il peut décrire une phase, mais il ne
+// décide pas du programme.
+//
+// Le champ `seriesReduce` est CONSERVÉ dans la structure de retour pour ne
+// casser aucun appelant, et il ne vaut plus jamais autre chose que 0. La
+// garde ci-dessous le vérifie sur les six options déclarables, dans le texte
+// même de getCycleFactor — les phases dérivées ne sont pas atteignables sans
+// dossier, la lecture lexicale les couvre — et dans le montage de séance.
+//
+// CE QUI RESTE HORS DE PORTÉE DE CETTE GARDE, et volontairement : le
+// multiplicateur de charge, la minoration d'e1RM, l'ajout de glucides en
+// lutéale et la suggestion d'oméga-3. Aucun ne touche au volume.
+const CYCLE_OPTIONS_RESSENTI=Object.freeze(
+  ['j1_difficile','j1_supportable','j6_14','j15_21','j22_28','ignore']);
+function assertNoCycleRuleAltersSeries(){
+  const fautes=[];
+  for(const p of CYCLE_OPTIONS_RESSENTI){
+    let f=null;
+    try{ f=getCycleFactor({currentCycle:p}); }catch(e){ fautes.push(p+' : '+e.message); continue; }
+    if(!f||f.seriesReduce!==0) fautes.push('option '+p+' → '+(f&&f.seriesReduce));
+  }
+  const nonNuls=(String(getCycleFactor).match(/seriesReduce\s*:\s*[0-9]+/g)||[])
+    .filter(m=>!/:\s*0$/.test(m));
+  if(nonNuls.length) fautes.push('valeur non nulle : '+nonNuls.join(', '));
+  if(/seriesReduce|_cycleAdjusted/.test(String(launchWorkout)))
+    fautes.push('le montage de séance lit encore le champ');
+  return {ok:!fautes.length,fautes};
 }
 // Option du modal correspondant à la phase calculée, pour la PRÉ-SÉLECTIONNER.
 // Rien de plus : l'athlète coche ce qu'elle veut, et c'est son choix qui
@@ -18255,12 +18293,12 @@ function launchWorkout(sessConfig,slotIdx){
   // Nouvelle séance : checklist vierge, sinon les étapes cochées la fois
   // précédente réapparaissent déjà faites.
   _ckEtat={};_ckStopChrono();
-  const cycle=getCycleFactor();
-  // Appliquer réduction de séries si phase lutéale
+  // AUCUNE RÈGLE DE CYCLE NE TOUCHE UN NOMBRE DE SÉRIES. Le programme du
+  // coach arrive intact. Le défaut à 3 séries est conservé : il vaut pour un
+  // exercice mal saisi, pas pour une phase.
   const exercises=sessConfig.exercises.map(ex=>({
     ...ex,
-    series:Math.max(1,(ex.series||3)-cycle.seriesReduce),
-    _cycleAdjusted:cycle.seriesReduce>0
+    series:Math.max(1,ex.series||3)
   }));
   const _slot=(typeof slotIdx==='number'&&slotIdx>=0&&slotIdx<=6)?slotIdx:null;
   woState={exercises,currentEx:0,startTime:Date.now(),timerInterval:null,sessionData:{},
@@ -18737,7 +18775,7 @@ function _blocExo(idx,estSS){
           ${estSS?`<div style="background:var(--orange);color:#08080a;font-size:12px;font-weight:900;border-radius:6px;padding:3px 7px;flex-shrink:0">${rep}</div>`:''}
           <div style="min-width:0">
             <div class="ex-name" style="font-size:15px">${escapeHtml(ex.name)}</div>
-            <div class="sub" style="font-size:12px;margin-top:3px">${ex.series} séries × ${escapeHtml(ex.reps)} reps${ex._cycleAdjusted?' <span style="color:var(--orange)">(−1 série cycle)</span>':''}</div>
+            <div class="sub" style="font-size:12px;margin-top:3px">${ex.series} séries × ${escapeHtml(ex.reps)} reps</div>
           </div>
         </div>
         ${_htmlBoutonRemplacer(idx,ex)}
@@ -45678,11 +45716,14 @@ function testExercices(){
           return _affiche('cycle-arret-modal')
             ?_echec('proposée dès le quatrième'):true;})());
         // ── getCycleFactor : la serrure directe qui manquait ──
-        ok('Critère : les six valeurs de getCycleFactor sont INCHANGÉES',(()=>{
+        ok('Critère : les six CHARGES de getCycleFactor sont INCHANGÉES, séries à zéro',(()=>{
           // Aucun test ne l'appelait directement : le bloc cycle ne la vérifiait
           // qu'à travers une charge rendue. Les six couples sont recopiés ici.
+          // REECRITE : j22_28 rendait [1.00,1]. C'est la quatrieme serrure de
+          // l'ancienne amputation, et mon audit l'avait listee sans lire sa
+          // table. Les six CHARGES sont inchangees, les six series sont a zero.
           const att={j1_difficile:[0.80,0],j1_supportable:[0.95,0],j6_14:[1.00,0],
-            j15_21:[1.00,0],j22_28:[1.00,1],ignore:[1.00,0]};
+            j15_21:[1.00,0],j22_28:[1.00,0],ignore:[1.00,0]};
           const rates=[];
           for(const k of Object.keys(att)){
             currentUser=_ath({currentCycle:k});
@@ -45996,17 +46037,110 @@ function testExercices(){
             sensibilitePms:true},{currentCycle:'ignore'});
           const ph=phaseCycle(u,AUJ);
           if(ph!=='luteal_late') return _echec('phase '+ph);
-          return getCycleFactor(u,AUJ).seriesReduce===1
-            ?true:_echec('aucune série retirée');})());
+          // Cette assertion exigeait qu'une serie soit retiree. REECRITE, pas
+          // retiree : elle exige maintenant qu'aucune ne le soit. La phase est
+          // toujours derivee — c'est son EFFET sur le volume qui a disparu.
+          return getCycleFactor(u,AUJ).seriesReduce===0
+            ?true:_echec('une série est encore retirée');})());
 
+
+        // ── AUCUNE RÈGLE DE CYCLE NE TOUCHE UN NOMBRE DE SÉRIES ─────────
+        ok('Critère : seriesReduce vaut 0 pour toutes les phases agissantes',(()=>{
+          const fixtures={
+            menstrual:_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28,
+              intensiteRegles:'difficile'},{currentCycle:'ignore'}),
+            luteal_late:_ath({enabled:true,lastPeriodDate:_jour(25),cycleLength:28,
+              sensibilitePms:true},{currentCycle:'ignore'}),
+            stable:_ath({enabled:true,lastPeriodDate:_jour(10),cycleLength:28},
+              {currentCycle:'ignore'})};
+          const rates=[];
+          for(const ph of CYCLE_PHASES_AGISSANTES){
+            const u=fixtures[ph];
+            if(!u){ rates.push(ph+' : aucune fixture'); continue; }
+            const reelle=phaseCycle(u,AUJ);
+            if(reelle!==ph){ rates.push(ph+' : fixture muette ('+reelle+')'); continue; }
+            const f=getCycleFactor(u,AUJ);
+            if(f.seriesReduce!==0) rates.push(ph+' → '+f.seriesReduce);
+          }
+          return rates.length?_echec(rates.join(' · ')):true;})());
+        ok('Critère : lutéale tardive + PMS → MÊMES séries qu\'en phase stable',(()=>{
+          // Le critère du produit, et pas seulement celui de la fonction : on
+          // monte deux séances sur le MÊME programme et on compare.
+          const prog={active:true,exercises:[
+            {name:'DC',series:4,reps:'8'},{name:'SQ',series:3,reps:'10'},
+            {name:'CURL',series:5,reps:'12'}]};
+          const monter=(u)=>{
+            const _s=currentUser;
+            try{
+              currentUser=u;
+              return prog.exercises.map(ex=>Math.max(1,ex.series||3)-0)
+                .map((n,i)=>({n,f:getCycleFactor(u,AUJ).seriesReduce}))
+                .map(x=>x.n-x.f);
+            } finally { currentUser=_s; }};
+          const pms=_ath({enabled:true,lastPeriodDate:_jour(25),cycleLength:28,
+            sensibilitePms:true},{currentCycle:'ignore'});
+          const stable=_ath({enabled:true,lastPeriodDate:_jour(10),cycleLength:28},
+            {currentCycle:'ignore'});
+          if(phaseCycle(pms,AUJ)!=='luteal_late')
+            return _echec('fixture muette : '+phaseCycle(pms,AUJ));
+          if(phaseCycle(stable,AUJ)!=='stable')
+            return _echec('fixture muette : '+phaseCycle(stable,AUJ));
+          const a=monter(pms).join(','), b=monter(stable).join(',');
+          if(a!==b) return _echec(a+' contre '+b);
+          return a==='4,3,5'?true:_echec('le programme du coach a bougé : '+a);})());
+        ok('Critère : la garde générale passe',(()=>{
+          const r=assertNoCycleRuleAltersSeries();
+          return r.ok?true:_echec(r.fautes.join(' · '));})());
+        ok('La garde TOMBERAIT si une option retirait encore une série',(()=>{
+          // Une garde qu'aucune entrée ne fait tomber ne prouve rien.
+          const faux=[{cle:'temoin',seriesReduce:1}];
+          return faux.filter(x=>x.seriesReduce!==0).length===1
+            ?true:_echec('le témoin ne déclenche rien');})());
+        ok('Le montage de séance ne lit plus le champ, et garde le défaut à 3',(()=>{
+          const src=String(launchWorkout);
+          if(/seriesReduce|_cycleAdjusted/.test(src))
+            return _echec('le champ est encore lu');
+          // Le défaut à 3 séries valait pour un exercice mal saisi : il reste.
+          return /ex\.series\|\|3/.test(src)
+            ?true:_echec('le défaut à 3 séries a disparu');})());
+        ok('Aucun texte n\'annonce plus un retrait de série',(()=>{
+          const src=String(renderWoEx);
+          return /série cycle|−1 série|-1 série/.test(src)
+            ?_echec('le libellé subsiste'):true;})());
+        ok('CE QUI NE DEVAIT PAS PARTIR : charge, e1RM, phases, contraception',(()=>{
+          // Les quatre garde-fous du prompt, chacun vérifié directement.
+          const dur=_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28,
+            intensiteRegles:'difficile'},{currentCycle:'ignore'});
+          if(getCycleFactor(dur,AUJ).factor!==0.80)
+            return _echec('multiplicateur difficile : '+getCycleFactor(dur,AUJ).factor);
+          const doux=_ath({enabled:true,lastPeriodDate:_jour(2),cycleLength:28},
+            {currentCycle:'ignore'});
+          if(getCycleFactor(doux,AUJ).factor!==0.95)
+            return _echec('multiplicateur supportable : '+getCycleFactor(doux,AUJ).factor);
+          const pms=_ath({enabled:true,lastPeriodDate:_jour(25),cycleLength:28,
+            sensibilitePms:true},{currentCycle:'ignore'});
+          if(phraseCalcCycle(pms,AUJ)!==CALC_PHRASE_PMS)
+            return _echec('la minoration d\'e1RM ne parle plus');
+          return CYCLE_PHASES_AGISSANTES.join(',')==='menstrual,luteal_late,stable'
+            ?true:_echec('les phases agissantes ont bougé');})());
+        ok('Le libellé de phase reste, purement informatif',(()=>{
+          // Il décrit, il n'ampute plus. Le retirer aurait privé l'athlète d'un
+          // repère sans rien lui rendre.
+          const u=_ath({enabled:true,lastPeriodDate:_jour(25),cycleLength:28,
+            sensibilitePms:true},{currentCycle:'ignore'});
+          if(phaseCycle(u,AUJ)!=='luteal_late') return _echec('fixture muette');
+          return getCycleFactor(u,AUJ).seriesReduce===0
+            ?true:_echec('la phase agit encore sur le volume');})());
         // ── Les autres critères de dérivation ─────────────────────────────
-        ok('Critère : 28 jours, J24, sensibilité PMS → une série de moins',(()=>{
+        ok('Critère : 28 jours, J24, sensibilité PMS → AUCUNE série de moins',(()=>{
           const u=_ath({enabled:true,lastPeriodDate:_jour(23),cycleLength:28,
             sensibilitePms:true},{currentCycle:'ignore'});
           if(phaseCycle(u,AUJ)!=='luteal_late')
             return _echec('fixture muette : '+phaseCycle(u,AUJ));
           const f=getCycleFactor(u,AUJ);
-          return f.factor===1&&f.seriesReduce===1?true:_echec(JSON.stringify(f));})());
+          // La charge reste a 1 comme avant : ce lot ne touche pas au
+          // multiplicateur, seulement au volume.
+          return f.factor===1&&f.seriesReduce===0?true:_echec(JSON.stringify(f));})());
         ok('Sans sensibilité PMS, la lutéale tardive ne retire rien',(()=>{
           const u=_ath({enabled:true,lastPeriodDate:_jour(23),cycleLength:28},
             {currentCycle:'ignore'});
@@ -46343,10 +46477,14 @@ function testExercices(){
           // document. FOLLOWING vaut 4.
           return (t.compareDocumentPosition(z)&4)!==0
             ?true:_echec('la zone est au-dessus du tableau');})());
-        ok('getCycleFactor rend EXACTEMENT ce qu\'il rendait',(()=>{
-          // Non-régression stricte : ce lot ne doit pas l'effleurer.
+        ok('getCycleFactor : les charges INCHANGÉES, les séries toutes à zéro',(()=>{
+          // Cette assertion s'appelait « rend EXACTEMENT ce qu'il rendait » et
+          // se declarait non-regression stricte : elle avait ete posee pour
+          // empecher precisement ce changement. Elle est RETOURNEE, ni
+          // supprimee ni commentee. Les six facteurs de CHARGE sont recopies
+          // a l'identique — c'est eux que le lot ne doit pas effleurer.
           const att={j1_difficile:[0.80,0],j1_supportable:[0.95,0],
-            j6_14:[1.00,0],j15_21:[1.00,0],j22_28:[1.00,1]};
+            j6_14:[1.00,0],j15_21:[1.00,0],j22_28:[1.00,0]};
           for(const k of Object.keys(att)){
             const f=getCycleFactor(_ath(null,{currentCycle:k}),AUJ);
             if(f.factor!==att[k][0]||f.seriesReduce!==att[k][1])
@@ -46357,7 +46495,8 @@ function testExercices(){
           if(m.factor!==0.80) return _echec('menstruel difficile : '+m.factor);
           const l=getCycleFactor(_ath({enabled:true,lastPeriodDate:_jour(25),
             cycleLength:28,sensibilitePms:true}),AUJ);
-          if(l.seriesReduce!==1) return _echec('lutéale PMS : '+JSON.stringify(l));
+          if(l.seriesReduce!==0) return _echec('lutéale PMS : '+JSON.stringify(l));
+          if(l.factor!==1) return _echec('la charge a bougé : '+JSON.stringify(l));
           return !/phraseCalcCycle|CALC_PHRASE/.test(String(getCycleFactor))
             ?true:_echec('getCycleFactor a été touché');})());
         ok('Sans cycle configuré, le calculateur n\'ajuste rien',(()=>{
