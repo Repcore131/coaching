@@ -61650,6 +61650,90 @@ function testExercices(){
         streakSemaines({streak:5,lastSession:J(30),sessions_config:cfg(3)})===0);
       ok('streakSemaines rend la valeur stockee quand elle tient',
         streakSemaines({streak:5,lastSession:J(2),sessions_config:cfg(3)})===5);
+  // ── L'INCRÉMENTATION, et pas seulement la péremption ────────────────────
+  // Les assertions ci-dessus tiennent ecartNormalJours, _streakPerime et
+  // l'affichage. Rien ne tenait updateStreak lui-meme : il n'est exerce qu'une
+  // fois dans toute la suite, et sous SUSPENSION — c'est-a-dire dans le seul
+  // cas ou il ne doit RIEN faire. La regle qui fait monter le compteur n'etait
+  // verifiee nulle part.
+  ok('Une semaine au quota crédite UN point, et un seul',(()=>{
+    const _sv=currentUser, _ss=window.saveUser;
+    try{
+      window.saveUser=()=>true;
+      const J=n=>Date.now()-n*864e5;
+      const cfg=[{day:'Lundi',active:true,exercises:[]},{day:'Mardi',active:false,exercises:[]},
+        {day:'Mercredi',active:true,exercises:[]},{day:'Jeudi',active:false,exercises:[]},
+        {day:'Vendredi',active:true,exercises:[]},{day:'Samedi',active:false,exercises:[]},
+        {day:'Dimanche',active:false,exercises:[]}];
+      currentUser={id:'st',email:'st@t',role:'athlete',streak:0,streakWeek:null,
+        lastSession:J(1),bilans:[],nutrition:{},exAlias:{},exMuscles:{},programs:{},
+        sessions_config:JSON.parse(JSON.stringify(cfg)),
+        sessions:[{id:'a',date:J(5)},{id:'b',date:J(3)},{id:'c',date:J(1)}]};
+      if(seancesPrevuesParSemaine(currentUser)!==3)
+        return _echec('quota : '+seancesPrevuesParSemaine(currentUser));
+      updateStreak();
+      if(currentUser.streak!==1) return _echec('après une semaine : '+currentUser.streak);
+      // LE POINT QUI COMPTE : rappeler updateStreak dans la MEME semaine ne
+      // recredite pas. Sans la garde streakWeek, trois seances donneraient
+      // trois points et le compteur cesserait de compter des semaines.
+      updateStreak(); updateStreak();
+      if(currentUser.streak!==1) return _echec('recrédité dans la même semaine : '+currentUser.streak);
+      // Et le compteur AFFICHE suit la valeur stockee.
+      return streakSemaines(currentUser)===1
+        ?true:_echec('affiché : '+streakSemaines(currentUser));
+    } finally { currentUser=_sv; window.saveUser=_ss; }})());
+  ok('Sous le quota, rien n\'est crédité',(()=>{
+    const _sv=currentUser, _ss=window.saveUser;
+    try{
+      window.saveUser=()=>true;
+      const J=n=>Date.now()-n*864e5;
+      currentUser={id:'st2',email:'st2@t',role:'athlete',streak:0,streakWeek:null,
+        lastSession:J(1),bilans:[],nutrition:{},exAlias:{},exMuscles:{},programs:{},
+        sessions_config:[{active:true,exercises:[]},{active:true,exercises:[]},
+                         {active:true,exercises:[]}],
+        sessions:[{id:'a',date:J(3)},{id:'b',date:J(1)}]};   // deux sur trois
+      updateStreak();
+      if(currentUser.streak!==0) return _echec('crédité à 2 séances sur 3');
+      // La troisieme suffit a declencher le credit.
+      currentUser.sessions.push({id:'c',date:Date.now()-3600e3});
+      updateStreak();
+      return currentUser.streak===1?true:_echec('non crédité au quota atteint');
+    } finally { currentUser=_sv; window.saveUser=_ss; }})());
+  ok('Un jour de repos planifié ne déclenche AUCUNE relance',(()=>{
+    // Lundi / Mercredi / Vendredi : mardi et jeudi sont a deux jours de la
+    // derniere seance. L'ancienne relance parlait des le premier jour, ce qui
+    // reprochait a l'athlete de suivre son propre programme.
+    const cfg3=[{active:true,exercises:[]},{active:true,exercises:[]},{active:true,exercises:[]}];
+    const e=ecartNormalJours({sessions_config:cfg3});
+    if(e!==4) return _echec('écart normal : '+e);
+    // Un mardi ou un jeudi : deux jours. Silence.
+    if(2>e) return _echec('une relance sortirait un jour de repos');
+    // Et le seuil ne dort pas non plus : au-dela, elle parle.
+    if(!(5>e)) return _echec('plus aucune relance ne sort jamais');
+    // Un athlete a UNE seance par semaine a droit a huit jours.
+    const e1=ecartNormalJours({sessions_config:[{active:true,exercises:[]}]});
+    if(!(6<e1)) return _echec('six jours alertent quelqu\'un qui s\'entraîne une fois');
+    // Sans configuration, le plancher a 1 s'applique : jamais de division par
+    // zero, jamais d'alerte quotidienne.
+    return ecartNormalJours({})===8
+      ?true:_echec('sans configuration : '+ecartNormalJours({}));})());
+  ok('UNE seule sémantique : le header et la métrique disent tous deux « semaines »',(()=>{
+    // Le compteur a compte des jours consecutifs. Un libelle oublie en
+    // « jours » a cote d'un calcul en semaines serait pire qu'un chiffre faux.
+    const tout=document.documentElement.outerHTML;
+    const prod=tout.slice(0,tout.indexOf('function testExercices'));
+    const hdr=document.getElementById('clh-streak-val');
+    if(!hdr) return _echec('l\'encadré du header a disparu');
+    const lib=(hdr.parentNode.innerText||'').toUpperCase();
+    if(lib.indexOf('SEM')<0) return _echec('libellé du header : '+lib.slice(0,30));
+    if(/JOUR/.test(lib)) return _echec('le header parle encore de jours');
+    // La metrique de la fiche coach, et celle de l'accueil.
+    if((prod.match(/metric-label">Semaines</g)||[]).length<2)
+      return _echec('les deux métriques ne disent pas « Semaines »');
+    // Et les deux lisent la MEME fonction.
+    return /streakSemaines\(c\)/.test(prod)&&/streakSemaines\(currentUser\)/.test(prod)
+      ?true:_echec('header et métrique ne lisent pas la même source');})());
+
     })();
 
     // ── Le filet sur l'ANNULATION existante, posé avant de l'étendre ──
