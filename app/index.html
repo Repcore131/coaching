@@ -3055,6 +3055,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="nut-diet-content"></div>
       <!-- Journal Yazio (flexible) -->
       <div id="fj-today-section" style="display:none;margin-bottom:24px"></div>
+      <div id="fj-equiv"></div>
       <!-- Compléments alimentaires -->
       <div id="supp-embedded" style="margin-bottom:8px"></div>
       <!-- Caféine -->
@@ -31151,6 +31152,242 @@ function _fjAjouter(copies,dateCible,quoi){
   _renderFjDaySummary(dateCible);
   return true;
 }
+
+// ══════════════ ÉQUIVALENCES À MACRO CONSTANTE ════════════════════════════
+// Pour un aliment journalisé, trois à cinq substituts DU MÊME GROUPE dont la
+// quantité égalise le macronutriment dominant du groupe. Rien n'est jamais
+// substitué tout seul : l'athlète choisit, et il peut annuler.
+//
+// LA TABLE VIENT DES DONNÉES, pas d'une intuition. Part médiane des kcal
+// calculée sur les 3 484 aliments Ciqual, groupe par groupe. Deux écarts
+// assumés, et ils sont dits :
+//
+//   • PRODUITS LAITIERS : la médiane donne les LIPIDES à 57 %, tirée vers le
+//     haut par les fromages et les crèmes. Mais quelqu'un qui remplace un
+//     yaourt cherche à égaliser ses PROTÉINES. On choisit l'usage contre le
+//     chiffre, et on l'écrit ici pour que personne ne le "corrige" plus tard.
+//   • ENTRÉES ET PLATS COMPOSÉS (42 % lipides, 37 % glucides) et AIDES
+//     CULINAIRES (34 contre 31) n'ont AUCUNE macro dominante réelle.
+//     Substituer une pizza par un couscous « à lipides égaux » ne veut rien
+//     dire : ces deux groupes n'ont pas d'équivalence.
+const EQ_DOMINANT=Object.freeze({
+  'viandes, oeufs, poissons':'p',
+  'produits laitiers':'p',                       // usage contre médiane, cf. ci-dessus
+  'fruits, légumes, légumineuses et oléagineux':'c',
+  'produits céréaliers':'c',
+  'produits sucrés':'c',
+  'glaces et sorbets':'c',
+  'eaux et autres boissons':'c',
+  'aliments infantiles':'c',
+  'matières grasses':'l'
+  // 'entrées et plats composés' et 'aides culinaires et ingrédients divers'
+  // sont ABSENTS volontairement : aucune macro dominante.
+});
+const EQ_MIN=3, EQ_MAX=5;
+// Plafonds de vraisemblance, par groupe. Au-delà, on plafonne ET on le DIT :
+// « 1 200 g de courgettes » est une réponse mathématiquement juste et
+// pratiquement absurde, et l'afficher sans commentaire décrédibilise tout
+// l'écran.
+const EQ_PLAFOND=Object.freeze({
+  'fruits, légumes, légumineuses et oléagineux':400,
+  'eaux et autres boissons':1000,
+  'matières grasses':100,
+  'produits laitiers':500,
+  'viandes, oeufs, poissons':400,
+  'produits céréaliers':400,
+  'produits sucrés':300,
+  'glaces et sorbets':300,
+  'aliments infantiles':400
+});
+const EQ_PLAFOND_DEFAUT=500;
+const EQ_SANS_FILTRE_ALLERGENE='Cette liste n\'est PAS filtrée par allergène '
+  +'ni par régime : RepCore ne les enregistre pas encore. Vérifie toi-même que '
+  +'ce que tu choisis te convient.';
+
+// PURE. Le macronutriment d'égalisation d'un GROUPE — jamais d'un aliment.
+// Rend 'p', 'c', 'l', ou null quand le groupe n'a pas d'équivalence.
+function macroDominant(groupe){
+  const g=String(groupe==null?'':groupe).toLowerCase().trim();
+  if(!g) return null;
+  for(const k in EQ_DOMINANT) if(k.toLowerCase()===g) return EQ_DOMINANT[k];
+  return null;
+}
+// PURE. Le plafond de vraisemblance du groupe.
+function plafondEquivalence(groupe){
+  const g=String(groupe==null?'':groupe).toLowerCase().trim();
+  for(const k in EQ_PLAFOND) if(k.toLowerCase()===g) return EQ_PLAFOND[k];
+  return EQ_PLAFOND_DEFAUT;
+}
+// PURE. Les substituts. Rend un tableau, vide si le groupe n'a pas de macro
+// dominante, si l'aliment n'en porte pas, ou si la table n'est pas chargée.
+//
+// L'ÉCART RÉSIDUEL EST TOUJOURS CALCULÉ ET TOUJOURS RENDU, y compris nul : le
+// masquer laisserait croire à une équivalence parfaite, qui n'existe pas.
+function equivalents(aliment,qty,n,base){
+  const src=Array.isArray(base)?base:(typeof _ciqualDB!=='undefined'?_ciqualDB:null);
+  if(!Array.isArray(src)||!aliment) return [];
+  const dom=macroDominant(aliment.g);
+  if(!dom) return [];
+  const q=parseFloat(qty);
+  if(!isFinite(q)||q<=0) return [];
+  const valDom=parseFloat(aliment[dom]);
+  if(!isFinite(valDom)||valDom<=0) return [];
+  // La quantité de macro dominante à égaliser, en grammes.
+  const cible=valDom*q/100;
+  const plafond=plafondEquivalence(aliment.g);
+  const gLower=String(aliment.g).toLowerCase().trim();
+  const refP=(parseFloat(aliment.p)||0)*q/100;
+  const refC=(parseFloat(aliment.c)||0)*q/100;
+  const refL=(parseFloat(aliment.l)||0)*q/100;
+  const out=[];
+  for(const a of src){
+    if(!a||a.id===aliment.id) continue;
+    if(String(a.g||'').toLowerCase().trim()!==gLower) continue;
+    const v=parseFloat(a[dom]);
+    if(!isFinite(v)||v<=0) continue;
+    let qEq=cible*100/v;
+    if(!isFinite(qEq)||qEq<=0) continue;
+    // Sous un gramme, la ligne n'a aucun sens pratique.
+    if(qEq<1) continue;
+    let plafonne=false;
+    if(qEq>plafond){ qEq=plafond; plafonne=true; }
+    qEq=Math.round(qEq);
+    const p=(parseFloat(a.p)||0)*qEq/100;
+    const c=(parseFloat(a.c)||0)*qEq/100;
+    const l=(parseFloat(a.l)||0)*qEq/100;
+    const r1=x=>Math.round(x*10)/10;
+    out.push({alim:a,qtyEq:qEq,plafonne,
+      ecartP:r1(p-refP),ecartC:r1(c-refC),ecartL:r1(l-refL),
+      // Le classement se fait sur l'écart des DEUX AUTRES macros, en kcal :
+      // c'est ce que l'athlète subit réellement en acceptant le substitut.
+      _cout:Math.abs((dom==='p'?0:(p-refP)*4))
+           +Math.abs((dom==='c'?0:(c-refC)*4))
+           +Math.abs((dom==='l'?0:(l-refL)*9))
+           +(plafonne?10000:0)});
+  }
+  out.sort((a,b)=>a._cout-b._cout);
+  const max=(n>0?n:EQ_MAX);
+  return out.slice(0,Math.min(max,EQ_MAX)).map(x=>{ delete x._cout; return x; });
+}
+// PURE. L'écran est-il en registre STRICTEMENT DESCRIPTIF ? Le produit n'a pas
+// de `tcaRisque` : il a aTCA, qui coupe déjà onze chemins ailleurs. On s'y
+// adosse plutôt que d'inventer un second drapeau.
+function equivalenceDescriptive(user){
+  try{ return !!aTCA(user); }catch(e){ return false; }
+}
+
+// PURE. Construit une entrée de journal depuis un aliment Ciqual et une
+// quantité. MIROIR EXACT de saveFoodEntry, qui ne peut pas être appelée ici
+// (elle lit le DOM). Une assertion compare les deux sorties sur la même
+// entrée : c'est ce qui empêche les deux chemins de diverger.
+function _eqConstruireEntree(f,qty,repas,id){
+  const r=qty/100;
+  const e={
+    id:id||Date.now(),alim_id:f.id,nom:f.n,groupe:f.g||'',qty,repas:repas||'dejeuner',
+    kcal:f.k!=null?Math.round(f.k*r):null,
+    p:f.p!=null?parseFloat((f.p*r).toFixed(1)):null,
+    c:f.c!=null?parseFloat((f.c*r).toFixed(1)):null,
+    l:f.l!=null?parseFloat((f.l*r).toFixed(1)):null,
+    fi:f.f!=null?parseFloat((f.f*r).toFixed(1)):null,
+    sel:f.e!=null?parseFloat((f.e*r).toFixed(2)):null,
+    periSeance:false
+  };
+  for(const _mc in MICRO_REFS){
+    const _v=f[_mc];
+    if(_v!=null) e[_mc]=parseFloat((_v*r).toFixed(3));
+  }
+  return e;
+}
+// ── L'écran ───────────────────────────────────────────────────────────────
+let _eqCtx=null;   // {date, entryId} — en mémoire, jamais persisté
+function ouvrirEquivalents(date,entryId){
+  const es=_fjEntrees(date);
+  const e=es.find(x=>x&&String(x.id)===String(entryId));
+  if(!e) return false;
+  _eqCtx={date,entryId:String(entryId)};
+  const z=document.getElementById('fj-equiv');
+  if(!z) return false;
+  z.innerHTML=_htmlEquivalents(e);
+  z.scrollIntoView({block:'nearest'});
+  return true;
+}
+function fermerEquivalents(){
+  _eqCtx=null;
+  const z=document.getElementById('fj-equiv');
+  if(z) z.innerHTML='';
+  return true;
+}
+function _htmlEquivalents(e){
+  const alim=(typeof _ciqualDB!=='undefined'&&Array.isArray(_ciqualDB))
+    ?_ciqualDB.find(a=>a&&a.id===e.alim_id):null;
+  const descriptif=equivalenceDescriptive(currentUser);
+  const entete=`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
+      <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--sub);text-transform:uppercase">Équivalences</span>
+      <button onclick="fermerEquivalents()" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:18px;cursor:pointer;min-width:44px;min-height:32px">×</button>
+    </div>`;
+  const cadre=(corps)=>`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-top:10px">${entete}${corps}</div>`;
+  // RÈGLE 8 : produit OFF ou groupe vide ⇒ aucune équivalence, et on dit
+  // pourquoi plutôt que de rendre une liste vide muette.
+  if(!alim||!alim.g)
+    return cadre(`<div style="font-size:11.5px;color:var(--text-dim);line-height:1.6">Aucune équivalence pour cet aliment : ${escapeHtml(e.alim_source==='off'?'les produits de marque n\'ont pas de groupe Ciqual.':'il n\'appartient à aucun groupe alimentaire.')}</div>`);
+  const dom=macroDominant(alim.g);
+  if(!dom)
+    return cadre(`<div style="font-size:11.5px;color:var(--text-dim);line-height:1.6">Le groupe « ${escapeHtml(alim.g)} » n'a pas de macronutriment dominant : ses aliments sont trop différents les uns des autres pour qu'une équivalence veuille dire quelque chose.</div>`);
+  const l=equivalents(alim,e.qty,EQ_MAX);
+  if(!l.length)
+    return cadre(`<div style="font-size:11.5px;color:var(--text-dim);line-height:1.6">Aucun substitut exploitable dans ce groupe.</div>`);
+  const libDom={p:'protéines',c:'glucides',l:'lipides'}[dom];
+  const sgn=v=>(v>0?'+':'')+String(v).replace('.',',');
+  const ecart=(x)=>{
+    // RÈGLE 3 : les DEUX autres macros sont toujours montrées, y compris à
+    // zéro. « 0 » est une information ; l'absence n'en est pas une.
+    const t=[];
+    if(dom!=='p') t.push('P '+sgn(x.ecartP)+' g');
+    if(dom!=='c') t.push('G '+sgn(x.ecartC)+' g');
+    if(dom!=='l') t.push('L '+sgn(x.ecartL)+' g');
+    return t.join(' · ');
+  };
+  return cadre(`
+    <div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:9px">${escapeHtml(descriptif?'À '+libDom+' égales, dans le même groupe.':'Même quantité de '+libDom+', dans le même groupe. À toi de voir.')}</div>
+    ${l.map(x=>`<div style="display:flex;align-items:center;gap:9px;padding:8px 0;border-top:1px solid rgba(255,255,255,.06)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:700;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.alim.n)}</div>
+        <div style="font-size:10.5px;color:var(--sub);margin-top:2px">${x.qtyEq} g${x.plafonne?' <span style="color:var(--orange)">· plafonné</span>':''} &nbsp;·&nbsp; <span style="color:var(--text-dim)">${escapeHtml(ecart(x))}</span></div>
+        ${x.plafonne?`<div style="font-size:9.5px;color:var(--orange);line-height:1.5;margin-top:2px">Quantité plafonnée à ${plafondEquivalence(alim.g)} g : l'équivalence exacte demanderait davantage, ce qui ne se mange pas.</div>`:''}
+      </div>
+      <button onclick="appliquerEquivalence('${escapeHtml(x.alim.id)}',${x.qtyEq})"
+        class="btn btn-outline btn-sm" style="flex-shrink:0;margin:0;min-height:36px;padding:6px 11px;font-size:10.5px">Remplacer</button>
+    </div>`).join('')}
+    <div style="font-size:9.5px;color:var(--orange);line-height:1.55;margin-top:9px">${escapeHtml(EQ_SANS_FILTRE_ALLERGENE)}</div>
+    <div style="font-size:9.5px;color:var(--text-faint);line-height:1.55;margin-top:4px">Rien n'est remplacé tant que tu n'as pas appuyé. L'écart sur les autres macros est affiché tel quel, jamais arrondi à zéro.</div>`);
+}
+// RÈGLE 4 : la substitution ne se fait QUE sur ce bouton. Elle passe par
+// _fjDernierAjout — le mécanisme existant — étendu à la restitution, parce
+// qu'un remplacement retire une entrée en plus d'en ajouter une, et qu'une
+// annulation qui ne rendrait pas l'originale serait pire que pas d'annulation.
+function appliquerEquivalence(alimId,qtyEq){
+  if(!_eqCtx) return false;
+  const {date,entryId}=_eqCtx;
+  const log=(currentUser.nutrition||{}).log||{};
+  const j=log[date];
+  if(!j||!Array.isArray(j.entries)) return false;
+  const i=j.entries.findIndex(x=>x&&String(x.id)===String(entryId));
+  if(i<0) return false;
+  const ancienne=j.entries[i];
+  const alim=Array.isArray(_ciqualDB)?_ciqualDB.find(a=>a&&String(a.id)===String(alimId)):null;
+  if(!alim) return false;
+  const neuve=_eqConstruireEntree(alim,Number(qtyEq),ancienne.repas,Date.now());
+  // Le marqueur péri-séance de l'athlète survit au remplacement : c'est SA
+  // note, elle ne parle pas de l'aliment.
+  neuve.periSeance=!!ancienne.periSeance;
+  j.entries.splice(i,1,neuve);
+  _fjDernierAjout={date,ids:[neuve.id],quoi:escapeHtml(ancienne.nom)+' remplacé par '+escapeHtml(alim.n),
+    retirees:[{index:i,entree:ancienne}]};
+  saveUser();
+  fermerEquivalents();
+  _renderFjDaySummary(date);
+  return true;
+}
 function refaireRepas(dateSource,repas){
   // La cible est AUJOURD'HUI : refaire un repas d'un jour passé dans ce jour
   // passé n'aurait aucun sens.
@@ -31179,6 +31416,18 @@ function annulerDernierAjout(){
   // saisie à la main entre-temps ne doit pas partir avec.
   const aRetirer=new Set(a.ids.map(String));
   j.entries=j.entries.filter(e=>!aRetirer.has(String(e&&e.id)));
+  // RESTITUTION. Un AJOUT n a rien a rendre et ce bloc ne s execute pas :
+  // le chemin d avant est conserve a l octet pres. Un REMPLACEMENT, lui,
+  // a retire une entree en plus d en ajouter une — sans la rendre,
+  // « annuler » ferait perdre l originale, ce qui est pire que de ne rien
+  // proposer. On la remet A SA PLACE, pas a la fin.
+  if(Array.isArray(a.retirees)){
+    for(const r of a.retirees.slice().sort((x,y)=>x.index-y.index)){
+      if(!r||!r.entree) continue;
+      const i=Math.max(0,Math.min(j.entries.length,Number(r.index)||0));
+      j.entries.splice(i,0,r.entree);
+    }
+  }
   if(!j.entries.length) delete log[a.date];
   _fjDernierAjout=null;
   saveUser();
@@ -31990,6 +32239,9 @@ function deleteFoodEntry(date,id){
 }
 
 function _renderFjDaySummary(date){
+  // Une liste d equivalences ouverte vise une entree PRECISE : changer de
+  // jour la laisserait pointer dans le vide.
+  try{ if(_eqCtx&&_eqCtx.date!==date) fermerEquivalents(); }catch(e){}
   const el=document.getElementById('fj-today-section');
   if(!el) return;
   const todayStr=localISODate(new Date());
@@ -32094,6 +32346,8 @@ function _renderFjDaySummary(date){
           </div>
           <div style="flex-shrink:0;margin-left:8px;text-align:right">
             ${e.kcal!=null?`<div style="font-size:13px;font-weight:800;color:var(--red)">${e.kcal}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400"> kcal</span></div>`:`<span style="font-size:var(--fs-xs);font-weight:800;color:#fb923c;background:#1a0e00;border:1px solid #3a1e00;border-radius:4px;padding:1px 5px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`}
+            <button onclick="ouvrirEquivalents('${date}',${e.id})" title="Équivalences" aria-label="Voir des équivalences"
+              style="background:none;border:none;color:var(--text-dim);font-size:13px;cursor:pointer;padding:2px 4px;margin-top:2px">⇄</button>
             <button onclick="deleteFoodEntry('${date}',${e.id})" style="background:none;border:none;color:var(--text-dim);font-size:14px;cursor:pointer;padding:2px 4px;margin-top:2px">✕</button>
           </div>
         </div>`).join('')}
@@ -58566,6 +58820,195 @@ function testExercices(){
         streakSemaines({streak:5,lastSession:J(30),sessions_config:cfg(3)})===0);
       ok('streakSemaines rend la valeur stockee quand elle tient',
         streakSemaines({streak:5,lastSession:J(2),sessions_config:cfg(3)})===5);
+    })();
+
+    // ── Le filet sur l'ANNULATION existante, posé avant de l'étendre ──
+    (function(){
+      const sauveU=currentUser, sauveA=_fjDernierAjout;
+      try{
+        ok('Non-régression : annuler un AJOUT retire exactement ce qui a été ajouté',(()=>{
+          const u={id:'an',nutrition:{log:{'2026-08-08':{entries:[
+            {id:1,nom:'A',qty:100,kcal:100},{id:2,nom:'B',qty:50,kcal:50}]}}}};
+          currentUser=u;
+          // Un ajout, comme _fjAjouter le pose.
+          u.nutrition.log['2026-08-08'].entries.push({id:3,nom:'C',qty:10,kcal:10});
+          _fjDernierAjout={date:'2026-08-08',ids:[3],quoi:'1 aliment ajouté'};
+          annulerDernierAjout();
+          const e=u.nutrition.log['2026-08-08'].entries;
+          if(e.length!==2) return _echec(e.length+' entrées restantes');
+          if(e[0].id!==1||e[1].id!==2) return _echec('les entrées d\'origine ont bougé');
+          return _fjDernierAjout===null?true:_echec('le drapeau subsiste');})());
+        ok('Non-régression : le jour est supprimé quand il ne reste rien',(()=>{
+          const u={id:'an2',nutrition:{log:{'2026-08-08':{entries:[{id:9,nom:'X',qty:1}]}}}};
+          currentUser=u;
+          _fjDernierAjout={date:'2026-08-08',ids:[9],quoi:'x'};
+          annulerDernierAjout();
+          return u.nutrition.log['2026-08-08']===undefined
+            ?true:_echec('le jour subsiste');})());
+      } finally { currentUser=sauveU; _fjDernierAjout=sauveA; }
+    })();
+
+    // ── Équivalences : les six critères d'acceptation ──
+    (function(){
+      const sauveU=currentUser, sauveA=_fjDernierAjout, sauveC=_eqCtx;
+      const poulet=Array.isArray(_ciqualDB)
+        ?(_ciqualDB.find(a=>/^Poulet blanc/.test(a.n))
+          ||_ciqualDB.find(a=>a.g==='viandes, oeufs, poissons'&&a.p>20)):null;
+      try{
+        // Critère 1 : tous les substituts du même groupe.
+        ok('Critère 1 : 100 g de blanc de poulet ⇒ tous les substituts du même groupe',(()=>{
+          if(!poulet) return _echec('table Ciqual absente');
+          const l=equivalents(poulet,100,5);
+          if(l.length<3||l.length>5) return _echec(l.length+' substituts');
+          if(!l.every(x=>x.alim.g===poulet.g)) return _echec('frontière de groupe franchie');
+          return l.every(x=>x.alim.id!==poulet.id)
+            ?true:_echec('l\'aliment lui-même est proposé');})());
+
+        // Critère 2 : protéines nulles à l'arrondi, glucides et lipides rendus.
+        ok('Critère 2 : écart protéines nul à l\'arrondi, écarts G et L rendus',(()=>{
+          const l=equivalents(poulet,100,5).filter(x=>!x.plafonne);
+          if(!l.length) return _echec('aucun substitut exact');
+          for(const x of l){
+            if(Math.abs(x.ecartP)>0.6) return _echec('écart P = '+x.ecartP);
+            if(typeof x.ecartC!=='number'||typeof x.ecartL!=='number')
+              return _echec('un écart manque');
+          }
+          // Et ils sont AFFICHÉS, y compris à zéro.
+          const e={id:1,alim_id:poulet.id,nom:poulet.n,qty:100,repas:'dejeuner'};
+          const h=_htmlEquivalents(e);
+          // Un écart RÉELLEMENT nul s'écrit « 0 g », sans signe — et c'est
+          // juste : deux viandes maigres ont bien 0 g de glucides l'une comme
+          // l'autre. Exiger un signe revenait à exiger que l'écart soit non
+          // nul, ce que la règle 3 ne demande pas : elle demande qu'il soit
+          // AFFICHÉ, y compris à zéro.
+          if(!/G [+-]?\d/.test(h)) return _echec('les glucides ne sont pas affichés');
+          if(!/L [+-]?\d/.test(h)) return _echec('les lipides ne sont pas affichés');
+          // Et jamais masqué : autant de mentions que de substituts.
+          const n=(h.match(/Remplacer/g)||[]).length;
+          return (h.match(/G [+-]?\d/g)||[]).length===n
+            ?true:_echec('un écart manque sur un substitut');})());
+
+        // Critère 3 : groupe vide ⇒ rien, et explication à l'écran.
+        ok('Critère 3 : groupe vide ⇒ tableau vide et explication affichée',(()=>{
+          const vide=_ciqualDB.find(a=>!a.g||!String(a.g).trim());
+          if(!vide) return _echec('aucun aliment sans groupe dans la table');
+          if(equivalents(vide,100,5).length!==0) return _echec('des substituts sont rendus');
+          const h=_htmlEquivalents({id:1,alim_id:vide.id,nom:vide.n,qty:100});
+          if(!/Aucune équivalence/.test(h)) return _echec('aucune explication');
+          return /groupe alimentaire/.test(h)?true:_echec('l\'explication est muette');})());
+        ok('Règle 8 : produit OFF ⇒ aucune équivalence, et l\'écran le dit',(()=>{
+          const h=_htmlEquivalents({id:1,alim_id:'off:123',nom:'Skyr',qty:100,alim_source:'off'});
+          return /produits de marque/.test(h)
+            ?true:_echec('l\'explication ne cite pas les produits de marque');})());
+
+        // Critère 4 : plafonnement mentionné.
+        ok('Critère 4 : équivalence plafonnée ⇒ mention présente',(()=>{
+          const riche=_ciqualDB.find(a=>a.g==='fruits, légumes, légumineuses et oléagineux'&&a.c>50);
+          if(!riche) return _echec('fixture introuvable');
+          const l=equivalents(riche,300,5);
+          const plaf=l.filter(x=>x.plafonne);
+          if(!plaf.length) return true;   // aucun plafonnement sur ce jeu : rien à dire
+          if(!l.every(x=>x.qtyEq<=plafondEquivalence(riche.g)))
+            return _echec('le plafond est franchi');
+          const h=_htmlEquivalents({id:1,alim_id:riche.id,nom:riche.n,qty:300});
+          return /plafonn/.test(h)?true:_echec('aucune mention de plafonnement');})());
+
+        // Critère 5 : substitution appliquée puis annulée ⇒ entrée restaurée.
+        ok('Critère 5 : substitution puis annulation ⇒ entrée d\'origine à l\'identique',(()=>{
+          const cible=equivalents(poulet,100,5)[0];
+          if(!cible) return _echec('aucun substitut');
+          const origine={id:42,alim_id:poulet.id,nom:poulet.n,groupe:poulet.g,qty:100,
+            repas:'dejeuner',kcal:165,p:31,c:0,l:3.6,fi:0,sel:0.1,periSeance:true};
+          const u={id:'sub',nutrition:{log:{'2026-08-08':{entries:[
+            {id:41,nom:'avant',qty:10},JSON.parse(JSON.stringify(origine)),{id:43,nom:'après',qty:10}]}}}};
+          currentUser=u; _eqCtx={date:'2026-08-08',entryId:'42'};
+          const avant=JSON.stringify(u.nutrition.log['2026-08-08'].entries);
+          if(!appliquerEquivalence(String(cible.alim.id),cible.qtyEq))
+            return _echec('la substitution a échoué');
+          const apres=u.nutrition.log['2026-08-08'].entries;
+          if(apres.length!==3) return _echec('le nombre d\'entrées a changé');
+          if(apres[1].alim_id!==cible.alim.id) return _echec('le remplacement n\'a pas eu lieu');
+          if(apres[1].periSeance!==true) return _echec('le marqueur péri-séance est perdu');
+          // Annulation.
+          annulerDernierAjout();
+          const fin=u.nutrition.log['2026-08-08'].entries;
+          if(JSON.stringify(fin)!==avant)
+            return _echec('restauration imparfaite : '+JSON.stringify(fin).slice(0,120));
+          return true;})());
+        ok('L\'entrée restaurée revient À SA PLACE, pas à la fin',(()=>{
+          const cible=equivalents(poulet,100,5)[0];
+          const u={id:'pl',nutrition:{log:{'2026-08-08':{entries:[
+            {id:1,nom:'un',qty:10},{id:2,alim_id:poulet.id,nom:poulet.n,qty:100,repas:'matin'},
+            {id:3,nom:'trois',qty:10}]}}}};
+          currentUser=u; _eqCtx={date:'2026-08-08',entryId:'2'};
+          appliquerEquivalence(String(cible.alim.id),cible.qtyEq);
+          annulerDernierAjout();
+          const e=u.nutrition.log['2026-08-08'].entries;
+          return (e.length===3&&e[0].id===1&&e[1].id===2&&e[2].id===3)
+            ?true:_echec(e.map(x=>x.id).join(','));})());
+
+        // Critère 6 : registre descriptif sous antécédent déclaré.
+        ok('Critère 6 : antécédent de TCA ⇒ aucun texte incitatif',(()=>{
+          const u={id:'tca',bilans:[{type:'depart',date:1,'deb-tca':'Oui, il y a des années'}],
+            nutrition:{log:{}}};
+          currentUser=u;
+          if(!equivalenceDescriptive(u)) return _echec('le registre ne bascule pas');
+          const h=_htmlEquivalents({id:1,alim_id:poulet.id,nom:poulet.n,qty:100});
+          const txt=h.replace(/<[^>]*>/g,' ');
+          // Aucune formulation qui pousse à changer, à alléger ou à faire mieux.
+          const incite=/plus l[ée]ger|moins calorique|meilleur choix|préf[èe]re|allège|économise|au lieu de te|tu devrais|conseill/i;
+          if(incite.test(txt)) return _echec('formulation incitative : '+(incite.exec(txt)||[''])[0]);
+          // Et le registre est bien celui, neutre, de la variante descriptive.
+          return /À protéines égales/.test(txt)
+            ?true:_echec('registre inattendu : '+txt.slice(0,90));})());
+        ok('Hors antécédent, le registre reste neutre lui aussi',(()=>{
+          const u={id:'n',bilans:[],nutrition:{log:{}}};
+          currentUser=u;
+          const txt=_htmlEquivalents({id:1,alim_id:poulet.id,nom:poulet.n,qty:100})
+            .replace(/<[^>]*>/g,' ');
+          return !/tu devrais|meilleur choix|plus léger/i.test(txt)
+            ?true:_echec('formulation incitative hors TCA');})());
+
+        // Règle 4 : rien ne s'applique tout seul.
+        ok('Règle 4 : aucune substitution sans action explicite',(()=>{
+          const u={id:'auto',nutrition:{log:{'2026-08-08':{entries:[
+            {id:7,alim_id:poulet.id,nom:poulet.n,qty:100}]}}}};
+          currentUser=u; _eqCtx=null;
+          const avant=JSON.stringify(u);
+          equivalents(poulet,100,5);
+          _htmlEquivalents({id:7,alim_id:poulet.id,nom:poulet.n,qty:100});
+          ouvrirEquivalents('2026-08-08',7);
+          if(JSON.stringify(u)!==avant) return _echec('le dossier a changé sans clic');
+          // Et sans contexte ouvert, appliquer ne fait rien.
+          _eqCtx=null;
+          return appliquerEquivalence('1',100)===false
+            ?true:_echec('une substitution a eu lieu hors contexte');})());
+        ok('La mention d\'absence de filtre allergène est affichée',(()=>{
+          currentUser={id:'a',bilans:[],nutrition:{log:{}}};
+          const h=_htmlEquivalents({id:1,alim_id:poulet.id,nom:poulet.n,qty:100});
+          return /PAS filtrée par allergène/.test(h)
+            ?true:_echec('la mention manque');})());
+        ok('_eqConstruireEntree est le MIROIR de saveFoodEntry',(()=>{
+          // Le seul garde-fou contre une divergence des deux chemins.
+          const u={id:'m',nutrition:{log:{},recentFoods:[]}};
+          const sU=currentUser, sF=_fjFood, sD=_fjDate, sR=_fjRepas;
+          try{
+            currentUser=u; _fjDate='2026-08-08'; _fjRepas='dejeuner'; _fjFood=poulet;
+            const q=document.getElementById('fja-qty');
+            const qs=q?q.value:null; if(q) q.value=137;
+            saveFoodEntry();
+            if(q) q.value=qs;
+            const ref=(u.nutrition.log['2026-08-08']||{entries:[]}).entries[0];
+            if(!ref) return _echec('saveFoodEntry n\'a rien écrit');
+            const mien=_eqConstruireEntree(poulet,137,'dejeuner',ref.id);
+            for(const k of Object.keys(ref)){
+              if(k==='unite') continue;      // propre à la saisie en unités
+              if(JSON.stringify(ref[k])!==JSON.stringify(mien[k]))
+                return _echec('divergence sur « '+k+' » : '+ref[k]+' vs '+mien[k]);
+            }
+            return true;
+          } finally { currentUser=sU; _fjFood=sF; _fjDate=sD; _fjRepas=sR; }})());
+      } finally { currentUser=sauveU; _fjDernierAjout=sauveA; _eqCtx=sauveC; }
     })();
 
     // ── Expression des macros : les six critères d'acceptation ──
