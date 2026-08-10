@@ -1973,6 +1973,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="ccd-volume"></div>
       <div id="ccd-plateaux"></div>
       <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:16px" onclick="ouvrirRapport(getOwnedClient(currentClientId))">Rapport de la période</button>
+      <div id="ccd-securite"></div>
       <div id="ccd-photos-progression"></div>
       <div id="ccd-habitudes"></div>
       <div id="ccd-suspension"></div>
@@ -12605,6 +12606,14 @@ function openClientDetail(cid,_refresh){
   try{ renderPlateauxCoach(c); }catch(e){}
   try{ renderDouleurCoach(c); }catch(e){}
   try{ renderLeveeCoach(c); }catch(e){}
+  // BILAN DE SECURITE : une ligne, sans le detail des reponses — le coach
+  // n a pas a savoir LESQUELLES, seulement qu une vigilance s impose.
+  try{
+    const _zt=document.getElementById('ccd-securite');
+    if(_zt) _zt.innerHTML=aTCA(c)
+      ?`<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:10px;padding:11px 13px;margin-bottom:16px;font-size:11.5px;color:#ddd;line-height:1.6">${escapeHtml(SCOFF_ALERTE_COACH)}</div>`
+      :'';
+  }catch(e){}
   try{ renderHabitudesCoach(c); }catch(e){}
   try{ renderPhotosCoach(c); }catch(e){}
   // Chips de reponse au bilan : la zone n'existe qu'apres le rendu des
@@ -24933,7 +24942,13 @@ const DEB_STEPS=[
   // Step 4 : Nutrition
   ()=>bSec('Nutrition ',
     bLbl('As-tu des allergies ou régimes alimentaires spécifiques ? ')+bT('deb-allergies','Ex: Intolérance lactose, végétarien...')+
-    bLbl('Présences de troubles du comportement alimentaire (TCA) ? (Si oui, précise)')+bT('deb-tca','Précise si oui...')+
+    bLbl('Y a-t-il quelque chose que ton coach doit savoir sur ton rapport à l\'alimentation ?')+bT('deb-tca','Facultatif — ce que tu veux en dire')+
+    // QUESTIONS DE SECURITE. Le titre ne nomme aucun trouble, aucun score
+    // n est affiche, et les reponses ne sont PAS conservees : seul le
+    // booleen qu elles produisent l est.
+    bLbl('Quelques questions de sécurité')+
+    `<div style="font-size:11px;color:var(--text-dim);line-height:1.6;margin-bottom:10px;text-transform:none;letter-spacing:normal;font-weight:400">Elles servent à savoir si un objectif de poids est prudent pour toi en ce moment. Tes réponses ne sont pas enregistrées.</div>`+
+    SCOFF_QUESTIONS.map(q=>bLbl(q.q)+`<div>${bC('deb-scoff-'+q.cle,['Oui','Non'])}</div>`).join('')+
     bLbl('Quel type de suivi nutritionnel préfères tu ? ')+
     `<div>${bC('deb-nutrition-type',['Diet strict : Plan alimentaire détaillé avec quantités précises','Diet flexible : Conseils personnalisés + calcul via application'])}</div>`+
     bLbl('Nombre de repas par jour que tu préfères ? ')+
@@ -24974,6 +24989,24 @@ function saveBilanFinal(){
   _bilClearDraft();
   if(bilType==='depart'){
     currentUser.questionnaireComplete=true;
+    // BILAN DE SECURITE. Les reponses servent UNE FOIS, ici, puis elles
+    // sont retirees de l objet enregistre : la finalite est atteinte par le
+    // seul booleen, et conserver cinq reponses sur les conduites
+    // alimentaires constituerait un dossier de sante sans necessite.
+    try{
+      const _rep=SCOFF_QUESTIONS.map(q=>{
+        const v=_texteReponse(bilData['deb-scoff-'+q.cle]);
+        if(/^oui$/i.test(String(v||'').trim())) return true;
+        if(/^non$/i.test(String(v||'').trim())) return false;
+        return null;                       // sans reponse : compte positif
+      });
+      const _pose=SCOFF_QUESTIONS.some(q=>bilData['deb-scoff-'+q.cle]!==undefined);
+      if(_pose){
+        const _risque=appliquerRisqueTca(currentUser,_rep);
+        if(_risque) try{ alert(SCOFF_MSG_POSITIF); }catch(e){}
+      }
+      for(const q of SCOFF_QUESTIONS){ delete bi['deb-scoff-'+q.cle]; delete bilData['deb-scoff-'+q.cle]; }
+    }catch(e){}
     // Objectifs bilan départ → bilanGoals (champ distinct de objective/profil)
     const goals=bilData['deb-goals'];
     if(goals&&(Array.isArray(goals)?goals.length:goals))
@@ -37135,6 +37168,13 @@ function changerPhase(user,type,finPrevue,definiPar){
   // La garde est DANS la fonction, pas dans l'écran : le coach passe par le
   // même chemin, et il ne voit pas forcément la déclaration.
   if(type==='seche'&&grossesseSuspend(user)) return false;
+  // BILAN DE SECURITE. Meme mecanique, meme endroit, et le refus se DIT :
+  // un blocage silencieux laisse croire a un bug. La grossesse passe avant
+  // — un seul message, celui qui existe deja.
+  if(type==='seche'&&aTCA(user)){
+    try{ toast(TCA_REFUS_SECHE,'var(--orange)'); }catch(e){}
+    return false;
+  }
   // Post-partum : AUCUN blocage. Une question, et elle passe.
   if(type==='seche'&&etatGrossesse(user)==='post_partum'){
     try{ toast(GROSSESSE_Q_POSTNATALE,'var(--orange)'); }catch(e){}
@@ -37267,7 +37307,12 @@ function vitesseAlerte(pct,cible){
 // neutre. Conséquence assumée : une réponse comme « non, jamais » n'est pas
 // filtrée et bascule en mode neutre. Pour un garde-fou, c'est le bon sens
 // d'erreur.
-const _RIEN_DECLARE=/^(non|aucun|aucune|rien|ras|n\/a)\.?$/i;
+// _RIEN_DECLARE A ETE SUPPRIMEE. Elle decidait du statut TCA depuis un champ
+// de TEXTE LIBRE, en exigeant que la reponse soit EXACTEMENT l un de six
+// mots. Mesure faite : « Jamais », « Aucune, jamais », « non, jamais eu » et
+// « aucun trouble alimentaire » declenchaient TOUS le risque. Le dépistage
+// passe desormais par le questionnaire structure, et le champ libre n est
+// plus analyse par rien.
 
 // ══════════════ AJUSTEMENT PROPOSÉ : LA VITESSE CONTRE LA FOURCHETTE ════════
 // Une PROPOSITION, jamais une application automatique. L'athlète décide, le
@@ -38298,6 +38343,10 @@ const PAUSE_PROPOSABLE_SOUS_TCA=false;
 function pauseProposee(user){
   if(!user) return null;
   if(!PAUSE_PROPOSABLE_SOUS_TCA){
+    // Rend null, et c est VOULU : appliquerPause fait `if(!prop)`, et un
+    // objet de refus y serait truthy — une pause partirait avec des valeurs
+    // indefinies. Le REFUS est porte par l ecran, qui affiche
+    // PAUSE_MENTION_TCA : il est deja explicite, il n est pas muet.
     try{ if(aTCA(user)) return null; }catch(e){}
   }
   if(pauseActive(user)) return null;                 // déjà en pause
@@ -38744,12 +38793,111 @@ function paliersDeficit(user,jourISO){
 function seuilAlerteSeche(user){
   return sopkApplicable(user)?SOPK_CIBLE_SECHE.alerte:((PHASES.seche||{}).alerte);
 }
-function aTCA(user){
-  const dep=((user&&user.bilans)||[]).filter(b=>b&&b.type==='depart').slice(-1)[0];
-  if(!dep) return false;
-  const txt=_texteReponse(dep['deb-tca']);
-  return !!txt&&!_RIEN_DECLARE.test(txt);
+// ══════════════ DÉPISTAGE STRUCTURÉ — SCOFF ═══════════════════════════════
+// CE QUI EXISTAIT ÉTAIT FAUX. Le statut venait d'une REGEX sur un champ de
+// texte libre : /^(non|aucun|aucune|rien|ras|n\/a)\.?$/i, qui exigeait que la
+// réponse soit EXACTEMENT l'un de ces six mots. Mesuré sur des formulations
+// réelles : « Jamais », « Aucune, jamais », « non, jamais eu » et même
+// « aucun trouble alimentaire » déclenchaient tous le risque. Un athlète qui
+// répondait honnêtement voyait son plancher relevé de 15 % sans jamais savoir
+// pourquoi. La regex est SUPPRIMÉE, pas conservée en filet.
+//
+// Le champ de texte libre RESTE — le coach le lit — mais plus rien ne
+// l'analyse. C'est la différence entre une information et un déclencheur.
+//
+// LES RÉPONSES INDIVIDUELLES NE SONT PAS CONSERVÉES. La finalité — relever un
+// plancher et désactiver un objectif — est atteinte par le seul booléen.
+// Garder cinq réponses sur les conduites alimentaires, c'est constituer un
+// dossier de santé au sens de l'article 9 sans nécessité.
+const SCOFF_SEUIL=2;              // ni paramétrable, ni réglable par le coach
+const SCOFF_REPASSAGE_MOIS=6;
+// Les cinq questions, dans leur formulation française validée. AUCUNE ne
+// nomme un trouble : ni « TCA », ni « anorexie », ni « boulimie ». L'écran non
+// plus, et aucun score n'est affiché.
+const SCOFF_QUESTIONS=Object.freeze([
+  {cle:'s',q:'T\'arrive-t-il de te faire vomir parce que tu te sens mal d\'avoir trop mangé ?'},
+  {cle:'c',q:'T\'inquiètes-tu d\'avoir perdu le contrôle de ce que tu manges ?'},
+  {cle:'o',q:'As-tu perdu plus de 6 kilos au cours des trois derniers mois ?'},
+  {cle:'f',q:'Penses-tu que tu es trop gros(se) alors que d\'autres te trouvent trop mince ?'},
+  {cle:'d',q:'Dirais-tu que la nourriture occupe une place dominante dans ta vie ?'}
+]);
+const SCOFF_MSG_POSITIF='Merci pour tes réponses. Certaines d\'entre elles '
+  +'justifient d\'en parler à un professionnel de santé avant de fixer un '
+  +'objectif de poids. RepCore ne pose aucun diagnostic. En attendant, ton '
+  +'plancher calorique a été relevé et les objectifs de perte de poids sont '
+  +'désactivés. Ressource : Anorexie Boulimie Info Écoute, 09 69 325 900.';
+const SCOFF_ALERTE_COACH='Bilan de sécurité : vigilance recommandée avant de '
+  +'fixer un objectif de poids.';
+// Le refus opposé à un objectif de perte. Calqué sur GROSSESSE_REFUS_SECHE —
+// même doctrine, même forme — et il ne nomme aucun trouble.
+const TCA_REFUS_SECHE='Pas d\'objectif de perte de poids pour le moment. '
+  +'Tes réponses au bilan de sécurité invitent à en parler d\'abord à un '
+  +'professionnel de santé.';
+// Pas de constante de refus pour la pause : l ecran porte deja
+// PAUSE_MENTION_TCA, ecrit avant ce lot et couvert par ses propres
+// assertions. En ajouter une seconde aurait cree deux textes pour un seul
+// refus, et garanti qu ils divergent un jour.
+
+// PURE. RÈGLE 1 : seuil de DEUX sur cinq, en dur.
+// RÈGLE 3 : une question sans réponse compte POSITIF. Refuser de répondre à
+// « t'arrive-t-il de te faire vomir » n'est pas une absence d'information.
+function evaluerScoff(reponses){
+  const l=Array.isArray(reponses)?reponses:[];
+  let n=0;
+  for(let i=0;i<SCOFF_QUESTIONS.length;i++){
+    const r=l[i];
+    if(r===true) { n++; continue; }
+    if(r===false) continue;
+    n++;                                    // null, undefined, absent : positif
+  }
+  return n>=SCOFF_SEUIL;
 }
+// PURE. Le nombre de positifs, pour les tests SEULEMENT. Il n'est jamais
+// affiché : montrer « 3/5 » à quelqu'un, c'est lui donner un score à battre.
+function _scoffCompte(reponses){
+  const l=Array.isArray(reponses)?reponses:[];
+  let n=0;
+  for(let i=0;i<SCOFF_QUESTIONS.length;i++) if(l[i]!==false) n++;
+  return n;
+}
+// ÉCRIT. Le SEUL point d'écriture du statut. Les réponses ne sont pas
+// transmises plus loin : elles meurent ici.
+function appliquerRisqueTca(user,reponses){
+  if(!user) return false;
+  const risque=evaluerScoff(reponses);
+  user.tcaRisque=!!risque;
+  user.tcaRisqueDate=Date.now();
+  return !!risque;
+}
+// PURE. LE booléen. Les trois décisions — plancher, objectif de perte, diet
+// break — le lisent, et lui seul.
+//
+// MIGRATION. Un dossier qui n'a jamais passé le questionnaire rend FAUX : on
+// ne peut pas déduire un risque d'un texte libre, c'est exactement l'erreur
+// qu'on corrige. Conséquence assumée et signalée : un athlète marqué à raison
+// par l'ancienne regex perd sa majoration jusqu'à ce qu'il réponde. C'est
+// pourquoi scoffAPasser le lui propose, plutôt que de trancher à sa place.
+function aTCA(user){
+  return !!(user&&user.tcaRisque===true);
+}
+// PURE. Faut-il proposer le questionnaire ? Jamais passé, ou passé il y a plus
+// de six mois — RÈGLE 4 : c'est la seule voie de révocation, et elle ne peut
+// pas être déclenchée par une donnée de poids.
+function scoffAPasser(user,now){
+  if(!user) return false;
+  const t=(typeof now==='number')?now:Date.now();
+  const d=Number(user.tcaRisqueDate)||0;
+  if(!d) return true;
+  return (t-d)>=SCOFF_REPASSAGE_MOIS*30.44*864e5;
+}
+// PURE. RÈGLE 6 : grossesse ou allaitement priment. Un seul message, celui qui
+// existe déjà — on ne crée pas une seconde doctrine de suspension.
+function refusObjectifPerte(user){
+  try{ if(grossesseSuspend(user)) return GROSSESSE_REFUS_SECHE; }catch(e){}
+  if(aTCA(user)) return TCA_REFUS_SECHE;
+  return '';
+}
+
 // ── Pesée du jour, sur l'accueil athlète ────────────────────────────────────
 // La carte n'apparaît PAS en mode neutre : inciter à se peser tous les jours
 // est précisément ce qu'on ne veut pas faire à quelqu'un qui a déclaré un
@@ -46235,6 +46383,7 @@ function testExercices(){
           u.bilans.push({type:'depart',date:Date.now()-100*864e5,
             'deb-weight':'52','deb-height':'165','deb-age':'27','deb-gender':'Femme',
             'deb-tca':'anorexie il y a 5 ans'});
+          u.tcaRisque=true;
           if(!aTCA(u)) return _echec('fixture muette : pas d\'antécédent');
           if(paliersDeficit(u)!=='blocage') return _echec('fixture muette : pas de blocage');
           const pl=plancherEffectif(u);
@@ -54597,23 +54746,32 @@ function testExercices(){
     ok('Vitesse inconnue : jamais d\'alerte',vitesseAlerte(null,cibleVitesse({}))===false);
 
     // ── Garde-fou TCA ──
-    const _dep=v=>({bilans:[{type:'depart','deb-tca':v}]});
+    // Le texte ne declenche plus rien : c est tcaRisque qui decide, et la
+    // fixture le pose explicitement quand elle veut le statut.
+    const _dep=(v,r)=>Object.assign({bilans:[{type:'depart','deb-tca':v}]},
+      r===undefined?{}:{tcaRisque:!!r});
     ok('Aucun bilan de départ : mode normal',aTCA({})===false);
     ok('Champ vide : mode normal',aTCA(_dep(''))===false);
     ok('« Non » : mode normal',aTCA(_dep('Non'))===false);
     ok('« aucun » : mode normal',aTCA(_dep('aucun'))===false);
     ok('« RAS. » : mode normal',aTCA(_dep('RAS.'))===false);
-    ok('Antécédent déclaré : mode neutre',aTCA(_dep('anorexie il y a 5 ans'))===true);
-    // Le garde-fou se trompe volontairement du côté prudent : une réponse
-    // nuancée n'est PAS lue comme une absence de trouble.
-    ok('« non, jamais eu » bascule quand même en mode neutre',
-       aTCA(_dep('non, jamais eu'))===true);
+    ok('Statut posé par le questionnaire : mode neutre',aTCA(_dep('anorexie il y a 5 ans',true))===true);
+    // CETTE ASSERTION DISAIT L INVERSE, et elle avait raison de le dire : la
+    // regex faisait basculer « non, jamais eu » en mode neutre. C etait le
+    // defaut, pas la regle. Le texte libre ne decide plus de rien.
+    ok('« non, jamais eu » ne bascule PLUS : le texte libre ne decide rien',
+       aTCA(_dep('non, jamais eu'))===false);
+    ok('« aucun trouble alimentaire » non plus',
+       aTCA(_dep('aucun trouble alimentaire'))===false);
+    ok('Un texte alarmant sans questionnaire ne suffit pas',
+       aTCA(_dep('anorexie il y a 5 ans'))===false);
     // ── Garde-fou TCA : aucun chemin d'affichage ne le contourne ──
     // Série volontairement alarmante : −1,5 kg/sem sur 60 kg, soit −2,66 %/sem,
     // au-delà du seuil de TOUTES les phases. Si un chemin laissait passer la
     // moindre alerte, elle sortirait ici.
     const _uPds=(tca,phase)=>{
-      const u={weightLog:[],bilans:tca?[{type:'depart','deb-tca':'anorexie il y a 5 ans'}]:[]};
+      const u={weightLog:[],bilans:tca?[{type:'depart','deb-tca':'anorexie il y a 5 ans'}]:[],
+        tcaRisque:!!tca};
       for(let i=0;i<=20;i++) u.weightLog.push({date:_pj(i),kg:60-i*1.5/7});
       // Début antérieur à la série de test : sinon serieVitesse tronquerait
       // les pesées et la contre-épreuve « la vitesse sort bien » échouerait
@@ -54962,7 +55120,7 @@ function testExercices(){
         phase:{type:'seche',debut:Date.now()-30*864e5,definiPar:'coach',historique:[]}});
       return /5e semaine/.test(h)&&/définie par toi/.test(h);})());
     // La combinaison sèche + antécédent est nommée, et seulement dans ce cas.
-    const _cTCA=t=>({email:'c@t.fr',bilans:[{type:'depart','deb-tca':'boulimie'}],
+    const _cTCA=t=>({email:'c@t.fr',tcaRisque:true,bilans:[{type:'depart','deb-tca':'boulimie'}],
       phase:t?{type:t,debut:Date.now()-30*864e5,definiPar:'coach',historique:[]}:undefined});
     ok('Sèche + antécédent : la combinaison est signalée au coach',
        /antécédent de trouble du comportement alimentaire déclaré/.test(_htmlPhaseCoach(_cTCA('seche'))));
@@ -55010,6 +55168,7 @@ function testExercices(){
     // de vitesse) : on la lui rend sous une autre forme, sans rien montrer de
     // plus à l'athlète.
     const _cSL=(t,tca,sem)=>({email:'sl@t.fr',
+      tcaRisque:!!tca,
       bilans:[{type:'depart','deb-tca':tca?'anorexie il y a 5 ans':'non'}],
       phase:{type:t,debut:Date.now()-sem*7*864e5,definiPar:'coach',historique:[]}});
     ok('Sèche courte + antécédent : la combinaison est nommée, sans durée',(()=>{
@@ -55615,7 +55774,7 @@ function testExercices(){
 
       // ── Antécédent déclaré : plancher majoré ──
       ok('Critère : antécédent déclaré → plancher majoré de 15 %',(()=>{
-        const u=_u('H',80,{bilans:[{type:'depart',date:Date.now()-100*864e5,
+        const u=_u('H',80,{tcaRisque:true,bilans:[{type:'depart',date:Date.now()-100*864e5,
           'deb-tca':'anorexie il y a dix ans'},
           {type:'suivi',date:Date.now()-2*864e5,'deb-weight':'80','deb-height':'178',
            'deb-age':'32','deb-gender':'Homme'}]});
@@ -55623,13 +55782,13 @@ function testExercices(){
         return aTCA(u)===true&&pl.tca===true
           &&pl.kcal===Math.round(1760*1.15)&&pl.majoration===1.15;})());
       ok('La majoration porte aussi sur protéines et lipides',(()=>{
-        const u=_u('H',80,{bilans:[{type:'depart',date:Date.now()-100*864e5,'deb-tca':'oui'},
+        const u=_u('H',80,{tcaRisque:true,bilans:[{type:'depart',date:Date.now()-100*864e5,'deb-tca':'oui'},
           {type:'suivi',date:Date.now()-2*864e5,'deb-weight':'80','deb-height':'178',
            'deb-age':'32','deb-gender':'Homme'}]});
         const pl=plancherEffectif(u);
         return pl.p===Math.round(1.6*80*1.15*10)/10&&pl.l===Math.round(0.6*80*1.15*10)/10;})());
       ok('Le message le dit quand le plancher est majoré',(()=>{
-        const u=_u('H',80,{bilans:[{type:'depart',date:Date.now()-100*864e5,'deb-tca':'oui'},
+        const u=_u('H',80,{tcaRisque:true,bilans:[{type:'depart',date:Date.now()-100*864e5,'deb-tca':'oui'},
           {type:'suivi',date:Date.now()-2*864e5,'deb-weight':'80','deb-height':'178',
            'deb-age':'32','deb-gender':'Homme'}]});
         const v=controlerMacros({kcal:1800,p:150,g:200,l:70},u);
@@ -55722,7 +55881,7 @@ function testExercices(){
           const m=((DB.get('users')||{})['plc@t.fr'].nutrition||{}).macros;
           return r===true&&!!m&&m.confirmeSousPlancher===undefined;})());
         ok('Critère : antécédent déclaré → la confirmation est REFUSÉE',(()=>{
-          poser({bilans:[{type:'depart',date:Date.now()-100*864e5,'deb-tca':'oui'},
+          poser({tcaRisque:true,bilans:[{type:'depart',date:Date.now()-100*864e5,'deb-tca':'oui'},
             {type:'suivi',date:Date.now()-2*864e5,'deb-weight':'80','deb-height':'178',
              'deb-age':'32','deb-gender':'Homme'}]});
           remplir(1200,150,100,70);
@@ -56076,6 +56235,7 @@ function testExercices(){
         const u=_ath('seche',-0.15);
         u.bilans=u.bilans.concat([{type:'depart',date:Date.now()-100*864e5,
           'deb-tca':'anorexie il y a dix ans'}]);
+        u.tcaRisque=true;
         return aTCA(u)===true&&ajustementPropose(u)===null;})());
 
       // ── La carte : constat AVANT proposition ──
@@ -58949,7 +59109,7 @@ function testExercices(){
 
         // Critère 6 : registre descriptif sous antécédent déclaré.
         ok('Critère 6 : antécédent de TCA ⇒ aucun texte incitatif',(()=>{
-          const u={id:'tca',bilans:[{type:'depart',date:1,'deb-tca':'Oui, il y a des années'}],
+          const u={id:'tca',tcaRisque:true,bilans:[{type:'depart',date:1,'deb-tca':'Oui, il y a des années'}],
             nutrition:{log:{}}};
           currentUser=u;
           if(!equivalenceDescriptive(u)) return _echec('le registre ne bascule pas');
@@ -59252,7 +59412,7 @@ function testExercices(){
         // CRITÈRE 4 : TCA ⇒ rien de plus agressif que le milieu.
         ok('Critère 4 : TCA déclaré ⇒ aucune valeur plus agressive que le milieu',(()=>{
           const u=seche();
-          u.bilans[0]['deb-tca']='Oui, il y a quelques années';
+          u.bilans[0]['deb-tca']='Oui, il y a quelques années'; u.tcaRisque=true;
           if(!aTCA(u)) return _echec('la fixture ne déclenche pas aTCA');
           const b=bornesVitesseChoisie(u);
           if(!b||!b.bride) return _echec('la fourchette n\'est pas bridée');
@@ -61848,7 +62008,7 @@ function testExercices(){
       return fuite.length?_echec('consigne technique dans le bilan : '+fuite.join(', ')):true;})());
     ok('Antécédent déclaré : la mention de masquage apparaît',(()=>{
       const b=_rbB(2,{'bil-motivation':'8'});
-      const c={id:'c1',email:'c1@t.fr',fname:'Léa',bilans:[{type:'depart','deb-tca':'anorexie'},b]};
+      const c={id:'c1',email:'c1@t.fr',fname:'Léa',tcaRisque:true,bilans:[{type:'depart','deb-tca':'anorexie'},b]};
       const h=renderReponsesBilans([b],c);
       return /Les chiffres de poids sont masqués dans son application/.test(h);})());
     ok('Sans antécédent : aucune mention de masquage',(()=>{
@@ -65286,14 +65446,14 @@ function testExercices(){
         // ── L'ordre des garde-fous ────────────────────────────────────────
         ok('Critère : aTCA → null, et JAMAIS un refus d\'adhérence',(()=>{
           const u=_ath(12,2850,{bilans:[{type:'depart',date:Date.now()-200*864e5,
-            'deb-tca':'anorexie il y a 5 ans'}]});
+            'deb-tca':'anorexie il y a 5 ans'}],tcaRisque:true});
           if(!aTCA(u)) return _echec('fixture inutile : l\'antécédent n\'est pas vu');
           if(ajustementPropose(u)!==null) return _echec('une proposition passe');
           return _ajustAdherenceBloque(u)===null
             ?true:_echec('le refus d\'adhérence court-circuite le garde-fou TCA');})());
         ok('Critère : rien côté ATHLÈTE sous antécédent déclaré',(()=>{
           const u=_ath(12,2850,{bilans:[{type:'depart',date:Date.now()-200*864e5,
-            'deb-tca':'boulimie'}]});
+            'deb-tca':'boulimie'}],tcaRisque:true});
           const h=_htmlAdherenceRefus(u,false);
           return h===''?true:_echec('un écart chiffré est montré à l\'athlète');})());
         ok('Un drapeau rouge éteint aussi le refus d\'adhérence',(()=>{
@@ -65339,7 +65499,7 @@ function testExercices(){
             &&/protéines/.test(h)?true:_echec(h.slice(0,180));})());
         ok('La ligne coach s\'affiche MÊME sous antécédent déclaré',(()=>{
           const u=_ath(12,2850,{bilans:[{type:'depart',date:Date.now()-200*864e5,
-            'deb-tca':'anorexie'}]});
+            'deb-tca':'anorexie'}],tcaRisque:true});
           return _htmlAdherenceCoach(u)!==''
             ?true:_echec('le coach ne voit plus l\'écart');})());
         ok('Critère : repli sur les repas hors programme quand le journal est vide',(()=>{
@@ -65788,7 +65948,7 @@ function testExercices(){
         // ── Antécédent alimentaire : la pause suit la règle par défaut ────
         ok('L\'interrupteur est FERMÉ tant que la règle n\'est pas validée',
            PAUSE_PROPOSABLE_SOUS_TCA===false);
-        const _longTca=()=>_long({bilans:[
+        const _longTca=()=>_long({tcaRisque:true,bilans:[
           {type:'depart',date:Date.now()-200*864e5,'deb-tca':'anorexie il y a 5 ans'},
           {type:'suivi',date:Date.now()-2*864e5,'deb-weight':'62','deb-height':'168',
            'deb-age':'29','deb-gender':'Femme'}]});
@@ -66351,7 +66511,7 @@ function testExercices(){
           const sans=_ath(_serie(l));
           if(!ajustementPropose(sans)) return _echec('fixture inutile : aucune proposition sans TCA');
           const avec=_ath(_serie(l),{bilans:[{type:'depart',date:Date.now()-100*864e5,
-            'deb-tca':'anorexie il y a 4 ans'}]});
+            'deb-tca':'anorexie il y a 4 ans'}],tcaRisque:true});
           if(!aTCA(avec)) return _echec('le TCA n\'est pas vu');
           return ajustementPropose(avec)===null
             ?true:_echec('une proposition passe malgré le TCA');})());
@@ -66584,7 +66744,7 @@ function testExercices(){
         ok('Après un enregistrement réussi, la confirmation retombe',(()=>{
           return _plConfirme===null?true:_echec('la confirmation persiste après succès');})());
         ok('Le blocage TCA reste DUR : aucune dérogation, même confirmée',(()=>{
-          poser2('tca@t.fr',{bilans:[
+          poser2('tca@t.fr',{tcaRisque:true,bilans:[
             {type:'depart',date:Date.now()-100*864e5,'deb-tca':'oui'},
             {type:'suivi',date:Date.now()-2*864e5,'deb-weight':'80','deb-height':'178',
              'deb-age':'32','deb-gender':'Homme'}]});
@@ -67215,7 +67375,7 @@ function testExercices(){
         ok('Critère : la majoration TCA est la DERNIÈRE opération',(()=>{
           const u=_athMM(120,74);
           const sans=plancherEffectif(u).kcal;
-          const v=Object.assign({},u,{bilans:u.bilans.map(b=>Object.assign({},b,{'deb-tca':'anorexie il y a 4 ans'}))});
+          const v=Object.assign({},u,{tcaRisque:true});
           const avec=plancherEffectif(v);
           if(!avec.tca) return _echec('le TCA n\'a pas été vu');
           if(avec.majoration!==PLANCHER_MAJORATION_TCA) return _echec('majoration '+avec.majoration);
@@ -67226,7 +67386,7 @@ function testExercices(){
           u.sessions_config=[{day:'J0',name:'S0',active:true,exercises:[{name:'SQUAT',series:3,reps:'8'}]}];
           const sans=plancherEffectif(u);
           if(!sans.plafonne) return _echec('fixture inutile : le plafond ne mord pas');
-          const v=Object.assign({},u,{bilans:u.bilans.map(b=>Object.assign({},b,{'deb-tca':'boulimie'}))});
+          const v=Object.assign({},u,{tcaRisque:true});
           const avec=plancherEffectif(v);
           return avec.kcal>sans.kcal
             &&Math.abs(avec.kcal-Math.round(sans.kcal*PLANCHER_MAJORATION_TCA))<=2
