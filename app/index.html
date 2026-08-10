@@ -60618,6 +60618,64 @@ function testExercices(){
         const z=document.getElementById('wd-afilmer');
         return r.sess.aFilmer.length===1
           &&z.querySelectorAll('.wd-af-btn').length===1;})());
+        // ── UNE SEULE SÉRIE VALIDÉE ─────────────────────────────────────
+        // Le test de bout en bout ci-dessus coche TOUTES les séries : le cas
+        // partiel — celui qui a motivé la correction — n'était couvert nulle
+        // part. sessionData contient toutes les séries PRÉVUES dès l'ouverture
+        // de l'exercice ; sans le garde-fou « if(!s.done) return », le bilan
+        // affichait le programme au lieu du réalisé.
+        ok('Une seule série validée : 1 série comptée, et le tonnage de celle-là',(()=>{
+          const _sw=woState, _su=currentUser;
+          try{
+            currentUser=_fAth();
+            woState={progName:'Partielle',slot:0,currentEx:0,
+              startTime:Date.now()-30*60000,timerInterval:null,aFilmer:[],
+              exercises:[{name:'SQUAT',series:3,reps:'8'},
+                         {name:'DEVELOPPE COUCHE',series:3,reps:'10'}],
+              sessionData:{
+                0:{sets:[{weight:'80',reps:'8',done:true},
+                         {weight:'80',reps:'8',done:false},
+                         {weight:'',  reps:'',  done:false}]},
+                1:{sets:[{weight:'60',reps:'10',done:false},
+                         {weight:'60',reps:'10',done:false},
+                         {weight:'60',reps:'10',done:false}]}}};
+            try{ finishWorkout(false); }catch(e){ return _echec('exception : '+e.message); }
+            const sess=(currentUser.sessions||[])[0];
+            if(!sess) return _echec('aucune séance enregistrée');
+            if(sess.sets!==1) return _echec('séries comptées : '+sess.sets);
+            // Le PRÉVU reste celui du programme : 3 + 3. Sans lui, un « 1 »
+            // isolé ne dirait pas s'il vaut 1 sur 1 ou 1 sur 6.
+            if(sess.setsPlanned!==6) return _echec('prévu : '+sess.setsPlanned);
+            if(sess.volume!==80*8) return _echec('volume : '+sess.volume+' au lieu de '+(80*8));
+            // ET LA FICHE COACH REPREND LA MÊME VALEUR. C'est le point qui
+            // compte : deux lectures divergentes du même réalisé seraient pires
+            // qu'un chiffre faux, parce que personne ne saurait laquelle croire.
+            const txt=_buildSessionCard(sess).replace(/<[^>]*>/g,' ').replace(/\s+/g,' ');
+            if(txt.indexOf(String(80*8))<0)
+              return _echec('la fiche coach n\'affiche pas 640 : '+txt.slice(0,90));
+            if(txt.indexOf(fmtSeries(1,6))<0)
+              return _echec('la fiche coach ne reprend pas 1/6');
+            // Elle ne déplie QUE la série faite : une seule ligne « kg× ».
+            return (txt.match(/kg×/g)||[]).length===1
+              ?true:_echec('des séries non validées sont dépliées');
+          } finally { woState=_sw; currentUser=_su; }})());
+        ok('La garde d\'isométrie tient : reps est une DURÉE, pas un compte',(()=>{
+          // tonnageSerie reçoit l'EXERCICE, pas seulement la série. C'est ce
+          // qui lui permet d'écarter l'isométrie — 80 kg « × » 30 secondes
+          // fabriquerait 2 400 kg de tonnage. Une version qui itérerait sur
+          // Object.values(sessionData) perdrait l'index, donc l'exercice, donc
+          // cette garde, sans que rien ne le signale.
+          const iso={name:'GAINAGE',reps:'30',methode:'isometrie_max'};
+          if(tonnageSerie({done:true,weight:'80',reps:'30'},iso)!==0)
+            return _echec('l\'isométrie produit du tonnage');
+          // Le même mouvement SANS la méthode compte normalement : c'est bien
+          // l'exercice qui décide, pas la série.
+          if(tonnageSerie({done:true,weight:'80',reps:'30'},{name:'X'})!==2400)
+            return _echec('la garde déborde sur les exercices ordinaires');
+          // Et finishWorkout passe bien l'exercice à tonnageSerie.
+          return /tonnageSerie\(s,\(woState\.exercises\|\|\[\]\)\[idx\]\)/.test(String(finishWorkout))
+            ?true:_echec('finishWorkout ne transmet plus l\'exercice');})());
+
 
       // ── Le bouton ouvre l'écran EXISTANT, champ pré-rempli ──
       ok('Le bouton pré-remplit le champ nom de l\'écran Vidéos',(()=>{
