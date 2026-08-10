@@ -2649,6 +2649,15 @@ const COACH_PHOTO='icons/coach.jpg';
           &nbsp;·&nbsp;
           <a href="../privacy.html" target="_blank" rel="noopener" style="color:#666;text-decoration:underline">Confidentialité</a>
         </div>
+        <!-- Zone dangereuse, calquee sur celle du coach. Le texte differe :
+             un athlete n'emet aucun code d'acces, et ce qu'il vient effacer
+             ce sont ses donnees de SANTE. Les nommer est le seul moyen
+             qu'il sache ce qu'il perd. -->
+        <div style="border:1px solid #2a0000;border-radius:10px;padding:16px;margin-top:22px;text-align:left">
+          <div style="font-weight:700;font-size:13px;margin-bottom:4px">Supprimer mon compte</div>
+          <div style="font-size:11px;color:var(--sub);margin-bottom:10px;line-height:1.5">Action irréversible. Conformément au RGPD (Art. 17), toutes tes données seront effacées : profil, séances, bilans, photos, et tes données de santé — poids, mensurations, cycle, constantes, analyses.</div>
+          <button onclick="requestAccountDeletion()" style="width:100%;background:none;border:1px solid #600000;border-radius:6px;padding:10px;color:#cc0000;font-family:Montserrat,sans-serif;font-size:12px;font-weight:700;cursor:pointer">SUPPRIMER MON COMPTE</button>
+        </div>
       </div>
     </div>
   </div>
@@ -43607,13 +43616,24 @@ function executeOffboard(coachId){
 }
 
 async function requestAccountDeletion(){
-  if(!currentUser||currentUser.role!=='coach') return;
+  // L'article 17 vaut pour TOUT LE MONDE. Le garde d'origine reservait la
+  // suppression aux coachs : un athlete ne pouvait pas faire effacer son
+  // poids, ses mensurations, ses photos, son cycle ni ses analyses depuis
+  // l'application — alors que ce sont precisement les donnees les plus
+  // sensibles qu'il y depose.
+  if(!currentUser) return;
   const users=DB.get('users')||{};
-  const remaining=Object.values(users).filter(u=>u.coachId===currentUser.id&&u.role!=='coach');
-  if(remaining.length>0){
-    toast(remaining.length+' athlète'+(remaining.length>1?'s':'')+' encore rattaché'+(remaining.length>1?'s':'')+' : réassigne-les d\'abord','var(--orange)');
-    offboardCoach(currentUser.id);
-    return;
+  // La reassignation ne concerne QUE le coach : lui seul a des athletes
+  // rattaches, et les laisser sans coach serait pire que de refuser la
+  // suppression. Chez un athlete le filtre ne rendrait rien de toute facon,
+  // mais le dire explicitement vaut mieux que de compter sur un tableau vide.
+  if(currentUser.role==='coach'){
+    const remaining=Object.values(users).filter(u=>u.coachId===currentUser.id&&u.role!=='coach');
+    if(remaining.length>0){
+      toast(remaining.length+' athlète'+(remaining.length>1?'s':'')+' encore rattaché'+(remaining.length>1?'s':'')+' : réassigne-les d\'abord','var(--orange)');
+      offboardCoach(currentUser.id);
+      return;
+    }
   }
   const ok=confirm(
     'SUPPRIMER DÉFINITIVEMENT MON COMPTE ?\n\n'
@@ -51760,6 +51780,61 @@ function testExercices(){
           const i=src.indexOf('_urlSantePrivee');
           return /DELETE/.test(src.slice(i,i+240))
             ?true:_echec('sante_privee est mentionné mais pas supprimé');})());
+        ok('L\'article 17 vaut aussi pour l\'athlète, pas seulement le coach',(()=>{
+          // Le garde d'origine refusait tout role autre que coach : celui qui
+          // depose poids, mensurations, photos, cycle et analyses etait
+          // precisement celui qui ne pouvait pas les faire effacer.
+          const src=String(requestAccountDeletion);
+          if(/currentUser\.role!=='coach'\)\s*return/.test(src))
+            return _echec('la suppression est encore réservée aux coachs');
+          if(!/if\(!currentUser\)\s*return/.test(src))
+            return _echec('plus aucun garde sur la session');
+          // La REASSIGNATION, elle, reste cantonnee au coach : lui seul a des
+          // athletes rattaches, et les laisser sans coach serait pire que de
+          // refuser la suppression.
+          const iRole=src.indexOf("currentUser.role==='coach'");
+          const iOff=src.indexOf('offboardCoach(');
+          if(iRole<0) return _echec('la réassignation n\'est plus cantonnée au coach');
+          if(!(iRole<iOff)) return _echec('offboardCoach est atteignable par un athlète');
+          // Et le bloc se referme AVANT la confirmation : sinon un athlete
+          // n'atteindrait jamais le confirm.
+          const iConf=src.indexOf('const ok=confirm(');
+          return (iOff<iConf)
+            ?true:_echec('la confirmation est enfermée dans la branche coach');})());
+        ok('Le profil athlète porte sa zone dangereuse, et elle NOMME la santé',(()=>{
+          const z=document.getElementById('s-athlete-profile');
+          if(!z) return _echec('écran de profil athlète absent');
+          const b=[...z.querySelectorAll('button')]
+            .find(x=>/SUPPRIMER MON COMPTE/i.test(x.innerText||x.textContent||''));
+          if(!b) return _echec('aucun bouton de suppression');
+          if(!/requestAccountDeletion\(\)/.test(b.getAttribute('onclick')||''))
+            return _echec('le bouton n\'appelle pas la suppression');
+          const t=(z.innerText||z.textContent||'').replace(/\s+/g,' ');
+          if(!/Art\. 17/.test(t)) return _echec('le fondement RGPD n\'est pas cité');
+          // Ce qu'un athlete perd n'est pas « des donnees » : ce sont SES
+          // donnees de sante. Les nommer est le seul moyen qu'il le sache.
+          const manque=['poids','mensurations','cycle'].filter(m=>t.indexOf(m)<0);
+          return manque.length
+            ?_echec('la zone ne nomme pas : '+manque.join(', ')):true;})());
+        ok('Un athlète qui part n\'emporte que SES nœuds distants',(()=>{
+          // La boucle de deliaison filtre sur coachId===currentUser.id : chez un
+          // athlete elle ne rend rien, et aucun dossier tiers n'est touche.
+          // On verifie la CLE visee plutot que le comportement — la fonction est
+          // asynchrone et fait du reseau.
+          const src=String(requestAccountDeletion);
+          if(!/const safeKey=myKey/.test(src))
+            return _echec('la clé de suppression ne vient plus de l\'utilisateur courant');
+          if(!/delete users\[myKey\]/.test(src))
+            return _echec('le dossier local n\'est plus retiré');
+          // La deliaison ne touche jamais le dossier de celui qui part, ni un
+          // dossier sans lien avec lui.
+          if(!/u\.coachId===currentUser\.id&&k!==myKey/.test(src))
+            return _echec('la déliaison a changé de filtre');
+          // Et le balayage local est TOTAL : l'appareil de celui qui part ne
+          // garde pas les dossiers des autres.
+          return /k\.indexOf\('rc_'\)===0/.test(src)
+            ?true:_echec('des traces locales survivent');})());
+
 
         // ── Le repli de lecture, sans migration ──────────────────────────
         ok('confCycle se replie sur cycleAdaptation, SANS rien écrire',(()=>{
