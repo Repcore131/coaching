@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v564';
+const CACHE = 'repcore-v565';
 const SW_DATA = 'repcore-sw-data'; // persistent across updates — not wiped by activate
 
 // DÉLAI DE GARDE sur index.html. Le handler était en network-first avec un
@@ -21,9 +21,7 @@ const SW_DELAI_RESEAU_MS = 2500;
 // avant lui, celle-ci lisait le cache sans jamais l alimenter.
 const ASSETS = ['./index.html', './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './fonts/montserrat-var-latin.woff2',
-  './fonts/bebasneue-400-latin.woff2',
-  // Typographie maison : sans elles, l'app hors ligne perdrait tous ses titres.
-  './fonts/repcore-contour.woff2?v=1', './fonts/repcore-plein.woff2?v=1'];
+  './fonts/bebasneue-400-latin.woff2'];
 
 // Une séance en cours interdit la bascule. Le client poste SEANCE_EN_COURS au
 // lancement et SEANCE_TERMINEE à la fin ; tant que ce drapeau est levé, le
