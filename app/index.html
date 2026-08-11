@@ -18061,7 +18061,7 @@ function loadClientHome(){
     // Rien n'est cliquable tant que le coach n'a pas rempli sa vitrine — une
     // carte qui s'ouvre sur du vide est pire qu'une carte inerte.
     try{
-      const _vit=!!name&&vitrineCoachRemplie(profilCoachLocal(cleCoachDe(currentUser)));
+      const _vit=!!name;
       el.onclick=_vit?function(ev){
         // Le bouton de contact et les liens gardent leur action propre.
         if(ev.target&&ev.target.closest&&ev.target.closest('a,button')) return;
@@ -44204,7 +44204,12 @@ function _htmlDiplomesCoach(p){
 // Cote athlete : depuis la carte du coach.
 function ouvrirVitrineCoach(){
   const pub=profilCoachLocal(cleCoachDe(currentUser));
-  if(!vitrineCoachRemplie(pub)) return false;
+  if(!vitrineCoachRemplie(pub)){
+    // Le silence etait le pire des cas : le doigt touche, rien ne bouge, et
+    // l athlete ne sait pas si l app est cassee ou si son coach n a rien mis.
+    toast('Ce coach n’a pas encore rempli sa presentation.','var(--orange)');
+    return false;
+  }
   const z=document.getElementById('vitrine-coach-corps');
   if(!z) return false;
   z.innerHTML=_htmlVitrineCoach(pub);
