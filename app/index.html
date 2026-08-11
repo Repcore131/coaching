@@ -281,13 +281,13 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;o
 /* .screen.active handled above */
 
 /* ====== BUTTONS ====== */
-.btn{width:100%;padding:16px;border:none;border-radius:2px;font-family:Montserrat,sans-serif;font-size:12px;font-weight:800;cursor:pointer;transition:transform .1s,box-shadow .15s,background .15s;text-transform:uppercase;letter-spacing:2.5px;-webkit-tap-highlight-color:transparent}
+.btn{width:100%;padding:16px;border:none;border-radius:2px;font-family:Montserrat,sans-serif;font-size:12px;font-weight:800;cursor:pointer;transition:box-shadow .15s,background .15s,transform var(--arc-strike) var(--arc-c-discharge);text-transform:uppercase;letter-spacing:2.5px;-webkit-tap-highlight-color:transparent}
 .btn-red{background:#E02020;color:#fff;box-shadow:var(--glow-md)}
 .btn-red:hover{background:#c91a1a;box-shadow:var(--glow-lg)}
-.btn-red:active{transform:scale(.97);box-shadow:0 1px 6px rgba(224,32,32,.3)}
+.btn-red:active{transform:scale(var(--arc-scale-charge));box-shadow:0 1px 6px rgba(224,32,32,.3);transition:transform var(--arc-attack) var(--arc-c-charge)}
 .btn-outline{background:transparent;color:#aaa;border:1px solid rgba(255,255,255,.12);letter-spacing:2px}
 .btn-outline:hover{border-color:var(--red);color:var(--red)}
-.btn-outline:active{transform:scale(.97)}
+.btn-outline:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
 .btn-sm{padding:9px 16px;font-size:11px;width:auto;border-radius:3px;letter-spacing:1.5px}
 @keyframes celebratePulse{0%,100%{box-shadow:none;transform:none}50%{box-shadow:var(--glow-lg);transform:scale(1.03)}}
 .celebrate{animation:celebratePulse 1.2s ease}
@@ -535,9 +535,9 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
    rien, c'est color qui teinte le tracé (stroke:currentColor) et line-height:0
    qui évite la demi-ligne de blanc sous l'icône. */
 .role-icon{color:var(--red);margin-bottom:12px;line-height:0}
-.client-row{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--surface-1);border-radius:0 2px 2px 0;margin-bottom:6px;cursor:pointer;border:1px solid var(--border);border-left:3px solid var(--red);transition:all .15s}
+.client-row{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--surface-1);border-radius:0 2px 2px 0;margin-bottom:6px;cursor:pointer;border:1px solid var(--border);border-left:3px solid var(--red);transition:all .15s,transform var(--arc-strike) var(--arc-c-discharge)}
 .client-row:hover{background:var(--red-bg);border-color:var(--red);box-shadow:0 4px 16px rgba(224,32,32,0.12);transform:translateY(-1px)}
-.client-row:active{transform:scale(.99);box-shadow:none}
+.client-row:active{transform:scale(var(--arc-scale-charge));box-shadow:none;transition:transform var(--arc-attack) var(--arc-c-charge)}
 /* Cellules optionnelles de la ligne athlete. renderClientRow les emet
    TOUJOURS, vides quand l'objectif ou la phase manquent, pour que le tableau
    du grand ecran garde un nombre de colonnes constant. Vides, elles ne doivent
@@ -668,20 +668,51 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
 .row-inactive{opacity:.5}
 .row-alert{background:var(--danger-bg)!important;border-left:3px solid var(--red)}
 .row-target{background:var(--red);color:#fff;border-radius:4px}
-.skeleton{background:linear-gradient(90deg,var(--surface-1) 25%,var(--surface-2) 37%,var(--surface-1) 63%);background-size:400% 100%;animation:skeletonShimmer 1.4s ease infinite;border-radius:6px}
+/* ANIMATION 10 — LE BALAYAGE D'INTERFÉRENCE.
+   Remplace le shimmer gris standard, et pas seulement pour le style : l'ancien
+   animait `background-position`, une propriété de PEINTURE. Chaque frame
+   repeignait le bloc. Le balayage est maintenant un enfant qui se translate —
+   une seule propriété, composée sur le processeur graphique, conforme à la
+   règle 1 comme le reste du système.
+   Deux couches superposées : des raies fines et régulières (le parasitage) et
+   un noyau plus clair qui passe (le courant). C'est leur superposition qui
+   donne l'interférence plutôt qu'un simple reflet.
+   TOUS LES SQUELETTES SONT EN PHASE : même durée, aucun délai, animation
+   linéaire. Quatre squelettes côte à côte ne font donc pas quatre boucles
+   concurrentes mais une seule vague qui les traverse — c'est ce qui rend
+   tenable la règle des deux boucles simultanées là où une liste en affiche
+   plusieurs d'un coup. */
+.skeleton{position:relative;overflow:hidden;background:var(--surface-1);border-radius:6px}
+.skeleton::after{content:'';position:absolute;top:0;bottom:0;left:0;width:60%;
+  background:repeating-linear-gradient(90deg,transparent 0 3px,rgba(77,232,255,.09) 3px 4px),
+    linear-gradient(90deg,transparent,rgba(77,232,255,.16) 45%,rgba(255,255,255,.10) 55%,transparent);
+  transform:translateX(-100%);animation:arcInterference 1200ms linear infinite;
+  will-change:transform}
+@keyframes arcInterference{from{transform:translateX(-100%)}to{transform:translateX(266%)}}
+
+/* ANIMATION 12 — LE CONDENSATEUR. Le trait se charge à mesure que le doigt
+   tire, et se décharge au relâchement. scaleX depuis la gauche : la charge
+   PROGRESSE, elle n'apparaît pas. */
+#arc-calque>.arc-condensateur{opacity:1}
+.arc-condensateur{background:var(--surface-2);overflow:hidden;border-radius:2px}
+.arc-condensateur>span{display:block;height:100%;width:100%;transform-origin:left center;
+  transform:scaleX(0);background:linear-gradient(90deg,var(--arc-charge),var(--arc-current));
+  box-shadow:0 0 8px var(--arc-glow);will-change:transform}
 /* Point REC du mockup téléphone — animation CSS (et non SMIL) pour rester
    neutralisable par la règle prefers-reduced-motion en fin de feuille. */
 .rc-blink{animation:rcBlink 1.4s ease-in-out infinite}
 @keyframes rcBlink{0%,100%{opacity:1}50%{opacity:.25}}
-@keyframes skeletonShimmer{0%{background-position:100% 50%}100%{background-position:0 50%}}
-.content-card{transition:background .2s,box-shadow .2s,transform .2s}
+.content-card{transition:background .2s,box-shadow .2s,transform var(--arc-strike) var(--arc-c-discharge)}
 .content-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.4);transform:translateY(-1px);filter:brightness(1.08)}
-.content-card:active{transform:scale(.985);box-shadow:none;filter:brightness(1)}
+.content-card:active{transform:scale(var(--arc-scale-charge));box-shadow:none;filter:brightness(1);transition:transform var(--arc-attack) var(--arc-c-charge)}
 
 .empty-state{text-align:center;padding:48px 20px;color:var(--sub)}
 .empty-state:hover .empty-illus{opacity:.68!important;filter:drop-shadow(0 0 10px rgba(224,32,32,.3))}
-.obj-opt{padding:14px;border-radius:12px;background:var(--surface-1);border:2px solid var(--border);cursor:pointer;font-size:13px;font-weight:600;transition:.2s;text-align:center;margin-bottom:10px}
+.obj-opt{padding:14px;border-radius:12px;background:var(--surface-1);border:2px solid var(--border);cursor:pointer;font-size:13px;font-weight:600;transition:.2s,transform var(--arc-strike) var(--arc-c-discharge);text-align:center;margin-bottom:10px}
 .obj-opt:hover,.obj-opt.sel{border-color:var(--red);color:var(--red)}
+/* .obj-opt etait la seule surface pressable SANS etat :active — elle ne
+   repondait pas au doigt. Elle en recoit un, aux memes valeurs que les autres. */
+.obj-opt:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
 .upload-zone{border:2px dashed var(--border);border-radius:14px;padding:40px 20px;text-align:center;cursor:pointer;transition:.2s}
 .upload-zone:hover{border-color:var(--red);background:#1a00001a}
 .video-card{background:var(--surface-1);border-radius:14px;padding:14px;margin-bottom:12px}
@@ -796,7 +827,16 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
 
 /* ====== PROGRESS BAR REDESIGN ====== */
 .progress-bar{height:3px;background:rgba(255,255,255,.06);border-radius:0;overflow:hidden}
-.progress-fill{height:100%;background:linear-gradient(90deg,var(--red),#ff4040);border-radius:0;transition:.5s}
+/* ANIMATION 5 — « la barre ne se remplit pas : le courant y monte ».
+   scaleX et non width : une largeur qui varie relance la mise en page à chaque
+   frame, un transform ne touche que la composition. La règle 1 du système
+   n'admet que transform et opacity, et c'est ici qu'elle se gagne le plus —
+   cette barre est mise à jour pendant que l'athlète tient son téléphone.
+   La valeur se pose sur --arc-pc, jamais sur style.width : voir renderWoEx. */
+.progress-fill{height:100%;width:100%;transform-origin:left center;
+  transform:scaleX(var(--arc-pc,0));
+  background:linear-gradient(90deg,var(--red),#ff4040);border-radius:0;
+  transition:transform var(--arc-release) var(--arc-c-discharge)}
 
 /* ====== TOPBAR TITLE ====== */
 .topbar-title{font-family:'Bebas Neue',Impact,sans-serif!important;font-size:14px!important;letter-spacing:2px!important;text-transform:uppercase}
@@ -846,14 +886,14 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 .red-zone{background:var(--red-bg)!important}
 
 /* ====== CHOICE OPTIONS REDESIGN ====== */
-.choice-opt{padding:13px 16px;border-radius:2px;border:1px solid var(--border);cursor:pointer;font-size:11px;font-weight:700;margin-bottom:6px;transition:.15s;color:var(--text-dim);background:var(--surface-1);letter-spacing:1px;text-transform:uppercase}
+.choice-opt{padding:13px 16px;border-radius:2px;border:1px solid var(--border);cursor:pointer;font-size:11px;font-weight:700;margin-bottom:6px;transition:.15s,transform var(--arc-strike) var(--arc-c-discharge);color:var(--text-dim);background:var(--surface-1);letter-spacing:1px;text-transform:uppercase}
 /* Échelle d'émojis néon (cheat meals) */
 .emo-row{display:flex;gap:7px;justify-content:space-between}
-.emo-opt{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 2px 10px;border-radius:12px;border:1px solid #222;background:var(--surface-1);cursor:pointer;transition:.18s;user-select:none}
+.emo-opt{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 2px 10px;border-radius:12px;border:1px solid #222;background:var(--surface-1);cursor:pointer;transition:.18s,transform var(--arc-strike) var(--arc-c-discharge);user-select:none}
 .emo-opt .emo{width:32px;height:32px;stroke:#4a4a4a;opacity:.55;transition:.18s}
 .emo-opt .emo .emo-dot{fill:#4a4a4a;stroke:none}
 .emo-opt .emo-lbl{font-size:var(--fs-xs);font-weight:800;letter-spacing:.8px;color:var(--text-dim);text-transform:uppercase;text-align:center;white-space:nowrap;transition:.18s}
-.emo-opt:active{transform:scale(.95)}
+.emo-opt:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
 .emo-opt.sel{border-color:var(--eo);background:#0e0a0a;box-shadow:0 0 14px var(--eo-glow),inset 0 0 10px var(--eo-glow)}
 .emo-opt.sel .emo{stroke:var(--eo);opacity:1;transform:scale(1.15);filter:drop-shadow(0 0 5px var(--eo))}
 .emo-opt.sel .emo .emo-dot{fill:var(--eo)}
@@ -868,11 +908,11 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 @keyframes wdShine{0%{background-position:120% 0}55%,100%{background-position:-160% 0}}
 /* Choix Homme/Femme avec silhouettes */
 .gsl-row{display:flex;gap:10px}
-.gsl-opt{flex:1;min-width:0;background:var(--surface-1);border:1px solid #222;border-radius:14px;padding:14px 8px 12px;text-align:center;cursor:pointer;transition:.18s;user-select:none}
+.gsl-opt{flex:1;min-width:0;background:var(--surface-1);border:1px solid #222;border-radius:14px;padding:14px 8px 12px;text-align:center;cursor:pointer;transition:.18s,transform var(--arc-strike) var(--arc-c-discharge);user-select:none}
 .gsl-opt svg{height:150px;width:100%}
 .gsl-opt .gsl-body{fill:#161616;stroke:#4a4a4a;stroke-width:2;transition:.18s}
 .gsl-opt .gsl-lbl{font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--text-dim);margin-top:8px;transition:.18s}
-.gsl-opt:active{transform:scale(.97)}
+.gsl-opt:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
 .gsl-opt.sel{border-color:#fff;background:#0e0a0a;box-shadow:0 0 16px rgba(255,255,255,.28),inset 0 0 12px rgba(255,255,255,.1)}
 .gsl-opt.sel .gsl-body{fill:#232323;stroke:#fff;filter:drop-shadow(0 0 6px rgba(255,255,255,.85))}
 .gsl-opt.sel .gsl-lbl{color:#fff;text-shadow:0 0 8px rgba(255,255,255,.6)}
@@ -886,7 +926,142 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 .bslider::-moz-range-thumb{width:26px;height:26px;border-radius:50%;background:#0a0a0a;border:2.5px solid var(--bsl,#555);box-shadow:0 0 12px var(--bsl-glow,transparent);cursor:pointer}
 .bsl-scale{display:flex;justify-content:space-between;font-size:var(--fs-xs);font-weight:700;color:var(--text-dim);margin-top:8px;padding:0 4px}
 .choice-opt.sel{border-color:var(--red);border-left-width:3px;color:#fff;background:var(--red-bg)}
-.choice-opt:active{transform:scale(.99)}
+.choice-opt:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
+
+/* ══════════════════ ARC — SYSTÈME D'ANIMATION ══════════════════
+   L'application est un circuit sous tension, l'athlète en est la source. Chaque
+   geste y fait circuler de l'énergie, et cette énergie a une DIRECTION : elle
+   part du doigt, traverse le composant, laisse une trace qui s'éteint.
+
+   LA GRAMMAIRE EN TROIS TEMPS gouverne TOUTE animation du système, sans
+   exception ni raccourci :
+     CHARGE     90 ms   anticipation, compression   (scale ↓)
+     DÉCHARGE  140 ms   l'impact, la libération     (scale ↑, flash)
+     RÉMANENCE 380 ms   la trace qui s'éteint       (halo ↓)
+   Une animation qui n'a pas ses trois temps, ou qui les inverse, n'appartient
+   pas au système.
+
+   LE CYAN N'EXISTE QUE DANS LE MOUVEMENT. L'identité de RepCore est rouge sur
+   noir, et ce lot n'y touche pas : --arc-current n'est jamais posé sur une
+   surface au repos, uniquement le temps d'un arc ou d'un halo. C'est cette
+   règle-là qui permet aux deux palettes de coexister au lieu de se contredire —
+   l'énergie se voit parce qu'elle passe, pas parce qu'elle est peinte.
+
+   --arc-void, --arc-deep et --arc-calm sont DÉCLARÉS ET NON UTILISÉS ici, et
+   c'est délibéré : ce sont des couleurs de SURFACE. Repeindre les surfaces
+   n'est pas de l'animation. --arc-calm attend le bandeau de décharge (lot 5),
+   les deux autres attendent une décision de rehabillage qui serait un autre
+   chantier. Les déclarer maintenant évite qu'ils soient redécouverts à
+   l'arrache, avec des valeurs approchantes, dans trois lots.
+
+   --arc-peak (magenta) EST RÉSERVÉ AU RECORD BATTU, et à rien d'autre. C'est sa
+   rareté qui fait sa force : posé sur un bouton ordinaire, il ne signalerait
+   plus rien. Une assertion en fin de fichier compte ses usages. */
+:root{
+  --arc-void:#070B18;      /* fond profond — déclaré, non utilisé (voir ci-dessus) */
+  --arc-deep:#121A33;      /* surfaces  — déclaré, non utilisé */
+  --arc-core:#FFFFFF;      /* cœur de l'arc, point le plus chaud */
+  --arc-current:#4DE8FF;   /* cyan électrique — couleur du mouvement */
+  --arc-charge:#7B3BFF;    /* violet — anticipation, états de charge */
+  --arc-peak:#FF2E93;      /* magenta — RECORD UNIQUEMENT */
+  --arc-danger:#FF4438;    /* court-circuit */
+  --arc-calm:#6E7A99;      /* décharge, « basse tension » — lot 5 */
+  --arc-glow:rgba(77,232,255,.45);
+  /* Durées. --arc-plat est la variante « animations réduites » : un fondu et
+     rien d'autre. Elle vit ici et pas dans un lot séparé — une variante
+     d'accessibilité développée « plus tard » n'est jamais développée. */
+  --arc-attack:90ms;--arc-strike:140ms;--arc-release:380ms;
+  --arc-afterglow:620ms;--arc-ambient:2400ms;--arc-plat:120ms;
+  --arc-c-charge:cubic-bezier(0.40,0.00,0.90,0.20);
+  --arc-c-discharge:cubic-bezier(0.05,0.70,0.10,1.00);
+  --arc-c-snap:cubic-bezier(0.20,0.00,0.00,1.00);
+  --arc-scale-charge:0.94;--arc-scale-impact:1.14;--arc-scale-settle:0.97;
+  --arc-translate:24px;--arc-glow-radius:18px;--arc-glow-rest:6px;
+  --arc-flash-peak:0.85}
+
+/* LE CALQUE. Tout ce qui brille vit ici, jamais dans le composant animé.
+   La raison est structurelle : l'interface est rendue par innerHTML, et
+   renderSets() reconstruit la table des séries à CHAQUE validation quand
+   _peindreRepos() reconstruit le chronomètre CHAQUE seconde. Une animation
+   posée sur ces nœuds serait retirée du document dans la même frame — sans
+   erreur, sans trace, juste rien à l'écran. Le calque, lui, n'est jamais
+   re-rendu par personne.
+   pointer-events:none sans exception : il couvre l'écran entier et ne doit
+   intercepter aucun geste. z-index 9000 le place au-dessus des modales (1000 à
+   3000) et sous #toast (9999), qui doit rester lisible par-dessus tout.
+   contain isole ses recalculs : ce qui s'y peint ne provoque aucun relayout
+   ailleurs dans la page. */
+#arc-calque{position:fixed;inset:0;pointer-events:none;z-index:9000;
+  contain:layout style paint;overflow:hidden}
+#arc-calque>*{position:absolute;pointer-events:none;opacity:0}
+/* La RÉMANENCE. Le box-shadow est FIXE, seule l'opacité est animée — un
+   box-shadow qui varie se repeint à chaque frame, et la règle de performance
+   l'interdit explicitement sur Android. Deux couches de halo plutôt qu'un
+   flou : même rendu, aucun filtre recalculé. */
+.arc-halo{box-shadow:0 0 var(--arc-glow-radius) var(--arc-halo-c,var(--arc-glow)),
+  0 0 calc(var(--arc-glow-radius) * 2.2) var(--arc-halo-c,var(--arc-glow));
+  will-change:opacity}
+/* Le FLASH de décharge : --arc-core, le point le plus chaud de l'arc. */
+.arc-eclair{background:var(--arc-core);will-change:opacity}
+
+/* La TRAVERSÉE — le geste signature. Un arc de courant parcourt un élément de
+   part en part. Deux nœuds et pas un : le parent porte le gabarit et la
+   découpe, l'enfant est seul à bouger. Ainsi le seul transform animé est une
+   translation, sur un élément dont la taille ne change jamais.
+   opacity:1 sur le parent, contre la règle générale du calque qui les pose à
+   zéro : ici c'est l'enfant qui apparaît et disparaît, en sortant du cadre. */
+#arc-calque>.arc-trace{opacity:1}
+.arc-trace{overflow:hidden}
+.arc-trace-arc{position:absolute;top:0;bottom:0;left:0;width:38%;
+  background:linear-gradient(90deg,transparent,var(--arc-trace-c,var(--arc-current)),
+    var(--arc-core),var(--arc-trace-c,var(--arc-current)),transparent);
+  will-change:transform}
+
+/* L'ANNEAU DU CHRONOMÈTRE DE REPOS et son point de courant.
+   Le point tourne en boucle, et le bandeau qui le porte est reconstruit CHAQUE
+   seconde par _peindreRepos. Sans précaution, l'animation repartirait de zéro
+   à chaque reconstruction : un point qui saute en arrière une fois par seconde.
+   La parade est un animation-delay NÉGATIF, calculé sur le temps écoulé — le
+   nœud tout juste créé reprend la boucle là où le précédent l'avait laissée.
+   C'est ce qui permet de ne rien changer à la structure du rendu.
+   rotate() sur un carré qui couvre l'anneau : une seule propriété animée,
+   composable, et le point suit exactement le cercle sans calcul de trajectoire. */
+.arc-ronde{position:absolute;inset:0;animation:arcRonde linear infinite;
+  will-change:transform;pointer-events:none}
+.arc-point{position:absolute;top:1.5px;left:50%;width:5px;height:5px;margin-left:-2.5px;
+  border-radius:50%}
+@keyframes arcRonde{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
+/* ANIMATION 7 — l'arc qui passe d'un onglet à l'autre. Un trait de 2 px à
+   l'aplomb du liseré de l'onglet actif, qui se DÉPLACE au lieu de s'éteindre
+   ici pour se rallumer là. Le courant change de branche, il ne se coupe pas.
+   opacity:1 contre la règle du calque : ici c'est la position qui raconte,
+   l'apparition n'a rien à dire. */
+#arc-calque>.arc-onglet{opacity:1}
+.arc-onglet{background:var(--arc-current);box-shadow:0 0 8px var(--arc-glow);
+  will-change:transform}
+
+/* ANIMATION 8 — LES FEUILLES ET LES MODALES.
+   Trente et un endroits du code écrivent leur propre `id="modal-overlay"`, sans
+   fabrique commune. Les animer un par un aurait voulu dire trente et une
+   retouches et trente et une occasions de diverger. Une règle CSS portée par
+   l'identifiant les prend TOUTES, et se déclenche seule à l'insertion du nœud :
+   aucun site d'appel n'est touché.
+   Le voile s'assombrit en 180 ms, la feuille monte sur la courbe de décharge en
+   140 ms. La SORTIE dure 140 ms elle aussi — jamais plus lente que l'entrée,
+   parce qu'une fermeture qui traîne donne le sentiment d'une application qui
+   résiste. */
+#modal-overlay{animation:arcVoile 180ms var(--arc-c-discharge) both}
+#modal-overlay>div{animation:arcFeuille var(--arc-strike) var(--arc-c-discharge) both}
+@keyframes arcVoile{from{opacity:0}to{opacity:1}}
+@keyframes arcFeuille{from{transform:translateY(var(--arc-translate))}to{transform:translateY(0)}}
+/* pointer-events:none dès la sortie : la feuille est encore à l'écran pendant
+   140 ms, et un second appui pendant ce temps ne doit rien pouvoir atteindre. */
+.arc-sortie{pointer-events:none;
+  animation:arcVoileOut var(--arc-strike) var(--arc-c-charge) both!important}
+.arc-sortie>div{animation:arcFeuilleOut var(--arc-strike) var(--arc-c-charge) both!important}
+@keyframes arcVoileOut{from{opacity:1}to{opacity:0}}
+@keyframes arcFeuilleOut{from{transform:translateY(0)}to{transform:translateY(var(--arc-translate))}}
 
 /* ── Accessibilité : respect de « Réduire les animations » du système ──────────
    Doit rester en TOUTE FIN de feuille pour l'emporter sur les règles ci-dessus. */
@@ -900,7 +1075,7 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   /* Animations en boucle : coupées net plutôt que jouées une fois en accéléré,
      sinon elles se figent sur leur dernière image (médaillon penché, halo éteint). */
   .wd-badge,.wd-badge-medal,.wd-badge-medal::after,
-  .skeleton,.done-anim .done-icon,.rc-blink,
+  .skeleton,.skeleton::after,.done-anim .done-icon,.rc-blink,
   .celebrate,.emo-opt .emo,.pulse-dot{animation:none!important}
   /* État final propre pour les éléments dont l'animation portait la mise en forme */
   .wd-badge{opacity:1!important;transform:none!important}
@@ -916,6 +1091,39 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
     filter:none!important;
     transform:none!important;
   }
+  /* ── ARC : la variante plate ──────────────────────────────────────────────
+     Le mouvement disparaît ENTIÈREMENT. Aucun scale, aucune translation,
+     aucun flash, aucune trace lumineuse, aucune boucle : il ne reste que les
+     fondus d'opacité de 120 ms, que la Web Animations API joue depuis
+     arcReduit(). Cette règle-ci est la ceinture — la vraie décision se prend
+     en JS, parce que prefers-reduced-motion ne s'applique PAS aux animations
+     lancées par element.animate(), et que animation-duration:.01ms plus haut
+     ne les touche pas davantage.
+     LES VIBRATIONS SURVIVENT, et c'est voulu : ce sont le mouvement et le
+     défilement qui déclenchent nausées et migraines, pas une pulsation dans
+     la paume. Les couper aurait retiré un repère sans rien soulager. */
+  #arc-calque{display:none!important}
+  .btn:active,.btn-red:active,.btn-outline:active,.content-card:active,
+  .client-row:active,.choice-opt:active,.emo-opt:active,.gsl-opt:active,
+  .obj-opt:active{transform:none!important}
+  /* Le point de courant du chronomètre est une BOUCLE : on la retire, on ne
+     l'accélère pas. La règle générale plus haut la ramènerait à .01 ms et le
+     point se figerait à un endroit arbitraire de l'anneau — un défaut
+     d'affichage, là où son absence ne se remarque même pas. L'anneau lui-même
+     reste : il ne bouge pas, il informe. */
+  .arc-ronde{display:none!important}
+  /* La barre de progression garde sa valeur, elle perd son glissement. */
+  .progress-fill{transition:none!important}
+  /* Les feuilles : le voile garde un fondu, ramené aux 120 ms de la variante
+     plate ; la feuille perd sa montée. La règle générale de ce bloc les aurait
+     ramenées à un centième de milliseconde, mais une translation de 24 px reste
+     une translation — jouée trop vite, elle devient un sursaut, et c'est
+     exactement ce que la préférence système demande d'éviter. */
+  #modal-overlay{animation:arcVoile var(--arc-plat) linear both!important}
+  #modal-overlay>div{animation:none!important;transform:none!important}
+  /* La courbe s'affiche entière, d'emblée : le tracé progressif est du
+     mouvement, et une courbe à moitié tracée puis figée serait un faux. */
+  svg.arc-courbe path{stroke-dasharray:none!important;stroke-dashoffset:0!important}
 }
 
 /* ══════════════ RAPPORT DE PERIODE ══════════════ */
@@ -2856,7 +3064,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="s-workout" class="screen">
   <div class="topbar" style="flex-shrink:0"><button class="back-btn" onclick="pauseWorkout()" aria-label="Mettre la séance en pause">←</button><span class="topbar-title" id="wo-title">Séance</span><span style="font-size:13px;font-weight:700;color:var(--sub)" id="wo-timer">00:00</span></div>
   <div style="padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:12px">
-    <div style="flex:1"><div class="progress-bar"><div class="progress-fill" id="wo-progress" style="width:0%"></div></div></div>
+    <div style="flex:1"><div class="progress-bar"><div class="progress-fill" id="wo-progress" style="--arc-pc:0"></div></div></div>
     <span style="font-size:12px;font-weight:700;color:var(--sub)" id="wo-ex-count">0/0</span>
   </div>
   <div class="scroll-area" style="flex:1"><div class="pad" id="wo-content"></div></div>
@@ -6765,12 +6973,21 @@ function _majTabbar(id){
   // L'onglet allumé se déduit de l'ÉCRAN AFFICHÉ, jamais du dernier clic : un
   // retour par la flèche appelle go() sans passer par clientTab(), et laissait
   // donc allumé l'onglet quitté.
+  // L'onglet quitté est relevé AVANT la bascule : après, il n'y a plus de
+  // « avant », et l'arc n'aurait plus de point de départ.
+  const _ongletAvant=bar.querySelector('.tab-btn.active');
   bar.querySelectorAll('.tab-btn').forEach(b=>{
     const actif=b.dataset.tab===onglet;
     b.classList.toggle('active',actif);
     if(actif) b.setAttribute('aria-current','page');
     else b.removeAttribute('aria-current');
   });
+  // Seulement quand l'onglet CHANGE. _majTabbar est appelée à chaque go(),
+  // y compris pour revenir sur l'écran où l'on est déjà : sans cette garde,
+  // l'arc repartirait sur place, d'un onglet vers lui-même.
+  const _ongletApres=bar.querySelector('.tab-btn.active');
+  if(_ongletAvant&&_ongletApres&&_ongletAvant!==_ongletApres)
+    _arcOnglet(_ongletAvant,_ongletApres);
   // À chaque navigation : les pastilles suivent l'état réel des retours non
   // vus, qu'ils viennent d'arriver par la synchro ou d'être consultés à
   // l'instant.
@@ -6847,6 +7064,15 @@ function go(id){
   // n'en instrumenter qu'un donnerait un tunnel faux sans que ça se voie.
   if(id==='s-welcome') rcmVue('welcome_view');
   if(id==='s-register') rcmVue('register_started');
+  // ANIMATION 9 — les courbes SVG. Posé ICI et pas chez les appelants pour la
+  // même raison que les deux lignes ci-dessus : _courbePesee et _rapCourbePoids
+  // rendent des CHAÎNES, insérées au milieu d'un innerHTML bien plus grand par
+  // plusieurs chemins. Il n'existe aucun moment où l'une d'elles « se monte »
+  // — le seul instant commun est l'affichage de l'écran qui la contient.
+  // Reporté d'une frame : à cette ligne, l'écran vient d'être affiché mais son
+  // contenu est peint par le loadX() qui suit. Les canvas, eux, ont leur propre
+  // rappel au moment du dessin — le WeakSet garantit qu'aucun ne joue deux fois.
+  if(s){ try{ requestAnimationFrame(()=>arcTracerCourbes(s)); }catch(e){} }
 }
 // ── Retour vers l'écran d'origine ───────────────────────────────────────────
 // L'application n'empile aucun état d'historique : la navigation se fait
@@ -6866,10 +7092,586 @@ function goAvecRetour(id){
 function retourDe(id,defaut){
   go(_ecranOrigine[id]||defaut||(currentUser?.role==='coach'?'s-coach-home':'s-client-home'));
 }
+// ══════════════════════ ARC — SYSTÈME D'ANIMATION ══════════════════════
+// Le pendant JS de la section « ARC » de la feuille de style. Toute animation
+// du produit passe par ces trois primitives — arcFlash (le flash de décharge),
+// arcGlow (la rémanence), arcDecharge (le cycle en trois temps). Aucune valeur
+// d'animation ne doit être écrite ailleurs qu'ici ou dans les variables CSS.
+//
+// POURQUOI LES MÊMES VALEURS DES DEUX CÔTÉS. Les durées, les courbes et les
+// amplitudes existent en variables CSS (pour les états gouvernés par la
+// feuille, :active en tête) ET dans l'objet ci-dessous, parce que la Web
+// Animations API ne lit pas les variables CSS. C'est UNE duplication assumée,
+// et elle est verrouillée par une assertion qui compare les deux sources — pas
+// deux vérités laissées libres de diverger en silence.
+const ARC=Object.freeze({
+  attack:90, strike:140, release:380, afterglow:620, ambient:2400,
+  plat:120,                                   // variante « animations réduites »
+  charge:'cubic-bezier(0.40,0.00,0.90,0.20)',
+  discharge:'cubic-bezier(0.05,0.70,0.10,1.00)',
+  snap:'cubic-bezier(0.20,0.00,0.00,1.00)',
+  scaleCharge:0.94, scaleImpact:1.14, scaleSettle:0.97,
+  translate:24, glowRadius:18, glowRest:6, flashPeak:0.85
+});
+
+// « Réduire les animations » du système. RELU À CHAQUE APPEL, jamais mis en
+// cache dans un booléen : le réglage se change sans recharger l'application, et
+// une valeur figée au démarrage l'aurait ignoré jusqu'au lancement suivant.
+// Seul l'objet MediaQueryList est conservé — c'est sa création qui coûte, pas
+// la lecture de .matches, qui est un simple champ.
+let _arcMq=null;
+function arcReduit(){
+  try{
+    if(!_arcMq&&window.matchMedia) _arcMq=window.matchMedia('(prefers-reduced-motion: reduce)');
+    return !!(_arcMq&&_arcMq.matches);
+  }catch(e){ return false; }
+}
+
+// Vibrations. TROIS RÉSERVES, dites ici une fois pour toutes :
+//   1. iOS Safari n'implémente pas navigator.vibrate. Sur iPhone, AUCUNE de ces
+//      lignes ne produit quoi que ce soit, et rien côté web n'y remédie. Le
+//      système d'animation ne doit donc jamais faire PORTER une information par
+//      la seule vibration — elle confirme, elle n'annonce pas.
+//   2. L'API ne connaît que des durées en millisecondes. « légère » et
+//      « lourde » sont des durées choisies, pas des moteurs haptiques distincts
+//      comme en natif.
+//   3. Elles SURVIVENT à « réduire les animations », par décision explicite :
+//      c'est le mouvement à l'écran qui déclenche nausées et migraines, pas une
+//      pulsation dans la paume.
+// « avertir » reprend exactement le motif déjà employé par la fin de repos
+// (180-90-180) : deux signaux d'avertissement qui se ressembleraient sans être
+// identiques seraient pires que deux signaux franchement distincts.
+const ARC_VIBRE=Object.freeze({legere:12,moyenne:26,lourde:55,
+  succes:[55,60,55],avertir:[180,90,180]});
+function arcHaptique(nom){
+  try{
+    if(!navigator.vibrate) return false;
+    const m=ARC_VIBRE[nom];
+    if(m==null) return false;
+    return !!navigator.vibrate(m);
+  }catch(e){ return false; }
+}
+
+// LE CALQUE. Créé à la première étincelle et pas au démarrage : une application
+// ouverte puis reposée n'a aucune raison de porter un nœud de plus.
+// isConnected et pas seulement une variable : un innerHTML posé sur <body>
+// détacherait le calque sans que la référence en sache rien, et toutes les
+// animations suivantes se joueraient hors du document, invisibles.
+let _arcCouche=null;
+function _arcCalque(){
+  if(_arcCouche&&_arcCouche.isConnected) return _arcCouche;
+  _arcCouche=document.getElementById('arc-calque');
+  if(!_arcCouche){
+    _arcCouche=document.createElement('div');
+    _arcCouche.id='arc-calque';
+    // aria-hidden : rien de ce qui s'y peint ne porte de sens. Un lecteur
+    // d'écran n'a pas à annoncer un halo.
+    _arcCouche.setAttribute('aria-hidden','true');
+    document.body.appendChild(_arcCouche);
+  }
+  return _arcCouche;
+}
+// Pose un nœud du calque à l'aplomb d'un rectangle écran. getBoundingClientRect
+// rend des coordonnées VIEWPORT, et le calque est en position:fixed : les deux
+// repères coïncident, aucun décalage de défilement à corriger.
+function _arcPoser(n,r,marge){
+  const m=marge||0;
+  n.style.left=(r.left-m)+'px'; n.style.top=(r.top-m)+'px';
+  n.style.width=Math.max(0,r.width+m*2)+'px';
+  n.style.height=Math.max(0,r.height+m*2)+'px';
+}
+// Retire le nœud à la fin comme à l'annulation. Les deux, jamais un seul : une
+// animation annulée n'émet PAS 'finish', et le nœud serait resté sur le calque
+// à opacité nulle — invisible, et accumulé à chaque geste.
+//
+// LE PLAFOND N'EST PAS UNE PRÉCAUTION THÉORIQUE, il vient d'une mesure. Quand
+// l'onglet passe en arrière-plan, le navigateur GÈLE la timeline des
+// animations : elles ne se terminent plus, 'finish' n'arrive jamais, et les
+// nœuds restent. Constaté à 15 nœuds sur une seule salve, page cachée. Ils
+// repartent bien au retour au premier plan — ce n'est donc pas une fuite sans
+// fond — mais un calque qui garde des restes d'une session à l'autre finirait
+// par peser sur la première frame du retour. Deux gestes simultanés sont déjà
+// beaucoup ; au-delà de ARC_CALQUE_MAX, le plus ancien part.
+const ARC_CALQUE_MAX=12;
+function _arcJeter(n,a){
+  const fin=()=>{ try{ n.remove(); }catch(e){} };
+  a.addEventListener('finish',fin); a.addEventListener('cancel',fin);
+  const c=n.parentNode;
+  while(c&&c.childElementCount>ARC_CALQUE_MAX&&c.firstElementChild!==n)
+    c.removeChild(c.firstElementChild);
+  return a;
+}
+
+// ── PRIMITIVE : la RÉMANENCE ───────────────────────────────────────────────
+// Un halo posé sur le calque à l'aplomb de la cible, qui s'éteint en 380 ms.
+// Rend l'Animation, ou null quand rien n'a été joué — l'appelant peut donc
+// attendre .finished, et distinguer « éteint » de « jamais allumé ».
+function arcGlow(cible,o){
+  o=o||{};
+  if(arcReduit()) return null;          // la variante plate n'a pas de trace
+  const el=(typeof cible==='string')?document.getElementById(cible):cible;
+  if(!el||!el.getBoundingClientRect) return null;
+  const r=el.getBoundingClientRect();
+  if(!r.width&&!r.height) return null;  // élément masqué : rien à éclairer
+  const n=document.createElement('div');
+  n.className='arc-halo';
+  if(o.couleur) n.style.setProperty('--arc-halo-c',o.couleur);
+  // Le halo épouse le rayon de la cible : un halo carré autour d'un bouton
+  // arrondi se voit tout de suite, et se lit comme un défaut d'affichage.
+  try{ n.style.borderRadius=getComputedStyle(el).borderRadius||'0'; }catch(e){}
+  _arcPoser(n,r,2);
+  _arcCalque().appendChild(n);
+  return _arcJeter(n,n.animate(
+    [{opacity:0},{opacity:(o.pic==null?1:o.pic),offset:0.12},{opacity:0}],
+    {duration:o.duree||ARC.release,easing:ARC.discharge,fill:'none'}));
+}
+
+// ── PRIMITIVE : le FLASH de décharge ───────────────────────────────────────
+// Le point le plus chaud de l'arc. Accepte un ÉLÉMENT ou un POINT {x,y} : la
+// validation de série part du doigt, pas du centre géométrique d'une ligne, et
+// c'est cette différence-là qui donne une direction à l'énergie.
+function arcFlash(cible,o){
+  o=o||{};
+  if(arcReduit()) return null;
+  const n=document.createElement('div');
+  n.className='arc-eclair';
+  if(o.couleur) n.style.background=o.couleur;
+  if(cible&&cible.nodeType===1){
+    const r=cible.getBoundingClientRect();
+    if(!r.width&&!r.height) return null;
+    try{ n.style.borderRadius=getComputedStyle(cible).borderRadius||'0'; }catch(e){}
+    _arcPoser(n,r,0);
+  }else if(cible&&typeof cible.x==='number'&&typeof cible.y==='number'){
+    const d=o.taille||64;
+    n.style.borderRadius='50%';
+    n.style.left=(cible.x-d/2)+'px'; n.style.top=(cible.y-d/2)+'px';
+    n.style.width=d+'px'; n.style.height=d+'px';
+  }else return null;
+  _arcCalque().appendChild(n);
+  return _arcJeter(n,n.animate(
+    [{opacity:0},{opacity:ARC.flashPeak,offset:0.30},{opacity:0}],
+    {duration:o.duree||ARC.strike,easing:ARC.discharge,fill:'none'}));
+}
+
+// ── PRIMITIVE : le CYCLE EN TROIS TEMPS ────────────────────────────────────
+// CHARGE 90 ms (scale ↓) · DÉCHARGE 140 ms (scale ↑, flash) · RÉMANENCE 380 ms
+// (le halo s'éteint sur le calque).
+//
+// LE CYCLE DURE 610 ms ET NE FAIT JAMAIS ATTENDRE. Le geste de l'athlète a déjà
+// produit son effet quand la charge démarre ; la rémanence se joue APRÈS coup,
+// sur un calque qui n'intercepte rien. Le plafond de 400 ms du chemin critique
+// porte sur ce qui retient l'athlète — ici les 230 ms de scale, et elles seules.
+//
+// UNE ANIMATION EN COURS EST TOUJOURS ANNULÉE PAR LA SUIVANTE. Un athlète qui
+// tape deux fois de suite ne doit pas voir le second geste faire la queue
+// derrière le premier : l'animation cède, jamais l'action.
+//
+// `base` : le transform À CONSERVER. La Web Animations API REMPLACE le
+// transform pendant qu'elle joue. Sur un élément déjà centré par
+// translateX(-50%) — #toast, par exemple — animer « scale(...) » seul l'aurait
+// décalé de la moitié de sa largeur le temps de l'animation, puis remis en
+// place. Le passer ici le compose au lieu de l'écraser.
+const _arcEnCours=new WeakMap();
+function arcDecharge(el,o){
+  o=o||{};
+  if(typeof el==='string') el=document.getElementById(el);
+  if(!el||!el.animate) return null;
+  const prec=_arcEnCours.get(el);
+  if(prec){ try{ prec.cancel(); }catch(e){} }
+  if(o.haptique) arcHaptique(o.haptique);
+  const base=o.base?(o.base+' '):'';
+  let a;
+  if(arcReduit()){
+    // VARIANTE PLATE, développée ICI et pas dans un lot « plus tard » : un
+    // fondu d'opacité de 120 ms, aucun scale, aucune translation, aucun flash,
+    // aucune trace. C'est le même appel pour l'appelant, qui n'a donc jamais à
+    // savoir laquelle des deux il déclenche.
+    a=el.animate([{opacity:0.55},{opacity:1}],
+      {duration:ARC.plat,easing:'linear',fill:'none'});
+  }else{
+    const pic=(o.impact==null)?ARC.scaleImpact:o.impact;
+    const tot=ARC.attack+ARC.strike;
+    const t=ms=>ms/tot;
+    a=el.animate([
+      {transform:base+'scale(1)',                     easing:ARC.charge,    offset:0},
+      {transform:base+'scale('+ARC.scaleCharge+')',   easing:ARC.discharge, offset:t(ARC.attack)},
+      {transform:base+'scale('+pic+')',               easing:ARC.snap,      offset:t(ARC.attack+ARC.strike*0.42)},
+      {transform:base+'scale('+ARC.scaleSettle+')',   easing:ARC.snap,      offset:t(ARC.attack+ARC.strike*0.74)},
+      {transform:base+'scale(1)',                                           offset:1}
+    ],{duration:tot,fill:'none'});
+    // Les deux autres temps partent À LA FIN DE LA CHARGE, jamais avant : c'est
+    // ce décalage qui fait lire l'impact comme la CONSÉQUENCE de la
+    // compression, et non comme un effet posé à côté. Même règle que
+    // l'haptique de la validation de série.
+    setTimeout(()=>{
+      // Le geste a pu être annulé entre-temps par un second appui : sans cette
+      // garde, le flash du premier serait parti par-dessus le second.
+      if(_arcEnCours.get(el)!==a) return;
+      if(o.flash!==false) arcFlash(el,{couleur:o.couleur});
+      if(o.halo!==false) arcGlow(el,{couleur:o.couleur});
+    },ARC.attack);
+  }
+  _arcEnCours.set(el,a);
+  const fin=()=>{ if(_arcEnCours.get(el)===a) _arcEnCours.delete(el); };
+  a.addEventListener('finish',fin); a.addEventListener('cancel',fin);
+  return a;
+}
+
+// ── PRIMITIVE : la TRAVERSÉE ───────────────────────────────────────────────
+// Un arc de courant parcourt un élément de part en part, de gauche à droite.
+// C'est le cœur du geste signature (validation de série) et la décharge de fin
+// de repos. Rendu sur le calque, donc insensible au fait que la ligne de série
+// soit reconstruite par renderSets à l'instant même où l'arc la traverse.
+//
+// La translation part de -100 % et va jusqu'à 265 % : l'arc entre entièrement
+// par la gauche et sort entièrement par la droite, sans jamais apparaître ni
+// disparaître sur place. Une opacité qui monte et redescend aurait donné une
+// lueur qui clignote ; ici, quelque chose PASSE.
+function arcTraversee(cible,o){
+  o=o||{};
+  if(arcReduit()) return null;
+  const el=(typeof cible==='string')?document.getElementById(cible):cible;
+  if(!el||!el.getBoundingClientRect) return null;
+  const r=el.getBoundingClientRect();
+  if(!r.width||!r.height) return null;
+  const n=document.createElement('div');
+  n.className='arc-trace';
+  if(o.couleur) n.style.setProperty('--arc-trace-c',o.couleur);
+  try{ n.style.borderRadius=getComputedStyle(el).borderRadius||'0'; }catch(e){}
+  _arcPoser(n,r,0);
+  const bar=document.createElement('div');
+  bar.className='arc-trace-arc';
+  n.appendChild(bar);
+  _arcCalque().appendChild(n);
+  const a=bar.animate(
+    [{transform:'translateX(-100%)'},{transform:'translateX(265%)'}],
+    {duration:o.duree||ARC.strike,easing:ARC.discharge,fill:'none'});
+  return _arcJeter(n,a);
+}
+
+// ── LE DERNIER POINT DE CONTACT ────────────────────────────────────────────
+// « L'arc part du doigt » — encore faut-il savoir où il est. Les gestionnaires
+// de cette application sont appelés depuis des onclick écrits dans des chaînes
+// innerHTML : ils ne reçoivent AUCUN événement, et n'ont donc aucun moyen de
+// connaître le point de contact. On le retient donc en amont, à la source.
+// pointerdown et non pointerup : c'est l'appui qui désigne l'endroit, et un
+// doigt peut glisser de quelques millimètres avant de se relever.
+let _arcPoint=null;
+function _arcNoter(e){
+  try{
+    if(e&&typeof e.clientX==='number'&&typeof e.clientY==='number')
+      _arcPoint={x:e.clientX,y:e.clientY,t:Date.now()};
+  }catch(err){}
+}
+// Rend le dernier contact seulement s'il est FRAIS. Un point vieux d'une
+// seconde ne désigne plus rien : une action déclenchée au clavier, par la
+// reprise d'une séance ou par un minuteur ferait alors jaillir un arc depuis
+// l'endroit où le doigt se trouvait à un tout autre moment. Sans point frais,
+// l'appelant retombe sur le centre de l'élément — jamais sur un mensonge.
+const ARC_POINT_FRAIS=1200;
+function arcDernierPoint(fraicheur){
+  if(!_arcPoint) return null;
+  return (Date.now()-_arcPoint.t<=(fraicheur||ARC_POINT_FRAIS))?_arcPoint:null;
+}
+
+// ── PRIMITIVE : l'INTERPOLATION D'UNE VALEUR ───────────────────────────────
+// « Le chiffre s'anime aussi, pas seulement la barre. » Une écriture de
+// textContent par frame : un seul nœud de texte, aucun recalcul de mise en page
+// tant que la largeur du texte ne change pas — d'où le conseil d'appliquer
+// font-variant-numeric:tabular-nums à ce qu'on anime, sinon les chiffres de
+// largeurs différentes font trembler ce qui les suit.
+// requestAnimationFrame et non setInterval : la boucle s'arrête d'elle-même
+// quand l'onglet passe en arrière-plan, au lieu de peindre pour personne.
+const _arcChiffres=new WeakMap();
+function arcChiffre(el,de,vers,o){
+  o=o||{};
+  if(typeof el==='string') el=document.getElementById(el);
+  if(!el) return null;
+  const fmt=o.format||(v=>String(Math.round(v)));
+  const prec=_arcChiffres.get(el);
+  if(prec){ cancelAnimationFrame(prec); _arcChiffres.delete(el); }
+  // `duree` vaut 0 quand on la passe à 0, et non 620 : un `o.duree||défaut`
+  // rendait un zéro explicite indiscernable d'une absence, et « pose la valeur
+  // tout de suite » devenait « anime pendant 620 ms ».
+  const d=(o.duree==null)?ARC.afterglow:o.duree;
+  // Variante plate ET cas dégénérés : on pose la valeur d'arrivée, sans détour.
+  if(arcReduit()||!(d>0)||de===vers){
+    el.textContent=fmt(vers);
+    return null;
+  }
+  // LA VALEUR DE DÉPART EST ÉCRITE TOUT DE SUITE, avant la moindre frame.
+  // requestAnimationFrame ne s'exécute PAS sur une page cachée : sans cette
+  // ligne, un compteur mis à jour pendant que l'athlète a rangé son téléphone
+  // restait VIDE — pas figé sur l'ancienne valeur, vide — jusqu'au retour à
+  // l'écran. Un chiffre absent se lit comme une donnée perdue.
+  el.textContent=fmt(de);
+  const t0=(typeof performance!=='undefined'&&performance.now)?performance.now():Date.now();
+  const pas=(maintenant)=>{
+    const p=Math.min(1,(maintenant-t0)/d);
+    // Sortie longue, sans rebond : un chiffre qui dépasse sa valeur puis y
+    // revient se lit comme une erreur de calcul, pas comme une animation.
+    const e=1-Math.pow(1-p,3);
+    el.textContent=fmt(de+(vers-de)*e);
+    if(p<1) _arcChiffres.set(el,requestAnimationFrame(pas));
+    else _arcChiffres.delete(el);
+  };
+  _arcChiffres.set(el,requestAnimationFrame(pas));
+  return el;
+}
+
+// ── ANIMATION 7 : L'ARC QUI CHANGE D'ONGLET ────────────────────────────────
+// Le courant ne s'éteint pas ici pour se rallumer là : il SE DÉPLACE. Un trait
+// de 2 px part du liseré de l'onglet quitté et rejoint celui de l'onglet visé
+// en 140 ms, puis l'icône d'arrivée encaisse un impact léger.
+//
+// L'impact est LÉGER (1,10 et non 1,14) et sans flash ni halo, à la différence
+// de la validation de série. La barre d'onglets est traversée des dizaines de
+// fois par séance pour de simples consultations : la traiter comme un événement
+// aurait usé le seul geste qui mérite de l'être.
+function _arcOnglet(de,vers){
+  try{
+    if(arcReduit()||!de||!vers) return null;
+    const a=de.getBoundingClientRect(), b=vers.getBoundingClientRect();
+    if(!a.width||!b.width) return null;
+    const n=document.createElement('div');
+    n.className='arc-onglet';
+    n.style.left=a.left+'px'; n.style.top=a.top+'px';
+    n.style.width=a.width+'px'; n.style.height='2px';
+    _arcCalque().appendChild(n);
+    const an=n.animate(
+      [{transform:'translateX(0)'},{transform:'translateX('+(b.left-a.left)+'px)'}],
+      {duration:ARC.strike,easing:ARC.discharge,fill:'none'});
+    _arcJeter(n,an);
+    const icone=vers.querySelector('svg');
+    if(icone) arcDecharge(icone,{flash:false,halo:false,impact:1.10});
+    return an;
+  }catch(e){ return null; }
+}
+
+// ── ANIMATION 9 : LA COURBE SE TRACE COMME UN COURANT DANS UN FIL ──────────
+// UNE SEULE FOIS PAR ÉLÉMENT, jamais rejouée au défilement : c'est à quoi sert
+// ce WeakSet. Un observateur d'intersection aurait rallumé le tracé à chaque
+// passage de la courbe dans l'écran — joli une fois, insupportable à la
+// dixième.
+//
+// DEUX TECHNIQUES, PARCE QU'IL Y A DEUX SORTES DE GRAPHIQUES, et c'est la seule
+// entorse revendiquée à la règle « transform et opacity seuls » :
+//
+//   • Les courbes SVG (_courbePesee, _rapCourbePoids) reçoivent le VRAI tracé
+//     par stroke-dashoffset, celui que le cahier des charges nomme. Il n'existe
+//     aucun équivalent en transform, et la spécification l'autorise ici
+//     explicitement. Une courbe, une propriété animée, 620 ms : c'est tenable.
+//
+//   • Les quatorze <canvas> (lineChart, barChart, multiLineChart, drawLineChart)
+//     N'ONT PAS de stroke-dashoffset — un canvas n'a ni chemin ni trait, juste
+//     des pixels. Les tracer vraiment supposerait de réécrire les quatre
+//     fonctions de dessin en SVG : c'est un chantier, pas une animation. Ils
+//     reçoivent donc la TRAVERSÉE — un courant balaie le graphique une fois.
+//     L'intention est tenue, le moyen est honnête, et rien du code de dessin
+//     n'est touché.
+const _arcTraces=new WeakSet();
+function arcTracerCourbes(racine){
+  let n=0;
+  try{
+    const r=racine||document;
+    if(!r||!r.querySelectorAll) return 0;
+    // La racine peut ÊTRE le graphique : querySelectorAll ne rend que des
+    // descendants, et un <canvas> n'en a aucun.
+    const toiles=Array.prototype.slice.call(r.querySelectorAll('canvas'));
+    if(r.matches&&r.matches('canvas')) toiles.push(r);
+    r.querySelectorAll('svg.arc-courbe path').forEach(p=>{
+      if(_arcTraces.has(p)) return;
+      if(arcReduit()||!p.getTotalLength||!p.animate){ _arcTraces.add(p); return; }
+      let L=0;
+      try{ L=p.getTotalLength(); }catch(e){ return; }
+      if(!(L>0)) return;                   // pas encore mesurable : on réessaiera
+      _arcTraces.add(p);
+      p.style.strokeDasharray=L;
+      const a=p.animate([{strokeDashoffset:L},{strokeDashoffset:0}],
+        {duration:ARC.afterglow,easing:ARC.discharge,fill:'none'});
+      // Le pointillé est RETIRÉ à la fin : le laisser en place ne se voit pas
+      // aujourd'hui (un tiret long comme le chemin est un trait plein), mais il
+      // deviendrait visible à la première courbe rendue en plusieurs segments.
+      const net=()=>{ try{ p.style.strokeDasharray=''; }catch(e){} };
+      a.addEventListener('finish',net); a.addEventListener('cancel',net);
+      n++;
+    });
+    toiles.forEach(c=>{
+      if(_arcTraces.has(c)) return;
+      if(arcReduit()){ _arcTraces.add(c); return; }
+      // On ne marque QUE si le balayage est réellement parti : un graphique
+      // encore masqué mesure zéro, et le marquer l'aurait privé de son tracé
+      // pour de bon.
+      if(arcTraversee(c,{duree:ARC.afterglow})){ _arcTraces.add(c); n++; }
+    });
+  }catch(e){}
+  return n;
+}
+
+// ── ANIMATION 2 : LES ÉTATS DE PRESSION ────────────────────────────────────
+// La brique de base, celle qu'on ressent partout sans la remarquer.
+//
+// LA CHARGE EST LAISSÉE À LA FEUILLE DE STYLE (:active), et c'est un choix, pas
+// une facilité : elle est gratuite, elle démarre à l'instant exact du contact —
+// avant même qu'un gestionnaire JS soit appelé — et surtout le navigateur la
+// retire tout seul dès que le geste devient un défilement. Un pointerdown en JS
+// aurait allumé une charge à chaque début de scroll sur une carte.
+//
+// LA DÉCHARGE ET LA RÉMANENCE SONT ICI, sur pointerup — donc sur un vrai
+// relâchement, jamais sur un scroll avorté (qui émet pointercancel, que l'on
+// n'écoute pas). L'haptique tombe SUR la décharge et pas à l'appui : même règle
+// que la validation de série, et c'est ce qui la fait ressentir comme une
+// libération plutôt que comme un accusé de réception.
+//
+// PASSIF ET EN CAPTURE. Passif : cette écoute ne doit jamais retarder d'un seul
+// millimètre le défilement, et elle n'appelle aucun preventDefault. Capture :
+// elle reçoit l'événement même quand un gestionnaire en aval l'arrête, ce qui
+// arrive dans les feuilles modales. Aucune ACTION n'est déclenchée ici — cette
+// fonction ne fait que peindre, et son échec ne coûte jamais qu'un halo.
+const ARC_PRESSION='button,.btn,.content-card,.client-row,.choice-opt,'
+  +'.emo-opt,.gsl-opt,.obj-opt,[role="button"]';
+function _arcPression(e){
+  try{
+    if(!e.target||!e.target.closest) return;
+    const el=e.target.closest(ARC_PRESSION);
+    if(!el) return;
+    // Un élément désactivé ne rend rien : lui répondre serait mentir.
+    if(el.disabled||el.getAttribute('aria-disabled')==='true') return;
+    // data-arc="off" : la sortie de secours des gestes qui portent DÉJÀ leur
+    // propre décharge. Sans elle, le bouton de validation de série recevrait
+    // deux réponses pour un seul appui — une vibration légère par-dessus la
+    // lourde, et un halo générique par-dessus l'arc signature. Le geste le plus
+    // répété de la séance serait justement le plus brouillon.
+    if(el.getAttribute('data-arc')==='off') return;
+    arcHaptique('legere');
+    arcGlow(el);
+  }catch(err){}
+}
+try{
+  document.addEventListener('pointerdown',_arcNoter,{passive:true,capture:true});
+  document.addEventListener('pointerup',_arcPression,{passive:true,capture:true});
+}catch(err){
+  // Repli pour les moteurs qui refusent l'objet d'options. Le troisième
+  // argument booléen vaut « capture » — on perd « passive », pas la capture.
+  try{
+    document.addEventListener('pointerdown',_arcNoter,true);
+    document.addEventListener('pointerup',_arcPression,true);
+  }catch(e2){}
+}
+
+// ── ANIMATION 11 : LE COURT-CIRCUIT ────────────────────────────────────────
+// Réservé aux ERREURS. Entrée sèche PAR LE HAUT — le bandeau tombe de 24 px sur
+// la courbe `snap` au lieu de monter mollement depuis le bas — puis deux
+// oscillations horizontales de 4 px au plus. Deux, pas cinq : au-delà ce n'est
+// plus un court-circuit, c'est un tremblement, et un tremblement se lit comme
+// un défaut d'affichage.
+//
+// « PAR LE HAUT » VEUT DIRE DEPUIS AU-DESSUS DE SA PLACE, pas depuis le haut de
+// l'écran. Déplacer #toast en tête de page serait un déménagement, pas une
+// animation : il passerait sous les barres de titre et sous l'encoche, et cent
+// sites d'appel en dépendent. Le geste décrit — sec, tombant — est rendu par le
+// mouvement ; la position ne bouge pas.
+//
+// LA LISTE DE TRANSFORMS EST IDENTIQUE d'une image à l'autre, y compris quand
+// une valeur vaut zéro. Deux listes de fonctions différentes forcent le moteur
+// à interpoler des matrices, et l'oscillation devient molle là où on la veut
+// nette.
+function _arcCourtCircuit(t){
+  if(!t||!t.animate||arcReduit()) return null;
+  const f=(y,x)=>'translateX(-50%) translateY('+y+'px) translateX('+x+'px)';
+  return t.animate([
+    {transform:f(-ARC.translate,0),easing:ARC.snap,     offset:0},
+    {transform:f(0,4),             easing:ARC.discharge,offset:0.34},
+    {transform:f(0,-4),                                 offset:0.53},
+    {transform:f(0,3),                                  offset:0.70},
+    {transform:f(0,-2),                                 offset:0.85},
+    {transform:f(0,0),                                  offset:1}
+  ],{duration:ARC.strike+ARC.release,fill:'none'});
+}
+
+// ── ANIMATION 12 : TIRER POUR RAFRAÎCHIR ───────────────────────────────────
+// La charge d'un condensateur : le trait se remplit à mesure que le doigt tire,
+// et se décharge au relâchement.
+//
+// TOUTES LES ÉCOUTES SONT PASSIVES, sans une seule exception, et c'est un choix
+// qui coûte quelque chose : sans preventDefault, le rebond natif de la page
+// continue de se produire pendant le tirage. On l'accepte. Une écoute non
+// passive sur touchmove impose au navigateur d'attendre notre code avant de
+// faire défiler quoi que ce soit — sur toute la zone, à chaque geste, y compris
+// les milliers qui ne sont pas un tirage. La règle 7 dit que l'animation ne
+// bloque jamais l'action ; ici l'action, c'est le défilement lui-même.
+//
+// L'AMORTISSEMENT est ce qui rend le geste crédible : le doigt parcourt 131 px
+// pour que le trait en gagne 72. Sans lui le trait se remplit avant que le
+// geste soit devenu une intention, et l'athlète déclenche des rafraîchissements
+// en voulant simplement remonter sa page.
+const ARC_TIRAGE_SEUIL=72;
+const ARC_TIRAGE_AMORTI=0.55;
+function arcTirerPourRafraichir(zone,action){
+  if(!zone||typeof action!=='function') return false;
+  if(zone._arcTirage) return false;          // déjà armée : loadX() repasse ici
+  zone._arcTirage=true;
+  let y0=null, trait=null, jauge=null, charge=0;
+  const finir=()=>{
+    if(trait){ try{ trait.remove(); }catch(e){} }
+    trait=null; jauge=null; charge=0;
+  };
+  const poser=()=>{
+    const r=zone.getBoundingClientRect();
+    if(!r.width) return false;
+    trait=document.createElement('div');
+    trait.className='arc-condensateur';
+    trait.style.left=r.left+'px'; trait.style.top=r.top+'px';
+    trait.style.width=r.width+'px'; trait.style.height='3px';
+    jauge=document.createElement('span');
+    trait.appendChild(jauge);
+    _arcCalque().appendChild(trait);
+    return true;
+  };
+  zone.addEventListener('touchstart',e=>{
+    // scrollTop>0 : on est au milieu de la page, ce geste est un défilement.
+    if(arcReduit()||zone.scrollTop>0){ y0=null; return; }
+    y0=(e.touches&&e.touches[0])?e.touches[0].clientY:null;
+    charge=0;
+  },{passive:true});
+  zone.addEventListener('touchmove',e=>{
+    if(y0==null||!e.touches||!e.touches[0]) return;
+    const dy=e.touches[0].clientY-y0;
+    // Vers le haut, ou la page a bougé : ce n'est plus un tirage.
+    if(dy<=0||zone.scrollTop>0){ finir(); y0=null; return; }
+    charge=Math.min(ARC_TIRAGE_SEUIL,dy*ARC_TIRAGE_AMORTI);
+    if(!trait&&!poser()){ y0=null; return; }
+    jauge.style.transform='scaleX('+(charge/ARC_TIRAGE_SEUIL).toFixed(3)+')';
+  },{passive:true});
+  zone.addEventListener('touchend',()=>{
+    if(y0==null) return;
+    const plein=charge>=ARC_TIRAGE_SEUIL;
+    const t=trait;
+    y0=null;
+    if(!plein){ finir(); return; }
+    // La DÉCHARGE d'abord, l'action ensuite : l'athlète doit voir que son geste
+    // a porté avant que l'écran ne se reconstruise sous ses yeux.
+    arcHaptique('moyenne');
+    if(t) arcTraversee(t,{duree:ARC.strike});
+    finir();
+    // L'action est fournie par l'appelant et ne peut jamais faire tomber le
+    // geste : ce module peint, il ne décide de rien.
+    try{ action(); }catch(e){}
+  },{passive:true});
+  zone.addEventListener('touchcancel',()=>{ y0=null; finir(); },{passive:true});
+  return true;
+}
+
 function toast(msg,c='var(--green)'){
   const t=document.getElementById('toast');
-  t.textContent=msg;t.style.borderLeft='4px solid '+c;
+  // L'erreur se reconnaît à sa COULEUR, seule chose que les cent sites d'appel
+  // fournissent déjà. Aucun d'eux n'a été touché : les vingt-six qui passent
+  // « var(--red) » héritent du court-circuit sans le savoir.
+  const erreur=/--red\b|--danger|--arc-danger/i.test(String(c));
+  t.textContent=msg;
+  t.style.borderLeft='4px solid '+(erreur?'var(--arc-danger)':c);
   t.style.opacity='1';t.style.transform='translateX(-50%) translateY(0)';
+  if(erreur){ _arcCourtCircuit(t); arcHaptique('moyenne'); }
   setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(-50%) translateY(80px)';},2800);
 }
 
@@ -13043,6 +13845,9 @@ function drawLineChart(canvas,datasets,labels){
   const W=canvas.width=canvas.parentElement.offsetWidth||300,H=canvas.height=160;
   const ctx=canvas.getContext('2d');
   ctx.clearRect(0,0,W,H);
+  // ANIMATION 9. Cette fonction ne passe pas par _setupCanvas : sans ce
+  // rappel-ci, les graphiques du bilan seraient les seuls à ne pas se tracer.
+  try{ requestAnimationFrame(()=>arcTracerCourbes(canvas)); }catch(e){}
   const pad={t:16,b:28,l:36,r:12};
   const cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
   // Compute global min/max across all datasets
@@ -15994,31 +16799,66 @@ function _peindreRepos(){
     woState.reposVibre=true;
     // Dégradation silencieuse : iOS Safari n'expose pas vibrate, et un message
     // d'erreur pour un confort serait pire que l'absence du confort.
-    try{ if(navigator.vibrate) navigator.vibrate([180,90,180]); }catch(e){}
+    // Le motif passe par arcHaptique, qui porte EXACTEMENT le même 180-90-180 :
+    // deux avertissements qui se ressembleraient sans être identiques seraient
+    // pires que deux avertissements franchement distincts.
+    try{ arcHaptique('avertir'); }catch(e){}
     try{ if(currentUser&&currentUser.sonRepos) _bipRepos(); }catch(e){}
+    // La décharge de fin, pleine largeur. Posée ici et pas dans le rendu :
+    // reposVibre est déjà le drapeau « une seule fois », et le rendu, lui,
+    // repasse chaque seconde. Le report d'une frame laisse au bandeau le temps
+    // d'être peint — sans lui, la traversée viserait un rectangle vide.
+    try{ setTimeout(()=>{ const b=document.getElementById('wo-repos');
+      if(b&&b.firstElementChild) arcTraversee(b.firstElementChild,{duree:ARC.strike}); },0); }catch(e){}
   }
   const tot=woState.reposTotal||1;
   const pc=fini?100:Math.max(0,Math.min(100,(1-reste/tot)*100));
   const coul=fini?'var(--green)':'var(--red)';
+  // ── ANIMATION 4 : L'ANNEAU ET SON POINT DE COURANT ──────────────────────
+  // LES DIX DERNIÈRES SECONDES changent deux choses à la fois : la teinte passe
+  // au violet — la couleur d'ANTICIPATION du système, celle de la charge — et
+  // la cadence du point double. Deux signaux plutôt qu'un, parce que l'athlète
+  // ne regarde pas son téléphone : il doit pouvoir attraper l'information du
+  // coin de l'œil, et une teinte seule ne s'attrape pas.
+  const AVANT_FIN=10;
+  const bientot=!fini&&reste<=AVANT_FIN;
+  const anneau=fini?'var(--green)':(bientot?'var(--arc-charge)':'var(--arc-current)');
+  const cad=bientot?ARC.ambient/2:ARC.ambient;
+  // Le délai NÉGATIF est ce qui rend la boucle continue alors que ce bandeau
+  // est reconstruit chaque seconde : le nœud qui vient de naître reprend la
+  // rotation là où son prédécesseur l'a laissée, au lieu de repartir de zéro.
+  const ecoule=Math.max(0,(tot-reste))*1000;
+  const R=22, C=2*Math.PI*R;
+  const anneauHtml=`<div style="position:relative;width:52px;height:52px;margin-top:4px;flex-shrink:0">
+      <svg viewBox="0 0 52 52" width="52" height="52" style="display:block;transform:rotate(-90deg)" aria-hidden="true">
+        <circle cx="26" cy="26" r="${R}" fill="none" stroke="var(--surface-2)" stroke-width="3"></circle>
+        <circle cx="26" cy="26" r="${R}" fill="none" stroke="${anneau}" stroke-width="3" stroke-linecap="round"
+          stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${(C*pc/100).toFixed(2)}"></circle>
+      </svg>
+      <div class="arc-ronde" style="animation-duration:${cad}ms;animation-delay:-${(ecoule%cad).toFixed(0)}ms" aria-hidden="true">
+        <span class="arc-point" style="background:${anneau};box-shadow:0 0 6px ${anneau}"></span>
+      </div>
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:17px;letter-spacing:.5px;color:${coul};line-height:1">${fini?'+':''}${_fmtRepos(reste)}</div>
+    </div>`;
   z.style.display='block';
   z.innerHTML=`<div style="background:#0c0c0c;border-top:1px solid ${fini?'#14532d':'#2a0000'};padding:9px 14px 10px">
     <div style="display:flex;align-items:center;gap:10px">
       <div style="flex:1;min-width:0">
-        <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);font-weight:800">
+        <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
           ${fini?'Repos terminé':'Repos'}${woState.reposLib?' · '+escapeHtml(woState.reposLib):''}
         </div>
-        <div style="font-size:26px;font-weight:800;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px;color:${coul};line-height:1.1">
-          ${fini?'+':''}${_fmtRepos(reste)}
-        </div>
+        ${anneauHtml}
       </div>
       <button onclick="ajusterRepos(-15)" class="hit44" style="min-width:46px;min-height:44px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;color:#ddd;font-size:12px;font-weight:800;cursor:pointer">−15</button>
       <button onclick="ajusterRepos(15)" class="hit44" style="min-width:46px;min-height:44px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;color:#ddd;font-size:12px;font-weight:800;cursor:pointer">+15</button>
       <button onclick="annulerRepos()" class="hit44" style="min-width:60px;min-height:44px;background:none;border:1px solid var(--border);border-radius:9px;color:var(--sub);font-size:11px;font-weight:800;letter-spacing:.5px;cursor:pointer">Passer</button>
     </div>
-    <div style="height:4px;background:var(--surface-2);border-radius:2px;margin-top:7px;overflow:hidden">
-      <div style="height:100%;width:${pc.toFixed(1)}%;background:${coul};border-radius:2px"></div>
-    </div>
   </div>`;
+  // La barre de 4 px qui vivait ici a disparu AVEC son remplaçant, pas avant :
+  // l'anneau porte exactement la même information — la part de repos écoulée —
+  // et la porter deux fois aurait été la porter à moitié. Le décompte a suivi
+  // le trait à l'intérieur de l'anneau : c'est la même donnée, au même endroit,
+  // et la place ainsi rendue absorbe la hauteur du cercle.
 }
 // Aucun son par défaut : une salle est bruyante et l'athlète a souvent ses
 // écouteurs. Le réglage existe, il est éteint.
@@ -16931,6 +17771,14 @@ function phraseDuJour(d){
 }
 function loadClientHome(){
   go('s-client-home');
+  // ANIMATION 12. Armé ici, et l'action est loadClientHome elle-même : tirer
+  // rejoue EXACTEMENT ce que fait déjà l'arrivée sur l'accueil — la même
+  // synchronisation, les mêmes rappels, les mêmes rendus. Aucune logique
+  // métier n'est écrite pour l'occasion, c'est un chemin existant qu'on rend
+  // atteignable au doigt. La garde interne empêche le réarmement à chaque
+  // passage. Une autre zone se branche en une ligne, sur le même modèle.
+  try{ arcTirerPourRafraichir(document.querySelector('#s-client-home .scroll-area'),
+       loadClientHome); }catch(e){}
   // COULOIR DE RETOUR. La synchronisation vient AVANT les rappels : elle
   // décide s'ils ont le droit de partir. Elle n'écrit que si l'état a changé,
   // et re-désarme la copie du service worker dans ce cas.
@@ -18715,10 +19563,30 @@ function renderWoEx(){
   woState.currentEx=groupe[0];
   const estSS=groupe.length>1;
 
-  document.getElementById('wo-progress').style.width=(gi/grs.length*100)+'%';
+  // ── ANIMATION 5 : LE COURANT MONTE DANS LA BARRE ────────────────────────
+  // --arc-pc et non style.width : la barre est mise à l'échelle par un
+  // transform, qui ne relance jamais la mise en page. Voir .progress-fill.
+  const _barre=document.getElementById('wo-progress');
+  const _avantPc=parseFloat(_barre.style.getPropertyValue('--arc-pc'))||0;
+  const _pc=grs.length?gi/grs.length:0;
+  _barre.style.setProperty('--arc-pc',_pc.toFixed(4));
+  // Le courant PASSE dans le segment gagné, il ne s'y allume pas. Seulement
+  // quand la barre avance : revenir en arrière n'est pas une progression, et
+  // la célébrer brouillerait le signal.
+  if(_pc>_avantPc){
+    try{ arcTraversee(_barre.parentElement,{duree:ARC.release}); }catch(e){}
+  }
   // Le compteur suit les ÉCRANS, pas les exercices : un superset est un seul
   // écran. Le nombre d'exercices reste visible sur le badge de chaque bloc.
-  document.getElementById('wo-ex-count').textContent=(gi+1)+'/'+grs.length;
+  // Le CHIFFRE s'anime aussi, pas seulement la barre — d'où l'interpolation
+  // depuis la valeur affichée. tabular-nums est posé sur l'élément : sans lui,
+  // le passage de 1 à 4 change la largeur du texte et fait sauter la barre qui
+  // le précède, à chaque frame.
+  const _cpt=document.getElementById('wo-ex-count');
+  const _avantN=parseInt((_cpt.textContent||'').split('/')[0],10);
+  _cpt.style.fontVariantNumeric='tabular-nums';
+  arcChiffre(_cpt,isNaN(_avantN)?gi+1:_avantN,gi+1,
+    {duree:ARC.strike,format:v=>Math.round(v)+'/'+grs.length});
   document.getElementById('wo-prev-btn').style.opacity=gi===0?'0.3':'1';
   // innerHTML et non textContent : les deux libellés (long/court) doivent
   // survivre au changement d'exercice, sinon la version mobile disparaît dès le
@@ -19053,7 +19921,7 @@ function renderSets(ex,data,idx){
             <div style="display:flex;align-items:center;gap:8px">
               ${rirSelect}
               ${painSelect}
-              <button class="hit44" onclick="toggleSet(${i},${idx})" style="width:34px;height:34px;border-radius:50%;border:2px solid ${s.done?'#fff':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:14px;margin-left:auto;display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button>
+              <button class="hit44" data-arc="off" onclick="toggleSet(${i},${idx})" style="width:34px;height:34px;border-radius:50%;border:2px solid ${s.done?'#fff':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:14px;margin-left:auto;display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button>
             </div>
           </div>
         </td>
@@ -19067,7 +19935,7 @@ function renderSets(ex,data,idx){
       ${weightCell}
       <td>${rirSelect}</td>
       <td>${painSelect}</td>
-      <td><button class="hit44" onclick="toggleSet(${i},${idx})" style="width:34px;height:34px;border-radius:50%;border:2px solid ${s.done?'#fff':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button></td>
+      <td><button class="hit44" data-arc="off" onclick="toggleSet(${i},${idx})" style="width:34px;height:34px;border-radius:50%;border:2px solid ${s.done?'#fff':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button></td>
     </tr>`;
   }).join('');
   // Deux séries validées à 4 ou plus sur CET exercice : la carte apparaît.
@@ -19295,7 +20163,47 @@ function toggleSet(i,idx){
     if(sec) demarrerRepos(sec,(woState.exercises[idx]||{}).name||'');
   }
   renderSets(woState.exercises[idx],d,idx);
+  // APRÈS renderSets, jamais avant : la ligne que l'arc doit traverser vient
+  // d'être détruite et reconstruite, et l'animation doit viser la NOUVELLE.
+  // Et seulement quand on coche : décocher est une correction de saisie, pas
+  // un événement d'entraînement — rien ne doit le célébrer.
+  if(!avant) _arcSerieValidee(idx,i);
   woPersist();
+}
+// ── ANIMATION 3 : LA VALIDATION DE SÉRIE — l'élément signature ─────────────
+// Le geste répété 25 à 40 fois par séance, et le seul endroit du système où
+// l'on a le droit d'être spectaculaire. Tout le reste reste discipliné pour
+// que ce moment-là ressorte.
+//
+// L'ORDRE EST LE PROPOS. L'arc part du doigt, traverse la ligne de gauche à
+// droite en 140 ms, le numéro de série encaisse l'impact, la rémanence cyan
+// s'éteint en 380 ms. L'haptique lourde tombe SUR la décharge et pas à
+// l'appui : à l'appui elle accuserait réception, sur la décharge elle libère.
+//
+// NE LÈVE JAMAIS. Une série validée doit l'être même si l'animation échoue :
+// l'écriture a déjà eu lieu chez l'appelant, et rien ici ne doit pouvoir la
+// rendre douteuse. C'est la règle 7 poussée jusqu'au bout — l'animation cède,
+// toujours, et en silence.
+function _arcSerieValidee(idx,i){
+  try{
+    arcHaptique('lourde');
+    const tb=document.getElementById('sets-body-'+idx);
+    if(!tb) return;
+    const ligne=tb.children[i];
+    if(!ligne) return;
+    // Le point de contact s'il est frais, sinon rien : mieux vaut un arc sans
+    // étincelle de départ qu'une étincelle au mauvais endroit.
+    const p=arcDernierPoint();
+    if(p) arcFlash(p,{couleur:'var(--arc-current)',taille:56});
+    arcTraversee(ligne);
+    arcGlow(ligne);
+    // « Le compteur encaisse l'impact » : le numéro de série, première cellule
+    // de la ligne. C'est lui qui compte, et c'est vers lui que l'œil revient.
+    // Pas de flash ni de halo dessus — l'arc vient de passer, en rajouter
+    // brouillerait le seul moment fort de la séance.
+    const compteur=ligne.firstElementChild;
+    if(compteur) arcDecharge(compteur,{flash:false,halo:false});
+  }catch(e){}
 }
 function woNav(dir){
   // On navigue d'un GROUPE à l'autre : un superset est un seul écran, sinon
@@ -19307,6 +20215,33 @@ function woNav(dir){
   if(nxt<0) return;
   if(nxt>=grs.length){localStorage.removeItem('rc_wo_state');finishWorkout(false);return;}
   woState.currentEx=grs[nxt][0];renderWoEx();woPersist();
+  _arcGlissement(dir);
+}
+// ── ANIMATION 6 : LA TRANSITION ENTRE EXERCICES ────────────────────────────
+// Un glissement de 24 px, JAMAIS un fondu — et c'est le sens du glissement qui
+// porte l'information : le contenu de l'exercice suivant arrive par la droite
+// et se pose en glissant vers la gauche ; un retour arrive par la gauche.
+// L'athlète sait donc où il va sans lire un mot, et sans compter les écrans.
+//
+// Aucune opacité dans la variante normale : un fondu dirait « quelque chose a
+// changé » quand le glissement dit « tu avances ». Ce sont deux phrases
+// différentes, et une seule est vraie.
+//
+// La variante réduite, elle, N'A QUE l'opacité : sans mouvement il ne reste
+// aucun moyen de signaler la transition, et ne rien signaler du tout ferait
+// croire à un écran figé.
+function _arcGlissement(dir){
+  try{
+    const z=document.getElementById('wo-content');
+    if(!z||!z.animate) return null;
+    if(arcReduit())
+      return z.animate([{opacity:0.55},{opacity:1}],
+        {duration:ARC.plat,easing:'linear',fill:'none'});
+    const d=(dir>0?1:-1)*ARC.translate;
+    return z.animate(
+      [{transform:'translateX('+d+'px)'},{transform:'translateX(0)'}],
+      {duration:ARC.strike,easing:ARC.discharge,fill:'none'});
+  }catch(e){ return null; }
 }
 function finishWorkout(incomplete=false){
   // En PREMIER : si le reste échoue, le SW ne doit pas rester bloqué en
@@ -21021,7 +21956,7 @@ function _rapCourbePoids(points){
   const mmPts=pts.map((p,i)=>({i,v:p.mm7})).filter(p=>p.v!=null&&isFinite(p.v));
   const dm=mmPts.length>1
     ?mmPts.map((p,k)=>(k?'L':'M')+x(p.i).toFixed(1)+' '+y(p.v).toFixed(1)).join(' '):'';
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img"
+  return `<svg class="arc-courbe" viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img"
     aria-label="Courbe de poids sur la période" style="display:block">
     <line x1="${P}" y1="${H-P}" x2="${W-P}" y2="${H-P}" stroke="currentColor" stroke-opacity=".25" stroke-width="1"/>
     <line x1="${P}" y1="${P}" x2="${P}" y2="${H-P}" stroke="currentColor" stroke-opacity=".25" stroke-width="1"/>
@@ -40464,7 +41399,7 @@ function _courbePesee(serie){
     return d.length>1?`<path d="${d.join(' ')}" fill="none" stroke="var(--red)" stroke-width="1.8"
       stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`:'';
   }).join('');
-  return `<svg viewBox="0 0 ${L} ${H}" preserveAspectRatio="none" style="width:100%;height:120px;overflow:visible" aria-hidden="true">
+  return `<svg class="arc-courbe" viewBox="0 0 ${L} ${H}" preserveAspectRatio="none" style="width:100%;height:120px;overflow:visible" aria-hidden="true">
       ${bruts}${traits}
     </svg>
     <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text-faint);margin-top:4px">
@@ -41276,6 +42211,10 @@ function _setupCanvas(id,defaultH){
   const ctx=cv.getContext('2d');
   cv.width=cv.offsetWidth||400;cv.height=parseInt(cv.getAttribute('height'))||defaultH;
   ctx.clearRect(0,0,cv.width,cv.height);
+  // ANIMATION 9. Reporté d'une frame : à cet instant l'appelant n'a encore rien
+  // dessiné, et balayer une toile vide n'aurait rien montré. Une frame plus
+  // tard le tracé est là, et arcTracerCourbes ne le jouera qu'une fois.
+  try{ requestAnimationFrame(()=>arcTracerCourbes(cv)); }catch(e){}
   return{cv,ctx,w:cv.width,h:cv.height};
 }
 function _drawGrid(ctx,w,h,p,mn,mx){
@@ -42551,7 +43490,32 @@ document.addEventListener('keydown',e=>{
 });
 function closeModal(){
   if(typeof _audioMediaRecorder!=='undefined'&&_audioMediaRecorder&&_audioMediaRecorder.state==='recording') cancelAudioAnnotation();
-  document.getElementById('modal-overlay')?.remove();
+  const o=document.getElementById('modal-overlay');
+  if(!o) return;
+  // ── ANIMATION 8 : LA SORTIE ─────────────────────────────────────────────
+  // L'IDENTIFIANT PART TOUT DE SUITE, le nœud 140 ms plus tard. C'est ce qui
+  // rend la sortie animée sans effet de bord : dès cette ligne,
+  // getElementById('modal-overlay') ne trouve plus rien, et une feuille
+  // ouverte dans la foulée est la SEULE que le reste du code puisse voir.
+  // Sans cette précaution, fermer puis rouvrir aurait fait pointer tout le
+  // monde sur la feuille en train de mourir — un bogue invisible en lecture,
+  // et parfaitement reproductible au doigt.
+  o.removeAttribute('id');
+  // ET TOUS LES IDENTIFIANTS DE SES ENFANTS. Retirer le seul « modal-overlay »
+  // ne suffisait pas, et trois assertions existantes l'ont dit tout de suite :
+  // le contenu de la feuille porte ses propres identifiants (« rc-pkg-modal »
+  // et ses voisins), qui restaient trouvables pendant les 140 ms de la sortie.
+  // Du code qui vérifie « la feuille est-elle partie ? » juste après un
+  // closeModal() lisait donc « non ». Ce n'était pas un artefact de test :
+  // c'était le mécanisme de refus d'import qui se croyait rouvert.
+  try{ o.querySelectorAll('[id]').forEach(n=>n.removeAttribute('id')); }catch(e){}
+  o.setAttribute('aria-hidden','true');
+  if(arcReduit()||!o.animate){ o.remove(); return; }
+  o.classList.add('arc-sortie');
+  // Filet : si l'onglet passe en arrière-plan pendant la sortie, aucune frame
+  // n'est produite et l'événement d'animation n'arrive jamais. Le minuteur,
+  // lui, finit par tomber — la feuille ne peut pas rester coincée à l'écran.
+  setTimeout(()=>{ try{ o.remove(); }catch(e){} },ARC.strike);
 }
 async function createAthlete(){
   const fn=document.getElementById('aa-fname').value.trim();
@@ -53482,6 +54446,111 @@ function testExercices(){
           const xs=getComputedStyle(document.documentElement).getPropertyValue('--fs-xs').trim();
           return xs==='11px'?true:_echec('--fs-xs vaut '+xs);})());
 
+        // ══════ AUCUNE COMMANDE INVISIBLE ══════
+        ok('Aucun bouton rendu n\'est dépourvu de glyphe',(()=>{
+          // Une commande sans caractère est une zone cliquable invisible. Sept
+          // l'étaient devenues au fil des éditions, dont la seule sortie de l'écran
+          // de séance.
+          const vides=[]; let inspectes=0;
+          document.querySelectorAll('button').forEach(b=>{
+            inspectes++;
+            // textContent descend dans les enfants : un libellé enveloppé compte.
+            const txt=(b.textContent||'').replace(/[\s\u00a0]/g,'');
+            const ico=b.querySelector('svg,img,i');
+            // Le ::before du garde-fou compte AUSSI : c'est tout son objet. Mais on
+            // ne le consulte QUE dans le cas rare où il n'y a ni texte ni icône :
+            // getComputedStyle force un recalcul de style, et l'appeler sur les deux
+            // cents boutons de la page coûte plus que tout le reste de l'assertion.
+            const c=(txt||ico)?'x':(getComputedStyle(b,'::before').content||'')
+              .replace(/["']/g,'').replace(/^(none|normal)$/,'').trim();
+            if(!txt&&!ico&&!c)
+              vides.push((b.id||b.className||b.getAttribute('onclick')||'?').slice(0,40));
+          });
+          if(vides.length)
+            return _echec(vides.length+' commande(s) sans glyphe : '+vides.slice(0,3).join(' | '));
+          // TÉMOIN : le balayage voit vraiment des boutons. Sans lui, un sélecteur
+          // cassé rendrait « aucune faute » sur n'importe quelle page.
+          if(inspectes<150) return _echec('seulement '+inspectes+' bouton(s) inspecté(s)');
+          // Et les deux commandes que le critère nomme sont bien pourvues.
+          const woBack=document.querySelector('#s-workout .back-btn');
+          if(!woBack) return _echec('la sortie de l\'écran de séance a disparu');
+          if(!(woBack.textContent||'').trim())
+            return _echec('la sortie de l\'écran de séance n\'a plus de flèche');
+          if(!/pauseWorkout/.test(woBack.getAttribute('onclick')||''))
+            return _echec('la flèche de séance n\'ouvre plus la modale Pause');
+          const croix=document.querySelector('#session-picker button');
+          return (croix&&/[✕×]/.test(croix.textContent||''))
+            ?true:_echec('le sélecteur de séance n\'a plus de croix');})());
+        ok('Le garde-fou rend son glyphe MALGRÉ le calque tactile',(()=>{
+          // .back-btn::before pose déjà content:'' pour agrandir la zone tapable.
+          // Si sa spécificité passait devant celle de .back-btn:empty::before, le
+          // garde-fou serait mort en silence : un bouton vidé resterait invisible.
+          const temoins=[];
+          const poser=(cls,attrs)=>{
+            const b=document.createElement('button');
+            if(cls) b.className=cls;
+            if(attrs) Object.keys(attrs).forEach(k=>b.setAttribute(k,attrs[k]));
+            document.body.appendChild(b); temoins.push(b); return b;
+          };
+          const lu=el=>(getComputedStyle(el,'::before').content||'').replace(/["']/g,'');
+          try{
+            if(lu(poser('back-btn'))!=='←')
+              return _echec('un retour vidé ne récupère pas sa flèche : '+lu(temoins[0]));
+            if(lu(poser(null,{onclick:"closeModal('x')"}))!=='✕')
+              return _echec('une fermeture vidée ne récupère pas sa croix');
+            if(lu(poser(null,{onclick:"document.getElementById('x').style.display='none'"}))!=='✕')
+              return _echec('la variante display=none ne récupère pas sa croix');
+            // ET IL NE DÉBORDE PAS : un bouton qui a déjà son glyphe n'en reçoit
+            // pas un second. :empty ne matche que ce qui n'a AUCUN contenu.
+            const plein=poser('back-btn'); plein.textContent='←';
+            return lu(plein)===''
+              ?true:_echec('un bouton pourvu reçoit un glyphe en double : '+lu(plein));
+          } finally { temoins.forEach(b=>b.remove()); }})());
+        ok('La flèche de retour reste lisible et tapable',(()=>{
+          // #444 sur le fond de la topbar donnait 2,3:1 — sous le seuil AA de 4,5.
+          const bb=document.querySelector('.back-btn');
+          if(!bb) return _echec('aucun bouton retour dans la page');
+          const rgb=t=>(String(t).match(/\d+/g)||[0,0,0]).slice(0,3).map(Number);
+          const lum=t=>{const v=rgb(t).map(x=>{x/=255;
+            return x<=0.03928?x/12.92:Math.pow((x+0.055)/1.055,2.4);});
+            return 0.2126*v[0]+0.7152*v[1]+0.0722*v[2];};
+          // Le fond effectif : le premier ancêtre qui en peint un.
+          let f='rgb(8,8,8)',x=bb;
+          while(x&&x!==document.documentElement){
+            const c=getComputedStyle(x).backgroundColor;
+            if(c&&c!=='rgba(0, 0, 0, 0)'&&c!=='transparent'){ f=c; break; }
+            x=x.parentElement;
+          }
+          const a=lum(getComputedStyle(bb).color), b=lum(f);
+          const ratio=(Math.max(a,b)+0.05)/(Math.min(a,b)+0.05);
+          if(ratio<4.5) return _echec('contraste '+(Math.round(ratio*100)/100)+':1, sous le seuil AA');
+          // WCAG 2.5.8 : 44x44 minimum. ON FABRIQUE NOTRE PROPRE TÉMOIN plutôt que
+          // de mesurer ceux de la page : pendant la suite, tous les écrans sont
+          // masqués et rendent une largeur de zéro. Une assertion dont le verdict
+          // dépend de l'écran affiché au lancement ne vaut rien.
+          const t=document.createElement('button');
+          t.className='back-btn'; t.textContent='←';
+          document.body.appendChild(t);
+          try{
+            const r=t.getBoundingClientRect();
+            if(!r.width) return _echec('le témoin fabriqué n\'est pas mesurable');
+            if(r.width<44||r.height<44)
+              return _echec('zone tactile '+Math.round(r.width)+'x'+Math.round(r.height));
+            // Le calque ::before ne rétrécit pas une commande déjà plus large.
+            const av=getComputedStyle(t,'::before');
+            if(parseFloat(av.width)<44||parseFloat(av.height)<44)
+              return _echec('le calque tactile mesure '+av.width+'x'+av.height);
+          } finally { t.remove(); }
+          // Et aucune instance RENDUE ne descend sous la barre, s'il y en a.
+          const petits=[];
+          document.querySelectorAll('.back-btn').forEach(el=>{
+            const r=el.getBoundingClientRect();
+            if(r.width&&(r.width<44||r.height<44))
+              petits.push(Math.round(r.width)+'x'+Math.round(r.height));
+          });
+          return petits.length
+            ?_echec(petits.length+' retour(s) sous 44px : '+petits.slice(0,3).join(', '))
+            :true;})());
         ok('Le viewport COUVRE l\'écran — sans quoi env() vaut toujours zéro',(()=>{
           const m=document.querySelector('meta[name="viewport"]');
           if(!m) return _echec('aucun meta viewport');
@@ -75325,6 +76394,720 @@ vendredi 78 6h 44m
       if(!o||!p) return _echec('cellules absentes du rendu');
       return (o.innerHTML===''&&p.innerHTML==='')
         ?true:_echec('cellule non vide : "'+o.innerHTML+'" / "'+p.innerHTML+'"');})());
+
+    // ══════ ARC — SYSTÈME D'ANIMATION (lot 1) ══════
+    (()=>{
+      const _cssArc=Array.from(document.querySelectorAll('style'))
+        .map(s=>s.textContent).join('\n').replace(/\/\*[\s\S]*?\*\//g,'');
+      const _v=n=>getComputedStyle(document.documentElement)
+        .getPropertyValue(n).trim();
+
+      // ── La duplication CSS ↔ JS est VERROUILLÉE ─────────────────────────
+      // Les mêmes valeurs vivent des deux côtés parce que la Web Animations
+      // API ne lit pas les variables CSS. Une duplication non gardée finit
+      // TOUJOURS par diverger, et elle divergerait en silence : le CSS
+      // continuerait à jouer 90 ms pendant que le JS en jouerait 120, et rien
+      // ne le dirait. C'est cette assertion qui rend la duplication tenable.
+      ok('Les durées ARC sont les mêmes en CSS et en JS',(()=>{
+        const paires=[['--arc-attack',ARC.attack],['--arc-strike',ARC.strike],
+          ['--arc-release',ARC.release],['--arc-afterglow',ARC.afterglow],
+          ['--arc-ambient',ARC.ambient],['--arc-plat',ARC.plat]];
+        const faux=paires.filter(([n,j])=>_v(n)!==j+'ms')
+          .map(([n,j])=>n+' : css '+_v(n)+' ≠ js '+j+'ms');
+        return faux.length?_echec(faux.join(', ')):true;})());
+      ok('Les trois courbes ARC sont les mêmes en CSS et en JS',(()=>{
+        const paires=[['--arc-c-charge',ARC.charge],
+          ['--arc-c-discharge',ARC.discharge],['--arc-c-snap',ARC.snap]];
+        const faux=paires.filter(([n,j])=>_v(n).replace(/\s+/g,'')!==j.replace(/\s+/g,''))
+          .map(([n])=>n+' : «'+_v(n)+'»');
+        return faux.length?_echec(faux.join(', ')):true;})());
+      ok('Les amplitudes ARC sont les mêmes en CSS et en JS',(()=>{
+        const paires=[['--arc-scale-charge',ARC.scaleCharge],
+          ['--arc-scale-impact',ARC.scaleImpact],['--arc-scale-settle',ARC.scaleSettle],
+          ['--arc-flash-peak',ARC.flashPeak],['--arc-translate',ARC.translate+'px'],
+          ['--arc-glow-radius',ARC.glowRadius+'px'],['--arc-glow-rest',ARC.glowRest+'px']];
+        const faux=paires.filter(([n,j])=>_v(n)!==String(j))
+          .map(([n,j])=>n+' : css '+_v(n)+' ≠ js '+j);
+        return faux.length?_echec(faux.join(', ')):true;})());
+      ok('L\'objet ARC est gelé : aucune valeur ne se corrige à chaud',(()=>{
+        // Un token modifiable au runtime, c'est un token qui finit modifié
+        // depuis une fonction de rendu — et la cohérence du système avec.
+        const avant=ARC.attack;
+        try{ ARC.attack=999; }catch(e){}
+        return ARC.attack===avant?true:_echec('ARC.attack a bougé');})());
+
+      // ── La grammaire en trois temps ─────────────────────────────────────
+      ok('Le cycle suit 1 → 0,94 → 1,14 → 0,97 → 1, dans CET ordre',(()=>{
+        if(arcReduit()) return true;   // la variante plate n'a pas de scale
+        const el=document.createElement('div');
+        const a=arcDecharge(el,{flash:false,halo:false});
+        if(!a) return _echec('aucune animation rendue');
+        const k=a.effect.getKeyframes();
+        try{ a.cancel(); }catch(e){}
+        const ech=k.map(x=>{
+          const m=/scale\(([-0-9.]+)\)/.exec(x.transform||'');
+          return m?parseFloat(m[1]):null;});
+        const att=[1,ARC.scaleCharge,ARC.scaleImpact,ARC.scaleSettle,1];
+        return JSON.stringify(ech)===JSON.stringify(att)
+          ?true:_echec(JSON.stringify(ech));})());
+      ok('Le scale du cycle tient sous les 400 ms du chemin critique',(()=>{
+        // La rémanence (380 ms) se joue APRÈS coup sur le calque et ne retient
+        // personne. Ce qui compte, c'est ce qui bouge sous le doigt.
+        const d=ARC.attack+ARC.strike;
+        return d<=400?true:_echec(d+' ms');})());
+      ok('Le cycle N\'ÉCRASE PAS un transform existant',(()=>{
+        // Sur #toast, centré par translateX(-50%), un scale seul l'aurait
+        // décalé de la moitié de sa largeur le temps de l'animation.
+        if(arcReduit()) return true;
+        const el=document.createElement('div');
+        const a=arcDecharge(el,{base:'translateX(-50%)',flash:false,halo:false});
+        if(!a) return _echec('aucune animation rendue');
+        const k=a.effect.getKeyframes();
+        try{ a.cancel(); }catch(e){}
+        const sans=k.filter(x=>(x.transform||'').indexOf('translateX(-50%)')<0);
+        return sans.length?_echec(sans.length+' image(s) sans la base'):true;})());
+      ok('Une seconde décharge ANNULE la première, jamais l\'inverse',(()=>{
+        // Règle 7 : l'animation cède, jamais l'action. Un athlète qui tape deux
+        // fois de suite ne doit pas voir son second geste faire la queue.
+        const el=document.createElement('div');
+        const a=arcDecharge(el,{flash:false,halo:false});
+        const b=arcDecharge(el,{flash:false,halo:false});
+        if(!a||!b) return _echec('animation manquante');
+        const etat=a.playState;
+        try{ b.cancel(); }catch(e){}
+        return etat==='idle'?true:_echec('la première est en «'+etat+'»');})());
+
+      // ── L'accessibilité, développée avec le reste et pas après ──────────
+      ok('arcReduit() rend un booléen et ne lève jamais',(()=>{
+        const r=arcReduit();
+        return typeof r==='boolean'?true:_echec(typeof r);})());
+      ok('Sous « animations réduites », ni halo ni flash — jamais',(()=>{
+        // On ne peut pas forcer la préférence système depuis le test : on
+        // vérifie donc la RÈGLE, dans les deux mondes. Quand elle est active,
+        // les deux primitives rendent null ; quand elle ne l'est pas, elles
+        // rendent une animation. Un seul des deux cas s'exécute ici, et c'est
+        // celui de la machine qui lance le test.
+        const el=document.createElement('div');
+        document.body.appendChild(el);
+        el.style.cssText='position:fixed;left:0;top:0;width:10px;height:10px';
+        let g,f;
+        try{ g=arcGlow(el); f=arcFlash(el); }
+        finally{ try{ el.remove(); }catch(e){} }
+        try{ if(g) g.cancel(); if(f) f.cancel(); }catch(e){}
+        return arcReduit()
+          ? ((g===null&&f===null)?true:_echec('une trace est passée malgré la préférence'))
+          : ((g&&f)?true:_echec('aucune trace alors que la préférence est inactive'));})());
+      ok('La règle prefers-reduced-motion éteint le calque ENTIER',(()=>{
+        // Ceinture du garde-fou JS : même si une animation partait, rien ne
+        // s'afficherait. La règle vit DANS le bloc existant, pas après lui —
+        // le bloc doit rester le dernier de la feuille pour l'emporter.
+        const i=_cssArc.indexOf('@media (prefers-reduced-motion: reduce)');
+        if(i<0) return _echec('bloc introuvable');
+        const j=_cssArc.indexOf('{',i);
+        let p=0,bloc='';
+        for(let k=j;k<_cssArc.length;k++){
+          if(_cssArc[k]==='{') p++;
+          else if(_cssArc[k]==='}'){ p--; if(!p){ bloc=_cssArc.slice(j+1,k); break; } }
+        }
+        return /#arc-calque\s*\{[^}]*display\s*:\s*none/.test(bloc)
+          ?true:_echec('le calque n\'est pas neutralisé dans le bloc');})());
+
+      // ── Les vibrations ──────────────────────────────────────────────────
+      ok('arcHaptique ne lève jamais, même sans navigator.vibrate',(()=>{
+        // iOS Safari est exactement ce cas-là, en permanence.
+        const v=navigator.vibrate; let ok2=true;
+        try{
+          try{ delete navigator.vibrate; }catch(e){}
+          if(navigator.vibrate===undefined&&arcHaptique('legere')!==false) ok2=false;
+          if(arcHaptique('inconnue')!==false) ok2=false;
+        }catch(e){ return _echec('exception : '+e.message); }
+        finally{ try{ if(v) navigator.vibrate=v; }catch(e){} }
+        return ok2?true:_echec('un motif est passé');})());
+      ok('Les vibrations SURVIVENT à « réduire les animations »',(()=>{
+        // Décision explicite : c'est le mouvement à l'écran qui déclenche
+        // nausées et migraines, pas une pulsation dans la paume. arcHaptique
+        // ne consulte donc jamais arcReduit — et c'est ce qu'on éprouve ici.
+        return arcHaptique.toString().indexOf('arcReduit')<0
+          ?true:_echec('arcHaptique consulte la préférence');})());
+
+      // ── La rareté du magenta ────────────────────────────────────────────
+      ok('--arc-peak n\'est utilisé NULLE PART hors du record',(()=>{
+        // Sa force vient de sa rareté : posé sur un bouton ordinaire, il ne
+        // signalerait plus rien. Le lot 5 (record battu) fera monter ce compte
+        // à ses zones de célébration, et devra le faire DÉLIBÉRÉMENT — comme
+        // la liste des champs publiés a dû l'être à l'arrivée du canal.
+        const n=(_cssArc.match(/var\(--arc-peak\)/g)||[]).length;
+        return n===0?true:_echec(n+' usage(s) : lot 1 n\'en prévoit aucun');})());
+      ok('Le cyan n\'est peint sur AUCUNE surface au repos',(()=>{
+        // La charpente reste rouge sur noir. --arc-current n'apparaît que dans
+        // le MOUVEMENT et jamais en background, border ou color d'une règle
+        // ordinaire.
+        //
+        // LES CLASSES DU CALQUE SONT EXCLUES, et ce n'est pas une complaisance :
+        // .arc-trace-arc EST l'arc lui-même. Il n'existe que pendant les 140 ms
+        // d'une traversée, sur un calque qui n'intercepte rien et ne porte
+        // aucune surface. Ma première rédaction ne faisait pas la différence
+        // entre « peindre une surface en cyan » et « le mouvement est cyan »,
+        // et elle a justement attrapé l'arrivée de la traversée — ce qu'on lui
+        // demande. C'est la RÈGLE qui manquait de précision, pas le code.
+        // Pas de `(^|})` en tête : ce délimiteur, une fois consommé par une
+        // règle, manquait à la SUIVANTE — deux règles .arc-* qui se suivent et
+        // seule la première était retirée. `[^{}]*` suffit, et ne consomme rien
+        // qu'il ne faille consommer : une classe ne franchit pas une accolade.
+        const ordinaire=_cssArc.replace(/[^{}]*\.arc-[a-z-]+[^{}]*\{[^}]*\}/g,'');
+        const re=/(background|border(?:-[a-z]+)?|color)\s*:[^;{}]*var\(--arc-current\)/g;
+        const f=ordinaire.match(re)||[];
+        return f.length?_echec(f.length+' surface(s) : '+f[0].slice(0,90)):true;})());
+
+      // ── Le calque ───────────────────────────────────────────────────────
+      ok('Le calque n\'intercepte AUCUN geste',(()=>{
+        // Il couvre l'écran entier : une seule ligne oubliée et l'application
+        // devient inutilisable, sans que rien ne s'affiche de travers.
+        const c=_arcCalque();
+        const s=getComputedStyle(c);
+        if(s.pointerEvents!=='none') return _echec('pointer-events : '+s.pointerEvents);
+        return s.position==='fixed'?true:_echec('position : '+s.position);})());
+      ok('Le calque passe SOUS le toast et AU-DESSUS des modales',(()=>{
+        const z=parseInt(getComputedStyle(_arcCalque()).zIndex,10);
+        const t=document.getElementById('toast');
+        const zt=t?parseInt(getComputedStyle(t).zIndex,10):9999;
+        return (z>3000&&z<zt)?true:_echec('calque '+z+' / toast '+zt);})());
+      ok('Le calque est masqué aux lecteurs d\'écran',
+        _arcCalque().getAttribute('aria-hidden')==='true');
+      ok('Une trace ANNULÉE retire son nœud, pas seulement une trace finie',(()=>{
+        // Une animation annulée n'émet PAS 'finish'. N'écouter que 'finish'
+        // aurait laissé un nœud invisible sur le calque à chaque geste
+        // interrompu — accumulés, ils ne se voient jamais et ne s'arrêtent pas.
+        //
+        // LE RETRAIT N'EST PAS SYNCHRONE, et c'est la spécification qui le
+        // veut : la Web Animations API livre 'cancel' au tour de boucle
+        // SUIVANT, pas dans l'appel à .cancel(). Mon premier jet comptait les
+        // nœuds juste après l'annulation et tombait pour cette seule raison —
+        // le code était bon, l'assertion était fausse. On éprouve donc les
+        // trois moitiés vérifiables ici : le nœud est posé, l'annulation prend
+        // effet, et les DEUX écoutes qui le retirent sont bien là.
+        // Le retrait effectif, lui, se voit à l'écran : rien ne s'accumule sur
+        // le calque après une salve de gestes interrompus.
+        if(arcReduit()) return true;
+        const el=document.createElement('div');
+        el.style.cssText='position:fixed;left:0;top:0;width:10px;height:10px';
+        document.body.appendChild(el);
+        // Le calque est vidé D'ABORD. Il arrive plein : la navigation des tests
+        // qui précèdent déclenche de vrais arcs d'onglet, et sur une page cachée
+        // aucun ne se retire. Au plafond, le nœud posé ici en chassait un autre
+        // et le compte ne bougeait pas — l'assertion tombait sur son propre
+        // décor, pas sur un défaut.
+        const c0=_arcCalque(); while(c0.firstChild) c0.removeChild(c0.firstChild);
+        const avant=_arcCalque().childElementCount;
+        const a=arcGlow(el);
+        if(!a){ el.remove(); return _echec('aucune trace'); }
+        const pendant=_arcCalque().childElementCount;
+        a.cancel();
+        const etat=a.playState;
+        el.remove();
+        if(pendant!==avant+1) return _echec('nœud non posé : '+avant+' → '+pendant);
+        if(etat!=='idle') return _echec('annulation sans effet : «'+etat+'»');
+        // Les deux chemins de retrait sont éprouvés en déclenchant les
+        // événements NOUS-MÊMES. C'est le seul moyen fiable : le navigateur ne
+        // les délivre qu'au fil des frames, et un onglet caché n'en produit
+        // aucune — un test qui attendrait la vraie fin passerait sur un poste
+        // et tomberait sur un autre, sans que le code ait changé.
+        const el2=document.createElement('div');
+        el2.style.cssText='position:fixed;left:0;top:0;width:10px;height:10px';
+        document.body.appendChild(el2);
+        const faux=[];
+        for(const ev of ['finish','cancel']){
+          const an=arcGlow(el2);
+          const nd=_arcCalque().lastElementChild;
+          if(!an||!nd){ faux.push(ev+' : aucune trace'); continue; }
+          an.dispatchEvent(new Event(ev));
+          if(nd.isConnected) faux.push(ev+' : nœud toujours là');
+          try{ an.cancel(); }catch(e){}
+        }
+        el2.remove();
+        return faux.length?_echec(faux.join(', ')):true;})());
+      ok('Le calque ne dépasse JAMAIS son plafond, même timeline gelée',(()=>{
+        // Onglet en arrière-plan : le navigateur gèle la timeline, aucune
+        // animation ne se termine, 'finish' n'arrive pas. Mesuré à 15 nœuds
+        // restants sur une salve. Le plafond est ce qui borne ce cas-là.
+        if(arcReduit()) return true;
+        const el=document.createElement('div');
+        el.style.cssText='position:fixed;left:0;top:0;width:10px;height:10px';
+        document.body.appendChild(el);
+        const gardes=[];
+        for(let i=0;i<ARC_CALQUE_MAX+9;i++){ const a=arcGlow(el); if(a) gardes.push(a); }
+        const n=_arcCalque().childElementCount;
+        gardes.forEach(a=>{ try{ a.cancel(); }catch(e){} });
+        el.remove();
+        // On balaie NOUS-MÊMES : sur une page cachée, l'annulation ci-dessus
+        // ne délivrera jamais son événement, et ce test — qui inonde le calque
+        // à dessein — laisserait sinon ses douze nœuds derrière lui.
+        const c=_arcCalque(); while(c.firstChild) c.removeChild(c.firstChild);
+        if(!gardes.length) return _echec('aucune trace posée');
+        return n<=ARC_CALQUE_MAX+1
+          ?true:_echec(n+' nœuds pour un plafond de '+ARC_CALQUE_MAX);})());
+
+      // ── Les états de pression ───────────────────────────────────────────
+      ok('L\'aller et le retour n\'ont NI la même durée NI la même courbe',(()=>{
+        // Deux transitions et pas une : celle de :active gouverne la charge
+        // (90 ms, accélération contenue), celle de l'état de repos gouverne la
+        // décharge (140 ms, attaque brutale). Une transition unique aurait
+        // donné le même temps dans les deux sens, c'est-à-dire aucune charge.
+        const r=/\.btn-red:active\{[^}]*\}/.exec(_cssArc);
+        if(!r) return _echec('règle introuvable');
+        return /transition:transform var\(--arc-attack\) var\(--arc-c-charge\)/.test(r[0])
+          ?true:_echec(r[0].slice(0,110));})());
+      ok('Les huit surfaces pressables partagent LA MÊME amplitude',(()=>{
+        // Aucune valeur en dur : toutes passent par le token. C'est ce qui
+        // permet de corriger l'amplitude du système d'une seule ligne.
+        const sels=['.btn-red','.btn-outline','.content-card','.client-row',
+          '.choice-opt','.emo-opt','.gsl-opt','.obj-opt'];
+        const faux=sels.filter(s=>{
+          const m=new RegExp(s.replace('.','\\.')+':active\\{[^}]*\\}').exec(_cssArc);
+          return !m||!/transform:scale\(var\(--arc-scale-charge\)\)/.test(m[0]);});
+        return faux.length?_echec(faux.join(', ')):true;})());
+      ok('Le sélecteur de pression couvre ces mêmes surfaces',(()=>{
+        const manque=['button','.btn','.content-card','.client-row','.choice-opt',
+          '.emo-opt','.gsl-opt','.obj-opt'].filter(s=>ARC_PRESSION.indexOf(s)<0);
+        return manque.length?_echec('absent : '+manque.join(', ')):true;})());
+      ok('Un élément désactivé ne répond pas au doigt',(()=>{
+        // Lui rendre un halo serait lui promettre un effet qu'il n'a pas.
+        const b=document.createElement('button');
+        b.disabled=true;
+        b.style.cssText='position:fixed;left:0;top:0;width:10px;height:10px';
+        document.body.appendChild(b);
+        const avant=_arcCalque().childElementCount;
+        _arcPression({target:b});
+        const apres=_arcCalque().childElementCount;
+        b.remove();
+        return apres===avant?true:_echec('un halo est parti');})());
+      ok('L\'écoute de pression ne déclenche AUCUNE action',(()=>{
+        // Règle 7 : elle ne fait que peindre. Ni preventDefault (elle est
+        // passive), ni stopPropagation, ni appel de rendu — sinon un simple
+        // relâchement de doigt pourrait annuler un geste de l'application.
+        const src=_arcPression.toString();
+        const fautes=['preventDefault','stopPropagation','stopImmediatePropagation']
+          .filter(m=>src.indexOf(m)>=0);
+        return fautes.length?_echec(fautes.join(', ')):true;})());
+      ok('Une cible hors du système ne fait rien, et ne lève pas',(()=>{
+        const d=document.createElement('div');
+        const avant=_arcCalque().childElementCount;
+        try{ _arcPression({target:d}); _arcPression({}); _arcPression({target:null}); }
+        catch(e){ return _echec('exception : '+e.message); }
+        return _arcCalque().childElementCount===avant
+          ?true:_echec('un halo est parti sur une cible non pressable');})());
+      ok('data-arc="off" coupe la réponse générique',(()=>{
+        // Sans cette sortie, le bouton de validation de série recevrait deux
+        // réponses pour un appui : la vibration légère par-dessus la lourde,
+        // et le halo générique par-dessus l'arc signature.
+        const b=document.createElement('button');
+        b.setAttribute('data-arc','off');
+        b.style.cssText='position:fixed;left:0;top:0;width:10px;height:10px';
+        document.body.appendChild(b);
+        const avant=_arcCalque().childElementCount;
+        _arcPression({target:b});
+        const apres=_arcCalque().childElementCount;
+        b.remove();
+        return apres===avant?true:_echec('un halo générique est parti');})());
+      ok('Les boutons de validation de série la portent TOUS',(()=>{
+        // C'est le geste répété 25 à 40 fois par séance : un seul bouton
+        // oublié, et une ligne sur deux se comporte autrement.
+        const src=renderSets.toString();
+        const n=(src.match(/onclick="toggleSet\(/g)||[]).length;
+        const avec=(src.match(/data-arc="off" onclick="toggleSet\(/g)||[]).length;
+        if(!n) return _echec('aucun bouton toggleSet trouvé');
+        return n===avec?true:_echec(avec+' sur '+n+' boutons');})());
+
+      // ── ANIMATION 3 : la validation de série ────────────────────────────
+      ok('Cocher anime, décocher n\'anime RIEN',(()=>{
+        // Décocher est une correction de saisie, pas un événement
+        // d'entraînement — rien ne doit le célébrer. La garde est la même que
+        // celle qui protège le record et le lancement du repos.
+        const src=toggleSet.toString();
+        const i=src.indexOf('_arcSerieValidee');
+        if(i<0) return _echec('appel absent');
+        return /if\(!avant\)\s*_arcSerieValidee/.test(src)
+          ?true:_echec('l\'appel n\'est pas gardé par !avant');})());
+      ok('L\'animation vient APRÈS renderSets, jamais avant',(()=>{
+        // La ligne que l'arc traverse vient d'être détruite et reconstruite :
+        // viser avant, c'est viser un nœud qui n'est déjà plus au document.
+        const src=toggleSet.toString();
+        return src.indexOf('renderSets')<src.indexOf('_arcSerieValidee')
+          ?true:_echec('l\'ordre est inversé');})());
+      ok('Une série validée le reste même si l\'animation échoue',(()=>{
+        // Règle 7 poussée au bout : l'animation cède, jamais l'écriture.
+        let leve=false;
+        try{ _arcSerieValidee(99999,0); _arcSerieValidee(null,null); }
+        catch(e){ leve=true; }
+        return leve?_echec('_arcSerieValidee a levé'):true;})());
+      ok('L\'arc part du doigt, et seulement s\'il est FRAIS',(()=>{
+        // Un point vieux d'une seconde ne désigne plus rien : une action
+        // lancée au clavier ou par un minuteur ferait jaillir un arc depuis
+        // l'endroit où le doigt se trouvait à un tout autre moment.
+        const sauve=_arcPoint;
+        try{
+          _arcNoter({clientX:120,clientY:40});
+          const frais=arcDernierPoint();
+          if(!frais||frais.x!==120) return _echec('point frais non rendu');
+          _arcPoint={x:120,y:40,t:Date.now()-(ARC_POINT_FRAIS+500)};
+          return arcDernierPoint()===null
+            ?true:_echec('un point périmé est passé');
+        } finally { _arcPoint=sauve; }})());
+
+      // ── ANIMATION 4 : le chronomètre de repos ───────────────────────────
+      (()=>{
+        const sauveWo=woState, z=document.getElementById('wo-repos');
+        try{
+          woState={exercises:[],sessionData:{},startTime:Date.now(),
+            reposFin:Date.now()+60000,reposTotal:120,reposVibre:true,reposLib:''};
+          _peindreRepos();
+          const h1=z?z.innerHTML:'';
+          ok('L\'anneau remplace la barre : un seul porteur de l\'information',(()=>{
+            if(h1.indexOf('<svg')<0) return _echec('aucun anneau');
+            // La barre de 4 px ne doit plus coexister avec lui.
+            return /height:4px/.test(h1)?_echec('la barre est encore là'):true;})());
+          ok('Le décompte reste lisible DANS l\'anneau',
+             h1.indexOf('1:00')>=0,h1.indexOf('1:00')>=0?'':'décompte absent');
+          ok('Le libellé garde TOUTE la largeur de sa colonne',(()=>{
+            // Mesuré, pas supposé : posé À CÔTÉ de l'anneau, il tombait à 48 px
+            // sur un écran de 320 — « Développé couché barre » se lisait
+            // « Repo… ». Au-dessus, il retrouve les ~110 px de la colonne.
+            // C'est aussi la disposition d'origine : libellé en haut, chiffre
+            // en dessous. L'anneau a pris la place du chiffre, pas celle du mot.
+            const i=h1.indexOf('Repos'), j=h1.indexOf('<svg');
+            if(i<0||j<0) return _echec('libellé ou anneau absent');
+            return i<j?true:_echec('l\'anneau précède le libellé');})());
+          ok('Loin de la fin : cyan, cadence normale',(()=>{
+            if(h1.indexOf('var(--arc-current)')<0) return _echec('pas de cyan');
+            return h1.indexOf('animation-duration:'+ARC.ambient+'ms')>=0
+              ?true:_echec('cadence inattendue');})());
+
+          // Dix dernières secondes : deux signaux changent d'un coup.
+          woState.reposFin=Date.now()+7000;
+          _peindreRepos();
+          const h2=z?z.innerHTML:'';
+          ok('Les 10 dernières secondes : cyan → violet',(()=>{
+            if(h2.indexOf('var(--arc-charge)')<0) return _echec('pas de violet');
+            return h2.indexOf('var(--arc-current)')<0
+              ?true:_echec('le cyan est resté');})());
+          ok('Les 10 dernières secondes : cadence du point DOUBLÉE',
+             h2.indexOf('animation-duration:'+(ARC.ambient/2)+'ms')>=0,
+             'attendu '+(ARC.ambient/2)+'ms');
+          ok('Le point reprend la boucle au lieu de repartir de zéro',(()=>{
+            // Le bandeau est reconstruit CHAQUE seconde. Sans délai négatif,
+            // le point sauterait en arrière une fois par seconde.
+            const m=/animation-delay:(-?\d+)ms/.exec(h2);
+            if(!m) return _echec('aucun délai posé');
+            return parseInt(m[1],10)<=0
+              ?true:_echec('délai positif : '+m[1]);})());
+          ok('L\'anneau se VIDE : le trait recule quand le temps passe',(()=>{
+            const d=h=>{ const m=/stroke-dashoffset="([\d.]+)"/.exec(h);
+              return m?parseFloat(m[1]):null; };
+            const a=d(h1), b=d(h2);
+            if(a==null||b==null) return _echec('offset introuvable');
+            return b>a?true:_echec(a+' → '+b+' : le trait ne recule pas');})());
+        } finally { try{ annulerRepos(); }catch(e){} woState=sauveWo; }
+      })();
+      ok('L\'avertissement de fin de repos est le motif déjà connu',(()=>{
+        // 180-90-180, exactement celui que l'ancien code envoyait : deux
+        // avertissements qui se ressembleraient sans être identiques seraient
+        // pires que deux avertissements franchement distincts.
+        const m=ARC_VIBRE.avertir;
+        return (Array.isArray(m)&&m.join(',')==='180,90,180')
+          ?true:_echec(String(m));})());
+      ok('_peindreRepos n\'appelle plus navigator.vibrate en direct',(()=>{
+        // Une seule porte pour les vibrations, sinon la moitié d'entre elles
+        // échappe à toute règle du système.
+        return _peindreRepos.toString().indexOf('navigator.vibrate')<0
+          ?true:_echec('appel direct encore présent');})());
+
+      // ── ANIMATION 5 : le courant monte dans la barre ────────────────────
+      ok('La barre de progression n\'anime PLUS sa largeur',(()=>{
+        // Une largeur qui varie relance la mise en page à chaque frame. C'est
+        // la règle 1, et c'est ici qu'elle se gagne le plus : cette barre bouge
+        // pendant que l'athlète tient son téléphone.
+        const r=/\.progress-fill\{[^}]*\}/.exec(_cssArc);
+        if(!r) return _echec('règle introuvable');
+        if(/transition:[^;}]*width/.test(r[0])) return _echec('width encore en transition');
+        return /transform:scaleX\(var\(--arc-pc/.test(r[0])
+          ?true:_echec(r[0].slice(0,120));})());
+      ok('renderWoEx pose --arc-pc et jamais style.width',(()=>{
+        const src=renderWoEx.toString();
+        if(/wo-progress'\)\.style\.width/.test(src)) return _echec('style.width subsiste');
+        return src.indexOf("setProperty('--arc-pc'")>=0
+          ?true:_echec('--arc-pc non posé');})());
+      ok('Le chiffre s\'interpole, et atterrit EXACTEMENT sur sa valeur',(()=>{
+        const el=document.createElement('span');
+        arcChiffre(el,0,7,{duree:0});
+        return el.textContent==='7'?true:_echec('«'+el.textContent+'»');})());
+      ok('Une interpolation en cours est remplacée, jamais empilée',(()=>{
+        const el=document.createElement('span');
+        arcChiffre(el,0,100);
+        arcChiffre(el,0,3,{duree:0});
+        return el.textContent==='3'?true:_echec('«'+el.textContent+'»');})());
+      ok('Sous « animations réduites », le chiffre saute à sa valeur',(()=>{
+        // Aucune boucle rAF ne doit démarrer : c'est du mouvement, même sans
+        // déplacement à l'écran.
+        if(!arcReduit()) return true;
+        const el=document.createElement('span');
+        const r=arcChiffre(el,0,42);
+        return (r===null&&el.textContent==='42')
+          ?true:_echec('«'+el.textContent+'»');})());
+
+      // ── ANIMATION 6 : la transition entre exercices ─────────────────────
+      ok('Le sens du glissement ENCODE la direction dans la séance',(()=>{
+        // Suivant : le contenu arrive par la droite (+24) et se pose vers la
+        // gauche. Retour : l'inverse. L'athlète sait où il va sans lire.
+        const z=document.getElementById('wo-content');
+        if(!z) return _echec('#wo-content absent');
+        if(arcReduit()) return true;
+        const lire=d=>{ const a=_arcGlissement(d); if(!a) return null;
+          const k=a.effect.getKeyframes(); try{ a.cancel(); }catch(e){}
+          const m=/translateX\((-?[\d.]+)px\)/.exec(k[0].transform||'');
+          return m?parseFloat(m[1]):null; };
+        const suiv=lire(1), ret=lire(-1);
+        if(suiv==null||ret==null) return _echec('aucune image');
+        if(suiv!==ARC.translate) return _echec('suivant part de '+suiv);
+        if(ret!==-ARC.translate) return _echec('retour part de '+ret);
+        return true;})());
+      ok('La transition est un glissement, JAMAIS un fondu',(()=>{
+        // « Glissement horizontal de 24 px, jamais un fondu. » Un fondu dirait
+        // « quelque chose a changé » là où le glissement dit « tu avances ».
+        if(arcReduit()) return true;
+        const a=_arcGlissement(1);
+        if(!a) return _echec('aucune animation');
+        const k=a.effect.getKeyframes(); try{ a.cancel(); }catch(e){}
+        const avecOp=k.filter(x=>x.opacity!=null&&x.opacity!=='');
+        return avecOp.length?_echec(avecOp.length+' image(s) portent une opacité'):true;})());
+      ok('Une direction sur un écran absent ne lève pas',(()=>{
+        const z=document.getElementById('wo-content');
+        const p=z?z.parentNode:null, s=z?z.nextSibling:null;
+        try{ if(z) z.remove(); _arcGlissement(1); _arcGlissement(-1); }
+        catch(e){ return _echec('exception : '+e.message); }
+        finally{ if(z&&p) p.insertBefore(z,s); }
+        return true;})());
+
+      // ── La traversée ────────────────────────────────────────────────────
+      ok('La traversée ne bouge QU\'UNE translation',(()=>{
+        // Le parent porte le gabarit et la découpe, l'enfant seul se déplace :
+        // la taille de l'élément animé ne change jamais.
+        if(arcReduit()) return true;
+        const el=document.createElement('div');
+        el.style.cssText='position:fixed;left:0;top:0;width:200px;height:40px';
+        document.body.appendChild(el);
+        const a=arcTraversee(el);
+        if(!a){ el.remove(); return _echec('aucune traversée'); }
+        const k=a.effect.getKeyframes();
+        const hors=k.filter(x=>Object.keys(x).some(p=>
+          ['transform','offset','easing','composite','computedOffset'].indexOf(p)<0));
+        try{ a.cancel(); }catch(e){}
+        el.remove();
+        return hors.length?_echec('propriété hors transform : '
+          +Object.keys(hors[0]).join(',')):true;})());
+      ok('La traversée entre ET sort du cadre, elle ne s\'allume pas sur place',(()=>{
+        if(arcReduit()) return true;
+        const el=document.createElement('div');
+        el.style.cssText='position:fixed;left:0;top:0;width:200px;height:40px';
+        document.body.appendChild(el);
+        const a=arcTraversee(el);
+        if(!a){ el.remove(); return _echec('aucune traversée'); }
+        const k=a.effect.getKeyframes();
+        try{ a.cancel(); }catch(e){}
+        el.remove();
+        const d=x=>{ const m=/translateX\((-?[\d.]+)%\)/.exec(x.transform||'');
+          return m?parseFloat(m[1]):null; };
+        const a0=d(k[0]), a1=d(k[k.length-1]);
+        if(a0==null||a1==null) return _echec('translation introuvable');
+        return (a0<=-100&&a1>=200)?true:_echec(a0+'% → '+a1+'%');})());
+      ok('Un élément de taille nulle ne produit aucune traversée',(()=>{
+        const el=document.createElement('div');
+        document.body.appendChild(el);
+        const a=arcTraversee(el);
+        el.remove();
+        return a===null?true:_echec('une traversée est partie dans le vide');})());
+
+      // ── ANIMATION 7 : l'arc change d'onglet ─────────────────────────────
+      ok('L\'arc SE DÉPLACE d\'un onglet à l\'autre',(()=>{
+        // Le courant ne s'éteint pas ici pour se rallumer là : une seule
+        // translation, de la position quittée vers la position visée.
+        if(arcReduit()) return true;
+        const bar=document.getElementById('client-tabbar');
+        if(!bar) return _echec('barre absente');
+        const b=bar.querySelectorAll('.tab-btn');
+        if(b.length<2) return _echec(b.length+' onglet(s)');
+        // La barre est masquée tant que l'écran courant n'est pas un onglet
+        // d'athlète : ses boutons mesurent alors zéro, et _arcOnglet refuse
+        // — à juste titre — d'animer entre deux rectangles vides.
+        const vue=bar.classList.contains('show');
+        bar.classList.add('show');
+        const c0=_arcCalque(); while(c0.firstChild) c0.removeChild(c0.firstChild);
+        const avant=_arcCalque().childElementCount;
+        const a=_arcOnglet(b[0],b[2]);
+        if(!a){ if(!vue) bar.classList.remove('show'); return _echec('aucun arc'); }
+        const k=a.effect.getKeyframes();
+        const d=k.map(x=>{ const m=/translateX\((-?[\d.]+)px\)/.exec(x.transform||'');
+          return m?parseFloat(m[1]):null; });
+        const pose=_arcCalque().childElementCount-avant;
+        try{ a.cancel(); }catch(e){}
+        if(!vue) bar.classList.remove('show');
+        if(pose!==1) return _echec(pose+' nœud(s) posé(s)');
+        if(d[0]!==0) return _echec('ne part pas de l\'onglet quitté : '+d[0]);
+        return d[d.length-1]>0?true:_echec('n\'arrive nulle part : '+d[1]);})());
+      ok('L\'impact de l\'icône est LÉGER, et il l\'est moins que la série',(()=>{
+        // La barre est traversée des dizaines de fois par séance pour de
+        // simples consultations. La traiter comme un événement userait le seul
+        // geste qui mérite de l'être.
+        const src=_arcOnglet.toString();
+        const m=/impact:([\d.]+)/.exec(src);
+        if(!m) return _echec('aucun impact déclaré');
+        const v=parseFloat(m[1]);
+        if(!(v<ARC.scaleImpact)) return _echec(v+' ≥ '+ARC.scaleImpact);
+        return /flash:false/.test(src)&&/halo:false/.test(src)
+          ?true:_echec('flash ou halo laissé sur un simple changement d\'onglet');})());
+      ok('Revenir sur l\'onglet où l\'on est déjà n\'anime rien',(()=>{
+        // _majTabbar est appelée à CHAQUE go(). Sans la garde, l'arc repartirait
+        // sur place, d'un onglet vers lui-même, à chaque navigation interne.
+        const src=_majTabbar.toString();
+        return /_ongletAvant!==_ongletApres/.test(src)
+          ?true:_echec('aucune garde sur le changement réel d\'onglet');})());
+
+      // ── ANIMATION 8 : feuilles et modales ───────────────────────────────
+      ok('Les 31 feuilles sont prises par UNE règle, pas 31 retouches',(()=>{
+        const parVoile=/#modal-overlay\{[^}]*animation:arcVoile/.test(_cssArc);
+        const parFeuille=/#modal-overlay>div\{[^}]*animation:arcFeuille/.test(_cssArc);
+        return (parVoile&&parFeuille)?true
+          :_echec('voile '+parVoile+' / feuille '+parFeuille);})());
+      ok('La sortie n\'est JAMAIS plus lente que l\'entrée',(()=>{
+        // Une fermeture qui traîne donne le sentiment d'une application qui
+        // résiste. L'entrée dure 180 ms, la sortie 140.
+        const ent=/#modal-overlay\{[^}]*animation:arcVoile (\d+)ms/.exec(_cssArc);
+        if(!ent) return _echec('durée d\'entrée introuvable');
+        return ARC.strike<=parseInt(ent[1],10)
+          ?true:_echec('sortie '+ARC.strike+'ms > entrée '+ent[1]+'ms');})());
+      ok('closeModal retire l\'IDENTIFIANT tout de suite, le nœud après',(()=>{
+        // Sans ça, fermer puis rouvrir dans la foulée ferait pointer tout le
+        // code sur la feuille en train de mourir : invisible en lecture,
+        // parfaitement reproductible au doigt.
+        const src=closeModal.toString();
+        const iId=src.indexOf("removeAttribute('id')");
+        const iRm=src.indexOf('setTimeout');
+        if(iId<0) return _echec('l\'identifiant n\'est pas retiré');
+        return (arcReduit()||(iRm>iId))
+          ?true:_echec('le retrait différé précède le retrait de l\'identifiant');})());
+      ok('Fermer puis rouvrir : une seule feuille visible du code',(()=>{
+        const vieux=document.getElementById('modal-overlay');
+        if(vieux) vieux.remove();
+        const o=document.createElement('div');
+        o.id='modal-overlay'; o.innerHTML='<div>x</div>';
+        o.style.cssText='position:fixed;inset:0';
+        document.body.appendChild(o);
+        closeModal();
+        const restant=document.getElementById('modal-overlay');
+        // Nettoyage : sous animations réduites le nœud est déjà parti.
+        try{ o.remove(); }catch(e){}
+        return restant===null
+          ?true:_echec('la feuille fermée répond encore à son identifiant');})());
+      ok('Fermer sans feuille ouverte ne lève pas',(()=>{
+        const v=document.getElementById('modal-overlay');
+        if(v) v.remove();
+        try{ closeModal(); closeModal(); }
+        catch(e){ return _echec('exception : '+e.message); }
+        return true;})());
+
+      // ── ANIMATION 9 : la courbe se trace ────────────────────────────────
+      ok('Les deux courbes SVG portent la marque qui les distingue des icônes',(()=>{
+        // Sans classe, le balayage aurait pris TOUS les <path> de l'application
+        // — chaque icône de chaque bouton se serait tracée à l'entrée d'écran.
+        const src=_courbePesee.toString()+_rapCourbePoids.toString();
+        const c=(src.match(/<svg class="arc-courbe"/g)||[]).length;
+        return c===2?true:_echec(c+' courbe(s) marquée(s) sur 2');})());
+      ok('Une courbe ne se trace QU\'UNE fois, jamais rejouée',(()=>{
+        // « Une seule fois au montage. Jamais rejouée au scroll. »
+        const h=document.createElement('div');
+        h.style.cssText='position:fixed;left:0;top:0;width:200px;height:60px';
+        h.innerHTML='<svg class="arc-courbe" viewBox="0 0 100 40" style="width:100%;height:60px">'
+          +'<path d="M0 40 L50 10 L100 30" fill="none" stroke="red"></path></svg>';
+        document.body.appendChild(h);
+        const p=h.querySelector('path');
+        const un=arcTracerCourbes(h);
+        const deux=arcTracerCourbes(h);
+        try{ p.getAnimations().forEach(a=>a.cancel()); }catch(e){}
+        h.remove();
+        if(arcReduit()) return (un===0&&deux===0)?true:_echec('tracé malgré la préférence');
+        if(un!==1) return _echec('premier passage : '+un);
+        return deux===0?true:_echec('rejoué au second passage : '+deux);})());
+      ok('Le tracé SVG est un vrai stroke-dashoffset, sur 620 ms',(()=>{
+        // La seule entorse revendiquée à « transform et opacity seuls » : le
+        // cahier des charges nomme explicitement cette propriété, et aucun
+        // transform ne trace une courbe.
+        if(arcReduit()) return true;
+        const h=document.createElement('div');
+        h.style.cssText='position:fixed;left:0;top:0;width:200px;height:60px';
+        h.innerHTML='<svg class="arc-courbe" viewBox="0 0 100 40" style="width:100%;height:60px">'
+          +'<path d="M0 40 L50 10 L100 30" fill="none" stroke="red"></path></svg>';
+        document.body.appendChild(h);
+        arcTracerCourbes(h);
+        const p=h.querySelector('path');
+        const an=p.getAnimations()[0];
+        if(!an){ h.remove(); return _echec('aucune animation'); }
+        const k=an.effect.getKeyframes();
+        const d=an.effect.getTiming().duration;
+        try{ an.cancel(); }catch(e){}
+        h.remove();
+        if(d!==ARC.afterglow) return _echec(d+' ms au lieu de '+ARC.afterglow);
+        const dernier=parseFloat(k[k.length-1].strokeDashoffset);
+        return (parseFloat(k[0].strokeDashoffset)>0&&dernier===0)
+          ?true:_echec(JSON.stringify(k.map(x=>x.strokeDashoffset)));})());
+      ok('Un canvas reçoit la traversée, faute de trait à tracer',(()=>{
+        // Un canvas n'a ni chemin ni trait, juste des pixels : stroke-dashoffset
+        // n'y existe pas. Les tracer vraiment supposerait de réécrire les quatre
+        // fonctions de dessin en SVG — un chantier, pas une animation.
+        if(arcReduit()) return true;
+        const c=document.createElement('canvas');
+        c.width=200;c.height=60;
+        c.style.cssText='position:fixed;left:0;top:0;width:200px;height:60px';
+        document.body.appendChild(c);
+        const avant=_arcCalque().childElementCount;
+        const un=arcTracerCourbes(c);
+        const pose=_arcCalque().childElementCount-avant;
+        const deux=arcTracerCourbes(c);
+        _arcCalque().querySelectorAll('.arc-trace').forEach(n=>n.remove());
+        c.remove();
+        if(un!==1||pose!==1) return _echec('premier passage : '+un+' / '+pose+' nœud');
+        return deux===0?true:_echec('rejoué : '+deux);})());
+      ok('Un graphique encore masqué garde son droit au tracé',(()=>{
+        // Le marquer alors qu'il mesure zéro l'aurait privé de son tracé POUR
+        // DE BON : il n'aurait jamais rien joué, et rien ne l'aurait signalé.
+        if(arcReduit()) return true;
+        const c=document.createElement('canvas');
+        c.width=200;c.height=60;c.style.display='none';
+        document.body.appendChild(c);
+        const masque=arcTracerCourbes(c);
+        c.style.cssText='position:fixed;left:0;top:0;width:200px;height:60px';
+        const visible=arcTracerCourbes(c);
+        _arcCalque().querySelectorAll('.arc-trace').forEach(n=>n.remove());
+        c.remove();
+        if(masque!==0) return _echec('tracé alors qu\'il ne mesurait rien');
+        return visible===1?true:_echec('perdu son tracé une fois visible');})());
+      ok('Le tracé se déclenche au DESSIN, pas au défilement',(()=>{
+        // Les deux rappels sont posés là où la toile est réellement peinte.
+        const a=_setupCanvas.toString().indexOf('arcTracerCourbes')>=0;
+        const b=drawLineChart.toString().indexOf('arcTracerCourbes')>=0;
+        const c=go.toString().indexOf('arcTracerCourbes')>=0;
+        const faux=[];
+        if(!a) faux.push('_setupCanvas'); if(!b) faux.push('drawLineChart');
+        if(!c) faux.push('go');
+        // Et surtout : aucun observateur de défilement nulle part.
+        if(/IntersectionObserver/.test(arcTracerCourbes.toString()))
+          faux.push('un observateur de défilement rallumerait le tracé');
+        return faux.length?_echec(faux.join(', ')):true;})());
+
+      // Balayage final. Les tests ci-dessus annulent chacun leurs animations,
+      // mais un onglet caché ne produit aucune frame et n'en délivre donc
+      // jamais l'événement : les nœuds resteraient là, sans rapport avec un
+      // défaut du code. Le calque doit être rendu vide comme on l'a trouvé.
+      try{ const c=_arcCalque(); while(c.firstChild) c.removeChild(c.firstChild); }catch(e){}
+    })();
 
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
