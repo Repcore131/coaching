@@ -1997,6 +1997,19 @@ const COACH_PHOTO='icons/coach.jpg';
 <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">Signature (PNG à fond transparent)</label>
 <input id="coach-signature" type="url" placeholder="https://…" style="width:100%;font-size:13px;padding:11px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif">
 </div>
+<!-- CARTE PRO ET DIPLOMES. Facultatifs, et retirables : vider le champ
+     retire le document du profil public a la sauvegarde suivante.
+     Ce sont des documents personnels publies a tes athletes rattaches —
+     ne mets en ligne que ce que tu acceptes qu ils voient. -->
+<div style="margin-bottom:14px">
+<label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">Carte professionnelle (image)</label>
+<input id="coach-cartepro" type="url" placeholder="https://… — facultatif" style="width:100%;font-size:13px;padding:11px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif">
+</div>
+<div style="margin-bottom:14px">
+<label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">Diplômes et formations</label>
+<div id="coach-diplomes-liste"></div>
+<button type="button" onclick="ajouterDiplomeRow()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--sub);border-radius:8px;padding:10px;font-family:Montserrat,sans-serif;font-size:12px;font-weight:700;cursor:pointer">+ Ajouter un diplôme</button>
+</div>
 <button onclick="apercuVitrineCoach()" style="width:100%;background:none;border:1px solid var(--border);color:#ddd;border-radius:3px;padding:11px;font-family:Montserrat,sans-serif;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:10px">Prévisualiser ma vitrine</button>
 <button onclick="saveCoachIdentity()" style="width:100%;background:var(--red);border:none;color:#fff;border-radius:3px;padding:12px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px">ENREGISTRER</button>
         </div>
@@ -5751,7 +5764,7 @@ const CLOUD={
   // ou le coach change sa photo.
   CHAMPS_PROFIL_COACH:['fname','lname','teamName','catchphrase','coachPhoto',
     // Vitrine : ce que l'athlete lit en touchant la carte de son coach.
-    'bio','vision','photoVitrine','signature','promoBanners','phone','chargesSchema','contact','canalDernier','canalEpingle','dispo'],
+    'bio','vision','photoVitrine','signature','cartePro','diplomes','promoBanners','phone','chargesSchema','contact','canalDernier','canalEpingle','dispo'],
   // ── Santé privée : ce que le coach ne voit pas, et qui survit quand même ──
   // La règle de /users donne au coach un accès LECTURE ET ÉCRITURE sur le
   // dossier entier de ses athlètes, sans granularité. Les blocs non partagés
@@ -43981,6 +43994,44 @@ function uploadCoachPhoto(input){
     toastEcriture(ok,'Photo enregistrée ✓','la photo est');
   });
 }
+// Une ligne de diplome : un intitule, une image facultative. Le DOM est la
+// source de verite pendant l'edition — comme les bannieres promo, et pour
+// la meme raison : ajouter une ligne ne doit rien enregistrer tant que le
+// coach n'a pas valide.
+function ajouterDiplomeRow(titre,image){
+  const z=document.getElementById('coach-diplomes-liste');
+  if(!z) return;
+  const row=document.createElement('div');
+  row.className='dip-row';
+  row.style.cssText='display:flex;gap:6px;margin-bottom:6px;align-items:center';
+  const st='flex:1;min-width:0;font-size:12px;padding:9px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif';
+  const t=document.createElement('input');
+  t.type='text'; t.className='dip-titre'; t.placeholder='ex : Licence STAPS';
+  t.maxLength=120; t.style.cssText=st; t.value=titre||'';
+  const i=document.createElement('input');
+  i.type='url'; i.className='dip-image'; i.placeholder='https://… (facultatif)';
+  i.style.cssText=st; i.value=image||'';
+  const x=document.createElement('button');
+  x.type='button'; x.textContent='✕';
+  x.setAttribute('aria-label','Retirer ce diplôme');
+  x.style.cssText='flex:none;min-width:44px;min-height:44px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--sub);cursor:pointer';
+  x.onclick=()=>row.remove();
+  row.appendChild(t); row.appendChild(i); row.appendChild(x);
+  z.appendChild(row);
+}
+// Ce que l'editeur porte, nettoye. Une ligne sans intitule ne part pas :
+// une image seule ne dit pas de quel diplome il s'agit.
+function _lireDiplomes(){
+  const z=document.getElementById('coach-diplomes-liste');
+  if(!z) return null;
+  return [...z.querySelectorAll('.dip-row')].map(r=>({
+    titre:(r.querySelector('.dip-titre')?.value||'').trim(),
+    image:(r.querySelector('.dip-image')?.value||'').trim()
+  })).filter(d=>d.titre).map(d=>({
+    titre:d.titre,
+    image:/^https?:\/\//.test(d.image)?d.image:''
+  })).slice(0,12);
+}
 // ══════ VITRINE DU COACH ══════
 // Ce que l'athlete lit en touchant la carte de son coach. La source est le
 // PROFIL PUBLIC : sur le telephone de l'athlete, le dossier complet du coach
@@ -43989,7 +44040,8 @@ function uploadCoachPhoto(input){
 // qu'une carte qui ne s'ouvre pas.
 function vitrineCoachRemplie(pub){
   const p=pub||{};
-  return !!((p.bio||'').trim()||(p.vision||'').trim()||p.photoVitrine||p.signature);
+  return !!((p.bio||'').trim()||(p.vision||'').trim()||p.photoVitrine||p.signature
+    ||p.cartePro||((p.diplomes||[]).length));
 }
 function _htmlVitrineCoach(pub){
   const p=pub||{};
@@ -44010,9 +44062,42 @@ function _htmlVitrineCoach(pub){
     +img(p.photoVitrine,'width:100%;border-radius:14px;margin-bottom:22px;display:block')
     +bloc('Qui je suis',p.bio)
     +bloc('Ma vision',p.vision)
+    +_htmlDiplomesCoach(p)
     +(p.signature?('<div style="text-align:center;margin-top:26px">'
         +img(p.signature,'max-width:220px;width:60%;opacity:.9;display:inline-block')+'</div>'):'')
     +'</div>';
+}
+// Diplomes et carte pro, et le texte qui dit pourquoi ca compte. Rien n'est
+// rendu quand rien n'est renseigne : ce bloc ne doit pas devenir un encart
+// vide qui laisse croire a un document manquant.
+//
+// Le texte parle de FORMATION, jamais de sante : RepCore ne pose aucun
+// diagnostic et ne promet aucun resultat. Il dit ce qu'un diplome garantit
+// — une formation verifiee — et rien de plus.
+function _htmlDiplomesCoach(p){
+  const dips=((p||{}).diplomes||[]).filter(d=>d&&d.titre);
+  const carte=(p||{}).cartePro||'';
+  if(!dips.length&&!carte) return '';
+  const ligne=d=>'<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:12px">'
+    +'<span style="flex:none;color:var(--red);font-weight:900">✓</span>'
+    +'<div style="flex:1;min-width:0">'
+    +'<div style="font-size:12.5px;font-weight:700;color:#fff">'+escapeHtml(d.titre)+'</div>'
+    +(d.image?('<img src="'+escapeHtml(d.image)+'" alt="" loading="lazy" style="width:100%;border-radius:10px;margin-top:8px;display:block">'):'')
+    +'</div></div>';
+  return '<div style="margin-bottom:22px">'
+    +'<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:10px">Diplômes et qualifications</div>'
+    +dips.map(ligne).join('')
+    +(carte?('<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;font-weight:700;margin:14px 0 8px">Carte professionnelle</div>'
+        +'<img src="'+escapeHtml(carte)+'" alt="" loading="lazy" style="width:100%;border-radius:10px;display:block">'):'')
+    +'<div style="background:var(--surface-1);border-left:3px solid var(--red);border-radius:8px;padding:12px 14px;margin-top:16px">'
+    +'<div style="font-size:var(--fs-xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--red);font-weight:800;margin-bottom:6px">Pourquoi un professionnel diplômé</div>'
+    +'<div style="font-size:12px;color:#ddd;line-height:1.7">'
+    +'Un diplôme n\'est pas une formalité administrative : c\'est la preuve que la personne '
+    +'qui règle tes charges, corrige ta technique et t\'oriente sur ton alimentation a été '
+    +'formée pour le faire, et qu\'elle sait où s\'arrête son domaine. '
+    +'Un accompagnement improvisé, c\'est au mieux des mois perdus, au pire une blessure. '
+    +'Les documents ci-dessus ont été publiés par ton coach lui-même.'
+    +'</div></div></div>';
 }
 // Cote athlete : depuis la carte du coach.
 function ouvrirVitrineCoach(){
@@ -44053,6 +44138,10 @@ function saveCoachIdentity(){
   // publiee telle quelle a tous les athletes.
   if(_pv!==null) currentUser.photoVitrine=/^https?:\/\//.test(_pv)?_pv:'';
   if(_sig!==null) currentUser.signature=/^https?:\/\//.test(_sig)?_sig:'';
+  const _cp=_v('coach-cartepro');
+  if(_cp!==null) currentUser.cartePro=/^https?:\/\//.test(_cp)?_cp:'';
+  const _dip=_lireDiplomes();
+  if(_dip!==null) currentUser.diplomes=_dip;
   CLOUD.pushProfilCoach(currentUser);
   const ok=saveUser();
   // Push immédiat non-debounced pour que les athlètes voient les données immédiatement
@@ -44637,11 +44726,13 @@ function loadMonetisationTab(){
   const catchEl=document.getElementById('coach-catchphrase');
   setIf(catchEl,u.catchphrase||'');suivre(catchEl);
   ['coach-bio:bio','coach-vision:vision','coach-photo-vitrine:photoVitrine',
-   'coach-signature:signature'].forEach(paire=>{
+   'coach-signature:signature','coach-cartepro:cartePro'].forEach(paire=>{
     const [id,champ]=paire.split(':');
     const el=document.getElementById(id);
     if(el){ setIf(el,u[champ]||''); suivre(el); }
   });
+  const _dz=document.getElementById('coach-diplomes-liste');
+  if(_dz){ _dz.innerHTML=''; (u.diplomes||[]).forEach(d=>ajouterDiplomeRow(d&&d.titre,d&&d.image)); }
   _chargerDispoCoach(u);
   const bannerList=document.getElementById('coach-banners-list');
   if(bannerList){bannerList.innerHTML='';(u.promoBanners||[]).forEach(b=>addCoachBannerRow(b.imageUrl,b.linkUrl));}
