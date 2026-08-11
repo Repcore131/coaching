@@ -44215,11 +44215,19 @@ function ouvrirVitrineCoach(){
     .find(x=>x&&currentUser&&x.id===currentUser.coachId)||{};
   // Et si l utilisateur EST le coach, sa vitrine est dans son propre dossier.
   const _moi=(currentUser&&currentUser.role==='coach')?currentUser:{};
-  const pub=Object.assign({},_moi,_loc,_pub);
-  // Le public prime, sauf la ou il est vide : un champ rempli localement mais
-  // pas encore synchronise doit s afficher plutot que disparaitre.
-  ['bio','vision','photoVitrine','signature','cartePro','diplomes','teamName','catchphrase','fname','lname']
-    .forEach(k=>{ if(!pub[k]&&(_loc[k]||_moi[k])) pub[k]=_loc[k]||_moi[k]; });
+  // PREMIERE VALEUR NON VIDE, champ par champ. Un Object.assign laissait la
+  // derniere source ecraser les precedentes avec du vide : sur l appareil du
+  // coach, cleCoachDe rend null, profilCoachLocal rend alors le cache de
+  // n importe quel profil — souvent anterieur a ces champs — et il effacait
+  // le dossier du coach lui-meme. L ordre ne decide plus de rien : seul
+  // compte qu une valeur soit renseignee.
+  const _plein=v=>Array.isArray(v)?v.length>0:!!(v&&String(v).trim());
+  const pub={};
+  ['fname','lname','teamName','catchphrase','bio','vision','photoVitrine',
+   'signature','cartePro','diplomes'].forEach(k=>{
+    const v=[_pub[k],_loc[k],_moi[k]].find(_plein);
+    if(v!==undefined) pub[k]=v;
+  });
   if(!vitrineCoachRemplie(pub)){
     // Le silence etait le pire des cas : le doigt touche, rien ne bouge, et
     // l athlete ne sait pas si l app est cassee ou si son coach n a rien mis.
