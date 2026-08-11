@@ -50817,6 +50817,110 @@ function testExercices(){
           } finally { currentUser=sauve; if(el&&val0!=null) el.value=val0;
             window.saveUser=_sv; window.go=_go; window.loadClientHome=_lc;
             window.toastEcriture=_te; window._recordSteps=_rs; }})());
+        // ══════ LES PAS DE FIN DE SÉANCE ARRIVENT DANS LIFESTYLE ══════
+        ok('8500 pas saisis en fin de séance apparaissent dans Lifestyle',(()=>{
+          // LA CHAÎNE COMPLÈTE, de la saisie à la barre du jour. Le chiffre restait
+          // autrefois accroché à la séance : ni la barre ni la moyenne de la
+          // semaine n'en tenaient compte.
+          const _cu=currentUser,_db=DB.get('users');
+          const _sv=window.saveUser,_go=window.go,_lc=window.loadClientHome;
+          const _te=window.toastEcriture,_t=window.toast;
+          const el=document.getElementById('ps-steps'); const v0=el?el.value:null;
+          try{
+            if(!el) return _echec('champ de fin de séance absent');
+            window.saveUser=()=>true; window.go=()=>{}; window.loadClientHome=()=>{};
+            window.toastEcriture=()=>{}; window.toast=()=>{};
+            changeStepsDate('');   // la carte de saisie suit bien aujourd'hui
+            const auj=localISODate(new Date());
+            currentUser={email:'lea@t.fr',id:'a1',role:'athlete',fname:'Léa',
+              sessions:[{date:Date.now(),exercises:[]}],stepsLog:[],bilans:[]};
+            DB.set('users',{'lea@t.fr':currentUser});
+            el.value='8500';
+            savePostSession(false);
+            const j=(currentUser.stepsLog||[]).find(e=>e.date===auj);
+            if(!j) return _echec('rien n\'est écrit dans le journal de pas');
+            if(j.count!==8500) return _echec('journal : '+j.count+' pas');
+            // La séance garde SA copie : les deux lectures coexistent.
+            if(currentUser.sessions[0].steps!==8500)
+              return _echec('la séance ne porte plus les pas : '+currentUser.sessions[0].steps);
+            // L'écran Lifestyle affiche le chiffre — barre du jour ET moyenne.
+            loadSteps('steps-content');
+            const z=document.getElementById('steps-content');
+            if(!z) return _echec('écran Lifestyle absent');
+            // Les milliers sont séparés par une espace insécable : on normalise.
+            const plat=z.innerHTML.replace(/[\s\u00a0\u202f]/g,'');
+            const vus=(plat.match(/8500/g)||[]).length;
+            if(vus<2) return _echec('8 500 n\'apparaît que '+vus+' fois à l\'écran');
+            // ÉCRASEMENT depuis Lifestyle : un jour n'a qu'un total.
+            const inp=document.getElementById('steps-today-input');   // rendu par loadSteps
+            if(!inp) return _echec('champ Lifestyle absent après rendu');
+            inp.value='9000';
+            saveSteps();
+            const duJour=(currentUser.stepsLog||[]).filter(e=>e.date===auj);
+            if(duJour.length!==1) return _echec(duJour.length+' entrées pour le même jour');
+            return duJour[0].count===9000
+              ?true:_echec('après correction : '+duJour[0].count+' pas');
+          } finally { currentUser=_cu; if(_db) DB.set('users',_db);
+            window.saveUser=_sv; window.go=_go; window.loadClientHome=_lc;
+            window.toastEcriture=_te; window.toast=_t;
+            if(el&&v0!=null) el.value=v0; changeStepsDate(''); }})());
+        ok('Un champ de pas vide n\'efface pas la saisie Lifestyle du jour',(()=>{
+          // LE GARDE. _recordSteps accepte 0 — « je n'ai pas marché » est une
+          // réponse. L'appelant de fin de séance, lui, doit être plus strict : un
+          // champ laissé vide ne dit rien, et ne doit pas écraser un chiffre déjà
+          // entré dans Lifestyle le même jour.
+          const _cu=currentUser,_db=DB.get('users');
+          const _sv=window.saveUser,_go=window.go,_lc=window.loadClientHome;
+          const _te=window.toastEcriture,_t=window.toast;
+          const el=document.getElementById('ps-steps'); const v0=el?el.value:null;
+          try{
+            if(!el) return _echec('champ de fin de séance absent');
+            window.saveUser=()=>true; window.go=()=>{}; window.loadClientHome=()=>{};
+            window.toastEcriture=()=>{}; window.toast=()=>{};
+            const auj=localISODate(new Date());
+            const poser=v=>{
+              currentUser={email:'lea@t.fr',id:'a1',role:'athlete',fname:'Léa',
+                sessions:[{date:Date.now(),exercises:[]}],
+                stepsLog:[{date:auj,count:7200}],bilans:[]};
+              DB.set('users',{'lea@t.fr':currentUser});
+              el.value=v; savePostSession(false);
+              const e=(currentUser.stepsLog||[]).find(x=>x.date===auj);
+              return e?e.count:null;
+            };
+            if(poser('')!==7200) return _echec('un champ vide a écrasé : '+poser(''));
+            if(poser('0')!==7200) return _echec('un zéro a écrasé : '+poser('0'));
+            if(poser('999999')!==7200) return _echec('une valeur hors bornes a écrasé');
+            if(poser('abc')!==7200) return _echec('un texte a écrasé');
+            // TÉMOIN : la même mécanique écrit bien quand la valeur est valide.
+            return poser('8500')===8500?true:_echec('une saisie valide n\'écrit plus');
+          } finally { currentUser=_cu; if(_db) DB.set('users',_db);
+            window.saveUser=_sv; window.go=_go; window.loadClientHome=_lc;
+            window.toastEcriture=_te; window.toast=_t;
+            if(el&&v0!=null) el.value=v0; }})());
+        ok('Le journal de pas est purgé au-delà de '+STEPS_RETENTION_JOURS+' jours',(()=>{
+          // La purge vit DANS _recordSteps : elle ne s'applique donc qu'à l'écriture.
+          // Une seule source pour les deux appelants, une seule purge.
+          const _cu=currentUser,_db=DB.get('users');
+          try{
+            const jour=n=>localISODate(new Date(Date.now()-n*24*3600*1000));
+            currentUser={email:'lea@t.fr',id:'a1',role:'athlete',
+              stepsLog:[{date:jour(STEPS_RETENTION_JOURS+1),count:1000},
+                        {date:jour(STEPS_RETENTION_JOURS-1),count:2000}]};
+            DB.set('users',{'lea@t.fr':currentUser});
+            if(!_recordSteps(localISODate(new Date()),8500))
+              return _echec('_recordSteps refuse une valeur valide');
+            const d=currentUser.stepsLog.map(e=>e.date);
+            if(d.indexOf(jour(STEPS_RETENTION_JOURS+1))>=0)
+              return _echec('une entrée trop ancienne survit à la purge');
+            if(d.indexOf(jour(STEPS_RETENTION_JOURS-1))<0)
+              return _echec('la purge emporte une entrée encore dans la fenêtre');
+            // Les bornes de _recordSteps lui-même : 0 est légitime, pas le reste.
+            if(_recordSteps(jour(1),0)!==true) return _echec('0 pas devrait être accepté');
+            if(_recordSteps(jour(1),-1)!==false) return _echec('un négatif est accepté');
+            if(_recordSteps(jour(1),100000)!==false) return _echec('100000 est accepté');
+            return _recordSteps('',500)===false
+              ?true:_echec('une date vide est acceptée');
+          } finally { currentUser=_cu; if(_db) DB.set('users',_db); }})());
         ok('Le plancher d\'écart-type s\'applique aussi à l\'énergie',(()=>{
           // Sans plancher, un athlète très régulier verrait le moindre écart
           // devenir un z énorme. Mes fixtures étaient toutes trop dispersées
