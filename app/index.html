@@ -355,14 +355,14 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
    est un ecran installe depuis des mois : rapetisser une police se corrige, un
    onglet renomme desoriente. La contrepartie est reelle et assumee — 10px au
    lieu de 11 sous 420px de large. */
-@media(max-width:420px){.tab-btn{letter-spacing:0;padding:6px 2px;font-size:10px;flex:1 1 auto}}
+@media(max-width:420px){.tab-btn{letter-spacing:0;padding:6px 2px;font-size:var(--fs-xs);flex:1 1 auto}}
 /* Sous 360px (iPhone SE = 320px) : meme a 10px, 359px ne rentrent plus. Plutot
    que de rapetisser encore ou de tronquer, la barre defile — les derniers
    onglets s'atteignent d'un glissement, et aucun libelle ne devient illisible.
    Le seuil etait a 340px avec six onglets ; le septieme le remonte a 359px. */
 @media(max-width:359px){
   .tab-bar{overflow-x:auto}
-  .tab-btn{flex:0 0 auto;padding:6px 9px;font-size:10px}
+  .tab-btn{flex:0 0 auto;padding:6px 9px;font-size:var(--fs-xs)}
 }
 /* Onglet actif : trois signaux cumulés — teinte plus claire (#ff5a5a sur #0c0c0c
    = 6,4:1), halo sur l'icône, et liseré supérieur. Le liseré est un repère de
@@ -388,7 +388,7 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
    la pastille, jamais les deux a la fois : un onglet inaccessible n'a rien de
    neuf a signaler. L'opacite reste au-dessus de .5 pour que le libelle demeure
    lisible — un onglet qu'on veut voir desire ne doit pas devenir illisible. */
-.tab-lock{position:absolute;top:2px;left:calc(50% + 4px);font-size:10px;line-height:1;
+.tab-lock{position:absolute;top:2px;left:calc(50% + 4px);font-size:var(--fs-xs);line-height:1;
   display:none;pointer-events:none}
 .tab-btn.verrou{opacity:.55}
 .tab-btn.verrou .tab-lock{display:block}
@@ -2422,11 +2422,11 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- STATS -->
       <div style="display:flex;gap:8px;margin-bottom:20px">
         <div class="metric-box"><div class="metric-val" id="clh-m1">—</div><div class="metric-label">Cette semaine</div>
-          <div style="font-size:9px;color:var(--text-faint);margin-top:2px" id="clh-m1-sub"></div></div>
+          <div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:2px" id="clh-m1-sub"></div></div>
         <div class="metric-box"><div class="metric-val" id="clh-m2">—</div><div class="metric-label">Charge totale</div>
-          <div style="font-size:9px;color:var(--text-faint);margin-top:2px" id="clh-m2-sub"></div></div>
+          <div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:2px" id="clh-m2-sub"></div></div>
         <div class="metric-box"><div class="metric-val" id="clh-m3">—</div><div class="metric-label">Exercices en progrès</div>
-          <div style="font-size:9px;color:var(--text-faint);margin-top:2px" id="clh-m3-sub"></div></div>
+          <div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:2px" id="clh-m3-sub"></div></div>
       </div>
 
 
@@ -53263,6 +53263,92 @@ function testExercices(){
         // ══════ ÉCRANS À ENCOCHE ══════
         // Trois réglages qui ne se voient jamais sur un écran de bureau, et dont
         // l'absence rend l'app inutilisable sur un iPhone récent en PWA.
+        // ══════ LE PLANCHER TYPOGRAPHIQUE ══════
+        // 11 px est la plus petite taille admise. En dessous, un libellé en
+        // majuscules très espacées — ceux qui portent le sens — n'est plus
+        // lisible sur un téléphone tenu à bout de bras.
+        ok('Aucun texte de l\'accueil athlète ne descend sous le plancher',(()=>{
+          const _cu=currentUser,_db=DB.get('users');
+          try{
+            // On PEUPLE l'écran : sans données, les compteurs et leurs
+            // sous-titres ne sont pas rendus et la mesure passerait à côté.
+            currentUser={email:'lea@t.fr',id:'a1',role:'athlete',fname:'Léa',
+              sessions:[{date:Date.now()-864e5,exercises:[]}],bilans:[],streak:3,
+              weightLog:[{date:'2026-08-01',kg:62}],
+              sessions_config:[{day:'Lundi',active:true,exercises:[{name:'DC'}]}]};
+            DB.set('users',{'lea@t.fr':currentUser});
+            const z=document.getElementById('s-client-home');
+            if(!z) return _echec('accueil athlète introuvable');
+            const bar=document.getElementById('client-tabbar');
+            const etaitActif=z.classList.contains('active');
+            const barreVisible=bar&&bar.classList.contains('show');
+            z.classList.add('active'); if(bar) bar.classList.add('show');
+            try{ _majMetriquesAccueil(currentUser); }catch(e){}
+            // LE SCANNER COMPTE CE QUI PORTE DU TEXTE, pas seulement les
+            // feuilles : le libellé d'un onglet est un nœud texte DIRECT de
+            // .tab-btn, à côté du <svg> de l'icône. Un filtre « éléments sans
+            // enfants » les saute tous les sept — et donne un feu vert à tort.
+            const petits=[];
+            const scan=(r,ou)=>{ if(!r) return; r.querySelectorAll('*').forEach(el=>{
+              const direct=[...el.childNodes].filter(n=>n.nodeType===3&&n.textContent.trim());
+              if(!direct.length) return;
+              const cs=getComputedStyle(el);
+              if(cs.display==='none'||cs.visibility==='hidden') return;
+              const px=parseFloat(cs.fontSize);
+              if(px<11) petits.push(ou+' « '+direct.map(n=>n.textContent.trim()).join('').slice(0,24)+' » '+px+'px');
+            });};
+            scan(z,'accueil'); scan(bar,'onglets');
+            if(!etaitActif) z.classList.remove('active');
+            if(bar&&!barreVisible) bar.classList.remove('show');
+            if(petits.length) return _echec(petits.length+' sous 11px : '+petits.slice(0,3).join(' | '));
+            // TÉMOIN : le scanner voit bien du texte. Sans lui, un sélecteur
+            // cassé rendrait « aucun » quel que soit l'écran.
+            let vus=0;
+            z.querySelectorAll('*').forEach(el=>{
+              if([...el.childNodes].some(n=>n.nodeType===3&&n.textContent.trim())) vus++; });
+            return vus>15?true:_echec('le scanner ne trouve que '+vus+' porteurs de texte');
+          } finally { currentUser=_cu; if(_db) DB.set('users',_db); }})());
+        ok('Aucune règle CSS ne rapetisse la barre d\'onglets',(()=>{
+          // Le piège est dans les requêtes média : deux d'entre elles
+          // ramenaient .tab-btn à 10px en dessous de 420 px, donc sur la
+          // largeur même que vise le critère. Elles ne se voient pas au
+          // rendu par défaut, et aucune mesure ponctuelle ne les attrape.
+          //
+          // ON NE DESCEND QUE DANS LES VRAIS GROUPES. Avec le nesting CSS,
+          // toute CSSStyleRule porte un `cssRules` VIDE : un parcours qui
+          // récursait dès que la propriété existe n'inspectait aucune règle
+          // et passait quel que soit le fichier. Vérifié : :root porte bien
+          // un cssRules de longueur 0 sans être une CSSMediaRule.
+          const fautes=[]; let inspectees=0;
+          const lire=(regles,ou)=>{
+            for(const r of regles){
+              if(r instanceof CSSMediaRule||r instanceof CSSSupportsRule){
+                lire(r.cssRules,r.conditionText?'@media '+r.conditionText:ou); continue; }
+              if(!r.selectorText||!r.style) continue;
+              inspectees++;
+              // Bornée à ce que ce lot gouverne : la barre d'onglets, dont
+              // les sept libellés sont le premier élément que le plancher
+              // visait. Quinze autres règles passent sous 11 px sur d'autres
+              // écrans — hors portée d'ici, et signalées comme telles.
+              if(!/tab-btn|client-tabbar|tab-lock|tab-bar/.test(r.selectorText)) continue;
+              const v=(r.style.getPropertyValue('font-size')||'').trim();
+              const m=/^([0-9.]+)px$/.exec(v);
+              if(m&&parseFloat(m[1])<11)
+                fautes.push((ou?ou+' ':'')+r.selectorText+' → '+v);
+            }
+          };
+          for(const sh of document.styleSheets){
+            try{ lire(sh.cssRules,''); }catch(e){}
+          }
+          if(fautes.length) return _echec(fautes.length+' règle(s) : '+fautes.slice(0,3).join(' | '));
+          // TÉMOIN : le parcours inspecte vraiment. Sans lui, l'assertion
+          // rendrait « aucune faute » sur un fichier entièrement fautif —
+          // c'est exactement le défaut qu'elle a d'abord porté.
+          if(inspectees<100) return _echec('seulement '+inspectees+' règle(s) inspectée(s) : le parcours est aveugle');
+          // Et l'échelle existe toujours, avec son plancher à 11.
+          const xs=getComputedStyle(document.documentElement).getPropertyValue('--fs-xs').trim();
+          return xs==='11px'?true:_echec('--fs-xs vaut '+xs);})());
+
         ok('Le viewport COUVRE l\'écran — sans quoi env() vaut toujours zéro',(()=>{
           const m=document.querySelector('meta[name="viewport"]');
           if(!m) return _echec('aucun meta viewport');
