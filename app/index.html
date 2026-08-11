@@ -881,6 +881,19 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
 button[onclick*="closeModal"]:empty::before,
 button[onclick*="display='none'"]:empty::before,
 button[onclick*="?.remove()"]:empty::before{content:'✕'}
+/* ── Un emplacement vide n'occupe RIEN ──────────────────────────────────
+   Ces conteneurs sont remplis à l'exécution — on ne peut donc pas les
+   supprimer, ils portent le nom de l'athlète, la version du service worker,
+   le chronomètre de séance. Mais VIDES, ils gardaient leur marge : sept
+   d'entre eux réservaient de 9 à 23 px sans rien afficher, et
+   #coach-dispo-median dessinait en plus un trait de séparation sans rien à
+   séparer.
+   :empty ne matche que ce qui n'a AUCUN contenu : chacun reprend sa place
+   dès que le JS y écrit, au caractère près. Aucun des sept n'est piloté en
+   display par du JS — la règle n'entre en conflit avec personne. */
+#ci-expiry-info:empty,#sc-expiry-info:empty,#coach-dispo-apercu:empty,
+#coach-dispo-median:empty,#cloud-sw-version:empty,#cr-version:empty,
+#atp-trait-note:empty{display:none}
 
 /* ====== ACCENT BG ====== */
 .red-zone{background:var(--red-bg)!important}
@@ -54486,6 +54499,60 @@ function testExercices(){
           const croix=document.querySelector('#session-picker button');
           return (croix&&/[✕×]/.test(croix.textContent||''))
             ?true:_echec('le sélecteur de séance n\'a plus de croix');})());
+        ok('Un emplacement vide ne réserve aucun espace vertical',(()=>{
+          // Ces conteneurs sont remplis à l'exécution. Vides, ils gardaient leur
+          // marge : de 9 à 23 px sans rien afficher, et #coach-dispo-median
+          // dessinait en plus un trait de séparation sans rien à séparer.
+          const CIBLES=['ci-expiry-info','sc-expiry-info','coach-dispo-apercu','coach-dispo-median','cloud-sw-version','cr-version','atp-trait-note'];
+          const fautifs=[];
+          for(const id of CIBLES){
+            const el=document.getElementById(id);
+            if(!el) return _echec(id+' a disparu du document');
+            const av=el.innerHTML;
+            try{
+              el.innerHTML='';
+              const cs=getComputedStyle(el);
+              if(cs.display!=='none'){
+                const r=['marginTop','marginBottom','paddingTop','paddingBottom',
+                         'borderTopWidth','borderBottomWidth']
+                  .reduce((n,k)=>n+(parseFloat(cs[k])||0),0);
+                if(r>0) fautifs.push(id+' réserve '+r+'px');
+              }
+              // ET IL REVIENT DÈS QU'ON ÉCRIT : replier ne doit pas masquer un
+              // contenu réel. C'est le sens même de :empty.
+              el.textContent='x';
+              if(getComputedStyle(el).display==='none')
+                fautifs.push(id+' reste masqué alors qu\'il porte du texte');
+            } finally { el.innerHTML=av; }
+          }
+          return fautifs.length
+            ?_echec(fautifs.length+' : '+fautifs.slice(0,3).join(' | '))
+            :true;})());
+        ok('Aucun emplacement rempli à l\'exécution n\'a été « nettoyé »',(()=>{
+          // LA GARDE CONTRE UN FAUX NETTOYAGE. Un conteneur vide dans la source
+          // ressemble à du code mort — il n'en est pas un : c'est l'emplacement que
+          // le JS remplit. Les supprimer casserait le nom de l'athlète sur l'écran
+          // coach, la version du service worker, le chronomètre de séance.
+          const scripts=[...document.querySelectorAll('script')]
+            .filter(x=>!x.src).map(x=>x.textContent).join('\n');
+          const prod=scripts.slice(0,scripts.indexOf('function testExercices'));
+          if(prod.length<100000) return _echec('source trop courte : '+prod.length);
+          // Un échantillon nommé, pris dans chaque écran concerné.
+          const VIVANTS=['ch-name','ch-count','ci-expiry-info','sc-expiry-info',
+            'coach-dispo-apercu','coach-dispo-median','coach-contact-etat',
+            'cloud-sw-version','ccd-info','calc-cycle-etat','cr-version','clh-name',
+            'atp-trait-note','bq-compte','sub-renonc-txt','pe-duree-chrono'];
+          const perdus=VIVANTS.filter(id=>!document.getElementById(id));
+          if(perdus.length)
+            return _echec(perdus.length+' emplacement(s) supprimé(s) : '+perdus.join(', '));
+          // Et chacun est bien RÉCLAMÉ par le code : un emplacement que personne ne
+          // lit serait, lui, réellement mort.
+          const muets=VIVANTS.filter(id=>prod.indexOf("'"+id+"'")<0&&prod.indexOf('"'+id+'"')<0);
+          if(muets.length)
+            return _echec(muets.length+' emplacement(s) que personne ne lit : '+muets.join(', '));
+          // TÉMOIN : la recherche discrimine vraiment.
+          return prod.indexOf("'ch-name-qui-n-existe-pas'")<0
+            ?true:_echec('la recherche accepte n\'importe quel identifiant');})());
         ok('Le garde-fou rend son glyphe MALGRÉ le calque tactile',(()=>{
           // .back-btn::before pose déjà content:'' pour agrandir la zone tapable.
           // Si sa spécificité passait devant celle de .back-btn:empty::before, le
