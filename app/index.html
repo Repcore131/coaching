@@ -23654,8 +23654,12 @@ const BILAN_QUESTIONS={
     {k:'bil-sleep-quality',lbl:'Qualité du sommeil',emoji:'😴'},
     {k:'bil-stress',lbl:'Niveau de stress',emoji:'😤'},
     {k:'bil-stress-detail',lbl:'Source du stress',emoji:'📌'},
+    // `bil-new-goals` n'est PLUS POSÉE : le questionnaire ne demande que
+    // « Où en es-tu de tes objectifs ? ». On la garde pour les bilans qui
+    // la portent encore, et le libellé de la sous-question est autonome —
+    // « Lesquels » s'affichait seul, sans la question à laquelle il répond.
     {k:'bil-new-goals',lbl:'Nouveaux objectifs ?',emoji:'🎯'},
-    {k:'bil-new-goals-detail',lbl:'Lesquels',emoji:'🚀'},
+    {k:'bil-new-goals-detail',lbl:'Où en es-tu de tes objectifs',emoji:'🚀'},
   ],
   depart:[
     // Les trois contre-indications d'abord : c'est ce qui conditionne tout le
@@ -23675,6 +23679,11 @@ const BILAN_QUESTIONS={
     {k:'deb-training-days',lbl:"Jours d'entraînement souhaités",emoji:'📅'},
     {k:'deb-training-time',lbl:'Moment de la journée',emoji:'⏰'},
     {k:'deb-session-duration',lbl:'Durée de séance préférée',emoji:'⏱️'},
+    // Les deux, et dans cet ordre. `deb-sports` est le champ collecté
+    // aujourd'hui ; `deb-other-sports` est la question en texte libre qu'il
+    // a remplacée — retirée du formulaire, mais toujours présente dans les
+    // bilans d'avant la migration, où elle est la seule trace du sujet.
+    {k:'deb-sports',lbl:'Sports pratiqués',emoji:'⚽'},
     {k:'deb-other-sports',lbl:'Autres sports pratiqués',emoji:'⚽'},
     {k:'deb-intensity-1',lbl:'Intensité perçue (1)',emoji:'🔥'},
     {k:'deb-intensity-2',lbl:'Intensité perçue (2)',emoji:'🔥'},
@@ -23692,9 +23701,29 @@ const BILAN_QUESTIONS={
 };
 // Texte affichable d'une réponse. Un tableau vide est truthy et produisait une
 // rubrique titrée sans rien dessous : on juge le texte effectivement rendu.
+//
+// ET IL SAIT LIRE LES RÉPONSES STRUCTURÉES. `deb-sports` ne stocke pas du
+// texte mais des objets {sport,intensite,heures} : passés à String(), ils
+// donnaient « [object Object], [object Object] ». Une rubrique vide se voit
+// et s'ignore — celle-là, le coach la lit comme un dossier corrompu.
+function _texteSport(e){
+  if(!e||!e.sport) return '';
+  // L'intensité est stockée en clé ('moderee') : on rend le libellé, sinon
+  // le coach lit une valeur de base de données au lieu d'un mot français.
+  const i=(typeof SPORT_INTENSITES!=='undefined'?SPORT_INTENSITES:[])
+    .find(x=>x.cle===e.intensite);
+  const h=Number(e.heures);
+  const det=[i?i.lib:'',h>0?h+' h/sem':''].filter(Boolean).join(', ');
+  return String(e.sport).trim()+(det?' ('+det+')':'');
+}
 function _texteReponse(val){
   if(val==null||val==='') return '';
-  return (Array.isArray(val)?val.join(', '):String(val)).trim();
+  // Un objet non reconnu rend '' et disparaît : mieux vaut une rubrique
+  // muette qu'une rubrique qui affiche [object Object].
+  const un=v=>(v&&typeof v==='object')?_texteSport(v):String(v);
+  return (Array.isArray(val)
+    ?val.map(un).filter(x=>x&&x.trim()).join(', ')
+    :un(val)).trim();
 }
 // Contre-indications du bilan de départ. Rendues à part de la liste complète,
 // mais lues dans la MÊME déclaration : impossible d'en ajouter une au
@@ -70125,6 +70154,101 @@ function testExercices(){
           const manque=douze.filter(k=>h.indexOf('id="deb-'+k+'"')<0);
           return manque.length?_echec('perdues : '+manque.join(', ')):true;
         } finally { currentUser=sauve; }})());
+      // ══════ L'ÉCRAN RÉPONSES ══════
+      ok('Un bilan à moitié rempli ne rend QUE ses réponses',(()=>{
+        // LE PIÈGE : un tableau vide est truthy. « Raisons des écarts : [] »
+        // ouvrait une rubrique titrée avec rien dessous, et le coach y cherchait
+        // un texte qui n'existait pas.
+        //
+        // On appelle le RENDU RÉEL et on lit son HTML. Une assertion qui refait
+        // le tri de son côté teste son propre code : elle resterait verte si la
+        // production revenait à filtrer sur la valeur brute.
+        const bilan={date:Date.now(),type:'suivi',
+          'bil-prog-modifs':'Je voudrais plus de dos et moins de biceps.',
+          'bil-motivation':'8/10',
+          'bil-new-goals-detail':'Passer à 60 kg avant décembre.',
+          'bil-diff-detail':'',
+          'bil-cheat-reasons':[]};
+        const h=renderReponsesBilans([bilan],null);
+        if(!/plus de dos et moins de biceps/.test(h))
+          return _echec('le texte saisi n\'apparaît pas dans la carte');
+        if(h.indexOf('Modifications demandées')<0)
+          return _echec('« Modifications demandées » ne titre pas le texte');
+        if(h.indexOf('Raisons des écarts')>=0)
+          return _echec('un tableau vide ouvre encore une rubrique');
+        if(h.indexOf('Détail des difficultés')>=0)
+          return _echec('une chaîne vide ouvre encore une rubrique');
+        // « Lesquels » ne répondait à aucune question rendue : sa question parente
+        // n'est plus posée. Le libellé doit tenir debout seul.
+        if(h.indexOf('Lesquels')>=0) return _echec('libellé orphelin « Lesquels »');
+        if(h.indexOf('Où en es-tu de tes objectifs')<0)
+          return _echec('le libellé autonome ne titre pas la réponse');
+        if(/object Object/.test(h)) return _echec('une réponse structurée est rendue brute');
+        const RUB=/border-bottom:1px solid #141414/g;
+        const n=(h.match(RUB)||[]).length;
+        if(n!==3) return _echec(n+' rubriques rendues au lieu de 3');
+        // TÉMOIN : un bilan SANS réponse n'ouvre aucune rubrique. Sans lui, un
+        // rendu vide passerait tous les tests ci-dessus par l'absence.
+        const vide=renderReponsesBilans([{date:Date.now(),type:'suivi'}],null);
+        return (vide.match(RUB)||[]).length===0
+          ?true:_echec('un bilan vide ouvre des rubriques');})());
+      ok('Aucune réponse ne se rend en « [object Object] »',(()=>{
+        // deb-sports stocke des objets {sport,intensite,heures}. String() les
+        // rendait « [object Object], [object Object] » : une rubrique muette
+        // s'ignore, celle-là se lit comme un dossier corrompu.
+        const t=_texteReponse([{sport:'Boxe',intensite:'haute',heures:2},
+                               {sport:'Vélo',intensite:'moderee',heures:3}]);
+        if(/object Object/.test(t)) return _echec('rendu brut : '+t);
+        if(!/Boxe/.test(t)||!/Vélo/.test(t)) return _echec('sports perdus : '+t);
+        // L'intensité est rendue en français, pas en clé de base.
+        if(/haute|moderee/.test(t)) return _echec('clé d\'intensité affichée : '+t);
+        if(!/Haute/.test(t)||!/Modérée/.test(t)) return _echec('intensité absente : '+t);
+        if(!/2 h\/sem/.test(t)) return _echec('heures absentes : '+t);
+        // Une ligne sans nom de sport ne produit pas de virgule orpheline.
+        if(_texteReponse([{sport:'Boxe',heures:1},{heures:9}])!=='Boxe (1 h/sem)')
+          return _echec('ligne vide conservée : '+_texteReponse([{sport:'Boxe',heures:1},{heures:9}]));
+        // Et un objet inconnu disparaît plutôt que de s'afficher brut.
+        return _texteReponse({foo:1})===''
+          ?true:_echec('objet inconnu rendu : '+_texteReponse({foo:1}));})());
+      ok('Toute question affichée est une question réellement posée',(()=>{
+        // LA SERRURE ANTI-DÉRIVE. BILAN_QUESTIONS et les questionnaires sont
+        // deux listes séparées : rien n'empêchait l'une de citer une clé que
+        // l'autre ne collecte plus. Deux l'étaient — dont bil-new-goals, dont
+        // seule la sous-question « detail » est encore posée.
+        //
+        // ON MESURE SUR LE HTML RENDU, pas sur la source des étapes :
+        // bBodySchema construit deb-entrejambe et deb-bras dynamiquement, et les
+        // chercher dans le texte des fonctions les accuse à tort. Un scan des
+        // seuls `id` se trompe dans l'autre sens — les questions à choix passent
+        // par onclick, pas par un id.
+        const _cu=currentUser,_bd=bilData;
+        let html='';
+        try{
+          currentUser={id:'_q',email:'q@t',gender:'Homme'}; bilData={};
+          html=BIL_STEPS.concat(DEB_STEPS)
+            .map(f=>{try{return f();}catch(e){return '';}}).join('');
+        } finally { currentUser=_cu; bilData=_bd; }
+        // JETON EXACT. Sans la borne de fin, bil-new-goals passait : la chaîne
+        // est contenue dans bil-new-goals-detail, qui, elle, est bien posée.
+        const pose=k=>new RegExp(k.replace(/-/g,'\\-')+'(?![-\\w])').test(html);
+        // Clés d'HISTORIQUE : plus posées, mais présentes dans les bilans d'avant
+        // migration. Les retirer rendrait ces réponses invisibles.
+        const HISTO=['deb-other-sports','bil-new-goals'];
+        const cles=BILAN_QUESTIONS.suivi.concat(BILAN_QUESTIONS.depart).map(q=>q.k);
+        const orphelines=cles.filter(k=>HISTO.indexOf(k)<0).filter(k=>!pose(k));
+        if(orphelines.length)
+          return _echec('affichée(s) mais jamais posée(s) : '+orphelines.join(', '));
+        // TÉMOIN : les questionnaires ont bien été rendus. Sans lui, un BIL_STEPS
+        // vide rendrait « aucune orpheline » sur une liste entièrement fautive.
+        if(html.length<50000) return _echec('questionnaires illisibles : '+html.length+' caractères');
+        if(cles.length<35) return _echec('seulement '+cles.length+' questions inspectées');
+        // TÉMOIN INVERSE : le jeton exact discrimine vraiment.
+        if(pose('bil-new-goals')) return _echec('le jeton exact ne borne pas la fin');
+        if(!pose('bil-new-goals-detail')) return _echec('le jeton exact borne trop');
+        // Et les deux clés que ce lot rend lisibles sont bien posées.
+        return ['bil-prog-modifs','deb-sports'].every(pose)
+          ?true:_echec('une clé du lot n\'est pas collectée');})());
+
       ok('Les deux champs sont lisibles sur la fiche coach du bilan',(()=>{
         const cles=(BILAN_QUESTIONS.depart||[]).map(q=>q.k);
         const manque=['deb-entrejambe','deb-bras'].filter(k=>cles.indexOf(k)<0);
