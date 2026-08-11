@@ -67908,6 +67908,116 @@ function testExercices(){
        &&/_appAuPremierPlan()/.test(String(checkWoReminderToday)));
     ok("Aucun requireInteraction:true ne subsiste dans l'app",
        !/requireInteraction:(s*)true/.test(String(checkBilanNotifToday)+String(checkWoReminderToday)));
+    // ══ SAFARI iOS EN ONGLET : L'IDENTIFIANT N'EXISTE PAS ══════════════
+    ok('Sans l\'objet Notification, aucun point d\'entrée ne lève d\'erreur',(()=>{
+      // Safari iOS n'expose Notification QUE dans une PWA installée. Dans un
+      // onglet, le lire lève un ReferenceError — pas un undefined. Un seul
+      // accès non gardé casse la fonction entière, et avec elle la bannière
+      // in-app qui, elle, marcherait très bien.
+      const _N=window.Notification, _cu=currentUser, _t=window.toast, _sv=window.saveUser;
+      const toasts=[];
+      try{
+        window.toast=(m,c)=>toasts.push({m:String(m),c:c});
+        window.saveUser=()=>true;
+        delete window.Notification;
+        // TÉMOIN : la suppression a vraiment pris. Sans lui, l'assertion
+        // passerait sur un navigateur qui expose Notification — c'est-à-dire
+        // partout où on la fait tourner.
+        let leve=false;
+        try{ void Notification.permission; }catch(e){ leve=(e instanceof ReferenceError); }
+        if(!leve) return _echec('l\'identifiant n\'a pas été retiré : le test ne prouve rien');
+        // ON FORCE LES CHEMINS JUSQU'À LA LIGNE GARDÉE. Chacun sort avant elle en
+        // conditions de test — _appAuPremierPlan() rend true tant que la page est
+        // visible. Sans ces relais, l'assertion conclurait « aucune erreur » sans
+        // avoir exécuté une seule ligne de ce qu'elle prétend vérifier.
+        const _ap=window._appAuPremierPlan, _ib=window.isBilanNotifDay;
+        const _sb=window.showBilanNotifBanner, _sw=window.showWoReminderBanner;
+        const _ns=window._notifSupported, _se=window.suspensionEtat;
+        let passages=0;
+        window._appAuPremierPlan=()=>false;
+        window.isBilanNotifDay=()=>true;
+        window.showBilanNotifBanner=()=>{}; window.showWoReminderBanner=()=>{};
+        window.suspensionEtat=()=>({actif:false});
+        window._notifSupported=function(){ passages++; return _ns.apply(this,arguments); };
+        try{
+        const _now=new Date();
+        const _jourApp=_now.getDay()===0?6:_now.getDay()-1;
+        currentUser={id:'a1',email:'lea@t.fr',role:'athlete',fname:'Léa',
+          sessions:[],bilans:[{date:Date.now()-864e5,type:'suivi'}],_bilanFreq:2,
+          nutrition:{},
+          // Rappel de séance : aujourd'hui, l'heure passée, jamais notifié.
+          _woReminderEnabled:true,_woReminderDays:[_jourApp],_woReminderHour:0,
+          // Retour vidéo : un repère déjà posé, et une correction plus récente.
+          _lastFbNotif:1,videos:[{id:'v1',feedbackDate:Date.now()}]};
+        const POINTS=['checkBilanNotifToday','checkWoReminderToday','checkFeedbackNotif',
+          'checkReponseBilanNotif','requestBilanNotifPermission','showBilanNotifPrompt',
+          'showBilanNotifBanner','scheduleSwNotif','scheduleWoNotif','scheduleSuppNotif'];
+        const casses=[]; let appeles=0;
+        for(const n of POINTS){
+          const f=window[n];
+          if(typeof f!=='function'){ casses.push(n+' : absente'); continue; }
+          appeles++;
+          try{ f(); }catch(e){ casses.push(n+' : '+(e&&e.name)+' '+(e&&e.message||'').slice(0,50)); }
+        }
+        if(casses.length)
+          return _echec(casses.length+' point(s) d\'entrée cassé(s) : '+casses.slice(0,3).join(' | '));
+        if(appeles<8) return _echec('seulement '+appeles+' point(s) d\'entrée appelé(s)');
+        // LE CHEMIN DÉCLENCHÉ PAR L'UTILISATEUR dit pourquoi ça ne marche pas ET
+        // quoi faire : « non supportées » laisserait croire à une impasse alors
+        // que l'installation sur l'écran d'accueil suffit.
+        const t=toasts.find(x=>/notifications ne sont pas disponibles/i.test(x.m));
+        if(!t) return _echec('aucun message explicite : '+JSON.stringify(toasts.map(x=>x.m.slice(0,40))));
+        if(t.c!=='var(--orange)') return _echec('le message n\'est pas en alerte : '+t.c);
+        if(!/écran d'accueil/.test(t.m))
+          return _echec('le message ne dit pas quoi faire : '+t.m);
+        // TÉMOIN DE PROBANCE : si aucun chemin n'a consulté le garde, c'est que
+        // tous sont sortis avant — et l'assertion n'a rien vérifié du tout.
+        return passages>0
+          ?true:_echec('aucun chemin n\'a atteint la garde : l\'assertion ne prouve rien');
+      } finally {
+        window._appAuPremierPlan=_ap; window.isBilanNotifDay=_ib;
+        window.showBilanNotifBanner=_sb; window.showWoReminderBanner=_sw;
+        window._notifSupported=_ns; window.suspensionEtat=_se;
+      }
+      } finally { if(_N) window.Notification=_N; currentUser=_cu;
+        window.toast=_t; window.saveUser=_sv; }})());
+    ok('Tout accès à Notification passe par le garde',(()=>{
+      // La serrure de forme, en complément : elle nomme la fonction fautive
+      // avant même qu'on l'appelle. Les deux se complètent — celle-ci voit un
+      // chemin jamais exécuté par le test ci-dessus.
+      const scripts=[...document.querySelectorAll('script')]
+        .filter(x=>!x.src).map(x=>x.textContent).join('\n');
+      const prod=scripts.slice(0,scripts.indexOf('function testExercices'));
+      if(prod.length<100000) return _echec('source trop courte : '+prod.length);
+      // Chaque fonction qui NOMME Notification doit aussi nommer le garde.
+      const fautives=[];
+      const re=/function\s+(\w+)\s*\([^)]*\)\s*\{/g;
+      let m, vues=0;
+      while((m=re.exec(prod))){
+        // LE CORPS EXACT, par appariement d'accolades. Couper sur « \nfunction »
+        // ne marche pas : le code est indenté, et le corps débordait alors de
+        // 2500 caractères — attrapant le mot dans les COMMENTAIRES qui suivent
+        // l'accolade fermante. Deux fonctions étaient accusées à tort.
+        let prof=0, fin=-1;
+        for(let k=re.lastIndex-1;k<prod.length;k++){
+          const c=prod[k];
+          if(c==='{') prof++;
+          else if(c==='}'){ prof--; if(prof===0){ fin=k; break; } }
+        }
+        if(fin<0) continue;
+        // Et sans les commentaires : un commentaire n'exécute rien.
+        const corps=prod.slice(re.lastIndex,fin)
+          .replace(/\/\*[\s\S]*?\*\//g,'')
+          .split('\n').map(x=>x.replace(/\/\/.*$/,'')).join('\n');
+        if(!/(?<![.\w'"])Notification\b/.test(corps)) continue;
+        vues++;
+        if(m[1]==='_notifSupported') continue;
+        if(!/_notifSupported\(\)|typeof Notification/.test(corps)) fautives.push(m[1]);
+      }
+      if(fautives.length)
+        return _echec(fautives.length+' fonction(s) sans garde : '+fautives.slice(0,4).join(', '));
+      // TÉMOIN : le balayage a vraiment trouvé des fonctions à inspecter.
+      return vues>=4?true:_echec('seulement '+vues+' fonction(s) inspectée(s)');})());
     // ══════════════ NON-RÉGRESSION DU CIRCUIT VIDÉO ══════════════
     // Écrits AVANT de généraliser le composant de chips, qui est aujourd'hui
     // câblé en dur sur l'écran de retour vidéo. Ils doivent rester verts après.
