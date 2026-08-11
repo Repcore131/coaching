@@ -48518,6 +48518,83 @@ function testExercices(){
           } finally {
             window.saveUser=_sv; window._renderNutriContent=_rn;
           }})());
+        // ── La longueur du cycle : saisir « 30 » doit être possible ──────────
+        ok('« 30 » se tape chiffre par chiffre sans que le champ soit repris',(()=>{
+          // LE DÉFAUT D'ORIGINE : le gestionnaire se termine par un
+          // _renderNutriContent qui RECONSTRUIT ce champ. Branché sur oninput, il
+          // le détruisait à chaque frappe — le focus partait, et « 3 » avait déjà
+          // été ramené à 20 avant qu'on ait pu taper le second chiffre.
+          const _sv=window.saveUser, _cu=currentUser;
+          try{
+            window.saveUser=()=>true;
+            currentUser={id:'a1',email:'lea@t.fr',role:'athlete',fname:'Léa',gender:'F',
+              sessions:[],bilans:[],
+              cycle:{enabled:true,lastPeriodDate:'2026-08-01',cycleLength:28},
+              nutrition:{dietType:'flexible',log:{},
+                macros:{on:{kcal:2000,p:150,g:200,l:60},off:{kcal:2000,p:150,g:200,l:60}}}};
+            _renderNutriContent('flexible');
+            const el=document.getElementById('cycle-len');
+            if(!el) return _echec('le champ n\'est pas rendu');
+            // Le gestionnaire est onchange, et SURTOUT pas oninput.
+            if(el.getAttribute('oninput'))
+              return _echec('le champ est branché sur oninput : '+el.getAttribute('oninput'));
+            if(!/saveCycleNutSettings/.test(el.getAttribute('onchange')||''))
+              return _echec('aucun onchange sur le champ');
+            // La frappe, chiffre par chiffre. Le nœud doit être le MÊME d'un bout à
+            // l'autre : c'est sa recréation qui volait le focus.
+            el.value='3'; el.dispatchEvent(new Event('input',{bubbles:true}));
+            if(document.getElementById('cycle-len')!==el)
+              return _echec('le champ a été recréé après la première frappe');
+            if(currentUser.cycle.cycleLength!==28)
+              return _echec('« 3 » a déjà été enregistré : '+currentUser.cycle.cycleLength);
+            el.value='30'; el.dispatchEvent(new Event('input',{bubbles:true}));
+            if(document.getElementById('cycle-len')!==el)
+              return _echec('le champ a été recréé pendant la saisie');
+            if(el.value!=='30') return _echec('la valeur tapée a été reprise : '+el.value);
+            // Au blur seulement, la valeur complète est enregistrée.
+            el.dispatchEvent(new Event('change',{bubbles:true}));
+            if(currentUser.cycle.cycleLength!==30)
+              return _echec('après blur : '+currentUser.cycle.cycleLength);
+            // Et c'est bien ce que l'application LIT ensuite. Le stockage est
+            // user.cycle ; nutrition.cycleAdaptation n'est qu'un repli d'ancien
+            // dossier, et ce lot ne doit pas y écrire.
+            if(confCycle(currentUser).cycleLength!==30)
+              return _echec('confCycle lit '+confCycle(currentUser).cycleLength);
+            return (currentUser.nutrition.cycleAdaptation===undefined)
+              ?true:_echec('l\'ancien champ a été écrit');
+          } finally { currentUser=_cu; window.saveUser=_sv; }})());
+        ok('Un champ vidé ou illisible n\'écrase pas la longueur enregistrée',(()=>{
+          // Le clamp ne s'applique qu'à une valeur COMPLÈTE. Sur un champ vide il
+          // aurait écrit 20 sous les doigts de l'utilisatrice ; un parseInt||28
+          // aurait, lui, ramené silencieusement à 28 une saisie illisible.
+          const _sv=window.saveUser, _rn=window._renderNutriContent, _cu=currentUser;
+          try{
+            window.saveUser=()=>true; window._renderNutriContent=()=>{};
+            // LE CHAMP RÉEL s'il est déjà rendu : un second <input> portant le même
+            // id serait ignoré, getElementById rendant le premier du document — et
+            // l'assertion piloterait un champ que la fonction ne lit pas.
+            let z=document.getElementById('cycle-len'), fabrique=false;
+            const valeurAvant=z?z.value:null;
+            if(!z){ z=document.createElement('input'); z.id='cycle-len'; z.type='text';
+              document.body.appendChild(z); fabrique=true; }
+            try{
+              const poser=v=>{
+                currentUser={id:'a1',email:'lea@t.fr',role:'athlete',gender:'F',
+                  cycle:{enabled:true,lastPeriodDate:'2026-08-01',cycleLength:33},
+                  nutrition:{dietType:'flexible'}};
+                z.value=v; saveCycleNutSettings();
+                return currentUser.cycle.cycleLength;
+              };
+              if(poser('')!==33) return _echec('un champ vide a écrasé : '+poser(''));
+              if(poser('   ')!==33) return _echec('des espaces ont écrasé : '+poser('   '));
+              if(poser('abc')!==33) return _echec('un texte a écrasé : '+poser('abc'));
+              // Une valeur complète, elle, s'écrit — et se borne.
+              if(poser('30')!==30) return _echec('une saisie valide n\'écrit plus : '+poser('30'));
+              if(poser('3')!==20) return _echec('la borne basse ne joue plus : '+poser('3'));
+              if(poser('99')!==40) return _echec('la borne haute ne joue plus : '+poser('99'));
+              return true;
+            } finally { if(fabrique) z.remove(); else z.value=valeurAvant; }
+          } finally { currentUser=_cu; window.saveUser=_sv; window._renderNutriContent=_rn; }})());
         ok('Le champ « cycles réguliers » se lit et s\'écrit',(()=>{
           const u=_ath({regulier:true});
           if(confCycle(u).regulier!==true) return _echec('non lu');
