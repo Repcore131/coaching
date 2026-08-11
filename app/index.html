@@ -18326,7 +18326,12 @@ function removeSessionPhoto(i){
 // de la liste « Sans programme » du coach. La persistance appartient désormais
 // aux seuls chemins de personnalisation, qui appellent saveUser() eux-mêmes.
 function initSessionsConfig(){
-  const g=currentUser._evol_gender;
+  // MÊME LECTURE QUE openCoachSessions. _evol_gender n'existe qu'à partir du
+  // premier bilan : lu seul, il valait undefined pour une athlète qui n'en a
+  // pas encore rempli, et elle recevait les exemples génériques plutôt que la
+  // Fondation Femme. isFemale absorbe les conventions historiques du champ.
+  const _gBrut=currentUser._evol_gender||currentUser.gender;
+  const g=isFemale(_gBrut)?'F':(_gBrut?'H':null);
   const base=g==='F'?FONDATION_F:g==='H'?FONDATION_H:null;
   let cfg;
   if(base){
@@ -70683,6 +70688,132 @@ function testExercices(){
         return orphelins.length
           ?_echec(orphelins.length+' sans muscle : '+orphelins.slice(0,5).join(', '))
           :true;})());
+    })();
+    // ══ « GÉRER LE PROGRAMME » : LA FONDATION SUIT LE GENRE ══════════════
+    (()=>{
+      const _cu=currentUser,_db=DB.get('users'),_cid=currentClientId,_ce=_coachEditClient;
+      const _go=window.go,_lc=window.loadCoachSessionSlots,_t=window.toast;
+      const COACH={email:'kev@coach.fr',id:'c1',role:'coach',fname:'Kevin'};
+      // Ouvre l'écran pour un athlète donné et rend ce que le coach y verrait.
+      const ouvrir=(champs,sc)=>{
+        const a=Object.assign({email:'x@t.fr',id:'a1',role:'athlete',fname:'X',
+          coachId:'c1',bilans:[]},champs);
+        if(sc) a.sessions_config=sc;
+        currentUser=COACH; currentClientId='a1';
+        DB.set('users',{'kev@coach.fr':COACH,'x@t.fr':a});
+        openCoachSessions();
+        const r=_coachEditClient.sessions_config||[];
+        return {jours:r.length, actives:r.filter(x=>x.active).length,
+          fondation:r.filter(x=>x._foundation).length,
+          noms:r.filter(x=>x.active).map(x=>x.name),
+          exos:r.flatMap(x=>(x.exercises||[]).map(e=>e.name))};
+      };
+      const vide=()=>DAYS.map(day=>({day,name:'',photo:null,photo2:null,
+        exercises:[],active:false,notes:'',warmup:''}));
+      try{
+        window.go=()=>{}; window.loadCoachSessionSlots=()=>{}; window.toast=()=>{};
+        ok('Athlète créée par le coach, gender F et aucun bilan : Fondation Femme',(()=>{
+          // _evol_gender n'existe qu'à partir du PREMIER BILAN. Lu seul, il valait
+          // undefined pour une athlète que le coach vient de créer : aucune
+          // Fondation ne correspondait, et le coach héritait de defEx — une liste
+          // « DOS & ABDOS » que personne n'avait choisie, pour une femme.
+          const r=ouvrir({gender:'F'});
+          if(r.actives!==3) return _echec(r.actives+' séances actives au lieu de 3');
+          if(!/JAMBES & CUISSES/.test(r.noms[0]||''))
+            return _echec('première séance : '+r.noms[0]);
+          if(r.fondation!==7) return _echec(r.fondation+' jours marqués Fondation sur 7');
+          // ET JAMAIS defEx : c'est le défaut que le lot nomme.
+          const intrus=defEx.map(e=>e.name).filter(n=>r.exos.indexOf(n)>=0);
+          if(intrus.length) return _echec('exercices de defEx rendus : '+intrus.join(', '));
+          // Les conventions historiques du champ sont absorbées par isFemale.
+          for(const g of ['f','Femme','femme','F']){
+            const x=ouvrir({gender:g});
+            if(!/JAMBES & CUISSES/.test(x.noms[0]||''))
+              return _echec('gender='+JSON.stringify(g)+' → '+x.noms[0]);
+          }
+          // Et le bilan l'emporte sur la fiche : _evol_gender d'abord.
+          const bilan=ouvrir({gender:'H',_evol_gender:'F'});
+          if(!/JAMBES & CUISSES/.test(bilan.noms[0]||''))
+            return _echec('_evol_gender ne prime pas : '+bilan.noms[0]);
+          // TÉMOIN : un homme reçoit bien l'autre Fondation.
+          const h=ouvrir({gender:'H'});
+          return /PECS/.test(h.noms[0]||'')
+            ?true:_echec('Fondation Homme : '+h.noms[0]);})());
+        ok('Genre inconnu : sept jours VIDES et inactifs, jamais defEx',(()=>{
+          // defEx posait cinq jours actifs remplis d'un programme arbitraire que
+          // le coach devait d'abord défaire. Une grille vide dit la vérité : il
+          // n'y a pas encore de programme.
+          for(const cas of [{},{gender:''},{gender:null}]){
+            const r=ouvrir(cas);
+            if(r.jours!==7) return _echec(r.jours+' jours au lieu de 7');
+            if(r.actives!==0) return _echec(r.actives+' séance(s) active(s) sans genre connu');
+            if(r.exos.length) return _echec(r.exos.length+' exercice(s) posés sans genre connu');
+            if(r.fondation!==0) return _echec('une Fondation est posée sans genre connu');
+          }
+          // TÉMOIN : la fonction sait poser des exercices quand le genre est su.
+          return ouvrir({gender:'F'}).exos.length>0
+            ?true:_echec('aucun exercice même avec un genre connu');})());
+        ok('La migration n\'écrase JAMAIS un programme écrit par le coach',(()=>{
+          // Le risque réel de cette fonction. Une condition de migration trop
+          // large remplacerait par une Fondation le programme qu'un coach a
+          // construit à la main — sans le dire, et à l'ouverture de l'écran.
+          const perso=vide();
+          perso[0]={...perso[0],name:'MON PROGRAMME',active:true,
+            exercises:[{name:'DÉVELOPPÉ COUCHÉ',series:4,reps:'8'}]};
+          const g=ouvrir({gender:'F'},perso);
+          if(g.noms[0]!=='MON PROGRAMME')
+            return _echec('le programme du coach est devenu : '+g.noms[0]);
+          if(g.fondation!==0) return _echec('une Fondation a été posée par-dessus');
+          if(g.actives!==1) return _echec(g.actives+' séances actives au lieu de 1');
+          // En revanche, une grille VIDE se laisse remplir : rien à écraser.
+          const m=ouvrir({gender:'F'},vide());
+          if(m.actives!==3) return _echec('une grille vide n\'est pas migrée : '+m.actives);
+          // Et une Fondation déjà posée reste stable, sans doublon.
+          const deja=FONDATION_F.map(x=>({...x,exercises:x.exercises.map(e=>({...e}))}));
+          const st=ouvrir({gender:'F'},deja);
+          if(st.actives!==3) return _echec('la Fondation en place devient : '+st.actives);
+          // Sans genre connu, aucune migration ne part.
+          const inc=ouvrir({gender:''},vide());
+          return inc.actives===0
+            ?true:_echec('migration sans genre connu : '+inc.actives);})());
+        ok('Côté athlète aussi, la Fondation suit .gender sans attendre un bilan',(()=>{
+          // LA JUMELLE. initSessionsConfig lisait _evol_gender seul, comme le faisait
+          // openCoachSessions avant ce lot : une athlète sans bilan recevait les
+          // exemples génériques au lieu de la Fondation Femme. Corriger les deux et
+          // n'en tenir qu'un, c'est ainsi que le défaut avait survécu la première fois.
+          const _u=currentUser;
+          try{
+            const init=champs=>{
+              currentUser=Object.assign({email:'x@t.fr',id:'a1',role:'athlete',
+                fname:'X'},champs);
+              currentUser.sessions_config=null;
+              const cfg=initSessionsConfig()||[];
+              return {actives:cfg.filter(x=>x.active).length,
+                premiere:(cfg.filter(x=>x.active)[0]||{}).name||'',
+                essai:cfg.every(x=>x._essai===true)};
+            };
+            const f=init({gender:'F'});
+            if(!/JAMBES & CUISSES/.test(f.premiere))
+              return _echec('gender F sans bilan → '+JSON.stringify(f.premiere));
+            if(f.actives!==3) return _echec(f.actives+' séances actives au lieu de 3');
+            for(const g of ['f','Femme','femme']){
+              if(!/JAMBES & CUISSES/.test(init({gender:g}).premiere))
+                return _echec('gender='+JSON.stringify(g)+' n\'est pas reconnu');
+            }
+            // Le bilan prime toujours sur la fiche.
+            if(!/JAMBES & CUISSES/.test(init({gender:'H',_evol_gender:'F'}).premiere))
+              return _echec('_evol_gender ne prime pas côté athlète');
+            // TÉMOIN : un homme reçoit l'autre Fondation.
+            if(!/PECS/.test(init({gender:'H'}).premiere))
+              return _echec('Fondation Homme absente côté athlète');
+            // Et TOUT ce que fabrique cette fonction reste marqué EXEMPLE : c'est ce
+            // marqueur qui fait afficher les badges, et qui distingue une séance
+            // proposée d'une séance voulue.
+            return f.essai?true:_echec('les séances ne portent plus _essai');
+          } finally { currentUser=_u; }})());
+      } finally { currentUser=_cu; if(_db) DB.set('users',_db);
+        currentClientId=_cid; _coachEditClient=_ce;
+        window.go=_go; window.loadCoachSessionSlots=_lc; window.toast=_t; }
     })();
     // ══ REPRISE APRÈS COUPURE : DÉCOTE DE LA CHARGE SUGGÉRÉE ══════════════
     (()=>{
