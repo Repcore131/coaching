@@ -165,6 +165,19 @@
         "maj": {
           ".validate": "newData.isNumber()"
         },
+        "bio": { ".validate": "newData.isString() && newData.val().length < 4000" },
+        "vision": { ".validate": "newData.isString() && newData.val().length < 4000" },
+        "photoVitrine": { ".validate": "newData.isString() && newData.val().length < 3000000" },
+        "signature": { ".validate": "newData.isString() && newData.val().length < 1500000" },
+        "cartePro": { ".validate": "newData.isString() && newData.val().length < 3000000" },
+        "diplomes": {
+          ".validate": "newData.hasChildren() || newData.val() == null",
+          "$i": {
+            "titre": { ".validate": "newData.isString() && newData.val().length < 200" },
+            "image": { ".validate": "newData.isString() && newData.val().length < 3000000" },
+            "$x": { ".validate": false }
+          }
+        },
         "$autre": {
           ".validate": false
         }
