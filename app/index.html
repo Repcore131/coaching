@@ -13084,7 +13084,35 @@ function loadCoachActivite(){
   go('s-coach-activite');
   renderCoachActivite();
 }
+// REPUBLICATION DE RATTRAPAGE. Un coach qui a rempli sa vitrine AVANT que
+// son navigateur ne charge la version qui sait la publier garde ses textes
+// en local sans qu ils atteignent jamais coach_public : la liste blanche du
+// code d alors ne les connaissait pas. Mesure sur le dossier de Kevin : bio
+// de 226 caracteres en local, absente du profil publie.
+// Rien ne le rattrapait — il fallait re-enregistrer a la main, sans que rien
+// ne le dise. On compare donc ce qu on a a ce qui est publie, et on repousse
+// une seule fois si l ecart existe. Idempotent : sans ecart, aucun trafic.
+async function _rattraperProfilCoach(){
+  try{
+    if(!currentUser||currentUser.role!=='coach') return;
+    const aPublier=['bio','vision','photoVitrine','signature','cartePro','diplomes']
+      .filter(k=>{const v=currentUser[k];
+        return Array.isArray(v)?v.length>0:!!(v&&String(v).trim());});
+    if(!aPublier.length) return;
+    if(!CLOUD.ok||!CLOUD.ok()) return;
+    const cle=(currentUser.email||'').replace(/./g,',');
+    const tok=await CLOUD._getToken(); if(!tok) return;
+    const r=await fetch(CLOUD._urlProfilCoach(cle)+'?auth='+tok);
+    if(!r.ok) return;
+    const publie=await r.json()||{};
+    const manquants=aPublier.filter(k=>{const v=publie[k];
+      return Array.isArray(v)?!v.length:!(v&&String(v).trim());});
+    if(!manquants.length) return;
+    CLOUD.pushProfilCoach(currentUser);
+  }catch(e){}
+}
 function loadCoachHome(){
+  try{ _rattraperProfilCoach(); }catch(e){}
   // Publication de rattrapage : les coachs qui ont rempli leur profil AVANT
   // l existence du nud public n auraient rien a montrer tant qu ils ne
   // reenregistrent pas. Une fois par session suffit.
