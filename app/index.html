@@ -3814,9 +3814,12 @@ const COACH_PHOTO='icons/coach.jpg';
   <button class="tab-btn" data-tab="canal" data-icon="bell" onclick="clientTab('canal')"><span class="tab-dot" aria-hidden="true"></span><span class="tab-lock" aria-hidden="true">🔒</span>Canal</button>
 </div>
 <!-- ══════ ACCESS GATE ══════ -->
-<div id="s-coach-vitrine" class="screen">
+<!-- PAS de prefixe s-coach- : go() refuse a tout athlete un ecran ainsi
+     nomme (« Acces reserve au coach »), et cette vitrine est faite POUR lui.
+     C est le nom qui portait le controle d acces, pas une regle explicite. -->
+<div id="s-vitrine" class="screen">
   <div class="topbar">
-    <button class="back-btn" onclick="retourDe('s-coach-vitrine')">←</button>
+    <button class="back-btn" onclick="retourDe('s-vitrine')">←</button>
     <span class="topbar-title">Ton coach</span>
     <span style="width:44px"></span>
   </div>
@@ -44246,7 +44249,7 @@ function ouvrirVitrineCoach(){
   const z=document.getElementById('vitrine-coach-corps');
   if(!z) return false;
   z.innerHTML=_htmlVitrineCoach(pub);
-  goAvecRetour('s-coach-vitrine');
+  goAvecRetour('s-vitrine');
   return true;
 }
 // Cote coach : la meme fonction de rendu, sur son propre dossier — sinon
@@ -44260,7 +44263,7 @@ function apercuVitrineCoach(){
     photoVitrine:(document.getElementById('coach-photo-vitrine')?.value||''),
     signature:(document.getElementById('coach-signature')?.value||'')});
   z.innerHTML=_htmlVitrineCoach(brouillon);
-  goAvecRetour('s-coach-vitrine');
+  goAvecRetour('s-vitrine');
 }
 function saveCoachIdentity(){
   const name=(document.getElementById('coach-team-name')?.value||'').trim();
