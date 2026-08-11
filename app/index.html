@@ -1977,7 +1977,28 @@ const COACH_PHOTO='icons/coach.jpg';
             <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">Phrase d'accroche</label>
             <input id="coach-catchphrase" type="text" placeholder="ex: Chaque rep compte. Chaque jour compte." maxlength="100" style="width:100%;font-size:13px;padding:11px 14px;box-sizing:border-box">
           </div>
-          <button onclick="saveCoachIdentity()" style="width:100%;background:var(--red);border:none;color:#fff;border-radius:3px;padding:12px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px">ENREGISTRER</button>
+          <!-- VITRINE. Ce que l athlete lit en touchant la carte de son coach.
+     Les images sont des URL, comme les bannieres promo : cette tranche ne
+     tranche pas la question du televersement. Une signature gagne a etre
+     un PNG a fond transparent — sur le fond carbone, un fond blanc se voit. -->
+<div style="margin-bottom:14px">
+<label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">Qui tu es</label>
+<textarea id="coach-bio" rows="4" placeholder="Ton parcours, ta formation, ce qui t'anime. Quelques phrases suffisent." maxlength="1200" style="width:100%;font-size:13px;padding:11px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;resize:none"></textarea>
+</div>
+<div style="margin-bottom:14px">
+<label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">Ta vision, ta méthode</label>
+<textarea id="coach-vision" rows="4" placeholder="Comment tu accompagnes, ce en quoi tu crois." maxlength="1200" style="width:100%;font-size:13px;padding:11px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;resize:none"></textarea>
+</div>
+<div style="margin-bottom:14px">
+<label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">Photo de présentation</label>
+<input id="coach-photo-vitrine" type="url" placeholder="https://… — une autre que celle du profil" style="width:100%;font-size:13px;padding:11px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif">
+</div>
+<div style="margin-bottom:14px">
+<label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">Signature (PNG à fond transparent)</label>
+<input id="coach-signature" type="url" placeholder="https://…" style="width:100%;font-size:13px;padding:11px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif">
+</div>
+<button onclick="apercuVitrineCoach()" style="width:100%;background:none;border:1px solid var(--border);color:#ddd;border-radius:3px;padding:11px;font-family:Montserrat,sans-serif;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:10px">Prévisualiser ma vitrine</button>
+<button onclick="saveCoachIdentity()" style="width:100%;background:var(--red);border:none;color:#fff;border-radius:3px;padding:12px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px">ENREGISTRER</button>
         </div>
         <!-- DISPONIBILITE. Ce que l athlete lit AVANT de t ecrire. Le compteur
              de delai reel, lui, ne quitte jamais cet ecran. -->
@@ -3753,6 +3774,14 @@ const COACH_PHOTO='icons/coach.jpg';
   <button class="tab-btn" data-tab="canal" data-icon="bell" onclick="clientTab('canal')"><span class="tab-dot" aria-hidden="true"></span><span class="tab-lock" aria-hidden="true">🔒</span>Canal</button>
 </div>
 <!-- ══════ ACCESS GATE ══════ -->
+<div id="s-coach-vitrine" class="screen">
+  <div class="topbar">
+    <button class="back-btn" onclick="retourDe('s-coach-vitrine')">←</button>
+    <span class="topbar-title">Ton coach</span>
+    <span style="width:44px"></span>
+  </div>
+  <div class="scroll-area" style="flex:1"><div id="vitrine-coach-corps"></div></div>
+</div>
 <div id="s-access-gate" class="screen" style="background:#060606;justify-content:center;padding:32px 24px;position:relative;overflow:hidden">
   <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(-55deg,transparent,transparent 18px,rgba(198,15,8,.025) 18px,rgba(198,15,8,.025) 19px);pointer-events:none"></div>
   <div class="anim-in" style="text-align:center;z-index:1;width:100%">
@@ -5720,7 +5749,9 @@ const CLOUD={
   // separement dans coach_public serait efface a la prochaine sauvegarde de
   // profil, sans erreur ni trace. La banniere epinglee aurait disparu le jour
   // ou le coach change sa photo.
-  CHAMPS_PROFIL_COACH:['fname','lname','teamName','catchphrase','coachPhoto','promoBanners','phone','chargesSchema','contact','canalDernier','canalEpingle','dispo'],
+  CHAMPS_PROFIL_COACH:['fname','lname','teamName','catchphrase','coachPhoto',
+    // Vitrine : ce que l'athlete lit en touchant la carte de son coach.
+    'bio','vision','photoVitrine','signature','promoBanners','phone','chargesSchema','contact','canalDernier','canalEpingle','dispo'],
   // ── Santé privée : ce que le coach ne voit pas, et qui survit quand même ──
   // La règle de /users donne au coach un accès LECTURE ET ÉCRITURE sur le
   // dossier entier de ses athlètes, sans granularité. Les blocs non partagés
@@ -17984,6 +18015,22 @@ function loadClientHome(){
     const name=((coach?.fname||'')+' '+(coach?.lname||'')).trim()||fallbackName||'';
     const phrase=coach?.catchphrase||'';
     const photo=coach?.coachPhoto||'';
+    // TOUCHER LA CARTE OUVRE LA VITRINE. Le gestionnaire est pose sur le
+    // CONTENEUR : il survit au remplacement de son contenu, quelques lignes
+    // plus bas, ce qu'un handler pose sur les enfants ne ferait pas.
+    // Rien n'est cliquable tant que le coach n'a pas rempli sa vitrine — une
+    // carte qui s'ouvre sur du vide est pire qu'une carte inerte.
+    try{
+      const _vit=!!name&&vitrineCoachRemplie(profilCoachLocal(cleCoachDe(currentUser)));
+      el.onclick=_vit?function(ev){
+        // Le bouton de contact et les liens gardent leur action propre.
+        if(ev.target&&ev.target.closest&&ev.target.closest('a,button')) return;
+        ouvrirVitrineCoach();
+      }:null;
+      el.style.cursor=_vit?'pointer':'';
+      if(_vit){ el.setAttribute('role','button'); el.setAttribute('tabindex','0'); }
+      else { el.removeAttribute('role'); el.removeAttribute('tabindex'); }
+    }catch(e){}
     // Aucun coach rattaché : cet emplacement était simplement masqué. C'est
     // pourtant le seul endroit de l'accueil où la question « et mon coach ? »
     // se pose. Depuis que le code s'applique automatiquement à l'inscription,
@@ -43934,11 +43981,78 @@ function uploadCoachPhoto(input){
     toastEcriture(ok,'Photo enregistrée ✓','la photo est');
   });
 }
+// ══════ VITRINE DU COACH ══════
+// Ce que l'athlete lit en touchant la carte de son coach. La source est le
+// PROFIL PUBLIC : sur le telephone de l'athlete, le dossier complet du coach
+// n'est pas lisible, exactement comme pour la carte elle-meme.
+// Rien n'est rendu quand rien n'est rempli — une vitrine vide vaut moins
+// qu'une carte qui ne s'ouvre pas.
+function vitrineCoachRemplie(pub){
+  const p=pub||{};
+  return !!((p.bio||'').trim()||(p.vision||'').trim()||p.photoVitrine||p.signature);
+}
+function _htmlVitrineCoach(pub){
+  const p=pub||{};
+  const nom=[p.fname,p.lname].filter(Boolean).join(' ').trim()||p.teamName||'Ton coach';
+  const bloc=(titre,texte)=>{
+    const t=(texte||'').trim();
+    if(!t) return '';
+    // escapeHtml puis retours a la ligne : le coach ecrit du texte, pas du
+    // balisage, et ses paragraphes doivent survivre.
+    return '<div style="margin-bottom:22px">'
+      +'<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:8px">'+titre+'</div>'
+      +'<div style="font-size:13px;color:#ddd;line-height:1.7">'+escapeHtml(t).replace(/\n/g,'<br>')+'</div></div>';
+  };
+  const img=(src,style)=>src?('<img src="'+escapeHtml(src)+'" alt="" style="'+style+'">'):'';
+  return '<div class="pad" style="padding-bottom:40px">'
+    +(p.teamName?'<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:4px">'+escapeHtml(p.teamName)+'</div>':'')
+    +'<h1 style="margin-bottom:18px">'+escapeHtml(nom)+'</h1>'
+    +img(p.photoVitrine,'width:100%;border-radius:14px;margin-bottom:22px;display:block')
+    +bloc('Qui je suis',p.bio)
+    +bloc('Ma vision',p.vision)
+    +(p.signature?('<div style="text-align:center;margin-top:26px">'
+        +img(p.signature,'max-width:220px;width:60%;opacity:.9;display:inline-block')+'</div>'):'')
+    +'</div>';
+}
+// Cote athlete : depuis la carte du coach.
+function ouvrirVitrineCoach(){
+  const pub=profilCoachLocal(cleCoachDe(currentUser));
+  if(!vitrineCoachRemplie(pub)) return false;
+  const z=document.getElementById('vitrine-coach-corps');
+  if(!z) return false;
+  z.innerHTML=_htmlVitrineCoach(pub);
+  goAvecRetour('s-coach-vitrine');
+  return true;
+}
+// Cote coach : la meme fonction de rendu, sur son propre dossier — sinon
+// l'apercu et ce que voit l'athlete pourraient diverger.
+function apercuVitrineCoach(){
+  const z=document.getElementById('vitrine-coach-corps');
+  if(!z) return;
+  const brouillon=Object.assign({},currentUser,{
+    bio:(document.getElementById('coach-bio')?.value||''),
+    vision:(document.getElementById('coach-vision')?.value||''),
+    photoVitrine:(document.getElementById('coach-photo-vitrine')?.value||''),
+    signature:(document.getElementById('coach-signature')?.value||'')});
+  z.innerHTML=_htmlVitrineCoach(brouillon);
+  goAvecRetour('s-coach-vitrine');
+}
 function saveCoachIdentity(){
   const name=(document.getElementById('coach-team-name')?.value||'').trim();
   const phrase=(document.getElementById('coach-catchphrase')?.value||'').trim();
   currentUser.teamName=name;
   currentUser.catchphrase=phrase;
+  // Vitrine. On lit ce qui est present : l'editeur peut ne pas etre rendu
+  // quand saveCoachIdentity part d'un autre chemin.
+  const _v=id=>{const e=document.getElementById(id);return e?(e.value||'').trim():null;};
+  const _bio=_v('coach-bio'), _vis=_v('coach-vision');
+  const _pv=_v('coach-photo-vitrine'), _sig=_v('coach-signature');
+  if(_bio!==null) currentUser.bio=_bio;
+  if(_vis!==null) currentUser.vision=_vis;
+  // Une URL vide efface le champ ; une URL non http est refusee plutot que
+  // publiee telle quelle a tous les athletes.
+  if(_pv!==null) currentUser.photoVitrine=/^https?:\/\//.test(_pv)?_pv:'';
+  if(_sig!==null) currentUser.signature=/^https?:\/\//.test(_sig)?_sig:'';
   CLOUD.pushProfilCoach(currentUser);
   const ok=saveUser();
   // Push immédiat non-debounced pour que les athlètes voient les données immédiatement
@@ -44522,6 +44636,12 @@ function loadMonetisationTab(){
   setIf(teamNameEl,u.teamName||'');suivre(teamNameEl);
   const catchEl=document.getElementById('coach-catchphrase');
   setIf(catchEl,u.catchphrase||'');suivre(catchEl);
+  ['coach-bio:bio','coach-vision:vision','coach-photo-vitrine:photoVitrine',
+   'coach-signature:signature'].forEach(paire=>{
+    const [id,champ]=paire.split(':');
+    const el=document.getElementById(id);
+    if(el){ setIf(el,u[champ]||''); suivre(el); }
+  });
   _chargerDispoCoach(u);
   const bannerList=document.getElementById('coach-banners-list');
   if(bannerList){bannerList.innerHTML='';(u.promoBanners||[]).forEach(b=>addCoachBannerRow(b.imageUrl,b.linkUrl));}
