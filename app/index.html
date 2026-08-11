@@ -44118,6 +44118,27 @@ function vitrineCoachRemplie(pub){
   return !!((p.bio||'').trim()||(p.vision||'').trim()||p.photoVitrine||p.signature
     ||p.cartePro||((p.diplomes||[]).length));
 }
+// Le detail technique, en petit, sous la phrase. Il ne s adresse pas a
+// l athlete mais a qui depanne : sans lui, un ecran vide ne distingue pas
+// une cle manquante d un profil non publie ou d un champ absent.
+function _diagVitrine(){
+  try{
+    const cle=cleCoachDe(currentUser);
+    const pub=cle?profilCoachLocal(cle):null;
+    const loc=Object.values(DB.get('users')||{})
+      .find(x=>x&&currentUser&&x.id===currentUser.coachId);
+    const dit=[];
+    if(!currentUser||!currentUser.coachId) dit.push('aucun coach rattaché');
+    if(!cle) dit.push('clé coach absente (coachEmailKey)');
+    else if(!pub) dit.push('profil public jamais téléchargé');
+    else if(!(pub.bio||pub.vision||pub.photoVitrine||(pub.diplomes||[]).length))
+      dit.push('profil public reçu, mais sans présentation');
+    if(loc&&(loc.bio||loc.vision)) dit.push('la présentation existe en local mais n’est pas publiée');
+    if(!dit.length) return '';
+    return '<div style="font-size:10.5px;color:var(--text-faint);line-height:1.6;margin-top:10px">'
+      +escapeHtml(dit.join(' · '))+'</div>';
+  }catch(e){ return ''; }
+}
 function _htmlVitrineCoach(pub){
   const p=pub||{};
   const nom=[p.fname,p.lname].filter(Boolean).join(' ').trim()||p.teamName||'Ton coach';
@@ -44156,7 +44177,8 @@ function _htmlVitrineCoach(pub){
       +'<div style="font-size:13px;color:#dcdcdc;line-height:1.75">'
       +(currentUser&&currentUser.role==='coach'
         ?'Ta présentation est vide. Remplis « Qui tu es » dans ton profil, puis touche <strong>Enregistrer</strong> — le bouton rouge, pas « Prévisualiser ».'
-        :'Ton coach n’a pas encore rempli sa présentation.')
+        :('Ton coach n’a pas encore rempli sa présentation.'
+          +_diagVitrine()))
       +'</div></div></div>';
   }
   return '<div class="pad" style="padding-bottom:44px">'
