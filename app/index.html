@@ -3716,8 +3716,8 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:16px;color:var(--green)">
-        <div style="display:flex;align-items:center;gap:9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><span style="font-size:12px;color:#aaa">Charges et séries ajustées à ton cycle</span></div>
-        <div style="display:flex;align-items:center;gap:9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><span style="font-size:12px;color:#aaa">Programme papier importé en une photo</span></div>
+        <div style="display:flex;align-items:center;gap:9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><span style="font-size:12px;color:#aaa">Charges adaptées à ta phase de cycle</span></div>
+        <div style="display:flex;align-items:center;gap:9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><span style="font-size:12px;color:#aaa">Tu choisis ce que ton coach voit</span></div>
         <div style="display:flex;align-items:center;gap:9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><span style="font-size:12px;color:#aaa">3 484 aliments ANSES-Ciqual 2025, hors ligne</span></div>
         <div style="display:flex;align-items:center;gap:9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><span style="font-size:12px;color:#aaa">Séances complètes en salle sans réseau</span></div>
         <div style="display:flex;align-items:center;gap:9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><!-- « annulation facile » n'était adossé à rien : aucun code de résiliation
@@ -48238,7 +48238,12 @@ function testExercices(){
           const h=_texteVisible(htmlRedsCoach(u));
           if(!h) return _echec('la carte ne rend rien');
           if(!/\d{2}\/\d{2}\/\d{4}/.test(h)) return _echec('aucune date');
-          if(/\b11\b/.test(h)) return _echec('le score transparaît');
+          // La DATE est retirée avant de chercher le score. « 11 » est un score
+          // LEAF-Q plausible ET un quantième : le 11 de chaque mois, l'assertion
+          // tombait sur la date qu'elle vient elle-même d'exiger. Faux échec
+          // douze jours par an, invisible le reste du temps.
+          const sansDate=h.replace(/\d{2}\/\d{2}\/\d{4}/g,' ');
+          if(/\b11\b/.test(sansDate)) return _echec('le score transparaît');
           return /jamais le détail|pas transmis/.test(h)
             ?true:_echec('la carte ne dit pas ce qu\'elle ne montre pas');})());
         ok('Aucune disponibilité énergétique n\'est affichée en kcal par kilo',(()=>{
@@ -53325,6 +53330,75 @@ function testExercices(){
           const pb=parseFloat(getComputedStyle(b).paddingBottom);
           return pb>=10
             ?true:_echec('padding-bottom calculé : '+pb+'px, la déclaration a sauté');})());
+
+        // ══════ LES ARGUMENTS DE VENTE TIENNENT-ILS ? ══════
+        // Un écran de souscription promet. Ce qui suit vérifie que chaque
+        // promesse correspond à du code ALLUMÉ, pas à une intention.
+        ok('Les cinq arguments respectent leur format',(()=>{
+          const z=document.getElementById('s-subscribe');
+          if(!z) return _echec('écran de souscription absent');
+          const verts=[...z.querySelectorAll('div[style*="var(--green)"] span')]
+            .map(e=>(e.textContent||'').trim()).filter(Boolean);
+          if(verts.length!==5) return _echec(verts.length+' argument(s) au lieu de 5');
+          const trop=verts.filter(t=>t.split(/\s+/).length>8);
+          return trop.length
+            ?_echec('au-delà de 8 mots : '+trop.join(' | ')):true;})());
+        ok('Argument 1 : la charge EST vraiment ajustée au cycle',(()=>{
+          // Il disait « charges ET SÉRIES ». seriesReduce vaut 0 pour toutes
+          // les phases depuis le retrait de l'amputation de volume : la moitié
+          // de la promesse n'avait plus lieu.
+          const z=document.getElementById('s-subscribe');
+          const t=(z.innerText||z.textContent||'').replace(/\s+/g,' ');
+          if(/séries ajustées|volume ajusté/i.test(t))
+            return _echec('l\'écran promet encore un ajustement de volume');
+          if(!/[Cc]harges adaptées à ta phase de cycle/.test(t))
+            return _echec('l\'argument sur la charge a disparu');
+          // Et la fonction fait bien varier la charge — sinon on vend du vide.
+          // getCycleFactor(user,dateISO) lit user.currentCycle : la phase se
+          // passe DANS le dossier, pas en premier argument.
+          const facteurs=['j1_difficile','j1_supportable','j6_14']
+            .map(ph=>getCycleFactor({currentCycle:ph},'2026-08-10'));
+          if(!facteurs.some(f=>f&&f.factor!==1))
+            return _echec('aucune phase ne modifie la charge : la promesse est creuse');
+          // Le volume, lui, ne bouge JAMAIS : c'est ce qui rend la nouvelle
+          // formulation exacte.
+          return facteurs.every(f=>f&&f.seriesReduce===0)
+            ?true:_echec('le volume est ajusté : l\'argument devrait le dire');})());
+        ok('Argument 2 : le partage par bloc EXISTE, et il est fermé par défaut',(()=>{
+          const z=document.getElementById('s-subscribe');
+          const t=(z.innerText||z.textContent||'').replace(/\s+/g,' ');
+          if(!/Tu choisis ce que ton coach voit/.test(t))
+            return _echec('l\'argument sur le partage a disparu');
+          if(!Array.isArray(SANTE_BLOCS)||!SANTE_BLOCS.length)
+            return _echec('aucun bloc de santé : le choix n\'existe pas');
+          // « Tu choisis » n'est vrai que si le défaut est le silence : un
+          // partage ouvert par défaut ne se choisit pas, il se subit.
+          const fermes=SANTE_BLOCS.filter(b=>SANTE_VISIBLE_DEFAUT[b]===false);
+          return fermes.length
+            ?true:_echec('aucun bloc n\'est fermé par défaut : rien n\'est choisi');})());
+        ok('Argument 3 : les 3 484 aliments sont bien là, hors ligne',(()=>{
+          // Un compte annoncé au millier près doit correspondre au fichier.
+          const z=document.getElementById('s-subscribe');
+          const t=(z.innerText||z.textContent||'').replace(/\s+/g,' ');
+          const m=t.match(/([0-9][0-9  ]{2,})\s*aliments/);
+          if(!m) return _echec('l\'argument sur les aliments a disparu');
+          const annonce=parseInt(m[1].replace(/[^0-9]/g,''),10);
+          const reel=(_ciqualDB||[]).length;
+          if(!reel) return _echec('base non chargée : appeler _loadCiqual() avant la suite');
+          return annonce===reel
+            ?true:_echec('annoncé '+annonce+', réel '+reel);})());
+        ok('AUCUN argument ne vend une fonction éteinte',(()=>{
+          // « Programme papier importé en une photo » est resté à l'écran
+          // après que LEGACY_PDF_IMPORT est passé à false. Celui qui souscrit
+          // pour cette fonction ne la trouve jamais.
+          const z=document.getElementById('s-subscribe');
+          const t=(z.innerText||z.textContent||'').replace(/\s+/g,' ');
+          if(!_importLegacyOuvert()&&/photo|PDF/i.test(t))
+            return _echec('l\'écran vend l\'import photo, qui est désactivé');
+          // Le hors-ligne, lui, est bien vivant : le service worker précharge.
+          if(!/hors ligne|sans réseau/i.test(t))
+            return _echec('le fonctionnement hors ligne n\'est plus annoncé');
+          return true;})());
 
         ok('Aucun wa.me dans le parcours de séance',(()=>{
           // Il n'y en avait déjà pas : ce test le VERROUILLE.
