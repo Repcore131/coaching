@@ -1169,11 +1169,20 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="width:44px;height:44px;border-radius:10px;background:#0d0d0d;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></div>
         <div>
           <div style="font-weight:800;font-size:15px;letter-spacing:.5px">CRÉER MON COMPTE</div>
-          <!-- « inscription gratuite » laissait croire à une inscription libre,
-               alors que doRegister exige un code d'invitation valide (_INVITE_RE
-               + _verifyCoachInvite). Le compte EST gratuit — l'encart tarifs le
-               dit — mais il n'est pas ouvert : c'est la condition d'entrée, pas
-               le prix, qui devait figurer sur le bouton qu'elle gouverne. -->
+          <!-- CE COMMENTAIRE DISAIT L'INVERSE, et il se déclarait faisant foi :
+               « doRegister exige un code d'invitation valide ». C'était vrai
+               d'une version antérieure. doRegister porte aujourd'hui « LE VERROU
+               EST LEVÉ » et une assertion l'y tient.
+
+               L'état réel : un coach s'inscrit sans rien présenter et démarre au
+               palier Libre — un athlète suivi, sans carte bancaire, sans durée.
+               Ce qui borne l'entrée n'est pas un portier mais la CAPACITÉ :
+               placeLibreDisponible, consultée avant CLOUD.signIn. Un code
+               d'accueil, quand il y en a un, dispense de ce plafond parce que la
+               place était déjà réservée — il n'ouvre aucun droit de plus.
+
+               La mention visible dit donc le prix, et rien d'autre : c'est la
+               seule chose que cette carte gouverne réellement. -->
           <div class="sub" style="font-size:11px;margin-top:3px">Gratuit pour votre premier client, sans carte bancaire</div>
         </div>
         <div style="margin-left:auto;color:var(--sub);font-size:18px">›</div>
