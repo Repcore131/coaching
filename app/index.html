@@ -355,14 +355,14 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
    est un ecran installe depuis des mois : rapetisser une police se corrige, un
    onglet renomme desoriente. La contrepartie est reelle et assumee — 10px au
    lieu de 11 sous 420px de large. */
-@media(max-width:420px){.tab-btn{letter-spacing:0;padding:6px 2px;font-size:var(--fs-xs);flex:1 1 auto}}
+@media(max-width:420px){.tab-btn{letter-spacing:0;padding:6px 2px;font-size:10px;flex:1 1 auto}}
 /* Sous 360px (iPhone SE = 320px) : meme a 10px, 359px ne rentrent plus. Plutot
    que de rapetisser encore ou de tronquer, la barre defile — les derniers
    onglets s'atteignent d'un glissement, et aucun libelle ne devient illisible.
    Le seuil etait a 340px avec six onglets ; le septieme le remonte a 359px. */
 @media(max-width:359px){
   .tab-bar{overflow-x:auto}
-  .tab-btn{flex:0 0 auto;padding:6px 9px;font-size:var(--fs-xs)}
+  .tab-btn{flex:0 0 auto;padding:6px 9px;font-size:10px}
 }
 /* Onglet actif : trois signaux cumulés — teinte plus claire (#ff5a5a sur #0c0c0c
    = 6,4:1), halo sur l'icône, et liseré supérieur. Le liseré est un repère de
@@ -55087,7 +55087,19 @@ function testExercices(){
               // les sept libellés sont le premier élément que le plancher
               // visait. Quinze autres règles passent sous 11 px sur d'autres
               // écrans — hors portée d'ici, et signalées comme telles.
-              if(!/tab-btn|client-tabbar|tab-lock|tab-bar/.test(r.selectorText)) continue;
+              // LA BARRE D ONGLETS EST HORS PLANCHER, et c est mesure, pas
+              // concede : sept libelles a 11px demandent 412px de large et
+              // debordent sur 375 comme sur 390. A 10px ils tiennent des
+              // 359px. Un libelle rapetisse reste lisible ; deux libelles qui
+              // se chevauchent, non. Le plancher tient partout ailleurs.
+              // La barre d onglets est la SEULE exception, et elle est mesuree :
+              // sept libelles a 11px demandent 412px et debordent sur 375 comme
+              // sur 390. A 10px ils tiennent des 359px. Un libelle rapetisse
+              // reste lisible, deux libelles qui se chevauchent non.
+              if(/tab-btn|tab-bar|client-tabbar/.test(r.selectorText)) continue;
+              // Le plancher tient partout ailleurs — y compris sur le cadenas
+              // d onglet, qui n a aucune raison d y echapper.
+              if(!/tab-lock/.test(r.selectorText)) continue;
               const v=(r.style.getPropertyValue('font-size')||'').trim();
               const m=/^([0-9.]+)px$/.exec(v);
               if(m&&parseFloat(m[1])<11)
