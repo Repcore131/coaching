@@ -44203,7 +44203,23 @@ function _htmlDiplomesCoach(p){
 }
 // Cote athlete : depuis la carte du coach.
 function ouvrirVitrineCoach(){
-  const pub=profilCoachLocal(cleCoachDe(currentUser));
+  // LES MEMES SOURCES QUE LA CARTE, et dans le meme ordre. Ne lire que le
+  // profil public suffisait a rendre la vitrine muette dans deux cas reels :
+  // sur l appareil du COACH, ou profilCoachLocal ne rend rien puisqu il n a
+  // pas de coach ; et chez un athlete dont le cache rc_coach_profil date
+  // d avant l existence de ces champs. Le dossier local complete le public,
+  // exactement comme _applyCoachData le fait pour la carte.
+  const _cle=cleCoachDe(currentUser);
+  const _pub=profilCoachLocal(_cle)||{};
+  const _loc=Object.values(DB.get('users')||{})
+    .find(x=>x&&currentUser&&x.id===currentUser.coachId)||{};
+  // Et si l utilisateur EST le coach, sa vitrine est dans son propre dossier.
+  const _moi=(currentUser&&currentUser.role==='coach')?currentUser:{};
+  const pub=Object.assign({},_moi,_loc,_pub);
+  // Le public prime, sauf la ou il est vide : un champ rempli localement mais
+  // pas encore synchronise doit s afficher plutot que disparaitre.
+  ['bio','vision','photoVitrine','signature','cartePro','diplomes','teamName','catchphrase','fname','lname']
+    .forEach(k=>{ if(!pub[k]&&(_loc[k]||_moi[k])) pub[k]=_loc[k]||_moi[k]; });
   if(!vitrineCoachRemplie(pub)){
     // Le silence etait le pire des cas : le doigt touche, rien ne bouge, et
     // l athlete ne sait pas si l app est cassee ou si son coach n a rien mis.
