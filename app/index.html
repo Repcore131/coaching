@@ -68018,6 +68018,39 @@ function testExercices(){
         return _echec(fautives.length+' fonction(s) sans garde : '+fautives.slice(0,4).join(', '));
       // TÉMOIN : le balayage a vraiment trouvé des fonctions à inspecter.
       return vues>=4?true:_echec('seulement '+vues+' fonction(s) inspectée(s)');})());
+    // ══ LE BUCKET : UNE SEULE VALEUR, ET ELLE NE SE RECOPIE PAS ══════════
+    ok('Un seul bucket de stockage, et aucune URL ne le code en dur',(()=>{
+      // Il était écrit en DEUX endroits avec DEUX valeurs : l'upload de PDF
+      // visait « repcore-sync.appspot.com », celui de vidéo
+      // « repcore-sync.firebasestorage.app ». Le premier n'a jamais existé sur
+      // ce projet — tout téléversement de PDF partait vers un bucket fantôme.
+      const scripts=[...document.querySelectorAll('script')]
+        .filter(x=>!x.src).map(x=>x.textContent).join('\n');
+      const prod=scripts.slice(0,scripts.indexOf('function testExercices'));
+      if(prod.length<100000) return _echec('source trop courte : '+prod.length);
+      // Les commentaires citent l'ancienne valeur pour expliquer le défaut :
+      // ils n'exécutent rien et ne comptent pas.
+      const code=prod.replace(/\/\*[\s\S]*?\*\//g,'')
+        // LE // D'UNE URL N'EST PAS UN COMMENTAIRE. Sans cette garde, chaque
+        // « https:// » était tronqué à « https: » et le balayage n'inspectait plus
+        // aucune URL de stockage — l'assertion serait passée sur un fichier fautif.
+        .split('\n').map(x=>x.replace(/(^|[^:])\/\/.*$/,'$1')).join('\n');
+      // UNE SEULE déclaration littérale du bucket.
+      const decl=(code.match(/const STORAGE_BUCKET=/g)||[]).length;
+      if(decl!==1) return _echec(decl+' déclaration(s) de STORAGE_BUCKET');
+      if(typeof STORAGE_BUCKET!=='string'||!STORAGE_BUCKET)
+        return _echec('la constante est vide');
+      // Aucun bucket écrit en dur dans une URL de stockage : tout passe par la
+      // constante. C'est cela qui empêche les deux valeurs de réapparaître.
+      const dur=[...code.matchAll(/firebasestorage\.googleapis\.com\/v0\/b\/([^'"`$\s]+)/g)]
+        .map(m=>m[1]).filter(x=>x&&x!=='');
+      if(dur.length) return _echec(dur.length+' URL(s) avec bucket en dur : '+dur.slice(0,2).join(', '));
+      // TÉMOIN : le balayage voit bien les URL de stockage.
+      const urls=(code.match(/firebasestorage\.googleapis\.com/g)||[]).length;
+      if(urls<3) return _echec('seulement '+urls+' URL(s) de stockage inspectée(s)');
+      // Et l'ancienne valeur ne revient nulle part dans le code exécuté.
+      return code.indexOf('appspot.com')<0
+        ?true:_echec('« appspot.com » est réapparu dans le code');})());
     // ══════════════ NON-RÉGRESSION DU CIRCUIT VIDÉO ══════════════
     // Écrits AVANT de généraliser le composant de chips, qui est aujourd'hui
     // câblé en dur sur l'écran de retour vidéo. Ils doivent rester verts après.
