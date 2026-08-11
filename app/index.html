@@ -2710,9 +2710,9 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="display:flex;gap:8px;margin-bottom:20px">
         <div class="metric-box"><div class="metric-val" id="clh-m1">—</div><div class="metric-label">Cette semaine</div>
           <div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:2px" id="clh-m1-sub"></div></div>
-        <div class="metric-box"><div class="metric-val" id="clh-m2">—</div><div class="metric-label">Charge totale</div>
+        <div class="metric-box"><div class="metric-val" id="clh-m2">—</div><div class="metric-label">Séances au total</div>
           <div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:2px" id="clh-m2-sub"></div></div>
-        <div class="metric-box"><div class="metric-val" id="clh-m3">—</div><div class="metric-label">Exercices en progrès</div>
+        <div class="metric-box"><div class="metric-val" id="clh-m3">—</div><div class="metric-label">Diète respectée</div>
           <div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:2px" id="clh-m3-sub"></div></div>
       </div>
 
@@ -20969,6 +20969,52 @@ function _messageFinSeance(sets,setsPlanned,duration,records,delta,jour,incomple
 // Peuplement des trois cases de l'accueil. Chaque case dit ce qui lui manque
 // plutôt que d'afficher un chiffre qu'elle ne peut pas calculer : un « 0 »
 // sans historique se lit comme un échec, un « — » se lit comme une attente.
+// TAUX DE RESPECT DE LA DIETE. Deux regimes de preuve, un seul chiffre.
+//
+//   DIETE STRICTE : l athlete repond oui ou non chaque jour. Le taux est
+//   la part de « oui » parmi les jours REPONDUS.
+//   DIETE FLEXIBLE : un jour est respecte quand les trois macros tombent
+//   dans une tolerance de 5 % autour de la cible. Un ecart de cinq pour
+//   cent sur des grammes peses a la louche n est pas un ecart.
+//
+// LES JOURS NON ENREGISTRES NE COMPTENT PAS, ni au numerateur ni au
+// denominateur. Les compter comme des echecs punirait l athlete pour un
+// oubli de saisie et non pour un ecart alimentaire — c est la difference
+// entre mesurer une diete et mesurer une assiduite de saisie.
+const DIETE_TOLERANCE=0.05;
+function _tauxDieteRespectee(u){
+  const nut=(u&&u.nutrition)||{};
+  const flexible=(typeof typeDiete==='function')?typeDiete(nut)==='flexible':true;
+  let tenus=0, juges=0;
+  if(!flexible){
+    // Le journal des reponses quotidiennes. `respected` vaut true, false, ou
+    // n existe pas — et c est ce troisieme cas qu on ecarte.
+    const jours=nut.days||{};
+    Object.keys(jours).forEach(k=>{
+      const r=jours[k]&&jours[k].respected;
+      if(r===true){ tenus++; juges++; }
+      else if(r===false){ juges++; }
+    });
+  } else {
+    const log=nut.log||{};
+    Object.keys(log).forEach(k=>{
+      const entrees=(log[k]&&log[k].entries)||[];
+      if(!entrees.length) return;          // jour non enregistre : ignore
+      const m=(typeof _getEffectiveMacros==='function')
+        ?_getEffectiveMacros(nut,(typeof nutIsOnDay==='function')?nutIsOnDay(k):true,k)
+        :{};
+      const cibles=[m.p,m.g,m.l];
+      if(!cibles.every(x=>typeof x==='number'&&x>0)) return;   // sans cible, rien a juger
+      const t=entrees.reduce((a,e)=>({p:a.p+(e.p||0),c:a.c+(e.c||0),l:a.l+(e.l||0)}),
+        {p:0,c:0,l:0});
+      juges++;
+      const dans=(v,c)=>Math.abs(v-c)<=c*DIETE_TOLERANCE;
+      if(dans(t.p,m.p)&&dans(t.c,m.g)&&dans(t.l,m.l)) tenus++;
+    });
+  }
+  if(!juges) return null;
+  return {pct:Math.round(tenus*100/juges), tenus:tenus, juges:juges, flexible:flexible};
+}
 function _majMetriquesAccueil(u){
   const met=(id,val,sub)=>{
     const a=document.getElementById(id), b=document.getElementById(id+'-sub');
@@ -20977,23 +21023,29 @@ function _majMetriquesAccueil(u){
   };
   const ss=((u&&u.sessions)||[]).filter(s=>s&&s.date);
   if(!ss.length){
-    met('clh-m1','—',''); met('clh-m2','—','Il faut 5 semaines pour comparer.');
-    met('clh-m3','—','Pas encore assez d\'historique.');
+    met('clh-m1','—',''); met('clh-m2','0','Aucune séance enregistrée.');
+    const _d0=_tauxDieteRespectee(u);
+    met('clh-m3',_d0?(_d0.pct+' %'):'—',
+      _d0?(_d0.tenus+' sur '+_d0.juges+' renseignés'):'Aucun jour renseigné.');
     return;
   }
   // a) Cette semaine — depuis lundi, comme partout ailleurs dans l'app. Le
   // quota est l'ENGAGEMENT de l'objectif s'il existe, sinon les créneaux.
   const faites=_seancesCetteSemaine(u), quota=_quotaSemaine(u);
   met('clh-m1',String(faites),faites+' sur '+quota);
-  // b) Charge totale.
-  const ch=_chargeHebdo(u);
-  if(!ch||ch.pct==null) met('clh-m2','—','Il faut 5 semaines pour comparer.');
-  else met('clh-m2',(ch.pct>0?'+':'')+ch.pct+' %',
-    (ch.pct>0?'+':'')+ch.pct+' % vs 4 dernières semaines');
-  // c) Exercices en progrès.
-  const ex=_exercicesEnProgres(u);
-  if(!ex) met('clh-m3','—','Pas encore assez d\'historique.');
-  else met('clh-m3',String(ex.enProgres),ex.enProgres+' sur '+ex.total+' ce mois-ci');
+  // b) Séances au total, depuis le premier jour. Un compteur qui ne
+  //    redescend jamais : c'est le seul chiffre de cet écran qui récompense
+  //    la durée plutôt que la semaine en cours.
+  const _prem=ss.reduce((m,x)=>Math.min(m,x.date),ss[0].date);
+  const _jours=Math.max(1,Math.round((Date.now()-_prem)/864e5));
+  met('clh-m2',String(ss.length),
+    ss.length>1?('depuis '+_jours+' jour'+(_jours>1?'s':'')):'première séance');
+  // c) Diète respectée. Les jours non enregistrés sont ÉCARTÉS : les compter
+  //    comme des échecs mesurerait l'assiduité de saisie, pas la diète.
+  const di=_tauxDieteRespectee(u);
+  if(!di) met('clh-m3','—','Aucun jour renseigné.');
+  else met('clh-m3',di.pct+' %',
+    di.tenus+' jour'+(di.tenus>1?'s':'')+' sur '+di.juges+' renseigné'+(di.juges>1?'s':''));
 }
 // ── Volume par créneau, dans l'onglet Perfs ─────────────────────────────────
 // Le graphique mélangeait tous les créneaux : une séance jambes et une séance
