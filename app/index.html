@@ -53609,6 +53609,175 @@ function testExercices(){
             return _echec('aucun appel au démarrage');
           return /pullSantePrivee/.test(String(_migrerSantePriveeLocale))
             ?true:_echec('la migration ne lit pas le nœud distant');})());
+        // ══════ PAQUET DE PROFIL PAR URL : PROPOSER, PUIS ECRIRE ══════
+        ok('Critère : lire l\'URL n\'écrit RIEN et n\'appelle RIEN',(()=>{
+          // Le paquet n'est pas signé : n'importe qui peut fabriquer le lien.
+          // Ouvrir ce lien suffisait à écraser le dossier d'un athlète, y
+          // compris à distance. Rien ne doit partir avant un oui nommé.
+          const _f=window.fetch,_cu=currentUser,_db=DB.get('users'),_t=window.toast;
+          const appels=[];
+          try{
+            window.toast=()=>{};
+            window.fetch=(u)=>{appels.push(String(u));
+              return Promise.resolve({ok:true,json:()=>Promise.resolve({}),
+                text:()=>Promise.resolve(''),headers:{get:()=>null},status:200,statusText:'OK'});};
+            currentUser={email:'coach@t.fr',id:'c1',role:'coach'};
+            DB.set('users',{'lea@t.fr':{id:'a1',email:'lea@t.fr',fname:'Léa',
+              bilans:[{date:100,type:'suivi'}]}});
+            const avant=JSON.stringify(DB.get('users'));
+            appels.length=0;
+            window._pendingAthletePkg=_validateAthletePkg({id:'a1',role:'athlete',
+              email:'lea@t.fr',fname:'Léa',lname:'M',bilans:[{date:200,type:'suivi'}]});
+            if(!window._pendingAthletePkg) return _echec('le paquet de test est refusé');
+            // Mise de cote SEULEMENT : ni ecriture locale, ni reseau.
+            if(JSON.stringify(DB.get('users'))!==avant)
+              return _echec('le dossier a été modifié avant toute confirmation');
+            if(appels.length) return _echec(appels.length+' requête(s) avant confirmation');
+            _proposerImportAthlete();
+            if(!document.getElementById('rc-pkg-modal'))
+              return _echec('aucune modale : l\'import passerait en silence');
+            const fb=appels.filter(u=>/firebaseio/.test(u));
+            if(fb.length) return _echec(fb.length+' appel(s) firebaseio avant le oui');
+            return JSON.stringify(DB.get('users'))===avant
+              ?true:_echec('le dossier bouge à l\'affichage de la modale');
+          } finally { window.fetch=_f; currentUser=_cu; if(_db) DB.set('users',_db);
+            window.toast=_t; window._pendingAthletePkg=null;
+            window._pkgDejaProposee=false; closeModal(); }})());
+        ok('La modale NOMME l\'athlète, chiffre l\'impact, et dit les dégâts',(()=>{
+          // Un décompte qui ne parle que des ajouts cache l'essentiel : ce que
+          // l'import DÉTRUIT. nutrition et vidéos sont remplacées en bloc par
+          // l'Object.assign sans figurer dans le compte bilans/séances.
+          const _cu=currentUser,_db=DB.get('users'),_t=window.toast;
+          try{
+            window.toast=()=>{};
+            currentUser={email:'coach@t.fr',id:'c1',role:'coach'};
+            DB.set('users',{'lea@t.fr':{id:'a1',email:'lea@t.fr',fname:'Léa',
+              bilans:[{date:100,type:'suivi'}],nutrition:{plan:'X'},videos:[{id:'v1'}]}});
+            const pkg=_validateAthletePkg({id:'a1',role:'athlete',email:'lea@t.fr',
+              fname:'Léa',lname:'M',bilans:[{date:200,type:'suivi'}]});
+            const d=_diffAthletePkg(pkg);
+            if(d.bilansNouveaux!==1) return _echec('bilans nouveaux : '+d.bilansNouveaux);
+            if(d.bilansConserves!==1) return _echec('bilans conservés : '+d.bilansConserves);
+            // Un bilan DÉJÀ présent ne doit pas être compté comme nouveau.
+            const memeDate=_diffAthletePkg(_validateAthletePkg({id:'a1',role:'athlete',
+              email:'lea@t.fr',bilans:[{date:100,type:'suivi'}]}));
+            if(memeDate.bilansNouveaux!==0) return _echec('un bilan identique compte comme nouveau');
+            // LES DÉGÂTS sont nommés, pas seulement comptés.
+            if(d.ecrase.indexOf('le plan nutritionnel')<0)
+              return _echec('le plan nutritionnel disparaîtrait sans être annoncé');
+            if(d.ecrase.indexOf('les vidéos')<0)
+              return _echec('les vidéos disparaîtraient sans être annoncées');
+            window._pendingAthletePkg=pkg;
+            _proposerImportAthlete();
+            const m=document.getElementById('rc-pkg-modal');
+            if(!m) return _echec('modale absente');
+            const t=(m.innerText||m.textContent||'').replace(/\s+/g,' ');
+            if(t.indexOf('lea@t.fr')<0) return _echec('la modale ne nomme pas l\'athlète');
+            // L'avertissement sur l'origine du lien est le cœur du garde-fou.
+            return /fabriquer un lien/i.test(t)
+              ?true:_echec('la modale ne dit pas que le lien peut être fabriqué');
+          } finally { currentUser=_cu; if(_db) DB.set('users',_db); window.toast=_t;
+            window._pendingAthletePkg=null; window._pkgDejaProposee=false; closeModal(); }})());
+        ok('Refuser n\'écrit rien, et le paquet ne revient pas',(()=>{
+          const _cu=currentUser,_db=DB.get('users'),_t=window.toast;
+          try{
+            window.toast=()=>{};
+            currentUser={email:'coach@t.fr',id:'c1',role:'coach'};
+            DB.set('users',{'lea@t.fr':{id:'a1',email:'lea@t.fr',bilans:[]}});
+            const avant=JSON.stringify(DB.get('users'));
+            window._pendingAthletePkg=_validateAthletePkg({id:'a1',role:'athlete',
+              email:'lea@t.fr',bilans:[{date:200,type:'suivi'}]});
+            _proposerImportAthlete();
+            _refuserImportAthlete();
+            if(JSON.stringify(DB.get('users'))!==avant)
+              return _echec('un refus a quand même écrit');
+            if(window._pendingAthletePkg) return _echec('le paquet survit au refus');
+            // Et il ne se repropose pas : la modale ne doit pas revenir seule.
+            _proposerImportAthlete();
+            return !document.getElementById('rc-pkg-modal')
+              ?true:_echec('la modale revient après un refus');
+          } finally { currentUser=_cu; if(_db) DB.set('users',_db); window.toast=_t;
+            window._pendingAthletePkg=null; window._pkgDejaProposee=false; closeModal(); }})());
+        ok('Confirmer fusionne les bilans et ÉPARGNE le programme',(()=>{
+          // sessions_config n'est pas dans la liste blanche de validation :
+          // l'Object.assign ne peut donc pas l'écraser. C'est la propriété la
+          // plus importante du mécanisme — un lien ne doit jamais pouvoir
+          // effacer le programme qu'un coach a construit.
+          const _cu=currentUser,_db=DB.get('users'),_t=window.toast,_ts=window.toastSync,_p=CLOUD.pushOne;
+          let pousses=0;
+          try{
+            window.toast=()=>{}; window.toastSync=()=>{};
+            CLOUD.pushOne=()=>{pousses++;return Promise.resolve();};
+            currentUser={email:'coach@t.fr',id:'c1',role:'coach'};
+            DB.set('users',{'lea@t.fr':{id:'a1',email:'lea@t.fr',fname:'Léa',
+              bilans:[{date:100,type:'suivi'}],coachId:'c1',
+              sessions_config:[{day:'Lundi',active:true,exercises:[{name:'DC'}]},
+                               {day:'Mardi',active:true,exercises:[{name:'SQ'}]}]}});
+            window._pendingAthletePkg=_validateAthletePkg({id:'a1',role:'athlete',
+              email:'lea@t.fr',fname:'Léa',lname:'M',bilans:[{date:200,type:'suivi'}]});
+            _confirmerImportAthlete();
+            const a=(DB.get('users')||{})['lea@t.fr'];
+            const dates=(a.bilans||[]).map(b=>b.date).join(',');
+            if(dates!=='100,200') return _echec('bilans après fusion : '+dates);
+            if((a.sessions_config||[]).length!==2)
+              return _echec('le programme a été écrasé par un lien');
+            if(a.coachId!=='c1') return _echec('le rattachement au coach a sauté');
+            // Consommé AVANT l'écriture : un double clic ne pousse pas deux fois.
+            if(window._pendingAthletePkg) return _echec('le paquet reste rejouable');
+            if(pousses!==1) return _echec(pousses+' envoi(s) au lieu de 1');
+            _confirmerImportAthlete();
+            return pousses===1?true:_echec('un second clic repousse');
+          } finally { currentUser=_cu; if(_db) DB.set('users',_db); window.toast=_t;
+            window.toastSync=_ts; CLOUD.pushOne=_p; window._pendingAthletePkg=null;
+            window._pkgDejaProposee=false; closeModal(); }})());
+        ok('Seul un coach — ou l\'athlète lui-même — peut accepter',(()=>{
+          // Le déclencheur est en tête de routeUser(), donc AVANT le test de
+          // rôle : sans ce garde, un athlète connecté se verrait proposer
+          // d'écrire le dossier d'un tiers, puis de le pousser sous sa propre
+          // identité. Un consentement n'est pas une autorisation.
+          const _cu=currentUser,_db=DB.get('users'),_t=window.toast;
+          try{
+            window.toast=()=>{};
+            DB.set('users',{'lea@t.fr':{id:'a1',email:'lea@t.fr',bilans:[]}});
+            const pkg=_validateAthletePkg({id:'a1',role:'athlete',email:'lea@t.fr',bilans:[]});
+            currentUser={email:'tiers@t.fr',id:'x',role:'athlete'};
+            if(_peutImporterPkg(pkg)) return _echec('un athlète tiers est autorisé');
+            window._pendingAthletePkg=pkg;
+            _proposerImportAthlete();
+            if(document.getElementById('rc-pkg-modal'))
+              return _echec('la modale s\'ouvre pour un tiers');
+            // Le garde est REDIT au point d'écriture : cette fonction est
+            // atteignable autrement que par le bouton.
+            const avant=JSON.stringify(DB.get('users'));
+            _confirmerImportAthlete();
+            if(JSON.stringify(DB.get('users'))!==avant)
+              return _echec('un tiers a pu écrire en appelant la confirmation');
+            // L'athlète concerné, lui, rapatrie bien son propre dossier.
+            currentUser={email:'lea@t.fr',id:'a1',role:'athlete'};
+            return _peutImporterPkg(pkg)
+              ?true:_echec('l\'athlète ne peut pas rapatrier son propre dossier');
+          } finally { currentUser=_cu; if(_db) DB.set('users',_db); window.toast=_t;
+            window._pendingAthletePkg=null; window._pkgDejaProposee=false; closeModal(); }})());
+        ok('L\'adresse est nettoyée, même sur un paquet malformé',(()=>{
+          // Sans replaceState, un rechargement rejoue l'import. Et le nettoyage
+          // est dans un « finally » : un paquet qui jette laissait sinon le
+          // paramètre dans la barre d'adresse, prêt à repartir.
+          const tout=document.documentElement.outerHTML;
+          const prod=tout.slice(0,tout.indexOf('function testExercices'));
+          const i=prod.indexOf('function importFromURL');
+          if(i<0) return _echec('l\'IIFE d\'import a disparu');
+          const corps=prod.slice(i,i+3000);
+          if(corps.indexOf('history.replaceState')<0)
+            return _echec('l\'adresse n\'est plus nettoyée');
+          const iF=corps.indexOf('finally'), iR=corps.indexOf('history.replaceState');
+          if(!(iF>=0&&iF<iR))
+            return _echec('le nettoyage n\'est pas dans un finally : un paquet malformé le saute');
+          // Et l'IIFE ne doit RIEN écrire pour le paquet athlète.
+          const iA=corps.indexOf("params.get('athletepkg')",corps.indexOf('Athlete profile'));
+          const bloc=corps.slice(iA,iA+400);
+          return bloc.indexOf('_pendingAthletePkg')>=0&&bloc.indexOf('DB.set')<0
+            ?true:_echec('l\'IIFE écrit encore pour le paquet athlète');})());
+
         ok('athletepkg porte son interdiction de portabilité',(()=>{
           // Douze champs sur quatre-vingt-dix : répondre à une demande d'accès
           // avec ce paquet serait une réponse incomplète, donc un manquement.
