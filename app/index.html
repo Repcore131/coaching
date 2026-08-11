@@ -66428,6 +66428,73 @@ function testExercices(){
           return hex===attendue
             ?true:_echec('couleur '+hex+' au lieu de '+attendue);
         } finally { currentUser=_sv; window.saveUser=_ss; }})());
+          ok('Sur 40 jours d\'historique, le score compte exactement les pastilles vertes',(()=>{
+            // L'INVARIANT DU LOT : le score et les pastilles lisent les MÊMES sept
+            // clés. Vérifier « 1/7 » sur un cas précis ne le dit pas — un décalage
+            // d'un jour dans l'une des deux fenêtres survivrait à ce test.
+            const _sv=currentUser, _ss=window.saveUser;
+            try{
+              window.saveUser=()=>true;
+              const lire=()=>{
+                renderNutriDots();
+                const dots=[...document.querySelectorAll('#clh-nutri-dots > div > div:first-child')]
+                  .map(d=>{const b=d.style.background;
+                    return /green/.test(b)?'v':/red/.test(b)?'r':'g';});
+                return {dots:dots.join(''),
+                  vertes:dots.filter(x=>x==='v').length,
+                  score:document.getElementById('clh-nutri-score').textContent};
+              };
+              // Le lundi de la semaine courante, même formule que la production.
+              const auj=new Date(), lundi=new Date(auj);
+              lundi.setDate(auj.getDate()-((auj.getDay()+6)%7));
+              const cle=n=>{const d=new Date(lundi);d.setDate(lundi.getDate()+n);return localISODate(d);};
+              // 40 jours d'historique DENSE autour de la semaine, pour que le
+              // cloisonnement ait quelque chose à cloisonner.
+              const fond={};
+              for(let i=1;i<=40;i++){
+                const d=new Date(lundi); d.setDate(lundi.getDate()-i);
+                fond[localISODate(d)]={respected:i%2===0};
+              }
+              // Plusieurs motifs de semaine, dont les deux bornes.
+              const MOTIFS=[
+                [true,true,true,true,true,true,true],
+                [false,false,false,false,false,false,false],
+                [true,false,null,true,null,false,true],
+                [null,null,null,null,null,null,true],
+                [true,true,null,false,true,null,false],
+              ];
+              for(const motif of MOTIFS){
+                const days=Object.assign({},fond);
+                motif.forEach((v,n)=>{ if(v!==null) days[cle(n)]={respected:v}; });
+                currentUser={id:'nd',email:'nd@t',role:'athlete',exAlias:{},exMuscles:{},
+                  programs:{},sessions:[],bilans:[],nutrition:{days:days}};
+                const e=lire();
+                // L'INVARIANT, sur chaque motif.
+                if(e.score!==e.vertes+'/7')
+                  return _echec('score '+e.score+' pour '+e.vertes+' pastille(s) verte(s) — '+e.dots);
+                // Et il compte bien ce que le motif annonce : le fond de 40 jours ne
+                // déborde pas dans la semaine.
+                const attendu=motif.filter(v=>v===true).length;
+                if(e.vertes!==attendu)
+                  return _echec(e.vertes+' vertes au lieu de '+attendu+' — '+e.dots);
+                // LE SECOND CALCUL, celui de la diète stricte, doit dire la MÊME
+                // chose : deux fenêtres du même créneau qui divergent, c'est le
+                // défaut que ce dépôt rencontre le plus souvent.
+                const wk2=Array.from({length:7},(_,n)=>cle(n))
+                  .filter(k=>days[k]?.respected===true).length;
+                if(wk2!==e.vertes)
+                  return _echec('la diète stricte compte '+wk2+', l\'accueil '+e.vertes);
+              }
+              // Les deux bornes ont bien été atteintes : sans ça, l'assertion
+              // pourrait passer sur des motifs tous équivalents.
+              const days7=Object.assign({},fond);
+              for(let n=0;n<7;n++) days7[cle(n)]={respected:true};
+              currentUser.nutrition.days=days7;
+              if(lire().score!=='7/7') return _echec('une semaine pleine ne fait pas 7/7');
+              currentUser.nutrition.days=Object.assign({},fond);
+              return lire().score==='0/7'
+                ?true:_echec('une semaine vide ne fait pas 0/7 : '+lire().score);
+            } finally { currentUser=_sv; window.saveUser=_ss; }})());
 
 
       currentUser=sauveU;
