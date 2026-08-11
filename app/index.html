@@ -44100,7 +44100,58 @@ function _lirePngIntact(f,apres){
   fr.onerror=()=>toast('Image illisible','var(--orange)');
   fr.readAsDataURL(f);
 }
+// DETOURAGE DE LA SIGNATURE. Un fichier scanne ou photographie porte un fond
+// — blanc de la feuille, gris du scanner — meme quand il est enregistre en
+// PNG. Le rendre transparent a la main dans un logiciel n est pas une chose
+// a demander a un coach. On le fait ici.
+//
+// La couleur du fond est RELEVEE aux quatre coins, pas supposee blanche : un
+// scan tire souvent vers le gris ou le creme, et un seuil sur le blanc pur
+// ne retirerait rien. Tout pixel proche de cette couleur devient transparent,
+// avec un fondu sur la bordure pour ne pas hacher le trace.
+function _detourerSignature(f,apres){
+  const url=URL.createObjectURL(f);
+  const im=new Image();
+  im.onload=()=>{
+    try{
+      const MAX=900;
+      const r=Math.min(1,MAX/Math.max(im.width,im.height));
+      const c=document.createElement('canvas');
+      c.width=Math.round(im.width*r); c.height=Math.round(im.height*r);
+      const x=c.getContext('2d');
+      x.drawImage(im,0,0,c.width,c.height);
+      const d=x.getImageData(0,0,c.width,c.height), px=d.data;
+      const coin=i=>[px[i],px[i+1],px[i+2]];
+      const W=c.width,H=c.height;
+      const coins=[0,(W-1)*4,(H-1)*W*4,((H-1)*W+W-1)*4].map(coin);
+      const fond=[0,1,2].map(k=>Math.round(coins.reduce((a,v)=>a+v[k],0)/coins.length));
+      // Deux seuils : en deca, transparent ; entre les deux, alpha progressif.
+      const DUR=42, DOUX=88;
+      for(let i=0;i<px.length;i+=4){
+        const dist=Math.sqrt(Math.pow(px[i]-fond[0],2)+Math.pow(px[i+1]-fond[1],2)+Math.pow(px[i+2]-fond[2],2));
+        if(dist<=DUR) px[i+3]=0;
+        else if(dist<DOUX) px[i+3]=Math.round(px[i+3]*(dist-DUR)/(DOUX-DUR));
+      }
+      x.putImageData(d,0,0);
+      apres(c.toDataURL('image/png'));
+    }catch(e){ toast('Détourage impossible','var(--orange)'); }
+    finally{ URL.revokeObjectURL(url); }
+  };
+  im.onerror=()=>{ URL.revokeObjectURL(url); toast('Image illisible','var(--orange)'); };
+  im.src=url;
+}
 function _majImageVitrine(input,id){
+  // La signature est TOUJOURS detouree, quel que soit le format d origine :
+  // c est le seul moyen de garantir zero fond sans rien demander au coach.
+  const _fs=input.files&&input.files[0];
+  if(id==='coach-signature'&&_fs){
+    _detourerSignature(_fs,b64=>{
+      currentUser.signature=b64;
+      _apercuVitrine(id,b64);
+      toast('Signature détourée — pense à enregistrer');
+    });
+    return;
+  }
   const _f=input.files&&input.files[0];
   // Au-dela de 1,2 Mo on redimensionne quand meme : la transparence ne vaut
   // pas de faire porter une image lourde a chaque athlete.
