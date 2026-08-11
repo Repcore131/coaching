@@ -7093,6 +7093,16 @@ function _majTabbar(id){
   _majPastilleBilan();
 }
 function go(id){
+  // RATTRAPAGE DU PROFIL PUBLIC, une seule fois par session. Accroche ici et
+  // non au seul accueil coach : un coach qui ouvre l app ailleurs ne passait
+  // jamais par loadCoachHome, et sa vitrine restait non publiee sans que rien
+  // ne le signale. go() est le seul point par ou tout le monde passe.
+  try{
+    if(!window._ratProfilFait&&currentUser&&currentUser.role==='coach'){
+      window._ratProfilFait=true;
+      setTimeout(()=>{ try{ _rattraperProfilCoach(); }catch(e){} },1200);
+    }
+  }catch(e){}
   // SCAN : quitter l ecran coupe la camera. La garde est ICI, dans go(),
   // et pas seulement sur le bouton retour : un lien, une notification ou
   // un retour materiel passent tous par la, et aucun ne doit laisser une
