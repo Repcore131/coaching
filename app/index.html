@@ -44250,6 +44250,26 @@ function ouvrirVitrineCoach(){
   if(!z) return false;
   z.innerHTML=_htmlVitrineCoach(pub);
   goAvecRetour('s-vitrine');
+  // RAFRAICHISSEMENT A L OUVERTURE. Le cache rc_coach_profil n etait relu
+  // qu au demarrage : un coach qui vient de publier sa presentation ne la
+  // voyait pas arriver chez son athlete avant le prochain lancement, et rien
+  // ne disait qu il fallait attendre. On retire maintenant, et on redessine
+  // si le contenu a change — sans bloquer l ouverture, qui a deja eu lieu.
+  try{
+    if(_cle&&CLOUD&&CLOUD.ok&&CLOUD.ok()){
+      CLOUD.pullProfilCoach(_cle).then(frais=>{
+        if(!frais) return;
+        const maj={};
+        ['fname','lname','teamName','catchphrase','bio','vision','photoVitrine',
+         'signature','cartePro','diplomes'].forEach(k=>{
+          const v=[frais[k],pub[k]].find(x=>Array.isArray(x)?x.length:(x&&String(x).trim()));
+          if(v!==undefined) maj[k]=v;
+        });
+        const zz=document.getElementById('vitrine-coach-corps');
+        if(zz) zz.innerHTML=_htmlVitrineCoach(maj);
+      }).catch(()=>{});
+    }
+  }catch(e){}
   return true;
 }
 // Cote coach : la meme fonction de rendu, sur son propre dossier — sinon
