@@ -1989,21 +1989,51 @@ const COACH_PHOTO='icons/coach.jpg';
 <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">Ta vision, ta méthode</label>
 <textarea id="coach-vision" rows="4" placeholder="Comment tu accompagnes, ce en quoi tu crois." maxlength="1200" style="width:100%;font-size:13px;padding:11px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;resize:none"></textarea>
 </div>
-<div style="margin-bottom:14px">
-<label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">Photo de présentation</label>
-<input id="coach-photo-vitrine" type="url" placeholder="https://… — une autre que celle du profil" style="width:100%;font-size:13px;padding:11px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif">
+<div style="margin-bottom:16px">
+<label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px">Photo de présentation</label>
+<div style="display:flex;gap:12px;align-items:center">
+  <div id="coach-photo-vitrine-apercu" style="flex:none;width:64px;height:64px;border-radius:10px;background:var(--surface-2);border:1px solid var(--border);overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:22px">+</div>
+  <div style="flex:1;min-width:0">
+    <label class="btn btn-outline btn-sm" style="display:block;text-align:center;cursor:pointer;margin:0">Ajouter une image
+      <input type="file" accept="image/*" style="display:none" onchange="_majImageVitrine(this,'coach-photo-vitrine')">
+    </label>
+    <div style="font-size:10.5px;color:var(--text-faint);line-height:1.5;margin-top:5px">Une autre que celle du profil. Elle ouvre ta vitrine.</div>
+  </div>
+  <button type="button" onclick="_viderImageVitrine('coach-photo-vitrine')" aria-label="Retirer l'image" style="flex:none;min-width:44px;min-height:44px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--sub);cursor:pointer">✕</button>
 </div>
-<div style="margin-bottom:14px">
-<label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">Signature (PNG à fond transparent)</label>
-<input id="coach-signature" type="url" placeholder="https://…" style="width:100%;font-size:13px;padding:11px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif">
+</div>
+</div>
+<div style="margin-bottom:16px">
+<label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px">Signature</label>
+<div style="display:flex;gap:12px;align-items:center">
+  <div id="coach-signature-apercu" style="flex:none;width:64px;height:64px;border-radius:10px;background:var(--surface-2);border:1px solid var(--border);overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:22px">+</div>
+  <div style="flex:1;min-width:0">
+    <label class="btn btn-outline btn-sm" style="display:block;text-align:center;cursor:pointer;margin:0">Ajouter une image
+      <input type="file" accept="image/*" style="display:none" onchange="_majImageVitrine(this,'coach-signature')">
+    </label>
+    <div style="font-size:10.5px;color:var(--text-faint);line-height:1.5;margin-top:5px">Un PNG à fond transparent rend mieux sur le fond sombre.</div>
+  </div>
+  <button type="button" onclick="_viderImageVitrine('coach-signature')" aria-label="Retirer l'image" style="flex:none;min-width:44px;min-height:44px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--sub);cursor:pointer">✕</button>
+</div>
+</div>
 </div>
 <!-- CARTE PRO ET DIPLOMES. Facultatifs, et retirables : vider le champ
      retire le document du profil public a la sauvegarde suivante.
      Ce sont des documents personnels publies a tes athletes rattaches —
      ne mets en ligne que ce que tu acceptes qu ils voient. -->
-<div style="margin-bottom:14px">
-<label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">Carte professionnelle (image)</label>
-<input id="coach-cartepro" type="url" placeholder="https://… — facultatif" style="width:100%;font-size:13px;padding:11px;background:var(--surface-2);border:1.5px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif">
+<div style="margin-bottom:16px">
+<label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px">Carte professionnelle</label>
+<div style="display:flex;gap:12px;align-items:center">
+  <div id="coach-cartepro-apercu" style="flex:none;width:64px;height:64px;border-radius:10px;background:var(--surface-2);border:1px solid var(--border);overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--text-faint);font-size:22px">+</div>
+  <div style="flex:1;min-width:0">
+    <label class="btn btn-outline btn-sm" style="display:block;text-align:center;cursor:pointer;margin:0">Ajouter une image
+      <input type="file" accept="image/*" style="display:none" onchange="_majImageVitrine(this,'coach-cartepro')">
+    </label>
+    <div style="font-size:10.5px;color:var(--text-faint);line-height:1.5;margin-top:5px">Facultative. Visible de tes athlètes rattachés.</div>
+  </div>
+  <button type="button" onclick="_viderImageVitrine('coach-cartepro')" aria-label="Retirer l'image" style="flex:none;min-width:44px;min-height:44px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--sub);cursor:pointer">✕</button>
+</div>
+</div>
 </div>
 <div style="margin-bottom:14px">
 <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:5px">Diplômes et formations</label>
@@ -43998,6 +44028,40 @@ function uploadCoachPhoto(input){
 // source de verite pendant l'edition — comme les bannieres promo, et pour
 // la meme raison : ajouter une ligne ne doit rien enregistrer tant que le
 // coach n'a pas valide.
+// Lecture d'une image choisie, redimensionnee — meme chemin que la photo de
+// profil du coach. Le resultat est une donnee, pas un lien : rien a heberger.
+function _lireImage(input,maxW,maxH,apres){
+  const f=input.files&&input.files[0];
+  if(!f) return;
+  if(f.size>20*1024*1024){toast('Image trop lourde (max 20 Mo)','var(--orange)');return;}
+  _resizeImage(f,maxW,maxH,0.82).then(b64=>{
+    if(!b64){toast('Image illisible : réessaie avec une autre','var(--orange)');return;}
+    apres(b64);
+  }).catch(()=>toast('Image illisible','var(--orange)'));
+}
+// Les trois images de la vitrine. L'apercu est mis a jour tout de suite :
+// sans lui, rien ne dit que le fichier a ete pris en compte.
+const _IMG_VITRINE={'coach-photo-vitrine':['photoVitrine',900,1200],
+  'coach-signature':['signature',700,350],
+  'coach-cartepro':['cartePro',900,1200]};
+function _apercuVitrine(id,b64){
+  const z=document.getElementById(id+'-apercu');
+  if(!z) return;
+  z.innerHTML=b64?('<img src="'+escapeHtml(b64)+'" alt="" style="width:100%;height:100%;object-fit:cover">'):'+';
+}
+function _majImageVitrine(input,id){
+  const cfg=_IMG_VITRINE[id]; if(!cfg) return;
+  _lireImage(input,cfg[1],cfg[2],b64=>{
+    currentUser[cfg[0]]=b64;
+    _apercuVitrine(id,b64);
+    toast('Image ajoutée — pense à enregistrer');
+  });
+}
+function _viderImageVitrine(id){
+  const cfg=_IMG_VITRINE[id]; if(!cfg) return;
+  currentUser[cfg[0]]='';
+  _apercuVitrine(id,'');
+}
 function ajouterDiplomeRow(titre,image){
   const z=document.getElementById('coach-diplomes-liste');
   if(!z) return;
@@ -44009,8 +44073,19 @@ function ajouterDiplomeRow(titre,image){
   t.type='text'; t.className='dip-titre'; t.placeholder='ex : Licence STAPS';
   t.maxLength=120; t.style.cssText=st; t.value=titre||'';
   const i=document.createElement('input');
-  i.type='url'; i.className='dip-image'; i.placeholder='https://… (facultatif)';
-  i.style.cssText=st; i.value=image||'';
+  // L'image du diplome est un FICHIER, pas un lien. On la garde en memoire
+  // sur la ligne : le champ file ne peut pas porter une valeur existante.
+  i.type='button'; i.className='dip-image';
+  i.dataset.img=image||'';
+  i.textContent=image?'Image ✓':'Ajouter une image';
+  i.style.cssText=st+';cursor:pointer;text-align:left';
+  i.onclick=()=>{
+    const f=document.createElement('input');
+    f.type='file'; f.accept='image/*';
+    f.onchange=()=>{ _lireImage(f,900,1200,(b64)=>{
+      i.dataset.img=b64; i.textContent='Image ✓'; }); };
+    f.click();
+  };
   const x=document.createElement('button');
   x.type='button'; x.textContent='✕';
   x.setAttribute('aria-label','Retirer ce diplôme');
@@ -44026,10 +44101,10 @@ function _lireDiplomes(){
   if(!z) return null;
   return [...z.querySelectorAll('.dip-row')].map(r=>({
     titre:(r.querySelector('.dip-titre')?.value||'').trim(),
-    image:(r.querySelector('.dip-image')?.value||'').trim()
+    image:(r.querySelector('.dip-image')?.dataset.img||'')
   })).filter(d=>d.titre).map(d=>({
     titre:d.titre,
-    image:/^https?:\/\//.test(d.image)?d.image:''
+    image:d.image||''
   })).slice(0,12);
 }
 // ══════ VITRINE DU COACH ══════
@@ -44046,25 +44121,38 @@ function vitrineCoachRemplie(pub){
 function _htmlVitrineCoach(pub){
   const p=pub||{};
   const nom=[p.fname,p.lname].filter(Boolean).join(' ').trim()||p.teamName||'Ton coach';
-  const bloc=(titre,texte)=>{
+  const img=(src,st)=>src?('<img src="'+escapeHtml(src)+'" alt="" loading="lazy" style="'+st+'">'):'';
+  // Une carte par sujet. Le texte du coach est du TEXTE : on l'echappe, puis
+  // on rend ses retours a la ligne — ses paragraphes doivent survivre.
+  const carte=(titre,texte)=>{
     const t=(texte||'').trim();
     if(!t) return '';
-    // escapeHtml puis retours a la ligne : le coach ecrit du texte, pas du
-    // balisage, et ses paragraphes doivent survivre.
-    return '<div style="margin-bottom:22px">'
-      +'<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:8px">'+titre+'</div>'
-      +'<div style="font-size:13px;color:#ddd;line-height:1.7">'+escapeHtml(t).replace(/\n/g,'<br>')+'</div></div>';
+    return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:14px">'
+      +'<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:10px">'+titre+'</div>'
+      +'<div style="font-size:13px;color:#dcdcdc;line-height:1.75">'+escapeHtml(t).replace(/\n/g,'<br>')+'</div>'
+      +'</div>';
   };
-  const img=(src,style)=>src?('<img src="'+escapeHtml(src)+'" alt="" style="'+style+'">'):'';
-  return '<div class="pad" style="padding-bottom:40px">'
-    +(p.teamName?'<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:4px">'+escapeHtml(p.teamName)+'</div>':'')
-    +'<h1 style="margin-bottom:18px">'+escapeHtml(nom)+'</h1>'
-    +img(p.photoVitrine,'width:100%;border-radius:14px;margin-bottom:22px;display:block')
-    +bloc('Qui je suis',p.bio)
-    +bloc('Ma vision',p.vision)
+  // TETE. Avec photo, elle est pleine largeur et le nom se pose dessus en
+  // degrade ; sans photo, le meme bandeau sans image — jamais un trou.
+  const eyebrow=p.teamName?('<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:5px">'+escapeHtml(p.teamName)+'</div>'):'';
+  const titre='<h1 style="margin:0;line-height:1.05">'+escapeHtml(nom)+'</h1>';
+  const phrase=(p.catchphrase||'').trim()
+    ?('<div style="font-size:12.5px;color:#bdbdbd;font-style:italic;line-height:1.6;margin-top:8px">« '+escapeHtml(p.catchphrase.trim())+' »</div>')
+    :'';
+  const tete=p.photoVitrine
+    ?('<div style="position:relative;border-radius:16px;overflow:hidden;margin-bottom:18px">'
+      +img(p.photoVitrine,'width:100%;display:block')
+      +'<div style="position:absolute;inset:auto 0 0 0;padding:52px 16px 16px;background:linear-gradient(to top,rgba(8,8,8,.96),rgba(8,8,8,.75) 45%,transparent)">'
+      +eyebrow+titre+'</div></div>'+ (phrase?('<div style="margin:-6px 2px 18px">'+phrase+'</div>'):''))
+    :('<div style="margin-bottom:18px">'+eyebrow+titre+phrase+'</div>');
+  return '<div class="pad" style="padding-bottom:44px">'
+    +tete
+    +carte('Qui je suis',p.bio)
+    +carte('Ma vision',p.vision)
     +_htmlDiplomesCoach(p)
-    +(p.signature?('<div style="text-align:center;margin-top:26px">'
-        +img(p.signature,'max-width:220px;width:60%;opacity:.9;display:inline-block')+'</div>'):'')
+    +(p.signature?('<div style="text-align:center;margin-top:8px;padding-top:18px;border-top:1px solid var(--border)">'
+        +img(p.signature,'max-width:200px;width:55%;opacity:.85;display:inline-block')
+        +'</div>'):'')
     +'</div>';
 }
 // Diplomes et carte pro, et le texte qui dit pourquoi ca compte. Rien n'est
@@ -44077,27 +44165,44 @@ function _htmlVitrineCoach(pub){
 function _htmlDiplomesCoach(p){
   const dips=((p||{}).diplomes||[]).filter(d=>d&&d.titre);
   const carte=(p||{}).cartePro||'';
+  // Rien de rendu si rien n'est renseigne : un encart vide laisserait croire
+  // a un document manquant, et un coach sans diplome renseigne n'a pas a
+  // avoir l'air d'en cacher un.
   if(!dips.length&&!carte) return '';
-  const ligne=d=>'<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:12px">'
-    +'<span style="flex:none;color:var(--red);font-weight:900">✓</span>'
-    +'<div style="flex:1;min-width:0">'
-    +'<div style="font-size:12.5px;font-weight:700;color:#fff">'+escapeHtml(d.titre)+'</div>'
-    +(d.image?('<img src="'+escapeHtml(d.image)+'" alt="" loading="lazy" style="width:100%;border-radius:10px;margin-top:8px;display:block">'):'')
-    +'</div></div>';
-  return '<div style="margin-bottom:22px">'
-    +'<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:10px">Diplômes et qualifications</div>'
-    +dips.map(ligne).join('')
-    +(carte?('<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;font-weight:700;margin:14px 0 8px">Carte professionnelle</div>'
-        +'<img src="'+escapeHtml(carte)+'" alt="" loading="lazy" style="width:100%;border-radius:10px;display:block">'):'')
-    +'<div style="background:var(--surface-1);border-left:3px solid var(--red);border-radius:8px;padding:12px 14px;margin-top:16px">'
-    +'<div style="font-size:var(--fs-xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--red);font-weight:800;margin-bottom:6px">Pourquoi un professionnel diplômé</div>'
-    +'<div style="font-size:12px;color:#ddd;line-height:1.7">'
+  const img=src=>'<img src="'+escapeHtml(src)+'" alt="" loading="lazy" style="width:100%;border-radius:10px;margin-top:10px;display:block">';
+  // Une pastille cochee par diplome, l'image dessous quand il y en a une.
+  const ligne=d=>'<div style="padding:12px 0;border-bottom:1px solid #171717">'
+    +'<div style="display:flex;gap:10px;align-items:center">'
+    +'<span style="flex:none;width:20px;height:20px;border-radius:50%;background:var(--red);color:#fff;font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center">✓</span>'
+    +'<span style="flex:1;min-width:0;font-size:12.5px;font-weight:700;color:#fff;letter-spacing:.3px">'+escapeHtml(d.titre)+'</span>'
+    +'</div>'
+    +(d.image?img(d.image):'')
+    +'</div>';
+  let h='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:14px">';
+  if(dips.length){
+    h+='<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Diplômes et formations</div>'
+      +dips.map(ligne).join('');
+  }
+  if(carte){
+    h+='<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;text-transform:uppercase;font-weight:800;margin:16px 0 6px">Carte professionnelle</div>'
+      +'<img src="'+escapeHtml(carte)+'" alt="" loading="lazy" style="width:100%;border-radius:10px;display:block">';
+  }
+  h+='</div>';
+  // L'encart pedagogique est une carte A PART, et volontairement : il ne
+  // parle pas du coach mais du metier. Le fondre dans la liste laisserait
+  // croire qu'il decrit ses diplomes a lui.
+  h+='<div style="background:#0d0505;border:1px solid rgba(224,32,32,.28);border-left:3px solid var(--red);border-radius:14px;padding:16px 18px;margin-bottom:14px">'
+    +'<div style="font-size:var(--fs-xs);letter-spacing:2px;text-transform:uppercase;color:var(--red);font-weight:800;margin-bottom:8px">Pourquoi un professionnel diplômé</div>'
+    +'<div style="font-size:12.5px;color:#dcdcdc;line-height:1.75">'
     +'Un diplôme n\'est pas une formalité administrative : c\'est la preuve que la personne '
     +'qui règle tes charges, corrige ta technique et t\'oriente sur ton alimentation a été '
-    +'formée pour le faire, et qu\'elle sait où s\'arrête son domaine. '
-    +'Un accompagnement improvisé, c\'est au mieux des mois perdus, au pire une blessure. '
+    +'formée pour le faire — et qu\'elle sait où s\'arrête son domaine. '
+    +'Un accompagnement improvisé, c\'est au mieux des mois perdus, au pire une blessure.'
+    +'</div>'
+    +'<div style="font-size:10.5px;color:var(--text-faint);line-height:1.6;margin-top:10px">'
     +'Les documents ci-dessus ont été publiés par ton coach lui-même.'
-    +'</div></div></div>';
+    +'</div></div>';
+  return h;
 }
 // Cote athlete : depuis la carte du coach.
 function ouvrirVitrineCoach(){
@@ -44131,15 +44236,13 @@ function saveCoachIdentity(){
   // quand saveCoachIdentity part d'un autre chemin.
   const _v=id=>{const e=document.getElementById(id);return e?(e.value||'').trim():null;};
   const _bio=_v('coach-bio'), _vis=_v('coach-vision');
-  const _pv=_v('coach-photo-vitrine'), _sig=_v('coach-signature');
+  // Les images sont deja posees sur currentUser par _majImageVitrine.
   if(_bio!==null) currentUser.bio=_bio;
   if(_vis!==null) currentUser.vision=_vis;
   // Une URL vide efface le champ ; une URL non http est refusee plutot que
   // publiee telle quelle a tous les athletes.
-  if(_pv!==null) currentUser.photoVitrine=/^https?:\/\//.test(_pv)?_pv:'';
-  if(_sig!==null) currentUser.signature=/^https?:\/\//.test(_sig)?_sig:'';
-  const _cp=_v('coach-cartepro');
-  if(_cp!==null) currentUser.cartePro=/^https?:\/\//.test(_cp)?_cp:'';
+
+
   const _dip=_lireDiplomes();
   if(_dip!==null) currentUser.diplomes=_dip;
   CLOUD.pushProfilCoach(currentUser);
@@ -44725,12 +44828,12 @@ function loadMonetisationTab(){
   setIf(teamNameEl,u.teamName||'');suivre(teamNameEl);
   const catchEl=document.getElementById('coach-catchphrase');
   setIf(catchEl,u.catchphrase||'');suivre(catchEl);
-  ['coach-bio:bio','coach-vision:vision','coach-photo-vitrine:photoVitrine',
-   'coach-signature:signature','coach-cartepro:cartePro'].forEach(paire=>{
+  ['coach-bio:bio','coach-vision:vision'].forEach(paire=>{
     const [id,champ]=paire.split(':');
     const el=document.getElementById(id);
     if(el){ setIf(el,u[champ]||''); suivre(el); }
   });
+  Object.keys(_IMG_VITRINE).forEach(id=>_apercuVitrine(id,u[_IMG_VITRINE[id][0]]||''));
   const _dz=document.getElementById('coach-diplomes-liste');
   if(_dz){ _dz.innerHTML=''; (u.diplomes||[]).forEach(d=>ajouterDiplomeRow(d&&d.titre,d&&d.image)); }
   _chargerDispoCoach(u);
