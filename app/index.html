@@ -4523,7 +4523,7 @@ function alertePalier(coach,users){
   if(suivant&&quota!==Infinity&&n===quota-1){
     return {type:'falaise',palier:suivant.cle,
       titre:'Au prochain athlète, ton palier passe à '+suivant.titre
-        +' — '+suivant.prix+' €/mois.',
+        +' — '+suivant.prix+' €/mois.',
       texte:'Tu peux ajouter cet athlète sans changer de palier maintenant. '
         +'Rien n\'est prélevé tant que tu ne l\'as pas décidé toi-même.'};
   }
@@ -4534,7 +4534,7 @@ function alertePalier(coach,users){
     return {type:'montee',palier:suivant.cle,
       titre:'Tu suis '+n+' athlètes depuis '+c+' mois, pour un palier qui en '
         +'prévoit '+_quotaTexte(quota)+'.',
-      texte:'Le palier '+suivant.titre+' est à '+suivant.prix+' €/mois. '
+      texte:'Le palier '+suivant.titre+' est à '+suivant.prix+' €/mois. '
         +'Rien ne change tant que tu ne le choisis pas : tes athlètes gardent '
         +'tout leur accès, et ton prix actuel reste le tien.'};
   }
@@ -4545,7 +4545,7 @@ function alertePalier(coach,users){
     return {type:'descente',palier:cible.cle,
       titre:'Tu suis '+n+' athlète'+(n>1?'s':'')+' : le palier '+cible.titre
         +' te suffirait.',
-      texte:(cible.prix?('Il est à '+cible.prix+' €/mois. '):'Il est gratuit. ')
+      texte:(cible.prix?('Il est à '+cible.prix+' €/mois. '):'Il est gratuit. ')
         +'Le changement prend effet à la fin de la période déjà réglée, '
         +'quand tu veux — aucune fenêtre, aucun préavis.'};
   }
@@ -4596,7 +4596,7 @@ function _htmlBandeauPaliers(coach,users){
     +'<div style="flex:1;min-width:0">'
     +'<div style="font-weight:800;font-size:12.5px">'+escapeHtml(compte)+'</div>'
     +'<div class="sub" style="font-size:10.5px;margin-top:2px">Palier '+escapeHtml(pal.titre)
-    +(pal.prix?(' — '+pal.prix+' € par mois'):' — gratuit')+'</div></div>'
+    +(pal.prix?(' — '+pal.prix+' € par mois'):' — gratuit')+'</div></div>'
     +'<button class="btn btn-outline btn-sm" style="flex-shrink:0;min-height:38px" '
     +'onclick="ouvrirMonAbonnement()">Changer</button>'
     +'</div>';
@@ -4651,7 +4651,7 @@ function _renderAbonnementCoach(users){
       background:${ici?'rgba(224,32,32,.08)':'transparent'};border-radius:12px;padding:13px 12px;text-align:center">
       <div style="font-size:var(--fs-xs);color:${ici?'var(--red)':'var(--sub)'};font-weight:800;
         text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">${escapeHtml(x.titre)}</div>
-      <div style="font-size:20px;font-weight:900;color:#fff;line-height:1">${x.prix===0?'Gratuit':escapeHtml(x.prix+' €')}</div>
+      <div style="font-size:20px;font-weight:900;color:#fff;line-height:1">${x.prix===0?'Gratuit':escapeHtml(x.prix+' €')}</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:3px">${escapeHtml(x.periode||'')}</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:6px;line-height:1.5">${escapeHtml(x.detail)}</div>
       ${(id&&!ici)?`<button class="btn btn-red btn-sm" style="margin-top:10px;width:100%"
@@ -4662,7 +4662,7 @@ function _renderAbonnementCoach(users){
     <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:14px">Mon abonnement</div>
     ${l('Formule',pal.titre)}
     ${l('Athlètes',compteur)}
-    ${suivant?l('Palier suivant',suivant.titre+' — '+suivant.prix+' € '+suivant.periode):''}
+    ${suivant?l('Palier suivant',suivant.titre+' — '+suivant.prix+' € '+suivant.periode):''}
     ${depasse?`<div style="margin-top:10px;background:var(--warning-bg);border:1px solid var(--warning-border);
       border-radius:8px;padding:9px 11px;font-size:11px;color:var(--orange);line-height:1.6">
       Tu suis ${n} athlètes pour un palier qui en prévoit ${_quotaTexte(quota)}.
@@ -4840,7 +4840,7 @@ function _renderAbonnement(){
   z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px">
     <div style="font-weight:800;font-size:14px;margin-bottom:8px">Mon abonnement</div>
     ${l('Formule',(pal&&pal.titre)||'Mensuel')}
-    ${l('Prix',((pal&&pal.prix)||'9,95 €')+' '+((pal&&pal.periode)||'par mois'))}
+    ${l('Prix',((pal&&pal.prix)||'9,95 €')+' '+((pal&&pal.periode)||'par mois'))}
     ${fin?l(r?'Accès jusqu\'au':'Prochaine échéance',finTxt):''}
     ${r?`<div style="margin-top:12px;background:var(--surface-2);border-radius:10px;padding:12px 13px">
         <div style="font-size:12px;color:#eee;line-height:1.7;margin-bottom:8px">Résiliation demandée le ${escapeHtml(new Date(r.ts).toLocaleDateString('fr-FR'))}. Ton accès reste ouvert jusqu'au ${escapeHtml(finTxt)}.</div>
@@ -55612,11 +55612,103 @@ function testExercices(){
             .filter(x=>!x.src).map(x=>x.textContent).join('\n');
           const prod=scripts.slice(0,scripts.indexOf('function testExercices'));
           if(prod.length<100000) return _echec('source trop court : '+prod.length);
-          const t=['19'+' €','39'+' €'].filter(m=>prod.indexOf(m)>=0);
+          const t=[/19[ \u00a0]€/,/39[ \u00a0]€/].filter(re=>re.test(prod)).map(String);
           if(t.length) return _echec('un prix coach est écrit en dur : '+t.join(', '));
           // Et le paywall autonome reste intact : ce lot ne l'a pas touché.
           return /9,95/.test(String(loadAccessGate))
             ?true:_echec('la mention autonome a disparu de loadAccessGate');})());
+          // ══════ L'ÉCRAN D'ACCÈS EXPIRÉ ══════
+          ok('Accès expiré : le coach est joignable en un geste',(()=>{
+            // Sur cet écran, joindre son coach est la SEULE action qui débloque quoi
+            // que ce soit. « Contacte ton coach » dit à l'athlète de se débrouiller ;
+            // le bouton fait le travail.
+            const _cu=currentUser,_db=DB.get('users');
+            const _ls=localStorage.getItem('rc_coach_profil');
+            try{
+              // Le lien exige QUATRE choses : une clé coach, un profil local sous
+              // cette clé, un consentement horodaté, et un numéro au format
+              // international. Il en manque une, et l'écran retombe sur le mail.
+              localStorage.setItem('rc_coach_profil',JSON.stringify({key:'coach,t,fr',
+                d:{nom:'Guellec',phone:'+33612345678',
+                   contact:{mode:'whatsapp',consentAt:'2026-08-01T10:00:00.000Z'}}}));
+              currentUser={email:'lea@t.fr',id:'a1',role:'athlete',fname:'Léa',
+                coachId:'c1',coachName:'Guellec',coachEmailKey:'coach,t,fr',
+                status:'COACHING_SUIVI',accessExpiry:Date.now()-7*864e5};
+              DB.set('users',{'lea@t.fr':currentUser});
+              loadAccessGate();
+              const q=x=>document.getElementById(x);
+              if(q('ag-title').textContent!=='Accès expiré')
+                return _echec('titre : '+q('ag-title').textContent);
+              if(!/^Ton accès coaching avec suivi a expiré le \d/.test(q('ag-sub').textContent))
+                return _echec('sous-titre : '+q('ag-sub').textContent);
+              // Le bloc d'icône restait vide et laissait 56px de trou au-dessus du titre.
+              if(!/<svg/.test(q('ag-icon').innerHTML)) return _echec('le bloc d\'icône est vide');
+              const a=q('ag-status-block').querySelector('a');
+              if(!a) return _echec('aucun bouton de contact');
+              const href=a.getAttribute('href')||'';
+              if(href.indexOf('https://wa.me/33612345678')!==0)
+                return _echec('le lien ne mène pas au WhatsApp du coach : '+href.slice(0,40));
+              if(href==='#') return _echec('bouton mort');
+              // Le message est pré-rempli : l'athlète n'a plus qu'à envoyer.
+              const msg=decodeURIComponent(href.split('text=')[1]||'');
+              if(!/expiré le \d/.test(msg)) return _echec('message non pré-rempli : '+msg);
+              // ET IL NE PORTE AUCUNE DONNÉE DE SANTÉ : le canal n'est pas chiffré.
+              const interdits=['douleur','cycle','SOPK','thyroïde','PES','règles',
+                               'grossesse','poids','blessure'];
+              const fuite=interdits.filter(m=>new RegExp(m,'i').test(msg));
+              if(fuite.length) return _echec('donnée de santé dans le message : '+fuite.join(', '));
+              // La phrase de repli a cédé la place au bouton, elle ne double pas.
+              return !/Contacte ton coach/.test(q('ag-status-block').innerHTML)
+                ?true:_echec('la phrase de repli coexiste avec le bouton');
+            } finally { currentUser=_cu; if(_db) DB.set('users',_db);
+              if(_ls) localStorage.setItem('rc_coach_profil',_ls);
+              else localStorage.removeItem('rc_coach_profil'); }})());
+          ok('Coach injoignable : la phrase reste, sans bouton mort',(()=>{
+            // Un bouton qui ne mène nulle part vaut moins que pas de bouton.
+            const _cu=currentUser,_db=DB.get('users');
+            const _ls=localStorage.getItem('rc_coach_profil');
+            try{
+              localStorage.removeItem('rc_coach_profil');
+              currentUser={email:'lea@t.fr',id:'a1',role:'athlete',fname:'Léa',
+                status:'COACHING_SUIVI',accessExpiry:Date.now()-864e5};
+              DB.set('users',{'lea@t.fr':currentUser});
+              loadAccessGate();
+              const b=document.getElementById('ag-status-block');
+              if(!/Contacte ton coach pour le prolonger\./.test(b.innerHTML))
+                return _echec('la phrase de repli a disparu');
+              const a=b.querySelector('a');
+              if(a&&(a.getAttribute('href')||'#')==='#') return _echec('un bouton mort est rendu');
+              // TÉMOIN : sans coach joignable, aucun lien wa.me n'est fabriqué.
+              return b.innerHTML.indexOf('wa.me')<0
+                ?true:_echec('un lien WhatsApp sort de nulle part');
+            } finally { currentUser=_cu; if(_db) DB.set('users',_db);
+              if(_ls) localStorage.setItem('rc_coach_profil',_ls); }})());
+          ok('Les deux autres états de l\'écran sont rédigés et accentués',(()=>{
+            const _cu=currentUser,_db=DB.get('users');
+            try{
+              const q=x=>document.getElementById(x);
+              const poser=u=>{ currentUser=Object.assign({email:'lea@t.fr',id:'a1',
+                  role:'athlete',fname:'Léa'},u);
+                DB.set('users',{'lea@t.fr':currentUser}); loadAccessGate();
+                return q('ag-title').textContent+'|'+q('ag-sub').textContent
+                  +'|'+q('ag-status-block').textContent; };
+              const inactif=poser({status:'AUTONOMIE_PREMIUM',paymentStatus:'suspended'});
+              if(inactif.indexOf('Abonnement inactif')<0) return _echec('titre : '+inactif.split('|')[0]);
+              if(inactif.indexOf("Ton abonnement mensuel n'est plus actif.")<0)
+                return _echec('sous-titre : '+inactif.split('|')[1]);
+              if(inactif.indexOf('Renouvelle-le pour retrouver ton accès.')<0)
+                return _echec('la relance d\'action a disparu');
+              const requis=poser({status:'FREE'});
+              if(requis.indexOf('Accès requis')<0) return _echec('titre : '+requis.split('|')[0]);
+              // ESPACE INSÉCABLE avant le € : « 9,95 » / « €/mois » coupé en fin de
+              // ligne est fautif en typographie française.
+              if(requis.indexOf('9,95\u00a0€/mois')<0)
+                return _echec('la mention de prix a perdu son espace insécable');
+              // Aucun des trois états ne laisse passer un mot désaccentué.
+              const tout=inactif+'|'+requis;
+              const nus=(tout.match(/\b(Acces|acces|expire|Expire|abonnes)\b/g)||[]);
+              return nus.length?_echec('texte désaccentué : '+nus.join(', ')):true;
+            } finally { currentUser=_cu; if(_db) DB.set('users',_db); }})());
         // ── LE PRIX AVANT LE COMPTE ─────────────────────────────────────
         // Un visiteur doit atteindre 9,95 €/mois en DEUX clics, sans avoir
         // saisi la moindre donnee. Rien ne tenait ce parcours — et c'est celui
@@ -56862,7 +56954,7 @@ function testExercices(){
           const h=_htmlBandeauPaliers(c,_cacheP(12,3));
           if(h.indexOf('12 / 15 athlètes actifs')<0) return _echec('compte : '+h.slice(0,160));
           if(h.indexOf('Coach')<0) return _echec('le palier n\'est pas nommé');
-          if(h.indexOf('19 € par mois')<0) return _echec('le prix n\'est pas dit');
+          if(!/19[ \u00a0]€ par mois/.test(h)) return _echec('le prix n\'est pas dit');
           // Le palier libre est gratuit, et le bandeau le dit ainsi.
           const libre=_htmlBandeauPaliers({id:'c1',email:'c@t',role:'coach'},_cacheP(1,3));
           if(libre.indexOf('1 / 1 athlètes actifs')<0) return _echec('libre : '+libre.slice(0,140));
@@ -56948,7 +57040,7 @@ function testExercices(){
           const a=alertePalier(_coachP(),_cacheP(14,3));
           if(!a) return _echec('aucune alerte à 14 / 15');
           if(a.type!=='falaise') return _echec('type : '+a.type);
-          if(a.titre.indexOf('39 €/mois')<0) return _echec('prix absent : '+a.titre);
+          if(!/39[ \u00a0]€\/mois/.test(a.titre)) return _echec('prix absent : '+a.titre);
           if(a.titre.indexOf('Pro')<0) return _echec('le palier suivant n\'est pas nommé');
           // Et elle dit explicitement que rien ne bascule.
           if(!/sans changer de palier/.test(a.texte)) return _echec('texte : '+a.texte);
@@ -56974,7 +57066,7 @@ function testExercices(){
           const a=alertePalier(u,_cacheP(16,3));
           if(!a||a.type!=='montee') return _echec('aucune proposition après deux cycles');
           if(a.titre.indexOf('2 mois')<0) return _echec('la durée n\'est pas dite : '+a.titre);
-          if(a.texte.indexOf('39 €/mois')<0) return _echec('prix absent : '+a.texte);
+          if(!/39[ \u00a0]€\/mois/.test(a.texte)) return _echec('prix absent : '+a.texte);
           // LE POINT QUI COMPTE : le palier n'a pas bougé, et le texte le dit.
           if(u.coachPlan!==avant) return _echec('le palier a changé tout seul : '+u.coachPlan);
           if(!/Rien ne change tant que tu ne le choisis pas/.test(a.texte))
@@ -57021,7 +57113,7 @@ function testExercices(){
           const a=alertePalier(pro,_cacheP(3,3));
           if(!a||a.type!=='descente') return _echec('aucune descente proposée : '+(a&&a.type));
           if(a.palier!=='coach') return _echec('palier proposé : '+a.palier);
-          if(a.texte.indexOf('19 €/mois')<0) return _echec('prix absent : '+a.texte);
+          if(!/19[ \u00a0]€\/mois/.test(a.texte)) return _echec('prix absent : '+a.texte);
           if(!/aucune fenêtre, aucun préavis/.test(a.texte)) return _echec('le texte impose une contrainte');
           if(!/fin de la période déjà réglée/.test(a.texte)) return _echec('l\'effet n\'est pas daté');
           // Un seul athlète : le palier libre suffit, et il est gratuit.
