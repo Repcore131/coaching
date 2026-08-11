@@ -71043,6 +71043,53 @@ function testExercices(){
           ?_echec(orphelins.length+' sans muscle : '+orphelins.slice(0,5).join(', '))
           :true;})());
     })();
+    // ══ LE CHRONO NE SE DÉDOUBLE PAS ════════════════════════════════════
+    ok('Trois lancements enchaînés ne laissent qu\'un seul intervalle',(()=>{
+      // woState est remplacé EN BLOC au lancement : la référence à l'ancien
+      // intervalle est alors perdue à jamais, alors que l'intervalle, lui,
+      // continue de battre. Rien dans l'état de l'app ne le signale — seul un
+      // comptage des intervalles vivants peut le voir.
+      const _si=window.setInterval,_ci=window.clearInterval;
+      const _cu=currentUser,_ws=woState;
+      const _go=window.go,_t=window.toast,_sv=window.saveUser;
+      const vivants=new Set();
+      try{
+        window.setInterval=function(){ const id=_si.apply(window,arguments);
+          vivants.add(id); return id; };
+        window.clearInterval=function(id){ vivants.delete(id); return _ci.call(window,id); };
+        window.go=()=>{}; window.toast=()=>{}; window.saveUser=()=>true;
+        currentUser={id:'a1',email:'a@t',role:'athlete',fname:'Léa',sessions:[],bilans:[],
+          sessions_config:[{day:'Lundi',name:'PUSH',active:true,
+            exercises:[{name:'DC',series:3,reps:'10'}]}]};
+        const cfg=currentUser.sessions_config[0];
+        woState={exercises:[],currentEx:0,startTime:null,timerInterval:null,sessionData:{}};
+        for(let n=1;n<=3;n++){
+          launchWorkout(cfg,0);
+          if(vivants.size!==1)
+            return _echec(vivants.size+' intervalle(s) vivant(s) après '+n+' lancement(s)');
+        }
+        // TÉMOIN : l'instrumentation voit bien passer les intervalles. Sans lui,
+        // un setInterval jamais appelé donnerait « 0 » à chaque tour, et
+        // l'assertion passerait sur une app sans chrono du tout.
+        if(!woState.timerInterval) return _echec('aucun chrono n\'a été armé');
+        // ET LE LANCEMENT AVORTÉ NE TUE PAS L'HORLOGE EN COURS. C'est ce que
+        // protège la POSITION de la garde : placée en toute première ligne,
+        // elle arrêterait le chrono d'une séance que woState continue de
+        // décrire, et l'affichage se figerait.
+        const idAvant=woState.timerInterval;
+        launchWorkout({exercises:[]},0);
+        if(woState.timerInterval!==idAvant)
+          return _echec('un lancement refusé a remplacé la séance en cours');
+        if(!vivants.has(idAvant))
+          return _echec('un lancement refusé a arrêté le chrono en cours');
+        return vivants.size===1
+          ?true:_echec(vivants.size+' intervalle(s) après un lancement refusé');
+      } finally {
+        vivants.forEach(id=>_ci.call(window,id));
+        window.setInterval=_si; window.clearInterval=_ci;
+        currentUser=_cu; woState=_ws;
+        window.go=_go; window.toast=_t; window.saveUser=_sv;
+      }})());
     // ══ « GÉRER LE PROGRAMME » : LA FONDATION SUIT LE GENRE ══════════════
     (()=>{
       const _cu=currentUser,_db=DB.get('users'),_cid=currentClientId,_ce=_coachEditClient;
