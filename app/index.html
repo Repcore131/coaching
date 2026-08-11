@@ -44087,7 +44087,29 @@ function _apercuVitrine(id,b64){
   if(!z) return;
   z.innerHTML=b64?('<img src="'+escapeHtml(b64)+'" alt="" style="width:100%;height:100%;object-fit:cover">'):'+';
 }
+// LE PNG PASSE INTACT. _resizeImage encode en JPEG : une signature a fond
+// transparent en ressortait sur un aplat opaque, ce qui se voit tout de
+// suite sur le fond carbone. Un PNG raisonnable est donc lu tel quel, sans
+// re-encodage — sa transparence est justement ce qu on veut garder.
+function _lirePngIntact(f,apres){
+  const fr=new FileReader();
+  fr.onload=()=>apres(fr.result);
+  fr.onerror=()=>toast('Image illisible','var(--orange)');
+  fr.readAsDataURL(f);
+}
 function _majImageVitrine(input,id){
+  const _f=input.files&&input.files[0];
+  // Au-dela de 1,2 Mo on redimensionne quand meme : la transparence ne vaut
+  // pas de faire porter une image lourde a chaque athlete.
+  if(_f&&/png/i.test(_f.type)&&_f.size<=1200*1024){
+    const cfg=_IMG_VITRINE[id]; if(!cfg) return;
+    _lirePngIntact(_f,b64=>{
+      currentUser[cfg[0]]=b64;
+      _apercuVitrine(id,b64);
+      toast('Image ajoutée — pense à enregistrer');
+    });
+    return;
+  }
   const cfg=_IMG_VITRINE[id]; if(!cfg) return;
   _lireImage(input,cfg[1],cfg[2],b64=>{
     currentUser[cfg[0]]=b64;
@@ -44181,51 +44203,57 @@ function _htmlVitrineCoach(pub){
   const p=pub||{};
   const nom=[p.fname,p.lname].filter(Boolean).join(' ').trim()||p.teamName||'Ton coach';
   const img=(src,st)=>src?('<img src="'+escapeHtml(src)+'" alt="" loading="lazy" style="'+st+'">'):'';
-  // Une carte par sujet. Le texte du coach est du TEXTE : on l'echappe, puis
-  // on rend ses retours a la ligne — ses paragraphes doivent survivre.
+  const TRAME="repeating-linear-gradient(-55deg,transparent,transparent 16px,rgba(255,255,255,.014) 16px,rgba(255,255,255,.014) 17px)";
+  const CARTE="background:linear-gradient(160deg,#131313,#0c0c0c 55%,#0a0a0a);border:1px solid #1e1e1e;border-radius:16px;padding:20px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.04);position:relative;overflow:hidden";
+  const TITRE="font-size:var(--fs-xs);color:var(--red);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:11px;text-shadow:0 0 12px rgba(224,32,32,.55)";
+  // La trame carbone, posee en calque : elle donne la matiere sans rien
+  // telecharger, et ne mange aucun contraste au texte pose dessus.
+  const grain='<div style="position:absolute;inset:0;pointer-events:none;background:'+TRAME+'"></div>';
   const carte=(titre,texte)=>{
     const t=(texte||'').trim();
     if(!t) return '';
-    return '<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:14px">'
-      +'<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:10px">'+titre+'</div>'
-      +'<div style="font-size:13px;color:#dcdcdc;line-height:1.75">'+escapeHtml(t).replace(/\n/g,'<br>')+'</div>'
-      +'</div>';
+    return '<div style="'+CARTE+'">'+grain
+      +'<div style="position:relative">'
+      +'<div style="'+TITRE+'">'+titre+'</div>'
+      +'<div style="font-size:13px;color:#dcdcdc;line-height:1.8">'+escapeHtml(t).replace(/\n/g,'<br>')+'</div>'
+      +'</div></div>';
   };
-  // TETE. Avec photo, elle est pleine largeur et le nom se pose dessus en
-  // degrade ; sans photo, le meme bandeau sans image — jamais un trou.
-  const eyebrow=p.teamName?('<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:5px">'+escapeHtml(p.teamName)+'</div>'):'';
-  const titre='<h1 style="margin:0;line-height:1.05">'+escapeHtml(nom)+'</h1>';
-  const phrase=(p.catchphrase||'').trim()
-    ?('<div style="font-size:12.5px;color:#bdbdbd;font-style:italic;line-height:1.6;margin-top:8px">« '+escapeHtml(p.catchphrase.trim())+' »</div>')
-    :'';
-  const tete=p.photoVitrine
-    ?('<div style="position:relative;border-radius:16px;overflow:hidden;margin-bottom:18px">'
-      +img(p.photoVitrine,'width:100%;display:block')
-      +'<div style="position:absolute;inset:auto 0 0 0;padding:52px 16px 16px;background:linear-gradient(to top,rgba(8,8,8,.96),rgba(8,8,8,.75) 45%,transparent)">'
-      +eyebrow+titre+'</div></div>'+ (phrase?('<div style="margin:-6px 2px 18px">'+phrase+'</div>'):''))
-    :('<div style="margin-bottom:18px">'+eyebrow+titre+phrase+'</div>');
-  // Rien de rempli : on le dit DANS la page, avec le geste a faire. Un ecran
-  // vide laisserait croire a une panne ; un toast, lui, ne dit pas ou aller.
   const _rempli=(p.bio||'').trim()||(p.vision||'').trim()||p.photoVitrine
     ||p.signature||p.cartePro||((p.diplomes||[]).length);
   if(!_rempli){
     return '<div class="pad" style="padding-bottom:44px">'
       +'<h1 style="margin-bottom:14px">'+escapeHtml(nom)+'</h1>'
-      +'<div style="background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--red);border-radius:14px;padding:18px">'
-      +'<div style="font-size:13px;color:#dcdcdc;line-height:1.75">'
+      +'<div style="'+CARTE+';border-left:3px solid var(--red)">'+grain
+      +'<div style="position:relative;font-size:13px;color:#dcdcdc;line-height:1.75">'
       +(currentUser&&currentUser.role==='coach'
         ?'Ta présentation est vide. Remplis « Qui tu es » dans ton profil, puis touche <strong>Enregistrer</strong> — le bouton rouge, pas « Prévisualiser ».'
-        :('Ton coach n’a pas encore rempli sa présentation.'
-          +_diagVitrine()))
+        :('Ton coach n’a pas encore rempli sa présentation.'+_diagVitrine()))
       +'</div></div></div>';
   }
-  return '<div class="pad" style="padding-bottom:44px">'
+  const eyebrow=p.teamName?('<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px;text-shadow:0 0 14px rgba(224,32,32,.6)">'+escapeHtml(p.teamName)+'</div>'):'';
+  const titre='<h1 style="margin:0;line-height:1.02;text-shadow:0 3px 18px rgba(0,0,0,.9)">'+escapeHtml(nom)+'</h1>';
+  const phrase=(p.catchphrase||'').trim()
+    ?('<div style="font-size:12.5px;color:#c8c8c8;font-style:italic;line-height:1.65;margin-top:9px">« '+escapeHtml(p.catchphrase.trim())+' »</div>')
+    :'';
+  // TETE. Le filet rouge lumineux sous la photo raccorde l ecran a
+  // l identite de l app, et separe l image du texte sans trait dur.
+  const tete=p.photoVitrine
+    ?('<div style="position:relative;border-radius:18px;overflow:hidden;margin-bottom:20px;box-shadow:0 16px 40px rgba(0,0,0,.7),0 0 0 1px #1c1c1c">'
+      +img(p.photoVitrine,'width:100%;display:block')
+      +'<div style="position:absolute;inset:0;background:'+TRAME+';pointer-events:none"></div>'
+      +'<div style="position:absolute;inset:auto 0 0 0;padding:64px 18px 18px;background:linear-gradient(to top,rgba(6,6,6,.97),rgba(6,6,6,.78) 42%,transparent)">'
+      +eyebrow+titre+'</div>'
+      +'<div style="position:absolute;left:0;right:0;bottom:0;height:2px;background:linear-gradient(90deg,transparent,var(--red),transparent);box-shadow:0 0 16px rgba(224,32,32,.85)"></div>'
+      +'</div>'+(phrase?('<div style="margin:-8px 4px 20px">'+phrase+'</div>'):''))
+    :('<div style="margin-bottom:20px">'+eyebrow+titre+phrase+'</div>');
+  return '<div class="pad" style="padding-bottom:48px">'
     +tete
     +carte('Qui je suis',p.bio)
     +carte('Ma vision',p.vision)
     +_htmlDiplomesCoach(p)
-    +(p.signature?('<div style="text-align:center;margin-top:8px;padding-top:18px;border-top:1px solid var(--border)">'
-        +img(p.signature,'max-width:200px;width:55%;opacity:.85;display:inline-block')
+    +(p.signature?('<div style="text-align:center;margin-top:10px;padding-top:22px;position:relative">'
+        +'<div style="position:absolute;top:0;left:12%;right:12%;height:1px;background:linear-gradient(90deg,transparent,#2a2a2a,transparent)"></div>'
+        +img(p.signature,'max-width:210px;width:58%;display:inline-block;filter:drop-shadow(0 0 14px rgba(224,32,32,.35)) drop-shadow(0 2px 6px rgba(0,0,0,.8))')
         +'</div>'):'')
     +'</div>';
 }
@@ -44239,43 +44267,38 @@ function _htmlVitrineCoach(pub){
 function _htmlDiplomesCoach(p){
   const dips=((p||{}).diplomes||[]).filter(d=>d&&d.titre);
   const carte=(p||{}).cartePro||'';
-  // Rien de rendu si rien n'est renseigne : un encart vide laisserait croire
-  // a un document manquant, et un coach sans diplome renseigne n'a pas a
-  // avoir l'air d'en cacher un.
   if(!dips.length&&!carte) return '';
-  const img=src=>'<img src="'+escapeHtml(src)+'" alt="" loading="lazy" style="width:100%;border-radius:10px;margin-top:10px;display:block">';
-  // Une pastille cochee par diplome, l'image dessous quand il y en a une.
-  const ligne=d=>'<div style="padding:12px 0;border-bottom:1px solid #171717">'
-    +'<div style="display:flex;gap:10px;align-items:center">'
-    +'<span style="flex:none;width:20px;height:20px;border-radius:50%;background:var(--red);color:#fff;font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center">✓</span>'
-    +'<span style="flex:1;min-width:0;font-size:12.5px;font-weight:700;color:#fff;letter-spacing:.3px">'+escapeHtml(d.titre)+'</span>'
-    +'</div>'
-    +(d.image?img(d.image):'')
-    +'</div>';
-  let h='<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:14px">';
-  if(dips.length){
-    h+='<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Diplômes et formations</div>'
-      +dips.map(ligne).join('');
-  }
-  if(carte){
-    h+='<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;text-transform:uppercase;font-weight:800;margin:16px 0 6px">Carte professionnelle</div>'
-      +'<img src="'+escapeHtml(carte)+'" alt="" loading="lazy" style="width:100%;border-radius:10px;display:block">';
-  }
-  h+='</div>';
-  // L'encart pedagogique est une carte A PART, et volontairement : il ne
-  // parle pas du coach mais du metier. Le fondre dans la liste laisserait
-  // croire qu'il decrit ses diplomes a lui.
-  h+='<div style="background:#0d0505;border:1px solid rgba(224,32,32,.28);border-left:3px solid var(--red);border-radius:14px;padding:16px 18px;margin-bottom:14px">'
-    +'<div style="font-size:var(--fs-xs);letter-spacing:2px;text-transform:uppercase;color:var(--red);font-weight:800;margin-bottom:8px">Pourquoi un professionnel diplômé</div>'
-    +'<div style="font-size:12.5px;color:#dcdcdc;line-height:1.75">'
+  const TRAME="repeating-linear-gradient(-55deg,transparent,transparent 16px,rgba(255,255,255,.014) 16px,rgba(255,255,255,.014) 17px)";
+  const CARTE="background:linear-gradient(160deg,#131313,#0c0c0c 55%,#0a0a0a);border:1px solid #1e1e1e;border-radius:16px;padding:20px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.04);position:relative;overflow:hidden";
+  const TITRE="font-size:var(--fs-xs);color:var(--red);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:11px;text-shadow:0 0 12px rgba(224,32,32,.55)";
+  const grain='<div style="position:absolute;inset:0;pointer-events:none;background:'+TRAME+'"></div>';
+  const img=src=>'<img src="'+escapeHtml(src)+'" alt="" loading="lazy" style="width:100%;border-radius:12px;margin-top:11px;display:block;box-shadow:0 8px 22px rgba(0,0,0,.6)">';
+  // La pastille porte un halo : c est le seul point rouge de la liste, et
+  // c est lui qui fait lire la ligne comme une validation.
+  const ligne=d=>'<div style="padding:13px 0;border-bottom:1px solid #191919">'
+    +'<div style="display:flex;gap:11px;align-items:center">'
+    +'<span style="flex:none;width:21px;height:21px;border-radius:50%;background:linear-gradient(150deg,#ff4a3a,#b81515);color:#fff;font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 0 14px rgba(224,32,32,.6)">✓</span>'
+    +'<span style="flex:1;min-width:0;font-size:12.5px;font-weight:700;color:#fff;letter-spacing:.4px">'+escapeHtml(d.titre)+'</span>'
+    +'</div>'+(d.image?img(d.image):'')+'</div>';
+  let h='<div style="'+CARTE+'">'+grain+'<div style="position:relative">';
+  if(dips.length) h+='<div style="'+TITRE+'">Diplômes et formations</div>'+dips.map(ligne).join('');
+  if(carte) h+='<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;text-transform:uppercase;font-weight:800;margin:18px 0 8px">Carte professionnelle</div>'
+      +'<img src="'+escapeHtml(carte)+'" alt="" loading="lazy" style="width:100%;border-radius:12px;display:block;box-shadow:0 8px 22px rgba(0,0,0,.6)">';
+  h+='</div></div>';
+  // L encart pedagogique : fond plus chaud, liseré lumineux. Il parle du
+  // metier, pas du coach — il ne doit pas se confondre avec la liste.
+  h+='<div style="position:relative;overflow:hidden;background:linear-gradient(160deg,#170707,#0d0404);border:1px solid rgba(224,32,32,.3);border-left:3px solid var(--red);border-radius:16px;padding:18px 20px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.5),inset 0 0 40px rgba(224,32,32,.05)">'+grain
+    +'<div style="position:relative">'
+    +'<div style="font-size:var(--fs-xs);letter-spacing:2.5px;text-transform:uppercase;color:var(--red);font-weight:800;margin-bottom:9px;text-shadow:0 0 14px rgba(224,32,32,.7)">Pourquoi un professionnel diplômé</div>'
+    +'<div style="font-size:12.5px;color:#dcdcdc;line-height:1.8">'
     +'Un diplôme n\'est pas une formalité administrative : c\'est la preuve que la personne '
     +'qui règle tes charges, corrige ta technique et t\'oriente sur ton alimentation a été '
     +'formée pour le faire — et qu\'elle sait où s\'arrête son domaine. '
     +'Un accompagnement improvisé, c\'est au mieux des mois perdus, au pire une blessure.'
     +'</div>'
-    +'<div style="font-size:10.5px;color:var(--text-faint);line-height:1.6;margin-top:10px">'
+    +'<div style="font-size:10.5px;color:var(--text-faint);line-height:1.6;margin-top:11px">'
     +'Les documents ci-dessus ont été publiés par ton coach lui-même.'
-    +'</div></div>';
+    +'</div></div></div>';
   return h;
 }
 // Cote athlete : depuis la carte du coach.
