@@ -65086,6 +65086,80 @@ function testExercices(){
           const gkg=htmlAnneauxMacros(tot,m,'12px','gkg',80);
           if(!/g\/kg/.test(gkg)) return _echec('aucun g/kg');
           return /1,5 g\/kg/.test(gkg)?true:_echec('cible protéines : 150/80 = 1,875 attendu');})());
+        // ══════ LE CHIFFRE AU CENTRE SUIT LE JOURNAL ══════
+        ok('100 g de poulet au journal : l\'anneau Protéines passe à 31 / 160 g',(()=>{
+          // Le centre affichait la CIBLE : ajouter un aliment remplissait l'arc sans
+          // que le chiffre bouge, et l'athlète ne lisait nulle part ce qu'il avait
+          // mangé. On part du JOURNAL, pas d'un total déjà calculé — c'est le
+          // chemin que les assertions voisines ne prennent pas.
+          const _cu=currentUser;
+          try{
+            const auj=localISODate(new Date());
+            const nut={dietType:'flexible',
+              macros:{on:{kcal:2200,p:160,g:220,l:70},off:{kcal:2200,p:160,g:220,l:70}},
+              log:{}};
+            currentUser={email:'lea@t.fr',id:'a1',role:'athlete',fname:'Léa',
+              gender:'Homme',nutrition:nut};
+            const centre=h=>[...h.matchAll(/font-weight="900"\s*\n?\s*fill="([^"]*)">([^<]*)</g)]
+              .map(x=>({v:x[2],fill:x[1]}));
+            const sous=h=>[...h.matchAll(/font-size="11" fill="#777">([^<]*)</g)].map(x=>x[1]);
+            const arcs=h=>[...h.matchAll(/stroke-dasharray="([\d.]+) /g)].map(x=>parseFloat(x[1]));
+            const vide=_renderStrictMacroRings(nut);
+            if(!vide) return _echec('aucun anneau rendu sur un journal vide');
+            if(centre(vide)[0].v!=='0') return _echec('journal vide : centre = '+centre(vide)[0].v);
+            if(arcs(vide)[0]!==0) return _echec('journal vide : l\'arc est déjà rempli');
+            // 100 g de poulet : 31 g de protéines, 3,6 g de lipides.
+            nut.log[auj]={entries:[{nom:'Poulet',qte:100,kcal:165,p:31,c:0,l:3.6}]};
+            const h=_renderStrictMacroRings(nut);
+            const c=centre(h), sb=sous(h), ar=arcs(h);
+            if(c[0].v!=='31') return _echec('centre Protéines : '+c[0].v);
+            if(sb[0]!=='/ 160 g') return _echec('seconde ligne : '+sb[0]);
+            // L'arc vaut la FRACTION consommée, pas autre chose : 31/160 de la
+            // circonférence. Sans ça, le chiffre et le dessin pourraient diverger.
+            const circ=+(2*Math.PI*32).toFixed(2);
+            const attendu=+((31/160)*circ).toFixed(2);
+            if(Math.abs(ar[0]-attendu)>0.05)
+              return _echec('arc '+ar[0]+' au lieu de '+attendu);
+            // Les lipides décimaux s'arrondissent à l'entier : 3,6 → 4.
+            return c[2].v==='4'?true:_echec('lipides : '+c[2].v+' au lieu de 4');
+          } finally { currentUser=_cu; }})());
+        ok('Au-delà de 110 % de la cible, le chiffre vire à l\'orange',(()=>{
+          // L'arc est plafonné à 100 % par Math.min : à lui seul, il ne distingue
+          // pas « pile atteint » de « largement dépassé ». La couleur le fait.
+          const m={kcal:2000,p:160,g:200,l:70};
+          const teinte=pv=>{
+            const h=htmlAnneauxMacros({kcal:0,p:pv,c:0,l:0},m,'12px');
+            const x=/font-weight="900"\s*\n?\s*fill="([^"]*)">/.exec(h);
+            return x?x[1]:'(introuvable)';
+          };
+          if(teinte(200)!=='var(--orange)') return _echec('125 % ne passe pas en alerte : '+teinte(200));
+          if(teinte(100)!=='#fff') return _echec('un apport sous la cible est en alerte');
+          // LA BORNE EST STRICTE : 110 % pile n'est pas un dépassement.
+          if(teinte(176)!=='#fff') return _echec('110 % pile déclenche l\'alerte');
+          if(teinte(176.1)!=='var(--orange)') return _echec('juste au-dessus de 110 % ne déclenche rien');
+          // Et sans cible, aucune alerte : rien à dépasser.
+          const sansCible=htmlAnneauxMacros({kcal:0,p:300,c:0,l:0},{kcal:0,p:0,g:0,l:0},'12px');
+          return sansCible.indexOf('var(--orange)')<0
+            ?true:_echec('alerte rendue alors qu\'aucune cible n\'est fixée');})());
+        ok('Une cible décimale s\'affiche en entier, jamais « / 61.6 g »',(()=>{
+          // _applyNutCycleModifier fait un toFixed(1) : l'adaptation de cycle produit
+          // des lipides à la décimale. « / 61.6 g » en face d'un consommé entier ne
+          // veut rien dire.
+          const h=htmlAnneauxMacros({kcal:0,p:0,c:0,l:62},{kcal:2000,p:160,g:200,l:61.6},'12px');
+          const sous=[...h.matchAll(/font-size="11" fill="#777">([^<]*)</g)].map(x=>x[1]);
+          if(sous[2]!=='/ 62 g') return _echec('cible lipides : '+JSON.stringify(sous[2]));
+          // On ne juge que le TEXTE rendu : stroke-dasharray porte legitimement
+          // « 38.96 », c'est de la géométrie et personne ne la lit.
+          const lus=[...h.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map(x=>x[1]);
+          const dec=lus.filter(x=>/\d+[.,]\d/.test(x));
+          if(dec.length) return _echec('décimale affichée : '+JSON.stringify(dec));
+          // Sans cible, la ligne ne s'écrit pas du tout — plutôt que « / — g ».
+          const sans=htmlAnneauxMacros({kcal:0,p:20,c:0,l:0},{kcal:0,p:0,g:0,l:0},'12px');
+          const sousSans=[...sans.matchAll(/font-size="11" fill="#777">([^<]*)</g)].map(x=>x[1]);
+          if(sousSans.some(x=>x.trim())) return _echec('une cible vide est écrite : '+JSON.stringify(sousSans));
+          // TÉMOIN : le consommé, lui, reste rendu sans cible.
+          return /font-weight="900"[\s\S]{0,60}>20</.test(sans)
+            ?true:_echec('le consommé disparaît quand la cible manque');})());
 
         // Règle 7 : ON et OFF séparées côté coach.
         ok('Règle 7 : ON et OFF ont deux répartitions distinctes, jamais moyennées',(()=>{
