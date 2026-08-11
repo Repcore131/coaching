@@ -59891,7 +59891,10 @@ function testExercices(){
     // quand une réponse est attendue. L'épingle avait été oubliée — elle a
     // sonné, c'est son travail. Le délai médian de réponse, lui, n'y est pas
     // et n'y sera jamais.
-    const _cpAttendus=['fname','lname','teamName','catchphrase','coachPhoto','promoBanners','phone','chargesSchema','contact','canalDernier','canalEpingle','dispo'];
+    // La vitrine est entree ici : bio, vision, photo de presentation,
+    // signature, carte pro et diplomes. Ce sont des elements que le coach
+    // PUBLIE volontairement, et l athlete ne peut pas les lire autrement.
+    const _cpAttendus=['fname','lname','teamName','catchphrase','coachPhoto','bio','vision','photoVitrine','signature','cartePro','diplomes','promoBanners','phone','chargesSchema','contact','canalDernier','canalEpingle','dispo'];
     ok('Liste des champs publiés figée',
        JSON.stringify(CLOUD.CHAMPS_PROFIL_COACH)===JSON.stringify(_cpAttendus),
        JSON.stringify(CLOUD.CHAMPS_PROFIL_COACH));
