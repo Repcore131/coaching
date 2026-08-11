@@ -62452,6 +62452,68 @@ function testExercices(){
         // part. sessionData contient toutes les séries PRÉVUES dès l'ouverture
         // de l'exercice ; sans le garde-fou « if(!s.done) return », le bilan
         // affichait le programme au lieu du réalisé.
+        ok('Critère : 3×4 séries, 5 validées → « 5/12 » et le volume des 5',(()=>{
+          // LE PIÈGE : sessionData n'est rempli qu'à l'ouverture de chaque
+          // exercice. Une séance abandonnée au 2e exercice n'y porte que huit
+          // séries — compter le prévu dessus annoncerait « 5/8 », et
+          // l'écart réel, celui qu'on veut montrer, disparaîtrait.
+          const _cu=currentUser,_db=DB.get('users'),_ws=woState;
+          const _t=window.toast,_ts=window.toastSync,_p=CLOUD.pushOne,_g=window.go,_bc=window.barChart;
+          let graphe=null;
+          try{
+            window.toast=()=>{}; window.toastSync=()=>{}; window.go=()=>{};
+            CLOUD.pushOne=()=>Promise.resolve();
+            window.barChart=(id,lab,vals)=>{graphe={id,vals};};
+            currentUser={email:'lea@t.fr',id:'a1',role:'athlete',fname:'Léa',
+              sessions:[],bilans:[],
+              sessions_config:[{day:'Lundi',name:'PUSH',active:true,exercises:[]}]};
+            DB.set('users',{'lea@t.fr':currentUser});
+            const ex=[{name:'DC',series:4,reps:'10'},{name:'SQUAT',series:4,reps:'10'},
+                      {name:'ROWING',series:4,reps:'10'}];
+            // Le 3e exercice n'est JAMAIS ouvert : sessionData ne le porte pas.
+            const sd={};
+            [0,1].forEach(i=>{sd[i]={sets:[0,1,2,3].map(()=>({weight:'',reps:'',done:false}))};});
+            const v=(i,j,kg,r)=>{sd[i].sets[j]={weight:String(kg),reps:String(r),done:true};};
+            v(0,0,60,10); v(0,1,60,10); v(0,2,62.5,8); v(1,0,100,5); v(1,1,100,5);
+            woState={exercises:ex,sessionData:sd,currentEx:1,startTime:Date.now()-2700000,
+              progName:'PUSH',slot:0,substitutions:[]};
+            finishWorkout(false);
+            const u=DB.get('users')['lea@t.fr'];
+            const se=(u.sessions||[]).slice(-1)[0];
+            if(!se) return _echec('aucune séance enregistrée');
+            if(se.sets!==5) return _echec('séries réalisées : '+se.sets);
+            // 12, PAS 8 : le prévu vient du programme, pas de ce qui a été ouvert.
+            if(se.setsPlanned!==12)
+              return _echec('séries prévues : '+se.setsPlanned+' — comptées sur sessionData ?');
+            // Le volume ne retient QUE les cinq séries validées.
+            const attendu=Math.round(60*10+60*10+62.5*8+100*5+100*5);
+            if(se.volume!==attendu) return _echec('volume '+se.volume+' au lieu de '+attendu);
+            // Le récap l'affiche sous la forme demandée.
+            const r=document.getElementById('wd-sets');
+            if(!r||r.textContent!=='5/12') return _echec('récap : '+(r&&r.textContent));
+            // Et le graphique Perfs lit la MÊME valeur : les deux décrivent la
+            // même séance et ne doivent pas pouvoir diverger.
+            currentUser=u;
+            try{ _peindreVolumeCreneau(u); }catch(e){}
+            return (graphe&&(graphe.vals||[]).indexOf(attendu)>=0)
+              ?true:_echec('le graphique Perfs ne reflète pas le volume : '+JSON.stringify(graphe));
+          } finally { currentUser=_cu; if(_db) DB.set('users',_db); woState=_ws;
+            window.toast=_t; window.toastSync=_ts; CLOUD.pushOne=_p; window.go=_g;
+            window.barChart=_bc; }})());
+        ok('« série » s\'accorde sur le total prévu, jamais sur le réalisé',(()=>{
+          // « 1/12 série » serait faux : c'est le total qui commande l'accord.
+          if(pluSeries(1,12)!=='s') return _echec('1/12 devrait donner « séries »');
+          if(pluSeries(1,1)!=='') return _echec('1/1 devrait donner « série »');
+          if(pluSeries(0,0)!=='') return _echec('0/0 devrait donner « série »');
+          if(pluSeries(5,0)!=='s') return _echec('sans prévu, l\'accord suit le réalisé');
+          // Et le format : pas de dénominateur inventé sur l'historique ancien,
+          // ni de « 14/12 » sur un dossier incohérent.
+          if(fmtSeries(5,12)!=='5/12') return _echec('format : '+fmtSeries(5,12));
+          if(fmtSeries(5,0)!=='5') return _echec('un dénominateur apparaît sans setsPlanned');
+          if(fmtSeries(5)!=='5') return _echec('setsPlanned absent : '+fmtSeries(5));
+          return fmtSeries(14,12)==='14'
+            ?true:_echec('un dossier incohérent affiche « 14/12 »');})());
+
         ok('Une seule série validée : 1 série comptée, et le tonnage de celle-là',(()=>{
           const _sw=woState, _su=currentUser;
           try{
