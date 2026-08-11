@@ -44142,6 +44142,20 @@ function _htmlVitrineCoach(pub){
       +'<div style="position:absolute;inset:auto 0 0 0;padding:52px 16px 16px;background:linear-gradient(to top,rgba(8,8,8,.96),rgba(8,8,8,.75) 45%,transparent)">'
       +eyebrow+titre+'</div></div>'+ (phrase?('<div style="margin:-6px 2px 18px">'+phrase+'</div>'):''))
     :('<div style="margin-bottom:18px">'+eyebrow+titre+phrase+'</div>');
+  // Rien de rempli : on le dit DANS la page, avec le geste a faire. Un ecran
+  // vide laisserait croire a une panne ; un toast, lui, ne dit pas ou aller.
+  const _rempli=(p.bio||'').trim()||(p.vision||'').trim()||p.photoVitrine
+    ||p.signature||p.cartePro||((p.diplomes||[]).length);
+  if(!_rempli){
+    return '<div class="pad" style="padding-bottom:44px">'
+      +'<h1 style="margin-bottom:14px">'+escapeHtml(nom)+'</h1>'
+      +'<div style="background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--red);border-radius:14px;padding:18px">'
+      +'<div style="font-size:13px;color:#dcdcdc;line-height:1.75">'
+      +(currentUser&&currentUser.role==='coach'
+        ?'Ta présentation est vide. Remplis « Qui tu es » dans ton profil, puis touche <strong>Enregistrer</strong> — le bouton rouge, pas « Prévisualiser ».'
+        :'Ton coach n’a pas encore rempli sa présentation.')
+      +'</div></div></div>';
+  }
   return '<div class="pad" style="padding-bottom:44px">'
     +tete
     +carte('Qui je suis',p.bio)
@@ -44228,12 +44242,7 @@ function ouvrirVitrineCoach(){
     const v=[_pub[k],_loc[k],_moi[k]].find(_plein);
     if(v!==undefined) pub[k]=v;
   });
-  if(!vitrineCoachRemplie(pub)){
-    // Le silence etait le pire des cas : le doigt touche, rien ne bouge, et
-    // l athlete ne sait pas si l app est cassee ou si son coach n a rien mis.
-    toast('Ce coach n’a pas encore rempli sa presentation.','var(--orange)');
-    return false;
-  }
+  // Aucune condition : on ouvre, et l ecran dit lui-meme ce qui manque.
   const z=document.getElementById('vitrine-coach-corps');
   if(!z) return false;
   z.innerHTML=_htmlVitrineCoach(pub);
