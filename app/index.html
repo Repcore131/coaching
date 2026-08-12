@@ -31907,6 +31907,28 @@ function planFormatQte(g,unite){
 // Le nombre de jours par ligne vit dans plan.courses.jours, le stock déjà
 // présent dans plan.courses.stock. Une ligne de squelette se mange tous les
 // jours par défaut : c'est le sens même d'un repas imposé.
+// Regroupe les lignes qui designent la MEME denree. On ne fusionne que ce
+// qui s additionne vraiment : meme nom ET meme unite. « 2 oeufs » et
+// « 100 g » ne font pas 102 de quoi que ce soit, et deux denrees qui se
+// ressemblent ne sont pas la meme — la comparaison est donc sur le nom
+// exact, normalise (accents, casse), jamais approchante.
+function _lcFusionner(lignes){
+  const out=[],index=new Map();
+  for(const l of lignes||[]){
+    const k=_fjNorm(String(l.lib||'').trim())+'\u0000'+String(l.unite||'');
+    const d=index.get(k);
+    if(!d){ const c=Object.assign({},l,{cles:[l.cle]}); index.set(k,c); out.push(c); continue; }
+    d.qte=(d.qte||0)+(l.qte||0);
+    // Le stock deja soustrait se cumule lui aussi : il sert a expliquer la
+    // ligne au coach, il doit rester coherent avec la quantite affichee.
+    d.stock=(d.stock||0)+(l.stock||0);
+    d.cles.push(l.cle);
+    // La ligne ne vient plus d un seul endroit : ne pas laisser croire
+    // qu elle est purement imposee ou purement choisie.
+    if(d.origine!==l.origine) d.origine='mixte';
+  }
+  return out;
+}
 function planListeCourses(plan,porteur,chercher){
   const res=_planResolveur(chercher);
   const co=(plan&&plan.courses)||{};
@@ -31956,7 +31978,7 @@ function planListeCourses(plan,porteur,chercher){
             +((PLAN_JOURS_SEMAINE-totJours)>1?'s':'')+' sans source attribuée.'
           :' — la semaine est dépassée.'));
   }
-  return {lignes,alertes,restant:rest,couverture:couv,cibles};
+  return {lignes:_lcFusionner(lignes),alertes,restant:rest,couverture:couv,cibles};
 }
 
 // Tout ce qui doit passer sous les yeux du coach avant qu'il publie. Aucune
@@ -32840,12 +32862,19 @@ function lcChoisir(cle,val){
 // relisent donc sans migration.
 function lcStock(cle,el){
   const stock=!!(el&&el.value==='stock');
+  // Une ligne fusionnee porte les cles de TOUTES ses composantes, separees
+  // par des virgules. Aucune cle n en contient : elles valent 's<id>',
+  // 's#<i>', 'c<id>' ou 'x<alphanum>'. Cocher la ligne coche donc tout ce
+  // qui la compose — sans quoi une moitie du besoin resterait « a prendre ».
+  const cles=String(cle==null?'':cle).split(',').filter(Boolean);
   try{
     if(currentUser){
       if(!currentUser.nutrition) currentUser.nutrition={};
       if(!currentUser.nutrition.coursesAchat) currentUser.nutrition.coursesAchat={};
-      if(stock) currentUser.nutrition.coursesAchat[cle]=true;
-      else delete currentUser.nutrition.coursesAchat[cle];
+      for(const c of cles){
+        if(stock) currentUser.nutrition.coursesAchat[c]=true;
+        else delete currentUser.nutrition.coursesAchat[c];
+      }
       saveUser();
     }
   }catch(e){}
@@ -33036,7 +33065,7 @@ function _htmlPlanAthlete(user){
   // Rythme de LISTE : 3px de marge au lieu de 7, separateur plus discret.
   // La cible tactile ne descend pas pour autant — le select garde 34px, et
   // la regle WCAG est tenue par sa largeur, pas par l interligne.
-  const ligneCourse=(lib,qte,cle,stock)=>`<div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-top:1px solid #1c1c1c">
+  const ligneCourse=(lib,qte,cle,stock,nUsages)=>`<div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-top:1px solid #1c1c1c">
       <select onchange="lcStock('${cle}',this)" aria-label="État : ${escapeHtml(lib)}"
         style="flex-shrink:0;width:88px;min-height:34px;padding:4px 6px;border-radius:7px;cursor:pointer;
           background:${stock?'rgba(34,197,94,.10)':'#101010'};
@@ -33046,7 +33075,7 @@ function _htmlPlanAthlete(user){
         <option value=""${stock?'':' selected'}>À prendre</option>
         <option value="stock"${stock?' selected':''}>En stock</option>
       </select>
-      <span style="flex:1;min-width:0;font-size:11.5px;color:${stock?'var(--text-faint)':'#ddd'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${stock?'text-decoration:line-through':''}">${escapeHtml(lib)}</span>
+      <span style="flex:1;min-width:0;font-size:11.5px;color:${stock?'var(--text-faint)':'#ddd'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${stock?'text-decoration:line-through':''}">${escapeHtml(lib)}${(nUsages>1)?` <span title="Regroupé : cette denrée est demandée à ${nUsages} endroits de ton plan" style="font-size:9px;font-weight:800;color:var(--text-faint);border:1px solid #2e2e2e;border-radius:4px;padding:0 3px;vertical-align:1px">×${nUsages}</span>`:''}</span>
       <span style="font-size:12px;font-weight:800;color:${stock?'var(--text-faint)':'#fff'};flex-shrink:0">${qte}</span>
     </div>`;
   // Les sources sont INTERCHANGEABLES : la liste ne peut pas deviner laquelle
@@ -33081,7 +33110,12 @@ const courses=(lc&&lc.lignes.length)?`<div style="position:relative;overflow:hid
       <span style="font-size:9px;color:#5a5a5a;letter-spacing:1.5px;font-weight:800;text-transform:uppercase;flex-shrink:0">Stock</span>
     </div>
     <div style="font-size:9.5px;color:var(--text-faint);letter-spacing:.5px;margin-bottom:6px">Ce qu'il te faut acheter (ce n'est pas ton plan alimentaire).</div>
-      ${lc.lignes.filter(l=>l.qte>0).map(l=>ligneCourse(l.lib,planFormatQte(l.qte,l.unite),l.cle,!!achats[l.cle])).join('')}
+      ${lc.lignes.filter(l=>l.qte>0).map(l=>{
+        const cs=l.cles||[l.cle];
+        // « En stock » seulement si TOUTES les composantes le sont : une
+        // seule non cochee et il reste quelque chose a acheter.
+        return ligneCourse(l.lib,planFormatQte(l.qte,l.unite),cs.join(','),cs.every(c=>!!achats[c]),cs.length);
+      }).join('')}
       ${''/* les quatre lignes « au choix » suivent, hors du marquage stock */}
       ${auChoix('p',0)}${auChoix('p',1)}
       ${auChoix('c',0)}${auChoix('c',1)}
