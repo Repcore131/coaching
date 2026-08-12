@@ -3891,7 +3891,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
         <div style="width:3px;height:22px;background:var(--red);border-radius:2px;box-shadow:0 0 10px rgba(224,32,32,.9)"></div>
         <span style="display:inline-flex;color:#ff3b30;filter:drop-shadow(0 0 6px rgba(224,32,32,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M2 17h18a2 2 0 0 0 2-2c0-1.6-1.2-2.3-2.8-2.9l-4.4-1.7a3 3 0 0 1-1.3-1L11.6 6.4a1.4 1.4 0 0 0-2.2-.2L7.6 8.1 2 8.1z"/><path d="M2 17v2h20v-2"/></svg></span>
-        <span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:20px;letter-spacing:3px;color:#fff;text-transform:uppercase;text-shadow:0 0 14px rgba(255,255,255,.35)">MES PAS</span>
+        <span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:20px;letter-spacing:3px;color:var(--red);text-transform:uppercase;text-shadow:0 0 14px rgba(224,32,32,.55)">MES PAS</span>
       </div>
       <div id="lifestyle-steps-content"></div>
       <div class="divider" style="margin:28px 0"></div>
@@ -40557,12 +40557,18 @@ function loadSteps(containerId='steps-content'){
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:relative">
         <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:13px">Objectifs de pas</div>
-        <div style="display:flex;gap:10px;margin-bottom:12px">
-          <div style="flex:1;min-width:0">
+        <!-- ALIGNES PAR LE BAS. « JOUR ON ENTRAÎNEMENT » se replie sur deux
+             lignes la ou « JOUR OFF REPOS » tient sur une : les deux champs
+             se retrouvaient decales. Les colonnes s etirent a la meme hauteur
+             et poussent leur champ en bas, ce qui tient quel que soit le
+             libelle — figer une hauteur casserait a la premiere retouche de
+             texte, ou sur un telephone plus etroit. -->
+        <div style="display:flex;gap:10px;margin-bottom:12px;align-items:stretch">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end">
             <div style="font-size:var(--fs-xs);font-weight:800;color:#ff5a5a;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">JOUR ON <span style="font-size:var(--fs-xs);font-weight:600;color:var(--text-dim)">entraînement</span></div>
             <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:22px;text-align:center;padding:11px 6px;background:linear-gradient(180deg,#0a0000,#0f0303);border:1px solid #3a0d0d;border-radius:9px;color:#ff5a5a;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px;box-shadow:inset 0 2px 7px rgba(0,0,0,.6),0 0 12px rgba(224,32,32,.12);text-shadow:0 0 10px rgba(224,32,32,.6)">
           </div>
-          <div style="flex:1;min-width:0">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end">
             <div style="font-size:var(--fs-xs);font-weight:800;color:#7aa7d9;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">JOUR OFF <span style="font-size:var(--fs-xs);font-weight:600;color:var(--text-dim)">repos</span></div>
             <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:22px;text-align:center;padding:11px 6px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:9px;color:#7aa7d9;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px;box-shadow:inset 0 2px 7px rgba(0,0,0,.6),0 0 12px rgba(96,165,250,.1);text-shadow:0 0 10px rgba(96,165,250,.5)">
           </div>
