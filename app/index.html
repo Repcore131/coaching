@@ -941,6 +941,14 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 .choice-opt.sel{border-color:var(--red);border-left-width:3px;color:#fff;background:var(--red-bg)}
 .choice-opt:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
 
+/* HISTORIQUES REPLIABLES. <details> natif : aucun script, l etat survit au
+   defilement, et le clavier l ouvre comme n importe quel bouton. Fermes par
+   defaut — vingt et une lignes poussaient tout le reste de l ecran hors de
+   vue, ce qui etait la demande. */
+.hist-repli>summary::-webkit-details-marker{display:none}
+.hist-repli>summary::marker{content:''}
+.hist-repli[open]>summary .hist-chevron{transform:rotate(180deg)}
+
 /* ══════════════════ ARC — SYSTÈME D'ANIMATION ══════════════════
    L'application est un circuit sous tension, l'athlète en est la source. Chaque
    geste y fait circuler de l'énergie, et cette énergie a une DIRECTION : elle
@@ -40535,8 +40543,8 @@ function loadSteps(containerId='steps-content'){
     }).join('');
     histHtml=`<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4)">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div>
-      <div style="position:relative"><div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:6px">Historique</div>
-      ${rows}</div>
+      <details class="hist-repli" style="position:relative"><summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;margin-bottom:6px"><div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Historique</div><span style="font-size:11px;color:var(--text-faint);font-weight:700">${sortedLog.length} jour${sortedLog.length>1?'s':''}</span><span style="flex:1"></span><span class="hist-chevron" style="font-size:13px;color:var(--sub);transition:transform .18s">▾</span></summary>
+      ${rows}</details>
     </div>`;
   }
 
@@ -43936,9 +43944,9 @@ function loadSleep(containerId='sleep-content'){
       const lbl=new Date(e.date).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
       const col=sleepColor(e.duration);
       const badge=e.duration>=7&&e.duration<=9?'Idéal':'';
-      return `<div style="font-size:12px;font-weight:600;color:#aaa;text-transform:capitalize">${lbl}</div><div style="display:flex;align-items:center;gap:10px"><div style="font-size:var(--fs-xs);color:var(--sub)">${e.bed} → ${e.wake}</div>${badge?`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--green)">${badge}</span>`:''}<div style="font-size:14px;font-weight:800;color:${col}">${e.duration}h</div></div>`;
+      return `<div style="font-size:12px;font-weight:600;color:#aaa;text-transform:capitalize">${lbl}</div><div style="display:flex;align-items:center;gap:10px">${(e.bed&&e.wake)?`<div style="font-size:var(--fs-xs);color:var(--sub)">${e.bed} → ${e.wake}</div>`:''}${badge?`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--green)">${badge}</span>`:''}<div style="font-size:14px;font-weight:800;color:${col}">${e.duration}h</div></div>`;
     },{pad:'9px 0',justify:'space-between',gap:0,border:'#111'});
-    histHtml=`<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4)"><div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div><div style="position:relative"><div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:6px">Historique</div>${rows}</div></div>`;
+    histHtml=`<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4)"><div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div><details class="hist-repli" style="position:relative"><summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;margin-bottom:6px"><div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Historique</div><span style="font-size:11px;color:var(--text-faint);font-weight:700">${sortedLog.length} nuit${sortedLog.length>1?'s':''}</span><span style="flex:1"></span><span class="hist-chevron" style="font-size:13px;color:var(--sub);transition:transform .18s">▾</span></summary>${rows}</details></div>`;
   }
 
   document.getElementById(containerId).innerHTML=`
