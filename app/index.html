@@ -33998,6 +33998,18 @@ function nutriEcartAtwater(a){
   if(th==null||!(th>0)||a.k==null) return null;
   return Math.abs(a.k-th)/th;
 }
+// La provenance se DEDUIT quand elle n est pas portee, par la regle que le
+// reste du fichier applique deja : un identifiant NUMERIQUE est un identifiant
+// Ciqual, une chaine « p… » est un aliment perso, et un objet qui porte `_off`
+// vient d Open Food Facts. UNE SEULE definition : elle etait ecrite deux fois,
+// et la seconde ignorait les identifiants numeriques — un aliment de la table
+// se voyait alors traite comme une saisie manuelle.
+function nutriSource(a){
+  if(!a||typeof a!=='object') return NUTRI_SOURCES.MANUEL;
+  if(a.source) return a.source;
+  if(a._off) return NUTRI_SOURCES.OFF;
+  return (typeof a.id==='number')?NUTRI_SOURCES.CIQUAL:NUTRI_SOURCES.MANUEL;
+}
 // PURE. Rend {valide, fiabilite, alertes[], rejets[]}.
 // `valide` porte les impossibilites arithmetiques SEULEMENT : un aliment peut
 // etre valide et peu fiable, c est justement a quoi sert la note.
@@ -34016,13 +34028,7 @@ function nutriControle(a){
   if(!a||typeof a!=='object')
     return {valide:false,fiabilite:0,alertes:[],rejets:['Aliment illisible.'],
       impossibles:['Aliment illisible.'],incomplets:[]};
-  // La provenance se DEDUIT quand elle n est pas portee, par la regle que le
-  // reste du fichier applique deja : un identifiant NUMERIQUE est un
-  // identifiant Ciqual, une chaine « p… » est un aliment perso, et un objet
-  // qui porte `_off` vient d Open Food Facts. C est ce qui evite de noter a
-  // 70 un aliment de la table parce que personne n a pense a l etiqueter.
-  const src=a.source||(a._off?NUTRI_SOURCES.OFF
-    :(typeof a.id==='number'?NUTRI_SOURCES.CIQUAL:NUTRI_SOURCES.MANUEL));
+  const src=nutriSource(a);
   // ── Les rejets : ce qui ne peut pas exister ──────────────────────────
   if(!String(a.n||'').trim()) incomplets.push('Cet aliment n’a pas de nom.');
   if(a.k==null) incomplets.push('L’énergie n’est pas renseignée.');
@@ -34063,7 +34069,11 @@ function nutriControle(a){
     alertes.push(_nb2(a.e)+' g de sel pour 100 g : à ce niveau, le produit EST du sel.');
   // ── La note ──────────────────────────────────────────────────────────
   const rejets=impossibles.concat(incomplets);
-  const fiabilite=_nutriNote(a,src,ec,rejets.length>0);
+  // La note tombe a zero sur une IMPOSSIBILITE seulement. Une fiche
+  // incomplete garde la sienne : les 143 aliments Ciqual sans energie sont
+  // de la donnee ANSES, pas de la donnee fausse, et les noter 0 aurait
+  // declenche une demande de confirmation sur chacun d eux.
+  const fiabilite=_nutriNote(a,src,ec,impossibles.length>0);
   // « valide » reste l union : offValide s en sert, et une fiche Open Food
   // Facts muette n a rien a faire dans le journal. « impossibles » est ce qui
   // doit bloquer un aliment DEJA en base, Ciqual compris — sans quoi les 143
@@ -34852,7 +34862,7 @@ function _htmlFiabilite(a){
   if(!a) return '';
   let r;
   try{ r=nutriControle(a); }catch(e){ return ''; }
-  const src=a.source||(a._off?NUTRI_SOURCES.OFF:NUTRI_SOURCES.MANUEL);
+  const src=nutriSource(a);
   if(src===NUTRI_SOURCES.CIQUAL&&!r.alertes.length) return '';
   const pal=_fiabPalier(r.fiabilite);
   const alertes=r.alertes.length
