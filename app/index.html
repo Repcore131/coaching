@@ -36561,14 +36561,33 @@ function _renderSuppTable(list, isCoach, editFn){
       </div>
       <div style="position:relative;flex-shrink:0;text-align:right;line-height:1">
         <div style="font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:22px;color:${inactive?'var(--text-dim)':c};text-shadow:0 0 12px ${c}66">${total!=null?nb(total):'—'}</div>
-        <div style="font-size:9px;color:var(--text-faint);letter-spacing:.8px;text-transform:uppercase;margin-top:2px">${escapeHtml(planUnitePluriel(total,unite))}${prises>1?' · '+prises+'×':''}</div>
+        <div style="font-size:9px;color:var(--text-faint);letter-spacing:.8px;text-transform:uppercase;margin-top:2px">${escapeHtml(/\(s\)/i.test(unite)?unite:planUnitePluriel(total,unite))}${prises>1?' · '+prises+'×':''}</div>
       </div>
     </div>`;
   };
   // Ordre de lecture : par premier moment de la journee, puis alphabetique.
   const rang=s=>{const m=momentsDe(s)[0]; const k=m?TIMINGS_LIST.findIndex(t=>t.id===m.id):99; return k<0?99:k;};
   const ordonne=list.slice().sort((a,b)=>rang(a)-rang(b)||String(a.name||'').localeCompare(String(b.name||''),'fr'));
-  return _htmlSuppInteractions(list)+ordonne.map(carte).join('')
+  // Une banniere par creneau, posee sur le PREMIER moment de chaque produit.
+  // Elle rythme la journee sans ramener la repetition : la whey figure sous
+  // « Matin » une seule fois, et ses prises de l apres-midi et du soir se
+  // lisent sur ses pastilles.
+  const banniere=(id,lib)=>{
+    const mc=(SUPP_TIMING_META[id]||{color:'#6a6a6a'}).color;
+    return `<div style="display:flex;align-items:center;gap:8px;margin:15px 0 8px">
+      <span style="display:inline-flex;filter:drop-shadow(0 0 6px ${mc}cc)">${_suppTimingIcon(id,13,mc)}</span>
+      <span style="font-family:'Bebas Neue',Impact,sans-serif;font-size:14px;letter-spacing:2.5px;color:${mc};text-shadow:0 0 12px ${mc}55">${escapeHtml(String(lib||'').toUpperCase())}</span>
+      <span style="flex:1;height:1px;background:linear-gradient(90deg,${mc}55,transparent)"></span>
+    </div>`;
+  };
+  let dernier=null, sortie='';
+  ordonne.forEach(x=>{
+    const m=momentsDe(x)[0];
+    const id=m?m.id:'_none';
+    if(id!==dernier){ dernier=id; sortie+=banniere(id,m?m.label:'Moment non défini'); }
+    sortie+=carte(x);
+  });
+  return _htmlSuppInteractions(list)+sortie
     +_htmlSuppLegende(isCoach)+_htmlSuppSourcing(isCoach);
 }
 
