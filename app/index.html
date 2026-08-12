@@ -32998,7 +32998,7 @@ const courses=(lc&&lc.lignes.length)?`<div style="position:relative;overflow:hid
       <span style="font-size:var(--fs-xs);color:#0a0a0a;letter-spacing:2px;font-weight:800;text-transform:uppercase;display:inline-flex;align-items:center;gap:6px">${icon('clipboard',13)} Liste de courses</span>
       <span style="font-size:9px;color:#5a5a5a;letter-spacing:1.5px;font-weight:800;text-transform:uppercase;flex-shrink:0">Stock</span>
     </div>
-    <div style="font-size:9.5px;color:var(--text-faint);letter-spacing:.5px;margin-bottom:6px">Ce qu'il te faut acheter — ce n'est pas ton plan alimentaire.</div>
+    <div style="font-size:9.5px;color:var(--text-faint);letter-spacing:.5px;margin-bottom:6px">Ce qu'il te faut acheter (ce n'est pas ton plan alimentaire).</div>
       ${lc.lignes.filter(l=>l.qte>0).map(l=>ligneCourse(l.lib,planFormatQte(l.qte,l.unite),l.cle,!!achats[l.cle])).join('')}
       ${''/* les quatre lignes « au choix » suivent, hors du marquage stock */}
       ${auChoix('p',0)}${auChoix('p',1)}
