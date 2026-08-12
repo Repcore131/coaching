@@ -19653,6 +19653,193 @@ function _renderExCard(ex,idx){
     </div>
   </div></div>`;
 }
+// ══════════════ SEANCE DU JOUR : L IMAGE A PARTAGER ══════════════════════
+const STORY_L=1080, STORY_H=1920;   // 9:16, le format des stories
+// Les valeurs de la carte, calculees EXACTEMENT comme _renderWeeklyInto : si
+// les deux divergeaient, l athlete partagerait une seance qu il ne voit pas.
+function _storyDonnees(){
+  const sc=currentUser&&currentUser.sessions_config;
+  if(!sc||!sc.length) return null;
+  const today=new Date().getDay();
+  const todayIdx=today===0?6:today-1;
+  let sel=_selDay!=null?_selDay:-1;
+  if(sel===-1) sel=sc.findIndex((x,i)=>i===todayIdx&&x.active&&x.exercises&&x.exercises.length);
+  if(sel===-1) sel=sc.findIndex(x=>x.active&&x.exercises&&x.exercises.length);
+  if(sel<0) return null;
+  const selS=sc[sel]||{};
+  const nbEx=(selS.active&&selS.exercises&&selS.exercises.length)?selS.exercises.length:0;
+  if(!nbEx) return null;                 // un jour de repos ne se poste pas
+  return {sel,todayIdx,sc,
+    titre:(DAYS[sel]||'').toUpperCase()+(selS.name?' : '+selS.name.toUpperCase():''),
+    repos:(selS.exercises.map(e=>e.repos).filter(Boolean)[0]||''),
+    ex:selS.exercises.slice(0,14).map(e=>({n:String(e.name||'').toUpperCase(),
+      d:String(e.series||'')+'×'+String(e.reps||'')})),
+    coupes:Math.max(0,selS.exercises.length-14)};
+}
+// Le rendu. Toutes les mesures sont en pixels de l image finale, pas en
+// unites d ecran : ce dessin ne depend d aucune mise en page.
+async function _dessinerStorySeance(d){
+  // Les polices doivent etre PRETES : un canvas dessine avant leur
+  // chargement retombe sur une police systeme, sans erreur et sans recours.
+  try{ if(document.fonts&&document.fonts.ready) await document.fonts.ready; }catch(e){}
+  const cv=document.createElement('canvas');
+  cv.width=STORY_L; cv.height=STORY_H;
+  const g=cv.getContext('2d');
+  const BEBAS="'Bebas Neue','Arial Narrow',Impact,sans-serif";
+  const MONT="Montserrat,'Segoe UI',sans-serif";
+  // Fond : le carbone de l application, pas du noir pur.
+  g.fillStyle='#0a0a0a'; g.fillRect(0,0,STORY_L,STORY_H);
+  // Halo rouge diffus, en haut : ce qui donne sa profondeur a l app.
+  const halo=g.createRadialGradient(STORY_L*0.5,STORY_H*0.16,0,STORY_L*0.5,STORY_H*0.16,STORY_L*0.9);
+  halo.addColorStop(0,'rgba(224,32,32,.22)'); halo.addColorStop(1,'rgba(224,32,32,0)');
+  g.fillStyle=halo; g.fillRect(0,0,STORY_L,STORY_H);
+  // ── La carte rouge ──────────────────────────────────────────────────
+  const M=72, CX=M, CW=STORY_L-M*2, CY=330;
+  const nL=d.ex.length;
+  const LH=76;                                  // hauteur d une ligne d exercice
+  const CH=250+nL*LH+(d.coupes?64:0)+56;
+  const rr=(x,y,w,h,r)=>{ g.beginPath();
+    g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r);
+    g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); };
+  const grad=g.createLinearGradient(CX,CY,CX+CW,CY+CH);
+  grad.addColorStop(0,'#e02020'); grad.addColorStop(0.55,'#c01818'); grad.addColorStop(1,'#8e1010');
+  g.save();
+  g.shadowColor='rgba(0,0,0,.65)'; g.shadowBlur=60; g.shadowOffsetY=24;
+  rr(CX,CY,CW,CH,34); g.fillStyle=grad; g.fill();
+  g.restore();
+  // La trame diagonale, comme sur les cartes de l app.
+  g.save(); rr(CX,CY,CW,CH,34); g.clip();
+  g.strokeStyle='rgba(255,255,255,.05)'; g.lineWidth=2;
+  for(let x=-CH;x<CW+CH;x+=26){ g.beginPath(); g.moveTo(CX+x,CY); g.lineTo(CX+x+CH,CY+CH); g.stroke(); }
+  g.restore();
+  // ── L en-tete ───────────────────────────────────────────────────────
+  let y=CY+72;
+  g.fillStyle='rgba(255,255,255,.62)'; g.font='800 26px '+MONT;
+  g.textAlign='left'; g.textBaseline='alphabetic';
+  _texteEspace(g,'SÉANCE DU JOUR',CX+52,y,9);
+  // Les pastilles de la semaine, alignees a droite.
+  const DS=['L','Ma','Me','J','V','S','D'];
+  const pw=52,ph=52,pg=8;
+  let px=CX+CW-52-(pw*7+pg*6);
+  for(let i=0;i<7;i++){
+    const act=d.sc[i]&&d.sc[i].active;
+    rr(px,y-40,pw,ph,10);
+    g.fillStyle=(i===d.sel)?'rgba(255,255,255,.30)':(act?'rgba(255,255,255,.11)':'rgba(0,0,0,.26)');
+    g.fill();
+    if(i===d.todayIdx&&i!==d.sel){ g.strokeStyle='rgba(255,255,255,.55)'; g.lineWidth=2; g.stroke(); }
+    g.fillStyle=(i===d.sel)?'#fff':(act?'rgba(255,255,255,.78)':'rgba(255,255,255,.28)');
+    g.font='800 24px '+MONT; g.textAlign='center';
+    g.fillText(DS[i],px+pw/2,y-4);
+    px+=pw+pg;
+  }
+  g.textAlign='left';
+  // Le titre de la seance.
+  y+=76;
+  g.fillStyle='#fff'; g.font='700 66px '+BEBAS;
+  _texteAjuste(g,d.titre,CX+52,y,CW-104,66,BEBAS);
+  y+=46;
+  g.fillStyle='rgba(255,255,255,.62)'; g.font='600 26px '+MONT;
+  g.fillText(d.ex.length+' exercice'+(d.ex.length>1?'s':'')+(d.repos?' · '+d.repos:''),CX+52,y);
+  // ── La liste ────────────────────────────────────────────────────────
+  y+=42;
+  g.strokeStyle='rgba(255,255,255,.17)'; g.lineWidth=2;
+  g.beginPath(); g.moveTo(CX+52,y); g.lineTo(CX+CW-52,y); g.stroke();
+  y+=54;
+  d.ex.forEach((e,i)=>{
+    rr(CX+52,y-30,40,40,8); g.fillStyle='rgba(0,0,0,.32)'; g.fill();
+    g.fillStyle='rgba(255,255,255,.85)'; g.font='800 22px '+MONT;
+    g.textAlign='center'; g.fillText(String(i+1),CX+72,y-2);
+    g.textAlign='right'; g.fillStyle='rgba(255,255,255,.5)'; g.font='700 26px '+MONT;
+    const dl=g.measureText(e.d).width;
+    g.fillText(e.d,CX+CW-52,y);
+    g.textAlign='left'; g.fillStyle='#fff'; g.font='800 28px '+MONT;
+    _texteCoupe(g,e.n,CX+108,y,CW-160-dl-24);
+    y+=LH;
+  });
+  if(d.coupes){
+    g.fillStyle='rgba(255,255,255,.5)'; g.font='700 24px '+MONT;
+    g.fillText('+ '+d.coupes+' autre'+(d.coupes>1?'s':'')+' exercice'+(d.coupes>1?'s':''),CX+108,y);
+  }
+  // ── La signature ────────────────────────────────────────────────────
+  g.textAlign='center';
+  g.fillStyle='#fff'; g.font='700 54px '+BEBAS;
+  _texteEspace(g,'REPCORE',STORY_L/2,STORY_H-140,10,true);
+  g.fillStyle='rgba(255,255,255,.32)'; g.font='600 22px '+MONT;
+  g.fillText('repcore131.github.io/coaching',STORY_L/2,STORY_H-92);
+  return cv;
+}
+// Ecrit un texte en l espacant, l API canvas n ayant pas de letter-spacing
+// fiable partout.
+function _texteEspace(g,t,x,y,esp,centre){
+  const cs=String(t).split('');
+  const w=cs.reduce((a,c)=>a+g.measureText(c).width+esp,0)-esp;
+  let cx=centre?x-w/2:x;
+  const alg=g.textAlign; g.textAlign='left';
+  for(const c of cs){ g.fillText(c,cx,y); cx+=g.measureText(c).width+esp; }
+  g.textAlign=alg;
+}
+// Reduit la taille jusqu a ce que le texte tienne : un nom de seance long ne
+// doit pas deborder de la carte.
+function _texteAjuste(g,t,x,y,max,taille,police){
+  let s=taille;
+  g.font='700 '+s+'px '+police;
+  while(g.measureText(t).width>max&&s>28){ s-=2; g.font='700 '+s+'px '+police; }
+  g.fillText(t,x,y);
+}
+// Coupe avec des points de suspension, plutot que de laisser deborder sur la
+// colonne des series.
+function _texteCoupe(g,t,x,y,max){
+  let v=String(t);
+  if(g.measureText(v).width<=max){ g.fillText(v,x,y); return; }
+  while(v.length>1&&g.measureText(v+'…').width>max) v=v.slice(0,-1);
+  g.fillText(v+'…',x,y);
+}
+// LE GESTE. Sur telephone, `<a download>` ne met rien dans la galerie : iOS
+// l ignore et Android depose dans « Telechargements ». La feuille de partage
+// native propose « Enregistrer l image » ET Instagram — c est celle-la qu on
+// veut. Le telechargement reste le repli sur ordinateur.
+let _storyEnCours=false;
+async function partagerSeanceDuJour(){
+  if(_storyEnCours) return false;
+  const d=_storyDonnees();
+  if(!d){ toast('Aucune séance à partager aujourd’hui.','var(--orange)'); return false; }
+  _storyEnCours=true;
+  const btn=document.getElementById('story-btn');
+  if(btn) btn.disabled=true;
+  try{
+    const cv=await _dessinerStorySeance(d);
+    const blob=await new Promise(r=>cv.toBlob(r,'image/png'));
+    // Le canvas est relache tout de suite : 1080x1920 pese 8 Mo en memoire,
+    // et cette application a deja ete tuee pour moins que ca.
+    cv.width=0; cv.height=0;
+    if(!blob){ toast('Image impossible sur cet appareil.','var(--orange)'); return false; }
+    const nom='repcore-seance.png';
+    const f=(typeof File!=='undefined')?new File([blob],nom,{type:'image/png'}):null;
+    if(f&&navigator.canShare&&navigator.canShare({files:[f]})){
+      try{
+        await navigator.share({files:[f]});
+        return true;
+      }catch(e){
+        // Annulation par l athlete : ce n est pas une erreur, et le dire
+        // comme telle serait un reproche.
+        if(e&&e.name==='AbortError') return false;
+      }
+    }
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=nom;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),4000);
+    toast('Image enregistrée','var(--green)');
+    return true;
+  }catch(e){
+    toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)');
+    return false;
+  }finally{
+    _storyEnCours=false;
+    if(btn) btn.disabled=false;
+  }
+}
 function _renderWeeklyInto(el,sc){
   window._weekProgEl=el;
   const today=new Date().getDay();
@@ -19695,6 +19882,16 @@ function _renderWeeklyInto(el,sc){
               <div style="font-size:11px;color:#fff;font-weight:700;text-transform:uppercase;letter-spacing:.3px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(ex.name)}</div>
               <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);flex-shrink:0">${ex.series}×${ex.reps}</div>
             </div>`).join('')}
+        </div>`:''}
+        ${nbEx?`<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.15);display:flex;justify-content:flex-end">
+          <button id="story-btn" type="button" onclick="event.stopPropagation();partagerSeanceDuJour()" aria-label="Partager la séance du jour en image"
+            style="display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:6px 12px;border-radius:8px;cursor:pointer;
+              background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.22);color:#fff;
+              font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:.4px">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+            </svg>PARTAGER
+          </button>
         </div>`:''}
       </div>
     </div>
