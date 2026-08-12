@@ -18403,12 +18403,32 @@ function renderNutriAnneaux(){
 // Extrait de renderNutriDots pour etre partage — pas reecrit : le balisage est
 // celui d origine, octet pour octet, seule la taille est parametrable.
 const _DOTS_JOURS=['L','M','M','J','V','S','D'];
+// L etoile, en SVG et non en caractere : le glyphe « ★ » n a pas le meme
+// dessin d une police a l autre, et sur les appareils qui ne l ont pas il
+// tombe en carre vide. Le trace est ici, il est le meme partout.
+// `currentColor` : l etat vit sur le conteneur, une seule fois, et le trace
+// n a pas a le connaitre.
+function _svgEtoile(t){
+  return '<svg viewBox="0 0 24 24" width="'+t+'" height="'+t+'" fill="currentColor" aria-hidden="true" style="display:block">'
+    +'<path d="M12 1.6l3.09 6.9 7.41.62-5.6 4.85 1.7 7.28L12 17.3l-6.6 3.95 1.7-7.28-5.6-4.85 7.41-.62z"/></svg>';
+}
 function _htmlLigneDots(vals,taille,libelles){
   const t=taille>0?taille:28;
   const lib=Array.isArray(libelles)?libelles:_DOTS_JOURS;
   return (vals||[]).map((val,i)=>{
-    const bg=val===true?'var(--green)':val===false?'var(--red)':'var(--border)';
-    return `<div style="flex:1;text-align:center"><div style="width:${t}px;height:${t}px;border-radius:50%;background:${bg};margin:0 auto"></div><div style="font-size:var(--fs-xs);color:var(--sub);margin-top:3px">${lib[i]}</div></div>`;
+    // L ETAT PASSE PAR `color`, plus par `background` : le trace est rempli en
+    // currentColor, et le halo se calcule sur la meme teinte. Un jour tenu
+    // devient une etoile BLANCHE — la couleur d une reussite, pas d un
+    // etat parmi d autres.
+    const c=val===true?'#ffffff':val===false?'var(--red)':'var(--border)';
+    // NEON, et proportionnel a la taille : la meme ligne se rend a 28 px sur
+    // l accueil et a 18 px dans les habitudes. Un halo fixe ecraserait la
+    // petite. Seule l etoile gagnee brille ; sans quoi il n y aurait plus de
+    // difference entre tenir sa journee et ne rien avoir fait.
+    const halo=val===true
+      ?`filter:drop-shadow(0 0 ${Math.round(t*0.20)}px rgba(255,255,255,.95)) drop-shadow(0 0 ${Math.round(t*0.55)}px rgba(255,255,255,.55));`
+      :'';
+    return `<div style="flex:1;text-align:center"><div style="width:${t}px;height:${t}px;margin:0 auto;color:${c};${halo}">${_svgEtoile(t)}</div><div style="font-size:var(--fs-xs);color:var(--sub);margin-top:3px">${lib[i]}</div></div>`;
   }).join('');
 }
 function renderNutriDots(){
@@ -68654,8 +68674,8 @@ function testExercices(){
         return /clh-nutri-score/.test(src)?true:_echec('le score a disparu');})());
       ok('La ligne de pastilles rend bien sept jours',(()=>{
         const h=_htmlLigneDots([true,false,null,true,true,false,null],28);
-        return (h.match(/border-radius:50%/g)||[]).length===7
-          ?true:_echec((h.match(/border-radius:50%/g)||[]).length+' pastilles');})());
+        return (h.match(/<svg/g)||[]).length===7
+          ?true:_echec((h.match(/<svg/g)||[]).length+' étoiles');})());
       // ── LE COMPTAGE, ET PAS SEULEMENT SON VOCABULAIRE ────────────────
       // L'assertion ci-dessus est LEXICALE : elle cherche « respected » dans
       // le texte de la fonction. Elle serait restée verte pendant toute la
@@ -68674,8 +68694,10 @@ function testExercices(){
           const lire=()=>{
             renderNutriDots();
             const dots=[...document.querySelectorAll('#clh-nutri-dots > div > div:first-child')]
-              .map(d=>{const b=d.style.background;
-                return /green/.test(b)?'v':/red/.test(b)?'r':/border/.test(b)?'g':'?';});
+              .map(d=>{const b=d.style.color;
+                // L etat vit desormais sur `color` : blanc pour un jour tenu,
+                // rouge pour un jour manque, gris pour un jour sans reponse.
+                return /#ffffff|255, 255, 255|white/.test(b)?'v':/red/.test(b)?'r':/border/.test(b)?'g':'?';});
             const el=document.getElementById('clh-nutri-score');
             return {dots:dots.join(''),score:el.textContent,couleur:el.style.color};
           };
@@ -68721,8 +68743,11 @@ function testExercices(){
               const lire=()=>{
                 renderNutriDots();
                 const dots=[...document.querySelectorAll('#clh-nutri-dots > div > div:first-child')]
-                  .map(d=>{const b=d.style.background;
-                    return /green/.test(b)?'v':/red/.test(b)?'r':'g';});
+                  .map(d=>{const b=d.style.color;
+                    // L etat vit sur `color` depuis que les pastilles sont
+                    // devenues des etoiles : blanc pour un jour tenu, rouge
+                    // pour un jour manque, gris sinon.
+                    return /#ffffff|255, 255, 255|white/.test(b)?'v':/red/.test(b)?'r':'g';});
                 return {dots:dots.join(''),
                   vertes:dots.filter(x=>x==='v').length,
                   score:document.getElementById('clh-nutri-score').textContent};
