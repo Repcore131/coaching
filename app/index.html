@@ -33965,6 +33965,119 @@ function _fjResultHtml(f,avecEpingle){
 }
 
 
+// ══════════════ CONTROLE NUTRITIONNEL ════════════════════════════════════
+// Les quatre provenances d un aliment. CIQUAL est mesure en laboratoire par
+// l ANSES ; OFF est contributif ; MANUEL est saisi par l athlete ; CUSTOM est
+// un aliment saisi puis relu et valide. La provenance change ce qu on peut
+// croire des valeurs, donc elle change la note.
+const NUTRI_SOURCES=Object.freeze({CIQUAL:'CIQUAL',OFF:'OFF',MANUEL:'MANUEL',CUSTOM:'CUSTOM'});
+// Plus de 105 g de macros pour 100 g de produit : 5 g de tolerance pour les
+// arrondis d etiquette, au-dela c est arithmetiquement impossible.
+const NUTRI_SOMME_MAX=105;
+const NUTRI_MACRO_MAX=100;        // g pour 100 g
+const NUTRI_KCAL_MAX=900;         // l huile pure plafonne a 900
+const NUTRI_SEL_MAX=30;           // g pour 100 g : au-dela, c est du sel
+const NUTRI_ATWATER_ALERTE=0.20;  // ecart signale
+const NUTRI_ATWATER_NOTE=0.10;    // ecart qui coute des points
+const NUTRI_SEUIL_CONFIRME=50;    // sous ce score, l interface exigera un accord
+// L energie deduite des macros. Facteurs d Atwater : 4 kcal par gramme de
+// proteine et de glucide, 9 par gramme de lipide.
+function nutriAtwater(a){
+  if(!a) return null;
+  if(a.p==null&&a.c==null&&a.l==null) return null;
+  // L ALCOOL COMPTE POUR 7 kcal/g et n est ni protéine, ni glucide, ni lipide.
+  // Sans lui, un spiritueux affiche un écart délirant — mesuré sur la table
+  // Ciqual : 62 900 % sur le whisky, 3 192 % sur le vin blanc sec, parce que
+  // ses calories ne viennent d aucune des trois macros. Ciqual ne publie pas
+  // ce champ dans notre export ; Open Food Facts si, et on le lit.
+  return (a.p||0)*4+(a.c||0)*4+(a.l||0)*9+(a.alcool||0)*7;
+}
+function nutriEcartAtwater(a){
+  const th=nutriAtwater(a);
+  if(th==null||!(th>0)||a.k==null) return null;
+  return Math.abs(a.k-th)/th;
+}
+// PURE. Rend {valide, fiabilite, alertes[], rejets[]}.
+// `valide` porte les impossibilites arithmetiques SEULEMENT : un aliment peut
+// etre valide et peu fiable, c est justement a quoi sert la note.
+function nutriControle(a){
+  const rejets=[],alertes=[];
+  if(!a||typeof a!=='object')
+    return {valide:false,fiabilite:0,alertes:[],rejets:['Aliment illisible.']};
+  const src=a.source||(a._off?NUTRI_SOURCES.OFF:NUTRI_SOURCES.MANUEL);
+  // ── Les rejets : ce qui ne peut pas exister ──────────────────────────
+  if(!String(a.n||'').trim()) rejets.push('Cet aliment n’a pas de nom.');
+  if(a.k==null) rejets.push('L’énergie n’est pas renseignée.');
+  if(a.p==null&&a.c==null&&a.l==null)
+    rejets.push('Aucune macro n’est renseignée : protéines, glucides et lipides sont tous absents.');
+  if(a.k!=null&&a.k<0) rejets.push('L’énergie ne peut pas être négative.');
+  if(a.k!=null&&a.k>NUTRI_KCAL_MAX)
+    rejets.push(_nb2(a.k)+' kcal pour 100 g : au-delà du possible (l’huile pure est à 900).');
+  // Chaque champ porte son libelle ACCORDE. Fabriquer la phrase par
+  // substitution rendait le message illisible dans le code pour economiser
+  // cinq mots — un mauvais echange quand ce texte s affiche a l athlete.
+  const CHAMPS=[
+    {k:'p',neg:'Les protéines ne peuvent pas être négatives.',trop:'Les protéines'},
+    {k:'c',neg:'Les glucides ne peuvent pas être négatifs.',  trop:'Les glucides'},
+    {k:'l',neg:'Les lipides ne peuvent pas être négatifs.',   trop:'Les lipides'},
+    {k:'f',neg:'Les fibres ne peuvent pas être négatives.',   trop:'Les fibres'},
+    {k:'e',neg:'Le sel ne peut pas être négatif.',            trop:'Le sel'}];
+  for(const ch of CHAMPS){
+    const v=a[ch.k];
+    if(v==null) continue;
+    if(v<0) rejets.push(ch.neg);
+    else if(v>NUTRI_MACRO_MAX) rejets.push(ch.trop+' : '+_nb2(v)+' g pour 100 g de produit, c’est impossible.');
+  }
+  const somme=(a.p||0)+(a.c||0)+(a.l||0);
+  if(somme>NUTRI_SOMME_MAX)
+    rejets.push('Protéines + glucides + lipides font '+_nb2(somme)+' g pour 100 g de produit.');
+  // ── Les alertes : ce qui est possible mais suspect ───────────────────
+  const ec=nutriEcartAtwater(a);
+  if(ec!=null&&ec>NUTRI_ATWATER_ALERTE)
+    alertes.push('Les macros donnent environ '+Math.round(nutriAtwater(a))+' kcal, l’étiquette annonce '+_nb2(a.k)+'.');
+  // « dont » veut dire « compris dans » : un sous-total ne peut pas depasser
+  // son total. C est la faute de saisie la plus frequente sur une etiquette.
+  if(a.sucres!=null&&a.c!=null&&a.sucres>a.c)
+    alertes.push('Les sucres ('+_nb2(a.sucres)+' g) dépassent les glucides ('+_nb2(a.c)+' g), alors qu’ils en font partie.');
+  if(a.satures!=null&&a.l!=null&&a.satures>a.l)
+    alertes.push('Les acides gras saturés ('+_nb2(a.satures)+' g) dépassent les lipides ('+_nb2(a.l)+' g), alors qu’ils en font partie.');
+  if(a.e!=null&&a.e>NUTRI_SEL_MAX)
+    alertes.push(_nb2(a.e)+' g de sel pour 100 g : à ce niveau, le produit EST du sel.');
+  // ── La note ──────────────────────────────────────────────────────────
+  const fiabilite=_nutriNote(a,src,ec,rejets.length>0);
+  return {valide:rejets.length===0,fiabilite,alertes,rejets};
+}
+// Deux decimales au plus, virgule francaise, sans zero inutile.
+function _nb2(v){ return (Math.round(Number(v)*100)/100).toString().replace('.',','); }
+function _nutriNote(a,src,ec,rejete){
+  // Un aliment rejete n a pas de note : lui en donner une laisserait croire
+  // qu il est utilisable en le confirmant.
+  if(rejete) return 0;
+  // CIQUAL est mesure en laboratoire par l ANSES. Lui retirer des points pour
+  // une marque ou une portion absentes n aurait aucun sens : un aliment
+  // generique n en a pas, et c est la source la plus sure dont on dispose.
+  // MESURÉ sur les 3 484 aliments de la table : 454 d'entre eux — 13,9 % —
+  // s'écartent de plus de 10 % du calcul d'Atwater, et 228 de plus de 20 %.
+  // « Petits pois, crus » est à 15 %, « Haricots blancs à la sauce tomate » à
+  // 14 % : fibres et acides organiques ne suivent pas les facteurs 4/4/9. Sans
+  // cette ligne, un aliment mesuré en laboratoire par l'ANSES tomberait à 70.
+  if(src===NUTRI_SOURCES.CIQUAL) return 100;
+  let n=100;
+  if(ec!=null&&ec>NUTRI_ATWATER_NOTE) n-=30;
+  for(const cle of ['p','c','l']) if(a[cle]==null) n-=20;
+  // Marque et portion ne se reprochent qu a un PRODUIT : une preparation
+  // maison n a pas de marque, et l en penaliser punirait l athlete d avoir
+  // cuisine. On ne les exige que la ou un code-barres existe.
+  const estProduit=!!(a.code_barres||(a._off&&a._off.ean));
+  if(estProduit){
+    const marque=a.marque||(a._off&&a._off.marque);
+    const portion=a.portion_g||(a._off&&a._off.portion);
+    if(!marque) n-=15;
+    if(!(portion>0)) n-=10;
+  }
+  if(a.verifie===true) n+=10;
+  return Math.max(0,Math.min(100,n));
+}
 // ══════════════ PRODUITS DE MARQUE — OPEN FOOD FACTS ══════════════════════
 // Ciqual reste la base : 3 484 aliments ANSES, mesurés en laboratoire, à
 // demeure. OFF est une base CONTRIBUTIVE — n'importe qui y saisit n'importe
@@ -34072,11 +34185,19 @@ function offNormalise(p){
     k:k!=null?Math.round(k*10)/10:null,
     p:lire('proteins'), c:lire('carbohydrates'), l:lire('fat'),
     f:lire('fiber'), e:lire('salt'),
+    // Les deux sous-totaux « dont ». Ils ne servent a aucun calcul — seule
+    // l alerte de coherence les lit — mais leur absence rendait cette alerte
+    // impossible a poser sur un produit scanne.
+    sucres:lire('sugars'), satures:lire('saturated-fat'),
+    // L ethanol, pour que le calcul d Atwater ne declare pas incoherent un
+    // produit dont les calories viennent de l alcool.
+    alcool:lire('alcohol'),
+    source:NUTRI_SOURCES.OFF, verifie:false,
     _off:{ean:code,marque:String(p.brands||'').split(',')[0].trim(),
       format:String(p.quantity||'').trim(),portion:gPortion||null},
     _ambigu:false
   };
-  for(const k2 of ['p','c','l','f','e'])
+  for(const k2 of ['p','c','l','f','e','sucres','satures','alcool'])
     if(a[k2]!=null) a[k2]=Math.round(a[k2]*100)/100;
   // Micronutriments : posés SEULEMENT s'ils existent, et seulement s'ils sont
   // plausibles. Une valeur absurde n'est pas une information — la déposer
@@ -34106,6 +34227,12 @@ function offValide(a){
     return {ok:false,raison:'Fiche incomplète : '+manque.join(', ')+' ne sont pas renseignées. Open Food Facts est contributif, cette fiche n\'a pas été complétée.'};
   if(a.k>OFF_MAX_KCAL)
     return {ok:false,raison:a.k+' kcal pour 100 g : au-delà du possible (l\'huile pure est à 900). La fiche est erronée.'};
+  // Les bornes arithmetiques vivent dans nutriControle, une seule fois : une
+  // valeur negative, une macro au-dela de 100 g pour 100 g, ou une somme
+  // impossible. offValide garde en propre ce qui tient a OFF — fiche muette,
+  // valeurs par portion illisibles, ecart aux calories declarees.
+  const _ctrl=nutriControle(a);
+  if(!_ctrl.valide) return {ok:false,raison:_ctrl.rejets[0]};
   const calcul=4*a.p+4*a.c+9*a.l;
   if(a.k>0&&Math.abs(calcul-a.k)/a.k>OFF_ECART_MACRO)
     return {ok:false,raison:'Les macros ne collent pas aux calories déclarées ('+Math.round(calcul)+' kcal calculées contre '+Math.round(a.k)+' annoncées). La fiche est incohérente.'};
@@ -34687,7 +34814,20 @@ function _alimsPerso(){
 function _persoParId(id){ return _alimsPerso().find(a=>a&&a.id===id)||null; }
 // Le champ de recherche normalise, calcule a l enregistrement : le classement
 // lit f.s comme pour Ciqual, sans cas particulier.
-function _persoIndexer(a){ a.s=_fjNorm(a.n||''); return a; }
+// Le champ de recherche normalise, la provenance, et la note de fiabilite.
+// La note est CALCULEE ici, une fois, a l enregistrement : la recalculer a
+// chaque affichage couterait un passage sur toute la liste a chaque frappe.
+function _persoIndexer(a){
+  a.s=_fjNorm(a.n||'');
+  // MANUEL par defaut. CUSTOM est reserve a ce qu un relecteur a valide, et
+  // rien dans l application ne le pose aujourd hui : ce serait mentir sur le
+  // niveau de confiance. Le passage de MANUEL a CUSTOM viendra avec la
+  // moderation, ou pas du tout.
+  if(!a.source) a.source=NUTRI_SOURCES.MANUEL;
+  if(a.verifie!==true) a.verifie=false;
+  try{ a.fiabilite=nutriControle(a).fiabilite; }catch(e){ a.fiabilite=null; }
+  return a;
+}
 
 let _persoEdit=null;        // l aliment en cours de saisie, null = creation
 
@@ -34780,7 +34920,14 @@ function enregistrerAlimentPerso(){
     liste[i]=_persoIndexer(Object.assign({},liste[i],ch,{n:nom}));
   } else {
     if(liste.length>=200){ _persoDire('Tu as atteint 200 aliments personnels.','var(--orange)'); return; }
-    liste.push(_persoIndexer(Object.assign({id:'p'+Date.now(),n:nom,g:'Mon aliment'},ch)));
+    // Le modele porte la provenance, le code-barres quand il vient d un scan,
+    // la marque et la portion fabricant. quantite_ref / unite_ref n existent
+    // PAS : tout est pour 100 g dans cette application — Ciqual, Open Food
+    // Facts et le journal partagent cet invariant. L introduire ouvrirait la
+    // porte aux valeurs « par portion », exactement ce que offValide rejette.
+    liste.push(_persoIndexer(Object.assign({id:'p'+Date.now(),n:nom,g:'Mon aliment',
+      source:NUTRI_SOURCES.MANUEL,code_barres:null,marque:null,portion_g:null,
+      verifie:false},ch)));
   }
   currentUser.nutrition.alimentsPerso=liste;
   const cree=!_persoEdit;
