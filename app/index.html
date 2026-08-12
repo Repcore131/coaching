@@ -18014,7 +18014,7 @@ function loadClientHome(){
     if(montrer){
       const nom=document.getElementById('clh-resume-bilan-name');
       const sub=document.getElementById('clh-resume-bilan-sub');
-      const steps=_bilDraft.bilType==='depart'?DEB_STEPS:BIL_STEPS;
+      const steps=_etapesUtiles(_bilDraft.bilType==='depart'?DEB_STEPS:BIL_STEPS);
       if(nom) nom.textContent=_bilDraft.bilType==='depart'
         ?'Reprendre mon questionnaire de début':'Reprendre mon bilan coaching';
       if(sub) sub.textContent='Étape '+(_bilDraft.bilStep+1)+'/'+steps.length
@@ -24381,6 +24381,16 @@ function _updateBilanCountdown(){
 }
 // forcerReprise : appelé depuis la carte de reprise de l'accueil, où l'athlète
 // a déjà exprimé son intention — lui reposer la question serait redondant.
+// Etapes REELLEMENT affichables. Une etape conditionnelle qui rend une
+// chaine vide — le bloc Traitement, hors semestre — ne doit ni occuper un
+// numero ni imposer un « Suivant » sur du vide.
+function _etapesUtiles(steps){
+  return (steps||[]).filter(f=>{
+    try{ return String(f()||'').trim().length>0; }
+    catch(e){ return true; }   // en cas d erreur, on garde : mieux vaut une
+                               // etape fautive qu une etape escamotee
+  });
+}
 function openBilan(type,forcerReprise){
   const brut=localStorage.getItem(BIL_DRAFT_KEY);
   const brouillon=_bilLoadDraft(type);
@@ -24399,7 +24409,7 @@ function openBilan(type,forcerReprise){
     _bilClearDraft();_bilPurgerPhotos(type);
   }
   // Le nombre d'étapes peut avoir changé depuis l'écriture du brouillon.
-  const steps=type==='depart'?DEB_STEPS:BIL_STEPS;
+  const steps=_etapesUtiles(type==='depart'?DEB_STEPS:BIL_STEPS);
   bilStep=Math.max(0,Math.min(bilStep,steps.length-1));
   renderBilStep();go('s-bilan');
 }
@@ -24418,7 +24428,7 @@ function bilBack(){
   else{if(bilType==='depart'){go('s-client-home');loadClientHome();}else{go('s-bilan-choice');}}
 }
 function bilNext(){
-  const steps=bilType==='depart'?DEB_STEPS:BIL_STEPS;
+  const steps=_etapesUtiles(bilType==='depart'?DEB_STEPS:BIL_STEPS);
   if(bilStep<steps.length-1){bilStep++;renderBilStep();}
   else{
     if(_bilPhotoLoading>0){toast('Photos en cours de compression, patiente une seconde...','var(--orange)');setTimeout(bilNext,800);return;}
@@ -24426,7 +24436,7 @@ function bilNext(){
   }
 }
 function renderBilStep(){
-  const steps=bilType==='depart'?DEB_STEPS:BIL_STEPS;
+  const steps=_etapesUtiles(bilType==='depart'?DEB_STEPS:BIL_STEPS);
   const total=steps.length;
   document.getElementById('bil-title').textContent=bilType==='depart'?'Questionnaire de début':'Bilan Coaching';
   document.getElementById('bil-step-label').textContent=(bilStep+1)+'/'+total;
