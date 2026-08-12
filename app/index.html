@@ -19693,37 +19693,31 @@ function _prechaufferPolicesStory(){
 }
 // SYNCHRONE, et ce n est pas un detail : tout ce qui suit le clic doit
 // s executer dans la meme tache, sans quoi le geste utilisateur expire.
+// LA CARTE SEULE, SANS FOND. Le canevas fait exactement la taille de la
+// carte : pas de fond sombre, pas de halo, pas de signature en dessous. Ce
+// qui deborde des coins arrondis reste TRANSPARENT — c est ce que « sans
+// fond » veut dire, et c est ce qui permet de la poser sur n importe quel
+// arriere-plan dans une story.
 function _dessinerStorySeance(d){
+  const nL=d.ex.length;
+  const LH=76;                                  // hauteur d une ligne d exercice
+  const CW=STORY_L-144;                         // la largeur qu elle avait deja
+  const CH=250+nL*LH+(d.coupes?64:0)+56;
+  const CX=0, CY=0;                             // elle occupe tout le canevas
   const cv=document.createElement('canvas');
-  cv.width=STORY_L; cv.height=STORY_H;
+  cv.width=CW; cv.height=CH;
   const g=cv.getContext('2d');
   const BEBAS="'Bebas Neue','Arial Narrow',Impact,sans-serif";
   const MONT="Montserrat,'Segoe UI',sans-serif";
-  // Fond : le carbone de l application, pas du noir pur.
-  g.fillStyle='#0a0a0a'; g.fillRect(0,0,STORY_L,STORY_H);
-  // Halo rouge diffus, en haut : ce qui donne sa profondeur a l app.
-  const halo=g.createRadialGradient(STORY_L*0.5,STORY_H*0.16,0,STORY_L*0.5,STORY_H*0.16,STORY_L*0.9);
-  halo.addColorStop(0,'rgba(224,32,32,.22)'); halo.addColorStop(1,'rgba(224,32,32,0)');
-  g.fillStyle=halo; g.fillRect(0,0,STORY_L,STORY_H);
-  // ── La carte rouge ──────────────────────────────────────────────────
-  const M=72, CX=M, CW=STORY_L-M*2;
-  const nL=d.ex.length;
-  const LH=76;                                  // hauteur d une ligne d exercice
-  const CH=250+nL*LH+(d.coupes?64:0)+56;
-  // CENTREE VERTICALEMENT, entre le haut et la signature. A hauteur fixe, une
-  // seance de trois exercices finissait a 864 sur 1920 : la carte flottait en
-  // haut avec un demi-ecran de vide dessous. Le plancher a 200 evite qu une
-  // seance de quatorze lignes ne touche le bord.
-  const CY=Math.max(200,Math.round((STORY_H-140-CH)/2));
   const rr=(x,y,w,h,r)=>{ g.beginPath();
     g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r);
     g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); };
   const grad=g.createLinearGradient(CX,CY,CX+CW,CY+CH);
   grad.addColorStop(0,'#e02020'); grad.addColorStop(0.55,'#c01818'); grad.addColorStop(1,'#8e1010');
-  g.save();
-  g.shadowColor='rgba(0,0,0,.65)'; g.shadowBlur=60; g.shadowOffsetY=24;
+  // AUCUNE OMBRE PORTEE : le canevas s arrete au bord de la carte, une ombre
+  // y serait coupee net. Elle n aurait de sens qu avec une marge, donc avec
+  // un fond — precisement ce qu on retire.
   rr(CX,CY,CW,CH,34); g.fillStyle=grad; g.fill();
-  g.restore();
   // La trame diagonale, comme sur les cartes de l app.
   g.save(); rr(CX,CY,CW,CH,34); g.clip();
   g.strokeStyle='rgba(255,255,255,.05)'; g.lineWidth=2;
@@ -19777,12 +19771,9 @@ function _dessinerStorySeance(d){
     g.fillStyle='rgba(255,255,255,.5)'; g.font='700 24px '+MONT;
     g.fillText('+ '+d.coupes+' autre'+(d.coupes>1?'s':'')+' exercice'+(d.coupes>1?'s':''),CX+108,y);
   }
-  // ── La signature ────────────────────────────────────────────────────
-  g.textAlign='center';
-  g.fillStyle='#fff'; g.font='700 54px '+BEBAS;
-  _texteEspace(g,'REPCORE',STORY_L/2,STORY_H-140,10,true);
-  g.fillStyle='rgba(255,255,255,.32)'; g.font='600 22px '+MONT;
-  g.fillText('repcore131.github.io/coaching',STORY_L/2,STORY_H-92);
+  // PAS DE SIGNATURE. « Juste le carre rouge » : ce qui est en dehors de la
+  // carte n a plus de place ou vivre. La marque reviendra dans la carte si on
+  // le decide, pas sous elle.
   return cv;
 }
 // Ecrit un texte en l espacant, l API canvas n ayant pas de letter-spacing
@@ -19831,7 +19822,7 @@ function _b64versBlob(dataUrl){
   const n=bin.length;
   const u=new Uint8Array(n);
   for(let k=0;k<n;k++) u[k]=bin.charCodeAt(k);
-  return new Blob([u],{type:'image/jpeg'});
+  return new Blob([u],{type:'image/png'});
 }
 // L ecran de secours, et le seul geste qui marche sur TOUS les telephones :
 // l appui long sur une image affichee. iOS propose « Ajouter aux photos »,
@@ -19883,11 +19874,11 @@ function telechargerSeanceDuJour(){
   _storyEnCours=true;
   try{
     const cv=_dessinerStorySeance(d);
-    const dataUrl=cv.toDataURL('image/jpeg',0.92);
+    const dataUrl=cv.toDataURL('image/png');
     cv.width=0; cv.height=0;          // 8 Mo rendus tout de suite
     const a=document.createElement('a');
     a.href=dataUrl;                   // pas d URL d objet : rien a liberer,
-    a.download='repcore-seance.jpg';  // et rien qui puisse expirer trop tot
+    a.download='repcore-seance.png';  // et rien qui puisse expirer trop tot
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -19909,11 +19900,11 @@ function partagerSeanceDuJour(){
   _storyEnCours=true;
   try{
     const cv=_dessinerStorySeance(d);
-    const dataUrl=cv.toDataURL('image/jpeg',0.92);
+    const dataUrl=cv.toDataURL('image/png');
     cv.width=0; cv.height=0;
     const blob=_b64versBlob(dataUrl);
     let f=null;
-    try{ f=new File([blob],'repcore-seance.jpg',{type:'image/jpeg'}); }catch(e){}
+    try{ f=new File([blob],'repcore-seance.png',{type:'image/png'}); }catch(e){}
     if(f&&navigator.canShare&&navigator.canShare({files:[f]})&&navigator.share){
       navigator.share({files:[f]}).catch(()=>{});
       return true;
