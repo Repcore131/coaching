@@ -2739,10 +2739,17 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="clh-pesee"></div>
 
       <!-- REPRISE SÉANCE EN COURS -->
-      <div id="clh-resume-workout" style="display:none;background:linear-gradient(135deg,#0a1a0a,#051005);border:1px solid #1a4a1a;border-radius:12px;padding:14px 16px;margin-bottom:14px;cursor:pointer" onclick="woResumeAndGo()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <div style="font-size:var(--fs-xs);color:var(--green);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:5px">⚡ Séance en pause</div>
-        <div style="font-size:14px;font-weight:800;margin-bottom:3px" id="clh-resume-name">Reprendre ma séance</div>
-        <div style="font-size:11px;color:var(--sub)">Reprendre là où tu t'es arrêté →</div>
+      <div id="clh-resume-workout" style="display:none;position:relative;overflow:hidden;background:linear-gradient(160deg,#0a1622,#071019 55%,#050c14);border:1px solid #1d3f5c;border-radius:12px;padding:26px 16px 14px;margin-bottom:14px;cursor:pointer;box-shadow:0 8px 26px rgba(0,0,0,.5),inset 0 0 30px rgba(90,170,255,.06)" onclick="woResumeAndGo()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+        <svg aria-hidden="true" viewBox="0 0 100 28" preserveAspectRatio="none" style="position:absolute;top:0;left:0;width:100%;height:28px;pointer-events:none">
+          <defs><linearGradient id="glacon" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#cfeaff" stop-opacity=".95"/>
+            <stop offset=".55" stop-color="#7cc4ff" stop-opacity=".6"/>
+            <stop offset="1" stop-color="#4a9fe0" stop-opacity="0"/></linearGradient></defs>
+          <path d="M0,0 L0,0 L2.5,13 L5,0 L5,0 L7.5,6 L10,0 L10,0 L12.5,19 L15,0 L15,0 L17.5,9 L20,0 L20,0 L22.5,26 L25,0 L25,0 L27.5,7 L30,0 L30,0 L32.5,15 L35,0 L35,0 L37.5,22 L40,0 L40,0 L42.5,8 L45,0 L45,0 L47.5,17 L50,0 L50,0 L52.5,11 L55,0 L55,0 L57.5,24 L60,0 L60,0 L62.5,6 L65,0 L65,0 L67.5,14 L70,0 L70,0 L72.5,20 L75,0 L75,0 L77.5,9 L80,0 L80,0 L82.5,12 L85,0 L85,0 L87.5,7 L90,0 L90,0 L92.5,18 L95,0 L95,0 L97.5,10 L100,0 L100,0 Z" fill="url(#glacon)"/></svg>
+        <div aria-hidden="true" style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#7cc4ff,#bfe4ff,#7cc4ff,transparent);box-shadow:0 0 12px rgba(124,196,255,.75)"></div>
+        <div style="position:relative;font-size:var(--fs-xs);color:#8fd0ff;letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:5px;text-shadow:0 0 14px rgba(124,196,255,.65)">❄ Séance gelée</div>
+        <div style="position:relative;font-size:14px;font-weight:800;color:#eaf6ff;margin-bottom:3px" id="clh-resume-name">Reprendre ma séance</div>
+        <div style="position:relative;font-size:11px;color:#9ab6cc">Reprendre là où tu t'es arrêté →</div>
       </div>
 
       <!-- REPRISE BILAN EN COURS -->
