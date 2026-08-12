@@ -5971,6 +5971,41 @@ const CLOUD={
   // canal entier — il n'existe pas de .read sur /canaux/{coach}.
   _urlCanal(key,sous){ return this._fbUrl.replace('users.json','canaux/'+key+'/'+sous+'.json'); },
 
+  // ── Les aliments du coach ────────────────────────────────────────────
+  // MEME RAISON QUE LE CANAL de ne pas vivre dans coach_public : ce dernier
+  // est retelecharge EN ENTIER a chaque ouverture de l accueil athlete. Ici,
+  // rien ne descend tant que la recherche d aliments n est pas ouverte.
+  _urlAlimentsCoach(key){ return this._fbUrl.replace('users.json','aliments_coach/'+key+'.json'); },
+
+  // LEVE quand la requete echoue, et ne rend null QUE si le noeud est vide.
+  // Meme faute a ne pas refaire que _canalGet : avaler l erreur confondrait
+  // « ton coach n a rien saisi » et « je n ai pas pu demander ».
+  async alimentsCoachGet(key){
+    if(!key) throw new Error('Aucun coach rattaché.');
+    const ctrl=new AbortController();
+    const minuteur=setTimeout(()=>ctrl.abort(),8000);
+    try{
+      const token=await this._getToken();
+      if(!token) throw new Error('Session expirée.');
+      const r=await fetch(this._urlAlimentsCoach(key)+'?auth='+token,{signal:ctrl.signal});
+      if(!r.ok) throw new Error('Aliments du coach : '+r.status);
+      return await r.json();
+    } finally { clearTimeout(minuteur); }
+  },
+
+  // Ecriture par le coach, sur SA propre cle. LEVE au lieu de rendre false :
+  // une publication qui echoue en silence ferait croire au coach que ses
+  // athletes voient ses aliments.
+  async alimentsCoachPut(key,liste){
+    const token=await this._getToken();
+    if(!token) throw new Error('Non connecté : les aliments n\'ont pas pu être publiés.');
+    const r=await fetch(this._urlAlimentsCoach(key)+'?auth='+token,
+      {method:'PUT',headers:{'Content-Type':'application/json'},
+       body:JSON.stringify(liste&&liste.length?liste:null)});
+    if(!r.ok) throw new Error('Publication refusée ('+r.status+').');
+    return true;
+  },
+
   // LÈVE quand la requête échoue, et ne rend null QUE si Firebase a répondu
   // « ce nœud est vide ». Avaler l'erreur confondait « ton coach n'a rien
   // publié » et « je n'ai pas pu demander » : l'athlète hors ligne lisait
@@ -33868,6 +33903,9 @@ function openFoodSearch(date){
   if(inp){inp.value='';setTimeout(()=>inp.focus(),350);}
   // Re-rendue a chaque ouverture : le reseau a pu tomber depuis la derniere.
   _renderFjActions();
+  // Les aliments du coach, au plus une fois par heure. Rien ne bloque :
+  // la recherche Ciqual fonctionne pendant ce temps.
+  try{ _rafraichirAlimentsCoach(); }catch(e){}
   document.getElementById('fj-results-list').innerHTML='';
   if(!_ciqualDB){
     _loadCiqual().then(()=>{_renderFjRecent();});
@@ -33913,26 +33951,155 @@ function _renderFjRecent(){
   // reprend le plus souvent, et la seule liste ou on les retrouve sans les
   // nommer. Les plus recents en premier.
   const perso=_alimsPerso().slice(-5).reverse();
+  // FREQUENTS : trois usages suffisent a dire qu un aliment est habituel.
+  // On EXCLUT ceux qui sont deja en favoris ou en recents : les repeter trois
+  // fois sur le meme ecran ne renseigne personne.
+  const _uf=(currentUser.nutrition&&currentUser.nutrition.usageFoods)||{};
+  const dejaVu=new Set(favIds.concat(ids).map(String));
+  const freqIds=Object.keys(_uf)
+    .filter(k=>(_uf[k]&&_uf[k].n>=FJ_FREQUENT_MIN)&&!dejaVu.has(k))
+    .sort((x,y)=>((_uf[y].n||0)-(_uf[x].n||0))||((_uf[y].t||0)-(_uf[x].t||0)))
+    .slice(0,5);
+  const freqs=freqIds.map(k=>_ciqualDB.find(f=>String(f.id)===k)).filter(Boolean);
+  const blocFreq=freqs.length
+    ?titre('Fréquents')+freqs.map(f=>_fjResultHtml(f,true)).join('')+sep
+    :'';
   const blocPerso=perso.length
     ?titre('Mes aliments')+perso.map(a=>_htmlPersoResult(a)).join('')+sep
     :'';
   if(!ids.length){
-    el.innerHTML=blocPerso+blocFav+'<div style="padding:20px 16px;font-size:12px;color:var(--text-dim);text-align:center">Commence à saisir pour rechercher un aliment</div>';
+    el.innerHTML=blocPerso+blocFav+blocFreq+'<div style="padding:20px 16px;font-size:12px;color:var(--text-dim);text-align:center">Commence à saisir pour rechercher un aliment</div>';
     return;
   }
   const foods=ids.map(id=>_ciqualDB.find(f=>f.id===id)).filter(Boolean);
-  el.innerHTML=blocPerso+blocFav+titre('Récents')+
+  el.innerHTML=blocPerso+blocFav+blocFreq+titre('Récents')+
     foods.map(f=>_fjResultHtml(f,true)).join('')+sep;
 }
 
 // Le titre de section etait ecrit deux fois, ici et dans _renderFjRecent.
 // Une seule definition : les sections « Mes aliments » et « Favoris » ne
 // peuvent pas diverger visuellement.
+// PLAFOND ASSUME : 60 aliments. coach_public est relu par chaque athlete a
+// chaque ouverture ; y verser 200 fiches ferait payer ce poids a tout le
+// monde pour un cas qui n arrivera pas. Les 60 derniers crees partent.
+const COACH_ALIMENTS_MAX=60;
+// TROIS usages : en dessous, c est une coincidence ; au-dessus, c est une
+// habitude. Le chiffre vient de la specification, il est nomme pour qu on
+// puisse le discuter sans relire la fonction.
+const FJ_FREQUENT_MIN=3;
+function _alimentsPubliablesCoach(u){
+  const l=(u&&u.nutrition&&u.nutrition.alimentsPerso)||[];
+  if(!Array.isArray(l)) return [];
+  return l.slice(-COACH_ALIMENTS_MAX).map(a=>{
+    // On ne publie QUE ce qui sert a manger : ni identifiant interne d un
+    // autre dossier, ni note calculee, ni date. Le champ de recherche est
+    // recalcule a la lecture.
+    const o={id:a.id,n:a.n,k:a.k,p:a.p,c:a.c,l:a.l};
+    for(const k of ['f','e','sucres','satures','marque','portion_g','code_barres'])
+      if(a[k]!=null) o[k]=a[k];
+    return o;
+  }).filter(a=>{
+    if(!a.id||!String(a.n||'').trim()) return false;
+    try{ return !nutriControle(a).impossibles.length; }catch(e){ return false; }
+  });
+}
+// Cote athlete : les aliments de SON coach, lus dans le cache local. Rien si
+// le rattachement n existe pas — un athlete sans coach ne voit la liste de
+// personne, et la serrure reelle est la regle RTDB, pas ce test.
+// Publication silencieuse, cote coach uniquement.
+function _publierAlimentsCoach(){
+  if(!currentUser||currentUser.role!=='coach') return false;
+  const key=String(currentUser.email||'').replace(/\./g,',');
+  if(!key) return false;
+  const l=_alimentsPubliablesCoach(currentUser);
+  CLOUD.alimentsCoachPut(key,l).catch(()=>{});
+  return true;
+}
+// Rafraichissement cote athlete. UN SEUL appel par ouverture de la
+// recherche, et seulement si le cache a plus d une heure : la liste d un
+// coach ne bouge pas dans la journee, et chaque appel compte sur le plan
+// Spark dont le plafond est un volume mensuel.
+const COACH_ALIMENTS_TTL=3600000;   // 1 h
+let _coachAlimentsEnCours=false;
+async function _rafraichirAlimentsCoach(){
+  if(_coachAlimentsEnCours) return false;
+  if(!currentUser||currentUser.role==='coach') return false;
+  if(typeof navigator!=='undefined'&&navigator.onLine===false) return false;
+  const k=cleCoachDe(currentUser);
+  if(!k) return false;
+  const b=DB.get('coach_aliments');
+  if(b&&b.key===k&&b.t&&(Date.now()-b.t)<COACH_ALIMENTS_TTL) return false;
+  _coachAlimentsEnCours=true;
+  try{
+    const d=await CLOUD.alimentsCoachGet(k);
+    DB.set('coach_aliments',{key:k,t:Date.now(),d:Array.isArray(d)?d:[]});
+    // La liste vient d arriver : on redessine ce qui est a l ecran, sinon
+    // elle n apparaitrait qu a la recherche suivante.
+    try{
+      const inp=document.getElementById('fj-search-input');
+      if(inp&&inp.value) onFjSearch(inp.value); else _renderFjRecent();
+    }catch(e){}
+    return true;
+  }catch(e){
+    // Silencieux : l athlete n a rien demande, et Ciqual repond de toute
+    // facon. On ne salit pas l ecran pour une liste d appoint.
+    return false;
+  }finally{ _coachAlimentsEnCours=false; }
+}
+function _alimentsDuCoach(){
+  try{
+    if(!currentUser||currentUser.role==='coach') return [];
+    const k=cleCoachDe(currentUser);
+    if(!k) return [];
+    const b=DB.get('coach_aliments');
+    const l=(b&&b.key===k&&Array.isArray(b.d))?b.d:[];
+    if(!l.length) return [];
+    // La provenance est POSEE a la lecture : ces fiches viennent d un tiers,
+    // elles ne sont ni Ciqual ni les siennes, et la note doit le dire.
+    return l.map(a=>Object.assign({},a,{s:_fjNorm(a.n||''),
+      g:'Aliment de ton coach',source:NUTRI_SOURCES.CUSTOM,verifie:true}));
+  }catch(e){ return []; }
+}
 function _fjTitreSection(t){
   return '<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;padding:14px 16px 6px">'+escapeHtml(t)+'</div>';
 }
 // La ligne d un aliment perso : meme forme qu un resultat Ciqual, plus un
 // acces direct a la modification — c est la seule liste ou il se corrige.
+// Meme forme qu une ligne perso, SANS le crayon : l athlete ne modifie pas
+// ce que son coach a saisi. S il n est pas d accord, il cree le sien.
+function _htmlCoachResult(a){
+  const kcal=a.k!=null?('<span style="color:var(--red);font-weight:700">'+a.k+' kcal/100g</span>'):'<span style="color:var(--text-faint)">énergie non renseignée</span>';
+  const m=[a.p!=null?('P '+a.p):null,a.c!=null?('G '+a.c):null,a.l!=null?('L '+a.l):null].filter(Boolean).join(' · ');
+  return '<div class="fj-result" role="button" tabindex="0" onclick="selectCoachFood('+JSON.stringify(a.id)+')"'
+    +' onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}">'
+    +'<div style="font-size:13px;font-weight:700;line-height:1.35">'+escapeHtml(a.n||'')+'</div>'
+    +'<div style="font-size:11px;color:var(--sub);margin-top:3px">'+kcal+(m?(' <span style="color:var(--text-faint)">· '+m+'</span>'):'')+'</div>'
+    +'</div>';
+}
+// Le meme ecran de quantite que partout ailleurs.
+function selectCoachFood(id){
+  const a=_alimentsDuCoach().find(x=>x&&x.id===id);
+  if(!a) return false;
+  _fjFood=a;
+  go('s-food-add');
+  document.getElementById('fja-food-name').textContent=a.n;
+  const g=document.getElementById('fja-food-group');
+  if(g) g.textContent='Aliment de ton coach';
+  const q=document.getElementById('fja-qty');
+  if(q) q.value=(a.portion_g>0&&a.portion_g<=1500)?Math.round(a.portion_g):100;
+  if(!_fjRepasChoisi) _fjRepas=repasSelonHeure();
+  document.querySelectorAll('.fj-repas-btn').forEach(b=>b.classList.toggle('active',b.dataset.repas===_fjRepas));
+  const ep=document.getElementById('fja-epingle-slot');
+  if(ep) ep.innerHTML='';
+  const po=document.getElementById('fja-portions');
+  if(po) po.innerHTML='';
+  _fjUnite='g';
+  const pu=document.getElementById('fja-unites-slot');
+  if(pu) pu.innerHTML=_htmlUnites(_fjFood);
+  updateFjaCalc();
+  _majFjaFiabilite();
+  return true;
+}
 function _htmlPersoResult(a){
   const kcal=a.k!=null?('<span style="color:var(--red);font-weight:700">'+a.k+' kcal/100g</span>'):'<span style="color:var(--text-faint)">énergie non renseignée</span>';
   const m=[a.p!=null?('P '+a.p):null,a.c!=null?('G '+a.c):null,a.l!=null?('L '+a.l):null].filter(Boolean).join(' · ');
@@ -34840,9 +35007,15 @@ function onFjSearch(val){
   // Les aliments perso passent DEVANT : l athlete les a crees precisement
   // parce que la table ne repondait pas. Ils sont classes entre eux par la
   // meme regle, pour que « poulet maison » batte « sauce poulet maison ».
-  const mp=_classerAliments(_alimsPerso().filter(a=>a&&words.every(w=>String(a.s||'').includes(w))),normQ,words);
+  const filtre=l=>l.filter(a=>a&&words.every(w=>String(a.s||'').includes(w)));
+  const mp=_classerAliments(filtre(_alimsPerso()),normQ,words);
+  // ORDRE : ce que l athlete a cree, puis ce que SON COACH a cree, puis la
+  // table Ciqual, puis les produits de marque. Le plus specifique d abord :
+  // un aliment saisi l a ete parce que rien d autre ne convenait.
+  const mc=_classerAliments(filtre(_alimentsDuCoach()),normQ,words);
   el.innerHTML=(mp.length?_fjTitreSection('Mes aliments')+mp.map(x=>_htmlPersoResult(x.f)).join(''):'')
-    +(mp.length&&scored.length?_fjTitreSection('Table Ciqual'):'')
+    +(mc.length?_fjTitreSection('Aliments de ton coach')+mc.map(x=>_htmlCoachResult(x.f)).join(''):'')
+    +((mp.length||mc.length)&&scored.length?_fjTitreSection('Table Ciqual'):'')
     +scored.slice(0,50).map(x=>_fjResultHtml(x.f)).join('')
     +_offBoutonHtml(q);
 }
@@ -35098,6 +35271,11 @@ function enregistrerAlimentPerso(){
   const cree=!_persoEdit;
   const dernier=liste[_persoEdit?liste.findIndex(a=>a&&a.id===_persoEdit.id):liste.length-1];
   toastEcriture(saveUser(),cree?'Aliment créé ✓':'Aliment modifié ✓','cet aliment est');
+  // Un COACH publie sa liste pour ses athletes. En arriere-plan et sans
+  // toast : c est un effet de bord de son enregistrement, pas une action
+  // qu il a demandee, et l echouer ne doit pas lui faire croire que sa
+  // saisie est perdue — elle est deja dans son dossier.
+  try{ _publierAlimentsCoach(); }catch(e){}
   // A la creation, on enchaine sur la quantite : l athlete cree un aliment
   // parce qu il est en train de le manger, pas pour garnir une bibliotheque.
   if(cree&&dernier) selectPersoFood(dernier.id); else go('s-food-search');
@@ -35339,6 +35517,27 @@ async function saveFoodEntry(){
   currentUser.nutrition.log[_fjDate].entries.push(entry);
   // Les recents resolvent par _ciqualDB.find(f=>f.id===id) : un identifiant
   // OFF n y serait jamais retrouve, et la ligne serait morte.
+  // FREQUENTS : le nombre de fois qu un aliment a ete ajoute, et la derniere.
+  // Les recents disent « tu viens de t en servir », les frequents disent « tu
+  // t en sers tout le temps » — ce ne sont pas les memes aliments, et un
+  // athlete regulier voyait ses dix recents balayes par une seule journee
+  // inhabituelle.
+  try{
+    if(!currentUser.nutrition.usageFoods) currentUser.nutrition.usageFoods={};
+    const _uf=currentUser.nutrition.usageFoods;
+    const _ck=String(f.id);
+    const _pr=_uf[_ck]||{n:0,t:0};
+    _uf[_ck]={n:(_pr.n||0)+1,t:Date.now()};
+    // PLAFOND : au-dela de 300 aliments comptes, on retire les moins utilises.
+    // Sans quoi ce dictionnaire grossit sans fin dans un dossier synchronise.
+    const _cles=Object.keys(_uf);
+    if(_cles.length>300){
+      _cles.sort((x,y)=>((_uf[y].n||0)-(_uf[x].n||0))||((_uf[y].t||0)-(_uf[x].t||0)));
+      const _neuf={};
+      for(const _k of _cles.slice(0,300)) _neuf[_k]=_uf[_k];
+      currentUser.nutrition.usageFoods=_neuf;
+    }
+  }catch(e){}
   if(typeof f.id==='number'){
     let rec=currentUser.nutrition.recentFoods||[];
     currentUser.nutrition.recentFoods=[f.id,...rec.filter(id=>id!==f.id)].slice(0,10);

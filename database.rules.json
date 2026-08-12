@@ -516,6 +516,49 @@
     //
     // ECRITURE : le createur seul. Le seeding est un acte de publication, pas
     // une action de produit ; aucun ecran n ecrit ici.
+    // ── Aliments saisis par le coach, lus par ses athletes ────────────────
+    //
+    // POURQUOI PAS DANS coach_public, comme le canal et pour la meme raison :
+    // coach_public est retelecharge EN ENTIER a chaque ouverture de l accueil
+    // athlete. Y loger les aliments les ferait descendre a chaque lancement,
+    // y compris chez qui n ouvre jamais son journal. Ici, rien ne descend tant
+    // que la recherche d aliments n est pas ouverte, et le client garde une
+    // heure de cache. Le plafond du plan Spark est un VOLUME MENSUEL.
+    //
+    // LECTURE : le proprietaire, ou un athlete dont le coachEmailKey designe ce
+    // coach — meme test que coach_public. Un athlete sans coach referent recoit
+    // 401 ; le filtre cote application n est qu un affichage, la serrure est ici.
+    // ECRITURE : le proprietaire seul. Un coach ne publie que sous sa cle.
+    //
+    // AUCUNE DONNEE DE SANTE ici : un aliment porte un nom et des grammages.
+    // C est ce qui permet de l ouvrir au groupe sans autre precaution.
+    "aliments_coach": {
+      "$coachKey": {
+        ".read": "auth != null && (auth.token.email.replace('.', ',') === $coachKey || root.child('users').child(auth.token.email.replace('.', ',')).child('coachEmailKey').val() === $coachKey)",
+        ".write": "auth != null && auth.token.email.replace('.', ',') === $coachKey",
+        ".validate": "!newData.exists() || newData.hasChildren()",
+        "$i": {
+          // Les seuls champs admis. Un enfant non declare fait rejeter
+          // L ECRITURE ENTIERE : c est voulu, et c est ce qui empeche qu on
+          // verse ici, par inadvertance, autre chose que de la nutrition.
+          "id":          { ".validate": "newData.isString() && newData.val().length < 60" },
+          "n":           { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length < 120" },
+          "k":           { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 900" },
+          "p":           { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+          "c":           { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+          "l":           { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+          "f":           { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+          "e":           { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+          "sucres":      { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+          "satures":     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100" },
+          "marque":      { ".validate": "newData.isString() && newData.val().length < 120" },
+          "portion_g":   { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 5000" },
+          "code_barres": { ".validate": "newData.isString() && newData.val().length < 20" },
+          "$x": { ".validate": false }
+        }
+      }
+    },
+
     "exercices": {
       ".read": "auth != null && root.child('users').child(auth.token.email.replace('.', ',')).child('role').val() === 'coach'",
       ".write": "auth != null && auth.token.email === 'guellec.coachingpro@gmail.com'"
