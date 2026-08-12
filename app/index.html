@@ -36505,64 +36505,71 @@ function _htmlFormesFiche(fiche,cleRetenue){
 
 // Compléments regroupés par moment de prise — une section par créneau de la journée
 function _renderSuppTable(list, isCoach, editFn){
-  // L'encart sourcing survit à la liste vide : le raccourci d'avant sortait
-  // ici, et l'athlète qui n'a encore rien enregistré est précisément celui
-  // qui n'a encore rien acheté.
+  // L encart sourcing survit a la liste vide : l athlete qui n a rien
+  // enregistre est precisement celui qui n a rien achete.
   if(!list.length) return emptyState('pill','Aucun complément renseigné.',null,null,'padding:28px 0')
     +_htmlSuppSourcing(isCoach);
-  const groups=TIMINGS_LIST
-    .map(t=>({t,items:list.filter(s=>(s.timings||[]).includes(t.id)).sort((a,b)=>a.name.localeCompare(b.name,'fr'))}))
-    .filter(g=>g.items.length);
-  const orphans=list.filter(s=>!(s.timings||[]).some(id=>TIMINGS_LIST.some(t=>t.id===id)));
-  if(orphans.length) groups.push({t:{id:'_none',label:'Moment non défini'},items:orphans});
-
-  const row=(s,color)=>{
+  const TRAME='repeating-linear-gradient(-55deg,transparent,transparent 14px,rgba(255,255,255,.012) 14px,rgba(255,255,255,.012) 15px)';
+  // Les moments d un complement, dans l ordre de la journee — jamais celui
+  // de saisie, qui n a aucun sens a la lecture.
+  // Virgule francaise, et pas de decimale inutile : « 2 » et non « 2,0 ».
+  const nb=v=>(Math.round(v*100)/100).toString().replace('.',',');
+  const momentsDe=s=>TIMINGS_LIST.filter(t=>(s.timings||[]).includes(t.id));
+  const carte=s=>{
     const realIdx=list.indexOf(s);
     const inactive=s.active===false;
-    const others=(s.timings||[]).length-1;
-    // Fiche de référence, quand le nom saisi en retrouve une. Un complément
-    // maison, tapé à la main, s'affiche exactement comme avant.
     const fiche=_suppFiche(s.name);
-    const ecart=_suppEcartMoment(s);
-    return `<div onclick="${editFn}(${realIdx})" style="display:flex;align-items:center;gap:9px;padding:6px 11px;cursor:pointer;border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,0));border:1px solid rgba(255,255,255,.045);margin-bottom:5px;transition:.15s${inactive?';opacity:.42':''}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-      <div style="width:3px;align-self:stretch;border-radius:3px;background:${color};box-shadow:0 0 7px ${color}99;flex-shrink:0"></div>
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:baseline;gap:6px;min-width:0">
-          <span style="font-size:12.5px;font-weight:700;color:${inactive?'var(--text-dim)':'#fff'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s.name)}${inactive?'<span style="font-size:var(--fs-xs);color:var(--text-dim);margin-left:6px;font-weight:600">désactivé</span>':''}</span>
+    const mts=momentsDe(s);
+    // La couleur de la carte est celle du PREMIER moment : elle situe le
+    // complement dans la journee sans qu on ait a lire les pastilles.
+    const c=(SUPP_TIMING_META[(mts[0]||{}).id]||{color:'#6a6a6a'}).color;
+    const q=_planNb(s.dosage_quantity);
+    const prises=Math.max(1,mts.length);
+    const total=(q!=null&&mts.length)?q*prises:null;
+    const unite=s.dosage_unit||'';
+    const chips=mts.map(t=>{
+      const mc=(SUPP_TIMING_META[t.id]||{color:c}).color;
+      return '<span title="'+escapeHtml(t.label)+'" style="display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:20px;'
+        +'background:'+mc+'14;border:1px solid '+mc+'44;color:'+mc+';font-size:9.5px;font-weight:800;letter-spacing:.4px">'
+        +_suppTimingIcon(t.id,9,mc)+(q!=null?('<span>'+nb(q)+'</span>'):'')+'</span>';
+    }).join('');
+    return `<div onclick="${editFn}(${realIdx})" style="position:relative;overflow:hidden;display:flex;align-items:center;gap:10px;
+      padding:9px 12px;margin-bottom:7px;cursor:pointer;border-radius:11px;
+      background:linear-gradient(150deg,#161616,#101010 60%,#0d0d0d);
+      border:1px solid #202020;border-left:3px solid ${c};
+      box-shadow:0 6px 18px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.03);
+      opacity:${inactive?'.5':'1'}">
+      <div aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;background:${TRAME}"></div>
+      <div style="position:relative;flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;min-width:0">
+          <span style="font-size:12.5px;font-weight:800;color:${inactive?'var(--text-dim)':'#fff'};letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s.name||'')}</span>
           ${fiche?_suppPastille(fiche.preuve):''}
-          ${fiche?`<span style="flex:1;min-width:0;font-size:10.5px;color:var(--text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(fiche.dose)} ${escapeHtml(fiche.unite||'')}</span>`:''}
-        ${fiche?`<details onclick="event.stopPropagation()" style="flex-shrink:0">
-          <summary style="font-size:13px;color:var(--sub);cursor:pointer;list-style:none;padding:0 2px;flex-shrink:0">▾</summary>
-          <div style="font-size:11.5px;color:#ccc;line-height:1.6;margin-top:4px;white-space:normal">${escapeHtml(fiche.note)}</div>
-          ${_htmlFormesFiche(fiche,s.forme)}
-          ${s.forme?`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;letter-spacing:.3px;font-weight:700">Forme : ${escapeHtml(_libelleForme(fiche,s.forme))}</div>`:''}
-          ${phraseDureeJugement(fiche)?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px;line-height:1.5;white-space:normal">${escapeHtml(phraseDureeJugement(fiche))}</div>`:''}
-          ${s.notes?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s.notes)}</div>`:''}
-          ${ecart?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:3px;line-height:1.5;white-space:normal">${escapeHtml(ecart)}</div>`:''}
-          ${others>0?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px;letter-spacing:.5px">aussi ${others} autre${others>1?'s':''} moment${others>1?'s':''}</div>`:''}
-        </details>`:''}
+          ${fiche?`<details onclick="event.stopPropagation()" style="flex-shrink:0">
+            <summary style="font-size:12px;color:var(--sub);cursor:pointer;list-style:none;padding:0 2px">▾</summary>
+            <div style="font-size:11.5px;color:#ccc;line-height:1.6;margin-top:5px;white-space:normal">${escapeHtml(fiche.note)}</div>
+            ${_htmlFormesFiche(fiche,s.forme)}
+            ${s.forme?`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px;font-weight:700">Forme : ${escapeHtml(_libelleForme(fiche,s.forme))}</div>`:''}
+            ${phraseDureeJugement(fiche)?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:4px;line-height:1.5;white-space:normal">${escapeHtml(phraseDureeJugement(fiche))}</div>`:''}
+            ${s.notes?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:4px;font-style:italic;white-space:normal">${escapeHtml(s.notes)}</div>`:''}
+            ${_suppEcartMoment(s)?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:4px;line-height:1.5;white-space:normal">${escapeHtml(_suppEcartMoment(s))}</div>`:''}
+          </details>`:''}
         </div>
-        ${!fiche?`${s.forme?`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;letter-spacing:.3px;font-weight:700">Forme : ${escapeHtml(_libelleForme(fiche,s.forme))}</div>`:''}${phraseDureeJugement(fiche)?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px;line-height:1.5;white-space:normal">${escapeHtml(phraseDureeJugement(fiche))}</div>`:''}${s.notes?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s.notes)}</div>`:''}${ecart?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:3px;line-height:1.5;white-space:normal">${escapeHtml(ecart)}</div>`:''}${others>0?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px;letter-spacing:.5px">aussi ${others} autre${others>1?'s':''} moment${others>1?'s':''}</div>`:''}`:''}
+        <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:5px">
+          ${chips}
+          ${fiche?`<span style="font-size:9.5px;color:var(--text-faint);letter-spacing:.2px">réf. ${escapeHtml(fiche.dose)} ${escapeHtml(fiche.unite||'')}</span>`:''}
+        </div>
       </div>
-      <div style="flex-shrink:0;text-align:right">
-        <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:21px;line-height:1;color:${color};text-shadow:0 0 9px ${color}88">${s.dosage_quantity||'—'}</div>
-        <div style="font-size:var(--fs-xs);color:#666;letter-spacing:.8px;margin-top:1px;text-transform:uppercase">${s.dosage_quantity?escapeHtml(s.dosage_unit||''):''}</div>
+      <div style="position:relative;flex-shrink:0;text-align:right;line-height:1">
+        <div style="font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:22px;color:${inactive?'var(--text-dim)':c};text-shadow:0 0 12px ${c}66">${total!=null?nb(total):'—'}</div>
+        <div style="font-size:9px;color:var(--text-faint);letter-spacing:.8px;text-transform:uppercase;margin-top:2px">${escapeHtml(planUnitePluriel(total,unite))}${prises>1?' · '+prises+'×':''}</div>
       </div>
     </div>`;
   };
-
-  return _htmlSuppInteractions(list)+groups.map(g=>{
-    const meta=SUPP_TIMING_META[g.t.id]||{color:'#666',svg:''};
-    const c=meta.color;
-    return `<div style="margin-bottom:13px">
-      <div style="display:flex;align-items:center;gap:8px;padding:7px 11px;border-radius:9px 9px 0 0;background:linear-gradient(90deg,${c}22,${c}06 65%,transparent);border-left:3px solid ${c};box-shadow:inset 0 1px 0 rgba(255,255,255,.05)">
-        <span style="display:inline-flex;filter:drop-shadow(0 0 5px ${c}cc)">${_suppTimingIcon(g.t.id,14,c)}</span>
-        <span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2px;color:${c};text-transform:uppercase;text-shadow:0 0 9px ${c}88">${g.t.label}</span>
-        <span style="margin-left:auto;font-size:var(--fs-xs);font-weight:800;color:${c};opacity:.65;letter-spacing:1px">${g.items.length}</span>
-      </div>
-      <div style="padding-top:6px">${g.items.map(s=>row(s,c)).join('')}</div>
-    </div>`;
-  }).join('')+_htmlSuppLegende(isCoach)+_htmlSuppSourcing(isCoach);
+  // Ordre de lecture : par premier moment de la journee, puis alphabetique.
+  const rang=s=>{const m=momentsDe(s)[0]; const k=m?TIMINGS_LIST.findIndex(t=>t.id===m.id):99; return k<0?99:k;};
+  const ordonne=list.slice().sort((a,b)=>rang(a)-rang(b)||String(a.name||'').localeCompare(String(b.name||''),'fr'));
+  return _htmlSuppInteractions(list)+ordonne.map(carte).join('')
+    +_htmlSuppLegende(isCoach)+_htmlSuppSourcing(isCoach);
 }
 
 let _suppReturnToNutrition=false;
