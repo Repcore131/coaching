@@ -2739,14 +2739,17 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="clh-pesee"></div>
 
       <!-- REPRISE SÉANCE EN COURS -->
-      <div id="clh-resume-workout" style="display:none;position:relative;overflow:hidden;background:linear-gradient(160deg,#0a1622,#071019 55%,#050c14);border:1px solid #1d3f5c;border-radius:12px;padding:26px 16px 14px;margin-bottom:14px;cursor:pointer;box-shadow:0 8px 26px rgba(0,0,0,.5),inset 0 0 30px rgba(90,170,255,.06)" onclick="woResumeAndGo()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <svg aria-hidden="true" viewBox="0 0 100 28" preserveAspectRatio="none" style="position:absolute;top:0;left:0;width:100%;height:28px;pointer-events:none">
-          <defs><linearGradient id="glacon" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#cfeaff" stop-opacity=".95"/>
-            <stop offset=".55" stop-color="#7cc4ff" stop-opacity=".6"/>
-            <stop offset="1" stop-color="#4a9fe0" stop-opacity="0"/></linearGradient></defs>
-          <path d="M0,0 L0,0 L2.5,13 L5,0 L5,0 L7.5,6 L10,0 L10,0 L12.5,19 L15,0 L15,0 L17.5,9 L20,0 L20,0 L22.5,26 L25,0 L25,0 L27.5,7 L30,0 L30,0 L32.5,15 L35,0 L35,0 L37.5,22 L40,0 L40,0 L42.5,8 L45,0 L45,0 L47.5,17 L50,0 L50,0 L52.5,11 L55,0 L55,0 L57.5,24 L60,0 L60,0 L62.5,6 L65,0 L65,0 L67.5,14 L70,0 L70,0 L72.5,20 L75,0 L75,0 L77.5,9 L80,0 L80,0 L82.5,12 L85,0 L85,0 L87.5,7 L90,0 L90,0 L92.5,18 L95,0 L95,0 L97.5,10 L100,0 L100,0 Z" fill="url(#glacon)"/></svg>
-        <div aria-hidden="true" style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,#7cc4ff,#bfe4ff,#7cc4ff,transparent);box-shadow:0 0 12px rgba(124,196,255,.75)"></div>
+      <div id="clh-resume-workout" style="display:none;position:relative;overflow:hidden;background:linear-gradient(160deg,#0a1622,#071019 55%,#050c14);border:1px solid #1d3f5c;border-radius:12px;padding:48px 16px 14px;margin-bottom:14px;cursor:pointer;box-shadow:0 8px 26px rgba(0,0,0,.5),inset 0 0 30px rgba(90,170,255,.06)" onclick="woResumeAndGo()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+        <svg aria-hidden="true" viewBox="0 0 100 60" preserveAspectRatio="none" style="position:absolute;top:0;left:0;width:100%;height:56px;pointer-events:none;opacity:.85">
+          <defs><linearGradient id="congere" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#f2f9ff"/>
+            <stop offset="1" stop-color="#cfe3f2"/></linearGradient>
+          <linearGradient id="glacon" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#f0fbff" stop-opacity=".9"/>
+            <stop offset=".5" stop-color="#c7e6f8" stop-opacity=".6"/>
+            <stop offset="1" stop-color="#a6d4ee" stop-opacity="0"/></linearGradient></defs>
+          <path d="M98.58,20.67 Q99.09,26.36 99.38,30.06 Q99.67,26.36 100.18,20.67 Z M102.19,20.67 Q102.53,28.27 102.71,33.87 Q102.9,28.27 103.24,20.67 Z M87.91,19.63 Q88.39,28.17 88.66,34.71 Q88.93,28.17 89.42,19.63 Z M88.56,19.63 Q88.8,28.72 88.94,35.8 Q89.08,28.72 89.33,19.63 Z M79.08,20.15 Q79.53,28.8 79.78,35.45 Q80.03,28.8 80.48,20.15 Z M76.22,20.15 Q76.72,29.92 77,37.68 Q77.28,29.92 77.79,20.15 Z M78.18,20.15 Q78.71,32.8 79.02,43.45 Q79.32,32.8 79.85,20.15 Z M62.57,22.74 Q63.06,27.99 63.33,31.23 Q63.61,27.99 64.09,22.74 Z M65.15,22.74 Q65.45,29.74 65.62,34.74 Q65.79,29.74 66.1,22.74 Z M51.34,18.71 Q51.63,29.58 51.79,38.45 Q51.95,29.58 52.24,18.71 Z M47.99,18.71 Q48.23,24.87 48.36,29.03 Q48.49,24.87 48.73,18.71 Z M38.71,18.62 Q39.05,23.51 39.24,26.41 Q39.44,23.51 39.78,18.62 Z M35.42,18.62 Q35.85,23.16 36.09,25.69 Q36.33,23.16 36.76,18.62 Z M37.44,18.62 Q38,27.39 38.32,34.16 Q38.64,27.39 39.2,18.62 Z M30.66,22.08 Q30.92,30.04 31.07,36 Q31.21,30.04 31.47,22.08 Z M28.51,22.08 Q28.76,35.14 28.91,46.21 Q29.05,35.14 29.31,22.08 Z M18.59,16.83 Q19.11,25.81 19.41,32.79 Q19.7,25.81 20.22,16.83 Z M8.59,23.24 Q9.06,32.05 9.33,38.87 Q9.6,32.05 10.07,23.24 Z M6.61,23.24 Q6.87,30.84 7.01,36.45 Q7.15,30.84 7.41,23.24 Z" fill="url(#glacon)"/>
+          <path d="M0,0 L100,0 L100,15.67 Q102.15,22.67 96.42,14.63 Q91.43,21.63 86.44,15.15 Q78.18,22.15 69.92,17.74 Q63.32,24.74 56.73,13.71 Q49.22,20.71 41.71,13.62 Q37.23,20.62 32.76,17.08 Q28.12,24.08 23.47,11.83 Q18.49,18.83 13.5,18.24 Q6.75,25.24 0,18.24 Z" fill="url(#congere)"/></svg>
         <div style="position:relative;font-size:var(--fs-xs);color:#8fd0ff;letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:5px;text-shadow:0 0 14px rgba(124,196,255,.65)">❄ Séance gelée</div>
         <div style="position:relative;font-size:14px;font-weight:800;color:#eaf6ff;margin-bottom:3px" id="clh-resume-name">Reprendre ma séance</div>
         <div style="position:relative;font-size:11px;color:#9ab6cc">Reprendre là où tu t'es arrêté →</div>
