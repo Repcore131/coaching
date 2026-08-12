@@ -3144,6 +3144,19 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 <!-- PAUSE / CANCEL WORKOUT MODAL -->
+<!-- CONFIRMATION MAISON. Meme forme que la feuille de pause juste en
+     dessous, pour que la question ne surgisse pas d un autre monde. -->
+<div id="rc-confirm" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:4000;align-items:flex-end;justify-content:center">
+  <div style="background:linear-gradient(180deg,#151515,#0e0e0e);border-top:2px solid var(--red);border-radius:20px 20px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom,0px));width:100%;max-width:480px;box-shadow:0 -12px 40px rgba(0,0,0,.7)">
+    <div style="font-family:'Bebas Neue',Montserrat,sans-serif;font-size:20px;letter-spacing:3px;color:var(--red);margin-bottom:10px">REPCORE</div>
+    <div id="rc-confirm-titre" style="font-size:15px;font-weight:800;color:#fff;margin-bottom:6px"></div>
+    <div id="rc-confirm-texte" style="font-size:12.5px;color:var(--sub);line-height:1.65;margin-bottom:20px"></div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button id="rc-confirm-ok" class="btn btn-red">Confirmer</button>
+      <button id="rc-confirm-non" class="btn btn-outline">Annuler</button>
+    </div>
+  </div>
+</div>
 <div id="wo-pause-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:3000;align-items:flex-end;justify-content:center">
   <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px">
     <div style="font-size:14px;font-weight:800;letter-spacing:.5px;margin-bottom:4px">Séance en cours</div>
@@ -19116,7 +19129,31 @@ function cancelWorkout(){
   go('s-client-home');
   loadClientHome();
 }
-function finishWorkoutEarly(){
+// Remplacante de confirm(), aux couleurs de l app. Rend une PROMESSE pour
+// que l appelant garde la forme d avant : if(!await rcConfirm(...)) return.
+// Repli sur confirm() natif si l ecran manque — mieux vaut une boite laide
+// qu un geste irreversible declenche sans question.
+function rcConfirm(titre,texte,libelleOk){
+  const z=document.getElementById('rc-confirm');
+  const t=document.getElementById('rc-confirm-titre');
+  const x=document.getElementById('rc-confirm-texte');
+  const ok=document.getElementById('rc-confirm-ok');
+  const non=document.getElementById('rc-confirm-non');
+  if(!z||!t||!x||!ok||!non) return Promise.resolve(confirm(titre));
+  t.textContent=titre; x.textContent=texte||'';
+  ok.textContent=libelleOk||'Confirmer';
+  z.style.display='flex';
+  return new Promise(res=>{
+    const fermer=v=>{ z.style.display='none';
+      ok.onclick=null; non.onclick=null; z.onclick=null; res(v); };
+    ok.onclick=()=>fermer(true);
+    non.onclick=()=>fermer(false);
+    // Toucher le voile ANNULE : sur un geste irreversible, le toucher flou
+    // doit aller vers le refus.
+    z.onclick=e=>{ if(e.target===z) fermer(false); };
+  });
+}
+async function finishWorkoutEarly(){
   // LE SEUL GESTE IRREVERSIBLE de l ecran de seance, et il jouxte « Exercice
   // suivant », qui est le geste normal. On demande confirmation, et on NOMME
   // ce qui se perd : un « Etes-vous sur ? » se valide sans lire.
@@ -19124,12 +19161,12 @@ function finishWorkoutEarly(){
     return Object.values((woState&&woState.sessionData)||{})
       .reduce((n,d)=>n+((d&&d.sets)||[]).filter(x=>x&&x.done).length,0);
   }catch(e){ return 0; } })();
-  const msg='Abandonner la séance ?'+String.fromCharCode(10,10)+''
+  const msg=''
     +(fait
       ?('Tes '+fait+' série'+(fait>1?'s':'')+' validée'+(fait>1?'s':'')
         +' sont enregistrées, mais la séance sera terminée : pour la refaire, tu repartiras de zéro.')
       :'La séance sera terminée : pour la refaire, tu repartiras de zéro.');
-  if(!confirm(msg)) return;
+  if(!await rcConfirm('Abandonner la séance ?',msg,'Abandonner')) return;
   localStorage.removeItem('rc_wo_state');
   finishWorkout(true);
 }
