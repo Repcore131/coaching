@@ -3506,6 +3506,10 @@ const COACH_PHOTO='icons/coach.jpg';
     <input id="fj-search-input" type="search" autocomplete="off" placeholder="Rechercher (ex: poulet, riz, œuf…)"
       style="width:100%;padding:12px 14px;background:var(--surface-2);border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:14px;box-sizing:border-box;outline:none"
       oninput="onFjSearch(this.value)">
+    <!-- Les deux voies hors table, visibles DES L OUVERTURE. Le scan etait
+         auparavant enfoui sous les resultats : il fallait chercher un autre
+         aliment pour le faire apparaitre. -->
+    <div id="fj-actions" style="display:flex;gap:8px;margin-top:10px"></div>
   </div>
   <div class="scroll-area" style="flex:1">
     <div id="fj-recent-section"></div>
@@ -3563,6 +3567,89 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
       </div>
       <button class="btn btn-red" onclick="saveFoodEntry()" style="font-size:13px;letter-spacing:1px">AJOUTER AU JOURNAL</button>
+    </div>
+  </div>
+</div>
+
+<!-- MON ALIMENT (saisie manuelle + lecture d'étiquette) -->
+<div id="s-food-perso" class="screen">
+  <div class="topbar"><button class="back-btn" onclick="go('s-food-search')">←</button><span class="topbar-title" id="perso-titre">Créer un aliment</span><span></span></div>
+  <div class="scroll-area" style="flex:1">
+    <div class="pad">
+      <p style="font-size:12px;color:var(--sub);line-height:1.6;margin:0 0 16px">
+        Pour ce que la table Ciqual et les produits de marque ne couvrent pas :
+        une préparation maison, un produit du marché. Les valeurs se saisissent
+        <b style="color:#fff">pour 100&nbsp;g</b>, comme sur une étiquette.
+      </p>
+      <!-- La photo est lue SUR LE TELEPHONE, par le moteur deja embarque.
+           Elle ne part sur aucun serveur et n est pas conservee. -->
+      <input type="file" id="perso-etiq-file" accept="image/*" capture="environment"
+        style="display:none" onchange="lireEtiquette(this)">
+      <button type="button" id="perso-etiq-btn" class="btn btn-outline btn-sm" style="width:100%"
+        onclick="document.getElementById('perso-etiq-file').click()">📷 Lire l'étiquette (photo)</button>
+      <div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-top:7px">
+        La lecture se fait sur ton téléphone, sans envoi. Cadre le tableau
+        nutritionnel bien à plat. Vérifie toujours les valeurs obtenues.
+      </div>
+      <div id="perso-etat" style="display:none;font-size:11.5px;line-height:1.5;margin-top:10px"></div>
+      <div class="divider"></div>
+      <div style="margin-bottom:16px">
+        <label for="perso-nom" style="font-size:10px;color:var(--sub);letter-spacing:1px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:5px">Nom de l'aliment</label>
+        <input type="text" id="perso-nom" maxlength="80" placeholder="ex : gâteau de riz maison"
+          style="width:100%;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:14px">
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+          <div style="flex:1;min-width:0">
+            <label for="perso-kcal" style="font-size:10px;color:var(--sub);letter-spacing:1px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:5px">Énergie</label>
+            <input type="number" id="perso-kcal" inputmode="decimal" step="any" min="0" placeholder="0"
+              style="width:100%;padding:11px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:15px;font-weight:700;text-align:center"
+              oninput="majPersoCoherence()">
+            <div style="font-size:9px;color:var(--text-faint);text-align:center;margin-top:3px">kcal / 100 g</div>
+          </div>
+          <div style="flex:1;min-width:0">
+            <label for="perso-p" style="font-size:10px;color:var(--sub);letter-spacing:1px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:5px">Protéines</label>
+            <input type="number" id="perso-p" inputmode="decimal" step="any" min="0" placeholder="0"
+              style="width:100%;padding:11px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:15px;font-weight:700;text-align:center"
+              oninput="majPersoCoherence()">
+            <div style="font-size:9px;color:var(--text-faint);text-align:center;margin-top:3px">g / 100 g</div>
+          </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+          <div style="flex:1;min-width:0">
+            <label for="perso-c" style="font-size:10px;color:var(--sub);letter-spacing:1px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:5px">Glucides</label>
+            <input type="number" id="perso-c" inputmode="decimal" step="any" min="0" placeholder="0"
+              style="width:100%;padding:11px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:15px;font-weight:700;text-align:center"
+              oninput="majPersoCoherence()">
+            <div style="font-size:9px;color:var(--text-faint);text-align:center;margin-top:3px">g / 100 g</div>
+          </div>
+          <div style="flex:1;min-width:0">
+            <label for="perso-l" style="font-size:10px;color:var(--sub);letter-spacing:1px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:5px">Lipides</label>
+            <input type="number" id="perso-l" inputmode="decimal" step="any" min="0" placeholder="0"
+              style="width:100%;padding:11px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:15px;font-weight:700;text-align:center"
+              oninput="majPersoCoherence()">
+            <div style="font-size:9px;color:var(--text-faint);text-align:center;margin-top:3px">g / 100 g</div>
+          </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+          <div style="flex:1;min-width:0">
+            <label for="perso-f" style="font-size:10px;color:var(--sub);letter-spacing:1px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:5px">Fibres</label>
+            <input type="number" id="perso-f" inputmode="decimal" step="any" min="0" placeholder="—"
+              style="width:100%;padding:11px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:15px;font-weight:700;text-align:center"
+              oninput="majPersoCoherence()">
+            <div style="font-size:9px;color:var(--text-faint);text-align:center;margin-top:3px">g / 100 g (facultatif)</div>
+          </div>
+          <div style="flex:1;min-width:0">
+            <label for="perso-e" style="font-size:10px;color:var(--sub);letter-spacing:1px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:5px">Sel</label>
+            <input type="number" id="perso-e" inputmode="decimal" step="any" min="0" placeholder="—"
+              style="width:100%;padding:11px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:15px;font-weight:700;text-align:center"
+              oninput="majPersoCoherence()">
+            <div style="font-size:9px;color:var(--text-faint);text-align:center;margin-top:3px">g / 100 g (facultatif)</div>
+          </div>
+      </div>
+      <div id="perso-coherence" style="margin-bottom:18px"></div>
+      <button class="btn btn-red" onclick="enregistrerAlimentPerso()" style="font-size:13px;letter-spacing:1px">ENREGISTRER</button>
+      <button type="button" id="perso-supprimer" class="btn btn-outline btn-sm" style="width:100%;margin-top:10px;display:none;color:var(--orange);border-color:var(--orange)"
+        onclick="supprimerAlimentPerso()">Supprimer cet aliment</button>
     </div>
   </div>
 </div>
@@ -33744,6 +33831,8 @@ function openFoodSearch(date){
   go('s-food-search');
   const inp=document.getElementById('fj-search-input');
   if(inp){inp.value='';setTimeout(()=>inp.focus(),350);}
+  // Re-rendue a chaque ouverture : le reseau a pu tomber depuis la derniere.
+  _renderFjActions();
   document.getElementById('fj-results-list').innerHTML='';
   if(!_ciqualDB){
     _loadCiqual().then(()=>{_renderFjRecent();});
@@ -33752,6 +33841,21 @@ function openFoodSearch(date){
   }
 }
 
+// Les deux voies pour un aliment absent de la table. Elles se rendent a
+// l OUVERTURE de l ecran, pas dans les resultats : c est justement quand on
+// ne trouve rien qu on en a besoin, et chercher pour faire apparaitre le
+// bouton qui permet de ne pas chercher est un cercle.
+function _renderFjActions(){
+  const el=document.getElementById('fj-actions');
+  if(!el) return;
+  const st='flex:1;padding:10px 8px;font-size:11px;letter-spacing:.3px';
+  // Hors ligne le scan disparait — la fiche produit se lit chez Open Food
+  // Facts, et sans reseau il mene a un mur. La creation manuelle, elle,
+  // fonctionne entierement hors ligne : rien de ce qu elle fait ne sort.
+  const scan=(typeof navigator!=='undefined'&&navigator.onLine===false)?''
+    :'<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirScan()">Scanner un produit</button>';
+  el.innerHTML='<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirAlimentPerso()">+ Créer un aliment</button>'+scan;
+}
 function _renderFjRecent(){
   const el=document.getElementById('fj-recent-section');
   if(!el||!_ciqualDB) return;
@@ -33765,15 +33869,44 @@ function _renderFjRecent(){
   const blocFav=favs.length
     ?titre('Favoris')+favs.map(f=>_fjResultHtml(f,true)).join('')+sep
     :'';
+  // Les cinq derniers aliments perso crees, en tete : ce sont ceux qu on
+  // reprend le plus souvent, et la seule liste ou on les retrouve sans les
+  // nommer. Les plus recents en premier.
+  const perso=_alimsPerso().slice(-5).reverse();
+  const blocPerso=perso.length
+    ?titre('Mes aliments')+perso.map(a=>_htmlPersoResult(a)).join('')+sep
+    :'';
   if(!ids.length){
-    el.innerHTML=blocFav+'<div style="padding:20px 16px;font-size:12px;color:var(--text-dim);text-align:center">Commence à saisir pour rechercher un aliment</div>';
+    el.innerHTML=blocPerso+blocFav+'<div style="padding:20px 16px;font-size:12px;color:var(--text-dim);text-align:center">Commence à saisir pour rechercher un aliment</div>';
     return;
   }
   const foods=ids.map(id=>_ciqualDB.find(f=>f.id===id)).filter(Boolean);
-  el.innerHTML=blocFav+titre('Récents')+
+  el.innerHTML=blocPerso+blocFav+titre('Récents')+
     foods.map(f=>_fjResultHtml(f,true)).join('')+sep;
 }
 
+// Le titre de section etait ecrit deux fois, ici et dans _renderFjRecent.
+// Une seule definition : les sections « Mes aliments » et « Favoris » ne
+// peuvent pas diverger visuellement.
+function _fjTitreSection(t){
+  return '<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;padding:14px 16px 6px">'+escapeHtml(t)+'</div>';
+}
+// La ligne d un aliment perso : meme forme qu un resultat Ciqual, plus un
+// acces direct a la modification — c est la seule liste ou il se corrige.
+function _htmlPersoResult(a){
+  const kcal=a.k!=null?('<span style="color:var(--red);font-weight:700">'+a.k+' kcal/100g</span>'):'<span style="color:var(--text-faint)">énergie non renseignée</span>';
+  const m=[a.p!=null?('P '+a.p):null,a.c!=null?('G '+a.c):null,a.l!=null?('L '+a.l):null].filter(Boolean).join(' · ');
+  return '<div class="fj-result" role="button" tabindex="0" onclick="selectPersoFood('+JSON.stringify(a.id)+')"'
+    +' onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}"'
+    +' style="display:flex;align-items:center;gap:10px">'
+    +'<div style="flex:1;min-width:0">'
+    +'<div style="font-size:13px;font-weight:700;line-height:1.35">'+escapeHtml(a.n||'')+'</div>'
+    +'<div style="font-size:11px;color:var(--sub);margin-top:3px">'+kcal+(m?(' <span style="color:var(--text-faint)">· '+m+'</span>'):'')+'</div>'
+    +'</div>'
+    +'<button type="button" class="hit44" aria-label="Modifier cet aliment" style="flex-shrink:0;background:none;border:none;color:var(--sub);font-size:16px"'
+    +' onclick="event.stopPropagation();ouvrirAlimentPerso('+JSON.stringify(a.id)+')">✎</button>'
+    +'</div>';
+}
 function _fjResultHtml(f,avecEpingle){
   const _kvBadge=`<span style="font-size:var(--fs-xs);font-weight:800;color:#fb923c;background:#1a0e00;border:1px solid #3a1e00;border-radius:4px;padding:1px 5px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`;
   const kcalSpan=f.k!=null?`<span style="color:var(--red);font-weight:700">${f.k} kcal/100g</span>`:_kvBadge;
@@ -34396,7 +34529,13 @@ function onFjSearch(val){
   document.getElementById('fj-recent-section').innerHTML='';
   if(!res.length){el.innerHTML='<div style="padding:20px;text-align:center;color:var(--sub);font-size:12px">Aucun résultat pour "'+escapeHtml(q)+'"</div>'+_offBoutonHtml(q);return;}
   const scored=_classerAliments(res,normQ,words);
-  el.innerHTML=scored.slice(0,50).map(x=>_fjResultHtml(x.f)).join('')
+  // Les aliments perso passent DEVANT : l athlete les a crees precisement
+  // parce que la table ne repondait pas. Ils sont classes entre eux par la
+  // meme regle, pour que « poulet maison » batte « sauce poulet maison ».
+  const mp=_classerAliments(_alimsPerso().filter(a=>a&&words.every(w=>String(a.s||'').includes(w))),normQ,words);
+  el.innerHTML=(mp.length?_fjTitreSection('Mes aliments')+mp.map(x=>_htmlPersoResult(x.f)).join(''):'')
+    +(mp.length&&scored.length?_fjTitreSection('Table Ciqual'):'')
+    +scored.slice(0,50).map(x=>_fjResultHtml(x.f)).join('')
     +_offBoutonHtml(q);
 }
 
@@ -34465,6 +34604,297 @@ function updateFjaCalc(){
     <div><div class="txt-stat" style="line-height:1">${l??'—'}</div><div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-top:2px">LIP g</div></div>
     <div><div class="txt-stat" style="line-height:1">${sel??'—'}</div><div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-top:2px">SEL g</div></div>
   </div>`;
+}
+
+// ══ ALIMENTS PERSO ════════════════════════════════════════════════════════
+// Ranges dans le dossier de l athlete, sous son propre noeud. Aucune donnee
+// Ciqual ni OFF n y est recopiee : ce sont ses valeurs, saisies par lui.
+// L identifiant est une CHAINE (« p1723... ») la ou Ciqual utilise des
+// nombres : saveFoodEntry ne pousse dans recentFoods que les id numeriques,
+// donc un aliment perso n y entre jamais et aucune ligne ne devient morte.
+function _alimsPerso(){
+  const l=currentUser&&currentUser.nutrition&&currentUser.nutrition.alimentsPerso;
+  return Array.isArray(l)?l:[];
+}
+function _persoParId(id){ return _alimsPerso().find(a=>a&&a.id===id)||null; }
+// Le champ de recherche normalise, calcule a l enregistrement : le classement
+// lit f.s comme pour Ciqual, sans cas particulier.
+function _persoIndexer(a){ a.s=_fjNorm(a.n||''); return a; }
+
+let _persoEdit=null;        // l aliment en cours de saisie, null = creation
+
+function ouvrirAlimentPerso(id){
+  _persoEdit=id?_persoParId(id):null;
+  go('s-food-perso');
+  const v=(k,d)=>{ const e=document.getElementById(k); if(e) e.value=(d==null?'':d); };
+  const a=_persoEdit||{};
+  v('perso-nom',a.n); v('perso-kcal',a.k); v('perso-p',a.p);
+  v('perso-c',a.c); v('perso-l',a.l); v('perso-f',a.f); v('perso-e',a.e);
+  const t=document.getElementById('perso-titre');
+  if(t) t.textContent=_persoEdit?'Modifier mon aliment':'Créer un aliment';
+  const sup=document.getElementById('perso-supprimer');
+  if(sup) sup.style.display=_persoEdit?'block':'none';
+  _persoDire('');
+  majPersoCoherence();
+}
+function _persoNb(id){
+  const e=document.getElementById(id);
+  if(!e) return null;
+  const t=String(e.value||'').trim().replace(',','.');
+  if(!t) return null;
+  const v=parseFloat(t);
+  return isFinite(v)?v:null;
+}
+function _persoDire(msg,couleur){
+  const e=document.getElementById('perso-etat');
+  if(!e) return;
+  e.textContent=msg||'';
+  e.style.color=couleur||'var(--sub)';
+  e.style.display=msg?'block':'none';
+}
+// L energie DEDUITE des macros : 4 kcal par gramme de proteine et de glucide,
+// 9 par gramme de lipide (facteurs d Atwater). Elle n est jamais imposee — une
+// etiquette peut legitimement s en ecarter, les fibres et les polyols comptant
+// autrement — mais un ecart de plus d un quart signale presque toujours une
+// faute de frappe ou une colonne « par portion » lue par erreur.
+function _kcalAtwater(pr,gl,li){
+  if(pr==null&&gl==null&&li==null) return null;
+  return (pr||0)*4+(gl||0)*4+(li||0)*9;
+}
+function majPersoCoherence(){
+  const pr=_persoNb('perso-p'), gl=_persoNb('perso-c'), li=_persoNb('perso-l');
+  const th=_kcalAtwater(pr,gl,li);
+  const el=document.getElementById('perso-coherence');
+  if(!el) return;
+  const k=_persoNb('perso-kcal');
+  if(th==null){ el.innerHTML=''; return; }
+  const arr=Math.round(th);
+  if(k==null){
+    el.innerHTML='<div style="font-size:11px;color:var(--sub);line-height:1.5">'
+      +'D&apos;après les macros, environ <b style="color:#fff">'+arr+' kcal</b> pour 100 g. '
+      +'<button type="button" class="btn btn-outline btn-sm" style="margin-top:6px;width:100%" onclick="persoAppliquerKcal('+arr+')">Utiliser cette valeur</button></div>';
+    return;
+  }
+  const ecart=arr>0?Math.abs(k-arr)/arr:0;
+  el.innerHTML=ecart>0.25
+    ?'<div style="font-size:11px;color:var(--orange);line-height:1.5">Les macros donnent environ <b>'+arr+' kcal</b>, tu as saisi <b>'+k+'</b>. Vérifie que tu n&apos;as pas lu la colonne « par portion ».</div>'
+    :'<div style="font-size:11px;color:var(--text-faint);line-height:1.5">Cohérent avec les macros (~'+arr+' kcal).</div>';
+}
+function persoAppliquerKcal(v){
+  const e=document.getElementById('perso-kcal');
+  if(e){ e.value=v; majPersoCoherence(); }
+}
+function enregistrerAlimentPerso(){
+  const nom=String((document.getElementById('perso-nom')||{}).value||'').trim();
+  if(nom.length<2){ _persoDire('Donne un nom à cet aliment.','var(--orange)'); return; }
+  if(nom.length>80){ _persoDire('Nom trop long (80 caractères maximum).','var(--orange)'); return; }
+  const ch={k:_persoNb('perso-kcal'),p:_persoNb('perso-p'),c:_persoNb('perso-c'),
+            l:_persoNb('perso-l'),f:_persoNb('perso-f'),e:_persoNb('perso-e')};
+  // Une valeur negative ou delirante ne se corrige pas toute seule plus loin :
+  // elle contaminerait tous les totaux du jour.
+  for(const k in ch){
+    const v=ch[k];
+    if(v==null) continue;
+    if(v<0){ _persoDire('Aucune valeur ne peut être négative.','var(--orange)'); return; }
+    if(k!=='k'&&v>100){ _persoDire('Plus de 100 g pour 100 g d&apos;aliment : vérifie tes valeurs.','var(--orange)'); return; }
+    if(k==='k'&&v>900){ _persoDire('Au-delà de 900 kcal pour 100 g : vérifie ta saisie.','var(--orange)'); return; }
+  }
+  if(ch.k==null&&ch.p==null&&ch.c==null&&ch.l==null){
+    _persoDire('Renseigne au moins l&apos;énergie ou une macro.','var(--orange)'); return; }
+  // La somme des macros ne peut pas depasser 100 g pour 100 g de produit.
+  const somme=(ch.p||0)+(ch.c||0)+(ch.l||0);
+  if(somme>100){ _persoDire('Protéines + glucides + lipides dépassent 100 g pour 100 g.','var(--orange)'); return; }
+  if(!currentUser.nutrition) currentUser.nutrition={};
+  const liste=_alimsPerso().slice();
+  if(_persoEdit){
+    const i=liste.findIndex(a=>a&&a.id===_persoEdit.id);
+    if(i<0){ _persoDire('Cet aliment n&apos;existe plus.','var(--orange)'); return; }
+    liste[i]=_persoIndexer(Object.assign({},liste[i],ch,{n:nom}));
+  } else {
+    if(liste.length>=200){ _persoDire('Tu as atteint 200 aliments personnels.','var(--orange)'); return; }
+    liste.push(_persoIndexer(Object.assign({id:'p'+Date.now(),n:nom,g:'Mon aliment'},ch)));
+  }
+  currentUser.nutrition.alimentsPerso=liste;
+  const cree=!_persoEdit;
+  const dernier=liste[_persoEdit?liste.findIndex(a=>a&&a.id===_persoEdit.id):liste.length-1];
+  toastEcriture(saveUser(),cree?'Aliment créé ✓':'Aliment modifié ✓','cet aliment est');
+  // A la creation, on enchaine sur la quantite : l athlete cree un aliment
+  // parce qu il est en train de le manger, pas pour garnir une bibliotheque.
+  if(cree&&dernier) selectPersoFood(dernier.id); else go('s-food-search');
+}
+function supprimerAlimentPerso(){
+  if(!_persoEdit) return;
+  const id=_persoEdit.id;
+  rcConfirm('Supprimer cet aliment ?',
+    'Il disparaîtra de tes recherches. Les repas déjà enregistrés avec cet aliment ne changent pas.',
+    'Supprimer').then(ok=>{
+      if(!ok) return;
+      currentUser.nutrition.alimentsPerso=_alimsPerso().filter(a=>a&&a.id!==id);
+      _persoEdit=null;
+      toastEcriture(saveUser(),'Aliment supprimé','cette suppression est');
+      go('s-food-search');
+      onFjSearch((document.getElementById('fj-search-input')||{}).value||'');
+    });
+}
+// Le meme ecran de quantite que Ciqual et OFF : un seul parcours a maintenir,
+// et l athlete ne voit aucune difference de traitement.
+function selectPersoFood(id){
+  const a=_persoParId(id);
+  if(!a) return false;
+  _fjFood=a;
+  go('s-food-add');
+  document.getElementById('fja-food-name').textContent=a.n;
+  const g=document.getElementById('fja-food-group');
+  if(g) g.textContent='Mon aliment';
+  const q=document.getElementById('fja-qty');
+  if(q) q.value=100;
+  if(!_fjRepasChoisi) _fjRepas=repasSelonHeure();
+  document.querySelectorAll('.fj-repas-btn').forEach(b=>b.classList.toggle('active',b.dataset.repas===_fjRepas));
+  // Les favoris sont une liste d identifiants Ciqual : un id perso n y serait
+  // pas resolu. On offre a la place la modification de l aliment.
+  const ep=document.getElementById('fja-epingle-slot');
+  if(ep) ep.innerHTML='';
+  const po=document.getElementById('fja-portions');
+  if(po) po.innerHTML='<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="ouvrirAlimentPerso('+JSON.stringify(a.id)+')">Modifier mes valeurs</button>';
+  _fjUnite='g';
+  const pu=document.getElementById('fja-unites-slot');
+  if(pu) pu.innerHTML=_htmlUnites(_fjFood);
+  updateFjaCalc();
+  return true;
+}
+// ══ LECTURE D UNE ETIQUETTE ═══════════════════════════════════════════════
+// Le tableau nutritionnel est normalise en Europe : les memes intitules, dans
+// le meme ordre, avec les valeurs pour 100 g. C est ce qui le rend lisible
+// sans modele, contrairement a une photo de plat.
+//
+// AUCUN APPEL RESEAU : le moteur est celui deja embarque pour les captures de
+// pas, servi depuis ./vendor/. La photo ne quitte pas le telephone et n est
+// ni enregistree ni mise en cache.
+//
+// Le resultat n est jamais enregistre tel quel : il REMPLIT le formulaire, et
+// l athlete valide. Une lecture optique se trompe, et une macro fausse fausse
+// toute la journee.
+function _etiqNormaliser(txt){
+  return String(txt||'').toLowerCase()
+    .replace(/[éèêë]/g,'e').replace(/[àâä]/g,'a').replace(/[ùûü]/g,'u')
+    .replace(/[îï]/g,'i').replace(/[ôö]/g,'o').replace(/ç/g,'c')
+    // La virgule decimale francaise, et les espaces des milliers.
+    .replace(/(\d)[ \u00a0](\d{3})\b/g,'$1$2')
+    .replace(/(\d),(\d)/g,'$1.$2');
+}
+// Le premier nombre d une ligne, apres l intitule. La lecture optique confond
+// « g » et « 9 » : on n exige donc PAS l unite, on prend le nombre.
+function _etiqNombre(ligne){
+  const m=String(ligne||'').match(/(\d+(?:\.\d+)?)/);
+  return m?parseFloat(m[1]):null;
+}
+// PAS d exclusion des lignes « dont ». Elle semblait necessaire, elle est
+// nuisible : « dont sucres » ne contient pas « glucides » et « dont acides
+// gras satures » ne contient ni « lipides » ni « matieres grasses », donc ces
+// sous-lignes ne matchent jamais l intitule parent — le premier match est deja
+// le total. En revanche, sur les etiquettes qui impriment « Matieres grasses
+// dont saturees 21 g » sur UNE ligne, l exclusion jetait la ligne entiere et
+// faisait perdre la valeur. Mesure : lipides et glucides passaient a null.
+const ETIQ_CHAMPS=[
+  {k:'l',re:/(matieres? grasses|lipides)/},
+  {k:'c',re:/glucides/},
+  {k:'f',re:/fibres/},
+  {k:'p',re:/proteines/},
+  {k:'e',re:/\bsel\b|sodium/},
+];
+function _etiqAnalyser(texte){
+  const t=_etiqNormaliser(texte);
+  const lignes=t.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+  const out={};
+  // L energie : la ligne porte souvent les DEUX unites (« 1570 kj / 375 kcal »).
+  // On vise le nombre colle a « kcal », jamais le premier de la ligne.
+  for(const L of lignes){
+    const m=L.match(/(\d+(?:\.\d+)?)\s*k?\s*cal/);
+    if(m){ out.k=parseFloat(m[1]); break; }
+  }
+  for(const c of ETIQ_CHAMPS){
+    for(let i=0;i<lignes.length;i++){
+      const L=lignes[i];
+      if(!c.re.test(L)) continue;
+      // Une ligne du tableau est COURTE et commence par son intitule. Sans
+      // cette garde, « Sans sel ajouté » imprime en facade passe pour la ligne
+      // de sel, et le repli sur la ligne suivante lit le 100 de « pour 100 g ».
+      if(L.length>60||L.search(c.re)>25) continue;
+      let v=_etiqNombre(L.replace(c.re,' '));
+      // La valeur est parfois rejetee sur la ligne suivante par la mise en
+      // page — mais alors cette ligne ne porte QUE le nombre et son unite.
+      // Accepter n importe quelle ligne suivante, c est ramasser le premier
+      // nombre venu.
+      if(v==null&&lignes[i+1]&&/^\d+(?:\.\d+)?\s*(g|mg|9|kcal)?$/.test(lignes[i+1].trim()))
+        v=_etiqNombre(lignes[i+1]);
+      // Un macronutriment au-dela de 100 g pour 100 g de produit n existe pas :
+      // c est que la lecture a attrape autre chose.
+      if(v!=null&&c.k!=='k'&&v>100) v=null;
+      // On ne s arrete que sur une valeur TROUVEE : sinon la premiere ligne
+      // qui contient le mot bloque la recherche des suivantes.
+      if(v!=null){ out[c.k]=v; out['_l_'+c.k]=L; break; }
+    }
+  }
+  // Le sodium n est pas le sel : 1 g de sodium vaut 2,5 g de sel. La decision
+  // se prend sur LA LIGNE RETENUE, pas sur le texte entier — un « sans sel
+  // ajoute » imprime ailleurs sur l emballage annulerait la conversion, et la
+  // valeur sortirait 2,5 fois trop basse.
+  const _ls=out['_l_e']||'';
+  if(out.e!=null&&/sodium/.test(_ls)&&!/\bsel\b/.test(_ls)) out.e=Math.round(out.e*2.5*100)/100;
+  for(const _k in out) if(_k.indexOf('_l_')===0) delete out[_k];
+  out.pour100=/pour\s*100\s*(g|ml)|par\s*100\s*(g|ml)|100\s*(g|ml)/.test(t);
+  return out;
+}
+let _etiqEnCours=false;
+async function lireEtiquette(input){
+  if(_etiqEnCours) return;
+  const f=input&&input.files&&input.files[0];
+  if(!f){ return; }
+  _etiqEnCours=true;
+  const btn=document.getElementById('perso-etiq-btn');
+  if(btn) btn.disabled=true;
+  _persoDire('Lecture de l&apos;étiquette… (quelques secondes)','var(--sub)');
+  try{
+    // On passe par le meme redimensionnement que l import de programme : une
+    // photo de 12 Mpx fait echouer la lecture par manque de memoire sur les
+    // telephones d entree de gamme.
+    // _lireImage N APPELLE PAS son callback quand elle renonce — fichier trop
+    // lourd, image illisible : elle affiche un toast et sort. Sans garde, la
+    // promesse ne se resoudrait jamais, le bouton resterait desactive et il
+    // faudrait relancer l application. On borne donc l attente.
+    if(f.size>20*1024*1024){
+      _persoDire('Photo trop lourde (20 Mo maximum). Reprends-la en qualité moindre.','var(--orange)');
+      return;
+    }
+    const dataUrl=await new Promise((res,rej)=>{
+      const t=setTimeout(()=>rej(new Error('image illisible')),20000);
+      try{ _lireImage(input,1400,1800,b64=>{ clearTimeout(t); res(b64); }); }
+      catch(e){ clearTimeout(t); rej(e); }
+    });
+    if(!dataUrl){ _persoDire('Image illisible.','var(--orange)'); return; }
+    const texte=await _lireCaptureStats(dataUrl);
+    const r=_etiqAnalyser(texte);
+    const mis=[];
+    const pose=(id,v)=>{ if(v==null) return; const e=document.getElementById(id);
+      if(e){ e.value=v; mis.push(id); } };
+    pose('perso-kcal',r.k); pose('perso-p',r.p); pose('perso-c',r.c);
+    pose('perso-l',r.l);    pose('perso-f',r.f); pose('perso-e',r.e);
+    majPersoCoherence();
+    if(!mis.length){
+      _persoDire('Rien n&apos;a pu être lu. Cadre le tableau nutritionnel bien à plat, ou saisis les valeurs à la main.','var(--orange)');
+    } else if(!r.pour100){
+      _persoDire(mis.length+' valeur(s) lue(s), mais « pour 100 g » n&apos;apparaît pas : vérifie que ce ne sont pas les valeurs par portion.','var(--orange)');
+    } else {
+      _persoDire(mis.length+' valeur(s) lue(s). Vérifie-les : une lecture optique se trompe.','var(--green)');
+    }
+  }catch(e){
+    _persoDire('Lecture impossible : '+((e&&e.message)||'erreur')+'. Saisis les valeurs à la main.','var(--orange)');
+  }finally{
+    _etiqEnCours=false;
+    if(btn) btn.disabled=false;
+    // Le meme fichier doit pouvoir etre repris apres une correction de cadrage.
+    try{ input.value=''; }catch(e){}
+  }
 }
 
 function saveFoodEntry(){
