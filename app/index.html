@@ -36524,16 +36524,15 @@ function _renderSuppTable(list, isCoach, editFn){
     // maison, tapé à la main, s'affiche exactement comme avant.
     const fiche=_suppFiche(s.name);
     const ecart=_suppEcartMoment(s);
-    return `<div onclick="${editFn}(${realIdx})" style="display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;border-radius:9px;background:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,0));border:1px solid rgba(255,255,255,.045);margin-bottom:5px;transition:.15s${inactive?';opacity:.42':''}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+    return `<div onclick="${editFn}(${realIdx})" style="display:flex;align-items:center;gap:9px;padding:6px 11px;cursor:pointer;border-radius:8px;background:linear-gradient(180deg,rgba(255,255,255,.022),rgba(255,255,255,0));border:1px solid rgba(255,255,255,.045);margin-bottom:5px;transition:.15s${inactive?';opacity:.42':''}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="width:3px;align-self:stretch;border-radius:3px;background:${color};box-shadow:0 0 7px ${color}99;flex-shrink:0"></div>
       <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:6px;min-width:0">
-          <span style="font-size:13px;font-weight:700;color:${inactive?'var(--text-dim)':'#fff'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s.name)}${inactive?'<span style="font-size:var(--fs-xs);color:var(--text-dim);margin-left:6px;font-weight:600">désactivé</span>':''}</span>
+        <div style="display:flex;align-items:baseline;gap:6px;min-width:0">
+          <span style="font-size:12.5px;font-weight:700;color:${inactive?'var(--text-dim)':'#fff'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s.name)}${inactive?'<span style="font-size:var(--fs-xs);color:var(--text-dim);margin-left:6px;font-weight:600">désactivé</span>':''}</span>
           ${fiche?_suppPastille(fiche.preuve):''}
-        </div>
-        ${fiche?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px;letter-spacing:.3px">Couramment ${escapeHtml(fiche.dose)} ${escapeHtml(fiche.unite)}</div>`:''}
-        ${fiche?`<details onclick="event.stopPropagation()" style="margin-top:3px">
-          <summary style="font-size:var(--fs-xs);color:var(--sub);font-weight:700;letter-spacing:.5px;cursor:pointer;list-style:none">à savoir ▾</summary>
+          ${fiche?`<span style="flex:1;min-width:0;font-size:10.5px;color:var(--text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(fiche.dose)} ${escapeHtml(fiche.unite||'')}</span>`:''}
+        ${fiche?`<details onclick="event.stopPropagation()" style="flex-shrink:0">
+          <summary style="font-size:13px;color:var(--sub);cursor:pointer;list-style:none;padding:0 2px;flex-shrink:0">▾</summary>
           <div style="font-size:11.5px;color:#ccc;line-height:1.6;margin-top:4px;white-space:normal">${escapeHtml(fiche.note)}</div>
           ${_htmlFormesFiche(fiche,s.forme)}
           ${s.forme?`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;letter-spacing:.3px;font-weight:700">Forme : ${escapeHtml(_libelleForme(fiche,s.forme))}</div>`:''}
@@ -36542,6 +36541,7 @@ function _renderSuppTable(list, isCoach, editFn){
           ${ecart?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:3px;line-height:1.5;white-space:normal">${escapeHtml(ecart)}</div>`:''}
           ${others>0?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px;letter-spacing:.5px">aussi ${others} autre${others>1?'s':''} moment${others>1?'s':''}</div>`:''}
         </details>`:''}
+        </div>
         ${!fiche?`${s.forme?`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;letter-spacing:.3px;font-weight:700">Forme : ${escapeHtml(_libelleForme(fiche,s.forme))}</div>`:''}${phraseDureeJugement(fiche)?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px;line-height:1.5;white-space:normal">${escapeHtml(phraseDureeJugement(fiche))}</div>`:''}${s.notes?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(s.notes)}</div>`:''}${ecart?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:3px;line-height:1.5;white-space:normal">${escapeHtml(ecart)}</div>`:''}${others>0?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:2px;letter-spacing:.5px">aussi ${others} autre${others>1?'s':''} moment${others>1?'s':''}</div>`:''}`:''}
       </div>
       <div style="flex-shrink:0;text-align:right">
