@@ -43771,14 +43771,18 @@ function _appliquerCaptureStats(analyse){
 // champ qui le précède, le gestionnaire retrouve le bouton qui le suit.
 function _htmlCadreImportCapture(){
   return `
-    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:14px;animation:fadeInUp .5s ease">
-      <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:9px">Pas noté tes stats ?</div>
-      <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:11px">
-        Envoie la capture d'écran de ton application de montre — pas ou sommeil, vue 7 jours de préférence : les chiffres sont lus et remplis tout seuls.
-        <b style="color:#8a8a8a">La capture est lue sur ton téléphone. Elle n'est ni envoyée ni conservée.</b>
+    <!-- NI CADRE, NI TITRE. Ce n est pas une fonction du produit, c est un
+         depannage : quelques mots et un bouton. Le cadre et le titre en
+         capitales lui donnaient le poids d une section a part entiere.
+         La phrase sur la confidentialite RESTE : c est un engagement, pas
+         une decoration, et c est elle qui autorise a demander une image. -->
+    <div style="margin-bottom:14px;animation:fadeInUp .5s ease">
+      <div style="font-size:10.5px;color:var(--text-faint);line-height:1.5;margin-bottom:8px">
+        Pas noté tes stats ? Envoie la capture d'écran de ton application de montre — pas ou sommeil, vue 7 jours de préférence : les chiffres sont lus et remplis tout seuls.
+        <b style="color:var(--text-dim);font-weight:700">La capture est lue sur ton téléphone. Elle n'est ni envoyée ni conservée.</b>
       </div>
       <input type="file" accept="image/*" style="display:none" onchange="importerCaptureStats(this)">
-      <button onclick="this.previousElementSibling.click()" style="width:100%;padding:13px;background:linear-gradient(180deg,#131313,#0c0c0c);border:1px solid #2a2a2a;color:#c9c9c9;border-radius:9px;font-family:Montserrat,sans-serif;font-size:12px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer">Envoyer une capture</button>
+      <button onclick="this.previousElementSibling.click()" style="width:100%;padding:10px;background:linear-gradient(180deg,#131313,#0c0c0c);border:1px solid #262626;color:#a8a8a8;border-radius:8px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;cursor:pointer">Envoyer une capture</button>
     </div>`;
 }
 async function importerCaptureStats(input){
