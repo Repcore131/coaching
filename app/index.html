@@ -33848,13 +33848,18 @@ function openFoodSearch(date){
 function _renderFjActions(){
   const el=document.getElementById('fj-actions');
   if(!el) return;
+  // MESURE, pas estimation (clone a largeur imposee, Montserrat chargee, dans
+  // Chrome). La classe .btn met les libelles EN MAJUSCULES, ce qui les elargit
+  // d environ 12 % : « + CRÉER UN ALIMENT / SCANNER UN PRODUIT » passait sur
+  // deux lignes a 320 px (hauteur 50 px au lieu de 36). « + Nouvel aliment /
+  // Scanner » tient sur une ligne des 320 px, et respire a 375.
   const st='flex:1;padding:10px 8px;font-size:11px;letter-spacing:.3px';
   // Hors ligne le scan disparait — la fiche produit se lit chez Open Food
   // Facts, et sans reseau il mene a un mur. La creation manuelle, elle,
   // fonctionne entierement hors ligne : rien de ce qu elle fait ne sort.
   const scan=(typeof navigator!=='undefined'&&navigator.onLine===false)?''
-    :'<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirScan()">Scanner un produit</button>';
-  el.innerHTML='<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirAlimentPerso()">+ Créer un aliment</button>'+scan;
+    :'<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirScan()">Scanner</button>';
+  el.innerHTML='<button type="button" class="btn btn-outline btn-sm" style="'+st+'" onclick="ouvrirAlimentPerso()">+ Nouvel aliment</button>'+scan;
 }
 function _renderFjRecent(){
   const el=document.getElementById('fj-recent-section');
