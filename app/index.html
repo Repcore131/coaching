@@ -34476,6 +34476,12 @@ const SCAN_ATTENTE_CAM=7000;      // ms
 // Sans ce delai, reculer le telephone puis le ramener relance la meme fiche,
 // et un athlete qui scanne trois produits d affilee voit le premier revenir.
 const SCAN_DEBOUNCE=1500;         // ms avant de re-accepter LE MEME code
+// LES CODES-BARRES D ABORD, mais pas seulement. Un emballage porte de plus
+// en plus un QR code — le standard GS1 Digital Link — a cote de son EAN, et
+// le viser ne produisait RIEN, sans meme dire pourquoi. Le decodeur sait les
+// lire, il suffisait de les lui demander. Le DataMatrix sert aux petits
+// formats, ou l EAN ne tient pas.
+const SCAN_FORMATS=['EAN-13','EAN-8','UPC-A','UPC-E','QRCode','DataMatrix'];
 let _scanDernierCode=null, _scanDernierT=0;
 let _scanTorche=false;
 let _scanFlux=null, _scanBoucle=null, _scanZX=null, _scanEssais=0, _scanOccupe=false;
@@ -34484,6 +34490,33 @@ let _scanFlux=null, _scanBoucle=null, _scanZX=null, _scanEssais=0, _scanOccupe=f
 // Sans la clé, une frappe de travers part interroger OFF pour rien et revient
 // « produit introuvable » — un message faux, qui accuse la base alors que
 // c'est la saisie qui est fautive.
+// CE QU UN QR CODE CONTIENT n est pas un code produit : c est presque
+// toujours une URL. Le standard GS1 Digital Link y loge le GTIN apres un
+// segment « /01/ » — https://id.gs1.org/01/03017620422003 — et c est la
+// seule forme sur laquelle on peut compter. Un QR de campagne publicitaire
+// ou de recette ne porte aucun code : on le DIT, au lieu de laisser croire
+// que le scan a echoue.
+function scanExtraireCode(texte){
+  const t=String(texte||'').trim();
+  if(!t) return {ok:false,raison:'Rien n’a pu être lu.'};
+  // Un code-barres classique : que des chiffres.
+  if(/^\d+$/.test(t)) return {ok:true,code:t};
+  // GS1 Digital Link : le GTIN suit « /01/ ». 8, 12, 13 ou 14 chiffres.
+  const m=t.match(/(?:^|\/)01\/(\d{8,14})(?:[\/?#]|$)/);
+  if(m){
+    let c=m[1];
+    // Un GTIN-14 porte un chiffre d indicateur en tete ; l EAN-13 du produit
+    // est en dessous. Open Food Facts indexe l EAN, pas le GTIN-14.
+    if(c.length===14&&c[0]==='0') c=c.slice(1);
+    return {ok:true,code:c};
+  }
+  // Une URL sans GTIN, ou du texte libre : on nomme ce qu on a lu.
+  if(/^https?:\/\//i.test(t))
+    return {ok:false,qrSansCode:true,
+      raison:'Ce QR code renvoie vers une page web, il ne contient pas de code produit. Vise le code-barres à barres noires, ou photographie le tableau nutritionnel.'};
+  return {ok:false,qrSansCode:true,
+    raison:'Ce code ne contient pas de référence produit. Vise le code-barres, ou photographie le tableau nutritionnel.'};
+}
 function scanEanValide(code){
   const c=String(code||'').replace(/\s/g,'');
   if(!/^\d+$/.test(c)) return {ok:false,raison:'Un code-barres ne contient que des chiffres.'};
@@ -34583,6 +34616,10 @@ function _htmlScanViseur(){
     <button class="btn btn-outline btn-sm" style="width:100%;margin-top:4px" onclick="scanSaisieManuelle()">Saisir le code à la main</button>
     <!-- TOUJOURS accessible : un produit peut n être dans aucune base, et
          l athlete ne doit pas avoir a echouer deux fois pour le decouvrir. -->
+    <!-- LA DEUXIEME VOIE, a cote de la premiere. Un produit sans code-barres
+         lisible, ou absent des bases, porte toujours son tableau
+         nutritionnel : c est le dernier recours qui marche toujours. -->
+    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="photographierEtiquette()">📷 Photographier le tableau nutritionnel</button>
     <button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="creerAlimentDepuisScan()">Créer l'aliment à la main</button>
     <div id="scan-manuel"></div>
     <div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-top:10px">Aucune image n'est enregistrée, ni transmise, ni mise en cache. La caméra ne sert qu'à lire le code, sur ton appareil.</div>`;
@@ -34623,6 +34660,17 @@ async function scanBasculerTorche(){
 // Creer un aliment depuis le scan, en emportant le code-barres quand il a ete
 // lu : le retaper serait absurde, et c est la seule facon de rattacher
 // l aliment saisi au produit qui l a declenche.
+// Ouvre la creation d aliment ET declenche tout de suite l appareil photo :
+// l athlete a demande a photographier une etiquette, pas a remplir un
+// formulaire vide puis a chercher le bouton.
+function photographierEtiquette(code){
+  creerAlimentDepuisScan(code);
+  // Apres le changement d ecran, sinon le champ n existe pas encore.
+  setTimeout(()=>{
+    const f=document.getElementById('perso-etiq-file');
+    if(f) f.click();
+  },350);
+}
 function creerAlimentDepuisScan(code){
   const c=(typeof code==='string'&&code)?code:_scanDernierCode;
   scanArreter();
@@ -34718,7 +34766,7 @@ async function scanTenter(mod){
     ctx.drawImage(v,0,0,w,h);
     const img=ctx.getImageData(0,0,w,h);
     const res=await mod.readBarcodesFromImageData(img,
-      {formats:['EAN-13','EAN-8','UPC-A','UPC-E'],tryHarder:true,maxNumberOfSymbols:1});
+      {formats:SCAN_FORMATS,tryHarder:true,maxNumberOfSymbols:1});
     if(res&&res.length&&res[0].text){
       const code=res[0].text;
       // LE MEME code, relu dans la seconde et demie : on l ignore. Le
@@ -34803,6 +34851,18 @@ async function scanValiderManuel(){
 async function scanTraiterCode(code,zone){
   const e=zone||document.getElementById('scan-etat');
   const dire=(m,c)=>{ if(e){ e.textContent=m; e.style.color=c||'var(--sub)'; } };
+  // Un QR code lu ne porte pas forcement un code produit. Le dire ICI, avec
+  // la marche a suivre, plutot que d envoyer une URL a Open Food Facts et de
+  // rendre « produit introuvable » — qui serait faux et sans issue.
+  const ex=scanExtraireCode(code);
+  if(!ex.ok){
+    if(e){
+      e.innerHTML='<span style="color:var(--orange)">'+escapeHtml(ex.raison)+'</span>'
+        +'<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="photographierEtiquette()">Photographier le tableau nutritionnel</button>';
+    }
+    return false;
+  }
+  code=ex.code;
   dire('Recherche du produit…');
   const r=await offParEAN(code);
   if(r.ok){
