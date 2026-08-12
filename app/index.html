@@ -32049,17 +32049,12 @@ function onPlanSearch(val){
   const normQ=_fjNorm(q);
   const words=normQ.split(/\s+/).filter(w=>w.length>1);
   if(!words.length){ el.innerHTML=''; return; }
-  const res=_ciqualDB.filter(f=>words.every(w=>f.s.includes(w))).slice(0,80);
+  // Pas de coupe AVANT le classement : « Oeuf cru » est le 124e nom
+  // contenant « oeuf » dans l ordre de la table. Le plafonner a 80 revenait a
+  // classer un echantillon arbitraire. On classe tout, on coupe apres.
+  const res=_ciqualDB.filter(f=>words.every(w=>f.s.includes(w)));
   if(!res.length){ el.innerHTML='<div style="padding:20px;text-align:center;color:var(--sub);font-size:12px">Aucun résultat pour "'+escapeHtml(q)+'"</div>'; return; }
-  const scored=res.map(f=>{
-    const nn=_fjNorm(f.n),ng=_fjNorm(f.g||'');
-    let sc=0;
-    if(nn.startsWith(normQ)) sc+=100; else if(nn.startsWith(words[0])) sc+=50;
-    if(words.length<=2&&/viande|volaille|gibier/.test(ng)) sc+=30;
-    if(/plat/.test(ng)) sc-=50;
-    return {f,sc};
-  });
-  scored.sort((a,b)=>b.sc-a.sc);
+  const scored=_classerAliments(res,normQ,words);
   // La macro visée est rappelée sur chaque ligne : choisir une source de
   // glucides qui n'en porte pas est l'erreur la plus facile à commettre ici.
   const macro=(_cplCible&&_cplCible.macro)||null;
@@ -33058,6 +33053,52 @@ function _fjNorm(s){
     .replace(/[éèêë]/g,'e').replace(/[àâä]/g,'a').replace(/[ùûü]/g,'u')
     .replace(/[îï]/g,'i').replace(/[ôö]/g,'o').replace(/ç/g,'c')
     .replace(/œ/g,'oe').replace(/æ/g,'ae');
+}
+// Un athlete qui tape « oeuf » cherche l oeuf, pas la salade qui en contient.
+// On classe donc sur ce qui separe une matiere premiere d une preparation.
+function _classerAliments(res,normQ,words){
+  const isGeneric=words.length<=2;
+  // L etat de matiere premiere, tel qu il s ecrit dans les noms CIQUAL.
+  const ETAT_BRUT=/\b(cru|crue|crus|crues|frais|fraiche|nature|brut|brute|entier|entiere)\b/;
+  // « Sec » compte aussi — c est la forme brute de la lentille et des pates —
+  // mais moins que « cru » : sur « pomme », la pomme sechee ne doit pas passer
+  // devant la pomme fraiche.
+  const ETAT_SEC=/\b(sec|seche|sechee|seches|sechees)\b/;
+  // Les marqueurs de recette ou d ultra-transforme. « aux », « a la » et
+  // « avec » sont les plus revelateurs : ils annoncent une recette.
+  const PREPARE=/\b(aux?|a la|avec|sauce|farci|farcie|panne|pannee|cuisine|cuisinee|prepare|preparee|preemballe|preemballee|conserve|surgele|surgelee|assaisonne|assaisonnee|sandwich|pizza|quiche|tarte|gateau|biscuit|plat|recette|garni|garnie)\b/;
+  // La cuisson et l assaisonnement : moins lourds qu une recette, mais ils
+  // ecartent quand meme du produit brut — l amande grillee salee n est pas
+  // l amande, le saumon fume n est pas le saumon.
+  const TRANSFORME=/\b(grille|grillee|poele|poelee|frit|frite|fume|fumee|confit|confite|salee?|sucree?|aromatise|aromatisee|braise|braisee|roti|rotie|appertise|appertisee)\b/;
+  // Le filtre travaille en SOUS-CHAINE : « oeuf » retient aussi « boeuf »,
+  // « ail » retient « travail ». Un nom qui contient le mot ENTIER parle de
+  // l aliment cherche ; les autres n en parlent que par accident.
+  const MOTS=words.map(w=>new RegExp('\\b'+w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'s?\\b'));
+  return res.map(f=>{
+    // f.s EST deja le nom normalise dans la table : le recalculer a chaque
+    // frappe coutait le double du temps de recherche. Le repli reste la au
+    // cas ou la table serait regeneree sans ce champ.
+    const nn=f.s||_fjNorm(f.n), ng=_fjNorm(f.g||'');
+    let sc=0;
+    // 1) La correspondance de tete.
+    if(nn===normQ) sc+=200;                    // le nom EST la requete
+    else if(nn.startsWith(normQ)) sc+=100;
+    else if(nn.startsWith(words[0])) sc+=50;
+    // 2) Le mot entier, l etat brut, et l absence de preparation.
+    if(MOTS.every(r=>r.test(nn))) sc+=60;
+    if(ETAT_BRUT.test(nn)) sc+=45; else if(ETAT_SEC.test(nn)) sc+=25;
+    if(PREPARE.test(nn)) sc-=70;
+    if(TRANSFORME.test(nn)) sc-=35;
+    // 3) Un nom COURT est presque toujours plus generique qu un nom long :
+    //    « Oeuf cru » contre « Salade composee au thon et aux oeufs ». C est
+    //    un departage, pas une regle principale — d ou le petit poids.
+    sc+=Math.max(0,30-3*nn.split(/[\s,]+/).filter(Boolean).length);
+    // 4) Les groupes CIQUAL : matieres premieres contre plats composes.
+    if(isGeneric&&/viande|volaille|gibier|oeuf|poisson|legume|fruit|cereale|lait/.test(ng)) sc+=30;
+    if(/plat|sandwich|dessert|snack|aperitif/.test(ng)) sc-=80;
+    return{f,sc};
+  }).sort((a,b)=>b.sc-a.sc);
 }
 
 async function _loadCiqual(){
@@ -34348,21 +34389,13 @@ function onFjSearch(val){
   const normQ=_fjNorm(q);
   const words=normQ.split(/\s+/).filter(w=>w.length>1);
   if(!words.length){el.innerHTML='';return;}
-  const res=_ciqualDB.filter(f=>words.every(w=>f.s.includes(w))).slice(0,80);
+  // Pas de coupe AVANT le classement : « Oeuf cru » est le 124e nom
+  // contenant « oeuf » dans l ordre de la table. Le plafonner a 80 revenait a
+  // classer un echantillon arbitraire. On classe tout, on coupe apres.
+  const res=_ciqualDB.filter(f=>words.every(w=>f.s.includes(w)));
   document.getElementById('fj-recent-section').innerHTML='';
   if(!res.length){el.innerHTML='<div style="padding:20px;text-align:center;color:var(--sub);font-size:12px">Aucun résultat pour "'+escapeHtml(q)+'"</div>'+_offBoutonHtml(q);return;}
-  const isGeneric=words.length<=2;
-  const scored=res.map(f=>{
-    const nn=_fjNorm(f.n);
-    const ng=_fjNorm(f.g||'');
-    let sc=0;
-    if(nn.startsWith(normQ)) sc+=100;
-    else if(nn.startsWith(words[0])) sc+=50;
-    if(isGeneric&&/viande|volaille|gibier/.test(ng)) sc+=30;
-    if(/plat/.test(ng)) sc-=50;
-    return{f,sc};
-  });
-  scored.sort((a,b)=>b.sc-a.sc);
+  const scored=_classerAliments(res,normQ,words);
   el.innerHTML=scored.slice(0,50).map(x=>_fjResultHtml(x.f)).join('')
     +_offBoutonHtml(q);
 }
