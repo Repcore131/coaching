@@ -32796,9 +32796,17 @@ function _htmlPlanAthlete(user){
   // donne déjà à ses compteurs et l'écran strict à ses scores. Les mêmes
   // valeurs se lisaient ici en Montserrat 15, deux fois plus petites que le
   // « 44 » des jours consécutifs juste en dessous — la hiérarchie était inversée.
-  const tuile=(lib,val,unite,couleur)=>`<div style="flex:1;min-width:0;background:rgba(255,255,255,.028);border:1px solid rgba(255,255,255,.05);border-radius:10px;padding:10px 4px;text-align:center">
-    <div style="font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:26px;line-height:1;color:${couleur};text-shadow:0 0 10px ${couleur}66">${val==null?'—':Math.round(val)}<span style="font-family:Montserrat,sans-serif;font-size:9px;color:var(--sub);font-weight:400">${unite}</span></div>
-    <div style="font-size:9px;color:var(--sub);letter-spacing:1.4px;font-weight:800;margin-top:5px">${lib}</div>
+  // LA TUILE KCAL PORTE LE CHIFFRE QUI COMMANDE : les trois macros s y
+  // rangent. Elle etait pourtant grise comme les autres, et seul le nombre
+  // etait rouge. Elle prend donc le cadre : fond en degrade, bordure rouge,
+  // halo. Les trois autres restent neutres — si tout est mis en avant, plus
+  // rien ne l est.
+  const tuile=(lib,val,unite,couleur,vedette)=>`<div style="position:relative;overflow:hidden;flex:1;min-width:0;border-radius:10px;padding:10px 4px;text-align:center;${vedette
+      ?'background:linear-gradient(160deg,rgba(224,32,32,.20),rgba(224,32,32,.06) 60%,rgba(224,32,32,.02));border:1px solid rgba(224,32,32,.45);box-shadow:0 4px 16px rgba(224,32,32,.18),inset 0 1px 0 rgba(255,255,255,.06)'
+      :'background:rgba(255,255,255,.028);border:1px solid rgba(255,255,255,.05)'}">
+    ${vedette?`<div aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(-55deg,transparent,transparent 9px,rgba(255,255,255,.02) 9px,rgba(255,255,255,.02) 10px)"></div>`:''}
+    <div style="position:relative;font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:${vedette?30:26}px;line-height:1;color:${couleur};text-shadow:0 0 ${vedette?16:10}px ${couleur}${vedette?'99':'66'}">${val==null?'—':Math.round(val)}<span style="font-family:Montserrat,sans-serif;font-size:9px;color:var(--sub);font-weight:400">${unite}</span></div>
+    <div style="position:relative;font-size:9px;color:${vedette?'#ffb3b3':'var(--sub)'};letter-spacing:1.4px;font-weight:800;margin-top:5px">${lib}</div>
   </div>`;
 
   // Code couleur commun aux deux écrans du plan — voir PLAN_COULEURS.
@@ -33012,7 +33020,7 @@ const courses=(lc&&lc.lignes.length)?`<div style="position:relative;overflow:hid
         ${pal?`<span style="font-size:10px;font-weight:800;color:var(--red);background:rgba(224,32,32,.12);border:1px solid rgba(224,32,32,.3);border-radius:6px;padding:3px 9px">${escapeHtml(pal.lib)}</span>`:''}
       </div>
       <div style="display:flex;gap:7px">
-        ${tuile('KCAL',cib.kcal,'','var(--red)')}
+        ${tuile('KCAL',cib.kcal,'','var(--red)',true)}
         ${tuile('PROT',cib.p,' g','#60a5fa')}
         ${tuile('GLUC',cib.c,' g','var(--green)')}
         ${tuile('LIP',cib.l,' g','#fb923c')}
