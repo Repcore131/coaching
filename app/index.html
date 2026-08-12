@@ -34141,6 +34141,10 @@ const SCAN_DECODEUR='./vendor/zxing/reader/index.js';
 const SCAN_EAN_MIN=8, SCAN_EAN_MAX=13;
 const SCAN_INTERVALLE=350;        // ms entre deux tentatives de lecture
 const SCAN_MAX_ESSAIS=90;         // ~30 s, puis on propose la saisie
+// Délai au bout duquel on suppose que la demande d'autorisation caméra n'a
+// pas été vue. Assez long pour laisser le temps de la lire et d'accepter,
+// assez court pour ne pas laisser croire que le scan est cassé.
+const SCAN_ATTENTE_CAM=7000;      // ms
 let _scanFlux=null, _scanBoucle=null, _scanZX=null, _scanEssais=0, _scanOccupe=false;
 
 // PURE. Un EAN est-il plausible ? Longueur, chiffres, puis CLÉ DE CONTRÔLE.
@@ -34267,9 +34271,34 @@ async function scanDemarrer(){
   try{
     if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)
       throw new Error('pas de caméra');
-    _scanFlux=await navigator.mediaDevices.getUserMedia({
+    // MESURÉ : tant que la fenêtre d'autorisation n'a pas de réponse,
+    // getUserMedia reste EN ATTENTE — indéfiniment. Le message restait alors
+    // sur « Chargement du lecteur… », le décodeur était pourtant déjà chargé,
+    // et la saisie manuelle ne s'ouvrait pas : la RÈGLE 1 ne couvrait que le
+    // REFUS, pas l'attente. Sur ordinateur la demande apparaît dans la barre
+    // d'adresse et passe très facilement inaperçue.
+    _scanDire('Autorise l\'accès à la caméra pour scanner.');
+    const pCam=navigator.mediaDevices.getUserMedia({
       video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:960}},
       audio:false});
+    // On N'ABANDONNE PAS au bout du délai : quelqu'un qui lit la demande doit
+    // pouvoir accepter et voir la caméra démarrer. On ouvre seulement la porte
+    // de sortie en parallèle, pour qu'aucun écran ne reste mort.
+    const secours=setTimeout(()=>{
+      if(_scanFlux) return;
+      _scanDire('En attente de ton autorisation caméra (regarde la demande de ton navigateur). Tu peux aussi saisir le code à la main.','var(--orange)');
+      if(!document.getElementById('scan-ean')) scanSaisieManuelle();
+    },SCAN_ATTENTE_CAM);
+    try{ _scanFlux=await pCam; }
+    finally{ clearTimeout(secours); }
+    // L'écran a pu être quitté pendant l'attente : sans cette garde la caméra
+    // resterait allumée, témoin lumineux compris, derrière un autre écran.
+    if(!document.getElementById('scan-video')||
+       (document.querySelector('.screen.active')||{}).id!=='s-scan'){
+      try{ _scanFlux.getTracks().forEach(t=>t.stop()); }catch(err){}
+      _scanFlux=null;
+      return false;
+    }
     v.srcObject=_scanFlux;
     await v.play().catch(()=>{});
   }catch(e){
