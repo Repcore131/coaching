@@ -18129,8 +18129,10 @@ function loadClientHome(){
   const _q=phraseDuJour();
   const _phr=document.getElementById('clh-phrase');
   if(_phr) _phr.textContent='"'+_q.t+'"';
+  // Le nom SEUL, sans tiret devant : la mise en page dit deja que c est la
+  // source, la ponctuation n a rien a ajouter.
   const _aut=document.getElementById('clh-phrase-auteur');
-  if(_aut) _aut.textContent='— '+_q.a;
+  if(_aut) _aut.textContent=_q.a;
   // ── Trois chiffres d'entraînement ──
   // Le total de séances et le poids ont quitté cet écran : le premier compte
   // des présences, le second est déjà porté par la carte « Pesée du jour »
