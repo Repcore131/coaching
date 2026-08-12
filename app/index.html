@@ -7256,7 +7256,10 @@ function go(id){
   // un retour materiel passent tous par la, et aucun ne doit laisser une
   // piste video active.
   try{
-    if(id!=='s-scan'&&document.querySelector('.screen.active')?.id==='s-scan') scanArreter();
+    // Relache AUSSI le WebAssembly, et pas seulement la camera : c est la
+    // seule porte par laquelle tout le monde passe — bouton, lien,
+    // notification, retour materiel.
+    if(id!=='s-scan'&&document.querySelector('.screen.active')?.id==='s-scan') scanLibererTout();
   }catch(e){}
   // Sortie de l ecran multi-athletes : on date la visite. Seule ecriture de ce
   // lot, et elle ne part que si le coach quitte vraiment cet ecran-la.
@@ -34673,7 +34676,10 @@ function photographierEtiquette(code){
 }
 function creerAlimentDepuisScan(code){
   const c=(typeof code==='string'&&code)?code:_scanDernierCode;
-  scanArreter();
+  // AVANT de partir : l ecran suivant peut charger Tesseract, et les deux
+  // moteurs WebAssembly dans la meme page depassent ce qu un telephone
+  // d entree de gamme accorde a un onglet.
+  scanLibererTout();
   ouvrirAlimentPerso(null,c?{code_barres:c}:null);
 }
 function _scanDire(msg,couleur){
@@ -34810,11 +34816,19 @@ function scanArreter(){
   _scanOccupe=false;
   return true;
 }
-function scanFermer(){
+// TOUT relacher : la camera ET le megaoctet de WebAssembly. La purge vivait
+// dans scanFermer seulement, donc toute autre sortie de l ecran laissait le
+// module en memoire — et c est par une autre sortie que passe le bouton
+// « Photographier le tableau nutritionnel », qui charge ensuite Tesseract
+// par-dessus. Le rechargement coute 336 ms mesurees, contre un onglet tue.
+function scanLibererTout(){
   scanArreter();
-  // Le module WASM est relâché : un mégaoctet en mémoire ne sert plus à rien
-  // une fois le produit trouvé.
   try{ if(_scanZX&&_scanZX.purgeZXingModule) _scanZX.purgeZXingModule(); }catch(e){}
+  _scanZX=null;
+  return true;
+}
+function scanFermer(){
+  scanLibererTout();
   retourDe('s-scan');
 }
 // ── La saisie manuelle ────────────────────────────────────────────────────
@@ -35510,6 +35524,10 @@ async function lireEtiquette(input){
     _persoDire('Lecture impossible : '+((e&&e.message)||'erreur')+'. Saisis les valeurs à la main.','var(--orange)');
   }finally{
     _etiqEnCours=false;
+    // Plusieurs mega-octets rendus tout de suite. Une etiquette se lit une
+    // fois ; garder le moteur charge pour une eventuelle seconde photo
+    // couterait la memoire de tout le reste de la session.
+    try{ _libererLecteurTexte(); }catch(e){}
     if(btn) btn.disabled=false;
     // Le meme fichier doit pouvoir etre repris apres une correction de cadrage.
     try{ input.value=''; }catch(e){}
@@ -43271,10 +43289,31 @@ async function _chargerLecteurTexte(){
   })();
   return _lecteurTextePromesse;
 }
+// COMPTEUR D USAGE, et pas un simple drapeau : l import de captures lit
+// plusieurs images de suite, et terminer le worker sous les pieds d une
+// lecture en cours la ferait echouer. On ne libere qu au dernier sortant.
+let _lecteursEnCours=0;
+// Le worker n etait JAMAIS termine : coeur WebAssembly et donnees de langue
+// francaise restaient en memoire pour toute la session, plus son fil
+// d execution. Tant qu il etait seul, ca passait. Depuis qu on peut
+// enchainer le scan et la photo d etiquette, ca ne passe plus.
+// Le rechargement suivant vient du cache du Service Worker : c est du temps,
+// pas du reseau.
+async function _libererLecteurTexte(){
+  if(_lecteursEnCours>0) return false;
+  const w=_lecteurTexte;
+  _lecteurTexte=null; _lecteurTextePromesse=null;
+  if(!w) return false;
+  try{ await w.terminate(); }catch(e){}
+  return true;
+}
 async function _lireCaptureStats(dataUrl){
-  const w=await _chargerLecteurTexte();
-  const {data}=await w.recognize(dataUrl);
-  return (data&&data.text)||'';
+  _lecteursEnCours++;
+  try{
+    const w=await _chargerLecteurTexte();
+    const {data}=await w.recognize(dataUrl);
+    return (data&&data.text)||'';
+  } finally { _lecteursEnCours--; }
 }
 // L'analyse est VOLONTAIREMENT indépendante de la mise en page. Le texte rendu
 // par la lecture des captures réelles n'est pas régulier : la valeur tombe
