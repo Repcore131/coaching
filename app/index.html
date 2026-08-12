@@ -32943,14 +32943,17 @@ function _htmlPlanAthlete(user){
   // quoi : déjà au placard, ou acheté ce matin ? Un menu à deux entrées le dit.
   // « En stock » grise la ligne — elle reste lisible, mais elle sort de la
   // corvée du jour.
-  const ligneCourse=(lib,qte,cle,stock)=>`<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px solid #262626">
+  // Rythme de LISTE : 3px de marge au lieu de 7, separateur plus discret.
+  // La cible tactile ne descend pas pour autant — le select garde 34px, et
+  // la regle WCAG est tenue par sa largeur, pas par l interligne.
+  const ligneCourse=(lib,qte,cle,stock)=>`<div style="display:flex;align-items:center;gap:8px;padding:3px 0;border-top:1px solid #1c1c1c">
       <select onchange="lcStock('${cle}',this)" aria-label="État : ${escapeHtml(lib)}"
-        style="flex-shrink:0;width:104px;min-height:38px;padding:6px 7px;border-radius:8px;cursor:pointer;
+        style="flex-shrink:0;width:88px;min-height:34px;padding:4px 6px;border-radius:7px;cursor:pointer;
           background:${stock?'rgba(34,197,94,.10)':'#101010'};
           border:1px solid ${stock?'rgba(34,197,94,.42)':'#303030'};
           color:${stock?'var(--green)':'var(--sub)'};
           font-family:Montserrat,sans-serif;font-size:10.5px;font-weight:800;letter-spacing:.3px">
-        <option value=""${stock?'':' selected'}>À acheter</option>
+        <option value=""${stock?'':' selected'}>À prendre</option>
         <option value="stock"${stock?' selected':''}>En stock</option>
       </select>
       <span style="flex:1;min-width:0;font-size:11.5px;color:${stock?'var(--text-faint)':'#ddd'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${stock?'text-decoration:line-through':''}">${escapeHtml(lib)}</span>
@@ -32978,11 +32981,16 @@ function _htmlPlanAthlete(user){
     </div>`;
   };
   const achats=(user&&user.nutrition&&user.nutrition.coursesAchat)||{};
-  const courses=(lc&&lc.lignes.length)?`<div style="background:#141414;border:1px solid #2f2f2f;border-radius:12px;padding:13px 14px;margin-bottom:14px">
+  // LA LISTE N EST PAS LE PLAN. Le plan est une prescription — fond degrade,
+// cadre plein ; la liste est un outil de passage en magasin. On lui donne
+// donc l aspect d un ticket : fond plus clair, bord gauche marque, papier
+// legerement raye, et un sous-titre qui dit ce qu elle est.
+const courses=(lc&&lc.lignes.length)?`<div style="position:relative;overflow:hidden;background:repeating-linear-gradient(0deg,#161616,#161616 27px,#191919 27px,#191919 54px);border:1px solid #333;border-left:3px solid var(--red);border-radius:10px;padding:12px 13px;margin-bottom:14px">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px">
       <span style="font-size:var(--fs-xs);color:#cfcfcf;letter-spacing:2px;font-weight:800;text-transform:uppercase;display:inline-flex;align-items:center;gap:6px">${icon('clipboard',13)} Liste de courses</span>
       <span style="font-size:9px;color:var(--text-faint);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;flex-shrink:0">Stock</span>
     </div>
+    <div style="font-size:9.5px;color:var(--text-faint);letter-spacing:.5px;margin-bottom:6px">Ce qu'il te faut acheter — ce n'est pas ton plan alimentaire.</div>
       ${lc.lignes.filter(l=>l.qte>0).map(l=>ligneCourse(l.lib,planFormatQte(l.qte,l.unite),l.cle,!!achats[l.cle])).join('')}
       ${''/* les quatre lignes « au choix » suivent, hors du marquage stock */}
       ${auChoix('p',0)}${auChoix('p',1)}
