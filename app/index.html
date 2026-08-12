@@ -36404,6 +36404,15 @@ const TIMINGS_LIST=[
   {id:'toutes-4h',      label:'Toutes les 4h'},
 ];
 
+// L ordre de la JOURNEE, pour l affichage seul. Tout id absent d ici retombe
+// a la fin, dans l ordre de TIMINGS_LIST : une valeur ajoutee plus tard
+// s affiche donc quand meme, au lieu de disparaitre.
+const SUPP_ORDRE_JOURNEE=['jeun','matin','avant-entrainement','intra',
+  'apres-entrainement','midi','apres-midi','soir','coucher','toutes-4h'];
+function _rangMoment(id){
+  const i=SUPP_ORDRE_JOURNEE.indexOf(id);
+  return i<0?(100+TIMINGS_LIST.findIndex(t=>t.id===id)):i;
+}
 function _suppStore(){
   if(!currentUser.nutrition) currentUser.nutrition={};
   if(!Array.isArray(currentUser.nutrition.supplements)) currentUser.nutrition.supplements=[];
@@ -36514,7 +36523,10 @@ function _renderSuppTable(list, isCoach, editFn){
   // de saisie, qui n a aucun sens a la lecture.
   // Virgule francaise, et pas de decimale inutile : « 2 » et non « 2,0 ».
   const nb=v=>(Math.round(v*100)/100).toString().replace('.',',');
-  const momentsDe=s=>TIMINGS_LIST.filter(t=>(s.timings||[]).includes(t.id));
+  // Les pastilles suivent la JOURNEE, pas l ordre de saisie : « avant
+  // entrainement » doit preceder « soir » a la lecture.
+  const momentsDe=s=>TIMINGS_LIST.filter(t=>(s.timings||[]).includes(t.id))
+    .sort((a,b)=>_rangMoment(a.id)-_rangMoment(b.id));
   const carte=s=>{
     const realIdx=list.indexOf(s);
     const inactive=s.active===false;
@@ -36566,7 +36578,7 @@ function _renderSuppTable(list, isCoach, editFn){
     </div>`;
   };
   // Ordre de lecture : par premier moment de la journee, puis alphabetique.
-  const rang=s=>{const m=momentsDe(s)[0]; const k=m?TIMINGS_LIST.findIndex(t=>t.id===m.id):99; return k<0?99:k;};
+  const rang=s=>{const m=momentsDe(s)[0]; return m?_rangMoment(m.id):999;};
   const ordonne=list.slice().sort((a,b)=>rang(a)-rang(b)||String(a.name||'').localeCompare(String(b.name||''),'fr'));
   // Une banniere par creneau, posee sur le PREMIER moment de chaque produit.
   // Elle rythme la journee sans ramener la repetition : la whey figure sous
