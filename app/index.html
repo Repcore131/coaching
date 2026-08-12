@@ -941,6 +941,36 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 .choice-opt.sel{border-color:var(--red);border-left-width:3px;color:#fff;background:var(--red-bg)}
 .choice-opt:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
 
+/* CADRE TECHNIQUE — carte cafeine.
+   Coins coupes par clip-path plutot que border-radius : c est ce qui donne
+   la silhouette « instrument » de la direction artistique demandee. Le bord
+   est peint par un second calque decale, faute de pouvoir border un
+   clip-path. Filets hachures en repeating-linear-gradient, capitales
+   condensees pour les intitules. */
+.caf-cadre{position:relative;background:#0a0a0a;padding:16px;
+  clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px)}
+.caf-cadre::before{content:"";position:absolute;inset:0;background:#2e2e2e;z-index:0;
+  clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px)}
+.caf-cadre::after{content:"";position:absolute;inset:1px;background:
+  linear-gradient(160deg,#101010,#080808 60%,#050505);z-index:0;
+  clip-path:polygon(17px 0,100% 0,100% calc(100% - 17px),calc(100% - 17px) 100%,0 100%,0 17px)}
+.caf-cadre>*{position:relative;z-index:1}
+/* Filet hachure : la barre oblique repetee des planches techniques. */
+.caf-filet{height:5px;background:repeating-linear-gradient(115deg,
+  rgba(255,255,255,.32) 0 3px,transparent 3px 7px);margin:9px 0}
+.caf-titre{font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;
+  font-size:16px;letter-spacing:2.5px;color:#8f8f8f;text-transform:uppercase}
+.caf-titre b{color:#fff;font-weight:400}
+/* Pastille de palier : cerclee, et pleine SEULEMENT pour le palier courant. */
+.caf-pastille{width:11px;height:11px;border-radius:50%;border:1.5px solid #5a5a5a;
+  flex-shrink:0;display:inline-block;box-sizing:border-box}
+.caf-actif .caf-pastille{border-color:currentColor;box-shadow:inset 0 0 0 2.5px currentColor,0 0 7px currentColor}
+.caf-palier{display:flex;align-items:center;gap:9px;font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;
+  font-size:14px;letter-spacing:1.6px;color:#6a6a6a;text-transform:uppercase}
+.caf-actif{color:#fff}
+.caf-palier .caf-lib{margin-left:auto;color:#5e5e5e}
+.caf-actif .caf-lib{color:#fff}
+
 /* HISTORIQUES REPLIABLES. <details> natif : aucun script, l etat survit au
    defilement, et le clavier l ouvre comme n importe quel bouton. Fermes par
    defaut — vingt et une lignes poussaient tout le reste de l ecran hors de
@@ -38755,8 +38785,12 @@ function caffeineEquiv(mg){
 }
 // Les quatre paliers sont utilisés ici, et la légende sous la jauge reprend
 // exactement ces trois bornes — toute modification doit rester synchrone.
+// BLANC a l optimal, et non plus vert : c est la couleur du cadran au repos
+// dans la direction artistique retenue. L escalade, elle, reste coloree —
+// ambre, orange, rouge — parce que la teinte de l anneau est le seul signal
+// lisible d un coup d oeil quand la limite approche.
 function _caffeineColor(mg,thr){
-  if(mg<thr.green)  return 'var(--success)';
+  if(mg<thr.green)  return '#ffffff';
   if(mg<thr.yellow) return 'var(--info)';
   if(mg<thr.orange) return 'var(--warning)';
   return 'var(--danger)';
@@ -38955,6 +38989,11 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
   // que _caffeineColor, sinon l'anneau et le remplissage racontent deux histoires.
   const pct=Math.min(totalMg/thr.orange,1);
   const color=_caffeineColor(totalMg,thr);
+  // LE PALIER COURANT, calcule ICI et une seule fois. La liste s en sert
+  // pour remplir la pastille correspondante : les memes bornes que
+  // _caffeineColor, dans le meme ordre, sans quoi la pastille pleine et la
+  // couleur de l anneau finiraient par se contredire.
+  const _palier=totalMg<thr.green?0:totalMg<thr.yellow?1:totalMg<thr.orange?2:3;
   const wEstHtml=wEst?'<span style="display:block;margin-top:4px;color:var(--warning);font-size:var(--fs-xs)">⚖️ Poids estimé ('+CAFFEINE_POIDS_DEFAUT+' kg) : renseigne ton poids réel pour des seuils précis</span>':'';
   // La legende NOMME la regle appliquee, juste sous la jauge. Un mineur doit
   // lire que ses seuils ne sont pas ceux d'un adulte, sans avoir a le deviner
@@ -38981,17 +39020,17 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
   // deux caractères de large sur la valeur elle-même.
   const _nbChiffres=String(totalMg).length;
   const _tailleChiffres=_nbChiffres<=3?42:_nbChiffres===4?34:27;
-  return `<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:16px">
+  return `<div class="caf-cadre" style="margin-bottom:16px">
     <div style="display:flex;align-items:center;gap:16px">
       <div style="position:relative;width:120px;height:120px;flex-shrink:0">
-        <svg viewBox="0 0 120 120" width="120" height="120" style="display:block;filter:drop-shadow(0 0 8px ${color});transition:filter .4s ease">
+        <svg viewBox="0 0 120 120" width="120" height="120" style="display:block;filter:drop-shadow(0 0 6px ${color}) drop-shadow(0 0 16px ${color});transition:filter .4s ease">
           <circle cx="60" cy="60" r="48" fill="none" stroke="#1e1e1e" stroke-width="9"/>
           <circle cx="60" cy="60" r="48" fill="none" style="stroke:${color};transition:stroke-dashoffset .4s ease,stroke .4s ease" stroke-width="9" stroke-linecap="round" stroke-dasharray="${_circ.toFixed(1)}" stroke-dashoffset="${_off.toFixed(1)}" transform="rotate(-90 60 60)"/>
         </svg>
         <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;padding:0 11px;box-sizing:border-box">
           <div style="display:flex;align-items:baseline;justify-content:center;gap:1px;max-width:100%">
             <span class="txt-hero" style="color:${color};font-size:${_tailleChiffres}px;line-height:1">${totalMg}</span>
-            <span style="color:${color};font-family:Montserrat,sans-serif;font-size:12px;font-weight:800;line-height:1">mg</span>
+            <span style="color:${color};font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:15px;letter-spacing:1px;line-height:1;text-transform:uppercase">mg</span>
           </div>
         </div>
       </div>
@@ -39000,18 +39039,24 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
         <!-- Le plafond figurait sous le total, collé à l'anneau : ça salissait
              le cercle sans rien dire de plus que la légende, qui donne déjà les
              quatre paliers. Il est rappelé ici, avec le poids qui les calcule. -->
-        <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-bottom:7px;letter-spacing:.3px">Paliers pour ${Math.round(wKgAffiche)} kg</div>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <span style="display:flex;align-items:center;gap:6px;font-size:var(--fs-xs);color:var(--sub)"><span style="width:8px;height:8px;border-radius:50%;background:var(--success);display:inline-block;flex-shrink:0"></span>&lt;${thr.green}mg optimal</span>
-          <span style="display:flex;align-items:center;gap:6px;font-size:var(--fs-xs);color:var(--sub)"><span style="width:8px;height:8px;border-radius:50%;background:var(--info);display:inline-block;flex-shrink:0"></span>&lt;${thr.yellow}mg modéré</span>
-          <span style="display:flex;align-items:center;gap:6px;font-size:var(--fs-xs);color:var(--sub)"><span style="width:8px;height:8px;border-radius:50%;background:var(--warning);display:inline-block;flex-shrink:0"></span>&lt;${thr.orange}mg élevé</span>
-          <span style="display:flex;align-items:center;gap:6px;font-size:var(--fs-xs);color:var(--sub)"><span style="width:8px;height:8px;border-radius:50%;background:var(--danger);display:inline-block;flex-shrink:0"></span>&ge;${thr.orange}mg maximum</span>
+        <div class="caf-titre">Paliers pour <b>${Math.round(wKgAffiche)} kg</b></div>
+        <div class="caf-filet"></div>
+        <!-- LES QUATRE PALIERS, dont SEUL le courant est plein et blanc. La
+             couleur ne sert plus a etiqueter chaque ligne — elle etiquetait
+             quatre etats dont trois sont hypothetiques — mais a marquer celui
+             ou l athlete se trouve, de la meme teinte que l anneau. -->
+        <div style="display:flex;flex-direction:column;gap:7px">
+          ${[[`&lt;${thr.green}mg`,'optimal'],[`&lt;${thr.yellow}mg`,'modéré'],
+             [`&lt;${thr.orange}mg`,'élevé'],[`&ge;${thr.orange}mg`,'maximum']]
+            .map(([v,lib],i)=>`<span class="caf-palier${i===_palier?' caf-actif':''}"${i===_palier?` style="color:${color}"`:''}>`
+              +`<span class="caf-pastille"></span>${v}<span class="caf-lib">${lib}</span></span>`).join('')}
         </div>
         ${wEstHtml}
         ${legendeHtml}
       </div>
     </div>
-    <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--surface-2);font-size:var(--fs-xs);color:var(--sub);letter-spacing:.3px">Référence : ${thr.red} mg/j max (EFSA)</div>
+    <div class="caf-filet" style="margin:14px 0 10px"></div>
+      <div class="caf-titre" style="font-size:14px;letter-spacing:2px">Référence : <b>${thr.red} mg/j</b> max <span style="font-size:11px;letter-spacing:1px">(EFSA)</span></div>
   </div>
   ${isToday?_htmlCafeineCoucher(entries,currentUser):''}
   ${alertHtml}
