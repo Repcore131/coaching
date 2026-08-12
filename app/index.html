@@ -19866,40 +19866,64 @@ function fermerApercuStory(){
   return true;
 }
 let _storyEnCours=false;
+// TELECHARGER. Rien d autre. La feuille de partage native n existe pas
+// partout — navigator.share est absent de beaucoup de navigateurs de bureau
+// et de certains navigateurs mobiles — et quand elle manquait, ce bouton
+// ouvrait un apercu au lieu de rendre un fichier. Ce n est pas ce qu on lui
+// demande.
+//
+// Le lien avec l attribut `download` est le seul mecanisme universel. Sur
+// ordinateur et sur Android le fichier part dans les telechargements ; sur
+// iPhone il arrive dans Fichiers, d ou il se deplace vers Photos. Le partage
+// natif reste offert par un BOUTON SEPARE, pour qui veut publier directement.
+function telechargerSeanceDuJour(){
+  if(_storyEnCours) return false;
+  const d=_storyDonnees();
+  if(!d){ toast('Aucune séance à partager aujourd’hui.','var(--orange)'); return false; }
+  _storyEnCours=true;
+  try{
+    const cv=_dessinerStorySeance(d);
+    const dataUrl=cv.toDataURL('image/jpeg',0.92);
+    cv.width=0; cv.height=0;          // 8 Mo rendus tout de suite
+    const a=document.createElement('a');
+    a.href=dataUrl;                   // pas d URL d objet : rien a liberer,
+    a.download='repcore-seance.jpg';  // et rien qui puisse expirer trop tot
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    toast('Image téléchargée','var(--green)');
+    return true;
+  }catch(e){
+    toast('Téléchargement impossible : '+((e&&e.message)||'erreur'),'var(--orange)');
+    return false;
+  }finally{
+    _storyEnCours=false;
+  }
+}
+// Le partage natif, en plus et jamais a la place. Tout est SYNCHRONE : le
+// moindre await consommerait le geste utilisateur, et iOS refuserait.
 function partagerSeanceDuJour(){
   if(_storyEnCours) return false;
   const d=_storyDonnees();
   if(!d){ toast('Aucune séance à partager aujourd’hui.','var(--orange)'); return false; }
   _storyEnCours=true;
   try{
-    // TOUT CE BLOC EST SYNCHRONE. Le geste utilisateur doit encore etre
-    // valide quand navigator.share est appele, sinon iOS refuse.
     const cv=_dessinerStorySeance(d);
     const dataUrl=cv.toDataURL('image/jpeg',0.92);
-    cv.width=0; cv.height=0;          // 8 Mo rendus tout de suite
+    cv.width=0; cv.height=0;
     const blob=_b64versBlob(dataUrl);
-    const url=URL.createObjectURL(blob);
-    const nom='repcore-seance.jpg';
     let f=null;
-    try{ f=new File([blob],nom,{type:'image/jpeg'}); }catch(e){}
+    try{ f=new File([blob],'repcore-seance.jpg',{type:'image/jpeg'}); }catch(e){}
     if(f&&navigator.canShare&&navigator.canShare({files:[f]})&&navigator.share){
-      navigator.share({files:[f]})
-        .then(()=>{ try{ URL.revokeObjectURL(url); }catch(e){} })
-        .catch(err=>{
-          // Annulation : ce n est pas une erreur, et le dire comme telle
-          // serait un reproche. Refus du navigateur : on montre l image, qui
-          // reste enregistrable par appui long.
-          if(err&&err.name==='AbortError'){ try{ URL.revokeObjectURL(url); }catch(e){} return; }
-          _ouvrirApercuStory(url);
-        });
+      navigator.share({files:[f]}).catch(()=>{});
       return true;
     }
-    // Pas de feuille de partage : on affiche l image. Sur telephone c est le
-    // SEUL chemin vers la galerie ; sur ordinateur le bouton telecharge.
-    _ouvrirApercuStory(url);
-    return true;
+    // Pas de partage natif ici : on ne laisse pas l athlete sans rien, on
+    // telecharge. C est ce qu il attendait de toute facon.
+    _storyEnCours=false;
+    return telechargerSeanceDuJour();
   }catch(e){
-    toast('Image impossible : '+((e&&e.message)||'erreur'),'var(--orange)');
+    toast('Partage impossible : '+((e&&e.message)||'erreur'),'var(--orange)');
     return false;
   }finally{
     _storyEnCours=false;
@@ -19951,13 +19975,13 @@ function _renderWeeklyInto(el,sc){
             </div>`).join('')}
         </div>`:''}
         ${nbEx?`<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.15);display:flex;justify-content:flex-end">
-          <button id="story-btn" type="button" onclick="event.stopPropagation();partagerSeanceDuJour()" aria-label="Partager la séance du jour en image"
+          <button id="story-btn" type="button" onclick="event.stopPropagation();telechargerSeanceDuJour()" aria-label="Télécharger la séance du jour en image"
             style="display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:6px 12px;border-radius:8px;cursor:pointer;
               background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.22);color:#fff;
               font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:.4px">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
-            </svg>PARTAGER
+            </svg>TÉLÉCHARGER
           </button>
         </div>`:''}
       </div>
