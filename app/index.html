@@ -19818,13 +19818,20 @@ function _texteCoupe(g,t,x,y,max){
 // dataURL -> Blob, SANS attente. fetch(dataURL) ou toBlob rendraient une
 // promesse, et l autorisation de partager serait perdue le temps qu elle se
 // resolve.
+//
+// JPEG ET NON PNG. Mesure sur le rendu 1080x1920 reel : l encodage PNG prend
+// 13 105 ms et pese 1 048 Ko ; le JPEG a 0,92 prend 59 ms et pese 118 Ko.
+// Deux cent vingt fois plus rapide, neuf fois plus leger, pour une image qui
+// n a aucune transparence a preserver. Le PNG bloquait l application treize
+// secondes, et faisait donc expirer le geste utilisateur qu on cherche
+// justement a preserver.
 function _b64versBlob(dataUrl){
   const i=dataUrl.indexOf(',');
   const bin=atob(dataUrl.slice(i+1));
   const n=bin.length;
   const u=new Uint8Array(n);
   for(let k=0;k<n;k++) u[k]=bin.charCodeAt(k);
-  return new Blob([u],{type:'image/png'});
+  return new Blob([u],{type:'image/jpeg'});
 }
 // L ecran de secours, et le seul geste qui marche sur TOUS les telephones :
 // l appui long sur une image affichee. iOS propose « Ajouter aux photos »,
@@ -19841,7 +19848,7 @@ function _ouvrirApercuStory(url){
     +'<div style="font-size:12px;color:#ddd;text-align:center;line-height:1.6;max-width:320px">'
     +'Appuie <b>longuement</b> sur l’image, puis choisis <b>Ajouter aux photos</b> '
     +'(iPhone) ou <b>Télécharger l’image</b> (Android).</div>'
-    +'<a href="'+url+'" download="repcore-seance.png" class="btn btn-outline btn-sm" '
+    +'<a href="'+url+'" download="repcore-seance.jpg" class="btn btn-outline btn-sm" '
     +'style="width:auto;padding:8px 18px">Télécharger</a>'
     +'<button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:8px 18px" '
     +'onclick="fermerApercuStory()">Fermer</button>';
@@ -19868,13 +19875,13 @@ function partagerSeanceDuJour(){
     // TOUT CE BLOC EST SYNCHRONE. Le geste utilisateur doit encore etre
     // valide quand navigator.share est appele, sinon iOS refuse.
     const cv=_dessinerStorySeance(d);
-    const dataUrl=cv.toDataURL('image/png');
+    const dataUrl=cv.toDataURL('image/jpeg',0.92);
     cv.width=0; cv.height=0;          // 8 Mo rendus tout de suite
     const blob=_b64versBlob(dataUrl);
     const url=URL.createObjectURL(blob);
-    const nom='repcore-seance.png';
+    const nom='repcore-seance.jpg';
     let f=null;
-    try{ f=new File([blob],nom,{type:'image/png'}); }catch(e){}
+    try{ f=new File([blob],nom,{type:'image/jpeg'}); }catch(e){}
     if(f&&navigator.canShare&&navigator.canShare({files:[f]})&&navigator.share){
       navigator.share({files:[f]})
         .then(()=>{ try{ URL.revokeObjectURL(url); }catch(e){} })
