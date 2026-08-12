@@ -3532,6 +3532,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <span id="fja-epingle-slot" style="flex-shrink:0"></span>
         </div>
       </div>
+      <div id="fja-fiabilite" style="margin-bottom:16px"></div>
       <div style="margin-bottom:18px">
         <label id="fja-qty-label" style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:8px">Quantité (grammes)</label>
         <div style="display:flex;align-items:center;gap:10px">
@@ -34001,18 +34002,35 @@ function nutriEcartAtwater(a){
 // `valide` porte les impossibilites arithmetiques SEULEMENT : un aliment peut
 // etre valide et peu fiable, c est justement a quoi sert la note.
 function nutriControle(a){
-  const rejets=[],alertes=[];
+  // DEUX NATURES DE REFUS, qui ne se traitent pas pareil :
+  //   « impossibles » : l arithmetique interdit ces valeurs. Rien ne les sauve.
+  //   « incomplets »  : la fiche ne dit pas tout. C est genant, pas absurde.
+  // MESURE qui impose la distinction : 143 des 3 484 aliments Ciqual ne
+  // portent AUCUNE energie — l ANSES ne la publie pas pour eux (« Brochette
+  // de boeuf, crue », « Croque-monsieur »). Ils sont journalisables
+  // aujourd hui, et l affichage sait dire « énergie non renseignée ». Les
+  // refuser au nom de la completude effacerait 143 aliments reels.
+  const impossibles=[],incomplets=[],alertes=[];
+  // MEME FORME DE RETOUR dans tous les cas, sortie anticipée comprise : un
+  // appelant qui lit `impossibles` ne doit jamais tomber sur `undefined`.
   if(!a||typeof a!=='object')
-    return {valide:false,fiabilite:0,alertes:[],rejets:['Aliment illisible.']};
-  const src=a.source||(a._off?NUTRI_SOURCES.OFF:NUTRI_SOURCES.MANUEL);
+    return {valide:false,fiabilite:0,alertes:[],rejets:['Aliment illisible.'],
+      impossibles:['Aliment illisible.'],incomplets:[]};
+  // La provenance se DEDUIT quand elle n est pas portee, par la regle que le
+  // reste du fichier applique deja : un identifiant NUMERIQUE est un
+  // identifiant Ciqual, une chaine « p… » est un aliment perso, et un objet
+  // qui porte `_off` vient d Open Food Facts. C est ce qui evite de noter a
+  // 70 un aliment de la table parce que personne n a pense a l etiqueter.
+  const src=a.source||(a._off?NUTRI_SOURCES.OFF
+    :(typeof a.id==='number'?NUTRI_SOURCES.CIQUAL:NUTRI_SOURCES.MANUEL));
   // ── Les rejets : ce qui ne peut pas exister ──────────────────────────
-  if(!String(a.n||'').trim()) rejets.push('Cet aliment n’a pas de nom.');
-  if(a.k==null) rejets.push('L’énergie n’est pas renseignée.');
+  if(!String(a.n||'').trim()) incomplets.push('Cet aliment n’a pas de nom.');
+  if(a.k==null) incomplets.push('L’énergie n’est pas renseignée.');
   if(a.p==null&&a.c==null&&a.l==null)
-    rejets.push('Aucune macro n’est renseignée : protéines, glucides et lipides sont tous absents.');
-  if(a.k!=null&&a.k<0) rejets.push('L’énergie ne peut pas être négative.');
+    incomplets.push('Aucune macro n’est renseignée : protéines, glucides et lipides sont tous absents.');
+  if(a.k!=null&&a.k<0) impossibles.push('L’énergie ne peut pas être négative.');
   if(a.k!=null&&a.k>NUTRI_KCAL_MAX)
-    rejets.push(_nb2(a.k)+' kcal pour 100 g : au-delà du possible (l’huile pure est à 900).');
+    impossibles.push(_nb2(a.k)+' kcal pour 100 g : au-delà du possible (l’huile pure est à 900).');
   // Chaque champ porte son libelle ACCORDE. Fabriquer la phrase par
   // substitution rendait le message illisible dans le code pour economiser
   // cinq mots — un mauvais echange quand ce texte s affiche a l athlete.
@@ -34025,12 +34043,12 @@ function nutriControle(a){
   for(const ch of CHAMPS){
     const v=a[ch.k];
     if(v==null) continue;
-    if(v<0) rejets.push(ch.neg);
-    else if(v>NUTRI_MACRO_MAX) rejets.push(ch.trop+' : '+_nb2(v)+' g pour 100 g de produit, c’est impossible.');
+    if(v<0) impossibles.push(ch.neg);
+    else if(v>NUTRI_MACRO_MAX) impossibles.push(ch.trop+' : '+_nb2(v)+' g pour 100 g de produit, c’est impossible.');
   }
   const somme=(a.p||0)+(a.c||0)+(a.l||0);
   if(somme>NUTRI_SOMME_MAX)
-    rejets.push('Protéines + glucides + lipides font '+_nb2(somme)+' g pour 100 g de produit.');
+    impossibles.push('Protéines + glucides + lipides font '+_nb2(somme)+' g pour 100 g de produit.');
   // ── Les alertes : ce qui est possible mais suspect ───────────────────
   const ec=nutriEcartAtwater(a);
   if(ec!=null&&ec>NUTRI_ATWATER_ALERTE)
@@ -34044,8 +34062,13 @@ function nutriControle(a){
   if(a.e!=null&&a.e>NUTRI_SEL_MAX)
     alertes.push(_nb2(a.e)+' g de sel pour 100 g : à ce niveau, le produit EST du sel.');
   // ── La note ──────────────────────────────────────────────────────────
+  const rejets=impossibles.concat(incomplets);
   const fiabilite=_nutriNote(a,src,ec,rejets.length>0);
-  return {valide:rejets.length===0,fiabilite,alertes,rejets};
+  // « valide » reste l union : offValide s en sert, et une fiche Open Food
+  // Facts muette n a rien a faire dans le journal. « impossibles » est ce qui
+  // doit bloquer un aliment DEJA en base, Ciqual compris — sans quoi les 143
+  // aliments ANSES sans energie deviendraient injournalisables.
+  return {valide:rejets.length===0,fiabilite,alertes,rejets,impossibles,incomplets};
 }
 // Deux decimales au plus, virgule francaise, sans zero inutile.
 function _nb2(v){ return (Math.round(Number(v)*100)/100).toString().replace('.',','); }
@@ -34272,6 +34295,12 @@ const SCAN_MAX_ESSAIS=90;         // ~30 s, puis on propose la saisie
 // pas été vue. Assez long pour laisser le temps de la lire et d'accepter,
 // assez court pour ne pas laisser croire que le scan est cassé.
 const SCAN_ATTENTE_CAM=7000;      // ms
+// Un code-barres reste dans le champ de la camera bien apres avoir ete lu.
+// Sans ce delai, reculer le telephone puis le ramener relance la meme fiche,
+// et un athlete qui scanne trois produits d affilee voit le premier revenir.
+const SCAN_DEBOUNCE=1500;         // ms avant de re-accepter LE MEME code
+let _scanDernierCode=null, _scanDernierT=0;
+let _scanTorche=false;
 let _scanFlux=null, _scanBoucle=null, _scanZX=null, _scanEssais=0, _scanOccupe=false;
 
 // PURE. Un EAN est-il plausible ? Longueur, chiffres, puis CLÉ DE CONTRÔLE.
@@ -34373,9 +34402,54 @@ function _htmlScanViseur(){
       <div style="position:absolute;left:12%;right:12%;top:38%;height:24%;border:2px solid rgba(255,255,255,.85);border-radius:8px;box-shadow:0 0 0 9999px rgba(0,0,0,.35)"></div>
     </div>
     <div id="scan-etat" style="font-size:11.5px;color:var(--sub);line-height:1.6;margin-top:10px;min-height:34px">Démarrage de la caméra…</div>
+    <div id="scan-torche-slot"></div>
     <button class="btn btn-outline btn-sm" style="width:100%;margin-top:4px" onclick="scanSaisieManuelle()">Saisir le code à la main</button>
+    <!-- TOUJOURS accessible : un produit peut n être dans aucune base, et
+         l athlete ne doit pas avoir a echouer deux fois pour le decouvrir. -->
+    <button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="creerAlimentDepuisScan()">Créer l'aliment à la main</button>
     <div id="scan-manuel"></div>
     <div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-top:10px">Aucune image n'est enregistrée, ni transmise, ni mise en cache. La caméra ne sert qu'à lire le code, sur ton appareil.</div>`;
+}
+// LA TORCHE n existe pas partout : iOS ne l expose pas du tout, et beaucoup
+// de webcams non plus. On interroge la piste video et on ne pose le bouton
+// que si la capacite est reellement annoncee — un bouton qui ne fait rien
+// est pire que pas de bouton.
+function _scanPisteVideo(){
+  try{ return _scanFlux&&_scanFlux.getVideoTracks?_scanFlux.getVideoTracks()[0]:null; }
+  catch(e){ return null; }
+}
+function _scanTorcheDispo(){
+  const t=_scanPisteVideo();
+  try{ return !!(t&&t.getCapabilities&&t.getCapabilities().torch); }catch(e){ return false; }
+}
+function _majScanTorche(){
+  const z=document.getElementById('scan-torche-slot');
+  if(!z) return;
+  if(!_scanTorcheDispo()){ z.innerHTML=''; return; }
+  z.innerHTML='<button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="scanBasculerTorche()">'
+    +(_scanTorche?'Éteindre la lampe':'Allumer la lampe')+'</button>';
+}
+async function scanBasculerTorche(){
+  const t=_scanPisteVideo();
+  if(!t) return false;
+  try{
+    await t.applyConstraints({advanced:[{torch:!_scanTorche}]});
+    _scanTorche=!_scanTorche;
+    _majScanTorche();
+    return true;
+  }catch(e){
+    // Refus de l appareil : on le dit plutot que de laisser un bouton mort.
+    _scanDire('Cet appareil refuse d\'allumer la lampe.','var(--orange)');
+    return false;
+  }
+}
+// Creer un aliment depuis le scan, en emportant le code-barres quand il a ete
+// lu : le retaper serait absurde, et c est la seule facon de rattacher
+// l aliment saisi au produit qui l a declenche.
+function creerAlimentDepuisScan(code){
+  const c=(typeof code==='string'&&code)?code:_scanDernierCode;
+  scanArreter();
+  ouvrirAlimentPerso(null,c?{code_barres:c}:null);
 }
 function _scanDire(msg,couleur){
   const e=document.getElementById('scan-etat');
@@ -34429,11 +34503,25 @@ async function scanDemarrer(){
     v.srcObject=_scanFlux;
     await v.play().catch(()=>{});
   }catch(e){
-    _scanDire('Caméra indisponible ou refusée. Saisis le code à la main — ça marche tout aussi bien.','var(--orange)');
+    // TROIS SITUATIONS DIFFERENTES, qui tombaient dans le meme message : un
+    // refus se debloque dans les reglages du navigateur, une camera absente
+    // ne se debloque pas, et une camera occupee se libere en fermant l autre
+    // application. Dire « indisponible ou refusée » laissait l athlete sans
+    // rien a faire dans les trois cas.
+    const nom=(e&&e.name)||'';
+    let m='Caméra indisponible. Saisis le code à la main — ça marche tout aussi bien.';
+    if(nom==='NotAllowedError'||nom==='SecurityError')
+      m='Accès à la caméra refusé. Pour l\'autoriser : touche le cadenas à gauche de l\'adresse, puis active la caméra. En attendant, saisis le code à la main.';
+    else if(nom==='NotFoundError'||nom==='OverconstrainedError')
+      m='Aucune caméra détectée sur cet appareil. Saisis le code à la main.';
+    else if(nom==='NotReadableError')
+      m='La caméra est déjà utilisée par une autre application. Ferme-la, ou saisis le code à la main.';
+    _scanDire(m,'var(--orange)');
     scanArreter();
     scanSaisieManuelle();
     return false;
   }
+  _majScanTorche();
   _scanDire('Cadre le code-barres dans le rectangle.');
   _scanBoucle=setInterval(()=>{ scanTenter(mod); },SCAN_INTERVALLE);
   return true;
@@ -34455,8 +34543,18 @@ async function scanTenter(mod){
     const res=await mod.readBarcodesFromImageData(img,
       {formats:['EAN-13','EAN-8','UPC-A','UPC-E'],tryHarder:true,maxNumberOfSymbols:1});
     if(res&&res.length&&res[0].text){
+      const code=res[0].text;
+      // LE MEME code, relu dans la seconde et demie : on l ignore. Le
+      // code-barres reste dans le champ de la camera bien apres avoir ete
+      // lu, et sans ce filtre la fiche precedente revient sans cesse.
+      const t=Date.now();
+      if(code===_scanDernierCode&&(t-_scanDernierT)<SCAN_DEBOUNCE) return;
+      _scanDernierCode=code; _scanDernierT=t;
       scanArreter();
-      await scanTraiterCode(res[0].text);
+      // Le retour haptique CONFIRME, il n annonce pas : iOS ne l implemente
+      // pas, et rien de ce qui compte ne doit reposer sur lui seul.
+      try{ arcHaptique('succes'); }catch(e){}
+      await scanTraiterCode(code);
       return;
     }
     if(++_scanEssais>=SCAN_MAX_ESSAIS){
@@ -34474,6 +34572,9 @@ async function scanTenter(mod){
 // changement d'écran ET sur visibilitychange — trois portes, une seule
 // fonction, pour qu'aucune ne puisse être oubliée.
 function scanArreter(){
+  // Couper la piste eteint physiquement la lampe ; le drapeau doit suivre,
+  // sinon le bouton rouvrirait sur « Éteindre » au scan suivant.
+  _scanTorche=false;
   if(_scanBoucle){ clearInterval(_scanBoucle); _scanBoucle=null; }
   if(_scanFlux){
     try{ _scanFlux.getTracks().forEach(t=>t.stop()); }catch(e){}
@@ -34539,6 +34640,7 @@ async function scanTraiterCode(code,zone){
     dire('');
     if(e) e.innerHTML=`<span style="color:var(--orange)">${escapeHtml(r.raison)}</span>
       <span style="color:var(--sub)"> Le code ${escapeHtml(r.code||code)} est valide, mais aucune fiche n'existe encore.</span>
+      <button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="creerAlimentDepuisScan('${escapeHtml(r.code||code)}')">Créer cet aliment à la main</button>
       <button class="btn btn-outline btn-sm" style="width:100%;margin-top:8px" onclick="scanFermer()">Chercher par nom à la place</button>`;
     return false;
   }
@@ -34605,7 +34707,7 @@ async function offRecherche(terme){
       const a=offNormalise(b);
       if(!a) continue;
       const v=offValide(a);
-      if(!v.ok){ rejets.push({nom:a.n,raison:v.raison}); continue; }
+      if(!v.ok){ impossibles.push({nom:a.n,raison:v.raison}); continue; }
       l.push(a);
     }
     return {ok:true,liste:offDedoublonner(l),rejetes:rejets.length};
@@ -34698,6 +34800,7 @@ function selectOffFood(ean){
   if(_ep) _ep.innerHTML='';
   const _po=document.getElementById('fja-portions');
   if(_po) _po.innerHTML=`<div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-top:10px">${escapeHtml(OFF_ATTRIBUTION)}</div>`;
+  _majFjaFiabilite();
   _fjUnite='g';
   const _pu=document.getElementById('fja-unites-slot');
   if(_pu) _pu.innerHTML=_htmlUnites(_fjFood);
@@ -34734,6 +34837,47 @@ function onFjSearch(val){
     +_offBoutonHtml(q);
 }
 
+// Trois paliers, ceux de la specification : vert au-dessus de 80, orange
+// entre 50 et 79, rouge en dessous. La couleur RESUME, le texte informe.
+function _fiabPalier(n){
+  if(n==null) return {c:'var(--sub)',bg:'#111',bord:'#262626',lib:'Fiabilité inconnue'};
+  if(n>=80) return {c:'var(--green)',bg:'rgba(34,197,94,.08)',bord:'rgba(34,197,94,.35)',lib:'Donnée fiable'};
+  if(n>=NUTRI_SEUIL_CONFIRME) return {c:'var(--orange)',bg:'rgba(234,140,20,.08)',bord:'rgba(234,140,20,.35)',lib:'Donnée à vérifier'};
+  return {c:'var(--red)',bg:'var(--red-bg)',bord:'rgba(224,32,32,.4)',lib:'Donnée peu sûre'};
+}
+// Rend le bloc de fiabilite pour un aliment. Rien pour Ciqual : afficher
+// « fiable à 100 » sur chacun des 3 484 aliments mesures en laboratoire
+// serait du bruit, et le bruit finit par masquer le signal quand il compte.
+function _htmlFiabilite(a){
+  if(!a) return '';
+  let r;
+  try{ r=nutriControle(a); }catch(e){ return ''; }
+  const src=a.source||(a._off?NUTRI_SOURCES.OFF:NUTRI_SOURCES.MANUEL);
+  if(src===NUTRI_SOURCES.CIQUAL&&!r.alertes.length) return '';
+  const pal=_fiabPalier(r.fiabilite);
+  const alertes=r.alertes.length
+    ?'<ul style="margin:8px 0 0;padding-left:16px;font-size:11px;line-height:1.6;color:#ddd">'
+      +r.alertes.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')+'</ul>'
+    :'';
+  return `<div style="background:${pal.bg};border:1px solid ${pal.bord};border-radius:10px;padding:10px 12px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:11px;font-weight:800;letter-spacing:.5px;color:${pal.c}">${escapeHtml(pal.lib)}</span>
+      <span style="flex:1;height:1px;background:${pal.bord}"></span>
+      <span style="font-size:11px;font-weight:800;color:${pal.c}">${r.fiabilite==null?'—':r.fiabilite+' / 100'}</span>
+    </div>
+    ${alertes}
+    ${r.fiabilite!=null&&r.fiabilite<NUTRI_SEUIL_CONFIRME
+      ?`<div style="font-size:11px;line-height:1.6;color:var(--text-dim);margin-top:8px">Cette fiche est trop incomplète pour être ajoutée sans que tu la confirmes.</div>`
+      :''}
+  </div>`;
+}
+// Pose le bloc sur l ecran de quantite. Appele par les TROIS provenances :
+// oublier un seul appelant laisserait une fiche muette, et une fiche muette
+// se lit comme une fiche sûre.
+function _majFjaFiabilite(){
+  const z=document.getElementById('fja-fiabilite');
+  if(z) z.innerHTML=_htmlFiabilite(_fjFood);
+}
 function selectFjFood(id){
   if(!_ciqualDB) return;
   _fjFood=_ciqualDB.find(f=>f.id===id);
@@ -34754,6 +34898,7 @@ function selectFjFood(id){
   if(_ep) _ep.innerHTML=_htmlEpingle(_fjFood.id,true);
   const _po=document.getElementById('fja-portions');
   if(_po) _po.innerHTML=_htmlPortions(_fjFood);
+  _majFjaFiabilite();
   // Unites naturelles. Le selecteur est REMIS A ZERO a chaque aliment : une
   // unite d oeuf laissee active sur une carotte n aurait aucun sens.
   _fjUnite='g';
@@ -34830,12 +34975,19 @@ function _persoIndexer(a){
 }
 
 let _persoEdit=null;        // l aliment en cours de saisie, null = creation
+let _persoPrefill=null;     // ce qu un scan a rapporte : code-barres, marque
 
-function ouvrirAlimentPerso(id){
+// `prefill` vient du scan : un produit absent des bases se cree avec son
+// code-barres deja porte, sinon il faudrait le retaper chiffre par chiffre.
+function ouvrirAlimentPerso(id,prefill){
   _persoEdit=id?_persoParId(id):null;
   go('s-food-perso');
   const v=(k,d)=>{ const e=document.getElementById(k); if(e) e.value=(d==null?'':d); };
-  const a=_persoEdit||{};
+  const a=_persoEdit||(prefill?Object.assign({},prefill):{});
+  // Le code-barres est PORTE, pas affiche : il ne se corrige pas a la main,
+  // et un champ de treize chiffres au milieu du formulaire n aiderait
+  // personne. Il est repris a l enregistrement.
+  _persoPrefill=(!id&&prefill)?prefill:null;
   v('perso-nom',a.n); v('perso-kcal',a.k); v('perso-p',a.p);
   v('perso-c',a.c); v('perso-l',a.l); v('perso-f',a.f); v('perso-e',a.e);
   const t=document.getElementById('perso-titre');
@@ -34926,7 +35078,10 @@ function enregistrerAlimentPerso(){
     // Facts et le journal partagent cet invariant. L introduire ouvrirait la
     // porte aux valeurs « par portion », exactement ce que offValide rejette.
     liste.push(_persoIndexer(Object.assign({id:'p'+Date.now(),n:nom,g:'Mon aliment',
-      source:NUTRI_SOURCES.MANUEL,code_barres:null,marque:null,portion_g:null,
+      source:NUTRI_SOURCES.MANUEL,
+      code_barres:(_persoPrefill&&_persoPrefill.code_barres)||null,
+      marque:(_persoPrefill&&_persoPrefill.marque)||null,
+      portion_g:(_persoPrefill&&_persoPrefill.portion_g)||null,
       verifie:false},ch)));
   }
   currentUser.nutrition.alimentsPerso=liste;
@@ -34971,6 +35126,7 @@ function selectPersoFood(id){
   if(ep) ep.innerHTML='';
   const po=document.getElementById('fja-portions');
   if(po) po.innerHTML='<button type="button" class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="ouvrirAlimentPerso('+JSON.stringify(a.id)+')">Modifier mes valeurs</button>';
+  _majFjaFiabilite();
   _fjUnite='g';
   const pu=document.getElementById('fja-unites-slot');
   if(pu) pu.innerHTML=_htmlUnites(_fjFood);
@@ -35112,10 +35268,30 @@ async function lireEtiquette(input){
   }
 }
 
-function saveFoodEntry(){
+// L ajout au journal passe par le controle. Sous le seuil de fiabilite, on
+// DEMANDE : un accord tacite sur une fiche douteuse n est pas un accord, et
+// une macro fausse fausse la journee entiere.
+async function saveFoodEntry(){
   const f=_fjFood;if(!f) return;
   const qty=parseFloat(document.getElementById('fja-qty')?.value)||0;
   if(qty<=0||qty>9999){toast('Quantité invalide (1-9999g)','var(--orange)');return;}
+  try{
+    const ctrl=nutriControle(f);
+    // SEULEMENT les impossibilites arithmetiques. Une fiche incomplete n est
+    // pas une fiche fausse : 143 aliments Ciqual ne portent aucune energie
+    // parce que l ANSES ne la publie pas, et l affichage sait deja dire
+    // « énergie non renseignée ». Bloquer sur la completude les effacerait.
+    if(ctrl.impossibles&&ctrl.impossibles.length){
+      toast(ctrl.impossibles[0],'var(--orange)');
+      return;
+    }
+    if(ctrl.fiabilite!=null&&ctrl.fiabilite<NUTRI_SEUIL_CONFIRME){
+      const ok=await rcConfirm('Fiche peu fiable',
+        (ctrl.alertes[0]||'Cette fiche est incomplète.')+' L’ajouter faussera peut-être ton bilan du jour. Tu peux la corriger en créant ton propre aliment.',
+        'Ajouter quand même');
+      if(!ok) return;
+    }
+  }catch(e){}
   const r=qty/100;
   const entry={
     id:Date.now(),alim_id:f.id,nom:f.n,groupe:f.g||'',qty,repas:_fjRepas,
