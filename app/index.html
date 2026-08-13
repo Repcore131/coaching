@@ -4915,7 +4915,7 @@ function _htmlBandeauPaliers(coach,users){
     +'<div style="flex:1;min-width:0">'
     +'<div style="font-weight:800;font-size:12.5px">'+escapeHtml(compte)+'</div>'
     +'<div class="sub" style="font-size:10.5px;margin-top:2px">Palier '+escapeHtml(pal.titre)
-    +(pal.prix?(' — '+pal.prix+' € par mois'):' — gratuit')+'</div></div>'
+    +(pal.prix?(' : '+pal.prix+' € par mois'):' : gratuit')+'</div></div>'
     +'<button class="btn btn-outline btn-sm" style="flex-shrink:0;min-height:38px" '
     +'onclick="ouvrirMonAbonnement()">Changer</button>'
     +'</div>';
