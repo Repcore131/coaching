@@ -28892,7 +28892,7 @@ function showProgressTab(tab,btn){
         </div>
         ${isGroup?`<div style="display:flex;gap:8px;margin-bottom:4px">${g.items.map(it=>`<span style="font-size:var(--fs-xs);color:${it.color};font-weight:700">● ${it.l}</span>`).join('')}</div>`:''}
         ${tracable
-          ?`<canvas id="mc-${g.items.map(i=>i.k).join('-')}" height="65"></canvas>`
+          ?`<canvas id="mc-${g.items.map(i=>i.k).join('-')}" height="65" style="width:100%;display:block"></canvas>`
           :`<div style="font-size:10.5px;color:var(--text-faint);line-height:1.5;padding:12px 2px 4px">
              Une courbe demande deux bilans. Il en manque encore un.</div>`}
       </div>`;
@@ -44394,13 +44394,33 @@ function loadLifestyle(){
 function _setupCanvas(id,defaultH){
   const cv=document.getElementById(id);if(!cv)return null;
   const ctx=cv.getContext('2d');
-  cv.width=cv.offsetWidth||400;cv.height=parseInt(cv.getAttribute('height'))||defaultH;
-  ctx.clearRect(0,0,cv.width,cv.height);
+  // LA HAUTEUR VOULUE EST LUE UNE SEULE FOIS. Écrire cv.height réécrit
+  // l'attribut html : au rendu suivant on relirait une valeur déjà
+  // multipliée par la densité, et le graphique grandirait à chaque passage.
+  if(cv.dataset.hLogique==null) cv.dataset.hLogique=String(parseInt(cv.getAttribute('height'))||defaultH);
+  const H=parseInt(cv.dataset.hLogique)||defaultH;
+  // MÊME PIÈGE SUR LA LARGEUR. On retient la règle CSS d'origine — « 100% »
+  // pour une toile fluide, rien pour une toile qui tient sa largeur de son
+  // attribut — et on la rétablit avant de mesurer. Sans ça, on relirait la
+  // largeur figée par le rendu précédent.
+  if(cv.dataset.wCss==null) cv.dataset.wCss=cv.style.width||'';
+  if(cv.dataset.wCss) cv.style.width=cv.dataset.wCss;
+  const W=cv.offsetWidth||400;
+  // LA DENSITÉ D'ÉCRAN. Sans elle, 300 pixels de toile sont étirés sur 900
+  // pixels physiques : c'est tout le flou. Plafonnée à 3 — au-delà le coût
+  // mémoire grimpe au carré sans rien apporter à l'œil.
+  const dpr=Math.min(window.devicePixelRatio||1,3);
+  cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);
+  cv.style.width=W+'px';cv.style.height=H+'px';
+  // Après setTransform, tout ce que dessinent les appelants reste exprimé en
+  // pixels CSS : aucun d'eux n'a à connaître la densité.
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,W,H);
   // ANIMATION 9. Reporté d'une frame : à cet instant l'appelant n'a encore rien
   // dessiné, et balayer une toile vide n'aurait rien montré. Une frame plus
   // tard le tracé est là, et arcTracerCourbes ne le jouera qu'une fois.
   try{ requestAnimationFrame(()=>arcTracerCourbes(cv)); }catch(e){}
-  return{cv,ctx,w:cv.width,h:cv.height};
+  return{cv,ctx,w:W,h:H};
 }
 function _drawGrid(ctx,w,h,p,mn,mx){
   ctx.strokeStyle='#2a2a2a';ctx.lineWidth=1;
