@@ -14197,8 +14197,18 @@ function addBilanPhoto(bilanDate,bilanType,view,inputEl){
 
 function drawLineChart(canvas,datasets,labels){
   if(!canvas)return;
-  const W=canvas.width=canvas.parentElement.offsetWidth||300,H=canvas.height=160;
+  // MEME DEFAUT que le graphique cafeine, meme correction : le canevas etait
+  // dimensionne en pixels CSS puis etire par le navigateur. Sur un ecran a 3x,
+  // les courbes de poids et de masse grasse sortaient floues.
+  const _dpr=Math.min(window.devicePixelRatio||1,3);
+  const W=canvas.parentElement.offsetWidth||300,H=160;
+  canvas.width=Math.round(W*_dpr);
+  canvas.height=Math.round(H*_dpr);
+  canvas.style.width=W+'px';
+  canvas.style.height=H+'px';
   const ctx=canvas.getContext('2d');
+  // Les coordonnees restent en unites CSS : l echelle est portee ici, une fois.
+  ctx.setTransform(_dpr,0,0,_dpr,0,0);
   ctx.clearRect(0,0,W,H);
   // ANIMATION 9. Cette fonction ne passe pas par _setupCanvas : sans ce
   // rappel-ci, les graphiques du bilan seraient les seuls à ne pas se tracer.
@@ -39254,8 +39264,22 @@ function _drawCaffeineHistory(wKg,canvasId='caff-history-chart',daysOverride){
   const canvas=document.getElementById(canvasId);
   if(!canvas) return;
   const ctx=canvas.getContext('2d');
-  canvas.width=canvas.offsetWidth||340;
-  const W=canvas.width,H=canvas.height||140;
+  // DENSITE D ECRAN. Le canevas etait dimensionne en pixels CSS puis etire
+  // par le navigateur : sur un telephone a 3x, 311 pixels reels s affichaient
+  // sur 933 — tout etait flou, traits comme texte. On dessine desormais a la
+  // densite REELLE et on ramene la taille d affichage en CSS.
+  // Plafonnee a 3 : au-dela, le gain est invisible et la surface a peindre
+  // croit au carre.
+  const _dpr=Math.min(window.devicePixelRatio||1,3);
+  const W=canvas.offsetWidth||340;
+  const H=parseInt(canvas.getAttribute('height'),10)||140;
+  canvas.width=Math.round(W*_dpr);
+  canvas.height=Math.round(H*_dpr);
+  canvas.style.width=W+'px';
+  canvas.style.height=H+'px';
+  // Toutes les coordonnees qui suivent restent en unites CSS : le facteur
+  // d echelle est porte par la transformation, une seule fois.
+  ctx.setTransform(_dpr,0,0,_dpr,0,0);
   const days=daysOverride!==undefined?daysOverride:_caffStore();
   const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser),grossesseSuspend(currentUser));
   const labels=[],data=[];
@@ -39335,7 +39359,9 @@ function _drawCaffeineHistory(wKg,canvasId='caff-history-chart',daysOverride){
       const auj=(i===27);
       ctx.save();
       // Ombre portee : c est elle qui decolle la barre du fond.
-      ctx.shadowColor=c;ctx.shadowBlur=auj?12:5;
+      // Halos resserres : ils compensaient en partie le flou du canevas.
+      // A la densite reelle, ils n ont plus a le faire.
+      ctx.shadowColor=c;ctx.shadowBlur=auj?7:3;
       const g=ctx.createLinearGradient(0,y,0,base);
       g.addColorStop(0,c);
       g.addColorStop(1,'rgba(0,0,0,.55)');
