@@ -28863,12 +28863,16 @@ function showProgressTab(tab,btn){
       {label:'Mollets (D / G)',items:[{k:'calf-r',l:'Droit',color:'#f472b6'},{k:'calf-l',l:'Gauche',color:'#a78bfa'}]},
       {label:'Tour de Poitrine',items:[{k:'chest',l:'',color:'#eab308'}]},
       {label:'Tour de Taille',items:[{k:'waist',l:'',color:'#3b82f6'}]},
-      {label:'Tour de Hanche',items:[{k:'hips',l:'',color:'#38bdf8'}]},
       {label:'Fessier',items:[{k:'glutes',l:'',color:'#22c55e'}]},
       {label:'Buste',items:[{k:'bust',l:'',color:'#fb923c'}]},
-      {label:'Tour de Cou',items:[{k:'neck',l:'',color:'#94a3b8'}]},
+      // TOUR DE HANCHE et TOUR DE COU n'ont plus de courbe : ils bougent trop
+      // peu pour qu'une ligne dise quoi que ce soit. Ils restent dans le
+      // TABLEAU au-dessus — la donnée n'est pas perdue, elle n'a simplement
+      // pas besoin de son propre graphique.
     ];
-    let miniCharts='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px">';
+    // UNE COLONNE. À deux, les cartes de droite sortaient de l'écran sur un
+    // téléphone : on ne voyait qu'un tiers de la moitié des courbes.
+    let miniCharts='<div style="display:flex;flex-direction:column;gap:12px;margin-top:6px">';
     const groupsToRender=[];
     GROUPS.forEach(g=>{
       const hasData=g.items.some(it=>bl.some(b=>getBM(b,it.k)!==null));
@@ -28876,15 +28880,21 @@ function showProgressTab(tab,btn){
       const isGroup=g.items.length>1;
       const mainVals=bl.map(b=>getBM(b,g.items[0].k));
       const filtered=mainVals.filter(v=>v!==null);
+      const tracable=g.items.some(it=>bl.filter(b=>getBM(b,it.k)!==null).length>1);
       const diff=filtered.length>1?parseFloat((filtered[filtered.length-1]-filtered[0]).toFixed(1)):null;
       const col=diff===null?'var(--sub)':diff<=0?'var(--green)':'var(--red)';
-      miniCharts+=`<div style="background:var(--dark);border:1px solid var(--border);border-radius:10px;padding:12px">
+      // Le filet de gauche prend la couleur de la mesure : c'est ce qui
+      // rattache la carte à sa courbe sans avoir à lire le titre.
+      miniCharts+=`<div class="evo-carte" style="padding:12px;margin-bottom:0;border-left:3px solid ${g.items[0].color}">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <div style="font-size:var(--fs-xs);font-weight:800;color:${g.items[0].color};letter-spacing:.5px;text-transform:uppercase">${g.label}</div>
+          <div style="font-size:var(--fs-xs);font-weight:800;color:${g.items[0].color};letter-spacing:1.4px;text-transform:uppercase;text-shadow:0 0 12px ${g.items[0].color}55">${g.label}</div>
           ${diff!==null?`<div style="font-size:var(--fs-xs);font-weight:700;color:${col}">${diff>0?'+':''}${diff}cm</div>`:''}
         </div>
         ${isGroup?`<div style="display:flex;gap:8px;margin-bottom:4px">${g.items.map(it=>`<span style="font-size:var(--fs-xs);color:${it.color};font-weight:700">● ${it.l}</span>`).join('')}</div>`:''}
-        <canvas id="mc-${g.items.map(i=>i.k).join('-')}" height="65"></canvas>
+        ${tracable
+          ?`<canvas id="mc-${g.items.map(i=>i.k).join('-')}" height="65"></canvas>`
+          :`<div style="font-size:10.5px;color:var(--text-faint);line-height:1.5;padding:12px 2px 4px">
+             Une courbe demande deux bilans. Il en manque encore un.</div>`}
       </div>`;
       groupsToRender.push(g);
     });
