@@ -31445,31 +31445,10 @@ function _renderStrictDiet(){
   const coachCircle=coachPhoto
     ?`<img src="${escapeHtml(coachPhoto)}" style="width:54px;height:54px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(255,255,255,.35);box-shadow:0 0 0 4px rgba(0,0,0,.18)">`
     :`<div style="width:54px;height:54px;border-radius:50%;background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff">${icon('dumbbell',22)}</div>`;
-  el.innerHTML=`${_transiStrict}
-    <!-- Définition diète stricte -->
-    <div class="banner-hero" style="margin-bottom:18px;animation:fadeInUp .3s ease">
-      <div style="position:relative;display:flex;gap:14px;align-items:flex-start">
-        ${coachCircle}
-        <div style="flex:1;min-width:0">
-          <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Ton approche</div>
-          <div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:-0.3px;line-height:1.1;margin-bottom:8px">DIÈTE STRICTE</div>
-          <p style="margin:0;font-size:11px;color:rgba(255,255,255,.72);line-height:1.6">Ton programme alimentaire est 100&nbsp;% défini par ton coach: chaque repas, chaque apport. L'avantage: zéro prise de tête. Tu sais exactement quoi manger, quand, et en quelle quantité. Le cadre strict te permet de t'organiser au maximum et de progresser sans improviser.</p>
-        </div>
-      </div>
-    </div>
-    <!-- Plan alimentaire pas encore composé. Le bloc DISPARAÎT dès qu'un plan
-         existe : « Plan alimentaire à venir » juste au-dessus d'un plan complet
-         se lisait comme une contradiction. Le plan en photo a été retiré : le
-         coach compose désormais le plan dans l'application, il ne le dépose
-         plus en image. -->
-    ${!planActif(currentUser)?`
-    <div style="margin-bottom:20px">
-      <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:5px">${icon('clipboard',12)} Plan alimentaire</div>
-      <div style="background:var(--surface-1);border:1px dashed #2a2a2a;border-radius:12px;padding:32px 16px;text-align:center;color:var(--text-dim);font-size:12px"><div style="margin-bottom:8px;opacity:.3">${icon('clipboard',32)}</div>Plan alimentaire à venir</div>
-    </div>`:''}
-    <!-- Le plan composé par le coach : repas imposés et sources interchangeables -->
-    ${_htmlPlanAthlete(currentUser)}
-    <!-- Suivi du jour -->
+  // LE SUIVI DU JOUR EST PASSÉ AU PLAN, à la place qu'occupait la liste de
+  // courses. Ses deux compteurs le suivent : ils NOTENT la réponse oui/non,
+  // et les laisser derrière la liste les aurait rendus orphelins.
+  const suiviDuJour=`    <!-- Suivi du jour -->
     <div style="background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0b0b0b);border:1px solid #262626;border-radius:16px;box-shadow:0 18px 40px rgba(0,0,0,.75),0 4px 12px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.07),inset 0 -1px 0 rgba(0,0,0,.6);padding:18px;margin-bottom:12px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.45);animation:fadeInUp .3s ease">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.028) 11px,rgba(255,255,255,.028) 12px);pointer-events:none"></div>
       <div style="position:relative">
@@ -31499,6 +31478,31 @@ function _renderStrictDiet(){
         </div>
       </div>
     </div>`;
+  el.innerHTML=`${_transiStrict}
+    <!-- Définition diète stricte -->
+    <div class="banner-hero" style="margin-bottom:18px;animation:fadeInUp .3s ease">
+      <div style="position:relative;display:flex;gap:14px;align-items:flex-start">
+        ${coachCircle}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Ton approche</div>
+          <div style="font-size:20px;font-weight:900;color:#fff;letter-spacing:-0.3px;line-height:1.1;margin-bottom:8px">DIÈTE STRICTE</div>
+          <p style="margin:0;font-size:11px;color:rgba(255,255,255,.72);line-height:1.6">Ton programme alimentaire est 100&nbsp;% défini par ton coach: chaque repas, chaque apport. L'avantage: zéro prise de tête. Tu sais exactement quoi manger, quand, et en quelle quantité. Le cadre strict te permet de t'organiser au maximum et de progresser sans improviser.</p>
+        </div>
+      </div>
+    </div>
+    <!-- Plan alimentaire pas encore composé. Le bloc DISPARAÎT dès qu'un plan
+         existe : « Plan alimentaire à venir » juste au-dessus d'un plan complet
+         se lisait comme une contradiction. Le plan en photo a été retiré : le
+         coach compose désormais le plan dans l'application, il ne le dépose
+         plus en image. -->
+    ${!planActif(currentUser)?`
+    <div style="margin-bottom:20px">
+      <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:5px">${icon('clipboard',12)} Plan alimentaire</div>
+      <div style="background:var(--surface-1);border:1px dashed #2a2a2a;border-radius:12px;padding:32px 16px;text-align:center;color:var(--text-dim);font-size:12px"><div style="margin-bottom:8px;opacity:.3">${icon('clipboard',32)}</div>Plan alimentaire à venir</div>
+    </div>`:''}
+    <!-- Le plan composé par le coach : repas imposés et sources interchangeables -->
+    ${_htmlPlanAthlete(currentUser,suiviDuJour)}
+`;
 }
 
 function setNutriRespected(key,val){
@@ -32506,6 +32510,11 @@ function planCiblesJour(porteur,isOn,dateStr){
 }
 
 // ── Liste de courses ──────────────────────────────────────────────────────
+// Répondre oui ou non au suivi du jour refait TOUT le rendu de l'écran :
+// sans cette mémoire, la liste se refermerait sous les doigts à chaque
+// réponse. Elle n'est pas persistée — c'est un état d'affichage, pas une
+// donnée.
+let _lcOuvert=false;
 // Dans le tableur, deux lignes — Fromage blanc et Œufs — pointaient sur des
 // cellules détruites par un déplacement de colonnes et affichaient #REF!. Ce
 // n'était pas rattrapable : la formule ne savait plus de quel aliment elle
@@ -33525,7 +33534,10 @@ function lcStock(cle,el){
     if(qte) qte.style.color=stock?'var(--text-faint)':'#fff';
   }catch(e){}
 }
-function _htmlPlanAthlete(user){
+// `intercale` : ce que le plan doit afficher A LA PLACE de sa liste de
+// courses, laquelle est renvoyee a la fin. Le plan ne sait pas ce que c est
+// et n'a pas a le savoir — il fournit un emplacement, l'appelant le remplit.
+function _htmlPlanAthlete(user,intercale){
   if(!planActif(user)) return '';
   const plan=planDe(user);
   const today=localISODate(new Date());
@@ -33738,11 +33750,18 @@ function _htmlPlanAthlete(user){
 // cadre plein ; la liste est un outil de passage en magasin. On lui donne
 // donc l aspect d un ticket : fond plus clair, bord gauche marque, papier
 // legerement raye, et un sous-titre qui dit ce qu elle est.
-const courses=(lc&&lc.lignes.length)?`<div style="position:relative;overflow:hidden;background:repeating-linear-gradient(0deg,#161616,#161616 27px,#191919 27px,#191919 54px);border:1px solid #333;border-left:3px solid var(--red);border-radius:10px;padding:12px 13px;margin-bottom:14px">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:-12px -13px 8px;padding:9px 13px;border-radius:9px 9px 0 0;background:linear-gradient(180deg,#ffffff,#e9e9e9);box-shadow:0 2px 10px rgba(0,0,0,.45)">
+// REPLIABLE. Fermee par defaut : une quinzaine de lignes plus quatre menus
+// poussaient tout le reste hors de vue, et on ne la consulte qu au moment de
+// faire ses courses. <details> natif, comme les historiques : aucun script,
+// le clavier l ouvre, et le lecteur d ecran l annonce.
+const courses=(lc&&lc.lignes.length)?`<details class="hist-repli lc-repli" style="position:relative;overflow:hidden;background:repeating-linear-gradient(0deg,#161616,#161616 27px,#191919 27px,#191919 54px);border:1px solid #333;border-left:3px solid var(--red);border-radius:10px;padding:12px 13px;margin-bottom:14px"${_lcOuvert?' open':''} ontoggle="_lcOuvert=this.open">
+    <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:-12px -13px 8px;padding:11px 13px;border-radius:9px 9px 0 0;background:linear-gradient(180deg,#ffffff,#e9e9e9);box-shadow:0 2px 10px rgba(0,0,0,.45);min-height:44px">
       <span style="font-size:var(--fs-xs);color:#0a0a0a;letter-spacing:2px;font-weight:800;text-transform:uppercase;display:inline-flex;align-items:center;gap:6px">${icon('clipboard',13)} Liste de courses</span>
-      <span style="font-size:9px;color:#5a5a5a;letter-spacing:1.5px;font-weight:800;text-transform:uppercase;flex-shrink:0">Stock</span>
-    </div>
+      <span style="display:inline-flex;align-items:center;gap:9px;flex-shrink:0">
+        <span style="font-size:9px;color:#5a5a5a;letter-spacing:1.5px;font-weight:800;text-transform:uppercase">${lc.lignes.filter(l=>l.qte>0).length} lignes</span>
+        <span class="hist-chevron" style="font-size:13px;color:#3a3a3a;transition:transform .18s">▾</span>
+      </span>
+    </summary>
     <div style="font-size:9.5px;color:var(--text-faint);letter-spacing:.5px;margin-bottom:6px">Ce qu'il te faut acheter (ce n'est pas ton plan alimentaire).</div>
       ${lc.lignes.filter(l=>l.qte>0).map(l=>{
         const cs=l.cles||[l.cle];
@@ -33754,7 +33773,7 @@ const courses=(lc&&lc.lignes.length)?`<div style="position:relative;overflow:hid
       ${auChoix('p',0)}${auChoix('p',1)}
       ${auChoix('c',0)}${auChoix('c',1)}
       <div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-top:9px">Calculée sur un jour d'entraînement, le plus chargé : mieux vaut un reste qu'une rupture en milieu de semaine. Les lignes « au choix » comptent un repas multiplié par ${LC_REPAS}.</div>
-  </div>`:'';
+  </details>`:'';
 
   const pal=cib.palier;
   const negatif=rest.negatifs.length
@@ -33781,10 +33800,13 @@ const courses=(lc&&lc.lignes.length)?`<div style="position:relative;overflow:hid
     ${blocRepas}
     ${blocOrphelins}
     ${blocFruits}
-    ${courses}
+    ${intercale||''}
     ${blocCheat}
     ${_htmlHuileCuissonAthlete(couv)}
-    <div style="font-size:10px;color:var(--text-faint);line-height:1.6">${escapeHtml(PLAN_NOTE_CUISSON)}</div>
+    <div style="font-size:10px;color:var(--text-faint);line-height:1.6;margin-bottom:14px">${escapeHtml(PLAN_NOTE_CUISSON)}</div>
+    <!-- La liste ferme le plan : c'est un outil de passage en magasin, pas
+         une prescription, et elle n'a rien a faire au milieu des repas. -->
+    ${courses}
   </div>`;
 }
 // L'huile de cuisson est comptée dans les macros de l'athlète alors qu'aucune
