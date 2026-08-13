@@ -974,6 +974,11 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   linear-gradient(160deg,#101010,#080808 60%,#050505);z-index:0;
   clip-path:polygon(17px 0,100% 0,100% calc(100% - 17px),calc(100% - 17px) 100%,0 100%,0 17px)}
 .caf-cadre>*{position:relative;z-index:1}
+/* LA CANETTE ECHAPPE A LA REGLE CI-DESSUS. `.caf-cadre>*` lui imposait
+   position:relative, ce qui annulait son position:absolute : elle retombait
+   dans le flux, invisible. Le selecteur de classe l emporte sur l universel,
+   donc pas besoin de !important. */
+.caf-cadre>.caf-can{position:absolute;z-index:0;pointer-events:none}
 /* Filet hachure : la barre oblique repetee des planches techniques. */
 .caf-filet{height:5px;background:repeating-linear-gradient(115deg,
   rgba(255,255,255,.32) 0 3px,transparent 3px 7px);margin:9px 0}
@@ -39052,7 +39057,7 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
            le metal sombre, l arete lumineuse qui court sur la gauche, les
            griffures, et la condensation. Decorative, donc masquee aux
            lecteurs d ecran. -->
-      <svg viewBox="0 0 70 170" aria-hidden="true" style="position:absolute;right:-4px;bottom:-12px;width:88px;height:auto;opacity:.16;pointer-events:none;z-index:0">
+      <svg class="caf-can" viewBox="0 0 70 170" aria-hidden="true" style="right:-6px;bottom:-22px;height:205px;width:auto;opacity:.42;filter:drop-shadow(0 0 14px rgba(255,255,255,.18))">
         <defs>
           <linearGradient id="cafCanCorps" x1="0" y1="0" x2="1" y2="0">
             <stop offset="0" stop-color="#000"/><stop offset=".18" stop-color="#3a3a3a"/>
