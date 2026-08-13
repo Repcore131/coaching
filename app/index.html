@@ -27863,23 +27863,61 @@ function calcBF(waist,neck,hips,height,gender){
     return Math.max(2,Math.min(60,Math.round(bf*10)/10));
   }catch{return null;}
 }
+// L'ANNEAU. Refait en ARCS TRACÉS et non plus en parts recouvertes par un
+// disque. Le resultat a l'ecran est proche, mais tracer un arc donne trois
+// choses qu'un camembert masque ne donne pas : un jeu entre les segments,
+// des bouts arrondis, et une piste sombre visible derriere — ce qui fait la
+// difference entre un diagramme et un objet dessine.
 function drawPie(id,slices){
   const cv=document.getElementById(id);if(!cv)return;
   const sz=Math.min(cv.parentElement.offsetWidth||120,120);
-  cv.width=sz;cv.height=sz;
-  const ctx=cv.getContext('2d'),cx=sz/2,cy=sz/2,R=cx*0.88,r=cx*0.48;
-  const total=slices.reduce((s,x)=>s+x.val,0);
+  // DENSITÉ D'ÉCRAN, comme _setupCanvas : sans elle, 110 pixels de toile sont
+  // étirés sur 330 pixels physiques et tout l'anneau est mou.
+  const dpr=Math.min(window.devicePixelRatio||1,3);
+  cv.width=Math.round(sz*dpr);cv.height=Math.round(sz*dpr);
+  cv.style.width=sz+'px';cv.style.height=sz+'px';
+  const ctx=cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,sz,sz);
+  const cx=sz/2,cy=sz/2,ep=sz*0.15,R=cx*0.88-ep/2;
+  const total=slices.reduce((s,x)=>s+x.val,0)||1;
+  // La piste : elle donne un fond au segment le plus fin, qui sans elle
+  // flotte dans le vide des qu'il descend sous quelques pour cent.
+  ctx.strokeStyle='#161616';ctx.lineWidth=ep;
+  ctx.beginPath();ctx.arc(cx,cy,R,0,2*Math.PI);ctx.stroke();
+  // Le jeu entre segments est retire de chacun, pas ajoute : la somme des
+  // arcs doit rester le tour complet, sinon l'anneau ne ferme pas.
+  const jeu=slices.length>1?0.062:0;
   let a=-Math.PI/2;
   slices.forEach(sl=>{
     const sw=2*Math.PI*(sl.val/total);
-    ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,R,a,a+sw);
-    ctx.closePath();ctx.fillStyle=sl.color;ctx.fill();a+=sw;
+    if(sw>jeu){
+      // Le degrade traverse le disque en diagonale : un aplat de couleur
+      // unique est ce qui donne l'aspect imprimé qu'on veut perdre.
+      const g=ctx.createLinearGradient(cx-R,cy-R,cx+R,cy+R);
+      g.addColorStop(0,sl.color);g.addColorStop(1,sl.color+'99');
+      ctx.strokeStyle=g;ctx.lineWidth=ep;
+      // Bouts DROITS : un bout arrondi deborde de la moitie de l'epaisseur
+      // et recouvrirait entierement la coupure entre deux parts.
+      ctx.lineCap='butt';
+      ctx.shadowColor=sl.color;ctx.shadowBlur=6;
+      ctx.beginPath();ctx.arc(cx,cy,R,a+jeu/2,a+sw-jeu/2);ctx.stroke();
+      ctx.shadowBlur=0;
+    }
+    a+=sw;
   });
-  ctx.beginPath();ctx.arc(cx,cy,r,0,2*Math.PI);ctx.fillStyle='#0d0d0d';ctx.fill();
-  // center text
-  ctx.fillStyle='#fff';ctx.font=`bold ${Math.round(sz*0.12)}px Montserrat,sans-serif`;
+  ctx.lineCap='butt';
+  // Le coeur : un degre radial plutot qu'un aplat noir, pour que le centre
+  // ait un fond et non un trou.
+  const gc=ctx.createRadialGradient(cx,cy-sz*0.06,sz*0.02,cx,cy,R-ep/2);
+  gc.addColorStop(0,'#1c1c1c');gc.addColorStop(1,'#0b0b0b');
+  ctx.beginPath();ctx.arc(cx,cy,R-ep/2,0,2*Math.PI);ctx.fillStyle=gc;ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.05)';ctx.lineWidth=1;ctx.stroke();
+  ctx.fillStyle='#fff';ctx.font=`800 ${Math.round(sz*0.145)}px Montserrat,sans-serif`;
   ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.shadowColor='rgba(255,255,255,.35)';ctx.shadowBlur=10;
   ctx.fillText(Math.round(slices[0].val/total*100)+'%',cx,cy);
+  ctx.shadowBlur=0;
 }
 
 const MEAS=[
@@ -28946,7 +28984,7 @@ function showProgressTab(tab,btn){
       if(!mg&&!mm) return '';
       const mgC=idx===0?'#E02020':'#3b82f6';
       return `<div style="flex:1;text-align:center">
-        <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1px;font-weight:700;margin-bottom:6px">${title}</div>
+        <div class="evo-titre" style="letter-spacing:1.5px;margin-bottom:10px">${title}</div>
         <canvas id="pie-${idx}" style="max-width:110px;margin:0 auto;display:block"></canvas>
         <div style="margin-top:8px;display:flex;justify-content:center;gap:12px">
           <div style="text-align:center"><div style="width:8px;height:8px;border-radius:50%;background:${mgC};margin:0 auto 3px"></div><div style="font-size:var(--fs-xs);color:var(--sub)">MG</div><div style="font-size:12px;font-weight:800;color:#fff">${mg}kg</div></div>
@@ -28982,11 +29020,11 @@ function showProgressTab(tab,btn){
         Ce qui est exploitable ici, c'est le SENS de l'évolution entre deux bilans
         mesurés de la même façon, pas la valeur absolue.
       </div>
-      <div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px">
-        <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px">% de masse grasse corporelle</div>
-        <canvas id="mg-chart" height="150"></canvas>
+      <div class="evo-carte" style="padding:16px">
+        <div class="evo-titre">% de masse grasse corporelle</div>
+        <canvas id="mg-chart" height="150" style="width:100%;display:block"></canvas>
       </div>
-      ${bl.length>=1?`<div style="display:flex;gap:12px;background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px;justify-content:center">
+      ${bl.length>=1?`<div class="evo-carte" style="display:flex;gap:12px;padding:18px 16px;justify-content:center">
         ${pieSec(0,'Bilan 1')}
         ${bl.length>1?pieSec(bl.length-1,'Bilan '+bl.length):''}
       </div>`:''}
@@ -44422,19 +44460,61 @@ function _setupCanvas(id,defaultH){
   try{ requestAnimationFrame(()=>arcTracerCourbes(cv)); }catch(e){}
   return{cv,ctx,w:W,h:H};
 }
+// LA GRILLE. Des traits pleins gris tirent l'oeil autant que la courbe :
+// pointilles et plus sombres, ils redeviennent ce qu'ils sont — un reperage.
+// La ligne du bas reste pleine : c'est le socle du graphique, pas un repere.
 function _drawGrid(ctx,w,h,p,mn,mx){
-  ctx.strokeStyle='#2a2a2a';ctx.lineWidth=1;
-  [0,.5,1].forEach(t=>{const y=h-p-t*(h-p*2);ctx.beginPath();ctx.moveTo(p,y);ctx.lineTo(w-p,y);ctx.stroke();ctx.fillStyle='#555';ctx.font='9px sans-serif';ctx.fillText((mn+t*(mx-mn)).toFixed(1),0,y+4);});
+  [0,.5,1].forEach(t=>{
+    const y=h-p-t*(h-p*2);
+    ctx.strokeStyle=t===0?'#333':'#242424';ctx.lineWidth=1;
+    ctx.setLineDash(t===0?[]:[3,4]);
+    ctx.beginPath();ctx.moveTo(p,y);ctx.lineTo(w-p,y);ctx.stroke();
+    ctx.setLineDash([]);ctx.fillStyle='#4a4a4a';
+    ctx.font='600 9px Montserrat,sans-serif';ctx.textAlign='left';ctx.textBaseline='alphabetic';
+    ctx.fillText((mn+t*(mx-mn)).toFixed(1),0,y+4);
+  });
 }
 function _drawXLabels(ctx,labels,p,xs,h){
-  ctx.fillStyle='#555';ctx.font='9px sans-serif';ctx.textAlign='center';
+  ctx.shadowBlur=0;ctx.fillStyle='#5a5a5a';
+  ctx.font='700 9px Montserrat,sans-serif';ctx.textAlign='center';ctx.textBaseline='alphabetic';
   labels.forEach((l,i)=>ctx.fillText(l,p+i*xs,h-4));
 }
-function _drawLineSeries(ctx,pts,color,lineW,dotR){
-  ctx.setLineDash([]);ctx.strokeStyle=color;ctx.lineWidth=lineW;ctx.beginPath();
-  pts.forEach((pt,i)=>i===0?ctx.moveTo(pt.x,pt.y):ctx.lineTo(pt.x,pt.y));ctx.stroke();
-  ctx.fillStyle=color;
-  pts.forEach(pt=>{ctx.beginPath();ctx.arc(pt.x,pt.y,dotR,0,Math.PI*2);ctx.fill();});
+// o.base : ordonnee du socle. Fournie, la surface sous la courbe est remplie
+// d'un degrade qui s'eteint vers le bas. EN OPTION, et c'est deliberé : sur
+// un graphique a plusieurs series, deux aplats superposes brouillent la
+// lecture au lieu de l'aider.
+function _drawLineSeries(ctx,pts,color,lineW,dotR,o){
+  o=o||{};
+  if(!pts.length) return;
+  ctx.setLineDash([]);
+  if(o.base!=null&&pts.length>1){
+    const hauts=Math.min.apply(null,pts.map(q=>q.y));
+    const g=ctx.createLinearGradient(0,hauts,0,o.base);
+    g.addColorStop(0,color+'5c');g.addColorStop(.5,color+'26');g.addColorStop(1,color+'0a');
+    ctx.beginPath();ctx.moveTo(pts[0].x,o.base);
+    pts.forEach(q=>ctx.lineTo(q.x,q.y));
+    ctx.lineTo(pts[pts.length-1].x,o.base);ctx.closePath();
+    ctx.fillStyle=g;ctx.shadowBlur=0;ctx.fill();
+  }
+  // LA LUEUR est portee par l'ombre du contexte : sur un fond noir, un trait
+  // net parait imprime, un trait qui rayonne parait allume.
+  ctx.strokeStyle=color;ctx.lineWidth=lineW;
+  ctx.lineJoin='round';ctx.lineCap='round';
+  ctx.shadowColor=color;ctx.shadowBlur=9;
+  if(pts.length>1){
+    ctx.beginPath();
+    pts.forEach((pt,i)=>i===0?ctx.moveTo(pt.x,pt.y):ctx.lineTo(pt.x,pt.y));
+    ctx.stroke();
+  }
+  // Les points par-dessus : un anneau sombre les detache du remplissage,
+  // sinon ils se noient dedans des que la courbe descend.
+  pts.forEach(pt=>{
+    ctx.shadowBlur=10;ctx.fillStyle=color;
+    ctx.beginPath();ctx.arc(pt.x,pt.y,dotR,0,Math.PI*2);ctx.fill();
+    ctx.shadowBlur=0;ctx.strokeStyle='#0b0b0b';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.arc(pt.x,pt.y,dotR,0,Math.PI*2);ctx.stroke();
+  });
+  ctx.shadowBlur=0;
 }
 function lineChart(id,labels,data,color){
   const c=_setupCanvas(id,160);if(!c)return;
@@ -44443,7 +44523,7 @@ function lineChart(id,labels,data,color){
   const mn=Math.min(...data)*0.98,mx=Math.max(...data)*1.02;
   const xs=(w-p*2)/(data.length-1||1),ys=(h-p*2)/(mx-mn||1);
   _drawGrid(ctx,w,h,p,mn,mx);
-  _drawLineSeries(ctx,data.map((v,i)=>({x:p+i*xs,y:h-p-(v-mn)*ys})),color,2.5,4);
+  _drawLineSeries(ctx,data.map((v,i)=>({x:p+i*xs,y:h-p-(v-mn)*ys})),color,2.5,4,{base:h-p});
   _drawXLabels(ctx,labels,p,xs,h);
 }
 function barChart(id,labels,data){
