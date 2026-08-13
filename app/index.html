@@ -387,7 +387,79 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
 .banner-hero{background:linear-gradient(145deg,#c10000 0%,#880000 55%,#560000 100%);border-radius:12px;padding:18px 20px;position:relative;overflow:hidden;box-shadow:0 10px 26px rgba(0,0,0,.45)}
 .banner-hero::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 16px,rgba(0,0,0,.12) 16px,rgba(0,0,0,.12) 17px);pointer-events:none}
 .banner-hero::after{content:'';position:absolute;right:-18px;top:-18px;width:90px;height:90px;border-radius:50%;background:rgba(255,255,255,.05);pointer-events:none}
+/* ══════════ TABLEAU DE BORD COACH : LE RELIEF ══════════
+   L'écran était une pile d'aplats gris sur du noir : rien n'avait de poids,
+   tout en avait le même, et l'œil n'avait aucun point d'entrée. Même langage
+   que le reste de l'application — trame diagonale, dégradé, ombre sur DEUX
+   rayons, filet coloré, halo derrière les chiffres. */
+
+/* LES TROIS COMPTEURS. Le halo derrière le chiffre est ce qui le fait
+   exister : sur du noir, un chiffre plat reste imprimé, il ne s'allume pas. */
+.pil-compteur{flex:1 1 0;min-width:0;min-height:52px;padding:11px 6px;border-radius:12px;cursor:pointer;
+  font-family:Montserrat,sans-serif;text-align:center;position:relative;overflow:hidden;
+  background:
+    repeating-linear-gradient(-50deg,transparent,transparent 10px,rgba(255,255,255,.022) 10px,rgba(255,255,255,.022) 11px),
+    linear-gradient(168deg,#1b1b1b,#121212 52%,#0b0b0b);
+  border:1px solid #242424;border-left:3px solid #2e2e2e;
+  box-shadow:0 12px 26px rgba(0,0,0,.6),0 3px 8px rgba(0,0,0,.5),
+    inset 0 1px 0 rgba(255,255,255,.055),inset 0 -1px 0 rgba(0,0,0,.5);
+  transition:border-color .15s,box-shadow .15s}
+.pil-compteur[data-vide="1"]{box-shadow:0 8px 18px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.03)}
+.pil-val{font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:27px;line-height:1;position:relative}
+.pil-lib{font-size:9px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;line-height:1.25;margin-top:6px}
+
+/* LES VOLETS DE CONTEXTE. Une classe A COTE de .plan-src et non a sa place :
+   celle-ci sert aussi a l'éditeur de plan, qui n'a aucune raison de changer
+   parce que le tableau de bord en avait besoin. */
+.pil-bande{background:
+    repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.018) 11px,rgba(255,255,255,.018) 12px),
+    linear-gradient(168deg,#181818,#101010 55%,#0a0a0a)!important;
+  border:1px solid #242424!important;border-left:2px solid rgba(224,32,32,.5)!important;border-radius:11px!important;
+  box-shadow:0 10px 22px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.045)}
+.pil-bande>summary{color:#cfcfcf!important}
+
+/* LES DEUX LIENS DE BAS DE BARRE. */
+.pil-lien{width:100%;min-height:46px;margin-top:8px;border-radius:11px;cursor:pointer;
+  font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:#b4b4b4;
+  background:linear-gradient(168deg,#181818,#0e0e0e);border:1px solid #262626;
+  box-shadow:0 8px 20px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.05);transition:.15s}
+.pil-lien:hover{color:#fff;border-color:rgba(224,32,32,.5);box-shadow:0 10px 24px rgba(0,0,0,.6),0 0 18px rgba(224,32,32,.18)}
+
+/* LA RECHERCHE. Creusée plutôt que posée : une ombre INTERNE dit « on écrit
+   ici », là où une ombre portée aurait dit « on appuie ici ». */
+#ch-search{background:linear-gradient(180deg,#0c0c0c,#131313)!important;border:1px solid #262626!important;
+  box-shadow:inset 0 2px 6px rgba(0,0,0,.6),inset 0 -1px 0 rgba(255,255,255,.03);border-radius:11px!important}
+#ch-search:focus{border-color:rgba(224,32,32,.55)!important;box-shadow:inset 0 2px 6px rgba(0,0,0,.6),0 0 16px rgba(224,32,32,.2)}
+
+/* LES CARTES D'ATHLETE. Le filet gauche prend la couleur de l'ETAT : c'est
+   ce qui permet de balayer la liste sans lire un seul badge. */
+#ch-clients-list .client-row{
+  background:
+    repeating-linear-gradient(-50deg,transparent,transparent 12px,rgba(255,255,255,.020) 12px,rgba(255,255,255,.020) 13px),
+    linear-gradient(168deg,#1a1a1a,#111 52%,#0b0b0b);
+  border:1px solid #242424;border-left:3px solid var(--red);border-radius:3px 12px 12px 3px;
+  padding:13px 14px;margin-bottom:9px;
+  box-shadow:0 12px 26px rgba(0,0,0,.55),0 3px 8px rgba(0,0,0,.45),
+    inset 0 1px 0 rgba(255,255,255,.05),inset 0 -1px 0 rgba(0,0,0,.5)}
+#ch-clients-list .client-row[data-etat='alerte']{border-left-color:#E02020;box-shadow:0 12px 26px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.05),-3px 0 16px rgba(224,32,32,.3)}
+#ch-clients-list .client-row[data-etat='bilan']{border-left-color:#f97316;box-shadow:0 12px 26px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.05),-3px 0 16px rgba(249,115,22,.28)}
+#ch-clients-list .client-row[data-etat='actif']{border-left-color:#22c55e}
+#ch-clients-list .client-row[data-etat='attente']{border-left-color:#f97316;box-shadow:0 12px 26px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.05),-3px 0 16px rgba(249,115,22,.24)}
+#ch-clients-list .client-row[data-etat='lecture']{border-left-color:#6a6a6a;opacity:.88}
+#ch-clients-list .client-row[data-etat='dormant']{border-left-color:#3a3a3a;opacity:.82}
+#ch-clients-list .client-row:hover{background:
+    repeating-linear-gradient(-50deg,transparent,transparent 12px,rgba(255,255,255,.026) 12px,rgba(255,255,255,.026) 13px),
+    linear-gradient(168deg,#242424,#161616 52%,#0d0d0d);border-color:#3a3a3a}
+/* LE NOM TIENT SUR UNE LIGNE. Il passait a la ligne — « Kévin / GUELLEC » —
+   parce que le badge d'état mange la largeur. Un nom tronqué se lit ; un nom
+   cassé en deux se déchiffre. */
+#ch-clients-list .cr-nom{font-weight:800;font-size:14.5px;letter-spacing:.2px;color:#f2f2f2;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+#ch-clients-list .avatar{box-shadow:0 0 0 1px rgba(255,255,255,.09),0 4px 12px rgba(0,0,0,.5)}
+
 .ch-chip{background:var(--surface-1);border:1px solid var(--border);color:var(--text-dim);border-radius:20px;padding:7px 14px;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;letter-spacing:.5px;cursor:pointer;min-height:34px;transition:.15s}
+.ch-chip{box-shadow:0 4px 12px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.045)}
+.ch-chip.actif{box-shadow:0 4px 14px rgba(0,0,0,.5),0 0 16px rgba(224,32,32,.28),inset 0 1px 0 rgba(255,255,255,.09)}
 .ch-chip.actif{background:var(--red-bg);border-color:var(--red);color:#fff}
 .tab-dot{position:absolute;top:3px;left:calc(50% + 5px);width:9px;height:9px;
   border-radius:50%;background:var(--red);border:1.5px solid #0c0c0c;
@@ -1928,12 +2000,15 @@ const COACH_PHOTO='icons/coach.jpg';
           <span style="font-size:12px;font-weight:800;letter-spacing:1px">CHARGES ARTICULAIRES</span>
           <span id="ch-charges-av" style="font-size:11px;color:var(--sub)"></span>
         </button>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-          <div class="section-header" style="margin-bottom:0">
+        <!-- LE TITRE PREND SA PROPRE LIGNE. Cote a cote avec trois boutons, il
+             passait a la ligne — « MES / ATHLETES » — et un titre coupe en deux
+             n'est plus un titre. -->
+        <div style="margin-bottom:14px">
+          <div class="section-header" style="margin-bottom:11px">
             <div class="sh-line"></div>
-            <h2 style="font-size:16px">MES ATHLÈTES</h2>
+            <h2 style="font-size:16px;white-space:nowrap">MES ATHLÈTES</h2>
           </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
             <button class="btn btn-outline btn-sm" onclick="loadCanalCoach()" title="Canal : écrire à tous mes athlètes" aria-label="Canal : écrire à tous mes athlètes" style="letter-spacing:1px;padding:9px 11px;margin:0;min-height:38px">📣 CANAL</button>
             <button class="btn btn-outline btn-sm" onclick="openWaGroupe()" title="Message groupé WhatsApp" aria-label="Message groupé WhatsApp" style="letter-spacing:1px;padding:9px 11px;margin:0;min-height:38px">💬 GROUPÉ</button>
             <button class="btn btn-red btn-sm" onclick="openAddAthlete()" style="letter-spacing:2px;padding:9px 16px;margin:0;min-height:38px">+ AJOUTER</button>
@@ -10718,15 +10793,15 @@ function _pilCompteur(cle,lib,n,couleur){
   const actif=(_filtreClients===cle);
   return `<button onclick="setFiltreClients('${actif?'tous':cle}')"
     aria-pressed="${actif?'true':'false'}"
-    style="flex:1 1 0;min-width:0;min-height:44px;padding:9px 6px;border-radius:10px;cursor:pointer;font-family:Montserrat,sans-serif;text-align:center;
-      border:1.5px solid ${actif?couleur:(vide?'#242424':'#2e2e2e')};
-      background:${actif?'rgba(224,32,32,.10)':'#111'}">
-    <div style="font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:24px;line-height:1;color:${vide?'#5a5a5a':couleur}">${n}</div>
-    <div style="font-size:9px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;line-height:1.25;margin-top:5px;color:${vide?'#5a5a5a':'#bbb'}">${lib}</div>
+    class="pil-compteur" data-vide="${vide?1:0}"
+    style="border-left-color:${actif?couleur:(vide?'#2a2a2a':couleur+'66')};
+      ${actif?`border-color:${couleur};box-shadow:0 12px 26px rgba(0,0,0,.6),0 0 20px ${couleur}33,inset 0 1px 0 rgba(255,255,255,.08)`:''}">
+    <div class="pil-val" style="color:${vide?'#4e4e4e':couleur};text-shadow:${vide?'none':`0 0 16px ${couleur}99`}">${n}</div>
+    <div class="pil-lib" style="color:${vide?'#565656':'#c4c4c4'}">${lib}</div>
   </button>`;
 }
 function _pilBande(cle,titre,corps,resume){
-  return `<details class="plan-src" style="margin:0 0 6px"${_pilOuvert[cle]?' open':''} ontoggle="pilNoterBande('${cle}',this.open)">
+  return `<details class="plan-src pil-bande" style="margin:0 0 7px"${_pilOuvert[cle]?' open':''} ontoggle="pilNoterBande('${cle}',this.open)">
     <summary style="color:var(--sub)">${titre}<span class="plan-src-nb">${resume||''}</span></summary>
     <div class="plan-src-liste" style="font-size:11.5px;color:#ddd;line-height:1.7">${corps}</div>
   </details>`;
@@ -10767,8 +10842,8 @@ function renderPilotage(clients){
     ${_pilBande('a','Depuis ta dernière visite',corpsA,ch.length?String(ch.length):'—')}
     ${_pilBande('b','Portefeuille',corpsB,String(p.total))}
     ${_pilBande('c','Charge de travail',corpsC,String(g.bilansSansReponse+g.videosEnAttente))}
-    <button onclick="loadFileReprise()" style="width:100%;min-height:44px;margin-top:8px;background:none;border:1px solid var(--border);border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer">À relancer →</button>
-    <button onclick="loadCoachActivite()" style="width:100%;min-height:44px;margin-top:8px;background:none;border:1px solid var(--border);border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer">Activité du portefeuille →</button>`;
+    <button onclick="loadFileReprise()" class="pil-lien">À relancer →</button>
+    <button onclick="loadCoachActivite()" class="pil-lien">Activité du portefeuille →</button>`;
 }
 // La visite est horodatée À LA SORTIE de l'écran, pas à l'entrée : la datant à
 // l'entrée, la bande A serait vide dès la seconde ouverture de la journée.
@@ -13049,9 +13124,22 @@ function renderClientRow(c){
   const _ph=phaseCourante(c);
   const phLine=`<div class="cr-phase" style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:2px">${_ph?PHASES[_ph.type].lib+' · '+ordinalSemaine(semainesPhase(c)):''}</div>`;
   const _nm=(escapeHtml(c.fname||'')+' '+escapeHtml(c.lname||'')).trim()||'Profil incomplet';
-  return `<div class="client-row${!hasNewBilan(c)&&!needsAlert(c)&&!isActive(c)?' row-inactive':''}" onclick="openClientDetail('${c.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+  // L'ETAT est porte par un attribut plutot que par une classe : il pilote la
+  // couleur du filet gauche, et c est ce qui permet de balayer la liste sans
+  // lire un seul badge. Le classement suit CELUI DU BADGE, a la lettre — deux
+  // regles differentes donneraient une carte rouge a badge vert.
+  // L'ORDRE EST CELUI DU BADGE, cas par cas. Le badge classe : abonnement a
+  // souscrire, puis lecture seule, puis nouveau bilan, puis alerte, puis
+  // actif. Un ordre different ici donnerait un badge orange sur un filet
+  // rouge : deux signaux contradictoires, et le plus visible serait le faux.
+  const _etat=_enAttenteAbonnement(c)?'attente'
+    :_accesExpire(c)?'lecture'
+    :hasNewBilan(c)?'bilan'
+    :needsAlert(c)?'alerte'
+    :isActive(c)?'actif':'dormant';
+  return `<div class="client-row${!hasNewBilan(c)&&!needsAlert(c)&&!isActive(c)?' row-inactive':''}" data-etat="${_etat}" onclick="openClientDetail('${c.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <div class="avatar" style="width:44px;height:44px;font-size:15px;overflow:hidden;flex-shrink:0">${avatarHtml}</div>
-    <div style="flex:1;min-width:0"><div style="font-weight:700">${_nm}</div><div class="sub" style="font-size:11px;margin-top:2px">${activityLine}</div>${objLine}${phLine}</div>
+    <div style="flex:1;min-width:0"><div class="cr-nom">${_nm}</div><div class="sub" style="font-size:11px;margin-top:3px">${activityLine}</div>${objLine}${phLine}</div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">${badge}</div>
   </div>`;
 }
