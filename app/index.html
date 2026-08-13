@@ -1914,10 +1914,11 @@ const COACH_PHOTO='icons/coach.jpg';
              jamais une bascule : elle DIT, le coach decide. -->
         <div id="ch-alerte-palier"></div>
         <div id="ch-premiers-pas"></div>
-        <div id="ch-todo"></div>
-        <!-- Croissance hebdomadaire. Après « à traiter » : ce qui presse se lit
-             d'abord, la tendance ensuite. Rempli par loadCoachHome. -->
+        <!-- Croissance hebdomadaire, AU-DESSUS des notifications : c'est la
+             photo d'ensemble, et on la lit avant le détail de ce qui presse.
+             Rempli par loadCoachHome. -->
         <div id="ch-croissance"></div>
+        <div id="ch-todo"></div>
         <button onclick="openCoachPrograms()" class="content-card" style="width:100%;margin-bottom:16px;padding:13px 16px;background:linear-gradient(135deg,#0d0d0d,#1a0000);border:1px solid #2a0000;border-left:3px solid var(--red);border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px;text-align:left;display:flex;align-items:center;justify-content:space-between">
           <span>🗂️ MES PROGRAMMES (H/F)</span>
           <span style="color:var(--red);font-size:13px">→</span>
@@ -13237,7 +13238,7 @@ function _dessinerCroissance(id,pts){
     ctx.beginPath();ctx.moveTo(gL,y);ctx.lineTo(gL+iw,y);ctx.stroke();ctx.setLineDash([]);
     ctx.fillStyle='rgba(255,90,90,.55)';ctx.textAlign='right';
     ctx.fillText(String(Math.round(f*maxN)),gL-5,y);
-    ctx.fillStyle='rgba(34,197,94,.5)';ctx.textAlign='left';
+    ctx.fillStyle='rgba(255,255,255,.42)';ctx.textAlign='left';
     ctx.fillText(String(Math.round(f*maxC)),gL+iw+5,y);
   });
   // LES BARRES. Dégradé vertical, sommet arrondi, lueur : un aplat plat se
@@ -13260,19 +13261,19 @@ function _dessinerCroissance(id,pts){
   const ptsC=pts.map((pt,i)=>({x:gL+i*pas+pas/2,y:yC(pt.cumul)}));
   if(ptsC.length>1){
     const g=ctx.createLinearGradient(0,gT,0,gT+ih);
-    g.addColorStop(0,'rgba(34,197,94,.30)');g.addColorStop(1,'rgba(34,197,94,.02)');
+    g.addColorStop(0,'rgba(255,255,255,.26)');g.addColorStop(1,'rgba(255,255,255,.02)');
     ctx.beginPath();ctx.moveTo(ptsC[0].x,gT+ih);
     ptsC.forEach(q=>ctx.lineTo(q.x,q.y));
     ctx.lineTo(ptsC[ptsC.length-1].x,gT+ih);ctx.closePath();
     ctx.fillStyle=g;ctx.fill();
-    ctx.strokeStyle='#22c55e';ctx.lineWidth=2;ctx.lineJoin='round';ctx.lineCap='round';
-    ctx.shadowColor='#22c55e';ctx.shadowBlur=9;
+    ctx.strokeStyle='#ffffff';ctx.lineWidth=2;ctx.lineJoin='round';ctx.lineCap='round';
+    ctx.shadowColor='rgba(255,255,255,.85)';ctx.shadowBlur=9;
     ctx.beginPath();ptsC.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.stroke();
     ctx.shadowBlur=0;
   }
   // Le dernier point seul est marqué : c'est la valeur d'aujourd'hui.
   const dern=ptsC[ptsC.length-1];
-  ctx.fillStyle='#22c55e';ctx.shadowColor='#22c55e';ctx.shadowBlur=12;
+  ctx.fillStyle='#ffffff';ctx.shadowColor='rgba(255,255,255,.9)';ctx.shadowBlur=12;
   ctx.beginPath();ctx.arc(dern.x,dern.y,3.5,0,Math.PI*2);ctx.fill();
   ctx.shadowBlur=0;ctx.strokeStyle='#0b0b0b';ctx.lineWidth=1.5;
   ctx.beginPath();ctx.arc(dern.x,dern.y,3.5,0,Math.PI*2);ctx.stroke();
@@ -13301,15 +13302,15 @@ function _htmlCroissanceCoach(athletes){
   return `<div class="evo-carte" style="padding:15px 14px 12px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:2px">
       <div class="evo-titre" style="margin-bottom:0">Arrivées par semaine</div>
-      <div style="font-size:var(--fs-xs);font-weight:800;color:${recent>0?'#22c55e':'var(--sub)'}">${recent>0?'+':''}${recent} sur 4 semaines</div>
+      <div style="font-size:var(--fs-xs);font-weight:800;color:${recent>0?'#ffffff':'var(--sub)'}">${recent>0?'+':''}${recent} sur 4 semaines</div>
     </div>
     <div style="font-size:9.5px;color:var(--text-faint);letter-spacing:.4px;margin-bottom:9px">
       D'après la date de création de chaque dossier.</div>
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
       <span style="display:inline-flex;align-items:center;gap:5px;font-size:9px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#ff5a5a">
         <span style="width:9px;height:9px;border-radius:2px;background:linear-gradient(180deg,#ff4a4a,#6d0000);box-shadow:0 0 7px rgba(224,32,32,.8)"></span>Arrivées</span>
-      <span style="display:inline-flex;align-items:center;gap:5px;font-size:9px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#22c55e">
-        <span style="width:11px;height:2px;border-radius:2px;background:#22c55e;box-shadow:0 0 7px rgba(34,197,94,.8)"></span>Total (${total})</span>
+      <span style="display:inline-flex;align-items:center;gap:5px;font-size:9px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#ffffff">
+        <span style="width:11px;height:2px;border-radius:2px;background:#ffffff;box-shadow:0 0 7px rgba(255,255,255,.8)"></span>Total (${total})</span>
     </div>
     <canvas id="ch-croissance-toile" height="150" style="width:100%;display:block"></canvas>
     <div style="font-size:9.5px;color:var(--text-faint);line-height:1.5;margin-top:7px">
