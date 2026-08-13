@@ -1889,9 +1889,10 @@ const COACH_PHOTO='icons/coach.jpg';
 
     <!-- Mobile tabs (hidden on desktop) -->
     <div id="coach-tabs-bar" style="display:flex;border-bottom:1px solid #1a0000;flex-shrink:0;background:#080808">
-      <button id="ct-tab-dashboard" onclick="coachTab('dashboard')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid var(--red);color:#fff;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;cursor:pointer">ATHLÈTES</button>
-      <button id="ct-tab-codes" onclick="coachTab('codes')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;cursor:pointer">CODES</button>
-      <button id="ct-tab-monetisation" onclick="coachTab('monetisation')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;cursor:pointer">PAIEMENTS</button>
+      <button id="ct-tab-dashboard" onclick="coachTab('dashboard')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid var(--red);color:#fff;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px;cursor:pointer">ATHLÈTES</button>
+      <button id="ct-tab-codes" onclick="coachTab('codes')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px;cursor:pointer">CODES</button>
+      <button id="ct-tab-monetisation" onclick="coachTab('monetisation')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px;cursor:pointer">PAIEMENTS</button>
+      <button id="ct-tab-profil" onclick="coachTab('profil')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:2px solid transparent;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px;cursor:pointer">PROFIL</button>
     </div>
 
     <!-- Tab panels -->
@@ -2043,29 +2044,14 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
     </div>
 
-    <div id="ct-monetisation" style="display:none;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
+    <!-- PROFIL. Ce que le coach EST et ce que ses athletes voient de lui :
+         identite, vitrine, disponibilite, bannieres, contact. Rien de tout
+         cela ne parle d'argent, d'ou la separation d'avec PAIEMENTS.
+         Rempli par loadMonetisationTab, appelee par les deux onglets : elle
+         cherche ses elements par identifiant, sans se soucier du panneau. -->
+    <div id="ct-profil" style="display:none;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
       <div class="pad">
         <div style="width:20px;height:2px;background:var(--red);margin-bottom:8px;margin-top:4px"></div>
-
-        <!-- Tunnel — chiffres produit, pas chiffres d'un coach : réservé au
-             créateur, comme la génération de codes gratuits. Affiché par
-             loadCoachDashboard, qui seul connaît l'utilisateur courant. -->
-        <div id="ch-lien-tunnel" style="display:none;margin-bottom:18px">
-          <div onclick="loadMetrics()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:16px 18px;cursor:pointer;display:flex;align-items:center;gap:14px">
-            <div style="flex:1;min-width:0">
-              <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Mesure</div>
-              <div style="font-weight:800;font-size:14px">Tunnel d'acquisition</div>
-              <div class="sub" style="font-size:11px;margin-top:2px">7 derniers jours : compteurs anonymes</div>
-            </div>
-            <div style="color:var(--sub);font-size:18px">›</div>
-          </div>
-        </div>
-
-        <!-- Mon abonnement. Rempli par _renderAbonnementCoach, appele par
-             loadMonetisationTab : cette carte s adresse a TOUS les coachs,
-             contrairement au bloc du tunnel juste au-dessus. -->
-        <div id="coach-abo"></div>
-
         <!-- 🏷️ Identité coach / team -->
         <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px">
           <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:14px">Identité de la team</div>
@@ -2207,6 +2193,32 @@ const COACH_PHOTO='icons/coach.jpg';
           </div>
           <div id="coach-phone-preview" style="font-size:var(--fs-xs);color:var(--sub)"></div>
         </div>
+
+      </div>
+    </div>
+
+    <div id="ct-monetisation" style="display:none;flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;flex-direction:column">
+      <div class="pad">
+        <div style="width:20px;height:2px;background:var(--red);margin-bottom:8px;margin-top:4px"></div>
+
+        <!-- Tunnel — chiffres produit, pas chiffres d'un coach : réservé au
+             créateur, comme la génération de codes gratuits. Affiché par
+             loadCoachDashboard, qui seul connaît l'utilisateur courant. -->
+        <div id="ch-lien-tunnel" style="display:none;margin-bottom:18px">
+          <div onclick="loadMetrics()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:16px 18px;cursor:pointer;display:flex;align-items:center;gap:14px">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Mesure</div>
+              <div style="font-weight:800;font-size:14px">Tunnel d'acquisition</div>
+              <div class="sub" style="font-size:11px;margin-top:2px">7 derniers jours : compteurs anonymes</div>
+            </div>
+            <div style="color:var(--sub);font-size:18px">›</div>
+          </div>
+        </div>
+
+        <!-- Mon abonnement. Rempli par _renderAbonnementCoach, appele par
+             loadMonetisationTab : cette carte s adresse a TOUS les coachs,
+             contrairement au bloc du tunnel juste au-dessus. -->
+        <div id="coach-abo"></div>
 
         <!-- 🎥 Cloudinary vidéos -->
         <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px">
@@ -13618,7 +13630,7 @@ function loadCoachHome(){
   renderClientList(clients);
   // Preserve current tab if already on coach home, otherwise default to dashboard
   const _alreadyHere=document.getElementById('s-coach-home')?.classList.contains('active');
-  const _activeTab=_alreadyHere?(['dashboard','codes','monetisation'].find(t=>{const e=document.getElementById('ct-'+t);return e&&e.style.display!=='none';})||'dashboard'):'dashboard';
+  const _activeTab=_alreadyHere?(['dashboard','codes','monetisation','profil'].find(t=>{const e=document.getElementById('ct-'+t);return e&&e.style.display!=='none';})||'dashboard'):'dashboard';
   coachTab(_activeTab);
   // Sync athlètes depuis Firebase puis re-render pour afficher photos/objectifs à jour
   if(CLOUD.ok()) CLOUD.syncRelevantUsers().then(()=>{
@@ -46286,7 +46298,7 @@ async function loadMetrics(){
     : html+tbl;
 }
 function coachTab(tab){
-  ['dashboard','codes','monetisation'].forEach(function(id){
+  ['dashboard','codes','monetisation','profil'].forEach(function(id){
     var p=document.getElementById('ct-'+id);
     if(p){
       if(id===tab){
@@ -46302,7 +46314,12 @@ function coachTab(tab){
     }
   });
   if(tab==='codes')try{loadStudentCodes();}catch(e){console.error(e);}
-  if(tab==='monetisation')try{loadMonetisationTab();}catch(e){console.error(e);}
+  // LES DEUX ONGLETS appellent la meme fonction : elle remplit a la fois les
+  // champs du profil et ceux des paiements, et cherche ses elements par
+  // identifiant. La scinder aurait demande de trancher, pour chacune de ses
+  // trente lectures, de quel cote elle tombe — et une erreur y serait un
+  // champ vide, silencieux.
+  if(tab==='monetisation'||tab==='profil')try{loadMonetisationTab();}catch(e){console.error(e);}
 }
 
 function updateCloudStatus(){
