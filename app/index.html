@@ -416,9 +416,38 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
 :root{--tabbar-h:64px}
 body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 /* ====== METRIC BOXES ====== */
-.metric-box{background:repeating-linear-gradient(-50deg,transparent,transparent 14px,rgba(255,255,255,.016) 14px,rgba(255,255,255,.016) 15px),linear-gradient(160deg,#1e1e1e,#0d0d0d);border-radius:2px;padding:16px 12px;text-align:center;flex:1;border:1px solid rgba(255,255,255,.07);border-left:3px solid var(--red);position:relative;overflow:hidden;box-shadow:0 6px 24px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,255,255,.06),0 0 0 1px rgba(224,32,32,.08)}
+/* LES TROIS CHIFFRES. Grain double, halo rouge derriere la valeur, ombre
+   sur deux rayons et liserés haut/bas : c est ce qui donne l epaisseur
+   d une carte plutot que celle d un rectangle. */
+.metric-box{background:
+  repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.030) 11px,rgba(255,255,255,.030) 12px),
+  radial-gradient(90px 70px at 50% 0%,rgba(224,32,32,.16),transparent 72%),
+  linear-gradient(160deg,#232323,#141414 55%,#0b0b0b);
+  border-radius:3px;padding:16px 12px;text-align:center;flex:1;
+  border:1px solid rgba(255,255,255,.08);border-left:3px solid var(--red);
+  position:relative;overflow:hidden;
+  box-shadow:0 16px 34px rgba(0,0,0,.72),0 4px 12px rgba(0,0,0,.6),
+    inset 0 1px 0 rgba(255,255,255,.08),inset 0 -1px 0 rgba(0,0,0,.65),
+    0 0 0 1px rgba(224,32,32,.10),-3px 0 14px rgba(224,32,32,.35)}
+/* Le halo du chiffre lui-meme : sans lui, le blanc reste plat sur le noir. */
+.metric-val{text-shadow:0 0 18px rgba(255,255,255,.20)}
 .metric-box::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--red) var(--pct,0%),transparent var(--pct,0%))}
 .metric-val{font-size:32px;font-family:'Bebas Neue',Impact,sans-serif;letter-spacing:0;line-height:1}
+/* LES CARTES DE LA PAGE EVOLUTION. Elles etaient plates — un aplat et un
+   trait — la ou toutes les autres cartes de l application portent une trame
+   et une ombre. Meme langage, donc, et un filet rouge a gauche qui les
+   rattache a la charpente. */
+.evo-carte{position:relative;overflow:hidden;border-radius:12px;padding:14px;margin-bottom:14px;
+  background:
+    repeating-linear-gradient(-50deg,transparent,transparent 12px,rgba(255,255,255,.022) 12px,rgba(255,255,255,.022) 13px),
+    linear-gradient(168deg,#1b1b1b,#111 50%,#0a0a0a);
+  border:1px solid #242424;border-left:2px solid rgba(224,32,32,.55);
+  box-shadow:0 14px 30px rgba(0,0,0,.62),inset 0 1px 0 rgba(255,255,255,.055),
+    inset 0 -1px 0 rgba(0,0,0,.55)}
+/* Le titre de section : ROUGE. Il etait gris, donc invisible, et la page
+   n'avait aucun point d'entree pour l'oeil. */
+.evo-titre{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red);
+  text-transform:uppercase;margin-bottom:8px;text-shadow:0 0 10px rgba(224,32,32,.45)}
 .metric-label{font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;margin-top:6px;font-weight:700}
 /* Sur un écran de 320 px, trois encadrés côte à côte laissent 59 px de contenu
    chacun. « 1200kg » en Bebas 32 en demande 79, et .metric-box porte
@@ -43572,15 +43601,15 @@ function blocPoids(user){
       <div class="metric-box"><div class="metric-val">${act??'—'}kg</div><div class="metric-label">Actuel</div></div>
       <div class="metric-box"><div class="metric-val" style="color:${colEvol}">${diff!=null?(diff>0?'+':'')+diff+'kg':'—'}</div><div class="metric-label">Évolution</div></div>
     </div>`;
-  const courbe=`<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px">
+  const courbe=`<div class="evo-carte" style="padding:16px">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">
-        <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700">Évolution du poids</span>
+        <span class="evo-titre" style="margin-bottom:0">Évolution du poids</span>
         <span style="font-size:9px;color:var(--text-faint)">points = pesées · trait = moyenne 7 j</span>
       </div>
       ${_courbePesee(serie)||'<div style="font-size:11px;color:var(--sub)">Au moins deux pesées sont nécessaires pour tracer une courbe.</div>'}
     </div>`;
-  const vitesse=neutre?'':`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:14px">
-      <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Vitesse</div>
+  const vitesse=neutre?'':`<div class="evo-carte" style="padding:13px">
+      <div class="evo-titre">Vitesse</div>
       ${_blocVitesse(user)}
     </div>`;
   const neutreNote=neutre?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:14px;font-size:11px;color:var(--sub);line-height:1.6">
