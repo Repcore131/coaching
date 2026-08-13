@@ -980,8 +980,12 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
    donc pas besoin de !important. */
 .caf-cadre>.caf-can{position:absolute;z-index:0;pointer-events:none}
 /* Filet hachure : la barre oblique repetee des planches techniques. */
+/* Le filet passe au ROUGE. Il etait blanc pour rester neutre entre deux
+   blocs ; en rouge il devient la ligne de force de la carte, accordee au
+   titre de section et au trait vertical des en-tetes de l application. */
 .caf-filet{height:5px;background:repeating-linear-gradient(115deg,
-  rgba(255,255,255,.32) 0 3px,transparent 3px 7px);margin:9px 0}
+  rgba(224,32,32,.75) 0 3px,transparent 3px 7px);margin:9px 0;
+  filter:drop-shadow(0 0 4px rgba(224,32,32,.5))}
 .caf-titre{font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;
   font-size:16px;letter-spacing:2.5px;color:#8f8f8f;text-transform:uppercase}
 .caf-titre b{color:#fff;font-weight:400}
@@ -39227,7 +39231,7 @@ function _renderCaffeineEmbedded(){
   const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser),grossesseSuspend(currentUser));
   el.innerHTML=`
     <div style="margin-bottom:12px">
-      <h3 style="margin:0;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--sub);display:flex;align-items:center;gap:5px">${icon('coffee',11)} Caféine</h3>
+      <h3 style="margin:0;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--red);text-shadow:0 0 10px rgba(224,32,32,.45);display:flex;align-items:center;gap:5px">${icon('coffee',11)} Caféine</h3>
     </div>
     <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:14px">
       ${navPrev}
