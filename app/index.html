@@ -17178,7 +17178,11 @@ function _peindreRepos(){
   }
   const tot=woState.reposTotal||1;
   const pc=fini?100:Math.max(0,Math.min(100,(1-reste/tot)*100));
-  const coul=fini?'var(--green)':'var(--red)';
+  // LE DECOMPTE EST BLANC, l anneau porte la couleur. Le chiffre etait rouge
+  // et l anneau cyan : deux teintes vives pour une seule information, et le
+  // rouge — la couleur d alerte de l application — servait a un etat normal.
+  // Vert a la fin : ce n est plus un decompte, c est un etat.
+  const coul=fini?'var(--green)':'#ffffff';
   // ── ANIMATION 4 : L'ANNEAU ET SON POINT DE COURANT ──────────────────────
   // LES DIX DERNIÈRES SECONDES changent deux choses à la fois : la teinte passe
   // au violet — la couleur d'ANTICIPATION du système, celle de la charge — et
@@ -17187,7 +17191,13 @@ function _peindreRepos(){
   // coin de l'œil, et une teinte seule ne s'attrape pas.
   const AVANT_FIN=10;
   const bientot=!fini&&reste<=AVANT_FIN;
-  const anneau=fini?'var(--green)':(bientot?'var(--arc-charge)':'var(--arc-current)');
+  // L ANNEAU EST ROUGE. Les dix dernieres secondes le font passer au BLANC,
+  // pas au violet : le decompte etant desormais blanc, le violet aurait
+  // introduit une troisieme teinte sans rien dire de plus. Les DEUX signaux
+  // de la fin sont conserves — la teinte change ET la cadence du point
+  // double — parce que l athlete ne regarde pas son telephone et qu une
+  // teinte seule ne s attrape pas du coin de l oeil.
+  const anneau=fini?'var(--green)':(bientot?'#ffffff':'var(--red)');
   const cad=bientot?ARC.ambient/2:ARC.ambient;
   // Le délai NÉGATIF est ce qui rend la boucle continue alors que ce bandeau
   // est reconstruit chaque seconde : le nœud qui vient de naître reprend la
@@ -80029,8 +80039,13 @@ vendredi 78 6h 44m
             const i=h1.indexOf('Repos'), j=h1.indexOf('<svg');
             if(i<0||j<0) return _echec('libellé ou anneau absent');
             return i<j?true:_echec('l\'anneau précède le libellé');})());
-          ok('Loin de la fin : cyan, cadence normale',(()=>{
-            if(h1.indexOf('var(--arc-current)')<0) return _echec('pas de cyan');
+          // L'anneau est ROUGE et le décompte BLANC depuis le lot du 13/08 :
+          // le chiffre était rouge et l'anneau cyan, deux teintes vives pour
+          // une seule information.
+          ok('Loin de la fin : anneau rouge, décompte blanc, cadence normale',(()=>{
+            if(h1.indexOf('stroke="var(--red)"')<0) return _echec('anneau pas rouge');
+            if(h1.indexOf('color:#ffffff')<0) return _echec('décompte pas blanc');
+            if(h1.indexOf('var(--arc-current)')>=0) return _echec('le cyan est resté');
             return h1.indexOf('animation-duration:'+ARC.ambient+'ms')>=0
               ?true:_echec('cadence inattendue');})());
 
@@ -80038,10 +80053,13 @@ vendredi 78 6h 44m
           woState.reposFin=Date.now()+7000;
           _peindreRepos();
           const h2=z?z.innerHTML:'';
-          ok('Les 10 dernières secondes : cyan → violet',(()=>{
-            if(h2.indexOf('var(--arc-charge)')<0) return _echec('pas de violet');
-            return h2.indexOf('var(--arc-current)')<0
-              ?true:_echec('le cyan est resté');})());
+          // ROUGE → BLANC, et non plus cyan → violet : le décompte étant
+          // blanc, le violet aurait introduit une troisième teinte sans rien
+          // dire de plus. Les DEUX signaux de la fin sont conservés.
+          ok('Les 10 dernières secondes : anneau rouge → blanc',(()=>{
+            if(h2.indexOf('stroke="#ffffff"')<0) return _echec('anneau pas blanc');
+            return h2.indexOf('stroke="var(--red)"')<0
+              ?true:_echec('le rouge est resté');})());
           ok('Les 10 dernières secondes : cadence du point DOUBLÉE',
              h2.indexOf('animation-duration:'+(ARC.ambient/2)+'ms')>=0,
              'attendu '+(ARC.ambient/2)+'ms');
