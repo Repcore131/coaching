@@ -334,6 +334,15 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
 /* ====== TABS ====== */
 /* Barre d'accueil iOS / geste de retour Android : sans ce retrait, la dernière
    rangée d'onglets passe sous l'indicateur système et devient intappable. */
+/* LA FRESQUE « MA TRANSFORMATION » est faite pour être capturée en une fois.
+   Ces deux valeurs sont ici et non en ligne parce qu'elles doivent pouvoir
+   être reprises : quand même au plancher les photos ne rentrent pas dans un
+   écran, _fresqueTenirEcran pose data-serre et l'en-tête se resserre — c'est
+   lui qui mange la place sur un petit téléphone, pas les photos. */
+.fq-carte{padding:16px 14px 14px}
+.fq-titre{font-size:38px}
+.fq-carte[data-serre]{padding:10px 12px 10px}
+.fq-carte[data-serre] .fq-titre{font-size:26px}
 .tab-bar{display:flex;background:#0c0c0c;border-top:1px solid var(--surface-2);padding:6px 0 10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));flex-shrink:0;scrollbar-width:none}
 .tab-bar::-webkit-scrollbar{display:none}
 .tab-btn{flex:1 1 auto;min-width:0;overflow:hidden;position:relative;background:none;border:none;color:#8a8a8a;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:6px 3px;font-family:Montserrat,sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.2px;transition:.2s;white-space:nowrap}
@@ -29110,6 +29119,7 @@ function showProgressTab(tab,btn){
     // cours de saisie. D'ou posesGenre sans prefixe.
     const BP=posesGenre(null);
     const poses=[['face','DE FACE',BP.face],['back','DE DOS',BP.back],['side','DE PROFIL',BP.side]];
+    const POSES_N=poses.length;
     const cellW=Math.max(72,Math.min(104,Math.floor(((window.innerWidth||360)-124)/Math.max(1,Math.min(bl.length,3)))));
     const first=bl[0],last=bl[bl.length-1];
     const wFirst=getBW(first),wLast=getBW(last);
@@ -29124,7 +29134,10 @@ function showProgressTab(tab,btn){
       return m+' mois';
     })();
 
-    let html=`<div style="background:linear-gradient(160deg,#141414 0%,#0b0b0b 55%,#080808 100%);border:1px solid #202020;border-radius:16px;padding:16px 14px 14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 14px 34px rgba(0,0,0,.55);animation:fadeInUp .35s ease">
+    // --fq porte la largeur d'une photo. C'est une VARIABLE et non une valeur
+    // écrite dans chaque cellule : elle est réajustée après le rendu, une fois
+    // la place réellement disponible mesurée, et une seule écriture suffit.
+    let html=`<div data-fresque class="fq-carte" style="--fq:${cellW}px;background:linear-gradient(160deg,#141414 0%,#0b0b0b 55%,#080808 100%);border:1px solid #202020;border-radius:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 14px 34px rgba(0,0,0,.55);animation:fadeInUp .35s ease">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 17px,rgba(255,255,255,.016) 17px,rgba(255,255,255,.016) 18px);pointer-events:none"></div>
       <div style="position:absolute;left:-16px;top:34px;width:66px;height:150px;background:repeating-linear-gradient(-58deg,#E02020,#E02020 9px,transparent 9px,transparent 22px);opacity:.4;pointer-events:none;z-index:0"></div>
       <div style="position:absolute;right:-16px;bottom:44px;width:66px;height:150px;background:repeating-linear-gradient(-58deg,#E02020,#E02020 9px,transparent 9px,transparent 22px);opacity:.4;pointer-events:none;z-index:0"></div>
@@ -29136,7 +29149,7 @@ function showProgressTab(tab,btn){
             <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:4px;color:#ff5a5a;text-transform:uppercase;white-space:nowrap;text-shadow:0 0 9px rgba(224,32,32,.65)">RepCore</div>
             <div style="flex:1;max-width:52px;height:1px;background:linear-gradient(90deg,rgba(224,32,32,.85),transparent)"></div>
           </div>
-          <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:38px;line-height:.96;letter-spacing:2px;color:#fff;text-shadow:0 0 22px rgba(255,255,255,.42),0 0 44px rgba(224,32,32,.35)">MA TRANSFORMATION</div>
+          <div class="fq-titre" style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;line-height:.96;letter-spacing:2px;color:#fff;text-shadow:0 0 22px rgba(255,255,255,.42),0 0 44px rgba(224,32,32,.35)">MA TRANSFORMATION</div>
           <div style="width:46px;height:2.5px;background:linear-gradient(90deg,#ff3b30,#8d0000);border-radius:2px;margin:9px auto 0;box-shadow:0 0 12px rgba(224,32,32,.85)"></div>
           <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2.8px;color:#7a7a7a;text-transform:uppercase;margin-top:8px">${period?period+' de travail':'Suivi photo'} &nbsp;·&nbsp; ${bl.length} bilan${bl.length>1?'s':''}</div>
         </div>
@@ -29160,7 +29173,7 @@ function showProgressTab(tab,btn){
               <td style="padding:4px 6px;min-width:56px"></td>
               ${bl.map((_,i)=>{
                 const isLast=i===bl.length-1;
-                return `<td style="padding:4px 4px 7px;text-align:center;min-width:${cellW}px">
+                return `<td style="padding:4px 4px 7px;text-align:center;min-width:var(--fq)">
                   <div style="display:inline-block;padding:3px 9px;border-radius:20px;background:${isLast?'linear-gradient(160deg,#c10000,#6d0000)':'#141414'};border:1px solid ${isLast?'rgba(255,90,90,.45)':'#222'};box-shadow:${isLast?'0 0 14px rgba(224,32,32,.5)':'none'}">
                     <span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:13px;letter-spacing:1.5px;color:${isLast?'#fff':'#7a7a7a'};${isLast?'text-shadow:0 0 9px rgba(255,255,255,.7)':''}">B${i+1}</span>
                   </div>
@@ -29171,7 +29184,7 @@ function showProgressTab(tab,btn){
             <tbody>
             ${poses.map(([key,lbl,poseImg])=>`<tr>
               <td style="padding:5px 4px;vertical-align:middle;text-align:center">
-                <img src="${poseImg}" alt="${lbl}" style="height:52px;max-width:52px;object-fit:contain;filter:drop-shadow(0 0 7px rgba(255,255,255,.55));display:block;margin:0 auto 4px">
+                <img src="${poseImg}" alt="${lbl}" style="height:calc(var(--fq) * .5);max-width:52px;object-fit:contain;filter:drop-shadow(0 0 7px rgba(255,255,255,.55));display:block;margin:0 auto 4px">
                 <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:11px;letter-spacing:1.4px;color:#fff;text-shadow:0 0 9px rgba(255,255,255,.4);white-space:nowrap">${lbl}</div>
               </td>
               ${bl.map((b,i)=>{
@@ -29179,8 +29192,8 @@ function showProgressTab(tab,btn){
                 const isLast=i===bl.length-1;
                 return `<td style="padding:4px;vertical-align:top">
                   ${src
-                    ?`<div style="width:${cellW}px;aspect-ratio:.65;border-radius:9px;overflow:hidden;background:#111;cursor:pointer;border:1.5px solid ${isLast?'rgba(224,32,32,.75)':'#242424'};box-shadow:${isLast?'0 0 16px rgba(224,32,32,.45)':'0 5px 14px rgba(0,0,0,.5)'};position:relative" onclick="openPhotoFull(this.querySelector('img').src,'Bilan ${i+1} : ${lbl}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><img src="${src}" style="width:100%;height:100%;object-fit:cover"><div style="position:absolute;inset:0;background:linear-gradient(180deg,transparent 62%,rgba(0,0,0,.55));pointer-events:none"></div></div>`
-                    :`<div style="width:${cellW}px;aspect-ratio:.65;border-radius:9px;background:linear-gradient(180deg,#101010,#0a0a0a);border:1px dashed #1e1e1e;display:flex;align-items:center;justify-content:center;color:#1e1e1e">${icon('image',20)}</div>`}
+                    ?`<div style="width:var(--fq);aspect-ratio:.65;border-radius:9px;overflow:hidden;background:#111;cursor:pointer;border:1.5px solid ${isLast?'rgba(224,32,32,.75)':'#242424'};box-shadow:${isLast?'0 0 16px rgba(224,32,32,.45)':'0 5px 14px rgba(0,0,0,.5)'};position:relative" onclick="openPhotoFull(this.querySelector('img').src,'Bilan ${i+1} : ${lbl}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"><img src="${src}" style="width:100%;height:100%;object-fit:cover"><div style="position:absolute;inset:0;background:linear-gradient(180deg,transparent 62%,rgba(0,0,0,.55));pointer-events:none"></div></div>`
+                    :`<div style="width:var(--fq);aspect-ratio:.65;border-radius:9px;background:linear-gradient(180deg,#101010,#0a0a0a);border:1px dashed #1e1e1e;display:flex;align-items:center;justify-content:center;color:#1e1e1e">${icon('image',20)}</div>`}
                 </td>`;
               }).join('')}
             </tr>`).join('')}
@@ -29199,7 +29212,12 @@ function showProgressTab(tab,btn){
     // Les photos guidées passent DEVANT la fresque des bilans : deux
     // dispositifs distincts, deux sources, et la fresque n'est pas touchée.
     c.innerHTML='<div id="prog-photos-progression"></div>'+html;
-    setTimeout(()=>{ try{ renderPhotosProgression(); }catch(e){} },0);
+    setTimeout(()=>{
+      try{ renderPhotosProgression(); }catch(e){}
+      // APRÈS les photos guidées : elles s'insèrent au-dessus de la fresque et
+      // décalent son sommet. Mesurer avant les aurait ignorées.
+      try{ _fresqueTenirEcran(c,POSES_N,cellW); }catch(e){}
+    },0);
     c.querySelectorAll('[data-scroll-fade]').forEach(el=>setupScrollFade(el));
   } else if(tab==='notes'){
     if(!bl.length){c.innerHTML=emptyState('clipboard','Aucun bilan enregistré.');return;}
@@ -29210,6 +29228,49 @@ function showProgressTab(tab,btn){
   }
 }
 
+// LA FRESQUE DOIT TENIR DANS UN ÉCRAN : elle est faite pour être capturée et
+// repartagée, et une affiche qui demande deux captures n'est pas une affiche.
+//
+// On MESURE plutôt que de calculer à l'aveugle : la hauteur de l'en-tête
+// dépend du nombre de bilans (les trois chiffres n'apparaissent qu'à partir de
+// deux), la barre du bas dépend de l'encoche de l'appareil, et un bloc de
+// photos guidées peut s'insérer au-dessus. Rien de tout cela n'est connu à
+// l'écriture du gabarit.
+//
+// Le raisonnement : on retire de la carte tout ce qui n'est PAS une photo, ce
+// qui donne sa hauteur incompressible ; le reste de la place disponible se
+// répartit sur les lignes de pose.
+function _fresqueTenirEcran(racine,lignes,largeurMax){
+  const carte=(racine||document).querySelector('[data-fresque]');
+  if(!carte||!lignes) return null;
+  // LA POSITION DE LA CARTE NE COMPTE PAS. On peut toujours faire defiler
+  // jusqu'a elle : la seule contrainte est qu'elle ne soit pas PLUS HAUTE que
+  // la zone visible. Mesurer sa position aurait rendu le calcul dependant du
+  // defilement en cours — deja descendu d'un ecran, l'ajustement n'aurait
+  // plus rien fait.
+  const zone=carte.closest('.scroll-area');
+  const dispo=(zone?zone.clientHeight:(window.innerHeight||720))-12;
+  const actuel=parseFloat(carte.style.getPropertyValue('--fq'))||largeurMax;
+  // Une photo occupe sa largeur divisée par son rapport, plus le remplissage
+  // de sa cellule (4 px en haut et en bas, écrits dans le gabarit).
+  const hUne=n=>n/0.65+8;
+  const fixe=carte.offsetHeight-lignes*hUne(actuel);
+  const cible=Math.floor(((dispo-fixe)/lignes-8)*0.65);
+  // PLANCHER À 52 : sous cette taille une photo de progression ne montre plus
+  // rien. Si même là ça ne rentre pas, une fresque lisible qui déborde vaut
+  // mieux qu'une fresque illisible qui rentre.
+  const n=Math.max(52,Math.min(largeurMax,cible));
+  carte.style.setProperty('--fq',n+'px');
+  // LE PLANCHER EST ATTEINT : ce ne sont plus les photos qui débordent, c'est
+  // l'en-tête. On le resserre et on refait le calcul UNE fois — pas de boucle,
+  // le mode resserré est un cran unique et il ne peut pas se rappeler
+  // lui-même : data-serre est déjà posé au second passage.
+  if(n<=52&&!carte.hasAttribute('data-serre')){
+    carte.setAttribute('data-serre','');
+    return _fresqueTenirEcran(racine,lignes,largeurMax);
+  }
+  return n;
+}
 function setEvolGender(g){
   currentUser._evol_gender=g;saveUser();
   showProgressTab('masseGrasse',document.querySelector('#prog-tabs .btn-red'));
