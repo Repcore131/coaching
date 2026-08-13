@@ -951,7 +951,15 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px)}
 .caf-cadre::before{content:"";position:absolute;inset:0;background:#2e2e2e;z-index:0;
   clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px)}
+/* LE FOND, quatre calques : un halo radial derriere la roue, une trame
+   diagonale fine, des rayures longues qui cassent la regularite, et un
+   vignettage qui ferme les bords. Tout en CSS — aucune image a telecharger,
+   aucune a mettre en cache. */
 .caf-cadre::after{content:"";position:absolute;inset:1px;background:
+  radial-gradient(120px 120px at 18% 42%,rgba(255,255,255,.075),transparent 70%),
+  repeating-linear-gradient(58deg,rgba(255,255,255,.028) 0 1px,transparent 1px 9px),
+  repeating-linear-gradient(-32deg,rgba(255,255,255,.017) 0 1px,transparent 1px 23px),
+  radial-gradient(140% 120% at 50% 0%,transparent 40%,rgba(0,0,0,.72) 100%),
   linear-gradient(160deg,#101010,#080808 60%,#050505);z-index:0;
   clip-path:polygon(17px 0,100% 0,100% calc(100% - 17px),calc(100% - 17px) 100%,0 100%,0 17px)}
 .caf-cadre>*{position:relative;z-index:1}
@@ -39018,18 +39026,55 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
   // reste ~100px, moins la marge intérieure. À 44px fixes, « 1200 » débordait
   // sur l'anneau. L'unité « mg » est sortie du même span pour ne plus manger
   // deux caractères de large sur la valeur elle-même.
+  // La roue est passee de 120 a 130 px de cote et son rail de 48 a 44 de
+  // rayon : les graduations occupent la bande exterieure. Nouvelle
+  // circonference, donc, sans quoi l arc de progres serait faux d un tiers.
+  const _circ2=2*Math.PI*44;
+  const _off2=_circ2*(1-pct);
   const _nbChiffres=String(totalMg).length;
   const _tailleChiffres=_nbChiffres<=3?42:_nbChiffres===4?34:27;
   return `<div class="caf-cadre" style="margin-bottom:16px">
+      <!-- CANETTE GENERIQUE, en filaire technique et sans aucun marquage.
+           Elle tient le role compositionnel qu occupe la canette du modele,
+           a droite, sans reprendre l identite d une marque : ni logo, ni
+           nom, ni couleurs de marque. Purement decorative, donc masquee aux
+           lecteurs d ecran. -->
+      <svg viewBox="0 0 60 150" aria-hidden="true" style="position:absolute;right:-6px;bottom:-10px;width:74px;height:auto;opacity:.09;pointer-events:none;z-index:0"
+        fill="none" stroke="#ffffff" stroke-width="2" stroke-linejoin="round">
+        <path d="M14 26 L14 132 Q14 142 24 142 L36 142 Q46 142 46 132 L46 26"/>
+        <path d="M14 26 Q14 18 22 16 L38 16 Q46 18 46 26"/>
+        <ellipse cx="30" cy="15" rx="16" ry="5"/>
+        <ellipse cx="30" cy="15" rx="10" ry="3" stroke-width="1.2" opacity=".7"/>
+        <path d="M18 44 L42 44 M18 56 L42 56" stroke-width="1.2" opacity=".55"/>
+        <path d="M20 76 L40 76" stroke-width="1.2" opacity=".35"/>
+      </svg>
     <div style="display:flex;align-items:center;gap:16px">
-      <div style="position:relative;width:120px;height:120px;flex-shrink:0">
-        <svg viewBox="0 0 120 120" width="120" height="120" style="display:block;filter:drop-shadow(0 0 6px ${color}) drop-shadow(0 0 16px ${color});transition:filter .4s ease">
-          <circle cx="60" cy="60" r="48" fill="none" stroke="#1e1e1e" stroke-width="9"/>
-          <circle cx="60" cy="60" r="48" fill="none" style="stroke:${color};transition:stroke-dashoffset .4s ease,stroke .4s ease" stroke-width="9" stroke-linecap="round" stroke-dasharray="${_circ.toFixed(1)}" stroke-dashoffset="${_off.toFixed(1)}" transform="rotate(-90 60 60)"/>
+      <div style="position:relative;width:130px;height:130px;flex-shrink:0">
+        <svg viewBox="0 0 130 130" width="130" height="130" style="display:block;overflow:visible;filter:drop-shadow(0 0 5px ${color}) drop-shadow(0 0 14px ${color}88);transition:filter .4s ease">
+          <!-- 1. La couronne de graduations. 60 traits, un sur cinq plus long :
+               c est ce qui donne l echelle d un instrument plutot qu un cercle. -->
+          <g stroke="${color}" stroke-linecap="butt">
+            ${Array.from({length:60},(_,i)=>{
+              const a=(i*6-90)*Math.PI/180, gros=i%5===0;
+              const r1=59, r2=gros?52:55.5;
+              return `<line x1="${(65+r1*Math.cos(a)).toFixed(1)}" y1="${(65+r1*Math.sin(a)).toFixed(1)}"
+                x2="${(65+r2*Math.cos(a)).toFixed(1)}" y2="${(65+r2*Math.sin(a)).toFixed(1)}"
+                stroke-width="${gros?1.6:0.8}" opacity="${gros?0.5:0.22}"/>`;}).join('')}
+          </g>
+          <!-- 2. Le rail, INTERROMPU en bas a gauche et en bas a droite. Le
+               modele ouvre le cercle a ces deux endroits ; c est ce qui le
+               distingue d un simple anneau. -->
+          <circle cx="65" cy="65" r="44" fill="none" stroke="#232323" stroke-width="7"
+            stroke-dasharray="${(_circ2*0.30).toFixed(1)} ${(_circ2*0.05).toFixed(1)}" transform="rotate(-108 65 65)"/>
+          <!-- 3. L arc de progres, par-dessus, depuis le haut. -->
+          <circle cx="65" cy="65" r="44" fill="none" style="stroke:${color};transition:stroke-dashoffset .4s ease,stroke .4s ease"
+            stroke-width="7" stroke-linecap="round" stroke-dasharray="${_circ2.toFixed(1)}" stroke-dashoffset="${_off2.toFixed(1)}" transform="rotate(-90 65 65)"/>
+          <!-- 4. Le filet interieur, tres fin : il ferme le cadran. -->
+          <circle cx="65" cy="65" r="37.5" fill="none" stroke="${color}" stroke-width="0.7" opacity=".35"/>
         </svg>
         <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;padding:0 11px;box-sizing:border-box">
           <div style="display:flex;align-items:baseline;justify-content:center;gap:1px;max-width:100%">
-            <span class="txt-hero" style="color:${color};font-size:${_tailleChiffres}px;line-height:1">${totalMg}</span>
+            <span class="txt-hero" style="color:${color};font-size:${_tailleChiffres}px;line-height:1;text-shadow:0 0 12px ${color}66">${totalMg}</span>
             <span style="color:${color};font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:15px;letter-spacing:1px;line-height:1;text-transform:uppercase">mg</span>
           </div>
         </div>
