@@ -1915,6 +1915,9 @@ const COACH_PHOTO='icons/coach.jpg';
         <div id="ch-alerte-palier"></div>
         <div id="ch-premiers-pas"></div>
         <div id="ch-todo"></div>
+        <!-- Croissance hebdomadaire. Après « à traiter » : ce qui presse se lit
+             d'abord, la tendance ensuite. Rempli par loadCoachHome. -->
+        <div id="ch-croissance"></div>
         <button onclick="openCoachPrograms()" class="content-card" style="width:100%;margin-bottom:16px;padding:13px 16px;background:linear-gradient(135deg,#0d0d0d,#1a0000);border:1px solid #2a0000;border-left:3px solid var(--red);border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px;text-align:left;display:flex;align-items:center;justify-content:space-between">
           <span>🗂️ MES PROGRAMMES (H/F)</span>
           <span style="color:var(--red);font-size:13px">→</span>
@@ -13159,6 +13162,161 @@ function _actifsParMois(athletes,now){
   }
   return out;
 }
+// ══════════════════ CROISSANCE HEBDOMADAIRE DU COACH ══════════════════════
+// Combien d'athlètes sont arrivés semaine par semaine, d'après la date de
+// création de leur dossier, et où en est le total.
+const CROISSANCE_SEMAINES=12;
+// Le lundi de la semaine contenant t. getDay() rend 0 pour dimanche : le
+// décalage remet lundi à 0, sans quoi une arrivée du dimanche basculerait
+// dans la semaine suivante.
+function _lundiDe(t){
+  const d=new Date(t); d.setHours(0,0,0,0);
+  d.setDate(d.getDate()-((d.getDay()+6)%7));
+  return d;
+}
+// PURE. Une entrée par semaine, de la plus ancienne à la semaine en cours.
+//
+// Les bornes sont calculées EN DATES et non en millisecondes : ajouter
+// 7 × 864e5 traverse mal un changement d'heure, la frontière dérive d'une
+// heure et un dossier créé dans cet intervalle change de semaine.
+//
+// Les dossiers SANS date de création sont antérieurs au champ — le reste du
+// fichier les traite déjà comme anciens. Ils entrent donc dans le total dès
+// le premier point mais ne font naître aucune barre : on ne leur invente pas
+// une semaine d'arrivée.
+function croissanceHebdo(athletes,now,nbSemaines){
+  const l=Array.isArray(athletes)?athletes.filter(Boolean):[];
+  const n=Math.max(1,Math.floor(nbSemaines||CROISSANCE_SEMAINES));
+  const t=(now instanceof Date)?now.getTime():(typeof now==='number'?now:Date.now());
+  const base=_lundiDe(t);
+  // k est un nombre de SEMAINES, d'ou le x7 : sans lui la fenetre de douze
+  // semaines couvrait douze JOURS, et presque toutes les arrivees tombaient
+  // hors du graphique sans que rien ne le signale.
+  const lundi=k=>{ const d=new Date(base); d.setDate(d.getDate()+k*7); d.setHours(0,0,0,0); return d.getTime(); };
+  let socle=0; const dates=[];
+  for(const a of l){
+    const c=Number(a&&a.createdAt);
+    if(isFinite(c)&&c>0&&c<=t) dates.push(c); else socle++;
+  }
+  const debutFenetre=lundi(-(n-1));
+  let cumul=socle+dates.filter(c=>c<debutFenetre).length;
+  const out=[];
+  for(let i=0;i<n;i++){
+    const debut=lundi(i-(n-1)), fin=lundi(i-(n-1)+1);
+    const nouveaux=dates.filter(c=>c>=debut&&c<fin).length;
+    cumul+=nouveaux;
+    out.push({debut,fin,nouveaux,cumul});
+  }
+  return out;
+}
+// Le tracé. Deux échelles : les barres comptent les arrivées de la semaine,
+// la ligne compte le total. Sur une échelle commune, une barre de 1 face à un
+// total de 40 ferait un pixel de haut.
+function _dessinerCroissance(id,pts){
+  const c=_setupCanvas(id,150); if(!c||!pts||!pts.length) return;
+  const{ctx,w,h}=c;
+  const gL=26,gR=24,gT=12,gB=26;
+  const iw=Math.max(1,w-gL-gR), ih=Math.max(1,h-gT-gB);
+  const maxN=Math.max(1,...pts.map(p=>p.nouveaux));
+  const maxC=Math.max(1,...pts.map(p=>p.cumul));
+  const yN=v=>gT+ih-(v/maxN)*ih;
+  const yC=v=>gT+ih-(v/maxC)*ih;
+  const pas=iw/pts.length;
+  // Un voile sous la zone tracée : sans lui, le graphique flotte sur le noir
+  // et rien ne dit où commence la surface de lecture.
+  const voile=ctx.createLinearGradient(0,gT,0,gT+ih);
+  voile.addColorStop(0,'rgba(255,255,255,.030)');voile.addColorStop(1,'rgba(255,255,255,.004)');
+  ctx.fillStyle=voile;ctx.fillRect(gL,gT,iw,ih);
+  // La grille : pointillés, sauf le socle. Les repères de GAUCHE comptent les
+  // arrivées, ceux de DROITE le total.
+  ctx.font='600 8.5px Montserrat,sans-serif';ctx.textBaseline='middle';
+  [0,.5,1].forEach(f=>{
+    const y=gT+ih-f*ih;
+    ctx.strokeStyle=f===0?'#333':'#232323';ctx.lineWidth=1;
+    ctx.setLineDash(f===0?[]:[3,4]);
+    ctx.beginPath();ctx.moveTo(gL,y);ctx.lineTo(gL+iw,y);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='rgba(255,90,90,.55)';ctx.textAlign='right';
+    ctx.fillText(String(Math.round(f*maxN)),gL-5,y);
+    ctx.fillStyle='rgba(34,197,94,.5)';ctx.textAlign='left';
+    ctx.fillText(String(Math.round(f*maxC)),gL+iw+5,y);
+  });
+  // LES BARRES. Dégradé vertical, sommet arrondi, lueur : un aplat plat se
+  // lit comme un tableau, pas comme un graphique.
+  const bw=Math.max(3,Math.min(18,pas*0.52));
+  pts.forEach((pt,i)=>{
+    if(!pt.nouveaux) return;
+    const x=gL+i*pas+(pas-bw)/2, y=yN(pt.nouveaux), bh=gT+ih-y;
+    const g=ctx.createLinearGradient(0,y,0,gT+ih);
+    g.addColorStop(0,'#ff4a4a');g.addColorStop(1,'#6d0000');
+    ctx.fillStyle=g;ctx.shadowColor='rgba(224,32,32,.75)';ctx.shadowBlur=10;
+    ctx.beginPath();
+    if(ctx.roundRect) ctx.roundRect(x,y,bw,bh,[3,3,0,0]); else ctx.rect(x,y,bw,bh);
+    ctx.fill();ctx.shadowBlur=0;
+    // Un liseré clair sur l'arête haute : c'est lui qui donne le relief.
+    ctx.strokeStyle='rgba(255,255,255,.35)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(x+1,y+.5);ctx.lineTo(x+bw-1,y+.5);ctx.stroke();
+  });
+  // LA LIGNE DU TOTAL, sur les milieux de semaine.
+  const ptsC=pts.map((pt,i)=>({x:gL+i*pas+pas/2,y:yC(pt.cumul)}));
+  if(ptsC.length>1){
+    const g=ctx.createLinearGradient(0,gT,0,gT+ih);
+    g.addColorStop(0,'rgba(34,197,94,.30)');g.addColorStop(1,'rgba(34,197,94,.02)');
+    ctx.beginPath();ctx.moveTo(ptsC[0].x,gT+ih);
+    ptsC.forEach(q=>ctx.lineTo(q.x,q.y));
+    ctx.lineTo(ptsC[ptsC.length-1].x,gT+ih);ctx.closePath();
+    ctx.fillStyle=g;ctx.fill();
+    ctx.strokeStyle='#22c55e';ctx.lineWidth=2;ctx.lineJoin='round';ctx.lineCap='round';
+    ctx.shadowColor='#22c55e';ctx.shadowBlur=9;
+    ctx.beginPath();ptsC.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.stroke();
+    ctx.shadowBlur=0;
+  }
+  // Le dernier point seul est marqué : c'est la valeur d'aujourd'hui.
+  const dern=ptsC[ptsC.length-1];
+  ctx.fillStyle='#22c55e';ctx.shadowColor='#22c55e';ctx.shadowBlur=12;
+  ctx.beginPath();ctx.arc(dern.x,dern.y,3.5,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;ctx.strokeStyle='#0b0b0b';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.arc(dern.x,dern.y,3.5,0,Math.PI*2);ctx.stroke();
+  // Les dates, une sur deux quand la place manque.
+  ctx.fillStyle='#555';ctx.font='700 8.5px Montserrat,sans-serif';
+  ctx.textAlign='center';ctx.textBaseline='alphabetic';
+  const saut=pas<26?2:1;
+  pts.forEach((pt,i)=>{
+    if((pts.length-1-i)%saut) return;
+    const d=new Date(pt.debut);
+    ctx.fillText(d.getDate()+'/'+(d.getMonth()+1),gL+i*pas+pas/2,h-4);
+  });
+}
+// La carte. Elle n'apparaît pas sans athlète : un graphique vide n'apprend
+// rien et occupe la place de ce qui compte quand on démarre.
+function _htmlCroissanceCoach(athletes){
+  const l=Array.isArray(athletes)?athletes.filter(Boolean):[];
+  if(!l.length) return '';
+  const pts=croissanceHebdo(l,Date.now(),CROISSANCE_SEMAINES);
+  const total=pts[pts.length-1].cumul;
+  // Sur les quatre dernières semaines : la fenêtre que lit un coach pour
+  // savoir si ça bouge, sans être trop courte pour dire quoi que ce soit.
+  const recent=pts.slice(-4).reduce((n,p)=>n+p.nouveaux,0);
+  const meilleure=pts.reduce((m,p)=>p.nouveaux>m.nouveaux?p:m,pts[0]);
+  const dt=d=>new Date(d).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
+  return `<div class="evo-carte" style="padding:15px 14px 12px">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:2px">
+      <div class="evo-titre" style="margin-bottom:0">Arrivées par semaine</div>
+      <div style="font-size:var(--fs-xs);font-weight:800;color:${recent>0?'#22c55e':'var(--sub)'}">${recent>0?'+':''}${recent} sur 4 semaines</div>
+    </div>
+    <div style="font-size:9.5px;color:var(--text-faint);letter-spacing:.4px;margin-bottom:9px">
+      D'après la date de création de chaque dossier.</div>
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
+      <span style="display:inline-flex;align-items:center;gap:5px;font-size:9px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#ff5a5a">
+        <span style="width:9px;height:9px;border-radius:2px;background:linear-gradient(180deg,#ff4a4a,#6d0000);box-shadow:0 0 7px rgba(224,32,32,.8)"></span>Arrivées</span>
+      <span style="display:inline-flex;align-items:center;gap:5px;font-size:9px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#22c55e">
+        <span style="width:11px;height:2px;border-radius:2px;background:#22c55e;box-shadow:0 0 7px rgba(34,197,94,.8)"></span>Total (${total})</span>
+    </div>
+    <canvas id="ch-croissance-toile" height="150" style="width:100%;display:block"></canvas>
+    <div style="font-size:9.5px;color:var(--text-faint);line-height:1.5;margin-top:7px">
+      ${meilleure.nouveaux>0?`Meilleure semaine : ${meilleure.nouveaux} arrivée${meilleure.nouveaux>1?'s':''} le ${dt(meilleure.debut)}.`:'Aucune arrivée sur les 12 dernières semaines.'}
+    </div>
+  </div>`;
+}
 // PURE. Entrées et sorties du TRIMESTRE en cours.
 // Une pause déclarée n'est JAMAIS une sortie : c'est tout l'objet du compteur
 // séparé — un coach qui lit « 4 sorties » alors que trois sont des pauses
@@ -13446,6 +13604,13 @@ function loadCoachHome(){
   }
   clients.sort((a,b)=>urgencyScore(b)-urgencyScore(a));
   renderTodoBlock(clients);
+  // La toile est tracée APRÈS son insertion : _setupCanvas mesure la largeur
+  // du conteneur, et un élément pas encore dans le document en mesure zéro.
+  try{
+    const _zc=document.getElementById('ch-croissance');
+    if(_zc){ _zc.innerHTML=_htmlCroissanceCoach(clients);
+      if(clients.length) setTimeout(()=>{ try{ _dessinerCroissance('ch-croissance-toile',croissanceHebdo(clients,Date.now(),CROISSANCE_SEMAINES)); }catch(e){} },0); }
+  }catch(e){}
   // Reecrire innerHTML remet le panneau en haut : le coach qui parcourait sa
   // liste y etait ramene a chaque reveil. On releve la position avant, on la
   // repose apres.
