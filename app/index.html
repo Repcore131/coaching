@@ -17220,7 +17220,10 @@ function _peindreRepos(){
     <div style="display:flex;align-items:center;gap:10px">
       <div style="flex:1;min-width:0">
         <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-          ${fini?'Repos terminé':'Repos'}${woState.reposLib?' · '+escapeHtml(woState.reposLib):''}
+          <!-- Sans le nom de l'exercice : il était tronqué faute de place
+               et redondant avec l'écran, qui l'affiche en entier juste
+               au-dessus. Le bandeau n'a qu'une chose à dire : le temps. -->
+          ${fini?'Récup terminée':'Temps de récup'}
         </div>
         ${anneauHtml}
       </div>
@@ -69647,7 +69650,7 @@ function testExercices(){
       woState={exercises:[],sessionData:{},startTime:Date.now(),
         reposFin:Date.now()-12000,reposTotal:120,reposVibre:true,reposLib:''};
       _peindreRepos();
-      const vu=z&&z.style.display!=='none'&&/Repos terminé/.test(z.innerHTML)&&z.innerHTML.indexOf('+0:12')>=0;
+      const vu=z&&z.style.display!=='none'&&/Récup terminée/.test(z.innerHTML)&&z.innerHTML.indexOf('+0:12')>=0;
       annulerRepos(); woState=sauveWo;
       return !!vu;})(),(document.getElementById('wo-repos')||{}).innerHTML?'':'zone absente');
     ok('Au-delà de la fenêtre, le bandeau est masqué',(()=>{
@@ -80036,7 +80039,9 @@ vendredi 78 6h 44m
             // « Repo… ». Au-dessus, il retrouve les ~110 px de la colonne.
             // C'est aussi la disposition d'origine : libellé en haut, chiffre
             // en dessous. L'anneau a pris la place du chiffre, pas celle du mot.
-            const i=h1.indexOf('Repos'), j=h1.indexOf('<svg');
+            // Le libellé est « Temps de récup » depuis le 13/08 : le nom de
+            // l'exercice a été retiré, tronqué et redondant.
+            const i=h1.indexOf('Temps de récup'), j=h1.indexOf('<svg');
             if(i<0||j<0) return _echec('libellé ou anneau absent');
             return i<j?true:_echec('l\'anneau précède le libellé');})());
           // L'anneau est ROUGE et le décompte BLANC depuis le lot du 13/08 :
