@@ -26457,7 +26457,12 @@ function _nomsRemplacement(){
 // PURE. Les candidats, filtrés par la recherche. L'exercice courant ne se
 // propose pas lui-même. Tous les mots doivent être présents, comme dans la
 // banque : un ET, pas un OU.
+// LE CATALOGUE EST RESERVE AU COACH. Un athlete ne recoit AUCUN candidat :
+// il saisit lui-meme le nom du mouvement qu il a fait. La garde est ici, a
+// la source, et non dans le rendu — un ecran qui n affiche pas une liste
+// qu il a quand meme construite reste une fuite en attente.
 function candidatsRemplacement(nomCourant,q){
+  if(!currentUser||currentUser.role!=='coach') return [];
   const cur=exKey(nomCourant||'');
   const mots=_normRech(q).split(' ').filter(Boolean);
   return _nomsRemplacement().filter(n=>{
@@ -26484,20 +26489,52 @@ function ouvrirRemplacement(idx){
   if(drapeauQuelconqueActif(currentUser)){
     toast('Rien n\'est proposé tant que le drapeau est levé.','var(--orange)'); return false; }
   _remplIdx=idx;
+  const _estCoach=!!(currentUser&&currentUser.role==='coach');
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
     `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
       <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:16px 16px 0 0;padding:18px;width:100%;max-width:520px;max-height:88vh;display:flex;flex-direction:column">
         <div style="font-size:15px;font-weight:800;margin-bottom:3px">Remplacer pour aujourd'hui</div>
-        <div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:10px">
-          Ton programme n'est pas modifié. Ton coach verra l'échange.
-          Choisis toi-même : l'app ne trie pas encore ces mouvements pour toi.
+        ${_estCoach?`<div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:10px">
+          Ton programme n\'est pas modifié. Choisis dans la banque d\'exercices.
         </div>
         <input id="rempl-q" type="search" inputmode="search" placeholder="Chercher un mouvement"
           oninput="_rendreListeRemplacement()" style="width:100%;margin-bottom:10px">
-        <div id="rempl-liste" style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch"></div>
+        <div id="rempl-liste" style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch"></div>`
+        :`<div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:12px">
+          Ton programme n\'est pas modifié, et ton coach verra l\'échange.
+          <b style="color:#ddd">Écris le nom du mouvement que tu as fait à la place.</b>
+        </div>
+        <input id="rempl-manuel" type="text" maxlength="60" autocomplete="off"
+          placeholder="Ex : développé incliné haltères"
+          onkeydown="if(event.key===&quot;Enter&quot;){event.preventDefault();validerRemplacementManuel()}"
+          style="width:100%;margin-bottom:10px">
+        <div id="rempl-erreur" style="font-size:11px;color:var(--orange);line-height:1.5;margin-bottom:8px;display:none"></div>
+        <button class="btn btn-red" onclick="validerRemplacementManuel()" style="font-size:12px;letter-spacing:1px">Remplacer</button>
+        <div style="font-size:10.5px;color:var(--text-faint);line-height:1.55;margin-top:10px">
+          La banque d\'exercices est tenue par ton coach : c\'est lui qui choisit
+          les mouvements de ton programme.
+        </div>`}
       </div></div>`);
-  _rendreListeRemplacement();
+  if(_estCoach) _rendreListeRemplacement();
+  else setTimeout(()=>{ const i=document.getElementById('rempl-manuel'); if(i) i.focus(); },120);
+  return true;
+}
+// La saisie libre de l athlete. Le nom est NETTOYE mais jamais devine : on
+// ne corrige pas son orthographe, on ne rapproche pas d une entree du guide.
+// Ce qu il a ecrit est ce que le coach lira.
+function validerRemplacementManuel(){
+  const i=document.getElementById('rempl-manuel');
+  const e=document.getElementById('rempl-erreur');
+  const dire=m=>{ if(e){ e.textContent=m; e.style.display=m?'block':'none'; } };
+  if(!i) return false;
+  const nom=String(i.value||'').replace(/\s+/g,' ').trim();
+  if(nom.length<3){ dire('Écris le nom du mouvement (3 caractères minimum).'); return false; }
+  const ex=((typeof woState!=='undefined'&&woState&&woState.exercises)||[])[_remplIdx];
+  if(!ex){ dire('Cet exercice n’existe plus.'); return false; }
+  if(exKey(nom)===exKey(ex.name||'')){ dire('C’est déjà le mouvement en cours.'); return false; }
+  dire('');
+  _appliquerSubstitut(_remplIdx,nom);
   return true;
 }
 function _rendreListeRemplacement(){
