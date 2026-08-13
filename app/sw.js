@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v687';
+const CACHE = 'repcore-v688';
 const SW_DATA = 'repcore-sw-data'; // persistent across updates — not wiped by activate
 
 // DÉLAI DE GARDE sur index.html. Le handler était en network-first avec un
