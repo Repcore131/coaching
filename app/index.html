@@ -39267,27 +39267,105 @@ function _drawCaffeineHistory(wKg,canvasId='caff-history-chart',daysOverride){
     data.push(total);
   }
   const maxVal=Math.max(thr.red*1.1,...data,1);
-  const PAD={t:10,b:24,l:8,r:8};
+  const PAD={t:14,b:24,l:10,r:10};
   const chartW=W-PAD.l-PAD.r,chartH=H-PAD.t-PAD.b;
   const slotW=chartW/28;
   const barW=Math.max(4,slotW-3);
-  const yRed=PAD.t+chartH*(1-thr.red/maxVal);
+  const yDe=mg=>PAD.t+chartH*(1-mg/maxVal);
+  const yRed=yDe(thr.red);
+  // Les quatre paliers, ceux-la memes que la roue et la liste. Une seule
+  // ligne rouge ne disait pas ou se situait une barre a mi-hauteur.
+  const REPERES=[[thr.green,'#ffffff',.16],[thr.yellow,null,.16],
+                 [thr.orange,'#f59e0b',.20],[thr.red,'#ef4444',.55]];
+  // Les couleurs des jetons ne sont pas lisibles par un canvas : il faut des
+  // valeurs litterales. Resolues UNE fois, sur l element, plutot que codees
+  // en dur — sans quoi elles divergeraient du reste de l application.
+  const _cs=getComputedStyle(document.documentElement);
+  const _jeton=n=>(_cs.getPropertyValue(n)||'').trim()||'#888';
   const drawFrame=p=>{
     ctx.clearRect(0,0,W,H);
-    ctx.save();ctx.setLineDash([4,4]);ctx.strokeStyle='#ef4444';ctx.lineWidth=1;ctx.globalAlpha=0.45;
-    ctx.beginPath();ctx.moveTo(PAD.l,yRed);ctx.lineTo(W-PAD.r,yRed);ctx.stroke();
-    ctx.globalAlpha=1;ctx.setLineDash([]);ctx.restore();
-    data.forEach((v,i)=>{
-      if(!v) return;
-      const barH=Math.max(2,(v/maxVal)*chartH)*p;
-      const x=PAD.l+i*slotW+(slotW-barW)/2;
-      const y=PAD.t+chartH-barH;
-      ctx.fillStyle=_caffeineColor(v,thr);
-      if(ctx.roundRect){ctx.beginPath();ctx.roundRect(x,y,barW,barH,2);ctx.fill();}
-      else{ctx.fillRect(x,y,barW,barH);}
+    // ── 1. Le fond de traçage ────────────────────────────────────────
+    const gFond=ctx.createLinearGradient(0,PAD.t,0,PAD.t+chartH);
+    gFond.addColorStop(0,'rgba(255,255,255,.030)');
+    gFond.addColorStop(1,'rgba(255,255,255,.006)');
+    ctx.fillStyle=gFond;ctx.fillRect(PAD.l,PAD.t,chartW,chartH);
+    // La meme trame diagonale que la carte : les deux doivent appartenir au
+    // meme objet, pas se juxtaposer.
+    ctx.save();
+    ctx.beginPath();ctx.rect(PAD.l,PAD.t,chartW,chartH);ctx.clip();
+    ctx.strokeStyle='rgba(255,255,255,.028)';ctx.lineWidth=1;
+    for(let x=-chartH;x<chartW+chartH;x+=9){
+      ctx.beginPath();ctx.moveTo(PAD.l+x,PAD.t);ctx.lineTo(PAD.l+x+chartH,PAD.t+chartH);ctx.stroke();
+    }
+    ctx.restore();
+    // ── 2. Les quatre reperes ────────────────────────────────────────
+    REPERES.forEach(([mg,col,alpha])=>{
+      if(!(mg>0)||mg>maxVal) return;
+      const y=yDe(mg);
+      ctx.save();
+      ctx.setLineDash(mg===thr.red?[5,4]:[2,5]);
+      // `null` veut dire « prends le jeton --info » : un canvas ne sait pas
+      // lire var(--info), et l ecrire en dur ici le ferait diverger du reste.
+      ctx.strokeStyle=col||_jeton('--info');
+      ctx.globalAlpha=alpha;ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(PAD.l,y);ctx.lineTo(W-PAD.r,y);ctx.stroke();
+      ctx.restore();
     });
-    ctx.fillStyle='#555';ctx.font='9px sans-serif';ctx.textAlign='center';
-    [0,7,14,21,27].forEach(i=>{ctx.fillText(labels[i]||'',PAD.l+i*slotW+slotW/2,H-6);});
+    // ── 3. Le socle ──────────────────────────────────────────────────
+    const gSocle=ctx.createLinearGradient(PAD.l,0,W-PAD.r,0);
+    gSocle.addColorStop(0,'rgba(255,255,255,0)');
+    gSocle.addColorStop(.5,'rgba(255,255,255,.30)');
+    gSocle.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.fillStyle=gSocle;ctx.fillRect(PAD.l,PAD.t+chartH,chartW,1);
+    // ── 4. Les barres ────────────────────────────────────────────────
+    data.forEach((v,i)=>{
+      const x=PAD.l+i*slotW+(slotW-barW)/2;
+      const base=PAD.t+chartH;
+      if(!v){
+        // UN JOUR SANS PRISE N EST PAS UN JOUR SANS DONNEE, mais rien ne les
+        // distinguait : les deux etaient du vide. Un point les separe.
+        ctx.fillStyle='rgba(255,255,255,.13)';
+        ctx.beginPath();ctx.arc(x+barW/2,base-2.5,1.2,0,Math.PI*2);ctx.fill();
+        return;
+      }
+      const barH=Math.max(2,(v/maxVal)*chartH)*p;
+      const y=base-barH;
+      const col=_caffeineColor(v,thr);
+      const c=col.indexOf('var(')===0?_jeton(col.slice(4,-1)):col;
+      const auj=(i===27);
+      ctx.save();
+      // Ombre portee : c est elle qui decolle la barre du fond.
+      ctx.shadowColor=c;ctx.shadowBlur=auj?12:5;
+      const g=ctx.createLinearGradient(0,y,0,base);
+      g.addColorStop(0,c);
+      g.addColorStop(1,'rgba(0,0,0,.55)');
+      ctx.fillStyle=g;
+      if(ctx.roundRect){ctx.beginPath();ctx.roundRect(x,y,barW,barH,2);ctx.fill();}
+      else ctx.fillRect(x,y,barW,barH);
+      ctx.restore();
+      // Liseré clair sur l arete gauche : le volume tient a ce seul trait.
+      if(barW>=4&&barH>3){
+        ctx.fillStyle='rgba(255,255,255,.34)';
+        ctx.fillRect(x,y+1,1,barH-1);
+      }
+      // LE JOUR MEME : contour et repere, pour le trouver sans compter.
+      if(auj&&barH>3){
+        ctx.save();
+        ctx.strokeStyle='#ffffff';ctx.globalAlpha=.65;ctx.lineWidth=1;
+        if(ctx.roundRect){ctx.beginPath();ctx.roundRect(x+.5,y+.5,barW-1,barH-1,2);ctx.stroke();}
+        else ctx.strokeRect(x+.5,y+.5,barW-1,barH-1);
+        ctx.globalAlpha=1;ctx.fillStyle=c;
+        ctx.beginPath();ctx.moveTo(x+barW/2,y-3);ctx.lineTo(x+barW/2-3,y-8);ctx.lineTo(x+barW/2+3,y-8);
+        ctx.closePath();ctx.fill();
+        ctx.restore();
+      }
+    });
+    // ── 5. Les dates ─────────────────────────────────────────────────
+    ctx.fillStyle='#6a6a6a';ctx.font='700 9px Montserrat,sans-serif';ctx.textAlign='center';
+    [0,7,14,21,27].forEach(i=>{
+      if(i===27){ctx.save();ctx.fillStyle='#ffffff';ctx.fillText(labels[i]||'',PAD.l+i*slotW+slotW/2,H-6);ctx.restore();return;}
+      ctx.fillText(labels[i]||'',PAD.l+i*slotW+slotW/2,H-6);
+    });
   };
   if(canvas._histAnimated){drawFrame(1);return;}
   canvas._histAnimated=true;
