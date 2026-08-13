@@ -5282,6 +5282,10 @@ function renderDataTable(columns,rows,opts={}){
     stickyCol0=false,firstColMinWidth=null,bodyLabelBg=null,
     pad='5px 8px',dataPad=null,wrapperStyle='',mb='16px',
     emptyVal='—',emptyColor='var(--sub)',valueColor='#fff',
+    // OPT-IN toutes les deux : ce rendu sert a plusieurs tableaux, qui n ont
+    // pas a changer parce que celui des mensurations en avait besoin.
+    zebre=false,   // une ligne sur deux legerement eclaircie
+    unite='',      // suffixe d affichage, jamais stocke dans la donnee
   }=opts;
   const dp=dataPad||pad;
   const cbS=cellBorderSide==='bottom'?`border-bottom:1px solid ${cellBorder};`:`border:1px solid ${cellBorder};`;
@@ -5290,15 +5294,19 @@ function renderDataTable(columns,rows,opts={}){
   const sd=stickyCol0?'position:sticky;left:0;z-index:1;':'';
   const thBase=`background:${headerBg};color:${headerColor};font-size:var(--fs-xs);font-weight:800;white-space:nowrap;border:1px solid ${border};text-transform:uppercase;letter-spacing:.5px;padding:${pad};`;
   const thead=`<thead><tr>${columns.map((col,i)=>`<th style="${thBase}text-align:${i===0?'left':'center'};${i===0?sh+fcmw:''}">${col}</th>`).join('')}</tr></thead>`;
-  const tbody=`<tbody>${rows.map(row=>{
+  const tbody=`<tbody>${rows.map((row,ri)=>{
+    // Le zebrage est pose sur la LIGNE, label compris : eclaircir les seules
+    // cellules de valeurs aurait coupe la ligne en deux au lieu de la tenir.
+    const zb=zebre&&(ri%2===1)?'rgba(255,255,255,.035)':'';
     const lBg=row.labelBg||(bodyLabelBg||headerBg);
     const lCol=row.labelColor||headerColor;
-    const lSt=`background:${lBg};color:${lCol};font-size:var(--fs-xs);font-weight:800;padding:${pad};white-space:nowrap;border:1px solid ${border};${sd}`;
+    const lSt=`background:${zb?`linear-gradient(${zb},${zb}),${lBg}`:lBg};color:${lCol};font-size:var(--fs-xs);font-weight:800;padding:${pad};white-space:nowrap;border:1px solid ${border};${sd}`;
     const cells=row.values.map((v,ci)=>{
       const empty=v===null||v===undefined||v===0||v==='0'||v==='';
-      const display=empty?emptyVal:String(v);
+      // L unite ne s ajoute JAMAIS a une case vide : « — cm » n a pas de sens.
+      const display=empty?emptyVal:(String(v)+(unite?' '+unite:''));
       const color=row.valueStyleFn?row.valueStyleFn(v,ci,empty):(empty?`color:${emptyColor};`:`color:${valueColor};`);
-      return `<td style="font-size:var(--fs-xs);font-weight:700;padding:${dp};text-align:center;white-space:nowrap;${cbS}${color}">${display}</td>`;
+      return `<td style="font-size:var(--fs-xs);font-weight:700;padding:${dp};text-align:center;white-space:nowrap;${cbS}${color}${zb?`background-image:linear-gradient(${zb},${zb});`:''}">${display}</td>`;
     }).join('');
     return `<tr><td style="${lSt}">${row.label}</td>${cells}</tr>`;
   }).join('')}</tbody>`;
@@ -28888,7 +28896,7 @@ function showProgressTab(tab,btn){
       {stickyCol0:true,firstColMinWidth:'130px',bodyLabelBg:'var(--dark)',
        wrapperStyle:'border-radius:12px;border:1px solid var(--border);background:var(--dark)',
        pad:'7px 14px',cellBorder:'#141414',cellBorderSide:'bottom',mb:'16px',
-       emptyColor:'var(--sub)',valueColor:'#f0f0f0'}
+       emptyColor:'var(--sub)',valueColor:'#f0f0f0',zebre:true,unite:'cm'}
     )+miniCharts;
     c.querySelectorAll('[data-scroll-fade]').forEach(el=>setupScrollFade(el));
     setTimeout(()=>{
