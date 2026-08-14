@@ -48711,6 +48711,15 @@ async function _verifyAccessCode(raw,athleteName){
   try{const r=await fetch(url);if(!r.ok)throw new Error(r.status);data=await r.json();}
   catch(e){throw new Error('Impossible de vérifier le code : vérifie ta connexion.');}
   if(!data) throw new Error('Code invalide ou introuvable. Vérifie avec ton coach.');
+  // AVANT TOUT LE RESTE, et surtout avant le PATCH plus bas : une invitation
+  // coach acceptée ici était CONSOMMÉE — marquée redeemed:true — alors qu'elle
+  // ne servait à rien à un athlète. Le coach invité trouvait ensuite son propre
+  // code « déjà utilisé ».
+  //
+  // _verifierCodeSansConsommer refusait déjà ce cas ; les deux fonctions
+  // disaient donc le contraire sur le même code, et seule celle qui consomme
+  // laissait passer.
+  if(data.type==='coach') throw new Error("Ce code est une invitation coach, pas un code d'accès athlète. Crée ton compte depuis l'Espace Coach.");
   if(!data.active) throw new Error('Ce code a été désactivé par ton coach.');
   if(Date.now()>data.expiry) throw new Error('Ce code a expiré. Demande un nouveau code à ton coach.');
   if(data.redeemed&&data.athleteEmail&&data.athleteEmail!==currentUser.email)
