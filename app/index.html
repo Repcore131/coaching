@@ -3550,7 +3550,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- Bilan coaching -->
     <div onclick="openBilan('coaching')" style="background:var(--surface-1);border:1px solid var(--border);border-radius:16px;padding:20px;cursor:pointer;margin-bottom:14px" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="font-weight:900;font-size:15px;margin-bottom:6px;letter-spacing:.5px;text-transform:uppercase;color:var(--red)">BILAN COACHING</div>
-      <div style="font-size:13px;font-weight:700;margin-bottom:4px;color:#ddd">Bilan toutes les <span id="bilan-freq-display">2 semaines</span> :</div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px;color:#ddd"><span id="bilan-freq-display">Bilan toutes les 2 semaines :</span></div>
       <div class="sub" style="font-size:12px;line-height:1.5">Poids, mensurations, ressenti, photos.</div>
       <div style="font-size:11px;color:#666;margin-top:10px;line-height:1.65;border-top:1px solid #1e1e1e;padding-top:10px">
         Cela me permet de voir ton évolution, de structurer ta pratique et d'ajuster tes programmes au besoin.
@@ -26012,7 +26012,11 @@ function setBilanFreq(weeks){
 function _renderBilanChoiceUI(){
   const freq=currentUser._bilanFreq||2;
   const fd=document.getElementById('bilan-freq-display');
-  if(fd) fd.textContent=freq===1?'semaine':'2 semaines';
+  // LA PHRASE ENTIERE, et non le seul nombre. « Bilan toutes les » vivait dans
+  // le gabarit et imposait un pluriel : en hebdomadaire, la carte annonçait
+  // « Bilan toutes les semaine ». Les deux formulations peuvent maintenant ne
+  // pas se ressembler, ce qui est justement ce que le français demande.
+  if(fd) fd.textContent=freq===1?'Bilan chaque semaine :':'Bilan toutes les 2 semaines :';
   [1,2].forEach(v=>{
     const btn=document.getElementById('bilan-freq-btn-'+v);
     if(!btn) return;
