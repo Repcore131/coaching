@@ -19645,7 +19645,7 @@ function startWorkoutSession(idx){
   // les poser par-dessus un écran de séance qu'on vient d'ouvrir enchaînerait
   // deux interruptions.
   if(ouvrirApercuSeance(idx)) return;
-  launchWorkout(sess,idx);
+  demarrerSeance(sess,idx);
 }
 
 // ======= CYCLE LOGIC =======
@@ -19690,7 +19690,7 @@ function cycleArretAProposer(user){
 function _cycleLancer(){
   const cfg=currentUser.sessions_config||initSessionsConfig();
   const idx=window._pendingWorkoutIdx||0;
-  launchWorkout(cfg[idx],idx);
+  demarrerSeance(cfg[idx],idx);
 }
 function setCyclePhase(phase,el){
   if(el) document.querySelectorAll('#cycle-options .obj-opt').forEach(e=>e.classList.remove('sel'));
@@ -20004,6 +20004,45 @@ function _woLoadSnap(){
     return snap;
   }catch{return null;}
 }
+// PURE. Combien de séries portent done===true dans un instantané ? C'est ce
+// nombre qui distingue une séance qu'on a vraiment commencée d'un écran
+// ouvert puis quitté — et donc ce qui mérite une question avant écrasement.
+function _woSeriesValidees(snap){
+  let n=0;
+  try{
+    const d=snap&&snap.sessionData;
+    if(!d) return 0;
+    for(const k of Object.keys(d))
+      for(const st of ((d[k]&&d[k].sets)||[]))
+        if(st&&st.done===true) n++;
+  }catch(e){ return 0; }
+  return n;
+}
+// LE PRÉAMBULE DE LANCEMENT. launchWorkout remplace woState en bloc : sans
+// cette question, une séance mise en pause disparaissait au premier
+// « Démarrer », avec toutes ses séries saisies.
+//
+// SYNCHRONE QUAND IL N'Y A RIEN À DEMANDER : pas d'instantané, ou aucune
+// série validée, et on appelle launchWorkout directement — même pile
+// d'appels qu'avant, aucune promesse insérée.
+function demarrerSeance(sessConfig,slotIdx){
+  const snap=_woLoadSnap();
+  const n=_woSeriesValidees(snap);
+  if(!n) return launchWorkout(sessConfig,slotIdx);
+  const nom=(snap&&snap.progName)||'Séance';
+  return rcConfirm(
+    'Une séance est déjà en cours',
+    nom+' : '+n+' série'+(n>1?'s':'')+' déjà validée'+(n>1?'s':'')
+      +'. Démarrer une nouvelle séance effacera ce qui a été saisi.',
+    'Démarrer quand même',
+    'Reprendre la séance en cours'
+  ).then(ok=>{
+    // FALSE couvre le bouton de refus ET le toucher du voile : les deux mènent
+    // à la reprise, jamais à l'écrasement.
+    if(!ok) return woResumeAndGo();
+    return launchWorkout(sessConfig,slotIdx);
+  });
+}
 function woResumeAndGo(){
   const snap=_woLoadSnap();
   if(!snap){document.getElementById('clh-resume-workout').style.display='none';return;}
@@ -20050,7 +20089,11 @@ function cancelWorkout(){
 // que l appelant garde la forme d avant : if(!await rcConfirm(...)) return.
 // Repli sur confirm() natif si l ecran manque — mieux vaut une boite laide
 // qu un geste irreversible declenche sans question.
-function rcConfirm(titre,texte,libelleOk){
+// `libelleNon` est optionnel et vaut « Annuler » : les appels existants ne
+// changent pas. Il est REPOSE a chaque ouverture, comme celui du bouton
+// d'action — sans quoi le premier appel qui le personnalise le laisserait tel
+// quel pour tous les suivants.
+function rcConfirm(titre,texte,libelleOk,libelleNon){
   const z=document.getElementById('rc-confirm');
   const t=document.getElementById('rc-confirm-titre');
   const x=document.getElementById('rc-confirm-texte');
@@ -20059,6 +20102,7 @@ function rcConfirm(titre,texte,libelleOk){
   if(!z||!t||!x||!ok||!non) return Promise.resolve(confirm(titre));
   t.textContent=titre; x.textContent=texte||'';
   ok.textContent=libelleOk||'Confirmer';
+  non.textContent=libelleNon||'Annuler';
   z.style.display='flex';
   return new Promise(res=>{
     const fermer=v=>{ z.style.display='none';
@@ -20243,7 +20287,7 @@ function commencerDepuisApercu(){
   const sess=cfg[idx];
   if(!sess) return false;
   _apIdx=null;
-  launchWorkout(sess,idx);
+  demarrerSeance(sess,idx);
   return true;
 }
 // Une ligne dépliable. <details> natif : il gère le clavier, le lecteur
@@ -60347,7 +60391,9 @@ function testExercices(){
           // Le poser après reviendrait à montrer un résumé d'une séance déjà
           // commencée. On lit la source réelle de startWorkoutSession.
           const src=String(startWorkoutSession).replace(/\s+/g,'');
-          const iAp=src.indexOf('ouvrirApercuSeance'), iLan=src.indexOf('launchWorkout(sess,idx)');
+          // Le lancement passe par demarrerSeance depuis le 14/08 : il pose la
+          // question de la séance en cours avant d'écraser woState.
+          const iAp=src.indexOf('ouvrirApercuSeance'), iLan=src.indexOf('demarrerSeance(sess,idx)');
           if(iAp<0) return _echec('l\'aperçu n\'est pas branché');
           if(!(iAp<iLan)) return _echec('l\'aperçu vient après le lancement');
           // Et il court-circuite : sans le return, la séance démarrerait
