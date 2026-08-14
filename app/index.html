@@ -36969,7 +36969,12 @@ function _offBoutonHtml(q){
 }
 async function offChercherUI(){
   if(_offEnCours) return false;
-  const q=((document.getElementById('fj-search')||{}).value||'').trim();
+  // `fj-search-input`, et non `fj-search` : le champ n'a jamais porté ce
+  // second nom. getElementById rendait null, `q` valait la chaîne vide, et
+  // offRecherche sortait sur son garde `q.length<2` — « Tape au moins deux
+  // lettres. », quoi qu'on ait tapé. La recherche de produits de marque
+  // n'a donc jamais pu aboutir.
+  const q=((document.getElementById('fj-search-input')||{}).value||'').trim();
   const z=document.getElementById('off-results');
   const b=document.getElementById('off-btn');
   if(!z) return false;
@@ -70546,6 +70551,32 @@ function testExercices(){
         if(/caches\.|localStorage|indexedDB/.test(src)) return _echec('mise en cache');
         if(/saveUser\(|favoriteFoods|recentFoods/.test(src)) return _echec('écriture au dossier');
         return true;})());
+      // LE CHAMP QU'ON LIT DOIT EXISTER. offChercherUI a cherché `fj-search`
+      // pendant tout ce temps : un identifiant qui n'apparaît nulle part
+      // ailleurs dans le fichier. getElementById rendait null, la requête était
+      // vide, et le message « Tape au moins deux lettres » décrivait exactement
+      // ce que l'utilisateur croyait avoir mal fait.
+      //
+      // L'assertion ne nomme pas `fj-search` : elle vérifie que TOUT
+      // identifiant lu par la fonction existe dans la page. Une faute de frappe
+      // future tombe dessus, quel que soit le nom.
+      ok('Le champ de recherche lu par offChercherUI existe',(()=>{
+        if(document.getElementById('fj-search')!==null)
+          return _echec('fj-search existe : l\'assertion ne mesure plus rien');
+        const src=String(offChercherUI);
+        const ids=[...src.matchAll(/getElementById\('([^']+)'\)/g)].map(m=>m[1]);
+        if(!ids.length) return _echec('offChercherUI ne lit plus aucun identifiant');
+        const absents=ids.filter(id=>!document.getElementById(id));
+        return absents.length
+          ?_echec('identifiant(s) introuvable(s) dans la page : '+absents.join(', ')):true;})());
+      ok('Et la recherche part bien du texte saisi',(()=>{
+        // Sans ça, le correctif se réduirait à « un id qui existe » : il faut
+        // que ce soit CELUI du champ, et que sa valeur alimente la requête.
+        const inp=document.getElementById('fj-search-input');
+        if(!inp) return _echec('le champ de recherche a disparu');
+        const src=String(offChercherUI);
+        return /getElementById\('fj-search-input'\)[^;]*\.value/.test(src)
+          ?true:_echec('offChercherUI ne lit pas la valeur du champ');})());
       ok('Aucun appel OFF à la frappe',(()=>{
         // onFjSearch ne fait que POSER le bouton ; il n'appelle jamais le réseau.
         const src=String(onFjSearch);
