@@ -25843,12 +25843,28 @@ function _bilLoadDraft(type){
     return d;
   }catch{return null;}
 }
+// PURE. Ce qui est vraiment renseigné dans un jeu de réponses : un tableau
+// vide ne compte pas, '' et null non plus.
+//
+// EXTRAITE pour que le brouillon et la validation finale comptent la même
+// chose avec le MÊME code. Deux copies de la même règle finissent par
+// diverger — ce fichier en a déjà fait les frais ailleurs.
+function _bilCompterReponses(o){
+  return Object.values(o||{})
+    .filter(v=>Array.isArray(v)?v.length:(v!==''&&v!=null)).length;
+}
 // Nombre de réponses réellement saisies : ouvrir puis refermer un bilan sans
 // rien remplir ne doit pas déclencher de proposition de reprise.
 function _bilDraftRempli(d){
   if(!d) return 0;
-  return Object.values(d.bilData||{})
-    .filter(v=>Array.isArray(v)?v.length:(v!==''&&v!=null)).length;
+  return _bilCompterReponses(d.bilData);
+}
+// PURE. Le poids du bilan, quelle que soit la clef qui le porte — même
+// couple que getBW. Se fier au seul bilType laisserait passer le cas où
+// l'autre clef porte la valeur.
+function _bilPoidsSaisi(d){
+  const a=(d||{})['bil-weight'], b=(d||{})['deb-weight'];
+  return !((a===''||a==null)&&(b===''||b==null));
 }
 function _bilPhotoPrefixe(type){return (type==='depart'?'deb':'bil')+'-photo-';}
 // PURE. Le nom EXACT des deux boutons de l'écran de choix. Une question qui
@@ -26048,6 +26064,23 @@ function bilNext(){
     // Remis à zéro sur CHAQUE passage propre : un second bilan dans la même
     // session ne doit pas hériter du compteur du premier.
     _bilPhotoEssais=0;
+    // UN BILAN VIDE N'EST PAS UN BILAN. Il s'enregistrait quand même, comptait
+    // dans l'historique, et surtout RÉARMAIT le cycle de rappel : l'ancre de
+    // isBilanNotifDay comme de getNextBilanSaturday est la date du DERNIER
+    // bilan. Valider à vide repoussait le prochain rappel de quinze jours,
+    // sans qu'une seule donnée ait été saisie.
+    //
+    // APRÈS le bloc des photos, et non avant : une photo encore en
+    // compression finira dans bilData, et le bilan ne sera alors pas vide.
+    if(!_bilCompterReponses(bilData)){
+      toast('Ton bilan est vide : renseigne au moins ton poids ou une mesure.','var(--orange)');
+      return;
+    }
+    // LE POIDS NE BLOQUE PAS, IL SE SIGNALE. Un bilan peut légitimement ne
+    // porter que des ressentis ; mais c'est le seul champ qui porte une
+    // courbe, et son absence laissera un trou visible dans le suivi.
+    if(!_bilPoidsSaisi(bilData)
+       &&!confirm('Valider sans ton poids ?\n\nTa courbe n’aura pas de point pour ce bilan.')) return;
     saveBilanFinal();
   }
 }
@@ -66199,6 +66232,35 @@ function testExercices(){
           if(_ph===null) localStorage.removeItem(CLE); else localStorage.setItem(CLE,_ph);
           if(_sv===null) localStorage.removeItem(BIL_DRAFT_KEY);
           else localStorage.setItem(BIL_DRAFT_KEY,_sv); }})());
+      ok('Le brouillon et la validation comptent avec le MÊME code',(()=>{
+        // Deux copies de la même règle finissent par diverger : _bilDraftRempli
+        // doit déléguer, pas recopier.
+        if(!/_bilCompterReponses\(/.test(String(_bilDraftRempli)))
+          return _echec('_bilDraftRempli a sa propre copie de la règle');
+        if(!/_bilCompterReponses\(bilData\)/.test(String(bilNext)))
+          return _echec('bilNext ne compte pas avec la même');
+        const o={a:'',b:null,c:[],d:[1],e:'x',f:0};
+        return _bilCompterReponses(o)===3
+          ?true:_echec('comptage : '+_bilCompterReponses(o)+' au lieu de 3');})());
+      ok('Un bilan vide ne peut pas être validé',(()=>{
+        const _bd=bilData, _bs=bilStep, _bt=bilType, _t=window.toast;
+        const _sv=window.saveBilanFinal, _cf=window.confirm;
+        let dit=null, enregistre=0;
+        try{
+          window.toast=m=>{dit=m;}; window.saveBilanFinal=()=>{enregistre++;};
+          window.confirm=()=>true;
+          bilType='coaching'; bilData={};
+          bilStep=_etapesUtiles(BIL_STEPS).length-1;
+          bilNext();
+          if(enregistre) return _echec('un bilan vide a été enregistré');
+          if(!/vide/.test(dit||'')) return _echec('rien n\'a été dit : '+dit);
+          // Une seule réponse suffit à débloquer.
+          bilData={'bil-weight':'72'};
+          bilStep=_etapesUtiles(BIL_STEPS).length-1;
+          bilNext();
+          return enregistre===1?true:_echec('un bilan rempli n\'a pas été enregistré');
+        } finally { bilData=_bd; bilStep=_bs; bilType=_bt;
+          window.toast=_t; window.saveBilanFinal=_sv; window.confirm=_cf; }})());
       ok('Un brouillon d\'un AUTRE type ne meurt pas en silence',(()=>{
         // Toucher « Bilan coaching » détruisait un questionnaire de départ à
         // moitié rempli, sans un mot.
