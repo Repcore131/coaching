@@ -8259,6 +8259,15 @@ async function doRegister(){
       +' ans révolus. L\'application traite des données de santé, et le consentement '
       +'d\'un mineur plus jeune ne peut pas être recueilli ici.');
   if(!selRole) return showErr('r-err','Sélectionne ton rôle.');
+  // LE GENRE EST OBLIGATOIRE, et il ne l'était nulle part. Le champ part à vide
+  // par défaut, et tout le reste le traite comme acquis : calcBF change de
+  // formule selon lui, les repères énergétiques aussi, et les silhouettes de
+  // bilan viennent de posesGenre. Un compte créé sans genre traversait tout ça
+  // en silence.
+  //
+  // Ici, comme le contrôle d'âge : AVANT CLOUD.signIn, sinon un refus laisse
+  // derrière lui un compte Firebase Auth sans dossier applicatif.
+  if(!gn) return showErr('r-err','Sélectionne ton genre : il sert au calcul de tes repères énergétiques et de ta masse grasse.');
   // LE VERROU EST LEVÉ. Un coach inconnu crée son compte sans code, et démarre
   // au palier Libre — un athlète suivi, sans carte bancaire et sans durée.
   //
