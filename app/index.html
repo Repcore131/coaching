@@ -1657,8 +1657,17 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
         <div id="ae-arrow" style="margin-left:auto;color:var(--sub);font-size:18px;transition:transform .25s">›</div>
       </div>
-      <!-- Zone code -->
-      <div id="ae-code-zone" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+      <!-- Zone code.
+
+           LES DEUX ARRETS DE PROPAGATION SONT LA POUR LA MEME RAISON : cette
+           zone vit DANS #ae-card-new, qui se replie au clic et à la touche.
+           Sans eux, toucher le libellé, la bannière du coach ou le message
+           d'erreur refermait tout — et au clavier, Espace refermait la zone en
+           avalant le caractère, Entrée la refermait au lieu de valider.
+
+           L'en-tête de la carte, lui, est HORS de cette zone : il continue de
+           replier normalement. -->
+      <div id="ae-code-zone" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
         <div id="ae-coach-banner" style="display:none;background:#0a1a0a;border:1px solid #1a3a1a;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--green);font-weight:700;line-height:1.5"></div>
         <div style="font-size:var(--fs-xs);letter-spacing:2px;color:var(--red);font-weight:800;margin-bottom:8px">ENTRE TON CODE OU COLLE LE LIEN DE TON COACH</div>
         <!-- Pas de text-transform:uppercase ici : un lien d'invitation collé
