@@ -6874,7 +6874,6 @@ function _athleteSessionIdx(){
     ? _progEditorCtx.sessionIdx : null;
 }
 let woState={exercises:[],currentEx:0,startTime:null,timerInterval:null,sessionData:{}};
-let qStep=0;
 
 // ── Bande réseau ────────────────────────────────────────────────────────────
 // Persistante hors ligne : contrairement au toast, qui s'efface au bout de
@@ -9248,45 +9247,6 @@ function regenCoachCode(){
   document.getElementById('coach-code-val').textContent=currentUser.code;
   toast('Nouveau code généré : pense à partager le nouveau lien.','var(--green)');
 }
-
-// ======= QUESTIONNAIRE =======
-const QS=[
-  {title:'Objectif principal',type:'choice',field:'objective',choices:['Prise de masse musculaire','Perte de poids / sèche','Rééquilibrage corporel','Amélioration des performances','Bien-être général']},
-  {title:'Niveau d\'entraînement',type:'choice',field:'level',choices:['Débutant (< 1 an)','Intermédiaire (1-3 ans)','Avancé (3-5 ans)','Expert (5+ ans)']},
-  {title:'Fréquence hebdomadaire',type:'choice',field:'frequency',choices:['1-2 fois par semaine','3-4 fois par semaine','5-6 fois par semaine','Tous les jours']},
-  {title:'Mes mensurations initiales',type:'form',fields:[
-    {id:'init-age',label:'Âge',type:'number',ph:'25'},
-    {id:'init-height',label:'Taille (cm)',type:'number',ph:'175'},
-    {id:'init-weight',label:'Poids (kg)',type:'number',ph:'75'},
-    {id:'init-fat',label:'% masse grasse estimé',type:'number',ph:'18'}
-  ]}
-];
-function initQuestionnaire(){qStep=0;renderQ();}
-function renderQ(){
-  const s=QS[qStep];
-  document.getElementById('q-step-label').textContent=(qStep+1)+'/'+QS.length;
-  document.getElementById('q-prev').style.display=qStep>0?'':'none';
-  document.getElementById('q-next').textContent=qStep===QS.length-1?'Terminer ':'Suivant →';
-  const c=document.getElementById('q-content');
-  if(s.type==='choice'){
-    c.innerHTML=`<h2 style="margin-bottom:20px">${s.title}</h2>`+
-      s.choices.map((ch,i)=>`<div class="obj-opt${currentUser[s.field]===ch?' sel':''}" id="qo-${i}" onclick="pickQ(${i},'${s.field}','${ch}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${ch}</div>`).join('');
-  } else {
-    c.innerHTML=`<h2 style="margin-bottom:20px">${s.title}</h2>`+
-      s.fields.map(f=>`<div><label>${f.label}</label><input type="${f.type}" id="${f.id}" placeholder="${f.ph}" value="${currentUser[f.id]||''}"></div>`).join('');
-  }
-}
-function pickQ(i,field,val){
-  currentUser[field]=val;
-  document.querySelectorAll('.obj-opt').forEach((el,j)=>el.classList.toggle('sel',j===i));
-}
-function qNext(){
-  const s=QS[qStep];
-  if(s.type==='form') s.fields.forEach(f=>{const el=document.getElementById(f.id);if(el)currentUser[f.id]=el.value;});
-  if(qStep<QS.length-1){qStep++;renderQ();}
-  else{currentUser.questionnaireComplete=true;toastEcriture(saveUser(),' Profil complété !','ton profil est');loadClientHome();}
-}
-function qPrev(){if(qStep>0){qStep--;renderQ();}}
 
 // ======= COACH HOME =======
 // Types d'alerte portant sur la SANTÉ. Leur report obéit à deux règles que les
