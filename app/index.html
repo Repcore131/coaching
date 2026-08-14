@@ -5647,8 +5647,18 @@ const CLOUD={
       if(errCode.includes('INVALID_PASSWORD')||errCode.includes('INVALID_LOGIN_CREDENTIALS')){
         this._signInErr='wrong_password';return false;
       }
+      // ADRESSE MAL FORMÉE : on ne tente pas signUp non plus, il échouerait
+      // exactement pareil. Un aller-retour réseau épargné, et surtout un cas
+      // nommé — sans lui l'appelant retombait sur son message générique.
+      if(errCode.includes('INVALID_EMAIL')){
+        this._signInErr='invalid_email';return false;
+      }
       // Compte inconnu dans Firebase Auth → créer
       if(!this._signInErr) d=await call('signUp');
+      // signUp peut le dire à son tour : l'adresse n'a pas été jugée par le
+      // premier appel si celui-ci a échoué pour une autre raison.
+      if(!d.idToken&&!this._signInErr&&String(d.error?.message||'').includes('INVALID_EMAIL'))
+        this._signInErr='invalid_email';
     }
     if(d.idToken){
       this._idToken=d.idToken;this._refreshToken=d.refreshToken;
@@ -8244,6 +8254,14 @@ async function doRegister(){
   const fn=v('r-fname'),ln=v('r-lname'),em=v('r-email').toLowerCase(),pw=v('r-pwd'),pw2=v('r-pwd2'),gn=v('r-gender');
   const err=document.getElementById('r-err');err.style.display='none';
   if(!fn||!ln||!em||!pw){return showErr('r-err','Tous les champs sont obligatoires.');}
+  // LA FORME DE L'ADRESSE, avant le moindre appel réseau. Sans ce contrôle,
+  // une adresse sans arobase partait jusqu'à Firebase, qui répondait
+  // INVALID_EMAIL — traduit en « Inscription impossible. Réessaie. », alors
+  // que réessayer ne pouvait rien changer.
+  //
+  // Le motif est celui qui valide déjà les adresses des paquets d'invitation :
+  // un second finirait par diverger du premier.
+  if(!_PKG_EMAIL_RE.test(em)) return showErr('r-err','Cette adresse email n\'est pas valide : vérifie le @ et le nom de domaine.');
   if(pw.length<6) return showErr('r-err','Mot de passe trop court (min 6 car.).');
   if(pw!==pw2) return showErr('r-err','Mots de passe différents.');
   // Contrôle d'âge AVANT CLOUD.signIn : signIn crée le compte Firebase Auth,
@@ -8333,7 +8351,9 @@ async function doRegister(){
         ? 'Un compte existe déjà avec cet email. Utilise « Se connecter » ou « Mot de passe oublié ? ».'
         : CLOUD._signInErr==='network'
           ? 'Pas de connexion : impossible de créer le compte maintenant.'
-          : 'Inscription impossible. Réessaie.');
+          : CLOUD._signInErr==='invalid_email'
+            ? 'Cette adresse email n\'est pas valide : vérifie le @ et le nom de domaine.'
+            : 'Inscription impossible. Réessaie.');
   }
   // Le compte peut exister CÔTÉ SERVEUR sans exister sur cet appareil :
   // réinstallation, nouveau téléphone, cache vidé. signIn réussit alors avec le
@@ -8431,6 +8451,8 @@ async function doLogin(){
         return showErr('l-err','Erreur réseau : vérifiez votre connexion et réessayez.');
       if(CLOUD._signInErr==='wrong_password')
         return showErr('l-err','Mot de passe incorrect. Utilisez "Mot de passe oublié ?" pour le réinitialiser par email.');
+      if(CLOUD._signInErr==='invalid_email')
+        return showErr('l-err','Cette adresse email n\'est pas valide : vérifie le @ et le nom de domaine.');
       return showErr('l-err','Impossible de se connecter. Essayez "Mot de passe oublié ?" ou vérifiez votre connexion.');
     }
     toast('Récupération du compte…');
@@ -8448,7 +8470,9 @@ async function doLogin(){
   const ok=await CLOUD.signIn(em,pw);
   if(!ok) return showErr('l-err',CLOUD._signInErr==='network'
     ?'Erreur réseau : vérifiez votre connexion.'
-    :'Email ou mot de passe incorrect.');
+    :CLOUD._signInErr==='invalid_email'
+      ?'Cette adresse email n\'est pas valide : vérifie le @ et le nom de domaine.'
+      :'Email ou mot de passe incorrect.');
   currentUser=users[em];DB.set('session',currentUser);
   if(CLOUD.canWrite()) saveUser();
   if(currentUser.role!=='coach'&&(currentUser.status||'FREE')==='FREE'){
