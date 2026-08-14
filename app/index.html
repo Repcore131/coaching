@@ -1783,24 +1783,34 @@ const COACH_PHOTO='icons/coach.jpg';
       <button type="button" onclick="ouvrirInviteCoach()" class="btn btn-outline btn-sm" style="width:100%">
         J'ai un code d'invitation</button>
     </div>
-    <div style="display:flex;align-items:flex-start;gap:10px;margin-top:4px;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px">
-      <!-- Deux consentements DISTINCTS, et non un seul.
-           Le RGPD traite ces deux acceptations différemment : accepter des
-           conditions relève de l'article 6, consentir à des données de santé
-           relève de l'article 9 et doit être EXPLICITE et SÉPARÉ. Une case
-           unique mélangeait les deux : l'utilisateur ne pouvait pas accepter
-           d'utiliser l'app sans consentir à ses données de santé, et rien ne
-           permettait de prouver lequel des deux il avait vraiment lu. -->
-      <div style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px">
-        <input type="checkbox" id="r-cgu" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
-        <label for="r-cgu" style="font-size:12px;color:var(--sub);line-height:1.6;cursor:pointer">J'ai lu et j'accepte la <a href="../privacy.html" target="_blank" rel="noopener" style="color:var(--red);text-decoration:underline;font-weight:600">politique de confidentialité</a> et les <a href="../legal.html" target="_blank" rel="noopener" style="color:var(--red);text-decoration:underline;font-weight:600">mentions légales</a>.</label>
-      </div>
-      <div style="display:flex;align-items:flex-start;gap:10px;margin-top:8px;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px">
-        <input type="checkbox" id="r-health" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
-        <div style="font-size:11px;color:var(--sub);margin:4px 0 12px;line-height:1.6">En créant un compte tu acceptes les <a href="../terms.html" target="_blank" rel="noopener" style="color:var(--red-light)">CGV</a> et prends connaissance des <a href="../legal.html" target="_blank" rel="noopener" style="color:var(--red-light)">mentions légales</a>.</div>
-        <label for="r-health" style="font-size:12px;color:var(--sub);line-height:1.6;cursor:pointer">Je consens explicitement au traitement de mes <strong style="color:#ccc">données de santé</strong>, notamment poids, mensurations, photos corporelles, cycle menstruel, sommeil, stress, caféine, compléments, pas quotidiens et âge pour mon suivi sportif. La liste complète figure au §2 de la <a href="../privacy.html" target="_blank" rel="noopener" style="color:var(--red-light)">politique de confidentialité</a>.</label>
-      </div>
+    <!-- Deux consentements DISTINCTS, et non un seul.
+         Le RGPD traite ces deux acceptations différemment : accepter des
+         conditions relève de l'article 6, consentir à des données de santé
+         relève de l'article 9 et doit être EXPLICITE et SÉPARÉ. Une case
+         unique mélangeait les deux : l'utilisateur ne pouvait pas accepter
+         d'utiliser l'app sans consentir à ses données de santé, et rien ne
+         permettait de prouver lequel des deux il avait vraiment lu.
+
+         AUCUN CADRE NE LES ENVELOPPE : un conteneur flex sans direction vaut
+         `row`, et les deux blocs se partageaient la largeur côte à côte. Ils
+         sont désormais frères directs de `.gap`, qui est en colonne avec
+         12 px d'écart — et chacun porte déjà son propre fond et sa bordure,
+         le conteneur en ajoutait un troisième par-dessus. -->
+    <div style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px">
+      <input type="checkbox" id="r-cgu" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
+      <label for="r-cgu" style="font-size:12px;color:var(--sub);line-height:1.6;cursor:pointer">J'ai lu et j'accepte la <a href="../privacy.html" target="_blank" rel="noopener" style="color:var(--red);text-decoration:underline;font-weight:600">politique de confidentialité</a> et les <a href="../legal.html" target="_blank" rel="noopener" style="color:var(--red);text-decoration:underline;font-weight:600">mentions légales</a>.</label>
     </div>
+    <!-- margin-top retiré : il s'ajoutait aux 12 px du parent et creusait un
+         écart inégal entre les deux consentements. -->
+    <div style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px">
+      <input type="checkbox" id="r-health" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
+      <label for="r-health" style="font-size:12px;color:var(--sub);line-height:1.6;cursor:pointer">Je consens explicitement au traitement de mes <strong style="color:#ccc">données de santé</strong>, notamment poids, mensurations, photos corporelles, cycle menstruel, sommeil, stress, caféine, compléments, pas quotidiens et âge pour mon suivi sportif. La liste complète figure au §2 de la <a href="../privacy.html" target="_blank" rel="noopener" style="color:var(--red-light)">politique de confidentialité</a>.</label>
+    </div>
+    <!-- LE TEXTE CGV EST ICI, et non plus au milieu du bloc santé : il y était
+         inséré ENTRE la case r-health et son label, ce qui séparait la case de
+         ce qu'elle engage. Il parle de la création de compte en général, sa
+         place est sous les deux consentements. -->
+    <div style="font-size:11px;color:var(--sub);line-height:1.6">En créant un compte tu acceptes les <a href="../terms.html" target="_blank" rel="noopener" style="color:var(--red-light)">CGV</a> et prends connaissance des <a href="../legal.html" target="_blank" rel="noopener" style="color:var(--red-light)">mentions légales</a>.</div>
     <!-- Rappel de l'invitation portée depuis l'écran coach : sans ce repère,
          le coach ne voit nulle part que son code a bien été pris en compte. -->
     <div id="r-invite-line" style="display:none;font-size:11px;color:var(--green);font-family:monospace;letter-spacing:1px;margin-bottom:4px"></div>
