@@ -2899,6 +2899,11 @@ const COACH_PHOTO='icons/coach.jpg';
         <a href="#" onclick="ouvrirReglagesAthlete();return false" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--sub);font-weight:700;letter-spacing:.5px;margin-top:6px;text-decoration:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;flex-shrink:0"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.31.4.55.71.66H21a2 2 0 1 1 0 4h-.09c-.31.11-.57.35-.71.66z"/></svg> Réglages</a>
       </div>
 
+      <!-- ÉCHÉANCE D'ACCÈS. Rempli par _rendreEcheanceAcces, vide le reste du
+           temps. Placé avant la carte du coach : c'est la seule chose de cet
+           écran qui a une date limite. -->
+      <div id="clh-echeance"></div>
+
       <!-- COACH BANNER -->
       <div id="clh-coach-banner" style="display:none;margin-bottom:18px"></div>
 
@@ -10671,6 +10676,62 @@ const PIL_PROGRAMME_FIGE_SEMAINES=6;
 // Reprend MOT POUR MOT la condition du palier 3 d'urgencyScore. La recopier
 // ailleurs ferait remonter comme « expire bientôt » tout athlète sans date,
 // alors qu'une date absente vaut accès ILLIMITÉ (voir checkAccess).
+// ══════════════ L'ÉCHÉANCE, CÔTÉ ATHLÈTE ══════════════
+// Le coach est prévenu quatorze jours avant ; l'athlète sept. La différence
+// est voulue : elle laisse une semaine pendant laquelle le coach peut
+// prolonger sans que son athlète ait été alarmé pour rien.
+const ACCES_PREVENIR_JOURS=7;
+// PURE. Le nombre de jours restants quand il faut prévenir, null sinon.
+//
+// Le prédicat est celui de _pilAccesExpire, mot pour mot : une échéance
+// absente vaut accès ILLIMITÉ (voir checkAccess), et un dossier _fromCode
+// n'a pas d'accès à lui. Deux définitions divergentes donneraient un athlète
+// prévenu que son accès se ferme alors que son coach ne voit rien.
+function accesJoursRestants(u,now){
+  if(!u||u._fromCode||u.status!=='COACHING_SUIVI') return null;
+  const e=Number(u.accessExpiry);
+  if(!isFinite(e)||e<=0) return null;
+  const t=(typeof now==='number')?now:Date.now();
+  // Déjà expiré : ce n'est plus un avertissement, c'est le verrou — et il a
+  // son propre écran. Un bandeau « dans 0 jour » sur un accueil inatteignable
+  // ne serait vu par personne.
+  if(e<=t) return null;
+  const j=Math.ceil((e-t)/864e5);
+  return j<=ACCES_PREVENIR_JOURS?j:null;
+}
+// Le bandeau. Vide tant qu'il n'y a rien à dire.
+function _rendreEcheanceAcces(){
+  const z=document.getElementById('clh-echeance');
+  if(!z) return null;
+  const u=currentUser;
+  const j=accesJoursRestants(u);
+  if(j==null){ z.innerHTML=''; return null; }
+  // Les deux derniers jours passent au rouge : le même bandeau orange pendant
+  // une semaine finit par faire partie du décor.
+  const urgent=j<=2;
+  const c=urgent?'#E02020':'#f97316';
+  // « dans 1 jour » serait ambigu — la veille au soir comme le matin même.
+  // « moins de 24 heures » est vrai dans les deux cas.
+  const quand=j===1?'dans moins de 24 heures':'dans '+j+' jours';
+  const d=new Date(Number(u.accessExpiry)).toLocaleDateString('fr-FR');
+  const nom=((u.coachName||'')+'').trim();
+  // Le message ne porte AUCUNE donnée de santé : il ne parle que d'accès.
+  const href=_coachContactHref(u.coachId,
+    'Bonjour'+(nom?' '+nom:'')+", mon accès RepCore se termine le "+d+'. Peux-tu le prolonger ?');
+  z.innerHTML=`<div style="position:relative;overflow:hidden;border-radius:12px;padding:13px 14px;margin-bottom:16px;
+      background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.02) 11px,rgba(255,255,255,.02) 12px),linear-gradient(168deg,#1b1b1b,#111 55%,#0b0b0b);
+      border:1px solid #262626;border-left:3px solid ${c};
+      box-shadow:0 12px 26px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.05),-3px 0 16px ${c}33">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:${c};text-shadow:0 0 10px ${c}66">
+      Ton accès se termine ${quand}</div>
+    <div style="font-size:11.5px;color:#c9c9c9;line-height:1.6;margin-top:5px">
+      Il prend fin le ${escapeHtml(d)}. ${nom?escapeHtml(nom)+' peut le prolonger':'Ton coach peut le prolonger'}, préviens-le avant.</div>
+    ${href?`<a href="${_safeContactUrl(href)}" target="_blank" rel="noopener" class="btn btn-red"
+      style="margin-top:11px;min-height:42px;display:flex;align-items:center;justify-content:center;font-size:12px;letter-spacing:1px">
+      Prévenir mon coach</a>`:''}
+  </div>`;
+  return j;
+}
 function _pilAccesExpire(c,now){
   return !!(c&&!c._fromCode&&c.status==='COACHING_SUIVI'&&c.accessExpiry
     &&(c.accessExpiry-now)>0&&(c.accessExpiry-now)<PIL_EXPIRE_JOURS*864e5);
@@ -18584,6 +18645,9 @@ function loadClientHome(){
   // `users` sert plus bas à _applyCoachData : il reste, la carte PDF non.
   const users=DB.get('users')||{};
   _majBandeauDispo('clh-dispo');
+  // L'échéance d'accès : rien à afficher la plupart du temps, un bandeau dans
+  // les sept derniers jours.
+  try{ _rendreEcheanceAcces(); }catch(e){}
   const contactLink=document.getElementById('clh-contact-link');
   if(contactLink&&u.coachId){
     // Déclarée AVANT _applyCoachData : le rapatriement plus bas s'en sert
