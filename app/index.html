@@ -30910,8 +30910,20 @@ function _htmlDossierSante(user,pourCoach){
         +' <span style="color:var(--text-dim)">— '+(x.action==='retire'?'retiré':'déclaré')+'</span>',
         _dossDate(x.date))).join(''):''}
     ${blocDisclaimerSante()}
+    ${!pourCoach?`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:13px;padding-top:12px;border-top:1px solid var(--border)">
+      <button type="button" class="btn btn-outline btn-sm" style="flex:1;min-width:150px;margin:0" onclick="telechargerDossierSante()">Télécharger mon dossier</button>
+      ${d.journal.length?`<button type="button" class="btn btn-outline btn-sm" style="flex:1;min-width:150px;margin:0" onclick="purgerHistoriqueSante()">Effacer l'historique des déclarations</button>`:''}
+    </div>`:''}
   </div>`;
 }
+// LES DEUX BOUTONS N'EXISTENT QUE COTE ATHLETE. Ce n'est pas une question de
+// mise en page : telechargerDossierSante et purgerHistoriqueSante operent sur
+// `currentUser`. Rendus dans le panneau du coach — même fonction, pourCoach
+// vrai, injectée dans ccd-dossier — ils téléchargeraient et purgeraient le
+// dossier DU COACH depuis la fiche d'un athlète.
+//
+// Et l'effacement ne s'affiche que s'il y a un historique : proposer
+// d'effacer ce qui n'existe pas ferait douter de ce qui est effacé.
 function renderDossierSante(){
   const z=document.getElementById('atp-dossier');
   if(!z) return;
