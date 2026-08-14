@@ -8961,19 +8961,24 @@ function _annoncerInvitation(coach){
     : 'Invitation de '+prenom+' reconnue, valide ton accès.';
   const z=document.getElementById('cc-invit');
   const inp=document.getElementById('cc-code');
-  // Le champ n'est pré-rempli QUE s'il est vide : on n'écrase pas une saisie
-  // en cours, même improbable au démarrage.
+  // Le champ est pré-rempli quoi qu'il arrive, mais seulement s'il est vide :
+  // il servira le jour où l'athlète ouvrira l'écran de saisie.
   if(inp&&!inp.value&&code) inp.value=code;
-  if(z){
-    z.textContent=msg;
-    z.style.display='block';
+  if(z){ z.textContent=msg; }
+  // LE MESSAGE SUIT L'ÉCRAN AFFICHÉ, PAS L'EXISTENCE DE L'ÉLÉMENT. #cc-invit
+  // vit dans s-client-code, qui est TOUJOURS dans le document — seulement
+  // masqué quand il n'est pas actif. Se fier à sa présence écrivait le message
+  // dans un écran caché : un athlète dont l'accès est actif atterrit sur son
+  // accueil et ne voyait rien du tout. Mesuré, la branche toast était morte.
+  const _surEcranCode=!!document.getElementById('s-client-code')
+    &&document.getElementById('s-client-code').classList.contains('active');
+  if(_surEcranCode){
+    if(z) z.style.display='block';
+  } else {
+    if(z) z.style.display='none';
+    toast(msg,_autre?'var(--orange)':'var(--green)');
   }
-  // L'écran d'arrivée ne porte pas toujours le champ : un athlète dont l'accès
-  // est actif atterrit sur son accueil. Le code est posé quand même — il
-  // pré-remplira l'écran de saisie le jour où il y va — et le message passe
-  // par le canal disponible.
-  else toast(msg,_autre?'var(--orange)':'var(--green)');
-  return {code,msg,autre:_autre};
+  return {code,msg,autre:_autre,canal:_surEcranCode?'encart':'toast'};
 }
 function _annoncerDejaRattache(coachDuLien){
   const actuel=coachActuelDe();
