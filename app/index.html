@@ -19512,7 +19512,11 @@ function programmeEstEssai(u){
   const usr=u||currentUser;
   if(!usr) return false;
   if(usr.program?.length) return false;
-  if(usr.programPdf||usr.programPdfLink||usr.programPdfStorageUrl) return false;
+  // PAS DE SORTIE SUR LA SEULE PRÉSENCE D'UN PDF. Elle éteignait le bandeau
+  // « Séances d'essai » pendant que chaque séance du sélecteur portait son
+  // badge « Exemple » : deux écrans, deux vérités, pour le même programme.
+  // Le prédicat suit maintenant les badges dans TOUS les cas — c'est ce que
+  // le commentaire au-dessus annonçait déjà.
   const sc=usr.sessions_config;
   if(!sc||!sc.length) return true;
   return sc.some(s=>s.active&&s.exercises?.length&&seanceEstExemple(s));
@@ -20904,7 +20908,12 @@ function _renderProgExercisesInto(el){
 
   // Fallback : ancien programme unique assigné par le coach
   const u=(DB.get('users')||{})[currentUser.email]||currentUser;
-  if(u.programPdf||u.programPdfLink||u.programPdfStorageUrl){el.innerHTML='';return;}
+  // UN PDF NE COUPE PLUS CET ÉCRAN. Cette branche vidait la zone et sortait,
+  // parce qu'un encart PDF prenait le relais juste au-dessus. Cet encart
+  // n'existe plus : `pv-pdf-zone` reste en display:none et rien ne l'allume,
+  // `openHomePdf` et `openPdfNewTab` sont sans appelant. Il ne restait donc
+  // qu'un écran blanc, sans un mot, pendant que le sélecteur de séances
+  // proposait un contenu complet. On descend maintenant sur le repli.
   const prog=getProgram();
   if(!prog._isDefault){
     el.innerHTML=`
