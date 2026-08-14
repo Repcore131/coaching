@@ -1859,6 +1859,12 @@ const COACH_PHOTO='icons/coach.jpg';
       <input id="cc-code" type="text" placeholder="Colle ton code RC-XXXX-XXXX ou le lien reçu de ton coach"
         style="width:100%;padding:14px;background:#111;border:1px solid var(--border);border-radius:12px;color:#fff;font-family:Montserrat,sans-serif;font-size:13px;box-sizing:border-box;letter-spacing:1px"
         oninput="var v=this.value;if(!v.startsWith('http')&&!v.startsWith('RCACCESS')&&!v.startsWith('RCLINK'))this.value=v.toUpperCase()">
+      <!-- Invitation reconnue. Rempli par _annoncerInvitation quand le lien du
+           coach est ouvert depuis une session deja active : le code est
+           pré-rempli au-dessus, il ne reste qu'à valider. -->
+      <div id="cc-invit" style="display:none;margin-top:10px;font-size:11.5px;line-height:1.6;
+        border-radius:10px;padding:10px 12px;background:linear-gradient(168deg,#131313,#0b0b0b);
+        border:1px solid #262626;border-left:3px solid var(--red);color:#d8d8d8"></div>
       <div id="cc-err" class="err" style="display:none;margin-top:8px"></div>
     </div>
     <button class="btn btn-red" onclick="doLinkCoach()">Activer mon accès →</button>
@@ -6985,6 +6991,10 @@ window.onload=()=>{
           })();
         }
       } else if(window._importedCoach){
+        // CE BRAS NE VOIT QUE LE CAS SANS SESSION — il est dans le `else` de
+        // `if(sess)`. Le cas AVEC session est traité plus bas, hors de cette
+        // chaîne : il ne s'atteignait jamais ici, et un athlète déjà connecté
+        // qui ouvrait le lien de son coach ne voyait donc rien du tout.
         // Ouverture directe du lien d'invitation. Un toast disparaissait avant
         // que l'athlète ait pu agir, et il devait retrouver puis ressaisir le
         // code lui-même. On ouvre l'accordéon, on pré-remplit, et la bannière
@@ -7010,6 +7020,20 @@ window.onload=()=>{
         },350);
       } else {
         go('s-welcome');
+      }
+      // ── L'INVITATION, SESSION DÉJÀ OUVERTE ────────────────────────────
+      // Hors de la chaîne de `else` ci-dessus, et APRÈS son routage : le
+      // traitement d'origine vivait dans un `else if` que la présence d'une
+      // session rendait inatteignable. Quelqu'un qui a déjà l'app ouverte et
+      // qui reçoit le lien de son coach — le cas le plus courant — arrivait
+      // sur son accueil sans qu'aucun signe ne lui soit donné.
+      //
+      // On ANNONCE, on n'applique pas. Différé : le routage vient de changer
+      // d'écran, et le champ à pré-remplir doit exister.
+      if(window._importedCoach&&currentUser&&currentUser.role!=='coach'){
+        const _ci=window._importedCoach;
+        window._importedCoach=null;
+        setTimeout(()=>{ try{ _annoncerInvitation(_ci); }catch(e){} },400);
       }
       // Sync périodique toutes les 30 secondes
       setInterval(async()=>{
@@ -8915,6 +8939,42 @@ function _memeCoachQueLien(coachDuLien,user){
 }
 // Le message dedie. Rend true quand il a pris la main — l appelant s arrete
 // alors la, et AUCUN second rattachement n a lieu.
+// L'INVITATION EST ANNONCÉE, JAMAIS APPLIQUÉE. On pose le code en attente et
+// on le dit ; la validation reste un geste de l'athlète, et
+// _annoncerDejaRattache — juste en dessous — garde la main sur ce geste.
+//
+// Le code du LIEN passe avant le code GCP du coach : `inv` porte le code
+// d'accès daté, `coach.code` ne rattache qu'au même appareil.
+function _annoncerInvitation(coach){
+  if(!coach) return null;
+  const code=window._invitationCode||coach.code||'';
+  if(code){ try{ localStorage.setItem('pendingCode',code); }catch(e){} }
+  const prenom=(coach.fname||coach.lname||'ton coach').trim();
+  // DÉJÀ SUIVI PAR QUELQU'UN D'AUTRE : on ne promet rien. « Valide ton accès »
+  // annoncerait exactement ce que _annoncerDejaRattache va refuser au clic
+  // suivant.
+  const _mien=currentUser&&currentUser.coachId;
+  const _autre=!!_mien&&_mien!==coach.id;
+  const msg=_autre
+    ? 'Invitation de '+prenom+' reçue. Tu es déjà suivi par '+(coachActuelDe(currentUser)||'un coach')
+      +' : parles-en à ton coach avant tout changement.'
+    : 'Invitation de '+prenom+' reconnue, valide ton accès.';
+  const z=document.getElementById('cc-invit');
+  const inp=document.getElementById('cc-code');
+  // Le champ n'est pré-rempli QUE s'il est vide : on n'écrase pas une saisie
+  // en cours, même improbable au démarrage.
+  if(inp&&!inp.value&&code) inp.value=code;
+  if(z){
+    z.textContent=msg;
+    z.style.display='block';
+  }
+  // L'écran d'arrivée ne porte pas toujours le champ : un athlète dont l'accès
+  // est actif atterrit sur son accueil. Le code est posé quand même — il
+  // pré-remplira l'écran de saisie le jour où il y va — et le message passe
+  // par le canal disponible.
+  else toast(msg,_autre?'var(--orange)':'var(--green)');
+  return {code,msg,autre:_autre};
+}
 function _annoncerDejaRattache(coachDuLien){
   const actuel=coachActuelDe();
   if(!actuel) return false;
