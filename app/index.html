@@ -1929,6 +1929,9 @@ const COACH_PHOTO='icons/coach.jpg';
       <button id="sb-tab-monetisation" onclick="coachTab('monetisation')" style="width:100%;text-align:left;padding:12px 14px;background:none;border:none;border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
         PAIEMENTS
       </button>
+      <button id="sb-tab-profil" onclick="coachTab('profil')" style="width:100%;text-align:left;padding:12px 14px;background:none;border:none;border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;margin-bottom:6px;letter-spacing:1px;display:flex;align-items:center;gap:10px">
+        PROFIL
+      </button>
     </div>
     <div style="padding:16px">
       <button onclick="showCoachCode()" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:9px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1px;margin-bottom:8px">MON CODE</button>
@@ -46405,6 +46408,17 @@ function coachTab(tab){
     if(b){
       b.style.borderBottom=(id===tab)?'2px solid #E02020':'2px solid transparent';
       b.style.color=(id===tab)?'#fff':'#555';
+    }
+    // LE PANNEAU LATERAL DU BUREAU. Il n'etait pas touche : ses boutons
+    // gardaient le style ecrit dans le gabarit, et « ATHLETES » restait allume
+    // meme en lisant PAIEMENTS. Une surbrillance qui ment sur la page ouverte
+    // est pire que pas de surbrillance du tout.
+    var sb=document.getElementById('sb-tab-'+id);
+    if(sb){
+      sb.style.background=(id===tab)?'var(--surface-1)':'none';
+      sb.style.color=(id===tab)?'#fff':'var(--sub)';
+      sb.style.boxShadow=(id===tab)?'inset 3px 0 0 var(--red)':'none';
+      if(id===tab) sb.setAttribute('aria-current','page'); else sb.removeAttribute('aria-current');
     }
   });
   if(tab==='codes')try{loadStudentCodes();}catch(e){console.error(e);}
