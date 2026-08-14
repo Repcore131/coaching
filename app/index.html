@@ -21380,14 +21380,27 @@ function _woChargeSaisie(idx,i,champ,el){
   // Seule `weight` porte la charge proposée : `weight2` n'est jamais
   // auto-remplie, donc ni `userEdited` ni `isAuto` ne la concernent.
   const principal=champ!=='weight2';
+  // LA VIRGULE DÉCIMALE, NORMALISÉE UNE FOIS POUR TOUTES. Rangée telle
+  // quelle, « 82,5 » devenait 82 : tout ce qui relit la charge passe par
+  // parseFloat, qui s'arrête à la virgule. Ni erreur, ni champ rouge — cinq
+  // cents grammes de moins par série dans le tonnage, et une charge suggérée
+  // calculée sur une valeur fausse.
+  //
+  // AVANT le contrôle du négatif, et non après : parseFloat("-0,5") rend -0,
+  // et `-0 < 0` est FAUX. Une charge négative écrite à la virgule passait donc
+  // au travers du refus.
+  const brut=String(el.value).replace(',','.');
   // parseFloat("") vaut NaN, et NaN<0 est faux : vider un champ reste une
   // saisie volontaire et passe par la branche normale, comme avant.
-  if(parseFloat(el.value)<0){
+  if(parseFloat(brut)<0){
     el.value=''; s[champ]='';
     if(principal) s.isAuto=false;
     toast('Charge négative ignorée','var(--orange)');
   } else {
-    s[champ]=el.value;
+    s[champ]=brut;
+    // Le champ affiche ce qui a été retenu. Sans ça, l'écran garderait « 82,5 »
+    // pendant que le dossier porte « 82.5 » : deux vérités pour une saisie.
+    if(el.value!==brut) el.value=brut;
     if(principal){ s.userEdited=true; s.isAuto=false; }
   }
   renderSets(woState.exercises[idx],d,idx);
