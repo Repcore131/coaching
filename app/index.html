@@ -5476,20 +5476,44 @@ function renderDataTable(columns,rows,opts={}){
 // ======= DATA =======
 // ── Compression image universelle ──
 // Redimensionne et compresse en JPEG avant stockage localStorage
-function compressImage(file, maxPx, quality, cb){
+// `onError` est OPTIONNEL et arrive en cinquieme : les appels existants ne
+// changent pas d'un iota. Sans lui, l'echec reste silencieux comme avant —
+// mais il ne laisse plus son appelant suspendu, puisque celui-ci peut
+// desormais le savoir.
+//
+// TROIS FACONS D'ECHOUER, toutes couvertes : le fichier illisible
+// (reader.onerror), le contenu qui n'est pas une image decodable
+// (img.onerror — c'est le cas d'un fichier renomme), et l'encodage qui
+// abandonne faute de memoire sur une image enorme (toDataURL qui jette).
+// Ce dernier survenait DANS un gestionnaire, donc personne ne le voyait.
+function compressImage(file, maxPx, quality, cb, onError){
+  // UN SEUL DES DEUX CHEMINS SORT. Un appelant qui rend un jeton dans chacun
+  // le rendrait deux fois, et son compteur passerait sous zero.
+  let fait=false;
+  const echec=()=>{ if(fait) return; fait=true; if(typeof onError==='function') onError(); };
   const reader=new FileReader();
+  reader.onerror=echec;
   reader.onload=ev=>{
     const img=new Image();
+    img.onerror=echec;
     img.onload=()=>{
-      let w=img.width,h=img.height;
-      if(w>maxPx||h>maxPx){
-        if(w>=h){h=Math.round(h*maxPx/w);w=maxPx;}
-        else{w=Math.round(w*maxPx/h);h=maxPx;}
-      }
-      const canvas=document.createElement('canvas');
-      canvas.width=w;canvas.height=h;
-      canvas.getContext('2d').drawImage(img,0,0,w,h);
-      cb(canvas.toDataURL('image/jpeg',quality));
+      let url;
+      // Le try n'enveloppe QUE l'encodage : une exception venue de `cb`
+      // lui-meme ne doit pas se faire passer pour une image illisible.
+      try{
+        let w=img.width,h=img.height;
+        if(w>maxPx||h>maxPx){
+          if(w>=h){h=Math.round(h*maxPx/w);w=maxPx;}
+          else{w=Math.round(w*maxPx/h);h=maxPx;}
+        }
+        const canvas=document.createElement('canvas');
+        canvas.width=w;canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        url=canvas.toDataURL('image/jpeg',quality);
+      }catch(e){ echec(); return; }
+      if(fait) return;
+      fait=true;
+      cb(url);
     };
     img.src=ev.target.result;
   };
@@ -25679,6 +25703,13 @@ function volAffiche(n){
 
 // ======= BILAN MULTI-STEP =======
 let bilStep=0,bilType='coaching',bilData={},_bilPhotoLoading=0;
+// L'ATTENTE DES PHOTOS EST BORNÉE. Elle ne l'était pas : un compteur qui ne
+// redescendait jamais faisait tourner bilNext indéfiniment, et le bilan ne
+// pouvait plus être validé. Dix secondes à 800 ms font treize passages ;
+// au quatorzième on enregistre sans la photo plutôt que de retenir en otage
+// tout ce que la personne vient de saisir.
+const BIL_PHOTO_ESSAIS_MAX=13;   // 13 × 800 ms ≈ 10,4 s
+let _bilPhotoEssais=0;
 
 // ── Brouillon de bilan ──────────────────────────────────────────────────────
 // Le questionnaire de départ compte une quinzaine d'étapes. Fermer l'onglet en
@@ -25892,7 +25923,19 @@ function bilNext(){
   const steps=_etapesUtiles(bilType==='depart'?DEB_STEPS:BIL_STEPS);
   if(bilStep<steps.length-1){bilStep++;renderBilStep();}
   else{
-    if(_bilPhotoLoading>0){toast('Photos en cours de compression, patiente une seconde...','var(--orange)');setTimeout(bilNext,800);return;}
+    if(_bilPhotoLoading>0&&++_bilPhotoEssais<=BIL_PHOTO_ESSAIS_MAX){
+      toast('Photos en cours de compression, patiente une seconde...','var(--orange)');
+      setTimeout(bilNext,800); return;
+    }
+    if(_bilPhotoLoading>0){
+      // Dix secondes : la compression ne reviendra pas. On ne retient pas en
+      // otage tout ce qui a été saisi pour une photo qui ne s'ajoutera pas.
+      _bilPhotoLoading=0;
+      toast('La photo n’a pas pu être ajoutée. Ton bilan est enregistré sans elle.','var(--orange)');
+    }
+    // Remis à zéro sur CHAQUE passage propre : un second bilan dans la même
+    // session ne doit pas hériter du compteur du premier.
+    _bilPhotoEssais=0;
     saveBilanFinal();
   }
 }
@@ -26299,13 +26342,26 @@ function loadBilPhoto(input,key){
   const f=input.files[0];if(!f)return;
   _bilPhotoLoading++;
   const lbl=input.closest('label');
+  // LE <input> VIT DANS LE <label> : écraser innerHTML le DÉTRUIT. On garde
+  // donc le contenu entier, pas seulement le mot « AJOUTER » — sans lui,
+  // « réessaie avec une autre photo » désignerait un bouton sans champ de
+  // fichier. Le reposer recrée un champ neuf, vierge, prêt pour un second essai.
+  const lblHtml=lbl?lbl.innerHTML:null;
+  const lblCoul=lbl?lbl.style.color:'';
   if(lbl){lbl.style.color='#888';lbl.innerHTML='⏳ Compression...';}
+  // Le jeton est rendu UNE fois, et jamais en dessous de zéro : bilNext peut
+  // avoir remis le compteur à plat pendant que la compression traînait.
+  const _rendre=()=>{ if(_bilPhotoLoading>0) _bilPhotoLoading--; };
   compressImage(f,1200,0.75,data=>{
-    _bilPhotoLoading--;
+    _rendre();
     bilData[key]=data;
     _setPhotoLS('rc_pendingphoto_'+key,data);
     _bilSaveDraft();
     if(lbl){lbl.style.background='#001a00';lbl.style.borderColor='#22c55e';lbl.style.color='#22c55e';lbl.innerHTML=' Ajoutée';}
+  },()=>{
+    _rendre();
+    if(lbl){ lbl.style.color=lblCoul; lbl.innerHTML=lblHtml; }
+    toast('Image illisible : réessaie avec une autre photo','var(--orange)');
   });
 }
 
