@@ -21325,6 +21325,10 @@ function _blocExo(idx,estSS){
         <tbody id="sets-body-${idx}"></tbody>
       </table>
       </div>`}
+      <!-- AJOUTER / RETIRER UNE SERIE. Repeinte par renderSets et non posee
+           ici une fois pour toutes : le « − » depend de l'etat de la derniere
+           serie, qui change a chaque validation. -->
+      <div id="wo-sets-actions-${idx}"></div>
       <div id="wo-douleur-${idx}"></div>
       ${ex.repos&&!isCardio(ex)&&!estSS?`<div style="margin-top:10px;display:flex;align-items:center;gap:8px;color:var(--sub);font-size:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15" style="flex-shrink:0"><circle cx="12" cy="14" r="8"/><line x1="12" y1="14" x2="12" y2="9.5"/><line x1="10" y1="2.5" x2="14" y2="2.5"/><line x1="12" y1="2.5" x2="12" y2="6"/></svg> <strong>Repos :</strong> ${escapeHtml(ex.repos)}</div>`:''}
       </div>`;
@@ -21335,6 +21339,95 @@ function _blocExo(idx,estSS){
 // idx explicite : sur un superset, deux tableaux de séries coexistent à
 // l'écran. Le laisser retomber sur woState.currentEx ferait écrire les deux
 // dans le même exercice.
+// Un plafond, pas une regle : vingt series sur un exercice, on est deja bien
+// au-dela de ce qu'un programme prescrit. Il protege d'un doigt reste appuye.
+const SERIES_MAX=20;
+// LA FORME EST COPIEE, PAS REECRITE. La derniere serie porte, par
+// construction, la forme de _blocExo — y compris `degressive` et `p2reps`,
+// dont depend la mise en page du tableau. La recopier puis remettre a zero ce
+// qui appartient a la serie precedente rend la divergence impossible.
+function _nouvelleSerie(idx){
+  const ex=woState.exercises[idx];
+  const d=woState.sessionData[idx];
+  const pr=parseReps(ex.reps);
+  const der=(d.sets||[])[d.sets.length-1]||null;
+  const s=der?Object.assign({},der):{weight:'',weight2:'',
+    reps:pr.type==='degressive'?pr.p1:ex.reps,rir:'',pain:'',done:false,
+    degressive:pr.type==='degressive',p2reps:pr.p2};
+  // Tout ce qui decrit la serie PRECEDENTE repart a zero. `reps` reste :
+  // c'est la prescription en cours, et c'est ce qu'on veut refaire.
+  s.weight=''; s.weight2=''; s.rir=''; s.pain=''; s.done=false;
+  delete s.userEdited; delete s.isAuto; delete s.reposReel; delete s.tValid;
+  return s;
+}
+// La charge n'est pas posee ici : renderSets la deduira du RIR de la serie
+// precedente, exactement comme pour une serie prevue au programme.
+function ajouterSerie(idx){
+  const ex=woState&&woState.exercises&&woState.exercises[idx];
+  const d=woState&&woState.sessionData&&woState.sessionData[idx];
+  if(!ex||!d||!Array.isArray(d.sets)) return;
+  // Cardio : une duree, pas un nombre de series.
+  if(isCardio(ex)) return;
+  if(d.sets.length>=SERIES_MAX)
+    return toast('Vingt séries sur un exercice, c\'est déjà le maximum.','var(--orange)');
+  d.sets.push(_nouvelleSerie(idx));
+  renderSets(ex,d,idx);
+  woPersist();
+}
+// Ne retire QUE la derniere, et seulement si elle n'est pas validee : une
+// serie validee compte deja dans le tonnage, et retirer au milieu decalerait
+// les index que _recordsVus et les gestionnaires du tableau portent en dur.
+function retirerSerie(idx){
+  const d=woState&&woState.sessionData&&woState.sessionData[idx];
+  if(!d||!Array.isArray(d.sets)) return;
+  const n=d.sets.length;
+  // Une seule serie restante : la retirer reviendrait a supprimer
+  // l'exercice, ce que ce bouton ne dit pas faire.
+  if(n<=1) return;
+  const der=d.sets[n-1];
+  if(!der||der.done===true) return;
+  const _oter=()=>{ d.sets.pop(); renderSets(woState.exercises[idx],d,idx); woPersist(); };
+  // Une charge TAPEE A LA MAIN, un RIR ou une douleur : c'est de la saisie, et
+  // elle disparaitrait sans un mot. La charge AUTO ne compte pas — elle est
+  // proposee et non saisie, et poserait la question a chaque fois.
+  const _saisie=!!(der.userEdited||(der.rir!==''&&der.rir!=null)
+    ||(der.pain!==''&&der.pain!=null));
+  if(!_saisie) return _oter();
+  // Le refus — bouton « Garder » ou toucher du voile — conserve la serie.
+  rcConfirm('Retirer cette série ?','Ce que tu as noté dessus sera perdu.',
+    'Retirer','Garder').then(ok=>{ if(ok) _oter(); });
+}
+// Les deux boutons, sous le tableau. Repeints a chaque renderSets : le « − »
+// n'existe que tant que la derniere serie n'est pas validee.
+function _majActionsSeries(ex,data,idx){
+  const z=document.getElementById('wo-sets-actions-'+idx);
+  if(!z) return;
+  // VIDE EXPLICITEMENT pour un cardio : un remplacement en cours de seance
+  // peut changer le type de l'exercice, et les boutons resteraient sinon.
+  if(isCardio(ex)){ z.innerHTML=''; return; }
+  const n=((data&&data.sets)||[]).length;
+  const der=n?data.sets[n-1]:null;
+  const peutRetirer=n>1&&der&&der.done!==true;
+  const base='min-height:44px;border-radius:9px;cursor:pointer;font-family:Montserrat,sans-serif;font-weight:800;letter-spacing:.5px;display:inline-flex;align-items:center;justify-content:center;gap:7px';
+  z.innerHTML='<div style="display:flex;gap:8px;margin-top:10px">'
+    +'<button type="button" class="hit44" onclick="ajouterSerie('+idx+')" '
+    +'aria-label="Ajouter une série à cet exercice" '
+    +'style="flex:1;'+base+';background:var(--surface-2);border:1px dashed var(--border);'
+    +'color:var(--sub);font-size:11px">'
+    +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" '
+    +'stroke-linecap="round" width="13" height="13" aria-hidden="true">'
+    +'<path d="M12 5v14"/><path d="M5 12h14"/></svg>une série</button>'
+    +(peutRetirer
+      ?'<button type="button" class="hit44" onclick="retirerSerie('+idx+')" '
+        +'aria-label="Retirer la dernière série" title="Retirer la dernière série" '
+        +'style="width:52px;'+base+';background:none;border:1px solid var(--border);'
+        +'color:var(--text-faint)">'
+        +'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" '
+        +'stroke-linecap="round" width="13" height="13" aria-hidden="true">'
+        +'<path d="M5 12h14"/></svg></button>'
+      :'')
+    +'</div>';
+}
 function renderSets(ex,data,idx){
   if(idx==null) idx=woState.currentEx;
   const tb=document.getElementById('sets-body-'+idx);if(!tb) return;
@@ -21350,6 +21443,7 @@ function renderSets(ex,data,idx){
         </button></td>
       </tr>`;
     }).join('');
+    _majActionsSeries(ex,data,idx);
     return;
   }
   // Plus aucune colonne de cycle ici : l ajustement est porte par la charge
@@ -21457,6 +21551,9 @@ function renderSets(ex,data,idx){
       <td><button class="hit44" data-arc="off" onclick="toggleSet(${i},${idx})" style="width:34px;height:34px;border-radius:50%;border:2px solid ${s.done?'#fff':'var(--border)'};background:${s.done?'#1a1a1a':'transparent'};color:var(--sub);cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center;padding:0;${s.done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">${s.done?'<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}</button></td>
     </tr>`;
   }).join('');
+  // Le « − » n'existe que tant que la dernière série n'est pas validée : sa
+  // présence dépend donc du tableau qui vient d'être repeint.
+  _majActionsSeries(ex,data,idx);
   // Deux séries validées à 4 ou plus sur CET exercice : la carte apparaît.
   // Ici et pas dans toggleSet, parce que la douleur peut aussi être saisie
   // après coup sur une série déjà validée.
@@ -21783,6 +21880,14 @@ function finishWorkout(incomplete=false){
   // annoncerait « 5/8 » — l'écart réel, celui qu'on veut montrer, est 5/12.
   // woState.exercises porte déjà la réduction de séries de la phase lutéale :
   // c'est bien ce qui était prévu POUR CETTE séance-là.
+  // NON RELEVÉ AU RÉALISÉ, même depuis que l'athlète peut ajouter des séries.
+  // setsPlanned signifie « prévu par le coach » et sert de DÉNOMINATEUR à un
+  // écart. Le relever à max(prévu, réalisé) ferait disparaître le travail en
+  // plus au lieu de le montrer — 10 séries sur 8 se lirait « 10/10 » — et,
+  // pire, signauxEntrainement calcule le décrochage sur faits/prévus : gonfler
+  // le dénominateur ferait passer pour un décrochage un athlète qui en fait
+  // DAVANTAGE. fmtSeries gère déjà le dépassement en n'affichant que le
+  // réalisé quand il excède le prévu.
   const setsPlanned=(woState.exercises||[]).reduce((n,ex)=>n+(parseInt(ex.series)||0),0);
   // Seules les séries validées comptent : sessionData contient toutes les séries
   // prévues dès l'ouverture de l'exercice, l'ancien sets++ inconditionnel affichait
@@ -22320,7 +22425,11 @@ function _exercicesEnProgres(u){
 function _messageFinSeance(sets,setsPlanned,duration,records,delta,jour,incomplete){
   const n=Number(sets)||0, p=Number(setsPlanned)||0, m=Number(duration)||0;
   if(incomplete) return 'Séance écourtée : '+n+' séries sur '+p+' enregistrées. C\'est compté.';
-  const tete=n+' séries sur '+p+', '+m+' min. ';
+  // « 10 séries sur 8 » se lit comme une erreur. Depuis que l'athlète peut
+  // ajouter des séries, le dépassement existe et mérite d'être dit dans ce
+  // sens-là. En dessous ou à égalité, la phrase ne change pas.
+  const tete=(p>0&&n>p)?(n+' séries pour '+p+' prévues, '+m+' min. ')
+    :(n+' séries sur '+p+', '+m+' min. ');
   if(records&&records.length){
     const b=records.slice().sort((a,x)=>x.gain-a.gain)[0];
     return tete+'Record : '+b.nm+' à '+b.curMax+' kg.';
@@ -63504,6 +63613,66 @@ function testExercices(){
       return n===cw;   // les seuls champs numériques sont ceux de charge
     })());
 
+    // ── UNE SÉRIE EN PLUS ──
+    // startTime nul : woPersist sort aussitôt et n'écrit aucun faux
+    // instantané de séance dans le stockage de qui lance la suite.
+    (()=>{
+      const sauve=woState;
+      const tb=document.createElement('tbody'); tb.id='sets-body-0';
+      const zn=document.createElement('div'); zn.id='wo-sets-actions-0';
+      document.body.appendChild(tb); document.body.appendChild(zn);
+      const monte=sets=>{
+        woState={exercises:[{name:'TX',series:2,reps:'10'}],currentEx:0,
+          sessionData:{0:{sets:sets}},progName:'P',slot:0,startTime:null};
+        try{ renderSets(woState.exercises[0],woState.sessionData[0],0); }catch(e){}
+      };
+      const vierge=()=>({weight:'',weight2:'',reps:'10',rir:'',pain:'',done:false,
+        degressive:false,p2reps:null});
+      try{
+        monte([Object.assign(vierge(),{done:true}),vierge()]);
+        ok('Le bouton « + une série » est dans la page',
+           /ajouterSerie\(0\)/.test(zn.innerHTML));
+        ok('Le « − » est là tant que la dernière série n\u0027est pas validée',
+           /retirerSerie\(0\)/.test(zn.innerHTML));
+
+        monte([Object.assign(vierge(),{done:true}),Object.assign(vierge(),{done:true})]);
+        ok('Dernière série validée : plus de « − »',!/retirerSerie/.test(zn.innerHTML));
+
+        // Ajouter : une ligne de plus dans le tableau, de MÊME forme.
+        monte([Object.assign(vierge(),{weight:'80',rir:'2',done:true,userEdited:true})]);
+        const avant=woState.sessionData[0].sets.length;
+        ajouterSerie(0);
+        const sets=woState.sessionData[0].sets;
+        ok('Ajouter une série allonge le tableau',sets.length===avant+1
+           &&tb.querySelectorAll('tr').length===sets.length,
+           sets.length+' séries / '+tb.querySelectorAll('tr').length+' lignes');
+        ok('La série ajoutée a la forme de _blocExo',
+           Object.keys(sets[1]).sort().join(',')===Object.keys(vierge()).sort().join(','),
+           Object.keys(sets[1]).sort().join(','));
+        ok('Elle reprend les répétitions de la précédente',sets[1].reps==='10');
+        ok('Elle n\u0027est ni validée ni marquée comme saisie',
+           sets[1].done===false&&!sets[1].userEdited);
+
+        // Retirer : une série vierge part sans question.
+        const n2=woState.sessionData[0].sets.length;
+        retirerSerie(0);
+        ok('Retirer enlève la dernière série',
+           woState.sessionData[0].sets.length===n2-1);
+
+        // Les deux refus.
+        monte([Object.assign(vierge(),{done:true})]);
+        retirerSerie(0);
+        ok('La dernière série restante ne se retire pas',
+           woState.sessionData[0].sets.length===1);
+        monte([vierge(),Object.assign(vierge(),{done:true})]);
+        retirerSerie(0);
+        ok('Une série validée ne se retire pas',
+           woState.sessionData[0].sets.length===2);
+      } finally {
+        tb.remove(); zn.remove(); woState=sauve;
+      }
+    })();
+
     // ── BB-05 : séance de décharge ──
     // Planifiée par le coach. Elle sort de la série temporelle, donc elle ne
     // peut pas passer pour un recul ni écraser un record.
@@ -71343,6 +71512,14 @@ function testExercices(){
     ok('setsPlanned à zéro : aucune fausse « séance complète »',(()=>{
       const m=_messageFinSeance(0,0,10,[],0,'lundi',false);
       return m==='0 séries sur 0, 10 min. C\'est enregistré.';})());
+    // Depuis que l'athlète peut ajouter des séries, le réalisé peut dépasser
+    // le prévu. « 10 séries sur 8 » se lirait comme une erreur.
+    ok('Dépassement : la phrase se retourne',
+       _messageFinSeance(10,8,45,[],0,'lundi',false)
+       ==='10 séries pour 8 prévues, 45 min. C\'est enregistré.');
+    ok('À égalité, la phrase ne change pas',
+       _messageFinSeance(8,8,45,[],0,'lundi',false)
+       ==='8 séries sur 8, 45 min. Séance complète.');
     ok('Delta négatif : on ne l\'annonce pas',
        !/de volume/.test(_messageFinSeance(10,12,45,[],-400,'lundi',false)));
 
