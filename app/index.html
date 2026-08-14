@@ -28329,9 +28329,13 @@ function saveBilanFinal(){
     const _lvlMap={'Faible intensité':'Débutant (< 1 an)','Intensité Modérée':'Intermédiaire (1-3 ans)','Haute intensité':'Avancé (3-5 ans)'};
     const _lvl=bilData['deb-intensity-1'];
     if(_lvl&&_lvlMap[_lvl]) currentUser.level=_lvlMap[_lvl];
-    // Fréquence → currentUser.frequency
-    const _freq=bilData['deb-sessions-week'];
-    if(_freq) currentUser.frequency=_freq;
+    // FRÉQUENCE : trois lignes retirées le 14/08. Elles lisaient
+    // `deb-sessions-week`, une clef qu'aucune étape de DEB_STEPS n'écrit — la
+    // valeur était donc toujours undefined. Et `currentUser.frequency` n'avait
+    // pour seul lecteur que renderQ, le questionnaire QS, dont le point
+    // d'entrée initQuestionnaire n'a aucun appelant et dont le conteneur
+    // `q-content` n'existe pas dans le DOM. La dériver aurait alimenté un écran
+    // que personne ne peut ouvrir.
     // Type de suivi nutritionnel → nutrition.dietType. On NE TOUCHE PAS a une
     // valeur deja fixee : le coach a pu la choisir avant que l'athlete remplisse
     // son bilan, et son avis prime. Reponse absente : on n'ecrit rien, le defaut
