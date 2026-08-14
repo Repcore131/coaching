@@ -3040,7 +3040,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- BILAN ALERT -->
       <div id="clh-bilan-alert" style="display:none;background:#7c2d1222;border:1px solid var(--orange);border-radius:12px;padding:14px;margin-bottom:16px;cursor:pointer" onclick="openBilanChoice()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div style="font-weight:700;color:var(--orange);font-size:13px;text-transform:uppercase;letter-spacing:.5px">Bilan bimensuel à compléter</div>
-        <div class="sub" style="font-size:12px;margin-top:4px">Suis ton évolution : remplis ton bilan.</div>
+        <div class="sub" style="font-size:12px;margin-top:4px" id="clh-bilan-alert-sub">Suis ton évolution : remplis ton bilan.</div>
       </div>
 
       <!-- LE PROGRAMME PDF A QUITTE L ACCUEIL. Les seances se composent
@@ -18959,6 +18959,22 @@ function loadClientHome(){
         +' : reprendre là où tu t\'es arrêté →';
     }
   }
+  // LE RAPPEL DE BILAN, TOUS LES JOURS ET PLUS SEULEMENT LE SAMEDI. Cette
+  // carte était dans le DOM depuis toujours en display:none et rien ne
+  // l'allumait ; le seul rappel restant, showBilanNotifBanner, ne sort que le
+  // samedi après 7 h. Un athlète qui n'ouvre pas l'app ce jour-là n'entendait
+  // plus parler de son bilan pendant deux semaines.
+  //
+  // getNextBilanSaturday rend null sans aucun bilan : le premier questionnaire
+  // a sa propre carte, clh-first-bilan-card, juste au-dessus.
+  const _alerte=document.getElementById('clh-bilan-alert');
+  if(_alerte){
+    let _txt=null;
+    try{ _txt=_bilTexteRetard(_bilRetardJours(getNextBilanSaturday())); }catch(e){ _txt=null; }
+    _alerte.style.display=_txt?'block':'none';
+    const _sub=document.getElementById('clh-bilan-alert-sub');
+    if(_sub&&_txt) _sub.textContent=_txt+' Suis ton évolution : remplis ton bilan.';
+  }
   // `users` sert plus bas à _applyCoachData : il reste, la carte PDF non.
   const users=DB.get('users')||{};
   _majBandeauDispo('clh-dispo');
@@ -28200,6 +28216,27 @@ function getNextBilanSaturday(rattraper){
     next.setHours(0,0,0,0);
   }
   return next;
+}
+// PURE. Le retard en jours entre une échéance et aujourd'hui. Négatif quand
+// l'échéance est devant — l'appelant y lit « rien à réclamer ».
+//
+// Math.round et non une division sèche : un passage à l'heure d'été rend
+// l'écart entre deux minuits non multiple de 24 h, et un floor perdrait un
+// jour. Même raisonnement que getNextBilanSaturday, qui avance par setDate.
+function _bilRetardJours(echeance,maintenant){
+  if(echeance==null) return null;
+  const e=new Date(echeance); e.setHours(0,0,0,0);
+  const j=new Date(maintenant==null?Date.now():maintenant); j.setHours(0,0,0,0);
+  const n=Math.round((j.getTime()-e.getTime())/86400000);
+  return isFinite(n)?n:null;
+}
+// PURE. Ce que la carte doit dire, ou null quand elle ne doit RIEN dire —
+// c'est ce null qui décide de l'afficher ou pas, pas le rendu.
+function _bilTexteRetard(n){
+  if(n==null||!isFinite(n)||n<0) return null;
+  if(n===0) return 'C’est aujourd’hui.';
+  if(n===1) return 'Attendu depuis hier.';
+  return 'Attendu depuis '+n+' jours.';
 }
 function isBilanNotifDay(){
   const bilans=currentUser.bilans||[];
