@@ -63646,12 +63646,25 @@ function testExercices(){
         ok('Ajouter une série allonge le tableau',sets.length===avant+1
            &&tb.querySelectorAll('tr').length===sets.length,
            sets.length+' séries / '+tb.querySelectorAll('tr').length+' lignes');
-        ok('La série ajoutée a la forme de _blocExo',
-           Object.keys(sets[1]).sort().join(',')===Object.keys(vierge()).sort().join(','),
-           Object.keys(sets[1]).sort().join(','));
+        // TOUS les champs de _blocExo, et rien d'autre que `isAuto` en plus :
+        // renderSets vient de déduire la charge du RIR de la série précédente,
+        // exactement comme il le fait pour une série prévue au programme. Une
+        // égalité stricte de clés serait donc fausse — et le manquant qui
+        // compte reste `reps`, sans lequel la série pèserait zéro kilo.
+        ok('La série ajoutée a la forme de _blocExo',(()=>{
+          const attendus=Object.keys(vierge());
+          const eus=Object.keys(sets[1]);
+          return attendus.every(k=>eus.includes(k))
+            &&eus.filter(k=>!attendus.includes(k)).every(k=>k==='isAuto');
+        })(),Object.keys(sets[1]).sort().join(','));
         ok('Elle reprend les répétitions de la précédente',sets[1].reps==='10');
         ok('Elle n\u0027est ni validée ni marquée comme saisie',
            sets[1].done===false&&!sets[1].userEdited);
+        // La charge n'est pas posée par ajouterSerie : renderSets la déduit du
+        // RIR de la série précédente. 80 kg à RIR 2 → +2 paliers → 85 kg.
+        ok('Sa charge est déduite du RIR précédent, comme une série prévue',
+           Number(sets[1].weight)===85&&sets[1].isAuto===true,
+           sets[1].weight+' kg');
 
         // Retirer : une série vierge part sans question.
         const n2=woState.sessionData[0].sets.length;
