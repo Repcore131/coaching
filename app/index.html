@@ -21358,6 +21358,40 @@ function _blocExo(idx,estSS){
 // Un plafond, pas une regle : vingt series sur un exercice, on est deja bien
 // au-dela de ce qu'un programme prescrit. Il protege d'un doigt reste appuye.
 const SERIES_MAX=20;
+// LA SAISIE D'UNE CHARGE, EN UN SEUL ENDROIT. Elle vivait dans un attribut
+// onchange recopié à quatre exemplaires par le gabarit : un refus posé là ne
+// serait vérifiable nulle part, et les copies finiraient par diverger.
+//
+// UNE CHARGE NÉGATIVE EST REFUSÉE, PAS CORRIGÉE : on ne devine pas qu'un
+// « -80 » voulait dire 80. Le champ se vide et l'athlète retape.
+//
+// Ce que le négatif coûtait : sur `weight`, tonnageSerie rend 0 et la série
+// disparaît du tonnage sans un mot ; sur `weight2`, il n'y a AUCUN garde et
+// la phase 2 RETRANCHE du tonnage de la séance. D'où le refus sur les deux.
+//
+// ET LE REFUS NE MARQUE PAS `userEdited` : ce drapeau coupe la charge
+// proposée pour cette série jusqu'à la fin de la séance. Une faute de frappe
+// ne doit pas priver quelqu'un de sa suggestion — au contraire, vider le
+// champ laisse renderSets la reproposer au tour suivant.
+function _woChargeSaisie(idx,i,champ,el){
+  const d=woState&&woState.sessionData&&woState.sessionData[idx];
+  const s=d&&d.sets&&d.sets[i];
+  if(!s||!el) return;
+  // Seule `weight` porte la charge proposée : `weight2` n'est jamais
+  // auto-remplie, donc ni `userEdited` ni `isAuto` ne la concernent.
+  const principal=champ!=='weight2';
+  // parseFloat("") vaut NaN, et NaN<0 est faux : vider un champ reste une
+  // saisie volontaire et passe par la branche normale, comme avant.
+  if(parseFloat(el.value)<0){
+    el.value=''; s[champ]='';
+    if(principal) s.isAuto=false;
+    toast('Charge négative ignorée','var(--orange)');
+  } else {
+    s[champ]=el.value;
+    if(principal){ s.userEdited=true; s.isAuto=false; }
+  }
+  renderSets(woState.exercises[idx],d,idx);
+}
 // LA FORME EST COPIEE, PAS REECRITE. La derniere serie porte, par
 // construction, la forme de _blocExo — y compris `degressive` et `p2reps`,
 // dont depend la mise en page du tableau. La recopier puis remettre a zero ce
@@ -21493,8 +21527,10 @@ function renderSets(ex,data,idx){
     const rowCls=s.done?'done':'';
     const painAlert=s.pain&&parseInt(s.pain)>=4?' row-alert':'';
 
-    const onChW=`woState.sessionData[${idx}].sets[${i}].weight=this.value;woState.sessionData[${idx}].sets[${i}].userEdited=true;woState.sessionData[${idx}].sets[${i}].isAuto=false;renderSets(woState.exercises[${idx}],woState.sessionData[${idx}],${idx})`;
-    const onChW2=`woState.sessionData[${idx}].sets[${i}].weight2=this.value;renderSets(woState.exercises[${idx}],woState.sessionData[${idx}],${idx})`;
+    // Les deux charges passent par _woChargeSaisie : le refus du négatif y vit
+    // une seule fois, et il est vérifiable.
+    const onChW=`_woChargeSaisie(${idx},${i},'weight',this)`;
+    const onChW2=`_woChargeSaisie(${idx},${i},'weight2',this)`;
     const onChR=`woState.sessionData[${idx}].sets[${i}].rir=this.value;renderSets(woState.exercises[${idx}],woState.sessionData[${idx}],${idx})`;
     const onChP=`woState.sessionData[${idx}].sets[${i}].pain=this.value`;
 
@@ -21505,13 +21541,13 @@ function renderSets(ex,data,idx){
     // Wide-mode: content without <td> wrappers (for 2-sub-row card layout)
     const isWide=isDeg;
     const weightInner=isDeg
-      ?`<input class="set-input" type="number" value="${s.weight||''}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}><input class="set-input" type="number" value="${s.weight2||''}" placeholder="P2" style="border-color:#78350f;margin-left:4px" onchange="${onChW2}" ${dis}>`
-      :`<div><input class="set-input" type="number" value="${s.weight||''}" placeholder="kg" style="${weightBorder}" onchange="${onChW}" ${dis}>${autoLabel}</div>`;
+      ?`<input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" value="${s.weight||''}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" value="${s.weight2||''}" placeholder="P2" style="border-color:#78350f;margin-left:4px" onchange="${onChW2}" ${dis}>`
+      :`<div><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" value="${s.weight||''}" placeholder="kg" style="${weightBorder}" onchange="${onChW}" ${dis}>${autoLabel}</div>`;
 
     // Simple-mode: <td> wrappers for classic table layout
     const weightCell=isDeg
-      ?`<td><input class="set-input" type="number" value="${s.weight||''}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}></td><td><input class="set-input" type="number" value="${s.weight2||''}" placeholder="P2" style="border-color:#78350f" onchange="${onChW2}" ${dis}></td>`
-      :`<td><input class="set-input" type="number" value="${s.weight||''}" placeholder="kg" style="${weightBorder}" onchange="${onChW}" ${dis}>${autoLabel}</td>`;
+      ?`<td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" value="${s.weight||''}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}></td><td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" value="${s.weight2||''}" placeholder="P2" style="border-color:#78350f" onchange="${onChW2}" ${dis}></td>`
+      :`<td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" value="${s.weight||''}" placeholder="kg" style="${weightBorder}" onchange="${onChW}" ${dis}>${autoLabel}</td>`;
 
     // Cycle cell
 
@@ -25046,7 +25082,12 @@ function getPrevPerf(name,slot,progName){
     const sess=currentUser.sessions[i];if(!sess.data) continue;
     if(!_memeCreneau(sess,slot,progName)) continue;
     const d=_dataDeSeance(sess,name);if(!d) continue;
-    const done=d.sets.filter(s=>s.done&&s.weight);
+    // `s.weight` était vrai pour la chaîne '0' comme pour '-50' : la dernière
+    // série RÉELLEMENT chargée était alors ignorée au profit d'une série qui
+    // ne donne aucune suggestion — chargeSuivante rend 0 ou un négatif, et
+    // _blocExo retombe sur « Pas encore d'historique ». Une seule saisie
+    // aberrante coupait donc la progression pour de bon.
+    const done=d.sets.filter(s=>s.done&&parseFloat(s.weight)>0);
     // COPIE, et non la série elle-même : y écrire _refDate reviendrait à
     // glisser un champ parasite dans l'historique de l'athlète, que le prochain
     // saveUser persisterait. La date vient de la SÉANCE — une série n'en porte
