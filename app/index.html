@@ -1728,15 +1728,20 @@ const COACH_PHOTO='icons/coach.jpg';
     <p class="sub" style="text-align:center;margin-top:8px">Pas de compte ? <span class="red" style="cursor:pointer;font-weight:700;color:var(--red-light)" onclick="goRegisterAthlete()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">Créer un compte</span></p>
     <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:16px">
       <p class="sub" style="text-align:center;font-size:11px;margin-bottom:10px;color:var(--text-dim)">Tu as changé de navigateur ou d'appareil ?</p>
-      <button class="btn" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--sub);font-size:12px;letter-spacing:1px" onclick="showNewPwdRecovery()">RÉCUPÉRER AVEC UN NOUVEAU MOT DE PASSE</button>
+      <!-- CE BOUTON NE CHANGE AUCUN MOT DE PASSE. Il sert au cas où le compte
+           n'a jamais été connecté ici : signUp crée alors le compte
+           d'authentification et rapatrie les données. Sur un compte déjà connu,
+           Firebase répond EMAIL_EXISTS et rien ne change — d'où le renvoi vers
+           « Mot de passe oublié ? », juste au-dessus. -->
+      <button class="btn" style="width:100%;background:var(--surface-2);border:1px solid var(--border);color:var(--sub);font-size:12px;letter-spacing:1px" onclick="showNewPwdRecovery()">JE N'AI JAMAIS RÉUSSI À ME CONNECTER ICI</button>
     </div>
     <div id="new-pwd-recovery" style="display:none;margin-top:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:16px">
-      <div style="font-size:12px;font-weight:800;letter-spacing:1px;margin-bottom:10px">RÉCUPÉRATION DU COMPTE</div>
-      <p style="font-size:11px;color:#888;line-height:1.6;margin-bottom:12px">Entre ton email et choisis un nouveau mot de passe. Tes données seront restaurées depuis le cloud si elles y sont.</p>
+      <div style="font-size:12px;font-weight:800;letter-spacing:1px;margin-bottom:10px">PREMIÈRE CONNEXION SUR CET APPAREIL</div>
+      <p style="font-size:11px;color:#888;line-height:1.6;margin-bottom:12px">À utiliser seulement si tu n'as <b style="color:#bbb">jamais réussi</b> à te connecter, nulle part. Tes données sont rapatriées depuis le cloud, et le mot de passe saisi ici devient celui de ton compte.<br><br>Si ton compte est déjà connu, ce bouton n'y changera rien : passe par « Mot de passe oublié ? » ci-dessus.</p>
       <div style="margin-bottom:8px"><label style="font-size:11px">Email</label><input id="rec-email" type="email" placeholder="ton@email.com"></div>
-      <div style="margin-bottom:8px"><label style="font-size:11px">Nouveau mot de passe</label><input id="rec-pwd" type="password" placeholder="Min. 6 caractères"></div>
+      <div style="margin-bottom:8px"><label style="font-size:11px">Mot de passe à définir</label><input id="rec-pwd" type="password" placeholder="Min. 6 caractères"></div>
       <div id="rec-err" style="color:var(--red-light);font-size:12px;display:none;margin-bottom:8px"></div>
-      <button class="btn btn-red" style="width:100%;font-size:12px;letter-spacing:1px" onclick="doNewPwdRecovery()">RÉCUPÉRER MON COMPTE</button>
+      <button class="btn btn-red" style="width:100%;font-size:12px;letter-spacing:1px" onclick="doNewPwdRecovery()">RESTAURER MON COMPTE ICI</button>
     </div>
   </div>
 
@@ -8513,6 +8518,15 @@ function showNewPwdRecovery(){
   const el=document.getElementById('new-pwd-recovery');
   if(el) el.style.display=el.style.display==='none'?'block':'none';
 }
+// NE CHANGE AUCUN MOT DE PASSE, malgré son nom hérité. accounts:signUp CRÉE un
+// compte d'authentification quand l'email n'y est pas encore — le cas d'un
+// dossier présent dans la seule base RTDB, ou créé avant que Firebase Auth ne
+// soit configuré. Sur un compte déjà connu, Firebase répond EMAIL_EXISTS et la
+// branche d'erreur renvoie vers « Mot de passe oublié ? », qui est le seul
+// chemin réel pour changer un mot de passe.
+//
+// Les libellés ont été corrigés en conséquence : ils promettaient un choix de
+// mot de passe que cette API ne peut pas rendre sur un compte existant.
 async function doNewPwdRecovery(){
   const em=(document.getElementById('rec-email')?.value||'').trim().toLowerCase();
   const pw=document.getElementById('rec-pwd')?.value||'';
@@ -8527,7 +8541,7 @@ async function doNewPwdRecovery(){
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({email:em,password:pw,returnSecureToken:true})
   }).then(r=>r.json()).catch(()=>({}));
-  if(btn){btn.textContent='RÉCUPÉRER MON COMPTE';btn.disabled=false;}
+  if(btn){btn.textContent='RESTAURER MON COMPTE ICI';btn.disabled=false;}
   if(r.idToken){
     // Nouveau compte Firebase créé → essayer de récupérer les données RTDB
     CLOUD._idToken=r.idToken;CLOUD._refreshToken=r.refreshToken;
