@@ -3076,13 +3076,28 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
         <div style="display:flex;gap:12px;margin-bottom:14px">
           <div style="flex:1">
-            <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px">Âge</label>
-            <input id="atp-age" type="number" min="10" max="99" placeholder="25" style="width:100%;font-size:16px;padding:11px 14px;box-sizing:border-box">
+            <!-- LA DATE, PAS L'ÂGE. `age` est une vue de `birthdate` : le
+                 démarrage la recalcule et l'écrit, si bien qu'un âge saisi ici
+                 était effacé au prochain lancement. On donne donc le champ qui
+                 gouverne. -->
+            <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px">Date de naissance</label>
+            <input id="atp-birthdate" type="date" style="width:100%;font-size:16px;padding:11px 14px;box-sizing:border-box">
           </div>
           <div style="flex:1">
             <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px">Poids (kg)</label>
             <input id="atp-weight" type="number" min="30" max="300" step="0.1" placeholder="70" style="width:100%;font-size:16px;padding:11px 14px;box-sizing:border-box">
           </div>
+        </div>
+        <!-- REPLI. Les dossiers créés par doRescue n'ont pas de date de
+             naissance : pour eux seulement, le champ d'âge libre reste, avec
+             son comportement d'avant. Il disparaît dès qu'une date est
+             renseignée. Affiché par openAthleteProfile. -->
+        <div id="atp-age-repli" style="display:none;margin-bottom:14px">
+          <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:6px">Âge</label>
+          <input id="atp-age" type="number" min="10" max="99" placeholder="25" style="width:100%;font-size:16px;padding:11px 14px;box-sizing:border-box">
+          <div style="font-size:10.5px;color:var(--text-faint);line-height:1.5;margin-top:6px">
+            Ton dossier n'a pas de date de naissance. Renseigne-la au-dessus et ton âge
+            se mettra à jour tout seul chaque année.</div>
         </div>
         <div>
           <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Sexe</label>
@@ -8695,13 +8710,19 @@ function _ageRevolu(iso){
   return age;
 }
 // Borne haute du sélecteur natif : la date la plus récente encore acceptable.
+// LES DEUX CHAMPS DE DATE partagent ces bornes : celui de l'inscription et
+// celui du profil. Deux jeux finiraient par diverger, et celui du profil
+// serait le dernier mis à jour.
 function _initBirthdateMax(){
-  const el=document.getElementById('r-birthdate');
-  if(!el) return;
   const d=new Date();
   d.setFullYear(d.getFullYear()-AGE_MINIMUM);
-  el.max=d.toISOString().slice(0,10);
-  el.min='1900-01-01';
+  const max=d.toISOString().slice(0,10);
+  for(const id of ['r-birthdate','atp-birthdate']){
+    const el=document.getElementById(id);
+    if(!el) continue;
+    el.max=max;
+    el.min='1900-01-01';
+  }
 }
 // Normalise toutes les conventions historiques ('femme','F','f') → booléen
 function isFemale(g){const s=String(g||'');return s==='F'||s==='f'||s.toLowerCase()==='femme';}
@@ -47632,8 +47653,15 @@ function openAthleteProfile(){
   if(fnEl) fnEl.value=u.fname||'';
   const lnEl=document.getElementById('atp-lname');
   if(lnEl) lnEl.value=u.lname||'';
+  // LA DATE D'ABORD. Le champ d'âge n'apparaît qu'à défaut — dossiers créés
+  // par doRescue, qui ne portent pas de date de naissance.
+  const bdEl=document.getElementById('atp-birthdate');
+  if(bdEl) bdEl.value=u.birthdate||'';
+  try{ _initBirthdateMax(); }catch(e){}
   const ageEl=document.getElementById('atp-age');
   if(ageEl) ageEl.value=u.age||'';
+  const repli=document.getElementById('atp-age-repli');
+  if(repli) repli.style.display=u.birthdate?'none':'block';
   const wtEl=document.getElementById('atp-weight');
   if(wtEl) wtEl.value=u.profileWeight||'';
   const objEl=document.getElementById('atp-objective');
@@ -47664,7 +47692,22 @@ function saveAthleteProfile(){
   const _ln=(document.getElementById('atp-lname')?.value||'').trim().slice(0,40);
   if(_fn) currentUser.fname=_fn;
   if(_ln) currentUser.lname=_ln;
-  currentUser.age=parseInt(document.getElementById('atp-age')?.value)||undefined;
+  // L'ÂGE EST DÉDUIT, JAMAIS SAISI — quand une date est disponible. C'est ce
+  // qui met fin à la correction effacée au redémarrage : le boot recalcule
+  // depuis `birthdate`, il retrouvera donc exactement ce qui est écrit ici.
+  const _bd=(document.getElementById('atp-birthdate')?.value||'').trim();
+  if(_bd){
+    const _a=_ageRevolu(_bd);
+    // Une date illisible ou aberrante n'écrase rien : mieux vaut garder
+    // l'ancienne valeur qu'en inscrire une fausse.
+    if(_a!==null&&_a>=0&&_a<=120){ currentUser.birthdate=_bd; currentUser.age=_a; }
+  } else if(!currentUser.birthdate){
+    // REPLI : aucune date connue, ni saisie ni enregistrée. Le champ libre
+    // reste la seule source, avec son comportement d'avant.
+    currentUser.age=parseInt(document.getElementById('atp-age')?.value)||undefined;
+  }
+  // Champ vidé alors qu'une date est enregistrée : on ne détruit rien. Effacer
+  // sa date de naissance par inadvertance ferait disparaître son âge partout.
   currentUser.profileWeight=parseFloat(document.getElementById('atp-weight')?.value)||undefined;
   currentUser.gender=_atpGender||currentUser.gender;
   currentUser.objective=(document.getElementById('atp-objective')?.value||'').trim()||undefined;
