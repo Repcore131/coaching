@@ -32687,7 +32687,10 @@ function _renderStrictMacroRings(nut){
   </div>`;
 }
 
-function _renderNutriContent(type){
+// `dateAff` est OPTIONNELLE et retombe sur aujourd'hui : les vingt appelants
+// existants ne changent pas d'un iota. Elle sert à ceux qui savent sur quel
+// jour le journal doit rester — après un ajout, notamment.
+function _renderNutriContent(type,dateAff){
   const contentEl=document.getElementById('nut-diet-content');
   // Encart de transition : il se pose AVANT tout le reste, parce qu'il explique
   // pourquoi les chiffres affiches en dessous ne portent aucune adaptation.
@@ -32722,7 +32725,10 @@ function _renderNutriContent(type){
       ${_renderStrictMacroRings(nut)}
       ${_htmlHydratationNut(currentUser)}
       ${_renderCycleNutSettings(nut)}`;
-    if(fjSec){fjSec.style.display='block';_renderFjDaySummary(localISODate(new Date()));}
+    // LE JOUR VISÉ, ou aujourd'hui à défaut. Cette ligne ramenait le journal à
+    // aujourd'hui après chaque rendu : un aliment ajouté à un jour passé
+    // paraissait perdu, et on le saisissait une seconde fois.
+    if(fjSec){fjSec.style.display='block';_renderFjDaySummary(dateAff||localISODate(new Date()));}
   } else {
     if(fjSec) fjSec.style.display='none';
     _renderStrictDiet();
@@ -37624,7 +37630,10 @@ async function saveFoodEntry(){
     currentUser.nutrition.recentFoods=[f.id,...rec.filter(id=>id!==f.id)].slice(0,10);
   }
   toastEcriture(saveUser(),'Ajouté ✓','cet aliment est');
-  loadNutrition();
+  // ON REVIENT SUR LE JOUR OÙ L'ON VIENT D'ÉCRIRE, et non sur aujourd'hui.
+  // L'entrée était bien enregistrée au bon jour ; c'est l'écran qui sautait,
+  // et l'ajout paraissait perdu.
+  loadNutrition(_fjDate);
 }
 
 function deleteFoodEntry(date,id){
@@ -37636,6 +37645,13 @@ function deleteFoodEntry(date,id){
 }
 
 function _renderFjDaySummary(date){
+  // LA DATE AFFICHÉE DEVIENT LA DATE D'ÉCRITURE. saveFoodEntry écrit dans
+  // log[_fjDate] ; les flèches de navigation, elles, ne touchaient pas
+  // _fjDate. Les deux ne tenaient d'accord que parce qu'un seul chemin — le
+  // bouton d'ajout, qui reporte la date affichée — le voulait bien. Un
+  // appelant qui l'oublie écrivait dans le mauvais jour. Ici, la divergence
+  // devient impossible plutôt que simplement improbable.
+  if(date) _fjDate=date;
   // Une liste d equivalences ouverte vise une entree PRECISE : changer de
   // jour la laisserait pointer dans le vide.
   try{ if(_eqCtx&&_eqCtx.date!==date) fermerEquivalents(); }catch(e){}
@@ -37875,7 +37891,9 @@ function _prefetchCiqual(){
       .catch(()=>{});
   }catch(e){}
 }
-function loadNutrition(){
+// `dateAff` traverse jusqu'au journal. Sans argument, aujourd'hui : c'est le
+// comportement de tous les appelants existants.
+function loadNutrition(dateAff){
   go('s-nutrition');
   _prefetchCiqual();
   const nut=currentUser.nutrition||{};
@@ -37894,7 +37912,7 @@ function loadNutrition(){
     }
     sel.value=dt;
   }
-  _renderNutriContent(dt);
+  _renderNutriContent(dt,dateAff);
   loadSuppEmbedded();
   loadCaffeineEmbedded();
 }
