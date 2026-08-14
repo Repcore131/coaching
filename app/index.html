@@ -20752,7 +20752,7 @@ function _ouvrirApercuStory(url){
     +'<div style="font-size:12px;color:#ddd;text-align:center;line-height:1.6;max-width:320px">'
     +'Appuie <b>longuement</b> sur l’image, puis choisis <b>Ajouter aux photos</b> '
     +'(iPhone) ou <b>Télécharger l’image</b> (Android).</div>'
-    +'<a href="'+url+'" download="repcore-seance.jpg" class="btn btn-outline btn-sm" '
+    +'<a href="'+url+'" download="repcore-seance.png" class="btn btn-outline btn-sm" '
     +'style="width:auto;padding:8px 18px">Télécharger</a>'
     +'<button type="button" class="btn btn-outline btn-sm" style="width:auto;padding:8px 18px" '
     +'onclick="fermerApercuStory()">Fermer</button>';
@@ -20768,6 +20768,18 @@ function fermerApercuStory(){
   d.remove();
   if(u&&u.indexOf('blob:')===0) setTimeout(()=>{ try{ URL.revokeObjectURL(u); }catch(e){} },1000);
   return true;
+}
+// iOS, iPadOS compris. Le second test n'est pas une coquetterie : depuis
+// iPadOS 13, un iPad se declare « MacIntel » et se confondrait avec un Mac de
+// bureau — seul le nombre de points de contact les separe.
+function _estIOS(){
+  try{
+    const n=(typeof navigator!=='undefined')?navigator:null;
+    if(!n) return false;
+    const p=String(n.platform||''), u=String(n.userAgent||'');
+    if(/iP(hone|ad|od)/.test(p)||/iP(hone|ad|od)/.test(u)) return true;
+    return /Mac/.test(p)&&(n.maxTouchPoints||0)>1;
+  }catch(e){ return false; }
 }
 let _storyEnCours=false;
 // TELECHARGER. Rien d autre. La feuille de partage native n existe pas
@@ -20789,6 +20801,15 @@ function telechargerSeanceDuJour(){
     const cv=_dessinerStorySeance(d);
     const dataUrl=cv.toDataURL('image/png');
     cv.width=0; cv.height=0;          // 8 Mo rendus tout de suite
+    // SUR iOS, L'APERÇU. Safari refuse la navigation de premier niveau vers une
+    // URL `data:`, et c'est exactement ce que porte ce lien. On ne peut pas non
+    // plus détecter l'échec : `a.click()` ne rend rien — ni événement, ni
+    // promesse, ni exception. On choisit donc d'après la plateforme.
+    //
+    // L'aperçu n'est pas un pis-aller : l'appui long sur une image est le seul
+    // geste qui marche sur TOUS les téléphones, et il porte lui-même un lien de
+    // téléchargement pour les cas où celui-ci passe.
+    if(_estIOS()){ _ouvrirApercuStory(dataUrl); return true; }
     const a=document.createElement('a');
     a.href=dataUrl;                   // pas d URL d objet : rien a liberer,
     a.download='repcore-seance.png';  // et rien qui puisse expirer trop tot
@@ -20878,7 +20899,7 @@ function _renderWeeklyInto(el,sc){
               <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);flex-shrink:0">${ex.series}×${ex.reps}</div>
             </div>`).join('')}
         </div>`:''}
-        ${nbEx?`<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.15);display:flex;justify-content:flex-end">
+        ${nbEx?`<div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.15);display:flex;justify-content:flex-end;gap:8px">
           <button id="story-btn" type="button" onclick="event.stopPropagation();telechargerSeanceDuJour()" aria-label="Télécharger la séance du jour en image"
             style="display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:6px 12px;border-radius:8px;cursor:pointer;
               background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.22);color:#fff;
@@ -20887,6 +20908,19 @@ function _renderWeeklyInto(el,sc){
               <path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
             </svg>TÉLÉCHARGER
           </button>
+          <!-- PARTAGER n'apparaît QUE si la feuille de partage native existe.
+               Sans elle, partagerSeanceDuJour retombe sur le téléchargement :
+               ce serait deux boutons pour une seule action, sur tout le bureau.
+               Placé à droite, au bord : c'est le geste qu'on vient chercher. -->
+          ${(typeof navigator!=='undefined'&&navigator.share)?`
+          <button id="story-partage-btn" type="button" onclick="event.stopPropagation();partagerSeanceDuJour()" aria-label="Partager la séance du jour"
+            style="display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:6px 12px;border-radius:8px;cursor:pointer;
+              background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.34);color:#fff;
+              font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:.4px">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+            </svg>PARTAGER
+          </button>`:''}
         </div>`:''}
       </div>
     </div>
