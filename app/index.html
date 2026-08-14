@@ -8336,19 +8336,25 @@ async function doRegister(){
   // qu'après la création du compte Firebase.
   if(selRole==='coach'&&_coachInviteCode()&&!_INVITE_RE.test(_coachInviteCode()))
     return showErr('r-err','Ce code d\'invitation est mal formé (format RC-XXXX-XXXX). Efface-le pour continuer sans code.');
-  // Plafond de capacité. ICI, avant CLOUD.signIn : refuser plus bas laisserait
-  // derrière soi un compte Firebase Auth sans dossier applicatif.
-  // Un coach porteur d'un code d'invitation n'est PAS concerné : il a été
-  // invité, la place lui était réservée.
-  if(selRole==='coach'&&!_coachInviteCode()&&!(await placeLibreDisponible()))
-    return showErr('r-err',LIBRE_ATTENTE_TEXTE);
   // Les deux consentements sont exiges SEPAREMENT, et refuses avec des messages
   // distincts : dire « accepte les conditions » a quelqu'un qui a coche les
   // conditions mais pas les donnees de sante le laisse chercher.
+  //
+  // AVANT L'APPEL RÉSEAU ci-dessous, qui peut durer plusieurs secondes : une
+  // case oubliée n'a pas à se payer d'une attente serveur, alors que la
+  // réponse tient dans la lecture de deux cases de la page.
   if(!document.getElementById('r-cgu')?.checked)
     return showErr('r-err','Accepte la politique de confidentialité et les mentions légales pour continuer.');
   if(!document.getElementById('r-health')?.checked)
     return showErr('r-err','Le consentement au traitement de tes données de santé est nécessaire : sans lui, RepCore ne peut enregistrer ni ton poids, ni tes mensurations, ni tes photos.');
+  // Plafond de capacité. Avant CLOUD.signIn : refuser plus bas laisserait
+  // derrière soi un compte Firebase Auth sans dossier applicatif — et signIn
+  // vient bien plus loin, le passage des consentements au-dessus ne change
+  // rien à cette garantie.
+  // Un coach porteur d'un code d'invitation n'est PAS concerné : il a été
+  // invité, la place lui était réservée.
+  if(selRole==='coach'&&!_coachInviteCode()&&!(await placeLibreDisponible()))
+    return showErr('r-err',LIBRE_ATTENTE_TEXTE);
   const users=DB.get('users')||{};
   if(users[em]) return showErr('r-err','Email déjà utilisé.');
   const uid='u_'+Date.now();
