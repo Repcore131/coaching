@@ -21532,7 +21532,11 @@ function renderSets(ex,data,idx){
     const onChW=`_woChargeSaisie(${idx},${i},'weight',this)`;
     const onChW2=`_woChargeSaisie(${idx},${i},'weight2',this)`;
     const onChR=`woState.sessionData[${idx}].sets[${i}].rir=this.value;renderSets(woState.exercises[${idx}],woState.sessionData[${idx}],${idx})`;
-    const onChP=`woState.sessionData[${idx}].sets[${i}].pain=this.value`;
+    // Persiste PUIS repeint. La persistance d'abord : si le rendu venait à
+    // échouer, la douleur serait quand même dans l'instantané. Et le rendu
+    // appelle _majCarteDouleur en fin de course, ce qui fait apparaître la
+    // carte « ça t'a fait mal deux fois » au moment même de la saisie.
+    const onChP=`woState.sessionData[${idx}].sets[${i}].pain=this.value;woPersist();renderSets(woState.exercises[${idx}],woState.sessionData[${idx}],${idx})`;
 
     // Weight cell (with AUTO badge)
     const autoLabel=s.isAuto&&!s.done?'<div style="font-size:var(--fs-xs);color:var(--green);text-align:center;margin-top:2px;letter-spacing:1px">AUTO</div>':'';
@@ -21558,7 +21562,16 @@ function renderSets(ex,data,idx){
     </select>`;
 
     // Pain dropdown
-    const painSelect=`<select class="set-input" onchange="${onChP}" ${dis} style="padding:4px 2px;font-size:11px;min-width:44px;min-height:44px">
+    // PAS DE `${dis}` ICI, et c'est le seul champ dans ce cas. Une douleur se
+    // déclare souvent une fois la barre reposée : la verrouiller à la
+    // validation revenait à ne jamais la recueillir au moment où elle se
+    // manifeste. C'est l'intention déjà écrite en fin de renderSets — « la
+    // douleur peut aussi être saisie après coup sur une série déjà validée » —
+    // que le `disabled` rendait impossible.
+    //
+    // La charge et le RIR, eux, le gardent : ils décrivent un effort accompli,
+    // et les rouvrir permettrait de réécrire une séance validée.
+    const painSelect=`<select class="set-input" onchange="${onChP}" aria-label="Douleur ressentie sur cette série" style="padding:4px 2px;font-size:11px;min-width:44px;min-height:44px">
       <option value="">—</option>
       ${PAIN_OPTS.map(v=>`<option value="${v}" ${String(s.pain)===v?'selected':''}>${v}</option>`).join('')}
     </select>`;
