@@ -47052,6 +47052,53 @@ function _apercuVitrine(id,b64){
 // transparent en ressortait sur un aplat opaque, ce qui se voit tout de
 // suite sur le fond carbone. Un PNG raisonnable est donc lu tel quel, sans
 // re-encodage — sa transparence est justement ce qu on veut garder.
+// LE POIDS EN BASE64 EST CE QUI COMPTE : c'est sous cette forme que l'image
+// occupe le stockage local, et ce stockage vaut ~5 Mo pour TOUT l'appareil —
+// le dossier du coach, ceux de ses athletes, leurs bilans et leurs seances.
+// Une seule image qui deborde bloque l'enregistrement de tout le reste.
+//
+// Les budgets sont poses sur ce que la vitrine affiche reellement : la
+// signature en `max-width:210px`, les deux autres en pleine largeur de carte.
+const IMG_BUDGET_KO={signature:200,photoVitrine:320,cartePro:320};
+// PURE au sens ou elle ne touche rien d'autre : reduit la DIMENSION du canvas
+// jusqu'a ce que le PNG tienne sous le budget. Le format ne change pas — un
+// JPEG remettrait un fond opaque la ou on vient justement de le retirer.
+// Rend toujours une image : le plus petit essai vaut mieux que rien, et
+// toastEcriture dira la verite si le stockage refuse quand meme.
+function _pngSousBudget(cv,budgetKo){
+  const max=(budgetKo||240)*1024;
+  let b64=cv.toDataURL('image/png');
+  if(b64.length<=max) return b64;
+  for(const ech of [0.72,0.52,0.38,0.28,0.2]){
+    const c2=document.createElement('canvas');
+    c2.width=Math.max(1,Math.round(cv.width*ech));
+    c2.height=Math.max(1,Math.round(cv.height*ech));
+    const x=c2.getContext('2d');
+    x.imageSmoothingEnabled=true; x.imageSmoothingQuality='high';
+    x.drawImage(cv,0,0,c2.width,c2.height);
+    b64=c2.toDataURL('image/png');
+    if(b64.length<=max) return b64;
+  }
+  return b64;
+}
+// Meme plafond, applique a un PNG deja lu. On repasse par un canvas a sa
+// taille d'origine avant de reduire : sans ce redessin, il n'y a rien a
+// mesurer ni a reduire.
+function _pngRamener(b64,budgetKo,apres){
+  if(!b64||b64.length<=(budgetKo||240)*1024) return apres(b64);
+  const im=new Image();
+  im.onload=()=>{
+    try{
+      const cv=document.createElement('canvas');
+      cv.width=im.naturalWidth; cv.height=im.naturalHeight;
+      cv.getContext('2d').drawImage(im,0,0);
+      apres(_pngSousBudget(cv,budgetKo));
+    }catch(e){ apres(b64); }
+  };
+  // Illisible ne doit pas vouloir dire perdue : on garde ce qu'on avait.
+  im.onerror=()=>apres(b64);
+  im.src=b64;
+}
 function _lirePngIntact(f,apres){
   const fr=new FileReader();
   fr.onload=()=>apres(fr.result);
@@ -47072,7 +47119,10 @@ function _detourerSignature(f,apres){
   const im=new Image();
   im.onload=()=>{
     try{
-      const MAX=900;
+      // 560 et non 900 : _htmlVitrineCoach affiche la signature en
+      // `max-width:210px`. Meme a trois pixels physiques par point, il n'y a
+      // rien a voir au-dela — et _IMG_VITRINE declarait deja 700x350.
+      const MAX=560;
       const r=Math.min(1,MAX/Math.max(im.width,im.height));
       const c=document.createElement('canvas');
       c.width=Math.round(im.width*r); c.height=Math.round(im.height*r);
@@ -47091,7 +47141,10 @@ function _detourerSignature(f,apres){
         else if(dist<DOUX) px[i+3]=Math.round(px[i+3]*(dist-DUR)/(DOUX-DUR));
       }
       x.putImageData(d,0,0);
-      apres(c.toDataURL('image/png'));
+      // Le detourage laisse un PNG a canal alpha : sa compression depend du
+      // trace, pas de la dimension seule. On le PESE plutot que de le supposer
+      // leger — un logo photographie en produisait plus d'un megaoctet.
+      apres(_pngSousBudget(c,IMG_BUDGET_KO.signature));
     }catch(e){ toast('Détourage impossible','var(--orange)'); }
     finally{ URL.revokeObjectURL(url); }
   };
@@ -47115,10 +47168,15 @@ function _majImageVitrine(input,id){
   // pas de faire porter une image lourde a chaque athlete.
   if(_f&&/png/i.test(_f.type)&&_f.size<=1200*1024){
     const cfg=_IMG_VITRINE[id]; if(!cfg) return;
-    _lirePngIntact(_f,b64=>{
-      currentUser[cfg[0]]=b64;
-      _apercuVitrine(id,b64);
-      toast('Image ajoutée — pense à enregistrer');
+    _lirePngIntact(_f,brut=>{
+      // 1,2 Mo de fichier font ~1,6 Mo une fois en base64. Le controle de
+      // taille a l'entree ne suffisait donc pas : il portait sur le fichier,
+      // pas sur ce qui allait etre stocke.
+      _pngRamener(brut,IMG_BUDGET_KO[cfg[0]]||240,b64=>{
+        currentUser[cfg[0]]=b64;
+        _apercuVitrine(id,b64);
+        toast('Image ajoutée — pense à enregistrer');
+      });
     });
     return;
   }
