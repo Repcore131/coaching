@@ -3347,47 +3347,6 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 
-<!-- PROGRAM VIEW -->
-<div id="s-program-view" class="screen">
-  <div class="topbar" style="position:relative">
-    <button class="back-btn" onclick="go('s-client-home')">←</button>
-    <span class="topbar-title">Programme</span>
-    <span id="pv-version" class="sub" style="font-size:var(--fs-xs);letter-spacing:1px"></span>
-  </div>
-  <div class="scroll-area" style="flex:1">
-    <!-- PDF ZONE - au-dessus de tout -->
-    <div id="pv-pdf-zone" style="display:none;border-bottom:1px solid #181818">
-      <!-- Alerte nouvelle version -->
-      <div id="pv-pdf-update-banner" style="display:none;background:var(--success-bg);border-bottom:1px solid var(--success-border);padding:10px 20px;display:flex;align-items:center;gap:10px">
-        <div style="width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0;animation:pulse 1.5s infinite"></div>
-        <div style="flex:1">
-          <div style="font-size:var(--fs-xs);font-weight:800;color:var(--green);letter-spacing:1px;text-transform:uppercase">Programme mis à jour</div>
-          <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:1px" id="pv-pdf-update-date"></div>
-        </div>
-      </div>
-      <!-- PDF principal -->
-      <div style="padding:16px 20px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <div>
-            <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:2px">Fiche Programme</div>
-            <div style="font-size:14px;font-weight:900" id="pv-pdf-title">—</div>
-            <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px" id="pv-pdf-meta"></div>
-          </div>
-          <div style="width:40px;height:48px;background:linear-gradient(180deg,#1a0000,#120000);border:1px solid #3a0a0a;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0"></div>
-        </div>
-        <!-- Boutons PDF -->
-        <div id="pv-pdf-btns" style="display:flex;gap:8px"></div>
-        <!-- Version info -->
-        <div style="margin-top:10px;padding:8px 12px;background:var(--dark);border-radius:3px;display:flex;align-items:center;justify-content:space-between">
-          <span style="font-size:var(--fs-xs);color:var(--sub)" id="pv-pdf-version-label"></span>
-          <span style="font-size:var(--fs-xs);color:var(--sub)" id="pv-pdf-size"></span>
-        </div>
-      </div>
-    </div>
-    <div class="pad" id="pv-content"></div>
-  </div>
-</div>
-
 <!-- iOS INSTALL GUIDE MODAL -->
 <div id="ios-install-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:4000;align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeIosInstallGuide()">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px 36px;width:100%;max-width:480px;animation:slideUp .3s ease">
@@ -19157,14 +19116,6 @@ async function _openPdfSrc(raw){
     if(url!=='#') window.open(url,'_blank');
   }
 }
-async function openHomePdf(){
-  const users=DB.get('users')||{};
-  const freshU=users[currentUser.email]||currentUser;
-  currentUser.pdfLastSeen=Date.now();saveUser();
-  const badge=document.getElementById('clh-pdf-new-badge');
-  if(badge) badge.style.display='none';
-  await _openPdfSrc(freshU.programPdfStorageUrl||freshU.programPdfLink||freshU.programPdf);
-}
 async function uploadAthletePdf(input){
   const f=input.files[0];if(!f) return;
   if(f.size>20*1024*1024){toast('PDF trop lourd (max 20 Mo)','var(--orange)');return;}
@@ -20976,32 +20927,6 @@ function _renderProgExercisesInto(el){
       <div style="color:var(--sub);font-size:12px;line-height:1.7">Ton coach n'a pas encore publié<br>ton programme personnalisé.</div>
     </div>`;
 }
-function loadProgramView(){
-  const users=DB.get('users')||{};
-  const freshUser=users[currentUser.email];
-  if(freshUser){Object.assign(currentUser,freshUser);}
-  _renderProgExercisesInto(document.getElementById('pv-content'));
-  go('s-program-view');
-}
-
-async function openPdfNewTab(){
-  await _openPdfSrc(currentUser.programPdfStorageUrl||currentUser.programPdfLink||currentUser.programPdf);
-}
-async function downloadPdf(){
-  const src=currentUser.programPdfStorageUrl||currentUser.programPdf;
-  if(!src) return;
-  try{
-    if(src.startsWith('data:')){
-      const a=document.createElement('a');a.href=src;a.download=(currentUser.programPdfName||'programme')+'.pdf';a.click();
-    } else {
-      const res=await fetch(src);const blob=await res.blob();
-      const url=URL.createObjectURL(blob);
-      const a=document.createElement('a');a.href=url;a.download=(currentUser.programPdfName||'programme')+'.pdf';a.click();
-      setTimeout(()=>URL.revokeObjectURL(url),15000);
-    }
-  }catch{toast('Téléchargement échoué.','var(--orange)');}
-}
-
 // ======= WORKOUT =======
 function startWorkout(){
   const prog=getProgram();
