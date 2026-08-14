@@ -40209,7 +40209,10 @@ function renderCoachCaffeineSection(c){
   if(!el||!c) return;
   const days=c.nutrition?.caffeine?.days||{};
   const wKg=parseFloat(c.weight)||75;
-  const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser),grossesseSuspend(currentUser));
+  // `c`, ET NON currentUser : sur la fiche client, currentUser est le COACH.
+  // Le poids venait bien de l'athlète, mais l'âge et l'état de grossesse du
+  // coach — un athlète de seize ans recevait donc des seuils adultes.
+  const thr=caffeineThresholds(wKg,_ageUtilisateur(c),grossesseSuspend(c));
   // Construire les 28 jours
   const today=new Date();
   const totals28=[];
@@ -40253,11 +40256,12 @@ function renderCoachCaffeineSection(c){
         ?emptyState('coffee','Aucune prise enregistrée sur 28 jours.',null,null,'padding:16px 0')
         :`<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin-bottom:8px">Historique 28 jours</div>
           <canvas id="ccd-caff-history" height="100" style="width:100%;display:block;border-radius:6px"></canvas>
-          <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:6px">Seuils (pour ${wKg}kg) : vert &lt;${thr.green}mg · jaune &lt;${thr.yellow}mg · orange &lt;${thr.orange}mg · rouge ${thr.red}mg</div>`
+          <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:6px">Seuils (pour ${wKg}kg) : vert &lt;${thr.green}mg · jaune &lt;${thr.yellow}mg · orange &lt;${thr.orange}mg · rouge ${thr.red}mg</div>
+          <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:4px;line-height:1.5">${escapeHtml(legendeSeuilsCafeine(thr,false))}</div>`
       }
     </div>`;
   if(withData.length){
-    requestAnimationFrame(()=>_drawCaffeineHistory(wKg,'ccd-caff-history',days));
+    requestAnimationFrame(()=>_drawCaffeineHistory(wKg,'ccd-caff-history',days,c));
   }
 }
 
@@ -40930,7 +40934,10 @@ function _renderCaffeineEmbedded(){
   `;
   requestAnimationFrame(()=>_drawCaffeineHistory(wKg,'emb-caff-history-chart'));
 }
-function _drawCaffeineHistory(wKg,canvasId='caff-history-chart',daysOverride){
+// `porteur` retombe sur currentUser : les deux appels de l'écran athlète ne
+// changent pas. Il n'existe que pour la fiche coach, où currentUser est le
+// coach et où les seuils doivent suivre l'athlète affiché.
+function _drawCaffeineHistory(wKg,canvasId='caff-history-chart',daysOverride,porteur){
   const canvas=document.getElementById(canvasId);
   if(!canvas) return;
   const ctx=canvas.getContext('2d');
@@ -40951,7 +40958,10 @@ function _drawCaffeineHistory(wKg,canvasId='caff-history-chart',daysOverride){
   // d echelle est porte par la transformation, une seule fois.
   ctx.setTransform(_dpr,0,0,_dpr,0,0);
   const days=daysOverride!==undefined?daysOverride:_caffStore();
-  const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser),grossesseSuspend(currentUser));
+  // MÊME faute que dans la fiche coach : cette fonction sert les DEUX écrans.
+  // Côté athlète currentUser est le bon porteur ; côté coach, non.
+  const _p=porteur||currentUser;
+  const thr=caffeineThresholds(wKg,_ageUtilisateur(_p),grossesseSuspend(_p));
   const labels=[],data=[];
   for(let i=27;i>=0;i--){
     const d=new Date();d.setDate(d.getDate()-i);
@@ -78434,6 +78444,38 @@ function testExercices(){
           return d.length?_echec('divergence sur '+d.join(',')):true;})());
 
         // ── Le mineur ─────────────────────────────────────────────────────
+        ok('Fiche coach : les seuils suivent l\'ATHLÈTE, pas le coach',(()=>{
+          // renderCoachCaffeineSection lisait le poids de l'athlète et l'âge du
+          // COACH : un athlète de seize ans recevait des seuils adultes.
+          const _s=currentUser;
+          const el=document.getElementById('ccd-caffeine');
+          if(!el) return _echec('ccd-caffeine absent');
+          const _garde=el.innerHTML;
+          try{
+            currentUser={id:'co',email:'co@t',role:'coach','init-age':40};
+            const j=localISODate(new Date());
+            const ath={id:'a16',email:'a16@t',weight:60,'init-age':16,
+              nutrition:{caffeine:{days:{[j]:[{mg:120}]}}}};
+            renderCoachCaffeineSection(ath);
+            const h=el.innerHTML;
+            if(!/moins de /.test(h))
+              return _echec('la légende n\'annonce pas le barème mineur : '+h.slice(0,200));
+            // Le plafond mineur est CAFFEINE_MG_KG_MINEUR × le poids ; vert à
+            // 50 % de ce plafond, jaune à 75 %. On le relit plutôt que de le
+            // supposer : la constante a déjà changé une fois.
+            const t=caffeineThresholds(60,16);
+            if(t.regle!=='mineur') return _echec('le barème attendu n\'est pas mineur');
+            if(h.indexOf('vert &lt;'+t.green+'mg')<0)
+              return _echec('seuils affichés ≠ barème mineur (attendu vert '+t.green+')');
+            // Et le coach de 40 ans ne doit PAS imposer le barème adulte.
+            const adulte=caffeineThresholds(60,40);
+            return adulte.green!==t.green
+              ?true:_echec('les deux barèmes sont indiscernables : le test ne prouve rien');
+          } finally { currentUser=_s; el.innerHTML=_garde; }})());
+        ok('L\'historique du coach reçoit lui aussi le porteur',(()=>{
+          const src=String(renderCoachCaffeineSection);
+          return /_drawCaffeineHistory\(wKg,'ccd-caff-history',days,c\)/.test(src)
+            ?true:_echec('le graphe garde les seuils du coach');})());
         ok('Critère : caffeineThresholds(70,17).orange === 210',(()=>{
           const t=caffeineThresholds(70,17);
           return t.orange===210?true:_echec(JSON.stringify(t));})());
