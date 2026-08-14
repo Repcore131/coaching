@@ -20107,7 +20107,14 @@ function demarrerSeance(sessConfig,slotIdx){
 function woResumeAndGo(){
   const snap=_woLoadSnap();
   if(!snap){document.getElementById('clh-resume-workout').style.display='none';return;}
+  // Vidé AVANT l'affectation : ce qui restait dans le Set appartient à une
+  // autre séance, et son indexation par « exercice : série » le ferait
+  // ressortir sur des séries qui ne sont pas des records.
+  _resetRecordsVus();
   woState={...snap};
+  // Puis reconstruit sur ce qui vient d'être repris : les badges de CETTE
+  // séance-là sont justes, et un rechargement les avait jusqu'ici perdus.
+  _rebatirRecordsVus();
   // Checklist restaurée avant le rendu, sinon les coches s'afficheraient vides.
   // Le chrono, lui, ne redémarre pas : le temps a passé pendant la pause.
   _ckEtat=snap.ckEtat||{};
@@ -20473,6 +20480,12 @@ function launchWorkout(sessConfig,slotIdx){
   // Nouvelle séance : checklist vierge, sinon les étapes cochées la fois
   // précédente réapparaissent déjà faites.
   _ckEtat={};_ckStopChrono();
+  // Et badges de record vierges, pour exactement la même raison : le Set est
+  // indexé par « exercice : série », donc un record posé sur 0:1 la fois
+  // d'avant se rallumait sur la première série du premier exercice de
+  // celle-ci. APRÈS le garde, comme le clearInterval ci-dessus : un
+  // lancement avorté ne doit rien effacer d'une séance encore en cours.
+  _resetRecordsVus();
   // AUCUNE RÈGLE DE CYCLE NE TOUCHE UN NOMBRE DE SÉRIES. Le programme du
   // coach arrive intact. Le défaut à 3 séries est conservé : il vaut pour un
   // exercice mal saisi, pas pour une phase.
@@ -20956,6 +20969,9 @@ function startWorkout(){
   // Chemin hérité : ce programme unique ne vient pas d'un créneau de la semaine.
   // slot:null fait retomber la recherche d'historique sur le nom de la séance.
   _ckEtat={};_ckStopChrono();
+  // Même raison que dans launchWorkout : sans ce vidage, les badges de record
+  // de la séance précédente se rallument sur des séries qui ne les ont pas.
+  _resetRecordsVus();
   woState={exercises:prog.exercises,currentEx:0,startTime:Date.now(),timerInterval:null,sessionData:{},progName:prog.name,slot:null,
     // Même amorçage que launchWorkout : une demande du coach vaut case cochée
     // d'avance. Sans cette ligne, le chemin hérité l'ignorerait en silence.
@@ -29639,6 +29655,28 @@ function ecartPrescritRealise(user){
 // enregistré tel quel en fin de séance, et un champ posé là serait persisté.
 let _recordsVus=new Set();
 function _resetRecordsVus(){ _recordsVus=new Set(); }
+// UNE SEANCE REPRISE RETROUVE SES BADGES. Ils ne sont pas dans l'instantane
+// — le drapeau vit dans un Set de module et JAMAIS sur la serie, puisque
+// sessionData est enregistre tel quel en fin de seance. Ils se RECALCULENT :
+// estNouveauRecord compare aux seances PASSEES, et celle en cours n'est pas
+// encore dans user.sessions. Le verdict est donc le meme qu'au moment de la
+// validation. Sans cette reconstruction, une seance reprise apres un
+// rechargement n'affichait plus aucun record, y compris la ou il y en avait.
+function _rebatirRecordsVus(){
+  _resetRecordsVus();
+  try{
+    const exs=(woState&&woState.exercises)||[];
+    const d=(woState&&woState.sessionData)||{};
+    for(const k of Object.keys(d)){
+      const nom=(exs[parseInt(k,10)]||{}).name;
+      if(!nom) continue;
+      const sets=(d[k]&&d[k].sets)||[];
+      // estNouveauRecord ecarte deja les series non validees.
+      for(let i=0;i<sets.length;i++)
+        if(estNouveauRecord(currentUser,nom,sets[i])) _recordsVus.add(k+':'+i);
+    }
+  }catch(e){}
+}
 function estNouveauRecord(user,nomEx,serie){
   if(!user||!nomEx||!serie||serie.done!==true) return false;
   const w=parseFloat(serie.weight);
