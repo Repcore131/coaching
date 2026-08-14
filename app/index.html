@@ -48109,6 +48109,10 @@ async function requestAccountDeletion(){
         users[k]=u;CLOUD.pushOne(k,u);
       }
     }
+    // Les dates de bilan sont relevées AVANT que le dossier disparaisse : ce
+    // sont elles qui désignent les photos en cache à effacer, et on ne les
+    // retrouverait plus après.
+    const _datesBilans=((currentUser.bilans)||[]).map(b=>b&&b.date).filter(Boolean);
     delete users[myKey];
     DB.set('users',users);
     // ── Effacement distant, PUIS local ────────────────────────────────────
@@ -48165,18 +48169,54 @@ async function requestAccountDeletion(){
       }catch(e){}
     }
 
-    // 5. Traces locales. Balayage de TOUTES les cles rc_ plutot qu'une liste
-    //    nominative : rc_photo_<id> est suffixee dynamiquement, et une liste
-    //    figee laisserait passer toute cle ajoutee plus tard. Couvre donc
-    //    rc_photo_*, rc_wo_state, rc_session, rc_fb_auth, rc_users et le reste.
+    // 5. Traces locales, CIBLÉES. Le balayage de toutes les clés `rc_`
+    //    emportait rc_users — le dossier de TOUS les comptes de cet appareil —
+    //    et rc_comptes, le registre du multi-compte. Supprimer son compte
+    //    effaçait donc aussi celui d'à côté.
+    //
+    //    Le commentaire d'origine défendait le balayage : « une liste figée
+    //    laisserait passer toute clé ajoutée plus tard ». C'est vrai, et c'est
+    //    le prix : mieux vaut oublier une clé du compte sortant — qu'un lot
+    //    suivant rattrapera — que détruire les données de quelqu'un qui n'a
+    //    rien demandé.
     try{
+      // Le registre du multi-compte : on en retire CETTE entrée, pas le reste.
+      try{ _comptesEcrire(comptesConnectes().filter(c=>c.email!==myKey)); }catch(e){}
+      // Clés propres à cet appareil ou au compte actif — aucune ne porte les
+      // données d'un autre compte.
+      for(const k of ['rc_wo_state','rc_session','rc_fb_auth','rc_resil_file',
+                      'rc_code_verifie','pendingCode'])
+        try{ localStorage.removeItem(k); }catch(e){}
+      // Les photos et les secondes vues, préfixées par ce compte ou datées par
+      // SES bilans. rc_p2_ porte l'email ; rc_photo_ ne porte qu'une date,
+      // d'où le relevé fait plus haut.
+      const _prefP2='rc_p2_'+myKey+'_';
+      const _datesSet=new Set(_datesBilans.map(String));
       for(const k of Object.keys(localStorage)){
-        if(k.indexOf('rc_')===0) localStorage.removeItem(k);
+        if(k.indexOf(_prefP2)===0){ localStorage.removeItem(k); continue; }
+        if(k.indexOf('rc_photo_')===0){
+          // rc_photo_<date>_<vue> : on ne touche qu'aux dates de CE compte.
+          const _d=k.slice('rc_photo_'.length).split('_')[0];
+          if(_datesSet.has(_d)) localStorage.removeItem(k);
+        }
       }
+      // sessionStorage est propre à cet onglet et ne survit pas : rien d'un
+      // autre compte n'y vit durablement.
       sessionStorage.clear();
     }catch(e){}
 
+    // Un autre compte reste sur l'appareil : on l'active plutôt que de
+    //    renvoyer sur l'écran d'accueil — même geste que logout.
+    let _reste=[];
+    try{ _reste=comptesConnectes(); }catch(e){}
     silentLogout();
+    const _apres=DB.get('users')||{};
+    const _suivant=_reste.find(c=>_apres[c.email]);
+    if(_suivant){
+      setTimeout(()=>toast('Compte supprimé. Au revoir.','var(--sub)'),400);
+      basculerCompte(_suivant.email);
+      return;
+    }
     go('s-welcome');
     setTimeout(()=>toast('Compte supprimé. Au revoir.','var(--sub)'),400);
   }catch(e){
