@@ -30294,7 +30294,7 @@ function showProgressTab(tab,btn){
       <div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">
         <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px">Paramètres : Formule US Navy</div>
         <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-          <div style="flex:1;min-width:70px"><label for="evol-height" style="font-size:var(--fs-xs)">Taille (cm)</label><input type="number" id="evol-height" value="${escapeHtml(String(storedH||''))}" placeholder="176" style="padding:8px;font-size:14px;font-weight:700;text-align:center"></div>
+          <div style="flex:1;min-width:70px"><label for="evol-height" style="font-size:var(--fs-xs)">Taille (cm)</label><input type="text" inputmode="decimal" id="evol-height" value="${escapeHtml(String(storedH||''))}" placeholder="176" style="padding:8px;font-size:14px;font-weight:700;text-align:center"></div>
           <div style="flex:1;min-width:80px">
             <label style="font-size:var(--fs-xs)">Sexe</label>
             <div style="display:flex;gap:4px;margin-top:6px">
@@ -30564,11 +30564,35 @@ function setEvolGender(g){
   currentUser._evol_gender=g;saveUser();
   showProgressTab('masseGrasse',document.querySelector('#prog-tabs .btn-red'));
 }
+// Bornes EXCLUES, exactement celles du test qui existait : au-dessus de 100,
+// en dessous de 250. Nommées ici pour que le message et le contrôle ne
+// puissent pas annoncer deux intervalles différents.
+const TAILLE_MIN_CM=100, TAILLE_MAX_CM=250;
+// PURE. La taille utilisable, ou null. LA VIRGULE EST ACCEPTÉE : « 176,5 »
+// est une saisie française ordinaire, et parseFloat s'y arrête — 176,5
+// deviendrait 176 sans un mot, dans une valeur qui entre ensuite dans la
+// formule US Navy.
+function tailleSaisie(v){
+  const n=parseFloat(String(v==null?'':v).replace(',','.'));
+  return (Number.isFinite(n)&&n>TAILLE_MIN_CM&&n<TAILLE_MAX_CM)?n:null;
+}
+// UN REFUS SE DIT. L'ancienne version enregistrait et redessinait dans tous
+// les cas : une taille hors bornes rendait donc un écran identique, et le
+// bouton passait pour mort. On ne redessine plus rien — l'écran garde la
+// saisie sous les yeux, ce qui est exactement ce dont on a besoin pour la
+// corriger.
 function refreshMG(){
-  const h=parseFloat(document.getElementById('evol-height')?.value);
-  if(h&&h>100&&h<250) currentUser._evol_height=h;
+  const el=document.getElementById('evol-height');
+  const h=tailleSaisie(el&&el.value);
+  if(h===null){
+    toast('Taille attendue en centimètres, entre '+(TAILLE_MIN_CM+1)+' et '
+      +(TAILLE_MAX_CM-1)+' (ex : 176).','var(--orange)');
+    return false;
+  }
+  currentUser._evol_height=h;
   saveUser();
   showProgressTab('masseGrasse',document.querySelector('#prog-tabs .btn-red'));
+  return true;
 }
 // ======= NUTRITION =======
 // ══════════════ RÉPARTITION PAR REPAS ET REPÈRE PÉRI-SÉANCE ══════════════
