@@ -2879,6 +2879,23 @@ const COACH_PHOTO='icons/coach.jpg';
          parle de résiliation ne lui dirait rien de bon. -->
     <div id="cr-abo"></div>
 
+    <!-- LE SON DE FIN DE REPOS. Éteint par défaut : une salle est bruyante et
+         l'athlète a souvent ses écouteurs. Il compte surtout sur iOS, où
+         Safari n'expose pas navigator.vibrate : sans lui, la fin du repos n'y
+         émet aucun signal. État posé par ouvrirReglagesAthlete. -->
+    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px">
+      <label for="cr-son-case" style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;margin:0">
+        <input type="checkbox" id="cr-son-case" onchange="basculerSonRepos()"
+          style="width:18px;height:18px;accent-color:#E02020;flex-shrink:0;margin-top:2px;cursor:pointer">
+        <span style="flex:1;min-width:0">
+          <span style="display:block;font-weight:800;font-size:14px;margin-bottom:4px">Son de fin de repos</span>
+          <span style="display:block;font-size:11px;color:var(--sub);line-height:1.6">Un bip court quand le minuteur arrive à zéro,
+            en plus de la vibration. Utile sur iPhone, où la vibration n'est pas disponible dans le navigateur.</span>
+          <span id="cr-son-etat" style="display:block;font-size:10.5px;color:var(--text-faint);letter-spacing:1px;text-transform:uppercase;font-weight:800;margin-top:6px">Éteint</span>
+        </span>
+      </label>
+    </div>
+
     <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px">
       <div style="font-weight:800;font-size:14px;margin-bottom:4px">Mes données</div>
       <div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:12px">Tout ce que RepCore conserve à ton sujet, dans un fichier que tu gardes. Disponible à tout moment, même si ton accès a expiré.</div>
@@ -5296,6 +5313,8 @@ const RESIL_PAYPAL=Object.freeze([
 function ouvrirReglagesAthlete(){
   go('s-client-reglages');
   _renderAbonnement();
+  // L'interrupteur du son reflète le dossier à chaque ouverture.
+  try{ _majSonReglages(); }catch(e){}
   const v=document.getElementById('cr-version');
   if(v) versionSW().then(x=>{ if(x) v.textContent='RepCore · '+x; });
   return true;
@@ -17831,6 +17850,8 @@ function _peindreRepos(){
     try{ setTimeout(()=>{ const b=document.getElementById('wo-repos');
       if(b&&b.firstElementChild) arcTraversee(b.firstElementChild,{duree:ARC.strike}); },0); }catch(e){}
   }
+  // Lu une seule fois : le gabarit ci-dessous le consulte trois fois.
+  const _sonOn=!!(currentUser&&currentUser.sonRepos);
   const tot=woState.reposTotal||1;
   const pc=fini?100:Math.max(0,Math.min(100,(1-reste/tot)*100));
   // LE DECOMPTE EST BLANC, l anneau porte la couleur. Le chiffre etait rouge
@@ -17885,6 +17906,15 @@ function _peindreRepos(){
       <button onclick="ajusterRepos(-15)" class="hit44" style="min-width:46px;min-height:44px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;color:#ddd;font-size:12px;font-weight:800;cursor:pointer">−15</button>
       <button onclick="ajusterRepos(15)" class="hit44" style="min-width:46px;min-height:44px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;color:#ddd;font-size:12px;font-weight:800;cursor:pointer">+15</button>
       <button onclick="annulerRepos()" class="hit44" style="min-width:60px;min-height:44px;background:none;border:1px solid var(--border);border-radius:9px;color:var(--sub);font-size:11px;font-weight:800;letter-spacing:.5px;cursor:pointer">Passer</button>
+      <!-- LE SON, COUPABLE SUR PLACE. Le réglage se pose une fois ; ce bouton
+           sert au moment où le son dérange — quelqu'un à côté, ou les
+           écouteurs qu'on vient de retirer. -->
+      <button onclick="basculerSonRepos()" class="hit44" aria-pressed="${_sonOn?'true':'false'}"
+        aria-label="${_sonOn?'Couper le son de fin de repos':'Activer le son de fin de repos'}"
+        title="${_sonOn?'Son de fin de repos activé':'Son de fin de repos coupé'}"
+        style="min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;
+        background:${_sonOn?'rgba(224,32,32,.12)':'none'};border:1px solid ${_sonOn?'rgba(224,32,32,.5)':'var(--border)'};
+        border-radius:9px;color:${_sonOn?'var(--red-light)':'var(--sub)'};cursor:pointer">${_icoSon(_sonOn,15)}</button>
     </div>
   </div>`;
   // La barre de 4 px qui vivait ici a disparu AVEC son remplaçant, pas avant :
@@ -17895,6 +17925,20 @@ function _peindreRepos(){
 }
 // Aucun son par défaut : une salle est bruyante et l'athlète a souvent ses
 // écouteurs. Le réglage existe, il est éteint.
+// Le pictogramme du haut-parleur, barré quand le son est coupé. Dessiné ici
+// et non deux fois : le bandeau et les réglages montrent le même état, et
+// deux tracés finiraient par diverger.
+function _icoSon(actif,taille){
+  const t=taille||15;
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+    +'stroke-linecap="round" stroke-linejoin="round" width="'+t+'" height="'+t+'" '
+    +'style="display:block;flex-shrink:0" aria-hidden="true">'
+    +'<path d="M11 5 6 9H2v6h4l5 4z"/>'
+    +(actif
+      ?'<path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>'
+      :'<path d="m22 9-6 6"/><path d="m16 9 6 6"/>')
+    +'</svg>';
+}
 function _bipRepos(){
   try{
     const C=window.AudioContext||window.webkitAudioContext;
@@ -17913,6 +17957,19 @@ function basculerSonRepos(){
   currentUser.sonRepos=!currentUser.sonRepos;
   saveUser();
   toast(currentUser.sonRepos?'Son de fin de repos activé':'Son de fin de repos désactivé');
+  // Les deux surfaces qui montrent l'état se remettent d'accord tout de suite.
+  // _peindreRepos sort de lui-même quand aucun repos ne court : rien à garder
+  // ici. _majSonReglages ne fait rien si l'écran de réglages n'est pas monté.
+  try{ _peindreRepos(); }catch(e){}
+  try{ _majSonReglages(); }catch(e){}
+}
+// L'interrupteur des réglages suit le dossier, jamais l'inverse : il est posé
+// à l'ouverture de l'écran et après chaque bascule.
+function _majSonReglages(){
+  const c=document.getElementById('cr-son-case');
+  if(c) c.checked=!!(currentUser&&currentUser.sonRepos);
+  const e=document.getElementById('cr-son-etat');
+  if(e) e.textContent=(currentUser&&currentUser.sonRepos)?'Activé':'Éteint';
 }
 // Le retour d'arrière-plan est le moment où un compteur décrémenté aurait
 // menti : on repeint depuis l'échéance, qui est la seule source de vérité.
