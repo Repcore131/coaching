@@ -6996,7 +6996,12 @@ window.onload=()=>{
           const zone=document.getElementById('ae-code-zone');
           if(zone&&zone.style.display==='none') aeToggleCode();
           const inp=document.getElementById('ae-code');
-          if(inp) inp.value=c.code||'';
+          // LE CODE DU LIEN D'ABORD. `inv` porte le code d'accès RC-XXXX-XXXX,
+          // celui qui vit dans /rc_codes et porte la durée. `c.code` est le code
+          // GCP permanent du coach : il rattache, mais n'ouvre aucun accès daté.
+          // Pré-rempli avec le second, la validation partait sur le mauvais
+          // chemin et l'athlète obtenait un accès sans échéance.
+          if(inp) inp.value=window._invitationCode||c.code||'';
           const ban=document.getElementById('ae-coach-banner');
           if(ban){
             ban.textContent='Coach '+((c.fname||c.lname||'?').trim())+' reconnu : valide pour créer ton compte';
@@ -8676,21 +8681,56 @@ async function doAthleteCode(){
   // Cas 1 : lien d'invitation complet (?coachpkg=BASE64) — aligné sur doLinkCoach.
   // L'athlète n'a pas encore de compte : on mémorise le coach et son code, puis
   // on enchaîne sur l'inscription, exactement comme la branche du code GCP.
+  // LE CODE DU LIEN EST RETENU, PAS VÉRIFIÉ ICI. Le `catch` de ce try est vide
+  // — il l'était déjà, pour tolérer une saisie qui n'est pas une URL. Y mettre
+  // la vérification réseau aurait avalé ses erreurs : « ce code a déjà été
+  // utilisé » serait devenu un silence, puis le message générique du bas.
+  let _invDuLien=null;
   try{
-    const pkg=new URL(raw).searchParams.get('coachpkg');
+    const _url=new URL(raw);
+    const pkg=_url.searchParams.get('coachpkg');
+    const inv=String(_url.searchParams.get('inv')||'').trim().toUpperCase();
     if(pkg){
       const coach=_validateCoachPkg(JSON.parse(decodeURIComponent(escape(atob(pkg)))));
       if(coach){
         const users=DB.get('users')||{};
         users[coach.email]=Object.assign(users[coach.email]||{},coach);
         DB.set('users',users);
-        localStorage.setItem('pendingCode',coach.code||'');
-        go('s-register');
-        setTimeout(()=>selectRole('athlete'),50);
-        return;
+        // Le lien porte un vrai code d'accès : on le traite comme tel, à
+        // l'identique de la branche RC-XXXX-XXXX plus bas. Sinon seulement,
+        // on retombe sur le code GCP — le rattachement même-appareil.
+        if(_INVITE_RE.test(inv)){ _invDuLien=inv; }
+        else {
+          localStorage.setItem('pendingCode',coach.code||'');
+          go('s-register');
+          setTimeout(()=>selectRole('athlete'),50);
+          return;
+        }
       }
     }
   }catch(e){}
+  // Hors du try : ici, une erreur se dit.
+  if(_invDuLien){
+    const btn=document.getElementById('ae-valider');
+    const libelle=btn?btn.textContent:'';
+    if(btn){btn.disabled=true;btn.textContent='VÉRIFICATION…';}
+    try{
+      // SANS CONSOMMER : le compte n'existe pas encore, et un code brûlé par
+      // une inscription abandonnée serait perdu pour de bon.
+      const payload=await _verifierCodeSansConsommer(_invDuLien);
+      rcm('code_valid');
+      _retenirCodeVerifie(_invDuLien,payload);
+      go('s-register');
+      setTimeout(()=>selectRole('athlete'),50);
+    }catch(e){
+      rcm('code_invalid');
+      errEl.textContent=e.message||'Code invalide.';
+      errEl.style.display='block';
+    }finally{
+      if(btn){btn.disabled=false;btn.textContent=libelle;}
+    }
+    return;
+  }
 
   // Cas 2 : codes courts. C'est SEULEMENT ici que la mise en majuscules a un sens.
   const code=raw.toUpperCase();
@@ -8909,9 +8949,14 @@ async function doLinkCoach(){
   if(!raw){return showErr('cc-err','Entre un code ou lien coach.');}
 
   // Case 1: URL d'invitation coach (?coachpkg=BASE64) — cross-device
+  //
+  // LE CODE DU LIEN EST RETENU, PAS VÉRIFIÉ ICI : le `catch` de ce try est
+  // vide, et la vérification réseau y perdrait ses messages d'erreur.
+  let _invDuLien=null;
   try{
     const urlObj=new URL(raw);
     const pkg=urlObj.searchParams.get('coachpkg');
+    const inv=String(urlObj.searchParams.get('inv')||'').trim().toUpperCase();
     if(pkg){
       const coach=_validateCoachPkg(JSON.parse(decodeURIComponent(escape(atob(pkg)))));
       if(coach){
@@ -8922,10 +8967,27 @@ async function doLinkCoach(){
         const users=DB.get('users')||{};
         users[coach.email]=Object.assign(users[coach.email]||{},coach);
         DB.set('users',users);
-        return linkToCoach(coach);
+        // LE LIEN PORTE UN VRAI CODE D'ACCÈS. linkToCoach rattache mais ne
+        // pose PAS accessExpiry, et checkAccess lit une échéance absente
+        // comme un accès ILLIMITÉ : tout athlète arrivé par lien obtenait un
+        // accès perpétuel, et le code restait « ouvert » dans /rc_codes, donc
+        // réutilisable par quelqu'un d'autre. On passe par le vrai chemin.
+        if(_INVITE_RE.test(inv)){ _invDuLien=inv; }
+        else return linkToCoach(coach);
       }
     }
   }catch(e){}
+  // Hors du try : ici, une erreur se dit.
+  if(_invDuLien){
+    let _res;
+    try{
+      _res=await _verifyAccessCode(_invDuLien,(currentUser.fname||'')+' '+(currentUser.lname||''));
+    }catch(e){
+      return showErr('cc-err',e.message||'Code invalide ou corrompu. Contacte ton coach.');
+    }
+    _appliquerPayloadCode(_res.payload);
+    return;
+  }
 
   // Case 2: code RC-XXXX-XXXX — vérifié via Firebase RTDB directement
   if(/^RC-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(raw)||raw.startsWith('RCACCESS:')){
