@@ -9135,6 +9135,23 @@ async function doLinkCoach(){
   // Case 2: code RC-XXXX-XXXX — vérifié via Firebase RTDB directement
   if(/^RC-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(raw)||raw.startsWith('RCACCESS:')){
     if(raw.startsWith('RCACCESS:')) return showErr('cc-err','Ancien format de code : demande un nouveau code (RC-XXXX-XXXX) à ton coach.');
+    // LA MÊME GARDE QU'AU CAS 1. Sans elle, un code suffisait à changer de
+    // coach en silence — là où le lien d'invitation, lui, était arrêté.
+    //
+    // La lecture est SEULE et ne juge rien : elle ne sert qu'à comparer les
+    // coachs. Elle vient AVANT _verifyAccessCode, qui consomme le code par un
+    // PATCH : décider après aurait brûlé un code qu'on refuse.
+    //
+    // Elle n'a lieu que si un coach est déjà en place. Un athlète qui n'en a
+    // pas, ou qui saisit un code de SON coach — la prolongation — ne paie
+    // aucun aller-retour supplémentaire.
+    if(coachActuelDe()){
+      const _cl=await _coachDuCode(raw);
+      if(_cl&&String(_cl.id)!==String(currentUser.coachId||'')){
+        _annoncerDejaRattache(_cl);
+        return;
+      }
+    }
     let result;
     try{
       result=await _verifyAccessCode(raw,(currentUser.fname||'')+' '+(currentUser.lname||''));
@@ -48617,6 +48634,27 @@ async function _verifyCoachInvite(raw,email){
 // Le rejet d'un code déjà consommé est ici sans nuance, contrairement à
 // _verifyAccessCode qui tolère `redeemed` pour le compte qui l'a consommé :
 // personne ne peut être ce compte avant de s'être inscrit.
+// DE QUEL COACH VIENT CE CODE ? Rien d'autre. Aucune validation : ni actif,
+// ni expiré, ni déjà utilisé — ces trois-là restent l'affaire de
+// _verifyAccessCode, qui les rend avec ses propres messages.
+//
+// Elle existe parce que _verifyAccessCode CONSOMME le code (PATCH
+// redeemed:true) : l'appeler pour décider s'il faut refuser brûlerait le code
+// avant de savoir. Et parce que _verifierCodeSansConsommer, lui, refuse un
+// code déjà utilisé — ce qui empêcherait de comparer les coachs dans
+// précisément le cas où un athlète a déjà consommé le code d'un autre.
+async function _coachDuCode(code){
+  try{
+    const c=String(code||'').trim().toUpperCase();
+    if(!_INVITE_RE.test(c)) return null;
+    const t=await CLOUD._getToken().catch(()=>null);
+    const r=await fetch(_rcCodesUrl(c)+(t?'?auth='+t:''));
+    if(!r.ok) return null;
+    const d=await r.json();
+    // La forme attendue par _annoncerDejaRattache : un objet coach.
+    return (d&&d.coachId)?{id:d.coachId,fname:d.coachName||'',lname:''}:null;
+  }catch(e){ return null; }
+}
 async function _verifierCodeSansConsommer(raw){
   const code=String(raw||'').trim().toUpperCase();
   if(!_INVITE_RE.test(code)) throw new Error('Format attendu : RC-XXXX-XXXX (lettres et chiffres).');
