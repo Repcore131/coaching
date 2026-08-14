@@ -24200,6 +24200,67 @@ async function phpViderFile(){
   if(n) saveUser();
   return n;
 }
+// ── Retrait d'une seule photo ─────────────────────────────────────────────
+// phpPeutCreerSeance conseille « Supprime les plus anciennes » depuis
+// toujours, sans qu'aucun chemin ne le permette : phpSupprimerBlob n'avait
+// aucun appelant, et phpRevoquerUI détruit tout en retirant le consentement.
+//
+// LE delete_token EST TENTE D'ABORD, comme dans phpRevoquer. Ce module
+// distingue partout une suppression RÉELLE d'une liste de choses à
+// supprimer : dans les dix minutes qui suivent un envoi, la copie distante
+// peut encore être détruite. On n'inscrit dans aPurger que ce qu'on n'a pas
+// pu effacer.
+async function phpSupprimerPose(u,seanceDate,pose){
+  if(!u||!u.photosProgression) return {ok:false,raison:'Aucun dossier.'};
+  const l=phpEtat(u).seances;
+  const s=l.find(x=>x&&x.date===seanceDate);
+  if(!s||!s.poses||!s.poses[pose]) return {ok:false,raison:'Photo introuvable.'};
+  const x=s.poses[pose];
+  // Le blob d'abord : c'est la seule copie qu'on puisse VRAIMENT détruire.
+  let local=false;
+  try{ await phpSupprimerBlob(x.cle); local=true; }catch(e){ local=false; }
+  // La file hors ligne pointait peut-être sur ce blob. L'y laisser ferait
+  // réessayer un partage à chaque reconnexion, sur une photo qui n'existe
+  // plus : phpViderFile ne retire que les séances introuvables.
+  try{ phpFileRetirer(x.cle); }catch(e){}
+  let restant=null;
+  if(x.publicId){
+    let efface=false;
+    if(x.deleteToken){ try{ efface=await phpAnnulerUpload(x.deleteToken); }catch(e){ efface=false; } }
+    if(!efface) restant={publicId:x.publicId,date:s.date,pose};
+  }
+  delete s.poses[pose];
+  // LA SÉANCE PART AVEC SA DERNIÈRE POSE : une entrée sans photo compterait
+  // encore dans le plafond de deux cents, soit exactement le problème que ce
+  // retrait sert à résoudre.
+  if(!Object.keys(s.poses).length) u.photosProgression.seances=l.filter(y=>y!==s);
+  if(restant){
+    if(!Array.isArray(u.photosProgression.aPurger)) u.photosProgression.aPurger=[];
+    u.photosProgression.aPurger.push(restant);
+  }
+  return {ok:true,local,restant:restant?restant.publicId:null};
+}
+// LE GESTE. La question nomme la photo et son jour, et dit la vérité quand la
+// photo est déjà partie chez le coach — l'écran de consentement l'a promis.
+async function phpSupprimerPoseUI(seanceDate,pose){
+  const u=currentUser;
+  if(!u) return false;
+  const s=phpEtat(u).seances.find(x=>x&&x.date===seanceDate);
+  const x=s&&s.poses&&s.poses[pose];
+  if(!x){ toast('Photo introuvable.','var(--orange)'); return false; }
+  const lib=(PHP_POSES.find(q=>q.cle===pose)||{}).lib||pose;
+  const jour=new Date(seanceDate).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  if(!confirm('Supprimer « '+lib+' » du '+jour+' ?\n\n'
+    +(x.publicId?'Cette photo a déjà été transmise à ton coach : elle part de ce téléphone, mais sa copie ne peut pas toujours être effacée à distance.\n\n':'')
+    +'C’est définitif.')) return false;
+  const r=await phpSupprimerPose(u,seanceDate,pose);
+  if(!r.ok){ toast(r.raison||'Suppression impossible.','var(--orange)'); return false; }
+  saveUser();
+  renderPhotosProgression();
+  toast(r.restant?'Photo supprimée de ce téléphone. Une copie reste à purger côté coach.'
+    :'Photo supprimée.','var(--green)');
+  return true;
+}
 // ── Révocation ────────────────────────────────────────────────────────────
 // CE QU'ELLE FAIT VRAIMENT, et ce qu'elle ne peut pas faire.
 //
@@ -24402,10 +24463,17 @@ function htmlPhotosFrise(u){
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:14px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:9px">Frise</div>
     <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">
-      ${f.map(s=>`<div style="flex-shrink:0;min-width:74px;text-align:center;background:#111;border:1px solid #2e2e2e;border-radius:9px;padding:8px 6px">
-        <div style="font-size:10.5px;font-weight:800;color:#fff">${new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'})}</div>
-        <div style="font-size:9.5px;color:var(--sub);margin-top:3px">${s.poses.length} pose${s.poses.length>1?'s':''}</div>
-      </div>`).join('')}
+      ${f.map(s=>{
+        const _j=new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
+        return `<div style="flex-shrink:0;min-width:126px;background:#111;border:1px solid #2e2e2e;border-radius:9px;padding:8px 4px 6px 9px">
+          <div style="font-size:10.5px;font-weight:800;color:#fff;margin-bottom:3px">${_j}</div>
+          ${s.poses.map(_c=>{
+            const _l=(PHP_POSES.find(q=>q.cle===_c)||{}).lib||_c;
+            return `<div style="display:flex;align-items:center;gap:4px">
+              <span style="flex:1;min-width:0;font-size:9.5px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(_l)}</span>
+              ${_htmlRetraitReleve(`phpSupprimerPoseUI(${s.date},&quot;${_c}&quot;)`,`la photo ${escapeHtml(_l)} du ${_j}`)}
+            </div>`;}).join('')}
+        </div>`;}).join('')}
     </div>
   </div>`;
 }
