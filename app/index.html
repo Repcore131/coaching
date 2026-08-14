@@ -8647,7 +8647,25 @@ async function doNewPwdRecovery(){
     show('Erreur : '+code);
   }
 }
-function showErr(id,msg){const e=document.getElementById(id);e.textContent=msg;e.style.display='block';}
+// LA COULEUR EST REPOSEE A CHAQUE AFFICHAGE. forgotPassword peint #l-err en
+// vert pour annoncer « email envoyé » et ne le remet jamais : l'erreur
+// suivante — mot de passe incorrect, panne réseau — sortait dans le vert du
+// succès.
+//
+// On MÉMORISE la couleur d'origine au premier passage plutôt que de vider la
+// propriété. `l-err` et `r-err` tiennent leur rouge du style EN LIGNE, et
+// element.style EST cet attribut : `style.color=''` ne remet pas par défaut,
+// elle SUPPRIME la déclaration — les deux auraient perdu leur rouge dès la
+// première erreur. Quant à `cc-err`, sa classe `.err` n'existe nulle part dans
+// la feuille de style.
+function showErr(id,msg){
+  const e=document.getElementById(id);
+  if(!e) return;
+  if(e.dataset.coulOrigine===undefined) e.dataset.coulOrigine=e.style.color||'';
+  e.style.color=e.dataset.coulOrigine;
+  e.textContent=msg;
+  e.style.display='block';
+}
 // La carte « CRÉER MON COMPTE » demande l'invitation AVANT d'ouvrir le
 // formulaire. Le contrôle de forme est fait ici pour attraper les fautes de
 // frappe tout de suite ; la validité réelle est vérifiée et le code consommé
