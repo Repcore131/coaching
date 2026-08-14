@@ -25835,6 +25835,10 @@ function _bilDraftRempli(d){
     .filter(v=>Array.isArray(v)?v.length:(v!==''&&v!=null)).length;
 }
 function _bilPhotoPrefixe(type){return (type==='depart'?'deb':'bil')+'-photo-';}
+// PURE. Le nom EXACT des deux boutons de l'écran de choix. Une question qui
+// nommerait le bilan autrement que le bouton qu'on vient de toucher ferait
+// hésiter au pire moment.
+function _bilNomType(t){ return t==='depart'?'bilan de départ':'bilan coaching'; }
 // Les photos survivent dans leurs propres clés. On ne récupère que celles du
 // type en cours : un bilan de départ abandonné laisserait sinon ses photos
 // s'inviter dans un bilan de suivi.
@@ -25954,6 +25958,20 @@ function _etapesUtiles(steps){
 }
 function openBilan(type,forcerReprise){
   const brut=localStorage.getItem(BIL_DRAFT_KEY);
+  // LE BROUILLON BRUT, avant tout filtre : _bilLoadDraft rend null dès que le
+  // type diffère, et c'est précisément le cas qu'on veut voir ici.
+  let ancien=null;
+  try{ ancien=brut?JSON.parse(brut):null; }catch(e){ ancien=null; }
+  const autreType=!!(ancien&&ancien.bilType&&ancien.bilType!==type);
+  // POSÉE AVANT DE TOUCHER AUX VARIABLES DU MODULE : refuser doit tout laisser
+  // exactement comme c'était, brouillon compris. Les remettre à zéro d'abord
+  // aurait laissé l'écran décrire un bilan vide pendant que le brouillon
+  // existait encore.
+  if(autreType&&_bilDraftRempli(ancien)>0){
+    const n=_bilDraftRempli(ancien);
+    if(!confirm('Tu as un '+_bilNomType(ancien.bilType)+' commencé avec '+n
+      +' réponse'+(n>1?'s':'')+'.\n\nOuvrir un '+_bilNomType(type)+' l’effacera.\n\nContinuer ?')) return false;
+  }
   const brouillon=_bilLoadDraft(type);
   bilType=type;bilStep=0;bilData={};_bilPhotoLoading=0;
   if(brouillon&&_bilDraftRempli(brouillon)>0
@@ -25967,7 +25985,16 @@ function openBilan(type,forcerReprise){
   } else if(brut){
     // Brouillon refusé, périmé, ou d'un autre type : on repart à zéro pour de
     // bon, photos en attente comprises — sinon elles reviendraient plus tard.
-    _bilClearDraft();_bilPurgerPhotos(type);
+    //
+    // LES DEUX PRÉFIXES, et non celui du bilan demandé. Un brouillon de départ
+    // abandonné laissait ses `deb-photo-*` derrière lui, et _bilRestaurerPhotos
+    // les aurait ressorties au prochain questionnaire de départ — c'est
+    // exactement ce que son commentaire redoute. Il n'existe qu'UNE clef de
+    // brouillon : une fois celui-ci détruit, plus rien de légitime ne peut
+    // réclamer une photo en attente, de l'un ou l'autre type. Cela couvre aussi
+    // le brouillon illisible, dont on ne connaît pas le type.
+    _bilClearDraft();
+    _bilPurgerPhotos('depart');_bilPurgerPhotos('coaching');
   }
   // Le nombre d'étapes peut avoir changé depuis l'écriture du brouillon.
   const steps=_etapesUtiles(type==='depart'?DEB_STEPS:BIL_STEPS);
@@ -66118,6 +66145,41 @@ function testExercices(){
           if(bilData['bil-photo-face']!=='data:image/jpeg;base64,PHOTOFACE')
             return _echec('la photo n\'est pas restaurée');
           return true;
+        } finally { window.confirm=_cf; window.go=_go; window.renderBilStep=_r;
+          bilType=_bt; bilStep=_bs; bilData=_bd;
+          if(_ph===null) localStorage.removeItem(CLE); else localStorage.setItem(CLE,_ph);
+          if(_sv===null) localStorage.removeItem(BIL_DRAFT_KEY);
+          else localStorage.setItem(BIL_DRAFT_KEY,_sv); }})());
+      ok('Un brouillon d\'un AUTRE type ne meurt pas en silence',(()=>{
+        // Toucher « Bilan coaching » détruisait un questionnaire de départ à
+        // moitié rempli, sans un mot.
+        const _sv=localStorage.getItem(BIL_DRAFT_KEY), _cf=window.confirm;
+        const _bt=bilType, _bs=bilStep, _bd=bilData, _go=window.go, _r=window.renderBilStep;
+        const CLE='rc_pendingphoto_deb-photo-face';
+        const _ph=localStorage.getItem(CLE);
+        try{
+          window.go=()=>{}; window.renderBilStep=()=>{};
+          localStorage.setItem(BIL_DRAFT_KEY,JSON.stringify({bilType:'depart',bilStep:3,
+            bilData:{poids:'70',objectif:'masse'},ts:Date.now()}));
+          localStorage.setItem(CLE,'data:image/jpeg;base64,DEPART');
+          let question=null;
+          window.confirm=(m)=>{question=m;return false;};
+          const r=openBilan('coaching');
+          if(!question) return _echec('aucune question posée');
+          if(!/bilan de départ/.test(question)) return _echec('le bilan en cours n\'est pas nommé : '+question);
+          if(!/2 réponses/.test(question)) return _echec('le nombre de réponses manque : '+question);
+          if(r!==false) return _echec('l\'ouverture n\'est pas abandonnée');
+          // REFUS : rien ne bouge, ni le brouillon, ni les variables du module.
+          if(!localStorage.getItem(BIL_DRAFT_KEY)) return _echec('le brouillon a été effacé malgré le refus');
+          if(localStorage.getItem(CLE)===null) return _echec('la photo en attente a été purgée malgré le refus');
+          if(bilType!==_bt) return _echec('bilType a été écrasé avant la question');
+          // ACCEPTER : le brouillon part, et ses photos AUSSI — sans quoi elles
+          // reviendraient s'inviter au prochain questionnaire de départ.
+          window.confirm=()=>true;
+          openBilan('coaching');
+          if(localStorage.getItem(BIL_DRAFT_KEY)) return _echec('le brouillon survit à l\'acceptation');
+          return localStorage.getItem(CLE)===null
+            ?true:_echec('la photo deb-photo-* reste orpheline dans le stockage');
         } finally { window.confirm=_cf; window.go=_go; window.renderBilStep=_r;
           bilType=_bt; bilStep=_bs; bilData=_bd;
           if(_ph===null) localStorage.removeItem(CLE); else localStorage.setItem(CLE,_ph);
