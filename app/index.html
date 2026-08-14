@@ -27281,8 +27281,21 @@ function _appliquerSubstitut(idx,nom){
   // Les séries déjà saisies portaient sur l'exercice précédent : on repart
   // propre plutôt que d'attribuer des charges à un mouvement qui n'a pas été
   // fait.
-  if(woState.sessionData&&woState.sessionData[idx])
-    woState.sessionData[idx].sets=woState.sessionData[idx].sets.map(()=>({}));
+  //
+  // RECONSTRUITES À LA FORME DE _blocExo, et non vidées en `{}`. Des objets
+  // vides n'ont pas de `reps`, et repsToNumber(undefined) vaut 0 : tonnageSerie
+  // rendait donc 0 quelles que soient la charge et les répétitions saisies
+  // ensuite. L'exercice remplacé pesait zéro kilo dans wd-vol, dans le volume
+  // enregistré, et dans toutes les comparaisons qui en découlent.
+  //
+  // Les séries et les répétitions restent celles du programme : le
+  // remplacement change le MOUVEMENT, pas la prescription du coach.
+  if(woState.sessionData&&woState.sessionData[idx]){
+    const pr=parseReps(ex.reps);
+    woState.sessionData[idx].sets=Array.from({length:ex.series},()=>({weight:'',weight2:'',
+      reps:pr.type==='degressive'?pr.p1:ex.reps,rir:'',pain:'',done:false,
+      degressive:pr.type==='degressive',p2reps:pr.p2}));
+  }
   woPersist();
   closeModal();
   renderWoEx();
