@@ -25947,6 +25947,51 @@ function _bilPoidsSaisi(d){
   return !((a===''||a==null)&&(b===''||b==null));
 }
 function _bilPhotoPrefixe(type){return (type==='depart'?'deb':'bil')+'-photo-';}
+// Les clefs pré-remplies depuis le dernier bilan. `null` tant que rien ne
+// l'est — un questionnaire de départ, ou un brouillon repris.
+let _bilReprises=null;
+// PURE. Les mensurations du dernier bilan QUI LES PORTE, clef par clef.
+//
+// Chaque mesure est cherchée séparément : un bilan où seul le poids a été
+// noté ne doit pas masquer la cuisse relevée deux bilans plus tôt. getBM lit
+// déjà les trois préfixes possibles — bil-, deb-, et la clef nue.
+function mensurationsReprises(u){
+  const l=(((u&&u.bilans)||[]).filter(b=>b&&b.date)).slice().sort((a,b)=>a.date-b.date);
+  const out={};
+  for(const m of MEAS){
+    for(let i=l.length-1;i>=0;i--){
+      const v=getBM(l[i],m.k);
+      if(v!=null){ out['bil-'+m.k]=String(v); break; }
+    }
+  }
+  for(let i=l.length-1;i>=0;i--){
+    const w=getBW(l[i]);
+    if(w!=null){ out['bil-weight']=String(w); break; }
+  }
+  return out;
+}
+// Toucher une case la rend à son auteur : le pointillé tombe, sinon il
+// désignerait une saisie fraîche comme une valeur reprise.
+function bMesureSaisie(id,v){
+  bilData[id]=v;
+  if(_bilReprises&&_bilReprises.has(id)){
+    _bilReprises.delete(id);
+    const bx=document.getElementById('bx-'+id);
+    if(bx) bx.style.borderStyle='solid';
+    const ch=document.getElementById(id);
+    if(ch&&ch.style) ch.style.borderStyle='solid';
+  }
+}
+function _bilEstReprise(id){ return !!(_bilReprises&&_bilReprises.has(id)); }
+// La ligne sous le titre de l'étape. Elle ne s'affiche que s'il reste
+// quelque chose à vérifier.
+function _htmlNoteReprises(){
+  if(!_bilReprises||!_bilReprises.size) return '';
+  return `<div style="display:flex;gap:7px;align-items:flex-start;background:#12100a;border:1px dashed rgba(224,32,32,.45);border-radius:8px;padding:9px 11px;margin-bottom:10px">
+    <span style="flex:none;font-size:12px;line-height:1.3">↺</span>
+    <span style="font-size:11.5px;color:var(--sub);line-height:1.55">Les cases en pointillé portent les valeurs de ton dernier bilan : corrige ce qui a changé.</span>
+  </div>`;
+}
 // PURE. Le nom EXACT des deux boutons de l'écran de choix. Une question qui
 // nommerait le bilan autrement que le bouton qu'on vient de toucher ferait
 // hésiter au pire moment.
@@ -26086,6 +26131,7 @@ function openBilan(type,forcerReprise){
   }
   const brouillon=_bilLoadDraft(type);
   bilType=type;bilStep=0;bilData={};_bilPhotoLoading=0;
+  _bilReprises=null;
   if(brouillon&&_bilDraftRempli(brouillon)>0
      &&(forcerReprise||confirm('Reprendre ton bilan en cours ?\n\nTu en étais à l\'étape '
         +(brouillon.bilStep+1)+', avec '+_bilDraftRempli(brouillon)+' réponse'
@@ -26107,6 +26153,25 @@ function openBilan(type,forcerReprise){
     // le brouillon illisible, dont on ne connaît pas le type.
     _bilClearDraft();
     _bilPurgerPhotos('depart');_bilPurgerPhotos('coaching');
+  }
+  // LES MENSURATIONS DU DERNIER BILAN SONT REPRISES. Sans elles, douze tours
+  // à retaper toutes les deux semaines — et chaque case oubliée creuse un trou
+  // dans une courbe, parce qu'un bilan sans la valeur n'est pas un bilan avec
+  // la valeur d'avant : c'est une rupture.
+  //
+  // JAMAIS POUR LE QUESTIONNAIRE DE DÉPART : il n'y a aucun bilan antérieur, et
+  // le pré-remplir reviendrait à lui inventer un passé.
+  //
+  // `bilData` vide dit à lui seul que rien n'a été repris du brouillon : la
+  // reprise en pose au moins une réponse, c'est sa condition d'existence.
+  if(type==='coaching'&&!Object.keys(bilData).length){
+    let _r={};
+    try{ _r=mensurationsReprises(currentUser); }catch(e){ _r={}; }
+    const _k=Object.keys(_r);
+    if(_k.length){
+      for(const k of _k) bilData[k]=_r[k];
+      _bilReprises=new Set(_k);
+    }
   }
   // Le nombre d'étapes peut avoir changé depuis l'écriture du brouillon.
   const steps=_etapesUtiles(type==='depart'?DEB_STEPS:BIL_STEPS);
@@ -26195,7 +26260,13 @@ function pickBilChoice(groupId,val,multi){
   // Un clic ne déclenche pas d'événement `input` : la délégation ne le voit pas.
   _bilSaveDraft();
 }
-function bQ(id){return`<input type="number" id="${id}" placeholder="—" value="${bilData[id]||''}" step="any" oninput="bilData['${id}']=this.value" style="width:68px;text-align:right;padding:6px 8px;font-size:15px;font-weight:800;margin:0;background:#080808;border:1px solid #222;border-radius:2px">`;}
+// LE POIDS PORTE LE MEME POINTILLÉ que les cases du schéma. Il est rendu ici,
+// hors de bBodySchema : pré-rempli sans marque, il serait le pire des deux
+// mondes — c'est la seule valeur qui alimente une courbe que tout le monde
+// regarde, et un athlète distrait y inscrirait le poids d'il y a quinze jours.
+// Aucune mensuration ne passe par bQ : seul le poids est concerné.
+function bQ(id){const _r=_bilEstReprise(id);
+  return`<input type="number" id="${id}" placeholder="—" value="${bilData[id]||''}" step="any" oninput="bMesureSaisie('${id}',this.value)" style="width:68px;text-align:right;padding:6px 8px;font-size:15px;font-weight:800;margin:0;background:#080808;border:1px ${_r?'dashed rgba(224,32,32,.5)':'solid #222'};border-radius:2px">`;}
 function bT(id,ph){return`<input type="text" id="${id}" placeholder="${ph||''}" value="${escapeHtml(bilData[id]||'')}" oninput="bilData['${id}']=this.value">`;}
 function bTA(id,ph){return`<textarea id="${id}" rows="3" placeholder="${ph||''}" oninput="bilData['${id}']=this.value" style="resize:none">${escapeHtml(bilData[id]||'')}</textarea>`;}
 function bC(gid,choices,multi){
@@ -26520,11 +26591,15 @@ function bBodySchema(prefix){
       // seule ligne, la place est comptee — et le cote est deja porte par la
       // position de la case, a gauche ou a droite du corps.
       const court=f.l.replace(/ gauche$/,' G.').replace(/ droite?$/,' D.');
+      // Une valeur reprise du dernier bilan porte un POINTILLÉ : elle est là
+      // pour être vérifiée, pas pour être crue. Le trait redevient plein dès
+      // que l'athlète touche la case — voir bMesureSaisie.
+      const _rep=_bilEstReprise(id);
       return `<div style="position:absolute;${posX};top:${top}%;width:31%">
-        <div id="bx-${id}" style="display:flex;align-items:center;gap:4px;background:#0c0c0c;border:1px solid #2b2b2b;border-radius:7px;padding:2px 6px;transition:border-color .2s,box-shadow .2s">
+        <div id="bx-${id}" style="display:flex;align-items:center;gap:4px;background:#0c0c0c;border:1px ${_rep?'dashed rgba(224,32,32,.5)':'solid #2b2b2b'};border-radius:7px;padding:2px 6px;transition:border-color .2s,box-shadow .2s">
           <span style="flex:none;font-size:9px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--sub);white-space:nowrap">${court}</span>
           <input type="number" inputmode="decimal" step="any" id="${id}" value="${bilData[id]||''}" placeholder="—"
-            oninput="bilData['${id}']=this.value"
+            oninput="bMesureSaisie('${id}',this.value)"
             onfocus="bBodyFocus('${id}',1)" onblur="bBodyFocus('${id}',0)"
             style="flex:1;width:100%;min-width:0;background:none;border:none;outline:none;box-shadow:none;color:#fff;font-family:Montserrat,sans-serif;font-weight:800;font-size:13px;text-align:right;padding:3px 0;margin:0">
           <span style="font-size:var(--fs-xs);color:var(--text-dim);font-weight:700;margin-left:2px">cm</span>
@@ -28060,6 +28135,7 @@ const BIL_STEPS=[
   // Step 1 : Mensurations — schéma corporel interactif
   ()=>bSec('Mensurations ',
     `<div style="font-size:12px;color:var(--sub);margin-bottom:8px;line-height:1.5">Complète tes mesures directement sur le schéma. Touche une case pour la remplir.</div>`+
+    _htmlNoteReprises()+
     `<div style="display:flex;flex-direction:column;margin-bottom:4px">${bMeas('bil-weight','Poids actuel','kg')}</div>`+
     bBodySchema('bil')
   ),
