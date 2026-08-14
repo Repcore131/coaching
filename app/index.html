@@ -23861,8 +23861,20 @@ function rapRendre(){
   try{ r=rapportPeriode(_rapCible,_rapDebut,_rapFin); }catch(e){ r=null; }
   z.innerHTML=r?htmlRapport(r):'<div class="rap-vide">Rapport indisponible.</div>';
   const d=document.getElementById('rap-d'), f=document.getElementById('rap-f');
-  if(d&&!d.value) d.value=localISODate(new Date(_rapDebut));
-  if(f&&!f.value) f.value=localISODate(new Date(_rapFin));
+  // TOUJOURS, et non « seulement si le champ est vide ». ouvrirRapport remet
+  // _rapDebut et _rapFin au mois précédent à CHAQUE ouverture : les champs
+  // gardaient donc la période choisie la fois d'avant pendant que le rapport,
+  // lui, couvrait le mois précédent. Deux vérités à l'écran, et la seule
+  // lisible était la fausse — sur un document qu'on imprime et qu'on donne.
+  //
+  // Une date non finie n'écrit rien : mieux vaut un champ inchangé qu'un
+  // « 1970-01-01 » posé par un new Date(null).
+  //
+  // Number.isFinite et NON isFinite : le second convertit son argument, et
+  // isFinite(null) vaut TRUE — null devient 0, donc le 1er janvier 1970. C'est
+  // exactement le cas que ce garde devait empêcher.
+  if(d&&Number.isFinite(_rapDebut)) d.value=localISODate(new Date(_rapDebut));
+  if(f&&Number.isFinite(_rapFin)) f.value=localISODate(new Date(_rapFin));
   const c=document.getElementById('rap-cases');
   if(c&&!c.dataset.pose){
     c.dataset.pose='1';
