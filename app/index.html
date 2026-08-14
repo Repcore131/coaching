@@ -39648,7 +39648,35 @@ function _htmlFormesFiche(fiche,cleRetenue){
 }
 
 // Compléments regroupés par moment de prise — une section par créneau de la journée
+// Toute entrée porte un identifiant AVANT que le HTML ne le cite. Les trois
+// chemins de création en posent déjà un ; il reste les dossiers écrits avant
+// que ce champ n'existe. On le pose ici, au seul endroit où son absence
+// coûterait quelque chose : la ligne qui va le mettre dans un onclick.
+//
+// Unicité assurée contre les identifiants DÉJÀ présents : deux entrées créées
+// dans la même milliseconde partageraient sinon la même clef, et le défaut
+// qu'on corrige reviendrait par une autre porte.
+function _suppAssurerIds(list){
+  if(!Array.isArray(list)) return list;
+  const vus=new Set(list.filter(x=>x&&x.id!=null).map(x=>x.id));
+  let n=Date.now();
+  for(const x of list){
+    if(!x||x.id!=null) continue;
+    while(vus.has(n)) n++;
+    x.id=n; vus.add(n); n++;
+  }
+  return list;
+}
+// PURE. Le rang d'une entrée dans SA liste, par identité. -1 si absente : les
+// appelants s'en servent comme garde, exactement comme avant avec un index.
+function _suppIndexParId(list,id){
+  if(!Array.isArray(list)) return -1;
+  const n=Number(id);
+  if(!Number.isFinite(n)) return -1;
+  return list.findIndex(x=>x&&Number(x.id)===n);
+}
 function _renderSuppTable(list, isCoach, editFn){
+  _suppAssurerIds(list);
   // L encart sourcing survit a la liste vide : l athlete qui n a rien
   // enregistre est precisement celui qui n a rien achete.
   if(!list.length) return emptyState('pill','Aucun complément renseigné.',null,null,'padding:28px 0')
@@ -39663,7 +39691,11 @@ function _renderSuppTable(list, isCoach, editFn){
   const momentsDe=s=>TIMINGS_LIST.filter(t=>(s.timings||[]).includes(t.id))
     .sort((a,b)=>_rangMoment(a.id)-_rangMoment(b.id));
   const carte=s=>{
-    const realIdx=list.indexOf(s);
+    // L'IDENTITÉ, ET NON LE RANG. `list.indexOf(s)` donnait la position dans la
+    // liste REÇUE — filtrée sur les actifs côté athlète — pendant que
+    // openSuppEdit relisait le store complet. Un inactif placé avant un actif
+    // suffisait à ouvrir, puis écraser, la mauvaise entrée.
+    const realIdx=s.id;
     const inactive=s.active===false;
     const fiche=_suppFiche(s.name);
     const mts=momentsDe(s);
@@ -39797,13 +39829,18 @@ function loadSuppEmbedded(){
     <div style="height:4px"></div>`;
 }
 
-function openSuppEdit(idx){
+// `id` est un IDENTIFIANT, plus un rang. -1 reste le nouveau complément : aucun
+// identifiant ne vaut -1, la sentinelle survit sans ambiguïté.
+function openSuppEdit(id){
   _suppReturnToNutrition=document.getElementById('s-nutrition')?.classList.contains('active')||false;
   go('s-supplement-edit');
-  const list=_suppStore();
+  const list=_suppAssurerIds(_suppStore());
+  const idx=_suppIndexParId(list,id);
   const s=idx>=0?list[idx]:null;
   document.getElementById('supp-edit-title').textContent=s?'Modifier le complément':'Nouveau complément';
-  document.getElementById('supp-edit-idx').value=idx;
+  // Le champ caché porte l'IDENTIFIANT, pas le rang : entre l'ouverture et
+  // l'enregistrement, une synchro peut avoir réordonné la liste.
+  document.getElementById('supp-edit-idx').value=s?s.id:-1;
   document.getElementById('supp-name').value=s?s.name:'';
   document.getElementById('supp-qty').value=s?(s.dosage_quantity||''):'';
   document.getElementById('supp-unit').value=s?(s.dosage_unit||'g'):'g';
@@ -39887,7 +39924,7 @@ function saveSuppEntry(){
   const unit=document.getElementById('supp-unit').value;
   const notes=(document.getElementById('supp-notes').value||'').trim();
   const active=document.getElementById('supp-active').checked;
-  const idx=parseInt(document.getElementById('supp-edit-idx').value);
+  const _id=parseInt(document.getElementById('supp-edit-idx').value);
   const timings=Array.from(document.querySelectorAll('#supp-timings-grid .supp-timing-chip.active')).map(b=>{
     const txt=b.textContent.trim();
     return (TIMINGS_LIST.find(t=>t.label===txt)||{id:txt}).id;
@@ -39906,7 +39943,9 @@ function saveSuppEntry(){
   const forme=((document.getElementById('supp-forme')||{}).value||'').trim();
   if(forme) entry.forme=forme;
   const list=_suppStore();
-  if(idx>=0&&idx<list.length){
+  // Résolu MAINTENANT, sur la liste telle qu'elle est à l'enregistrement.
+  const idx=_suppIndexParId(list,_id);
+  if(idx>=0){
     const maj={...list[idx],...entry,id:list[idx].id};
     // Revenir à « Non précisée » doit EFFACER : le spread, seul, aurait
     // reconduit l'ancienne forme indéfiniment.
@@ -39920,9 +39959,10 @@ function saveSuppEntry(){
   _suppReturnToNutrition?loadNutrition():loadSupplements();
 }
 
-function deleteSuppEntry(idx){
+function deleteSuppEntry(id){
   const list=_suppStore();
-  if(idx<0||idx>=list.length) return;
+  const idx=_suppIndexParId(list,id);
+  if(idx<0) return;
   list.splice(idx,1);
   saveUser();
   if(currentUser._notifEnabled) scheduleSuppNotif();
@@ -40018,12 +40058,16 @@ function deleteClientSuppEntry(index){
   renderCoachSuppSection(c);
 }
 
-function openCoachSuppEdit(idx){
+// PAR IDENTIFIANT LUI AUSSI. Sa liste n'est pas filtrée aujourd'hui, donc son
+// rang était juste — par accident. Un invariant qui tient parce qu'un appelant
+// a oublié de filtrer n'est pas un invariant.
+function openCoachSuppEdit(id){
   document.getElementById('modal-overlay')?.remove();
   const users=DB.get('users')||{};
   const c=getOwnedClient(currentClientId,users);
   if(!c) return;
-  const list=c.nutrition?.supplements||[];
+  const list=_suppAssurerIds(c.nutrition?.supplements||[]);
+  const idx=_suppIndexParId(list,id);
   const s=idx>=0?list[idx]:null;
   const timingChips=TIMINGS_LIST.map(t=>`<button type="button" class="supp-timing-chip${s&&(s.timings||[]).includes(t.id)?' active':''}" onclick="this.classList.toggle('active')">${t.label}</button>`).join('');
   const unitOpts=['g','mg','mcg','ml','gélule(s)','comprimé(s)','scoop(s)','cuillère(s)'];
@@ -40070,9 +40114,9 @@ function openCoachSuppEdit(idx){
           onchange="document.getElementById('coach-supp-active-lbl').textContent=this.checked?'Oui':'Non'">
       </div>
     </div>
-    <input type="hidden" id="coach-supp-idx" value="${idx}">
+    <input type="hidden" id="coach-supp-idx" value="${s?s.id:-1}">
     <button onclick="saveCoachSuppEdit()" style="width:100%;padding:13px 0;background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer;margin-bottom:10px">SAUVEGARDER</button>
-    ${s?`<button onclick="deleteCoachSuppEdit(${idx})" style="width:100%;padding:11px 0;background:none;border:1px solid #333;color:#666;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;border-radius:10px;cursor:pointer">SUPPRIMER CE COMPLÉMENT</button>`:''}
+    ${s?`<button onclick="deleteCoachSuppEdit(${s.id})" style="width:100%;padding:11px 0;background:none;border:1px solid #333;color:#666;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;border-radius:10px;cursor:pointer">SUPPRIMER CE COMPLÉMENT</button>`:''}
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
 }
@@ -40086,7 +40130,7 @@ function saveCoachSuppEdit(){
   const unit=document.getElementById('coach-supp-unit').value;
   const notes=(document.getElementById('coach-supp-notes').value||'').trim();
   const active=document.getElementById('coach-supp-active').checked;
-  const idx=parseInt(document.getElementById('coach-supp-idx').value);
+  const _id=parseInt(document.getElementById('coach-supp-idx').value);
   const timings=Array.from(document.querySelectorAll('#coach-supp-timings .supp-timing-chip.active')).map(b=>{
     const txt=b.textContent.trim();
     return (TIMINGS_LIST.find(t=>t.label===txt)||{id:txt}).id;
@@ -40097,7 +40141,9 @@ function saveCoachSuppEdit(){
   if(!c.nutrition) c.nutrition={};
   if(!Array.isArray(c.nutrition.supplements)) c.nutrition.supplements=[];
   const entry={name,dosage_quantity:qty,dosage_unit:unit,timings,notes,active};
-  if(idx>=0&&idx<c.nutrition.supplements.length){
+  // Résolu sur la liste telle qu'elle est maintenant, par identité.
+  const idx=_suppIndexParId(c.nutrition.supplements,_id);
+  if(idx>=0){
     c.nutrition.supplements[idx]={...c.nutrition.supplements[idx],...entry};
   } else {
     c.nutrition.supplements.push({id:Date.now(),...entry});
@@ -40109,10 +40155,12 @@ function saveCoachSuppEdit(){
   renderCoachSuppSection(c);
 }
 
-function deleteCoachSuppEdit(idx){
+function deleteCoachSuppEdit(id){
   const users=DB.get('users')||{};
   const c=getOwnedClient(currentClientId,users);
   if(!c||!Array.isArray(c.nutrition?.supplements)) return;
+  const idx=_suppIndexParId(c.nutrition.supplements,id);
+  if(idx<0) return;
   c.nutrition.supplements.splice(idx,1);
   c.updatedAt=Date.now();users[c.email]=c;
   const ok=DB.set('users',users);
