@@ -26836,13 +26836,30 @@ function _htmlAlerteTension(user){
     ${blocDisclaimerSante()}
   </div>`;
 }
+// LE BOUTON DE RETRAIT, dessiné ici et non deux fois : deux tracés finissent
+// par diverger, et celui-ci porte une cible de 44 px qu'on ne veut pas voir
+// rétrécir d'un côté seulement.
+//
+// DISCRET À DESSEIN. Ce sont des données de santé : le geste doit être
+// possible, pas invitant. Et il passe de toute façon par une confirmation.
+function _htmlRetraitReleve(appel,quoi){
+  return '<button type="button" class="hit44" onclick="'+appel+'" '
+    +'aria-label="Supprimer '+quoi+'" title="Supprimer" '
+    +'style="flex:none;width:44px;height:44px;min-width:44px;min-height:44px;'
+    +'display:inline-flex;align-items:center;justify-content:center;padding:0;'
+    +'background:none;border:none;border-radius:8px;color:var(--text-faint);cursor:pointer">'
+    +'<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" '
+    +'stroke-width="2.2" stroke-linecap="round" aria-hidden="true">'
+    +'<path d="M6 6 18 18"/><path d="M18 6 6 18"/></svg></button>';
+}
 function _htmlConstantes(user){
   const l=(((user&&user.constantes)||[]).filter(e=>e&&e.type==='tension'))
     .slice().sort((a,b)=>a.date<b.date?-1:1).slice(-10).reverse();
   if(!l.length) return `<div class="sub" style="font-size:11px;padding:8px 0;line-height:1.6">Aucune mesure enregistrée.</div>`;
-  return l.map(e=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid #161616">
+  return l.map(e=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:2px 0;border-bottom:1px solid #161616">
     <span style="font-size:12px;color:#ddd">${e.sys}/${e.dia}${e.pouls?` · ${e.pouls} bpm`:''}</span>
-    <span class="sub" style="font-size:11px;white-space:nowrap">${escapeHtml(_fmtDateCourte(e.date))}</span>
+    <span class="sub" style="font-size:11px;white-space:nowrap;margin-left:auto">${escapeHtml(_fmtDateCourte(e.date))}</span>
+    ${_htmlRetraitReleve(`supprimerConstanteUI(&quot;${escapeHtml(e.date)}&quot;)`,`la mesure du ${escapeHtml(_fmtDateCourte(e.date))}`)}
   </div>`).join('');
 }
 function _htmlAnalyses(user){
@@ -26855,12 +26872,15 @@ function _htmlAnalyses(user){
     // « +6 depuis le 12 mars » : un fait, pas un jugement. Aucune couleur, aucune
     // flèche, rien qui suggère qu'une direction vaudrait mieux que l'autre.
     const ecart=ec?` · ${ec.delta>0?'+':''}${String(ec.delta).replace('.',',')} depuis le ${escapeHtml(_fmtDateCourte(ec.depuis))}`:'';
-    return `<div style="padding:8px 0;border-bottom:1px solid #161616">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
-        <span style="font-size:12px;color:#ddd;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml((m&&m.lib)||e.marqueur)}</span>
-        <span style="font-size:12px;color:#fff;font-weight:700;white-space:nowrap">${String(e.valeur).replace('.',',')} ${escapeHtml(e.unite)}</span>
+    return `<div style="display:flex;align-items:center;gap:8px;padding:2px 0;border-bottom:1px solid #161616">
+      <div style="flex:1;min-width:0;padding:6px 0">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+          <span style="font-size:12px;color:#ddd;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml((m&&m.lib)||e.marqueur)}</span>
+          <span style="font-size:12px;color:#fff;font-weight:700;white-space:nowrap">${String(e.valeur).replace('.',',')} ${escapeHtml(e.unite)}</span>
+        </div>
+        <div class="sub" style="font-size:10px;margin-top:2px">${escapeHtml(_fmtDateCourte(e.date))}${escapeHtml(ecart)}</div>
       </div>
-      <div class="sub" style="font-size:10px;margin-top:2px">${escapeHtml(_fmtDateCourte(e.date))}${escapeHtml(ecart)}</div>
+      ${_htmlRetraitReleve(`supprimerAnalyseUI(&quot;${escapeHtml(e.date)}&quot;,&quot;${escapeHtml(e.marqueur)}&quot;)`,`${escapeHtml((m&&m.lib)||e.marqueur)} du ${escapeHtml(_fmtDateCourte(e.date))}`)}
     </div>`;
   }).join('');
 }
@@ -26879,6 +26899,49 @@ function _htmlDrapeauGeneral(user){
     <div style="font-size:11px;color:var(--text-dim);line-height:1.6;margin-top:9px">Ton coach le voit de son côté. C'est lui qui retire ce signalement quand tu l'as vu avec un médecin.</div>
     ${blocDisclaimerSante()}
   </div>`;
+}
+// LE GESTE. Une confirmation qui NOMME ce qu'on retire — « supprimer ce
+// relevé » ne permet pas de vérifier qu'on vise le bon.
+//
+// L'ENVOI EST IMMÉDIAT, et ce n'est pas du zèle : ces relevés vivent dans
+// sante_privee, et _migrerSantePriveeLocale fait une UNION du local et du
+// distant à chaque démarrage. Une suppression restée locale reviendrait au
+// prochain lancement. CLOUD.pushOne PUT le nœud entier, donc sans l'entrée —
+// même chemin que la migration, pas un second qui divergerait.
+function _santePousserMaintenant(){
+  try{ const r=CLOUD.pushOne(currentUser.email,currentUser);
+    if(r&&r.catch) r.catch(()=>{}); }catch(e){}
+}
+function supprimerConstanteUI(dateISO){
+  const u=currentUser;
+  if(!u) return false;
+  const e=((u.constantes)||[]).find(x=>x&&x.date===dateISO);
+  if(!e){ toast('Mesure introuvable.','var(--orange)'); return false; }
+  if(!confirm('Supprimer la mesure '+e.sys+'/'+e.dia
+    +' du '+_fmtDateCourte(e.date)+' ?\n\nC’est définitif.')) return false;
+  const r=supprimerConstante(u,dateISO);
+  if(!r.ok){ toast(r.raison,'var(--orange)'); return false; }
+  saveUser();
+  _santePousserMaintenant();
+  loadSante();
+  toast('Mesure supprimée.','var(--green)');
+  return true;
+}
+function supprimerAnalyseUI(dateISO,marqueur){
+  const u=currentUser;
+  if(!u) return false;
+  const e=((u.analyses)||[]).find(x=>x&&x.date===dateISO&&x.marqueur===marqueur);
+  if(!e){ toast('Analyse introuvable.','var(--orange)'); return false; }
+  const m=marqueurDe(marqueur);
+  if(!confirm('Supprimer '+((m&&m.lib)||marqueur)+' — '+String(e.valeur).replace('.',',')
+    +' '+e.unite+' du '+_fmtDateCourte(e.date)+' ?\n\nC’est définitif.')) return false;
+  const r=supprimerAnalyse(u,dateISO,marqueur);
+  if(!r.ok){ toast(r.raison,'var(--orange)'); return false; }
+  saveUser();
+  _santePousserMaintenant();
+  loadSante();
+  toast('Analyse supprimée.','var(--green)');
+  return true;
 }
 function loadSante(){
   const u=currentUser;
@@ -42319,6 +42382,32 @@ function enregistrerConstante(user,sys,dia,pouls,dateISO){
     .filter(e=>e&&e.date&&new Date(e.date).getTime()>=min)
     .sort((a,b)=>a.date<b.date?-1:1);
   return {ok:true,entree:v.entree};
+}
+// RETRAIT D'UN RELEVÉ. Ni DOM ni réseau : elles décident, l'écran applique.
+//
+// La date ISO porte les millisecondes : elle identifie donc un relevé à elle
+// seule. C'est aussi la clef qui dédoublonne dans _unionParDate — retirer par
+// date, ici, retire bien la même chose que ce que la fusion reconnaît.
+//
+// AUCUN TABLEAU N'EST CRÉÉ : si le dossier n'en a pas, il n'y a rien à
+// retirer, et poser un [] ferait écrire un champ vide vers sante_privee.
+function supprimerConstante(user,dateISO){
+  if(!user) return {ok:false,raison:'Aucun dossier.'};
+  if(!Array.isArray(user.constantes)) return {ok:false,raison:'Aucune mesure.'};
+  const avant=user.constantes.length;
+  user.constantes=user.constantes.filter(e=>!(e&&e.date===dateISO));
+  const n=avant-user.constantes.length;
+  return n?{ok:true,retirees:n}:{ok:false,raison:'Mesure introuvable.'};
+}
+// Le marqueur EN PLUS de la date : deux analyses du même prélèvement portent
+// le même horodatage, et retirer la ferritine ne doit pas emporter la TSH.
+function supprimerAnalyse(user,dateISO,marqueur){
+  if(!user) return {ok:false,raison:'Aucun dossier.'};
+  if(!Array.isArray(user.analyses)) return {ok:false,raison:'Aucune analyse.'};
+  const avant=user.analyses.length;
+  user.analyses=user.analyses.filter(e=>!(e&&e.date===dateISO&&e.marqueur===marqueur));
+  const n=avant-user.analyses.length;
+  return n?{ok:true,retirees:n}:{ok:false,raison:'Analyse introuvable.'};
 }
 // PURE. Trois dernières mesures au-dessus du seuil ET espacées de plus de 24 h
 // l'une de l'autre. L'espacement n'est pas un détail : trois relevés pris à
