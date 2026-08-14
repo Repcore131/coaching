@@ -24381,6 +24381,75 @@ function htmlPhotosFrise(u){
     </div>
   </div>`;
 }
+// PURE. Ce qui peut être partagé, et ce qui l'est déjà. Aucun rendu ici : la
+// carte se contente de mettre en forme ce que cette fonction décide, et le
+// banc peut donc éprouver la décision sans DOM.
+//
+// RIEN si le partage au coach n'est pas couvert par l'accord : ce n'est pas
+// le rendu qui décide, c'est ici — même doctrine que phpEnvoiAutorise.
+function phpAPartager(u){
+  if(!phpEtat(u).partageCoach) return [];
+  return phpEtat(u).seances.slice().sort((a,b)=>b.date-a.date).map(s=>({
+    date:s.date,
+    dateISO:localISODate(new Date(s.date)),
+    poses:PHP_POSES.filter(p=>s.poses&&s.poses[p.cle]).map(p=>({
+      cle:p.cle,lib:p.lib,partagee:!!(s.poses[p.cle]&&s.poses[p.cle].publicId)
+    }))
+  })).filter(x=>x.poses.length);
+}
+// ── Le partage, pose par pose ─────────────────────────────────────────────
+// SOUS LA FRISE, et non dedans : la frise est une bande de vignettes de 74 px
+// où un bouton par pose ne tient pas, et surtout le partage n'est pas de la
+// consultation. Une carte à part, qui dit ce quelle fait.
+function htmlPhotosPartage(u){
+  const l=phpAPartager(u);
+  if(!l.length) return '';
+  const dj=t=>new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:14px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Partager avec mon coach</div>
+    <div style="font-size:11.5px;color:var(--sub);line-height:1.65;margin-bottom:11px">Photo par photo, et jamais toute seule. Une photo déjà transmise ne peut plus être effacée à distance depuis l’application.</div>
+    ${l.slice(0,12).map(s=>`<div style="border-top:1px solid var(--border);padding-top:9px;margin-top:9px">
+      <div style="font-size:10.5px;font-weight:800;color:var(--text-dim);letter-spacing:1px;margin-bottom:6px">${dj(s.date)}</div>
+      ${s.poses.map(p=>`<div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">
+        <div style="flex:1;min-width:0;font-size:11.5px;color:#ddd">${escapeHtml(p.lib)}</div>
+        ${p.partagee
+          ?`<span style="flex-shrink:0;font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--green);background:#001a00;border:1px solid #1e5c2e;border-radius:5px;padding:3px 8px">Partagée</span>`
+          :`<button type="button" class="hit44" onclick="phpPartagerPoseUI('${s.dateISO}','${p.cle}')"
+            aria-label="Partager la pose ${escapeHtml(p.lib)} du ${dj(s.date)} avec mon coach"
+            style="flex-shrink:0;min-height:34px;padding:6px 12px;border-radius:7px;cursor:pointer;background:var(--surface-2);border:1px solid var(--border);color:var(--sub);font-family:Montserrat,sans-serif;font-size:10.5px;font-weight:800;letter-spacing:.4px">Partager</button>`}
+      </div>`).join('')}
+    </div>`).join('')}
+  </div>`;
+}
+// LE GESTE. Regroupe ici tout ce qui doit accompagner un envoi : la seconde
+// confirmation de la règle 4, l'écriture, le rendu, et un mot sur ce qui
+// s'est réellement passé — phpPartagerPose a quatre issues, pas deux.
+async function phpPartagerPoseUI(dateISO,pose){
+  const u=currentUser;
+  if(!u||!phpEtat(u).partageCoach){ toast('Le partage au coach n’est pas activé.','var(--orange)'); return false; }
+  // phpSeanceDuJour retrouve la séance PAR SA DATE : le nom dit « du jour »,
+  // mais elle accepte n'importe quel jour ISO, et c'est exactement ce qu'il
+  // faut ici. On ne réécrit pas une seconde recherche qui pourrait diverger.
+  const s=phpSeanceDuJour(u,dateISO);
+  if(!s){ toast('Séance photo introuvable.','var(--orange)'); return false; }
+  const x=s.poses&&s.poses[pose];
+  if(!x){ toast('Photo introuvable.','var(--orange)'); return false; }
+  if(x.publicId){ toast('Cette photo est déjà partagée.','var(--orange)'); return false; }
+  const lib=(PHP_POSES.find(q=>q.cle===pose)||{}).lib||pose;
+  const jour=new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  // RÈGLE 4. L'accord initial autorise le suivi, pas cet envoi-ci. La question
+  // nomme LA photo et LE jour : « partager mes photos » ne veut rien dire.
+  if(!confirm('Partager « '+lib+' » du '+jour+' avec ton coach ?\n\n'
+    +'Cette photo quitte ton téléphone. Une fois transmise, elle ne pourra plus être effacée à distance depuis l’application.\n\n'
+    +'Aucune autre photo ne part.')) return false;
+  const r=await phpPartagerPose(u,s,pose);
+  saveUser();
+  renderPhotosProgression();
+  if(r.ok&&r.deja) toast('Cette photo était déjà partagée.','var(--orange)');
+  else if(r.ok) toast('« '+lib+' » partagée avec ton coach.','var(--green)');
+  else toast(r.raison||'Partage impossible.','var(--orange)');
+  return !!r.ok;
+}
 // ── La révocation, côté écran ─────────────────────────────────────────────
 function htmlPhotosReglages(u){
   const e=phpEtat(u);
@@ -24411,7 +24480,7 @@ async function phpRevoquerUI(){
 function htmlPhotosProgression(u){
   if(!phpDisponible(u)) return '';          // RÈGLE 5 : masquée, sans un mot
   if(!phpEtat(u).donne) return htmlPhotosConsentement(u);
-  return htmlPhotosSeance(u)+htmlPhotosComparateur(u)+htmlPhotosFrise(u)+htmlPhotosReglages(u);
+  return htmlPhotosSeance(u)+htmlPhotosComparateur(u)+htmlPhotosFrise(u)+htmlPhotosPartage(u)+htmlPhotosReglages(u);
 }
 function renderPhotosProgression(){
   const z=document.getElementById('prog-photos-progression');
@@ -70337,6 +70406,35 @@ function testExercices(){
         const src=String(phpRevoquerUI)+String(phpDonnerConsentement);
         return (src.match(/confirm\(/g)||[]).length>=2
           ?true:_echec('une seule confirmation');})());
+      // L'assertion ci-dessus porte sur la révocation et le consentement. Le
+      // PARTAGE lui-même n'avait pas de bouton, donc rien à couvrir ; il en a
+      // un depuis le 14/08, et c'est lui que la règle 4 vise en premier.
+      ok('Règle 4 : un envoi au coach se confirme, et nomme la photo',(()=>{
+        const src=String(phpPartagerPoseUI);
+        if(!/confirm\(/.test(src)) return _echec('aucune confirmation avant l\'envoi');
+        if(src.indexOf('confirm(')>src.indexOf('phpPartagerPose(u,s,pose)'))
+          return _echec('la confirmation vient APRÈS l\'envoi');
+        return /effacée à distance/.test(src)
+          ?true:_echec('la confirmation ne dit pas ce qui est irréversible');})());
+      ok('Aucun envoi automatique : le partage part d\'un clic',(()=>{
+        // phpViderFile ne renvoie que ce qu'un partage explicite a déjà mis en
+        // file : ce n'est pas un envoi automatique, c'est une reprise.
+        const src=String(htmlPhotosProgression)+String(htmlPhotosPartage)
+          +String(renderPhotosProgression)+String(phpAPartager);
+        return !/phpPartagerPose\(/.test(src)
+          ?true:_echec('un rendu déclenche un envoi');})());
+      ok('Une pose déjà partagée n\'a plus de bouton',(()=>{
+        const u={}; phpConsentir(u,true);
+        u.photosProgression.seances=[{date:N,poses:{face:{cle:'a'},dos:{cle:'b',publicId:'x/b'}}}];
+        const h=htmlPhotosPartage(u);
+        const n=(h.match(/phpPartagerPoseUI\(/g)||[]).length;
+        if(n!==1) return _echec(n+' bouton(s) au lieu d\'un seul');
+        return /Partagée/.test(h)?true:_echec('la pose partagée n\'est pas marquée');})());
+      ok('Sans accord de partage, la carte n\'existe pas',(()=>{
+        const u={}; phpConsentir(u,false);
+        u.photosProgression.seances=[{date:N,poses:{face:{cle:'a'}}}];
+        return htmlPhotosPartage(u)===''&&phpAPartager(u).length===0
+          ?true:_echec('la carte s\'affiche sans accord');})());
       ok('Le partage au coach est refusé si l\'accord ne le couvre pas',(()=>{
         const u={}; phpConsentir(u,false);
         // phpPartagerPose est asynchrone ; on vérifie la garde en tête.
