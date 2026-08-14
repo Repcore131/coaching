@@ -4327,7 +4327,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
       </div>
       <p class="sub" style="font-size:12px;line-height:1.6;margin-bottom:14px">Tu as reçu un code d'accès de ton coach. Entre-le ici pour débloquer l'app avec ton suivi personnalisé.</p>
-      <button class="btn btn-outline" onclick="go('s-client-code')">Entrer mon code coach</button>
+      <button class="btn btn-outline" onclick="_subOuvrirCode()">Entrer mon code coach</button>
     </div>
 
     <!-- Option 2: Autonomie -->
@@ -5209,6 +5209,24 @@ function _majRenonciation(accepte){
   try{ saveUser(); }catch(e){}
   _majBoutonPaypal();
   return true;
+}
+// LE BLOC DE RENONCEMENT N'A DE SENS QU'AVEC UN COMPTE : la case s'enregistre
+// dans le dossier de l'utilisateur, et _majRenonciation refuse de tourner sans
+// lui. Sans compte on le masque, et l'écran ne propose que la création.
+//
+// LA VISIBILITÉ EST POSÉE DANS LES DEUX SENS, jamais supposée : quelqu'un qui
+// crée son compte revient sur cet écran, et un bouton PayPal actif SANS la
+// case serait un manquement à l'article L221-28 13°.
+function _subAfficherRenonciation(visible){
+  const c=document.getElementById('sub-renonciation');
+  // On masque le LABEL, pas la case seule : le label porte aussi le texte du
+  // renoncement, et le masquer à moitié laisserait une boîte vide de 10 px.
+  const l=c?c.closest('label'):null;
+  if(l) l.style.display=visible?'':'none';
+  const t=document.getElementById('sub-renonc-txt');
+  if(t) t.style.display=visible?'':'none';
+  const m=document.getElementById('sub-renonc-msg');
+  if(m&&!visible) m.style.display='none';   // remontré par _majBoutonPaypal
 }
 function _majBoutonPaypal(){
   const z=document.getElementById('paypal-btn-container');
@@ -48684,6 +48702,13 @@ function _planIdChoisi(){
   const p=_paliersDispo().find(x=>x.cle===_subPalier)||_paliersDispo()[0];
   return p?p.planId():'';
 }
+// SANS COMPTE, s-client-code EST UN PIÈGE : doLinkCoach y lit currentUser.fname
+// dès sa première branche réelle, ce qui lève une TypeError sur un visiteur.
+// s-athlete-entry fait le chemin complet — le code PUIS la création du compte —
+// et c'est le seul écran qui sache le faire.
+function _subOuvrirCode(){
+  go(currentUser?'s-client-code':'s-athlete-entry');
+}
 function loadSubscribePage(mode,payload){
   // La case est REMISE À SON ÉTAT STOCKÉ à chaque ouverture, et cet état est
   // faux par défaut. Elle n'est jamais cochée par le code.
@@ -48708,12 +48733,24 @@ function loadSubscribePage(mode,payload){
     // compte, doRegister ramène ici au lieu d'envoyer vers l'écran de code.
     if(_pp) _pp.innerHTML='<button class="btn btn-red" onclick="goRegisterPourSouscrire()">Créer mon compte pour souscrire →</button>'
       +'<div style="font-size:11px;color:var(--sub);text-align:center;margin-top:10px;line-height:1.6">Le paiement se fait juste après, en une étape.</div>';
+    // LE VERROU EST LEVÉ EXPLICITEMENT. _majBoutonPaypal vient de le poser
+    // quelques lignes plus haut, sur la foi d'un renoncement absent — et il
+    // l'est forcément, puisqu'il se stocke dans un dossier qui n'existe pas.
+    // Sans ces deux lignes, le bouton de création qu'on vient d'injecter dans
+    // ce conteneur est mort au toucher : le visiteur appuie, rien ne bouge.
+    if(_pp){ _pp.style.opacity='1'; _pp.style.pointerEvents='auto'; }
+    _subAfficherRenonciation(false);
     const _co=document.getElementById('sub-code-option');
     if(_co) _co.style.display='';
     const _pi=document.getElementById('sub-pending-info');
     if(_pi) _pi.style.display='none';
     return;
   }
+  // Le compte existe : le renoncement redevient obligatoire et visible. Le
+  // remontrer n'est pas de la symétrie décorative — sans compte on l'a masqué,
+  // et le parcours nominal repasse ici juste après la création.
+  _subAfficherRenonciation(true);
+  _majBoutonPaypal();
   _pp.innerHTML='<button class="btn btn-red" onclick="initPaypalSubscription()" id="paypal-loading-btn">Souscrire</button>';
   // Ecrit apres l insertion : le bouton doit exister pour recevoir son libelle.
   _majBoutonSouscrire();
