@@ -28251,8 +28251,20 @@ function isBilanNotifDay(){
   const today=new Date();today.setHours(0,0,0,0);
   const diff=today.getTime()-anchor.getTime();
   if(diff<0) return false;
-  const cycle=freq*7*24*3600*1000;
-  return Math.round(diff/cycle)*cycle===diff;
+  // EN JOURS, ET NON EN MILLISECONDES. `diff` sépare deux MINUITS LOCAUX : à
+  // cheval sur un changement d'heure il vaut quatorze jours moins une heure, et
+  // l'égalité exacte `Math.round(diff/cycle)*cycle===diff` échouait. Mesuré à
+  // Paris : du samedi 21 mars au samedi 4 avril 2026, 1 206 000 000 ms au lieu
+  // de 1 209 600 000.
+  //
+  // ET C'ÉTAIT DURABLE : l'ancre est la date du dernier bilan, elle ne bouge
+  // pas. Le décalage se reportait sur tous les samedis suivants — plus aucun
+  // rappel jusqu'à ce que l'athlète remplisse un bilan, c'est-à-dire jusqu'à
+  // ce qu'il fasse ce qu'on ne lui rappelait plus.
+  //
+  // Math.round rend 14 aussi bien pour 13 j 23 h que pour 14 j 01 h.
+  const jours=Math.round(diff/864e5);
+  return jours>=0&&jours%(freq*7)===0;
 }
 // ── Notifications : disponibilité, testée partout avant usage ──────────────
 // Safari iOS n'expose Notification QUE dans une PWA installée : dans un onglet,
