@@ -11012,8 +11012,12 @@ function expliquerUrgence(c){
   try{ if(neverStarted(c)) ajout('Jamais démarré',5,c.createdAt); }catch(e){}
   try{
     if(hasNewBilan(c)){
-      const sans=bils.filter(b=>!b.reponseCoach);
-      ajout('Bilan sans réponse',5,sans.length?sans[sans.length-1].date:dernier);
+      // La date du bilan QUI MOTIVE l’alerte — le plus récent, celui que le
+      // prédicat vient de juger. `sans[sans.length-1]` désignait le dernier
+      // non répondu DANS L’ORDRE DU TABLEAU, ce qui pouvait montrer une date
+      // plus ancienne que la raison réelle du signal.
+      const der=dernierBilan(c);
+      ajout('Bilan sans réponse',5,(der&&der.date)||dernier);
     }
   }catch(e){}
   try{ if(!c._fromCode&&needsAlert(c)) ajout('Bilan en retard',4,dernier); }catch(e){}
@@ -14086,9 +14090,37 @@ function needsAlert(c){
 // l'athlete ne voyait jamais rien revenir.
 // seenBilans reste ecrit par ailleurs : il sert encore a distinguer un bilan
 // jamais ouvert d'un bilan lu, ce que la fiche client affiche.
+// PURE. Le bilan le plus RÉCENT, choisi par sa DATE et non par sa position.
+//
+// Rien ne garantit que `bilans` soit trié : _mergeUser le trie, les écritures
+// locales non. Prendre le dernier élément du tableau ferait dépendre un signal
+// d’un ordre que personne ne maintient — et un tri qui se relâche éteindrait
+// le signal sans que rien ne le dise.
+function dernierBilan(c){
+  const l=(c&&c.bilans)||[];
+  let der=null, dDer=-Infinity;
+  for(const b of l){
+    if(!b) continue;
+    const d=Number(b.date);
+    const v=Number.isFinite(d)?d:-Infinity;
+    if(!der||v>=dDer){ der=b; dDer=v; }
+  }
+  return der;
+}
+// LE SIGNAL PORTE SUR LE DERNIER BILAN, PAS SUR L’HISTORIQUE ENTIER.
+//
+// « un bilan quelconque sans réponse » ne retombait jamais : un bilan de
+// février resté sans réponse gardait le badge allumé et l’athlète dans « À
+// traiter » même après dix réponses. Un signal qui ne s’éteint pas cesse
+// d’être lu — et la fiche athlète, elle, affichait « Actif » au même moment.
+//
+// Ce qui reste dû sur les bilans PLUS ANCIENS est compté par
+// bilansSansReponse, qui mesure une charge de travail et non une nouveauté :
+// les deux notions sont distinctes et le restent.
 function hasNewBilan(c){
   if(!c.bilans?.length||c._fromCode) return false;
-  return c.bilans.some(b=>b&&!b.reponseCoach);
+  const der=dernierBilan(c);
+  return !!der&&!der.reponseCoach;
 }
 // Athlète rattaché depuis plus de 3 jours qui n'a jamais rempli le moindre bilan.
 // Utilisé à deux endroits (la ligne « À traiter » et urgencyScore) : un seul
@@ -14501,10 +14533,18 @@ function openClientDetail(cid,_refresh){
   if(_pq) _pq.innerHTML=_htmlPourquoiIci(c);
   document.getElementById('ccd-badge').innerHTML=c._fromCode
     ?'<span class="badge badge-orange">⏳ En attente d\'inscription</span>'
-    // Même verdict que la liste : les deux écrans doivent dire la même chose.
+    // MÊME PRÉDICAT QUE LA LISTE, et non plus seulement la même intention.
+    //
+    // La fiche jugeait sur seenBilans — « ce bilan a-t-il été OUVERT » — que
+    // le rendu juste au-dessus vient d’écrire. Le badge s’éteignait donc à la
+    // première ouverture, pendant que la liste, elle, le gardait allumé. Les
+    // deux écrans annonçaient deux choses différentes du même dossier.
+    //
+    // seenBilans continue d’être tenu à jour : il sert encore à distinguer un
+    // bilan jamais ouvert d’un bilan lu. Il ne décide simplement plus du badge.
     :_enAttenteAbonnement(c)?'<span class="badge badge-orange">⏳ Abonnement à souscrire</span>'
     :_accesExpire(c)?'<span class="badge badge-gray">Lecture seule — accès expiré</span>'
-    :_newBil?'<span class="badge badge-orange"> Nouveau bilan</span>'
+    :hasNewBilan(c)?'<span class="badge badge-orange"> Nouveau bilan</span>'
     :needsAlert(c)?'<span class="badge badge-red"> Bilan en retard</span>':isActive(c)?'<span class="badge badge-green"> Actif</span>':'<span class="badge badge-gray">Inactif</span>';
   const _pd=document.getElementById('ccd-profile-details');
   if(_pd){
@@ -73545,6 +73585,29 @@ function testExercices(){
       ok('Ouvrir ne suffit plus : seenBilans n\'éteint plus le signal',(()=>{
         currentUser.seenBilans={'x1@t.fr':Date.now()+1e6};
         return hasNewBilan(sansRep)===true;})());
+      ok('Le signal porte sur le DERNIER bilan, pas sur l\'historique',(()=>{
+        // Un bilan ancien resté sans réponse ne doit plus rallumer le badge
+        // à vie : sinon le signal ne retombe jamais et on cesse de le lire.
+        const vieuxOuvert=_rbB(90);
+        const recentRepondu=_rbB(1,{reponseCoach:'ok',reponseDate:1,reponseVue:false});
+        const c={id:'x3',email:'x3@t.fr',sessions:[],bilans:[vieuxOuvert,recentRepondu]};
+        if(hasNewBilan(c)) return _echec('un bilan ancien rallume le badge');
+        // Et le compteur de charge, lui, continue de le compter : les deux
+        // notions sont distinctes.
+        if(bilansSansReponse(c)!==1) return _echec('la charge de travail a disparu');
+        return true;})());
+      ok('L\'ordre du tableau ne décide de rien',(()=>{
+        const vieuxOuvert=_rbB(90);
+        const recentRepondu=_rbB(1,{reponseCoach:'ok',reponseDate:1,reponseVue:false});
+        // Le même dossier, rangé à l’envers : le verdict ne bouge pas.
+        const envers={id:'x4',email:'x4@t.fr',sessions:[],bilans:[recentRepondu,vieuxOuvert]};
+        if(hasNewBilan(envers)) return _echec('le tri du tableau change le verdict');
+        // Témoin : le cas inverse allume bien le signal, dans les deux ordres.
+        const vieuxRepondu=_rbB(90,{reponseCoach:'ok',reponseDate:1,reponseVue:false});
+        const recentOuvert=_rbB(1);
+        return hasNewBilan({id:'x5',email:'x5@t.fr',sessions:[],bilans:[vieuxRepondu,recentOuvert]})
+          &&hasNewBilan({id:'x6',email:'x6@t.fr',sessions:[],bilans:[recentOuvert,vieuxRepondu]})
+          ?true:_echec('un bilan récent sans réponse n\'allume pas le signal');})());
       ok('Compteur coach : bilans sans réponse',
          bilansSansReponse(sansRep)===1&&bilansSansReponse(avecRep)===0
          &&bilansSansReponse({})===0);
