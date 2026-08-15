@@ -39329,6 +39329,122 @@ function _htmlPlanResumeCoach(c){
   </div>`;
 }
 
+// ── Journal alimentaire, côté coach : LECTURE SEULE ───────────────────────
+// La donnée voyageait déjà : `nutrition` n'est pas retiré de l'envoi, et
+// SANTE_CHAMPS ne masque que grossesse, pes, constantes et analyses. Le
+// journal est donc dans /users/{emailKey}, que les règles ouvrent au coach.
+// C'est l'interface qui le cachait, pas le stockage.
+//
+// Le coach LIT. Il ne corrige pas le journal de quelqu'un d'autre : aucun
+// champ, aucune suppression, seulement la navigation entre les jours — même
+// doctrine que la section photos.
+// PURE. Les jours RÉELLEMENT journalisés d'une fenêtre, du plus récent au
+// plus ancien. Un jour sans entrée n'est pas un jour à zéro : c'est un jour
+// dont on ne sait rien, et le faire compter tirerait toutes les moyennes
+// vers le bas.
+function journalJours(log,nbJours,finISO){
+  const out=[];
+  const l=log||{};
+  const fin=finISO||'';
+  const cles=Object.keys(l).filter(k=>{
+    const e=(l[k]&&l[k].entries)||[];
+    if(!e.length) return false;
+    return fin?k<=fin:true;
+  }).sort((a,b)=>a<b?1:-1);
+  const n=Number(nbJours)>0?Number(nbJours):null;
+  if(!n) return cles;
+  // La fenêtre se compte en JOURS de calendrier depuis `fin`, pas en nombre
+  // d'entrées : sept jours dont deux journalisés font une moyenne sur deux.
+  const bas=fin?_journalRecule(fin,n-1):null;
+  return cles.filter(k=>!bas||k>=bas);
+}
+// PURE. La date ISO `n` jours avant celle donnée. Midi, comme partout
+// ailleurs dans ce fichier : 'YYYY-MM-DD' seul s'interprète en UTC et
+// décalerait d'un jour à l'ouest de Greenwich.
+function _journalRecule(dateISO,n){
+  const d=new Date(String(dateISO)+'T12:00:00');
+  if(isNaN(d.getTime())) return '';
+  d.setDate(d.getDate()-(Number(n)||0));
+  const p2=x=>(x<10?'0':'')+x;
+  return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());
+}
+// PURE. Le total d'un jour.
+function journalTotalJour(log,dateISO){
+  const e=((log||{})[dateISO]&&(log||{})[dateISO].entries)||[];
+  return e.reduce((a,x)=>({
+    kcal:a.kcal+(Number(x.kcal)||0), p:a.p+(Number(x.p)||0),
+    c:a.c+(Number(x.c)||0), l:a.l+(Number(x.l)||0), n:a.n+1
+  }),{kcal:0,p:0,c:0,l:0,n:0});
+}
+// PURE. La moyenne sur une fenêtre, calculée sur les seuls jours journalisés.
+// `null` quand il n'y en a aucun : afficher « 0 kcal » ferait croire à un
+// jeûne là où il n'y a qu'une absence de saisie.
+function journalMoyenne(log,nbJours,finISO){
+  const jours=journalJours(log,nbJours,finISO);
+  if(!jours.length) return null;
+  const t=jours.reduce((a,k)=>{
+    const j=journalTotalJour(log,k);
+    return {kcal:a.kcal+j.kcal,p:a.p+j.p,c:a.c+j.c,l:a.l+j.l};
+  },{kcal:0,p:0,c:0,l:0});
+  const n=jours.length;
+  return {jours:n,kcal:Math.round(t.kcal/n),p:Math.round(t.p/n),
+    c:Math.round(t.c/n),l:Math.round(t.l/n)};
+}
+let _ccdJournalJour=null;
+// Le jour affiché : celui choisi s'il est journalisé, sinon le plus récent
+// qui le soit. Un coach qui ouvre la fiche doit voir quelque chose.
+function _ccdJournalJourValide(log){
+  const dispo=journalJours(log,null,null);
+  if(!dispo.length) return null;
+  return dispo.indexOf(_ccdJournalJour)>=0?_ccdJournalJour:dispo[0];
+}
+function ccdJournalAller(dateISO){
+  _ccdJournalJour=dateISO||null;
+  try{ const c=getOwnedClient(currentClientId); if(c) renderCoachNutriSection(c); }catch(e){}
+}
+// Le bloc. Rien si l'athlète n'a jamais rien journalisé : une carte vide
+// n'apprend rien au coach.
+function _htmlJournalCoach(c){
+  const log=((c||{}).nutrition||{}).log||{};
+  const tous=journalJours(log,null,null);
+  if(!tous.length) return '';
+  const jour=_ccdJournalJourValide(log);
+  const i=tous.indexOf(jour);
+  const prec=i<tous.length-1?tous[i+1]:null;
+  const suiv=i>0?tous[i-1]:null;
+  const m7=journalMoyenne(log,7,tous[0]), m28=journalMoyenne(log,28,tous[0]);
+  const t=journalTotalJour(log,jour);
+  const entrees=((log[jour]||{}).entries)||[];
+  const nb=v=>Math.round(v).toLocaleString('fr-FR');
+  const carte=(lib,m)=>`<div style="flex:1;min-width:0;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;margin-bottom:5px">${lib}</div>
+    <div class="txt-stat" style="line-height:1;color:${m?'#fff':'#555'}">${m?nb(m.kcal):'—'}</div>
+    <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">kcal/j</div>
+    <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:4px;line-height:1.5">${m?(nb(m.p)+' P · '+nb(m.c)+' G · '+nb(m.l)+' L'):'aucun jour'}</div>
+    <div style="font-size:9.5px;color:var(--text-faint);margin-top:3px">${m?(m.jours+' jour'+(m.jours>1?'s':'')+' journalisé'+(m.jours>1?'s':'')):''}</div>
+  </div>`;
+  const fl=d=>{ const x=new Date(String(d)+'T12:00:00');
+    return isNaN(x.getTime())?d:x.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'}); };
+  const nav=(d,fleche)=>d
+    ?`<button type="button" onclick="ccdJournalAller('${d}')" style="flex:none;background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:14px">${fleche}</button>`
+    :`<button type="button" disabled style="flex:none;background:none;border:1px solid #222;color:var(--text-dim);border-radius:8px;padding:4px 10px;cursor:not-allowed;font-size:14px">${fleche}</button>`;
+  const lignes=entrees.map(e=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid rgba(255,255,255,.06)">
+      <span style="flex:1;min-width:0;font-size:11.5px;color:#ddd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(e.nom||'—')}<span style="color:var(--text-faint)"> · ${escapeHtml((FJ_REPAS_LIB[e.repas]||e.repas||''))}</span></span>
+      <span style="flex:none;font-size:11px;color:var(--sub);white-space:nowrap">${e.qty?nb(e.qty)+' g · ':''}${e.kcal!=null?nb(e.kcal)+' kcal':'—'}</span>
+    </div>`).join('');
+  return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px">
+    <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:4px">📓 Journal alimentaire</div>
+    <div style="font-size:10.5px;color:var(--text-dim);line-height:1.55;margin-bottom:12px">Ce que ton athlète a saisi. Lecture seule — ${tous.length} jour${tous.length>1?'s':''} journalisé${tous.length>1?'s':''} en tout.</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">${carte('MOY. 7 J',m7)}${carte('MOY. 28 J',m28)}</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      ${nav(prec,'←')}
+      <div style="flex:1;min-width:0;text-align:center;font-size:11.5px;font-weight:800;color:#ddd;text-transform:capitalize">${escapeHtml(fl(jour))}</div>
+      ${nav(suiv,'→')}
+    </div>
+    <div style="font-size:11.5px;color:#fff;font-weight:700;text-align:center;margin-bottom:6px">${nb(t.kcal)} kcal · ${nb(t.p)} P · ${nb(t.c)} G · ${nb(t.l)} L</div>
+    ${lignes||'<div style="font-size:11px;color:var(--text-dim);padding:8px 0">Aucun aliment ce jour-là.</div>'}
+  </div>`;
+}
 function renderCoachNutriSection(c){
   _plOublierSiAutreAthlete(c&&c.email);
   const el=document.getElementById('ccd-nutrition');
@@ -39397,7 +39513,8 @@ function renderCoachNutriSection(c){
       ${dt==='strict'?_htmlStrictAccesCoach(c):''}
       <!-- Plan alimentaire composé (stricte uniquement) -->
       ${dt==='strict'?_htmlPlanResumeCoach(c):''}
-    </div>`;
+    </div>
+    ${(()=>{ try{ return _htmlJournalCoach(c); }catch(e){ return ''; } })()}`;
 }
 
 function saveClientNutriDiet(type){
