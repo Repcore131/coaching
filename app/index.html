@@ -14723,11 +14723,58 @@ function _majDemandesVideo(){
   });
 }
 
-function confirmDeleteClient(){
-  if(!confirm('Retirer cet élève de ton suivi ?\nSon compte reste actif mais il ne sera plus associé à ton coaching.')) return;
-  if(!getOwnedClient(currentClientId)) return;
+// PURE. Les codes qui appartiennent à cet athlète.
+//
+// L'ADRESSE D'ABORD : c'est l'identité, et elle ne bouge pas quand le coach
+// corrige une faute de frappe dans le nom. Le nom normalisé ne sert QU'aux
+// codes émis avant que `athleteEmail` ne soit écrit.
+//
+// Et quand `athleteEmail` est présent mais ne correspond pas, on ne retombe
+// PAS sur le nom : deux homonymes fermeraient le code l’un de l’autre.
+function _codesDeLAthlete(codes,athlete){
+  const email=String((athlete||{}).email||'').toLowerCase();
+  const nom=exKey(((athlete||{}).fname||'')+' '+((athlete||{}).lname||''));
+  return (codes||[]).filter(c=>{
+    if(!c) return false;
+    if(c.athleteEmail) return !!email&&String(c.athleteEmail).toLowerCase()===email;
+    return !!nom&&exKey(c.studentName||'')===nom;
+  });
+}
+// LE CODE TOMBE AVEC LE RATTACHEMENT.
+//
+// Sans cela, getClients relisait le code resté actif et recréait un élève
+// fantôme `_code_...` : l'élève « retiré » revenait dans la liste au rendu
+// suivant, avec le badge « En attente d’inscription ».
+//
+// Et le code restait OUVERT côté serveur : il pouvait encore servir à se
+// rattacher à ce coach. On le ferme donc D’ABORD, et sur /rc_codes — même
+// discipline que toggleStudentCode. Si le serveur refuse, RIEN n'est retiré :
+// un élève détaché dont le code fonctionne encore serait le même défaut,
+// simplement déplacé.
+async function confirmDeleteClient(){
+  const cible=getOwnedClient(currentClientId);
+  if(!cible) return;
+  const estCode=currentClientId.startsWith('_code_');
+  // Les codes déjà fermés ne sont pas re-touchés : inutile d’exiger le réseau
+  // pour refermer une porte déjà close.
+  const codes=(estCode
+    ? (currentUser.studentCodes||[]).filter(c=>c&&('_code_'+c.codeId)===currentClientId)
+    : _codesDeLAthlete(currentUser.studentCodes,cible)).filter(c=>c.active!==false);
+  const _phrase=codes.length
+    ? '\nSon code d\'accès sera désactivé : il ne pourra plus s\'en servir pour se rattacher à toi.'
+    : '';
+  if(!confirm('Retirer cet élève de ton suivi ?\nSon compte reste actif mais il ne sera plus associé à ton coaching.'+_phrase)) return;
+  // LE SERVEUR D’ABORD. Un code sans jeton n’a pas de nœud à fermer — il date
+  // d’avant leur enregistrement — et ne bloque donc rien.
+  for(const code of codes){
+    if(!code.token) continue;
+    if(!await _majActifDistant(code.token,false)){
+      toast('Impossible de désactiver son code d\'accès : vérifie ta connexion. L\'élève n\'a PAS été retiré.','var(--red)');
+      return;
+    }
+  }
   let ok=true,envoi=Promise.resolve();
-  if(currentClientId.startsWith('_code_')){
+  if(estCode){
     // Élève code uniquement → supprimer le code
     const codeId=currentClientId.replace('_code_','');
     currentUser.studentCodes=(currentUser.studentCodes||[]).filter(c=>c.codeId!==codeId);
@@ -14746,6 +14793,9 @@ function confirmDeleteClient(){
       // Tant qu'il n'a pas abouti, le détachement n'est que cosmétique.
       envoi=CLOUD.pushOne(athlete.email,athlete);
     }
+    // Le serveur a accepté : la liste du coach peut suivre. Sans cette ligne,
+    // getClients recréerait l’élève fantôme au prochain rendu.
+    codes.forEach(c=>{c.active=false;});
     // Nettoyer les refs côté coach
     if(currentUser.clients) currentUser.clients=currentUser.clients.filter(id=>id!==currentClientId);
     if(currentUser.seenBilans) delete currentUser.seenBilans[athlete?.email];
