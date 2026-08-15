@@ -42489,6 +42489,28 @@ function _bandeauJour(inputId,jour,handler){
   </div>`;
 }
 
+// PURE. L'objectif de pas d'un jour donné.
+//
+// LE TYPE DÉCLARÉ D'ABORD : stepsDayType est un choix explicite de l'athlète,
+// rien ne le prime. À défaut, le PROGRAMME : nutIsOnDay lit sessions_config,
+// la source que la nutrition emploie déjà pour ses jours ON/OFF — quelqu'un
+// qui s'entraîne lundi, mercredi, vendredi n'a pas à le redéclarer ici.
+//
+// ET `off` EN DERNIER RECOURS : c'est l'objectif le plus bas, le seul qu'on
+// puisse appliquer sans rien reprocher à quelqu'un dont on ignore le jour.
+// Le repli codé en dur à 10 000 jugeait sur un chiffre que l'athlète n'avait
+// jamais choisi.
+function _stepsObjectifJour(goals,type,date){
+  const g=goals||{};
+  const on=Number(g.on)>0?Number(g.on):null;
+  const off=Number(g.off)>0?Number(g.off):null;
+  if(type==='on') return on||off||0;
+  if(type==='off') return off||on||0;
+  let estOn=false;
+  try{ estOn=!!(date&&nutIsOnDay(date)); }catch(e){ estOn=false; }
+  if(estOn&&on) return on;
+  return off||on||0;
+}
 function loadSteps(containerId='steps-content'){
   if(containerId==='steps-content') go('s-steps');
   const log=currentUser.stepsLog||[];
@@ -42511,9 +42533,12 @@ function loadSteps(containerId='steps-content'){
   const selStr=_jourSteps();
   const todayEntry={count:(log.find(e=>e.date===selStr)||{}).count??null};
   const todayType=dayTypes[selStr]??null;
-  const stepColor=(n,type)=>{
+  // LE JOUR EN PLUS DU TYPE : sans lui, impossible de déduire quoi que ce soit
+  // du programme, et le repli restait un chiffre en dur.
+  const stepColor=(n,type,date)=>{
     if(!n) return '#2a2a2a';
-    const goal=type==='on'?goals.on:type==='off'?goals.off:10000;
+    const goal=_stepsObjectifJour(goals,type,date);
+    if(!(goal>0)) return '#2a2a2a';
     if(n>=goal) return '#22c55e';
     if(n>=goal*0.6) return '#f97316';
     return '#e05050';
@@ -42524,7 +42549,7 @@ function loadSteps(containerId='steps-content'){
   let bars='';
   weekData.forEach(d=>{
     const pct=d.count?Math.max(6,Math.round(d.count/maxVal*100)):6;
-    const col=stepColor(d.count||0,d.type);
+    const col=stepColor(d.count||0,d.type,d.date);
     const glow=d.isToday?';box-shadow:0 0 10px '+col+'66':'';
     const typeAccent=d.type==='on'?'#E02020':d.type==='off'?'#60a5fa':'transparent';
     bars+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">
@@ -42538,7 +42563,7 @@ function loadSteps(containerId='steps-content'){
   });
   let counts='';
   weekData.forEach(d=>{
-    counts+=`<div style="flex:1;text-align:center;font-size:var(--fs-xs);font-weight:700;color:${d.count?stepColor(d.count,d.type):'#2a2a2a'};margin-top:3px">${d.count?Math.round(d.count/100)/10+'k':'·'}</div>`;
+    counts+=`<div style="flex:1;text-align:center;font-size:var(--fs-xs);font-weight:700;color:${d.count?stepColor(d.count,d.type,d.date):'#2a2a2a'};margin-top:3px">${d.count?Math.round(d.count/100)/10+'k':'·'}</div>`;
   });
 
   let histHtml='';
@@ -42548,7 +42573,7 @@ function loadSteps(containerId='steps-content'){
       const d=new Date(e.date);
       const lbl=d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
       const goal=type==='on'?goals.on:type==='off'?goals.off:null;
-      const col=stepColor(e.count,type);
+      const col=stepColor(e.count,type,e.date);
       const pctBar=goal?Math.min(100,Math.round(e.count/goal*100)):null;
       const typeBadge=type?`<span style="font-size:var(--fs-xs);font-weight:900;padding:2px 6px;border-radius:4px;background:${type==='on'?'#2a0000':'#001a2a'};color:${type==='on'?'var(--red)':'var(--sub)'};letter-spacing:.5px">${type.toUpperCase()}</span>`:'';
       const goalLine=goal?`<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:4px">${e.count.toLocaleString('fr-FR')} / ${goal.toLocaleString('fr-FR')} pas${e.count>=goal?' <span style="color:var(--green)">✓</span>':''}</div><div style="height:3px;background:var(--surface-2);border-radius:2px;margin-top:5px;overflow:hidden"><div style="height:100%;width:${pctBar}%;background:${col};border-radius:2px"></div></div>`:'';
@@ -42573,10 +42598,10 @@ function loadSteps(containerId='steps-content'){
   const todayProgressHtml=todayGoal&&todayCount?`<div style="margin-top:12px">
     <div style="display:flex;justify-content:space-between;font-size:var(--fs-xs);margin-bottom:4px">
       <span style="color:var(--sub)">${todayCount.toLocaleString('fr-FR')} / ${todayGoal.toLocaleString('fr-FR')} pas</span>
-      <span style="color:${stepColor(todayCount,todayType)};font-weight:800">${todayPct}%</span>
+      <span style="color:${stepColor(todayCount,todayType,selStr)};font-weight:800">${todayPct}%</span>
     </div>
     <div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden">
-      <div style="height:100%;width:${todayPct}%;background:${stepColor(todayCount,todayType)};border-radius:3px;transition:.4s"></div>
+      <div style="height:100%;width:${todayPct}%;background:${stepColor(todayCount,todayType,selStr)};border-radius:3px;transition:.4s"></div>
     </div>
   </div>`:'';
   const todayGoalHintHtml=todayType?`<div style="text-align:center;font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px">Objectif : <strong style="color:${todayType==='on'?'var(--red)':'var(--sub)'}">${(todayType==='on'?goals.on:goals.off).toLocaleString('fr-FR')} pas</strong></div>`:'';
@@ -56500,6 +56525,30 @@ function testExercices(){
             window.saveUser=_sv; window.go=_go; window.loadClientHome=_lc;
             window.toastEcriture=_te; window.toast=_t;
             if(el&&v0!=null) el.value=v0; }})());
+        ok('L\'objectif d\'un jour suit CELUI DE L\'ATHLÈTE, jamais 10 000 en dur',(()=>{
+          // La carte « Objectifs de pas » est juste au-dessus des barres : les
+          // colorer sur un chiffre que l'athlète n'a pas choisi la contredit.
+          const g={on:12000,off:7000};
+          const _s=currentUser;
+          try{
+            currentUser={id:'_sp',sessions_config:null};
+            if(_stepsObjectifJour(g,'on','2026-08-10')!==12000)
+              return _echec('type ON déclaré : '+_stepsObjectifJour(g,'on','2026-08-10'));
+            if(_stepsObjectifJour(g,'off','2026-08-10')!==7000)
+              return _echec('type OFF déclaré : '+_stepsObjectifJour(g,'off','2026-08-10'));
+            // Sans type ni programme : le plus bas, jamais 10 000.
+            const sans=_stepsObjectifJour(g,null,'2026-08-10');
+            if(sans===10000) return _echec('le repli en dur est revenu');
+            if(sans!==7000) return _echec('dernier recours : '+sans);
+            // Le programme décide quand le type ne dit rien. Le 10 août 2026
+            // est un LUNDI, soit sessions_config[0].
+            currentUser={id:'_sp',sessions_config:[{active:true},{active:false},
+              {active:false},{active:false},{active:false},{active:false},{active:false}]};
+            if(_stepsObjectifJour(g,null,'2026-08-10')!==12000)
+              return _echec('lundi actif devrait valoir ON : '+_stepsObjectifJour(g,null,'2026-08-10'));
+            return _stepsObjectifJour(g,null,'2026-08-11')===7000
+              ?true:_echec('mardi inactif devrait valoir OFF');
+          } finally { currentUser=_s; }})());
         ok('Le journal de pas est purgé au-delà de '+STEPS_RETENTION_JOURS+' jours',(()=>{
           // La purge vit DANS _recordSteps : elle ne s'applique donc qu'à l'écriture.
           // Une seule source pour les deux appelants, une seule purge.
