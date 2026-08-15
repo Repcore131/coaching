@@ -22499,7 +22499,55 @@ function _messageFinSeance(sets,setsPlanned,duration,records,delta,jour,incomple
 // denominateur. Les compter comme des echecs punirait l athlete pour un
 // oubli de saisie et non pour un ecart alimentaire — c est la difference
 // entre mesurer une diete et mesurer une assiduite de saisie.
-const DIETE_TOLERANCE=0.05;
+// LA TOLÉRANCE, ET CE QU’ELLE MESURE.
+//
+// ±5 % sur les TROIS macros simultanément était inatteignable : sur des
+// grammes pesés à la louche, toucher protéines, glucides ET lipides à cinq
+// près le même jour relève du hasard. La case affichait 0 % à des athlètes
+// qui suivaient leur plan — et une mesure qui rend toujours zéro ne mesure
+// rien, elle décourage.
+//
+// LA MESURE PORTE DÉSORMAIS SUR L'ÉNERGIE ET LES PROTÉINES, à ±10 %.
+//
+// Ce n’est pas un assouplissement de confort : c’est la définition de la
+// diète FLEXIBLE. Ce qui gouverne la composition corporelle est le total
+// énergétique ; ce qui protège la masse maigre est l’apport protéique. Le
+// partage entre glucides et lipides, À ÉNERGIE ÉGALE, appartient à
+// l’athlète — c’est exactement ce qu’on lui laisse choisir.
+//
+// Et l'échange n'est PAS libre pour autant : l'énergie étant vérifiée, on ne
+// peut pas troquer des glucides contre des lipides sans que le total bouge.
+// La règle autorise un arbitrage, pas un dépassement.
+//
+// L’AUTRE OPTION — les trois macros à ±10 % avec au plus une hors
+// fourchette — a été écartée : « au plus une macro dehors » ne correspond à
+// rien de nutritionnel, et laisserait passer un jour à protéines et glucides
+// justes avec quarante pour cent de lipides en trop.
+const DIETE_TOLERANCE=0.10;
+// PURE. L'énergie d'un jeu de macros. `kcal` quand il est là — c'est ce que
+// les cibles portent — et sinon la reconstitution 4/4/9, pour qu'un dossier
+// ancien reste jugeable au lieu d'être écarté en silence.
+function _dieteKcal(o){
+  const k=Number((o||{}).kcal);
+  if(k>0) return k;
+  const pr=Number((o||{}).p)||0, gl=Number((o||{}).g!=null?o.g:(o||{}).c)||0, li=Number((o||{}).l)||0;
+  const somme=pr*4+gl*4+li*9;
+  return somme>0?somme:0;
+}
+// PURE. Ce que la case annonce sous son pourcentage. Il ne suffisait pas de
+// compter les jours : rien ne disait sur QUOI le jugement portait, et deux
+// athlètes pouvaient lire le même 60 % pour deux règles différentes selon
+// leur type de diète.
+//
+// Le seuil est DÉRIVÉ de la constante : un pourcentage écrit à la main ici
+// finirait par annoncer autre chose que ce que le code applique.
+function _sousTitreDiete(di){
+  if(!di) return 'Aucun jour renseigné.';
+  const n=di.tenus+'/'+di.juges;
+  return di.flexible
+    ? n+' · kcal et protéines à ±'+Math.round(DIETE_TOLERANCE*100)+' %'
+    : n+' · jours déclarés';
+}
 function _tauxDieteRespectee(u){
   const nut=(u&&u.nutrition)||{};
   const flexible=(typeof typeDiete==='function')?typeDiete(nut)==='flexible':true;
@@ -22521,13 +22569,18 @@ function _tauxDieteRespectee(u){
       const m=(typeof _getEffectiveMacros==='function')
         ?_getEffectiveMacros(nut,(typeof nutIsOnDay==='function')?nutIsOnDay(k):true,k)
         :{};
-      const cibles=[m.p,m.g,m.l];
-      if(!cibles.every(x=>typeof x==='number'&&x>0)) return;   // sans cible, rien a juger
-      const t=entrees.reduce((a,e)=>({p:a.p+(e.p||0),c:a.c+(e.c||0),l:a.l+(e.l||0)}),
-        {p:0,c:0,l:0});
+      // L'ÉNERGIE ET LES PROTÉINES. Glucides et lipides ne sont plus jugés
+      // séparément : leur partage à énergie égale appartient à l'athlète.
+      const cibleKcal=_dieteKcal(m), cibleProt=Number(m.p)||0;
+      if(!(cibleKcal>0&&cibleProt>0)) return;   // sans cible, rien a juger
+      const t=entrees.reduce((a,e)=>({p:a.p+(e.p||0),c:a.c+(e.c||0),l:a.l+(e.l||0),
+        kcal:a.kcal+(Number(e.kcal)||0)}),{p:0,c:0,l:0,kcal:0});
       juges++;
+      // L'énergie consommée : la somme des kcal du journal, ou sa
+      // reconstitution quand des aliments n'en portent pas.
+      const mangeKcal=t.kcal>0?t.kcal:_dieteKcal(t);
       const dans=(v,c)=>Math.abs(v-c)<=c*DIETE_TOLERANCE;
-      if(dans(t.p,m.p)&&dans(t.c,m.g)&&dans(t.l,m.l)) tenus++;
+      if(dans(mangeKcal,cibleKcal)&&dans(t.p,cibleProt)) tenus++;
     });
   }
   if(!juges) return null;
@@ -22543,8 +22596,7 @@ function _majMetriquesAccueil(u){
   if(!ss.length){
     met('clh-m1','—',''); met('clh-m2','0','Aucune séance enregistrée.');
     const _d0=_tauxDieteRespectee(u);
-    met('clh-m3',_d0?(_d0.pct+' %'):'—',
-      _d0?(_d0.tenus+' sur '+_d0.juges+' renseignés'):'Aucun jour renseigné.');
+    met('clh-m3',_d0?(_d0.pct+' %'):'—',_sousTitreDiete(_d0));
     return;
   }
   // a) Cette semaine — depuis lundi, comme partout ailleurs dans l'app. Le
@@ -22561,9 +22613,7 @@ function _majMetriquesAccueil(u){
   // c) Diète respectée. Les jours non enregistrés sont ÉCARTÉS : les compter
   //    comme des échecs mesurerait l'assiduité de saisie, pas la diète.
   const di=_tauxDieteRespectee(u);
-  if(!di) met('clh-m3','—','Aucun jour renseigné.');
-  else met('clh-m3',di.pct+' %',
-    di.tenus+' jour'+(di.tenus>1?'s':'')+' sur '+di.juges+' renseigné'+(di.juges>1?'s':''));
+  met('clh-m3',di?(di.pct+' %'):'—',_sousTitreDiete(di));
 }
 // ── Volume par créneau, dans l'onglet Perfs ─────────────────────────────────
 // Le graphique mélangeait tous les créneaux : une séance jambes et une séance
