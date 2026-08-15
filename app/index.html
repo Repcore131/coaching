@@ -34191,7 +34191,11 @@ function onPlanSearch(val){
   // Pas de coupe AVANT le classement : « Oeuf cru » est le 124e nom
   // contenant « oeuf » dans l ordre de la table. Le plafonner a 80 revenait a
   // classer un echantillon arbitraire. On classe tout, on coupe apres.
-  const res=_ciqualDB.filter(f=>words.every(w=>f.s.includes(w)));
+  // AU SINGULIER COMME AU PLURIEL. Les noms Ciqual sont au singulier :
+  // « tomates » ne retenait que les 4 entrées portant elles-mêmes un « s », sur
+  // 57. Quatre résultats donnent l'illusion d'avoir cherché — on en conclut
+  // que l'aliment n'est pas dans la table.
+  const res=_ciqualDB.filter(f=>_fjContientTous(f.s,words));
   if(!res.length){ el.innerHTML='<div style="padding:20px;text-align:center;color:var(--sub);font-size:12px">Aucun résultat pour "'+escapeHtml(q)+'"</div>'; return; }
   const scored=_classerAliments(res,normQ,words);
   // La macro visée est rappelée sur chaque ligne : choisir une source de
@@ -35212,6 +35216,32 @@ let _fjFood=null;   // aliment sélectionné
 let _fjDate=null;   // date YYYY-MM-DD du journal ouvert
 let _fjRepas='matin';
 
+// PURE. Le singulier probable d'un mot de requête, ou le mot lui-même.
+//
+// Le « s » final tombe au-delà de trois lettres : « riz » et « pas » restent
+// entiers. Le « x », lui, ne tombe QUE derrière un « u » — la seule marque de
+// pluriel français en -x : -aux, -eux, -oux. « noix » n'est pas un pluriel, et
+// le réduire à « noi » ferait remonter « noisette » et « poivre noir » sur une
+// recherche de noix.
+function _fjSingulier(w){
+  const m=String(w||'');
+  if(m.length>3&&/ux$/.test(m)) return m.slice(0,-1);
+  if(m.length>3&&/s$/.test(m)) return m.slice(0,-1);
+  return m;
+}
+// PURE. Les formes acceptées pour un mot : la saisie, ET son singulier. On
+// garde les deux — un mot doit correspondre à l'une ou à l'autre.
+function _fjFormes(w){
+  const sg=_fjSingulier(w);
+  return sg===w?[w]:[w,sg];
+}
+// PURE. Le texte normalisé contient-il TOUS les mots, au singulier comme au
+// pluriel ? Un seul endroit décide, pour la table, les aliments perso et ceux
+// du coach.
+function _fjContientTous(texte,words){
+  const t=String(texte||'');
+  return (words||[]).every(w=>_fjFormes(w).some(v=>t.includes(v)));
+}
 function _fjNorm(s){
   return (s||'').toLowerCase()
     .replace(/[éèêë]/g,'e').replace(/[àâä]/g,'a').replace(/[ùûü]/g,'u')
@@ -35238,7 +35268,11 @@ function _classerAliments(res,normQ,words){
   // Le filtre travaille en SOUS-CHAINE : « oeuf » retient aussi « boeuf »,
   // « ail » retient « travail ». Un nom qui contient le mot ENTIER parle de
   // l aliment cherche ; les autres n en parlent que par accident.
-  const MOTS=words.map(w=>new RegExp('\\b'+w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'s?\\b'));
+  // BATI SUR LE SINGULIER, avec le pluriel optionnel : il tolérait le pluriel
+  // du côté TABLE — « oeuf » retrouvait « oeufs » — mais jamais du côté
+  // REQUÊTE. Sans ça, « tomates » remonterait désormais du filtre sans jamais
+  // recevoir le bonus « mot entier » : trouvées, mais classées derrière.
+  const MOTS=words.map(w=>new RegExp('\\b'+_fjSingulier(w).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'[sx]?\\b'));
   return res.map(f=>{
     // f.s EST deja le nom normalise dans la table : le recalculer a chaque
     // frappe coutait le double du temps de recherche. Le repli reste la au
@@ -37083,14 +37117,21 @@ function onFjSearch(val){
   // Pas de coupe AVANT le classement : « Oeuf cru » est le 124e nom
   // contenant « oeuf » dans l ordre de la table. Le plafonner a 80 revenait a
   // classer un echantillon arbitraire. On classe tout, on coupe apres.
-  const res=_ciqualDB.filter(f=>words.every(w=>f.s.includes(w)));
+  // AU SINGULIER COMME AU PLURIEL. Les noms Ciqual sont au singulier :
+  // « tomates » ne retenait que les 4 entrées portant elles-mêmes un « s », sur
+  // 57. Quatre résultats donnent l'illusion d'avoir cherché — on en conclut
+  // que l'aliment n'est pas dans la table.
+  const res=_ciqualDB.filter(f=>_fjContientTous(f.s,words));
   document.getElementById('fj-recent-section').innerHTML='';
   if(!res.length){el.innerHTML='<div style="padding:20px;text-align:center;color:var(--sub);font-size:12px">Aucun résultat pour "'+escapeHtml(q)+'"</div>'+_offBoutonHtml(q);return;}
   const scored=_classerAliments(res,normQ,words);
   // Les aliments perso passent DEVANT : l athlete les a crees precisement
   // parce que la table ne repondait pas. Ils sont classes entre eux par la
   // meme regle, pour que « poulet maison » batte « sauce poulet maison ».
-  const filtre=l=>l.filter(a=>a&&words.every(w=>String(a.s||'').includes(w)));
+  // Même règle pour les aliments perso et ceux du coach : une seule fonction
+  // décide, sinon la table et les listes personnelles répondraient différemment
+  // à la même frappe.
+  const filtre=l=>l.filter(a=>a&&_fjContientTous(String(a.s||''),words));
   const mp=_classerAliments(filtre(_alimsPerso()),normQ,words);
   // ORDRE : ce que l athlete a cree, puis ce que SON COACH a cree, puis la
   // table Ciqual, puis les produits de marque. Le plus specifique d abord :
