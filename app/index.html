@@ -47816,22 +47816,42 @@ async function createAthlete(){
   athlete.updatedAt=Date.now();users[em]=athlete;
   users[currentUser.email]=currentUser;
   const okU=DB.set('users',users);
-  const envoi=CLOUD.pushOne(em,athlete);
+  // AUCUN envoi du dossier de l’athlète. La règle .write de /users exige
+  // data.child('coachEmailKey') NON NULL : sur un nœud qui n’existe pas
+  // encore, `data` est null et l’écriture est refusée. Le coach ne PEUT pas
+  // créer le dossier distant de son athlète — et c’est voulu, un coach n’a
+  // pas à fabriquer un dossier de données personnelles pour quelqu’un qui
+  // n’a encore rien accepté.
+  //
+  // Le push a donc été retiré, et pas seulement le message : un envoi rejeté
+  // passe par _enfiler + _queueRetry, donc était rejoué à chaque démarrage
+  // pour être refusé à chaque fois. Chaque athlète créé laissait une entrée
+  // morte dans la file de reprise.
+  //
+  // Le dossier naît chez l’athlète : il se connecte, saisit son code, et
+  // _appliquerPayloadCode pose coachId, coachEmailKey, status et accessExpiry
+  // sur SON dossier, qu’il a le droit d’écrire. Le coach, lui, part bien —
+  // DB.set('users') pousse son propre document, qui porte studentCodes.
   const okS=DB.set('session',currentUser);
   closeModal();
   // Copy token to clipboard for convenience
   try{navigator.clipboard?.writeText(token);}catch{}
   const exp=new Date(expiry).toLocaleDateString('fr-FR');
-  // Sans synchronisation, l'athlète ne trouvera pas son dossier en se
-  // connectant depuis son propre téléphone : annoncer « il peut se connecter »
-  // serait un mensonge coûteux.
-  // Le message ne distingue plus créateur et affilié : les deux accordent
-  // l'accès, et annoncer autre chose serait faux. (La ligne qui disait
-  // l'inverse datait d'avant R-03 et n'avait pas été retirée.)
-  const messageFinal=motDePasseActif
-    ? '✓ '+fn+' créé : il peut se connecter avec cet email et ce mot de passe. Accès jusqu\'au '+exp+' (code copié)'
-    : '✓ '+fn+' rattaché : il avait déjà un compte, il garde SON mot de passe. Accès jusqu\'au '+exp+' (code copié)';
-  toastSync(okU&&okS,envoi,messageFinal,'le compte est');
+  // CE QUI EST VRAI, ET CE QUI RESTE À FAIRE.
+  //
+  // Le compte Firebase Auth, lui, existe : « il peut se connecter » est exact.
+  // Ce qui ne l’était pas, c’est le sous-entendu que tout était fini. Tant que
+  // l’athlète n’a pas saisi son code, il n’est rattaché à personne côté
+  // serveur, et sa fiche reste l’ébauche issue du code.
+  //
+  // Le message ne distingue pas créateur et affilié : les deux accordent
+  // l'accès, et annoncer autre chose serait faux.
+  const _aFaire=" Envoie-lui le CODE (copié) : tant qu'il ne l'a pas saisi à sa première connexion, sa fiche reste vide chez toi.";
+  const messageFinal=(motDePasseActif
+    ? '✓ '+fn+' créé : il se connecte avec cet email et ce mot de passe.'
+    : '✓ '+fn+' rattaché : il avait déjà un compte, il garde SON mot de passe.')
+    +_aFaire+' Accès jusqu\'au '+exp;
+  toastEcriture(okU&&okS,messageFinal,'le compte est');
   loadCoachHome();
 }
 

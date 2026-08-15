@@ -4,6 +4,21 @@
       "$emailKey": {
         ".read": "auth != null && (\n  auth.token.email.replace('.', ',') === $emailKey ||\n  (data.child('coachEmailKey').exists() &&\n   auth.token.email.replace('.', ',') === data.child('coachEmailKey').val())\n)",
 
+        // ECRITURE : le proprietaire, ou le coach QUE LE DOSSIER DESIGNE DEJA.
+        //
+        // `data` est le noeud EXISTANT : un coach ne peut donc pas CREER le
+        // dossier de son athlete. C est DELIBERE, et non un oubli.
+        //
+        // Autoriser la creation quand !data.exists() reviendrait a laisser
+        // n importe quel coach fabriquer /users/{adresse pas encore inscrite}
+        // en s y designant comme coach, avec le contenu de son choix. La
+        // personne visee adopterait ce dossier en s inscrivant. C est un squat
+        // d adresses, et un dossier de donnees personnelles cree sans le
+        // moindre consentement.
+        //
+        // Le dossier d un athlete NAIT sur son appareil : il saisit son code,
+        // _appliquerPayloadCode pose coachEmailKey, et sa propre ecriture passe
+        // par la premiere branche. Le coach le lit ensuite.
         ".write": "auth != null && (\n  auth.token.email.replace('.', ',') === $emailKey ||\n  (data.child('coachEmailKey').val() !== null &&\n   auth.token.email.replace('.', ',') === data.child('coachEmailKey').val())\n)",
 
         // Journal RGPD : la DATE du dernier export, et rien d autre. Ni son
