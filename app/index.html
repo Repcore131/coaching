@@ -50248,13 +50248,51 @@ function loadStudentCodes(){
       +'</div></div>';
   }).join('');
 }
-function toggleStudentCode(i){
+// Sur le modèle de _marquerRelanceDistante. Le nœud /rc_codes est la seule
+// source qui fasse autorité pour les lecteurs du code : c’est là que
+// _verifierCodeSansConsommer et _verifyAccessCode vont chercher `active`.
+// Rend true SEULEMENT si le serveur a accepté l’écriture.
+async function _majActifDistant(code,actif){
+  try{
+    const tok=await CLOUD._getToken().catch(()=>null);
+    if(!tok) return false;
+    const r=await fetch(_rcCodesUrl(code)+'?auth='+tok,
+      {method:'PATCH',headers:{'Content-Type':'application/json'},
+       body:JSON.stringify({active:!!actif})});
+    return r.ok;
+  }catch(e){ return false; }
+}
+// DÉSACTIVER UN CODE DOIT LE DÉSACTIVER POUR DE BON.
+//
+// Cette fonction ne retournait que la copie locale du coach. Le nœud
+// /rc_codes/{token} gardait active:true, et c’est LUI que lisent les deux
+// vérifications : un code annoncé fermé continuait d’ouvrir l’accès, avec un
+// coach persuadé du contraire. Sans ce bouton il aurait su qu’il ne pouvait
+// pas fermer un code ; avec lui, il croyait l’avoir fait.
+//
+// L’ORDRE EST LE POINT : le nœud d’abord, l’affichage ensuite. Basculer
+// localement puis échouer reproduirait exactement le défaut corrigé ici.
+async function toggleStudentCode(i){
   if(!currentUser.studentCodes||!currentUser.studentCodes[i]) return;
-  currentUser.studentCodes[i].active=!currentUser.studentCodes[i].active;
+  const c=currentUser.studentCodes[i];
+  const nouveau=!c.active;
+  // Un code sans jeton n’a pas de nœud à modifier. Le dire, plutôt que de
+  // parler de connexion : le coach chercherait une panne qui n’existe pas.
+  if(!c.token){ toast('Ce code est trop ancien pour être fermé à distance : régénère-le.','var(--orange)'); return; }
+  if(!await _majActifDistant(c.token,nouveau)){
+    toast(nouveau?'Impossible d\'activer le code : vérifie ta connexion'
+                 :'Impossible de désactiver le code : vérifie ta connexion','var(--red)');
+    return;
+  }
+  c.active=nouveau;
+  currentUser.updatedAt=Date.now();
   const users=DB.get('users')||{};users[currentUser.email]=currentUser;
   DB.set('users',users);DB.set('session',currentUser);
+  // Sans ce push, l’état ne suivait pas le coach d’un appareil à l’autre :
+  // il rouvrait l’application sur son autre téléphone et lisait « actif ».
+  CLOUD.pushOne(currentUser.email,currentUser);
   loadStudentCodes();
-  toast(currentUser.studentCodes[i].active?'Code activé':'Code désactivé');
+  toast(nouveau?'Code activé':'Code désactivé');
 }
 async function extendStudentCode(i){
   if(!currentUser.studentCodes||!currentUser.studentCodes[i]) return;
