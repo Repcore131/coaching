@@ -46098,7 +46098,10 @@ function saveStepsGoals(){
   if(isNaN(onVal)||onVal<500||isNaN(offVal)||offVal<500){toast('Objectifs invalides');return;}
   currentUser.stepsGoals={on:onVal,off:offVal};
   toastEcriture(saveUser(),'Objectifs enregistrés ✓','les objectifs sont');
-  loadLifestyle();
+  // Et NON loadLifestyle() : ce panneau est aussi rendu dans l'écran « Mes
+  // pas » autonome, d'où un go('s-lifestyle') éjectait l'athlète au moment
+  // même où son enregistrement réussissait.
+  _rerenderLifestyle();
 }
 function stepsToggleType(type){
   // Le type de journée appartient au jour affiché, pas au jour courant : sinon
