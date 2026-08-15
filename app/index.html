@@ -16476,12 +16476,29 @@ function openCoachSessions(){
       // grille vide dit la vérité : il n'y a pas encore de programme.
       :DAYS.map(day=>({day,name:'',photo:null,photo2:null,exercises:[],active:false,notes:'',warmup:''}));
   }
-  // Migration vers Fondation si genre connu et séances non personnalisées
-  if((g==='H'||g==='F')&&sc&&!sc.some(s=>s._foundation)){
-    if(!sc.filter(s=>s.active).some(s=>s.name&&!s._foundation)){
-      const base=g==='F'?FONDATION_F:g==='H'?FONDATION_H:null;
-      if(base) _coachEditClient.sessions_config=base.map(s=>({...s,exercises:s.exercises.map(e=>({...e}))}));
-    }
+  // MIGRATION VERS FONDATION — seulement sur une grille qui ne porte RIEN.
+  //
+  // La garde reposait sur `_foundation`. Ce marqueur est SUPPRIMÉ par
+  // _marquerCommePublie à chaque publication, et enregistrerBrouillon ne le
+  // recopie pas : dès qu’un programme était publié, la garde ne le
+  // reconnaissait plus. Un vrai programme dont les séances actives n’avaient
+  // pas de nom était donc remplacé par FONDATION_H/F à la simple OUVERTURE de
+  // cet écran, sans un mot et sans que rien ne soit encore enregistré.
+  //
+  // On ne regarde plus qu’une chose, visible et durable : cette configuration
+  // porte-t-elle une séance ACTIVE avec des exercices, ou un nom ?
+  //
+  // LE NOM COMPTE AUTANT QUE LES EXERCICES. Un coach qui a nommé ses quatre
+  // séances avant d’y mettre le moindre mouvement a déjà fait un travail :
+  // migrer par-dessus le lui prendrait, et ce serait la même perte silencieuse
+  // que celle qu’on corrige ici, simplement déplacée.
+  //
+  // Les Fondations elles-mêmes portent des séances actives avec exercices :
+  // une config déjà migrée ne peut donc pas l’être une seconde fois.
+  const _porteQqch=s2=>s2&&s2.active&&(((s2.exercises||[]).length>0)||!!String(s2.name||'').trim());
+  if((g==='H'||g==='F')&&sc&&!sc.some(_porteQqch)){
+    const base=g==='F'?FONDATION_F:g==='H'?FONDATION_H:null;
+    if(base) _coachEditClient.sessions_config=base.map(s2=>({...s2,exercises:s2.exercises.map(e=>({...e}))}));
   }
   const title=document.getElementById('csm-title');
   if(title) title.textContent=(_coachEditClient.fname||'Athlète')+' : Séances';
@@ -61502,6 +61519,43 @@ function testExercices(){
             return true;
           } finally { currentUser=sauveC; _coachEditClient=sauveE; }})());
         // ── LA PUBLICATION N’ÉCRASE PAS LE DOSSIER DE L’ATHLÈTE ──────────
+        // ── OUVRIR L’ÉDITEUR NE REMPLACE PAS LE PROGRAMME PUBLIÉ ─────────
+        ok('Un programme publié SANS NOM de séance survit à l\'ouverture',(()=>{
+          // Le cas exact du défaut : _marquerCommePublie a retiré _foundation
+          // à la publication, et les séances actives n’ont pas de nom. La garde
+          // d’avant ne reconnaissait plus rien et posait FONDATION_H par-dessus,
+          // à la simple ouverture, sans que rien ne soit enregistré.
+          const _sv=currentUser, _se=_coachEditClient, _sid=currentClientId;
+          const _get=DB.get, _go=go, _slots=loadCoachSessionSlots, _pb=_proposerBrouillon;
+          const publie=[{day:'Lundi',name:'',active:true,notes:'',warmup:'',cooldown:'',
+              exercises:[{name:'SOULEVÉ DE TERRE',series:5,reps:'5',repos:'03 min',description:''}]},
+            {day:'Mardi',name:'',active:false,notes:'',warmup:'',cooldown:'',exercises:[]}];
+          const magasin={users:{'a@t':{id:'a1',email:'a@t',role:'athlete',coachId:'c1',
+            gender:'Homme',sessions_config:JSON.parse(JSON.stringify(publie))}}};
+          try{
+            DB.get=k=>magasin[k]||null;
+            go=()=>{}; loadCoachSessionSlots=()=>{}; _proposerBrouillon=()=>false;
+            currentUser={id:'c1',email:'c@t',role:'coach'};
+            currentClientId='a1';
+            openCoachSessions();
+            const apres=_coachEditClient.sessions_config;
+            if(apres[0].exercises[0].name!=='SOULEVÉ DE TERRE')
+              return _echec('le programme publié a été remplacé : '+apres[0].exercises[0].name);
+            if(apres.length!==2) return _echec('la grille a changé de taille : '+apres.length);
+            // TÉMOIN : une grille qui ne porte VRAIMENT rien migre toujours.
+            magasin.users['a@t'].sessions_config=[{day:'Lundi',name:'',active:false,exercises:[]}];
+            openCoachSessions();
+            if(!(_coachEditClient.sessions_config||[]).some(x=>(x.exercises||[]).length))
+              return _echec('une grille vide ne reçoit plus la Fondation');
+            // Et un jour actif SEULEMENT nommé est protégé lui aussi.
+            magasin.users['a@t'].sessions_config=[{day:'Lundi',name:'HAUT DU CORPS',active:true,exercises:[]},
+              {day:'Mardi',name:'',active:false,exercises:[]}];
+            openCoachSessions();
+            if(_coachEditClient.sessions_config[0].name!=='HAUT DU CORPS')
+              return _echec('un jour nommé sans exercices a été écrasé');
+            return true;
+          } finally { currentUser=_sv; _coachEditClient=_se; currentClientId=_sid;
+            DB.get=_get; go=_go; loadCoachSessionSlots=_slots; _proposerBrouillon=_pb; }})());
         ok('Ce que l\'athlète enregistre pendant l\'édition survit à la publication',(()=>{
           const _sv=currentUser, _se=_coachEditClient, _sid=currentClientId;
           const _get=DB.get, _set=DB.set, _go=go, _slots=loadCoachSessionSlots;
