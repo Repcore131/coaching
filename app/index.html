@@ -14486,6 +14486,11 @@ function openClientDetail(cid,_refresh){
   currentClientId=cid;
   const c=getOwnedClient(cid);
   if(!c) return;
+  // La réponse au bilan se compose dans cette fiche : son contexte, c’est le
+  // prénom de l’athlète. Posé ici et non dans blocReponseBilan, qui est un
+  // rendu — un rendu ne doit pas modifier l’état de l’application, et il est
+  // partagé avec l’écran de l’ATHLÈTE, où ce contexte n’a rien à faire.
+  try{ tplContexte({prenom:c.fname},'rb-texte'); }catch(e){}
   // Volume de la semaine en cours, calcule avec la classification et les
   // reperes de L ATHLETE.
   try{ renderJournalCoach(c); }catch(e){}
@@ -28228,6 +28233,9 @@ function bilansSansReponse(c){
   return ((c&&c.bilans)||[]).filter(b=>b&&!b.reponseCoach).length;
 }
 function saveReponseBilan(email,bilanId){
+  // Même garde-fou, et `false` comme tous les autres refus de cette fonction :
+  // ses appelants lisent cette valeur.
+  if(!tplVerifierAvantEnvoi('rb-texte')) return false;
   const ta=document.getElementById('rb-texte');
   const txt=((ta&&ta.value)||'').trim();
   if(!txt){ toast('Écris ta réponse avant d\'envoyer.','var(--orange)'); return false; }
@@ -42008,10 +42016,26 @@ const QC_BILAN_DEFAULTS=[
 // source. C'est ce qui permet d'absorber sans rien casser.
 const TPL_CAT_LIB=Object.freeze({technique:'Technique',motivation:'Motivation',
   nutrition:'Nutrition',administratif:'Administratif',absence:'Absence'});
-// Le contexte de la zone de composition. Rempli par qui ouvre la feuille :
+// Le contexte de la zone de composition. Rempli par qui ouvre l’écran :
 // c'est lui qui sait de quel exercice et de quel athlète on parle.
+//
+// `cible` EST L’ID DE LA ZONE POUR LAQUELLE CE CONTEXTE VAUT, et ce n’est pas
+// un détail. Le coach ouvre la correction d’une vidéo SQUAT, annule, puis
+// répond à un bilan : sans cette borne, le contexte porterait encore
+// exercice:'SQUAT' et « Beau travail sur {exercice} » se remplirait tout
+// seul, avec un exercice dont ce bilan ne parle pas. Une valeur fausse posée
+// en silence est pire qu’une variable restée visible.
 let _tplContexte={};
-function tplContexte(c){ _tplContexte=c||{}; }
+let _tplContexteCible=null;
+function tplContexte(c,cible){ _tplContexte=c||{}; _tplContexteCible=cible||null; }
+// PURE au sens qui compte ici : elle ne décide de rien d’autre que du champ
+// de validité. Une autre zone ne garde que le PRÉNOM — le seul qui reste vrai
+// d’une zone à l’autre, puisqu’on est dans la fiche du même athlète. Les
+// trois autres redeviennent visibles, donc bloquantes à l’envoi.
+function _tplCtxPour(cible){
+  if(!_tplContexteCible||_tplContexteCible===cible) return _tplContexte;
+  return {prenom:_tplContexte.prenom};
+}
 
 function _tplListe(){
   if(!currentUser) return [];
@@ -42071,8 +42095,9 @@ function tplInserer(id){
   const cible=window._tplCible||'vc-general';
   const ta=document.getElementById(cible);
   if(!ta) return false;
-  const r=templateResoudre(t.corps,_tplContexte);
-  ta.value=templateInserer(ta.value,t,_tplContexte);
+  const ctx=_tplCtxPour(cible);
+  const r=templateResoudre(t.corps,ctx);
+  ta.value=templateInserer(ta.value,t,ctx);
   closeModal();
   ta.focus();
   if(r.manquantes.length){
@@ -42561,6 +42586,12 @@ function openVideoCorrection(email,videoId){
   if(!c||c.coachId!==currentUser?.id){toast('Élève introuvable ou non autorisé','var(--orange)');return;}
   const v=(c.videos||[]).find(x=>x.id===videoId);if(!v)return;
   window._vcEmail=email;window._vcVideoId=videoId;
+  // Le nom de la vidéo EST le nom de l’exercice : c’est ce que porte `name`,
+  // et c’est lui que consommerDemandeVideo compare aux demandes du coach.
+  // `seance` et `charge` ne figurent nulle part dans une vidéo : les laisser
+  // vides est exact, et tplVerifierAvantEnvoi refusera l’envoi si un modèle
+  // les réclame — mieux vaut demander que deviner.
+  tplContexte({prenom:c.fname,exercice:v.name},'vc-general');
   window._tsAnnotations=v.feedbackTimestamps?JSON.parse(JSON.stringify(v.feedbackTimestamps)):[];
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 24px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:92vh;overflow-y:auto">
@@ -42616,6 +42647,10 @@ function openVideoCorrection(email,videoId){
   try{ rcInitLecteur('vc-video'); }catch(e){}
 }
 function saveVideoCorrection(){
+  // Le garde-fou EN PREMIER : une variable non remplie ne doit pas atteindre
+  // l’athlète. Il surligne le champ et le dit, il ne se contente pas de
+  // refuser en silence.
+  if(!tplVerifierAvantEnvoi('vc-general')) return;
   const general=(document.getElementById('vc-general')?.value||'').trim();
   const tss=window._tsAnnotations||[];
   if(!general&&!tss.length) return toast('Ajoute un commentaire ou au moins un repère','var(--orange)');
