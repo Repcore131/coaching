@@ -32772,6 +32772,25 @@ function _htmlStrictVerrou(raison){
   </div>`;
 }
 
+// Le jour visé par les deux boutons OUI/NON. `null` = aujourd'hui.
+let _strictJour=null;
+// PURE. Le jour retenu : celui choisi s'il est recevable, aujourd'hui sinon.
+// MÊME BORNE QUE _bandeauJour — STEPS_RETENTION_JOURS — parce que c'est le
+// même sélecteur qui la propose : offrir un jour hors de portée serait un
+// piège.
+function _strictJourValide(choisi,maintenant){
+  const now=maintenant||new Date();
+  const auj=localISODate(now);
+  const min=localISODate(new Date(now.getTime()-STEPS_RETENTION_JOURS*24*3600*1000));
+  const j=String(choisi||'');
+  return (j>=min&&j<=auj)?j:auj;
+}
+// Le handler du sélecteur, à la forme attendue par _bandeauJour : une chaîne
+// vide ramène à aujourd'hui.
+function setStrictJour(v){
+  _strictJour=v||null;
+  _renderStrictDiet();
+}
 function _renderStrictDiet(){
   const el=document.getElementById('nut-diet-content');
   if(!el) return;
@@ -32799,7 +32818,12 @@ function _renderStrictDiet(){
   const days_data=nut.days||{};
   const today=new Date();
   const todayKey=localISODate(today);
-  const resp=days_data[todayKey]?.respected;
+  // LE JOUR CHOISI, et non plus le jour même : une journée oubliée la veille
+  // était perdue, et la série de jours consécutifs cassait pour une case non
+  // cochée.
+  const _sjour=_strictJourValide(_strictJour);
+  const _sAuj=_sjour===todayKey;
+  const resp=days_data[_sjour]?.respected;
   const respYes=resp===true;
   const respNo=resp===false;
   const wk=new Date(today);wk.setDate(today.getDate()-((today.getDay()+6)%7));
@@ -32827,10 +32851,11 @@ function _renderStrictDiet(){
     <div style="background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0b0b0b);border:1px solid #262626;border-radius:16px;box-shadow:0 18px 40px rgba(0,0,0,.75),0 4px 12px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.07),inset 0 -1px 0 rgba(0,0,0,.6);padding:18px;margin-bottom:12px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.45);animation:fadeInUp .3s ease">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.028) 11px,rgba(255,255,255,.028) 12px);pointer-events:none"></div>
       <div style="position:relative">
-        <div style="display:inline-flex;align-items:center;gap:7px;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;color:#fff;text-transform:uppercase;letter-spacing:2.5px;margin-bottom:14px;text-shadow:0 0 8px rgba(255,255,255,.35),0 0 18px rgba(255,255,255,.18)"><span style="display:inline-flex;color:#ff3b30;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('check',13)}</span>J'AI RESPECTÉ MON PLAN AUJOURD'HUI</div>
+        <div style="display:inline-flex;align-items:center;gap:7px;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:15px;color:#fff;text-transform:uppercase;letter-spacing:2.5px;margin-bottom:14px;text-shadow:0 0 8px rgba(255,255,255,.35),0 0 18px rgba(255,255,255,.18)"><span style="display:inline-flex;color:#ff3b30;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('check',13)}</span>J'AI RESPECTÉ MON PLAN${_sAuj?" AUJOURD'HUI":''}</div>
+        ${_bandeauJour('strict-jour',_sjour,'setStrictJour')}
         <div style="display:flex;gap:10px">
-          <button onclick="setNutriRespected('${todayKey}',true)" style="flex:1;padding:16px 0;border-radius:10px;font-family:Montserrat,sans-serif;font-size:14px;font-weight:800;letter-spacing:1.5px;cursor:pointer;background:${respYes?'linear-gradient(160deg,#1a9c4d,#0f5c2e)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${respYes?'#fff':'#8fd9ab'};border:2px solid ${respYes?'#22c55e':'rgba(34,197,94,.35)'};box-shadow:${respYes?'0 0 20px rgba(34,197,94,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${respYes?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">✓ OUI</button>
-          <button onclick="setNutriRespected('${todayKey}',false)" style="flex:1;padding:16px 0;border-radius:10px;font-family:Montserrat,sans-serif;font-size:14px;font-weight:800;letter-spacing:1.5px;cursor:pointer;background:${respNo?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${respNo?'#fff':'#e79b9b'};border:2px solid ${respNo?'var(--red)':'rgba(224,32,32,.35)'};box-shadow:${respNo?'0 0 20px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${respNo?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">✗ NON</button>
+          <button onclick="setNutriRespected('${_sjour}',true)" style="flex:1;padding:16px 0;border-radius:10px;font-family:Montserrat,sans-serif;font-size:14px;font-weight:800;letter-spacing:1.5px;cursor:pointer;background:${respYes?'linear-gradient(160deg,#1a9c4d,#0f5c2e)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${respYes?'#fff':'#8fd9ab'};border:2px solid ${respYes?'#22c55e':'rgba(34,197,94,.35)'};box-shadow:${respYes?'0 0 20px rgba(34,197,94,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${respYes?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">✓ OUI</button>
+          <button onclick="setNutriRespected('${_sjour}',false)" style="flex:1;padding:16px 0;border-radius:10px;font-family:Montserrat,sans-serif;font-size:14px;font-weight:800;letter-spacing:1.5px;cursor:pointer;background:${respNo?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${respNo?'#fff':'#e79b9b'};border:2px solid ${respNo?'var(--red)':'rgba(224,32,32,.35)'};box-shadow:${respNo?'0 0 20px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${respNo?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">✗ NON</button>
         </div>
       </div>
     </div>
@@ -39847,6 +39872,10 @@ function _renderSuppTable(list, isCoach, editFn){
 }
 
 let _suppReturnToNutrition=false;
+// La rétention du journal de caféine, nommée : elle vivait en dur dans
+// addCaffeineEntry, et la borne du sélecteur de jour doit être LA MÊME —
+// proposer un jour que la purge effacera serait un piège.
+const CAFF_RETENTION_JOURS=180;
 let _caffReturnToNutrition=false;
 let _caffeineViewDate=null;  // date affichée dans l'écran standalone s-caffeine
 let _caffeineEmbedDate=null; // date affichée dans la section embarquée s-nutrition
@@ -40726,14 +40755,31 @@ function _htmlCafeineNuits(user,dates){
   </div>`;
 }
 function getCaffeineDay(dateStr){return(_caffStore()[dateStr]||[]);}
-function addCaffeineEntry(entry){
+// `dateISO` est OPTIONNELLE et vaut aujourd'hui : les appels existants ne
+// changent pas. Elle sert à la saisie rétroactive, sur le modèle des pas.
+//
+// DEUX REFUS, et ils ne sont pas décoratifs. Le FUTUR : on ne consigne pas ce
+// qui n'a pas eu lieu. Et AU-DELÀ DE LA RÉTENTION : la purge qui suit
+// effacerait l'entrée dans la foulée, ce qui se lirait comme un
+// enregistrement réussi puis disparu.
+function addCaffeineEntry(entry,dateISO){
   const days=_caffStore();
-  const d=localISODate(new Date());
+  const auj=localISODate(new Date());
+  const cutoff=localISODate(new Date(Date.now()-CAFF_RETENTION_JOURS*24*3600*1000));
+  const d=dateISO||auj;
+  if(d>auj||d<cutoff) return false;
   if(!days[d]) days[d]=[];
   days[d].push(entry);
-  const cutoff=localISODate(new Date(Date.now()-180*24*3600*1000));
   Object.keys(days).forEach(k=>{if(k<cutoff)delete days[k];});
   saveUser();
+  return true;
+}
+// LE JOUR VISÉ PAR L'ÉCRAN D'OÙ L'ON VIENT. Deux écrans affichent la caféine
+// — l'autonome et celui encastré dans la nutrition — et chacun garde sa
+// propre date. _caffReturnToNutrition dit déjà lequel a ouvert la saisie.
+function _caffDateCourante(){
+  const d=_caffReturnToNutrition?_caffeineEmbedDate:_caffeineViewDate;
+  return d||localISODate(new Date());
 }
 // wKgAffiche : poids qui a servi à calculer thr. Passé en paramètre plutôt que
 // relu ici, pour que la vue coach puisse un jour afficher le poids de l'ATHLÈTE
@@ -40881,7 +40927,11 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
   </div>
   ${isToday?_htmlCafeineCoucher(entries,currentUser):''}
   ${alertHtml}
-  ${isToday?'<button class="btn btn-red" onclick="openCaffeineAdd()" style="margin-bottom:20px">+ Enregistrer une prise</button>':''}
+  <!-- PLUS MASQUÉ HORS D'AUJOURD'HUI. On pouvait naviguer vers hier sans
+       pouvoir y écrire : le bouton disparaissait, ce qui cachait le problème
+       au lieu de le régler. Le futur reste impossible — la flèche « → » est
+       désactivée sur aujourd'hui, et addCaffeineEntry le refuse de toute façon. -->
+  <button class="btn btn-red" onclick="openCaffeineAdd()" style="margin-bottom:20px">+ Enregistrer une prise${isToday?'':' le '+dateLbl}</button>
   <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
     <div style="width:20px;height:2px;background:var(--red)"></div>
     <h3>${dateLbl}</h3>
@@ -41224,8 +41274,10 @@ function _commitCaffeineAdd(qty){
   const now=new Date();
   const hhmm=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
   const name=qty>1?p.name+' ×'+qty:p.name;
-  addCaffeineEntry({id:p.id,name,icon:p.icon,mg:p.mg*qty,volume:p.volume||'',type:p.type,time:hhmm,ts:Date.now()});
+  const _d=_caffDateCourante();
+  const _ok=addCaffeineEntry({id:p.id,name,icon:p.icon,mg:p.mg*qty,volume:p.volume||'',type:p.type,time:hhmm,ts:Date.now()},_d);
   _pendingCaffProduct=null;
+  if(!_ok){ toast('Jour hors de portée : la prise n’a pas été enregistrée.','var(--orange)'); return; }
   toast(name+' ajouté ✓');
   _caffReturnToNutrition?loadNutrition():loadCaffeine();
 }
@@ -41236,7 +41288,8 @@ function saveCaffeineCustom(){
   if(!name||mg<1){toast('Remplis le nom et la dose en mg');return;}
   const now=new Date();
   const hhmm=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
-  addCaffeineEntry({id:'custom',name,icon:'☕',mg,volume,type:'custom',time:hhmm,ts:Date.now()});
+  const _ok=addCaffeineEntry({id:'custom',name,icon:'☕',mg,volume,type:'custom',time:hhmm,ts:Date.now()},_caffDateCourante());
+  if(!_ok){ toast('Jour hors de portée : la prise n’a pas été enregistrée.','var(--orange)'); return; }
   toast(name+' ajouté ✓');
   _caffReturnToNutrition?loadNutrition():loadCaffeine();
 }
