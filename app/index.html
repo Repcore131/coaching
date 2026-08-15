@@ -32712,8 +32712,23 @@ function htmlLigneCalories(tot,m){
       <div style="height:100%;width:${(pct*100).toFixed(1)}%;background:linear-gradient(90deg,var(--red),#ff4444);border-radius:5px;transition:width .4s ease;box-shadow:0 0 12px rgba(224,32,32,.5)"></div>
     </div>`;
 }
-function _renderStrictMacroRings(nut){
-  const today=localISODate(new Date());
+// PURE. Le libellé d’un jour, PARTAGÉ par le journal et la carte des
+// objectifs. Les deux en-têtes nomment le même jour : les laisser calculer
+// ce nom chacun de son côté, c’est accepter qu’ils finissent par diverger.
+function _libelleJourNut(dateISO){
+  const auj=localISODate(new Date());
+  if(dateISO===auj) return "Aujourd'hui";
+  const h=new Date(); h.setDate(h.getDate()-1);
+  if(dateISO===localISODate(h)) return 'Hier';
+  const [y,m,d]=String(dateISO||'').split('-').map(Number);
+  if(!(y>0&&m>0&&d>0)) return String(dateISO||'');
+  return new Date(y,m-1,d).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
+}
+// `jourAff` est OPTIONNELLE et retombe sur aujourd’hui : le rendu initial et
+// les tests intégrés, qui appellent avec le seul `nut`, ne changent pas.
+function _renderStrictMacroRings(nut,jourAff){
+  const today=jourAff||localISODate(new Date());
+  const estAuj=today===localISODate(new Date());
   const isOn=nutIsOnDay(today);
   const m=_getEffectiveMacros(nut,isOn,today);
   // Reperes INDICATIFS, sous les totaux : ils ne les modifient pas.
@@ -32728,7 +32743,7 @@ function _renderStrictMacroRings(nut){
     :`<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:5px;padding:3px 10px;letter-spacing:1px">${icon('moon',10)} JOUR OFF</span>`;
   return `<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 8px 24px rgba(0,0,0,.35);animation:fadeInUp .3s ease">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div style="display:inline-flex;align-items:center;gap:7px;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:17px;color:#ff3b30;text-transform:uppercase;letter-spacing:3px;text-shadow:0 0 8px rgba(224,32,32,.85),0 0 20px rgba(224,32,32,.45)"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('target',13)}</span>OBJECTIFS DU JOUR</div>
+      <div style="min-width:0"><div style="display:inline-flex;align-items:center;gap:7px;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:17px;color:#ff3b30;text-transform:uppercase;letter-spacing:3px;text-shadow:0 0 8px rgba(224,32,32,.85),0 0 20px rgba(224,32,32,.45)"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('target',13)}</span>${estAuj?'OBJECTIFS DU JOUR':'OBJECTIFS'}</div>${estAuj?'':`<div style="margin-top:4px;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--red)">${_libelleJourNut(today)}</div>`}</div>
       <span style="display:inline-flex;align-items:center;gap:6px">${badgePhase(currentUser)}${dayBadge}</span>
     </div>
     ${htmlAnneauxMacros(tot,m,'16px')}
@@ -32772,7 +32787,7 @@ function _renderNutriContent(type,dateAff){
       ${_htmlPalierAthlete(currentUser)}
       ${_htmlRecuperationAthlete(currentUser)}
       ${_htmlAjustement(currentUser,false)}
-      ${_renderStrictMacroRings(nut)}
+      <div id="nut-rings-slot">${_renderStrictMacroRings(nut)}</div>
       ${_htmlHydratationNut(currentUser)}
       ${_renderCycleNutSettings(nut)}`;
     // LE JOUR VISÉ, ou aujourd'hui à défaut. Cette ligne ramenait le journal à
@@ -37778,8 +37793,7 @@ function _renderFjDaySummary(date){
   const [_yy,_mm,_dd]=date.split('-').map(Number);
   const prevStr=localISODate(new Date(_yy,_mm-1,_dd-1));
   const nextStr=localISODate(new Date(_yy,_mm-1,_dd+1));
-  const yst=new Date();yst.setDate(yst.getDate()-1);
-  const dateLbl=isToday?"Aujourd'hui":date===localISODate(yst)?"Hier":new Date(_yy,_mm-1,_dd).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
+  const dateLbl=_libelleJourNut(date);
   const nextBtn=isToday
     ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:8px;padding:4px 10px;font-size:14px;cursor:not-allowed">→</button>`
     :`<button onclick="_renderFjDaySummary('${nextStr}')" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:14px">→</button>`;
@@ -37881,6 +37895,19 @@ function _renderFjDaySummary(date){
           </div>
         </div>`).join('')}
       </div>`).join('')}`;
+
+  // LES DEUX CARTES PARLENT DU MÊME JOUR.
+  //
+  // La carte des objectifs vit dans un AUTRE conteneur (nut-diet-content) et
+  // restait figée sur la date du système : en reculant d’un jour, l’écran
+  // affichait deux badges JOUR ON/OFF contradictoires, et des cibles qui
+  // n’étaient pas celles du jour consulté. On la re-rend ici, sur la date
+  // affichée, parce que c’est ce rendu-ci qui SAIT quel jour est à l’écran.
+  //
+  // L’emplacement peut manquer — en diète stricte, le journal n’est pas
+  // affiché du tout : on ne fabrique alors rien.
+  const _slot=document.getElementById('nut-rings-slot');
+  if(_slot) _slot.innerHTML=_renderStrictMacroRings(currentUser.nutrition||{},date);
 }
 // Demande au Service Worker de mettre la base Ciqual (672 Ko) en cache.
 // Appelé au premier affichage de l'écran nutrition seulement : la recherche
