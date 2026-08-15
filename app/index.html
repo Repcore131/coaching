@@ -16540,24 +16540,27 @@ function _reporterSeances(stocke,edite){
   stocke.updatedAt=Date.now();
   return stocke;
 }
-// La décharge suit la MÊME règle. Elle appelait saveUser(), qui enregistre le
-// dossier du COACH : localement, la case cochée n’était donc écrite nulle
-// part. Puis elle poussait la copie entière dans le cloud, où elle écrasait
-// ce que l’athlète venait d’y mettre. On écrit maintenant là où il faut, et
-// on n’envoie que le dossier fusionné.
+// LA DÉCHARGE N’EST PAS PUBLIÉE PAR UNE CASE À COCHER.
+//
+// Cette fonction envoyait `_coachEditClient` chez l’athlète. Or
+// `_coachEditClient` EST le brouillon : l’écran affiche au même instant le
+// bandeau « Non publié — ces modifications ne sont pas encore chez ton
+// athlète ». Cocher une case publiait donc tout le travail en cours, en
+// contredisant ce que l’écran venait d’écrire au coach.
+//
+// Elle se range avec coachToggleDay et coachRenameSession, juste en dessous :
+// elle touche le brouillon, et PUBLIER seul écrit. Les caches de plateau et
+// de signaux sont vidés parce qu’ils sont calculés à partir des séances et
+// que l’écran du coach les relit tout de suite.
+//
+// loadCoachSessionSlots redessine le bandeau : sans lui, le coach cocherait
+// la case sans voir apparaître le « Non publié » qui l’attend.
 function coachToggleDeload(i,val){
   const c=_coachEditClient; if(!c?.sessions_config?.[i]) return;
   c.sessions_config[i].deload=!!val;
-  const users=DB.get('users')||{};
-  const emailKey=Object.keys(users).find(k=>users[k]?.id===c.id);
-  if(emailKey&&getOwnedClient(c.id,users)){
-    const stocke=_reporterSeances(users[emailKey],c);
-    users[emailKey]=stocke;
-    DB.set('users',users);
-    CLOUD.pushOne(emailKey,stocke);
-  }
   _viderCachePlateau();
   _viderCacheSignaux();
+  loadCoachSessionSlots();
 }
 function coachToggleDay(i){
   if(!_coachEditClient?.sessions_config) return;
@@ -16646,6 +16649,10 @@ function enregistrerBrouillon(user){
     sessions_config:c.sessions_config.map(sc=>({
       day:sc.day, name:sc.name||'', active:!!sc.active, notes:sc.notes||'',
       warmup:sc.warmup||'', cooldown:sc.cooldown||'',
+      // `deload` était absent : un brouillon repris effaçait la décharge en
+      // silence, et brouillonDiffere aurait comparé un champ que le brouillon
+      // ne savait pas transporter.
+      deload:!!sc.deload,
       exercises:(sc.exercises||[]).map(e=>Object.assign({},e))
     }))
   };
@@ -16665,7 +16672,10 @@ function oublierBrouillon(athleteId,user){
 function brouillonDiffere(b,publie){
   if(!b||!Array.isArray(b.sessions_config)) return false;
   const net=cfg=>JSON.stringify((cfg||[]).map(s=>({
+    // `dl` : sans lui, cocher « Séance de décharge » ne déclenchait aucun
+    // bandeau — le coach quittait l’écran en croyant n’avoir rien modifié.
     d:s.day,n:s.name||'',a:!!s.active,no:s.notes||'',w:s.warmup||'',c:s.cooldown||'',
+    dl:!!s.deload,
     e:(s.exercises||[]).map(x=>({n:x.name||'',s:x.series,r:x.reps,p:x.repos,
       d:x.description||'',ss:!!x.ss,t:x.methode||null}))
   })));
@@ -61373,29 +61383,36 @@ function testExercices(){
           } finally { currentUser=_sv; _coachEditClient=_se; currentClientId=_sid;
             DB.get=_get; DB.set=_set; go=_go; loadCoachSessionSlots=_slots;
             CLOUD.pushOne=_push; toast=_toast; toastSync=_tsync; saveUser=_su; }})());
-        ok('La décharge, elle aussi, n\'écrase rien',(()=>{
+        ok('Cocher « Séance de décharge » ne publie RIEN chez l\'athlète',(()=>{
+          // La case vit dans l’éditeur, sous un bandeau qui annonce que rien
+          // n’est publié. L’envoyer contredirait ce bandeau.
           const _sv=currentUser, _se=_coachEditClient, _sid=currentClientId;
-          const _get=DB.get, _set=DB.set, _push=CLOUD.pushOne, _toast=toast;
+          const _get=DB.get, _set=DB.set, _push=CLOUD.pushOne, _slots=loadCoachSessionSlots;
           const magasin={users:{'a@t':{id:'a1',email:'a@t',role:'athlete',coachId:'c1',
             sessions_config:_cfg(),sessions:[],updatedAt:1}}};
-          let envoye=null;
+          let envois=0, ecritures=0;
           try{
             DB.get=k=>magasin[k]||null;
-            DB.set=(k,v)=>{magasin[k]=v;return true;};
-            toast=()=>{};
-            CLOUD.pushOne=(e,u)=>{envoye=u;return Promise.resolve();};
+            DB.set=(k,v)=>{ecritures++;magasin[k]=v;return true;};
+            loadCoachSessionSlots=()=>{};
+            CLOUD.pushOne=()=>{envois++;return Promise.resolve();};
             currentUser={id:'c1',email:'c@t',role:'coach'};
             currentClientId='a1';
             _coachEditClient=JSON.parse(JSON.stringify(magasin.users['a@t']));
-            magasin.users['a@t'].sessions.push({date:'2026-08-15'});
             coachToggleDeload(0,true);
-            const apres=magasin.users['a@t'];
-            if(!apres.sessions_config[0].deload) return _echec('la décharge n\'est pas enregistrée');
-            if(apres.sessions.length!==1) return _echec('la séance de l\'athlète a été écrasée');
-            if(!envoye||(envoye.sessions||[]).length!==1) return _echec('le cloud reçoit la copie périmée');
+            if(envois!==0) return _echec('la décharge a été envoyée à l\'athlète');
+            if(ecritures!==0) return _echec('la décharge a été écrite dans le magasin');
+            if(magasin.users['a@t'].sessions_config[0].deload)
+              return _echec('le dossier publié porte déjà la décharge');
+            if(!_coachEditClient.sessions_config[0].deload)
+              return _echec('la case n\'a rien posé sur le brouillon');
+            // Et le bandeau « Non publié » doit maintenant se déclencher.
+            if(!brouillonDiffere({sessions_config:_coachEditClient.sessions_config},
+              magasin.users['a@t'].sessions_config))
+              return _echec('le bandeau ne signale pas le changement de décharge');
             return true;
           } finally { currentUser=_sv; _coachEditClient=_se; currentClientId=_sid;
-            DB.get=_get; DB.set=_set; CLOUD.pushOne=_push; toast=_toast; }})());
+            DB.get=_get; DB.set=_set; CLOUD.pushOne=_push; loadCoachSessionSlots=_slots; }})());
         // ── LE CONTEXTE UNIQUE DE L'ÉDITEUR : LA CIBLE D'ÉCRITURE ───────
         // Trois drapeaux globaux décidaient autrefois où saveProgram écrivait.
         // Ils pouvaient rester positionnés : ouvrir une séance de MODÈLE, en
