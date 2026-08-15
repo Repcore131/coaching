@@ -16516,10 +16516,46 @@ function saveCoachSessionsAsTemplate(){
 
 // Une decharge est PLANIFIEE par le coach, pas constatee apres coup : elle ne
 // doit pas pouvoir servir a effacer une mauvaise seance de l historique.
+// CE QUE L’ÉDITEUR DE SÉANCES POSSÈDE — et rien d’autre.
+//
+// `_coachEditClient` est une copie PROFONDE du dossier ENTIER, prise à
+// l’ouverture de l’écran. L’écrire telle quelle rendait le dossier à son état
+// d’il y a dix minutes : les séances faites, le bilan, le poids et les photos
+// enregistrés par l’athlète PENDANT l’édition étaient effacés.
+//
+// Et le garde-fou de _doPushOne ne pouvait pas rattraper ça : il refuse un
+// envoi dont l’updatedAt est plus ancien que le distant, or celui de la copie
+// vient d’être remis à maintenant. Un écrasement local passait donc pour une
+// mise à jour légitime jusque dans le cloud.
+//
+// On ne remplace plus l’objet : on relit le dossier stocké et on y REPORTE
+// ces champs-là. Tout le reste appartient à l’athlète.
+const COACH_CHAMPS_SEANCES=['sessions_config','sessions_config_history',
+  'assignedProgramName','assignedProgramAt'];
+// `in` et non un test de vérité : assignedProgramAt peut valoir 0 ou null,
+// et un `if(edite[champ])` laisserait ces valeurs-là derrière lui.
+function _reporterSeances(stocke,edite){
+  if(!stocke||!edite) return stocke;
+  for(const champ of COACH_CHAMPS_SEANCES) if(champ in edite) stocke[champ]=edite[champ];
+  stocke.updatedAt=Date.now();
+  return stocke;
+}
+// La décharge suit la MÊME règle. Elle appelait saveUser(), qui enregistre le
+// dossier du COACH : localement, la case cochée n’était donc écrite nulle
+// part. Puis elle poussait la copie entière dans le cloud, où elle écrasait
+// ce que l’athlète venait d’y mettre. On écrit maintenant là où il faut, et
+// on n’envoie que le dossier fusionné.
 function coachToggleDeload(i,val){
   const c=_coachEditClient; if(!c?.sessions_config?.[i]) return;
   c.sessions_config[i].deload=!!val;
-  saveUser(); CLOUD.pushOne(c.email,c);
+  const users=DB.get('users')||{};
+  const emailKey=Object.keys(users).find(k=>users[k]?.id===c.id);
+  if(emailKey&&getOwnedClient(c.id,users)){
+    const stocke=_reporterSeances(users[emailKey],c);
+    users[emailKey]=stocke;
+    DB.set('users',users);
+    CLOUD.pushOne(emailKey,stocke);
+  }
   _viderCachePlateau();
   _viderCacheSignaux();
 }
@@ -16705,8 +16741,12 @@ function saveCoachSessions(){
   // telle quelle. Sans ça, l'athlète continuerait de lire « ton coach n'a pas
   // encore publié ton programme » devant un programme bel et bien publié.
   _marquerCommePublie(c.sessions_config);
-  c.updatedAt=Date.now();
-  users[emailKey]=c;
+  // ON REPORTE, ON NE REMPLACE PAS : voir _reporterSeances. `users[emailKey]`
+  // est le dossier RELU à l’instant, avec ce que l’athlète y a écrit depuis
+  // l’ouverture de l’éditeur.
+  const stocke=_reporterSeances(users[emailKey],c);
+  c.updatedAt=stocke.updatedAt;
+  users[emailKey]=stocke;
   // Publié : le brouillon n'a plus de raison d'être, et le garder ferait
   // proposer une reprise vers un état identique à la prochaine ouverture.
   if(oublierBrouillon(c.id)) try{ saveUser(); }catch(e){}
@@ -16714,7 +16754,7 @@ function saveCoachSessions(){
   // « Enregistrement… » écraserait l'avertissement de quota émis par DB.set.
   if(localOk) toast('Enregistrement…');
   go('s-coach-client');
-  toastSync(localOk,CLOUD.pushOne(emailKey,c),' Séances sauvegardées !','les séances sont');
+  toastSync(localOk,CLOUD.pushOne(emailKey,stocke),' Séances sauvegardées !','les séances sont');
 }
 
 function resolveClient(cid){
@@ -61295,6 +61335,67 @@ function testExercices(){
               return _echec('le programme publié a bougé : '+athlete.sessions_config[0].exercises[0].name);
             return true;
           } finally { currentUser=sauveC; _coachEditClient=sauveE; }})());
+        // ── LA PUBLICATION N’ÉCRASE PAS LE DOSSIER DE L’ATHLÈTE ──────────
+        ok('Ce que l\'athlète enregistre pendant l\'édition survit à la publication',(()=>{
+          const _sv=currentUser, _se=_coachEditClient, _sid=currentClientId;
+          const _get=DB.get, _set=DB.set, _go=go, _slots=loadCoachSessionSlots;
+          const _push=CLOUD.pushOne, _toast=toast, _tsync=toastSync, _su=saveUser;
+          // Le magasin est SIMULÉ : ce test ne doit rien écrire dans le
+          // stockage réel, ni rien envoyer.
+          const magasin={users:{'a@t':{id:'a1',email:'a@t',role:'athlete',coachId:'c1',
+            sessions_config:_cfg(),sessions:[],bilans:[],updatedAt:1}}};
+          let envoye=null;
+          try{
+            DB.get=k=>magasin[k]||null;
+            DB.set=(k,v)=>{magasin[k]=v;return true;};
+            go=()=>{}; loadCoachSessionSlots=()=>{}; toast=()=>{};
+            toastSync=()=>{}; saveUser=()=>true;
+            CLOUD.pushOne=(e,u)=>{envoye=u;return Promise.resolve();};
+            currentUser={id:'c1',email:'c@t',role:'coach'};
+            currentClientId='a1';
+            openCoachSessions();
+            // Le coach travaille. PENDANT CE TEMPS, l’athlète enregistre une
+            // séance et son poids : ils arrivent dans le dossier STOCKÉ, pas
+            // dans la copie que l’éditeur tient en main.
+            _coachEditClient.sessions_config[0].name='HAUT DU CORPS';
+            magasin.users['a@t'].sessions.push({date:'2026-08-15'});
+            magasin.users['a@t'].poids=82;
+            saveCoachSessions();
+            const apres=magasin.users['a@t'];
+            if(apres.sessions.length!==1) return _echec('la séance de l\'athlète a été écrasée');
+            if(apres.poids!==82) return _echec('le poids saisi a été écrasé');
+            if(apres.sessions_config[0].name!=='HAUT DU CORPS')
+              return _echec('le travail du coach n\'est pas publié : '+apres.sessions_config[0].name);
+            // L’envoi part avec le dossier FUSIONNÉ : sans ça, l’écrasement
+            // se contenterait de changer de destination.
+            if(!envoye||(envoye.sessions||[]).length!==1) return _echec('le cloud reçoit la copie périmée');
+            return true;
+          } finally { currentUser=_sv; _coachEditClient=_se; currentClientId=_sid;
+            DB.get=_get; DB.set=_set; go=_go; loadCoachSessionSlots=_slots;
+            CLOUD.pushOne=_push; toast=_toast; toastSync=_tsync; saveUser=_su; }})());
+        ok('La décharge, elle aussi, n\'écrase rien',(()=>{
+          const _sv=currentUser, _se=_coachEditClient, _sid=currentClientId;
+          const _get=DB.get, _set=DB.set, _push=CLOUD.pushOne, _toast=toast;
+          const magasin={users:{'a@t':{id:'a1',email:'a@t',role:'athlete',coachId:'c1',
+            sessions_config:_cfg(),sessions:[],updatedAt:1}}};
+          let envoye=null;
+          try{
+            DB.get=k=>magasin[k]||null;
+            DB.set=(k,v)=>{magasin[k]=v;return true;};
+            toast=()=>{};
+            CLOUD.pushOne=(e,u)=>{envoye=u;return Promise.resolve();};
+            currentUser={id:'c1',email:'c@t',role:'coach'};
+            currentClientId='a1';
+            _coachEditClient=JSON.parse(JSON.stringify(magasin.users['a@t']));
+            magasin.users['a@t'].sessions.push({date:'2026-08-15'});
+            coachToggleDeload(0,true);
+            const apres=magasin.users['a@t'];
+            if(!apres.sessions_config[0].deload) return _echec('la décharge n\'est pas enregistrée');
+            if(apres.sessions.length!==1) return _echec('la séance de l\'athlète a été écrasée');
+            if(!envoye||(envoye.sessions||[]).length!==1) return _echec('le cloud reçoit la copie périmée');
+            return true;
+          } finally { currentUser=_sv; _coachEditClient=_se; currentClientId=_sid;
+            DB.get=_get; DB.set=_set; CLOUD.pushOne=_push; toast=_toast; }})());
         // ── LE CONTEXTE UNIQUE DE L'ÉDITEUR : LA CIBLE D'ÉCRITURE ───────
         // Trois drapeaux globaux décidaient autrefois où saveProgram écrivait.
         // Ils pouvaient rester positionnés : ouvrir une séance de MODÈLE, en
