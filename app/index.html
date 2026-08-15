@@ -16222,10 +16222,18 @@ function openProgTemplateSessionExercises(idx){
   _prepProgEditor({name:s.name,notes:s.notes,warmup:s.warmup,cooldown:s.cooldown});
   _progEditorCtx={mode:'template',sessionIdx:idx,progIdx:_editProgTemplateIdx,gender:_editProgTemplateGender};
   const backBtn=document.querySelector('#s-coach-program .back-btn');
-  if(backBtn) backBtn.onclick=()=>{_progEditorCtx={mode:'clientProgram'};go('s-coach-prog-template');loadProgTemplateSlots(_editProgTemplateGender);};
+  // MÊME GARDE-FOU QUE LES DEUX AUTRES ÉDITEURS. Sans lui, un ← jetait tout
+  // le travail en cours sans un mot — et c’est le seul des trois qui édite un
+  // MODÈLE, donc du travail réutilisé sur plusieurs athlètes.
+  if(backBtn) backBtn.onclick=()=>{if(_progExDirty&&!confirm('Modifications non enregistrées : quitter quand même ?'))return;_progEditorCtx={mode:'clientProgram'};go('s-coach-prog-template');loadProgTemplateSlots(_editProgTemplateGender);};
   const title=document.querySelector('#s-coach-program .topbar-title');
   if(title) title.textContent=(s.name||DAYS[idx])+' ('+_editProgTemplateGender+') : Exercices';
   renderProgEx();go('s-coach-program');
+  // Le drapeau est REMIS À ZÉRO à l’ouverture, comme dans les deux autres.
+  // Sans cette ligne, celui laissé par l’éditeur précédent survivrait ici et
+  // ferait poser la question sur des modifications qui n’existent pas — une
+  // question qui se pose sans raison apprend à répondre oui sans lire.
+  _progExDirty=false;
 }
 
 // ─── Assignation ───
