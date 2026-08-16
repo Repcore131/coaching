@@ -26607,9 +26607,21 @@ let _bilDraftTimer=null,_bilDraftAvertiPlein=false;
 // plusieurs centaines de Ko et elles sont écrites dès la compression dans
 // rc_pendingphoto_* : les dupliquer ferait déborder le quota sur la saisie même
 // qu'on cherche à sauver.
+// SANS LES PHOTOS — elles vivent dans leurs propres clés — ET SANS LES
+// REPRISES. Une mensuration pré-remplie n'est pas une réponse : recopiée dans
+// le brouillon, elle faisait qu’ouvrir un bilan coaching puis en sortir
+// laissait treize « réponses » jamais saisies, avec la carte « Bilan
+// commencé » sur l’accueil et une question de reprise mensongère.
+//
+// bMesureSaisie retire la clef du Set dès que l’athlète y touche : ce qu’il
+// corrige entre donc dans le brouillon au caractère près, comme avant.
 function _bilDataSansPhotos(){
   const o={};
-  for(const k of Object.keys(bilData)) if(!k.includes('photo')) o[k]=bilData[k];
+  for(const k of Object.keys(bilData)){
+    if(k.includes('photo')) continue;
+    if(_bilReprises&&_bilReprises.has(k)) continue;
+    o[k]=bilData[k];
+  }
   return o;
 }
 function _bilSaveDraft(){
@@ -26928,10 +26940,19 @@ async function openBilan(type,forcerReprise){
   //
   // `bilData` vide dit à lui seul que rien n'a été repris du brouillon : la
   // reprise en pose au moins une réponse, c'est sa condition d'existence.
-  if(type==='coaching'&&!Object.keys(bilData).length){
+  // APRÈS UNE REPRISE DE BROUILLON AUSSI, et pas seulement sur un bilan neuf.
+  // La condition était « bilData vide » : une reprise de brouillon sautait donc
+  // le pré-remplissage, _bilReprises restait null, et les mensurations
+  // — présentes dans l’ancien brouillon — se présentaient comme neuves : sans
+  // pointillés, sans la note, et comptées comme des réponses.
+  //
+  // LIMITÉ AUX CLEFS ABSENTES DU BROUILLON. `in` et non une valeur vide : une
+  // case que l’athlète a délibérément effacée est une décision, pas un trou —
+  // la re-remplir reviendrait à lui rendre ce qu’il vient de retirer.
+  if(type==='coaching'){
     let _r={};
     try{ _r=mensurationsReprises(currentUser); }catch(e){ _r={}; }
-    const _k=Object.keys(_r);
+    const _k=Object.keys(_r).filter(k=>!(k in bilData));
     if(_k.length){
       for(const k of _k) bilData[k]=_r[k];
       _bilReprises=new Set(_k);
