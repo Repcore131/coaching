@@ -14136,7 +14136,12 @@ async function _rattraperProfilCoach(){
         return Array.isArray(v)?v.length>0:!!(v&&String(v).trim());});
     if(!aPublier.length) return;
     if(!CLOUD.ok||!CLOUD.ok()) return;
-    const cle=(currentUser.email||'').replace(/./g,',');
+    // `/\./g` et non `/./g` : sans la barre oblique inverse, le point est le
+    // joker des expressions régulières et TOUS les caractères devenaient des
+    // virgules. La clé interrogée n’existait donc jamais, `publie` valait {},
+    // et la comparaison ci-dessous déclarait tout manquant — ce rattrapage
+    // « idempotent » republiait le profil ENTIER à chaque passage.
+    const cle=(currentUser.email||'').replace(/\./g,',');
     const tok=await CLOUD._getToken(); if(!tok) return;
     const r=await fetch(CLOUD._urlProfilCoach(cle)+'?auth='+tok);
     if(!r.ok) return;
@@ -14151,7 +14156,15 @@ async function _rattraperProfilCoach(){
   }catch(e){}
 }
 function loadCoachHome(){
-  try{ _rattraperProfilCoach(); }catch(e){}
+  // UNE FOIS PAR SESSION, et pas à chaque appel : loadCoachHome est rappelée
+  // par la boucle de synchronisation toutes les 30 secondes, et par chaque
+  // retour vers le tableau de bord.
+  //
+  // Le drapeau est celui de go(), QUI GARDE DÉJÀ CETTE FONCTION. Un second
+  // pour la même question finirait par dire autre chose que le premier —
+  // c’est la faute que ce fichier a déjà corrigée ailleurs.
+  if(!window._ratProfilFait){ window._ratProfilFait=true;
+    try{ _rattraperProfilCoach(); }catch(e){} }
   // Publication de rattrapage : les coachs qui ont rempli leur profil AVANT
   // l existence du nud public n auraient rien a montrer tant qu ils ne
   // reenregistrent pas. Une fois par session suffit.
