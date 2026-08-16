@@ -32907,7 +32907,12 @@ function _getEffectiveMacros(nut,isOn,dateStr,porteur){
   // cette fonction savait lire avant ce lot.
   const _porteur=porteur||((nut===((currentUser||{}).nutrition))?currentUser:{nutrition:nut});
   const conf=confCycle(_porteur);
-  if(!conf.enabled||!conf.lastPeriodDate||!isFemale(currentUser.gender)) return base;
+  // `_porteur.gender` ET NON currentUser.gender. Sur la fiche coach et dans le
+  // composeur de plan, currentUser est le COACH : l’adaptation de cycle d’une
+  // athlète était silencieusement ignorée dès que le coach est un homme, et
+  // planCiblesJour produisait alors des grammages calés sur des cibles autres
+  // que celles que l’athlète voit sur son propre écran.
+  if(!conf.enabled||!conf.lastPeriodDate||!isFemale(_porteur.gender)) return base;
   // La phase vient du MÊME dossier que la config. Passer par
   // _getCyclePhaseNut, qui lit currentUser, faisait dire « cycle actif » à
   // l'une et « aucune phase » à l'autre sur un dossier étranger.
