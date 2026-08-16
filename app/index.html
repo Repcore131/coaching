@@ -24999,9 +24999,27 @@ async function phpRevoquer(u){
   u.photosProgression.consentement={donne:false,date:Date.now(),partageCoach:false};
   // La liste des identifiants restants est CONSERVÉE : la cacher reviendrait à
   // laisser croire que tout a disparu.
-  u.photosProgression.aPurger=restants.length?restants:undefined;
-  if(!restants.length) delete u.photosProgression.aPurger;
-  return {ok:true,local,restants};
+  //
+  // FUSIONNÉE, JAMAIS ÉCRASÉE. phpSupprimerPose a pu en inscrire avant nous :
+  // ses poses ne sont plus dans `seances`, donc phpPartagees ne les voit pas et
+  // la boucle ci-dessus ne les recalcule pas. L’affectation les effaçait — et
+  // avec elles la seule trace de fichiers qui, eux, restent chez l'hébergeur.
+  //
+  // DÉDOUBLONNÉ PAR publicId : une pose inscrite par phpSupprimerPose peut
+  // reparaître dans les restants si la séance a été recréée entre-temps.
+  const anciens=Array.isArray(u.photosProgression.aPurger)?u.photosProgression.aPurger:[];
+  const fusion=[];
+  const vus=new Set();
+  for(const e of anciens.concat(restants)){
+    const id=e&&e.publicId;
+    if(!id||vus.has(id)) continue;
+    vus.add(id); fusion.push(e);
+  }
+  if(fusion.length) u.photosProgression.aPurger=fusion;
+  else delete u.photosProgression.aPurger;
+  // `restants` reste ce qui a échoué CE COUP-CI — d’autres lecteurs pourraient
+  // s'y fier. `aPurger` est le total, et c'est lui que l'écran doit annoncer.
+  return {ok:true,local,restants,aPurger:fusion};
 }
 // Le `delete_token` d'un upload non signé : valable dix minutes, et seulement
 // si le préréglage l'autorise. C'est la SEULE suppression qu'un client puisse
@@ -25279,7 +25297,11 @@ async function phpRevoquerUI(){
   const r=await phpRevoquer(currentUser);
   saveUser();
   renderPhotosProgression();
-  toast(r.restants.length?'Photos locales supprimées. '+r.restants.length+' à purger côté coach.':'Photos supprimées.','var(--green)');
+  // SUR LA FUSION, et non sur les seuls restants de ce passage : la carte de
+  // htmlPhotosReglages liste `aPurger` en entier, et un toast qui annoncerait
+  // moins de fichiers que la carte n’en montre ferait douter des deux.
+  const _aPurger=(r.aPurger||r.restants||[]).length;
+  toast(_aPurger?'Photos locales supprimées. '+_aPurger+' à purger côté coach.':'Photos supprimées.','var(--green)');
   return true;
 }
 // ── Le rendu de l'onglet ──────────────────────────────────────────────────
