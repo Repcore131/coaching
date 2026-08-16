@@ -41421,7 +41421,12 @@ function renderCoachCaffeineSection(c){
   const el=document.getElementById('ccd-caffeine');
   if(!el||!c) return;
   const days=c.nutrition?.caffeine?.days||{};
-  const wKg=parseFloat(c.weight)||75;
+  // CAFFEINE_POIDS_DEFAUT ET NON 75. La règle est écrite au-dessus de la
+  // constante : un repli sur un poids INCONNU tire les seuils vers le bas,
+  // jamais vers le haut. À 75 kg, le coach voyait du vert là où l’athlète
+  // voyait du jaune — sur le même dossier, le même jour.
+  const _wConnu=parseFloat(c.weight)>0;
+  const wKg=_wConnu?parseFloat(c.weight):CAFFEINE_POIDS_DEFAUT;
   // `c`, ET NON currentUser : sur la fiche client, currentUser est le COACH.
   // Le poids venait bien de l'athlète, mais l'âge et l'état de grossesse du
   // coach — un athlète de seize ans recevait donc des seuils adultes.
@@ -41469,8 +41474,8 @@ function renderCoachCaffeineSection(c){
         ?emptyState('coffee','Aucune prise enregistrée sur 28 jours.',null,null,'padding:16px 0')
         :`<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin-bottom:8px">Historique 28 jours</div>
           <canvas id="ccd-caff-history" height="100" style="width:100%;display:block;border-radius:6px"></canvas>
-          <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:6px">Seuils (pour ${wKg}kg) : vert &lt;${thr.green}mg · jaune &lt;${thr.yellow}mg · orange &lt;${thr.orange}mg · rouge ${thr.red}mg</div>
-          <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:4px;line-height:1.5">${escapeHtml(legendeSeuilsCafeine(thr,false))}</div>`
+          <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:6px">Seuils (pour ${wKg}kg${_wConnu?'':' — poids non renseigné, seuils estimés'}) : vert &lt;${thr.green}mg · jaune &lt;${thr.yellow}mg · orange &lt;${thr.orange}mg · rouge ${thr.red}mg</div>
+          <div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:4px;line-height:1.5">${escapeHtml(legendeSeuilsCafeine(thr,!_wConnu))}</div>`
       }
     </div>`;
   if(withData.length){
