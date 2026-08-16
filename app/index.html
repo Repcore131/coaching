@@ -11056,7 +11056,7 @@ function agregerPortefeuille(clients,opts){
       if(_pilAccesExpire(c,now)) accesExpirent++;
     }
     charge.bilansSansReponse+=bilansSansReponse(c);
-    charge.videosEnAttente+=((c.videos||[]).filter(v=>v&&!v.feedbackDate).length);
+    charge.videosEnAttente+=((c.videos||[]).filter(videoNonCorrigee).length);
     // ── Depuis la dernière visite ──
     const nom=((c.fname||'')+' '+(c.lname||'')).trim()||c.email||'Athlète';
     for(const b of (c.bilans||[]))
@@ -14667,17 +14667,17 @@ function openClientDetail(cid,_refresh){
   }
   // Section vidéos
   const _vids=(c.videos||[]).slice().reverse().slice(0,6);
-  const _pendingVids=_vids.filter(v=>!v.feedback&&!v.feedbackTimestamps?.length);
+  const _pendingVids=_vids.filter(videoNonCorrigee);
   const _vEl=document.getElementById('ccd-videos');
   if(_vEl) _vEl.innerHTML=!_vids.length?'':(`
     <h3 style="margin:20px 0 12px">Vidéos <span class="badge ${_pendingVids.length?'badge-orange':'badge-green'}" style="font-size:var(--fs-xs)">${_pendingVids.length?_pendingVids.length+' à corriger':'Tout corrigé'}</span></h3>
     ${_vids.map(v=>`<div class="card" style="margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <div style="font-weight:700;font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(v.name)}</div>
-        <span class="badge ${(v.feedback||v.feedbackTimestamps?.length)?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${(v.feedback||v.feedbackTimestamps?.length)?'✓ Corrigée':'À corriger'}</span>
+        <span class="badge ${videoNonCorrigee(v)?'badge-orange':'badge-green'}" style="margin-left:8px;flex-shrink:0">${videoNonCorrigee(v)?'À corriger':'✓ Corrigée'}</span>
       </div>
       <div class="sub" style="font-size:11px;margin-bottom:8px">${new Date(v.date).toLocaleDateString('fr-FR')}</div>
-      <button class="btn btn-outline btn-sm" onclick="openVideoCorrection('${c.email}','${v.id}')">${icon('edit-2',13)} ${(v.feedback||v.feedbackTimestamps?.length)?'Modifier':'Corriger'}</button>
+      <button class="btn btn-outline btn-sm" onclick="openVideoCorrection('${c.email}','${v.id}')">${icon('edit-2',13)} ${videoNonCorrigee(v)?'Corriger':'Modifier'}</button>
     </div>`).join('')}`);
 
   _majDemandesVideo();
@@ -28255,6 +28255,27 @@ function openBilanNotes(id){
 // signal, il faut répondre.
 function bilansSansReponse(c){
   return ((c&&c.bilans)||[]).filter(b=>b&&!b.reponseCoach).length;
+}
+// PURE. Une vidéo attend-elle encore la correction du coach ?
+//
+// La bande « Charge de travail » comptait `!v.feedbackDate`, la fiche athlète
+// jugeait `!v.feedback && !v.feedbackTimestamps?.length`. Une vidéo corrigée
+// AVANT que feedbackDate n’existe portait donc « ✓ Corrigée » sur la fiche et
+// « en attente » sur le tableau de bord : le coach cherchait un travail déjà
+// fait, et le compteur ne retombait jamais.
+//
+// LA RÉUNION DES TROIS SIGNES, et non leur intersection : une vidéo est en
+// attente quand RIEN n’indique qu’on l’a corrigée. Conséquence assumée, dans
+// le sens sûr — une vidéo qui ne porterait qu’un feedbackDate, sans texte ni
+// repère, compte désormais pour corrigée des deux côtés. saveVideoCorrection
+// refuse d’enregistrer sans texte NI repère, donc le cas ne se produit pas ;
+// et s’il se produisait, se taire vaut mieux que réclamer un travail fait.
+//
+// Une entrée nulle n’attend rien : elle était déjà écartée par le `v&&` du
+// tableau de bord, et le rester évite de compter du vide comme du travail.
+function videoNonCorrigee(v){
+  if(!v) return false;
+  return !v.feedback&&!((v.feedbackTimestamps||[]).length)&&!v.feedbackDate;
 }
 function saveReponseBilan(email,bilanId){
   // Même garde-fou, et `false` comme tous les autres refus de cette fonction :
