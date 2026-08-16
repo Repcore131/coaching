@@ -19984,6 +19984,12 @@ function loadSessionManager(){
         </div>
 
         <!-- Photo vidéos (liens YouTube — cachée) -->
+        <!-- MASQUÉ TANT QUE L'IMPORT LEGACY EST FERMÉ. Son unique lecteur,
+             analyzePhotoWithClaude, refuse dès sa première ligne : proposer le
+             dépôt revenait à faire compresser et stocker une image que rien ne
+             lit, sous un « ✓ » vert. Les photo2 déjà déposées ne sont pas
+             touchées — relever le drapeau les fait toutes réapparaître. -->
+        ${!_importLegacyOuvert()?'':`
         <div style="margin-bottom:12px">
           <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin-bottom:5px"> Photo liens vidéos <span style="font-weight:400">(cachée : IA seulement)</span></div>
           ${s.photo2?`
@@ -20001,6 +20007,7 @@ function loadSessionManager(){
               </div>
             </label>`}
         </div>
+        `}
 
         <!-- Exercices + actions -->
         <div style="display:flex;gap:8px">
