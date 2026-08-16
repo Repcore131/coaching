@@ -30925,6 +30925,10 @@ async function programmerDecharge(){
     +'Les '+actifs.length+' séances actives seront marquées « décharge » et sortiront de la détection de plateau.'
     +String.fromCharCode(10)+'Aucun décochage automatique : c\'est toi qui la retires ensuite.',null,'Programmer')) return;
   actifs.forEach(o=>{ c.sessions_config[o.i].deload=true; });
+  // HORODATÉ. Sans ça, _mergeUser n'applique pas le dossier distant sur
+  // l'appareil de l'athlète, et son envoi suivant écrase la décharge. C'était
+  // la seule écriture coach→athlète du fichier à l’omettre.
+  c.updatedAt=Date.now();
   users[c.email]=c;
   const ok=DB.set('users',users);
   const envoi=CLOUD.pushOne(c.email,c);
