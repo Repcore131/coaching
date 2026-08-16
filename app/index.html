@@ -18258,6 +18258,38 @@ function parseRepos(str){
 // dès que l'onglet passe en arrière-plan sur mobile, et l'écran verrouillé le
 // suspend franchement. L'échéance, elle, survit à tout.
 let _reposTick=null;
+// LE CONTEXTE AUDIO DU REPOS, UNIQUE ET DURABLE. iOS Safari ne laisse un
+// AudioContext quitter l'état « suspended » que s'il est créé ou repris
+// PENDANT un geste utilisateur. Celui-ci est donc amorcé au geste, puis
+// réutilisé à l'échéance — qui, elle, tombe depuis un setInterval.
+//
+// JAMAIS FERMÉ. close() rendrait le contexte inutilisable et le suivant
+// redemanderait un geste : ce serait revenir au défaut corrigé ici. Un
+// contexte inactif ne coûte rien ; c'en ouvrir un par bip qui coûtait.
+let _ctxSon=null;
+// AMORCE LE CONTEXTE. À N APPELER QUE DEPUIS UN GESTE UTILISATEUR.
+//
+// Le resume() seul ne suffit pas sur iOS : il faut qu'un son ait réellement
+// été JOUÉ pendant le geste. D'où l'oscillateur de 20 ms à gain quasi nul —
+// inaudible, mais c'est lui qui ouvre la voie au bip qui suivra.
+//
+// NE LÈVE JAMAIS : le son est un confort, et une erreur ici ne doit pouvoir
+// empêcher ni la bascule de l'interrupteur, ni la validation d'une série.
+function _amorcerSon(){
+  try{
+    const C=window.AudioContext||window.webkitAudioContext;
+    if(!C) return;
+    // Un contexte fermé ne se reprend pas : on en refait un. Rien ne le ferme
+    // ici, mais le navigateur peut le faire sous pression mémoire.
+    if(_ctxSon&&_ctxSon.state==='closed') _ctxSon=null;
+    if(!_ctxSon) _ctxSon=new C();
+    try{ _ctxSon.resume(); }catch(e){}
+    const o=_ctxSon.createOscillator(), g=_ctxSon.createGain();
+    o.frequency.value=440; o.connect(g); g.connect(_ctxSon.destination);
+    g.gain.setValueAtTime(0.0001,_ctxSon.currentTime);
+    o.start(); o.stop(_ctxSon.currentTime+0.02);
+  }catch(e){}
+}
 function _resteRepos(){
   if(typeof woState==='undefined'||!woState||!woState.reposFin) return null;
   return Math.round((woState.reposFin-Date.now())/1000);
@@ -18414,22 +18446,40 @@ function _icoSon(actif,taille){
       :'<path d="m22 9-6 6"/><path d="m16 9 6 6"/>')
     +'</svg>';
 }
+// APPELÉ DEPUIS UN MINUTEUR, jamais depuis un geste : il ne crée donc plus
+// son propre contexte, il reprend celui qu'un geste a déjà amorcé.
 function _bipRepos(){
   try{
     const C=window.AudioContext||window.webkitAudioContext;
     if(!C) return;
-    const ctx=new C(), o=ctx.createOscillator(), g=ctx.createGain();
+    // REPLI. Le contexte manque si le son était déjà actif au chargement et
+    // qu'aucun geste n'est encore passé — un repos lancé par le minuteur
+    // libre, par exemple. On en crée un : sur iOS il naîtra suspendu et
+    // restera muet, comme avant ce lot, mais ailleurs le bip sortira. Ne rien
+    // faire du tout serait une régression sur les plateformes qui marchaient.
+    if(_ctxSon&&_ctxSon.state==='closed') _ctxSon=null;
+    if(!_ctxSon) _ctxSon=new C();
+    const ctx=_ctxSon;
+    // Le contexte a pu être suspendu par la mise en arrière-plan de l'onglet —
+    // ce qui est le cas ordinaire pendant un repos, téléphone posé.
+    try{ ctx.resume(); }catch(e){}
+    const o=ctx.createOscillator(), g=ctx.createGain();
     o.frequency.value=880; o.connect(g); g.connect(ctx.destination);
     g.gain.setValueAtTime(0.0001,ctx.currentTime);
     g.gain.exponentialRampToValueAtTime(0.25,ctx.currentTime+0.02);
     g.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+0.35);
     o.start(); o.stop(ctx.currentTime+0.36);
-    setTimeout(()=>{ try{ ctx.close(); }catch(e){} },600);
+    // PAS DE close() : le contexte sert au bip suivant. Les nœuds, eux, sont
+    // libérés par le navigateur une fois l'oscillateur arrêté.
   }catch(e){}
 }
 function basculerSonRepos(){
   if(!currentUser) return;
   currentUser.sonRepos=!currentUser.sonRepos;
+  // LE GESTE EST ICI, et nulle part ailleurs dans la vie du son : c'est le
+  // seul moment où l'on peut ouvrir le contexte. À l'extinction, on ne touche
+  // à rien — le contexte déjà amorcé resservira si le son revient.
+  if(currentUser.sonRepos) _amorcerSon();
   saveUser();
   toast(currentUser.sonRepos?'Son de fin de repos activé':'Son de fin de repos désactivé');
   // Les deux surfaces qui montrent l'état se remettent d'accord tout de suite.
@@ -22440,6 +22490,15 @@ function toggleSet(i,idx){
   // Décocher ne lance rien et n'annule rien : c'est une correction de saisie,
   // pas un événement d'entraînement.
   if(!avant){
+    // LE GESTE QUI PRÉCÈDE IMMÉDIATEMENT LE REPOS. L'interrupteur du son a pu
+    // être activé lors d'une séance précédente : le dossier dit « activé »,
+    // mais aucun geste de CETTE page n'a encore ouvert de contexte, et le bip
+    // qui va suivre serait muet sur iOS. Une seule fois, la première série
+    // validée suffit à couvrir toute la séance.
+    //
+    // Rien quand le son est éteint : on n'ouvre pas de contexte audio pour
+    // quelqu'un qui a demandé le silence.
+    if(currentUser&&currentUser.sonRepos&&!_ctxSon) _amorcerSon();
     // Le record se juge à la validation, contre les séances PASSÉES. Décocher
     // ne l'efface pas : c'est une correction de saisie, pas un événement.
     _marquerRecordSiBesoin(idx,i);
