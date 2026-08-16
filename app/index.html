@@ -26684,6 +26684,21 @@ function _bilPhotoPrefixe(type){return (type==='depart'?'deb':'bil')+'-photo-';}
 // Les clefs pré-remplies depuis le dernier bilan. `null` tant que rien ne
 // l'est — un questionnaire de départ, ou un brouillon repris.
 let _bilReprises=null;
+// AU-DELÀ, ON NE REPREND PLUS RIEN. Une mesure vieille de plus de deux mois
+// n'est plus une valeur à corriger : c'est une valeur à reprendre depuis le
+// début, et la proposer pré-remplie invite à la valider telle quelle.
+const BIL_REPRISE_MAX_JOURS=60;
+// PURE. `data` privé des clefs encore présentes dans `reprises` — celles que
+// l'athlète n'a PAS touchées.
+//
+// Le compte des réponses et la présence du poids doivent porter là-dessus :
+// sinon un bilan où rien n'a été saisi compte douze réponses, et le garde-fou
+// « ton bilan est vide » ne se déclenche plus jamais sur un bilan coaching.
+function _bilSansReprises(data,reprises){
+  const out=Object.assign({},data||{});
+  if(reprises&&reprises.size) for(const k of reprises) delete out[k];
+  return out;
+}
 // PURE. Les mensurations du dernier bilan QUI LES PORTE, clef par clef.
 //
 // Chaque mesure est cherchée séparément : un bilan où seul le poids a été
@@ -26692,15 +26707,21 @@ let _bilReprises=null;
 function mensurationsReprises(u){
   const l=(((u&&u.bilans)||[]).filter(b=>b&&b.date)).slice().sort((a,b)=>a.date-b.date);
   const out={};
+  // LA BORNE EST PAR CLEF, et non sur le dernier bilan tout court : chaque
+  // mesure est cherchée séparément, et un poids noté il y a huit jours reste
+  // repris quand la cuisse, elle, date de six mois. Une borne globale
+  // écarterait le récent avec l’ancien, ou garderait l’ancien avec le récent.
+  const _limite=Date.now()-BIL_REPRISE_MAX_JOURS*24*3600*1000;
+  const _frais=b=>Number(b&&b.date)>=_limite;
   for(const m of MEAS){
     for(let i=l.length-1;i>=0;i--){
       const v=getBM(l[i],m.k);
-      if(v!=null){ out['bil-'+m.k]=String(v); break; }
+      if(v!=null){ if(_frais(l[i])) out['bil-'+m.k]=String(v); break; }
     }
   }
   for(let i=l.length-1;i>=0;i--){
     const w=getBW(l[i]);
-    if(w!=null){ out['bil-weight']=String(w); break; }
+    if(w!=null){ if(_frais(l[i])) out['bil-weight']=String(w); break; }
   }
   return out;
 }
@@ -26960,14 +26981,22 @@ async function bilNext(){
     //
     // APRÈS le bloc des photos, et non avant : une photo encore en
     // compression finira dans bilData, et le bilan ne sera alors pas vide.
-    if(!_bilCompterReponses(bilData)){
+    // SANS LES REPRISES. Les mensurations pré-remplies ne sont pas des
+    // réponses : les compter faisait qu’un bilan coaching où rien n’avait été
+    // touché passait le garde-fou, s’enregistrait, et repoussait le prochain
+    // rappel de quinze jours sans qu’une seule donnée ait été saisie.
+    const _saisi=_bilSansReprises(bilData,_bilReprises);
+    if(!_bilCompterReponses(_saisi)){
       toast('Ton bilan est vide : renseigne au moins ton poids ou une mesure.','var(--orange)');
       return;
     }
     // LE POIDS NE BLOQUE PAS, IL SE SIGNALE. Un bilan peut légitimement ne
     // porter que des ressentis ; mais c'est le seul champ qui porte une
     // courbe, et son absence laissera un trou visible dans le suivi.
-    if(!_bilPoidsSaisi(bilData)
+    // Sur le même jeu : un poids seulement REPRIS ne fera pas de point sur la
+    // courbe, puisqu’il va être retiré du bilan enregistré. L’avertissement
+    // doit donc bien tomber.
+    if(!_bilPoidsSaisi(_saisi)
        &&!await rcConfirm('Valider sans ton poids ?\n\nTa courbe n’aura pas de point pour ce bilan.',null,'Valider')) return;
     saveBilanFinal();
   }
@@ -29198,6 +29227,18 @@ function saveBilanFinal(){
     const _g=_gMap[bilData['deb-gender']]||bilData['deb-gender'];
     if(!currentUser._evol_gender) currentUser._evol_gender=_g;
   }
+  // LES REPRISES NON TOUCHÉES NE SONT PAS DES MESURES DE CE BILAN. Écrites
+  // ici, elles porteraient la DATE DU JOUR : une mesure d’il y a deux semaines
+  // deviendrait un point neuf sur la courbe et nourrirait l’estimation de
+  // masse grasse. Un trou se lit comme un trou ; une mesure inventée, non.
+  //
+  // Sur `bi` seulement : `bilData` a déjà servi plus haut à propager le poids,
+  // la taille et l’âge vers le profil, et ces propagations réécrivent la même
+  // valeur que le profil portait déjà.
+  try{
+    if(_bilReprises&&_bilReprises.size) for(const k of _bilReprises) delete bi[k];
+  }catch(e){}
+  _bilReprises=null;
   if(!currentUser.bilans) currentUser.bilans=[];
   currentUser.bilans.push(bi);
   if(bi.type==='depart'){
