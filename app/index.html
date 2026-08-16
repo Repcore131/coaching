@@ -7181,12 +7181,26 @@ window.onload=()=>{
         window._importedCoach=null;
         setTimeout(()=>{ try{ _annoncerInvitation(_ci); }catch(e){} },400);
       }
-      // Sync périodique toutes les 30 secondes
-      setInterval(async()=>{
+      // SYNC PÉRIODIQUE. La cadence vient de periodeSync() : 5 minutes
+      // normalement, 30 au-delà de 85 % du quota. Le commentaire annonçait
+      // encore « toutes les 30 secondes », une valeur qui n’a plus cours.
+      //
+      // setTimeout QUI SE REPLANIFIE, et non setInterval : ce dernier évalue
+      // periodeSync() UNE SEULE FOIS au démarrage, si bien que le passage en
+      // mode dégradé ne s’appliquait JAMAIS dans la session courante — c’est-à-
+      // dire précisément tant que le quota continuait de se remplir.
+      //
+      // La replanification est posée SUR LES DEUX SORTIES, et le corps n’est pas
+      // enveloppé : il porte déjà son propre try/catch, et un second ouvert
+      // par-dessus se refermerait sur le catch de l’autre.
+      const _replanifierSync=()=>{
+        try{ setTimeout(_tourSync,periodeSync()); }catch(e){}
+      };
+      const _tourSync=async()=>{
         // LE CHANGEMENT DE JOUR D’ABORD, et AVANT le garde de connexion : une
         // app hors ligne a la même horloge, et sa date doit suivre minuit.
         try{ _repeindreSiJourChange(); }catch(e){}
-        if(!CLOUD.ok()||!currentUser) return;
+        if(!CLOUD.ok()||!currentUser){ _replanifierSync(); return; }
         // Garde d'edition GLOBAL, en tete : proteger le seul re-render ne
         // suffit pas, car la synchro elle-meme remplace currentUser sous les
         // doigts de l'utilisateur. Tant qu'un champ a le focus, on ne touche
@@ -7255,7 +7269,11 @@ window.onload=()=>{
             loadClientHome();
           }
         }catch(e){console.warn('sync periodique :',e);}
-      },periodeSync());
+        // Après le catch : un passage qui lève ne doit pas arrêter la
+        // synchronisation pour le reste de la session.
+        _replanifierSync();
+      };
+      _replanifierSync();
       // Le passage à 5 minutes rendrait l'app molle au retour d'arrière-plan :
       // un athlète qui rouvre son téléphone attendrait jusqu'à 5 min pour voir
       // la correction de son coach. Le retour au premier plan déclenche donc
