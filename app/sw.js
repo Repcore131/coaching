@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v812';
+const CACHE = 'repcore-v813';
 const SW_DATA = 'repcore-sw-data'; // persistent across updates — not wiped by activate
 
 // DÉLAI DE GARDE sur index.html. Le handler était en network-first avec un
@@ -19,6 +19,9 @@ const SW_DELAI_RESEAU_MS = 2500;
 // usage, et y restent pour le suivant, hors ligne compris. Cela n a ete VRAI
 // qu a partir du lot qui a ajoute le put dans la branche generique du handler :
 // avant lui, celle-ci lisait le cache sans jamais l alimenter.
+// Le temps que le report de cache a le droit de prendre dans activate, qui
+// retient la prise de contrôle. Au-delà, on laisse le reste au handler fetch.
+const REPORT_BUDGET_MS = 1000;
 const ASSETS = ['./index.html', './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './fonts/montserrat-var-latin.woff2',
   './fonts/bebasneue-400-latin.woff2'];
@@ -127,16 +130,53 @@ self.addEventListener('activate', e => {
       const neuf = await caches.open(CACHE);
       const cles = await caches.keys();
       const anciens = cles.filter(k => k !== CACHE && k !== SW_DATA);
-      // 1. Report de Ciqual, depuis le premier ancien cache qui le porte.
-      if (!(await neuf.match(CIQUAL_URL))) {
-        for (const k of anciens) {
-          try {
-            const vieux = await caches.open(k);
-            const r = await vieux.match(CIQUAL_URL);
-            if (r) { await neuf.put(CIQUAL_URL, r.clone()); break; }
-          } catch (err) {}
-        }
+      // 1. REPORT GENERAL. Deux entrées seulement étaient reportées, et tout le
+      //    reste du cache hors ligne partait à la purge : pdf.min.js, le moteur
+      //    de reconnaissance et ses données, zxing, et les 407 illustrations
+      //    d'exercices déjà vues. Le commentaire d'ASSETS affirme pourtant que
+      //    ces fichiers restent « pour le suivant, hors ligne compris ».
+      //
+      //    DU PLUS RÉCENT AU PLUS ANCIEN, première occurrence gagnante : quand
+      //    plusieurs anciens caches ont survécu, le plus récent porte la version
+      //    la plus juste.
+      //
+      //    ON NE REMPLACE JAMAIS ce que le nouveau cache porte déjà : ASSETS
+      //    vient d'être téléchargé, il fait foi.
+      //
+      //    BUDGET DE TEMPS. activate retient la prise de contrôle : recopier
+      //    15 Mo sur un téléphone lent ne doit pas la bloquer. On trie par
+      //    valeur — vendor/ et exercices/ sont les plus coûteux à retélécharger
+      //    — et on s'arrête quand le budget est épuisé. Ce qui reste sera repris
+      //    par le handler fetch au premier usage, exactement comme avant.
+      const _t0 = Date.now();
+      let _reportes = 0, _sautes = 0;
+      const _prioritaire = u => /\/vendor\/|\/exercices\//.test(u);
+      // index.html est traité juste en dessous, en réseau-d'abord ; tests.js ne
+      // doit JAMAIS être mis en cache d'office — il n'est pas dans ASSETS pour
+      // cette raison, et le reporter le remettrait par la porte de derrière.
+      const _exclu = u => /\/index\.html$/.test(u) || /\/tests\.js$/.test(u);
+      for (let i = anciens.length - 1; i >= 0; i--) {
+        try {
+          const vieux = await caches.open(anciens[i]);
+          const req = await vieux.keys();
+          const tri = req.slice().sort((a, b) =>
+            (_prioritaire(b.url) ? 1 : 0) - (_prioritaire(a.url) ? 1 : 0));
+          for (const rq of tri) {
+            if (_exclu(rq.url)) continue;
+            if (Date.now() - _t0 > REPORT_BUDGET_MS) { _sautes++; continue; }
+            try {
+              if (await neuf.match(rq)) continue;
+              const r = await vieux.match(rq);
+              if (r) { await neuf.put(rq, r.clone()); _reportes++; }
+            } catch (err) {}
+          }
+        } catch (err) {}
       }
+      // ON DIT CE QU'ON N'A PAS FAIT. Un report tronqué en silence se lirait
+      // comme un cache complet, et la prochaine ouverture hors ligne serait une
+      // surprise.
+      console.log('[RepCore SW] report cache :', _reportes, 'entrées en',
+        (Date.now() - _t0) + ' ms' + (_sautes ? ', ' + _sautes + ' hors budget' : ''));
       // 2. Report d'index.html si ASSETS a échoué (hors ligne à l'install).
       if (!(await neuf.match('./index.html'))) {
         for (const k of anciens) {
