@@ -48748,11 +48748,25 @@ function ouvrirVitrineCoach(){
 function apercuVitrineCoach(){
   const z=document.getElementById('vitrine-coach-corps');
   if(!z) return;
+  // SEULS LA BIO ET LA VISION SONT LUES DANS LE FORMULAIRE : ce sont les deux
+  // seuls champs en cours de saisie, dans des <textarea>.
+  //
+  // Les deux lignes qui suivaient lisaient getElementById('coach-photo-vitrine')
+  // et ...('coach-signature'). Ces chaînes ne sont pas des identifiants : ce
+  // sont les CLÉS de _IMG_VITRINE, celles que les <input type="file"> passent
+  // à _majImageVitrine — et ces inputs ne portent aucun id. getElementById
+  // rendait null, et `||''` posait une chaîne vide : l'aperçu effaçait les
+  // deux images qu'il était censé montrer.
   const brouillon=Object.assign({},currentUser,{
     bio:(document.getElementById('coach-bio')?.value||''),
-    vision:(document.getElementById('coach-vision')?.value||''),
-    photoVitrine:(document.getElementById('coach-photo-vitrine')?.value||''),
-    signature:(document.getElementById('coach-signature')?.value||'')});
+    vision:(document.getElementById('coach-vision')?.value||'')});
+  // Les images viennent du DOSSIER, où _majImageVitrine les a déjà posées —
+  // même règle que saveCoachIdentity, qui le dit déjà en toutes lettres.
+  //
+  // La table décide desquelles : la recopier à la main ici est précisément ce
+  // qui avait produit le défaut. Une image ajoutée à _IMG_VITRINE demain sera
+  // couverte sans qu'on y revienne.
+  Object.values(_IMG_VITRINE).forEach(cfg=>{ brouillon[cfg[0]]=currentUser[cfg[0]]||''; });
   z.innerHTML=_htmlVitrineCoach(brouillon);
   goAvecRetour('s-vitrine');
 }
