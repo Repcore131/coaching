@@ -9559,7 +9559,22 @@ function showCoachCode(){
   go('s-coach-code');
 }
 async function regenCoachCode(){
-  if(!await rcConfirm('⚠️ Régénérer ton code coach ?\n\nTous les liens d\'invitation déjà partagés avec l\'ancien code cesseront de fonctionner.\n\nLes athlètes déjà liés ne sont PAS affectés.',null,'Régénérer')) return;
+  // CE QUE ÇA COUPE, ET CE QUE ÇA NE COUPE PAS. L'ancien texte promettait que
+  // « tous les liens déjà partagés » cesseraient de fonctionner : c'était vrai
+  // quand le seul lien portait le code GCP. Les invitations NOMINATIVES portent
+  // &inv=RC-XXXX-XXXX, et doAthleteCode traite cette branche EN PRIORITÉ sans
+  // jamais lire coach.code — le pré-remplissage de l’écran d’entrée non plus.
+  //
+  // Un message de sécurité doit dire ce qu’il fait, et surtout ce qu’il NE fait
+  // pas : croire avoir fermé un accès qui reste ouvert est pire que de savoir
+  // qu’il faut le fermer ailleurs. D’où le renvoi vers l’onglet CODES.
+  if(!await rcConfirm('⚠️ Régénérer ton code coach ?',
+    'Ça remplace ton code court et le lien générique de « Copier le lien '
+    +'d\'invitation » : les deux cessent de fonctionner.\n\n'
+    +'En revanche, les invitations NOMINATIVES déjà envoyées continuent de '
+    +'fonctionner : elles portent leur propre code. Pour en fermer une, '
+    +'désactive-la dans l\'onglet CODES.\n\n'
+    +'Les athlètes déjà liés ne sont PAS affectés.','Régénérer')) return;
   currentUser.code=genCode();
   saveUser();
   document.getElementById('coach-code-val').textContent=currentUser.code;
