@@ -8509,132 +8509,163 @@ async function doRegister(){
     return showErr('r-err','Accepte la politique de confidentialité et les mentions légales pour continuer.');
   if(!document.getElementById('r-health')?.checked)
     return showErr('r-err','Le consentement au traitement de tes données de santé est nécessaire : sans lui, RepCore ne peut enregistrer ni ton poids, ni tes mensurations, ni tes photos.');
-  // Plafond de capacité. Avant CLOUD.signIn : refuser plus bas laisserait
-  // derrière soi un compte Firebase Auth sans dossier applicatif — et signIn
-  // vient bien plus loin, le passage des consentements au-dessus ne change
-  // rien à cette garantie.
-  // Un coach porteur d'un code d'invitation n'est PAS concerné : il a été
-  // invité, la place lui était réservée.
-  if(selRole==='coach'&&!_coachInviteCode()&&!(await placeLibreDisponible()))
-    return showErr('r-err',LIBRE_ATTENTE_TEXTE);
-  const users=DB.get('users')||{};
-  if(users[em]) return showErr('r-err','Email déjà utilisé.');
-  const uid='u_'+Date.now();
-  const user={id:uid,fname:fn,lname:ln,email:em,
-    role:selRole,gender:gn,
-    // birthdate est la source de vérité ; age n'en est qu'une vue, recalculée
-    // au démarrage pour ne pas vieillir sur place.
-    birthdate:bd,age:ageInscription,
-    createdAt:Date.now(),streak:0,lastSession:null,sessions:[],bilans:[],nutrition:{},videos:[],coachId:null,coachName:null,
-    status:'FREE',accessExpiry:null,paymentStatus:null,paypalSubscriptionId:null,
-    // Trace du consentement : QUOI, QUAND, et sur QUELLE VERSION du texte.
-    // Sans la version, on saurait que la personne a accepte quelque chose, sans
-    // pouvoir dire quoi — c'est precisement ce que l'article 7.1 du RGPD demande
-    // de pouvoir demontrer. Pousse tel quel vers RTDB : _doPushOne ne retire que
-    // les champs sensibles (mots de passe, blobs), jamais celui-ci.
-    consent:{cgu:true,health:true,at:Date.now(),policyVersion:POLICY_VERSION}};
-  if(selRole==='coach'){
-    user.code=genCode();user.clients=[];
-    // Écrit À LA CRÉATION, pas rétro-écrit sur les dossiers existants : deux
-    // clés sur un dossier neuf ne coûtent rien, et le palier devient lisible
-    // tel quel au lieu d'être déduit d'une absence.
-    user.coachPlan='libre';
-    user.coachSubActive=false;
-    user.coachPlanSince=Date.now();
-  }
-  // Authentifier Firebase AVANT de sauvegarder → le push 2s plus tard aura un token valide.
-  // Si l'auth échoue on n'écrit RIEN localement : sinon un compte fantôme est créé
-  // sur l'appareil (email deja pris chez Firebase, mauvais mot de passe, hors ligne...)
-  // et il bloque ensuite la vraie connexion.
-  const authOk=await CLOUD.signIn(em,pw);
-  if(!authOk){
-    return showErr('r-err',
-      CLOUD._signInErr==='wrong_password'
-        ? 'Un compte existe déjà avec cet email. Utilise « Se connecter » ou « Mot de passe oublié ? ».'
-        : CLOUD._signInErr==='network'
-          ? 'Pas de connexion : impossible de créer le compte maintenant.'
-          : CLOUD._signInErr==='invalid_email'
-            ? 'Cette adresse email n\'est pas valide : vérifie le @ et le nom de domaine.'
-            : 'Inscription impossible. Réessaie.');
-  }
-  // Le compte peut exister CÔTÉ SERVEUR sans exister sur cet appareil :
-  // réinstallation, nouveau téléphone, cache vidé. signIn réussit alors avec le
-  // bon mot de passe, et l'ancien code écrivait par-dessus un objet vierge — que
-  // le push suivant répliquait dans la RTDB, effaçant séances et bilans.
-  // On adopte le profil distant au lieu de le remplacer.
-  const cloudUser=await CLOUD.pullUser(em);
-  if(cloudUser){
-    showErr('r-err','Ce compte existe déjà, connexion en cours…');
-    toast('Ce compte existe déjà : tes données ont été récupérées.','var(--green)');
-    users[em]=cloudUser;DB.set('users',users);
-    currentUser=cloudUser;DB.set('session',cloudUser);
-    // routeUser() déconnecterait un athlète encore en statut FREE ; on le mène
-    // à l'écran de code, comme le fait doLogin dans la même situation.
-    if(cloudUser.role!=='coach'&&(cloudUser.status||'FREE')==='FREE'){
-      if(_retourApresInscription()) return;
-      // Même règle que pour une inscription neuve : un code déjà vérifié
-      // s'applique tout seul. Ce chemin est celui du réinstallateur, qui n'a
-      // aucune raison de ressaisir un code qu'il vient de valider.
-      if(await _appliquerCodeApresInscription()) return;
-      go('s-client-code');
-      const enAttente=localStorage.getItem('pendingCode')||window._invitationCode;
-      if(enAttente){
-        const inp=document.getElementById('cc-code');
-        if(inp) inp.value=enAttente;
-      // Conserve TANT QUE la liaison n'a pas abouti. L'effacer ici perdait
-      // le code des qu'on affichait l'ecran : fermer l'onglet avant de valider
-      // obligeait a redemander le code au coach. Il est efface a la liaison
-      // reussie, dans linkToCoach et dans la branche succes de doLinkCoach.
+  // ── UN SEUL DEPART A LA FOIS ──────────────────────────────────────────
+  //
+  // À partir d’ici, la fonction enchaîne jusqu’à QUATRE appels réseau —
+  // placeLibreDisponible, CLOUD.signIn, CLOUD.pullUser, _verifyCoachInvite —
+  // sans rien changer à l’écran. Sur réseau lent, le bouton répondait au
+  // second appui : la seconde inscription trouvait le compte que la première
+  // venait de créer et affichait « Ce compte existe déjà », et côté coach
+  // incrementerCompteurLibres comptait deux places pour une seule.
+  //
+  // DEUX VERROUS, parce qu’ils ne couvrent pas la même chose. Celui du
+  // bouton dit à l’utilisateur qu’il se passe quelque chose ; celui de la
+  // fonction tient même quand l’appel vient d’ailleurs — une touche Entrée,
+  // un lien, un autre chemin ajouté plus tard.
+  //
+  // POSÉS ICI, après les validations synchrones : une case oubliée n’a pas à
+  // attendre un tour de réseau pour être signalée, et ces refus-là sortent
+  // au-dessus sans avoir rien verrouillé.
+  if(window._registerEnCours) return;
+  window._registerEnCours=true;
+  const _btnReg=document.querySelector('#s-register .btn-red');
+  const _libelleReg=_btnReg?_btnReg.textContent:'';
+  if(_btnReg){_btnReg.disabled=true;_btnReg.textContent='Création…';}
+  // Le try couvre TOUS les chemins de sortie, y compris les `return
+  // showErr(...)` du compte déjà existant et de l’invitation refusée : c’est
+  // précisément eux qui laissaient le bouton mort dans doLogin avant son
+  // propre correctif.
+  try{
+    // Plafond de capacité. Avant CLOUD.signIn : refuser plus bas laisserait
+    // derrière soi un compte Firebase Auth sans dossier applicatif — et signIn
+    // vient bien plus loin, le passage des consentements au-dessus ne change
+    // rien à cette garantie.
+    // Un coach porteur d'un code d'invitation n'est PAS concerné : il a été
+    // invité, la place lui était réservée.
+    if(selRole==='coach'&&!_coachInviteCode()&&!(await placeLibreDisponible()))
+      return showErr('r-err',LIBRE_ATTENTE_TEXTE);
+    const users=DB.get('users')||{};
+    if(users[em]) return showErr('r-err','Email déjà utilisé.');
+    const uid='u_'+Date.now();
+    const user={id:uid,fname:fn,lname:ln,email:em,
+      role:selRole,gender:gn,
+      // birthdate est la source de vérité ; age n'en est qu'une vue, recalculée
+      // au démarrage pour ne pas vieillir sur place.
+      birthdate:bd,age:ageInscription,
+      createdAt:Date.now(),streak:0,lastSession:null,sessions:[],bilans:[],nutrition:{},videos:[],coachId:null,coachName:null,
+      status:'FREE',accessExpiry:null,paymentStatus:null,paypalSubscriptionId:null,
+      // Trace du consentement : QUOI, QUAND, et sur QUELLE VERSION du texte.
+      // Sans la version, on saurait que la personne a accepte quelque chose, sans
+      // pouvoir dire quoi — c'est precisement ce que l'article 7.1 du RGPD demande
+      // de pouvoir demontrer. Pousse tel quel vers RTDB : _doPushOne ne retire que
+      // les champs sensibles (mots de passe, blobs), jamais celui-ci.
+      consent:{cgu:true,health:true,at:Date.now(),policyVersion:POLICY_VERSION}};
+    if(selRole==='coach'){
+      user.code=genCode();user.clients=[];
+      // Écrit À LA CRÉATION, pas rétro-écrit sur les dossiers existants : deux
+      // clés sur un dossier neuf ne coûtent rien, et le palier devient lisible
+      // tel quel au lieu d'être déduit d'une absence.
+      user.coachPlan='libre';
+      user.coachSubActive=false;
+      user.coachPlanSince=Date.now();
+    }
+    // Authentifier Firebase AVANT de sauvegarder → le push 2s plus tard aura un token valide.
+    // Si l'auth échoue on n'écrit RIEN localement : sinon un compte fantôme est créé
+    // sur l'appareil (email deja pris chez Firebase, mauvais mot de passe, hors ligne...)
+    // et il bloque ensuite la vraie connexion.
+    const authOk=await CLOUD.signIn(em,pw);
+    if(!authOk){
+      return showErr('r-err',
+        CLOUD._signInErr==='wrong_password'
+          ? 'Un compte existe déjà avec cet email. Utilise « Se connecter » ou « Mot de passe oublié ? ».'
+          : CLOUD._signInErr==='network'
+            ? 'Pas de connexion : impossible de créer le compte maintenant.'
+            : CLOUD._signInErr==='invalid_email'
+              ? 'Cette adresse email n\'est pas valide : vérifie le @ et le nom de domaine.'
+              : 'Inscription impossible. Réessaie.');
+    }
+    // Le compte peut exister CÔTÉ SERVEUR sans exister sur cet appareil :
+    // réinstallation, nouveau téléphone, cache vidé. signIn réussit alors avec le
+    // bon mot de passe, et l'ancien code écrivait par-dessus un objet vierge — que
+    // le push suivant répliquait dans la RTDB, effaçant séances et bilans.
+    // On adopte le profil distant au lieu de le remplacer.
+    const cloudUser=await CLOUD.pullUser(em);
+    if(cloudUser){
+      showErr('r-err','Ce compte existe déjà, connexion en cours…');
+      toast('Ce compte existe déjà : tes données ont été récupérées.','var(--green)');
+      users[em]=cloudUser;DB.set('users',users);
+      currentUser=cloudUser;DB.set('session',cloudUser);
+      // routeUser() déconnecterait un athlète encore en statut FREE ; on le mène
+      // à l'écran de code, comme le fait doLogin dans la même situation.
+      if(cloudUser.role!=='coach'&&(cloudUser.status||'FREE')==='FREE'){
+        if(_retourApresInscription()) return;
+        // Même règle que pour une inscription neuve : un code déjà vérifié
+        // s'applique tout seul. Ce chemin est celui du réinstallateur, qui n'a
+        // aucune raison de ressaisir un code qu'il vient de valider.
+        if(await _appliquerCodeApresInscription()) return;
+        go('s-client-code');
+        const enAttente=localStorage.getItem('pendingCode')||window._invitationCode;
+        if(enAttente){
+          const inp=document.getElementById('cc-code');
+          if(inp) inp.value=enAttente;
+        // Conserve TANT QUE la liaison n'a pas abouti. L'effacer ici perdait
+        // le code des qu'on affichait l'ecran : fermer l'onglet avant de valider
+        // obligeait a redemander le code au coach. Il est efface a la liaison
+        // reussie, dans linkToCoach et dans la branche succes de doLinkCoach.
+        }
+        return;
       }
-      return;
+      return routeUser();
     }
-    return routeUser();
-  }
 
-  // Consommation de l'invitation : ICI et pas plus haut, pour ne pas brûler un
-  // code au profit de quelqu'un qui ne fait que récupérer un compte existant
-  // (branche cloudUser ci-dessus, qui sort avant d'arriver là).
-  // Sans code saisi, il n'y a rien à consommer et rien à refuser : le compte
-  // se crée au palier Libre. Avec un code, le comportement est EXACTEMENT
-  // celui d'avant ce lot — verification serveur, PATCH redeemed, refus parlant.
-  if(selRole==='coach'&&_coachInviteCode()){
-    try{ await _verifyCoachInvite(_coachInviteCode(),em); }
-    catch(e){ return showErr('r-err',e.message||'Invitation refusée.'); }
-  }
-
-  users[em]=user;DB.set('users',users);
-  currentUser=user;DB.set('session',user);
-  // Ici et pas plus haut : le compte existe vraiment à cette ligne. Les deux
-  // sorties précédentes (compte déjà présent côté cloud, invitation coach
-  // refusée) ne sont pas des inscriptions abouties et ne doivent pas compter.
-  rcm('register_completed');
-  if(selRole==='coach'){
-    // Compté seulement maintenant : les deux sorties précédentes (compte déjà
-    // présent, invitation refusée) ne sont pas des inscriptions abouties.
-    // Un coach invité ne consomme pas une place Libre.
-    if(!_coachInviteCode()) incrementerCompteurLibres();
-    _clearCoachInvite();
-    document.getElementById('coach-code-val').textContent=user.code;
-    go('s-coach-code');
-  } else if(!_retourApresInscription()){
-    // Le code saisi sur l'écran d'entrée a DÉJÀ été vérifié : le redemander
-    // ici était la double saisie. On l'applique directement, et l'athlète part
-    // sur son bilan de départ (code créateur) ou sur l'abonnement (code
-    // affilié) sans jamais voir s-client-code.
-    if(await _appliquerCodeApresInscription()) return;
-    // Pas de code retenu, ou application impossible : l'écran de saisie reste
-    // le filet — c'est désormais son seul rôle.
-    go('s-client-code');
-    // Pre-fill pending code if athlete came via s-athlete-entry
-    const pending=localStorage.getItem('pendingCode');
-    if(pending){
-      const inp=document.getElementById('cc-code');
-      if(inp){inp.value=pending;}
-      // Conserve TANT QUE la liaison n'a pas abouti. L'effacer ici perdait
-      // le code des qu'on affichait l'ecran : fermer l'onglet avant de valider
-      // obligeait a redemander le code au coach. Il est efface a la liaison
-      // reussie, dans linkToCoach et dans la branche succes de doLinkCoach.
+    // Consommation de l'invitation : ICI et pas plus haut, pour ne pas brûler un
+    // code au profit de quelqu'un qui ne fait que récupérer un compte existant
+    // (branche cloudUser ci-dessus, qui sort avant d'arriver là).
+    // Sans code saisi, il n'y a rien à consommer et rien à refuser : le compte
+    // se crée au palier Libre. Avec un code, le comportement est EXACTEMENT
+    // celui d'avant ce lot — verification serveur, PATCH redeemed, refus parlant.
+    if(selRole==='coach'&&_coachInviteCode()){
+      try{ await _verifyCoachInvite(_coachInviteCode(),em); }
+      catch(e){ return showErr('r-err',e.message||'Invitation refusée.'); }
     }
+
+    users[em]=user;DB.set('users',users);
+    currentUser=user;DB.set('session',user);
+    // Ici et pas plus haut : le compte existe vraiment à cette ligne. Les deux
+    // sorties précédentes (compte déjà présent côté cloud, invitation coach
+    // refusée) ne sont pas des inscriptions abouties et ne doivent pas compter.
+    rcm('register_completed');
+    if(selRole==='coach'){
+      // Compté seulement maintenant : les deux sorties précédentes (compte déjà
+      // présent, invitation refusée) ne sont pas des inscriptions abouties.
+      // Un coach invité ne consomme pas une place Libre.
+      if(!_coachInviteCode()) incrementerCompteurLibres();
+      _clearCoachInvite();
+      document.getElementById('coach-code-val').textContent=user.code;
+      go('s-coach-code');
+    } else if(!_retourApresInscription()){
+      // Le code saisi sur l'écran d'entrée a DÉJÀ été vérifié : le redemander
+      // ici était la double saisie. On l'applique directement, et l'athlète part
+      // sur son bilan de départ (code créateur) ou sur l'abonnement (code
+      // affilié) sans jamais voir s-client-code.
+      if(await _appliquerCodeApresInscription()) return;
+      // Pas de code retenu, ou application impossible : l'écran de saisie reste
+      // le filet — c'est désormais son seul rôle.
+      go('s-client-code');
+      // Pre-fill pending code if athlete came via s-athlete-entry
+      const pending=localStorage.getItem('pendingCode');
+      if(pending){
+        const inp=document.getElementById('cc-code');
+        if(inp){inp.value=pending;}
+        // Conserve TANT QUE la liaison n'a pas abouti. L'effacer ici perdait
+        // le code des qu'on affichait l'ecran : fermer l'onglet avant de valider
+        // obligeait a redemander le code au coach. Il est efface a la liaison
+        // reussie, dans linkToCoach et dans la branche succes de doLinkCoach.
+      }
+    }
+  } finally {
+    window._registerEnCours=false;
+    if(_btnReg){_btnReg.disabled=false;_btnReg.textContent=_libelleReg;}
   }
 }
 async function doLogin(){
