@@ -28235,7 +28235,15 @@ function renderContraintesAthlete(){
   const z=document.getElementById('clh-contraintes');
   if(!z) return;
   let h='';
-  try{ h=currentUser?blocDrapeauRouge(currentUser):''; }catch(e){ h=''; }
+  // LE DRAPEAU ROUGE **PUIS** LES CONTRAINTES ACTIVES. blocContraintes rend
+  // les deux, dans cet ordre ; on n’en rendait que la première moitié, si bien
+  // qu’une gêne déclarée par l’athlète lui-même n’apparaissait nulle part de
+  // son côté et ne pouvait être retirée que par son coach.
+  //
+  // `false` : ce n'est pas la vue coach. `'moi'` : la cible que _ctRetirer
+  // recevra, celle qui écrit dans le dossier de l’athlète et pas dans un
+  // brouillon de fiche client.
+  try{ h=currentUser?blocContraintes(currentUser,false,'moi'):''; }catch(e){ h=''; }
   z.innerHTML=h;
 }
 // ══════════════ SCHÉMAS MOTEURS ══════════════
