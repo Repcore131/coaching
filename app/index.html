@@ -50518,10 +50518,22 @@ async function extendStudentCode(i){
   users[currentUser.email]=currentUser;
   DB.set('users',users);DB.set('session',currentUser);
   loadStudentCodes();
+  // LA DATE, DES DEUX CÔTÉS : « prolongé de 3 mois » ne dit pas jusqu’à quand,
+  // et c’est la seule chose que le coach cherche à savoir.
+  const _jusquau=new Date(res.payload.expiry).toLocaleDateString('fr-FR');
   if(res.appliedImmediately){
-    toast('Accès prolongé de 3 mois : actif immédiatement.','var(--green)');
+    toast('Accès prolongé jusqu\'au '+_jusquau+' : actif immédiatement.','var(--green)');
   } else {
-    toast('Nouveau code généré : envoie-le à l\'élève, il doit le ressaisir pour activer la prolongation.','var(--orange)');
+    // « Nouveau code généré » était FAUX : _extendAccessCode rend le même
+    // jeton, aucun code n’est créé. Le coach cherchait dans sa liste un code
+    // qui n’existait pas.
+    //
+    // Ce qui est vrai : le nœud du code est prolongé — le PATCH a eu lieu —
+    // mais le dossier de l’athlète n’a pas pu être mis à jour sur CET
+    // appareil. Resaisir le même code applique la prolongation :
+    // _verifyAccessCode accepte un code déjà consommé par cette adresse, et
+    // _appliquerPayloadCode retient la date la plus lointaine.
+    toast('Code prolongé jusqu\'au '+_jusquau+'. Son dossier n\'est pas encore synchronisé ici : renvoie-lui le MÊME code (bouton Copier) pour qu\'il applique la prolongation.','var(--orange)');
   }
 }
 function copyExistingCode(i){
