@@ -7150,6 +7150,9 @@ window.onload=()=>{
       }
       // Sync périodique toutes les 30 secondes
       setInterval(async()=>{
+        // LE CHANGEMENT DE JOUR D’ABORD, et AVANT le garde de connexion : une
+        // app hors ligne a la même horloge, et sa date doit suivre minuit.
+        try{ _repeindreSiJourChange(); }catch(e){}
         if(!CLOUD.ok()||!currentUser) return;
         // Garde d'edition GLOBAL, en tete : proteger le seul re-render ne
         // suffit pas, car la synchro elle-meme remplace currentUser sous les
@@ -7227,6 +7230,10 @@ window.onload=()=>{
       // regarde vraiment l'écran.
       document.addEventListener('visibilitychange',()=>{
         if(document.visibilityState!=='visible') return;
+        // AVANT le garde anti-rafale et le garde de connexion : c’est au retour
+        // d’arrière-plan qu’un jour a pu passer, et ces deux gardes sortent
+        // tôt — l’un pendant 60 s, l’autre dès que le réseau manque.
+        try{ _repeindreSiJourChange(); }catch(e){}
         if(!CLOUD.ok()||!currentUser) return;
         // Garde anti-rafale : basculer entre deux apps déclenche plusieurs
         // évènements rapprochés, qui feraient repartir autant de requêtes.
@@ -14169,6 +14176,9 @@ async function _rattraperProfilCoach(){
   }catch(e){}
 }
 function loadCoachHome(){
+  // Même mémorisation que côté athlète : les deux accueils sont les deux
+  // écrans que le changement de jour doit rafraîchir.
+  _jourAffiche=localISODate(new Date());
   // UNE FOIS PAR SESSION, et pas à chaque appel : loadCoachHome est rappelée
   // par la boucle de synchronisation toutes les 30 secondes, et par chaque
   // retour vers le tableau de bord.
@@ -19211,7 +19221,41 @@ function phraseDuJour(d){
   const j=_rcQuantieme(d instanceof Date?d:new Date());
   return RC_PHRASES[(j-1)%RC_PHRASES.length];
 }
+// LE JOUR QUE LE DERNIER RENDU D ACCUEIL A ECRIT A L ECRAN.
+//
+// clh-date n’est posée que par loadClientHome, et la boucle de 30 s ne
+// repeint que si la synchro a rapporté un changement de DONNÉES. Minuit n’en
+// est pas un : une app laissée ouverte affichait la date de la veille.
+//
+// On mémorise le jour AFFICHÉ plutôt que de comparer deux horloges : c’est
+// l’écart entre ce qui est à l’écran et ce qu’il est vraiment qui compte.
+let _jourAffiche=null;
+// PURE au sens qui compte : elle ne décide que du repeint. localISODate est
+// le même calcul que _jourLocal dans sw.js — jour LOCAL, jamais UTC, sans
+// quoi le changement de date arriverait à 2 h du matin en été.
+function _repeindreSiJourChange(){
+  if(!currentUser) return false;
+  if(_jourAffiche===localISODate(new Date())) return false;
+  // MÊME GARDE DE SAISIE que la boucle de synchronisation : repeindre sous
+  // les doigts fait perdre le focus et les caractères tapés. Le réveil
+  // suivant s’en chargera — la date est en retard d’une minute, pas d’un jour.
+  const _ae=document.activeElement;
+  if(_ae&&_ae.matches&&_ae.matches('input,textarea,select')) return false;
+  // Seulement si l’accueil est À L’ÉCRAN. Ailleurs, rien n’affiche cette date,
+  // et y revenir passe de toute façon par le rendu qui la réécrit.
+  if(currentUser.role==='athlete'
+     &&document.getElementById('s-client-home')?.classList.contains('active')){
+    loadClientHome(); return true;
+  }
+  if(currentUser.role==='coach'
+     &&document.getElementById('s-coach-home')?.classList.contains('active')){
+    loadCoachHome(); return true;
+  }
+  return false;
+}
 function loadClientHome(){
+  // Posé À CHAQUE rendu : c’est lui qui vient d’écrire la date.
+  _jourAffiche=localISODate(new Date());
   go('s-client-home');
   // ANIMATION 12. Armé ici, et l'action est loadClientHome elle-même : tirer
   // rejoue EXACTEMENT ce que fait déjà l'arrivée sur l'accueil — la même
