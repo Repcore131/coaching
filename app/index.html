@@ -9304,10 +9304,16 @@ function _annoncerInvitation(coach){
   }
   return {code,msg,autre:_autre,canal:_surEcranCode?'encart':'toast'};
 }
+// N’EST PLUS APPELÉE QUE POUR UN AUTRE COACH.
+//
+// Ses deux appelants vérifient l’écart d’identité avant d’appeler : le lien
+// de SON coach est une prolongation, pas un changement. La branche « même
+// coach » est donc partie — elle affirmait « ton accès est déjà actif, ce
+// lien ne sert plus à rien », ce qui était faux dès que accessExpiry était
+// dépassée, et plus rien ne l’affichait.
 function _annoncerDejaRattache(coachDuLien){
   const actuel=coachActuelDe();
   if(!actuel) return false;
-  const meme=_memeCoachQueLien(coachDuLien);
   const nomLien=coachDuLien?(((coachDuLien.fname||'')+' '+(coachDuLien.lname||'')).trim()||'ce coach'):'ce coach';
   const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
     +'background:#000c;z-index:1000;display:flex;align-items:flex-end;justify-content:center">'
@@ -9316,15 +9322,11 @@ function _annoncerDejaRattache(coachDuLien){
     +'animation:fadeIn .3s ease">'
     +'<h2 style="margin-bottom:8px;font-size:16px">Tu es déjà suivi</h2>'
     +'<p class="sub" style="font-size:12px;line-height:1.65;margin-bottom:14px">'
-    +(meme
-      ? ('Ton accès avec <strong style="color:#ddd">'+escapeHtml(actuel)+'</strong> est déjà '
-        +'actif : ce lien ne sert plus à rien, tu peux le laisser de côté. '
-        +'Rien n\'a été modifié.')
-      : ('Tu es actuellement suivi par <strong style="color:#ddd">'+escapeHtml(actuel)+'</strong>, '
-        +'et ce lien vient de <strong style="color:#ddd">'+escapeHtml(nomLien)+'</strong>. '
-        +'Changer de coach ne se fait pas en ouvrant un lien : demande à '
-        +escapeHtml(actuel)+' de te libérer, puis rouvre celui-ci. '
-        +'<strong style="color:#ddd">Rien n\'a été modifié.</strong>'))
+    +'Tu es actuellement suivi par <strong style="color:#ddd">'+escapeHtml(actuel)+'</strong>, '
+    +'et ce lien vient de <strong style="color:#ddd">'+escapeHtml(nomLien)+'</strong>. '
+    +'Changer de coach ne se fait pas en ouvrant un lien : demande à '
+    +escapeHtml(actuel)+' de te libérer, puis rouvre celui-ci. '
+    +'<strong style="color:#ddd">Rien n\'a été modifié.</strong>'
     +'</p>'
     +'<button class="btn btn-red" style="min-height:46px" onclick="closeModal();go(\'s-client-home\')">'
     +'Revenir à mon accueil</button>'
@@ -9349,10 +9351,19 @@ async function doLinkCoach(){
     if(pkg){
       const coach=_validateCoachPkg(JSON.parse(decodeURIComponent(escape(atob(pkg)))));
       if(coach){
-        // DEJA RATTACHE : on le DIT, et on s'arrete la. Ni erreur muette, ni
-        // second rattachement — changer de coach ne se fait pas en ouvrant
-        // un lien.
-        if(_annoncerDejaRattache(coach)) return;
+        // DEJA RATTACHE A UN AUTRE : on le DIT, et on s’arrête là. Ni erreur
+        // muette, ni second rattachement — changer de coach ne se fait pas en
+        // ouvrant un lien.
+        //
+        // MAIS LE LIEN DE SON PROPRE COACH EST LE GESTE DE PROLONGATION.
+        // L’arrêter refusait de renouveler un accès, et le message annonçait
+        // « ton accès est déjà actif » à quelqu’un dont l’échéance venait
+        // justement de passer. On continue donc vers `inv`, comme le cas 2.
+        //
+        // _memeCoachQueLien rend exactement le test du cas 2 : un coach en
+        // place ET différent. Sans coach du tout, il rend false et
+        // _annoncerDejaRattache s’abstient de lui-même.
+        if(!_memeCoachQueLien(coach)&&_annoncerDejaRattache(coach)) return;
         const users=DB.get('users')||{};
         users[coach.email]=Object.assign(users[coach.email]||{},coach);
         DB.set('users',users);

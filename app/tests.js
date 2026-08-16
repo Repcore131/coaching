@@ -10797,19 +10797,21 @@ function testExercices(){
           try{
             currentUser={id:'a1',email:'a@t',role:'athlete',coachId:'c1',coachName:'Kevin G'};
             if(coachActuelDe()!=='Kevin G') return _echec('coach lu : '+coachActuelDe());
-            // Son propre coach.
-            if(!_annoncerDejaRattache({id:'c1',fname:'Kevin',lname:'G'}))
-              return _echec('aucun message pour son propre lien');
-            let m=document.getElementById('modal-overlay');
-            if(!m) return _echec('la modale n\'est pas dans le DOM');
-            let t=m.innerText;
-            if(t.indexOf('Kevin G')<0) return _echec('le coach n\'est pas nommé');
-            if(!/Rien n'a été modifié/.test(t)) return _echec('on ne dit pas que rien n\'a bougé');
-            closeModal();
-            // Un AUTRE coach : le message change, et il dit quoi faire.
+            // SON PROPRE COACH NE PASSE PLUS PAR ICI : rouvrir son lien est le
+            // geste de PROLONGATION, et les deux appelants vérifient l’écart
+            // d’identité avant d’appeler. On vérifie donc la GARDE, là où elle
+            // est posée, plutôt qu’un message que plus rien n’affiche.
+            const _g=String(doLinkCoach);
+            if(!/if\(!_memeCoachQueLien\(coach\)&&_annoncerDejaRattache\(coach\)\) return;/.test(_g))
+              return _echec('le cas 1 ne laisse pas passer le lien du même coach');
+            if(!_memeCoachQueLien({id:'c1'}))
+              return _echec('_memeCoachQueLien ne reconnaît pas son propre coach');
+            if(_memeCoachQueLien({id:'c2'}))
+              return _echec('_memeCoachQueLien confond deux coachs');
+            // Un AUTRE coach : le message est affiché, et il dit quoi faire.
             if(!_annoncerDejaRattache({id:'c2',fname:'Autre',lname:'Coach'}))
               return _echec('aucun message pour un autre lien');
-            m=document.getElementById('modal-overlay'); t=m.innerText;
+            let m=document.getElementById('modal-overlay'), t=m.innerText;
             if(t.indexOf('Autre Coach')<0) return _echec('le coach du lien n\'est pas nommé');
             if(!/de te libérer/.test(t)) return _echec('la marche à suivre n\'est pas donnée');
             closeModal();
