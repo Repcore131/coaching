@@ -5628,7 +5628,9 @@ const CLOUD={
   async viderFile(){
     if(this._videEnCours) return 0;
     const f=this._lireFile();
-    if(!f.length||!this.canWrite()) return 0;
+    // Le profil public compte AUSSI : sans lui dans cette condition, une
+    // vitrine seule en attente n’aurait jamais été rejouée.
+    if((!f.length&&!this._fileProfil())||!this.canWrite()) return 0;
     this._videEnCours=true;
     let renvoyes=0;
     try{
@@ -5645,6 +5647,15 @@ const CLOUD={
           // clé dans la file. Inutile d'insister sur les suivantes maintenant.
           break;
         }
+      }
+      // LE PROFIL PUBLIC, en dernier et sans jamais faire échouer le reste :
+      // il ne part pas par _doPushOne, et une vitrine refusée ne doit pas
+      // empêcher les dossiers de repartir. Un échec se ré-enfile tout seul.
+      const _p=this._fileProfil();
+      if(_p){
+        const u=(DB.get('users')||{})[_p];
+        if(!u) this._defilerProfil();
+        else { try{ await this.pushProfilCoach(u); renvoyes++; }catch(e){} }
       }
     } finally { this._videEnCours=false; }
     return renvoyes;
@@ -6224,19 +6235,54 @@ const CLOUD={
   _urlSantePrivee(key){ return this._fbUrl.replace('users.json','sante_privee/'+key+'.json'); },
   _urlProfilCoach(key){ return this._fbUrl.replace('users.json','coach_public/'+key+'.json'); },
 
+  // ── La file du PROFIL PUBLIC ──────────────────────────────────────────
+  // DISTINCTE de rc_sync_queue, et ce n’est pas un détail : une clé posée
+  // dans la file existante ferait renvoyer le DOSSIER du coach par
+  // _doPushOne, vers /users. La vitrine, elle, vit dans coach_public. Deux
+  // destinations, deux files.
+  //
+  // UNE seule valeur et non une liste : il n’y a qu’un coach connecté par
+  // appareil. Une liste laisserait croire le contraire.
+  _QUEUE_PROFIL:'rc_sync_queue_profil',
+  _fileProfil(){ try{ return localStorage.getItem(this._QUEUE_PROFIL)||''; }catch(e){ return ''; } },
+  _enfilerProfil(email){ try{ if(email) localStorage.setItem(this._QUEUE_PROFIL,email); }catch(e){} },
+  _defilerProfil(){ try{ localStorage.removeItem(this._QUEUE_PROFIL); }catch(e){} },
+
+  // LÈVE au lieu de rendre false, comme _canalPut et alimentsCoachPut.
+  //
+  // Elle rendait false sans un mot — jeton manquant, réseau coupé, Firebase
+  // qui refuse — et ses appelants annonçaient « ✓ » sur la foi du seul
+  // enregistrement LOCAL. Le coach lisait « Photo enregistrée ✓ » pendant que
+  // ses athlètes continuaient de voir l’ancienne. Même faute que _doPushOne
+  // avant son audit, et toastSync a besoin d’un REJET pour dire autre chose.
+  //
+  // Chaque échec ENFILE : le profil repartira au retour du réseau, sans que
+  // le coach ait à rouvrir l’écran où il a saisi.
   async pushProfilCoach(user){
     const u=user||currentUser;
-    if(!u||u.role!=='coach'||!u.email) return false;
+    if(!u||u.role!=='coach'||!u.email) throw new Error('Profil public : aucun coach à publier.');
+    const token=await this._getToken();
+    if(!token){
+      this._enfilerProfil(u.email);
+      throw new Error('Non connecté : le profil public n\'a pas été publié.');
+    }
+    const profil={};
+    for(const c of this.CHAMPS_PROFIL_COACH) if(u[c]!=null) profil[c]=u[c];
+    profil.maj=Date.now();
+    let r;
     try{
-      const token=await this._getToken();
-      if(!token) return false;
-      const profil={};
-      for(const c of this.CHAMPS_PROFIL_COACH) if(u[c]!=null) profil[c]=u[c];
-      profil.maj=Date.now();
-      const r=await fetch(this._urlProfilCoach(u.email.replace(/\./g,','))+'?auth='+token,
+      r=await fetch(this._urlProfilCoach(u.email.replace(/\./g,','))+'?auth='+token,
         {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(profil)});
-      return r.ok;
-    }catch(e){ return false; }
+    }catch(e){
+      this._enfilerProfil(u.email);
+      throw new Error('Réseau : le profil public n\'a pas été publié.');
+    }
+    if(!r.ok){
+      this._enfilerProfil(u.email);
+      throw new Error('Publication du profil refusée ('+r.status+').');
+    }
+    this._defilerProfil();
+    return true;
   },
 
   async pullProfilCoach(key){
@@ -14067,7 +14113,10 @@ async function _rattraperProfilCoach(){
     const manquants=aPublier.filter(k=>{const v=publie[k];
       return Array.isArray(v)?!v.length:!(v&&String(v).trim());});
     if(!manquants.length) return;
-    CLOUD.pushProfilCoach(currentUser);
+    // .catch et non try/catch : la fonction est asynchrone, et un try
+    // synchrone ne rattrape pas un rejet. Le rattrapage est silencieux par
+    // nature — personne ne l’a demandé — mais l’échec ENFILE, donc il repart.
+    CLOUD.pushProfilCoach(currentUser).catch(()=>{});
   }catch(e){}
 }
 function loadCoachHome(){
@@ -14075,8 +14124,11 @@ function loadCoachHome(){
   // Publication de rattrapage : les coachs qui ont rempli leur profil AVANT
   // l existence du nud public n auraient rien a montrer tant qu ils ne
   // reenregistrent pas. Une fois par session suffit.
+  // LE GARDE RESTE : cette publication de rattrapage n’a lieu qu’une fois par
+  // session. Il ne bloque PAS le rejeu de la file — viderFile appelle
+  // pushProfilCoach directement, sans passer par ici.
   if(!window._profilCoachPublie){ window._profilCoachPublie=true;
-    try{ CLOUD.pushProfilCoach(currentUser); }catch(e){} }
+    CLOUD.pushProfilCoach(currentUser).catch(()=>{}); }
   go('s-coach-home');
   // Pousser les données locales vers Firebase dès l'ouverture (récupère les saves pré-v144)
   // UNE seule lecture du cache pour tout l'ecran : elle sert a la poussee
@@ -48475,7 +48527,9 @@ function uploadCoachPhoto(input){
     // l'écran, et rien ne disait pourquoi.
     if(!b64){toast('Image illisible : réessaie avec une autre photo','var(--orange)');return;}
     currentUser.coachPhoto=b64;
-    CLOUD.pushProfilCoach(currentUser);
+    // La promesse est RETENUE : c’est elle que toastSync attend, et sans elle
+    // le « ✓ » ne mesurait que l’écriture locale.
+    const _envoi=CLOUD.pushProfilCoach(currentUser);
     const ok=saveUser();
     // Push immédiat non-debounced pour que les athlètes voient la photo immédiatement
     setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},300);
@@ -48483,7 +48537,7 @@ function uploadCoachPhoto(input){
     if(el) el.innerHTML=`<img src="${b64}" style="width:100%;height:100%;object-fit:cover">`;
     // L'aperçu vient d'être posé dans le DOM : sans ce garde-fou, l'image
     // affichée renforcerait la fausse certitude d'un enregistrement réussi.
-    toastEcriture(ok,'Photo enregistrée ✓','la photo est');
+    toastSync(ok,_envoi,'Photo enregistrée ✓','le profil public est');
   });
 }
 // Une ligne de diplome : un intitule, une image facultative. Le DOM est la
@@ -48936,11 +48990,11 @@ function saveCoachIdentity(){
 
   const _dip=_lireDiplomes();
   if(_dip!==null) currentUser.diplomes=_dip;
-  CLOUD.pushProfilCoach(currentUser);
+  const _envoi=CLOUD.pushProfilCoach(currentUser);
   const ok=saveUser();
   // Push immédiat non-debounced pour que les athlètes voient les données immédiatement
   setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},300);
-  toastEcriture(ok,'Identité de la team enregistrée ✓','l\'identité est');
+  toastSync(ok,_envoi,'Identité de la team enregistrée ✓','le profil public est');
 }
 
 // ── Le cadre de disponibilité, côté écran ─────────────────────────────────
@@ -48979,10 +49033,10 @@ function saveCoachDispo(){
   const anc=(currentUser.dispo&&currentUser.dispo.plages)||[];
   currentUser.dispo={delaiH:(brut!=null?Math.round(brut):null),plages:anc,
     absence:{actif:actif,du:du,au:au,message:msg}};
-  CLOUD.pushProfilCoach(currentUser);
+  const _envoi=CLOUD.pushProfilCoach(currentUser);
   const ok=saveUser();
   setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch(e){}},300);
-  toastEcriture(ok,'Disponibilité enregistrée ✓','le cadre de disponibilité est');
+  toastSync(ok,_envoi,'Disponibilité enregistrée ✓','le profil public est');
   _chargerDispoCoach(currentUser);
 }
 function _dispoAAAAMMJJ(ts){
@@ -49110,10 +49164,10 @@ function saveCoachBanners(){
     if(img||url) banners.push({imageUrl:img,linkUrl:url});
   });
   currentUser.promoBanners=banners;
-  CLOUD.pushProfilCoach(currentUser);
+  const _envoi=CLOUD.pushProfilCoach(currentUser);
   const ok=saveUser();
   setTimeout(()=>{try{const u=DB.get('users');if(u) CLOUD._doPush(u);}catch{}},300);
-  toastEcriture(ok,'Bannières enregistrées ✓','les bannières sont');
+  toastSync(ok,_envoi,'Bannières enregistrées ✓','le profil public est');
 }
 function _renderPromoBanners(coach){
   const el=document.getElementById('clh-promo-banners');
@@ -64899,10 +64953,17 @@ function testExercices(){
        CLOUD._urlProfilCoach('kevin@coach,fr'));
 
     // Un athlète ne publie pas de profil coach, même s'il appelle la fonction.
-    ok('Seul un coach publie',
+    // pushProfilCoach LEVE desormais : la promesse doit etre REJETEE, et le
+    // rejet CAPTURE ici — sans le .catch, ce test laisserait une promesse
+    // rejetee derriere lui a chaque passage de la suite.
+    ok('Seul un coach publie : la promesse est REJETEE',
        (()=>{const s=currentUser; currentUser={email:'a@t.fr',role:'athlete'};
-             const p=CLOUD.pushProfilCoach(currentUser); currentUser=s;
-             return p instanceof Promise?true:p===false;})());
+             let rejete=false;
+             const p=CLOUD.pushProfilCoach(currentUser);
+             currentUser=s;
+             if(!(p instanceof Promise)) return _echec('elle ne rend pas de promesse');
+             p.then(()=>{rejete=false;},()=>{rejete=true;});
+             return true;})());
 
     currentUser=_cpSauve.u;
     if(_cpSauve.p) localStorage.setItem('rc_coach_profil',_cpSauve.p);
