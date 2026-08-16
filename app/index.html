@@ -42067,7 +42067,15 @@ function deleteCaffeineEntry(dateStr,idx,screen){
   if(!days[dateStr].length) delete days[dateStr];
   saveUser();
   if(screen==='embedded') _renderCaffeineEmbedded();
-  else _caffReturnToNutrition?loadNutrition():_renderCaffeineScreen();
+  // SUR L'ÉCRAN RÉELLEMENT AFFICHÉ, et non sur _caffReturnToNutrition : ce
+  // drapeau n'est posé que par openCaffeineAdd et n'est jamais remis à zéro.
+  // Une prise enregistrée depuis Nutrition, puis une suppression faite plus
+  // tard depuis l'écran autonome, renvoyaient sur s-nutrition sans raison.
+  //
+  // Même méthode qu’openCaffeineAdd pour poser ce drapeau : un état observable
+  // plutôt qu’un souvenir.
+  else if(document.getElementById('s-nutrition')?.classList.contains('active')) loadNutrition();
+  else _renderCaffeineScreen();
 }
 function loadCaffeine(){
   _caffeineViewDate=localISODate(new Date());
