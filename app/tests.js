@@ -6774,6 +6774,38 @@ function testExercices(){
           return f.indexOf("_swSeance('SEANCE_TERMINEE')")
             <f.indexOf('rc_wo_state')
             ?true:_echec('l\'émission de fin n\'est pas en premier');})());
+        ok('CHAQUE sortie de l\'écran de séance baisse le drapeau',(()=>{
+          // L'assertion ci-dessus ne surveillait qu'UNE paire — launchWorkout /
+          // finishWorkout — et c'est exactement ce qui a laissé passer les trois
+          // autres chemins : pause, annulation, retour matériel. seanceActive()
+          // restait vrai et l'app ne se mettait plus à jour pendant 4 h.
+          //
+          // On ENUMERE les sorties. Une cinquième qui apparaîtrait sans baisser
+          // le drapeau ne serait pas attrapée par cette liste — mais elle le
+          // serait par la centralisation : _quitterEcranSeance est le seul
+          // endroit à connaître le geste.
+          const sorties=[
+            ['confirmPauseWorkout',String(confirmPauseWorkout)],
+            ['cancelWorkout',String(cancelWorkout)],
+            ['_histPopstate',String(_histPopstate)]];
+          for(const [nom,src] of sorties){
+            if(!/_quitterEcranSeance\(/.test(src))
+              return _echec(nom+' quitte l\'écran sans passer par _quitterEcranSeance');
+          }
+          const q=String(_quitterEcranSeance);
+          if(!/_swSeance\('SEANCE_TERMINEE'\)/.test(q))
+            return _echec('_quitterEcranSeance ne baisse pas le drapeau');
+          if(!/clearInterval/.test(q))
+            return _echec('_quitterEcranSeance n\'arrête pas le chronomètre');
+          // L'ANNULATION NE PERSISTE PAS : elle vient d'effacer la séance.
+          if(!/_quitterEcranSeance\(false\)/.test(String(cancelWorkout)))
+            return _echec('cancelWorkout persisterait la séance qu\'il vient d\'effacer');
+          if(!/_quitterEcranSeance\(true\)/.test(String(confirmPauseWorkout)))
+            return _echec('la pause ne garde pas la séance en cours');
+          // finishWorkout garde son émission directe : il ENREGISTRE la séance
+          // au lieu de la quitter, et l'émet en premier.
+          return /_swSeance\('SEANCE_TERMINEE'\)/.test(String(finishWorkout))
+            ?true:_echec('finishWorkout n\'émet plus rien');})());
         ok('_swSeance est silencieux sans service worker',(()=>{
           const src=String(_swSeance);
           if(!/try\{/.test(src)||!/catch/.test(src))

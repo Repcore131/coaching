@@ -7889,7 +7889,13 @@ function _histPopstate(){
   if(q){
     _histPousser(actuel);
     try{
-      Promise.resolve(rcConfirm(q[0],q[1],q[2],q[3])).then(ok=>{ if(ok) _histRetour(actuel); });
+      // LE TROISIÈME CHEMIN DE SORTIE DE SÉANCE. Il quittait l’écran sans
+      // baisser le drapeau, comme la pause et l’annulation avant ce lot.
+      Promise.resolve(rcConfirm(q[0],q[1],q[2],q[3])).then(ok=>{
+        if(!ok) return;
+        if(actuel==='s-workout'){ try{ _quitterEcranSeance(true); }catch(e){} }
+        _histRetour(actuel);
+      });
     }catch(e){}
     return;
   }
@@ -20814,11 +20820,27 @@ function pauseWorkout(){
   const m=document.getElementById('wo-pause-modal');
   if(m) m.style.display='flex';
 }
+// QUITTER L’ÉCRAN DE SÉANCE, par où que ce soit.
+//
+// Le drapeau lu par sw.js n’était baissé qu’à UN endroit — finishWorkout —
+// alors que trois autres chemins quittent cet écran. seanceActive() restait
+// donc vrai et `install` ne faisait plus skipWaiting() pendant les QUATRE
+// HEURES de SEANCE_PEREMPTION_MS : une pause de deux minutes gelait les mises
+// à jour pour la demi-journée.
+//
+// `garder` distingue la PAUSE de l’ANNULATION : la première conserve la séance
+// en cours, la seconde vient de l’effacer et la réécrire la ferait revenir.
+//
+// NE LÈVE JAMAIS : une sortie d’écran ne doit pas pouvoir échouer.
+function _quitterEcranSeance(garder){
+  try{ _swSeance('SEANCE_TERMINEE'); }catch(e){}
+  if(garder!==false){ try{ woPersist(); }catch(e){} }
+  try{ clearInterval(woState&&woState.timerInterval); }catch(e){}
+}
 function confirmPauseWorkout(){
   const m=document.getElementById('wo-pause-modal');
   if(m) m.style.display='none';
-  woPersist();
-  clearInterval(woState.timerInterval);
+  _quitterEcranSeance(true);
   go('s-client-home');
   loadClientHome();
 }
@@ -20827,7 +20849,8 @@ async function cancelWorkout(){
   if(m) m.style.display='none';
   if(!await rcConfirm('Annuler la séance ? Aucune donnée ne sera enregistrée.',null,'Annuler la séance')) return;
   localStorage.removeItem('rc_wo_state');
-  clearInterval(woState.timerInterval);
+  // `false` : la séance vient d’être effacée, la réécrire la ferait revenir.
+  _quitterEcranSeance(false);
   woState={};
   go('s-client-home');
   loadClientHome();
