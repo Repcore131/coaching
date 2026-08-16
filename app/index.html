@@ -11162,7 +11162,9 @@ function renderCoachMicroSection(c){
 // de plus, et le même bloc — pas une seconde implémentation.
 function _htmlHydratationNut(user){
   const u=user||currentUser;
-  try{ return _htmlHydratation(u,nutIsOnDay(localISODate(new Date()))); }
+  // `u` et non currentUser : cette fonction reçoit un dossier, et il faut la
+  // croire sur parole.
+  try{ return _htmlHydratation(u,nutIsOnDay(localISODate(new Date()),u)); }
   catch(e){ return ''; }
 }
 // Meme rendu que cote athlete, mais le jour ON est celui de l'ATHLETE : sur la
@@ -23267,7 +23269,9 @@ function _tauxDieteRespectee(u){
       const entrees=(log[k]&&log[k].entries)||[];
       if(!entrees.length) return;          // jour non enregistre : ignore
       const m=(typeof _getEffectiveMacros==='function')
-        ?_getEffectiveMacros(nut,(typeof nutIsOnDay==='function')?nutIsOnDay(k):true,k)
+        // Le porteur `u`, reçu en paramètre : ce taux se calcule aussi sur un
+        // dossier qui n’est pas celui de l’utilisateur courant.
+        ?_getEffectiveMacros(nut,(typeof nutIsOnDay==='function')?nutIsOnDay(k,u):true,k,u)
         :{};
       // L'ÉNERGIE ET LES PROTÉINES. Glucides et lipides ne sont plus jugés
       // séparément : leur partage à énergie égale appartient à l'athlète.
@@ -32126,7 +32130,8 @@ function _periSeanceCle(user){
 // Le repère ne s'affiche QUE les jours d'entraînement. Un jour de repos, il n'y
 // a pas de séance autour de laquelle placer quoi que ce soit.
 function repereSeance(user,dateStr){
-  if(!nutIsOnDay(dateStr)) return null;
+  // Sur le planning de `user`, pas sur celui de l’utilisateur courant.
+  if(!nutIsOnDay(dateStr,user)) return null;
   const c=_periSeanceCle(user);
   if(!c||!REPERES_PERI[c]) return null;
   return {cle:c,texte:REPERES_PERI[c]};
@@ -32160,9 +32165,18 @@ function basculerPeriSeance(dateStr,id){
   return true;
 }
 
-function nutIsOnDay(dateStr){
+// `porteur` EST OPTIONNEL et retombe sur currentUser : les appelants sans
+// dossier explicite — tous les écrans athlète — ne changent pas.
+//
+// IL EXISTE PARCE QUE CETTE FONCTION EST APPELÉE SUR DES DOSSIERS QUI NE SONT
+// PAS CELUI DE L’UTILISATEUR COURANT : la fiche coach et le composeur de plan
+// travaillent sur un client. Sans lui, les jours ON/OFF lus étaient ceux du
+// COACH — ou tous OFF, puisqu’un coach n’a le plus souvent pas de
+// sessions_config.
+function nutIsOnDay(dateStr,porteur){
   // Détermine si c'est un jour d'entraînement selon sessions_config
-  const cfg=currentUser.sessions_config;
+  const _u=porteur||currentUser;
+  const cfg=_u&&_u.sessions_config;
   if(!cfg) return false;
   const [_y,_m,_day]=dateStr.split('-').map(Number);
   const d=new Date(_y,_m-1,_day);
@@ -35932,7 +35946,9 @@ function _htmlPlanAthlete(user,intercale){
   const plan=planDe(user);
   const today=localISODate(new Date());
   let isOn=false;
-  try{ isOn=nutIsOnDay(today); }catch(e){}
+  // Le planning de `user`. planCiblesJour reçoit déjà le dossier juste en
+  // dessous : lire le jour ON ailleurs serait mélanger deux personnes.
+  try{ isOn=nutIsOnDay(today,user); }catch(e){}
   const cib=planCiblesJour(user,isOn,today);
   const couv=planCouverture(plan);
   const rest=planRestant(cib,couv);
@@ -44641,7 +44657,10 @@ function adherence(user,finISO){
     // Un jour est « journalisé » s'il porte de vraies calories. Une entrée à
     // zéro kcal — un thé, une erreur de saisie — ne fait pas une journée suivie.
     if(!(realise.kcal>0)) continue;
-    const cible=_getEffectiveMacros(nut,nutIsOnDay(j),j,user);
+    // LE PORTEUR, jusqu’au bout. `user` est un CLIENT quand cette fonction est
+    // appelée depuis _htmlAdherenceCoach ou ajustementPropose : sans lui, les
+    // jours ON étaient ceux du coach, et l’écart affiché s’en trouvait faux.
+    const cible=_getEffectiveMacros(nut,nutIsOnDay(j,user),j,user);
     // Cible absente ce jour-là : le jour ne dit rien d'un écart, il sort du
     // calcul plutôt que de compter comme un écart de la taille du réalisé.
     if(!cible||!(Number(cible.kcal)>0)) continue;
