@@ -28677,7 +28677,25 @@ function _appliquerSubstitut(idx,nom){
   if(!ex) return;
   if(!woState.substitutions) woState.substitutions=[];
   woState.substitutions.push({de:ex.name,vers:nom,date:Date.now()});
+  // MÉMORISÉ AVANT L'AFFECTATION : woState.aFilmer contient des NOMS, et
+  // celui-ci est sur le point de disparaître.
+  const _ancienNom=ex.name;
   ex.name=nom;
+  // L'INTENTION DE FILMER PORTAIT SUR LE MOUVEMENT REMPLACÉ. Sans ce retrait,
+  // l’écran de fin proposait « Déposer la vidéo de <ancien exercice> » — un
+  // mouvement que l’athlète n’a pas fait. La case de renderWoEx, elle, se
+  // décoche seule : estAFilmer lit le NOUVEAU nom, absent de la liste.
+  //
+  // SEULEMENT SI PLUS AUCUN exercice ne porte ce nom. Un programme peut
+  // répéter un mouvement à deux positions — en remplacer une ne doit pas
+  // effacer l’intention posée sur l’autre.
+  try{
+    if(_ancienNom&&Array.isArray(woState.aFilmer)
+      &&!(woState.exercises||[]).some(e=>e&&e.name===_ancienNom)){
+      const _iF=woState.aFilmer.indexOf(_ancienNom);
+      if(_iF>=0) woState.aFilmer.splice(_iF,1);
+    }
+  }catch(e){}
   // Les séries déjà saisies portaient sur l'exercice précédent : on repart
   // propre plutôt que d'attribuer des charges à un mouvement qui n'a pas été
   // fait.
