@@ -14849,7 +14849,12 @@ function openClientDetail(cid,_refresh){
   // prénom de l’athlète. Posé ici et non dans blocReponseBilan, qui est un
   // rendu — un rendu ne doit pas modifier l’état de l’application, et il est
   // partagé avec l’écran de l’ATHLÈTE, où ce contexte n’a rien à faire.
-  try{ tplContexte({prenom:c.fname},'rb-texte'); }catch(e){}
+  // SANS CIBLE, et c’est délibéré : le prénom est la SEULE variable posée ici,
+  // et il vaut pour tous les blocs de réponse de cette fiche — il y en a un par
+  // bilan, chacun avec son propre identifiant. Nommer un seul champ laisserait
+  // les autres sans contexte, et _tplCtxPour ne leur rendrait que le prénom :
+  // exactement ce qu’on veut, mais par accident plutôt que par décision.
+  try{ tplContexte({prenom:c.fname},null); }catch(e){}
   // Volume de la semaine en cours, calcule avec la classification et les
   // reperes de L ATHLETE.
   try{ renderJournalCoach(c); }catch(e){}
@@ -28973,11 +28978,15 @@ function videoNonCorrigee(v){
   if(!v) return false;
   return !v.feedback&&!((v.feedbackTimestamps||[]).length)&&!v.feedbackDate;
 }
-function saveReponseBilan(email,bilanId){
+// `taId` EST L IDENTIFIANT DU CHAMP SOUS LE BOUTON QU ON VIENT DE TOUCHER.
+// Le bouton le passe ; le repli sur l ancien identifiant fixe ne sert qu aux
+// appels qui ne le connaissent pas encore.
+function saveReponseBilan(email,bilanId,taId){
+  const _ta=taId||_taIdBilan(bilanId||'');
   // Même garde-fou, et `false` comme tous les autres refus de cette fonction :
   // ses appelants lisent cette valeur.
-  if(!tplVerifierAvantEnvoi('rb-texte')) return false;
-  const ta=document.getElementById('rb-texte');
+  if(!tplVerifierAvantEnvoi(_ta)) return false;
+  const ta=document.getElementById(_ta);
   const txt=((ta&&ta.value)||'').trim();
   if(!txt){ toast('Écris ta réponse avant d\'envoyer.','var(--orange)'); return false; }
   const users=DB.get('users')||{};
@@ -28999,6 +29008,17 @@ function saveReponseBilan(email,bilanId){
   return true;
 }
 // Bloc de réponse, rendu SOUS chaque bilan — côté coach uniquement.
+// LES DEUX IDENTIFIANTS DE CE BLOC, DERIVES DE L IDENTIFIANT DU BILAN.
+//
+// renderReponsesBilans emet ce bloc une fois par bilan : des identifiants
+// fixes en produisaient autant de copies, et getElementById ne rendait que le
+// premier du document — le plus RECENT, puisque la liste est inversee.
+//
+// Deux fonctions plutot qu une concatenation a chaque endroit : la forme de la
+// cle est lue par _renderQuickCommentChips, qui doit retrouver le champ a
+// partir du conteneur de chips.
+function _qcIdBilan(id){ return 'qc-chips-bilan_'+id; }
+function _taIdBilan(id){ return 'rb-texte_'+id; }
 function blocReponseBilan(b,c){
   if(!b||!c) return '';
   const id=_idBilan(b);
@@ -29012,9 +29032,9 @@ function blocReponseBilan(b,c){
     ${tca?`<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:8px;padding:9px 11px;margin-bottom:9px;font-size:11px;color:var(--sub);line-height:1.6">
       Les chiffres de poids sont masqués dans son application. Évite de les citer par message.
     </div>`:''}
-    <div id="qc-chips-bilan" style="display:flex;gap:6px;overflow-x:auto;padding:6px 0 8px;scrollbar-width:none;-ms-overflow-style:none"></div>
-    <textarea id="rb-texte" rows="3" placeholder="Ce que tu retiens de ce bilan, et ce qu'on ajuste." style="width:100%;box-sizing:border-box">${escapeHtml(b.reponseCoach||'')}</textarea>
-    <button class="btn btn-red btn-sm" onclick="saveReponseBilan('${escapeHtml(c.email||'')}','${escapeHtml(id)}')"
+    <div id="${_qcIdBilan(id)}" style="display:flex;gap:6px;overflow-x:auto;padding:6px 0 8px;scrollbar-width:none;-ms-overflow-style:none"></div>
+    <textarea id="${_taIdBilan(id)}" rows="3" placeholder="Ce que tu retiens de ce bilan, et ce qu'on ajuste." style="width:100%;box-sizing:border-box">${escapeHtml(b.reponseCoach||'')}</textarea>
+    <button class="btn btn-red btn-sm" onclick="saveReponseBilan('${escapeHtml(c.email||'')}','${escapeHtml(id)}','${_taIdBilan(id)}')"
       style="margin-top:8px;letter-spacing:1px">Envoyer ma réponse</button>
   </div>`;
 }
@@ -43046,14 +43066,33 @@ function _getQC(liste){
 // changent pas, et une batterie de non-regression le verifie.
 function _renderQuickCommentChips(liste){
   const bilan=liste==='bilan';
-  const zone=bilan?'qc-chips-bilan':'qc-chips';
-  const cible=bilan?'rb-texte':'vc-general';
+  // LA ZONE DU BILAN EXISTE EN PLUSIEURS EXEMPLAIRES — une par bilan affiché.
+  // On les peuple TOUTES, chacune pointant sur le champ de SON bloc : des
+  // chips qui insèrent dans le champ du haut quel que soit le bilan sous lequel
+  // on a cliqué sont pires que pas de chips du tout.
+  if(bilan){
+    const qcsB=_getQC(liste);
+    const zones=document.querySelectorAll('[id^="qc-chips-bilan_"]');
+    zones.forEach(z=>{
+      const _id=String(z.id||'').slice('qc-chips-bilan_'.length);
+      z.innerHTML=_htmlChipsQC(qcsB,_taIdBilan(_id));
+    });
+    return;
+  }
+  const zone='qc-chips';
+  const cible='vc-general';
   const el=document.getElementById(zone);if(!el)return;
   const qcs=_getQC(liste);
   el.innerHTML=(qcs.length?qcs.map(c=>`<button data-qc="${escapeHtml(c.text)}" onclick="insertQC(this.dataset.qc,'${cible}')" style="flex-shrink:0;background:var(--surface-2);border:1px solid var(--border);border-radius:20px;padding:0 14px;height:44px;color:var(--text);font-family:Montserrat,sans-serif;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.label)}</button>`).join(''):'')
     // La liste du bilan est fixe : pas de bouton de gestion.
     // La feuille complete est atteignable des DEUX zones : c est la meme
     // bibliotheque, il n y a plus de raison de la reserver a la video.
+    +`<button onclick="ouvrirModeles('${cible}')" style="flex-shrink:0;background:transparent;border:1px dashed var(--border);border-radius:20px;padding:0 14px;height:44px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;cursor:pointer;white-space:nowrap">${icon('edit-2',13)} Modèles</button>`;
+}
+// LE MEME GABARIT POUR LES DEUX CHEMINS. Deux copies du même balisage
+// finiraient par diverger — ce fichier en a déjà fait les frais ailleurs.
+function _htmlChipsQC(qcs,cible){
+  return ((qcs&&qcs.length)?qcs.map(c=>`<button data-qc="${escapeHtml(c.text)}" onclick="insertQC(this.dataset.qc,'${cible}')" style="flex-shrink:0;background:var(--surface-2);border:1px solid var(--border);border-radius:20px;padding:0 14px;height:44px;color:var(--text);font-family:Montserrat,sans-serif;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.label)}</button>`).join(''):'')
     +`<button onclick="ouvrirModeles('${cible}')" style="flex-shrink:0;background:transparent;border:1px dashed var(--border);border-radius:20px;padding:0 14px;height:44px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;cursor:pointer;white-space:nowrap">${icon('edit-2',13)} Modèles</button>`;
 }
 function insertQC(text,cible){
