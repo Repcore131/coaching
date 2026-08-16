@@ -3386,11 +3386,24 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="rc-confirm" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:4000;align-items:flex-end;justify-content:center">
   <div style="background:linear-gradient(180deg,#151515,#0e0e0e);border-top:2px solid var(--red);border-radius:20px 20px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom,0px));width:100%;max-width:480px;box-shadow:0 -12px 40px rgba(0,0,0,.7)">
     <div style="font-family:'Bebas Neue',Montserrat,sans-serif;font-size:20px;letter-spacing:3px;color:var(--red);margin-bottom:10px">REPCORE</div>
-    <div id="rc-confirm-titre" style="font-size:15px;font-weight:800;color:#fff;margin-bottom:6px"></div>
-    <div id="rc-confirm-texte" style="font-size:12.5px;color:var(--sub);line-height:1.65;margin-bottom:20px"></div>
+    <div id="rc-confirm-titre" style="white-space:pre-line;font-size:15px;font-weight:800;color:#fff;margin-bottom:6px"></div>
+    <div id="rc-confirm-texte" style="white-space:pre-line;font-size:12.5px;color:var(--sub);line-height:1.65;margin-bottom:20px"></div>
     <div style="display:flex;flex-direction:column;gap:10px">
       <button id="rc-confirm-ok" class="btn btn-red">Confirmer</button>
       <button id="rc-confirm-non" class="btn btn-outline">Annuler</button>
+    </div>
+  </div>
+</div>
+<!-- SAISIE. Remplace prompt(), que Chrome éteint avec les autres boîtes. -->
+<div id="rc-saisie" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:4000;align-items:flex-end;justify-content:center">
+  <div style="background:linear-gradient(180deg,#151515,#0e0e0e);border-top:2px solid var(--red);border-radius:20px 20px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom,0px));width:100%;max-width:480px">
+    <div style="font-family:'Bebas Neue',Montserrat,sans-serif;font-size:20px;letter-spacing:3px;color:var(--red);margin-bottom:10px">REPCORE</div>
+    <div id="rc-saisie-titre" style="font-size:15px;font-weight:800;color:#fff;margin-bottom:6px;white-space:pre-line"></div>
+    <div id="rc-saisie-texte" style="font-size:12.5px;color:var(--sub);line-height:1.65;margin-bottom:14px;white-space:pre-line"></div>
+    <input id="rc-saisie-champ" style="width:100%;box-sizing:border-box;margin-bottom:18px">
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <button id="rc-saisie-ok" class="btn btn-red">Valider</button>
+      <button id="rc-saisie-non" class="btn btn-outline">Annuler</button>
     </div>
   </div>
 </div>
@@ -9428,8 +9441,8 @@ function showCoachCode(){
   document.getElementById('coach-code-val').textContent=currentUser.code;
   go('s-coach-code');
 }
-function regenCoachCode(){
-  if(!confirm('⚠️ Régénérer ton code coach ?\n\nTous les liens d\'invitation déjà partagés avec l\'ancien code cesseront de fonctionner.\n\nLes athlètes déjà liés ne sont PAS affectés.')) return;
+async function regenCoachCode(){
+  if(!await rcConfirm('⚠️ Régénérer ton code coach ?\n\nTous les liens d\'invitation déjà partagés avec l\'ancien code cesseront de fonctionner.\n\nLes athlètes déjà liés ne sont PAS affectés.',null,'Régénérer')) return;
   currentUser.code=genCode();
   saveUser();
   document.getElementById('coach-code-val').textContent=currentUser.code;
@@ -12286,7 +12299,7 @@ async function enregistrerMessageCanal(){
 }
 
 async function supprimerMessageCanal(msgId){
-  if(!confirm('Supprimer ce message du canal ? Il disparaîtra chez tous tes athlètes.')) return;
+  if(!await rcConfirm('Supprimer ce message du canal ? Il disparaîtra chez tous tes athlètes.',null,'Supprimer')) return;
   const cle=canalCle(currentUser);
   if(!cle) return;
   try{
@@ -14652,12 +14665,12 @@ function jrAjouter(){
   toastEcriture(ok,'Noté','la note est');
   return true;
 }
-function jrSupprimer(noteId){
+async function jrSupprimer(noteId){
   const c=getOwnedClient(currentClientId);
   if(!c) return false;
   // « Pas de corbeille » est une règle de STOCKAGE, pas une raison de détruire
   // sans avertir. Rien ici ne se récupère.
-  if(!confirm('Supprimer cette note ? Elle ne sera pas récupérable.')) return false;
+  if(!await rcConfirm('Supprimer cette note ? Elle ne sera pas récupérable.',null,'Supprimer')) return false;
   // La recherche est transversale : la note à supprimer n'appartient pas
   // forcément au fil affiché.
   let cible=c.id;
@@ -15015,7 +15028,7 @@ async function confirmDeleteClient(){
   const _phrase=codes.length
     ? '\nSon code d\'accès sera désactivé : il ne pourra plus s\'en servir pour se rattacher à toi.'
     : '';
-  if(!confirm('Retirer cet élève de ton suivi ?\nSon compte reste actif mais il ne sera plus associé à ton coaching.'+_phrase)) return;
+  if(!await rcConfirm('Retirer cet élève de ton suivi ?\nSon compte reste actif mais il ne sera plus associé à ton coaching.'+_phrase,null,'Retirer')) return;
   // LE SERVEUR D’ABORD. Un code sans jeton n’a pas de nœud à fermer — il date
   // d’avant leur enregistrement — et ne bloque donc rien.
   for(const code of codes){
@@ -16210,8 +16223,8 @@ function duplicateCoachProgTemplate(idx){
   loadCoachProgramsList();
 }
 
-function deleteCoachProgTemplate(idx){
-  if(!confirm('Supprimer ce programme ?')) return;
+async function deleteCoachProgTemplate(idx){
+  if(!await rcConfirm('Supprimer ce programme ?',null,'Supprimer')) return;
   currentUser.coachPrograms.splice(idx,1);
   saveUser();toast('Programme supprimé.');loadCoachProgramsList();
 }
@@ -16279,11 +16292,11 @@ function _copierSeance(src,dst){
 }
 // Un mauvais appui ne doit pas effacer une séance déjà écrite : c'est le seul
 // endroit de ce lot où l'on peut détruire du travail.
-function _confirmerEcrasement(src,dst){
+async function _confirmerEcrasement(src,dst){
   if(!dst.active||!dst.exercises?.length) return true;
   const n=dst.exercises.length;
-  return confirm(dst.day+' contient déjà '+n+' exercice'+(n>1?'s':'')
-    +'.\nLes remplacer par ceux de '+src.day+' ?');
+  return await rcConfirm(dst.day+' contient déjà '+n+' exercice'+(n>1?'s':'')
+    +'.\nLes remplacer par ceux de '+src.day+' ?',null,'Confirmer');
 }
 // ── Duplication de séance ───────────────────────────────────────────────────
 // Le NOM porte une conséquence : _memeCreneau compare d'abord le slot, mais
@@ -16364,12 +16377,12 @@ function dupliquerExercice(i){
   return true;
 }
 
-function cptCopyDay(i,j){
+async function cptCopyDay(i,j){
   if(_editProgTemplateIdx===null) return;
   const p=currentUser.coachPrograms[_editProgTemplateIdx];
   const sessions=_editProgTemplateGender==='H'?p.sessions_H:p.sessions_F;
   const src=sessions[i],dst=sessions[j];
-  if(!src||!dst||!_confirmerEcrasement(src,dst)) return;
+  if(!src||!dst||!await _confirmerEcrasement(src,dst)) return;
   _copierSeance(src,dst);
   loadProgTemplateSlots(_editProgTemplateGender);
   // Pas de saveUser ici : comme cptToggleDay et cptRenameSession, l'écriture
@@ -16383,14 +16396,14 @@ function cptCopyDay(i,j){
 // c'est saveCoachSessions qui archive la version STOCKÉE — donc bien celle
 // d'avant la duplication. Un instantané posé sur la copie en mémoire serait
 // écrasé à la sauvegarde et ne survivrait à aucun rechargement.
-function coachCopyDay(i,j){
+async function coachCopyDay(i,j){
   const sc=_coachEditClient?.sessions_config;
   if(!sc) return;
   const src=sc[i],dst=sc[j];
   if(!src||!dst) return;
   if(!src.active||!((src.exercises||[]).length)){
     toast('Le créneau source est vide : rien à dupliquer.','var(--orange)'); return; }
-  if(!_confirmerEcrasement(src,dst)) return;
+  if(!await _confirmerEcrasement(src,dst)) return;
   const r=dupliquerSeance(sc,i,j);
   if(!r.ok){ toast(r.raison,'var(--orange)'); return; }
   loadCoachSessionSlots();
@@ -16437,7 +16450,7 @@ function openProgTemplateSessionExercises(idx){
   // MÊME GARDE-FOU QUE LES DEUX AUTRES ÉDITEURS. Sans lui, un ← jetait tout
   // le travail en cours sans un mot — et c’est le seul des trois qui édite un
   // MODÈLE, donc du travail réutilisé sur plusieurs athlètes.
-  if(backBtn) backBtn.onclick=()=>{if(_progExDirty&&!confirm('Modifications non enregistrées : quitter quand même ?'))return;_progEditorCtx={mode:'clientProgram'};go('s-coach-prog-template');loadProgTemplateSlots(_editProgTemplateGender);};
+  if(backBtn) backBtn.onclick=async ()=>{if(_progExDirty&&!await rcConfirm('Modifications non enregistrées : quitter quand même ?',null,'Quitter'))return;_progEditorCtx={mode:'clientProgram'};go('s-coach-prog-template');loadProgTemplateSlots(_editProgTemplateGender);};
   const title=document.querySelector('#s-coach-program .topbar-title');
   if(title) title.textContent=(s.name||DAYS[idx])+' ('+_editProgTemplateGender+') : Exercices';
   renderProgEx();go('s-coach-program');
@@ -16504,7 +16517,7 @@ function _pushSessionsHistory(a){
   if(a.sessions_config_history.length>_SESSIONS_HISTORY_MAX) a.sessions_config_history.length=_SESSIONS_HISTORY_MAX;
 }
 
-function confirmAssignProgram(){
+async function confirmAssignProgram(){
   const checked=[...document.querySelectorAll('#cpa-athletes input[type=checkbox]:checked')];
   if(!checked.length){toast('Sélectionne au moins un athlète','var(--orange)');return;}
   const prog=currentUser.coachPrograms[_assigningProgIdx];
@@ -16525,7 +16538,7 @@ function confirmAssignProgram(){
   const msg=`Assigner "${prog.name||'Ce programme'}" à ${targets.length} athlète${targets.length>1?'s':''} ?\n\n`
     +targets.map(t=>t.name+(hasProgram(t.a)?' (programme existant remplacé)':'')).join('\n')
     +(hasSessions?'\n\nL\'ancien programme sera sauvegardé dans l\'historique (rollback possible).':'');
-  if(!confirm(msg)) return;
+  if(!await rcConfirm(msg,null,'Confirmer')) return;
   const pushes=[];
   targets.forEach(({emailKey,a,gender})=>{
     _assignerModele(a,prog,gender);
@@ -16544,13 +16557,14 @@ function confirmAssignProgram(){
 
 // Renseigner le numéro d'un athlète depuis sa fiche. Écrit dans le nœud de
 // l'athlète, donc synchronisé et visible depuis n'importe quel appareil du coach.
-function setClientPhone(){
+async function setClientPhone(){
   const users=DB.get('users')||{};
   const emailKey=Object.keys(users).find(k=>users[k]?.id===currentClientId);
   if(!emailKey){toast('Athlète introuvable','var(--orange)');return;}
   const a=users[emailKey];
-  const saisi=prompt('Numéro WhatsApp de '+(a.fname||'cet athlète')
-    +'\n\nAvec l\'indicatif pays, ex : +33612345678',a.phone||'+33');
+  const saisi=await rcSaisie('Numéro WhatsApp de '+(a.fname||'cet athlète')
+    +'\n\nAvec l\'indicatif pays, ex : +33612345678',a.phone||'+33',
+    {type:'tel',inputmode:'tel',placeholder:'+33612345678',libelleOk:'Enregistrer'});
   if(saisi===null) return; // annulé
   const brut=saisi.trim();
   // Refuser à la saisie plutôt que de stocker un numéro qui ouvrira WhatsApp
@@ -16630,7 +16644,7 @@ function _atSwitchGenre(i,g){
   bH.style.background=g==='H'?'var(--red)':'#222';bH.style.color=g==='H'?'#fff':'var(--sub)';
   bF.style.background=g==='F'?'var(--red)':'#222';bF.style.color=g==='F'?'#fff':'var(--sub)';
 }
-function applyTemplateToClient(idx){
+async function applyTemplateToClient(idx){
   const prog=(currentUser.coachPrograms||[])[idx];
   if(!prog) return;
   const users=DB.get('users')||{};
@@ -16644,8 +16658,8 @@ function applyTemplateToClient(idx){
   if(hasProgram(a)){
     const rollback=a.sessions_config
       ?'\n\nL\'ancien programme sera sauvegardé dans l\'historique (rollback possible).':'';
-    if(!confirm('Remplacer le programme actuel de '+(a.fname||'cet athlète')
-      +' par « '+(prog.name||'ce modèle')+' » (version '+genre+') ?'+rollback)) return;
+    if(!await rcConfirm('Remplacer le programme actuel de '+(a.fname||'cet athlète')
+      +' par « '+(prog.name||'ce modèle')+' » (version '+genre+') ?'+rollback,null,'Remplacer')) return;
   }
   _assignerModele(a,prog,genre);
   users[emailKey]=a;
@@ -16744,14 +16758,14 @@ function renderSessionsHistory(){
 // Restauration : on remet la copie en memoire et on redessine. On N'ENREGISTRE
 // PAS — le coach valide par SAUVEGARDER, comme pour toute autre modification.
 // C'est ce qui lui laisse une porte de sortie s'il s'est trompe de version.
-function restaurerSessionsConfig(i){
+async function restaurerSessionsConfig(i){
   const hist=(_coachEditClient&&_coachEditClient.sessions_config_history)||[];
   const e=hist[i];
   if(!e||!e.sessions_config) return;
   const d=new Date(e.ts).toLocaleString('fr-FR',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
-  if(!confirm("Restaurer la configuration du "+d+" ?\n\n"
+  if(!await rcConfirm("Restaurer la configuration du "+d+" ?\n\n"
     +"Le programme affiché sera remplacé. Rien n'est enregistré tant que tu n'as "
-    +"pas touché SAUVEGARDER.")) return;
+    +"pas touché SAUVEGARDER.",null,'Confirmer')) return;
   _coachEditClient.sessions_config=JSON.parse(JSON.stringify(e.sessions_config));
   loadCoachSessionSlots();
   renderSessionsHistory();
@@ -16808,7 +16822,7 @@ function loadCoachSessionSlots(){
 
 // Transformer le programme abouti d'un athlète en modèle réassignable, sans
 // ressaisir un exercice.
-function saveCoachSessionsAsTemplate(){
+async function saveCoachSessionsAsTemplate(){
   const c=_coachEditClient;
   if(!c) return;
   const src=c.sessions_config||[];
@@ -16817,7 +16831,7 @@ function saveCoachSessionsAsTemplate(){
     return;
   }
   const defaut=((c.fname||'Athlète')+' : '+new Date().toLocaleDateString('fr-FR'));
-  const nom=(prompt('Nom du modèle ?',defaut)||'').trim();
+  const nom=(await rcSaisie('Nom du modèle ?',defaut,{libelleOk:'Enregistrer'})||'').trim();
   if(!nom) return; // annulé, ou nom vide
   // Les photos de séance sont écartées : elles sont en base64 et les modèles
   // vivent dans currentUser, poussé en entier à chaque synchro. Sept jours de
@@ -16908,7 +16922,7 @@ function openCoachSessionExercises(idx){
   _prepProgEditor({name:s.name,notes:s.notes,warmup:s.warmup,cooldown:s.cooldown||currentUser._defaultCooldown});
   _progEditorCtx={mode:'coachClient',sessionIdx:idx};
   const backBtn=document.querySelector('#s-coach-program .back-btn');
-  if(backBtn) backBtn.onclick=()=>{if(_progExDirty&&!confirm('Modifications non enregistrées : quitter quand même ?'))return;_progEditorCtx={mode:'clientProgram'};go('s-coach-sessions');loadCoachSessionSlots();};
+  if(backBtn) backBtn.onclick=async ()=>{if(_progExDirty&&!await rcConfirm('Modifications non enregistrées : quitter quand même ?',null,'Quitter'))return;_progEditorCtx={mode:'clientProgram'};go('s-coach-sessions');loadCoachSessionSlots();};
   const title=document.querySelector('#s-coach-program .topbar-title');
   if(title) title.textContent=(s.name||DAYS[idx])+' : Exercices';
   renderProgEx();go('s-coach-program');
@@ -17010,7 +17024,7 @@ function brouillonDiffere(b,publie){
 }
 
 // Propose la reprise d'un brouillon. Rend true s'il a été repris.
-function _proposerBrouillon(){
+async function _proposerBrouillon(){
   const c=_coachEditClient;
   if(!c||!c.id) return false;
   const b=brouillonDe(c.id);
@@ -17026,8 +17040,8 @@ function _proposerBrouillon(){
   const vieux=brouillonEstPerime(b)
     ?'\n\nIl a plus de '+BROUILLON_PEREMPTION_J+' jours : vérifie qu\'il correspond encore à cet athlète.'
     :'';
-  const ok=confirm('Tu as un brouillon non publié pour cet athlète ('+quand+').'
-    +vieux+'\n\nOK : reprendre le brouillon.\nAnnuler : repartir du programme publié.');
+  const ok=await rcConfirm('Tu as un brouillon non publié pour cet athlète ('+quand+').'
+    +vieux+'\n\nOK : reprendre le brouillon.\nAnnuler : repartir du programme publié.',null,'Confirmer');
   if(!ok){
     if(oublierBrouillon(c.id)) try{ saveUser(); }catch(e){}
     return false;
@@ -17101,8 +17115,8 @@ function resolveClient(cid){
   if(c._fromCode){toast('Cet athlète n\'a pas encore créé son compte. Le programme sera disponible après son inscription.','var(--orange)');return null;}
   return {c,users};
 }
-function removeCoachPdf(){
-  if(!confirm('Supprimer le PDF du programme ?')) return;
+async function removeCoachPdf(){
+  if(!await rcConfirm('Supprimer le PDF du programme ?',null,'Supprimer')) return;
   const res=resolveClient(currentClientId);if(!res) return;
   const {c,users}=res;
   // programPdfStorageUrl DOIT être effacé aussi : tous les lecteurs font
@@ -17606,8 +17620,8 @@ function ouvrirFicheBanque(slug,ev){
   document.body.insertAdjacentHTML('beforeend',html);
   return true;
 }
-function _supprimerExoPerso(slug){
-  if(!confirm('Supprimer cet exercice de tes exercices personnels ?')) return false;
+async function _supprimerExoPerso(slug){
+  if(!await rcConfirm('Supprimer cet exercice de tes exercices personnels ?',null,'Supprimer')) return false;
   const ok=supprimerExercicePerso(slug);
   if(ok){ try{ saveUser(); }catch(e){} }
   closeModal(); _bqRendre();
@@ -18365,7 +18379,7 @@ function repsToNumber(reps){
   return isNaN(n)?0:n;
 }
 
-function setExerciseCount(n){
+async function setExerciseCount(n){
   const cur=progEx.length;
   if(n===cur) return;
   if(n>cur){
@@ -18373,7 +18387,7 @@ function setExerciseCount(n){
   } else {
     const toRemove=progEx.slice(n);
     const hasContent=toRemove.some(ex=>ex.name||ex.description);
-    if(hasContent && !confirm('Supprimer les '+(cur-n)+' dernier(s) exercice(s) ?')) return;
+    if(hasContent && !await rcConfirm('Supprimer les '+(cur-n)+' dernier(s) exercice(s) ?',null,'Supprimer')) return;
     progEx=progEx.slice(0,n);
   }
   renderProgEx();
@@ -19973,7 +19987,7 @@ function openSessionExercises(idx){
   _updateAnalyzeBtn();
   _progEditorCtx={mode:'athlete',sessionIdx:idx};
   const backBtn=document.querySelector('#s-coach-program .back-btn');
-  if(backBtn) backBtn.onclick=()=>{if(_progExDirty&&!confirm('Modifications non enregistrées : quitter quand même ?'))return;_progEditorCtx={mode:'clientProgram'};go('s-session-manager');};
+  if(backBtn) backBtn.onclick=async ()=>{if(_progExDirty&&!await rcConfirm('Modifications non enregistrées : quitter quand même ?',null,'Quitter'))return;_progEditorCtx={mode:'clientProgram'};go('s-session-manager');};
   const title=document.querySelector('#s-coach-program .topbar-title');
   if(title) title.textContent=(cfg[idx].name||'Séance')+' : Exercices';
   renderProgEx();
@@ -20475,10 +20489,10 @@ function confirmPauseWorkout(){
   go('s-client-home');
   loadClientHome();
 }
-function cancelWorkout(){
+async function cancelWorkout(){
   const m=document.getElementById('wo-pause-modal');
   if(m) m.style.display='none';
-  if(!confirm('Annuler la séance ? Aucune donnée ne sera enregistrée.')) return;
+  if(!await rcConfirm('Annuler la séance ? Aucune donnée ne sera enregistrée.',null,'Annuler la séance')) return;
   localStorage.removeItem('rc_wo_state');
   clearInterval(woState.timerInterval);
   woState={};
@@ -20500,6 +20514,15 @@ function rcConfirm(titre,texte,libelleOk,libelleNon){
   const ok=document.getElementById('rc-confirm-ok');
   const non=document.getElementById('rc-confirm-non');
   if(!z||!t||!x||!ok||!non) return Promise.resolve(confirm(titre));
+  // UN SEUL ARGUMENT SUFFIT. Les messages venus de confirm() portent déjà
+  // leur séparation : un titre, une ligne vide, le détail. On coupe ICI
+  // plutôt que de réécrire quarante-neuf messages à la main — et de se
+  // tromper sur l’un d’eux, alors qu’ils portent des conséquences de santé
+  // et des mentions juridiques.
+  if(texte==null&&typeof titre==='string'){
+    const _i=titre.indexOf('\n\n');
+    if(_i>0){ texte=titre.slice(_i+2); titre=titre.slice(0,_i); }
+  }
   t.textContent=titre; x.textContent=texte||'';
   ok.textContent=libelleOk||'Confirmer';
   non.textContent=libelleNon||'Annuler';
@@ -20512,6 +20535,60 @@ function rcConfirm(titre,texte,libelleOk,libelleNon){
     // Toucher le voile ANNULE : sur un geste irreversible, le toucher flou
     // doit aller vers le refus.
     z.onclick=e=>{ if(e.target===z) fermer(false); };
+  });
+}
+// UN SEUL BOUTON, pour ce qui n’appelle pas de décision — le remplaçant
+// d’alert(). Même calque : deux boîtes différentes pour deux messages du
+// même écran donneraient l’impression que l’une vient d’ailleurs.
+//
+// Elle rend une promesse, comme rcConfirm : un rapport de fin de traitement
+// doit pouvoir être LU avant que l’écran ne se redessine dessous.
+function rcAlerte(titre,libelleOk){
+  const non=document.getElementById('rc-confirm-non');
+  if(non) non.style.display='none';
+  return rcConfirm(titre,null,libelleOk||'J’ai compris')
+    .then(v=>{ if(non) non.style.display=''; return v; },
+          e=>{ if(non) non.style.display=''; throw e; });
+}
+// SAISIE, en remplacement de prompt(). Rend la valeur, ou null si on annule
+// — exactement le contrat de prompt(), pour que les appelants gardent leur
+// forme : `if(saisi===null) return;`.
+//
+// `opts` porte le clavier à ouvrir. Un numéro de téléphone saisi sur un
+// clavier alphabétique est une brimade sur mobile.
+function rcSaisie(titre,valeur,opts){
+  const z=document.getElementById('rc-saisie');
+  const t=document.getElementById('rc-saisie-titre');
+  const x=document.getElementById('rc-saisie-texte');
+  const c=document.getElementById('rc-saisie-champ');
+  const ok=document.getElementById('rc-saisie-ok');
+  const non=document.getElementById('rc-saisie-non');
+  // Repli sur prompt() si l’écran manque : mieux vaut une boîte laide qu’une
+  // saisie impossible. Même règle que rcConfirm.
+  if(!z||!t||!x||!c||!ok||!non) return Promise.resolve(prompt(titre,valeur));
+  let ttre=titre, det='';
+  if(typeof titre==='string'){
+    const _i=titre.indexOf('\n\n');
+    if(_i>0){ det=titre.slice(_i+2); ttre=titre.slice(0,_i); }
+  }
+  t.textContent=ttre; x.textContent=det;
+  const o=opts||{};
+  c.type=o.type||'text';
+  if(o.inputmode) c.setAttribute('inputmode',o.inputmode); else c.removeAttribute('inputmode');
+  c.placeholder=o.placeholder||'';
+  c.value=valeur==null?'':String(valeur);
+  ok.textContent=o.libelleOk||'Valider';
+  non.textContent=o.libelleNon||'Annuler';
+  z.style.display='flex';
+  setTimeout(()=>{ try{ c.focus(); c.select(); }catch(e){} },50);
+  return new Promise(res=>{
+    const fermer=v=>{ z.style.display='none';
+      ok.onclick=null; non.onclick=null; z.onclick=null; c.onkeydown=null; res(v); };
+    ok.onclick=()=>fermer(c.value);
+    non.onclick=()=>fermer(null);
+    c.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); fermer(c.value); } };
+    // Toucher le voile ANNULE, comme sur rcConfirm.
+    z.onclick=e=>{ if(e.target===z) fermer(null); };
   });
 }
 async function finishWorkoutEarly(){
@@ -24637,9 +24714,9 @@ async function phpSupprimerPoseUI(seanceDate,pose){
   if(!x){ toast('Photo introuvable.','var(--orange)'); return false; }
   const lib=(PHP_POSES.find(q=>q.cle===pose)||{}).lib||pose;
   const jour=new Date(seanceDate).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
-  if(!confirm('Supprimer « '+lib+' » du '+jour+' ?\n\n'
+  if(!await rcConfirm('Supprimer « '+lib+' » du '+jour+' ?\n\n'
     +(x.publicId?'Cette photo a déjà été transmise à ton coach : elle part de ce téléphone, mais sa copie ne peut pas toujours être effacée à distance.\n\n':'')
-    +'C’est définitif.')) return false;
+    +'C’est définitif.',null,'Supprimer')) return false;
   const r=await phpSupprimerPose(u,seanceDate,pose);
   if(!r.ok){ toast(r.raison||'Suppression impossible.','var(--orange)'); return false; }
   saveUser();
@@ -24717,9 +24794,9 @@ function htmlPhotosConsentement(u){
     <button class="btn btn-outline" style="width:100%;margin-top:8px" onclick="showProgressTab('photos',null)">Non, pas de photos</button>
   </div>`;
 }
-function phpDonnerConsentement(){
+async function phpDonnerConsentement(){
   const partage=!!(document.getElementById('php-partage')||{}).checked;
-  if(!confirm('Activer les photos de progression ?\n\nCe sont des données de santé. Elles restent sur ton téléphone.')) return false;
+  if(!await rcConfirm('Activer les photos de progression ?\n\nCe sont des données de santé. Elles restent sur ton téléphone.',null,'Activer')) return false;
   if(!phpConsentir(currentUser,partage)) return false;
   saveUser();
   renderPhotosProgression();
@@ -24922,9 +24999,9 @@ async function phpPartagerPoseUI(dateISO,pose){
   const jour=new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric'});
   // RÈGLE 4. L'accord initial autorise le suivi, pas cet envoi-ci. La question
   // nomme LA photo et LE jour : « partager mes photos » ne veut rien dire.
-  if(!confirm('Partager « '+lib+' » du '+jour+' avec ton coach ?\n\n'
+  if(!await rcConfirm('Partager « '+lib+' » du '+jour+' avec ton coach ?\n\n'
     +'Cette photo quitte ton téléphone. Une fois transmise, elle ne pourra plus être effacée à distance depuis l’application.\n\n'
-    +'Aucune autre photo ne part.')) return false;
+    +'Aucune autre photo ne part.',null,'Partager')) return false;
   const r=await phpPartagerPose(u,s,pose);
   saveUser();
   renderPhotosProgression();
@@ -24951,8 +25028,8 @@ function htmlPhotosReglages(u){
 }
 async function phpRevoquerUI(){
   const n=phpPartagees(currentUser).length;
-  if(!confirm('Supprimer toutes tes photos de cet appareil et retirer ton accord ?\n\nC\'est définitif.')) return false;
-  if(n&&!confirm(n+' photo(s) ont déjà été transmises à ton coach.\n\nElles ne peuvent pas être effacées à distance depuis l\'app. La liste des fichiers à purger te sera affichée.\n\nContinuer ?')) return false;
+  if(!await rcConfirm('Supprimer toutes tes photos de cet appareil et retirer ton accord ?\n\nC\'est définitif.',null,'Supprimer')) return false;
+  if(n&&!await rcConfirm(n+' photo(s) ont déjà été transmises à ton coach.\n\nElles ne peuvent pas être effacées à distance depuis l\'app. La liste des fichiers à purger te sera affichée.\n\nContinuer ?',null,'Confirmer')) return false;
   const r=await phpRevoquer(currentUser);
   saveUser();
   renderPhotosProgression();
@@ -26504,7 +26581,7 @@ function _etapesUtiles(steps){
                                // etape fautive qu une etape escamotee
   });
 }
-function openBilan(type,forcerReprise){
+async function openBilan(type,forcerReprise){
   const brut=localStorage.getItem(BIL_DRAFT_KEY);
   // LE BROUILLON BRUT, avant tout filtre : _bilLoadDraft rend null dès que le
   // type diffère, et c'est précisément le cas qu'on veut voir ici.
@@ -26517,17 +26594,17 @@ function openBilan(type,forcerReprise){
   // existait encore.
   if(autreType&&_bilDraftRempli(ancien)>0){
     const n=_bilDraftRempli(ancien);
-    if(!confirm('Tu as un '+_bilNomType(ancien.bilType)+' commencé avec '+n
-      +' réponse'+(n>1?'s':'')+'.\n\nOuvrir un '+_bilNomType(type)+' l’effacera.\n\nContinuer ?')) return false;
+    if(!await rcConfirm('Tu as un '+_bilNomType(ancien.bilType)+' commencé avec '+n
+      +' réponse'+(n>1?'s':'')+'.\n\nOuvrir un '+_bilNomType(type)+' l’effacera.\n\nContinuer ?',null,'Confirmer')) return false;
   }
   const brouillon=_bilLoadDraft(type);
   bilType=type;bilStep=0;bilData={};_bilPhotoLoading=0;
   _bilReprises=null;
   if(brouillon&&_bilDraftRempli(brouillon)>0
-     &&(forcerReprise||confirm('Reprendre ton bilan en cours ?\n\nTu en étais à l\'étape '
+     &&(forcerReprise||await rcConfirm('Reprendre ton bilan en cours ?\n\nTu en étais à l\'étape '
         +(brouillon.bilStep+1)+', avec '+_bilDraftRempli(brouillon)+' réponse'
         +(_bilDraftRempli(brouillon)>1?'s':'')+' déjà saisie'
-        +(_bilDraftRempli(brouillon)>1?'s':'')+'.'))){
+        +(_bilDraftRempli(brouillon)>1?'s':'')+'.',null,'Reprendre'))){
     bilStep=brouillon.bilStep;
     bilData={...brouillon.bilData};
     _bilRestaurerPhotos(type);
@@ -26583,7 +26660,7 @@ function bilBack(){
   if(bilStep>0){bilStep--;renderBilStep();}
   else{if(bilType==='depart'){go('s-client-home');loadClientHome();}else{go('s-bilan-choice');}}
 }
-function bilNext(){
+async function bilNext(){
   const steps=_etapesUtiles(bilType==='depart'?DEB_STEPS:BIL_STEPS);
   if(bilStep<steps.length-1){bilStep++;renderBilStep();}
   else{
@@ -26616,7 +26693,7 @@ function bilNext(){
     // porter que des ressentis ; mais c'est le seul champ qui porte une
     // courbe, et son absence laissera un trou visible dans le suivi.
     if(!_bilPoidsSaisi(bilData)
-       &&!confirm('Valider sans ton poids ?\n\nTa courbe n’aura pas de point pour ce bilan.')) return;
+       &&!await rcConfirm('Valider sans ton poids ?\n\nTa courbe n’aura pas de point pour ce bilan.',null,'Valider')) return;
     saveBilanFinal();
   }
 }
@@ -27446,13 +27523,13 @@ function _santePousserMaintenant(){
   try{ const r=CLOUD.pushOne(currentUser.email,currentUser);
     if(r&&r.catch) r.catch(()=>{}); }catch(e){}
 }
-function supprimerConstanteUI(dateISO){
+async function supprimerConstanteUI(dateISO){
   const u=currentUser;
   if(!u) return false;
   const e=((u.constantes)||[]).find(x=>x&&x.date===dateISO);
   if(!e){ toast('Mesure introuvable.','var(--orange)'); return false; }
-  if(!confirm('Supprimer la mesure '+e.sys+'/'+e.dia
-    +' du '+_fmtDateCourte(e.date)+' ?\n\nC’est définitif.')) return false;
+  if(!await rcConfirm('Supprimer la mesure '+e.sys+'/'+e.dia
+    +' du '+_fmtDateCourte(e.date)+' ?\n\nC’est définitif.',null,'Supprimer')) return false;
   const r=supprimerConstante(u,dateISO);
   if(!r.ok){ toast(r.raison,'var(--orange)'); return false; }
   saveUser();
@@ -27461,14 +27538,14 @@ function supprimerConstanteUI(dateISO){
   toast('Mesure supprimée.','var(--green)');
   return true;
 }
-function supprimerAnalyseUI(dateISO,marqueur){
+async function supprimerAnalyseUI(dateISO,marqueur){
   const u=currentUser;
   if(!u) return false;
   const e=((u.analyses)||[]).find(x=>x&&x.date===dateISO&&x.marqueur===marqueur);
   if(!e){ toast('Analyse introuvable.','var(--orange)'); return false; }
   const m=marqueurDe(marqueur);
-  if(!confirm('Supprimer '+((m&&m.lib)||marqueur)+' — '+String(e.valeur).replace('.',',')
-    +' '+e.unite+' du '+_fmtDateCourte(e.date)+' ?\n\nC’est définitif.')) return false;
+  if(!await rcConfirm('Supprimer '+((m&&m.lib)||marqueur)+' — '+String(e.valeur).replace('.',',')
+    +' '+e.unite+' du '+_fmtDateCourte(e.date)+' ?\n\nC’est définitif.',null,'Supprimer')) return false;
   const r=supprimerAnalyse(u,dateISO,marqueur);
   if(!r.ok){ toast(r.raison,'var(--orange)'); return false; }
   saveUser();
@@ -28127,9 +28204,11 @@ function _remplacerParExo(i,nom){
   renderProgEx();
   toast('Exercice remplacé');
 }
-function _garderMalgreContrainte(i){
+async function _garderMalgreContrainte(i){
   if(!progEx[i]) return;
-  const j=prompt('Pourquoi tu maintiens cet exercice ? (une ligne)');
+  const j=await rcSaisie('Pourquoi tu maintiens cet exercice ?'
+    +'\n\nUne ligne suffit. Elle reste dans le dossier.',null,
+    {placeholder:'Ex : douleur ancienne, sans gêne actuelle',libelleOk:'Enregistrer'});
   if(j==null) return;
   const t=String(j).trim().slice(0,200);
   if(!t){ toast('Une justification est demandée','var(--orange)'); return; }
@@ -28756,7 +28835,9 @@ function saveBilanFinal(){
       const _pose=SCOFF_QUESTIONS.some(q=>bilData['deb-scoff-'+q.cle]!==undefined);
       if(_pose){
         const _risque=appliquerRisqueTca(currentUser,_rep);
-        if(_risque) try{ alert(SCOFF_MSG_POSITIF); }catch(e){}
+        // rcAlerte et non alert : Chrome eteint les boites natives toutes
+        // ensemble, et ce message-la ne doit pas disparaitre en silence.
+        if(_risque) try{ rcAlerte(SCOFF_MSG_POSITIF); }catch(e){}
       }
       for(const q of SCOFF_QUESTIONS){ delete bi['deb-scoff-'+q.cle]; delete bilData['deb-scoff-'+q.cle]; }
     }catch(e){}
@@ -29295,11 +29376,11 @@ function renderLeveeCoach(c){
   let h=''; try{ h=c?htmlLeveeCoach(c):''; }catch(e){ h=''; }
   z.innerHTML=h;
 }
-function coachLeverDrapeau(quoi){
+async function coachLeverDrapeau(quoi){
   const c=getOwnedClient(currentClientId);
   if(!c) return false;
   const lib=(quoi==='general')?'ce signalement général':'ce drapeau rouge';
-  if(!confirm('Lever '+lib+' ? L\'entraînement reprendra, avec une séance de retour en volume réduit.')) return false;
+  if(!await rcConfirm('Lever '+lib+' ? L\'entraînement reprendra, avec une séance de retour en volume réduit.',null,'Lever')) return false;
   let fait=false;
   try{ fait=(quoi==='general')?leverDrapeauGeneral(c):leverDrapeauRouge(c); }catch(e){ fait=false; }
   if(!fait) return false;
@@ -29429,10 +29510,10 @@ function habCoachAjouter(){
   toastEcriture(ok,'Habitude ajoutée','l\'habitude est');
   return true;
 }
-function habCoachRetirer(cle){
+async function habCoachRetirer(cle){
   const c=getOwnedClient(currentClientId);
   if(!c) return false;
-  if(!confirm('Retirer cette habitude ? Les coches déjà faites sont conservées.')) return false;
+  if(!await rcConfirm('Retirer cette habitude ? Les coches déjà faites sont conservées.',null,'Retirer')) return false;
   if(!habitudeRetirer(c,cle)) return false;
   const ok=saveUser();
   try{ CLOUD.pushOne(c.email,c); }catch(e){}
@@ -30398,15 +30479,17 @@ async function confirmDechargeGroupee(){
     :'Aucun athlète traitable dans cette sélection.';
   if(prep.echecs.length) txt+=nl+nl+'Ne seront PAS traités :'+nl
     +prep.echecs.map(e=>'· '+e.nom+' ('+e.raison+')').join(nl);
-  if(!prep.cibles.length){ alert(txt); return; }
-  if(!confirm(txt)) return;
+  if(!prep.cibles.length){ await rcAlerte(txt); return; }
+  if(!await rcConfirm(txt,null,'Confirmer')) return;
   const r=await appliquerDechargeGroupee(ids);
   loadDechargeAthletes();
   // Une liste d'échecs ne se lit pas en deux secondes de toast.
-  if(r.echecs.length) alert(_rapportDecharge(r)); else toast(_rapportDecharge(r));
+  // Une liste d’échecs ne se lit pas en deux secondes de toast, et l’écran
+  // vient d’être redessiné : on attend que le rapport soit lu.
+  if(r.echecs.length) await rcAlerte(_rapportDecharge(r)); else toast(_rapportDecharge(r));
 }
 
-function programmerDecharge(){
+async function programmerDecharge(){
   // Ecriture par la carte des utilisateurs, comme toute autre modification
   // depuis la fiche athlete : _coachEditClient est une copie profonde reservee
   // a l'editeur de seances et n'est pas forcement renseigne ici.
@@ -30416,9 +30499,9 @@ function programmerDecharge(){
   if(!c.email){ toast('Cet élève n\'a pas encore de dossier synchronisé','var(--orange)'); return; }
   const actifs=((c.sessions_config)||[]).map((x,i)=>({x,i})).filter(o=>o.x&&o.x.active);
   if(!actifs.length){ toast('Aucun créneau actif','var(--orange)'); return; }
-  if(!confirm('Programmer une semaine de décharge ?'+String.fromCharCode(10)+String.fromCharCode(10)
+  if(!await rcConfirm('Programmer une semaine de décharge ?'+String.fromCharCode(10)+String.fromCharCode(10)
     +'Les '+actifs.length+' séances actives seront marquées « décharge » et sortiront de la détection de plateau.'
-    +String.fromCharCode(10)+'Aucun décochage automatique : c\'est toi qui la retires ensuite.')) return;
+    +String.fromCharCode(10)+'Aucun décochage automatique : c\'est toi qui la retires ensuite.',null,'Programmer')) return;
   actifs.forEach(o=>{ c.sessions_config[o.i].deload=true; });
   users[c.email]=c;
   const ok=DB.set('users',users);
@@ -31459,8 +31542,8 @@ function telechargerDossierSante(){
     return true;
   }catch(e){ toast('Export impossible.','var(--red)'); return false; }
 }
-function purgerHistoriqueSante(){
-  if(!confirm('Effacer l\'historique des déclarations ? Les déclarations actives ne sont pas touchées. Ce choix est définitif.')) return false;
+async function purgerHistoriqueSante(){
+  if(!await rcConfirm('Effacer l\'historique des déclarations ? Les déclarations actives ne sont pas touchées. Ce choix est définitif.',null,'Effacer')) return false;
   purgerJournalSante(currentUser);
   saveUser();
   renderDossierSante();
@@ -32209,12 +32292,12 @@ function _htmlPostPartumCoach(c){
 // ÉCRIT sur le dossier de l'ATHLÈTE, par la carte des utilisateurs — même
 // chemin que coachLeverDrapeau. La trace est horodatée et n'est jamais
 // effacée par ce module.
-function ppCoachLever(){
+async function ppCoachLever(){
   const users=DB.get('users')||{};
   const c=getOwnedClient(currentClientId,users);
   if(!c||!c.email) return false;
   if(!ppVisibleCoach(c)) return false;
-  if(!confirm('Lever la restriction d\'impacts pour cette athlète ? La trace restera dans son dossier.')) return false;
+  if(!await rcConfirm('Lever la restriction d\'impacts pour cette athlète ? La trace restera dans son dossier.',null,'Lever')) return false;
   if(!c.grossesse||typeof c.grossesse!=='object') c.grossesse={};
   if(!c.grossesse.pp||typeof c.grossesse.pp!=='object') c.grossesse.pp={};
   c.grossesse.pp.levee={date:Date.now(),par:(currentUser&&(currentUser.fname||currentUser.email))||'coach'};
@@ -32841,7 +32924,7 @@ function _htmlDepartAthlete(nut){
     ${blocDisclaimerSante()}
   </div>`;
 }
-function utiliserBesoinsProposes(){
+async function utiliserBesoinsProposes(){
   const nut=currentUser.nutrition||{};
   // Deuxième garde, au MOMENT de l'écriture et pas seulement au rendu : entre
   // l'affichage de la carte et le clic, une synchronisation a pu apporter les
@@ -32863,10 +32946,10 @@ function utiliserBesoinsProposes(){
       toast('Vu ce que tu as déclaré, RepCore ne pose pas de déficit tout seul. Passe par ton coach.','var(--orange)');
       return;
     }
-    if(!confirm('Ces objectifs posent un déficit d\'environ '+deficit
+    if(!await rcConfirm('Ces objectifs posent un déficit d\'environ '+deficit
       +' kcal par jour, sous ta dépense estimée de '+b.depense+' kcal.'
       +String.fromCharCode(10)+String.fromCharCode(10)
-      +'Tu peux les modifier à tout moment. Continuer ?')) return;
+      +'Tu peux les modifier à tout moment. Continuer ?',null,'Confirmer')) return;
   }
   const j=o=>({kcal:o.kcal,p:o.p,g:o.g,l:o.l,f:o.f});
   if(!currentUser.nutrition) currentUser.nutrition={};
@@ -34641,15 +34724,15 @@ function ouvrirPlanCoach(){
 // confirme — SAUF quand il n'y a rien à écraser, où demander confirmation
 // pour remplacer du vide serait une friction gratuite. Et il n'écrit rien en
 // base : le coach relit et enregistre comme d'habitude.
-function cplPoserModele(cle){
+async function cplPoserModele(cle){
   const c=getOwnedClient(currentClientId);
   if(!c) return;
   const m=planDepuisModele(c,_cplPlan?_cplPlan.avecComplements:false,cle);
   if(!m){ toast('Modèle inconnu','var(--orange)'); return; }
   if(planActif({nutrition:{plan:_cplPlan}})&&!_cplIntact()
-     &&!confirm('Remplacer toute la composition en cours par le modèle « '
+     &&!await rcConfirm('Remplacer toute la composition en cours par le modèle « '
        +planModeleLib(m.modele)+' » ?'+String.fromCharCode(10)
-       +String.fromCharCode(10)+'Rien n\'est enregistré tant que tu n\'as pas cliqué sur Enregistrer.')) return;
+       +String.fromCharCode(10)+'Rien n\'est enregistré tant que tu n\'as pas cliqué sur Enregistrer.',null,'Remplacer')) return;
   _cplPlan=m; _cplNeuf=true; _cplPliage={};
   renderPlanCoach();
   toast('Modèle « '+planModeleLib(m.modele)+' » posé. Relis, ajuste, puis enregistre.');
@@ -35332,8 +35415,8 @@ function savePlanCoach(){
   const ok=DB.set('users',users);
   toastSync(ok,CLOUD.pushOne(c.email,c),'Plan alimentaire enregistré ✓','le plan est');
 }
-function supprimerPlanCoach(){
-  if(!confirm('Supprimer le plan alimentaire de cet athlète ? Ses objectifs de macros ne sont pas touchés.')) return;
+async function supprimerPlanCoach(){
+  if(!await rcConfirm('Supprimer le plan alimentaire de cet athlète ? Ses objectifs de macros ne sont pas touchés.',null,'Supprimer')) return;
   const users=DB.get('users')||{};
   const c=getOwnedClient(currentClientId,users);
   if(!c) return;
@@ -42011,12 +42094,12 @@ function loadMoreVideos(){
   const shown=document.getElementById('vid-card-list')?.children.length||0;
   _renderVideoBatch(shown,20);
 }
-function _buildVideoCard(v){
+async function _buildVideoCard(v){
   const hasFb=v.feedback||v.feedbackTimestamps?.length;
   const tsInner=_renderTsAnnotations(v.feedbackTimestamps||[],{readonly:true,videoId:'vc-video-'+v.id});
   const tsBlock=tsInner?`<div style="margin-top:8px">${tsInner}</div>`:'';
   const fbBlock=hasFb?`<div style="background:var(--surface-2);border-radius:8px;padding:10px;margin-top:10px;font-size:12px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span style="color:var(--sub);font-size:var(--fs-xs);font-weight:700">FEEDBACK COACH</span>${v.feedbackDate?`<span style="font-size:var(--fs-xs);color:var(--text-dim)">${new Date(v.feedbackDate).toLocaleDateString('fr-FR')}</span>`:''}</div>${v.feedback?`<p style="margin:0;line-height:1.5">${escapeHtml(v.feedback)}</p>`:''}${tsBlock}</div>`:'';
-  return `<div class="video-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:13px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?'✓ Corrigée':'En attente'}</span><button onclick="if(confirm('Supprimer cette vidéo ?'))deleteVideo('${currentUser.email}','${v.id}')" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:18px;line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button></div><div class="sub" style="font-size:11px">${new Date(v.date).toLocaleDateString('fr-FR')}</div>${_videoEmbed(v.url,'vc-video-'+v.id)}${fbBlock}</div>`;
+  return `<div class="video-card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><div style="font-weight:700;font-size:13px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(v.name)}</div><span class="badge ${hasFb?'badge-green':'badge-orange'}" style="margin-left:8px;flex-shrink:0">${hasFb?'✓ Corrigée':'En attente'}</span><button onclick="if(await rcConfirm('Supprimer cette vidéo ?',null,'Supprimer'))deleteVideo('${currentUser.email}','${v.id}')" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:18px;line-height:1;padding:0 0 0 8px;flex-shrink:0" title="Supprimer">×</button></div><div class="sub" style="font-size:11px">${new Date(v.date).toLocaleDateString('fr-FR')}</div>${_videoEmbed(v.url,'vc-video-'+v.id)}${fbBlock}</div>`;
 }
 async function deleteVideo(email,videoId){
   const users=DB.get('users')||{};
@@ -42522,8 +42605,8 @@ function qcSaveEdit(id){
   c.label=label.slice(0,40);c.text=(text||label).slice(0,120);
   saveUser();openQCManager();_renderQuickCommentChips();
 }
-function qcDel(id){
-  if(!confirm('Supprimer ce commentaire-type ?'))return;
+async function qcDel(id){
+  if(!await rcConfirm('Supprimer ce commentaire-type ?',null,'Supprimer'))return;
   currentUser.quickComments=(currentUser.quickComments||[]).filter(c=>c.id!==id);
   saveUser();openQCManager();_renderQuickCommentChips();
 }
@@ -42537,8 +42620,8 @@ function qcDown(idx){
   [qcs[idx].pos,qcs[idx+1].pos]=[qcs[idx+1].pos,qcs[idx].pos];
   currentUser.quickComments=qcs;saveUser();openQCManager();_renderQuickCommentChips();
 }
-function qcReset(){
-  if(!confirm('Réinitialiser aux 6 commentaires par défaut ?'))return;
+async function qcReset(){
+  if(!await rcConfirm('Réinitialiser aux 6 commentaires par défaut ?',null,'Confirmer'))return;
   currentUser.quickComments=QC_DEFAULTS.map((c,i)=>({id:'qcd'+Date.now()+i,label:c.label,text:c.text,pos:i}));
   toastEcriture(saveUser(),'Liste réinitialisée ✓','la liste est');openQCManager();_renderQuickCommentChips();
 }
@@ -45044,7 +45127,7 @@ function _pauseJournaliser(c,quoi,extra){
 // hebdomadaires. Chaque palier est une écriture normale dans nutrition.macros,
 // journalisée avec origine 'transition'. Protéines et lipides ne bougent pas —
 // même contrat que partout ailleurs dans ce module.
-function ouvrirTransitionMaintien(){
+async function ouvrirTransitionMaintien(){
   const r=_pauseCible(); if(!r) return false;
   const {c}=r;
   let dep=null;
@@ -45060,7 +45143,7 @@ function ouvrirTransitionMaintien(){
     +String.fromCharCode(10)+String.fromCharCode(10)
     +'Protéines et lipides ne changent pas. Tu peux appliquer les paliers un par '
     +'un, ou sauter directement à la cible.';
-  if(!confirm(txt+String.fromCharCode(10)+String.fromCharCode(10)+'Appliquer le PREMIER palier ?')){
+  if(!await rcConfirm(txt+String.fromCharCode(10)+String.fromCharCode(10)+'Appliquer le PREMIER palier ?',null,'Appliquer')){
     return false;
   }
   return appliquerPalierTransition(0);
@@ -45691,8 +45774,8 @@ function leafqPlusTard(){
   return true;
 }
 // RÈGLE 8 : définitif. Aucun chemin ne le rouvre.
-function leafqNePlusProposer(){
-  if(!confirm('Ne plus proposer ces questions ? Ce choix est définitif.')) return false;
+async function leafqNePlusProposer(){
+  if(!await rcConfirm('Ne plus proposer ces questions ? Ce choix est définitif.',null,'Ne plus proposer')) return false;
   if(!currentUser.redsScreening||typeof currentUser.redsScreening!=='object')
     currentUser.redsScreening={};
   currentUser.redsScreening.optedOut=true;
@@ -45902,7 +45985,7 @@ function renderCartePesee(){
     <div style="font-size:11px;color:var(--sub);margin-top:8px;line-height:1.5">${sous}</div>
   </div>`;
 }
-function savePesee(){
+async function savePesee(){
   const inp=document.getElementById('pesee-input');
   if(!inp) return;
   const v=parseFloat(String(inp.value).replace(',','.'));
@@ -45912,7 +45995,7 @@ function savePesee(){
   // en un jour est presque toujours une virgule ou un chiffre de trop.
   const ant=serieWeight(currentUser).filter(e=>e.date<auj).slice(-1)[0];
   if(ant&&Math.abs(v-ant.kg)>PESEE_ECART_CONFIRM
-     &&!confirm('Écart de '+Math.abs(v-ant.kg).toFixed(1)+' kg avec ta dernière pesée ('+ant.kg+' kg).\n\nC\'est bien '+v+' kg ?')) return;
+     &&!await rcConfirm('Écart de '+Math.abs(v-ant.kg).toFixed(1)+' kg avec ta dernière pesée ('+ant.kg+' kg).\n\nC\'est bien '+v+' kg ?',null,'Confirmer')) return;
   if(!_recordWeight(auj,v)){ toast('⚠️ Pesée refusée','var(--red)'); return; }
   toastEcriture(saveUser(),'Pesée enregistrée 👍','ta pesée est');
   renderCartePesee();
@@ -47037,8 +47120,8 @@ function toastSync(localOk,promesse,succes,perdu){
     });
 }
 function silentLogout(){DB.del('session');currentUser=null;CLOUD.signOut();oublierBanque();}
-function logout(){
-  if(!confirm('Se déconnecter ?')) return;
+async function logout(){
+  if(!await rcConfirm('Se déconnecter ?',null,'Se déconnecter')) return;
   // Le compte quitte le registre : ses jetons viennent d'être révoqués, le
   // garder en liste promettrait une bascule qui échouerait.
   const _sortant=compteActif();
@@ -49707,7 +49790,7 @@ async function toggleSubStatus(email){
   // Le créateur voit tous les abonnés ; les coachs sont limités à leurs propres élèves.
   const isCreator=currentUser?.email===CREATOR_EMAIL;
   if(!isCreator&&!getOwnedClient(u.id,users)) return; // getOwnedClient affiche le toast
-  if(u.paymentStatus==='active'&&!confirm('Suspendre l\'abonnement de '+u.fname+' ? Il perdra l\'accès immédiatement.')) return;
+  if(u.paymentStatus==='active'&&!await rcConfirm('Suspendre l\'abonnement de '+u.fname+' ? Il perdra l\'accès immédiatement.',null,'Confirmer')) return;
   u.paymentStatus=u.paymentStatus==='active'?'cancelled':'active';
   u.updatedAt=Date.now();
   users[email]=u;
@@ -49876,13 +49959,13 @@ async function requestAccountDeletion(){
       return;
     }
   }
-  const ok=confirm(
+  const ok=await rcConfirm(
     'SUPPRIMER DÉFINITIVEMENT MON COMPTE ?\n\n'
     +'Cette action est irréversible.\n'
     +'Toutes tes données personnelles (profil, programmes, codes d\'accès, messages audio)\n'
     +'seront effacées conformément au RGPD (Art. 17).\n\n'
     +'Les données financières sont conservées 5 ans (obligation légale).'
-  );
+  ,null,'Confirmer');
   if(!ok) return;
   toast('Suppression en cours…','var(--sub)');
   try{
@@ -51323,7 +51406,7 @@ function _aAntecedentLombaire(){
   return /lombaire|hernie|sciatique|lumbago|dos\b/.test(txt);
 }
 
-function _appliquerProto(slug,champ){
+async function _appliquerProto(slug,champ){
   const p=protocole(slug); if(!p) return;
   const el=document.getElementById(champ); if(!el) return;
   const actuel=(el.value||'').trim();
@@ -51331,7 +51414,7 @@ function _appliquerProto(slug,champ){
   // porter une consigne pour cet athlète-là. En revanche un texte issu d'un
   // protocole se remplace directement, sinon essayer les suggestions l'une
   // après l'autre demande une confirmation à chaque clic.
-  if(actuel&&!_vientDunProtocole(actuel)&&!confirm('Remplacer le texte actuel par « '+p.nom+' » ?')) return;
+  if(actuel&&!_vientDunProtocole(actuel)&&!await rcConfirm('Remplacer le texte actuel par « '+p.nom+' » ?',null,'Remplacer')) return;
   el.value=protoTexte(p);
   _progExDirty=true;
   // Provenance conservée, pour savoir plus tard d'où vient ce texte.
@@ -51510,8 +51593,8 @@ function ouvrirEditeurProto(slug,retour){
   go('s-proto-edit');
   _peRendre();
 }
-function _peQuitter(){
-  if(_peModifie&&!confirm('Quitter sans enregistrer ? Les modifications seront perdues.')) return;
+async function _peQuitter(){
+  if(_peModifie&&!await rcConfirm('Quitter sans enregistrer ? Les modifications seront perdues.',null,'Quitter')) return;
   _peBrouillon=null;
   go(_peRetour);
   if(_peRetour==='s-protocoles') _pfRendre();
@@ -51725,10 +51808,10 @@ function _peEnregistrer(){
   if(typeof toastEcriture==='function') toastEcriture(ok,'Protocole enregistré','le protocole est');
   else toast('Protocole enregistré');
 }
-function _peSupprimer(){
+async function _peSupprimer(){
   const slug=_peBrouillon&&_peBrouillon.slug;
   if(!slug) return;
-  if(!confirm('Supprimer ce protocole ? Les séances où son déroulé a déjà été écrit ne changent pas.')) return;
+  if(!await rcConfirm('Supprimer ce protocole ? Les séances où son déroulé a déjà été écrit ne changent pas.',null,'Supprimer')) return;
   currentUser.protocolesPerso=protocolesPerso().filter(p=>p.slug!==slug);
   saveUser();
   _peModifie=false; _peBrouillon=null;
