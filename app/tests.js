@@ -31424,3 +31424,365 @@ vendredi 78 6h 44m
 }
 function getLastZeloRIRSafe(n){ return getLastZeroRIRWeight(n,0,'P'); }
 
+
+// ══════════════ TESTS DU SERVICE WORKER ══════════════
+//
+// DÉPLACÉES DEPUIS index.html : 21 Ko de code de test qui y étaient restés
+// après le découpage, sans aucun appelant, et que chaque athlète téléchargeait
+// et analysait à chaque ouverture.
+//
+// Le motif invoqué là-bas — « lire sw.js exige un fetch, donc de l’asynchrone »
+// — ne tient plus : chargerTests() est déjà `async` et charge ce fichier à la
+// demande.
+//
+// testNotifs lit _swSeance, currentUser, DB, appliquerDechargeGroupee,
+// _cachePlateau, _cacheSignaux, _viderCachePlateau et _viderCacheSignaux depuis
+// la portée globale. Ce fichier est chargé par une balise <script> ordinaire :
+// il partage la même portée, et les retrouve toutes.
+// ══════════════ TESTS DU SERVICE WORKER ══════════════
+// sw.js s'exécute dans un autre contexte : la page n'y a aucun accès, et
+// testExercices() ne peut donc rien en dire. Or c'est là que vivent le plafond
+// de trois notifications, l'avance de bilan et le calcul de jour — c'est-à-dire
+// tout ce que ce lot corrige.
+//
+// On charge le FICHIER RÉELLEMENT LIVRÉ par fetch et on l'évalue avec des
+// bouchons. Rien n'est dupliqué : si sw.js change, le test suit. Et « Date »
+// est passé en paramètre, ce qui le fait masquer le Date global À L'INTÉRIEUR
+// du source évalué — on peut donc simuler une heure sans toucher à la page.
+//
+// À lancer depuis la console : await testNotifs()
+// Les assertions sur sw.js vivent ICI et non dans testExercices : lire le
+// fichier exige un fetch, donc de l'asynchrone. testNotifs l'est déjà.
+// src est FOURNI par testNotifs, qui charge deja sw.js : un second fetch
+// serait un second point de defaillance pour la meme lecture.
+// R est le tableau de resultats de testNotifs : _testSW y pousse directement,
+// ce qui lui evite de reinventer le report du message d echec.
+function _testSW(R,src){
+  let _m='';
+  const _echec=m=>{ _m=m; return false; };
+  const ok=(n,c)=>{ R.push({n,ok:!!c,d:c?'':_m}); _m=''; };
+  ok('sw.js est lisible depuis la suite',(()=>{
+    return src.length>3000?true:_echec('source vide ou tronquée ('+src.length+' o)');})());
+  if(!src) return;
+  ok('ASSETS contient ./index.html',(()=>{
+    const m=src.match(/const\s+ASSETS\s*=\s*\[([^\]]*)\]/);
+    if(!m) return _echec('ASSETS introuvable');
+    if(m[1].indexOf("'./index.html'")<0)
+      return _echec('index.html absent : ' + m[1].trim());
+    // Les deux autres restent : ils font l'installabilité PWA.
+    return /manifest\.json/.test(m[1])?true:_echec('manifest.json a disparu');})());
+  ok('Le délai de garde existe et vaut au plus 2500 ms',(()=>{
+    const m=src.match(/const\s+SW_DELAI_RESEAU_MS\s*=\s*(\d+)/);
+    if(!m) return _echec('SW_DELAI_RESEAU_MS introuvable');
+    const v=parseInt(m[1],10);
+    if(!(v>0)) return _echec('valeur : '+v);
+    return v<=2500?true:_echec(v+' ms, au-delà du plafond');})());
+  ok('index.html n\'est PAS passé en cache-first',(()=>{
+    // La mise à jour doit rester rapide : le réseau est toujours lancé,
+    // le cache ne sert que si la course est perdue.
+    if(!/Promise\.race/.test(src)) return _echec('aucune course : le délai ne joue pas');
+    return /const reseau\s*=\s*fetch\(/.test(src)
+      ?true:_echec('le réseau n\'est plus lancé d\'emblée');})());
+  ok('Aucune requête cross-origin n\'est interceptée',(()=>{
+    // Ce garde protège Firebase : sans lui le SW renvoie du HTML là où du
+    // JSON est attendu.
+    return /if \(!url\.startsWith\(self\.location\.origin\)\) return;/.test(src)
+      ?true:_echec('le garde cross-origin a disparu');})());
+  ok('activate ne purge QUE si le nouveau cache porte index.html',(()=>{
+    if(!/await neuf\.match\('\.\/index\.html'\)/.test(src))
+      return _echec('aucune vérification avant purge');
+    const i=src.indexOf("if (await neuf.match('./index.html'))");
+    const j=src.indexOf('caches.delete(k)',i<0?0:i);
+    return (i>=0&&j>i)?true:_echec('la purge précède la vérification');})());
+  ok('Ciqual est RECOPIÉ, pas retéléchargé, à l\'activation',(()=>{
+    if(!/neuf\.put\(CIQUAL_URL/.test(src)) return _echec('aucun report de Ciqual');
+    // Et surtout pas un add(), qui repartirait chercher 852 Ko.
+    const bloc=src.slice(src.indexOf("addEventListener('activate'"),
+      src.indexOf("addEventListener('fetch'"));
+    return !/\.add\(CIQUAL_URL/.test(bloc)
+      ?true:_echec('activate retélécharge Ciqual');})());
+  ok('L\'état de séance est lu dans le CACHE PARTAGÉ, pas dans une variable',(()=>{
+    // Une variable de module appartient au worker QUI S'INSTALLE : elle y vaut
+    // toujours false, et le garde-fou ne s'est jamais déclenché. Ce test-ci
+    // remplace celui qui vérifiait la présence de `_seanceEnCours` — il
+    // constatait la LETTRE du garde-fou, pas son effet.
+    if(/_seanceEnCours/.test(src)) return _echec('l\'état vit encore dans une variable de module');
+    const inst=src.slice(src.indexOf("addEventListener('install'"),
+      src.indexOf("addEventListener('message'"));
+    if(!/e\.waitUntil\(\(async \(\) => \{/.test(inst)) return _echec('install ne diffère plus sa décision');
+    if(!/if \(await seanceActive\(\)\) _attenteFinSeance = true;/.test(inst))
+      return _echec('install ne lit pas l\'état partagé');
+    if(!/else self\.skipWaiting\(\);/.test(inst)) return _echec('la bascule a disparu');
+    // La lecture passe par le cache qui SURVIT aux mises à jour.
+    const sa=src.slice(src.indexOf('async function seanceActive'),
+      src.indexOf('async function seanceActive')+400);
+    if(!/swGet\(SEANCE_CLE\)/.test(sa)) return _echec('seanceActive ne lit pas SW_DATA');
+    if(!/const SEANCE_CLE = '\/seance-en-cours';/.test(src)) return _echec('aucune clé nommée');
+    // Et le drapeau PÉRIME : une séance jamais terminée bloquerait tout.
+    if(!/SEANCE_PEREMPTION_MS/.test(sa)) return _echec('aucune péremption');
+    if(!/const SEANCE_PEREMPTION_MS = 4 \* 3600 \* 1000;/.test(src))
+      return _echec('la péremption n\'est pas de 4 h');
+    // La fin de séance efface la clé, débloque ce worker-ci, et redemande au
+    // navigateur d'aller voir : sans update(), la bascule retenue attendrait
+    // la fermeture de tous les onglets.
+    const fin=src.slice(src.indexOf("'SEANCE_TERMINEE'"), src.indexOf("'PREFETCH_CIQUAL'"));
+    if(!/swSet\(SEANCE_CLE, null\)/.test(fin)) return _echec('la clé n\'est pas effacée');
+    if(!/self\.skipWaiting\(\)/.test(fin)) return _echec('la bascule retenue n\'est pas libérée');
+    return /self\.registration\.update\(\)/.test(fin)
+      ?true:_echec('aucun update() : la bascule retenue attendrait la fermeture des onglets');})());
+  ok('Le client écrit l\'état là où le worker qui s\'installe ira le lire',(()=>{
+    const c=String(_swSeance);
+    if(!/caches\.open\(SW_DATA_CACHE\)/.test(c)) return _echec('le client n\'écrit pas dans le cache');
+    if(!/'\/seance-en-cours'/.test(c)) return _echec('pas la bonne clé');
+    if(!/reg\.waiting\?\.postMessage/.test(c))
+      return _echec('le worker EN ATTENTE n\'est pas prévenu : il resterait bloqué');
+    // Le nom du cache doit être le MÊME des deux côtés, sinon chacun écrit
+    // dans le sien et on retrouve exactement le défaut corrigé ici.
+    return /const SW_DATA = 'repcore-sw-data';/.test(src)
+      &&SW_DATA_CACHE==='repcore-sw-data'
+      ?true:_echec('les deux fichiers ne nomment pas le même cache');})());
+  ok('SW_DATA reste hors de portée de la purge',(()=>{
+    // Rappels de bilan, de séance et de compléments vivent dedans.
+    return /k !== SW_DATA/.test(src)
+      ?true:_echec('SW_DATA peut être supprimé');})());
+  ok('Les handlers de notification ne sont pas touchés',(()=>{
+    for(const h of ['periodicsync','notificationclick','push'])
+      if(src.indexOf("addEventListener('"+h+"'")<0)
+        return _echec(h+' a disparu');
+    return true;})());
+}
+async function testNotifs(){
+  const R=[]; const ok=(n,c,d)=>R.push({n,ok:!!c,d:d||''});
+  let src='';
+  try{ src=await (await fetch('./sw.js',{cache:'no-store'})).text(); }
+  catch(e){ console.error('sw.js introuvable : '+e.message); return {total:0,echecs:1}; }
+
+  // ── Bouchons ──
+  const faireContexte=(isoFige)=>{
+    const notifs=[], mem=new Map(), VraiDate=window.Date;
+    const fige=new VraiDate(isoFige);
+    const D=new Proxy(VraiDate,{
+      construct:(t,a)=>a.length?new VraiDate(...a):new VraiDate(fige.getTime()),
+      get:(t,k)=>k==='now'?(()=>fige.getTime()):t[k]
+    });
+    const self={
+      addEventListener(){}, skipWaiting(){}, location:{origin:'http://x'},
+      clients:{claim(){}},
+      registration:{showNotification(titre,opts){notifs.push({titre,opts});return Promise.resolve();}}
+    };
+    const caches={open:()=>Promise.resolve({
+      match:k=>Promise.resolve(mem.has(k)?{json:()=>Promise.resolve(JSON.parse(mem.get(k)))}:undefined),
+      put:(k,resp)=>Promise.resolve(resp.text()).then(t=>{mem.set(k,t);}),
+      add:()=>Promise.resolve()
+    })};
+    const usine=new Function('self','caches','clients','Date',
+      src+'\nreturn {_jourLocal,_freqBilan,SUPP_GROUPES,swCheckSuppReminders,swCheckAndNotify,swGet,swSet};');
+    return {api:usine(self,caches,self.clients,D),notifs,mem};
+  };
+
+  // ── _jourLocal ──
+  {
+    const {api}=faireContexte('2026-07-15T10:00:00');
+    const d=new Date(2026,6,15,0,30);            // 15 juillet, 00 h 30 LOCALES
+    ok('_jourLocal rend la date locale',api._jourLocal(d)==='2026-07-15',api._jourLocal(d));
+    ok('_jourLocal : 23 h 59 reste le même jour',
+       api._jourLocal(new Date(2026,6,15,23,59))==='2026-07-15');
+    ok('_jourLocal : 00 h 01 bascule au jour suivant',
+       api._jourLocal(new Date(2026,6,16,0,1))==='2026-07-16');
+    ok('_jourLocal : hiver, 00 h 01',
+       api._jourLocal(new Date(2026,0,10,0,1))==='2026-01-10');
+    ok('_jourLocal : les mois et jours sont sur deux chiffres',
+       api._jourLocal(new Date(2026,0,5,12,0))==='2026-01-05');
+    // Là où le bug vivait : en avance sur UTC, minuit local est encore la
+    // veille en UTC. On ne l'affirme que si la machine est dans ce cas.
+    if(d.getTimezoneOffset()<0){
+      ok('_jourLocal diffère de toISOString quand UTC est en retard',
+         api._jourLocal(d)!==d.toISOString().slice(0,10),
+         'local '+api._jourLocal(d)+' vs UTC '+d.toISOString().slice(0,10));
+    } else {
+      ok('Fuseau non décalé : comparaison UTC sans objet',true,'ignoré ici');
+    }
+  }
+
+  // ── _freqBilan : bornage ──
+  {
+    const {api}=faireContexte('2026-07-15T10:00:00');
+    ok('Fréquence absente : deux semaines',api._freqBilan({})===2&&api._freqBilan(null)===2);
+    ok('Fréquence 1 respectée',api._freqBilan({freqSemaines:1})===1);
+    ok('Fréquence 2 respectée',api._freqBilan({freqSemaines:2})===2);
+    ok('Valeur aberrante bornée à deux',
+       api._freqBilan({freqSemaines:0})===2&&api._freqBilan({freqSemaines:99})===2
+       &&api._freqBilan({freqSemaines:'beaucoup'})===2);
+  }
+
+  // ── swCheckAndNotify : avance paramétrée ──
+  const avanceApres=async(freq,retardJours)=>{
+    const {api,mem,notifs}=faireContexte('2026-07-15T09:00:00');
+    const t=new Date(2026,6,15,9,0).getTime();
+    const sched={nextDate:t-retardJours*864e5,fname:'Marc'};
+    if(freq!=null) sched.freqSemaines=freq;
+    await api.swSet('/bilan-schedule',sched);
+    await api.swCheckAndNotify();
+    const apres=JSON.parse(mem.get('/bilan-schedule'));
+    return {avanceJours:Math.round((apres.nextDate-sched.nextDate)/864e5),notifs};
+  };
+  {
+    const a=await avanceApres(null,1);
+    ok('Cache sans freqSemaines : avance de 14 jours',a.avanceJours===14,String(a.avanceJours));
+    ok('Cache sans freqSemaines : aucune erreur, la notification part',a.notifs.length===1);
+    const b=await avanceApres(1,1);
+    ok('freqSemaines 1 : avance de 7 jours',b.avanceJours===7,String(b.avanceJours));
+    ok('freqSemaines 1 : le titre est « Bilan de la semaine »',
+       b.notifs[0]&&b.notifs[0].titre==='Bilan de la semaine',b.notifs[0]&&b.notifs[0].titre);
+    const c=await avanceApres(2,1);
+    ok('freqSemaines 2 : avance de 14 jours',c.avanceJours===14);
+    ok('freqSemaines 2 : le titre est « Bilan de quinzaine »',
+       c.notifs[0]&&c.notifs[0].titre==='Bilan de quinzaine');
+    ok('Le corps porte le prénom et la formule exacte',
+       c.notifs[0]&&c.notifs[0].opts.body==='Marc, 10 min quand tu as le temps ce week-end.',
+       c.notifs[0]&&c.notifs[0].opts.body);
+    ok('Le rappel de bilan ne colle plus à l\'écran',
+       c.notifs[0]&&c.notifs[0].opts.requireInteraction===false);
+    const d=await avanceApres(99,1);
+    ok('Valeur aberrante : avance bornée à 14 jours',d.avanceJours===14,String(d.avanceJours));
+    const e=await avanceApres(2,60);
+    ok('Échéance dépassée de plusieurs cycles : une seule avance, une seule notification',
+       e.avanceJours===14&&e.notifs.length===1);
+  }
+
+  // ── swCheckSuppReminders : trois groupes, plafond strict ──
+  const passeSupp=async(heure,items,memPartage)=>{
+    const {api,mem,notifs}=faireContexte('2026-07-15T'+String(heure).padStart(2,'0')+':05:00');
+    if(memPartage) memPartage.forEach((v,k)=>mem.set(k,v));
+    await api.swSet('/supp-reminders',{enabled:true,fname:'Marc',items,
+      lastNotif:memPartage?JSON.parse(mem.get('/supp-reminders')||'{}').lastNotif:undefined});
+    await api.swCheckSuppReminders();
+    return {notifs,mem};
+  };
+  {
+    const dix=[
+      {name:'Créatine',timings:['jeun'],dosage_quantity:5,dosage_unit:'g'},
+      {name:'Vitamine D',timings:['matin']},
+      {name:'Magnésium',timings:['toutes-4h']},
+      {name:'Oméga 3',timings:['midi']},
+      {name:'Zinc',timings:['apres-midi']},
+      {name:'Caféine',timings:['avant-entrainement']},
+      {name:'EAA',timings:['intra']},
+      {name:'Whey',timings:['apres-entrainement']},
+      {name:'Tisane',timings:['soir']},
+      {name:'Mélatonine',timings:['coucher']}
+    ];
+    ok('Aucun complément : aucune notification',(await passeSupp(8,[])).notifs.length===0);
+    const m=await passeSupp(8,[dix[0]]);
+    ok('Un seul complément le matin : une notification',m.notifs.length===1);
+    ok('Le corps porte le prénom, le nom, la quantité et l\'unité',
+       m.notifs[0].opts.body==='Marc : Créatine 5 g',m.notifs[0].opts.body);
+    ok('Le titre est « Compléments »',m.notifs[0].titre==='Compléments');
+    const m3=await passeSupp(8,[dix[0],dix[1],dix[2]]);
+    ok('Groupe matin : une seule notification pour trois produits',m3.notifs.length===1);
+    ok('Les produits sont concaténés par « · »',
+       m3.notifs[0].opts.body==='Marc : Créatine 5 g · Vitamine D · Magnésium',m3.notifs[0].opts.body);
+    // Une journée entière : trois passages aux trois heures d'émission.
+    let total=0;
+    for(const h of [8,13,20]) total+=(await passeSupp(h,dix)).notifs.length;
+    ok('Dix compléments sur dix créneaux : au plus 3 notifications par jour',total===3,String(total));
+    // Deux passages dans la même heure : une seule émission.
+    const p1=await passeSupp(8,[dix[0]]);
+    const p2=await passeSupp(8,[dix[0]],p1.mem);
+    ok('Deux passages dans la même heure : une seule émission',
+       p1.notifs.length===1&&p2.notifs.length===0,'1er '+p1.notifs.length+' 2e '+p2.notifs.length);
+    // Fenêtre d'émission.
+    ok('À 7 h, rien ne part encore',(await passeSupp(7,dix)).notifs.length===0);
+    ok('À 8 h, le groupe du matin part',(await passeSupp(8,dix)).notifs.length===1);
+    ok('À 9 h, le groupe du matin part encore',(await passeSupp(9,dix)).notifs.length===1);
+    ok('À 12 h, plus rien du matin',(await passeSupp(12,dix)).notifs.length===0);
+    ok('Aucune notification de complément ne colle à l\'écran',
+       (await passeSupp(8,dix)).notifs.every(x=>x.opts.requireInteraction===false));
+    ok('Les trois groupes couvrent les dix créneaux',(()=>{
+      const {api}=faireContexte('2026-07-15T08:00:00');
+      const c=api.SUPP_GROUPES.reduce((a,g)=>a.concat(g.timings),[]);
+      return c.length===10&&new Set(c).size===10;})());
+  }
+
+  // ── Les textes doivent rester identiques entre les deux fichiers ──
+  {
+    const page=document.documentElement.innerHTML;
+    const paires=[
+      ['Bilan de quinzaine',/Bilan de quinzaine/],
+      ['Bilan de la semaine',/Bilan de la semaine/],
+      ['Séance du jour',/'Séance du jour'/],
+      [', 10 min quand tu as le temps ce week-end.',/10 min quand tu as le temps ce week-end/],
+      [' est au programme.',/est au programme/]
+    ];
+    paires.forEach(([txt,re])=>{
+      ok('Texte partagé présent dans sw.js : « '+txt.trim()+' »',src.indexOf(txt)>=0);
+      ok('Texte partagé présent dans l\'app : « '+txt.trim()+' »',re.test(page));
+    });
+    ok('Aucun requireInteraction:true ne subsiste dans sw.js',!/requireInteraction:\s*true/.test(src));
+    ok('Aucune date UTC ne sert plus de clé de déduplication',
+       !/toISOString\(\)\.slice/.test(src));
+  }
+
+  // ── Décharge groupée : ce qui ne se vérifie qu'après l'écriture ──────────
+  {
+    const _sU=currentUser, _sUsers=DB.get('users');
+    try{
+      currentUser={id:'coZ',email:'coz@t.fr',role:'coach',exAlias:{},exMuscles:{},
+        sessions:[],bilans:[]};
+      const jour=(n)=>({day:'J'+n,name:'S'+n,active:true,photo:null,photo2:null,
+        warmup:'',cooldown:'',notes:'',exercises:[{name:'SQUAT',series:3,reps:'8'}]});
+      const mk=(id,fn,em,n)=>({id,fname:fn,lname:'Z',role:'athlete',coachId:'coZ',
+        email:em,exAlias:{},exMuscles:{},sessions:[],bilans:[],
+        sessions_config:Array.from({length:n},(_,k)=>jour(k))});
+      const a=mk('zA','Anna','annaz@t.fr',2), b=mk('zB','Bruno','brunoz@t.fr',1),
+            c=mk('zC','Chloe','',1);
+      const u={}; u[a.email]=a; u[b.email]=b; u['_sansmail_zC']=c;
+      DB.set('users',u);
+      // On empoisonne les deux caches : s'ils ne sont pas purgés, la décharge
+      // resterait invisible pour la détection de plateau et les signaux.
+      _cachePlateau['sentinelle']={x:1};
+      _cacheSignaux.set('sentinelle',1);
+      const r=await appliquerDechargeGroupee(['zA','zB','zC']);
+      ok('Critère : la décharge groupée vide le cache de plateau',
+         _cachePlateau['sentinelle']===undefined,
+         'la sentinelle a survécu');
+      ok('Critère : la décharge groupée vide le cache de signaux',
+         !_cacheSignaux.has('sentinelle'),'la sentinelle a survécu');
+      ok('La décharge groupée marque bien les créneaux actifs',(()=>{
+        const ap=DB.get('users')['annaz@t.fr'];
+        return ((ap&&ap.sessions_config)||[]).every(s=>s.deload===true);})(),
+        'des créneaux sont restés sans décharge');
+      // L'envoi ne peut pas aboutir ici : le bac à sable n'a pas de jeton, donc
+      // les deux athlètes synchronisés ressortent en « envoi refusé ». C'est le
+      // chemin d'échec, et il doit rester COMPLET — on vérifie donc que chaque
+      // athlète sélectionné est rapporté exactement une fois, et que celui qui
+      // n'a pas de dossier est distingué de celui dont l'envoi a échoué.
+      ok('Aucun échec silencieux : chaque athlète est rapporté une fois',
+         r.faits.length+r.echecs.length===3&&r.total===3,
+         JSON.stringify({faits:r.faits,echecs:r.echecs}));
+      ok('L\'athlète sans dossier est nommé, et pour la BONNE raison',
+         r.echecs.some(e=>/Chloe/.test(e.nom)&&e.raison==='dossier non synchronisé'),
+         JSON.stringify(r.echecs));
+      ok('Un athlète synchronisé n\'est jamais dit « non synchronisé »',
+         !r.echecs.some(e=>/Anna|Bruno/.test(e.nom)&&e.raison==='dossier non synchronisé'),
+         JSON.stringify(r.echecs));
+    } finally {
+      currentUser=_sU;
+      if(_sUsers) DB.set('users',_sUsers);
+      _viderCachePlateau(); _viderCacheSignaux();
+    }
+  }
+    // Assertions du lot « SW : demarrage garanti ». Elles lisent le source deja
+  // charge ci-dessus.
+  try{ _testSW(R,src); }
+  catch(e){ R.push({n:'Assertions SW',ok:false,d:e.message}); }
+
+  const ko=R.filter(r=>!r.ok);
+  console.log('%c'+R.length+' vérifications Service Worker, '+ko.length+' en échec',
+    'font-weight:bold;color:'+(ko.length?'#e05050':'#22c55e'));
+  R.forEach(r=>console.log((r.ok?'  ok   ':'  ÉCHEC')+'  '+r.n+(r.d?'   → '+r.d:'')));
+  return {total:R.length,echecs:ko.length,detail:R};
+}
+
+// Exposée comme testExercices : c’est depuis la console qu’on l’appelle.
+try{ if(typeof window!=='undefined') window.testNotifs=testNotifs; }catch(e){}
