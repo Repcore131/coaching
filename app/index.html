@@ -7912,7 +7912,28 @@ function _histPopstate(){
     _histPousser(actuel);
     return;
   }
-  // 4. LE CAS COURANT.
+  // 4. L'ÉCRAN A SON PROPRE BOUTON RETOUR : c'est LUI qui décide.
+  //
+  //    s-coach-program et s-proto-edit recâblent leur .back-btn avec un garde
+  //    de modifications non enregistrées. Le retour matériel les contournait et
+  //    quittait sans rien demander : le travail était perdu en silence.
+  //
+  //    Déléguer plutôt qu’allonger HIST_CONFIRME : une table figée redirait ce
+  //    que les écrans savent déjà, et il faudrait y penser au prochain écran
+  //    qui se dote d’un garde. C’est aussi ce qui fait que la flèche affichée
+  //    et le bouton matériel mènent enfin au même endroit.
+  //
+  //    L’entrée est repoussée AVANT l’appel : la question peut être
+  //    asynchrone, et sans elle la pile perdrait un cran pendant qu’elle est
+  //    posée. _histPousser ne pose qu’une sentinelle, l’appel à go() qui suivra
+  //    n’en ajoutera donc pas une seconde.
+  const _bk=document.querySelector('#'+actuel+' .back-btn');
+  if(_bk&&typeof _bk.onclick==='function'){
+    _histPousser(actuel);
+    try{ _bk.onclick(); }catch(e){}
+    return;
+  }
+  // 5. LE CAS COURANT : aucun bouton retour à l’écran, on remonte à l’origine.
   _histRetour(actuel);
 }
 try{ window.addEventListener('popstate',_histPopstate); }catch(e){}
