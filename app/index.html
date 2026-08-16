@@ -50137,13 +50137,42 @@ async function requestAccountDeletion(){
     //    le prix : mieux vaut oublier une clé du compte sortant — qu'un lot
     //    suivant rattrapera — que détruire les données de quelqu'un qui n'a
     //    rien demandé.
+    // LES BLOBS DE PHOTOS DE PROGRESSION, dans IndexedDB `repcore-photos`.
+    //
+    // Leurs clés sont `<date>/<pose>` : elles ne portent AUCUNE adresse. Rien
+    // ne pourra donc les rattacher à ce compte plus tard — ne pas les
+    // supprimer maintenant, c’est les laisser là pour toujours, orphelines et
+    // illisibles, mais bien présentes.
+    //
+    // phpViderBlobs vide le magasin ENTIER. Tant qu’un autre compte reste sur
+    // l’appareil, ce serait détruire SES photos. On ne vide tout que si on
+    // part seul ; sinon on retire clé par clé celles que CE dossier déclare.
+    //
+    // Et DANS LE DOUTE, on ne vide pas tout : si le registre des comptes est
+    // illisible, on retombe sur le retrait ciblé. Oublier un blob à soi se
+    // rattrape ; effacer celui d’un autre, non.
+    try{
+      let _seulSurLAppareil=false;
+      try{ _seulSurLAppareil=!comptesConnectes().some(c=>c&&c.email!==myKey); }
+      catch(e){ _seulSurLAppareil=false; }
+      if(_seulSurLAppareil){ await phpViderBlobs(); }
+      else {
+        const _sc=((currentUser.photosProgression||{}).seances)||[];
+        for(const _s of _sc)
+          for(const _po of Object.values((_s&&_s.poses)||{}))
+            if(_po&&_po.cle) try{ await phpSupprimerBlob(_po.cle); }catch(e){}
+      }
+    }catch(e){}
     try{
       // Le registre du multi-compte : on en retire CETTE entrée, pas le reste.
       try{ _comptesEcrire(comptesConnectes().filter(c=>c.email!==myKey)); }catch(e){}
       // Clés propres à cet appareil ou au compte actif — aucune ne porte les
       // données d'un autre compte.
+      // BIL_DRAFT_KEY et PHP_FILE_CLE sont nommées, pas retapées : leur valeur
+      // est déclarée ailleurs, et deux écritures d’une même clé finissent par
+      // désigner deux endroits.
       for(const k of ['rc_wo_state','rc_session','rc_fb_auth','rc_resil_file',
-                      'rc_code_verifie','pendingCode'])
+                      'rc_code_verifie','pendingCode',BIL_DRAFT_KEY,PHP_FILE_CLE])
         try{ localStorage.removeItem(k); }catch(e){}
       // Les photos et les secondes vues, préfixées par ce compte ou datées par
       // SES bilans. rc_p2_ porte l'email ; rc_photo_ ne porte qu'une date,
