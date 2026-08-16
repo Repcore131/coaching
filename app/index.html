@@ -12436,7 +12436,16 @@ async function enregistrerMessageCanal(){
     // La sonde de pastille et la copie épinglée vivent dans coach_public, qui
     // est déjà téléchargé à chaque ouverture d'accueil : c'est ce qui rend la
     // bannière et la pastille gratuites côté athlète.
-    currentUser.canalDernier=Date.now();
+    // SUR L'HORODATAGE DU MESSAGE, jamais sur « maintenant ». Une MODIFICATION
+    // garde le `at` d'origine : poser Date.now() faisait passer la sonde
+    // au-dessus de tout ce que l’athlète peut voir, et canalNonLu — qui compare
+    // canalDernier au plus récent AFFICHÉ — ne pouvait plus jamais
+    // s'équilibrer. La pastille restait allumée, ouverture après ouverture.
+    //
+    // Math.max et non une affectation : éditer un vieux message ne doit pas
+    // faire RECULER la sonde sous un message plus récent, sinon la pastille
+    // s’éteindrait pour une publication que personne n’a lue.
+    currentUser.canalDernier=Math.max(Number(currentUser.canalDernier)||0,msg.at);
     if(epingle) currentUser.canalEpingle={id,at:msg.at,titre,texte,lien:lienBrut};
     else if(currentUser.canalEpingle&&currentUser.canalEpingle.id===id) delete currentUser.canalEpingle;
     saveUser();
