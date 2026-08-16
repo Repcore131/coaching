@@ -28696,6 +28696,10 @@ function _appliquerSubstitut(idx,nom){
       reps:pr.type==='degressive'?pr.p1:ex.reps,rir:'',pain:'',done:false,
       degressive:pr.type==='degressive',p2reps:pr.p2}));
   }
+  // LES RECORDS DE L'ANCIEN MOUVEMENT S'EN VONT AVEC LUI. Le Set est indexé
+  // par position : sans cette purge, « RECORD » se recollerait sur les séries
+  // vides qu’on vient de reconstruire. Avant renderWoEx, qui les relit.
+  try{ _oublierRecordsExo(idx); }catch(e){}
   woPersist();
   closeModal();
   renderWoEx();
@@ -30935,6 +30939,18 @@ function ecartPrescritRealise(user){
 // enregistré tel quel en fin de séance, et un champ posé là serait persisté.
 let _recordsVus=new Set();
 function _resetRecordsVus(){ _recordsVus=new Set(); }
+// OUBLIE LES RECORDS D'UN SEUL EXERCICE, par sa POSITION. Appelée quand un
+// mouvement est remplacé en cours de séance : ses séries sont reconstruites à
+// vide, mais les clés `idx:i` survivraient et _badgeRecord — rendu sans
+// condition — recollerait « RECORD » sur les séries vides du nouveau.
+//
+// LE DEUX-POINTS EST DANS LE PRÉFIXE, et il compte : sans lui, purger
+// l'exercice 1 emporterait aussi les clés de l'exercice 10.
+function _oublierRecordsExo(idx){
+  const pre=idx+':';
+  for(const k of Array.from(_recordsVus))
+    if(String(k).indexOf(pre)===0) _recordsVus.delete(k);
+}
 // UNE SEANCE REPRISE RETROUVE SES BADGES. Ils ne sont pas dans l'instantane
 // — le drapeau vit dans un Set de module et JAMAIS sur la serie, puisque
 // sessionData est enregistre tel quel en fin de seance. Ils se RECALCULENT :
