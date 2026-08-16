@@ -27503,6 +27503,26 @@ function _ctEcrire(fn){
   CLOUD.pushOne(c.email,c);
   return true;
 }
+// La fiche coach, re-rendue QUAND ELLE EST À L’ÉCRAN.
+//
+// L’ancien code visait `ccd-contraintes`, un id qui n’existe pas, et appelait
+// renderContraintesCoach, définie nulle part. Enveloppé dans un try/catch,
+// il échouait en silence : l’écriture avait lieu, l’écran ne bougeait pas.
+// Le coach cliquait sur la ✕, la ligne restait, il recliquait.
+//
+// Le bloc réel est `ccd-alertes`, peuplé par openClientDetail — c’est donc la
+// fiche qu’on re-rend. Le second paramètre saute le go() et la synchro : on
+// redessine, on ne navigue pas.
+//
+// La garde sur l’écran actif n’est pas décorative : _ctRetirer sert AUSSI
+// l’athlète sur son propre dossier, et currentClientId peut y porter encore
+// le dernier client consulté en tant que coach.
+function _ctRafraichirFiche(){
+  if(!currentClientId) return false;
+  if(!document.getElementById('s-coach-client')?.classList.contains('active')) return false;
+  openClientDetail(currentClientId,true);
+  return true;
+}
 function _ctValider(){
   const s=_ctSaisie;
   if(!s.zone){ toast('Choisis une zone','var(--orange)'); return; }
@@ -27517,6 +27537,10 @@ function _ctValider(){
       poserDrapeauRouge(u,zone,cases);
     });
     closeModal();
+    // AVANT l’écran d’arrêt, qui se pose par-dessus : sans ça, le coach
+    // refermait l’arrêt sur une fiche qui ne montrait toujours pas les signes
+    // qu’il venait d’enregistrer. C’est le cas le plus grave des trois.
+    try{ _ctRafraichirFiche(); }catch(e){}
     if(ok2) afficherEcranArret(zone);
     return;
   }
@@ -27527,7 +27551,7 @@ function _ctValider(){
   closeModal();
   if(!ok2){ toast('Enregistrement impossible','var(--red)'); return; }
   toast('C\'est noté 👍');
-  try{ if(document.getElementById('ccd-contraintes')) renderContraintesCoach(getOwnedClient(_ctCible)); }catch(e){}
+  try{ _ctRafraichirFiche(); }catch(e){}
   try{ if(document.getElementById('clh-contraintes')) renderContraintesAthlete(); }catch(e){}
 }
 // ── Écran d'arrêt ───────────────────────────────────────────────────────────
@@ -27557,7 +27581,7 @@ function _ligneContrainte(c,pourCoach,cible){
 function _ctRetirer(id,cible){
   _ctCible=cible||null;
   _ctEcrire(u=>retirerContrainte(u,id));
-  try{ if(document.getElementById('ccd-contraintes')) renderContraintesCoach(getOwnedClient(cible)); }catch(e){}
+  try{ _ctRafraichirFiche(); }catch(e){}
   try{ if(document.getElementById('clh-contraintes')) renderContraintesAthlete(); }catch(e){}
 }
 function blocDrapeauRouge(u){
