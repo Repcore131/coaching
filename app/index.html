@@ -1891,7 +1891,7 @@ const COACH_PHOTO='icons/coach.jpg';
         border:1px solid #262626;border-left:3px solid var(--red);color:#d8d8d8"></div>
       <div id="cc-err" class="err" style="display:none;margin-top:8px"></div>
     </div>
-    <button class="btn btn-red" onclick="doLinkCoach()">Activer mon accès →</button>
+    <button id="cc-valider" class="btn btn-red" onclick="doLinkCoach()">Activer mon accès →</button>
     <div style="margin-top:20px;text-align:center">
       <button onclick="goAvecRetour('s-subscribe');loadSubscribePage()" style="background:none;border:none;color:var(--sub);font-size:12px;cursor:pointer;font-family:Montserrat,sans-serif">Pas de code coach ? Voir les abonnements →</button>
     </div>
@@ -8696,47 +8696,65 @@ async function doLogin(){
   const em=v('l-email').toLowerCase(),pw=v('l-pwd');
   const users=DB.get('users')||{};
   let u=users[em];
+  // UN SEUL VERROU POUR LES DEUX BRAS.
+  //
+  // Le bras « compte inconnu » verrouillait le bouton puis le rendait AVANT
+  // syncUser, et restaurait un libellé ÉCRIT EN DUR — « SE CONNECTER » — qui
+  // ne demandait qu’à diverger du bouton. Le bras « compte connu », lui,
+  // appelait CLOUD.signIn sans rien verrouiller du tout.
+  //
+  // Posé ici, le verrou couvre toute la connexion, de la première requête au
+  // dernier écran, et le libellé est mémorisé.
+  const _btnLog=document.querySelector('#s-login .btn-red');
+  // Même garde qu’au-dessus : un second appel pendant l’attente mémoriserait
+  // « Connexion… » comme libellé d’origine.
+  if(_btnLog&&_btnLog.disabled) return;
+  const _libLog=_btnLog?_btnLog.textContent:'';
+  if(_btnLog){_btnLog.disabled=true;_btnLog.textContent='Connexion…';}
+  try{
 
-  if(!u){
-    // Compte inconnu localement → essayer Firebase Auth puis sync RTDB
-    const btn=document.querySelector('#s-login .btn-red');
-    if(btn){btn.textContent='Connexion…';btn.disabled=true;}
-    const ok=await CLOUD.signIn(em,pw);
-    if(btn){btn.textContent='SE CONNECTER';btn.disabled=false;}
-    if(!ok){
-      if(CLOUD._signInErr==='network')
-        return showErr('l-err','Erreur réseau : vérifiez votre connexion et réessayez.');
-      if(CLOUD._signInErr==='wrong_password')
-        return showErr('l-err','Mot de passe incorrect. Utilisez "Mot de passe oublié ?" pour le réinitialiser par email.');
-      if(CLOUD._signInErr==='invalid_email')
-        return showErr('l-err','Cette adresse email n\'est pas valide : vérifie le @ et le nom de domaine.');
-      return showErr('l-err','Impossible de se connecter. Essayez "Mot de passe oublié ?" ou vérifiez votre connexion.');
+    if(!u){
+      // Compte inconnu localement → essayer Firebase Auth puis sync RTDB
+      // Le bouton est déjà verrouillé par la fonction : plus besoin de le
+      // faire ici, ni de le rendre avant syncUser.
+      const ok=await CLOUD.signIn(em,pw);
+      if(!ok){
+        if(CLOUD._signInErr==='network')
+          return showErr('l-err','Erreur réseau : vérifiez votre connexion et réessayez.');
+        if(CLOUD._signInErr==='wrong_password')
+          return showErr('l-err','Mot de passe incorrect. Utilisez "Mot de passe oublié ?" pour le réinitialiser par email.');
+        if(CLOUD._signInErr==='invalid_email')
+          return showErr('l-err','Cette adresse email n\'est pas valide : vérifie le @ et le nom de domaine.');
+        return showErr('l-err','Impossible de se connecter. Essayez "Mot de passe oublié ?" ou vérifiez votre connexion.');
+      }
+      toast('Récupération du compte…');
+      await CLOUD.syncUser(em);
+      let synced=DB.get('users')||{};
+      u=synced[em];
+      if(!u){synced=DB.get('users')||{};u=synced[em];}
+      if(!u) return rescueLogin(em,pw);
+      synced[em]=u;DB.set('users',synced);
+      currentUser=u;DB.set('session',currentUser);
+      if(currentUser.role!=='coach'&&(currentUser.status||'FREE')==='FREE'){go('s-client-code');return;}
+      return routeUser();
     }
-    toast('Récupération du compte…');
-    await CLOUD.syncUser(em);
-    let synced=DB.get('users')||{};
-    u=synced[em];
-    if(!u){synced=DB.get('users')||{};u=synced[em];}
-    if(!u) return rescueLogin(em,pw);
-    synced[em]=u;DB.set('users',synced);
-    currentUser=u;DB.set('session',currentUser);
-    if(currentUser.role!=='coach'&&(currentUser.status||'FREE')==='FREE'){go('s-client-code');return;}
-    return routeUser();
-  }
 
-  const ok=await CLOUD.signIn(em,pw);
-  if(!ok) return showErr('l-err',CLOUD._signInErr==='network'
-    ?'Erreur réseau : vérifiez votre connexion.'
-    :CLOUD._signInErr==='invalid_email'
-      ?'Cette adresse email n\'est pas valide : vérifie le @ et le nom de domaine.'
-      :'Email ou mot de passe incorrect.');
-  currentUser=users[em];DB.set('session',currentUser);
-  if(CLOUD.canWrite()) saveUser();
-  if(currentUser.role!=='coach'&&(currentUser.status||'FREE')==='FREE'){
-    go('s-client-code');
-    return;
+    const ok=await CLOUD.signIn(em,pw);
+    if(!ok) return showErr('l-err',CLOUD._signInErr==='network'
+      ?'Erreur réseau : vérifiez votre connexion.'
+      :CLOUD._signInErr==='invalid_email'
+        ?'Cette adresse email n\'est pas valide : vérifie le @ et le nom de domaine.'
+        :'Email ou mot de passe incorrect.');
+    currentUser=users[em];DB.set('session',currentUser);
+    if(CLOUD.canWrite()) saveUser();
+    if(currentUser.role!=='coach'&&(currentUser.status||'FREE')==='FREE'){
+      go('s-client-code');
+      return;
+    }
+    routeUser();
+  } finally {
+    if(_btnLog){_btnLog.disabled=false;_btnLog.textContent=_libLog;}
   }
-  routeUser();
 }
 function rescueLogin(em,pw){
   // Firebase Auth OK mais RTDB vide — créer un profil minimal avec sélection du rôle
@@ -9342,122 +9360,145 @@ function _annoncerDejaRattache(coachDuLien){
 async function doLinkCoach(){
   const raw=document.getElementById('cc-code').value.trim();
   if(!raw){return showErr('cc-err','Entre un code ou lien coach.');}
-
-  // Case 1: URL d'invitation coach (?coachpkg=BASE64) — cross-device
+  // LE BOUTON DIT QU IL SE PASSE QUELQUE CHOSE. À partir d’ici, la fonction
+  // peut enchaîner _verifyAccessCode, _coachDuCode puis _appliquerPayloadCode
+  // — trois allers-retours réseau pendant lesquels rien ne bougeait à
+  // l’écran. Un second appui relançait toute la vérification, et le PATCH de
+  // _verifyAccessCode consomme le code : le deuxième passage le trouvait
+  // « déjà utilisé ».
   //
-  // LE CODE DU LIEN EST RETENU, PAS VÉRIFIÉ ICI : le `catch` de ce try est
-  // vide, et la vérification réseau y perdrait ses messages d'erreur.
-  let _invDuLien=null;
+  // Le libellé est MÉMORISÉ, jamais réécrit en dur : celui du bouton et
+  // celui du code finiraient par diverger.
+  const _btnLC=document.getElementById('cc-valider');
+  // DEJA EN COURS : on ne relance rien. Sans ce garde, un second appel
+  // memoriserait « VÉRIFICATION… » comme libellé d’origine et le rendrait à
+  // la fin — le bouton resterait figé sur un mot d’attente.
+  if(_btnLC&&_btnLC.disabled) return;
+  const _libLC=_btnLC?_btnLC.textContent:'';
+  if(_btnLC){_btnLC.disabled=true;_btnLC.textContent='VÉRIFICATION…';}
+  // Le try couvre TOUS les chemins de sortie, `return showErr(...)` compris :
+  // c’est précisément eux qui laissaient le bouton mort dans doAthleteCode
+  // avant son propre correctif.
   try{
-    const urlObj=new URL(raw);
-    const pkg=urlObj.searchParams.get('coachpkg');
-    const inv=String(urlObj.searchParams.get('inv')||'').trim().toUpperCase();
-    if(pkg){
-      const coach=_validateCoachPkg(JSON.parse(decodeURIComponent(escape(atob(pkg)))));
-      if(coach){
-        // DEJA RATTACHE A UN AUTRE : on le DIT, et on s’arrête là. Ni erreur
-        // muette, ni second rattachement — changer de coach ne se fait pas en
-        // ouvrant un lien.
-        //
-        // MAIS LE LIEN DE SON PROPRE COACH EST LE GESTE DE PROLONGATION.
-        // L’arrêter refusait de renouveler un accès, et le message annonçait
-        // « ton accès est déjà actif » à quelqu’un dont l’échéance venait
-        // justement de passer. On continue donc vers `inv`, comme le cas 2.
-        //
-        // _memeCoachQueLien rend exactement le test du cas 2 : un coach en
-        // place ET différent. Sans coach du tout, il rend false et
-        // _annoncerDejaRattache s’abstient de lui-même.
-        if(!_memeCoachQueLien(coach)&&_annoncerDejaRattache(coach)) return;
+
+    // Case 1: URL d'invitation coach (?coachpkg=BASE64) — cross-device
+    //
+    // LE CODE DU LIEN EST RETENU, PAS VÉRIFIÉ ICI : le `catch` de ce try est
+    // vide, et la vérification réseau y perdrait ses messages d'erreur.
+    let _invDuLien=null;
+    try{
+      const urlObj=new URL(raw);
+      const pkg=urlObj.searchParams.get('coachpkg');
+      const inv=String(urlObj.searchParams.get('inv')||'').trim().toUpperCase();
+      if(pkg){
+        const coach=_validateCoachPkg(JSON.parse(decodeURIComponent(escape(atob(pkg)))));
+        if(coach){
+          // DEJA RATTACHE A UN AUTRE : on le DIT, et on s’arrête là. Ni erreur
+          // muette, ni second rattachement — changer de coach ne se fait pas en
+          // ouvrant un lien.
+          //
+          // MAIS LE LIEN DE SON PROPRE COACH EST LE GESTE DE PROLONGATION.
+          // L’arrêter refusait de renouveler un accès, et le message annonçait
+          // « ton accès est déjà actif » à quelqu’un dont l’échéance venait
+          // justement de passer. On continue donc vers `inv`, comme le cas 2.
+          //
+          // _memeCoachQueLien rend exactement le test du cas 2 : un coach en
+          // place ET différent. Sans coach du tout, il rend false et
+          // _annoncerDejaRattache s’abstient de lui-même.
+          if(!_memeCoachQueLien(coach)&&_annoncerDejaRattache(coach)) return;
+          const users=DB.get('users')||{};
+          users[coach.email]=Object.assign(users[coach.email]||{},coach);
+          DB.set('users',users);
+          // LE LIEN PORTE UN VRAI CODE D'ACCÈS. linkToCoach rattache mais ne
+          // pose PAS accessExpiry, et checkAccess lit une échéance absente
+          // comme un accès ILLIMITÉ : tout athlète arrivé par lien obtenait un
+          // accès perpétuel, et le code restait « ouvert » dans /rc_codes, donc
+          // réutilisable par quelqu'un d'autre. On passe par le vrai chemin.
+          if(_INVITE_RE.test(inv)){ _invDuLien=inv; }
+          else return linkToCoach(coach);
+        }
+      }
+    }catch(e){}
+    // Hors du try : ici, une erreur se dit.
+    if(_invDuLien){
+      let _res;
+      try{
+        _res=await _verifyAccessCode(_invDuLien,(currentUser.fname||'')+' '+(currentUser.lname||''));
+      }catch(e){
+        return showErr('cc-err',e.message||'Code invalide ou corrompu. Contacte ton coach.');
+      }
+      _appliquerPayloadCode(_res.payload);
+      return;
+    }
+
+    // Case 2: code RC-XXXX-XXXX — vérifié via Firebase RTDB directement
+    if(/^RC-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(raw)||raw.startsWith('RCACCESS:')){
+      if(raw.startsWith('RCACCESS:')) return showErr('cc-err','Ancien format de code : demande un nouveau code (RC-XXXX-XXXX) à ton coach.');
+      // LA MÊME GARDE QU'AU CAS 1. Sans elle, un code suffisait à changer de
+      // coach en silence — là où le lien d'invitation, lui, était arrêté.
+      //
+      // La lecture est SEULE et ne juge rien : elle ne sert qu'à comparer les
+      // coachs. Elle vient AVANT _verifyAccessCode, qui consomme le code par un
+      // PATCH : décider après aurait brûlé un code qu'on refuse.
+      //
+      // Elle n'a lieu que si un coach est déjà en place. Un athlète qui n'en a
+      // pas, ou qui saisit un code de SON coach — la prolongation — ne paie
+      // aucun aller-retour supplémentaire.
+      if(coachActuelDe()){
+        const _cl=await _coachDuCode(raw);
+        if(_cl&&String(_cl.id)!==String(currentUser.coachId||'')){
+          _annoncerDejaRattache(_cl);
+          return;
+        }
+      }
+      let result;
+      try{
+        result=await _verifyAccessCode(raw,(currentUser.fname||'')+' '+(currentUser.lname||''));
+      }catch(e){
+        return showErr('cc-err',e.message||'Code invalide ou corrompu. Contacte ton coach.');
+      }
+      _appliquerPayloadCode(result.payload);
+      return;
+    }
+
+    // NOTE — une branche « ancien format RC-XXXX-XXXX » figurait ici. Elle etait
+    // INATTEIGNABLE : la Case 2 plus haut teste le MEME motif exact et retourne
+    // toujours. Son commentaire affirmait de surcroit qu'une « regle RTDB bloque
+    // /rc_codes/* », alors que database.rules.json les ouvre en lecture ET en
+    // ecriture a tout compte authentifie. Code mort porteur d'une contre-verite :
+    // retire plutot que corrige.
+
+    // Case 3: RCLINK token (legacy)
+    if(raw.startsWith('RCLINK:')){
+      try{
+        const payload=JSON.parse(decodeURIComponent(escape(atob(raw.slice(7)))));
+        if(!payload.c||!payload.f||!payload.i) throw new Error('invalid');
+        currentUser.coachId=payload.i;
+        currentUser.coachName=payload.f+(payload.l?' '+payload.l:'');
+        currentUser.coachCode=payload.c;
+        currentUser.status='COACHING_SUIVI';
         const users=DB.get('users')||{};
-        users[coach.email]=Object.assign(users[coach.email]||{},coach);
-        DB.set('users',users);
-        // LE LIEN PORTE UN VRAI CODE D'ACCÈS. linkToCoach rattache mais ne
-        // pose PAS accessExpiry, et checkAccess lit une échéance absente
-        // comme un accès ILLIMITÉ : tout athlète arrivé par lien obtenait un
-        // accès perpétuel, et le code restait « ouvert » dans /rc_codes, donc
-        // réutilisable par quelqu'un d'autre. On passe par le vrai chemin.
-        if(_INVITE_RE.test(inv)){ _invDuLien=inv; }
-        else return linkToCoach(coach);
-      }
+        users[currentUser.email]=currentUser;
+        const _u2=DB.set('users',users),_s2=DB.set('session',currentUser);
+        toastEcriture(_u2&&_s2,'Lié à '+currentUser.coachName+' ✓','le rattachement est');
+        _apresRattachement();return;
+      }catch(e){return showErr('cc-err','Lien invalide. Demande un nouveau lien à ton coach.');}
     }
-  }catch(e){}
-  // Hors du try : ici, une erreur se dit.
-  if(_invDuLien){
-    let _res;
-    try{
-      _res=await _verifyAccessCode(_invDuLien,(currentUser.fname||'')+' '+(currentUser.lname||''));
-    }catch(e){
-      return showErr('cc-err',e.message||'Code invalide ou corrompu. Contacte ton coach.');
-    }
-    _appliquerPayloadCode(_res.payload);
-    return;
-  }
 
-  // Case 2: code RC-XXXX-XXXX — vérifié via Firebase RTDB directement
-  if(/^RC-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(raw)||raw.startsWith('RCACCESS:')){
-    if(raw.startsWith('RCACCESS:')) return showErr('cc-err','Ancien format de code : demande un nouveau code (RC-XXXX-XXXX) à ton coach.');
-    // LA MÊME GARDE QU'AU CAS 1. Sans elle, un code suffisait à changer de
-    // coach en silence — là où le lien d'invitation, lui, était arrêté.
-    //
-    // La lecture est SEULE et ne juge rien : elle ne sert qu'à comparer les
-    // coachs. Elle vient AVANT _verifyAccessCode, qui consomme le code par un
-    // PATCH : décider après aurait brûlé un code qu'on refuse.
-    //
-    // Elle n'a lieu que si un coach est déjà en place. Un athlète qui n'en a
-    // pas, ou qui saisit un code de SON coach — la prolongation — ne paie
-    // aucun aller-retour supplémentaire.
-    if(coachActuelDe()){
-      const _cl=await _coachDuCode(raw);
-      if(_cl&&String(_cl.id)!==String(currentUser.coachId||'')){
-        _annoncerDejaRattache(_cl);
-        return;
-      }
-    }
-    let result;
-    try{
-      result=await _verifyAccessCode(raw,(currentUser.fname||'')+' '+(currentUser.lname||''));
-    }catch(e){
-      return showErr('cc-err',e.message||'Code invalide ou corrompu. Contacte ton coach.');
-    }
-    _appliquerPayloadCode(result.payload);
-    return;
-  }
-
-  // NOTE — une branche « ancien format RC-XXXX-XXXX » figurait ici. Elle etait
-  // INATTEIGNABLE : la Case 2 plus haut teste le MEME motif exact et retourne
-  // toujours. Son commentaire affirmait de surcroit qu'une « regle RTDB bloque
-  // /rc_codes/* », alors que database.rules.json les ouvre en lecture ET en
-  // ecriture a tout compte authentifie. Code mort porteur d'une contre-verite :
-  // retire plutot que corrige.
-
-  // Case 3: RCLINK token (legacy)
-  if(raw.startsWith('RCLINK:')){
-    try{
-      const payload=JSON.parse(decodeURIComponent(escape(atob(raw.slice(7)))));
-      if(!payload.c||!payload.f||!payload.i) throw new Error('invalid');
-      currentUser.coachId=payload.i;
-      currentUser.coachName=payload.f+(payload.l?' '+payload.l:'');
-      currentUser.coachCode=payload.c;
-      currentUser.status='COACHING_SUIVI';
+    // Case 4: Code GCP-XXXXXX
+    const code=raw.toUpperCase().replace(/\s/g,'');
+    if(code.startsWith('GCP-')){
       const users=DB.get('users')||{};
-      users[currentUser.email]=currentUser;
-      const _u2=DB.set('users',users),_s2=DB.set('session',currentUser);
-      toastEcriture(_u2&&_s2,'Lié à '+currentUser.coachName+' ✓','le rattachement est');
-      _apresRattachement();return;
-    }catch(e){return showErr('cc-err','Lien invalide. Demande un nouveau lien à ton coach.');}
-  }
+      const coach=Object.values(users).find(u=>u.role==='coach'&&u.code&&u.code.toUpperCase()===code);
+      if(coach) return linkToCoach(coach);
+      // Code GCP non trouvé → probablement autre appareil
+      return showErr('cc-err','❌ Code introuvable sur cet appareil.\n\nTon coach doit appuyer sur "Copier le lien d\'invitation" depuis son écran de code, puis t\'envoyer ce lien par WhatsApp. Colle ce lien ici à la place du code court.');
+    }
 
-  // Case 4: Code GCP-XXXXXX
-  const code=raw.toUpperCase().replace(/\s/g,'');
-  if(code.startsWith('GCP-')){
-    const users=DB.get('users')||{};
-    const coach=Object.values(users).find(u=>u.role==='coach'&&u.code&&u.code.toUpperCase()===code);
-    if(coach) return linkToCoach(coach);
-    // Code GCP non trouvé → probablement autre appareil
-    return showErr('cc-err','❌ Code introuvable sur cet appareil.\n\nTon coach doit appuyer sur "Copier le lien d\'invitation" depuis son écran de code, puis t\'envoyer ce lien par WhatsApp. Colle ce lien ici à la place du code court.');
+    showErr('cc-err','Format non reconnu. Entre le lien d\'invitation de ton coach.');
+  } finally {
+    if(_btnLC){_btnLC.disabled=false;_btnLC.textContent=_libLC;}
   }
-
-  showErr('cc-err','Format non reconnu. Entre le lien d\'invitation de ton coach.');
 }
 function showCoachCode(){
   document.getElementById('coach-code-val').textContent=currentUser.code;
