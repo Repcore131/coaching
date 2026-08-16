@@ -22704,7 +22704,11 @@ function finishWorkout(incomplete=false){
   // Le retour au calme n'a de sens qu'ici, une fois la dernière série faite.
   document.getElementById('wd-cooldown').innerHTML=_carteProtocole(woState&&woState.cooldown,'Fin de séance','var(--accent-blue)','wd-cooldown-body');
   // Reset sliders post-séance
-  ['fatigue','satisfaction','sensation','hydratation','motivation'].forEach(m=>{
+  // `energie` EST DANS LA LISTE. Elle en était absente alors que
+  // savePostSession écrit toujours energie:_lu('energie') : deux séances de
+  // suite sans rechargement, et la seconde héritait de la note de la première
+  // — une valeur jamais saisie, enregistrée comme si elle l'avait été.
+  ['fatigue','satisfaction','sensation','hydratation','motivation','energie'].forEach(m=>{
     const el=document.getElementById('ps-'+m);const vl=document.getElementById('ps-'+m+'-val');
     if(el){el.value=5;}if(vl)vl.textContent='5';
   });
