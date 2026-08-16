@@ -52109,21 +52109,26 @@ function _aAntecedentLombaire(){
   return /lombaire|hernie|sciatique|lumbago|dos\b/.test(txt);
 }
 
+// REND UN BOOLEEN : true quand le texte a ete pose, false sur un refus ou une
+// sortie anticipee. _pfUtiliser en avait besoin — il deduisait le resultat en
+// comparant le contenu du champ, un test indirect qui lisait « refus » quand
+// on reappliquait le protocole deja en place.
 async function _appliquerProto(slug,champ){
-  const p=protocole(slug); if(!p) return;
-  const el=document.getElementById(champ); if(!el) return;
+  const p=protocole(slug); if(!p) return false;
+  const el=document.getElementById(champ); if(!el) return false;
   const actuel=(el.value||'').trim();
   // Le texte écrit à la main n'est jamais écrasé sans confirmation : il peut
   // porter une consigne pour cet athlète-là. En revanche un texte issu d'un
   // protocole se remplace directement, sinon essayer les suggestions l'une
   // après l'autre demande une confirmation à chaque clic.
-  if(actuel&&!_vientDunProtocole(actuel)&&!await rcConfirm('Remplacer le texte actuel par « '+p.nom+' » ?',null,'Remplacer')) return;
+  if(actuel&&!_vientDunProtocole(actuel)&&!await rcConfirm('Remplacer le texte actuel par « '+p.nom+' » ?',null,'Remplacer')) return false;
   el.value=protoTexte(p);
   _progExDirty=true;
   // Provenance conservée, pour savoir plus tard d'où vient ce texte.
   if(champ==='prog-warmup') _protoChoisi.warmup=slug; else _protoChoisi.cooldown=slug;
   _rendreSuggestionsProto();
   toast(p.nom+' appliqué');
+  return true;
 }
 let _protoChoisi={warmup:null,cooldown:null};
 
@@ -52673,13 +52678,15 @@ function _pfRendreListe(){
   }).join('');
 }
 
-function _pfUtiliser(slug){
+// ASYNCHRONE. _appliquerProto se suspend sur rcConfirm quand le champ porte un
+// texte écrit à la main : sans await, la suite lisait l'ANCIENNE valeur et
+// l'écran de la bibliothèque ne se refermait jamais après une confirmation.
+async function _pfUtiliser(slug){
   if(!_pfCible) return;
-  const avant=(document.getElementById(_pfCible)?.value||'').trim();
-  _appliquerProto(slug,_pfCible);
-  // _appliquerProto peut être annulé par la confirmation d'écrasement : on ne
-  // quitte l'écran que si le champ a réellement changé.
-  if((document.getElementById(_pfCible)?.value||'').trim()!==avant) _pfRetourner();
+  // SUR LE RÉSULTAT, et non sur une comparaison du contenu du champ : ce test
+  // indirect lisait « refus » quand on réappliquait le protocole déjà en place,
+  // puisque le texte ne changeait pas. On demande, on ne déduit plus.
+  if(await _appliquerProto(slug,_pfCible)) _pfRetourner();
   else _pfRendre();
 }
 // ══════════════ TESTS DE LA COUCHE D'IDENTITÉ D'EXERCICE ══════════════
