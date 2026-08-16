@@ -43773,7 +43773,11 @@ function loadSteps(containerId='steps-content'){
       const type=dayTypes[e.date]??null;
       const d=new Date(e.date);
       const lbl=d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
-      const goal=type==='on'?goals.on:type==='off'?goals.off:null;
+      // LE MEME OBJECTIF QUE LA COULEUR. Sans lui, un jour sans type déclaré
+      // se colorait contre un objectif déduit que cette ligne n’affichait pas.
+      // `||null` : la fonction rend 0 quand rien n’est déductible, et c’est ce
+      // 0 qui doit se lire « — », pas « 0 pas ».
+      const goal=_stepsObjectifJour(goals,type,e.date)||null;
       const col=stepColor(e.count,type,e.date);
       const pctBar=goal?Math.min(100,Math.round(e.count/goal*100)):null;
       const typeBadge=type?`<span style="font-size:var(--fs-xs);font-weight:900;padding:2px 6px;border-radius:4px;background:${type==='on'?'#2a0000':'#001a2a'};color:${type==='on'?'var(--red)':'var(--sub)'};letter-spacing:.5px">${type.toUpperCase()}</span>`:'';
@@ -43793,7 +43797,9 @@ function loadSteps(containerId='steps-content'){
     </div>`;
   }
 
-  const todayGoal=todayType==='on'?goals.on:todayType==='off'?goals.off:null;
+  // Même déduction que la couleur, sur le jour RÉELLEMENT choisi — `selStr`,
+  // qui peut être hors de la semaine affichée.
+  const todayGoal=_stepsObjectifJour(goals,todayType,selStr)||null;
   const todayCount=todayEntry?.count??0;
   const todayPct=todayGoal&&todayCount?Math.min(100,Math.round(todayCount/todayGoal*100)):0;
   const todayProgressHtml=todayGoal&&todayCount?`<div style="margin-top:12px">
@@ -43805,7 +43811,11 @@ function loadSteps(containerId='steps-content'){
       <div style="height:100%;width:${todayPct}%;background:${stepColor(todayCount,todayType,selStr)};border-radius:3px;transition:.4s"></div>
     </div>
   </div>`:'';
-  const todayGoalHintHtml=todayType?`<div style="text-align:center;font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px">Objectif : <strong style="color:${todayType==='on'?'var(--red)':'var(--sub)'}">${(todayType==='on'?goals.on:goals.off).toLocaleString('fr-FR')} pas</strong></div>`:'';
+  // AFFICHÉ DÈS QU’UN OBJECTIF EXISTE, déclaré ou déduit — et non plus
+  // seulement quand le type a été posé à la main. La teinte rouge reste
+  // réservée au jour ON DÉCLARÉ : un jour déduit n’a pas la même certitude, et
+  // le dire en rouge lui donnerait un poids qu’il n’a pas.
+  const todayGoalHintHtml=todayGoal?`<div style="text-align:center;font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px">Objectif : <strong style="color:${todayType==='on'?'var(--red)':'var(--sub)'}">${todayGoal.toLocaleString('fr-FR')} pas</strong></div>`:'';
 
   document.getElementById(containerId).innerHTML=`
     <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);animation:fadeInUp .3s ease">
