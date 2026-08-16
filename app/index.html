@@ -1729,6 +1729,10 @@ const COACH_PHOTO='icons/coach.jpg';
       <div class="sub" style="font-size:12px;margin-top:4px">Continu ton parcours</div>
     </div>
 
+    <!-- LES COMPTES DEJA CONNECTES SUR CET APPAREIL. Rempli par go(), et
+         seulement quand au moins l un d eux porte des jetons : sans eux, la
+         bascule n authentifie personne. -->
+    <div id="l-comptes"></div>
     <div><label for="l-email">Email</label><input type="email" id="l-email" placeholder="ton@email.com"></div>
     <div><label for="l-pwd">Mot de passe</label><input type="password" id="l-pwd" placeholder="••••••••"></div>
     <div id="l-err" style="color:var(--red-light);font-size:13px;display:none"></div>
@@ -7709,6 +7713,27 @@ function go(id){
       const _pc=localStorage.getItem('pendingCode');
       const _in=document.getElementById('cc-code');
       if(_pc&&_in&&!_in.value) _in.value=_pc;
+    }catch(e){}
+  }
+  // LE SÉLECTEUR DE COMPTES, sur l’écran de connexion. Posé ICI pour la même
+  // raison que le pré-remplissage ci-dessus : plusieurs chemins mènent à
+  // s-login — « Ajouter un compte », la déconnexion, le retour depuis
+  // l’accueil — et n’en instrumenter qu’un laisserait les autres sans rien.
+  //
+  // SEULEMENT SI UN COMPTE PORTE DES JETONS. Sans eux, basculerCompte pose
+  // _jetonsPoser(null) : on arrive sur le compte sans être authentifié.
+  // Afficher le sélecteur promettrait alors une bascule sans mot de passe
+  // qui n’en serait pas une — c’est précisément le défaut qu’on corrige.
+  //
+  // REMPLI À CHAQUE PASSAGE, jamais une seule fois : le registre change à la
+  // connexion, à l’ajout et au retrait, et un rendu figé le dirait faux.
+  if(id==='s-login'){
+    try{
+      const _z=document.getElementById('l-comptes');
+      if(_z){
+        const _avecJetons=comptesConnectes().filter(c=>c&&c.auth);
+        _z.innerHTML=_avecJetons.length?htmlSelecteurComptes():'';
+      }
     }catch(e){}
   }
   // Étapes de tunnel adossées à l'affichage d'un écran. Posées ici plutôt que
