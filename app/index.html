@@ -1618,7 +1618,7 @@ const COACH_PHOTO='icons/coach.jpg';
              c'est vrai pour UN athlète, puis les paliers Coach et Pro s'appliquent.
              L'ancienne formule promettait « des codes d'accès gratuits » que seul le
            créateur peut émettre : la promesse ne pouvait pas être tenue. -->
-      <div style="font-size:11px;color:rgba(255,255,255,.82);line-height:1.6"><strong style="color:#fff">Gratuit pour votre premier client</strong>, sans limite de durée et sans carte bancaire. Au-delà, un palier suit le nombre d'athlètes que tu accompagnes. Tu génères tes propres codes à donner à tes athlètes : chaque code les rattache à ton suivi et leur ouvre l'accès pour la durée que tu choisis, <strong style="color:#fff">jusqu'à 12 mois</strong>. <strong style="color:#fff">Tes athlètes ne paient rien</strong> tant qu'ils utilisent un de tes codes. Sans code, l'accès en autonomie leur coûte 9,95&nbsp;€/mois, sans engagement.</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.82);line-height:1.6"><strong style="color:#fff">Gratuit pour votre premier client</strong>, sans limite de durée et sans carte bancaire. Au-delà, un palier suit le nombre d'athlètes que tu accompagnes. Tu génères tes propres codes à donner à tes athlètes : chaque code les rattache à ton suivi et leur ouvre l'accès pour la durée que tu choisis, <strong style="color:#fff">jusqu'à 12 mois</strong>. <strong style="color:#fff">Tes athlètes ne paient rien</strong> tant qu'ils utilisent un de tes codes. Sans code, l'accès en autonomie leur coûte <span data-prix-autonomie>9,95&nbsp;€/mois</span>, sans engagement.</div>
     </div>
   </div>
 </div>
@@ -1701,7 +1701,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="width:44px;height:44px;border-radius:10px;background:#0d0d0d;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div>
         <div>
           <div style="font-weight:800;font-size:15px;letter-spacing:.5px">JE N'AI PAS DE CODE</div>
-          <div class="sub" style="font-size:11px;margin-top:3px">Accès en autonomie : 9,95 €/mois, sans engagement</div>
+          <div class="sub" style="font-size:11px;margin-top:3px">Accès en autonomie : <span data-prix-autonomie>9,95 €/mois</span>, sans engagement</div>
         </div>
         <div style="margin-left:auto;color:var(--sub);font-size:18px">›</div>
       </div>
@@ -1710,7 +1710,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- Info box athlète -->
     <div style="background:rgba(224,32,32,.07);border:1px solid rgba(224,32,32,.24);border-radius:10px;padding:14px 16px;margin-top:4px">
       <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:var(--red);font-weight:700;margin-bottom:6px">ℹ️ ESPACE ATHLÈTE</div>
-      <div style="font-size:11px;color:rgba(255,255,255,.82);line-height:1.6">Avec un code fourni par ton coach, l'accès est compris dans son suivi. Sans code, l'accès en autonomie coûte 9,95 €/mois, sans engagement.</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.82);line-height:1.6">Avec un code fourni par ton coach, l'accès est compris dans son suivi. Sans code, l'accès en autonomie coûte <span data-prix-autonomie>9,95 €/mois</span>, sans engagement.</div>
     </div>
 
   </div>
@@ -4685,7 +4685,30 @@ const SUB_PALIERS=[
    detail:'119,40 € sur un an', econ:'', remise:'',
    planId:()=>PAYPAL_PLAN_ID},
 ];
-function _paliersDispo(){return SUB_PALIERS.filter(p=>!!p.planId());}
+// LA TABLE EMPLOYÉE PAR L’ÉCRAN D’ABONNEMENT.
+//
+// souscrireCoach pose `rc_palier_coach` avant d’ouvrir l’écran : tant que
+// cette clé est là, ce sont les paliers COACH qu’il faut montrer et facturer.
+// Sans cette lecture, la clé était posée et jamais relue — l’écran gardait
+// les paliers athlète, et le plan facturé était le mensuel de l’athlète.
+//
+// La clé vit en sessionStorage : elle ne survit pas à la fermeture de
+// l’onglet, et c’est voulu — un coach qui revient sur cet écran par un autre
+// chemin voit l’offre athlète, celle qui le concerne alors.
+function _palierCoachEnAttente(){
+  try{ return sessionStorage.getItem('rc_palier_coach')||''; }catch(e){ return ''; }
+}
+function _tablePaliers(){
+  return _palierCoachEnAttente()?COACH_PALIERS:SUB_PALIERS;
+}
+// `prix` est un NOMBRE dans COACH_PALIERS et une CHAÎNE dans SUB_PALIERS.
+// L’écran les affiche tels quels : on normalise ici plutôt que dans chaque
+// gabarit, sinon « 19 » s’afficherait sans son euro.
+function _prixPalier(p){
+  if(!p) return '';
+  return typeof p.prix==='number'?(p.prix+' €'):String(p.prix||'');
+}
+function _paliersDispo(){return _tablePaliers().filter(p=>!!p.planId());}
 
 // ══════ BASCULE DU PAYEUR — LE COACH PAIE, L'ATHLÈTE RATTACHÉ NON ══════
 // Ce bloc n'installe QUE la mécanique de comptage et de palier. Il ne touche
@@ -5144,6 +5167,10 @@ function souscrireCoach(cle){
   if(!p||!p.planId()){ toast('Ce palier n\'est pas encore ouvert au paiement.','var(--orange)'); return false; }
   try{ sessionStorage.setItem('rc_palier_coach',cle); }catch(e){}
   go('s-subscribe');
+  // L ÉCRAN DOIT ÊTRE RENDU. Sans cet appel, il gardait les paliers ATHLÈTE
+  // — et _planIdChoisi aurait facturé PAYPAL_PLAN_ID, le mensuel de
+  // l'athlète, à un coach qui croyait souscrire son palier.
+  loadSubscribePage();
   return true;
 }
 // ══════ RÉSILIATION EN LIGNE ET RENONCEMENT À LA RÉTRACTATION ══════
@@ -6992,6 +7019,8 @@ window.addEventListener('online',async()=>{
 
 // ======= BOOT =======
 window.onload=()=>{
+  // Les prix affichés en clair viennent de la table, pas du balisage.
+  _majPrixAffiches();
   // L'app peut démarrer hors ligne : l'événement `offline` ne se déclenchera
   // pas, il n'y a pas de transition.
   if(!navigator.onLine) _rcBandeauReseau('offline');
@@ -7542,7 +7571,7 @@ function loadAccessGate(){
     // Espace insécable avant le € : la coupure « 9,95 » / « €/mois » en fin de
     // ligne est fautive en typographie française.
     block.innerHTML=L+"Tu n'as pas encore d'accès actif.<br>"
-      +"Entre un code fourni par ton coach, ou souscris à l'abonnement autonomie à 9,95 €/mois.</div>";
+      +"Entre un code fourni par ton coach, ou souscris à l'abonnement autonomie à "+escapeHtml(prixAutonomie())+".</div>";
   }
 }
 
@@ -11314,6 +11343,23 @@ function expliquerUrgence(c){
   return out.sort((a,b)=>b.gravite-a.gravite);
 }
 
+// PURE. Le prix de l'abonnement autonome, TEL QUE LA TABLE LE PORTE.
+//
+// Trois textes l’annonçaient en dur : changer 9,95 dans SUB_PALIERS ne
+// changeait rien à l’écran, et le produit aurait annoncé deux prix selon
+// l’endroit — celui de la table sur la carte, l’ancien dans les textes.
+function prixAutonomie(){
+  const p=SUB_PALIERS.find(x=>x.cle==='mensuel');
+  return ((p&&p.prix)||'9,95 €')+'/mois';
+}
+// Les emplacements statiques qui l’annoncent. Un attribut plutôt que trois
+// identifiants : un quatrième texte s’y branche sans toucher à ce code.
+function _majPrixAffiches(){
+  try{
+    document.querySelectorAll('[data-prix-autonomie]')
+      .forEach(e=>{ e.textContent=prixAutonomie(); });
+  }catch(e){}
+}
 // PURE. Ne mute NI le tableau reçu, NI les dossiers qu'il contient.
 //
 // `opts.now` et `opts.depuis` existent pour les tests : sans eux, la fonction
@@ -51075,11 +51121,15 @@ function _renderSubPaliers(){
   if(!dispo.length){zone.innerHTML='';return;}
   // Le palier retenu doit toujours exister : si l'annuel disparaît (constante
   // vidée) alors qu'il était sélectionné, on retombe sur le premier disponible.
+  // Le palier COACH en attente est celui qu’on présélectionne : le coach
+  // vient de le choisir sur son écran, le lui redemander serait le perdre.
+  const _pc=_palierCoachEnAttente();
+  if(_pc&&dispo.some(p=>p.cle===_pc)) _subPalier=_pc;
   if(!_subPalier||!dispo.some(p=>p.cle===_subPalier)) _subPalier=dispo[0].cle;
   if(dispo.length===1){
     const p=dispo[0];
     zone.innerHTML='<div style="font-size:22px;font-weight:900;color:var(--red);line-height:1">'
-      +escapeHtml(p.prix)+'<span style="font-size:12px;color:var(--sub);font-weight:600"> '
+      +escapeHtml(_prixPalier(p))+'<span style="font-size:12px;color:var(--sub);font-weight:600"> '
       +escapeHtml(p.periode)+'</span></div>';
     return;
   }
@@ -51095,7 +51145,7 @@ function _renderSubPaliers(){
         padding:2px 8px;border-radius:20px;letter-spacing:.5px;white-space:nowrap">${escapeHtml(p.remise)}</div>`:''}
       <div style="font-size:var(--fs-xs);color:${sel?'var(--red)':'var(--sub)'};font-weight:800;
         text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">${escapeHtml(p.titre)}</div>
-      <div style="font-size:20px;font-weight:900;color:#fff;line-height:1">${escapeHtml(p.prix)}</div>
+      <div style="font-size:20px;font-weight:900;color:#fff;line-height:1">${escapeHtml(_prixPalier(p))}</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:3px">${escapeHtml(p.periode)}</div>
       <div style="font-size:var(--fs-xs);color:${p.econ?'var(--green)':'var(--sub)'};margin-top:6px;
         font-weight:${p.econ?'800':'400'}">${escapeHtml(p.econ||p.detail)}</div>
@@ -51113,7 +51163,7 @@ function _majBoutonSouscrire(){
   const b=document.getElementById('paypal-loading-btn');
   if(!b) return;
   const p=_paliersDispo().find(x=>x.cle===_subPalier)||_paliersDispo()[0];
-  if(p) b.textContent='Souscrire pour '+p.prix+' '+p.periode+' →';
+  if(p) b.textContent='Souscrire pour '+_prixPalier(p)+' '+p.periode+' →';
 }
 function _planIdChoisi(){
   const p=_paliersDispo().find(x=>x.cle===_subPalier)||_paliersDispo()[0];
@@ -51262,6 +51312,15 @@ function renderPaypalButton(planId,coachId){
         currentUser.status='AUTONOMIE_PREMIUM';
         currentUser.paymentStatus='active';
         currentUser.paypalSubscriptionId=data.subscriptionID;
+        // LE PALIER RETENU, A COTE DU STATUT. Sans lui, abonnement.palier
+        // n était écrit nulle part et _renderAbonnement retombait toujours
+        // sur « Mensuel » — y compris pour qui venait de payer un an.
+        //
+        // Object.assign et non une affectation : `abonnement` porte aussi
+        // l échéance, la résiliation et le renoncement à la rétractation. Le
+        // remplacer les effacerait.
+        currentUser.abonnement=Object.assign({},currentUser.abonnement,
+          {palier:_subPalier||'mensuel'});
         rcm('subscription_activated');
         if(pending){
           currentUser.coachId=pending.coachId||currentUser.coachId||null;
