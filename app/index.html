@@ -42083,9 +42083,16 @@ function _renderCaffeineScreen(){
   const nextStr=localISODate(new Date(yy,mm-1,dd+1));
   const yst=new Date();yst.setDate(yst.getDate()-1);
   const dateLbl=isToday?"Aujourd'hui":date===localISODate(yst)?"Hier":new Date(yy,mm-1,dd).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
+  // LA MEME BORNE QU addCaffeineEntry. Sans elle, on remontait indéfiniment
+  // sur des jours forcément vides — et une prise saisie là-bas était refusée.
+  // Le commentaire de CAFF_RETENTION_JOURS exige la même borne des deux côtés.
+  const minStr=localISODate(new Date(Date.now()-CAFF_RETENTION_JOURS*24*3600*1000));
+  const auFond=prevStr<minStr;
   const navEl=document.getElementById('caff-date-nav');
   if(navEl) navEl.innerHTML=`<div style="display:flex;align-items:center;justify-content:center;gap:12px">
-    <button onclick="_caffeineViewDate='${prevStr}';_renderCaffeineScreen()" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:6px 13px;cursor:pointer;font-size:15px;font-family:Montserrat,sans-serif">←</button>
+    ${auFond
+      ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:8px;padding:6px 13px;font-size:15px;cursor:not-allowed">←</button>`
+      :`<button onclick="_caffeineViewDate='${prevStr}';_renderCaffeineScreen()" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:6px 13px;cursor:pointer;font-size:15px;font-family:Montserrat,sans-serif">←</button>`}
     <span style="font-size:13px;font-weight:700;min-width:110px;text-align:center">${dateLbl}</span>
     ${isToday
       ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:8px;padding:6px 13px;font-size:15px;cursor:not-allowed">→</button>`
@@ -42123,7 +42130,12 @@ function _renderCaffeineEmbedded(){
   const nextStr=localISODate(new Date(yy,mm-1,dd+1));
   const yst=new Date();yst.setDate(yst.getDate()-1);
   const dateLbl=isToday?"Aujourd'hui":date===localISODate(yst)?"Hier":new Date(yy,mm-1,dd).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'});
-  const navPrev=`<button onclick="_caffeineEmbedDate='${prevStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:15px;font-family:Montserrat,sans-serif">←</button>`;
+  // Même borne que sur l’écran autonome, et même rendu désactivé que « → ».
+  const minStr=localISODate(new Date(Date.now()-CAFF_RETENTION_JOURS*24*3600*1000));
+  const auFond=prevStr<minStr;
+  const navPrev=auFond
+    ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:8px;padding:5px 12px;font-size:15px;cursor:not-allowed">←</button>`
+    :`<button onclick="_caffeineEmbedDate='${prevStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:15px;font-family:Montserrat,sans-serif">←</button>`;
   const navNext=isToday
     ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:8px;padding:5px 12px;font-size:15px;cursor:not-allowed">→</button>`
     :`<button onclick="_caffeineEmbedDate='${nextStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:15px;font-family:Montserrat,sans-serif">→</button>`;
