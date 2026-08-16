@@ -38961,7 +38961,10 @@ function _prefetchCiqual(){
 }
 // `dateAff` traverse jusqu'au journal. Sans argument, aujourd'hui : c'est le
 // comportement de tous les appelants existants.
-function loadNutrition(dateAff){
+// `dateCaff` EST DISTINCTE de `dateAff` : le journal alimentaire et le suivi
+// caféine se naviguent séparément, chacun avec sa propre date. Les confondre
+// ferait sauter le journal au jour de la caféine, ou l’inverse.
+function loadNutrition(dateAff,dateCaff){
   go('s-nutrition');
   _prefetchCiqual();
   const nut=currentUser.nutrition||{};
@@ -38982,7 +38985,7 @@ function loadNutrition(dateAff){
   }
   _renderNutriContent(dt,dateAff);
   loadSuppEmbedded();
-  loadCaffeineEmbedded();
+  loadCaffeineEmbedded(dateCaff);
 }
 
 // ======= NUTRITION COACH (gestion plan client) =======
@@ -42101,8 +42104,12 @@ function updateCaffeineEntryTime(dateStr,idx,val){
   days[dateStr][idx].time=val;
   saveUser();
 }
-function loadCaffeineEmbedded(){
-  _caffeineEmbedDate=localISODate(new Date());
+// DATE OPTIONNELLE, comme _renderNutriContent en accepte une. Sans elle,
+// aujourd'hui : c'est le comportement de l'entrée normale sur l'écran
+// Nutrition. Avec elle, on RESTE sur le jour visé — une prise ajoutée pour
+// hier doit se voir, sinon l’athlète la croit perdue et la ressaisit.
+function loadCaffeineEmbedded(dateAff){
+  _caffeineEmbedDate=dateAff||localISODate(new Date());
   _renderCaffeineEmbedded();
 }
 function _renderCaffeineEmbedded(){
@@ -42398,7 +42405,11 @@ function _commitCaffeineAdd(qty){
   _pendingCaffProduct=null;
   if(!_ok){ toast('Jour hors de portée : la prise n’a pas été enregistrée.','var(--orange)'); return; }
   toast(name+' ajouté ✓');
-  _caffReturnToNutrition?loadNutrition():loadCaffeine();
+  // ON RESTE SUR LE JOUR OU LA PRISE A ETE ECRITE. loadCaffeine remettait
+  // _caffeineViewDate à aujourd’hui et loadNutrition() faisait de même pour
+  // _caffeineEmbedDate : la prise partait au bon jour, mais l’écran revenait
+  // à aujourd’hui et elle semblait perdue.
+  _caffReturnToNutrition?loadNutrition(undefined,_d):_renderCaffeineScreen();
 }
 function saveCaffeineCustom(){
   const name=(document.getElementById('caff-custom-name')||{}).value?.trim();
@@ -42407,10 +42418,13 @@ function saveCaffeineCustom(){
   if(!name||mg<1){toast('Remplis le nom et la dose en mg');return;}
   const now=new Date();
   const hhmm=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
-  const _ok=addCaffeineEntry({id:'custom',name,icon:'☕',mg,volume,type:'custom',time:hhmm,ts:Date.now()},_caffDateCourante());
+  // Mémorisée AVANT l’ajout, comme dans _commitCaffeineAdd : c’est le jour
+  // sur lequel il faudra revenir.
+  const _d=_caffDateCourante();
+  const _ok=addCaffeineEntry({id:'custom',name,icon:'☕',mg,volume,type:'custom',time:hhmm,ts:Date.now()},_d);
   if(!_ok){ toast('Jour hors de portée : la prise n’a pas été enregistrée.','var(--orange)'); return; }
   toast(name+' ajouté ✓');
-  _caffReturnToNutrition?loadNutrition():loadCaffeine();
+  _caffReturnToNutrition?loadNutrition(undefined,_d):_renderCaffeineScreen();
 }
 
 // ======= VIDEOS =======
