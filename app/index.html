@@ -7847,8 +7847,23 @@ const HIST_QUITTER_MS=2000;
 let _navParHistorique=false;
 let _histQuitter=0;
 let _histSortie=false;
+// UNE SEULE ENTREE au-dessus de l’entrée initiale, jamais une par écran.
+//
+// La pile grandissait d’un cran par écran visité, alors qu’un appui sur retour
+// n’en consomme qu’un tout en remontant DIRECTEMENT à l’origine : après dix
+// écrans, il aurait fallu dix appuis pour vider ce que l’accueil ne consommait
+// pas. Sur un écran racine, le second appui reculait alors de deux crans dans
+// une pile profonde — on restait DANS l’application, sur une vieille entrée,
+// et comme go() n’était pas appelé, rien ne changeait à l’écran.
+//
+// `rcScreen` sert de MARQUEUR de présence, pas de mémoire : l’écran précédent
+// vient de _ecranOrigine, et rien ne relit cette valeur. On la garde parce
+// qu’un état vide serait indiscernable de l’entrée initiale.
 function _histPousser(id){
-  try{ history.pushState({rcScreen:id},''); }catch(e){}
+  try{
+    if(history.state&&history.state.rcScreen) return;
+    history.pushState({rcScreen:id},'');
+  }catch(e){}
 }
 // PURE-ish : elle ne fait que regarder. Deux calques peuvent être ouverts —
 // les feuilles (#modal-overlay) et la demande de confirmation (#rc-confirm),
@@ -7907,6 +7922,14 @@ function _histPopstate(){
       // referme l’application. Le drapeau BORNE l’opération à un seul saut —
       // sans lui, le popstate suivant repasserait ici et viderait
       // l’historique du navigateur, y compris ce qui ne nous appartient pas.
+      // ON NE REPOSE RIEN. Le popstate vient de consommer la sentinelle : nous
+      // sommes sur l’entrée initiale, et history.back() sort donc de
+      // l'application plutôt que de reculer dans une pile d'écrans.
+      //
+      // Le drapeau BORNE l’opération à un seul saut. Il servait à absorber le
+      // popstate que provoquait ce back() dans une pile profonde ; il ne peut
+      // plus s’en produire, mais l’application peut avoir été ouverte depuis un
+      // lien, auquel cas une entrée étrangère reste dessous.
       if(_histSortie) return;
       _histSortie=true;
       setTimeout(()=>{_histSortie=false;},1500);
