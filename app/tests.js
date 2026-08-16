@@ -9680,20 +9680,20 @@ function testExercices(){
             go=()=>{}; loadCoachSessionSlots=()=>{}; _proposerBrouillon=()=>false;
             currentUser={id:'c1',email:'c@t',role:'coach'};
             currentClientId='a1';
-            openCoachSessions();
+            ouvrirSeancesSansBrouillon();
             const apres=_coachEditClient.sessions_config;
             if(apres[0].exercises[0].name!=='SOULEVÉ DE TERRE')
               return _echec('le programme publié a été remplacé : '+apres[0].exercises[0].name);
             if(apres.length!==2) return _echec('la grille a changé de taille : '+apres.length);
             // TÉMOIN : une grille qui ne porte VRAIMENT rien migre toujours.
             magasin.users['a@t'].sessions_config=[{day:'Lundi',name:'',active:false,exercises:[]}];
-            openCoachSessions();
+            ouvrirSeancesSansBrouillon();
             if(!(_coachEditClient.sessions_config||[]).some(x=>(x.exercises||[]).length))
               return _echec('une grille vide ne reçoit plus la Fondation');
             // Et un jour actif SEULEMENT nommé est protégé lui aussi.
             magasin.users['a@t'].sessions_config=[{day:'Lundi',name:'HAUT DU CORPS',active:true,exercises:[]},
               {day:'Mardi',name:'',active:false,exercises:[]}];
-            openCoachSessions();
+            ouvrirSeancesSansBrouillon();
             if(_coachEditClient.sessions_config[0].name!=='HAUT DU CORPS')
               return _echec('un jour nommé sans exercices a été écrasé');
             return true;
@@ -9716,7 +9716,7 @@ function testExercices(){
             CLOUD.pushOne=(e,u)=>{envoye=u;return Promise.resolve();};
             currentUser={id:'c1',email:'c@t',role:'coach'};
             currentClientId='a1';
-            openCoachSessions();
+            ouvrirSeancesSansBrouillon();
             // Le coach travaille. PENDANT CE TEMPS, l’athlète enregistre une
             // séance et son poids : ils arrivent dans le dossier STOCKÉ, pas
             // dans la copie que l’éditeur tient en main.
@@ -24611,7 +24611,7 @@ function testExercices(){
         if(sc) a.sessions_config=sc;
         currentUser=COACH; currentClientId='a1';
         DB.set('users',{'kev@coach.fr':COACH,'x@t.fr':a});
-        openCoachSessions();
+        ouvrirSeancesSansBrouillon();
         const r=_coachEditClient.sessions_config||[];
         return {jours:r.length, actives:r.filter(x=>x.active).length,
           fondation:r.filter(x=>x._foundation).length,

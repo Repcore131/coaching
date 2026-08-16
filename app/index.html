@@ -16811,15 +16811,44 @@ async function applyTemplateToClient(idx){
 
 // ======= COACH SESSION MANAGER =======
 let _coachEditClient=null;
-function openCoachSessions(){
+// L'OUVERTURE DE L'ÉDITEUR, EN TROIS TEMPS.
+//
+// Elle était en un seul, et _proposerBrouillon n’y était pas attendue : tout
+// ce qui suit s’exécutait pendant que la question était encore posée. La garde
+// de migration jugeait le PUBLIÉ, la grille se dessinait sur le publié, et une
+// reprise acceptée remplaçait sessions_config sans que l’écran soit redessiné.
+//
+// LES DEUX MOITIÉS RESTENT SYNCHRONES. Cinq assertions de la suite intégrée
+// exécutent ce chemin, et testExercices() est synchrone : tout rendre
+// asynchrone les aurait fait lire l’état d’AVANT la migration et passer au vert
+// sans rien mesurer.
+//
+// Son unique appelant est un onclick= : « lance et oublie », rien à changer.
+async function openCoachSessions(){
+  if(!_seancesCoachPreparer()) return;
+  // ATTENDUE. C’est tout le lot.
+  try{ await _proposerBrouillon(); }catch(e){}
+  _seancesCoachRendre();
+}
+// LE MÊME CHEMIN, SANS LA QUESTION. Employé par la suite intégrée, qui est
+// synchrone, et qui n’a rien à tester du brouillon ici.
+function ouvrirSeancesSansBrouillon(){
+  if(!_seancesCoachPreparer()) return false;
+  _seancesCoachRendre();
+  return true;
+}
+// Prend le dossier et en fait une copie de travail. Rend false quand il n’y a
+// rien à ouvrir — les deux gardes d’origine, inchangées.
+function _seancesCoachPreparer(){
   const c=getOwnedClient(currentClientId);
-  if(!c) return;
-  if(c._fromCode){toast('Cet athlète n\'a pas encore créé son compte.','var(--orange)');return;}
+  if(!c) return false;
+  if(c._fromCode){toast('Cet athlète n\'a pas encore créé son compte.','var(--orange)');return false;}
   _coachEditClient=JSON.parse(JSON.stringify(c));
-  // Un brouillon plus récent que le publié : on PROPOSE de le reprendre, on
-  // ne l'impose pas. L'imposer écraserait sans le dire un programme que le
-  // coach a peut-être publié depuis un autre appareil.
-  try{ _proposerBrouillon(); }catch(e){}
+  return true;
+}
+// Migration éventuelle, titre, écran, grille. Lit la configuration RETENUE :
+// appelée après la réponse, elle ne peut plus juger le publié à sa place.
+function _seancesCoachRendre(){
   const sc=_coachEditClient.sessions_config;
   // _evol_gender n'existe qu'à partir du premier bilan. Un athlète créé par le
   // coach porte son genre dans .gender et rien d'autre : lu seul, _evol_gender
