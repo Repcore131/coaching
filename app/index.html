@@ -7588,6 +7588,9 @@ function go(id){
     const _cur=document.querySelector('.screen.active');
     if(_cur&&_cur.id==='s-coach-home'&&id!=='s-coach-home') _pilMarquerVisite();
   }catch(e){}
+  // L'écran quitté, relevé AVANT toute bascule : il sert à décider s'il y a
+  // vraiment changement d'écran, donc s'il faut empiler une entrée d'historique.
+  const _avant=document.querySelector('.screen.active')?.id;
   const _safe=['s-splash','s-welcome','s-coach-home','s-client-home','s-coach-entry','s-athlete-entry'];
   if(window._swUpdatePending&&_safe.includes(id)){location.reload();return;}
   // Filet de sécurité UI — le vrai contrôle d'accès reste côté données/serveur (P02).
@@ -7652,14 +7655,25 @@ function go(id){
   // contenu est peint par le loadX() qui suit. Les canvas, eux, ont leur propre
   // rappel au moment du dessin — le WeakSet garantit qu'aucun ne joue deux fois.
   if(s){ try{ requestAnimationFrame(()=>arcTracerCourbes(s)); }catch(e){} }
+  // L'ENTRÉE D'HISTORIQUE, en dernier et sous deux conditions.
+  //
+  // APRÈS l’affichage : les retours anticipés plus haut — rechargement
+  // _swUpdatePending, accès refusé qui rappelle go() ailleurs — ne doivent
+  // rien empiler. Celui du rechargement quitte la page de toute façon.
+  //
+  // Sur un VRAI changement : go() vers l’écran courant est fréquent —
+  // loadCoachHome le fait toutes les 30 s — et empiler là remplirait la pile
+  // d’entrées identiques. Il faudrait autant d’appuis pour en sortir.
+  if(!_navParHistorique&&id!==_avant) _histPousser(id);
 }
 // ── Retour vers l'écran d'origine ───────────────────────────────────────────
-// L'application n'empile aucun état d'historique : la navigation se fait
-// uniquement en basculant la classe .active entre les div.screen. Un bouton
-// retour câblé sur history.back() ne revient donc pas à l'écran précédent, il
-// SORT de l'application. Deux écrans le faisaient. On mémorise l'origine à
-// l'ouverture plutôt que d'y coder une destination en dur : ils sont
-// atteignables depuis plusieurs endroits.
+// La navigation se fait en basculant la classe .active entre les div.screen.
+// On mémorise l’origine à l’ouverture plutôt que d’y coder une destination en
+// dur : ces écrans sont atteignables depuis plusieurs endroits.
+//
+// AUCUN BOUTON de l’interface n’appelle history.back() — une assertion le
+// surveille. Le retour MATÉRIEL, lui, passe par le bloc juste en dessous, qui
+// réutilise _ecranOrigine comme source de l’écran précédent.
 const _ecranOrigine={};
 function goAvecRetour(id){
   const actif=document.querySelector('.screen.active')?.id;
@@ -7671,6 +7685,103 @@ function goAvecRetour(id){
 function retourDe(id,defaut){
   go(_ecranOrigine[id]||defaut||(currentUser?.role==='coach'?'s-coach-home':'s-client-home'));
 }
+// ══════════════════ RETOUR MATÉRIEL (Android) ══════════════════════════
+//
+// Le manifeste déclare "display":"standalone" : l’application n’a pas de
+// barre d’adresse, et le bouton matériel est le SEUL retour du système.
+// Comme rien n’empilait d’état d’historique, chaque appui SORTAIT de
+// l’application — en pleine séance, en plein bilan, n’importe où.
+//
+// go() empile une entrée par changement d’écran réel ; ce handler la
+// consomme et rappelle go() SANS en repousser une — d’où _navParHistorique,
+// sans quoi la pile ne se viderait jamais et l’app ne pourrait plus se
+// fermer du tout : le défaut inverse, tout aussi bloquant.
+//
+// L'ÉCRAN PRÉCÉDENT VIENT DE retourDe, donc de _ecranOrigine. On ne tient pas
+// une seconde pile : deux mémoires de la même chose finiraient par se
+// contredire, et c’est déjà ce que le produit évite pour les boutons retour.
+const HIST_RACINES=['s-welcome','s-coach-home','s-client-home'];
+// Les deux écrans qu’on ne quitte pas par mégarde. Le texte dit ce qui est
+// gardé : sans cela, « Quitter ? » se répond au hasard.
+const HIST_CONFIRME={
+  's-workout':['Quitter la séance ?','Ta séance est enregistrée au fur et à mesure : tu la retrouveras en cours.','Quitter','Rester'],
+  's-bilan':['Quitter le bilan ?','Tes réponses sont gardées en brouillon : tu reprendras où tu en étais.','Quitter','Rester']
+};
+// Deux secondes : au-delà, le deuxième appui n’est plus une confirmation mais
+// un nouveau geste.
+const HIST_QUITTER_MS=2000;
+let _navParHistorique=false;
+let _histQuitter=0;
+let _histSortie=false;
+function _histPousser(id){
+  try{ history.pushState({rcScreen:id},''); }catch(e){}
+}
+// PURE-ish : elle ne fait que regarder. Deux calques peuvent être ouverts —
+// les feuilles (#modal-overlay) et la demande de confirmation (#rc-confirm),
+// qui n’est pas une feuille et ne se ferme pas avec closeModal().
+function _histCalqueOuvert(){
+  if(document.getElementById('modal-overlay')) return true;
+  const z=document.getElementById('rc-confirm');
+  return !!(z&&z.style.display==='flex');
+}
+function _histFermerCalque(){
+  const z=document.getElementById('rc-confirm');
+  if(z&&z.style.display==='flex'){
+    // On passe par SON bouton « non » : c’est lui qui résout la promesse.
+    // La fermer à la main laisserait l’appelant attendre pour toujours.
+    const non=document.getElementById('rc-confirm-non');
+    if(non&&typeof non.onclick==="function"){ non.onclick(); return; }
+    z.style.display='none'; return;
+  }
+  closeModal();
+}
+function _histRetour(actuel){
+  _navParHistorique=true;
+  try{ retourDe(actuel); } finally { _navParHistorique=false; }
+}
+// Exporté pour le banc et la suite de tests : le handler lui-même n’est pas
+// atteignable autrement, et le vérifier par sa seule lecture ne prouve rien.
+function _histPopstate(){
+  const actuel=document.querySelector('.screen.active')?.id;
+  if(!actuel){ return; }
+  // 1. UN CALQUE OUVERT SE FERME D’ABORD, et rien d’autre ne bouge. On
+  //    repousse une entrée : celle qui vient d’être consommée décrivait
+  //    l’écran, pas le calque, et sans elle la pile aurait perdu un cran.
+  if(_histCalqueOuvert()){ _histFermerCalque(); _histPousser(actuel); return; }
+  // 2. SÉANCE ET BILAN : on demande avant de sortir. La question est
+  //    asynchrone, donc on repousse TOUT DE SUITE — on reste pendant qu’elle
+  //    est posée — et on ne s’en va que si la réponse est oui.
+  const q=HIST_CONFIRME[actuel];
+  if(q){
+    _histPousser(actuel);
+    try{
+      Promise.resolve(rcConfirm(q[0],q[1],q[2],q[3])).then(ok=>{ if(ok) _histRetour(actuel); });
+    }catch(e){}
+    return;
+  }
+  // 3. ÉCRAN RACINE : on laisse l’application se fermer, mais pas au premier
+  //    appui — sortir par erreur d’une app sans barre d’adresse est agaçant.
+  if(HIST_RACINES.includes(actuel)){
+    if(Date.now()-_histQuitter<HIST_QUITTER_MS){
+      // Deuxième appui : on consomme l’entrée du dessous pour que le système
+      // referme l’application. Le drapeau BORNE l’opération à un seul saut —
+      // sans lui, le popstate suivant repasserait ici et viderait
+      // l’historique du navigateur, y compris ce qui ne nous appartient pas.
+      if(_histSortie) return;
+      _histSortie=true;
+      setTimeout(()=>{_histSortie=false;},1500);
+      try{ history.back(); }catch(e){}
+      return;
+    }
+    _histQuitter=Date.now();
+    try{ toast('Appuie encore pour quitter'); }catch(e){}
+    _histPousser(actuel);
+    return;
+  }
+  // 4. LE CAS COURANT.
+  _histRetour(actuel);
+}
+try{ window.addEventListener('popstate',_histPopstate); }catch(e){}
 // ══════════════════════ ARC — SYSTÈME D'ANIMATION ══════════════════════
 // Le pendant JS de la section « ARC » de la feuille de style. Toute animation
 // du produit passe par ces trois primitives — arcFlash (le flash de décharge),
