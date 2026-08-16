@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v769';
+const CACHE = 'repcore-v770';
 const SW_DATA = 'repcore-sw-data'; // persistent across updates — not wiped by activate
 
 // DÉLAI DE GARDE sur index.html. Le handler était en network-first avec un
@@ -23,25 +23,51 @@ const ASSETS = ['./index.html', './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './fonts/montserrat-var-latin.woff2',
   './fonts/bebasneue-400-latin.woff2'];
 
-// Une séance en cours interdit la bascule. Le client poste SEANCE_EN_COURS au
-// lancement et SEANCE_TERMINEE à la fin ; tant que ce drapeau est levé, le
-// nouveau SW reste en attente. Prendre le contrôle en pleine séance, c'est
-// purger le cache sous les pieds de quelqu'un qui est peut-être hors ligne.
-let _seanceEnCours = false;
+// Une séance en cours interdit la bascule. Prendre le contrôle en pleine
+// séance, c'est purger le cache sous les pieds de quelqu'un qui est peut-être
+// hors ligne.
+//
+// L'ÉTAT VIT DANS LE CACHE PARTAGÉ, ET NON DANS UNE VARIABLE DE MODULE.
+//
+// Une variable appartient au worker qui l'a déclarée. Le client levait le
+// drapeau en postant au worker ACTIF, alors que le handler `install` du worker
+// EN COURS D'INSTALLATION lisait SA copie, restée à false : skipWaiting()
+// partait à chaque fois, et le garde-fou n'a jamais rien gardé.
+//
+// repcore-sw-data est le seul support que les deux workers voient. Il survit
+// aux mises à jour, et activate l'épargne explicitement.
+const SEANCE_CLE = '/seance-en-cours';
+// QUATRE HEURES. Un drapeau plus vieux décrit une séance jamais terminée —
+// l'app fermée en plein milieu, le téléphone éteint. Le respecter
+// indéfiniment bloquerait TOUTES les mises à jour, pour toujours ; l'ignorer
+// ramène ce cas-là au comportement d'avant, qui n'était pas pire.
+const SEANCE_PEREMPTION_MS = 4 * 3600 * 1000;
+// `_attenteFinSeance`, LUI, reste une variable de module — et c'est correct :
+// il décrit ce que CE worker-ci a décidé de retenir, pas un état du monde.
 let _attenteFinSeance = false;
+async function seanceActive() {
+  const s = await swGet(SEANCE_CLE);
+  const d = s && Number(s.depuis);
+  if (!d) return false;
+  return (Date.now() - d) < SEANCE_PEREMPTION_MS;
+}
 
 self.addEventListener('install', e => {
-  // allSettled et non addAll : un asset manquant ou en erreur ne doit plus
-  // faire échouer toute l'installation du Service Worker.
-  e.waitUntil(
-    caches.open(CACHE)
-      .then(c => Promise.allSettled(ASSETS.map(a => c.add(a))))
-      .catch(() => {})
-  );
-  // Conditionné : voir _seanceEnCours. Sans séance en cours, comportement
-  // inchangé — la mise à jour reste immédiate.
-  if (_seanceEnCours) _attenteFinSeance = true;
-  else self.skipWaiting();
+  // TOUT est dans le waitUntil, y compris la décision de basculer : la lecture
+  // de l'état est asynchrone, et une décision prise hors du waitUntil serait
+  // prise avant que la réponse n'arrive.
+  e.waitUntil((async () => {
+    // allSettled et non addAll : un asset manquant ou en erreur ne doit plus
+    // faire échouer toute l'installation du Service Worker.
+    try {
+      const c = await caches.open(CACHE);
+      await Promise.allSettled(ASSETS.map(a => c.add(a)));
+    } catch (err) {}
+    // Sans séance en cours, comportement inchangé : la mise à jour est
+    // immédiate. Avec, on retient la bascule jusqu'à SEANCE_TERMINEE.
+    if (await seanceActive()) _attenteFinSeance = true;
+    else self.skipWaiting();
+  })());
 });
 
 // Préchargement différé et non bloquant de la base alimentaire (672 Ko).
@@ -51,12 +77,26 @@ self.addEventListener('install', e => {
 const CIQUAL_URL = './data/ciqual.json';
 let _ciqualPrefetch = null;
 self.addEventListener('message', e => {
-  // Séance en cours : on retient la bascule. À la fin, si un SW attendait,
+  // Séance en cours : on retient la bascule. À la fin, si CE worker attendait,
   // il prend la main immédiatement — l'utilisateur n'a rien à faire.
-  if (e.data?.type === 'SEANCE_EN_COURS') { _seanceEnCours = true; return; }
+  //
+  // L'écriture passe par le cache partagé, jamais par une variable : c'est là
+  // que le prochain `install` viendra lire. La page écrit la même clé de son
+  // côté ; les deux chemins mènent au même endroit, ce qui est tout le point.
+  if (e.data?.type === 'SEANCE_EN_COURS') {
+    e.waitUntil(swSet(SEANCE_CLE, { depuis: Date.now() }));
+    return;
+  }
   if (e.data?.type === 'SEANCE_TERMINEE') {
-    _seanceEnCours = false;
-    if (_attenteFinSeance) { _attenteFinSeance = false; self.skipWaiting(); }
+    e.waitUntil((async () => {
+      await swSet(SEANCE_CLE, null);
+      if (_attenteFinSeance) { _attenteFinSeance = false; self.skipWaiting(); }
+      // Le worker ACTIF, lui, n'a rien retenu : c'est update() qui redemande
+      // au navigateur d'aller chercher sw.js, donc de relancer un `install`
+      // qui, cette fois, ne verra plus de séance. Sans lui, la bascule
+      // retenue attendait la fermeture de tous les onglets.
+      try { await self.registration.update(); } catch (err) {}
+    })());
     return;
   }
   if (e.data?.type !== 'PREFETCH_CIQUAL') return;

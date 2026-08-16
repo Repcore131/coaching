@@ -38136,13 +38136,29 @@ function _renderFjDaySummary(date){
 // — controllerchange le retient déjà — mais les requêtes suivantes passaient
 // par un cache vide, et une séance hors ligne pouvait perdre ses assets.
 //
-// Deux messages, rien de plus : le SW décide, le client se contente de dire
-// où il en est. Silencieux si le SW n'est pas prêt — ce n'est pas une erreur.
-function _swSeance(type){
+// L'ÉTAT EST ÉCRIT DANS LE CACHE PARTAGÉ, pas seulement posté.
+//
+// Poster à `reg.active` ne pouvait pas marcher : le drapeau est lu par le
+// handler `install` du worker EN COURS D'INSTALLATION, qui ne partage aucune
+// variable avec le worker actif. repcore-sw-data, lui, est vu par les deux.
+//
+// Le message reste envoyé, et à `reg.waiting` AUSSI : un worker déjà en
+// attente ne lit plus rien du cache — il a fini son install — et c'est ce
+// message-là qui le libère à la fin de la séance.
+const SW_DATA_CACHE='repcore-sw-data';   // MÊME nom que SW_DATA dans sw.js
+async function _swSeance(type){
+  const enCours=(type==='SEANCE_EN_COURS');
   try{
-    navigator.serviceWorker?.ready
-      .then(reg=>reg.active?.postMessage({type}))
-      .catch(()=>{});
+    const c=await caches.open(SW_DATA_CACHE);
+    await c.put('/seance-en-cours',
+      new Response(JSON.stringify(enCours?{depuis:Date.now()}:null),
+        {headers:{'Content-Type':'application/json'}}));
+  }catch(e){}
+  try{
+    const reg=await navigator.serviceWorker?.ready;
+    if(!reg) return;
+    reg.active?.postMessage({type});
+    reg.waiting?.postMessage({type});
   }catch(e){}
 }
 // Version du cache du SW, pour l'écran de synchronisation. Lue DANS sw.js
@@ -51737,13 +51753,46 @@ function _testSW(R,src){
       src.indexOf("addEventListener('fetch'"));
     return !/\.add\(CIQUAL_URL/.test(bloc)
       ?true:_echec('activate retélécharge Ciqual');})());
-  ok('skipWaiting est CONDITIONNÉ par la séance en cours',(()=>{
-    if(!/_seanceEnCours/.test(src)) return _echec('aucun état de séance');
-    const m=src.match(/if \(_seanceEnCours\) _attenteFinSeance = true;\s*\r?\n\s*else self\.skipWaiting\(\);/);
-    if(!m) return _echec('skipWaiting n\'est pas conditionné');
-    // Et la fin de séance le débloque, sinon la mise à jour n'arriverait jamais.
-    return /SEANCE_TERMINEE[\s\S]{0,200}self\.skipWaiting\(\)/.test(src)
-      ?true:_echec('la fin de séance ne débloque pas la bascule');})());
+  ok('L\'état de séance est lu dans le CACHE PARTAGÉ, pas dans une variable',(()=>{
+    // Une variable de module appartient au worker QUI S'INSTALLE : elle y vaut
+    // toujours false, et le garde-fou ne s'est jamais déclenché. Ce test-ci
+    // remplace celui qui vérifiait la présence de `_seanceEnCours` — il
+    // constatait la LETTRE du garde-fou, pas son effet.
+    if(/_seanceEnCours/.test(src)) return _echec('l\'état vit encore dans une variable de module');
+    const inst=src.slice(src.indexOf("addEventListener('install'"),
+      src.indexOf("addEventListener('message'"));
+    if(!/e\.waitUntil\(\(async \(\) => \{/.test(inst)) return _echec('install ne diffère plus sa décision');
+    if(!/if \(await seanceActive\(\)\) _attenteFinSeance = true;/.test(inst))
+      return _echec('install ne lit pas l\'état partagé');
+    if(!/else self\.skipWaiting\(\);/.test(inst)) return _echec('la bascule a disparu');
+    // La lecture passe par le cache qui SURVIT aux mises à jour.
+    const sa=src.slice(src.indexOf('async function seanceActive'),
+      src.indexOf('async function seanceActive')+400);
+    if(!/swGet\(SEANCE_CLE\)/.test(sa)) return _echec('seanceActive ne lit pas SW_DATA');
+    if(!/const SEANCE_CLE = '\/seance-en-cours';/.test(src)) return _echec('aucune clé nommée');
+    // Et le drapeau PÉRIME : une séance jamais terminée bloquerait tout.
+    if(!/SEANCE_PEREMPTION_MS/.test(sa)) return _echec('aucune péremption');
+    if(!/const SEANCE_PEREMPTION_MS = 4 \* 3600 \* 1000;/.test(src))
+      return _echec('la péremption n\'est pas de 4 h');
+    // La fin de séance efface la clé, débloque ce worker-ci, et redemande au
+    // navigateur d'aller voir : sans update(), la bascule retenue attendrait
+    // la fermeture de tous les onglets.
+    const fin=src.slice(src.indexOf("'SEANCE_TERMINEE'"), src.indexOf("'PREFETCH_CIQUAL'"));
+    if(!/swSet\(SEANCE_CLE, null\)/.test(fin)) return _echec('la clé n\'est pas effacée');
+    if(!/self\.skipWaiting\(\)/.test(fin)) return _echec('la bascule retenue n\'est pas libérée');
+    return /self\.registration\.update\(\)/.test(fin)
+      ?true:_echec('aucun update() : la bascule retenue attendrait la fermeture des onglets');})());
+  ok('Le client écrit l\'état là où le worker qui s\'installe ira le lire',(()=>{
+    const c=String(_swSeance);
+    if(!/caches\.open\(SW_DATA_CACHE\)/.test(c)) return _echec('le client n\'écrit pas dans le cache');
+    if(!/'\/seance-en-cours'/.test(c)) return _echec('pas la bonne clé');
+    if(!/reg\.waiting\?\.postMessage/.test(c))
+      return _echec('le worker EN ATTENTE n\'est pas prévenu : il resterait bloqué');
+    // Le nom du cache doit être le MÊME des deux côtés, sinon chacun écrit
+    // dans le sien et on retrouve exactement le défaut corrigé ici.
+    return /const SW_DATA = 'repcore-sw-data';/.test(src)
+      &&SW_DATA_CACHE==='repcore-sw-data'
+      ?true:_echec('les deux fichiers ne nomment pas le même cache');})());
   ok('SW_DATA reste hors de portée de la purge',(()=>{
     // Rappels de bilan, de séance et de compléments vivent dedans.
     return /k !== SW_DATA/.test(src)
@@ -58742,7 +58791,11 @@ function testExercices(){
           if(!/try\{/.test(src)||!/catch/.test(src))
             return _echec('aucune garde : une absence de SW jetterait');
           let err=null;
+          // _swSeance ÉCRIT désormais dans le cache partagé : sans le second
+          // appel, lancer la suite de tests lèverait un drapeau « séance en
+          // cours » et bloquerait les mises à jour pendant quatre heures.
           try{ _swSeance('SEANCE_EN_COURS'); }catch(e){ err=e.message; }
+          try{ _swSeance('SEANCE_TERMINEE'); }catch(e){ err=err||e.message; }
           return err?_echec('exception : '+err):true;})());
         ok('La pastille ne sort QU\'UNE fois, et seulement depuis le cache',(()=>{
           const src=String(_pastilleServiParCache);
