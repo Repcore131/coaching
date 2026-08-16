@@ -7788,7 +7788,17 @@ function go(id){
   // Sur un VRAI changement : go() vers l’écran courant est fréquent —
   // loadCoachHome le fait toutes les 30 s — et empiler là remplirait la pile
   // d’entrées identiques. Il faudrait autant d’appuis pour en sortir.
-  if(!_navParHistorique&&id!==_avant) _histPousser(id);
+  // ET L'ORIGINE, sous la MÊME condition : un changement d'écran réel, pas
+  // provoqué par un retour. C’est le même événement, il n’y a pas de raison
+  // que les deux mémoires en aient chacune une lecture.
+  //
+  // _ecranOrigine n’était écrit que par goAvecRetour, employée sur CINQ écrans
+  // sur 53 : partout ailleurs, le retour matériel ramenait à l’accueil au lieu
+  // de l’écran précédent.
+  if(!_navParHistorique&&id!==_avant){
+    if(_avant) _ecranOrigine[id]=_avant;
+    _histPousser(id);
+  }
 }
 // ── Retour vers l'écran d'origine ───────────────────────────────────────────
 // La navigation se fait en basculant la classe .active entre les div.screen.
