@@ -13814,7 +13814,21 @@ async function _rafraichirCodesEleves(){
       if(!r.ok) continue;
       data=await r.json();
     }catch(e){continue;}
-    if(!data||!data.redeemed||!data.athleteEmail) continue;
+    if(!data) continue;
+    // L'ÉTAT D'OUVERTURE D'ABORD, et AVANT la sortie sur `redeemed` : c’est
+    // précisément quand l’athlète a ouvert le lien SANS avoir encore créé son
+    // compte que `etat:'ouvert'` existe. La sortie plus bas l’écartait donc
+    // dans le seul cas où il avait quelque chose à dire, et « Ouverte » était
+    // littéralement inatteignable.
+    //
+    // etatProgresse GARDE LE SENS UNIQUE : un aperçu tardif ne fait pas reculer
+    // un compte déjà créé, et etatInvitation fait primer `redeemed`.
+    if(etatProgresse(etatInvitation(c),data.etat)){
+      c.etat=data.etat;
+      if(data.ouvertLe) c.ouvertLe=data.ouvertLe;
+      change=true;
+    }
+    if(!data.redeemed||!data.athleteEmail) continue;
     // Le dossier n'est lisible que si l'athlete a bien inscrit coachEmailKey :
     // c'est la condition posee par database.rules.json. Un echec ici signifie
     // que le rattachement n'est pas alle au bout, pas que le code est faux.
