@@ -22712,6 +22712,11 @@ function finishWorkout(incomplete=false){
     const el=document.getElementById('ps-'+m);const vl=document.getElementById('ps-'+m+'-val');
     if(el){el.value=5;}if(vl)vl.textContent='5';
   });
+  // LA CARTE DE FORME SUIT LES CURSEURS QU'ON VIENT DE REMETTRE A 5.
+  // renderFormeSeance n'est appelée que par leur `oninput` : sans cet appel,
+  // #wd-forme affichait la forme de la séance PRÉCÉDENTE jusqu’au premier
+  // déplacement de curseur. Après la remise à zéro, jamais avant.
+  try{ renderFormeSeance(); }catch(e){}
   document.getElementById('ps-steps').value='';
   // La séance est déjà dans l'historique à ce stade : la toute première y est
   // donc seule. Même raisonnement que first_workout_started — c'est la donnée
