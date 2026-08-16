@@ -7665,6 +7665,11 @@ function _majTabbar(id){
   _majPastilleBilan();
 }
 function go(id){
+  // UNE SAISIE OUVERTE NE SURVIT PAS AU CHANGEMENT D’ÉCRAN. Sans ça, le calque
+  // restait affiché par-dessus le nouvel écran et son appelant attendait une
+  // promesse qui ne se résoudrait jamais. C’est un no-op quand rien n’est
+  // ouvert — donc à chaque appel ordinaire.
+  try{ rcSaisieFermer(); }catch(e){}
   // RATTRAPAGE DU PROFIL PUBLIC, une seule fois par session. Accroche ici et
   // non au seul accueil coach : un coach qui ouvre l app ailleurs ne passait
   // jamais par loadCoachHome, et sa vitrine restait non publiee sans que rien
@@ -7868,19 +7873,30 @@ function _histPousser(id){
 // PURE-ish : elle ne fait que regarder. Deux calques peuvent être ouverts —
 // les feuilles (#modal-overlay) et la demande de confirmation (#rc-confirm),
 // qui n’est pas une feuille et ne se ferme pas avec closeModal().
+// TROIS calques peuvent être ouverts : les feuilles (#modal-overlay), la
+// demande de confirmation (#rc-confirm) et la SAISIE (#rc-saisie). Les deux
+// dernières ne sont pas des feuilles et ne se ferment pas avec closeModal().
+//
+// #rc-saisie manquait : un retour matériel pendant une saisie changeait d’écran
+// en laissant le calque affiché par-dessus, promesse en attente pour toujours.
 function _histCalqueOuvert(){
   if(document.getElementById('modal-overlay')) return true;
-  const z=document.getElementById('rc-confirm');
-  return !!(z&&z.style.display==='flex');
+  for(const id of ['rc-confirm','rc-saisie']){
+    const z=document.getElementById(id);
+    if(z&&z.style.display==='flex') return true;
+  }
+  return false;
 }
 function _histFermerCalque(){
-  const z=document.getElementById('rc-confirm');
-  if(z&&z.style.display==='flex'){
-    // On passe par SON bouton « non » : c’est lui qui résout la promesse.
-    // La fermer à la main laisserait l’appelant attendre pour toujours.
-    const non=document.getElementById('rc-confirm-non');
-    if(non&&typeof non.onclick==="function"){ non.onclick(); return; }
-    z.style.display='none'; return;
+  // PAR LEUR BOUTON « non » : c’est lui qui résout la promesse. Les fermer à
+  // la main laisserait l’appelant attendre pour toujours.
+  for(const id of ['rc-confirm','rc-saisie']){
+    const z=document.getElementById(id);
+    if(z&&z.style.display==='flex'){
+      const non=document.getElementById(id+'-non');
+      if(non&&typeof non.onclick==="function"){ non.onclick(); return; }
+      z.style.display='none'; return;
+    }
   }
   closeModal();
 }
@@ -20935,6 +20951,20 @@ function rcAlerte(titre,libelleOk){
 //
 // `opts` porte le clavier à ouvrir. Un numéro de téléphone saisi sur un
 // clavier alphabétique est une brimade sur mobile.
+// LA FERMETURE DE LA SAISIE EN COURS, atteignable de l’extérieur.
+//
+// go() l’appelle : changer d’écran alors qu’une saisie est ouverte laissait le
+// calque par-dessus le nouvel écran, et la promesse en attente. `null` est la
+// réponse d’une annulation, celle que les trois appelants savent déjà lire.
+//
+// Vidée dès qu’elle a servi : une seconde fermeture ne doit pas résoudre une
+// promesse qui n’existe plus.
+let _rcSaisieFermer=null;
+function rcSaisieFermer(){
+  const f=_rcSaisieFermer;
+  _rcSaisieFermer=null;
+  if(typeof f==='function') try{ f(); }catch(e){}
+}
 function rcSaisie(titre,valeur,opts){
   const z=document.getElementById('rc-saisie');
   const t=document.getElementById('rc-saisie-titre');
@@ -20962,7 +20992,10 @@ function rcSaisie(titre,valeur,opts){
   setTimeout(()=>{ try{ c.focus(); c.select(); }catch(e){} },50);
   return new Promise(res=>{
     const fermer=v=>{ z.style.display='none';
+      _rcSaisieFermer=null;
       ok.onclick=null; non.onclick=null; z.onclick=null; c.onkeydown=null; res(v); };
+    // La poignée que go() et rcSaisieFermer utilisent : une annulation.
+    _rcSaisieFermer=()=>fermer(null);
     ok.onclick=()=>fermer(c.value);
     non.onclick=()=>fermer(null);
     c.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); fermer(c.value); } };
