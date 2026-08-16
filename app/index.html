@@ -7326,6 +7326,10 @@ function _comptesRemiseAZero(){
   woState={};
   try{ localStorage.removeItem('rc_wo_state'); }catch(e){}
   bilData={};
+  // LE BROUILLON PART AVEC. Il porte désormais une adresse, donc le compte
+  // d’arrivée ne le lirait pas — mais le laisser derrière soi, c’est laisser
+  // les mensurations de quelqu’un dans le stockage d’un appareil partagé.
+  try{ localStorage.removeItem(BIL_DRAFT_KEY); }catch(e){}
   try{ _ckEtat={}; _ckStopChrono(); }catch(e){}
   try{ _viderCacheVolume(); }catch(e){}
   try{ _viderCacheSignaux(); }catch(e){}
@@ -26399,6 +26403,17 @@ let _bilPhotoEssais=0;
 // Le questionnaire de départ compte une quinzaine d'étapes. Fermer l'onglet en
 // cours de route effaçait toute la saisie : bilData ne vivait qu'en mémoire.
 const BIL_DRAFT_KEY='rc_bil_draft';
+// PURE. Le brouillon est-il celui du compte courant ?
+//
+// Une seule clé pour tout l’appareil, un contenu qui n’appartient qu’à une
+// personne : sans cette question, la reprise de bilan traversait les comptes.
+// Un brouillon SANS adresse date d’avant ce champ — on refuse plutôt que de
+// deviner, et c’est le sens sûr.
+function _bilDraftAMoi(d){
+  const moi=(currentUser&&currentUser.email)||null;
+  if(!moi||!d||!d.email) return false;
+  return String(d.email)===String(moi);
+}
 const BIL_DRAFT_TTL=7*24*3600*1000;
 let _bilDraftTimer=null,_bilDraftAvertiPlein=false;
 // Les photos ne vont PAS dans le brouillon. compressImage les ramène déjà à
@@ -26414,8 +26429,12 @@ function _bilSaveDraft(){
   clearTimeout(_bilDraftTimer);
   _bilDraftTimer=setTimeout(()=>{
     try{
+      // L ADRESSE DE CELUI QUI ÉCRIT. La clé est commune à l’appareil, le
+      // contenu ne l’est pas : poids, mensurations, cycle et sommeil sont ceux
+      // d’une seule personne.
       localStorage.setItem(BIL_DRAFT_KEY,JSON.stringify({
-        bilType,bilStep,bilData:_bilDataSansPhotos(),ts:Date.now()
+        bilType,bilStep,bilData:_bilDataSansPhotos(),ts:Date.now(),
+        email:(currentUser&&currentUser.email)||''
       }));
     }catch(e){
       // Une seule alerte par session : la sauvegarde se déclenche à chaque
@@ -26433,10 +26452,19 @@ function _bilClearDraft(){
 }
 // Retourne le brouillon s'il est exploitable, null sinon. Ne supprime rien :
 // c'est à l'appelant de décider, selon qu'il consulte ou qu'il repart à zéro.
+//
+// ET SEULEMENT S’IL EST À SOI. La clé est commune à l’appareil ; le contenu
+// appartient à une personne. Sans ce filtre, l’accueil proposait « Reprendre
+// mon bilan » sur les mensurations de quelqu’un d’autre.
+//
+// UN BROUILLON SANS ADRESSE — écrit avant ce correctif — est REFUSÉ. On ne
+// sait pas à qui il appartient : le proposer serait deviner, et faire
+// ressaisir ses propres mesures est moins grave que d’en montrer d’autres.
 function _bilLoadDraft(type){
   try{
     const d=JSON.parse(localStorage.getItem(BIL_DRAFT_KEY)||'null');
     if(!d||!d.bilData||typeof d.bilStep!=='number') return null;
+    if(!_bilDraftAMoi(d)) return null;
     if(type&&d.bilType!==type) return null;
     if(!d.ts||Date.now()-d.ts>BIL_DRAFT_TTL) return null;
     return d;
@@ -26642,6 +26670,11 @@ async function openBilan(type,forcerReprise){
   // type diffère, et c'est précisément le cas qu'on veut voir ici.
   let ancien=null;
   try{ ancien=brut?JSON.parse(brut):null; }catch(e){ ancien=null; }
+  // MÊME FILTRE QUE _bilLoadDraft, et pour la même raison : cette lecture-ci
+  // court-circuite volontairement le type, pas le propriétaire. Sans elle, le
+  // brouillon d’un AUTRE compte déclenchait encore la question « tu as un
+  // bilan en cours », en nommant un bilan qui n’est pas le sien.
+  if(ancien&&!_bilDraftAMoi(ancien)) ancien=null;
   const autreType=!!(ancien&&ancien.bilType&&ancien.bilType!==type);
   // POSÉE AVANT DE TOUCHER AUX VARIABLES DU MODULE : refuser doit tout laisser
   // exactement comme c'était, brouillon compris. Les remettre à zéro d'abord
