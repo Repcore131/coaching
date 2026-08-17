@@ -3978,7 +3978,9 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- CAFÉINE AJOUT -->
 <div id="s-caffeine-add" class="screen">
-  <div class="topbar"><button class="back-btn" onclick="loadNutrition()">←</button><span class="topbar-title">Ajouter une prise</span><span></span></div>
+  <!-- fermerCaffeineAdd, et non loadNutrition() : le retour rend la main à
+       l’écran d’où l’on vient, et à la date qu’il affichait. -->
+  <div class="topbar"><button class="back-btn" onclick="fermerCaffeineAdd()">←</button><span class="topbar-title">Ajouter une prise</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <!-- Défilement horizontal supprimé : les cinq catégories ne tenaient pas
@@ -43648,6 +43650,23 @@ function _drawCaffeineHistory(wKg,canvasId='caff-history-chart',daysOverride,por
     if(p<1) canvas._histAnimId=requestAnimationFrame(tick);
   };
   canvas._histAnimId=requestAnimationFrame(tick);
+}
+// LA TROISIÈME SORTIE DE L’ÉCRAN DE SAISIE, à côté des deux validations.
+//
+// Le bouton retour appelait loadNutrition() EN DUR : on revenait sur
+// Nutrition même en étant arrivé depuis l’écran autonome, et l’appel sans
+// argument remettait _caffeineEmbedDate à aujourd’hui — renoncer à une saisie
+// déplaçait donc le jour du bloc embarqué.
+//
+// MÊME DRAPEAU que les deux autres sorties, posé par openCaffeineAdd. Trois
+// façons de quitter cet écran, une seule règle pour savoir où l’on retombe.
+//
+// ON NE REVIENT PAS SUR UN JOUR : rien n’a été écrit, donc rien à retrouver.
+// On rend chaque écran à la date qu’il affichait — `_caffeineEmbedDate` pour
+// le bloc embarqué, `_caffeineViewDate` que _renderCaffeineScreen relit.
+function fermerCaffeineAdd(){
+  if(_caffReturnToNutrition) loadNutrition(undefined,_caffeineEmbedDate);
+  else{ go('s-caffeine'); _renderCaffeineScreen(); }
 }
 function openCaffeineAdd(){
   _caffReturnToNutrition=document.getElementById('s-nutrition')?.classList.contains('active')||false;
