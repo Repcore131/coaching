@@ -666,8 +666,20 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
    du grand ecran garde un nombre de colonnes constant. Vides, elles ne doivent
    rien occuper ici : sous 1025 px la ligne est une carte empilee, et un div
    vide y ajouterait sa marge. Le bloc @media(min-width:1025px) les rallume. */
-.cr-obj:empty,.cr-phase:empty,
-.cr-charge:empty,.cr-progres:empty,.cr-bilans:empty{display:none}
+.cr-obj:empty,.cr-phase:empty{display:none}
+/* LES TROIS MESURES, MASQUEES SOUS 1025 px QUEL QUE SOIT LEUR CONTENU.
+
+   Vides, le patron ci-dessus suffisait ; PLEINES, elles s empilaient sur la
+   carte du telephone en nombres nus — « +12 % », « 3/7 », « 2 » — sans
+   etiquette : `title` n existe pas au toucher, et la carte empilee n a pas
+   de ligne d en-tete pour les nommer. La carte redevient ici rigoureusement
+   celle d avant leur ajout.
+
+   ELLES RESTENT EMISES DANS LE HTML : c est du CSS. Le bloc
+   @media(min-width:1025px) les rallume en display:block, et les neuf
+   colonnes de la grille supposent que les sept cellules du bloc
+   `display:contents` sont TOUJOURS presentes, vides comprises. */
+.cr-charge,.cr-progres,.cr-bilans{display:none}
 /* ══════════ PLAN ALIMENTAIRE — DIÈTE STRICTE ══════════
    Même langage visuel que la diète flexible : carte en dégradé, filet
    diagonal, ombre portée, titre en Bebas sur un bandeau accentué. Le plan
