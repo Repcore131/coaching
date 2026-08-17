@@ -11605,9 +11605,18 @@ function renderPilotage(clients){
   // « Programmes figés » n'y figure pas : aucun horodatage de programme
   // n'existe au dossier, et l'inventer donnerait un nombre faux en silence.
   const g=r.charge;
+  // LE COMPTEUR DE VIDÉOS MÈNE À LA CORRECTION. Il annonçait un chiffre juste
+  // sans offrir aucun chemin : il fallait deviner quels athlètes, ouvrir leur
+  // fiche une par une, et descendre jusqu’à la section Vidéos.
+  //
+  // Cliquable SEULEMENT s’il y en a : un bouton qui n’ouvre rien apprend à
+  // cliquer dans le vide. Le texte, lui, ne change pas d’un caractère.
+  const _libVid=`${g.videosEnAttente} vidéo${g.videosEnAttente>1?'s':''} en attente de correction`;
   const corpsC=(g.bilansSansReponse||g.videosEnAttente)
     ? `${g.bilansSansReponse} bilan${g.bilansSansReponse>1?'s':''} sans réponse · `
-      +`${g.videosEnAttente} vidéo${g.videosEnAttente>1?'s':''} en attente de correction`
+      +(g.videosEnAttente
+        ?`<button type="button" onclick="_entrerFileVideos()" style="background:none;border:none;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;color:var(--red-light);font-weight:800;text-decoration:underline;cursor:pointer">${_libVid}</button>`
+        :_libVid)
     : 'Rien en attente de ta part.';
   el.innerHTML=`
     <div style="display:flex;gap:6px;margin-bottom:10px">
@@ -13895,6 +13904,60 @@ function _renderPremiersPas(clients){
 // Elle porte des IDENTIFIANTS, pas des dossiers : entre deux réponses, les
 // dossiers changent — c’est même tout l’objet de l’exercice.
 let _fileBilans=[];
+// LA FILE DES VIDEOS A CORRIGER. Posée quand le coach clique le compteur de la
+// bande C, et par lui seulement.
+//
+// Chaque entrée porte l’adresse, l’identifiant de la vidéo, ET l’identifiant
+// du client : c’est lui qui alimente currentClientId, sans quoi le retour à la
+// fiche après la DERNIÈRE vidéo atterrirait sur l’athlète précédemment ouvert
+// — ou nulle part.
+let _fileVideos=[];
+// Entrée par le compteur. Toutes les vidéos non corrigées du portefeuille,
+// dans l’ordre des athlètes puis des vidéos.
+function _entrerFileVideos(){
+  let l=[];
+  try{ l=(typeof getClients==='function')?(getClients()||[]):[]; }catch(e){ l=[]; }
+  _fileVideos=[];
+  for(const c of l){
+    if(!c||!c.email) continue;
+    for(const v of ((c.videos)||[])){
+      try{ if(v&&v.id&&videoNonCorrigee(v)) _fileVideos.push({email:c.email,cid:c.id,id:v.id}); }
+      catch(e){}
+    }
+  }
+  if(!_fileVideos.length){ try{ toast('Aucune vidéo en attente'); }catch(e){} return false; }
+  return _allerVideoSuivante(_fileVideos[0]);
+}
+// PURE-ish : elle ne fait que regarder. Les vidéos de la file placées APRÈS
+// celle qu’on vient de corriger, et qui sont ENCORE à corriger.
+//
+// Le filtre par videoNonCorrigee rend le compte honnête, et celui sur coachId
+// reprend la garde d’openVideoCorrection : une vidéo dont l’athlète n’est plus
+// à moi ne doit pas s’enchaîner.
+//
+// Une vidéo absente de la file rend un tableau vide : entré par la fiche, le
+// coach retrouve le comportement d’avant, une vidéo et puis c’est tout.
+function _fileVideosSuivantes(email,videoId){
+  const i=_fileVideos.findIndex(x=>x&&x.email===email&&x.id===videoId);
+  if(i<0) return [];
+  const users=DB.get('users')||{};
+  return _fileVideos.slice(i+1).filter(x=>{
+    try{
+      const c=users[x.email];
+      if(!c||c.coachId!==(currentUser&&currentUser.id)) return false;
+      const v=(c.videos||[]).find(y=>y&&y.id===x.id);
+      return !!(v&&videoNonCorrigee(v));
+    }catch(e){ return false; }
+  });
+}
+// Va à la suivante : la fiche de son propriétaire devient la fiche courante,
+// pour que le retour après la dernière atterrisse au bon endroit.
+function _allerVideoSuivante(x){
+  if(!x||!x.email||!x.id) return false;
+  if(x.cid) currentClientId=x.cid;
+  try{ openVideoCorrection(x.email,x.id); }catch(e){ return false; }
+  return true;
+}
 // Entrée par la ligne du tableau de bord. Fait ce que faisait le clic — ouvrir
 // la fiche du premier — et retient les autres au passage.
 function _entrerFileBilans(idx){
@@ -44072,10 +44135,14 @@ function openVideoCorrection(email,videoId){
   // les réclame — mieux vaut demander que deviner.
   tplContexte({prenom:c.fname,exercice:v.name},'vc-general');
   window._tsAnnotations=v.feedbackTimestamps?JSON.parse(JSON.stringify(v.feedbackTimestamps)):[];
+  const _vcReste=(()=>{ try{ return _fileVideosSuivantes(email,videoId).length; }catch(e){ return 0; } })();
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 24px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:92vh;overflow-y:auto">
     <h2 style="margin-bottom:2px">✏️ Corriger</h2>
-    <p class="sub" style="font-size:12px;margin-bottom:12px">${escapeHtml(v.name)} · ${new Date(v.date).toLocaleDateString('fr-FR')}</p>
+    <!-- LE RESTE DE LA FILE, quand il y en a une. Des modales qui
+         s’enchaînent sans dire combien il en reste sont désorientantes ; hors
+         file, _fileVideosSuivantes rend un tableau vide et rien ne s’affiche. -->
+    <p class="sub" style="font-size:12px;margin-bottom:12px">${escapeHtml(v.name)} · ${new Date(v.date).toLocaleDateString('fr-FR')}${_vcReste?' · '+_vcReste+' restante'+(_vcReste>1?'s':''):''}</p>
     ${_videoEmbed(v.url)}
     ${/\.(mp4|mov|webm|mkv)(\?|$)/i.test(v.url||'')?htmlLecteurCorrection('vc-video'):''}
     <div style="margin-top:14px">
@@ -44155,6 +44222,16 @@ function saveVideoCorrection(){
   // La modale vient de se fermer : le coach ne peut plus rien récupérer si
   // l'écriture a échoué, il faut donc le lui dire au lieu d'un « ✓ ».
   toastSync(ok,envoi,'Correction enregistrée !','la correction est');
+  // ENCHAÎNEMENT. Quand le coach est entré par le compteur de la bande C, on
+  // ouvre la vidéo suivante plutôt que de le renvoyer sur une fiche qu’il
+  // devrait quitter aussitôt.
+  //
+  // File vide, vidéo hors file, ou ouverture qui échoue : on retombe sur le
+  // retour à la fiche, c’est-à-dire exactement le comportement d’avant.
+  try{
+    const _rest=_fileVideosSuivantes(window._vcEmail,window._vcVideoId);
+    if(_rest.length&&_allerVideoSuivante(_rest[0])) return;
+  }catch(e){}
   openClientDetail(currentClientId,true);
 }
 
