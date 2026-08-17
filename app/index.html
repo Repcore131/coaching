@@ -25392,6 +25392,18 @@ function _rapPresetBornes(cle){
     cle:p.cle
   };
 }
+// PURE. La cible du rapport, est-ce le dossier de celui qui regarde ?
+//
+// L’ADRESSE EN PLUS DE L’IDENTITÉ : la fiche coach passe par getOwnedClient,
+// qui peut rendre une COPIE du dossier, et une comparaison par référence
+// seule prendrait alors le coach pour un de ses clients.
+//
+// Extraite d’ouvrirRapport, qui la calculait en local : rapPreset en aurait
+// fait une seconde copie, et deux copies d’une même règle divergent.
+function _rapCibleEstSoi(cible){
+  return !cible||cible===currentUser
+    ||!!(currentUser&&cible&&cible.email&&cible.email===currentUser.email);
+}
 // LE DERNIER PRÉRÉGLAGE CHOISI, sur le dossier du COACH. Il tient d’un athlète
 // à l’autre : régler la même fenêtre douze fois de suite dans une soirée n’est
 // pas un choix, c’est une corvée.
@@ -25420,7 +25432,17 @@ function rapPreset(cle){
   // poserait un 1er janvier 1970 dans un document qu’on imprime.
   if(!Number.isFinite(b.debut)||!Number.isFinite(b.fin)) return false;
   _rapDebut=b.debut; _rapFin=b.fin; _rapPresetActif=b.cle;
-  _rapMemoriserPreset(b.cle);
+  // MÉMORISÉ SEULEMENT POUR LE RAPPORT D’UN AUTRE. Sur son propre rapport,
+  // le champ était écrit — et poussé vers le nuage par saveUser — sans que
+  // personne ne le relise jamais : ouvrirRapport ne le consulte que dans la
+  // branche « pas soi ». Trois boutons essayés, trois envois pour rien.
+  //
+  // Le choix reste évidemment actif pour la séance en cours : il vit dans
+  // _rapDebut, _rapFin et _rapPresetActif, juste au-dessus.
+  //
+  // `_rapCible` nul — rapPreset appelée hors de tout rapport — se lit comme
+  // « soi », donc n’écrit rien : le défaut sûr est de ne pas écrire.
+  if(!_rapCibleEstSoi(_rapCible)) _rapMemoriserPreset(b.cle);
   rapRendre();
   return true;
 }
@@ -25534,11 +25556,9 @@ function ouvrirRapport(cible){
   // fiche d’un athlète regarde ce qui vient de se passer ; un athlète qui
   // ouvre son propre rapport depuis l’onglet Perfs veut un document de bilan.
   //
-  // L’adresse en plus de l’identité : la fiche coach passe getOwnedClient,
-  // qui peut rendre une COPIE du dossier, et une comparaison par référence
-  // seule prendrait alors le coach pour un de ses clients.
-  const _soi=!cible||cible===currentUser
-    ||!!(currentUser&&cible&&cible.email&&cible.email===currentUser.email);
+  // Le prédicat est écrit UNE fois, au-dessus : rapPreset s’en sert aussi
+  // pour décider s’il y a lieu de mémoriser quoi que ce soit.
+  const _soi=_rapCibleEstSoi(cible);
   const _cle=_soi?'mois':(_rapPresetMemorise()||'14j');
   const b=_rapPresetBornes(_cle);
   _rapDebut=b.debut; _rapFin=b.fin; _rapPresetActif=b.cle;
