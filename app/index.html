@@ -16846,14 +16846,41 @@ function typeDeSeance(exercises){
 // jamais qu'il a existé. Les contre-indications sont donc AFFICHÉES, et c'est
 // le coach qui tranche. Le jour où le bilan portera des cases à cocher, le
 // filtre pourra devenir dur sans rien changer d'autre.
-function suggestProtocols(seance,profil){
+// PURE. La liste de depart : restreinte aux protocoles doux en fenetre
+// post-partum basse, complete sinon.
+//
+// TROIS PHRASES du produit en dependent — « je te propose seulement de la
+// mobilité et des échauffements », « du renforcement progressif, sans
+// impact », « Impacts non proposés par RepCore ». Elles etaient affichees
+// alors que RIEN ne filtrait : ppProtocolesDoux n avait aucun appelant.
+//
+// `=== false` ET NON `!ppImpactAutorise(...)` : la fonction rend NULL quand
+// aucune date n est declaree, c est-a-dire « la question ne se pose pas ».
+// Le nul se lirait comme un refus et restreindrait tout le monde.
+//
+// AUCUNE TAXONOMIE D IMPACT N EST INVENTEE ICI : on reprend la liste que
+// ppProtocolesDoux tire de la bibliotheque existante, sur objectif et
+// intensite. Classer des mouvements par risque perineal est precisement ce
+// que la doctrine du produit interdit.
+function _protocolesDeDepart(user){
+  if(!user) return tousProtocoles();
+  let f=null, imp=null;
+  try{ f=ppFenetre(user); imp=ppImpactAutorise(user); }catch(e){ return tousProtocoles(); }
+  const restreint=(f==='0_6'||f==='6_12')||imp===false;
+  return restreint?ppProtocolesDoux():tousProtocoles();
+}
+// `user` EST LE DOSSIER DE CELUI QUI S ENTRAÎNE, pas celui qui regarde
+// l’écran. Le seul appelant est l’éditeur de programme, qui sert le coach
+// sur la fiche d’une cliente autant que l’athlète sur la sienne.
+function suggestProtocols(seance,profil,user){
   const type=(seance&&seance.type)||null;
   const objSeance=(seance&&seance.objectif)||null;
   const dispo=(seance&&seance.dureeCible)||null;
   const materielDispo=(profil&&profil.materielDispo)||null;   // null = on ne filtre pas
+  const _depart=_protocolesDeDepart(user);
   const res={warmup:[],cooldown:[]};
   for(const phase of ['WARMUP','COOLDOWN']){
-    const notes=tousProtocoles().filter(p=>p.phase===phase).map(p=>{
+    const notes=_depart.filter(p=>p.phase===phase).map(p=>{
       let s=p.priorite||0;
       // Un protocole VISANT ce type de séance l'emporte sur un protocole
       // compatible avec tout. Sans cette distinction, « Protocole dos
@@ -53273,9 +53300,14 @@ function _confirmerRenommage(x,y){
 // un coach qui le retouche crée sa propre version sans toucher au protocole.
 function _rendreSuggestionsProto(){
   const type=typeDeSeance(progEx);
+  // LE PORTEUR, EXPLICITE. Cet écran sert le coach sur la fiche d’une
+  // cliente autant que l’athlète sur son propre programme : `currentUser`
+  // désignerait le mauvais dossier une fois sur deux.
+  const _porteur=_porteurEditeurProto();
   const sug=suggestProtocols(
     {type},
-    {antecedentLombaire:_aAntecedentLombaire()}
+    {antecedentLombaire:_aAntecedentLombaire(_porteur)},
+    _porteur
   );
   for(const [phase,zone,champ] of [['warmup','proto-sug-warmup','prog-warmup'],
                                    ['cooldown','proto-sug-cooldown','prog-cooldown']]){
@@ -53312,8 +53344,26 @@ const _PROTO_CI_LIB={DOS_LOMBAIRE:'dos',GENOU:'genou',EPAULE:'épaule',
 // remonter les protocoles de prévention dans la liste, jamais à en écarter :
 // une lecture par mots-clés se trompe, et un protocole écarté à tort est
 // invisible pour le coach.
-function _aAntecedentLombaire(){
-  const b=(currentUser&&currentUser.bilans)||[];
+// LE DOSSIER QUE L ÉDITEUR EST EN TRAIN DE SERVIR.
+//
+// `coachClient` : la cliente, jamais le coach — c’est SON post-partum et SES
+//   antécédents qui décident, pas ceux de qui tient le téléphone.
+// `template` : PERSONNE. Un modèle est réassignable à n’importe qui ;
+//   le restreindre sur l’état d’un dossier serait faux dans les deux sens,
+//   et le laisser complet est le seul choix qui ne ment pas.
+// le reste : l’athlète sur son propre programme.
+function _porteurEditeurProto(){
+  const m=(typeof _progEditorCtx==='object'&&_progEditorCtx&&_progEditorCtx.mode)||null;
+  if(m==='template') return null;
+  if(m==='coachClient') return (typeof _coachEditClient!=='undefined'&&_coachEditClient)||null;
+  return (typeof currentUser!=='undefined'&&currentUser)||null;
+}
+// `u` EXPLICITE, avec repli sur currentUser pour ne rien changer aux appels
+// existants : lue depuis la fiche d’une cliente, cette fonction rendait
+// jusqu’ici les antécédents du COACH.
+function _aAntecedentLombaire(u){
+  const _u=u||currentUser;
+  const b=(_u&&_u.bilans)||[];
   const txt=b.map(x=>String(x['deb-health']||x['bil-health']||'')).join(' ').toLowerCase();
   return /lombaire|hernie|sciatique|lumbago|dos\b/.test(txt);
 }
