@@ -19033,6 +19033,16 @@ const LIB_FAMILLE_BADGE=Object.freeze({degressive:'DÉGRESSIVE',rest_pause:'REST
 const COUL_FAMILLE=Object.freeze({degressive:['#7c2d12','#fca5a5'],rest_pause:['#3b1a5f','#c4b5fd'],
   myo_reps:['#0f3b3b','#5eead4'],superset:['#4a2c00','#fdba74'],
   partielles:['#3f2d00','#fde047'],isometrie:['#1e3a5f','#93c5fd']});
+// PURE. Le nom de la méthode, et sur quelles séries elle s’applique.
+//
+// '' quand aucune méthode n’est posée : `methodeSeries` seul ne décrit rien,
+// et l’afficher laisserait lire une consigne sans objet.
+function _libTechniqueSeries(ex){
+  let m=null; try{ m=methodeDe(ex); }catch(e){ m=null; }
+  if(!m) return '';
+  const s=String((ex&&ex.methodeSeries)||'').trim();
+  return m.nom+(s?' · séries : '+s:'');
+}
 function badgeTechnique(ex){
   const m=methodeDe(ex);
   const fam=techniqueDe(ex);
@@ -19056,6 +19066,16 @@ function _selecteurTechnique(ex,i){
       style="width:100%;box-sizing:border-box${cardio?';opacity:.45':''}">${opts}</select>
     ${m?`<div style="font-size:10px;color:var(--sub);line-height:1.6;margin-top:5px">${escapeHtml(m.desc)}
       ${m.video?`<a href="${safeUrl(m.video)}" target="_blank" rel="noopener" style="color:var(--link);white-space:nowrap">· voir la vidéo</a>`:''}</div>`:''}
+    <!-- SUR QUELLE(S) SÉRIE(S). Une méthode se pose rarement sur les quatre :
+         c'est la dernière, ou les deux dernières. Le coach l'écrivait dans la
+         description, ou pas du tout. Affiché SEULEMENT quand une méthode est
+         posée — le champ seul ne décrirait rien. -->
+    ${m?`<div style="margin-top:7px">
+      <label style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;color:var(--sub);font-weight:700">Sur quelle(s) série(s)</label>
+      <input value="${escapeHtml((ex&&ex.methodeSeries)||'')}" maxlength="40"
+        onchange="_progExDirty=true;progEx[${i}].methodeSeries=this.value"
+        placeholder="dernière · 3 et 4 · toutes" style="margin-top:4px;font-size:11px;padding:7px 10px">
+    </div>`:''}
     ${_avertissementTechnique(ex,i)}
   </div>`;
 }
@@ -19093,6 +19113,9 @@ function _progExTechnique(i,cle){
     if(TECHNIQUES[cle].famille==='superset'&&i>0&&!progEx[i].ss) progEx[i].ss=true;
   } else {
     delete progEx[i].methode;
+    // L’adresse décrivait une méthode qui n’est plus là : la garder ferait
+    // « séries : dernière » sans dire dernière de QUOI.
+    delete progEx[i].methodeSeries;
   }
   renderProgEx();
 }
@@ -19376,7 +19399,7 @@ function loadExImage(idx,input){
 }
 
 function addExercise(){
-  progEx.push({name:'',series:3,reps:'10',repos:'01 min',description:'',image:null,videoUrl:'',ss:false});
+  progEx.push({name:'',series:3,reps:'10',repos:'01 min',description:'',image:null,videoUrl:'',ss:false,methodeSeries:''});
   _progExDirty=true;
   renderProgEx();
   // Scroll vers le nouvel exercice
@@ -21556,6 +21579,7 @@ function _apLigne(ex,i){
       ${l('Répétitions',ex.reps)}
       ${l('Repos',ex.repos)}
       ${l('Tempo',ex.tempo)}
+      ${l('Technique',_libTechniqueSeries(ex))}
       ${l('Matériel',ex.materiel)}
       ${l('Charge cible',ex.charge||ex.poids||'')}
       ${l('RIR',ex.rir)}
@@ -22205,9 +22229,12 @@ function banniereTechnique(ex,idx){
   const fam=techniqueDe(ex);
   if(!m||fam==='normale'&&!m) return '';
   const c=COUL_FAMILLE[fam]||['#2a2a2a','#bbb'];
+  // Sur quelles séries la méthode s’applique. À CÔTÉ DU NOM : c’est la
+  // première chose à savoir quand on la lit debout entre deux séries.
+  const _msTxt=String((ex&&ex.methodeSeries)||'').trim();
   const compteur=(fam==='rest_pause'||fam==='myo_reps')?_compteurRelances(idx):'';
   return `<div style="background:${c[0]}22;border:1px solid ${c[0]};border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;line-height:1.6;color:#ddd">
-    <strong style="color:${c[1]}">${escapeHtml(m.nom)}${m.sous?' ('+escapeHtml(m.sous)+')':''} :</strong>
+    <strong style="color:${c[1]}">${escapeHtml(m.nom)}${m.sous?' ('+escapeHtml(m.sous)+')':''}${_msTxt?' · séries : '+escapeHtml(_msTxt):''} :</strong>
     ${escapeHtml(m.desc)}
     ${m.video?`<a href="${safeUrl(m.video)}" target="_blank" rel="noopener" style="color:var(--link);white-space:nowrap"> · vidéo</a>`:''}
     ${compteur}
