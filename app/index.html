@@ -53359,7 +53359,10 @@ function _vientDunProtocole(txt){
 // Les coches vivent dans _ckEtat et non dans le DOM : sans ça, mettre la séance
 // en pause pendant l'échauffement remettait tout à zéro au retour.
 let _ckEtat={};
-let _ckChrono=null;   // {cle, i, reste, id} — un seul chrono à la fois
+// `fin` EST UNE ÉCHÉANCE, pas un reste. Voir le commentaire de doctrine du
+// minuteur de repos : un compteur décrémenté dérive de plusieurs dizaines de
+// secondes, et s’arrête franchement écran verrouillé.
+let _ckChrono=null;   // {cle, i, fin, id} — un seul chrono à la fois
 
 // Durée d'une étape, en secondes, ou null si l'étape n'en annonce pas.
 // Plancher à 20 s : en dessous ce n'est pas une étape à chronométrer mais une
@@ -53397,6 +53400,29 @@ function _ckStopChrono(){
   if(b){ b.textContent=b.dataset.libelle; b.classList.remove('ck-actif'); }
   _ckChrono=null;
 }
+// LE REPEINT, ISOLÉ DU DÉMARRAGE pour être appelable de l’extérieur : par
+// l’intervalle et par le retour d’avant-plan. C’est le rôle de _peindreRepos
+// côté minuteur de repos, et il est ici pour la même raison.
+//
+// LE RESTE EST RECALCULÉ, jamais retenu : c’est tout le lot. Un compteur
+// décrémenté perd chaque tic que le navigateur ne lui donne pas, et l’écran
+// verrouillé ne lui en donne plus aucun.
+function _ckPeindreChrono(){
+  if(!_ckChrono) return;
+  const cle=_ckChrono.cle, i=_ckChrono.i;
+  // Le bouton a disparu (changement d'écran, séance terminée) : on s'arrête
+  // au lieu de faire tourner un intervalle sur un DOM qui n'existe plus.
+  const el=document.getElementById('ck-chrono-'+cle+'-'+i);
+  if(!el){ _ckStopChrono(); return; }
+  const reste=Math.max(0,Math.round((_ckChrono.fin-Date.now())/1000));
+  el.textContent=_ckMMSS(reste);
+  if(reste<=0){
+    _ckStopChrono();
+    try{ navigator.vibrate&&navigator.vibrate([180,90,180]); }catch(e){}
+    const c=document.getElementById('ck-case-'+cle+'-'+i);
+    if(c&&!c.checked){ c.checked=true; _ckCocher(cle,i,true); }
+  }
+}
 function _ckDemarrerChrono(cle,i,secs){
   // Relancer le chrono déjà en cours l'annule : c'est le seul geste d'arrêt.
   const memeEtape=_ckChrono&&_ckChrono.cle===cle&&_ckChrono.i===i;
@@ -53405,25 +53431,20 @@ function _ckDemarrerChrono(cle,i,secs){
   const b=document.getElementById('ck-chrono-'+cle+'-'+i);
   if(!b) return;
   b.classList.add('ck-actif');
-  _ckChrono={cle,i,reste:secs,id:null};
-  const tic=()=>{
-    // Le bouton a disparu (changement d'écran, séance terminée) : on s'arrête
-    // au lieu de faire tourner un intervalle sur un DOM qui n'existe plus.
-    const el=document.getElementById('ck-chrono-'+cle+'-'+i);
-    if(!el||!_ckChrono){ _ckStopChrono(); return; }
-    el.textContent=_ckMMSS(_ckChrono.reste);
-    if(_ckChrono.reste<=0){
-      _ckStopChrono();
-      try{ navigator.vibrate&&navigator.vibrate([180,90,180]); }catch(e){}
-      const c=document.getElementById('ck-case-'+cle+'-'+i);
-      if(c&&!c.checked){ c.checked=true; _ckCocher(cle,i,true); }
-      return;
-    }
-    _ckChrono.reste--;
-  };
-  tic();
-  if(_ckChrono) _ckChrono.id=setInterval(tic,1000);
+  _ckChrono={cle,i,fin:Date.now()+secs*1000,id:null};
+  _ckPeindreChrono();
+  if(_ckChrono) _ckChrono.id=setInterval(_ckPeindreChrono,1000);
 }
+// LE RETOUR D AVANT-PLAN est le moment où un compteur décrémenté aurait
+// menti : on repeint depuis l’échéance, qui est la seule source de vérité.
+// Sans lui, l’étape terminée pendant que l’écran était éteint n’afficherait
+// sa fin — et ne cocherait sa case — qu’au tic suivant, ou jamais.
+//
+// Jumeau EXACT de celui du minuteur de repos, à la garde près : `_ckChrono`
+// est nul la plupart du temps, et repeindre à vide n’aurait aucun sens.
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden&&_ckChrono) _ckPeindreChrono();
+});
 function _ckMajEntete(cle){
   const el=document.getElementById('ck-compte-'+cle);
   if(!el) return;
