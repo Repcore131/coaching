@@ -4469,7 +4469,10 @@ const COACH_PHOTO='icons/coach.jpg';
           <div style="font-size:11px;color:var(--sub)">L'app seule, sans coach</div>
         </div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:16px;color:var(--green)">
+      <!-- LES CINQ ARGUMENTS DE L OFFRE ATHLETE. Masqués quand un palier COACH
+           est en attente : cycle menstruel, base alimentaire et « sans réseau en salle »
+           ne décrivent pas ce qu’un coach achète, et le lui vendre serait faux. -->
+      <div id="sub-args-athlete" style="display:flex;flex-direction:column;gap:9px;margin-bottom:16px;color:var(--green)">
         <div style="display:flex;align-items:center;gap:9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><span style="font-size:12px;color:#aaa">Charges adaptées à ta phase de cycle</span></div>
         <div style="display:flex;align-items:center;gap:9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><span style="font-size:12px;color:#aaa">Tu choisis ce que ton coach voit</span></div>
         <div style="display:flex;align-items:center;gap:9px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg><span style="font-size:12px;color:#aaa">3 484 aliments ANSES-Ciqual 2025, hors ligne</span></div>
@@ -4772,6 +4775,14 @@ const SUB_PALIERS=[
 // chemin voit l’offre athlète, celle qui le concerne alors.
 function _palierCoachEnAttente(){
   try{ return sessionStorage.getItem('rc_palier_coach')||''; }catch(e){ return ''; }
+}
+// PURE. Le palier retenu appartient-il à la table COACH ?
+//
+// Par appartenance à la table, et non par « ce n’est pas un palier athlète » :
+// les deux tables n’ont aucune clef en commun aujourd’hui, mais une clef
+// ajoutée demain d’un côté ne doit pas se faire ranger de l’autre par défaut.
+function _palierEstCoach(cle){
+  return !!cle&&COACH_PALIERS.some(x=>x.cle===cle);
 }
 function _tablePaliers(){
   return _palierCoachEnAttente()?COACH_PALIERS:SUB_PALIERS;
@@ -52673,6 +52684,18 @@ function _subOuvrirCode(){
   go(currentUser?'s-client-code':'s-athlete-entry');
 }
 function loadSubscribePage(mode,payload){
+  // LE PALIER COACH EN ATTENTE NE SURVIT PAS À UN CHANGEMENT DE COMPTE.
+  //
+  // `rc_palier_coach` était posée par souscrireCoach et retirée par personne.
+  // Un coach qui ouvrait cet écran, renonçait, puis basculait sur son compte
+  // athlète se voyait facturer le plan COACH : _planIdChoisi lit la table que
+  // cette clef désigne, et elle vivait jusqu’à la fermeture de l’onglet.
+  //
+  // EN TÊTE DE FONCTION, avant _renderSubPaliers : rendre les cartes puis
+  // retirer la clef laisserait à l’écran les paliers qu’on vient de désavouer.
+  if(!(currentUser&&currentUser.role==='coach')){
+    try{sessionStorage.removeItem('rc_palier_coach');}catch(e){}
+  }
   // La case est REMISE À SON ÉTAT STOCKÉ à chaque ouverture, et cet état est
   // faux par défaut. Elle n'est jamais cochée par le code.
   try{
@@ -52691,6 +52714,11 @@ function loadSubscribePage(mode,payload){
   // Les paliers sont rendus AVANT le test de connexion : le prix doit être
   // visible même sans compte, c'est justement le rôle de cet écran.
   _renderSubPaliers();
+  // AVANT le retour anticipé du visiteur sans compte : cet écran-là doit lui
+  // aussi retrouver l’argumentaire, sinon il resterait masqué pour l’athlète
+  // suivant de la même session.
+  const _argsAth=document.getElementById('sub-args-athlete');
+  if(_argsAth) _argsAth.style.display=_palierCoachEnAttente()?'none':'';
   if(!currentUser){
     // goRegisterPourSouscrire pose l'intention de retour : après création du
     // compte, doRegister ramène ici au lieu d'envoyer vers l'écran de code.
@@ -52730,6 +52758,10 @@ function loadSubscribePage(mode,payload){
     if(pendingInfo) pendingInfo.style.display='none';
     sessionStorage.removeItem('pendingCodePayload');
   }
+  // « Entrer mon code coach » N A PAS DE SENS POUR UN COACH : c’est lui qui
+  // les distribue. En DERNIER, parce que les deux branches ci-dessus viennent
+  // de décider de cette carte et écraseraient la décision prise plus haut.
+  if(_palierCoachEnAttente()&&codeOpt) codeOpt.style.display='none';
 }
 function initPaypalSubscription(){
   // Défense en profondeur : le SDK ne doit jamais être chargé sans compte, même
@@ -52802,12 +52834,29 @@ function renderPaypalButton(planId,coachId){
       const pendingStr=sessionStorage.getItem('pendingCodePayload');
       const pending=pendingStr?JSON.parse(pendingStr):null;
       toast('Vérification du paiement…');
+      const _estCoach=_palierEstCoach(_subPalier);
       try{
         // Activation directe (plan Spark, pas de vérification serveur) :
         // le subscriptionID vient du SDK PayPal après paiement approuvé.
-        currentUser.status='AUTONOMIE_PREMIUM';
+        //
+        // AUTONOMIE_PREMIUM EST LE STATUT ATHLÈTE, et le poser sur un coach le
+        // ferait passer pour un abonné en autonomie auprès de tout ce qui lit
+        // `status`. Un coach n’achète pas l’accès à l’app pour lui : il achète
+        // un quota d’athlètes.
+        if(!_estCoach) currentUser.status='AUTONOMIE_PREMIUM';
         currentUser.paymentStatus='active';
         currentUser.paypalSubscriptionId=data.subscriptionID;
+        // LE PALIER PAYÉ, ÉCRIT DANS LE DOSSIER. `coachPlan` n’était écrit
+        // qu’à l’inscription : un coach qui payait dix-neuf euros restait au
+        // palier `libre`, quota UN athlète. coachPlanDe et getCoachQuota lisent
+        // ces deux clefs-là, et rien d’autre.
+        if(_estCoach){
+          currentUser.coachPlan=_subPalier;
+          currentUser.coachSubActive=true;
+          // La date du palier EN VIGUEUR. La laisser à celle de l’inscription
+          // ne la rendrait pas seulement obsolète, mais fausse.
+          currentUser.coachPlanSince=Date.now();
+        }
         // LE PALIER RETENU, A COTE DU STATUT. Sans lui, abonnement.palier
         // n était écrit nulle part et _renderAbonnement retombait toujours
         // sur « Mensuel » — y compris pour qui venait de payer un an.
@@ -52831,8 +52880,19 @@ function renderPaypalButton(planId,coachId){
         }
         // Activation d'abonnement : c'est le pire moment pour un « ✓ » menteur,
         // l'athlète vient de payer et croirait son accès acquis sur l'appareil.
+        // L INTENTION EST CONSOMMÉE. Sans ce retrait, la clef vivait jusqu’à
+        // la fermeture de l’onglet et faisait facturer le plan coach au compte
+        // suivant qui ouvrirait cet écran.
+        try{sessionStorage.removeItem('rc_palier_coach');}catch(e){}
         toastEcriture(saveUser(),'Abonnement activé ! Bienvenue sur RepCore ✓','ton abonnement est');
-        setTimeout(()=>{loadClientHome();},1500);
+        // UN COACH NE RENTRE PAS SUR L ACCUEIL ATHLÈTE. loadClientHome y lit
+        // bilans, séances et nutrition d’un dossier qui n’en porte pas, et
+        // l’aurait posé devant un écran qui ne le concerne pas juste après
+        // avoir payé.
+        setTimeout(()=>{
+          if(_estCoach){ go('s-coach-home'); loadCoachHome(); }
+          else loadClientHome();
+        },1500);
       }catch(e){
         toast('Erreur d\'activation : '+(e.message||'Réessaie ou contacte le support.'),'var(--orange)');
       }
