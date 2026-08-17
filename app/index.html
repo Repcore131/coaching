@@ -3508,6 +3508,14 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- WORKOUT COMPLETE -->
 <div id="s-workout-done" class="screen">
+  <!-- UNE SORTIE EXPLICITE. Sans .back-btn, _histPopstate tombait en cas 5 et
+       remontait à _ecranOrigine — c’est-à-dire s-workout, la séance qu’on
+       vient d’enregistrer. La flèche affichée et le bouton matériel mènent
+       désormais au même endroit : le cas 4 trouve celle-ci et la délègue. -->
+  <div class="topbar" style="border-bottom:none">
+    <button class="back-btn" aria-label="Retour à l'accueil" onclick="go('s-client-home');loadClientHome()">←</button>
+    <span></span><span></span>
+  </div>
   <div class="scroll-area" style="flex:1">
     <div class="done-anim anim-in pad">
       <div style="text-align:center;padding:24px 0 20px;border-bottom:1px solid #181818;margin-bottom:20px">
@@ -23575,6 +23583,17 @@ function _arcGlissement(dir){
   }catch(e){ return null; }
 }
 function finishWorkout(incomplete=false){
+  // IDEMPOTENTE, ET LE GARDE EST EN TOUTE PREMIERE LIGNE.
+  //
+  // Un second appel — par n’importe quel chemin — réécrivait la MÊME séance
+  // dans currentUser.sessions. Le garde vient AVANT _swSeance : rejouer
+  // « SEANCE_TERMINEE » n’est pas neutre non plus, il relance la prise de
+  // contrôle du service worker.
+  //
+  // `termine` repart à faux tout seul : launchWorkout remplace woState en
+  // bloc par un objet neuf, qui ne porte pas le champ. Le cas légitime — une
+  // seconde séance dans la même session — n’est donc pas touché.
+  if(woState&&woState.termine) return;
   // En PREMIER : si le reste échoue, le SW ne doit pas rester bloqué en
   // attente sur une séance qui, elle, est bel et bien finie.
   _swSeance('SEANCE_TERMINEE');
