@@ -34162,14 +34162,26 @@ const DIETE_TRANSITION=
   'Ton adaptation de cycle est active, mais ton suivi n\'est pas en diète '
   +'flexible : elle ne s\'applique pas à tes macros. Choisis un type de suivi '
   +'avec ton coach.';
-function _dieteTransitionActive(nut){
-  // La config peut désormais vivre dans user.cycle : on la lit par confCycle,
-  // en présentant nut comme la nutrition du dossier courant quand c'est elle.
-  const c=confCycle((nut===((currentUser||{}).nutrition))?currentUser:{nutrition:nut});
+// `porteur` EXPLICITE, comme _getEffectiveMacros et pour la même raison.
+//
+// La config de cycle vit désormais dans `user.cycle` — c’est la seule cible
+// d’écriture de saveCycleNutSettings depuis la migration. Le porteur était
+// DEVINÉ : sur la fiche coach, où la nutrition est celle du CLIENT, on
+// fabriquait un `{nutrition:nut}` qui perd `c.cycle`. confCycle ne retrouvait
+// alors que le `cycleAdaptation` hérité, `enabled` valait false, et la
+// bannière ne sortait JAMAIS côté coach — alors que son appelant écrit « le
+// coach doit voir la même chose que son athlète ».
+//
+// Le repli est celui d’avant, mot pour mot : sans porteur, on retrouve le
+// dossier courant quand c’est bien sa nutrition, et l’objet synthétique
+// sinon. Les trois appels athlète ne changent donc pas de comportement.
+function _dieteTransitionActive(nut,porteur){
+  const _p=porteur||((nut===((currentUser||{}).nutrition))?currentUser:{nutrition:nut});
+  const c=confCycle(_p);
   return typeDiete(nut)==='strict'&&!!c.enabled&&!!c.lastPeriodDate;
 }
-function _htmlDieteTransition(nut){
-  if(!_dieteTransitionActive(nut)) return '';
+function _htmlDieteTransition(nut,porteur){
+  if(!_dieteTransitionActive(nut,porteur)) return '';
   return `<div style="margin-top:12px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:10px;padding:11px 13px">
     <div style="font-size:11px;color:#eee;line-height:1.6">${escapeHtml(DIETE_TRANSITION)}</div>
   </div>`;
@@ -41728,7 +41740,11 @@ function renderCoachNutriSection(c){
   const dt=typeDiete(nut);
   // Le coach doit voir la meme chose que son athlete : c'est lui qui tranchera
   // le type de suivi.
-  const _transi=_htmlDieteTransition(nut);
+  //
+  // `c` EXPLICITE : la config de cycle vit dans `c.cycle`, et un porteur
+  // deviné à partir de la seule nutrition la perdait — la bannière ne
+  // sortait jamais ici.
+  const _transi=_htmlDieteTransition(nut,c);
   // Les trois encarts de pause : proposition, pause en cours ou terminee, et
   // preavis de fin de phase. Fiche COACH uniquement — rien de ce module
   // n'atteint l'ecran de l'athlete.
