@@ -7959,7 +7959,17 @@ function go(id){
   // sur 53 : partout ailleurs, le retour matériel ramenait à l’accueil au lieu
   // de l’écran précédent.
   if(!_navParHistorique&&id!==_avant){
-    if(_avant) _ecranOrigine[id]=_avant;
+    // DEUX ORIGINES NE S ECRIVENT JAMAIS.
+    //
+    // s-splash : c’est l’écran actif au chargement, donc l’origine du PREMIER
+    // écran routé de la session. Le retour matériel y ramenait, sur un écran
+    // d’amorçage que rien ne sait plus rendre.
+    //
+    // ET CELLE QUI REBOUCLE : si `_avant` a déjà `id` pour origine, écrire
+    // l’inverse crée un va-et-vient sans fin — c’est exactement ce que
+    // s-access-gate et s-subscribe faisaient, l’aller par goAvecRetour et le
+    // retour par retourDe.
+    if(_avant&&_avant!=='s-splash'&&_ecranOrigine[_avant]!==id) _ecranOrigine[id]=_avant;
     _histPousser(id);
   }
 }
@@ -8137,7 +8147,19 @@ function _histPopstate(){
   const _bk=document.querySelector('#'+actuel+' .back-btn');
   if(_bk&&typeof _bk.onclick==='function'){
     _histPousser(actuel);
-    try{ _bk.onclick(); }catch(e){}
+    // LE DRAPEAU EST LEVE ICI AUSSI, comme dans _histRetour : sans lui, le
+    // go() declenche par la flèche écrivait l’origine À L’ENVERS.
+    //
+    // RELACHE APRES LA PROMESSE, pas au retour synchrone : trois écrans
+    // recâblent leur flèche avec un garde de modifications non enregistrées,
+    // et ces handlers-là sont `async`. Relâcher tout de suite laisserait le
+    // go() qui suit la confirmation s’exécuter drapeau baissé.
+    _navParHistorique=true;
+    let _p=null;
+    try{ _p=_bk.onclick(); }catch(e){}
+    if(_p&&typeof _p.then==='function') Promise.resolve(_p)
+      .then(()=>{_navParHistorique=false;},()=>{_navParHistorique=false;});
+    else _navParHistorique=false;
     return;
   }
   // 5. LE CAS COURANT : aucun bouton retour à l’écran, on remonte à l’origine.
