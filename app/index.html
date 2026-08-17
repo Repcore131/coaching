@@ -2512,6 +2512,10 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="ccd-supplements" style="margin-bottom:20px"></div>
       <!-- Caféine coach (lecture seule) -->
       <div id="ccd-caffeine" style="margin-bottom:20px"></div>
+      <!-- Rite de fin de cycle : la question de l'athlète, et la réponse du
+           coach. Avant les bilans, parce qu'il porte une question POSÉE —
+           quelqu'un attend au bout. -->
+      <div id="ccd-rite" style="margin-bottom:20px;display:none"></div>
       <h3 style="margin-bottom:12px">Bilans récents</h3>
       <div id="ccd-bilans"></div>
       <div id="ccd-volume"></div>
@@ -12752,6 +12756,107 @@ function riteAAfficher(u,now){
     return {ok:false,raison:'aucune_seance',cycle:e.cycle};
   return {ok:true,raison:null,cycle:e.cycle,depuis:debut};
 }
+// ══════════════ LE RITE, CÔTÉ COACH ══════════════
+//
+// L'athlète ferme son cycle et écrit parfois une question. Elle partait dans
+// `rites[]` et personne ne la lisait : le tableau de bord signalait « Bilan de
+// 4 semaines à lire » pour quelque chose qu’aucun écran n’affichait.
+//
+// PURE. Le dernier rite SANS réponse. La ligne du tableau de bord, elle, ne
+// regarde que le TOUT DERNIER — sa règle de relance unique fait qu'un cycle
+// déjà laissé sans réponse ne redemande rien. La fiche, elle, montre ce qui
+// reste ouvert : consulter un dossier n’est pas une relance, et ça ne réarme
+// rien.
+function _riteSansReponse(c){
+  const l=((c&&c.rites)||[]).filter(r=>r&&r.date&&!r.reponseCoach);
+  return l.length?l[l.length-1]:null;
+}
+// L'identifiant du champ dérive du cycle, comme celui des bilans dérive de
+// l’identifiant du bilan : un id fixe redeviendrait ambigu le jour où deux
+// rites seraient affichés ensemble.
+function _taIdRite(cycle){ return 'rr-texte_'+cycle; }
+function _htmlRiteCoach(c){
+  const r=_riteSansReponse(c);
+  if(!r) return '';
+  const d=r.date?new Date(r.date).toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'}):'';
+  let nom=''; try{ nom=riteNomPeriode(c,r.cycle); }catch(e){ nom=''; }
+  const ta=_taIdRite(r.cycle);
+  // La question est ÉCRITE PAR L'ATHLÈTE : elle est échappée, comme le prénom
+  // dans le tableau de bord. Elle est aussi FACULTATIVE — fermerRite n’écrit
+  // que la date. On dit alors qu’il n’y a pas de question plutôt que de rendre
+  // un bloc vide qui laisserait croire à un rendu cassé.
+  const q=String(r.question||'').trim();
+  return `<div style="background:var(--surface-1);border:1px solid var(--border);border-left:3px solid var(--sub);border-radius:12px;padding:14px">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:6px">📆 Bilan de 4 semaines</div>
+    <div style="font-size:12px;color:var(--text-dim);margin-bottom:10px">${escapeHtml(nom)}${d?' · '+escapeHtml(d):''}</div>
+    ${q
+      ?`<div style="background:var(--surface-2);border-radius:8px;padding:10px 12px;font-size:12.5px;color:#eee;line-height:1.6">${escapeHtml(q)}</div>`
+      :`<div style="font-size:11.5px;color:var(--text-faint);line-height:1.6">Cycle clôturé sans question écrite.</div>`}
+    <textarea id="${ta}" rows="3" placeholder="Ce que tu retiens de ce cycle, et ce qu'on ajuste." style="width:100%;box-sizing:border-box;margin-top:10px"></textarea>
+    <button class="btn btn-red btn-sm" onclick="saveReponseRite('${escapeHtml(c.email||'')}','${escapeHtml(String(r.cycle))}','${ta}')"
+      style="margin-top:8px;letter-spacing:1px">Envoyer ma réponse</button>
+  </div>`;
+}
+function renderRiteCoach(c){
+  const z=document.getElementById('ccd-rite');
+  if(!z) return;
+  let h=''; try{ h=_htmlRiteCoach(c); }catch(e){ h=''; }
+  z.innerHTML=h;
+  z.style.display=h?'':'none';
+}
+// L’ÉCRITURE PASSE PAR users[email], JAMAIS PAR saveUser(). _riteEnregistrer
+// s’exécute côté ATHLÈTE sur currentUser ; ici currentUser est le COACH, et
+// saveUser() écrirait la réponse dans le dossier du coach.
+//
+// Même patron que saveReponseBilan : garde-fou de modèle en tête, plafond de
+// 2000 caractères, DB.set puis CLOUD.pushOne.
+//
+// HORODATÉ, et c’est nécessaire : _mergeUser n’applique le dossier distant que
+// si son updatedAt est au moins aussi récent que le local, et _doPushOne peut
+// refuser un envoi que le distant dépasse. Sans ça, la réponse partirait pour
+// ne jamais arriver.
+function saveReponseRite(email,cycle,taId){
+  const _ta=taId||_taIdRite(cycle||'');
+  if(!tplVerifierAvantEnvoi(_ta)) return false;
+  const ta=document.getElementById(_ta);
+  const txt=((ta&&ta.value)||'').trim();
+  if(!txt){ toast('Écris ta réponse avant d\'envoyer.','var(--orange)'); return false; }
+  const users=DB.get('users')||{};
+  const c=users[email];
+  if(!c||!Array.isArray(c.rites)){ toast('Athlète introuvable','var(--red)'); return false; }
+  // Le cycle est UNIQUE dans rites[] : _riteEnregistrer refuse d’en écrire un
+  // second pour le même, via riteTenu.
+  const r=c.rites.find(x=>x&&Number(x.cycle)===Number(cycle)&&!x.reponseCoach);
+  if(!r){ toast('Bilan de cycle introuvable','var(--red)'); return false; }
+  const _avant=c.rites.length;
+  r.reponseCoach=txt.slice(0,2000);
+  r.reponseDate=Date.now();
+  // On ne pousse RIEN dans rites[] : le plafond de 24 ne peut pas bouger.
+  if(c.rites.length!==_avant) c.rites.length=_avant;
+  c.updatedAt=Date.now();
+  users[email]=c;
+  const ok=DB.set('users',users);
+  const envoi=CLOUD.pushOne(email,c);
+  toastSync(ok,envoi,'Réponse envoyée. '+(c.fname||'Ton athlète')+' la verra à sa prochaine ouverture.',
+    'la réponse est');
+  try{ openClientDetail(c.id,true); }catch(e){}
+  return true;
+}
+// Entrée par la ligne du tableau de bord : on ouvre la fiche ET on amène le
+// bloc sous les yeux. Une alerte qui ouvre un écran de deux mètres de haut
+// sans dire où regarder ne vaut guère mieux qu’une alerte muette.
+function _ouvrirRiteClient(id){
+  if(!id) return;
+  openClientDetail(id);
+  try{
+    setTimeout(()=>{
+      try{
+        const z=document.getElementById('ccd-rite');
+        if(z&&z.innerHTML) z.scrollIntoView({block:'start',behavior:'smooth'});
+      }catch(e){}
+    },80);
+  }catch(e){}
+}
 // PURE. Le nom de la période suivante. Le coach peut la nommer ; sinon un
 // numéro. Ce nom est une ÉTIQUETTE, il ne pilote rien.
 function riteNomPeriode(u,cycle){
@@ -13925,7 +14030,9 @@ function renderTodoBlock(clients){
       return{html:`<span style="font-size:15px;flex-shrink:0;align-self:flex-start;margin-top:1px">${r.icon}</span>${corps}${_ajBouton(r,idx)}${_waBoutonTodo(r,idx)}${r.nonReportable?'':`<button onclick="event.stopPropagation();dismissTodoRow(${idx})" title="Snoozer 7 jours" style="background:none;border:none;color:var(--text-dim);font-size:15px;cursor:pointer;padding:4px 8px;flex-shrink:0;transition:color .15s;border-radius:4px" onmouseover="this.style.color='var(--sub)'" onmouseout="this.style.color='#444'">✕</button>`}`,
       // LA LIGNE DES BILANS POSE LA FILE au passage. Les autres lignes ouvrent
       // la fiche comme avant : elles ne décrivent pas une série à traiter.
-      onClick:r.type==='bilan'?`_entrerFileBilans(${idx})`:`openClientDetail('${r.list[0].id}')`,
+      onClick:r.type==='bilan'?`_entrerFileBilans(${idx})`
+        :r.type==='rite'?`_ouvrirRiteClient('${r.list[0].id}')`
+        :`openClientDetail('${r.list[0].id}')`,
       style:'cursor:pointer;transition:background .15s;'};
     },{pad:'10px 14px',gap:10,border:'#180000',hover:'#140000'})}
     ${restant?`<div style="padding:8px 14px;font-size:11px;color:var(--sub);border-top:1px solid #180000">+ ${restant} autre${restant>1?'s':''}</div>`:''}
@@ -15204,6 +15311,9 @@ function openClientDetail(cid,_refresh){
       ${blocDisclaimerSante()}
     </div>`;
   }
+  // Le rite AVANT les bilans, comme dans le balisage : il porte une question
+  // posée, et quelqu’un attend au bout.
+  try{ renderRiteCoach(c); }catch(e){}
   const be=document.getElementById('ccd-bilans');
   if(c._fromCode){
     be.innerHTML=`<div style="background:#111;border:1px solid var(--surface-2);border-radius:12px;padding:16px;text-align:center">
