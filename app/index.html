@@ -13766,6 +13766,86 @@ function _renderPremiersPas(clients){
     +'</div>';
   return true;
 }
+// LA FILE DES BILANS A LIRE. Posée quand le coach entre par la ligne
+// « Nouveaux bilans à lire », et par elle seulement : c’est le seul endroit
+// qui connaisse la liste complète et son ordre.
+//
+// Elle porte des IDENTIFIANTS, pas des dossiers : entre deux réponses, les
+// dossiers changent — c’est même tout l’objet de l’exercice.
+let _fileBilans=[];
+// Entrée par la ligne du tableau de bord. Fait ce que faisait le clic — ouvrir
+// la fiche du premier — et retient les autres au passage.
+function _entrerFileBilans(idx){
+  const r=(window._todoRows||[])[idx];
+  const l=(r&&r.list)||[];
+  _fileBilans=l.map(c=>c&&c.id).filter(Boolean);
+  if(!_fileBilans.length) return;
+  openClientDetail(_fileBilans[0]);
+}
+// PURE-ish : elle ne fait que regarder. Les athlètes de la file placés APRÈS
+// celui qu’on vient de traiter, et qui ont ENCORE un bilan sans réponse.
+//
+// Le filtre par hasNewBilan rend le compte HONNÊTE : sans lui, « 3 restants »
+// pourrait mener sur un athlète auquel on a déjà répondu depuis un autre
+// chemin. Et l’athlète courant en sort de lui-même, puisqu’il vient d’être
+// répondu — aucun décompte à tenir à la main.
+//
+// Un athlète absent de la file rend un tableau vide : entré par un autre
+// chemin, le coach retrouve exactement le comportement d’avant.
+function _fileBilansSuivants(idApres){
+  const i=_fileBilans.indexOf(idApres);
+  if(i<0) return [];
+  return _fileBilans.slice(i+1).filter(id=>{
+    try{
+      const c=getOwnedClient(id);
+      return !!(c&&hasNewBilan(c));
+    }catch(e){ return false; }
+  });
+}
+// Va au suivant : exactement le chemin que le coach aurait pris à la main.
+function _allerBilanSuivant(id){
+  if(!id) return false;
+  currentClientId=id;
+  try{ viewClientBilans(); }catch(e){ return false; }
+  try{ evoTab('reponses'); }catch(e){}
+  try{ setTimeout(()=>{ try{ _renderQuickCommentChips('bilan'); }catch(e){} },0); }catch(e){}
+  return true;
+}
+// Pose le bouton en tête du volet « Réponses », là où le coach vient de taper.
+// Rend false s’il n’y a pas de volet — le coach a navigué ailleurs entre-temps,
+// et l’appelant retombe alors sur le retour à la fiche.
+function _proposerBilanSuivant(restants){
+  const suivant=restants&&restants[0];
+  if(!suivant) return false;
+  // Le bilan qu’on vient d’enregistrer doit s’afficher COMME ENREGISTRÉ : on
+  // redessine avant de proposer la suite, sinon le coach quitte un écran qui
+  // montre encore l’état d’avant.
+  try{
+    const c=getOwnedClient(currentClientId);
+    if(c) renderBilanEvolution(c);
+    evoTab('reponses');
+    // Le redessin a vidé les conteneurs de chips : sans ça, les autres bilans
+    // de cet athlète perdraient leurs commentaires rapides.
+    _renderQuickCommentChips('bilan');
+  }catch(e){}
+  const pane=document.querySelector('#evo-content [data-evo-pane="reponses"]');
+  if(!pane) return false;
+  const n=restants.length;
+  const z=document.createElement('div');
+  z.id='file-bilans-suivant';
+  z.style.cssText='margin-bottom:12px';
+  const b=document.createElement('button');
+  b.className='btn btn-red';
+  b.style.cssText='width:100%;letter-spacing:1px';
+  b.textContent='Athlète suivant → ('+n+' restant'+(n>1?'s':'')+')';
+  // L’écouteur est posé en JS et non dans un attribut : l’identifiant ne
+  // traverse alors aucune chaîne de balisage, et il n’y a rien à échapper.
+  b.onclick=()=>{ _allerBilanSuivant(suivant); };
+  z.appendChild(b);
+  pane.insertBefore(z,pane.firstChild);
+  try{ z.scrollIntoView({block:'nearest'}); }catch(e){}
+  return true;
+}
 function renderTodoBlock(clients){
   _renderPremiersPas(clients);
   const el=document.getElementById('ch-todo');if(!el) return;
@@ -13843,7 +13923,10 @@ function renderTodoBlock(clients){
         ? `<div style="flex:1;min-width:0"><span style="font-size:12px;font-weight:800;color:#fff">${nomA}</span><span style="font-size:12px;font-weight:700;color:${r.color}"> · ${r.label}</span><div style="font-size:11px;color:var(--sub);line-height:1.5;margin-top:2px">${escapeHtml(r.texte)}</div></div>`
         : `<div style="flex:1;min-width:0"><span style="font-size:12px;font-weight:700;color:#fff">${r.list.length>1?r.list.length+' ':''}</span><span style="font-size:12px;font-weight:700;color:${r.color}">${r.label}</span><span style="font-size:11px;color:var(--sub)"> · ${names}</span></div>`;
       return{html:`<span style="font-size:15px;flex-shrink:0;align-self:flex-start;margin-top:1px">${r.icon}</span>${corps}${_ajBouton(r,idx)}${_waBoutonTodo(r,idx)}${r.nonReportable?'':`<button onclick="event.stopPropagation();dismissTodoRow(${idx})" title="Snoozer 7 jours" style="background:none;border:none;color:var(--text-dim);font-size:15px;cursor:pointer;padding:4px 8px;flex-shrink:0;transition:color .15s;border-radius:4px" onmouseover="this.style.color='var(--sub)'" onmouseout="this.style.color='#444'">✕</button>`}`,
-      onClick:`openClientDetail('${r.list[0].id}')`,style:'cursor:pointer;transition:background .15s;'};
+      // LA LIGNE DES BILANS POSE LA FILE au passage. Les autres lignes ouvrent
+      // la fiche comme avant : elles ne décrivent pas une série à traiter.
+      onClick:r.type==='bilan'?`_entrerFileBilans(${idx})`:`openClientDetail('${r.list[0].id}')`,
+      style:'cursor:pointer;transition:background .15s;'};
     },{pad:'10px 14px',gap:10,border:'#180000',hover:'#140000'})}
     ${restant?`<div style="padding:8px 14px;font-size:11px;color:var(--sub);border-top:1px solid #180000">+ ${restant} autre${restant>1?'s':''}</div>`:''}
     ${aDrapeau?`<div style="padding:8px 14px;border-top:1px solid #180000">${blocDisclaimerSante()}</div>`:''}
@@ -29170,6 +29253,15 @@ function saveReponseBilan(email,bilanId,taId){
   const envoi=CLOUD.pushOne(email,c);
   toastSync(ok,envoi,'Réponse envoyée. '+(c.fname||'Ton athlète')+' la verra à sa prochaine ouverture.',
     'la réponse est');
+  // ENCHAÎNEMENT. Quand le coach est entré par la ligne « Nouveaux bilans à
+  // lire », on lui propose le suivant plutôt que de le renvoyer sur la fiche :
+  // il devait sinon repasser par le tableau de bord entre chaque réponse.
+  //
+  // File vide, athlète hors file, ou volet introuvable : on retombe sur le
+  // retour à la fiche, c’est-à-dire exactement le comportement d’avant.
+  try{
+    if(_proposerBilanSuivant(_fileBilansSuivants(c.id))) return true;
+  }catch(e){}
   try{ openClientDetail(c.id,true); }catch(e){}
   return true;
 }
