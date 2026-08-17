@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v863';
+const CACHE = 'repcore-v864';
 const SW_DATA = 'repcore-sw-data'; // persistent across updates — not wiped by activate
 
 // DÉLAI DE GARDE sur index.html. Le handler était en network-first avec un
@@ -162,7 +162,13 @@ self.addEventListener('activate', e => {
       // index.html est traité juste en dessous, en réseau-d'abord ; tests.js ne
       // doit JAMAIS être mis en cache d'office — il n'est pas dans ASSETS pour
       // cette raison, et le reporter le remettrait par la porte de derrière.
-      const _exclu = u => /\/index\.html$/.test(u) || /\/tests\.js$/.test(u);
+      //
+      // sw.js NON PLUS. versionSW() le lit pour afficher la version du cache ;
+      // le transporter d'une version à l'autre lui faisait annoncer la
+      // PRÉCÉDENTE. C'est aussi le seul fichier dont une copie périmée se
+      // recopierait indéfiniment : chaque report la reconduirait.
+      const _exclu = u => /\/index\.html$/.test(u) || /\/tests\.js$/.test(u)
+        || /\/sw\.js$/.test(u);
       // LA BASE ALIMENTAIRE D'ABORD, ET HORS BUDGET. Elle n'entre dans le
       // cache que par un prefetch explicite, et le report ne la connaissait
       // pas : elle passait après vendor/ et les 407 illustrations, donc
@@ -284,6 +290,16 @@ self.addEventListener('fetch', e => {
     })());
     return;
   }
+  // sw.js : ON NE S'EN MÊLE PAS. versionSW() le lit avec {cache:'no-store'},
+  // mais no-store ne parle qu'au cache HTTP — le service worker interceptait
+  // quand même, et sa branche générique, cache-first, servait la copie de la
+  // version PRÉCÉDENTE. L'écran de synchronisation annonçait donc une version
+  // périmée. Et le put générique l'y remettait au premier passage, d'où le
+  // report la reconduisait de version en version.
+  //
+  // Ni lecture ni écriture : on rend la main au navigateur, qui sait gérer le
+  // script d'un service worker mieux que nous.
+  if (/\/sw\.js$/.test(url.split('?')[0])) return;
   // Assets same-origin : cache-first, sans fallback HTML (évite de servir HTML
   // a la place d un asset). La reponse reseau REJOINT desormais le cache : sans
   // ce put, la branche lisait le cache sans jamais l alimenter, et vendor/
