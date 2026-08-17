@@ -1329,6 +1329,18 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   svg.arc-courbe path{stroke-dasharray:none!important;stroke-dashoffset:0!important}
 }
 
+/* ══════════════ FICHE PROGRAMME IMPRIMABLE ══════════════ */
+.pp-tete{margin-bottom:20px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.pp-seance{margin-bottom:22px}
+.pp-seance h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--sub);
+  font-weight:800;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.pp-lbl{font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:1px;margin:10px 0 3px}
+/* pre-wrap : échauffement, retour au calme et notes sont des zones de
+   texte, et le coach y a mis des retours à la ligne qui font le sens. */
+.pp-txt{font-size:11.5px;line-height:1.6;white-space:pre-wrap;margin-bottom:8px}
+.pp-meta{font-size:10.5px;color:var(--text-dim);line-height:1.5;margin-top:2px}
+.pp-nom{font-weight:800}
+
 /* ══════════════ RAPPORT DE PERIODE ══════════════ */
 .rap-bloc{margin-bottom:22px}
 .rap-bloc h2{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--sub);
@@ -1359,7 +1371,13 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   @page{margin:14mm}
   html,body{background:#fff!important;color:#000!important}
   .screen{display:none!important}
-  #s-rapport{display:block!important;position:static!important;padding:0!important;
+  /* LES DEUX ECRANS IMPRIMABLES, chacun SEULEMENT S IL EST A L ECRAN.
+     `.active` etait superflu tant qu il n y en avait qu un : forcer
+     #s-rapport visible ne pouvait rien montrer d autre. A deux, sans lui,
+     imprimer le rapport ferait aussi sortir la fiche programme, et
+     imprimer la fiche ferait sortir le corps du rapport a la suite. */
+  #s-rapport.active,
+  #s-programme-print.active{display:block!important;position:static!important;padding:0!important;
     background:#fff!important;color:#000!important}
   .topbar,.bottom-nav,.rap-outils,.rap-noprint,.btn,button,input,select,textarea{display:none!important}
   .rap-bloc{break-inside:avoid;page-break-inside:avoid;margin-bottom:16px}
@@ -1368,6 +1386,14 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   .rap-lbl,.rap-u,.rap-note,.rap-meta,.rap-vide{color:#555!important}
   .rap-tbl td{border-bottom-color:#ddd!important}
   .rap-mot{border-color:#bbb!important;min-height:76px}
+  /* UNE SEANCE NE SE COUPE PAS EN DEUX PAGES : sur le patron de .rap-bloc.
+     Une fiche dont l echauffement est page 1 et les exercices page 2 se
+     lit mal debout en salle, qui est le seul endroit ou elle sert. */
+  .pp-seance{break-inside:avoid;page-break-inside:avoid;margin-bottom:16px}
+  .pp-seance h2{color:#444!important;border-bottom-color:#bbb!important}
+  .pp-tete{border-bottom-color:#bbb!important}
+  .pp-lbl,.pp-meta{color:#555!important}
+  .pp-txt,.pp-nom{color:#000!important}
   /* Sans ceci, les barres de volume et la courbe s impriment BLANCHES : les
      navigateurs suppriment les fonds par defaut. */
   .rap-bloc svg,.rap-bloc rect,.rap-bloc path{-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -2540,6 +2566,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="ccd-volume"></div>
       <div id="ccd-plateaux"></div>
       <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:16px" onclick="ouvrirRapport(getOwnedClient(currentClientId))">Rapport de la période</button>
+      <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:16px" onclick="ouvrirProgrammePrint(getOwnedClient(currentClientId))">Fiche programme à imprimer</button>
       <div id="ccd-dossier"></div>
       <div id="ccd-prises"></div>
       <div id="ccd-pp"></div>
@@ -4144,6 +4171,27 @@ const COACH_PHOTO='icons/coach.jpg';
       <button class="btn btn-red" style="width:100%" onclick="rapImprimer()">Imprimer / Enregistrer en PDF</button>
     </div>
     <div id="rap-corps"></div>
+  </div>
+</div>
+
+<!-- ══════ FICHE PROGRAMME IMPRIMABLE ══════
+     Jumelle du rapport : GENEREE et IMPRIMABLE, jamais ENVOYEE. La seule
+     sortie est window.print(), qui rend la main au systeme — lui imprime,
+     ou enregistre en PDF. Aucune bibliotheque, aucun appel reseau, aucune
+     Cloud Function : le plan Firebase reste Spark.
+
+     La barre d outils porte `rap-outils`, deja masquee a l impression par
+     la meme regle que celle du rapport. -->
+<div id="s-programme-print" class="screen">
+  <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
+    <button class="back-btn" onclick="retourDe('s-programme-print')">←</button>
+    <span style="font-size:13px;font-weight:800;letter-spacing:1px">PROGRAMME</span>
+  </div>
+  <div class="pad">
+    <div class="rap-outils" style="margin-bottom:16px">
+      <button class="btn btn-red" style="width:100%" onclick="ppImprimer()">Imprimer / Enregistrer en PDF</button>
+    </div>
+    <div id="pp-corps"></div>
   </div>
 </div>
 
@@ -25366,6 +25414,121 @@ function rapPeriodeChange(){
 // la main au système, qui imprime ou enregistre en PDF.
 function rapImprimer(){
   try{ window.print(); }catch(e){ toast('Impression indisponible sur ce navigateur','var(--orange)'); }
+  return true;
+}
+// ══════════════ FICHE PROGRAMME IMPRIMABLE ════════════════════════════════
+//
+// Le programme se lisait sur un téléphone, et nulle part ailleurs. Cette
+// fiche est la même chose sur papier : une section par créneau actif, avec
+// l’échauffement, les exercices, le retour au calme et les notes.
+//
+// AUCUNE IMPRESSION PROPRE. window.print() imprime le DOCUMENT, pas un
+// écran : c’est la feuille @media print qui décide seule de ce qui sort.
+// Deux fonctions identiques auraient fini par diverger — celle du rapport
+// suffit, l’alias ne sert qu’à ce que le point d’appel dise ce qu’il fait.
+const ppImprimer=rapImprimer;
+
+// LES COLONNES CHIFFREES, dans l’ordre où on les lit sur un banc. Le nom,
+// la méthode et la description ne sont PAS ici : ce sont des textes longs,
+// ils tiennent dans la première cellule, en sous-lignes. Dix colonnes sur
+// une A4 ne se lisent plus.
+const PP_COLS=Object.freeze([
+  {cle:'materiel',lib:'Matériel',v:ex=>ex.materiel},
+  {cle:'series',  lib:'Séries',  v:ex=>ex.series},
+  {cle:'reps',    lib:'Reps',    v:ex=>ex.reps},
+  {cle:'charge',  lib:'Charge',  v:ex=>ex.charge||ex.poids},
+  {cle:'rir',     lib:'RIR',     v:ex=>ex.rir},
+  {cle:'repos',   lib:'Repos',   v:ex=>ex.repos},
+  {cle:'tempo',   lib:'Tempo',   v:ex=>ex.tempo}
+]);
+function _ppTexte(v){ return String(v==null?'':v).trim(); }
+// PURE. Les créneaux actifs, avec leur INDICE de jour conservé : filtrer
+// d’abord perdrait la correspondance avec DAYS, et la fiche annoncerait le
+// mauvais jour dès qu’un créneau est éteint.
+function _ppSeancesActives(u){
+  const cfg=(u&&Array.isArray(u.sessions_config))?u.sessions_config:[];
+  return cfg.map((s,i)=>({s,i})).filter(x=>x.s&&x.s.active===true);
+}
+// LES COLONNES VIDES SAUTENT — pas de « — » ni de « 0 », c’est la règle de
+// l’application : une absence de consigne n’est pas une consigne.
+//
+// Le choix se fait sur TOUT le document et non séance par séance : deux
+// tableaux aux colonnes différentes sur la même page se liraient comme deux
+// documents, et l’œil qui descend la colonne « Charge » la perdrait.
+function _ppColonnes(seances){
+  const exs=[];
+  (seances||[]).forEach(x=>((x.s&&x.s.exercises)||[]).forEach(e=>{ if(e) exs.push(e); }));
+  return PP_COLS.filter(c=>exs.some(e=>_ppTexte(c.v(e))!==''));
+}
+function _ppBloc(lib,txt){
+  const t=_ppTexte(txt);
+  if(!t) return '';
+  return `<div class="pp-lbl">${escapeHtml(lib)}</div><div class="pp-txt">${escapeHtml(t)}</div>`;
+}
+function _ppTable(seance,cols){
+  const exs=((seance&&seance.exercises)||[]).filter(Boolean);
+  if(!exs.length) return '';
+  const th=cols.map(c=>`<th>${escapeHtml(c.lib)}</th>`).join('');
+  const lignes=exs.map((ex,n)=>{
+    let meth=''; try{ meth=_libTechniqueSeries(ex)||''; }catch(e){ meth=''; }
+    const desc=_ppTexte(ex.description);
+    // La méthode PORTE DÉJÀ ses séries concernées : _libTechniqueSeries rend
+    // « Rest-pause · séries : dernière ». On ne reformule pas ici, sinon la
+    // fiche et la bannière de séance finiraient par ne plus dire pareil.
+    const nom=`<div class="pp-nom">${n+1}. ${escapeHtml(_ppTexte(ex.name)||'Exercice '+(n+1))}</div>`
+      +(meth?`<div class="pp-meta">${escapeHtml(meth)}</div>`:'')
+      +(desc?`<div class="pp-meta">${escapeHtml(desc)}</div>`:'');
+    return `<tr><td>${nom}</td>`+cols.map(c=>`<td>${escapeHtml(_ppTexte(c.v(ex)))}</td>`).join('')+'</tr>';
+  }).join('');
+  return `<table class="rap-tbl"><thead><tr><th>Exercice</th>${th}</tr></thead><tbody>${lignes}</tbody></table>`;
+}
+// PURE. Ne lit QUE `u` : la même fonction sert l’athlète sur son dossier et
+// le coach sur celui d’un client. Un `currentUser` glissé ici ferait imprimer
+// le programme du coach sur la fiche de son athlète.
+function htmlProgrammePrint(u){
+  const seances=_ppSeancesActives(u);
+  const tete=`<header class="pp-tete">
+    <div class="rap-titre">Programme</div>
+    <div class="rap-sous">${escapeHtml(_ppTexte(u&&u.fname)||'Athlète')}</div>
+    <div class="rap-meta">Édité le ${new Date().toLocaleDateString('fr-FR')}</div>
+  </header>`;
+  if(!seances.length) return tete+'<div class="rap-vide">Aucun créneau actif : rien à imprimer.</div>';
+  const cols=_ppColonnes(seances);
+  return tete+seances.map(x=>{
+    const s=x.s;
+    const jour=_ppTexte(s.day)||DAYS[x.i]||'';
+    const nom=_ppTexte(s.name);
+    const titre=jour?(jour+(nom?' · '+nom:'')):_nomSeance(s,x.i);
+    // ?? et non || : demarrerSeance applique le protocole mémorisé avec la
+    // MÊME règle. Un champ vidé volontairement par le coach doit rester vide
+    // sur la fiche comme au lancement — sans quoi le papier promettrait un
+    // échauffement que l’écran ne montrera pas.
+    const wu=_ppTexte(s.warmup??(u&&u._defaultWarmup)??'');
+    const cd=_ppTexte(s.cooldown??(u&&u._defaultCooldown)??'');
+    return `<section class="pp-seance"><h2>${escapeHtml(titre)}</h2>`
+      +_ppBloc('Échauffement',wu)
+      +_ppTable(s,cols)
+      +_ppBloc('Retour au calme',cd)
+      +_ppBloc('Notes',s.notes)
+      +'</section>';
+  }).join('');
+}
+let _ppCible=null;
+// Sur le modèle d’ouvrirRapport : la cible est passée, et le défaut est le
+// dossier courant. goAvecRetour et non go — l’écran est atteignable depuis
+// la fiche coach, et le rendra un jour depuis l’onglet de l’athlète.
+function ouvrirProgrammePrint(cible){
+  _ppCible=cible||currentUser;
+  goAvecRetour('s-programme-print');
+  ppRendre();
+  return true;
+}
+function ppRendre(){
+  const z=document.getElementById('pp-corps');
+  if(!z) return false;
+  let h='';
+  try{ h=htmlProgrammePrint(_ppCible); }catch(e){ h='<div class="rap-vide">Fiche indisponible.</div>'; }
+  z.innerHTML=h;
   return true;
 }
 // ══════════════ PHOTOS DE PROGRESSION ═════════════════════════════════════
