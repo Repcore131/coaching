@@ -10472,11 +10472,41 @@ function testExercices(){
           // Aiguilles assemblées : sans ça, ce test se trouve lui-même.
           const ecritures=prod.split('coachPlan'+'=').length-1
             +(prod.split('coachPlan'+" =").length-1);
-          // UNE seule écriture en production : la création du compte, dans
-          // doRegister. Toute autre est une bascule automatique.
-          if(ecritures!==1) return _echec(ecritures+' écritures de coachPlan au lieu d\'une');
+          // DEUX écritures en production, et deux seulement :
+          //   1. la création du compte, dans doRegister ;
+          //   2. l'activation d'un palier PAYÉ, dans onApprove — après choix
+          //      explicite du palier, acceptation des CGV et paiement PayPal
+          //      abouti.
+          //
+          // La seconde N'EST PAS une bascule automatique : c'est l'inverse,
+          // rien ne bouge sans que le coach ait payé. Elle est admise
+          // NOMMÉMENT — position ET condition vérifiées ci-dessous — pour
+          // qu'une TROISIÈME ne s'ajoute pas en silence. Sans elle, un coach
+          // qui paie dix-neuf euros resterait au palier libre, quota UN.
+          if(ecritures!==2) return _echec(ecritures+' écritures de coachPlan au lieu de deux');
           if(String(doRegister).indexOf("user.coachPlan='libre'")<0)
-            return _echec('l\'écriture unique n\'est pas celle de la création');
+            return _echec('la première écriture n\'est pas celle de la création');
+          // La seconde est DANS onApprove, et SOUS la condition du palier coach.
+          // Aiguilles assemblées, comme ci-dessus : ce fichier ne doit pas se
+          // trouver lui-même si _prodSrc venait à l'englober.
+          const _oaDeb=prod.indexOf('onApprove'+':async function(data){');
+          if(_oaDeb<0) return _echec('onApprove introuvable en production');
+          const _oaFin=prod.indexOf('onError'+':function(err)',_oaDeb);
+          const _oa=prod.slice(_oaDeb,_oaFin>0?_oaFin:prod.length);
+          if((_oa.split('coachPlan'+'=').length-1)!==1)
+            return _echec('la seconde écriture n\'est pas dans onApprove');
+          // LA GARDE COLLE À L'ÉCRITURE. Un simple indexOf de la garde dans
+          // onApprove ne prouvait rien : elle y figure DEUX fois — la seconde
+          // choisit l'écran d'arrivée — et retirer celle qui protège
+          // l'écriture laissait ce test vert. On exige que les trois lignes se
+          // suivent, commentaires retirés.
+          const _oaNu=_oa.split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n');
+          const _motif=new RegExp('if\\(_est'+'Coach\\)\\{\\s*currentUser\\.coach'
+            +'Plan=_subPalier;\\s*currentUser\\.coachSubActive=true;');
+          if(!_motif.test(_oaNu))
+            return _echec('l\'écriture de onApprove n\'est pas conditionnée au palier payé');
+          if(_oa.indexOf('_palier'+'EstCoach(_subPalier)')<0)
+            return _echec('la condition ne vient pas de la table COACH_PALIERS');
           // Et rien dans le comptage ni dans le bandeau n'y touche.
           for(const f of [countActiveAthletes,coachPalierRequis,_htmlBandeauPaliers,
                           paliersDe,_ecrirePaliers,loadCoachHome]){
