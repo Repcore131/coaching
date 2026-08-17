@@ -44502,14 +44502,32 @@ function _htmlChipsQC(qcs,cible){
   return ((qcs&&qcs.length)?qcs.map(c=>`<button data-qc="${escapeHtml(c.text)}" onclick="insertQC(this.dataset.qc,'${cible}')" style="flex-shrink:0;background:var(--surface-2);border:1px solid var(--border);border-radius:20px;padding:0 14px;height:44px;color:var(--text);font-family:Montserrat,sans-serif;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.label)}</button>`).join(''):'')
     +`<button onclick="ouvrirModeles('${cible}')" style="flex-shrink:0;background:transparent;border:1px dashed var(--border);border-radius:20px;padding:0 14px;height:44px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:11px;cursor:pointer;white-space:nowrap">${icon('edit-2',13)} Modèles</button>`;
 }
+// LES VARIABLES SONT RESOLUES AVANT L INSERTION, comme dans tplInserer.
+//
+// Les deux lisent la MÊME bibliothèque — _getQC — et l’écran de gestion des
+// modèles promet que les variables sont remplies à l’insertion. Ici le texte
+// entrait tel quel : un modèle contenant {prénom} arrivait littéral, et
+// tplVerifierAvantEnvoi refusait l’envoi en surlignant un champ que le coach
+// venait de remplir d’un clic.
+//
+// LA CIBLE SERT DEUX FOIS : à trouver le champ, et à décider du contexte —
+// _tplCtxPour ne rend le contexte entier qu’à la zone visée.
 function insertQC(text,cible){
-  const ta=document.getElementById(cible||'vc-general');if(!ta)return;
+  const _cible=cible||'vc-general';
+  const ta=document.getElementById(_cible);if(!ta)return;
+  const r=templateResoudre(text,_tplCtxPour(_cible));
   const s=ta.selectionStart,e=ta.selectionEnd;
   const before=ta.value.substring(0,s),after=ta.value.substring(e);
   const sep=(before&&!/[\s\n]$/.test(before))?'. ':'';
-  const ins=sep+text;
+  const ins=sep+r.texte;
   ta.value=before+ins+after;
   const p=s+ins.length;ta.setSelectionRange(p,p);ta.focus();
+  // MÊME SUITE QUE tplInserer : ce qui reste à compléter est SURLIGNÉ et DIT.
+  // Sans cela, le coach découvrirait le manque au refus d’envoi.
+  if(r.manquantes.length){
+    _tplSurligner(ta,true);
+    toast('À compléter : '+r.manquantes.join(', '),'var(--orange)');
+  } else _tplSurligner(ta,false);
 }
 // ABSORBE. L ancien gestionnaire ecrivait dans `quickComments`, que _getQC ne
 // lit plus : le laisser en place aurait donne un ecran ou l on modifie des
