@@ -4122,6 +4122,10 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
   <div class="pad">
     <div class="rap-outils" style="margin-bottom:16px">
+      <!-- Préréglages de période. Rendus par rapRendre pour que le bouton en
+           vigueur soit celui qui est allumé — et qu’aucun ne le reste quand
+           les dates sont reprises à la main. -->
+      <div id="rap-presets" style="display:flex;gap:6px;margin-bottom:9px"></div>
       <div style="display:flex;gap:8px;margin-bottom:9px">
         <input id="rap-d" type="date" onchange="rapPeriodeChange()" style="flex:1" aria-label="Début de période">
         <input id="rap-f" type="date" onchange="rapPeriodeChange()" style="flex:1" aria-label="Fin de période">
@@ -24959,6 +24963,69 @@ function _rapBarreVolume(m){
 // ── Le document ───────────────────────────────────────────────────────────
 let _rapBlocs={entete:true,assiduite:true,volume:true,progression:true,tendances:true,poids:true,signaux:true,mot:true};
 let _rapDebut=null,_rapFin=null,_rapCible=null;
+// Les trois fenêtres qu’on demande réellement. Remplir deux champs date à la
+// main, sur téléphone, pour chaque athlète, était le prix de la moindre
+// question — « et sur les deux dernières semaines ? ».
+const RAP_PRESETS=Object.freeze([
+  {cle:'14j', lib:'14 derniers jours', jours:14},
+  {cle:'28j', lib:'28 derniers jours', jours:28},
+  {cle:'mois',lib:'Mois précédent'}
+]);
+// Le préréglage actuellement en vigueur, ou null dès que les dates ont été
+// modifiées à la main : un bouton qui resterait allumé pendant que les champs
+// disent autre chose ferait deux vérités à l’écran — exactement ce que le
+// commentaire de rapRendre redoute déjà pour les dates elles-mêmes.
+let _rapPresetActif=null;
+// PURE. Les bornes d’un préréglage, JOUR PLEIN À JOUR PLEIN — comme
+// rapMoisPrecedent, qui est borne à borne. Des bornes à l’heure près
+// s’afficheraient mal dans deux champs `type="date"` et s’imprimeraient de
+// travers.
+//
+// n-1 : « 14 derniers jours » compte aujourd’hui. Quatorze jours pleins, pas
+// quinze.
+function _rapPresetBornes(cle){
+  if(cle==='mois'){ const m=rapMoisPrecedent(); return {debut:m.debut,fin:m.fin,cle:'mois'}; }
+  const p=RAP_PRESETS.find(x=>x.cle===cle)||RAP_PRESETS[0];
+  const n=Number(p.jours)||14;
+  const d=new Date();
+  return {
+    debut:new Date(d.getFullYear(),d.getMonth(),d.getDate()-(n-1),0,0,0,0).getTime(),
+    fin:new Date(d.getFullYear(),d.getMonth(),d.getDate(),23,59,59,999).getTime(),
+    cle:p.cle
+  };
+}
+// LE DERNIER PRÉRÉGLAGE CHOISI, sur le dossier du COACH. Il tient d’un athlète
+// à l’autre : régler la même fenêtre douze fois de suite dans une soirée n’est
+// pas un choix, c’est une corvée.
+//
+// Écrit seulement quand il CHANGE : saveUser pousse vers le nuage, et un envoi
+// par clic sur le même bouton serait du trafic pour rien.
+function _rapMemoriserPreset(cle){
+  try{
+    if(!currentUser||currentUser.rapPreset===cle) return false;
+    currentUser.rapPreset=cle;
+    saveUser();
+    return true;
+  }catch(e){ return false; }
+}
+// PURE-ish. Le préréglage mémorisé, s'il est encore connu : une clef inventée
+// ou disparue d’une version à l’autre ne doit pas ouvrir une fenêtre absurde.
+function _rapPresetMemorise(){
+  try{
+    const v=currentUser&&currentUser.rapPreset;
+    return RAP_PRESETS.some(x=>x.cle===v)?v:null;
+  }catch(e){ return null; }
+}
+function rapPreset(cle){
+  const b=_rapPresetBornes(cle);
+  // Le MÊME garde que rapRendre, et pour la même raison : une borne non finie
+  // poserait un 1er janvier 1970 dans un document qu’on imprime.
+  if(!Number.isFinite(b.debut)||!Number.isFinite(b.fin)) return false;
+  _rapDebut=b.debut; _rapFin=b.fin; _rapPresetActif=b.cle;
+  _rapMemoriserPreset(b.cle);
+  rapRendre();
+  return true;
+}
 function _rapInsuffisant(){
   return `<div class="rap-vide">${escapeHtml(RAP_INSUFFISANT)}</div>`;
 }
@@ -25065,8 +25132,18 @@ function htmlRapport(r){
 // ── L'écran ───────────────────────────────────────────────────────────────
 function ouvrirRapport(cible){
   _rapCible=cible||currentUser;
-  const m=rapMoisPrecedent();
-  _rapDebut=m.debut; _rapFin=m.fin;
+  // SOI OU UN CLIENT : le défaut n’est pas le même. Un coach qui ouvre la
+  // fiche d’un athlète regarde ce qui vient de se passer ; un athlète qui
+  // ouvre son propre rapport depuis l’onglet Perfs veut un document de bilan.
+  //
+  // L’adresse en plus de l’identité : la fiche coach passe getOwnedClient,
+  // qui peut rendre une COPIE du dossier, et une comparaison par référence
+  // seule prendrait alors le coach pour un de ses clients.
+  const _soi=!cible||cible===currentUser
+    ||!!(currentUser&&cible&&cible.email&&cible.email===currentUser.email);
+  const _cle=_soi?'mois':(_rapPresetMemorise()||'14j');
+  const b=_rapPresetBornes(_cle);
+  _rapDebut=b.debut; _rapFin=b.fin; _rapPresetActif=b.cle;
   // L'écran est atteignable depuis l'onglet Perfs de l'athlète ET depuis la
   // fiche coach : goAvecRetour mémorise d'où l'on vient, plutôt que de coder
   // une destination en dur — ou d'appeler history.back(), que le produit
@@ -25095,6 +25172,14 @@ function rapRendre(){
   // exactement le cas que ce garde devait empêcher.
   if(d&&Number.isFinite(_rapDebut)) d.value=localISODate(new Date(_rapDebut));
   if(f&&Number.isFinite(_rapFin)) f.value=localISODate(new Date(_rapFin));
+  // REDESSINÉS À CHAQUE RENDU, contrairement aux cases de blocs : le bouton
+  // allumé doit suivre la période en vigueur, et s’éteindre dès qu’elle est
+  // reprise à la main.
+  const pz=document.getElementById('rap-presets');
+  if(pz) pz.innerHTML=RAP_PRESETS.map(x=>{
+    const actif=_rapPresetActif===x.cle;
+    return `<button type="button" onclick="rapPreset('${x.cle}')" aria-pressed="${actif?'true':'false'}" style="flex:1;min-height:38px;padding:0 6px;border-radius:8px;cursor:pointer;font-family:Montserrat,sans-serif;font-size:10.5px;font-weight:800;letter-spacing:.5px;background:${actif?'#1a0000':'var(--surface-1)'};border:1px solid ${actif?'var(--red)':'var(--border)'};color:${actif?'var(--red-light)':'var(--sub)'}">${escapeHtml(x.lib)}</button>`;
+  }).join('');
   const c=document.getElementById('rap-cases');
   if(c&&!c.dataset.pose){
     c.dataset.pose='1';
@@ -25107,7 +25192,9 @@ function rapPeriodeChange(){
   const d=document.getElementById('rap-d'), f=document.getElementById('rap-f');
   const a=d&&d.value?new Date(d.value+'T00:00:00').getTime():null;
   const b=f&&f.value?new Date(f.value+'T23:59:59').getTime():null;
-  if(a&&b&&b>a){ _rapDebut=a; _rapFin=b; rapRendre(); }
+  // Le préréglage s’éteint : les dates ne viennent plus de lui, et un bouton
+  // resté allumé annoncerait une période que le rapport ne couvre pas.
+  if(a&&b&&b>a){ _rapDebut=a; _rapFin=b; _rapPresetActif=null; rapRendre(); }
   else toast('La fin doit suivre le début','var(--orange)');
 }
 // La SEULE sortie. Aucun canal d'envoi n'est construit : window.print() rend
