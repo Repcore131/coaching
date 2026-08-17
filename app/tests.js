@@ -10122,17 +10122,31 @@ function testExercices(){
             ?true:_echec('séries absentes : '+_apSeriesReps({series:'',reps:'10'}));})());
         ok('L\'aperçu s\'intercale AVANT le lancement, pas après',(()=>{
           // Le poser après reviendrait à montrer un résumé d'une séance déjà
-          // commencée. On lit la source réelle de startWorkoutSession.
-          const src=String(startWorkoutSession).replace(/\s+/g,'');
-          // Le lancement passe par demarrerSeance depuis le 14/08 : il pose la
-          // question de la séance en cours avant d'écraser woState.
-          const iAp=src.indexOf('ouvrirApercuSeance'), iLan=src.indexOf('demarrerSeance(sess,idx)');
+          // commencée.
+          //
+          // ELLE NE LISAIT QUE startWorkoutSession, et c'est précisément ce
+          // qu'elle ne voyait pas : _cycleLancer, où reviennent les CINQ
+          // sorties des modales de cycle, allait droit à demarrerSeance.
+          // L'aperçu était donc inatteignable pour toute athlète dont le suivi
+          // de cycle est actif, sans que ce test bronche. La fin commune vit
+          // maintenant dans _apercuOuSeance : on l'y vérifie, ET on exige que
+          // les DEUX entrées y passent sans garder de copie.
+          const fin=String(_apercuOuSeance).replace(/\s+/g,'');
+          const iAp=fin.indexOf('ouvrirApercuSeance'), iLan=fin.indexOf('demarrerSeance(');
           if(iAp<0) return _echec('l\'aperçu n\'est pas branché');
           if(!(iAp<iLan)) return _echec('l\'aperçu vient après le lancement');
           // Et il court-circuite : sans le return, la séance démarrerait
           // DERRIÈRE l'aperçu.
-          return /if\(ouvrirApercuSeance\(idx\)\)return;/.test(src)
-            ?true:_echec('l\'aperçu ne court-circuite pas le lancement');})());
+          if(!/if\(ouvrirApercuSeance\(idx\)\)returntrue;/.test(fin))
+            return _echec('l\'aperçu ne court-circuite pas le lancement');
+          for(const f of [startWorkoutSession,_cycleLancer]){
+            const s2=String(f).replace(/\s+/g,'');
+            if(s2.indexOf('_apercuOuSeance(')<0)
+              return _echec((f.name||'?')+' ne passe pas par _apercuOuSeance');
+            if(s2.indexOf('demarrerSeance(')>=0)
+              return _echec((f.name||'?')+' garde sa propre copie du lancement');
+          }
+          return true;})());
         ok('L\'aperçu refuse une séance vide plutôt que d\'ouvrir un écran nu',(()=>{
           const sauve=currentUser;
           try{
