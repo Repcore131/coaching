@@ -44981,6 +44981,21 @@ function saveVideoCorrection(){
     const _rest=_fileVideosSuivantes(window._vcEmail,window._vcVideoId);
     if(_rest.length&&_allerVideoSuivante(_rest[0])) return;
   }catch(e){}
+  // LE TABLEAU DE BORD SE RAFRAÎCHIT QUAND C EST LUI QUI EST À L ÉCRAN.
+  //
+  // La chaîne s’ouvre en modale par-dessus s-coach-home et s’y termine :
+  // openClientDetail(_,true) supprime la navigation et ne rejoue jamais
+  // renderPilotage, appelée seulement par renderClientList. Le compteur
+  // « N vidéos en attente de correction » restait donc sur son ancien
+  // chiffre après qu’on venait d’en corriger N.
+  //
+  // MÊME TEST DE GARDE que _rafraichirCodesEleves : sur l’écran réellement
+  // affiché, jamais sur une intention. Entré par la fiche athlète, on
+  // retombe sur openClientDetail — le comportement d’avant, intact.
+  if(document.getElementById('s-coach-home')?.classList.contains('active')){
+    try{ loadCoachHome(); }catch(e){}
+    return;
+  }
   openClientDetail(currentClientId,true);
 }
 
