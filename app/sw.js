@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v862';
+const CACHE = 'repcore-v863';
 const SW_DATA = 'repcore-sw-data'; // persistent across updates — not wiped by activate
 
 // DÉLAI DE GARDE sur index.html. Le handler était en network-first avec un
@@ -149,12 +149,48 @@ self.addEventListener('activate', e => {
       //    — et on s'arrête quand le budget est épuisé. Ce qui reste sera repris
       //    par le handler fetch au premier usage, exactement comme avant.
       const _t0 = Date.now();
-      let _reportes = 0, _sautes = 0;
+      let _reportes = 0, _sautes = 0, _octets = 0, _inconnus = 0;
+      // La taille se lit dans l'en-tête, jamais en relisant le corps :
+      // relire 15 Mo pour les mesurer coûterait le budget qu'on tient.
+      const _taille = r => {
+        try { return Number(r.headers.get('content-length')) || 0; }
+        catch (err) { return 0; }
+      };
+      const _lisible = n => n >= 1048576 ? (n / 1048576).toFixed(1) + ' Mo'
+        : n >= 1024 ? Math.round(n / 1024) + ' Ko' : n + ' o';
       const _prioritaire = u => /\/vendor\/|\/exercices\//.test(u);
       // index.html est traité juste en dessous, en réseau-d'abord ; tests.js ne
       // doit JAMAIS être mis en cache d'office — il n'est pas dans ASSETS pour
       // cette raison, et le reporter le remettrait par la porte de derrière.
       const _exclu = u => /\/index\.html$/.test(u) || /\/tests\.js$/.test(u);
+      // LA BASE ALIMENTAIRE D'ABORD, ET HORS BUDGET. Elle n'entre dans le
+      // cache que par un prefetch explicite, et le report ne la connaissait
+      // pas : elle passait après vendor/ et les 407 illustrations, donc
+      // souvent jamais. À chaque mise à jour la recherche d'aliment
+      // redevenait indisponible hors ligne et 672 Ko repartaient sur le
+      // réseau. C'est une entrée unique et connue : la faire concourir dans
+      // un tri ne garantirait rien.
+      //
+      // put/clone, jamais add : add irait la rechercher sur le réseau.
+      // `_ciqual` dit qu'elle a été REPORTÉE, pas qu'elle avait une taille
+      // connue : une entrée sans content-length est reportée quand même, et le
+      // journal doit le dire.
+      let _ciqual = false;
+      if (!(await neuf.match(CIQUAL_URL))) {
+        for (let i = anciens.length - 1; i >= 0; i--) {
+          try {
+            const vieux = await caches.open(anciens[i]);
+            const r = await vieux.match(CIQUAL_URL);
+            if (r) {
+              await neuf.put(CIQUAL_URL, r.clone());
+              _ciqual = true; _reportes++;
+              const _n = _taille(r);
+              if (_n) _octets += _n; else _inconnus++;
+              break;
+            }
+          } catch (err) {}
+        }
+      }
       for (let i = anciens.length - 1; i >= 0; i--) {
         try {
           const vieux = await caches.open(anciens[i]);
@@ -167,7 +203,11 @@ self.addEventListener('activate', e => {
             try {
               if (await neuf.match(rq)) continue;
               const r = await vieux.match(rq);
-              if (r) { await neuf.put(rq, r.clone()); _reportes++; }
+              if (r) {
+                await neuf.put(rq, r.clone()); _reportes++;
+                const _n = _taille(r);
+                if (_n) _octets += _n; else _inconnus++;
+              }
             } catch (err) {}
           }
         } catch (err) {}
@@ -175,8 +215,11 @@ self.addEventListener('activate', e => {
       // ON DIT CE QU'ON N'A PAS FAIT. Un report tronqué en silence se lirait
       // comme un cache complet, et la prochaine ouverture hors ligne serait une
       // surprise.
-      console.log('[RepCore SW] report cache :', _reportes, 'entrées en',
-        (Date.now() - _t0) + ' ms' + (_sautes ? ', ' + _sautes + ' hors budget' : ''));
+      console.log('[RepCore SW] report cache :', _reportes, 'entrées,',
+        _lisible(_octets) + (_inconnus ? ' (+ ' + _inconnus + ' sans taille connue)' : ''),
+        'en ' + (Date.now() - _t0) + ' ms'
+        + (_sautes ? ', ' + _sautes + ' hors budget' : '')
+        + (_ciqual ? ', base alimentaire comprise' : ''));
       // 2. Report d'index.html si ASSETS a échoué (hors ligne à l'install).
       if (!(await neuf.match('./index.html'))) {
         for (const k of anciens) {
