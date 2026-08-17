@@ -13173,10 +13173,22 @@ function riteJour(i,el,forcer){
   el.style.borderColor=actif?'var(--red)':'#2e2e2e';
   el.style.color=actif?'#fff':'var(--sub)';
 }
-// Fermeture SANS réponse : on note la date du rite, et RIEN d'autre. Le
-// critère est explicite — aucune écriture hors la date.
+// LES CYCLES REPORTES DANS CETTE SESSION. Un Set en mémoire, JAMAIS une
+// écriture au dossier : c’est toute la différence entre « pas maintenant »
+// et « c’est fait ».
+//
+// Il disparaît à la fermeture de l’app, et le rite se represente à la
+// prochaine ouverture — c’est ce que « Plus tard » promet.
+const _riteReportes=new Set();
+// FERMETURE SANS ÉCRITURE. Elle inscrivait le cycle dans rites[], donc le
+// rendait « tenu » pour riteTenu : la modale ne revenait plus avant 28 jours.
+// Or cette fonction est appelée par le bouton « Plus tard » ET par le clic
+// sur le fond de la modale — un geste qui, partout ailleurs dans ce produit,
+// ne décide de rien.
+//
+// SEUL « Enregistrer et repartir » écrit désormais.
 function fermerRite(){
-  _riteEnregistrer(null,false);
+  try{ _riteReportes.add(Number(window._riteCycle)); }catch(e){}
   closeModal();
 }
 function validerRite(){
@@ -13258,6 +13270,10 @@ function riteAfficherSiBesoin(){
     if(document.getElementById('modal-overlay')) return false;   // une modale suffit
     const v=riteAAfficher(currentUser,Date.now());
     if(!v.ok) return false;
+    // REPORTÉ DANS CETTE SESSION : on ne le repose pas à chaque navigation.
+    // Lu ICI et non dans riteAAfficher, qui est PURE et doit le rester — une
+    // lecture d’état de session la rendrait dépendante du navigateur.
+    if(_riteReportes.has(Number(v.cycle))) return false;
     ouvrirRite(v.cycle);
     return true;
   }catch(e){ return false; }
@@ -14302,7 +14318,12 @@ function renderTodoBlock(clients){
   // suivant ne redemande rien.
   const _rites=clients.filter(c=>{
     if(!c||c._fromCode) return false;
-    const l=(c.rites||[]).filter(r=>r&&r.date);
+    // SEULS LES RITES PORTEURS D UNE QUESTION. Un cycle clôturé sans question
+    // n’attend aucune réponse : l’annoncer « à lire » envoyait le coach vers
+    // un écran où il n’y a rien à lire. La règle de relance unique ci-dessous
+    // s’applique alors à cette liste-là, celle des rites qui demandent
+    // vraiment quelque chose.
+    const l=(c.rites||[]).filter(r=>r&&r.date&&String(r.question||'').trim());
     if(!l.length) return false;
     const der=l[l.length-1];
     if(der.reponseCoach) return false;
