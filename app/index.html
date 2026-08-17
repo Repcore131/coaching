@@ -21216,6 +21216,10 @@ function woPersist(){
   if(woState.termine) return;
   try{
     localStorage.setItem('rc_wo_state',JSON.stringify({
+      // L ADRESSE DE CELUI QUI S ENTRAÎNE. La clé est commune à l’appareil,
+      // le contenu ne l’est pas : charges, séries validées, réponses de
+      // douleur et photo de séance sont ceux d’une seule personne.
+      email:(currentUser&&currentUser.email)||'',
       exercises:woState.exercises,
       currentEx:woState.currentEx,
       startTime:woState.startTime,
@@ -21249,6 +21253,17 @@ function woPersist(){
     }));
   }catch{}
 }
+// PURE. L’instantané de séance est-il celui du compte courant ?
+//
+// Copie exacte de _bilDraftAMoi, y compris son refus quand l’adresse MANQUE :
+// un instantané écrit avant ce correctif n’en porte pas, et deviner à qui il
+// est reviendrait à proposer la séance de quelqu’un d’autre. On refuse, ce
+// qui est le sens sûr — la seule perte est une reprise, jamais une donnée.
+function _woSnapAMoi(snap){
+  const moi=(currentUser&&currentUser.email)||null;
+  if(!moi||!snap||!snap.email) return false;
+  return String(snap.email)===String(moi);
+}
 function _woLoadSnap(){
   try{
     const raw=localStorage.getItem('rc_wo_state');
@@ -21256,6 +21271,11 @@ function _woLoadSnap(){
     const snap=JSON.parse(raw);
     if(!snap?.exercises?.length||!snap.startTime) return null;
     if(Date.now()-snap.startTime>24*3600*1000){localStorage.removeItem('rc_wo_state');return null;}
+    // ON NE SUPPRIME PAS l’instantané d’un autre, contrairement au cas de la
+    // péremption juste au-dessus, qui vaut pour tout le monde. Même doctrine
+    // que _bilLoadDraft : la lecture ne détruit rien, et son propriétaire
+    // retrouve sa séance s’il se reconnecte sur cet appareil.
+    if(!_woSnapAMoi(snap)) return null;
     return snap;
   }catch{return null;}
 }
@@ -48772,7 +48792,13 @@ function toastSync(localOk,promesse,succes,perdu){
       return false;
     });
 }
-function silentLogout(){DB.del('session');currentUser=null;CLOUD.signOut();oublierBanque();}
+// L’INSTANTANÉ DE SÉANCE PART AVEC LA SESSION. Il porte désormais une
+// adresse, donc le compte suivant ne le lirait pas — mais le laisser
+// derrière soi, c’est laisser les charges et les réponses de douleur de
+// quelqu’un dans le stockage d’un appareil partagé. Même geste que pour le
+// brouillon de bilan dans _comptesRemiseAZero.
+function silentLogout(){DB.del('session');currentUser=null;CLOUD.signOut();oublierBanque();
+  try{localStorage.removeItem('rc_wo_state');}catch(e){}}
 async function logout(){
   if(!await rcConfirm('Se déconnecter ?',null,'Se déconnecter')) return;
   // Le compte quitte le registre : ses jetons viennent d'être révoqués, le
