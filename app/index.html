@@ -27251,6 +27251,25 @@ function _htmlConcentration(res,m){
 function volumeSemaine(user,cle){ return _calculSemaine(user,cle).muscles; }
 function frequenceSemaine(user,cle,muscle){ return _calculSemaine(user,cle).freq[muscle]||0; }
 
+// PURE. « 3×/sem », ou '' quand la fréquence est nulle.
+//
+// CE FORMAT EST CELUI DE L'ÉCRAN ATHLÈTE. renderVolume écrit déjà
+// `freq+'×/sem'` sur exactement la même donnée : deux orthographes d'une même
+// mesure selon qu'on la lit côté coach ou côté athlète seraient deux
+// conventions à apprendre.
+//
+// UNE CELLULE VIDE ET NON « ×0 ». Un muscle peut porter du volume sans aucun
+// jour à série dure entière — des demi-séries secondaires accumulées. « ×0 »
+// se lirait comme un constat sur la semaine, alors que c’est le compteur qui
+// ne s’applique pas.
+//
+// AUCUN SEUIL, AUCUNE COULEUR PAR VALEUR : l’application n’a pas de doctrine
+// de fréquence, et en poser une ici en créerait une seconde à côté des repères
+// MEV/MAV/MRV, qui sont documentés et surchargeables. On montre le nombre.
+function _libFrequence(user,cle,muscle){
+  let n=0; try{ n=frequenceSemaine(user,cle,muscle); }catch(e){ n=0; }
+  return n>0?(n+'×/sem'):'';
+}
 // ── Repères effectifs ──────────────────────────────────────────────────────
 // Surcharge partielle : le coach peut ne remonter que le MRV, les autres
 // bornes gardent leur défaut. Rend null pour un muscle sans repère : l'écran
@@ -31357,10 +31376,21 @@ function renderVolumeCoach(c){
 
   const ligne=(m,n,rep)=>{
     const zo=zoneVolume(n,rep,c);
+    // LA FREQUENCE ENTRE LE VOLUME ET LA ZONE, en teinte neutre : douze séries
+    // en une séance et douze sur trois jours ne se lisent pas pareil, et c’est
+    // la première question devant un volume. La ZONE RESTE EN DERNIER : c’est
+    // elle qui porte la couleur, et rien ne doit concurrencer ce signal-là.
+    //
+    // En commentaire JS et non dans le gabarit : un commentaire HTML posé là
+    // partirait dans le DOM à chaque ligne de muscle, à chaque rendu.
+    // `cle` est la MEME semaine que celle du volume juste au-dessus, et
+    // _calculSemaine est memoisee : cet appel relit l’objet que `res` porte
+    // deja, il n’en calcule pas un second.
+    const _fq=_libFrequence(c,cle,m);
     return `<div style="margin-bottom:9px">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:4px">
         <span style="font-size:11px;font-weight:800;color:${(MUSCLES[m]||{}).c||'#fff'}">${(MUSCLES[m]||{}).lib||m}</span>
-        <span style="font-size:10px;color:${zo?zo.c:'var(--sub)'};white-space:nowrap">${volAffiche(n)} série${n>=2?'s':''} · ${zo?zo.lib:'pas de repère'}</span>
+        <span style="font-size:10px;color:${zo?zo.c:'var(--sub)'};white-space:nowrap">${volAffiche(n)} série${n>=2?'s':''}${_fq?' · <span style="color:var(--sub)">'+escapeHtml(_fq)+'</span>':''} · ${zo?zo.lib:'pas de repère'}</span>
       </div>
       ${_volBarre(m,n,rep,res.aberrants[m],c)}
       ${_htmlConcentration(res,m)}
