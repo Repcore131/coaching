@@ -8018,6 +8018,10 @@ function _histPopstate(){
       Promise.resolve(rcConfirm(q[0],q[1],q[2],q[3])).then(ok=>{
         if(!ok) return;
         if(actuel==='s-workout'){ try{ _quitterEcranSeance(true); }catch(e){} }
+        // LA QUATRIEME SORTIE DU BILAN. Elle ne passe pas par bilBack, et
+        // laissait donc `bilData` plein — la bascule de compte restait
+        // interdite jusqu’à la fermeture de l’app.
+        if(actuel==='s-bilan'){ try{ _quitterEcranBilan(true); }catch(e){} }
         _histRetour(actuel);
       });
     }catch(e){}
@@ -27590,9 +27594,11 @@ function _bilDataSansPhotos(){
   }
   return o;
 }
-function _bilSaveDraft(){
-  clearTimeout(_bilDraftTimer);
-  _bilDraftTimer=setTimeout(()=>{
+// SEPAREE DU MINUTEUR pour pouvoir etre appelee TOUT DE SUITE. En quittant
+// l’écran, les dernières frappes sont encore dans le débounce : les perdre
+// ferait reprendre le bilan quelques caractères en arrière. Le corps est
+// INCHANGE, y compris son try/catch et l’alerte unique de quota.
+function _bilEcrireDraft(){
     try{
       // L ADRESSE DE CELUI QUI ÉCRIT. La clé est commune à l’appareil, le
       // contenu ne l’est pas : poids, mensurations, cycle et sommeil sont ceux
@@ -27609,11 +27615,44 @@ function _bilSaveDraft(){
         toast('Stockage plein : ton bilan ne sera pas récupérable si tu quittes l\'app.','var(--orange)');
       }
     }
-  },400);
+}
+// `_bilDraftTimer` est REMIS A NULL quand il part : sans quoi rien ne
+// distingue un minuteur en attente d’un minuteur déjà consommé, et la sortie
+// d’écran réécrirait un brouillon que personne n’attend.
+function _bilSaveDraft(){
+  clearTimeout(_bilDraftTimer);
+  _bilDraftTimer=setTimeout(()=>{ _bilDraftTimer=null; _bilEcrireDraft(); },400);
 }
 function _bilClearDraft(){
   clearTimeout(_bilDraftTimer);
+  _bilDraftTimer=null;
   try{localStorage.removeItem(BIL_DRAFT_KEY);}catch(e){}
+}
+// ── Quitter l’écran de bilan ────────────────────────────────────────────────
+//
+// `bilData` N’APPARTIENT QU’AU COMPTE QUI L’A COMMENCÉ, et peutBasculer s’en
+// sert pour interdire la bascule. Il n’était vidé que par _comptesRemiseAZero
+// et openBilan : un bilan VALIDÉ le laissait plein, et « Termine ou quitte
+// ton bilan » s’affichait pour toujours sur un bilan précisément terminé.
+//
+// UNE SEULE FONCTION POUR LES QUATRE SORTIES — validation, bouton retour,
+// retour matériel, « plus tard ». C’est le patron de _quitterEcranSeance,
+// écrit pour la même raison : une sortie oubliée est une sortie qui ment.
+//
+// LE BROUILLON N’EST PAS TOUCHÉ ICI, et c’est tout le point : `garder` vrai
+// l’ÉCRIT (le débounce n’a pas encore tiré), `garder` faux le laisse tel que
+// l’appelant vient de le faire — saveBilanFinal et skipFirstBilan ont déjà
+// appelé _bilClearDraft, le réécrire ressusciterait ce qu’ils effacent.
+let _bilGen=0;
+function _quitterEcranBilan(garder){
+  clearTimeout(_bilDraftTimer);
+  if(garder===true&&_bilDraftTimer!=null){ try{ _bilEcrireDraft(); }catch(e){} }
+  _bilDraftTimer=null;
+  // LES RAPPELS EN VOL SONT DESAVOUES. La compression d’une photo écrit dans
+  // `bilData` bien après qu’on a quitté : sans ce compteur, prendre une photo
+  // puis sortir aussitôt reremplissait `bilData` et reverrouillait la bascule.
+  _bilGen++;
+  bilData={}; bilStep=0;
 }
 // Retourne le brouillon s'il est exploitable, null sinon. Ne supprime rien :
 // c'est à l'appelant de décider, selon qu'il consulte ou qu'il repart à zéro.
@@ -27767,6 +27806,9 @@ function _bilBrancherAutoSave(){
 function skipFirstBilan(){
   currentUser._firstBilanPending=true;
   _bilClearDraft();_bilPurgerPhotos('depart');
+  // `false` : le brouillon vient d’être effacé volontairement, le réécrire
+  // ferait reproposer une reprise de ce qu’on abandonne.
+  _quitterEcranBilan(false);
   saveUser();
   go('s-client-home');
   loadClientHome();
@@ -27941,7 +27983,12 @@ function bilResumeAndGo(){
 }
 function bilBack(){
   if(bilStep>0){bilStep--;renderBilStep();}
-  else{if(bilType==='depart'){go('s-client-home');loadClientHome();}else{go('s-bilan-choice');}}
+  else{
+    // AVANT la navigation : loadClientHome dessine la carte « Bilan commencé »
+    // à partir du BROUILLON, et le débounce ne l’a peut-être pas encore écrit.
+    _quitterEcranBilan(true);
+    if(bilType==='depart'){go('s-client-home');loadClientHome();}else{go('s-bilan-choice');}
+  }
 }
 async function bilNext(){
   const steps=_etapesUtiles(bilType==='depart'?DEB_STEPS:BIL_STEPS);
@@ -28411,14 +28458,27 @@ function loadBilPhoto(input,key){
   // Le jeton est rendu UNE fois, et jamais en dessous de zéro : bilNext peut
   // avoir remis le compteur à plat pendant que la compression traînait.
   const _rendre=()=>{ if(_bilPhotoLoading>0) _bilPhotoLoading--; };
+  // L’ÉCRAN PEUT AVOIR ÉTÉ QUITTÉ ENTRE-TEMPS. La compression est asynchrone :
+  // son rappel écrivait dans `bilData` et dans rc_pendingphoto_ longtemps
+  // après. Deux dégâts, tous deux constatables : la bascule de compte se
+  // reverrouillait, et une photo validée sans attendre par bilNext réapparais-
+  // sait dans le bilan SUIVANT du même type, restaurée par _bilRestaurerPhotos.
+  //
+  // ON LA LAISSE TOMBER ENTIÈREMENT, sans même la ranger : rien à l’écran
+  // n’avait confirmé son ajout — le bouton disait encore « Compression ».
+  // La garder en douce ferait apparaître plus tard une photo que personne
+  // n’a vue être acceptée.
+  const _gen=_bilGen;
   compressImage(f,1200,0.75,data=>{
     _rendre();
+    if(_gen!==_bilGen) return;
     bilData[key]=data;
     _setPhotoLS('rc_pendingphoto_'+key,data);
     _bilSaveDraft();
     if(lbl){lbl.style.background='#001a00';lbl.style.borderColor='#22c55e';lbl.style.color='#22c55e';lbl.innerHTML=' Ajoutée';}
   },()=>{
     _rendre();
+    if(_gen!==_bilGen) return;
     if(lbl){ lbl.style.color=lblCoul; lbl.innerHTML=lblHtml; }
     toast('Image illisible : réessaie avec une autre photo','var(--orange)');
   });
@@ -30290,6 +30350,13 @@ function saveBilanFinal(){
   if(enregistre&&ancrageOk) toast(' Bilan n°'+n+' enregistré !');
   else toast('Stockage plein : bilan envoyé au cloud, mais absent de cet appareil','var(--orange)');
   go('s-client-home');loadClientHome();
+  // LA SORTIE PROPRE. Vérifié : plus rien ne lit `bilData` en dessous — les
+  // propagations de poids, taille, âge et genre vers le profil ont eu lieu
+  // bien plus haut, et `bi` est une copie prise avant tout cela.
+  //
+  // `false` : _bilClearDraft a déjà retiré le brouillon en tête de fonction,
+  // le bilan étant validé.
+  _quitterEcranBilan(false);
   // Propose notifications après le 1er bilan
   const totalBilans=(currentUser.bilans||[]).length;
   if(totalBilans===1) setTimeout(showBilanNotifPrompt, 1500);
