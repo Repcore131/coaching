@@ -7833,6 +7833,11 @@ function go(id){
   // promesse qui ne se résoudrait jamais. C’est un no-op quand rien n’est
   // ouvert — donc à chaque appel ordinaire.
   try{ rcSaisieFermer(); }catch(e){}
+  // LA MODALE DE PAUSE NON PLUS. Même raison : le retour matériel n’est pas
+  // le seul chemin qui change d’écran, et elle survivait à tous les autres.
+  // No-op quand elle est fermée, donc à chaque appel ordinaire.
+  try{ const _wp=document.getElementById('wo-pause-modal');
+       if(_wp&&_wp.style.display==='flex') _wp.style.display='none'; }catch(e){}
   // RATTRAPAGE DU PROFIL PUBLIC, une seule fois par session. Accroche ici et
   // non au seul accueil coach : un coach qui ouvre l app ailleurs ne passait
   // jamais par loadCoachHome, et sa vitrine restait non publiee sans que rien
@@ -8057,6 +8062,12 @@ function _histPousser(id){
 // en laissant le calque affiché par-dessus, promesse en attente pour toujours.
 function _histCalqueOuvert(){
   if(document.getElementById('modal-overlay')) return true;
+  // LA MODALE DE PAUSE, AVANT LES DEUX AUTRES. Elle s’ouvre par-dessus la
+  // séance et n’était pas comptée : le retour matériel tombait en cas 4,
+  // déléguait la flèche de s-workout, et la modale restait affichée
+  // par-dessus l’accueil.
+  const _wp=document.getElementById('wo-pause-modal');
+  if(_wp&&_wp.style.display==='flex') return true;
   for(const id of ['rc-confirm','rc-saisie']){
     const z=document.getElementById(id);
     if(z&&z.style.display==='flex') return true;
@@ -8064,6 +8075,11 @@ function _histCalqueOuvert(){
   return false;
 }
 function _histFermerCalque(){
+  // LA MODALE DE PAUSE D’ABORD, ET À LA MAIN. Contrairement aux deux
+  // suivantes elle ne rend aucune promesse et personne ne l’attend : la
+  // masquer suffit, c’est ce que fait déjà son bouton « Continuer la séance ».
+  const _wp=document.getElementById('wo-pause-modal');
+  if(_wp&&_wp.style.display==='flex'){ _wp.style.display='none'; return; }
   // PAR LEUR BOUTON « non » : c’est lui qui résout la promesse. Les fermer à
   // la main laisserait l’appelant attendre pour toujours.
   for(const id of ['rc-confirm','rc-saisie']){
