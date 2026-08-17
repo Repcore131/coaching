@@ -13635,6 +13635,45 @@ function substitutsPour(nom,contraintes){
   }
   return out;
 }
+// ── Ce qui ne survit pas à un remplacement d’exercice ──────────────────────
+//
+// MUTE SON ENTRÉE, délibérément : les trois appelants tiennent déjà l’objet
+// qu’ils veulent modifier, chacun dans son contexte — une copie du programme
+// pour le coach, `progEx` pour l’éditeur, `woState.exercises` pour la séance.
+//
+// UNE SEULE LISTE POUR LES TROIS. Elle n’existait que dans la version coach ;
+// les deux versions athlète ne nettoyaient rien, et l’encart CONSIGNE
+// réaffichait en séance le matériel, la description, le tempo, la vidéo et la
+// bannière de technique du mouvement qu’on venait d’abandonner. Trois copies
+// d’une même règle, dont une seule écrite.
+//
+// CE QUI RESTE, ET POURQUOI :
+//   `series`, `reps`, `repos` — la prescription du coach. Le remplacement
+//      change le MOUVEMENT, pas le travail demandé.
+//   `ss` et le rang — on écrit À LA MÊME POSITION : le chaînage de superset
+//      et l’ordre de la séance tiennent tout seuls.
+//   `rir` — une consigne d’EFFORT, pas une description du mouvement.
+//      « Arrête-toi à deux répétitions de l’échec » garde le même sens sur le
+//      mouvement de remplacement, là où quatre-vingts kilos, non.
+function _oublierAncienMouvement(ex){
+  if(!ex) return ex;
+  // L’image base64 ne suit JAMAIS : elle montrerait le mouvement qu’on vient
+  // justement de retirer.
+  delete ex.image;
+  // Tout ce qui DÉCRIVAIT l’ancien mouvement ne décrit plus le nouveau.
+  delete ex.description; delete ex.note; delete ex.tempo;
+  // Un banc à smith ne sert pas à des fentes haltères, et les deux vidéos
+  // montrent encore le geste qu’on vient de retirer.
+  delete ex.materiel; delete ex.videoUrl; delete ex.videoUrl2;
+  // Quatre-vingts kilos sur un squat ne sont pas quatre-vingts kilos sur une
+  // presse : un poids est attaché à un mouvement.
+  delete ex.charge; delete ex.poids;
+  // La technique et les séries qu’elle visait décrivaient l’ancien geste.
+  delete ex.methode; delete ex.methodeSeries;
+  // Et la justification portait sur une contrainte évaluée pour l’ancien nom.
+  delete ex.justificationContrainte;
+  return ex;
+}
 // PURE, NE MUTE PAS SON ENTRÉE. Rend un nouveau sessions_config.
 //
 // « Seances » et non « appliquerAjustement » tout court : ce dernier nom etait
@@ -13662,27 +13701,9 @@ function appliquerAjustementSeances(sessionsConfig,cibles,action){
       const nv=String((action.nom||'')).trim();
       if(!nv) continue;
       ex.name=nv;
-      // L'image base64 de l'exercice remplacé ne suit JAMAIS : elle montrerait
-      // le mouvement qu'on vient justement de retirer.
-      delete ex.image;
-      // Et tout ce qui DÉCRIVAIT l'ancien mouvement ne décrit plus le nouveau.
-      delete ex.description; delete ex.note; delete ex.tempo;
-      // `materiel` et `videoUrl2` décrivaient l’ANCIEN mouvement comme les
-      // autres : un banc à smith ne sert pas à des fentes haltères, et la
-      // seconde vidéo montre encore le geste qu’on vient de retirer.
-      delete ex.materiel; delete ex.videoUrl2;
-      // LA CHARGE PART AUSSI. Quatre-vingts kilos sur un squat ne sont pas
-      // quatre-vingts kilos sur une presse : un poids est attaché à un
-      // mouvement, et le laisser derrière ferait charger la barre sur la foi
-      // d’un exercice qu’on vient de retirer.
-      delete ex.charge; delete ex.poids;
-      // `rir` RESTE, lui, et c’est délibéré : ce n’est pas une description du
-      // mouvement mais une consigne d’EFFORT — « arrête-toi à deux répétitions
-      // de l’échec » garde exactement le même sens sur le mouvement de
-      // remplacement.
-      delete ex.videoUrl; delete ex.justificationContrainte;
-      // ss et le rang sont conservés : on écrit À LA MÊME POSITION, donc le
-      // chaînage de superset et l'ordre de la séance tiennent tout seuls.
+      // LA MÊME LISTE QUE LES DEUX VERSIONS ATHLÈTE. Elle n’était écrite
+      // qu’ici, et c’est ce qui a permis aux deux autres de s’en écarter.
+      _oublierAncienMouvement(ex);
     }
   }
   return out;
@@ -29646,7 +29667,10 @@ function _remplacerParExo(i,nom){
   if(!progEx[i]) return;
   _progExDirty=true;
   progEx[i].name=nom;
-  delete progEx[i].justificationContrainte;
+  // Il ne retirait que la justification : matériel, description, tempo,
+  // vidéos, image et technique de l’ancien mouvement restaient collés au
+  // nouveau, et repartaient tels quels dans le dossier de l’athlète.
+  _oublierAncienMouvement(progEx[i]);
   renderProgEx();
   toast('Exercice remplacé');
 }
@@ -29861,6 +29885,16 @@ function _appliquerSubstitut(idx,nom){
   // celui-ci est sur le point de disparaître.
   const _ancienNom=ex.name;
   ex.name=nom;
+  // LE PLUS VISIBLE DES TROIS CAS. L’encart CONSIGNE de _blocExo réaffichait
+  // le matériel, la description, le tempo, le lien vidéo et la bannière de
+  // technique du mouvement abandonné — à l’écran, en salle, au moment où
+  // l’athlète va charger la barre. Sa condition d’affichage inclut
+  // `ex.materiel` : une fois la fiche vidée, l’encart disparaît de lui-même
+  // si le nouveau mouvement n’a ni illustration ni description.
+  //
+  // `series`, `reps` et `repos` restent : la reconstruction des séries plus
+  // bas les relit, et c’est la prescription du coach.
+  _oublierAncienMouvement(ex);
   // L'INTENTION DE FILMER PORTAIT SUR LE MOUVEMENT REMPLACÉ. Sans ce retrait,
   // l’écran de fin proposait « Déposer la vidéo de <ancien exercice> » — un
   // mouvement que l’athlète n’a pas fait. La case de renderWoEx, elle, se
