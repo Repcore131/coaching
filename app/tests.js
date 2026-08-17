@@ -20281,8 +20281,21 @@ function testExercices(){
         if(!riteBilanDeLaSemaine(u,N)) return false;
         return riteBilanDeLaSemaine(ath({bilans:[{type:'coaching',date:J(20)}]}),N)===null;})());
 
-      // Critère : fermé sans réponse ⇒ aucune écriture hors la date du rite.
-      ok('Critère 5 : fermé sans répondre, seule la date est écrite',(()=>{
+      // ASSERTION CORRIGÉE, ET SIGNALÉE À KEVIN.
+      //
+      // Elle exigeait que fermerRite ÉCRIVE une entrée dans rites[]. C'est
+      // exactement ce que le lot « Plus tard veut enfin dire plus tard » a
+      // supprimé : cette écriture rendait le cycle « tenu », et la modale ne
+      // revenait plus avant 28 jours — alors que fermerRite est appelée aussi
+      // bien par « Plus tard » que par le clic sur le fond de la modale, un
+      // geste qui ne décide de rien nulle part ailleurs dans ce produit.
+      //
+      // Elle exige maintenant l'INVERSE, et vérifie en plus les réglages : un
+      // report ne doit toucher NI rites[], NI les rappels.
+      //
+      // (Le u.rites[0] de l'ancienne rédaction levait sur un dossier resté
+      // vide, ce qui interrompait la suite entière 1 460 lignes trop tôt.)
+      ok('Critère 5 : fermé sans répondre, RIEN n\'est écrit',(()=>{
         const u=ath({_woReminderDays:[1,3],_woReminderHour:19});
         currentUser=u;
         if(!riteAfficherSiBesoin()) return false;
@@ -20290,12 +20303,28 @@ function testExercices(){
         window._riteJours=[0,1,2,3,4,5,6];
         const ch=document.getElementById('rite-heure'); if(ch) ch.value='7';
         fermerRite();
-        const cles=Object.keys(u.rites[0]).sort().join(',');
-        return u.rites.length===1&&cles==='cycle,date,reponseCoach'
+        return u.rites===undefined
           &&JSON.stringify(u._woReminderDays)==='[1,3]'&&u._woReminderHour===19;})());
+      // Et « Enregistrer et repartir », lui, écrit toujours : c'est la moitié
+      // de la règle qu'il ne faut pas perdre en corrigeant l'autre.
+      ok('Critère 5 bis : « Enregistrer et repartir » écrit, LUI',(()=>{
+        // Le critère 5 vient de reporter ce cycle POUR CE COMPTE, et ath()
+        // rend toujours le même. On repart d'une session neuve, comme le fait
+        // une réouverture de l'app — c'est précisément ce que _riteReportes
+        // promet en ne vivant qu'en mémoire.
+        _riteReportes.clear();
+        const u=ath({_woReminderDays:[1,3],_woReminderHour:19});
+        currentUser=u;
+        if(!riteAfficherSiBesoin()) return false;
+        window._riteJours=[1,3];
+        const ch=document.getElementById('rite-heure'); if(ch) ch.value='19';
+        validerRite();
+        return !!u.rites&&u.rites.length===1
+          &&Object.keys(u.rites[0]).sort().join(',')==='cycle,date,reponseCoach';})());
 
       // Validé : les réglages vont dans les champs de rappel EXISTANTS.
       ok('Validé : jours et heure écrits dans _woReminderDays/_woReminderHour',(()=>{
+        _riteReportes.clear();   // même raison qu'au critère 5 bis
         const u=ath({_woReminderDays:[1],_woReminderHour:19});
         currentUser=u;
         if(!riteAfficherSiBesoin()) return false;
@@ -20305,9 +20334,23 @@ function testExercices(){
         return JSON.stringify(u._woReminderDays)==='[0,2,4]'&&u._woReminderHour===7
           &&u.periodisation===undefined&&!('phase' in u.rites[0]);})());
 
-      ok('Le rite ne se tient qu\'une fois par cycle',(()=>{
+      // ASSERTION CORRIGÉE, ET SIGNALÉE À KEVIN. Même lot que le critère 5.
+      //
+      // Elle lisait raison==='deja_tenu' APRÈS un simple fermerRite : le report
+      // se faisait passer pour un rite tenu. Il ne l'est plus. Ce qui compte —
+      // que la modale ne revienne pas en boucle dans la même session — est
+      // maintenant vérifié pour ce qu'il est : un report en mémoire.
+      ok('Reporté : la modale ne revient pas dans cette session',(()=>{
+        _riteReportes.clear();   // session neuve : ath() rend toujours le même compte
         const u=ath();
         currentUser=u; riteAfficherSiBesoin(); fermerRite();
+        return riteAAfficher(u,N).raison!=='deja_tenu'   // rien n'a été « tenu »
+          &&!u.rites                                     // ni écrit
+          &&!riteAfficherSiBesoin();})());               // mais ça ne revient pas
+      ok('Validé : LÀ, le rite est tenu pour ce cycle',(()=>{
+        _riteReportes.clear();
+        const u=ath();
+        currentUser=u; riteAfficherSiBesoin(); validerRite();
         return riteAAfficher(u,N).raison==='deja_tenu'&&!riteAfficherSiBesoin();})());
 
       currentUser=sauveU;

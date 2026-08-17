@@ -13268,6 +13268,17 @@ function riteJour(i,el,forcer){
 // Il disparaît à la fermeture de l’app, et le rite se represente à la
 // prochaine ouverture — c’est ce que « Plus tard » promet.
 const _riteReportes=new Set();
+// LA CLÉ PORTE LE COMPTE, pas seulement le cycle. RepCore assume plusieurs
+// comptes sur le même téléphone : deux athlètes au même numéro de cycle
+// partageaient leur report, et le rite du second ne s’affichait pas sans que
+// rien ne le dise. Un numéro de cycle n’est pas un identifiant.
+//
+// L’email quand il existe, l’identifiant sinon : un compte créé par code
+// n’a pas toujours d’email.
+function _riteCle(u,cycle){
+  const qui=(u&&(u.email||u.id))||'?';
+  return qui+'#'+Number(cycle);
+}
 // FERMETURE SANS ÉCRITURE. Elle inscrivait le cycle dans rites[], donc le
 // rendait « tenu » pour riteTenu : la modale ne revenait plus avant 28 jours.
 // Or cette fonction est appelée par le bouton « Plus tard » ET par le clic
@@ -13276,7 +13287,7 @@ const _riteReportes=new Set();
 //
 // SEUL « Enregistrer et repartir » écrit désormais.
 function fermerRite(){
-  try{ _riteReportes.add(Number(window._riteCycle)); }catch(e){}
+  try{ _riteReportes.add(_riteCle(currentUser,window._riteCycle)); }catch(e){}
   closeModal();
 }
 function validerRite(){
@@ -13361,7 +13372,7 @@ function riteAfficherSiBesoin(){
     // REPORTÉ DANS CETTE SESSION : on ne le repose pas à chaque navigation.
     // Lu ICI et non dans riteAAfficher, qui est PURE et doit le rester — une
     // lecture d’état de session la rendrait dépendante du navigateur.
-    if(_riteReportes.has(Number(v.cycle))) return false;
+    if(_riteReportes.has(_riteCle(currentUser,v.cycle))) return false;
     ouvrirRite(v.cycle);
     return true;
   }catch(e){ return false; }
