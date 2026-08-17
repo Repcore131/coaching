@@ -8171,6 +8171,14 @@ function _histPopstate(){
     return;
   }
   // 5. LE CAS COURANT : aucun bouton retour à l’écran, on remonte à l’origine.
+  //
+  //    LA SENTINELLE EST REPOUSSÉE ICI AUSSI, comme dans les quatre cas
+  //    précédents. _histRetour appelle go() avec _navParHistorique levé, ce
+  //    qui bloque justement le _histPousser de go() : après un retour depuis
+  //    un écran sans .back-btn — s-client-code, s-coach-code, s-bilan-choice,
+  //    s-access-gate — la sentinelle avait disparu, et l’appui suivant
+  //    fermait l’application sans le double appui.
+  _histPousser(actuel);
   _histRetour(actuel);
 }
 try{ window.addEventListener('popstate',_histPopstate); }catch(e){}
