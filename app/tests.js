@@ -14302,10 +14302,20 @@ function testExercices(){
       ok('NON-REGRESSION : urgencyScore intacte apres ce lot',(()=>{
         const src=String(urgencyScore);
         if(src.indexOf('PF_')>=0) return _echec('urgencyScore a ete contaminee par le lot');
-        for(const [rang,frag] of [[10,'drapeauRougeActif(c)) return 10'],
+        // LE RANG 10 LIT LES DEUX FAMILLES DE DRAPEAUX. Il ne connaissait que
+        // la musculo-squelettique : un signe GÉNÉRAL — douleur thoracique,
+        // essoufflement au repos — ne remontait pas, alors que l'athlète lit
+        // « Ton coach a été prévenu » en le déclarant. Les seuils, eux, sont
+        // les mêmes qu'avant, et c'est ce que ce test garde.
+        for(const [rang,frag] of [[10,'drapeauQuelconqueActif(c)) return 10'],
           [9,'sg.douleur&&'],[8,'sg.douleurDiffuse&&'],[7,'sg.decrochage&&'],
           [4,'needsAlert(c)&&'],[3,'14*864e5']])
           if(src.indexOf(frag)<0) return _echec('palier '+rang+' introuvable');
+        // Et le prédicat du rang 10 couvre BIEN les deux : le nommer ne suffit
+        // pas, il pourrait un jour ne plus lire que l'une des deux tables.
+        const q=String(drapeauQuelconqueActif).replace(/\s+/g,'');
+        if(q.indexOf('drapeauRougeActif(u)')<0||q.indexOf('drapeauGeneralActif(u)')<0)
+          return _echec('le rang 10 ne couvre plus les deux familles de drapeaux');
         return true;})());
       currentUser=sauveU;
     })();
