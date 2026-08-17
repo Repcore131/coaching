@@ -8168,7 +8168,28 @@ function _histPopstate(){
   //    asynchrone, et sans elle la pile perdrait un cran pendant qu’elle est
   //    posée. _histPousser ne pose qu’une sentinelle, l’appel à go() qui suivra
   //    n’en ajoutera donc pas une seconde.
-  const _bk=document.querySelector('#'+actuel+' .back-btn');
+  //    LA DERNIÈRE VISIBLE, PAS LA PREMIÈRE. s-coach-plan en porte deux : celle
+  //    de sa barre de titre, et celle de la surcouche #cpl-search qui referme
+  //    la recherche d’aliment. querySelector rendait la première : un retour
+  //    matériel pendant la recherche quittait la composition entière et perdait
+  //    ce qui n’était pas enregistré — l’inverse exact de ce à quoi la
+  //    surcouche sert. Dernière, parce qu’une surcouche est déclarée APRÈS la
+  //    barre qu’elle recouvre ; visible, parce qu’elle est en display:none le
+  //    reste du temps et qu’il faut alors retomber sur la barre de titre.
+  //
+  //    getClientRects() et non offsetParent : ce dernier rend null pour tout
+  //    élément en position:fixed, visible ou non. En cas de doute on répond
+  //    VISIBLE, ce qui conserve le comportement d’avant.
+  //
+  //    s-coach-plan est le SEUL écran à deux flèches — les 58 ont été comptés.
+  const _fl=document.querySelectorAll('#'+actuel+' .back-btn');
+  let _bk=null;
+  for(let _i=0;_i<_fl.length;_i++){
+    const _b=_fl[_i];
+    let _vu=true;
+    try{ if(typeof _b.getClientRects==='function') _vu=_b.getClientRects().length>0; }catch(e){}
+    if(_vu) _bk=_b;
+  }
   if(_bk&&typeof _bk.onclick==='function'){
     _histPousser(actuel);
     // LE DRAPEAU EST LEVE ICI AUSSI, comme dans _histRetour : sans lui, le
