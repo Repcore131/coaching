@@ -43697,7 +43697,10 @@ function _drawCaffeineHistory(wKg,canvasId='caff-history-chart',daysOverride,por
 // On rend chaque écran à la date qu’il affichait — `_caffeineEmbedDate` pour
 // le bloc embarqué, `_caffeineViewDate` que _renderCaffeineScreen relit.
 function fermerCaffeineAdd(){
-  if(_caffReturnToNutrition) loadNutrition(undefined,_caffeineEmbedDate);
+  // MÊME DÉFAUT QUE LES DEUX VALIDATIONS, et il n’était pas dans la demande :
+  // renoncer à une saisie de caféine ramenait aussi le journal alimentaire à
+  // aujourd’hui. Trois sorties, une seule règle.
+  if(_caffReturnToNutrition) loadNutrition(_fjDate||undefined,_caffeineEmbedDate);
   else{ go('s-caffeine'); _renderCaffeineScreen(); }
 }
 function openCaffeineAdd(){
@@ -43807,7 +43810,14 @@ function _commitCaffeineAdd(qty){
   // _caffeineViewDate à aujourd’hui et loadNutrition() faisait de même pour
   // _caffeineEmbedDate : la prise partait au bon jour, mais l’écran revenait
   // à aujourd’hui et elle semblait perdue.
-  if(_caffReturnToNutrition) loadNutrition(undefined,_d);
+  // `_fjDate` EN PREMIER ARGUMENT. Laissé à undefined, _renderNutriContent
+  // retombait sur _renderFjDaySummary(aujourd’hui) — qui ÉCRIT `_fjDate` au
+  // passage. Ajouter un café sur hier ramenait donc le journal alimentaire à
+  // aujourd’hui, et la saisie d’aliment suivante partait dans le mauvais jour.
+  //
+  // `||undefined` : `_fjDate` vaut null tant que le journal n’a jamais été
+  // ouvert, et le repli sur aujourd’hui doit rester dans ce cas-là.
+  if(_caffReturnToNutrition) loadNutrition(_fjDate||undefined,_d);
   // L’ÉCRAN N’ÉTAIT PAS RAMENÉ. _renderCaffeineScreen ne fait que remplir
   // #caff-date-nav et #caff-block ; loadCaffeine, qu’elle a remplacée ici,
   // faisait le go() en plus. On restait donc sur s-caffeine-add après
@@ -43832,7 +43842,14 @@ function saveCaffeineCustom(){
   const _ok=addCaffeineEntry({id:'custom',name,icon:'☕',mg,volume,type:'custom',time:hhmm,ts:Date.now()},_d);
   if(!_ok){ toast('Jour hors de portée : la prise n’a pas été enregistrée.','var(--orange)'); return; }
   toast(name+' ajouté ✓');
-  if(_caffReturnToNutrition) loadNutrition(undefined,_d);
+  // `_fjDate` EN PREMIER ARGUMENT. Laissé à undefined, _renderNutriContent
+  // retombait sur _renderFjDaySummary(aujourd’hui) — qui ÉCRIT `_fjDate` au
+  // passage. Ajouter un café sur hier ramenait donc le journal alimentaire à
+  // aujourd’hui, et la saisie d’aliment suivante partait dans le mauvais jour.
+  //
+  // `||undefined` : `_fjDate` vaut null tant que le journal n’a jamais été
+  // ouvert, et le repli sur aujourd’hui doit rester dans ce cas-là.
+  if(_caffReturnToNutrition) loadNutrition(_fjDate||undefined,_d);
   // L’ÉCRAN N’ÉTAIT PAS RAMENÉ. _renderCaffeineScreen ne fait que remplir
   // #caff-date-nav et #caff-block ; loadCaffeine, qu’elle a remplacée ici,
   // faisait le go() en plus. On restait donc sur s-caffeine-add après
