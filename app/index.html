@@ -14151,6 +14151,18 @@ function _fileBilansSuivants(idApres){
 function _allerBilanSuivant(id){
   if(!id) return false;
   currentClientId=id;
+  // LE CONTEXTE DE MODELE SUIT L ATHLETE. Il n’est posé que par
+  // openClientDetail, et ce chemin-ci ne passe pas par elle : le prénom du
+  // PRÉCÉDENT restait en place, un modèle contenant {prénom} le résolvait
+  // avec lui, et tplVerifierAvantEnvoi ne bloquait rien — la variable avait
+  // bien été remplie, simplement avec la mauvaise valeur.
+  //
+  // SANS CIBLE, comme openClientDetail et pour la même raison : le prénom
+  // vaut pour tous les blocs de réponse de la fiche, il y en a un par bilan.
+  try{
+    const c=getOwnedClient(id);
+    tplContexte({prenom:c&&c.fname},null);
+  }catch(e){}
   try{ viewClientBilans(); }catch(e){ return false; }
   try{ evoTab('reponses'); }catch(e){}
   try{ setTimeout(()=>{ try{ _renderQuickCommentChips('bilan'); }catch(e){} },0); }catch(e){}
