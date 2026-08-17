@@ -42728,8 +42728,12 @@ function renderCoachCaffeineSection(c){
   // constante : un repli sur un poids INCONNU tire les seuils vers le bas,
   // jamais vers le haut. À 75 kg, le coach voyait du vert là où l’athlète
   // voyait du jaune — sur le même dossier, le même jour.
-  const _wConnu=parseFloat(c.weight)>0;
-  const wKg=_wConnu?parseFloat(c.weight):CAFFEINE_POIDS_DEFAUT;
+  // LA MÊME RÉSOLUTION QUE L’ATHLÈTE, et non le seul `c.weight` : celui-ci
+  // n’est écrit que par le parcours bilan, et un athlète qui a rempli « Mon
+  // profil » se voyait annoncer au coach un poids « non renseigné ».
+  const _p=_poidsCafeine(c);
+  const _wConnu=!_p.estimated;
+  const wKg=_p.weight;
   // `c`, ET NON currentUser : sur la fiche client, currentUser est le COACH.
   // Le poids venait bien de l'athlète, mais l'âge et l'état de grossesse du
   // coach — un athlète de seize ans recevait donc des seuils adultes.
@@ -43029,15 +43033,24 @@ function _caffeineColor(mg,thr){
   if(mg<thr.orange) return 'var(--warning)';
   return 'var(--danger)';
 }
-function getUserWeight(){
-  if(!currentUser) return {weight:CAFFEINE_POIDS_DEFAUT,estimated:true};
+// PURE. Le poids qui sert aux seuils de caféine, et s’il est ESTIMÉ.
+//
+// PREND LE DOSSIER EN ARGUMENT, parce que deux surfaces le demandent : l’écran
+// de l’athlète sur `currentUser`, et la fiche coach sur le dossier du CLIENT.
+// La seconde ne lisait que `weight` — écrit par le seul parcours bilan — et
+// annonçait « poids non renseigné, seuils estimés » à 60 kg pour un athlète
+// qui n’avait rempli que « Mon profil ». L’en-tête de la même fiche affichait
+// pourtant son profileWeight, et l’athlète voyait ses vrais seuils : trois
+// surfaces, deux vérités.
+function _poidsCafeine(u){
+  if(!u) return {weight:CAFFEINE_POIDS_DEFAUT,estimated:true};
   // Poids du profil (saisi au bilan) puis repli sur l'écran Mon profil
-  const w0=parseFloat(currentUser.weight)||parseFloat(currentUser.profileWeight);
+  const w0=parseFloat(u.weight)||parseFloat(u.profileWeight);
   if(w0>0) return {weight:w0,estimated:false};
   // bilan.date est un timestamp (Date.now()) : tri numérique sur une COPIE.
   // L'ancien localeCompare levait une TypeError des le 2e bilan (les nombres
   // n'ont pas cette methode), ce qui cassait tout l'ecran Cafeine.
-  const bilans=(currentUser.bilans||[]).slice().sort((a,b)=>(b.date||0)-(a.date||0));
+  const bilans=(u.bilans||[]).slice().sort((a,b)=>(b.date||0)-(a.date||0));
   if(bilans.length){
     const last=bilans[0];
     const w1=parseFloat(last['bil-weight']||last['deb-weight']||last.weight||0);
@@ -43045,6 +43058,9 @@ function getUserWeight(){
   }
   return {weight:CAFFEINE_POIDS_DEFAUT,estimated:true};
 }
+// Le dossier courant, et rien d’autre : c’est la seule chose que cette
+// fonction ajoutait à la résolution ci-dessus.
+function getUserWeight(){ return _poidsCafeine(currentUser); }
 function _caffStore(){
   if(!currentUser.nutrition) currentUser.nutrition={};
   if(!currentUser.nutrition.caffeine) currentUser.nutrition.caffeine={days:{}};
