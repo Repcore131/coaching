@@ -7514,10 +7514,24 @@ function ajouterCompte(){
   try{ DB.del('session'); }catch(e){}
   go('s-login');
 }
+// PURE. Ce slot permet-il une bascule SANS MOT DE PASSE ?
+//
+// Il lui faut ses jetons : basculerCompte appelle _jetonsPoser avec ce que
+// le slot porte, et sans rien c’est _jetonsPoser(null) — une session ouverte
+// et NON AUTHENTIFIÉE. Le filtre vivait dans go() pendant que le rendu vivait
+// ici : deux copies de la même règle, dont une seule était appliquée.
+function _compteAvecJetons(c){ return !!(c&&c.auth); }
 // Sélecteur. Rendu vide avec un seul compte : un sélecteur à un choix n'a rien
 // à sélectionner, mais le bouton d'ajout reste.
-function htmlSelecteurComptes(){
-  const l=comptesConnectes();
+//
+// `jetonsRequis` N’EST PAS LE DÉFAUT, et c’est délibéré : depuis le profil
+// athlète et depuis la modale « Changer de compte », une session est OUVERTE.
+// Un slot sans jetons y reste légitime — on peut vouloir le retirer, et le
+// masquer le rendrait impossible à effacer. C’est sur s-login, et là
+// seulement, que le montrer promet une bascule qui n’aura pas lieu.
+function htmlSelecteurComptes(opts){
+  const _req=!!(opts&&opts.jetonsRequis);
+  const l=_req?comptesConnectes().filter(_compteAvecJetons):comptesConnectes();
   const actif=compteActif();
   const ini=c=>((c.fname||c.email||'?')[0]||'?').toUpperCase()
     +((c.lname||'')[0]||'').toUpperCase();
@@ -7556,9 +7570,16 @@ function ouvrirComptes(){
         ${htmlSelecteurComptes()}
       </div></div>`);
 }
+// LE RÉGLAGE SUIT L’ÉCRAN, il n’est pas mémorisé. Cette fonction est appelée
+// par la croix de retrait, présente dans les TROIS contextes : lire l’écran
+// actif est la seule façon de redessiner la même liste que celle qu’on vient
+// de modifier.
 function _majSelecteurComptes(){
   const z=document.getElementById('cpt-selecteur');
-  if(z) z.outerHTML=htmlSelecteurComptes();
+  if(!z) return;
+  let _login=false;
+  try{ _login=document.querySelector('.screen.active')?.id==='s-login'; }catch(e){}
+  z.outerHTML=htmlSelecteurComptes(_login?{jetonsRequis:true}:null);
 }
 
 function routeUser(){
@@ -7869,8 +7890,11 @@ function go(id){
     try{
       const _z=document.getElementById('l-comptes');
       if(_z){
-        const _avecJetons=comptesConnectes().filter(c=>c&&c.auth);
-        _z.innerHTML=_avecJetons.length?htmlSelecteurComptes():'';
+        // LE MÊME PRÉDICAT que celui du rendu, et non une seconde copie :
+        // c’est leur divergence qui affichait ici des comptes que ce filtre
+        // venait pourtant d’écarter.
+        const _avecJetons=comptesConnectes().filter(_compteAvecJetons);
+        _z.innerHTML=_avecJetons.length?htmlSelecteurComptes({jetonsRequis:true}):'';
       }
     }catch(e){}
   }
