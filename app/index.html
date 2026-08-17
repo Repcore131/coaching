@@ -13671,6 +13671,15 @@ function appliquerAjustementSeances(sessionsConfig,cibles,action){
       // autres : un banc à smith ne sert pas à des fentes haltères, et la
       // seconde vidéo montre encore le geste qu’on vient de retirer.
       delete ex.materiel; delete ex.videoUrl2;
+      // LA CHARGE PART AUSSI. Quatre-vingts kilos sur un squat ne sont pas
+      // quatre-vingts kilos sur une presse : un poids est attaché à un
+      // mouvement, et le laisser derrière ferait charger la barre sur la foi
+      // d’un exercice qu’on vient de retirer.
+      delete ex.charge; delete ex.poids;
+      // `rir` RESTE, lui, et c’est délibéré : ce n’est pas une description du
+      // mouvement mais une consigne d’EFFORT — « arrête-toi à deux répétitions
+      // de l’échec » garde exactement le même sens sur le mouvement de
+      // remplacement.
       delete ex.videoUrl; delete ex.justificationContrainte;
       // ss et le rang sont conservés : on écrit À LA MÊME POSITION, donc le
       // chaînage de superset et l'ordre de la séance tiennent tout seuls.
@@ -19391,6 +19400,29 @@ function renderProgEx(){
         <div style="margin-bottom:10px">
           <label>Tempo <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(ex: 3-1-1-0 — descente, bas, montée, haut)</span></label>
           <input value="${escapeHtml(ex.tempo||'')}" onchange="_progExDirty=true;progEx[${i}].tempo=this.value" placeholder="3-1-1-0">
+        </div>
+        <!-- CHARGE ET RIR CIBLES. Les deux étaient LUS depuis toujours —
+             _apLigne les affiche dans l’aperçu de séance, PP_COLS en fait
+             deux colonnes de la fiche imprimable — et ÉCRITS nulle part.
+             Le coach n’avait aucun moyen de prescrire une charge.
+
+             « RIR CIBLE » et non « RIR » : ce champ-ci est la consigne du
+             coach. Le RIR RÉALISÉ vit dans sets[i].rir, saisi en séance, et
+             c’est LUI qui alimente multiplicateurRir, poidsIntensite, l’e1RM
+             et la charge suggérée. Deux données différentes qui ne doivent
+             jamais partager un champ, ni un libellé.
+
+             Placés avec les séries, les reps et le tempo plutôt qu’avec le
+             matériel : c’est la prescription du travail, pas de l’engin. -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+          <div>
+            <label>Charge cible</label>
+            <input value="${escapeHtml(ex.charge||'')}" onchange="_progExDirty=true;progEx[${i}].charge=this.value" placeholder="Ex : 80 kg">
+          </div>
+          <div>
+            <label>RIR cible</label>
+            <input value="${escapeHtml(ex.rir||'')}" onchange="_progExDirty=true;progEx[${i}].rir=this.value" placeholder="Ex : 2">
+          </div>
         </div>
         <!-- Matériel : son propre champ depuis que la banque le pré-remplit.
              Il se retapait dans le NOM de l'exercice, ce qui le rendait
