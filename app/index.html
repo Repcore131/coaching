@@ -250,12 +250,19 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
      voisines. On garde la couleur, qui suffit a designer la ligne visee. */
   body:has(#s-coach-home.active) #ch-clients-list .client-row{
     display:grid;
-    grid-template-columns:44px minmax(150px,1.3fr) minmax(140px,1.1fr) minmax(120px,1.2fr) minmax(90px,.8fr) 180px;
+    /* NEUF colonnes depuis les trois cellules de mesure. Le compte DOIT suivre
+       le nombre d’enfants réels de la ligne — avatar, les sept cellules du
+       bloc en display:contents, puis le badge — sinon la grille repasse à la
+       ligne et le tableau se disloque. */
+    grid-template-columns:44px minmax(150px,1.3fr) minmax(140px,1.1fr) minmax(120px,1.2fr) minmax(90px,.8fr) 72px 58px 42px 180px;
     align-items:center;gap:16px;margin-bottom:2px}
   body:has(#s-coach-home.active) #ch-clients-list .client-row>div:nth-child(2){display:contents}
   body:has(#s-coach-home.active) #ch-clients-list .client-row>*{margin-top:0}
   body:has(#s-coach-home.active) #ch-clients-list .cr-obj,
-  body:has(#s-coach-home.active) #ch-clients-list .cr-phase{display:block}
+  body:has(#s-coach-home.active) #ch-clients-list .cr-phase,
+  body:has(#s-coach-home.active) #ch-clients-list .cr-charge,
+  body:has(#s-coach-home.active) #ch-clients-list .cr-progres,
+  body:has(#s-coach-home.active) #ch-clients-list .cr-bilans{display:block}
   body:has(#s-coach-home.active) #ch-clients-list .client-row:hover{transform:none}
 
   /* ── DOSSIER ATHLETE EN DEUX COLONNES ──
@@ -659,7 +666,8 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
    du grand ecran garde un nombre de colonnes constant. Vides, elles ne doivent
    rien occuper ici : sous 1025 px la ligne est une carte empilee, et un div
    vide y ajouterait sa marge. Le bloc @media(min-width:1025px) les rallume. */
-.cr-obj:empty,.cr-phase:empty{display:none}
+.cr-obj:empty,.cr-phase:empty,
+.cr-charge:empty,.cr-progres:empty,.cr-bilans:empty{display:none}
 /* ══════════ PLAN ALIMENTAIRE — DIÈTE STRICTE ══════════
    Même langage visuel que la diète flexible : carte en dégradé, filet
    diagonal, ombre portée, titre en Bebas sur un bandeau accentué. Le plan
@@ -2080,8 +2088,10 @@ const COACH_PHOTO='icons/coach.jpg';
           <!-- Colonne triable : urgence par defaut, taux a la demande. -->
           <div style="display:flex;gap:6px;align-items:center">
             <span style="font-size:9px;color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase">Trier</span>
-            <button class="ch-chip actif" data-tri="urgence" onclick="setTriClients('urgence');this.classList.add('actif');this.nextElementSibling.classList.remove('actif')">Urgence</button>
-            <button class="ch-chip" data-tri="taux" onclick="setTriClients('taux');this.classList.add('actif');this.previousElementSibling.classList.remove('actif')">Séances faites</button>
+            <button class="ch-chip actif" data-tri="urgence" onclick="setTriClients('urgence')">Urgence</button>
+            <button class="ch-chip" data-tri="taux" onclick="setTriClients('taux')">Séances faites</button>
+            <button class="ch-chip" data-tri="charge" onclick="setTriClients('charge')">Charge</button>
+            <button class="ch-chip" data-tri="progression" onclick="setTriClients('progression')">Progression</button>
           </div>
           <div class="sub" id="ch-sans-reponse" style="font-size:11px;letter-spacing:.5px;color:var(--orange)"></div>
           <button onclick="openDechargeGroupee()" class="btn btn-outline btn-sm" style="width:100%;margin:2px 0 0">Décharge groupée</button>
@@ -12719,7 +12729,20 @@ function htmlTauxCompletion(u,compact){
 // Tri du portefeuille. L urgence reste le tri PAR DEFAUT : le taux est une
 // mesure, pas une file d action.
 let _triClients='urgence';
-function setTriClients(t){ _triClients=(t==='taux')?'taux':'urgence'; renderClientList(); }
+const TRIS_CLIENTS=Object.freeze(['urgence','taux','charge','progression']);
+// LE BOUTON ACTIF EST DESIGNE PAR SON `data-tri`, plus par ses voisins. Les
+// deux boutons se renvoyaient à nextElementSibling / previousElementSibling :
+// à deux, ça tenait ; à quatre, chacun n’en éteint qu’un seul et il en reste
+// deux allumés. Le tri est un état, il se lit dans l’état.
+function setTriClients(t){
+  _triClients=TRIS_CLIENTS.indexOf(t)>=0?t:'urgence';
+  try{
+    document.querySelectorAll('#s-coach-home [data-tri]').forEach(b=>{
+      b.classList.toggle('actif',b.dataset.tri===_triClients);
+    });
+  }catch(e){}
+  renderClientList();
+}
 function _triTaux(c){
   let r=null; try{ r=tauxCompletion(c,Date.now()); }catch(e){}
   return (r&&r.interpretable)?r.taux:-1;   // les non-interpretables en fin de liste
@@ -13097,6 +13120,11 @@ function renderClientList(clients){
   else if(_filtreClients==='pf-decrochage') vus=vus.filter(c=>_pilEligibleSignaux(c)&&signauxEntrainement(c).decrochage);
   else if(_filtreClients==='pf-acces') vus=vus.filter(c=>_pilEligibleSignaux(c)&&_pilAccesExpire(c,Date.now()));
   if(_triClients==='taux') vus.sort((a,b)=>_triTaux(b)-_triTaux(a));
+  else if(_triClients==='charge') vus.sort((a,b)=>_triCharge(b)-_triCharge(a));
+  else if(_triClients==='progression') vus.sort((a,b)=>_triProgres(b)-_triProgres(a));
+  // L’URGENCE RESTE LE DÉFAUT : c’est le seul tri qui réponde à « qui
+  // dois-je regarder », et les trois autres sont des questions qu’on se pose
+  // ensuite.
   else vus.sort((a,b)=>urgencyScore(b)-urgencyScore(a));
   // Bilans auxquels le coach n'a pas encore ecrit. « Sans reponse » et non
   // « non lus » : ouvrir ne compte plus.
@@ -14140,6 +14168,42 @@ function _accesExpire(c){
   if((c.status||'FREE')!=='COACHING_SUIVI') return false;
   return !!c.accessExpiry&&Date.now()>=c.accessExpiry;
 }
+// ── Les trois mesures de la liste ────────────────────────────────────────
+//
+// PURES. Chacune rend '' quand il n'y a rien à dire : _chargeHebdo demande
+// cinq semaines d’historique, _exercicesEnProgres un couple comparable, et un
+// athlète sans bilan en attente n’a rien à afficher. Un « 0 » ou un « — » se
+// lirait comme un constat, alors que c’est une absence de mesure.
+function _crCharge(c){
+  let r=null; try{ r=_chargeHebdo(c); }catch(e){ r=null; }
+  // `pct` peut être null alors que l’objet existe : moyenne de référence à
+  // zéro, aucun pourcentage n’a alors de sens.
+  if(!r||r.pct==null) return '';
+  return (r.pct>0?'+':'')+r.pct+' %';
+}
+function _crProgres(c){
+  let r=null; try{ r=_exercicesEnProgres(c); }catch(e){ r=null; }
+  if(!r) return '';
+  return r.enProgres+'/'+r.total;
+}
+function _crBilans(c){
+  let n=0; try{ n=bilansSansReponse(c); }catch(e){ n=0; }
+  return n>0?String(n):'';
+}
+// LES NON MESURABLES EN FIN DE LISTE. Un sentinelle très négative et non -1 :
+// une charge peut légitimement valoir -20 %, et -1 la placerait AU-DESSUS
+// d’un athlète dont on ne sait rien. Pas -Infinity non plus — la soustraction
+// de deux infinis rend NaN, et un comparateur qui rend NaN désordonne la
+// liste au lieu de la trier.
+const TRI_SANS_MESURE=-1e9;
+function _triCharge(c){
+  let r=null; try{ r=_chargeHebdo(c); }catch(e){}
+  return (r&&r.pct!=null)?r.pct:TRI_SANS_MESURE;
+}
+function _triProgres(c){
+  let r=null; try{ r=_exercicesEnProgres(c); }catch(e){}
+  return (r&&r.total>0)?(r.enProgres/r.total):TRI_SANS_MESURE;
+}
 function renderClientRow(c){
   const badge=_enAttenteAbonnement(c)?'<span class="badge badge-orange">⏳ Abonnement à souscrire</span>'
     :_accesExpire(c)?'<span class="badge badge-gray">Lecture seule</span>'
@@ -14161,6 +14225,17 @@ function renderClientRow(c){
   // Phase : rien du tout quand elle est absente, ce qui est le cas par defaut.
   const _ph=phaseCourante(c);
   const phLine=`<div class="cr-phase" style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:2px">${_ph?PHASES[_ph.type].lib+' · '+ordinalSemaine(semainesPhase(c)):''}</div>`;
+  // Les trois mesures, EMISES MEME VIDES, pour la même raison que l’objectif
+  // et la phase : sur grand écran la ligne devient une ligne de tableau, et
+  // une cellule absente décalerait toutes les colonnes suivantes.
+  //
+  // Aucun seuil, aucune couleur par valeur : la liste porte déjà un filet
+  // d’état et un badge, et une quatrième teinte à interpréter les affaiblirait
+  // tous les trois.
+  const _cel=(cls,txt,titre)=>`<div class="${cls}" title="${escapeHtml(titre)}" style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;white-space:nowrap">${txt?escapeHtml(txt):''}</div>`;
+  const chLine=_cel('cr-charge',_crCharge(c),'Charge de la semaine, sur la moyenne des 4 précédentes');
+  const prLine=_cel('cr-progres',_crProgres(c),'Exercices en hausse sur 28 jours');
+  const biLine=_cel('cr-bilans',_crBilans(c),'Bilans sans réponse');
   const _nm=(escapeHtml(c.fname||'')+' '+escapeHtml(c.lname||'')).trim()||'Profil incomplet';
   // L'ETAT est porte par un attribut plutot que par une classe : il pilote la
   // couleur du filet gauche, et c est ce qui permet de balayer la liste sans
@@ -14177,7 +14252,7 @@ function renderClientRow(c){
     :isActive(c)?'actif':'dormant';
   return `<div class="client-row${!hasNewBilan(c)&&!needsAlert(c)&&!isActive(c)?' row-inactive':''}" data-etat="${_etat}" onclick="openClientDetail('${c.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <div class="avatar" style="width:44px;height:44px;font-size:15px;overflow:hidden;flex-shrink:0">${avatarHtml}</div>
-    <div style="flex:1;min-width:0"><div class="cr-nom">${_nm}</div><div class="sub" style="font-size:11px;margin-top:3px">${activityLine}</div>${objLine}${phLine}</div>
+    <div style="flex:1;min-width:0"><div class="cr-nom">${_nm}</div><div class="sub" style="font-size:11px;margin-top:3px">${activityLine}</div>${objLine}${phLine}${chLine}${prLine}${biLine}</div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">${badge}</div>
   </div>`;
 }
