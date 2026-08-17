@@ -2477,6 +2477,10 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="metric-box"><div class="metric-val" id="ccd-sessions">0</div><div class="metric-label">Séances</div></div>
         <div class="metric-box"><div class="metric-val" id="ccd-weight">—</div><div class="metric-label">Poids</div></div>
       </div>
+      <!-- Charge de la semaine et exercices en hausse. Masqué tant que
+           l'historique ne permet pas de les établir : c'est le contrat des
+           deux fonctions qui les calculent. -->
+      <div id="ccd-tendances" style="margin-bottom:16px;display:none"></div>
       <!-- CONTRE-INDICATIONS — épinglées en permanence, jamais repliées.
            Santé, allergies et TCA conditionnent toute la programmation : les
            laisser au fond du questionnaire de départ revenait à demander au
@@ -15317,6 +15321,7 @@ function openClientDetail(cid,_refresh){
   }
   // Le rite AVANT les bilans, comme dans le balisage : il porte une question
   // posée, et quelqu’un attend au bout.
+  try{ renderTendancesCoach(c); }catch(e){}
   try{ renderRiteCoach(c); }catch(e){}
   const be=document.getElementById('ccd-bilans');
   if(c._fromCode){
@@ -23601,6 +23606,45 @@ function _exercicesEnProgres(u){
   if(!total) return null;
   return {enProgres,total};
 }
+// ── Les deux phrases, pour la fiche coach ET pour le rapport ─────────────
+//
+// PURES. Elles rendent '' — donc RIEN à afficher — quand la fonction qu'elles
+// habillent rend null. C'est le contrat documenté sur les deux : moins de cinq
+// semaines d’historique, ou aucun couple d’exercices comparable. Un « 0 » ou un
+// « — » se lirait comme un constat, alors que c’est une absence de mesure.
+//
+// UNE SEULE FORMULATION POUR LES DEUX SURFACES : la fiche et le rapport disent
+// mot pour mot la même chose, et il n’y a qu’un endroit où la corriger.
+function phraseChargeHebdo(u){
+  let c=null; try{ c=_chargeHebdo(u); }catch(e){ c=null; }
+  // `pct` peut être null alors que l’objet existe : moyenne de référence à
+  // zéro, aucun pourcentage n’a alors de sens. Même réponse — on se tait.
+  if(!c||c.pct==null) return '';
+  return 'Charge de la semaine : '+(c.pct>0?'+':'')+c.pct
+    +' % sur la moyenne des 4 précédentes';
+}
+function phraseExercicesEnProgres(u){
+  let p=null; try{ p=_exercicesEnProgres(u); }catch(e){ p=null; }
+  if(!p) return '';
+  // « 0 exercice sur 8 » est une réponse, pas un trou : il y a des couples
+  // comparables, et aucun n’a progressé. C’est le cas où total vaut 0 qui rend
+  // null, et il est déjà écarté au-dessus.
+  return 'Progression : '+p.enProgres+' exercice'+(p.enProgres>1?'s':'')
+    +' sur '+p.total+' en hausse sur '+ACC_JOURS_PROGRES+' jours';
+}
+// Les deux lignes de la fiche coach, ou rien du tout.
+function renderTendancesCoach(c){
+  const z=document.getElementById('ccd-tendances');
+  if(!z) return;
+  let l=[];
+  try{ l=[phraseChargeHebdo(c),phraseExercicesEnProgres(c)].filter(Boolean); }catch(e){ l=[]; }
+  z.innerHTML=l.length
+    ?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:10px 13px">`
+      +l.map(x=>`<div style="font-size:12px;color:#ddd;line-height:1.7">${escapeHtml(x)}</div>`).join('')
+      +`</div>`
+    :'';
+  z.style.display=l.length?'':'none';
+}
 // Message de fin de séance. Il dit ce qui vient de se passer, pas une formule
 // de politesse identique pour tout le monde.
 function _messageFinSeance(sets,setsPlanned,duration,records,delta,jour,incomplete){
@@ -24601,6 +24645,7 @@ const RAP_BLOCS=Object.freeze([
   {cle:'assiduite',  lib:'Assiduité'},
   {cle:'volume',     lib:'Volume par muscle'},
   {cle:'progression',lib:'Progression'},
+  {cle:'tendances',  lib:'Tendances'},
   {cle:'poids',      lib:'Poids'},
   {cle:'signaux',    lib:'Signaux détectés'},
   {cle:'mot',        lib:'Mot du coach'}
@@ -24846,6 +24891,14 @@ function rapportPeriode(u,debut,fin,opts){
     progression:rapProgression(u,debut,fin),
     poids:rapPoids(u,debut,fin),
     signaux:rapSignaux(u,now),
+    // CONSTATEES A L'EDITION, pas sur la periode — exactement comme les
+    // signaux juste au-dessus. Les deux fonctions qui les calculent lisent des
+    // fenêtres glissantes qui se terminent aujourd’hui, et rien dans le dossier
+    // ne permettrait de les rejouer sur un mois écoulé. Le bloc le DIT.
+    tendances:{
+      charge:phraseChargeHebdo(u),
+      progres:phraseExercicesEnProgres(u)
+    },
     sante:rapSanteAutorisee(u),
     // RÈGLE 6 : le mot du coach est VIDE. Il n'est pas pré-rempli, il n'est pas
     // suggéré, et aucune phrase par défaut ne l'habite.
@@ -24897,7 +24950,7 @@ function _rapBarreVolume(m){
   </svg>`;
 }
 // ── Le document ───────────────────────────────────────────────────────────
-let _rapBlocs={entete:true,assiduite:true,volume:true,progression:true,poids:true,signaux:true,mot:true};
+let _rapBlocs={entete:true,assiduite:true,volume:true,progression:true,tendances:true,poids:true,signaux:true,mot:true};
 let _rapDebut=null,_rapFin=null,_rapCible=null;
 function _rapInsuffisant(){
   return `<div class="rap-vide">${escapeHtml(RAP_INSUFFISANT)}</div>`;
@@ -24951,7 +25004,20 @@ function htmlRapport(r){
     }
     h+=`</section>`;
   }
-  // (5) Poids — masqué sous grossesse, absent sans pesée.
+  // (5) Tendances — CONSTATÉES À L’ÉDITION, et le bloc le dit.
+  if(B.tendances){
+    const _t=r.tendances||{};
+    const _l=[_t.charge,_t.progres].filter(Boolean);
+    // Rien à établir : le bloc est ABSENT. Pas de cadre vide, pas de zéro —
+    // même règle que le poids sans pesée juste en dessous.
+    if(_l.length){
+      h+=`<section class="rap-bloc"><h2>Tendances</h2>
+        <ul class="rap-liste">${_l.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')}</ul>
+        <p class="rap-note">Constaté le ${new Date(r.genereLe).toLocaleDateString('fr-FR')} : ces deux chiffres portent sur les semaines qui précèdent l’édition, pas sur la période du rapport.</p>
+      </section>`;
+    }
+  }
+  // (6) Poids — masqué sous grossesse, absent sans pesée.
   if(B.poids){
     const p=r.poids;
     if(p.masque) h+=`<section class="rap-bloc"><h2>Poids</h2><p class="rap-note">${escapeHtml(p.renvoi)}</p></section>`;
