@@ -45111,6 +45111,14 @@ function _bandeauJour(inputId,jour,handler){
 // puisse appliquer sans rien reprocher à quelqu'un dont on ignore le jour.
 // Le repli codé en dur à 10 000 jugeait sur un chiffre que l'athlète n'avait
 // jamais choisi.
+// LES OBJECTIFS DE PAS PAR DÉFAUT, gelés et partagés.
+//
+// Ils étaient écrits en dur dans loadSteps. Ce défaut n’est pas décoratif :
+// il colore les barres de la semaine et alimente _stepsObjectifJour, donc
+// l’athlète le VIT. La fiche coach, elle, lisait `stepsGoals` sans repli et
+// masquait la ligne « Objectif » pour tout dossier n’ayant jamais ouvert le
+// réglage : le coach en concluait qu’aucun objectif n’était fixé.
+const STEPS_GOALS_DEFAUT=Object.freeze({on:10000,off:7000});
 function _stepsObjectifJour(goals,type,date){
   const g=goals||{};
   const on=Number(g.on)>0?Number(g.on):null;
@@ -45125,7 +45133,7 @@ function _stepsObjectifJour(goals,type,date){
 function loadSteps(containerId='steps-content'){
   if(containerId==='steps-content') go('s-steps');
   const log=currentUser.stepsLog||[];
-  const goals=currentUser.stepsGoals||{on:10000,off:7000};
+  const goals=currentUser.stepsGoals||STEPS_GOALS_DEFAUT;
   const dayTypes=currentUser.stepsDayType||{};
   const todayStr=localISODate(new Date());
   const dayNames=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
@@ -46813,12 +46821,20 @@ function _htmlSommeilCoach(c){
 function _htmlPasCoach(c){
   let m=null; try{ m=moyennePas14j(c); }catch(e){ m=null; }
   if(m==null) return '';
-  const g=(c&&c.stepsGoals)||null;
+  // LE MÊME DÉFAUT QUE L’ATHLÈTE, et il est DIT. Masquer la ligne laissait
+  // croire qu’aucun objectif n’était fixé ; afficher le chiffre sans préciser
+  // d’où il vient remplacerait un silence trompeur par une affirmation
+  // trompeuse. Le coach doit pouvoir distinguer un objectif CHOISI d’un repli.
+  const _propres=!!(c&&c.stepsGoals);
+  const g=(c&&c.stepsGoals)||STEPS_GOALS_DEFAUT;
   const on=Number(g&&g.on)>0?Number(g.on):null;
   const off=Number(g&&g.off)>0?Number(g.off):null;
   const nb=v=>Number(v).toLocaleString('fr-FR');
-  const obj=[on!=null?nb(on)+' les jours ON':'',off!=null?nb(off)+' les jours OFF':'']
+  const _liste=[on!=null?nb(on)+' les jours ON':'',off!=null?nb(off)+' les jours OFF':'']
     .filter(Boolean).join(' · ');
+  // Un dossier qui porte des objectifs à ZÉRO n’a rien à dire, et la ligne
+  // disparaît comme avant : c’est un choix explicite, pas une absence.
+  const obj=_liste?(_liste+(_propres?'':' (objectifs par défaut)')):'';
   return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:8px">Pas</div>
     <div style="display:flex;justify-content:space-between;gap:12px;font-size:12px;color:#ddd;line-height:1.9">
