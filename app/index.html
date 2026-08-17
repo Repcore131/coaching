@@ -48784,11 +48784,27 @@ async function logout(){
     _reste=comptesConnectes();
   }catch(e){}
   silentLogout();
+  // LA SESSION EST DÉJÀ DÉTRUITE : il n’y a plus rien à protéger. Sans cette
+  // ligne, une séance ou un bilan en cours faisait refuser la bascule par
+  // peutBasculer — à juste titre pour un changement de compte ordinaire, où
+  // l’on revient, mais ici le compte vient d’être déconnecté. L’application
+  // restait alors avec currentUser à null sur un écran authentifié, sans
+  // aucune navigation, et le seul message visible était « Termine ta séance »
+  // pour une séance qu’on ne pouvait plus atteindre.
+  //
+  // AVANT le test de `_suivant`, et non dans sa branche : le chemin sans
+  // compte suivant laissait lui aussi woState en mémoire, rc_wo_state dans le
+  // stockage, et un setInterval qui continuait d’écrire dans #wo-timer pour un
+  // compte qui n’existe plus.
+  _comptesRemiseAZero();
   // Un autre compte est resté connecté : on l'active au lieu de renvoyer sur
   // l'écran d'accueil, comme le fait Instagram.
   const users=DB.get('users')||{};
   const _suivant=_reste.find(c=>users[c.email]);
-  if(_suivant){ basculerCompte(_suivant.email); return; }
+  // LE RETOUR EST TESTÉ. basculerCompte rend false sur quatre chemins — pas
+  // seulement le garde : adresse vide, compte déjà actif, dossier absent du
+  // stockage. Chacun laissait l’application sans écran.
+  if(_suivant && basculerCompte(_suivant.email)) return;
   go('s-welcome');
 }
 
@@ -51764,12 +51780,13 @@ async function requestAccountDeletion(){
     silentLogout();
     const _apres=DB.get('users')||{};
     const _suivant=_reste.find(c=>_apres[c.email]);
-    if(_suivant){
-      setTimeout(()=>toast('Compte supprimé. Au revoir.','var(--sub)'),400);
-      basculerCompte(_suivant.email);
-      return;
-    }
-    go('s-welcome');
+    // MÊME RAISON QUE DANS logout : le compte vient d’être SUPPRIMÉ, une
+    // séance ou un bilan en cours ne protège plus rien, et un refus de
+    // basculerCompte laissait l’application sans écran ni session.
+    _comptesRemiseAZero();
+    // L’adieu est dit UNE FOIS, sur les deux chemins. Il était écrit deux
+    // fois, et il aurait fallu l’écrire trois avec le repli.
+    if(!(_suivant && basculerCompte(_suivant.email))) go('s-welcome');
     setTimeout(()=>toast('Compte supprimé. Au revoir.','var(--sub)'),400);
   }catch(e){
     toast('Erreur : '+(e.message||String(e)),'var(--red)');
