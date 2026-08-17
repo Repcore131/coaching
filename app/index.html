@@ -2516,6 +2516,11 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="ccd-supplements" style="margin-bottom:20px"></div>
       <!-- Caféine coach (lecture seule) -->
       <div id="ccd-caffeine" style="margin-bottom:20px"></div>
+      <!-- Sommeil et pas : les CHIFFRES BRUTS, sans seuil ni jugement. Le
+           verdict, lui, reste au bloc Récupération. Masqués tant que rien
+           n’a été saisi. -->
+      <div id="ccd-sommeil" style="display:none"></div>
+      <div id="ccd-pas" style="display:none"></div>
       <!-- Rite de fin de cycle : la question de l'athlète, et la réponse du
            coach. Avant les bilans, parce qu'il porte une question POSÉE —
            quelqu'un attend au bout. -->
@@ -15385,6 +15390,8 @@ function openClientDetail(cid,_refresh){
   renderCoachNutriSection(c);
   renderCoachSuppSection(c);
   renderCoachCaffeineSection(c);
+  try{ renderSommeilCoach(c); }catch(e){}
+  try{ renderPasCoach(c); }catch(e){}
   if(!_refresh) go('s-coach-client');
   // Sync immédiat puis rafraîchi automatique (sans bouton)
   if(!_refresh && CLOUD.ok()){
@@ -45913,6 +45920,73 @@ function motifRecuperation(user){
     ?{cle:'recuperation',lib:'Récupération'}:null; }catch(e){ return null; }
 }
 // ── Restitution coach : les critères REMPLIS, sans score ni couleur ──────
+// ══════════════ SOMMEIL ET PAS, CÔTÉ COACH ══════════════
+//
+// LES CHIFFRES BRUTS, ET RIEN D'AUTRE. scoreRecuperation lit déjà ces données
+// pour en tirer un verdict, sans jamais montrer ce sur quoi il s’appuie : ces
+// deux blocs donnent de quoi le lire. Aucun seuil, aucune couleur par valeur,
+// aucun jugement — sinon le coach lirait deux avis sur la même donnée.
+//
+// PURE. Moyenne de durée sur une fenêtre de N jours, et le nombre de nuits qui
+// la composent. `null` quand aucune nuit n’y figure — même forme et même
+// contrat que moyennePas14j, pour que les deux se lisent pareil.
+function _sommeilMoyenne(u,jours){
+  const log=((u&&u.sleepLog)||[]).filter(e=>e&&e.date&&Number(e.duration)>0);
+  if(!log.length) return null;
+  const limite=localISODate(new Date(Date.now()-jours*864e5));
+  const l=log.filter(e=>e.date>=limite);
+  if(!l.length) return null;
+  return {h:Math.round(l.reduce((s,e)=>s+Number(e.duration),0)/l.length*10)/10,
+    nuits:l.length};
+}
+// PURE. '' quand il n'y a aucune nuit à montrer : pas de cadre vide, pas de
+// « 0 nuit » — ce serait un constat sur l’athlète, alors que c’est une absence
+// de saisie.
+function _htmlSommeilCoach(c){
+  const a=_sommeilMoyenne(c,7), b=_sommeilMoyenne(c,28);
+  if(!a&&!b) return '';
+  const dec=v=>String(v).replace('.',',');
+  const ligne=(lib,x)=>x
+    ?`<div style="display:flex;justify-content:space-between;gap:12px;font-size:12px;color:#ddd;line-height:1.9"><span style="color:var(--sub)">${escapeHtml(lib)}</span><span style="font-weight:800">${dec(x.h)} h <span style="color:var(--text-dim);font-weight:600">· ${x.nuits} nuit${x.nuits>1?'s':''}</span></span></div>`
+    :'';
+  return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:8px">Sommeil</div>
+    ${ligne('Moyenne 7 jours',a)}
+    ${ligne('Moyenne 28 jours',b)}
+    <div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-top:8px">Durées saisies par l’athlète. Les nuits non renseignées ne sont pas comptées.</div>
+  </div>`;
+}
+// PURE. '' sans aucun jour de pas sur la fenêtre. moyennePas14j est employée
+// TELLE QUELLE : elle porte déjà sa fenêtre et son contrat de null.
+function _htmlPasCoach(c){
+  let m=null; try{ m=moyennePas14j(c); }catch(e){ m=null; }
+  if(m==null) return '';
+  const g=(c&&c.stepsGoals)||null;
+  const on=Number(g&&g.on)>0?Number(g.on):null;
+  const off=Number(g&&g.off)>0?Number(g.off):null;
+  const nb=v=>Number(v).toLocaleString('fr-FR');
+  const obj=[on!=null?nb(on)+' les jours ON':'',off!=null?nb(off)+' les jours OFF':'']
+    .filter(Boolean).join(' · ');
+  return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:8px">Pas</div>
+    <div style="display:flex;justify-content:space-between;gap:12px;font-size:12px;color:#ddd;line-height:1.9">
+      <span style="color:var(--sub)">Moyenne 14 jours</span>
+      <span style="font-weight:800">${nb(m)} pas</span></div>
+    ${obj?`<div style="display:flex;justify-content:space-between;gap:12px;font-size:12px;color:#ddd;line-height:1.9"><span style="color:var(--sub)">Objectif</span><span style="font-weight:800">${escapeHtml(obj)}</span></div>`:''}
+  </div>`;
+}
+function renderSommeilCoach(c){
+  const z=document.getElementById('ccd-sommeil');
+  if(!z) return;
+  let h=''; try{ h=_htmlSommeilCoach(c); }catch(e){ h=''; }
+  z.innerHTML=h; z.style.display=h?'':'none';
+}
+function renderPasCoach(c){
+  const z=document.getElementById('ccd-pas');
+  if(!z) return;
+  let h=''; try{ h=_htmlPasCoach(c); }catch(e){ h=''; }
+  z.innerHTML=h; z.style.display=h?'':'none';
+}
 function _htmlRecuperationCoach(c){
   const r=scoreRecuperation(c);
   if(!r.points) return '';
@@ -47741,9 +47815,12 @@ function updateSleepPreview(){
   const el=document.getElementById('sleep-preview');
   if(el) el.innerHTML=dur!=null?`<span style="font-weight:800;font-size:18px;color:${sleepColor(dur)}">${dur}h</span> de sommeil`:'';
 }
-function loadSleep(containerId='sleep-content'){
+// `user` EST OPTIONNEL et retombe sur currentUser : les trois appels existants
+// ne changent pas.
+function loadSleep(containerId='sleep-content',user){
   if(containerId==='sleep-content') go('s-sleep');
-  const log=currentUser.sleepLog||[];
+  const _u=user||currentUser;
+  const log=(_u&&_u.sleepLog)||[];
   const todayStr=localISODate(new Date());
   const dayNames=['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'];
   const weekDates=getSleepWeek();
@@ -47840,7 +47917,10 @@ function loadSleep(containerId='sleep-content'){
         <div style="display:flex;gap:4px">${counts}</div>
       </div>
     </div>
-    ${_htmlCafeineNuits(currentUser,weekDates)}
+    <!-- Le MÊME porteur que le journal ci-dessus. Lire les nuits d’un dossier
+         et la caféine d’un autre mélangerait deux personnes — c’est le défaut
+         qu’on vient de fermer sur nutIsOnDay et _getEffectiveMacros. -->
+    ${_htmlCafeineNuits(_u,weekDates)}
     ${histHtml}
     ${_htmlCadreImportCapture()}
   `;
