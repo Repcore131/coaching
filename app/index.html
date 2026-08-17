@@ -20970,6 +20970,27 @@ function openSessionPicker(){
 // réponse soit jamais retenue. La question passe du niveau « chaque séance »
 // au niveau « une fois », et le genre ne décide plus que d'une chose : à qui
 // on propose l'écran de choix la première fois.
+// ── Le dernier geste des DEUX chemins de lancement ─────────────────────────
+//
+// startWorkoutSession quand aucune question de cycle n’est due, _cycleLancer
+// quand elles viennent d’être répondues. La seconde appelait demarrerSeance
+// directement : l’aperçu était donc INATTEIGNABLE pour toute athlète dont le
+// suivi de cycle est actif, puisque les cinq sorties des modales repassent
+// toutes par elle.
+//
+// L’APERÇU PEUT REFUSER. ouvrirApercuSeance rend false sur une séance sans
+// exercice, après l’avoir dit à l’écran. On enchaîne alors sur
+// demarrerSeance — c’était déjà le repli de startWorkoutSession, on le garde
+// mot pour mot.
+//
+// `sess` est passée quand l’appelant la tient déjà : c’est le cas de
+// startWorkoutSession, qui l’a lue en tête de fonction.
+function _apercuOuSeance(idx,sess){
+  if(ouvrirApercuSeance(idx)) return true;
+  const cfg=currentUser.sessions_config||initSessionsConfig();
+  demarrerSeance(sess||cfg[idx],idx);
+  return false;
+}
 function startWorkoutSession(idx){
   const cfg=currentUser.sessions_config||initSessionsConfig();
   const sess=cfg[idx];
@@ -20986,9 +21007,9 @@ function startWorkoutSession(idx){
   currentUser.currentCycle='ignore';
   // L'aperçu s'intercale ICI, après les questions de cycle et non avant :
   // les poser par-dessus un écran de séance qu'on vient d'ouvrir enchaînerait
-  // deux interruptions.
-  if(ouvrirApercuSeance(idx)) return;
-  demarrerSeance(sess,idx);
+  // deux interruptions. Il ne remonte donc PAS au-dessus des deux `return`
+  // ci-dessus — c’est _cycleLancer qui le reprend de l’autre côté.
+  _apercuOuSeance(idx,sess);
 }
 
 // ======= CYCLE LOGIC =======
@@ -21030,10 +21051,13 @@ function cycleArretAProposer(user){
   if(user&&user.cycleArretPropose) return false;
   return ((user&&user.cycleIgnoresSuite)||0)>=CYCLE_IGNORE_SUITE;
 }
+// LE RETOUR DES CINQ MODALES DE CYCLE. Elle sautait l’aperçu, et c’est tout
+// le défaut : la question de cycle vient d’être posée et répondue, l’aperçu
+// n’en repose aucune — startWorkoutSession n’est pas rappelée, et la sortie
+// de l’aperçu passe par commencerDepuisApercu, qui va droit à demarrerSeance.
 function _cycleLancer(){
-  const cfg=currentUser.sessions_config||initSessionsConfig();
   const idx=window._pendingWorkoutIdx||0;
-  demarrerSeance(cfg[idx],idx);
+  _apercuOuSeance(idx);
 }
 function setCyclePhase(phase,el){
   if(el) document.querySelectorAll('#cycle-options .obj-opt').forEach(e=>e.classList.remove('sel'));
