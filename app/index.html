@@ -7293,17 +7293,28 @@ window.onload=()=>{
       // mode dégradé ne s’appliquait JAMAIS dans la session courante — c’est-à-
       // dire précisément tant que le quota continuait de se remplir.
       //
-      // La replanification est posée SUR LES DEUX SORTIES, et le corps n’est pas
-      // enveloppé : il porte déjà son propre try/catch, et un second ouvert
-      // par-dessus se refermerait sur le catch de l’autre.
+      // LA REPLANIFICATION EST DANS UN `finally`, ET NULLE PART AILLEURS.
+      //
+      // Elle était posée sur DEUX des QUATRE sorties. Les deux autres tuaient
+      // la boucle : `if(_typing) return;` — un champ au focus à l’échéance —
+      // et surtout `if(!_change) return;`, à l’intérieur du try, dont le
+      // `return` sautait la replanification placée après le catch. Or
+      // `_change` est faux dès que rien n’a bougé côté serveur, c’est-à-dire
+      // le cas ORDINAIRE : la toute première échéance arrêtait la synchro de
+      // fond pour toute la session, sans un mot.
+      //
+      // Le `finally` couvre toutes les sorties, y compris celles qu’on
+      // ajoutera plus tard. Un seul point de replanification : en garder
+      // d’autres replanifierait deux fois, et la période serait divisée.
       const _replanifierSync=()=>{
         try{ setTimeout(_tourSync,periodeSync()); }catch(e){}
       };
       const _tourSync=async()=>{
+       try{
         // LE CHANGEMENT DE JOUR D’ABORD, et AVANT le garde de connexion : une
         // app hors ligne a la même horloge, et sa date doit suivre minuit.
         try{ _repeindreSiJourChange(); }catch(e){}
-        if(!CLOUD.ok()||!currentUser){ _replanifierSync(); return; }
+        if(!CLOUD.ok()||!currentUser) return;
         // Garde d'edition GLOBAL, en tete : proteger le seul re-render ne
         // suffit pas, car la synchro elle-meme remplace currentUser sous les
         // doigts de l'utilisateur. Tant qu'un champ a le focus, on ne touche
@@ -7372,9 +7383,11 @@ window.onload=()=>{
             loadClientHome();
           }
         }catch(e){console.warn('sync periodique :',e);}
-        // Après le catch : un passage qui lève ne doit pas arrêter la
-        // synchronisation pour le reste de la session.
+       }finally{
+        // TOUTES LES SORTIES PASSENT ICI : les quatre `return`, la fin
+        // normale, et toute exception qui aurait echappé au catch interne.
         _replanifierSync();
+       }
       };
       _replanifierSync();
       // Le passage à 5 minutes rendrait l'app molle au retour d'arrière-plan :
