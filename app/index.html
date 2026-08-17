@@ -27929,10 +27929,24 @@ function bMesureSaisie(id,v){
   bilData[id]=v;
   if(_bilReprises&&_bilReprises.has(id)){
     _bilReprises.delete(id);
+    // DEUX FORMES DE CASE, ET UNE SEULE PORTE LA BORDURE.
+    //
+    // Les champs de bQ portent la leur : c’est sur eux qu’il faut repasser en
+    // trait plein. Ceux du schéma corporel sont déclarés `border:none`, et le
+    // pointillé vit sur le conteneur `bx-<id>` — y poser un STYLE de bordure
+    // réveille la largeur par défaut, `medium`, soit TROIS pixels à la couleur
+    // du texte. Un cadre blanc apparaissait autour de la case à la première
+    // frappe, sur le geste même qui devait discrètement enlever le pointillé.
+    //
+    // LA STRUCTURE DÉCIDE, pas l’apparence : un conteneur `bx-` existe si et
+    // seulement si c’est lui qui porte la bordure. Pas de getComputedStyle,
+    // qui forcerait un calcul de style à chaque caractère saisi.
     const bx=document.getElementById('bx-'+id);
     if(bx) bx.style.borderStyle='solid';
-    const ch=document.getElementById(id);
-    if(ch&&ch.style) ch.style.borderStyle='solid';
+    else{
+      const ch=document.getElementById(id);
+      if(ch&&ch.style) ch.style.borderStyle='solid';
+    }
   }
 }
 function _bilEstReprise(id){ return !!(_bilReprises&&_bilReprises.has(id)); }
