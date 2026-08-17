@@ -13530,6 +13530,10 @@ function appliquerAjustementSeances(sessionsConfig,cibles,action){
       delete ex.image;
       // Et tout ce qui DÉCRIVAIT l'ancien mouvement ne décrit plus le nouveau.
       delete ex.description; delete ex.note; delete ex.tempo;
+      // `materiel` et `videoUrl2` décrivaient l’ANCIEN mouvement comme les
+      // autres : un banc à smith ne sert pas à des fentes haltères, et la
+      // seconde vidéo montre encore le geste qu’on vient de retirer.
+      delete ex.materiel; delete ex.videoUrl2;
       delete ex.videoUrl; delete ex.justificationContrainte;
       // ss et le rang sont conservés : on écrit À LA MÊME POSITION, donc le
       // chaînage de superset et l'ordre de la séance tiennent tout seuls.
@@ -19031,10 +19035,18 @@ function ajouterDepuisBanque(){
       name:f.nom,
       series:3, reps:'10', repos:f.repos||'01 min',
       description:f.execution||'',
+      // LE MATÉRIEL DE LA FICHE. Il se retapait dans le NOM de l'exercice —
+      // le placeholder du champ nom disait « (MATÉRIELS) » — alors que la
+      // banque le porte déjà. Pré-rempli, et modifiable dans l’éditeur : la
+      // fiche décrit le mouvement en général, le coach connaît SA salle.
+      materiel:f.materiel||'',
       // videoUrl est le champ que la vue seance lit deja : on ne cree pas
       // un second canal pour la meme chose.
       videoUrl:(f.videos&&f.videos[0])?('https://youtu.be/'+f.videos[0].id):'',
-      videoUrl2:'',
+      // LA SECONDE VIDÉO, quand la fiche en porte une. La vue en séance sait
+      // déjà l’afficher (« ▶ VIDÉO 2 ») : elle était simplement perdue à
+      // l’import, et rien ne permettait de la saisir à la main.
+      videoUrl2:(f.videos&&f.videos[1])?('https://youtu.be/'+f.videos[1].id):'',
       exSlug:f.slug,
       image:null
     });
@@ -19088,7 +19100,7 @@ function renderProgEx(){
             <button type="button" class="px-mini" onclick="_pxDeplacerParFleche(${i},1)" ${gi===_grs.length-1?'disabled':''} aria-label="Descendre">▼</button>
           </span>`:''}
           <span style="background:#fff2;border-radius:50%;min-width:22px;height:22px;padding:0 5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0">${_repereEx(progEx,i)}</span>
-          <input value="${escapeHtml(ex.name||'')}" onchange="_progExDirty=true;progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase()" placeholder="NOM DE L'EXERCICE (MATÉRIELS)" style="background:transparent;border:none;color:#fff;font-family:Montserrat,sans-serif;font-weight:800;font-size:13px;outline:none;text-transform:uppercase;flex:1">
+          <input value="${escapeHtml(ex.name||'')}" onchange="_progExDirty=true;progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase()" placeholder="NOM DE L'EXERCICE" style="background:transparent;border:none;color:#fff;font-family:Montserrat,sans-serif;font-weight:800;font-size:13px;outline:none;text-transform:uppercase;flex:1">
         </div>
         <span style="display:flex;align-items:center;gap:6px;flex-shrink:0">
           <button onclick="_dupliquerExUI(${i})" aria-label="Dupliquer cet exercice" title="Dupliquer" style="background:#fff2;border:none;color:#fff;font-size:11px;font-weight:800;cursor:pointer;border-radius:12px;height:24px;padding:0 9px;display:flex;align-items:center;justify-content:center;font-family:inherit">COPIE</button>
@@ -19116,6 +19128,13 @@ function renderProgEx(){
           <label>Tempo <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(ex: 3-1-1-0 — descente, bas, montée, haut)</span></label>
           <input value="${escapeHtml(ex.tempo||'')}" onchange="_progExDirty=true;progEx[${i}].tempo=this.value" placeholder="3-1-1-0">
         </div>
+        <!-- Matériel : son propre champ depuis que la banque le pré-remplit.
+             Il se retapait dans le NOM de l'exercice, ce qui le rendait
+             illisible partout où le nom sert de clef. -->
+        <div style="margin-bottom:10px">
+          <label>Matériel</label>
+          <input value="${escapeHtml(ex.materiel||'')}" onchange="_progExDirty=true;progEx[${i}].materiel=this.value" placeholder="Ex : haltères, banc incliné">
+        </div>
         ${_selecteurTechnique(ex,i)}
         ${_blocAvertissementContrainte(ex,i)}
         ${_ligneMuscles(ex,i)}
@@ -19133,6 +19152,17 @@ function renderProgEx(){
               ${normaliserUrlVideo(ex.videoUrl)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl))}" target="_blank" rel="noopener" style="background:var(--surface-2);border:1px solid var(--border);border-radius:3px;padding:7px 10px;font-size:12px;text-decoration:none;display:flex;align-items:center">▶</a>`:''}
             </div>
             ${ex.videoUrl&&!normaliserUrlVideo(ex.videoUrl)?`<div class="videoInutilisable" style="font-size:10px;color:var(--orange);margin-top:4px;line-height:1.5">Ce texte n'est pas un lien : l'athlète ne verra aucune vidéo. Colle l'adresse YouTube, ou juste l'identifiant de la vidéo.</div>`:''}
+            <!-- SECOND LIEN. La vue en séance l'affichait déjà (« ▶ VIDÉO 2 »)
+                 et la banque en porte parfois un : rien ne permettait de le
+                 saisir. Même normalisation et même avertissement que le
+                 premier — deux champs qui se ressembleraient sans se
+                 comporter pareil seraient deux champs à apprendre. -->
+            <label style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;color:var(--sub);font-weight:700;margin-top:9px">2ᵉ lien vidéo (facultatif)</label>
+            <div style="display:flex;gap:6px;margin-top:4px">
+              <input value="${escapeHtml(ex.videoUrl2||'')}" onchange="_progExDirty=true;progEx[${i}].videoUrl2=normaliserUrlVideo(this.value);this.value=progEx[${i}].videoUrl2;renderProgEx()" placeholder="https://youtu.be/..." style="flex:1;font-size:11px;padding:7px 10px">
+              ${normaliserUrlVideo(ex.videoUrl2)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl2))}" target="_blank" rel="noopener" style="background:var(--surface-2);border:1px solid var(--border);border-radius:3px;padding:7px 10px;font-size:12px;text-decoration:none;display:flex;align-items:center">▶</a>`:''}
+            </div>
+            ${ex.videoUrl2&&!normaliserUrlVideo(ex.videoUrl2)?`<div class="videoInutilisable" style="font-size:10px;color:var(--orange);margin-top:4px;line-height:1.5">Ce texte n'est pas un lien : l'athlète ne verra aucune vidéo. Colle l'adresse YouTube, ou juste l'identifiant de la vidéo.</div>`:''}
           </div>
         </div>
       </div>
@@ -21401,7 +21431,11 @@ function _apLigne(ex,i){
       font-size:12.5px;padding:6px 2px;border-top:1px solid rgba(255,255,255,.05)">`
     +`<span style="color:var(--sub);letter-spacing:.4px">${escapeHtml(t)}</span>`
     +`<span style="color:#fff;font-weight:800;text-align:right">${escapeHtml(String(v))}</span></div>`:'';
-  const note=(ex.description||ex.note||'').trim();
+  // `ex.note` a disparu d'ici : TROIS lectures, et aucun champ ne l'écrivait.
+  // Le seul écrivain était la chaîne d'import legacy, qui posait une chaîne
+  // VIDE dans un chemin fermé par LEGACY_PDF_IMPORT. `ex.description` fait le
+  // même travail, et lui est saisissable.
+  const note=(ex.description||'').trim();
   // LA VIGNETTE NE RECADRE PLUS. `cover` coupait les bords de chaque
   // illustration : sur un pendulum squat, la machine sortait du cadre et il ne
   // restait qu'un morceau de cuisse. `contain` montre l'image ENTIÈRE, quitte
@@ -21443,6 +21477,7 @@ function _apLigne(ex,i){
       ${l('Répétitions',ex.reps)}
       ${l('Repos',ex.repos)}
       ${l('Tempo',ex.tempo)}
+      ${l('Matériel',ex.materiel)}
       ${l('Charge cible',ex.charge||ex.poids||'')}
       ${l('RIR',ex.rir)}
       ${note?`<div style="margin-top:8px;font-size:12px;color:#bbb;line-height:1.6;
@@ -22350,12 +22385,17 @@ function _blocExo(idx,estSS){
 
       ${_htmlMonteeCharge(sug,ex,idx)}
       ${_blocContrainteSeance(ex,idx)}
-      ${(ex.description||ex.note||ex.tempo||illustrationDe(ex.name))?`<div style="background:var(--surface-2);border-radius:10px;padding:11px 14px;margin-bottom:12px">
+      ${(ex.description||ex.materiel||ex.tempo||illustrationDe(ex.name))?`<div style="background:var(--surface-2);border-radius:10px;padding:11px 14px;margin-bottom:12px">
         <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--red);margin-bottom:5px">CONSIGNE</div>
         ${blocTempo(ex)}
+        <!-- LE MATÉRIEL EN PREMIER : c'est ce qu'on va chercher avant de
+             commencer, pas ce qu'on lit pendant. Il fait aussi partie de la
+             condition d'affichage du bloc — sans ça, un exercice qui ne
+             porterait QUE son matériel n'aurait rien affiché du tout. -->
+        ${ex.materiel?`<div style="font-size:11.5px;color:var(--sub);line-height:1.6;margin-bottom:6px"><span style="font-weight:800;letter-spacing:.5px">Matériel :</span> ${escapeHtml(ex.materiel)}</div>`:''}
         <div style="display:flex;gap:11px;align-items:flex-start">
           ${_htmlVignetteExo(ex)}
-          <div style="flex:1;min-width:0;font-size:12px;color:#bbb;line-height:1.6">${escapeHtml(ex.description||'')}${ex.note&&!(ex.description||'').includes(ex.note)?(ex.description?'<br>':'')+escapeHtml(ex.note):''}</div>
+          <div style="flex:1;min-width:0;font-size:12px;color:#bbb;line-height:1.6">${escapeHtml(ex.description||'')}</div>
         </div>
       </div>`:''}
 
@@ -48684,7 +48724,7 @@ function parseWorkoutSheet(text){
     // rattrape d'une case à cocher dans l'écran de relecture.
     const _noms=_ocrDecouperSS(name);
     _noms.forEach((nm,k)=>{
-      exercises.push({name:nm,series,reps,repos,description,note:'',image:null,ss:k>0});
+      exercises.push({name:nm,series,reps,repos,description,image:null,ss:k>0});
     });
   }
   return exercises;
@@ -48817,7 +48857,7 @@ function importOcrExercises(idx,maxN){
     // décale ce qui suit : un exercice ne peut pas rester enchaîné avec un
     // précédent qui n'est plus là.
     const ss=!!document.getElementById('ocr-ss-'+i)?.checked&&result.length>0;
-    if(name) result.push({name,series,reps,repos,description,note:'',image:null,videoUrl,videoUrl2,ss});
+    if(name) result.push({name,series,reps,repos,description,image:null,videoUrl,videoUrl2,ss});
   }
   if(!result.length){toast('Aucun exercice à importer.','var(--orange)');return;}
   _normaliserSS(result);
