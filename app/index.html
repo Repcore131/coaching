@@ -43756,7 +43756,17 @@ function _commitCaffeineAdd(qty){
   // _caffeineViewDate à aujourd’hui et loadNutrition() faisait de même pour
   // _caffeineEmbedDate : la prise partait au bon jour, mais l’écran revenait
   // à aujourd’hui et elle semblait perdue.
-  _caffReturnToNutrition?loadNutrition(undefined,_d):_renderCaffeineScreen();
+  if(_caffReturnToNutrition) loadNutrition(undefined,_d);
+  // L’ÉCRAN N’ÉTAIT PAS RAMENÉ. _renderCaffeineScreen ne fait que remplir
+  // #caff-date-nav et #caff-block ; loadCaffeine, qu’elle a remplacée ici,
+  // faisait le go() en plus. On restait donc sur s-caffeine-add après
+  // « AJOUTER », avec l’impression que rien ne s’était passé — alors que la
+  // prise était écrite.
+  //
+  // go() ET SURTOUT PAS loadCaffeine() : celle-ci remet _caffeineViewDate à
+  // AUJOURD’HUI, ce qui referait le défaut que le commentaire ci-dessus
+  // décrit — la prise sur hier, l’écran revenu à aujourd’hui.
+  else{ go('s-caffeine'); _renderCaffeineScreen(); }
 }
 function saveCaffeineCustom(){
   const name=(document.getElementById('caff-custom-name')||{}).value?.trim();
@@ -43771,7 +43781,17 @@ function saveCaffeineCustom(){
   const _ok=addCaffeineEntry({id:'custom',name,icon:'☕',mg,volume,type:'custom',time:hhmm,ts:Date.now()},_d);
   if(!_ok){ toast('Jour hors de portée : la prise n’a pas été enregistrée.','var(--orange)'); return; }
   toast(name+' ajouté ✓');
-  _caffReturnToNutrition?loadNutrition(undefined,_d):_renderCaffeineScreen();
+  if(_caffReturnToNutrition) loadNutrition(undefined,_d);
+  // L’ÉCRAN N’ÉTAIT PAS RAMENÉ. _renderCaffeineScreen ne fait que remplir
+  // #caff-date-nav et #caff-block ; loadCaffeine, qu’elle a remplacée ici,
+  // faisait le go() en plus. On restait donc sur s-caffeine-add après
+  // « AJOUTER », avec l’impression que rien ne s’était passé — alors que la
+  // prise était écrite.
+  //
+  // go() ET SURTOUT PAS loadCaffeine() : celle-ci remet _caffeineViewDate à
+  // AUJOURD’HUI, ce qui referait le défaut que le commentaire ci-dessus
+  // décrit — la prise sur hier, l’écran revenu à aujourd’hui.
+  else{ go('s-caffeine'); _renderCaffeineScreen(); }
 }
 
 // ======= VIDEOS =======
