@@ -11415,7 +11415,13 @@ function urgencyScore(c){
   // l'application puisse recevoir, et il passe donc devant la douleur répétée.
   // Il n'est PAS reportable : un coach ne doit pas pouvoir le faire disparaître
   // d'un clic, et seule la levée du drapeau l'éteint.
-  if(drapeauRougeActif(c)) return 10;
+  //
+  // LES DEUX FAMILLES, et non la seule musculo-squelettique. Un signe
+  // GÉNÉRAL — douleur thoracique, essoufflement au repos, palpitations —
+  // n’atteignait pas ce classement, alors que l’athlète lit « Ton coach a
+  // été prévenu » en le déclarant. Le seuil ne bouge pas, ni les exclusions :
+  // c’est ce qui ENTRE au rang 10 qui était incomplet.
+  if(drapeauQuelconqueActif(c)) return 10;
   const sg=signauxEntrainement(c);
   if(sg.douleur&&!isAlertSnoozed('douleur',c.id,0,c)) return 9;
   if(sg.douleurDiffuse&&!isAlertSnoozed('douleurdiff',c.id,0,c)) return 8;
@@ -11530,7 +11536,9 @@ function expliquerUrgence(c){
   if(!c) return out;
   const ajout=(motif,gravite,date)=>out.push({motif,gravite,
     date:(typeof date==='number'&&date>0)?date:null});
-  const dr=drapeauRougeActif(c);
+  // Les DEUX familles : cette explication doit dire la même chose que le
+  // classement, sinon un athlète remonté au rang 10 y apparaîtrait sans motif.
+  const dr=drapeauQuelconqueActif(c);
   if(dr) ajout('Drapeau rouge déclaré',10,dr.date||dr.quand);
   let sg=SIGNAUX_VIDES;
   try{ sg=signauxEntrainement(c); }catch(e){}
@@ -12016,6 +12024,11 @@ function dispoEchangesDe(clients){
 // l'appareil du coach qui lèvera la notification à sa prochaine ouverture.
 function dispoSanteForce(user){
   try{
+    // LE SIGNE GÉNÉRAL EN PREMIER, et pas seulement en plus : _suspTextes lui
+    // associe TEXTE_ARRET_GENERAL — « Arrête l’entraînement et fais-toi
+    // examiner » — qui est le texte le plus protecteur du produit. Quand les
+    // deux familles sont actives, c’est celui-là qu’il faut afficher.
+    if(drapeauGeneralActif(user)) return 'general';
     if(drapeauRougeActif(user)) return 'drapeau';
     const sg=signauxEntrainement(user);
     if(sg&&(sg.douleur||sg.douleurDiffuse)) return 'douleur';
@@ -14188,12 +14201,21 @@ function renderTodoBlock(clients){
   const noStart=clients.filter(c=>neverStarted(c)&&!isAlertSnoozed('nostart',c.id));
   // Drapeau rouge d'abord : c'est le seul signal que le coach ne peut pas
   // reporter d'un clic. Une ligne par athlete, avec les signes declares.
-  const rows=clients.filter(c=>drapeauRougeActif(c)).map(c=>{
-    const d=drapeauRougeActif(c);
-    const lib=d.cases.map(x=>(DRAPEAUX_ROUGES.find(y=>y.cle===x)||{lib:x}).lib);
+  //
+  // LES DEUX FAMILLES. Un signe général n’arrivait pas jusqu’ici : l’athlète
+  // le déclarait, lisait « Ton coach a été prévenu », et rien ne montait.
+  const rows=clients.filter(c=>drapeauQuelconqueActif(c)).map(c=>{
+    const d=drapeauQuelconqueActif(c);
+    // libelleDrapeau couvre LES DEUX TABLES : chercher dans DRAPEAUX_ROUGES
+    // seulement rendait la clef brute — « thoracique » — pour un signe général.
+    const lib=d.cases.map(libelleDrapeau);
+    // LA ZONE N EST AFFICHÉE QUE QUAND C EN EST UNE. `general` n’est pas une
+    // zone du corps, et « Général · une douleur dans la poitrine » nommerait
+    // une région qui n’existe pas.
+    const _z=(d.zone&&d.zone!==DRAPEAU_ZONE_GENERALE)?(libZone(d.zone)+' · '):'';
     return {type:'drapeau',icon:'🛑',color:'var(--red)',label:'Drapeau rouge santé signalé',
       list:[c],sante:true,nonReportable:true,
-      texte:libZone(d.zone)+' · '+lib.join(' · ')+". Aucun exercice de remplacement n'est proposé."};
+      texte:_z+lib.join(' · ')+". Aucun exercice de remplacement n'est proposé."};
   });
   // Puis les signaux d'entrainement : la sante avant l'intendance.
   rows.push.apply(rows,_lignesEntrainement(clients));
