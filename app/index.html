@@ -3017,6 +3017,9 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- MOT DU COACH -->
       <div id="clh-annonce" style="display:none"></div>
 
+      <!-- RÉPONSE À UN BILAN DE FIN DE CYCLE -->
+      <div id="clh-rite-reponse" style="display:none"></div>
+
       <!-- OBJECTIF -->
 
       <!-- STATS -->
@@ -13196,6 +13199,47 @@ function _riteEnregistrer(question,avecReglages){
 }
 // Appelé à l'ouverture de l'accueil athlète. Ne s'affiche que si TOUT est
 // réuni, et ne bloque jamais l'accès à l'application.
+// PURE. Le dernier bilan de fin de cycle portant une réponse du coach que
+// l’athlète n’a pas encore lue, ou null.
+//
+// `reponseVue!==true` ET NON `===false` : les rites écrits avant ce lot ne
+// portent aucun drapeau, et une réponse déjà envoyée doit pouvoir être lue.
+function riteReponseNonVue(u){
+  const l=((u&&u.rites)||[]).filter(r=>r&&r.reponseCoach&&r.reponseVue!==true);
+  return l.length?l[l.length-1]:null;
+}
+// LE PATRON EXACT de la réponse de bilan — cadre var(--surface-2), filet
+// gauche vert, titre « Réponse de ton coach ». La ligne de cycle en plus :
+// une réponse sans son objet ne se rattache à rien, là où celle du bilan est
+// rendue DANS la carte du bilan qu’elle commente.
+function _htmlRiteReponse(r){
+  if(!r||!r.reponseCoach) return '';
+  const _c=Number(r.cycle);
+  const _d=r.reponseDate?new Date(r.reponseDate).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}):'';
+  const _sous=[Number.isFinite(_c)&&_c>0?('Bilan de fin de cycle '+_c):'',_d].filter(Boolean).join(' · ');
+  return `<div style="margin-bottom:18px;background:var(--surface-2);border-left:3px solid var(--green);border-radius:8px;padding:10px 12px">
+    <div style="font-size:var(--fs-xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--green);font-weight:800;margin-bottom:4px">Réponse de ton coach</div>
+    ${_sous?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-bottom:5px">${escapeHtml(_sous)}</div>`:''}
+    <div style="font-size:12px;color:#ddd;line-height:1.6">${escapeHtml(r.reponseCoach)}</div>
+  </div>`;
+}
+// MARQUÉ LU À L’AFFICHAGE, comme `b.reponseVue` pour les bilans : le bloc a
+// été rendu, il ne revient pas à chaque ouverture.
+//
+// L’écriture ne touche QUE ce drapeau : `rites` n’est ni allongé ni
+// réordonné, donc le plafond de 24 de _riteEnregistrer ne peut pas bouger.
+function renderRiteReponse(){
+  const el=document.getElementById('clh-rite-reponse');
+  if(!el) return false;
+  let r=null; try{ r=riteReponseNonVue(currentUser); }catch(e){ r=null; }
+  let h=''; try{ h=_htmlRiteReponse(r); }catch(e){ h=''; }
+  el.innerHTML=h;
+  el.style.display=h?'':'none';
+  // APRÈS le rendu : si l’écriture échouait, le bloc serait quand même à
+  // l’écran, et c’est ce qui compte.
+  if(h&&r&&r.reponseVue!==true){ r.reponseVue=true; try{ saveUser(); }catch(e){} }
+  return !!h;
+}
 function riteAfficherSiBesoin(){
   try{
     if(!currentUser||currentUser.role==='coach') return false;
@@ -20274,6 +20318,9 @@ function loadClientHome(){
   renderContraintesAthlete();
   renderDouleurAthlete();
   renderEpingleAccueil();
+  // La réponse du coach à un bilan de fin de cycle : à côté du mot du coach,
+  // parce que c’est la même chose — sa parole, adressée à cet athlète-là.
+  renderRiteReponse();
   renderBandeauPhase();renderRelancePhase();renderCartePhase();
   renderSuspension();
   renderHabitudes();
