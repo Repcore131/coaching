@@ -40955,6 +40955,29 @@ function _htmlJournalCoach(c){
     ${lignes||'<div style="font-size:11px;color:var(--text-dim);padding:8px 0">Aucun aliment ce jour-là.</div>'}
   </div>`;
 }
+// PURE. La ligne de diète respectée pour la fiche coach, ou '' quand aucun
+// jour n’est jugeable.
+//
+// LE POURCENTAGE NE VOYAGE JAMAIS SEUL. _sousTitreDiete dit sur QUOI il porte
+// — « 12/20 · kcal et protéines à ±10 % » en flexible, « 12/20 · jours
+// déclarés » sinon — et il DÉRIVE le seuil de DIETE_TOLERANCE plutôt que de le
+// réécrire. Afficher le chiffre sans lui laisserait lire le même 60 % pour
+// deux règles différentes.
+//
+// '' ET NON « 0 % » quand la fonction rend null : aucun jour enregistré n'est
+// pas la même chose que zéro jour tenu.
+function _htmlDieteCoach(c){
+  let di=null; try{ di=_tauxDieteRespectee(c); }catch(e){ di=null; }
+  if(!di) return '';
+  let sub=''; try{ sub=_sousTitreDiete(di); }catch(e){ sub=''; }
+  return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline">
+      <span style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase">Diète respectée</span>
+      <span style="font-size:15px;font-weight:800;color:#fff">${di.pct} %</span>
+    </div>
+    ${sub?`<div style="font-size:11px;color:var(--text-dim);line-height:1.55;margin-top:5px">${escapeHtml(sub)}</div>`:''}
+  </div>`;
+}
 function renderCoachNutriSection(c){
   _plOublierSiAutreAthlete(c&&c.email);
   const el=document.getElementById('ccd-nutrition');
@@ -40992,7 +41015,11 @@ function renderCoachNutriSection(c){
     // convertir leur contenu ferait partir un « 30 » tape en pourcentage
     // comme 30 grammes de proteines vers le dossier.
     +(()=>{ try{ return htmlMacrosCoachLecture(c,mon,moff); }catch(e){ return ''; } })();
-  el.innerHTML=`${_transi}${_pauseHtml}
+  // EN TÊTE : c’est le seul chiffre du bloc qui dise si les cibles réglées
+  // en dessous sont tenues. Le lire après les avoir modifiées serait le lire
+  // trop tard.
+  const _diete=(()=>{ try{ return _htmlDieteCoach(c); }catch(e){ return ''; } })();
+  el.innerHTML=`${_diete}${_transi}${_pauseHtml}
     <div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px">
       <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:14px">🍎 Nutrition</div>
       <!-- Type de diète -->
