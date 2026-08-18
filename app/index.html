@@ -29030,26 +29030,26 @@ function bBodySchema(prefix){
     </svg>
     ${F.map(f=>{
       const id=prefix+'-'+f.k;
-      const posX=f.s==='l'?'left:1%':'right:1%';
+      const posX=f.s==='l'?'left:0':'right:0';
       // Plus de decalage de 26px pour loger un libelle au-dessus : il est
       // dans la case. La case est donc centree sur son point anatomique.
       const top=(A.box[f.k]-Y0-13)/VH*100;
       // Libelle raccourci : « Cuisse gauche » devient « CUISSE G. ». Sur une
       // seule ligne, la place est comptee — et le cote est deja porte par la
       // position de la case, a gauche ou a droite du corps.
-      const court=f.l.replace(/ gauche$/,' G.').replace(/ droite?$/,' D.');
+      const court=f.l.replace(/ gauche$/,' G.').replace(/ droite?$/,' D.').replace('POITRINE','POITR.').replace('FESSIERS','FESS.').replace('MOLLET','MOLL.').replace('CUISSE','CUIS.');
       // Une valeur reprise du dernier bilan porte un POINTILLÉ : elle est là
       // pour être vérifiée, pas pour être crue. Le trait redevient plein dès
       // que l'athlète touche la case — voir bMesureSaisie.
       const _rep=_bilEstReprise(id);
-      return `<div style="position:absolute;${posX};top:${top}%;width:31%">
-        <div id="bx-${id}" style="display:flex;align-items:center;gap:4px;background:#0c0c0c;border:1px ${_rep?'dashed rgba(224,32,32,.5)':'solid var(--border)'};border-radius:var(--r-2);padding:2px 6px;transition:border-color var(--t-2),box-shadow var(--t-2)">
-          <span style="flex:none;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--sub);white-space:nowrap">${court}</span>
+      return `<div style="position:absolute;${posX};top:${top}%;width:34%">
+        <div id="bx-${id}" style="display:flex;align-items:center;gap:3px;background:#0c0c0c;border:1px ${_rep?'dashed rgba(224,32,32,.5)':'solid var(--border)'};border-radius:var(--r-2);padding:2px 5px;transition:border-color var(--t-2),box-shadow var(--t-2)">
+          <span style="flex:none;font-size:8.5px;font-weight:800;letter-spacing:.2px;text-transform:uppercase;color:var(--sub);white-space:nowrap">${court}</span>
           <input type="number" inputmode="decimal" step="any" id="${id}" value="${bilData[id]||''}" placeholder="—"
             oninput="bMesureSaisie('${id}',this.value)"
             onfocus="bBodyFocus('${id}',1)" onblur="bBodyFocus('${id}',0)"
             style="flex:1;width:100%;min-width:0;background:none;border:none;outline:none;box-shadow:none;color:var(--text);font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-md);text-align:right;padding:3px 0;margin:0">
-          <span style="font-size:var(--fs-xs);color:var(--text-dim);font-weight:700;margin-left:2px">cm</span>
+          <span style="font-size:8.5px;color:var(--text-dim);font-weight:700;margin-left:1px">cm</span>
         </div>
       </div>`;
     }).join('')}
