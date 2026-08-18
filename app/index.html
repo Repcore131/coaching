@@ -22999,7 +22999,7 @@ function renderWoEx(){
         <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--info);flex-shrink:0">DÉCHARGE</span>
         <span style="font-size:var(--fs-xs);color:#bbb;line-height:1.5">Semaine allégée voulue par ton coach. Elle ne comptera pas comme un recul.</span>
       </div>`:''}
-      ${woState.currentEx===0?_carteProtocole(woState.warmup,'Échauffement','var(--orange)','wo-warmup-body'):''}
+      ${woState.currentEx===0?_carteProtocole(woState.warmup,'Échauffement','var(--orange)','wo-warmup-body',true):''}
       ${photoHtml}
       ${estSS?`<div style="display:flex;align-items:center;gap:9px;background:#1a0f00;border:1px solid var(--orange);border-radius:var(--r-3);padding:10px 13px;margin-bottom:12px">
         <svg viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17" style="flex-shrink:0"><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
@@ -54105,7 +54105,7 @@ function _ckMajEntete(cle){
   el.style.color=n>=tot&&tot?'var(--success)':'var(--sub)';
 }
 
-function _carteProtocole(txt,titre,couleur,id){
+function _carteProtocole(txt,titre,couleur,id,replie){
   const t=String(txt||'').trim();
   if(!t) return '';
   const lignes=t.split('\n').map(x=>x.trim()).filter(Boolean);
@@ -54138,9 +54138,9 @@ function _carteProtocole(txt,titre,couleur,id){
         ${entete?`<span style="display:block;font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${escapeHtml(entete)}</span>`:''}
       </span>
       ${etapes.length?`<span id="ck-compte-${cle}" data-total="${etapes.length}" style="font-size:var(--fs-xs);font-weight:800;color:${faits>=etapes.length?'var(--success)':'var(--sub)'}">${faits}/${etapes.length}</span>`:''}
-      <span class="chev" style="color:var(--sub);font-size:var(--fs-md)">▾</span>
+      <span class="chev" style="color:var(--sub);font-size:var(--fs-md)">${replie?'▸':'▾'}</span>
     </div>
-    <div id="${id}" style="padding:0 13px 11px">${corps}</div>
+    <div id="${id}" style="padding:0 13px 11px${replie?';display:none':''}">${corps}</div>
   </div>`;
 }
 
