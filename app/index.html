@@ -589,11 +589,9 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
   radial-gradient(90px 70px at 50% 0%,rgba(224,32,32,.16),transparent 72%),
   linear-gradient(160deg,var(--border),#141414 55%,#0b0b0b);
   border-radius:var(--r-1);padding:16px 12px;text-align:center;flex:1;
-  border:1px solid rgba(255,255,255,.08);border-left:3px solid var(--red);
+  border:1px solid rgba(255,255,255,.08);border-left:1px solid rgba(255,255,255,.08);
   position:relative;overflow:hidden;
-  box-shadow:var(--e4),
-    inset 0 1px 0 rgba(255,255,255,.08),inset 0 -1px 0 rgba(0,0,0,.65),
-    0 0 0 1px rgba(224,32,32,.10),-3px 0 14px rgba(224,32,32,.35)}
+  box-shadow:0 6px 14px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06)}
 /* Le halo du chiffre lui-meme : sans lui, le blanc reste plat sur le noir. */
 .metric-val{text-shadow:var(--halo-2)}
 .metric-box::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--red) var(--pct,0%),transparent var(--pct,0%))}
@@ -3144,7 +3142,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 
       <!-- DÉMARRER SÉANCE — hero card -->
-      <div style="background:linear-gradient(135deg,#0f0000,#160000);border:1px solid #2a0000;border-radius:var(--r-1);padding:20px;margin-bottom:14px;position:relative;overflow:hidden">
+      <div style="background:linear-gradient(160deg,#1a0303,#120000 55%,#0b0000);border:1px solid #3a0000;border-left:3px solid var(--red);border-radius:14px;padding:24px 20px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.6),0 0 30px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.05)">
         <div style="position:absolute;right:0;top:0;width:3px;height:100%;background:var(--red)"></div>
         <div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:14px">Entraînement</div>
         <button class="btn btn-red" onclick="openSessionPicker()" style="margin-bottom:10px;letter-spacing:1.5px;font-size:var(--fs-md);box-shadow:var(--e-inset),var(--glow-red)">DÉMARRER MA SÉANCE</button>
