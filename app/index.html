@@ -32935,7 +32935,7 @@ function showProgressTab(tab,btn){
         </div>
         ${isGroup?`<div style="display:flex;gap:8px;margin-bottom:4px">${g.items.map(it=>`<span style="font-size:var(--fs-xs);color:${it.color};font-weight:700">● ${it.l}</span>`).join('')}</div>`:''}
         ${tracable
-          ?`<canvas id="mc-${g.items.map(i=>i.k).join('-')}" height="65" style="width:100%;display:block"></canvas>`
+          ?`<canvas id="mc-${g.items.map(i=>i.k).join('-')}" height="96" style="width:100%;display:block"></canvas>`
           :`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;padding:12px 2px 4px">
              Une courbe demande deux bilans. Il en manque encore un.</div>`}
       </div>`;
@@ -49343,9 +49343,14 @@ function _setupCanvas(id,defaultH){
 // LA GRILLE. Des traits pleins gris tirent l'oeil autant que la courbe :
 // pointilles et plus sombres, ils redeviennent ce qu'ils sont — un reperage.
 // La ligne du bas reste pleine : c'est le socle du graphique, pas un repere.
-function _drawGrid(ctx,w,h,p,mn,mx){
+// pt/pb : les marges HAUTE et BASSE, distinctes de la marge horizontale.
+// p seul servait aux trois, si bien qu'un couloir de 32 px reserve aux
+// libelles d'ordonnee ecrasait aussi la courbe de 64 px sur sa hauteur.
+// Sans argument, pt et pb valent p : les appelants existants ne changent pas.
+function _drawGrid(ctx,w,h,p,mn,mx,pt,pb){
+  pt=pt||p; pb=pb||p;
   [0,.5,1].forEach(t=>{
-    const y=h-p-t*(h-p*2);
+    const y=h-pb-t*(h-pt-pb);
     ctx.strokeStyle=t===0?_tok('--border','#242424'):'#242424';ctx.lineWidth=1;
     ctx.setLineDash(t===0?[]:[3,4]);
     ctx.beginPath();ctx.moveTo(p,y);ctx.lineTo(w-p,y);ctx.stroke();
@@ -49398,12 +49403,12 @@ function _drawLineSeries(ctx,pts,color,lineW,dotR,o){
 }
 function lineChart(id,labels,data,color){
   const c=_setupCanvas(id,160);if(!c)return;
-  const{ctx,w,h}=c;const p=32;
+  const{ctx,w,h}=c;const p=32,pt=12,pb=20;
   if(!data.length)return;
   const mn=Math.min(...data)*0.98,mx=Math.max(...data)*1.02;
-  const xs=(w-p*2)/(data.length-1||1),ys=(h-p*2)/(mx-mn||1);
-  _drawGrid(ctx,w,h,p,mn,mx);
-  _drawLineSeries(ctx,data.map((v,i)=>({x:p+i*xs,y:h-p-(v-mn)*ys})),color,2.5,4,{base:h-p});
+  const xs=(w-p*2)/(data.length-1||1),ys=(h-pt-pb)/(mx-mn||1);
+  _drawGrid(ctx,w,h,p,mn,mx,pt,pb);
+  _drawLineSeries(ctx,data.map((v,i)=>({x:p+i*xs,y:h-pb-(v-mn)*ys})),color,2.5,4,{base:h-pb});
   _drawXLabels(ctx,labels,p,xs,h);
 }
 function barChart(id,labels,data){
@@ -49421,14 +49426,14 @@ function barChart(id,labels,data){
 }
 function multiLineChart(id,labels,series){
   const c=_setupCanvas(id,100);if(!c)return;
-  const{ctx,w,h}=c;const p=32;
+  const{ctx,w,h}=c;const p=32,pt=12,pb=20;
   const allVals=series.flatMap(s=>s.data.filter(v=>v));if(!allVals.length)return;
   const mn=Math.min(...allVals)*0.98,mx=Math.max(...allVals)*1.02;
-  const xs=(w-p*2)/(labels.length-1||1),ys=(h-p*2)/(mx-mn||1);
-  _drawGrid(ctx,w,h,p,mn,mx);
+  const xs=(w-p*2)/(labels.length-1||1),ys=(h-pt-pb)/(mx-mn||1);
+  _drawGrid(ctx,w,h,p,mn,mx,pt,pb);
   series.forEach(s=>{
     if(!s.data.some(v=>v))return;
-    _drawLineSeries(ctx,s.data.map((v,i)=>v?{x:p+i*xs,y:h-p-(v-mn)*ys}:null).filter(Boolean),s.color,2,3);
+    _drawLineSeries(ctx,s.data.map((v,i)=>v?{x:p+i*xs,y:h-pb-(v-mn)*ys}:null).filter(Boolean),s.color,2,3);
   });
   _drawXLabels(ctx,labels,p,xs,h);
 }
