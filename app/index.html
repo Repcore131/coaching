@@ -612,6 +612,16 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 .evo-titre{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);
   text-transform:uppercase;margin-bottom:8px;--halo-c:rgba(224,32,32,.45);text-shadow:var(--halo-1)}
 .metric-label{font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;margin-top:6px;font-weight:700}
+/* LE SURTITRE. Neuf libellés en capitales espacées portaient neuf écritures :
+   4px, 3px, 2px, 1.5px et .5px d'interlettrage, deux graisses, deux tailles.
+   Chaque carte ne garde désormais que ce qui lui est propre — sa couleur
+   d'accent, sa marge, son halo. .eyebrow-act est la variante active, celle
+   qui porte le rouge de la marque. */
+.eyebrow{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--sub);line-height:1.2}
+/* --red-text et non --red : le rouge de marque plafonne a 3,95:1 sur le fond
+   de carte, sous le seuil AA. Les deux libelles que cette classe remplace
+   portaient deja --red-text, a 6,17:1. */
+.eyebrow.eyebrow-act{color:var(--red-text)}
 /* Sur un écran de 320 px, trois encadrés côte à côte laissent 59 px de contenu
    chacun. « 1200kg » en Bebas 32 en demande 79, et .metric-box porte
    overflow:hidden : le chiffre n'était pas débordé, il était COUPÉ — sans rien
@@ -3076,7 +3086,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="openAthleteProfile()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div id="clh-athlete-avatar" style="width:48px;height:48px;border-radius:var(--r-full);background:var(--surface-2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
       <div>
-        <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:4px;font-weight:700;text-transform:uppercase;margin-bottom:2px">MON PROFIL</div>
+        <div class="eyebrow eyebrow-act" style="margin-bottom:2px">MON PROFIL</div>
         <div style="font-size:var(--fs-md);font-family:var(--pile-titre);letter-spacing:1px;line-height:1" id="clh-name"></div>
         <span id="clh-sync-badge" class="rc-sync-badge"></span>
       </div>
@@ -3085,7 +3095,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" style="flex-shrink:0;filter:drop-shadow(0 0 6px rgba(224,32,32,.85))"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg>
       <div>
         <div class="txt-stat" style="color:var(--text);line-height:1;font-size:var(--fs-xl)" id="clh-streak-val">0</div>
-        <div style="font-size:var(--fs-xs);color:var(--text);letter-spacing:2px;text-transform:uppercase;font-weight:700;margin-top:1px">SEM.</div>
+        <div class="eyebrow" style="color:var(--text);margin-top:1px">SEM.</div>
       </div>
     </div>
   </div>
@@ -3144,7 +3154,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- DÉMARRER SÉANCE — hero card -->
       <div style="background:linear-gradient(160deg,#1a0303,#120000 55%,#0b0000);border:1px solid #3a0000;border-left:3px solid var(--red);border-radius:14px;padding:24px 20px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.6),0 0 30px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.05)">
         <div style="position:absolute;right:0;top:0;width:3px;height:100%;background:var(--red)"></div>
-        <div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:14px">Entraînement</div>
+        <div class="eyebrow eyebrow-act" style="margin-bottom:14px">Entraînement</div>
         <button class="btn btn-red" onclick="openSessionPicker()" style="margin-bottom:10px;letter-spacing:1.5px;font-size:var(--fs-md);box-shadow:var(--e-inset),var(--glow-red)">DÉMARRER MA SÉANCE</button>
         <button class="btn btn-outline" onclick="loadSessionManager()" style="font-size:var(--fs-xs);padding:11px;letter-spacing:1.5px">GÉRER MES SÉANCES</button>
       </div>
@@ -3176,7 +3186,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <path d="M0,2 L100,2 L100,19.76 Q101.13,25.26 98.73,14.25 Q96.79,19.75 94.84,15.51 Q91.64,21.01 88.43,12.09 Q85.04,17.59 81.65,18.22 Q78.72,23.72 75.8,15.79 Q73.1,21.29 70.4,19.34 Q67.43,24.84 64.46,12.11 Q60.57,17.61 56.69,13.98 Q53.96,19.48 51.23,11.51 Q48.43,17.01 45.62,19.91 Q41.63,25.41 37.65,16.09 Q35.19,21.59 32.74,12.59 Q30.68,18.09 28.62,11.63 Q26.22,17.13 23.82,19.11 Q20.27,24.61 16.73,19.59 Q14.33,25.09 11.92,20.27 Q8.63,25.77 5.34,20.06 Q2.67,25.56 0,20.06 Z" fill="#8fb6d2" opacity=".55"/>
           <path d="M0,0 L100,0 L100,18.26 Q101.13,23.76 98.73,12.75 Q96.79,18.25 94.84,14.01 Q91.64,19.51 88.43,10.59 Q85.04,16.09 81.65,16.72 Q78.72,22.22 75.8,14.29 Q73.1,19.79 70.4,17.84 Q67.43,23.34 64.46,10.61 Q60.57,16.11 56.69,12.48 Q53.96,17.98 51.23,10.01 Q48.43,15.51 45.62,18.41 Q41.63,23.91 37.65,14.59 Q35.19,20.09 32.74,11.09 Q30.68,16.59 28.62,10.13 Q26.22,15.63 23.82,17.61 Q20.27,23.11 16.73,18.09 Q14.33,23.59 11.92,18.77 Q8.63,24.27 5.34,18.56 Q2.67,24.06 0,18.56 Z" fill="url(#congere)"/>
           <circle cx="92.16" cy="10.14" r="0.7" fill="var(--text)" opacity="0.47"/><circle cx="64.39" cy="4.7" r="0.43" fill="var(--text)" opacity="0.47"/><circle cx="5.35" cy="10.75" r="0.68" fill="var(--text)" opacity="0.55"/><circle cx="24.91" cy="2.1" r="0.62" fill="var(--text)" opacity="0.31"/><circle cx="40.35" cy="7.11" r="0.7" fill="var(--text)" opacity="0.44"/><circle cx="31.93" cy="12.22" r="0.55" fill="var(--text)" opacity="0.54"/><circle cx="65.07" cy="4.65" r="0.3" fill="var(--text)" opacity="0.44"/><circle cx="79.28" cy="11.56" r="0.67" fill="var(--text)" opacity="0.52"/><circle cx="43.69" cy="3.5" r="0.4" fill="var(--text)" opacity="0.34"/><circle cx="79.3" cy="3.12" r="0.57" fill="var(--text)" opacity="0.34"/><circle cx="47.83" cy="3.38" r="0.68" fill="var(--text)" opacity="0.59"/><circle cx="7.31" cy="2.92" r="0.57" fill="var(--text)" opacity="0.61"/><circle cx="34.28" cy="4.86" r="0.27" fill="var(--text)" opacity="0.27"/><circle cx="12.68" cy="11.91" r="0.55" fill="var(--text)" opacity="0.51"/><circle cx="89.44" cy="6.83" r="0.39" fill="var(--text)" opacity="0.43"/><circle cx="96.66" cy="6.19" r="0.73" fill="var(--text)" opacity="0.49"/><circle cx="40.5" cy="11.47" r="0.63" fill="var(--text)" opacity="0.55"/><circle cx="56.76" cy="11.55" r="0.68" fill="var(--text)" opacity="0.45"/><circle cx="33.11" cy="3.44" r="0.28" fill="var(--text)" opacity="0.48"/><circle cx="97.94" cy="9.41" r="0.75" fill="var(--text)" opacity="0.58"/><circle cx="75.94" cy="2.42" r="0.29" fill="var(--text)" opacity="0.54"/><circle cx="10.31" cy="3.95" r="0.25" fill="var(--text)" opacity="0.49"/><circle cx="51.68" cy="2.04" r="0.74" fill="var(--text)" opacity="0.46"/><circle cx="13.63" cy="8.78" r="0.55" fill="var(--text)" opacity="0.58"/><circle cx="94.91" cy="4.06" r="0.49" fill="var(--text)" opacity="0.41"/><circle cx="68.38" cy="7.72" r="0.43" fill="var(--text)" opacity="0.45"/><circle cx="36.5" cy="4.94" r="0.29" fill="var(--text)" opacity="0.42"/><circle cx="53.59" cy="11.09" r="0.32" fill="var(--text)" opacity="0.48"/><circle cx="14.72" cy="11.76" r="0.66" fill="var(--text)" opacity="0.44"/><circle cx="11.23" cy="9.26" r="0.35" fill="var(--text)" opacity="0.34"/><circle cx="53.01" cy="10.38" r="0.57" fill="var(--text)" opacity="0.59"/><circle cx="57.34" cy="10.51" r="0.26" fill="var(--text)" opacity="0.27"/><circle cx="4.48" cy="7.06" r="0.55" fill="var(--text)" opacity="0.6"/><circle cx="59.84" cy="9.27" r="0.58" fill="var(--text)" opacity="0.59"/><circle cx="62.94" cy="11.29" r="0.56" fill="var(--text)" opacity="0.62"/><circle cx="82.91" cy="5.67" r="0.74" fill="var(--text)" opacity="0.26"/><circle cx="40.74" cy="4.08" r="0.69" fill="var(--text)" opacity="0.35"/><circle cx="98.16" cy="10.45" r="0.4" fill="var(--text)" opacity="0.56"/><circle cx="13.19" cy="12.43" r="0.74" fill="var(--text)" opacity="0.4"/><circle cx="62.38" cy="2.14" r="0.72" fill="var(--text)" opacity="0.55"/><circle cx="29.67" cy="4.31" r="0.61" fill="var(--text)" opacity="0.35"/><circle cx="61.99" cy="12.67" r="0.39" fill="var(--text)" opacity="0.48"/><circle cx="91.43" cy="10.81" r="0.51" fill="var(--text)" opacity="0.64"/><circle cx="24.15" cy="11.2" r="0.52" fill="var(--text)" opacity="0.26"/><circle cx="95.98" cy="2.73" r="0.52" fill="var(--text)" opacity="0.37"/><circle cx="94.55" cy="4.39" r="0.39" fill="var(--text)" opacity="0.49"/><circle cx="48.26" cy="5.47" r="0.47" fill="var(--text)" opacity="0.55"/><circle cx="81.82" cy="11.93" r="0.46" fill="var(--text)" opacity="0.33"/><circle cx="38.41" cy="12.24" r="0.7" fill="var(--text)" opacity="0.37"/><circle cx="68.67" cy="5.44" r="0.29" fill="var(--text)" opacity="0.29"/><circle cx="86.17" cy="3.62" r="0.55" fill="var(--text)" opacity="0.64"/><circle cx="89.68" cy="8.68" r="0.27" fill="var(--text)" opacity="0.55"/><circle cx="52.04" cy="7.45" r="0.32" fill="var(--text)" opacity="0.56"/><circle cx="75.72" cy="7.12" r="0.63" fill="var(--text)" opacity="0.35"/><circle cx="15.03" cy="12.04" r="0.43" fill="var(--text)" opacity="0.49"/><circle cx="65.04" cy="7.82" r="0.38" fill="var(--text)" opacity="0.4"/><circle cx="17.11" cy="7.77" r="0.52" fill="var(--text)" opacity="0.53"/><circle cx="81.11" cy="7.67" r="0.52" fill="var(--text)" opacity="0.47"/><circle cx="74.33" cy="2.9" r="0.31" fill="var(--text)" opacity="0.5"/><circle cx="77.02" cy="12.9" r="0.55" fill="var(--text)" opacity="0.25"/><circle cx="54.61" cy="2.88" r="0.36" fill="var(--text)" opacity="0.33"/><circle cx="46.59" cy="11.02" r="0.45" fill="var(--text)" opacity="0.32"/><circle cx="22.12" cy="7.84" r="0.57" fill="var(--text)" opacity="0.59"/><circle cx="2.17" cy="5.03" r="0.3" fill="var(--text)" opacity="0.37"/><circle cx="48.48" cy="6.51" r="0.62" fill="var(--text)" opacity="0.53"/><circle cx="19.07" cy="10.94" r="0.41" fill="var(--text)" opacity="0.59"/><circle cx="90.48" cy="10.43" r="0.66" fill="var(--text)" opacity="0.43"/><circle cx="46.66" cy="7.7" r="0.67" fill="var(--text)" opacity="0.58"/><circle cx="34.54" cy="7.51" r="0.39" fill="var(--text)" opacity="0.54"/><circle cx="86.2" cy="4.42" r="0.29" fill="var(--text)" opacity="0.38"/></svg>
-        <div style="position:relative;font-size:var(--fs-xs);color:#8fd0ff;letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:5px;--halo-c:rgba(124,196,255,.65);text-shadow:var(--halo-2)">❄ Séance gelée</div>
+        <div class="eyebrow" style="position:relative;color:#8fd0ff;margin-bottom:5px;--halo-c:rgba(124,196,255,.65);text-shadow:var(--halo-2)">❄ Séance gelée</div>
         <div style="position:relative;font-size:var(--fs-md);font-weight:800;color:#eaf6ff;margin-bottom:3px" id="clh-resume-name">Reprendre ma séance</div>
         <div style="position:relative;font-size:var(--fs-xs);color:#9ab6cc">Reprendre là où tu t'es arrêté →</div>
       </div>
@@ -3186,14 +3196,14 @@ const COACH_PHOTO='icons/coach.jpg';
         <!-- accent bleu propre à cette carte : var(--info) est ambre et servirait
              déjà la carte « 1er bilan en attente » juste en dessous, les deux
              deviendraient indistinguables -->
-        <div style="font-size:var(--fs-xs);color:#7fb3e8;letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:5px">✎ Bilan commencé</div>
+        <div class="eyebrow" style="color:#7fb3e8;margin-bottom:5px">✎ Bilan commencé</div>
         <div style="font-size:var(--fs-md);font-weight:800;margin-bottom:3px" id="clh-resume-bilan-name">Reprendre mon bilan</div>
         <div style="font-size:var(--fs-xs);color:var(--sub)" id="clh-resume-bilan-sub">Reprendre là où tu t'es arrêté →</div>
       </div>
 
       <!-- 1er BILAN EN ATTENTE -->
       <div id="clh-first-bilan-card" style="display:none;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px;cursor:pointer" onclick="openBilan('depart')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <div style="font-size:var(--fs-xs);color:var(--info);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:5px;display:flex;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="9" y="2" width="6" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> À compléter</div>
+        <div class="eyebrow" style="color:var(--info);margin-bottom:5px;display:flex;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="9" y="2" width="6" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> À compléter</div>
         <div style="font-size:var(--fs-md);font-weight:800;margin-bottom:4px;color:var(--text)">Questionnaire de départ</div>
         <!-- Le texte disait quoi faire, pas ce que ça rapporte. Depuis que le
              bilan ne bloque plus l'entrée dans l'app, cette carte est le seul
@@ -3233,9 +3243,9 @@ const COACH_PHOTO='icons/coach.jpg';
            fonction, htmlAnneauxMacros — mais ce qu'ils portent dépend de la
            diète : voir renderNutriAnneaux. -->
       <div class="card">
-        <div style="font-size:var(--fs-sm);font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--sub);margin-bottom:10px">Nutrition</div>
+        <div class="eyebrow" style="margin-bottom:10px">Nutrition</div>
         <div id="clh-nutri-rings"></div>
-        <div id="clh-nutri-sem-label" style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin:16px 0 8px">Cette semaine</div>
+        <div id="clh-nutri-sem-label" class="eyebrow" style="margin:16px 0 8px">Cette semaine</div>
         <div style="display:flex;gap:6px" id="clh-nutri-dots"></div>
         <div style="margin-top:10px;font-size:var(--fs-sm)">Score: <span style="font-weight:800;color:var(--green)" id="clh-nutri-score">—</span></div>
       </div>
@@ -22644,7 +22654,7 @@ function _renderWeeklyInto(el,sc){
       <div style="position:relative">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
           <div>
-            <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Séance du jour</div>
+            <div class="eyebrow" style="color:rgba(255,255,255,.55);margin-bottom:4px">Séance du jour</div>
             <div style="font-size:var(--fs-xl);font-weight:900;color:var(--text);letter-spacing:-0.3px;line-height:1.1">${heading}</div>
             ${nbEx?`<div style="font-size:var(--fs-xs);color:rgba(255,255,255,.6);margin-top:4px">${nbEx} exercice${nbEx>1?'s':''}${mainRest?' · '+mainRest+' repos':''}</div>`:'<div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);margin-top:4px">Récupération active</div>'}
           </div>
