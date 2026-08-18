@@ -371,7 +371,7 @@ body::after{content:'';position:fixed;inset:0;z-index:var(--z-layer);pointer-eve
 .btn-outline:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
 .btn-sm{padding:9px 16px;font-size:var(--fs-xs);width:auto;border-radius:var(--r-1);letter-spacing:1.5px}
 @keyframes celebratePulse{0%,100%{box-shadow:none;transform:none}50%{box-shadow:var(--glow-red);transform:scale(1.03)}}
-.celebrate{animation:celebratePulse 1var(--t-2) ease}
+.celebrate{animation:celebratePulse 1.2s ease}
 
 /* ====== INPUTS ====== */
 input,select,textarea{width:100%;padding:13px 16px;background:#0c0c0c;border:1px solid var(--border);border-radius:var(--r-1);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);outline:none;transition:var(--t-2)}
@@ -939,7 +939,7 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
   box-shadow:0 0 8px var(--arc-glow);will-change:transform}
 /* Point REC du mockup téléphone — animation CSS (et non SMIL) pour rester
    neutralisable par la règle prefers-reduced-motion en fin de feuille. */
-.rc-blink{animation:rcBlink 1var(--t-3) ease-in-out infinite}
+.rc-blink{animation:rcBlink 1.4s ease-in-out infinite}
 @keyframes rcBlink{0%,100%{opacity:1}50%{opacity:.25}}
 .content-card{transition:background var(--t-2),box-shadow var(--t-2),transform var(--arc-strike) var(--arc-c-discharge)}
 .content-card:hover{box-shadow:var(--e2);transform:translateY(-1px);filter:brightness(1.08)}
@@ -1160,8 +1160,8 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 .emo-opt.sel .emo-lbl{color:var(--eo);--halo-c:var(--eo-glow);text-shadow:var(--halo-1)}
 /* Badge record animé (fin de séance) — médaillon */
 .wd-badge{display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 0 2px;animation:wdBadgePop var(--t-4) cubic-bezier(.2,1.5,.4,1) both}
-.wd-badge-medal{position:relative;width:138px;height:138px;border-radius:var(--r-full);flex-shrink:0;animation:wdMedalSwing 3s ease-in-out var(--t-4) infinite,wdBadgeGlow 2var(--t-3) ease-in-out var(--t-4) infinite}
-.wd-badge-medal::after{content:'';position:absolute;inset:0;border-radius:var(--r-full);background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.22) 48%,transparent 58%);background-size:280% 100%;animation:wdShine 2var(--t-4) ease-in-out .9s infinite}
+.wd-badge-medal{position:relative;width:138px;height:138px;border-radius:var(--r-full);flex-shrink:0;animation:wdMedalSwing 3s ease-in-out var(--t-4) infinite,wdBadgeGlow 2.4s ease-in-out var(--t-4) infinite}
+.wd-badge-medal::after{content:'';position:absolute;inset:0;border-radius:var(--r-full);background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.22) 48%,transparent 58%);background-size:280% 100%;animation:wdShine 2.8s ease-in-out .9s infinite}
 @keyframes wdBadgePop{0%{transform:scale(.4);opacity:0}65%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
 @keyframes wdBadgeGlow{0%,100%{filter:drop-shadow(0 0 8px rgba(224,32,32,.35))}50%{filter:drop-shadow(0 0 22px rgba(224,32,32,.65))}}
 @keyframes wdMedalSwing{0%,100%{transform:rotate(0deg)}18%{transform:rotate(-6deg)}38%{transform:rotate(5deg)}58%{transform:rotate(-2.5deg)}78%{transform:rotate(1.5deg)}}
