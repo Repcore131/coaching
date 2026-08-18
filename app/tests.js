@@ -30967,10 +30967,17 @@ vendredi 78 6h 44m
         if(s.pointerEvents!=='none') return _echec('pointer-events : '+s.pointerEvents);
         return s.position==='fixed'?true:_echec('position : '+s.position);})());
       ok('Le calque passe SOUS le toast et AU-DESSUS des modales',(()=>{
+        // Le 3000 en dur etait un pense-bete de l'epoque ou #wo-pause-modal
+        // occupait ce niveau. L'echelle nomme desormais le sommet des modales :
+        // on s'y compare, ce qui suit le contrat au lieu d'un nombre fige.
+        const _cr=n=>parseInt(getComputedStyle(document.documentElement)
+          .getPropertyValue(n),10);
         const z=parseInt(getComputedStyle(_arcCalque()).zIndex,10);
         const t=document.getElementById('toast');
-        const zt=t?parseInt(getComputedStyle(t).zIndex,10):9999;
-        return (z>3000&&z<zt)?true:_echec('calque '+z+' / toast '+zt);})());
+        const zt=t?parseInt(getComputedStyle(t).zIndex,10):_cr('--z-toast');
+        const zm=_cr('--z-modal-2');
+        return (z>zm&&z<zt)?true
+          :_echec('calque '+z+' / modales '+zm+' / toast '+zt);})());
       ok('Le calque est masqué aux lecteurs d\'écran',
         _arcCalque().getAttribute('aria-hidden')==='true');
       ok('Une trace ANNULÉE retire son nœud, pas seulement une trace finie',(()=>{

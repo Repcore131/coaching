@@ -124,6 +124,21 @@ html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-h
   /* Bleus. #3355aa et #4466aa donnaient 2,7:1 et 3,4:1 sur #111 : c'etait un
      lien, donc un echec de contraste sur du texte actionnable. */
   --link:#7aa7e8;--accent-blue:#4fc3f7;--green:#22c55e;--orange:#f97316;--success:var(--green);--success-bg:#021007;--success-border:#052a10;--info:#d4a017;--info-bg:#160d00;--info-border:#2a1a00;--warning:var(--orange);--warning-bg:#1a0800;--warning-border:#3a1500;--danger:var(--red);--danger-bg:#1a0000;--danger-border:#3a0000;--cycle-accent:#A78BFA;--glow-sm:0 0 12px rgba(224,32,32,.25);--glow-md:0 0 28px rgba(255,51,69,.4);--glow-lg:0 0 56px rgba(255,51,69,.5);
+  /* Empilement. Le fichier portait 90 z-index sur 18 valeurs, de 0 à 9999, sans
+     aucune règle : 900, 2100, 5000, 8000, 9000, 9998, 9999. Six crans suffisent,
+     et l'ordre ci-dessous est le contrat :
+       base < raised < bar < modal < modal-2 < layer < toast
+     --z-modal-2 n'est pas un caprice : #rc-confirm et #rc-saisie s'ouvrent
+     PAR-DESSUS une modale déjà à l'écran — _histCalqueOuvert les traite d'ailleurs
+     comme deux calques distincts, et la superposition a été vérifiée dans le
+     navigateur. Sans ce cran, une demande de confirmation passerait derrière la
+     modale qui la pose.
+     --z-layer porte ce qui doit couvrir les modales sans couvrir le toast : le
+     grain global, #arc-calque et le bandeau hors-ligne. */
+  --z-base:0;--z-raised:10;--z-bar:100;--z-modal:1000;--z-modal-2:1100;--z-layer:1800;--z-toast:2000;
+  /* UN SEUL VOILE. Il s'écrivait de neuf façons — #000a à #000e, et quatre rgba
+     de .82 à .93 — neuf gris pour un seul geste : masquer ce qu'il y a derrière. */
+  --scrim:rgba(0,0,0,.80);
   /* Échelle typographique, HUIT CRANS. Le fichier portait 1898 tailles écrites
      à la main sur 34 valeurs distinctes, dont six demi-crans — 9.5, 10.5, 11.5,
      12.5, 13.5, 14.5 — que rien ne distingue à l'œil de leur voisin entier.
@@ -291,7 +306,7 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
 }
 
 /* ====== GRAIN TEXTURE GLOBAL ====== */
-body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;opacity:1;
+body::after{content:'';position:fixed;inset:0;z-index:var(--z-layer);pointer-events:none;opacity:1;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
   background-repeat:repeat;background-size:300px 300px;}
 
@@ -511,8 +526,11 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
    position:fixed se cale sur la fenetre — sans cela la barre s'etalerait sur
    toute la largeur d'un ecran large. Meme idiome que les bannieres (l. 8717).
    z-index sous les modales (1000) : une modale doit couvrir la barre. */
-#client-tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);
-  width:100%;max-width:480px;z-index:900;display:none}
+/* LE VOILE DE MODALE EST FLOUTÉ. Une seule règle pour un seul identifiant, quel
+   que soit le nombre d'endroits qui le construisent. Le -webkit- reste requis
+   sur Safari iOS, où la PWA de la plupart des athlètes s'exécute. */
+#modal-overlay{backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}#client-tabbar{position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+  width:100%;max-width:480px;z-index:var(--z-bar);display:none}
 #client-tabbar.show{display:flex}
 /* Compensation de la hauteur : la barre etant fixe, elle recouvre le bas de
    l'ecran. On rend au SCREEN la place qu'occupait l'ancien enfant flex — la
@@ -882,8 +900,8 @@ input[type=file]{display:none}
 .done-anim .done-icon{font-size:72px;margin-bottom:16px;animation:pulse 2s infinite}
 
 /* ═══ COACH TABS ═══ */
-#coach-tabs-bar{display:flex!important;flex-shrink:0;position:relative;z-index:10}
-#coach-tabs-bar button{cursor:pointer!important;pointer-events:auto!important;position:relative;z-index:10}
+#coach-tabs-bar{display:flex!important;flex-shrink:0;position:relative;z-index:var(--z-raised)}
+#coach-tabs-bar button{cursor:pointer!important;pointer-events:auto!important;position:relative;z-index:var(--z-raised)}
 #s-coach-home{height:100vh!important;height:100dvh!important;overflow:hidden!important;display:flex;flex-direction:column}
 #ch-main-area{display:flex!important;flex-direction:column!important;flex:1!important;min-height:0!important;overflow:hidden!important}
 
@@ -1222,7 +1240,7 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
    3000) et sous #toast (9999), qui doit rester lisible par-dessus tout.
    contain isole ses recalculs : ce qui s'y peint ne provoque aucun relayout
    ailleurs dans la page. */
-#arc-calque{position:fixed;inset:0;pointer-events:none;z-index:9000;
+#arc-calque{position:fixed;inset:0;pointer-events:none;z-index:var(--z-layer);
   contain:layout style paint;overflow:hidden}
 #arc-calque>*{position:absolute;pointer-events:none;opacity:0}
 /* La RÉMANENCE. Le box-shadow est FIXE, seule l'opacité est animée — un
@@ -2744,7 +2762,7 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
   <!-- Recherche d'aliment, en surcouche : le coach ne quitte jamais sa
        composition, donc il ne perd jamais ce qu'il n'a pas encore enregistré. -->
-  <div id="cpl-search" style="display:none;position:absolute;inset:0;background:var(--dark);z-index:40;flex-direction:column">
+  <div id="cpl-search" style="display:none;position:absolute;inset:0;background:var(--dark);z-index:var(--z-raised);flex-direction:column">
     <div class="topbar">
       <button class="back-btn" onclick="fermerRecherchePlan()">←</button>
       <span class="topbar-title" id="cpl-search-title">Choisir un aliment</span><span></span>
@@ -2897,7 +2915,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- CALCULATEUR DE CHARGES (modal) -->
-<div id="calc-modal" style="display:none;position:fixed;inset:0;background:#000c;z-index:2000;overflow-y:auto">
+<div id="calc-modal" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);overflow-y:auto">
   <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;margin-top:60px;min-height:calc(100vh - 60px);min-height:calc(100dvh - 60px)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <h2> Calculateur RIR</h2>
@@ -3357,7 +3375,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- SESSION PICKER (modal) -->
-<div id="session-picker" style="display:none;position:fixed;inset:0;background:#000c;z-index:2000;display:none;align-items:flex-end;justify-content:center">
+<div id="session-picker" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:none;align-items:flex-end;justify-content:center">
   <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <h2>Quelle séance aujourd'hui ?</h2>
@@ -3369,7 +3387,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- CYCLE SELECTOR (modal, femmes) -->
-<div id="cycle-modal" style="display:none;position:fixed;inset:0;background:#000c;z-index:2100;align-items:flex-end;justify-content:center">
+<div id="cycle-modal" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);align-items:flex-end;justify-content:center">
   <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:6px"> Phase du cycle</h2>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:20px;line-height:1.5">Comment tu te sens aujourd'hui ? Ta charge suggérée et ton nombre de séries peuvent être réduits selon ta réponse.</p>
@@ -3402,7 +3420,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- Écran de CHOIX : la question passe du niveau « chaque séance » au niveau
      « une fois ». Non bloquant : « plus tard » lance la séance sans rien
      décider, et au bout de trois reports on cesse de demander. -->
-<div id="cycle-choix-modal" style="display:none;position:fixed;inset:0;background:#000c;z-index:2100;align-items:flex-end;justify-content:center">
+<div id="cycle-choix-modal" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);align-items:flex-end;justify-content:center">
   <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:6px">Veux-tu adapter tes séances à ton cycle ?</h2>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:20px;line-height:1.5">Une seule fois. Tu pourras changer d'avis à tout moment dans « Mon profil ».</p>
@@ -3423,7 +3441,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- Cinq « je ne sais pas » d'affilée : la question ne sert plus à rien. -->
-<div id="cycle-arret-modal" style="display:none;position:fixed;inset:0;background:#000c;z-index:2100;align-items:flex-end;justify-content:center">
+<div id="cycle-arret-modal" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);align-items:flex-end;justify-content:center">
   <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:6px">On arrête de te demander ?</h2>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:20px;line-height:1.5">Tu as passé la question cinq fois de suite. Tu pourras la réactiver dans « Mon profil ».</p>
@@ -3433,7 +3451,7 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- iOS INSTALL GUIDE MODAL -->
-<div id="ios-install-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:4000;align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeIosInstallGuide()">
+<div id="ios-install-modal" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeIosInstallGuide()">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px 36px;width:100%;max-width:480px;animation:slideUp .3s ease">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:.3px">📲 Installer l'app</div>
@@ -3468,7 +3486,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- PAUSE / CANCEL WORKOUT MODAL -->
 <!-- CONFIRMATION MAISON. Meme forme que la feuille de pause juste en
      dessous, pour que la question ne surgisse pas d un autre monde. -->
-<div id="rc-confirm" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:4000;align-items:flex-end;justify-content:center">
+<div id="rc-confirm" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal-2);align-items:flex-end;justify-content:center">
   <div style="background:linear-gradient(180deg,#151515,#0e0e0e);border-top:2px solid var(--red);border-radius:20px 20px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom,0px));width:100%;max-width:480px;box-shadow:0 -12px 40px rgba(0,0,0,.7)">
     <div style="font-family:'Bebas Neue',Montserrat,sans-serif;font-size:var(--fs-xl);letter-spacing:3px;color:var(--red-text);margin-bottom:10px">REPCORE</div>
     <div id="rc-confirm-titre" style="white-space:pre-line;font-size:var(--fs-lg);font-weight:800;color:#fff;margin-bottom:6px"></div>
@@ -3480,7 +3498,7 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
 </div>
 <!-- SAISIE. Remplace prompt(), que Chrome éteint avec les autres boîtes. -->
-<div id="rc-saisie" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:4000;align-items:flex-end;justify-content:center">
+<div id="rc-saisie" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal-2);align-items:flex-end;justify-content:center">
   <div style="background:linear-gradient(180deg,#151515,#0e0e0e);border-top:2px solid var(--red);border-radius:20px 20px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom,0px));width:100%;max-width:480px">
     <div style="font-family:'Bebas Neue',Montserrat,sans-serif;font-size:var(--fs-xl);letter-spacing:3px;color:var(--red-text);margin-bottom:10px">REPCORE</div>
     <div id="rc-saisie-titre" style="font-size:var(--fs-lg);font-weight:800;color:#fff;margin-bottom:6px;white-space:pre-line"></div>
@@ -3492,7 +3510,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
   </div>
 </div>
-<div id="wo-pause-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:3000;align-items:flex-end;justify-content:center">
+<div id="wo-pause-modal" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);align-items:flex-end;justify-content:center">
   <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px">
     <div style="font-size:var(--fs-md);font-weight:800;letter-spacing:.5px;margin-bottom:4px">Séance en cours</div>
     <div style="font-size:var(--fs-sm);color:var(--text-faint);margin-bottom:20px">Que veux-tu faire ?</div>
@@ -4274,8 +4292,8 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- TOAST -->
 <!-- BANDE RÉSEAU — persistante hors ligne, brève au retour -->
-<div id="rc-offline-bar" role="status" aria-live="polite" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9998;padding:9px 14px;padding-top:calc(9px + env(safe-area-inset-top,0px));text-align:center;font-size:var(--fs-xs);font-weight:700;letter-spacing:.3px;line-height:1.4"></div>
-<div id="toast" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:#222;color:#fff;padding:12px 20px;border-radius:12px;font-size:var(--fs-md);font-weight:600;z-index:9999;transition:.3s;opacity:0;min-width:200px;text-align:center;pointer-events:none"></div>
+<div id="rc-offline-bar" role="status" aria-live="polite" style="display:none;position:fixed;top:0;left:0;right:0;z-index:var(--z-layer);padding:9px 14px;padding-top:calc(9px + env(safe-area-inset-top,0px));text-align:center;font-size:var(--fs-xs);font-weight:700;letter-spacing:.3px;line-height:1.4"></div>
+<div id="toast" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:#222;color:#fff;padding:12px 20px;border-radius:12px;font-size:var(--fs-md);font-weight:600;z-index:var(--z-toast);transition:.3s;opacity:0;min-width:200px;text-align:center;pointer-events:none"></div>
 
 <!-- ══════ BARRE D'ONGLETS ATHLÈTE ══════
      Sœur des écrans, et non enfant de #s-client-home : c'est ce qui lui permet
@@ -6691,7 +6709,7 @@ const CLOUD={
   showQR(){
     const url=APP_BASE_URL;
     const modal=document.createElement('div');
-    modal.style.cssText='position:fixed;inset:0;background:#000c;z-index:9999;display:flex;align-items:center;justify-content:center';
+    modal.style.cssText='position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:center;justify-content:center';
     modal.innerHTML=`<div style="background:#111;border:1px solid #222;border-radius:20px;padding:28px;text-align:center;max-width:300px;width:90%">
       <div style="font-size:var(--fs-md);font-weight:800;text-transform:uppercase;letter-spacing:2px;margin-bottom:16px">Scanner sur un autre appareil</div>
       <div id="qr-zone" style="width:220px;height:220px;border-radius:12px;background:#fff;padding:8px;margin:0 auto;display:flex;align-items:center;justify-content:center"></div>
@@ -6941,7 +6959,7 @@ function _proposerReconsentement(){
   if(!currentUser||_consentementAJour(currentUser)) return;
   if(document.getElementById('rc-consent-modal')) return;   // idempotent
   const dejaVu=!!(currentUser.consent&&currentUser.consent.policyVersion);
-  const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:#000d;z-index:3000;display:flex;align-items:flex-end;justify-content:center">
+  const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div id="rc-consent-modal" onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <h2 style="font-size:var(--fs-lg);margin-bottom:8px">${dejaVu?'La politique de confidentialité a changé':'Ton accord est nécessaire'}</h2>
     <p class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:16px">${dejaVu
@@ -7006,7 +7024,7 @@ function _proposerImportAthlete(){
   if(d.connu&&d.seances<d.seancesExistantes)
     degats.push((d.seancesExistantes-d.seances)+' séance'+((d.seancesExistantes-d.seances)>1?'s':''));
   degats.push(...d.ecrase);
-  const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
+  const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div id="rc-pkg-modal" onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <h2 style="font-size:var(--fs-lg)">Importer un profil ?</h2>
@@ -7617,7 +7635,7 @@ function htmlSelecteurComptes(opts){
 function ouvrirComptes(){
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
-    `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
+    `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
       <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:16px 16px 0 0;padding:18px;width:100%;max-width:520px;max-height:88vh;overflow:auto">
         <div style="font-size:var(--fs-lg);font-weight:800;margin-bottom:4px">Changer de compte</div>
         <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:14px">Tes comptes restent connectés sur cet appareil. Tu passes de l'un à l'autre sans ressaisir ton mot de passe.</div>
@@ -9145,7 +9163,7 @@ function rescueLogin(em,pw){
   if(existing) existing.remove();
   const panel=document.createElement('div');
   panel.id='rescue-panel';
-  panel.style.cssText='position:fixed;inset:0;background:#000d;z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  panel.style.cssText='position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:center;justify-content:center;padding:20px';
   panel.innerHTML=`
     <div style="background:var(--surface-2);border:1px solid #2a2a2a;border-radius:20px;padding:28px 24px;max-width:340px;width:100%;text-align:center">
       <div style="font-size:var(--fs-2xl);margin-bottom:12px">✅</div>
@@ -9302,7 +9320,7 @@ function goRegisterCoach(){
   setTimeout(()=>selectRole('coach'),50);
 }
 function ouvrirInviteCoach(){
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease">
     <h2 style="margin-bottom:6px">Code d'invitation coach</h2>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:12px;line-height:1.6">Tu n'en as pas besoin pour créer ton compte. Si le créateur de RepCore t'a remis un code, saisis-le ici : il est à usage unique.</p>
@@ -9721,7 +9739,7 @@ function _annoncerDejaRattache(coachDuLien){
   if(!actuel) return false;
   const nomLien=coachDuLien?(((coachDuLien.fname||'')+' '+(coachDuLien.lname||'')).trim()||'ce coach'):'ce coach';
   const html='<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;'
-    +'background:#000c;z-index:1000;display:flex;align-items:flex-end;justify-content:center">'
+    +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
     +'<div onclick="event.stopPropagation()" style="background:var(--surface-2);'
     +'border-radius:20px 20px 0 0;padding:18px 20px 22px;width:100%;max-width:480px;'
     +'animation:fadeIn .3s ease">'
@@ -12420,7 +12438,7 @@ function loadCanal(){
 function _canalPorteFermee(){
   document.getElementById('modal-overlay')?.remove();
   document.body.insertAdjacentHTML('beforeend',
-  `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:center;justify-content:center;padding:24px">
+  `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:center;justify-content:center;padding:24px">
     <div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Canal verrouillé" style="background:var(--surface-2);border:1px solid var(--border);border-radius:16px;padding:22px 20px;width:100%;max-width:360px;animation:fadeIn .25s ease;text-align:center">
       <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:10px">🔒</div>
       <h2 style="margin-bottom:8px;font-size:var(--fs-lg)">Canal réservé aux athlètes suivis</h2>
@@ -12732,7 +12750,7 @@ function openMessageCanal(msgId){
   const m=(msgId&&(window._canalMsgsCoach||{})[msgId])||{};
   window._canalEdite=msgId||'';
   document.body.insertAdjacentHTML('beforeend',
-  `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" role="dialog" aria-modal="true" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:88vh;overflow-y:auto">
     <h2 style="margin-bottom:4px">${msgId?'Modifier le message':'Nouveau message'}</h2>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:12px;line-height:1.55">Il apparaît dans le canal de tous tes athlètes suivis, à leur prochaine ouverture de l'app. Ce n'est pas une notification : leur téléphone ne sonnera pas.</p>
@@ -12856,7 +12874,7 @@ function openWaGroupe(rowIdx){
       </div>
     </label>`;
   }).join('');
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:88vh;overflow-y:auto">
     <h2 style="margin-bottom:4px">💬 Message groupé</h2>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:10px">Rien n'est envoyé d'ici : chaque nom ouvrira ta conversation WhatsApp avec le texte déjà écrit.</p>
@@ -13210,7 +13228,7 @@ function ouvrirRite(cycle){
   try{ vit=vitesseHebdo(serieWeight(u)); }catch(e){}
   const tauxLib=(c.taux&&c.taux.interpretable)?(c.taux.taux+' %'):'—';
   const muscles=c.muscles.filter(m=>m.mev!=null).slice(0,14);
-  const html=`<div id="modal-overlay" onclick="fermerRite()" style="position:fixed;inset:0;background:#000c;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  const html=`<div id="modal-overlay" onclick="fermerRite()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 18px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:2px">
       <h2 style="margin:0">4 semaines</h2>
@@ -13937,7 +13955,7 @@ function ouvrirAjustement(idx){
   if(_ajCtx.creneaux.length) _ajCtx.slotChoisi=_ajCtx.creneaux[0].slot;
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
-    '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">'
+    '<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
     +'<div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:16px 16px 0 0;padding:18px;width:100%;max-width:480px;max-height:88vh;display:flex;flex-direction:column">'
     +'<div id="aj-corps" style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch"></div>'
     +'</div></div>');
@@ -17627,7 +17645,7 @@ function openApplyTemplate(){
         <button class="btn btn-red btn-sm" style="flex:1;margin:0;min-height:44px" onclick="applyTemplateToClient(${i})">Appliquer</button>
       </div>
     </div>`).join('');
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:85vh;overflow-y:auto">
     <h2 style="margin-bottom:4px">🗂️ Appliquer un modèle</h2>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:6px">à ${escapeHtml((c.fname||'')+' '+(c.lname||'')).trim()||'cet athlète'} : version ${genreDefaut==='F'?'F':'H'} pré-sélectionnée</p>
@@ -18623,7 +18641,7 @@ function ouvrirFicheBanque(slug,ev){
   // que les données portent réellement — inventer une liste de variantes
   // serait un jugement de métier qu'aucune donnée ne soutient ici.
   const variantes=f.schema?catalogueCoach().filter(x=>x.schema===f.schema&&x.slug!==f.slug).slice(0,6):[];
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;animation:fadeIn .3s ease">
     <h2 style="margin-bottom:10px;font-size:var(--fs-lg)">${escapeHtml(f.nom)}</h2>
     ${img?`<img src="${escapeHtml(img)}" alt="${escapeHtml(f.nom)}" style="width:100%;max-height:260px;object-fit:contain;background:#fff;border-radius:10px;margin-bottom:12px">`
@@ -18660,7 +18678,7 @@ async function _supprimerExoPerso(slug){
 function ouvrirCreationExo(){
   if(!peutConsulterBanque()){ toast('Réservé aux coachs.','var(--orange)'); return false; }
   const opt=(v,lib,sel)=>`<option value="${escapeHtml(v)}"${sel?' selected':''}>${escapeHtml(lib)}</option>`;
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;animation:fadeIn .3s ease">
     <h2 style="margin-bottom:4px;font-size:var(--fs-lg)">Créer un exercice</h2>
     <p class="sub" style="font-size:var(--fs-xs);margin-bottom:12px;line-height:1.6">Il n'appartient qu'à toi : aucun autre coach ne le voit. L'illustration est facultative — il n'y en aura pas.</p>
@@ -21946,7 +21964,7 @@ function ouvrirIllustration(nom){
   if(!img) return false;
   const ov=document.createElement('div');
   ov.id='illus-plein';
-  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.93);z-index:9999;'
+  ov.style.cssText='position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);'
     +'display:flex;flex-direction:column;align-items:center;justify-content:center;'
     +'padding:20px;touch-action:none';
   ov.innerHTML='<button type="button" aria-label="Fermer" data-fermer="1"'
@@ -22428,7 +22446,7 @@ function _ouvrirApercuStory(url){
   document.getElementById('story-apercu')?.remove();
   const d=document.createElement('div');
   d.id='story-apercu';
-  d.style.cssText='position:fixed;inset:0;z-index:4000;background:#000e;display:flex;'
+  d.style.cssText='position:fixed;inset:0;z-index:var(--z-modal);background:var(--scrim);display:flex;'
     +'flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:18px';
   d.innerHTML='<img src="'+url+'" alt="Ta séance du jour" '
     +'style="max-width:100%;max-height:64vh;border-radius:12px;box-shadow:0 20px 50px rgba(0,0,0,.7)">'
@@ -28628,7 +28646,7 @@ function bMetier(id){
   return `<div style="position:relative">
     <input type="text" id="${id}" autocomplete="off" placeholder="Commence à taper : maçon, infirmier, comptable…"
       value="${escapeHtml(v)}" oninput="_bMetierSaisie('${id}',this.value)" onfocus="_bMetierSaisie('${id}',this.value)">
-    <div id="${id}-sug" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:40;background:var(--dark);border:1px solid var(--border);border-radius:0 0 10px 10px;max-height:210px;overflow:auto"></div>
+    <div id="${id}-sug" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:var(--z-raised);background:var(--dark);border:1px solid var(--border);border-radius:0 0 10px 10px;max-height:210px;overflow:auto"></div>
     <div id="${id}-niv" style="font-size:var(--fs-2xs);line-height:1.6;margin-top:5px;color:${n?'var(--success)':'var(--text-faint)'}">${
       n?escapeHtml(n.lib)+' → facteur '+String(n.f).replace('.',',')
        :(v?'Métier non reconnu : le calcul utilisera le nombre de séances.':'')}</div>
@@ -29546,7 +29564,7 @@ function ouvrirFormContrainte(zone,cible){
   _ctCible=cible||null;
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
-    `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
+    `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
       <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:16px 16px 0 0;padding:18px;width:100%;max-width:520px;max-height:90vh;overflow:auto">
         <div style="font-size:var(--fs-lg);font-weight:800;margin-bottom:4px">Signaler une gêne</div>
         <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:14px">
@@ -29629,7 +29647,7 @@ function _ctValider(){
 // d'aller voir quelqu'un.
 function afficherEcranArret(zone){
   document.body.insertAdjacentHTML('beforeend',
-    `<div id="modal-overlay" style="position:fixed;inset:0;background:#000e;z-index:3000;display:flex;align-items:center;justify-content:center;padding:20px">
+    `<div id="modal-overlay" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:center;justify-content:center;padding:20px">
       <div style="background:var(--dark);border:2px solid var(--red);border-radius:16px;padding:20px;width:100%;max-width:460px;max-height:90vh;overflow:auto">
         <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase;margin-bottom:10px">Ce que tu décris demande un avis</div>
         ${TEXTE_ARRET_DRAPEAU.map(t=>`<div style="font-size:var(--fs-md);color:#eee;line-height:1.7;margin-bottom:9px">${escapeHtml(t)}</div>`).join('')}
@@ -30055,7 +30073,7 @@ function _jeRemplace(idx){
   if(!subs.length){ toast('Aucun remplacement à proposer','var(--orange)'); return; }
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
-    `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
+    `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
       <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:16px 16px 0 0;padding:18px;width:100%;max-width:520px;max-height:88vh;overflow:auto">
         <div style="font-size:var(--fs-lg);font-weight:800;margin-bottom:3px">Remplacer pour aujourd'hui</div>
         <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">
@@ -30138,7 +30156,7 @@ function ouvrirRemplacement(idx){
   const _estCoach=!!(currentUser&&currentUser.role==='coach');
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
-    `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
+    `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
       <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:16px 16px 0 0;padding:18px;width:100%;max-width:520px;max-height:88vh;display:flex;flex-direction:column">
         <div style="font-size:var(--fs-lg);font-weight:800;margin-bottom:3px">Remplacer pour aujourd'hui</div>
         ${_estCoach?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:10px">
@@ -31005,7 +31023,7 @@ function showBilanNotifBanner(){
   document.getElementById('bilan-notif-banner')?.remove();
   const b=document.createElement('div');
   b.id='bilan-notif-banner';
-  b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:5000;animation:slideDown .35s ease';
+  b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:var(--z-bar);animation:slideDown .35s ease';
   b.innerHTML=`<div style="background:linear-gradient(135deg,#1a0000,#280000);border-bottom:2px solid var(--red);padding:14px 18px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openBilanChoice();document.getElementById('bilan-notif-banner')?.remove()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <div style="flex:1;min-width:0">
       <div style="font-size:var(--fs-xs);font-weight:900;color:var(--red-text);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px">Bilan bimensuel · Ce samedi</div>
@@ -31064,7 +31082,7 @@ function showBilanNotifPrompt(){
   const existing=document.getElementById('notif-perm-modal');if(existing) return;
   const m=document.createElement('div');
   m.id='notif-perm-modal';
-  m.style.cssText='position:fixed;inset:0;background:#000b;z-index:8000;display:flex;align-items:flex-end;justify-content:center';
+  m.style.cssText='position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center';
   m.innerHTML=`<div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:28px 24px 40px;width:100%;max-width:480px;animation:slideUp .35s ease">
     <div style="text-align:center;font-size:var(--fs-3xl);margin-bottom:12px"></div>
     <h2 style="text-align:center;margin-bottom:8px;font-size:var(--fs-lg);font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:.5px">Active les rappels bilan</h2>
@@ -31448,7 +31466,7 @@ function showWoReminderBanner(){
   document.getElementById('wo-reminder-banner')?.remove();
   const b=document.createElement('div');
   b.id='wo-reminder-banner';
-  b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:5000;animation:slideDown .35s ease';
+  b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:var(--z-bar);animation:slideDown .35s ease';
   b.innerHTML=`<div style="background:linear-gradient(135deg,#001a06,#002810);border-bottom:2px solid var(--green);padding:14px 18px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openSessionPicker();document.getElementById('wo-reminder-banner')?.remove()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <div style="font-size:var(--fs-2xl);flex-shrink:0">💪</div>
     <div style="flex:1;min-width:0">
@@ -31471,7 +31489,7 @@ function openWoReminderConfig(){
   const dayBtns=DS.map((d,i)=>`<button id="wrd-day-${i}" onclick="wrdToggleDay(${i})" style="flex:1;min-width:0;border:1px solid ${curDays.includes(i)?'var(--red)':'var(--border)'};border-radius:6px;padding:9px 2px;background:${curDays.includes(i)?'#1a0000':'transparent'};color:${curDays.includes(i)?'var(--red)':'var(--sub)'};font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer">${d}</button>`).join('');
   const hourOpts=Array.from({length:17},(_,i)=>i+6).map(h=>`<option value="${h}" ${h===curH?'selected':''}>${String(h).padStart(2,'0')}h</option>`).join('');
   document.getElementById('wo-reminder-config')?.remove();
-  document.body.insertAdjacentHTML('beforeend',`<div id="wo-reminder-config" style="position:fixed;inset:0;background:#000b;z-index:3000;display:flex;align-items:flex-end;justify-content:center" onclick="if(event.target===this)this.remove()">
+  document.body.insertAdjacentHTML('beforeend',`<div id="wo-reminder-config" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center" onclick="if(event.target===this)this.remove()">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px 36px;width:100%;max-width:480px;animation:slideUp .3s ease">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <h2 style="margin:0;font-size:var(--fs-lg);display:flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Rappel séance</h2>
@@ -42859,7 +42877,7 @@ function openCoachSuppEdit(id){
   const unitLabels={'gélule(s)':'gél.','comprimé(s)':'cpr.','scoop(s)':'scoop','cuillère(s)':'c.à.s'};
   const unitOptions=unitOpts.map(u=>`<option value="${u}"${s&&s.dosage_unit===u?' selected':''}>${unitLabels[u]||u}</option>`).join('');
   const isActive=s?s.active!==false:true;
-  const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
+  const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <h2>${s?'Modifier le complément':'Nouveau complément'}</h2>
@@ -44469,7 +44487,7 @@ function _tplListe(){
 function ouvrirModeles(cible){
   const l=_tplListe();
   window._tplCible=cible||'vc-general';
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 18px 22px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">
     <h2 style="margin-bottom:2px">Modèles</h2>
     <p class="sub" style="font-size:var(--fs-xs);margin-bottom:10px">Le texte reste modifiable après insertion : rien ne part sans que tu l'aies relu.</p>
@@ -44548,7 +44566,7 @@ function ouvrirGestionModeles(){
   closeModal();
   const l=_tplListe();
   const opts=(sel)=>Object.keys(TPL_CAT_LIB).map(c=>`<option value="${c}"${c===sel?' selected':''}>${escapeHtml(TPL_CAT_LIB[c])}</option>`).join('');
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 18px 22px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">
     <h2 style="margin-bottom:2px">Mes modèles</h2>
     <p class="sub" style="font-size:var(--fs-xs);margin-bottom:12px">Variables reconnues : {prénom}, {exercice}, {séance}, {charge}. Elles sont remplies au moment où tu insères le modèle.</p>
@@ -45050,7 +45068,7 @@ function openVideoCorrection(email,videoId){
   tplContexte({prenom:c.fname,exercice:v.name},'vc-general');
   window._tsAnnotations=v.feedbackTimestamps?JSON.parse(JSON.stringify(v.feedbackTimestamps)):[];
   const _vcReste=(()=>{ try{ return _fileVideosSuivantes(email,videoId).length; }catch(e){ return 0; } })();
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 24px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:92vh;overflow-y:auto">
     <h2 style="margin-bottom:2px">✏️ Corriger</h2>
     <!-- LE RESTE DE LA FILE, quand il y en a une. Des modales qui
@@ -48501,7 +48519,7 @@ function ouvrirChoixPhase(){
   _phChoix=typePhase(currentUser);
   closeModal();
   document.body.insertAdjacentHTML('beforeend',
-    `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+    `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
       <div onclick="event.stopPropagation()" style="background:var(--dark);border:1px solid var(--border);border-radius:16px 16px 0 0;padding:18px;width:100%;max-width:520px;max-height:88vh;overflow:auto">
         ${_htmlChoixPhase()}
       </div></div>`);
@@ -49228,7 +49246,7 @@ function multiLineChart(id,labels,series){
 }
 function openPhotoFull(src,title){
   const m=document.createElement('div');
-  m.style.cssText='position:fixed;inset:0;background:#000e;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer';
+  m.style.cssText='position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer';
   m.onclick=()=>m.remove();
   m.innerHTML=`<div style="font-size:var(--fs-xs);color:#888;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:12px">${escapeHtml(title)}</div>
     <img src="${escapeHtml(src)}" style="max-width:94vw;max-height:80vh;object-fit:contain;border-radius:8px">
@@ -49531,7 +49549,7 @@ async function importVideoLinksFromPdf(input){
     } else {
       // Modale diagnostic — montre le texte brut extrait
       const preview=t=>t.replace(/</g,'&lt;').slice(0,400);
-      const html=`<div id="modal-overlay" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
+      const html=`<div id="modal-overlay" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
       <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:500px;max-height:80vh;overflow-y:auto">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
           <b style="color:var(--red-light)">Aucun lien trouvé : Diagnostic</b>
@@ -49587,7 +49605,7 @@ async function analyzeProgPhotos(){
         if(!videoLinks.length){
           const esc=s=>s.replace(/</g,'&lt;').slice(0,600);
           document.body.insertAdjacentHTML('beforeend',`
-          <div id="modal-overlay" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
+          <div id="modal-overlay" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
           <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:500px;max-height:85vh;overflow-y:auto">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
               <b style="color:var(--red-light)">Lecture automatique : texte brut</b>
@@ -50116,7 +50134,7 @@ function showOcrReviewModal(exercises,idx,videoLinks=[]){
       <button onclick="this.closest('#ocr-ex-${i}').remove()" style="margin-top:8px;background:none;border:none;color:var(--red-light);font-size:var(--fs-xs);cursor:pointer;font-family:Montserrat,sans-serif"> Supprimer</button>
     </div>`;}).join('');
 
-  const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
+  const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <h2> ${exercises.length} exercices lus</h2>
@@ -50338,7 +50356,7 @@ function showPdfSeancesModal(seances,targetEmail){
       </div>
     </div>`).join('');
   document.getElementById('modal-overlay')?.remove();
-  const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
+  const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <h2>${seances.length} séance${seances.length>1?'s':''} détectée${seances.length>1?'s':''}</h2>
@@ -50356,7 +50374,7 @@ function showDrivePdfModal(driveUrl,targetEmail){
   _pendingPdfTarget=targetEmail;
   document.getElementById('modal-overlay')?.remove();
   const openUrl=_driveOpenUrl(driveUrl);
-  const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:#000c;z-index:2000;display:flex;align-items:flex-end;justify-content:center">
+  const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <h2 style="font-size:var(--fs-lg)"> PDF Google Drive</h2>
@@ -50431,7 +50449,7 @@ function openAddAthlete(){
   // parce que l'affilié est plafonné à 12 mois par code et le créateur non :
   // annoncer la même durée aux deux serait faux pour l'un des deux.
   const estCreateur=currentUser?.email===CREATOR_EMAIL;
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
   <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:6px">➕ Ajouter un athlète</h2>
     <p class="sub" style="margin-bottom:8px;font-size:var(--fs-sm)">${estCreateur
@@ -52099,7 +52117,7 @@ function offboardCoach(coachId){
     +'<div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">Les athlètes conservent leur compte mais n\'ont plus de coach</div></div></label>';
   const ov=document.createElement('div');
   ov.id='modal-overlay';ov.onclick=closeModal;
-  ov.style.cssText='position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center';
+  ov.style.cssText='position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center';
   ov.innerHTML='<div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-sizing:border-box">'
     +'<div style="width:40px;height:4px;background:#333;border-radius:2px;margin:0 auto 18px"></div>'
     +'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Réassignation des athlètes</div>'
@@ -53503,7 +53521,7 @@ function _rendreSelecteurMuscles(titre){
       <div style="display:flex;gap:5px;flex:0 0 122px">${b(p,m.c,'PRIM.','_selMusclePrim')}${b(s,m.c,'SEC.','_selMuscleSec')}</div>
     </div>`;
   }).join('');
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
     <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 18px 20px;width:100%;max-width:480px;max-height:88vh;display:flex;flex-direction:column">
       <h2 style="margin-bottom:2px;font-size:var(--fs-lg)">Muscles travaillés</h2>
       <p class="sub" style="font-size:var(--fs-xs);margin-bottom:12px;line-height:1.5">${titre}</p>
@@ -53612,7 +53630,7 @@ function ouvrirFusion(k){
   const cibles=[...vus.entries()].filter(([kk])=>kk!==k)
     .sort((a,b)=>b[1].seances-a[1].seances).slice(0,60);
   if(!cibles.length) return toast('Aucun autre exercice avec qui fusionner.','var(--orange)');
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
     <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 18px 20px;width:100%;max-width:480px;max-height:82vh;display:flex;flex-direction:column">
       <h2 style="margin-bottom:2px;font-size:var(--fs-lg)">Fusionner</h2>
       <p class="sub" style="font-size:var(--fs-xs);margin-bottom:6px;line-height:1.5">« ${escapeHtml(k)} » désigne en réalité :</p>
@@ -53679,7 +53697,7 @@ function _detecterRenommage(){
     const idx=_indexSessionData(s); return idx&&idx[x]!==undefined;
   });
   if(!aDeLHistorique) return;
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:#000c;z-index:1000;display:flex;align-items:flex-end;justify-content:center">
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
     <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px">
       <h2 style="margin-bottom:8px;font-size:var(--fs-lg)">Même exercice ?</h2>
       <p class="sub" style="font-size:var(--fs-sm);line-height:1.65;margin-bottom:16px">
