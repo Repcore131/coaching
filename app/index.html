@@ -1453,6 +1453,20 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 }
 </style>
 <script>
+// UN TOKEN NE SE RESOUT PAS DANS UN CANVAS. Affecter un var() a fillStyle
+// n'est pas une valeur valide : l'affectation est ignorée EN SILENCE et le contexte
+// garde sa couleur précédente — le noir par défaut, donc rien de visible sur ce
+// thème. ctx.font retombe de même sur « 10px sans-serif ».
+//
+// On lit donc la variable sur :root et on rend sa VALEUR. Le repli n'est pas
+// décoratif : sans lui, un token absent redonnerait exactement le noir qu'on
+// cherche à éviter.
+const _tok=(nom,repli)=>{
+  try{
+    const v=getComputedStyle(document.documentElement).getPropertyValue(nom).trim();
+    return v||repli;
+  }catch(e){ return repli; }
+};
 const COACH_PHOTO='icons/coach.jpg';
 </script>
 </head>
@@ -14829,7 +14843,7 @@ function _dessinerCroissance(id,pts){
   ctx.font='600 8.5px Montserrat,sans-serif';ctx.textBaseline='middle';
   [0,.5,1].forEach(f=>{
     const y=gT+ih-f*ih;
-    ctx.strokeStyle=f===0?'var(--border)':'var(--border)';ctx.lineWidth=1;
+    ctx.strokeStyle=f===0?_tok('--border','#242424'):_tok('--border','#242424');ctx.lineWidth=1;
     ctx.setLineDash(f===0?[]:[3,4]);
     ctx.beginPath();ctx.moveTo(gL,y);ctx.lineTo(gL+iw,y);ctx.stroke();ctx.setLineDash([]);
     ctx.fillStyle='rgba(255,90,90,.55)';ctx.textAlign='right';
@@ -14862,14 +14876,14 @@ function _dessinerCroissance(id,pts){
     ptsC.forEach(q=>ctx.lineTo(q.x,q.y));
     ctx.lineTo(ptsC[ptsC.length-1].x,gT+ih);ctx.closePath();
     ctx.fillStyle=g;ctx.fill();
-    ctx.strokeStyle='var(--text)';ctx.lineWidth=2;ctx.lineJoin='round';ctx.lineCap='round';
+    ctx.strokeStyle=_tok('--text','#efefef');ctx.lineWidth=2;ctx.lineJoin='round';ctx.lineCap='round';
     ctx.shadowColor='rgba(255,255,255,.85)';ctx.shadowBlur=9;
     ctx.beginPath();ptsC.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.stroke();
     ctx.shadowBlur=0;
   }
   // Le dernier point seul est marqué : c'est la valeur d'aujourd'hui.
   const dern=ptsC[ptsC.length-1];
-  ctx.fillStyle='var(--text)';ctx.shadowColor='rgba(255,255,255,.9)';ctx.shadowBlur=12;
+  ctx.fillStyle=_tok('--text','#efefef');ctx.shadowColor='rgba(255,255,255,.9)';ctx.shadowBlur=12;
   ctx.beginPath();ctx.arc(dern.x,dern.y,3.5,0,Math.PI*2);ctx.fill();
   ctx.shadowBlur=0;ctx.strokeStyle='#0b0b0b';ctx.lineWidth=1.5;
   ctx.beginPath();ctx.arc(dern.x,dern.y,3.5,0,Math.PI*2);ctx.stroke();
@@ -22358,7 +22372,7 @@ function _dessinerStorySeance(d){
     g.fillStyle=(i===d.sel)?'rgba(255,255,255,.30)':(act?'rgba(255,255,255,.11)':'rgba(0,0,0,.26)');
     g.fill();
     if(i===d.todayIdx&&i!==d.sel){ g.strokeStyle='rgba(255,255,255,.55)'; g.lineWidth=2; g.stroke(); }
-    g.fillStyle=(i===d.sel)?'var(--text)':(act?'rgba(255,255,255,.78)':'rgba(255,255,255,.28)');
+    g.fillStyle=(i===d.sel)?_tok('--text','#efefef'):(act?'rgba(255,255,255,.78)':'rgba(255,255,255,.28)');
     g.font='800 24px '+MONT; g.textAlign='center';
     g.fillText(DS[i],px+pw/2,y-4);
     px+=pw+pg;
@@ -22366,7 +22380,7 @@ function _dessinerStorySeance(d){
   g.textAlign='left';
   // Le titre de la seance.
   y+=76;
-  g.fillStyle='var(--text)'; g.font='700 66px '+BEBAS;
+  g.fillStyle=_tok('--text','#efefef'); g.font='700 66px '+BEBAS;
   _texteAjuste(g,d.titre,CX+52,y,CW-104,66,BEBAS);
   y+=46;
   g.fillStyle='rgba(255,255,255,.62)'; g.font='600 26px '+MONT;
@@ -22383,7 +22397,7 @@ function _dessinerStorySeance(d){
     g.textAlign='right'; g.fillStyle='rgba(255,255,255,.5)'; g.font='700 26px '+MONT;
     const dl=g.measureText(e.d).width;
     g.fillText(e.d,CX+CW-52,y);
-    g.textAlign='left'; g.fillStyle='var(--text)'; g.font='800 28px '+MONT;
+    g.textAlign='left'; g.fillStyle=_tok('--text','#efefef'); g.font='800 28px '+MONT;
     _texteCoupe(g,e.n,CX+108,y,CW-160-dl-24);
     y+=LH;
   });
@@ -27587,10 +27601,10 @@ function dessinerGrilleCharge(u){
       const c=d.par[i+'|'+mu];
       const x=MARGE+LARG_MUS+k*CASE;
       g.globalAlpha=c?(0.18+0.82*(c.tonnageRelatif||0)):0.18;
-      g.fillStyle=(c&&c.repere)?GC_COULEURS[c.repere]:'var(--border)';
+      g.fillStyle=(c&&c.repere)?GC_COULEURS[c.repere]:_tok('--border','#242424');
       g.fillRect(x+2,y-HAUT/2+2,CASE-4,HAUT-4);
       g.globalAlpha=1;
-      g.fillStyle='var(--text)'; g.textAlign='center';
+      g.fillStyle=_tok('--text','#efefef'); g.textAlign='center';
       g.fillText(String(c?c.series:0),x+CASE/2,y);
     });
   });
@@ -31685,7 +31699,7 @@ function drawPie(id,slices){
   gc.addColorStop(0,'#1c1c1c');gc.addColorStop(1,'#0b0b0b');
   ctx.beginPath();ctx.arc(cx,cy,R-ep/2,0,2*Math.PI);ctx.fillStyle=gc;ctx.fill();
   ctx.strokeStyle='rgba(255,255,255,.05)';ctx.lineWidth=1;ctx.stroke();
-  ctx.fillStyle='var(--text)';ctx.font=`800 ${Math.round(sz*0.145)}px Montserrat,sans-serif`;
+  ctx.fillStyle=_tok('--text','#efefef');ctx.font=`800 ${Math.round(sz*0.145)}px Montserrat,sans-serif`;
   ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.shadowColor='rgba(255,255,255,.35)';ctx.shadowBlur=10;
   ctx.fillText(Math.round(slices[0].val/total*100)+'%',cx,cy);
@@ -43897,7 +43911,7 @@ function _drawCaffeineHistory(wKg,canvasId='caff-history-chart',daysOverride,por
       // LE JOUR MEME : contour et repere, pour le trouver sans compter.
       if(auj&&barH>3){
         ctx.save();
-        ctx.strokeStyle='var(--text)';ctx.globalAlpha=.65;ctx.lineWidth=1;
+        ctx.strokeStyle=_tok('--text','#efefef');ctx.globalAlpha=.65;ctx.lineWidth=1;
         if(ctx.roundRect){ctx.beginPath();ctx.roundRect(x+.5,y+.5,barW-1,barH-1,2);ctx.stroke();}
         else ctx.strokeRect(x+.5,y+.5,barW-1,barH-1);
         ctx.globalAlpha=1;ctx.fillStyle=c;
@@ -43909,7 +43923,7 @@ function _drawCaffeineHistory(wKg,canvasId='caff-history-chart',daysOverride,por
     // ── 5. Les dates ─────────────────────────────────────────────────
     ctx.fillStyle='#6a6a6a';ctx.font='700 9px Montserrat,sans-serif';ctx.textAlign='center';
     [0,7,14,21,27].forEach(i=>{
-      if(i===27){ctx.save();ctx.fillStyle='var(--text)';ctx.fillText(labels[i]||'',PAD.l+i*slotW+slotW/2,H-6);ctx.restore();return;}
+      if(i===27){ctx.save();ctx.fillStyle=_tok('--text','#efefef');ctx.fillText(labels[i]||'',PAD.l+i*slotW+slotW/2,H-6);ctx.restore();return;}
       ctx.fillText(labels[i]||'',PAD.l+i*slotW+slotW/2,H-6);
     });
   };
@@ -49164,7 +49178,7 @@ function _setupCanvas(id,defaultH){
 function _drawGrid(ctx,w,h,p,mn,mx){
   [0,.5,1].forEach(t=>{
     const y=h-p-t*(h-p*2);
-    ctx.strokeStyle=t===0?'var(--border)':'#242424';ctx.lineWidth=1;
+    ctx.strokeStyle=t===0?_tok('--border','#242424'):'#242424';ctx.lineWidth=1;
     ctx.setLineDash(t===0?[]:[3,4]);
     ctx.beginPath();ctx.moveTo(p,y);ctx.lineTo(w-p,y);ctx.stroke();
     ctx.setLineDash([]);ctx.fillStyle='#4a4a4a';
