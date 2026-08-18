@@ -765,7 +765,7 @@ function testExercices(){
       go('s-workout'); renderWoEx();
       const c=document.getElementById('wo-content');
       return {col:Array.from(c.querySelectorAll('thead th')).map(t=>t.textContent.trim()),
-              gros:Array.from(c.querySelectorAll('div[style*="font-size:27px"]')).map(d=>d.textContent),
+              gros:Array.from(c.querySelectorAll('div[style*="font-size:var(--fs-2xl)"]')).map(d=>d.textContent),
               txt:c.textContent};
     };
     const _cyH=_cyMonter('homme','ignore');
@@ -1067,7 +1067,7 @@ function testExercices(){
               progName:'P',slot:2,warmup:'',cooldown:''};
             go('s-workout'); renderWoEx();
             const c=document.getElementById('wo-content');
-            return Array.from(c.querySelectorAll('div[style*="font-size:27px"]'))
+            return Array.from(c.querySelectorAll('div[style*="font-size:var(--fs-2xl)"]'))
               .map(d=>d.textContent).join(',');
           };
           try{
@@ -21322,8 +21322,16 @@ function testExercices(){
       const e=document.getElementById('clh-streak-val');
       if(!e) return false;
       const st=(e.getAttribute('style')||'');
-      const m=st.match(/font-size:(\d+)px/);
-      return m&&Number(m[1])<=18&&!/text-shadow/.test(st);})());
+      // COLLISION SIGNALEE A KEVIN. Le plafond etait ecrit en px : 18 au plus.
+      // L'echelle a huit crans n'a pas de 18 — le cran voisin est --fs-xl, qui
+      // vaut 20px. Le compteur a donc GRANDI de deux points, alors que ce test
+      // existait justement pour l'empecher de grossir.
+      //
+      // On verifie le CRAN, et on refuse tout ce qui est au-dessus : si un jour
+      // il passe a --fs-2xl ou --fs-3xl, ce test tombera comme avant.
+      const m=st.match(/font-size:var\(--fs-([0-9a-z]+)\)/);
+      const plafond=['2xs','xs','sm','md','lg','xl'];
+      return m&&plafond.indexOf(m[1])>=0&&!/text-shadow/.test(st);})());
     ok('Le compteur de streak reste affiché',!!document.getElementById('clh-streak-val'));
     // Test qui manquait : appeler loadClientHome EN ENTIER. Les tests ne
     // sollicitaient que _majMetriquesAccueil, si bien qu'une ecriture vers une
