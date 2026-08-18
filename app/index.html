@@ -627,6 +627,28 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 .evo-titre{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);
   text-transform:uppercase;margin-bottom:8px;--halo-c:rgba(224,32,32,.45);text-shadow:var(--halo-1)}
 .metric-label{font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;margin-top:6px;font-weight:700}
+/* LA TUILE DE STATISTIQUE. Elle remplace .metric-box sur les DEUX ecrans de
+   seance — l'apercu et la fin. Les selecteurs sont DESCENDANTS : .st-val et
+   .st-lbl sont sur des enfants, et `.stat-tile.st-val` sans espace decrirait
+   un element portant les deux classes a la fois — il ne matcherait jamais. */
+.stat-tile{position:relative;overflow:hidden;flex:1;min-width:0;text-align:center;
+  padding:14px 8px;border-radius:11px;
+  background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.030) 11px,rgba(255,255,255,.030) 12px),
+  radial-gradient(90px 70px at 50% 0%,rgba(224,32,32,.16),transparent 72%),
+  linear-gradient(160deg,#232323,#141414 55%,#0b0b0b);
+  border:1px solid rgba(255,255,255,.08);border-left:3px solid var(--red);
+  box-shadow:0 16px 34px rgba(0,0,0,.72),0 4px 12px rgba(0,0,0,.6),
+  inset 0 1px 0 rgba(255,255,255,.08),inset 0 -1px 0 rgba(0,0,0,.65)}
+.stat-tile .st-val{font-family:var(--pile-titre);font-size:32px;line-height:1;
+  letter-spacing:.5px;color:var(--text);text-shadow:0 0 18px rgba(255,255,255,.20)}
+.stat-tile .st-lbl{font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;
+  letter-spacing:2px;margin-top:6px;font-weight:700}
+.stat-tile--fort{flex:1.3;border-left-color:#ff5a5a;
+  background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(0,0,0,.13) 11px,rgba(0,0,0,.13) 12px),
+  linear-gradient(145deg,#c10000 0%,#8d0000 55%,#5a0000 100%);
+  box-shadow:0 0 18px rgba(224,32,32,.38),inset 0 1px 0 rgba(255,255,255,.16),0 6px 16px rgba(0,0,0,.5)}
+.stat-tile--fort .st-lbl{color:rgba(255,255,255,.88)}
+@media (max-width:360px){.stat-tile{padding:14px 4px}.stat-tile .st-val{font-size:22px}.stat-tile .st-lbl{letter-spacing:1px}}
 /* LE SURTITRE. Neuf libellés en capitales espacées portaient neuf écritures :
    4px, 3px, 2px, 1.5px et .5px d'interlettrage, deux graisses, deux tailles.
    Chaque carte ne garde désormais que ce qui lui est propre — sa couleur
@@ -1414,7 +1436,7 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
      ils restent nommés. */
   /* Les tuiles de fin de seance sont animees en JS par _feterFinSeance : la
      regle universelle plus haut ne les atteint pas, il faut les nommer. */
-  #s-workout-done .metric-box{animation:none!important}
+  #s-workout-done .stat-tile{animation:none!important}
   .fx-loop,.fx-loop::after,.fx-loop::before,
   .wd-badge-medal::after,.skeleton::after{animation:none!important}
   /* État final propre pour les éléments dont l'animation portait la mise en forme */
@@ -3675,9 +3697,9 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
       <div id="wd-comparison"></div>
       <div style="display:flex;gap:8px;margin-bottom:20px">
-        <div class="metric-box"><div class="metric-val" id="wd-time">—</div><div class="metric-label">Durée</div></div>
-        <div class="metric-box"><div class="metric-val" id="wd-sets">—</div><div class="metric-label">Séries</div></div>
-        <div class="metric-box"><div class="metric-val" id="wd-vol">—</div><div class="metric-label">Volume</div></div>
+        <div class="stat-tile"><div class="st-val" id="wd-time">—</div><div class="st-lbl">Durée</div></div>
+        <div class="stat-tile"><div class="st-val" id="wd-sets">—</div><div class="st-lbl">Séries</div></div>
+        <div class="stat-tile"><div class="st-val" id="wd-vol">—</div><div class="st-lbl">Volume</div></div>
       </div>
       <div id="wd-etats"></div>
       <div id="wd-cooldown"></div>
@@ -22255,20 +22277,12 @@ function _renderApercu(){
   // diète et les scores : c'est la typographie que l'app donne déjà à ses
   // nombres, et elle se lit d'un mètre. La durée est la tuile ROUGE — c'est la
   // seule des trois qui décide si on a le temps de faire la séance maintenant.
-  const chiffre=(v,lib,fort)=>`<div style="flex:${fort?'1.3':'1'};min-width:0;position:relative;overflow:hidden;
-    text-align:center;border-radius:var(--r-3);padding:11px 6px;
-    background:${fort?'linear-gradient(145deg,#c10000 0%,#8d0000 55%,#5a0000 100%)':'linear-gradient(180deg,#161616,#0e0e0e)'};
-    border:1px solid ${fort?'rgba(255,90,90,.45)':'var(--border)'};
-    box-shadow:${fort?'0 0 18px rgba(224,32,32,.38),':''}inset 0 1px 0 rgba(255,255,255,${fort?'.16':'.05'}),0 6px 16px rgba(0,0,0,.5)">
-    <div style="position:absolute;inset:0;pointer-events:none;
-      background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(0,0,0,.13) 11px,rgba(0,0,0,.13) 12px)"></div>
-    <div style="position:relative">
-      <div style="font-family:var(--pile-titre);
-        font-size:var(--fs-2xl);line-height:1;color:var(--text);letter-spacing:.5px;
-        --halo-c:rgba(255,255,255,${fort?'.95':'.35'});text-shadow:var(--halo-1),0 0 22px rgba(255,255,255,${fort?'.5':'.15'})">${escapeHtml(String(v))}</div>
-      <div style="font-size:var(--fs-xs);margin-top:5px;text-transform:uppercase;letter-spacing:1.2px;font-weight:800;
-        color:${fort?'rgba(255,255,255,.88)':'var(--sub)'}">${escapeHtml(lib)}</div>
-    </div></div>`;
+  // La trame, le relief et le halo vivent desormais dans .stat-tile : le
+  // gabarit ne porte plus que la donnee, et le div de trame interpose n'a plus
+  // de raison d'etre.
+  const chiffre=(v,lib,fort)=>`<div class="stat-tile${fort?' stat-tile--fort':''}">
+    <div class="st-val">${escapeHtml(String(v))}</div>
+    <div class="st-lbl">${escapeHtml(lib)}</div></div>`;
   const notes=(sess.notes||'').trim();
   z.innerHTML=
     `<div style="display:flex;gap:8px;margin:12px 0 14px">
@@ -23981,7 +23995,7 @@ function _feterFinSeance(){
       {duration:450,easing:'cubic-bezier(0.05,0.70,0.10,1.00)',fill:'none'});
     a.addEventListener('finish',()=>v.remove());
     a.addEventListener('cancel',()=>v.remove());
-    document.querySelectorAll('#s-workout-done .metric-box').forEach((el,i)=>{
+    document.querySelectorAll('#s-workout-done .stat-tile').forEach((el,i)=>{
       el.style.animation='wFadeUp 0.6s cubic-bezier(.16,1,.3,1) '+(0.25+i*0.09)+'s both';
     });
     if(typeof arcHaptique==='function') arcHaptique('succes');
