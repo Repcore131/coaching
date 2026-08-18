@@ -144,6 +144,11 @@ html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-h
   --e4:0 20px 50px rgba(0,0,0,.65);
   --e-inset:inset 0 2px 6px rgba(0,0,0,.6);
   --glow-red:0 0 18px rgba(224,32,32,.35);
+  /* Durées et courbes. Dix-huit durées distinctes pour quatre intentions.
+     --c-out sort vite puis freine, --c-in fait l'inverse, --c-snap dépasse
+     légèrement puis revient. */
+  --t-1:120ms;--t-2:200ms;--t-3:320ms;--t-4:600ms;
+  --c-out:cubic-bezier(.16,1,.3,1);--c-in:cubic-bezier(.4,0,.9,.2);--c-snap:cubic-bezier(.2,1.5,.4,1);
   /* Halos. Douze rayons distincts de 6 à 30 px pour un seul geste — faire luire
      un chiffre — ramenés à trois crans.
 
@@ -345,11 +350,11 @@ body::after{content:'';position:fixed;inset:0;z-index:var(--z-layer);pointer-eve
   repeating-linear-gradient(-55deg,transparent,transparent 18px,rgba(198,15,8,.028) 18px,rgba(198,15,8,.028) 19px);}
 
 /* ====== SCREENS ====== */
-.screen{display:none!important;min-height:100vh;min-height:100dvh;flex-direction:column;animation:screenIn .22s ease both}.screen.active{display:flex!important}
+.screen{display:none!important;min-height:100vh;min-height:100dvh;flex-direction:column;animation:screenIn var(--t-2) ease both}.screen.active{display:flex!important}
 /* .screen.active handled above */
 
 /* ====== BUTTONS ====== */
-.btn{width:100%;padding:16px;border:none;border-radius:2px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800;cursor:pointer;transition:box-shadow .15s,background .15s,transform var(--arc-strike) var(--arc-c-discharge);text-transform:uppercase;letter-spacing:2.5px;-webkit-tap-highlight-color:transparent}
+.btn{width:100%;padding:16px;border:none;border-radius:2px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800;cursor:pointer;transition:box-shadow var(--t-1),background var(--t-1),transform var(--arc-strike) var(--arc-c-discharge);text-transform:uppercase;letter-spacing:2.5px;-webkit-tap-highlight-color:transparent}
 .btn-red{background:#E02020;color:var(--text);box-shadow:var(--glow-red)}
 .btn-red:hover{background:#c91a1a;box-shadow:var(--glow-red)}
 .btn-red:active{transform:scale(var(--arc-scale-charge));box-shadow:var(--e1),var(--glow-red);transition:transform var(--arc-attack) var(--arc-c-charge)}
@@ -358,10 +363,10 @@ body::after{content:'';position:fixed;inset:0;z-index:var(--z-layer);pointer-eve
 .btn-outline:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
 .btn-sm{padding:9px 16px;font-size:var(--fs-xs);width:auto;border-radius:3px;letter-spacing:1.5px}
 @keyframes celebratePulse{0%,100%{box-shadow:none;transform:none}50%{box-shadow:var(--glow-red);transform:scale(1.03)}}
-.celebrate{animation:celebratePulse 1.2s ease}
+.celebrate{animation:celebratePulse 1var(--t-2) ease}
 
 /* ====== INPUTS ====== */
-input,select,textarea{width:100%;padding:13px 16px;background:#0c0c0c;border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);outline:none;transition:.2s}
+input,select,textarea{width:100%;padding:13px 16px;background:#0c0c0c;border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);outline:none;transition:var(--t-2)}
 input:focus,select:focus,textarea:focus{border-color:var(--red);background:#0d0000;box-shadow:0 0 0 2px rgba(224,32,32,.15)}
 select option{background:#111}
 label{display:block;font-size:var(--fs-xs);font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;margin-top:16px}
@@ -413,7 +418,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .fq-carte[data-serre] .fq-titre{font-size:var(--fs-2xl)}
 .tab-bar{display:flex;background:#0c0c0c;border-top:1px solid var(--surface-2);padding:6px 0 10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));flex-shrink:0;scrollbar-width:none}
 .tab-bar::-webkit-scrollbar{display:none}
-.tab-btn{flex:1 1 auto;min-width:0;overflow:hidden;position:relative;background:none;border:none;color:#8a8a8a;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:6px 3px;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:700;text-transform:uppercase;letter-spacing:.2px;transition:.2s;white-space:nowrap}
+.tab-btn{flex:1 1 auto;min-width:0;overflow:hidden;position:relative;background:none;border:none;color:#8a8a8a;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:6px 3px;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:700;text-transform:uppercase;letter-spacing:.2px;transition:var(--t-2);white-space:nowrap}
 /* 6 onglets doivent tenir sans debordement horizontal. La taille ne descend
    plus pour y arriver — c'est l'interlettrage et les marges qui cedent.
    Mesure a 375px : « ÉVOLUTION » demandait 66px pour 63 disponibles et poussait
@@ -471,7 +476,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
   border:1px solid #242424;border-left:3px solid var(--border);
   box-shadow:var(--e3)
     inset 0 1px 0 rgba(255,255,255,.055),inset 0 -1px 0 rgba(0,0,0,.5);
-  transition:border-color .15s,box-shadow .15s}
+  transition:border-color var(--t-1),box-shadow var(--t-1)}
 .pil-compteur[data-vide="1"]{box-shadow:var(--e2)}
 .pil-val{font-family:var(--pile-titre);font-size:var(--fs-2xl);line-height:1;position:relative}
 .pil-lib{font-size:var(--fs-2xs);font-weight:800;letter-spacing:.9px;text-transform:uppercase;line-height:1.25;margin-top:6px}
@@ -490,7 +495,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .pil-lien{width:100%;min-height:46px;margin-top:8px;border-radius:11px;cursor:pointer;
   font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:#b4b4b4;
   background:linear-gradient(168deg,#181818,#0e0e0e);border:1px solid var(--border);
-  box-shadow:var(--e2);transition:.15s}
+  box-shadow:var(--e2);transition:var(--t-1)}
 .pil-lien:hover{color:var(--text);border-color:rgba(224,32,32,.5);box-shadow:var(--e3),var(--glow-red)}
 
 /* LA RECHERCHE. Creusée plutôt que posée : une ombre INTERNE dit « on écrit
@@ -531,7 +536,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 #ch-clients-list .badge{font-size:var(--fs-2xs);letter-spacing:.9px;padding:4px 9px;border-radius:4px;
   max-width:104px;white-space:normal;text-align:center;line-height:1.3}
 
-.ch-chip{background:var(--surface-1);border:1px solid var(--border);color:var(--text-dim);border-radius:20px;padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:.5px;cursor:pointer;min-height:34px;transition:.15s}
+.ch-chip{background:var(--surface-1);border:1px solid var(--border);color:var(--text-dim);border-radius:20px;padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:.5px;cursor:pointer;min-height:34px;transition:var(--t-1)}
 .ch-chip{box-shadow:var(--e2)}
 .ch-chip.actif{box-shadow:var(--e2),var(--glow-red)}
 .ch-chip.actif{background:var(--red-bg);border-color:var(--red);color:var(--text)}
@@ -622,7 +627,7 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 
 /* ====== EXERCISE / SERIES TABLE ====== */
 .exercise-card{background:var(--surface-1);border-radius:4px;margin-bottom:12px;overflow:hidden;border:1px solid var(--border)}
-.exo-chip{background:var(--surface-2);border:1.5px solid var(--border);color:var(--sub);font-size:var(--fs-sm);font-weight:800;width:32px;height:32px;border-radius:50%;cursor:pointer;font-family:Montserrat,sans-serif;transition:.15s;display:inline-flex;align-items:center;justify-content:center;padding:0}
+.exo-chip{background:var(--surface-2);border:1.5px solid var(--border);color:var(--sub);font-size:var(--fs-sm);font-weight:800;width:32px;height:32px;border-radius:50%;cursor:pointer;font-family:Montserrat,sans-serif;transition:var(--t-1);display:inline-flex;align-items:center;justify-content:center;padding:0}
 .exo-chip.active{background:var(--red);color:var(--text);border-color:var(--red)}
 .pf-chip{background:var(--surface-2);border:1.5px solid var(--border);color:var(--sub);font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;padding:6px 11px;border-radius:16px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;min-height:30px}
 .pf-chip.active{background:var(--red);color:var(--text);border-color:var(--red)}
@@ -662,25 +667,25 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
 .suggest-box .s-note{font-size:var(--fs-xs);color:var(--sub)}
 
 /* ====== PHOTO / UPLOAD ====== */
-.photo-slot{width:calc(50% - 6px);aspect-ratio:1;background:var(--surface-2);border-radius:4px;border:1px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:.2s;overflow:hidden;position:relative}
+.photo-slot{width:calc(50% - 6px);aspect-ratio:1;background:var(--surface-2);border-radius:4px;border:1px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:var(--t-2);overflow:hidden;position:relative}
 .photo-slot:hover{border-color:var(--red)}.photo-slot img{width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0}
 .nutrition-day{background:var(--surface-1);border-radius:4px;padding:14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;border:1px solid var(--border)}
 .fj-entry{background:var(--surface-1);border-radius:8px;padding:10px 12px;display:flex;align-items:center;margin-bottom:6px;border:1px solid var(--border);gap:8px}
 .fj-result{padding:12px 16px;border-bottom:1px solid #111;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .fj-result:active{background:var(--surface-2)}
-.fj-repas-btn{flex:1;padding:10px 6px;background:#111;border:1px solid #222;border-radius:8px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:.5px;cursor:pointer;text-align:center;transition:all .15s}
+.fj-repas-btn{flex:1;padding:10px 6px;background:#111;border:1px solid #222;border-radius:8px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:.5px;cursor:pointer;text-align:center;transition:all var(--t-1)}
 .fj-repas-btn.active{background:#1a0000;border-color:var(--red);color:var(--text)}
 
 /* ====== CODE DISPLAY ====== */
 .code-display{background:var(--dark);border-radius:4px;padding:24px;text-align:center;letter-spacing:8px;font-size:var(--fs-2xl);font-weight:900;color:var(--red-text);border:1px solid #2a0a0a;font-family:monospace}
 /* ====== SUPPLEMENTS ====== */
-.supp-timing-chip{display:inline-flex;align-items:center;padding:8px 14px;min-height:40px;border:1px solid var(--border);border-radius:20px;background:none;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;transition:.15s;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+.supp-timing-chip{display:inline-flex;align-items:center;padding:8px 14px;min-height:40px;border:1px solid var(--border);border-radius:20px;background:none;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;transition:var(--t-1);white-space:nowrap;-webkit-tap-highlight-color:transparent}
 .supp-timing-chip.active{background:#1a0000;border-color:var(--red);color:var(--text)}
 /* ====== CAFFEINE ====== */
 .caff-alert-banner{border:1px solid;border-radius:10px;padding:12px 14px;font-size:var(--fs-sm);font-weight:700;margin-bottom:8px;line-height:1.5}
-.caff-product-tile{background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:14px;cursor:pointer;transition:.15s;text-align:center;-webkit-tap-highlight-color:transparent}
+.caff-product-tile{background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:14px;cursor:pointer;transition:var(--t-1);text-align:center;-webkit-tap-highlight-color:transparent}
 .caff-product-tile:active{background:#1a0000;border-color:var(--red)}
-.caff-type-btn{flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;padding:8px 12px;border:1px solid var(--border);border-radius:20px;background:none;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;transition:.15s;white-space:nowrap}
+.caff-type-btn{flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;padding:8px 12px;border:1px solid var(--border);border-radius:20px;background:none;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;transition:var(--t-1);white-space:nowrap}
 .caff-tab-ico{display:inline-flex;line-height:0}
 .caff-type-btn.active{background:#1a0000;border-color:var(--red);color:var(--text)}
 
@@ -701,7 +706,7 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
 .bilan-section h3{margin-bottom:12px;font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:2px;color:var(--sub);font-weight:700}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 /* ====== CHOICE OPTIONS ====== */
-.choice-opt-sm{padding:10px 14px;border-radius:3px;border:1px solid #1e1e1e;cursor:pointer;font-size:var(--fs-xs);font-weight:700;transition:.15s;color:var(--text-dim);background:#0c0c0c;flex:1;text-align:center}
+.choice-opt-sm{padding:10px 14px;border-radius:3px;border:1px solid #1e1e1e;cursor:pointer;font-size:var(--fs-xs);font-weight:700;transition:var(--t-1);color:var(--text-dim);background:#0c0c0c;flex:1;text-align:center}
 .choice-opt-sm.sel{border-color:var(--red);color:var(--text);background:#100000}
 /* ====== BIL MEASURE ROW ====== */
 .bil-row{background:var(--dark);border:1px solid var(--border);border-radius:3px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
@@ -716,13 +721,13 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
 .scroll-area::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:1px}
 
 /* ====== ROLE CARDS ====== */
-.role-card{background:var(--surface-1);border-radius:4px;padding:28px 20px;text-align:center;border:1px solid var(--border);cursor:pointer;transition:.3s;flex:1}
+.role-card{background:var(--surface-1);border-radius:4px;padding:28px 20px;text-align:center;border:1px solid var(--border);cursor:pointer;transition:var(--t-3);flex:1}
 .role-card:hover,.role-card.sel{border-color:var(--red);background:#110000}
 /* Porte désormais un SVG et non plus un caractère : font-size ne sert plus à
    rien, c'est color qui teinte le tracé (stroke:currentColor) et line-height:0
    qui évite la demi-ligne de blanc sous l'icône. */
 .role-icon{color:var(--red-text);margin-bottom:12px;line-height:0}
-.client-row{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--surface-1);border-radius:0 2px 2px 0;margin-bottom:6px;cursor:pointer;border:1px solid var(--border);border-left:3px solid var(--red);transition:all .15s,transform var(--arc-strike) var(--arc-c-discharge)}
+.client-row{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--surface-1);border-radius:0 2px 2px 0;margin-bottom:6px;cursor:pointer;border:1px solid var(--border);border-left:3px solid var(--red);transition:all var(--t-1),transform var(--arc-strike) var(--arc-c-discharge)}
 .client-row:hover{background:var(--red-bg);border-color:var(--red);box-shadow:var(--e2),var(--glow-red);transform:translateY(-1px)}
 .client-row:active{transform:scale(var(--arc-scale-charge));box-shadow:none;transition:transform var(--arc-attack) var(--arc-c-charge)}
 /* Cellules optionnelles de la ligne athlete. renderClientRow les emet
@@ -790,7 +795,7 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
 .plan-src{margin:9px 0 3px;border:1px solid var(--border);border-radius:10px;background:var(--dark);overflow:hidden}
 .plan-src>summary{list-style:none;cursor:pointer;min-height:44px;padding:9px 12px;display:flex;align-items:center;gap:8px;font-size:var(--fs-sm);font-weight:800;line-height:1.35}
 .plan-src>summary::-webkit-details-marker{display:none}
-.plan-src>summary::after{content:'▾';margin-left:auto;flex-shrink:0;font-size:var(--fs-sm);color:var(--sub);transition:transform .18s}
+.plan-src>summary::after{content:'▾';margin-left:auto;flex-shrink:0;font-size:var(--fs-sm);color:var(--sub);transition:transform var(--t-1)}
 .plan-src[open]>summary::after{transform:rotate(180deg)}
 .plan-src-nb{flex-shrink:0;font-size:var(--fs-2xs);font-weight:700;color:var(--text-faint);letter-spacing:.5px;white-space:nowrap}
 /* Marges internes rognées au strict nécessaire : entre le bord de l'écran et
@@ -900,20 +905,20 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
   box-shadow:0 0 8px var(--arc-glow);will-change:transform}
 /* Point REC du mockup téléphone — animation CSS (et non SMIL) pour rester
    neutralisable par la règle prefers-reduced-motion en fin de feuille. */
-.rc-blink{animation:rcBlink 1.4s ease-in-out infinite}
+.rc-blink{animation:rcBlink 1var(--t-3) ease-in-out infinite}
 @keyframes rcBlink{0%,100%{opacity:1}50%{opacity:.25}}
-.content-card{transition:background .2s,box-shadow .2s,transform var(--arc-strike) var(--arc-c-discharge)}
+.content-card{transition:background var(--t-2),box-shadow var(--t-2),transform var(--arc-strike) var(--arc-c-discharge)}
 .content-card:hover{box-shadow:var(--e2);transform:translateY(-1px);filter:brightness(1.08)}
 .content-card:active{transform:scale(var(--arc-scale-charge));box-shadow:none;filter:brightness(1);transition:transform var(--arc-attack) var(--arc-c-charge)}
 
 .empty-state{text-align:center;padding:48px 20px;color:var(--sub)}
 .empty-state:hover .empty-illus{opacity:.68!important;filter:drop-shadow(0 0 10px rgba(224,32,32,.3))}
-.obj-opt{padding:14px;border-radius:12px;background:var(--surface-1);border:2px solid var(--border);cursor:pointer;font-size:var(--fs-md);font-weight:600;transition:.2s,transform var(--arc-strike) var(--arc-c-discharge);text-align:center;margin-bottom:10px}
+.obj-opt{padding:14px;border-radius:12px;background:var(--surface-1);border:2px solid var(--border);cursor:pointer;font-size:var(--fs-md);font-weight:600;transition:var(--t-2),transform var(--arc-strike) var(--arc-c-discharge);text-align:center;margin-bottom:10px}
 .obj-opt:hover,.obj-opt.sel{border-color:var(--red);color:var(--red-text)}
 /* .obj-opt etait la seule surface pressable SANS etat :active — elle ne
    repondait pas au doigt. Elle en recoit un, aux memes valeurs que les autres. */
 .obj-opt:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
-.upload-zone{border:2px dashed var(--border);border-radius:14px;padding:40px 20px;text-align:center;cursor:pointer;transition:.2s}
+.upload-zone{border:2px dashed var(--border);border-radius:14px;padding:40px 20px;text-align:center;cursor:pointer;transition:var(--t-2)}
 .upload-zone:hover{border-color:var(--red);background:#1a00001a}
 .video-card{background:var(--surface-1);border-radius:14px;padding:14px;margin-bottom:12px}
 @keyframes fadeInScale{from{opacity:0;transform:scale(0.3)}to{opacity:1;transform:scale(1)}}
@@ -924,7 +929,7 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
 @keyframes glowPulse{0%,100%{filter:drop-shadow(0 0 30px rgba(198,15,8,.4))}50%{filter:drop-shadow(0 0 60px rgba(198,15,8,.7))}}
 @keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
 @keyframes slideDown{from{opacity:0;transform:translateY(-100%)}to{opacity:1;transform:translateY(0)}}
-.anim-in{animation:fadeIn .35s ease both}
+.anim-in{animation:fadeIn var(--t-3) ease both}
 input[type=file]{display:none}
 .done-anim{text-align:center;padding:48px 20px}
 .done-anim .done-icon{font-size:72px;margin-bottom:16px;animation:pulse 2s infinite}
@@ -1004,7 +1009,7 @@ h3{font-size:var(--fs-lg);text-transform:uppercase}
    Ne s'applique qu'à cet élément : les badges coach existants gardent leur
    rendu, la classe .rc-sync-badge n'étant qu'un crochet de sélection. */
 #clh-sync-badge{display:block;margin-top:3px;font-size:var(--fs-xs);font-weight:700;
-  letter-spacing:.3px;line-height:1;opacity:.4;transition:opacity .2s}
+  letter-spacing:.3px;line-height:1;opacity:.4;transition:opacity var(--t-2)}
 #clh-sync-badge[data-sync-state="fail"]{opacity:1}
 :focus-visible{outline:2px solid var(--red-glow);outline-offset:2px;border-radius:2px}
 button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px solid #FF3345;outline-offset:3px}
@@ -1017,7 +1022,7 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
 #coach-tabs-bar button{flex:1;padding:14px 4px;background:none;border:none;
   font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;
   cursor:pointer;text-transform:uppercase;color:var(--sub);
-  border-bottom:2px solid transparent;transition:all .2s;position:relative}
+  border-bottom:2px solid transparent;transition:all var(--t-2);position:relative}
 #coach-tabs-bar button:active{transform:scale(.96)}
 
 /* ====== SECTION HEADERS (Anton + trait rouge) ====== */
@@ -1054,7 +1059,7 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
    44x44 : le repère tactile d'iOS, et bien au-delà des 24x24 exigés par la
    règle WCAG 2.5.8 AA. inline-flex parce qu'un min-width sans centrage
    collerait le glyphe à gauche de sa nouvelle zone. */
-.back-btn{background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;padding:12px 14px;font-weight:300;transition:.15s;line-height:1;min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+.back-btn{background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;padding:12px 14px;font-weight:300;transition:var(--t-1);line-height:1;min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}
 /* Zone tactile de 44x44 sans toucher a l'apparence. Le ::before est un calque
    invisible centre sur la commande : il agrandit ce que le doigt atteint, pas
    ce que l'oeil voit. C'est ce qui permet aux pastilles de serie de rester des
@@ -1099,43 +1104,43 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 .red-zone{background:var(--red-bg)!important}
 
 /* ====== CHOICE OPTIONS REDESIGN ====== */
-.choice-opt{padding:13px 16px;border-radius:2px;border:1px solid var(--border);cursor:pointer;font-size:var(--fs-xs);font-weight:700;margin-bottom:6px;transition:.15s,transform var(--arc-strike) var(--arc-c-discharge);color:var(--text-dim);background:var(--surface-1);letter-spacing:1px;text-transform:uppercase}
+.choice-opt{padding:13px 16px;border-radius:2px;border:1px solid var(--border);cursor:pointer;font-size:var(--fs-xs);font-weight:700;margin-bottom:6px;transition:var(--t-1),transform var(--arc-strike) var(--arc-c-discharge);color:var(--text-dim);background:var(--surface-1);letter-spacing:1px;text-transform:uppercase}
 /* Échelle d'émojis néon (cheat meals) */
 .emo-row{display:flex;gap:7px;justify-content:space-between}
-.emo-opt{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 2px 10px;border-radius:12px;border:1px solid #222;background:var(--surface-1);cursor:pointer;transition:.18s,transform var(--arc-strike) var(--arc-c-discharge);user-select:none}
-.emo-opt .emo{width:32px;height:32px;stroke:#4a4a4a;opacity:.55;transition:.18s}
+.emo-opt{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 2px 10px;border-radius:12px;border:1px solid #222;background:var(--surface-1);cursor:pointer;transition:var(--t-1),transform var(--arc-strike) var(--arc-c-discharge);user-select:none}
+.emo-opt .emo{width:32px;height:32px;stroke:#4a4a4a;opacity:.55;transition:var(--t-1)}
 .emo-opt .emo .emo-dot{fill:#4a4a4a;stroke:none}
-.emo-opt .emo-lbl{font-size:var(--fs-xs);font-weight:800;letter-spacing:.8px;color:var(--text-dim);text-transform:uppercase;text-align:center;white-space:nowrap;transition:.18s}
+.emo-opt .emo-lbl{font-size:var(--fs-xs);font-weight:800;letter-spacing:.8px;color:var(--text-dim);text-transform:uppercase;text-align:center;white-space:nowrap;transition:var(--t-1)}
 .emo-opt:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
 .emo-opt.sel{border-color:var(--eo);background:#0e0a0a;box-shadow:0 0 14px var(--eo-glow),inset 0 0 10px var(--eo-glow)}
 .emo-opt.sel .emo{stroke:var(--eo);opacity:1;transform:scale(1.15);filter:drop-shadow(0 0 5px var(--eo))}
 .emo-opt.sel .emo .emo-dot{fill:var(--eo)}
 .emo-opt.sel .emo-lbl{color:var(--eo);--halo-c:var(--eo-glow);text-shadow:var(--halo-1)}
 /* Badge record animé (fin de séance) — médaillon */
-.wd-badge{display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 0 2px;animation:wdBadgePop .6s cubic-bezier(.2,1.5,.4,1) both}
-.wd-badge-medal{position:relative;width:138px;height:138px;border-radius:50%;flex-shrink:0;animation:wdMedalSwing 3s ease-in-out .6s infinite,wdBadgeGlow 2.4s ease-in-out .6s infinite}
-.wd-badge-medal::after{content:'';position:absolute;inset:0;border-radius:50%;background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.22) 48%,transparent 58%);background-size:280% 100%;animation:wdShine 2.8s ease-in-out .9s infinite}
+.wd-badge{display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 0 2px;animation:wdBadgePop var(--t-4) cubic-bezier(.2,1.5,.4,1) both}
+.wd-badge-medal{position:relative;width:138px;height:138px;border-radius:50%;flex-shrink:0;animation:wdMedalSwing 3s ease-in-out var(--t-4) infinite,wdBadgeGlow 2var(--t-3) ease-in-out var(--t-4) infinite}
+.wd-badge-medal::after{content:'';position:absolute;inset:0;border-radius:50%;background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.22) 48%,transparent 58%);background-size:280% 100%;animation:wdShine 2var(--t-4) ease-in-out .9s infinite}
 @keyframes wdBadgePop{0%{transform:scale(.4);opacity:0}65%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
 @keyframes wdBadgeGlow{0%,100%{filter:drop-shadow(0 0 8px rgba(224,32,32,.35))}50%{filter:drop-shadow(0 0 22px rgba(224,32,32,.65))}}
 @keyframes wdMedalSwing{0%,100%{transform:rotate(0deg)}18%{transform:rotate(-6deg)}38%{transform:rotate(5deg)}58%{transform:rotate(-2.5deg)}78%{transform:rotate(1.5deg)}}
 @keyframes wdShine{0%{background-position:120% 0}55%,100%{background-position:-160% 0}}
 /* Choix Homme/Femme avec silhouettes */
 .gsl-row{display:flex;gap:10px}
-.gsl-opt{flex:1;min-width:0;background:var(--surface-1);border:1px solid #222;border-radius:14px;padding:14px 8px 12px;text-align:center;cursor:pointer;transition:.18s,transform var(--arc-strike) var(--arc-c-discharge);user-select:none}
+.gsl-opt{flex:1;min-width:0;background:var(--surface-1);border:1px solid #222;border-radius:14px;padding:14px 8px 12px;text-align:center;cursor:pointer;transition:var(--t-1),transform var(--arc-strike) var(--arc-c-discharge);user-select:none}
 .gsl-opt svg{height:150px;width:100%}
-.gsl-opt .gsl-body{fill:#161616;stroke:#4a4a4a;stroke-width:2;transition:.18s}
-.gsl-opt .gsl-lbl{font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--text-dim);margin-top:8px;transition:.18s}
+.gsl-opt .gsl-body{fill:#161616;stroke:#4a4a4a;stroke-width:2;transition:var(--t-1)}
+.gsl-opt .gsl-lbl{font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--text-dim);margin-top:8px;transition:var(--t-1)}
 .gsl-opt:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
 .gsl-opt.sel{border-color:var(--text);background:#0e0a0a;box-shadow:0 0 16px rgba(255,255,255,.28),inset 0 0 12px rgba(255,255,255,.1)}
 .gsl-opt.sel .gsl-body{fill:var(--border);stroke:var(--text);filter:drop-shadow(0 0 6px rgba(255,255,255,.85))}
 .gsl-opt.sel .gsl-lbl{color:var(--text);text-shadow:var(--halo-1)}
 /* Curseur néon 1-10 (motivation) */
 .bsl-wrap{background:var(--surface-1);border:1px solid #222;border-radius:12px;padding:18px 16px 14px;text-align:center}
-.bsl-value{font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:1;transition:.15s}
+.bsl-value{font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:1;transition:var(--t-1)}
 .bsl-value .bsl-max{font-size:var(--fs-xl);color:var(--text-dim);margin-left:2px}
-.bsl-feedback{font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;margin:4px 0 14px;min-height:13px;transition:.15s}
+.bsl-feedback{font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;margin:4px 0 14px;min-height:13px;transition:var(--t-1)}
 .bslider{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:3px;background:#1a1a1a;outline:none;margin:0;padding:0;border:none;box-shadow:none}
-.bslider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:26px;height:26px;border-radius:50%;background:#0a0a0a;border:2.5px solid var(--bsl,#555);box-shadow:0 0 12px var(--bsl-glow,transparent);cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.bslider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:26px;height:26px;border-radius:50%;background:#0a0a0a;border:2.5px solid var(--bsl,#555);box-shadow:0 0 12px var(--bsl-glow,transparent);cursor:pointer;transition:border-color var(--t-1),box-shadow var(--t-1)}
 .bslider::-moz-range-thumb{width:26px;height:26px;border-radius:50%;background:#0a0a0a;border:2.5px solid var(--bsl,#555);box-shadow:0 0 12px var(--bsl-glow,transparent);cursor:pointer}
 .bsl-scale{display:flex;justify-content:space-between;font-size:var(--fs-xs);font-weight:700;color:var(--text-dim);margin-top:8px;padding:0 4px}
 .choice-opt.sel{border-color:var(--red);border-left-width:3px;color:var(--text);background:var(--red-bg)}
@@ -1345,6 +1350,15 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 /* ── Accessibilité : respect de « Réduire les animations » du système ──────────
    Doit rester en TOUTE FIN de feuille pour l'emporter sur les règles ci-dessus. */
 @media (prefers-reduced-motion: reduce){
+  /* Les crans, neutralisés à la source : tout ce qui passe par eux tombe à
+     1 ms sans qu'aucune règle n'ait à le nommer. */
+  :root{
+    --t-1:1ms;--t-2:1ms;--t-3:1ms;--t-4:1ms;
+    --arc-attack:1ms;--arc-strike:1ms;--arc-release:1ms;--arc-plat:1ms;
+  }
+  /* La règle universelle RESTE, et ce n'est pas une redondance : elle seule
+     atteint les durées qui ne passent PAS par un cran — .05s, .1s, .9s — et
+     celles écrites hors de ces variables. */
   *,*::before,*::after{
     animation-duration:.01ms!important;
     animation-iteration-count:1!important;
@@ -1353,9 +1367,13 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   }
   /* Animations en boucle : coupées net plutôt que jouées une fois en accéléré,
      sinon elles se figent sur leur dernière image (médaillon penché, halo éteint). */
-  .wd-badge,.wd-badge-medal,.wd-badge-medal::after,
-  .skeleton,.skeleton::after,.done-anim .done-icon,.rc-blink,
-  .celebrate,.emo-opt .emo,.pulse-dot{animation:none!important}
+  /* UNE CLASSE PLUTÔT QU'UNE LISTE DE NOMS. La liste devait être tenue à jour
+     à chaque animation ajoutée, et personne n'y pense. `fx-loop` se pose sur
+     l'élément qui boucle, et le jour où il en naît un autre, il suffit de la
+     lui donner. Les pseudo-éléments, eux, ne peuvent pas porter de classe :
+     ils restent nommés. */
+  .fx-loop,.fx-loop::after,.fx-loop::before,
+  .wd-badge-medal::after,.skeleton::after{animation:none!important}
   /* État final propre pour les éléments dont l'animation portait la mise en forme */
   .wd-badge{opacity:1!important;transform:none!important}
   .wd-badge-medal{transform:none!important;filter:drop-shadow(0 0 12px rgba(224,32,32,.45))!important}
@@ -1520,7 +1538,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- SPLASH -->
 <div id="s-splash" class="screen active carbon-bg" style="align-items:center;justify-content:center;position:relative;overflow:hidden">
   <!-- Screen flash overlay -->
-  <div id="splash-flash" style="position:absolute;inset:0;background:#fff;pointer-events:none;animation:screenFlash 0.45s ease 0.05s both;opacity:0;z-index:0"></div>
+  <div id="splash-flash" style="position:absolute;inset:0;background:#fff;pointer-events:none;animation:screenFlash 0var(--t-4) ease 0.05s both;opacity:0;z-index:0"></div>
 
   <!-- ÉCLAIR DIAGONAL — haut-droite vers bas-gauche, large au début, effilé à la fin -->
   <div style="position:absolute;inset:0;pointer-events:none;z-index:2">
@@ -1556,7 +1574,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </linearGradient>
       </defs>
 
-      <g style="animation:boltFlash 0.55s ease 0.05s both;opacity:0">
+      <g style="animation:boltFlash 0var(--t-4) ease 0.05s both;opacity:0">
         <!-- Aura atmosphérique (gradient stroke → s'évanouit en bas-gauche) -->
         <polyline points="80,0 55,48 68,90 40,132 54,172 18,220"
           stroke="url(#g-aura)" stroke-width="72" fill="none" stroke-linecap="round" filter="url(#ga)"/>
@@ -1616,37 +1634,37 @@ const COACH_PHOTO='icons/coach.jpg';
   <div style="flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1;padding-top:60px;padding-top:min(60px,6dvh)">
 
     <!-- Logo avec ombre directionnelle droite + bas -->
-    <div style="animation:wFadeUp 0.8s cubic-bezier(.16,1,.3,1) 0.1s both;min-height:0">
+    <div style="animation:wFadeUp 0var(--t-4) cubic-bezier(.16,1,.3,1) 0.1s both;min-height:0">
       <img src="./icons/logo.png" style="display:block;width:200px;height:200px;height:min(200px,30dvh);width:auto;aspect-ratio:1;filter:drop-shadow(5px 8px 16px rgba(0,0,0,.95)) drop-shadow(2px 4px 6px rgba(0,0,0,.7))">
     </div>
 
     <!-- Tagline avec text-shadow pour faire ressortir -->
-    <div style="margin-top:48px;margin-top:min(48px,5dvh);text-align:center;padding:0 32px;animation:wFadeUp 0.7s ease 0.5s both;opacity:0">
+    <div style="margin-top:48px;margin-top:min(48px,5dvh);text-align:center;padding:0 32px;animation:wFadeUp 0var(--t-4) ease 0var(--t-4) both;opacity:0">
       <div style="font-size:var(--fs-2xl);font-weight:900;line-height:1.1;letter-spacing:-1.5px;color:var(--text);text-shadow:0 2px 20px rgba(0,0,0,.95),0 0 50px rgba(0,0,0,.8),0 4px 8px rgba(0,0,0,.6)">Entraîne-toi<br>comme un<br><span style="color:#E02020;--halo-c:rgba(224,32,32,.5);text-shadow:var(--halo-3),0 2px 14px rgba(0,0,0,.9)">pro.</span></div>
     </div>
 
     <!-- Descriptor — DISCIPLINE · TRAVAIL · RÉSULTAT -->
-    <div style="margin-top:20px;margin-top:min(20px,2.6dvh);animation:wFadeUp 0.6s ease 0.65s both;opacity:0">
+    <div style="margin-top:20px;margin-top:min(20px,2.6dvh);animation:wFadeUp 0var(--t-4) ease 0var(--t-4) both;opacity:0">
       <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.38);letter-spacing:2px;text-align:center;font-weight:500">DISCIPLINE &nbsp;·&nbsp; TRAVAIL &nbsp;·&nbsp; RÉSULTAT</div>
     </div>
   </div>
 
   <!-- BOTTOM: CTA buttons — flex-shrink:0 pour que ce soit le bloc du HAUT
        qui cède, jamais les deux boutons d'entrée dans l'app. -->
-  <div style="padding:32px 28px 48px;padding:min(32px,4dvh) 28px min(48px,6dvh);flex-shrink:0;z-index:1;animation:wSlideUp 0.7s cubic-bezier(.16,1,.3,1) 0.55s both;opacity:0">
+  <div style="padding:32px 28px 48px;padding:min(32px,4dvh) 28px min(48px,6dvh);flex-shrink:0;z-index:1;animation:wSlideUp 0var(--t-4) cubic-bezier(.16,1,.3,1) 0var(--t-4) both;opacity:0">
     <!-- ESPACE COACH — bevel 3D inset + glow rouge -->
     <button onclick="go('s-coach-entry')"
-      style="width:100%;padding:20px;background:#E02020;color:var(--text);border:none;font-family:var(--pile-titre);font-size:var(--fs-md);font-weight:400;letter-spacing:4px;cursor:pointer;text-transform:uppercase;margin-bottom:12px;transition:.15s;box-shadow:var(--e-inset),var(--glow-red)"
+      style="width:100%;padding:20px;background:#E02020;color:var(--text);border:none;font-family:var(--pile-titre);font-size:var(--fs-md);font-weight:400;letter-spacing:4px;cursor:pointer;text-transform:uppercase;margin-bottom:12px;transition:var(--t-1);box-shadow:var(--e-inset),var(--glow-red)"
       onmouseover="this.style.background='#c91a1a'" onmouseout="this.style.background='#E02020'">ESPACE COACH</button>
     <!-- ESPACE ATHLÈTE — bevel subtil -->
     <button onclick="go('s-athlete-entry')"
-      style="width:100%;padding:20px;background:rgba(255,255,255,.04);color:var(--text);border:1px solid rgba(255,255,255,.15);font-family:var(--pile-titre);font-size:var(--fs-md);font-weight:400;letter-spacing:4px;cursor:pointer;text-transform:uppercase;transition:.15s;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),inset 0 -2px 0 rgba(0,0,0,.4),0 4px 18px rgba(0,0,0,.55)"
+      style="width:100%;padding:20px;background:rgba(255,255,255,.04);color:var(--text);border:1px solid rgba(255,255,255,.15);font-family:var(--pile-titre);font-size:var(--fs-md);font-weight:400;letter-spacing:4px;cursor:pointer;text-transform:uppercase;transition:var(--t-1);box-shadow:inset 0 1px 0 rgba(255,255,255,.12),inset 0 -2px 0 rgba(0,0,0,.4),0 4px 18px rgba(0,0,0,.55)"
       onmouseover="this.style.borderColor='rgba(224,32,32,.6)';this.style.color='#E02020'" onmouseout="this.style.borderColor='rgba(255,255,255,.15)';this.style.color='var(--text)'">ESPACE ATHLÈTE</button>
     <button id="install-btn" onclick="installApp()"
-      style="display:none;width:100%;margin-top:12px;padding:14px;background:transparent;color:#E02020;border:1px solid rgba(224,32,32,.35);font-family:var(--pile-titre);font-size:var(--fs-sm);font-weight:400;letter-spacing:3px;cursor:pointer;text-transform:uppercase;align-items:center;justify-content:center;gap:8px;transition:.15s;box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 4px 14px rgba(0,0,0,.4)"
+      style="display:none;width:100%;margin-top:12px;padding:14px;background:transparent;color:#E02020;border:1px solid rgba(224,32,32,.35);font-family:var(--pile-titre);font-size:var(--fs-sm);font-weight:400;letter-spacing:3px;cursor:pointer;text-transform:uppercase;align-items:center;justify-content:center;gap:8px;transition:var(--t-1);box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 4px 14px rgba(0,0,0,.4)"
       onmouseover="this.style.background='rgba(224,32,32,.08)'" onmouseout="this.style.background='transparent'">⬇ Installer l'app sur ce téléphone</button>
     <button id="ios-install-btn" onclick="showIosInstallGuide()"
-      style="display:none;width:100%;margin-top:12px;padding:14px;background:transparent;color:#E02020;border:1px solid rgba(224,32,32,.35);font-family:var(--pile-titre);font-size:var(--fs-sm);font-weight:400;letter-spacing:3px;cursor:pointer;text-transform:uppercase;align-items:center;justify-content:center;gap:8px;transition:.15s;box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 4px 14px rgba(0,0,0,.4)"
+      style="display:none;width:100%;margin-top:12px;padding:14px;background:transparent;color:#E02020;border:1px solid rgba(224,32,32,.35);font-family:var(--pile-titre);font-size:var(--fs-sm);font-weight:400;letter-spacing:3px;cursor:pointer;text-transform:uppercase;align-items:center;justify-content:center;gap:8px;transition:var(--t-1);box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 4px 14px rgba(0,0,0,.4)"
       onmouseover="this.style.background='rgba(224,32,32,.08)'" onmouseout="this.style.background='transparent'">📲 Installer l'app</button>
   </div>
 
@@ -1679,7 +1697,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
 
     <!-- SE CONNECTER -->
-    <div onclick="go('s-login')" style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+    <div onclick="go('s-login')" style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color var(--t-2)" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="display:flex;align-items:center;gap:14px">
         <div style="width:44px;height:44px;border-radius:10px;background:#1a0000;border:1px solid #3a0000;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
         <div>
@@ -1691,7 +1709,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
 
     <!-- CRÉER MON COMPTE -->
-    <div onclick="goRegisterCoach()" style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+    <div onclick="goRegisterCoach()" style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color var(--t-2)" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="display:flex;align-items:center;gap:14px">
         <div style="width:44px;height:44px;border-radius:10px;background:#0d0d0d;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></div>
         <div>
@@ -1772,14 +1790,14 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
 
     <!-- Carte A : j'ai un code coach -->
-    <div id="ae-card-new" onclick="aeToggleCode()" style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+    <div id="ae-card-new" onclick="aeToggleCode()" style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color var(--t-2)" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="display:flex;align-items:center;gap:14px">
         <div style="width:44px;height:44px;border-radius:10px;background:#1a0000;border:1px solid #3a0000;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg></div>
         <div>
           <div style="font-weight:800;font-size:var(--fs-lg);letter-spacing:.5px">J'AI UN CODE D'ACCÈS</div>
           <div class="sub" style="font-size:var(--fs-xs);margin-top:3px">Créer mon compte et activer l'accès avec mon code</div>
         </div>
-        <div id="ae-arrow" style="margin-left:auto;color:var(--sub);font-size:var(--fs-xl);transition:transform .25s">›</div>
+        <div id="ae-arrow" style="margin-left:auto;color:var(--sub);font-size:var(--fs-xl);transition:transform var(--t-2)">›</div>
       </div>
       <!-- Zone code.
 
@@ -1805,7 +1823,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
 
     <!-- Carte B : déjà inscrit -->
-    <div onclick="go('s-login')" style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+    <div onclick="go('s-login')" style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color var(--t-2)" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="display:flex;align-items:center;gap:14px">
         <div style="width:44px;height:44px;border-radius:10px;background:#0d0d0d;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
         <div>
@@ -1820,7 +1838,7 @@ const COACH_PHOTO='icons/coach.jpg';
          Le prix doit être atteignable AVANT toute création de compte : depuis
          l'accueil, deux clics suffisent (ESPACE ATHLÈTE puis cette carte) et
          aucune donnée personnelle n'est demandée. -->
-    <div onclick="goAvecRetour('s-subscribe');loadSubscribePage()" style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+    <div onclick="goAvecRetour('s-subscribe');loadSubscribePage()" style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color var(--t-2)" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="display:flex;align-items:center;gap:14px">
         <div style="width:44px;height:44px;border-radius:10px;background:#0d0d0d;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div>
         <div>
@@ -2121,8 +2139,8 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
       <div style="display:flex;gap:8px">
         <button onclick="ouvrirComptes()" style="background:none;border:1px solid rgba(255,255,255,.1);color:var(--sub);padding:7px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer" title="Changer de compte">⇄</button>
-        <button onclick="showCoachCode()" style="background:var(--red-bg);border:1px solid var(--red);color:var(--red-light);padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:2px;text-transform:uppercase;transition:.15s" onmouseover="this.style.background='#1a0000'" onmouseout="this.style.background='var(--red-bg)'">CODE</button>
-        <button onclick="logout()" style="background:none;border:1px solid rgba(255,255,255,.1);color:var(--sub);padding:7px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;transition:.15s" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--sub)'">&#8592;</button>
+        <button onclick="showCoachCode()" style="background:var(--red-bg);border:1px solid var(--red);color:var(--red-light);padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:2px;text-transform:uppercase;transition:var(--t-1)" onmouseover="this.style.background='#1a0000'" onmouseout="this.style.background='var(--red-bg)'">CODE</button>
+        <button onclick="logout()" style="background:none;border:1px solid rgba(255,255,255,.1);color:var(--sub);padding:7px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);cursor:pointer;transition:var(--t-1)" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--sub)'">&#8592;</button>
       </div>
     </div>
 
@@ -2837,7 +2855,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="margin-top:16px">
         <label for="prog-photo-input">Photo de ta fiche programme (référence visuelle)</label>
         <div id="prog-photo-zone" onclick="document.getElementById('prog-photo-input').click()"
-          style="border:2px dashed var(--border);border-radius:14px;padding:20px;text-align:center;cursor:pointer;transition:.2s;margin-top:6px;position:relative;overflow:hidden"
+          style="border:2px dashed var(--border);border-radius:14px;padding:20px;text-align:center;cursor:pointer;transition:var(--t-2);margin-top:6px;position:relative;overflow:hidden"
           ondragover="event.preventDefault();this.style.borderColor='var(--red)'"
           ondrop="dropProgPhoto(event)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
           <input type="file" id="prog-photo-input" accept="image/*" onchange="loadProgPhoto(this)" style="display:none">
@@ -3285,8 +3303,8 @@ const COACH_PHOTO='icons/coach.jpg';
         <div>
           <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Sexe</label>
           <div style="display:flex;gap:8px">
-            <button id="atp-btn-m" onclick="setAthleteGender('H')" style="flex:1;padding:11px;border:1px solid var(--border);background:none;border-radius:3px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer;color:var(--text);transition:.15s">Homme</button>
-            <button id="atp-btn-f" onclick="setAthleteGender('F')" style="flex:1;padding:11px;border:1px solid var(--border);background:none;border-radius:3px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer;color:var(--text);transition:.15s">Femme</button>
+            <button id="atp-btn-m" onclick="setAthleteGender('H')" style="flex:1;padding:11px;border:1px solid var(--border);background:none;border-radius:3px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer;color:var(--text);transition:var(--t-1)">Homme</button>
+            <button id="atp-btn-f" onclick="setAthleteGender('F')" style="flex:1;padding:11px;border:1px solid var(--border);background:none;border-radius:3px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer;color:var(--text);transition:var(--t-1)">Femme</button>
           </div>
         </div>
       </div>
@@ -3420,7 +3438,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- SESSION PICKER (modal) -->
 <div id="session-picker" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:none;align-items:flex-end;justify-content:center">
-  <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease">
+  <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) ease">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <h2>Quelle séance aujourd'hui ?</h2>
       <button onclick="document.getElementById('session-picker').style.display='none'" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:var(--fs-2xl);cursor:pointer;min-width:44px;min-height:44px;line-height:1">✕</button>
@@ -3496,7 +3514,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- iOS INSTALL GUIDE MODAL -->
 <div id="ios-install-modal" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);align-items:flex-end;justify-content:center" onclick="if(event.target===this)closeIosInstallGuide()">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px 36px;width:100%;max-width:480px;animation:slideUp .3s ease">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px 36px;width:100%;max-width:480px;animation:slideUp var(--t-3) ease">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <div style="font-size:var(--fs-lg);font-weight:800;letter-spacing:.3px">📲 Installer l'app</div>
       <button onclick="closeIosInstallGuide()" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-xl);cursor:pointer;line-height:1">✕</button>
@@ -3729,8 +3747,8 @@ const COACH_PHOTO='icons/coach.jpg';
     <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:12px">
       <div style="font-size:var(--fs-xs);letter-spacing:2px;font-weight:800;color:var(--sub);text-transform:uppercase;margin-bottom:10px">Fréquence des bilans</div>
       <div style="display:flex;gap:8px">
-        <button id="bilan-freq-btn-1" onclick="setBilanFreq(1);event.stopPropagation()" style="flex:1;padding:10px;border-radius:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;transition:all .2s">Chaque semaine</button>
-        <button id="bilan-freq-btn-2" onclick="setBilanFreq(2);event.stopPropagation()" style="flex:1;padding:10px;border-radius:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;transition:all .2s">Toutes les 2 sem.</button>
+        <button id="bilan-freq-btn-1" onclick="setBilanFreq(1);event.stopPropagation()" style="flex:1;padding:10px;border-radius:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;transition:all var(--t-2)">Chaque semaine</button>
+        <button id="bilan-freq-btn-2" onclick="setBilanFreq(2);event.stopPropagation()" style="flex:1;padding:10px;border-radius:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:.5px;text-transform:uppercase;transition:all var(--t-2)">Toutes les 2 sem.</button>
       </div>
     </div>
 
@@ -3747,7 +3765,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <button class="back-btn" id="bil-back-btn" onclick="bilBack()">←</button>
     <span class="topbar-title" id="bil-title">Bilan</span>
     <span class="sub" id="bil-step-label" style="font-size:var(--fs-xs);font-weight:700">1/4</span>
-    <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:#111"><div id="bil-progress" style="height:100%;background:var(--red);transition:.35s;width:25%"></div></div>
+    <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:#111"><div id="bil-progress" style="height:100%;background:var(--red);transition:var(--t-3);width:25%"></div></div>
   </div>
   <div class="scroll-area" style="flex:1" id="bil-content"></div>
   <div style="padding:14px 20px;border-top:1px solid #181818;background:var(--bg);flex-shrink:0">
@@ -4111,7 +4129,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <!-- BANNIÈRE DE BASCULE -->
-      <div class="banner-hero" style="margin-bottom:16px;animation:fadeInUp .3s ease">
+      <div class="banner-hero" style="margin-bottom:16px;animation:fadeInUp var(--t-3) ease">
         <div style="position:relative;display:flex;gap:14px;align-items:flex-start">
           <!-- Mockup téléphone en train de filmer un exercice -->
           <svg viewBox="0 0 62 108" style="width:56px;flex-shrink:0;filter:drop-shadow(0 6px 12px rgba(0,0,0,.5))">
@@ -4138,7 +4156,7 @@ const COACH_PHOTO='icons/coach.jpg';
               <path d="M11 18 L11 14 L15 14"/><path d="M51 18 L51 14 L47 14"/>
               <path d="M11 90 L11 94 L15 94"/><path d="M51 90 L51 94 L47 94"/>
             </g>
-            <circle class="rc-blink" cx="17" cy="86" r="3.1" fill="#ff2d2d"/>
+            <circle class="rc-blink fx-loop" cx="17" cy="86" r="3.1" fill="#ff2d2d"/>
             <!-- SEULE taille sous 11px conservée dans toute l'app, et c'est
                  délibéré : ce « REC » n'est pas du texte à lire, c'est le
                  voyant du boîtier dessiné juste au-dessus. Il vit dans les
@@ -4155,7 +4173,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
       </div>
 
-      <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:18px 16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.45);animation:fadeInUp .35s ease">
+      <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:18px 16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.45);animation:fadeInUp var(--t-3) ease">
         <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
         <div style="position:absolute;left:50%;top:-34px;transform:translateX(-50%);width:120px;height:90px;border-radius:50%;background:radial-gradient(circle,rgba(224,32,32,.15),transparent 68%);pointer-events:none"></div>
         <div style="position:relative;text-align:center">
@@ -4177,11 +4195,11 @@ const COACH_PHOTO='icons/coach.jpg';
           <div class="sub" style="font-size:var(--fs-xs);margin-top:11px;line-height:1.6">Enregistre avec ton téléphone → partage sur <b style="color:var(--text-strong)">YouTube</b> (non répertoriée) ou <b style="color:var(--text-strong)">Google Drive</b> → colle le lien ici · <strong style="color:#ff5a5a">ton coach corrige directement dans l'app</strong></div>
         </div>
       </div>
-      <div style="margin-top:12px;background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp .4s ease">
+      <div style="margin-top:12px;background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp var(--t-3) ease">
         <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div>
         <div style="position:relative">
           <div style="font-family:var(--pile-titre);font-size:var(--fs-md);letter-spacing:2.2px;margin-bottom:11px;color:#8a8a8a;text-transform:uppercase">Ou upload direct : sans YouTube / Drive</div>
-          <label for="vid-file-input" style="display:flex;align-items:center;justify-content:center;gap:9px;padding:13px;border:1.5px dashed #2f2f2f;border-radius:10px;cursor:pointer;font-size:var(--fs-sm);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#cfcfcf;background:linear-gradient(180deg,#111,#0c0c0c);box-shadow:inset 0 1px 0 rgba(255,255,255,.03);transition:.2s">
+          <label for="vid-file-input" style="display:flex;align-items:center;justify-content:center;gap:9px;padding:13px;border:1.5px dashed #2f2f2f;border-radius:10px;cursor:pointer;font-size:var(--fs-sm);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#cfcfcf;background:linear-gradient(180deg,#111,#0c0c0c);box-shadow:inset 0 1px 0 rgba(255,255,255,.03);transition:var(--t-2)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:17px;height:17px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Choisir un fichier vidéo
             <input id="vid-file-input" type="file" accept="video/*" style="display:none" onchange="uploadVideoFile(this)">
           </label>
@@ -4337,7 +4355,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- TOAST -->
 <!-- BANDE RÉSEAU — persistante hors ligne, brève au retour -->
 <div id="rc-offline-bar" role="status" aria-live="polite" style="display:none;position:fixed;top:0;left:0;right:0;z-index:var(--z-layer);padding:9px 14px;padding-top:calc(9px + env(safe-area-inset-top,0px));text-align:center;font-size:var(--fs-xs);font-weight:700;letter-spacing:.3px;line-height:1.4"></div>
-<div id="toast" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:#222;color:var(--text);padding:12px 20px;border-radius:12px;font-size:var(--fs-md);font-weight:600;z-index:var(--z-toast);transition:.3s;opacity:0;min-width:200px;text-align:center;pointer-events:none"></div>
+<div id="toast" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:#222;color:var(--text);padding:12px 20px;border-radius:12px;font-size:var(--fs-md);font-weight:600;z-index:var(--z-toast);transition:var(--t-3);opacity:0;min-width:200px;text-align:center;pointer-events:none"></div>
 
 <!-- ══════ BARRE D'ONGLETS ATHLÈTE ══════
      Sœur des écrans, et non enfant de #s-client-home : c'est ce qui lui permet
@@ -5640,8 +5658,8 @@ const ILLUS={
   folder:`<path d="M14,40 L14,76 Q14,80 18,80 L78,80 Q82,80 82,76 L82,40 Q82,36 78,36 L50,36 Q46,36 44,32 L40,27 Q38,24 34,24 L18,24 Q14,24 14,28 Z" stroke-dasharray="5 3"/><line x1="48" y1="52" x2="48" y2="64"/><line x1="42" y1="58" x2="54" y2="58"/>`,
 };
 function illusIcon(name,size=96){const s=ILLUS[name];if(!s)return icon(name,Math.round(size*.58));return '<svg viewBox="0 0 96 96" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:'+size+'px;height:'+size+'px;display:block;margin:0 auto">'+s+'</svg>';}
-function emptyState(iconName,message,ctaLabel,ctaFn,wrapStyle){const ico=illusIcon(iconName);const cta=(ctaLabel&&ctaFn)?`<button onclick="${ctaFn}" style="margin-top:16px;background:none;border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:9px 24px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1.5px">${ctaLabel}</button>`:'';const sa=wrapStyle?' style="'+wrapStyle+'"':'';return `<div class="empty-state"${sa}><div class="empty-illus" style="opacity:.42;margin-bottom:14px;transition:opacity .3s,filter .3s">${ico}</div><div>${message}</div>${cta}</div>`;}
-function setupScrollFade(el){if(!el||el._sfBound)return;el._sfBound=true;const par=el.parentElement;const badge=document.createElement('div');badge.style.cssText='position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.85);border:1px solid var(--border);color:var(--sub);font-size:var(--fs-xs);font-weight:800;font-family:Montserrat,sans-serif;letter-spacing:.5px;padding:2px 7px;border-radius:10px;pointer-events:none;transition:opacity .2s;opacity:0;z-index:10;white-space:nowrap;line-height:1.5';par.appendChild(badge);const grad='linear-gradient(to right,#000 82%,transparent 100%)';const upd=()=>{const hidden=el.scrollWidth-el.scrollLeft-el.clientWidth;const hasMore=hidden>4;el.style.webkitMaskImage=hasMore?grad:'';el.style.maskImage=hasMore?grad:'';if(hasMore){let n=0;const tbl=el.querySelector('table');if(tbl){const row=tbl.querySelector('tr');if(row){const right=el.getBoundingClientRect().right;n=[...row.querySelectorAll('th,td')].filter(c=>c.getBoundingClientRect().left>=right-4).length;}}else{const right=el.getBoundingClientRect().right;n=[...el.children].filter(c=>c.getBoundingClientRect().left>=right-4).length;}badge.textContent=n>0?'+'+n:'';badge.style.opacity=n>0?'1':'0';}else{badge.style.opacity='0';}};el.addEventListener('scroll',upd,{passive:true});upd();}
+function emptyState(iconName,message,ctaLabel,ctaFn,wrapStyle){const ico=illusIcon(iconName);const cta=(ctaLabel&&ctaFn)?`<button onclick="${ctaFn}" style="margin-top:16px;background:none;border:1px solid var(--border);color:var(--sub);border-radius:8px;padding:9px 24px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;letter-spacing:1.5px">${ctaLabel}</button>`:'';const sa=wrapStyle?' style="'+wrapStyle+'"':'';return `<div class="empty-state"${sa}><div class="empty-illus" style="opacity:.42;margin-bottom:14px;transition:opacity var(--t-3),filter var(--t-3)">${ico}</div><div>${message}</div>${cta}</div>`;}
+function setupScrollFade(el){if(!el||el._sfBound)return;el._sfBound=true;const par=el.parentElement;const badge=document.createElement('div');badge.style.cssText='position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.85);border:1px solid var(--border);color:var(--sub);font-size:var(--fs-xs);font-weight:800;font-family:Montserrat,sans-serif;letter-spacing:.5px;padding:2px 7px;border-radius:10px;pointer-events:none;transition:opacity var(--t-2);opacity:0;z-index:10;white-space:nowrap;line-height:1.5';par.appendChild(badge);const grad='linear-gradient(to right,#000 82%,transparent 100%)';const upd=()=>{const hidden=el.scrollWidth-el.scrollLeft-el.clientWidth;const hasMore=hidden>4;el.style.webkitMaskImage=hasMore?grad:'';el.style.maskImage=hasMore?grad:'';if(hasMore){let n=0;const tbl=el.querySelector('table');if(tbl){const row=tbl.querySelector('tr');if(row){const right=el.getBoundingClientRect().right;n=[...row.querySelectorAll('th,td')].filter(c=>c.getBoundingClientRect().left>=right-4).length;}}else{const right=el.getBoundingClientRect().right;n=[...el.children].filter(c=>c.getBoundingClientRect().left>=right-4).length;}badge.textContent=n>0?'+'+n:'';badge.style.opacity=n>0?'1':'0';}else{badge.style.opacity='0';}};el.addEventListener('scroll',upd,{passive:true});upd();}
 
 // ─── List / Table generics ───────────────────────────────────────────────────
 // renderDataList: flex rows with automatic border-bottom separator (removed on last child)
@@ -7249,7 +7267,7 @@ window.onload=()=>{
   const logoAnim=document.getElementById('splash-logo-anim');
   if(logoAnim){
     requestAnimationFrame(()=>requestAnimationFrame(()=>{
-      logoAnim.style.animation='rcStrike 0.55s cubic-bezier(.15,0,.35,1) both';
+      logoAnim.style.animation='rcStrike 0.55s var(--c-out) both';
     }));
   }
   setTimeout(()=>{
@@ -9365,7 +9383,7 @@ function goRegisterCoach(){
 }
 function ouvrirInviteCoach(){
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) ease">
     <h2 style="margin-bottom:6px">Code d'invitation coach</h2>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:12px;line-height:1.6">Tu n'en as pas besoin pour créer ton compte. Si le créateur de RepCore t'a remis un code, saisis-le ici : il est à usage unique.</p>
     <label for="ci-code" style="margin-top:0">Ton code</label>
@@ -9786,7 +9804,7 @@ function _annoncerDejaRattache(coachDuLien){
     +'background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">'
     +'<div onclick="event.stopPropagation()" style="background:var(--surface-2);'
     +'border-radius:20px 20px 0 0;padding:18px 20px 22px;width:100%;max-width:480px;'
-    +'animation:fadeIn .3s ease">'
+    +'animation:fadeIn var(--t-3) ease">'
     +'<h2 style="margin-bottom:8px;font-size:var(--fs-lg)">Tu es déjà suivi</h2>'
     +'<p class="sub" style="font-size:var(--fs-sm);line-height:1.65;margin-bottom:14px">'
     +'Tu es actuellement suivi par <strong style="color:var(--text-strong)">'+escapeHtml(actuel)+'</strong>, '
@@ -12483,7 +12501,7 @@ function _canalPorteFermee(){
   document.getElementById('modal-overlay')?.remove();
   document.body.insertAdjacentHTML('beforeend',
   `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:center;justify-content:center;padding:24px">
-    <div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Canal verrouillé" style="background:var(--surface-2);border:1px solid var(--border);border-radius:16px;padding:22px 20px;width:100%;max-width:360px;animation:fadeIn .25s ease;text-align:center">
+    <div onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-label="Canal verrouillé" style="background:var(--surface-2);border:1px solid var(--border);border-radius:16px;padding:22px 20px;width:100%;max-width:360px;animation:fadeIn var(--t-2) ease;text-align:center">
       <div style="font-size:var(--fs-2xl);line-height:1;margin-bottom:10px">🔒</div>
       <h2 style="margin-bottom:8px;font-size:var(--fs-lg)">Canal réservé aux athlètes suivis</h2>
       <p class="sub" style="font-size:var(--fs-sm);line-height:1.6;margin-bottom:16px">Ton coach y publie ses annonces, ses formations et ses documents. Entre ton code coach pour y accéder.</p>
@@ -12795,7 +12813,7 @@ function openMessageCanal(msgId){
   window._canalEdite=msgId||'';
   document.body.insertAdjacentHTML('beforeend',
   `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" role="dialog" aria-modal="true" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:88vh;overflow-y:auto">
+  <div onclick="event.stopPropagation()" role="dialog" aria-modal="true" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) ease;max-height:88vh;overflow-y:auto">
     <h2 style="margin-bottom:4px">${msgId?'Modifier le message':'Nouveau message'}</h2>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:12px;line-height:1.55">Il apparaît dans le canal de tous tes athlètes suivis, à leur prochaine ouverture de l'app. Ce n'est pas une notification : leur téléphone ne sonnera pas.</p>
     <label for="cm-titre">Titre (optionnel) · ${CANAL_TITRE_MAX} caractères</label>
@@ -12919,7 +12937,7 @@ function openWaGroupe(rowIdx){
     </label>`;
   }).join('');
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:88vh;overflow-y:auto">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) ease;max-height:88vh;overflow-y:auto">
     <h2 style="margin-bottom:4px">💬 Message groupé</h2>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:10px">Rien n'est envoyé d'ici : chaque nom ouvrira ta conversation WhatsApp avec le texte déjà écrit.</p>
     <label for="wag-texte" style="margin-top:0">Message : chacun le recevra précédé de « Salut &lt;son prénom&gt;, »</label>
@@ -14542,13 +14560,13 @@ function renderTodoBlock(clients){
       const corps=r.texte
         ? `<div style="flex:1;min-width:0"><span style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${nomA}</span><span style="font-size:var(--fs-sm);font-weight:700;color:${r.color}"> · ${r.label}</span><div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:2px">${escapeHtml(r.texte)}</div></div>`
         : `<div style="flex:1;min-width:0"><span style="font-size:var(--fs-sm);font-weight:700;color:var(--text)">${r.list.length>1?r.list.length+' ':''}</span><span style="font-size:var(--fs-sm);font-weight:700;color:${r.color}">${r.label}</span><span style="font-size:var(--fs-xs);color:var(--sub)"> · ${names}</span></div>`;
-      return{html:`<span style="font-size:var(--fs-lg);flex-shrink:0;align-self:flex-start;margin-top:1px">${r.icon}</span>${corps}${_ajBouton(r,idx)}${_waBoutonTodo(r,idx)}${r.nonReportable?'':`<button onclick="event.stopPropagation();dismissTodoRow(${idx})" title="Snoozer 7 jours" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:4px 8px;flex-shrink:0;transition:color .15s;border-radius:4px" onmouseover="this.style.color='var(--sub)'" onmouseout="this.style.color='#444'">✕</button>`}`,
+      return{html:`<span style="font-size:var(--fs-lg);flex-shrink:0;align-self:flex-start;margin-top:1px">${r.icon}</span>${corps}${_ajBouton(r,idx)}${_waBoutonTodo(r,idx)}${r.nonReportable?'':`<button onclick="event.stopPropagation();dismissTodoRow(${idx})" title="Snoozer 7 jours" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer;padding:4px 8px;flex-shrink:0;transition:color var(--t-1);border-radius:4px" onmouseover="this.style.color='var(--sub)'" onmouseout="this.style.color='#444'">✕</button>`}`,
       // LA LIGNE DES BILANS POSE LA FILE au passage. Les autres lignes ouvrent
       // la fiche comme avant : elles ne décrivent pas une série à traiter.
       onClick:r.type==='bilan'?`_entrerFileBilans(${idx})`
         :r.type==='rite'?`_ouvrirRiteClient('${r.list[0].id}')`
         :`openClientDetail('${r.list[0].id}')`,
-      style:'cursor:pointer;transition:background .15s;'};
+      style:'cursor:pointer;transition:background var(--t-1);'};
     },{pad:'10px 14px',gap:10,border:'#180000',hover:'#140000'})}
     ${restant?`<div style="padding:8px 14px;font-size:var(--fs-xs);color:var(--sub);border-top:1px solid #180000">+ ${restant} autre${restant>1?'s':''}</div>`:''}
     ${aDrapeau?`<div style="padding:8px 14px;border-top:1px solid #180000">${blocDisclaimerSante()}</div>`:''}
@@ -17690,7 +17708,7 @@ function openApplyTemplate(){
       </div>
     </div>`).join('');
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:85vh;overflow-y:auto">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) ease;max-height:85vh;overflow-y:auto">
     <h2 style="margin-bottom:4px">🗂️ Appliquer un modèle</h2>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:6px">à ${escapeHtml((c.fname||'')+' '+(c.lname||'')).trim()||'cet athlète'} : version ${genreDefaut==='F'?'F':'H'} pré-sélectionnée</p>
     ${lignes}
@@ -17889,8 +17907,8 @@ function loadCoachSessionSlots(){
             <div class="sub" style="font-size:var(--fs-xs);margin-top:1px" id="csm-sub-${i}">${s.active?(escapeHtml(s.name)||'Séance sans nom'):'Jour de repos'}</div>
           </div>
         </div>
-        <div onclick="coachToggleDay(${i})" style="width:44px;height:24px;border-radius:12px;background:${s.active?'var(--red)':'var(--border)'};position:relative;cursor:pointer;transition:.3s;flex-shrink:0" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-          <div style="position:absolute;width:18px;height:18px;border-radius:9px;background:#fff;top:3px;transition:.3s;left:${s.active?'23px':'3px'}"></div>
+        <div onclick="coachToggleDay(${i})" style="width:44px;height:24px;border-radius:12px;background:${s.active?'var(--red)':'var(--border)'};position:relative;cursor:pointer;transition:var(--t-3);flex-shrink:0" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+          <div style="position:absolute;width:18px;height:18px;border-radius:9px;background:#fff;top:3px;transition:var(--t-3);left:${s.active?'23px':'3px'}"></div>
         </div>
       </div>
       ${s.active?`
@@ -18686,7 +18704,7 @@ function ouvrirFicheBanque(slug,ev){
   // serait un jugement de métier qu'aucune donnée ne soutient ici.
   const variantes=f.schema?catalogueCoach().filter(x=>x.schema===f.schema&&x.slug!==f.slug).slice(0,6):[];
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;animation:fadeIn .3s ease">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;animation:fadeIn var(--t-3) ease">
     <h2 style="margin-bottom:10px;font-size:var(--fs-lg)">${escapeHtml(f.nom)}</h2>
     ${img?`<img src="${escapeHtml(img)}" alt="${escapeHtml(f.nom)}" style="width:100%;max-height:260px;object-fit:contain;background:#fff;border-radius:10px;margin-bottom:12px">`
       :`<div class="sub" style="font-size:var(--fs-xs);text-align:center;padding:16px;background:var(--surface-1);border-radius:10px;margin-bottom:12px">Aucune illustration pour cet exercice.</div>`}
@@ -18723,7 +18741,7 @@ function ouvrirCreationExo(){
   if(!peutConsulterBanque()){ toast('Réservé aux coachs.','var(--orange)'); return false; }
   const opt=(v,lib,sel)=>`<option value="${escapeHtml(v)}"${sel?' selected':''}>${escapeHtml(lib)}</option>`;
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;animation:fadeIn .3s ease">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;animation:fadeIn var(--t-3) ease">
     <h2 style="margin-bottom:4px;font-size:var(--fs-lg)">Créer un exercice</h2>
     <p class="sub" style="font-size:var(--fs-xs);margin-bottom:12px;line-height:1.6">Il n'appartient qu'à toi : aucun autre coach ne le voit. L'illustration est facultative — il n'y en aura pas.</p>
     <label for="ce-nom">Nom</label>
@@ -19346,7 +19364,7 @@ function _peindreRepos(){
         <circle cx="26" cy="26" r="${R}" fill="none" stroke="${anneau}" stroke-width="3" stroke-linecap="round"
           stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${(C*pc/100).toFixed(2)}"></circle>
       </svg>
-      <div class="arc-ronde" style="animation-duration:${cad}ms;animation-delay:-${(ecoule%cad).toFixed(0)}ms" aria-hidden="true">
+      <div class="arc-ronde fx-loop" style="animation-duration:${cad}ms;animation-delay:-${(ecoule%cad).toFixed(0)}ms" aria-hidden="true">
         <span class="arc-point" style="background:${anneau};box-shadow:0 0 6px ${anneau}"></span>
       </div>
       <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:.5px;color:${coul};line-height:1">${fini?'+':''}${_fmtRepos(reste)}</div>
@@ -20970,8 +20988,8 @@ function loadSessionManager(){
         </div>
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0">
           <span class="sub" style="font-size:var(--fs-xs)">${s.active?'Actif':'Repos'}</span>
-          <div onclick="toggleDayActive(${i})" style="width:44px;height:24px;border-radius:12px;background:${s.active?'var(--red)':'var(--border)'};position:relative;cursor:pointer;transition:.3s;flex-shrink:0" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-            <div style="position:absolute;width:18px;height:18px;border-radius:9px;background:#fff;top:3px;transition:.3s;left:${s.active?'23px':'3px'}"></div>
+          <div onclick="toggleDayActive(${i})" style="width:44px;height:24px;border-radius:12px;background:${s.active?'var(--red)':'var(--border)'};position:relative;cursor:pointer;transition:var(--t-3);flex-shrink:0" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+            <div style="position:absolute;width:18px;height:18px;border-radius:9px;background:#fff;top:3px;transition:var(--t-3);left:${s.active?'23px':'3px'}"></div>
           </div>
         </label>
       </div>
@@ -21003,7 +21021,7 @@ function loadSessionManager(){
             </button>`:
             `<label style="display:block;margin-top:6px;cursor:pointer">
               <input type="file" accept="image/*" style="display:none" onchange="uploadSessionPhoto(${i},this)">
-              <div style="border:2px dashed var(--border);border-radius:12px;padding:20px;text-align:center;transition:.2s" onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='var(--border)'">
+              <div style="border:2px dashed var(--border);border-radius:12px;padding:20px;text-align:center;transition:var(--t-2)" onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='var(--border)'">
                 <div style="font-weight:700;font-size:var(--fs-md)">Ajouter ma fiche programme</div>
                 <div class="sub" style="font-size:var(--fs-xs);margin-top:3px">Elle restera sous tes yeux pendant la séance. Les exercices se saisissent au bouton « Exercices ».</div>
               </div>
@@ -23863,7 +23881,7 @@ function finishWorkout(incomplete=false){
   const _wdBil=document.getElementById('wd-first-bilan-card');
   if(_wdBil) _wdBil.style.display=(currentUser.bilans||[]).some(b=>b.type==='depart')?'none':'block';
   go('s-workout-done');
-  const _wd=document.getElementById('s-workout-done');_wd.classList.remove('celebrate');void _wd.offsetWidth;_wd.classList.add('celebrate');
+  const _wd=document.getElementById('s-workout-done');_wd.classList.remove('celebrate');void _wd.offsetWidth;_wd.classList.add('celebrate','fx-loop');
 }
 // ══════════════ DÉTECTION DE L'ABSENCE DE PROGRESSION ══════════════
 // Tout est DÉRIVÉ de user.sessions : aucun champ nouveau, aucune migration.
@@ -24585,8 +24603,8 @@ function buildSessionComparison(vol,data){
   if(records.length){
     records.sort((a,b)=>b.gain-a.gain);
     const best=records[0];
-    html+=`<div class="wd-badge" style="margin-bottom:16px">
-      <div class="wd-badge-medal"><svg viewBox="0 0 200 200" style="width:100%;height:100%;display:block">
+    html+=`<div class="wd-badge fx-loop" style="margin-bottom:16px">
+      <div class="wd-badge-medal fx-loop"><svg viewBox="0 0 200 200" style="width:100%;height:100%;display:block">
         <defs>
           <linearGradient id="wdRed" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0" stop-color="#ff7a50"/><stop offset=".35" stop-color="#e63a24"/>
@@ -28903,7 +28921,7 @@ function bBodySchema(prefix){
       // que l'athlète touche la case — voir bMesureSaisie.
       const _rep=_bilEstReprise(id);
       return `<div style="position:absolute;${posX};top:${top}%;width:31%">
-        <div id="bx-${id}" style="display:flex;align-items:center;gap:4px;background:#0c0c0c;border:1px ${_rep?'dashed rgba(224,32,32,.5)':'solid var(--border)'};border-radius:7px;padding:2px 6px;transition:border-color .2s,box-shadow .2s">
+        <div id="bx-${id}" style="display:flex;align-items:center;gap:4px;background:#0c0c0c;border:1px ${_rep?'dashed rgba(224,32,32,.5)':'solid var(--border)'};border-radius:7px;padding:2px 6px;transition:border-color var(--t-2),box-shadow var(--t-2)">
           <span style="flex:none;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--sub);white-space:nowrap">${court}</span>
           <input type="number" inputmode="decimal" step="any" id="${id}" value="${bilData[id]||''}" placeholder="—"
             oninput="bMesureSaisie('${id}',this.value)"
@@ -31071,7 +31089,7 @@ function showBilanNotifBanner(){
   document.getElementById('bilan-notif-banner')?.remove();
   const b=document.createElement('div');
   b.id='bilan-notif-banner';
-  b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:var(--z-bar);animation:slideDown .35s ease';
+  b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:var(--z-bar);animation:slideDown var(--t-3) ease';
   b.innerHTML=`<div style="background:linear-gradient(135deg,#1a0000,#280000);border-bottom:2px solid var(--red);padding:14px 18px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openBilanChoice();document.getElementById('bilan-notif-banner')?.remove()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <div style="flex:1;min-width:0">
       <div style="font-size:var(--fs-xs);font-weight:900;color:var(--red-text);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px">Bilan bimensuel · Ce samedi</div>
@@ -31131,7 +31149,7 @@ function showBilanNotifPrompt(){
   const m=document.createElement('div');
   m.id='notif-perm-modal';
   m.style.cssText='position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center';
-  m.innerHTML=`<div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:28px 24px 40px;width:100%;max-width:480px;animation:slideUp .35s ease">
+  m.innerHTML=`<div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:28px 24px 40px;width:100%;max-width:480px;animation:slideUp var(--t-3) ease">
     <div style="text-align:center;font-size:var(--fs-3xl);margin-bottom:12px"></div>
     <h2 style="text-align:center;margin-bottom:8px;font-size:var(--fs-lg);font-family:var(--pile-titre);letter-spacing:.5px">Active les rappels bilan</h2>
     <p style="text-align:center;color:var(--sub);font-size:var(--fs-sm);line-height:1.7;margin-bottom:24px">
@@ -31514,7 +31532,7 @@ function showWoReminderBanner(){
   document.getElementById('wo-reminder-banner')?.remove();
   const b=document.createElement('div');
   b.id='wo-reminder-banner';
-  b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:var(--z-bar);animation:slideDown .35s ease';
+  b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:var(--z-bar);animation:slideDown var(--t-3) ease';
   b.innerHTML=`<div style="background:linear-gradient(135deg,#001a06,#002810);border-bottom:2px solid var(--green);padding:14px 18px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openSessionPicker();document.getElementById('wo-reminder-banner')?.remove()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <div style="font-size:var(--fs-2xl);flex-shrink:0">💪</div>
     <div style="flex:1;min-width:0">
@@ -31538,7 +31556,7 @@ function openWoReminderConfig(){
   const hourOpts=Array.from({length:17},(_,i)=>i+6).map(h=>`<option value="${h}" ${h===curH?'selected':''}>${String(h).padStart(2,'0')}h</option>`).join('');
   document.getElementById('wo-reminder-config')?.remove();
   document.body.insertAdjacentHTML('beforeend',`<div id="wo-reminder-config" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center" onclick="if(event.target===this)this.remove()">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px 36px;width:100%;max-width:480px;animation:slideUp .3s ease">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px 36px;width:100%;max-width:480px;animation:slideUp var(--t-3) ease">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <h2 style="margin:0;font-size:var(--fs-lg);display:flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>Rappel séance</h2>
       <button onclick="document.getElementById('wo-reminder-config').remove()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;line-height:1">✕</button>
@@ -32993,7 +33011,7 @@ function showProgressTab(tab,btn){
     // --fq porte la largeur d'une photo. C'est une VARIABLE et non une valeur
     // écrite dans chaque cellule : elle est réajustée après le rendu, une fois
     // la place réellement disponible mesurée, et une seule écriture suffit.
-    let html=`<div data-fresque class="fq-carte" style="--fq:${cellW}px;background:linear-gradient(160deg,#141414 0%,#0b0b0b 55%,#080808 100%);border:1px solid #202020;border-radius:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 14px 34px rgba(0,0,0,.55);animation:fadeInUp .35s ease">
+    let html=`<div data-fresque class="fq-carte" style="--fq:${cellW}px;background:linear-gradient(160deg,#141414 0%,#0b0b0b 55%,#080808 100%);border:1px solid #202020;border-radius:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 14px 34px rgba(0,0,0,.55);animation:fadeInUp var(--t-3) ease">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 17px,rgba(255,255,255,.016) 17px,rgba(255,255,255,.016) 18px);pointer-events:none"></div>
       <div style="position:absolute;left:-16px;top:34px;width:66px;height:150px;background:repeating-linear-gradient(-58deg,#E02020,#E02020 9px,transparent 9px,transparent 22px);opacity:.4;pointer-events:none;z-index:0"></div>
       <div style="position:absolute;right:-16px;bottom:44px;width:66px;height:150px;background:repeating-linear-gradient(-58deg,#E02020,#E02020 9px,transparent 9px,transparent 22px);opacity:.4;pointer-events:none;z-index:0"></div>
@@ -34722,8 +34740,8 @@ function _renderCycleNutSettings(nut){
       </div>
       <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;margin-left:12px;cursor:pointer">
         <input type="checkbox" id="cycle-pms" ${pms?'checked':''} onchange="saveCycleNutSettings()" style="opacity:0;width:0;height:0;position:absolute">
-        <span style="position:absolute;inset:0;background:${pms?'var(--red)':'var(--border)'};border-radius:12px;transition:.2s;pointer-events:none">
-          <span style="position:absolute;top:3px;left:${pms?'23':'3'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s"></span>
+        <span style="position:absolute;inset:0;background:${pms?'var(--red)':'var(--border)'};border-radius:12px;transition:var(--t-2);pointer-events:none">
+          <span style="position:absolute;top:3px;left:${pms?'23':'3'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:var(--t-2)"></span>
         </span>
       </label>
     </div>
@@ -34743,8 +34761,8 @@ function _renderCycleNutSettings(nut){
         </div>
         <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;margin-left:12px;cursor:pointer">
           <input type="checkbox" id="cycle-contra-partage" ${_partage?'checked':''} onchange="saveCycleNutSettings()" style="opacity:0;width:0;height:0;position:absolute">
-          <span style="position:absolute;inset:0;background:${_partage?'var(--red)':'var(--border)'};border-radius:12px;transition:.2s;pointer-events:none">
-            <span style="position:absolute;top:3px;left:${_partage?'23':'3'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s"></span>
+          <span style="position:absolute;inset:0;background:${_partage?'var(--red)':'var(--border)'};border-radius:12px;transition:var(--t-2);pointer-events:none">
+            <span style="position:absolute;top:3px;left:${_partage?'23':'3'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:var(--t-2)"></span>
           </span>
         </label>
       </div>
@@ -34782,8 +34800,8 @@ function _renderCycleNutSettings(nut){
       </div>
       <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer">
         <input type="checkbox" id="cycle-enabled" ${on?'checked':''} onchange="saveCycleNutSettings()" style="opacity:0;width:0;height:0;position:absolute">
-        <span style="position:absolute;inset:0;background:${on?'var(--red)':'var(--border)'};border-radius:12px;transition:.2s;pointer-events:none">
-          <span style="position:absolute;top:3px;left:${on?'23':'3'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s"></span>
+        <span style="position:absolute;inset:0;background:${on?'var(--red)':'var(--border)'};border-radius:12px;transition:var(--t-2);pointer-events:none">
+          <span style="position:absolute;top:3px;left:${on?'23':'3'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:var(--t-2)"></span>
         </span>
       </label>
     </div>
@@ -35209,7 +35227,7 @@ function htmlLigneCalories(tot,m){
       <span style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text)">${Math.round(tot.kcal||0)}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400">${m.kcal?' / '+m.kcal+' kcal':' kcal'}</span></span>
     </div>
     <div style="height:10px;background:var(--surface-2);border-radius:5px;overflow:visible">
-      <div style="height:100%;width:${(pct*100).toFixed(1)}%;background:linear-gradient(90deg,var(--red),#ff4444);border-radius:5px;transition:width .4s ease;box-shadow:0 0 12px rgba(224,32,32,.5)"></div>
+      <div style="height:100%;width:${(pct*100).toFixed(1)}%;background:linear-gradient(90deg,var(--red),#ff4444);border-radius:5px;transition:width var(--t-3) ease;box-shadow:0 0 12px rgba(224,32,32,.5)"></div>
     </div>`;
 }
 // PURE. Le libellé d’un jour, PARTAGÉ par le journal et la carte des
@@ -35241,7 +35259,7 @@ function _renderStrictMacroRings(nut,jourAff){
   const dayBadge=isOn
     ?`<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--success);background:var(--success-bg);border:1px solid var(--success-border);border-radius:5px;padding:3px 10px;letter-spacing:1px">${icon('zap',10)} JOUR ON</span>`
     :`<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:5px;padding:3px 10px;letter-spacing:1px">${icon('moon',10)} JOUR OFF</span>`;
-  return `<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 8px 24px rgba(0,0,0,.35);animation:fadeInUp .3s ease">
+  return `<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 8px 24px rgba(0,0,0,.35);animation:fadeInUp var(--t-3) ease">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <div style="min-width:0"><div style="display:inline-flex;align-items:center;gap:7px;font-family:var(--pile-titre);font-size:var(--fs-lg);color:#ff3b30;text-transform:uppercase;letter-spacing:3px;--halo-c:rgba(224,32,32,.85);text-shadow:var(--halo-1),0 0 20px rgba(224,32,32,.45)"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('target',13)}</span>${estAuj?'OBJECTIFS DU JOUR':'OBJECTIFS'}</div>${estAuj?'':`<div style="margin-top:4px;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--red-text)">${_libelleJourNut(today)}</div>`}</div>
       <span style="display:inline-flex;align-items:center;gap:6px">${badgePhase(currentUser)}${dayBadge}</span>
@@ -35271,7 +35289,7 @@ function _renderNutriContent(type,dateAff){
     :`<div style="width:54px;height:54px;border-radius:50%;background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text)">${icon('dumbbell',22)}</div>`;
   if(type==='flexible'){
     contentEl.innerHTML=`
-      <div class="banner-hero" style="margin-bottom:18px;animation:fadeInUp .3s ease">
+      <div class="banner-hero" style="margin-bottom:18px;animation:fadeInUp var(--t-3) ease">
         <div style="position:relative;display:flex;gap:14px;align-items:flex-start">
           ${_flxCircle}
           <div style="flex:1;min-width:0">
@@ -35413,20 +35431,20 @@ function _renderStrictDiet(){
   // courses. Ses deux compteurs le suivent : ils NOTENT la réponse oui/non,
   // et les laisser derrière la liste les aurait rendus orphelins.
   const suiviDuJour=`    <!-- Suivi du jour -->
-    <div style="background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0b0b0b);border:1px solid var(--border);border-radius:16px;box-shadow:var(--e4);padding:18px;margin-bottom:12px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.45);animation:fadeInUp .3s ease">
+    <div style="background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0b0b0b);border:1px solid var(--border);border-radius:16px;box-shadow:var(--e4);padding:18px;margin-bottom:12px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.45);animation:fadeInUp var(--t-3) ease">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.028) 11px,rgba(255,255,255,.028) 12px);pointer-events:none"></div>
       <div style="position:relative">
         <div style="display:inline-flex;align-items:center;gap:7px;font-family:var(--pile-titre);font-size:var(--fs-lg);color:var(--text);text-transform:uppercase;letter-spacing:2.5px;margin-bottom:14px;text-shadow:var(--halo-1),0 0 18px rgba(255,255,255,.18)"><span style="display:inline-flex;color:#ff3b30;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('check',13)}</span>J'AI RESPECTÉ MON PLAN${_sAuj?" AUJOURD'HUI":''}</div>
         ${_bandeauJour('strict-jour',_sjour,'setStrictJour')}
         <div style="display:flex;gap:10px">
-          <button onclick="setNutriRespected('${_sjour}',true)" style="flex:1;padding:16px 0;border-radius:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;letter-spacing:1.5px;cursor:pointer;background:${respYes?'linear-gradient(160deg,#1a9c4d,#0f5c2e)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${respYes?'var(--text)':'#8fd9ab'};border:2px solid ${respYes?'#22c55e':'rgba(34,197,94,.35)'};box-shadow:${respYes?'0 0 20px rgba(34,197,94,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${respYes?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">✓ OUI</button>
-          <button onclick="setNutriRespected('${_sjour}',false)" style="flex:1;padding:16px 0;border-radius:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;letter-spacing:1.5px;cursor:pointer;background:${respNo?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${respNo?'var(--text)':'#e79b9b'};border:2px solid ${respNo?'var(--red)':'rgba(224,32,32,.35)'};box-shadow:${respNo?'0 0 20px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${respNo?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">✗ NON</button>
+          <button onclick="setNutriRespected('${_sjour}',true)" style="flex:1;padding:16px 0;border-radius:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;letter-spacing:1.5px;cursor:pointer;background:${respYes?'linear-gradient(160deg,#1a9c4d,#0f5c2e)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${respYes?'var(--text)':'#8fd9ab'};border:2px solid ${respYes?'#22c55e':'rgba(34,197,94,.35)'};box-shadow:${respYes?'0 0 20px rgba(34,197,94,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${respYes?'0 0 10px rgba(255,255,255,.6)':'none'};transition:var(--t-2)">✓ OUI</button>
+          <button onclick="setNutriRespected('${_sjour}',false)" style="flex:1;padding:16px 0;border-radius:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;letter-spacing:1.5px;cursor:pointer;background:${respNo?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${respNo?'var(--text)':'#e79b9b'};border:2px solid ${respNo?'var(--red)':'rgba(224,32,32,.35)'};box-shadow:${respNo?'0 0 20px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${respNo?'0 0 10px rgba(255,255,255,.6)':'none'};transition:var(--t-2)">✗ NON</button>
         </div>
       </div>
     </div>
     <!-- Scores -->
     <div style="display:flex;gap:10px;margin-bottom:8px">
-      <div style="flex:1;min-width:0;background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0a0a0a);border:1px solid var(--border);border-radius:16px;box-shadow:var(--e4);padding:16px 10px;text-align:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp .35s ease">
+      <div style="flex:1;min-width:0;background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0a0a0a);border:1px solid var(--border);border-radius:16px;box-shadow:var(--e4);padding:16px 10px;text-align:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp var(--t-3) ease">
         <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.028) 11px,rgba(255,255,255,.028) 12px);pointer-events:none"></div>
         <div style="position:absolute;left:50%;top:-46px;transform:translateX(-50%);width:150px;height:110px;background:radial-gradient(circle,${streak>0?'rgba(34,197,94,.2)':'rgba(224,32,32,.13)'},transparent 68%);pointer-events:none"></div>
         <div style="position:relative">
@@ -35434,7 +35452,7 @@ function _renderStrictDiet(){
           <div style="font-size:var(--fs-xs);color:${streak>0?'rgba(34,197,94,.75)':'rgba(255,90,90,.7)'};letter-spacing:2px;margin-top:5px;text-transform:uppercase;font-weight:800">Jours consécutifs</div>
         </div>
       </div>
-      <div style="flex:1;min-width:0;background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0a0a0a);border:1px solid var(--border);border-radius:16px;box-shadow:var(--e4);padding:16px 10px;text-align:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp .4s ease">
+      <div style="flex:1;min-width:0;background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0a0a0a);border:1px solid var(--border);border-radius:16px;box-shadow:var(--e4);padding:16px 10px;text-align:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp var(--t-3) ease">
         <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.028) 11px,rgba(255,255,255,.028) 12px);pointer-events:none"></div>
         <div style="position:absolute;left:50%;top:-46px;transform:translateX(-50%);width:150px;height:110px;background:radial-gradient(circle,rgba(245,197,24,.16),transparent 68%);pointer-events:none"></div>
         <div style="position:relative">
@@ -35445,7 +35463,7 @@ function _renderStrictDiet(){
     </div>`;
   el.innerHTML=`${_transiStrict}
     <!-- Définition diète stricte -->
-    <div class="banner-hero" style="margin-bottom:18px;animation:fadeInUp .3s ease">
+    <div class="banner-hero" style="margin-bottom:18px;animation:fadeInUp var(--t-3) ease">
       <div style="position:relative;display:flex;gap:14px;align-items:flex-start">
         ${coachCircle}
         <div style="flex:1;min-width:0">
@@ -37339,8 +37357,8 @@ function renderPlanCoach(){
         </div>
         <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer">
           <input type="checkbox" ${_cplPlan.avecComplements?'checked':''} onchange="cplToggleComplements()" style="opacity:0;width:0;height:0;position:absolute">
-          <span style="position:absolute;inset:0;background:${_cplPlan.avecComplements?'var(--red)':'var(--border)'};border-radius:12px;transition:.2s;pointer-events:none">
-            <span style="position:absolute;top:3px;left:${_cplPlan.avecComplements?'23':'3'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s"></span>
+          <span style="position:absolute;inset:0;background:${_cplPlan.avecComplements?'var(--red)':'var(--border)'};border-radius:12px;transition:var(--t-2);pointer-events:none">
+            <span style="position:absolute;top:3px;left:${_cplPlan.avecComplements?'23':'3'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:var(--t-2)"></span>
           </span>
         </label>
       </div>
@@ -37742,7 +37760,7 @@ const courses=(lc&&lc.lignes.length)?`<details class="hist-repli lc-repli" style
       <span style="font-size:var(--fs-xs);color:#0a0a0a;letter-spacing:2px;font-weight:800;text-transform:uppercase;display:inline-flex;align-items:center;gap:6px">${icon('clipboard',13)} Liste de courses</span>
       <span style="display:inline-flex;align-items:center;gap:9px;flex-shrink:0">
         <span style="font-size:var(--fs-2xs);color:#5a5a5a;letter-spacing:1.5px;font-weight:800;text-transform:uppercase">${lc.lignes.filter(l=>l.qte>0).length} lignes</span>
-        <span class="hist-chevron" style="font-size:var(--fs-md);color:var(--border);transition:transform .18s">▾</span>
+        <span class="hist-chevron" style="font-size:var(--fs-md);color:var(--border);transition:transform var(--t-1)">▾</span>
       </span>
     </summary>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.5px;margin-bottom:6px">Ce qu'il te faut acheter (ce n'est pas ton plan alimentaire).</div>
@@ -39699,7 +39717,7 @@ function onFjSearch(val){
   const q=(val||'').trim();
   if(q.length<2){el.innerHTML='';return;}
   if(!_ciqualDB){
-    el.innerHTML='<div class="fj-result" style="pointer-events:none"><div class="skeleton" style="height:13px;width:62%;margin-bottom:8px"></div><div class="skeleton" style="height:10px;width:35%"></div></div><div class="fj-result" style="pointer-events:none"><div class="skeleton" style="height:13px;width:78%;margin-bottom:8px"></div><div class="skeleton" style="height:10px;width:45%"></div></div><div class="fj-result" style="pointer-events:none"><div class="skeleton" style="height:13px;width:54%;margin-bottom:8px"></div><div class="skeleton" style="height:10px;width:30%"></div></div><div class="fj-result" style="pointer-events:none"><div class="skeleton" style="height:13px;width:70%;margin-bottom:8px"></div><div class="skeleton" style="height:10px;width:42%"></div></div>';
+    el.innerHTML='<div class="fj-result" style="pointer-events:none"><div class="skeleton fx-loop" style="height:13px;width:62%;margin-bottom:8px"></div><div class="skeleton fx-loop" style="height:10px;width:35%"></div></div><div class="fj-result" style="pointer-events:none"><div class="skeleton fx-loop" style="height:13px;width:78%;margin-bottom:8px"></div><div class="skeleton fx-loop" style="height:10px;width:45%"></div></div><div class="fj-result" style="pointer-events:none"><div class="skeleton fx-loop" style="height:13px;width:54%;margin-bottom:8px"></div><div class="skeleton fx-loop" style="height:10px;width:30%"></div></div><div class="fj-result" style="pointer-events:none"><div class="skeleton fx-loop" style="height:13px;width:70%;margin-bottom:8px"></div><div class="skeleton fx-loop" style="height:10px;width:42%"></div></div>';
     _loadCiqual().then(()=>onFjSearch(val));
     return;
   }
@@ -40345,7 +40363,7 @@ function _renderFjDaySummary(date){
   </div>`;
 
   el.innerHTML=`
-    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 8px 24px rgba(0,0,0,.35);animation:fadeInUp .3s ease;margin-bottom:12px;overflow:hidden">
+    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 8px 24px rgba(0,0,0,.35);animation:fadeInUp var(--t-3) ease;margin-bottom:12px;overflow:hidden">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 14px">
         <div style="display:flex;align-items:center;gap:6px">
           <button onclick="_renderFjDaySummary('${prevStr}')" style="background:none;border:1px solid var(--border);color:#aaa;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:var(--fs-md)">←</button>
@@ -41829,8 +41847,8 @@ function _htmlStrictAccesCoach(c){
       </div>
       <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer">
         <input type="checkbox" ${ouvert?'checked':''} onchange="saveClientStrictAcces(this.checked)" style="opacity:0;width:0;height:0;position:absolute">
-        <span style="position:absolute;inset:0;background:${ouvert?'var(--success)':'var(--border)'};border-radius:12px;transition:.2s;pointer-events:none">
-          <span style="position:absolute;top:3px;left:${ouvert?'23':'3'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s"></span>
+        <span style="position:absolute;inset:0;background:${ouvert?'var(--success)':'var(--border)'};border-radius:12px;transition:var(--t-2);pointer-events:none">
+          <span style="position:absolute;top:3px;left:${ouvert?'23':'3'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:var(--t-2)"></span>
         </span>
       </label>
     </div>
@@ -42926,7 +42944,7 @@ function openCoachSuppEdit(id){
   const unitOptions=unitOpts.map(u=>`<option value="${u}"${s&&s.dosage_unit===u?' selected':''}>${unitLabels[u]||u}</option>`).join('');
   const isActive=s?s.active!==false:true;
   const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:90vh;overflow-y:auto">
+  <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) ease;max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
       <h2>${s?'Modifier le complément':'Nouveau complément'}</h2>
       <button onclick="closeModal()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer">✕</button>
@@ -43639,7 +43657,7 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
       </svg>
     <div style="display:flex;align-items:center;gap:16px">
       <div style="position:relative;width:130px;height:130px;flex-shrink:0">
-        <svg viewBox="0 0 130 130" width="130" height="130" style="display:block;overflow:visible;filter:drop-shadow(0 0 5px ${color}) drop-shadow(0 0 14px ${color}88);transition:filter .4s ease">
+        <svg viewBox="0 0 130 130" width="130" height="130" style="display:block;overflow:visible;filter:drop-shadow(0 0 5px ${color}) drop-shadow(0 0 14px ${color}88);transition:filter var(--t-3) ease">
           <!-- 1. La couronne de graduations. 60 traits, un sur cinq plus long :
                c est ce qui donne l echelle d un instrument plutot qu un cercle. -->
           <g stroke="${color}" stroke-linecap="butt">
@@ -43656,7 +43674,7 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
           <circle cx="65" cy="65" r="44" fill="none" stroke="var(--border)" stroke-width="7"
             stroke-dasharray="${(_circ2*0.30).toFixed(1)} ${(_circ2*0.05).toFixed(1)}" transform="rotate(-108 65 65)"/>
           <!-- 3. L arc de progres, par-dessus, depuis le haut. -->
-          <circle cx="65" cy="65" r="44" fill="none" style="stroke:${color};transition:stroke-dashoffset .4s ease,stroke .4s ease"
+          <circle cx="65" cy="65" r="44" fill="none" style="stroke:${color};transition:stroke-dashoffset var(--t-3) ease,stroke var(--t-3) ease"
             stroke-width="7" stroke-linecap="round" stroke-dasharray="${_circ2.toFixed(1)}" stroke-dashoffset="${_off2.toFixed(1)}" transform="rotate(-90 65 65)"/>
           <!-- 4. Le filet interieur, tres fin : il ferme le cadran. -->
           <circle cx="65" cy="65" r="37.5" fill="none" stroke="${color}" stroke-width="0.7" opacity=".35"/>
@@ -45117,7 +45135,7 @@ function openVideoCorrection(email,videoId){
   window._tsAnnotations=v.feedbackTimestamps?JSON.parse(JSON.stringify(v.feedbackTimestamps)):[];
   const _vcReste=(()=>{ try{ return _fileVideosSuivantes(email,videoId).length; }catch(e){ return 0; } })();
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 24px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:92vh;overflow-y:auto">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 24px;width:100%;max-width:480px;animation:fadeIn var(--t-3) ease;max-height:92vh;overflow-y:auto">
     <h2 style="margin-bottom:2px">✏️ Corriger</h2>
     <!-- LE RESTE DE LA FILE, quand il y en a une. Des modales qui
          s’enchaînent sans dire combien il en reste sont désorientantes ; hors
@@ -45506,7 +45524,7 @@ function loadSteps(containerId='steps-content'){
     const glow=d.isToday?';box-shadow:0 0 10px '+col+'66':'';
     const typeAccent=d.type==='on'?'#E02020':d.type==='off'?'#60a5fa':'transparent';
     bars+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">
-      <div style="width:82%;height:${pct}%;background:linear-gradient(180deg,${col},${col}55);border-radius:4px 4px 0 0;min-height:5px;box-shadow:0 0 ${d.isToday?'14':'8'}px ${col}${d.isToday?'aa':'55'},inset 0 1px 0 rgba(255,255,255,.25);transition:.4s;border-bottom:2px solid ${typeAccent}"></div>
+      <div style="width:82%;height:${pct}%;background:linear-gradient(180deg,${col},${col}55);border-radius:4px 4px 0 0;min-height:5px;box-shadow:0 0 ${d.isToday?'14':'8'}px ${col}${d.isToday?'aa':'55'},inset 0 1px 0 rgba(255,255,255,.25);transition:var(--t-3);border-bottom:2px solid ${typeAccent}"></div>
     </div>`;
   });
 
@@ -45544,7 +45562,7 @@ function loadSteps(containerId='steps-content'){
     }).join('');
     histHtml=`<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4)">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div>
-      <details class="hist-repli" style="position:relative"><summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;margin-bottom:6px"><div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Historique</div><span style="font-size:var(--fs-xs);color:var(--text-faint);font-weight:700">${Math.min(log.length,21)} jour${Math.min(log.length,21)>1?'s':''}</span><span style="flex:1"></span><span class="hist-chevron" style="font-size:var(--fs-md);color:var(--sub);transition:transform .18s">▾</span></summary>
+      <details class="hist-repli" style="position:relative"><summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;margin-bottom:6px"><div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Historique</div><span style="font-size:var(--fs-xs);color:var(--text-faint);font-weight:700">${Math.min(log.length,21)} jour${Math.min(log.length,21)>1?'s':''}</span><span style="flex:1"></span><span class="hist-chevron" style="font-size:var(--fs-md);color:var(--sub);transition:transform var(--t-1)">▾</span></summary>
       ${rows}</details>
     </div>`;
   }
@@ -45560,7 +45578,7 @@ function loadSteps(containerId='steps-content'){
       <span style="color:${stepColor(todayCount,todayType,selStr)};font-weight:800">${todayPct}%</span>
     </div>
     <div style="height:6px;background:var(--surface-2);border-radius:3px;overflow:hidden">
-      <div style="height:100%;width:${todayPct}%;background:${stepColor(todayCount,todayType,selStr)};border-radius:3px;transition:.4s"></div>
+      <div style="height:100%;width:${todayPct}%;background:${stepColor(todayCount,todayType,selStr)};border-radius:3px;transition:var(--t-3)"></div>
     </div>
   </div>`:'';
   // AFFICHÉ DÈS QU’UN OBJECTIF EXISTE, déclaré ou déduit — et non plus
@@ -45570,7 +45588,7 @@ function loadSteps(containerId='steps-content'){
   const todayGoalHintHtml=todayGoal?`<div style="text-align:center;font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px">Objectif : <strong style="color:${todayType==='on'?'var(--red)':'var(--sub)'}">${todayGoal.toLocaleString('fr-FR')} pas</strong></div>`:'';
 
   document.getElementById(containerId).innerHTML=`
-    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);animation:fadeInUp .3s ease">
+    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);animation:fadeInUp var(--t-3) ease">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:relative">
         <div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:13px">Objectifs de pas</div>
@@ -45594,7 +45612,7 @@ function loadSteps(containerId='steps-content'){
       </div>
     </div>
 
-    <div style="background:linear-gradient(145deg,#c10000 0%,#7d0000 55%,#4a0000 100%);border-radius:14px;padding:20px;margin-bottom:14px;text-align:center;position:relative;overflow:hidden;box-shadow:var(--e3);animation:fadeInUp .35s ease">
+    <div style="background:linear-gradient(145deg,#c10000 0%,#7d0000 55%,#4a0000 100%);border-radius:14px;padding:20px;margin-bottom:14px;text-align:center;position:relative;overflow:hidden;box-shadow:var(--e3);animation:fadeInUp var(--t-3) ease">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 16px,rgba(0,0,0,.13) 16px,rgba(0,0,0,.13) 17px);pointer-events:none"></div>
       <div style="position:absolute;right:-22px;top:-22px;width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,.055);pointer-events:none"></div>
       <div style="position:relative">
@@ -45611,14 +45629,14 @@ function loadSteps(containerId='steps-content'){
       </div>
     </div>
 
-    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);animation:fadeInUp .4s ease">
+    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);animation:fadeInUp var(--t-3) ease">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:absolute;left:50%;top:-30px;transform:translateX(-50%);width:130px;height:90px;border-radius:50%;background:radial-gradient(circle,${todayType==='off'?'rgba(96,165,250,.13)':'rgba(224,32,32,.14)'},transparent 68%);pointer-events:none"></div>
       <div style="position:relative">
         ${_bandeauJour('steps-date-input',selStr,'changeStepsDate')}
         <div style="display:flex;gap:8px;margin-bottom:11px">
-          <button onclick="stepsToggleType('on')" style="flex:1;padding:10px 4px;border-radius:9px;border:2px solid ${todayType==='on'?'var(--red)':'#1f1f1f'};background:${todayType==='on'?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='on'?'var(--text)':'#4a4a4a'};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='on'?'0 0 18px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='on'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">JOUR ON</button>
-          <button onclick="stepsToggleType('off')" style="flex:1;padding:10px 4px;border-radius:9px;border:2px solid ${todayType==='off'?'#60a5fa':'#1f1f1f'};background:${todayType==='off'?'linear-gradient(160deg,#1d4f80,#0b2740)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='off'?'var(--text)':'#4a4a4a'};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='off'?'0 0 18px rgba(96,165,250,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='off'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">JOUR OFF</button>
+          <button onclick="stepsToggleType('on')" style="flex:1;padding:10px 4px;border-radius:9px;border:2px solid ${todayType==='on'?'var(--red)':'#1f1f1f'};background:${todayType==='on'?'linear-gradient(160deg,#c10000,#6d0000)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='on'?'var(--text)':'#4a4a4a'};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='on'?'0 0 18px rgba(224,32,32,.5),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='on'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:var(--t-2)">JOUR ON</button>
+          <button onclick="stepsToggleType('off')" style="flex:1;padding:10px 4px;border-radius:9px;border:2px solid ${todayType==='off'?'#60a5fa':'#1f1f1f'};background:${todayType==='off'?'linear-gradient(160deg,#1d4f80,#0b2740)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${todayType==='off'?'var(--text)':'#4a4a4a'};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2px;cursor:pointer;box-shadow:${todayType==='off'?'0 0 18px rgba(96,165,250,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${todayType==='off'?'0 0 10px rgba(255,255,255,.6)':'none'};transition:var(--t-2)">JOUR OFF</button>
         </div>
         ${todayGoalHintHtml}
         <input type="number" id="steps-today-input" placeholder="0" min="0" max="99999"
@@ -45629,7 +45647,7 @@ function loadSteps(containerId='steps-content'){
       </div>
     </div>
 
-    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);animation:fadeInUp .45s ease">
+    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);animation:fadeInUp var(--t-4) ease">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:relative">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:15px">
@@ -48887,7 +48905,7 @@ function _htmlCadreImportCapture(){
          capitales lui donnaient le poids d une section a part entiere.
          La phrase sur la confidentialite RESTE : c est un engagement, pas
          une decoration, et c est elle qui autorise a demander une image. -->
-    <div style="margin-top:22px;margin-bottom:14px;animation:fadeInUp .5s ease">
+    <div style="margin-top:22px;margin-bottom:14px;animation:fadeInUp var(--t-4) ease">
       <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-bottom:8px">
         Pas noté tes stats ? Envoie la capture d'écran de ton application de montre, pas ou sommeil, vue 7 jours de préférence : les chiffres sont lus et remplis tout seuls.
         <b style="color:var(--text-dim);font-weight:700">La capture est lue sur ton téléphone. Elle n'est ni envoyée ni conservée.</b>
@@ -49046,7 +49064,7 @@ function loadSleep(containerId='sleep-content',user){
     const pct=h?Math.max(6,Math.round(h/maxVal*100)):4;
     const col=sleepColor(h);
     const glow=d.isToday?';box-shadow:0 0 10px '+col+'66':'';
-    bars+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%"><div style="width:82%;height:${pct}%;background:linear-gradient(180deg,${col},${col}55);border-radius:4px 4px 0 0;min-height:4px;box-shadow:0 0 ${d.isToday?'14':'8'}px ${col}${d.isToday?'aa':'55'},inset 0 1px 0 rgba(255,255,255,.25);transition:.4s"></div></div>`;
+    bars+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%"><div style="width:82%;height:${pct}%;background:linear-gradient(180deg,${col},${col}55);border-radius:4px 4px 0 0;min-height:4px;box-shadow:0 0 ${d.isToday?'14':'8'}px ${col}${d.isToday?'aa':'55'},inset 0 1px 0 rgba(255,255,255,.25);transition:var(--t-3)"></div></div>`;
   });
   let labels='';
   weekData.forEach(d=>{
@@ -49067,11 +49085,11 @@ function loadSleep(containerId='sleep-content',user){
       const badge=e.duration>=7&&e.duration<=9?'Idéal':'';
       return `<div style="font-size:var(--fs-sm);font-weight:600;color:#aaa;text-transform:capitalize">${lbl}</div><div style="display:flex;align-items:center;gap:10px">${(e.bed&&e.wake)?`<div style="font-size:var(--fs-xs);color:var(--sub)">${e.bed} → ${e.wake}</div>`:''}${badge?`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--green)">${badge}</span>`:''}<div style="font-size:var(--fs-md);font-weight:800;color:${col}">${e.duration}h</div></div>`;
     },{pad:'9px 0',justify:'space-between',gap:0,border:'#111'});
-    histHtml=`<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4)"><div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div><details class="hist-repli" style="position:relative"><summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;margin-bottom:6px"><div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Historique</div><span style="font-size:var(--fs-xs);color:var(--text-faint);font-weight:700">${sortedLog.length} nuit${sortedLog.length>1?'s':''}</span><span style="flex:1"></span><span class="hist-chevron" style="font-size:var(--fs-md);color:var(--sub);transition:transform .18s">▾</span></summary>${rows}</details></div>`;
+    histHtml=`<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4)"><div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div><details class="hist-repli" style="position:relative"><summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;margin-bottom:6px"><div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase">Historique</div><span style="font-size:var(--fs-xs);color:var(--text-faint);font-weight:700">${sortedLog.length} nuit${sortedLog.length>1?'s':''}</span><span style="flex:1"></span><span class="hist-chevron" style="font-size:var(--fs-md);color:var(--sub);transition:transform var(--t-1)">▾</span></summary>${rows}</details></div>`;
   }
 
   document.getElementById(containerId).innerHTML=`
-    <div style="background:linear-gradient(145deg,#0d2a4d 0%,#08172c 55%,#040c17 100%);border-radius:14px;padding:20px;margin-bottom:14px;text-align:center;position:relative;overflow:hidden;box-shadow:var(--e3);animation:fadeInUp .3s ease">
+    <div style="background:linear-gradient(145deg,#0d2a4d 0%,#08172c 55%,#040c17 100%);border-radius:14px;padding:20px;margin-bottom:14px;text-align:center;position:relative;overflow:hidden;box-shadow:var(--e3);animation:fadeInUp var(--t-3) ease">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 16px,rgba(0,0,0,.16) 16px,rgba(0,0,0,.16) 17px);pointer-events:none"></div>
       <div style="position:absolute;right:-20px;top:-20px;width:96px;height:96px;border-radius:50%;background:rgba(255,255,255,.05);pointer-events:none"></div>
       <div style="position:absolute;left:14px;top:12px;color:rgba(255,255,255,.16)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
@@ -49087,7 +49105,7 @@ function loadSleep(containerId='sleep-content',user){
       </div>
     </div>
 
-    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);animation:fadeInUp .35s ease">
+    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);animation:fadeInUp var(--t-3) ease">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:absolute;left:50%;top:-30px;transform:translateX(-50%);width:130px;height:90px;border-radius:50%;background:radial-gradient(circle,rgba(96,165,250,.13),transparent 68%);pointer-events:none"></div>
       <div style="position:relative">
@@ -49107,7 +49125,7 @@ function loadSleep(containerId='sleep-content',user){
       </div>
     </div>
 
-    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);animation:fadeInUp .4s ease">
+    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);animation:fadeInUp var(--t-3) ease">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:relative">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:15px">
@@ -50183,7 +50201,7 @@ function showOcrReviewModal(exercises,idx,videoLinks=[]){
     </div>`;}).join('');
 
   const html=`<div id="modal-overlay" onclick="" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:90vh;overflow-y:auto">
+  <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) ease;max-height:90vh;overflow-y:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <h2> ${exercises.length} exercices lus</h2>
       <button onclick="closeModal()" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;min-width:44px;min-height:44px;line-height:1">✕</button>
@@ -50498,7 +50516,7 @@ function openAddAthlete(){
   // annoncer la même durée aux deux serait faux pour l'un des deux.
   const estCreateur=currentUser?.email===CREATOR_EMAIL;
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn .3s ease;max-height:90vh;overflow-y:auto">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) ease;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:6px">➕ Ajouter un athlète</h2>
     <p class="sub" style="margin-bottom:8px;font-size:var(--fs-sm)">${estCreateur
       ?'Crée le compte et active l\'accès en une seule étape. Ton élève se connectera avec l\'email et le mot de passe que tu saisis ici.'
@@ -51598,7 +51616,7 @@ function handleBannerImage(input){
   const f=input.files[0];if(!f) return;
   const row=input.closest('.banner-row');
   const prev=row?.querySelector('.banner-preview');
-  if(prev) prev.innerHTML='<div class="skeleton" style="height:90px;border-radius:4px"></div>';
+  if(prev) prev.innerHTML='<div class="skeleton fx-loop" style="height:90px;border-radius:4px"></div>';
   compressImage(f,1800,0.88,b64=>{
     if(!row) return;
     row.dataset.imageUrl=b64;
@@ -53264,7 +53282,7 @@ function _renderSubPaliers(){
       onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
       style="flex:1;position:relative;cursor:pointer;border:2px solid ${sel?'var(--red)':'var(--border)'};
       background:${sel?'rgba(224,32,32,.08)':'transparent'};border-radius:12px;padding:14px 12px;
-      text-align:center;transition:.15s;min-height:44px">
+      text-align:center;transition:var(--t-1);min-height:44px">
       ${p.remise?`<div style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);
         background:var(--green);color:#04210d;font-size:var(--fs-xs);font-weight:900;
         padding:2px 8px;border-radius:20px;letter-spacing:.5px;white-space:nowrap">${escapeHtml(p.remise)}</div>`:''}
@@ -53395,7 +53413,7 @@ function initPaypalSubscription(){
   const planId=_planIdChoisi()||PAYPAL_PLAN_ID;
   const coachId=CREATOR_EMAIL;
   const _ppCon=document.getElementById('paypal-btn-container');
-  if(_ppCon) _ppCon.innerHTML='<div class="skeleton" style="height:55px;border-radius:8px"></div>';
+  if(_ppCon) _ppCon.innerHTML='<div class="skeleton fx-loop" style="height:55px;border-radius:8px"></div>';
   // Load PayPal SDK dynamically
   if(document.getElementById('paypal-sdk')){
     renderPaypalButton(planId,coachId);return;
