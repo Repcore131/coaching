@@ -48485,19 +48485,49 @@ function _courbePesee(serie){
   const L=100,H=64,mg=4;
   const X=d=>(_joursEntre(pts[0].date,d)/jours)*L;
   const Y=v=>H-mg-((v-mn)/(mx-mn))*(H-2*mg);
-  const bruts=pts.map(e=>`<circle cx="${X(e.date).toFixed(2)}" cy="${Y(e.kg).toFixed(2)}" r="1.1" fill="var(--text-faint)"/>`).join('');
+  // LES POINTS ETAIENT DES ELLIPSES. Le viewBox fait 100x64 et le svg est
+  // etire en preserveAspectRatio="none" jusqu'a ~350x120 : l'abscisse est
+  // grossie 3,5 fois, l'ordonnee 1,9 fois. Un <circle r="1.1" devenait donc
+  // un ovale couche de 7,7 sur 4,1 pixels. Un segment nul de longueur 0.01
+  // termine en bout ROND et trace en non-scaling-stroke echappe a la
+  // deformation : sa taille est en pixels d'ecran, pas en unites du viewBox.
+  const _pt=(x,y,c,w)=>`<path d="M${x.toFixed(2)} ${y.toFixed(2)} l0.01 0" stroke="${c}" stroke-width="${w}" stroke-linecap="round" vector-effect="non-scaling-stroke" fill="none"/>`;
+  const bruts=pts.map(e=>_pt(X(e.date),Y(e.kg),'var(--text-faint)',2.2)).join('');
+  // LA DERNIERE PESEE porte le regard : c'est celle qu'on vient de poser.
+  // Le disque sombre pose dessous la decolle du trait quand elle tombe
+  // exactement sur la moyenne.
+  const _d=pts[pts.length-1];
+  const dernier=_pt(X(_d.date),Y(_d.kg),'#0b0b0b',7)+_pt(X(_d.date),Y(_d.kg),'var(--red)',4.5);
   // Une moyenne mobile par SEGMENT : le trait s'interrompt à chaque coupure.
-  const traits=segs.map(seg=>{
-    const d=[];
+  // L'IDENTIFIANT EST UNIQUE PAR TRACE. blocPoids et blocPoidsCoach appellent
+  // tous deux cette fonction, et les ecrans restent dans le document une fois
+  // rendus : un id fixe en aurait mis deux. url(#...) prend le premier venu.
+  const gid='pesAire'+(_courbePesee._n=(_courbePesee._n||0)+1);
+  // L'AIRE SUIT LE SEGMENT, pas la courbe entiere : une coupure dans les
+  // pesees doit se voir comme un trou, pas se laisser combler par un aplat.
+  const aires=[],traits=[];
+  segs.forEach(seg=>{
+    const d=[],xy=[];
     for(let i=0;i<seg.length;i++){
       const v=mm7(seg,seg[i].date);
-      if(v!=null) d.push((d.length?'L':'M')+X(seg[i].date).toFixed(2)+' '+Y(v).toFixed(2));
+      if(v!=null){ const x=X(seg[i].date),y=Y(v);
+        xy.push([x,y]);
+        d.push((d.length?'L':'M')+x.toFixed(2)+' '+y.toFixed(2)); }
     }
-    return d.length>1?`<path d="${d.join(' ')}" fill="none" stroke="var(--red)" stroke-width="1.8"
-      stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`:'';
-  }).join('');
+    if(d.length<2) return;
+    aires.push(`<path d="M${xy[0][0].toFixed(2)} ${H} ${d.join(' ').slice(1)} L${xy[xy.length-1][0].toFixed(2)} ${H} Z" fill="url(#${gid})" stroke="none"/>`);
+    traits.push(`<path d="${d.join(' ')}" fill="none" stroke="var(--red)" stroke-width="1.8"
+      stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`);
+  });
+  // Le degrade est declare en style inline : var() n'est substitue que dans
+  // une declaration CSS, et stop-color en attribut ne le resoudrait pas
+  // partout de la meme facon.
+  const defs=`<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" style="stop-color:var(--red);stop-opacity:.30"/>
+      <stop offset="1" style="stop-color:var(--red);stop-opacity:0"/>
+    </linearGradient></defs>`;
   return `<svg class="arc-courbe" viewBox="0 0 ${L} ${H}" preserveAspectRatio="none" style="width:100%;height:120px;overflow:visible" aria-hidden="true">
-      ${bruts}${traits}
+      ${defs}${aires.join('')}${bruts}${traits.join('')}${dernier}
     </svg>
     <div style="display:flex;justify-content:space-between;font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">
       <span>${_fmtJourCourt(pts[0].date)}</span><span>${mn.toFixed(1)} – ${mx.toFixed(1)} kg</span><span>${_fmtJourCourt(fin)}</span>
@@ -48558,7 +48588,7 @@ function blocPoids(user){
     </div>`;
   const courbe=`<div class="evo-carte" style="padding:16px">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">
-        <span class="evo-titre" style="margin-bottom:0">Évolution du poids</span>
+        <span class="evo-titre" style="margin-bottom:0">Évolution du poids${act!=null?`<span style="font-family:var(--pile-titre);font-size:var(--fs-lg);color:var(--text-strong);letter-spacing:1px;margin-left:9px">${act} kg</span>`:''}</span>
         <span style="font-size:var(--fs-2xs);color:var(--text-faint)">points = pesées · trait = moyenne 7 j</span>
       </div>
       ${_courbePesee(serie)||'<div style="font-size:var(--fs-xs);color:var(--sub)">Au moins deux pesées sont nécessaires pour tracer une courbe.</div>'}
