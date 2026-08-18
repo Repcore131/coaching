@@ -3127,7 +3127,7 @@ const COACH_PHOTO='icons/coach.jpg';
   
   <div class="scroll-area" style="flex:1">
     <div class="pad">
-      <div class="clh-in clh-in-1" style="margin-bottom:20px">
+      <div class="clh-in clh-in-1" style="margin-bottom:28px">
         <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
         <h1 id="clh-greeting" style="font-size:var(--fs-2xl);line-height:1.15;font-weight:400;letter-spacing:1px"></h1>
         <p class="sub" id="clh-date" style="margin-top:4px;font-size:var(--fs-sm)"></p>
@@ -3149,7 +3149,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="clh-echeance"></div>
 
       <!-- COACH BANNER -->
-      <div id="clh-coach-banner" style="display:none;margin-bottom:18px"></div>
+      <div id="clh-coach-banner" style="display:none;margin-bottom:16px"></div>
 
       <!-- SIGNES À FAIRE EXAMINER -->
       <div id="clh-contraintes"></div>
@@ -3166,7 +3166,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- OBJECTIF -->
 
       <!-- STATS -->
-      <div class="clh-in clh-in-2" style="display:flex;gap:8px;margin-bottom:20px">
+      <div class="clh-in clh-in-2" style="display:flex;gap:8px;margin-bottom:16px">
         <div class="metric-box"><div class="metric-val" id="clh-m1">—</div><div class="metric-label">Cette semaine</div>
           <div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:2px" id="clh-m1-sub"></div></div>
         <div class="metric-box"><div class="metric-val" id="clh-m2">—</div><div class="metric-label">Séances au total</div>
@@ -3177,7 +3177,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 
       <!-- DÉMARRER SÉANCE — hero card -->
-      <div class="clh-in clh-in-3" style="background:linear-gradient(160deg,#1a0303,#120000 55%,#0b0000);border:1px solid #3a0000;border-left:3px solid var(--red);border-radius:14px;padding:24px 20px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.6),0 0 30px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.05)">
+      <div class="clh-in clh-in-3" style="background:linear-gradient(160deg,#1a0303,#120000 55%,#0b0000);border:1px solid #3a0000;border-left:3px solid var(--red);border-radius:14px;padding:24px 20px;margin-bottom:16px;position:relative;overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.6),0 0 30px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.05)">
         <div style="position:absolute;right:0;top:0;width:3px;height:100%;background:var(--red)"></div>
         <div class="eyebrow eyebrow-act" style="margin-bottom:14px">Entraînement</div>
         <button class="btn btn-red" onclick="openSessionPicker()" style="margin-bottom:10px;letter-spacing:1.5px;font-size:var(--fs-md);box-shadow:var(--e-inset),var(--glow-red)">DÉMARRER MA SÉANCE</button>
@@ -3198,7 +3198,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="clh-pesee"></div>
 
       <!-- REPRISE SÉANCE EN COURS -->
-      <div id="clh-resume-workout" style="display:none;position:relative;overflow:hidden;background:linear-gradient(160deg,#0a1622,#071019 55%,#050c14);border:1px solid #1d3f5c;border-radius:var(--r-md);padding:28px 16px 14px;margin-bottom:14px;cursor:pointer;box-shadow:var(--e2),inset 0 0 30px rgba(90,170,255,.06)" onclick="woResumeAndGo()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div id="clh-resume-workout" style="display:none;position:relative;overflow:hidden;background:linear-gradient(160deg,#0a1622,#071019 55%,#050c14);border:1px solid #1d3f5c;border-radius:var(--r-md);padding:28px 16px 14px;margin-bottom:16px;cursor:pointer;box-shadow:var(--e2),inset 0 0 30px rgba(90,170,255,.06)" onclick="woResumeAndGo()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <svg aria-hidden="true" viewBox="0 0 100 62" preserveAspectRatio="none" style="position:absolute;top:0;left:0;width:100%;height:34px;pointer-events:none;opacity:.30">
           <defs><linearGradient id="congere" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stop-color="var(--text)"/><stop offset=".45" stop-color="#f4faff"/>
@@ -3217,7 +3217,7 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
 
       <!-- REPRISE BILAN EN COURS -->
-      <div id="clh-resume-bilan" style="display:none;background:linear-gradient(135deg,#0a1420,#04080f);border:1px solid #1c4266;border-radius:var(--r-md);padding:14px 16px;margin-bottom:14px;cursor:pointer" onclick="bilResumeAndGo()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div id="clh-resume-bilan" style="display:none;background:linear-gradient(135deg,#0a1420,#04080f);border:1px solid #1c4266;border-radius:var(--r-md);padding:14px 16px;margin-bottom:16px;cursor:pointer" onclick="bilResumeAndGo()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <!-- accent bleu propre à cette carte : var(--info) est ambre et servirait
              déjà la carte « 1er bilan en attente » juste en dessous, les deux
              deviendraient indistinguables -->
@@ -3227,7 +3227,7 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
 
       <!-- 1er BILAN EN ATTENTE -->
-      <div id="clh-first-bilan-card" style="display:none;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-md);padding:14px 16px;margin-bottom:14px;cursor:pointer" onclick="openBilan('depart')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div id="clh-first-bilan-card" style="display:none;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-md);padding:14px 16px;margin-bottom:16px;cursor:pointer" onclick="openBilan('depart')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div class="eyebrow" style="color:var(--info);margin-bottom:5px;display:flex;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="9" y="2" width="6" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> À compléter</div>
         <div style="font-size:var(--fs-md);font-weight:800;margin-bottom:4px;color:var(--text)">Questionnaire de départ</div>
         <!-- Le texte disait quoi faire, pas ce que ça rapporte. Depuis que le
@@ -3257,7 +3257,7 @@ const COACH_PHOTO='icons/coach.jpg';
            personne ne s en sert. Seules les portes d entree partent. -->
       <div id="clh-suspension"></div>
       <!-- EXERCICES DU PROGRAMME (inline dans Accueil) -->
-      <div class="clh-in clh-in-4" id="clh-prog-exercises" style="margin-bottom:14px"></div>
+      <div class="clh-in clh-in-4" id="clh-prog-exercises" style="margin-bottom:16px"></div>
 
       <div id="clh-wo-reminder-row"></div>
       <div id="clh-habitudes"></div>
@@ -3276,7 +3276,7 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
 
       <!-- BANNIÈRES PUB COACH -->
-      <div id="clh-promo-banners" style="display:none;margin-top:18px;margin-bottom:8px"></div>
+      <div id="clh-promo-banners" style="display:none;margin-top:24px;margin-bottom:16px"></div>
     </div>
   </div>
   <!-- La barre d'onglets etait ici. Elle est desormais soeur des ecrans, plus
@@ -22675,7 +22675,7 @@ function _renderWeeklyInto(el,sc){
     :((DAYS[sel]||'').toUpperCase()+' : REPOS');
   const mainRest=nbEx?(selS.exercises.map(e=>e.repos).filter(Boolean)[0]||''):'';
   el.innerHTML=`
-    <div class="banner-hero" style="margin-bottom:14px">
+    <div class="banner-hero" style="margin-bottom:16px">
       <div style="position:relative">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
           <div>
@@ -48320,7 +48320,7 @@ function renderCartePesee(){
     sous='Encore '+(PESEE_MM_MIN-fen)+' pesée'+((PESEE_MM_MIN-fen)>1?'s':'')
       +' cette semaine avant une moyenne fiable';
   }
-  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:14px;box-shadow:var(--el-1)">
+  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:16px;box-shadow:var(--el-1)">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:9px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Pesée du jour</span>
       ${dujour?`<span style="font-size:var(--fs-2xs);color:var(--green);font-weight:700">✓ ${dujour.kg} kg</span>`:''}
