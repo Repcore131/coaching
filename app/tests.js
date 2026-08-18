@@ -13775,15 +13775,29 @@ function testExercices(){
       return /masqué/.test(h)&&/Réafficher/.test(h)&&!_INTERDIT.test(h);})());
 
     // ── Courbe : rupture après une interruption ──
+    // Le tracé porte désormais une aire par segment, des points en <path>
+    // et un dernier point souligné : compter les <path> nus ne distinguerait
+    // plus rien. On compte chaque forme par SA signature — même exigence,
+    // lue au bon endroit.
+    const _trTraits=h=>(h.match(/stroke-width="1\.8"/g)||[]).length;
+    const _trAires=h=>(h.match(/fill="url\(#pesAire\d+\)"/g)||[]).length;
+    const _trPoints=h=>(h.match(/stroke="var\(--text-faint\)" stroke-width="2\.2"/g)||[]).length;
     ok('Deux segments donnent deux traits',(()=>{
       const s=[]; for(let i=0;i<=10;i++) s.push({date:_pj(i),kg:80});
       for(let i=0;i<=10;i++) s.push({date:_pj(50+i),kg:78});
       const h=_courbePesee(s);
-      return (h.match(/<path/g)||[]).length===2;})());
-    ok('Une série continue ne donne qu\'un trait',
-       (_courbePesee(_ps(20,i=>80-i/14)).match(/<path/g)||[]).length===1);
+      return _trTraits(h)===2&&_trAires(h)===2;})());
+    ok("Une série continue ne donne qu'un trait",(()=>{
+      const h=_courbePesee(_ps(20,i=>80-i/14));
+      return _trTraits(h)===1&&_trAires(h)===1;})());
     ok('Chaque pesée est un point',
-       (_courbePesee(_ps(20,()=>80)).match(/<circle/g)||[]).length===21);
+       _trPoints(_courbePesee(_ps(20,()=>80)))===21);
+    ok('La dernière pesée est soulignée, une seule fois',(()=>{
+      const h=_courbePesee(_ps(20,()=>80));
+      return (h.match(/stroke-width="7"/g)||[]).length===1
+          &&(h.match(/stroke-width="4\.5"/g)||[]).length===1;})());
+    ok('Aucun <circle> ne subsiste : ils rendaient des ovales',
+       !/<circle/.test(_courbePesee(_ps(20,()=>80))));
     ok('Une série parfaitement plate ne divise pas par zéro',
        !/NaN|Infinity/.test(_courbePesee(_ps(20,()=>80))));
     // ══════════════ PHASE ══════════════
