@@ -370,8 +370,6 @@ body::after{content:'';position:fixed;inset:0;z-index:var(--z-layer);pointer-eve
 .btn-outline:hover{border-color:var(--red);color:var(--red-text)}
 .btn-outline:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
 .btn-sm{padding:9px 16px;font-size:var(--fs-xs);width:auto;border-radius:var(--r-1);letter-spacing:1.5px}
-@keyframes celebratePulse{0%,100%{box-shadow:none;transform:none}50%{box-shadow:var(--glow-red);transform:scale(1.03)}}
-.celebrate{animation:celebratePulse 1.2s ease}
 
 /* ====== INPUTS ====== */
 input,select,textarea{width:100%;padding:13px 16px;background:#0c0c0c;border:1px solid var(--border);border-radius:var(--r-1);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);outline:none;transition:var(--t-2)}
@@ -1414,6 +1412,9 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
      l'élément qui boucle, et le jour où il en naît un autre, il suffit de la
      lui donner. Les pseudo-éléments, eux, ne peuvent pas porter de classe :
      ils restent nommés. */
+  /* Les tuiles de fin de seance sont animees en JS par _feterFinSeance : la
+     regle universelle plus haut ne les atteint pas, il faut les nommer. */
+  #s-workout-done .metric-box{animation:none!important}
   .fx-loop,.fx-loop::after,.fx-loop::before,
   .wd-badge-medal::after,.skeleton::after{animation:none!important}
   /* État final propre pour les éléments dont l'animation portait la mise en forme */
@@ -23930,7 +23931,35 @@ function finishWorkout(incomplete=false){
   const _wdBil=document.getElementById('wd-first-bilan-card');
   if(_wdBil) _wdBil.style.display=(currentUser.bilans||[]).some(b=>b.type==='depart')?'none':'block';
   go('s-workout-done');
-  const _wd=document.getElementById('s-workout-done');_wd.classList.remove('celebrate');void _wd.offsetWidth;_wd.classList.add('celebrate','fx-loop');
+  _feterFinSeance();
+}
+
+// LA CELEBRATION DE FIN DE SEANCE.
+//
+// Elle passait par une classe CSS qu'il fallait retirer, forcer a se recalculer
+// (void offsetWidth) puis remettre — trois operations dont la seule raison
+// d'etre etait de rejouer une animation. Une animation JS se rejoue toute seule.
+//
+// NE LEVE JAMAIS : appelee APRES go('s-workout-done'), une fois la seance deja
+// enregistree. Une celebration qui echoue ne doit pas emporter l'enregistrement.
+//
+// z-index 8500 : SOUS #arc-calque et sous #toast — le voile ne doit jamais
+// couvrir un message.
+function _feterFinSeance(){
+  try{
+    if(typeof arcReduit==='function'&&arcReduit()) return;
+    const v=document.createElement('div');
+    v.style.cssText='position:fixed;inset:0;background:#fff;pointer-events:none;z-index:8500;opacity:0';
+    document.body.appendChild(v);
+    const a=v.animate([{opacity:0},{opacity:.55,offset:.18},{opacity:0}],
+      {duration:450,easing:'cubic-bezier(0.05,0.70,0.10,1.00)',fill:'none'});
+    a.addEventListener('finish',()=>v.remove());
+    a.addEventListener('cancel',()=>v.remove());
+    document.querySelectorAll('#s-workout-done .metric-box').forEach((el,i)=>{
+      el.style.animation='wFadeUp 0.6s cubic-bezier(.16,1,.3,1) '+(0.25+i*0.09)+'s both';
+    });
+    if(typeof arcHaptique==='function') arcHaptique('succes');
+  }catch(e){}
 }
 // ══════════════ DÉTECTION DE L'ABSENCE DE PROGRESSION ══════════════
 // Tout est DÉRIVÉ de user.sessions : aucun champ nouveau, aucune migration.
