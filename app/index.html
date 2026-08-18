@@ -681,7 +681,14 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 .series-table thead th{background:var(--red);color:var(--text);border-bottom:none}
 select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padding:5px 3px;cursor:pointer}
 .series-table td{padding:10px;text-align:center;border-top:1px solid #181818;font-size:var(--fs-md);font-weight:600}
-.series-table tr.done td{background:#E0202010;color:var(--red-text)}
+.series-table tr.done td{background:#101a12;color:var(--text)}
+.series-table tr.done td:first-child{box-shadow:inset 3px 0 0 var(--green)}
+.series-table tr.done .set-input:disabled{opacity:.55;-webkit-text-fill-color:var(--text);color:var(--text)}
+/* LA DOULEUR PASSE DEVANT LA VALIDATION. .row-alert peint le <tr> ; la règle
+   ci-dessus peint les <td>. Un fond opaque d'enfant recouvre celui du parent,
+   !important ou non — mesuré. On rend donc les cellules transparentes quand la
+   ligne est aussi en alerte, sans ajouter d'!important concurrent. */
+.series-table tr.done.row-alert td{background:transparent}
 .series-table-wo td{padding:8px 4px}.series-table-wo th{padding:7px 4px}
 .set-input{width:56px;background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1);color:var(--text);text-align:center;padding:12px 4px;min-height:44px;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800}
 .set-input:focus{border-color:var(--red);outline:none;box-shadow:0 0 0 2px rgba(198,15,8,.15)}
