@@ -358,7 +358,7 @@ body::after{content:'';position:fixed;inset:0;z-index:var(--z-layer);pointer-eve
   repeating-linear-gradient(-55deg,transparent,transparent 18px,rgba(198,15,8,.028) 18px,rgba(198,15,8,.028) 19px);}
 
 /* ====== SCREENS ====== */
-.screen{display:none!important;min-height:100vh;min-height:100dvh;flex-direction:column;animation:screenIn var(--t-2) ease both}.screen.active{display:flex!important}
+.screen{display:none!important;min-height:100vh;min-height:100dvh;flex-direction:column;animation:screenIn.16s var(--arc-c-discharge) both}.screen.active{display:flex!important}
 /* .screen.active handled above */
 
 /* ====== BUTTONS ====== */
@@ -1039,7 +1039,7 @@ h3{font-size:var(--fs-lg);text-transform:uppercase}
 button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px solid #FF3345;outline-offset:3px}
 
 /* ====== SCREEN TRANSITIONS ====== */
-@keyframes screenIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes screenIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
 
 /* ====== COACH TABS PREMIUM ====== */
 #coach-tabs-bar{background:#080808;border-bottom:1px solid var(--red);gap:0}
