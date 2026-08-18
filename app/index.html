@@ -106,7 +106,11 @@ if('serviceWorker' in navigator){
 </style>
 <style>
 html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-:root{--bg:#080808;--red:#E02020;--red2:#b81515;--red-bg:#0d0000;--red-glow:#FF3345;--red-light:color-mix(in srgb,var(--red) 70%,white);--dark:#0f0f0f;--surface-1:#111111;--surface-2:#181818;--surface-3:#1e1e1e;--border:#242424;--sub:#8a8a8a;--text:#efefef;
+:root{--bg:#080808;--red:#E02020;--red2:#b81515;--red-bg:#0d0000;--red-glow:#FF3345;--red-light:color-mix(in srgb,var(--red) 70%,white);
+  /* rouge de TEXTE — 6,17:1 sur #111. --red (#E02020) plafonne à 3,95:1 et
+     reste réservé aux fonds, bordures et halos. */
+  --red-text:#FF5A5A;
+ --dark:#0f0f0f;--surface-1:#111111;--surface-2:#181818;--surface-3:#1e1e1e;--border:#242424;--sub:#8a8a8a;--text:#efefef;
   /* Paliers de contraste du texte, mesures sur le fond de carte #111 :
      --text-dim   #8a8a8a  5,47:1  — texte secondaire, passe AA a toute taille.
                                      Meme valeur que --sub, qui nomme un ROLE
@@ -293,7 +297,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;o
 .btn-red:hover{background:#c91a1a;box-shadow:var(--glow-lg)}
 .btn-red:active{transform:scale(var(--arc-scale-charge));box-shadow:0 1px 6px rgba(224,32,32,.3);transition:transform var(--arc-attack) var(--arc-c-charge)}
 .btn-outline{background:transparent;color:#aaa;border:1px solid rgba(255,255,255,.12);letter-spacing:2px}
-.btn-outline:hover{border-color:var(--red);color:var(--red)}
+.btn-outline:hover{border-color:var(--red);color:var(--red-text)}
 .btn-outline:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
 .btn-sm{padding:9px 16px;font-size:11px;width:auto;border-radius:3px;letter-spacing:1.5px}
 @keyframes celebratePulse{0%,100%{box-shadow:none;transform:none}50%{box-shadow:var(--glow-lg);transform:scale(1.03)}}
@@ -314,7 +318,7 @@ h3{font-size:15px;font-weight:700;letter-spacing:0.3px}
 .txt-title{font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:32px}
 .txt-stat{font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:24px}
 .txt-stat-sm{font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:18px}
-.red{color:var(--red)}.sub{color:var(--sub);font-size:13px}
+.red{color:var(--red-text)}.sub{color:var(--sub);font-size:13px}
 .pad{padding:24px 20px}.gap{gap:12px;display:flex;flex-direction:column}
 .row{display:flex;align-items:center;gap:10px}.row2{display:flex;gap:10px}
 
@@ -540,7 +544,7 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
     inset 0 -1px 0 rgba(0,0,0,.55)}
 /* Le titre de section : ROUGE. Il etait gris, donc invisible, et la page
    n'avait aucun point d'entree pour l'oeil. */
-.evo-titre{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red);
+.evo-titre{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);
   text-transform:uppercase;margin-bottom:8px;text-shadow:0 0 10px rgba(224,32,32,.45)}
 .metric-label{font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;margin-top:6px;font-weight:700}
 /* Sur un écran de 320 px, trois encadrés côte à côte laissent 59 px de contenu
@@ -585,7 +589,7 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 .series-table thead th{background:var(--red);color:#fff;border-bottom:none}
 select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 3px;cursor:pointer}
 .series-table td{padding:10px;text-align:center;border-top:1px solid #181818;font-size:13px;font-weight:600}
-.series-table tr.done td{background:#E0202010;color:var(--red)}
+.series-table tr.done td{background:#E0202010;color:var(--red-text)}
 .series-table-wo td{padding:8px 4px}.series-table-wo th{padding:7px 4px}
 .set-input{width:56px;background:var(--dark);border:1px solid #2a2a2a;border-radius:3px;color:#fff;text-align:center;padding:12px 4px;min-height:44px;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800}
 .set-input:focus{border-color:var(--red);outline:none;box-shadow:0 0 0 2px rgba(198,15,8,.15)}
@@ -608,7 +612,7 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
 .fj-repas-btn.active{background:#1a0000;border-color:var(--red);color:#fff}
 
 /* ====== CODE DISPLAY ====== */
-.code-display{background:var(--dark);border-radius:4px;padding:24px;text-align:center;letter-spacing:8px;font-size:28px;font-weight:900;color:var(--red);border:1px solid #2a0a0a;font-family:monospace}
+.code-display{background:var(--dark);border-radius:4px;padding:24px;text-align:center;letter-spacing:8px;font-size:28px;font-weight:900;color:var(--red-text);border:1px solid #2a0a0a;font-family:monospace}
 /* ====== SUPPLEMENTS ====== */
 .supp-timing-chip{display:inline-flex;align-items:center;padding:8px 14px;min-height:40px;border:1px solid #2a2a2a;border-radius:20px;background:none;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;transition:.15s;white-space:nowrap;-webkit-tap-highlight-color:transparent}
 .supp-timing-chip.active{background:#1a0000;border-color:var(--red);color:#fff}
@@ -657,7 +661,7 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
 /* Porte désormais un SVG et non plus un caractère : font-size ne sert plus à
    rien, c'est color qui teinte le tracé (stroke:currentColor) et line-height:0
    qui évite la demi-ligne de blanc sous l'icône. */
-.role-icon{color:var(--red);margin-bottom:12px;line-height:0}
+.role-icon{color:var(--red-text);margin-bottom:12px;line-height:0}
 .client-row{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--surface-1);border-radius:0 2px 2px 0;margin-bottom:6px;cursor:pointer;border:1px solid var(--border);border-left:3px solid var(--red);transition:all .15s,transform var(--arc-strike) var(--arc-c-discharge)}
 .client-row:hover{background:var(--red-bg);border-color:var(--red);box-shadow:0 4px 16px rgba(224,32,32,0.12);transform:translateY(-1px)}
 .client-row:active{transform:scale(var(--arc-scale-charge));box-shadow:none;transition:transform var(--arc-attack) var(--arc-c-charge)}
@@ -845,7 +849,7 @@ select.set-input{width:auto!important;min-width:60px;font-size:11px;padding:5px 
 .empty-state{text-align:center;padding:48px 20px;color:var(--sub)}
 .empty-state:hover .empty-illus{opacity:.68!important;filter:drop-shadow(0 0 10px rgba(224,32,32,.3))}
 .obj-opt{padding:14px;border-radius:12px;background:var(--surface-1);border:2px solid var(--border);cursor:pointer;font-size:13px;font-weight:600;transition:.2s,transform var(--arc-strike) var(--arc-c-discharge);text-align:center;margin-bottom:10px}
-.obj-opt:hover,.obj-opt.sel{border-color:var(--red);color:var(--red)}
+.obj-opt:hover,.obj-opt.sel{border-color:var(--red);color:var(--red-text)}
 /* .obj-opt etait la seule surface pressable SANS etat :active — elle ne
    repondait pas au doigt. Elle en recoit un, aux memes valeurs que les autres. */
 .obj-opt:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
@@ -978,7 +982,7 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
 .topbar-title{font-family:'Bebas Neue',Impact,sans-serif!important;font-size:15px!important;letter-spacing:2.5px!important;text-transform:uppercase}
 
 /* ====== AVATAR REDESIGN ====== */
-.avatar{width:44px;height:44px;border-radius:2px;background:var(--red-bg);border:1px solid var(--red);display:flex;align-items:center;justify-content:center;font-weight:400;font-size:13px;flex-shrink:0;letter-spacing:1px;color:var(--red);font-family:'Bebas Neue',Impact,sans-serif}
+.avatar{width:44px;height:44px;border-radius:2px;background:var(--red-bg);border:1px solid var(--red);display:flex;align-items:center;justify-content:center;font-weight:400;font-size:13px;flex-shrink:0;letter-spacing:1px;color:var(--red-text);font-family:'Bebas Neue',Impact,sans-serif}
 
 /* ====== BADGE REDESIGN ====== */
 .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:1px;font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:1.5px}
@@ -1004,7 +1008,7 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
 .hit44::before,.back-btn::before,.exo-chip::before{
   content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
   width:44px;height:44px;min-width:100%;min-height:100%}
-.back-btn:hover{color:var(--red)}
+.back-btn:hover{color:var(--red-text)}
 .back-btn:active{transform:scale(.9)}
 /* ── Garde-fou : une commande sans glyphe redevient visible ─────────────────
    Sept boutons avaient perdu leur caractère au fil des éditions et se
@@ -1130,7 +1134,7 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   flex-shrink:0;display:inline-block;box-sizing:border-box}
 .caf-actif .caf-pastille{border-color:currentColor;box-shadow:inset 0 0 0 2.5px currentColor,0 0 7px currentColor}
 .caf-palier{display:flex;align-items:center;gap:9px;font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;
-  font-size:14px;letter-spacing:1.6px;color:#6a6a6a;text-transform:uppercase}
+  font-size:14px;letter-spacing:1.6px;color:var(--text-faint);text-transform:uppercase}
 .caf-actif{color:#fff}
 .caf-palier .caf-lib{margin-left:auto;color:#5e5e5e}
 .caf-actif .caf-lib{color:#fff}
@@ -1395,7 +1399,7 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   .rap-bloc{break-inside:avoid;page-break-inside:avoid;margin-bottom:16px}
   .rap-bloc h2{color:#444!important;border-bottom-color:#bbb!important}
   .rap-nb{color:#000!important}
-  .rap-lbl,.rap-u,.rap-note,.rap-meta,.rap-vide{color:#555!important}
+  .rap-lbl,.rap-u,.rap-note,.rap-meta,.rap-vide{color:var(--text-dim)!important}
   .rap-tbl td{border-bottom-color:#ddd!important}
   .rap-mot{border-color:#bbb!important;min-height:76px}
   /* UNE SEANCE NE SE COUPE PAS EN DEUX PAGES : sur le patron de .rap-bloc.
@@ -1404,7 +1408,7 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   .pp-seance{break-inside:avoid;page-break-inside:avoid;margin-bottom:16px}
   .pp-seance h2{color:#444!important;border-bottom-color:#bbb!important}
   .pp-tete{border-bottom-color:#bbb!important}
-  .pp-lbl,.pp-meta{color:#555!important}
+  .pp-lbl,.pp-meta{color:var(--text-dim)!important}
   .pp-txt,.pp-nom{color:#000!important}
   /* Sans ceci, les barres de volume et la courbe s impriment BLANCHES : les
      navigateurs suppriment les fonds par defaut. */
@@ -1593,7 +1597,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
     <div style="margin-bottom:8px">
       <div style="width:24px;height:2px;background:var(--red);margin-bottom:14px"></div>
-      <div style="font-size:26px;font-weight:900;letter-spacing:-0.5px;text-transform:uppercase;color:var(--red)">ESPACE COACH</div>
+      <div style="font-size:26px;font-weight:900;letter-spacing:-0.5px;text-transform:uppercase;color:var(--red-text)">ESPACE COACH</div>
       <!-- Le sous-titre vend le tableau de bord ; la condition d'accès n'a pas
            disparu, elle est portée par la carte « CRÉER MON COMPTE », seule
            concernée. L'énoncer deux fois faisait de l'écran une procédure. -->
@@ -1657,7 +1661,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
     <!-- Info box rouge -->
     <div style="background:rgba(224,32,32,.07);border:1px solid rgba(224,32,32,.24);border-radius:10px;padding:14px 16px;margin-top:4px">
-      <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:var(--red);font-weight:700;margin-bottom:6px">ℹ️ ESPACE COACH : TARIFS</div>
+      <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:var(--red-text);font-weight:700;margin-bottom:6px">ℹ️ ESPACE COACH : TARIFS</div>
       <!-- Cet écran est lu AVANT l'inscription, donc par de futurs coachs affiliés.
            L'encart disait ce que le COACH paie, jamais ce que ses athlètes
              paient. On ne dit pas non plus « compte coach gratuit » tout court :
@@ -1689,7 +1693,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- Header -->
     <div style="margin-bottom:8px">
       <div style="width:24px;height:2px;background:var(--red);margin-bottom:14px"></div>
-      <div style="font-size:26px;font-weight:900;letter-spacing:-0.5px;text-transform:uppercase;color:var(--red)">ESPACE ATHLÈTE</div>
+      <div style="font-size:26px;font-weight:900;letter-spacing:-0.5px;text-transform:uppercase;color:var(--red-text)">ESPACE ATHLÈTE</div>
       <div class="sub" style="font-size:12px;margin-top:6px">Accès réservé aux athlètes suivis sur RepCore.</div>
     </div>
 
@@ -1715,13 +1719,13 @@ const COACH_PHOTO='icons/coach.jpg';
            replier normalement. -->
       <div id="ae-code-zone" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
         <div id="ae-coach-banner" style="display:none;background:#0a1a0a;border:1px solid #1a3a1a;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--green);font-weight:700;line-height:1.5"></div>
-        <div style="font-size:var(--fs-xs);letter-spacing:2px;color:var(--red);font-weight:800;margin-bottom:8px">ENTRE TON CODE OU COLLE LE LIEN DE TON COACH</div>
+        <div style="font-size:var(--fs-xs);letter-spacing:2px;color:var(--red-text);font-weight:800;margin-bottom:8px">ENTRE TON CODE OU COLLE LE LIEN DE TON COACH</div>
         <!-- Pas de text-transform:uppercase ici : un lien d'invitation collé
              s'afficherait en majuscules alors que sa charge base64 y est sensible.
              La normalisation ne s'applique qu'aux codes courts, comme sur cc-code. -->
         <input id="ae-code" type="text" placeholder="Ex: RC-A3KZ-W9MX ou le lien reçu" style="letter-spacing:1px;font-family:monospace" onclick="event.stopPropagation()"
           oninput="var v=this.value;if(!v.startsWith('http')&&!v.startsWith('RCACCESS')&&!v.startsWith('RCLINK'))this.value=v.toUpperCase()">
-        <div id="ae-err" style="color:var(--red);font-size:11px;margin-top:6px;display:none"></div>
+        <div id="ae-err" style="color:var(--red-text);font-size:11px;margin-top:6px;display:none"></div>
         <button id="ae-valider" class="btn btn-red" onclick="event.stopPropagation();doAthleteCode()" style="margin-top:12px">VALIDER → CRÉER MON COMPTE</button>
       </div>
     </div>
@@ -1755,7 +1759,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
     <!-- Info box athlète -->
     <div style="background:rgba(224,32,32,.07);border:1px solid rgba(224,32,32,.24);border-radius:10px;padding:14px 16px;margin-top:4px">
-      <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:var(--red);font-weight:700;margin-bottom:6px">ℹ️ ESPACE ATHLÈTE</div>
+      <div style="font-size:var(--fs-xs);letter-spacing:1.5px;color:var(--red-text);font-weight:700;margin-bottom:6px">ℹ️ ESPACE ATHLÈTE</div>
       <div style="font-size:11px;color:rgba(255,255,255,.82);line-height:1.6">Avec un code fourni par ton coach, l'accès est compris dans son suivi. Sans code, l'accès en autonomie coûte <span data-prix-autonomie>9,95 €/mois</span>, sans engagement.</div>
     </div>
 
@@ -1857,7 +1861,7 @@ const COACH_PHOTO='icons/coach.jpg';
          le conteneur en ajoutait un troisième par-dessus. -->
     <div style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px">
       <input type="checkbox" id="r-cgu" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
-      <label for="r-cgu" style="font-size:12px;color:var(--sub);line-height:1.6;cursor:pointer">J'ai lu et j'accepte la <a href="../privacy.html" target="_blank" rel="noopener" style="color:var(--red);text-decoration:underline;font-weight:600">politique de confidentialité</a> et les <a href="../legal.html" target="_blank" rel="noopener" style="color:var(--red);text-decoration:underline;font-weight:600">mentions légales</a>.</label>
+      <label for="r-cgu" style="font-size:12px;color:var(--sub);line-height:1.6;cursor:pointer">J'ai lu et j'accepte la <a href="../privacy.html" target="_blank" rel="noopener" style="color:var(--red-text);text-decoration:underline;font-weight:600">politique de confidentialité</a> et les <a href="../legal.html" target="_blank" rel="noopener" style="color:var(--red-text);text-decoration:underline;font-weight:600">mentions légales</a>.</label>
     </div>
     <!-- margin-top retiré : il s'ajoutait aux 12 px du parent et creusait un
          écart inégal entre les deux consentements. -->
@@ -1993,7 +1997,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
         <img src="./icons/logo.png" style="display:block;width:52px;height:52px;flex-shrink:0">
         <div>
-          <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2px;font-weight:800">COACH</div>
+          <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800">COACH</div>
           <div style="font-size:13px;font-weight:900" id="ch-name-sidebar"></div>
         </div>
       </div>
@@ -2036,7 +2040,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="display:flex;align-items:center;gap:10px">
         <img src="./icons/logo.png" style="display:block;width:52px;height:52px;flex-shrink:0">
         <div>
-          <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:4px;font-weight:700;text-transform:uppercase;margin-bottom:2px">COACH</div>
+          <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:4px;font-weight:700;text-transform:uppercase;margin-bottom:2px">COACH</div>
           <div style="font-size:14px;font-family:'Bebas Neue',Impact,sans-serif;letter-spacing:1px;line-height:1" id="ch-name"></div>
           <span class="coach-sync-badge rc-sync-badge" style="font-size:var(--fs-xs);font-weight:700;letter-spacing:.3px;display:block;margin-top:2px"></span>
         </div>
@@ -2062,7 +2066,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="display:flex;gap:10px;margin-bottom:20px;padding-top:4px">
           <div class="metric-box"><div class="metric-val" id="ch-total">0</div><div class="metric-label">Athlètes</div></div>
           <div class="metric-box"><div class="metric-val" id="ch-active" style="color:var(--green)">0</div><div class="metric-label">Actifs 14 j</div></div>
-          <div class="metric-box"><div class="metric-val" id="ch-alerts" style="color:var(--red)">0</div><div class="metric-label">Alertes</div></div>
+          <div class="metric-box"><div class="metric-val" id="ch-alerts" style="color:var(--red-text)">0</div><div class="metric-label">Alertes</div></div>
         </div>
         <!-- Premiers pas. Rempli par _renderPremiersPas, et seulement tant que
              le coach n'a aucun athlète : au-delà, ch-todo a mieux à dire. -->
@@ -2083,7 +2087,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div id="ch-todo"></div>
         <button onclick="openCoachPrograms()" class="content-card" style="width:100%;margin-bottom:16px;padding:13px 16px;background:linear-gradient(135deg,#0d0d0d,#1a0000);border:1px solid #2a0000;border-left:3px solid var(--red);border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;letter-spacing:1.5px;text-align:left;display:flex;align-items:center;justify-content:space-between">
           <span>🗂️ MES PROGRAMMES (H/F)</span>
-          <span style="color:var(--red);font-size:13px">→</span>
+          <span style="color:var(--red-text);font-size:13px">→</span>
         </button>
         <button onclick="loadCharges()" class="content-card pil-lien" style="margin-bottom:16px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;text-align:left;letter-spacing:1px">
           <span style="font-size:12px;font-weight:800;letter-spacing:1px">CHARGES ARTICULAIRES</span>
@@ -2170,7 +2174,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
 
         <div id="sc-generate-card" style="background:var(--dark);border:1px solid #2a0000;border-radius:14px;padding:18px;margin-bottom:24px">
-          <div style="font-size:11px;font-weight:800;color:var(--red);letter-spacing:2px;margin-bottom:14px">NOUVEAU CODE D'ACCÈS</div>
+          <div style="font-size:11px;font-weight:800;color:var(--red-text);letter-spacing:2px;margin-bottom:14px">NOUVEAU CODE D'ACCÈS</div>
           <div style="margin-bottom:12px"><label for="sc-name">Nom de l'élève</label><input id="sc-name" placeholder="Ex: Marie Martin"></div>
           <div style="margin-bottom:14px">
             <label for="sc-duration">Durée d'accès</label>
@@ -2220,7 +2224,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="width:20px;height:2px;background:var(--red);margin-bottom:8px;margin-top:4px"></div>
         <!-- 🏷️ Identité coach / team -->
         <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px">
-          <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:14px">Identité de la team</div>
+          <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:14px">Identité de la team</div>
           <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
             <label style="cursor:pointer;flex-shrink:0">
               <div id="coach-photo-circle" style="width:72px;height:72px;border-radius:50%;background:var(--surface-2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:28px;height:28px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
@@ -2328,7 +2332,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
         <!-- 🖼️ Bannières publicitaires -->
         <div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:14px;padding:18px;margin-bottom:18px">
-          <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Bannières pub</div>
+          <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Bannières pub</div>
           <div style="font-size:11px;color:var(--sub);margin-bottom:14px;line-height:1.5">Affiché en bas de l'accueil de tes athlètes.<br>Format bannière cliquable (photo + lien).</div>
           <div id="coach-banners-list" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px"></div>
           <button onclick="addCoachBannerRow()" style="width:100%;background:transparent;border:1px dashed #3a3a5a;color:var(--info);border-radius:3px;padding:10px;font-family:Montserrat,sans-serif;font-size:11px;cursor:pointer;margin-bottom:12px">+ Ajouter une bannière</button>
@@ -2373,7 +2377,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div id="ch-lien-tunnel" style="display:none;margin-bottom:18px">
           <div onclick="loadMetrics()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:16px 18px;cursor:pointer;display:flex;align-items:center;gap:14px">
             <div style="flex:1;min-width:0">
-              <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Mesure</div>
+              <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Mesure</div>
               <div style="font-weight:800;font-size:14px">Tunnel d'acquisition</div>
               <div class="sub" style="font-size:11px;margin-top:2px">7 derniers jours : compteurs anonymes</div>
             </div>
@@ -2467,12 +2471,12 @@ const COACH_PHOTO='icons/coach.jpg';
 
         <!-- Zone dangereuse : self-service -->
         <div style="background:#0f0000;border:1px solid #2a0000;border-radius:14px;padding:18px;margin-top:24px;margin-bottom:8px">
-          <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:14px">⚠ Zone dangereuse</div>
+          <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:14px">⚠ Zone dangereuse</div>
 
           <div style="margin-bottom:16px">
             <div style="font-weight:700;font-size:13px;margin-bottom:4px">Réassigner mes athlètes</div>
             <div style="font-size:11px;color:var(--sub);margin-bottom:10px;line-height:1.5">Transférer tous tes athlètes à un autre coach ou au créateur avant de fermer ton compte.</div>
-            <button onclick="offboardCoach(currentUser?.id)" style="width:100%;background:none;border:1px solid var(--red);border-radius:6px;padding:10px;color:var(--red);font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:1px">RÉASSIGNER MES ATHLÈTES</button>
+            <button onclick="offboardCoach(currentUser?.id)" style="width:100%;background:none;border:1px solid var(--red);border-radius:6px;padding:10px;color:var(--red-text);font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:1px">RÉASSIGNER MES ATHLÈTES</button>
           </div>
 
           <div style="border-top:1px solid #1a1a1a;padding-top:16px;margin-top:0">
@@ -2494,9 +2498,9 @@ const COACH_PHOTO='icons/coach.jpg';
          #ch-sidebar : celle-ci est en display:none sous 900 px, donc sur
          mobile — la plateforme réelle — le coach ne verrait jamais le lien. -->
     <div style="flex-shrink:0;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));border-top:1px solid #141414;background:#080808;text-align:center;font-size:var(--fs-xs);color:var(--text-dim);line-height:1.9">
-      <a href="../legal.html" target="_blank" rel="noopener" style="color:#666;text-decoration:underline">Mentions légales</a>
+      <a href="../legal.html" target="_blank" rel="noopener" style="color:var(--text-faint);text-decoration:underline">Mentions légales</a>
       &nbsp;·&nbsp;
-      <a href="../privacy.html" target="_blank" rel="noopener" style="color:#666;text-decoration:underline">Confidentialité</a>
+      <a href="../privacy.html" target="_blank" rel="noopener" style="color:var(--text-faint);text-decoration:underline">Confidentialité</a>
     </div>
 
   </div><!-- end #ch-main-area -->
@@ -2553,7 +2557,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
       <!-- PDF PROGRAMME — dépôt direct sans passer par l'éditeur -->
       <div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
-        <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:12px">Programme PDF</div>
+        <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:12px">Programme PDF</div>
         <div id="ccc-pdf-content"></div>
       </div>
 
@@ -2623,7 +2627,7 @@ const COACH_PHOTO='icons/coach.jpg';
            promesse etait fausse. Rempli par renderSessionsHistory(). -->
       <details id="csm-history" style="background:var(--dark);border:1px solid var(--border);border-radius:10px;margin-bottom:14px;display:none">
         <summary style="cursor:pointer;padding:12px 14px;font-size:12px;font-weight:700;letter-spacing:.5px;color:var(--sub);list-style:none;display:flex;justify-content:space-between;align-items:center;min-height:44px">
-          <span>Versions precedentes</span><span id="csm-history-n" style="color:var(--red)"></span>
+          <span>Versions precedentes</span><span id="csm-history-n" style="color:var(--red-text)"></span>
         </summary>
         <div id="csm-history-list" style="padding:0 14px 12px"></div>
       </details>
@@ -2980,7 +2984,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="openAthleteProfile()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div id="clh-athlete-avatar" style="width:48px;height:48px;border-radius:50%;background:var(--surface-2);border:2px solid #2a2a2a;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
       <div>
-        <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:4px;font-weight:700;text-transform:uppercase;margin-bottom:2px">MON PROFIL</div>
+        <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:4px;font-weight:700;text-transform:uppercase;margin-bottom:2px">MON PROFIL</div>
         <div style="font-size:14px;font-family:'Bebas Neue',Impact,sans-serif;letter-spacing:1px;line-height:1" id="clh-name"></div>
         <span id="clh-sync-badge" class="rc-sync-badge"></span>
       </div>
@@ -3008,7 +3012,7 @@ const COACH_PHOTO='icons/coach.jpg';
              dessous, porte déjà son nom, sa photo et sa phrase. Le cas « sans
              coach » y est traité aussi, par une invitation à saisir un code. -->
         <div id="clh-dispo"></div>
-        <a id="clh-contact-link" href="#" target="_blank" rel="noopener" style="display:none;font-size:11px;color:var(--red);font-weight:700;letter-spacing:.5px;margin-top:6px;text-decoration:none;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg> Un souci ? Contacte ton coach</a>
+        <a id="clh-contact-link" href="#" target="_blank" rel="noopener" style="display:none;font-size:11px;color:var(--red-text);font-weight:700;letter-spacing:.5px;margin-top:6px;text-decoration:none;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="m3 21 1.9-5.7a8.5 8.5 0 1 1 3.8 3.8z"/></svg> Un souci ? Contacte ton coach</a>
         <a href="#" onclick="ouvrirReglagesAthlete();return false" style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--sub);font-weight:700;letter-spacing:.5px;margin-top:6px;text-decoration:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;flex-shrink:0"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9c.14.31.4.55.71.66H21a2 2 0 1 1 0 4h-.09c-.31.11-.57.35-.71.66z"/></svg> Réglages</a>
       </div>
 
@@ -3048,7 +3052,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <!-- DÉMARRER SÉANCE — hero card -->
       <div style="background:linear-gradient(135deg,#0f0000,#160000);border:1px solid #2a0000;border-radius:4px;padding:20px;margin-bottom:14px;position:relative;overflow:hidden">
         <div style="position:absolute;right:0;top:0;width:3px;height:100%;background:var(--red)"></div>
-        <div style="font-size:var(--fs-xs);color:var(--red);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:14px">Entraînement</div>
+        <div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:14px">Entraînement</div>
         <button class="btn btn-red" onclick="openSessionPicker()" style="margin-bottom:10px;letter-spacing:1.5px;font-size:13px;box-shadow:inset 0 2px 0 rgba(255,255,255,.22),inset 0 -3px 0 rgba(0,0,0,.45),0 4px 20px rgba(224,32,32,.35)">DÉMARRER MA SÉANCE</button>
         <button class="btn btn-outline" onclick="loadSessionManager()" style="font-size:11px;padding:11px;letter-spacing:1.5px">GÉRER MES SÉANCES</button>
       </div>
@@ -3296,9 +3300,9 @@ const COACH_PHOTO='icons/coach.jpg';
         <!-- Pied athlète : deux clics depuis n'importe quel écran connecté —
              l'avatar de l'accueil ouvre ce profil, ce lien ouvre la page. -->
         <div style="margin-top:14px;font-size:11px;color:var(--text-dim);line-height:1.9">
-          <a href="../legal.html" target="_blank" rel="noopener" style="color:#666;text-decoration:underline">Mentions légales</a>
+          <a href="../legal.html" target="_blank" rel="noopener" style="color:var(--text-faint);text-decoration:underline">Mentions légales</a>
           &nbsp;·&nbsp;
-          <a href="../privacy.html" target="_blank" rel="noopener" style="color:#666;text-decoration:underline">Confidentialité</a>
+          <a href="../privacy.html" target="_blank" rel="noopener" style="color:var(--text-faint);text-decoration:underline">Confidentialité</a>
         </div>
         <!-- Zone dangereuse, calquee sur celle du coach. Le texte differe :
              un athlete n'emet aucun code d'acces, et ce qu'il vient effacer
@@ -3425,23 +3429,23 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
     <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:28px">
       <div id="ios-step-safari" style="display:flex;align-items:flex-start;gap:12px">
-        <div style="width:28px;height:28px;background:#1a0000;border:1px solid #3a0000;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--red);flex-shrink:0">1</div>
+        <div style="width:28px;height:28px;background:#1a0000;border:1px solid #3a0000;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--red-text);flex-shrink:0">1</div>
         <div>
-          <div style="font-size:13px;font-weight:700;margin-bottom:2px">Ouvre ce lien dans <span style="color:var(--red)">Safari</span></div>
+          <div style="font-size:13px;font-weight:700;margin-bottom:2px">Ouvre ce lien dans <span style="color:var(--red-text)">Safari</span></div>
           <div style="font-size:11px;color:var(--text-dim);line-height:1.5">L'installation ne fonctionne que depuis Safari : pas Chrome ni Firefox.</div>
         </div>
       </div>
       <div style="display:flex;align-items:flex-start;gap:12px">
-        <div id="ios-step2-num" style="width:28px;height:28px;background:#1a0000;border:1px solid #3a0000;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--red);flex-shrink:0">2</div>
+        <div id="ios-step2-num" style="width:28px;height:28px;background:#1a0000;border:1px solid #3a0000;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--red-text);flex-shrink:0">2</div>
         <div>
-          <div style="font-size:13px;font-weight:700;margin-bottom:2px">Appuie sur le bouton <span style="color:var(--red)">Partager</span> <span style="font-size:15px">⎙</span></div>
+          <div style="font-size:13px;font-weight:700;margin-bottom:2px">Appuie sur le bouton <span style="color:var(--red-text)">Partager</span> <span style="font-size:15px">⎙</span></div>
           <div style="font-size:11px;color:var(--text-dim);line-height:1.5">L'icône carré avec une flèche vers le haut : en bas de l'écran Safari.</div>
         </div>
       </div>
       <div style="display:flex;align-items:flex-start;gap:12px">
-        <div id="ios-step3-num" style="width:28px;height:28px;background:#1a0000;border:1px solid #3a0000;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--red);flex-shrink:0">3</div>
+        <div id="ios-step3-num" style="width:28px;height:28px;background:#1a0000;border:1px solid #3a0000;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--red-text);flex-shrink:0">3</div>
         <div>
-          <div style="font-size:13px;font-weight:700;margin-bottom:2px">Sélectionne <span style="color:var(--red)">"Sur l'écran d'accueil"</span></div>
+          <div style="font-size:13px;font-weight:700;margin-bottom:2px">Sélectionne <span style="color:var(--red-text)">"Sur l'écran d'accueil"</span></div>
           <div style="font-size:11px;color:var(--text-dim);line-height:1.5">Fais défiler les options du menu Partager puis appuie sur "Ajouter".</div>
         </div>
       </div>
@@ -3454,7 +3458,7 @@ const COACH_PHOTO='icons/coach.jpg';
      dessous, pour que la question ne surgisse pas d un autre monde. -->
 <div id="rc-confirm" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:4000;align-items:flex-end;justify-content:center">
   <div style="background:linear-gradient(180deg,#151515,#0e0e0e);border-top:2px solid var(--red);border-radius:20px 20px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom,0px));width:100%;max-width:480px;box-shadow:0 -12px 40px rgba(0,0,0,.7)">
-    <div style="font-family:'Bebas Neue',Montserrat,sans-serif;font-size:20px;letter-spacing:3px;color:var(--red);margin-bottom:10px">REPCORE</div>
+    <div style="font-family:'Bebas Neue',Montserrat,sans-serif;font-size:20px;letter-spacing:3px;color:var(--red-text);margin-bottom:10px">REPCORE</div>
     <div id="rc-confirm-titre" style="white-space:pre-line;font-size:15px;font-weight:800;color:#fff;margin-bottom:6px"></div>
     <div id="rc-confirm-texte" style="white-space:pre-line;font-size:12.5px;color:var(--sub);line-height:1.65;margin-bottom:20px"></div>
     <div style="display:flex;flex-direction:column;gap:10px">
@@ -3466,7 +3470,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- SAISIE. Remplace prompt(), que Chrome éteint avec les autres boîtes. -->
 <div id="rc-saisie" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:4000;align-items:flex-end;justify-content:center">
   <div style="background:linear-gradient(180deg,#151515,#0e0e0e);border-top:2px solid var(--red);border-radius:20px 20px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom,0px));width:100%;max-width:480px">
-    <div style="font-family:'Bebas Neue',Montserrat,sans-serif;font-size:20px;letter-spacing:3px;color:var(--red);margin-bottom:10px">REPCORE</div>
+    <div style="font-family:'Bebas Neue',Montserrat,sans-serif;font-size:20px;letter-spacing:3px;color:var(--red-text);margin-bottom:10px">REPCORE</div>
     <div id="rc-saisie-titre" style="font-size:15px;font-weight:800;color:#fff;margin-bottom:6px;white-space:pre-line"></div>
     <div id="rc-saisie-texte" style="font-size:12.5px;color:var(--sub);line-height:1.65;margin-bottom:14px;white-space:pre-line"></div>
     <input id="rc-saisie-champ" style="width:100%;box-sizing:border-box;margin-bottom:18px">
@@ -3479,7 +3483,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="wo-pause-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:3000;align-items:flex-end;justify-content:center">
   <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;width:100%;max-width:480px">
     <div style="font-size:14px;font-weight:800;letter-spacing:.5px;margin-bottom:4px">Séance en cours</div>
-    <div style="font-size:12px;color:#666;margin-bottom:20px">Que veux-tu faire ?</div>
+    <div style="font-size:12px;color:var(--text-faint);margin-bottom:20px">Que veux-tu faire ?</div>
     <div style="display:flex;flex-direction:column;gap:10px">
       <button onclick="document.getElementById('wo-pause-modal').style.display='none'" style="padding:14px;background:var(--surface-2);border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;cursor:pointer;letter-spacing:.5px">▶ Continuer la séance</button>
       <button onclick="confirmPauseWorkout()" style="padding:14px;background:#111;border:1px solid #2a2a2a;border-radius:10px;color:#aaa;font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;cursor:pointer;letter-spacing:.5px">⏸ Mettre en pause</button>
@@ -3519,7 +3523,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1">
     <div class="done-anim anim-in pad">
       <div style="text-align:center;padding:24px 0 20px;border-bottom:1px solid #181818;margin-bottom:20px">
-        <div style="margin-bottom:12px;color:var(--red);filter:drop-shadow(0 0 20px rgba(198,15,8,.4))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:56px;height:56px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg></div>
+        <div style="margin-bottom:12px;color:var(--red-text);filter:drop-shadow(0 0 20px rgba(198,15,8,.4))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:56px;height:56px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/></svg></div>
         <h1 style="text-align:center;font-size:36px;margin-bottom:6px;color:#fff">SÉANCE TERMINÉE</h1>
         <!-- Le message porte désormais des chiffres et un nom d'exercice. En
              majuscules espacées, comme le voulait la formule générique qu'il
@@ -3544,7 +3548,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <div style="background:var(--dark);border:1px solid var(--border);border-radius:3px;padding:12px 10px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
               <div style="font-size:var(--fs-xs);font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Fatigue</div>
-              <div style="font-size:18px;font-weight:900;color:var(--red)" id="ps-fatigue-val">5</div>
+              <div style="font-size:18px;font-weight:900;color:var(--red-text)" id="ps-fatigue-val">5</div>
             </div>
             <input type="range" id="ps-fatigue" min="0" max="10" value="5" oninput="document.getElementById('ps-fatigue-val').textContent=this.value;renderFormeSeance()" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
           </div>
@@ -3556,7 +3560,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <div class="ps-detail-item" style="display:none;background:var(--dark);border:1px solid var(--border);border-radius:3px;padding:12px 10px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
               <div style="font-size:var(--fs-xs);font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Satisfaction</div>
-              <div style="font-size:18px;font-weight:900;color:var(--red)" id="ps-satisfaction-val">5</div>
+              <div style="font-size:18px;font-weight:900;color:var(--red-text)" id="ps-satisfaction-val">5</div>
             </div>
             <input type="range" id="ps-satisfaction" min="0" max="10" value="5" oninput="document.getElementById('ps-satisfaction-val').textContent=this.value" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
           </div>
@@ -3564,7 +3568,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <div style="background:var(--dark);border:1px solid var(--border);border-radius:3px;padding:12px 10px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
               <div style="font-size:var(--fs-xs);font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Sensation</div>
-              <div style="font-size:18px;font-weight:900;color:var(--red)" id="ps-sensation-val">5</div>
+              <div style="font-size:18px;font-weight:900;color:var(--red-text)" id="ps-sensation-val">5</div>
             </div>
             <input type="range" id="ps-sensation" min="0" max="10" value="5" oninput="document.getElementById('ps-sensation-val').textContent=this.value;renderFormeSeance()" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
           </div>
@@ -3572,7 +3576,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <div style="background:var(--dark);border:1px solid var(--border);border-radius:3px;padding:12px 10px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
               <div style="font-size:var(--fs-xs);font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Énergie en dehors des séances</div>
-              <div style="font-size:18px;font-weight:900;color:var(--red)" id="ps-energie-val">5</div>
+              <div style="font-size:18px;font-weight:900;color:var(--red-text)" id="ps-energie-val">5</div>
             </div>
             <input type="range" id="ps-energie" min="0" max="10" value="5" oninput="document.getElementById('ps-energie-val').textContent=this.value" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
           </div>
@@ -3580,7 +3584,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <div class="ps-detail-item" style="display:none;background:var(--dark);border:1px solid var(--border);border-radius:3px;padding:12px 10px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
               <div style="font-size:var(--fs-xs);font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Hydratation</div>
-              <div style="font-size:18px;font-weight:900;color:var(--red)" id="ps-hydratation-val">5</div>
+              <div style="font-size:18px;font-weight:900;color:var(--red-text)" id="ps-hydratation-val">5</div>
             </div>
             <input type="range" id="ps-hydratation" min="0" max="10" value="5" oninput="document.getElementById('ps-hydratation-val').textContent=this.value" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
           </div>
@@ -3588,7 +3592,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <div style="background:var(--dark);border:1px solid var(--border);border-radius:3px;padding:12px 10px">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
               <div style="font-size:var(--fs-xs);font-weight:700;color:#888;text-transform:uppercase;letter-spacing:1px"> Motivation</div>
-              <div style="font-size:18px;font-weight:900;color:var(--red)" id="ps-motivation-val">5</div>
+              <div style="font-size:18px;font-weight:900;color:var(--red-text)" id="ps-motivation-val">5</div>
             </div>
             <input type="range" id="ps-motivation" min="0" max="10" value="5" oninput="document.getElementById('ps-motivation-val').textContent=this.value;renderFormeSeance()" style="width:100%;accent-color:var(--red);background:none;border:none;padding:0;height:20px;cursor:pointer">
           </div>
@@ -3639,10 +3643,10 @@ const COACH_PHOTO='icons/coach.jpg';
 
     <!-- Bilan coaching -->
     <div onclick="openBilan('coaching')" style="background:var(--surface-1);border:1px solid var(--border);border-radius:16px;padding:20px;cursor:pointer;margin-bottom:14px" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-      <div style="font-weight:900;font-size:15px;margin-bottom:6px;letter-spacing:.5px;text-transform:uppercase;color:var(--red)">BILAN COACHING</div>
+      <div style="font-weight:900;font-size:15px;margin-bottom:6px;letter-spacing:.5px;text-transform:uppercase;color:var(--red-text)">BILAN COACHING</div>
       <div style="font-size:13px;font-weight:700;margin-bottom:4px;color:#ddd"><span id="bilan-freq-display">Bilan toutes les 2 semaines :</span></div>
       <div class="sub" style="font-size:12px;line-height:1.5">Poids, mensurations, ressenti, photos.</div>
-      <div style="font-size:11px;color:#666;margin-top:10px;line-height:1.65;border-top:1px solid #1e1e1e;padding-top:10px">
+      <div style="font-size:11px;color:var(--text-faint);margin-top:10px;line-height:1.65;border-top:1px solid #1e1e1e;padding-top:10px">
         Cela me permet de voir ton évolution, de structurer ta pratique et d'ajuster tes programmes au besoin.
       </div>
     </div>
@@ -3746,7 +3750,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- COMPLÉMENTS ALIMENTAIRES -->
 <div id="s-supplements" class="screen">
-  <div class="topbar"><button class="back-btn" onclick="loadNutrition()">←</button><span class="topbar-title" style="display:inline-flex;align-items:center;gap:6px;color:var(--red)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M10.5 20.5 3.5 13.5a5 5 0 1 1 7-7l7 7a5 5 0 1 1-7 7z"/><line x1="14" y1="14" x2="10" y2="10"/></svg>Compléments</span><span></span></div>
+  <div class="topbar"><button class="back-btn" onclick="loadNutrition()">←</button><span class="topbar-title" style="display:inline-flex;align-items:center;gap:6px;color:var(--red-text)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M10.5 20.5 3.5 13.5a5 5 0 1 1 7-7l7 7a5 5 0 1 1-7 7z"/><line x1="14" y1="14" x2="10" y2="10"/></svg>Compléments</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div id="supp-table-content"></div>
@@ -3800,9 +3804,9 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
       <!-- Moments de prise -->
       <div class="form-group">
-        <label class="form-label">Moment(s) de prise <span style="color:var(--red)">*</span></label>
+        <label class="form-label">Moment(s) de prise <span style="color:var(--red-text)">*</span></label>
         <div id="supp-timings-grid" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px"></div>
-        <div id="supp-timings-err" style="display:none;color:var(--red);font-size:11px;margin-top:6px">Sélectionne au moins un moment.</div>
+        <div id="supp-timings-err" style="display:none;color:var(--red-text);font-size:11px;margin-top:6px">Sélectionne au moins un moment.</div>
       </div>
       <!-- Notes -->
       <div class="form-group">
@@ -3853,7 +3857,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:12px;padding:14px;margin-bottom:18px">
-        <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:4px" id="fja-food-group">—</div>
+        <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:4px" id="fja-food-group">—</div>
         <div style="display:flex;align-items:flex-start;gap:6px">
           <div style="flex:1;min-width:0;font-size:15px;font-weight:800;line-height:1.3" id="fja-food-name">—</div>
           <span id="fja-epingle-slot" style="flex-shrink:0"></span>
@@ -3984,7 +3988,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- CAFÉINE JOURNAL -->
 <div id="s-caffeine" class="screen">
-  <div class="topbar"><button class="back-btn" onclick="loadNutrition()">←</button><span class="topbar-title" style="display:inline-flex;align-items:center;gap:6px;color:var(--red)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M17 8h1a4 4 0 0 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/></svg>Caféine</span><span></span></div>
+  <div class="topbar"><button class="back-btn" onclick="loadNutrition()">←</button><span class="topbar-title" style="display:inline-flex;align-items:center;gap:6px;color:var(--red-text)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M17 8h1a4 4 0 0 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" y1="2" x2="6" y2="4"/><line x1="10" y1="2" x2="10" y2="4"/><line x1="14" y1="2" x2="14" y2="4"/></svg>Caféine</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <div id="caff-date-nav" style="margin-bottom:12px"></div>
@@ -4108,7 +4112,7 @@ const COACH_PHOTO='icons/coach.jpg';
             <input id="vid-file-input" type="file" accept="video/*" style="display:none" onchange="uploadVideoFile(this)">
           </label>
           <div id="vid-upload-progress" style="display:none;margin-top:10px;font-size:13px;font-weight:800;color:var(--green);text-align:center;text-shadow:0 0 10px rgba(34,197,94,.6)"></div>
-          <div id="vid-upload-error" style="display:none;margin-top:10px;font-size:12px;color:var(--red)"></div>
+          <div id="vid-upload-error" style="display:none;margin-top:10px;font-size:12px;color:var(--red-text)"></div>
           <div class="sub" style="font-size:11px;margin-top:11px;line-height:1.6">Envoi direct et sécurisé : ta vidéo est visible par ton coach immédiatement.</div>
         </div>
       </div>
@@ -4242,7 +4246,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
         <div style="width:3px;height:22px;background:var(--red);border-radius:2px;box-shadow:0 0 10px rgba(224,32,32,.9)"></div>
         <span style="display:inline-flex;color:#ff3b30;filter:drop-shadow(0 0 6px rgba(224,32,32,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M2 17h18a2 2 0 0 0 2-2c0-1.6-1.2-2.3-2.8-2.9l-4.4-1.7a3 3 0 0 1-1.3-1L11.6 6.4a1.4 1.4 0 0 0-2.2-.2L7.6 8.1 2 8.1z"/><path d="M2 17v2h20v-2"/></svg></span>
-        <span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:20px;letter-spacing:3px;color:var(--red);text-transform:uppercase;text-shadow:0 0 14px rgba(224,32,32,.55)">MES PAS</span>
+        <span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:20px;letter-spacing:3px;color:var(--red-text);text-transform:uppercase;text-shadow:0 0 14px rgba(224,32,32,.55)">MES PAS</span>
       </div>
       <div id="lifestyle-steps-content"></div>
       <div class="divider" style="margin:28px 0"></div>
@@ -4297,7 +4301,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="anim-in" style="text-align:center;z-index:1;width:100%">
     <!-- Rempli par loadAccessGate (seul chemin qui mène ici) : le bloc restait
          vide et laissait 56px de trou au-dessus du titre. -->
-    <div id="ag-icon" style="color:var(--red);margin-bottom:16px;line-height:0"></div>
+    <div id="ag-icon" style="color:var(--red-text);margin-bottom:16px;line-height:0"></div>
     <h1 style="margin-bottom:8px" id="ag-title">Accès expiré</h1>
     <p class="sub" style="line-height:1.6;margin-bottom:32px" id="ag-sub">Ton accès à RepCore n'est plus actif.</p>
     <div style="background:var(--dark);border:1px solid #2a0000;border-radius:16px;padding:20px;margin-bottom:24px;text-align:left">
@@ -4480,7 +4484,7 @@ const COACH_PHOTO='icons/coach.jpg';
            pas de quoi comparer. À réintroduire le jour où l'écran Monétisation
            saura dire lequel des deux paliers domine réellement. -->
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-        <div style="width:48px;height:48px;border-radius:50%;background:var(--surface-2);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--red)">
+        <div style="width:48px;height:48px;border-radius:50%;background:var(--surface-2);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--red-text)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:32px;height:32px;display:inline-block;flex-shrink:0"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
         </div>
         <div>
@@ -5255,7 +5259,7 @@ function _renderAbonnementCoach(users){
     </div>`;
   }).join('');
   z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px">
-    <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:14px">Mon abonnement</div>
+    <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:14px">Mon abonnement</div>
     ${l('Formule',pal.titre)}
     ${l('Athlètes',compteur)}
     ${suivant?l('Palier suivant',suivant.titre+' — '+suivant.prix+' € '+suivant.periode):''}
@@ -6690,7 +6694,7 @@ const CLOUD={
       const z=modal.querySelector('#qr-zone');
       const cv=(window.RepCoreQR&&RepCoreQR.versCanvas)?RepCoreQR.versCanvas(url,204):null;
       if(z&&cv){ cv.style.width='204px'; cv.style.height='204px'; z.appendChild(cv); }
-      else if(z){ z.innerHTML='<div style="font-size:11px;color:#666;text-align:center;padding:12px;line-height:1.6">QR indisponible sur cet appareil. Ouvre cette adresse sur l&#39;autre :<br><b style="color:#111;word-break:break-all">'+escapeHtml(url)+'</b></div>'; }
+      else if(z){ z.innerHTML='<div style="font-size:11px;color:var(--text-faint);text-align:center;padding:12px;line-height:1.6">QR indisponible sur cet appareil. Ouvre cette adresse sur l&#39;autre :<br><b style="color:#111;word-break:break-all">'+escapeHtml(url)+'</b></div>'; }
     }catch(e){}
   }
 };
@@ -6933,7 +6937,7 @@ function _proposerReconsentement(){
       :'Ton compte a été créé avant que ces deux accords soient recueillis séparément. Confirme-les pour continuer.'}</p>
     <div style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
       <input type="checkbox" id="rc-cgu" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
-      <label for="rc-cgu" style="font-size:12px;color:var(--sub);line-height:1.6;cursor:pointer">J'ai lu et j'accepte la <a href="../privacy.html" target="_blank" rel="noopener" style="color:var(--red);text-decoration:underline;font-weight:600">politique de confidentialité</a> et les <a href="../legal.html" target="_blank" rel="noopener" style="color:var(--red);text-decoration:underline;font-weight:600">mentions légales</a>.</label>
+      <label for="rc-cgu" style="font-size:12px;color:var(--sub);line-height:1.6;cursor:pointer">J'ai lu et j'accepte la <a href="../privacy.html" target="_blank" rel="noopener" style="color:var(--red-text);text-decoration:underline;font-weight:600">politique de confidentialité</a> et les <a href="../legal.html" target="_blank" rel="noopener" style="color:var(--red-text);text-decoration:underline;font-weight:600">mentions légales</a>.</label>
     </div>
     <div style="display:flex;align-items:flex-start;gap:10px;margin-top:8px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
       <input type="checkbox" id="rc-health" style="margin-top:2px;flex-shrink:0;accent-color:#E02020;width:16px;height:16px;cursor:pointer">
@@ -7584,7 +7588,7 @@ function htmlSelecteurComptes(opts){
         <div style="font-size:12px;font-weight:800;color:#eee;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(((c.fname||'')+' '+(c.lname||'')).trim()||c.email)}</div>
         <div style="font-size:10px;color:var(--text-faint)">${c.role==='coach'?'Coach':'Élève'}${est?' · actif':''}</div>
       </div>
-      ${est?'<span style="font-size:13px;color:var(--red);flex-shrink:0">✓</span>'
+      ${est?'<span style="font-size:13px;color:var(--red-text);flex-shrink:0">✓</span>'
            :`<button onclick="retirerCompte('${escapeHtml(c.email)}');_majSelecteurComptes()" class="hit44"
               style="flex:0 0 auto;background:none;border:none;color:var(--text-dim);font-size:15px;cursor:pointer;padding:0 4px" title="Retirer">✕</button>`}
     </div>`;
@@ -11805,7 +11809,7 @@ function renderPilotage(clients){
   const dateCourte=t=>new Date(t).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
   const corpsA=ch.length
     ? montres.map(x=>`<div style="padding:2px 0"><span style="color:var(--text-faint)">${dateCourte(x.date)}</span> · <b>${escapeHtml(x.qui)}</b> ${escapeHtml(x.quoi)}</div>`).join('')
-      +(ch.length>montres.length?`<button onclick="pilVoirTout()" style="background:none;border:none;color:var(--red);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;padding:8px 0 0;text-decoration:underline">Voir tout (${ch.length})</button>`:'')
+      +(ch.length>montres.length?`<button onclick="pilVoirTout()" style="background:none;border:none;color:var(--red-text);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;cursor:pointer;padding:8px 0 0;text-decoration:underline">Voir tout (${ch.length})</button>`:'')
     : 'Rien de neuf depuis ta dernière visite.';
   // ── Bande B : portefeuille, quatre nombres en une ligne ──
   const p=r.portefeuille;
@@ -12483,7 +12487,7 @@ function _canalCarte(m,compteurs,mienne){
   }).join('');
   return `<div style="background:var(--surface-1);border:1px solid ${m.epingle?'rgba(224,32,32,.45)':'var(--border)'};border-radius:14px;padding:15px 16px;margin-bottom:12px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-      ${m.epingle?'<span style="font-size:var(--fs-xs);color:var(--red);font-weight:800;letter-spacing:1.5px;text-transform:uppercase">📌 Épinglé</span>':''}
+      ${m.epingle?'<span style="font-size:var(--fs-xs);color:var(--red-text);font-weight:800;letter-spacing:1.5px;text-transform:uppercase">📌 Épinglé</span>':''}
       <span class="sub" style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase">${escapeHtml(ago(Number(m.at)||Date.now()))}</span>
     </div>
     ${m.titre?`<div style="font-weight:800;font-size:14px;margin-bottom:6px;line-height:1.4">${escapeHtml(m.titre)}</div>`:''}
@@ -12590,12 +12594,12 @@ function renderEpingleAccueil(){
   el.innerHTML=`<div style="background:linear-gradient(135deg,#12000a,#1a0000);border:1px solid rgba(224,32,32,.45);border-radius:12px;padding:14px 16px;margin-bottom:18px;box-shadow:0 6px 18px rgba(0,0,0,.45)">
     <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
       <span style="font-size:15px;line-height:1" aria-hidden="true">📣</span>
-      <span style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase">Mot de ton coach</span>
+      <span style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase">Mot de ton coach</span>
     </div>
     ${e.titre?`<div style="font-weight:800;font-size:14px;margin-bottom:6px;line-height:1.4">${escapeHtml(e.titre)}</div>`:''}
     ${e.texte?`<div style="font-size:13px;color:#eee;line-height:1.65;white-space:pre-wrap">${escapeHtml(e.texte)}</div>`:''}
     ${lien&&safeUrlRaw(lien)!=='#'?`<a href="${safeUrl(lien)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:10px;font-size:12px;color:var(--info);font-weight:700">${escapeHtml(canalDomaine(lien)||'Ouvrir le lien')} ↗</a>`:''}
-    <button onclick="clientTab('canal')" style="width:100%;margin-top:12px;padding:10px 0;background:none;border:1px solid rgba(224,32,32,.5);color:var(--red);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:2px;border-radius:8px;cursor:pointer">VOIR LE CANAL</button>
+    <button onclick="clientTab('canal')" style="width:100%;margin-top:12px;padding:10px 0;background:none;border:1px solid rgba(224,32,32,.5);color:var(--red-text);font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:2px;border-radius:8px;cursor:pointer">VOIR LE CANAL</button>
   </div>`;
 }
 
@@ -12683,7 +12687,7 @@ function _canalCarteCoach(m,compteurs,vrai,reactions){
   const lien=String(m.lien||'').trim();
   return `<div style="background:var(--surface-1);border:1px solid ${m.epingle?'rgba(224,32,32,.45)':'var(--border)'};border-radius:14px;padding:15px 16px;margin-bottom:12px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-      ${m.epingle?'<span style="font-size:var(--fs-xs);color:var(--red);font-weight:800;letter-spacing:1.5px;text-transform:uppercase">📌 Épinglé</span>':''}
+      ${m.epingle?'<span style="font-size:var(--fs-xs);color:var(--red-text);font-weight:800;letter-spacing:1.5px;text-transform:uppercase">📌 Épinglé</span>':''}
       <span class="sub" style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase">${escapeHtml(ago(Number(m.at)||Date.now()))}</span>
     </div>
     ${m.titre?`<div style="font-weight:800;font-size:14px;margin-bottom:6px;line-height:1.4">${escapeHtml(m.titre)}</div>`:''}
@@ -13606,7 +13610,7 @@ function renderFileReprise(){
   const tete=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;
       background:var(--surface-1);border:1px solid var(--border);border-radius:11px;padding:11px 13px;margin-bottom:12px">
       <span style="font-size:11.5px;color:#ddd;line-height:1.5">Relancés cette semaine</span>
-      <span style="font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:22px;color:var(--red);
+      <span style="font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:22px;color:var(--red-text);
         text-shadow:0 0 9px rgba(224,32,32,.6)">${sem}</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
@@ -14211,7 +14215,7 @@ function _renderPremiersPas(clients){
   if(n>0){ z.innerHTML=''; return false; }
   z.innerHTML='<div style="background:var(--surface-1);border:1px solid var(--border);'
     +'border-radius:14px;padding:18px;margin-bottom:18px">'
-    +'<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;'
+    +'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;'
     +'text-transform:uppercase;margin-bottom:6px">Premiers pas</div>'
     +'<div style="font-size:11px;color:var(--sub);line-height:1.6;margin-bottom:14px">'
     +escapeHtml(PROMESSE_COACH)+'</div>'
@@ -14447,7 +14451,7 @@ function renderTodoBlock(clients){
   const aDrapeau=vues.some(r=>r.type==='drapeau');
   el.innerHTML=`<div style="background:#0c0000;border:1px solid #2a0000;border-radius:4px;margin-bottom:20px;overflow:hidden">
     <div style="padding:9px 14px;display:flex;align-items:center;justify-content:space-between;background:#0f0000;border-bottom:1px solid #1e0000">
-      <span style="font-size:var(--fs-xs);font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:2px">⚡ À traiter</span>
+      <span style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);text-transform:uppercase;letter-spacing:2px">⚡ À traiter</span>
       <span style="background:var(--red);color:#fff;font-size:11px;font-weight:400;padding:1px 8px;border-radius:10px;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px">${unique}</span>
     </div>
     ${renderDataList(vues,(r,idx)=>{
@@ -15179,7 +15183,7 @@ function loadCoachHome(){
   const elList=document.getElementById('ch-clients-list');
   if(!clients.length){
     renderTodoBlock([]);
-    elList.innerHTML=emptyState('users','Aucun athlète encore.'+(u.code?'<br>Partage ton code : <strong style="color:var(--red)">'+u.code+'</strong>':''));return;
+    elList.innerHTML=emptyState('users','Aucun athlète encore.'+(u.code?'<br>Partage ton code : <strong style="color:var(--red-text)">'+u.code+'</strong>':''));return;
   }
   clients.sort((a,b)=>urgencyScore(b)-urgencyScore(a));
   renderTodoBlock(clients);
@@ -16220,7 +16224,7 @@ function renderBilanEvolution(c){
   // ── Evolution du poids ─────────────────────────────────────────────
   const buildWeightSection=()=>{
     return `
-      <div style="font-size:11px;font-weight:800;color:var(--red);text-align:center;margin-bottom:8px;text-transform:uppercase;letter-spacing:2px">EVOLUTION DU POIDS EN KG</div>
+      <div style="font-size:11px;font-weight:800;color:var(--red-text);text-align:center;margin-bottom:8px;text-transform:uppercase;letter-spacing:2px">EVOLUTION DU POIDS EN KG</div>
       <div style="background:var(--dark);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px">
         <canvas id="evo-weight-chart" style="width:100%;display:block"></canvas>
       </div>
@@ -16243,7 +16247,7 @@ function renderBilanEvolution(c){
     });
     // Formula note
     const formulaNote=`<div style="background:#111;border:1px solid #222;border-radius:8px;padding:12px;margin-bottom:14px;font-size:var(--fs-xs);line-height:1.8">
-      <div style="font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:2px;color:var(--red);margin-bottom:6px">Formule US Navy ${female?'(Femme)':'(Homme)'} : Calcul automatique</div>
+      <div style="font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:2px;color:var(--red-text);margin-bottom:6px">Formule US Navy ${female?'(Femme)':'(Homme)'} : Calcul automatique</div>
       ${female
         ?`<div style="color:#aaa;font-family:monospace;font-size:var(--fs-xs)">%MG = 495 / [1,29579 − 0,35004 × log(<b style="color:#fff">taille</b> + <b style="color:#69f0ae">hanches</b> − <b style="color:#ffd600">cou</b>) + 0,22100 × log(<b style="color:var(--accent-blue)">hauteur</b>)] − 450</div>
          <div style="color:var(--text-dim);font-size:var(--fs-xs);margin-top:4px">taille = tour de taille · hanches = tour de hanches · cou = tour de cou · hauteur = taille en cm</div>`
@@ -16258,7 +16262,7 @@ function renderBilanEvolution(c){
       pieBilans.map(p=>`<div style="text-align:center;flex-shrink:0">
         <div style="font-size:var(--fs-xs);font-weight:800;margin-bottom:6px">Bilan ${p.idx+1}</div>
         <canvas id="evo-pie-${p.idx}" width="100" height="100"></canvas>
-        <div style="font-size:var(--fs-xs);color:var(--red);margin-top:4px">MG: ${p.mg}kg</div>
+        <div style="font-size:var(--fs-xs);color:var(--red-text);margin-top:4px">MG: ${p.mg}kg</div>
         <div style="font-size:var(--fs-xs);color:#aaa;margin-top:1px">MM: ${p.mm}kg</div>
       </div>`).join('')+`</div>`:'';
     return `
@@ -16312,7 +16316,7 @@ function renderBilanEvolution(c){
               <div style="font-size:26px;opacity:.5">📷</div>
               <div style="font-size:var(--fs-xs);color:#aaa;font-weight:700">B${i+1}</div>
               <div style="font-size:var(--fs-xs);color:#888">${date}</div>
-              <div style="font-size:var(--fs-xs);color:var(--red);text-transform:uppercase;letter-spacing:1px;margin-top:2px">+ Ajouter</div>
+              <div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:1px;margin-top:2px">+ Ajouter</div>
             </label>`;
       }).join('');
       return `<div style="margin-bottom:20px">
@@ -16324,7 +16328,7 @@ function renderBilanEvolution(c){
     }).join('');
 
     return `<div style="margin-top:4px;margin-bottom:28px">
-      <div style="font-size:11px;font-weight:800;color:var(--red);text-align:center;text-transform:uppercase;letter-spacing:3px;margin-bottom:18px;display:flex;align-items:center;justify-content:center;gap:8px">
+      <div style="font-size:11px;font-weight:800;color:var(--red-text);text-align:center;text-transform:uppercase;letter-spacing:3px;margin-bottom:18px;display:flex;align-items:center;justify-content:center;gap:8px">
         <div style="height:1px;background:rgba(224,32,32,.2);flex:1"></div>
         FRESQUE ÉVOLUTION
         <div style="height:1px;background:rgba(224,32,32,.2);flex:1"></div>
@@ -17152,7 +17156,7 @@ function loadCoachProgramsList(){
         <button class="btn btn-outline btn-sm" style="flex:1" onclick="editCoachProgTemplate(${i})">✏️ Modifier</button>
         <button class="btn btn-red btn-sm" style="flex:1" onclick="openAssignProgram(${i})">▶ Assigner</button>
         <button onclick="duplicateCoachProgTemplate(${i})" title="Dupliquer ce programme" aria-label="Dupliquer ce programme" style="background:none;border:1px solid #333;color:#888;border-radius:8px;padding:7px 10px;font-size:14px;cursor:pointer;line-height:1">⧉</button>
-        <button onclick="deleteCoachProgTemplate(${i})" title="Supprimer ce programme" aria-label="Supprimer ce programme" style="background:none;border:1px solid #333;color:#666;border-radius:8px;padding:7px 10px;font-size:14px;cursor:pointer;line-height:1">🗑</button>
+        <button onclick="deleteCoachProgTemplate(${i})" title="Supprimer ce programme" aria-label="Supprimer ce programme" style="background:none;border:1px solid #333;color:var(--text-faint);border-radius:8px;padding:7px 10px;font-size:14px;cursor:pointer;line-height:1">🗑</button>
       </div>
     </div>
   `).join('');
@@ -18155,7 +18159,7 @@ function renderClientPdfCard(c){
   const name=c.programPdfName||(c.programPdfLink?'Lien Drive':'Programme.pdf');
   const dt=c.programPdfDate?new Date(c.programPdfDate).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})+' · v'+(c.programPdfVersion||1):'';
   const existHtml=hasPdf?`<div style="background:#151515;border:1px solid #2a2a2a;border-radius:8px;padding:12px;margin-bottom:10px;display:flex;align-items:center;gap:10px">
-    <div style="width:34px;height:40px;background:#1a0000;border:1px solid #3a0a0a;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:900;color:var(--red);letter-spacing:.5px;flex-shrink:0">PDF</div>
+    <div style="width:34px;height:40px;background:#1a0000;border:1px solid #3a0a0a;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:900;color:var(--red-text);letter-spacing:.5px;flex-shrink:0">PDF</div>
     <div style="flex:1;min-width:0">
       <div style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${dt}</div>
@@ -18520,7 +18524,7 @@ function _bqLigne(f){
 }
 function _bqSection(titre,fiches){
   if(!fiches.length) return '';
-  return `<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2px;font-weight:800;
+  return `<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800;
     text-transform:uppercase;margin:12px 0 7px">${escapeHtml(titre)}</div>`
     +fiches.map(_bqLigne).join('');
 }
@@ -18600,7 +18604,7 @@ function ouvrirFicheBanque(slug,ev){
   const l=(t,v)=>v?`<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:3px 0">`
     +`<span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:#eee;text-align:right">${escapeHtml(v)}</span></div>`:'';
   const liste=(titre,arr)=>(arr&&arr.length)?`<div style="margin-top:12px">`
-    +`<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:5px">${escapeHtml(titre)}</div>`
+    +`<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:5px">${escapeHtml(titre)}</div>`
     +`<ul style="margin:0 0 0 16px;padding:0;font-size:12px;color:#bbb;line-height:1.6">`
     +arr.map(x=>`<li style="margin-bottom:4px">${escapeHtml(x)}</li>`).join('')+`</ul></div>`:'';
   // Variantes : les exercices du MÊME schéma moteur. C'est la seule parenté
@@ -18618,7 +18622,7 @@ function ouvrirFicheBanque(slug,ev){
     ${l('Niveau',f.niveau||'')}
     ${f.unilateral?l('Unilatéral','oui'):''}
     ${l('Repos conseillé',f.repos||'')}
-    ${f.execution?`<div style="margin-top:12px"><div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:5px">Exécution</div>
+    ${f.execution?`<div style="margin-top:12px"><div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:5px">Exécution</div>
       <div style="font-size:12px;color:#bbb;line-height:1.65">${escapeHtml(f.execution)}</div></div>`:''}
     ${liste('Erreurs fréquentes',f.erreurs)}
     ${liste('Consignes',f.consignes)}
@@ -20651,7 +20655,7 @@ function loadClientHome(){
           <div style="margin-top:auto;margin-left:-20px;width:92px;text-align:center;background:var(--red);color:#fff;font-size:10px;font-weight:900;letter-spacing:2.5px;padding:5px 0;border-radius:0 7px 7px 0;box-shadow:0 6px 18px rgba(224,32,32,0.3)">COACH</div>
         </div>
         <div style="flex:1;min-width:0">
-          ${team?`<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:4px;font-weight:900;text-transform:uppercase;margin-bottom:5px">${escapeHtml(team)}</div>`:''}
+          ${team?`<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:4px;font-weight:900;text-transform:uppercase;margin-bottom:5px">${escapeHtml(team)}</div>`:''}
           <div class="txt-stat" style="letter-spacing:2px;line-height:0.95;background:linear-gradient(135deg,#ffffff 30%,#888 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:${phrase?'8':'0'}px">${escapeHtml(name.trim())}</div>
           ${phrase?`<div style="font-size:var(--fs-xs);color:#888;font-style:italic;line-height:1.6">"${escapeHtml(phrase)}"</div>`:''}
         </div>
@@ -21201,7 +21205,7 @@ function openSessionPicker(){
         <div style="font-weight:800;font-size:14px;margin-top:2px">${escapeHtml(_nomSeance(s,i))}${badgeExemple}</div>
         <div class="sub" style="font-size:11px">${s.exercises?.length||0} exercices ${seanceEstExemple(s)?'proposés':'configurés'}</div>
       </div>
-      <span style="color:var(--red);font-size:20px">▶</span>
+      <span style="color:var(--red-text);font-size:20px">▶</span>
     </div>`;
   }).join('');
 }
@@ -22062,7 +22066,7 @@ function _apLigne(ex,i){
     <summary style="position:relative;display:flex;align-items:center;gap:12px;padding:11px 12px;
       cursor:pointer;list-style:none;min-height:56px">
       <span style="flex-shrink:0;width:22px;font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;
-        font-size:19px;line-height:1;color:var(--red);text-shadow:0 0 9px rgba(224,32,32,.75);
+        font-size:19px;line-height:1;color:var(--red-text);text-shadow:0 0 9px rgba(224,32,32,.75);
         text-align:center">${i+1}</span>
       ${vign}
       <div style="flex:1;min-width:0">
@@ -22125,7 +22129,7 @@ function _renderApercu(){
     </div>`
     +(notes?`<div style="background:var(--surface-1);border:1px solid var(--border);
       border-left:3px solid var(--red);border-radius:0 10px 10px 0;padding:11px 13px;margin-bottom:14px">
-      <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:1.5px;font-weight:800;
+      <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:1.5px;font-weight:800;
       text-transform:uppercase;margin-bottom:4px">Mot de ton coach</div>
       <div style="font-size:12px;color:#bbb;line-height:1.65">${escapeHtml(notes)}</div></div>`:'')
     +(sess.exercises||[]).map(_apLigne).join('');
@@ -22225,7 +22229,7 @@ function _renderExCard(ex,idx){
       <div class="ex-name">${escapeHtml(ex.name)}</div>
       <div class="ex-detail" style="margin-top:3px">${ex.series} séries · ${escapeHtml(ex.reps)} reps${ex.repos?' · '+escapeHtml(ex.repos):''}</div>
       ${badge?`<div style="margin-top:5px">${badge}</div>`:''}
-      ${ex.description?`<div style="font-size:11px;color:#666;margin-top:6px;line-height:1.5;border-left:2px solid #2a2a2a;padding-left:8px">${escapeHtml(ex.description)}</div>`:''}
+      ${ex.description?`<div style="font-size:11px;color:var(--text-faint);margin-top:6px;line-height:1.5;border-left:2px solid #2a2a2a;padding-left:8px">${escapeHtml(ex.description)}</div>`:''}
       ${(ex.videoUrl||ex.videoUrl2)?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
         ${normaliserUrlVideo(ex.videoUrl)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl))}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;background:#1a0000;border:1px solid #3a0a0a;border-radius:6px;padding:5px 10px;color:var(--red-light);font-size:var(--fs-xs);font-weight:800;text-decoration:none;letter-spacing:1px">▶ VIDÉO 1</a>`:''}
         ${normaliserUrlVideo(ex.videoUrl2)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl2))}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;background:#1a0000;border:1px solid #3a0a0a;border-radius:6px;padding:5px 10px;color:var(--red-light);font-size:var(--fs-xs);font-weight:800;text-decoration:none;letter-spacing:1px">▶ VIDÉO 2</a>`:''}
@@ -22619,7 +22623,7 @@ function _renderProgExercisesInto(el){
   if(!prog._isDefault){
     el.innerHTML=`
       <div style="margin-bottom:14px">
-        <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Mon programme</div>
+        <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Mon programme</div>
         <div style="font-size:16px;font-weight:900;letter-spacing:-0.3px">${escapeHtml(prog.name)}</div>
         ${prog.notes?`<p class="sub" style="margin-top:5px;font-size:12px;line-height:1.6">${escapeHtml(prog.notes)}</p>`:''}
       </div>
@@ -22851,7 +22855,7 @@ function renderWoEx(){
                une phrase, pas un intitulé de champ. -->
           <label class="hit44" style="font-size:11px;cursor:pointer;color:var(--sub);text-transform:none;letter-spacing:normal;font-weight:400;margin:0;display:inline-flex;align-items:center;gap:5px"><input type="checkbox" id="film-ex" style="width:auto;margin:0">Filmer cet exercice</label>
           <span style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:var(--fs-xs);color:var(--red);font-weight:700">→ Vise RIR 0 sur ta dernière série</span>
+            <span style="font-size:var(--fs-xs);color:var(--red-text);font-weight:700">→ Vise RIR 0 sur ta dernière série</span>
             <button class="hit44" onclick="toggleRirExplain()" style="background:#1a1a1a;border:1.5px solid #fff;border-radius:50%;width:19px;height:19px;color:#fff;font-size:11px;font-weight:900;cursor:pointer;line-height:1;padding:0;flex-shrink:0;box-shadow:0 0 8px rgba(255,255,255,.45)">?</button>
           </span>
         </div>
@@ -22864,7 +22868,7 @@ function renderWoEx(){
             <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:var(--fs-xs);font-weight:900;min-width:40px;padding-top:1px;color:var(--info)">RIR 2</span><span style="color:#aaa;font-size:11px">2 reps encore possibles : effort intense mais contrôlé</span></div>
             <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:var(--fs-xs);font-weight:900;min-width:40px;padding-top:1px;color:var(--success)">RIR 3+</span><span style="color:#aaa;font-size:11px">Encore loin de l'échec : échauffement ou séance légère</span></div>
           </div>
-          <div style="border-top:1px solid #1a1a2a;padding-top:10px;color:#666;font-size:11px;line-height:1.6">
+          <div style="border-top:1px solid #1a1a2a;padding-top:10px;color:var(--text-faint);font-size:11px;line-height:1.6">
             💡 <strong style="color:#aaa">En pratique :</strong> vise <strong style="color:var(--info)">RIR 2</strong> sur tes premières séries pour préserver l'énergie, puis pousse à <strong style="color:var(--danger)">RIR 0–1</strong> sur ta <strong style="color:#fff">dernière série</strong> pour maximiser le stimulus musculaire.
           </div>
         </div>
@@ -22993,7 +22997,7 @@ function _blocExo(idx,estSS){
       ${_htmlMonteeCharge(sug,ex,idx)}
       ${_blocContrainteSeance(ex,idx)}
       ${(ex.description||ex.materiel||ex.tempo||illustrationDe(ex.name))?`<div style="background:var(--surface-2);border-radius:10px;padding:11px 14px;margin-bottom:12px">
-        <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--red);margin-bottom:5px">CONSIGNE</div>
+        <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--red-text);margin-bottom:5px">CONSIGNE</div>
         ${blocTempo(ex)}
         <!-- LE MATÉRIEL EN PREMIER : c'est ce qu'on va chercher avant de
              commencer, pas ce qu'on lit pendant. Il fait aussi partie de la
@@ -23296,7 +23300,7 @@ function renderSets(ex,data,idx){
           <div style="background:${cardBg};border:1px solid ${cardBorder};border-radius:8px;padding:8px 10px">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
               <div style="text-align:center;min-width:28px;flex-shrink:0">
-                <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red);line-height:1">${i+1}</div>
+                <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);line-height:1">${i+1}</div>
                 <div style="font-size:14px;font-weight:900;line-height:1.2"><span style="font-size:var(--fs-xs);font-weight:600">×</span>${s.reps||ex.reps}</div>
               </div>
               ${weightInner}
@@ -23312,7 +23316,7 @@ function renderSets(ex,data,idx){
     }
     return `<tr class="${rowCls}${painAlert}">
       <td style="text-align:center;padding:4px 6px">
-        <span style="display:block;font-size:var(--fs-xs);font-weight:800;color:var(--red);line-height:1">${i+1}${_badgeRecord(idx,i)}</span>
+        <span style="display:block;font-size:var(--fs-xs);font-weight:800;color:var(--red-text);line-height:1">${i+1}${_badgeRecord(idx,i)}</span>
         <span style="font-size:15px;font-weight:900;line-height:1.2"><span style="font-size:var(--fs-xs);font-weight:600">×</span>${s.reps||ex.reps}</span>
       </td>
       ${weightCell}
@@ -28294,7 +28298,7 @@ function _updateBilanCountdown(){
     :[{v:pad(hours),l:'HEURES',red:true},{v:pad(mins),l:'MIN',red:false}];
   cd.innerHTML=`<div style="background:linear-gradient(160deg,#1a0000 0%,#0d0d0d 60%);border:1px solid rgba(224,32,32,.22);border-radius:12px;padding:16px 14px 14px;position:relative;overflow:hidden;box-shadow:0 0 28px rgba(224,32,32,.07),0 6px 20px rgba(0,0,0,.55)">
     <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,rgba(224,32,32,.95),rgba(224,32,32,.15),transparent)"></div>
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:var(--red);margin-bottom:3px">Prochain bilan</div>
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:var(--red-text);margin-bottom:3px">Prochain bilan</div>
     <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:14px">${dateLabel}</div>
     <div style="display:flex;gap:6px">${blocks.map(b=>`<div style="flex:1;background:${b.red?'rgba(224,32,32,.13)':'rgba(255,255,255,.03)'};border:1px solid ${b.red?'rgba(224,32,32,.28)':'rgba(255,255,255,.07)'};border-radius:8px;padding:12px 6px;text-align:center"><div style="font-size:36px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:${b.red?'var(--red)':'#fff'}${b.red?';text-shadow:0 0 18px rgba(224,32,32,.55)':''}">${b.v}</div><div style="font-size:var(--fs-xs);font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:rgba(255,255,255,.32);margin-top:5px">${b.l}</div></div>`).join('')}</div>
   </div>`;
@@ -28721,7 +28725,7 @@ function _bSportSet(id,i,champ,val){
   }
 }
 
-function bSec(title,html){return`<div style="margin-bottom:22px"><div style="font-size:var(--fs-xs);color:var(--red);text-transform:uppercase;letter-spacing:2px;font-weight:800;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid rgba(224,32,32,.28);text-shadow:0 0 12px rgba(224,32,32,.4)">${title}</div>${html}</div>`;}
+function bSec(title,html){return`<div style="margin-bottom:22px"><div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:2px;font-weight:800;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid rgba(224,32,32,.28);text-shadow:0 0 12px rgba(224,32,32,.4)">${title}</div>${html}</div>`;}
 function bMeas(id,label,unit){return`<div class="bil-row"><span class="bil-row-label">${label}</span><div style="display:flex;align-items:center;gap:6px">${bQ(id)}<span class="bil-unit">${unit}</span></div></div>`;}
 
 // ── Schéma corporel interactif (mensurations) ─────────────────────────
@@ -29615,7 +29619,7 @@ function afficherEcranArret(zone){
   document.body.insertAdjacentHTML('beforeend',
     `<div id="modal-overlay" style="position:fixed;inset:0;background:#000e;z-index:3000;display:flex;align-items:center;justify-content:center;padding:20px">
       <div style="background:var(--dark);border:2px solid var(--red);border-radius:16px;padding:20px;width:100%;max-width:460px;max-height:90vh;overflow:auto">
-        <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red);text-transform:uppercase;margin-bottom:10px">Ce que tu décris demande un avis</div>
+        <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase;margin-bottom:10px">Ce que tu décris demande un avis</div>
         ${TEXTE_ARRET_DRAPEAU.map(t=>`<div style="font-size:13px;color:#eee;line-height:1.7;margin-bottom:9px">${escapeHtml(t)}</div>`).join('')}
         <div style="font-size:11px;color:var(--text-faint);line-height:1.6;margin-top:10px">Zone concernée : ${escapeHtml(libZone(zone))}.</div>
         <button class="btn btn-red" onclick="closeModal()" style="margin-top:16px;letter-spacing:1px">J'ai compris</button>
@@ -29643,7 +29647,7 @@ function blocDrapeauRouge(u){
   if(!d) return '';
   const lib=d.cases.map(c=>(DRAPEAUX_ROUGES.find(x=>x.cle===c)||{lib:c}).lib);
   return `<div style="background:#1a0505;border:1px solid var(--red);border-radius:10px;padding:12px;margin-bottom:12px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red);text-transform:uppercase;margin-bottom:6px">Signes à faire examiner · ${escapeHtml(libZone(d.zone))}</div>
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase;margin-bottom:6px">Signes à faire examiner · ${escapeHtml(libZone(d.zone))}</div>
     ${lib.map(t=>`<div style="font-size:11px;color:#ddd;line-height:1.6">· ${escapeHtml(t)}</div>`).join('')}
     <div style="font-size:11px;color:var(--sub);line-height:1.6;margin-top:7px">Aucun exercice de remplacement n'est proposé tant que ce signalement est actif.</div>
   </div>`;
@@ -30473,7 +30477,7 @@ function renderReponsesBilans(bilans,client){
     if(!answers) return '';
     return `<div id="bil-${escapeHtml(_idBilan(b))}" style="background:var(--dark);border:1px solid ${depart?'rgba(224,32,32,.35)':'var(--border)'};border-radius:12px;padding:16px;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div style="font-size:var(--fs-xs);font-weight:900;color:var(--red);text-transform:uppercase;letter-spacing:1.5px">${depart?'Questionnaire de départ':'Bilan '+_rang.get(b)}</div>
+        <div style="font-size:var(--fs-xs);font-weight:900;color:var(--red-text);text-transform:uppercase;letter-spacing:1.5px">${depart?'Questionnaire de départ':'Bilan '+_rang.get(b)}</div>
         <div style="text-align:right"><div style="font-size:var(--fs-xs);color:var(--text-dim)">${d}</div>${w?`<div style="font-size:12px;font-weight:700;color:#fff;margin-top:2px">⚖️ ${w}kg</div>`:''}</div>
       </div>
       ${answers}
@@ -30543,7 +30547,7 @@ const BIL_STEPS=[
   ()=>`<div style="margin-bottom:22px"><div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">Photos de progression </div>`+
     `<div style="background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:14px;text-align:center">`+
     `<div style="font-weight:700;font-size:13px;margin-bottom:6px;color:#fff">Photos de progression${grossesseSuspend(currentUser)?' <span style="font-weight:600;color:var(--sub)">— facultatif</span>':''}</div>`+
-    `<div style="font-size:11px;color:var(--sub);line-height:1.6">Reproduis les 3 poses ci-dessous : même endroit, même lumière qu'au début :<br><strong style="color:var(--red)">Face · Dos · Profil</strong></div></div>`+
+    `<div style="font-size:11px;color:var(--sub);line-height:1.6">Reproduis les 3 poses ci-dessous : même endroit, même lumière qu'au début :<br><strong style="color:var(--red-text)">Face · Dos · Profil</strong></div></div>`+
     bPhotoCards('bil')+
     `</div>`
 ];
@@ -30642,7 +30646,7 @@ const DEB_STEPS=[
   ()=>`<div style="margin-bottom:22px"><div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #181818">Photos de départ </div>`+
     `<div style="background:var(--dark);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:14px;text-align:center">`+
     `<div style="font-weight:700;font-size:13px;margin-bottom:6px;color:#fff">Photos de départ</div>`+
-    `<div style="font-size:11px;color:var(--sub);line-height:1.6">Reproduis les 3 poses ci-dessous, tenue légère, lumière naturelle : <strong style="color:var(--red)">touche AJOUTER sous chaque pose</strong>.</div></div>`+
+    `<div style="font-size:11px;color:var(--sub);line-height:1.6">Reproduis les 3 poses ci-dessous, tenue légère, lumière naturelle : <strong style="color:var(--red-text)">touche AJOUTER sous chaque pose</strong>.</div></div>`+
     bPhotoCards('deb')+
     `</div>`
 ];
@@ -30992,7 +30996,7 @@ function showBilanNotifBanner(){
   b.style.cssText='position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;z-index:5000;animation:slideDown .35s ease';
   b.innerHTML=`<div style="background:linear-gradient(135deg,#1a0000,#280000);border-bottom:2px solid var(--red);padding:14px 18px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openBilanChoice();document.getElementById('bilan-notif-banner')?.remove()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <div style="flex:1;min-width:0">
-      <div style="font-size:var(--fs-xs);font-weight:900;color:var(--red);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px">Bilan bimensuel · Ce samedi</div>
+      <div style="font-size:var(--fs-xs);font-weight:900;color:var(--red-text);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px">Bilan bimensuel · Ce samedi</div>
       <div style="font-size:12px;color:#ddd;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Remplis ton bilan coaching pour suivre ton évolution !</div>
     </div>
     <button onclick="event.stopPropagation();document.getElementById('bilan-notif-banner')?.remove()" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:22px;cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1;min-width:44px;min-height:44px">✕</button>
@@ -31217,7 +31221,7 @@ function htmlLeveeCoach(c){
   if(sp.cause==='douleur'&&sp.mouvement)
     lignes.push('Douleur à 4 ou plus sur '+sp.mouvement+', '+SUSP_DOULEUR_SEANCES+' séances de suite.');
   return `<div style="background:#1a0000;border:1px solid var(--red);border-radius:12px;padding:14px 16px;margin-bottom:16px">
-    <div style="font-size:9px;color:var(--red);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:8px">Entraînement suspendu</div>
+    <div style="font-size:9px;color:var(--red-text);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:8px">Entraînement suspendu</div>
     ${lignes.map(t=>`<div style="font-size:12px;color:#eee;line-height:1.65;margin-bottom:5px">${escapeHtml(t)}</div>`).join('')}
     ${sp.actif?`<div style="font-size:11px;color:var(--sub);line-height:1.6;margin-top:7px">Depuis ${sp.jours} jour${sp.jours>1?'s':''}. Compteur de semaines gelé à ${sp.streakGele}, rappels coupés, semaines hors du taux de complétion.</div>`:''}
     <div style="font-size:11px;color:var(--text-dim);line-height:1.6;margin-top:8px">Toi seul peux lever cette pause. RepCore ne le fera jamais à ta place.</div>
@@ -32977,7 +32981,7 @@ function showProgressTab(tab,btn){
         <!-- Pied facon signature -->
         <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,.06)">
           <img src="./icons/logo.png" alt="" style="width:20px;height:20px;border-radius:5px;object-fit:cover;opacity:.9">
-          <span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:13px;letter-spacing:3px;color:#6a6a6a">REPCORE</span>
+          <span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:13px;letter-spacing:3px;color:var(--text-faint)">REPCORE</span>
           <span style="font-size:var(--fs-xs);color:var(--text-dim);letter-spacing:1.5px;font-weight:700">· GUELLEC COACHING PRO</span>
         </div>
       </div>
@@ -35124,7 +35128,7 @@ function htmlLigneCalories(tot,m){
   const pct=m.kcal?Math.min((tot.kcal||0)/m.kcal,1):0;
   return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700">Calories</span>
-      <span style="font-size:11px;font-weight:800;color:var(--red)">${Math.round(tot.kcal||0)}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400">${m.kcal?' / '+m.kcal+' kcal':' kcal'}</span></span>
+      <span style="font-size:11px;font-weight:800;color:var(--red-text)">${Math.round(tot.kcal||0)}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400">${m.kcal?' / '+m.kcal+' kcal':' kcal'}</span></span>
     </div>
     <div style="height:10px;background:var(--surface-2);border-radius:5px;overflow:visible">
       <div style="height:100%;width:${(pct*100).toFixed(1)}%;background:linear-gradient(90deg,var(--red),#ff4444);border-radius:5px;transition:width .4s ease;box-shadow:0 0 12px rgba(224,32,32,.5)"></div>
@@ -35161,7 +35165,7 @@ function _renderStrictMacroRings(nut,jourAff){
     :`<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:5px;padding:3px 10px;letter-spacing:1px">${icon('moon',10)} JOUR OFF</span>`;
   return `<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 8px 24px rgba(0,0,0,.35);animation:fadeInUp .3s ease">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div style="min-width:0"><div style="display:inline-flex;align-items:center;gap:7px;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:17px;color:#ff3b30;text-transform:uppercase;letter-spacing:3px;text-shadow:0 0 8px rgba(224,32,32,.85),0 0 20px rgba(224,32,32,.45)"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('target',13)}</span>${estAuj?'OBJECTIFS DU JOUR':'OBJECTIFS'}</div>${estAuj?'':`<div style="margin-top:4px;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--red)">${_libelleJourNut(today)}</div>`}</div>
+      <div style="min-width:0"><div style="display:inline-flex;align-items:center;gap:7px;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:17px;color:#ff3b30;text-transform:uppercase;letter-spacing:3px;text-shadow:0 0 8px rgba(224,32,32,.85),0 0 20px rgba(224,32,32,.45)"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('target',13)}</span>${estAuj?'OBJECTIFS DU JOUR':'OBJECTIFS'}</div>${estAuj?'':`<div style="margin-top:4px;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--red-text)">${_libelleJourNut(today)}</div>`}</div>
       <span style="display:inline-flex;align-items:center;gap:6px">${badgePhase(currentUser)}${dayBadge}</span>
     </div>
     ${htmlAnneauxMacros(tot,m,'16px')}
@@ -37682,12 +37686,12 @@ const courses=(lc&&lc.lignes.length)?`<details class="hist-repli lc-repli" style
     :'';
 
   return `<div style="margin-bottom:22px">
-    <div style="font-size:var(--fs-xs);color:var(--red);text-transform:uppercase;letter-spacing:2px;font-weight:800;text-shadow:0 0 12px rgba(224,32,32,.45);margin-bottom:4px;display:flex;align-items:center;gap:5px">${icon('target',12)} Programme nutritionnel</div>
+    <div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:2px;font-weight:800;text-shadow:0 0 12px rgba(224,32,32,.45);margin-bottom:4px;display:flex;align-items:center;gap:5px">${icon('target',12)} Programme nutritionnel</div>
     <div style="font-size:10px;color:var(--text-faint);line-height:1.55;margin-bottom:12px">${escapeHtml(PLAN_NOTE_INDICATIF)}</div>
     <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:14px;margin-bottom:12px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:11px;gap:8px">
         <span style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);letter-spacing:1.5px;text-transform:uppercase">${isOn?'Jour d\'entraînement':'Jour de repos'}</span>
-        ${pal?`<span style="font-size:10px;font-weight:800;color:var(--red);background:rgba(224,32,32,.12);border:1px solid rgba(224,32,32,.3);border-radius:6px;padding:3px 9px">${escapeHtml(pal.lib)}</span>`:''}
+        ${pal?`<span style="font-size:10px;font-weight:800;color:var(--red-text);background:rgba(224,32,32,.12);border:1px solid rgba(224,32,32,.3);border-radius:6px;padding:3px 9px">${escapeHtml(pal.lib)}</span>`:''}
       </div>
       <div style="display:flex;gap:7px">
         ${tuile('KCAL',cib.kcal,'','var(--red)',true)}
@@ -38619,7 +38623,7 @@ function _fjTitreSection(t){
 // Meme forme qu une ligne perso, SANS le crayon : l athlete ne modifie pas
 // ce que son coach a saisi. S il n est pas d accord, il cree le sien.
 function _htmlCoachResult(a){
-  const kcal=a.k!=null?('<span style="color:var(--red);font-weight:700">'+a.k+' kcal/100g</span>'):'<span style="color:var(--text-faint)">énergie non renseignée</span>';
+  const kcal=a.k!=null?('<span style="color:var(--red-text);font-weight:700">'+a.k+' kcal/100g</span>'):'<span style="color:var(--text-faint)">énergie non renseignée</span>';
   const m=[a.p!=null?('P '+a.p):null,a.c!=null?('G '+a.c):null,a.l!=null?('L '+a.l):null].filter(Boolean).join(' · ');
   return '<div class="fj-result" role="button" tabindex="0" onclick="selectCoachFood('+JSON.stringify(a.id)+')"'
     +' onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}">'
@@ -38652,7 +38656,7 @@ function selectCoachFood(id){
   return true;
 }
 function _htmlPersoResult(a){
-  const kcal=a.k!=null?('<span style="color:var(--red);font-weight:700">'+a.k+' kcal/100g</span>'):'<span style="color:var(--text-faint)">énergie non renseignée</span>';
+  const kcal=a.k!=null?('<span style="color:var(--red-text);font-weight:700">'+a.k+' kcal/100g</span>'):'<span style="color:var(--text-faint)">énergie non renseignée</span>';
   const m=[a.p!=null?('P '+a.p):null,a.c!=null?('G '+a.c):null,a.l!=null?('L '+a.l):null].filter(Boolean).join(' · ');
   return '<div class="fj-result" role="button" tabindex="0" onclick="selectPersoFood('+JSON.stringify(a.id)+')"'
     +' onkeydown="if(event.key===&quot;Enter&quot;||event.key===&quot; &quot;){event.preventDefault();this.click()}"'
@@ -38667,7 +38671,7 @@ function _htmlPersoResult(a){
 }
 function _fjResultHtml(f,avecEpingle){
   const _kvBadge=`<span style="font-size:var(--fs-xs);font-weight:800;color:#fb923c;background:#1a0e00;border:1px solid #3a1e00;border-radius:4px;padding:1px 5px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`;
-  const kcalSpan=f.k!=null?`<span style="color:var(--red);font-weight:700">${f.k} kcal/100g</span>`:_kvBadge;
+  const kcalSpan=f.k!=null?`<span style="color:var(--red-text);font-weight:700">${f.k} kcal/100g</span>`:_kvBadge;
   // L'épingle n'apparaît que sur les listes de favoris et de récents : les
   // résultats de recherche restent rendus exactement comme avant.
   const _ep=avecEpingle?_htmlEpingle(f.id,false):'';
@@ -39571,7 +39575,7 @@ function _offResultHtml(a){
     <div style="flex:1;min-width:0">
       <div style="font-weight:700;font-size:13px">${escapeHtml(a.n)}</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px;display:flex;gap:10px;align-items:center">
-        <span style="color:var(--red);font-weight:700">${a.k} kcal/100g</span>
+        <span style="color:var(--red-text);font-weight:700">${a.k} kcal/100g</span>
         ${detail?`<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(detail)}</span>`:''}
       </div>
     </div>
@@ -39755,7 +39759,7 @@ function updateFjaCalc(){
   const l=f.l!=null?parseFloat((f.l*r).toFixed(1)):null;
   const sel=f.e!=null?parseFloat((f.e*r).toFixed(2)):null;
   el.innerHTML=`<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:12px;padding:14px;display:flex;justify-content:space-around;text-align:center">
-    <div><div class="txt-stat" style="color:var(--red);line-height:1">${kcal??'—'}</div><div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-top:2px">KCAL</div></div>
+    <div><div class="txt-stat" style="color:var(--red-text);line-height:1">${kcal??'—'}</div><div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-top:2px">KCAL</div></div>
     <div><div class="txt-stat" style="line-height:1">${p??'—'}</div><div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-top:2px">PROT g</div></div>
     <div><div class="txt-stat" style="line-height:1">${c??'—'}</div><div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-top:2px">GLUC g</div></div>
     <div><div class="txt-stat" style="line-height:1">${l??'—'}</div><div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-top:2px">LIP g</div></div>
@@ -40308,7 +40312,7 @@ function _renderFjDaySummary(date){
             <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${[e.qty+'g',_fragmentSiValeur('P ',e.p,'g'),_fragmentSiValeur('G ',e.c,'g'),_fragmentSiValeur('L ',e.l,'g')].filter(x=>x).join(' · ')}</div>
           </div>
           <div style="flex-shrink:0;margin-left:8px;text-align:right">
-            ${e.kcal!=null?`<div style="font-size:13px;font-weight:800;color:var(--red)">${e.kcal}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400"> kcal</span></div>`:`<span style="font-size:var(--fs-xs);font-weight:800;color:#fb923c;background:#1a0e00;border:1px solid #3a1e00;border-radius:4px;padding:1px 5px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`}
+            ${e.kcal!=null?`<div style="font-size:13px;font-weight:800;color:var(--red-text)">${e.kcal}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400"> kcal</span></div>`:`<span style="font-size:var(--fs-xs);font-weight:800;color:#fb923c;background:#1a0e00;border:1px solid #3a1e00;border-radius:4px;padding:1px 5px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`}
             <button onclick="ouvrirEquivalents('${date}',${e.id})" title="Équivalences" aria-label="Voir des équivalences"
               style="background:none;border:none;color:var(--text-dim);font-size:13px;cursor:pointer;padding:2px 4px;margin-top:2px">⇄</button>
             <button onclick="deleteFoodEntry('${date}',${e.id})" style="background:none;border:none;color:var(--text-dim);font-size:14px;cursor:pointer;padding:2px 4px;margin-top:2px">✕</button>
@@ -41899,7 +41903,7 @@ function _htmlJournalCoach(c){
       <span style="flex:none;font-size:11px;color:var(--sub);white-space:nowrap">${e.qty?nb(e.qty)+' g · ':''}${e.kcal!=null?nb(e.kcal)+' kcal':'—'}</span>
     </div>`).join('');
   return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px">
-    <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:4px">📓 Journal alimentaire</div>
+    <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:4px">📓 Journal alimentaire</div>
     <div style="font-size:10.5px;color:var(--text-dim);line-height:1.55;margin-bottom:12px">Ce que ton athlète a saisi. Lecture seule — ${tous.length} jour${tous.length>1?'s':''} journalisé${tous.length>1?'s':''} en tout.</div>
     <div style="display:flex;gap:8px;margin-bottom:14px">${carte('MOY. 7 J',m7)}${carte('MOY. 28 J',m28)}</div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
@@ -41981,7 +41985,7 @@ function renderCoachNutriSection(c){
   const _diete=(()=>{ try{ return _htmlDieteCoach(c); }catch(e){ return ''; } })();
   el.innerHTML=`${_diete}${_transi}${_pauseHtml}
     <div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px">
-      <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:14px">🍎 Nutrition</div>
+      <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:14px">🍎 Nutrition</div>
       <!-- Type de diète -->
       <div style="position:relative;margin-bottom:20px">
         <select id="ccd-diet-sel" onchange="saveClientNutriDiet(this.value)"
@@ -42330,7 +42334,7 @@ function _suppTimingTags(timings,small){
   return timings.map(id=>{
     const t=TIMINGS_LIST.find(x=>x.id===id);
     const label=t?t.label:id;
-    return `<span style="display:inline-block;background:#1a0000;border:1px solid #3a0000;border-radius:12px;padding:${small?'2px 7px':'3px 9px'};font-size:${small?'9':'10'}px;font-weight:700;color:var(--red);margin:2px 2px 2px 0;white-space:nowrap">${label}</span>`;
+    return `<span style="display:inline-block;background:#1a0000;border:1px solid #3a0000;border-radius:12px;padding:${small?'2px 7px':'3px 9px'};font-size:${small?'9':'10'}px;font-weight:700;color:var(--red-text);margin:2px 2px 2px 0;white-space:nowrap">${label}</span>`;
   }).join('');
 }
 
@@ -42746,7 +42750,7 @@ function renderCoachSuppSection(c){
   const list=(c.nutrition?.supplements)||[];
   el.innerHTML=`
     <div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px">
-      <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:5px">${icon('pill',12)} Compléments alimentaires</div>
+      <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:5px">${icon('pill',12)} Compléments alimentaires</div>
       <div style="margin-bottom:12px">
         ${_renderSuppTable(list, true, 'openCoachSuppEdit')}
       </div>
@@ -42781,7 +42785,7 @@ function renderCoachSuppSection(c){
           </div>
         </div>
         <div style="margin-bottom:10px">
-          <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:6px">Moment(s) <span style="color:var(--red)">*</span></div>
+          <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:6px">Moment(s) <span style="color:var(--red-text)">*</span></div>
           <div style="display:flex;flex-wrap:wrap;gap:6px" id="ccd-supp-timings">
             ${TIMINGS_LIST.map(t=>`<button type="button" class="supp-timing-chip" onclick="this.classList.toggle('active')">${t.label}</button>`).join('')}
           </div>
@@ -42868,7 +42872,7 @@ function openCoachSuppEdit(id){
       </div>
     </div>
     <div style="margin-bottom:14px">
-      <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-bottom:6px">MOMENT(S) <span style="color:var(--red)">*</span></div>
+      <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;margin-bottom:6px">MOMENT(S) <span style="color:var(--red-text)">*</span></div>
       <div style="display:flex;flex-wrap:wrap;gap:6px" id="coach-supp-timings">${timingChips}</div>
     </div>
     <div style="margin-bottom:14px">
@@ -42885,7 +42889,7 @@ function openCoachSuppEdit(id){
     </div>
     <input type="hidden" id="coach-supp-idx" value="${s?s.id:-1}">
     <button onclick="saveCoachSuppEdit()" style="width:100%;padding:13px 0;background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer;margin-bottom:10px">SAUVEGARDER</button>
-    ${s?`<button onclick="deleteCoachSuppEdit(${s.id})" style="width:100%;padding:11px 0;background:none;border:1px solid #333;color:#666;font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;border-radius:10px;cursor:pointer">SUPPRIMER CE COMPLÉMENT</button>`:''}
+    ${s?`<button onclick="deleteCoachSuppEdit(${s.id})" style="width:100%;padding:11px 0;background:none;border:1px solid #333;color:var(--text-faint);font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;border-radius:10px;cursor:pointer">SUPPRIMER CE COMPLÉMENT</button>`:''}
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
 }
@@ -42977,7 +42981,7 @@ function renderCoachCaffeineSection(c){
   const colPeak=peakMg>0?_caffeineColor(peakMg,thr):'#555';
   el.innerHTML=`
     <div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px">
-      <div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:14px">☕ Caféine</div>
+      <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:14px">☕ Caféine</div>
       <div style="display:flex;gap:8px;margin-bottom:14px">
         <div style="flex:1;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">
           <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;margin-bottom:5px">MOY. 7J</div>
@@ -43496,7 +43500,7 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
     :'';
   const listHtml=!entries.length
     ?emptyState('coffee','Aucune prise enregistrée ce jour.',null,null,'padding:16px 0')
-    :renderDataList(entries,(e,i)=>`<span style="line-height:0;flex-shrink:0">${caffIcone(e.type,22)}</span><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13px">${escapeHtml(e.name)}</div><div style="font-size:11px;color:var(--sub);display:flex;align-items:center;gap:4px"><input type="time" value="${e.time||''}" onchange="updateCaffeineEntryTime('${date}',${i},this.value)" style="background:none;border:none;border-bottom:1px solid #333;color:var(--sub);font-size:11px;font-family:Montserrat,sans-serif;cursor:pointer;padding:0;width:52px">${e.volume?'· '+escapeHtml(e.volume):''}</div></div><span style="font-weight:900;color:var(--red);font-size:15px;min-width:48px;text-align:right">${e.mg}mg</span><button onclick="deleteCaffeineEntry('${date}',${i},'${deleteFnName}')" style="background:none;border:none;color:var(--sub);font-size:20px;cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent">×</button>`);
+    :renderDataList(entries,(e,i)=>`<span style="line-height:0;flex-shrink:0">${caffIcone(e.type,22)}</span><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:13px">${escapeHtml(e.name)}</div><div style="font-size:11px;color:var(--sub);display:flex;align-items:center;gap:4px"><input type="time" value="${e.time||''}" onchange="updateCaffeineEntryTime('${date}',${i},this.value)" style="background:none;border:none;border-bottom:1px solid #333;color:var(--sub);font-size:11px;font-family:Montserrat,sans-serif;cursor:pointer;padding:0;width:52px">${e.volume?'· '+escapeHtml(e.volume):''}</div></div><span style="font-weight:900;color:var(--red-text);font-size:15px;min-width:48px;text-align:right">${e.mg}mg</span><button onclick="deleteCaffeineEntry('${date}',${i},'${deleteFnName}')" style="background:none;border:none;color:var(--sub);font-size:20px;cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent">×</button>`);
   const _circ=2*Math.PI*48;
   const _off=_circ*(1-pct);
   // Le cercle mesure 120px de diamètre, dont 9px d'anneau de chaque côté : il
@@ -43716,7 +43720,7 @@ function _renderCaffeineEmbedded(){
   const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser),grossesseSuspend(currentUser));
   el.innerHTML=`
     <div style="margin-bottom:12px">
-      <h3 style="margin:0;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--red);text-shadow:0 0 10px rgba(224,32,32,.45);display:flex;align-items:center;gap:5px">${icon('coffee',11)} Caféine</h3>
+      <h3 style="margin:0;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--red-text);text-shadow:0 0 10px rgba(224,32,32,.45);display:flex;align-items:center;gap:5px">${icon('coffee',11)} Caféine</h3>
     </div>
     <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:14px">
       ${navPrev}
@@ -43955,7 +43959,7 @@ function renderCaffeineProducts(type){
     return `<div class="caff-product-tile" data-id="${p.id}" onclick="confirmCaffeineAdd(decodeURIComponent('${safe}'))" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="margin-bottom:7px;line-height:0">${caffIcone(p.type,26)}</div>
       <div style="font-weight:800;font-size:12px;line-height:1.3;margin-bottom:4px">${p.name}</div>
-      <div style="color:var(--red);font-weight:900;font-size:14px">${p.mg}mg</div>
+      <div style="color:var(--red-text);font-weight:900;font-size:14px">${p.mg}mg</div>
       <div style="color:var(--sub);font-size:var(--fs-xs)">${p.volume}</div>
     </div>`;
   }).join('');
@@ -43980,7 +43984,7 @@ function _renderCaffeineConfirmPanel(qty){
       <span style="line-height:0;flex-shrink:0">${caffIcone(p.type,26)}</span>
       <div style="flex:1">
         <div style="font-weight:800;font-size:13px">${escapeHtml(p.name)}</div>
-        <div style="color:var(--red);font-weight:900;font-size:15px">${totalMg}mg</div>
+        <div style="color:var(--red-text);font-weight:900;font-size:15px">${totalMg}mg</div>
         <div style="color:var(--sub);font-size:var(--fs-xs)">${vol}</div>
       </div>
       <button onclick="cancelCaffeineAdd()" style="background:none;border:none;color:var(--sub);font-size:22px;cursor:pointer;padding:4px">×</button>
@@ -44070,7 +44074,7 @@ function _videoEmbed(url,vidId='vc-video'){
   const ytM=url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);
   if(ytM) return `<iframe src="https://www.youtube.com/embed/${ytM[1]}" frameborder="0" allowfullscreen style="width:100%;height:190px;border-radius:8px;margin-top:8px"></iframe>`;
   if(/\.(mp4|mov|webm|mkv)(\?|$)/i.test(url)) return `<video id="${vidId}" src="${url}" controls preload="none" playsinline webkit-playsinline style="width:100%;border-radius:8px;margin-top:8px;max-height:220px;background:#000"></video>`;
-  return `<a href="${url}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:10px 14px;background:var(--surface-2);border-radius:8px;color:var(--red);font-size:12px;font-weight:700;text-decoration:none">▶ Voir la vidéo</a>`;
+  return `<a href="${url}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:10px 14px;background:var(--surface-2);border-radius:8px;color:var(--red-text);font-size:12px;font-weight:700;text-decoration:none">▶ Voir la vidéo</a>`;
 }
 
 // Carte de fin de séance. Elle ne dépose rien : elle renvoie vers l'écran
@@ -44541,7 +44545,7 @@ function ouvrirGestionModeles(){
         <div style="flex:1;min-width:0;font-size:12.5px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(t.titre)}</div>
         <span style="flex-shrink:0;font-size:9px;color:var(--sub);letter-spacing:1px;text-transform:uppercase">${escapeHtml(TPL_CAT_LIB[t.cat]||t.cat)}</span>
         <button onclick="tplSupprimer('${escapeHtml(t.id)}')" aria-label="Supprimer ce modèle"
-          style="flex-shrink:0;min-width:44px;min-height:38px;background:none;border:1px solid #3a1a1a;border-radius:8px;color:var(--red);cursor:pointer">✕</button>
+          style="flex-shrink:0;min-width:44px;min-height:38px;background:none;border:1px solid #3a1a1a;border-radius:8px;color:var(--red-text);cursor:pointer">✕</button>
       </div>
       <textarea oninput="tplMajCorps('${escapeHtml(t.id)}',this.value)" rows="2"
         style="width:100%;margin-top:7px;font-size:12px;box-sizing:border-box">${escapeHtml(t.corps)}</textarea>
@@ -44846,7 +44850,7 @@ function htmlLecteurCorrection(vidId){
           font-family:Montserrat,sans-serif;font-size:11px;font-weight:800">${String(r).replace('.',',')}×</button>`).join('')}
       <span id="rc-badge-${vidId}" aria-live="polite"
         style="margin-left:auto;font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:16px;
-        color:var(--red);letter-spacing:1px;text-shadow:0 0 9px rgba(224,32,32,.7)">1×</span>
+        color:var(--red-text);letter-spacing:1px;text-shadow:0 0 9px rgba(224,32,32,.7)">1×</span>
     </div>
     <div style="display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap">
       ${b('◀ 1','rcPas(\''+vidId+'\',-1)','Reculer d\'une image (flèche gauche)','data-cmd="pas"')}
@@ -44983,7 +44987,7 @@ function _renderTsAnnotations(annotations,opts={}){
     ?sorted.map((t,i)=>{
         const isAudio=!!t.audioUrl;
         return `<div style="display:flex;align-items:${isAudio?'flex-start':'center'};gap:8px;padding:6px 0;border-bottom:1px solid var(--surface-2)">
-          <span onclick="const _v=document.getElementById('${videoId}');if(_v)_v.currentTime=${(t&&isFinite(Number(t.sec)))?Number(t.sec):'tsToSecs(\''+t.ts+'\')'}" style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:13px;color:var(--red);flex-shrink:0;min-width:36px;margin-top:${isAudio?'3px':'0'};cursor:pointer" title="▶ ${t.ts}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${t.ts}</span>
+          <span onclick="const _v=document.getElementById('${videoId}');if(_v)_v.currentTime=${(t&&isFinite(Number(t.sec)))?Number(t.sec):'tsToSecs(\''+t.ts+'\')'}" style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:13px;color:var(--red-text);flex-shrink:0;min-width:36px;margin-top:${isAudio?'3px':'0'};cursor:pointer" title="▶ ${t.ts}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${t.ts}</span>
           ${isAudio
             ?`<div style="flex:1"><audio src="${t.audioUrl}" controls style="height:32px;width:100%;margin-bottom:2px"></audio><div style="font-size:var(--fs-xs);color:var(--sub);display:flex;align-items:center;gap:4px">${icon('mic',12)} message audio</div></div>`
             :`<span style="flex:1;font-size:12px">${escapeHtml(t.note)}</span>`}
@@ -46863,10 +46867,10 @@ function _htmlViolationsCoach(c){
   const pl=plancherEffectif(c);
   const dur=pl.tca;
   return `<div style="background:#1a0505;border:1px solid var(--red);border-radius:10px;padding:12px;margin:10px 0">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red);text-transform:uppercase;margin-bottom:7px">Sous le plancher</div>
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase;margin-bottom:7px">Sous le plancher</div>
     ${viol.map(v=>`<div style="font-size:11px;color:#ddd;line-height:1.6">· ${escapeHtml(v.message)}</div>`).join('')}
     ${dur
-      ?`<div style="font-size:11px;color:var(--red);line-height:1.6;margin-top:9px;font-weight:700">Un antécédent alimentaire est déclaré au bilan de départ. Cette prescription ne peut pas être enregistrée, et il n'y a pas de dérogation. Reprends les valeurs au-dessus du plancher.</div>`
+      ?`<div style="font-size:11px;color:var(--red-text);line-height:1.6;margin-top:9px;font-weight:700">Un antécédent alimentaire est déclaré au bilan de départ. Cette prescription ne peut pas être enregistrée, et il n'y a pas de dérogation. Reprends les valeurs au-dessus du plancher.</div>`
       :`<label style="display:flex;align-items:flex-start;gap:9px;margin-top:11px;cursor:pointer;text-transform:none;letter-spacing:normal;font-size:inherit;font-weight:400;color:inherit">
           <input type="checkbox" id="ccd-pl-confirm" ${_plConfirmeValide(c&&c.email,_plSaisieCourante())?'checked':''} onchange="_plSetConfirme(this.checked,'${escapeHtml((c&&c.email)||'')}')"
             style="width:18px;height:18px;margin-top:1px;flex-shrink:0;accent-color:var(--red)">
@@ -46891,7 +46895,7 @@ function _htmlPlancherAthlete(user){
   const viol=controlerMacros(nut.macros,user);
   if(!viol.length) return '';
   return `<div style="background:#1a0505;border:1px solid var(--red);border-radius:14px;padding:14px;margin-bottom:18px">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red);text-transform:uppercase;margin-bottom:8px">À savoir</div>
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase;margin-bottom:8px">À savoir</div>
     ${TEXTE_PLANCHER_ATHLETE.map(t=>`<div style="font-size:12.5px;color:#eee;line-height:1.7;margin-bottom:7px">${escapeHtml(t)}</div>`).join('')}
   </div>`;
 }
@@ -48497,7 +48501,7 @@ function _htmlBandeauPhase(user){
   if(!p) return '';
   return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:14px">
     <span style="font-size:11px;color:var(--sub)"><b style="color:#ddd">${PHASES[p.type].lib}</b> · ${ordinalSemaine(semainesPhase(user))}</span>
-    <button onclick="ouvrirChoixPhase()" style="background:none;border:none;padding:0;cursor:pointer;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--red);font-weight:700">Changer</button>
+    <button onclick="ouvrirChoixPhase()" style="background:none;border:none;padding:0;cursor:pointer;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--red-text);font-weight:700">Changer</button>
   </div>`;
 }
 function renderBandeauPhase(){
@@ -48558,7 +48562,7 @@ function _htmlPhaseCoach(c){
   const combiLongue=combiTCA&&semSeche>=PHASE_SEMAINES_RELANCE;
   const combi=!combiTCA?''
     : `<div style="margin-top:9px;background:${combiLongue?'#1a0505':'var(--warning-bg)'};border:1px solid ${combiLongue?'var(--red)':'var(--warning-border)'};border-radius:8px;padding:9px 11px;font-size:11px;color:var(--sub);line-height:1.6">
-        ${combiLongue?`<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--red);margin-bottom:6px">Sèche longue et antécédent déclaré</div>
+        ${combiLongue?`<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--red-text);margin-bottom:6px">Sèche longue et antécédent déclaré</div>
         Sèche depuis <b style="color:#fff">${semSeche} semaines</b>, et un antécédent de trouble du
         comportement alimentaire est déclaré au questionnaire de départ.`
         :`Sèche <b>et</b> antécédent de trouble du comportement alimentaire déclaré.`}
@@ -49020,7 +49024,7 @@ function loadSleep(containerId='sleep-content',user){
             <input type="time" id="sleep-wake-input" value="${todayEntry?.wake||''}" oninput="updateSleepPreview()" style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:22px;letter-spacing:1px;text-align:center;padding:11px 4px;background:linear-gradient(180deg,#0d0900,#120e03);border:1px solid #4d3d12;border-radius:9px;color:#f0d98a;width:100%;box-sizing:border-box;box-shadow:inset 0 2px 7px rgba(0,0,0,.6);text-shadow:0 0 10px rgba(245,197,24,.45)">
           </div>
         </div>
-        <div id="sleep-preview" style="text-align:center;font-size:12px;color:#6a6a6a;margin-bottom:11px;min-height:26px">${todayEntry?.duration!=null?`<span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:26px;color:${sleepColor(todayEntry.duration)};text-shadow:0 0 13px ${sleepColor(todayEntry.duration)}aa">${todayEntry.duration}h</span> de sommeil`:''}</div>
+        <div id="sleep-preview" style="text-align:center;font-size:12px;color:var(--text-faint);margin-bottom:11px;min-height:26px">${todayEntry?.duration!=null?`<span style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:26px;color:${sleepColor(todayEntry.duration)};text-shadow:0 0 13px ${sleepColor(todayEntry.duration)}aa">${todayEntry.duration}h</span> de sommeil`:''}</div>
         <button onclick="saveSleep()" style="width:100%;padding:13px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:#fff;border-radius:9px;font-family:Montserrat,sans-serif;font-size:12px;font-weight:800;letter-spacing:2.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:0 0 10px rgba(255,255,255,.45)">Enregistrer</button>
       </div>
     </div>
@@ -51164,7 +51168,7 @@ function _htmlVitrineCoach(pub){
   const img=(src,st)=>src?('<img src="'+escapeHtml(src)+'" alt="" loading="lazy" style="'+st+'">'):'';
   const TRAME="repeating-linear-gradient(-55deg,transparent,transparent 16px,rgba(255,255,255,.014) 16px,rgba(255,255,255,.014) 17px)";
   const CARTE="background:linear-gradient(160deg,#131313,#0c0c0c 55%,#0a0a0a);border:1px solid #1e1e1e;border-radius:16px;padding:20px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.04);position:relative;overflow:hidden";
-  const TITRE="font-size:var(--fs-xs);color:var(--red);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:11px;text-shadow:0 0 12px rgba(224,32,32,.55)";
+  const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:11px;text-shadow:0 0 12px rgba(224,32,32,.55)";
   // La trame carbone, posee en calque : elle donne la matiere sans rien
   // telecharger, et ne mange aucun contraste au texte pose dessus.
   const grain='<div style="position:absolute;inset:0;pointer-events:none;background:'+TRAME+'"></div>';
@@ -51189,7 +51193,7 @@ function _htmlVitrineCoach(pub){
         :('Ton coach n’a pas encore rempli sa présentation.'+_diagVitrine()))
       +'</div></div></div>';
   }
-  const eyebrow=p.teamName?('<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px;text-shadow:0 0 14px rgba(224,32,32,.6)">'+escapeHtml(p.teamName)+'</div>'):'';
+  const eyebrow=p.teamName?('<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px;text-shadow:0 0 14px rgba(224,32,32,.6)">'+escapeHtml(p.teamName)+'</div>'):'';
   const titre='<h1 style="margin:0;line-height:1.02;text-shadow:0 3px 18px rgba(0,0,0,.9)">'+escapeHtml(nom)+'</h1>';
   const phrase=(p.catchphrase||'').trim()
     ?('<div style="font-size:12.5px;color:#c8c8c8;font-style:italic;line-height:1.65;margin-top:9px">« '+escapeHtml(p.catchphrase.trim())+' »</div>')
@@ -51229,7 +51233,7 @@ function _htmlDiplomesCoach(p){
   if(!dips.length&&!carte) return '';
   const TRAME="repeating-linear-gradient(-55deg,transparent,transparent 16px,rgba(255,255,255,.014) 16px,rgba(255,255,255,.014) 17px)";
   const CARTE="background:linear-gradient(160deg,#131313,#0c0c0c 55%,#0a0a0a);border:1px solid #1e1e1e;border-radius:16px;padding:20px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.04);position:relative;overflow:hidden";
-  const TITRE="font-size:var(--fs-xs);color:var(--red);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:11px;text-shadow:0 0 12px rgba(224,32,32,.55)";
+  const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:11px;text-shadow:0 0 12px rgba(224,32,32,.55)";
   const grain='<div style="position:absolute;inset:0;pointer-events:none;background:'+TRAME+'"></div>';
   const img=src=>'<img src="'+escapeHtml(src)+'" alt="" loading="lazy" style="width:100%;border-radius:12px;margin-top:11px;display:block;box-shadow:0 8px 22px rgba(0,0,0,.6)">';
   // La pastille porte un halo : c est le seul point rouge de la liste, et
@@ -51248,7 +51252,7 @@ function _htmlDiplomesCoach(p){
   // metier, pas du coach — il ne doit pas se confondre avec la liste.
   h+='<div style="position:relative;overflow:hidden;background:linear-gradient(160deg,#170707,#0d0404);border:1px solid rgba(224,32,32,.3);border-left:3px solid var(--red);border-radius:16px;padding:18px 20px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.5),inset 0 0 40px rgba(224,32,32,.05)">'+grain
     +'<div style="position:relative">'
-    +'<div style="font-size:var(--fs-xs);letter-spacing:2.5px;text-transform:uppercase;color:var(--red);font-weight:800;margin-bottom:9px;text-shadow:0 0 14px rgba(224,32,32,.7)">Pourquoi un professionnel diplômé</div>'
+    +'<div style="font-size:var(--fs-xs);letter-spacing:2.5px;text-transform:uppercase;color:var(--red-text);font-weight:800;margin-bottom:9px;text-shadow:0 0 14px rgba(224,32,32,.7)">Pourquoi un professionnel diplômé</div>'
     +'<div style="font-size:12.5px;color:#dcdcdc;line-height:1.8">'
     +'Un diplôme n\'est pas une formalité administrative : c\'est la preuve que la personne '
     +'qui règle tes charges, corrige ta technique et t\'oriente sur ton alimentation a été '
@@ -51464,7 +51468,7 @@ function htmlBandeauDispo(){
   return `<div style="background:${fond};border:1px solid ${bord};border-radius:10px;padding:10px 12px;margin-bottom:12px">
     ${txt?`<div style="font-size:11.5px;color:${couleur};font-weight:700;line-height:1.5">${escapeHtml(txt)}</div>`:''}
     ${msg?`<div style="font-size:11px;color:#ddd;line-height:1.55;margin-top:4px">${escapeHtml(msg)}</div>`:''}
-    ${sante?`<div style="font-size:11px;color:var(--red);line-height:1.55;margin-top:${txt||msg?'6':'0'}px;font-weight:700">Ce que tu signales touche ta santé : ton coach en est averti quoi qu'il arrive.</div>`
+    ${sante?`<div style="font-size:11px;color:var(--red-text);line-height:1.55;margin-top:${txt||msg?'6':'0'}px;font-weight:700">Ce que tu signales touche ta santé : ton coach en est averti quoi qu'il arrive.</div>`
            :`<div style="font-size:10px;color:var(--text-faint);line-height:1.5;margin-top:4px">Tu peux écrire quand tu veux : rien n'est bloqué.</div>`}
   </div>`;
 }
@@ -52086,7 +52090,7 @@ function offboardCoach(coachId){
   ov.style.cssText='position:fixed;inset:0;background:#000a;z-index:1000;display:flex;align-items:flex-end;justify-content:center';
   ov.innerHTML='<div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-sizing:border-box">'
     +'<div style="width:40px;height:4px;background:#333;border-radius:2px;margin:0 auto 18px"></div>'
-    +'<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Réassignation des athlètes</div>'
+    +'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Réassignation des athlètes</div>'
     +'<div style="font-size:15px;font-weight:800;margin-bottom:4px">'+escapeHtml((coach.fname||'')+' '+(coach.lname||''))+'</div>'
     +'<div style="font-size:12px;color:var(--sub);margin-bottom:14px">'+athletes.length+' athlète'+(athletes.length>1?'s':'')+' à traiter avant désactivation</div>'
     +'<div style="background:var(--surface-1);border-radius:8px;padding:8px 10px;margin-bottom:16px;max-height:140px;overflow-y:auto">'+athListHtml+'</div>'
@@ -52487,7 +52491,7 @@ function _htmlInvitationsEnAttente(user){
       +'</div>';
   }).join('');
   return '<div style="margin-bottom:18px">'
-    +'<div style="font-size:var(--fs-xs);color:var(--red);letter-spacing:2px;font-weight:800;'
+    +'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800;'
     +'text-transform:uppercase;margin-bottom:8px">En attente ('+l.length+')</div>'
     +lignes+'</div>';
 }
@@ -53171,7 +53175,7 @@ function _renderSubPaliers(){
   if(!_subPalier||!dispo.some(p=>p.cle===_subPalier)) _subPalier=dispo[0].cle;
   if(dispo.length===1){
     const p=dispo[0];
-    zone.innerHTML='<div style="font-size:22px;font-weight:900;color:var(--red);line-height:1">'
+    zone.innerHTML='<div style="font-size:22px;font-weight:900;color:var(--red-text);line-height:1">'
       +escapeHtml(_prixPalier(p))+'<span style="font-size:12px;color:var(--sub);font-weight:600"> '
       +escapeHtml(p.periode)+'</span></div>';
     return;
@@ -53481,7 +53485,7 @@ function _rendreSelecteurMuscles(titre){
   const lignes=Object.keys(MUSCLES).map(g=>{
     const m=MUSCLES[g],p=_selMusclesP.includes(g),s=_selMusclesS.includes(g);
     const b=(actif,col,lbl,fn)=>`<button onclick="${fn}('${g}')" style="flex:1;padding:7px 4px;border-radius:7px;cursor:pointer;font-family:Montserrat,sans-serif;font-size:10px;font-weight:800;letter-spacing:.5px;`
-      +(actif?`background:${col};color:#08080a;border:1px solid ${col}`:`background:transparent;color:#555;border:1px solid #262626`)+`">${lbl}</button>`;
+      +(actif?`background:${col};color:#08080a;border:1px solid ${col}`:`background:transparent;color:var(--text-dim);border:1px solid #262626`)+`">${lbl}</button>`;
     return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #161616">
       <span style="flex:1;min-width:0;font-size:12px;font-weight:700;color:${(p||s)?'#fff':'var(--sub)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.lib}</span>
       <div style="display:flex;gap:5px;flex:0 0 122px">${b(p,m.c,'PRIM.','_selMusclePrim')}${b(s,m.c,'SEC.','_selMuscleSec')}</div>
@@ -54057,7 +54061,7 @@ function _peLigneEtape(e,i,total){
   return `<div id="pe-ligne-${i}" data-pe-idx="${i}" style="display:flex;align-items:flex-start;gap:7px;margin-bottom:6px">
     <button type="button" class="pe-poignee" aria-label="Déplacer l'étape ${i+1}"
       onpointerdown="_peDragDebut(event,${i})">⠿</button>
-    <span style="font-size:11px;font-weight:800;color:var(--red);padding-top:11px;min-width:14px;text-align:right">${i+1}</span>
+    <span style="font-size:11px;font-weight:800;color:var(--red-text);padding-top:11px;min-width:14px;text-align:right">${i+1}</span>
     <textarea id="pe-et-${i}" rows="1" oninput="_peEtapeTexte(${i},this.value);this.style.height='auto';this.style.height=this.scrollHeight+'px'"
       placeholder="Ex : Rameur, 3 min" style="flex:1;font-size:12px;padding:8px 10px;margin:0;line-height:1.5;resize:none;min-height:38px">${escapeHtml(e)}</textarea>
     <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0">
