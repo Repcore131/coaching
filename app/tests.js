@@ -18788,9 +18788,9 @@ function testExercices(){
             return x?x[1]:'(introuvable)';
           };
           if(teinte(200)!=='var(--orange)') return _echec('125 % ne passe pas en alerte : '+teinte(200));
-          if(teinte(100)!=='#fff') return _echec('un apport sous la cible est en alerte');
+          if(teinte(100)!=='var(--text)') return _echec('un apport sous la cible est en alerte');
           // LA BORNE EST STRICTE : 110 % pile n'est pas un dépassement.
-          if(teinte(176)!=='#fff') return _echec('110 % pile déclenche l\'alerte');
+          if(teinte(176)!=='var(--text)') return _echec('110 % pile déclenche l\'alerte');
           if(teinte(176.1)!=='var(--orange)') return _echec('juste au-dessus de 110 % ne déclenche rien');
           // Et sans cible, aucune alerte : rien à dépasser.
           const sansCible=htmlAnneauxMacros({kcal:0,p:300,c:0,l:0},{kcal:0,p:0,g:0,l:0},'12px');
@@ -20032,7 +20032,7 @@ function testExercices(){
               .map(d=>{const b=d.style.color;
                 // L etat vit desormais sur `color` : blanc pour un jour tenu,
                 // rouge pour un jour manque, gris pour un jour sans reponse.
-                return /#ffffff|255, 255, 255|white/.test(b)?'v':/red/.test(b)?'r':/border/.test(b)?'g':'?';});
+                return /var\(--text\)|255, 255, 255|white/.test(b)?'v':/red/.test(b)?'r':/--border/.test(b)?'g':'?';});
             const el=document.getElementById('clh-nutri-score');
             return {dots:dots.join(''),score:el.textContent,couleur:el.style.color};
           };
@@ -20082,7 +20082,7 @@ function testExercices(){
                     // L etat vit sur `color` depuis que les pastilles sont
                     // devenues des etoiles : blanc pour un jour tenu, rouge
                     // pour un jour manque, gris sinon.
-                    return /#ffffff|255, 255, 255|white/.test(b)?'v':/red/.test(b)?'r':'g';});
+                    return /var\(--text\)|255, 255, 255|white/.test(b)?'v':/red/.test(b)?'r':'g';});
                 return {dots:dots.join(''),
                   vertes:dots.filter(x=>x==='v').length,
                   score:document.getElementById('clh-nutri-score').textContent};
@@ -31190,7 +31190,7 @@ vendredi 78 6h 44m
           // une seule information.
           ok('Loin de la fin : anneau rouge, décompte blanc, cadence normale',(()=>{
             if(h1.indexOf('stroke="var(--red)"')<0) return _echec('anneau pas rouge');
-            if(h1.indexOf('color:#ffffff')<0) return _echec('décompte pas blanc');
+            if(h1.indexOf('color:var(--text)')<0) return _echec('décompte pas blanc');
             if(h1.indexOf('var(--arc-current)')>=0) return _echec('le cyan est resté');
             return h1.indexOf('animation-duration:'+ARC.ambient+'ms')>=0
               ?true:_echec('cadence inattendue');})());
@@ -31203,7 +31203,7 @@ vendredi 78 6h 44m
           // blanc, le violet aurait introduit une troisième teinte sans rien
           // dire de plus. Les DEUX signaux de la fin sont conservés.
           ok('Les 10 dernières secondes : anneau rouge → blanc',(()=>{
-            if(h2.indexOf('stroke="#ffffff"')<0) return _echec('anneau pas blanc');
+            if(h2.indexOf('stroke="var(--text)"')<0) return _echec('anneau pas blanc');
             return h2.indexOf('stroke="var(--red)"')<0
               ?true:_echec('le rouge est resté');})());
           ok('Les 10 dernières secondes : cadence du point DOUBLÉE',
