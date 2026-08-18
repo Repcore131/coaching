@@ -151,6 +151,12 @@ html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-h
   --c-out:cubic-bezier(.16,1,.3,1);--c-in:cubic-bezier(.4,0,.9,.2);--c-snap:cubic-bezier(.2,1.5,.4,1);
   /* Rayons. Seize valeurs de 1 à 20 px, plus 50 %, sur 932 déclarations. */
   --r-1:4px;--r-2:8px;--r-3:12px;--r-4:18px;--r-full:50%;
+  /* Noms d'usage des cartes athlète. Les deux premiers sont des ALIAS : --r-sm
+     est déjà --r-1 et --r-md est déjà --r-3. Les redéclarer en dur donnerait
+     deux sources pour la même mesure, et la prochaine retouche n'en corrigerait
+     qu'une. --r-lg et les deux élévations sont, eux, des valeurs neuves. */
+  --r-sm:var(--r-1);--r-md:var(--r-3);--r-lg:16px;
+  --el-1:0 6px 14px rgba(0,0,0,.5);--el-2:0 14px 34px rgba(0,0,0,.6);
   /* Halos. Douze rayons distincts de 6 à 30 px pour un seul geste — faire luire
      un chiffre — ramenés à trois crans.
 
@@ -387,7 +393,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .row{display:flex;align-items:center;gap:10px}.row2{display:flex;gap:10px}
 
 /* ====== CARDS ====== */
-.card{background:var(--surface-1);border-radius:var(--r-3);padding:16px;border:1px solid var(--border)}
+.card{background:var(--surface-1);border-radius:var(--r-md);padding:16px;border:1px solid var(--border);box-shadow:var(--el-1)}
 .card-accent{border-left:3px solid var(--red)!important;border-radius:0 var(--r-1) var(--r-1) 0}
 .card-warn{border-left:3px solid var(--orange)!important;border-radius:0 var(--r-1) var(--r-1) 0}
 .card-ok{border-left:3px solid var(--green)!important;border-radius:0 var(--r-1) var(--r-1) 0}
@@ -3055,7 +3061,7 @@ const COACH_PHOTO='icons/coach.jpg';
          l'athlète a souvent ses écouteurs. Il compte surtout sur iOS, où
          Safari n'expose pas navigator.vibrate : sans lui, la fin du repos n'y
          émet aucun signal. État posé par ouvrirReglagesAthlete. -->
-    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:18px;margin-bottom:18px">
+    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:18px">
       <label for="cr-son-case" style="display:flex;align-items:flex-start;gap:12px;cursor:pointer;margin:0">
         <input type="checkbox" id="cr-son-case" onchange="basculerSonRepos()"
           style="width:18px;height:18px;accent-color:#E02020;flex-shrink:0;margin-top:2px;cursor:pointer">
@@ -3068,7 +3074,7 @@ const COACH_PHOTO='icons/coach.jpg';
       </label>
     </div>
 
-    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-4);padding:18px;margin-bottom:18px">
+    <div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:18px">
       <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:4px">Mes données</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">Tout ce que RepCore conserve à ton sujet, dans un fichier que tu gardes. Disponible à tout moment, même si ton accès a expiré.</div>
       <button class="btn btn-red" style="width:100%;margin-bottom:8px" onclick="exporterMesDonnees()">Télécharger tout ce que RepCore sait de moi</button>
@@ -3173,7 +3179,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="clh-pesee"></div>
 
       <!-- REPRISE SÉANCE EN COURS -->
-      <div id="clh-resume-workout" style="display:none;position:relative;overflow:hidden;background:linear-gradient(160deg,#0a1622,#071019 55%,#050c14);border:1px solid #1d3f5c;border-radius:var(--r-3);padding:50px 16px 14px;margin-bottom:14px;cursor:pointer;box-shadow:var(--e2),inset 0 0 30px rgba(90,170,255,.06)" onclick="woResumeAndGo()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div id="clh-resume-workout" style="display:none;position:relative;overflow:hidden;background:linear-gradient(160deg,#0a1622,#071019 55%,#050c14);border:1px solid #1d3f5c;border-radius:var(--r-md);padding:50px 16px 14px;margin-bottom:14px;cursor:pointer;box-shadow:var(--e2),inset 0 0 30px rgba(90,170,255,.06)" onclick="woResumeAndGo()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <svg aria-hidden="true" viewBox="0 0 100 62" preserveAspectRatio="none" style="position:absolute;top:0;left:0;width:100%;height:58px;pointer-events:none;opacity:.88">
           <defs><linearGradient id="congere" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stop-color="var(--text)"/><stop offset=".45" stop-color="#f4faff"/>
@@ -3192,7 +3198,7 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
 
       <!-- REPRISE BILAN EN COURS -->
-      <div id="clh-resume-bilan" style="display:none;background:linear-gradient(135deg,#0a1420,#04080f);border:1px solid #1c4266;border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px;cursor:pointer" onclick="bilResumeAndGo()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div id="clh-resume-bilan" style="display:none;background:linear-gradient(135deg,#0a1420,#04080f);border:1px solid #1c4266;border-radius:var(--r-md);padding:14px 16px;margin-bottom:14px;cursor:pointer" onclick="bilResumeAndGo()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <!-- accent bleu propre à cette carte : var(--info) est ambre et servirait
              déjà la carte « 1er bilan en attente » juste en dessous, les deux
              deviendraient indistinguables -->
@@ -3202,7 +3208,7 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
 
       <!-- 1er BILAN EN ATTENTE -->
-      <div id="clh-first-bilan-card" style="display:none;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:14px 16px;margin-bottom:14px;cursor:pointer" onclick="openBilan('depart')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div id="clh-first-bilan-card" style="display:none;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-md);padding:14px 16px;margin-bottom:14px;cursor:pointer" onclick="openBilan('depart')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div class="eyebrow" style="color:var(--info);margin-bottom:5px;display:flex;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="9" y="2" width="6" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> À compléter</div>
         <div style="font-size:var(--fs-md);font-weight:800;margin-bottom:4px;color:var(--text)">Questionnaire de départ</div>
         <!-- Le texte disait quoi faire, pas ce que ça rapporte. Depuis que le
@@ -3213,7 +3219,7 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
 
       <!-- BILAN ALERT -->
-      <div id="clh-bilan-alert" style="display:none;background:#7c2d1222;border:1px solid var(--orange);border-radius:var(--r-3);padding:14px;margin-bottom:16px;cursor:pointer" onclick="openBilanChoice()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div id="clh-bilan-alert" style="display:none;background:#7c2d1222;border:1px solid var(--orange);border-radius:var(--r-md);padding:14px 16px;margin-bottom:16px;cursor:pointer" onclick="openBilanChoice()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div style="font-weight:700;color:var(--orange);font-size:var(--fs-md);text-transform:uppercase;letter-spacing:.5px">Bilan bimensuel à compléter</div>
         <div class="sub" style="font-size:var(--fs-sm);margin-top:4px" id="clh-bilan-alert-sub">Suis ton évolution : remplis ton bilan.</div>
       </div>
@@ -20730,7 +20736,7 @@ function loadClientHome(){
     // d'appareil, ou reçu son code après s'être inscrit.
     if(!name){
       el.style.display='block';
-      el.innerHTML=`<div onclick="go('s-client-code')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:var(--r-4);background:#0c0c0c;border:1px dashed var(--border);cursor:pointer">
+      el.innerHTML=`<div onclick="go('s-client-code')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:var(--r-md);background:#0c0c0c;border:1px dashed var(--border);cursor:pointer">
         <div style="flex-shrink:0;width:38px;height:38px;border-radius:var(--r-full);background:var(--surface-3);display:flex;align-items:center;justify-content:center;color:var(--sub)">${icon('user',18)}</div>
         <div style="flex:1;min-width:0">
           <div style="font-weight:800;font-size:var(--fs-md)">Tu as un code coach&nbsp;?</div>
@@ -20741,7 +20747,7 @@ function loadClientHome(){
       return;
     }
     el.style.display='block';
-    el.innerHTML=`<div style="position:relative;overflow:hidden;border-radius:var(--r-4);background:#0c0c0c;border-top:2px solid var(--red);border-left:3px solid var(--red);border-right:1px solid #1e1e1e;border-bottom:1px solid rgba(180,0,0,0.18)">
+    el.innerHTML=`<div style="position:relative;overflow:hidden;border-radius:var(--r-md);background:#0c0c0c;border-top:2px solid var(--red);border-left:3px solid var(--red);border-right:1px solid #1e1e1e;border-bottom:1px solid rgba(180,0,0,0.18)">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 18px,rgba(255,255,255,0.013) 18px,rgba(255,255,255,0.013) 19px);pointer-events:none"></div>
       <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 0% 50%,rgba(210,0,0,0.2) 0%,transparent 65%);pointer-events:none"></div>
       <!-- La photo n'est plus centrée sur la hauteur : elle est calée EN HAUT,
@@ -48294,7 +48300,7 @@ function renderCartePesee(){
     sous='Encore '+(PESEE_MM_MIN-fen)+' pesée'+((PESEE_MM_MIN-fen)>1?'s':'')
       +' cette semaine avant une moyenne fiable';
   }
-  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px;margin-bottom:14px">
+  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:14px;box-shadow:var(--el-1)">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:9px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Pesée du jour</span>
       ${dujour?`<span style="font-size:var(--fs-2xs);color:var(--green);font-weight:700">✓ ${dujour.kg} kg</span>`:''}
