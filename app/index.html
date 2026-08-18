@@ -19399,20 +19399,20 @@ function _peindreRepos(){
   // est reconstruit chaque seconde : le nœud qui vient de naître reprend la
   // rotation là où son prédécesseur l'a laissée, au lieu de repartir de zéro.
   const ecoule=Math.max(0,(tot-reste))*1000;
-  const R=22, C=2*Math.PI*R;
-  const anneauHtml=`<div style="position:relative;width:52px;height:52px;margin-top:4px;flex-shrink:0">
-      <svg viewBox="0 0 52 52" width="52" height="52" style="display:block;transform:rotate(-90deg)" aria-hidden="true">
-        <circle cx="26" cy="26" r="${R}" fill="none" stroke="var(--surface-2)" stroke-width="3"></circle>
-        <circle cx="26" cy="26" r="${R}" fill="none" stroke="${anneau}" stroke-width="3" stroke-linecap="round"
+  const R=34, C=2*Math.PI*R;
+  const anneauHtml=`<div style="position:relative;width:76px;height:76px;margin-top:4px;flex-shrink:0">
+      <svg viewBox="0 0 76 76" width="76" height="76" style="display:block;transform:rotate(-90deg)" aria-hidden="true">
+        <circle cx="38" cy="38" r="${R}" fill="none" stroke="var(--surface-2)" stroke-width="5"></circle>
+        <circle cx="38" cy="38" r="${R}" fill="none" stroke="${anneau}" stroke-width="5" stroke-linecap="round"
           stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${(C*pc/100).toFixed(2)}"></circle>
       </svg>
       <div class="arc-ronde fx-loop" style="animation-duration:${cad}ms;animation-delay:-${(ecoule%cad).toFixed(0)}ms" aria-hidden="true">
         <span class="arc-point" style="background:${anneau};box-shadow:0 0 6px ${anneau}"></span>
       </div>
-      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:.5px;color:${coul};line-height:1">${fini?'+':''}${_fmtRepos(reste)}</div>
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--pile-titre);font-size:30px;letter-spacing:1px;color:${coul};line-height:1">${fini?'+':''}${_fmtRepos(reste)}</div>
     </div>`;
   z.style.display='block';
-  z.innerHTML=`<div style="background:#0c0c0c;border-top:1px solid ${fini?'#14532d':'#2a0000'};padding:9px 14px 10px">
+  z.innerHTML=`<div style="background:#101010;border-top:1px solid ${fini?'#14532d':'#2a0000'};padding:9px 14px 10px">
     <div style="display:flex;align-items:center;gap:10px">
       <div style="flex:1;min-width:0">
         <div style="font-size:var(--fs-2xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
