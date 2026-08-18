@@ -110,7 +110,13 @@ html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-h
   /* rouge de TEXTE — 6,17:1 sur #111. --red (#E02020) plafonne à 3,95:1 et
      reste réservé aux fonds, bordures et halos. */
   --red-text:#FF5A5A;
- --dark:#0f0f0f;--surface-1:#111111;--surface-2:#181818;--surface-3:#1e1e1e;--border:#242424;--sub:#8a8a8a;--text:#efefef;
+ --dark:#0f0f0f;
+  /* Surfaces et paliers de texte ajoutes pour les trois vagues de tokens.
+     --text-strong (#dddddd) est le gris clair du corps de texte, --text-mid
+     (#aaaaaa) le palier en dessous. --surface-0 est plus sombre que --dark :
+     c'est le fond des creux, pas des cartes. */
+  --surface-0:#0c0c0c;--text-strong:#dddddd;--text-mid:#aaaaaa;
+  --red-bg-2:#2a0000;--red-bg-3:#6d0000;--warning-gold:#f5c518;--surface-1:#111111;--surface-2:#181818;--surface-3:#1e1e1e;--border:#242424;--sub:#8a8a8a;--text:#efefef;
   /* Paliers de contraste du texte, mesures sur le fond de carte #111 :
      --text-dim   #8a8a8a  5,47:1  — texte secondaire, passe AA a toute taille.
                                      Meme valeur que --sub, qui nomme un ROLE
@@ -118,7 +124,7 @@ html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-h
                                      PALIER. Les deux coexistent volontairement.
      --text-faint #6f6f6f  3,70:1  — sous le seuil AA : reserve au non essentiel
                                      de 18px et plus, jamais un libelle d action.
-     Les gris en dur qu'ils remplacent descendaient jusqu'a #2a2a2a, soit
+     Les gris en dur qu'ils remplacent descendaient jusqu'a var(--border), soit
      1,4:1 — invisible. */
   --text-dim:var(--sub);--text-faint:#6f6f6f;
   /* Bleus. #3355aa et #4466aa donnaient 2,7:1 et 3,4:1 sur #111 : c'etait un
@@ -438,7 +444,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
   background:
     repeating-linear-gradient(-50deg,transparent,transparent 10px,rgba(255,255,255,.022) 10px,rgba(255,255,255,.022) 11px),
     linear-gradient(168deg,#1b1b1b,#121212 52%,#0b0b0b);
-  border:1px solid #242424;border-left:3px solid #2e2e2e;
+  border:1px solid #242424;border-left:3px solid var(--border);
   box-shadow:0 12px 26px rgba(0,0,0,.6),0 3px 8px rgba(0,0,0,.5),
     inset 0 1px 0 rgba(255,255,255,.055),inset 0 -1px 0 rgba(0,0,0,.5);
   transition:border-color .15s,box-shadow .15s}
@@ -459,13 +465,13 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 /* LES DEUX LIENS DE BAS DE BARRE. */
 .pil-lien{width:100%;min-height:46px;margin-top:8px;border-radius:11px;cursor:pointer;
   font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:#b4b4b4;
-  background:linear-gradient(168deg,#181818,#0e0e0e);border:1px solid #262626;
+  background:linear-gradient(168deg,#181818,#0e0e0e);border:1px solid var(--border);
   box-shadow:0 8px 20px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.05);transition:.15s}
 .pil-lien:hover{color:#fff;border-color:rgba(224,32,32,.5);box-shadow:0 10px 24px rgba(0,0,0,.6),0 0 18px rgba(224,32,32,.18)}
 
 /* LA RECHERCHE. Creusée plutôt que posée : une ombre INTERNE dit « on écrit
    ici », là où une ombre portée aurait dit « on appuie ici ». */
-#ch-search{background:linear-gradient(180deg,#0c0c0c,#131313)!important;border:1px solid #262626!important;
+#ch-search{background:linear-gradient(180deg,#0c0c0c,#131313)!important;border:1px solid var(--border)!important;
   box-shadow:inset 0 2px 6px rgba(0,0,0,.6),inset 0 -1px 0 rgba(255,255,255,.03);border-radius:11px!important}
 #ch-search:focus{border-color:rgba(224,32,32,.55)!important;box-shadow:inset 0 2px 6px rgba(0,0,0,.6),0 0 16px rgba(224,32,32,.2)}
 
@@ -484,10 +490,10 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 #ch-clients-list .client-row[data-etat='actif']{border-left-color:#22c55e}
 #ch-clients-list .client-row[data-etat='attente']{border-left-color:#f97316;box-shadow:0 12px 26px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.05),-3px 0 16px rgba(249,115,22,.24)}
 #ch-clients-list .client-row[data-etat='lecture']{border-left-color:#6a6a6a;opacity:.88}
-#ch-clients-list .client-row[data-etat='dormant']{border-left-color:#3a3a3a;opacity:.82}
+#ch-clients-list .client-row[data-etat='dormant']{border-left-color:var(--border);opacity:.82}
 #ch-clients-list .client-row:hover{background:
     repeating-linear-gradient(-50deg,transparent,transparent 12px,rgba(255,255,255,.026) 12px,rgba(255,255,255,.026) 13px),
-    linear-gradient(168deg,#242424,#161616 52%,#0d0d0d);border-color:#3a3a3a}
+    linear-gradient(168deg,#242424,#161616 52%,#0d0d0d);border-color:var(--border)}
 /* LE NOM TIENT SUR UNE LIGNE. Il passait a la ligne — « Kévin / GUELLEC » —
    parce que le badge d'état mange la largeur. Un nom tronqué se lit ; un nom
    cassé en deux se déchiffre. */
@@ -550,7 +556,7 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 .metric-box{background:
   repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.030) 11px,rgba(255,255,255,.030) 12px),
   radial-gradient(90px 70px at 50% 0%,rgba(224,32,32,.16),transparent 72%),
-  linear-gradient(160deg,#232323,#141414 55%,#0b0b0b);
+  linear-gradient(160deg,var(--border),#141414 55%,#0b0b0b);
   border-radius:3px;padding:16px 12px;text-align:center;flex:1;
   border:1px solid rgba(255,255,255,.08);border-left:3px solid var(--red);
   position:relative;overflow:hidden;
@@ -621,7 +627,7 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
 .series-table td{padding:10px;text-align:center;border-top:1px solid #181818;font-size:var(--fs-md);font-weight:600}
 .series-table tr.done td{background:#E0202010;color:var(--red-text)}
 .series-table-wo td{padding:8px 4px}.series-table-wo th{padding:7px 4px}
-.set-input{width:56px;background:var(--dark);border:1px solid #2a2a2a;border-radius:3px;color:#fff;text-align:center;padding:12px 4px;min-height:44px;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800}
+.set-input{width:56px;background:var(--dark);border:1px solid var(--border);border-radius:3px;color:#fff;text-align:center;padding:12px 4px;min-height:44px;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800}
 .set-input:focus{border-color:var(--red);outline:none;box-shadow:0 0 0 2px rgba(198,15,8,.15)}
 
 /* ====== SUGGEST BOX ====== */
@@ -632,7 +638,7 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
 .suggest-box .s-note{font-size:var(--fs-xs);color:var(--sub)}
 
 /* ====== PHOTO / UPLOAD ====== */
-.photo-slot{width:calc(50% - 6px);aspect-ratio:1;background:var(--surface-2);border-radius:4px;border:1px dashed #2a2a2a;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:.2s;overflow:hidden;position:relative}
+.photo-slot{width:calc(50% - 6px);aspect-ratio:1;background:var(--surface-2);border-radius:4px;border:1px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:.2s;overflow:hidden;position:relative}
 .photo-slot:hover{border-color:var(--red)}.photo-slot img{width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0}
 .nutrition-day{background:var(--surface-1);border-radius:4px;padding:14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;border:1px solid var(--border)}
 .fj-entry{background:var(--surface-1);border-radius:8px;padding:10px 12px;display:flex;align-items:center;margin-bottom:6px;border:1px solid var(--border);gap:8px}
@@ -644,7 +650,7 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
 /* ====== CODE DISPLAY ====== */
 .code-display{background:var(--dark);border-radius:4px;padding:24px;text-align:center;letter-spacing:8px;font-size:var(--fs-2xl);font-weight:900;color:var(--red-text);border:1px solid #2a0a0a;font-family:monospace}
 /* ====== SUPPLEMENTS ====== */
-.supp-timing-chip{display:inline-flex;align-items:center;padding:8px 14px;min-height:40px;border:1px solid #2a2a2a;border-radius:20px;background:none;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;transition:.15s;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+.supp-timing-chip{display:inline-flex;align-items:center;padding:8px 14px;min-height:40px;border:1px solid var(--border);border-radius:20px;background:none;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;transition:.15s;white-space:nowrap;-webkit-tap-highlight-color:transparent}
 .supp-timing-chip.active{background:#1a0000;border-color:var(--red);color:#fff}
 /* ====== CAFFEINE ====== */
 .caff-alert-banner{border:1px solid;border-radius:10px;padding:12px 14px;font-size:var(--fs-sm);font-weight:700;margin-bottom:8px;line-height:1.5}
@@ -683,7 +689,7 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
 /* ====== SCROLL ====== */
 .scroll-area{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .scroll-area::-webkit-scrollbar{width:2px}
-.scroll-area::-webkit-scrollbar-thumb{background:#2a2a2a;border-radius:1px}
+.scroll-area::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:1px}
 
 /* ====== ROLE CARDS ====== */
 .role-card{background:var(--surface-1);border-radius:4px;padding:28px 20px;text-align:center;border:1px solid var(--border);cursor:pointer;transition:.3s;flex:1}
@@ -1097,7 +1103,7 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 .gsl-opt .gsl-lbl{font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--text-dim);margin-top:8px;transition:.18s}
 .gsl-opt:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
 .gsl-opt.sel{border-color:#fff;background:#0e0a0a;box-shadow:0 0 16px rgba(255,255,255,.28),inset 0 0 12px rgba(255,255,255,.1)}
-.gsl-opt.sel .gsl-body{fill:#232323;stroke:#fff;filter:drop-shadow(0 0 6px rgba(255,255,255,.85))}
+.gsl-opt.sel .gsl-body{fill:var(--border);stroke:#fff;filter:drop-shadow(0 0 6px rgba(255,255,255,.85))}
 .gsl-opt.sel .gsl-lbl{color:#fff;text-shadow:0 0 8px rgba(255,255,255,.6)}
 /* Curseur néon 1-10 (motivation) */
 .bsl-wrap{background:var(--surface-1);border:1px solid #222;border-radius:12px;padding:18px 16px 14px;text-align:center}
@@ -1119,7 +1125,7 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
    condensees pour les intitules. */
 .caf-cadre{position:relative;background:#0a0a0a;padding:16px;
   clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px)}
-.caf-cadre::before{content:"";position:absolute;inset:0;background:#2e2e2e;z-index:0;
+.caf-cadre::before{content:"";position:absolute;inset:0;background:var(--surface-3);z-index:0;
   clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px)}
 /* LE FOND. Deuxieme version : la premiere empilait deux trames REGULIERES,
    qui se lisaient comme du velours cotele au lieu d une matiere. Une surface
@@ -1649,7 +1655,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- CRÉER MON COMPTE -->
     <div onclick="goRegisterCoach()" style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="display:flex;align-items:center;gap:14px">
-        <div style="width:44px;height:44px;border-radius:10px;background:#0d0d0d;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></div>
+        <div style="width:44px;height:44px;border-radius:10px;background:#0d0d0d;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></div>
         <div>
           <div style="font-weight:800;font-size:var(--fs-lg);letter-spacing:.5px">CRÉER MON COMPTE</div>
           <!-- CE COMMENTAIRE DISAIT L'INVERSE, et il se déclarait faisant foi :
@@ -1763,7 +1769,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- Carte B : déjà inscrit -->
     <div onclick="go('s-login')" style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="display:flex;align-items:center;gap:14px">
-        <div style="width:44px;height:44px;border-radius:10px;background:#0d0d0d;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+        <div style="width:44px;height:44px;border-radius:10px;background:#0d0d0d;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
         <div>
           <div style="font-weight:800;font-size:var(--fs-lg);letter-spacing:.5px">J'AI DÉJÀ UN COMPTE</div>
           <div class="sub" style="font-size:var(--fs-xs);margin-top:3px">Me connecter et reprendre ma progression</div>
@@ -1778,7 +1784,7 @@ const COACH_PHOTO='icons/coach.jpg';
          aucune donnée personnelle n'est demandée. -->
     <div onclick="goAvecRetour('s-subscribe');loadSubscribePage()" style="background:var(--surface-2);border:1px solid var(--border);border-radius:14px;padding:20px;cursor:pointer;transition:border-color .2s" onmouseover="this.style.borderColor='rgba(224,32,32,.4)'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="display:flex;align-items:center;gap:14px">
-        <div style="width:44px;height:44px;border-radius:10px;background:#0d0d0d;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div>
+        <div style="width:44px;height:44px;border-radius:10px;background:#0d0d0d;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div>
         <div>
           <div style="font-weight:800;font-size:var(--fs-lg);letter-spacing:.5px">JE N'AI PAS DE CODE</div>
           <div class="sub" style="font-size:var(--fs-xs);margin-top:3px">Accès en autonomie : <span data-prix-autonomie>9,95 €/mois</span>, sans engagement</div>
@@ -1972,7 +1978,7 @@ const COACH_PHOTO='icons/coach.jpg';
            pré-rempli au-dessus, il ne reste qu'à valider. -->
       <div id="cc-invit" style="display:none;margin-top:10px;font-size:var(--fs-xs);line-height:1.6;
         border-radius:10px;padding:10px 12px;background:linear-gradient(168deg,#131313,#0b0b0b);
-        border:1px solid #262626;border-left:3px solid var(--red);color:#d8d8d8"></div>
+        border:1px solid var(--border);border-left:3px solid var(--red);color:#d8d8d8"></div>
       <div id="cc-err" class="err" style="display:none;margin-top:8px"></div>
     </div>
     <button id="cc-valider" class="btn btn-red" onclick="doLinkCoach()">Activer mon accès →</button>
@@ -2542,7 +2548,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <div class="pad">
       <div class="card" style="margin-bottom:16px">
         <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:12px">
-          <div id="ccd-avatar" style="width:64px;height:64px;border-radius:50%;background:var(--surface-2);border:2px solid #2a2a2a;display:flex;align-items:center;justify-content:center;font-size:var(--fs-xl);overflow:hidden;flex-shrink:0"></div>
+          <div id="ccd-avatar" style="width:64px;height:64px;border-radius:50%;background:var(--surface-2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:var(--fs-xl);overflow:hidden;flex-shrink:0"></div>
           <div style="flex:1;min-width:0">
             <div style="font-weight:800;font-size:var(--fs-lg);margin-bottom:2px" id="ccd-name"></div>
             <div class="sub" style="font-size:var(--fs-xs);margin-bottom:6px" id="ccd-info"></div>
@@ -2769,7 +2775,7 @@ const COACH_PHOTO='icons/coach.jpg';
     </div>
     <div style="padding:12px 16px;background:var(--surface-1);border-bottom:1px solid var(--surface-2);flex-shrink:0">
       <input id="cpl-search-input" type="search" autocomplete="off" placeholder="Rechercher (ex: riz basmati, thon, flocons…)"
-        style="width:100%;padding:12px 14px;background:var(--surface-2);border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:var(--fs-md);box-sizing:border-box;outline:none"
+        style="width:100%;padding:12px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:var(--fs-md);box-sizing:border-box;outline:none"
         oninput="onPlanSearch(this.value)">
     </div>
     <div class="scroll-area" style="flex:1"><div id="cpl-search-list"></div>
@@ -2821,15 +2827,15 @@ const COACH_PHOTO='icons/coach.jpg';
             <div style="font-size:var(--fs-xs);color:var(--green);font-weight:700">Coller liens</div>
           </div>
           <div id="prog-photo2-photo" onclick="document.getElementById('prog-photo2-input').click()"
-            style="flex:1;border:1px dashed #2a2a2a;border-radius:8px;padding:10px;text-align:center;cursor:pointer"
-            onmouseover="this.style.borderColor='#555'" onmouseout="this.style.borderColor='#2a2a2a'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+            style="flex:1;border:1px dashed var(--border);border-radius:8px;padding:10px;text-align:center;cursor:pointer"
+            onmouseover="this.style.borderColor='#555'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
             <input type="file" id="prog-photo2-input" accept="image/*" style="display:none" onchange="loadProgPhoto2(this)">
             <div style="font-size:var(--fs-xl);margin-bottom:3px">📷</div>
             <div style="font-size:var(--fs-xs);color:var(--sub);font-weight:700">Photo</div>
           </div>
           <div id="prog-photo2-pdf" onclick="document.getElementById('prog-pdf-links-input').click()"
-            style="flex:1;border:1px dashed #2a2a2a;border-radius:8px;padding:10px;text-align:center;cursor:pointer"
-            onmouseover="this.style.borderColor='#555'" onmouseout="this.style.borderColor='#2a2a2a'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+            style="flex:1;border:1px dashed var(--border);border-radius:8px;padding:10px;text-align:center;cursor:pointer"
+            onmouseover="this.style.borderColor='#555'" onmouseout="this.style.borderColor='var(--border)'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
             <input type="file" id="prog-pdf-links-input" accept="application/pdf" style="display:none" onchange="importVideoLinksFromPdf(this)">
             <div style="font-size:var(--fs-xl);margin-bottom:3px">📄</div>
             <div style="font-size:var(--fs-xs);color:var(--sub);font-weight:700">PDF</div>
@@ -2919,7 +2925,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:24px 20px;margin-top:60px;min-height:calc(100vh - 60px);min-height:calc(100dvh - 60px)">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <h2> Calculateur RIR</h2>
-      <button onclick="document.getElementById('calc-modal').style.display='none'" aria-label="Fermer" style="background:none;border:1px solid #2a2a2a;border-radius:50%;width:32px;height:32px;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" width="15" height="15"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg></button>
+      <button onclick="document.getElementById('calc-modal').style.display='none'" aria-label="Fermer" style="background:none;border:1px solid var(--border);border-radius:50%;width:32px;height:32px;color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" width="15" height="15"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg></button>
     </div>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:20px;line-height:1.5">Basé sur ta dernière performance. Le système calcule ta charge optimale pour chaque combinaison reps/RIR.</p>
     <div style="background:var(--surface-2);border-radius:12px;padding:14px;margin-bottom:16px">
@@ -3012,7 +3018,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <!-- Brand header athlete -->
   <div style="background:#090909;border-bottom:1px solid rgba(255,255,255,.22);box-shadow:0 4px 20px rgba(0,0,0,.9);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:relative;z-index:2;flex-shrink:0">
     <div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="openAthleteProfile()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-      <div id="clh-athlete-avatar" style="width:48px;height:48px;border-radius:50%;background:var(--surface-2);border:2px solid #2a2a2a;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+      <div id="clh-athlete-avatar" style="width:48px;height:48px;border-radius:50%;background:var(--surface-2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
       <div>
         <div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:4px;font-weight:700;text-transform:uppercase;margin-bottom:2px">MON PROFIL</div>
         <div style="font-size:var(--fs-md);font-family:'Bebas Neue',Impact,sans-serif;letter-spacing:1px;line-height:1" id="clh-name"></div>
@@ -3197,7 +3203,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <div class="pad">
       <div style="display:flex;justify-content:center;margin-bottom:24px;margin-top:8px">
         <label style="cursor:pointer;text-align:center">
-          <div id="atp-photo-circle" style="width:90px;height:90px;border-radius:50%;background:var(--surface-2);border:2px solid #2a2a2a;display:flex;align-items:center;justify-content:center;overflow:hidden;margin:0 auto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:36px;height:36px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+          <div id="atp-photo-circle" style="width:90px;height:90px;border-radius:50%;background:var(--surface-2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;margin:0 auto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:36px;height:36px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:8px;letter-spacing:1.5px;text-transform:uppercase">Changer la photo</div>
           <input type="file" accept="image/*" style="display:none" onchange="uploadAthletePhoto(this)">
         </label>
@@ -3322,7 +3328,7 @@ const COACH_PHOTO='icons/coach.jpg';
       </div>
       <div class="card">
         <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Objectif</label>
-        <textarea id="atp-objective" placeholder="ex: Prise de masse, perte de poids, remise en forme..." style="width:100%;min-height:80px;font-size:var(--fs-md);padding:11px 14px;box-sizing:border-box;resize:vertical;background:#111;border:1px solid #2a2a2a;color:#fff;font-family:Montserrat,sans-serif;border-radius:4px;line-height:1.5" maxlength="200"></textarea>
+        <textarea id="atp-objective" placeholder="ex: Prise de masse, perte de poids, remise en forme..." style="width:100%;min-height:80px;font-size:var(--fs-md);padding:11px 14px;box-sizing:border-box;resize:vertical;background:#111;border:1px solid var(--border);color:#fff;font-family:Montserrat,sans-serif;border-radius:4px;line-height:1.5" maxlength="200"></textarea>
       </div>
       <div class="card" id="atp-comptes"></div>
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);text-align:center">
@@ -3515,8 +3521,8 @@ const COACH_PHOTO='icons/coach.jpg';
     <div style="font-size:var(--fs-md);font-weight:800;letter-spacing:.5px;margin-bottom:4px">Séance en cours</div>
     <div style="font-size:var(--fs-sm);color:var(--text-faint);margin-bottom:20px">Que veux-tu faire ?</div>
     <div style="display:flex;flex-direction:column;gap:10px">
-      <button onclick="document.getElementById('wo-pause-modal').style.display='none'" style="padding:14px;background:var(--surface-2);border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px">▶ Continuer la séance</button>
-      <button onclick="confirmPauseWorkout()" style="padding:14px;background:#111;border:1px solid #2a2a2a;border-radius:10px;color:#aaa;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px">⏸ Mettre en pause</button>
+      <button onclick="document.getElementById('wo-pause-modal').style.display='none'" style="padding:14px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px">▶ Continuer la séance</button>
+      <button onclick="confirmPauseWorkout()" style="padding:14px;background:#111;border:1px solid var(--border);border-radius:10px;color:#aaa;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px">⏸ Mettre en pause</button>
       <button onclick="cancelWorkout()" style="padding:14px;background:#1a0000;border:1px solid var(--red);border-radius:10px;color:#fca5a5;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px">✕ Annuler la séance</button>
     </div>
   </div>
@@ -3534,9 +3540,9 @@ const COACH_PHOTO='icons/coach.jpg';
   <div id="wo-repos" style="display:none;flex-shrink:0"></div>
   <div style="padding:12px 20px;border-top:1px solid var(--border);flex-shrink:0;display:flex;gap:8px">
     <button class="btn btn-outline" id="wo-prev-btn" onclick="woNav(-1)" style="flex:none;width:44px">←</button>
-    <button onclick="confirmPauseWorkout()" title="Retour à l'accueil (séance sauvegardée)" style="flex:none;width:44px;align-self:stretch;background:#111;border:1px solid #333;border-radius:3px;color:var(--sub);cursor:pointer;display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M3 10.5 L12 3 L21 10.5"/><path d="M5.5 9 V20 a1,1 0 0 0 1,1 H9.5 V14.5 h5 V21 H17.5 a1,1 0 0 0 1,-1 V9"/></svg></button>
+    <button onclick="confirmPauseWorkout()" title="Retour à l'accueil (séance sauvegardée)" style="flex:none;width:44px;align-self:stretch;background:#111;border:1px solid var(--border);border-radius:3px;color:var(--sub);cursor:pointer;display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M3 10.5 L12 3 L21 10.5"/><path d="M5.5 9 V20 a1,1 0 0 0 1,1 H9.5 V14.5 h5 V21 H17.5 a1,1 0 0 0 1,-1 V9"/></svg></button>
     <button class="btn btn-red" id="wo-next-btn" onclick="woNav(1)" style="flex:1;white-space:nowrap;font-size:var(--fs-sm);letter-spacing:1px;padding-left:8px;padding-right:8px;min-width:0;overflow:hidden;text-overflow:ellipsis"><span class="wo-lbl-long">Exercice suivant</span><span class="wo-lbl-court">Suivant</span> →</button>
-    <button onclick="finishWorkoutEarly()" style="flex:none;align-self:stretch;background:#0d0d0d;border:1px solid #262626;color:var(--text-faint);padding:0 9px;font-size:var(--fs-2xs);opacity:.85;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;border-radius:3px;white-space:nowrap;letter-spacing:.5px;display:inline-flex;align-items:center;gap:7px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><circle cx="12" cy="12" r="9"/><polyline points="9 12 11 14 15 10"/></svg>Terminer</button>
+    <button onclick="finishWorkoutEarly()" style="flex:none;align-self:stretch;background:#0d0d0d;border:1px solid var(--border);color:var(--text-faint);padding:0 9px;font-size:var(--fs-2xs);opacity:.85;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;border-radius:3px;white-space:nowrap;letter-spacing:.5px;display:inline-flex;align-items:center;gap:7px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><circle cx="12" cy="12" r="9"/><polyline points="9 12 11 14 15 10"/></svg>Terminer</button>
   </div>
 </div>
 
@@ -3865,7 +3871,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar"><button class="back-btn" onclick="loadNutrition()">←</button><span class="topbar-title">Ajouter un aliment</span><span></span></div>
   <div style="padding:12px 16px;background:var(--surface-1);border-bottom:1px solid var(--surface-2);flex-shrink:0">
     <input id="fj-search-input" type="search" autocomplete="off" placeholder="Rechercher (ex: poulet, riz, œuf…)"
-      style="width:100%;padding:12px 14px;background:var(--surface-2);border:1px solid #2a2a2a;border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:var(--fs-md);box-sizing:border-box;outline:none"
+      style="width:100%;padding:12px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;color:#fff;font-family:Montserrat,sans-serif;font-size:var(--fs-md);box-sizing:border-box;outline:none"
       oninput="onFjSearch(this.value)">
     <!-- Les deux voies hors table, visibles DES L OUVERTURE. Le scan etait
          auparavant enfoui sous les resultats : il fallait chercher un autre
@@ -3897,11 +3903,11 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="margin-bottom:18px">
         <label id="fja-qty-label" style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;display:block;margin-bottom:8px">Quantité (grammes)</label>
         <div style="display:flex;align-items:center;gap:10px">
-          <button onclick="stepFjaQty(-10)" style="width:44px;height:44px;background:var(--surface-2);border:1px solid #2a2a2a;border-radius:8px;color:#fff;font-size:var(--fs-xl);cursor:pointer;flex-shrink:0">−</button>
+          <button onclick="stepFjaQty(-10)" style="width:44px;height:44px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-size:var(--fs-xl);cursor:pointer;flex-shrink:0">−</button>
           <input type="number" id="fja-qty" value="100" min="1" max="9999"
             style="flex:1;padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:var(--fs-xl);font-weight:800;text-align:center"
             oninput="fjaQtyTouchee()">
-          <button onclick="stepFjaQty(10)" style="width:44px;height:44px;background:var(--surface-2);border:1px solid #2a2a2a;border-radius:8px;color:#fff;font-size:var(--fs-xl);cursor:pointer;flex-shrink:0">+</button>
+          <button onclick="stepFjaQty(10)" style="width:44px;height:44px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-size:var(--fs-xl);cursor:pointer;flex-shrink:0">+</button>
         </div>
         <div id="fja-unites-slot"></div>
         <div style="display:flex;gap:8px;margin-top:10px">
@@ -4123,9 +4129,9 @@ const COACH_PHOTO='icons/coach.jpg';
                savoir de quoi elle parlait. Le champ est facultatif : laissé
                vide, l'ancienne déduction s'applique exactement comme avant. -->
           <input id="vid-name-input" type="text" placeholder="Quel exercice ? (facultatif)" autocomplete="off"
-            style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:9px;border:1px solid #262626;background:linear-gradient(180deg,#0b0b0b,#0f0f0f);color:var(--text);font-size:var(--fs-md);font-family:inherit;margin-bottom:9px;box-shadow:inset 0 2px 6px rgba(0,0,0,.5)">
+            style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:9px;border:1px solid var(--border);background:linear-gradient(180deg,#0b0b0b,#0f0f0f);color:var(--text);font-size:var(--fs-md);font-family:inherit;margin-bottom:9px;box-shadow:inset 0 2px 6px rgba(0,0,0,.5)">
           <input id="vid-url-input" type="url" placeholder="Colle le lien YouTube ou Google Drive…" autocomplete="off"
-            style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:9px;border:1px solid #262626;background:linear-gradient(180deg,#0b0b0b,#0f0f0f);color:var(--text);font-size:var(--fs-md);font-family:inherit;margin-bottom:9px;box-shadow:inset 0 2px 6px rgba(0,0,0,.5)"
+            style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:9px;border:1px solid var(--border);background:linear-gradient(180deg,#0b0b0b,#0f0f0f);color:var(--text);font-size:var(--fs-md);font-family:inherit;margin-bottom:9px;box-shadow:inset 0 2px 6px rgba(0,0,0,.5)"
             onkeydown="if(event.key==='Enter')addVideoLink()"
             oninput="document.getElementById('vid-drive-hint').style.display=this.value.includes('drive.google.com')?'block':'none'">
           <div id="vid-drive-hint" style="display:none;background:var(--warning-bg);border:1px solid #7c2d1244;border-radius:8px;padding:9px 12px;font-size:var(--fs-xs);color:var(--warning);line-height:1.5;margin-bottom:10px;text-align:left">⚠️ Vérifie que le lien est accessible à tous ceux qui l'ont (pas seulement toi) avant de l'envoyer · dans Drive : <strong>Partager → Toute personne avec le lien</strong>.</div>
@@ -5277,7 +5283,7 @@ function _renderAbonnementCoach(users){
     :'en cours de synchronisation';
   const cartes=COACH_PALIERS.map(x=>{
     const ici=x.cle===cle, id=x.planId();
-    return `<div style="flex:1;min-width:140px;border:2px solid ${ici?'var(--red)':'#2a2a2a'};
+    return `<div style="flex:1;min-width:140px;border:2px solid ${ici?'var(--red)':'var(--border)'};
       background:${ici?'rgba(224,32,32,.08)':'transparent'};border-radius:12px;padding:13px 12px;text-align:center">
       <div style="font-size:var(--fs-xs);color:${ici?'var(--red)':'var(--sub)'};font-weight:800;
         text-transform:uppercase;letter-spacing:1px;margin-bottom:5px">${escapeHtml(x.titre)}</div>
@@ -9165,7 +9171,7 @@ function rescueLogin(em,pw){
   panel.id='rescue-panel';
   panel.style.cssText='position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:center;justify-content:center;padding:20px';
   panel.innerHTML=`
-    <div style="background:var(--surface-2);border:1px solid #2a2a2a;border-radius:20px;padding:28px 24px;max-width:340px;width:100%;text-align:center">
+    <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:20px;padding:28px 24px;max-width:340px;width:100%;text-align:center">
       <div style="font-size:var(--fs-2xl);margin-bottom:12px">✅</div>
       <div style="font-size:var(--fs-md);font-weight:800;text-transform:uppercase;letter-spacing:2px;margin-bottom:8px">Mot de passe reconnu</div>
       <p style="font-size:var(--fs-sm);color:#888;line-height:1.6;margin-bottom:20px">Le site a changé d'adresse et tes données locales n'ont pas encore été retrouvées dans le cloud. Indique ton rôle pour continuer provisoirement : si tu te reconnectes depuis ton appareil ou navigateur habituel, ton profil complet sera restauré.</p>
@@ -11647,7 +11653,7 @@ function _rendreEcheanceAcces(){
     'Bonjour'+(nom?' '+nom:'')+", mon accès RepCore se termine le "+d+'. Peux-tu le prolonger ?');
   z.innerHTML=`<div style="position:relative;overflow:hidden;border-radius:12px;padding:13px 14px;margin-bottom:16px;
       background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.02) 11px,rgba(255,255,255,.02) 12px),linear-gradient(168deg,#1b1b1b,#111 55%,#0b0b0b);
-      border:1px solid #262626;border-left:3px solid ${c};
+      border:1px solid var(--border);border-left:3px solid ${c};
       box-shadow:0 12px 26px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.05),-3px 0 16px ${c}33">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:${c};text-shadow:0 0 10px ${c}66">
       Ton accès se termine ${quand}</div>
@@ -11814,7 +11820,7 @@ function _pilCompteur(cle,lib,n,couleur){
   return `<button onclick="setFiltreClients('${actif?'tous':cle}')"
     aria-pressed="${actif?'true':'false'}"
     class="pil-compteur" data-vide="${vide?1:0}"
-    style="border-left-color:${actif?couleur:(vide?'#2a2a2a':couleur+'66')};
+    style="border-left-color:${actif?couleur:(vide?'var(--border)':couleur+'66')};
       ${actif?`border-color:${couleur};box-shadow:0 12px 26px rgba(0,0,0,.6),0 0 20px ${couleur}33,inset 0 1px 0 rgba(255,255,255,.08)`:''}">
     <div class="pil-val" style="color:${vide?'#4e4e4e':couleur};text-shadow:${vide?'none':`0 0 16px ${couleur}99`}">${n}</div>
     <div class="pil-lib" style="color:${vide?'#565656':'#c4c4c4'}">${lib}</div>
@@ -12924,7 +12930,7 @@ function _wagPreparer(){
   zone.innerHTML=`<div class="sub" style="font-size:var(--fs-xs);margin-bottom:8px">Touche chaque nom pour ouvrir WhatsApp : ${sel.length} conversation${sel.length>1?'s':''} à ouvrir${sansTel?`, dont ${sansTel} sans numéro utilisable (contact à choisir)`:''}.</div>`
     +sel.map(s=>`<a href="${safeUrl(waLink(s.tel,pour(s)))}" target="_blank" rel="noopener"
       style="display:flex;align-items:center;gap:8px;min-height:44px;padding:0 12px;margin-bottom:6px;background:#0a1a0a;border:1px solid #1e3a1e;border-radius:8px;color:var(--green);text-decoration:none;font-size:var(--fs-md);font-weight:700"
-      onclick="this.style.opacity='.5';this.style.borderColor='#333'">💬 ${escapeHtml(s.nom||'Athlète')}${s.tel?'':' <span style="color:var(--orange);font-weight:400;font-size:var(--fs-xs)">(contact à choisir)</span>'}</a>`).join('');
+      onclick="this.style.opacity='.5';this.style.borderColor='var(--border)'">💬 ${escapeHtml(s.nom||'Athlète')}${s.tel?'':' <span style="color:var(--orange);font-weight:400;font-size:var(--fs-xs)">(contact à choisir)</span>'}</a>`).join('');
 }
 
 // Rendu de la liste d'athletes. La recherche et le filtre sont lus dans le
@@ -13266,7 +13272,7 @@ function ouvrirRite(cycle){
       <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:9px">Tes jours et ton heure d'entraînement pour les 4 prochaines semaines. Nommer cette période ne crée aucun programme : c'est une étiquette.</div>
       <div id="rite-jours" style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px">
         ${['L','Ma','Me','J','V','S','D'].map((j,i)=>`<button type="button" data-j="${i}" onclick="riteJour(${i},this)"
-          style="flex:1;min-width:40px;min-height:44px;border-radius:9px;cursor:pointer;background:#111;border:1px solid #2e2e2e;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800">${j}</button>`).join('')}
+          style="flex:1;min-width:40px;min-height:44px;border-radius:9px;cursor:pointer;background:#111;border:1px solid var(--border);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800">${j}</button>`).join('')}
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:var(--fs-xs);color:var(--sub)">Heure</span>
@@ -13292,7 +13298,7 @@ function riteJour(i,el,forcer){
   if(actif&&k<0) window._riteJours.push(i);
   if(!actif&&k>=0) window._riteJours.splice(k,1);
   el.style.background=actif?'rgba(224,32,32,.14)':'#111';
-  el.style.borderColor=actif?'var(--red)':'#2e2e2e';
+  el.style.borderColor=actif?'var(--red)':'var(--border)';
   el.style.color=actif?'#fff':'var(--sub)';
 }
 // LES CYCLES REPORTES DANS CETTE SESSION. Un Set en mémoire, JAMAIS une
@@ -13646,7 +13652,7 @@ function renderFileReprise(){
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
       <span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase">Mettre en veille</span>
       <select onchange="frSetDuree(this.value)" aria-label="Durée de mise en veille"
-        style="min-height:38px;padding:6px 9px;border-radius:8px;background:#101010;border:1px solid #303030;
+        style="min-height:38px;padding:6px 9px;border-radius:8px;background:#101010;border:1px solid var(--border);
           color:#ddd;font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">
         ${FR_DUREES.map(j=>`<option value="${j}"${j===_frDuree?' selected':''}>${j} jours</option>`).join('')}
       </select>
@@ -13660,10 +13666,10 @@ function renderFileReprise(){
   const bouton=(lib,act,fort)=>`<button type="button" onclick="${act}"
     style="flex:1;min-width:0;min-height:44px;padding:8px 6px;border-radius:9px;cursor:pointer;
       font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.3px;
-      background:${fort?'rgba(224,32,32,.14)':'#111'};border:1px solid ${fort?'var(--red)':'#2e2e2e'};
+      background:${fort?'rgba(224,32,32,.14)':'#111'};border:1px solid ${fort?'var(--red)':'var(--border)'};
       color:${fort?'#fff':'var(--sub)'}">${escapeHtml(lib)}</button>`;
   el.innerHTML=tete+f.lignes.map(r=>`<div style="background:linear-gradient(180deg,#151515,#0e0e0e);
-      border:1px solid #232323;border-left:3px solid var(--red);border-radius:11px;
+      border:1px solid var(--border);border-left:3px solid var(--red);border-radius:11px;
       padding:11px 12px;margin-bottom:9px;box-shadow:0 5px 15px rgba(0,0,0,.45)">
       <div style="display:flex;align-items:baseline;gap:8px">
         <span style="font-size:var(--fs-md);font-weight:900;color:#fff">${escapeHtml(r.prenom||'Athlète')}</span>
@@ -14823,7 +14829,7 @@ function _dessinerCroissance(id,pts){
   ctx.font='600 8.5px Montserrat,sans-serif';ctx.textBaseline='middle';
   [0,.5,1].forEach(f=>{
     const y=gT+ih-f*ih;
-    ctx.strokeStyle=f===0?'#333':'#232323';ctx.lineWidth=1;
+    ctx.strokeStyle=f===0?'var(--border)':'var(--border)';ctx.lineWidth=1;
     ctx.setLineDash(f===0?[]:[3,4]);
     ctx.beginPath();ctx.moveTo(gL,y);ctx.lineTo(gL+iw,y);ctx.stroke();ctx.setLineDash([]);
     ctx.fillStyle='rgba(255,90,90,.55)';ctx.textAlign='right';
@@ -16231,7 +16237,7 @@ function renderBilanEvolution(c){
   const buildMeasTable=()=>{
     const columns=['Parties mesurées',...bHeaders];
     const rows=MEAS.map(m=>({
-      label:m.label,labelBg:m.color||'#333',labelColor:'#fff',
+      label:m.label,labelBg:m.color||'var(--border)',labelColor:'#fff',
       values:Array.from({length:maxB},(_,i)=>{const v=bilans[i]?bVal(bilans[i],m.key):0;return v||null;}),
       valueStyleFn:(v,ci,empty)=>empty?'background:#080808;color:var(--sub);':'background:var(--dark);color:#fff;'
     }));
@@ -16336,7 +16342,7 @@ function renderBilanEvolution(c){
         const safeCap=(c.fname||'').replace(/'/g,'').replace(/"/g,'')+'  B'+(i+1);
         return img
           ?`<div data-cap="${safeCap}" onclick="openPhotoFull(this.querySelector('img').src,this.dataset.cap)"
-              style="flex-shrink:0;cursor:pointer;position:relative;border-radius:10px;overflow:hidden;background:#111;border:1px solid #333;width:110px" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+              style="flex-shrink:0;cursor:pointer;position:relative;border-radius:10px;overflow:hidden;background:#111;border:1px solid var(--border);width:110px" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
               <div style="position:absolute;top:6px;left:6px;background:#000b;color:#fff;font-size:var(--fs-xs);font-weight:800;padding:2px 7px;border-radius:20px;letter-spacing:1px;z-index:1">B${i+1}</div>
               <img src="${img}" style="width:110px;height:160px;object-fit:cover;display:block">
               <div style="padding:5px 6px;font-size:var(--fs-xs);color:#888;font-weight:700;text-align:center">${date}</div>
@@ -17185,8 +17191,8 @@ function loadCoachProgramsList(){
       <div style="display:flex;gap:8px">
         <button class="btn btn-outline btn-sm" style="flex:1" onclick="editCoachProgTemplate(${i})">✏️ Modifier</button>
         <button class="btn btn-red btn-sm" style="flex:1" onclick="openAssignProgram(${i})">▶ Assigner</button>
-        <button onclick="duplicateCoachProgTemplate(${i})" title="Dupliquer ce programme" aria-label="Dupliquer ce programme" style="background:none;border:1px solid #333;color:#888;border-radius:8px;padding:7px 10px;font-size:var(--fs-md);cursor:pointer;line-height:1">⧉</button>
-        <button onclick="deleteCoachProgTemplate(${i})" title="Supprimer ce programme" aria-label="Supprimer ce programme" style="background:none;border:1px solid #333;color:var(--text-faint);border-radius:8px;padding:7px 10px;font-size:var(--fs-md);cursor:pointer;line-height:1">🗑</button>
+        <button onclick="duplicateCoachProgTemplate(${i})" title="Dupliquer ce programme" aria-label="Dupliquer ce programme" style="background:none;border:1px solid var(--border);color:#888;border-radius:8px;padding:7px 10px;font-size:var(--fs-md);cursor:pointer;line-height:1">⧉</button>
+        <button onclick="deleteCoachProgTemplate(${i})" title="Supprimer ce programme" aria-label="Supprimer ce programme" style="background:none;border:1px solid var(--border);color:var(--text-faint);border-radius:8px;padding:7px 10px;font-size:var(--fs-md);cursor:pointer;line-height:1">🗑</button>
       </div>
     </div>
   `).join('');
@@ -17292,7 +17298,7 @@ function loadProgTemplateSlots(gender){
 function _boutonsCopieJour(fn,i){
   return `<div style="margin-top:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
     <span class="sub" style="font-size:var(--fs-xs);text-transform:uppercase;letter-spacing:.5px;flex-shrink:0">Copier vers</span>
-    ${DAYS.map((d,j)=>j===i?'':`<button onclick="${fn}(${i},${j})" title="Copier vers ${d}" aria-label="Copier cette séance vers ${d}" style="background:none;border:1px solid #333;color:var(--sub);border-radius:6px;min-width:44px;min-height:44px;padding:4px 8px;font-size:var(--fs-xs);font-weight:700;cursor:pointer;font-family:inherit">${DAY_ICONS[j]}</button>`).join('')}
+    ${DAYS.map((d,j)=>j===i?'':`<button onclick="${fn}(${i},${j})" title="Copier vers ${d}" aria-label="Copier cette séance vers ${d}" style="background:none;border:1px solid var(--border);color:var(--sub);border-radius:6px;min-width:44px;min-height:44px;padding:4px 8px;font-size:var(--fs-xs);font-weight:700;cursor:pointer;font-family:inherit">${DAY_ICONS[j]}</button>`).join('')}
   </div>`;
 }
 function _copierSeance(src,dst){
@@ -18188,7 +18194,7 @@ function renderClientPdfCard(c){
   const hasPdf=!!(c.programPdf||c.programPdfLink||c.programPdfStorageUrl);
   const name=c.programPdfName||(c.programPdfLink?'Lien Drive':'Programme.pdf');
   const dt=c.programPdfDate?new Date(c.programPdfDate).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})+' · v'+(c.programPdfVersion||1):'';
-  const existHtml=hasPdf?`<div style="background:#151515;border:1px solid #2a2a2a;border-radius:8px;padding:12px;margin-bottom:10px;display:flex;align-items:center;gap:10px">
+  const existHtml=hasPdf?`<div style="background:#151515;border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;display:flex;align-items:center;gap:10px">
     <div style="width:34px;height:40px;background:#1a0000;border:1px solid #3a0a0a;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:900;color:var(--red-text);letter-spacing:.5px;flex-shrink:0">PDF</div>
     <div style="flex:1;min-width:0">
       <div style="font-size:var(--fs-sm);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}</div>
@@ -19512,7 +19518,7 @@ function badgeTechnique(ex){
   const m=methodeDe(ex);
   const fam=techniqueDe(ex);
   if(!m&&fam==='normale') return '';
-  const c=COUL_FAMILLE[fam]||['#2a2a2a','#bbb'];
+  const c=COUL_FAMILLE[fam]||['var(--border)','#bbb'];
   const txt=m?m.nom.toUpperCase():(LIB_FAMILLE_BADGE[fam]||fam.toUpperCase());
   return `<span style="background:${c[0]};color:${c[1]};padding:2px 7px;border-radius:20px;font-size:var(--fs-xs);font-weight:700">${escapeHtml(txt)}</span>`;
 }
@@ -20658,7 +20664,7 @@ function loadClientHome(){
     // d'appareil, ou reçu son code après s'être inscrit.
     if(!name){
       el.style.display='block';
-      el.innerHTML=`<div onclick="go('s-client-code')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;background:#0c0c0c;border:1px dashed #2e2e2e;cursor:pointer">
+      el.innerHTML=`<div onclick="go('s-client-code')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:14px;background:#0c0c0c;border:1px dashed var(--border);cursor:pointer">
         <div style="flex-shrink:0;width:38px;height:38px;border-radius:50%;background:var(--surface-3);display:flex;align-items:center;justify-content:center;color:var(--sub)">${icon('user',18)}</div>
         <div style="flex:1;min-width:0">
           <div style="font-weight:800;font-size:var(--fs-md)">Tu as un code coach&nbsp;?</div>
@@ -20986,7 +20992,7 @@ function loadSessionManager(){
             </div>`:`
             <label style="display:block;cursor:pointer">
               <input type="file" accept="image/*" style="display:none" onchange="uploadSessionPhoto2(${i},this)">
-              <div style="border:1px dashed #2a2a2a;border-radius:8px;padding:9px;text-align:center" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='#2a2a2a'">
+              <div style="border:1px dashed var(--border);border-radius:8px;padding:9px;text-align:center" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
                 <div style="font-size:var(--fs-xs);color:var(--sub);font-weight:700;letter-spacing:1px"> + Page liens YouTube (pour l'IA)</div>
               </div>
             </label>`}
@@ -22084,11 +22090,11 @@ function _apLigne(ex,i){
         <img src="${escapeHtml(img)}" alt="" loading="lazy" width="76" height="76"
           style="width:100%;height:100%;object-fit:contain;display:block"></div>`
     : `<div style="flex-shrink:0;width:76px;height:76px;border-radius:10px;
-         background:linear-gradient(145deg,#181818,#0d0d0d);border:1px solid #262626;
-         display:flex;align-items:center;justify-content:center;color:#3a3a3a;
+         background:linear-gradient(145deg,#181818,#0d0d0d);border:1px solid var(--border);
+         display:flex;align-items:center;justify-content:center;color:var(--border);
          box-shadow:inset 0 1px 0 rgba(255,255,255,.04)">${icon('dumbbell',26)}</div>`;
   return `<details style="position:relative;background:linear-gradient(180deg,#161616,#0f0f0f);
-    border:1px solid #232323;border-left:3px solid var(--red);border-radius:12px;
+    border:1px solid var(--border);border-left:3px solid var(--red);border-radius:12px;
     margin-bottom:9px;overflow:hidden;
     box-shadow:0 6px 18px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.045)">
     <div style="position:absolute;inset:0;pointer-events:none;
@@ -22139,7 +22145,7 @@ function _renderApercu(){
   const chiffre=(v,lib,fort)=>`<div style="flex:${fort?'1.3':'1'};min-width:0;position:relative;overflow:hidden;
     text-align:center;border-radius:11px;padding:11px 6px;
     background:${fort?'linear-gradient(145deg,#c10000 0%,#8d0000 55%,#5a0000 100%)':'linear-gradient(180deg,#161616,#0e0e0e)'};
-    border:1px solid ${fort?'rgba(255,90,90,.45)':'#232323'};
+    border:1px solid ${fort?'rgba(255,90,90,.45)':'var(--border)'};
     box-shadow:${fort?'0 0 18px rgba(224,32,32,.38),':''}inset 0 1px 0 rgba(255,255,255,${fort?'.16':'.05'}),0 6px 16px rgba(0,0,0,.5)">
     <div style="position:absolute;inset:0;pointer-events:none;
       background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(0,0,0,.13) 11px,rgba(0,0,0,.13) 12px)"></div>
@@ -22259,7 +22265,7 @@ function _renderExCard(ex,idx){
       <div class="ex-name">${escapeHtml(ex.name)}</div>
       <div class="ex-detail" style="margin-top:3px">${ex.series} séries · ${escapeHtml(ex.reps)} reps${ex.repos?' · '+escapeHtml(ex.repos):''}</div>
       ${badge?`<div style="margin-top:5px">${badge}</div>`:''}
-      ${ex.description?`<div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:6px;line-height:1.5;border-left:2px solid #2a2a2a;padding-left:8px">${escapeHtml(ex.description)}</div>`:''}
+      ${ex.description?`<div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:6px;line-height:1.5;border-left:2px solid var(--border);padding-left:8px">${escapeHtml(ex.description)}</div>`:''}
       ${(ex.videoUrl||ex.videoUrl2)?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
         ${normaliserUrlVideo(ex.videoUrl)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl))}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;background:#1a0000;border:1px solid #3a0a0a;border-radius:6px;padding:5px 10px;color:var(--red-light);font-size:var(--fs-xs);font-weight:800;text-decoration:none;letter-spacing:1px">▶ VIDÉO 1</a>`:''}
         ${normaliserUrlVideo(ex.videoUrl2)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl2))}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;background:#1a0000;border:1px solid #3a0a0a;border-radius:6px;padding:5px 10px;color:var(--red-light);font-size:var(--fs-xs);font-weight:800;text-decoration:none;letter-spacing:1px">▶ VIDÉO 2</a>`:''}
@@ -22763,7 +22769,7 @@ function banniereTechnique(ex,idx){
   const m=methodeDe(ex);
   const fam=techniqueDe(ex);
   if(!m||fam==='normale'&&!m) return '';
-  const c=COUL_FAMILLE[fam]||['#2a2a2a','#bbb'];
+  const c=COUL_FAMILLE[fam]||['var(--border)','#bbb'];
   // Sur quelles séries la méthode s’applique. À CÔTÉ DU NOM : c’est la
   // première chose à savoir quand on la lit debout entre deux séries.
   const _msTxt=String((ex&&ex.methodeSeries)||'').trim();
@@ -22998,7 +23004,7 @@ function _blocExo(idx,estSS){
         <button class="hit44" id="wo-calc-btn-${idx}" style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:var(--fs-xs);padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Vue tableau</button>
       </div>
 
-      ${cycleLabel&&!estSS?`<div style="background:var(--dark);border:1px solid #2a2a2a;border-radius:3px;padding:10px 14px;margin-bottom:12px;font-size:var(--fs-xs);color:#888;letter-spacing:.5px">${cycleLabel.text}</div>`:''}
+      ${cycleLabel&&!estSS?`<div style="background:var(--dark);border:1px solid var(--border);border-radius:3px;padding:10px 14px;margin-bottom:12px;font-size:var(--fs-xs);color:#888;letter-spacing:.5px">${cycleLabel.text}</div>`:''}
 
       ${isCardio(ex)?
         `<div style="background:#0a1a0a;border:1px solid #1a3a1a;border-radius:10px;padding:14px;margin-bottom:12px;text-align:center">
@@ -26449,7 +26455,7 @@ function htmlPhotosSeance(u){
       ${PHP_POSES.map(p=>{
         const faite=!!(s&&s.poses&&s.poses[p.cle]);
         return `<label class="hit44" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:64px;border-radius:10px;cursor:pointer;padding:9px 6px;text-transform:none;letter-spacing:normal;margin:0;
-          background:${faite?'rgba(34,197,94,.12)':'#111'};border:1px solid ${faite?'var(--green)':'#2e2e2e'};color:${faite?'#fff':'var(--sub)'}">
+          background:${faite?'rgba(34,197,94,.12)':'#111'};border:1px solid ${faite?'var(--green)':'var(--border)'};color:${faite?'#fff':'var(--sub)'}">
           <span style="font-size:var(--fs-lg)">${faite?'●':'○'}</span>
           <span style="font-size:var(--fs-xs);font-weight:800">${escapeHtml(p.lib)}</span>
           <input type="file" accept="image/*" capture="environment" style="display:none"
@@ -26514,7 +26520,7 @@ function htmlPhotosComparateur(u){
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:9px">
       ${PHP_POSES.map(p=>`<button type="button" onclick="phpChoisirPose('${p.cle}')"
         style="flex:1;min-width:66px;min-height:44px;border-radius:9px;cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;
-          background:${p.cle===_phpPose?'rgba(224,32,32,.14)':'#111'};border:1px solid ${p.cle===_phpPose?'var(--red)':'#2e2e2e'};color:${p.cle===_phpPose?'#fff':'var(--sub)'}">${escapeHtml(p.lib)}</button>`).join('')}
+          background:${p.cle===_phpPose?'rgba(224,32,32,.14)':'#111'};border:1px solid ${p.cle===_phpPose?'var(--red)':'var(--border)'};color:${p.cle===_phpPose?'#fff':'var(--sub)'}">${escapeHtml(p.lib)}</button>`).join('')}
     </div>
     ${st.vide
       ? '<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Aucune photo dans cette pose.</div>'
@@ -26561,7 +26567,7 @@ function htmlPhotosFrise(u){
     <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">
       ${f.map(s=>{
         const _j=new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
-        return `<div style="flex-shrink:0;min-width:126px;background:#111;border:1px solid #2e2e2e;border-radius:9px;padding:8px 4px 6px 9px">
+        return `<div style="flex-shrink:0;min-width:126px;background:#111;border:1px solid var(--border);border-radius:9px;padding:8px 4px 6px 9px">
           <div style="font-size:var(--fs-2xs);font-weight:800;color:#fff;margin-bottom:3px">${_j}</div>
           ${s.poses.map(_c=>{
             const _l=(PHP_POSES.find(q=>q.cle===_c)||{}).lib||_c;
@@ -27509,7 +27515,7 @@ function _rendreGrilleCharge(){
     for(const i of semaines){
       const c=par[i+'|'+mu];
       const m=meta[i]||{};
-      const fond=c&&c.repere?GC_COULEURS[c.repere]:'#2a2a2a';
+      const fond=c&&c.repere?GC_COULEURS[c.repere]:'var(--border)';
       // L intensite de fond suit le tonnage relatif : une case a 1 est pleine,
       // une case a 0,2 est presque effacee. La couleur dit la ZONE, l opacite
       // dit la CHARGE — deux informations, un seul carre.
@@ -27581,7 +27587,7 @@ function dessinerGrilleCharge(u){
       const c=d.par[i+'|'+mu];
       const x=MARGE+LARG_MUS+k*CASE;
       g.globalAlpha=c?(0.18+0.82*(c.tonnageRelatif||0)):0.18;
-      g.fillStyle=(c&&c.repere)?GC_COULEURS[c.repere]:'#2a2a2a';
+      g.fillStyle=(c&&c.repere)?GC_COULEURS[c.repere]:'var(--border)';
       g.fillRect(x+2,y-HAUT/2+2,CASE-4,HAUT-4);
       g.globalAlpha=1;
       g.fillStyle='#fff'; g.textAlign='center';
@@ -28814,7 +28820,7 @@ function bBodySchema(prefix){
     <svg viewBox="0 ${Y0} ${W} ${VH}" style="position:absolute;inset:0;width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
       <defs>
         <linearGradient id="bodyGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="#2b2b2b"/>
+          <stop offset="0" stop-color="var(--border)"/>
           <stop offset=".45" stop-color="#1b1b1b"/>
           <stop offset="1" stop-color="#0e0e0e"/>
         </linearGradient>
@@ -28837,7 +28843,7 @@ function bBodySchema(prefix){
         <path d="${A.body}" fill="url(#bodyTex)" fill-rule="evenodd"/>
         <path d="${A.body}" fill="url(#bodySheen)" fill-rule="evenodd"/>
       </g>
-      <g stroke="#2b2b2b" stroke-width="1.2" fill="none" stroke-linecap="round">${A.detail}</g>
+      <g stroke="var(--border)" stroke-width="1.2" fill="none" stroke-linecap="round">${A.detail}</g>
       ${leaders}
     </svg>
     ${F.map(f=>{
@@ -28855,7 +28861,7 @@ function bBodySchema(prefix){
       // que l'athlète touche la case — voir bMesureSaisie.
       const _rep=_bilEstReprise(id);
       return `<div style="position:absolute;${posX};top:${top}%;width:31%">
-        <div id="bx-${id}" style="display:flex;align-items:center;gap:4px;background:#0c0c0c;border:1px ${_rep?'dashed rgba(224,32,32,.5)':'solid #2b2b2b'};border-radius:7px;padding:2px 6px;transition:border-color .2s,box-shadow .2s">
+        <div id="bx-${id}" style="display:flex;align-items:center;gap:4px;background:#0c0c0c;border:1px ${_rep?'dashed rgba(224,32,32,.5)':'solid var(--border)'};border-radius:7px;padding:2px 6px;transition:border-color .2s,box-shadow .2s">
           <span style="flex:none;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--sub);white-space:nowrap">${court}</span>
           <input type="number" inputmode="decimal" step="any" id="${id}" value="${bilData[id]||''}" placeholder="—"
             oninput="bMesureSaisie('${id}',this.value)"
@@ -28874,7 +28880,7 @@ function bLongueurs(){
   const champ=(id,lbl,aide)=>`<div style="margin-bottom:12px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--sub);margin-bottom:3px">${lbl}</div>
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5;margin-bottom:5px">${aide}</div>
-    <div style="display:flex;align-items:center;background:#0c0c0c;border:1px solid #2b2b2b;border-radius:7px;padding:1px 10px;max-width:170px">
+    <div style="display:flex;align-items:center;background:#0c0c0c;border:1px solid var(--border);border-radius:7px;padding:1px 10px;max-width:170px">
       <input type="number" inputmode="decimal" step="any" id="${id}" value="${bilData[id]||''}" placeholder="—"
         oninput="bilData['${id}']=this.value"
         style="width:100%;min-width:0;background:none;border:none;outline:none;box-shadow:none;color:#fff;font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-md);text-align:center;padding:6px 0;margin:0">
@@ -28894,7 +28900,7 @@ function bBodyFocus(id,on){
   if(ln){ln.setAttribute('stroke',on?'#E02020':(filled?'rgba(224,32,32,.75)':'#6a6a6a'));ln.setAttribute('stroke-width',on?'2':'1.4');}
   if(dsh){dsh.setAttribute('stroke',on?'#ff2222':(filled?'rgba(224,32,32,.8)':'rgba(224,32,32,.5)'));dsh.setAttribute('stroke-width',on?'1.8':'1.2');}
   if(dot){dot.setAttribute('stroke',on?'#E02020':(filled?'rgba(224,32,32,.9)':'#8a8a8a'));dot.setAttribute('fill',on||filled?'#E02020':'#0a0a0a');}
-  if(bx){bx.style.borderColor=on?'#E02020':(filled?'rgba(224,32,32,.4)':'#2b2b2b');bx.style.boxShadow=on?'0 0 12px rgba(224,32,32,.25)':'none';}
+  if(bx){bx.style.borderColor=on?'#E02020':(filled?'rgba(224,32,32,.4)':'var(--border)');bx.style.boxShadow=on?'0 0 12px rgba(224,32,32,.25)':'none';}
 }
 function bLbl(txt){return`<div style="font-size:var(--fs-xs);font-weight:700;color:#e0e0e0;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;margin-top:14px">${txt}</div>`;}
 function loadBilPhoto(input,key){
@@ -29929,7 +29935,7 @@ function renderCharges(){
           <div style="font-size:var(--fs-2xs);color:var(--text-faint)">${m.nb} exercices${ouvert?'':' · voir'}</div>
         </div>
         ${ZONES_ARTICULAIRES.map(zz=>m.hors.indexOf(zz)>=0
-          ?`<div style="width:36px;flex-shrink:0;text-align:center;font-size:var(--fs-sm);color:#2a2a2a">—</div>`
+          ?`<div style="width:36px;flex-shrink:0;text-align:center;font-size:var(--fs-sm);color:var(--border)">—</div>`
           :`<div style="width:36px;flex-shrink:0;display:flex;justify-content:center">${_chCase(s,zz)}</div>`).join('')}
       </div>
       ${ouvert?`<div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.6;margin-top:7px;border-top:1px solid var(--border);padding-top:7px">
@@ -31306,7 +31312,7 @@ function htmlHabitudes(u){
           aria-pressed="${on?'true':'false'}"
           style="flex:1;min-width:0;min-height:44px;border-radius:10px;cursor:pointer;padding:8px 6px;
             font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;line-height:1.35;
-            background:${on?'rgba(34,197,94,.13)':'#111'};border:1px solid ${on?'var(--green)':'#2e2e2e'};
+            background:${on?'rgba(34,197,94,.13)':'#111'};border:1px solid ${on?'var(--green)':'var(--border)'};
             color:${on?'#fff':'var(--sub)'}">
           <span style="display:block;font-size:var(--fs-lg);margin-bottom:2px">${on?'●':'○'}</span>
           ${escapeHtml(h.libelle||h.cle)}
@@ -32056,7 +32062,7 @@ function _htmlTonnage(user,decalage){
     const h=x.vide?0:Math.max(4,Math.round(x.kg/max*100));
     return `<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%" title="${x.vide?'aucune séance':_fmtKg(x.kg)}">`
       +(x.vide
-        ?`<div style="height:3px;background:repeating-linear-gradient(90deg,#2a2a2a,#2a2a2a 3px,transparent 3px,transparent 6px);border-radius:2px"></div>`
+        ?`<div style="height:3px;background:repeating-linear-gradient(90deg,var(--border),var(--border) 3px,transparent 3px,transparent 6px);border-radius:2px"></div>`
         :`<div style="height:${h}%;min-height:4px;background:linear-gradient(180deg,var(--red),#7a0000);border-radius:3px 3px 0 0"></div>`)
       +`</div>`;}).join('');
   if(!hist.some(x=>!x.vide)) return '';
@@ -32817,8 +32823,8 @@ function showProgressTab(tab,btn){
           <div style="flex:1;min-width:80px">
             <label style="font-size:var(--fs-xs)">Sexe</label>
             <div style="display:flex;gap:4px;margin-top:6px">
-              <button onclick="setEvolGender('H')" style="flex:1;padding:9px;border-radius:4px;border:1px solid ${!female?'var(--red)':'#2a2a2a'};background:${!female?'#1a0000':'#111'};color:${!female?'var(--red)':'#555'};font-size:var(--fs-md);font-weight:900;cursor:pointer;letter-spacing:1px">H</button>
-              <button onclick="setEvolGender('F')" style="flex:1;padding:9px;border-radius:4px;border:1px solid ${female?'var(--red)':'#2a2a2a'};background:${female?'#1a0000':'#111'};color:${female?'var(--red)':'#555'};font-size:var(--fs-md);font-weight:900;cursor:pointer;letter-spacing:1px">F</button>
+              <button onclick="setEvolGender('H')" style="flex:1;padding:9px;border-radius:4px;border:1px solid ${!female?'var(--red)':'var(--border)'};background:${!female?'#1a0000':'#111'};color:${!female?'var(--red)':'#555'};font-size:var(--fs-md);font-weight:900;cursor:pointer;letter-spacing:1px">H</button>
+              <button onclick="setEvolGender('F')" style="flex:1;padding:9px;border-radius:4px;border:1px solid ${female?'var(--red)':'var(--border)'};background:${female?'#1a0000':'#111'};color:${female?'var(--red)':'#555'};font-size:var(--fs-md);font-weight:900;cursor:pointer;letter-spacing:1px">F</button>
             </div>
           </div>
           <button class="btn btn-red btn-sm" onclick="refreshMG()" style="height:40px;padding:0 16px;align-self:flex-end;letter-spacing:1px">Appliquer</button>
@@ -32962,7 +32968,7 @@ function showProgressTab(tab,btn){
           <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2.8px;color:#7a7a7a;text-transform:uppercase;margin-top:8px">${period?period+' de travail':'Suivi photo'} &nbsp;·&nbsp; ${bl.length} bilan${bl.length>1?'s':''}</div>
         </div>
         ${dW!=null?`<div style="display:flex;justify-content:center;gap:9px;margin:11px 0 13px">
-          <div style="flex:1;max-width:112px;background:linear-gradient(180deg,#131313,#0b0b0b);border:1px solid #232323;border-radius:10px;padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)">
+          <div style="flex:1;max-width:112px;background:linear-gradient(180deg,#131313,#0b0b0b);border:1px solid var(--border);border-radius:10px;padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)">
             <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:var(--fs-xl);line-height:1;color:#8a8a8a">${wFirst}<span style="font-size:var(--fs-xs)">kg</span></div>
             <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:var(--text-dim);margin-top:3px;font-weight:800">DÉPART</div>
           </div>
@@ -34117,7 +34123,7 @@ function _htmlPpQuestions(user){
         ${[['0','Non'],['1','Oui']].map(([v,l])=>
           `<button type="button" onclick="ppRepondre('${x.cle}',${v},this)"
             style="flex:1;min-height:36px;border-radius:8px;cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;
-              background:${s[x.cle]===(v==='1')?'rgba(224,32,32,.14)':'#111'};border:1px solid ${s[x.cle]===(v==='1')?'var(--red)':'#2e2e2e'};color:${s[x.cle]===(v==='1')?'#fff':'var(--sub)'}">${l}</button>`).join('')}
+              background:${s[x.cle]===(v==='1')?'rgba(224,32,32,.14)':'#111'};border:1px solid ${s[x.cle]===(v==='1')?'var(--red)':'var(--border)'};color:${s[x.cle]===(v==='1')?'#fff':'var(--sub)'}">${l}</button>`).join('')}
       </div>
     </div>`).join('')}
     <button class="btn btn-red" style="width:100%;margin-top:12px" onclick="ppValiderQuestions()">Envoyer</button>
@@ -34129,7 +34135,7 @@ function ppRepondre(cle,v,el){
   _ppRep[cle]=(Number(v)===1);
   try{
     const p=el.parentNode;
-    for(const b of p.children){ b.style.background='#111'; b.style.borderColor='#2e2e2e'; b.style.color='var(--sub)'; }
+    for(const b of p.children){ b.style.background='#111'; b.style.borderColor='var(--border)'; b.style.color='var(--sub)'; }
     el.style.background='rgba(224,32,32,.14)'; el.style.borderColor='var(--red)'; el.style.color='#fff';
   }catch(e){}
   return true;
@@ -34663,8 +34669,8 @@ function _renderCycleNutSettings(nut){
     <div>
       <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:8px">Intensité des règles</div>
       <div style="display:flex;gap:8px">
-        <button onclick="saveCycleNutSettings('intensite','supportable')" style="flex:1;padding:9px 0;border-radius:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${intens==='supportable'?'var(--green)':'#2a2a2a'};background:${intens==='supportable'?'rgba(34,197,94,.12)':'#111'};color:${intens==='supportable'?'var(--green)':'#555'}">Supportable</button>
-        <button onclick="saveCycleNutSettings('intensite','difficile')" style="flex:1;padding:9px 0;border-radius:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${intens==='difficile'?'var(--red)':'#2a2a2a'};background:${intens==='difficile'?'rgba(224,32,32,.12)':'#111'};color:${intens==='difficile'?'var(--red)':'#555'}">Difficile</button>
+        <button onclick="saveCycleNutSettings('intensite','supportable')" style="flex:1;padding:9px 0;border-radius:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${intens==='supportable'?'var(--green)':'var(--border)'};background:${intens==='supportable'?'rgba(34,197,94,.12)':'#111'};color:${intens==='supportable'?'var(--green)':'#555'}">Supportable</button>
+        <button onclick="saveCycleNutSettings('intensite','difficile')" style="flex:1;padding:9px 0;border-radius:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${intens==='difficile'?'var(--red)':'var(--border)'};background:${intens==='difficile'?'rgba(224,32,32,.12)':'#111'};color:${intens==='difficile'?'var(--red)':'#555'}">Difficile</button>
       </div>
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--border)">
@@ -34674,7 +34680,7 @@ function _renderCycleNutSettings(nut){
       </div>
       <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;margin-left:12px;cursor:pointer">
         <input type="checkbox" id="cycle-pms" ${pms?'checked':''} onchange="saveCycleNutSettings()" style="opacity:0;width:0;height:0;position:absolute">
-        <span style="position:absolute;inset:0;background:${pms?'var(--red)':'#2a2a2a'};border-radius:12px;transition:.2s;pointer-events:none">
+        <span style="position:absolute;inset:0;background:${pms?'var(--red)':'var(--border)'};border-radius:12px;transition:.2s;pointer-events:none">
           <span style="position:absolute;top:3px;left:${pms?'23':'3'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s"></span>
         </span>
       </label>
@@ -34686,7 +34692,7 @@ function _renderCycleNutSettings(nut){
       <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:8px">Contraception</div>
       <div style="display:flex;flex-direction:column;gap:7px">
         ${CONTRACEPTIONS.map(c=>`<button onclick="saveCycleNutSettings('contraception','${c.cle}')"
-          style="text-align:left;padding:9px 11px;border-radius:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;line-height:1.45;border:1.5px solid ${_contra===c.cle?'var(--red)':'#2a2a2a'};background:${_contra===c.cle?'rgba(224,32,32,.10)':'#111'};color:${_contra===c.cle?'#fff':'#666'}">${escapeHtml(c.lib)}</button>`).join('')}
+          style="text-align:left;padding:9px 11px;border-radius:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;cursor:pointer;line-height:1.45;border:1.5px solid ${_contra===c.cle?'var(--red)':'var(--border)'};background:${_contra===c.cle?'rgba(224,32,32,.10)':'#111'};color:${_contra===c.cle?'#fff':'#666'}">${escapeHtml(c.lib)}</button>`).join('')}
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0 2px;margin-top:9px;border-top:1px solid var(--border)">
         <div>
@@ -34695,7 +34701,7 @@ function _renderCycleNutSettings(nut){
         </div>
         <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;margin-left:12px;cursor:pointer">
           <input type="checkbox" id="cycle-contra-partage" ${_partage?'checked':''} onchange="saveCycleNutSettings()" style="opacity:0;width:0;height:0;position:absolute">
-          <span style="position:absolute;inset:0;background:${_partage?'var(--red)':'#2a2a2a'};border-radius:12px;transition:.2s;pointer-events:none">
+          <span style="position:absolute;inset:0;background:${_partage?'var(--red)':'var(--border)'};border-radius:12px;transition:.2s;pointer-events:none">
             <span style="position:absolute;top:3px;left:${_partage?'23':'3'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s"></span>
           </span>
         </label>
@@ -34708,8 +34714,8 @@ function _renderCycleNutSettings(nut){
            n'est choisi, aucun des deux n'est allumé. -->
       <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin-bottom:8px">Régularité</div>
       <div style="display:flex;gap:8px">
-        <button onclick="saveCycleNutSettings('regulier','oui')" style="flex:1;padding:9px 0;border-radius:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${regulier===true?'var(--green)':'#2a2a2a'};background:${regulier===true?'rgba(34,197,94,.12)':'#111'};color:${regulier===true?'var(--green)':'#555'}">Réguliers</button>
-        <button onclick="saveCycleNutSettings('regulier','non')" style="flex:1;padding:9px 0;border-radius:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${regulier===false?'var(--orange)':'#2a2a2a'};background:${regulier===false?'rgba(245,158,11,.12)':'#111'};color:${regulier===false?'var(--orange)':'#555'}">Irréguliers</button>
+        <button onclick="saveCycleNutSettings('regulier','oui')" style="flex:1;padding:9px 0;border-radius:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${regulier===true?'var(--green)':'var(--border)'};background:${regulier===true?'rgba(34,197,94,.12)':'#111'};color:${regulier===true?'var(--green)':'#555'}">Réguliers</button>
+        <button onclick="saveCycleNutSettings('regulier','non')" style="flex:1;padding:9px 0;border-radius:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;border:1.5px solid ${regulier===false?'var(--orange)':'var(--border)'};background:${regulier===false?'rgba(245,158,11,.12)':'#111'};color:${regulier===false?'var(--orange)':'#555'}">Irréguliers</button>
       </div>
       ${obsHtml}
     </div>
@@ -34734,7 +34740,7 @@ function _renderCycleNutSettings(nut){
       </div>
       <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer">
         <input type="checkbox" id="cycle-enabled" ${on?'checked':''} onchange="saveCycleNutSettings()" style="opacity:0;width:0;height:0;position:absolute">
-        <span style="position:absolute;inset:0;background:${on?'var(--red)':'#2a2a2a'};border-radius:12px;transition:.2s;pointer-events:none">
+        <span style="position:absolute;inset:0;background:${on?'var(--red)':'var(--border)'};border-radius:12px;transition:.2s;pointer-events:none">
           <span style="position:absolute;top:3px;left:${on?'23':'3'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s"></span>
         </span>
       </label>
@@ -35046,7 +35052,7 @@ function htmlMacroUnite(user,idSuffixe){
         style="min-width:44px;min-height:30px;border-radius:7px;cursor:${dispo?'pointer':'not-allowed'};
           font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;padding:4px 9px;
           background:${x===u&&dispo?'rgba(224,32,32,.14)':'#111'};
-          border:1px solid ${x===u&&dispo?'var(--red)':'#2e2e2e'};
+          border:1px solid ${x===u&&dispo?'var(--red)':'var(--border)'};
           color:${dispo?(x===u?'#fff':'var(--sub)'):'var(--text-faint)'};
           opacity:${dispo?1:.5}">${libs[x]}</button>`;}).join('')}
     ${(u==='gkg'&&pr>0)?`<span style="font-size:var(--fs-2xs);color:var(--text-faint);margin-left:4px">par kilo · ${String(pr).replace('.',',')} kg au dernier bilan</span>`:''}
@@ -35365,7 +35371,7 @@ function _renderStrictDiet(){
   // courses. Ses deux compteurs le suivent : ils NOTENT la réponse oui/non,
   // et les laisser derrière la liste les aurait rendus orphelins.
   const suiviDuJour=`    <!-- Suivi du jour -->
-    <div style="background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0b0b0b);border:1px solid #262626;border-radius:16px;box-shadow:0 18px 40px rgba(0,0,0,.75),0 4px 12px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.07),inset 0 -1px 0 rgba(0,0,0,.6);padding:18px;margin-bottom:12px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.45);animation:fadeInUp .3s ease">
+    <div style="background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0b0b0b);border:1px solid var(--border);border-radius:16px;box-shadow:0 18px 40px rgba(0,0,0,.75),0 4px 12px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.07),inset 0 -1px 0 rgba(0,0,0,.6);padding:18px;margin-bottom:12px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.45);animation:fadeInUp .3s ease">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.028) 11px,rgba(255,255,255,.028) 12px);pointer-events:none"></div>
       <div style="position:relative">
         <div style="display:inline-flex;align-items:center;gap:7px;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:var(--fs-lg);color:#fff;text-transform:uppercase;letter-spacing:2.5px;margin-bottom:14px;text-shadow:0 0 8px rgba(255,255,255,.35),0 0 18px rgba(255,255,255,.18)"><span style="display:inline-flex;color:#ff3b30;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('check',13)}</span>J'AI RESPECTÉ MON PLAN${_sAuj?" AUJOURD'HUI":''}</div>
@@ -35378,7 +35384,7 @@ function _renderStrictDiet(){
     </div>
     <!-- Scores -->
     <div style="display:flex;gap:10px;margin-bottom:8px">
-      <div style="flex:1;min-width:0;background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0a0a0a);border:1px solid #262626;border-radius:16px;box-shadow:0 18px 40px rgba(0,0,0,.75),0 4px 12px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.07),inset 0 -1px 0 rgba(0,0,0,.6);padding:16px 10px;text-align:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp .35s ease">
+      <div style="flex:1;min-width:0;background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0a0a0a);border:1px solid var(--border);border-radius:16px;box-shadow:0 18px 40px rgba(0,0,0,.75),0 4px 12px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.07),inset 0 -1px 0 rgba(0,0,0,.6);padding:16px 10px;text-align:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp .35s ease">
         <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.028) 11px,rgba(255,255,255,.028) 12px);pointer-events:none"></div>
         <div style="position:absolute;left:50%;top:-46px;transform:translateX(-50%);width:150px;height:110px;background:radial-gradient(circle,${streak>0?'rgba(34,197,94,.2)':'rgba(224,32,32,.13)'},transparent 68%);pointer-events:none"></div>
         <div style="position:relative">
@@ -35386,7 +35392,7 @@ function _renderStrictDiet(){
           <div style="font-size:var(--fs-xs);color:${streak>0?'rgba(34,197,94,.75)':'rgba(255,90,90,.7)'};letter-spacing:2px;margin-top:5px;text-transform:uppercase;font-weight:800">Jours consécutifs</div>
         </div>
       </div>
-      <div style="flex:1;min-width:0;background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0a0a0a);border:1px solid #262626;border-radius:16px;box-shadow:0 18px 40px rgba(0,0,0,.75),0 4px 12px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.07),inset 0 -1px 0 rgba(0,0,0,.6);padding:16px 10px;text-align:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp .4s ease">
+      <div style="flex:1;min-width:0;background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0a0a0a);border:1px solid var(--border);border-radius:16px;box-shadow:0 18px 40px rgba(0,0,0,.75),0 4px 12px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.07),inset 0 -1px 0 rgba(0,0,0,.6);padding:16px 10px;text-align:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp .4s ease">
         <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.028) 11px,rgba(255,255,255,.028) 12px);pointer-events:none"></div>
         <div style="position:absolute;left:50%;top:-46px;transform:translateX(-50%);width:150px;height:110px;background:radial-gradient(circle,rgba(245,197,24,.16),transparent 68%);pointer-events:none"></div>
         <div style="position:relative">
@@ -35415,7 +35421,7 @@ function _renderStrictDiet(){
     ${!planActif(currentUser)?`
     <div style="margin-bottom:20px">
       <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:5px">${icon('clipboard',12)} Plan alimentaire</div>
-      <div style="background:var(--surface-1);border:1px dashed #2a2a2a;border-radius:12px;padding:32px 16px;text-align:center;color:var(--text-dim);font-size:var(--fs-sm)"><div style="margin-bottom:8px;opacity:.3">${icon('clipboard',32)}</div>Plan alimentaire à venir</div>
+      <div style="background:var(--surface-1);border:1px dashed var(--border);border-radius:12px;padding:32px 16px;text-align:center;color:var(--text-dim);font-size:var(--fs-sm)"><div style="margin-bottom:8px;opacity:.3">${icon('clipboard',32)}</div>Plan alimentaire à venir</div>
     </div>`:''}
     <!-- SANS PLAN, LE SUIVI DU JOUR EST RENDU ICI. Il ne l'était qu'à travers
          _htmlPlanAthlete, qui sort tot quand planActif est faux : tant
@@ -37153,7 +37159,7 @@ function _cplHtmlModele(c){
   const choix=PLAN_MODELES_LISTE.map(k=>{
     const actif=(pose===k);
     return `<button onclick="cplPoserModele('${k}')"
-      style="flex:1 1 46%;padding:9px 6px;border-radius:9px;cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;line-height:1.3;border:1.5px solid ${actif?'var(--red)':'#2a2a2a'};background:${actif?'rgba(224,32,32,.12)':'#111'};color:${actif?'#fff':'#8a8a8a'}">${escapeHtml(planModeleLib(k))}</button>`;
+      style="flex:1 1 46%;padding:9px 6px;border-radius:9px;cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;line-height:1.3;border:1.5px solid ${actif?'var(--red)':'var(--border)'};background:${actif?'rgba(224,32,32,.12)':'#111'};color:${actif?'#fff':'#8a8a8a'}">${escapeHtml(planModeleLib(k))}</button>`;
   }).join('');
   let entete;
   if(pose){
@@ -37185,7 +37191,7 @@ function _cplHtmlMoment(c,moment){
   const choix=PLAN_MOMENTS.map(m=>{
     const actif=(moment===m.cle);
     return `<button onclick="cplSetMoment('${m.cle}')"
-      style="flex:1 1 30%;padding:9px 6px;border-radius:9px;cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;line-height:1.3;border:1.5px solid ${actif?'var(--red)':'#2a2a2a'};background:${actif?'rgba(224,32,32,.12)':'#111'};color:${actif?'#fff':'#8a8a8a'}">${escapeHtml(m.lib)}</button>`;
+      style="flex:1 1 30%;padding:9px 6px;border-radius:9px;cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;line-height:1.3;border:1.5px solid ${actif?'var(--red)':'var(--border)'};background:${actif?'rgba(224,32,32,.12)':'#111'};color:${actif?'#fff':'#8a8a8a'}">${escapeHtml(m.lib)}</button>`;
   }).join('');
   // D'où vient la valeur affichée. Sans cette phrase, un coach qui n'a rien
   // choisi croit avoir choisi.
@@ -37291,7 +37297,7 @@ function renderPlanCoach(){
         </div>
         <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer">
           <input type="checkbox" ${_cplPlan.avecComplements?'checked':''} onchange="cplToggleComplements()" style="opacity:0;width:0;height:0;position:absolute">
-          <span style="position:absolute;inset:0;background:${_cplPlan.avecComplements?'var(--red)':'#2a2a2a'};border-radius:12px;transition:.2s;pointer-events:none">
+          <span style="position:absolute;inset:0;background:${_cplPlan.avecComplements?'var(--red)':'var(--border)'};border-radius:12px;transition:.2s;pointer-events:none">
             <span style="position:absolute;top:3px;left:${_cplPlan.avecComplements?'23':'3'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s"></span>
           </span>
         </label>
@@ -37458,7 +37464,7 @@ function lcStock(cle,el){
   // liste, un rendu complet remettrait le défilement à zéro.
   try{
     el.style.background=stock?'rgba(34,197,94,.10)':'#101010';
-    el.style.borderColor=stock?'rgba(34,197,94,.42)':'#303030';
+    el.style.borderColor=stock?'rgba(34,197,94,.42)':'var(--border)';
     el.style.color=stock?'var(--green)':'var(--sub)';
     const ligne=el.closest('div');
     const nom=ligne.children[1], qte=ligne.children[2];
@@ -37650,13 +37656,13 @@ function _htmlPlanAthlete(user,intercale){
       <select onchange="lcStock('${cle}',this)" aria-label="État : ${escapeHtml(lib)}"
         style="flex-shrink:0;width:88px;min-height:34px;padding:4px 6px;border-radius:7px;cursor:pointer;
           background:${stock?'rgba(34,197,94,.10)':'#101010'};
-          border:1px solid ${stock?'rgba(34,197,94,.42)':'#303030'};
+          border:1px solid ${stock?'rgba(34,197,94,.42)':'var(--border)'};
           color:${stock?'var(--green)':'var(--sub)'};
           font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.3px">
         <option value=""${stock?'':' selected'}>À prendre</option>
         <option value="stock"${stock?' selected':''}>En stock</option>
       </select>
-      <span style="flex:1;min-width:0;font-size:var(--fs-xs);color:${stock?'var(--text-faint)':'#ddd'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${stock?'text-decoration:line-through':''}">${escapeHtml(lib)}${(nUsages>1)?` <span title="Regroupé : cette denrée est demandée à ${nUsages} endroits de ton plan" style="font-size:var(--fs-2xs);font-weight:800;color:var(--text-faint);border:1px solid #2e2e2e;border-radius:4px;padding:0 3px;vertical-align:1px">×${nUsages}</span>`:''}</span>
+      <span style="flex:1;min-width:0;font-size:var(--fs-xs);color:${stock?'var(--text-faint)':'#ddd'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${stock?'text-decoration:line-through':''}">${escapeHtml(lib)}${(nUsages>1)?` <span title="Regroupé : cette denrée est demandée à ${nUsages} endroits de ton plan" style="font-size:var(--fs-2xs);font-weight:800;color:var(--text-faint);border:1px solid var(--border);border-radius:4px;padding:0 3px;vertical-align:1px">×${nUsages}</span>`:''}</span>
       <span style="font-size:var(--fs-sm);font-weight:800;color:${stock?'var(--text-faint)':'#fff'};flex-shrink:0">${qte}</span>
     </div>`;
   // Les sources sont INTERCHANGEABLES : la liste ne peut pas deviner laquelle
@@ -37671,9 +37677,9 @@ function _htmlPlanAthlete(user,intercale){
       return `<option value="${escapeHtml(v)}"${choisi===v?' selected':''}>${escapeHtml(planNomCourt(s.nom))}</option>`;
     }).join('');
     const q=choisi?Math.round(Number(choisi.split('|')[1])*LC_REPAS):null;
-    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid #262626">
+    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--border)">
       <select onchange="lcChoisir('${cle}',this.value)" aria-label="Source de ${macro==='p'?'protéines':'glucides'} au choix"
-        style="flex:1;min-width:0;min-height:38px;padding:7px 9px;background:#101010;border:1px solid #303030;border-radius:8px;color:${choisi?'#fff':'var(--text-dim)'};font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">
+        style="flex:1;min-width:0;min-height:38px;padding:7px 9px;background:#101010;border:1px solid var(--border);border-radius:8px;color:${choisi?'#fff':'var(--text-dim)'};font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">
         <option value="">${macro==='p'?'Protéines':'Glucides'} au choix…</option>
         ${opts}
       </select>
@@ -37689,12 +37695,12 @@ function _htmlPlanAthlete(user,intercale){
 // poussaient tout le reste hors de vue, et on ne la consulte qu au moment de
 // faire ses courses. <details> natif, comme les historiques : aucun script,
 // le clavier l ouvre, et le lecteur d ecran l annonce.
-const courses=(lc&&lc.lignes.length)?`<details class="hist-repli lc-repli" style="position:relative;overflow:hidden;background:repeating-linear-gradient(0deg,#161616,#161616 27px,#191919 27px,#191919 54px);border:1px solid #333;border-left:3px solid var(--red);border-radius:10px;padding:12px 13px;margin-bottom:14px"${_lcOuvert?' open':''} ontoggle="_lcOuvert=this.open">
+const courses=(lc&&lc.lignes.length)?`<details class="hist-repli lc-repli" style="position:relative;overflow:hidden;background:repeating-linear-gradient(0deg,#161616,#161616 27px,#191919 27px,#191919 54px);border:1px solid var(--border);border-left:3px solid var(--red);border-radius:10px;padding:12px 13px;margin-bottom:14px"${_lcOuvert?' open':''} ontoggle="_lcOuvert=this.open">
     <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:-12px -13px 8px;padding:11px 13px;border-radius:9px 9px 0 0;background:linear-gradient(180deg,#ffffff,#e9e9e9);box-shadow:0 2px 10px rgba(0,0,0,.45);min-height:44px">
       <span style="font-size:var(--fs-xs);color:#0a0a0a;letter-spacing:2px;font-weight:800;text-transform:uppercase;display:inline-flex;align-items:center;gap:6px">${icon('clipboard',13)} Liste de courses</span>
       <span style="display:inline-flex;align-items:center;gap:9px;flex-shrink:0">
         <span style="font-size:var(--fs-2xs);color:#5a5a5a;letter-spacing:1.5px;font-weight:800;text-transform:uppercase">${lc.lignes.filter(l=>l.qte>0).length} lignes</span>
-        <span class="hist-chevron" style="font-size:var(--fs-md);color:#3a3a3a;transition:transform .18s">▾</span>
+        <span class="hist-chevron" style="font-size:var(--fs-md);color:var(--border);transition:transform .18s">▾</span>
       </span>
     </summary>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.5px;margin-bottom:6px">Ce qu'il te faut acheter (ce n'est pas ton plan alimentaire).</div>
@@ -39691,7 +39697,7 @@ function onFjSearch(val){
 // Trois paliers, ceux de la specification : vert au-dessus de 80, orange
 // entre 50 et 79, rouge en dessous. La couleur RESUME, le texte informe.
 function _fiabPalier(n){
-  if(n==null) return {c:'var(--sub)',bg:'#111',bord:'#262626',lib:'Fiabilité inconnue'};
+  if(n==null) return {c:'var(--sub)',bg:'#111',bord:'var(--border)',lib:'Fiabilité inconnue'};
   if(n>=80) return {c:'var(--green)',bg:'rgba(34,197,94,.08)',bord:'rgba(34,197,94,.35)',lib:'Donnée fiable'};
   if(n>=NUTRI_SEUIL_CONFIRME) return {c:'var(--orange)',bg:'rgba(234,140,20,.08)',bord:'rgba(234,140,20,.35)',lib:'Donnée à vérifier'};
   return {c:'var(--red)',bg:'var(--red-bg)',bord:'rgba(224,32,32,.4)',lib:'Donnée peu sûre'};
@@ -40250,7 +40256,7 @@ function _renderFjDaySummary(date){
   const dateLbl=_libelleJourNut(date);
   const nextBtn=isToday
     ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:8px;padding:4px 10px;font-size:var(--fs-md);cursor:not-allowed">→</button>`
-    :`<button onclick="_renderFjDaySummary('${nextStr}')" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:var(--fs-md)">→</button>`;
+    :`<button onclick="_renderFjDaySummary('${nextStr}')" style="background:none;border:1px solid var(--border);color:#aaa;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:var(--fs-md)">→</button>`;
   const nut=currentUser.nutrition||{};
   const entries=(nut.log?.[date]?.entries)||[];
   const isOn=nutIsOnDay(date);
@@ -40300,7 +40306,7 @@ function _renderFjDaySummary(date){
     <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 8px 24px rgba(0,0,0,.35);animation:fadeInUp .3s ease;margin-bottom:12px;overflow:hidden">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 14px">
         <div style="display:flex;align-items:center;gap:6px">
-          <button onclick="_renderFjDaySummary('${prevStr}')" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:var(--fs-md)">←</button>
+          <button onclick="_renderFjDaySummary('${prevStr}')" style="background:none;border:1px solid var(--border);color:#aaa;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:var(--fs-md)">←</button>
           <div>
             <h3 style="margin:0;font-size:var(--fs-md)">${dateLbl}</h3>
             <div style="margin-top:3px">${dayBadge}</div>
@@ -40328,13 +40334,13 @@ function _renderFjDaySummary(date){
     ${_htmlSelSemaine(currentUser)}
     ${_microHtml}
     ${_htmlDernierAjout(date)}
-    ${isToday?`<button onclick="copierHier()" style="width:100%;margin-bottom:12px;padding:10px 0;background:none;border:1px dashed #2a2a2a;border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;cursor:pointer">Copier la journée d'hier</button>`:''}
+    ${isToday?`<button onclick="copierHier()" style="width:100%;margin-bottom:12px;padding:10px 0;background:none;border:1px dashed var(--border);border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;cursor:pointer">Copier la journée d'hier</button>`:''}
     ${entries.length===0?`<div style="text-align:center;padding:18px 0 8px;color:var(--text-dim);font-size:var(--fs-sm)">Aucun aliment enregistré : appuie sur + AJOUTER</div>`:''}
     ${repasOrder.filter(r=>grouped[r]).map(r=>`
       <div style="margin-bottom:14px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
           <div style="flex:1;min-width:0;font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase">${repasLabels[r]}</div>
-          ${!isToday?`<button onclick="refaireRepas('${date}','${r}')" style="flex-shrink:0;background:none;border:1px solid #2a2a2a;border-radius:7px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:.5px;padding:5px 9px;cursor:pointer">Refaire aujourd'hui</button>`:''}
+          ${!isToday?`<button onclick="refaireRepas('${date}','${r}')" style="flex-shrink:0;background:none;border:1px solid var(--border);border-radius:7px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:.5px;padding:5px 9px;cursor:pointer">Refaire aujourd'hui</button>`:''}
         </div>
         ${grouped[r].map(e=>`<div class="fj-entry">
           <div style="flex:1;min-width:0">
@@ -41781,7 +41787,7 @@ function _htmlStrictAccesCoach(c){
       </div>
       <label style="position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0;cursor:pointer">
         <input type="checkbox" ${ouvert?'checked':''} onchange="saveClientStrictAcces(this.checked)" style="opacity:0;width:0;height:0;position:absolute">
-        <span style="position:absolute;inset:0;background:${ouvert?'var(--success)':'#2a2a2a'};border-radius:12px;transition:.2s;pointer-events:none">
+        <span style="position:absolute;inset:0;background:${ouvert?'var(--success)':'var(--border)'};border-radius:12px;transition:.2s;pointer-events:none">
           <span style="position:absolute;top:3px;left:${ouvert?'23':'3'}px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s"></span>
         </span>
       </label>
@@ -41926,7 +41932,7 @@ function _htmlJournalCoach(c){
   const fl=d=>{ const x=new Date(String(d)+'T12:00:00');
     return isNaN(x.getTime())?d:x.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'}); };
   const nav=(d,fleche)=>d
-    ?`<button type="button" onclick="ccdJournalAller('${d}')" style="flex:none;background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:var(--fs-md)">${fleche}</button>`
+    ?`<button type="button" onclick="ccdJournalAller('${d}')" style="flex:none;background:none;border:1px solid var(--border);color:#aaa;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:var(--fs-md)">${fleche}</button>`
     :`<button type="button" disabled style="flex:none;background:none;border:1px solid #222;color:var(--text-dim);border-radius:8px;padding:4px 10px;cursor:not-allowed;font-size:var(--fs-md)">${fleche}</button>`;
   const lignes=entrees.map(e=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid rgba(255,255,255,.06)">
       <span style="flex:1;min-width:0;font-size:var(--fs-xs);color:#ddd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(e.nom||'—')}<span style="color:var(--text-faint)"> · ${escapeHtml((FJ_REPAS_LIB[e.repas]||e.repas||''))}</span></span>
@@ -42001,9 +42007,9 @@ function renderCoachNutriSection(c){
     <div style="display:grid;grid-template-columns:90px 1fr 1fr;align-items:center;gap:6px;margin-bottom:7px">
       <div style="font-size:var(--fs-xs);font-weight:800;color:${f.color};letter-spacing:1px">${f.label}</div>
       <input id="ccd-on-${f.k}" type="number" min="0" placeholder="${f.ph}" value="${mon[f.k]||''}"
-        style="padding:7px 10px;background:#111;border:1px solid #2a2a2a;border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:600;outline:none;width:100%;box-sizing:border-box">
+        style="padding:7px 10px;background:#111;border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:600;outline:none;width:100%;box-sizing:border-box">
       <input id="ccd-off-${f.k}" type="number" min="0" placeholder="${f.ph}" value="${moff[f.k]||''}"
-        style="padding:7px 10px;background:#111;border:1px solid #2a2a2a;border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:600;outline:none;width:100%;box-sizing:border-box">
+        style="padding:7px 10px;background:#111;border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:600;outline:none;width:100%;box-sizing:border-box">
     </div>`).join('')
     // LECTURE SEULE, sous les champs. Les dix champs restent en grammes :
     // convertir leur contenu ferait partir un « 30 » tape en pourcentage
@@ -42628,7 +42634,7 @@ function loadSuppEmbedded(){
     <div style="background:var(--dark);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:12px">
       ${_htmlMigrationCycleSupp(currentUser)}${_htmlSuggestionCycle(currentUser)}${omegaBanner}${_renderSuppTable(list,false,'openSuppEdit')}
     </div>
-    <button onclick="openSuppEdit(-1)" style="background:none;border:1px dashed #2a2a2a;border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;padding:10px 0;width:100%;cursor:pointer;margin-bottom:4px">+ Ajouter un complément</button>
+    <button onclick="openSuppEdit(-1)" style="background:none;border:1px dashed var(--border);border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;padding:10px 0;width:100%;cursor:pointer;margin-bottom:4px">+ Ajouter un complément</button>
     <div style="height:4px"></div>`;
 }
 
@@ -42919,7 +42925,7 @@ function openCoachSuppEdit(id){
     </div>
     <input type="hidden" id="coach-supp-idx" value="${s?s.id:-1}">
     <button onclick="saveCoachSuppEdit()" style="width:100%;padding:13px 0;background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer;margin-bottom:10px">SAUVEGARDER</button>
-    ${s?`<button onclick="deleteCoachSuppEdit(${s.id})" style="width:100%;padding:11px 0;background:none;border:1px solid #333;color:var(--text-faint);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;border-radius:10px;cursor:pointer">SUPPRIMER CE COMPLÉMENT</button>`:''}
+    ${s?`<button onclick="deleteCoachSuppEdit(${s.id})" style="width:100%;padding:11px 0;background:none;border:1px solid var(--border);color:var(--text-faint);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;border-radius:10px;cursor:pointer">SUPPRIMER CE COMPLÉMENT</button>`:''}
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
 }
@@ -43530,7 +43536,7 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
     :'';
   const listHtml=!entries.length
     ?emptyState('coffee','Aucune prise enregistrée ce jour.',null,null,'padding:16px 0')
-    :renderDataList(entries,(e,i)=>`<span style="line-height:0;flex-shrink:0">${caffIcone(e.type,22)}</span><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:var(--fs-md)">${escapeHtml(e.name)}</div><div style="font-size:var(--fs-xs);color:var(--sub);display:flex;align-items:center;gap:4px"><input type="time" value="${e.time||''}" onchange="updateCaffeineEntryTime('${date}',${i},this.value)" style="background:none;border:none;border-bottom:1px solid #333;color:var(--sub);font-size:var(--fs-xs);font-family:Montserrat,sans-serif;cursor:pointer;padding:0;width:52px">${e.volume?'· '+escapeHtml(e.volume):''}</div></div><span style="font-weight:900;color:var(--red-text);font-size:var(--fs-lg);min-width:48px;text-align:right">${e.mg}mg</span><button onclick="deleteCaffeineEntry('${date}',${i},'${deleteFnName}')" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent">×</button>`);
+    :renderDataList(entries,(e,i)=>`<span style="line-height:0;flex-shrink:0">${caffIcone(e.type,22)}</span><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:var(--fs-md)">${escapeHtml(e.name)}</div><div style="font-size:var(--fs-xs);color:var(--sub);display:flex;align-items:center;gap:4px"><input type="time" value="${e.time||''}" onchange="updateCaffeineEntryTime('${date}',${i},this.value)" style="background:none;border:none;border-bottom:1px solid var(--border);color:var(--sub);font-size:var(--fs-xs);font-family:Montserrat,sans-serif;cursor:pointer;padding:0;width:52px">${e.volume?'· '+escapeHtml(e.volume):''}</div></div><span style="font-weight:900;color:var(--red-text);font-size:var(--fs-lg);min-width:48px;text-align:right">${e.mg}mg</span><button onclick="deleteCaffeineEntry('${date}',${i},'${deleteFnName}')" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent">×</button>`);
   const _circ=2*Math.PI*48;
   const _off=_circ*(1-pct);
   // Le cercle mesure 120px de diamètre, dont 9px d'anneau de chaque côté : il
@@ -43555,12 +43561,12 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
       <svg class="caf-can" viewBox="0 0 70 170" aria-hidden="true" style="right:-6px;bottom:-22px;height:205px;width:auto;opacity:.42;filter:drop-shadow(0 0 14px rgba(255,255,255,.18))">
         <defs>
           <linearGradient id="cafCanCorps" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0" stop-color="#000"/><stop offset=".18" stop-color="#3a3a3a"/>
+            <stop offset="0" stop-color="#000"/><stop offset=".18" stop-color="var(--border)"/>
             <stop offset=".34" stop-color="#0d0d0d"/><stop offset=".72" stop-color="#242424"/>
             <stop offset="1" stop-color="#000"/>
           </linearGradient>
           <linearGradient id="cafCanHaut" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0" stop-color="#2a2a2a"/><stop offset=".45" stop-color="#7a7a7a"/>
+            <stop offset="0" stop-color="var(--border)"/><stop offset=".45" stop-color="#7a7a7a"/>
             <stop offset="1" stop-color="#1a1a1a"/>
           </linearGradient>
         </defs>
@@ -43605,7 +43611,7 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
           <!-- 2. Le rail, INTERROMPU en bas a gauche et en bas a droite. Le
                modele ouvre le cercle a ces deux endroits ; c est ce qui le
                distingue d un simple anneau. -->
-          <circle cx="65" cy="65" r="44" fill="none" stroke="#232323" stroke-width="7"
+          <circle cx="65" cy="65" r="44" fill="none" stroke="var(--border)" stroke-width="7"
             stroke-dasharray="${(_circ2*0.30).toFixed(1)} ${(_circ2*0.05).toFixed(1)}" transform="rotate(-108 65 65)"/>
           <!-- 3. L arc de progres, par-dessus, depuis le haut. -->
           <circle cx="65" cy="65" r="44" fill="none" style="stroke:${color};transition:stroke-dashoffset .4s ease,stroke .4s ease"
@@ -43697,11 +43703,11 @@ function _renderCaffeineScreen(){
   if(navEl) navEl.innerHTML=`<div style="display:flex;align-items:center;justify-content:center;gap:12px">
     ${auFond
       ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:8px;padding:6px 13px;font-size:var(--fs-lg);cursor:not-allowed">←</button>`
-      :`<button onclick="_caffeineViewDate='${prevStr}';_renderCaffeineScreen()" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:6px 13px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">←</button>`}
+      :`<button onclick="_caffeineViewDate='${prevStr}';_renderCaffeineScreen()" style="background:none;border:1px solid var(--border);color:#aaa;border-radius:8px;padding:6px 13px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">←</button>`}
     <span style="font-size:var(--fs-md);font-weight:700;min-width:110px;text-align:center">${dateLbl}</span>
     ${isToday
       ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:8px;padding:6px 13px;font-size:var(--fs-lg);cursor:not-allowed">→</button>`
-      :`<button onclick="_caffeineViewDate='${nextStr}';_renderCaffeineScreen()" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:6px 13px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">→</button>`}
+      :`<button onclick="_caffeineViewDate='${nextStr}';_renderCaffeineScreen()" style="background:none;border:1px solid var(--border);color:#aaa;border-radius:8px;padding:6px 13px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">→</button>`}
   </div>`;
   const entries=getCaffeineDay(date);
   const totalMg=entries.reduce((s,e)=>s+(e.mg||0),0);
@@ -43740,10 +43746,10 @@ function _renderCaffeineEmbedded(){
   const auFond=prevStr<minStr;
   const navPrev=auFond
     ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:8px;padding:5px 12px;font-size:var(--fs-lg);cursor:not-allowed">←</button>`
-    :`<button onclick="_caffeineEmbedDate='${prevStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">←</button>`;
+    :`<button onclick="_caffeineEmbedDate='${prevStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid var(--border);color:#aaa;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">←</button>`;
   const navNext=isToday
     ?`<button disabled style="background:none;border:1px solid #222;color:var(--text-dim);border-radius:8px;padding:5px 12px;font-size:var(--fs-lg);cursor:not-allowed">→</button>`
-    :`<button onclick="_caffeineEmbedDate='${nextStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid #333;color:#aaa;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">→</button>`;
+    :`<button onclick="_caffeineEmbedDate='${nextStr}';_renderCaffeineEmbedded()" style="background:none;border:1px solid var(--border);color:#aaa;border-radius:8px;padding:5px 12px;cursor:pointer;font-size:var(--fs-lg);font-family:Montserrat,sans-serif">→</button>`;
   const entries=getCaffeineDay(date);
   const totalMg=entries.reduce((s,e)=>s+(e.mg||0),0);
   const {weight:wKg,estimated:_wEst}=getUserWeight();
@@ -44020,7 +44026,7 @@ function _renderCaffeineConfirmPanel(qty){
       <button onclick="cancelCaffeineAdd()" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;padding:4px">×</button>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:12px">
-      ${[1,2,3].map(n=>`<button onclick="_renderCaffeineConfirmPanel(${n})" style="flex:1;padding:10px 0;background:${qty===n?'var(--red)':'var(--surface-2)'};border:1px solid ${qty===n?'var(--red)':'#333'};border-radius:8px;color:${qty===n?'#fff':'var(--sub)'};font-family:Montserrat,sans-serif;font-size:var(--fs-lg);font-weight:900;cursor:pointer">×${n}</button>`).join('')}
+      ${[1,2,3].map(n=>`<button onclick="_renderCaffeineConfirmPanel(${n})" style="flex:1;padding:10px 0;background:${qty===n?'var(--red)':'var(--surface-2)'};border:1px solid ${qty===n?'var(--red)':'var(--border)'};border-radius:8px;color:${qty===n?'#fff':'var(--sub)'};font-family:Montserrat,sans-serif;font-size:var(--fs-lg);font-weight:900;cursor:pointer">×${n}</button>`).join('')}
     </div>
     <button onclick="_commitCaffeineAdd(${qty})" style="width:100%;padding:12px 0;background:var(--red);border:none;color:#fff;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800;letter-spacing:1.5px;border-radius:10px;cursor:pointer">AJOUTER</button>
   </div>`;
@@ -44517,7 +44523,7 @@ function _tplFiltrer(){
       const v=templateVariables(t.corps);
       return `<button type="button" onclick="tplInserer('${escapeHtml(t.id)}')"
         style="width:100%;text-align:left;min-height:44px;padding:9px 11px;margin-bottom:6px;border-radius:9px;cursor:pointer;
-          background:#111;border:1px solid #2b2b2b;color:#ddd;font-family:Montserrat,sans-serif">
+          background:#111;border:1px solid var(--border);color:#ddd;font-family:Montserrat,sans-serif">
         <div style="font-size:var(--fs-sm);font-weight:800;color:#fff">${escapeHtml(t.titre)}</div>
         <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:3px">${escapeHtml(t.corps)}</div>
         ${v.length?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">Variables : ${v.map(x=>escapeHtml(x)).join(', ')}</div>`:''}
@@ -44866,17 +44872,17 @@ function htmlLecteurCorrection(vidId){
   const b=(lib,act,titre,extra)=>`<button type="button" onclick="${act}" title="${escapeHtml(titre)}"
     aria-label="${escapeHtml(titre)}" ${extra||''} disabled
     style="min-width:44px;min-height:44px;padding:8px 10px;border-radius:9px;cursor:pointer;
-      background:#111;border:1px solid #2e2e2e;color:#ddd;font-family:Montserrat,sans-serif;
+      background:#111;border:1px solid var(--border);color:#ddd;font-family:Montserrat,sans-serif;
       font-size:var(--fs-xs);font-weight:800;letter-spacing:.3px">${lib}</button>`;
   return `<div id="rc-barre-${vidId}" data-vid="${vidId}" style="margin-top:8px;background:#101010;
-    border:1px solid #262626;border-radius:11px;padding:9px 10px">
+    border:1px solid var(--border);border-radius:11px;padding:9px 10px">
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
       <span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.4px;font-weight:800;text-transform:uppercase">Vitesse</span>
       ${VID_RATES.map(r=>`<button type="button" onclick="rcVitesse('${vidId}',${r})"
         data-rate="${r}" disabled aria-pressed="false"
         aria-label="Lire à ${String(r).replace('.',',')} fois la vitesse normale"
         style="min-width:44px;min-height:38px;padding:6px 9px;border-radius:8px;cursor:pointer;
-          background:#111;border:1px solid #2e2e2e;color:var(--sub);
+          background:#111;border:1px solid var(--border);color:var(--sub);
           font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800">${String(r).replace('.',',')}×</button>`).join('')}
       <span id="rc-badge-${vidId}" aria-live="polite"
         style="margin-left:auto;font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:var(--fs-lg);
@@ -44912,7 +44918,7 @@ function rcVitesse(vidId,r){
   if(z) z.querySelectorAll('button[data-rate]').forEach(b=>{
     const actif=Math.abs(Number(b.dataset.rate)-applique)<1e-6;
     b.setAttribute('aria-pressed',actif?'true':'false');
-    b.style.borderColor=actif?'var(--red)':'#2e2e2e';
+    b.style.borderColor=actif?'var(--red)':'var(--border)';
     b.style.background=actif?'rgba(224,32,32,.12)':'#111';
     b.style.color=actif?'#fff':'var(--sub)';
   });
@@ -45381,8 +45387,8 @@ function _bandeauJour(inputId,jour,handler){
     :new Date(jour+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'long'});
   return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
     <div style="flex:1;min-width:0;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:var(--fs-lg);letter-spacing:2.5px;color:${estAuj?'#8a8a8a':'var(--red)'};text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${lbl}</div>
-    ${estAuj?'':`<button onclick="${handler}('')" title="Revenir à aujourd'hui" style="flex:none;background:#141414;border:1px solid #2a2a2a;color:var(--sub);border-radius:7px;padding:6px 9px;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;cursor:pointer">AUJ.</button>`}
-    <input type="date" id="${inputId}" value="${jour}" min="${min}" max="${auj}" onchange="${handler}(this.value)" aria-label="Choisir le jour" style="flex:0 0 auto;width:138px;box-sizing:border-box;background:#101010;border:1px solid #2a2a2a;color:#ccc;border-radius:7px;padding:6px 8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);color-scheme:dark">
+    ${estAuj?'':`<button onclick="${handler}('')" title="Revenir à aujourd'hui" style="flex:none;background:#141414;border:1px solid var(--border);color:var(--sub);border-radius:7px;padding:6px 9px;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;cursor:pointer">AUJ.</button>`}
+    <input type="date" id="${inputId}" value="${jour}" min="${min}" max="${auj}" onchange="${handler}(this.value)" aria-label="Choisir le jour" style="flex:0 0 auto;width:138px;box-sizing:border-box;background:#101010;border:1px solid var(--border);color:#ccc;border-radius:7px;padding:6px 8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);color-scheme:dark">
   </div>`;
 }
 
@@ -45441,9 +45447,9 @@ function loadSteps(containerId='steps-content'){
   // LE JOUR EN PLUS DU TYPE : sans lui, impossible de déduire quoi que ce soit
   // du programme, et le repli restait un chiffre en dur.
   const stepColor=(n,type,date)=>{
-    if(!n) return '#2a2a2a';
+    if(!n) return 'var(--border)';
     const goal=_stepsObjectifJour(goals,type,date);
-    if(!(goal>0)) return '#2a2a2a';
+    if(!(goal>0)) return 'var(--border)';
     if(n>=goal) return '#22c55e';
     if(n>=goal*0.6) return '#f97316';
     return '#e05050';
@@ -45468,7 +45474,7 @@ function loadSteps(containerId='steps-content'){
   });
   let counts='';
   weekData.forEach(d=>{
-    counts+=`<div style="flex:1;text-align:center;font-size:var(--fs-xs);font-weight:700;color:${d.count?stepColor(d.count,d.type,d.date):'#2a2a2a'};margin-top:3px">${d.count?Math.round(d.count/100)/10+'k':'·'}</div>`;
+    counts+=`<div style="flex:1;text-align:center;font-size:var(--fs-xs);font-weight:700;color:${d.count?stepColor(d.count,d.type,d.date):'var(--border)'};margin-top:3px">${d.count?Math.round(d.count/100)/10+'k':'·'}</div>`;
   });
 
   let histHtml='';
@@ -47975,7 +47981,7 @@ function htmlLeafq(){
         ${[['0','Non'],['1','Un peu'],['2','Oui']].map(([v,l])=>
           `<button type="button" onclick="leafqRepondre('${it.k}',${v},this)"
             style="flex:1;min-height:36px;border-radius:8px;cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;
-              background:#111;border:1px solid #2e2e2e;color:var(--sub)">${l}</button>`).join('')}
+              background:#111;border:1px solid var(--border);color:var(--sub)">${l}</button>`).join('')}
       </div>
     </div>`).join('')}
     <button class="btn btn-red" style="width:100%;margin-top:14px" onclick="leafqValider()">Envoyer mes réponses</button>
@@ -47987,7 +47993,7 @@ function leafqRepondre(k,v,el){
   _leafqRep[k]=Number(v)||0;
   try{
     const p=el.parentNode;
-    for(const b of p.children){ b.style.background='#111'; b.style.borderColor='#2e2e2e'; b.style.color='var(--sub)'; }
+    for(const b of p.children){ b.style.background='#111'; b.style.borderColor='var(--border)'; b.style.color='var(--sub)'; }
     el.style.background='rgba(224,32,32,.14)'; el.style.borderColor='var(--red)'; el.style.color='#fff';
   }catch(e){}
   return true;
@@ -48845,7 +48851,7 @@ function _htmlCadreImportCapture(){
         <b style="color:var(--text-dim);font-weight:700">La capture est lue sur ton téléphone. Elle n'est ni envoyée ni conservée.</b>
       </div>
       <input type="file" accept="image/*" style="display:none" onchange="importerCaptureStats(this)">
-      <button onclick="this.previousElementSibling.click()" style="width:100%;padding:10px;background:linear-gradient(180deg,#131313,#0c0c0c);border:1px solid #262626;color:#a8a8a8;border-radius:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;cursor:pointer">Envoyer une capture</button>
+      <button onclick="this.previousElementSibling.click()" style="width:100%;padding:10px;background:linear-gradient(180deg,#131313,#0c0c0c);border:1px solid var(--border);color:#a8a8a8;border-radius:8px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;cursor:pointer">Envoyer une capture</button>
     </div>`;
 }
 async function importerCaptureStats(input){
@@ -48957,7 +48963,7 @@ function calcSleepDuration(bed,wake){
   return Math.round(mins/6)/10;
 }
 function sleepColor(h){
-  if(!h) return '#2a2a2a';
+  if(!h) return 'var(--border)';
   if(h>=7&&h<=9) return '#22c55e';
   if((h>=6&&h<7)||(h>9&&h<=10)) return '#f97316';
   return '#E02020';
@@ -49007,7 +49013,7 @@ function loadSleep(containerId='sleep-content',user){
   let counts='';
   weekData.forEach(d=>{
     const h=d.entry?.duration;
-    counts+=`<div style="flex:1;text-align:center;font-size:var(--fs-xs);font-weight:700;color:${h?sleepColor(h):'#2a2a2a'};margin-top:3px">${h!=null?h+'h':'·'}</div>`;
+    counts+=`<div style="flex:1;text-align:center;font-size:var(--fs-xs);font-weight:700;color:${h?sleepColor(h):'var(--border)'};margin-top:3px">${h!=null?h+'h':'·'}</div>`;
   });
 
   let histHtml='';
@@ -49158,7 +49164,7 @@ function _setupCanvas(id,defaultH){
 function _drawGrid(ctx,w,h,p,mn,mx){
   [0,.5,1].forEach(t=>{
     const y=h-p-t*(h-p*2);
-    ctx.strokeStyle=t===0?'#333':'#242424';ctx.lineWidth=1;
+    ctx.strokeStyle=t===0?'var(--border)':'#242424';ctx.lineWidth=1;
     ctx.setLineDash(t===0?[]:[3,4]);
     ctx.beginPath();ctx.moveTo(p,y);ctx.lineTo(w-p,y);ctx.stroke();
     ctx.setLineDash([]);ctx.fillStyle='#4a4a4a';
@@ -49613,11 +49619,11 @@ async function analyzeProgPhotos(){
             </div>
             <p style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:8px">Envoie-moi ce texte :</p>
             <div style="font-size:var(--fs-xs);color:var(--green);margin-bottom:4px">M1 original :</div>
-            <textarea readonly style="width:100%;height:70px;font-size:var(--fs-xs);font-family:monospace;background:var(--surface-1);border:1px solid #333;color:#ccc;padding:6px;border-radius:6px;box-sizing:border-box">${esc(t1)||'(vide)'}</textarea>
+            <textarea readonly style="width:100%;height:70px;font-size:var(--fs-xs);font-family:monospace;background:var(--surface-1);border:1px solid var(--border);color:#ccc;padding:6px;border-radius:6px;box-sizing:border-box">${esc(t1)||'(vide)'}</textarea>
             <div style="font-size:var(--fs-xs);color:var(--green);margin:6px 0 4px">M2 original :</div>
-            <textarea readonly style="width:100%;height:70px;font-size:var(--fs-xs);font-family:monospace;background:var(--surface-1);border:1px solid #333;color:#ccc;padding:6px;border-radius:6px;box-sizing:border-box">${esc(t2)||'(vide)'}</textarea>
+            <textarea readonly style="width:100%;height:70px;font-size:var(--fs-xs);font-family:monospace;background:var(--surface-1);border:1px solid var(--border);color:#ccc;padding:6px;border-radius:6px;box-sizing:border-box">${esc(t2)||'(vide)'}</textarea>
             <div style="font-size:var(--fs-xs);color:var(--green);margin:6px 0 4px">M1 prétraité :</div>
-            <textarea readonly style="width:100%;height:70px;font-size:var(--fs-xs);font-family:monospace;background:var(--surface-1);border:1px solid #333;color:#ccc;padding:6px;border-radius:6px;box-sizing:border-box">${esc(t3)||'(vide)'}</textarea>
+            <textarea readonly style="width:100%;height:70px;font-size:var(--fs-xs);font-family:monospace;background:var(--surface-1);border:1px solid var(--border);color:#ccc;padding:6px;border-radius:6px;box-sizing:border-box">${esc(t3)||'(vide)'}</textarea>
           </div></div>`);
         }
       }catch(e){
@@ -50090,7 +50096,7 @@ function showOcrReviewModal(exercises,idx,videoLinks=[]){
     // « prise serrée » de « large », et la fiche papier ne le dit pas.
     const _autres=_propose&&_vg.length>1
       ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">`
-        +_vg.map(v=>`<button onclick="_ocrChoisirVideo(${i},'${v.id}')" style="background:#0e0e0e;border:1px solid #2a2a2a;color:var(--sub);border-radius:14px;padding:4px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:700;cursor:pointer">${escapeHtml(v.lbl||'version par défaut')}</button>`).join('')
+        +_vg.map(v=>`<button onclick="_ocrChoisirVideo(${i},'${v.id}')" style="background:#0e0e0e;border:1px solid var(--border);color:var(--sub);border-radius:14px;padding:4px 10px;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:700;cursor:pointer">${escapeHtml(v.lbl||'version par défaut')}</button>`).join('')
         +`</div>` : '';
     const _mention=_propose
       ? `<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-bottom:4px">Proposé depuis ton guide</div>` : '';
@@ -50336,7 +50342,7 @@ async function triggerAthletePdfParse(){
 function showPdfSeancesModal(seances,targetEmail){
   _pendingPdfSeances=seances;_pendingPdfTarget=targetEmail;
   const rows=seances.map((s,si)=>`
-    <div style="background:#111;border:1px solid #2a2a2a;border-radius:8px;margin-bottom:10px;overflow:hidden">
+    <div style="background:#111;border:1px solid var(--border);border-radius:8px;margin-bottom:10px;overflow:hidden">
       <div style="padding:12px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <div>
           <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px">${escapeHtml(s.name)}</div>
@@ -50391,7 +50397,7 @@ function showDrivePdfModal(driveUrl,targetEmail){
        Sélectionner le fichier téléchargé
       <input type="file" accept=".pdf" style="display:none" onchange="_parsePdfFromDriveFile(this)">
     </label>
-    <button onclick="closeModal()" style="display:block;width:100%;padding:11px;background:none;border:1px solid #2a2a2a;border-radius:8px;color:var(--sub);font-size:var(--fs-sm);margin-top:10px;cursor:pointer;font-family:Montserrat,sans-serif">Annuler</button>
+    <button onclick="closeModal()" style="display:block;width:100%;padding:11px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:var(--fs-sm);margin-top:10px;cursor:pointer;font-family:Montserrat,sans-serif">Annuler</button>
   </div></div>`;
   document.body.insertAdjacentHTML('beforeend',html);
 }
@@ -51245,7 +51251,7 @@ function _htmlVitrineCoach(pub){
     +carte('Ma vision',p.vision)
     +_htmlDiplomesCoach(p)
     +(p.signature?('<div style="text-align:center;margin-top:10px;padding-top:22px;position:relative">'
-        +'<div style="position:absolute;top:0;left:12%;right:12%;height:1px;background:linear-gradient(90deg,transparent,#2a2a2a,transparent)"></div>'
+        +'<div style="position:absolute;top:0;left:12%;right:12%;height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent)"></div>'
         +img(p.signature,'max-width:210px;width:58%;display:inline-block;background:none')
         +'</div>'):'')
     +'</div>';
@@ -51579,7 +51585,7 @@ function _renderPromoBanners(coach){
   if(!banners.length){el.style.display='none';return;}
   el.style.display='block';
   el.innerHTML=banners.map(b=>{
-    const img=`<img src="${escapeHtml(b.imageUrl)}" style="width:100%;height:auto;display:block;border-radius:8px;border:1px solid #2a2a2a" onerror="this.style.display='none'">`;
+    const img=`<img src="${escapeHtml(b.imageUrl)}" style="width:100%;height:auto;display:block;border-radius:8px;border:1px solid var(--border)" onerror="this.style.display='none'">`;
     return `<div style="margin:0 0 8px">${b.linkUrl?`<a href="${safeUrl(b.linkUrl)}" target="_blank" rel="noopener" style="display:block">${img}</a>`:img}</div>`;
   }).join('');
 }
@@ -52102,7 +52108,7 @@ function offboardCoach(coachId){
     ?'<label style="display:flex;align-items:flex-start;gap:10px;padding:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:8px;cursor:pointer">'
       +'<input type="radio" name="ob-action" value="reassign" checked style="margin-top:3px;flex-shrink:0">'
       +'<div style="width:100%"><div style="font-weight:700;font-size:var(--fs-sm)">Réassigner à un autre coach</div>'
-      +'<select id="ob-target" style="margin-top:8px;width:100%;padding:9px;background:var(--surface-2);border:1px solid #333;border-radius:6px;color:#fff;font-size:var(--fs-sm);font-family:Montserrat,sans-serif">'+coachOptsHtml+'</select>'
+      +'<select id="ob-target" style="margin-top:8px;width:100%;padding:9px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;color:#fff;font-size:var(--fs-sm);font-family:Montserrat,sans-serif">'+coachOptsHtml+'</select>'
       +'</div></label>'
     :'';
   const creatorBlock=(!isCreatorSelf&&creator)
@@ -52119,7 +52125,7 @@ function offboardCoach(coachId){
   ov.id='modal-overlay';ov.onclick=closeModal;
   ov.style.cssText='position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center';
   ov.innerHTML='<div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-sizing:border-box">'
-    +'<div style="width:40px;height:4px;background:#333;border-radius:2px;margin:0 auto 18px"></div>'
+    +'<div style="width:40px;height:4px;background:var(--surface-3);border-radius:2px;margin:0 auto 18px"></div>'
     +'<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:6px">Réassignation des athlètes</div>'
     +'<div style="font-size:var(--fs-lg);font-weight:800;margin-bottom:4px">'+escapeHtml((coach.fname||'')+' '+(coach.lname||''))+'</div>'
     +'<div style="font-size:var(--fs-sm);color:var(--sub);margin-bottom:14px">'+athletes.length+' athlète'+(athletes.length>1?'s':'')+' à traiter avant désactivation</div>'
@@ -53214,7 +53220,7 @@ function _renderSubPaliers(){
     const sel=p.cle===_subPalier;
     return `<div onclick="_choisirPalier('${p.cle}')" role="button" tabindex="0"
       onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
-      style="flex:1;position:relative;cursor:pointer;border:2px solid ${sel?'var(--red)':'#2a2a2a'};
+      style="flex:1;position:relative;cursor:pointer;border:2px solid ${sel?'var(--red)':'var(--border)'};
       background:${sel?'rgba(224,32,32,.08)':'transparent'};border-radius:12px;padding:14px 12px;
       text-align:center;transition:.15s;min-height:44px">
       ${p.remise?`<div style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);
@@ -53515,7 +53521,7 @@ function _rendreSelecteurMuscles(titre){
   const lignes=Object.keys(MUSCLES).map(g=>{
     const m=MUSCLES[g],p=_selMusclesP.includes(g),s=_selMusclesS.includes(g);
     const b=(actif,col,lbl,fn)=>`<button onclick="${fn}('${g}')" style="flex:1;padding:7px 4px;border-radius:7px;cursor:pointer;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;`
-      +(actif?`background:${col};color:#08080a;border:1px solid ${col}`:`background:transparent;color:var(--text-dim);border:1px solid #262626`)+`">${lbl}</button>`;
+      +(actif?`background:${col};color:#08080a;border:1px solid ${col}`:`background:transparent;color:var(--text-dim);border:1px solid var(--border)`)+`">${lbl}</button>`;
     return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #161616">
       <span style="flex:1;min-width:0;font-size:var(--fs-sm);font-weight:700;color:${(p||s)?'#fff':'var(--sub)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.lib}</span>
       <div style="display:flex;gap:5px;flex:0 0 122px">${b(p,m.c,'PRIM.','_selMusclePrim')}${b(s,m.c,'SEC.','_selMuscleSec')}</div>
