@@ -19412,27 +19412,33 @@ function _peindreRepos(){
       <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--pile-titre);font-size:30px;letter-spacing:1px;color:${coul};line-height:1">${fini?'+':''}${_fmtRepos(reste)}</div>
     </div>`;
   z.style.display='block';
-  z.innerHTML=`<div style="background:#101010;border-top:1px solid ${fini?'#14532d':'#2a0000'};padding:9px 14px 10px">
-    <div style="display:flex;align-items:center;gap:10px">
+  z.innerHTML=`<div style="background:#101010;border-top:1px solid ${fini?'#14532d':'#2a0000'};padding:10px 14px 12px">
+    <!-- RANGEE 1 : l'anneau et ce qu'il mesure. Le libellé ne tronque plus —
+         il a toute la largeur restante, et l'anneau ne rétrécit pas. -->
+    <div style="display:flex;align-items:center;gap:12px">
+      ${anneauHtml}
       <div style="flex:1;min-width:0">
-        <div style="font-size:var(--fs-2xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+        <div style="font-size:var(--fs-sm);letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);font-weight:800">
           <!-- Sans le nom de l'exercice : il était tronqué faute de place
                et redondant avec l'écran, qui l'affiche en entier juste
                au-dessus. Le bandeau n'a qu'une chose à dire : le temps. -->
           ${fini?'Récup terminée':'Temps de récup'}
         </div>
-        ${anneauHtml}
       </div>
-      <button onclick="ajusterRepos(-15)" class="hit44" style="min-width:46px;min-height:44px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text-strong);font-size:var(--fs-sm);font-weight:800;cursor:pointer">−15</button>
-      <button onclick="ajusterRepos(15)" class="hit44" style="min-width:46px;min-height:44px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text-strong);font-size:var(--fs-sm);font-weight:800;cursor:pointer">+15</button>
-      <button onclick="annulerRepos()" class="hit44" style="min-width:60px;min-height:44px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px;cursor:pointer">Passer</button>
+    </div>
+    <!-- RANGEE 2 : les commandes, sur leur propre ligne. Elles se disputaient
+         la largeur avec le libellé et tombaient toutes sous 44 px de haut. -->
+    <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+      <button onclick="ajusterRepos(-15)" class="hit44" style="flex:0 0 56px;height:56px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);color:var(--text-strong);font-size:var(--fs-lg);font-weight:800;cursor:pointer">−15</button>
+      <button onclick="ajusterRepos(15)" class="hit44" style="flex:0 0 56px;height:56px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);color:var(--text-strong);font-size:var(--fs-lg);font-weight:800;cursor:pointer">+15</button>
+      <button onclick="annulerRepos()" class="hit44" style="flex:1;min-height:48px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-sm);font-weight:800;letter-spacing:.5px;cursor:pointer">Passer</button>
       <!-- LE SON, COUPABLE SUR PLACE. Le réglage se pose une fois ; ce bouton
            sert au moment où le son dérange — quelqu'un à côté, ou les
            écouteurs qu'on vient de retirer. -->
       <button onclick="basculerSonRepos()" class="hit44" aria-pressed="${_sonOn?'true':'false'}"
         aria-label="${_sonOn?'Couper le son de fin de repos':'Activer le son de fin de repos'}"
         title="${_sonOn?'Son de fin de repos activé':'Son de fin de repos coupé'}"
-        style="min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;
+        style="flex:0 0 48px;height:48px;display:flex;align-items:center;justify-content:center;
         background:${_sonOn?'rgba(224,32,32,.12)':'none'};border:1px solid ${_sonOn?'rgba(224,32,32,.5)':'var(--border)'};
         border-radius:var(--r-2);color:${_sonOn?'var(--red-light)':'var(--sub)'};cursor:pointer">${_icoSon(_sonOn,15)}</button>
     </div>
