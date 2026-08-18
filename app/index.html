@@ -105,6 +105,12 @@ if('serviceWorker' in navigator){
 :root{--pile-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,'Noto Sans',sans-serif;--pile-titre:'Bebas Neue','Arial Narrow','Haettenschweiler','Franklin Gothic Condensed',Impact,sans-serif}
 </style>
 <style>
+/* LA MOITIÉ QUI REND --halo-c OPÉRANT. Les éléments qui posent une couleur
+   redéclarent les trois crans CHEZ EUX, où leur propre --halo-c s'applique
+   enfin. Le cas neutre reste résolu sur :root, sans rien coûter aux autres.
+   Limite connue : un halo imbriqué dans un halo coloré hériterait de sa
+   couleur. Il n'y en a aucun aujourd'hui. */
+[style*="--halo-c"]{--halo-1:0 0 8px var(--halo-c,rgba(255,255,255,.45));--halo-2:0 0 14px var(--halo-c,rgba(255,255,255,.60)),0 0 30px var(--halo-c,rgba(255,255,255,.25));--halo-3:0 0 20px var(--halo-c,rgba(255,255,255,.85)),0 0 44px var(--halo-c,rgba(255,255,255,.40));}
 html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{--bg:#080808;--red:#E02020;--red2:#b81515;--red-bg:#0d0000;--red-glow:#FF3345;--red-light:color-mix(in srgb,var(--red) 70%,white);
   /* rouge de TEXTE — 6,17:1 sur #111. --red (#E02020) plafonne à 3,95:1 et
@@ -130,6 +136,16 @@ html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-h
   /* Bleus. #3355aa et #4466aa donnaient 2,7:1 et 3,4:1 sur #111 : c'etait un
      lien, donc un echec de contraste sur du texte actionnable. */
   --link:#7aa7e8;--accent-blue:#4fc3f7;--green:#22c55e;--orange:#f97316;--success:var(--green);--success-bg:#021007;--success-border:#052a10;--info:#d4a017;--info-bg:#160d00;--info-border:#2a1a00;--warning:var(--orange);--warning-bg:#1a0800;--warning-border:#3a1500;--danger:var(--red);--danger-bg:#1a0000;--danger-border:#3a0000;--cycle-accent:#A78BFA;--glow-sm:0 0 12px rgba(224,32,32,.25);--glow-md:0 0 28px rgba(255,51,69,.4);--glow-lg:0 0 56px rgba(255,51,69,.5);
+  /* Halos. Douze rayons distincts de 6 à 30 px pour un seul geste — faire luire
+     un chiffre — ramenés à trois crans.
+
+     --halo-c en change la couleur au point d'usage. ATTENTION : les trois crans
+     sont AUSSI redéclarés plus bas sur [style*="--halo-c"], et ce n'est pas une
+     redondance. Une propriété personnalisée est substituée LÀ OÙ ELLE EST
+     DÉCLARÉE : le var(--halo-c,…) écrit ici est résolu une fois pour toutes
+     avec le blanc, et poser --halo-c sur un élément plus bas n'y changerait
+     rien. Vérifié dans le navigateur. */
+  --halo-1:0 0 8px var(--halo-c,rgba(255,255,255,.45));--halo-2:0 0 14px var(--halo-c,rgba(255,255,255,.60)),0 0 30px var(--halo-c,rgba(255,255,255,.25));--halo-3:0 0 20px var(--halo-c,rgba(255,255,255,.85)),0 0 44px var(--halo-c,rgba(255,255,255,.40));
   /* Empilement. Le fichier portait 90 z-index sur 18 valeurs, de 0 à 9999, sans
      aucune règle : 900, 2100, 5000, 8000, 9000, 9998, 9999. Six crans suffisent,
      et l'ordre ci-dessous est le contrat :
@@ -498,7 +514,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
    parce que le badge d'état mange la largeur. Un nom tronqué se lit ; un nom
    cassé en deux se déchiffre. */
 #ch-clients-list .cr-nom{font-weight:800;font-size:var(--fs-md);letter-spacing:.2px;color:#f2f2f2;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #ch-clients-list .avatar{box-shadow:0 0 0 1px rgba(255,255,255,.09),0 4px 12px rgba(0,0,0,.5)}
 /* LE BADGE, COMPACT ICI SEULEMENT. Mesuré : sur 343 px de ligne, « Nouveau
    bilan » en prenait 136 — quarante pour cent pour une étiquette — et il ne
@@ -564,7 +580,7 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
     inset 0 1px 0 rgba(255,255,255,.08),inset 0 -1px 0 rgba(0,0,0,.65),
     0 0 0 1px rgba(224,32,32,.10),-3px 0 14px rgba(224,32,32,.35)}
 /* Le halo du chiffre lui-meme : sans lui, le blanc reste plat sur le noir. */
-.metric-val{text-shadow:0 0 18px rgba(255,255,255,.20)}
+.metric-val{text-shadow:var(--halo-2)}
 .metric-box::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--red) var(--pct,0%),transparent var(--pct,0%))}
 .metric-val{font-size:var(--fs-2xl);font-family:var(--pile-titre);letter-spacing:0;line-height:1}
 /* LES CARTES DE LA PAGE EVOLUTION. Elles etaient plates — un aplat et un
@@ -581,7 +597,7 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 /* Le titre de section : ROUGE. Il etait gris, donc invisible, et la page
    n'avait aucun point d'entree pour l'oeil. */
 .evo-titre{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);
-  text-transform:uppercase;margin-bottom:8px;text-shadow:0 0 10px rgba(224,32,32,.45)}
+  text-transform:uppercase;margin-bottom:8px;--halo-c:rgba(224,32,32,.45);text-shadow:var(--halo-1)}
 .metric-label{font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;margin-top:6px;font-weight:700}
 /* Sur un écran de 320 px, trois encadrés côte à côte laissent 59 px de contenu
    chacun. « 1200kg » en Bebas 32 en demande 79, et .metric-box porte
@@ -748,10 +764,10 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
   background:repeating-linear-gradient(-52deg,transparent,transparent 7px,rgba(0,0,0,.16) 7px,rgba(0,0,0,.16) 8px)}
 .plan-titre>*{position:relative}
 .plan-titre-t{font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.2px;text-transform:uppercase;color:var(--text);
-  text-shadow:0 0 6px rgba(255,255,255,.9),0 0 14px rgba(255,255,255,.5),0 0 26px rgba(255,120,120,.45)}
+  text-shadow:var(--halo-1),0 0 14px rgba(255,255,255,.5),0 0 26px rgba(255,120,120,.45)}
 /* Total du repas : petit, italique, poussé à droite. Il ne doit jamais
    concurrencer le nom du repas — c'est un repère, pas un titre. */
-.plan-macros{margin-left:auto;flex-shrink:0;font-style:italic;font-size:var(--fs-2xs);font-weight:600;color:rgba(255,255,255,.82);letter-spacing:.2px;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.plan-macros{margin-left:auto;flex-shrink:0;font-style:italic;font-size:var(--fs-2xs);font-weight:600;color:rgba(255,255,255,.82);letter-spacing:.2px;white-space:nowrap}
 .plan-corps{padding:1px 9px 8px}
 /* Le filet SÉPARE, il n'encadre pas : la première ligne n'en porte pas, sinon
    il doublait le bord du bandeau de titre juste au-dessus. */
@@ -1086,7 +1102,7 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 .emo-opt.sel{border-color:var(--eo);background:#0e0a0a;box-shadow:0 0 14px var(--eo-glow),inset 0 0 10px var(--eo-glow)}
 .emo-opt.sel .emo{stroke:var(--eo);opacity:1;transform:scale(1.15);filter:drop-shadow(0 0 5px var(--eo))}
 .emo-opt.sel .emo .emo-dot{fill:var(--eo)}
-.emo-opt.sel .emo-lbl{color:var(--eo);text-shadow:0 0 8px var(--eo-glow)}
+.emo-opt.sel .emo-lbl{color:var(--eo);--halo-c:var(--eo-glow);text-shadow:var(--halo-1)}
 /* Badge record animé (fin de séance) — médaillon */
 .wd-badge{display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 0 2px;animation:wdBadgePop .6s cubic-bezier(.2,1.5,.4,1) both}
 .wd-badge-medal{position:relative;width:138px;height:138px;border-radius:50%;flex-shrink:0;animation:wdMedalSwing 3s ease-in-out .6s infinite,wdBadgeGlow 2.4s ease-in-out .6s infinite}
@@ -1104,7 +1120,7 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 .gsl-opt:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
 .gsl-opt.sel{border-color:var(--text);background:#0e0a0a;box-shadow:0 0 16px rgba(255,255,255,.28),inset 0 0 12px rgba(255,255,255,.1)}
 .gsl-opt.sel .gsl-body{fill:var(--border);stroke:var(--text);filter:drop-shadow(0 0 6px rgba(255,255,255,.85))}
-.gsl-opt.sel .gsl-lbl{color:var(--text);text-shadow:0 0 8px rgba(255,255,255,.6)}
+.gsl-opt.sel .gsl-lbl{color:var(--text);text-shadow:var(--halo-1)}
 /* Curseur néon 1-10 (motivation) */
 .bsl-wrap{background:var(--surface-1);border:1px solid #222;border-radius:12px;padding:18px 16px 14px;text-align:center}
 .bsl-value{font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:1;transition:.15s}
@@ -1598,7 +1614,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
     <!-- Tagline avec text-shadow pour faire ressortir -->
     <div style="margin-top:48px;margin-top:min(48px,5dvh);text-align:center;padding:0 32px;animation:wFadeUp 0.7s ease 0.5s both;opacity:0">
-      <div style="font-size:var(--fs-2xl);font-weight:900;line-height:1.1;letter-spacing:-1.5px;color:var(--text);text-shadow:0 2px 20px rgba(0,0,0,.95),0 0 50px rgba(0,0,0,.8),0 4px 8px rgba(0,0,0,.6)">Entraîne-toi<br>comme un<br><span style="color:#E02020;text-shadow:0 0 30px rgba(224,32,32,.5),0 2px 14px rgba(0,0,0,.9)">pro.</span></div>
+      <div style="font-size:var(--fs-2xl);font-weight:900;line-height:1.1;letter-spacing:-1.5px;color:var(--text);text-shadow:0 2px 20px rgba(0,0,0,.95),0 0 50px rgba(0,0,0,.8),0 4px 8px rgba(0,0,0,.6)">Entraîne-toi<br>comme un<br><span style="color:#E02020;--halo-c:rgba(224,32,32,.5);text-shadow:var(--halo-3),0 2px 14px rgba(0,0,0,.9)">pro.</span></div>
     </div>
 
     <!-- Descriptor — DISCIPLINE · TRAVAIL · RÉSULTAT -->
@@ -3134,7 +3150,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <path d="M0,2 L100,2 L100,19.76 Q101.13,25.26 98.73,14.25 Q96.79,19.75 94.84,15.51 Q91.64,21.01 88.43,12.09 Q85.04,17.59 81.65,18.22 Q78.72,23.72 75.8,15.79 Q73.1,21.29 70.4,19.34 Q67.43,24.84 64.46,12.11 Q60.57,17.61 56.69,13.98 Q53.96,19.48 51.23,11.51 Q48.43,17.01 45.62,19.91 Q41.63,25.41 37.65,16.09 Q35.19,21.59 32.74,12.59 Q30.68,18.09 28.62,11.63 Q26.22,17.13 23.82,19.11 Q20.27,24.61 16.73,19.59 Q14.33,25.09 11.92,20.27 Q8.63,25.77 5.34,20.06 Q2.67,25.56 0,20.06 Z" fill="#8fb6d2" opacity=".55"/>
           <path d="M0,0 L100,0 L100,18.26 Q101.13,23.76 98.73,12.75 Q96.79,18.25 94.84,14.01 Q91.64,19.51 88.43,10.59 Q85.04,16.09 81.65,16.72 Q78.72,22.22 75.8,14.29 Q73.1,19.79 70.4,17.84 Q67.43,23.34 64.46,10.61 Q60.57,16.11 56.69,12.48 Q53.96,17.98 51.23,10.01 Q48.43,15.51 45.62,18.41 Q41.63,23.91 37.65,14.59 Q35.19,20.09 32.74,11.09 Q30.68,16.59 28.62,10.13 Q26.22,15.63 23.82,17.61 Q20.27,23.11 16.73,18.09 Q14.33,23.59 11.92,18.77 Q8.63,24.27 5.34,18.56 Q2.67,24.06 0,18.56 Z" fill="url(#congere)"/>
           <circle cx="92.16" cy="10.14" r="0.7" fill="var(--text)" opacity="0.47"/><circle cx="64.39" cy="4.7" r="0.43" fill="var(--text)" opacity="0.47"/><circle cx="5.35" cy="10.75" r="0.68" fill="var(--text)" opacity="0.55"/><circle cx="24.91" cy="2.1" r="0.62" fill="var(--text)" opacity="0.31"/><circle cx="40.35" cy="7.11" r="0.7" fill="var(--text)" opacity="0.44"/><circle cx="31.93" cy="12.22" r="0.55" fill="var(--text)" opacity="0.54"/><circle cx="65.07" cy="4.65" r="0.3" fill="var(--text)" opacity="0.44"/><circle cx="79.28" cy="11.56" r="0.67" fill="var(--text)" opacity="0.52"/><circle cx="43.69" cy="3.5" r="0.4" fill="var(--text)" opacity="0.34"/><circle cx="79.3" cy="3.12" r="0.57" fill="var(--text)" opacity="0.34"/><circle cx="47.83" cy="3.38" r="0.68" fill="var(--text)" opacity="0.59"/><circle cx="7.31" cy="2.92" r="0.57" fill="var(--text)" opacity="0.61"/><circle cx="34.28" cy="4.86" r="0.27" fill="var(--text)" opacity="0.27"/><circle cx="12.68" cy="11.91" r="0.55" fill="var(--text)" opacity="0.51"/><circle cx="89.44" cy="6.83" r="0.39" fill="var(--text)" opacity="0.43"/><circle cx="96.66" cy="6.19" r="0.73" fill="var(--text)" opacity="0.49"/><circle cx="40.5" cy="11.47" r="0.63" fill="var(--text)" opacity="0.55"/><circle cx="56.76" cy="11.55" r="0.68" fill="var(--text)" opacity="0.45"/><circle cx="33.11" cy="3.44" r="0.28" fill="var(--text)" opacity="0.48"/><circle cx="97.94" cy="9.41" r="0.75" fill="var(--text)" opacity="0.58"/><circle cx="75.94" cy="2.42" r="0.29" fill="var(--text)" opacity="0.54"/><circle cx="10.31" cy="3.95" r="0.25" fill="var(--text)" opacity="0.49"/><circle cx="51.68" cy="2.04" r="0.74" fill="var(--text)" opacity="0.46"/><circle cx="13.63" cy="8.78" r="0.55" fill="var(--text)" opacity="0.58"/><circle cx="94.91" cy="4.06" r="0.49" fill="var(--text)" opacity="0.41"/><circle cx="68.38" cy="7.72" r="0.43" fill="var(--text)" opacity="0.45"/><circle cx="36.5" cy="4.94" r="0.29" fill="var(--text)" opacity="0.42"/><circle cx="53.59" cy="11.09" r="0.32" fill="var(--text)" opacity="0.48"/><circle cx="14.72" cy="11.76" r="0.66" fill="var(--text)" opacity="0.44"/><circle cx="11.23" cy="9.26" r="0.35" fill="var(--text)" opacity="0.34"/><circle cx="53.01" cy="10.38" r="0.57" fill="var(--text)" opacity="0.59"/><circle cx="57.34" cy="10.51" r="0.26" fill="var(--text)" opacity="0.27"/><circle cx="4.48" cy="7.06" r="0.55" fill="var(--text)" opacity="0.6"/><circle cx="59.84" cy="9.27" r="0.58" fill="var(--text)" opacity="0.59"/><circle cx="62.94" cy="11.29" r="0.56" fill="var(--text)" opacity="0.62"/><circle cx="82.91" cy="5.67" r="0.74" fill="var(--text)" opacity="0.26"/><circle cx="40.74" cy="4.08" r="0.69" fill="var(--text)" opacity="0.35"/><circle cx="98.16" cy="10.45" r="0.4" fill="var(--text)" opacity="0.56"/><circle cx="13.19" cy="12.43" r="0.74" fill="var(--text)" opacity="0.4"/><circle cx="62.38" cy="2.14" r="0.72" fill="var(--text)" opacity="0.55"/><circle cx="29.67" cy="4.31" r="0.61" fill="var(--text)" opacity="0.35"/><circle cx="61.99" cy="12.67" r="0.39" fill="var(--text)" opacity="0.48"/><circle cx="91.43" cy="10.81" r="0.51" fill="var(--text)" opacity="0.64"/><circle cx="24.15" cy="11.2" r="0.52" fill="var(--text)" opacity="0.26"/><circle cx="95.98" cy="2.73" r="0.52" fill="var(--text)" opacity="0.37"/><circle cx="94.55" cy="4.39" r="0.39" fill="var(--text)" opacity="0.49"/><circle cx="48.26" cy="5.47" r="0.47" fill="var(--text)" opacity="0.55"/><circle cx="81.82" cy="11.93" r="0.46" fill="var(--text)" opacity="0.33"/><circle cx="38.41" cy="12.24" r="0.7" fill="var(--text)" opacity="0.37"/><circle cx="68.67" cy="5.44" r="0.29" fill="var(--text)" opacity="0.29"/><circle cx="86.17" cy="3.62" r="0.55" fill="var(--text)" opacity="0.64"/><circle cx="89.68" cy="8.68" r="0.27" fill="var(--text)" opacity="0.55"/><circle cx="52.04" cy="7.45" r="0.32" fill="var(--text)" opacity="0.56"/><circle cx="75.72" cy="7.12" r="0.63" fill="var(--text)" opacity="0.35"/><circle cx="15.03" cy="12.04" r="0.43" fill="var(--text)" opacity="0.49"/><circle cx="65.04" cy="7.82" r="0.38" fill="var(--text)" opacity="0.4"/><circle cx="17.11" cy="7.77" r="0.52" fill="var(--text)" opacity="0.53"/><circle cx="81.11" cy="7.67" r="0.52" fill="var(--text)" opacity="0.47"/><circle cx="74.33" cy="2.9" r="0.31" fill="var(--text)" opacity="0.5"/><circle cx="77.02" cy="12.9" r="0.55" fill="var(--text)" opacity="0.25"/><circle cx="54.61" cy="2.88" r="0.36" fill="var(--text)" opacity="0.33"/><circle cx="46.59" cy="11.02" r="0.45" fill="var(--text)" opacity="0.32"/><circle cx="22.12" cy="7.84" r="0.57" fill="var(--text)" opacity="0.59"/><circle cx="2.17" cy="5.03" r="0.3" fill="var(--text)" opacity="0.37"/><circle cx="48.48" cy="6.51" r="0.62" fill="var(--text)" opacity="0.53"/><circle cx="19.07" cy="10.94" r="0.41" fill="var(--text)" opacity="0.59"/><circle cx="90.48" cy="10.43" r="0.66" fill="var(--text)" opacity="0.43"/><circle cx="46.66" cy="7.7" r="0.67" fill="var(--text)" opacity="0.58"/><circle cx="34.54" cy="7.51" r="0.39" fill="var(--text)" opacity="0.54"/><circle cx="86.2" cy="4.42" r="0.29" fill="var(--text)" opacity="0.38"/></svg>
-        <div style="position:relative;font-size:var(--fs-xs);color:#8fd0ff;letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:5px;text-shadow:0 0 14px rgba(124,196,255,.65)">❄ Séance gelée</div>
+        <div style="position:relative;font-size:var(--fs-xs);color:#8fd0ff;letter-spacing:3px;font-weight:800;text-transform:uppercase;margin-bottom:5px;--halo-c:rgba(124,196,255,.65);text-shadow:var(--halo-2)">❄ Séance gelée</div>
         <div style="position:relative;font-size:var(--fs-md);font-weight:800;color:#eaf6ff;margin-bottom:3px" id="clh-resume-name">Reprendre ma séance</div>
         <div style="position:relative;font-size:var(--fs-xs);color:#9ab6cc">Reprendre là où tu t'es arrêté →</div>
       </div>
@@ -4136,7 +4152,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="position:absolute;left:50%;top:-34px;transform:translateX(-50%);width:120px;height:90px;border-radius:50%;background:radial-gradient(circle,rgba(224,32,32,.15),transparent 68%);pointer-events:none"></div>
         <div style="position:relative;text-align:center">
           <div style="margin-bottom:9px;color:#ff3b30;filter:drop-shadow(0 0 9px rgba(224,32,32,.75))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:30px;height:30px;display:inline-block;vertical-align:middle"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
-          <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:2.5px;color:var(--text);text-transform:uppercase;margin-bottom:12px;text-shadow:0 0 12px rgba(255,255,255,.3)">Partager une vidéo</div>
+          <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:2.5px;color:var(--text);text-transform:uppercase;margin-bottom:12px;text-shadow:var(--halo-2)">Partager une vidéo</div>
           <!-- Le nom était jusqu'ici DÉDUIT de l'URL (« Vidéo YouTube ») ou du
                nom de fichier. Deux vidéos de deux exercices différents
                s'appelaient donc pareil, et le coach devait ouvrir chacune pour
@@ -4149,7 +4165,7 @@ const COACH_PHOTO='icons/coach.jpg';
             onkeydown="if(event.key==='Enter')addVideoLink()"
             oninput="document.getElementById('vid-drive-hint').style.display=this.value.includes('drive.google.com')?'block':'none'">
           <div id="vid-drive-hint" style="display:none;background:var(--warning-bg);border:1px solid #7c2d1244;border-radius:8px;padding:9px 12px;font-size:var(--fs-xs);color:var(--warning);line-height:1.5;margin-bottom:10px;text-align:left">⚠️ Vérifie que le lien est accessible à tous ceux qui l'ont (pas seulement toi) avant de l'envoyer · dans Drive : <strong>Partager → Toute personne avec le lien</strong>.</div>
-          <button onclick="addVideoLink()" style="width:100%;padding:13px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:9px;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:0 0 10px rgba(255,255,255,.45)">Ajouter la vidéo</button>
+          <button onclick="addVideoLink()" style="width:100%;padding:13px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:9px;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Ajouter la vidéo</button>
           <div class="sub" style="font-size:var(--fs-xs);margin-top:11px;line-height:1.6">Enregistre avec ton téléphone → partage sur <b style="color:var(--text-strong)">YouTube</b> (non répertoriée) ou <b style="color:var(--text-strong)">Google Drive</b> → colle le lien ici · <strong style="color:#ff5a5a">ton coach corrige directement dans l'app</strong></div>
         </div>
       </div>
@@ -4161,7 +4177,7 @@ const COACH_PHOTO='icons/coach.jpg';
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:17px;height:17px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Choisir un fichier vidéo
             <input id="vid-file-input" type="file" accept="video/*" style="display:none" onchange="uploadVideoFile(this)">
           </label>
-          <div id="vid-upload-progress" style="display:none;margin-top:10px;font-size:var(--fs-md);font-weight:800;color:var(--green);text-align:center;text-shadow:0 0 10px rgba(34,197,94,.6)"></div>
+          <div id="vid-upload-progress" style="display:none;margin-top:10px;font-size:var(--fs-md);font-weight:800;color:var(--green);text-align:center;--halo-c:rgba(34,197,94,.6);text-shadow:var(--halo-1)"></div>
           <div id="vid-upload-error" style="display:none;margin-top:10px;font-size:var(--fs-sm);color:var(--red-text)"></div>
           <div class="sub" style="font-size:var(--fs-xs);margin-top:11px;line-height:1.6">Envoi direct et sécurisé : ta vidéo est visible par ton coach immédiatement.</div>
         </div>
@@ -4296,14 +4312,14 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
         <div style="width:3px;height:22px;background:var(--red);border-radius:2px;box-shadow:0 0 10px rgba(224,32,32,.9)"></div>
         <span style="display:inline-flex;color:#ff3b30;filter:drop-shadow(0 0 6px rgba(224,32,32,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M2 17h18a2 2 0 0 0 2-2c0-1.6-1.2-2.3-2.8-2.9l-4.4-1.7a3 3 0 0 1-1.3-1L11.6 6.4a1.4 1.4 0 0 0-2.2-.2L7.6 8.1 2 8.1z"/><path d="M2 17v2h20v-2"/></svg></span>
-        <span style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:3px;color:var(--red-text);text-transform:uppercase;text-shadow:0 0 14px rgba(224,32,32,.55)">MES PAS</span>
+        <span style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:3px;color:var(--red-text);text-transform:uppercase;--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)">MES PAS</span>
       </div>
       <div id="lifestyle-steps-content"></div>
       <div class="divider" style="margin:28px 0"></div>
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
         <div style="width:3px;height:22px;background:#60a5fa;border-radius:2px;box-shadow:0 0 10px rgba(96,165,250,.9)"></div>
         <span style="display:inline-flex;color:#60a5fa;filter:drop-shadow(0 0 6px rgba(96,165,250,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="17" height="17"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>
-        <span style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:3px;color:var(--text);text-transform:uppercase;text-shadow:0 0 14px rgba(255,255,255,.35)">MON SOMMEIL</span>
+        <span style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:3px;color:var(--text);text-transform:uppercase;text-shadow:var(--halo-2)">MON SOMMEIL</span>
       </div>
       <div id="lifestyle-sleep-content"></div>
     </div>
@@ -11669,7 +11685,7 @@ function _rendreEcheanceAcces(){
       background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.02) 11px,rgba(255,255,255,.02) 12px),linear-gradient(168deg,#1b1b1b,#111 55%,#0b0b0b);
       border:1px solid var(--border);border-left:3px solid ${c};
       box-shadow:0 12px 26px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.05),-3px 0 16px ${c}33">
-    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:${c};text-shadow:0 0 10px ${c}66">
+    <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:${c};--halo-c:${c};text-shadow:var(--halo-1)66">
       Ton accès se termine ${quand}</div>
     <div style="font-size:var(--fs-xs);color:#c9c9c9;line-height:1.6;margin-top:5px">
       Il prend fin le ${escapeHtml(d)}. ${nom?escapeHtml(nom)+' peut le prolonger':'Ton coach peut le prolonger'}, préviens-le avant.</div>
@@ -13661,7 +13677,7 @@ function renderFileReprise(){
       background:var(--surface-1);border:1px solid var(--border);border-radius:11px;padding:11px 13px;margin-bottom:12px">
       <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.5">Relancés cette semaine</span>
       <span style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--red-text);
-        text-shadow:0 0 9px rgba(224,32,32,.6)">${sem}</span>
+        --halo-c:rgba(224,32,32,.6);text-shadow:var(--halo-1)">${sem}</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
       <span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase">Mettre en veille</span>
@@ -22116,12 +22132,12 @@ function _apLigne(ex,i){
     <summary style="position:relative;display:flex;align-items:center;gap:12px;padding:11px 12px;
       cursor:pointer;list-style:none;min-height:56px">
       <span style="flex-shrink:0;width:22px;font-family:var(--pile-titre);
-        font-size:var(--fs-xl);line-height:1;color:var(--red-text);text-shadow:0 0 9px rgba(224,32,32,.75);
+        font-size:var(--fs-xl);line-height:1;color:var(--red-text);--halo-c:rgba(224,32,32,.75);text-shadow:var(--halo-1);
         text-align:center">${i+1}</span>
       ${vign}
       <div style="flex:1;min-width:0">
         <div style="font-weight:900;font-size:var(--fs-md);line-height:1.25;letter-spacing:.2px;
-          text-transform:uppercase;color:var(--text);text-shadow:0 1px 2px rgba(0,0,0,.6)">${escapeHtml(ex.name||'Exercice '+(i+1))}</div>
+          text-transform:uppercase;color:var(--text)">${escapeHtml(ex.name||'Exercice '+(i+1))}</div>
         ${sr?`<div style="display:inline-block;margin-top:6px;padding:3px 9px;border-radius:6px;
           background:rgba(224,32,32,.12);border:1px solid rgba(224,32,32,.32);
           font-size:var(--fs-sm);font-weight:800;color:#ff6b6b;letter-spacing:.5px">${escapeHtml(sr)}</div>`:''}
@@ -22166,7 +22182,7 @@ function _renderApercu(){
     <div style="position:relative">
       <div style="font-family:var(--pile-titre);
         font-size:var(--fs-2xl);line-height:1;color:var(--text);letter-spacing:.5px;
-        text-shadow:0 0 9px rgba(255,255,255,${fort?'.95':'.35'}),0 0 22px rgba(255,255,255,${fort?'.5':'.15'})">${escapeHtml(String(v))}</div>
+        --halo-c:rgba(255,255,255,${fort?'.95':'.35'});text-shadow:var(--halo-1),0 0 22px rgba(255,255,255,${fort?'.5':'.15'})">${escapeHtml(String(v))}</div>
       <div style="font-size:var(--fs-2xs);margin-top:5px;text-transform:uppercase;letter-spacing:1.6px;font-weight:800;
         color:${fort?'rgba(255,255,255,.88)':'var(--sub)'}">${escapeHtml(lib)}</div>
     </div></div>`;
@@ -24598,7 +24614,7 @@ function buildSessionComparison(vol,data){
         </g>
         <text x="100" y="157" text-anchor="middle" font-family="'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif" font-size="34" letter-spacing="4" fill="url(#wdSilver)" stroke="#43474e" stroke-width=".7" paint-order="stroke">RECORD</text>
       </svg></div>
-      <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:2px;color:#e8ebef;margin-top:12px;line-height:1;text-shadow:0 0 10px rgba(255,255,255,.25)">NOUVEAU RECORD</div>
+      <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:2px;color:#e8ebef;margin-top:12px;line-height:1;text-shadow:var(--halo-1)">NOUVEAU RECORD</div>
       <div style="font-size:var(--fs-md);font-weight:800;color:var(--text);margin-top:5px">${best.curMax}kg : ${escapeHtml(best.nm)}</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:3px">était ${best.histMax}kg${records.length>1?' · +'+(records.length-1)+' autre'+(records.length>2?'s':'')+' record'+(records.length>2?'s':'')+' battu'+(records.length>2?'s':''):''}</div>
     </div>`;
@@ -28354,7 +28370,7 @@ function _updateBilanCountdown(){
     <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,rgba(224,32,32,.95),rgba(224,32,32,.15),transparent)"></div>
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:var(--red-text);margin-bottom:3px">Prochain bilan</div>
     <div style="font-size:var(--fs-md);font-weight:700;color:var(--text);margin-bottom:14px">${dateLabel}</div>
-    <div style="display:flex;gap:6px">${blocks.map(b=>`<div style="flex:1;background:${b.red?'rgba(224,32,32,.13)':'rgba(255,255,255,.03)'};border:1px solid ${b.red?'rgba(224,32,32,.28)':'rgba(255,255,255,.07)'};border-radius:8px;padding:12px 6px;text-align:center"><div style="font-size:var(--fs-3xl);font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:${b.red?'var(--red)':'var(--text)'}${b.red?';text-shadow:0 0 18px rgba(224,32,32,.55)':''}">${b.v}</div><div style="font-size:var(--fs-xs);font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:rgba(255,255,255,.32);margin-top:5px">${b.l}</div></div>`).join('')}</div>
+    <div style="display:flex;gap:6px">${blocks.map(b=>`<div style="flex:1;background:${b.red?'rgba(224,32,32,.13)':'rgba(255,255,255,.03)'};border:1px solid ${b.red?'rgba(224,32,32,.28)':'rgba(255,255,255,.07)'};border-radius:8px;padding:12px 6px;text-align:center"><div style="font-size:var(--fs-3xl);font-weight:900;line-height:1;font-variant-numeric:tabular-nums;color:${b.red?'var(--red)':'var(--text)'}${b.red?';--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)':''}">${b.v}</div><div style="font-size:var(--fs-xs);font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:rgba(255,255,255,.32);margin-top:5px">${b.l}</div></div>`).join('')}</div>
   </div>`;
 }
 // forcerReprise : appelé depuis la carte de reprise de l'accueil, où l'athlète
@@ -28642,7 +28658,7 @@ function bSlider(gid){
   const pct=(v-1)/9*100;
   const track=set?`linear-gradient(90deg,${c} ${pct}%,#1a1a1a ${pct}%)`:'#1a1a1a';
   return `<div class="bsl-wrap">
-    <div class="bsl-value" id="bsl-num-${gid}" style="color:${c};${set?`text-shadow:0 0 16px ${c}66`:''}">${set?v:'–'}<span class="bsl-max">/10</span></div>
+    <div class="bsl-value" id="bsl-num-${gid}" style="color:${c};${set?`--halo-c:${c};text-shadow:var(--halo-2)66`:''}">${set?v:'–'}<span class="bsl-max">/10</span></div>
     <div class="bsl-feedback" id="bsl-fb-${gid}" style="color:${set?c:'var(--text-dim)'}">${set?BSL_LABELS[v-1]:'Fais glisser le curseur'}</div>
     <input type="range" min="1" max="10" step="1" value="${v}" class="bslider" id="bsl-in-${gid}" style="--bsl:${set?c:'#555'};--bsl-glow:${set?c+'66':'transparent'};background:${track}" oninput="bSliderInput('${gid}',this.value)">
     <div class="bsl-scale"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span></div>
@@ -28779,7 +28795,7 @@ function _bSportSet(id,i,champ,val){
   }
 }
 
-function bSec(title,html){return`<div style="margin-bottom:22px"><div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:2px;font-weight:800;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid rgba(224,32,32,.28);text-shadow:0 0 12px rgba(224,32,32,.4)">${title}</div>${html}</div>`;}
+function bSec(title,html){return`<div style="margin-bottom:22px"><div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:2px;font-weight:800;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid rgba(224,32,32,.28);--halo-c:rgba(224,32,32,.4);text-shadow:var(--halo-2)">${title}</div>${html}</div>`;}
 function bMeas(id,label,unit){return`<div class="bil-row"><span class="bil-row-label">${label}</span><div style="display:flex;align-items:center;gap:6px">${bQ(id)}<span class="bil-unit">${unit}</span></div></div>`;}
 
 // ── Schéma corporel interactif (mensurations) ─────────────────────────
@@ -32766,7 +32782,7 @@ function showProgressTab(tab,btn){
       // rattache la carte à sa courbe sans avoir à lire le titre.
       miniCharts+=`<div class="evo-carte" style="padding:12px;margin-bottom:0;border-left:3px solid ${g.items[0].color}">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-          <div style="font-size:var(--fs-xs);font-weight:800;color:${g.items[0].color};letter-spacing:1.4px;text-transform:uppercase;text-shadow:0 0 12px ${g.items[0].color}55">${g.label}</div>
+          <div style="font-size:var(--fs-xs);font-weight:800;color:${g.items[0].color};letter-spacing:1.4px;text-transform:uppercase;--halo-c:${g.items[0].color};text-shadow:var(--halo-2)55">${g.label}</div>
           ${diff!==null?`<div style="font-size:var(--fs-xs);font-weight:700;color:${col}">${diff>0?'+':''}${diff}cm</div>`:''}
         </div>
         ${isGroup?`<div style="display:flex;gap:8px;margin-bottom:4px">${g.items.map(it=>`<span style="font-size:var(--fs-xs);color:${it.color};font-weight:700">● ${it.l}</span>`).join('')}</div>`:''}
@@ -32978,10 +32994,10 @@ function showProgressTab(tab,btn){
         <div style="text-align:center;margin-bottom:6px">
           <div style="display:flex;align-items:center;justify-content:center;gap:9px;margin-bottom:7px">
             <div style="flex:1;max-width:52px;height:1px;background:linear-gradient(90deg,transparent,rgba(224,32,32,.85))"></div>
-            <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:4px;color:#ff5a5a;text-transform:uppercase;white-space:nowrap;text-shadow:0 0 9px rgba(224,32,32,.65)">RepCore</div>
+            <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:4px;color:#ff5a5a;text-transform:uppercase;white-space:nowrap;--halo-c:rgba(224,32,32,.65);text-shadow:var(--halo-1)">RepCore</div>
             <div style="flex:1;max-width:52px;height:1px;background:linear-gradient(90deg,rgba(224,32,32,.85),transparent)"></div>
           </div>
-          <div class="fq-titre" style="font-family:var(--pile-titre);line-height:.96;letter-spacing:2px;color:var(--text);text-shadow:0 0 22px rgba(255,255,255,.42),0 0 44px rgba(224,32,32,.35)">MA TRANSFORMATION</div>
+          <div class="fq-titre" style="font-family:var(--pile-titre);line-height:.96;letter-spacing:2px;color:var(--text);text-shadow:var(--halo-3),0 0 44px rgba(224,32,32,.35)">MA TRANSFORMATION</div>
           <div style="width:46px;height:2.5px;background:linear-gradient(90deg,#ff3b30,#8d0000);border-radius:2px;margin:9px auto 0;box-shadow:0 0 12px rgba(224,32,32,.85)"></div>
           <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2.8px;color:#7a7a7a;text-transform:uppercase;margin-top:8px">${period?period+' de travail':'Suivi photo'} &nbsp;·&nbsp; ${bl.length} bilan${bl.length>1?'s':''}</div>
         </div>
@@ -32991,11 +33007,11 @@ function showProgressTab(tab,btn){
             <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:var(--text-dim);margin-top:3px;font-weight:800">DÉPART</div>
           </div>
           <div style="flex:1;max-width:112px;background:linear-gradient(160deg,#c10000,#6d0000);border:1px solid rgba(255,90,90,.42);border-radius:10px;padding:8px 6px;text-align:center;box-shadow:0 0 20px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.18)">
-            <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;color:var(--text);text-shadow:0 0 12px rgba(255,255,255,.9)">${wLast}<span style="font-size:var(--fs-xs)">kg</span></div>
+            <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;color:var(--text);text-shadow:var(--halo-2)">${wLast}<span style="font-size:var(--fs-xs)">kg</span></div>
             <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:rgba(255,255,255,.8);margin-top:3px;font-weight:800">AUJOURD'HUI</div>
           </div>
           <div style="flex:1;max-width:112px;background:linear-gradient(180deg,#131313,#0b0b0b);border:1px solid ${dCol}44;border-radius:10px;padding:8px 6px;text-align:center;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 0 16px ${dCol}22">
-            <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;color:${dCol};text-shadow:0 0 12px ${dCol}bb">${dW>0?'+':''}${dW}<span style="font-size:var(--fs-xs)">kg</span></div>
+            <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;color:${dCol};--halo-c:${dCol};text-shadow:var(--halo-2)bb">${dW>0?'+':''}${dW}<span style="font-size:var(--fs-xs)">kg</span></div>
             <div style="font-size:var(--fs-xs);letter-spacing:1.6px;color:${dCol}aa;margin-top:3px;font-weight:800">ÉVOLUTION</div>
           </div>
         </div>`:'<div style="height:8px"></div>'}
@@ -33007,7 +33023,7 @@ function showProgressTab(tab,btn){
                 const isLast=i===bl.length-1;
                 return `<td style="padding:4px 4px 7px;text-align:center;min-width:var(--fq)">
                   <div style="display:inline-block;padding:3px 9px;border-radius:20px;background:${isLast?'linear-gradient(160deg,#c10000,#6d0000)':'#141414'};border:1px solid ${isLast?'rgba(255,90,90,.45)':'#222'};box-shadow:${isLast?'0 0 14px rgba(224,32,32,.5)':'none'}">
-                    <span style="font-family:var(--pile-titre);font-size:var(--fs-md);letter-spacing:1.5px;color:${isLast?'var(--text)':'#7a7a7a'};${isLast?'text-shadow:0 0 9px rgba(255,255,255,.7)':''}">B${i+1}</span>
+                    <span style="font-family:var(--pile-titre);font-size:var(--fs-md);letter-spacing:1.5px;color:${isLast?'var(--text)':'#7a7a7a'};${isLast?'text-shadow:var(--halo-1)':''}">B${i+1}</span>
                   </div>
                   <div style="font-size:var(--fs-xs);font-weight:800;color:${isLast?'#ff7a7a':'#3f3f3f'};margin-top:3px;letter-spacing:.5px">${getBW(bl[i])?getBW(bl[i])+'KG':''}</div>
                 </td>`;
@@ -33017,7 +33033,7 @@ function showProgressTab(tab,btn){
             ${poses.map(([key,lbl,poseImg])=>`<tr>
               <td style="padding:5px 4px;vertical-align:middle;text-align:center">
                 <img src="${poseImg}" alt="${lbl}" style="height:calc(var(--fq) * .5);max-width:52px;object-fit:contain;filter:drop-shadow(0 0 7px rgba(255,255,255,.55));display:block;margin:0 auto 4px">
-                <div style="font-family:var(--pile-titre);font-size:var(--fs-xs);letter-spacing:1.4px;color:var(--text);text-shadow:0 0 9px rgba(255,255,255,.4);white-space:nowrap">${lbl}</div>
+                <div style="font-family:var(--pile-titre);font-size:var(--fs-xs);letter-spacing:1.4px;color:var(--text);text-shadow:var(--halo-1);white-space:nowrap">${lbl}</div>
               </td>
               ${bl.map((b,i)=>{
                 const src=getP(b,key);
@@ -35219,7 +35235,7 @@ function _renderStrictMacroRings(nut,jourAff){
     :`<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:5px;padding:3px 10px;letter-spacing:1px">${icon('moon',10)} JOUR OFF</span>`;
   return `<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;margin-bottom:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 8px 24px rgba(0,0,0,.35);animation:fadeInUp .3s ease">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div style="min-width:0"><div style="display:inline-flex;align-items:center;gap:7px;font-family:var(--pile-titre);font-size:var(--fs-lg);color:#ff3b30;text-transform:uppercase;letter-spacing:3px;text-shadow:0 0 8px rgba(224,32,32,.85),0 0 20px rgba(224,32,32,.45)"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('target',13)}</span>${estAuj?'OBJECTIFS DU JOUR':'OBJECTIFS'}</div>${estAuj?'':`<div style="margin-top:4px;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--red-text)">${_libelleJourNut(today)}</div>`}</div>
+      <div style="min-width:0"><div style="display:inline-flex;align-items:center;gap:7px;font-family:var(--pile-titre);font-size:var(--fs-lg);color:#ff3b30;text-transform:uppercase;letter-spacing:3px;--halo-c:rgba(224,32,32,.85);text-shadow:var(--halo-1),0 0 20px rgba(224,32,32,.45)"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('target',13)}</span>${estAuj?'OBJECTIFS DU JOUR':'OBJECTIFS'}</div>${estAuj?'':`<div style="margin-top:4px;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--red-text)">${_libelleJourNut(today)}</div>`}</div>
       <span style="display:inline-flex;align-items:center;gap:6px">${badgePhase(currentUser)}${dayBadge}</span>
     </div>
     ${htmlAnneauxMacros(tot,m,'16px')}
@@ -35392,7 +35408,7 @@ function _renderStrictDiet(){
     <div style="background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0b0b0b);border:1px solid var(--border);border-radius:16px;box-shadow:0 18px 40px rgba(0,0,0,.75),0 4px 12px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.07),inset 0 -1px 0 rgba(0,0,0,.6);padding:18px;margin-bottom:12px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.45);animation:fadeInUp .3s ease">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.028) 11px,rgba(255,255,255,.028) 12px);pointer-events:none"></div>
       <div style="position:relative">
-        <div style="display:inline-flex;align-items:center;gap:7px;font-family:var(--pile-titre);font-size:var(--fs-lg);color:var(--text);text-transform:uppercase;letter-spacing:2.5px;margin-bottom:14px;text-shadow:0 0 8px rgba(255,255,255,.35),0 0 18px rgba(255,255,255,.18)"><span style="display:inline-flex;color:#ff3b30;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('check',13)}</span>J'AI RESPECTÉ MON PLAN${_sAuj?" AUJOURD'HUI":''}</div>
+        <div style="display:inline-flex;align-items:center;gap:7px;font-family:var(--pile-titre);font-size:var(--fs-lg);color:var(--text);text-transform:uppercase;letter-spacing:2.5px;margin-bottom:14px;text-shadow:var(--halo-1),0 0 18px rgba(255,255,255,.18)"><span style="display:inline-flex;color:#ff3b30;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('check',13)}</span>J'AI RESPECTÉ MON PLAN${_sAuj?" AUJOURD'HUI":''}</div>
         ${_bandeauJour('strict-jour',_sjour,'setStrictJour')}
         <div style="display:flex;gap:10px">
           <button onclick="setNutriRespected('${_sjour}',true)" style="flex:1;padding:16px 0;border-radius:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;letter-spacing:1.5px;cursor:pointer;background:${respYes?'linear-gradient(160deg,#1a9c4d,#0f5c2e)':'linear-gradient(180deg,#131313,#0c0c0c)'};color:${respYes?'var(--text)':'#8fd9ab'};border:2px solid ${respYes?'#22c55e':'rgba(34,197,94,.35)'};box-shadow:${respYes?'0 0 20px rgba(34,197,94,.45),inset 0 1px 0 rgba(255,255,255,.2)':'inset 0 1px 0 rgba(255,255,255,.03)'};text-shadow:${respYes?'0 0 10px rgba(255,255,255,.6)':'none'};transition:.2s">✓ OUI</button>
@@ -35406,7 +35422,7 @@ function _renderStrictDiet(){
         <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.028) 11px,rgba(255,255,255,.028) 12px);pointer-events:none"></div>
         <div style="position:absolute;left:50%;top:-46px;transform:translateX(-50%);width:150px;height:110px;background:radial-gradient(circle,${streak>0?'rgba(34,197,94,.2)':'rgba(224,32,32,.13)'},transparent 68%);pointer-events:none"></div>
         <div style="position:relative">
-          <div style="font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:1;color:${streak>0?'#22c55e':'#ff3b30'};text-shadow:0 0 12px ${streak>0?'rgba(34,197,94,.85)':'rgba(224,32,32,.8)'},0 0 26px ${streak>0?'rgba(34,197,94,.4)':'rgba(224,32,32,.35)'}">${streak}</div>
+          <div style="font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:1;color:${streak>0?'#22c55e':'#ff3b30'};--halo-c:${streak>0?'rgba(34,197,94,.85)':'rgba(224,32,32,.8)'};text-shadow:var(--halo-2),0 0 26px ${streak>0?'rgba(34,197,94,.4)':'rgba(224,32,32,.35)'}">${streak}</div>
           <div style="font-size:var(--fs-xs);color:${streak>0?'rgba(34,197,94,.75)':'rgba(255,90,90,.7)'};letter-spacing:2px;margin-top:5px;text-transform:uppercase;font-weight:800">Jours consécutifs</div>
         </div>
       </div>
@@ -35414,7 +35430,7 @@ function _renderStrictDiet(){
         <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.028) 11px,rgba(255,255,255,.028) 12px);pointer-events:none"></div>
         <div style="position:absolute;left:50%;top:-46px;transform:translateX(-50%);width:150px;height:110px;background:radial-gradient(circle,rgba(245,197,24,.16),transparent 68%);pointer-events:none"></div>
         <div style="position:relative">
-          <div style="font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:1;color:#f5c518;text-shadow:0 0 12px rgba(245,197,24,.8),0 0 26px rgba(245,197,24,.35)">${weekScore}<span style="font-size:var(--fs-xl);color:rgba(255,255,255,.35);text-shadow:none">/${answered||7}</span></div>
+          <div style="font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:1;color:#f5c518;--halo-c:rgba(245,197,24,.8);text-shadow:var(--halo-2),0 0 26px rgba(245,197,24,.35)">${weekScore}<span style="font-size:var(--fs-xl);color:rgba(255,255,255,.35);text-shadow:none">/${answered||7}</span></div>
           <div style="font-size:var(--fs-xs);color:rgba(245,197,24,.7);letter-spacing:2px;margin-top:5px;text-transform:uppercase;font-weight:800">Cette semaine</div>
         </div>
       </div>
@@ -37648,7 +37664,7 @@ function _htmlPlanAthlete(user,intercale){
       <span style="font-size:var(--fs-lg);line-height:1;filter:drop-shadow(0 0 6px rgba(255,90,90,.95))">⚠</span>
       <span style="font-family:var(--pile-titre);font-size:var(--fs-lg);
         letter-spacing:3px;color:var(--text);text-transform:uppercase;
-        text-shadow:0 0 9px rgba(255,90,90,.95),0 0 20px rgba(224,32,32,.55)">Attention</span>
+        --halo-c:rgba(255,90,90,.95);text-shadow:var(--halo-1),0 0 20px rgba(224,32,32,.55)">Attention</span>
     </div>
     <div style="position:relative;padding:11px 13px 12px">
       ${PLAN_NOTE_CHEATMEAL.map(t=>`<div style="display:flex;gap:8px;align-items:flex-start;font-size:var(--fs-xs);color:#f0dede;line-height:1.65;padding:4px 0;border-top:1px solid rgba(255,90,90,.14)">
@@ -37740,7 +37756,7 @@ const courses=(lc&&lc.lignes.length)?`<details class="hist-repli lc-repli" style
     :'';
 
   return `<div style="margin-bottom:22px">
-    <div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:2px;font-weight:800;text-shadow:0 0 12px rgba(224,32,32,.45);margin-bottom:4px;display:flex;align-items:center;gap:5px">${icon('target',12)} Programme nutritionnel</div>
+    <div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:2px;font-weight:800;--halo-c:rgba(224,32,32,.45);text-shadow:var(--halo-2);margin-bottom:4px;display:flex;align-items:center;gap:5px">${icon('target',12)} Programme nutritionnel</div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-bottom:12px">${escapeHtml(PLAN_NOTE_INDICATIF)}</div>
     <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:14px;margin-bottom:12px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:11px;gap:8px">
@@ -40308,15 +40324,15 @@ function _renderFjDaySummary(date){
     ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--success);background:var(--success-bg);border:1px solid var(--success-border);border-radius:5px;padding:2px 7px;letter-spacing:1px">${icon('zap',10)} JOUR ON</span>`
     : `<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:5px;padding:2px 7px;letter-spacing:1px">${icon('moon',10)} JOUR OFF</span>`;
   const tile=(val,tgt,label,color)=>`<div style="flex:1;background:linear-gradient(180deg,#141414,#0d0d0d);border:1px solid #1e1e1e;border-radius:10px;padding:10px 8px;text-align:center;min-width:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)">
-    <div style="font-size:var(--fs-xl);font-weight:800;color:${color};line-height:1;text-shadow:0 0 9px ${color}66">${typeof val==='number'?parseFloat(val.toFixed(1)):val}${tgt?`<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400;text-shadow:none">/${tgt}</span>`:''}</div>
+    <div style="font-size:var(--fs-xl);font-weight:800;color:${color};line-height:1;--halo-c:${color};text-shadow:var(--halo-1)66">${typeof val==='number'?parseFloat(val.toFixed(1)):val}${tgt?`<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400;text-shadow:none">/${tgt}</span>`:''}</div>
     <div style="font-size:var(--fs-xs);color:${color};opacity:.75;letter-spacing:1.2px;margin-top:4px;text-transform:uppercase;font-weight:800">${label}</div>
   </div>`;
   // Bloc calories : carré rouge, chiffre néon blanc
   const kcalTile=`<div style="flex:1.25;min-width:0;background:linear-gradient(145deg,#c10000 0%,#8d0000 55%,#5a0000 100%);border:1px solid rgba(255,90,90,.45);border-radius:10px;padding:9px 8px;text-align:center;position:relative;overflow:hidden;box-shadow:0 0 18px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.16)">
     <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(0,0,0,.14) 11px,rgba(0,0,0,.14) 12px);pointer-events:none"></div>
     <div style="position:relative">
-      <div style="font-family:var(--pile-titre);font-size:var(--fs-2xl);color:var(--text);line-height:1;letter-spacing:1px;text-shadow:0 0 8px rgba(255,255,255,.95),0 0 20px rgba(255,255,255,.5)">${Math.round(tot.kcal)}${m.kcal?`<span style="font-size:var(--fs-xs);opacity:.65;letter-spacing:0;text-shadow:none"> / ${m.kcal}</span>`:''}</div>
-      <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.85);letter-spacing:2.5px;margin-top:3px;text-transform:uppercase;font-weight:800;text-shadow:0 0 6px rgba(255,255,255,.5)">KCAL</div>
+      <div style="font-family:var(--pile-titre);font-size:var(--fs-2xl);color:var(--text);line-height:1;letter-spacing:1px;text-shadow:var(--halo-1),0 0 20px rgba(255,255,255,.5)">${Math.round(tot.kcal)}${m.kcal?`<span style="font-size:var(--fs-xs);opacity:.65;letter-spacing:0;text-shadow:none"> / ${m.kcal}</span>`:''}</div>
+      <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.85);letter-spacing:2.5px;margin-top:3px;text-transform:uppercase;font-weight:800;text-shadow:var(--halo-1)">KCAL</div>
     </div>
   </div>`;
 
@@ -42562,7 +42578,7 @@ function _renderSuppTable(list, isCoach, editFn){
         </div>
       </div>
       <div style="position:relative;flex-shrink:0;text-align:right;line-height:1">
-        <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:${inactive?'var(--text-dim)':c};text-shadow:0 0 12px ${c}66">${total!=null?nb(total):'—'}</div>
+        <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:${inactive?'var(--text-dim)':c};--halo-c:${c};text-shadow:var(--halo-2)66">${total!=null?nb(total):'—'}</div>
         <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.8px;text-transform:uppercase;margin-top:2px">${escapeHtml(/\(s\)/i.test(unite)?unite:planUnitePluriel(total,unite))}${prises>1?' · '+prises+'×':''}</div>
       </div>
     </div>`;
@@ -42578,7 +42594,7 @@ function _renderSuppTable(list, isCoach, editFn){
     const mc=(SUPP_TIMING_META[id]||{color:'#6a6a6a'}).color;
     return `<div style="display:flex;align-items:center;gap:8px;margin:15px 0 8px">
       <span style="display:inline-flex;filter:drop-shadow(0 0 6px ${mc}cc)">${_suppTimingIcon(id,13,mc)}</span>
-      <span style="font-family:var(--pile-titre);font-size:var(--fs-md);letter-spacing:2.5px;color:${mc};text-shadow:0 0 12px ${mc}55">${escapeHtml(String(lib||'').toUpperCase())}</span>
+      <span style="font-family:var(--pile-titre);font-size:var(--fs-md);letter-spacing:2.5px;color:${mc};--halo-c:${mc};text-shadow:var(--halo-2)55">${escapeHtml(String(lib||'').toUpperCase())}</span>
       <span style="flex:1;height:1px;background:linear-gradient(90deg,${mc}55,transparent)"></span>
     </div>`;
   };
@@ -43639,7 +43655,7 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
         </svg>
         <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;padding:0 11px;box-sizing:border-box">
           <div style="display:flex;align-items:baseline;justify-content:center;gap:1px;max-width:100%">
-            <span class="txt-hero" style="color:${color};font-size:${_tailleChiffres}px;line-height:1;text-shadow:0 0 12px ${color}66">${totalMg}</span>
+            <span class="txt-hero" style="color:${color};font-size:${_tailleChiffres}px;line-height:1;--halo-c:${color};text-shadow:var(--halo-2)66">${totalMg}</span>
             <span style="color:${color};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:1px;line-height:1;text-transform:uppercase">mg</span>
           </div>
         </div>
@@ -43774,7 +43790,7 @@ function _renderCaffeineEmbedded(){
   const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser),grossesseSuspend(currentUser));
   el.innerHTML=`
     <div style="margin-bottom:12px">
-      <h3 style="margin:0;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--red-text);text-shadow:0 0 10px rgba(224,32,32,.45);display:flex;align-items:center;gap:5px">${icon('coffee',11)} Caféine</h3>
+      <h3 style="margin:0;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--red-text);--halo-c:rgba(224,32,32,.45);text-shadow:var(--halo-1);display:flex;align-items:center;gap:5px">${icon('coffee',11)} Caféine</h3>
     </div>
     <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:14px">
       ${navPrev}
@@ -44904,7 +44920,7 @@ function htmlLecteurCorrection(vidId){
           font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800">${String(r).replace('.',',')}×</button>`).join('')}
       <span id="rc-badge-${vidId}" aria-live="polite"
         style="margin-left:auto;font-family:var(--pile-titre);font-size:var(--fs-lg);
-        color:var(--red-text);letter-spacing:1px;text-shadow:0 0 9px rgba(224,32,32,.7)">1×</span>
+        color:var(--red-text);letter-spacing:1px;--halo-c:rgba(224,32,32,.7);text-shadow:var(--halo-1)">1×</span>
     </div>
     <div style="display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap">
       ${b('◀ 1','rcPas(\''+vidId+'\',-1)','Reculer d\'une image (flèche gauche)','data-cmd="pas"')}
@@ -45559,14 +45575,14 @@ function loadSteps(containerId='steps-content'){
         <div style="display:flex;gap:10px;margin-bottom:12px;align-items:stretch">
           <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end">
             <div style="font-size:var(--fs-xs);font-weight:800;color:#ff5a5a;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">JOUR ON <span style="font-size:var(--fs-xs);font-weight:600;color:var(--text-dim)">entraînement</span></div>
-            <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:11px 6px;background:linear-gradient(180deg,#0a0000,#0f0303);border:1px solid #3a0d0d;border-radius:9px;color:#ff5a5a;font-family:var(--pile-titre);letter-spacing:1px;box-shadow:inset 0 2px 7px rgba(0,0,0,.6),0 0 12px rgba(224,32,32,.12);text-shadow:0 0 10px rgba(224,32,32,.6)">
+            <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:11px 6px;background:linear-gradient(180deg,#0a0000,#0f0303);border:1px solid #3a0d0d;border-radius:9px;color:#ff5a5a;font-family:var(--pile-titre);letter-spacing:1px;box-shadow:inset 0 2px 7px rgba(0,0,0,.6),0 0 12px rgba(224,32,32,.12);--halo-c:rgba(224,32,32,.6);text-shadow:var(--halo-1)">
           </div>
           <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end">
             <div style="font-size:var(--fs-xs);font-weight:800;color:#7aa7d9;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">JOUR OFF <span style="font-size:var(--fs-xs);font-weight:600;color:var(--text-dim)">repos</span></div>
-            <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:11px 6px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:9px;color:#7aa7d9;font-family:var(--pile-titre);letter-spacing:1px;box-shadow:inset 0 2px 7px rgba(0,0,0,.6),0 0 12px rgba(96,165,250,.1);text-shadow:0 0 10px rgba(96,165,250,.5)">
+            <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:11px 6px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:9px;color:#7aa7d9;font-family:var(--pile-titre);letter-spacing:1px;box-shadow:inset 0 2px 7px rgba(0,0,0,.6),0 0 12px rgba(96,165,250,.1);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
           </div>
         </div>
-        <button onclick="saveStepsGoals()" style="width:100%;padding:12px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:9px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 18px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:0 0 9px rgba(255,255,255,.4)">Enregistrer les objectifs</button>
+        <button onclick="saveStepsGoals()" style="width:100%;padding:12px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:9px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 18px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Enregistrer les objectifs</button>
       </div>
     </div>
 
@@ -45575,14 +45591,14 @@ function loadSteps(containerId='steps-content'){
       <div style="position:absolute;right:-22px;top:-22px;width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,.055);pointer-events:none"></div>
       <div style="position:relative">
         <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:8px">Moyenne hebdomadaire</div>
-        <div style="font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:.95;color:var(--text);letter-spacing:1px;text-shadow:0 0 16px rgba(255,255,255,.85),0 0 34px rgba(255,255,255,.4)">${fmt(weekAvg)}</div>
+        <div style="font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:.95;color:var(--text);letter-spacing:1px;text-shadow:var(--halo-3),0 0 34px rgba(255,255,255,.4)">${fmt(weekAvg)}</div>
         <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.62);margin-top:6px">pas / jour &nbsp;·&nbsp; ${withData.length} / 7 jours renseignés</div>
         <div style="margin-top:14px;display:flex;justify-content:center;gap:14px">
-          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">OBJECTIF ON</div><div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--text);margin-top:2px;text-shadow:0 0 10px rgba(255,255,255,.55)">${goals.on.toLocaleString('fr-FR')}</div></div>
+          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">OBJECTIF ON</div><div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--text);margin-top:2px">${goals.on.toLocaleString('fr-FR')}</div></div>
           <div style="width:1px;background:rgba(255,255,255,.18)"></div>
           <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">OBJECTIF OFF</div><div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:rgba(255,255,255,.8);margin-top:2px">${goals.off.toLocaleString('fr-FR')}</div></div>
           <div style="width:1px;background:rgba(255,255,255,.18)"></div>
-          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">TOTAL SEMAINE</div><div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--text);margin-top:2px;text-shadow:0 0 10px rgba(255,255,255,.55)">${fmt(withData.reduce((s,d)=>s+d.count,0))}</div></div>
+          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);letter-spacing:1.5px;font-weight:800">TOTAL SEMAINE</div><div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--text);margin-top:2px">${fmt(withData.reduce((s,d)=>s+d.count,0))}</div></div>
         </div>
       </div>
     </div>
@@ -45599,8 +45615,8 @@ function loadSteps(containerId='steps-content'){
         ${todayGoalHintHtml}
         <input type="number" id="steps-today-input" placeholder="0" min="0" max="99999"
           value="${todayEntry&&todayEntry.count!=null?todayEntry.count:''}"
-          style="width:100%;box-sizing:border-box;font-size:var(--fs-3xl);text-align:center;padding:14px 10px;background:linear-gradient(180deg,#070707,#0d0d0d);border:1px solid #242424;border-radius:10px;color:var(--text);font-family:var(--pile-titre);letter-spacing:2px;margin-bottom:11px;box-shadow:inset 0 3px 10px rgba(0,0,0,.65);text-shadow:0 0 16px rgba(255,255,255,.45)">
-        <button onclick="saveSteps()" style="width:100%;padding:13px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:9px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800;letter-spacing:2.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:0 0 10px rgba(255,255,255,.45)">Sauver</button>
+          style="width:100%;box-sizing:border-box;font-size:var(--fs-3xl);text-align:center;padding:14px 10px;background:linear-gradient(180deg,#070707,#0d0d0d);border:1px solid #242424;border-radius:10px;color:var(--text);font-family:var(--pile-titre);letter-spacing:2px;margin-bottom:11px;box-shadow:inset 0 3px 10px rgba(0,0,0,.65);text-shadow:var(--halo-2)">
+        <button onclick="saveSteps()" style="width:100%;padding:13px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:9px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800;letter-spacing:2.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Sauver</button>
         ${todayProgressHtml}
       </div>
     </div>
@@ -49053,12 +49069,12 @@ function loadSleep(containerId='sleep-content',user){
       <div style="position:absolute;left:14px;top:12px;color:rgba(255,255,255,.16)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
       <div style="position:relative">
         <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:8px">Moyenne hebdomadaire</div>
-        <div style="font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:.95;color:${weekAvg?avgColor:'rgba(255,255,255,.55)'};letter-spacing:1px;text-shadow:0 0 16px ${weekAvg?avgColor:'rgba(255,255,255,.4)'},0 0 34px ${weekAvg?avgColor+'66':'transparent'}">${weekAvg?weekAvg+'h':'—'}</div>
+        <div style="font-family:var(--pile-titre);font-size:var(--fs-3xl);line-height:.95;color:${weekAvg?avgColor:'rgba(255,255,255,.55)'};letter-spacing:1px;--halo-c:${weekAvg?avgColor:'rgba(255,255,255,.4)'};text-shadow:var(--halo-3),0 0 34px ${weekAvg?avgColor+'66':'transparent'}">${weekAvg?weekAvg+'h':'—'}</div>
         <div style="font-size:var(--fs-xs);color:rgba(255,255,255,.55);margin-top:6px">heures / nuit &nbsp;·&nbsp; ${withData.length} / 7 nuits renseignées</div>
         <div style="margin-top:14px;display:flex;justify-content:center;gap:16px">
-          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">OPTIMAL</div><div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--green);margin-top:2px;text-shadow:0 0 11px rgba(34,197,94,.7)">7 – 9 h</div></div>
+          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">OPTIMAL</div><div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:var(--green);margin-top:2px">7 – 9 h</div></div>
           <div style="width:1px;background:rgba(255,255,255,.15)"></div>
-          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">TOTAL SEMAINE</div><div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:${weekTotal!=null?avgColor:'rgba(255,255,255,.5)'};margin-top:2px;text-shadow:0 0 11px ${weekTotal!=null?avgColor+'99':'transparent'}">${weekTotal!=null?weekTotal+'h':'—'}</div></div>
+          <div style="text-align:center;flex:1"><div style="font-size:var(--fs-xs);color:rgba(255,255,255,.45);letter-spacing:1.5px;font-weight:800">TOTAL SEMAINE</div><div style="font-family:var(--pile-titre);font-size:var(--fs-xl);color:${weekTotal!=null?avgColor:'rgba(255,255,255,.5)'};margin-top:2px">${weekTotal!=null?weekTotal+'h':'—'}</div></div>
         </div>
       </div>
     </div>
@@ -49071,15 +49087,15 @@ function loadSleep(containerId='sleep-content',user){
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px">
           <div>
             <div style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-xs);font-weight:800;color:#60a5fa;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(96,165,250,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>Coucher</div>
-            <input type="time" id="sleep-bed-input" value="${todayEntry?.bed||''}" oninput="updateSleepPreview()" style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;text-align:center;padding:11px 4px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:9px;color:#9cc4ee;width:100%;box-sizing:border-box;box-shadow:inset 0 2px 7px rgba(0,0,0,.6);text-shadow:0 0 10px rgba(96,165,250,.5)">
+            <input type="time" id="sleep-bed-input" value="${todayEntry?.bed||''}" oninput="updateSleepPreview()" style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;text-align:center;padding:11px 4px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:9px;color:#9cc4ee;width:100%;box-sizing:border-box;box-shadow:inset 0 2px 7px rgba(0,0,0,.6);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
           </div>
           <div>
             <div style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-xs);font-weight:800;color:#f5c518;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(245,197,24,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><circle cx="12" cy="12" r="4.5"/><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="4.2" y1="4.2" x2="6" y2="6"/><line x1="18" y1="18" x2="19.8" y2="19.8"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.2" y1="19.8" x2="6" y2="18"/><line x1="18" y1="6" x2="19.8" y2="4.2"/></svg></span>Lever</div>
-            <input type="time" id="sleep-wake-input" value="${todayEntry?.wake||''}" oninput="updateSleepPreview()" style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;text-align:center;padding:11px 4px;background:linear-gradient(180deg,#0d0900,#120e03);border:1px solid #4d3d12;border-radius:9px;color:#f0d98a;width:100%;box-sizing:border-box;box-shadow:inset 0 2px 7px rgba(0,0,0,.6);text-shadow:0 0 10px rgba(245,197,24,.45)">
+            <input type="time" id="sleep-wake-input" value="${todayEntry?.wake||''}" oninput="updateSleepPreview()" style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;text-align:center;padding:11px 4px;background:linear-gradient(180deg,#0d0900,#120e03);border:1px solid #4d3d12;border-radius:9px;color:#f0d98a;width:100%;box-sizing:border-box;box-shadow:inset 0 2px 7px rgba(0,0,0,.6);--halo-c:rgba(245,197,24,.45);text-shadow:var(--halo-1)">
           </div>
         </div>
-        <div id="sleep-preview" style="text-align:center;font-size:var(--fs-sm);color:var(--text-faint);margin-bottom:11px;min-height:26px">${todayEntry?.duration!=null?`<span style="font-family:var(--pile-titre);font-size:var(--fs-2xl);color:${sleepColor(todayEntry.duration)};text-shadow:0 0 13px ${sleepColor(todayEntry.duration)}aa">${todayEntry.duration}h</span> de sommeil`:''}</div>
-        <button onclick="saveSleep()" style="width:100%;padding:13px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:9px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800;letter-spacing:2.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:0 0 10px rgba(255,255,255,.45)">Enregistrer</button>
+        <div id="sleep-preview" style="text-align:center;font-size:var(--fs-sm);color:var(--text-faint);margin-bottom:11px;min-height:26px">${todayEntry?.duration!=null?`<span style="font-family:var(--pile-titre);font-size:var(--fs-2xl);color:${sleepColor(todayEntry.duration)};--halo-c:${sleepColor(todayEntry.duration)};text-shadow:var(--halo-2)aa">${todayEntry.duration}h</span> de sommeil`:''}</div>
+        <button onclick="saveSleep()" style="width:100%;padding:13px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:9px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800;letter-spacing:2.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Enregistrer</button>
       </div>
     </div>
 
@@ -51222,7 +51238,7 @@ function _htmlVitrineCoach(pub){
   const img=(src,st)=>src?('<img src="'+escapeHtml(src)+'" alt="" loading="lazy" style="'+st+'">'):'';
   const TRAME="repeating-linear-gradient(-55deg,transparent,transparent 16px,rgba(255,255,255,.014) 16px,rgba(255,255,255,.014) 17px)";
   const CARTE="background:linear-gradient(160deg,#131313,#0c0c0c 55%,#0a0a0a);border:1px solid #1e1e1e;border-radius:16px;padding:20px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.04);position:relative;overflow:hidden";
-  const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:11px;text-shadow:0 0 12px rgba(224,32,32,.55)";
+  const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:11px;--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)";
   // La trame carbone, posee en calque : elle donne la matiere sans rien
   // telecharger, et ne mange aucun contraste au texte pose dessus.
   const grain='<div style="position:absolute;inset:0;pointer-events:none;background:'+TRAME+'"></div>';
@@ -51247,7 +51263,7 @@ function _htmlVitrineCoach(pub){
         :('Ton coach n’a pas encore rempli sa présentation.'+_diagVitrine()))
       +'</div></div></div>';
   }
-  const eyebrow=p.teamName?('<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px;text-shadow:0 0 14px rgba(224,32,32,.6)">'+escapeHtml(p.teamName)+'</div>'):'';
+  const eyebrow=p.teamName?('<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px;--halo-c:rgba(224,32,32,.6);text-shadow:var(--halo-2)">'+escapeHtml(p.teamName)+'</div>'):'';
   const titre='<h1 style="margin:0;line-height:1.02;text-shadow:0 3px 18px rgba(0,0,0,.9)">'+escapeHtml(nom)+'</h1>';
   const phrase=(p.catchphrase||'').trim()
     ?('<div style="font-size:var(--fs-sm);color:#c8c8c8;font-style:italic;line-height:1.65;margin-top:9px">« '+escapeHtml(p.catchphrase.trim())+' »</div>')
@@ -51287,7 +51303,7 @@ function _htmlDiplomesCoach(p){
   if(!dips.length&&!carte) return '';
   const TRAME="repeating-linear-gradient(-55deg,transparent,transparent 16px,rgba(255,255,255,.014) 16px,rgba(255,255,255,.014) 17px)";
   const CARTE="background:linear-gradient(160deg,#131313,#0c0c0c 55%,#0a0a0a);border:1px solid #1e1e1e;border-radius:16px;padding:20px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.04);position:relative;overflow:hidden";
-  const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:11px;text-shadow:0 0 12px rgba(224,32,32,.55)";
+  const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:11px;--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)";
   const grain='<div style="position:absolute;inset:0;pointer-events:none;background:'+TRAME+'"></div>';
   const img=src=>'<img src="'+escapeHtml(src)+'" alt="" loading="lazy" style="width:100%;border-radius:12px;margin-top:11px;display:block;box-shadow:0 8px 22px rgba(0,0,0,.6)">';
   // La pastille porte un halo : c est le seul point rouge de la liste, et
@@ -51306,7 +51322,7 @@ function _htmlDiplomesCoach(p){
   // metier, pas du coach — il ne doit pas se confondre avec la liste.
   h+='<div style="position:relative;overflow:hidden;background:linear-gradient(160deg,#170707,#0d0404);border:1px solid rgba(224,32,32,.3);border-left:3px solid var(--red);border-radius:16px;padding:18px 20px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.5),inset 0 0 40px rgba(224,32,32,.05)">'+grain
     +'<div style="position:relative">'
-    +'<div style="font-size:var(--fs-xs);letter-spacing:2.5px;text-transform:uppercase;color:var(--red-text);font-weight:800;margin-bottom:9px;text-shadow:0 0 14px rgba(224,32,32,.7)">Pourquoi un professionnel diplômé</div>'
+    +'<div style="font-size:var(--fs-xs);letter-spacing:2.5px;text-transform:uppercase;color:var(--red-text);font-weight:800;margin-bottom:9px;--halo-c:rgba(224,32,32,.7);text-shadow:var(--halo-2)">Pourquoi un professionnel diplômé</div>'
     +'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.8">'
     +'Un diplôme n\'est pas une formalité administrative : c\'est la preuve que la personne '
     +'qui règle tes charges, corrige ta technique et t\'oriente sur ton alimentation a été '
