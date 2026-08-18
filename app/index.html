@@ -23713,7 +23713,11 @@ function toggleSet(i,idx){
 // toujours, et en silence.
 function _arcSerieValidee(idx,i){
   try{
-    arcHaptique('lourde');
+    // LE RECORD EST LU UNE FOIS, EN TETE : les cinq gestes qui suivent doivent
+    // raconter la meme chose, et relire le Set a chaque appel les exposerait a
+    // diverger si le marquage changeait entre-temps.
+    const rec=_recordsVus.has(idx+':'+i);
+    arcHaptique(rec?'succes':'lourde');
     const tb=document.getElementById('sets-body-'+idx);
     if(!tb) return;
     const ligne=tb.children[i];
@@ -23721,15 +23725,15 @@ function _arcSerieValidee(idx,i){
     // Le point de contact s'il est frais, sinon rien : mieux vaut un arc sans
     // étincelle de départ qu'une étincelle au mauvais endroit.
     const p=arcDernierPoint();
-    if(p) arcFlash(p,{couleur:'var(--arc-current)',taille:56});
-    arcTraversee(ligne);
-    arcGlow(ligne);
+    if(p) arcFlash(p,{couleur:rec?'var(--arc-peak)':'var(--arc-current)',taille:rec?76:56});
+    arcTraversee(ligne,rec?{couleur:'var(--arc-peak)',duree:ARC.release}:undefined);
+    arcGlow(ligne,rec?{couleur:'rgba(255,46,147,.55)'}:undefined);
     // « Le compteur encaisse l'impact » : le numéro de série, première cellule
     // de la ligne. C'est lui qui compte, et c'est vers lui que l'œil revient.
     // Pas de flash ni de halo dessus — l'arc vient de passer, en rajouter
     // brouillerait le seul moment fort de la séance.
     const compteur=ligne.firstElementChild;
-    if(compteur) arcDecharge(compteur,{flash:false,halo:false});
+    if(compteur) arcDecharge(compteur,{flash:false,halo:false,impact:rec?1.22:undefined});
   }catch(e){}
 }
 function woNav(dir){
@@ -32735,7 +32739,7 @@ function _marquerRecordSiBesoin(idx,i){
 }
 function _badgeRecord(idx,i){
   return _recordsVus.has(idx+':'+i)
-    ? `<span title="Nouveau record" style="display:inline-block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;color:#f5c518;background:#1a1400;border:1px solid #4d3d12;border-radius:var(--r-1);padding:1px 4px;margin-left:5px;white-space:nowrap">RECORD</span>`
+    ? `<span title="Nouveau record" style="display:inline-block;font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px;color:var(--arc-peak);background:#2a0016;border:1px solid #5c0033;border-radius:var(--r-1);padding:1px 5px;margin-left:5px;white-space:nowrap;--halo-c:rgba(255,46,147,.5);text-shadow:var(--halo-1)">RECORD</span>`
     : '';
 }
 
