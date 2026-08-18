@@ -601,6 +601,10 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 /* Le halo du chiffre lui-meme : sans lui, le blanc reste plat sur le noir. */
 .metric-val{text-shadow:var(--halo-2)}
 .metric-box::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--red) var(--pct,0%),transparent var(--pct,0%))}
+/* UNE CASE SANS DONNEE S'EFFACE. Un « — » en pleine lumière a le même poids
+   visuel qu'un chiffre, alors qu'il ne dit rien. Elle perd son relief et
+   descend à 55 % — elle reste lisible, elle cesse d'appeler. */
+.metric-box[data-vide]{box-shadow:0 4px 10px rgba(0,0,0,.45);opacity:.55}
 .metric-val{font-size:var(--fs-2xl);font-family:var(--pile-titre);letter-spacing:0;line-height:1}
 /* LES CARTES DE LA PAGE EVOLUTION. Elles etaient plates — un aplat et un
    trait — la ou toutes les autres cartes de l application portent une trame
@@ -22760,12 +22764,9 @@ function _renderProgExercisesInto(el){
   const essai=currentUser.sessions_config||initSessionsConfig();
   if(essai.some(s=>s.active&&s.exercises?.length)){_rendreSemaineAvecBandeau(el,essai);return;}
   // Filet de sécurité : ni programme, ni repli exploitable.
-  el.innerHTML=`
-    <div style="text-align:center;padding:32px 24px 16px">
-      <div style="font-size:var(--fs-3xl);margin-bottom:12px">⏳</div>
-      <div style="font-weight:900;font-size:var(--fs-lg);margin-bottom:8px">Programme en cours de création</div>
-      <div style="color:var(--sub);font-size:var(--fs-sm);line-height:1.7">Ton coach n'a pas encore publié<br>ton programme personnalisé.</div>
-    </div>`;
+  el.innerHTML='<div style="border:1px dashed var(--border);border-radius:var(--r-md);background:var(--surface-0);margin-bottom:14px">'
+    +emptyState('dumbbell','<b style=\"color:var(--text);font-size:var(--fs-lg);display:block;margin-bottom:6px\">Programme en cours de création</b>Ton coach n\'a pas encore publié ton programme personnalisé.','ENTRER UN CODE COACH','go(\'s-client-code\')')
+    +'</div>';
 }
 // ======= WORKOUT =======
 function startWorkout(){
@@ -24508,6 +24509,10 @@ function _majMetriquesAccueil(u){
   const met=(id,val,sub)=>{
     const a=document.getElementById(id), b=document.getElementById(id+'-sub');
     if(a) a.textContent=val;
+    // Le drapeau suit la VALEUR AFFICHEE, pas le calcul : « — » et « 0 » sont
+    // les deux facons dont cette app dit « rien ». closest() remonte au
+    // conteneur, qui porte le style.
+    if(a) a.closest('.metric-box')?.toggleAttribute('data-vide', val==='—'||val==='0');
     if(b) b.textContent=sub||'';
   };
   const ss=((u&&u.sessions)||[]).filter(s=>s&&s.date);
