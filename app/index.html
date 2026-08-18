@@ -22266,7 +22266,7 @@ function _renderApercu(){
       <div style="font-family:var(--pile-titre);
         font-size:var(--fs-2xl);line-height:1;color:var(--text);letter-spacing:.5px;
         --halo-c:rgba(255,255,255,${fort?'.95':'.35'});text-shadow:var(--halo-1),0 0 22px rgba(255,255,255,${fort?'.5':'.15'})">${escapeHtml(String(v))}</div>
-      <div style="font-size:var(--fs-2xs);margin-top:5px;text-transform:uppercase;letter-spacing:1.6px;font-weight:800;
+      <div style="font-size:var(--fs-xs);margin-top:5px;text-transform:uppercase;letter-spacing:1.2px;font-weight:800;
         color:${fort?'rgba(255,255,255,.88)':'var(--sub)'}">${escapeHtml(lib)}</div>
     </div></div>`;
   const notes=(sess.notes||'').trim();
@@ -30091,7 +30091,7 @@ function renderCharges(){
   </div>`;
   const entetes=`<div style="display:flex;gap:3px;padding:0 0 5px 0;min-width:max-content">
     <div style="flex:0 0 132px"></div>
-    ${ZONES_ARTICULAIRES.map(zz=>`<div style="width:36px;flex-shrink:0;text-align:center;font-size:var(--fs-2xs);letter-spacing:.3px;color:var(--text-faint);text-transform:uppercase;line-height:1.2">${escapeHtml(_chAbrege(zz))}</div>`).join('')}
+    ${ZONES_ARTICULAIRES.map(zz=>`<div style="width:40px;flex-shrink:0;text-align:center;font-size:var(--fs-2xs);letter-spacing:.3px;color:var(--text-faint);text-transform:uppercase;line-height:1.2">${escapeHtml(_chAbrege(zz))}</div>`).join('')}
   </div>`;
   const lignes=Object.keys(SCHEMAS_META).map(s=>{
     const m=SCHEMAS_META[s];
@@ -30100,11 +30100,11 @@ function renderCharges(){
       <div style="display:flex;align-items:center;gap:3px;min-width:max-content">
         <div style="flex:0 0 132px;cursor:pointer" onclick="_chSchemaOuvert=${ouvert?'null':"'"+s+"'"};renderCharges()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
           <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text);line-height:1.25">${escapeHtml(m.lib)}</div>
-          <div style="font-size:var(--fs-2xs);color:var(--text-faint)">${m.nb} exercices${ouvert?'':' · voir'}</div>
+          <div style="font-size:var(--fs-xs);color:var(--text-faint)">${m.nb} exercices${ouvert?'':' · voir'}</div>
         </div>
         ${ZONES_ARTICULAIRES.map(zz=>m.hors.indexOf(zz)>=0
-          ?`<div style="width:36px;flex-shrink:0;text-align:center;font-size:var(--fs-sm);color:var(--border)">—</div>`
-          :`<div style="width:36px;flex-shrink:0;display:flex;justify-content:center">${_chCase(s,zz)}</div>`).join('')}
+          ?`<div style="width:40px;flex-shrink:0;text-align:center;font-size:var(--fs-sm);color:var(--border)">—</div>`
+          :`<div style="width:40px;flex-shrink:0;display:flex;justify-content:center">${_chCase(s,zz)}</div>`).join('')}
       </div>
       ${ouvert?`<div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.6;margin-top:7px;border-top:1px solid var(--border);padding-top:7px">
         ${escapeHtml((SCHEMAS_BRUT[s]||'').split('~').slice(0,12).join(' · ').toLowerCase())}${(SCHEMAS_BRUT[s]||'').split('~').length>12?'…':''}
