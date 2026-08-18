@@ -1436,7 +1436,7 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   .rap-bloc h2{color:#444!important;border-bottom-color:#bbb!important}
   .rap-nb{color:#000!important}
   .rap-lbl,.rap-u,.rap-note,.rap-meta,.rap-vide{color:var(--text-dim)!important}
-  .rap-tbl td{border-bottom-color:#ddd!important}
+  .rap-tbl td{border-bottom-color:var(--text-strong)!important}
   .rap-mot{border-color:#bbb!important;min-height:76px}
   /* UNE SEANCE NE SE COUPE PAS EN DEUX PAGES : sur le patron de .rap-bloc.
      Une fiche dont l echauffement est page 1 et les exercices page 2 se
@@ -1978,7 +1978,7 @@ const COACH_PHOTO='icons/coach.jpg';
            pré-rempli au-dessus, il ne reste qu'à valider. -->
       <div id="cc-invit" style="display:none;margin-top:10px;font-size:var(--fs-xs);line-height:1.6;
         border-radius:10px;padding:10px 12px;background:linear-gradient(168deg,#131313,#0b0b0b);
-        border:1px solid var(--border);border-left:3px solid var(--red);color:#d8d8d8"></div>
+        border:1px solid var(--border);border-left:3px solid var(--red);color:var(--text-strong)"></div>
       <div id="cc-err" class="err" style="display:none;margin-top:8px"></div>
     </div>
     <button id="cc-valider" class="btn btn-red" onclick="doLinkCoach()">Activer mon accès →</button>
@@ -2337,7 +2337,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="coach-diplomes-liste"></div>
 <button type="button" onclick="ajouterDiplomeRow()" style="width:100%;background:none;border:1px dashed var(--border);color:var(--sub);border-radius:8px;padding:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer">+ Ajouter un diplôme</button>
 </div>
-<button onclick="apercuVitrineCoach()" style="width:100%;background:none;border:1px solid var(--border);color:#ddd;border-radius:3px;padding:11px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer;margin-bottom:10px">Prévisualiser ma vitrine</button>
+<button onclick="apercuVitrineCoach()" style="width:100%;background:none;border:1px solid var(--border);color:var(--text-strong);border-radius:3px;padding:11px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer;margin-bottom:10px">Prévisualiser ma vitrine</button>
 <button onclick="saveCoachIdentity()" style="width:100%;background:var(--red);border:none;color:#fff;border-radius:3px;padding:12px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px">ENREGISTRER</button>
         </div>
         <!-- DISPONIBILITE. Ce que l athlete lit AVANT de t ecrire. Le compteur
@@ -2345,13 +2345,13 @@ const COACH_PHOTO='icons/coach.jpg';
         <div class="card" style="margin-bottom:14px">
           <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Disponibilité</label>
           <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:10px">Ce que tes athlètes liront juste avant de t'écrire. Tant que tu n'as rien déclaré, rien ne s'affiche chez eux.</div>
-          <label style="font-size:var(--fs-xs);color:#ddd;display:block;margin-bottom:6px">Délai de réponse habituel (heures)</label>
+          <label style="font-size:var(--fs-xs);color:var(--text-strong);display:block;margin-bottom:6px">Délai de réponse habituel (heures)</label>
           <input id="coach-dispo-delai" type="number" min="1" max="168" placeholder="24" style="width:100%;font-size:var(--fs-lg);padding:11px 14px;box-sizing:border-box;margin-bottom:8px">
           <div id="coach-dispo-apercu" style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55;margin-bottom:12px"></div>
           <div style="border-top:1px solid var(--border);padding-top:12px">
             <label style="display:flex;align-items:center;gap:9px;cursor:pointer;min-height:44px">
               <input type="checkbox" id="coach-dispo-abs" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0">
-              <span style="font-size:var(--fs-sm);color:#ddd">Je suis absent</span>
+              <span style="font-size:var(--fs-sm);color:var(--text-strong)">Je suis absent</span>
             </label>
             <div style="display:flex;gap:8px;margin-bottom:8px">
               <div style="flex:1"><label style="font-size:var(--fs-2xs);color:var(--sub);display:block;margin-bottom:4px">Du</label>
@@ -2363,7 +2363,7 @@ const COACH_PHOTO='icons/coach.jpg';
             <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:8px">Une date de fin est obligatoire, 90 jours au plus. L'absence s'éteint toute seule : tu n'as rien à décocher au retour. Elle n'empêche jamais un athlète de t'écrire.</div>
           </div>
           <button onclick="saveCoachDispo()" style="width:100%;background:var(--red);border:none;color:#fff;border-radius:3px;padding:12px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px;margin-top:12px">ENREGISTRER</button>
-          <div id="coach-dispo-median" style="font-size:var(--fs-xs);color:#ddd;line-height:1.6;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)"></div>
+          <div id="coach-dispo-median" style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)"></div>
         </div>
 
         <!-- 🖼️ Bannières publicitaires -->
@@ -2392,7 +2392,7 @@ const COACH_PHOTO='icons/coach.jpg';
             </div>
             <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;margin-bottom:8px">
               <input type="checkbox" id="coach-contact-consent" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px" onchange="basculerConsentContact(this.checked)">
-              <span style="font-size:var(--fs-xs);color:#ddd;line-height:1.55">J'accepte que ce numéro soit communiqué à mes athlètes rattachés</span>
+              <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.55">J'accepte que ce numéro soit communiqué à mes athlètes rattachés</span>
             </label>
             <input id="coach-contact-horaires" type="text" placeholder="Mes horaires de réponse (facultatif)" maxlength="200" style="width:100%;font-size:var(--fs-md);padding:10px 12px;margin-bottom:8px" oninput="saveHorairesContact(this.value)">
             <div id="coach-contact-etat" style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-bottom:6px"></div>
@@ -2518,7 +2518,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <div style="border-top:1px solid #1a1a1a;padding-top:16px;margin-top:0">
             <div style="font-weight:700;font-size:var(--fs-md);margin-bottom:4px">Exporter mes données</div>
             <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px;line-height:1.5">RGPD (Art. 20) : récupère l'intégralité de ton dossier dans un fichier JSON — bilans, séances, nutrition, mensurations et photos. Les mots de passe en sont exclus.</div>
-            <button onclick="exportMyData()" style="width:100%;background:none;border:1px solid var(--border);border-radius:6px;padding:10px;color:#ddd;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer">Exporter mes données (JSON)</button>
+            <button onclick="exportMyData()" style="width:100%;background:none;border:1px solid var(--border);border-radius:6px;padding:10px;color:var(--text-strong);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer">Exporter mes données (JSON)</button>
           </div>
           <div style="border-top:1px solid #2a0000;padding-top:16px">
             <div style="font-weight:700;font-size:var(--fs-md);margin-bottom:4px">Supprimer mon compte</div>
@@ -3266,7 +3266,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div id="atp-gross-consent-row" style="margin-bottom:10px">
           <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer">
             <input type="checkbox" id="atp-gross-consent" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px">
-            <span style="font-size:var(--fs-xs);color:#ddd;line-height:1.55">J'accepte que RepCore conserve cette information pour désactiver ce qui ne me convient pas. Je peux la retirer à tout moment, et elle sera alors effacée.</span>
+            <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.55">J'accepte que RepCore conserve cette information pour désactiver ce qui ne me convient pas. Je peux la retirer à tout moment, et elle sera alors effacée.</span>
           </label>
         </div>
         <div id="atp-gross-opts" style="display:flex;flex-direction:column;gap:8px"></div>
@@ -3281,13 +3281,13 @@ const COACH_PHOTO='icons/coach.jpg';
         <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">Produits améliorant la performance</label>
         <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer">
           <input type="checkbox" id="atp-pes" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px" onchange="basculerPES(this.checked)">
-          <span style="font-size:var(--fs-sm);color:#ddd;line-height:1.55">J'en utilise</span>
+          <span style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.55">J'en utilise</span>
         </label>
         <div id="atp-pes-bloc" style="display:none;margin-top:11px;border-top:1px solid var(--border);padding-top:11px">
-          <div id="atp-pes-phrase" style="font-size:var(--fs-xs);color:#ddd;line-height:1.7;margin-bottom:10px"></div>
+          <div id="atp-pes-phrase" style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7;margin-bottom:10px"></div>
           <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer">
             <input type="checkbox" id="atp-pes-partage" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px" onchange="basculerPartagePES(this.checked)">
-            <span style="font-size:var(--fs-xs);color:#ddd;line-height:1.55">Transmettre cette information à mon coach</span>
+            <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.55">Transmettre cette information à mon coach</span>
           </label>
           <div id="atp-pes-partage-note" style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-top:9px"></div>
         </div>
@@ -3308,7 +3308,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <div id="atp-hormo-opts" style="display:flex;flex-direction:column;gap:7px"></div>
           <label style="display:flex;align-items:center;gap:9px;margin-top:10px;cursor:pointer">
             <input type="checkbox" id="atp-hormo-trait" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0">
-            <span style="font-size:var(--fs-sm);color:#ddd;line-height:1.5">Un traitement hormonal est en cours</span>
+            <span style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5">Un traitement hormonal est en cours</span>
           </label>
         </div>
         <div id="atp-thyroide-bloc" style="display:none;margin-top:11px;border-top:1px solid var(--border);padding-top:11px">
@@ -3316,7 +3316,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <div id="atp-thyroide-etats" style="display:flex;flex-direction:column;gap:7px"></div>
           <label style="display:flex;align-items:center;gap:9px;margin-top:10px;cursor:pointer">
             <input type="checkbox" id="atp-thyroide-trait" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0">
-            <span style="font-size:var(--fs-sm);color:#ddd;line-height:1.5">Un traitement est en cours</span>
+            <span style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5">Un traitement est en cours</span>
           </label>
         </div>
         <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-top:9px">Ces déclarations sont visibles de ton coach : c'est lui qui ajuste tes repères avec. RepCore ne pose aucun diagnostic et ne demande ni dose, ni molécule, ni résultat d'analyse.</div>
@@ -3347,7 +3347,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <div style="border-top:1px solid #1a1a1a;padding-top:16px;margin-top:22px">
           <div style="font-weight:700;font-size:var(--fs-md);margin-bottom:4px">Exporter mes données</div>
           <div style="font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px;line-height:1.5">RGPD (Art. 20) : récupère l'intégralité de ton dossier dans un fichier JSON — bilans, séances, nutrition, mensurations et photos. Les mots de passe en sont exclus.</div>
-          <button onclick="exportMyData()" style="width:100%;background:none;border:1px solid var(--border);border-radius:6px;padding:10px;color:#ddd;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer">Exporter mes données (JSON)</button>
+          <button onclick="exportMyData()" style="width:100%;background:none;border:1px solid var(--border);border-radius:6px;padding:10px;color:var(--text-strong);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;cursor:pointer">Exporter mes données (JSON)</button>
         </div>
         <div style="border:1px solid #2a0000;border-radius:10px;padding:16px;margin-top:22px;text-align:left">
           <div style="font-weight:700;font-size:var(--fs-md);margin-bottom:4px">Supprimer mon compte</div>
@@ -3680,7 +3680,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <!-- Bilan coaching -->
     <div onclick="openBilan('coaching')" style="background:var(--surface-1);border:1px solid var(--border);border-radius:16px;padding:20px;cursor:pointer;margin-bottom:14px" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div style="font-weight:900;font-size:var(--fs-lg);margin-bottom:6px;letter-spacing:.5px;text-transform:uppercase;color:var(--red-text)">BILAN COACHING</div>
-      <div style="font-size:var(--fs-md);font-weight:700;margin-bottom:4px;color:#ddd"><span id="bilan-freq-display">Bilan toutes les 2 semaines :</span></div>
+      <div style="font-size:var(--fs-md);font-weight:700;margin-bottom:4px;color:var(--text-strong)"><span id="bilan-freq-display">Bilan toutes les 2 semaines :</span></div>
       <div class="sub" style="font-size:var(--fs-sm);line-height:1.5">Poids, mensurations, ressenti, photos.</div>
       <div style="font-size:var(--fs-xs);color:var(--text-faint);margin-top:10px;line-height:1.65;border-top:1px solid #1e1e1e;padding-top:10px">
         Cela me permet de voir ton évolution, de structurer ta pratique et d'ajuster tes programmes au besoin.
@@ -4136,7 +4136,7 @@ const COACH_PHOTO='icons/coach.jpg';
             oninput="document.getElementById('vid-drive-hint').style.display=this.value.includes('drive.google.com')?'block':'none'">
           <div id="vid-drive-hint" style="display:none;background:var(--warning-bg);border:1px solid #7c2d1244;border-radius:8px;padding:9px 12px;font-size:var(--fs-xs);color:var(--warning);line-height:1.5;margin-bottom:10px;text-align:left">⚠️ Vérifie que le lien est accessible à tous ceux qui l'ont (pas seulement toi) avant de l'envoyer · dans Drive : <strong>Partager → Toute personne avec le lien</strong>.</div>
           <button onclick="addVideoLink()" style="width:100%;padding:13px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:#fff;border-radius:9px;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:0 0 10px rgba(255,255,255,.45)">Ajouter la vidéo</button>
-          <div class="sub" style="font-size:var(--fs-xs);margin-top:11px;line-height:1.6">Enregistre avec ton téléphone → partage sur <b style="color:#ddd">YouTube</b> (non répertoriée) ou <b style="color:#ddd">Google Drive</b> → colle le lien ici · <strong style="color:#ff5a5a">ton coach corrige directement dans l'app</strong></div>
+          <div class="sub" style="font-size:var(--fs-xs);margin-top:11px;line-height:1.6">Enregistre avec ton téléphone → partage sur <b style="color:var(--text-strong)">YouTube</b> (non répertoriée) ou <b style="color:var(--text-strong)">Google Drive</b> → colle le lien ici · <strong style="color:#ff5a5a">ton coach corrige directement dans l'app</strong></div>
         </div>
       </div>
       <div style="margin-top:12px;background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:14px;padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp .4s ease">
@@ -4558,7 +4558,7 @@ const COACH_PHOTO='icons/coach.jpg';
            Le bouton PayPal est inactif tant qu'elle ne l'est pas. -->
       <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;margin-bottom:10px;text-align:left">
         <input type="checkbox" id="sub-renonciation" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px" onchange="_majRenonciation(this.checked)">
-        <span id="sub-renonc-txt" style="font-size:var(--fs-xs);color:#ddd;line-height:1.55"></span>
+        <span id="sub-renonc-txt" style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.55"></span>
       </label>
       <div id="sub-renonc-msg" style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-bottom:8px">Coche la case ci-dessus pour activer le paiement.</div>
       <div id="paypal-btn-container" style="min-height:48px">
@@ -5275,7 +5275,7 @@ function _renderAbonnementCoach(users){
   const depasse=fiable&&n>quota;
   const suivant=_palierSuivant(cle);
   const l=(t,v)=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-sm);padding:3px 0">`
-    +`<span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:#eee">${escapeHtml(v)}</span></div>`;
+    +`<span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:var(--text)">${escapeHtml(v)}</span></div>`;
   // Le compteur ne ment pas quand il ne sait pas. `users` ne contient que ce
   // que la synchronisation a rapatrié : sur un appareil neuf, annoncer
   // « 0 / 15 » à un coach qui suit douze personnes serait pire que se taire.
@@ -5496,16 +5496,16 @@ function _renderAbonnement(){
   const finTxt=fin?new Date(fin).toLocaleDateString('fr-FR'):'la fin de la période réglée';
   const pal=SUB_PALIERS.find(x=>x.cle===(abonnementDe(u).palier))||SUB_PALIERS[1];
   const l=(t,v)=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-sm);padding:3px 0">
-    <span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:#eee">${escapeHtml(v)}</span></div>`;
+    <span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:var(--text)">${escapeHtml(v)}</span></div>`;
   z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px">
     <div style="font-weight:800;font-size:var(--fs-md);margin-bottom:8px">Mon abonnement</div>
     ${l('Formule',(pal&&pal.titre)||'Mensuel')}
     ${l('Prix',((pal&&pal.prix)||'9,95 €')+' '+((pal&&pal.periode)||'par mois'))}
     ${fin?l(r?'Accès jusqu\'au':'Prochaine échéance',finTxt):''}
     ${r?`<div style="margin-top:12px;background:var(--surface-2);border-radius:10px;padding:12px 13px">
-        <div style="font-size:var(--fs-sm);color:#eee;line-height:1.7;margin-bottom:8px">Résiliation demandée le ${escapeHtml(new Date(r.ts).toLocaleDateString('fr-FR'))}. Ton accès reste ouvert jusqu'au ${escapeHtml(finTxt)}.</div>
+        <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-bottom:8px">Résiliation demandée le ${escapeHtml(new Date(r.ts).toLocaleDateString('fr-FR'))}. Ton accès reste ouvert jusqu'au ${escapeHtml(finTxt)}.</div>
         <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.7">${escapeHtml(RESIL_MOYENS)}</div>
-        <ol style="font-size:var(--fs-xs);color:#ddd;line-height:1.8;margin:8px 0 0 18px">${RESIL_PAYPAL.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')}</ol>
+        <ol style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.8;margin:8px 0 0 18px">${RESIL_PAYPAL.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')}</ol>
       </div>`
       :`<button class="btn btn-outline" style="width:100%;margin-top:12px;letter-spacing:1px" onclick="_ouvrirResiliation()">Résilier mon abonnement</button>
         <div id="cr-resil" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px"></div>`}
@@ -7621,7 +7621,7 @@ function htmlSelecteurComptes(opts){
         display:flex;align-items:center;justify-content:center;font-size:var(--fs-sm);font-weight:800;color:#bbb">
         ${c.avatar?`<img src="${escapeHtml(c.avatar)}" style="width:100%;height:100%;object-fit:cover">`:escapeHtml(ini(c))}</div>
       <div style="flex:1;min-width:0;cursor:${est?'default':'pointer'}"${est?'':` onclick="basculerCompte('${escapeHtml(c.email)}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"`}>
-        <div style="font-size:var(--fs-sm);font-weight:800;color:#eee;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(((c.fname||'')+' '+(c.lname||'')).trim()||c.email)}</div>
+        <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(((c.fname||'')+' '+(c.lname||'')).trim()||c.email)}</div>
         <div style="font-size:var(--fs-2xs);color:var(--text-faint)">${c.role==='coach'?'Coach':'Élève'}${est?' · actif':''}</div>
       </div>
       ${est?'<span style="font-size:var(--fs-md);color:var(--red-text);flex-shrink:0">✓</span>'
@@ -7750,8 +7750,8 @@ function loadAccessGate(){
     const href=_coachContactHref(u.coachId,
       'Bonjour'+(nom?' '+nom:'')+", mon accès RepCore a expiré le "+d+'. Peux-tu le prolonger ?');
     block.innerHTML=L
-      +'Expiré le : <strong style="color:#ddd">'+escapeHtml(d)+'</strong>'
-      +(nom?'<br>Coach : <strong style="color:#ddd">'+escapeHtml(nom)+'</strong>':'')
+      +'Expiré le : <strong style="color:var(--text-strong)">'+escapeHtml(d)+'</strong>'
+      +(nom?'<br>Coach : <strong style="color:var(--text-strong)">'+escapeHtml(nom)+'</strong>':'')
       +'</div>'
       +(href
         ?'<a href="'+_safeContactUrl(href)+'" target="_blank" rel="noopener" class="btn btn-red" '
@@ -9751,11 +9751,11 @@ function _annoncerDejaRattache(coachDuLien){
     +'animation:fadeIn .3s ease">'
     +'<h2 style="margin-bottom:8px;font-size:var(--fs-lg)">Tu es déjà suivi</h2>'
     +'<p class="sub" style="font-size:var(--fs-sm);line-height:1.65;margin-bottom:14px">'
-    +'Tu es actuellement suivi par <strong style="color:#ddd">'+escapeHtml(actuel)+'</strong>, '
-    +'et ce lien vient de <strong style="color:#ddd">'+escapeHtml(nomLien)+'</strong>. '
+    +'Tu es actuellement suivi par <strong style="color:var(--text-strong)">'+escapeHtml(actuel)+'</strong>, '
+    +'et ce lien vient de <strong style="color:var(--text-strong)">'+escapeHtml(nomLien)+'</strong>. '
     +'Changer de coach ne se fait pas en ouvrant un lien : demande à '
     +escapeHtml(actuel)+' de te libérer, puis rouvre celui-ci. '
-    +'<strong style="color:#ddd">Rien n\'a été modifié.</strong>'
+    +'<strong style="color:var(--text-strong)">Rien n\'a été modifié.</strong>'
     +'</p>'
     +'<button class="btn btn-red" style="min-height:46px" onclick="closeModal();go(\'s-client-home\')">'
     +'Revenir à mon accueil</button>'
@@ -10437,7 +10437,7 @@ async function voirContenuExport(cible){
   if(!paquet){ z.innerHTML='<div class="sub" style="font-size:var(--fs-sm)">Dossier illisible.</div>'; return false; }
   const m=_manifesteExport(paquet);
   const lst=(t,items)=>`<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;text-transform:uppercase;font-weight:700;margin:10px 0 6px">${escapeHtml(t)}</div>`
-    +items.map(x=>`<div style="font-size:var(--fs-xs);color:#ddd;line-height:1.6;padding:2px 0">${x}</div>`).join('');
+    +items.map(x=>`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;padding:2px 0">${x}</div>`).join('');
   z.innerHTML=lst('Inclus ('+m.categories_incluses.length+')',
       m.categories_incluses.map(c=>escapeHtml(c.cle)+' <span style="color:var(--text-faint)">· '+escapeHtml(c.noeud)+' · '+c.entrees+'</span>'))
     +lst('NON inclus ('+m.categories_non_incluses.length+')',
@@ -11056,7 +11056,7 @@ function _htmlCouvertureMicro(user,ref){
   // phrases dans l'ordre de la table, et le rappel qui les encadre.
   return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Micronutriments · ${MICRO_JOURS_FENETRE} jours</div>
-    ${lignes.map(t=>`<div style="font-size:var(--fs-xs);color:#ddd;line-height:1.6;padding:4px 0;border-bottom:1px solid #161616">${escapeHtml(t)}</div>`).join('')}
+    ${lignes.map(t=>`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;padding:4px 0;border-bottom:1px solid #161616">${escapeHtml(t)}</div>`).join('')}
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:9px">${escapeHtml(MICRO_DISCLAIMER)}</div>
   </div>`;
 }
@@ -11415,7 +11415,7 @@ function _htmlQuestionsMorpho(user){
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:12px">Des variantes à envisager, jamais un exercice à retirer.</div>
     ${l.map(r=>`<div style="border-left:2px solid var(--border);padding-left:11px;margin-bottom:12px">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(r.lib)}</div>
-      <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.6">${escapeHtml(r.motif)}</div>
+      <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(r.motif)}</div>
       <div style="font-size:var(--fs-sm);color:#fff;line-height:1.6;margin-top:5px;font-weight:600">${escapeHtml(r.question)}</div>
     </div>`).join('')}
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;border-top:1px solid var(--border);padding-top:10px">${escapeHtml(MORPHO_DISCLAIMER)}</div>
@@ -11450,7 +11450,7 @@ function _htmlDeficitCoach(c){
     if(!q) return '';
     return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(q.lib)}</div>
-      <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.6">${escapeHtml(q.motif)}</div>
+      <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(q.motif)}</div>
       <div style="font-size:var(--fs-sm);color:#fff;line-height:1.6;margin-top:5px;font-weight:600">${escapeHtml(q.question)}</div>
     </div>`;
   }
@@ -11459,7 +11459,7 @@ function _htmlDeficitCoach(c){
   const col=bloc?'var(--red)':'var(--orange)';
   const leve=((c&&c.cycle)||{}).leveDeficit;
   const lignes=r.criteres.map(x=>
-    `<div style="font-size:var(--fs-sm);color:#ddd;line-height:1.65">· ${escapeHtml(x.lib)} — ${escapeHtml(String(x.valeur))}</div>`).join('');
+    `<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.65">· ${escapeHtml(x.lib)} — ${escapeHtml(String(x.valeur))}</div>`).join('');
   // La levée est un GESTE du coach, jamais une expiration automatique. Deux
   // motifs, pas de champ libre : on ne fait pas raconter un dossier médical.
   const boutons=bloc
@@ -11476,7 +11476,7 @@ function _htmlDeficitCoach(c){
     <div style="font-size:var(--fs-xs);color:${col};letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:6px">${bloc?'Apports bloqués sous le plancher':'Faits qui se cumulent'}</div>
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:10px">${r.points} élément${r.points>1?'s':''} relevé${r.points>1?'s':''}. Rien n'est diagnostiqué ici : ce sont des constats mesurés dans l'app.</div>
     ${lignes}
-    ${bloc?`<div style="font-size:var(--fs-sm);color:#eee;line-height:1.7;margin-top:10px;border-top:1px solid var(--border);padding-top:10px">${escapeHtml(DEF_TEXTE_BLOCAGE)}</div>`:''}
+    ${bloc?`<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-top:10px;border-top:1px solid var(--border);padding-top:10px">${escapeHtml(DEF_TEXTE_BLOCAGE)}</div>`:''}
     ${boutons}${rappelLeve}
   </div>`;
 }
@@ -11518,7 +11518,7 @@ function renderCoachMicroSection(c){
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:12px">Rien n'est détecté ici : ce sont des questions que le profil rend pertinentes.</div>
     ${l.map(r=>`<div style="border-left:2px solid var(--border);padding-left:11px;margin-bottom:12px">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.2px;color:#bbb;text-transform:uppercase;margin-bottom:4px">${escapeHtml(r.lib)}</div>
-      <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.6">${escapeHtml(r.motif)}</div>
+      <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(r.motif)}</div>
       <div style="font-size:var(--fs-sm);color:#fff;line-height:1.6;margin-top:5px;font-weight:600">${escapeHtml(r.question)}</div>
     </div>`).join('')}
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;border-top:1px solid var(--border);padding-top:10px">${escapeHtml(MICRO_DISCLAIMER)}</div>
@@ -11829,7 +11829,7 @@ function _pilCompteur(cle,lib,n,couleur){
 function _pilBande(cle,titre,corps,resume){
   return `<details class="plan-src pil-bande" style="margin:0 0 7px"${_pilOuvert[cle]?' open':''} ontoggle="pilNoterBande('${cle}',this.open)">
     <summary style="color:var(--sub)">${titre}<span class="plan-src-nb">${resume||''}</span></summary>
-    <div class="plan-src-liste" style="font-size:var(--fs-xs);color:#ddd;line-height:1.7">${corps}</div>
+    <div class="plan-src-liste" style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7">${corps}</div>
   </details>`;
 }
 function renderPilotage(clients){
@@ -11901,7 +11901,7 @@ function _htmlPourquoiIci(c){
     <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:7px">Pourquoi cet athlète est ici</div>
     ${l.map(x=>`<div style="display:flex;align-items:baseline;gap:8px;padding:3px 0">
       <span style="flex-shrink:0;font-size:var(--fs-2xs);font-weight:900;color:${x.gravite>=7?'var(--red)':'var(--sub)'};min-width:16px">${x.gravite}</span>
-      <span style="flex:1;min-width:0;font-size:var(--fs-xs);color:#ddd;line-height:1.5">${escapeHtml(x.motif)}</span>
+      <span style="flex:1;min-width:0;font-size:var(--fs-xs);color:var(--text-strong);line-height:1.5">${escapeHtml(x.motif)}</span>
       <span style="flex-shrink:0;font-size:var(--fs-2xs);color:var(--text-faint)">${x.date?dateCourte(x.date):''}</span>
     </div>`).join('')}
   </div>`;
@@ -12527,7 +12527,7 @@ function _canalCarte(m,compteurs,mienne){
       <span class="sub" style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase">${escapeHtml(ago(Number(m.at)||Date.now()))}</span>
     </div>
     ${m.titre?`<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px;line-height:1.4">${escapeHtml(m.titre)}</div>`:''}
-    ${m.texte?`<div style="font-size:var(--fs-md);color:#ddd;line-height:1.65;white-space:pre-wrap">${escapeHtml(m.texte)}</div>`:''}
+    ${m.texte?`<div style="font-size:var(--fs-md);color:var(--text-strong);line-height:1.65;white-space:pre-wrap">${escapeHtml(m.texte)}</div>`:''}
     ${lien?_canalCarteLien(lien):''}
     <div style="display:flex;gap:6px;margin-top:12px">${boutons}</div>
   </div>`;
@@ -12633,7 +12633,7 @@ function renderEpingleAccueil(){
       <span style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase">Mot de ton coach</span>
     </div>
     ${e.titre?`<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px;line-height:1.4">${escapeHtml(e.titre)}</div>`:''}
-    ${e.texte?`<div style="font-size:var(--fs-md);color:#eee;line-height:1.65;white-space:pre-wrap">${escapeHtml(e.texte)}</div>`:''}
+    ${e.texte?`<div style="font-size:var(--fs-md);color:var(--text);line-height:1.65;white-space:pre-wrap">${escapeHtml(e.texte)}</div>`:''}
     ${lien&&safeUrlRaw(lien)!=='#'?`<a href="${safeUrl(lien)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:10px;font-size:var(--fs-sm);color:var(--info);font-weight:700">${escapeHtml(canalDomaine(lien)||'Ouvrir le lien')} ↗</a>`:''}
     <button onclick="clientTab('canal')" style="width:100%;margin-top:12px;padding:10px 0;background:none;border:1px solid rgba(224,32,32,.5);color:var(--red-text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;border-radius:8px;cursor:pointer">VOIR LE CANAL</button>
   </div>`;
@@ -12727,7 +12727,7 @@ function _canalCarteCoach(m,compteurs,vrai,reactions){
       <span class="sub" style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase">${escapeHtml(ago(Number(m.at)||Date.now()))}</span>
     </div>
     ${m.titre?`<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px;line-height:1.4">${escapeHtml(m.titre)}</div>`:''}
-    ${m.texte?`<div style="font-size:var(--fs-md);color:#ddd;line-height:1.65;white-space:pre-wrap">${escapeHtml(m.texte)}</div>`:''}
+    ${m.texte?`<div style="font-size:var(--fs-md);color:var(--text-strong);line-height:1.65;white-space:pre-wrap">${escapeHtml(m.texte)}</div>`:''}
     ${lien&&safeUrlRaw(lien)!=='#'?`<a href="${safeUrl(lien)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:9px;font-size:var(--fs-sm);color:var(--info);font-weight:700">${escapeHtml(canalDomaine(lien)||'lien')} ↗</a>`:''}
     ${lignes?`<div style="margin-top:11px;padding-top:10px;border-top:1px solid var(--border)">${lignes}</div>`
             :'<div class="sub" style="margin-top:11px;padding-top:10px;border-top:1px solid var(--border);font-size:var(--fs-xs)">Aucune réaction pour l\'instant.</div>'}
@@ -12962,7 +12962,7 @@ function htmlTauxCompletion(u,compact){
   const val=tauxCompletionLib(r), fl=tauxCompletionFleche(r);
   const gris=!r.interpretable;
   if(compact) return `<span title="${escapeHtml(r.fenetre)}" style="font-size:var(--fs-xs);font-weight:800;
-    color:${gris?'var(--text-faint)':'#ddd'};white-space:nowrap">${escapeHtml(val)}`
+    color:${gris?'var(--text-faint)':'var(--text-strong)'};white-space:nowrap">${escapeHtml(val)}`
     +`${fl?' '+fl:''}</span>`;
   return `<div style="text-align:center">
     <div style="font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:var(--fs-xl);line-height:1;
@@ -13080,7 +13080,7 @@ function _htmlRiteCoach(c){
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:6px">📆 Bilan de 4 semaines</div>
     <div style="font-size:var(--fs-sm);color:var(--text-dim);margin-bottom:10px">${escapeHtml(nom)}${d?' · '+escapeHtml(d):''}</div>
     ${q
-      ?`<div style="background:var(--surface-2);border-radius:8px;padding:10px 12px;font-size:var(--fs-sm);color:#eee;line-height:1.6">${escapeHtml(q)}</div>`
+      ?`<div style="background:var(--surface-2);border-radius:8px;padding:10px 12px;font-size:var(--fs-sm);color:var(--text);line-height:1.6">${escapeHtml(q)}</div>`
       :`<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6">Cycle clôturé sans question écrite.</div>`}
     <textarea id="${ta}" rows="3" placeholder="Ce que tu retiens de ce cycle, et ce qu'on ajuste." style="width:100%;box-sizing:border-box;margin-top:10px"></textarea>
     <button class="btn btn-red btn-sm" onclick="saveReponseRite('${escapeHtml(c.email||'')}','${escapeHtml(String(r.cycle))}','${ta}')"
@@ -13261,7 +13261,7 @@ function ouvrirRite(cycle){
       ${muscles.map(m=>_riteLigne(m.muscle,m.series+' séries','MEV '+m.mev+' · MAV '+m.mav+' · MRV '+m.mrv)).join('')}
     </div>`:''}
 
-    ${bil?`<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:11px;padding:11px 13px;margin-bottom:10px;font-size:var(--fs-xs);color:#ddd;line-height:1.6">
+    ${bil?`<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:11px;padding:11px 13px;margin-bottom:10px;font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">
       Ton bilan de cette semaine est déjà enregistré : il n'est pas redemandé ici.</div>`:''}
 
     <label style="margin-top:0">Une question à ton coach&nbsp;?</label>
@@ -13383,7 +13383,7 @@ function _htmlRiteReponse(r){
   return `<div style="margin-bottom:18px;background:var(--surface-2);border-left:3px solid var(--green);border-radius:8px;padding:10px 12px">
     <div style="font-size:var(--fs-xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--green);font-weight:800;margin-bottom:4px">Réponse de ton coach</div>
     ${_sous?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-bottom:5px">${escapeHtml(_sous)}</div>`:''}
-    <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.6">${escapeHtml(r.reponseCoach)}</div>
+    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(r.reponseCoach)}</div>
   </div>`;
 }
 // MARQUÉ LU À L’AFFICHAGE, comme `b.reponseVue` pour les bilans : le bloc a
@@ -13645,7 +13645,7 @@ function renderFileReprise(){
   const sem=frRelancesSemaine(currentUser,Date.now());
   const tete=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;
       background:var(--surface-1);border:1px solid var(--border);border-radius:11px;padding:11px 13px;margin-bottom:12px">
-      <span style="font-size:var(--fs-xs);color:#ddd;line-height:1.5">Relancés cette semaine</span>
+      <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.5">Relancés cette semaine</span>
       <span style="font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:var(--fs-xl);color:var(--red-text);
         text-shadow:0 0 9px rgba(224,32,32,.6)">${sem}</span>
     </div>
@@ -13653,7 +13653,7 @@ function renderFileReprise(){
       <span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase">Mettre en veille</span>
       <select onchange="frSetDuree(this.value)" aria-label="Durée de mise en veille"
         style="min-height:38px;padding:6px 9px;border-radius:8px;background:#101010;border:1px solid var(--border);
-          color:#ddd;font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">
+          color:var(--text-strong);font-family:Montserrat,sans-serif;font-size:var(--fs-xs)">
         ${FR_DUREES.map(j=>`<option value="${j}"${j===_frDuree?' selected':''}>${j} jours</option>`).join('')}
       </select>
     </div>`;
@@ -13995,7 +13995,7 @@ function _ajRendre(){
   let drap=null; try{ drap=drapeauRougeActif(c); }catch(e){}
   if(drap||(function(){try{return drapeauQuelconqueActif(c);}catch(e){return false;}})()){
     z.innerHTML=h+'<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:10px;padding:12px 13px">'
-      +'<div style="font-size:var(--fs-sm);color:#eee;line-height:1.6">Un drapeau est levé sur ce dossier. '
+      +'<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">Un drapeau est levé sur ce dossier. '
       +'Aucun ajustement de programme n\'est proposé tant qu\'il n\'est pas levé.</div>'
       +blocDisclaimerSante()+'</div>';
     return true;
@@ -14022,11 +14022,11 @@ function _ajRendre(){
         +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'
         +cr.map(x=>'<button onclick="ajPortee(\'jour\','+x.slot+')" class="hit44" style="min-height:44px;'
           +'background:'+((_ajCtx.portee==='jour'&&_ajCtx.slotChoisi===x.slot)?'var(--red)':'var(--surface-1)')+';'
-          +'border:1px solid var(--border);border-radius:8px;padding:8px 11px;font-size:var(--fs-xs);color:#ddd;cursor:pointer">'
+          +'border:1px solid var(--border);border-radius:8px;padding:8px 11px;font-size:var(--fs-xs);color:var(--text-strong);cursor:pointer">'
           +escapeHtml((x.jour||('créneau '+(x.slot+1)))+(x.active?'':' (inactif)'))+'</button>').join('')
         +'<button onclick="ajPortee(\'tous\',null)" class="hit44" style="min-height:44px;'
         +'background:'+(_ajCtx.portee==='tous'?'var(--red)':'var(--surface-1)')+';'
-        +'border:1px solid var(--border);border-radius:8px;padding:8px 11px;font-size:var(--fs-xs);color:#ddd;cursor:pointer">Tous les jours</button>'
+        +'border:1px solid var(--border);border-radius:8px;padding:8px 11px;font-size:var(--fs-xs);color:var(--text-strong);cursor:pointer">Tous les jours</button>'
         +'</div>';
     }else{
       h+='<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6;margin-bottom:12px">'
@@ -14055,7 +14055,7 @@ function _ajRendre(){
           +' class="hit44" style="display:block;width:100%;text-align:left;min-height:44px;'
           +'background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:9px 12px;'
           +'margin-bottom:6px;font-size:var(--fs-sm);cursor:'+(x.compatible?'pointer':'not-allowed')+';'
-          +'color:'+(x.compatible?'#ddd':'var(--text-faint)')+';opacity:'+(x.compatible?'1':'.55')+'">'
+          +'color:'+(x.compatible?'var(--text-strong)':'var(--text-faint)')+';opacity:'+(x.compatible?'1':'.55')+'">'
           +escapeHtml(x.nom.toLowerCase())
           // RÈGLE 7 : écarté, GRISÉ, motivé — jamais masqué en silence.
           +(x.compatible?'':'<div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.5;margin-top:3px">'+escapeHtml(x.motif)+'</div>')
@@ -14207,7 +14207,7 @@ function blocDouleurAthlete(user){
   const x=sg.details.douleur;
   return `<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:12px;padding:13px;margin-bottom:14px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--warning);text-transform:uppercase;margin-bottom:7px">Douleur signalée</div>
-    <div style="font-size:var(--fs-sm);color:#eee;line-height:1.6">
+    <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">
       Tu as signalé une douleur sur <b>${escapeHtml(x.nom)}</b> lors de tes ${x.seances} dernières séances.
       Ne force pas dessus. Préviens ton coach.
     </div>
@@ -15027,7 +15027,7 @@ function renderCoachActivite(){
   try{ fiable=countActiveAthletesFiable(currentUser,DB.get('users')||{}); }catch(e){}
   let ath=[];
   try{ ath=getClients().filter(c=>c&&!c._fromCode); }catch(e){
-    el.innerHTML=`<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:12px;padding:14px;font-size:var(--fs-sm);color:#eee;line-height:1.6">Impossible de lire ton portefeuille pour l'instant. Reviens dans un moment.</div>`;
+    el.innerHTML=`<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:12px;padding:14px;font-size:var(--fs-sm);color:var(--text);line-height:1.6">Impossible de lire ton portefeuille pour l'instant. Reviens dans un moment.</div>`;
     return;
   }
   if(!fiable&&!ath.length){
@@ -15053,7 +15053,7 @@ function renderCoachActivite(){
   const barres=mois.map(x=>{
     const h=Math.round(x.actifs/maxi*100);
     return `<div style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px">
-      <div style="font-size:var(--fs-2xs);color:${x.actifs?'#ddd':'var(--text-faint)'};font-weight:800">${x.actifs}</div>
+      <div style="font-size:var(--fs-2xs);color:${x.actifs?'var(--text-strong)':'var(--text-faint)'};font-weight:800">${x.actifs}</div>
       <div style="width:100%;height:64px;display:flex;align-items:flex-end">
         <div style="width:100%;height:${Math.max(h,2)}%;background:${x.actifs?'linear-gradient(180deg,var(--red),#8d0000)':'#242424'};border-radius:3px 3px 0 0"></div>
       </div>
@@ -15107,7 +15107,7 @@ function _actParagraphe(ath,mois,es,anc,comp,partiel){
   if(es.pauses) p.push(es.pauses+' '+(es.pauses>1?'sont':'est')+' en pause déclarée.');
   if(partiel) p.push('En dessous de '+ACT_MIN_ATHLETES+' athlètes, les médianes et les tendances restent masquées : elles se liraient comme des faits alors qu\'elles n\'en sont pas.');
   p.push('Ces chiffres décrivent ce qui a été enregistré dans RepCore, rien d\'autre.');
-  return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:13px 14px;font-size:var(--fs-xs);color:#ddd;line-height:1.7">${escapeHtml(p.join(' '))}
+  return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:13px 14px;font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7">${escapeHtml(p.join(' '))}
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:8px">Une pause non déclarée — ou déclarée sans être partagée avec toi — n'est pas visible ici : elle apparaîtra comme une absence de séance.</div>
   </div>`;
 }
@@ -15564,7 +15564,7 @@ function _jrHtmlNote(n,nom){
     +' aria-label="Supprimer cette note" style="background:none;border:none;color:var(--text-faint);'
     +'font-size:var(--fs-lg);line-height:1;cursor:pointer;min-width:44px;min-height:44px;margin:-12px -10px -12px 0;'
     +'flex-shrink:0">×</button></div>'
-    +'<div style="font-size:var(--fs-sm);color:#ddd;line-height:1.6;white-space:pre-wrap;word-break:break-word">'
+    +'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6;white-space:pre-wrap;word-break:break-word">'
     +escapeHtml(n.texte)+'</div></div>';
 }
 function renderJournalCoach(c){
@@ -15713,7 +15713,7 @@ function openClientDetail(cid,_refresh){
   try{
     const _zt=document.getElementById('ccd-securite');
     if(_zt) _zt.innerHTML=aTCA(c)
-      ?`<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:10px;padding:11px 13px;margin-bottom:16px;font-size:var(--fs-xs);color:#ddd;line-height:1.6">${escapeHtml(SCOFF_ALERTE_COACH)}</div>`
+      ?`<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:10px;padding:11px 13px;margin-bottom:16px;font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">${escapeHtml(SCOFF_ALERTE_COACH)}</div>`
       :'';
   }catch(e){}
   try{ renderHabitudesCoach(c); }catch(e){}
@@ -15797,7 +15797,7 @@ function openClientDetail(cid,_refresh){
   const _ap=document.getElementById('ccd-assigned-prog');
   if(_ap){
     if(c.assignedProgramName){
-      _ap.innerHTML='<strong style="color:#ddd">Programme :</strong> '+escapeHtml(c.assignedProgramName)
+      _ap.innerHTML='<strong style="color:var(--text-strong)">Programme :</strong> '+escapeHtml(c.assignedProgramName)
         +(c.assignedProgramAt?' — assigné le '+new Date(c.assignedProgramAt).toLocaleDateString('fr-FR'):'');
       _ap.style.display='block';
     } else _ap.style.display='none';
@@ -15826,7 +15826,7 @@ function openClientDetail(cid,_refresh){
     _al.innerHTML=(!ci.length&&!_ctL.length&&!_ctD)?'':`<div style="background:#1a0d00;border:1px solid var(--orange);border-left:4px solid var(--orange);border-radius:8px;padding:12px 14px">
       <div style="font-size:var(--fs-xs);color:var(--orange);font-weight:900;text-transform:uppercase;letter-spacing:1.2px;margin-bottom:8px">⚠️ À prendre en compte</div>
       ${blocDrapeauRouge(c)}
-      ${ci.map(x=>`<div style="font-size:var(--fs-sm);line-height:1.55;margin-bottom:4px"><span style="color:#fcd34d;font-weight:700">${x.emoji} ${x.lbl} :</span> <span style="color:#eee">${escapeHtml(x.txt)}</span></div>`).join('')}
+      ${ci.map(x=>`<div style="font-size:var(--fs-sm);line-height:1.55;margin-bottom:4px"><span style="color:#fcd34d;font-weight:700">${x.emoji} ${x.lbl} :</span> <span style="color:var(--text)">${escapeHtml(x.txt)}</span></div>`).join('')}
       ${_ctL.length?`<div style="margin-top:9px;border-top:1px solid #3a2400;padding-top:8px">
         <div style="font-size:var(--fs-xs);color:var(--orange);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;margin-bottom:4px">Contraintes structurées</div>
         ${_ctL.map(x=>_ligneContrainte(x,true,c.id)).join('')}
@@ -17800,7 +17800,7 @@ function renderSessionsHistory(){
     const actifs=((e.sessions_config)||[]).filter(s=>s&&s.active).length;
     return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:1px solid #1a1a1a">
       <div style="min-width:0">
-        <div style="font-size:var(--fs-sm);font-weight:700;color:#ddd">${escapeHtml(d)}</div>
+        <div style="font-size:var(--fs-sm);font-weight:700;color:var(--text-strong)">${escapeHtml(d)}</div>
         <div class="sub" style="font-size:var(--fs-xs)">${actifs} jour${actifs>1?'s':''} actif${actifs>1?'s':''}</div>
       </div>
       <button class="btn btn-outline btn-sm" style="flex-shrink:0;margin:0" onclick="restaurerSessionsConfig(${i})">Restaurer</button>
@@ -18638,7 +18638,7 @@ function ouvrirFicheBanque(slug,ev){
   if(!f) return false;
   const img=illustrationDe(f.nom);
   const l=(t,v)=>v?`<div style="display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-sm);padding:3px 0">`
-    +`<span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:#eee;text-align:right">${escapeHtml(v)}</span></div>`:'';
+    +`<span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:var(--text);text-align:right">${escapeHtml(v)}</span></div>`:'';
   const liste=(titre,arr)=>(arr&&arr.length)?`<div style="margin-top:12px">`
     +`<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:5px">${escapeHtml(titre)}</div>`
     +`<ul style="margin:0 0 0 16px;padding:0;font-size:var(--fs-sm);color:#bbb;line-height:1.6">`
@@ -19325,8 +19325,8 @@ function _peindreRepos(){
         </div>
         ${anneauHtml}
       </div>
-      <button onclick="ajusterRepos(-15)" class="hit44" style="min-width:46px;min-height:44px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;color:#ddd;font-size:var(--fs-sm);font-weight:800;cursor:pointer">−15</button>
-      <button onclick="ajusterRepos(15)" class="hit44" style="min-width:46px;min-height:44px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;color:#ddd;font-size:var(--fs-sm);font-weight:800;cursor:pointer">+15</button>
+      <button onclick="ajusterRepos(-15)" class="hit44" style="min-width:46px;min-height:44px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;color:var(--text-strong);font-size:var(--fs-sm);font-weight:800;cursor:pointer">−15</button>
+      <button onclick="ajusterRepos(15)" class="hit44" style="min-width:46px;min-height:44px;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;color:var(--text-strong);font-size:var(--fs-sm);font-weight:800;cursor:pointer">+15</button>
       <button onclick="annulerRepos()" class="hit44" style="min-width:60px;min-height:44px;background:none;border:1px solid var(--border);border-radius:9px;color:var(--sub);font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px;cursor:pointer">Passer</button>
       <!-- LE SON, COUPABLE SUR PLACE. Le réglage se pose une fois ; ce bouton
            sert au moment où le son dérange — quelqu'un à côté, ou les
@@ -19426,7 +19426,7 @@ function blocTempo(ex){
     ? n[0]+' s pour descendre, '+n[1]+' s en bas, '+n[2]+' s pour monter, '+n[3]+' s en haut.'
     : 'excentrique · pause basse · concentrique · pause haute, en secondes.';
   return `<div style="margin-bottom:7px">
-    <span style="font-size:var(--fs-sm);font-weight:800;color:#eee">Tempo ${escapeHtml(t)}</span>
+    <span style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">Tempo ${escapeHtml(t)}</span>
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:2px">${escapeHtml(expl)}</div>
   </div>`;
 }
@@ -22456,7 +22456,7 @@ function _ouvrirApercuStory(url){
     +'flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:18px';
   d.innerHTML='<img src="'+url+'" alt="Ta séance du jour" '
     +'style="max-width:100%;max-height:64vh;border-radius:12px;box-shadow:0 20px 50px rgba(0,0,0,.7)">'
-    +'<div style="font-size:var(--fs-sm);color:#ddd;text-align:center;line-height:1.6;max-width:320px">'
+    +'<div style="font-size:var(--fs-sm);color:var(--text-strong);text-align:center;line-height:1.6;max-width:320px">'
     +'Appuie <b>longuement</b> sur l’image, puis choisis <b>Ajouter aux photos</b> '
     +'(iPhone) ou <b>Télécharger l’image</b> (Android).</div>'
     +'<a href="'+url+'" download="repcore-seance.png" class="btn btn-outline btn-sm" '
@@ -22774,7 +22774,7 @@ function banniereTechnique(ex,idx){
   // première chose à savoir quand on la lit debout entre deux séries.
   const _msTxt=String((ex&&ex.methodeSeries)||'').trim();
   const compteur=(fam==='rest_pause'||fam==='myo_reps')?_compteurRelances(idx):'';
-  return `<div style="background:${c[0]}22;border:1px solid ${c[0]};border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:var(--fs-sm);line-height:1.6;color:#ddd">
+  return `<div style="background:${c[0]}22;border:1px solid ${c[0]};border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:var(--fs-sm);line-height:1.6;color:var(--text-strong)">
     <strong style="color:${c[1]}">${escapeHtml(m.nom)}${m.sous?' ('+escapeHtml(m.sous)+')':''}${_msTxt?' · séries : '+escapeHtml(_msTxt):''} :</strong>
     ${escapeHtml(m.desc)}
     ${m.video?`<a href="${safeUrl(m.video)}" target="_blank" rel="noopener" style="color:var(--link);white-space:nowrap"> · vidéo</a>`:''}
@@ -22790,7 +22790,7 @@ function _compteurRelances(idx){
   return `<div style="display:flex;align-items:center;gap:9px;margin-top:9px;flex-wrap:wrap">
     <span style="font-size:var(--fs-xs);color:var(--sub)">Relances :</span>
     <span id="rel-n-${idx}" style="font-size:var(--fs-lg);font-weight:400;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px">${faites}</span>
-    <button onclick="_ajouterRelance(${idx})" class="hit44" style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#eee;font-size:var(--fs-lg);font-weight:800;min-width:38px;min-height:34px;cursor:pointer">+</button>
+    <button onclick="_ajouterRelance(${idx})" class="hit44" style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:var(--fs-lg);font-weight:800;min-width:38px;min-height:34px;cursor:pointer">+</button>
     ${faites?`<button onclick="_retirerRelance(${idx})" class="hit44" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--sub);font-size:var(--fs-md);min-width:34px;min-height:34px;cursor:pointer">−</button>`:''}
   </div>`;
 }
@@ -23412,11 +23412,11 @@ function _htmlCarteDouleur(idx){
   const choix=_dlrChoixFait(idx);
   if(choix==='continue'||choix==='declare') return '';
   if(choix==='allege'){
-    return `<div style="background:var(--surface-2);border-radius:10px;padding:11px 14px;margin-top:10px;font-size:var(--fs-sm);color:#ddd;line-height:1.6">J'ai baissé tes séries qui restent de 20 %. À toi de voir si ça passe mieux.</div>`;
+    return `<div style="background:var(--surface-2);border-radius:10px;padding:11px 14px;margin-top:10px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">J'ai baissé tes séries qui restent de 20 %. À toi de voir si ça passe mieux.</div>`;
   }
   if(seriesDouloureusesSeance(idx)<DLR_SEANCE_MIN) return '';
   return `<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:10px;padding:12px 14px;margin-top:10px">
-    <div style="font-size:var(--fs-sm);color:#eee;line-height:1.6;margin-bottom:10px">Ça t'a fait mal deux fois sur cet exercice. Qu'est-ce que tu veux faire ?</div>
+    <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-bottom:10px">Ça t'a fait mal deux fois sur cet exercice. Qu'est-ce que tu veux faire ?</div>
     <div style="display:flex;flex-direction:column;gap:6px">
       <button class="btn btn-outline btn-sm dlr-btn" data-choix="continue" data-idx="${idx}" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-2xs)">Je continue comme ça</button>
       <button class="btn btn-outline btn-sm dlr-btn" data-choix="allege" data-idx="${idx}" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-2xs)">J'allège</button>
@@ -24293,7 +24293,7 @@ function renderTendancesCoach(c){
   try{ l=[phraseChargeHebdo(c),phraseExercicesEnProgres(c)].filter(Boolean); }catch(e){ l=[]; }
   z.innerHTML=l.length
     ?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:10px 13px">`
-      +l.map(x=>`<div style="font-size:var(--fs-sm);color:#ddd;line-height:1.7">${escapeHtml(x)}</div>`).join('')
+      +l.map(x=>`<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(x)}</div>`).join('')
       +`</div>`
     :'';
   z.style.display=l.length?'':'none';
@@ -24696,7 +24696,7 @@ function _htmlHydratation(user,jourEstOn){
   if(!h&&!b) return '';
   return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Hydratation</div>
-    ${h?`<div style="font-size:var(--fs-sm);color:#ddd;line-height:1.6">${escapeHtml(phraseHydratation(h))}</div>`:''}
+    ${h?`<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(phraseHydratation(h))}</div>`:''}
     ${b?`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:${h?'6px':'0'}">${escapeHtml(b)}</div>`:''}
   </div>`;
 }
@@ -24747,7 +24747,7 @@ function _htmlSatisfaction(user){
   if(!s) return '';
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:16px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Satisfaction des séances</div>
-    <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.6">${escapeHtml(phraseSatisfaction(s))}</div>
+    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(phraseSatisfaction(s))}</div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px;line-height:1.5">Déclaratif. N'entre pas dans l'indice de forme : une séance dure peut satisfaire, une séance facile peut décevoir.</div>
   </div>`;
 }
@@ -25124,7 +25124,7 @@ function blocEnergie(user,pourCoach){
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Énergie hors séances</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint)">normale ${_fmtForme(e.moyenne)}/10</span>
     </div>
-    <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.6">${escapeHtml(phraseEnergie(e))}</div>
+    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(phraseEnergie(e))}</div>
     ${phrase?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:6px">${escapeHtml(phrase)}</div>`:''}
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px;line-height:1.5">Déclaratif, comparé à ta propre moyenne. N'entre pas dans l'indice de forme.</div>
   </div>`;
@@ -26420,7 +26420,7 @@ const PHP_TEXTE_SANTE='Une photo de ton corps est une donnée de santé au sens 
 function htmlPhotosConsentement(u){
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:15px 16px;margin-bottom:16px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:9px">Photos de progression</div>
-    <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.7;margin-bottom:10px">${escapeHtml(PHP_TEXTE_SANTE)}</div>
+    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7;margin-bottom:10px">${escapeHtml(PHP_TEXTE_SANTE)}</div>
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.7">Ce que fait RepCore : tes photos restent <strong style="color:#fff">sur ton téléphone</strong>. Elles ne partent nulle part tant que tu ne les partages pas, photo par photo, avec une confirmation à chaque fois.</div>
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.7;margin-top:8px">Ce que RepCore ne peut pas faire : une photo <em>déjà partagée</em> ne peut plus être effacée à distance depuis l'application. Si tu retires ton accord, tout ce qui est sur ce téléphone est détruit, et la liste de ce qui a été transmis est affichée pour que ton coach le supprime de son côté. On préfère te le dire avant.</div>
     <div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6;margin-top:8px">Aucune analyse automatique : ni silhouette, ni masse grasse, ni comparaison à qui que ce soit. Ce sont tes photos, rangées côte à côte.</div>
@@ -26609,7 +26609,7 @@ function htmlPhotosPartage(u){
     ${l.slice(0,12).map(s=>`<div style="border-top:1px solid var(--border);padding-top:9px;margin-top:9px">
       <div style="font-size:var(--fs-2xs);font-weight:800;color:var(--text-dim);letter-spacing:1px;margin-bottom:6px">${dj(s.date)}</div>
       ${s.poses.map(p=>`<div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">
-        <div style="flex:1;min-width:0;font-size:var(--fs-xs);color:#ddd">${escapeHtml(p.lib)}</div>
+        <div style="flex:1;min-width:0;font-size:var(--fs-xs);color:var(--text-strong)">${escapeHtml(p.lib)}</div>
         ${p.partagee
           ?`<span style="flex-shrink:0;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--green);background:#001a00;border:1px solid #1e5c2e;border-radius:5px;padding:3px 8px">Partagée</span>`
           :`<button type="button" class="hit44" onclick="phpPartagerPoseUI('${s.dateISO}','${p.cle}')"
@@ -26657,7 +26657,7 @@ function htmlPhotosReglages(u){
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Tes photos</div>
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.65">${e.seances.length} séance${e.seances.length>1?'s':''} sur cet appareil${partagees?' · '+partagees+' photo'+(partagees>1?'s':'')+' partagée'+(partagees>1?'s':''):' · rien de partagé'}.</div>
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.65;margin-top:7px">Partage au coach : ${e.partageCoach?'activé':'désactivé'}.</div>
-    ${purge.length?`<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:9px;padding:10px 12px;margin-top:9px;font-size:var(--fs-xs);color:#ddd;line-height:1.65">
+    ${purge.length?`<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:9px;padding:10px 12px;margin-top:9px;font-size:var(--fs-xs);color:var(--text-strong);line-height:1.65">
       ${purge.length} fichier${purge.length>1?'s':''} déjà transmis n'${purge.length>1?'ont':'a'} pas pu être supprimé${purge.length>1?'s':''} à distance. Montre cette liste à ton coach : c'est lui qui les efface chez l'hébergeur.
       <div style="font-family:monospace;font-size:var(--fs-2xs);color:var(--text-faint);margin-top:6px;word-break:break-all">${purge.map(p=>escapeHtml(p.publicId)).join('<br>')}</div>
     </div>`:''}
@@ -28669,7 +28669,7 @@ function _bMetierSaisie(id,val){
     const exact=!!niveauMetier(val);
     zs.style.display=(l.length&&!exact)?'block':'none';
     zs.innerHTML=l.map(m=>`<div onclick="_bMetierChoisi('${id}',this.dataset.n)" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" data-n="${escapeHtml(m.nom)}"
-      style="padding:9px 12px;font-size:var(--fs-sm);color:#ddd;cursor:pointer;border-bottom:1px solid var(--border)">
+      style="padding:9px 12px;font-size:var(--fs-sm);color:var(--text-strong);cursor:pointer;border-bottom:1px solid var(--border)">
       ${escapeHtml(m.nom)}<span style="color:var(--text-faint);font-size:var(--fs-2xs)"> · ${escapeHtml(m.fam)}</span></div>`).join('');
   }
   if(zn){
@@ -28888,7 +28888,7 @@ function bLongueurs(){
     </div>
   </div>`;
   return `<div style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px">
-    <div style="font-size:var(--fs-xs);font-weight:700;color:#e0e0e0;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Longueurs — facultatif</div>
+    <div style="font-size:var(--fs-xs);font-weight:700;color:var(--text-strong);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Longueurs — facultatif</div>
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-bottom:12px">Deux mesures qui ne bougent plus une fois adulte. Elles servent à ton coach pour te proposer des variantes d'un mouvement, jamais pour en écarter un.</div>
     ${champ('deb-entrejambe','Entrejambe','Du sol au pubis, pieds nus, dos au mur.')}
     ${champ('deb-bras','Longueur de bras','Bras tendu le long du corps, de la pointe de l\'épaule au poignet.')}
@@ -28902,7 +28902,7 @@ function bBodyFocus(id,on){
   if(dot){dot.setAttribute('stroke',on?'#E02020':(filled?'rgba(224,32,32,.9)':'#8a8a8a'));dot.setAttribute('fill',on||filled?'#E02020':'#0a0a0a');}
   if(bx){bx.style.borderColor=on?'#E02020':(filled?'rgba(224,32,32,.4)':'var(--border)');bx.style.boxShadow=on?'0 0 12px rgba(224,32,32,.25)':'none';}
 }
-function bLbl(txt){return`<div style="font-size:var(--fs-xs);font-weight:700;color:#e0e0e0;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;margin-top:14px">${txt}</div>`;}
+function bLbl(txt){return`<div style="font-size:var(--fs-xs);font-weight:700;color:var(--text-strong);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;margin-top:14px">${txt}</div>`;}
 function loadBilPhoto(input,key){
   const f=input.files[0];if(!f)return;
   _bilPhotoLoading++;
@@ -29253,7 +29253,7 @@ function _htmlAlerteTension(user){
   const a=alerteTension(user);
   if(!a.alerte) return '';
   return `<div style="margin-top:12px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:10px;padding:12px 14px">
-    <div style="font-size:var(--fs-sm);color:#eee;line-height:1.6">${escapeHtml(TENSION_MESSAGE)}</div>
+    <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">${escapeHtml(TENSION_MESSAGE)}</div>
     ${blocDisclaimerSante()}
   </div>`;
 }
@@ -29278,7 +29278,7 @@ function _htmlConstantes(user){
     .slice().sort((a,b)=>a.date<b.date?-1:1).slice(-10).reverse();
   if(!l.length) return `<div class="sub" style="font-size:var(--fs-xs);padding:8px 0;line-height:1.6">Aucune mesure enregistrée.</div>`;
   return l.map(e=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:2px 0;border-bottom:1px solid #161616">
-    <span style="font-size:var(--fs-sm);color:#ddd">${e.sys}/${e.dia}${e.pouls?` · ${e.pouls} bpm`:''}</span>
+    <span style="font-size:var(--fs-sm);color:var(--text-strong)">${e.sys}/${e.dia}${e.pouls?` · ${e.pouls} bpm`:''}</span>
     <span class="sub" style="font-size:var(--fs-xs);white-space:nowrap;margin-left:auto">${escapeHtml(_fmtDateCourte(e.date))}</span>
     ${_htmlRetraitReleve(`supprimerConstanteUI(&quot;${escapeHtml(e.date)}&quot;)`,`la mesure du ${escapeHtml(_fmtDateCourte(e.date))}`)}
   </div>`).join('');
@@ -29296,7 +29296,7 @@ function _htmlAnalyses(user){
     return `<div style="display:flex;align-items:center;gap:8px;padding:2px 0;border-bottom:1px solid #161616">
       <div style="flex:1;min-width:0;padding:6px 0">
         <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
-          <span style="font-size:var(--fs-sm);color:#ddd;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml((m&&m.lib)||e.marqueur)}</span>
+          <span style="font-size:var(--fs-sm);color:var(--text-strong);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml((m&&m.lib)||e.marqueur)}</span>
           <span style="font-size:var(--fs-sm);color:#fff;font-weight:700;white-space:nowrap">${String(e.valeur).replace('.',',')} ${escapeHtml(e.unite)}</span>
         </div>
         <div class="sub" style="font-size:var(--fs-2xs);margin-top:2px">${escapeHtml(_fmtDateCourte(e.date))}${escapeHtml(ecart)}</div>
@@ -29315,7 +29315,7 @@ function _htmlDrapeauGeneral(user){
   const d=drapeauGeneralActif(user);
   if(!d) return '';
   return `<div style="margin-top:12px;background:#1a0000;border:1px solid var(--red);border-radius:10px;padding:13px 15px">
-    ${TEXTE_ARRET_GENERAL.map(t=>`<div style="font-size:var(--fs-md);color:#eee;line-height:1.7;margin-bottom:9px">${escapeHtml(t)}</div>`).join('')}
+    ${TEXTE_ARRET_GENERAL.map(t=>`<div style="font-size:var(--fs-md);color:var(--text);line-height:1.7;margin-bottom:9px">${escapeHtml(t)}</div>`).join('')}
     <div class="sub" style="font-size:var(--fs-xs);line-height:1.6">Tu as signalé : ${d.cases.map(c=>escapeHtml(libelleDrapeau(c))).join(', ')}.</div>
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:9px">Ton coach le voit de son côté. C'est lui qui retire ce signalement quand tu l'as vu avec un médecin.</div>
     ${blocDisclaimerSante()}
@@ -29399,7 +29399,7 @@ function loadSante(){
     <div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:6px">Signes à ne pas ignorer</div>
       <div class="sub" style="font-size:var(--fs-xs);line-height:1.6;margin-bottom:9px">Coche ce que tu ressens. RepCore arrêtera ses propositions et te renverra vers un médecin.</div>
-      ${DRAPEAUX_GENERAUX.map(d=>`<label class="hit44" style="display:flex;align-items:center;gap:9px;margin:0 0 6px;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:400;font-size:var(--fs-sm);color:#ddd">
+      ${DRAPEAUX_GENERAUX.map(d=>`<label class="hit44" style="display:flex;align-items:center;gap:9px;margin:0 0 6px;cursor:pointer;text-transform:none;letter-spacing:normal;font-weight:400;font-size:var(--fs-sm);color:var(--text-strong)">
         <input type="checkbox" class="dg-case" value="${escapeHtml(d.cle)}" style="width:16px;height:16px;margin:0;accent-color:var(--red);flex-shrink:0">
         ${escapeHtml(d.lib)}
       </label>`).join('')}
@@ -29524,7 +29524,7 @@ function _htmlFormContrainte(){
     return `<label style="display:flex;align-items:flex-start;gap:9px;padding:9px 0;cursor:pointer;min-height:44px;text-transform:none;letter-spacing:normal;font-size:inherit;font-weight:400;color:inherit;margin:0">
       <input type="checkbox" ${on?'checked':''} onchange="_ctDrapeau('${d.cle}',this.checked)"
         style="width:18px;height:18px;margin-top:1px;flex-shrink:0;accent-color:var(--red)">
-      <span style="font-size:var(--fs-sm);color:#ddd;line-height:1.5">${escapeHtml(d.lib)}</span>
+      <span style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5">${escapeHtml(d.lib)}</span>
     </label>`;}).join('');
   const alerte=s.drapeaux.length>0;
   return `<div id="ct-form">
@@ -29656,7 +29656,7 @@ function afficherEcranArret(zone){
     `<div id="modal-overlay" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:center;justify-content:center;padding:20px">
       <div style="background:var(--dark);border:2px solid var(--red);border-radius:16px;padding:20px;width:100%;max-width:460px;max-height:90vh;overflow:auto">
         <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase;margin-bottom:10px">Ce que tu décris demande un avis</div>
-        ${TEXTE_ARRET_DRAPEAU.map(t=>`<div style="font-size:var(--fs-md);color:#eee;line-height:1.7;margin-bottom:9px">${escapeHtml(t)}</div>`).join('')}
+        ${TEXTE_ARRET_DRAPEAU.map(t=>`<div style="font-size:var(--fs-md);color:var(--text);line-height:1.7;margin-bottom:9px">${escapeHtml(t)}</div>`).join('')}
         <div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6;margin-top:10px">Zone concernée : ${escapeHtml(libZone(zone))}.</div>
         <button class="btn btn-red" onclick="closeModal()" style="margin-top:16px;letter-spacing:1px">J'ai compris</button>
       </div></div>`);
@@ -29666,7 +29666,7 @@ function _ligneContrainte(c,pourCoach,cible){
   const cote=c.cote?' ('+(COTES_CONTRAINTE.find(x=>x.cle===c.cote)||{lib:c.cote}).lib+')':'';
   return `<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)">
     <div style="flex:1;min-width:0">
-      <div style="font-size:var(--fs-sm);font-weight:800;color:#eee">${escapeHtml(libZone(c.zone))}${escapeHtml(cote)}</div>
+      <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${escapeHtml(libZone(c.zone))}${escapeHtml(cote)}</div>
       <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5">${escapeHtml(libNiveau(c.niveau))}${c.libelle?' · '+escapeHtml(c.libelle):''}</div>
     </div>
     <button onclick="_ctRetirer('${c.id}',${cible?"'"+cible+"'":'null'})" class="hit44" style="min-width:40px;min-height:40px;background:none;border:none;color:var(--text-dim);font-size:var(--fs-lg);cursor:pointer" aria-label="Retirer">✕</button>
@@ -29684,7 +29684,7 @@ function blocDrapeauRouge(u){
   const lib=d.cases.map(c=>(DRAPEAUX_ROUGES.find(x=>x.cle===c)||{lib:c}).lib);
   return `<div style="background:#1a0505;border:1px solid var(--red);border-radius:10px;padding:12px;margin-bottom:12px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase;margin-bottom:6px">Signes à faire examiner · ${escapeHtml(libZone(d.zone))}</div>
-    ${lib.map(t=>`<div style="font-size:var(--fs-xs);color:#ddd;line-height:1.6">· ${escapeHtml(t)}</div>`).join('')}
+    ${lib.map(t=>`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">· ${escapeHtml(t)}</div>`).join('')}
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:7px">Aucun exercice de remplacement n'est proposé tant que ce signalement est actif.</div>
   </div>`;
 }
@@ -29883,7 +29883,7 @@ function loadCharges(){
 }
 function _chCase(s,z){
   const v=chargeSchema(s,z);
-  const c=v==null?'var(--text-faint)':(v>=2?'var(--orange)':(v===0?'var(--sub)':'#ddd'));
+  const c=v==null?'var(--text-faint)':(v>=2?'var(--orange)':(v===0?'var(--sub)':'var(--text-strong)'));
   return `<button onclick="_chCycle('${s}','${z}')" class="hit44"
     style="min-width:34px;min-height:38px;border-radius:8px;cursor:pointer;font-size:var(--fs-md);font-weight:800;
     background:${v>=2?'#1a0f00':'var(--surface-1)'};border:1px solid ${v>=2?'var(--orange)':'var(--border)'};color:${c}">${v==null?'·':v}</button>`;
@@ -29906,7 +29906,7 @@ function renderCharges(){
   const entete=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:14px">
     <div style="font-size:var(--fs-sm);color:var(--sub);line-height:1.6">
       Pour chaque famille de mouvement, dis à quel point elle sollicite chaque articulation.
-      Un appui fait défiler <b style="color:#ddd">0</b> aucune · <b style="color:#ddd">1</b> légère ·
+      Un appui fait défiler <b style="color:var(--text-strong)">0</b> aucune · <b style="color:var(--text-strong)">1</b> légère ·
       <b style="color:var(--orange)">2</b> forte · <b style="color:var(--orange)">3</b> maximale · <b>·</b> pas encore noté.
     </div>
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:8px">
@@ -29931,7 +29931,7 @@ function renderCharges(){
     return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:9px 10px;margin-bottom:6px">
       <div style="display:flex;align-items:center;gap:3px;min-width:max-content">
         <div style="flex:0 0 132px;cursor:pointer" onclick="_chSchemaOuvert=${ouvert?'null':"'"+s+"'"};renderCharges()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-          <div style="font-size:var(--fs-sm);font-weight:800;color:#eee;line-height:1.25">${escapeHtml(m.lib)}</div>
+          <div style="font-size:var(--fs-sm);font-weight:800;color:var(--text);line-height:1.25">${escapeHtml(m.lib)}</div>
           <div style="font-size:var(--fs-2xs);color:var(--text-faint)">${m.nb} exercices${ouvert?'':' · voir'}</div>
         </div>
         ${ZONES_ARTICULAIRES.map(zz=>m.hors.indexOf(zz)>=0
@@ -29994,10 +29994,10 @@ function _blocAvertissementContrainte(ex,i){
   }
   const subs=(()=>{ try{ return substitutsDe(ex,{zone:c.zone}).slice(0,3); }catch(e){ return []; } })();
   return `<div style="margin-top:8px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:8px;padding:10px 12px">
-    <div style="font-size:var(--fs-xs);color:#eee;line-height:1.6">
+    <div style="font-size:var(--fs-xs);color:var(--text);line-height:1.6">
       ${escapeHtml(cible.fname||'Cet athlète')} a signalé : <b>${escapeHtml(libZone(c.zone))}</b>, ${escapeHtml(libNiveau(c.niveau))}${c.libelle?' — '+escapeHtml(c.libelle):''}.
     </div>
-    <div style="font-size:var(--fs-xs);color:#eee;line-height:1.6;margin-top:4px">
+    <div style="font-size:var(--fs-xs);color:var(--text);line-height:1.6;margin-top:4px">
       <b>${escapeHtml(ex.name)}</b> sollicite fortement ${escapeHtml(libZone(c.zone))}.
     </div>
     ${subs.length?`<div style="font-size:var(--fs-2xs);color:var(--sub);line-height:1.6;margin-top:7px">Mouvements moins exigeants sur cette zone :</div>
@@ -30005,7 +30005,7 @@ function _blocAvertissementContrainte(ex,i){
         <div style="font-size:var(--fs-2xs);color:var(--text-faint)">${escapeHtml(s.lib)} · charge ${s.charge}/3</div>
         <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:3px">
           ${_exemplesSubstitut(s,3).map(n=>`<button onclick="_remplacerParExo(${i},${JSON.stringify(n).replace(/"/g,'&quot;')})"
-            style="background:var(--surface-1);border:1px solid var(--border);border-radius:7px;padding:6px 9px;font-size:var(--fs-2xs);color:#ddd;cursor:pointer">${escapeHtml(n.toLowerCase())}</button>`).join('')}
+            style="background:var(--surface-1);border:1px solid var(--border);border-radius:7px;padding:6px 9px;font-size:var(--fs-2xs);color:var(--text-strong);cursor:pointer">${escapeHtml(n.toLowerCase())}</button>`).join('')}
         </div></div>`).join('')}`
       :`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:7px">Aucun mouvement de remplacement à proposer : les charges articulaires ne sont pas encore renseignées pour les autres familles.</div>`}
     <div style="display:flex;gap:7px;margin-top:9px">
@@ -30052,14 +30052,14 @@ function _blocContrainteSeance(ex,idx){
   if(!l.length) return '';
   if(ex.justificationContrainte){
     return `<div style="background:var(--surface-2);border-radius:10px;padding:11px 14px;margin-bottom:12px">
-      <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.6">Ton coach a maintenu cet exercice : « ${escapeHtml(ex.justificationContrainte)} »</div>
+      <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">Ton coach a maintenu cet exercice : « ${escapeHtml(ex.justificationContrainte)} »</div>
       ${blocDisclaimerSante()}
     </div>`;
   }
   const c=l[0];
   const subs=(()=>{ try{ return substitutsDe(ex,{zone:c.zone}).slice(0,3); }catch(e){ return []; } })();
   return `<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:10px;padding:11px 14px;margin-bottom:12px">
-    <div style="font-size:var(--fs-sm);color:#eee;line-height:1.6">
+    <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">
       ⚠ Tu as signalé une gêne au ${escapeHtml(libZone(c.zone))}. Cet exercice sollicite beaucoup cette zone.
       Reste sur une charge où ta technique est parfaite, et arrête si ça pince.
     </div>
@@ -30089,7 +30089,7 @@ function _jeRemplace(idx){
           <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:1px;text-transform:uppercase">${escapeHtml(s.lib)}</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
             ${_exemplesSubstitut(s,4).map(n=>`<button onclick="_appliquerSubstitut(${idx},${JSON.stringify(n).replace(/"/g,'&quot;')})"
-              class="hit44" style="min-height:40px;background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:8px 11px;font-size:var(--fs-xs);color:#ddd;cursor:pointer">${escapeHtml(n.toLowerCase())}</button>`).join('')}
+              class="hit44" style="min-height:40px;background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:8px 11px;font-size:var(--fs-xs);color:var(--text-strong);cursor:pointer">${escapeHtml(n.toLowerCase())}</button>`).join('')}
           </div></div>`).join('')}
         ${blocDisclaimerSante()}
       </div></div>`);
@@ -30173,7 +30173,7 @@ function ouvrirRemplacement(idx){
         <div id="rempl-liste" style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch"></div>`
         :`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:12px">
           Ton programme n\'est pas modifié, et ton coach verra l\'échange.
-          <b style="color:#ddd">Écris le nom du mouvement que tu as fait à la place.</b>
+          <b style="color:var(--text-strong)">Écris le nom du mouvement que tu as fait à la place.</b>
         </div>
         <input id="rempl-manuel" type="text" maxlength="60" autocomplete="off"
           placeholder="Ex : développé incliné haltères"
@@ -30221,7 +30221,7 @@ function _rendreListeRemplacement(){
   const vus=l.slice(0,REMPL_MAX_LISTE);
   // Le reste n'est pas caché en silence : on dit combien, et quoi faire.
   z.innerHTML=vus.map(n=>`<button onclick="_appliquerSubstitut(${_remplIdx},${JSON.stringify(n).replace(/"/g,'&quot;')})"
-      class="hit44" style="display:block;width:100%;text-align:left;min-height:44px;background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:6px;font-size:var(--fs-sm);color:#ddd;cursor:pointer">`
+      class="hit44" style="display:block;width:100%;text-align:left;min-height:44px;background:var(--surface-1);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:6px;font-size:var(--fs-sm);color:var(--text-strong);cursor:pointer">`
       +escapeHtml(n.toLowerCase())+'</button>').join('')
     +(l.length>vus.length?'<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;padding:4px 2px 2px">'
       +(l.length-vus.length)+' autres mouvements. Affine ta recherche pour les voir.</div>':'');
@@ -30474,7 +30474,7 @@ function blocReponseBilan(b,c){
   return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
     ${b.reponseCoach?`<div style="background:var(--surface-2);border-radius:8px;padding:9px 11px;margin-bottom:9px">
       <div style="font-size:var(--fs-xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);font-weight:800;margin-bottom:4px">Ta réponse${dejaLue?' · lue':' · non lue'}</div>
-      <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.6">${escapeHtml(b.reponseCoach)}</div>
+      <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(b.reponseCoach)}</div>
     </div>`:''}
     ${tca?`<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:8px;padding:9px 11px;margin-bottom:9px;font-size:var(--fs-xs);color:var(--sub);line-height:1.6">
       Les chiffres de poids sont masqués dans son application. Évite de les citer par message.
@@ -30507,7 +30507,7 @@ function renderReponsesBilans(bilans,client){
       if(!txt) return '';
       return `<div style="padding:8px 0;border-bottom:1px solid #141414">
         <div style="font-size:var(--fs-xs);color:${q.alerte?'#fca5a5':'var(--sub)'};font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">${q.emoji} ${q.lbl}</div>
-        <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.5">${escapeHtml(txt)}</div>
+        <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5">${escapeHtml(txt)}</div>
       </div>`;
     }).filter(Boolean).join('');
     if(!answers) return '';
@@ -30519,7 +30519,7 @@ function renderReponsesBilans(bilans,client){
       ${answers}
       ${(!client&&b.reponseCoach)?`<div style="margin-top:10px;background:var(--surface-2);border-left:3px solid var(--green);border-radius:8px;padding:10px 12px">
         <div style="font-size:var(--fs-xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--green);font-weight:800;margin-bottom:4px">Réponse de ton coach</div>
-        <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.6">${escapeHtml(b.reponseCoach)}</div>
+        <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.6">${escapeHtml(b.reponseCoach)}</div>
       </div>`:''}
       ${client?blocReponseBilan(b,client):''}
     </div>`;
@@ -30607,7 +30607,7 @@ const DEB_STEPS=[
     // mention qui l'accompagne est AFFICHÉE, pas seulement commentée.
     `<label style="display:flex;align-items:flex-start;gap:9px;margin-top:10px;cursor:pointer">
       <input type="checkbox" id="deb-traitement" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px"${bilData['deb-traitement']?' checked':''} onchange="bilData['deb-traitement']=this.checked">
-      <span style="font-size:var(--fs-sm);color:#ddd;line-height:1.55">Je suis un traitement médicamenteux régulier</span>
+      <span style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.55">Je suis un traitement médicamenteux régulier</span>
     </label>`+
     bT('deb-traitement-detail','Si tu veux préciser (facultatif)')+
     `<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-top:6px">${escapeHtml(TRAITEMENT_MENTION)}</div>`+
@@ -31033,7 +31033,7 @@ function showBilanNotifBanner(){
   b.innerHTML=`<div style="background:linear-gradient(135deg,#1a0000,#280000);border-bottom:2px solid var(--red);padding:14px 18px;display:flex;align-items:center;gap:12px;cursor:pointer" onclick="openBilanChoice();document.getElementById('bilan-notif-banner')?.remove()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <div style="flex:1;min-width:0">
       <div style="font-size:var(--fs-xs);font-weight:900;color:var(--red-text);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px">Bilan bimensuel · Ce samedi</div>
-      <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Remplis ton bilan coaching pour suivre ton évolution !</div>
+      <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Remplis ton bilan coaching pour suivre ton évolution !</div>
     </div>
     <button onclick="event.stopPropagation();document.getElementById('bilan-notif-banner')?.remove()" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1;min-width:44px;min-height:44px">✕</button>
   </div>`;
@@ -31184,7 +31184,7 @@ function htmlSuspension(u){
   const zone=(()=>{ try{ const d=drapeauRougeActif(u); return d?d.zone:''; }catch(e){ return ''; } })();
   const msg=suspensionMessageReprise(u);
   return `<div style="background:#1a0000;border:1px solid var(--red);border-radius:12px;padding:15px 16px;margin-bottom:16px">
-    ${_suspTextes(sp.cause).map(t=>`<div style="font-size:var(--fs-md);color:#eee;line-height:1.7;margin-bottom:9px">${escapeHtml(t)}</div>`).join('')}
+    ${_suspTextes(sp.cause).map(t=>`<div style="font-size:var(--fs-md);color:var(--text);line-height:1.7;margin-bottom:9px">${escapeHtml(t)}</div>`).join('')}
     ${sp.mouvement?`<div class="sub" style="font-size:var(--fs-xs);line-height:1.6">Mouvement concerné : ${escapeHtml(sp.mouvement)}.</div>`:''}
     ${zone?`<div class="sub" style="font-size:var(--fs-xs);line-height:1.6">Zone concernée : ${escapeHtml(zone)}.</div>`:''}
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:9px">Ton compteur de semaines est gelé à ${sp.streakGele}. Il ne descend pas pendant la pause. Tes rappels de séance sont coupés, ton réglage est conservé.</div>
@@ -31225,7 +31225,7 @@ function htmlRepriseSeance(u){
   const zero=r.remiseAZero?suspensionMessageReprise(u):'';
   return `<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:12px;padding:14px 16px;margin-bottom:12px">
     <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:7px">Séance de retour</div>
-    <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.65">Ton coach a levé la pause. Cette séance t'est proposée en volume réduit — tu peux décocher.</div>
+    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.65">Ton coach a levé la pause. Cette séance t'est proposée en volume réduit — tu peux décocher.</div>
     ${r.mouvement?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:7px">Mouvement à l'origine de la pause : <strong style="color:#fff">${escapeHtml(r.mouvement)}</strong>.</div>`:''}
     ${ci?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:5px">${escapeHtml(ci)}</div>`:''}
     ${zero?`<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6;margin-top:7px">${escapeHtml(zero)}</div>`:''}
@@ -31258,7 +31258,7 @@ function htmlLeveeCoach(c){
     lignes.push('Douleur à 4 ou plus sur '+sp.mouvement+', '+SUSP_DOULEUR_SEANCES+' séances de suite.');
   return `<div style="background:#1a0000;border:1px solid var(--red);border-radius:12px;padding:14px 16px;margin-bottom:16px">
     <div style="font-size:var(--fs-2xs);color:var(--red-text);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:8px">Entraînement suspendu</div>
-    ${lignes.map(t=>`<div style="font-size:var(--fs-sm);color:#eee;line-height:1.65;margin-bottom:5px">${escapeHtml(t)}</div>`).join('')}
+    ${lignes.map(t=>`<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.65;margin-bottom:5px">${escapeHtml(t)}</div>`).join('')}
     ${sp.actif?`<div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:7px">Depuis ${sp.jours} jour${sp.jours>1?'s':''}. Compteur de semaines gelé à ${sp.streakGele}, rappels coupés, semaines hors du taux de complétion.</div>`:''}
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:8px">Toi seul peux lever cette pause. RepCore ne le fera jamais à ta place.</div>
     ${dg?`<button class="btn btn-outline btn-sm" style="width:100%;margin-top:10px" onclick="coachLeverDrapeau('general')">Lever le signalement général</button>`:''}
@@ -31363,7 +31363,7 @@ function htmlHabitudesCoach(c){
     </div>
     ${l.length
       ? l.map(h=>`<div style="display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px solid rgba(255,255,255,.05)">
-          <span style="flex:1;min-width:0;font-size:var(--fs-sm);color:#ddd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(h.libelle||h.cle)}</span>
+          <span style="flex:1;min-width:0;font-size:var(--fs-sm);color:var(--text-strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(h.libelle||h.cle)}</span>
           <span style="font-size:var(--fs-sm);font-weight:800;color:#fff;flex-shrink:0">${habTaux(c,h.cle)}&nbsp;%</span>
           <button onclick="habCoachRetirer('${escapeHtml(h.cle)}')" aria-label="Retirer"
             style="min-width:44px;min-height:44px;background:none;border:none;color:var(--sub);font-size:var(--fs-lg);cursor:pointer;flex-shrink:0">×</button>
@@ -31477,7 +31477,7 @@ function showWoReminderBanner(){
     <div style="font-size:var(--fs-2xl);flex-shrink:0">💪</div>
     <div style="flex:1;min-width:0">
       <div style="font-size:var(--fs-xs);font-weight:900;color:var(--green);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:3px">Séance du jour</div>
-      <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">C'est l'heure de t'entraîner ! Clique pour démarrer.</div>
+      <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">C'est l'heure de t'entraîner ! Clique pour démarrer.</div>
     </div>
     <button onclick="event.stopPropagation();document.getElementById('wo-reminder-banner')?.remove()" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-xl);cursor:pointer;flex-shrink:0;padding:0 4px;line-height:1">✕</button>
   </div>`;
@@ -31599,7 +31599,7 @@ function _htmlEncartOsseux(user){
   const u=user||currentUser;
   if(!menopauseeOuAgee(u)||((u||{}).encartOsseuxVu)) return '';
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px 14px;margin-bottom:14px">
-    <div style="font-size:var(--fs-sm);color:#eee;line-height:1.75">${escapeHtml(MENO_ENCART_OSSEUX)}</div>
+    <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(MENO_ENCART_OSSEUX)}</div>
     <button onclick="accuserEncartOsseux()" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:var(--fs-2xs);letter-spacing:1px">J'ai compris</button>
   </div>`;
 }
@@ -32099,7 +32099,7 @@ function _htmlRecords(user){
   return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:9px">Records</div>
     ${lignes.map(x=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:7px">
-      <span style="font-size:var(--fs-xs);color:#ddd;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nom)}</span>
+      <span style="font-size:var(--fs-xs);color:var(--text-strong);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nom)}</span>
       <span style="font-size:var(--fs-xs);font-weight:800;color:#fff;white-space:nowrap">${_fmtKg(x.rec.meilleureCharge.kg)}${x.rec.meilleureCharge.reps?` × ${x.rec.meilleureCharge.reps}`:''}<span style="font-size:var(--fs-2xs);color:var(--text-faint);font-weight:600"> · ${dt(x.rec.meilleureCharge.date)}</span></span>
     </div>`).join('')}
   </div>`;
@@ -32115,7 +32115,7 @@ function _htmlRirMoyen(c){
   const manquantes=l.reduce((a,x)=>a+(x.r.nTotal-x.r.nRenseignees),0);
   return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
     <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">RIR moyen · ${l.length} dernière${l.length>1?'s':''} séance${l.length>1?'s':''}</div>
-    <div style="font-size:var(--fs-xs);color:#ddd">${String(moy).replace('.',',')}${manquantes?`<span style="color:var(--text-faint)"> · ${manquantes} série${manquantes>1?'s':''} sans RIR, exclue${manquantes>1?'s':''} du calcul</span>`:''}</div>
+    <div style="font-size:var(--fs-xs);color:var(--text-strong)">${String(moy).replace('.',',')}${manquantes?`<span style="color:var(--text-faint)"> · ${manquantes} série${manquantes>1?'s':''} sans RIR, exclue${manquantes>1?'s':''} du calcul</span>`:''}</div>
   </div>`;
 }
 // Fiche coach : ce qui est prescrit contre ce qui est fait.
@@ -32125,7 +32125,7 @@ function _htmlEcartPrescrit(c){
   const dits=l.slice(0,6);
   return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
     <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:5px">Prescrit / réalisé</div>
-    ${dits.map(x=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:var(--fs-xs);color:#ddd;margin-bottom:3px">
+    ${dits.map(x=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:var(--fs-xs);color:var(--text-strong);margin-bottom:3px">
       <span>${escapeHtml((MUSCLES[x.muscle]||{}).lib||x.muscle)}</span>
       <span style="white-space:nowrap;color:var(--sub)">${volAffiche(x.realise)} / ${volAffiche(x.prescrit)} · ${Math.round(x.part*100)} %</span>
     </div>`).join('')}
@@ -32221,7 +32221,7 @@ function _htmlCarteDecharge(c){
     +escapeHtml(titre)+`</div>
     <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-bottom:8px">Sur la `
     +escapeHtml(sem)+`. Proposition, pas décision : rien n'est appliqué tant que tu ne cliques pas.</div>`
-    +f.motifs.map(m=>`<div style="font-size:var(--fs-xs);color:#ddd;line-height:1.6;border-left:2px solid var(--info);padding-left:9px;margin-bottom:5px">`
+    +f.motifs.map(m=>`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;border-left:2px solid var(--info);padding-left:9px;margin-bottom:5px">`
       +escapeHtml(String(m.libelle||''))+` — <b>`+escapeHtml(String(m.valeur))+`</b> `
       +escapeHtml(String(m.unite||''))+`</div>`).join('')
     +`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
@@ -32712,7 +32712,7 @@ function showProgressTab(tab,btn){
         {stickyCol0:true,firstColMinWidth:'130px',bodyLabelBg:'var(--dark)',
          wrapperStyle:'border-radius:12px;border:1px solid var(--border);background:var(--dark)',
          pad:'7px 14px',cellBorder:'#141414',cellBorderSide:'bottom',mb:'14px',
-         emptyColor:'var(--sub)',valueColor:'#f0f0f0'}
+         emptyColor:'var(--sub)',valueColor:'var(--text)'}
       ):'');
     c.querySelectorAll('[data-scroll-fade]').forEach(el=>setupScrollFade(el));
 
@@ -32762,12 +32762,12 @@ function showProgressTab(tab,btn){
     miniCharts+='</div>';
     c.innerHTML=renderDataTable(
       ['PARTIES MESURÉES',...bilLabels],
-      MEAS.map(m=>({label:m.l,labelColor:'#e0e0e0',
+      MEAS.map(m=>({label:m.l,labelColor:'var(--text-strong)',
         values:bl.map(b=>{const v=getBM(b,m.k);return v!==null?v:null;})})),
       {stickyCol0:true,firstColMinWidth:'130px',bodyLabelBg:'var(--dark)',
        wrapperStyle:'border-radius:12px;border:1px solid var(--border);background:var(--dark)',
        pad:'7px 14px',cellBorder:'#141414',cellBorderSide:'bottom',mb:'16px',
-       emptyColor:'var(--sub)',valueColor:'#f0f0f0',zebre:true,unite:'cm'}
+       emptyColor:'var(--sub)',valueColor:'var(--text)',zebre:true,unite:'cm'}
     )+miniCharts;
     c.querySelectorAll('[data-scroll-fade]').forEach(el=>setupScrollFade(el));
     setTimeout(()=>{
@@ -32864,7 +32864,7 @@ function showProgressTab(tab,btn){
         {stickyCol0:true,firstColMinWidth:'130px',bodyLabelBg:'var(--dark)',
          wrapperStyle:'border-radius:12px;border:1px solid var(--border);background:var(--dark)',
          pad:'7px 14px',cellBorder:'#141414',cellBorderSide:'bottom',mb:'16px',
-         emptyColor:'var(--sub)',valueColor:'#f0f0f0'}
+         emptyColor:'var(--sub)',valueColor:'var(--text)'}
       )}
       <div style="font-size:var(--fs-xs);color:var(--text-dim);text-align:center;margin-top:8px;line-height:1.6">
         Formule US Navy · Basée sur tour de cou, tour de taille${female?' et tour de hanche':''} + taille<br>
@@ -33372,10 +33372,10 @@ function _htmlDossierSante(user,pourCoach){
   try{ d=dossierSante(user,pourCoach); }catch(e){ d=null; }
   if(!d) return '';
   if(dossierSanteVide(d))
-    return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:14px 16px;font-size:var(--fs-sm);color:#ddd;line-height:1.75">${escapeHtml(DOSSIER_VIDE)}</div>`;
+    return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:14px 16px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.75">${escapeHtml(DOSSIER_VIDE)}</div>`;
   const titre=t=>`<div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin:14px 0 7px">${escapeHtml(t)}</div>`;
   const ligne=(g,dr)=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid rgba(255,255,255,.06)">
-      <span style="font-size:var(--fs-xs);color:#ddd;line-height:1.6;min-width:0">${g}</span>
+      <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;min-width:0">${g}</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint);white-space:nowrap;flex-shrink:0">${escapeHtml(dr)}</span>
     </div>`;
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px 15px">
@@ -33587,7 +33587,7 @@ function _htmlRepartitionPrises(user,macrosJour){
     ?r.nRepas+' × '+r.parts[0]+' g'
     :r.parts.join(' g · ')+' g';
   return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">
-    <div style="font-size:var(--fs-xs);color:#ddd;line-height:1.6">${escapeHtml(detail)} — ${escapeHtml(String(r.total))} g au total.</div>
+    <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">${escapeHtml(detail)} — ${escapeHtml(String(r.total))} g au total.</div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:5px">${escapeHtml(phrasePlancherPrise(r))}</div>
     ${r.tension?`<div style="font-size:var(--fs-2xs);color:var(--text-dim);line-height:1.55;margin-top:5px">${escapeHtml(PRISE_PHRASE_TENSION)}${r.nSuggere?' Essaie '+r.nSuggere+' repas.':''}</div>`:''}
   </div>`;
@@ -33601,7 +33601,7 @@ function _htmlRepartitionPrisesCoach(c){
   if(!r) return '';
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:12px 13px;margin-bottom:16px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">Protéines par prise</div>
-    <div style="font-size:var(--fs-xs);color:#ddd;line-height:1.7">${escapeHtml(r.parts.join(' + '))} = ${escapeHtml(String(r.total))} g sur ${escapeHtml(String(r.nRepas))} repas.</div>
+    <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7">${escapeHtml(r.parts.join(' + '))} = ${escapeHtml(String(r.total))} g sur ${escapeHtml(String(r.nRepas))} repas.</div>
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.7">Repère par prise : ${escapeHtml(String(r.plancher))} g.</div>
     ${r.tension?`<div style="font-size:var(--fs-xs);color:var(--orange);line-height:1.7">Sous le repère${r.nSuggere?' — '+r.nSuggere+' repas s\'en approcherait':''}. Le total ne bouge pas.</div>`:''}
   </div>`;
@@ -33660,8 +33660,8 @@ function _htmlReperesRepas(user,macrosJour,dateStr){
   try{ per=repereSeance(user,dateStr); }catch(e){}
   if(!pr&&!per) return '';
   return `<div style="margin-top:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:11px 13px">
-    ${pr?`<div style="font-size:var(--fs-xs);color:#ddd;line-height:1.6">${escapeHtml(phraseProtParRepas(pr))}</div>`:''}
-    ${per?`<div style="font-size:var(--fs-xs);color:#ddd;line-height:1.6;margin-top:${pr?'6px':'0'}">${escapeHtml(per.texte)}</div>`:''}
+    ${pr?`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">${escapeHtml(phraseProtParRepas(pr))}</div>`:''}
+    ${per?`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;margin-top:${pr?'6px':'0'}">${escapeHtml(per.texte)}</div>`:''}
     ${_htmlRepartitionPrises(user,macrosJour)}
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:7px">${escapeHtml(REPERE_PERI_REGISTRE)}</div>
   </div>`;
@@ -34082,7 +34082,7 @@ function _htmlPostPartum(user){
   // La fenêtre est nommée en mots courants. Aucun terme médical, aucune
   // justification de ce qui se passe dans le corps : RepCore décrit ce qu'il
   // fait, pas ce qu'elle est.
-  const bloc=f?`<div style="font-size:var(--fs-xs);color:#ddd;line-height:1.7;margin-top:10px;padding-top:9px;border-top:1px solid var(--border)">
+  const bloc=f?`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7;margin-top:10px;padding-top:9px;border-top:1px solid var(--border)">
       <b>${escapeHtml(PP_LIB_FENETRES[f]||'')}</b>${f==='0_6'
         ?' — je te propose seulement de la mobilité et des échauffements.'
         :(f==='6_12'?' — du renforcement progressif, sans impact.'
@@ -34093,17 +34093,17 @@ function _htmlPostPartum(user){
     ?`<label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;margin-top:10px">
         <input type="checkbox" ${e.evaluationPerineale?'checked':''} onchange="ppSetEvaluation(this.checked)"
           style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0;margin-top:2px">
-        <span style="font-size:var(--fs-xs);color:#ddd;line-height:1.55">J'ai fait le point avec une sage-femme ou un kinésithérapeute.</span>
+        <span style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.55">J'ai fait le point avec une sage-femme ou un kinésithérapeute.</span>
       </label>`:'';
   return `<div class="card" style="margin-bottom:14px">
     <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:8px">${escapeHtml(PP_TITRE)}</label>
-    <div style="font-size:var(--fs-xs);color:#ddd;line-height:1.7;margin-bottom:10px">${escapeHtml(PP_INTRO)}</div>
+    <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7;margin-bottom:10px">${escapeHtml(PP_INTRO)}</div>
     <input type="date" value="${escapeHtml(e.date||'')}" onchange="ppSetDate(this.value)"
       aria-label="Date d'accouchement"
       style="width:100%;padding:9px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;color:#fff;font-family:Montserrat,sans-serif;font-size:var(--fs-sm)">
     ${e.date?`<div style="display:flex;flex-direction:column;gap:8px;margin-top:9px">${modes}</div>`:''}
     ${bloc}${evalRow}
-    ${renvoi?`<div style="font-size:var(--fs-xs);color:#ddd;line-height:1.7;margin-top:10px">${escapeHtml(renvoi)}</div>`:''}
+    ${renvoi?`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7;margin-top:10px">${escapeHtml(renvoi)}</div>`:''}
     ${e.date?`<button onclick="ppEffacerDate()" class="btn btn-outline btn-sm" style="width:100%;margin-top:9px;font-size:var(--fs-2xs);letter-spacing:1px;color:var(--sub)">Retirer cette date</button>`:''}
     ${blocDisclaimerSante()}
   </div>`;
@@ -34118,7 +34118,7 @@ function _htmlPpQuestions(user){
   return `<div class="card" style="margin-bottom:14px">
     <label style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1px;text-transform:uppercase;display:block;margin-bottom:9px">Comment ça se passe ?</label>
     ${PP_SYMPTOMES.map(x=>`<div style="padding:7px 0;border-top:1px solid rgba(255,255,255,.06)">
-      <div style="font-size:var(--fs-sm);color:#eee;line-height:1.6;margin-bottom:6px">${escapeHtml(x.q)}</div>
+      <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-bottom:6px">${escapeHtml(x.q)}</div>
       <div style="display:flex;gap:6px">
         ${[['0','Non'],['1','Oui']].map(([v,l])=>
           `<button type="button" onclick="ppRepondre('${x.cle}',${v},this)"
@@ -34214,7 +34214,7 @@ function _htmlPostPartumCoach(c){
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">${escapeHtml(PP_TITRE)}</span>
       <span style="font-size:var(--fs-xs);font-weight:800;color:${impact===true?'var(--sub)':'var(--orange)'}">${escapeHtml(f?(PP_LIB_FENETRES[f]||''):'Informatif')}</span>
     </div>
-    <div style="font-size:var(--fs-xs);color:#ddd;line-height:1.7">Début de la fenêtre : ${escapeHtml(dat(new Date(e.date+'T00:00:00').getTime()))}.</div>
+    <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7">Début de la fenêtre : ${escapeHtml(dat(new Date(e.date+'T00:00:00').getTime()))}.</div>
     ${causes.length?`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.7">Cause : ${escapeHtml(causes.join(', '))}.</div>`:''}
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.7">Impacts ${impact===true?'sans restriction de RepCore':'non proposés par RepCore'}.</div>
     ${e.levee?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-top:8px;padding-top:7px;border-top:1px solid var(--border)">Levée le ${escapeHtml(dat(e.levee.date))}${e.levee.par?' par '+escapeHtml(e.levee.par):''}.</div>`
@@ -34425,7 +34425,7 @@ function _dieteTransitionActive(nut,porteur){
 function _htmlDieteTransition(nut,porteur){
   if(!_dieteTransitionActive(nut,porteur)) return '';
   return `<div style="margin-top:12px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:10px;padding:11px 13px">
-    <div style="font-size:var(--fs-xs);color:#eee;line-height:1.6">${escapeHtml(DIETE_TRANSITION)}</div>
+    <div style="font-size:var(--fs-xs);color:var(--text);line-height:1.6">${escapeHtml(DIETE_TRANSITION)}</div>
   </div>`;
 }
 function _getEffectiveMacros(nut,isOn,dateStr,porteur){
@@ -34537,7 +34537,7 @@ function _htmlSuggestionCycle(user){
   const s=suggestionCycleSupplements(user||currentUser);
   if(!s) return '';
   return `<div style="margin-bottom:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:12px 13px">
-    <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.7">${escapeHtml(s.libelle)}</div>
+    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(s.libelle)}</div>
     <div style="display:flex;gap:8px;margin-top:10px">
       <button onclick="accepterSuggestionCycle()" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:var(--fs-2xs);letter-spacing:1px">Ajouter</button>
       <button onclick="refuserSuggestionCycle()" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:var(--fs-2xs);letter-spacing:1px;color:var(--sub)">Non merci</button>
@@ -34553,7 +34553,7 @@ function _htmlMigrationCycleSupp(user){
   if(((u.cycle||{}).migrationSuppVue)) return '';
   if(!list.some(x=>x&&x._cycleManaged)) return '';
   return `<div style="margin-bottom:10px;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:12px 13px">
-    <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.7">Cette ligne avait été ajoutée automatiquement par l'app. Tu peux la garder ou la retirer.</div>
+    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">Cette ligne avait été ajoutée automatiquement par l'app. Tu peux la garder ou la retirer.</div>
     <div style="display:flex;gap:8px;margin-top:10px">
       <button onclick="garderSuggestionCycleAuto()" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:var(--fs-2xs);letter-spacing:1px">Je la garde</button>
       <button onclick="retirerSuggestionCycleAuto()" class="btn btn-outline btn-sm" style="flex:1;margin:0;font-size:var(--fs-2xs);letter-spacing:1px;color:var(--sub)">La retirer</button>
@@ -34727,7 +34727,7 @@ function _renderCycleNutSettings(nut){
       <button onclick="declarerReglesAujourdhui()" class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-2xs)">Mes règles ont commencé aujourd'hui</button>
       <label style="display:flex;align-items:center;gap:9px;margin-top:10px;cursor:pointer">
         <input type="checkbox" id="cycle-absence" ${absenceCeMois?'checked':''} onchange="declarerAbsenceCycle(this.checked)" style="width:16px;height:16px;accent-color:var(--red);flex-shrink:0">
-        <span style="font-size:var(--fs-sm);color:#ddd;line-height:1.5">Je n'ai pas eu mes règles ce mois-ci</span>
+        <span style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.5">Je n'ai pas eu mes règles ce mois-ci</span>
       </label>
     </div>
     ${phaseHtml}
@@ -35286,7 +35286,7 @@ function _htmlStrictVerrou(raison){
     <div style="position:relative">
       <div style="color:var(--text-dim);line-height:0;margin-bottom:14px">${icon('lock',40)}</div>
       <div style="font-family:'Bebas Neue','Arial Narrow',Impact,sans-serif;font-size:var(--fs-xl);letter-spacing:2.5px;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px">Diète stricte</div>
-      <div style="font-size:var(--fs-md);font-weight:800;color:#ddd;margin-bottom:10px">${escapeHtml(v.titre)}</div>
+      <div style="font-size:var(--fs-md);font-weight:800;color:var(--text-strong);margin-bottom:10px">${escapeHtml(v.titre)}</div>
       <p style="margin:0 0 10px;font-size:var(--fs-sm);color:var(--sub);line-height:1.65">${escapeHtml(v.texte)}</p>
       <p style="margin:0 0 18px;font-size:var(--fs-xs);color:var(--text-faint);line-height:1.6">${escapeHtml(v.action)}</p>
       <button class="btn btn-outline btn-sm" style="width:100%;margin:0;letter-spacing:1px;font-size:var(--fs-xs)" onclick="setNutriDietType('flexible')">Passer en diète flexible</button>
@@ -37030,7 +37030,7 @@ function _cplHtmlAlertes(){
   if(!l.length) return '';
   return `<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:12px;padding:12px;margin-bottom:14px">
     <div style="font-size:var(--fs-xs);color:var(--orange);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:7px">À regarder</div>
-    ${l.map(x=>`<div style="font-size:var(--fs-xs);color:#eee;line-height:1.6;margin-bottom:4px">• ${escapeHtml(x)}</div>`).join('')}
+    ${l.map(x=>`<div style="font-size:var(--fs-xs);color:var(--text);line-height:1.6;margin-bottom:4px">• ${escapeHtml(x)}</div>`).join('')}
   </div>`;
 }
 // Les deux catalogues, dans la mise en forme EXACTE de la fiche de l'athlète —
@@ -37178,7 +37178,7 @@ function _cplHtmlModele(c){
       +' Choisis le modèle à poser :';
   }
   return `<div style="background:${_cplNeuf?'var(--info-bg)':'var(--surface-1)'};border:1px solid ${_cplNeuf?'var(--info-border)':'var(--border)'};border-radius:12px;padding:12px;margin-bottom:14px">
-    <div style="font-size:var(--fs-xs);color:#ddd;line-height:1.6;margin-bottom:9px">${entete}</div>
+    <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;margin-bottom:9px">${entete}</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px">${choix}</div>
   </div>`;
 }
@@ -37468,7 +37468,7 @@ function lcStock(cle,el){
     el.style.color=stock?'var(--green)':'var(--sub)';
     const ligne=el.closest('div');
     const nom=ligne.children[1], qte=ligne.children[2];
-    if(nom){ nom.style.color=stock?'var(--text-faint)':'#ddd';
+    if(nom){ nom.style.color=stock?'var(--text-faint)':'var(--text-strong)';
       nom.style.textDecoration=stock?'line-through':'none'; }
     if(qte) qte.style.color=stock?'var(--text-faint)':'#fff';
   }catch(e){}
@@ -37662,7 +37662,7 @@ function _htmlPlanAthlete(user,intercale){
         <option value=""${stock?'':' selected'}>À prendre</option>
         <option value="stock"${stock?' selected':''}>En stock</option>
       </select>
-      <span style="flex:1;min-width:0;font-size:var(--fs-xs);color:${stock?'var(--text-faint)':'#ddd'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${stock?'text-decoration:line-through':''}">${escapeHtml(lib)}${(nUsages>1)?` <span title="Regroupé : cette denrée est demandée à ${nUsages} endroits de ton plan" style="font-size:var(--fs-2xs);font-weight:800;color:var(--text-faint);border:1px solid var(--border);border-radius:4px;padding:0 3px;vertical-align:1px">×${nUsages}</span>`:''}</span>
+      <span style="flex:1;min-width:0;font-size:var(--fs-xs);color:${stock?'var(--text-faint)':'var(--text-strong)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${stock?'text-decoration:line-through':''}">${escapeHtml(lib)}${(nUsages>1)?` <span title="Regroupé : cette denrée est demandée à ${nUsages} endroits de ton plan" style="font-size:var(--fs-2xs);font-weight:800;color:var(--text-faint);border:1px solid var(--border);border-radius:4px;padding:0 3px;vertical-align:1px">×${nUsages}</span>`:''}</span>
       <span style="font-size:var(--fs-sm);font-weight:800;color:${stock?'var(--text-faint)':'#fff'};flex-shrink:0">${qte}</span>
     </div>`;
   // Les sources sont INTERCHANGEABLES : la liste ne peut pas deviner laquelle
@@ -37718,7 +37718,7 @@ const courses=(lc&&lc.lignes.length)?`<details class="hist-repli lc-repli" style
 
   const pal=cib.palier;
   const negatif=rest.negatifs.length
-    ?`<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:var(--fs-xs);color:#eee;line-height:1.6">Tes repas imposés couvrent déjà ${rest.negatifs.map(n=>n.lib).join(' et ')} : les sources correspondantes affichent 0. Parles-en à ton coach.</div>`
+    ?`<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:var(--fs-xs);color:var(--text);line-height:1.6">Tes repas imposés couvrent déjà ${rest.negatifs.map(n=>n.lib).join(' et ')} : les sources correspondantes affichent 0. Parles-en à ton coach.</div>`
     :'';
 
   return `<div style="margin-bottom:22px">
@@ -39713,7 +39713,7 @@ function _htmlFiabilite(a){
   if(src===NUTRI_SOURCES.CIQUAL&&!r.alertes.length) return '';
   const pal=_fiabPalier(r.fiabilite);
   const alertes=r.alertes.length
-    ?'<ul style="margin:8px 0 0;padding-left:16px;font-size:var(--fs-xs);line-height:1.6;color:#ddd">'
+    ?'<ul style="margin:8px 0 0;padding-left:16px;font-size:var(--fs-xs);line-height:1.6;color:var(--text-strong)">'
       +r.alertes.map(x=>'<li>'+escapeHtml(x)+'</li>').join('')+'</ul>'
     :'';
   return `<div style="background:${pal.bg};border:1px solid ${pal.bord};border-radius:10px;padding:10px 12px">
@@ -40476,7 +40476,7 @@ function _htmlCapacite(user){
     }catch(x){ return null; }
   })();
   const l=(t,v)=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-sm);padding:3px 0">
-    <span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:#eee">${escapeHtml(v)}</span></div>`;
+    <span style="color:var(--sub)">${escapeHtml(t)}</span><span style="color:var(--text)">${escapeHtml(v)}</span></div>`;
   return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:9px">Capacité</div>
     ${l('Ce mois-ci',chiffre)}
@@ -41639,7 +41639,7 @@ function _htmlMigrationSopk(c){
   if(!migrationSopkADire(c)) return '';
   return `<div style="background:var(--surface-1);border:1px solid var(--warning-border);border-radius:12px;padding:13px;margin-bottom:12px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">${escapeHtml(SOPK_MIGRATION_TITRE)}</div>
-    <div style="font-size:var(--fs-xs);color:#ddd;line-height:1.7">${escapeHtml(SOPK_MIGRATION_TEXTE)}</div>
+    <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7">${escapeHtml(SOPK_MIGRATION_TEXTE)}</div>
     <button onclick="accuserMigrationSopk()" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:var(--fs-2xs);letter-spacing:1px">J'ai lu</button>
   </div>`;
 }
@@ -41935,7 +41935,7 @@ function _htmlJournalCoach(c){
     ?`<button type="button" onclick="ccdJournalAller('${d}')" style="flex:none;background:none;border:1px solid var(--border);color:#aaa;border-radius:8px;padding:4px 10px;cursor:pointer;font-size:var(--fs-md)">${fleche}</button>`
     :`<button type="button" disabled style="flex:none;background:none;border:1px solid #222;color:var(--text-dim);border-radius:8px;padding:4px 10px;cursor:not-allowed;font-size:var(--fs-md)">${fleche}</button>`;
   const lignes=entrees.map(e=>`<div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid rgba(255,255,255,.06)">
-      <span style="flex:1;min-width:0;font-size:var(--fs-xs);color:#ddd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(e.nom||'—')}<span style="color:var(--text-faint)"> · ${escapeHtml((FJ_REPAS_LIB[e.repas]||e.repas||''))}</span></span>
+      <span style="flex:1;min-width:0;font-size:var(--fs-xs);color:var(--text-strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(e.nom||'—')}<span style="color:var(--text-faint)"> · ${escapeHtml((FJ_REPAS_LIB[e.repas]||e.repas||''))}</span></span>
       <span style="flex:none;font-size:var(--fs-xs);color:var(--sub);white-space:nowrap">${e.qty?nb(e.qty)+' g · ':''}${e.kcal!=null?nb(e.kcal)+' kcal':'—'}</span>
     </div>`).join('');
   return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px">
@@ -41944,7 +41944,7 @@ function _htmlJournalCoach(c){
     <div style="display:flex;gap:8px;margin-bottom:14px">${carte('MOY. 7 J',m7)}${carte('MOY. 28 J',m28)}</div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       ${nav(prec,'←')}
-      <div style="flex:1;min-width:0;text-align:center;font-size:var(--fs-xs);font-weight:800;color:#ddd;text-transform:capitalize">${escapeHtml(fl(jour))}</div>
+      <div style="flex:1;min-width:0;text-align:center;font-size:var(--fs-xs);font-weight:800;color:var(--text-strong);text-transform:capitalize">${escapeHtml(fl(jour))}</div>
       ${nav(suiv,'→')}
     </div>
     <div style="font-size:var(--fs-xs);color:#fff;font-weight:700;text-align:center;margin-bottom:6px">${nb(t.kcal)} kcal · ${nb(t.p)} P · ${nb(t.c)} G · ${nb(t.l)} L</div>
@@ -42319,7 +42319,7 @@ function _htmlSuppInteractions(list){
   if(!l.length) return '';
   return `<div style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.25);border-radius:10px;padding:10px 12px;margin-bottom:12px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:#f59e0b;text-transform:uppercase;margin-bottom:6px">Au même moment</div>
-    ${l.map(m=>`<div style="font-size:var(--fs-xs);color:#ddd;line-height:1.6;margin-bottom:4px">· ${escapeHtml(m)}</div>`).join('')}
+    ${l.map(m=>`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;margin-bottom:4px">· ${escapeHtml(m)}</div>`).join('')}
   </div>`;
 }
 function _htmlSuppLegende(isCoach){
@@ -42413,7 +42413,7 @@ const TRAITEMENT_SUPP='Tu as déclaré un traitement régulier. Avant d\'ajouter
 function _htmlTraitementSupp(user){
   if(!traitementDeclare(user||currentUser)) return '';
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:12px 13px;margin-bottom:14px">
-    <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.7">${escapeHtml(TRAITEMENT_SUPP)}</div>
+    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(TRAITEMENT_SUPP)}</div>
   </div>`;
 }
 function _htmlSuppSourcing(isCoach){
@@ -43475,7 +43475,7 @@ function _htmlCafeineNuits(user,dates){
   const lbl=d=>new Date(d+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'short',day:'numeric'});
   return `<div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.24);border-radius:14px;padding:16px;margin-bottom:14px">
     <div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-size:var(--fs-lg);letter-spacing:2.5px;color:var(--warning);text-transform:uppercase;margin-bottom:9px">Caféine au coucher</div>
-    ${lignes.map(l=>`<div style="font-size:var(--fs-sm);color:#ddd;line-height:1.7;text-transform:capitalize">${escapeHtml(lbl(l.date))} <span style="text-transform:none;color:var(--warning);font-weight:700">environ ${l.mg} mg</span><span style="text-transform:none;color:var(--sub)"> encore présents à ${_libHeure(_hhmmEnMin(l.bed))}</span></div>`).join('')}
+    ${lignes.map(l=>`<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7;text-transform:capitalize">${escapeHtml(lbl(l.date))} <span style="text-transform:none;color:var(--warning);font-weight:700">environ ${l.mg} mg</span><span style="text-transform:none;color:var(--sub)"> encore présents à ${_libHeure(_hhmmEnMin(l.bed))}</span></div>`).join('')}
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5;margin-top:8px">${escapeHtml(CAFEINE_NOTE_DEMIVIE)}</div>
   </div>`;
 }
@@ -44523,7 +44523,7 @@ function _tplFiltrer(){
       const v=templateVariables(t.corps);
       return `<button type="button" onclick="tplInserer('${escapeHtml(t.id)}')"
         style="width:100%;text-align:left;min-height:44px;padding:9px 11px;margin-bottom:6px;border-radius:9px;cursor:pointer;
-          background:#111;border:1px solid var(--border);color:#ddd;font-family:Montserrat,sans-serif">
+          background:#111;border:1px solid var(--border);color:var(--text-strong);font-family:Montserrat,sans-serif">
         <div style="font-size:var(--fs-sm);font-weight:800;color:#fff">${escapeHtml(t.titre)}</div>
         <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.5;margin-top:3px">${escapeHtml(t.corps)}</div>
         ${v.length?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:4px">Variables : ${v.map(x=>escapeHtml(x)).join(', ')}</div>`:''}
@@ -44872,7 +44872,7 @@ function htmlLecteurCorrection(vidId){
   const b=(lib,act,titre,extra)=>`<button type="button" onclick="${act}" title="${escapeHtml(titre)}"
     aria-label="${escapeHtml(titre)}" ${extra||''} disabled
     style="min-width:44px;min-height:44px;padding:8px 10px;border-radius:9px;cursor:pointer;
-      background:#111;border:1px solid var(--border);color:#ddd;font-family:Montserrat,sans-serif;
+      background:#111;border:1px solid var(--border);color:var(--text-strong);font-family:Montserrat,sans-serif;
       font-size:var(--fs-xs);font-weight:800;letter-spacing:.3px">${lib}</button>`;
   return `<div id="rc-barre-${vidId}" data-vid="${vidId}" style="margin-top:8px;background:#101010;
     border:1px solid var(--border);border-radius:11px;padding:9px 10px">
@@ -46235,7 +46235,7 @@ function _htmlDeficit(user,lectureSeule){
   const c=bloc?'var(--red)':'var(--orange)';
   return `<div style="background:var(--surface-1);border:1px solid ${c}55;border-radius:14px;padding:14px;margin-bottom:18px">
     <div style="font-size:var(--fs-xs);color:${c};text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">${bloc?'À faire vérifier':'Prudence'}</div>
-    <div style="font-size:var(--fs-sm);color:#eee;line-height:1.75">${escapeHtml(txt)}</div>
+    <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(txt)}</div>
     ${blocDisclaimerSante()}
   </div>`;
 }
@@ -46262,7 +46262,7 @@ function _htmlAjustement(user,lectureSeule){
     const pl=_ajustPlancherAtteint(user);
     if(pl&&!lectureSeule) return _defHtml+`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:18px">
       <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">Rythme</div>
-      <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.7">Ta ${escapeHtml(PHASES[(phaseCourante(user)||{}).type].apres)} avance plus lentement que visé, mais je ne te propose pas de baisser : tu serais ${pl.plancher!=null?(pl.regle||'sous ton plancher')+' ('+pl.plancher+' kcal)':'sous ton plancher'}. On regarde ailleurs : sommeil, pas quotidiens, régularité, et s'il n'y a pas une cause médicale.</div>
+      <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">Ta ${escapeHtml(PHASES[(phaseCourante(user)||{}).type].apres)} avance plus lentement que visé, mais je ne te propose pas de baisser : tu serais ${pl.plancher!=null?(pl.regle||'sous ton plancher')+' ('+pl.plancher+' kcal)':'sous ton plancher'}. On regarde ailleurs : sommeil, pas quotidiens, régularité, et s'il n'y a pas une cause médicale.</div>
       ${blocDisclaimerSante()}
     </div>`;
     // Le plancher a la priorite : il vient d'etre teste juste au-dessus et rend
@@ -46274,7 +46274,7 @@ function _htmlAjustement(user,lectureSeule){
     const h=(nut.ajustHisto||[]).slice(-1)[0];
     if(lectureSeule&&h) return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:16px">
       <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">Dernier ajustement proposé</div>
-      <div style="font-size:var(--fs-xs);color:#ddd;line-height:1.7">${new Date(h.date).toLocaleDateString('fr-FR')} · ${h.sens==='baisse'?'baisse':'hausse'} de ${Math.abs(h.kcalDelta)} kcal les jours ${h.jour==='off'?'OFF':'ON'} (${_fmtPct(h.gDelta)} g de glucides) — vitesse mesurée ${_fmtPct(h.mesuree)} %/sem.<br><strong style="color:${h.decision==='applique'?'var(--success)':'var(--sub)'}">${h.decision==='applique'?'Appliqué par l\'athlète':'Refusé : il garde ses objectifs'}</strong></div>
+      <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7">${new Date(h.date).toLocaleDateString('fr-FR')} · ${h.sens==='baisse'?'baisse':'hausse'} de ${Math.abs(h.kcalDelta)} kcal les jours ${h.jour==='off'?'OFF':'ON'} (${_fmtPct(h.gDelta)} g de glucides) — vitesse mesurée ${_fmtPct(h.mesuree)} %/sem.<br><strong style="color:${h.decision==='applique'?'var(--success)':'var(--sub)'}">${h.decision==='applique'?'Appliqué par l\'athlète':'Refusé : il garde ses objectifs'}</strong></div>
     </div>`;
     return '';
   }
@@ -46286,7 +46286,7 @@ function _htmlAjustement(user,lectureSeule){
     +(a.verifieParJournal?'':`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-top:4px">Proposé sans journal alimentaire pour le vérifier.</div>`);
   return `<div style="background:var(--dark);border:1px solid var(--surface-2);border-radius:14px;padding:14px;margin-bottom:18px">
     <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:8px">Ajustement proposé</div>
-    <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.7;margin-bottom:6px">${constat}</div>
+    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7;margin-bottom:6px">${constat}</div>
     <div style="font-size:var(--fs-sm);color:#fff;font-weight:800;line-height:1.6;margin-bottom:4px">${propo}</div>
     ${regimeHtml}
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.6;margin-bottom:${lectureSeule?'0':'11px'}">Tes protéines et tes lipides ne changent pas. Un seul ajustement par quinzaine.</div>
@@ -46501,7 +46501,7 @@ function _htmlStagnation(user,lectureSeule){
   if(!r) return '';
   return `<div style="background:var(--surface-1);border:1px solid var(--orange)55;border-radius:14px;padding:14px;margin-bottom:18px">
     <div style="font-size:var(--fs-xs);color:var(--orange);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">Rythme</div>
-    <div style="font-size:var(--fs-sm);color:#eee;line-height:1.75">${escapeHtml(THY_TEXTE_ATHLETE)}</div>
+    <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(THY_TEXTE_ATHLETE)}</div>
     ${blocDisclaimerSante()}
   </div>`;
 }
@@ -46531,7 +46531,7 @@ function _htmlAdherenceRefus(user,lectureSeule){
   }
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:18px">
     <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:7px">Rythme</div>
-    <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.7">${escapeHtml(phraseAdherence(r.adh))}</div>
+    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(phraseAdherence(r.adh))}</div>
     ${blocDisclaimerSante()}
   </div>`;
 }
@@ -46547,7 +46547,7 @@ function _htmlAdherenceCoach(c){
     const sp=adh.ecartProt>0?'+':'−';
     return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
       <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Adhérence</div>
-      <div style="font-size:var(--fs-xs);color:#ddd;line-height:1.6">${adh.nJours} jour${adh.nJours>1?'s':''} journalisé${adh.nJours>1?'s':''} sur ${ADH_FENETRE_JOURS}, ${s}${Math.abs(adh.ecartKcal)} kcal en moyenne, protéines ${sp}${Math.abs(adh.ecartProt)} g.</div>
+      <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">${adh.nJours} jour${adh.nJours>1?'s':''} journalisé${adh.nJours>1?'s':''} sur ${ADH_FENETRE_JOURS}, ${s}${Math.abs(adh.ecartKcal)} kcal en moyenne, protéines ${sp}${Math.abs(adh.ecartProt)} g.</div>
     </div>`;
   }
   // Repli : aucun jour journalisé, mais l'athlète a déclaré des repas hors
@@ -46560,7 +46560,7 @@ function _htmlAdherenceCoach(c){
   if(!tous) return '';
   return `<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
     <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.5px;font-weight:800;text-transform:uppercase;margin-bottom:4px">Adhérence</div>
-    <div style="font-size:var(--fs-xs);color:#ddd;line-height:1.6">Aucun jour journalisé sur ${ADH_FENETRE_JOURS}, et « ${escapeHtml(ADH_CHEAT_REPLI)} » repas hors programme déclarés aux ${ADH_CHEAT_BILANS} derniers bilans.</div>
+    <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">Aucun jour journalisé sur ${ADH_FENETRE_JOURS}, et « ${escapeHtml(ADH_CHEAT_REPLI)} » repas hors programme déclarés aux ${ADH_CHEAT_BILANS} derniers bilans.</div>
   </div>`;
 }
 
@@ -46904,13 +46904,13 @@ function _htmlViolationsCoach(c){
   const dur=pl.tca;
   return `<div style="background:#1a0505;border:1px solid var(--red);border-radius:10px;padding:12px;margin:10px 0">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase;margin-bottom:7px">Sous le plancher</div>
-    ${viol.map(v=>`<div style="font-size:var(--fs-xs);color:#ddd;line-height:1.6">· ${escapeHtml(v.message)}</div>`).join('')}
+    ${viol.map(v=>`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">· ${escapeHtml(v.message)}</div>`).join('')}
     ${dur
       ?`<div style="font-size:var(--fs-xs);color:var(--red-text);line-height:1.6;margin-top:9px;font-weight:700">Un antécédent alimentaire est déclaré au bilan de départ. Cette prescription ne peut pas être enregistrée, et il n'y a pas de dérogation. Reprends les valeurs au-dessus du plancher.</div>`
       :`<label style="display:flex;align-items:flex-start;gap:9px;margin-top:11px;cursor:pointer;text-transform:none;letter-spacing:normal;font-size:inherit;font-weight:400;color:inherit">
           <input type="checkbox" id="ccd-pl-confirm" ${_plConfirmeValide(c&&c.email,_plSaisieCourante())?'checked':''} onchange="_plSetConfirme(this.checked,'${escapeHtml((c&&c.email)||'')}')"
             style="width:18px;height:18px;margin-top:1px;flex-shrink:0;accent-color:var(--red)">
-          <span style="font-size:var(--fs-sm);color:#eee;line-height:1.5">Je confirme cette prescription en connaissance de cause.</span>
+          <span style="font-size:var(--fs-sm);color:var(--text);line-height:1.5">Je confirme cette prescription en connaissance de cause.</span>
         </label>
         <button class="btn btn-red btn-sm" style="width:100%;margin-top:9px;letter-spacing:1px" onclick="saveClientNutriMacros(true)">Enregistrer malgré le plancher</button>`}
     ${blocDisclaimerSante()}
@@ -46932,7 +46932,7 @@ function _htmlPlancherAthlete(user){
   if(!viol.length) return '';
   return `<div style="background:#1a0505;border:1px solid var(--red);border-radius:14px;padding:14px;margin-bottom:18px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase;margin-bottom:8px">À savoir</div>
-    ${TEXTE_PLANCHER_ATHLETE.map(t=>`<div style="font-size:var(--fs-sm);color:#eee;line-height:1.7;margin-bottom:7px">${escapeHtml(t)}</div>`).join('')}
+    ${TEXTE_PLANCHER_ATHLETE.map(t=>`<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-bottom:7px">${escapeHtml(t)}</div>`).join('')}
   </div>`;
 }
 // Invitation au palier, jamais une injonction. Elle ne remplace pas la carte
@@ -46942,7 +46942,7 @@ function _htmlPalierAthlete(user){
   const sem=semainesEcoulees(user);
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:18px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:8px">Faire un palier</div>
-    <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.7">Tu es en sèche depuis ${sem} semaines, avec des apports proches de ton plancher. Remonter aux alentours de ta dépense pendant deux ou trois semaines n'annule rien de ce que tu as fait : ça remet du carburant dans les séances et ça facilite la suite. C'est une proposition, tu en parles avec ton coach.</div>
+    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">Tu es en sèche depuis ${sem} semaines, avec des apports proches de ton plancher. Remonter aux alentours de ta dépense pendant deux ou trois semaines n'annule rien de ce que tu as fait : ça remet du carburant dans les séances et ça facilite la suite. C'est une proposition, tu en parles avec ton coach.</div>
     ${blocDisclaimerSante()}
   </div>`;
 }
@@ -47099,7 +47099,7 @@ function _htmlSommeilCoach(c){
   if(!a&&!b) return '';
   const dec=v=>String(v).replace('.',',');
   const ligne=(lib,x)=>x
-    ?`<div style="display:flex;justify-content:space-between;gap:12px;font-size:var(--fs-sm);color:#ddd;line-height:1.9"><span style="color:var(--sub)">${escapeHtml(lib)}</span><span style="font-weight:800">${dec(x.h)} h <span style="color:var(--text-dim);font-weight:600">· ${x.nuits} nuit${x.nuits>1?'s':''}</span></span></div>`
+    ?`<div style="display:flex;justify-content:space-between;gap:12px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.9"><span style="color:var(--sub)">${escapeHtml(lib)}</span><span style="font-weight:800">${dec(x.h)} h <span style="color:var(--text-dim);font-weight:600">· ${x.nuits} nuit${x.nuits>1?'s':''}</span></span></div>`
     :'';
   return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:8px">Sommeil</div>
@@ -47129,10 +47129,10 @@ function _htmlPasCoach(c){
   const obj=_liste?(_liste+(_propres?'':' (objectifs par défaut)')):'';
   return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:8px">Pas</div>
-    <div style="display:flex;justify-content:space-between;gap:12px;font-size:var(--fs-sm);color:#ddd;line-height:1.9">
+    <div style="display:flex;justify-content:space-between;gap:12px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.9">
       <span style="color:var(--sub)">Moyenne 14 jours</span>
       <span style="font-weight:800">${nb(m)} pas</span></div>
-    ${obj?`<div style="display:flex;justify-content:space-between;gap:12px;font-size:var(--fs-sm);color:#ddd;line-height:1.9"><span style="color:var(--sub)">Objectif</span><span style="font-weight:800">${escapeHtml(obj)}</span></div>`:''}
+    ${obj?`<div style="display:flex;justify-content:space-between;gap:12px;font-size:var(--fs-sm);color:var(--text-strong);line-height:1.9"><span style="color:var(--sub)">Objectif</span><span style="font-weight:800">${escapeHtml(obj)}</span></div>`:''}
   </div>`;
 }
 function renderSommeilCoach(c){
@@ -47153,7 +47153,7 @@ function _htmlRecuperationCoach(c){
   const ligne=r.criteres.map(x=>x.lib.toLowerCase()+' ('+x.valeur+')').join(' · ');
   return `<div style="background:var(--dark);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:20px">
     <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase;margin-bottom:5px">Récupération</div>
-    <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.7">${escapeHtml(ligne)}.</div>
+    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(ligne)}.</div>
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.55;margin-top:8px">Ce qui va dans le même sens en ce moment, d'après ce qu'elle ou il a saisi. Aucun seuil n'est franchi : c'est une conversation à avoir.</div>
   </div>`;
 }
@@ -47166,7 +47166,7 @@ function _htmlRecuperationAthlete(user){
   try{ r=scoreRecuperation(user); }catch(e){ return ''; }
   if(r.points<RECUP_SEUIL_MESSAGE) return '';
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:18px">
-    <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.7">${escapeHtml(RECUP_PHRASE_ATHLETE)}</div>
+    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(RECUP_PHRASE_ATHLETE)}</div>
   </div>`;
 }
 function controlerMacros(macros,user){
@@ -47462,7 +47462,7 @@ function _htmlPauseProposition(c){
     if(!_restrictionBrute(c)||pauseActive(c)) return '';
     return `<div style="margin-top:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">Restriction prolongée</div>
-      <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.7">${escapeHtml(PAUSE_MENTION_TCA)}</div>
+      <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(PAUSE_MENTION_TCA)}</div>
       ${blocDisclaimerSante()}
     </div>`;
   }
@@ -47474,7 +47474,7 @@ function _htmlPauseProposition(c){
     +'Protéines et lipides ne changent pas.';
   return `<div style="margin-top:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">Pause diététique</div>
-    <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.7">${escapeHtml(phrase)}</div>
+    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(phrase)}</div>
     ${tca?`<div style="font-size:var(--fs-xs);color:var(--warning);line-height:1.6;margin-top:8px">${escapeHtml(PAUSE_MENTION_TCA)}</div>`:''}
     <div style="display:flex;gap:8px;margin-top:10px">
       <button class="btn btn-red btn-sm" style="flex:1;margin:0" onclick="appliquerPause(${prop.jours})">Proposer la pause</button>
@@ -47498,12 +47498,12 @@ function _htmlPauseEnCours(c){
   if(!fini){
     return `<div style="margin-top:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px">
       <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">Pause en cours</div>
-      <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.7">Pause de ${p.jours} jours, encore ${rest} jour${rest>1?'s':''}. ${escapeHtml(PAUSE_TEXTE_VITESSE.charAt(0).toUpperCase()+PAUSE_TEXTE_VITESSE.slice(1))}.</div>
+      <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">Pause de ${p.jours} jours, encore ${rest} jour${rest>1?'s':''}. ${escapeHtml(PAUSE_TEXTE_VITESSE.charAt(0).toUpperCase()+PAUSE_TEXTE_VITESSE.slice(1))}.</div>
     </div>`;
   }
   return `<div style="margin-top:12px;background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:12px;padding:13px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:7px">Pause terminée</div>
-    <div style="font-size:var(--fs-sm);color:#eee;line-height:1.7">Ta pause est terminée. On reprend la sèche, ou on s'arrête là ?</div>
+    <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7">Ta pause est terminée. On reprend la sèche, ou on s'arrête là ?</div>
     ${peutReprendre?'':`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6;margin-top:6px">Les objectifs d'avant la pause sont introuvables : seul le passage en maintien reste possible.</div>`}
     <div style="display:flex;gap:8px;margin-top:10px">
       ${peutReprendre?`<button class="btn btn-outline btn-sm" style="flex:1;margin:0" onclick="reprendreSeche()">Reprendre la sèche</button>`:''}
@@ -47523,7 +47523,7 @@ function _htmlFinPrevue(c){
   const j=Math.ceil((p.finPrevue-Date.now())/864e5);
   if(j<0||j>FIN_PREVUE_PREAVIS_JOURS) return '';
   return `<div style="margin-top:12px;background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px">
-    <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.7">Ta ${escapeHtml(PHASES[p.type].apres)} se termine dans ${j} jour${j>1?'s':''}. On prépare la sortie ?</div>
+    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">Ta ${escapeHtml(PHASES[p.type].apres)} se termine dans ${j} jour${j>1?'s':''}. On prépare la sortie ?</div>
     <button class="btn btn-outline btn-sm" style="width:100%;margin-top:9px" onclick="ouvrirTransitionMaintien()">Préparer la sortie</button>
   </div>`;
 }
@@ -47974,9 +47974,9 @@ let _leafqRep={};
 function htmlLeafq(){
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:15px 16px;margin-bottom:16px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:9px">${escapeHtml(REDS_TITRE)}</div>
-    <div style="font-size:var(--fs-sm);color:#ddd;line-height:1.75;margin-bottom:12px">${escapeHtml(LEAFQ_INTRO)}</div>
+    <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.75;margin-bottom:12px">${escapeHtml(LEAFQ_INTRO)}</div>
     ${LEAFQ_ITEMS.map(it=>`<div style="padding:8px 0;border-top:1px solid rgba(255,255,255,.06)">
-      <div style="font-size:var(--fs-sm);color:#eee;line-height:1.6;margin-bottom:6px">${escapeHtml(it.q)}</div>
+      <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6;margin-bottom:6px">${escapeHtml(it.q)}</div>
       <div style="display:flex;gap:6px">
         ${[['0','Non'],['1','Un peu'],['2','Oui']].map(([v,l])=>
           `<button type="button" onclick="leafqRepondre('${it.k}',${v},this)"
@@ -48013,7 +48013,7 @@ function leafqValider(){
   saveUser();
   const z=document.getElementById('prog-reds');
   if(z) z.innerHTML=redsSuspend(currentUser)
-    ?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:var(--fs-sm);color:#eee;line-height:1.75">${escapeHtml(REDS_RENVOI)}${blocDisclaimerSante()}</div>`
+    ?`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(REDS_RENVOI)}${blocDisclaimerSante()}</div>`
     :'';
   return true;
 }
@@ -48047,7 +48047,7 @@ function renderReds(){
   try{
     if(shouldPromptLeafq(currentUser)) h=htmlLeafq();
     else if(redsSuspend(currentUser))
-      h=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:var(--fs-sm);color:#eee;line-height:1.75">${escapeHtml(REDS_RENVOI)}${blocDisclaimerSante()}</div>`;
+      h=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:var(--fs-sm);color:var(--text);line-height:1.75">${escapeHtml(REDS_RENVOI)}${blocDisclaimerSante()}</div>`;
   }catch(e){ h=''; }
   z.innerHTML=h;
 }
@@ -48066,7 +48066,7 @@ function htmlRedsCoach(c){
       <span style="font-size:var(--fs-xs);font-weight:800;color:${e.level==='red'?'var(--red)':(e.level==='orange'?'var(--orange)':'var(--sub)')}">${escapeHtml(lib)}</span>
     </div>
     ${sig.length?sig.map(x=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid rgba(255,255,255,.05)">
-      <span style="font-size:var(--fs-xs);color:#ddd;min-width:0">${escapeHtml(REDS_LIB_SIGNAUX[x.code]||x.code)}</span>
+      <span style="font-size:var(--fs-xs);color:var(--text-strong);min-width:0">${escapeHtml(REDS_LIB_SIGNAUX[x.code]||x.code)}</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint);white-space:nowrap;flex-shrink:0">${escapeHtml(dat(new Date(x.date).getTime?new Date(x.date).getTime():Date.now()))}</span>
     </div>`).join('')
     :'<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">Aucun signal actif.</div>'}
@@ -48218,7 +48218,7 @@ function renderCartePesee(){
   const der=serie.length?serie[serie.length-1]:null;
   // Ce qui manque est dit franchement plutôt que laissé vide.
   let sous;
-  if(moy!=null) sous='Moyenne 7 jours : <b style="color:#f0f0f0">'+moy.toFixed(1)+' kg</b>';
+  if(moy!=null) sous='Moyenne 7 jours : <b style="color:var(--text)">'+moy.toFixed(1)+' kg</b>';
   else{
     const fen=serie.filter(e=>e.date>=_jourPlus(auj,-(PESEE_FENETRE_MM-1))).length;
     sous='Encore '+(PESEE_MM_MIN-fen)+' pesée'+((PESEE_MM_MIN-fen)>1?'s':'')
@@ -48233,7 +48233,7 @@ function renderCartePesee(){
       <input type="number" id="pesee-input" inputmode="decimal" step="0.1"
         min="${PESEE_MIN}" max="${PESEE_MAX}" placeholder="${der?der.kg:'—'}"
         value="${dujour?dujour.kg:''}"
-        style="flex:1;min-width:0;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:10px 6px;background:var(--dark);border:1px solid var(--border);border-radius:9px;color:#f0f0f0;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px">
+        style="flex:1;min-width:0;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:10px 6px;background:var(--dark);border:1px solid var(--border);border-radius:9px;color:var(--text);font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px">
       <button class="btn btn-red btn-sm" onclick="savePesee()" style="height:44px;padding:0 18px;letter-spacing:1px;white-space:nowrap">${dujour?'Corriger':'Valider'}</button>
     </div>
     <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:8px;line-height:1.5">${sous}</div>
@@ -48310,7 +48310,7 @@ function _blocVitesse(user){
   }
   const cible=cibleVitesse(user);
   const alerte=vitesseAlerte(v.pctSem,cible);
-  const c=alerte?'var(--orange)':'#f0f0f0';
+  const c=alerte?'var(--orange)':'var(--text)';
   const signe=v.kgSem>0?'+':'';
   let phrase;
   if(alerte) phrase=cible.phase
@@ -48407,7 +48407,7 @@ function blocPoidsCoach(user){
   const v=vitesseHebdo(serieVitesse(user));
   const cible=cibleVitesse(user);
   const alerte=v&&vitesseAlerte(v.pctSem,cible);
-  const c=alerte?'var(--orange)':'#f0f0f0';
+  const c=alerte?'var(--orange)':'var(--text)';
   const der=serie[serie.length-1];
   const moy=mm7(serie,der.date);
   return `<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:13px;margin-bottom:16px">
@@ -48416,7 +48416,7 @@ function blocPoidsCoach(user){
       <span style="font-size:var(--fs-2xs);color:var(--text-faint)">dernière pesée le ${_fmtJourCourt(der.date)}</span>
     </div>
     <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
-      <span style="font-size:var(--fs-xl);font-weight:400;color:#f0f0f0;font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px">${der.kg} kg</span>
+      <span style="font-size:var(--fs-xl);font-weight:400;color:var(--text);font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;letter-spacing:1px">${der.kg} kg</span>
       ${moy!=null?`<span style="font-size:var(--fs-xs);color:var(--sub)">moyenne 7 j ${moy.toFixed(1)} kg</span>`:''}
     </div>
     ${v?`<div style="font-size:var(--fs-sm);font-weight:700;color:${c};margin-top:6px">
@@ -48460,7 +48460,7 @@ function _htmlChoixPhase(){
     return `<button onclick="_phSet('${t}')" style="display:block;width:100%;text-align:left;margin-bottom:8px;padding:12px;border-radius:10px;cursor:pointer;
       background:${sel?'#1a0505':'var(--surface-1)'};border:1px solid ${sel?'var(--red)':'var(--border)'}">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
-        <span style="font-size:var(--fs-md);font-weight:800;color:${sel?'#fff':'#ddd'}">${p.lib}</span>
+        <span style="font-size:var(--fs-md);font-weight:800;color:${sel?'#fff':'var(--text-strong)'}">${p.lib}</span>
         ${sugg===t?'<span style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:1px;text-transform:uppercase">suggéré</span>':''}
       </div>
       <div style="font-size:var(--fs-xs);color:var(--sub);line-height:1.6;margin-top:5px">${escapeHtml(p.texte)}</div>
@@ -48536,7 +48536,7 @@ function _htmlBandeauPhase(user){
   const p=phaseCourante(user);
   if(!p) return '';
   return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--surface-1);border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:14px">
-    <span style="font-size:var(--fs-xs);color:var(--sub)"><b style="color:#ddd">${PHASES[p.type].lib}</b> · ${ordinalSemaine(semainesPhase(user))}</span>
+    <span style="font-size:var(--fs-xs);color:var(--sub)"><b style="color:var(--text-strong)">${PHASES[p.type].lib}</b> · ${ordinalSemaine(semainesPhase(user))}</span>
     <button onclick="ouvrirChoixPhase()" style="background:none;border:none;padding:0;cursor:pointer;font-size:var(--fs-2xs);letter-spacing:1px;text-transform:uppercase;color:var(--red-text);font-weight:700">Changer</button>
   </div>`;
 }
@@ -48553,7 +48553,7 @@ function renderRelancePhase(){
   if(!z) return;
   const msg=currentUser?relancePhase(currentUser):null;
   z.innerHTML=msg?`<div style="background:var(--info-bg);border:1px solid var(--info-border);border-radius:12px;padding:13px;margin-bottom:14px">
-    <div style="font-size:var(--fs-sm);color:#eee;line-height:1.6">${escapeHtml(msg)}</div>
+    <div style="font-size:var(--fs-sm);color:var(--text);line-height:1.6">${escapeHtml(msg)}</div>
     <button class="btn btn-outline btn-sm" onclick="ouvrirChoixPhase()" style="margin-top:9px;letter-spacing:1px;font-size:var(--fs-2xs)">Mettre à jour ma phase</button>
   </div>`:'';
 }
@@ -50763,7 +50763,7 @@ async function loadMetrics(){
   for(const j of jours) tbl+='<th style="padding:4px 6px;color:var(--sub);font-weight:700">'+j.slice(8)+'/'+j.slice(5,7)+'</th>';
   tbl+='</tr>';
   for(const e of RCM_TUNNEL){
-    tbl+='<tr><td style="padding:4px 8px 4px 0;color:'+(e.horsTunnel?'var(--orange)':'#ddd')+'">'+escapeHtml(e.lib)+'</td>';
+    tbl+='<tr><td style="padding:4px 8px 4px 0;color:'+(e.horsTunnel?'var(--orange)':'var(--text-strong)')+'">'+escapeHtml(e.lib)+'</td>';
     for(const j of jours){
       const n=e.cles.reduce((s,c)=>s+(parseInt(parJour[j][c],10)||0),0);
       tbl+='<td style="padding:4px 6px;text-align:center;color:'+(n?'#fff':'#444')+'">'+(n||'—')+'</td>';
@@ -51214,7 +51214,7 @@ function _htmlVitrineCoach(pub){
     return '<div style="'+CARTE+'">'+grain
       +'<div style="position:relative">'
       +'<div style="'+TITRE+'">'+titre+'</div>'
-      +'<div style="font-size:var(--fs-md);color:#dcdcdc;line-height:1.8">'+escapeHtml(t).replace(/\n/g,'<br>')+'</div>'
+      +'<div style="font-size:var(--fs-md);color:var(--text-strong);line-height:1.8">'+escapeHtml(t).replace(/\n/g,'<br>')+'</div>'
       +'</div></div>';
   };
   const _rempli=(p.bio||'').trim()||(p.vision||'').trim()||p.photoVitrine
@@ -51223,7 +51223,7 @@ function _htmlVitrineCoach(pub){
     return '<div class="pad" style="padding-bottom:44px">'
       +'<h1 style="margin-bottom:14px">'+escapeHtml(nom)+'</h1>'
       +'<div style="'+CARTE+';border-left:3px solid var(--red)">'+grain
-      +'<div style="position:relative;font-size:var(--fs-md);color:#dcdcdc;line-height:1.75">'
+      +'<div style="position:relative;font-size:var(--fs-md);color:var(--text-strong);line-height:1.75">'
       +(currentUser&&currentUser.role==='coach'
         ?'Ta présentation est vide. Remplis « Qui tu es » dans ton profil, puis touche <strong>Enregistrer</strong> — le bouton rouge, pas « Prévisualiser ».'
         :('Ton coach n’a pas encore rempli sa présentation.'+_diagVitrine()))
@@ -51289,7 +51289,7 @@ function _htmlDiplomesCoach(p){
   h+='<div style="position:relative;overflow:hidden;background:linear-gradient(160deg,#170707,#0d0404);border:1px solid rgba(224,32,32,.3);border-left:3px solid var(--red);border-radius:16px;padding:18px 20px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.5),inset 0 0 40px rgba(224,32,32,.05)">'+grain
     +'<div style="position:relative">'
     +'<div style="font-size:var(--fs-xs);letter-spacing:2.5px;text-transform:uppercase;color:var(--red-text);font-weight:800;margin-bottom:9px;text-shadow:0 0 14px rgba(224,32,32,.7)">Pourquoi un professionnel diplômé</div>'
-    +'<div style="font-size:var(--fs-sm);color:#dcdcdc;line-height:1.8">'
+    +'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.8">'
     +'Un diplôme n\'est pas une formalité administrative : c\'est la preuve que la personne '
     +'qui règle tes charges, corrige ta technique et t\'oriente sur ton alimentation a été '
     +'formée pour le faire et qu\'elle sait où s\'arrête son domaine. '
@@ -51503,7 +51503,7 @@ function htmlBandeauDispo(){
   const bord=abs?'var(--warning-border)':'var(--border)';
   return `<div style="background:${fond};border:1px solid ${bord};border-radius:10px;padding:10px 12px;margin-bottom:12px">
     ${txt?`<div style="font-size:var(--fs-xs);color:${couleur};font-weight:700;line-height:1.5">${escapeHtml(txt)}</div>`:''}
-    ${msg?`<div style="font-size:var(--fs-xs);color:#ddd;line-height:1.55;margin-top:4px">${escapeHtml(msg)}</div>`:''}
+    ${msg?`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.55;margin-top:4px">${escapeHtml(msg)}</div>`:''}
     ${sante?`<div style="font-size:var(--fs-xs);color:var(--red-text);line-height:1.55;margin-top:${txt||msg?'6':'0'}px;font-weight:700">Ce que tu signales touche ta santé : ton coach en est averti quoi qu'il arrive.</div>`
            :`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5;margin-top:4px">Tu peux écrire quand tu veux : rien n'est bloqué.</div>`}
   </div>`;
@@ -51740,9 +51740,9 @@ function _renderAtpGrossesse(){
     const aDire=e&&!g.msgVu;
     msg.style.display=aDire?'block':'none';
     if(aDire) msg.innerHTML=
-      `<div style="font-size:var(--fs-sm);color:#eee;line-height:1.7">${escapeHtml(GROSSESSE_MSG)}</div>`
+      `<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7">${escapeHtml(GROSSESSE_MSG)}</div>`
       +(e==='allaitement'
-        ?`<div style="font-size:var(--fs-sm);color:#eee;line-height:1.7;margin-top:9px">${escapeHtml(GROSSESSE_MSG_ALLAITEMENT)}</div>`:'')
+        ?`<div style="font-size:var(--fs-sm);color:var(--text);line-height:1.7;margin-top:9px">${escapeHtml(GROSSESSE_MSG_ALLAITEMENT)}</div>`:'')
       +`<button onclick="accuserMessageGrossesse()" class="btn btn-outline btn-sm" style="width:100%;margin:10px 0 0;font-size:var(--fs-2xs);letter-spacing:1px">J'ai compris</button>`;
   }
   const cons=document.getElementById('atp-gross-consent-row');
