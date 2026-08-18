@@ -424,7 +424,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 .fq-titre{font-size:var(--fs-3xl)}
 .fq-carte[data-serre]{padding:10px 12px 10px}
 .fq-carte[data-serre] .fq-titre{font-size:var(--fs-2xl)}
-.tab-bar{display:flex;background:#0c0c0c;border-top:1px solid var(--surface-2);padding:6px 0 10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));flex-shrink:0;scrollbar-width:none}
+.tab-bar{display:flex;background:#0c0c0c;border-top:1px solid rgba(255,255,255,.08);box-shadow:0 -10px 24px rgba(0,0,0,.65);padding:6px 0 10px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));flex-shrink:0;scrollbar-width:none}
 .tab-bar::-webkit-scrollbar{display:none}
 .tab-btn{flex:1 1 auto;min-width:0;overflow:hidden;position:relative;background:none;border:none;color:#8a8a8a;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:6px 3px;font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:700;text-transform:uppercase;letter-spacing:.2px;transition:var(--t-2);white-space:nowrap}
 /* 6 onglets doivent tenir sans debordement horizontal. La taille ne descend
@@ -451,7 +451,14 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
    onglets s'atteignent d'un glissement, et aucun libelle ne devient illisible.
    Le seuil etait a 340px avec six onglets ; le septieme le remonte a 359px. */
 @media(max-width:359px){
-  .tab-bar{overflow-x:auto}
+  /* Le masque annonce le défilement en dégradant le dernier onglet. Il
+     REMPLACE l'ascenseur — scrollbar-width:none reste posé plus haut.
+     ATTENTION : un masque écrête TOUT le rendu de l'élément, ombre portée
+     comprise. Sous 360 px, la barre perd donc son ombre supérieure ; c'est le
+     prix du dégradé, et la bordure, elle, reste. */
+  .tab-bar{overflow-x:auto;
+    -webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 18px),transparent 100%);
+    mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 18px),transparent 100%)}
   .tab-btn{flex:0 0 auto;padding:6px 9px;font-size:var(--fs-2xs)}
 }
 /* Onglet actif : trois signaux cumulés — teinte plus claire (#ff5a5a sur #0c0c0c
