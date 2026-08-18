@@ -26719,6 +26719,11 @@ async function phpApercu(pose){
 // code — flèches, Origine, Fin — là où un curseur maison aurait exigé qu'on
 // réimplémente ce que le navigateur fait déjà bien.
 let _phpPose='face', _phpA=null, _phpB=null;
+// LES URL D OBJET DE LA FRISE SE REVOQUENT. Une vignette par pose et par
+// seance, repeint a chaque suppression : sans revocation, chaque passage
+// laisserait un blob entier retenu en memoire par le navigateur, et la frise
+// est justement l ecran qu on repeint le plus.
+let _phpUrlsFrise=[];
 function htmlPhotosComparateur(u){
   const st=phpComparateurEtat(u,_phpPose);
   const dl=st.dates;
@@ -26777,17 +26782,59 @@ function htmlPhotosFrise(u){
     <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">
       ${f.map(s=>{
         const _j=new Date(s.date).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
-        return `<div style="flex-shrink:0;min-width:126px;background:#111;border:1px solid var(--border);border-radius:var(--r-2);padding:8px 4px 6px 9px">
-          <div style="font-size:var(--fs-2xs);font-weight:800;color:var(--text);margin-bottom:3px">${_j}</div>
+        return `<div style="flex-shrink:0;background:#111;border:1px solid var(--border);border-radius:var(--r-2);padding:8px 9px 6px">
+          <div style="font-size:var(--fs-2xs);font-weight:800;color:var(--text);margin-bottom:5px">${_j}</div>
+          <div style="display:flex;gap:6px">
           ${s.poses.map(_c=>{
             const _l=(PHP_POSES.find(q=>q.cle===_c)||{}).lib||_c;
-            return `<div style="display:flex;align-items:center;gap:4px">
-              <span style="flex:1;min-width:0;font-size:var(--fs-2xs);color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(_l)}</span>
-              ${_htmlRetraitReleve(`phpSupprimerPoseUI(${s.date},&quot;${_c}&quot;)`,`la photo ${escapeHtml(_l)} du ${_j}`)}
+            return `<div style="width:74px;flex:none">
+              <div style="position:relative;width:74px;height:98px;border-radius:var(--r-1);overflow:hidden;background:#080808;border:1px solid var(--border)">
+                <img data-php-frise="${s.date}|${escapeHtml(_c)}" alt=""
+                  style="width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity var(--t-2) var(--c-out)">
+                <div style="position:absolute;top:0;right:0">
+                  ${_htmlRetraitReleve(`phpSupprimerPoseUI(${s.date},&quot;${_c}&quot;)`,`la photo ${escapeHtml(_l)} du ${_j}`)}
+                </div>
+              </div>
+              <div style="font-size:var(--fs-2xs);color:var(--sub);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(_l)}</div>
             </div>`;}).join('')}
+          </div>
         </div>`;}).join('')}
     </div>
   </div>`;
+}
+// LA PEINTURE DE LA FRISE, a part et asynchrone — meme forme que
+// phpRendreComparateur. htmlPhotosFrise est appelee dans une concatenation de
+// chaines, elle ne peut pas attendre IndexedDB : elle pose les emplacements,
+// celle-ci va chercher les blobs et les remplit.
+//
+// AUCUNE IMAGE NE SORT DU TELEPHONE ICI : une URL d objet ne designe qu un
+// blob deja en memoire, elle n est ni une adresse reseau ni un cache.
+async function phpPeindreFrise(){
+  const z=document.getElementById('prog-photos-progression');
+  if(!z) return;
+  const cases=z.querySelectorAll('img[data-php-frise]');
+  // On revoque le tour PRECEDENT, pas celui-ci : innerHTML a deja remplace les
+  // <img> qui portaient ces URL, plus personne ne les regarde.
+  const vieilles=_phpUrlsFrise; _phpUrlsFrise=[];
+  vieilles.forEach(u=>{ try{ URL.revokeObjectURL(u); }catch(e){} });
+  if(!cases.length) return;
+  const seances=phpEtat(currentUser).seances;
+  for(const img of cases){
+    try{
+      const [d,pose]=String(img.getAttribute('data-php-frise')||'').split('|');
+      const se=seances.find(x=>x&&String(x.date)===d);
+      const x=se&&se.poses&&se.poses[pose];
+      if(!x||!x.cle) continue;
+      const b=await phpLireBlob(x.cle);
+      if(!b) continue;
+      // L emplacement a pu disparaitre pendant l attente : une suppression
+      // repeint la frise, et ce <img>-la n est plus dans le document.
+      if(!img.isConnected) continue;
+      const u=URL.createObjectURL(b);
+      _phpUrlsFrise.push(u);
+      img.src=u; img.style.opacity='1';
+    }catch(e){}
+  }
 }
 // PURE. Ce qui peut être partagé, et ce qui l'est déjà. Aucun rendu ici : la
 // carte se contente de mettre en forme ce que cette fonction décide, et le
@@ -26900,6 +26947,7 @@ function renderPhotosProgression(){
   let h=''; try{ h=htmlPhotosProgression(currentUser); }catch(e){ h=''; }
   z.innerHTML=h;
   try{ phpRendreComparateur(); }catch(e){}
+  try{ phpPeindreFrise(); }catch(e){}
 }
 // ── Côté coach : LECTURE SEULE, et seulement sous partage actif ───────────
 function htmlPhotosCoach(c){
