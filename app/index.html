@@ -135,7 +135,15 @@ html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-h
   --text-dim:var(--sub);--text-faint:#6f6f6f;
   /* Bleus. #3355aa et #4466aa donnaient 2,7:1 et 3,4:1 sur #111 : c'etait un
      lien, donc un echec de contraste sur du texte actionnable. */
-  --link:#7aa7e8;--accent-blue:#4fc3f7;--green:#22c55e;--orange:#f97316;--success:var(--green);--success-bg:#021007;--success-border:#052a10;--info:#d4a017;--info-bg:#160d00;--info-border:#2a1a00;--warning:var(--orange);--warning-bg:#1a0800;--warning-border:#3a1500;--danger:var(--red);--danger-bg:#1a0000;--danger-border:#3a0000;--cycle-accent:#A78BFA;--glow-sm:0 0 12px rgba(224,32,32,.25);--glow-md:0 0 28px rgba(255,51,69,.4);--glow-lg:0 0 56px rgba(255,51,69,.5);
+  --link:#7aa7e8;--accent-blue:#4fc3f7;--green:#22c55e;--orange:#f97316;--success:var(--green);--success-bg:#021007;--success-border:#052a10;--info:#d4a017;--info-bg:#160d00;--info-border:#2a1a00;--warning:var(--orange);--warning-bg:#1a0800;--warning-border:#3a1500;--danger:var(--red);--danger-bg:#1a0000;--danger-border:#3a0000;--cycle-accent:#A78BFA;  /* Élévation. Cinq crans, un creux, un halo. Les trois tokens de lueur qu'ils
+     remplacent totalisaient QUATRE appels et trois rouges differents. */
+  --e0:none;
+  --e1:inset 0 1px 0 rgba(255,255,255,.045),0 2px 6px rgba(0,0,0,.35);
+  --e2:0 8px 20px rgba(0,0,0,.50),inset 0 1px 0 rgba(255,255,255,.05);
+  --e3:0 12px 26px rgba(0,0,0,.55),0 3px 8px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.05);
+  --e4:0 20px 50px rgba(0,0,0,.65);
+  --e-inset:inset 0 2px 6px rgba(0,0,0,.6);
+  --glow-red:0 0 18px rgba(224,32,32,.35);
   /* Halos. Douze rayons distincts de 6 à 30 px pour un seul geste — faire luire
      un chiffre — ramenés à trois crans.
 
@@ -342,14 +350,14 @@ body::after{content:'';position:fixed;inset:0;z-index:var(--z-layer);pointer-eve
 
 /* ====== BUTTONS ====== */
 .btn{width:100%;padding:16px;border:none;border-radius:2px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800;cursor:pointer;transition:box-shadow .15s,background .15s,transform var(--arc-strike) var(--arc-c-discharge);text-transform:uppercase;letter-spacing:2.5px;-webkit-tap-highlight-color:transparent}
-.btn-red{background:#E02020;color:var(--text);box-shadow:var(--glow-md)}
-.btn-red:hover{background:#c91a1a;box-shadow:var(--glow-lg)}
-.btn-red:active{transform:scale(var(--arc-scale-charge));box-shadow:0 1px 6px rgba(224,32,32,.3);transition:transform var(--arc-attack) var(--arc-c-charge)}
+.btn-red{background:#E02020;color:var(--text);box-shadow:var(--glow-red)}
+.btn-red:hover{background:#c91a1a;box-shadow:var(--glow-red)}
+.btn-red:active{transform:scale(var(--arc-scale-charge));box-shadow:var(--e1),var(--glow-red);transition:transform var(--arc-attack) var(--arc-c-charge)}
 .btn-outline{background:transparent;color:#aaa;border:1px solid rgba(255,255,255,.12);letter-spacing:2px}
 .btn-outline:hover{border-color:var(--red);color:var(--red-text)}
 .btn-outline:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
 .btn-sm{padding:9px 16px;font-size:var(--fs-xs);width:auto;border-radius:3px;letter-spacing:1.5px}
-@keyframes celebratePulse{0%,100%{box-shadow:none;transform:none}50%{box-shadow:var(--glow-lg);transform:scale(1.03)}}
+@keyframes celebratePulse{0%,100%{box-shadow:none;transform:none}50%{box-shadow:var(--glow-red);transform:scale(1.03)}}
 .celebrate{animation:celebratePulse 1.2s ease}
 
 /* ====== INPUTS ====== */
@@ -444,7 +452,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
    (19px, centre dans le bouton) et non du bouton : sur un bouton large elle
    aurait flotte loin de l'icone. Le lisere sombre la detache du fond de barre.
    pointer-events:none pour qu'elle n'intercepte jamais le tap sur l'onglet. */
-.banner-hero{background:linear-gradient(145deg,#c10000 0%,#880000 55%,#560000 100%);border-radius:12px;padding:18px 20px;position:relative;overflow:hidden;box-shadow:0 10px 26px rgba(0,0,0,.45)}
+.banner-hero{background:linear-gradient(145deg,#c10000 0%,#880000 55%,#560000 100%);border-radius:12px;padding:18px 20px;position:relative;overflow:hidden;box-shadow:var(--e3)}
 .banner-hero::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 16px,rgba(0,0,0,.12) 16px,rgba(0,0,0,.12) 17px);pointer-events:none}
 .banner-hero::after{content:'';position:absolute;right:-18px;top:-18px;width:90px;height:90px;border-radius:50%;background:rgba(255,255,255,.05);pointer-events:none}
 /* ══════════ TABLEAU DE BORD COACH : LE RELIEF ══════════
@@ -461,10 +469,10 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
     repeating-linear-gradient(-50deg,transparent,transparent 10px,rgba(255,255,255,.022) 10px,rgba(255,255,255,.022) 11px),
     linear-gradient(168deg,#1b1b1b,#121212 52%,#0b0b0b);
   border:1px solid #242424;border-left:3px solid var(--border);
-  box-shadow:0 12px 26px rgba(0,0,0,.6),0 3px 8px rgba(0,0,0,.5),
+  box-shadow:var(--e3)
     inset 0 1px 0 rgba(255,255,255,.055),inset 0 -1px 0 rgba(0,0,0,.5);
   transition:border-color .15s,box-shadow .15s}
-.pil-compteur[data-vide="1"]{box-shadow:0 8px 18px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.03)}
+.pil-compteur[data-vide="1"]{box-shadow:var(--e2)}
 .pil-val{font-family:var(--pile-titre);font-size:var(--fs-2xl);line-height:1;position:relative}
 .pil-lib{font-size:var(--fs-2xs);font-weight:800;letter-spacing:.9px;text-transform:uppercase;line-height:1.25;margin-top:6px}
 
@@ -475,21 +483,21 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
     repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.018) 11px,rgba(255,255,255,.018) 12px),
     linear-gradient(168deg,#181818,#101010 55%,#0a0a0a)!important;
   border:1px solid #242424!important;border-left:2px solid rgba(224,32,32,.5)!important;border-radius:11px!important;
-  box-shadow:0 10px 22px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.045)}
+  box-shadow:var(--e3)}
 .pil-bande>summary{color:#cfcfcf!important}
 
 /* LES DEUX LIENS DE BAS DE BARRE. */
 .pil-lien{width:100%;min-height:46px;margin-top:8px;border-radius:11px;cursor:pointer;
   font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:#b4b4b4;
   background:linear-gradient(168deg,#181818,#0e0e0e);border:1px solid var(--border);
-  box-shadow:0 8px 20px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.05);transition:.15s}
-.pil-lien:hover{color:var(--text);border-color:rgba(224,32,32,.5);box-shadow:0 10px 24px rgba(0,0,0,.6),0 0 18px rgba(224,32,32,.18)}
+  box-shadow:var(--e2);transition:.15s}
+.pil-lien:hover{color:var(--text);border-color:rgba(224,32,32,.5);box-shadow:var(--e3),var(--glow-red)}
 
 /* LA RECHERCHE. Creusée plutôt que posée : une ombre INTERNE dit « on écrit
    ici », là où une ombre portée aurait dit « on appuie ici ». */
 #ch-search{background:linear-gradient(180deg,#0c0c0c,#131313)!important;border:1px solid var(--border)!important;
-  box-shadow:inset 0 2px 6px rgba(0,0,0,.6),inset 0 -1px 0 rgba(255,255,255,.03);border-radius:11px!important}
-#ch-search:focus{border-color:rgba(224,32,32,.55)!important;box-shadow:inset 0 2px 6px rgba(0,0,0,.6),0 0 16px rgba(224,32,32,.2)}
+  box-shadow:var(--e-inset);border-radius:11px!important}
+#ch-search:focus{border-color:rgba(224,32,32,.55)!important;box-shadow:var(--e-inset),var(--glow-red)}
 
 /* LES CARTES D'ATHLETE. Le filet gauche prend la couleur de l'ETAT : c'est
    ce qui permet de balayer la liste sans lire un seul badge. */
@@ -499,12 +507,12 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
     linear-gradient(168deg,#1a1a1a,#111 52%,#0b0b0b);
   border:1px solid #242424;border-left:3px solid var(--red);border-radius:3px 12px 12px 3px;
   padding:13px 14px;margin-bottom:9px;
-  box-shadow:0 12px 26px rgba(0,0,0,.55),0 3px 8px rgba(0,0,0,.45),
+  box-shadow:var(--e3)
     inset 0 1px 0 rgba(255,255,255,.05),inset 0 -1px 0 rgba(0,0,0,.5)}
-#ch-clients-list .client-row[data-etat='alerte']{border-left-color:#E02020;box-shadow:0 12px 26px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.05),-3px 0 16px rgba(224,32,32,.3)}
-#ch-clients-list .client-row[data-etat='bilan']{border-left-color:#f97316;box-shadow:0 12px 26px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.05),-3px 0 16px rgba(249,115,22,.28)}
+#ch-clients-list .client-row[data-etat='alerte']{border-left-color:#E02020;box-shadow:var(--e3),var(--glow-red)}
+#ch-clients-list .client-row[data-etat='bilan']{border-left-color:#f97316;box-shadow:var(--e3),-3px 0 16px rgba(249,115,22,.28)}
 #ch-clients-list .client-row[data-etat='actif']{border-left-color:#22c55e}
-#ch-clients-list .client-row[data-etat='attente']{border-left-color:#f97316;box-shadow:0 12px 26px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.05),-3px 0 16px rgba(249,115,22,.24)}
+#ch-clients-list .client-row[data-etat='attente']{border-left-color:#f97316;box-shadow:var(--e3),-3px 0 16px rgba(249,115,22,.24)}
 #ch-clients-list .client-row[data-etat='lecture']{border-left-color:#6a6a6a;opacity:.88}
 #ch-clients-list .client-row[data-etat='dormant']{border-left-color:var(--border);opacity:.82}
 #ch-clients-list .client-row:hover{background:
@@ -524,8 +532,8 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
   max-width:104px;white-space:normal;text-align:center;line-height:1.3}
 
 .ch-chip{background:var(--surface-1);border:1px solid var(--border);color:var(--text-dim);border-radius:20px;padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:.5px;cursor:pointer;min-height:34px;transition:.15s}
-.ch-chip{box-shadow:0 4px 12px rgba(0,0,0,.4),inset 0 1px 0 rgba(255,255,255,.045)}
-.ch-chip.actif{box-shadow:0 4px 14px rgba(0,0,0,.5),0 0 16px rgba(224,32,32,.28),inset 0 1px 0 rgba(255,255,255,.09)}
+.ch-chip{box-shadow:var(--e2)}
+.ch-chip.actif{box-shadow:var(--e2),var(--glow-red)}
 .ch-chip.actif{background:var(--red-bg);border-color:var(--red);color:var(--text)}
 .tab-dot{position:absolute;top:3px;left:calc(50% + 5px);width:9px;height:9px;
   border-radius:50%;background:var(--red);border:1.5px solid #0c0c0c;
@@ -576,7 +584,7 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
   border-radius:3px;padding:16px 12px;text-align:center;flex:1;
   border:1px solid rgba(255,255,255,.08);border-left:3px solid var(--red);
   position:relative;overflow:hidden;
-  box-shadow:0 16px 34px rgba(0,0,0,.72),0 4px 12px rgba(0,0,0,.6),
+  box-shadow:var(--e4)
     inset 0 1px 0 rgba(255,255,255,.08),inset 0 -1px 0 rgba(0,0,0,.65),
     0 0 0 1px rgba(224,32,32,.10),-3px 0 14px rgba(224,32,32,.35)}
 /* Le halo du chiffre lui-meme : sans lui, le blanc reste plat sur le noir. */
@@ -592,7 +600,7 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
     repeating-linear-gradient(-50deg,transparent,transparent 12px,rgba(255,255,255,.022) 12px,rgba(255,255,255,.022) 13px),
     linear-gradient(168deg,#1b1b1b,#111 50%,#0a0a0a);
   border:1px solid #242424;border-left:2px solid rgba(224,32,32,.55);
-  box-shadow:0 14px 30px rgba(0,0,0,.62),inset 0 1px 0 rgba(255,255,255,.055),
+  box-shadow:var(--e3)
     inset 0 -1px 0 rgba(0,0,0,.55)}
 /* Le titre de section : ROUGE. Il etait gris, donc invisible, et la page
    n'avait aucun point d'entree pour l'oeil. */
@@ -715,7 +723,7 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
    qui évite la demi-ligne de blanc sous l'icône. */
 .role-icon{color:var(--red-text);margin-bottom:12px;line-height:0}
 .client-row{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--surface-1);border-radius:0 2px 2px 0;margin-bottom:6px;cursor:pointer;border:1px solid var(--border);border-left:3px solid var(--red);transition:all .15s,transform var(--arc-strike) var(--arc-c-discharge)}
-.client-row:hover{background:var(--red-bg);border-color:var(--red);box-shadow:0 4px 16px rgba(224,32,32,0.12);transform:translateY(-1px)}
+.client-row:hover{background:var(--red-bg);border-color:var(--red);box-shadow:var(--e2),var(--glow-red);transform:translateY(-1px)}
 .client-row:active{transform:scale(var(--arc-scale-charge));box-shadow:none;transition:transform var(--arc-attack) var(--arc-c-charge)}
 /* Cellules optionnelles de la ligne athlete. renderClientRow les emet
    TOUJOURS, vides quand l'objectif ou la phase manquent, pour que le tableau
@@ -895,7 +903,7 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
 .rc-blink{animation:rcBlink 1.4s ease-in-out infinite}
 @keyframes rcBlink{0%,100%{opacity:1}50%{opacity:.25}}
 .content-card{transition:background .2s,box-shadow .2s,transform var(--arc-strike) var(--arc-c-discharge)}
-.content-card:hover{box-shadow:0 4px 20px rgba(0,0,0,.4);transform:translateY(-1px);filter:brightness(1.08)}
+.content-card:hover{box-shadow:var(--e2);transform:translateY(-1px);filter:brightness(1.08)}
 .content-card:active{transform:scale(var(--arc-scale-charge));box-shadow:none;filter:brightness(1);transition:transform var(--arc-attack) var(--arc-c-charge)}
 
 .empty-state{text-align:center;padding:48px 20px;color:var(--sub)}
@@ -1628,7 +1636,7 @@ const COACH_PHOTO='icons/coach.jpg';
   <div style="padding:32px 28px 48px;padding:min(32px,4dvh) 28px min(48px,6dvh);flex-shrink:0;z-index:1;animation:wSlideUp 0.7s cubic-bezier(.16,1,.3,1) 0.55s both;opacity:0">
     <!-- ESPACE COACH — bevel 3D inset + glow rouge -->
     <button onclick="go('s-coach-entry')"
-      style="width:100%;padding:20px;background:#E02020;color:var(--text);border:none;font-family:var(--pile-titre);font-size:var(--fs-md);font-weight:400;letter-spacing:4px;cursor:pointer;text-transform:uppercase;margin-bottom:12px;transition:.15s;box-shadow:inset 0 2px 0 rgba(255,255,255,.24),inset 0 -3px 0 rgba(0,0,0,.45),0 6px 28px rgba(224,32,32,.5)"
+      style="width:100%;padding:20px;background:#E02020;color:var(--text);border:none;font-family:var(--pile-titre);font-size:var(--fs-md);font-weight:400;letter-spacing:4px;cursor:pointer;text-transform:uppercase;margin-bottom:12px;transition:.15s;box-shadow:var(--e-inset),var(--glow-red)"
       onmouseover="this.style.background='#c91a1a'" onmouseout="this.style.background='#E02020'">ESPACE COACH</button>
     <!-- ESPACE ATHLÈTE — bevel subtil -->
     <button onclick="go('s-athlete-entry')"
@@ -1648,7 +1656,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="s-coach-entry" class="screen carbon-bg" style="position:relative">
 
   <!-- Topbar — bandeau uni, ombre portée vers le bas pour séparation visuelle -->
-  <div class="topbar" style="border-bottom:1px solid rgba(255,255,255,.22);box-shadow:0 6px 28px rgba(0,0,0,.9);position:relative;z-index:2;background:#090909">
+  <div class="topbar" style="border-bottom:1px solid rgba(255,255,255,.22);box-shadow:var(--e2);position:relative;z-index:2;background:#090909">
     <button class="back-btn" onclick="go('s-welcome')">←</button>
     <div style="height:32px;display:flex;align-items:center;gap:6px">
       <img src="./icons/logo.png" style="display:block;height:52px;width:52px;margin:-8px 0">
@@ -1743,7 +1751,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="s-athlete-entry" class="screen carbon-bg" style="position:relative">
 
   <!-- Topbar — bandeau uni avec séparation visuelle identique coach -->
-  <div class="topbar" style="border-bottom:1px solid rgba(255,255,255,.22);box-shadow:0 6px 28px rgba(0,0,0,.9);position:relative;z-index:2;background:#090909">
+  <div class="topbar" style="border-bottom:1px solid rgba(255,255,255,.22);box-shadow:var(--e2);position:relative;z-index:2;background:#090909">
     <button class="back-btn" onclick="go('s-welcome')">←</button>
     <div style="height:32px;display:flex;align-items:center;gap:6px">
       <img src="./icons/logo.png" style="display:block;height:52px;width:52px;margin:-8px 0">
@@ -3046,7 +3054,7 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <div id="s-client-home" class="screen">
   <!-- Brand header athlete -->
-  <div style="background:#090909;border-bottom:1px solid rgba(255,255,255,.22);box-shadow:0 4px 20px rgba(0,0,0,.9);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:relative;z-index:2;flex-shrink:0">
+  <div style="background:#090909;border-bottom:1px solid rgba(255,255,255,.22);box-shadow:var(--e2);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:relative;z-index:2;flex-shrink:0">
     <div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="openAthleteProfile()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
       <div id="clh-athlete-avatar" style="width:48px;height:48px;border-radius:50%;background:var(--surface-2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:24px;height:24px;display:inline-block;vertical-align:middle;flex-shrink:0"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
       <div>
@@ -3119,7 +3127,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div style="background:linear-gradient(135deg,#0f0000,#160000);border:1px solid #2a0000;border-radius:4px;padding:20px;margin-bottom:14px;position:relative;overflow:hidden">
         <div style="position:absolute;right:0;top:0;width:3px;height:100%;background:var(--red)"></div>
         <div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:14px">Entraînement</div>
-        <button class="btn btn-red" onclick="openSessionPicker()" style="margin-bottom:10px;letter-spacing:1.5px;font-size:var(--fs-md);box-shadow:inset 0 2px 0 rgba(255,255,255,.22),inset 0 -3px 0 rgba(0,0,0,.45),0 4px 20px rgba(224,32,32,.35)">DÉMARRER MA SÉANCE</button>
+        <button class="btn btn-red" onclick="openSessionPicker()" style="margin-bottom:10px;letter-spacing:1.5px;font-size:var(--fs-md);box-shadow:var(--e-inset),var(--glow-red)">DÉMARRER MA SÉANCE</button>
         <button class="btn btn-outline" onclick="loadSessionManager()" style="font-size:var(--fs-xs);padding:11px;letter-spacing:1.5px">GÉRER MES SÉANCES</button>
       </div>
 
@@ -3137,7 +3145,7 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="clh-pesee"></div>
 
       <!-- REPRISE SÉANCE EN COURS -->
-      <div id="clh-resume-workout" style="display:none;position:relative;overflow:hidden;background:linear-gradient(160deg,#0a1622,#071019 55%,#050c14);border:1px solid #1d3f5c;border-radius:12px;padding:50px 16px 14px;margin-bottom:14px;cursor:pointer;box-shadow:0 8px 26px rgba(0,0,0,.5),inset 0 0 30px rgba(90,170,255,.06)" onclick="woResumeAndGo()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      <div id="clh-resume-workout" style="display:none;position:relative;overflow:hidden;background:linear-gradient(160deg,#0a1622,#071019 55%,#050c14);border:1px solid #1d3f5c;border-radius:12px;padding:50px 16px 14px;margin-bottom:14px;cursor:pointer;box-shadow:var(--e2),inset 0 0 30px rgba(90,170,255,.06)" onclick="woResumeAndGo()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         <svg aria-hidden="true" viewBox="0 0 100 62" preserveAspectRatio="none" style="position:absolute;top:0;left:0;width:100%;height:58px;pointer-events:none;opacity:.88">
           <defs><linearGradient id="congere" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stop-color="var(--text)"/><stop offset=".45" stop-color="#f4faff"/>
@@ -4159,9 +4167,9 @@ const COACH_PHOTO='icons/coach.jpg';
                savoir de quoi elle parlait. Le champ est facultatif : laissé
                vide, l'ancienne déduction s'applique exactement comme avant. -->
           <input id="vid-name-input" type="text" placeholder="Quel exercice ? (facultatif)" autocomplete="off"
-            style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:9px;border:1px solid var(--border);background:linear-gradient(180deg,#0b0b0b,#0f0f0f);color:var(--text);font-size:var(--fs-md);font-family:inherit;margin-bottom:9px;box-shadow:inset 0 2px 6px rgba(0,0,0,.5)">
+            style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:9px;border:1px solid var(--border);background:linear-gradient(180deg,#0b0b0b,#0f0f0f);color:var(--text);font-size:var(--fs-md);font-family:inherit;margin-bottom:9px;box-shadow:var(--e-inset)">
           <input id="vid-url-input" type="url" placeholder="Colle le lien YouTube ou Google Drive…" autocomplete="off"
-            style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:9px;border:1px solid var(--border);background:linear-gradient(180deg,#0b0b0b,#0f0f0f);color:var(--text);font-size:var(--fs-md);font-family:inherit;margin-bottom:9px;box-shadow:inset 0 2px 6px rgba(0,0,0,.5)"
+            style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:9px;border:1px solid var(--border);background:linear-gradient(180deg,#0b0b0b,#0f0f0f);color:var(--text);font-size:var(--fs-md);font-family:inherit;margin-bottom:9px;box-shadow:var(--e-inset)"
             onkeydown="if(event.key==='Enter')addVideoLink()"
             oninput="document.getElementById('vid-drive-hint').style.display=this.value.includes('drive.google.com')?'block':'none'">
           <div id="vid-drive-hint" style="display:none;background:var(--warning-bg);border:1px solid #7c2d1244;border-radius:8px;padding:9px 12px;font-size:var(--fs-xs);color:var(--warning);line-height:1.5;margin-bottom:10px;text-align:left">⚠️ Vérifie que le lien est accessible à tous ceux qui l'ont (pas seulement toi) avant de l'envoyer · dans Drive : <strong>Partager → Toute personne avec le lien</strong>.</div>
@@ -11684,7 +11692,7 @@ function _rendreEcheanceAcces(){
   z.innerHTML=`<div style="position:relative;overflow:hidden;border-radius:12px;padding:13px 14px;margin-bottom:16px;
       background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.02) 11px,rgba(255,255,255,.02) 12px),linear-gradient(168deg,#1b1b1b,#111 55%,#0b0b0b);
       border:1px solid var(--border);border-left:3px solid ${c};
-      box-shadow:0 12px 26px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.05),-3px 0 16px ${c}33">
+      box-shadow:var(--e3)}33">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:${c};--halo-c:${c};text-shadow:var(--halo-1)66">
       Ton accès se termine ${quand}</div>
     <div style="font-size:var(--fs-xs);color:#c9c9c9;line-height:1.6;margin-top:5px">
@@ -11851,7 +11859,7 @@ function _pilCompteur(cle,lib,n,couleur){
     aria-pressed="${actif?'true':'false'}"
     class="pil-compteur" data-vide="${vide?1:0}"
     style="border-left-color:${actif?couleur:(vide?'var(--border)':couleur+'66')};
-      ${actif?`border-color:${couleur};box-shadow:0 12px 26px rgba(0,0,0,.6),0 0 20px ${couleur}33,inset 0 1px 0 rgba(255,255,255,.08)`:''}">
+      ${actif?`border-color:${couleur};box-shadow:var(--e3)}33,inset 0 1px 0 rgba(255,255,255,.08)`:''}">
     <div class="pil-val" style="color:${vide?'#4e4e4e':couleur};text-shadow:${vide?'none':`0 0 16px ${couleur}99`}">${n}</div>
     <div class="pil-lib" style="color:${vide?'#565656':'#c4c4c4'}">${lib}</div>
   </button>`;
@@ -12657,7 +12665,7 @@ function renderEpingleAccueil(){
   if(!e){ el.innerHTML=''; el.style.display='none'; return; }
   el.style.display='block';
   const lien=String(e.lien||'').trim();
-  el.innerHTML=`<div style="background:linear-gradient(135deg,#12000a,#1a0000);border:1px solid rgba(224,32,32,.45);border-radius:12px;padding:14px 16px;margin-bottom:18px;box-shadow:0 6px 18px rgba(0,0,0,.45)">
+  el.innerHTML=`<div style="background:linear-gradient(135deg,#12000a,#1a0000);border:1px solid rgba(224,32,32,.45);border-radius:12px;padding:14px 16px;margin-bottom:18px;box-shadow:var(--e2)">
     <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
       <span style="font-size:var(--fs-lg);line-height:1" aria-hidden="true">📣</span>
       <span style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3px;font-weight:800;text-transform:uppercase">Mot de ton coach</span>
@@ -13700,7 +13708,7 @@ function renderFileReprise(){
       color:${fort?'var(--text)':'var(--sub)'}">${escapeHtml(lib)}</button>`;
   el.innerHTML=tete+f.lignes.map(r=>`<div style="background:linear-gradient(180deg,#151515,#0e0e0e);
       border:1px solid var(--border);border-left:3px solid var(--red);border-radius:11px;
-      padding:11px 12px;margin-bottom:9px;box-shadow:0 5px 15px rgba(0,0,0,.45)">
+      padding:11px 12px;margin-bottom:9px;box-shadow:var(--e2)">
       <div style="display:flex;align-items:baseline;gap:8px">
         <span style="font-size:var(--fs-md);font-weight:900;color:var(--text)">${escapeHtml(r.prenom||'Athlète')}</span>
         <span style="margin-left:auto;font-size:var(--fs-2xs);color:var(--text-faint);flex-shrink:0">${r.jours==null?'aucune séance':r.jours+' j sans séance'}</span>
@@ -20718,7 +20726,7 @@ function loadClientHome(){
         ${photo
           ?`<div style="width:72px;height:72px;border-radius:50%;overflow:hidden;border:2px solid rgba(210,0,0,0.55);box-shadow:0 0 0 5px rgba(200,0,0,0.07),0 8px 28px rgba(0,0,0,0.7)"><img src="${escapeHtml(photo)}" style="width:100%;height:100%;object-fit:cover;display:block"></div>`
           :`<div style="width:72px;height:72px;border-radius:50%;background:linear-gradient(135deg,var(--surface-3),#080808);border:2px solid rgba(210,0,0,0.55);box-shadow:0 0 0 5px rgba(200,0,0,0.07),0 8px 28px rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center">${icon('dumbbell',28)}</div>`}
-          <div style="margin-top:auto;margin-left:-20px;width:92px;text-align:center;background:var(--red);color:var(--text);font-size:var(--fs-2xs);font-weight:900;letter-spacing:2.5px;padding:5px 0;border-radius:0 7px 7px 0;box-shadow:0 6px 18px rgba(224,32,32,0.3)">COACH</div>
+          <div style="margin-top:auto;margin-left:-20px;width:92px;text-align:center;background:var(--red);color:var(--text);font-size:var(--fs-2xs);font-weight:900;letter-spacing:2.5px;padding:5px 0;border-radius:0 7px 7px 0;box-shadow:var(--e2),var(--glow-red)">COACH</div>
         </div>
         <div style="flex:1;min-width:0">
           ${team?`<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:4px;font-weight:900;text-transform:uppercase;margin-bottom:5px">${escapeHtml(team)}</div>`:''}
@@ -22126,7 +22134,7 @@ function _apLigne(ex,i){
   return `<details style="position:relative;background:linear-gradient(180deg,#161616,#0f0f0f);
     border:1px solid var(--border);border-left:3px solid var(--red);border-radius:12px;
     margin-bottom:9px;overflow:hidden;
-    box-shadow:0 6px 18px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.045)">
+    box-shadow:var(--e2)">
     <div style="position:absolute;inset:0;pointer-events:none;
       background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px)"></div>
     <summary style="position:relative;display:flex;align-items:center;gap:12px;padding:11px 12px;
@@ -22489,7 +22497,7 @@ function _ouvrirApercuStory(url){
   d.style.cssText='position:fixed;inset:0;z-index:var(--z-modal);background:var(--scrim);display:flex;'
     +'flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:18px';
   d.innerHTML='<img src="'+url+'" alt="Ta séance du jour" '
-    +'style="max-width:100%;max-height:64vh;border-radius:12px;box-shadow:0 20px 50px rgba(0,0,0,.7)">'
+    +'style="max-width:100%;max-height:64vh;border-radius:12px;box-shadow:var(--e4)">'
     +'<div style="font-size:var(--fs-sm);color:var(--text-strong);text-align:center;line-height:1.6;max-width:320px">'
     +'Appuie <b>longuement</b> sur l’image, puis choisis <b>Ajouter aux photos</b> '
     +'(iPhone) ou <b>Télécharger l’image</b> (Android).</div>'
@@ -35405,7 +35413,7 @@ function _renderStrictDiet(){
   // courses. Ses deux compteurs le suivent : ils NOTENT la réponse oui/non,
   // et les laisser derrière la liste les aurait rendus orphelins.
   const suiviDuJour=`    <!-- Suivi du jour -->
-    <div style="background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0b0b0b);border:1px solid var(--border);border-radius:16px;box-shadow:0 18px 40px rgba(0,0,0,.75),0 4px 12px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.07),inset 0 -1px 0 rgba(0,0,0,.6);padding:18px;margin-bottom:12px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.45);animation:fadeInUp .3s ease">
+    <div style="background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0b0b0b);border:1px solid var(--border);border-radius:16px;box-shadow:var(--e4);padding:18px;margin-bottom:12px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.45);animation:fadeInUp .3s ease">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.028) 11px,rgba(255,255,255,.028) 12px);pointer-events:none"></div>
       <div style="position:relative">
         <div style="display:inline-flex;align-items:center;gap:7px;font-family:var(--pile-titre);font-size:var(--fs-lg);color:var(--text);text-transform:uppercase;letter-spacing:2.5px;margin-bottom:14px;text-shadow:var(--halo-1),0 0 18px rgba(255,255,255,.18)"><span style="display:inline-flex;color:#ff3b30;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('check',13)}</span>J'AI RESPECTÉ MON PLAN${_sAuj?" AUJOURD'HUI":''}</div>
@@ -35418,7 +35426,7 @@ function _renderStrictDiet(){
     </div>
     <!-- Scores -->
     <div style="display:flex;gap:10px;margin-bottom:8px">
-      <div style="flex:1;min-width:0;background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0a0a0a);border:1px solid var(--border);border-radius:16px;box-shadow:0 18px 40px rgba(0,0,0,.75),0 4px 12px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.07),inset 0 -1px 0 rgba(0,0,0,.6);padding:16px 10px;text-align:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp .35s ease">
+      <div style="flex:1;min-width:0;background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0a0a0a);border:1px solid var(--border);border-radius:16px;box-shadow:var(--e4);padding:16px 10px;text-align:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp .35s ease">
         <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.028) 11px,rgba(255,255,255,.028) 12px);pointer-events:none"></div>
         <div style="position:absolute;left:50%;top:-46px;transform:translateX(-50%);width:150px;height:110px;background:radial-gradient(circle,${streak>0?'rgba(34,197,94,.2)':'rgba(224,32,32,.13)'},transparent 68%);pointer-events:none"></div>
         <div style="position:relative">
@@ -35426,7 +35434,7 @@ function _renderStrictDiet(){
           <div style="font-size:var(--fs-xs);color:${streak>0?'rgba(34,197,94,.75)':'rgba(255,90,90,.7)'};letter-spacing:2px;margin-top:5px;text-transform:uppercase;font-weight:800">Jours consécutifs</div>
         </div>
       </div>
-      <div style="flex:1;min-width:0;background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0a0a0a);border:1px solid var(--border);border-radius:16px;box-shadow:0 18px 40px rgba(0,0,0,.75),0 4px 12px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.07),inset 0 -1px 0 rgba(0,0,0,.6);padding:16px 10px;text-align:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp .4s ease">
+      <div style="flex:1;min-width:0;background:linear-gradient(168deg,#1c1c1c,#121212 45%,#0a0a0a);border:1px solid var(--border);border-radius:16px;box-shadow:var(--e4);padding:16px 10px;text-align:center;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp .4s ease">
         <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.028) 11px,rgba(255,255,255,.028) 12px);pointer-events:none"></div>
         <div style="position:absolute;left:50%;top:-46px;transform:translateX(-50%);width:150px;height:110px;background:radial-gradient(circle,rgba(245,197,24,.16),transparent 68%);pointer-events:none"></div>
         <div style="position:relative">
@@ -37534,7 +37542,7 @@ function _htmlPlanAthlete(user,intercale){
   // halo. Les trois autres restent neutres — si tout est mis en avant, plus
   // rien ne l est.
   const tuile=(lib,val,unite,couleur,vedette)=>`<div style="position:relative;overflow:hidden;flex:1;min-width:0;border-radius:10px;padding:10px 4px;text-align:center;${vedette
-      ?'background:linear-gradient(160deg,rgba(224,32,32,.20),rgba(224,32,32,.06) 60%,rgba(224,32,32,.02));border:1px solid rgba(224,32,32,.45);box-shadow:0 4px 16px rgba(224,32,32,.18),inset 0 1px 0 rgba(255,255,255,.06)'
+      ?'background:linear-gradient(160deg,rgba(224,32,32,.20),rgba(224,32,32,.06) 60%,rgba(224,32,32,.02));border:1px solid rgba(224,32,32,.45);box-shadow:var(--e2),var(--glow-red)'
       :'background:rgba(255,255,255,.028);border:1px solid rgba(255,255,255,.05)'}">
     ${vedette?`<div aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(-55deg,transparent,transparent 9px,rgba(255,255,255,.02) 9px,rgba(255,255,255,.02) 10px)"></div>`:''}
     <div style="position:relative;font-family:var(--pile-titre);font-size:${vedette?30:26}px;line-height:1;color:${couleur};text-shadow:0 0 ${vedette?16:10}px ${couleur}${vedette?'99':'66'}">${val==null?'—':Math.round(val)}<span style="font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);color:var(--sub);font-weight:400">${unite}</span></div>
@@ -37730,7 +37738,7 @@ function _htmlPlanAthlete(user,intercale){
 // faire ses courses. <details> natif, comme les historiques : aucun script,
 // le clavier l ouvre, et le lecteur d ecran l annonce.
 const courses=(lc&&lc.lignes.length)?`<details class="hist-repli lc-repli" style="position:relative;overflow:hidden;background:repeating-linear-gradient(0deg,#161616,#161616 27px,#191919 27px,#191919 54px);border:1px solid var(--border);border-left:3px solid var(--red);border-radius:10px;padding:12px 13px;margin-bottom:14px"${_lcOuvert?' open':''} ontoggle="_lcOuvert=this.open">
-    <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:-12px -13px 8px;padding:11px 13px;border-radius:9px 9px 0 0;background:linear-gradient(180deg,var(--text),#e9e9e9);box-shadow:0 2px 10px rgba(0,0,0,.45);min-height:44px">
+    <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;margin:-12px -13px 8px;padding:11px 13px;border-radius:9px 9px 0 0;background:linear-gradient(180deg,var(--text),#e9e9e9);box-shadow:var(--e1);min-height:44px">
       <span style="font-size:var(--fs-xs);color:#0a0a0a;letter-spacing:2px;font-weight:800;text-transform:uppercase;display:inline-flex;align-items:center;gap:6px">${icon('clipboard',13)} Liste de courses</span>
       <span style="display:inline-flex;align-items:center;gap:9px;flex-shrink:0">
         <span style="font-size:var(--fs-2xs);color:#5a5a5a;letter-spacing:1.5px;font-weight:800;text-transform:uppercase">${lc.lignes.filter(l=>l.qte>0).length} lignes</span>
@@ -42555,7 +42563,7 @@ function _renderSuppTable(list, isCoach, editFn){
       padding:9px 12px;margin-bottom:7px;cursor:pointer;border-radius:11px;
       background:linear-gradient(150deg,#161616,#101010 60%,#0d0d0d);
       border:1px solid #202020;border-left:3px solid ${c};
-      box-shadow:0 6px 18px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.03);
+      box-shadow:var(--e2);
       opacity:${inactive?'.5':'1'}">
       <div aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;background:${TRAME}"></div>
       <div style="position:relative;flex:1;min-width:0">
@@ -45575,18 +45583,18 @@ function loadSteps(containerId='steps-content'){
         <div style="display:flex;gap:10px;margin-bottom:12px;align-items:stretch">
           <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end">
             <div style="font-size:var(--fs-xs);font-weight:800;color:#ff5a5a;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">JOUR ON <span style="font-size:var(--fs-xs);font-weight:600;color:var(--text-dim)">entraînement</span></div>
-            <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:11px 6px;background:linear-gradient(180deg,#0a0000,#0f0303);border:1px solid #3a0d0d;border-radius:9px;color:#ff5a5a;font-family:var(--pile-titre);letter-spacing:1px;box-shadow:inset 0 2px 7px rgba(0,0,0,.6),0 0 12px rgba(224,32,32,.12);--halo-c:rgba(224,32,32,.6);text-shadow:var(--halo-1)">
+            <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:11px 6px;background:linear-gradient(180deg,#0a0000,#0f0303);border:1px solid #3a0d0d;border-radius:9px;color:#ff5a5a;font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),var(--glow-red);--halo-c:rgba(224,32,32,.6);text-shadow:var(--halo-1)">
           </div>
           <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end">
             <div style="font-size:var(--fs-xs);font-weight:800;color:#7aa7d9;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">JOUR OFF <span style="font-size:var(--fs-xs);font-weight:600;color:var(--text-dim)">repos</span></div>
-            <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:11px 6px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:9px;color:#7aa7d9;font-family:var(--pile-titre);letter-spacing:1px;box-shadow:inset 0 2px 7px rgba(0,0,0,.6),0 0 12px rgba(96,165,250,.1);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
+            <input type="number" id="steps-goal-off" value="${goals.off}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:11px 6px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:9px;color:#7aa7d9;font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),0 0 12px rgba(96,165,250,.1);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
           </div>
         </div>
         <button onclick="saveStepsGoals()" style="width:100%;padding:12px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:9px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 18px rgba(224,32,32,.4),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Enregistrer les objectifs</button>
       </div>
     </div>
 
-    <div style="background:linear-gradient(145deg,#c10000 0%,#7d0000 55%,#4a0000 100%);border-radius:14px;padding:20px;margin-bottom:14px;text-align:center;position:relative;overflow:hidden;box-shadow:0 12px 30px rgba(0,0,0,.5);animation:fadeInUp .35s ease">
+    <div style="background:linear-gradient(145deg,#c10000 0%,#7d0000 55%,#4a0000 100%);border-radius:14px;padding:20px;margin-bottom:14px;text-align:center;position:relative;overflow:hidden;box-shadow:var(--e3);animation:fadeInUp .35s ease">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 16px,rgba(0,0,0,.13) 16px,rgba(0,0,0,.13) 17px);pointer-events:none"></div>
       <div style="position:absolute;right:-22px;top:-22px;width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,.055);pointer-events:none"></div>
       <div style="position:relative">
@@ -45615,7 +45623,7 @@ function loadSteps(containerId='steps-content'){
         ${todayGoalHintHtml}
         <input type="number" id="steps-today-input" placeholder="0" min="0" max="99999"
           value="${todayEntry&&todayEntry.count!=null?todayEntry.count:''}"
-          style="width:100%;box-sizing:border-box;font-size:var(--fs-3xl);text-align:center;padding:14px 10px;background:linear-gradient(180deg,#070707,#0d0d0d);border:1px solid #242424;border-radius:10px;color:var(--text);font-family:var(--pile-titre);letter-spacing:2px;margin-bottom:11px;box-shadow:inset 0 3px 10px rgba(0,0,0,.65);text-shadow:var(--halo-2)">
+          style="width:100%;box-sizing:border-box;font-size:var(--fs-3xl);text-align:center;padding:14px 10px;background:linear-gradient(180deg,#070707,#0d0d0d);border:1px solid #242424;border-radius:10px;color:var(--text);font-family:var(--pile-titre);letter-spacing:2px;margin-bottom:11px;box-shadow:var(--e-inset);text-shadow:var(--halo-2)">
         <button onclick="saveSteps()" style="width:100%;padding:13px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:9px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800;letter-spacing:2.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Sauver</button>
         ${todayProgressHtml}
       </div>
@@ -49063,7 +49071,7 @@ function loadSleep(containerId='sleep-content',user){
   }
 
   document.getElementById(containerId).innerHTML=`
-    <div style="background:linear-gradient(145deg,#0d2a4d 0%,#08172c 55%,#040c17 100%);border-radius:14px;padding:20px;margin-bottom:14px;text-align:center;position:relative;overflow:hidden;box-shadow:0 12px 30px rgba(0,0,0,.5);animation:fadeInUp .3s ease">
+    <div style="background:linear-gradient(145deg,#0d2a4d 0%,#08172c 55%,#040c17 100%);border-radius:14px;padding:20px;margin-bottom:14px;text-align:center;position:relative;overflow:hidden;box-shadow:var(--e3);animation:fadeInUp .3s ease">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 16px,rgba(0,0,0,.16) 16px,rgba(0,0,0,.16) 17px);pointer-events:none"></div>
       <div style="position:absolute;right:-20px;top:-20px;width:96px;height:96px;border-radius:50%;background:rgba(255,255,255,.05);pointer-events:none"></div>
       <div style="position:absolute;left:14px;top:12px;color:rgba(255,255,255,.16)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
@@ -49087,11 +49095,11 @@ function loadSleep(containerId='sleep-content',user){
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px">
           <div>
             <div style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-xs);font-weight:800;color:#60a5fa;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(96,165,250,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></span>Coucher</div>
-            <input type="time" id="sleep-bed-input" value="${todayEntry?.bed||''}" oninput="updateSleepPreview()" style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;text-align:center;padding:11px 4px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:9px;color:#9cc4ee;width:100%;box-sizing:border-box;box-shadow:inset 0 2px 7px rgba(0,0,0,.6);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
+            <input type="time" id="sleep-bed-input" value="${todayEntry?.bed||''}" oninput="updateSleepPreview()" style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;text-align:center;padding:11px 4px;background:linear-gradient(180deg,#00060d,#030a12);border:1px solid #12304d;border-radius:9px;color:#9cc4ee;width:100%;box-sizing:border-box;box-shadow:var(--e-inset);--halo-c:rgba(96,165,250,.5);text-shadow:var(--halo-1)">
           </div>
           <div>
             <div style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-xs);font-weight:800;color:#f5c518;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(245,197,24,.9))"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><circle cx="12" cy="12" r="4.5"/><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="4.2" y1="4.2" x2="6" y2="6"/><line x1="18" y1="18" x2="19.8" y2="19.8"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.2" y1="19.8" x2="6" y2="18"/><line x1="18" y1="6" x2="19.8" y2="4.2"/></svg></span>Lever</div>
-            <input type="time" id="sleep-wake-input" value="${todayEntry?.wake||''}" oninput="updateSleepPreview()" style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;text-align:center;padding:11px 4px;background:linear-gradient(180deg,#0d0900,#120e03);border:1px solid #4d3d12;border-radius:9px;color:#f0d98a;width:100%;box-sizing:border-box;box-shadow:inset 0 2px 7px rgba(0,0,0,.6);--halo-c:rgba(245,197,24,.45);text-shadow:var(--halo-1)">
+            <input type="time" id="sleep-wake-input" value="${todayEntry?.wake||''}" oninput="updateSleepPreview()" style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:1px;text-align:center;padding:11px 4px;background:linear-gradient(180deg,#0d0900,#120e03);border:1px solid #4d3d12;border-radius:9px;color:#f0d98a;width:100%;box-sizing:border-box;box-shadow:var(--e-inset);--halo-c:rgba(245,197,24,.45);text-shadow:var(--halo-1)">
           </div>
         </div>
         <div id="sleep-preview" style="text-align:center;font-size:var(--fs-sm);color:var(--text-faint);margin-bottom:11px;min-height:26px">${todayEntry?.duration!=null?`<span style="font-family:var(--pile-titre);font-size:var(--fs-2xl);color:${sleepColor(todayEntry.duration)};--halo-c:${sleepColor(todayEntry.duration)};text-shadow:var(--halo-2)aa">${todayEntry.duration}h</span> de sommeil`:''}</div>
@@ -49750,7 +49758,7 @@ function updateCalcTable(){
         let w=e1rm*(p2/100);
         w=Math.round(w/2.5)*2.5; // arrondi à 2.5kg
         const isTarget=r===Math.round(pr)&&rir===Math.round(prir);
-        return `<td style="padding:8px 6px;text-align:center;background:${isTarget?'var(--red)':''};border-radius:${isTarget?'6px':''};font-weight:${isTarget?'800':'600'};box-shadow:${isTarget?'var(--glow-sm)':''}">${w>0?w+'kg':'—'}</td>`;
+        return `<td style="padding:8px 6px;text-align:center;background:${isTarget?'var(--red)':''};border-radius:${isTarget?'6px':''};font-weight:${isTarget?'800':'600'};box-shadow:${isTarget?'var(--glow-red)':''}">${w>0?w+'kg':'—'}</td>`;
       }).join('')}
     </tr>`;
   }).join('');
@@ -51237,7 +51245,7 @@ function _htmlVitrineCoach(pub){
   const nom=[p.fname,p.lname].filter(Boolean).join(' ').trim()||p.teamName||'Ton coach';
   const img=(src,st)=>src?('<img src="'+escapeHtml(src)+'" alt="" loading="lazy" style="'+st+'">'):'';
   const TRAME="repeating-linear-gradient(-55deg,transparent,transparent 16px,rgba(255,255,255,.014) 16px,rgba(255,255,255,.014) 17px)";
-  const CARTE="background:linear-gradient(160deg,#131313,#0c0c0c 55%,#0a0a0a);border:1px solid #1e1e1e;border-radius:16px;padding:20px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.04);position:relative;overflow:hidden";
+  const CARTE="background:linear-gradient(160deg,#131313,#0c0c0c 55%,#0a0a0a);border:1px solid #1e1e1e;border-radius:16px;padding:20px;margin-bottom:16px;box-shadow:var(--e3);position:relative;overflow:hidden";
   const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:11px;--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)";
   // La trame carbone, posee en calque : elle donne la matiere sans rien
   // telecharger, et ne mange aucun contraste au texte pose dessus.
@@ -51271,7 +51279,7 @@ function _htmlVitrineCoach(pub){
   // TETE. Le filet rouge lumineux sous la photo raccorde l ecran a
   // l identite de l app, et separe l image du texte sans trait dur.
   const tete=p.photoVitrine
-    ?('<div style="position:relative;border-radius:18px;overflow:hidden;margin-bottom:20px;box-shadow:0 16px 40px rgba(0,0,0,.7),0 0 0 1px #1c1c1c">'
+    ?('<div style="position:relative;border-radius:18px;overflow:hidden;margin-bottom:20px;box-shadow:var(--e4)">'
       +img(p.photoVitrine,'width:100%;display:block')
       +'<div style="position:absolute;inset:0;background:'+TRAME+';pointer-events:none"></div>'
       +'<div style="position:absolute;inset:auto 0 0 0;padding:64px 18px 18px;background:linear-gradient(to top,rgba(6,6,6,.97),rgba(6,6,6,.78) 42%,transparent)">'
@@ -51302,10 +51310,10 @@ function _htmlDiplomesCoach(p){
   const carte=(p||{}).cartePro||'';
   if(!dips.length&&!carte) return '';
   const TRAME="repeating-linear-gradient(-55deg,transparent,transparent 16px,rgba(255,255,255,.014) 16px,rgba(255,255,255,.014) 17px)";
-  const CARTE="background:linear-gradient(160deg,#131313,#0c0c0c 55%,#0a0a0a);border:1px solid #1e1e1e;border-radius:16px;padding:20px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.04);position:relative;overflow:hidden";
+  const CARTE="background:linear-gradient(160deg,#131313,#0c0c0c 55%,#0a0a0a);border:1px solid #1e1e1e;border-radius:16px;padding:20px;margin-bottom:16px;box-shadow:var(--e3);position:relative;overflow:hidden";
   const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:11px;--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)";
   const grain='<div style="position:absolute;inset:0;pointer-events:none;background:'+TRAME+'"></div>';
-  const img=src=>'<img src="'+escapeHtml(src)+'" alt="" loading="lazy" style="width:100%;border-radius:12px;margin-top:11px;display:block;box-shadow:0 8px 22px rgba(0,0,0,.6)">';
+  const img=src=>'<img src="'+escapeHtml(src)+'" alt="" loading="lazy" style="width:100%;border-radius:12px;margin-top:11px;display:block;box-shadow:var(--e2)">';
   // La pastille porte un halo : c est le seul point rouge de la liste, et
   // c est lui qui fait lire la ligne comme une validation.
   const ligne=d=>'<div style="padding:13px 0;border-bottom:1px solid #191919">'
@@ -51316,11 +51324,11 @@ function _htmlDiplomesCoach(p){
   let h='<div style="'+CARTE+'">'+grain+'<div style="position:relative">';
   if(dips.length) h+='<div style="'+TITRE+'">Diplômes et formations</div>'+dips.map(ligne).join('');
   if(carte) h+='<div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;text-transform:uppercase;font-weight:800;margin:18px 0 8px">Carte professionnelle</div>'
-      +'<img src="'+escapeHtml(carte)+'" alt="" loading="lazy" style="width:100%;border-radius:12px;display:block;box-shadow:0 8px 22px rgba(0,0,0,.6)">';
+      +'<img src="'+escapeHtml(carte)+'" alt="" loading="lazy" style="width:100%;border-radius:12px;display:block;box-shadow:var(--e2)">';
   h+='</div></div>';
   // L encart pedagogique : fond plus chaud, liseré lumineux. Il parle du
   // metier, pas du coach — il ne doit pas se confondre avec la liste.
-  h+='<div style="position:relative;overflow:hidden;background:linear-gradient(160deg,#170707,#0d0404);border:1px solid rgba(224,32,32,.3);border-left:3px solid var(--red);border-radius:16px;padding:18px 20px;margin-bottom:16px;box-shadow:0 10px 30px rgba(0,0,0,.5),inset 0 0 40px rgba(224,32,32,.05)">'+grain
+  h+='<div style="position:relative;overflow:hidden;background:linear-gradient(160deg,#170707,#0d0404);border:1px solid rgba(224,32,32,.3);border-left:3px solid var(--red);border-radius:16px;padding:18px 20px;margin-bottom:16px;box-shadow:var(--e3),var(--glow-red)">'+grain
     +'<div style="position:relative">'
     +'<div style="font-size:var(--fs-xs);letter-spacing:2.5px;text-transform:uppercase;color:var(--red-text);font-weight:800;margin-bottom:9px;--halo-c:rgba(224,32,32,.7);text-shadow:var(--halo-2)">Pourquoi un professionnel diplômé</div>'
     +'<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.8">'
