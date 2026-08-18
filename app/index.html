@@ -985,9 +985,9 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
 @keyframes slideDown{from{opacity:0;transform:translateY(-100%)}to{opacity:1;transform:translateY(0)}}
 .anim-in{animation:fadeIn var(--t-3) ease both}
 /* L'ACCUEIL ATHLÈTE EN CASCADE. Quatre blocs, quatre retards de 40 ms.
-   adeInUp.28s sans espace est valide : le tokeniseur coupe entre l'ident et
+   Ecrire fadeInUp.28s sans espace est valide : le tokeniseur coupe entre l'ident et
    la dimension, et le style calculé est identique à la forme espacée.
-   AUCUN conteneur piloté en display ne porte ces classes — oth retient la
+   AUCUN conteneur piloté en display ne porte ces classes — le mot-cle both retient la
    première image, donc opacity:0, et les figerait invisibles au moment où le
    JS les repasse en display:block. */
 .clh-in{animation:fadeInUp.28s cubic-bezier(0.05,0.70,0.10,1.00) both}
