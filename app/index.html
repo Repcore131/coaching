@@ -16283,18 +16283,24 @@ function drawLineChart(canvas,datasets,labels){
   const range=mx-mn||1;
   const yMin=mn-range*0.12,yMax=mx+range*0.12;
   // Grid
-  ctx.strokeStyle='#1e1e1e';ctx.lineWidth=1;
+  // MEME CONTRAT VISUEL QUE _drawLineSeries : le socle est plein, les reperes
+  // intermediaires en pointilles. Deux graphiques du meme produit ne peuvent
+  // pas se lire differemment selon qu'on est coach ou athlete.
+  ctx.lineWidth=1;
   for(let i=0;i<=4;i++){
     const y=pad.t+ch*(1-i/4);
+    ctx.strokeStyle=(i===0?'#333':'#242424');
+    ctx.setLineDash(i===0?[]:[3,4]);
     ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(pad.l+cw,y);ctx.stroke();
-    ctx.fillStyle='#444';ctx.font='9px Montserrat,sans-serif';
+    ctx.setLineDash([]);
+    ctx.fillStyle='#4a4a4a';ctx.font='600 9px Montserrat,sans-serif';
     ctx.textAlign='right';ctx.fillText(Math.round(yMin+(yMax-yMin)*i/4),pad.l-3,y+3);
   }
   // X labels
   const n=labels.length;
   labels.forEach((lbl,i)=>{
     const x=pad.l+(n<2?cw/2:cw*i/(n-1));
-    ctx.fillStyle='#555';ctx.font='8px Montserrat,sans-serif';ctx.textAlign='center';
+    ctx.fillStyle='#5a5a5a';ctx.font='700 9px Montserrat,sans-serif';ctx.textAlign='center';
     ctx.fillText(lbl,x,H-6);
   });
   // Lines
@@ -16304,11 +16310,33 @@ function drawLineChart(canvas,datasets,labels){
       y:pad.t+ch*(1-(v-yMin)/(yMax-yMin)),
       ok:v>0
     }));
-    ctx.beginPath();ctx.strokeStyle=ds.color;ctx.lineWidth=2;ctx.lineJoin='round';
+    // LE REMPLISSAGE, POUR LA SEULE SERIE DE MARQUE. Le degrade sous la courbe
+    // dit « c'est celle-ci qu'on suit » ; l'appliquer a toutes le dirait de
+    // personne. Base = pad.t+ch, le socle de la grille.
+    const _ok=pts.filter(p=>p.ok);
+    if(ds.color==='#E02020'&&_ok.length>1){
+      const _hauts=Math.min.apply(null,_ok.map(q=>q.y));
+      const _g=ctx.createLinearGradient(0,_hauts,0,pad.t+ch);
+      _g.addColorStop(0,ds.color+'5c');_g.addColorStop(.5,ds.color+'26');_g.addColorStop(1,ds.color+'0a');
+      ctx.beginPath();ctx.moveTo(_ok[0].x,pad.t+ch);
+      _ok.forEach(q=>ctx.lineTo(q.x,q.y));
+      ctx.lineTo(_ok[_ok.length-1].x,pad.t+ch);ctx.closePath();
+      ctx.fillStyle=_g;ctx.shadowBlur=0;ctx.fill();
+    }
+    // La lueur est portee par l'ombre du contexte, comme dans _drawLineSeries :
+    // sur un fond noir, un trait net parait imprime, un trait qui rayonne
+    // parait allume.
+    ctx.beginPath();ctx.strokeStyle=ds.color;ctx.lineWidth=2.5;
+    ctx.lineJoin='round';ctx.lineCap='round';
+    ctx.shadowColor=ds.color;ctx.shadowBlur=9;
     let started=false;
     pts.forEach(p=>{if(!p.ok)return;if(!started){ctx.moveTo(p.x,p.y);started=true;}else ctx.lineTo(p.x,p.y);});
     ctx.stroke();
-    pts.forEach(p=>{if(!p.ok)return;ctx.beginPath();ctx.arc(p.x,p.y,3,0,2*Math.PI);ctx.fillStyle=ds.color;ctx.fill();});
+    ctx.shadowBlur=0;
+    pts.forEach(p=>{if(!p.ok)return;
+      ctx.beginPath();ctx.arc(p.x,p.y,4,0,2*Math.PI);ctx.fillStyle=ds.color;ctx.fill();
+      ctx.beginPath();ctx.arc(p.x,p.y,4,0,2*Math.PI);
+      ctx.strokeStyle='#0b0b0b';ctx.lineWidth=1.5;ctx.stroke();});
   });
 }
 
