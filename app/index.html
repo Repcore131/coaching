@@ -23943,13 +23943,16 @@ function finishWorkout(incomplete=false){
 // NE LEVE JAMAIS : appelee APRES go('s-workout-done'), une fois la seance deja
 // enregistree. Une celebration qui echoue ne doit pas emporter l'enregistrement.
 //
-// z-index 8500 : SOUS #arc-calque et sous #toast — le voile ne doit jamais
-// couvrir un message.
+// L'EMPILEMENT SUIT L'ECHELLE, PAS LE 8500 DEMANDE. Ce nombre avait ete choisi
+// « sous #arc-calque (9000) et sous #toast (9999) » — mais le lot d'empilement
+// a ramene ces deux-la a --z-layer (1800) et --z-toast (2000). A 8500 le voile
+// serait passe AU-DESSUS des deux, exactement l'inverse de l'intention. Il
+// prend donc --z-modal : au-dessus du contenu, sous le calque et sous le toast.
 function _feterFinSeance(){
   try{
     if(typeof arcReduit==='function'&&arcReduit()) return;
     const v=document.createElement('div');
-    v.style.cssText='position:fixed;inset:0;background:#fff;pointer-events:none;z-index:8500;opacity:0';
+    v.style.cssText='position:fixed;inset:0;background:#fff;pointer-events:none;z-index:var(--z-modal);opacity:0';
     document.body.appendChild(v);
     const a=v.animate([{opacity:0},{opacity:.55,offset:.18},{opacity:0}],
       {duration:450,easing:'cubic-bezier(0.05,0.70,0.10,1.00)',fill:'none'});
