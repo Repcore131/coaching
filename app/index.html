@@ -789,8 +789,11 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
   box-shadow:0 0 8px rgba(224,32,32,.8)}
 
 /* -- LES CAISSONS DU BAS ------------------------------------------------ */
+/* OPAQUE, et non a soixante-douze pour cent : un caisson translucide laisse
+   passer les eclairs qu'il recouvre, et ce qui traverse un caisson se lit
+   comme s'il etait DEVANT lui. */
 .nut-bloc{margin-top:13px;padding:12px 13px;border-radius:13px;
-  background:linear-gradient(180deg,rgba(20,6,6,.72),rgba(8,3,3,.72));
+  background:linear-gradient(180deg,#150606,#0a0303);
   border:1px solid rgba(224,32,32,.34);
   box-shadow:inset 0 1px 0 rgba(255,190,190,.07),0 4px 14px rgba(0,0,0,.45)}
 .nut-cap{font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:2.4px;
@@ -37701,7 +37704,16 @@ function htmlAnneauxMacros(tot,m,marge,unite,poidsRef){
             <stop offset=".45" stop-color="#e01414"/>
             <stop offset="1" stop-color="#ff5a5a"/>
           </linearGradient>
+          <!-- Le fond du cadran. Il reprend le degrade de la carte au lieu
+               d'un aplat : un aplat unique se detacherait comme un disque
+               plus sombre sous le coin haut-droit, qui est le point clair du
+               fond. -->
+          <radialGradient id="${gid}f" cx=".38" cy=".3" r=".78">
+            <stop offset="0" stop-color="#170707"/>
+            <stop offset="1" stop-color="#080303"/>
+          </radialGradient>
         </defs>
+        <circle cx="${cx}" cy="${cy}" r="${R-sw/2+0.5}" fill="url(#${gid}f)"/>
         <circle cx="${cx}" cy="${cy}" r="57" fill="none" stroke="rgba(224,32,32,.28)" stroke-width="1"/>
         <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#1c1111" stroke-width="${sw}"/>
         <circle cx="${cx}" cy="${cy}" r="${R-sw/2-2.5}" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="1"/>
