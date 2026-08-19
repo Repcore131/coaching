@@ -611,6 +611,13 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
    descend à 55 % — elle reste lisible, elle cesse d'appeler. */
 .metric-box[data-vide]{box-shadow:0 4px 10px rgba(0,0,0,.45);opacity:.55}
 .metric-val{font-size:var(--fs-2xl);font-family:var(--pile-titre);letter-spacing:0;line-height:1}
+/* DES CHIFFRES QUI NE DANSENT PAS. Mesure en Montserrat a 40 px : « 1111 »
+   fait 57,8 px la ou « 0000 » en fait 105,9 — le 1 est presque deux fois plus
+   etroit qu un 0. Une valeur qui change fait donc bouger tout ce qui la suit.
+   Sur .metric-val la police est Bebas, deja tabulaire : la regle n y change
+   rien aujourd hui, elle rattrape les reprises de la pile (Impact, sans-serif)
+   si Bebas ne charge pas. */
+.rap-nb,.metric-val{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
 /* LES CARTES DE LA PAGE EVOLUTION. Elles etaient plates — un aplat et un
    trait — la ou toutes les autres cartes de l application portent une trame
    et une ombre. Meme langage, donc, et un filet rouge a gauche qui les
@@ -5792,8 +5799,8 @@ function renderDataTable(columns,rows,opts={}){
   const fcmw=stickyCol0&&firstColMinWidth?`min-width:${firstColMinWidth};`:'';
   const sh=stickyCol0?'position:sticky;left:0;z-index:2;':'';
   const sd=stickyCol0?'position:sticky;left:0;z-index:1;':'';
-  const thBase=`background:${headerBg};color:${headerColor};font-size:var(--fs-xs);font-weight:800;white-space:nowrap;border:1px solid ${border};text-transform:uppercase;letter-spacing:.5px;padding:${pad};`;
-  const thead=`<thead><tr>${columns.map((col,i)=>`<th style="${thBase}text-align:${i===0?'left':'center'};${i===0?sh+fcmw:''}">${col}</th>`).join('')}</tr></thead>`;
+  const thBase=`background:${headerBg};color:${headerColor};font-size:var(--fs-xs);font-weight:800;white-space:nowrap;border:1px solid ${border};text-transform:uppercase;letter-spacing:.5px;font-variant-numeric:tabular-nums;padding:${pad};`;
+  const thead=`<thead><tr>${columns.map((col,i)=>`<th style="${thBase}text-align:${i===0?'left':'right'};${i===0?sh+fcmw:''}">${col}</th>`).join('')}</tr></thead>`;
   const tbody=`<tbody>${rows.map((row,ri)=>{
     // Le zebrage est pose sur la LIGNE, label compris : eclaircir les seules
     // cellules de valeurs aurait coupe la ligne en deux au lieu de la tenir.
@@ -5806,7 +5813,7 @@ function renderDataTable(columns,rows,opts={}){
       // L unite ne s ajoute JAMAIS a une case vide : « — cm » n a pas de sens.
       const display=empty?emptyVal:(String(v)+(unite?' '+unite:''));
       const color=row.valueStyleFn?row.valueStyleFn(v,ci,empty):(empty?`color:${emptyColor};`:`color:${valueColor};`);
-      return `<td style="font-size:var(--fs-xs);font-weight:700;padding:${dp};text-align:center;white-space:nowrap;${cbS}${color}${zb?`background-image:linear-gradient(${zb},${zb});`:''}">${display}</td>`;
+      return `<td style="font-size:var(--fs-xs);font-weight:700;padding:${dp};padding-right:14px;text-align:right;font-variant-numeric:tabular-nums;font-feature-settings:'tnum' 1;white-space:nowrap;${cbS}${color}${zb?`background-image:linear-gradient(${zb},${zb});`:''}">${display}</td>`;
     }).join('');
     return `<tr><td style="${lSt}">${row.label}</td>${cells}</tr>`;
   }).join('')}</tbody>`;
@@ -29557,7 +29564,7 @@ function _htmlConstantes(user){
     .slice().sort((a,b)=>a.date<b.date?-1:1).slice(-10).reverse();
   if(!l.length) return `<div class="sub" style="font-size:var(--fs-xs);padding:8px 0;line-height:1.6">Aucune mesure enregistrée.</div>`;
   return l.map(e=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:2px 0;border-bottom:1px solid #161616">
-    <span style="font-size:var(--fs-sm);color:var(--text-strong)">${e.sys}/${e.dia}${e.pouls?` · ${e.pouls} bpm`:''}</span>
+    <span style="font-size:var(--fs-sm);color:var(--text-strong);font-variant-numeric:tabular-nums">${e.sys}/${e.dia}${e.pouls?` · ${e.pouls} bpm`:''}</span>
     <span class="sub" style="font-size:var(--fs-xs);white-space:nowrap;margin-left:auto">${escapeHtml(_fmtDateCourte(e.date))}</span>
     ${_htmlRetraitReleve(`supprimerConstanteUI(&quot;${escapeHtml(e.date)}&quot;)`,`la mesure du ${escapeHtml(_fmtDateCourte(e.date))}`)}
   </div>`).join('');
@@ -29576,7 +29583,7 @@ function _htmlAnalyses(user){
       <div style="flex:1;min-width:0;padding:6px 0">
         <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
           <span style="font-size:var(--fs-sm);color:var(--text-strong);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml((m&&m.lib)||e.marqueur)}</span>
-          <span style="font-size:var(--fs-sm);color:var(--text);font-weight:700;white-space:nowrap">${String(e.valeur).replace('.',',')} ${escapeHtml(e.unite)}</span>
+          <span style="font-size:var(--fs-sm);color:var(--text);font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums">${String(e.valeur).replace('.',',')} ${escapeHtml(e.unite)}</span>
         </div>
         <div class="sub" style="font-size:var(--fs-2xs);margin-top:2px">${escapeHtml(_fmtDateCourte(e.date))}${escapeHtml(ecart)}</div>
       </div>
