@@ -764,7 +764,7 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
 .photo-slot{width:calc(50% - 6px);aspect-ratio:1;background:var(--surface-2);border-radius:var(--r-1);border:1px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:var(--t-2);overflow:hidden;position:relative}
 .photo-slot:hover{border-color:var(--red)}.photo-slot img{width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0}
 .nutrition-day{background:var(--surface-1);border-radius:var(--r-1);padding:14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;border:1px solid var(--border)}
-.fj-entry{background:var(--surface-1);border-radius:var(--r-2);padding:10px 12px;display:flex;align-items:center;margin-bottom:6px;border:1px solid var(--border);border-left:3px solid transparent;gap:8px}
+.fj-entry{background:var(--surface-1);border-radius:var(--r-2);padding:11px 12px;display:flex;align-items:center;margin-bottom:6px;border:1px solid var(--border);border-left:3px solid transparent;gap:8px}
 /* CE QUE JE VIENS D AJOUTER. Le toast dit qu une ecriture a eu lieu ; il ne
    dit pas OU. Sur un journal de douze lignes, retrouver celle qu on vient de
    poser demande de relire la liste.
@@ -40769,14 +40769,14 @@ function _renderFjDaySummary(date){
         </div>
         ${grouped[r].map(e=>`<div class="fj-entry${e.id===_fjIdNeuf?' fj-neuf':''}">
           <div style="flex:1;min-width:0">
-            <div style="font-size:var(--fs-sm);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(e.nom)}</div>
+            <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(e.nom)}</div>
             <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${[e.qty+'g',_fragmentSiValeur('P ',e.p,'g'),_fragmentSiValeur('G ',e.c,'g'),_fragmentSiValeur('L ',e.l,'g')].filter(x=>x).join(' · ')}</div>
           </div>
           <div style="flex-shrink:0;margin-left:8px;text-align:right">
-            ${e.kcal!=null?`<div style="font-size:var(--fs-md);font-weight:800;color:var(--red-text)">${e.kcal}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400"> kcal</span></div>`:`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--amber);background:#1a0e00;border:1px solid #3a1e00;border-radius:var(--r-1);padding:1px 5px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`}
-            <button onclick="ouvrirEquivalents('${date}',${e.id})" title="Équivalences" aria-label="Voir des équivalences"
-              style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:2px">⇄</button>
-            <button onclick="deleteFoodEntry('${date}',${e.id})" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:2px">✕</button>
+            ${e.kcal!=null?`<div style="font-family:'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif;font-weight:400;font-size:17px;letter-spacing:.5px;color:var(--red-text)">${e.kcal}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400"> kcal</span></div>`:`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--amber);background:#1a0e00;border:1px solid #3a1e00;border-radius:var(--r-1);padding:1px 5px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`}
+            <button class="hit44" onclick="ouvrirEquivalents('${date}',${e.id})" title="Équivalences" aria-label="Voir des équivalences"
+              style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:4px">⇄</button>
+            <button class="hit44" onclick="deleteFoodEntry('${date}',${e.id})" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:4px">✕</button>
           </div>
         </div>`).join('')}
       </div>`).join('')}`;
@@ -43969,7 +43969,7 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
     :'';
   const listHtml=!entries.length
     ?emptyState('coffee','Aucune prise enregistrée ce jour.',null,null,'padding:16px 0')
-    :renderDataList(entries,(e,i)=>({cls:(e.ts!=null&&e.ts===_caffTsNeuf)?'caff-neuf':'',html:`<span style="line-height:0;flex-shrink:0">${caffIcone(e.type,22)}</span><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:var(--fs-md)">${escapeHtml(e.name)}</div><div style="font-size:var(--fs-xs);color:var(--sub);display:flex;align-items:center;gap:4px"><input type="time" value="${e.time||''}" onchange="updateCaffeineEntryTime('${date}',${i},this.value)" style="background:none;border:none;border-bottom:1px solid var(--border);color:var(--sub);font-size:var(--fs-xs);font-family:Montserrat,sans-serif;cursor:pointer;padding:0;width:52px">${e.volume?'· '+escapeHtml(e.volume):''}</div></div><span style="font-weight:900;color:var(--red-text);font-size:var(--fs-lg);min-width:48px;text-align:right">${e.mg}mg</span><button onclick="deleteCaffeineEntry('${date}',${i},'${deleteFnName}')" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent">×</button>`}));
+    :renderDataList(entries,(e,i)=>({cls:(e.ts!=null&&e.ts===_caffTsNeuf)?'caff-neuf':'',html:`<span style="line-height:0;flex-shrink:0">${caffIcone(e.type,22)}</span><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:var(--fs-md)">${escapeHtml(e.name)}</div><div style="font-size:var(--fs-xs);color:var(--sub);display:flex;align-items:center;gap:4px"><input type="time" value="${e.time||''}" onchange="updateCaffeineEntryTime('${date}',${i},this.value)" style="background:none;border:none;border-bottom:1px solid var(--border);color:var(--sub);font-size:var(--fs-xs);font-family:Montserrat,sans-serif;cursor:pointer;padding:0;width:52px">${e.volume?'· '+escapeHtml(e.volume):''}</div></div><span style="font-weight:900;color:var(--red-text);font-size:var(--fs-lg);min-width:48px;text-align:right">${e.mg}mg</span><button class="hit44" onclick="deleteCaffeineEntry('${date}',${i},'${deleteFnName}')" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent">×</button>`}));
   const _circ=2*Math.PI*48;
   const _off=_circ*(1-pct);
   // Le cercle mesure 120px de diamètre, dont 9px d'anneau de chaque côté : il
