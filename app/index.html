@@ -21016,6 +21016,28 @@ function getProgram(){
 // l'athlète : dès que la stricte lui est ouverte (accesDieteStricte), ses
 // apports SONT ceux du plan, et la carte affiche donc les objectifs atteints.
 // Sans accès ouvert, on n'affiche pas des chiffres qui ne s'appuient sur rien.
+// LES JAUGES PARTENT DE ZERO ET REJOIGNENT LEUR VALEUR. Le html les pose a
+// l arret — anneau entierement masque, barre a zero — et cette fonction leur
+// donne leur cible AU TOUR SUIVANT : une transition ne demarre que si la
+// valeur de depart a ete peinte au moins une fois. Deux requestAnimationFrame,
+// parce qu un seul tombe encore dans la meme passe de style que l innerHTML.
+//
+// Elle traite aussi [data-arc-off] tout court, pour les arcs qui n ont pas la
+// classe .rc-anneau — l anneau de cafeine, notamment.
+function _animerJauges(root){
+  if(!root) return;
+  const red=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const pose=()=>{
+    root.querySelectorAll('.rc-anneau,[data-arc-off]').forEach(c=>{
+      if(c.dataset.arcOff!=null) c.style.strokeDashoffset=c.dataset.arcOff;
+    });
+    root.querySelectorAll('.rc-barre').forEach(b=>{
+      if(b.dataset.barW!=null) b.style.width=b.dataset.barW+'%';
+    });
+  };
+  if(red) pose();
+  else requestAnimationFrame(()=>requestAnimationFrame(pose));
+}
 function renderNutriAnneaux(){
   const el=document.getElementById('clh-nutri-rings');
   if(!el) return;
@@ -21040,6 +21062,7 @@ function renderNutriAnneaux(){
   el.innerHTML=htmlMacroUnite(currentUser)
     +htmlAnneauxMacros(tot,m,'12px',macroUnite(),_pr)+htmlLigneCalories(tot,m)
     +(macroNoteGlucidesZero(m)?`<div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.55;margin-top:6px">${escapeHtml(macroNoteGlucidesZero(m))}</div>`:'');
+  _animerJauges(el);
 }
 // PURE. Une ligne de sept pastilles, lundi -> dimanche.
 // `vals` : true (vert), false (rouge), null/undefined (neutre).
@@ -35495,8 +35518,14 @@ function htmlAnneauxMacros(tot,m,marge,unite,poidsRef){
     return `<div style="flex:1;text-align:center">
       <svg width="88" height="88" viewBox="0 0 88 88">
         <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="var(--border)" stroke-width="${sw}"/>
+        <!-- LE TOUR ENTIER EST TRACE, et masque par son propre decalage. Un
+             stroke-dasharray anime ne peut pas s interpoler proprement ; un
+             stroke-dashoffset, si. On part du tour complet cache, et
+             _animerJauges pose la valeur finale au tour d apres. -->
         <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${color}" stroke-width="${sw}"
-          stroke-dasharray="${d} ${gap}" stroke-linecap="${d>0?'round':'butt'}"
+          stroke-dasharray="${circ}" stroke-dashoffset="${circ.toFixed(2)}" data-arc-off="${(circ-d).toFixed(2)}"
+          class="rc-anneau" style="transition:stroke-dashoffset 620ms cubic-bezier(.16,1,.3,1)"
+          stroke-linecap="${d>0?'round':'butt'}"
           ${d>0?`filter="drop-shadow(0 0 4px ${color})"`:''}
           transform="rotate(-90 ${cx} ${cy})"/>
         <!-- GRAISSE 400, IMPERATIVEMENT. Bebas Neue n est chargee qu en 400 dans
@@ -35527,7 +35556,7 @@ function htmlLigneCalories(tot,m){
       <span style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text)">${Math.round(tot.kcal||0)}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400">${m.kcal?' / '+m.kcal+' kcal':' kcal'}</span></span>
     </div>
     <div style="height:10px;background:var(--surface-2);border-radius:var(--r-1);overflow:visible">
-      <div style="height:100%;width:${(pct*100).toFixed(1)}%;background:linear-gradient(90deg,var(--red),#ff4444);border-radius:var(--r-1);transition:width var(--t-3) ease;box-shadow:0 0 12px rgba(224,32,32,.5)"></div>
+      <div class="rc-barre" data-bar-w="${(pct*100).toFixed(1)}" style="height:100%;width:0;background:linear-gradient(90deg,var(--red),#ff4444);border-radius:var(--r-1);transition:width var(--t-3) ease;box-shadow:0 0 12px rgba(224,32,32,.5)"></div>
     </div>`;
 }
 // PURE. Le libellé d’un jour, PARTAGÉ par le journal et la carte des
@@ -40746,6 +40775,7 @@ function _renderFjDaySummary(date){
   // affiché du tout : on ne fabrique alors rien.
   const _slot=document.getElementById('nut-rings-slot');
   if(_slot) _slot.innerHTML=_renderStrictMacroRings(currentUser.nutrition||{},date);
+  if(_slot) _animerJauges(_slot);
   // 1 300 ms : la duree de l animation plus une marge. Passe ce delai, le
   // marqueur s eteint pour tout le monde, y compris pour un rendu declenche
   // par autre chose qu un ajout.
