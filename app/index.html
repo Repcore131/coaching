@@ -1529,6 +1529,11 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 .rap-bloc h2{font-size:var(--fs-sm);letter-spacing:2px;text-transform:uppercase;color:var(--sub);
   font-weight:800;margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
 .rap-titre{font-family:var(--pile-titre);font-size:var(--fs-2xl);letter-spacing:2px;line-height:1}
+/* LA SIGNATURE DU DOCUMENT. Un trait rouge sous le titre, a l ecran comme au
+   papier : c est la seule marque de l app sur une feuille imprimee en noir.
+   Elle vaut pour les DEUX documents imprimables, le rapport et la fiche
+   programme — ils portent la meme classe, et la meme origine. */
+.rap-titre::after{content:'';display:block;width:34mm;height:3mm;background:#E02020;margin-top:3mm}
 .rap-sous{font-size:var(--fs-md);font-weight:800;margin-top:5px}
 .rap-meta{font-size:var(--fs-2xs);color:var(--text-faint);margin-top:3px}
 .rap-grille{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:11px}
@@ -1575,6 +1580,18 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   .rap-nb{color:#000!important}
   .rap-lbl,.rap-u,.rap-note,.rap-meta,.rap-vide{color:var(--text-dim)!important}
   .rap-tbl td{border-bottom-color:var(--text-strong)!important}
+  /* Les en-tetes etaient en var(--sub), calibre pour du blanc sur noir : sur
+     du papier blanc, ils disparaissaient presque. */
+  .rap-tbl th{color:#555!important}
+  /* Les colonnes de valeurs se lisent alignees a droite, chiffres de largeur
+     fixe. La premiere colonne, qui porte le libelle, reste a gauche. */
+  .rap-tbl td:not(:first-child),.rap-tbl th:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
+  /* La piste de la barre de volume est calee sur un fond noir : a 8 %, sur du
+     blanc, elle ne se voit plus du tout. */
+  .rap-piste{fill-opacity:.16!important}
+  /* Le rouge de la signature doit SURVIVRE a l economie d encre du
+     navigateur, qui aplatit les fonds par defaut. */
+  .rap-titre::after{content:'';display:block;width:34mm;height:3mm;background:#E02020!important;margin-top:3mm;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .rap-mot{border-color:#bbb!important;min-height:76px}
   /* AU PAPIER, RIEN NE CHANGE : la page imprimee est plus large que l ecran,
      les legendes y etaient deja lisibles. On rend donc les valeurs d avant. */
@@ -4384,7 +4401,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="s-rapport" class="screen">
   <div class="topbar" style="border-bottom:1px solid var(--surface-2)">
     <button class="back-btn" onclick="retourDe('s-rapport')">←</button>
-    <span style="font-size:var(--fs-md);font-weight:800;letter-spacing:1px">RAPPORT</span>
+    <span class="topbar-title">Rapport</span><span></span>
   </div>
   <div class="pad">
     <div class="rap-outils" style="margin-bottom:16px">
@@ -25842,7 +25859,7 @@ function _rapBarreVolume(m){
     <text x="${Math.min(W-16,px(v)+2).toFixed(1)}" y="9" class="rap-lgd-s" fill="currentColor" fill-opacity=".55">${lib}</text>`;
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img"
     aria-label="Volume ${escapeHtml(m.muscle)} : ${m.series} séries, MEV ${m.mev}, MAV ${m.mav}, MRV ${m.mrv}" style="display:block">
-    <rect x="0" y="9" width="${W}" height="8" fill="currentColor" fill-opacity=".08" rx="4"/>
+    <rect class="rap-piste" x="0" y="9" width="${W}" height="8" fill="currentColor" fill-opacity=".08" rx="4"/>
     <rect x="0" y="9" width="${px(m.series).toFixed(1)}" height="8" fill="#e02020" rx="4"/>
     ${rep(m.mev,'MEV')}${rep(m.mav,'MAV')}${rep(m.mrv,'MRV')}
   </svg>`;
