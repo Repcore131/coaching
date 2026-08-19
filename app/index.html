@@ -122,6 +122,9 @@ html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-h
      (#aaaaaa) le palier en dessous. --surface-0 est plus sombre que --dark :
      c'est le fond des creux, pas des cartes. */
   --surface-0:#0c0c0c;--text-strong:#dddddd;--text-mid:#aaaaaa;
+  /* L ambre des avertissements de cafeine, et le jaune des glucides. Deux
+     roles distincts que trois litteraux differents servaient jusqu ici. */
+  --amber:#f59e0b;--gluc:#f5c518;
   --red-bg-2:#2a0000;--red-bg-3:#6d0000;--warning-gold:#f5c518;--surface-1:#111111;--surface-2:#181818;--surface-3:#1e1e1e;--border:#242424;--sub:#8a8a8a;--text:#efefef;
   /* Paliers de contraste du texte, mesures sur le fond de carte #111 :
      --text-dim   #8a8a8a  5,47:1  — texte secondaire, passe AA a toute taille.
@@ -21126,7 +21129,10 @@ function renderNutriDots(){
   const score=weekKeys.filter(k=>nut.days?.[k]?.respected===true).length;
   const scoreEl=document.getElementById('clh-nutri-score');
   scoreEl.textContent=score+'/7';
-  scoreEl.style.color='#f5c518'; // aligné sur le score "Cette semaine" de _renderStrictDiet
+  // LE VERT, PAS LE JAUNE DES GLUCIDES. Un score de 5/7 peint dans la couleur
+  // exacte de l anneau glucides se lit comme une macro, pas comme un compte de
+  // jours tenus. Le vert est la couleur de ce qui est fait, partout ailleurs.
+  scoreEl.style.color='var(--green)';
 }
 function renderNotifs(){
   const notifs=[];
@@ -35554,7 +35560,7 @@ function htmlAnneauxMacros(tot,m,marge,unite,poidsRef){
   };
   return `<div style="display:flex;justify-content:space-around${marge?';margin-bottom:'+marge:''}">
     ${ring(tot.p,m.p,'#E02020','Protéines','p')}
-    ${ring(tot.c,m.g,'#f5c518','Glucides','c')}
+    ${ring(tot.c,m.g,'var(--gluc)','Glucides','c')}
     ${ring(tot.l,m.l,'#22c55e','Lipides','l')}
   </div>`;
 }
@@ -39124,7 +39130,7 @@ function _htmlPersoResult(a){
     +'</div>';
 }
 function _fjResultHtml(f,avecEpingle){
-  const _kvBadge=`<span style="font-size:var(--fs-xs);font-weight:800;color:#fb923c;background:#1a0e00;border:1px solid #3a1e00;border-radius:var(--r-1);padding:1px 5px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`;
+  const _kvBadge=`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--amber);background:#1a0e00;border:1px solid #3a1e00;border-radius:var(--r-1);padding:1px 5px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`;
   const kcalSpan=f.k!=null?`<span style="color:var(--red-text);font-weight:700">${f.k} kcal/100g</span>`:_kvBadge;
   // L'épingle n'apparaît que sur les listes de favoris et de récents : les
   // résultats de recherche restent rendus exactement comme avant.
@@ -40737,7 +40743,7 @@ function _renderFjDaySummary(date){
       <div style="border-top:1px solid var(--surface-2);padding:13px 14px 10px">
         <div style="display:flex;gap:6px;margin-bottom:6px">
           ${tile(tot.p,m.p?m.p+'g':'','prot','#E02020')}
-          ${tile(tot.c,m.g?m.g+'g':'','gluc','#f5c518')}
+          ${tile(tot.c,m.g?m.g+'g':'','gluc','var(--gluc)')}
           ${tile(tot.l,m.l?m.l+'g':'','lip','#22c55e')}
         </div>
         <div style="display:flex;gap:6px;align-items:stretch">
@@ -40767,7 +40773,7 @@ function _renderFjDaySummary(date){
             <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${[e.qty+'g',_fragmentSiValeur('P ',e.p,'g'),_fragmentSiValeur('G ',e.c,'g'),_fragmentSiValeur('L ',e.l,'g')].filter(x=>x).join(' · ')}</div>
           </div>
           <div style="flex-shrink:0;margin-left:8px;text-align:right">
-            ${e.kcal!=null?`<div style="font-size:var(--fs-md);font-weight:800;color:var(--red-text)">${e.kcal}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400"> kcal</span></div>`:`<span style="font-size:var(--fs-xs);font-weight:800;color:#fb923c;background:#1a0e00;border:1px solid #3a1e00;border-radius:var(--r-1);padding:1px 5px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`}
+            ${e.kcal!=null?`<div style="font-size:var(--fs-md);font-weight:800;color:var(--red-text)">${e.kcal}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400"> kcal</span></div>`:`<span style="font-size:var(--fs-xs);font-weight:800;color:var(--amber);background:#1a0e00;border:1px solid #3a1e00;border-radius:var(--r-1);padding:1px 5px;letter-spacing:.5px">VALEUR INDISPONIBLE</span>`}
             <button onclick="ouvrirEquivalents('${date}',${e.id})" title="Équivalences" aria-label="Voir des équivalences"
               style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:2px">⇄</button>
             <button onclick="deleteFoodEntry('${date}',${e.id})" style="background:none;border:none;color:var(--text-dim);font-size:var(--fs-md);cursor:pointer;padding:2px 4px;margin-top:2px">✕</button>
@@ -42741,7 +42747,7 @@ function _suppInteractions(list){
 function _htmlSuppInteractions(list){
   const l=_suppInteractions(list);
   if(!l.length) return '';
-  return `<div style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.25);border-radius:var(--r-3);padding:10px 12px;margin-bottom:12px">
+  return `<div style="background:color-mix(in srgb,var(--amber) 7%,transparent);border:1px solid color-mix(in srgb,var(--amber) 25%,transparent);border-radius:var(--r-3);padding:10px 12px;margin-bottom:12px">
     <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:#f59e0b;text-transform:uppercase;margin-bottom:6px">Au même moment</div>
     ${l.map(m=>`<div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6;margin-bottom:4px">· ${escapeHtml(m)}</div>`).join('')}
   </div>`;
@@ -43876,7 +43882,7 @@ function _htmlCafeineCoucher(entrees,user){
   const coul=alerte?'var(--warning)':'var(--sub)';
   const lim=alerte?heureLimiteCafeine(entrees,bed,CAFEINE_RESIDU_CIBLE):null;
   const sansHeure=_cafeineSansHeure(entrees);
-  return `<div style="background:${alerte?'rgba(245,158,11,.07)':'var(--surface-1)'};border:1px solid ${alerte?'rgba(245,158,11,.28)':'var(--border)'};border-radius:var(--r-3);padding:11px 13px;margin-bottom:8px">
+  return `<div style="background:${alerte?'color-mix(in srgb,var(--amber) 7%,transparent)':'var(--surface-1)'};border:1px solid ${alerte?'color-mix(in srgb,var(--amber) 28%,transparent)':'var(--border)'};border-radius:var(--r-3);padding:11px 13px;margin-bottom:8px">
     <div style="font-size:var(--fs-sm);color:${coul};line-height:1.6;font-weight:${alerte?'700':'400'}">Il t'en restera environ ${residu} mg à ton heure de coucher habituelle (${_libHeure(c.min)}).</div>
     ${lim!=null?`<div style="font-size:var(--fs-sm);color:var(--warning);line-height:1.6;font-weight:700;margin-top:4px">Pour être sous ${CAFEINE_RESIDU_CIBLE} mg, ta dernière prise devrait être avant ${_libHeure(lim)}.</div>`:''}
     ${sansHeure?`<div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5;margin-top:5px">${sansHeure} prise${sansHeure>1?'s':''} sans heure renseignée n'${sansHeure>1?'entrent':'entre'} pas dans ce calcul.</div>`:''}
@@ -43900,7 +43906,7 @@ function _htmlCafeineNuits(user,dates){
   }).filter(Boolean);
   if(!lignes.length) return '';
   const lbl=d=>new Date(d+'T12:00:00').toLocaleDateString('fr-FR',{weekday:'short',day:'numeric'});
-  return `<div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.24);border-radius:var(--r-4);padding:16px;margin-bottom:14px">
+  return `<div style="background:color-mix(in srgb,var(--amber) 6%,transparent);border:1px solid color-mix(in srgb,var(--amber) 24%,transparent);border-radius:var(--r-4);padding:16px;margin-bottom:14px">
     <div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:var(--warning);text-transform:uppercase;margin-bottom:9px">Caféine au coucher</div>
     ${lignes.map(l=>`<div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7;text-transform:capitalize">${escapeHtml(lbl(l.date))} <span style="text-transform:none;color:var(--warning);font-weight:700">environ ${l.mg} mg</span><span style="text-transform:none;color:var(--sub)"> encore présents à ${_libHeure(_hhmmEnMin(l.bed))}</span></div>`).join('')}
     <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.5;margin-top:8px">${escapeHtml(CAFEINE_NOTE_DEMIVIE)}</div>
