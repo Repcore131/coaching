@@ -700,6 +700,10 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
    octets pres — vue coach et vue athlete — chacune avec son style en ligne. */
 /* Hors du point de rupture large, l en-tete de colonnes n a rien a coiffer. */
 .cr-head{display:none}
+/* QUATRE BOITES DANS LA COLONNE D UN DOSSIER. A 375 px, chacune tombait a
+   52,25 px de contenu — moins que la largeur d un nombre a trois chiffres.
+   Deux par deux en dessous de 431 px, quatre au-dela. */
+@media(min-width:431px){#s-coach-client .metric-box-row{grid-template-columns:repeat(4,1fr)}}
 /* LES LIGNES ENTRENT, en cascade courte. Six seulement : au-dela, la cascade
    devient une attente, et une liste de quarante athletes se lirait par vagues.
    fadeInUp est deja declaree, on ne la redeclare pas. */
@@ -2889,7 +2893,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
         <div id="ccd-profile-details" style="display:none;border-top:1px solid var(--surface-2);padding-top:10px;flex-wrap:wrap;gap:10px"></div>
       </div>
-      <div style="display:flex;gap:10px;margin-bottom:16px">
+      <div class="metric-box-row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
         <div class="metric-box"><div class="metric-val" id="ccd-streak">0</div><div class="metric-label">Semaines</div></div>
         <!-- Le taux de complétion, à côté de la série. Rempli par
              openClientDetail via htmlTauxCompletion. -->
@@ -13330,11 +13334,13 @@ function htmlTauxCompletion(u,compact){
   if(compact) return `<span title="${escapeHtml(r.fenetre)}" style="font-size:var(--fs-xs);font-weight:800;
     color:${gris?'var(--text-faint)':'var(--text-strong)'};white-space:nowrap">${escapeHtml(val)}`
     +`${fl?' '+fl:''}</span>`;
-  return `<div style="text-align:center">
-    <div style="font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1;
-      color:${gris?'var(--text-faint)':'var(--text)'}">${escapeHtml(val)}<span style="font-size:var(--fs-md);color:var(--sub)">${fl?' '+fl:''}</span></div>
-    <div style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1px;font-weight:800;text-transform:uppercase;margin-top:4px">Séances faites</div>
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:2px">${escapeHtml(r.fenetre)}</div>
+  // TROIS LIGNES DANS UNE BOITE QUI EN AFFICHE DEUX PARTOUT AILLEURS cassaient
+  // l alignement de toute la rangee. La fenetre passe en title, comme le fait
+  // deja la branche compacte.
+  return `<div style="text-align:center" title="${escapeHtml(r.fenetre)}">
+    <div style="font-family:var(--pile-titre);font-size:32px;line-height:1;
+      color:${gris?'var(--text-faint)':'var(--text)'}">${escapeHtml(val)}<span style="font-size:18px;color:var(--sub)">${fl?' '+fl:''}</span></div>
+    <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-top:6px">Séances faites</div>
   </div>`;
 }
 // Tri du portefeuille. L urgence reste le tri PAR DEFAUT : le taux est une
@@ -51887,9 +51893,9 @@ function _htmlVitrineCoach(pub){
   const p=pub||{};
   const nom=[p.fname,p.lname].filter(Boolean).join(' ').trim()||p.teamName||'Ton coach';
   const img=(src,st)=>src?('<img src="'+escapeHtml(src)+'" alt="" loading="lazy" style="'+st+'">'):'';
-  const TRAME="repeating-linear-gradient(-55deg,transparent,transparent 16px,rgba(255,255,255,.014) 16px,rgba(255,255,255,.014) 17px)";
-  const CARTE="background:linear-gradient(160deg,#131313,#0c0c0c 55%,#0a0a0a);border:1px solid #1e1e1e;border-radius:var(--r-4);padding:20px;margin-bottom:16px;box-shadow:var(--e3);position:relative;overflow:hidden";
-  const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:11px;--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)";
+  const TRAME="repeating-linear-gradient(-50deg,transparent,transparent 12px,rgba(255,255,255,.020) 12px,rgba(255,255,255,.020) 13px)";
+  const CARTE="background:linear-gradient(168deg,#1b1b1b,#111 52%,#0b0b0b);border:1px solid #242424;border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:var(--elev-1);position:relative;overflow:hidden";
+  const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:11px;--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)";
   // La trame carbone, posee en calque : elle donne la matiere sans rien
   // telecharger, et ne mange aucun contraste au texte pose dessus.
   const grain='<div style="position:absolute;inset:0;pointer-events:none;background:'+TRAME+'"></div>';
@@ -51915,9 +51921,9 @@ function _htmlVitrineCoach(pub){
       +'</div></div></div>';
   }
   const eyebrow=p.teamName?('<div style="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:3.5px;font-weight:800;text-transform:uppercase;margin-bottom:6px;--halo-c:rgba(224,32,32,.6);text-shadow:var(--halo-2)">'+escapeHtml(p.teamName)+'</div>'):'';
-  const titre='<h1 style="margin:0;line-height:1.02;text-shadow:0 3px 18px rgba(0,0,0,.9)">'+escapeHtml(nom)+'</h1>';
+  const titre='<h1 style="margin:0;font-weight:400;line-height:1.02;text-shadow:0 3px 18px rgba(0,0,0,.9)">'+escapeHtml(nom)+'</h1>';
   const phrase=(p.catchphrase||'').trim()
-    ?('<div style="font-size:var(--fs-sm);color:#c8c8c8;font-style:italic;line-height:1.65;margin-top:9px">« '+escapeHtml(p.catchphrase.trim())+' »</div>')
+    ?('<div style="font-size:15px;color:#d8d8d8;letter-spacing:.2px;font-style:italic;line-height:1.65;margin-top:12px">« '+escapeHtml(p.catchphrase.trim())+' »</div>')
     :'';
   // TETE. Le filet rouge lumineux sous la photo raccorde l ecran a
   // l identite de l app, et separe l image du texte sans trait dur.
@@ -51935,7 +51941,7 @@ function _htmlVitrineCoach(pub){
     +carte('Qui je suis',p.bio)
     +carte('Ma vision',p.vision)
     +_htmlDiplomesCoach(p)
-    +(p.signature?('<div style="text-align:center;margin-top:10px;padding-top:22px;position:relative">'
+    +(p.signature?('<div style="text-align:center;margin-top:18px;padding-top:30px;position:relative">'
         +'<div style="position:absolute;top:0;left:12%;right:12%;height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent)"></div>'
         +img(p.signature,'max-width:210px;width:58%;display:inline-block;background:none')
         +'</div>'):'')
@@ -51952,9 +51958,9 @@ function _htmlDiplomesCoach(p){
   const dips=((p||{}).diplomes||[]).filter(d=>d&&d.titre);
   const carte=(p||{}).cartePro||'';
   if(!dips.length&&!carte) return '';
-  const TRAME="repeating-linear-gradient(-55deg,transparent,transparent 16px,rgba(255,255,255,.014) 16px,rgba(255,255,255,.014) 17px)";
-  const CARTE="background:linear-gradient(160deg,#131313,#0c0c0c 55%,#0a0a0a);border:1px solid #1e1e1e;border-radius:var(--r-4);padding:20px;margin-bottom:16px;box-shadow:var(--e3);position:relative;overflow:hidden";
-  const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2.5px;font-weight:800;text-transform:uppercase;margin-bottom:11px;--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)";
+  const TRAME="repeating-linear-gradient(-50deg,transparent,transparent 12px,rgba(255,255,255,.020) 12px,rgba(255,255,255,.020) 13px)";
+  const CARTE="background:linear-gradient(168deg,#1b1b1b,#111 52%,#0b0b0b);border:1px solid #242424;border-radius:12px;padding:20px;margin-bottom:16px;box-shadow:var(--elev-1);position:relative;overflow:hidden";
+  const TITRE="font-size:var(--fs-xs);color:var(--red-text);letter-spacing:2px;font-weight:800;text-transform:uppercase;margin-bottom:11px;--halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)";
   const grain='<div style="position:absolute;inset:0;pointer-events:none;background:'+TRAME+'"></div>';
   const img=src=>'<img src="'+escapeHtml(src)+'" alt="" loading="lazy" style="width:100%;border-radius:var(--r-3);margin-top:11px;display:block;box-shadow:var(--e2)">';
   // La pastille porte un halo : c est le seul point rouge de la liste, et
