@@ -155,6 +155,10 @@ html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-h
      change, --t-3 un panneau qui entre, --t-4 un evenement rare et merite.
      --t-boucle est la SEULE duree legale d'une animation infinite. */
   --t-0:90ms;--t-1:120ms;--t-2:200ms;--t-3:320ms;--t-4:620ms;--t-boucle:2400ms;
+  /* UN SEUL CONTRAT DE CASCADE. Le sixieme element demarre a 175 ms et finit
+     a 395 ms — sous le seuil des 400 ms au-dela duquel une entree cesse
+     d'etre un plaisir pour devenir une attente. */
+  --casc-pas:35ms;--casc-duree:220ms;
   --c-out:cubic-bezier(.16,1,.3,1);--c-in:cubic-bezier(.4,0,.9,.2);--c-snap:cubic-bezier(.2,1.5,.4,1);
   /* Rayons. Seize valeurs de 1 à 20 px, plus 50 %, sur 932 déclarations. */
   --r-1:4px;--r-2:8px;--r-3:12px;--r-4:18px;--r-full:50%;
@@ -393,7 +397,9 @@ body::after{content:'';position:fixed;inset:0;z-index:var(--z-layer);pointer-eve
   repeating-linear-gradient(-55deg,transparent,transparent 18px,rgba(198,15,8,.028) 18px,rgba(198,15,8,.028) 19px);}
 
 /* ====== SCREENS ====== */
-.screen{display:none!important;min-height:100vh;min-height:100dvh;flex-direction:column;animation:screenIn.16s var(--arc-c-discharge) both}.screen.active{display:flex!important}
+.screen{display:none!important;min-height:100vh;min-height:100dvh;flex-direction:column;animation:screenAv var(--t-2) var(--arc-c-discharge) both}.screen.active{display:flex!important}
+/* Specificite 0,2,1 contre 0,1,0 : elle gagne sans !important. */
+html[data-nav="ar"] .screen{animation:screenAr var(--t-1) var(--arc-c-discharge) both}
 /* .screen.active handled above */
 
 /* ====== BUTTONS ====== */
@@ -512,7 +518,16 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
    FORME : l'onglet actif reste identifiable sans percevoir la couleur. */
 .tab-btn.active{color:#ff5a5a}
 .tab-btn.active svg{filter:drop-shadow(0 0 6px rgba(224,32,32,.8))}
-.tab-btn.active::after{content:'';position:absolute;top:0;left:20%;right:20%;height:2px;background:var(--red)}
+/* LE LISERE EXISTE TOUJOURS, sinon il ne peut pas etre anime : un
+   pseudo-element qui nait avec la classe apparait a destination. Le retard de
+   100 ms porte sur l'ARRIVEE seulement — il tombe pile quand l'arc se pose ;
+   le depart reste immediat et plus court, un repere qui s'eteint n'a pas a
+   trainer. */
+.tab-btn::after{content:'';position:absolute;top:0;left:20%;right:20%;height:2px;background:var(--red);opacity:0;transition:opacity var(--t-0) var(--arc-c-charge)}
+.tab-btn.active::after{opacity:1;transition:opacity var(--arc-strike) var(--arc-c-discharge) 100ms}
+/* Prop 13 : l'onglet est l'element le plus touche cote athlete, et le seul qui
+   ne disait rien au moment du contact. Memes valeurs que .btn et .content-card. */
+.tab-btn:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
 .tab-btn svg{width:19px;height:19px}
 /* Pastille « il y a du nouveau ». Calee sur le coin haut-droit du pictogramme
    (19px, centre dans le bouton) et non du bouton : sur un bouton large elle
@@ -773,15 +788,22 @@ html{scroll-behavior:smooth}
 @media(min-width:431px){#s-coach-client .metric-box-row{grid-template-columns:repeat(4,1fr)}}
 /* LES LIGNES ENTRENT, en cascade courte. Six seulement : au-dela, la cascade
    devient une attente, et une liste de quarante athletes se lirait par vagues.
-   fadeInUp est deja declaree, on ne la redeclare pas. */
-#ch-clients-list .client-row{animation:fadeInUp var(--t-2) var(--c-out) both}
-#ch-clients-list .client-row:nth-child(1){animation-delay:0s}
-#ch-clients-list .client-row:nth-child(2){animation-delay:.018s}
-#ch-clients-list .client-row:nth-child(3){animation-delay:.036s}
-#ch-clients-list .client-row:nth-child(4){animation-delay:.054s}
-#ch-clients-list .client-row:nth-child(5){animation-delay:.072s}
-#ch-clients-list .client-row:nth-child(6){animation-delay:.09s}
-#ch-clients-list .client-row:nth-child(n+7){animation-delay:0s}
+   fadeInUp est deja declaree, on ne la redeclare pas.
+   L'ATTRIBUT data-entree porte la cascade, et non la seule presence de la
+   ligne : renderClientList reecrit tout l'innerHTML a chaque caractere tape
+   dans la recherche, a chaque tri, a chaque filtre et a chaque reveil de
+   synchro. Sans lui, taper « mar » jouait dix-huit entrees sous le doigt.
+   Le plafond RETIENT la derniere valeur (.09s) au lieu de revenir a zero :
+   a 0s, la septieme ligne et les suivantes entraient AVANT les lignes 2 a 6,
+   et la vague partait du bas de l'ecran. */
+#ch-clients-list[data-entree] .client-row{animation:fadeInUp var(--t-2) var(--c-out) both}
+#ch-clients-list[data-entree] .client-row:nth-child(1){animation-delay:0s}
+#ch-clients-list[data-entree] .client-row:nth-child(2){animation-delay:.018s}
+#ch-clients-list[data-entree] .client-row:nth-child(3){animation-delay:.036s}
+#ch-clients-list[data-entree] .client-row:nth-child(4){animation-delay:.054s}
+#ch-clients-list[data-entree] .client-row:nth-child(5){animation-delay:.072s}
+#ch-clients-list[data-entree] .client-row:nth-child(6){animation-delay:.09s}
+#ch-clients-list[data-entree] .client-row:nth-child(n+7){animation-delay:.09s}
 /* LA PULSATION DE SYNCHRO. Elle ne dit qu une chose : la liste vient de
    changer. Posee a chaque tour de boucle, elle ne dirait plus rien. */
 @keyframes chSyncPulse{0%{box-shadow:0 0 0 0 rgba(224,32,32,.35)}100%{box-shadow:0 0 0 0 rgba(224,32,32,0)}}
@@ -1242,8 +1264,25 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
    AUCUN conteneur piloté en display ne porte ces classes — le mot-cle both retient la
    première image, donc opacity:0, et les figerait invisibles au moment où le
    JS les repasse en display:block. */
-.clh-in{animation:fadeInUp var(--t-3) var(--c-out) both}
-.clh-in-1{animation-delay:0ms}.clh-in-2{animation-delay:40ms}.clh-in-3{animation-delay:80ms}.clh-in-4{animation-delay:120ms}
+.clh-in{animation:fadeInUp var(--casc-duree) var(--arc-c-discharge) both}
+/* L'entree au defilement. arc-attente n'est JAMAIS posee sans observateur :
+   la garde est dans arcEntreeAuDefilement, avant la pose. */
+.arc-attente{opacity:0}
+.arc-vu{animation:fadeIn var(--t-2) var(--arc-c-discharge) both}
+.clh-in-1{animation-delay:0ms}.clh-in-2{animation-delay:calc(var(--casc-pas)*1)}.clh-in-3{animation-delay:calc(var(--casc-pas)*2)}.clh-in-4{animation-delay:calc(var(--casc-pas)*3)}
+/* LA CLASSE DE CASCADE, une pour toute l'application. Le meme geste — « une
+   liste apparait » — etait ecrit cinq fois differemment : 18 ms sur 220,
+   40 ms sur 280, 90 ms sur 600, et deux fois 0 ms. Le plafond RETIENT la
+   derniere valeur, il ne revient pas a zero.
+   ATTENTION : aucun conteneur pilote en display ne doit porter cette classe —
+   both retient la premiere image, donc opacity:0. */
+.casc>*{animation:fadeInUp var(--casc-duree) var(--arc-c-discharge) both}
+.casc>*:nth-child(1){animation-delay:0ms}
+.casc>*:nth-child(2){animation-delay:calc(var(--casc-pas)*1)}
+.casc>*:nth-child(3){animation-delay:calc(var(--casc-pas)*2)}
+.casc>*:nth-child(4){animation-delay:calc(var(--casc-pas)*3)}
+.casc>*:nth-child(5){animation-delay:calc(var(--casc-pas)*4)}
+.casc>*:nth-child(n+6){animation-delay:calc(var(--casc-pas)*5)}
 input[type=file]{display:none}
 .done-anim{text-align:center;padding:48px 20px}
 .done-anim .done-icon{font-size:72px;margin-bottom:16px;animation:pulse var(--t-boucle) var(--c-out) infinite}
@@ -1276,18 +1315,24 @@ h3{font-size:var(--fs-lg);text-transform:uppercase}
    temps ; chacune ne conserve donc QU'UN seul pic, soit 3 au total sur la
    première seconde. Les rebonds de scale sont conservés : un changement de
    taille n'est pas un flash. */
+/* PLUS AUCUN filter DANS rcStrike. Trois drop-shadow, dont un de 130 px, sur
+   une image de 240 px, au repere 5 % : c'etait la frame la plus chere de toute
+   l'application, et elle tombait pendant que le fil principal finit d'amorcer.
+   72 % de la duree partaient de surcroit dans une decroissance de filtre qu'on
+   ne voyait pas. Le halo est deporte sur un calque frere anime en opacity —
+   la parade que .arc-halo applique deja.
+   TOUTES LES IMAGES PORTENT LA MEME LISTE DE FONCTIONS transform : deux listes
+   differentes forcent une interpolation de matrices et rendent le rebond mou. */
 @keyframes rcStrike{
-  0%   {opacity:0;transform:scale(0.4) translateY(30px);filter:brightness(1)}
-  5%   {opacity:1;transform:scale(1.26) translateY(-10px);
-        filter:brightness(4) drop-shadow(0 0 30px var(--text)) drop-shadow(0 0 70px var(--text)) drop-shadow(0 0 130px #7df)}
-  8%   {transform:scale(0.95);filter:brightness(1.4) drop-shadow(0 0 6px var(--text))}
-  16%  {transform:scale(0.98);filter:brightness(1.1) drop-shadow(0 0 4px rgba(224,32,32,.5))}
-  21%  {transform:scale(1.07);
-        filter:brightness(1.1) drop-shadow(0 0 18px #E02020) drop-shadow(0 0 42px #E02020)}
-  28%  {transform:scale(1);filter:brightness(1) drop-shadow(0 0 9px rgba(224,32,32,.4))}
-  55%  {filter:brightness(1) drop-shadow(0 0 5px rgba(224,32,32,.2))}
-  100% {filter:brightness(1) drop-shadow(0 0 2px rgba(224,32,32,.07))}
+  0%       {opacity:0;transform:scale(.4) translateY(30px)}
+  7%       {opacity:1;transform:scale(1.26) translateY(-10px)}
+  14%      {opacity:1;transform:scale(.95) translateY(0)}
+  30%      {opacity:1;transform:scale(.98) translateY(0)}
+  42%      {opacity:1;transform:scale(1.07) translateY(0)}
+  62%,100% {opacity:1;transform:scale(1) translateY(0)}
 }
+/* Le halo, sur son propre calque : une seule propriete animee, composee. */
+@keyframes rcHalo{0%{opacity:0}7%{opacity:1}30%{opacity:.35}100%{opacity:.07}}
 @keyframes screenFlash{
   0%  {opacity:0}
   6%  {opacity:0.5}
@@ -1321,7 +1366,13 @@ h3{font-size:var(--fs-lg);text-transform:uppercase}
 button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px solid #FF3345;outline-offset:3px}
 
 /* ====== SCREEN TRANSITIONS ====== */
-@keyframes screenIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+/* DEUX SENS, DEUX IMAGES. L'aller entre par la droite et part de rien ;
+   le retour entre par la gauche, plus court et deja a 35 % d'opacite —
+   il ramene a du connu, il n'a pas a se presenter. L'application savait
+   deja qu'on reculait (_navParHistorique) et ne s'en servait que pour la
+   pile, jamais pour l'image. */
+@keyframes screenAv{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+@keyframes screenAr{from{opacity:.35;transform:translateX(-14px)}to{opacity:1;transform:translateX(0)}}
 
 /* ====== COACH TABS PREMIUM ====== */
 #coach-tabs-bar{background:#080808;border-bottom:1px solid var(--red);gap:0}
@@ -1658,6 +1709,15 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 .arc-sortie>div{animation:arcFeuilleOut var(--arc-strike) var(--arc-c-charge) both!important}
 @keyframes arcVoileOut{from{opacity:1}to{opacity:0}}
 @keyframes arcFeuilleOut{from{transform:translateY(0)}to{transform:translateY(var(--arc-translate))}}
+/* LES TROIS CALQUES STATIQUES — la question qui remplace confirm(), la saisie
+   qui remplace prompt(), la feuille qui decide du sort d'une seance en cours.
+   Ce sont les trois plus lourds de consequence de l'application, et ils
+   arrivaient par un display:flex sec : ils clignotaient. La regle de
+   #modal-overlay ne pouvait pas les prendre, elle est portee par un
+   identifiant. Memes valeurs, a la milliseconde pres. La SORTIE, elle, passe
+   par .arc-sortie / .arc-sortie>div, qui existent deja. */
+#rc-confirm.arc-entree,#rc-saisie.arc-entree,#wo-pause-modal.arc-entree{animation:arcVoile var(--t-2) var(--arc-c-discharge) both}
+#rc-confirm.arc-entree>div,#rc-saisie.arc-entree>div,#wo-pause-modal.arc-entree>div{animation:arcFeuille var(--arc-strike) var(--arc-c-discharge) both}
 
 /* ── Accessibilité : respect de « Réduire les animations » du système ──────────
    Doit rester en TOUTE FIN de feuille pour l'emporter sur les règles ci-dessus. */
@@ -1699,13 +1759,15 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   .wd-badge-medal{transform:none!important;filter:drop-shadow(0 0 12px rgba(224,32,32,.45))!important}
   .rc-blink{opacity:1!important}
   .fj-entry.fj-neuf,.caff-neuf{animation:none!important}
-  #ch-clients-list .client-row{animation:none}
+  #ch-clients-list[data-entree] .client-row{animation:none!important}
   .btn-attente,.celebrate{animation:none!important}
   .bq-l{transition:none}
   .bq-l:active{transform:none}
   /* Coupee net, pas accelerée : la regle universelle la ramenerait a .01 ms,
      ce qui laisse un saut au lieu d une entree. */
   #bil-content>.pad{animation:none!important}
+  /* Une translation de 20 px jouee en .01 ms est un sursaut. */
+  .casc>*{animation:none!important}
   /* La regle universelle plus haut ramene deja ces transitions a .01 ms.
      On les nomme quand meme : une valeur qui existe encore peut etre relue
      comme un choix, alors qu ici il n y a plus de mouvement du tout. */
@@ -1714,12 +1776,15 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
      l'éclair doivent s'afficher d'emblée, à pleine opacité et sans filtre —
      animation:none seul les figerait sur leur première image (opacity:0). */
   #splash-flash{display:none!important}
-  #splash-logo-anim,[style*="boltFlash"]{
+  #splash-logo-anim,[style*="boltFlash"],#splash-line,#splash-word{
     animation:none!important;
     opacity:1!important;
     filter:none!important;
     transform:none!important;
   }
+  /* Le halo garde une presence fixe : animation:none seul le figerait a
+     opacity:0, c'est-a-dire invisible — le piege signale juste au-dessus. */
+  #splash-halo{animation:none!important;opacity:.35!important}
   /* ── ARC : la variante plate ──────────────────────────────────────────────
      Le mouvement disparaît ENTIÈREMENT. Aucun scale, aucune translation,
      aucun flash, aucune trace lumineuse, aucune boucle : il ne reste que les
@@ -1731,10 +1796,13 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
      LES VIBRATIONS SURVIVENT, et c'est voulu : ce sont le mouvement et le
      défilement qui déclenchent nausées et migraines, pas une pulsation dans
      la paume. Les couper aurait retiré un repère sans rien soulager. */
+  /* Une translation de 20 px jouee en .01 ms est un sursaut, pas une absence
+     de mouvement : l'ecran ne s'anime pas du tout. */
+  .screen{animation:none!important}
   #arc-calque{display:none!important}
   .btn:active,.btn-red:active,.btn-outline:active,.content-card:active,
   .client-row:active,.choice-opt:active,.emo-opt:active,.gsl-opt:active,
-  .obj-opt:active{transform:none!important}
+  .obj-opt:active,.tab-btn:active{transform:none!important}
   /* Le point de courant du chronomètre est une BOUCLE : on la retire, on ne
      l'accélère pas. La règle générale plus haut la ramènerait à .01 ms et le
      point se figerait à un endroit arbitraire de l'anneau — un défaut
@@ -1748,8 +1816,8 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
      ramenées à un centième de milliseconde, mais une translation de 24 px reste
      une translation — jouée trop vite, elle devient un sursaut, et c'est
      exactement ce que la préférence système demande d'éviter. */
-  #modal-overlay{animation:arcVoile var(--arc-plat) linear both!important}
-  #modal-overlay>div{animation:none!important;transform:none!important}
+  #modal-overlay,#rc-confirm.arc-entree,#rc-saisie.arc-entree,#wo-pause-modal.arc-entree{animation:arcVoile var(--arc-plat) linear both!important}
+  #modal-overlay>div,#rc-confirm.arc-entree>div,#rc-saisie.arc-entree>div,#wo-pause-modal.arc-entree>div{animation:none!important;transform:none!important}
   /* La courbe s'affiche entière, d'emblée : le tracé progressif est du
      mouvement, et une courbe à moitié tracée puis figée serait un faux. */
   svg.arc-courbe path{stroke-dasharray:none!important;stroke-dashoffset:0!important}
@@ -1937,7 +2005,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- SPLASH -->
 <div id="s-splash" class="screen active carbon-bg" style="align-items:center;justify-content:center;position:relative;overflow:hidden">
   <!-- Screen flash overlay -->
-  <div id="splash-flash" style="position:absolute;inset:0;background:#fff;pointer-events:none;animation:screenFlash var(--t-3) var(--c-out) 0.05s both;opacity:0;z-index:0"></div>
+  <div id="splash-flash" style="position:absolute;inset:0;background:#fff;pointer-events:none;opacity:0;z-index:0"></div>
 
   <!-- ÉCLAIR DIAGONAL — haut-droite vers bas-gauche, large au début, effilé à la fin -->
   <div style="position:absolute;inset:0;pointer-events:none;z-index:2">
@@ -1973,7 +2041,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </linearGradient>
       </defs>
 
-      <g style="animation:boltFlash var(--t-4) var(--c-out) 0.05s both;opacity:0">
+      <g data-bolt style="opacity:0">
         <!-- Aura atmosphérique (gradient stroke → s'évanouit en bas-gauche) -->
         <polyline points="80,0 55,48 68,90 40,132 54,172 18,220"
           stroke="url(#g-aura)" stroke-width="72" fill="none" stroke-linecap="round" filter="url(#ga)"/>
@@ -1995,11 +2063,24 @@ const COACH_PHOTO='icons/coach.jpg';
     </svg>
   </div>
 
-  <!-- RC Logo — z-index:5, devant l'éclair -->
-  <div style="display:flex;justify-content:center;align-items:center;position:relative;z-index:5">
-    <div id="splash-logo-anim" style="opacity:0">
-      <img src="./icons/logo.png" style="display:block;width:240px;height:240px">
+  <!-- RC Logo — z-index:7, devant l'éclair ET devant la vignette : le trait et
+       le mot sont sous le logo, et la vignette (z-index:6) les couvrirait. -->
+  <div style="display:flex;flex-direction:column;justify-content:center;align-items:center;position:relative;z-index:7">
+    <!-- Le halo sur son propre calque, sous le logo : rendu equivalent aux trois
+         drop-shadow d'avant, aucun flou recalcule par image. -->
+    <div style="position:relative;display:flex;justify-content:center;align-items:center">
+      <div id="splash-halo" style="position:absolute;width:340px;height:340px;border-radius:50%;pointer-events:none;background:radial-gradient(circle,rgba(224,32,32,.55),transparent 70%);opacity:0"></div>
+      <div id="splash-logo-anim" style="position:relative;opacity:0">
+        <img src="./icons/logo.png" style="display:block;width:240px;height:240px">
+      </div>
     </div>
+    <!-- LE TRAIT ET LE MOT tiennent dans le budget existant : le dernier finit
+         a 560 ms, sous les 640 ms de la sortie. Aucune seconde ajoutee — on
+         remplit du temps deja paye. Ni filter, ni brightness, ni halo ici : le
+         seuil WCAG 2.3.1 autorise trois pics de luminance sur la premiere
+         seconde, et les trois sont deja pris. -->
+    <div id="splash-line" style="width:120px;height:2px;background:var(--red);margin:18px auto 0;transform-origin:center;opacity:0"></div>
+    <div id="splash-word" style="font-family:var(--pile-titre);font-size:var(--fs-xl);letter-spacing:6px;color:var(--text);margin-top:10px;text-align:center;opacity:0">REPCORE</div>
   </div>
 
   <!-- Vignette — assombrit les bords, fait ressortir l'éclair au centre -->
@@ -4074,7 +4155,7 @@ const COACH_PHOTO='icons/coach.jpg';
     <div style="font-size:var(--fs-md);font-weight:800;letter-spacing:.5px;margin-bottom:4px">Séance en cours</div>
     <div style="font-size:var(--fs-sm);color:var(--text-faint);margin-bottom:20px">Que veux-tu faire ?</div>
     <div style="display:flex;flex-direction:column;gap:10px">
-      <button onclick="document.getElementById('wo-pause-modal').style.display='none'" style="padding:14px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px">▶ Continuer la séance</button>
+      <button onclick="_feuilleFermer('wo-pause-modal')" style="padding:14px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px">▶ Continuer la séance</button>
       <button onclick="confirmPauseWorkout()" style="padding:14px;background:#111;border:1px solid var(--border);border-radius:var(--r-3);color:#aaa;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px">⏸ Mettre en pause</button>
       <button onclick="cancelWorkout()" style="padding:14px;background:#1a0000;border:1px solid var(--red);border-radius:var(--r-3);color:#fca5a5;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;cursor:pointer;letter-spacing:.5px">✕ Annuler la séance</button>
     </div>
@@ -4638,9 +4719,9 @@ const COACH_PHOTO='icons/coach.jpg';
 <div id="s-videos" class="screen">
   <div class="topbar"><button class="back-btn" onclick="go('s-client-home')">←</button><span class="topbar-title">Vidéos techniques</span><span></span></div>
   <div class="scroll-area" style="flex:1">
-    <div class="pad">
+    <div class="pad casc">
       <!-- BANNIÈRE DE BASCULE -->
-      <div class="banner-hero" style="margin-bottom:16px;animation:fadeInUp var(--t-3) var(--c-out)">
+      <div class="banner-hero" style="margin-bottom:16px">
         <div style="position:relative;display:flex;gap:14px;align-items:flex-start">
           <!-- Mockup téléphone en train de filmer un exercice -->
           <svg viewBox="0 0 62 108" style="width:56px;flex-shrink:0;filter:drop-shadow(0 6px 12px rgba(0,0,0,.5))">
@@ -4684,7 +4765,7 @@ const COACH_PHOTO='icons/coach.jpg';
         </div>
       </div>
 
-      <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:18px 16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.45);animation:fadeInUp var(--t-3) var(--c-out)">
+      <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:18px 16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 10px 26px rgba(0,0,0,.45)">
         <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
         <div style="position:absolute;left:50%;top:-34px;transform:translateX(-50%);width:120px;height:90px;border-radius:var(--r-full);background:radial-gradient(circle,rgba(224,32,32,.15),transparent 68%);pointer-events:none"></div>
         <div style="position:relative;text-align:center">
@@ -4706,7 +4787,7 @@ const COACH_PHOTO='icons/coach.jpg';
           <div class="sub" style="font-size:var(--fs-xs);margin-top:11px;line-height:1.6">Enregistre avec ton téléphone → partage sur <b style="color:var(--text-strong)">YouTube</b> (non répertoriée) ou <b style="color:var(--text-strong)">Google Drive</b> → colle le lien ici · <strong style="color:#ff5a5a">ton coach corrige directement dans l'app</strong></div>
         </div>
       </div>
-      <div style="margin-top:12px;background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 8px 22px rgba(0,0,0,.4);animation:fadeInUp var(--t-3) var(--c-out)">
+      <div style="margin-top:12px;background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 8px 22px rgba(0,0,0,.4)">
         <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.012) 15px,rgba(255,255,255,.012) 16px);pointer-events:none"></div>
         <div style="position:relative">
           <div style="font-family:var(--pile-titre);font-size:var(--fs-md);letter-spacing:2.2px;margin-bottom:11px;color:#8a8a8a;text-transform:uppercase">Ou upload direct : sans YouTube / Drive</div>
@@ -7775,13 +7856,35 @@ window.onload=()=>{
   // Reprise des envois restés en échec lors de la session précédente. Différée :
   // l'accueil doit s'afficher d'abord, la file est une tâche d'arrière-plan.
   setTimeout(()=>{CLOUD.viderFile().catch(()=>{});},3000);
+  // UN SEUL INSTANT DE DEPART. Le voile et l'eclair partaient a l'analyse du
+  // HTML, le logo en JS a la toute fin du demarrage — l'eclair frappait donc
+  // AVANT que le logo n'apparaisse, et l'ecart grandissait avec la lenteur de
+  // l'appareil. Les cinq animations sont posees dans la MEME frame. Les retards
+  // de 0,05 s disparaissent : ils attendaient une peinture qui a deja eu lieu.
   const logoAnim=document.getElementById('splash-logo-anim');
   if(logoAnim){
     requestAnimationFrame(()=>requestAnimationFrame(()=>{
-      logoAnim.style.animation='rcStrike 0.55s var(--c-out) both';
+      try{
+        const _f=document.getElementById('splash-flash');
+        const _b=document.querySelector('#s-splash g[data-bolt]');
+        const _h=document.getElementById('splash-halo');
+        const _l=document.getElementById('splash-line');
+        const _m=document.getElementById('splash-word');
+        if(_f) _f.style.animation='screenFlash var(--t-3) var(--c-out) both';
+        if(_b) _b.style.animation='boltFlash var(--t-4) var(--c-out) both';
+        logoAnim.style.animation='rcStrike 420ms var(--c-out) both';
+        if(_h) _h.style.animation='rcHalo 420ms var(--c-out) both';
+        if(_l) _l.style.animation='splashLineIn var(--t-3) var(--c-out) 260ms both';
+        if(_m) _m.style.animation='splashTextIn var(--t-2) var(--c-out) 340ms both';
+      }catch(e){}
     }));
   }
-  setTimeout(()=>{
+  // LA SORTIE SUIT L'ANIMATION, pas l'horloge — avec un filet a 900 ms au cas
+  // ou l'onglet passerait en arriere-plan : aucune frame n'est alors produite
+  // et l'evenement n'arrive jamais.
+  let _splashParti=false;
+  const _quitterSplash=()=>{
+    if(_splashParti) return; _splashParti=true;
     const splash=document.getElementById('s-splash');
     if(splash){splash.style.transition='opacity var(--t-2) var(--c-in)';splash.style.opacity='0';}
     setTimeout(()=>{
@@ -8025,7 +8128,15 @@ window.onload=()=>{
         CLOUD.syncRelevantUsers().catch(()=>{});
       });
     },220);
-  },640);
+  };
+  try{
+    const _mot=document.getElementById('splash-word');
+    if(_mot) _mot.addEventListener('animationend',_quitterSplash,{once:true});
+  }catch(e){}
+  // Sous « animations reduites » aucun animationend n'arrive : on garde le
+  // minutage d'avant plutot que d'attendre le filet.
+  let _red=false; try{ _red=(typeof arcReduit==='function')&&arcReduit(); }catch(e){}
+  setTimeout(_quitterSplash,_red?640:900);
 };
 
 // ══════════════ PLUSIEURS COMPTES SUR LE MÊME APPAREIL ══════════════════════
@@ -8438,16 +8549,21 @@ function go(id){
   // ON NE VIDE QUE SI L ON QUITTE LE MODULE. Naviguer de la nutrition vers la
   // cafeine ne rejoue rien ; revenir depuis l accueil rejoue l entree une fois.
   try{ if(!NUT_ECRANS.test(String(id||''))) _dejaAnime.clear(); }catch(e){}
+  // MEME REGLE POUR LA LISTE D'ATHLETES : la cascade rejoue quand on REVIENT
+  // sur l'accueil coach depuis un autre ecran, et jamais pendant qu'on y est.
+  try{ if(id!=='s-coach-home'){ const _l=document.getElementById('ch-clients-list');
+       if(_l) delete _l.dataset.deja; } }catch(e){}
   // UNE SAISIE OUVERTE NE SURVIT PAS AU CHANGEMENT D’ÉCRAN. Sans ça, le calque
   // restait affiché par-dessus le nouvel écran et son appelant attendait une
   // promesse qui ne se résoudrait jamais. C’est un no-op quand rien n’est
   // ouvert — donc à chaque appel ordinaire.
-  try{ rcSaisieFermer(); }catch(e){}
+  try{ rcSaisieFermer(true); }catch(e){}
   // LA MODALE DE PAUSE NON PLUS. Même raison : le retour matériel n’est pas
   // le seul chemin qui change d’écran, et elle survivait à tous les autres.
   // No-op quand elle est fermée, donc à chaque appel ordinaire.
-  try{ const _wp=document.getElementById('wo-pause-modal');
-       if(_wp&&_wp.style.display==='flex') _wp.style.display='none'; }catch(e){}
+  // INSTANTANEE : une feuille qui sortirait en fondu par-dessus le nouvel
+  // ecran serait pire que le clignotement d'avant.
+  try{ _feuilleFermer('wo-pause-modal',true); }catch(e){}
   // RATTRAPAGE DU PROFIL PUBLIC, une seule fois par session. Accroche ici et
   // non au seul accueil coach : un coach qui ouvre l app ailleurs ne passait
   // jamais par loadCoachHome, et sa vitrine restait non publiee sans que rien
@@ -8502,6 +8618,22 @@ function go(id){
   // Restaurée seulement si elle avait déjà été montrée : sinon elle s'ouvrirait
   // dès le premier go() du démarrage, avant même que l'utilisateur soit routé.
   if(window._pendingAthletePkg&&window._pkgDejaProposee) setTimeout(_proposerImportAthlete,0);
+  // LE SENS DE L'ONGLET, lu ICI et pas dans _majTabbar : cette derniere est
+  // appelee APRES s.classList.add('active') — l'animation est deja engagee,
+  // l'onglet actif deja deplace, et le delta ne serait plus calculable.
+  // L'arc d'onglet et l'ecran partent enfin du meme cote.
+  try{
+    const _cible=TABBAR_ECRANS[id];
+    const _bar=document.getElementById('client-tabbar');
+    if(_cible&&_bar&&currentUser?.role==='athlete'){
+      const _tabs=Array.prototype.slice.call(_bar.querySelectorAll('.tab-btn'));
+      const _de=_tabs.findIndex(b=>b.classList.contains('active'));
+      const _vers=_tabs.findIndex(b=>b.dataset.tab===_cible);
+      if(_de>=0&&_vers>=0&&_de!==_vers) _sensNav=(_vers>_de)?'av':'ar';
+    }
+  }catch(e){}
+  // Remise a 'av' immediate : un seul go() consomme le sens, jamais deux.
+  document.documentElement.dataset.nav=_sensNav; _sensNav='av';
   document.querySelectorAll('.screen').forEach(s=>{
     s.classList.remove('active');
     s.style.display='none';
@@ -8613,6 +8745,7 @@ function goAvecRetour(id){
   go(id);
 }
 function retourDe(id,defaut){
+  _sensNav='ar';
   go(_ecranOrigine[id]||defaut||(currentUser?.role==='coach'?'s-coach-home':'s-client-home'));
 }
 // ══════════════════ RETOUR MATÉRIEL (Android) ══════════════════════════
@@ -8640,6 +8773,15 @@ const HIST_CONFIRME={
 // Deux secondes : au-delà, le deuxième appui n’est plus une confirmation mais
 // un nouveau geste.
 const HIST_QUITTER_MS=2000;
+// LE SENS DE LA PROCHAINE NAVIGATION. Consomme par go(), remis a 'av'
+// immediatement : un seul go() consomme le sens, jamais deux.
+let _sensNav='av';
+// Les trente .back-btn qui appellent go('s-...') en dur ne passent pas par
+// retourDe() : une seule ecoute deleguee, en capture et passive, les couvre
+// toutes sans en reecrire une.
+document.addEventListener('pointerdown',e=>{
+  if(e.target&&e.target.closest&&e.target.closest('.back-btn')) _sensNav='ar';
+},{passive:true,capture:true});
 let _navParHistorique=false;
 let _histQuitter=0;
 let _histSortie=false;
@@ -8676,11 +8818,13 @@ function _histCalqueOuvert(){
   // séance et n’était pas comptée : le retour matériel tombait en cas 4,
   // déléguait la flèche de s-workout, et la modale restait affichée
   // par-dessus l’accueil.
+  // `!dataset.sortie` : pendant les 140 ms de sortie la feuille est encore en
+  // flex, et un appui sur retour serait alors mange une seconde fois.
   const _wp=document.getElementById('wo-pause-modal');
-  if(_wp&&_wp.style.display==='flex') return true;
+  if(_wp&&_wp.style.display==='flex'&&!_wp.dataset.sortie) return true;
   for(const id of ['rc-confirm','rc-saisie']){
     const z=document.getElementById(id);
-    if(z&&z.style.display==='flex') return true;
+    if(z&&z.style.display==='flex'&&!z.dataset.sortie) return true;
   }
   return false;
 }
@@ -8689,20 +8833,21 @@ function _histFermerCalque(){
   // suivantes elle ne rend aucune promesse et personne ne l’attend : la
   // masquer suffit, c’est ce que fait déjà son bouton « Continuer la séance ».
   const _wp=document.getElementById('wo-pause-modal');
-  if(_wp&&_wp.style.display==='flex'){ _wp.style.display='none'; return; }
+  if(_wp&&_wp.style.display==='flex'&&!_wp.dataset.sortie){ _feuilleFermer('wo-pause-modal'); return; }
   // PAR LEUR BOUTON « non » : c’est lui qui résout la promesse. Les fermer à
   // la main laisserait l’appelant attendre pour toujours.
   for(const id of ['rc-confirm','rc-saisie']){
     const z=document.getElementById(id);
-    if(z&&z.style.display==='flex'){
+    if(z&&z.style.display==='flex'&&!z.dataset.sortie){
       const non=document.getElementById(id+'-non');
       if(non&&typeof non.onclick==="function"){ non.onclick(); return; }
-      z.style.display='none'; return;
+      _feuilleFermer(id); return;
     }
   }
   closeModal();
 }
 function _histRetour(actuel){
+  _sensNav='ar';
   _navParHistorique=true;
   try{ retourDe(actuel); } finally { _navParHistorique=false; }
 }
@@ -9315,6 +9460,36 @@ function arcTracerCourbes(racine){
     });
   }catch(e){}
   return n;
+}
+
+// ── L'ENTREE AU DEFILEMENT DES LISTES LONGUES ──────────────────────────────
+// Les six premieres lignes de la liste coach cascadent ; tout ce qui est sous
+// le pli — l'essentiel chez un coach de quarante athletes — apparaissait deja
+// pose. Trois points non negociables : unobserve des le premier passage (joli
+// une fois, insupportable a la dixieme), disconnect() en tete de fonction
+// parce que le conteneur est reconstruit a chaque frappe, et le test de
+// disponibilite AVANT la pose de arc-attente — sans quoi un navigateur sans
+// IntersectionObserver afficherait une liste vide.
+const ARC_VUE_MAX=24;
+function arcEntreeAuDefilement(conteneur,selecteur,depuis){
+  if(!conteneur) return null;
+  try{ if(conteneur._arcObs){ conteneur._arcObs.disconnect(); conteneur._arcObs=null; } }catch(e){}
+  if(arcReduit()||typeof IntersectionObserver!=='function') return null;
+  const d=depuis||0;
+  const els=Array.prototype.slice.call(conteneur.querySelectorAll(selecteur)).slice(d,d+ARC_VUE_MAX);
+  if(!els.length) return null;
+  els.forEach(e=>e.classList.add('arc-attente'));
+  const obs=new IntersectionObserver(entrees=>{
+    entrees.forEach(x=>{
+      if(!x.isIntersecting) return;
+      x.target.classList.remove('arc-attente');
+      x.target.classList.add('arc-vu');
+      obs.unobserve(x.target);
+    });
+  },{threshold:.15,rootMargin:'0px 0px -8% 0px'});
+  els.forEach(e=>obs.observe(e));
+  conteneur._arcObs=obs;
+  return obs;
 }
 
 // ── ANIMATION 2 : LES ÉTATS DE PRESSION ────────────────────────────────────
@@ -13086,11 +13261,36 @@ function _majOngletCanal(){
 }
 
 // ── L'écran athlète ─────────────────────────────────────────────────────────
+// TROIS SILHOUETTES A LA FORME DE .cnl-carte. Le Canal est le seul ecran
+// vraiment suspendu au reseau, et il affichait une phrase sur du vide pendant
+// une duree que personne ne maitrise. La classe fx-loop est OBLIGATOIRE :
+// c'est elle que le bloc prefers-reduced-motion coupe, sans quoi le balayage
+// tournerait a l'infini contre la preference systeme. Trois au maximum : la
+// regle interne autorise deux boucles simultanees, trois cartes qui partagent
+// la meme keyframe restent tenables, dix ne le seraient pas.
+function _canalSquelette(fil){
+  if(!fil||fil.dataset.rempli) return false;
+  fil.innerHTML=Array(3).fill(
+     '<div class="cnl-carte" style="pointer-events:none">'
+    +'<div class="skeleton fx-loop" style="height:15px;width:62%;margin-bottom:9px"></div>'
+    +'<div class="skeleton fx-loop" style="height:11px;width:88%;margin-bottom:6px"></div>'
+    +'<div class="skeleton fx-loop" style="height:11px;width:35%"></div></div>').join('');
+  fil._t0=Date.now();
+  return true;
+}
+// Le plancher evite le clignotement sur une reponse instantanee. Il ne
+// s'applique QU'AU squelette : une erreur doit s'afficher tout de suite.
+async function _canalPlancher(fil){
+  if(!fil||!fil._t0) return;
+  const _r=250-(Date.now()-fil._t0);
+  fil._t0=0;
+  if(_r>0) await new Promise(r=>setTimeout(r,_r));
+}
 function loadCanal(){
   if(!canalAccessible(currentUser)){ _canalPorteFermee(); return; }
   go('s-canal');
   const fil=document.getElementById('canal-fil');
-  if(fil) fil.innerHTML='<div class="sub" style="text-align:center;padding:40px 0;font-size:var(--fs-sm)">Chargement du canal…</div>';
+  _canalSquelette(fil);
   _canalCharger();
 }
 // La carte proposée à l'athlète sans coach. Elle mène EXACTEMENT là où mène
@@ -13146,6 +13346,10 @@ async function _canalCharger(){
   // Sans elle, le compteur touché ne changeait jamais à l'écran.
   const liste=canalTrier(msgs);
   window._canalListe=liste;
+  await _canalPlancher(fil);
+  // Un rappel sur un fil deja peint — bouton « Reessayer », retour dans
+  // l'onglet — ne doit pas vider l'ecran pour y remettre des silhouettes.
+  fil.dataset.rempli='1';
   fil.innerHTML=liste.length
     ? liste.map(m=>_canalCarte(m,window._canalCompteurs[m.id]||{},window._canalMiennes[m.id]||'')).join('')
     : _canalVide('Rien pour le moment.','Ton coach publiera ici ses annonces et ses liens.');
@@ -13155,6 +13359,8 @@ async function _canalCharger(){
   const plusRecent=liste.reduce((x,m)=>Math.max(x,Number(m.at)||0),0);
   if(plusRecent) _canalMarquerVu(currentUser.email,plusRecent);
   _majOngletCanal();
+  // A partir de la cinquieme carte : les quatre premieres sont deja a l'ecran.
+  try{ arcEntreeAuDefilement(fil,'.cnl-carte',4); }catch(e){}
 }
 function _canalVide(titre,sous){
   return `<div style="text-align:center;padding:48px 20px">
@@ -13299,7 +13505,7 @@ function loadCanalCoach(){
   if(currentUser?.role!=='coach') return;
   go('s-coach-canal');
   const fil=document.getElementById('canal-coach-fil');
-  if(fil) fil.innerHTML='<div class="sub" style="text-align:center;padding:36px 0;font-size:var(--fs-sm)">Chargement…</div>';
+  _canalSquelette(fil);
   _canalChargerCoach();
 }
 async function _canalChargerCoach(){
@@ -13332,6 +13538,8 @@ async function _canalChargerCoach(){
   window._canalMsgsCoach=msgs||{};
   const liste=canalTrier(msgs);
   const vrai=canalDecompteVrai(reactions);
+  await _canalPlancher(fil);
+  fil.dataset.rempli='1';
   fil.innerHTML=liste.length
     ? liste.map(m=>_canalCarteCoach(m,(compteurs||{})[m.id]||{},vrai[m.id]||{},reactions||{})).join('')
     : _canalVide('Ton canal est vide.','Le premier message apparaîtra chez tous tes athlètes.');
@@ -14118,8 +14326,23 @@ function renderClientList(clients){
       +'<span>Objectif</span><span>Phase</span><span>Charge</span><span>Progrès</span>'
       +'<span>Bilans</span><span>État</span></div>'
       +vus.map(renderClientRow).join('');
+    // LA CASCADE NE JOUE QU'AU PREMIER REMPLISSAGE de la visite. Les rendus
+    // suivants — frappe, filtre, tri, synchro — posent le contenu sans un
+    // mouvement : une entree qui se rejoue n'est plus une entree, c'est un
+    // clignotement pendant qu'on filtre. Le drapeau est remis a zero dans
+    // go(), et nulle part ailleurs. 420 ms couvrent le dernier retard (90 ms)
+    // plus la duree (200 ms) avec de la marge.
+    if(!el.dataset.deja){
+      el.dataset.deja='1';
+      el.setAttribute('data-entree','');
+      setTimeout(()=>{ try{ el.removeAttribute('data-entree'); }catch(e){} },420);
+    }
   }
+  // APRES l'ecriture de l'innerHTML, comme aujourd'hui.
   if(pan&&scr) pan.scrollTop=scr;
+  // L'entree au defilement pour tout ce qui est sous le pli, a partir de la
+  // septieme ligne : les six premieres ont deja la cascade.
+  try{ arcEntreeAuDefilement(el,'.client-row',6); }catch(e){}
   return vus.length;
 }
 
@@ -22520,8 +22743,7 @@ function woResumeAndGo(){
   _reprendreRepos();
 }
 function pauseWorkout(){
-  const m=document.getElementById('wo-pause-modal');
-  if(m) m.style.display='flex';
+  _feuilleOuvrir('wo-pause-modal');
 }
 // QUITTER L’ÉCRAN DE SÉANCE, par où que ce soit.
 //
@@ -22541,15 +22763,13 @@ function _quitterEcranSeance(garder){
   try{ clearInterval(woState&&woState.timerInterval); }catch(e){}
 }
 function confirmPauseWorkout(){
-  const m=document.getElementById('wo-pause-modal');
-  if(m) m.style.display='none';
+  _feuilleFermer('wo-pause-modal',true);
   _quitterEcranSeance(true);
   go('s-client-home');
   loadClientHome();
 }
 async function cancelWorkout(){
-  const m=document.getElementById('wo-pause-modal');
-  if(m) m.style.display='none';
+  _feuilleFermer('wo-pause-modal');
   if(!await rcConfirm('Annuler la séance ? Aucune donnée ne sera enregistrée.',null,'Annuler la séance')) return;
   localStorage.removeItem('rc_wo_state');
   // `false` : la séance vient d’être effacée, la réécrire la ferait revenir.
@@ -22585,10 +22805,14 @@ function rcConfirm(titre,texte,libelleOk,libelleNon){
   t.textContent=titre; x.textContent=texte||'';
   ok.textContent=libelleOk||'Confirmer';
   non.textContent=libelleNon||'Annuler';
-  z.style.display='flex';
+  _feuilleOuvrir('rc-confirm');
   return new Promise(res=>{
-    const fermer=v=>{ z.style.display='none';
-      ok.onclick=null; non.onclick=null; z.onclick=null; res(v); };
+    // REGLE 7 : on resout D'ABORD, on anime ensuite. Quarante-neuf messages
+    // portent des consequences de sante ou juridiques — aucune decision ne
+    // doit attendre 140 ms de plus.
+    const fermer=v=>{
+      ok.onclick=null; non.onclick=null; z.onclick=null; res(v);
+      _feuilleFermer('rc-confirm'); };
     ok.onclick=()=>fermer(true);
     non.onclick=()=>fermer(false);
     // Toucher le voile ANNULE : sur un geste irreversible, le toucher flou
@@ -22624,10 +22848,13 @@ function rcAlerte(titre,libelleOk){
 // Vidée dès qu’elle a servi : une seconde fermeture ne doit pas résoudre une
 // promesse qui n’existe plus.
 let _rcSaisieFermer=null;
-function rcSaisieFermer(){
+function rcSaisieFermer(instantane){
   const f=_rcSaisieFermer;
   _rcSaisieFermer=null;
   if(typeof f==='function') try{ f(); }catch(e){}
+  // go() ferme SANS ANIMATION : une feuille qui sortirait en fondu par-dessus
+  // le nouvel ecran serait pire que le clignotement d'avant.
+  if(instantane) try{ _feuilleFermer('rc-saisie',true); }catch(e){}
 }
 function rcSaisie(titre,valeur,opts){
   const z=document.getElementById('rc-saisie');
@@ -22652,12 +22879,14 @@ function rcSaisie(titre,valeur,opts){
   c.value=valeur==null?'':String(valeur);
   ok.textContent=o.libelleOk||'Valider';
   non.textContent=o.libelleNon||'Annuler';
-  z.style.display='flex';
+  _feuilleOuvrir('rc-saisie');
   setTimeout(()=>{ try{ c.focus(); c.select(); }catch(e){} },50);
   return new Promise(res=>{
-    const fermer=v=>{ z.style.display='none';
+    // Meme regle qu'au-dessus : la promesse part avant l'animation.
+    const fermer=v=>{
       _rcSaisieFermer=null;
-      ok.onclick=null; non.onclick=null; z.onclick=null; c.onkeydown=null; res(v); };
+      ok.onclick=null; non.onclick=null; z.onclick=null; c.onkeydown=null; res(v);
+      _feuilleFermer('rc-saisie'); };
     // La poignée que go() et rcSaisieFermer utilisent : une annulation.
     _rcSaisieFermer=()=>fermer(null);
     ok.onclick=()=>fermer(c.value);
@@ -37618,7 +37847,9 @@ function onPlanSearch(val){
   const q=(val||'').trim();
   if(q.length<2){ el.innerHTML=''; return; }
   if(!_ciqualDB){
-    el.innerHTML='<div style="padding:20px;text-align:center;color:var(--sub);font-size:var(--fs-sm)">Chargement de la table Ciqual…</div>';
+    // MEME TABLE, MEME LISTE DE RESULTATS que le journal alimentaire : le
+    // gabarit de silhouettes est repris a l'identique.
+    el.innerHTML='<div class="fj-result" style="pointer-events:none"><div class="skeleton fx-loop" style="height:13px;width:62%;margin-bottom:8px"></div><div class="skeleton fx-loop" style="height:10px;width:35%"></div></div><div class="fj-result" style="pointer-events:none"><div class="skeleton fx-loop" style="height:13px;width:78%;margin-bottom:8px"></div><div class="skeleton fx-loop" style="height:10px;width:45%"></div></div><div class="fj-result" style="pointer-events:none"><div class="skeleton fx-loop" style="height:13px;width:54%;margin-bottom:8px"></div><div class="skeleton fx-loop" style="height:10px;width:30%"></div></div>';
     _loadCiqual().then(()=>onPlanSearch(val));
     return;
   }
@@ -38665,7 +38896,8 @@ const _dejaAnime=new Set();
 function _animEntree(cle){
   if(_dejaAnime.has(cle)) return '';
   _dejaAnime.add(cle);
-  return 'animation:fadeInUp var(--t-3) var(--c-out);';
+  // MEME CONTRAT QUE .casc : un seul geste, une seule grammaire.
+  return 'animation:fadeInUp var(--casc-duree) var(--arc-c-discharge) both;';
 }
 // Les ecrans du module. Revenir depuis l accueil vide le jeu et rejoue
 // l entree une fois ; naviguer DANS le module ne la rejoue pas.
@@ -51509,6 +51741,34 @@ document.addEventListener('keydown',e=>{
   e.preventDefault();
   try{ closeModal(); }catch(x){ ov.remove(); }
 });
+// LA FERMETURE DES TROIS CALQUES STATIQUES. Meme discipline que closeModal :
+// pointer-events coupes tout de suite, le noeud reste 140 ms, puis display:none.
+// `tout_de_suite` sert a go() : une feuille qui sortirait en fondu par-dessus
+// le nouvel ecran serait pire que le clignotement d'avant.
+function _feuilleFermer(id,tout_de_suite){
+  const z=document.getElementById(id);
+  if(!z||z.style.display!=='flex') return;
+  z.classList.remove('arc-entree');
+  if(tout_de_suite||arcReduit()||!z.animate){
+    z.classList.remove('arc-sortie'); delete z.dataset.sortie;
+    z.style.display='none'; return;
+  }
+  z.dataset.sortie='1';
+  z.classList.add('arc-sortie');
+  setTimeout(()=>{
+    try{ z.classList.remove('arc-sortie'); delete z.dataset.sortie; z.style.display='none'; }catch(e){}
+  },ARC.strike);
+}
+// L'ouverture, en pendant : une animation CSS repart d'elle-meme quand un
+// element passe de display:none a affiche, il n'y a rien a relancer.
+function _feuilleOuvrir(id){
+  const z=document.getElementById(id);
+  if(!z) return null;
+  z.classList.remove('arc-sortie'); delete z.dataset.sortie;
+  z.style.display='flex';
+  z.classList.add('arc-entree');
+  return z;
+}
 function closeModal(){
   if(typeof _audioMediaRecorder!=='undefined'&&_audioMediaRecorder&&_audioMediaRecorder.state==='recording') cancelAudioAnnotation();
   const o=document.getElementById('modal-overlay');
@@ -51730,7 +51990,7 @@ async function loadMetrics(){
   _renderCapacite();
   const corps=document.getElementById('mt-corps');
   if(!corps) return;
-  corps.innerHTML='<div class="sub" style="font-size:var(--fs-sm)">Chargement…</div>';
+  corps.innerHTML='<div class="skeleton fx-loop" style="height:120px;border-radius:var(--r-2)"></div>';
   const tok=await CLOUD._getToken().catch(()=>null);
   // 7 jours glissants, aujourd'hui inclus.
   const jours=[];
