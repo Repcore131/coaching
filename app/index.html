@@ -21537,7 +21537,13 @@ function loadClientHome(){
   // Le compteur de l'en-tete subsiste, reduit. La case « Semaines » a quitte
   // les metriques : elle reste consultable dans l'onglet Perfs.
   const _sv=document.getElementById('clh-streak-val');
-  if(_sv) _sv.textContent=s;
+  if(_sv){
+    const _av=parseFloat(String(_sv.textContent||'').replace(/[^\d.-]/g,''));
+    if(isFinite(_av)&&_av!==s){
+      _sv.style.fontVariantNumeric='tabular-nums';
+      arcChiffre(_sv,_av,s,{duree:ARC.release});
+    } else _sv.textContent=s;
+  }
   document.getElementById('clh-greeting').textContent=salutation()+' '+u.fname+'.';
   const _dStr=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
   document.getElementById('clh-date').textContent=_dStr.charAt(0).toUpperCase()+_dStr.slice(1);
@@ -21840,6 +21846,22 @@ function getProgram(){
 //
 // Elle traite aussi [data-arc-off] tout court, pour les arcs qui n ont pas la
 // classe .rc-anneau — l anneau de cafeine, notamment.
+// LA MARQUE DE FRANCHISSEMENT. Elle tombe A LA FIN de la course de l'arc, pas
+// a son depart — sinon on celebre avant d'etre arrive. L'element anime doit
+// etre le <svg> conteneur et jamais le <circle> : un transform sur un <circle>
+// SVG s'applique dans le repere du viewBox et ferait deriver l'anneau hors de
+// son centre.
+function _arcPalierAtteint(el){
+  if(!el||!el.animate||arcReduit()) return null;
+  // Le noeud a pu quitter le document avant l'echeance du setTimeout.
+  if(el.isConnected===false) return null;
+  try{ el.style.transformBox='fill-box'; el.style.transformOrigin='center'; }catch(e){}
+  const a=_animer(el,
+    [{transform:'scale(1)'},{transform:'scale(1.10)',offset:.42},{transform:'scale(1)'}],
+    {duration:260,easing:'cubic-bezier(.2,1.5,.4,1)',fill:'none'});
+  try{ arcHaptique('legere'); }catch(e){}
+  return a;
+}
 function _animerJauges(root){
   if(!root) return;
   const red=arcReduit();
@@ -21856,6 +21878,34 @@ function _animerJauges(root){
     });
     root.querySelectorAll('.rc-barre').forEach(b=>{
       if(b.dataset.barW!=null) b.style.width=b.dataset.barW+'%';
+    });
+    // LES BARRES VERTICALES. Meme motif que .rc-barre, sur la hauteur : le
+    // gabarit les rend a 4 px et la valeur est posee ici, une frame plus tard.
+    // Le decalage est plafonne a six colonnes : la derniere finit a 690 ms.
+    root.querySelectorAll('.rc-barre-v').forEach((b,i)=>{
+      if(b.dataset.barH==null) return;
+      if(!b.style.getPropertyValue('--rcb-d')) b.style.setProperty('--rcb-d',Math.min(i,6)*45+'ms');
+      b.style.height=b.dataset.barH+'%';
+    });
+    // LES CHIFFRES MONTENT. arcChiffre respecte deja arcReduit() — elle pose
+    // alors la valeur d'arrivee — et annule une interpolation en cours sur le
+    // meme element via sa WeakMap : un second rendu pendant l'animation ne
+    // produit pas deux boucles concurrentes.
+    root.querySelectorAll('[data-num]').forEach(e=>{
+      const v=parseFloat(e.dataset.num);
+      if(!isFinite(v)) return;
+      const d=parseFloat(e.dataset.numDuree);
+      arcChiffre(e,0,v,{duree:isFinite(d)?d:ARC.afterglow,format:x=>String(Math.round(x))});
+    });
+    // LE FRANCHISSEMENT, temporise sur l'arrivee de l'arc. 620 ms est la duree
+    // de la transition stroke-dashoffset des anneaux de macros ; 320 ms celle
+    // du cadran de cafeine. Les anneaux qui passent 100 % le meme jour sont
+    // decales de 90 ms : trois impulsions simultanees ne designeraient rien.
+    root.querySelectorAll('svg[data-atteint="1"]').forEach((s,i)=>{
+      setTimeout(()=>_arcPalierAtteint(s),ARC.afterglow+i*90);
+    });
+    root.querySelectorAll('svg[data-palier-neuf="1"]').forEach(s=>{
+      setTimeout(()=>_arcPalierAtteint(s),320);
     });
   };
   if(red) pose();
@@ -21936,7 +21986,12 @@ function renderNutriDots(){
     _htmlLigneDots(weekKeys.map(k=>nut.days?.[k]?.respected),28,days);
   const score=weekKeys.filter(k=>nut.days?.[k]?.respected===true).length;
   const scoreEl=document.getElementById('clh-nutri-score');
-  scoreEl.textContent=score+'/7';
+  // Meme regle que les trois metriques : on ne compte que si la valeur a change.
+  const _avS=parseFloat(String(scoreEl.textContent||'').replace(/[^\d.-]/g,''));
+  if(isFinite(_avS)&&_avS!==score){
+    scoreEl.style.fontVariantNumeric='tabular-nums';
+    arcChiffre(scoreEl,_avS,score,{duree:ARC.release,format:v=>Math.round(v)+'/7'});
+  } else scoreEl.textContent=score+'/7';
   // LE VERT, PAS LE JAUNE DES GLUCIDES. Un score de 5/7 peint dans la couleur
   // exacte de l anneau glucides se lit comme une macro, pas comme un compte de
   // jours tenus. Le vert est la couleur de ce qui est fait, partout ailleurs.
@@ -25681,13 +25736,28 @@ function _tauxDieteRespectee(u){
   return {pct:Math.round(tenus*100/juges), tenus:tenus, juges:juges, flexible:flexible};
 }
 function _majMetriquesAccueil(u){
+  // LA MONTEE EST CONDITIONNELLE, et la condition est le coeur du correctif :
+  // l'accueil est quotidien, la regle de frequence interdit d'y rejouer une
+  // animation a chaque retour dans la meme session. On lit l'ancien texte du
+  // noeud avant de l'ecraser — aucun etat a conserver — et on ne compte que si
+  // la valeur a change. Un premier affichage (texte initial « — », donc av non
+  // fini) pose la valeur directement plutot que de compter depuis zero a
+  // chaque lancement de l'application.
   const met=(id,val,sub)=>{
     const a=document.getElementById(id), b=document.getElementById(id+'-sub');
-    if(a) a.textContent=val;
-    // Le drapeau suit la VALEUR AFFICHEE, pas le calcul : « — » et « 0 » sont
-    // les deux facons dont cette app dit « rien ». closest() remonte au
-    // conteneur, qui porte le style.
-    if(a) a.closest('.metric-box')?.toggleAttribute('data-vide', val==='—'||val==='0');
+    if(a){
+      const av=parseFloat(String(a.textContent||'').replace(/[^\d.-]/g,''));
+      const ap=parseFloat(String(val).replace(/[^\d.-]/g,''));
+      const suf=/%/.test(String(val))?' %':'';
+      if(isFinite(av)&&isFinite(ap)&&av!==ap){
+        a.style.fontVariantNumeric='tabular-nums';
+        arcChiffre(a,av,ap,{duree:ARC.release,format:v=>Math.round(v)+suf});
+      } else a.textContent=val;
+      // Le drapeau suit la VALEUR AFFICHEE, pas le calcul : « — » et « 0 » sont
+      // les deux facons dont cette app dit « rien ». closest() remonte au
+      // conteneur, qui porte le style.
+      a.closest('.metric-box')?.toggleAttribute('data-vide', val==='—'||val==='0');
+    }
     if(b) b.textContent=sub||'';
   };
   const ss=((u&&u.sessions)||[]).filter(s=>s&&s.date);
@@ -29502,7 +29572,31 @@ function mensurationsReprises(u){
 // Toucher une case la rend à son auteur : le pointillé tombe, sinon il
 // désignerait une saisie fraîche comme une valeur reprise.
 function bMesureSaisie(id,v){
+  const _avantVide=!String(bilData[id]||'').trim();
   bilData[id]=v;
+  // LE POINT S'ALLUME quand la case passe de vide a renseignee. 200 ms : c'est
+  // un geste repete douze fois, il doit etre presque subliminal et ne jamais
+  // retarder la frappe suivante.
+  if(_avantVide&&String(v||'').trim()&&!arcReduit()){
+    const d=document.getElementById('dot-'+id);
+    if(d&&d.animate) _animer(d,
+      [{transform:'scale(1)'},{transform:'scale(1.9)',offset:.4},{transform:'scale(1)'}],
+      {duration:200,easing:ARC.discharge,fill:'none'});
+    // LA DOUZIEME CASE. Une seule fois : le drapeau est remis a zero a l'entree
+    // dans l'etape, par bBodySchema.
+    try{
+      if(!_bschComplet){
+        const dots=document.querySelectorAll('.bsch svg circle[id^="dot-"]');
+        const total=dots.length;
+        let n=0;
+        dots.forEach(c=>{ const k=c.id.slice(4); if(String(bilData[k]||'').trim()) n++; });
+        if(total&&n>=total){
+          _bschComplet=true;
+          arcTraversee(document.querySelector('.bsch'),{duree:ARC.release});
+        }
+      }
+    }catch(e){}
+  }
   if(_bilReprises&&_bilReprises.has(id)){
     _bilReprises.delete(id);
     // DEUX FORMES DE CASE, ET UNE SEULE PORTE LA BORDURE.
@@ -29819,8 +29913,13 @@ function renderBilStep(){
   document.getElementById('bil-next-btn').textContent=bilStep===total-1?'Valider ':'Suivant →';
   document.getElementById('bil-back-btn').style.visibility='visible';
   // Le cadre de disponibilite se lit AVANT d ecrire, pas apres l envoi.
-  document.getElementById('bil-content').innerHTML='<div class="pad">'
+  const _bilZone=document.getElementById('bil-content');
+  _bilZone.innerHTML='<div class="pad">'
     +htmlBandeauDispo()+steps[bilStep]()+'</div>';
+  // Les deux etapes qui portent un schema corporel — le bilan de depart et le
+  // bilan de suivi — le recoivent ici, une seule fois chacune : le WeakSet
+  // interne empeche le rejeu si l'etape est re-rendue sans etre quittee.
+  try{ requestAnimationFrame(()=>arcTracerSchema(_bilZone)); }catch(e){}
   const skipBtn=document.getElementById('bil-skip-depart');
   if(skipBtn) skipBtn.style.display=(bilType==='depart'&&!currentUser?.bilans?.some(b=>b.type==='depart'))?'block':'none';
   _bilBrancherAutoSave();
@@ -30096,7 +30195,33 @@ const BSCH_F={
   box:{chest:160,'bicep-r':198,waist:236,glutes:274,'thigh-r':320,'calf-r':404,neck:121,bust:153,'bicep-l':211,hips:253,'thigh-l':326,'calf-l':404},
   detail:''
 };
+// LES DOUZE AMORCES SE TIRENT DU CORPS VERS LEUR CASE. strokeDashoffset sur un
+// <path id="ln-*"> mesurable : la meme entorse deja revendiquee et bornee pour
+// svg.arc-courbe. La coupure est arcReduit(), et l'absence de getTotalLength —
+// un <path> dans un conteneur masque n'est pas encore mesurable, on ne marque
+// alors rien et le prochain affichage reessaiera.
+const _arcSchemaVus=new WeakSet();
+function arcTracerSchema(root){
+  if(!root||arcReduit()) return;
+  root.querySelectorAll('svg.arc-schema path[id^="ln-"]').forEach((p,i)=>{
+    if(_arcSchemaVus.has(p)||!p.getTotalLength||!p.animate) return;
+    let L=0;
+    try{ L=p.getTotalLength(); }catch(e){ return; }
+    if(!(L>0)) return;
+    _arcSchemaVus.add(p);
+    p.style.strokeDasharray=L;
+    const a=_animer(p,[{strokeDashoffset:L},{strokeDashoffset:0}],
+      {duration:340,delay:Math.min(i,11)*35,easing:ARC.discharge,fill:'both'});
+    const net=()=>{ try{ p.style.strokeDasharray=''; }catch(e){} };
+    if(a){ a.addEventListener('finish',net); a.addEventListener('cancel',net); }
+    else net();
+  });
+}
+// Le drapeau « les douze cases viennent d'etre remplies », remis a zero a
+// l'entree dans l'etape.
+let _bschComplet=false;
 function bBodySchema(prefix){
+  _bschComplet=false;
   // Silhouette selon le genre : questionnaire de début → réponse "Tu es ?", sinon profil
   let female;
   if(prefix==='deb'&&bilData['deb-gender']) female=bilData['deb-gender']==='Femme';
@@ -30127,13 +30252,16 @@ function bBodySchema(prefix){
     const solid=Math.abs(ny-cy)<=8
       ? `M${bx},${cy} L${nx},${ny}`
       : `M${bx},${cy} L${mx},${cy} L${nx},${ny}`;
+    // Les pointilles et les points ne se TRACENT pas : ils apparaissent a leur
+    // place. Douze traits simultanes deviendraient illisibles. Seules les douze
+    // amorces se tirent du corps vers leur case.
     return `<line id="dsh-${id}" x1="${nx}" y1="${ny}" x2="${fx}" y2="${ny}" stroke="rgba(224,32,32,.5)" stroke-width="1.2" stroke-dasharray="4 3"/>`+
            `<path id="ln-${id}" d="${solid}" fill="none" stroke="#6a6a6a" stroke-width="1.4" stroke-linejoin="round"/>`+
-           `<circle id="dot-${id}" cx="${nx}" cy="${ny}" r="4" fill="#0a0a0a" stroke="#8a8a8a" stroke-width="1.7"/>`;
+           `<circle id="dot-${id}" cx="${nx}" cy="${ny}" r="4" fill="#0a0a0a" stroke="#8a8a8a" stroke-width="1.7" style="transform-box:fill-box;transform-origin:center"/>`;
   }).join('');
   return `
   <div class="bsch" style="position:relative;width:100%;max-width:420px;margin:0 auto;aspect-ratio:${W}/${VH};max-height:58vh">
-    <svg viewBox="0 ${Y0} ${W} ${VH}" style="position:absolute;inset:0;width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
+    <svg class="arc-schema" viewBox="0 ${Y0} ${W} ${VH}" style="position:absolute;inset:0;width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
       <defs>
         <linearGradient id="bodyGrad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stop-color="var(--border)"/>
@@ -33069,7 +33197,7 @@ function _volBarre(m,n,rep,aberrant,user){
   // et au-dessous, le trait de MRV traverse le tout.
   return `<div style="position:relative;height:16px;border-radius:var(--r-2);overflow:hidden;background:var(--surface-2);${aberrant?'outline:1.5px solid var(--orange);outline-offset:1px':''}">
       ${fond}
-      <div style="position:absolute;left:0;top:5px;height:6px;width:${pc(n)}%;background:${couleur};border-radius:var(--r-1);box-shadow:0 0 0 1px rgba(0,0,0,.45)"></div>
+      <div class="rc-barre" data-bar-w="${pc(n).toFixed(1)}" style="position:absolute;left:0;top:5px;height:6px;width:0;background:${couleur};border-radius:var(--r-1);box-shadow:0 0 0 1px rgba(0,0,0,.45);transition:width 480ms var(--c-out) var(--rcv-d,0ms)"></div>
       ${rep?`<div style="position:absolute;left:${pc(rep.mrv)}%;top:0;bottom:0;width:1.5px;background:#fff;opacity:.6"></div>`:''}
     </div>`;
 }
@@ -33172,6 +33300,26 @@ function renderVolume(){
   document.getElementById('progress-content').innerHTML=
     nav+alertes+corps+zero+axial+_htmlTonnage(u,_volDecalage)+_htmlRecords(u)
     +_htmlHydratation(u,nutIsOnDay(localISODate(new Date())))+conv+bandeau;
+  // LE REMPLISSAGE SEUL BOUGE : le fond zone, le trait de MRV et le contour des
+  // valeurs aberrantes sont des REPERES, pas des mesures, et restent poses a
+  // leur place. La cascade est plafonnee a huit lignes — au-dela, elle devient
+  // une attente.
+  try{
+    const _pc=document.getElementById('progress-content');
+    if(_pc){
+      _pc.querySelectorAll('.rc-barre').forEach((b,i)=>b.style.setProperty('--rcv-d',Math.min(i,8)*40+'ms'));
+      // Huit colonnes de tonnage au maximum : 385 ms de cascade, aucun plafond
+      // necessaire. Nom de variable distinct de celui des barres de semaine.
+      _pc.querySelectorAll('.rc-barre-v').forEach((b,i)=>b.style.setProperty('--rcb-d',i*55+'ms'));
+      _animerJauges(_pc);
+      // _fmtKg garde le separateur de milliers et l'unite du rendu actuel.
+      if(document.getElementById('rc-tonnage-num'))
+        arcChiffre('rc-tonnage-num',0,tonnageSemaine(u,_volDecalage).kg,{duree:900,format:v=>_fmtKg(v)});
+      // Prop 38 : renderVolume ecrit #progress-content sans passer par
+      // showProgressTab — sans ce rappel, ses courbes ne se traceraient jamais.
+      requestAnimationFrame(()=>arcTracerCourbes(_pc));
+    }
+  }catch(e){}
 }
 // Familles reellement pratiquees sur la fenetre affichee : on ne parle de
 // convention que si elle s'applique a quelque chose.
@@ -33379,13 +33527,13 @@ function _htmlTonnage(user,decalage){
     return `<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%" title="${x.vide?'aucune séance':_fmtKg(x.kg)}">`
       +(x.vide
         ?`<div style="height:3px;background:repeating-linear-gradient(90deg,var(--border),var(--border) 3px,transparent 3px,transparent 6px);border-radius:var(--r-1)"></div>`
-        :`<div style="height:${h}%;min-height:4px;background:linear-gradient(180deg,var(--red),#7a0000);border-radius:var(--r-1) var(--r-1) 0 0"></div>`)
+        :`<div class="rc-barre-v" data-bar-h="${h}" style="height:0;min-height:4px;background:linear-gradient(180deg,var(--red),#7a0000);border-radius:var(--r-1) var(--r-1) 0 0;transition:height 420ms var(--c-out) var(--rcb-d,0ms)"></div>`)
       +`</div>`;}).join('');
   if(!hist.some(x=>!x.vide)) return '';
   return `<div style="margin-top:14px;background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-3);padding:13px">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Tonnage</span>
-      <span style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${t.nSeances?_fmtKg(t.kg):'—'}<span style="font-size:var(--fs-2xs);color:var(--sub);font-weight:600">${t.nSeances?' · '+t.nSeances+' séance'+(t.nSeances>1?'s':''):' aucune séance'}</span></span>
+      <span style="font-size:var(--fs-sm);font-weight:800;color:var(--text)">${t.nSeances?`<span id="rc-tonnage-num" style="font-variant-numeric:tabular-nums">${_fmtKg(t.kg)}</span>`:'—'}<span style="font-size:var(--fs-2xs);color:var(--sub);font-weight:600">${t.nSeances?' · '+t.nSeances+' séance'+(t.nSeances>1?'s':''):' aucune séance'}</span></span>
     </div>
     <div style="display:flex;align-items:flex-end;gap:3px;height:54px;margin-bottom:6px">${barres}</div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.5">${escapeHtml(TONNAGE_AVERTISSEMENT)}</div>
@@ -34357,6 +34505,15 @@ function showProgressTab(tab,btn){
     // et l'athlète était donc le seul à pouvoir lire ses propres réponses.
     c.innerHTML=renderReponsesBilans(bl);
   }
+  // arcTracerCourbes n'etait declenchee que par go() : la premiere arrivee sur
+  // Evolution tracait bien la courbe, mais un aller-retour vers Mensurations
+  // reconstruisait un <path> neuf que plus rien n'atteignait. Le WeakSet
+  // empeche deja tout rejeu sur un element deja trace ; les branches vides
+  // sortent plus haut, et c'est voulu — il n'y a alors aucune courbe a tracer.
+  try{
+    const _pc=document.getElementById('progress-content');
+    if(_pc) requestAnimationFrame(()=>arcTracerCourbes(_pc));
+  }catch(e){}
 }
 
 // LA FRESQUE DOIT TENIR DANS UN ÉCRAN : elle est faite pour être capturée et
@@ -36452,8 +36609,11 @@ function htmlAnneauxMacros(tot,m,marge,unite,poidsRef){
     // plafonné à 100 % par Math.min : à lui seul, il ne peut pas distinguer
     // « pile atteint » de « largement dépassé ».
     const trop=cible!=null&&val>tgt*1.1;
+    // data-atteint : la macro est tenue. _animerJauges declenche l'impulsion a
+    // la FIN de la course de l'arc — 620 ms, la duree de la transition
+    // stroke-dashoffset ci-dessous — et jamais a son depart.
     return `<div style="flex:1;text-align:center">
-      <svg width="88" height="88" viewBox="0 0 88 88">
+      <svg width="88" height="88" viewBox="0 0 88 88" data-atteint="${pct>=1?'1':'0'}">
         <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="var(--border)" stroke-width="${sw}"/>
         <!-- LE TOUR ENTIER EST TRACE, et masque par son propre decalage. Un
              stroke-dasharray anime ne peut pas s interpoler proprement ; un
@@ -36470,6 +36630,8 @@ function htmlAnneauxMacros(tot,m,marge,unite,poidsRef){
              que le navigateur fabrique en epaississant le trace. -->
         <text x="${cx}" y="${cy-4}" dominant-baseline="middle" text-anchor="middle"
           font-family="'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif" font-size="26" font-weight="400" letter-spacing="0.5"
+          style="font-variant-numeric:tabular-nums"
+          ${_cv?'':`data-num="${fait}"`}
           fill="${trop?'var(--orange)':'var(--text)'}">${_cv?_cv.fait.texte:fait}</text>
         <text x="${cx}" y="${cy+13}" dominant-baseline="middle" text-anchor="middle"
           font-family="Montserrat,sans-serif" font-size="12" fill="#8a8a8a">${_cv?(_cv.cible?'/ '+_cv.cible.texte:''):_fragmentSiValeur('/ ',cible,' g')}</text>
@@ -36490,7 +36652,7 @@ function htmlLigneCalories(tot,m){
   const pct=m.kcal?Math.min((tot.kcal||0)/m.kcal,1):0;
   return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700">Calories</span>
-      <span style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text)">${Math.round(tot.kcal||0)}<span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400">${m.kcal?' / '+m.kcal+' kcal':' kcal'}</span></span>
+      <span style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text)"><span id="rcmac-kcal" data-num="${Math.round(tot.kcal||0)}" style="font-variant-numeric:tabular-nums">${Math.round(tot.kcal||0)}</span><span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400">${m.kcal?' / '+m.kcal+' kcal':' kcal'}</span></span>
     </div>
     <div style="height:10px;background:var(--surface-2);border-radius:var(--r-1);overflow:visible">
       <div class="rc-barre" data-bar-w="${(pct*100).toFixed(1)}" style="height:100%;width:0;background:linear-gradient(90deg,var(--red),#ff4444);border-radius:var(--r-1);transition:width var(--t-3) var(--c-out);box-shadow:0 0 12px rgba(224,32,32,.5)"></div>
@@ -44896,6 +45058,10 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
   // dernier palier, pas var(--red).
   const _colDepart=(_caffPalierPrec!=null&&_caffPalierPrec.p!==_palier)
     ?_caffPalierPrec.c:color;
+  // LE FRANCHISSEMENT, et non le simple etat : la couleur glissait deja sur
+  // 320 ms, mais rien ne MARQUAIT l'instant. L'athlete qui depasse sa limite le
+  // lisait, il ne le sentait pas.
+  const _palierNeuf=(_caffPalierPrec!=null&&_caffPalierPrec.p!==_palier);
   _caffPalierPrec={p:_palier,c:color};
   const wEstHtml=wEst?'<span style="display:block;margin-top:4px;color:var(--warning);font-size:var(--fs-xs)">⚖️ Poids estimé ('+CAFFEINE_POIDS_DEFAUT+' kg) : renseigne ton poids réel pour des seuils précis</span>':'';
   // La legende NOMME la regle appliquee, juste sous la jauge. Un mineur doit
@@ -44975,7 +45141,7 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
       </svg>
     <div style="display:flex;align-items:center;gap:16px">
       <div style="position:relative;width:130px;height:130px;flex-shrink:0">
-        <svg viewBox="0 0 130 130" width="130" height="130" style="display:block;overflow:visible;filter:drop-shadow(0 0 5px ${color}) drop-shadow(0 0 14px ${color}88);transition:filter var(--t-3) var(--c-out)">
+        <svg viewBox="0 0 130 130" width="130" height="130" data-palier-neuf="${_palierNeuf?'1':'0'}" style="display:block;overflow:visible;filter:drop-shadow(0 0 5px ${color}) drop-shadow(0 0 14px ${color}88);transition:filter var(--t-3) var(--c-out)">
           <!-- 1. La couronne de graduations. 60 traits, un sur cinq plus long :
                c est ce qui donne l echelle d un instrument plutot qu un cercle. -->
           <g data-caff-col="${color}" style="stroke:${_colDepart};transition:stroke var(--t-3) var(--c-out)" stroke-linecap="butt">
@@ -44999,7 +45165,7 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
         </svg>
         <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;padding:0 11px;box-sizing:border-box">
           <div style="display:flex;align-items:baseline;justify-content:center;gap:1px;max-width:100%">
-            <span class="txt-hero" data-caff-col="${color}" style="color:${_colDepart};font-size:${_tailleChiffres}px;line-height:1;--halo-c:${color};text-shadow:var(--halo-2)66;transition:color var(--t-3) var(--c-out),text-shadow var(--t-3) var(--c-out)">${totalMg}</span>
+            <span id="caff-total-num" class="txt-hero" data-caff-col="${color}" data-num="${totalMg}" style="color:${_colDepart};font-size:${_tailleChiffres}px;line-height:1;--halo-c:${color};text-shadow:var(--halo-2)66;font-variant-numeric:tabular-nums;transition:color var(--t-3) var(--c-out),text-shadow var(--t-3) var(--c-out)">${totalMg}</span>
             <span style="color:${color};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:1px;line-height:1;text-transform:uppercase">mg</span>
           </div>
         </div>
@@ -45106,8 +45272,10 @@ function loadCaffeineEmbedded(dateAff){
 // Deux aiguilleurs, pour que _bandeauJour garde son contrat : elle appelle
 // handler(valeur), et rien d autre. Une chaine vide ramene a aujourd hui,
 // comme sur les pas.
-function _caffAllerJour(v){ _caffeineViewDate=v||null; _renderCaffeineScreen(); }
-function _caffEmbedAllerJour(v){ _caffeineEmbedDate=v||null; _renderCaffeineEmbedded(); }
+// Changer de jour n'est PAS un franchissement de palier : sans cette remise
+// a zero, l'app marquerait un evenement qui n'a pas eu lieu.
+function _caffAllerJour(v){ _caffeineViewDate=v||null; _caffPalierPrec=null; _renderCaffeineScreen(); }
+function _caffEmbedAllerJour(v){ _caffeineEmbedDate=v||null; _caffPalierPrec=null; _renderCaffeineEmbedded(); }
 function _renderCaffeineEmbedded(){
   const el=document.getElementById('caff-embedded');
   if(!el) return;
@@ -46841,8 +47009,13 @@ function _stepsObjectifJour(goals,type,date){
 // LE LISERE HAUT REMPLACE UN GLOW MORT. Les deux ecrans calculaient une
 // variable de lueur pour le jour courant sans jamais l employer : ce jour
 // n etait donc signale nulle part. C est ce que ce calcul essayait de dire.
+// LA BARRE NAIT A 4 px ET MONTE. Elle etait rendue a sa hauteur finale avec
+// une transition a cote : une transition CSS n'interpole qu'entre deux valeurs
+// dont la premiere a ete peinte, celle-ci n'a donc jamais joue une seule fois.
+// _animerJauges pose la hauteur au second requestAnimationFrame. Le gabarit est
+// PARTAGE par les pas et le sommeil : une fonction modifiee, deux ecrans.
 function _htmlBarreSemaine(pct,col,isToday,accentBas){
-  return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%"><div style="width:82%;height:${pct}%;background:linear-gradient(180deg,${col},${col}55);border-radius:var(--r-1) var(--r-1) 0 0;min-height:4px;box-shadow:0 0 ${isToday?'14':'8'}px ${col}${isToday?'aa':'55'},inset 0 1px 0 rgba(255,255,255,.25);transition:var(--t-3);${isToday?'border-top:2px solid #fff;':''}${accentBas?'border-bottom:2px solid '+accentBas+';':''}"></div></div>`;
+  return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%"><div class="rc-barre-v" data-bar-h="${pct}" style="width:82%;height:4px;background:linear-gradient(180deg,${col},${col}55);border-radius:var(--r-1) var(--r-1) 0 0;min-height:4px;box-shadow:0 0 ${isToday?'14':'8'}px ${col}${isToday?'aa':'55'},inset 0 1px 0 rgba(255,255,255,.25);transition:height 420ms var(--c-out) var(--rcb-d,0ms);${isToday?'border-top:2px solid #fff;':''}${accentBas?'border-bottom:2px solid '+accentBas+';':''}"></div></div>`;
 }
 function loadSteps(containerId='steps-content'){
   if(containerId==='steps-content') go('s-steps');
@@ -46934,10 +47107,10 @@ function loadSteps(containerId='steps-content'){
   const todayProgressHtml=todayGoal&&todayCount?`<div style="margin-top:12px">
     <div style="display:flex;justify-content:space-between;font-size:var(--fs-xs);margin-bottom:4px">
       <span style="color:var(--sub)">${todayCount.toLocaleString('fr-FR')} / ${todayGoal.toLocaleString('fr-FR')} pas</span>
-      <span style="color:${stepColor(todayCount,todayType,selStr)};font-weight:800">${todayPct}%</span>
+      <span id="steps-pct-jour" style="color:${stepColor(todayCount,todayType,selStr)};font-weight:800;font-variant-numeric:tabular-nums">${todayPct}%</span>
     </div>
     <div style="height:6px;background:var(--surface-2);border-radius:var(--r-1);overflow:hidden">
-      <div style="height:100%;width:${todayPct}%;background:${stepColor(todayCount,todayType,selStr)};border-radius:var(--r-1);transition:var(--t-3)"></div>
+      <div class="rc-barre" data-bar-w="${todayPct}" style="height:100%;width:0;background:${stepColor(todayCount,todayType,selStr)};border-radius:var(--r-1);transition:width 520ms var(--c-out)"></div>
     </div>
   </div>`:'';
   // AFFICHÉ DÈS QU’UN OBJECTIF EXISTE, déclaré ou déduit — et non plus
@@ -47022,6 +47195,16 @@ function loadSteps(containerId='steps-content'){
     ${histHtml}
     ${_htmlCadreImportCapture()}
   `;
+  // Les barres et le pourcentage du jour ne bougent que si quelqu'un leur donne
+  // leur cible AU TOUR SUIVANT : c'est tout l'objet de _animerJauges.
+  try{
+    const _z=document.getElementById(containerId);
+    if(_z){
+      _animerJauges(_z);
+      if(todayGoal&&todayCount)
+        arcChiffre('steps-pct-jour',0,todayPct,{duree:520,format:v=>Math.round(v)+'%'});
+    }
+  }catch(e){}
 }
 // ── Journal de pas : point d'écriture unique ────────────────────────────────
 // Deux écrans y déposent la même donnée — la saisie Lifestyle et le champ de
@@ -50532,6 +50715,11 @@ function loadSleep(containerId='sleep-content',user){
     ${histHtml}
     ${_htmlCadreImportCapture()}
   `;
+  // Meme gabarit de barres que les pas : elles naissent a 4 px et montent.
+  try{
+    const _z=document.getElementById(containerId);
+    if(_z) _animerJauges(_z);
+  }catch(e){}
 }
 // Jumelle de _recordSteps : une date, une nuit, écrasement plutôt qu'empilement.
 // Extraite de saveSleep pour que l'import par capture n'ait pas à redire les
@@ -52230,11 +52418,11 @@ async function loadMetrics(){
     html+='<div style="margin-bottom:12px">'
       +'<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:5px">'
       +'<span style="font-size:var(--fs-sm);font-weight:700;color:'+(e.horsTunnel?'var(--orange)':'var(--text)')+'">'+escapeHtml(e.lib)+'</span>'
-      +'<span style="font-size:var(--fs-sm);color:var(--sub);white-space:nowrap"><strong style="color:var(--text);font-size:var(--fs-md)">'+n+'</strong>'
+      +'<span style="font-size:var(--fs-sm);color:var(--sub);white-space:nowrap"><strong data-num="'+n+'" data-num-duree="520" style="color:var(--text);font-size:var(--fs-md);font-variant-numeric:tabular-nums">'+n+'</strong>'
       +(taux?' <span style="color:var(--sub)">('+taux+')</span>':'')+'</span>'
       +'</div>'
       +'<div style="height:6px;background:var(--surface-2);border-radius:var(--r-1);overflow:hidden">'
-      +'<div style="height:100%;width:'+largeur+'%;background:'+(e.horsTunnel?'var(--orange)':'var(--red)')+'"></div>'
+      +'<div class="rc-barre" data-bar-w="'+largeur+'" style="height:100%;width:0;background:'+(e.horsTunnel?'var(--orange)':'var(--red)')+';transition:width 520ms var(--c-out) var(--rcf-d,0ms)"></div>'
       +'</div>'
       +(detail?'<div class="sub" style="font-size:var(--fs-2xs);margin-top:3px">'+escapeHtml(detail.slice(3))+'</div>':'')
       +'</div>';
@@ -52259,6 +52447,18 @@ async function loadMetrics(){
   corps.innerHTML=totalTout===0
     ? '<div class="sub" style="font-size:var(--fs-sm);line-height:1.6">Aucune mesure sur les 7 derniers jours.<br><br>C\'est normal tant que les règles de la base n\'ont pas été redéployées, ou tant que personne n\'a ouvert l\'application depuis la mise en ligne.</div>'
     : html+tbl;
+  // UN ENTONNOIR SE LIT DE HAUT EN BAS : chaque etage se remplit apres le
+  // precedent, c'est la forme meme de la donnee. Ecran rare, ecran
+  // administrateur, aucune action bloquee — c'est le bon endroit pour etre
+  // long. Rien n'est anime sur la sortie anticipee : elle rend un texte, pas
+  // des barres. Le tableau jour par jour reste immobile, c'est une grille de
+  // lecture, pas une mesure a ressentir.
+  if(totalTout!==0){
+    try{
+      corps.querySelectorAll('.rc-barre').forEach((b,i)=>b.style.setProperty('--rcf-d',i*70+'ms'));
+      _animerJauges(corps);
+    }catch(e){}
+  }
 }
 function coachTab(tab){
   ['dashboard','codes','monetisation','profil'].forEach(function(id){
