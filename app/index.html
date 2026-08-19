@@ -163,9 +163,18 @@ html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-h
      avec --e0..e4 et --el-1/--el-2 : c est une troisieme famille, et je le
      signale plutot que de l installer en silence. Seule --elev-2 sert
      aujourd hui, portee par .card-nut. */
-  --elev-1:0 4px 12px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.03);
-  --elev-2:0 8px 22px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.04);
-  --elev-3:0 14px 34px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.05);
+  /* ⚠ CES TROIS VALEURS ONT CHANGE. Elles avaient ete posees pour .card-nut
+     (module nutrition) ; le lot cote coach les redefinit, et .card-nut suit
+     donc automatiquement — c est le propre d un token, mais il faut le savoir.
+     --elev-3 porte en plus un halo rouge : c est l elevation des objets qui
+     APPELLENT, pas une simple ombre plus grande. */
+  --elev-0:none;
+  --elev-1:0 2px 6px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.045);
+  --elev-2:0 8px 20px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.05);
+  --elev-3:0 16px 34px rgba(0,0,0,.7),0 0 22px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.06);
+  /* ALIAS, pas des valeurs neuves : --r-3 vaut deja 12px et --r-1 vaut 4px.
+     Les redeclarer en dur donnerait deux sources pour la meme mesure. */
+  --r-card:var(--r-3);--r-pill:var(--r-1);
   --el-1:0 6px 14px rgba(0,0,0,.5);--el-2:0 14px 34px rgba(0,0,0,.6);
   /* Halos. Douze rayons distincts de 6 à 30 px pour un seul geste — faire luire
      un chiffre — ramenés à trois crans.
@@ -503,8 +512,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
     repeating-linear-gradient(-50deg,transparent,transparent 10px,rgba(255,255,255,.022) 10px,rgba(255,255,255,.022) 11px),
     linear-gradient(168deg,#1b1b1b,#121212 52%,#0b0b0b);
   border:1px solid #242424;border-left:3px solid var(--border);
-  box-shadow:var(--e3),
-    inset 0 1px 0 rgba(255,255,255,.055),inset 0 -1px 0 rgba(0,0,0,.5);
+  box-shadow:var(--elev-2);
   transition:border-color var(--t-1),box-shadow var(--t-1)}
 .pil-compteur[data-vide="1"]{box-shadow:var(--e2)}
 .pil-val{font-family:var(--pile-titre);font-size:var(--fs-2xl);line-height:1;position:relative}
@@ -517,14 +525,14 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
     repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.018) 11px,rgba(255,255,255,.018) 12px),
     linear-gradient(168deg,#181818,#101010 55%,#0a0a0a)!important;
   border:1px solid #242424!important;border-left:2px solid rgba(224,32,32,.5)!important;border-radius:var(--r-3)!important;
-  box-shadow:var(--e3)}
+  box-shadow:var(--elev-2)}
 .pil-bande>summary{color:#cfcfcf!important}
 
 /* LES DEUX LIENS DE BAS DE BARRE. */
 .pil-lien{width:100%;min-height:46px;margin-top:8px;border-radius:var(--r-3);cursor:pointer;
   font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:#b4b4b4;
   background:linear-gradient(168deg,#181818,#0e0e0e);border:1px solid var(--border);
-  box-shadow:var(--e2);transition:var(--t-1)}
+  box-shadow:var(--elev-1);transition:var(--t-1)}
 .pil-lien:hover{color:var(--text);border-color:rgba(224,32,32,.5);box-shadow:var(--e3),var(--glow-red)}
 
 /* LA RECHERCHE. Creusée plutôt que posée : une ombre INTERNE dit « on écrit
@@ -539,16 +547,20 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
   background:
     repeating-linear-gradient(-50deg,transparent,transparent 12px,rgba(255,255,255,.020) 12px,rgba(255,255,255,.020) 13px),
     linear-gradient(168deg,#1a1a1a,#111 52%,#0b0b0b);
-  border:1px solid #242424;border-left:3px solid var(--red);border-radius:var(--r-1) var(--r-3) var(--r-3) var(--r-1);
+  border:1px solid #242424;border-left:3px solid var(--red);border-radius:2px var(--r-card) var(--r-card) 2px;
   padding:13px 14px;margin-bottom:9px;
-  box-shadow:var(--e3),
-    inset 0 1px 0 rgba(255,255,255,.05),inset 0 -1px 0 rgba(0,0,0,.5)}
-#ch-clients-list .client-row[data-etat='alerte']{border-left-color:#E02020;box-shadow:var(--e3),var(--glow-red)}
-#ch-clients-list .client-row[data-etat='bilan']{border-left-color:#f97316;box-shadow:var(--e3),-3px 0 16px rgba(249,115,22,.28)}
-#ch-clients-list .client-row[data-etat='actif']{border-left-color:#22c55e}
-#ch-clients-list .client-row[data-etat='attente']{border-left-color:#f97316;box-shadow:var(--e3),-3px 0 16px rgba(249,115,22,.24)}
-#ch-clients-list .client-row[data-etat='lecture']{border-left-color:#6a6a6a;opacity:.88}
-#ch-clients-list .client-row[data-etat='dormant']{border-left-color:var(--border);opacity:.82}
+  box-shadow:var(--elev-1)}
+#ch-clients-list .client-row[data-etat='alerte']{border-left:5px solid #E02020;box-shadow:var(--elev-1),-3px 0 16px rgba(224,32,32,.3)}
+#ch-clients-list .client-row[data-etat='bilan']{border-left:5px solid #f97316;box-shadow:var(--elev-1),-3px 0 16px rgba(249,115,22,.28)}
+/* LE POINTILLE DIT L ATTENTE. Une bordure pleine orange se confond avec le
+   bilan a lire ; le pointille dit qu on attend quelque chose qui n est pas
+   encore la. border-image le rend, la couleur de border-left ne sert plus. */
+#ch-clients-list .client-row[data-etat='attente']{border-left:5px solid transparent;
+  border-image:repeating-linear-gradient(-45deg,#f97316 0 4px,#7c2d12 4px 8px) 5;
+  box-shadow:var(--elev-1),-3px 0 16px rgba(249,115,22,.24)}
+#ch-clients-list .client-row[data-etat='actif']{border-left:2px solid #22c55e}
+#ch-clients-list .client-row[data-etat='lecture']{border-left:2px solid #8a8a8a;opacity:.88}
+#ch-clients-list .client-row[data-etat='dormant']{border-left:2px solid #666666;opacity:.82}
 #ch-clients-list .client-row:hover{background:
     repeating-linear-gradient(-50deg,transparent,transparent 12px,rgba(255,255,255,.026) 12px,rgba(255,255,255,.026) 13px),
     linear-gradient(168deg,#242424,#161616 52%,#0d0d0d);border-color:var(--border)}
@@ -618,7 +630,7 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
   border-radius:var(--r-1);padding:16px 12px;text-align:center;flex:1;
   border:1px solid rgba(255,255,255,.08);border-left:1px solid rgba(255,255,255,.08);
   position:relative;overflow:hidden;
-  box-shadow:0 6px 14px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06)}
+  box-shadow:var(--elev-1)}
 /* Le halo du chiffre lui-meme : sans lui, le blanc reste plat sur le noir. */
 .metric-val{text-shadow:var(--halo-2)}
 .metric-box::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--red) var(--pct,0%),transparent var(--pct,0%))}
@@ -660,8 +672,7 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
     repeating-linear-gradient(-50deg,transparent,transparent 12px,rgba(255,255,255,.022) 12px,rgba(255,255,255,.022) 13px),
     linear-gradient(168deg,#1b1b1b,#111 50%,#0a0a0a);
   border:1px solid #242424;border-left:2px solid rgba(224,32,32,.55);
-  box-shadow:var(--e3),
-    inset 0 -1px 0 rgba(0,0,0,.55)}
+  box-shadow:var(--elev-1)}
 /* Le titre de section : ROUGE. Il etait gris, donc invisible, et la page
    n'avait aucun point d'entree pour l'oeil. */
 .evo-titre{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);
@@ -2330,6 +2341,11 @@ const COACH_PHOTO='icons/coach.jpg';
              le coach n'a aucun athlète : au-delà, ch-todo a mieux à dire. -->
         <!-- Compteur permanent. Rempli par loadCoachHome avec le cache DEJA
              lu : le relire couterait 130 ms a 40 athletes. -->
+        <!-- CE QUI PRESSE EN PREMIER. « A traiter » etait rendu tout en bas,
+             apres cinq blocs qui ne demandent aucune action : le coach devait
+             defiler pour voir ce qui l attend. Les cinq autres gardent leur
+             ordre relatif entre eux. -->
+        <div id="ch-todo"></div>
         <div id="ch-paliers"></div>
         <!-- Invitations emises qui n ont pas abouti. Rempli par
              _rendreInvitations, appele par loadCoachHome. -->
@@ -2338,11 +2354,12 @@ const COACH_PHOTO='icons/coach.jpg';
              jamais une bascule : elle DIT, le coach decide. -->
         <div id="ch-alerte-palier"></div>
         <div id="ch-premiers-pas"></div>
-        <!-- Croissance hebdomadaire, AU-DESSUS des notifications : c'est la
-             photo d'ensemble, et on la lit avant le détail de ce qui presse.
+        <!-- Croissance hebdomadaire. Elle etait AU-DESSUS des notifications —
+             « la photo d'ensemble avant le detail de ce qui presse ». Ce lot
+             renverse ce choix : la photo d'ensemble ne demande rien, « A
+             traiter » si, et c'est ce qui doit se voir sans defiler.
              Rempli par loadCoachHome. -->
         <div id="ch-croissance"></div>
-        <div id="ch-todo"></div>
         <button onclick="openCoachPrograms()" class="content-card" style="width:100%;margin-bottom:16px;padding:13px 16px;background:linear-gradient(135deg,#0d0d0d,#1a0000);border:1px solid #2a0000;border-left:3px solid var(--red);border-radius:var(--r-3);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1.5px;text-align:left;display:flex;align-items:center;justify-content:space-between">
           <span>🗂️ MES PROGRAMMES (H/F)</span>
           <span style="color:var(--red-text);font-size:var(--fs-md)">→</span>
@@ -14724,10 +14741,10 @@ function renderTodoBlock(clients){
   // Un drapeau rouge n'a rien a voir avec l'echelle de douleur de 1 a 6 : le
   // disclaimer qui convient est celui des contraintes de sante.
   const aDrapeau=vues.some(r=>r.type==='drapeau');
-  el.innerHTML=`<div style="background:#0c0000;border:1px solid #2a0000;border-radius:var(--r-1);margin-bottom:20px;overflow:hidden">
+  el.innerHTML=`<div style="background:#0c0000;border:1px solid #2a0000;border-left:3px solid var(--red);border-radius:var(--r-card);margin-bottom:20px;overflow:hidden;box-shadow:var(--elev-3)">
     <div style="padding:9px 14px;display:flex;align-items:center;justify-content:space-between;background:#0f0000;border-bottom:1px solid #1e0000">
-      <span style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);text-transform:uppercase;letter-spacing:2px">⚡ À traiter</span>
-      <span style="background:var(--red);color:var(--text);font-size:var(--fs-xs);font-weight:400;padding:1px 8px;border-radius:var(--r-3);font-family:var(--pile-titre);letter-spacing:1px">${unique}</span>
+      <span style="font-size:13px;font-weight:800;color:var(--red-text);text-transform:uppercase;letter-spacing:2.4px">⚡ À traiter</span>
+      <span style="background:var(--red);color:var(--text);font-size:14px;font-weight:400;padding:1px 9px;border-radius:var(--r-3);font-family:var(--pile-titre);letter-spacing:1px">${unique}</span>
     </div>
     ${renderDataList(vues,(r,idx)=>{
       // XSS stocké : le prénom est saisi par l'athlète lui-même et atterrissait
