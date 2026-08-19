@@ -1801,16 +1801,17 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   border-radius:var(--r-full)}
 @keyframes arcRonde{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 /* ══ LE CHRONOMÈTRE DE RÉCUPÉRATION ═══════════════════════════════════════
-   Une carte, un cadran, trois commandes. Tout est dimensionné à partir d'une
-   SEULE unité, --rep-d (le diamètre du cadran) : réduire le chrono sur un
-   écran court, c'est changer ce nombre-là et rien d'autre. */
+   Un titre en bandeau, puis deux colonnes : le cadran à gauche, les trois
+   commandes à droite. Tout est dimensionné à partir d'une SEULE mesure,
+   --rep-d (le diamètre du cadran) — le corps du décompte en dérive, les
+   marges aussi. Réduire le chrono, c'est changer ce nombre-là et rien d'autre. */
 .rep-carte{
-  --rep-d:118px;                 /* diamètre du cadran */
-  --rep-f:38px;                  /* corps du décompte, dérivé du cadran */
+  --rep-d:104px;                       /* diamètre du cadran */
+  --rep-f:calc(var(--rep-d)*.322);     /* corps du décompte, dérivé du cadran */
   --rep-rouge:#E02020;
   position:relative;
   margin:0 7px 6px;
-  padding:14px 14px 12px;
+  padding:12px 13px 13px;
   background:#080808;
   border:1px solid rgba(255,255,255,.07);
   border-radius:10px;
@@ -1828,54 +1829,74 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   color:var(--text);white-space:nowrap}
 /* ── Le son : la seule commande que la maquette n'a pas, et qu'on ne
       supprime pas pour autant. Posée en retrait, coin haut droit. ──────── */
-.rep-son{position:absolute;top:8px;right:8px;width:26px;height:26px;padding:0;
+.rep-son{position:absolute;top:6px;right:6px;width:24px;height:24px;padding:0;
   display:flex;align-items:center;justify-content:center;
   background:none;border:none;border-radius:var(--r-1);cursor:pointer;
   color:#232323;transition:color var(--t-2) var(--c-out)}
 .rep-son[aria-pressed="true"]{color:rgba(224,32,32,.85)}
+/* ── LES DEUX COLONNES ─────────────────────────────────────────────────── */
+.rep-corps{display:flex;align-items:center;gap:10px;margin-top:8px}
+/* La scène : le cadran et sa décharge. Elle prend ce qui reste, les commandes
+   ayant la largeur qu'il leur faut et pas davantage. */
+.rep-scene{flex:1 1 auto;min-width:0;display:flex;align-items:center;justify-content:center}
 /* ── Le cadran ─────────────────────────────────────────────────────────── */
-.rep-cadran{position:relative;width:var(--rep-d);height:var(--rep-d);
-  margin:11px auto 10px}
+.rep-cadran{position:relative;width:var(--rep-d);height:var(--rep-d);flex:0 0 auto}
 /* LE HALO EST UN DÉGRADÉ, PAS UN FLOU. Un radial-gradient est peint une fois
    et ne coûte plus rien ; un filter:blur() de cette taille serait recalculé à
    chaque image de la transition de l'arc. Même parade que .arc-halo. */
 .rep-cadran::before{content:'';position:absolute;left:50%;top:50%;
-  width:300%;height:300%;transform:translate(-50%,-50%);pointer-events:none;
+  width:230%;height:230%;transform:translate(-50%,-50%);pointer-events:none;
   background:radial-gradient(circle closest-side,
-    rgba(224,32,32,.30) 12%,rgba(224,32,32,.13) 34%,rgba(224,32,32,.04) 52%,transparent 70%)}
-/* Les éclairs latéraux : décor pur, aucun événement, aucune animation. */
+    rgba(224,32,32,.32) 10%,rgba(224,32,32,.13) 32%,rgba(224,32,32,.04) 48%,transparent 64%)}
+/* ── La décharge ───────────────────────────────────────────────────────── */
 .rep-eclairs{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-  width:calc(var(--rep-d)*2.85);height:calc(var(--rep-d)*1.20);
+  width:calc(var(--rep-d)*2.7);height:calc(var(--rep-d)*1.20);
   pointer-events:none;overflow:visible}
 .rep-carte[data-fini] .rep-eclairs{opacity:.3}
 .rep-eclairs .ec-flou{filter:blur(5px)}
 .rep-eclairs .ec-doux{filter:blur(1.6px)}
+/* ELLE CRÉPITE. Trois faisceaux, une seule keyframe, trois phases : c'est le
+   décalage qui fait la vie — trois groupes en phase clignoteraient comme un
+   seul interrupteur.
+   SEULE L'OPACITÉ EST ANIMÉE, et elle est portée par le groupe PARENT : les
+   deux flous des calques du dessous sont rastérisés une fois et ne sont plus
+   recalculés, exactement la parade que la règle d'or décrit pour un halo qui
+   respire. steps(1,end) : un éclair coupe, il ne fond pas.
+   fx-loop est OBLIGATOIRE — c'est par elle que « réduire les animations »
+   arrête la boucle. */
+.ec-faisceau{animation:ecCrepite var(--t-boucle) steps(1,end) infinite}
+@keyframes ecCrepite{
+  0%{opacity:.92}   8%{opacity:.34}  12%{opacity:1}    19%{opacity:.5}
+  26%{opacity:.86} 41%{opacity:.62}  47%{opacity:1}    53%{opacity:.3}
+  61%{opacity:.95} 74%{opacity:.55}  82%{opacity:.88}  91%{opacity:.42}
+  100%{opacity:.92}
+}
 .rep-anneau{position:absolute;inset:0;width:100%;height:100%;display:block;
   transform:rotate(-90deg)}
 /* Le cœur du cadran : l'éclair, le décompte, l'état. */
 .rep-centre{position:absolute;inset:0;display:flex;flex-direction:column;
   align-items:center;justify-content:center;pointer-events:none}
-.rep-centre>svg{width:11px;height:14px;color:var(--rep-rouge);margin-bottom:3px;
+.rep-centre>svg{width:10px;height:12.5px;color:var(--rep-rouge);margin-bottom:2px;
   filter:drop-shadow(0 0 5px rgba(224,32,32,.8))}
-/* BEBAS, ET C'EST UNE MESURE, PAS UN GOÛT : « 01:53 » y occupe 85 px pour une
-   hauteur de capitale de 29 px, soit exactement la proportion de la maquette.
-   La même chaîne en Montserrat 800 ferait 124 px et déborderait du disque.
+/* BEBAS, ET C'EST UNE MESURE, PAS UN GOÛT : « 01:53 » y occupe 0,68 fois le
+   diamètre du cadran pour une hauteur de capitale de 0,23 fois — la proportion
+   de la maquette. La même chaîne en Montserrat 800 déborderait du disque.
    tabular-nums : sans elle, la largeur change à chaque seconde et le décompte
    danse dans son cercle. */
-/* LE « + » DU DÉPASSEMENT EST UN SIXIÈME GLYPHE, et « +00:04 » déborde du
-   disque à la taille de « 00:04 ». On ne rogne pas le disque pour un état qui
-   dure quelques secondes : c'est le décompte qui cède. */
 #rep-num.rep-long{font-size:calc(var(--rep-f)*.82)}
 #rep-num{font-family:var(--pile-titre);font-size:var(--rep-f);line-height:.98;
   letter-spacing:1px;font-weight:400;color:var(--text);
   font-variant-numeric:tabular-nums;
   text-shadow:0 0 12px rgba(255,255,255,.35),0 0 30px rgba(255,255,255,.12)}
-#rep-etat{margin-top:3px;font-size:8px;font-weight:700;letter-spacing:4.2px;
+#rep-etat{margin-top:3px;font-size:7.5px;font-weight:700;letter-spacing:3.6px;
   text-transform:uppercase;color:var(--rep-rouge);
   --halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-1)}
-/* ── Les trois commandes ───────────────────────────────────────────────── */
-.rep-actions{display:flex;align-items:stretch;gap:7px}
-.rep-btn{flex:1 1 0;min-width:0;min-height:36px;padding:5px 4px 6px;
+/* ── Les trois commandes, en deux rangs ────────────────────────────────── */
+/* −15 et +15 côte à côte, PASSER sous les deux : le geste rare est le plus
+   large, et les deux ajustements se répondent sur une seule ligne. */
+.rep-actions{flex:0 0 clamp(148px,41%,190px);display:grid;
+  grid-template-columns:1fr 1fr;gap:6px}
+.rep-btn{min-height:33px;padding:4px 4px 5px;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
   background:linear-gradient(180deg,#0e0e0e,#080808);
   border:1px solid rgba(224,32,32,.28);border-radius:6px;cursor:pointer;
@@ -1884,26 +1905,18 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
              transform var(--arc-strike) var(--arc-c-discharge)}
 .rep-btn:active{transform:scale(var(--arc-scale-charge));
   transition:transform var(--arc-attack) var(--arc-c-charge)}
-.rep-btn-large{flex:2 1 0}
-.rep-btn-v{font-size:14px;font-weight:800;letter-spacing:.4px;line-height:1;
+.rep-btn-large{grid-column:1/-1}
+.rep-btn-v{font-size:13px;font-weight:800;letter-spacing:.4px;line-height:1;
   font-variant-numeric:tabular-nums}
-.rep-btn-l{font-size:7px;font-weight:700;letter-spacing:1.6px;color:#7d7d7d;
+.rep-btn-l{font-size:6.5px;font-weight:700;letter-spacing:1.5px;color:#7d7d7d;
   text-transform:uppercase;line-height:1}
-.rep-btn-large .rep-btn-v{display:flex;align-items:center;gap:9px;letter-spacing:2.2px}
+.rep-btn-large .rep-btn-v{display:flex;align-items:center;gap:8px;letter-spacing:2px}
+.rep-btn-large .rep-chev{color:#5c5c5c;font-size:12px;letter-spacing:-2px}
 .rep-maj{text-transform:uppercase}
-.rep-btn-large .rep-chev{color:#5c5c5c;font-size:13px;letter-spacing:-2px}
-/* Écran court : le cadran rétrécit, et lui seul — toutes les autres mesures
-   en découlent. */
-@media (max-height:720px){.rep-carte{--rep-d:96px;--rep-f:32px}}
-@media (max-height:620px){.rep-carte{--rep-d:82px;--rep-f:27px}
-  .rep-cadran{margin:8px auto 8px}}
-
-/* L'ANNEAU BALAIE AU LIEU D'AVANCER PAR CRANS. stroke-dashoffset est un cout
-   justifie et borne : un seul <circle> de 76x76 px, et c'est la seule
-   propriete qui rende un balayage circulaire — la meme exception que celle
-   deja accordee a svg.arc-courbe. Les 1000 ms sont la periode du tick, pas
-   un cran de mouvement : elles doivent lui rester egales. */
-#rep-arc{transition:stroke-dashoffset 1000ms linear,stroke var(--t-3) var(--c-out)}
+/* Écran court : le cadran rétrécit, et lui seul — le corps du décompte et
+   l'emprise de la décharge en découlent. */
+@media (max-height:700px){.rep-carte{--rep-d:92px}}
+@media (max-height:600px){.rep-carte{--rep-d:82px}}
 
 /* ANIMATION 7 — l'arc qui passe d'un onglet à l'autre. Un trait de 2 px à
    l'aplomb du liseré de l'onglet actif, qui se DÉPLACE au lieu de s'éteindre
@@ -20949,8 +20962,11 @@ const REPOS_ECLAIRS=(function(){
       // ajoute un souffle pour que l'éventail ne soit pas mécanique.
       const th=Math.atan2(dy*0.45,dir*c)+(rnd()-0.5)*0.18;
       const ux=Math.cos(th), uy=Math.sin(th);
-      const t=brin(x,y,ux,uy,9,10,16);
-      brins.push({d:t.d,gros:true});
+      // ASYMÉTRIQUE, PARCE QUE LA MISE EN PAGE L'EST. Le cadran vit à gauche :
+      // la décharge a du champ de ce côté et bute sur les commandes de l'autre.
+      // Elle porte donc loin à gauche et se retient à droite.
+      const t=(dir<0)?brin(x,y,ux,uy,10,10.5,16):brin(x,y,ux,uy,6,8,15);
+      brins.push({d:t.d,gros:true,lot:i%3});
       // LA RAMURE EST DENSE PRÈS DU CADRAN et se dégarnit en s'éloignant :
       // c'est ce gradient de densité, autant que le dégradé d'opacité, qui
       // fait lire une décharge plutôt qu'un trait. Les fourches sont donc
@@ -20959,7 +20975,7 @@ const REPOS_ECLAIRS=(function(){
         const p=t.pts[rnd()<.66?Math.floor(rnd()*2):2+Math.floor(rnd()*3)];
         // La fourche s'écarte du tronc de 20 à 34°, puis meurt vite.
         const ph=Math.atan2(p[3],p[2])+(rnd()<.5?-1:1)*(0.35+rnd()*0.25);
-        brins.push({d:brin(p[0],p[1],Math.cos(ph),Math.sin(ph),4,8,18).d,gros:false});
+        brins.push({d:brin(p[0],p[1],Math.cos(ph),Math.sin(ph),dir<0?4:3,dir<0?8:6.5,18).d,gros:false,lot:i%3});
       }
     });
   });
@@ -20979,14 +20995,22 @@ const REPOS_ECLAIRS=(function(){
     +'<stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>'
     +'<mask id="ecM"><rect x="-40" y="-60" width="240" height="270" fill="url(#ecG)"/>'
     +'<rect x="200" y="-60" width="240" height="270" fill="url(#ecD)"/></mask></defs>';
-  const couche=(w,o,c,cls)=>'<g'+(cls?' class="'+cls+'"':'')+'>'+brins.map(b=>
+  // Trois faisceaux, pris un départ sur trois : chacun mêle des brins du haut
+  // et du bas, sinon le clignotement se lirait comme un volet qui s'ouvre.
+  const couche=(lot,w,o,c,cls)=>'<g'+(cls?' class="'+cls+'"':'')+'>'+lot.map(b=>
     '<path d="'+b.d+'" fill="none" stroke="'+c+'" stroke-width="'+(b.gros?w:w*0.6).toFixed(2)
     +'" stroke-linecap="round" stroke-linejoin="round" opacity="'+o+'"/>').join('')+'</g>';
+  const faisceau=(n,retard)=>{
+    const lot=brins.filter(b=>b.lot===n);
+    return '<g class="ec-faisceau fx-loop" style="animation-delay:'+retard+'ms">'
+      + couche(lot,8,.50,'#ff1010','ec-flou')     // la nappe : large, très floue
+      + couche(lot,2.8,.80,'#ff4444','ec-doux')   // la lueur, c'est elle qui fait le rouge
+      + couche(lot,0.9,1,'#fff0f0','')            // le cœur, net et presque blanc
+      + '</g>';
+  };
   return '<svg class="rep-eclairs" viewBox="0 0 400 150" preserveAspectRatio="xMidYMid meet" aria-hidden="true">'
     + defs + '<g mask="url(#ecM)">'
-    + couche(7,.42,'#ff1010','ec-flou')      // la nappe : large, très floue
-    + couche(2.6,.75,'#ff3a3a','ec-doux')    // la lueur, c'est elle qui fait le rouge
-    + couche(0.7,.85,'#ffc8c8','')           // le cœur, fin — sinon tout blanchit
+    + faisceau(0,0) + faisceau(1,-900) + faisceau(2,-1700)
     + '</g></svg>';
 })();
 function _monterRepos(z){
@@ -21006,6 +21030,8 @@ function _monterRepos(z){
     <button id="rep-son" class="rep-son hit44" onclick="basculerSonRepos()" aria-pressed="${_sonOn?'true':'false'}"
       aria-label="${_sonOn?'Couper le son de fin de repos':'Activer le son de fin de repos'}"
       title="${_sonOn?'Son de fin de repos activé':'Son de fin de repos coupé'}">${_icoSon(_sonOn,14)}</button>
+    <div class="rep-corps">
+    <div class="rep-scene">
     <div class="rep-cadran">
       ${REPOS_ECLAIRS}
       <svg class="rep-anneau" viewBox="0 0 200 200" aria-hidden="true">
@@ -21031,13 +21057,15 @@ function _monterRepos(z){
         <div id="rep-etat">Repos</div>
       </div>
     </div>
+    </div>
     <div class="rep-actions">
       <button class="rep-btn" onclick="ajusterRepos(-15)">
         <span class="rep-btn-v">−15</span><span class="rep-btn-l">secondes</span></button>
-      <button class="rep-btn rep-btn-large" onclick="annulerRepos()">
-        <span class="rep-btn-v rep-maj">Passer<span class="rep-chev">&#187;</span></span></button>
       <button class="rep-btn" onclick="ajusterRepos(15)">
         <span class="rep-btn-v">+15</span><span class="rep-btn-l">secondes</span></button>
+      <button class="rep-btn rep-btn-large" onclick="annulerRepos()">
+        <span class="rep-btn-v rep-maj">Passer<span class="rep-chev">&#187;</span></span></button>
+    </div>
     </div>
   </div>`;
 }
