@@ -506,7 +506,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 
 /* LES TROIS COMPTEURS. Le halo derrière le chiffre est ce qui le fait
    exister : sur du noir, un chiffre plat reste imprimé, il ne s'allume pas. */
-.pil-compteur{flex:1 1 0;min-width:0;min-height:52px;padding:11px 6px;border-radius:var(--r-3);cursor:pointer;
+.pil-compteur{flex:1 1 0;min-width:0;min-height:58px;padding:11px 6px;border-radius:var(--r-3);cursor:pointer;
   font-family:Montserrat,sans-serif;text-align:center;position:relative;overflow:hidden;
   background:
     repeating-linear-gradient(-50deg,transparent,transparent 10px,rgba(255,255,255,.022) 10px,rgba(255,255,255,.022) 11px),
@@ -516,7 +516,16 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
   transition:border-color var(--t-1),box-shadow var(--t-1)}
 .pil-compteur[data-vide="1"]{box-shadow:var(--e2)}
 .pil-val{font-family:var(--pile-titre);font-size:var(--fs-2xl);line-height:1;position:relative}
-.pil-lib{font-size:var(--fs-2xs);font-weight:800;letter-spacing:.9px;text-transform:uppercase;line-height:1.25;margin-top:6px}
+.pil-lib{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;line-height:1.25;margin-top:6px}
+/* L ETAT PRESSE SE VOYAIT SEULEMENT A LA BORDURE GAUCHE, que le filet colore
+   de l etat porte deja : deux informations sur le meme trait. Un soulignement
+   bas, dans la couleur du compteur, dit lequel filtre est actif. */
+.pil-compteur{position:relative}
+.pil-compteur::after{content:'';position:absolute;left:10px;right:10px;bottom:0;height:3px;
+  border-radius:3px 3px 0 0;background:currentColor;opacity:0;transition:opacity.15s}
+.pil-compteur[aria-pressed="true"]::after{opacity:1}
+.pil-compteur:hover{border-color:#3a3a3a;transform:translateY(-1px)}
+@media(prefers-reduced-motion:reduce){.pil-compteur{transition:none}.pil-compteur:hover{transform:none}}
 
 /* LES VOLETS DE CONTEXTE. Une classe A COTE de .plan-src et non a sa place :
    celle-ci sert aussi a l'éditeur de plan, qui n'a aucune raison de changer
@@ -530,7 +539,7 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
 
 /* LES DEUX LIENS DE BAS DE BARRE. */
 .pil-lien{width:100%;min-height:46px;margin-top:8px;border-radius:var(--r-3);cursor:pointer;
-  font-family:Montserrat,sans-serif;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:#b4b4b4;
+  font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase;color:#b4b4b4;
   background:linear-gradient(168deg,#181818,#0e0e0e);border:1px solid var(--border);
   box-shadow:var(--elev-1);transition:var(--t-1)}
 .pil-lien:hover{color:var(--text);border-color:rgba(224,32,32,.5);box-shadow:var(--e3),var(--glow-red)}
@@ -569,13 +578,21 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
    cassé en deux se déchiffre. */
 #ch-clients-list .cr-nom{font-weight:800;font-size:var(--fs-md);letter-spacing:.2px;color:#f2f2f2;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* LA LIGNE D ACTIVITE PORTAIT LA CLASSE .sub — un gris de sous-titre pour ce
+   qui est en realite l information la plus consultee de la ligne : quand
+   l athlete s est entraine pour la derniere fois. */
+#ch-clients-list .cr-act{font-size:12px;font-weight:700;color:#c8c8c8;margin-top:3px;
+  letter-spacing:.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#ch-clients-list .cr-obj{font-weight:500}
+#ch-clients-list .cr-phase{font-size:10.5px!important;font-weight:600;color:#8a8a8a!important;
+  letter-spacing:.9px;text-transform:uppercase}
 #ch-clients-list .avatar{box-shadow:0 0 0 1px rgba(255,255,255,.09),0 4px 12px rgba(0,0,0,.5)}
 /* LE BADGE, COMPACT ICI SEULEMENT. Mesuré : sur 343 px de ligne, « Nouveau
    bilan » en prenait 136 — quarante pour cent pour une étiquette — et il ne
    restait que 107 px au nom, qui en demande 121. La règle est portée par
    #ch-clients-list : le même .badge sert partout ailleurs, où il a la place. */
-#ch-clients-list .badge{font-size:var(--fs-2xs);letter-spacing:.9px;padding:4px 9px;border-radius:var(--r-1);
-  max-width:104px;white-space:normal;text-align:center;line-height:1.3}
+#ch-clients-list .badge{font-size:11px;letter-spacing:.6px;padding:4px 8px;border-radius:var(--r-pill);
+  max-width:112px;white-space:normal;text-align:center;line-height:1.3}
 
 .ch-chip{background:var(--surface-1);border:1px solid var(--border);color:var(--text-dim);border-radius:var(--r-4);padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:.5px;cursor:pointer;min-height:34px;transition:var(--t-1)}
 .ch-chip{box-shadow:var(--e2)}
@@ -629,7 +646,7 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
   linear-gradient(160deg,var(--border),#141414 55%,#0b0b0b);
   border-radius:var(--r-1);padding:16px 12px;text-align:center;flex:1;
   border:1px solid rgba(255,255,255,.08);border-left:1px solid rgba(255,255,255,.08);
-  position:relative;overflow:hidden;
+  position:relative;overflow:hidden;cursor:default;
   box-shadow:var(--elev-1)}
 /* Le halo du chiffre lui-meme : sans lui, le blanc reste plat sur le noir. */
 .metric-val{text-shadow:var(--halo-2)}
@@ -923,7 +940,7 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
 .plan-src>summary::-webkit-details-marker{display:none}
 .plan-src>summary::after{content:'▾';margin-left:auto;flex-shrink:0;font-size:var(--fs-sm);color:var(--sub);transition:transform var(--t-1)}
 .plan-src[open]>summary::after{transform:rotate(180deg)}
-.plan-src-nb{flex-shrink:0;font-size:var(--fs-2xs);font-weight:700;color:var(--text-faint);letter-spacing:.5px;white-space:nowrap}
+.plan-src-nb{flex-shrink:0;font-size:11px;font-weight:700;color:var(--sub);letter-spacing:.5px;white-space:nowrap}
 /* Marges internes rognées au strict nécessaire : entre le bord de l'écran et
    le texte d'un nom, la chaîne .pad → .plan-card → .plan-corps → .plan-src →
    .plan-src-liste → cellule prélevait 50 px sur 375. Chaque pixel rendu ici
@@ -12076,10 +12093,10 @@ function _pilCompteur(cle,lib,n,couleur){
   return `<button onclick="setFiltreClients('${actif?'tous':cle}')"
     aria-pressed="${actif?'true':'false'}"
     class="pil-compteur" data-vide="${vide?1:0}"
-    style="border-left-color:${actif?couleur:(vide?'var(--border)':couleur+'66')};
+    style="color:${couleur};border-left-color:${actif?couleur:(vide?'var(--border)':couleur+'66')};
       ${actif?`border-color:${couleur};box-shadow:var(--e3)}33,inset 0 1px 0 rgba(255,255,255,.08)`:''}">
-    <div class="pil-val" style="color:${vide?'#4e4e4e':couleur};text-shadow:${vide?'none':`0 0 16px ${couleur}99`}">${n}</div>
-    <div class="pil-lib" style="color:${vide?'#565656':'#c4c4c4'}">${lib}</div>
+    <div class="pil-val" style="color:${vide?'#6a6a6a':couleur};text-shadow:${vide?'none':`0 0 16px ${couleur}99`}">${n}</div>
+    <div class="pil-lib" style="color:${vide?'#8a8a8a':'#c4c4c4'}">${lib}</div>
   </button>`;
 }
 function _pilBande(cle,titre,corps,resume){
@@ -14877,7 +14894,7 @@ function renderClientRow(c){
     :isActive(c)?'actif':'dormant';
   return `<div class="client-row${!hasNewBilan(c)&&!needsAlert(c)&&!isActive(c)?' row-inactive':''}" data-etat="${_etat}" onclick="openClientDetail('${c.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <div class="avatar" style="width:44px;height:44px;font-size:var(--fs-lg);overflow:hidden;flex-shrink:0">${avatarHtml}</div>
-    <div style="flex:1;min-width:0"><div class="cr-nom">${_nm}</div><div class="sub" style="font-size:var(--fs-xs);margin-top:3px">${activityLine}</div>${objLine}${phLine}${chLine}${prLine}${biLine}</div>
+    <div style="flex:1;min-width:0"><div class="cr-nom">${_nm}</div><div class="cr-act">${activityLine}</div>${objLine}${phLine}${chLine}${prLine}${biLine}</div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">${badge}</div>
   </div>`;
 }
