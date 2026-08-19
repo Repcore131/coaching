@@ -983,6 +983,10 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
 .video-card{background:var(--surface-1);border-radius:var(--r-4);padding:14px;margin-bottom:12px}
 @keyframes fadeInScale{from{opacity:0;transform:scale(0.3)}to{opacity:1;transform:scale(1)}}
 @keyframes fadeInUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+/* CHAQUE ETAPE DU BILAN ENTRE. renderBilStep remplace tout le contenu par un
+   seul <div class="pad"> : l element est neuf a chaque etape, l animation se
+   rejoue donc d elle-meme, sans qu aucun code n ait a la relancer. */
+#bil-content>.pad{animation:fadeInUp.26s cubic-bezier(.16,1,.3,1) both}
 @keyframes fadeIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
 @keyframes fadeInFast{from{opacity:0}to{opacity:1}}
 @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
@@ -1449,6 +1453,9 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   .wd-badge{opacity:1!important;transform:none!important}
   .wd-badge-medal{transform:none!important;filter:drop-shadow(0 0 12px rgba(224,32,32,.45))!important}
   .rc-blink{opacity:1!important}
+  /* Coupee net, pas accelerée : la regle universelle la ramenerait a .01 ms,
+     ce qui laisse un saut au lieu d une entree. */
+  #bil-content>.pad{animation:none!important}
   /* La regle universelle plus haut ramene deja ces transitions a .01 ms.
      On les nomme quand meme : une valeur qui existe encore peut etre relue
      comme un choix, alors qu ici il n y a plus de mouvement du tout. */
@@ -3847,8 +3854,8 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar" style="position:relative">
     <button class="back-btn" id="bil-back-btn" onclick="bilBack()">←</button>
     <span class="topbar-title" id="bil-title">Bilan</span>
-    <span class="sub" id="bil-step-label" style="font-size:var(--fs-xs);font-weight:700">1/4</span>
-    <div style="position:absolute;bottom:0;left:0;right:0;height:2px;background:#111"><div id="bil-progress" style="height:100%;background:var(--red);transition:var(--t-3);width:25%"></div></div>
+    <span id="bil-step-label" style="font-size:13px;font-weight:800;color:#fff;letter-spacing:.5px">1/4</span>
+    <div style="position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(255,255,255,.06)"><div id="bil-progress" style="height:100%;background:var(--red);transition:width var(--t-3) cubic-bezier(.16,1,.3,1);width:25%"></div></div>
   </div>
   <div class="scroll-area" style="flex:1" id="bil-content"></div>
   <div style="padding:14px 20px;border-top:1px solid #181818;background:var(--bg);flex-shrink:0">
@@ -28766,7 +28773,11 @@ function renderBilStep(){
   const steps=_etapesUtiles(bilType==='depart'?DEB_STEPS:BIL_STEPS);
   const total=steps.length;
   document.getElementById('bil-title').textContent=bilType==='depart'?'Questionnaire de début':'Bilan Coaching';
-  document.getElementById('bil-step-label').textContent=(bilStep+1)+'/'+total;
+  // LE NUMERO D ETAPE EST LA VALEUR, le total n est qu un reperage. Ils sont
+  // ecrits par la meme phrase, mais seul le premier est peint en blanc.
+  // Aucune des deux valeurs ne vient de l exterieur : bilStep est un entier
+  // interne, total sort de _etapesUtiles — rien a echapper ici.
+  document.getElementById('bil-step-label').innerHTML=(bilStep+1)+'<span style="color:#8a8a8a;font-weight:700">/'+total+'</span>';
   document.getElementById('bil-progress').style.width=((bilStep+1)/total*100)+'%';
   document.getElementById('bil-next-btn').textContent=bilStep===total-1?'Valider ':'Suivant →';
   document.getElementById('bil-back-btn').style.visibility='visible';
