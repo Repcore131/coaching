@@ -3913,14 +3913,20 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="prog-reds"></div>
       <div id="prog-encart-osseux"></div>
       <div id="prog-bandeau-phase"></div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:20px" id="prog-tabs">
-        <button class="btn btn-red btn-sm" onclick="showProgressTab('poids',this)" style="white-space:nowrap">️ Poids</button>
-        <button class="btn btn-outline btn-sm" onclick="showProgressTab('mensus',this)" style="white-space:nowrap"> Mensurations</button>
-        <button class="btn btn-outline btn-sm" onclick="showProgressTab('masseGrasse',this)" style="white-space:nowrap"> Masse Grasse</button>
-        <button class="btn btn-outline btn-sm" onclick="showProgressTab('perf',this)" style="white-space:nowrap">️ Perfs</button>
-        <button class="btn btn-outline btn-sm" onclick="showProgressTab('volume',this)" style="white-space:nowrap">Volume</button>
-        <button class="btn btn-outline btn-sm" onclick="showProgressTab('photos',this)" style="white-space:nowrap"> Photos</button>
-        <button class="btn btn-outline btn-sm" onclick="showProgressTab('notes',this)" style="white-space:nowrap;display:inline-flex;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="9" y="2" width="6" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> Notes</button>
+      <!-- LA BANDE NE SE REPLIE PLUS, ELLE DEFILE. A sept onglets, flex-wrap
+           jetait les deux derniers sur une seconde ligne et poussait tout le
+           contenu de la page vers le bas. L enveloppe porte le position:relative
+           dont le badge « +n » de setupScrollFade a besoin pour se placer. -->
+      <div style="position:relative;margin-bottom:20px">
+      <div style="display:flex;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;gap:6px;position:relative;padding-bottom:2px" id="prog-tabs">
+        <button class="btn btn-red btn-sm" onclick="showProgressTab('poids',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 13px;font-size:10.5px;letter-spacing:1px">Poids</button>
+        <button class="btn btn-outline btn-sm" onclick="showProgressTab('mensus',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 13px;font-size:10.5px;letter-spacing:1px">Mensurations</button>
+        <button class="btn btn-outline btn-sm" onclick="showProgressTab('masseGrasse',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 13px;font-size:10.5px;letter-spacing:1px">Masse Grasse</button>
+        <button class="btn btn-outline btn-sm" onclick="showProgressTab('perf',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 13px;font-size:10.5px;letter-spacing:1px">Perfs</button>
+        <button class="btn btn-outline btn-sm" onclick="showProgressTab('volume',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 13px;font-size:10.5px;letter-spacing:1px">Volume</button>
+        <button class="btn btn-outline btn-sm" onclick="showProgressTab('photos',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 13px;font-size:10.5px;letter-spacing:1px">Photos</button>
+        <button class="btn btn-outline btn-sm" onclick="showProgressTab('notes',this)" style="white-space:nowrap;flex-shrink:0;padding:8px 13px;font-size:10.5px;letter-spacing:1px;display:inline-flex;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;display:inline-block;vertical-align:middle;flex-shrink:0"><rect x="9" y="2" width="6" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg> Notes</button>
+      </div>
       </div>
       <div id="progress-content"></div>
     </div>
@@ -30909,7 +30915,7 @@ const DEB_STEPS=[
     bLbl('Tu es ?')+
     `<div>${bGenderCards('deb-gender')}</div>`+
     bLbl('Quel âge as-tu ? ')+bQ('deb-age')+
-    bLbl('Quel est ton poids actuel ? ️ (en kg)')+bQ('deb-weight')+
+    bLbl('Quel est ton poids actuel ? (en kg)')+bQ('deb-weight')+
     bLbl('Quelle est ta taille ?  (en cm)')+bQ('deb-height')+
     bLbl('Quels sont tes objectifs principaux ? ')+
     `<div>${bC('deb-goals',['Perte de poids','Prise de muscle','Rééquilibrage corporel','Amélioration des performances','Bien-être général'],true)}</div>`+
@@ -30938,7 +30944,7 @@ const DEB_STEPS=[
     bBodySchema('deb')
   ),
   // Step 3 : Entraînement
-  ()=>bSec('Entraînement ️',
+  ()=>bSec('Entraînement',
     bLbl("Où t'entraînes tu habituellement ? ")+
     `<div>${bC('deb-location',["En salle","Chez toi","Park de Street Workout"],true)}</div>`+
     bLbl("Si tu t'entraines en salle, dans laquelle vas-tu?")+bT('deb-gym','Nom de la salle...')+
