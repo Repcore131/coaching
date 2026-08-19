@@ -417,6 +417,17 @@ html[data-nav="ar"] .screen{animation:screenAr var(--t-1) var(--arc-c-discharge)
 .btn-outline:hover{border-color:var(--red);color:var(--red-text)}
 .btn-outline:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
 .btn-sm{padding:9px 16px;font-size:var(--fs-xs);width:auto;border-radius:var(--r-1);letter-spacing:1.5px}
+/* L'ATTENTE SE VOIT. Il n'existait aucune regle .btn:disabled : rien ne
+   distinguait un bouton verrouille d'un bouton pret, et trois sites sur onze
+   bricolaient un opacity en ligne que les huit autres n'avaient pas. Le trait
+   est un pseudo-element anime en transform seul — exactement la mecanique de
+   .skeleton::after. */
+.btn[disabled],.btn:disabled{opacity:.72;cursor:progress}
+.btn.arc-attente-bar{position:relative;overflow:hidden}
+.btn.arc-attente-bar::after{content:'';position:absolute;left:0;bottom:0;height:2px;width:40%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.85),transparent);
+  transform:translateX(-100%);animation:arcAttenteBar 1100ms linear infinite;will-change:transform}
+@keyframes arcAttenteBar{from{transform:translateX(-100%)}to{transform:translateX(300%)}}
 
 /* ====== INPUTS ====== */
 input,select,textarea{width:100%;padding:13px 16px;background:#0c0c0c;border:1px solid var(--border);border-radius:var(--r-1);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);outline:none;transition:border-color var(--t-2),background var(--t-2),box-shadow var(--t-2)}
@@ -727,17 +738,39 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 /* Hors du point de rupture large, l en-tete de colonnes n a rien a coiffer. */
 /* LE BOUTON QUI ATTEND. Un travail non publie n existait que dans un bandeau
    qu on defile hors de vue ; le bouton, lui, reste sous les yeux. */
-.btn-attente{background:linear-gradient(180deg,#f97316,#c2540b)!important;color:#160800!important;
-  box-shadow:0 0 0 2px rgba(249,115,22,.25),0 0 18px rgba(249,115,22,.45)!important;
-  animation:glowPulse var(--t-boucle) var(--c-out) infinite}
+/* LE HALO NE SE REPEINT PLUS. glowPulse animait filter:drop-shadow de 30 a
+   60 px, EN BOUCLE INFINIE, sur un bouton de topbar visible pendant toute la
+   session d'edition d'un programme : un flou de 60 px repeint soixante fois
+   par seconde sur un Android d'entree de gamme. La couleur etait de surcroit
+   ROUGE (198,15,8) sur un bouton ORANGE — le halo ne correspondait ni au
+   bouton ni a ce qu'il annonce.
+   Le box-shadow du pseudo-element est STATIQUE, pose une fois, jamais
+   interpole : seule l'opacite est animee, donc composee sur le GPU.
+   SIX iterations et non « infinite » : environ quatorze secondes, assez pour
+   etre vu, borne pour ne pas peindre pendant vingt minutes. */
+.btn-attente{position:relative;background:linear-gradient(180deg,#f97316,#c2540b)!important;color:#160800!important;
+  box-shadow:0 0 0 2px rgba(249,115,22,.25)!important}
+.btn-attente::after{content:'';position:absolute;inset:-4px;border-radius:inherit;pointer-events:none;
+  box-shadow:0 0 18px 2px rgba(249,115,22,.55);opacity:.35;
+  animation:arcAttentePulse var(--arc-ambient) var(--c-out) 6;will-change:opacity}
+@keyframes arcAttentePulse{0%,100%{opacity:.30}50%{opacity:.85}}
 /* .celebrate ET SA KEYFRAME AVAIENT ETE SUPPRIMEES avec l ancienne fin de
    seance : la consigne les croyait encore la. Elles reviennent ici, pour le
    seul geste qui les demande — la publication reussie. */
-@keyframes celebratePulse{0%{transform:scale(1);box-shadow:0 0 0 0 rgba(34,197,94,.55)}
-  55%{transform:scale(1.06);box-shadow:0 0 0 10px rgba(34,197,94,0)}
-  100%{transform:scale(1);box-shadow:0 0 0 0 rgba(34,197,94,0)}}
-.celebrate{background:linear-gradient(180deg,#22c55e,#15803d)!important;color:#04140a!important;
-  animation:celebratePulse var(--t-3) var(--c-out)}
+/* LA BOX-SHADOW SORT DE LA KEYFRAME : le bouton ne fait plus que grossir, et
+   l'onde est portee par un pseudo-element anime en opacity et transform.
+   `forwards` : le vert doit tenir jusqu'a la navigation, qui part 200 ms plus
+   tard qu'avant — la celebration duraient 420 ms et le go() partait a la
+   milliseconde exacte ou elle finissait. */
+@keyframes celebratePulse{0%{transform:scale(1)}
+  55%{transform:scale(1.06)}
+  100%{transform:scale(1)}}
+@keyframes celebrateOnde{0%{opacity:.9;transform:scale(.92)}100%{opacity:0;transform:scale(1.18)}}
+.celebrate{position:relative;background:linear-gradient(180deg,#22c55e,#15803d)!important;color:#04140a!important;
+  animation:celebratePulse var(--t-3) var(--c-out) forwards}
+.celebrate::after{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  box-shadow:0 0 0 10px rgba(34,197,94,.55);opacity:0;
+  animation:celebrateOnde var(--t-3) var(--c-out) both}
 .cr-head{display:none}
 /* LA LIGNE DE BANQUE REPOND AU DOIGT. Elle est cliquable depuis toujours et
    ne le montrait par rien : ni survol, ni enfoncement. */
@@ -1254,7 +1287,6 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
 #bil-content>.pad{animation:fadeInUp var(--t-3) var(--c-out) both}
 @keyframes fadeIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
 @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
-@keyframes glowPulse{0%,100%{filter:drop-shadow(0 0 30px rgba(198,15,8,.4))}50%{filter:drop-shadow(0 0 60px rgba(198,15,8,.7))}}
 @keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
 @keyframes slideDown{from{opacity:0;transform:translateY(-100%)}to{opacity:1;transform:translateY(0)}}
 .anim-in{animation:fadeIn var(--t-3) var(--c-out) both}
@@ -1506,6 +1538,25 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 .bsl-scale{display:flex;justify-content:space-between;font-size:var(--fs-xs);font-weight:700;color:var(--text-dim);margin-top:8px;padding:0 4px}
 .choice-opt.sel{border-color:var(--red);border-left-width:3px;color:var(--text);background:var(--red-bg)}
 .choice-opt:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
+
+/* ── L'APPUI, SUR TOUT CE QUI SE PRESSE ────────────────────────────────────
+   La ligne 114 pose -webkit-tap-highlight-color:transparent sur * : le retour
+   natif d'Android est coupe pour TOUT LE MONDE, et onze selecteurs seulement
+   le remplacent par un :active. Sur les 251 boutons qui ne portent ni btn-red,
+   ni btn-outline, ni back-btn — dont 200 styles en ligne — et sur les 58
+   <div onclick> sans role="button", l'appui ne produisait aucune image : le
+   halo d'arcGlow n'arrive qu'au RELACHEMENT, donc apres coup.
+   Aucune valeur neuve : --arc-scale-charge (0,94), --arc-attack (90 ms) et
+   --arc-c-charge sont deja en place. */
+.tab-btn:active,.hit44:active,.exo-chip:active,.supp-timing-chip:active,
+.caff-type-btn:active,.fj-repas-btn:active,.plan-src>summary:active,
+.arc-presse:active,
+button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach-tabs-bar button):active{
+  transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
+/* La remontee reste sur la courbe de decharge. Ces transitions se COMPOSENT
+   avec celles deja ecrites plus haut, elles ne les remplacent pas. */
+.exo-chip,.supp-timing-chip,.caff-type-btn,.fj-repas-btn,.arc-presse{
+  transition:background var(--t-1),border-color var(--t-1),color var(--t-1),transform var(--arc-strike) var(--arc-c-discharge)}
 
 /* CADRE TECHNIQUE — carte cafeine.
    Coins coupes par clip-path plutot que border-radius : c est ce qui donne
@@ -1763,7 +1814,8 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
      regle universelle plus haut ne les atteint pas, il faut les nommer. */
   #s-workout-done .stat-tile{animation:none!important}
   .fx-loop,.fx-loop::after,.fx-loop::before,
-  .wd-badge-medal::after,.skeleton::after{animation:none!important}
+  .wd-badge-medal::after,.skeleton::after,
+  .btn.arc-attente-bar::after{animation:none!important}
   /* État final propre pour les éléments dont l'animation portait la mise en forme */
   /* Le delai de 260 ms laisserait le badge invisible : on coupe l'animation. */
   .wd-badge{opacity:1!important;transform:none!important;animation:none!important}
@@ -1772,6 +1824,9 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   .fj-entry.fj-neuf,.caff-neuf{animation:none!important}
   #ch-clients-list[data-entree] .client-row{animation:none!important}
   .btn-attente,.celebrate{animation:none!important}
+  /* Le halo reste POSE, il ne respire plus : l'information ne se perd pas. */
+  .btn-attente::after{animation:none!important;opacity:.30!important}
+  .celebrate::after{animation:none!important;opacity:0!important}
   .bq-l{transition:none}
   .bq-l:active{transform:none}
   /* Coupee net, pas accelerée : la regle universelle la ramenerait a .01 ms,
@@ -1813,7 +1868,10 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   #arc-calque{display:none!important}
   .btn:active,.btn-red:active,.btn-outline:active,.content-card:active,
   .client-row:active,.choice-opt:active,.emo-opt:active,.gsl-opt:active,
-  .obj-opt:active,.tab-btn:active{transform:none!important}
+  .obj-opt:active,.tab-btn:active,.hit44:active,.exo-chip:active,
+  .supp-timing-chip:active,.caff-type-btn:active,.fj-repas-btn:active,
+  .plan-src>summary:active,.arc-presse:active,
+  button:not([disabled]):active{transform:none!important}
   /* Le point de courant du chronomètre est une BOUCLE : on la retire, on ne
      l'accélère pas. La règle générale plus haut la ramènerait à .01 ms et le
      point se figerait à un endroit arbitraire de l'anneau — un défaut
@@ -6279,7 +6337,9 @@ function renderDataList(items,rowRenderer,opts={}){
     const html=typeof r==='string'?r:r.html;
     const onC=typeof r==='object'&&r.onClick?` onclick="${r.onClick}"`:'';
     const xSt=typeof r==='object'&&r.style?r.style:'';
-    const xCls=typeof r==='object'&&r.cls?` class="${r.cls}"`:'';
+    // rc-ligne : le point d'ancrage du retrait anime. Aucune mise en forme n'y
+    // est attachee — c'est une prise, pas un style.
+    const xCls=` class="rc-ligne${typeof r==='object'&&r.cls?' '+r.cls:''}"`;
     const sep=last?'':`border-bottom:1px solid ${border};`;
     const hov=hover?` onmouseover="this.style.background='${hover}'" onmouseout="this.style.background=''"` :'';
     return `<div${xCls} style="display:flex;align-items:${align};gap:${gap}px;padding:${pad};${sep}${jStr}${xSt}"${onC}${hov}>${html}</div>`;
@@ -9312,8 +9372,19 @@ let _arcPoint=null;
 function _arcNoter(e){
   try{
     if(e&&typeof e.clientX==='number'&&typeof e.clientY==='number')
-      _arcPoint={x:e.clientX,y:e.clientY,t:Date.now()};
+      _arcPoint={x:e.clientX,y:e.clientY,t:Date.now(),el:e.target||null};
   }catch(err){}
+}
+// LE DERNIER ELEMENT, pour la meme raison que le dernier point : un onclick
+// ecrit dans une chaine innerHTML ne recoit aucun evenement et ne peut donc
+// pas remonter a sa propre ligne. Rend le premier ancetre qui repond au
+// selecteur, et seulement si le contact est frais.
+function arcDernierElement(selecteur){
+  try{
+    const p=arcDernierPoint();
+    if(!p||!p.el||!p.el.closest) return null;
+    return p.el.closest(selecteur);
+  }catch(e){ return null; }
 }
 // Rend le dernier contact seulement s'il est FRAIS. Un point vieux d'une
 // seconde ne désigne plus rien : une action déclenchée au clavier, par la
@@ -9474,6 +9545,82 @@ function arcTracerCourbes(racine){
   return n;
 }
 
+// ── LE RETRAIT D'UNE LIGNE ─────────────────────────────────────────────────
+// Les fonctions de suppression font splice() puis un re-rendu innerHTML
+// complet : la ligne n'etait pas retiree, elle CESSAIT D'EXISTER entre deux
+// images, et tout ce qui est en dessous sautait vers le haut d'un coup. Le
+// desequilibre etait frappant — l'AJOUT a droit a fjNeuf sur 1 200 ms, le
+// RETRAIT a rien, alors que c'est le geste qu'on a besoin de pouvoir relire
+// pour savoir si on s'est trompe de ligne.
+//
+// ENTORSE A LA REGLE 5, assumee et bornee : height/padding/margin declenchent
+// bien une mise en page, mais sur UN SEUL noeud, pendant 120 ms, et UNE FOIS
+// par geste de suppression. Il n'existe aucun equivalent en transform pour
+// refermer l'espace laisse par la ligne, et un scaleY deformerait le texte.
+// Les 160 premieres millisecondes — opacite et translation — sont, elles,
+// purement composees.
+//
+// REGLE 7 : le rappel porte l'ecriture, et il est execute MEME quand
+// l'animation ne part pas. Rien n'est conditionne a sa reussite.
+function arcRetrait(el,apres){
+  const fini=()=>{ try{ if(typeof apres==='function') apres(); }catch(e){} };
+  if(!el||!el.animate||arcReduit()){ fini(); return null; }
+  let h=0;
+  try{ h=el.getBoundingClientRect().height; }catch(e){}
+  if(!(h>0)){ fini(); return null; }
+  let mb='0px',pt='0px',pb='0px';
+  try{ const cs=getComputedStyle(el); mb=cs.marginBottom; pt=cs.paddingTop; pb=cs.paddingBottom; }catch(e){}
+  el.style.overflow='hidden';
+  el.style.pointerEvents='none';
+  const a=el.animate([
+    {opacity:1,transform:'translateX(0)',   height:h+'px',marginBottom:mb,   paddingTop:pt,   paddingBottom:pb,   offset:0},
+    {opacity:0,transform:'translateX(-18px)',height:h+'px',marginBottom:mb,  paddingTop:pt,   paddingBottom:pb,   offset:0.57},
+    {opacity:0,transform:'translateX(-18px)',height:'0px', marginBottom:'0px',paddingTop:'0px',paddingBottom:'0px',offset:1}
+  ],{duration:280,easing:ARC.charge,fill:'none'});
+  if(!a){ fini(); return null; }
+  a.addEventListener('finish',fini);
+  a.addEventListener('cancel',fini);
+  return a;
+}
+
+// ── LA SAISIE REFUSEE ──────────────────────────────────────────────────────
+// Deux oscillations de 5 px, 190 ms. Elle s'applique au CHAMP, jamais a son
+// conteneur : une secousse sur une carte entiere se lit comme un plantage. Et
+// jamais pendant que l'utilisateur tape — uniquement a la soumission.
+function arcRefus(el){
+  if(!el||!el.animate||arcReduit()) return null;
+  return el.animate([
+    {transform:'translateX(0)',   offset:0},
+    {transform:'translateX(5px)', offset:0.28},
+    {transform:'translateX(-5px)',offset:0.52},
+    {transform:'translateX(3px)', offset:0.76},
+    {transform:'translateX(0)',   offset:1}
+  ],{duration:190,easing:ARC.discharge,fill:'none'});
+}
+
+// ── LE BOUTON QUI ATTEND LE DIT ────────────────────────────────────────────
+// Onze sites verrouillaient un bouton pour un appel reseau en changeant son
+// seul libelle. Sur l'OCR l'attente depasse cinq secondes le temps de
+// telecharger le moteur, et rien ne bougeait. Le trait qui balaie le bas du
+// bouton et le opacity:.72 sont poses ici, une fois, pour les onze.
+function arcAttendre(btn,libelle){
+  if(!btn) return null;
+  const av=btn.textContent;
+  btn.dataset.arcLibelle=av;
+  btn.disabled=true;
+  btn.classList.add('arc-attente-bar');
+  if(libelle) btn.textContent=libelle;
+  return av;
+}
+function arcRendre(btn,libelle){
+  if(!btn) return;
+  btn.disabled=false;
+  btn.classList.remove('arc-attente-bar');
+  const av=(libelle!=null)?libelle:btn.dataset.arcLibelle;
+  if(av!=null) btn.textContent=av;
+  delete btn.dataset.arcLibelle;
+}
+
 // ── L'ENTREE AU DEFILEMENT DES LISTES LONGUES ──────────────────────────────
 // Les six premieres lignes de la liste coach cascadent ; tout ce qui est sous
 // le pli — l'essentiel chez un coach de quarante athletes — apparaissait deja
@@ -9543,6 +9690,28 @@ function _arcPression(e){
     arcGlow(el);
   }catch(err){}
 }
+// LES REPLIS S'OUVRENT SUR LEUR CONTENU, pas sur leur boite. Un seul repli
+// avait du mouvement, et c'etait son chevron : le contenu, lui, apparaissait
+// sans transition dans les seize cas, ce qui fait sauter la page d'un bloc. Le
+// navigateur n'anime pas nativement <details>, et animer sa hauteur ferait
+// remonter tout ce qui suit — a proscrire sur des listes longues. On anime donc
+// opacity + transform sur un seul noeud, 160 ms, une fois par ouverture :
+// aucune hauteur n'est animee, rien ne saute, rien ne se recalcule.
+// capture:true est OBLIGATOIRE : l'evenement `toggle` ne remonte pas. L'ecoute
+// n'appelle ni preventDefault ni stopPropagation — elle s'ajoute, elle ne
+// remplace aucun ontoggle existant.
+try{
+  document.addEventListener('toggle',e=>{
+    try{
+      const d=e.target;
+      if(!d||d.tagName!=='DETAILS'||!d.open||arcReduit()) return;
+      const c=d.querySelector(':scope>*:not(summary)');
+      if(!c||!c.animate) return;
+      c.animate([{opacity:0,transform:'translateY(-8px)'},{opacity:1,transform:'translateY(0)'}],
+        {duration:160,easing:ARC.discharge,fill:'none'});
+    }catch(err){}
+  },{capture:true,passive:true});
+}catch(err){}
 try{
   document.addEventListener('pointerdown',_arcNoter,{passive:true,capture:true});
   document.addEventListener('pointerup',_arcPression,{passive:true,capture:true});
@@ -9607,10 +9776,10 @@ function arcTirerPourRafraichir(zone,action){
   if(!zone||typeof action!=='function') return false;
   if(zone._arcTirage) return false;          // déjà armée : loadX() repasse ici
   zone._arcTirage=true;
-  let y0=null, trait=null, jauge=null, charge=0;
+  let y0=null, trait=null, jauge=null, charge=0, arme=false;
   const finir=()=>{
     if(trait){ try{ trait.remove(); }catch(e){} }
-    trait=null; jauge=null; charge=0;
+    trait=null; jauge=null; charge=0; arme=false;
   };
   const poser=()=>{
     const r=zone.getBoundingClientRect();
@@ -9628,7 +9797,7 @@ function arcTirerPourRafraichir(zone,action){
     // scrollTop>0 : on est au milieu de la page, ce geste est un défilement.
     if(arcReduit()||zone.scrollTop>0){ y0=null; return; }
     y0=(e.touches&&e.touches[0])?e.touches[0].clientY:null;
-    charge=0;
+    charge=0; arme=false;
   },{passive:true});
   zone.addEventListener('touchmove',e=>{
     if(y0==null||!e.touches||!e.touches[0]) return;
@@ -9638,6 +9807,18 @@ function arcTirerPourRafraichir(zone,action){
     charge=Math.min(ARC_TIRAGE_SEUIL,dy*ARC_TIRAGE_AMORTI);
     if(!trait&&!poser()){ y0=null; return; }
     jauge.style.transform='scaleX('+(charge/ARC_TIRAGE_SEUIL).toFixed(3)+')';
+    // LE FRANCHISSEMENT. Rien ne changeait a l'instant ou le seuil etait
+    // atteint : l'athlete continuait de tirer sans savoir s'il en avait assez
+    // fait, et decouvrait le resultat au relachement. Une seule fois par sens.
+    const plein=charge>=ARC_TIRAGE_SEUIL;
+    if(plein&&!arme){
+      arme=true;
+      try{ arcHaptique('legere'); }catch(e){}
+      jauge.style.background='linear-gradient(90deg,var(--arc-current),var(--arc-peak))';
+    } else if(!plein&&arme){
+      arme=false;
+      jauge.style.background='';
+    }
   },{passive:true});
   zone.addEventListener('touchend',()=>{
     if(y0==null) return;
@@ -9658,17 +9839,38 @@ function arcTirerPourRafraichir(zone,action){
   return true;
 }
 
+// LA MINUTERIE EST CONSERVEE. setTimeout etait pose sans que son identifiant
+// le soit : le second toast remplacait le texte du premier, mais la minuterie
+// du premier l'effacait apres le temps qu'il lui restait — un message pouvait
+// donc disparaitre au bout de 300 ms. Courant sur toastSync, qui annonce le
+// local puis le cloud.
+let _toastMinuteur=null;
 function toast(msg,c='var(--green)'){
   const t=document.getElementById('toast');
   // L'erreur se reconnaît à sa COULEUR, seule chose que les cent sites d'appel
   // fournissent déjà. Aucun d'eux n'a été touché : les vingt-six qui passent
   // « var(--red) » héritent du court-circuit sans le savoir.
   const erreur=/--red\b|--danger|--arc-danger/i.test(String(c));
-  t.textContent=msg;
-  t.style.borderLeft='4px solid '+(erreur?'var(--arc-danger)':c);
-  t.style.opacity='1';t.style.transform='translateX(-50%) translateY(0)';
-  if(erreur){ _arcCourtCircuit(t); arcHaptique('moyenne'); }
-  setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(-50%) translateY(80px)';},2800);
+  if(_toastMinuteur){ clearTimeout(_toastMinuteur); _toastMinuteur=null; }
+  const poser=()=>{
+    t.textContent=msg;
+    t.style.borderLeft='4px solid '+(erreur?'var(--arc-danger)':c);
+    t.style.opacity='1';t.style.transform='translateX(-50%) translateY(0)';
+    if(erreur){ _arcCourtCircuit(t); arcHaptique('moyenne'); }
+    _toastMinuteur=setTimeout(()=>{
+      t.style.opacity='0';t.style.transform='translateX(-50%) translateY(80px)';
+      _toastMinuteur=null;
+    },2800);
+  };
+  // LE RELAIS. Un toast deja affiche sort en 90 ms avant que le suivant entre :
+  // sans lui, le texte etait remplace sur place et rien ne disait qu'un nouveau
+  // message venait d'arriver. toast() reste SYNCHRONE et rend toujours
+  // undefined immediatement — seul l'affichage est differe.
+  if(t.style.opacity==='1'&&!arcReduit()&&t.animate){
+    const a=t.animate([{opacity:1},{opacity:0}],{duration:90,easing:ARC.charge,fill:'none'});
+    if(a){ a.addEventListener('finish',poser); a.addEventListener('cancel',poser); }
+    else poser();
+  } else poser();
 }
 
 // ======= AUTH =======
@@ -9717,17 +9919,17 @@ async function doRegister(){
   //
   // Le motif est celui qui valide déjà les adresses des paquets d'invitation :
   // un second finirait par diverger du premier.
-  if(!_PKG_EMAIL_RE.test(em)) return showErr('r-err','Cette adresse email n\'est pas valide : vérifie le @ et le nom de domaine.');
-  if(pw.length<6) return showErr('r-err','Mot de passe trop court (min 6 car.).');
-  if(pw!==pw2) return showErr('r-err','Mots de passe différents.');
+  if(!_PKG_EMAIL_RE.test(em)) return showErr('r-err','Cette adresse email n\'est pas valide : vérifie le @ et le nom de domaine.','r-email');
+  if(pw.length<6) return showErr('r-err','Mot de passe trop court (min 6 car.).','r-pwd');
+  if(pw!==pw2) return showErr('r-err','Mots de passe différents.','r-pwd2');
   // Contrôle d'âge AVANT CLOUD.signIn : signIn crée le compte Firebase Auth,
   // et un refus qui interviendrait après laisserait derrière lui le compte
   // d'un mineur — exactement ce que ce contrôle doit empêcher.
   const bd=v('r-birthdate');
-  if(!bd) return showErr('r-err','Renseigne ta date de naissance.');
+  if(!bd) return showErr('r-err','Renseigne ta date de naissance.','r-birthdate');
   const ageInscription=_ageRevolu(bd);
   if(ageInscription===null||ageInscription<0||ageInscription>120)
-    return showErr('r-err','Date de naissance invalide.');
+    return showErr('r-err','Date de naissance invalide.','r-birthdate');
   if(ageInscription<AGE_MINIMUM)
     return showErr('r-err','L\'inscription à RepCore demande d\'avoir '+AGE_MINIMUM
       +' ans révolus. L\'application traite des données de santé, et le consentement '
@@ -9790,7 +9992,7 @@ async function doRegister(){
   window._registerEnCours=true;
   const _btnReg=document.querySelector('#s-register .btn-red');
   const _libelleReg=_btnReg?_btnReg.textContent:'';
-  if(_btnReg){_btnReg.disabled=true;_btnReg.textContent='Création…';}
+  if(_btnReg) arcAttendre(_btnReg,'Création…');
   // Le try couvre TOUS les chemins de sortie, y compris les `return
   // showErr(...)` du compte déjà existant et de l’invitation refusée : c’est
   // précisément eux qui laissaient le bouton mort dans doLogin avant son
@@ -9805,7 +10007,7 @@ async function doRegister(){
     if(selRole==='coach'&&!_coachInviteCode()&&!(await placeLibreDisponible()))
       return showErr('r-err',LIBRE_ATTENTE_TEXTE);
     const users=DB.get('users')||{};
-    if(users[em]) return showErr('r-err','Email déjà utilisé.');
+    if(users[em]) return showErr('r-err','Email déjà utilisé.','r-email');
     const uid='u_'+Date.now();
     const user={id:uid,fname:fn,lname:ln,email:em,
       role:selRole,gender:gn,
@@ -9925,7 +10127,7 @@ async function doRegister(){
     }
   } finally {
     window._registerEnCours=false;
-    if(_btnReg){_btnReg.disabled=false;_btnReg.textContent=_libelleReg;}
+    if(_btnReg) arcRendre(_btnReg,_libelleReg);
   }
 }
 async function doLogin(){
@@ -9946,7 +10148,7 @@ async function doLogin(){
   // « Connexion… » comme libellé d’origine.
   if(_btnLog&&_btnLog.disabled) return;
   const _libLog=_btnLog?_btnLog.textContent:'';
-  if(_btnLog){_btnLog.disabled=true;_btnLog.textContent='Connexion…';}
+  if(_btnLog) arcAttendre(_btnLog,'Connexion…');
   try{
 
     if(!u){
@@ -9958,9 +10160,9 @@ async function doLogin(){
         if(CLOUD._signInErr==='network')
           return showErr('l-err','Erreur réseau : vérifiez votre connexion et réessayez.');
         if(CLOUD._signInErr==='wrong_password')
-          return showErr('l-err','Mot de passe incorrect. Utilisez "Mot de passe oublié ?" pour le réinitialiser par email.');
+          return showErr('l-err','Mot de passe incorrect. Utilisez "Mot de passe oublié ?" pour le réinitialiser par email.','l-pwd');
         if(CLOUD._signInErr==='invalid_email')
-          return showErr('l-err','Cette adresse email n\'est pas valide : vérifie le @ et le nom de domaine.');
+          return showErr('l-err','Cette adresse email n\'est pas valide : vérifie le @ et le nom de domaine.','l-email');
         return showErr('l-err','Impossible de se connecter. Essayez "Mot de passe oublié ?" ou vérifiez votre connexion.');
       }
       toast('Récupération du compte…');
@@ -9989,7 +10191,7 @@ async function doLogin(){
     }
     routeUser();
   } finally {
-    if(_btnLog){_btnLog.disabled=false;_btnLog.textContent=_libLog;}
+    if(_btnLog) arcRendre(_btnLog,_libLog);
   }
 }
 function rescueLogin(em,pw){
@@ -10079,13 +10281,13 @@ async function doNewPwdRecovery(){
   if(!em||!pw) return show('Remplis les deux champs.');
   if(pw.length<6) return show('Le mot de passe doit faire au moins 6 caractères.');
   const btn=document.querySelector('#new-pwd-recovery .btn-red');
-  if(btn){btn.textContent='Récupération…';btn.disabled=true;}
+  if(btn) arcAttendre(btn,'Récupération…');
   // Tenter signUp — crée un compte Firebase Auth si l'email n'y est pas encore
   const r=await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key='+CLOUD._fbKey,{
     method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({email:em,password:pw,returnSecureToken:true})
   }).then(r=>r.json()).catch(()=>({}));
-  if(btn){btn.textContent='RESTAURER MON COMPTE ICI';btn.disabled=false;}
+  if(btn) arcRendre(btn,'RESTAURER MON COMPTE ICI');
   if(r.idToken){
     // Nouveau compte Firebase créé → essayer de récupérer les données RTDB
     CLOUD._idToken=r.idToken;CLOUD._refreshToken=r.refreshToken;
@@ -10135,13 +10337,23 @@ async function doNewPwdRecovery(){
 // elle SUPPRIME la déclaration — les deux auraient perdu leur rouge dès la
 // première erreur. Quant à `cc-err`, sa classe `.err` n'existe nulle part dans
 // la feuille de style.
-function showErr(id,msg){
+function showErr(id,msg,champId){
   const e=document.getElementById(id);
   if(!e) return;
   if(e.dataset.coulOrigine===undefined) e.dataset.coulOrigine=e.style.color||'';
   e.style.color=e.dataset.coulOrigine;
   e.textContent=msg;
   e.style.display='block';
+  // LE BANDEAU ENTRE au lieu d'apparaitre d'un coup — souvent hors du champ de
+  // vision quand le clavier est ouvert. Le message, lui, s'affiche toujours :
+  // c'est de l'information, pas du mouvement.
+  if(!arcReduit()&&e.animate)
+    e.animate([{opacity:0,transform:'translateY(-6px)'},{opacity:1,transform:'translateY(0)'}],
+      {duration:ARC.strike,easing:ARC.discharge,fill:'none'});
+  // LE CHAMP FAUTIF EST DESIGNE. arcRefus s'applique au CHAMP, jamais a son
+  // conteneur. L'haptique survit a prefers-reduced-motion.
+  const c=champId&&document.getElementById(champId);
+  if(c){ arcRefus(c); try{ arcHaptique('moyenne'); }catch(err){} }
 }
 // La carte « CRÉER MON COMPTE » demande l'invitation AVANT d'ouvrir le
 // formulaire. Le contrôle de forme est fait ici pour attraper les fautes de
@@ -10319,7 +10531,7 @@ async function doAthleteCode(){
   if(_invDuLien){
     const btn=document.getElementById('ae-valider');
     const libelle=btn?btn.textContent:'';
-    if(btn){btn.disabled=true;btn.textContent='VÉRIFICATION…';}
+    if(btn) arcAttendre(btn,'VÉRIFICATION…');
     try{
       // SANS CONSOMMER : le compte n'existe pas encore, et un code brûlé par
       // une inscription abandonnée serait perdu pour de bon.
@@ -10333,7 +10545,7 @@ async function doAthleteCode(){
       errEl.textContent=e.message||'Code invalide.';
       errEl.style.display='block';
     }finally{
-      if(btn){btn.disabled=false;btn.textContent=libelle;}
+      if(btn) arcRendre(btn,libelle);
     }
     return;
   }
@@ -10357,7 +10569,7 @@ async function doAthleteCode(){
   if(_INVITE_RE.test(code)){
     const btn=document.getElementById('ae-valider');
     const libelle=btn?btn.textContent:'';
-    if(btn){btn.disabled=true;btn.textContent='VÉRIFICATION…';}
+    if(btn) arcAttendre(btn,'VÉRIFICATION…');
     try{
       const payload=await _verifierCodeSansConsommer(code);
       rcm('code_valid');
@@ -10369,7 +10581,7 @@ async function doAthleteCode(){
       errEl.textContent=e.message||'Code invalide.';
       errEl.style.display='block';
     }finally{
-      if(btn){btn.disabled=false;btn.textContent=libelle;}
+      if(btn) arcRendre(btn,libelle);
     }
     return;
   }
@@ -10611,7 +10823,7 @@ async function doLinkCoach(){
   // la fin — le bouton resterait figé sur un mot d’attente.
   if(_btnLC&&_btnLC.disabled) return;
   const _libLC=_btnLC?_btnLC.textContent:'';
-  if(_btnLC){_btnLC.disabled=true;_btnLC.textContent='VÉRIFICATION…';}
+  if(_btnLC) arcAttendre(_btnLC,'VÉRIFICATION…');
   // Le try couvre TOUS les chemins de sortie, `return showErr(...)` compris :
   // c’est précisément eux qui laissaient le bouton mort dans doAthleteCode
   // avant son propre correctif.
@@ -10733,7 +10945,7 @@ async function doLinkCoach(){
 
     showErr('cc-err','Format non reconnu. Entre le lien d\'invitation de ton coach.');
   } finally {
-    if(_btnLC){_btnLC.disabled=false;_btnLC.textContent=_libLC;}
+    if(_btnLC) arcRendre(_btnLC,_libLC);
   }
 }
 function showCoachCode(){
@@ -41089,10 +41301,10 @@ async function offChercherUI(){
   const b=document.getElementById('off-btn');
   if(!z) return false;
   _offEnCours=true;
-  if(b){ b.disabled=true; b.textContent='Recherche…'; }
+  if(b) arcAttendre(b,'Recherche…');
   const r=await offRecherche(q);
   _offEnCours=false;
-  if(b){ b.disabled=false; b.textContent='Chercher un produit de marque'; }
+  if(b) arcRendre(b,'Chercher un produit de marque');
   if(!r.ok){
     z.innerHTML=`<div style="font-size:var(--fs-xs);color:${r.quota||r.horsLigne?'var(--sub)':'var(--orange)'};line-height:1.6;margin-top:10px">${escapeHtml(r.raison)}</div>`;
     return false;
@@ -44384,12 +44596,14 @@ function saveClientSuppEntry(){
 }
 
 function deleteClientSuppEntry(index){
-  const users=DB.get('users')||{};
-  const c=getOwnedClient(currentClientId,users);
-  if(!c||!Array.isArray(c.nutrition?.supplements)) return;
-  c.nutrition.supplements.splice(index,1);
-  c.updatedAt=Date.now();users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
-  renderCoachSuppSection(c);
+  arcRetrait(arcDernierElement('.rc-ligne'),()=>{
+    const users=DB.get('users')||{};
+    const c=getOwnedClient(currentClientId,users);
+    if(!c||!Array.isArray(c.nutrition?.supplements)) return;
+    c.nutrition.supplements.splice(index,1);
+    c.updatedAt=Date.now();users[c.email]=c;DB.set('users',users);CLOUD.pushOne(c.email,c);
+    renderCoachSuppSection(c);
+  });
 }
 
 // PAR IDENTIFIANT LUI AUSSI. Sa liste n'est pas filtrée aujourd'hui, donc son
@@ -45208,6 +45422,14 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
   ${listHtml}`;
 }
 function deleteCaffeineEntry(dateStr,idx,screen){
+  const days=_caffStore();
+  if(!days[dateStr]) return;
+  // LA LIGNE SORT AVANT LE RE-RENDU. L'ecriture, elle, est dans le rappel, et
+  // le rappel s'execute meme quand l'animation ne part pas : arcRetrait le
+  // garantit. Rien n'est conditionne a la reussite de l'animation.
+  arcRetrait(arcDernierElement('.rc-ligne'),()=>_deleteCaffeineEntryEcrire(dateStr,idx,screen));
+}
+function _deleteCaffeineEntryEcrire(dateStr,idx,screen){
   const days=_caffStore();
   if(!days[dateStr]) return;
   days[dateStr].splice(idx,1);
@@ -50495,7 +50717,7 @@ async function importerCaptureStats(input){
   // La première lecture télécharge le moteur, et la reconnaissance elle-même
   // prend quelques secondes sur un téléphone. Sans ce retour visuel, l'athlète
   // croit que rien ne se passe et renvoie sa capture une deuxième fois.
-  if(btn){ btn.disabled=true; btn.textContent='Lecture en cours…'; }
+  if(btn) arcAttendre(btn,'Lecture en cours…');
   try{
     const dataUrl=await new Promise((res,rej)=>{
       const r=new FileReader();
@@ -50522,7 +50744,7 @@ async function importerCaptureStats(input){
   }catch(err){
     toast(err&&err.message?err.message:'Lecture impossible','var(--orange)');
   }finally{
-    if(btn){ btn.disabled=false; btn.textContent=libelle; }
+    if(btn) arcRendre(btn,libelle);
   }
 }
 function _recordSteps(dateStr,count){
@@ -51223,8 +51445,8 @@ async function analyzeProgPhotos(){
   if(!_importLegacyOuvert()) return _refusImportLegacy();
   if(!progPhotoData){toast('Ajoute d\'abord la photo de séance.','var(--orange)');return;}
   const btn=document.getElementById('prog-analyze-btn');
-  const reset=()=>{if(btn){btn.innerHTML=' Analyser les 2 photos → Importer les exercices';btn.disabled=false;}};
-  if(btn){btn.innerHTML='⏳ Lecture photo séance...';btn.disabled=true;btn.style.opacity='0.7';}
+  const reset=()=>{if(btn){ btn.disabled=false; btn.classList.remove('arc-attente-bar'); btn.innerHTML=' Analyser les 2 photos → Importer les exercices'; }};
+  if(btn){ btn.disabled=true; btn.classList.add('arc-attente-bar'); btn.innerHTML='⏳ Lecture photo séance...'; }
   try{
     const text=await _ocrImage(progPhotoData);
     if(!text){toast('Texte illisible. Photo plus nette ?','var(--orange)');reset();return;}
@@ -51501,8 +51723,8 @@ async function analyzePhotoWithClaude(idx){
   const photo=cfg[idx].photo;
   if(!photo) return;
   const btn=document.getElementById('analyze-btn-'+idx);
-  const resetBtn=()=>{if(btn){btn.innerHTML=' Lire & importer les exercices';btn.disabled=false;btn.style.opacity='1';}};
-  if(btn){btn.innerHTML='⏳ Lecture en cours...';btn.disabled=true;btn.style.opacity='0.7';}
+  const resetBtn=()=>{if(btn){ btn.disabled=false; btn.classList.remove('arc-attente-bar'); btn.innerHTML=' Lire & importer les exercices'; }};
+  if(btn){ btn.disabled=true; btn.classList.add('arc-attente-bar'); btn.innerHTML='⏳ Lecture en cours...'; }
   try{
     const rawText=await _ocrImage(photo);
     if(!rawText){toast('Texte illisible. Essaie une photo plus nette et bien cadrée.','var(--orange)');resetBtn();return;}
