@@ -45863,6 +45863,17 @@ function _stepsObjectifJour(goals,type,date){
   if(estOn&&on) return on;
   return off||on||0;
 }
+// LE GABARIT DE BARRE, PARTAGE PAR LES PAS ET LE SOMMEIL. Les deux ecrans
+// dessinaient la meme barre a quelques octets pres, et ces octets-la
+// divergeaient deja : plancher a 6 contre 4, hauteur minimale a 5 px contre 4.
+// Une seule fonction, et la prochaine retouche ne peut plus les separer.
+//
+// LE LISERE HAUT REMPLACE UN GLOW MORT. Les deux ecrans calculaient une
+// variable de lueur pour le jour courant sans jamais l employer : ce jour
+// n etait donc signale nulle part. C est ce que ce calcul essayait de dire.
+function _htmlBarreSemaine(pct,col,isToday,accentBas){
+  return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%"><div style="width:82%;height:${pct}%;background:linear-gradient(180deg,${col},${col}55);border-radius:var(--r-1) var(--r-1) 0 0;min-height:4px;box-shadow:0 0 ${isToday?'14':'8'}px ${col}${isToday?'aa':'55'},inset 0 1px 0 rgba(255,255,255,.25);transition:var(--t-3);${isToday?'border-top:2px solid #fff;':''}${accentBas?'border-bottom:2px solid '+accentBas+';':''}"></div></div>`;
+}
 function loadSteps(containerId='steps-content'){
   if(containerId==='steps-content') go('s-steps');
   const log=currentUser.stepsLog||[];
@@ -45893,20 +45904,17 @@ function loadSteps(containerId='steps-content'){
     if(!(goal>0)) return 'var(--border)';
     if(n>=goal) return '#22c55e';
     if(n>=goal*0.6) return '#f97316';
-    return '#e05050';
+    return '#E02020';
   };
   const fmt=n=>n?n.toLocaleString('fr-FR'):'—';
   const avgColor=weekAvg>=goals.on?'#22c55e':weekAvg>=goals.on*0.6?'#f97316':weekAvg>0?'#E02020':'#777777';
 
   let bars='';
   weekData.forEach(d=>{
-    const pct=d.count?Math.max(6,Math.round(d.count/maxVal*100)):6;
+    const pct=d.count?Math.max(5,Math.round(d.count/maxVal*100)):4;
     const col=stepColor(d.count||0,d.type,d.date);
-    const glow=d.isToday?';box-shadow:0 0 10px '+col+'66':'';
     const typeAccent=d.type==='on'?'#E02020':d.type==='off'?'#60a5fa':'transparent';
-    bars+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">
-      <div style="width:82%;height:${pct}%;background:linear-gradient(180deg,${col},${col}55);border-radius:var(--r-1) var(--r-1) 0 0;min-height:5px;box-shadow:0 0 ${d.isToday?'14':'8'}px ${col}${d.isToday?'aa':'55'},inset 0 1px 0 rgba(255,255,255,.25);transition:var(--t-3);border-bottom:2px solid ${typeAccent}"></div>
-    </div>`;
+    bars+=_htmlBarreSemaine(pct,col,d.isToday,typeAccent);
   });
 
   let labels='';
@@ -49472,10 +49480,9 @@ function loadSleep(containerId='sleep-content',user){
   let bars='';
   weekData.forEach(d=>{
     const h=d.entry?.duration||0;
-    const pct=h?Math.max(6,Math.round(h/maxVal*100)):4;
+    const pct=h?Math.max(5,Math.round(h/maxVal*100)):4;
     const col=sleepColor(h);
-    const glow=d.isToday?';box-shadow:0 0 10px '+col+'66':'';
-    bars+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%"><div style="width:82%;height:${pct}%;background:linear-gradient(180deg,${col},${col}55);border-radius:var(--r-1) var(--r-1) 0 0;min-height:4px;box-shadow:0 0 ${d.isToday?'14':'8'}px ${col}${d.isToday?'aa':'55'},inset 0 1px 0 rgba(255,255,255,.25);transition:var(--t-3)"></div></div>`;
+    bars+=_htmlBarreSemaine(pct,col,d.isToday,null);
   });
   let labels='';
   weekData.forEach(d=>{
