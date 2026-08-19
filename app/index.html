@@ -743,7 +743,11 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 }
 
 /* -- L'EN-TETE ---------------------------------------------------------- */
-.nut-tete{display:flex;align-items:center;gap:11px;margin-bottom:13px}
+/* LE TITRE ET LE SELECTEUR SUR UNE SEULE LIGNE. flex-wrap est le filet : sur
+   un ecran assez etroit pour que les deux ne tiennent pas, le selecteur
+   redescend de lui-meme -- ce qui est l'etat d'avant, donc jamais pire. */
+.nut-tete{display:flex;align-items:center;gap:10px;margin-bottom:13px;flex-wrap:wrap}
+.nut-tete>#clh-nutri-unite{margin-left:auto}
 .nut-boul{display:inline-flex;align-items:center;justify-content:center;
   width:30px;height:30px;flex-shrink:0;border-radius:9px;color:#ff2a2a;
   background:linear-gradient(180deg,#1c0606,#0a0303);
@@ -754,18 +758,21 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
   background:linear-gradient(180deg,transparent,rgba(255,42,42,.55),transparent)}
 /* L'inclinaison est un skew, pas un font-style : Bebas Neue n'est chargee
    qu'en romain et le navigateur en fabriquerait une oblique baveuse. */
-.nut-titre{font-family:var(--pile-titre);font-size:23px;font-weight:400;
-  letter-spacing:2.4px;color:var(--text);text-transform:uppercase;line-height:1;
+.nut-titre{font-family:var(--pile-titre);font-size:21px;font-weight:400;
+  letter-spacing:1.6px;color:var(--text);text-transform:uppercase;line-height:1;
   transform:skewX(-9deg);transform-origin:left center;
   text-shadow:0 0 10px rgba(255,255,255,.35),0 0 26px rgba(224,32,32,.35)}
 
 /* -- LE SELECTEUR D'UNITE ----------------------------------------------- */
-.nut-seg{display:inline-flex;align-items:stretch;padding:3px;border-radius:11px;
+.nut-seg{display:inline-flex;align-items:stretch;padding:2px;border-radius:10px;
   background:linear-gradient(180deg,#121212,#0a0a0a);border:1px solid var(--border);
   box-shadow:var(--e-inset)}
-.nut-seg button{min-width:52px;min-height:30px;border:1px solid transparent;border-radius:8px;
+/* 28 px de haut : c'est le plancher tapable une fois le boitier compte --
+   le rembourrage du boitier et sa bordure portent le bouton a 32 px de zone
+   utile, au-dessus des 30 px du reste de l'application. */
+.nut-seg button{min-width:42px;min-height:28px;border:1px solid transparent;border-radius:8px;
   background:none;color:var(--sub);cursor:pointer;
-  font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;padding:2px 10px;
+  font-family:Montserrat,sans-serif;font-size:12px;font-weight:800;padding:2px 7px;
   transition:color var(--t-1) var(--c-out),border-color var(--t-1) var(--c-out),
              background-color var(--t-1) var(--c-out),box-shadow var(--t-1) var(--c-out)}
 .nut-seg button:hover:not(:disabled){color:var(--text-strong)}
@@ -798,6 +805,11 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
   box-shadow:inset 0 1px 0 rgba(255,190,190,.07),0 4px 14px rgba(0,0,0,.45)}
 .nut-cap{font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:2.4px;
   text-transform:uppercase;color:var(--sub)}
+/* La phrase est longue : elle prend un interlettrage de titre courant, sinon
+   elle passe a la ligne sur un telephone de 360 px -- ce qui rendrait la
+   ligne qu'on vient de gagner. */
+.nut-sem{letter-spacing:1.1px;margin-bottom:2px}
+.nut-sem b{font-weight:800;font-size:13px;font-variant-numeric:tabular-nums;letter-spacing:.5px}
 .nut-kcal{font-family:Montserrat,sans-serif;font-size:15px;font-weight:800;color:#ff2b2b;
   text-shadow:0 0 10px rgba(224,32,32,.55)}
 .nut-kcal small{font-size:13px;font-weight:600;color:var(--sub);text-shadow:none}
@@ -853,8 +865,7 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
   from{transform:scale(.55);opacity:0}
   to  {transform:scale(1);opacity:1}
 }
-.nut-score{margin-top:11px;font-family:Montserrat,sans-serif;font-size:14px;color:var(--sub)}
-.nut-score b{font-weight:800;font-variant-numeric:tabular-nums}
+
 
 @media (max-width:480px){.metric-row-4{display:grid;grid-template-columns:1fr 1fr;gap:10px}}
 .metric-val{font-size:var(--fs-2xl);font-family:var(--pile-titre);letter-spacing:0;line-height:1}
@@ -4320,12 +4331,16 @@ const COACH_PHOTO='icons/coach.jpg';
           <span class="nut-boul"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;display:block"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
           <span class="nut-sep"></span>
           <span class="nut-titre">Nutrition</span>
+          <!-- Le selecteur d'unite est REMPLI par renderNutriAnneaux : il vit
+               ici pour tenir sur la ligne du titre, mais il reste produit par
+               le rendu qui connait le poids de reference et les unites
+               disponibles. -->
+          <div id="clh-nutri-unite"></div>
         </div>
         <div id="clh-nutri-rings"></div>
         <div class="nut-bloc">
-          <div id="clh-nutri-sem-label" class="nut-cap">Cette semaine</div>
+          <div id="clh-nutri-sem-label" class="nut-cap nut-sem">Cette semaine, ton score est : <b id="clh-nutri-score">—</b></div>
           <div class="nut-jours" id="clh-nutri-dots"></div>
-          <div class="nut-score">Score : <b id="clh-nutri-score">—</b></div>
         </div>
       </div>
 
@@ -22987,7 +23002,11 @@ function renderNutriAnneaux(){
   const m=_getEffectiveMacros(nut,isOn,today)||{};
   // Sans objectifs, il n'y a rien à dessiner : trois anneaux vides sans cible
   // ne renseignent sur rien.
-  if(!m.p&&!m.g&&!m.l){ el.innerHTML=''; return; }
+  // L'emplacement du selecteur, dans l'en-tete. Il se vide EN MEME TEMPS que
+  // les anneaux : un selecteur d'unite seul, sous un titre et au-dessus de
+  // rien, ne selectionnerait l'unite de personne.
+  const elU=document.getElementById('clh-nutri-unite');
+  if(!m.p&&!m.g&&!m.l){ el.innerHTML=''; if(elU) elU.innerHTML=''; return; }
   let tot;
   if(typeDiete(nut)==='strict'){
     let ouvert=false;
@@ -22999,7 +23018,10 @@ function renderNutriAnneaux(){
       c:a.c+(e.c||0),l:a.l+(e.l||0)}),{kcal:0,p:0,c:0,l:0});
   }
   const _pr=poidsReference(currentUser);
-  el.innerHTML=htmlMacroUnite(currentUser)
+  // Le boitier monte dans l'en-tete SANS sa note ; la note se pose en tete du
+  // bloc des anneaux, soit juste sous lui, a la ligne pres.
+  if(elU) elU.innerHTML=htmlMacroUnite(currentUser,null,true);
+  el.innerHTML=htmlMacroUniteNote(currentUser)
     +htmlAnneauxMacros(tot,m,'12px',macroUnite(),_pr)+htmlLigneCalories(tot,m)
     +(macroNoteGlucidesZero(m)?`<div style="font-size:var(--fs-2xs);color:var(--orange);line-height:1.55;margin-top:6px">${escapeHtml(macroNoteGlucidesZero(m))}</div>`:'');
   _animerJauges(el);
@@ -37590,7 +37612,19 @@ function setMacroUnite(u){
   return v;
 }
 // Le sélecteur, partagé par tous les écrans qui l'affichent.
-function htmlMacroUnite(user,idSuffixe){
+// PURE. Les deux phrases qui accompagnent le selecteur d'unite. Extraites
+// pour pouvoir etre posees AILLEURS que le boitier : sur la ligne du titre,
+// elles feraient passer l'en-tete de une a trois lignes.
+function htmlMacroUniteNote(user){
+  const pr=poidsReference(user);
+  const u=macroUnite();
+  if(u==='gkg'&&pr>0) return `<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-bottom:8px">par kilo · ${String(pr).replace('.',',')} kg au dernier bilan</div>`;
+  if(!pr) return `<div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-bottom:8px">g/kg indisponible : aucun poids au dossier</div>`;
+  return '';
+}
+// `sansNote` est OPTIONNEL et vaut faux : les appels existants rendent le
+// boitier ET la note, au caractere pres, comme avant.
+function htmlMacroUnite(user,idSuffixe,sansNote){
   const pr=poidsReference(user);
   const u=macroUnite();
   const libs={g:'g',pct:'%',gkg:'g/kg'};
@@ -37600,7 +37634,7 @@ function htmlMacroUnite(user,idSuffixe){
   // [aria-pressed] et [disabled] -- donc par les attributs qui les DECLARENT
   // deja pour les technologies d'assistance, jamais par une classe parallele
   // qui pourrait s'en desynchroniser.
-  return `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+  return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
     <div class="nut-seg">
     ${MACRO_UNITES.map(x=>{
       const dispo=macroUniteDisponible(x,pr);
@@ -37608,8 +37642,7 @@ function htmlMacroUnite(user,idSuffixe){
         aria-pressed="${x===u&&dispo?'true':'false'}"
         title="${dispo?'':'Aucun poids au dossier'}">${libs[x]}</button>`;}).join('')}
     </div>
-    ${(u==='gkg'&&pr>0)?`<span style="font-size:var(--fs-2xs);color:var(--text-faint)">par kilo · ${String(pr).replace('.',',')} kg au dernier bilan</span>`:''}
-    ${(!pr)?`<span style="font-size:var(--fs-2xs);color:var(--text-faint)">g/kg indisponible : aucun poids au dossier</span>`:''}
+    ${sansNote?'':htmlMacroUniteNote(user)}
   </div>`;
 }
 
@@ -37690,6 +37723,11 @@ function htmlAnneauxMacros(tot,m,marge,unite,poidsRef){
     // plafonne a 100 % par Math.min : a lui seul, il ne peut pas distinguer
     // « pile atteint » de « largement depasse ».
     const trop=cible!=null&&val>tgt*1.1;
+    // LE CORPS SUIT LA LONGUEUR. Le diametre interieur vaut 2*(R - sw/2), moins
+    // une marge ; une capitale de Bebas avance d'environ 0,45 em. Trois signes
+    // gardent le corps nominal, « 2,71 G/KG » descend a une vingtaine de pixels.
+    const _txt=String(_cv?_cv.fait.texte:fait);
+    const _fs=Math.max(15,Math.min(36,Math.round((2*(R-sw/2)-8)/(0.48*Math.max(1,_txt.length)))));
     return `<div class="nut-a">
       <svg viewBox="0 0 120 120" data-atteint="${pct>=1?'1':'0'}" aria-hidden="true">
         <!-- LE CERCEAU EXTERIEUR ET LE FILET INTERIEUR ne portent aucune
@@ -37741,7 +37779,7 @@ function htmlAnneauxMacros(tot,m,marge,unite,poidsRef){
              dans ce depot : toute valeur superieure produit un gras synthetique
              baveux, que le navigateur fabrique en epaississant le trace. -->
         <text x="${cx}" y="${cy+6}" dominant-baseline="middle" text-anchor="middle"
-          font-family="'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif" font-size="36" font-weight="400" letter-spacing="0.5"
+          font-family="'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif" font-size="${_fs}" font-weight="400" letter-spacing="0.5"
           style="font-variant-numeric:tabular-nums"
           ${_cv?'':`data-num="${fait}"`}
           fill="${trop?'var(--orange)':'var(--text)'}">${_cv?_cv.fait.texte:fait}</text>
