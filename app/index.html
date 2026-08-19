@@ -362,9 +362,15 @@ body::after{content:'';position:fixed;inset:0;z-index:var(--z-layer);pointer-eve
 /* .screen.active handled above */
 
 /* ====== BUTTONS ====== */
-.btn{width:100%;padding:16px;border:none;border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800;cursor:pointer;transition:box-shadow var(--t-1),background var(--t-1),transform var(--arc-strike) var(--arc-c-discharge);text-transform:uppercase;letter-spacing:2.5px;-webkit-tap-highlight-color:transparent}
-.btn-red{background:#E02020;color:var(--text);box-shadow:var(--glow-red)}
-.btn-red:hover{background:#c91a1a;box-shadow:var(--glow-red)}
+.btn{width:100%;padding:16px;border:none;border-radius:10px;font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800;cursor:pointer;transition:box-shadow var(--t-1),background var(--t-1),transform var(--arc-strike) var(--arc-c-discharge);text-transform:uppercase;letter-spacing:2.5px;-webkit-tap-highlight-color:transparent}
+/* LE BOUTON PRIMAIRE, UNE SEULE FOIS. Le degrade et le liseré clair vivaient
+   en style inline sur les boutons Pas et Sommeil ; les quatre autres boutons
+   d action du module etaient des aplats. Ils remontent ici : une seule
+   definition, et les six se ressemblent enfin. */
+.btn-red{background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);box-shadow:var(--glow-red)}
+/* Le survol posait un aplat : il aurait EFFACE le degrade au premier passage
+   de souris. Il s assombrit dans le meme sens, il ne change pas de nature. */
+.btn-red:hover{background:linear-gradient(160deg,#c91a1a,#7a0000);box-shadow:var(--glow-red)}
 .btn-red:active{transform:scale(var(--arc-scale-charge));box-shadow:var(--e1),var(--glow-red);transition:transform var(--arc-attack) var(--arc-c-charge)}
 .btn-outline{background:transparent;color:#aaa;border:1px solid rgba(255,255,255,.12);letter-spacing:2px}
 .btn-outline:hover{border-color:var(--red);color:var(--red-text)}
@@ -40642,7 +40648,7 @@ function _renderFjDaySummary(date){
           </div>
           ${nextBtn}
         </div>
-        <button onclick="openFoodSearch('${date}')" style="background:var(--red);border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;padding:8px 14px;border-radius:var(--r-2);cursor:pointer;box-shadow:0 0 14px rgba(224,32,32,.35)">+ AJOUTER</button>
+        <button class="btn btn-red btn-sm" onclick="openFoodSearch('${date}')">+ AJOUTER</button>
       </div>
       <div style="border-top:1px solid var(--surface-2);padding:13px 14px 10px">
         <div style="display:flex;gap:6px;margin-bottom:6px">
@@ -42925,7 +42931,7 @@ function loadSupplements(){
         <div style="width:3px;height:20px;background:var(--red);border-radius:var(--r-1)"></div>
         <h3 style="margin:0">Mes compléments</h3>
       </div>
-      <button onclick="openSuppEdit(-1)" style="background:var(--red);border:none;color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;padding:8px 14px;border-radius:var(--r-2);cursor:pointer">+ AJOUTER</button>
+      <button class="btn btn-red btn-sm" onclick="openSuppEdit(-1)">+ AJOUTER</button>
     </div>
     ${_htmlTraitementSupp(currentUser)}
     <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4);padding:14px">
@@ -42963,7 +42969,7 @@ function loadSuppEmbedded(){
     <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4);padding:14px;margin-bottom:12px">
       ${_htmlMigrationCycleSupp(currentUser)}${_htmlSuggestionCycle(currentUser)}${omegaBanner}${_renderSuppTable(list,false,'openSuppEdit')}
     </div>
-    <button onclick="openSuppEdit(-1)" style="background:none;border:1px dashed var(--border);border-radius:var(--r-3);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;padding:10px 0;width:100%;cursor:pointer;margin-bottom:4px">+ Ajouter un complément</button>
+    <button onclick="openSuppEdit(-1)" style="background:none;border:1px dashed var(--border);border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;padding:10px 0;width:100%;cursor:pointer;margin-bottom:4px">+ Ajouter un complément</button>
     <div style="height:4px"></div>`;
 }
 
@@ -45911,7 +45917,7 @@ function loadSteps(containerId='steps-content'){
         <input type="number" id="steps-today-input" placeholder="0" min="0" max="99999"
           value="${todayEntry&&todayEntry.count!=null?todayEntry.count:''}"
           style="width:100%;box-sizing:border-box;font-size:var(--fs-3xl);text-align:center;padding:14px 10px;background:linear-gradient(180deg,#070707,#0d0d0d);border:1px solid #242424;border-radius:var(--r-3);color:var(--text);font-family:var(--pile-titre);letter-spacing:2px;margin-bottom:11px;box-shadow:var(--e-inset);text-shadow:var(--halo-2)">
-        <button onclick="saveSteps()" style="width:100%;padding:13px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800;letter-spacing:2.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Sauver</button>
+        <button class="btn btn-red" onclick="saveSteps()">Sauver</button>
         ${todayProgressHtml}
       </div>
     </div>
@@ -49420,7 +49426,7 @@ function loadSleep(containerId='sleep-content',user){
           </div>
         </div>
         <div id="sleep-preview" style="text-align:center;font-size:var(--fs-sm);color:var(--text-faint);margin-bottom:11px;min-height:26px">${todayEntry?.duration!=null?`<span style="font-family:var(--pile-titre);font-size:var(--fs-2xl);color:${sleepColor(todayEntry.duration)};--halo-c:${sleepColor(todayEntry.duration)};text-shadow:var(--halo-2)aa">${todayEntry.duration}h</span> de sommeil`:''}</div>
-        <button onclick="saveSleep()" style="width:100%;padding:13px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:800;letter-spacing:2.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Enregistrer</button>
+        <button class="btn btn-red" onclick="saveSleep()">Enregistrer</button>
       </div>
     </div>
 
