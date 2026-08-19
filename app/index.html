@@ -42805,16 +42805,21 @@ function _suppTimingTags(timings,small){
 }
 
 // Métadonnées d'affichage par moment de prise : ordre chronologique, couleur, icône
+// LES QUATRE CHAUDES S ECARTENT EN CLARTE, PAS EN TEINTE. Matin, midi,
+// apres-midi et apres-entrainement etaient quatre jaunes-oranges voisins :
+// sur une pastille de 10 px, rien ne les separait. Leur ORDRE DE JOURNEE est
+// conserve — c est leur luminosite qui les distingue, du plus clair au plus
+// sombre : #fde047, #fb923c, #d97706, #c2410c.
 const SUPP_TIMING_META={
   'jeun':               {color:'#94a3b8',svg:'<circle cx="12" cy="15" r="4"/><line x1="12" y1="5" x2="12" y2="8"/><line x1="5.6" y1="8.6" x2="7.7" y2="10.7"/><line x1="18.4" y1="8.6" x2="16.3" y2="10.7"/><line x1="3" y1="20" x2="21" y2="20"/>'},
-  'matin':              {color:'#f5c518',svg:'<circle cx="12" cy="12" r="4.5"/><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="4.2" y1="4.2" x2="6" y2="6"/><line x1="18" y1="18" x2="19.8" y2="19.8"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.2" y1="19.8" x2="6" y2="18"/><line x1="18" y1="6" x2="19.8" y2="4.2"/>'},
+  'matin':              {color:'#fde047',svg:'<circle cx="12" cy="12" r="4.5"/><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="4.2" y1="4.2" x2="6" y2="6"/><line x1="18" y1="18" x2="19.8" y2="19.8"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.2" y1="19.8" x2="6" y2="18"/><line x1="18" y1="6" x2="19.8" y2="4.2"/>'},
   'midi':               {color:'#fb923c',svg:'<circle cx="12" cy="12" r="5.5"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="5" y1="5" x2="6.5" y2="6.5"/><line x1="17.5" y1="6.5" x2="19" y2="5"/>'},
-  'apres-midi':         {color:'#f59e0b',svg:'<circle cx="12" cy="13" r="4"/><line x1="12" y1="4" x2="12" y2="6.5"/><line x1="18.5" y1="7.5" x2="16.7" y2="9.3"/><line x1="20" y1="14" x2="17.5" y2="14"/><line x1="3" y1="20" x2="21" y2="20"/>'},
+  'apres-midi':         {color:'#d97706',svg:'<circle cx="12" cy="13" r="4"/><line x1="12" y1="4" x2="12" y2="6.5"/><line x1="18.5" y1="7.5" x2="16.7" y2="9.3"/><line x1="20" y1="14" x2="17.5" y2="14"/><line x1="3" y1="20" x2="21" y2="20"/>'},
   'soir':               {color:'#a78bfa',svg:'<circle cx="12" cy="14" r="4"/><line x1="12" y1="5" x2="12" y2="7.5"/><line x1="5.5" y1="8.5" x2="7.3" y2="10.3"/><line x1="4" y1="15" x2="6.5" y2="15"/><line x1="3" y1="20" x2="21" y2="20"/><polyline points="9 17.5 12 20.5 15 17.5"/>'},
   'coucher':            {color:'#60a5fa',svg:'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'},
   'avant-entrainement': {color:'#E02020',svg:'<path d="M6.5 6.5h11M6.5 17.5h11M4 9v6M20 9v6M8 7v10M16 7v10"/>'},
   'intra':              {color:'#22c55e',svg:'<path d="M12 2.7 C12 2.7 5.5 10 5.5 14.2 a6.5 6.5 0 0 0 13 0 C18.5 10 12 2.7 12 2.7 Z"/>'},
-  'apres-entrainement': {color:'#ef7d3a',svg:'<path d="M6.5 6.5h11M6.5 17.5h11M4 9v6M20 9v6"/><polyline points="8.5 12 11 14.5 15.5 9.5"/>'},
+  'apres-entrainement': {color:'#c2410c',svg:'<path d="M6.5 6.5h11M6.5 17.5h11M4 9v6M20 9v6"/><polyline points="8.5 12 11 14.5 15.5 9.5"/>'},
   'toutes-4h':          {color:'#94a3b8',svg:'<circle cx="12" cy="12" r="9"/><polyline points="12 6.5 12 12 15.8 14"/>'}
 };
 function _suppTimingIcon(id,size,color){
@@ -42943,14 +42948,14 @@ function _renderSuppTable(list, isCoach, editFn){
     const unite=s.dosage_unit||'';
     const chips=mts.map(t=>{
       const mc=(SUPP_TIMING_META[t.id]||{color:c}).color;
-      return '<span title="'+escapeHtml(t.label)+'" style="display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:var(--r-4);'
-        +'background:'+mc+'14;border:1px solid '+mc+'44;color:'+mc+';font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px">'
-        +_suppTimingIcon(t.id,9,mc)+(q!=null?('<span>'+nb(q)+'</span>'):'')+'</span>';
+      return '<span title="'+escapeHtml(t.label)+'" style="display:inline-flex;align-items:center;gap:3px;padding:3px 7px;border-radius:var(--r-4);'
+        +'background:'+mc+'1f;border:1px solid '+mc+'44;color:'+mc+';font-size:10.5px;font-weight:800;letter-spacing:.4px">'
+        +_suppTimingIcon(t.id,11,mc)+(q!=null?('<span>'+nb(q)+'</span>'):'')+'</span>';
     }).join('');
     return `<div onclick="${editFn}(${realIdx})" role="button" tabindex="0" aria-label="${escapeHtml(s.name||'Complément')}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}" style="position:relative;overflow:hidden;display:flex;align-items:center;gap:10px;
       padding:9px 12px;margin-bottom:7px;cursor:pointer;border-radius:var(--r-3);
       background:linear-gradient(150deg,#161616,#101010 60%,#0d0d0d);
-      border:1px solid #202020;border-left:3px solid ${c};
+      border:1px solid #202020;border-left:4px solid ${c};
       box-shadow:var(--e2);
       opacity:${inactive?'.5':'1'}">
       <div aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;background:${TRAME}"></div>
