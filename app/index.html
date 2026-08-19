@@ -1642,6 +1642,13 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 @media print{
   @page{margin:14mm}
   html,body{background:#fff!important;color:#000!important}
+  /* LA MAQUETTE DE 480 PX EST UNE CONTRAINTE D ECRAN. Au papier, elle laissait
+     les deux tiers de la feuille vides et un liseré de maquette en marge. */
+  body{max-width:none!important;border-left:none!important;border-right:none!important;box-shadow:none!important}
+  /* Le padding:0 de la ligne suivante porte sur le .screen, pas sur le .pad,
+     qui garde ses 24 x 20 px. Les deux regles sont necessaires. */
+  #s-programme-print.active .pad,#s-rapport.active .pad{padding:0!important}
+  #s-programme-print.active,#s-rapport.active{max-width:none!important}
   .screen{display:none!important}
   /* LES DEUX ECRANS IMPRIMABLES, chacun SEULEMENT S IL EST A L ECRAN.
      `.active` etait superflu tant qu il n y en avait qu un : forcer
@@ -1656,13 +1663,28 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   .rap-bloc h2{color:#444!important;border-bottom-color:#bbb!important}
   .rap-nb{color:#000!important}
   .rap-lbl,.rap-u,.rap-note,.rap-meta,.rap-vide{color:var(--text-dim)!important}
-  .rap-tbl td{border-bottom-color:var(--text-strong)!important}
+  /* LE TABLEAU AU PAPIER. Une largeur fixe, un en-tete qui se repete d une page
+     a l autre, et une ligne sur deux teintee : sur une feuille imprimee, l oeil
+     n a plus le survol pour se reperer dans une ligne longue. */
+  .rap-tbl{table-layout:fixed;width:100%}
+  .rap-tbl th{color:#000!important;background:#f0f0f0!important;border-bottom:1.5px solid #000!important;
+    padding:6px 7px!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .rap-tbl td{border-bottom-color:#ddd!important;padding:6px 7px!important;vertical-align:top}
+  .rap-tbl tbody tr:nth-child(even) td{background:#fafafa!important;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .rap-tbl th:first-child,.rap-tbl td:first-child{width:34%;text-align:left}
+  .rap-tbl th:not(:first-child),.rap-tbl td:not(:first-child){text-align:center;white-space:nowrap}
+  .rap-tbl thead{display:table-header-group}
   /* Les en-tetes etaient en var(--sub), calibre pour du blanc sur noir : sur
-     du papier blanc, ils disparaissaient presque. */
-  .rap-tbl th{color:#555!important}
-  /* Les colonnes de valeurs se lisent alignees a droite, chiffres de largeur
-     fixe. La premiere colonne, qui porte le libelle, reste a gauche. */
-  .rap-tbl td:not(:first-child),.rap-tbl th:not(:first-child){text-align:right;font-variant-numeric:tabular-nums}
+     du papier blanc, ils disparaissaient presque. Un premier lot les avait
+     passes a #555 ; le lot du tableau imprime les pousse jusqu au noir plein,
+     sur un fond gris clair. La regle #555 est retiree plutot que laissee a
+     s ecraser plus bas : deux declarations pour la meme chose, dont une morte,
+     c est le genre de chose qu on relit trois fois avant de comprendre. */
+  /* L alignement des colonnes de valeurs est desormais pose plus haut, en
+     CENTRE et non a droite. Les chiffres de largeur fixe restent, eux : c est
+     ce qui empeche les colonnes de danser. */
+  .rap-tbl td:not(:first-child),.rap-tbl th:not(:first-child){font-variant-numeric:tabular-nums}
   /* La piste de la barre de volume est calee sur un fond noir : a 8 %, sur du
      blanc, elle ne se voit plus du tout. */
   .rap-piste{fill-opacity:.16!important}
@@ -1670,6 +1692,22 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
      navigateur, qui aplatit les fonds par defaut. */
   .rap-titre::after{content:'';display:block;width:34mm;height:3mm;background:#E02020!important;margin-top:3mm;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .rap-mot{border-color:#bbb!important;min-height:76px}
+  /* L ECHELLE DU PAPIER. Une feuille A4 se lit a 40 cm, un telephone a 30 : les
+     tailles d ecran y paraissent toutes d un cran trop petites.
+     .rap-titre est en Bebas SANS font-weight, donc en 400 — la seule graisse
+     reellement chargee. Ne rien y ajouter : un 800 declencherait le faux gras. */
+  .rap-titre{font-size:44px!important;letter-spacing:3px!important;color:#000!important}
+  .pp-tete{border-bottom:2px solid #E02020!important;padding-bottom:12px!important;
+    margin-bottom:24px!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .rap-sous{font-size:16px!important}
+  .rap-meta{font-size:11px!important}
+  .pp-seance h2{font-size:14px!important;letter-spacing:2.5px!important}
+  .rap-tbl{font-size:13px!important}
+  .rap-tbl th{font-size:11px!important;letter-spacing:1.2px!important}
+  .pp-nom{font-size:14px!important}
+  .pp-txt{font-size:12.5px!important;line-height:1.7!important}
+  .pp-lbl{font-size:11px!important;letter-spacing:1.5px!important}
+  .pp-meta{font-size:11.5px!important;line-height:1.6!important}
   /* AU PAPIER, RIEN NE CHANGE : la page imprimee est plus large que l ecran,
      les legendes y etaient deja lisibles. On rend donc les valeurs d avant. */
   .rap-lgd{font-size:9px}
@@ -1679,7 +1717,8 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
      lit mal debout en salle, qui est le seul endroit ou elle sert. */
   .pp-seance{break-inside:avoid;page-break-inside:avoid;margin-bottom:16px}
   .pp-seance h2{color:#444!important;border-bottom-color:#bbb!important}
-  .pp-tete{border-bottom-color:#bbb!important}
+  /* .pp-tete prend son filet rouge plus haut : #bbb est retire pour ne pas
+     l ecraser depuis le bas du bloc. */
   .pp-lbl,.pp-meta{color:var(--text-dim)!important}
   .pp-txt,.pp-nom{color:#000!important}
   /* Sans ceci, les barres de volume et la courbe s impriment BLANCHES : les
