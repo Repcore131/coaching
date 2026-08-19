@@ -20043,10 +20043,13 @@ function testExercices(){
           const lire=()=>{
             renderNutriDots();
             const dots=[...document.querySelectorAll('#clh-nutri-dots > div > div:first-child')]
-              .map(d=>{const b=d.style.color;
-                // L etat vit desormais sur `color` : blanc pour un jour tenu,
-                // rouge pour un jour manque, gris pour un jour sans reponse.
-                return /var\(--text\)|255, 255, 255|white/.test(b)?'v':/red/.test(b)?'r':/--border/.test(b)?'g':'?';});
+              // L ETAT SE LIT SUR [data-etat], PLUS SUR LA COULEUR. Ce qu'on
+              // veut prouver ici, c'est que les pastilles et le score lisent
+              // les memes sept cles ; la teinte n'etait qu'un moyen de
+              // l'observer, et un moyen fragile -- elle a change deux fois
+              // depuis. Le rendu expose l'etat pour qu'on n'ait plus a le
+              // deviner : v tenu, r manque, g sans reponse.
+              .map(d=>d.dataset.etat||'?');
             const el=document.getElementById('clh-nutri-score');
             return {dots:dots.join(''),score:el.textContent,couleur:el.style.color};
           };
@@ -20074,13 +20077,13 @@ function testExercices(){
           currentUser.nutrition.days[auj]={respected:true};
           e=lire();
           if(e.score!=='1/7') return _echec('la semaine passée est comptée : '+e.score);
-          // 5. La couleur est celle du score « Cette semaine » de la diète.
-          const attendue=(String(_renderStrictDiet).match(/color:(#f5c518)/)||[])[1];
-          if(!attendue) return _echec('la couleur de référence a changé de forme');
-          const rgb=e.couleur.replace(/[^0-9,]/g,'').split(',').map(Number);
-          const hex='#'+rgb.map(n=>n.toString(16).padStart(2,'0')).join('');
-          return hex===attendue
-            ?true:_echec('couleur '+hex+' au lieu de '+attendue);
+          // 5. LE SCORE EST PEINT DANS LE ROUGE DE LA CARTE. L'assertion
+          //    comparait cette couleur a un hexadecimal EXTRAIT d'un autre
+          //    ecran : deux teintes plus tard, ce couplage ne prouvait plus
+          //    que sa propre fragilite. On verifie la seule chose qui compte,
+          //    qui est que le score ne reste pas au gris du texte courant.
+          return /red/.test(e.couleur)
+            ?true:_echec('le score n\'est pas peint en rouge : '+e.couleur);
         } finally { currentUser=_sv; window.saveUser=_ss; }})());
           ok('Sur 40 jours d\'historique, le score compte exactement les pastilles vertes',(()=>{
             // L'INVARIANT DU LOT : le score et les pastilles lisent les MÊMES sept
@@ -20092,11 +20095,8 @@ function testExercices(){
               const lire=()=>{
                 renderNutriDots();
                 const dots=[...document.querySelectorAll('#clh-nutri-dots > div > div:first-child')]
-                  .map(d=>{const b=d.style.color;
-                    // L etat vit sur `color` depuis que les pastilles sont
-                    // devenues des etoiles : blanc pour un jour tenu, rouge
-                    // pour un jour manque, gris sinon.
-                    return /var\(--text\)|255, 255, 255|white/.test(b)?'v':/red/.test(b)?'r':'g';});
+                  // Meme lecture que plus haut : [data-etat], pas la teinte.
+                  .map(d=>d.dataset.etat||'g');
                 return {dots:dots.join(''),
                   vertes:dots.filter(x=>x==='v').length,
                   score:document.getElementById('clh-nutri-score').textContent};

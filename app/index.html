@@ -714,6 +714,145 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
    definition, et la prochaine retouche ne peut plus les faire diverger. */
 .card-nut{background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);
   border-radius:var(--r-lg);box-shadow:var(--elev-2);padding:16px;position:relative;overflow:hidden}
+/* == LA CARTE NUTRITION ====================================================
+   Un pupitre, pas une liste. Trois etages separes par des caissons, un lisere
+   rouge tout autour, et derriere le tout un ciel d'eclairs qui ne fait que
+   crepiter -- jamais bouger : ce qui se deplace en fond vole l'attention aux
+   chiffres, qui sont la seule chose a lire ici. */
+.nut-hud{border:1px solid rgba(224,32,32,.55)!important;
+  background:radial-gradient(120% 80% at 78% 0%,#1a0505 0%,#0b0303 46%,#070303 100%)!important;
+  box-shadow:0 18px 40px rgba(0,0,0,.72),0 0 26px rgba(224,32,32,.16),inset 0 1px 0 rgba(255,190,190,.10)!important;
+  padding:16px 14px 14px!important;border-radius:20px!important}
+.nut-eclairs{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;
+  mix-blend-mode:screen;opacity:.92}
+.nut-hud>*:not(.nut-eclairs){position:relative;z-index:1}
+/* LE CREPITEMENT. steps(1,end) et non une interpolation : un eclair ne fond
+   pas, il est la ou il n'est pas. Les trois faisceaux partagent la meme duree
+   -- le seul cran infini legal -- et se decalent d'un tiers, si bien qu'il y
+   en a toujours un allume et jamais les trois. */
+.nut-ec{animation:nutCrepite var(--t-boucle) steps(1,end) infinite}
+.nut-ec2{animation-delay:calc(var(--t-boucle)/-3)}
+.nut-ec3{animation-delay:calc(var(--t-boucle)/-1.5)}
+@keyframes nutCrepite{
+  0%,7%   {opacity:0}
+  8%      {opacity:1}
+  11%     {opacity:.15}
+  13%     {opacity:.9}
+  17%     {opacity:.35}
+  20%,100%{opacity:0}
+}
+
+/* -- L'EN-TETE ---------------------------------------------------------- */
+.nut-tete{display:flex;align-items:center;gap:11px;margin-bottom:13px}
+.nut-boul{display:inline-flex;align-items:center;justify-content:center;
+  width:30px;height:30px;flex-shrink:0;border-radius:9px;color:#ff2a2a;
+  background:linear-gradient(180deg,#1c0606,#0a0303);
+  border:1px solid rgba(255,42,42,.75);
+  box-shadow:0 0 12px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,190,190,.28)}
+.nut-boul svg{filter:drop-shadow(0 0 5px rgba(255,42,42,.9))}
+.nut-sep{width:1px;align-self:stretch;flex-shrink:0;
+  background:linear-gradient(180deg,transparent,rgba(255,42,42,.55),transparent)}
+/* L'inclinaison est un skew, pas un font-style : Bebas Neue n'est chargee
+   qu'en romain et le navigateur en fabriquerait une oblique baveuse. */
+.nut-titre{font-family:var(--pile-titre);font-size:23px;font-weight:400;
+  letter-spacing:2.4px;color:var(--text);text-transform:uppercase;line-height:1;
+  transform:skewX(-9deg);transform-origin:left center;
+  text-shadow:0 0 10px rgba(255,255,255,.35),0 0 26px rgba(224,32,32,.35)}
+
+/* -- LE SELECTEUR D'UNITE ----------------------------------------------- */
+.nut-seg{display:inline-flex;align-items:stretch;padding:3px;border-radius:11px;
+  background:linear-gradient(180deg,#121212,#0a0a0a);border:1px solid var(--border);
+  box-shadow:var(--e-inset)}
+.nut-seg button{min-width:52px;min-height:30px;border:1px solid transparent;border-radius:8px;
+  background:none;color:var(--sub);cursor:pointer;
+  font-family:Montserrat,sans-serif;font-size:13px;font-weight:800;padding:2px 10px;
+  transition:color var(--t-1) var(--c-out),border-color var(--t-1) var(--c-out),
+             background-color var(--t-1) var(--c-out),box-shadow var(--t-1) var(--c-out)}
+.nut-seg button:hover:not(:disabled){color:var(--text-strong)}
+.nut-seg button[aria-pressed="true"]{color:var(--text);
+  background:linear-gradient(180deg,rgba(224,32,32,.20),rgba(224,32,32,.07));
+  border-color:rgba(255,42,42,.85);
+  box-shadow:0 0 12px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,190,190,.22)}
+.nut-seg button:disabled{cursor:not-allowed;color:var(--text-faint);opacity:.5}
+
+/* -- LES TROIS ANNEAUX -------------------------------------------------- */
+.nut-anneaux{display:flex;justify-content:space-between;gap:2px}
+.nut-a{flex:1;min-width:0;text-align:center}
+.nut-a svg{width:100%;height:auto;max-width:140px;display:block;margin:0 auto;overflow:visible}
+.nut-lbl{font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:1.9px;
+  text-transform:uppercase;color:var(--text);margin-top:2px;
+  text-shadow:0 0 8px rgba(255,255,255,.22)}
+/* Le filet sous le libelle : il rattache l'anneau a son nom, et donne au trio
+   la ligne de base que la maquette dessine. */
+.nut-soul{width:30px;height:2px;margin:5px auto 0;border-radius:2px;
+  background:linear-gradient(90deg,transparent,#ff2a2a,transparent);
+  box-shadow:0 0 8px rgba(224,32,32,.8)}
+
+/* -- LES CAISSONS DU BAS ------------------------------------------------ */
+.nut-bloc{margin-top:13px;padding:12px 13px;border-radius:13px;
+  background:linear-gradient(180deg,rgba(20,6,6,.72),rgba(8,3,3,.72));
+  border:1px solid rgba(224,32,32,.34);
+  box-shadow:inset 0 1px 0 rgba(255,190,190,.07),0 4px 14px rgba(0,0,0,.45)}
+.nut-cap{font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;letter-spacing:2.4px;
+  text-transform:uppercase;color:var(--sub)}
+.nut-kcal{font-family:Montserrat,sans-serif;font-size:15px;font-weight:800;color:#ff2b2b;
+  text-shadow:0 0 10px rgba(224,32,32,.55)}
+.nut-kcal small{font-size:13px;font-weight:600;color:var(--sub);text-shadow:none}
+.nut-piste{position:relative;height:24px;border-radius:9px;overflow:hidden;
+  background:linear-gradient(180deg,#0a0a0a,#131313);border:1px solid rgba(224,32,32,.22);
+  box-shadow:var(--e-inset)}
+/* La barre porte sa propre texture d'eclairs : un degrade repete, donc rien a
+   charger et rien a animer. */
+/* POSITIONNEE, pour que l'eclair qu'elle porte s'ancre sur ELLE et non sur la
+   piste : sans cette ligne, `position:absolute` remonte jusqu'au plus proche
+   ancetre positionne et le pictogramme reste colle au bout de la piste, quel
+   que soit le remplissage. */
+.nut-piste .rc-barre{position:relative;background:
+    repeating-linear-gradient(72deg,rgba(255,255,255,0) 0 9px,rgba(255,225,225,.13) 9px 10px,rgba(255,255,255,0) 10px 19px),
+    linear-gradient(180deg,#ff4a4a,#d40d0d 58%,#8e0000)!important;
+  box-shadow:0 0 16px rgba(224,32,32,.75),inset 0 1px 0 rgba(255,200,200,.35)!important;
+  border-radius:8px!important}
+/* LA LUEUR QUI TRAVERSE, UNE FOIS. Elle accompagne le remplissage et s'arrete
+   avec lui : une barre pleine qui continue de scintiller finit par se lire
+   comme un chargement en cours. */
+.nut-piste::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(100deg,transparent 38%,rgba(255,255,255,.32) 50%,transparent 62%);
+  transform:translateX(-105%);
+  animation:nutSillage 1100ms var(--c-out) 240ms both}
+@keyframes nutSillage{to{transform:translateX(105%)}}
+/* ANCRE A DROITE DU REMPLISSAGE, et non pose en absolu sans ancrage : sans
+   `right`, il restait a sa position statique -- le depart de la barre -- que
+   overflow:hidden coupait. Ancre, il suit la tete de la course sans qu'on ait
+   a lui calculer une position. */
+.nut-zap{position:absolute;right:1px;top:50%;width:20px;height:20px;margin-top:-10px;
+  display:flex;align-items:center;justify-content:center;border-radius:6px;color:#fff;
+  background:linear-gradient(180deg,#ff5a5a,#c00000);border:1px solid rgba(255,210,210,.7);
+  box-shadow:0 0 10px rgba(255,90,90,.95)}
+
+/* -- LA SEMAINE --------------------------------------------------------- */
+.nut-jours{display:flex;gap:6px;margin-top:10px}
+/* column-reverse : la lettre passe AU-DESSUS de l'etoile a l'ecran sans
+   changer l'ordre du balisage. Le premier enfant reste la pastille -- c'est
+   par lui que la suite de tests lit l'etat de la journee. */
+.nut-j{flex:1;min-width:0;display:flex;flex-direction:column-reverse;align-items:center;gap:6px}
+.nut-j-lbl{font-family:Montserrat,sans-serif;font-size:12px;font-weight:800;letter-spacing:1px}
+/* LE DIAMETRE EST UN PLAFOND, PAS UNE MESURE. Sept ronds ecrits en pixels
+   durs debordent d'un telephone de 360 px ; avec min(), ils se serrent. Le
+   `aspect-ratio` tient la hauteur, et l'etoile se mesure sur son rond. */
+.nut-j-rond{display:flex;align-items:center;justify-content:center;border-radius:50%;
+  width:min(var(--nut-r,42px),100%);aspect-ratio:1;
+  border:1.5px solid currentColor;background:radial-gradient(circle at 50% 40%,#160404,#080202)}
+.nut-j-rond svg{width:48%;height:auto}
+/* L'ECLOSION, A UN COUP. Sept etoiles qui apparaissent ensemble ne racontent
+   rien ; decalees de 55 ms, elles se lisent de lundi a dimanche. */
+.nut-j-rond{animation:nutEtoile var(--t-3) var(--c-snap) both;animation-delay:var(--nut-d,0ms)}
+@keyframes nutEtoile{
+  from{transform:scale(.55);opacity:0}
+  to  {transform:scale(1);opacity:1}
+}
+.nut-score{margin-top:11px;font-family:Montserrat,sans-serif;font-size:14px;color:var(--sub)}
+.nut-score b{font-weight:800;font-variant-numeric:tabular-nums}
+
 @media (max-width:480px){.metric-row-4{display:grid;grid-template-columns:1fr 1fr;gap:10px}}
 .metric-val{font-size:var(--fs-2xl);font-family:var(--pile-titre);letter-spacing:0;line-height:1}
 /* DES CHIFFRES QUI NE DANSENT PAS. Mesure en Montserrat a 40 px : « 1111 »
@@ -2085,6 +2224,11 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   .wd-badge-medal{transform:none!important;filter:drop-shadow(0 0 12px rgba(224,32,32,.45))!important}
   .rc-blink{opacity:1!important}
   .fj-entry.fj-neuf,.caff-neuf{animation:none!important}
+  /* SANS ANIMATION, LES TROIS FAISCEAUX D'ECLAIRS RESTENT ALLUMES ENSEMBLE :
+     chacun retombe sur son style de base, qui est opaque, et la carte se
+     couvre d'un grillage rouge. Un seul faisceau, a un tiers d'intensite. */
+  .nut-ec{opacity:.32}
+  .nut-ec2,.nut-ec3{opacity:0}
   #ch-clients-list[data-entree] .client-row{animation:none!important}
   #ch-clients-list .client-row.cr-neuve::after{animation:none!important;opacity:0!important}
   .cc-sect-t.cc-vise::before{animation:none!important;opacity:0!important}
@@ -4161,12 +4305,25 @@ const COACH_PHOTO='icons/coach.jpg';
            Les anneaux sont EXACTEMENT ceux de la diète flexible — même
            fonction, htmlAnneauxMacros — mais ce qu'ils portent dépend de la
            diète : voir renderNutriAnneaux. -->
-      <div class="card card-nut">
-        <div class="eyebrow" style="margin-bottom:10px">Nutrition</div>
+      <div class="card card-nut nut-hud" id="clh-nut-card">
+        <!-- LE CIEL D'ECLAIRS. Il est POSE ICI, en dur, et non produit par le
+             rendu : il ne depend d'aucune donnee, et le refabriquer a chaque
+             repeinture de la carte -- ce qui arrive a chaque aliment ajoute --
+             obligerait le navigateur a recalculer trois flous gaussiens pour
+             rien. La classe fx-loop sur chaque faisceau est ce par quoi le
+             bloc prefers-reduced-motion les eteint. -->
+        <svg class="nut-eclairs" viewBox="0 0 480 360" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="nutEg" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff3a3a"/><stop offset=".26" stop-color="#e00808"/><stop offset="1" stop-color="#4a0000"/></linearGradient><filter id="nutEf" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3"/></filter></defs><g class="nut-ec nut-ec1 fx-loop"><path d="M470.0,-10.0 L456.5,13.5 L431.1,24.4 L417.1,47.4 L391.0,57.4 L371.3,74.4 L369.3,110.1 L349.8,127.2 L312.0,124.9 L300.0,150.0 M385.4,69.7 L373.6,84.7 L362.1,100.0 L355.6,118.7 L342.2,132.7 M361.6,92.0 L344.4,89.1 L345.7,110.2 L342.4,125.4 L324.1,121.1 M455.0,40.0 L428.1,52.8 L423.4,88.9 L378.7,83.0 L389.8,135.7 L340.9,125.3 L320.1,144.5 L318.9,184.3 L288.4,193.2 L260.8,205.3 L250.0,235.0 M337.9,151.4 L346.4,170.8 L368.9,171.1 L373.1,196.4 L396.8,195.1 M322.7,165.9 L313.0,181.7 L284.5,160.0 L281.4,189.0 L266.3,194.0" stroke="url(#nutEg)" stroke-width="8" fill="none" stroke-linecap="round" filter="url(#nutEf)" opacity=".9"/><path d="M470.0,-10.0 L456.5,13.5 L431.1,24.4 L417.1,47.4 L391.0,57.4 L371.3,74.4 L369.3,110.1 L349.8,127.2 L312.0,124.9 L300.0,150.0 M385.4,69.7 L373.6,84.7 L362.1,100.0 L355.6,118.7 L342.2,132.7 M361.6,92.0 L344.4,89.1 L345.7,110.2 L342.4,125.4 L324.1,121.1 M455.0,40.0 L428.1,52.8 L423.4,88.9 L378.7,83.0 L389.8,135.7 L340.9,125.3 L320.1,144.5 L318.9,184.3 L288.4,193.2 L260.8,205.3 L250.0,235.0 M337.9,151.4 L346.4,170.8 L368.9,171.1 L373.1,196.4 L396.8,195.1 M322.7,165.9 L313.0,181.7 L284.5,160.0 L281.4,189.0 L266.3,194.0" stroke="#ff7070" stroke-width="1" opacity=".55" fill="none" stroke-linecap="round"/></g><g class="nut-ec nut-ec2 fx-loop"><path d="M430.0,-12.0 L405.7,11.7 L375.0,29.0 L345.5,47.6 L341.2,91.1 L302.0,100.1 L281.0,127.0 L259.0,153.0 L246.5,188.4 L215.0,205.0 M352.2,66.6 L356.0,84.8 L365.9,97.3 L382.5,103.2 L396.3,111.7 M486.0,120.0 L462.7,142.1 L441.4,165.6 L438.3,203.5 L406.2,218.6 L399.3,253.4 L361.7,264.3 L355.7,299.8 L330.0,320.0 M423.8,199.8 L419.0,222.6 L399.8,233.3 L384.1,246.9 L371.1,262.7" stroke="url(#nutEg)" stroke-width="8" fill="none" stroke-linecap="round" filter="url(#nutEf)" opacity=".9"/><path d="M430.0,-12.0 L405.7,11.7 L375.0,29.0 L345.5,47.6 L341.2,91.1 L302.0,100.1 L281.0,127.0 L259.0,153.0 L246.5,188.4 L215.0,205.0 M352.2,66.6 L356.0,84.8 L365.9,97.3 L382.5,103.2 L396.3,111.7 M486.0,120.0 L462.7,142.1 L441.4,165.6 L438.3,203.5 L406.2,218.6 L399.3,253.4 L361.7,264.3 L355.7,299.8 L330.0,320.0 M423.8,199.8 L419.0,222.6 L399.8,233.3 L384.1,246.9 L371.1,262.7" stroke="#ff7070" stroke-width="1" opacity=".55" fill="none" stroke-linecap="round"/></g><g class="nut-ec nut-ec3 fx-loop"><path d="M300.0,-14.0 L276.3,12.9 L254.3,41.6 L231.4,69.4 L186.5,74.5 L169.8,108.6 L142.5,131.8 L120.0,160.0 M223.9,59.5 L226.4,76.5 L235.7,89.5 L241.5,104.5 L256.4,114.1 M219.4,63.9 L204.7,66.7 L200.7,87.5 L181.3,82.6 L171.1,92.9 M470.0,200.0 L443.9,220.9 L429.7,254.5 L390.7,261.7 L383.5,302.7 L341.7,306.9 L319.2,331.7 L300.0,360.0 M421.9,245.2 L416.0,256.9 L425.0,274.7 L415.0,284.8 L402.4,293.7 M60.0,-10.0 L57.1,18.7 L29.3,37.9 L38.6,71.3 L24.7,95.8 L10.0,120.0 M33.6,58.8 L30.9,69.7 L33.2,78.1 L48.2,80.3 L48.7,89.7" stroke="url(#nutEg)" stroke-width="8" fill="none" stroke-linecap="round" filter="url(#nutEf)" opacity=".9"/><path d="M300.0,-14.0 L276.3,12.9 L254.3,41.6 L231.4,69.4 L186.5,74.5 L169.8,108.6 L142.5,131.8 L120.0,160.0 M223.9,59.5 L226.4,76.5 L235.7,89.5 L241.5,104.5 L256.4,114.1 M219.4,63.9 L204.7,66.7 L200.7,87.5 L181.3,82.6 L171.1,92.9 M470.0,200.0 L443.9,220.9 L429.7,254.5 L390.7,261.7 L383.5,302.7 L341.7,306.9 L319.2,331.7 L300.0,360.0 M421.9,245.2 L416.0,256.9 L425.0,274.7 L415.0,284.8 L402.4,293.7 M60.0,-10.0 L57.1,18.7 L29.3,37.9 L38.6,71.3 L24.7,95.8 L10.0,120.0 M33.6,58.8 L30.9,69.7 L33.2,78.1 L48.2,80.3 L48.7,89.7" stroke="#ff7070" stroke-width="1" opacity=".55" fill="none" stroke-linecap="round"/></g></svg>
+        <div class="nut-tete">
+          <span class="nut-boul"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;display:block"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
+          <span class="nut-sep"></span>
+          <span class="nut-titre">Nutrition</span>
+        </div>
         <div id="clh-nutri-rings"></div>
-        <div id="clh-nutri-sem-label" class="eyebrow" style="margin:16px 0 8px">Cette semaine</div>
-        <div style="display:flex;gap:6px" id="clh-nutri-dots"></div>
-        <div style="margin-top:10px;font-size:var(--fs-sm)">Score: <span style="font-weight:800;color:var(--green)" id="clh-nutri-score">—</span></div>
+        <div class="nut-bloc">
+          <div id="clh-nutri-sem-label" class="nut-cap">Cette semaine</div>
+          <div class="nut-jours" id="clh-nutri-dots"></div>
+          <div class="nut-score">Score : <b id="clh-nutri-score">—</b></div>
+        </div>
       </div>
 
       <!-- BANNIÈRES PUB COACH -->
@@ -6573,6 +6730,18 @@ const ICONS={
   key:'<path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/>',
   'plus-circle':'<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/>',
   zap:'<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+  // L'haltere des proteines, l'epi des glucides, la goutte des lipides.
+  // L'HALTERE ET NON UN BRAS FLECHI. Cinq silhouettes de bras ont ete dessinees
+  // et rendues a la taille d'emploi -- dix-sept pixels, au sommet d'un anneau :
+  // toutes se lisent comme une botte. Celle-ci se lit du premier coup. C'est
+  // une variante EPAISSE de l'icone `dumbbell` deja au jeu : les barres y sont
+  // plus courtes et les disques plus hauts, parce qu'a cette taille les traits
+  // fins de l'originale se referment les uns sur les autres.
+  haltere:'<path d="M7 12h10"/><path d="M7 7.5v9"/><path d="M17 7.5v9"/><path d="M3.6 9.8v4.4"/><path d="M20.4 9.8v4.4"/>',
+  // TROIS PAIRES DE GRAINS PLEINS, et non des contours : a dix-huit pixels un
+  // grain dessine au trait se referme sur lui-meme et vire au point.
+  wheat:'<path d="M12 21.5v-5"/><path d="M12 16c-3 0-4.8-1.9-4.8-4.9 3 0 4.8 1.9 4.8 4.9z" fill="currentColor" stroke="none"/><path d="M12 16c3 0 4.8-1.9 4.8-4.9-3 0-4.8 1.9-4.8 4.9z" fill="currentColor" stroke="none"/><path d="M12 10.2c-3 0-4.8-1.9-4.8-4.9 3 0 4.8 1.9 4.8 4.9z" fill="currentColor" stroke="none"/><path d="M12 10.2c3 0 4.8-1.9 4.8-4.9-3 0-4.8 1.9-4.8 4.9z" fill="currentColor" stroke="none"/><path d="M12 5.6V2.5"/>',
+  droplet:'<path d="M12 2.6 7.2 8.4a6.2 6.2 0 1 0 9.6 0z"/>',
   target:'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
   shoe:'<path d="M2 17h18a2 2 0 0 0 2-2c0-1.6-1.2-2.3-2.8-2.9l-4.4-1.7a3 3 0 0 1-1.3-1L11.6 6.4a1.4 1.4 0 0 0-2.2-.2L7.6 8.1 2 8.1z"/><path d="M2 17v2h20v-2"/><path d="M7.6 8.1 9.3 10M10.6 9.2l1.7 1.9"/>',
   sun:'<circle cx="12" cy="12" r="4.5"/><line x1="12" y1="2" x2="12" y2="4.5"/><line x1="12" y1="19.5" x2="12" y2="22"/><line x1="4.2" y1="4.2" x2="6" y2="6"/><line x1="18" y1="18" x2="19.8" y2="19.8"/><line x1="2" y1="12" x2="4.5" y2="12"/><line x1="19.5" y1="12" x2="22" y2="12"/><line x1="4.2" y1="19.8" x2="6" y2="18"/><line x1="18" y1="6" x2="19.8" y2="4.2"/>',
@@ -6589,6 +6758,13 @@ const ICONS={
   moon:'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
   trophy:'<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
 };
+function _icoG(nom,cx,cy,taille,couleur,epaisseur){
+  const p=ICONS[nom]; if(!p) return '';
+  const k=taille/24;
+  return '<g transform="translate('+(cx-taille/2).toFixed(2)+' '+(cy-taille/2).toFixed(2)+') scale('+k.toFixed(4)+')"'
+    +' fill="none" stroke="'+couleur+'" stroke-width="'+(epaisseur||2)+'" stroke-linecap="round" stroke-linejoin="round">'
+    +p+'</g>';
+}
 function icon(name,size=20){const s=ICONS[name];if(!s) return '';return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:'+size+'px;height:'+size+'px;display:inline-block;vertical-align:middle;flex-shrink:0">'+s+'</svg>';}
 const ILLUS={
   dumbbell:`<line x1="24" y1="48" x2="72" y2="48" stroke-dasharray="4.5 3"/><line x1="24" y1="32" x2="24" y2="64"/><line x1="12" y1="38" x2="28" y2="38"/><line x1="12" y1="58" x2="28" y2="58"/><line x1="72" y1="32" x2="72" y2="64"/><line x1="68" y1="38" x2="84" y2="38"/><line x1="68" y1="58" x2="84" y2="58"/><line x1="48" y1="72" x2="48" y2="80" stroke-width="1.5"/><line x1="44" y1="76" x2="52" y2="76" stroke-width="1.5"/>`,
@@ -22842,20 +23018,28 @@ function _svgEtoile(t){
 function _htmlLigneDots(vals,taille,libelles){
   const t=taille>0?taille:28;
   const lib=Array.isArray(libelles)?libelles:_DOTS_JOURS;
+  const rond=Math.round(t*1.5), etoile=Math.round(t*0.72);
   return (vals||[]).map((val,i)=>{
-    // L ETAT PASSE PAR `color`, plus par `background` : le trace est rempli en
-    // currentColor, et le halo se calcule sur la meme teinte. Un jour tenu
-    // devient une etoile BLANCHE — la couleur d une reussite, pas d un
-    // etat parmi d autres.
-    const c=val===true?'var(--text)':val===false?'var(--red)':'var(--border)';
-    // NEON, et proportionnel a la taille : la meme ligne se rend a 28 px sur
-    // l accueil et a 18 px dans les habitudes. Un halo fixe ecraserait la
-    // petite. Seule l etoile gagnee brille ; sans quoi il n y aurait plus de
+    // L'ETAT EST ECRIT DEUX FOIS, ET CE N'EST PAS UNE REDONDANCE : `color`
+    // pour le rendu -- le trace est rempli en currentColor et le halo se
+    // calcule sur la meme teinte -- et [data-etat] pour qui doit le LIRE.
+    // La suite de tests lisait la couleur ; une couleur est une decision de
+    // mise en forme, elle a le droit de changer, et elle vient de changer.
+    const etat=val===true?'v':val===false?'r':'g';
+    // var(--border) donnait 1,4:1 sur ce fond : le rond disparaissait purement.
+    const c=val===true?'var(--red)':val===false?'#6d0000':'#3b3232';
+    // Seule la journee TENUE brille. Sans quoi il n'y aurait plus de
     // difference entre tenir sa journee et ne rien avoir fait.
     const halo=val===true
-      ?`filter:drop-shadow(0 0 ${Math.round(t*0.20)}px rgba(255,255,255,.95)) drop-shadow(0 0 ${Math.round(t*0.55)}px rgba(255,255,255,.55));`
+      ?`box-shadow:0 0 ${Math.round(t*0.42)}px rgba(224,32,32,.55),inset 0 0 ${Math.round(t*0.32)}px rgba(224,32,32,.35);`
       :'';
-    return `<div style="flex:1;text-align:center"><div style="width:${t}px;height:${t}px;margin:0 auto;color:${c};${halo}">${_svgEtoile(t)}</div><div style="font-size:var(--fs-xs);color:var(--sub);margin-top:3px">${lib[i]}</div></div>`;
+    const lueur=val===true
+      ?`filter:drop-shadow(0 0 ${Math.round(t*0.22)}px rgba(255,60,60,.95));`
+      :'';
+    // La lettre ne prend jamais var(--border) : a 1,4:1 sur le fond de carte
+    // elle serait invisible. Un jour sans reponse garde le gris de sous-titre.
+    const cl=val===true?'var(--red)':val===false?'#a35a5a':'var(--sub)';
+    return `<div class="nut-j" style="--nut-d:${i*55}ms"><div class="nut-j-rond" data-etat="${etat}" style="--nut-r:${rond}px;color:${c};${halo}${lueur}">${_svgEtoile(etoile)}</div><div class="nut-j-lbl" style="color:${cl}">${lib[i]}</div></div>`;
   }).join('');
 }
 function renderNutriDots(){
@@ -22871,7 +23055,7 @@ function renderNutriDots(){
   // vue hebdomadaire des habitudes. Meme pastille, meme ordre, meme code —
   // deux rendus de la meme chose auraient diverge des la premiere retouche.
   document.getElementById('clh-nutri-dots').innerHTML=
-    _htmlLigneDots(weekKeys.map(k=>nut.days?.[k]?.respected),28,days);
+    _htmlLigneDots(weekKeys.map(k=>nut.days?.[k]?.respected),26,days);
   const score=weekKeys.filter(k=>nut.days?.[k]?.respected===true).length;
   const scoreEl=document.getElementById('clh-nutri-score');
   // Meme regle que les trois metriques : on ne compte que si la valeur a change.
@@ -22883,7 +23067,7 @@ function renderNutriDots(){
   // LE VERT, PAS LE JAUNE DES GLUCIDES. Un score de 5/7 peint dans la couleur
   // exacte de l anneau glucides se lit comme une macro, pas comme un compte de
   // jours tenus. Le vert est la couleur de ce qui est fait, partout ailleurs.
-  scoreEl.style.color='var(--green)';
+  scoreEl.style.color='var(--red-text)';
 }
 function renderNotifs(){
   const notifs=[];
@@ -37407,20 +37591,22 @@ function htmlMacroUnite(user,idSuffixe){
   const pr=poidsReference(user);
   const u=macroUnite();
   const libs={g:'g',pct:'%',gkg:'g/kg'};
-  return `<div style="display:flex;gap:4px;align-items:center;margin-bottom:8px">
+  // TROIS SEGMENTS DANS UN SEUL BOITIER, et non trois boutons cote a cote :
+  // c'est le boitier qui dit qu'un seul des trois vaut a la fois. Les etats
+  // (choisi, disponible, indisponible) sont portes par la feuille, sur
+  // [aria-pressed] et [disabled] -- donc par les attributs qui les DECLARENT
+  // deja pour les technologies d'assistance, jamais par une classe parallele
+  // qui pourrait s'en desynchroniser.
+  return `<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+    <div class="nut-seg">
     ${MACRO_UNITES.map(x=>{
       const dispo=macroUniteDisponible(x,pr);
       return `<button type="button" onclick="setMacroUnite('${x}')" ${dispo?'':'disabled'}
         aria-pressed="${x===u&&dispo?'true':'false'}"
-        title="${dispo?'':'Aucun poids au dossier'}"
-        style="min-width:44px;min-height:30px;border-radius:var(--r-2);cursor:${dispo?'pointer':'not-allowed'};
-          font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;padding:4px 9px;
-          background:${x===u&&dispo?'rgba(224,32,32,.14)':'#111'};
-          border:1px solid ${x===u&&dispo?'var(--red)':'var(--border)'};
-          color:${dispo?(x===u?'var(--text)':'var(--sub)'):'var(--text-faint)'};
-          opacity:${dispo?1:.5}">${libs[x]}</button>`;}).join('')}
-    ${(u==='gkg'&&pr>0)?`<span style="font-size:var(--fs-2xs);color:var(--text-faint);margin-left:4px">par kilo · ${String(pr).replace('.',',')} kg au dernier bilan</span>`:''}
-    ${(!pr)?`<span style="font-size:var(--fs-2xs);color:var(--text-faint);margin-left:4px">g/kg indisponible : aucun poids au dossier</span>`:''}
+        title="${dispo?'':'Aucun poids au dossier'}">${libs[x]}</button>`;}).join('')}
+    </div>
+    ${(u==='gkg'&&pr>0)?`<span style="font-size:var(--fs-2xs);color:var(--text-faint)">par kilo · ${String(pr).replace('.',',')} kg au dernier bilan</span>`:''}
+    ${(!pr)?`<span style="font-size:var(--fs-2xs);color:var(--text-faint)">g/kg indisponible : aucun poids au dossier</span>`:''}
   </div>`;
 }
 
@@ -37473,66 +37659,95 @@ function htmlMacrosCoachLecture(c,mon,moff){
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);margin-top:3px">Lecture seule : tes champs restent en grammes.</div>
   </div>`;
 }
+// Le compteur des degrades d'anneaux. Il ne sert qu'a rendre les identifiants
+// uniques dans le document, jamais a designer quoi que ce soit.
+let _nutSerie=0;
 function htmlAnneauxMacros(tot,m,marge,unite,poidsRef){
-  const R=32,cx=44,cy=44,sw=9;
+  const R=47,cx=60,cy=60,sw=6.5;
   const circ=+(2*Math.PI*R).toFixed(2);
-  const ring=(val,tgt,color,label,cle)=>{
+  // UN NUMERO D'ORDRE PAR APPEL. Les degrades vivent dans un <defs> local a ce
+  // balisage, et l'accueil comme la diete stricte gardent leurs trois anneaux
+  // dans le meme document : sans ce numero, les seconds reprendraient les
+  // degrades des premiers -- un identifiant en double, en SVG, c'est le premier
+  // qui gagne, en silence.
+  const gid='nutA'+(_nutSerie=(_nutSerie||0)+1);
+  const ring=(val,tgt,color,label,cle,ico)=>{
     const pct=tgt&&val?Math.min(val/tgt,1):0;
     const d=+(pct*circ).toFixed(2);
-    const gap=+(circ-d).toFixed(2);
-    // Le centre affichait la CIBLE : ajouter un aliment remplissait l'arc sans
-    // que le chiffre bouge, et l'athlète ne lisait nulle part ce qu'il avait
-    // réellement mangé. On montre le consommé, la cible passe en dessous —
-    // exactement la forme de la ligne Calories un peu plus bas.
+    // Le centre affiche le CONSOMME, la cible passe en dessous : ajouter un
+    // aliment doit faire bouger le chiffre en meme temps que l'arc.
     const fait=Math.round(val||0);
-    // UNITE D AFFICHAGE. Absente ou 'g' : rien ne change, au caractere pres.
-    // Les deux nombres se convertissent ensemble — comparer une part a des
-    // grammes n aurait aucun sens.
     const _u=(typeof unite==='string')?unite:'g';
     const _cv=(_u!=='g'&&typeof _macroCouple==='function')
       ?_macroCouple(cle,tot,m,_u,poidsRef):null;
-    // La cible est arrondie elle aussi : l'adaptation de cycle produit des
-    // lipides à la décimale (_applyNutCycleModifier fait un toFixed(1)), et
-    // « / 61.6 g » en face d'un consommé entier ne veut rien dire.
+    // La cible est arrondie : l'adaptation de cycle produit des lipides a la
+    // decimale, et « / 61.6 g » en face d'un consomme entier ne veut rien dire.
     const cible=(typeof tgt==='number'&&isFinite(tgt)&&tgt>0)?Math.round(tgt):null;
-    // Au-delà de 110 % de la cible, le chiffre vire à l'orange. L'arc est
-    // plafonné à 100 % par Math.min : à lui seul, il ne peut pas distinguer
-    // « pile atteint » de « largement dépassé ».
+    // Au-dela de 110 % de la cible, le chiffre vire a l'orange. L'arc est
+    // plafonne a 100 % par Math.min : a lui seul, il ne peut pas distinguer
+    // « pile atteint » de « largement depasse ».
     const trop=cible!=null&&val>tgt*1.1;
-    // data-atteint : la macro est tenue. _animerJauges declenche l'impulsion a
-    // la FIN de la course de l'arc — 620 ms, la duree de la transition
-    // stroke-dashoffset ci-dessous — et jamais a son depart.
-    return `<div style="flex:1;text-align:center">
-      <svg width="88" height="88" viewBox="0 0 88 88" data-atteint="${pct>=1?'1':'0'}">
-        <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="var(--border)" stroke-width="${sw}"/>
+    return `<div class="nut-a">
+      <svg viewBox="0 0 120 120" data-atteint="${pct>=1?'1':'0'}" aria-hidden="true">
+        <!-- LE CERCEAU EXTERIEUR ET LE FILET INTERIEUR ne portent aucune
+             donnee : ils donnent a l'anneau l'epaisseur d'un cadran plutot que
+             celle d'un trait, et c'est tout ce qu'on leur demande. -->
+        <defs>
+          <!-- L'arc part sombre en bas et arrive incandescent en haut : c'est
+               le degrade qui dit dans quel sens la course a ete faite. Le
+               repere est celui du trace, apres la rotation de -90 degres. -->
+          <linearGradient id="${gid}" x1="0" y1="1" x2="0.35" y2="0">
+            <stop offset="0" stop-color="#8f0505"/>
+            <stop offset=".45" stop-color="#e01414"/>
+            <stop offset="1" stop-color="#ff5a5a"/>
+          </linearGradient>
+        </defs>
+        <circle cx="${cx}" cy="${cy}" r="57" fill="none" stroke="rgba(224,32,32,.28)" stroke-width="1"/>
+        <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#1c1111" stroke-width="${sw}"/>
+        <circle cx="${cx}" cy="${cy}" r="${R-sw/2-2.5}" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="1"/>
         <!-- LE TOUR ENTIER EST TRACE, et masque par son propre decalage. Un
-             stroke-dasharray anime ne peut pas s interpoler proprement ; un
+             stroke-dasharray anime ne peut pas s'interpoler proprement ; un
              stroke-dashoffset, si. On part du tour complet cache, et
-             _animerJauges pose la valeur finale au tour d apres. -->
-        <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="${color}" stroke-width="${sw}"
+             _animerJauges pose la valeur finale au tour d'apres. -->
+        <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="url(#${gid})" stroke-width="${sw}"
           stroke-dasharray="${circ}" stroke-dashoffset="${circ.toFixed(2)}" data-arc-off="${(circ-d).toFixed(2)}"
           class="rc-anneau" style="transition:stroke-dashoffset var(--t-4) var(--c-out)"
           stroke-linecap="${d>0?'round':'butt'}"
-          ${d>0?`filter="drop-shadow(0 0 4px ${color})"`:''}
+          ${d>0?`filter="drop-shadow(0 0 2px ${color})"`:''}
           transform="rotate(-90 ${cx} ${cy})"/>
-        <!-- GRAISSE 400, IMPERATIVEMENT. Bebas Neue n est chargee qu en 400 dans
-             ce depot : toute valeur superieure produit un gras synthetique baveux,
-             que le navigateur fabrique en epaississant le trace. -->
-        <text x="${cx}" y="${cy-4}" dominant-baseline="middle" text-anchor="middle"
-          font-family="'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif" font-size="26" font-weight="400" letter-spacing="0.5"
+        ${d>0?`<!-- LE POINT CHAUD EN TETE DE COURSE. Un tiret de longueur nulle
+             a bout rond : place au meme decalage que l'arc, il se pose donc
+             exactement sur son extremite et voyage avec lui pendant les 620 ms
+             de la transition, sans une ligne de JS de plus. -->
+        <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#fff2f2" stroke-width="${sw-1.6}"
+          stroke-dasharray="7 ${circ}" stroke-dashoffset="${(circ+7).toFixed(2)}" data-arc-off="${(circ-d+7).toFixed(2)}"
+          style="transition:stroke-dashoffset var(--t-4) var(--c-out)"
+          stroke-linecap="round" filter="drop-shadow(0 0 3px #ffbcbc)"
+          transform="rotate(-90 ${cx} ${cy})"/>`:''}
+        ${_icoG(ico,cx,32,18,'#ff3b3b',1.9)}
+        <!-- GRAISSE 400, IMPERATIVEMENT. Bebas Neue n'est chargee qu'en 400
+             dans ce depot : toute valeur superieure produit un gras synthetique
+             baveux, que le navigateur fabrique en epaississant le trace. -->
+        <text x="${cx}" y="${cy+6}" dominant-baseline="middle" text-anchor="middle"
+          font-family="'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif" font-size="36" font-weight="400" letter-spacing="0.5"
           style="font-variant-numeric:tabular-nums"
           ${_cv?'':`data-num="${fait}"`}
           fill="${trop?'var(--orange)':'var(--text)'}">${_cv?_cv.fait.texte:fait}</text>
-        <text x="${cx}" y="${cy+13}" dominant-baseline="middle" text-anchor="middle"
+        <text x="${cx}" y="${cy+29}" dominant-baseline="middle" text-anchor="middle"
           font-family="Montserrat,sans-serif" font-size="12" fill="#8a8a8a">${_cv?(_cv.cible?'/ '+_cv.cible.texte:''):_fragmentSiValeur('/ ',cible,' g')}</text>
       </svg>
-      <div style="font-size:10px;color:var(--sub);letter-spacing:1.4px;font-weight:700;text-transform:uppercase;margin-top:-4px">${label}</div>
+      <div class="nut-lbl">${label}</div>
+      <div class="nut-soul"></div>
     </div>`;
   };
-  return `<div style="display:flex;justify-content:space-around${marge?';margin-bottom:'+marge:''}">
-    ${ring(tot.p,m.p,'#E02020','Protéines','p')}
-    ${ring(tot.c,m.g,'var(--gluc)','Glucides','c')}
-    ${ring(tot.l,m.l,'#22c55e','Lipides','l')}
+  // LES TROIS ANNEAUX SONT ROUGES. Le jaune et le vert d'avant codaient la
+  // MACRO ; or la macro est deja nommee sous chaque anneau, et son pictogramme
+  // la redit au centre. Trois teintes pour une information ecrite deux fois,
+  // c'etait trois teintes qui ne servaient qu'a fragmenter la carte.
+  return `<div class="nut-anneaux"${marge?' style="margin-bottom:'+marge+'"':''}>
+    ${ring(tot.p,m.p,'#ff1e1e','Protéines','p','haltere')}
+    ${ring(tot.c,m.g,'#ff1e1e','Glucides','c','wheat')}
+    ${ring(tot.l,m.l,'#ff1e1e','Lipides','l','droplet')}
   </div>`;
 }
 // La ligne Calories et sa barre, PARTAGÉES elles aussi, pour la même raison
@@ -37540,13 +37755,24 @@ function htmlAnneauxMacros(tot,m,marge,unite,poidsRef){
 // pouvoir diverger sur son arrondi ni sur le plafonnement de la barre.
 function htmlLigneCalories(tot,m){
   const pct=m.kcal?Math.min((tot.kcal||0)/m.kcal,1):0;
-  return `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-      <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;font-weight:700">Calories</span>
-      <span style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text)"><span id="rcmac-kcal" data-num="${Math.round(tot.kcal||0)}" style="font-variant-numeric:tabular-nums">${Math.round(tot.kcal||0)}</span><span style="font-size:var(--fs-xs);color:var(--sub);font-weight:400">${m.kcal?' / '+m.kcal+' kcal':' kcal'}</span></span>
+  // LE CAISSON, ET NON UNE LIGNE POSEE SUR LE FOND. Les calories sont la
+  // somme des trois anneaux du dessus : les encadrer dit qu'on change de
+  // niveau de lecture, la ou une ligne nue se serait lue comme une quatrieme
+  // macro.
+  return `<div class="nut-bloc">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
+      <span class="nut-cap">Calories</span>
+      <span class="nut-kcal"><span id="rcmac-kcal" data-num="${Math.round(tot.kcal||0)}" style="font-variant-numeric:tabular-nums">${Math.round(tot.kcal||0)}</span><small>${m.kcal?' / '+m.kcal+' kcal':' kcal'}</small></span>
     </div>
-    <div style="height:10px;background:var(--surface-2);border-radius:var(--r-1);overflow:visible">
-      <div class="rc-barre" data-bar-w="${(pct*100).toFixed(1)}" style="height:100%;width:0;background:linear-gradient(90deg,var(--red),#ff4444);border-radius:var(--r-1);transition:width var(--t-3) var(--c-out);box-shadow:0 0 12px rgba(224,32,32,.5)"></div>
-    </div>`;
+    <div class="nut-piste">
+      <div class="rc-barre" data-bar-w="${(pct*100).toFixed(1)}" style="height:100%;width:0;transition:width var(--t-3) var(--c-out)">
+        <!-- L'ECLAIR VOYAGE DANS LA BARRE, pas au-dessus : enfant du
+             remplissage, il suit sa largeur sans qu'on ait a lui calculer une
+             position ni a l'animer separement. -->
+        <span class="nut-zap">${icon('zap',12)}</span>
+      </div>
+    </div>
+  </div>`;
 }
 // PURE. Le libellé d’un jour, PARTAGÉ par le journal et la carte des
 // objectifs. Les deux en-têtes nomment le même jour : les laisser calculer
