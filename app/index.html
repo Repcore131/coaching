@@ -2420,15 +2420,13 @@ const COACH_PHOTO='icons/coach.jpg';
           </div>
           <div class="sub" id="ch-count" style="font-size:var(--fs-xs);letter-spacing:.5px"></div>
           <!-- Colonne triable : urgence par defaut, taux a la demande. -->
-          <div style="display:flex;gap:6px;align-items:center">
-            <span style="font-size:var(--fs-2xs);color:var(--sub);letter-spacing:1.2px;font-weight:800;text-transform:uppercase">Trier</span>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <span style="font-size:10.5px;color:var(--sub);letter-spacing:1px;font-weight:800;text-transform:uppercase">Trier</span>
             <button class="ch-chip actif" data-tri="urgence" onclick="setTriClients('urgence')">Urgence</button>
             <button class="ch-chip" data-tri="taux" onclick="setTriClients('taux')">Séances faites</button>
             <button class="ch-chip" data-tri="charge" onclick="setTriClients('charge')">Charge</button>
             <button class="ch-chip" data-tri="progression" onclick="setTriClients('progression')">Progression</button>
           </div>
-          <div class="sub" id="ch-sans-reponse" style="font-size:var(--fs-xs);letter-spacing:.5px;color:var(--orange)"></div>
-          <button onclick="openDechargeGroupee()" class="btn btn-outline btn-sm" style="width:100%;margin:2px 0 0">Décharge groupée</button>
         </div>
         <div id="ch-clients-list"></div>
       </div>
@@ -12141,17 +12139,30 @@ function renderPilotage(clients){
         ?`<button type="button" onclick="_entrerFileVideos()" style="background:none;border:none;padding:0;font-family:inherit;font-size:inherit;line-height:inherit;color:var(--red-light);font-weight:800;text-decoration:underline;cursor:pointer">${_libVid}</button>`
         :_libVid)
     : 'Rien en attente de ta part.';
+  // TROIS VOLETS POUR UN SEUL GESTE. Le coach les ouvrait l'un apres l'autre
+  // pour se faire une idee, et devait retenir ce qu'il avait lu dans le
+  // precedent. Un seul volet, trois sections separees d'un filet.
+  const corpsSep='<div style="height:1px;background:#1e1e1e;margin:9px 0"></div>';
+  const _tt=t=>`<div style="font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--sub);font-weight:800;margin-bottom:4px">${t}</div>`;
+  const corpsA2=_tt('Depuis ta dernière visite')+corpsA;
+  const corpsB2=_tt('Portefeuille')+corpsB;
+  const corpsC2=_tt('Charge de travail')+corpsC;
+  // Les trois chemins de sortie, dans le volet : ils prolongent ce qu'on
+  // vient de lire, ils n'ouvrent pas un quatrieme sujet.
+  const _ln='background:none;border:none;padding:0;font-family:Montserrat,sans-serif;font-size:11px;font-weight:800;color:var(--red-text);text-decoration:underline;cursor:pointer';
+  const corpsLiens=corpsSep
+    +`<div style="display:flex;flex-wrap:wrap;gap:14px;align-items:center">`
+    +`<button type="button" onclick="loadFileReprise()" style="${_ln}">À relancer →</button>`
+    +`<button type="button" onclick="loadCoachActivite()" style="${_ln}">Activité du portefeuille →</button>`
+    +`<button type="button" onclick="openDechargeGroupee()" style="${_ln}">Décharge groupée →</button>`
+    +`</div>`;
   el.innerHTML=`
     <div style="display:flex;gap:6px;margin-bottom:10px">
       ${_pilCompteur('pf-traiter','À traiter',r.aTraiter,'#E02020')}
       ${_pilCompteur('pf-decrochage','Séances écourtées',r.decrochage,'#f5c518')}
       ${_pilCompteur('pf-acces','Accès qui expirent',r.accesExpirent,'#22c55e')}
     </div>
-    ${_pilBande('a','Depuis ta dernière visite',corpsA,ch.length?String(ch.length):'—')}
-    ${_pilBande('b','Portefeuille',corpsB,String(p.total))}
-    ${_pilBande('c','Charge de travail',corpsC,String(g.bilansSansReponse+g.videosEnAttente))}
-    <button onclick="loadFileReprise()" class="pil-lien">À relancer →</button>
-    <button onclick="loadCoachActivite()" class="pil-lien">Activité du portefeuille →</button>`;
+    ${_pilBande('vue',"Vue d'ensemble",corpsA2+corpsSep+corpsB2+corpsSep+corpsC2+corpsLiens,String(g.bilansSansReponse+g.videosEnAttente))}`;
 }
 // La visite est horodatée À LA SORTIE de l'écran, pas à l'entrée : la datant à
 // l'entrée, la bande A serait vide dès la seconde ouverture de la journée.
@@ -13715,10 +13726,8 @@ function renderClientList(clients){
   // Bilans auxquels le coach n'a pas encore ecrit. « Sans reponse » et non
   // « non lus » : ouvrir ne compte plus.
   renderPilotage(tous);
-  // La ligne « Bilans sans reponse » a demenage dans la bande « Charge de
-  // travail » : l'afficher aussi ici serait la dire deux fois.
-  const _sr=document.getElementById('ch-sans-reponse');
-  if(_sr) _sr.textContent='';
+  // La ligne « Bilans sans reponse » a demenage dans le volet « Vue
+  // d'ensemble » du pilotage. L'element qu'on vidait ici n'existe plus.
   const cnt=document.getElementById('ch-count');
   if(cnt) cnt.textContent=vus.length+'/'+tous.length+' athlete'+(tous.length>1?'s':'');
   // Position de defilement preservee : reecrire innerHTML la remet a zero.
