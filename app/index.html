@@ -722,6 +722,12 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 .cr-head{display:none}
 /* LA LIGNE DE BANQUE REPOND AU DOIGT. Elle est cliquable depuis toujours et
    ne le montrait par rien : ni survol, ni enfoncement. */
+/* TROIS GROUPES DANS LA CARTE D EXERCICE. Onze champs a la file, sans un mot
+   pour dire ou l on passe de ce qu on PRESCRIT a ce qui se PASSE en salle. */
+.px-grp{display:flex;align-items:center;gap:8px;margin:14px 0 8px;font-size:var(--fs-xs);
+  font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--sub)}
+.px-grp::after{content:'';flex:1;height:1px;background:var(--border)}
+.px-grp:first-child{margin-top:0}
 .bq-l{transition:border-color.15s,background.15s,transform.15s}
 .bq-l:hover{border-color:rgba(224,32,32,.55);background:var(--surface-2)}
 .bq-l:active{transform:scale(.985);border-color:var(--red)}
@@ -20162,25 +20168,16 @@ function renderProgEx(){
         </span>
       </div>
       <div style="padding:12px">
-        <!-- Description technique -->
-        <div style="margin-bottom:10px">
-          <label style="margin-top:0">Description / Technique</label>
-          <textarea rows="3" placeholder="Ex: Faire 10 répétitions lourdes buste droit puis diminuer la charge..." onchange="_progExDirty=true;progEx[${i}].description=this.value" class="f-sm" style="margin-top:4px;line-height:1.5">${escapeHtml(ex.description||'')}</textarea>
-        </div>
+        <div class="px-grp">PRESCRIPTION</div>
         <!-- Séries / Reps / Repos -->
-        <div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:8px;margin-bottom:10px">
-          <div><label>Séries</label><input type="number" min="0" value="${ex.series||3}" onchange="_progExDirty=true;this.value=Math.max(0,+this.value);progEx[${i}].series=+this.value" class="f-c"></div>
+        <div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:8px;margin-bottom:8px">
+          <div><label style="margin-top:0">Séries</label><input type="number" min="0" value="${ex.series||3}" onchange="_progExDirty=true;this.value=Math.max(0,+this.value);progEx[${i}].series=+this.value" class="f-c"></div>
           <div>
             <label>Reps <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(ex: 10 PUIS 20 / 6-8 / 15 Par Jambe)</span></label>
             <input value="${escapeHtml(ex.reps||'')}" onchange="if(/^-\\d+$/.test(this.value.trim())){toast('Reps invalides : valeur négative non autorisée','var(--orange)');this.value=progEx[${i}].reps||'';return;}_progExDirty=true;progEx[${i}].reps=this.value" placeholder="10 PUIS 20" class="f-c">
             <div style="margin-top:4px">${badge}</div>
           </div>
           <div><label>Repos</label><input value="${escapeHtml(ex.repos||'01 min')}" onchange="_progExDirty=true;progEx[${i}].repos=this.value" placeholder="01 min" class="f-c f-sm"></div>
-        </div>
-        <!-- Tempo : ligne propre, la grille au-dessus n'a que trois colonnes -->
-        <div style="margin-bottom:10px">
-          <label>Tempo <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(ex: 3-1-1-0 — descente, bas, montée, haut)</span></label>
-          <input value="${escapeHtml(ex.tempo||'')}" onchange="_progExDirty=true;progEx[${i}].tempo=this.value" placeholder="3-1-1-0">
         </div>
         <!-- CHARGE ET RIR CIBLES. Les deux étaient LUS depuis toujours —
              _apLigne les affiche dans l’aperçu de séance, PP_COLS en fait
@@ -20195,7 +20192,7 @@ function renderProgEx(){
 
              Placés avec les séries, les reps et le tempo plutôt qu’avec le
              matériel : c’est la prescription du travail, pas de l’engin. -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
           <div>
             <label>Charge cible</label>
             <input value="${escapeHtml(ex.charge||'')}" onchange="_progExDirty=true;progEx[${i}].charge=this.value" placeholder="Ex : 80 kg">
@@ -20205,16 +20202,28 @@ function renderProgEx(){
             <input value="${escapeHtml(ex.rir||'')}" onchange="_progExDirty=true;progEx[${i}].rir=this.value" placeholder="Ex : 2">
           </div>
         </div>
+        <div class="px-grp">EXÉCUTION</div>
+        <!-- Tempo : ligne propre, la grille au-dessus n'a que trois colonnes -->
+        <div style="margin-bottom:8px">
+          <label style="margin-top:0">Tempo <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(ex: 3-1-1-0 — descente, bas, montée, haut)</span></label>
+          <input value="${escapeHtml(ex.tempo||'')}" onchange="_progExDirty=true;progEx[${i}].tempo=this.value" placeholder="3-1-1-0">
+        </div>
         <!-- Matériel : son propre champ depuis que la banque le pré-remplit.
              Il se retapait dans le NOM de l'exercice, ce qui le rendait
              illisible partout où le nom sert de clef. -->
-        <div style="margin-bottom:10px">
+        <div style="margin-bottom:8px">
           <label>Matériel</label>
           <input value="${escapeHtml(ex.materiel||'')}" onchange="_progExDirty=true;progEx[${i}].materiel=this.value" placeholder="Ex : haltères, banc incliné">
         </div>
         ${_selecteurTechnique(ex,i)}
         ${_blocAvertissementContrainte(ex,i)}
         ${_ligneMuscles(ex,i)}
+        <!-- Description technique -->
+        <div style="margin-bottom:8px">
+          <label style="margin-top:0">Description / Technique</label>
+          <textarea rows="3" placeholder="Ex: Faire 10 répétitions lourdes buste droit puis diminuer la charge..." onchange="_progExDirty=true;progEx[${i}].description=this.value" class="f-sm" style="margin-top:4px;line-height:1.5">${escapeHtml(ex.description||'')}</textarea>
+        </div>
+        <div class="px-grp">MÉDIA</div>
         <!-- Image + Vidéo exercice -->
         <div style="display:flex;align-items:flex-start;gap:10px;margin-top:4px">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-shrink:0">
