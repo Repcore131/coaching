@@ -615,6 +615,12 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
    trait — la ou toutes les autres cartes de l application portent une trame
    et une ombre. Meme langage, donc, et un filet rouge a gauche qui les
    rattache a la charpente. */
+/* LE SCHEMA CORPOREL CHANGE D ETAT SANS SAUTER. bBodyFocus repeint trois
+   formes d un coup — le trait de rappel, le pointille et le point — a chaque
+   entree et sortie de champ. Sans transition, la silhouette clignote a chaque
+   tabulation. On ne fait glisser QUE ce que bBodyFocus touche : stroke,
+   stroke-width et fill. Les coordonnees ne bougent jamais. */
+.bsch svg path[id^="ln-"],.bsch svg line[id^="dsh-"],.bsch svg circle[id^="dot-"]{transition:stroke.18s ease,stroke-width.18s ease,fill.18s ease}
 .evo-carte{position:relative;overflow:hidden;border-radius:var(--r-3);padding:14px;margin-bottom:14px;
   background:
     repeating-linear-gradient(-50deg,transparent,transparent 12px,rgba(255,255,255,.022) 12px,rgba(255,255,255,.022) 13px),
@@ -1443,6 +1449,10 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   .wd-badge{opacity:1!important;transform:none!important}
   .wd-badge-medal{transform:none!important;filter:drop-shadow(0 0 12px rgba(224,32,32,.45))!important}
   .rc-blink{opacity:1!important}
+  /* La regle universelle plus haut ramene deja ces transitions a .01 ms.
+     On les nomme quand meme : une valeur qui existe encore peut etre relue
+     comme un choix, alors qu ici il n y a plus de mouvement du tout. */
+  .bsch svg path[id^="ln-"],.bsch svg line[id^="dsh-"],.bsch svg circle[id^="dot-"]{transition:none!important}
   /* Splash : le voile blanc est purement décoratif, on le retire. Le logo et
      l'éclair doivent s'afficher d'emblée, à pleine opacité et sans filtre —
      animation:none seul les figerait sur leur première image (opacity:0). */
@@ -29074,7 +29084,7 @@ function bBodySchema(prefix){
            `<circle id="dot-${id}" cx="${nx}" cy="${ny}" r="4" fill="#0a0a0a" stroke="#8a8a8a" stroke-width="1.7"/>`;
   }).join('');
   return `
-  <div style="position:relative;width:100%;max-width:420px;margin:0 auto;aspect-ratio:${W}/${VH};max-height:58vh">
+  <div class="bsch" style="position:relative;width:100%;max-width:420px;margin:0 auto;aspect-ratio:${W}/${VH};max-height:58vh">
     <svg viewBox="0 ${Y0} ${W} ${VH}" style="position:absolute;inset:0;width:100%;height:100%" preserveAspectRatio="xMidYMid meet">
       <defs>
         <linearGradient id="bodyGrad" x1="0" y1="0" x2="0" y2="1">
@@ -29158,7 +29168,7 @@ function bBodyFocus(id,on){
   if(ln){ln.setAttribute('stroke',on?'#E02020':(filled?'rgba(224,32,32,.75)':'#6a6a6a'));ln.setAttribute('stroke-width',on?'2':'1.4');}
   if(dsh){dsh.setAttribute('stroke',on?'#ff2222':(filled?'rgba(224,32,32,.8)':'rgba(224,32,32,.5)'));dsh.setAttribute('stroke-width',on?'1.8':'1.2');}
   if(dot){dot.setAttribute('stroke',on?'#E02020':(filled?'rgba(224,32,32,.9)':'#8a8a8a'));dot.setAttribute('fill',on||filled?'#E02020':'#0a0a0a');}
-  if(bx){bx.style.borderColor=on?'#E02020':(filled?'rgba(224,32,32,.4)':'var(--border)');bx.style.boxShadow=on?'0 0 12px rgba(224,32,32,.25)':'none';}
+  if(bx){bx.style.borderColor=on?'#E02020':(filled?'rgba(224,32,32,.4)':'var(--border)');bx.style.boxShadow=on?'0 0 18px rgba(224,32,32,.45)':'none';}
 }
 function bLbl(txt){return`<div style="font-size:var(--fs-xs);font-weight:700;color:var(--text-strong);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;margin-top:14px">${txt}</div>`;}
 function loadBilPhoto(input,key){
