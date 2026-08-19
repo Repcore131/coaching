@@ -699,6 +699,19 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 /* LES CARTES DU CANAL. Deux fonctions rendaient la meme carte a quelques
    octets pres — vue coach et vue athlete — chacune avec son style en ligne. */
 /* Hors du point de rupture large, l en-tete de colonnes n a rien a coiffer. */
+/* LE BOUTON QUI ATTEND. Un travail non publie n existait que dans un bandeau
+   qu on defile hors de vue ; le bouton, lui, reste sous les yeux. */
+.btn-attente{background:linear-gradient(180deg,#f97316,#c2540b)!important;color:#160800!important;
+  box-shadow:0 0 0 2px rgba(249,115,22,.25),0 0 18px rgba(249,115,22,.45)!important;
+  animation:glowPulse 2.2s ease-in-out infinite}
+/* .celebrate ET SA KEYFRAME AVAIENT ETE SUPPRIMEES avec l ancienne fin de
+   seance : la consigne les croyait encore la. Elles reviennent ici, pour le
+   seul geste qui les demande — la publication reussie. */
+@keyframes celebratePulse{0%{transform:scale(1);box-shadow:0 0 0 0 rgba(34,197,94,.55)}
+  55%{transform:scale(1.06);box-shadow:0 0 0 10px rgba(34,197,94,0)}
+  100%{transform:scale(1);box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+.celebrate{background:linear-gradient(180deg,#22c55e,#15803d)!important;color:#04140a!important;
+  animation:celebratePulse .42s cubic-bezier(.16,1,.3,1)}
 .cr-head{display:none}
 /* QUATRE BOITES DANS LA COLONNE D UN DOSSIER. A 375 px, chacune tombait a
    52,25 px de contenu — moins que la largeur d un nombre a trois chiffres.
@@ -1580,6 +1593,7 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   .rc-blink{opacity:1!important}
   .fj-entry.fj-neuf,.caff-neuf{animation:none!important}
   #ch-clients-list .client-row{animation:none}
+  .btn-attente,.celebrate{animation:none!important}
   /* Coupee net, pas accelerée : la regle universelle la ramenerait a .01 ms,
      ce qui laisse un saut au lieu d une entree. */
   #bil-content>.pad{animation:none!important}
@@ -2985,13 +2999,13 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar">
     <button class="back-btn" onclick="go('s-coach-client')">←</button>
     <span class="topbar-title" id="csm-title">Séances</span>
-    <button onclick="saveCoachSessions()" style="background:var(--red);border:none;color:var(--text);padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:var(--r-1)">PUBLIER</button>
+    <button id="csm-publier" onclick="saveCoachSessions()" style="background:var(--red);border:none;color:var(--text);padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;letter-spacing:1px;border-radius:var(--r-1)">PUBLIER</button>
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
       <!-- Rempli par loadCoachSessionSlots : il dit quand un travail
            attend encore une publication. -->
-      <div id="cs-bandeau-brouillon"></div>
+      <div id="cs-bandeau-brouillon" style="position:sticky;top:0;z-index:5"></div>
       <p class="sub" style="font-size:var(--fs-sm);margin-bottom:12px;line-height:1.6">Active/désactive les jours et modifie chaque séance. Le Programme Fondation est pré-chargé jusqu'à personnalisation.</p>
       <!-- Versions precedentes. Le confirm d'application d'un modele promet
            « rollback possible » et _snapshotSessionsConfig ecrit bien
@@ -3129,7 +3143,7 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- COACH PROGRAM EDITOR -->
 <div id="s-coach-program" class="screen">
   <div class="topbar"><button class="back-btn" onclick="go('s-coach-client')">←</button><span class="topbar-title">Programme</span>
-    <button class="btn btn-red btn-sm" onclick="saveProgram()">Sauvegarder</button>
+    <button id="cp-sauver" class="btn btn-red btn-sm" onclick="saveProgram()">Sauvegarder</button>
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
@@ -18298,6 +18312,14 @@ function loadCoachSessionSlots(){
       </div>`:''}
     </div>
   `).join('');
+  // LE BOUTON DIT CE QUE LE BANDEAU DIT DEJA, mais lui reste sous les yeux :
+  // le bandeau se defile hors de vue des la premiere seance ouverte.
+  const _bp=document.getElementById('csm-publier');
+  if(_bp){
+    const _att=!!_htmlBandeauBrouillon();
+    _bp.classList.toggle('btn-attente',_att);
+    _bp.textContent=_att?'PUBLIER •':'PUBLIER';
+  }
 }
 
 // Transformer le programme abouti d'un athlète en modèle réassignable, sans
@@ -18584,7 +18606,16 @@ function saveCoachSessions(){
   const localOk=DB.set('users',users);
   // « Enregistrement… » écraserait l'avertissement de quota émis par DB.set.
   if(localOk) toast('Enregistrement…');
-  go('s-coach-client');
+  // LA PUBLICATION EST FAITE. Tout ce qui precede — DB.set, l historique, le
+  // marquage, le report, l oubli du brouillon, la poussee distante — s est
+  // execute de facon synchrone. SEULE la navigation est retardee, de 420 ms,
+  // le temps que le bouton dise que c est parti.
+  const _b=document.getElementById('csm-publier');
+  if(_b&&!matchMedia('(prefers-reduced-motion: reduce)').matches){
+    _b.classList.remove('btn-attente');
+    _b.classList.add('celebrate');
+  }
+  setTimeout(()=>go('s-coach-client'),420);
   toastSync(localOk,CLOUD.pushOne(emailKey,stocke),' Séances sauvegardées !','les séances sont');
 }
 
@@ -20198,6 +20229,11 @@ function renderProgEx(){
       </div>
     </div>`;
   }).join('');
+  const _bs=document.getElementById('cp-sauver');
+  if(_bs){
+    _bs.classList.toggle('btn-attente',_progExDirty);
+    _bs.textContent=_progExDirty?'SAUVEGARDER •':'Sauvegarder';
+  }
 }
 
 // Lier ou délier un exercice avec celui du dessus.
