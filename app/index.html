@@ -328,6 +328,19 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
      s'efface. */
   body:has(#s-coach-home.active) #ch-main-area>div:last-child{display:none}
 
+  /* ── DOSSIER ATHLETE EN DEUX COLONNES ──
+     align-items:start est ce qui fait tenir la chose : sans lui, chaque bloc
+     s'etirerait a la hauteur du plus haut de sa rangee et le dossier serait
+     un damier de vides. Les blocs gardent leur hauteur propre et se posent en
+     deux colonnes dans l'ordre du document. */
+  body:has(#s-coach-client.active) #s-coach-client>.scroll-area>.pad{
+    display:grid;grid-template-columns:1fr 1fr;gap:0 24px;align-items:start}
+}
+/* LA LISTE EN TABLEAU DEMANDE PLUS QUE 1025 PX. A neuf colonnes dont trois de
+   mesure, 1025 px les tassait sous leur libelle. Elle a son propre point de
+   rupture ; le reste de la mise en page large — barre laterale, largeur
+   maximale, dossier en deux colonnes — reste a 1025. */
+@media(min-width:1360px){
   /* ── LISTE D'ATHLETES EN TABLEAU ──
      display:contents sur le bloc central : ses quatre enfants (nom, activite,
      objectif, phase) remontent comme cellules de la grille au lieu de rester
@@ -347,8 +360,9 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
        le nombre d’enfants réels de la ligne — avatar, les sept cellules du
        bloc en display:contents, puis le badge — sinon la grille repasse à la
        ligne et le tableau se disloque. */
-    grid-template-columns:44px minmax(150px,1.3fr) minmax(140px,1.1fr) minmax(120px,1.2fr) minmax(90px,.8fr) 72px 58px 42px 180px;
-    align-items:center;gap:16px;margin-bottom:2px}
+    grid-template-columns:44px minmax(150px,1.3fr) minmax(130px,1.1fr) minmax(96px,1.2fr) minmax(84px,.8fr) 66px 54px 40px 120px;
+    align-items:center;gap:12px;box-shadow:none;border-radius:0 3px 3px 0;
+    margin-bottom:0;border-bottom:1px solid #1e1e1e}
   body:has(#s-coach-home.active) #ch-clients-list .client-row>div:nth-child(2){display:contents}
   body:has(#s-coach-home.active) #ch-clients-list .client-row>*{margin-top:0}
   body:has(#s-coach-home.active) #ch-clients-list .cr-obj,
@@ -357,14 +371,12 @@ body{background:var(--bg);color:var(--text);font-family:Montserrat,sans-serif;mi
   body:has(#s-coach-home.active) #ch-clients-list .cr-progres,
   body:has(#s-coach-home.active) #ch-clients-list .cr-bilans{display:block}
   body:has(#s-coach-home.active) #ch-clients-list .client-row:hover{transform:none}
-
-  /* ── DOSSIER ATHLETE EN DEUX COLONNES ──
-     align-items:start est ce qui fait tenir la chose : sans lui, chaque bloc
-     s'etirerait a la hauteur du plus haut de sa rangee et le dossier serait
-     un damier de vides. Les blocs gardent leur hauteur propre et se posent en
-     deux colonnes dans l'ordre du document. */
-  body:has(#s-coach-client.active) #s-coach-client>.scroll-area>.pad{
-    display:grid;grid-template-columns:1fr 1fr;gap:0 24px;align-items:start}
+  /* L en-tete de colonnes n existe QUE dans ce mode : sous le point de
+     rupture, la ligne est une carte empilee et neuf intitules n auraient
+     rien a surmonter. Il herite de la grille de la ligne. */
+  .cr-head{display:grid;grid-template-columns:inherit;gap:12px;padding:0 14px 7px;
+    font-size:10.5px;font-weight:800;letter-spacing:1.1px;text-transform:uppercase;
+    color:var(--sub);border-bottom:1px solid #242424;margin-bottom:6px}
 }
 
 /* ====== GRAIN TEXTURE GLOBAL ====== */
@@ -686,6 +698,22 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 .bsch svg path[id^="ln-"],.bsch svg line[id^="dsh-"],.bsch svg circle[id^="dot-"]{transition:stroke.18s ease,stroke-width.18s ease,fill.18s ease}
 /* LES CARTES DU CANAL. Deux fonctions rendaient la meme carte a quelques
    octets pres — vue coach et vue athlete — chacune avec son style en ligne. */
+/* Hors du point de rupture large, l en-tete de colonnes n a rien a coiffer. */
+.cr-head{display:none}
+/* LES LIGNES ENTRENT, en cascade courte. Six seulement : au-dela, la cascade
+   devient une attente, et une liste de quarante athletes se lirait par vagues.
+   fadeInUp est deja declaree, on ne la redeclare pas. */
+#ch-clients-list .client-row{animation:fadeInUp.22s cubic-bezier(.16,1,.3,1) both}
+#ch-clients-list .client-row:nth-child(1){animation-delay:0s}
+#ch-clients-list .client-row:nth-child(2){animation-delay:.018s}
+#ch-clients-list .client-row:nth-child(3){animation-delay:.036s}
+#ch-clients-list .client-row:nth-child(4){animation-delay:.054s}
+#ch-clients-list .client-row:nth-child(5){animation-delay:.072s}
+#ch-clients-list .client-row:nth-child(6){animation-delay:.09s}
+#ch-clients-list .client-row:nth-child(n+7){animation-delay:0s}
+/* LA PULSATION DE SYNCHRO. Elle ne dit qu une chose : la liste vient de
+   changer. Posee a chaque tour de boucle, elle ne dirait plus rien. */
+@keyframes chSyncPulse{0%{box-shadow:0 0 0 0 rgba(224,32,32,.35)}100%{box-shadow:0 0 0 0 rgba(224,32,32,0)}}
 .cnl-carte{position:relative;overflow:hidden;
   background:repeating-linear-gradient(-50deg,transparent,transparent 12px,rgba(255,255,255,.020) 12px,rgba(255,255,255,.020) 13px),
     linear-gradient(168deg,#1a1a1a,#111 52%,#0b0b0b);
@@ -1547,6 +1575,7 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   .wd-badge-medal{transform:none!important;filter:drop-shadow(0 0 12px rgba(224,32,32,.45))!important}
   .rc-blink{opacity:1!important}
   .fj-entry.fj-neuf,.caff-neuf{animation:none!important}
+  #ch-clients-list .client-row{animation:none}
   /* Coupee net, pas accelerée : la regle universelle la ramenerait a .01 ms,
      ce qui laisse un saut au lieu d une entree. */
   #bil-content>.pad{animation:none!important}
@@ -13791,7 +13820,13 @@ function renderClientList(clients){
       ? '<div class="sub" style="text-align:center;padding:28px 12px;font-size:var(--fs-sm)">Aucun athlète ne correspond.</div>'
       : el.innerHTML;
   } else {
-    el.innerHTML=vus.map(renderClientRow).join('');
+    // L en-tete de colonnes est emis TOUJOURS : c est le CSS qui decide de
+    // l afficher, et seulement au-dela de 1360 px. Le sortir du rendu
+    // demanderait au JS de connaitre la largeur de la fenetre.
+    el.innerHTML='<div class="cr-head"><span></span><span>Athlète</span><span>Activité</span>'
+      +'<span>Objectif</span><span>Phase</span><span>Charge</span><span>Progrès</span>'
+      +'<span>Bilans</span><span>État</span></div>'
+      +vus.map(renderClientRow).join('');
   }
   if(pan&&scr) pan.scrollTop=scr;
   return vus.length;
@@ -15590,8 +15625,21 @@ function loadCoachHome(){
     renderTodoBlock(freshClients);
     const el2=document.getElementById('ch-clients-list');
     if(!el2||!freshClients.length) return;
+    // LA PULSATION NE PART QUE SI LA LISTE A REELLEMENT CHANGE. Posee a chaque
+    // tour de boucle, elle ne dirait plus rien — et la synchro tourne toutes
+    // les 30 secondes. Deux signaux suffisent : le nombre d athletes, et
+    // l identite du premier, qui bouge des que le tri par urgence bascule.
+    const _av=(typeof clients!=='undefined'&&clients)||[];
+    const _change=freshClients.length!==_av.length
+      ||(freshClients[0]&&_av[0]&&freshClients[0].id!==_av[0].id);
     // Meme precaution apres la synchro distante, qui reecrit la meme liste.
     renderClientList(freshClients);
+    // APRES renderClientList, qui restaure la position de defilement : poser
+    // l animation avant la ferait sauter la liste sous les yeux du coach.
+    if(_change&&!matchMedia('(prefers-reduced-motion:reduce)').matches){
+      el2.style.animation='chSyncPulse.6s ease';
+      el2.addEventListener('animationend',()=>{ el2.style.animation=''; },{once:true});
+    }
   }).catch(()=>{});
 }
 function getClients(){
