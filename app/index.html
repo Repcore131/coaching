@@ -35468,13 +35468,16 @@ function htmlAnneauxMacros(tot,m,marge,unite,poidsRef){
           stroke-dasharray="${d} ${gap}" stroke-linecap="${d>0?'round':'butt'}"
           ${d>0?`filter="drop-shadow(0 0 4px ${color})"`:''}
           transform="rotate(-90 ${cx} ${cy})"/>
-        <text x="${cx}" y="${cy-5}" dominant-baseline="middle" text-anchor="middle"
-          font-family="Montserrat,sans-serif" font-size="15" font-weight="900"
+        <!-- GRAISSE 400, IMPERATIVEMENT. Bebas Neue n est chargee qu en 400 dans
+             ce depot : toute valeur superieure produit un gras synthetique baveux,
+             que le navigateur fabrique en epaississant le trace. -->
+        <text x="${cx}" y="${cy-4}" dominant-baseline="middle" text-anchor="middle"
+          font-family="'Bebas Neue','Arial Narrow',Impact,'Haettenschweiler','Franklin Gothic Condensed',sans-serif" font-size="26" font-weight="400" letter-spacing="0.5"
           fill="${trop?'var(--orange)':'var(--text)'}">${_cv?_cv.fait.texte:fait}</text>
         <text x="${cx}" y="${cy+13}" dominant-baseline="middle" text-anchor="middle"
-          font-family="Montserrat,sans-serif" font-size="11" fill="#777">${_cv?(_cv.cible?'/ '+_cv.cible.texte:''):_fragmentSiValeur('/ ',cible,' g')}</text>
+          font-family="Montserrat,sans-serif" font-size="12" fill="#8a8a8a">${_cv?(_cv.cible?'/ '+_cv.cible.texte:''):_fragmentSiValeur('/ ',cible,' g')}</text>
       </svg>
-      <div style="font-size:var(--fs-xs);color:#888;letter-spacing:1px;font-weight:700;text-transform:uppercase;margin-top:-4px">${label}</div>
+      <div style="font-size:10px;color:var(--sub);letter-spacing:1.4px;font-weight:700;text-transform:uppercase;margin-top:-4px">${label}</div>
     </div>`;
   };
   return `<div style="display:flex;justify-content:space-around${marge?';margin-bottom:'+marge:''}">
