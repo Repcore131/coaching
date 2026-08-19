@@ -411,6 +411,13 @@ body::after{content:'';position:fixed;inset:0;z-index:var(--z-layer);pointer-eve
 /* ====== INPUTS ====== */
 input,select,textarea{width:100%;padding:13px 16px;background:#0c0c0c;border:1px solid var(--border);border-radius:var(--r-1);color:var(--text);font-family:Montserrat,sans-serif;font-size:var(--fs-md);outline:none;transition:var(--t-2)}
 input:focus,select:focus,textarea:focus{border-color:var(--red);background:#0d0000;box-shadow:0 0 0 2px rgba(224,32,32,.15)}
+/* TROIS CORPS DE CHAMP DANS UNE SEULE CARTE — 11, 12, 13 et 14 px — quand la
+   difference entre deux d entre eux ne veut rien dire. Il n en reste que deux,
+   plus le nom. */
+.f-sm{font-size:12px!important;padding:9px 11px!important}
+.f-c{text-align:center}
+.f-inline{background:transparent!important;border:none!important;padding:0!important;
+  font-weight:800;font-size:14px}
 select option{background:#111}
 label{display:block;font-size:var(--fs-xs);font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:6px;margin-top:16px}
 
@@ -713,6 +720,11 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 .celebrate{background:linear-gradient(180deg,#22c55e,#15803d)!important;color:#04140a!important;
   animation:celebratePulse .42s cubic-bezier(.16,1,.3,1)}
 .cr-head{display:none}
+/* LA LIGNE DE BANQUE REPOND AU DOIGT. Elle est cliquable depuis toujours et
+   ne le montrait par rien : ni survol, ni enfoncement. */
+.bq-l{transition:border-color.15s,background.15s,transform.15s}
+.bq-l:hover{border-color:rgba(224,32,32,.55);background:var(--surface-2)}
+.bq-l:active{transform:scale(.985);border-color:var(--red)}
 /* QUATRE BOITES DANS LA COLONNE D UN DOSSIER. A 375 px, chacune tombait a
    52,25 px de contenu — moins que la largeur d un nombre a trois chiffres.
    Deux par deux en dessous de 431 px, quatre au-dela. */
@@ -1594,6 +1606,8 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   .fj-entry.fj-neuf,.caff-neuf{animation:none!important}
   #ch-clients-list .client-row{animation:none}
   .btn-attente,.celebrate{animation:none!important}
+  .bq-l{transition:none}
+  .bq-l:active{transform:none}
   /* Coupee net, pas accelerée : la regle universelle la ramenerait a .01 ms,
      ce qui laisse un saut au lieu d une entree. */
   #bil-content>.pad{animation:none!important}
@@ -18994,14 +19008,16 @@ function _bqLigne(f){
     f.materiel||''].filter(Boolean).join(' · ');
   return `<div onclick="bqChoisir('${escapeHtml(f.slug)}')" role="button" tabindex="0"
     onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}"
+    class="bq-l"
     style="display:flex;align-items:center;gap:11px;background:var(--surface-1);
     border:1px solid var(--border);border-radius:var(--r-3);padding:9px 11px;margin-bottom:8px;
-    cursor:pointer;min-height:56px">
-    ${img?`<img src="${escapeHtml(img)}" alt="" loading="lazy" width="52" height="38"
-      style="width:52px;height:38px;object-fit:cover;border-radius:var(--r-2);background:#fff;flex-shrink:0">`
+    cursor:pointer;min-height:66px">
+    ${img?`<img src="${escapeHtml(img)}" alt="" loading="lazy" width="64" height="48"
+      style="width:64px;height:48px;object-fit:cover;border-radius:8px;background:#f4f4f4;
+      box-shadow:inset 0 0 0 1px rgba(0,0,0,.12);flex-shrink:0">`
       // Pas d'illustration : un cadre neutre de la MÊME taille. Sans lui, la
       // ligne se décalerait et la liste deviendrait un escalier.
-      :`<div style="width:52px;height:38px;border-radius:var(--r-2);background:var(--surface-2);
+      :`<div style="width:64px;height:48px;border-radius:8px;background:var(--surface-2);
         border:1px solid var(--border);flex-shrink:0"></div>`}
     <div style="flex:1;min-width:0">
       <div style="font-weight:800;font-size:var(--fs-sm);line-height:1.3">${escapeHtml(f.nom)}${f.perso?' <span style="color:var(--sub);font-weight:600">· perso</span>':''}</div>
@@ -20010,7 +20026,7 @@ function _selecteurTechnique(ex,i){
       <label style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;color:var(--sub);font-weight:700">Sur quelle(s) série(s)</label>
       <input value="${escapeHtml((ex&&ex.methodeSeries)||'')}" maxlength="40"
         onchange="_progExDirty=true;progEx[${i}].methodeSeries=this.value"
-        placeholder="dernière · 3 et 4 · toutes" style="margin-top:4px;font-size:var(--fs-xs);padding:7px 10px">
+        placeholder="dernière · 3 et 4 · toutes" class="f-sm" style="margin-top:4px">
     </div>`:''}
     ${_avertissementTechnique(ex,i)}
   </div>`;
@@ -20138,7 +20154,7 @@ function renderProgEx(){
             <button type="button" class="px-mini" onclick="_pxDeplacerParFleche(${i},1)" ${gi===_grs.length-1?'disabled':''} aria-label="Descendre">▼</button>
           </span>`:''}
           <span style="background:#fff2;border-radius:var(--r-full);min-width:22px;height:22px;padding:0 5px;display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:800;flex-shrink:0">${_repereEx(progEx,i)}</span>
-          <input value="${escapeHtml(ex.name||'')}" onchange="_progExDirty=true;progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase()" placeholder="NOM DE L'EXERCICE" style="background:transparent;border:none;color:var(--text);font-family:Montserrat,sans-serif;font-weight:800;font-size:var(--fs-md);outline:none;text-transform:uppercase;flex:1">
+          <input value="${escapeHtml(ex.name||'')}" onchange="_progExDirty=true;progEx[${i}].name=this.value.toUpperCase();this.value=this.value.toUpperCase()" placeholder="NOM DE L'EXERCICE" class="f-inline" style="color:var(--text);font-family:Montserrat,sans-serif;outline:none;text-transform:uppercase;flex:1">
         </div>
         <span style="display:flex;align-items:center;gap:6px;flex-shrink:0">
           <button onclick="_dupliquerExUI(${i})" aria-label="Dupliquer cet exercice" title="Dupliquer" style="background:#fff2;border:none;color:var(--text);font-size:var(--fs-xs);font-weight:800;cursor:pointer;border-radius:var(--r-3);height:24px;padding:0 9px;display:flex;align-items:center;justify-content:center;font-family:inherit">COPIE</button>
@@ -20149,17 +20165,17 @@ function renderProgEx(){
         <!-- Description technique -->
         <div style="margin-bottom:10px">
           <label style="margin-top:0">Description / Technique</label>
-          <textarea rows="3" placeholder="Ex: Faire 10 répétitions lourdes buste droit puis diminuer la charge..." onchange="_progExDirty=true;progEx[${i}].description=this.value" style="margin-top:4px;font-size:var(--fs-sm);line-height:1.5">${escapeHtml(ex.description||'')}</textarea>
+          <textarea rows="3" placeholder="Ex: Faire 10 répétitions lourdes buste droit puis diminuer la charge..." onchange="_progExDirty=true;progEx[${i}].description=this.value" class="f-sm" style="margin-top:4px;line-height:1.5">${escapeHtml(ex.description||'')}</textarea>
         </div>
         <!-- Séries / Reps / Repos -->
         <div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:8px;margin-bottom:10px">
-          <div><label>Séries</label><input type="number" min="0" value="${ex.series||3}" onchange="_progExDirty=true;this.value=Math.max(0,+this.value);progEx[${i}].series=+this.value" style="text-align:center"></div>
+          <div><label>Séries</label><input type="number" min="0" value="${ex.series||3}" onchange="_progExDirty=true;this.value=Math.max(0,+this.value);progEx[${i}].series=+this.value" class="f-c"></div>
           <div>
             <label>Reps <span style="font-size:var(--fs-xs);color:var(--sub);text-transform:none">(ex: 10 PUIS 20 / 6-8 / 15 Par Jambe)</span></label>
-            <input value="${escapeHtml(ex.reps||'')}" onchange="if(/^-\\d+$/.test(this.value.trim())){toast('Reps invalides : valeur négative non autorisée','var(--orange)');this.value=progEx[${i}].reps||'';return;}_progExDirty=true;progEx[${i}].reps=this.value" placeholder="10 PUIS 20" style="text-align:center">
+            <input value="${escapeHtml(ex.reps||'')}" onchange="if(/^-\\d+$/.test(this.value.trim())){toast('Reps invalides : valeur négative non autorisée','var(--orange)');this.value=progEx[${i}].reps||'';return;}_progExDirty=true;progEx[${i}].reps=this.value" placeholder="10 PUIS 20" class="f-c">
             <div style="margin-top:4px">${badge}</div>
           </div>
-          <div><label>Repos</label><input value="${escapeHtml(ex.repos||'01 min')}" onchange="_progExDirty=true;progEx[${i}].repos=this.value" placeholder="01 min" style="text-align:center;font-size:var(--fs-sm)"></div>
+          <div><label>Repos</label><input value="${escapeHtml(ex.repos||'01 min')}" onchange="_progExDirty=true;progEx[${i}].repos=this.value" placeholder="01 min" class="f-c f-sm"></div>
         </div>
         <!-- Tempo : ligne propre, la grille au-dessus n'a que trois colonnes -->
         <div style="margin-bottom:10px">
@@ -20209,7 +20225,7 @@ function renderProgEx(){
           <div style="flex:1">
             <label style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;color:var(--sub);font-weight:700">Lien vidéo YouTube (technique)</label>
             <div style="display:flex;gap:6px;margin-top:4px">
-              <input value="${escapeHtml(ex.videoUrl||'')}" onchange="_progExDirty=true;progEx[${i}].videoUrl=normaliserUrlVideo(this.value);this.value=progEx[${i}].videoUrl;renderProgEx()" placeholder="https://youtu.be/..." style="flex:1;font-size:var(--fs-xs);padding:7px 10px">
+              <input value="${escapeHtml(ex.videoUrl||'')}" onchange="_progExDirty=true;progEx[${i}].videoUrl=normaliserUrlVideo(this.value);this.value=progEx[${i}].videoUrl;renderProgEx()" placeholder="https://youtu.be/..." class="f-sm" style="flex:1">
               ${normaliserUrlVideo(ex.videoUrl)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl))}" target="_blank" rel="noopener" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-1);padding:7px 10px;font-size:var(--fs-sm);text-decoration:none;display:flex;align-items:center">▶</a>`:''}
             </div>
             ${ex.videoUrl&&!normaliserUrlVideo(ex.videoUrl)?`<div class="videoInutilisable" style="font-size:var(--fs-2xs);color:var(--orange);margin-top:4px;line-height:1.5">Ce texte n'est pas un lien : l'athlète ne verra aucune vidéo. Colle l'adresse YouTube, ou juste l'identifiant de la vidéo.</div>`:''}
@@ -20220,7 +20236,7 @@ function renderProgEx(){
                  comporter pareil seraient deux champs à apprendre. -->
             <label style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase;color:var(--sub);font-weight:700;margin-top:9px">2ᵉ lien vidéo (facultatif)</label>
             <div style="display:flex;gap:6px;margin-top:4px">
-              <input value="${escapeHtml(ex.videoUrl2||'')}" onchange="_progExDirty=true;progEx[${i}].videoUrl2=normaliserUrlVideo(this.value);this.value=progEx[${i}].videoUrl2;renderProgEx()" placeholder="https://youtu.be/..." style="flex:1;font-size:var(--fs-xs);padding:7px 10px">
+              <input value="${escapeHtml(ex.videoUrl2||'')}" onchange="_progExDirty=true;progEx[${i}].videoUrl2=normaliserUrlVideo(this.value);this.value=progEx[${i}].videoUrl2;renderProgEx()" placeholder="https://youtu.be/..." class="f-sm" style="flex:1">
               ${normaliserUrlVideo(ex.videoUrl2)?`<a href="${safeUrl(normaliserUrlVideo(ex.videoUrl2))}" target="_blank" rel="noopener" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-1);padding:7px 10px;font-size:var(--fs-sm);text-decoration:none;display:flex;align-items:center">▶</a>`:''}
             </div>
             ${ex.videoUrl2&&!normaliserUrlVideo(ex.videoUrl2)?`<div class="videoInutilisable" style="font-size:var(--fs-2xs);color:var(--orange);margin-top:4px;line-height:1.5">Ce texte n'est pas un lien : l'athlète ne verra aucune vidéo. Colle l'adresse YouTube, ou juste l'identifiant de la vidéo.</div>`:''}
