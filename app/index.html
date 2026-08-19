@@ -8089,6 +8089,9 @@ function _majTabbar(id){
   _majPastilleBilan();
 }
 function go(id){
+  // ON NE VIDE QUE SI L ON QUITTE LE MODULE. Naviguer de la nutrition vers la
+  // cafeine ne rejoue rien ; revenir depuis l accueil rejoue l entree une fois.
+  try{ if(!NUT_ECRANS.test(String(id||''))) _dejaAnime.clear(); }catch(e){}
   // UNE SAISIE OUVERTE NE SURVIT PAS AU CHANGEMENT D’ÉCRAN. Sans ça, le calque
   // restait affiché par-dessus le nouvel écran et son appelant attendait une
   // promesse qui ne se résoudrait jamais. C’est un no-op quand rien n’est
@@ -35556,7 +35559,7 @@ function _renderStrictMacroRings(nut,jourAff){
   const dayBadge=isOn
     ?`<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--success);background:var(--success-bg);border:1px solid var(--success-border);border-radius:var(--r-1);padding:3px 10px;letter-spacing:1px">${icon('zap',10)} JOUR ON</span>`
     :`<span style="display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-xs);font-weight:800;color:var(--sub);background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-1);padding:3px 10px;letter-spacing:1px">${icon('moon',10)} JOUR OFF</span>`;
-  return `<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;margin-bottom:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 8px 24px rgba(0,0,0,.35);animation:fadeInUp var(--t-3) ease">
+  return `<div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;margin-bottom:18px;box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 8px 24px rgba(0,0,0,.35);${_animEntree('nut-rings')}">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
       <div style="min-width:0"><div style="display:inline-flex;align-items:center;gap:7px;font-family:var(--pile-titre);font-size:var(--fs-lg);color:#ff3b30;text-transform:uppercase;letter-spacing:3px;--halo-c:rgba(224,32,32,.85);text-shadow:var(--halo-1),0 0 20px rgba(224,32,32,.45)"><span style="display:inline-flex;filter:drop-shadow(0 0 5px rgba(224,32,32,.9))">${icon('target',13)}</span>${estAuj?'OBJECTIFS DU JOUR':'OBJECTIFS'}</div>${estAuj?'':`<div style="margin-top:4px;font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--red-text)">${_libelleJourNut(today)}</div>`}</div>
       <span style="display:inline-flex;align-items:center;gap:6px">${badgePhase(currentUser)}${dayBadge}</span>
@@ -35586,7 +35589,7 @@ function _renderNutriContent(type,dateAff){
     :`<div style="width:54px;height:54px;border-radius:var(--r-full);background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text)">${icon('dumbbell',22)}</div>`;
   if(type==='flexible'){
     contentEl.innerHTML=`
-      <div class="banner-hero" style="margin-bottom:18px;animation:fadeInUp var(--t-3) ease">
+      <div class="banner-hero" style="margin-bottom:18px;${_animEntree('nut-hero')}">
         <div style="position:relative;display:flex;gap:14px;align-items:flex-start">
           ${_flxCircle}
           <div style="flex:1;min-width:0">
@@ -38125,6 +38128,19 @@ let _fjDate=null;   // date YYYY-MM-DD du journal ouvert
 // a null 1 300 ms plus tard : au-dela, la ligne n est plus « neuve », et un
 // re-rendu pour une autre raison ne doit pas rejouer le marqueur.
 let _fjIdNeuf=null;
+// L ENTREE NE SE REJOUE PAS A CHAQUE RENDU. Ces cartes sont reconstruites a
+// chaque ajout d aliment, a chaque changement de jour, a chaque validation de
+// pas : leur animation d entree repartait a zero et la page entiere
+// tressautait. On la garde, mais UNE FOIS par visite du module.
+const _dejaAnime=new Set();
+function _animEntree(cle){
+  if(_dejaAnime.has(cle)) return '';
+  _dejaAnime.add(cle);
+  return 'animation:fadeInUp.3s ease;';
+}
+// Les ecrans du module. Revenir depuis l accueil vide le jeu et rejoue
+// l entree une fois ; naviguer DANS le module ne la rejoue pas.
+const NUT_ECRANS=/^(s-nutrition|s-food-|s-caffeine|s-supplement|s-steps|s-sleep|s-lifestyle)/;
 let _fjRepas='matin';
 
 // PURE. Le singulier probable d'un mot de requête, ou le mot lui-même.
@@ -40665,7 +40681,7 @@ function _renderFjDaySummary(date){
   </div>`;
 
   el.innerHTML=`
-    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 8px 24px rgba(0,0,0,.35);animation:fadeInUp var(--t-3) ease;margin-bottom:12px;overflow:hidden">
+    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 8px 24px rgba(0,0,0,.35);${_animEntree('fj-jour')}margin-bottom:12px;overflow:hidden">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 14px">
         <div style="display:flex;align-items:center;gap:6px">
           <button onclick="_renderFjDaySummary('${prevStr}')" style="background:none;border:1px solid var(--border);color:#aaa;border-radius:var(--r-2);padding:4px 10px;cursor:pointer;font-size:var(--fs-md)">←</button>
@@ -45905,7 +45921,7 @@ function loadSteps(containerId='steps-content'){
   const todayGoalHintHtml=todayGoal?`<div style="text-align:center;font-size:var(--fs-xs);color:var(--sub);margin-bottom:10px">Objectif : <strong style="color:${todayType==='on'?'var(--red)':'var(--sub)'}">${todayGoal.toLocaleString('fr-FR')} pas</strong></div>`:'';
 
   document.getElementById(containerId).innerHTML=`
-    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);animation:fadeInUp var(--t-3) ease">
+    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);${_animEntree('steps-obj')}">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:relative">
         <div style="font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:2.5px;color:#8a8a8a;text-transform:uppercase;margin-bottom:13px">Objectifs de pas</div>
@@ -45929,7 +45945,7 @@ function loadSteps(containerId='steps-content'){
       </div>
     </div>
 
-    <div style="background:linear-gradient(145deg,#c10000 0%,#7d0000 55%,#4a0000 100%);border-radius:var(--r-4);padding:20px;margin-bottom:14px;text-align:center;position:relative;overflow:hidden;box-shadow:var(--e3);animation:fadeInUp var(--t-3) ease">
+    <div style="background:linear-gradient(145deg,#c10000 0%,#7d0000 55%,#4a0000 100%);border-radius:var(--r-4);padding:20px;margin-bottom:14px;text-align:center;position:relative;overflow:hidden;box-shadow:var(--e3);${_animEntree('steps-moy')}">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 16px,rgba(0,0,0,.13) 16px,rgba(0,0,0,.13) 17px);pointer-events:none"></div>
       <div style="position:absolute;right:-22px;top:-22px;width:100px;height:100px;border-radius:var(--r-full);background:rgba(255,255,255,.055);pointer-events:none"></div>
       <div style="position:relative">
@@ -45946,7 +45962,7 @@ function loadSteps(containerId='steps-content'){
       </div>
     </div>
 
-    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);animation:fadeInUp var(--t-3) ease">
+    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);${_animEntree('steps-saisie')}">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:absolute;left:50%;top:-30px;transform:translateX(-50%);width:130px;height:90px;border-radius:var(--r-full);background:radial-gradient(circle,${todayType==='off'?'rgba(96,165,250,.13)':'rgba(224,32,32,.14)'},transparent 68%);pointer-events:none"></div>
       <div style="position:relative">
@@ -45964,7 +45980,7 @@ function loadSteps(containerId='steps-content'){
       </div>
     </div>
 
-    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);animation:fadeInUp var(--t-4) ease">
+    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);${_animEntree('steps-sem')}">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:relative">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:15px">
@@ -49436,7 +49452,7 @@ function loadSleep(containerId='sleep-content',user){
   }
 
   document.getElementById(containerId).innerHTML=`
-    <div style="background:linear-gradient(145deg,#0d2a4d 0%,#08172c 55%,#040c17 100%);border-radius:var(--r-4);padding:20px;margin-bottom:14px;text-align:center;position:relative;overflow:hidden;box-shadow:var(--e3);animation:fadeInUp var(--t-3) ease">
+    <div style="background:linear-gradient(145deg,#0d2a4d 0%,#08172c 55%,#040c17 100%);border-radius:var(--r-4);padding:20px;margin-bottom:14px;text-align:center;position:relative;overflow:hidden;box-shadow:var(--e3);${_animEntree('sleep-moy')}">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 16px,rgba(0,0,0,.16) 16px,rgba(0,0,0,.16) 17px);pointer-events:none"></div>
       <div style="position:absolute;right:-20px;top:-20px;width:96px;height:96px;border-radius:var(--r-full);background:rgba(255,255,255,.05);pointer-events:none"></div>
       <div style="position:absolute;left:14px;top:12px;color:rgba(255,255,255,.16)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" width="22" height="22"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
@@ -49452,7 +49468,7 @@ function loadSleep(containerId='sleep-content',user){
       </div>
     </div>
 
-    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);animation:fadeInUp var(--t-3) ease">
+    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);${_animEntree('sleep-saisie')}">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:absolute;left:50%;top:-30px;transform:translateX(-50%);width:130px;height:90px;border-radius:var(--r-full);background:radial-gradient(circle,rgba(96,165,250,.13),transparent 68%);pointer-events:none"></div>
       <div style="position:relative">
@@ -49472,7 +49488,7 @@ function loadSleep(containerId='sleep-content',user){
       </div>
     </div>
 
-    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);animation:fadeInUp var(--t-3) ease">
+    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;margin-bottom:14px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.04),0 8px 22px rgba(0,0,0,.42);${_animEntree('sleep-sem')}">
       <div style="position:absolute;inset:0;background:repeating-linear-gradient(-50deg,transparent,transparent 15px,rgba(255,255,255,.014) 15px,rgba(255,255,255,.014) 16px);pointer-events:none"></div>
       <div style="position:relative">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:15px">
