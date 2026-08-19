@@ -21046,6 +21046,13 @@ function _animerJauges(root){
     root.querySelectorAll('.rc-anneau,[data-arc-off]').forEach(c=>{
       if(c.dataset.arcOff!=null) c.style.strokeDashoffset=c.dataset.arcOff;
     });
+    // Les elements qui doivent CHANGER DE COULEUR : ils sont rendus a la
+    // couleur du palier precedent, on leur pose la nouvelle ici.
+    root.querySelectorAll('[data-caff-col]').forEach(e=>{
+      const c=e.dataset.caffCol;
+      if(!c) return;
+      if(e.tagName==='SPAN') e.style.color=c; else e.style.stroke=c;
+    });
     root.querySelectorAll('.rc-barre').forEach(b=>{
       if(b.dataset.barW!=null) b.style.width=b.dataset.barW+'%';
     });
@@ -43020,6 +43027,9 @@ let _caffeineViewDate=null;  // date affichée dans l'écran standalone s-caffei
 // Meme role pour la cafeine, indexe sur l horodatage : les prises n ont pas
 // d identifiant propre, mais leur ts est ecrit a la milliseconde.
 let _caffTsNeuf=null;
+// Le palier du rendu precedent ET sa couleur. Sert a faire PARTIR la transition :
+// sans point de depart different, une transition CSS ne joue pas.
+let _caffPalierPrec=null;
 let _caffeineEmbedDate=null; // date affichée dans la section embarquée s-nutrition
 let _pendingCaffProduct=null;
 
@@ -43948,15 +43958,30 @@ function _caffDateCourante(){
 // relu ici, pour que la vue coach puisse un jour afficher le poids de l'ATHLÈTE
 // et non celui du compte connecté.
 function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday,dateLbl,wKgAffiche){
-  // La jauge est pleine exactement quand l'anneau vire au rouge : même borne
-  // que _caffeineColor, sinon l'anneau et le remplissage racontent deux histoires.
-  const pct=Math.min(totalMg/thr.orange,1);
+  // LA JAUGE EST PLEINE A LA REFERENCE AFFICHEE AU PIED DE LA CARTE, pas au
+  // seuil orange. L anneau saturait des l orange et ne bougeait plus ensuite,
+  // alors que la carte annonce thr.red comme plafond : entre l orange et le
+  // rouge, l athlete voyait un anneau immobile pendant que son total montait.
+  // Les seuils de COULEUR ne changent pas, seule la course de l arc s aligne.
+  const pct=Math.min(totalMg/thr.red,1);
+  // LE CHANGEMENT DE PALIER SE VOIT. Les transitions sur `stroke` etaient
+  // ecrites depuis toujours mais ne jouaient jamais : le html naissait deja
+  // a la couleur finale, et une transition ne part que d une valeur peinte.
+  // On rend donc a la couleur du palier PRECEDENT, et _animerJauges pose la
+  // nouvelle au tour d apres — les transitions jouent enfin.
   const color=_caffeineColor(totalMg,thr);
   // LE PALIER COURANT, calcule ICI et une seule fois. La liste s en sert
   // pour remplir la pastille correspondante : les memes bornes que
   // _caffeineColor, dans le meme ordre, sans quoi la pastille pleine et la
   // couleur de l anneau finiraient par se contredire.
   const _palier=totalMg<thr.green?0:totalMg<thr.yellow?1:totalMg<thr.orange?2:3;
+  // LA COULEUR DE DEPART EST CELLE DU RENDU PRECEDENT, retenue telle quelle.
+  // Une table « palier -> couleur » serait une SECONDE source pour la meme
+  // decision, et elle divergerait : _caffeineColor rend var(--danger) au
+  // dernier palier, pas var(--red).
+  const _colDepart=(_caffPalierPrec!=null&&_caffPalierPrec.p!==_palier)
+    ?_caffPalierPrec.c:color;
+  _caffPalierPrec={p:_palier,c:color};
   const wEstHtml=wEst?'<span style="display:block;margin-top:4px;color:var(--warning);font-size:var(--fs-xs)">⚖️ Poids estimé ('+CAFFEINE_POIDS_DEFAUT+' kg) : renseigne ton poids réel pour des seuils précis</span>':'';
   // La legende NOMME la regle appliquee, juste sous la jauge. Un mineur doit
   // lire que ses seuils ne sont pas ceux d'un adulte, sans avoir a le deviner
@@ -44038,7 +44063,7 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
         <svg viewBox="0 0 130 130" width="130" height="130" style="display:block;overflow:visible;filter:drop-shadow(0 0 5px ${color}) drop-shadow(0 0 14px ${color}88);transition:filter var(--t-3) ease">
           <!-- 1. La couronne de graduations. 60 traits, un sur cinq plus long :
                c est ce qui donne l echelle d un instrument plutot qu un cercle. -->
-          <g stroke="${color}" stroke-linecap="butt">
+          <g data-caff-col="${color}" style="stroke:${_colDepart};transition:stroke.45s ease" stroke-linecap="butt">
             ${Array.from({length:60},(_,i)=>{
               const a=(i*6-90)*Math.PI/180, gros=i%5===0;
               const r1=59, r2=gros?52:55.5;
@@ -44052,14 +44077,14 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
           <circle cx="65" cy="65" r="44" fill="none" stroke="var(--border)" stroke-width="7"
             stroke-dasharray="${(_circ2*0.30).toFixed(1)} ${(_circ2*0.05).toFixed(1)}" transform="rotate(-108 65 65)"/>
           <!-- 3. L arc de progres, par-dessus, depuis le haut. -->
-          <circle cx="65" cy="65" r="44" fill="none" style="stroke:${color};transition:stroke-dashoffset var(--t-3) ease,stroke var(--t-3) ease"
-            stroke-width="7" stroke-linecap="round" stroke-dasharray="${_circ2.toFixed(1)}" stroke-dashoffset="${_off2.toFixed(1)}" transform="rotate(-90 65 65)"/>
+          <circle cx="65" cy="65" r="44" fill="none" data-caff-col="${color}" style="stroke:${_colDepart};transition:stroke-dashoffset var(--t-3) ease,stroke var(--t-3) ease"
+            stroke-width="7" stroke-linecap="round" stroke-dasharray="${_circ2.toFixed(1)}" stroke-dashoffset="${_circ2.toFixed(1)}" data-arc-off="${_off2.toFixed(1)}" transform="rotate(-90 65 65)"/>
           <!-- 4. Le filet interieur, tres fin : il ferme le cadran. -->
-          <circle cx="65" cy="65" r="37.5" fill="none" stroke="${color}" stroke-width="0.7" opacity=".35"/>
+          <circle cx="65" cy="65" r="37.5" fill="none" data-caff-col="${color}" style="stroke:${_colDepart};transition:stroke.45s ease" stroke-width="0.7" opacity=".35"/>
         </svg>
         <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;padding:0 11px;box-sizing:border-box">
           <div style="display:flex;align-items:baseline;justify-content:center;gap:1px;max-width:100%">
-            <span class="txt-hero" style="color:${color};font-size:${_tailleChiffres}px;line-height:1;--halo-c:${color};text-shadow:var(--halo-2)66">${totalMg}</span>
+            <span class="txt-hero" data-caff-col="${color}" style="color:${_colDepart};font-size:${_tailleChiffres}px;line-height:1;--halo-c:${color};text-shadow:var(--halo-2)66;transition:color.45s ease,text-shadow.45s ease">${totalMg}</span>
             <span style="color:${color};font-family:var(--pile-titre);font-size:var(--fs-lg);letter-spacing:1px;line-height:1;text-transform:uppercase">mg</span>
           </div>
         </div>
@@ -44152,6 +44177,7 @@ function _renderCaffeineScreen(){
   const {weight:wKg,estimated:_wEst}=getUserWeight();
   const thr=caffeineThresholds(wKg,_ageUtilisateur(currentUser),grossesseSuspend(currentUser));
   document.getElementById('caff-block').innerHTML=_renderCaffeineBlock(entries,totalMg,thr,'screen',date,_wEst,isToday,dateLbl,wKg);
+  _animerJauges(document.getElementById('caff-block'));
   requestAnimationFrame(()=>_drawCaffeineHistory(wKg));
 }
 function updateCaffeineEntryTime(dateStr,idx,val){
@@ -44210,6 +44236,7 @@ function _renderCaffeineEmbedded(){
     <div class="card"><canvas id="emb-caff-history-chart" height="140"></canvas></div>
     <div style="height:16px"></div>
   `;
+  _animerJauges(el);
   requestAnimationFrame(()=>_drawCaffeineHistory(wKg,'emb-caff-history-chart'));
 }
 // `porteur` retombe sur currentUser : les deux appels de l'écran athlète ne
