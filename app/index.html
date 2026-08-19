@@ -754,6 +754,21 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
   box-shadow:0 0 18px 2px rgba(249,115,22,.55);opacity:.35;
   animation:arcAttentePulse var(--arc-ambient) var(--c-out) 6;will-change:opacity}
 @keyframes arcAttentePulse{0%,100%{opacity:.30}50%{opacity:.85}}
+/* L'ENVOI AU CANAL. transform seul, un pseudo-element, aucun relayout. */
+.cnl-envoi{position:relative;overflow:hidden}
+.cnl-envoi::after{content:'';position:absolute;left:0;bottom:0;height:2px;width:40%;
+  background:rgba(255,255,255,.85);transform-origin:left center;
+  animation:cnlEnvoi 900ms cubic-bezier(.4,0,.6,1) infinite}
+@keyframes cnlEnvoi{0%{transform:translateX(-100%) scaleX(.6)}100%{transform:translateX(350%) scaleX(1.2)}}
+/* LA CARTE NEUVE entre seule et marquee : le message qu'on vient d'ecrire
+   apparaissait au milieu d'un rechargement complet du fil, indistinct des
+   autres. .cnl-carte porte deja position:relative et overflow:hidden. */
+.cnl-carte.cnl-neuve{animation:cnlNeuve var(--t-4) var(--c-out) both}
+@keyframes cnlNeuve{0%{opacity:0;transform:translateY(10px) scale(.985)}100%{opacity:1;transform:none}}
+.cnl-carte.cnl-neuve::before{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(100deg,rgba(224,32,32,.26),transparent 58%);
+  opacity:0;animation:cnlLueur 900ms var(--c-out) 120ms both}
+@keyframes cnlLueur{0%{opacity:0}25%{opacity:1}100%{opacity:0}}
 /* .celebrate ET SA KEYFRAME AVAIENT ETE SUPPRIMEES avec l ancienne fin de
    seance : la consigne les croyait encore la. Elles reviennent ici, pour le
    seul geste qui les demande — la publication reussie. */
@@ -806,8 +821,17 @@ html{scroll-behavior:smooth}
    c est le CSS qui decide. :has() est deja employe dans ce fichier. */
 .cc-sect:has(>.cc-sect-c:empty),
 .cc-sect:has(>.cc-sect-c[style*="display:none"]){display:none}
-/* Le repere de defilement : 52 px de topbar plus 52 px d ancres. */
-.cc-sect{scroll-margin-top:104px}
+/* LE CONTENEUR DE DEFILEMENT EST #s-coach-client>.scroll-area, et il commence
+   DEJA sous la topbar et sous #ccd-ancres : ce sont ses freres en colonne
+   flex, ils ne recouvrent rien. Les 104 px decalaient la cible vers le bas
+   d'une hauteur de barre entiere — le coach voyait encore la fin de la section
+   precedente et devait remonter a la main. */
+.cc-sect{scroll-margin-top:12px}
+/* LA MARQUE D'ARRIVEE. ::before est libre — ::after porte deja les hachures. */
+.cc-sect-t.cc-vise::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(90deg,rgba(255,255,255,.30),transparent 55%);
+  opacity:0;animation:ccVise 480ms var(--c-out) both}
+@keyframes ccVise{0%{opacity:0}18%{opacity:1}100%{opacity:0}}
 .px-grp{display:flex;align-items:center;gap:8px;margin:14px 0 8px;font-size:var(--fs-xs);
   font-weight:800;letter-spacing:2px;text-transform:uppercase;color:var(--sub)}
 .px-grp::after{content:'';flex:1;height:1px;background:var(--border)}
@@ -839,7 +863,20 @@ html{scroll-behavior:smooth}
 #ch-clients-list[data-entree] .client-row:nth-child(n+7){animation-delay:.09s}
 /* LA PULSATION DE SYNCHRO. Elle ne dit qu une chose : la liste vient de
    changer. Posee a chaque tour de boucle, elle ne dirait plus rien. */
-@keyframes chSyncPulse{0%{box-shadow:0 0 0 0 rgba(224,32,32,.35)}100%{box-shadow:0 0 0 0 rgba(224,32,32,0)}}
+/* chSyncPulse est SUPPRIMEE : ses deux etapes valaient box-shadow:0 0 0 0 —
+   blur nul, spread nul — l'ombre etait integralement clippee derriere
+   l'element. Elle ne peignait rien, quoi qu'il arrive, depuis qu'elle a ete
+   ecrite. Elle visait en plus la liste ENTIERE : elle disait « la liste a
+   change » la ou le coach a besoin de « CETTE ligne-la a change ».
+   Le remplacement est un balayage de 520 ms en opacity sur un pseudo-element,
+   pose PAR LIGNE modifiee, plafonne a trois lignes — au-dela, quatre lignes
+   qui clignotent ne designent plus personne. Rien ne relayoute, rien ne
+   repeint la ligne elle-meme. */
+#ch-clients-list .client-row{position:relative}
+#ch-clients-list .client-row.cr-neuve::after{content:'';position:absolute;inset:0;border-radius:inherit;
+  pointer-events:none;background:linear-gradient(90deg,rgba(224,32,32,.30),rgba(224,32,32,.06) 62%,transparent);
+  opacity:0;animation:crNeuve 520ms var(--c-out) both}
+@keyframes crNeuve{0%{opacity:0;transform:translateX(-8px)}22%{opacity:1;transform:translateX(0)}100%{opacity:0;transform:translateX(0)}}
 .cnl-carte{position:relative;overflow:hidden;
   background:repeating-linear-gradient(-50deg,transparent,transparent 12px,rgba(255,255,255,.020) 12px,rgba(255,255,255,.020) 13px),
     linear-gradient(168deg,#1a1a1a,#111 52%,#0b0b0b);
@@ -908,7 +945,18 @@ html{scroll-behavior:smooth}
 .exercise-card{background:var(--surface-1);border-radius:var(--r-1);margin-bottom:12px;overflow:hidden;border:1px solid var(--border)}
 .exo-chip{background:var(--surface-2);border:1.5px solid var(--border);color:var(--sub);font-size:var(--fs-sm);font-weight:800;width:32px;height:32px;border-radius:var(--r-full);cursor:pointer;font-family:Montserrat,sans-serif;transition:background var(--t-1),border-color var(--t-1),color var(--t-1);display:inline-flex;align-items:center;justify-content:center;padding:0}
 .exo-chip.active{background:var(--red);color:var(--text);border-color:var(--red)}
-.pf-chip{background:var(--surface-2);border:1.5px solid var(--border);color:var(--sub);font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;padding:6px 11px;border-radius:var(--r-4);cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;min-height:30px}
+.pf-chip{background:var(--surface-2);border:1.5px solid var(--border);color:var(--sub);font-size:var(--fs-2xs);font-weight:800;letter-spacing:.5px;padding:6px 11px;border-radius:var(--r-4);cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;min-height:30px;transition:background var(--t-1),border-color var(--t-1),color var(--t-1),padding var(--t-1) var(--c-out),min-height var(--t-1),font-size var(--t-1),transform var(--arc-attack) var(--arc-c-charge)}
+/* Memes valeurs que .btn-outline:active, rien de neuf. */
+.pf-chip:active{transform:scale(var(--arc-scale-charge))}
+/* ── LA BARRE D'ANCRES SE RESSERRE AU DEFILEMENT ─────────────────────────
+   Sur un ecran de 375 px, la topbar (52 px) et la barre d'ancres (46 px)
+   mangeaient une centaine de pixels en permanence sans jamais en rendre un.
+   padding, min-height et font-size declenchent bien un relayout : il est
+   BORNE A CINQ PUCES SUR UNE SEULE LIGNE, jamais a la liste de 27 sections.
+   C'est la justification exigee par la regle 2 ; ne pas l'etendre ailleurs. */
+#ccd-ancres{transition:padding var(--t-1) var(--c-out)}
+#ccd-ancres[data-serre]{padding:4px 14px}
+#ccd-ancres[data-serre] .pf-chip{padding:3px 9px;min-height:24px;font-size:9.5px}
 .pf-chip.active{background:var(--red);color:var(--text);border-color:var(--red)}
 .ck-chrono{background:var(--surface-2);border:1px solid var(--border);color:var(--sub);font-size:var(--fs-xs);font-weight:800;font-family:Montserrat,sans-serif;padding:5px 9px;border-radius:var(--r-4);cursor:pointer;flex-shrink:0;min-width:58px;min-height:30px;letter-spacing:.5px}
 .ck-chrono.ck-actif{background:var(--red);border-color:var(--red);color:var(--text);box-shadow:0 0 12px rgba(224,32,32,.45)}
@@ -1110,6 +1158,14 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
    .plan-src-liste → cellule prélevait 50 px sur 375. Chaque pixel rendu ici
    est un caractère de plus sur la ligne. */
 .plan-src-liste{padding:0 4px 8px}
+/* LE VOLET SE DEPLIE. grid-template-rows sur UN SEUL volet, jamais sur une
+   liste : c'est un relayout borne a un noeud, et il evite de mesurer une
+   hauteur en JS. <details> ne ferme pas en anime sans JS, et on l'accepte —
+   L'OUVERTURE EST LE GESTE QUI COMPTE ; une fermeture qui traine donne le
+   sentiment d'une application qui resiste. */
+.pil-bande>.plan-src-liste{display:grid;grid-template-rows:0fr;transition:grid-template-rows 220ms var(--c-out)}
+.pil-bande>.plan-src-liste>*{min-height:0;overflow:hidden}
+.pil-bande[open]>.plan-src-liste{grid-template-rows:1fr}
 /* ── Tableau à 4 colonnes : deux paires (aliment, quantité) côte à côte ──
    Une liste de 28 glucides tenait sur 28 lignes ; elle en occupe 14. C'est la
    même raison que le repli des volets — la hauteur — poussée d'un cran.
@@ -1405,6 +1461,17 @@ button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px s
    pile, jamais pour l'image. */
 @keyframes screenAv{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
 @keyframes screenAr{from{opacity:.35;transform:translateX(-14px)}to{opacity:1;transform:translateX(0)}}
+/* LA RELEVE D'ATHLETE : le contenu sortant part de 12 px vers le haut, le
+   prenom du nouveau entre, et un soulignement rouge se trace de gauche a
+   droite. Un seul geste, qui dit « nouvel eleve » et rien d'autre. */
+@keyframes cxSort{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-12px)}}
+@keyframes cxEntre{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes cxTrait{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.cx-sort{animation:cxSort 110ms var(--c-in) both}
+.cx-entre{animation:cxEntre 150ms var(--c-out) both}
+#s-coach-bilan-evo .topbar{position:relative}
+#s-coach-bilan-evo .topbar.cx-trait::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:2px;
+  background:var(--red);transform-origin:left center;animation:cxTrait 260ms var(--c-out) both}
 
 /* ====== COACH TABS PREMIUM ====== */
 #coach-tabs-bar{background:#080808;border-bottom:1px solid var(--red);gap:0}
@@ -1763,6 +1830,12 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 #modal-overlay>div{animation:arcFeuille var(--arc-strike) var(--arc-c-discharge) both}
 @keyframes arcVoile{from{opacity:0}to{opacity:1}}
 @keyframes arcFeuille{from{transform:translateY(var(--arc-translate))}to{transform:translateY(0)}}
+/* LE PASSAGE D'UNE VIDEO A LA SUIVANTE. Une seule feuille reste, son contenu
+   glisse lateralement : le geste dit « suivante », il ne redemarre pas. */
+@keyframes vcPart{from{opacity:1;transform:translateX(0)}to{opacity:0;transform:translateX(-18px)}}
+@keyframes vcArrive{from{opacity:0;transform:translateX(22px)}to{opacity:1;transform:translateX(0)}}
+#modal-overlay>div.vc-part{animation:vcPart 120ms var(--c-in) both}
+#modal-overlay>div.vc-arrive{animation:vcArrive 180ms var(--c-out) both}
 /* pointer-events:none dès la sortie : la feuille est encore à l'écran pendant
    140 ms, et un second appui pendant ce temps ne doit rien pouvoir atteindre. */
 .arc-sortie{pointer-events:none;
@@ -1823,6 +1896,18 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   .rc-blink{opacity:1!important}
   .fj-entry.fj-neuf,.caff-neuf{animation:none!important}
   #ch-clients-list[data-entree] .client-row{animation:none!important}
+  #ch-clients-list .client-row.cr-neuve::after{animation:none!important;opacity:0!important}
+  .cc-sect-t.cc-vise::before{animation:none!important;opacity:0!important}
+  /* L'etat serre RESTE applique : ce n'est pas du mouvement, c'est de la place
+     gagnee. Seule la transition disparait. */
+  #ccd-ancres,#ccd-ancres .pf-chip{transition:none!important}
+  .cx-sort,.cx-entre,#s-coach-bilan-evo .topbar.cx-trait::after{animation:none!important;opacity:1!important;transform:none!important}
+  /* Le libelle « Envoi… » et le disabled, eux, restent dans tous les cas :
+     ce n'est pas de la decoration. */
+  .cnl-envoi::after,.cnl-carte.cnl-neuve,.cnl-carte.cnl-neuve::before{animation:none!important}
+  .cnl-carte.cnl-neuve{opacity:1!important;transform:none!important}
+  .pil-bande>.plan-src-liste{transition:none!important}
+  #modal-overlay>div.vc-part,#modal-overlay>div.vc-arrive{animation:none!important;opacity:1!important;transform:none!important}
   .btn-attente,.celebrate{animation:none!important}
   /* Le halo reste POSE, il ne respire plus : l'information ne se perd pas. */
   .btn-attente::after{animation:none!important;opacity:.30!important}
@@ -3157,11 +3242,11 @@ const COACH_PHOTO='icons/coach.jpg';
   <!-- CINQ ANCRES POUR VINGT-SEPT SECTIONS. Le dossier se lit en cinq temps ;
        la barre les nomme et y mene, elle ne double pas la liste des sections. -->
   <nav id="ccd-ancres" style="position:sticky;top:52px;z-index:5;display:flex;gap:6px;overflow-x:auto;padding:8px 14px;background:#090909;border-bottom:1px solid var(--border);-webkit-overflow-scrolling:touch">
-    <button class="pf-chip" onclick="document.getElementById('ccd-pourquoi').scrollIntoView({behavior:'smooth',block:'start'})">SANTÉ</button>
-    <button class="pf-chip" onclick="document.getElementById('ccd-tendances').scrollIntoView({behavior:'smooth',block:'start'})">ENTRAÎNEMENT</button>
-    <button class="pf-chip" onclick="document.getElementById('ccd-nutrition').scrollIntoView({behavior:'smooth',block:'start'})">NUTRITION</button>
-    <button class="pf-chip" onclick="document.getElementById('ccd-poids').scrollIntoView({behavior:'smooth',block:'start'})">CORPS</button>
-    <button class="pf-chip" onclick="document.getElementById('ccd-journal').scrollIntoView({behavior:'smooth',block:'start'})">ÉCHANGES</button>
+    <button class="pf-chip" data-ancre="ccd-pourquoi" onclick="ccdAller('ccd-pourquoi')">SANTÉ</button>
+    <button class="pf-chip" data-ancre="ccd-tendances" onclick="ccdAller('ccd-tendances')">ENTRAÎNEMENT</button>
+    <button class="pf-chip" data-ancre="ccd-nutrition" onclick="ccdAller('ccd-nutrition')">NUTRITION</button>
+    <button class="pf-chip" data-ancre="ccd-poids" onclick="ccdAller('ccd-poids')">CORPS</button>
+    <button class="pf-chip" data-ancre="ccd-journal" onclick="ccdAller('ccd-journal')">ÉCHANGES</button>
   </nav>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
@@ -9418,7 +9503,11 @@ function arcChiffre(el,de,vers,o){
   // tout de suite » devenait « anime pendant 620 ms ».
   const d=(o.duree==null)?ARC.afterglow:o.duree;
   // Variante plate ET cas dégénérés : on pose la valeur d'arrivée, sans détour.
-  if(arcReduit()||!(d>0)||de===vers){
+  // PAGE CACHEE COMPRISE : requestAnimationFrame ne s'y execute pas, et le
+  // compteur resterait fige sur sa valeur de DEPART — un zero, qui se lit comme
+  // une donnee perdue. Mieux vaut le chiffre juste, sans la montee.
+  let _cachee=false; try{ _cachee=!!(typeof document!=='undefined'&&document.hidden); }catch(e){}
+  if(arcReduit()||!(d>0)||de===vers||_cachee){
     el.textContent=fmt(vers);
     return null;
   }
@@ -9578,8 +9667,14 @@ function arcRetrait(el,apres){
     {opacity:0,transform:'translateX(-18px)',height:'0px', marginBottom:'0px',paddingTop:'0px',paddingBottom:'0px',offset:1}
   ],{duration:280,easing:ARC.charge,fill:'none'});
   if(!a){ fini(); return null; }
-  a.addEventListener('finish',fini);
-  a.addEventListener('cancel',fini);
+  let fait=false;
+  const une=()=>{ if(fait) return; fait=true; fini(); };
+  a.addEventListener('finish',une);
+  a.addEventListener('cancel',une);
+  // LE FILET, et il n'est pas decoratif : ce rappel porte le splice, le
+  // saveUser et le re-rendu. Un onglet masque ne doit pas pouvoir avaler une
+  // suppression que l'utilisateur a demandee.
+  setTimeout(une,360);
   return a;
 }
 
@@ -9867,9 +9962,15 @@ function toast(msg,c='var(--green)'){
   // message venait d'arriver. toast() reste SYNCHRONE et rend toujours
   // undefined immediatement — seul l'affichage est differe.
   if(t.style.opacity==='1'&&!arcReduit()&&t.animate){
+    let fait=false;
+    const une=()=>{ if(fait) return; fait=true; poser(); };
     const a=t.animate([{opacity:1},{opacity:0}],{duration:90,easing:ARC.charge,fill:'none'});
-    if(a){ a.addEventListener('finish',poser); a.addEventListener('cancel',poser); }
-    else poser();
+    if(a){
+      a.addEventListener('finish',une); a.addEventListener('cancel',une);
+      // LE FILET : onglet en arriere-plan, aucune frame, aucun `finish` — et le
+      // message suivant ne s'afficherait jamais.
+      setTimeout(une,120);
+    } else une();
   } else poser();
 }
 
@@ -11031,9 +11132,27 @@ function reporterAlerte(type,c,jours){
 }
 function dismissTodoRow(idx){
   const r=window._todoRows&&window._todoRows[idx];if(!r) return;
-  r.list.forEach(c=>reporterAlerte(r.type,c));
-  saveUser();
-  renderTodoBlock(getClients());
+  // L'ECRITURE N'EST PAS RETARDEE PAR L'ANIMATION : elle est groupee avec le
+  // re-rendu, qui l'etait deja. pointer-events coupes TOUT DE SUITE — le report
+  // est deja decide, un second appui pendant les 180 ms ne doit rien atteindre.
+  // A huit lignes a reporter le dimanche soir, le coach visait une cible qui
+  // avait bouge entre deux appuis.
+  const fin=()=>{
+    r.list.forEach(c=>reporterAlerte(r.type,c));
+    saveUser();
+    renderTodoBlock(getClients());
+  };
+  const n=arcDernierElement('.rc-ligne');
+  if(!n||arcReduit()||!n.animate) return fin();
+  n.style.pointerEvents='none';
+  const a=n.animate([{opacity:1,transform:'translateX(0)'},{opacity:0,transform:'translateX(-16px)'}],
+    {duration:180,easing:ARC.charge,fill:'forwards'});
+  if(!a) return fin();
+  let fait=false;
+  const une=()=>{ if(fait) return; fait=true; fin(); };
+  a.addEventListener('finish',une);
+  a.addEventListener('cancel',une);
+  setTimeout(une,260);             // le filet : le rappel porte l'ecriture
 }
 
 // ══════════════ SIGNAUX D'ENTRAÎNEMENT ══════════════
@@ -12870,7 +12989,7 @@ function _pilCompteur(cle,lib,n,couleur){
 function _pilBande(cle,titre,corps,resume){
   return `<details class="plan-src pil-bande" style="margin:0 0 7px"${_pilOuvert[cle]?' open':''} ontoggle="pilNoterBande('${cle}',this.open)">
     <summary style="color:var(--sub)">${titre}<span class="plan-src-nb">${resume||''}</span></summary>
-    <div class="plan-src-liste" style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7">${corps}</div>
+    <div class="plan-src-liste" style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.7"><div>${corps}</div></div>
   </details>`;
 }
 function renderPilotage(clients){
@@ -13732,7 +13851,7 @@ function loadCanalCoach(){
   _canalSquelette(fil);
   _canalChargerCoach();
 }
-async function _canalChargerCoach(){
+async function _canalChargerCoach(idNeuf){
   const cle=canalCle(currentUser);
   const fil=document.getElementById('canal-coach-fil');
   if(!fil) return;
@@ -13765,7 +13884,7 @@ async function _canalChargerCoach(){
   await _canalPlancher(fil);
   fil.dataset.rempli='1';
   fil.innerHTML=liste.length
-    ? liste.map(m=>_canalCarteCoach(m,(compteurs||{})[m.id]||{},vrai[m.id]||{},reactions||{})).join('')
+    ? liste.map(m=>_canalCarteCoach(m,(compteurs||{})[m.id]||{},vrai[m.id]||{},reactions||{},m.id===idNeuf)).join('')
     : _canalVide('Ton canal est vide.','Le premier message apparaîtra chez tous tes athlètes.');
 }
 // PURE. /reactions est rangé par athlète puis par message ; le décompte, lui,
@@ -13799,7 +13918,7 @@ function canalPrenoms(reactions,msgId,emoji){
   });
   return noms.sort((a,b)=>String(a).localeCompare(String(b)));
 }
-function _canalCarteCoach(m,compteurs,vrai,reactions){
+function _canalCarteCoach(m,compteurs,vrai,reactions,neuve){
   const derive=CANAL_EMOJIS.some(e=>(Number(compteurs[e])||0)!==(Number(vrai[e])||0));
   const lignes=CANAL_EMOJIS.filter(e=>(Number(vrai[e])||0)>0).map(e=>{
     const noms=canalPrenoms(reactions,m.id,e);
@@ -13808,7 +13927,7 @@ function _canalCarteCoach(m,compteurs,vrai,reactions){
       <span class="sub" style="flex:1;min-width:0;line-height:1.5">${escapeHtml(noms.join(', '))}</span></div>`;
   }).join('');
   const lien=String(m.lien||'').trim();
-  return `<div class="cnl-carte"${m.epingle?' data-epingle':''}>
+  return `<div class="cnl-carte${neuve?' cnl-neuve':''}"${m.epingle?' data-epingle':''}>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       ${m.epingle?'<span style="font-size:var(--fs-xs);color:var(--red-text);font-weight:800;letter-spacing:1.5px;text-transform:uppercase">📌 Épinglé</span>':''}
       <span class="sub" style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase">${escapeHtml(ago(Number(m.at)||Date.now()))}</span>
@@ -13844,7 +13963,7 @@ function openMessageCanal(msgId){
   window._canalEdite=msgId||'';
   document.body.insertAdjacentHTML('beforeend',
   `<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" role="dialog" aria-modal="true" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) var(--c-out);max-height:88vh;overflow-y:auto">
+  <div onclick="event.stopPropagation()" role="dialog" aria-modal="true" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">
     <h2 style="margin-bottom:4px">${msgId?'Modifier le message':'Nouveau message'}</h2>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:12px;line-height:1.55">Il apparaît dans le canal de tous tes athlètes suivis, à leur prochaine ouverture de l'app. Ce n'est pas une notification : leur téléphone ne sonnera pas.</p>
     <label for="cm-titre">Titre (optionnel) · ${CANAL_TITRE_MAX} caractères</label>
@@ -13883,7 +14002,19 @@ async function enregistrerMessageCanal(){
   const id=window._canalEdite||('m'+Date.now()+'-'+Math.random().toString(36).slice(2,7));
   const ancien=(window._canalMsgsCoach||{})[id]||{};
   const msg={at:Number(ancien.at)||Date.now(),titre,texte,lien:lienBrut,epingle};
-  closeModal();
+  // LE BOUTON PORTE L'ATTENTE, et la feuille ne part QU'AU SUCCES. closeModal()
+  // etait appele AVANT patcherMessagesCanal, ecrireMessageCanal et
+  // pushProfilCoach — trois allers-retours reseau enchaines : le coach venait
+  // d'envoyer un message a ses vingt eleves et rien ne le lui disait pendant
+  // 300 ms a 2 s. En cas d'echec, la feuille reste ouverte avec le texte saisi ;
+  // aujourd'hui il etait perdu.
+  const _b=document.querySelector('#modal-overlay .btn-red');
+  if(_b){
+    _b.disabled=true;
+    _b.dataset.lib=_b.textContent;
+    _b.textContent='Envoi…';
+    _b.classList.add('cnl-envoi');
+  }
   try{
     // Dépingler les autres AVANT d'épingler celui-ci, et d'un seul PATCH : deux
     // bannières empilées sur l'accueil, personne ne les lit.
@@ -13912,12 +14043,22 @@ async function enregistrerMessageCanal(){
     else if(currentUser.canalEpingle&&currentUser.canalEpingle.id===id) delete currentUser.canalEpingle;
     saveUser();
     await CLOUD.pushProfilCoach(currentUser);
+    closeModal();
     toast(window._canalEdite?'Message modifié':'Message publié');
   }catch(e){
+    if(_b){
+      _b.disabled=false;
+      _b.classList.remove('cnl-envoi');
+      if(_b.dataset.lib!=null) _b.textContent=_b.dataset.lib;
+    }
     toast('Non publié : '+e.message,'var(--orange)');
+    return;                       // la feuille reste ouverte, le texte aussi
   }
   window._canalEdite='';
-  _canalChargerCoach();
+  // L'identifiant du message neuf voyage jusqu'au rendu : la carte qu'on vient
+  // d'ecrire entre seule et marquee, au lieu d'etre indistincte au milieu d'un
+  // rechargement complet du fil.
+  _canalChargerCoach(id);
 }
 
 async function supprimerMessageCanal(msgId){
@@ -14068,6 +14209,19 @@ const TRIS_CLIENTS=Object.freeze(['urgence','taux','charge','progression']);
 // deux boutons se renvoyaient à nextElementSibling / previousElementSibling :
 // à deux, ça tenait ; à quatre, chacun n’en éteint qu’un seul et il en reste
 // deux allumés. Le tri est un état, il se lit dans l’état.
+// LA REORGANISATION SE VOIT. setTriClients basculait la classe puis
+// reconstruisait toutes les lignes : l'ordre changeait d'un coup, et rien ne
+// disait a qui l'ancienne troisieme ligne etait devenue la huitieme — or c'est
+// exactement l'information que le coach cherche en changeant de tri.
+// UNIQUEMENT AU CHANGEMENT DE TRI : pas a la frappe dans la recherche (les
+// lignes disparaissent, un FLIP n'a rien a interpoler), pas au reveil de
+// synchro, pas au changement de filtre.
+// BORNEE A 20 LIGNES : vingt getBoundingClientRect tiennent dans une frame,
+// cinquante non. Au-dela, le comportement est celui d'avant.
+// La garde matchMedia est OBLIGATOIRE : le bloc CSS ne couvre pas
+// element.animate(). will-change n'est POSE NULLE PART — l'animation dure
+// 260 ms, le navigateur promeut de lui-meme, et le poser a demeure sur vingt
+// lignes ferait tomber l'appareil qu'il pretendait aider.
 function setTriClients(t){
   _triClients=TRIS_CLIENTS.indexOf(t)>=0?t:'urgence';
   try{
@@ -14075,7 +14229,24 @@ function setTriClients(t){
       b.classList.toggle('actif',b.dataset.tri===_triClients);
     });
   }catch(e){}
+  const el=document.getElementById('ch-clients-list');
+  const anime=!!el&&!arcReduit()&&el.querySelectorAll('.client-row').length<=20;
+  const avant=new Map();
+  if(anime) el.querySelectorAll('.client-row').forEach(n=>{
+    avant.set(n.dataset.cid,n.getBoundingClientRect().top);
+  });
   renderClientList();
+  if(!anime) return;
+  requestAnimationFrame(()=>{
+    el.querySelectorAll('.client-row').forEach(n=>{
+      const y0=avant.get(n.dataset.cid);
+      if(y0==null) return;
+      const d=y0-n.getBoundingClientRect().top;
+      if(Math.abs(d)<2) return;
+      _animer(n,[{transform:'translateY('+d+'px)'},{transform:'translateY(0)'}],
+        {duration:260,easing:ARC.discharge,fill:'none'});
+    });
+  });
 }
 function _triTaux(c){
   let r=null; try{ r=tauxCompletion(c,Date.now()); }catch(e){}
@@ -15467,8 +15638,26 @@ function _fileBilansSuivants(idApres){
   });
 }
 // Va au suivant : exactement le chemin que le coach aurait pris à la main.
+// LA RELEVE D'ATHLETE, EN DEUX TEMPS DE 260 ms. _allerBilanSuivant appelle
+// viewClientBilans() -> go('s-coach-bilan-evo') ALORS QU'ON Y EST DEJA : go()
+// fait display:none puis display:flex dans la meme tache, sans purge de style
+// entre les deux, donc l'animation d'ecran ne rejoue pas. Dix bilans a la
+// chaine, dix fois le meme ecran qui change de contenu sans que rien ne dise
+// « on a tourne la page ».
+// Les 110 ms ne retardent rien de perceptible : la reponse est deja enregistree
+// quand le bouton est touche, et le rendu du bilan suivant coute deja plus.
 function _allerBilanSuivant(id){
   if(!id) return false;
+  const _z=document.getElementById('evo-content');
+  const _tb=document.querySelector('#s-coach-bilan-evo .topbar');
+  if(!arcReduit()&&_z){
+    _z.classList.add('cx-sort');
+    setTimeout(()=>{ _bilanSuivantCorps(id,_z,_tb); },110);
+    return true;
+  }
+  return _bilanSuivantCorps(id,null,null);
+}
+function _bilanSuivantCorps(id,_z,_tb){
   currentClientId=id;
   // LE CONTEXTE DE MODELE SUIT L ATHLETE. Il n’est posé que par
   // openClientDetail, et ce chemin-ci ne passe pas par elle : le prénom du
@@ -15483,6 +15672,17 @@ function _allerBilanSuivant(id){
     tplContexte({prenom:c&&c.fname},null);
   }catch(e){}
   try{ viewClientBilans(); }catch(e){ return false; }
+  if(_z){
+    _z.classList.remove('cx-sort');
+    _z.classList.add('cx-entre');
+    _z.addEventListener('animationend',e=>{ if(e.target===_z) _z.classList.remove('cx-entre'); },{once:true});
+  }
+  if(_tb){
+    _tb.classList.remove('cx-trait');
+    void _tb.offsetWidth;
+    _tb.classList.add('cx-trait');
+    _tb.addEventListener('animationend',e=>{ if(e.target===_tb) _tb.classList.remove('cx-trait'); },{once:true});
+  }
   try{ evoTab('reponses'); }catch(e){}
   try{ setTimeout(()=>{ try{ _renderQuickCommentChips('bilan'); }catch(e){} },0); }catch(e){}
   return true;
@@ -15737,7 +15937,7 @@ function renderClientRow(c){
   // lire un seul badge. Le classement suit CELUI DU BADGE, a la lettre — deux
   // regles differentes donneraient une carte rouge a badge vert.
   const _etat=etatAthlete(c);
-  return `<div class="client-row${!hasNewBilan(c)&&!needsAlert(c)&&!isActive(c)?' row-inactive':''}" data-etat="${_etat}" onclick="openClientDetail('${c.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+  return `<div class="client-row${!hasNewBilan(c)&&!needsAlert(c)&&!isActive(c)?' row-inactive':''}" data-etat="${_etat}" data-cid="${c.id}" onclick="openClientDetail('${c.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <div class="avatar" style="width:44px;height:44px;font-size:var(--fs-lg);overflow:hidden;flex-shrink:0">${avatarHtml}</div>
     <div style="flex:1;min-width:0"><div class="cr-nom">${_nm}</div><div class="cr-act">${activityLine}</div>${objLine}${phLine}${chLine}${prLine}${biLine}</div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">${badge}</div>
@@ -16356,6 +16556,24 @@ function loadCoachHome(){
   const _alreadyHere=document.getElementById('s-coach-home')?.classList.contains('active');
   const _activeTab=_alreadyHere?(['dashboard','codes','monetisation','profil'].find(t=>{const e=document.getElementById('ct-'+t);return e&&e.style.display!=='none';})||'dashboard'):'dashboard';
   coachTab(_activeTab);
+  // TIRER POUR RAFRAICHIR, sur le tableau de bord et lui seul. La primitive est
+  // deja eprouvee cote athlete et porte son propre repli ; elle n'etait armee
+  // que sur un ecran. C'est pourtant ici que le besoin est le plus fort : vingt
+  // dossiers qui bougent pendant que le coach travaille, et une boucle de 30 s
+  // qui n'annonce rien.
+  // CIBLE #ct-dashboard ET PAS #s-coach-home : ce dernier est en overflow:hidden,
+  // le conteneur qui defile est le panneau d'onglet. Les trois autres onglets
+  // contiennent des champs de saisie — un rafraichissement pendant une frappe
+  // est deja proscrit ailleurs. La garde interne zone._arcTirage empeche le
+  // rearmement, donc l'appel peut rester ici.
+  try{
+    arcTirerPourRafraichir(document.getElementById('ct-dashboard'),()=>{
+      try{
+        if(CLOUD.ok()) CLOUD.syncRelevantUsers().then(()=>loadCoachHome()).catch(()=>loadCoachHome());
+        else loadCoachHome();
+      }catch(e){ loadCoachHome(); }
+    });
+  }catch(e){}
   // Sync athlètes depuis Firebase puis re-render pour afficher photos/objectifs à jour
   if(CLOUD.ok()) CLOUD.syncRelevantUsers().then(()=>{
     const freshClients=getClients();
@@ -16370,13 +16588,24 @@ function loadCoachHome(){
     const _av=(typeof clients!=='undefined'&&clients)||[];
     const _change=freshClients.length!==_av.length
       ||(freshClients[0]&&_av[0]&&freshClients[0].id!==_av[0].id);
+    // LA SIGNATURE D'UNE LIGNE, relevee AVANT le rendu : c'est elle qui dit
+    // quelle ligne a bouge, et pas seulement que la liste a bouge.
+    const _sig=c=>{ try{ return urgencyScore(c)+'|'+(hasNewBilan(c)?1:0)+'|'+etatAthlete(c); }
+                    catch(e){ return ''; } };
+    const _avantMap=new Map(_av.map(c=>[c.id,_sig(c)]));
     // Meme precaution apres la synchro distante, qui reecrit la meme liste.
     renderClientList(freshClients);
     // APRES renderClientList, qui restaure la position de defilement : poser
     // l animation avant la ferait sauter la liste sous les yeux du coach.
     if(_change&&!arcReduit()){
-      el2.style.animation='chSyncPulse var(--t-4) var(--c-out)';
-      el2.addEventListener('animationend',()=>{ el2.style.animation=''; },{once:true});
+      let _n=0;
+      for(const c of freshClients){
+        if(_n>=3) break;                 // au-dela, plus rien ne designe personne
+        const _a=_avantMap.get(c.id);
+        if(_a!=null&&_a===_sig(c)) continue;
+        const _l=el2.querySelector('.client-row[data-cid="'+c.id+'"]');
+        if(_l){ _l.classList.add('cr-neuve'); _n++; }
+      }
     }
   }).catch(()=>{});
 }
@@ -16817,7 +17046,71 @@ function getOwnedClient(cid,users){
   if(!c||c.coachId!==currentUser.id){toast('Élève introuvable ou non autorisé','var(--orange)');return null;}
   return c;
 }
+// LA NAVIGATION PAR ANCRES DE LA FICHE ATHLETE. Trois choses : le saut lui-meme
+// (par _defiler, qui respecte la preference systeme la ou scrollIntoView ne le
+// fait pas), la marque d'arrivee sur le titre de la section atteinte, et la
+// puce qui s'allume — .pf-chip.active existait et n'etait posee nulle part.
+function ccdAller(id){
+  const z=document.getElementById(id);
+  if(!z) return;
+  _defiler(z);
+  _ccdAllumerPuce(id);
+  if(arcReduit()) return;
+  const t=z.closest('.cc-sect')?.querySelector('.cc-sect-t');
+  if(!t) return;
+  // Sans changement de point de depart, une classe reposee ne rejoue pas :
+  // il faut forcer une reprise de mise en page entre le retrait et la pose.
+  t.classList.remove('cc-vise');
+  void t.offsetWidth;
+  t.classList.add('cc-vise');
+}
+function _ccdAllumerPuce(id){
+  try{
+    document.querySelectorAll('#ccd-ancres .pf-chip').forEach(b=>{
+      b.classList.toggle('active',b.dataset.ancre===id);
+    });
+  }catch(e){}
+}
+// ARME UNE SEULE FOIS, et pas a chaque openClientDetail : la fonction est
+// rappelee toutes les 30 s par la boucle de synchro. L'observateur tolere une
+// cible non rendue — .cc-sect:has(>.cc-sect-c:empty) masque les sections vides.
+function _ccdArmerAncres(){
+  try{
+    const sa=document.querySelector('#s-coach-client>.scroll-area');
+    const nav=document.getElementById('ccd-ancres');
+    if(!sa||!nav) return;
+    if(!window._ccdAncresObs&&typeof IntersectionObserver==='function'){
+      const cibles=['ccd-pourquoi','ccd-tendances','ccd-nutrition','ccd-poids','ccd-journal']
+        .map(id=>document.getElementById(id)).filter(Boolean);
+      if(cibles.length){
+        window._ccdAncresObs=new IntersectionObserver(entrees=>{
+          entrees.forEach(e=>{ if(e.isIntersecting) _ccdAllumerPuce(e.target.id); });
+        },{root:sa,rootMargin:'0px 0px -62% 0px',threshold:0});
+        cibles.forEach(c=>window._ccdAncresObs.observe(c));
+      }
+    }
+    // LA BARRE SE RESSERRE au-dela de 120 px, et se rouvre sous 60 px.
+    // L'HYSTERESIS EST OBLIGATOIRE : sans elle la barre pompe a chaque
+    // micro-mouvement du pouce. L'ecoute est PASSIVE et amortie par une frame :
+    // elle ne retient jamais le defilement.
+    if(!window._ccdSerreArme){
+      window._ccdSerreArme=true;
+      let tic=false;
+      sa.addEventListener('scroll',()=>{
+        if(tic) return;
+        tic=true;
+        requestAnimationFrame(()=>{
+          tic=false;
+          const y=sa.scrollTop;
+          if(y>120) nav.setAttribute('data-serre','');
+          else if(y<60) nav.removeAttribute('data-serre');
+        });
+      },{passive:true});
+    }
+  }catch(e){}
+}
 function openClientDetail(cid,_refresh){
+  setTimeout(_ccdArmerAncres,0);
   setTimeout(_majLiensClasser,0);
   currentClientId=cid;
   const c=getOwnedClient(cid);
@@ -18813,7 +19106,7 @@ function openApplyTemplate(){
       </div>
     </div>`).join('');
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) var(--c-out);max-height:85vh;overflow-y:auto">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto">
     <h2 style="margin-bottom:4px">🗂️ Appliquer un modèle</h2>
     <p class="sub" style="font-size:var(--fs-sm);margin-bottom:6px">à ${escapeHtml((c.fname||'')+' '+(c.lname||'')).trim()||'cet athlète'} : version ${genreDefaut==='F'?'F':'H'} pré-sélectionnée</p>
     ${lignes}
@@ -19329,12 +19622,22 @@ function saveCoachSessions(){
   // marquage, le report, l oubli du brouillon, la poussee distante — s est
   // execute de facon synchrone. SEULE la navigation est retardee, de 420 ms,
   // le temps que le bouton dise que c est parti.
+  // LE LIBELLE ET LE VERROU ONT LIEU DANS TOUS LES CAS : le bouton disait
+  // encore « PUBLIER • » pendant sa propre celebration — le point est le
+  // marqueur « non publie » — et un second appui pendant la sortie
+  // republierait. Ce ne sont pas des decorations, ils sortent du if.
   const _b=document.getElementById('csm-publier');
-  if(_b&&!arcReduit()){
+  if(_b){
     _b.classList.remove('btn-attente');
-    _b.classList.add('celebrate');
+    _b.textContent='PUBLIÉ ✓';
+    _b.disabled=true;
+    if(!arcReduit()) _b.classList.add('celebrate');
   }
-  setTimeout(()=>go('s-coach-client'),420);
+  // 620 ms et non 420 : la celebration dure 320 ms et le go() partait a la
+  // milliseconde exacte ou elle finissait — le coach voyait un vert qui n'avait
+  // pas le temps de retomber. Ce delai ne retarde AUCUNE ecriture : tout ce qui
+  // precede s'est execute de facon synchrone.
+  setTimeout(()=>go('s-coach-client'),620);
   toastSync(localOk,CLOUD.pushOne(emailKey,stocke),' Séances sauvegardées !','les séances sont');
 }
 
@@ -19828,7 +20131,7 @@ function ouvrirFicheBanque(slug,ev){
   // serait un jugement de métier qu'aucune donnée ne soutient ici.
   const variantes=f.schema?catalogueCoach().filter(x=>x.schema===f.schema&&x.slug!==f.slug).slice(0,6):[];
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;animation:fadeIn var(--t-3) var(--c-out)">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:10px;font-size:var(--fs-lg)">${escapeHtml(f.nom)}</h2>
     ${img?`<img src="${escapeHtml(img)}" alt="${escapeHtml(f.nom)}" style="width:100%;max-height:260px;object-fit:contain;background:#fff;border-radius:var(--r-3);margin-bottom:12px">`
       :`<div class="sub" style="font-size:var(--fs-xs);text-align:center;padding:16px;background:var(--surface-1);border-radius:var(--r-3);margin-bottom:12px">Aucune illustration pour cet exercice.</div>`}
@@ -19865,7 +20168,7 @@ function ouvrirCreationExo(){
   if(!peutConsulterBanque()){ toast('Réservé aux coachs.','var(--orange)'); return false; }
   const opt=(v,lib,sel)=>`<option value="${escapeHtml(v)}"${sel?' selected':''}>${escapeHtml(lib)}</option>`;
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto;animation:fadeIn var(--t-3) var(--c-out)">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 22px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:4px;font-size:var(--fs-lg)">Créer un exercice</h2>
     <p class="sub" style="font-size:var(--fs-xs);margin-bottom:12px;line-height:1.6">Il n'appartient qu'à toi : aucun autre coach ne le voit. L'illustration est facultative — il n'y en aura pas.</p>
     <label for="ce-nom">Nom</label>
@@ -20505,10 +20808,13 @@ function _reposRetirer(z){
   const net=()=>{ try{ z.style.display='none'; z.innerHTML=''; z.style.pointerEvents=''; _reposVisible=false; _reposSonRendu=null; }catch(e){} };
   if(!c||arcReduit()||!c.animate){ net(); return; }
   z.style.pointerEvents='none';
+  let fait=false;
+  const une=()=>{ if(fait) return; fait=true; net(); };
   const a=_animer(c,[{transform:'translateY(0)',opacity:1},{transform:'translateY(8px)',opacity:0}],
     {duration:ARC.strike,easing:ARC.charge,fill:'none'});
-  if(!a){ net(); return; }
-  a.addEventListener('finish',net); a.addEventListener('cancel',net);
+  if(!a){ une(); return; }
+  a.addEventListener('finish',une); a.addEventListener('cancel',une);
+  setTimeout(une,ARC.strike+80);   // le filet
 }
 function _peindreRepos(){
   const z=document.getElementById('wo-repos');
@@ -22120,8 +22426,11 @@ function _animerJauges(root){
       setTimeout(()=>_arcPalierAtteint(s),320);
     });
   };
-  if(red) pose();
-  else requestAnimationFrame(()=>requestAnimationFrame(pose));
+  if(red){ pose(); return; }
+  let fait=false;
+  const une=()=>{ if(fait) return; fait=true; pose(); };
+  requestAnimationFrame(()=>requestAnimationFrame(une));
+  setTimeout(une,300);
 }
 function renderNutriAnneaux(){
   const el=document.getElementById('clh-nutri-rings');
@@ -25322,8 +25631,10 @@ function _feterFinSeance(o){
       rec?[{opacity:0},{opacity:.55,offset:.14},{opacity:0}]
          :[{opacity:0},{opacity:.28,offset:.18},{opacity:0}],
       {duration:rec?520:320,easing:'cubic-bezier(0.05,0.70,0.10,1.00)',fill:'none'});
-    a.addEventListener('finish',()=>v.remove());
-    a.addEventListener('cancel',()=>v.remove());
+    const _oter=()=>{ try{ v.remove(); }catch(e){} };
+    a.addEventListener('finish',_oter);
+    a.addEventListener('cancel',_oter);
+    setTimeout(_oter,(rec?520:320)+200);   // le filet
     document.querySelectorAll('#s-workout-done .stat-tile').forEach((el,i)=>{
       el.style.animation='wFadeUp var(--t-4) var(--c-out) '+(0.25+i*0.09)+'s both';
     });
@@ -46842,11 +47153,11 @@ function removeTsAnnotation(sortedIdx){
   if(i>=0) window._tsAnnotations.splice(i,1);
   _renderTsAnnotations();
 }
-function openVideoCorrection(email,videoId){
+function _vcCorpsHtml(email,videoId){
   const users=DB.get('users')||{};
   const c=users[email];
-  if(!c||c.coachId!==currentUser?.id){toast('Élève introuvable ou non autorisé','var(--orange)');return;}
-  const v=(c.videos||[]).find(x=>x.id===videoId);if(!v)return;
+  if(!c||c.coachId!==currentUser?.id){toast('Élève introuvable ou non autorisé','var(--orange)');return null;}
+  const v=(c.videos||[]).find(x=>x.id===videoId);if(!v)return null;
   window._vcEmail=email;window._vcVideoId=videoId;
   // Le nom de la vidéo EST le nom de l’exercice : c’est ce que porte `name`,
   // et c’est lui que consommerDemandeVideo compare aux demandes du coach.
@@ -46856,13 +47167,12 @@ function openVideoCorrection(email,videoId){
   tplContexte({prenom:c.fname,exercice:v.name},'vc-general');
   window._tsAnnotations=v.feedbackTimestamps?JSON.parse(JSON.stringify(v.feedbackTimestamps)):[];
   const _vcReste=(()=>{ try{ return _fileVideosSuivantes(email,videoId).length; }catch(e){ return 0; } })();
-  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;animation:fadeIn var(--t-3) var(--c-out);max-height:92vh;overflow-y:auto">
+  return `
     <h2 style="margin-bottom:2px">✏️ Corriger</h2>
     <!-- LE RESTE DE LA FILE, quand il y en a une. Des modales qui
          s’enchaînent sans dire combien il en reste sont désorientantes ; hors
          file, _fileVideosSuivantes rend un tableau vide et rien ne s’affiche. -->
-    <p class="sub" style="font-size:var(--fs-sm);margin-bottom:12px">${escapeHtml(v.name)} · ${new Date(v.date).toLocaleDateString('fr-FR')}${_vcReste?' · '+_vcReste+' restante'+(_vcReste>1?'s':''):''}</p>
+    <p class="sub" style="font-size:var(--fs-sm);margin-bottom:12px">${escapeHtml(v.name)} · ${new Date(v.date).toLocaleDateString('fr-FR')}${_vcReste?` · <span id="vc-reste" style="display:inline-block">${_vcReste} restante${_vcReste>1?'s':''}</span>`:''}</p>
     ${_videoEmbed(v.url)}
     ${/\.(mp4|mov|webm|mkv)(\?|$)/i.test(v.url||'')?htmlLecteurCorrection('vc-video'):''}
     <div style="margin-top:14px">
@@ -46904,13 +47214,59 @@ function openVideoCorrection(email,videoId){
     <div style="position:sticky;bottom:0;height:32px;background:linear-gradient(transparent,var(--surface-2));pointer-events:none;margin-top:-32px"></div>
     <button class="btn btn-red" style="margin-top:12px;width:100%" onclick="saveVideoCorrection()">Enregistrer la correction</button>
     <button class="btn btn-outline" style="margin-top:8px;width:100%" onclick="closeModal()">Annuler</button>
-  </div></div>`;
-  document.body.insertAdjacentHTML('beforeend',html);
+`;
+}
+// Ce qui doit tourner APRES l'insertion du gabarit, que la feuille vienne
+// d'etre creee ou que son contenu ait ete remplace sur place.
+function _vcApres(){
   _renderTsAnnotations();
   _renderQuickCommentChips();
-  // La barre de correction n'existe que pour un vrai <video> : sur une vidéo
+  // La barre de correction n'existe que pour un vrai <video> : sur une video
   // YouTube, htmlLecteurCorrection n'a rien produit et rcInitLecteur sort.
   try{ rcInitLecteur('vc-video'); }catch(e){}
+}
+function openVideoCorrection(email,videoId){
+  const corps=_vcCorpsHtml(email,videoId);
+  if(corps==null) return;
+  const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 24px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto">${corps}</div></div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+  _vcApres();
+}
+// ── UNE SEULE FEUILLE QUI RESTE ────────────────────────────────────────────
+// saveVideoCorrection appelait closeModal(), qui LAISSE LE NOEUD A L'ECRAN
+// 140 ms, puis appelait synchroniquement l'enchainement, qui inserait un
+// SECOND #modal-overlay : pendant 140 ms deux voiles plein ecran se
+// superposaient, le fond doublait de densite puis s'eclaircissait, et la
+// nouvelle feuille montait a travers l'ancienne. Le coach voyait un
+// clignotement, pas une passation.
+// Ici la feuille RESTE, son contenu glisse lateralement, et le compteur de file
+// encaisse une decharge. Le geste dit « suivante », il ne redemarre pas.
+function _vcRemplacer(x){
+  const sheet=document.querySelector('#modal-overlay>div');
+  if(!sheet||arcReduit()){ closeModal(); return _allerVideoSuivante(x); }
+  // closeModal() annule un enregistrement audio en cours : on doit le faire
+  // aussi ici, aux memes conditions.
+  try{ if(typeof cancelAudioAnnotation==='function') cancelAudioAnnotation(); }catch(e){}
+  sheet.classList.add('vc-part');
+  setTimeout(()=>{
+    try{
+      if(x&&x.cid) currentClientId=x.cid;
+      const corps=_vcCorpsHtml(x.email,x.id);
+      if(corps==null){ closeModal(); return; }
+      sheet.innerHTML=corps;
+      sheet.scrollTop=0;
+      _vcApres();
+      sheet.classList.remove('vc-part');
+      sheet.classList.add('vc-arrive');
+      sheet.addEventListener('animationend',e=>{
+        if(e.target===sheet) sheet.classList.remove('vc-arrive');
+      },{once:true});
+      const r=document.getElementById('vc-reste');
+      if(r) arcDecharge(r,{flash:false,halo:false,impact:1.14});
+    }catch(e){ try{ closeModal(); }catch(e2){} }
+  },120);
+  return true;
 }
 function saveVideoCorrection(){
   // Le garde-fou EN PREMIER : une variable non remplie ne doit pas atteindre
@@ -46938,7 +47294,12 @@ function saveVideoCorrection(){
   c.updatedAt=Date.now();users[window._vcEmail]=c;
   const ok=DB.set('users',users);
   const envoi=CLOUD.pushOne(window._vcEmail,c);
-  closeModal();
+  // LA FILE EST LUE AVANT DE FERMER. closeModal() laisse le noeud a l'ecran
+  // 140 ms : ferme ici, il se superposait a la feuille suivante, inseree
+  // synchroniquement juste apres. On ne ferme donc que s'il n'y a pas de suite.
+  let _rest=[];
+  try{ _rest=_fileVideosSuivantes(window._vcEmail,window._vcVideoId); }catch(e){ _rest=[]; }
+  if(!_rest.length) closeModal();
   // La modale vient de se fermer : le coach ne peut plus rien récupérer si
   // l'écriture a échoué, il faut donc le lui dire au lieu d'un « ✓ ».
   toastSync(ok,envoi,'Correction enregistrée !','la correction est');
@@ -46949,9 +47310,11 @@ function saveVideoCorrection(){
   // File vide, vidéo hors file, ou ouverture qui échoue : on retombe sur le
   // retour à la fiche, c’est-à-dire exactement le comportement d’avant.
   try{
-    const _rest=_fileVideosSuivantes(window._vcEmail,window._vcVideoId);
-    if(_rest.length&&_allerVideoSuivante(_rest[0])) return;
+    if(_rest.length&&_vcRemplacer(_rest[0])) return;
   }catch(e){}
+  // Le repli — file vide, video hors file, ou remplacement qui echoue — passe
+  // par la fermeture, exactement comme avant.
+  try{ if(document.getElementById('modal-overlay')) closeModal(); }catch(e){}
   // LE TABLEAU DE BORD SE RAFRAÎCHIT QUAND C EST LUI QUI EST À L ÉCRAN.
   //
   // La chaîne s’ouvre en modale par-dessus s-coach-home et s’y termine :
@@ -52322,7 +52685,7 @@ function openAddAthlete(){
   // annoncer la même durée aux deux serait faux pour l'un des deux.
   const estCreateur=currentUser?.email===CREATOR_EMAIL;
   const html=`<div id="modal-overlay" onclick="closeModal()" style="position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:flex;align-items:flex-end;justify-content:center">
-  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) var(--c-out);max-height:90vh;overflow-y:auto">
+  <div onclick="event.stopPropagation()" style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:16px 20px 20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <h2 style="margin-bottom:6px">➕ Ajouter un athlète</h2>
     <p class="sub" style="margin-bottom:8px;font-size:var(--fs-sm)">${estCreateur
       ?'Crée le compte et active l\'accès en une seule étape. Ton élève se connectera avec l\'email et le mot de passe que tu saisis ici.'
