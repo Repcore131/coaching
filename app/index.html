@@ -1543,6 +1543,13 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 .rap-tbl th{text-align:left;font-size:var(--fs-2xs);text-transform:uppercase;letter-spacing:1px;
   color:var(--sub);font-weight:800;padding:4px 6px 4px 0;border-bottom:1px solid var(--border)}
 .rap-tbl td{padding:5px 6px 5px 0;border-bottom:1px solid rgba(255,255,255,.05)}
+/* LES LEGENDES DES SVG DU RAPPORT. Elles portaient leur taille en attribut,
+   donc en unites du viewBox : a 520 unites de large ramenees a la largeur
+   d un telephone, une taille de 9 unites ne pesait plus que ~5,8 px reels. Passees
+   en classe, elles restent en unites du viewBox — c est bien le levier — mais
+   la valeur devient reglable, et @media print les ramene au pixel d avant. */
+.rap-lgd{font-size:13px}
+.rap-lgd-s{font-size:11px}
 .rap-liste{margin:0;padding-left:17px;font-size:var(--fs-xs);line-height:1.8}
 .rap-mot{min-height:88px;border:1px dashed var(--border);border-radius:var(--r-2);padding:11px;font-size:var(--fs-sm);line-height:1.7}
 .rap-case{display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-xs);color:var(--sub);
@@ -1569,6 +1576,10 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   .rap-lbl,.rap-u,.rap-note,.rap-meta,.rap-vide{color:var(--text-dim)!important}
   .rap-tbl td{border-bottom-color:var(--text-strong)!important}
   .rap-mot{border-color:#bbb!important;min-height:76px}
+  /* AU PAPIER, RIEN NE CHANGE : la page imprimee est plus large que l ecran,
+     les legendes y etaient deja lisibles. On rend donc les valeurs d avant. */
+  .rap-lgd{font-size:9px}
+  .rap-lgd-s{font-size:7px}
   /* UNE SEANCE NE SE COUPE PAS EN DEUX PAGES : sur le patron de .rap-bloc.
      Une fiche dont l echauffement est page 1 et les exercices page 2 se
      lit mal debout en salle, qui est le seul endroit ou elle sert. */
@@ -25813,10 +25824,10 @@ function _rapCourbePoids(points){
     aria-label="Courbe de poids sur la période" style="display:block">
     <line x1="${P}" y1="${H-P}" x2="${W-P}" y2="${H-P}" stroke="currentColor" stroke-opacity=".25" stroke-width="1"/>
     <line x1="${P}" y1="${P}" x2="${P}" y2="${H-P}" stroke="currentColor" stroke-opacity=".25" stroke-width="1"/>
-    <text x="2" y="${P+4}" font-size="9" fill="currentColor" fill-opacity=".55">${mx.toFixed(1)}</text>
-    <text x="2" y="${H-P+3}" font-size="9" fill="currentColor" fill-opacity=".55">${mn.toFixed(1)}</text>
+    <text x="2" y="${P+4}" class="rap-lgd" fill="currentColor" fill-opacity=".55">${mx.toFixed(1)}</text>
+    <text x="2" y="${H-P+3}" class="rap-lgd" fill="currentColor" fill-opacity=".55">${mn.toFixed(1)}</text>
     ${dm?`<path d="${dm}" fill="none" stroke="currentColor" stroke-opacity=".35" stroke-width="2.5"/>`:''}
-    <path d="${d}" fill="none" stroke="#e02020" stroke-width="1.6"/>
+    <path d="${d}" fill="none" stroke="#e02020" stroke-width="2.4" vector-effect="non-scaling-stroke"/>
     ${pts.map((p,i)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(p.kg).toFixed(1)}" r="2" fill="#e02020"/>`).join('')}
   </svg>`;
 }
@@ -25828,7 +25839,7 @@ function _rapBarreVolume(m){
   const px=v=>Math.max(0,Math.min(W,(v/ech)*W));
   const rep=(v,lib)=>`<line x1="${px(v).toFixed(1)}" y1="2" x2="${px(v).toFixed(1)}" y2="${H-2}"
       stroke="currentColor" stroke-opacity=".45" stroke-width="1" stroke-dasharray="2 2"/>
-    <text x="${Math.min(W-16,px(v)+2).toFixed(1)}" y="9" font-size="7" fill="currentColor" fill-opacity=".55">${lib}</text>`;
+    <text x="${Math.min(W-16,px(v)+2).toFixed(1)}" y="9" class="rap-lgd-s" fill="currentColor" fill-opacity=".55">${lib}</text>`;
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img"
     aria-label="Volume ${escapeHtml(m.muscle)} : ${m.series} séries, MEV ${m.mev}, MAV ${m.mav}, MRV ${m.mrv}" style="display:block">
     <rect x="0" y="9" width="${W}" height="8" fill="currentColor" fill-opacity=".08" rx="4"/>
