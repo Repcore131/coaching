@@ -684,6 +684,16 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
    tabulation. On ne fait glisser QUE ce que bBodyFocus touche : stroke,
    stroke-width et fill. Les coordonnees ne bougent jamais. */
 .bsch svg path[id^="ln-"],.bsch svg line[id^="dsh-"],.bsch svg circle[id^="dot-"]{transition:stroke.18s ease,stroke-width.18s ease,fill.18s ease}
+/* LES CARTES DU CANAL. Deux fonctions rendaient la meme carte a quelques
+   octets pres — vue coach et vue athlete — chacune avec son style en ligne. */
+.cnl-carte{position:relative;overflow:hidden;
+  background:repeating-linear-gradient(-50deg,transparent,transparent 12px,rgba(255,255,255,.020) 12px,rgba(255,255,255,.020) 13px),
+    linear-gradient(168deg,#1a1a1a,#111 52%,#0b0b0b);
+  border:1px solid #242424;border-radius:12px;padding:15px 16px;margin-bottom:12px;box-shadow:var(--elev-1)}
+.cnl-carte[data-epingle]{border-left:3px solid var(--red);border-radius:3px 12px 12px 3px;
+  box-shadow:var(--elev-1),-3px 0 16px rgba(224,32,32,.26)}
+.cnl-titre{font-size:16px;font-weight:800;line-height:1.3;margin-bottom:7px;letter-spacing:.1px}
+.cnl-texte{font-size:13.5px;color:#d0d0d0;line-height:1.7;white-space:pre-wrap}
 .evo-carte{position:relative;overflow:hidden;border-radius:var(--r-3);padding:14px;margin-bottom:14px;
   background:
     repeating-linear-gradient(-50deg,transparent,transparent 12px,rgba(255,255,255,.022) 12px,rgba(255,255,255,.022) 13px),
@@ -3011,6 +3021,8 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
+      <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
+      <h1 style="font-size:20px;line-height:1.3;font-weight:900;margin-bottom:4px">Assigner un programme</h1>
       <p class="sub" style="font-size:var(--fs-sm);margin-bottom:4px;line-height:1.6">Sélectionne les athlètes qui recevront ce programme. La version H ou F est choisie automatiquement selon leur genre.</p>
       <div style="display:flex;gap:8px;margin-bottom:16px;margin-top:12px">
         <button onclick="cpaSelectAll(true)" class="btn btn-outline btn-sm" style="flex:1">Tout sélectionner</button>
@@ -3026,10 +3038,12 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar">
     <button class="back-btn" onclick="go('s-coach-home')">←</button>
     <span class="topbar-title">Décharge groupée</span>
-    <button id="cdg-appliquer" onclick="confirmDechargeGroupee()" disabled style="background:#222;border:none;color:var(--text-dim);padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:not-allowed;letter-spacing:1px;border-radius:var(--r-1)">APPLIQUER</button>
+    <button id="cdg-appliquer" onclick="confirmDechargeGroupee()" disabled style="background:#222;color:var(--text-dim);border:none;padding:7px 14px;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:not-allowed;letter-spacing:1px;border-radius:var(--r-1)">APPLIQUER</button>
   </div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
+      <div style="width:24px;height:2px;background:var(--red);margin-bottom:10px"></div>
+      <h1 style="font-size:20px;line-height:1.3;font-weight:900;margin-bottom:4px">Décharge groupée</h1>
       <p class="sub" style="font-size:var(--fs-sm);margin-bottom:4px;line-height:1.6">Les séances actives des athlètes cochés seront marquées « décharge » et sortiront de la détection de plateau. Aucun décochage automatique : c'est toi qui la retires ensuite.</p>
       <div style="display:flex;gap:8px;margin-bottom:16px;margin-top:12px">
         <button onclick="cdgSelectAll(true)" class="btn btn-outline btn-sm" style="flex:1">Tout sélectionner</button>
@@ -12844,13 +12858,13 @@ function _canalCarte(m,compteurs,mienne){
         font-family:Montserrat,sans-serif;font-weight:700">
       <span aria-hidden="true">${e}</span><span style="font-size:var(--fs-xs)">${n}</span></button>`;
   }).join('');
-  return `<div style="background:var(--surface-1);border:1px solid ${m.epingle?'rgba(224,32,32,.45)':'var(--border)'};border-radius:var(--r-4);padding:15px 16px;margin-bottom:12px">
+  return `<div class="cnl-carte"${m.epingle?' data-epingle':''}>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       ${m.epingle?'<span style="font-size:var(--fs-xs);color:var(--red-text);font-weight:800;letter-spacing:1.5px;text-transform:uppercase">📌 Épinglé</span>':''}
       <span class="sub" style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase">${escapeHtml(ago(Number(m.at)||Date.now()))}</span>
     </div>
-    ${m.titre?`<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px;line-height:1.4">${escapeHtml(m.titre)}</div>`:''}
-    ${m.texte?`<div style="font-size:var(--fs-md);color:var(--text-strong);line-height:1.65;white-space:pre-wrap">${escapeHtml(m.texte)}</div>`:''}
+    ${m.titre?`<div class="cnl-titre">${escapeHtml(m.titre)}</div>`:''}
+    ${m.texte?`<div class="cnl-texte">${escapeHtml(m.texte)}</div>`:''}
     ${lien?_canalCarteLien(lien):''}
     <div style="display:flex;gap:6px;margin-top:12px">${boutons}</div>
   </div>`;
@@ -13044,20 +13058,20 @@ function _canalCarteCoach(m,compteurs,vrai,reactions){
       <span class="sub" style="flex:1;min-width:0;line-height:1.5">${escapeHtml(noms.join(', '))}</span></div>`;
   }).join('');
   const lien=String(m.lien||'').trim();
-  return `<div style="background:var(--surface-1);border:1px solid ${m.epingle?'rgba(224,32,32,.45)':'var(--border)'};border-radius:var(--r-4);padding:15px 16px;margin-bottom:12px">
+  return `<div class="cnl-carte"${m.epingle?' data-epingle':''}>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
       ${m.epingle?'<span style="font-size:var(--fs-xs);color:var(--red-text);font-weight:800;letter-spacing:1.5px;text-transform:uppercase">📌 Épinglé</span>':''}
       <span class="sub" style="font-size:var(--fs-xs);letter-spacing:1px;text-transform:uppercase">${escapeHtml(ago(Number(m.at)||Date.now()))}</span>
     </div>
-    ${m.titre?`<div style="font-weight:800;font-size:var(--fs-md);margin-bottom:6px;line-height:1.4">${escapeHtml(m.titre)}</div>`:''}
-    ${m.texte?`<div style="font-size:var(--fs-md);color:var(--text-strong);line-height:1.65;white-space:pre-wrap">${escapeHtml(m.texte)}</div>`:''}
+    ${m.titre?`<div class="cnl-titre">${escapeHtml(m.titre)}</div>`:''}
+    ${m.texte?`<div class="cnl-texte">${escapeHtml(m.texte)}</div>`:''}
     ${lien&&safeUrlRaw(lien)!=='#'?`<a href="${safeUrl(lien)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin-top:9px;font-size:var(--fs-sm);color:var(--info);font-weight:700">${escapeHtml(canalDomaine(lien)||'lien')} ↗</a>`:''}
     ${lignes?`<div style="margin-top:11px;padding-top:10px;border-top:1px solid var(--border)">${lignes}</div>`
             :'<div class="sub" style="margin-top:11px;padding-top:10px;border-top:1px solid var(--border);font-size:var(--fs-xs)">Aucune réaction pour l\'instant.</div>'}
     ${derive?`<button class="btn btn-outline btn-sm" style="width:100%;margin:9px 0 0;min-height:38px;color:var(--orange);border-color:var(--orange)" onclick="resyncCompteursCanal('${escapeHtml(m.id)}')">Le compteur public a dérivé — resynchroniser</button>`:''}
-    <div style="display:flex;gap:8px;margin-top:10px">
-      <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:40px" onclick="openMessageCanal('${escapeHtml(m.id)}')">Modifier</button>
-      <button class="btn btn-outline btn-sm" style="flex:1;margin:0;min-height:40px;color:var(--sub)" onclick="supprimerMessageCanal('${escapeHtml(m.id)}')">Supprimer</button>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">
+      <button class="btn btn-outline btn-sm" style="width:auto;padding:0 14px;min-height:34px;font-size:10.5px;margin:0" onclick="openMessageCanal('${escapeHtml(m.id)}')">Modifier</button>
+      <button class="btn btn-outline btn-sm" style="width:auto;padding:0 14px;min-height:34px;font-size:10.5px;margin:0;color:var(--sub)" onclick="supprimerMessageCanal('${escapeHtml(m.id)}')">Supprimer</button>
     </div></div>`;
 }
 // Le compteur public est ramené sur le décompte vrai. Les règles laissent le
@@ -14894,6 +14908,24 @@ function _triProgres(c){
   let r=null; try{ r=_exercicesEnProgres(c); }catch(e){}
   return (r&&r.total>0)?(r.enProgres/r.total):TRI_SANS_MESURE;
 }
+// L ETAT D UN ATHLETE, EN UN SEUL ENDROIT. Trois ecrans le lisent maintenant :
+// la liste du portefeuille, l assignation de programme et la decharge groupee.
+// Le duplique aurait suffi a ce que deux ecrans finissent par se contredire.
+//
+// L ORDRE EST CELUI DU BADGE, cas par cas : abonnement a souscrire, puis
+// lecture seule, puis nouveau bilan, puis alerte, puis actif. Un ordre
+// different donnerait un badge orange sur un filet rouge — deux signaux
+// contradictoires, et le plus visible serait le faux.
+function etatAthlete(c){
+  return _enAttenteAbonnement(c)?'attente'
+    :_accesExpire(c)?'lecture'
+    :hasNewBilan(c)?'bilan'
+    :needsAlert(c)?'alerte'
+    :isActive(c)?'actif':'dormant';
+}
+// La couleur du filet, par etat. Meme table pour les trois ecrans.
+const ETAT_FILET=Object.freeze({alerte:'#E02020',bilan:'#f97316',attente:'#f97316',
+  actif:'#22c55e',lecture:'#8a8a8a',dormant:'#666666'});
 function renderClientRow(c){
   const badge=_enAttenteAbonnement(c)?'<span class="badge badge-orange">⏳ Abonnement à souscrire</span>'
     :_accesExpire(c)?'<span class="badge badge-gray">Lecture seule</span>'
@@ -14931,15 +14963,7 @@ function renderClientRow(c){
   // couleur du filet gauche, et c est ce qui permet de balayer la liste sans
   // lire un seul badge. Le classement suit CELUI DU BADGE, a la lettre — deux
   // regles differentes donneraient une carte rouge a badge vert.
-  // L'ORDRE EST CELUI DU BADGE, cas par cas. Le badge classe : abonnement a
-  // souscrire, puis lecture seule, puis nouveau bilan, puis alerte, puis
-  // actif. Un ordre different ici donnerait un badge orange sur un filet
-  // rouge : deux signaux contradictoires, et le plus visible serait le faux.
-  const _etat=_enAttenteAbonnement(c)?'attente'
-    :_accesExpire(c)?'lecture'
-    :hasNewBilan(c)?'bilan'
-    :needsAlert(c)?'alerte'
-    :isActive(c)?'actif':'dormant';
+  const _etat=etatAthlete(c);
   return `<div class="client-row${!hasNewBilan(c)&&!needsAlert(c)&&!isActive(c)?' row-inactive':''}" data-etat="${_etat}" onclick="openClientDetail('${c.id}')" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
     <div class="avatar" style="width:44px;height:44px;font-size:var(--fs-lg);overflow:hidden;flex-shrink:0">${avatarHtml}</div>
     <div style="flex:1;min-width:0"><div class="cr-nom">${_nm}</div><div class="cr-act">${activityLine}</div>${objLine}${phLine}${chLine}${prLine}${biLine}</div>
@@ -17854,7 +17878,8 @@ function loadAssignAthletes(){
     const detectedF=isFemale(gRaw);
     const defG=detectedF?'F':'H';
     return `
-    <div style="display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid #181818">
+    <div style="display:flex;align-items:center;gap:12px;border-bottom:1px solid #242424;padding:11px 10px;border-left:3px solid ${ETAT_FILET[etatAthlete(a)]||'#666666'};border-radius:0 8px 8px 0;background:linear-gradient(168deg,#141414,#0d0d0d);margin-bottom:5px">
+      <div class="avatar" style="width:32px;height:32px;font-size:12px;flex-shrink:0">${escapeHtml(ini(a.fname,a.lname))}</div>
       <input type="checkbox" id="cpa-cb-${a.id}" value="${a.id}" data-gender="${defG}" style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <label for="cpa-cb-${a.id}" style="flex:1;cursor:pointer">
         <div style="font-weight:700;font-size:var(--fs-md)">${escapeHtml((a.fname||'')+' '+(a.lname||''))}</div>
@@ -32830,7 +32855,8 @@ function loadDechargeAthletes(){
     // le récapitulatif qui dira pourquoi. Le masquer ferait croire au coach
     // qu'il n'existe pas.
     const empeche=(!a.email?'dossier non synchronisé':(!n?'aucun créneau actif':''));
-    return `<div style="display:flex;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid #181818">
+    return `<div style="display:flex;align-items:center;gap:12px;border-bottom:1px solid #242424;padding:11px 10px;border-left:3px solid ${ETAT_FILET[etatAthlete(a)]||'#666666'};border-radius:0 8px 8px 0;background:linear-gradient(168deg,#141414,#0d0d0d);margin-bottom:5px">
+      <div class="avatar" style="width:32px;height:32px;font-size:12px;flex-shrink:0">${escapeHtml(ini(a.fname,a.lname))}</div>
       <input type="checkbox" id="cdg-cb-${escapeHtml(a.id)}" value="${escapeHtml(a.id)}" onchange="_cdgMajBouton()" style="width:18px;height:18px;accent-color:var(--red);cursor:pointer;flex-shrink:0">
       <label for="cdg-cb-${escapeHtml(a.id)}" style="flex:1;cursor:pointer;min-width:0">
         <div style="font-weight:700;font-size:var(--fs-md)">${escapeHtml(_nomAthlete(a))}</div>
