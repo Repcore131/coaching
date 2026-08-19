@@ -749,7 +749,28 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
 .photo-slot{width:calc(50% - 6px);aspect-ratio:1;background:var(--surface-2);border-radius:var(--r-1);border:1px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:var(--t-2);overflow:hidden;position:relative}
 .photo-slot:hover{border-color:var(--red)}.photo-slot img{width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0}
 .nutrition-day{background:var(--surface-1);border-radius:var(--r-1);padding:14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;border:1px solid var(--border)}
-.fj-entry{background:var(--surface-1);border-radius:var(--r-2);padding:10px 12px;display:flex;align-items:center;margin-bottom:6px;border:1px solid var(--border);gap:8px}
+.fj-entry{background:var(--surface-1);border-radius:var(--r-2);padding:10px 12px;display:flex;align-items:center;margin-bottom:6px;border:1px solid var(--border);border-left:3px solid transparent;gap:8px}
+/* CE QUE JE VIENS D AJOUTER. Le toast dit qu une ecriture a eu lieu ; il ne
+   dit pas OU. Sur un journal de douze lignes, retrouver celle qu on vient de
+   poser demande de relire la liste.
+
+   L ANIMATION PASSE PAR background-image, PAS PAR background. Une teinte
+   posee sur background laisserait sa valeur finale au fond de l element : sur
+   .fj-entry elle vaut justement var(--surface-1) et ne se verrait pas, mais
+   sur une ligne de cafeine, qui n a pas de fond, elle en poserait un pour
+   toujours. Un aplat en background-image se retire proprement, quel que soit
+   le fond dessous. */
+@keyframes fjNeuf{
+  0%{border-left-color:var(--green);
+    background-image:linear-gradient(color-mix(in srgb,var(--green) 14%,transparent),color-mix(in srgb,var(--green) 14%,transparent))}
+  100%{border-left-color:transparent;
+    background-image:linear-gradient(transparent,transparent)}
+}
+.fj-entry.fj-neuf{animation:fjNeuf 1200ms cubic-bezier(.16,1,.3,1) both}
+/* La ligne de cafeine n a pas de bord gauche a elle : on le lui prete pendant
+   l animation, et on reprend les 3 px en marge pour que rien ne se decale. */
+.caff-neuf{border-left:3px solid transparent;margin-left:-3px;
+  animation:fjNeuf 1200ms cubic-bezier(.16,1,.3,1) both}
 .fj-result{padding:12px 16px;border-bottom:1px solid #111;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .fj-result:active{background:var(--surface-2)}
 .fj-repas-btn{flex:1;padding:10px 6px;background:#111;border:1px solid #222;border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:.5px;cursor:pointer;text-align:center;transition:all var(--t-1)}
@@ -1472,6 +1493,7 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   .wd-badge{opacity:1!important;transform:none!important}
   .wd-badge-medal{transform:none!important;filter:drop-shadow(0 0 12px rgba(224,32,32,.45))!important}
   .rc-blink{opacity:1!important}
+  .fj-entry.fj-neuf,.caff-neuf{animation:none!important}
   /* Coupee net, pas accelerée : la regle universelle la ramenerait a .01 ms,
      ce qui laisse un saut au lieu d une entree. */
   #bil-content>.pad{animation:none!important}
@@ -38099,6 +38121,10 @@ function _htmlHuileCuissonAthlete(couv){
 let _ciqualDB=null;
 let _fjFood=null;   // aliment sélectionné
 let _fjDate=null;   // date YYYY-MM-DD du journal ouvert
+// L identifiant de la ligne qu on vient d ecrire, le temps d un rendu. Remis
+// a null 1 300 ms plus tard : au-dela, la ligne n est plus « neuve », et un
+// re-rendu pour une autre raison ne doit pas rejouer le marqueur.
+let _fjIdNeuf=null;
 let _fjRepas='matin';
 
 // PURE. Le singulier probable d'un mot de requête, ou le mot lui-même.
@@ -40555,6 +40581,7 @@ async function saveFoodEntry(){
     let rec=currentUser.nutrition.recentFoods||[];
     currentUser.nutrition.recentFoods=[f.id,...rec.filter(id=>id!==f.id)].slice(0,10);
   }
+  _fjIdNeuf=entry.id;
   toastEcriture(saveUser(),'Ajouté ✓','cet aliment est');
   // ON REVIENT SUR LE JOUR OÙ L'ON VIENT D'ÉCRIRE, et non sur aujourd'hui.
   // L'entrée était bien enregistrée au bon jour ; c'est l'écran qui sautait,
@@ -40677,7 +40704,7 @@ function _renderFjDaySummary(date){
           <div style="flex:1;min-width:0;font-size:var(--fs-xs);color:var(--sub);letter-spacing:2px;font-weight:700;text-transform:uppercase">${repasLabels[r]}</div>
           ${!isToday?`<button onclick="refaireRepas('${date}','${r}')" style="flex-shrink:0;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:.5px;padding:5px 9px;cursor:pointer">Refaire aujourd'hui</button>`:''}
         </div>
-        ${grouped[r].map(e=>`<div class="fj-entry">
+        ${grouped[r].map(e=>`<div class="fj-entry${e.id===_fjIdNeuf?' fj-neuf':''}">
           <div style="flex:1;min-width:0">
             <div style="font-size:var(--fs-sm);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(e.nom)}</div>
             <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:2px">${[e.qty+'g',_fragmentSiValeur('P ',e.p,'g'),_fragmentSiValeur('G ',e.c,'g'),_fragmentSiValeur('L ',e.l,'g')].filter(x=>x).join(' · ')}</div>
@@ -40703,6 +40730,10 @@ function _renderFjDaySummary(date){
   // affiché du tout : on ne fabrique alors rien.
   const _slot=document.getElementById('nut-rings-slot');
   if(_slot) _slot.innerHTML=_renderStrictMacroRings(currentUser.nutrition||{},date);
+  // 1 300 ms : la duree de l animation plus une marge. Passe ce delai, le
+  // marqueur s eteint pour tout le monde, y compris pour un rendu declenche
+  // par autre chose qu un ajout.
+  if(_fjIdNeuf!=null) setTimeout(()=>{_fjIdNeuf=null;},1300);
 }
 // Demande au Service Worker de mettre la base Ciqual (672 Ko) en cache.
 // Appelé au premier affichage de l'écran nutrition seulement : la recherche
@@ -42917,6 +42948,9 @@ let _suppReturnToNutrition=false;
 const CAFF_RETENTION_JOURS=180;
 let _caffReturnToNutrition=false;
 let _caffeineViewDate=null;  // date affichée dans l'écran standalone s-caffeine
+// Meme role pour la cafeine, indexe sur l horodatage : les prises n ont pas
+// d identifiant propre, mais leur ts est ecrit a la milliseconde.
+let _caffTsNeuf=null;
 let _caffeineEmbedDate=null; // date affichée dans la section embarquée s-nutrition
 let _pendingCaffProduct=null;
 
@@ -43871,7 +43905,7 @@ function _renderCaffeineBlock(entries,totalMg,thr,deleteFnName,date,wEst,isToday
     :'';
   const listHtml=!entries.length
     ?emptyState('coffee','Aucune prise enregistrée ce jour.',null,null,'padding:16px 0')
-    :renderDataList(entries,(e,i)=>`<span style="line-height:0;flex-shrink:0">${caffIcone(e.type,22)}</span><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:var(--fs-md)">${escapeHtml(e.name)}</div><div style="font-size:var(--fs-xs);color:var(--sub);display:flex;align-items:center;gap:4px"><input type="time" value="${e.time||''}" onchange="updateCaffeineEntryTime('${date}',${i},this.value)" style="background:none;border:none;border-bottom:1px solid var(--border);color:var(--sub);font-size:var(--fs-xs);font-family:Montserrat,sans-serif;cursor:pointer;padding:0;width:52px">${e.volume?'· '+escapeHtml(e.volume):''}</div></div><span style="font-weight:900;color:var(--red-text);font-size:var(--fs-lg);min-width:48px;text-align:right">${e.mg}mg</span><button onclick="deleteCaffeineEntry('${date}',${i},'${deleteFnName}')" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent">×</button>`);
+    :renderDataList(entries,(e,i)=>({cls:(e.ts!=null&&e.ts===_caffTsNeuf)?'caff-neuf':'',html:`<span style="line-height:0;flex-shrink:0">${caffIcone(e.type,22)}</span><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:var(--fs-md)">${escapeHtml(e.name)}</div><div style="font-size:var(--fs-xs);color:var(--sub);display:flex;align-items:center;gap:4px"><input type="time" value="${e.time||''}" onchange="updateCaffeineEntryTime('${date}',${i},this.value)" style="background:none;border:none;border-bottom:1px solid var(--border);color:var(--sub);font-size:var(--fs-xs);font-family:Montserrat,sans-serif;cursor:pointer;padding:0;width:52px">${e.volume?'· '+escapeHtml(e.volume):''}</div></div><span style="font-weight:900;color:var(--red-text);font-size:var(--fs-lg);min-width:48px;text-align:right">${e.mg}mg</span><button onclick="deleteCaffeineEntry('${date}',${i},'${deleteFnName}')" style="background:none;border:none;color:var(--sub);font-size:var(--fs-xl);cursor:pointer;padding:4px 8px;-webkit-tap-highlight-color:transparent">×</button>`}));
   const _circ=2*Math.PI*48;
   const _off=_circ*(1-pct);
   // Le cercle mesure 120px de diamètre, dont 9px d'anneau de chaque côté : il
@@ -44379,9 +44413,13 @@ function _commitCaffeineAdd(qty){
   const hhmm=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
   const name=qty>1?p.name+' ×'+qty:p.name;
   const _d=_caffDateCourante();
-  const _ok=addCaffeineEntry({id:p.id,name,icon:p.icon,mg:p.mg*qty,volume:p.volume||'',type:p.type,time:hhmm,ts:Date.now()},_d);
+  // L horodatage est SORTI de l objet : c est lui qui sert de marqueur, et il
+  // faut le retenir avant de le confier a addCaffeineEntry.
+  const _ts=Date.now();
+  const _ok=addCaffeineEntry({id:p.id,name,icon:p.icon,mg:p.mg*qty,volume:p.volume||'',type:p.type,time:hhmm,ts:_ts},_d);
   _pendingCaffProduct=null;
   if(!_ok){ toast('Jour hors de portée : la prise n’a pas été enregistrée.','var(--orange)'); return; }
+  _caffTsNeuf=_ts;
   toast(name+' ajouté ✓');
   // ON RESTE SUR LE JOUR OU LA PRISE A ETE ECRITE. loadCaffeine remettait
   // _caffeineViewDate à aujourd’hui et loadNutrition() faisait de même pour
@@ -44416,8 +44454,12 @@ function saveCaffeineCustom(){
   // Mémorisée AVANT l’ajout, comme dans _commitCaffeineAdd : c’est le jour
   // sur lequel il faudra revenir.
   const _d=_caffDateCourante();
-  const _ok=addCaffeineEntry({id:'custom',name,icon:'☕',mg,volume,type:'custom',time:hhmm,ts:Date.now()},_d);
+  // Meme marqueur que _commitCaffeineAdd : ajouter une boisson personnalisee
+  // est le meme geste, la ligne doit se signaler pareil.
+  const _ts=Date.now();
+  const _ok=addCaffeineEntry({id:'custom',name,icon:'☕',mg,volume,type:'custom',time:hhmm,ts:_ts},_d);
   if(!_ok){ toast('Jour hors de portée : la prise n’a pas été enregistrée.','var(--orange)'); return; }
+  _caffTsNeuf=_ts;
   toast(name+' ajouté ✓');
   // `_fjDate` EN PREMIER ARGUMENT. Laissé à undefined, _renderNutriContent
   // retombait sur _renderFjDaySummary(aujourd’hui) — qui ÉCRIT `_fjDate` au
