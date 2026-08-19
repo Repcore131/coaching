@@ -610,6 +610,12 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
    visuel qu'un chiffre, alors qu'il ne dit rien. Elle perd son relief et
    descend à 55 % — elle reste lisible, elle cesse d'appeler. */
 .metric-box[data-vide]{box-shadow:0 4px 10px rgba(0,0,0,.45);opacity:.55}
+/* QUATRE BOITES NE TIENNENT PAS SUR UNE LIGNE DE TELEPHONE. A trois elles
+   passent, c est pourquoi le repli existant vise 360 px ; a quatre, chacune
+   tombe sous 70 px et le chiffre se casse avant son libelle. En dessous de
+   480 px elles passent donc en deux colonnes de deux. */
+.metric-row-4{display:flex;gap:10px}
+@media (max-width:480px){.metric-row-4{display:grid;grid-template-columns:1fr 1fr;gap:10px}}
 .metric-val{font-size:var(--fs-2xl);font-family:var(--pile-titre);letter-spacing:0;line-height:1}
 /* DES CHIFFRES QUI NE DANSENT PAS. Mesure en Montserrat a 40 px : « 1111 »
    fait 57,8 px la ou « 0000 » en fait 105,9 — le 1 est presque deux fois plus
@@ -33219,7 +33225,7 @@ function showProgressTab(tab,btn){
     let _lst=[];
     try{ _lst=_listeEtats(currentUser); }catch(e){ _lst=[]; }
     const _jug=_lst.filter(x=>x.etat!=='insuffisant');
-    c.innerHTML=`<div style="display:flex;gap:10px;margin-bottom:16px">
+    c.innerHTML=`<div class="metric-row-4" style="margin-bottom:16px">
       <div class="metric-box"><div class="metric-val">${ss.length}</div><div class="metric-label">Total</div></div>
       <div class="metric-box"><div class="metric-val">${streakSemaines(currentUser)}</div><div class="metric-label">Semaines</div></div>
         <div class="metric-box">${htmlTauxCompletion(currentUser,false)}</div>
