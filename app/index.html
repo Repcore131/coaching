@@ -1474,9 +1474,13 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 .emo-opt.sel .emo .emo-dot{fill:var(--eo)}
 .emo-opt.sel .emo-lbl{color:var(--eo);--halo-c:var(--eo-glow);text-shadow:var(--halo-1)}
 /* Badge record animé (fin de séance) — médaillon */
-.wd-badge{display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 0 2px;animation:wdBadgePop var(--t-4) var(--c-snap) both}
-.wd-badge-medal{position:relative;width:138px;height:138px;border-radius:var(--r-full);flex-shrink:0;animation:wdMedalSwing var(--t-boucle) var(--c-out) var(--t-4) infinite,wdBadgeGlow var(--t-boucle) var(--c-out) var(--t-4) infinite}
-.wd-badge-medal::after{content:'';position:absolute;inset:0;border-radius:var(--r-full);background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.22) 48%,transparent 58%);background-size:280% 100%;animation:wdShine var(--t-boucle) linear .9s infinite}
+/* 260 ms de retard : le medaillon arrive DANS l'obscurite qui suit le flash,
+   pas pendant. `both` le garde invisible pendant le delai, il ne clignote pas.
+   Le reflet et la boucle du medaillon suivent le meme decalage, sinon ils
+   partiraient avant que le medaillon existe. */
+.wd-badge{display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 0 2px;animation:wdBadgePop var(--t-4) var(--c-snap) 260ms both}
+.wd-badge-medal{position:relative;width:138px;height:138px;border-radius:var(--r-full);flex-shrink:0;animation:wdMedalSwing var(--t-boucle) var(--c-out) calc(var(--t-4) + 260ms) infinite,wdBadgeGlow var(--t-boucle) var(--c-out) calc(var(--t-4) + 260ms) infinite}
+.wd-badge-medal::after{content:'';position:absolute;inset:0;border-radius:var(--r-full);background:linear-gradient(115deg,transparent 38%,rgba(255,255,255,.22) 48%,transparent 58%);background-size:280% 100%;animation:wdShine var(--t-boucle) linear 1.16s infinite}
 @keyframes wdBadgePop{0%{transform:scale(.4);opacity:0}65%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
 @keyframes wdBadgeGlow{0%,100%{filter:drop-shadow(0 0 8px rgba(224,32,32,.35))}50%{filter:drop-shadow(0 0 22px rgba(224,32,32,.65))}}
 @keyframes wdMedalSwing{0%,100%{transform:rotate(0deg)}18%{transform:rotate(-6deg)}38%{transform:rotate(5deg)}58%{transform:rotate(-2.5deg)}78%{transform:rotate(1.5deg)}}
@@ -1678,6 +1682,12 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
 .arc-point{position:absolute;top:1.5px;left:50%;width:5px;height:5px;margin-left:-2.5px;
   border-radius:var(--r-full)}
 @keyframes arcRonde{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+/* L'ANNEAU BALAIE AU LIEU D'AVANCER PAR CRANS. stroke-dashoffset est un cout
+   justifie et borne : un seul <circle> de 76x76 px, et c'est la seule
+   propriete qui rende un balayage circulaire — la meme exception que celle
+   deja accordee a svg.arc-courbe. Les 1000 ms sont la periode du tick, pas
+   un cran de mouvement : elles doivent lui rester egales. */
+#rep-arc{transition:stroke-dashoffset 1000ms linear,stroke var(--t-3) var(--c-out)}
 
 /* ANIMATION 7 — l'arc qui passe d'un onglet à l'autre. Un trait de 2 px à
    l'aplomb du liseré de l'onglet actif, qui se DÉPLACE au lieu de s'éteindre
@@ -1755,7 +1765,8 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
   .fx-loop,.fx-loop::after,.fx-loop::before,
   .wd-badge-medal::after,.skeleton::after{animation:none!important}
   /* État final propre pour les éléments dont l'animation portait la mise en forme */
-  .wd-badge{opacity:1!important;transform:none!important}
+  /* Le delai de 260 ms laisserait le badge invisible : on coupe l'animation. */
+  .wd-badge{opacity:1!important;transform:none!important;animation:none!important}
   .wd-badge-medal{transform:none!important;filter:drop-shadow(0 0 12px rgba(224,32,32,.45))!important}
   .rc-blink{opacity:1!important}
   .fj-entry.fj-neuf,.caff-neuf{animation:none!important}
@@ -1809,6 +1820,7 @@ button[onclick*="?.remove()"]:empty::before{content:'✕'}
      d'affichage, là où son absence ne se remarque même pas. L'anneau lui-même
      reste : il ne bouge pas, il informe. */
   .arc-ronde{display:none!important}
+  #rep-arc{transition:none!important}
   /* La barre de progression garde sa valeur, elle perd son glissement. */
   .progress-fill{transition:none!important}
   /* Les feuilles : le voile garde un fondu, ramené aux 120 ms de la variante
@@ -20175,6 +20187,7 @@ function demarrerRepos(sec,lib){
   woState.reposTotal=sec;
   woState.reposLib=lib||'';
   woState.reposVibre=false;
+  _reposDernierBat=null;
   _lancerTickRepos();
   _peindreRepos();
   woPersist();
@@ -20183,6 +20196,7 @@ function demarrerRepos(sec,lib){
 function annulerRepos(){
   if(typeof woState==='undefined'||!woState) return;
   woState.reposFin=null; woState.reposTotal=null; woState.reposLib=''; woState.reposVibre=false;
+  _reposDernierBat=null;
   if(_reposTick){ clearInterval(_reposTick); _reposTick=null; }
   _peindreRepos();
   woPersist();
@@ -20194,12 +20208,95 @@ function ajusterRepos(delta){
   // Retirer du temps peut mettre l'échéance dans le passé : c'est légitime,
   // le dépassement prend le relais.
   if(delta>0) woState.reposVibre=false;
+  _reposDernierBat=null;
   _peindreRepos();
   woPersist();
 }
 function _lancerTickRepos(){
   if(_reposTick) clearInterval(_reposTick);
   _reposTick=setInterval(_peindreRepos,1000);
+}
+// ── LE BANDEAU DE REPOS ───────────────────────────────────────────
+// LA STRUCTURE EST BATIE UNE FOIS, le tick ne met plus a jour que quatre
+// choses. Auparavant _peindreRepos reecrivait 2,6 ko d'innerHTML CHAQUE
+// SECONDE — deux cercles SVG, quatre boutons, deux icones — soit jusqu'a 210
+// reconstructions par repos et vingt-cinq repos par seance : un parse HTML,
+// une mise en page et une peinture par seconde pendant trois minutes, sur un
+// Android d'entree de gamme. L'anneau avancait par crans d'une seconde parce
+// qu'aucune transition ne survit a un noeud detruit, et tout l'artifice du
+// animation-delay negatif n'existait que pour rattraper cette destruction.
+// Il disparait avec elle.
+let _reposVisible=false;
+// La seconde deja battue. _peindreRepos est aussi rappelee par
+// visibilitychange et par ajusterRepos : sans ce drapeau, un meme tick
+// battrait deux fois.
+let _reposDernierBat=null;
+// Le bouton son n'est reecrit que si son etat a change depuis le dernier tick.
+let _reposSonRendu=null;
+const REPOS_R=34, REPOS_C=2*Math.PI*34;
+function _monterRepos(z){
+  const _sonOn=!!(currentUser&&currentUser.sonRepos);
+  _reposSonRendu=_sonOn;
+  z.innerHTML=`<div id="rep-bandeau" style="background:#101010;border-top:1px solid #2a0000;padding:10px 14px 12px">
+    <!-- RANGEE 1 : l'anneau et ce qu'il mesure. Le libellé ne tronque plus —
+         il a toute la largeur restante, et l'anneau ne rétrécit pas. -->
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="position:relative;width:76px;height:76px;margin-top:4px;flex-shrink:0">
+        <svg viewBox="0 0 76 76" width="76" height="76" style="display:block;transform:rotate(-90deg)" aria-hidden="true">
+          <circle cx="38" cy="38" r="${REPOS_R}" fill="none" stroke="var(--surface-2)" stroke-width="5"></circle>
+          <circle id="rep-arc" cx="38" cy="38" r="${REPOS_R}" fill="none" stroke="var(--red)" stroke-width="5" stroke-linecap="round"
+            stroke-dasharray="${REPOS_C.toFixed(2)}" stroke-dashoffset="${REPOS_C.toFixed(2)}"></circle>
+        </svg>
+        <div id="rep-ronde" class="arc-ronde fx-loop" aria-hidden="true">
+          <span id="rep-point" class="arc-point" style="background:var(--red);box-shadow:0 0 6px var(--red)"></span>
+        </div>
+        <div id="rep-num" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--pile-titre);font-size:30px;letter-spacing:1px;color:var(--text);line-height:1;font-variant-numeric:tabular-nums">0:00</div>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div id="rep-lbl" style="font-size:var(--fs-sm);letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);font-weight:800">
+          <!-- Sans le nom de l'exercice : il était tronqué faute de place
+               et redondant avec l'écran, qui l'affiche en entier juste
+               au-dessus. Le bandeau n'a qu'une chose à dire : le temps. -->
+          Temps de récup
+        </div>
+      </div>
+    </div>
+    <!-- RANGEE 2 : les commandes, sur leur propre ligne. Elles se disputaient
+         la largeur avec le libellé et tombaient toutes sous 44 px de haut. -->
+    <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+      <button onclick="ajusterRepos(-15)" class="hit44" style="flex:0 0 56px;height:56px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);color:var(--text-strong);font-size:var(--fs-lg);font-weight:800;cursor:pointer">−15</button>
+      <button onclick="ajusterRepos(15)" class="hit44" style="flex:0 0 56px;height:56px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);color:var(--text-strong);font-size:var(--fs-lg);font-weight:800;cursor:pointer">+15</button>
+      <button onclick="annulerRepos()" class="hit44" style="flex:1;min-height:48px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-sm);font-weight:800;letter-spacing:.5px;cursor:pointer">Passer</button>
+      <!-- LE SON, COUPABLE SUR PLACE. Le réglage se pose une fois ; ce bouton
+           sert au moment où le son dérange — quelqu'un à côté, ou les
+           écouteurs qu'on vient de retirer. -->
+      <button id="rep-son" onclick="basculerSonRepos()" class="hit44" aria-pressed="${_sonOn?'true':'false'}"
+        aria-label="${_sonOn?'Couper le son de fin de repos':'Activer le son de fin de repos'}"
+        title="${_sonOn?'Son de fin de repos activé':'Son de fin de repos coupé'}"
+        style="flex:0 0 48px;height:48px;display:flex;align-items:center;justify-content:center;
+        background:${_sonOn?'rgba(224,32,32,.12)':'none'};border:1px solid ${_sonOn?'rgba(224,32,32,.5)':'var(--border)'};
+        border-radius:var(--r-2);color:${_sonOn?'var(--red-light)':'var(--sub)'};cursor:pointer">${_icoSon(_sonOn,15)}</button>
+    </div>
+  </div>`;
+  // La barre de 4 px qui vivait ici a disparu AVEC son remplaçant, pas avant :
+  // l'anneau porte exactement la même information — la part de repos écoulée —
+  // et la porter deux fois aurait été la porter à moitié. Le décompte a suivi
+  // le trait à l'intérieur de l'anneau : c'est la même donnée, au même endroit,
+  // et la place ainsi rendue absorbe la hauteur du cercle.
+}
+// LA SORTIE, puis le retrait. pointer-events coupes TOUT DE SUITE : les boutons
+// ne doivent plus rien intercepter pendant les 140 ms — meme discipline que
+// .arc-sortie. Jamais plus lente que l'entree.
+function _reposRetirer(z){
+  const c=z.firstElementChild;
+  _reposDernierBat=null;
+  const net=()=>{ try{ z.style.display='none'; z.innerHTML=''; z.style.pointerEvents=''; _reposVisible=false; _reposSonRendu=null; }catch(e){} };
+  if(!c||arcReduit()||!c.animate){ net(); return; }
+  z.style.pointerEvents='none';
+  const a=_animer(c,[{transform:'translateY(0)',opacity:1},{transform:'translateY(8px)',opacity:0}],
+    {duration:ARC.strike,easing:ARC.charge,fill:'none'});
+  if(!a){ net(); return; }
+  a.addEventListener('finish',net); a.addEventListener('cancel',net);
 }
 function _peindreRepos(){
   const z=document.getElementById('wo-repos');
@@ -20208,7 +20305,7 @@ function _peindreRepos(){
   if(reste==null||reste<-REPOS_DEPASSEMENT){
     if(_reposTick&&(reste==null||reste<-REPOS_DEPASSEMENT)){ clearInterval(_reposTick); _reposTick=null; }
     if(reste!=null&&woState) { woState.reposFin=null; woState.reposTotal=null; }
-    z.style.display='none'; z.innerHTML='';
+    if(_reposVisible) _reposRetirer(z); else { z.style.display='none'; z.innerHTML=''; }
     return;
   }
   const fini=reste<=0;
@@ -20228,8 +20325,28 @@ function _peindreRepos(){
     try{ setTimeout(()=>{ const b=document.getElementById('wo-repos');
       if(b&&b.firstElementChild) arcTraversee(b.firstElementChild,{duree:ARC.strike}); },0); }catch(e){}
   }
-  // Lu une seule fois : le gabarit ci-dessous le consulte trois fois.
-  const _sonOn=!!(currentUser&&currentUser.sonRepos);
+  z.style.display='block';
+  z.style.pointerEvents='';
+  // LA STRUCTURE, UNE SEULE FOIS. Le tick ne touche plus qu'aux quatre valeurs.
+  let arc=document.getElementById('rep-arc');
+  if(!arc){ _monterRepos(z); arc=document.getElementById('rep-arc'); }
+  const num=document.getElementById('rep-num');
+  const lbl=document.getElementById('rep-lbl');
+  const ronde=document.getElementById('rep-ronde');
+  const point=document.getElementById('rep-point');
+  const bandeau=document.getElementById('rep-bandeau');
+  // L'ENTREE. La hauteur se reserve tout de suite — on ne masque jamais le
+  // contenu — et le CONTENU monte. Un drapeau, sinon l'animation rejouerait
+  // a chaque seconde.
+  if(!_reposVisible){
+    _reposVisible=true;
+    const c=z.firstElementChild;
+    if(c&&!arcReduit()&&c.animate){
+      _animer(c,[{transform:'translateY(14px)',opacity:0},{transform:'translateY(0)',opacity:1}],
+        {duration:180,easing:ARC.discharge,fill:'none'});
+      try{ arcTraversee(c,{duree:ARC.strike}); }catch(e){}
+    }
+  }
   const tot=woState.reposTotal||1;
   const pc=fini?100:Math.max(0,Math.min(100,(1-reste/tot)*100));
   // LE DECOMPTE EST BLANC, l anneau porte la couleur. Le chiffre etait rouge
@@ -20237,75 +20354,62 @@ function _peindreRepos(){
   // rouge — la couleur d alerte de l application — servait a un etat normal.
   // Vert a la fin : ce n est plus un decompte, c est un etat.
   const coul=fini?'var(--green)':'var(--text)';
-  // ── ANIMATION 4 : L'ANNEAU ET SON POINT DE COURANT ──────────────────────
-  // LES DIX DERNIÈRES SECONDES changent deux choses à la fois : la teinte passe
-  // au violet — la couleur d'ANTICIPATION du système, celle de la charge — et
-  // la cadence du point double. Deux signaux plutôt qu'un, parce que l'athlète
-  // ne regarde pas son téléphone : il doit pouvoir attraper l'information du
-  // coin de l'œil, et une teinte seule ne s'attrape pas.
-  const AVANT_FIN=10;
-  const bientot=!fini&&reste<=AVANT_FIN;
+  // ── ANIMATION 4 : L'ANNEAU ET SON POINT DE COURANT ────────────────────
   // L ANNEAU EST ROUGE. Les dix dernieres secondes le font passer au BLANC,
   // pas au violet : le decompte etant desormais blanc, le violet aurait
   // introduit une troisieme teinte sans rien dire de plus. Les DEUX signaux
   // de la fin sont conserves — la teinte change ET la cadence du point
   // double — parce que l athlete ne regarde pas son telephone et qu une
   // teinte seule ne s attrape pas du coin de l oeil.
+  const AVANT_FIN=10;
+  const bientot=!fini&&reste<=AVANT_FIN;
   const anneau=fini?'var(--green)':(bientot?'var(--text)':'var(--red)');
   const cad=bientot?ARC.ambient/2:ARC.ambient;
-  // Le délai NÉGATIF est ce qui rend la boucle continue alors que ce bandeau
-  // est reconstruit chaque seconde : le nœud qui vient de naître reprend la
-  // rotation là où son prédécesseur l'a laissée, au lieu de repartir de zéro.
-  const ecoule=Math.max(0,(tot-reste))*1000;
-  const R=34, C=2*Math.PI*R;
-  const anneauHtml=`<div style="position:relative;width:76px;height:76px;margin-top:4px;flex-shrink:0">
-      <svg viewBox="0 0 76 76" width="76" height="76" style="display:block;transform:rotate(-90deg)" aria-hidden="true">
-        <circle cx="38" cy="38" r="${R}" fill="none" stroke="var(--surface-2)" stroke-width="5"></circle>
-        <circle cx="38" cy="38" r="${R}" fill="none" stroke="${anneau}" stroke-width="5" stroke-linecap="round"
-          stroke-dasharray="${C.toFixed(2)}" stroke-dashoffset="${(C*pc/100).toFixed(2)}"></circle>
-      </svg>
-      <div class="arc-ronde fx-loop" style="animation-duration:${cad}ms;animation-delay:-${(ecoule%cad).toFixed(0)}ms" aria-hidden="true">
-        <span class="arc-point" style="background:${anneau};box-shadow:0 0 6px ${anneau}"></span>
-      </div>
-      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--pile-titre);font-size:30px;letter-spacing:1px;color:${coul};line-height:1">${fini?'+':''}${_fmtRepos(reste)}</div>
-    </div>`;
-  z.style.display='block';
-  z.innerHTML=`<div style="background:#101010;border-top:1px solid ${fini?'#14532d':'#2a0000'};padding:10px 14px 12px">
-    <!-- RANGEE 1 : l'anneau et ce qu'il mesure. Le libellé ne tronque plus —
-         il a toute la largeur restante, et l'anneau ne rétrécit pas. -->
-    <div style="display:flex;align-items:center;gap:12px">
-      ${anneauHtml}
-      <div style="flex:1;min-width:0">
-        <div style="font-size:var(--fs-sm);letter-spacing:1.5px;text-transform:uppercase;color:var(--sub);font-weight:800">
-          <!-- Sans le nom de l'exercice : il était tronqué faute de place
-               et redondant avec l'écran, qui l'affiche en entier juste
-               au-dessus. Le bandeau n'a qu'une chose à dire : le temps. -->
-          ${fini?'Récup terminée':'Temps de récup'}
-        </div>
-      </div>
-    </div>
-    <!-- RANGEE 2 : les commandes, sur leur propre ligne. Elles se disputaient
-         la largeur avec le libellé et tombaient toutes sous 44 px de haut. -->
-    <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
-      <button onclick="ajusterRepos(-15)" class="hit44" style="flex:0 0 56px;height:56px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);color:var(--text-strong);font-size:var(--fs-lg);font-weight:800;cursor:pointer">−15</button>
-      <button onclick="ajusterRepos(15)" class="hit44" style="flex:0 0 56px;height:56px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);color:var(--text-strong);font-size:var(--fs-lg);font-weight:800;cursor:pointer">+15</button>
-      <button onclick="annulerRepos()" class="hit44" style="flex:1;min-height:48px;background:none;border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-sm);font-weight:800;letter-spacing:.5px;cursor:pointer">Passer</button>
-      <!-- LE SON, COUPABLE SUR PLACE. Le réglage se pose une fois ; ce bouton
-           sert au moment où le son dérange — quelqu'un à côté, ou les
-           écouteurs qu'on vient de retirer. -->
-      <button onclick="basculerSonRepos()" class="hit44" aria-pressed="${_sonOn?'true':'false'}"
-        aria-label="${_sonOn?'Couper le son de fin de repos':'Activer le son de fin de repos'}"
-        title="${_sonOn?'Son de fin de repos activé':'Son de fin de repos coupé'}"
-        style="flex:0 0 48px;height:48px;display:flex;align-items:center;justify-content:center;
-        background:${_sonOn?'rgba(224,32,32,.12)':'none'};border:1px solid ${_sonOn?'rgba(224,32,32,.5)':'var(--border)'};
-        border-radius:var(--r-2);color:${_sonOn?'var(--red-light)':'var(--sub)'};cursor:pointer">${_icoSon(_sonOn,15)}</button>
-    </div>
-  </div>`;
-  // La barre de 4 px qui vivait ici a disparu AVEC son remplaçant, pas avant :
-  // l'anneau porte exactement la même information — la part de repos écoulée —
-  // et la porter deux fois aurait été la porter à moitié. Le décompte a suivi
-  // le trait à l'intérieur de l'anneau : c'est la même donnée, au même endroit,
-  // et la place ainsi rendue absorbe la hauteur du cercle.
+  if(arc){
+    arc.style.strokeDashoffset=(REPOS_C*(100-pc)/100).toFixed(2);
+    arc.style.stroke=anneau;
+  }
+  if(point){ point.style.background=anneau; point.style.boxShadow='0 0 6px '+anneau; }
+  // Le noeud n'etant plus detruit, la boucle continue d'elle-meme : le delai
+  // negatif qui rattrapait la destruction n'a plus de raison d'etre.
+  if(ronde&&ronde.style.animationDuration!==cad+'ms') ronde.style.animationDuration=cad+'ms';
+  if(num){
+    num.textContent=(fini?'+':'')+_fmtRepos(reste);
+    num.style.color=coul;
+  }
+  if(lbl) lbl.textContent=fini?'Récup terminée':'Temps de récup';
+  if(bandeau) bandeau.style.borderTopColor=fini?'#14532d':'#2a0000';
+  // LE DECOMPTE BAT LES CINQ DERNIERES SECONDES. Un battement par tick, jamais
+  // deux. A partir de 3 s une haptique legere tombe sur le meme battement :
+  // trois pulsations courtes qui PREPARENT la vibration d'avertissement de
+  // l'echeance sans jamais lui ressembler. Le battement visuel commence a 5 s
+  // et non a 3 : sur iPhone, ou navigator.vibrate n'existe pas, il porte seul
+  // l'information et il faut deux battements d'avance pour qu'on le remarque.
+  if(!fini&&reste>0&&reste<=5&&reste!==_reposDernierBat){
+    _reposDernierBat=reste;
+    if(num&&!arcReduit()&&num.animate){
+      _animer(num,[{transform:'scale(1)'},{transform:'scale(1.10)',offset:.38},{transform:'scale(1)'}],
+        {duration:220,easing:ARC.snap,fill:'none'});
+    }
+    // L'HAPTIQUE SURVIT a prefers-reduced-motion : c'est le mouvement a
+    // l'ecran qui declenche nausees et migraines, pas une pulsation dans la paume.
+    if(reste<=3) try{ arcHaptique('legere'); }catch(e){}
+  }
+  // Le bouton son n'est reecrit que si son etat a change.
+  const _sonOn=!!(currentUser&&currentUser.sonRepos);
+  if(_sonOn!==_reposSonRendu){
+    _reposSonRendu=_sonOn;
+    const b=document.getElementById('rep-son');
+    if(b){
+      b.setAttribute('aria-pressed',_sonOn?'true':'false');
+      b.setAttribute('aria-label',_sonOn?'Couper le son de fin de repos':'Activer le son de fin de repos');
+      b.setAttribute('title',_sonOn?'Son de fin de repos activé':'Son de fin de repos coupé');
+      b.style.background=_sonOn?'rgba(224,32,32,.12)':'none';
+      b.style.borderColor=_sonOn?'rgba(224,32,32,.5)':'var(--border)';
+      b.style.color=_sonOn?'var(--red-light)':'var(--sub)';
+      b.innerHTML=_icoSon(_sonOn,15);
+    }
+  }
 }
 // Aucun son par défaut : une salle est bruyante et l'athlète a souvent ses
 // écouteurs. Le réglage existe, il est éteint.
@@ -23046,6 +23150,11 @@ function _apSeriesReps(ex){
   return (n?n:'?')+(r?(' × '+r):'');
 }
 let _apIdx=null;
+// _renderApercu est appelee DEUX FOIS — une fois par ouvrirApercuSeance, une
+// seconde apres la resolution de chargerIndexIllustrations. Une animation CSS
+// rejouerait donc quelques centaines de ms plus tard, sous les yeux de
+// l'athlete. D'ou le drapeau.
+let _apAnime=false;
 // L'aperçu remplace le lancement direct : startWorkoutSession y passe.
 function ouvrirApercuSeance(idx){
   const cfg=currentUser.sessions_config||initSessionsConfig();
@@ -23054,6 +23163,7 @@ function ouvrirApercuSeance(idx){
     toast('Aucun exercice dans cette séance.','var(--red)'); return false;
   }
   _apIdx=idx;
+  _apAnime=false;
   go('s-seance-apercu');
   _renderApercu();
   // Les illustrations arrivent après le premier rendu : l'écran s'affiche
@@ -23061,7 +23171,7 @@ function ouvrirApercuSeance(idx){
   chargerIndexIllustrations().then(()=>{ if(_apIdx===idx) _renderApercu(); });
   return true;
 }
-function fermerApercu(){ _apIdx=null; go('s-client-home'); }
+function fermerApercu(){ _apIdx=null; _apAnime=false; go('s-client-home'); }
 function commencerDepuisApercu(){
   const idx=_apIdx;
   if(idx==null) return false;
@@ -23069,6 +23179,15 @@ function commencerDepuisApercu(){
   const sess=cfg[idx];
   if(!sess) return false;
   _apIdx=null;
+  _apAnime=false;
+  // LE SEUIL. arcDecharge peint sur #arc-calque (position:fixed,
+  // pointer-events:none) : le halo survit au changement d'ecran et n'ajoute pas
+  // une milliseconde au lancement — demarrerSeance part immediatement apres.
+  // C'est la regle 7 : l'animation cede, jamais l'action.
+  try{
+    const b=document.querySelector('#s-seance-apercu .btn-red');
+    if(b) arcDecharge(b,{haptique:'moyenne',couleur:'var(--arc-current)'});
+  }catch(e){}
   demarrerSeance(sess,idx);
   return true;
 }
@@ -23170,6 +23289,20 @@ function _renderApercu(){
       text-transform:uppercase;margin-bottom:4px">Mot de ton coach</div>
       <div style="font-size:var(--fs-sm);color:#bbb;line-height:1.65">${escapeHtml(notes)}</div></div>`:'')
     +(sess.exercises||[]).map(_apLigne).join('');
+  // LES LIGNES ENTRENT EN CASCADE, une seule fois par ouverture. Plafonnee a
+  // six : une seance de quatorze exercices ne doit pas mettre 760 ms a devenir
+  // lisible. fill:'backwards' et non 'both' — les lignes sont invisibles
+  // pendant leur delai mais reprennent leur style de feuille a la fin, sans
+  // quoi un <details> qui s'ouvre garderait un transform fige.
+  if(!_apAnime){
+    _apAnime=true;
+    if(typeof arcReduit==='function'&&!arcReduit()){
+      Array.prototype.slice.call(z.querySelectorAll(':scope > details')).forEach((el,i)=>{
+        _animer(el,[{transform:'translateY(10px)',opacity:0},{transform:'translateY(0)',opacity:1}],
+          {duration:200,delay:Math.min(i,5)*40,easing:ARC.discharge,fill:'backwards'});
+      });
+    }
+  }
   return true;
 }
 function launchWorkout(sessConfig,slotIdx){
@@ -23883,8 +24016,12 @@ function renderWoEx(){
   const blocs=groupe.map(i=>_blocExo(i,estSS));
   const auMoinsUnMuscu=groupe.some(i=>!isCardio(woState.exercises[i]));
 
+  // SANS anim-in : le fondu vertical de 320 ms recouvrait entierement le
+  // glissement horizontal de _arcGlissement. L'athlete voyait un contenu qui
+  // apparait en montant, pas un contenu qui arrive par le cote. La classe
+  // reste employee par cinq autres ecrans, elle n'est pas touchee ailleurs.
   document.getElementById('wo-content').innerHTML=`
-    <div class="anim-in">
+    <div>
       ${(()=>{ try{ return htmlRepriseSeance(currentUser); }catch(e){ return ''; } })()}
       ${woState.deload?`<div style="display:flex;align-items:center;gap:9px;background:var(--info-bg);border:1px solid var(--info-border);border-radius:var(--r-3);padding:10px 13px;margin-bottom:12px">
         <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:1.5px;color:var(--info);flex-shrink:0">DÉCHARGE</span>
@@ -24249,7 +24386,7 @@ function renderSets(ex,data,idx){
       const done=s.done;
       return `<tr class="${done?'done':''}">
         <td style="font-weight:700">${i+1}</td>
-        <td><button onclick="woState.sessionData[${idx}].sets[${i}].done=!woState.sessionData[${idx}].sets[${i}].done;renderSets(woState.exercises[${idx}],woState.sessionData[${idx}],${idx})"
+        <td><button data-arc="off" onclick="toggleSet(${i},${idx})"
           style="width:40px;height:40px;border-radius:var(--r-full);border:2px solid ${done?'var(--text)':'var(--border)'};background:${done?'#1a1a1a':'transparent'};color:var(--sub);font-size:var(--fs-lg);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;${done?'box-shadow:0 0 10px rgba(255,255,255,.4)':''}">
           ${done?'<svg viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="19" height="19" style="filter:drop-shadow(0 0 5px rgba(255,255,255,.9))"><polyline points="4.5 12.5 10 18 19.5 7"/></svg>':'○'}
         </button></td>
@@ -24657,6 +24794,41 @@ function _arcSerieValidee(idx,i){
     // de la ligne. C'est lui qui compte, et c'est vers lui que l'œil revient.
     // Pas de flash ni de halo dessus — l'arc vient de passer, en rajouter
     // brouillerait le seul moment fort de la séance.
+    // LA COCHE SE TRACE, de sa pointe a sa branche longue, dans le sillage de
+    // l'arc. Un seul <polyline> de 17x17 px : stroke-dashoffset est ici un cout
+    // borne et c'est la seule propriete qui rende un trace — meme exception que
+    // svg.arc-courbe. Le nettoyage du strokeDasharray a la fin est obligatoire :
+    // sans lui la coche resterait pointillee le jour ou quelqu'un change le trace.
+    // La garde !arcReduit() ne peut PAS etre remplacee par une regle CSS
+    // animation:none — la coche resterait figee a strokeDashoffset:L, invisible.
+    const coche=ligne.querySelector('button[data-arc="off"] polyline');
+    if(coche&&coche.getTotalLength&&coche.animate&&!arcReduit()){
+      let L=0; try{ L=coche.getTotalLength(); }catch(e){}
+      if(L>0){
+        coche.style.strokeDasharray=L;
+        const ac=_animer(coche,[{strokeDashoffset:L},{strokeDashoffset:0}],
+          {duration:160,easing:ARC.discharge,fill:'none'});
+        const net=()=>{ try{ coche.style.strokeDasharray=''; }catch(e){} };
+        if(ac){ ac.addEventListener('finish',net); ac.addEventListener('cancel',net); }
+        else net();
+      }
+    }
+    // LE MOT RECORD SE POSE AU LIEU D'ETRE DEJA LA. toggleSet appelle
+    // renderSets PUIS _arcSerieValidee : le badge est donc deja ecrit dans la
+    // ligne neuve quand l'arc magenta commence a la traverser — le verdict
+    // s'affichait avant l'evenement qui le produit. Il demarre a t=140 ms,
+    // quand l'arc a fini de traverser.
+    // fill:'backwards' et non 'both' : invisible pendant le delai, mais il
+    // reprend son style de feuille a la fin — un forwards figerait un transform
+    // sur un noeud que le prochain renderSets detruira.
+    if(rec&&!arcReduit()){
+      const b=ligne.querySelector('[title="Nouveau record"]');
+      if(b&&b.animate) _animer(b,
+        [{transform:'scale(.4)',opacity:0},
+         {transform:'scale(1.14)',opacity:1,offset:.62},
+         {transform:'scale(1)',opacity:1}],
+        {duration:ARC.release,delay:ARC.strike,easing:'cubic-bezier(.2,1.5,.4,1)',fill:'backwards'});
+    }
     const compteur=ligne.firstElementChild;
     if(compteur) arcDecharge(compteur,{flash:false,halo:false,impact:rec?1.22:undefined});
   }catch(e){}
@@ -24693,10 +24865,13 @@ function _arcGlissement(dir){
     if(arcReduit())
       return z.animate([{opacity:0.55},{opacity:1}],
         {duration:ARC.plat,easing:'linear',fill:'none'});
-    const d=(dir>0?1:-1)*ARC.translate;
+    // 180 ms et 28 px, et non plus 140 / 24 : le glissement n'est plus double
+    // par le fondu de anim-in, il porte seul la phrase. Un fondu dirait
+    // « quelque chose a change » quand le glissement dit « tu avances ».
+    const d=(dir>0?1:-1)*28;
     return z.animate(
       [{transform:'translateX('+d+'px)'},{transform:'translateX(0)'}],
-      {duration:ARC.strike,easing:ARC.discharge,fill:'none'});
+      {duration:180,easing:ARC.discharge,fill:'none'});
   }catch(e){ return null; }
 }
 function finishWorkout(incomplete=false){
@@ -24842,7 +25017,10 @@ function finishWorkout(incomplete=false){
   const _wdBil=document.getElementById('wd-first-bilan-card');
   if(_wdBil) _wdBil.style.display=(currentUser.bilans||[]).some(b=>b.type==='depart')?'none':'block';
   go('s-workout-done');
-  _feterFinSeance();
+  // Les trois textContent ci-dessus restent le repli : sous « animations
+  // reduites » _feterFinSeance sort en premiere ligne et ils sont alors la
+  // seule ecriture.
+  _feterFinSeance({mins,sets,setsPlanned,vol,records:(_cmp&&_cmp.records&&_cmp.records.length)|0});
 }
 
 // LA CELEBRATION DE FIN DE SEANCE.
@@ -24859,20 +25037,50 @@ function finishWorkout(incomplete=false){
 // a ramene ces deux-la a --z-layer (1800) et --z-toast (2000). A 8500 le voile
 // serait passe AU-DESSUS des deux, exactement l'inverse de l'intention. Il
 // prend donc --z-modal : au-dessus du contenu, sous le calque et sous le toast.
-function _feterFinSeance(){
+function _feterFinSeance(o){
+  o=o||{};
   try{
     if(typeof arcReduit==='function'&&arcReduit()) return;
+    // UN RECORD NE SE FETE PAS COMME UNE SEANCE. Sans record le flash tombe a
+    // 320 ms / pic 0,28 — assez pour ponctuer, plus assez pour pretendre. Avec
+    // record il reste blanc a 0,55 puis S'ENCHAINE sur un halo magenta pose
+    // sur le medaillon a t=260 ms : le rare cesse d'etre noye dans la fanfare
+    // ordinaire. --arc-peak est RESERVE au record, et n'apparait nulle part
+    // ailleurs sur cet ecran.
+    const rec=(o.records|0)>0;
     const v=document.createElement('div');
     v.style.cssText='position:fixed;inset:0;background:#fff;pointer-events:none;z-index:var(--z-modal);opacity:0';
     document.body.appendChild(v);
-    const a=v.animate([{opacity:0},{opacity:.55,offset:.18},{opacity:0}],
-      {duration:450,easing:'cubic-bezier(0.05,0.70,0.10,1.00)',fill:'none'});
+    const a=v.animate(
+      rec?[{opacity:0},{opacity:.55,offset:.14},{opacity:0}]
+         :[{opacity:0},{opacity:.28,offset:.18},{opacity:0}],
+      {duration:rec?520:320,easing:'cubic-bezier(0.05,0.70,0.10,1.00)',fill:'none'});
     a.addEventListener('finish',()=>v.remove());
     a.addEventListener('cancel',()=>v.remove());
     document.querySelectorAll('#s-workout-done .stat-tile').forEach((el,i)=>{
-      el.style.animation='wFadeUp 0.6s var(--c-out) '+(0.25+i*0.09)+'s both';
+      el.style.animation='wFadeUp var(--t-4) var(--c-out) '+(0.25+i*0.09)+'s both';
     });
-    if(typeof arcHaptique==='function') arcHaptique('succes');
+    // LES TROIS CHIFFRES MONTENT, chacun sur le delai de sa propre tuile. Le
+    // plus gros nombre a la plus longue montee. tabular-nums n'est PAS
+    // optionnel : sans lui, le passage de 3 a 4 chiffres change la largeur du
+    // texte a chaque frame et fait sauter les deux tuiles voisines.
+    ['wd-time','wd-sets','wd-vol'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el) el.style.fontVariantNumeric='tabular-nums';
+    });
+    if(o.mins!=null) setTimeout(()=>arcChiffre('wd-time',0,o.mins,{duree:600,format:v=>Math.round(v)+'min'}),250);
+    if(o.sets!=null) setTimeout(()=>arcChiffre('wd-sets',0,o.sets,{duree:700,format:v=>fmtSeries(Math.round(v),o.setsPlanned)}),340);
+    if(o.vol!=null)  setTimeout(()=>arcChiffre('wd-vol',0,o.vol,{duree:900,format:v=>Math.round(v)+'kg'}),430);
+    if(rec){
+      // LE MEDAILLON ARRIVE DANS L'OBSCURITE QUI SUIT LE FLASH, pas pendant.
+      setTimeout(()=>{
+        try{
+          const m=document.querySelector('#s-workout-done .wd-badge-medal');
+          if(m) arcGlow(m,{couleur:'rgba(255,46,147,.55)',duree:ARC.afterglow,pic:.9});
+          if(typeof arcHaptique==='function') arcHaptique('succes');
+        }catch(e){}
+      },260);
+    }else if(typeof arcHaptique==='function') arcHaptique('succes');
   }catch(e){}
 }
 // ══════════════ DÉTECTION DE L'ABSENCE DE PROGRESSION ══════════════
