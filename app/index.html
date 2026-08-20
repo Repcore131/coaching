@@ -2044,6 +2044,119 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .sk-lbl{font-size:11px;font-weight:800;letter-spacing:2.1px;text-transform:uppercase;
   color:var(--text);line-height:1}
 
+/* ══ LE CHOIX DE LA SÉANCE ════════════════════════════════════════════════
+   Tout passait par des styles en ligne, réécrits à chaque ouverture. Les états
+   — survol, appui, focus — ne peuvent pas s'y exprimer, et c'est pour ça que
+   la liste était plate : rien ne répondait au doigt. */
+.sp-feuille{position:relative;overflow:hidden;width:100%;max-width:480px;
+  padding:16px 18px 24px;border-radius:22px 22px 0 0;
+  background:linear-gradient(180deg,#181818 0%,#111 45%,#0b0b0b 100%);
+  border-top:1px solid rgba(255,255,255,.10);
+  box-shadow:0 -20px 55px rgba(0,0,0,.62),inset 0 1px 0 rgba(255,255,255,.07);
+  animation:fadeIn var(--t-3) var(--c-out)}
+/* LA TEXTURE, la même diagonale que la bannière « séance du jour » : deux
+   surfaces du même produit doivent avoir le même grain. Elle est en
+   pseudo-élément et ne capte donc aucun clic. */
+.sp-feuille::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background:
+    radial-gradient(120% 70% at 50% 0%,rgba(224,32,32,.10),transparent 62%),
+    repeating-linear-gradient(-50deg,transparent,transparent 16px,
+      rgba(255,255,255,.017) 16px,rgba(255,255,255,.017) 17px)}
+.sp-poignee{display:block;width:40px;height:4px;border-radius:2px;margin:0 auto 14px;
+  background:rgba(255,255,255,.16)}
+.sp-tete{position:relative;display:flex;justify-content:space-between;
+  align-items:center;gap:10px;margin-bottom:14px;padding-bottom:12px;
+  border-bottom:1px solid rgba(255,255,255,.07)}
+.sp-tete h2{min-width:0}
+.sp-fermer{flex:0 0 auto;width:38px;height:38px;border-radius:50%;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:var(--sub);
+  background:linear-gradient(180deg,#161616,#0e0e0e);
+  border:1px solid var(--border);box-shadow:var(--e1);
+  transition:color var(--t-1) var(--c-out),border-color var(--t-1) var(--c-out)}
+/* La croix est un CARACTÈRE et non un tracé : la suite de tests cherche
+   nommément /[✕×]/ dans le texte de ce bouton. Un SVG aurait été plus net, mais
+   il aurait fallu retoucher l'assertion pour qu'elle passe — et une assertion
+   qu'on retouche pour qu'elle passe ne protège plus rien. */
+.sp-fermer{font-size:17px;line-height:1;font-family:Montserrat,sans-serif}
+.sp-fermer:hover{color:var(--text);border-color:rgba(224,32,32,.5)}
+.sp-fermer:active{transform:scale(var(--arc-scale-charge));
+  transition:transform var(--arc-attack) var(--arc-c-charge)}
+
+/* ── Une rangée ───────────────────────────────────────────────────────── */
+.sp-ligne{position:relative;overflow:hidden;display:flex;align-items:center;gap:12px;
+  padding:13px 14px;margin-bottom:10px;cursor:pointer;border-radius:var(--r-3);
+  background:linear-gradient(160deg,#1a1a1a,#121212 55%,#0d0d0d);
+  border:1px solid var(--border);
+  box-shadow:0 5px 16px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.055);
+  transition:border-color var(--t-1) var(--c-out),box-shadow var(--t-1) var(--c-out)}
+.sp-ligne::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(-50deg,transparent,transparent 14px,
+    rgba(255,255,255,.022) 14px,rgba(255,255,255,.022) 15px)}
+.sp-ligne>*{position:relative}
+.sp-ligne:hover{border-color:rgba(255,255,255,.18)}
+/* LE SCALE EST PERMIS ICI, contrairement à la carte Nutrition : aucune de ces
+   rangées ne porte de filtre, rien n'est donc à rastériser de nouveau. */
+.sp-ligne:active{transform:scale(var(--arc-scale-charge));
+  transition:transform var(--arc-attack) var(--arc-c-charge)}
+.sp-ligne:focus-visible{outline:2px solid rgba(224,32,32,.85);outline-offset:2px}
+
+/* ── Le jour courant ──────────────────────────────────────────────────── */
+/* Il gagne un LISERÉ, pas seulement une teinte : la couleur seule ne désigne
+   rien pour qui ne la perçoit pas, et un accent est un repère de forme. */
+.sp-auj{background:linear-gradient(160deg,#2b0505,#1a0202 55%,#120101);
+  border-color:rgba(224,32,32,.85);
+  box-shadow:0 6px 20px rgba(0,0,0,.5),0 0 22px rgba(224,32,32,.22),
+             inset 0 1px 0 rgba(255,190,190,.16)}
+.sp-auj::after{content:'';position:absolute;left:0;top:8px;bottom:8px;width:3px;
+  border-radius:0 2px 2px 0;background:linear-gradient(180deg,#ff5a5a,#8f0505);
+  box-shadow:0 0 10px rgba(224,32,32,.7)}
+.sp-auj .sp-jourlib{color:#ff8a8a}
+
+/* ── La pastille du jour ──────────────────────────────────────────────── */
+.sp-jour{flex:0 0 auto;width:50px;height:50px;border-radius:13px;
+  display:flex;align-items:center;justify-content:center;
+  font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:900;
+  letter-spacing:.5px;color:#fff;
+  background:linear-gradient(160deg,#f03b3b,#c00d0d 52%,#8b0404);
+  box-shadow:0 3px 9px rgba(0,0,0,.45),
+             inset 0 1px 0 rgba(255,210,210,.42),inset 0 -2px 6px rgba(0,0,0,.35)}
+/* Seule la pastille du jour courant rayonne : six halos rouges se disputeraient
+   l'attention avec le seul qui doive désigner quelque chose. */
+.sp-auj .sp-jour{box-shadow:0 3px 10px rgba(180,10,10,.5),0 0 16px rgba(224,32,32,.35),
+             inset 0 1px 0 rgba(255,210,210,.5),inset 0 -2px 6px rgba(0,0,0,.35)}
+.sp-photo{flex:0 0 auto;width:50px;height:50px;border-radius:13px;object-fit:cover;
+  box-shadow:0 4px 12px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.2)}
+
+/* ── Le texte ─────────────────────────────────────────────────────────── */
+.sp-txt{flex:1;min-width:0}
+.sp-jourlib{font-size:var(--fs-xs);color:var(--sub);font-weight:700;
+  text-transform:uppercase;letter-spacing:1.4px}
+.sp-nom{font-weight:800;font-size:var(--fs-md);margin-top:2px;color:var(--text)}
+.sp-nb{font-size:var(--fs-xs);color:var(--sub);margin-top:1px}
+
+/* ── Le chevron de lancement ──────────────────────────────────────────── */
+.sp-go{flex:0 0 auto;width:34px;height:34px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;color:var(--red-text);
+  background:radial-gradient(circle at 35% 30%,#1c1010,#0d0808);
+  border:1px solid rgba(224,32,32,.4);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+.sp-go svg{width:16px;height:16px;display:block;margin-left:2px}
+.sp-auj .sp-go{border-color:rgba(255,90,90,.8);
+  box-shadow:0 0 12px rgba(224,32,32,.35),inset 0 1px 0 rgba(255,255,255,.08)}
+
+/* ── L'entrée en cascade ──────────────────────────────────────────────── */
+/* Sur les jetons de cadence de la doctrine, et NON EN BOUCLE : elle joue une
+   fois à l'ouverture. --i est le rang de la rangée, posé par le rendu. */
+.sp-ligne{animation:spEntree var(--casc-duree) var(--c-out) backwards;
+  animation-delay:calc(var(--i,0) * var(--casc-pas))}
+@keyframes spEntree{
+  from{opacity:0;transform:translateY(9px)}
+  to{opacity:1;transform:none}
+}
+@media(prefers-reduced-motion:reduce){
+  .sp-ligne{animation:none}
+}
+
 /* ══ L'ALERTE DE BILAN ════════════════════════════════════════════════════
    Le panneau d'attention est aligné sur le HAUT du texte, pas centré sur le
    bloc. Le sous-titre passe à deux lignes dès qu'il porte un retard en jours,
@@ -4815,10 +4928,11 @@ const COACH_PHOTO='icons/coach.jpg';
 
 <!-- SESSION PICKER (modal) -->
 <div id="session-picker" style="display:none;position:fixed;inset:0;background:var(--scrim);z-index:var(--z-modal);display:none;align-items:flex-end;justify-content:center">
-  <div style="background:var(--surface-2);border-radius:var(--r-4) var(--r-4) 0 0;padding:24px 20px;width:100%;max-width:480px;animation:fadeIn var(--t-3) var(--c-out)">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+  <div class="sp-feuille">
+    <i class="sp-poignee" aria-hidden="true"></i>
+    <div class="sp-tete">
       <h2>Quelle séance aujourd'hui ?</h2>
-      <button onclick="document.getElementById('session-picker').style.display='none'" aria-label="Fermer" style="background:none;border:none;color:var(--sub);font-size:var(--fs-2xl);cursor:pointer;min-width:44px;min-height:44px;line-height:1">✕</button>
+      <button class="sp-fermer" onclick="document.getElementById('session-picker').style.display='none'" aria-label="Fermer">✕</button>
     </div>
     <div id="session-picker-list"></div>
     <div style="height:20px"></div>
@@ -23914,6 +24028,10 @@ function openSessionExercises(idx){
   },80);
 }
 
+// Le rang de la rangee dans la cascade d'entree. Une variable de module et non
+// l'indice du jour : les jours de repos ne produisent pas de ligne, et compter
+// les jours laisserait des trous dans la cadence.
+let _spRang=0;
 function openSessionPicker(){
   const cfg=currentUser.sessions_config||initSessionsConfig();
   const active=cfg.filter(s=>s.active);
@@ -23925,19 +24043,28 @@ function openSessionPicker(){
   // n'avait aucun moyen de distinguer un programme écrit pour lui d'un contenu
   // d'exemple servi par défaut.
   const bandeau=programmeEstEssai()?_bandeauEssai():'';
+  // Remis a zero A CHAQUE OUVERTURE : sans cela la cascade repartirait du rang
+  // atteint la fois precedente et les premieres lignes entreraient en retard.
+  _spRang=0;
   document.getElementById('session-picker-list').innerHTML=bandeau+cfg.map((s,i)=>{
     if(!s.active) return '';
     const isToday=s.day===today;
     const badgeExemple=seanceEstExemple(s)?`<span style="background:#2a1a00;color:var(--orange);border:1px solid var(--orange);padding:1px 6px;border-radius:var(--r-1);font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px;text-transform:uppercase;margin-left:6px;vertical-align:middle">Exemple</span>`:'';
-    return `<div onclick="startWorkoutSession(${i});document.getElementById('session-picker').style.display='none'"
-      style="background:${isToday?'linear-gradient(135deg,#1a0000,#2a0000)':'var(--surface-2)'};border-radius:var(--r-3);padding:14px;margin-bottom:10px;cursor:pointer;display:flex;align-items:center;gap:12px;border:1.5px solid ${isToday?'var(--red)':'var(--border)'}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-      ${s.photo?`<img src="${s.photo}" style="width:50px;height:50px;border-radius:var(--r-2);object-fit:cover">`:`<div style="width:50px;height:50px;border-radius:var(--r-1);background:var(--red);display:flex;align-items:center;justify-content:center;font-size:var(--fs-md);font-weight:900;flex-shrink:0">${DAY_ICONS[i]}</div>`}
-      <div style="flex:1">
-        <div style="font-size:var(--fs-xs);color:${isToday?'#fca5a5':'var(--sub)'};font-weight:700;text-transform:uppercase;letter-spacing:.5px">${s.day||DAYS[i]}${isToday?' · Aujourd\'hui':''}</div>
-        <div style="font-weight:800;font-size:var(--fs-md);margin-top:2px">${escapeHtml(_nomSeance(s,i))}${badgeExemple}</div>
-        <div class="sub" style="font-size:var(--fs-xs)">${s.exercises?.length||0} exercices ${seanceEstExemple(s)?'proposés':'configurés'}</div>
+    // --i porte le RANG de la rangée : c'est lui que la cascade d'entrée lit
+    // pour décaler chaque ligne d'un cran. Il compte les rangées AFFICHÉES et
+    // non l'indice du jour, sinon un mardi de repos laisserait un trou dans la
+    // cadence.
+    const rang=_spRang++;
+    return `<div class="sp-ligne${isToday?' sp-auj':''}" style="--i:${rang}"
+      onclick="startWorkoutSession(${i});document.getElementById('session-picker').style.display='none'"
+      role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
+      ${s.photo?`<img class="sp-photo" src="${s.photo}" alt="">`:`<div class="sp-jour">${DAY_ICONS[i]}</div>`}
+      <div class="sp-txt">
+        <div class="sp-jourlib">${s.day||DAYS[i]}${isToday?' · Aujourd\'hui':''}</div>
+        <div class="sp-nom">${escapeHtml(_nomSeance(s,i))}${badgeExemple}</div>
+        <div class="sp-nb">${s.exercises?.length||0} exercices ${seanceEstExemple(s)?'proposés':'configurés'}</div>
       </div>
-      <span style="color:var(--red-text);font-size:var(--fs-xl)">▶</span>
+      <span class="sp-go" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5.2v13.6L19 12z" fill="currentColor"/></svg></span>
     </div>`;
   }).join('');
 }
