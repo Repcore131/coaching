@@ -2037,6 +2037,21 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .sk-lbl{font-size:11px;font-weight:800;letter-spacing:2.1px;text-transform:uppercase;
   color:var(--text);line-height:1}
 
+/* La carte Nutrition est un raccourci vers son onglet.
+   L'APPUI NE SE LIT NI SUR `transform` NI SUR `filter`, contrairement au reste
+   de l'application : cette carte porte le ciel d'éclairs, dont les trois
+   filtres de turbulence sont rastérisés UNE FOIS. Mettre le parent à l'échelle
+   obligerait le moteur à les recalculer — le coût même que le filtre statique
+   existe pour éviter. La bordure et la lueur ne coûtent rien. */
+.nut-lien{cursor:pointer;transition:border-color var(--t-1) var(--c-out),box-shadow var(--t-1) var(--c-out)}
+.nut-lien:active{border-color:rgba(255,90,90,.95);
+  box-shadow:0 0 0 1px rgba(255,90,90,.35),0 0 18px rgba(224,32,32,.35)}
+.nut-lien:focus-visible{outline:2px solid rgba(255,90,90,.9);outline-offset:3px}
+/* Les commandes de la carte gardent leur propre curseur : rien ne doit laisser
+   croire qu'appuyer sur « g » ouvre l'onglet. */
+.nut-lien button{cursor:pointer}
+.nut-lien button:disabled{cursor:not-allowed}
+
 /* ══ LA NOTIFICATION D'ASSIDUITÉ ══════════════════════════════════════════
    Le cadre du badge « 7 SEM. », à la ligne près : même corps, même bordure,
    même ombre — une seule ombre porte le néon, la lueur et l'arête chaude —,
@@ -4359,7 +4374,10 @@ const COACH_PHOTO='icons/coach.jpg';
            Les anneaux sont EXACTEMENT ceux de la diète flexible — même
            fonction, htmlAnneauxMacros — mais ce qu'ils portent dépend de la
            diète : voir renderNutriAnneaux. -->
-      <div class="card card-nut nut-hud" id="clh-nut-card">
+      <div class="card card-nut nut-hud nut-lien" id="clh-nut-card"
+           onclick="_nutRaccourci(event)" role="button" tabindex="0"
+           aria-label="Nutrition — ouvrir l'onglet"
+           onkeydown="if((event.key==='Enter'||event.key===' ')&&event.target===this){event.preventDefault();this.click()}">
         <!-- LE CIEL D'ECLAIRS. Il est POSE ICI, en dur, et non produit par le
              rendu : il ne depend d'aucune donnee, et le refabriquer a chaque
              repeinture de la carte -- ce qui arrive a chaque aliment ajoute --
@@ -23032,6 +23050,15 @@ function _animerJauges(root){
   const une=()=>{ if(fait) return; fait=true; pose(); };
   requestAnimationFrame(()=>requestAnimationFrame(une));
   setTimeout(une,300);
+}
+// Le raccourci de la carte Nutrition vers son onglet.
+// IL NE VOLE PAS LE CLIC DES COMMANDES QU'ELLE CONTIENT. Le sélecteur d'unité
+// vit dans cette carte : sans ce garde, un clic sur « % » remonterait jusqu'ici
+// et emmènerait l'athlète sur un autre écran alors qu'il changeait d'unité.
+function _nutRaccourci(ev){
+  const t=ev&&ev.target;
+  if(t&&t.closest&&t.closest('button,a,input,select,textarea,label')) return;
+  clientTab('nutrition');
 }
 function renderNutriAnneaux(){
   const el=document.getElementById('clh-nutri-rings');
