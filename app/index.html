@@ -2044,6 +2044,38 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .sk-lbl{font-size:11px;font-weight:800;letter-spacing:2.1px;text-transform:uppercase;
   color:var(--text);line-height:1}
 
+/* ══ LE CHAMP DE PESÉE ════════════════════════════════════════════════════
+   L'unité ne peut pas vivre DANS le champ : un <input type="number"> n'affiche
+   que sa valeur, et « 103.8 kg » n'en serait plus une. Elle se pose donc à
+   côté — mais le chiffre était centré, et une unité collée au bord droit s'en
+   serait trouvée à trente pixels.
+   D'où une BOÎTE qui contient le couple : l'input y prend une largeur fixe et
+   s'aligne à droite, l'unité le suit, et c'est le couple qui est centré. Le
+   « kg » reste collé au nombre, de « 62 » à « 103.8 ». */
+.pes-boite{flex:1;min-width:0;display:flex;align-items:baseline;justify-content:center;
+  gap:5px;box-sizing:border-box;padding:10px 6px;cursor:text;
+  background:var(--dark);border:1px solid var(--border);border-radius:var(--r-2);
+  transition:border-color var(--t-1) var(--c-out)}
+.pes-boite:focus-within{border-color:rgba(224,32,32,.55)}
+.pes-champ{width:4.6em;flex:0 0 auto;min-width:0;padding:0;margin:0;
+  background:none;border:none;outline:none;text-align:right;
+  font-size:var(--fs-xl);font-family:var(--pile-titre);letter-spacing:1px;color:var(--text)}
+/* LE CHAMP SE DIMENSIONNE À SON CONTENU LÀ OÙ LE NAVIGATEUR LE SAIT. Avec une
+   largeur fixe et un texte aligné à droite, c'est le CHAMP qui est centré, pas
+   le couple : « 62 kg » dérivait d'une douzaine de pixels vers la droite, la
+   place des chiffres manquants restant réservée. La largeur fixe demeure comme
+   repli pour les navigateurs qui ignorent field-sizing. */
+@supports (field-sizing:content){
+  .pes-champ{field-sizing:content;width:auto;min-width:1.6em;max-width:5em}
+}
+/* Les flèches natives prendraient une largeur imprévisible AU MILIEU du couple,
+   et une pesée ne se règle pas au pas de un. */
+.pes-champ::-webkit-outer-spin-button,
+.pes-champ::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.pes-champ{-moz-appearance:textfield;appearance:textfield}
+.pes-unite{flex:0 0 auto;font-family:var(--pile-titre);font-size:var(--fs-md);
+  letter-spacing:1.5px;text-transform:uppercase;color:var(--sub)}
+
 /* ══ LA CARTE « SÉANCE GELÉE » ════════════════════════════════════════════
    Deux colonnes : le texte à gauche, le bloc de glace à droite. Tout le décor
    — montagnes, voile, poudre — est un SVG posé EN DUR sous le contenu : il ne
@@ -51395,14 +51427,19 @@ function renderCartePesee(){
   }
   z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:16px;box-shadow:var(--el-1)">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:9px">
-      <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase">Pesée du jour</span>
+      <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase">Pesée du jour</span>
       ${dujour?`<span style="font-size:var(--fs-2xs);color:var(--green);font-weight:700">✓ ${dujour.kg} kg</span>`:''}
     </div>
     <div style="display:flex;gap:8px;align-items:center">
-      <input type="number" id="pesee-input" inputmode="decimal" step="0.1"
-        min="${PESEE_MIN}" max="${PESEE_MAX}" placeholder="${der?der.kg:'—'}"
-        value="${dujour?dujour.kg:''}"
-        style="flex:1;min-width:0;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:10px 6px;background:var(--dark);border:1px solid var(--border);border-radius:var(--r-2);color:var(--text);font-family:var(--pile-titre);letter-spacing:1px">
+      <!-- La boîte, et non le champ, porte la bordure : c'est elle qui doit
+           contenir le couple « nombre + unité ». Un clic n'importe où dedans
+           donne le focus au champ, sinon la moitié de la surface serait morte. -->
+      <label class="pes-boite" for="pesee-input">
+        <input type="number" id="pesee-input" inputmode="decimal" step="0.1"
+          min="${PESEE_MIN}" max="${PESEE_MAX}" placeholder="${der?der.kg:'—'}"
+          value="${dujour?dujour.kg:''}" class="pes-champ">
+        <span class="pes-unite">kg</span>
+      </label>
       <button class="btn btn-red btn-sm" onclick="savePesee()" style="height:44px;padding:0 18px;letter-spacing:1px;white-space:nowrap">${dujour?'Corriger':'Valider'}</button>
     </div>
     <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:8px;line-height:1.5">${sous}</div>
