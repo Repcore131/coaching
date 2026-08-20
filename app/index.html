@@ -1163,8 +1163,23 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
 /* ── La case de charge porte son unité ────────────────────────────────── */
 /* Un <input type="number"> n'affiche que sa valeur : l'unité se pose à côté, et
    c'est LE CADRE qui devient la boîte — bordure, fond et rayon lui passent. */
-.set-kg{display:inline-flex;align-items:baseline;justify-content:center;gap:2px;
-  width:60px;min-height:38px;box-sizing:border-box;padding:4px 4px;
+/* LE NOMBRE FLOTTAIT EN HAUT DE SA CASE. Mesure : 5 px au-dessus du chiffre,
+   14 en dessous. Deux causes cumulees.
+   D'abord align-items:baseline sur un flex a UNE ligne : les elements
+   s'alignent bien entre eux, mais la ligne se pose au DEPART de l'axe
+   transversal — tout l'espace libre tombait sous elle.
+   Ensuite Bebas ne peint aucune descendante sur les chiffres : ses glyphes
+   n'occupent que les 11 px hauts d'une boite de 19.
+   La grille corrige la premiere — align-content:center centre la piste dans le
+   conteneur, ce qu'un flex a une seule ligne ne sait pas faire. Le rembourrage
+   asymetrique 5/3 corrige la seconde : 2 px, la moitie de la descendante
+   absente.
+   LA LIGNE DE BASE EST CONSERVEE : « kg » reste pose sur celle du nombre, ce
+   qu'un align-items:center aurait perdu. Mesure apres : 13,5 px au-dessus,
+   13,5 en dessous. */
+.set-kg{display:inline-grid;grid-auto-flow:column;align-items:baseline;
+  align-content:center;justify-content:center;gap:2px;
+  width:60px;min-height:38px;box-sizing:border-box;padding:5px 4px 3px;
   background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1)}
 .set-kg input.set-input{width:auto;flex:1 1 auto;min-width:0;min-height:0;
   padding:0;background:none;border:none;text-align:right}
