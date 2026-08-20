@@ -17825,15 +17825,15 @@ function testExercices(){
         sessions:[],bilans:[],programs:{},videos:[]};
       ok('La ligne affichée cite les paliers, en français',(()=>{
         const h=_htmlMonteeCharge(80,{name:'SQUAT',reps:'5'},0);
-        return /Montée en charge/.test(h)&&/40 kg × 5/.test(h)
-          &&/55 kg × 5/.test(h)&&/67,5 kg × 5/.test(h);})());
+        // La forme a changé : l'unité et les répétitions, identiques pour tous
+        // les paliers, sont sorties du groupe pour tenir sur une ligne.
+        return /Échauffement/.test(h)&&/40 · 55 · 67,5 kg × 5/.test(h);})());
       ok('Une charge légère n\'affiche qu\'un seul palier',(()=>{
         const h=_htmlMonteeCharge(15,{name:'CURL HALTERE',reps:'12'},0);
-        return /Montée en charge/.test(h)&&/7,5 kg × 12/.test(h)&&h.split('·').length===1;})());
+        return /Échauffement/.test(h)&&/7,5 kg × 12/.test(h)&&h.split('·').length===1;})());
       ok('Une charge lourde en affiche quatre',(()=>{
         const h=_htmlMonteeCharge(140,{name:'SOULEVE DE TERRE',reps:'3'},0);
-        return /55 kg × 3/.test(h)&&/83,75 kg × 3/.test(h)
-          &&/105 kg × 3/.test(h)&&/125 kg × 3/.test(h);})());
+        return /55 · 83,75 · 105 · 125 kg × 3/.test(h);})());
       ok('Aucun bouton de validation, aucune case, aucune ligne de tableau',(()=>{
         const h=_htmlMonteeCharge(80,{name:'SQUAT',reps:'5'},0);
         return !/<input/i.test(h)&&!/<td/i.test(h)&&!/<tr/i.test(h)
@@ -17858,7 +17858,7 @@ function testExercices(){
         currentUser.monteeChargeMasquee=true;
         const h=_htmlMonteeCharge(80,{name:'SQUAT',reps:'5'},0);
         currentUser.monteeChargeMasquee=false;
-        return /▸/.test(h)&&/display:none/.test(h)&&/40 kg × 5/.test(h);})());
+        return /▸/.test(h)&&/display:none/.test(h)&&/40 · 55 · 67,5 kg × 5/.test(h);})());
       ok('La préférence est GLOBALE : deux exercices différents suivent le même état',(()=>{
         currentUser.monteeChargeMasquee=true;
         const a=_htmlMonteeCharge(80,{name:'SQUAT',reps:'5'},0);
@@ -17894,7 +17894,7 @@ function testExercices(){
         const apres=JSON.stringify(woState.sessionData);
         const n=woState.sessionData[0].sets.length;
         woState=sauveW; currentUser.sessions=[];
-        return avant===apres&&n===3&&/Montée en charge/.test(h);})());
+        return avant===apres&&n===3&&/Échauffement/.test(h);})());
       // Sans historique sur le créneau, il n'y a pas de charge de travail :
       // la rampe se tait plutôt que de partir d'un nombre inventé.
       ok('Sans historique sur le créneau, aucune montée en charge',(()=>{
@@ -17903,7 +17903,7 @@ function testExercices(){
           exercises:[{name:'SQUAT',series:3,reps:'5'}],sessionData:{}};
         let h=''; try{ h=_blocExo(0,false).html; }catch(e){ woState=sauveW; return _echec('exception: '+e.message); }
         woState=sauveW;
-        return !/Montée en charge/.test(h)&&/Pas encore d'historique/.test(h);})());
+        return !/Échauffement/.test(h)&&/Pas encore d'historique/.test(h);})());
 
       // ── Tonnage et volume : jeu de séances de référence, valeurs en dur ──
       // Ce sont les nombres d'AVANT le patch. Ils sont écrits ici en toutes
@@ -25058,7 +25058,7 @@ function testExercices(){
           // Pas de charge de travail, donc rien à échauffer : la rampe se tait
           // plutôt que de partir d'un nombre inventé.
           const h=_scene(200,100);
-          return !/Montée en charge/.test(h)
+          return !/Échauffement/.test(h)
             ?true:_echec('une rampe est affichée sans charge de travail');})());
         ok('À 40 jours, la montée en charge part de la charge DÉCOTÉE',(()=>{
           const h=_scene(40,100);

@@ -2209,15 +2209,20 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 #wo-set-count{display:block;margin-top:3px;font-size:var(--fs-xs);font-weight:700;
   color:var(--sub);white-space:nowrap}
 
-/* LE NOM EN ROUGE NÉON, ET FRANC. Le halo passe par --halo-c, le jeton de
-   l'application : une ombre écrite à la main ici aurait divergé du reste au
-   premier réglage. La teinte monte d'un cran — #ff3b30 tirait sur l'orangé.
-   LE HALO EST SERRÉ, ET C'EST CE QUI LE REND MORDANT. Une couche large et
-   opaque — celle de --halo-2 — étalait une brume rectangulaire sur toute la
-   ligne : plus de lumière, mais salie. Trois couches décroissantes tiennent le
-   bord des lettres chaud et laissent le fond noir. */
-.wo-nom{color:#ff2020;--halo-c:rgba(255,40,40,.95);
-  text-shadow:var(--halo-1),0 0 16px rgba(255,20,20,.5),0 0 34px rgba(224,32,32,.2)}
+/* LE NOM EN ROUGE, SANS HALO. Le néon est retiré à la demande ; la teinte
+   reste, elle. #ff3b30 tirait sur l'orangé, #ff2020 est du rouge. */
+.wo-nom{color:#ff2020}
+
+/* ── L'échauffement en charge, sur UNE ligne ──────────────────────────── */
+/* Quatre paliers y tiennent depuis que l'unité et les répétitions sont sorties
+   du groupe (voir _htmlMonteeCharge). nowrap est la garantie : si un cas non
+   prévu débordait malgré tout, il vaut mieux qu'il se voie en une ligne trop
+   longue que de se replier en trois sans qu'on le sache. */
+.wo-ramp{font-size:var(--fs-xs);line-height:1.5;white-space:nowrap;
+  overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.wo-ramp::-webkit-scrollbar{display:none}
+/* Sur un écran étroit le corps cède d'un demi-point plutôt que la ligne. */
+@media (max-width:400px){ .wo-ramp{font-size:var(--fs-2xs)} }
 /* Les deux commandes, empilées et de largeur égale. */
 .wo-cmd{display:flex;flex-direction:column;gap:6px;flex:0 0 auto;align-items:stretch}
 .wo-cmd>button{width:100%;justify-content:center;flex-shrink:0}
@@ -30476,8 +30481,16 @@ function _htmlMonteeCharge(chargeTravail,ex,idx){
   const paliers=seriesApproche(chargeTravail,ex&&ex.reps,ex);
   if(!paliers.length) return '';
   const masque=!!(currentUser&&currentUser.monteeChargeMasquee);
-  const txt=paliers.map(p=>_fmtChargeMontee(p.charge)+' kg × '+p.reps).join(' · ');
-  return `<div class="wo-ramp sub" style="font-size:var(--fs-xs);background:var(--surface-2);border-radius:var(--r-2);padding:10px 13px;margin-bottom:12px;line-height:1.6"><button type="button" onclick="basculerMonteeCharge()" style="background:none;border:none;padding:0;margin:0;color:inherit;font:inherit;cursor:pointer">Montée en charge <span class="wo-ramp-caret">${masque?'▸':'▾'}</span></button><span class="wo-ramp-det"${masque?' style="display:none"':''}> : ${txt}</span></div>`;
+  // L'UNITÉ ET LES RÉPÉTITIONS SORTENT DU GROUPE. Elles sont les mêmes pour
+  // tous les paliers — seriesApproche donne à chacun les répétitions
+  // prescrites, à l'identique — et les répéter quatre fois faisait déborder la
+  // ligne. On ne factorise QUE si c'est vrai : le jour où elles différeraient,
+  // la forme longue reprend la main plutôt que d'écrire un mensonge court.
+  const memesReps=paliers.every(p=>String(p.reps)===String(paliers[0].reps));
+  const txt=memesReps
+    ? paliers.map(p=>_fmtChargeMontee(p.charge)).join(' · ')+' kg × '+paliers[0].reps
+    : paliers.map(p=>_fmtChargeMontee(p.charge)+' kg × '+p.reps).join(' · ');
+  return `<div class="wo-ramp sub" style="background:var(--surface-2);border-radius:var(--r-2);padding:9px 12px;margin-bottom:12px"><button type="button" onclick="basculerMonteeCharge()" style="background:none;border:none;padding:0;margin:0;color:inherit;font:inherit;cursor:pointer">Échauffement <span class="wo-ramp-caret">${masque?'▸':'▾'}</span></button><span class="wo-ramp-det"${masque?' style="display:none"':''}> : ${txt}</span></div>`;
 }
 // Préférence GLOBALE, pas par exercice : replier la rampe une fois la replie
 // partout, sinon il faudrait la replier à chaque exercice de chaque séance.
