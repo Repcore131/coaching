@@ -1141,8 +1141,13 @@ html{scroll-behavior:smooth}
 .series-table thead th{background:var(--red);color:var(--text);border-bottom:none}
 select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padding:5px 3px;cursor:pointer}
 .series-table td{padding:10px;text-align:center;border-top:1px solid #181818;font-size:var(--fs-md);font-weight:600}
-.series-table tr.done td{background:#101a12;color:var(--text)}
-.series-table tr.done td:first-child{box-shadow:inset 3px 0 0 var(--green)}
+/* UNE SÉRIE VALIDÉE NE VERDIT PAS, ELLE S'ÉCLAIRCIT. Le vert (#101a12 et un
+   liseré var(--green)) donnait une teinte à une ligne qui n'a rien à signaler
+   d'autre que « c'est fait ». Un voile de blanc à quatre pour cent le dit sans
+   couleur — et translucide plutôt qu'opaque, parce que la ligne en alerte de
+   douleur peint le <tr> et qu'un fond opaque de cellule le recouvrirait. */
+.series-table tr.done td{background:rgba(255,255,255,.045);color:var(--text)}
+.series-table tr.done td:first-child{box-shadow:inset 3px 0 0 rgba(255,255,255,.3)}
 .series-table tr.done .set-input:disabled{opacity:.55;-webkit-text-fill-color:var(--text);color:var(--text)}
 /* LA DOULEUR PASSE DEVANT LA VALIDATION. .row-alert peint le <tr> ; la règle
    ci-dessus peint les <td>. Un fond opaque d'enfant recouvre celui du parent,
@@ -1151,6 +1156,15 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
 .series-table tr.done.row-alert td{background:transparent}
 .series-table-wo td{padding:8px 4px}.series-table-wo th{padding:7px 4px}
 .set-input{width:56px;background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1);color:var(--text);text-align:center;padding:12px 4px;min-height:44px;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800}
+/* LE CHIFFRE EN BEBAS, ET SEULEMENT LUI. La classe habille aussi les deux menus
+   déroulants (RIR, douleur) : Bebas n'a pas de bas de casse, « Échec » y
+   sortirait en capitales et le menu ne ressemblerait plus à un menu.
+   GRAISSE 400 IMPÉRATIVEMENT : Bebas Neue n'est chargée qu'en 400 dans ce
+   dépôt, et toute valeur supérieure produit un gras synthétique baveux —
+   exactement ce que donnait le 800 en Montserrat. Le corps monte de 14 à 18 px
+   parce qu'une condensée lit plus petit à taille égale. */
+input.set-input{font-family:var(--pile-titre);font-weight:400;
+  font-size:18px;letter-spacing:1px;font-variant-numeric:tabular-nums}
 .set-input:focus{border-color:var(--red);outline:none;box-shadow:0 0 0 2px rgba(198,15,8,.15)}
 
 /* ====== SUGGEST BOX ====== */
@@ -26211,7 +26225,7 @@ function renderSets(ex,data,idx){
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
               <div style="text-align:center;min-width:28px;flex-shrink:0">
                 <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);line-height:1">${i+1}</div>
-                <div style="font-size:var(--fs-md);font-weight:900;line-height:1.2"><span style="font-size:var(--fs-xs);font-weight:600">×</span>${s.reps||ex.reps}</div>
+                <div style="font-family:var(--pile-titre);font-size:18px;font-weight:400;letter-spacing:.5px;line-height:1.2"><span style="font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:600">×</span>${s.reps||ex.reps}</div>
               </div>
               ${weightInner}
             </div>
@@ -26227,7 +26241,7 @@ function renderSets(ex,data,idx){
     return `<tr class="${rowCls}${painAlert}">
       <td style="text-align:center;padding:4px 6px">
         <span style="display:block;font-size:var(--fs-xs);font-weight:800;color:var(--red-text);line-height:1">${i+1}${_badgeRecord(idx,i)}</span>
-        <span style="font-size:var(--fs-lg);font-weight:900;line-height:1.2"><span style="font-size:var(--fs-xs);font-weight:600">×</span>${s.reps||ex.reps}</span>
+        <span style="font-family:var(--pile-titre);font-size:20px;font-weight:400;letter-spacing:.5px;line-height:1.2"><span style="font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:600">×</span>${s.reps||ex.reps}</span>
       </td>
       ${weightCell}
       <td>${rirSelect}</td>
@@ -35771,7 +35785,7 @@ function _marquerRecordSiBesoin(idx,i){
 }
 function _badgeRecord(idx,i){
   return _recordsVus.has(idx+':'+i)
-    ? `<span title="Nouveau record" style="display:inline-block;font-size:var(--fs-xs);font-weight:800;letter-spacing:.5px;color:var(--arc-peak);background:#2a0016;border:1px solid #5c0033;border-radius:var(--r-1);padding:1px 5px;margin-left:5px;white-space:nowrap;--halo-c:rgba(255,46,147,.5);text-shadow:var(--halo-1)">RECORD</span>`
+    ? `<span title="Nouveau record" style="display:inline-block;font-size:var(--fs-2xs);font-weight:800;letter-spacing:.4px;color:var(--red-text);background:#280303;border:1px solid rgba(224,32,32,.6);border-radius:var(--r-1);padding:0 4px;margin-left:4px;white-space:nowrap;--halo-c:rgba(224,32,32,.5);text-shadow:var(--halo-1)">RECORD</span>`
     : '';
 }
 
