@@ -2044,6 +2044,39 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .sk-lbl{font-size:11px;font-weight:800;letter-spacing:2.1px;text-transform:uppercase;
   color:var(--text);line-height:1}
 
+/* ══ LA RANGÉE DU HAUT DE LA BANNIÈRE « SÉANCE DU JOUR » ══════════════════
+   Le sur-titre demande 132 px et les sept pastilles 200. À 480 px la bannière
+   offre 400 px de contenu : tout tient. À 360 il n'en reste que 280, et le
+   sur-titre se faisait couper — « SÉANCE… ». D'où trois paliers, dont aucun ne
+   sacrifie le titre, qui est ce qu'on cherchait à sauver. */
+.sem-rangee{display:flex;align-items:center;justify-content:space-between;
+  gap:10px;margin-bottom:5px}
+.sem-sur{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sem-jours{display:flex;gap:3px;flex-shrink:0}
+/* La taille des pastilles vit ICI et non en style en ligne : une media query ne
+   peut rien contre un style en ligne sans !important. Seules les couleurs, qui
+   dépendent du jour, restent écrites par le rendu. */
+.sem-jour{flex-shrink:0;width:26px;height:26px;border-radius:var(--r-1);
+  display:flex;align-items:center;justify-content:center;
+  font-size:var(--fs-xs);font-weight:900;cursor:pointer}
+/* Mesuré : à 360 px il reste 280 px de contenu. Sept pastilles de 21 px avec
+   2 px de blanc font 159, l'écart de rangée 8 ; il reste donc 113 px au
+   sur-titre, qui en demande 108 à cet interlettrage. Un pixel de plus sur la
+   pastille et il se faisait couper. */
+@media (max-width:420px){
+  .sem-rangee{gap:8px}
+  .sem-jours{gap:2px}
+  .sem-jour{width:21px;height:21px;font-size:var(--fs-2xs)}
+  .sem-sur{letter-spacing:1px;font-size:var(--fs-2xs)}
+}
+/* Sous 341 px, plus rien ne rentre : la rangée se plie et les pastilles passent
+   à la ligne. On y reperd la hauteur qu'on venait de gagner, mais le nom de la
+   séance reste sur une ligne — c'était le but. */
+@media (max-width:340px){
+  .sem-rangee{flex-wrap:wrap;justify-content:flex-end}
+  .sem-sur{flex:1 0 100%}
+}
+
 /* ══ LE CHAMP DE PESÉE ════════════════════════════════════════════════════
    L'unité ne peut pas vivre DANS le champ : un <input type="number"> n'affiche
    que sa valeur, et « 103.8 kg » n'en serait plus une. Elle se pose donc à
@@ -25255,21 +25288,25 @@ function _renderWeeklyInto(el,sc){
   el.innerHTML=`
     <div class="banner-hero" style="margin-bottom:16px">
       <div style="position:relative">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
-          <div>
-            <div class="eyebrow" style="color:rgba(255,255,255,.55);margin-bottom:4px">Séance du jour</div>
-            <div style="font-family:var(--pile-titre);font-size:var(--fs-2xl);font-weight:400;color:var(--text);letter-spacing:1px;line-height:1">${heading}</div>
-            ${nbEx?`<div style="font-size:var(--fs-xs);color:rgba(255,255,255,.6);margin-top:4px">${nbEx} exercice${nbEx>1?'s':''}${mainRest?' · '+mainRest+' repos':''}</div>`:'<div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);margin-top:4px">Récupération active</div>'}
-          </div>
-          <div style="display:flex;gap:3px;flex-shrink:0;margin-left:10px;padding-top:2px">
+        <div style="margin-bottom:12px">
+          <!-- LA RANGEE DU HAUT NE PORTE QUE DU COURT : le sur-titre et les
+               pastilles. Le titre, lui, a besoin de toute la largeur — c'est
+               d'avoir partagé sa ligne avec les sept pastilles qui le coupait
+               en deux, et en quatre sur un écran de 360. -->
+          <div class="sem-rangee">
+            <div class="eyebrow sem-sur" style="color:rgba(255,255,255,.55)">Séance du jour</div>
+            <div class="sem-jours">
             ${sc.map((s,i)=>{
               const isToday=i===todayIdx;const isSel=i===sel;
               const bg=isSel?'rgba(255,255,255,.28)':s.active?'rgba(255,255,255,.1)':'rgba(0,0,0,.25)';
               const col=isSel?'var(--text)':s.active?'rgba(255,255,255,.75)':'rgba(255,255,255,.25)';
               const bord=isToday&&!isSel?'1px solid rgba(255,255,255,.55)':'1px solid transparent';
-              return `<div onclick="_setWeekDay(${i})" style="flex-shrink:0;width:26px;height:26px;border-radius:var(--r-1);background:${bg};border:${bord};display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:900;cursor:pointer;color:${col}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${DAY_ICONS[i]}</div>`;
+              return `<div class="sem-jour" onclick="_setWeekDay(${i})" style="background:${bg};border:${bord};color:${col}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${DAY_ICONS[i]}</div>`;
             }).join('')}
+            </div>
           </div>
+          <div style="font-family:var(--pile-titre);font-size:var(--fs-2xl);font-weight:400;color:var(--text);letter-spacing:1px;line-height:1">${heading}</div>
+          ${nbEx?`<div style="font-size:var(--fs-xs);color:rgba(255,255,255,.6);margin-top:4px">${nbEx} exercice${nbEx>1?'s':''}${mainRest?' · '+mainRest+' repos':''}</div>`:'<div style="font-size:var(--fs-xs);color:rgba(255,255,255,.5);margin-top:4px">Récupération active</div>'}
         </div>
         ${nbEx?`<div style="border-top:1px solid rgba(255,255,255,.15);padding-top:10px;display:flex;flex-direction:column;gap:5px">
           ${selS.exercises.map((ex,i)=>`
