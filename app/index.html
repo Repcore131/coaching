@@ -2278,11 +2278,11 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .wo-ava-z{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;
   -webkit-mask-size:100% 100%;mask-size:100% 100%;
   -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
-  /* UN PIXEL DE FLOU, PAS DEUX. La vignette ne fait que trente-quatre pixels de
-     large : deux pixels en font six pour cent, et les zones voisines fusionnaient
-     en une masse où l'on ne distinguait plus le pectoral du deltoïde. */
-  mix-blend-mode:multiply;filter:blur(1.1px)}
-.wo-ava-z ellipse{fill:#ff2626}
+  /* LE FLOU N'EST PLUS QU'UN LISSAGE. C'est le dégradé radial qui éteint la
+     couleur avant le bord ; deux pixels de flou faisaient fusionner les zones
+     voisines en une masse où l'on ne distinguait plus le pectoral du deltoïde. */
+  mix-blend-mode:multiply;filter:blur(.5px)}
+.wo-ava-z ellipse{fill:url(#woZg)}
 
 /* Sur un écran étroit, c'est l'avatar qui cède — le nom de l'exercice et ses
    commandes sont ce qu'on vient lire. */
@@ -25785,27 +25785,19 @@ function _retirerRelance(idx){
 // par le minuteur de repos, qui lit une échéance. Une seule mécanique.
 
 // ══ LES ZONES MUSCULAIRES DE L'AVATAR ═════════════════════════════════════
-// Coordonnées en CENTIÈMES de la vignette, pas en pixels : la vignette est
-// recadrée au plus juste sur la silhouette, donc les mêmes fractions tombent
-// au même endroit du corps sur les sept niveaux et sur les deux genres.
-// `preserveAspectRatio="none"` fait le reste — le repère se déforme avec
-// l'image, et une épaule reste sur l'épaule.
-// Repères de la vue de FACE, lus sur les niveaux 1, 4 et 7 confondus :
-// menton 13 · clavicule 19 · ligne des pectoraux 26 · nombril 40 · aine 50 ·
-// genoux 70 · mollets 74-88 · chevilles 92.
-const WO_ZONES_AV = Object.freeze({
-  TRAPEZES  :[[40,18,8,3],      [60,18,8,3]],
-  DELT_ANT  :[[21,21,9,4.5],    [79,21,9,4.5]],
-  DELT_LAT  :[[17,21,8,4.5],    [83,21,8,4.5]],
-  PECTORAUX :[[39,25,10,5],     [61,25,10,5]],
-  ABDOS     :[[50,36,13,7]],
-  BICEPS    :[[16,27,8,6.5],    [84,27,8,6.5]],
-  AVANT_BRAS:[[10,41,9,6.5],    [90,41,9,6.5]],
-  QUADRICEPS:[[31,60,13,8],     [68,60,13,8]],
-  ADDUCTEURS:[[40,57,6,7],      [59,57,6,7]],
-  ABDUCTEURS:[[23,53,7,6],      [77,53,7,6]],
-  MOLLETS   :[[28,80,11,7],     [71,80,11,7]]
-});
+// LES ZONES SONT MESURÉES SUR CHAQUE DESSIN, pas partagées par les vingt-huit.
+// Une table unique devait être généreuse pour couvrir le bras épais du niveau 7,
+// et cette même ellipse débordait du bras fin du niveau 1 : le masque la rognait,
+// et débutant comme avancé finissaient avec la même tache.
+// Ici, chaque zone a été reportée sur la silhouette de son fichier — relevé de
+// l'alpha à la hauteur de la zone, position et largeur transposées dans le
+// segment de chair qui la porte. Elle ÉPOUSE donc le dessin, parce qu'elle en
+// est déduite. Et sa part du membre croît avec le niveau : le muscle d'un
+// débutant est petit dans un bras fin, celui d'un avancé est plein dans un bras
+// épais — les deux effets se cumulent.
+// Coordonnées en centièmes de la vignette : [cx, cy, rx, ry].
+// Produite par z20_zones_par_image.py ; ne pas retoucher à la main.
+const WO_ZONES = {"h":{"face":{"1":{"TRAPEZES":[[40.1,18,3.8,2.6],[58.9,18,3.8,2.6]],"DELT_ANT":[[23.7,21,4.8,4.0],[77.1,21,4.8,4.0]],"DELT_LAT":[[20.1,21,4.3,4.0],[80.8,21,4.3,4.0]],"PECTORAUX":[[40.3,25,5.4,4.4],[60.6,25,5.4,4.4]],"ABDOS":[[49.9,36,7.2,6.2]],"BICEPS":[[19.6,27,4.2,5.7],[81.2,27,4.2,5.7]],"AVANT_BRAS":[[11.7,41,4.5,5.7],[88.1,41,5.1,5.7]],"QUADRICEPS":[[30.3,60,6.5,7.1],[67.8,60,6.5,7.1]],"ADDUCTEURS":[[39.2,57,3.1,6.2],[59.7,57,3.1,6.2]],"ABDUCTEURS":[[20.9,53,1.9,5.3],[78.6,53,1.8,5.3]],"MOLLETS":[[27.7,80,6.2,6.2],[70.3,80,6.2,6.2]]},"2":{"TRAPEZES":[[40.2,18,4.3,2.7],[58.9,18,4.3,2.7]],"DELT_ANT":[[22.6,21,5.5,4.1],[77.3,21,5.5,4.1]],"DELT_LAT":[[18.8,21,4.9,4.1],[81.1,21,4.9,4.1]],"PECTORAUX":[[39.8,25,6.0,4.5],[60.1,25,6.0,4.5]],"ABDOS":[[50.0,36,8.2,6.3]],"BICEPS":[[19.2,27,4.7,5.9],[80.7,27,4.7,5.9]],"AVANT_BRAS":[[11.3,41,5.5,5.9],[88.6,41,5.5,5.9]],"QUADRICEPS":[[30.1,60,7.8,7.2],[67.9,60,7.3,7.2]],"ADDUCTEURS":[[39.5,57,3.7,6.3],[60.2,57,3.5,6.3]],"ABDUCTEURS":[[20.0,53,2.2,5.4],[79.4,53,2.2,5.4]],"MOLLETS":[[27.4,80,6.6,6.3],[70.8,80,6.6,6.3]]},"3":{"TRAPEZES":[[39.2,18,5.0,2.8],[58.9,18,5.0,2.8]],"DELT_ANT":[[21.8,21,6.3,4.1],[78.1,21,6.3,4.1]],"DELT_LAT":[[17.9,21,5.6,4.1],[82.0,21,5.6,4.1]],"PECTORAUX":[[39.3,25,7.0,4.6],[60.7,25,7.0,4.6]],"ABDOS":[[50.0,36,9.3,6.5]],"BICEPS":[[16.9,27,5.6,6.0],[83.1,27,5.6,6.0]],"AVANT_BRAS":[[9.8,41,6.4,6.0],[89.2,41,6.3,6.0]],"QUADRICEPS":[[29.9,60,9.4,7.4],[67.2,60,9.4,7.4]],"ADDUCTEURS":[[39.9,57,4.4,6.5],[58.2,57,4.4,6.5]],"ABDUCTEURS":[[22.7,53,5.0,5.5],[76.3,53,5.0,5.5]],"MOLLETS":[[27.2,80,8.2,6.5],[69.9,80,8.2,6.5]]},"4":{"TRAPEZES":[[40.0,18,5.5,2.8],[60.0,18,5.5,2.8]],"DELT_ANT":[[21.0,21,7.1,4.2],[79.0,21,7.1,4.2]],"DELT_LAT":[[17.0,21,6.3,4.2],[83.0,21,6.3,4.2]],"PECTORAUX":[[39.0,25,7.9,4.7],[61.0,25,7.9,4.7]],"ABDOS":[[50.0,36,10.3,6.6]],"BICEPS":[[16.0,27,6.3,6.1],[84.0,27,6.3,6.1]],"AVANT_BRAS":[[10.0,41,7.1,6.1],[90.0,41,7.1,6.1]],"QUADRICEPS":[[31.0,60,10.3,7.5],[68.0,60,10.3,7.5]],"ADDUCTEURS":[[40.0,57,4.7,6.6],[59.0,57,4.7,6.6]],"ABDUCTEURS":[[23.0,53,5.5,5.6],[77.0,53,5.5,5.6]],"MOLLETS":[[28.0,80,8.7,6.6],[71.0,80,8.7,6.6]]},"5":{"TRAPEZES":[[40.2,18,5.9,2.9],[59.8,18,5.9,2.9]],"DELT_ANT":[[21.7,21,7.7,4.3],[79.2,21,7.7,4.3]],"DELT_LAT":[[17.7,21,6.8,4.3],[83.2,21,6.8,4.3]],"PECTORAUX":[[39.5,25,8.5,4.8],[61.4,25,8.5,4.8]],"ABDOS":[[50.5,36,11.1,6.7]],"BICEPS":[[16.9,27,6.9,6.2],[84.9,27,6.9,6.2]],"AVANT_BRAS":[[10.5,41,8.1,6.2],[89.6,41,8.1,6.2]],"QUADRICEPS":[[29.7,60,11.8,7.7],[69.2,60,11.8,7.7]],"ADDUCTEURS":[[40.1,57,5.4,6.7],[59.6,57,5.3,6.7]],"ABDUCTEURS":[[23.0,53,6.1,5.8],[78.0,53,6.1,5.8]],"MOLLETS":[[25.9,80,10.2,6.7],[71.7,80,9.8,6.7]]},"6":{"TRAPEZES":[[39.3,18,6.7,2.9],[59.8,18,6.7,2.9]],"DELT_ANT":[[20.9,21,8.4,4.4],[79.2,21,8.4,4.4]],"DELT_LAT":[[16.9,21,7.5,4.4],[83.2,21,7.5,4.4]],"PECTORAUX":[[38.6,25,9.2,4.9],[60.5,25,9.2,4.9]],"ABDOS":[[49.6,36,11.8,6.9]],"BICEPS":[[15.2,27,7.6,6.4],[84.8,27,7.6,6.4]],"AVANT_BRAS":[[10.3,41,8.6,6.4],[88.7,41,9.6,6.4]],"QUADRICEPS":[[29.1,60,13.2,7.8],[67.1,60,12.5,7.8]],"ADDUCTEURS":[[65.7,57,12.0,6.9],[32.4,57,12.0,6.9]],"ABDUCTEURS":[[22.5,53,6.5,5.9],[76.6,53,6.5,5.9]],"MOLLETS":[[25.4,80,10.8,6.9],[70.9,80,10.8,6.9]]},"7":{"TRAPEZES":[[39.8,18,7.1,3.0],[60.2,18,7.1,3.0]],"DELT_ANT":[[21.2,21,9.1,4.5],[79.7,21,9.1,4.5]],"DELT_LAT":[[17.2,21,8.1,4.5],[83.7,21,8.1,4.5]],"PECTORAUX":[[39.1,25,10.0,5.0],[61.0,25,10.0,5.0]],"ABDOS":[[50.0,36,12.2,7.0]],"BICEPS":[[15.0,27,8.3,6.5],[85.1,27,8.3,6.5]],"AVANT_BRAS":[[10.5,41,9.5,6.5],[89.1,41,10.0,6.5]],"QUADRICEPS":[[30.9,60,13.9,8.0],[66.3,60,13.2,8.0]],"ADDUCTEURS":[[64.7,57,12.1,7.0],[33.5,57,12.1,7.0]],"ABDUCTEURS":[[24.3,53,6.7,6.0],[75.7,53,6.7,6.0]],"MOLLETS":[[28.8,80,11.2,7.0],[68.9,80,10.7,7.0]]}},"dos":{"1":{"TRAPEZES":[[51.0,20,11.6,4.4]],"DELT_POST":[[18.6,21,5.1,3.5],[81.4,21,5.1,3.5]],"DORSAUX":[[42.9,31,3.9,6.2],[56.6,31,3.9,6.2]],"LOMBAIRES":[[49.5,41,6.6,3.5]],"TRICEPS":[[15.8,27,4.7,5.7],[84.2,27,4.7,5.7]],"AVANT_BRAS":[[8.9,41,5.2,5.7],[90.5,41,5.5,5.7]],"FESSIERS":[[36.0,50,7.0,4.9],[64.0,50,7.0,4.9]],"ISCHIOS":[[30.4,63,6.2,6.2],[67.6,63,6.2,6.2]],"MOLLETS":[[27.0,80,6.0,6.2],[70.5,80,6.3,6.2]]},"2":{"TRAPEZES":[[49.5,20,12.9,4.5]],"DELT_POST":[[17.5,21,5.8,3.6],[80.5,21,5.8,3.6]],"DORSAUX":[[49.6,31,6.0,6.3],[68.1,31,6.0,6.3]],"LOMBAIRES":[[49.5,41,7.2,3.6]],"TRICEPS":[[15.6,27,5.2,5.9],[83.4,27,5.2,5.9]],"AVANT_BRAS":[[8.7,41,5.7,5.9],[90.2,41,6.4,5.9]],"FESSIERS":[[35.5,50,7.8,5.0],[63.5,50,7.8,5.0]],"ISCHIOS":[[29.7,63,7.4,6.3],[67.2,63,7.4,6.3]],"MOLLETS":[[26.4,80,6.6,6.3],[70.1,80,6.9,6.3]]},"3":{"TRAPEZES":[[50.0,20,14.3,4.6]],"DELT_POST":[[17.3,21,6.4,3.7],[80.8,21,6.4,3.7]],"DORSAUX":[[38.6,31,8.5,6.5],[62.3,31,8.5,6.5]],"LOMBAIRES":[[50.0,41,7.9,3.7]],"TRICEPS":[[15.4,27,5.8,6.0],[83.7,27,5.8,6.0]],"AVANT_BRAS":[[8.8,41,6.4,6.0],[90.7,41,6.7,6.0]],"FESSIERS":[[35.6,50,8.6,5.1],[63.4,50,8.6,5.1]],"ISCHIOS":[[30.2,63,8.4,6.5],[67.8,63,8.4,6.5]],"MOLLETS":[[26.6,80,7.9,6.5],[70.8,80,8.2,6.5]]},"4":{"TRAPEZES":[[50.0,20,15.8,4.7]],"DELT_POST":[[18.0,21,7.1,3.8],[82.0,21,7.1,3.8]],"DORSAUX":[[38.0,31,9.5,6.6],[62.0,31,9.5,6.6]],"LOMBAIRES":[[50.0,41,8.7,3.8]],"TRICEPS":[[16.0,27,6.3,6.1],[84.0,27,6.3,6.1]],"AVANT_BRAS":[[9.0,41,7.1,6.1],[91.0,41,7.1,6.1]],"FESSIERS":[[36.0,50,9.5,5.2],[64.0,50,9.5,5.2]],"ISCHIOS":[[30.0,63,9.5,6.6],[68.0,63,9.5,6.6]],"MOLLETS":[[27.0,80,8.7,6.6],[71.0,80,8.7,6.6]]},"5":{"TRAPEZES":[[50.5,20,17.1,4.8]],"DELT_POST":[[17.8,21,7.8,3.8],[82.2,21,7.8,3.8]],"DORSAUX":[[38.3,31,10.5,6.7],[62.6,31,10.5,6.7]],"LOMBAIRES":[[49.6,41,9.0,3.8]],"TRICEPS":[[15.8,27,6.9,6.2],[84.2,27,6.9,6.2]],"AVANT_BRAS":[[9.2,41,7.9,6.2],[90.4,41,8.3,6.2]],"FESSIERS":[[35.9,50,10.1,5.3],[63.3,50,10.1,5.3]],"ISCHIOS":[[30.3,63,10.3,6.7],[67.4,63,10.0,6.7]],"MOLLETS":[[26.5,80,9.5,6.7],[70.6,80,9.5,6.7]]},"6":{"TRAPEZES":[[50.5,20,18.7,4.9]],"DELT_POST":[[17.5,21,8.5,3.9],[82.5,21,8.5,3.9]],"DORSAUX":[[38.1,31,11.6,6.9],[62.9,31,11.6,6.9]],"LOMBAIRES":[[49.6,41,9.5,3.9]],"TRICEPS":[[14.8,27,7.7,6.4],[85.2,27,7.7,6.4]],"AVANT_BRAS":[[9.6,41,8.9,6.4],[90.4,41,9.0,6.4]],"FESSIERS":[[35.9,50,10.9,5.4],[63.3,50,10.9,5.4]],"ISCHIOS":[[30.8,63,11.6,6.9],[67.2,63,11.6,6.9]],"MOLLETS":[[28.1,80,10.1,6.9],[69.5,80,10.5,6.9]]},"7":{"TRAPEZES":[[50.1,20,20.1,5.0]],"DELT_POST":[[17.2,21,9.1,4.0],[82.0,21,9.1,4.0]],"DORSAUX":[[37.7,31,12.3,7.0],[62.4,31,12.3,7.0]],"LOMBAIRES":[[49.2,41,10.2,4.0]],"TRICEPS":[[15.2,27,8.1,6.5],[84.0,27,8.1,6.5]],"AVANT_BRAS":[[9.2,41,9.2,6.5],[90.4,41,9.8,6.5]],"FESSIERS":[[35.7,50,11.6,5.5],[62.7,50,11.6,5.5]],"ISCHIOS":[[30.4,63,12.7,7.0],[66.1,63,12.7,7.0]],"MOLLETS":[[27.8,80,10.4,7.0],[68.7,80,11.2,7.0]]}}},"f":{"face":{"1":{"TRAPEZES":[[39.1,18,4.2,2.6],[59.8,18,4.2,2.6]],"DELT_ANT":[[24.2,21,4.4,4.0],[75.8,21,0.1,4.0]],"DELT_LAT":[[20.8,21,3.9,4.0],[75.9,21,0.1,4.0]],"PECTORAUX":[[38.1,25,5.7,4.4],[59.9,25,5.7,4.4]],"ABDOS":[[49.9,36,7.5,6.2]],"BICEPS":[[16.1,27,4.5,5.7],[82.0,27,4.5,5.7]],"AVANT_BRAS":[[8.9,41,5.3,5.7],[89.0,41,5.3,5.7]],"QUADRICEPS":[[29.9,60,6.8,7.1],[67.9,60,6.8,7.1]],"ADDUCTEURS":[[38.1,57,3.3,6.2],[60.3,57,3.1,6.2]],"ABDUCTEURS":[[22.5,53,4.1,5.3],[76.5,53,4.1,5.3]],"MOLLETS":[[28.8,80,5.8,6.2],[69.5,80,6.1,6.2]]},"2":{"TRAPEZES":[[38.7,18,4.7,2.7],[59.3,18,4.7,2.7]],"DELT_ANT":[[25.8,21,4.7,4.1],[71.9,21,4.7,4.1]],"DELT_LAT":[[22.6,21,4.1,4.1],[75.1,21,4.1,4.1]],"PECTORAUX":[[38.6,25,6.5,4.5],[60.5,25,6.5,4.5]],"ABDOS":[[49.5,36,8.6,6.3]],"BICEPS":[[15.5,27,5.1,5.9],[82.6,27,5.1,5.9]],"AVANT_BRAS":[[9.7,41,5.9,5.9],[89.3,41,5.9,5.9]],"QUADRICEPS":[[30.5,60,7.4,7.2],[67.4,60,8.0,7.2]],"ADDUCTEURS":[[38.2,57,3.7,6.3],[59.2,57,3.5,6.3]],"ABDUCTEURS":[[21.5,53,4.6,5.4],[76.5,53,4.6,5.4]],"MOLLETS":[[28.1,80,6.8,6.3],[69.8,80,6.8,6.3]]},"3":{"TRAPEZES":[[39.3,18,5.4,2.8],[60.7,18,5.4,2.8]],"DELT_ANT":[[25.8,21,5.9,4.1],[78.2,21,5.9,4.1]],"DELT_LAT":[[22.2,21,5.2,4.1],[81.9,21,5.2,4.1]],"PECTORAUX":[[39.3,25,7.0,4.6],[60.8,25,7.0,4.6]],"ABDOS":[[50.9,36,9.6,6.5]],"BICEPS":[[17.6,27,5.6,6.0],[83.4,27,5.6,6.0]],"AVANT_BRAS":[[10.4,41,6.6,6.0],[89.9,41,6.2,6.0]],"QUADRICEPS":[[30.6,60,8.9,7.4],[68.3,60,8.9,7.4]],"ADDUCTEURS":[[39.1,57,4.3,6.5],[58.9,57,4.3,6.5]],"ABDUCTEURS":[[21.8,53,5.3,5.5],[78.2,53,5.3,5.5]],"MOLLETS":[[27.8,80,8.2,6.5],[71.1,80,7.4,6.5]]},"4":{"TRAPEZES":[[40.0,18,5.5,2.8],[60.0,18,5.5,2.8]],"DELT_ANT":[[21.0,21,7.1,4.2],[79.0,21,7.1,4.2]],"DELT_LAT":[[17.0,21,6.3,4.2],[83.0,21,6.3,4.2]],"PECTORAUX":[[39.0,25,7.9,4.7],[61.0,25,7.9,4.7]],"ABDOS":[[50.0,36,10.3,6.6]],"BICEPS":[[16.0,27,6.3,6.1],[84.0,27,6.3,6.1]],"AVANT_BRAS":[[10.0,41,7.1,6.1],[90.0,41,7.1,6.1]],"QUADRICEPS":[[31.0,60,10.3,7.5],[68.0,60,10.3,7.5]],"ADDUCTEURS":[[40.0,57,4.7,6.6],[59.0,57,4.7,6.6]],"ABDUCTEURS":[[23.0,53,5.5,5.6],[77.0,53,5.5,5.6]],"MOLLETS":[[28.0,80,8.7,6.6],[71.0,80,8.7,6.6]]},"5":{"TRAPEZES":[[39.3,18,6.2,2.9],[59.9,18,6.2,2.9]],"DELT_ANT":[[22.1,21,0.5,4.3],[78.7,21,0.6,4.3]],"DELT_LAT":[[21.8,21,0.4,4.3],[79.0,21,0.5,4.3]],"PECTORAUX":[[38.6,25,8.5,4.8],[60.5,25,8.5,4.8]],"ABDOS":[[50.0,36,11.9,6.7]],"BICEPS":[[15.7,27,6.8,6.2],[82.6,27,6.8,6.2]],"AVANT_BRAS":[[9.3,41,8.0,6.2],[90.4,41,8.5,6.2]],"QUADRICEPS":[[31.3,60,11.6,7.7],[67.7,60,11.6,7.7]],"ADDUCTEURS":[[39.9,57,5.2,6.7],[58.8,57,5.1,6.7]],"ABDUCTEURS":[[23.4,53,5.8,5.8],[75.8,53,5.8,5.8]],"MOLLETS":[[28.3,80,10.1,6.7],[71.1,80,9.7,6.7]]},"6":{"TRAPEZES":[[38.7,18,7.4,2.9],[61.3,18,7.4,2.9]],"DELT_ANT":[[17.1,21,9.2,4.4],[81.0,21,9.2,4.4]],"DELT_LAT":[[12.7,21,8.2,4.4],[85.4,21,8.2,4.4]],"PECTORAUX":[[38.5,25,9.3,4.9],[60.6,25,9.3,4.9]],"ABDOS":[[50.1,36,13.0,6.9]],"BICEPS":[[15.5,27,7.5,6.4],[83.7,27,7.5,6.4]],"AVANT_BRAS":[[7.9,41,9.3,6.4],[91.6,41,8.8,6.4]],"QUADRICEPS":[[31.9,60,12.1,7.8],[67.6,60,12.5,7.8]],"ADDUCTEURS":[[65.0,57,11.3,6.9],[34.3,57,11.0,6.9]],"ABDUCTEURS":[[23.6,53,6.3,5.9],[75.6,53,6.3,5.9]],"MOLLETS":[[28.2,80,10.5,6.9],[70.8,80,10.5,6.9]]},"7":{"TRAPEZES":[[37.0,18,9.1,3.0],[63.0,18,9.1,3.0]],"DELT_ANT":[[17.0,21,10.2,4.5],[82.6,21,10.2,4.5]],"DELT_LAT":[[12.5,21,9.0,4.5],[87.1,21,9.0,4.5]],"PECTORAUX":[[37.9,25,10.6,5.0],[61.2,25,10.6,5.0]],"ABDOS":[[50.1,36,15.2,7.0]],"BICEPS":[[13.6,27,8.4,6.5],[84.7,27,8.4,6.5]],"AVANT_BRAS":[[6.8,41,9.6,6.5],[93.2,41,9.6,6.5]],"QUADRICEPS":[[31.4,60,13.9,8.0],[67.7,60,13.9,8.0]],"ADDUCTEURS":[[64.5,57,12.4,7.0],[33.2,57,12.1,7.0]],"ABDUCTEURS":[[22.9,53,6.8,6.0],[75.5,53,6.8,6.0]],"MOLLETS":[[27.8,80,11.7,7.0],[70.8,80,11.3,7.0]]}},"dos":{"1":{"TRAPEZES":[[49.4,20,9.2,4.4]],"DELT_POST":[[20.8,21,4.8,3.5],[79.1,21,4.8,3.5]],"DORSAUX":[[38.0,31,6.6,6.2],[60.9,31,6.6,6.2]],"LOMBAIRES":[[49.5,41,6.6,3.5]],"TRICEPS":[[16.4,27,4.5,5.7],[82.5,27,4.5,5.7]],"AVANT_BRAS":[[9.3,41,4.6,5.7],[89.5,41,4.6,5.7]],"FESSIERS":[[35.3,50,7.1,4.9],[63.7,50,7.1,4.9]],"ISCHIOS":[[29.9,63,6.4,6.2],[67.2,63,6.4,6.2]],"MOLLETS":[[26.7,80,5.7,6.2],[69.5,80,5.7,6.2]]},"2":{"TRAPEZES":[[49.4,20,10.9,4.5]],"DELT_POST":[[19.6,21,5.5,3.6],[79.3,21,5.5,3.6]],"DORSAUX":[[38.0,31,7.4,6.3],[60.9,31,7.4,6.3]],"LOMBAIRES":[[50.0,41,7.7,3.6]],"TRICEPS":[[16.3,27,5.1,5.9],[82.6,27,5.1,5.9]],"AVANT_BRAS":[[9.2,41,5.1,5.9],[90.6,41,5.1,5.9]],"FESSIERS":[[35.9,50,7.8,5.0],[64.0,50,7.8,5.0]],"ISCHIOS":[[30.1,63,7.4,6.3],[67.4,63,7.6,6.3]],"MOLLETS":[[26.9,80,6.6,6.3],[70.2,80,6.6,6.3]]},"3":{"TRAPEZES":[[49.9,20,13.1,4.6]],"DELT_POST":[[19.3,21,6.2,3.7],[80.6,21,6.2,3.7]],"DORSAUX":[[38.7,31,8.5,6.5],[62.3,31,8.5,6.5]],"LOMBAIRES":[[50.0,41,8.3,3.7]],"TRICEPS":[[16.2,27,5.7,6.0],[83.7,27,5.7,6.0]],"AVANT_BRAS":[[9.4,41,5.9,6.0],[90.4,41,5.9,6.0]],"FESSIERS":[[36.5,50,8.6,5.1],[64.5,50,8.6,5.1]],"ISCHIOS":[[30.0,63,8.3,6.5],[67.6,63,8.6,6.5]],"MOLLETS":[[26.3,80,7.8,6.5],[70.7,80,7.8,6.5]]},"4":{"TRAPEZES":[[50.0,20,15.8,4.7]],"DELT_POST":[[18.0,21,7.1,3.8],[82.0,21,7.1,3.8]],"DORSAUX":[[38.0,31,9.5,6.6],[62.0,31,9.5,6.6]],"LOMBAIRES":[[50.0,41,8.7,3.8]],"TRICEPS":[[16.0,27,6.3,6.1],[84.0,27,6.3,6.1]],"AVANT_BRAS":[[9.0,41,7.1,6.1],[91.0,41,7.1,6.1]],"FESSIERS":[[36.0,50,9.5,5.2],[64.0,50,9.5,5.2]],"ISCHIOS":[[30.0,63,9.5,6.6],[68.0,63,9.5,6.6]],"MOLLETS":[[27.0,80,8.7,6.6],[71.0,80,8.7,6.6]]},"5":{"TRAPEZES":[[50.0,20,18.5,4.8]],"DELT_POST":[[17.0,21,8.0,3.8],[83.1,21,8.0,3.8]],"DORSAUX":[[37.7,31,10.6,6.7],[62.3,31,10.6,6.7]],"LOMBAIRES":[[50.0,41,9.6,3.8]],"TRICEPS":[[15.1,27,7.1,6.2],[84.9,27,7.1,6.2]],"AVANT_BRAS":[[8.9,41,7.7,6.2],[91.1,41,7.7,6.2]],"FESSIERS":[[35.9,50,10.4,5.3],[64.1,50,10.4,5.3]],"ISCHIOS":[[29.2,63,10.6,6.7],[68.3,63,10.9,6.7]],"MOLLETS":[[25.8,80,9.4,6.7],[71.3,80,9.4,6.7]]},"6":{"TRAPEZES":[[50.5,20,20.8,4.9]],"DELT_POST":[[17.1,21,8.7,3.9],[83.9,21,8.7,3.9]],"DORSAUX":[[38.1,31,11.5,6.9],[62.9,31,11.5,6.9]],"LOMBAIRES":[[50.0,41,10.7,3.9]],"TRICEPS":[[15.3,27,7.7,6.4],[85.7,27,7.7,6.4]],"AVANT_BRAS":[[8.4,41,8.8,6.4],[92.0,41,8.4,6.4]],"FESSIERS":[[36.0,50,11.2,5.4],[64.0,50,11.2,5.4]],"ISCHIOS":[[29.0,63,11.9,6.9],[68.9,63,11.9,6.9]],"MOLLETS":[[25.5,80,10.6,6.9],[71.4,80,10.6,6.9]]},"7":{"TRAPEZES":[[50.1,20,23.8,5.0]],"DELT_POST":[[14.9,21,9.9,4.0],[85.2,21,9.9,4.0]],"DORSAUX":[[37.8,31,12.8,7.0],[63.3,31,12.8,7.0]],"LOMBAIRES":[[50.0,41,11.1,4.0]],"TRICEPS":[[14.1,27,8.4,6.5],[85.9,27,8.4,6.5]],"AVANT_BRAS":[[8.1,41,9.1,6.5],[92.3,41,8.7,6.5]],"FESSIERS":[[35.8,50,12.2,5.5],[64.3,50,12.2,5.5]],"ISCHIOS":[[28.8,63,12.3,7.0],[68.6,63,12.8,7.0]],"MOLLETS":[[25.0,80,11.4,7.0],[71.0,80,11.4,7.0]]}}}};
 // Les six groupes que la face ne montre pas : ils ont leur planche à eux.
 const WO_MUSCLES_DOS = Object.freeze(
   ['DORSAUX','LOMBAIRES','DELT_POST','TRICEPS','ISCHIOS','FESSIERS']);
@@ -25843,11 +25835,11 @@ function woMusclesAvatar(ex,user){
 }
 // Le calque des zones. Vide s'il n'y a rien à montrer — de face, un exercice
 // purement dorsal n'a aucune zone, et c'est assumé.
-function woHtmlZones(muscles,src,vue){
-  const table=(vue==='dos')?WO_ZONES_DOS:WO_ZONES_AV;
+function woHtmlZones(muscles,src,vue,niv,genre){
+  const par=((WO_ZONES[genre]||{})[vue]||{})[niv]||{};
   const f=[];
   (muscles||[]).forEach(m=>{
-    (table[m]||[]).forEach(z=>{
+    (par[m]||[]).forEach(z=>{
       f.push('<ellipse cx="'+z[0]+'" cy="'+z[1]+'" rx="'+z[2]+'" ry="'+z[3]+'"/>');
     });
   });
@@ -25855,8 +25847,15 @@ function woHtmlZones(muscles,src,vue){
   // Le masque est la vignette elle-même : les zones ne peuvent peindre que là
   // où il y a de la chair, sur les sept niveaux, sans découpage à la main.
   const mq="-webkit-mask-image:url('"+src+"');mask-image:url('"+src+"')";
+  // UN DÉGRADÉ, PAS UN APLAT. Une ellipse pleine a un bord franc que le flou
+  // ne suffit pas à fondre ; un dégradé radial éteint la couleur avant le bord,
+  // et la tache se pose sur le muscle au lieu d'être collée dessus.
+  const deg='<defs><radialGradient id="woZg">'
+    +'<stop offset="0" stop-color="#ff1b1b" stop-opacity=".95"/>'
+    +'<stop offset=".55" stop-color="#ff2626" stop-opacity=".8"/>'
+    +'<stop offset="1" stop-color="#ff3a3a" stop-opacity="0"/></radialGradient></defs>';
   return '<svg class="wo-ava-z" viewBox="0 0 100 100" preserveAspectRatio="none"'
-    +' aria-hidden="true" style="'+mq+'">'+f.join('')+'</svg>';
+    +' aria-hidden="true" style="'+mq+'">'+deg+f.join('')+'</svg>';
 }
 
 // ══ L'AVATAR DE PROGRESSION ═══════════════════════════════════════════════
@@ -25907,7 +25906,7 @@ function woMajAvatar(ecran,total,ex){
   const vue=woVueAvatar(mus);
   const src=woSrcAvatar(niv,g,vue);
   z.innerHTML='<img class="wo-ava-img" alt="" aria-hidden="true" src="'+src+'">'
-    +woHtmlZones(mus,src,vue);
+    +woHtmlZones(mus,src,vue,niv,g);
   z.dataset.niveau=String(niv);
   z.dataset.vue=vue;
 }
@@ -30791,14 +30790,26 @@ function _exIndex(){
 }
 // Un mot du guide à UNE correction près, ou le mot lui-même. Pas deux : à deux,
 // « BARRE » et « BANC » se confondent, et un dos deviendrait un pec.
+function _exPrefixe(a,b){
+  const n=Math.min(a.length,b.length); let i=0;
+  while(i<n && a[i]===b[i]) i++;
+  return i;
+}
 function _exMotProche(m){
   _exIndex();
   if(_exVoc.has(m)) return m;
   if(m.length<5) return null;
-  let best=null,bd=2;
+  // À ÉGALE DISTANCE, ON DÉPARTAGE — sans quoi on garde le premier mot
+  // rencontré, c'est-à-dire l'ordre d'insertion, autant dire le hasard.
+  // « LATERALES » est à une correction de « LATERALE » comme de « LATERALS » ;
+  // le préfixe commun tranche les pluriels et les accords, et la fréquence
+  // tranche le reste.
+  let best=null,bd=2,bp=-1,bf=-1;
   for(const v of _exVoc){
     const d=_exDist(m,v,1);
-    if(d<bd){ bd=d; best=v; if(d===0) break; }
+    if(d>1) continue;
+    const p=_exPrefixe(m,v), f=_exFreq.get(v)||0;
+    if(d<bd || (d===bd && (p>bp || (p===bp && f>bf)))){ bd=d; bp=p; bf=f; best=v; }
   }
   return bd<=1?best:null;
 }
