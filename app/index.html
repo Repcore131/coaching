@@ -1154,13 +1154,23 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
    !important ou non — mesuré. On rend donc les cellules transparentes quand la
    ligne est aussi en alerte, sans ajouter d'!important concurrent. */
 .series-table tr.done.row-alert td{background:transparent}
-.series-table-wo td{padding:5px 4px}.series-table-wo th{padding:6px 4px}
-/* LE REMBOURRAGE, PAS LE PLANCHER TAPABLE. Le champ mesurait 49 px : douze de
-   rembourrage haut et bas autour d'un texte de 18, soit cinq de plus que le
-   minimum de 44 qu'il doit garder. On rend ces cinq pixels à la ligne ; les
-   44 px restent, ils tiennent la cible du doigt et c'est eux qu'on ne touche
-   pas — on tape ce champ en pleine série, la main moite. */
-.set-input{width:56px;background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1);color:var(--text);text-align:center;padding:7px 4px;min-height:44px;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800}
+.series-table-wo td{padding:5px 4px}.series-table-wo th{padding:6px 6px}
+/* LA CASE DESCEND À 38 PX. Le plancher de 44 était un choix d'accessibilité ;
+   la demande est répétée, on l'abaisse. La case fait 56 px de large : la cible
+   reste 56 × 38, au-dessus du minimum de la règle (24 × 24) et sous son palier
+   confortable (44 × 44). Arbitrage assumé, pas un oubli. */
+.set-input{width:56px;background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1);color:var(--text);text-align:center;padding:4px;min-height:38px;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800}
+/* ── La case de charge porte son unité ────────────────────────────────── */
+/* Un <input type="number"> n'affiche que sa valeur : l'unité se pose à côté, et
+   c'est LE CADRE qui devient la boîte — bordure, fond et rayon lui passent. */
+.set-kg{display:inline-flex;align-items:baseline;justify-content:center;gap:2px;
+  width:60px;min-height:38px;box-sizing:border-box;padding:4px 4px;
+  background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1)}
+.set-kg input.set-input{width:auto;flex:1 1 auto;min-width:0;min-height:0;
+  padding:0;background:none;border:none;text-align:right}
+.set-kg i{flex:0 0 auto;font-style:normal;font-family:Montserrat,sans-serif;
+  font-size:9px;font-weight:800;letter-spacing:.3px;color:var(--sub);line-height:1}
+.series-table tr.done .set-kg{opacity:.55}
 /* LE CHIFFRE EN BEBAS, ET SEULEMENT LUI. La classe habille aussi les deux menus
    déroulants (RIR, douleur) : Bebas n'a pas de bas de casse, « Échec » y
    sortirait en capitales et le menu ne ressemblerait plus à un menu.
@@ -1168,8 +1178,10 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
    dépôt, et toute valeur supérieure produit un gras synthétique baveux —
    exactement ce que donnait le 800 en Montserrat. Le corps monte de 14 à 18 px
    parce qu'une condensée lit plus petit à taille égale. */
+/* INTERLIGNE 1 : la police de titre a un corps haut, et c'est lui qui creusait
+   le vide au-dessus et au-dessous du nombre, avant même le rembourrage. */
 input.set-input{font-family:var(--pile-titre);font-weight:400;
-  font-size:18px;letter-spacing:1px;font-variant-numeric:tabular-nums}
+  font-size:15px;line-height:1;letter-spacing:.2px;font-variant-numeric:tabular-nums}
 .set-input:focus{border-color:var(--red);outline:none;box-shadow:0 0 0 2px rgba(198,15,8,.15)}
 
 /* ====== SUGGEST BOX ====== */
@@ -26322,17 +26334,17 @@ function renderSets(ex,data,idx){
     const isWide=isDeg;
     const weightInner=isDeg
       ?`<input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" value="${s.weight||''}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" value="${s.weight2||''}" placeholder="P2" style="border-color:#78350f;margin-left:4px" onchange="${onChW2}" ${dis}>`
-      :`<div><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" value="${s.weight||''}" placeholder="kg" style="${weightBorder}" onchange="${onChW}" ${dis}>${autoLabel}</div>`;
+      :`<div><span class="set-kg" style="${weightBorder}"><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" value="${s.weight||''}" onchange="${onChW}" ${dis}><i>kg</i></span>${autoLabel}</div>`;
 
     // Simple-mode: <td> wrappers for classic table layout
     const weightCell=isDeg
       ?`<td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" value="${s.weight||''}" placeholder="P1" style="border-color:#9a3412" onchange="${onChW}" ${dis}></td><td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" value="${s.weight2||''}" placeholder="P2" style="border-color:#78350f" onchange="${onChW2}" ${dis}></td>`
-      :`<td><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" value="${s.weight||''}" placeholder="kg" style="${weightBorder}" onchange="${onChW}" ${dis}>${autoLabel}</td>`;
+      :`<td><span class="set-kg" style="${weightBorder}"><input class="set-input" type="number" min="0" step="0.25" inputmode="decimal" value="${s.weight||''}" onchange="${onChW}" ${dis}><i>kg</i></span>${autoLabel}</td>`;
 
     // Cycle cell
 
     // RIR dropdown
-    const rirSelect=`<select class="set-input" onchange="${onChR}" ${dis} style="padding:4px 2px;font-size:var(--fs-xs);min-width:52px;min-height:44px">
+    const rirSelect=`<select class="set-input" onchange="${onChR}" ${dis} style="padding:4px 2px;font-size:var(--fs-xs);min-width:44px;min-height:38px">
       <option value="">RIR</option>
       ${RIR_OPTS.map(v=>`<option value="${v}" ${String(s.rir)===v?'selected':''}>${v==='echec'?'Échec':v==='0'?'0 ':v}</option>`).join('')}
     </select>`;
@@ -26347,7 +26359,7 @@ function renderSets(ex,data,idx){
     //
     // La charge et le RIR, eux, le gardent : ils décrivent un effort accompli,
     // et les rouvrir permettrait de réécrire une séance validée.
-    const painSelect=`<select class="set-input" onchange="${onChP}" aria-label="Douleur ressentie sur cette série" style="padding:4px 2px;font-size:var(--fs-xs);min-width:44px;min-height:44px">
+    const painSelect=`<select class="set-input" onchange="${onChP}" aria-label="Douleur ressentie sur cette série" style="padding:4px 2px;font-size:var(--fs-xs);min-width:38px;min-height:38px">
       <option value="">—</option>
       ${PAIN_OPTS.map(v=>`<option value="${v}" ${String(s.pain)===v?'selected':''}>${v}</option>`).join('')}
     </select>`;
