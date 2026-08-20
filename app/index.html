@@ -2411,7 +2411,9 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
    --rep-d (le diamètre du cadran) — le corps du décompte en dérive, les
    marges aussi. Réduire le chrono, c'est changer ce nombre-là et rien d'autre. */
 .rep-carte{
-  --rep-d:104px;                       /* diamètre du cadran */
+  /* LA SEULE MESURE DE LA CARTE. Le corps du décompte en dérive, les marges
+     aussi : réduire le chrono, c'est changer ce nombre-là et rien d'autre. */
+  --rep-d:92px;                        /* diamètre du cadran */
   --rep-f:calc(var(--rep-d)*.322);     /* corps du décompte, dérivé du cadran */
   --rep-rouge:#E02020;
   position:relative;
@@ -2422,12 +2424,13 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   border-radius:10px;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.03),0 10px 30px rgba(0,0,0,.6);
 }
-/* ── L'en-tête : deux filets, deux éclairs, un titre ───────────────────── */
-.rep-entete{display:flex;align-items:center;justify-content:center;gap:9px}
-.rep-filet{flex:0 0 44px;height:1px;
-  background:linear-gradient(90deg,transparent,rgba(224,32,32,.55))}
-.rep-filet+.rep-filet,.rep-entete>.rep-filet:last-child{
-  background:linear-gradient(90deg,rgba(224,32,32,.55),transparent)}
+/* ── L'en-tête : un titre à gauche, un éclair derrière ─────────────────── */
+/* Les deux filets sont partis, et leurs règles avec eux : un sélecteur qui ne
+   vise plus rien est un piège pour le prochain qui lira cette feuille.
+   La marge de droite laisse la place au bouton du son, qui est en absolu dans
+   le coin — sans elle, un titre long passerait dessous. */
+.rep-entete{display:flex;align-items:center;justify-content:flex-start;gap:7px;
+  padding-right:30px}
 .rep-entete svg{width:9px;height:11.5px;flex:0 0 auto;color:var(--rep-rouge);
   filter:drop-shadow(0 0 4px rgba(224,32,32,.75))}
 .rep-titre{font-size:9.5px;font-weight:600;letter-spacing:3px;text-transform:uppercase;
@@ -2520,7 +2523,7 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .rep-maj{text-transform:uppercase}
 /* Écran court : le cadran rétrécit, et lui seul — le corps du décompte et
    l'emprise de la décharge en découlent. */
-@media (max-height:700px){.rep-carte{--rep-d:92px}}
+@media (max-height:700px){.rep-carte{--rep-d:82px}}
 @media (max-height:600px){.rep-carte{--rep-d:82px}}
 
 /* ANIMATION 7 — l'arc qui passe d'un onglet à l'autre. Un trait de 2 px à
@@ -21662,12 +21665,11 @@ function _monterRepos(z){
   const _sonOn=!!(currentUser&&currentUser.sonRepos);
   _reposSonRendu=_sonOn;
   z.innerHTML=`<div id="rep-bandeau" class="rep-carte">
-    <!-- L'EN-TÊTE. Deux filets, deux éclairs, un titre : le bandeau n'annonce
-         qu'une chose, et il l'annonce comme une enseigne. -->
+    <!-- L'EN-TÊTE. Le titre à gauche, un seul éclair derrière lui : placé
+         AVANT le mot il se lirait comme une puce, après il se lit comme une
+         signature. -->
     <div class="rep-entete">
-      <span class="rep-filet"></span>${REPOS_BOLT}
-      <span class="rep-titre" id="rep-lbl">Temps de récup</span>
-      ${REPOS_BOLT}<span class="rep-filet"></span>
+      <span class="rep-titre" id="rep-lbl">Temps de récup</span>${REPOS_BOLT}
     </div>
     <!-- LE SON, COUPABLE SUR PLACE. Le réglage se pose une fois ; ce bouton
          sert au moment où le son dérange — quelqu'un à côté, ou les écouteurs
