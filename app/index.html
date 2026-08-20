@@ -2044,6 +2044,22 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .sk-lbl{font-size:11px;font-weight:800;letter-spacing:2.1px;text-transform:uppercase;
   color:var(--text);line-height:1}
 
+/* ══ L'ALERTE DE BILAN ════════════════════════════════════════════════════
+   Le panneau d'attention est aligné sur le HAUT du texte, pas centré sur le
+   bloc. Le sous-titre passe à deux lignes dès qu'il porte un retard en jours,
+   et à trois sur un écran étroit : un pictogramme centré sur l'ensemble se
+   retrouverait alors à hauteur du texte de détail, loin du titre qu'il
+   qualifie.
+   Mesuré : son centre tombe 9 px sous celui du titre quand celui-ci tient sur
+   une ligne — le pictogramme fait 34 px, la ligne de titre 18. On ne le remonte
+   PAS par une marge négative : elle le ferait déborder sur le liseré du cadre,
+   qui n'a que 14 px de rembourrage. */
+.bal-rangee{display:flex;align-items:flex-start;gap:12px}
+.bal-ico{flex:0 0 auto;width:34px;height:34px;margin-top:1px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;color:var(--orange);
+  background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.35)}
+.bal-ico svg{width:19px;height:19px;display:block}
+
 /* ══ LA RANGÉE DU HAUT DE LA BANNIÈRE « SÉANCE DU JOUR » ══════════════════
    Le sur-titre demande 132 px et les sept pastilles 200. À 480 px la bannière
    offre 400 px de contenu : tout tient. À 360 il n'en reste que 280, et le
@@ -4540,8 +4556,13 @@ const COACH_PHOTO='icons/coach.jpg';
 
       <!-- BILAN ALERT -->
       <div id="clh-bilan-alert" style="display:none;background:#7c2d1222;border:1px solid var(--orange);border-radius:var(--r-md);padding:14px 16px;margin-bottom:16px;cursor:pointer" onclick="openBilanChoice()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <div style="font-weight:700;color:var(--orange);font-size:var(--fs-md);text-transform:uppercase;letter-spacing:.5px">Bilan bimensuel à compléter</div>
-        <div class="sub" style="font-size:var(--fs-sm);margin-top:4px" id="clh-bilan-alert-sub">Suis ton évolution : remplis ton bilan.</div>
+        <div class="bal-rangee">
+          <span class="bal-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+          <div style="min-width:0">
+            <div style="font-weight:700;color:var(--orange);font-size:var(--fs-md);text-transform:uppercase;letter-spacing:.5px">Bilan bimensuel à compléter</div>
+            <div class="sub" style="font-size:var(--fs-sm);margin-top:4px" id="clh-bilan-alert-sub">Suis ton évolution : remplis ton bilan.</div>
+          </div>
+        </div>
       </div>
 
       <!-- LE PROGRAMME PDF A QUITTE L ACCUEIL. Les seances se composent
