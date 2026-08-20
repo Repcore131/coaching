@@ -2209,10 +2209,15 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 #wo-set-count{display:block;margin-top:3px;font-size:var(--fs-xs);font-weight:700;
   color:var(--sub);white-space:nowrap}
 
-/* LE NOM EN ROUGE NÉON. Le halo passe par --halo-c, le jeton de l'application :
-   une ombre écrite à la main ici aurait divergé du reste au premier réglage. */
-.wo-nom{color:#ff3b30;--halo-c:rgba(224,32,32,.8);
-  text-shadow:var(--halo-1),0 0 18px rgba(224,32,32,.4)}
+/* LE NOM EN ROUGE NÉON, ET FRANC. Le halo passe par --halo-c, le jeton de
+   l'application : une ombre écrite à la main ici aurait divergé du reste au
+   premier réglage. La teinte monte d'un cran — #ff3b30 tirait sur l'orangé.
+   LE HALO EST SERRÉ, ET C'EST CE QUI LE REND MORDANT. Une couche large et
+   opaque — celle de --halo-2 — étalait une brume rectangulaire sur toute la
+   ligne : plus de lumière, mais salie. Trois couches décroissantes tiennent le
+   bord des lettres chaud et laissent le fond noir. */
+.wo-nom{color:#ff2020;--halo-c:rgba(255,40,40,.95);
+  text-shadow:var(--halo-1),0 0 16px rgba(255,20,20,.5),0 0 34px rgba(224,32,32,.2)}
 /* Les deux commandes, empilées et de largeur égale. */
 .wo-cmd{display:flex;flex-direction:column;gap:6px;flex:0 0 auto;align-items:stretch}
 .wo-cmd>button{width:100%;justify-content:center;flex-shrink:0}
