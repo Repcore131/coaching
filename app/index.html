@@ -2052,10 +2052,22 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
    D'où une BOÎTE qui contient le couple : l'input y prend une largeur fixe et
    s'aligne à droite, l'unité le suit, et c'est le couple qui est centré. Le
    « kg » reste collé au nombre, de « 62 » à « 103.8 ». */
-.pes-boite{flex:1;min-width:0;display:flex;align-items:baseline;justify-content:center;
-  gap:5px;box-sizing:border-box;padding:10px 6px;cursor:text;
+/* MÊME HAUTEUR QUE LE BOUTON, ÉCRITE. Elle valait 48 px contre 44 — issue du
+   rembourrage et du corps du chiffre — et les deux ne partageaient alors ni
+   leur bord haut ni leur bord bas.
+   `margin:0` N'EST PAS UNE PRÉCAUTION D'ÉCRITURE : la feuille donne à tout
+   <label> une marge de 16 px en haut et 6 en bas, pour les libellés de
+   formulaire. Ici elle décalait la boîte de cinq pixels sous le bouton — à
+   hauteurs pourtant égales — et ajoutait vingt-deux pixels à la carte. */
+.pes-boite{flex:1;min-width:0;height:44px;margin:0;display:flex;align-items:center;
+  justify-content:center;box-sizing:border-box;padding:0 10px;cursor:text;
   background:var(--dark);border:1px solid var(--border);border-radius:var(--r-2);
   transition:border-color var(--t-1) var(--c-out)}
+/* L'INTERMÉDIAIRE N'EST PAS DÉCORATIF. Le nombre et son unité s'alignent sur
+   leur LIGNE DE BASE — c'est ce qui les fait lire comme une seule mesure — mais
+   un alignement sur la base dans une boîte plus haute que son contenu colle
+   celui-ci en haut. On centre donc ce bloc, et la base s'aligne dedans. */
+.pes-duo{display:flex;align-items:baseline;justify-content:center;gap:5px;min-width:0}
 .pes-boite:focus-within{border-color:rgba(224,32,32,.55)}
 .pes-champ{width:4.6em;flex:0 0 auto;min-width:0;padding:0;margin:0;
   background:none;border:none;outline:none;text-align:right;
@@ -51425,8 +51437,8 @@ function renderCartePesee(){
     sous='Encore '+(PESEE_MM_MIN-fen)+' pesée'+((PESEE_MM_MIN-fen)>1?'s':'')
       +' cette semaine avant une moyenne fiable';
   }
-  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:16px;margin-bottom:16px;box-shadow:var(--el-1)">
-    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:9px">
+  z.innerHTML=`<div style="background:var(--surface-1);border:1px solid var(--border);border-radius:var(--r-md);padding:13px 14px;margin-bottom:16px;box-shadow:var(--el-1)">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
       <span style="font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);text-transform:uppercase">Pesée du jour</span>
       ${dujour?`<span style="font-size:var(--fs-2xs);color:var(--green);font-weight:700">✓ ${dujour.kg} kg</span>`:''}
     </div>
@@ -51435,14 +51447,16 @@ function renderCartePesee(){
            contenir le couple « nombre + unité ». Un clic n'importe où dedans
            donne le focus au champ, sinon la moitié de la surface serait morte. -->
       <label class="pes-boite" for="pesee-input">
-        <input type="number" id="pesee-input" inputmode="decimal" step="0.1"
-          min="${PESEE_MIN}" max="${PESEE_MAX}" placeholder="${der?der.kg:'—'}"
-          value="${dujour?dujour.kg:''}" class="pes-champ">
-        <span class="pes-unite">kg</span>
+        <span class="pes-duo">
+          <input type="number" id="pesee-input" inputmode="decimal" step="0.1"
+            min="${PESEE_MIN}" max="${PESEE_MAX}" placeholder="${der?der.kg:'—'}"
+            value="${dujour?dujour.kg:''}" class="pes-champ">
+          <span class="pes-unite">kg</span>
+        </span>
       </label>
       <button class="btn btn-red btn-sm" onclick="savePesee()" style="height:44px;padding:0 18px;letter-spacing:1px;white-space:nowrap">${dujour?'Corriger':'Valider'}</button>
     </div>
-    <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:8px;line-height:1.5">${sous}</div>
+    <div style="font-size:var(--fs-xs);color:var(--sub);margin-top:7px;line-height:1.45">${sous}</div>
   </div>`;
 }
 async function savePesee(){
