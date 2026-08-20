@@ -2037,6 +2037,105 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .sk-lbl{font-size:11px;font-weight:800;letter-spacing:2.1px;text-transform:uppercase;
   color:var(--text);line-height:1}
 
+/* ══ LA CARTE « SÉANCE GELÉE » ════════════════════════════════════════════
+   Deux colonnes : le texte à gauche, le bloc de glace à droite. Tout le décor
+   — montagnes, voile, poudre — est un SVG posé EN DUR sous le contenu : il ne
+   dépend d'aucune donnée, et le refabriquer à chaque rendu de l'accueil ferait
+   recalculer des turbulences pour rien.
+   DEUX BOUCLES SEULEMENT, et toutes deux en transform/opacité : le reflet qui
+   balaie le bloc et le flocon de la pastille. Le givre, lui, est rastérisé une
+   fois et ne bouge jamais. */
+.gv-carte{position:relative;overflow:hidden;display:none;
+  background:linear-gradient(158deg,#132b42 0%,#0c1c2e 46%,#081321 100%);
+  border:1px solid rgba(125,175,225,.28);border-radius:18px;
+  padding:16px 16px 16px 20px;margin-bottom:16px;cursor:pointer;
+  box-shadow:0 10px 30px rgba(0,0,0,.45),inset 0 1px 0 rgba(190,225,255,.16),
+             inset 0 0 40px rgba(90,170,255,.05);
+  transition:border-color var(--t-1) var(--c-out),box-shadow var(--t-1) var(--c-out)}
+.gv-carte:active{border-color:rgba(150,200,245,.55);
+  box-shadow:0 6px 18px rgba(0,0,0,.5),inset 0 0 40px rgba(90,170,255,.10)}
+.gv-carte:focus-visible{outline:2px solid rgba(150,200,245,.9);outline-offset:3px}
+.gv-decor{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+.gv-hex{position:absolute;top:13px;right:15px;width:34px;height:37px;
+  pointer-events:none;z-index:1;opacity:.85}
+.gv-corps{position:relative;z-index:2;display:flex;align-items:center;gap:12px}
+.gv-texte{flex:1 1 auto;min-width:0}
+
+/* ── La pastille ─────────────────────────────────────────────────────── */
+.gv-pastille{display:inline-flex;align-items:center;gap:9px;
+  padding:4px 14px 4px 4px;border-radius:999px;
+  background:linear-gradient(180deg,rgba(38,86,138,.55),rgba(24,58,96,.5));
+  border:1px solid rgba(120,175,230,.3);margin-bottom:12px}
+.gv-flocon{display:flex;align-items:center;justify-content:center;
+  width:27px;height:27px;border-radius:9px;flex:0 0 auto;color:#dcefff;
+  background:linear-gradient(180deg,rgba(62,124,186,.9),rgba(38,86,140,.9));
+  box-shadow:inset 0 1px 0 rgba(220,240,255,.35)}
+.gv-flocon svg{width:15px;height:15px;display:block;
+  animation:gvTourne var(--t-boucle) linear infinite}
+@keyframes gvTourne{to{transform:rotate(360deg)}}
+.gv-past-txt{font-family:Montserrat,sans-serif;font-size:10.5px;font-weight:800;
+  letter-spacing:2px;text-transform:uppercase;color:#8fc2f0;line-height:1}
+
+/* ── Le texte ────────────────────────────────────────────────────────── */
+.gv-titre{font-family:Montserrat,sans-serif;font-size:21px;font-weight:800;
+  letter-spacing:.2px;color:#eef5fc;line-height:1.1;margin-bottom:5px;
+  text-transform:uppercase;overflow-wrap:anywhere}
+.gv-sous{font-family:Montserrat,sans-serif;font-size:13px;color:#8ea6bd;line-height:1.3}
+.gv-regle{display:block;width:34px;height:3px;border-radius:2px;margin:11px 0 13px;
+  background:linear-gradient(90deg,#2f7fd8,#6bb4f5)}
+
+/* ── Le bouton ───────────────────────────────────────────────────────── */
+/* Il ne porte PAS le scale d'appui du reste de l'application : la carte est
+   elle-même un bouton, et deux réponses d'appui emboîtées se contredisent. */
+.gv-btn{display:inline-flex;align-items:center;gap:9px;
+  padding:10px 17px 10px 13px;border:none;border-radius:11px;cursor:pointer;
+  background:linear-gradient(180deg,#3f93e4,#2470c4);
+  box-shadow:0 4px 14px rgba(38,110,196,.45),inset 0 1px 0 rgba(220,240,255,.4);
+  font-family:Montserrat,sans-serif;font-size:11.5px;font-weight:800;
+  letter-spacing:1.1px;text-transform:uppercase;color:#fff;
+  transition:filter var(--t-1) var(--c-out),box-shadow var(--t-1) var(--c-out)}
+.gv-btn svg{width:17px;height:17px;flex:0 0 auto;display:block}
+.gv-btn:hover{filter:brightness(1.08)}
+.gv-btn:active{box-shadow:0 2px 8px rgba(38,110,196,.5),inset 0 1px 0 rgba(220,240,255,.3)}
+
+/* ── Le bloc de glace ────────────────────────────────────────────────── */
+.gv-glacon{flex:0 0 auto;width:126px;height:134px;display:block;margin:-6px -4px -8px 0}
+/* Le reflet fait sa course en un quart de cycle et attend le reste : un balayage
+   continu battrait comme un métronome, alors qu'un reflet est un accident. */
+.gv-balai{animation:gvBalai var(--t-boucle) linear infinite}
+@keyframes gvBalai{
+  0%   {transform:translateX(0);opacity:0}
+  4%   {opacity:.85}
+  26%  {transform:translateX(210px);opacity:.6}
+  30%  {transform:translateX(230px);opacity:0}
+  100% {transform:translateX(230px);opacity:0}
+}
+/* SUR UN TÉLÉPHONE ÉTROIT, C'EST LE BLOC QUI CÈDE. À 360 px, tout se repliait
+   sur deux lignes — la pastille, le titre, le sous-titre et le bouton : le
+   bloc de glace prenait 126 px sur les 320 de la carte et n'en laissait que
+   182 au texte. Il rétrécit donc, les marges se resserrent, et les deux
+   libellés qui ne DOIVENT pas se couper sont tenus en une ligne. */
+/* Le libellé tient en une ligne — mais JAMAIS au prix d'un débordement : à
+   320 px le bouton en nowrap sortait de sa colonne et passait sous le bloc de
+   glace. En dessous de 345 px il redevient donc coupable, ce qui n'ôte rien à
+   sa lisibilité. */
+.gv-past-txt,.gv-btn span{white-space:nowrap}
+.gv-btn{max-width:100%}
+@media (max-width:345px){ .gv-btn span{white-space:normal} }
+@media (max-width:420px){
+  .gv-carte{padding:14px 12px 14px 16px}
+  .gv-corps{gap:8px}
+  .gv-glacon{width:84px;height:89px;margin:-4px -2px -6px 0}
+  .gv-titre{font-size:19px}
+  .gv-sous{font-size:12px}
+  .gv-btn{padding:9px 13px 9px 11px;font-size:10.5px;letter-spacing:.6px;gap:7px}
+  .gv-btn svg{width:15px;height:15px}
+  .gv-pastille{padding:3px 11px 3px 3px;gap:7px;margin-bottom:10px}
+  .gv-flocon{width:23px;height:23px;border-radius:8px}
+  .gv-flocon svg{width:13px;height:13px}
+  .gv-hex{width:28px;height:31px;top:10px;right:11px}
+}
+
 /* La carte Nutrition est un raccourci vers son onglet.
    L'APPUI NE SE LIT NI SUR `transform` NI SUR `filter`, contrairement au reste
    de l'application : cette carte porte le ciel d'éclairs, dont les trois
@@ -4305,22 +4404,33 @@ const COACH_PHOTO='icons/coach.jpg';
       <div id="clh-pesee"></div>
 
       <!-- REPRISE SÉANCE EN COURS -->
-      <div id="clh-resume-workout" style="display:none;position:relative;overflow:hidden;background:linear-gradient(160deg,#0a1622,#071019 55%,#050c14);border:1px solid #1d3f5c;border-radius:var(--r-md);padding:28px 16px 14px;margin-bottom:16px;cursor:pointer;box-shadow:var(--e2),inset 0 0 30px rgba(90,170,255,.06)" onclick="woResumeAndGo()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
-        <svg aria-hidden="true" viewBox="0 0 100 62" preserveAspectRatio="none" style="position:absolute;top:0;left:0;width:100%;height:34px;pointer-events:none;opacity:.30">
-          <defs><linearGradient id="congere" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="var(--text)"/><stop offset=".45" stop-color="#f4faff"/>
-            <stop offset="1" stop-color="#c3daec"/></linearGradient>
-          <linearGradient id="glacon" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#f4fdff" stop-opacity=".95"/>
-            <stop offset=".45" stop-color="#cbe8fa" stop-opacity=".62"/>
-            <stop offset="1" stop-color="#9fcfea" stop-opacity="0"/></linearGradient></defs>
-          <path d="M100.82,16.57 Q100.97,19.31 101.08,22.04 Q101.18,19.31 101.33,16.57 Z M99.6,15.25 Q100.03,17.46 100.33,19.67 Q100.62,17.46 101.06,15.25 Z M101.14,16.93 Q101.33,30.07 101.45,43.22 Q101.57,30.07 101.75,16.93 Z M97.05,12.13 Q97.38,14.3 97.6,16.47 Q97.81,14.3 98.14,12.13 Z M96.97,12.18 Q97.32,14.18 97.56,16.19 Q97.79,14.18 98.15,12.18 Z M95.77,12.82 Q96.09,18.15 96.31,23.48 Q96.52,18.15 96.84,12.82 Z M89.26,10.64 Q89.55,22.55 89.75,34.46 Q89.94,22.55 90.23,10.64 Z M93.07,12.75 Q93.28,22.96 93.41,33.18 Q93.55,22.96 93.76,12.75 Z M90.9,12.9 Q91.34,15.62 91.63,18.33 Q91.92,15.62 92.36,12.9 Z M83.9,12.48 Q84.14,25.77 84.3,39.06 Q84.46,25.77 84.69,12.48 Z M84.15,12.23 Q84.43,18.77 84.62,25.32 Q84.81,18.77 85.09,12.23 Z M82.3,13.31 Q82.67,16.96 82.92,20.61 Q83.17,16.96 83.55,13.31 Z M85.68,10.89 Q85.88,20.14 86.01,29.39 Q86.15,20.14 86.35,10.89 Z M77.79,15.63 Q78.11,20.39 78.32,25.14 Q78.54,20.39 78.86,15.63 Z M79.5,15.76 Q79.79,29.82 79.98,43.87 Q80.18,29.82 80.47,15.76 Z M79.82,15.31 Q80.26,22.47 80.55,29.62 Q80.84,22.47 81.28,15.31 Z M76.38,14.01 Q76.76,18.94 77.02,23.88 Q77.27,18.94 77.66,14.01 Z M71.71,15.33 Q71.95,20.06 72.1,24.78 Q72.26,20.06 72.5,15.33 Z M72.85,14.79 Q73.12,17.41 73.29,20.03 Q73.47,17.41 73.73,14.79 Z M74.06,13.39 Q74.37,26.41 74.58,39.43 Q74.79,26.41 75.1,13.39 Z M65.51,12.63 Q65.73,17.61 65.87,22.59 Q66.01,17.61 66.22,12.63 Z M67.02,15.9 Q67.32,19.25 67.53,22.6 Q67.73,19.25 68.04,15.9 Z M65.13,12.1 Q65.46,21.5 65.69,30.9 Q65.91,21.5 66.24,12.1 Z M61.8,9.77 Q62.24,14.75 62.54,19.73 Q62.84,14.75 63.28,9.77 Z M60.36,10.69 Q60.75,18.14 61,25.59 Q61.26,18.14 61.64,10.69 Z M61.59,10.21 Q61.8,13.24 61.94,16.26 Q62.09,13.24 62.3,10.21 Z M53.9,11.72 Q54.25,18.7 54.49,25.67 Q54.73,18.7 55.08,11.72 Z M53.55,11.54 Q53.72,15.42 53.83,19.29 Q53.94,15.42 54.1,11.54 Z M53.14,11.21 Q53.29,20 53.39,28.79 Q53.49,20 53.65,11.21 Z M47.45,12.29 Q47.86,23.39 48.14,34.5 Q48.41,23.39 48.82,12.29 Z M48.54,10.78 Q48.89,18.07 49.12,25.36 Q49.35,18.07 49.69,10.78 Z M40.4,16.89 Q40.82,28.23 41.11,39.56 Q41.39,28.23 41.82,16.89 Z M38.92,15.02 Q39.23,20.98 39.43,26.95 Q39.64,20.98 39.95,15.02 Z M33.61,11.92 Q33.89,14.47 34.08,17.02 Q34.27,14.47 34.55,11.92 Z M33.61,12.34 Q34.02,17.89 34.3,23.43 Q34.57,17.89 34.99,12.34 Z M34.34,13.18 Q34.66,23.84 34.88,34.49 Q35.1,23.84 35.42,13.18 Z M30.96,10.11 Q31.4,12.87 31.69,15.63 Q31.98,12.87 32.42,10.11 Z M30.61,10.62 Q30.77,21.58 30.88,32.54 Q30.99,21.58 31.16,10.62 Z M30.56,10.62 Q30.77,12.71 30.9,14.81 Q31.04,12.71 31.24,10.62 Z M24.27,13.7 Q24.56,21.33 24.76,28.96 Q24.96,21.33 25.25,13.7 Z M27.35,9.09 Q27.57,13.06 27.71,17.02 Q27.86,13.06 28.07,9.09 Z M19.92,17.48 Q20.11,24.45 20.24,31.42 Q20.37,24.45 20.57,17.48 Z M19.36,17.47 Q19.66,19.66 19.85,21.84 Q20.05,19.66 20.35,17.47 Z M14.64,17.68 Q14.88,19.95 15.04,22.22 Q15.2,19.95 15.44,17.68 Z M14.27,17.92 Q14.49,27.47 14.64,37.02 Q14.78,27.47 15,17.92 Z M12.33,17.23 Q12.64,21 12.84,24.76 Q13.04,21 13.34,17.23 Z M14.67,17.48 Q15.03,19.95 15.27,22.43 Q15.5,19.95 15.86,17.48 Z M7.98,18.46 Q8.27,20.71 8.47,22.97 Q8.66,20.71 8.96,18.46 Z M6.32,17.66 Q6.68,21.61 6.92,25.57 Q7.16,21.61 7.52,17.66 Z M9,18.23 Q9.39,20.97 9.66,23.7 Q9.92,20.97 10.32,18.23 Z M6.47,17.63 Q6.72,28.61 6.89,39.58 Q7.06,28.61 7.32,17.63 Z M2.68,18.27 Q2.86,26.41 2.97,34.54 Q3.09,26.41 3.27,18.27 Z M3.74,17.19 Q4.12,19.55 4.37,21.92 Q4.63,19.55 5.01,17.19 Z M0.96,17.76 Q1.27,22 1.48,26.24 Q1.69,22 2,17.76 Z M0.77,17.3 Q0.94,23.19 1.05,29.07 Q1.17,23.19 1.34,17.3 Z" fill="url(#glacon)"/>
-          <path d="M0,2 L100,2 L100,19.76 Q101.13,25.26 98.73,14.25 Q96.79,19.75 94.84,15.51 Q91.64,21.01 88.43,12.09 Q85.04,17.59 81.65,18.22 Q78.72,23.72 75.8,15.79 Q73.1,21.29 70.4,19.34 Q67.43,24.84 64.46,12.11 Q60.57,17.61 56.69,13.98 Q53.96,19.48 51.23,11.51 Q48.43,17.01 45.62,19.91 Q41.63,25.41 37.65,16.09 Q35.19,21.59 32.74,12.59 Q30.68,18.09 28.62,11.63 Q26.22,17.13 23.82,19.11 Q20.27,24.61 16.73,19.59 Q14.33,25.09 11.92,20.27 Q8.63,25.77 5.34,20.06 Q2.67,25.56 0,20.06 Z" fill="#8fb6d2" opacity=".55"/>
-          <path d="M0,0 L100,0 L100,18.26 Q101.13,23.76 98.73,12.75 Q96.79,18.25 94.84,14.01 Q91.64,19.51 88.43,10.59 Q85.04,16.09 81.65,16.72 Q78.72,22.22 75.8,14.29 Q73.1,19.79 70.4,17.84 Q67.43,23.34 64.46,10.61 Q60.57,16.11 56.69,12.48 Q53.96,17.98 51.23,10.01 Q48.43,15.51 45.62,18.41 Q41.63,23.91 37.65,14.59 Q35.19,20.09 32.74,11.09 Q30.68,16.59 28.62,10.13 Q26.22,15.63 23.82,17.61 Q20.27,23.11 16.73,18.09 Q14.33,23.59 11.92,18.77 Q8.63,24.27 5.34,18.56 Q2.67,24.06 0,18.56 Z" fill="url(#congere)"/>
-          <circle cx="92.16" cy="10.14" r="0.7" fill="var(--text)" opacity="0.47"/><circle cx="64.39" cy="4.7" r="0.43" fill="var(--text)" opacity="0.47"/><circle cx="5.35" cy="10.75" r="0.68" fill="var(--text)" opacity="0.55"/><circle cx="24.91" cy="2.1" r="0.62" fill="var(--text)" opacity="0.31"/><circle cx="40.35" cy="7.11" r="0.7" fill="var(--text)" opacity="0.44"/><circle cx="31.93" cy="12.22" r="0.55" fill="var(--text)" opacity="0.54"/><circle cx="65.07" cy="4.65" r="0.3" fill="var(--text)" opacity="0.44"/><circle cx="79.28" cy="11.56" r="0.67" fill="var(--text)" opacity="0.52"/><circle cx="43.69" cy="3.5" r="0.4" fill="var(--text)" opacity="0.34"/><circle cx="79.3" cy="3.12" r="0.57" fill="var(--text)" opacity="0.34"/><circle cx="47.83" cy="3.38" r="0.68" fill="var(--text)" opacity="0.59"/><circle cx="7.31" cy="2.92" r="0.57" fill="var(--text)" opacity="0.61"/><circle cx="34.28" cy="4.86" r="0.27" fill="var(--text)" opacity="0.27"/><circle cx="12.68" cy="11.91" r="0.55" fill="var(--text)" opacity="0.51"/><circle cx="89.44" cy="6.83" r="0.39" fill="var(--text)" opacity="0.43"/><circle cx="96.66" cy="6.19" r="0.73" fill="var(--text)" opacity="0.49"/><circle cx="40.5" cy="11.47" r="0.63" fill="var(--text)" opacity="0.55"/><circle cx="56.76" cy="11.55" r="0.68" fill="var(--text)" opacity="0.45"/><circle cx="33.11" cy="3.44" r="0.28" fill="var(--text)" opacity="0.48"/><circle cx="97.94" cy="9.41" r="0.75" fill="var(--text)" opacity="0.58"/><circle cx="75.94" cy="2.42" r="0.29" fill="var(--text)" opacity="0.54"/><circle cx="10.31" cy="3.95" r="0.25" fill="var(--text)" opacity="0.49"/><circle cx="51.68" cy="2.04" r="0.74" fill="var(--text)" opacity="0.46"/><circle cx="13.63" cy="8.78" r="0.55" fill="var(--text)" opacity="0.58"/><circle cx="94.91" cy="4.06" r="0.49" fill="var(--text)" opacity="0.41"/><circle cx="68.38" cy="7.72" r="0.43" fill="var(--text)" opacity="0.45"/><circle cx="36.5" cy="4.94" r="0.29" fill="var(--text)" opacity="0.42"/><circle cx="53.59" cy="11.09" r="0.32" fill="var(--text)" opacity="0.48"/><circle cx="14.72" cy="11.76" r="0.66" fill="var(--text)" opacity="0.44"/><circle cx="11.23" cy="9.26" r="0.35" fill="var(--text)" opacity="0.34"/><circle cx="53.01" cy="10.38" r="0.57" fill="var(--text)" opacity="0.59"/><circle cx="57.34" cy="10.51" r="0.26" fill="var(--text)" opacity="0.27"/><circle cx="4.48" cy="7.06" r="0.55" fill="var(--text)" opacity="0.6"/><circle cx="59.84" cy="9.27" r="0.58" fill="var(--text)" opacity="0.59"/><circle cx="62.94" cy="11.29" r="0.56" fill="var(--text)" opacity="0.62"/><circle cx="82.91" cy="5.67" r="0.74" fill="var(--text)" opacity="0.26"/><circle cx="40.74" cy="4.08" r="0.69" fill="var(--text)" opacity="0.35"/><circle cx="98.16" cy="10.45" r="0.4" fill="var(--text)" opacity="0.56"/><circle cx="13.19" cy="12.43" r="0.74" fill="var(--text)" opacity="0.4"/><circle cx="62.38" cy="2.14" r="0.72" fill="var(--text)" opacity="0.55"/><circle cx="29.67" cy="4.31" r="0.61" fill="var(--text)" opacity="0.35"/><circle cx="61.99" cy="12.67" r="0.39" fill="var(--text)" opacity="0.48"/><circle cx="91.43" cy="10.81" r="0.51" fill="var(--text)" opacity="0.64"/><circle cx="24.15" cy="11.2" r="0.52" fill="var(--text)" opacity="0.26"/><circle cx="95.98" cy="2.73" r="0.52" fill="var(--text)" opacity="0.37"/><circle cx="94.55" cy="4.39" r="0.39" fill="var(--text)" opacity="0.49"/><circle cx="48.26" cy="5.47" r="0.47" fill="var(--text)" opacity="0.55"/><circle cx="81.82" cy="11.93" r="0.46" fill="var(--text)" opacity="0.33"/><circle cx="38.41" cy="12.24" r="0.7" fill="var(--text)" opacity="0.37"/><circle cx="68.67" cy="5.44" r="0.29" fill="var(--text)" opacity="0.29"/><circle cx="86.17" cy="3.62" r="0.55" fill="var(--text)" opacity="0.64"/><circle cx="89.68" cy="8.68" r="0.27" fill="var(--text)" opacity="0.55"/><circle cx="52.04" cy="7.45" r="0.32" fill="var(--text)" opacity="0.56"/><circle cx="75.72" cy="7.12" r="0.63" fill="var(--text)" opacity="0.35"/><circle cx="15.03" cy="12.04" r="0.43" fill="var(--text)" opacity="0.49"/><circle cx="65.04" cy="7.82" r="0.38" fill="var(--text)" opacity="0.4"/><circle cx="17.11" cy="7.77" r="0.52" fill="var(--text)" opacity="0.53"/><circle cx="81.11" cy="7.67" r="0.52" fill="var(--text)" opacity="0.47"/><circle cx="74.33" cy="2.9" r="0.31" fill="var(--text)" opacity="0.5"/><circle cx="77.02" cy="12.9" r="0.55" fill="var(--text)" opacity="0.25"/><circle cx="54.61" cy="2.88" r="0.36" fill="var(--text)" opacity="0.33"/><circle cx="46.59" cy="11.02" r="0.45" fill="var(--text)" opacity="0.32"/><circle cx="22.12" cy="7.84" r="0.57" fill="var(--text)" opacity="0.59"/><circle cx="2.17" cy="5.03" r="0.3" fill="var(--text)" opacity="0.37"/><circle cx="48.48" cy="6.51" r="0.62" fill="var(--text)" opacity="0.53"/><circle cx="19.07" cy="10.94" r="0.41" fill="var(--text)" opacity="0.59"/><circle cx="90.48" cy="10.43" r="0.66" fill="var(--text)" opacity="0.43"/><circle cx="46.66" cy="7.7" r="0.67" fill="var(--text)" opacity="0.58"/><circle cx="34.54" cy="7.51" r="0.39" fill="var(--text)" opacity="0.54"/><circle cx="86.2" cy="4.42" r="0.29" fill="var(--text)" opacity="0.38"/></svg>
-        <div class="eyebrow" style="position:relative;color:#7fb3e8;margin-bottom:5px;--halo-c:rgba(127,179,232,.35);text-shadow:var(--halo-1)">❄ Séance gelée</div>
-        <div style="position:relative;font-size:var(--fs-md);font-weight:800;color:#e8eef5;margin-bottom:3px" id="clh-resume-name">Reprendre ma séance</div>
-        <div style="position:relative;font-size:var(--fs-xs);color:var(--sub)">Reprendre là où tu t'es arrêté →</div>
+      <div id="clh-resume-workout" class="gv-carte" style="display:none"
+           onclick="woResumeAndGo()" role="button" tabindex="0"
+           aria-label="Séance gelée — reprendre"
+           onkeydown="if((event.key==='Enter'||event.key===' ')&&event.target===this){event.preventDefault();this.click()}">
+        <svg class="gv-decor" viewBox="0 0 480 190" preserveAspectRatio="none" aria-hidden="true"><defs><radialGradient id="gvHalo" cx=".72" cy=".38" r=".62"><stop offset="0" stop-color="#2d6ea8" stop-opacity=".38"/><stop offset="1" stop-color="#0a1524" stop-opacity="0"/></radialGradient><filter id="gvPoudre" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="41" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  1.4 0 0 0 -1.14"/></filter></defs><rect width="480" height="190" fill="url(#gvHalo)"/><path d="M0,116 L0.0,82.5 L80.0,89.9 L160.0,93.2 L240.0,93.6 L320.0,89.7 L400.0,85.2 L480.0,95.1 L480,116 Z" fill="#7fb3e8" opacity="0.03"/><path d="M0,124 L0.0,103.9 L60.0,109.6 L120.0,104.0 L180.0,106.0 L240.0,106.2 L300.0,103.9 L360.0,112.0 L420.0,105.2 L480.0,110.7 L480,124 Z" fill="#5f93c8" opacity="0.03"/><rect width="480" height="190" filter="url(#gvPoudre)" opacity=".38"/></svg>
+        <svg class="gv-hex" viewBox="0 0 44 48" fill="none" aria-hidden="true"><path d="M22 2 40.6 12.5v21L22 44 3.4 33.5v-21Z" stroke="#6ea8dd" stroke-opacity=".34" stroke-width="1.4"/><g transform="translate(22,23) scale(.78) translate(-12,-12)" stroke="#8cc0ee" stroke-opacity=".62" stroke-width="1.9" stroke-linecap="round"><line x1="6" y1="12" x2="18" y2="12"/><line x1="6" y1="8" x2="6" y2="16"/><line x1="18" y1="8" x2="18" y2="16"/><line x1="3" y1="9.5" x2="7" y2="9.5"/><line x1="3" y1="14.5" x2="7" y2="14.5"/><line x1="17" y1="9.5" x2="21" y2="9.5"/><line x1="17" y1="14.5" x2="21" y2="14.5"/></g></svg>
+        <div class="gv-corps">
+          <div class="gv-texte">
+            <div class="gv-pastille">
+              <span class="gv-flocon"><svg class="fx-loop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M12 2v20M2 12h20M4.9 4.9l14.2 14.2M19.1 4.9L4.9 19.1"/><path d="M12 5.6 9.6 8M12 5.6 14.4 8M12 18.4 9.6 16M12 18.4 14.4 16"/><path d="M5.6 12 8 9.6M5.6 12 8 14.4M18.4 12 16 9.6M18.4 12 16 14.4"/></svg></span>
+              <span class="gv-past-txt">Séance gelée</span>
+            </div>
+            <!-- L'identifiant et le contenu textuel ne changent pas : le rendu
+                 de l'accueil y écrit le nom de la séance par textContent. -->
+            <div class="gv-titre" id="clh-resume-name">Reprendre ma séance</div>
+            <div class="gv-sous">Ta séance est en pause</div>
+            <i class="gv-regle"></i>
+            <!-- stopPropagation : sans lui, le clic remonterait à la carte et
+                 woResumeAndGo serait appelée DEUX fois. -->
+            <button type="button" class="gv-btn"
+                    onclick="event.stopPropagation();woResumeAndGo()">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>
+              <span>Reprendre maintenant</span>
+            </button>
+          </div>
+          <svg class="gv-glacon" viewBox="0 0 132 140" aria-hidden="true"><defs><linearGradient id="gvCorps" x1=".12" y1="0" x2=".85" y2="1"><stop offset="0" stop-color="#b7ddf7" stop-opacity=".96"/><stop offset=".30" stop-color="#63a9de" stop-opacity=".95"/><stop offset=".66" stop-color="#2f74b2" stop-opacity=".95"/><stop offset="1" stop-color="#164671" stop-opacity=".97"/></linearGradient><linearGradient id="gvArete" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".85"/><stop offset=".5" stop-color="#dff1ff" stop-opacity=".25"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient><linearGradient id="gvCristal" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#4f93c8" stop-opacity=".95"/><stop offset=".55" stop-color="#a8dcff" stop-opacity=".9"/><stop offset="1" stop-color="#f2fbff" stop-opacity=".75"/></linearGradient><linearGradient id="gvFonte" x1="0" y1="0" x2=".6" y2="1"><stop offset="0" stop-color="#f2fbff"/><stop offset=".42" stop-color="#a9d3ef"/><stop offset="1" stop-color="#2b5c88"/></linearGradient><linearGradient id="gvReflet" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffffff" stop-opacity="0"/><stop offset=".45" stop-color="#ffffff" stop-opacity=".5"/><stop offset=".55" stop-color="#ffffff" stop-opacity=".5"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></linearGradient><filter id="gvGivre" x="-5%" y="-5%" width="110%" height="110%" color-interpolation-filters="sRGB"><feTurbulence type="turbulence" baseFrequency="0.17 0.13" numOctaves="3" seed="9" result="n"/><feColorMatrix in="n" type="matrix" result="g" values="0 0 0 0 .95  0 0 0 0 .99  0 0 0 0 1  1.5 .4 0 0 -.72"/></filter><filter id="gvGivreFin" x="-5%" y="-5%" width="110%" height="110%" color-interpolation-filters="sRGB"><feTurbulence type="fractalNoise" baseFrequency="0.34" numOctaves="3" seed="23" result="n"/><feColorMatrix in="n" type="matrix" result="g" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  .95 0 0 0 -.66"/></filter><clipPath id="gvCube"><rect x="14" y="12" width="104" height="100" rx="17"/></clipPath></defs><ellipse cx="66" cy="116" rx="58" ry="15" fill="#1b4f7d" opacity=".45"/><path d="M-1.3,118.6 L7.7,102.6 L9.8,118.6 Z" fill="url(#gvCristal)" opacity="0.28"/><path d="M10.3,117.9 L23.4,105.5 L23.1,117.9 Z" fill="url(#gvCristal)" opacity="0.38"/><path d="M12.8,118.1 L27.8,113.5 L38.4,118.1 Z" fill="url(#gvCristal)" opacity="0.43"/><path d="M22.4,115.7 L26.8,96.8 L39.6,115.7 Z" fill="url(#gvCristal)" opacity="0.38"/><path d="M31.6,117.5 L50.3,97.1 L49.9,117.5 Z" fill="url(#gvCristal)" opacity="0.38"/><path d="M44.1,116.6 L48.9,108.0 L61.3,116.6 Z" fill="url(#gvCristal)" opacity="0.37"/><path d="M53.5,117.3 L59.9,104.3 L68.4,117.3 Z" fill="url(#gvCristal)" opacity="0.41"/><path d="M62.3,120.5 L79.9,102.6 L82.4,120.5 Z" fill="url(#gvCristal)" opacity="0.31"/><path d="M68.2,119.1 L84.5,110.0 L93.6,119.1 Z" fill="url(#gvCristal)" opacity="0.46"/><path d="M87.3,120.4 L97.6,107.7 L95.6,120.4 Z" fill="url(#gvCristal)" opacity="0.46"/><path d="M93.5,119.9 L103.4,108.9 L103.7,119.9 Z" fill="url(#gvCristal)" opacity="0.41"/><path d="M94.6,120.4 L108.2,112.7 L113.4,120.4 Z" fill="url(#gvCristal)" opacity="0.50"/><g clip-path="url(#gvCube)"><rect x="14" y="12" width="104" height="100" fill="url(#gvCorps)"/><g opacity="1" transform="translate(66,62)"><rect x="-19" y="-4.5" width="38" height="9" rx="3.5" fill="url(#gvFonte)"/><rect x="-27" y="-16" width="12" height="32" rx="4.5" fill="url(#gvFonte)"/><rect x="15" y="-16" width="12" height="32" rx="4.5" fill="url(#gvFonte)"/><rect x="-36" y="-10.5" width="9.5" height="21" rx="3.5" fill="url(#gvFonte)"/><rect x="26.5" y="-10.5" width="9.5" height="21" rx="3.5" fill="url(#gvFonte)"/><rect x="-26" y="-15" width="3.5" height="30" rx="1.8" fill="#f4fcff" opacity=".45"/><rect x="16" y="-15" width="3.5" height="30" rx="1.8" fill="#f4fcff" opacity=".45"/><rect x="-19" y="-4" width="38" height="3" rx="1.5" fill="#f4fcff" opacity=".3"/></g><rect x="14" y="12" width="104" height="100" fill="#5ba0d8" opacity=".17"/><rect x="14" y="62" width="104" height="50" fill="#1a4e7d" opacity=".16"/><rect x="14" y="12" width="104" height="100" filter="url(#gvGivre)" opacity=".45"/><rect x="14" y="12" width="104" height="100" filter="url(#gvGivreFin)" opacity=".26"/><rect x="14" y="12" width="104" height="34" fill="url(#gvArete)"/><g class="gv-balai fx-loop"><rect x="-70" y="12" width="34" height="100" fill="url(#gvReflet)" transform="skewX(-14)"/></g></g><rect x="14" y="12" width="104" height="100" rx="17" fill="none" stroke="#e8f6ff" stroke-opacity=".55" stroke-width="1.4"/><rect x="17" y="15" width="98" height="94" rx="14" fill="none" stroke="#ffffff" stroke-opacity=".18" stroke-width="1"/><path d="M-2.0,122.0 L7.1,107.8 L15.8,122.0 Z" fill="url(#gvCristal)" opacity="0.60"/><path d="M7.1,121.0 L9.2,105.8 L20.9,121.0 Z" fill="url(#gvCristal)" opacity="0.87"/><path d="M10.8,122.8 L27.3,119.6 L38.6,122.8 Z" fill="url(#gvCristal)" opacity="0.59"/><path d="M25.4,120.7 L25.5,106.8 L32.8,120.7 Z" fill="url(#gvCristal)" opacity="0.72"/><path d="M30.7,122.0 L40.8,104.0 L44.7,122.0 Z" fill="url(#gvCristal)" opacity="0.72"/><path d="M29.7,123.0 L47.8,114.7 L55.0,123.0 Z" fill="url(#gvCristal)" opacity="0.62"/><path d="M42.6,123.7 L50.5,115.8 L57.7,123.7 Z" fill="url(#gvCristal)" opacity="0.93"/><path d="M56.5,121.8 L65.3,114.8 L68.3,121.8 Z" fill="url(#gvCristal)" opacity="0.69"/><path d="M54.1,119.9 L65.6,113.6 L76.4,119.9 Z" fill="url(#gvCristal)" opacity="0.93"/><path d="M71.6,119.8 L73.7,111.3 L83.1,119.8 Z" fill="url(#gvCristal)" opacity="0.60"/><path d="M80.6,120.2 L89.4,107.3 L91.0,120.2 Z" fill="url(#gvCristal)" opacity="0.57"/><path d="M84.8,123.5 L95.9,119.4 L99.9,123.5 Z" fill="url(#gvCristal)" opacity="0.90"/><path d="M90.6,120.0 L101.7,107.9 L109.9,120.0 Z" fill="url(#gvCristal)" opacity="0.61"/><path d="M100.0,119.9 L102.5,102.8 L109.8,119.9 Z" fill="url(#gvCristal)" opacity="0.77"/><path d="M102.8,124.3 L112.3,118.1 L120.4,124.3 Z" fill="url(#gvCristal)" opacity="0.77"/><path d="M118.3,123.6 L127.8,114.2 L127.1,123.6 Z" fill="url(#gvCristal)" opacity="0.60"/><path d="M-3.5,126.1 L6.7,118.6 L16.8,126.1 Z" fill="url(#gvCristal)" opacity="0.59"/><path d="M11.2,125.2 L18.5,119.5 L30.1,125.2 Z" fill="url(#gvCristal)" opacity="0.56"/><path d="M12.6,124.4 L29.1,121.0 L41.9,124.4 Z" fill="url(#gvCristal)" opacity="0.59"/><path d="M32.4,125.0 L41.4,116.1 L45.5,125.0 Z" fill="url(#gvCristal)" opacity="0.52"/><path d="M37.7,127.3 L50.2,116.8 L55.4,127.3 Z" fill="url(#gvCristal)" opacity="0.67"/><path d="M37.6,128.2 L53.0,124.3 L67.1,128.2 Z" fill="url(#gvCristal)" opacity="0.49"/><path d="M54.0,125.6 L59.5,118.2 L66.0,125.6 Z" fill="url(#gvCristal)" opacity="0.61"/><path d="M63.7,127.0 L75.9,117.4 L80.7,127.0 Z" fill="url(#gvCristal)" opacity="0.70"/><path d="M71.9,123.6 L85.0,120.9 L96.0,123.6 Z" fill="url(#gvCristal)" opacity="0.77"/><path d="M80.7,98.0 l0.8,1.9 l-0.8,1.9 l-0.8,-1.9 Z" fill="#eaf6ff" opacity="0.77"/><path d="M94.8,121.4 l0.4,0.9 l-0.4,0.9 l-0.4,-0.9 Z" fill="#eaf6ff" opacity="0.56"/><path d="M119.2,86.4 l0.9,2.1 l-0.9,2.1 l-0.9,-2.1 Z" fill="#eaf6ff" opacity="0.41"/><path d="M62.3,37.0 l0.7,1.6 l-0.7,1.6 l-0.7,-1.6 Z" fill="#eaf6ff" opacity="0.61"/><path d="M7.6,33.6 l0.5,1.3 l-0.5,1.3 l-0.5,-1.3 Z" fill="#eaf6ff" opacity="0.76"/><path d="M97.9,25.9 l0.8,1.9 l-0.8,1.9 l-0.8,-1.9 Z" fill="#eaf6ff" opacity="0.42"/><path d="M80.1,22.8 l0.4,0.9 l-0.4,0.9 l-0.4,-0.9 Z" fill="#eaf6ff" opacity="0.74"/><path d="M31.1,32.5 l0.9,2.2 l-0.9,2.2 l-0.9,-2.2 Z" fill="#eaf6ff" opacity="0.74"/><path d="M40.7,125.6 l0.7,1.6 l-0.7,1.6 l-0.7,-1.6 Z" fill="#eaf6ff" opacity="0.66"/><path d="M30.6,122.9 l0.8,1.8 l-0.8,1.8 l-0.8,-1.8 Z" fill="#eaf6ff" opacity="0.79"/><path d="M113.2,43.7 l0.6,1.4 l-0.6,1.4 l-0.6,-1.4 Z" fill="#eaf6ff" opacity="0.43"/><path d="M23.5,14.8 l0.5,1.3 l-0.5,1.3 l-0.5,-1.3 Z" fill="#eaf6ff" opacity="0.63"/><path d="M6.4,90.7 l0.6,1.3 l-0.6,1.3 l-0.6,-1.3 Z" fill="#eaf6ff" opacity="0.50"/><path d="M104.2,66.3 l0.6,1.3 l-0.6,1.3 l-0.6,-1.3 Z" fill="#eaf6ff" opacity="0.57"/><path d="M90.6,12.9 l0.9,2.2 l-0.9,2.2 l-0.9,-2.2 Z" fill="#eaf6ff" opacity="0.37"/><path d="M96.0,111.8 l0.4,0.9 l-0.4,0.9 l-0.4,-0.9 Z" fill="#eaf6ff" opacity="0.71"/></svg>
+        </div>
       </div>
 
       <!-- REPRISE BILAN EN COURS -->
