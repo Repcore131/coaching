@@ -113,9 +113,14 @@ if('serviceWorker' in navigator){
 [style*="--halo-c"]{--halo-1:0 0 8px var(--halo-c,rgba(255,255,255,.45));--halo-2:0 0 14px var(--halo-c,rgba(255,255,255,.60)),0 0 30px var(--halo-c,rgba(255,255,255,.25));--halo-3:0 0 20px var(--halo-c,rgba(255,255,255,.85)),0 0 44px var(--halo-c,rgba(255,255,255,.40));}
 html{background:#030303}*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{--bg:#080808;--red:#E02020;--red2:#b81515;--red-bg:#0d0000;--red-glow:#FF3345;--red-light:color-mix(in srgb,var(--red) 70%,white);
-  /* rouge de TEXTE — 6,17:1 sur #111. --red (#E02020) plafonne à 3,95:1 et
-     reste réservé aux fonds, bordures et halos. */
-  --red-text:#FF5A5A;
+  /* ROUGE DE TEXTE — le même que --red, sur décision du propriétaire du produit
+     (20/08/2026). Il valait #FF5A5A, choisi pour son contraste : 6,17:1 sur
+     #111, quand --red (#E02020) plafonne à 3,95:1 — au-dessus du seuil AA des
+     grands textes (3:1), en dessous de celui des textes courants (4,5:1).
+     LE JETON RESTE, et ne devient pas un alias de --red par paresse : il dit
+     « ici c'est du texte », et c'est par lui qu'on remontera la lisibilité si
+     elle pose problème, sans toucher aux fonds ni aux bordures. */
+  --red-text:var(--red);
  --dark:#0f0f0f;
   /* Surfaces et paliers de texte ajoutes pour les trois vagues de tokens.
      --text-strong (#dddddd) est le gris clair du corps de texte, --text-mid
@@ -524,10 +529,12 @@ h3{font-size:var(--fs-lg);font-weight:700;letter-spacing:0.3px}
     mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 18px),transparent 100%)}
   .tab-btn{flex:0 0 auto;padding:6px 9px;font-size:var(--fs-2xs)}
 }
-/* Onglet actif : trois signaux cumulés — teinte plus claire (#ff5a5a sur #0c0c0c
-   = 6,4:1), halo sur l'icône, et liseré supérieur. Le liseré est un repère de
-   FORME : l'onglet actif reste identifiable sans percevoir la couleur. */
-.tab-btn.active{color:#ff5a5a}
+/* Onglet actif : trois signaux cumulés — la teinte de --red-text, un halo sur
+   l'icône, et un liseré supérieur. Le liseré est un repère de FORME : l'onglet
+   actif reste identifiable sans percevoir la couleur — ce qui compte d'autant
+   plus depuis que --red-text vaut --red et retombe à 4,0:1 sur ce fond,
+   contre 6,4:1 avec le saumon d'avant. */
+.tab-btn.active{color:var(--red-text)}
 .tab-btn.active svg{filter:drop-shadow(0 0 6px rgba(224,32,32,.8))}
 /* LE LISERE EXISTE TOUJOURS, sinon il ne peut pas etre anime : un
    pseudo-element qui nait avec la classe apparait a destination. Le retard de
@@ -1065,7 +1072,7 @@ html{scroll-behavior:smooth}
   letter-spacing:.5px;color:var(--text);text-shadow:0 0 18px rgba(255,255,255,.20)}
 .stat-tile .st-lbl{font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;
   letter-spacing:2px;margin-top:6px;font-weight:700}
-.stat-tile--fort{flex:1.3;border-left-color:#ff5a5a;
+.stat-tile--fort{flex:1.3;border-left-color:var(--red-text);
   background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(0,0,0,.13) 11px,rgba(0,0,0,.13) 12px),
   linear-gradient(145deg,#c10000 0%,#8d0000 55%,#5a0000 100%);
   box-shadow:0 0 18px rgba(224,32,32,.38),inset 0 1px 0 rgba(255,255,255,.16),0 6px 16px rgba(0,0,0,.5)}
@@ -2183,7 +2190,7 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .nb-tiret{display:block;width:8px;height:1.5px;background:#ff2b2b;flex:0 0 auto;
   box-shadow:0 0 5px rgba(224,32,32,.75);margin-left:auto}
 .nb-cta{font-size:11px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;
-  color:#ff6b6b;line-height:1;flex:0 0 auto;
+  color:var(--red-text);line-height:1;flex:0 0 auto;
   text-shadow:0 0 8px rgba(224,32,32,.55)}
 
 /* ══ LE CHRONOMÈTRE DE RÉCUPÉRATION ═══════════════════════════════════════
@@ -5478,7 +5485,7 @@ const COACH_PHOTO='icons/coach.jpg';
             oninput="document.getElementById('vid-drive-hint').style.display=this.value.includes('drive.google.com')?'block':'none'">
           <div id="vid-drive-hint" style="display:none;background:var(--warning-bg);border:1px solid #7c2d1244;border-radius:var(--r-2);padding:9px 12px;font-size:var(--fs-xs);color:var(--warning);line-height:1.5;margin-bottom:10px;text-align:left">⚠️ Vérifie que le lien est accessible à tous ceux qui l'ont (pas seulement toi) avant de l'envoyer · dans Drive : <strong>Partager → Toute personne avec le lien</strong>.</div>
           <button onclick="addVideoLink()" style="width:100%;padding:13px;background:linear-gradient(160deg,#e21414,#8d0000);border:1px solid rgba(255,90,90,.4);color:var(--text);border-radius:var(--r-2);font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;box-shadow:0 0 20px rgba(224,32,32,.45),inset 0 1px 0 rgba(255,255,255,.18);text-shadow:var(--halo-1)">Ajouter la vidéo</button>
-          <div class="sub" style="font-size:var(--fs-xs);margin-top:11px;line-height:1.6">Enregistre avec ton téléphone → partage sur <b style="color:var(--text-strong)">YouTube</b> (non répertoriée) ou <b style="color:var(--text-strong)">Google Drive</b> → colle le lien ici · <strong style="color:#ff5a5a">ton coach corrige directement dans l'app</strong></div>
+          <div class="sub" style="font-size:var(--fs-xs);margin-top:11px;line-height:1.6">Enregistre avec ton téléphone → partage sur <b style="color:var(--text-strong)">YouTube</b> (non répertoriée) ou <b style="color:var(--text-strong)">Google Drive</b> → colle le lien ici · <strong style="color:var(--red-text)">ton coach corrige directement dans l'app</strong></div>
         </div>
       </div>
       <div style="margin-top:12px;background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:16px;position:relative;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 8px 22px rgba(0,0,0,.4)">
@@ -16779,7 +16786,7 @@ function _htmlCroissanceCoach(athletes){
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.4px;margin-bottom:9px">
       D'après la date de création de chaque dossier.</div>
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:6px">
-      <span style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#ff5a5a">
+      <span style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--red-text)">
         <span style="width:9px;height:9px;border-radius:var(--r-1);background:linear-gradient(180deg,#ff4a4a,#6d0000);box-shadow:0 0 7px rgba(224,32,32,.8)"></span>Arrivées</span>
       <span style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--text)">
         <span style="width:11px;height:2px;border-radius:var(--r-1);background:#ffffff;box-shadow:0 0 7px rgba(255,255,255,.8)"></span>Total (${total})</span>
@@ -24722,7 +24729,7 @@ function _apLigne(ex,i){
           text-transform:uppercase;color:var(--text)">${escapeHtml(ex.name||'Exercice '+(i+1))}</div>
         ${sr?`<div style="display:inline-block;margin-top:6px;padding:3px 9px;border-radius:var(--r-2);
           background:rgba(224,32,32,.12);border:1px solid rgba(224,32,32,.32);
-          font-size:var(--fs-sm);font-weight:800;color:#ff6b6b;letter-spacing:.5px">${escapeHtml(sr)}</div>`:''}
+          font-size:var(--fs-sm);font-weight:800;color:var(--red-text);letter-spacing:.5px">${escapeHtml(sr)}</div>`:''}
       </div>
       <span style="color:var(--sub);font-size:var(--fs-lg);flex-shrink:0;width:22px;text-align:center">▾</span>
     </summary>
@@ -35856,7 +35863,7 @@ function showProgressTab(tab,btn){
         <div style="text-align:center;margin-bottom:6px">
           <div style="display:flex;align-items:center;justify-content:center;gap:9px;margin-bottom:7px">
             <div style="flex:1;max-width:52px;height:1px;background:linear-gradient(90deg,transparent,rgba(224,32,32,.85))"></div>
-            <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:4px;color:#ff5a5a;text-transform:uppercase;white-space:nowrap;--halo-c:rgba(224,32,32,.65);text-shadow:var(--halo-1)">RepCore</div>
+            <div style="font-size:var(--fs-xs);font-weight:800;letter-spacing:4px;color:var(--red-text);text-transform:uppercase;white-space:nowrap;--halo-c:rgba(224,32,32,.65);text-shadow:var(--halo-1)">RepCore</div>
             <div style="flex:1;max-width:52px;height:1px;background:linear-gradient(90deg,rgba(224,32,32,.85),transparent)"></div>
           </div>
           <div class="fq-titre" style="font-family:var(--pile-titre);line-height:.96;letter-spacing:2px;color:var(--text);text-shadow:var(--halo-3),0 0 44px rgba(224,32,32,.35)">MA TRANSFORMATION</div>
@@ -40622,7 +40629,7 @@ function _htmlPlanAthlete(user,intercale){
     </div>
     <div style="position:relative;padding:11px 13px 12px">
       ${PLAN_NOTE_CHEATMEAL.map(t=>`<div style="display:flex;gap:8px;align-items:flex-start;font-size:var(--fs-xs);color:#f0dede;line-height:1.65;padding:4px 0;border-top:1px solid rgba(255,90,90,.14)">
-        <span style="color:#ff6b6b;flex-shrink:0;font-weight:900">•</span>
+        <span style="color:var(--red-text);flex-shrink:0;font-weight:900">•</span>
         <span>${escapeHtml(t)}</span></div>`).join('')}
     </div>
   </div>`;
@@ -48692,8 +48699,8 @@ function loadSteps(containerId='steps-content'){
              texte, ou sur un telephone plus etroit. -->
         <div style="display:flex;gap:10px;margin-bottom:12px;align-items:stretch">
           <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end">
-            <div style="font-size:var(--fs-xs);font-weight:800;color:#ff5a5a;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">JOUR ON <span style="font-size:var(--fs-xs);font-weight:600;color:var(--text-dim)">entraînement</span></div>
-            <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:11px 6px;background:linear-gradient(180deg,#0a0000,#0f0303);border:1px solid #3a0d0d;border-radius:var(--r-2);color:#ff5a5a;font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),var(--glow-red);--halo-c:rgba(224,32,32,.6);text-shadow:var(--halo-1)">
+            <div style="font-size:var(--fs-xs);font-weight:800;color:var(--red-text);letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">JOUR ON <span style="font-size:var(--fs-xs);font-weight:600;color:var(--text-dim)">entraînement</span></div>
+            <input type="number" id="steps-goal-on" value="${goals.on}" min="500" max="50000" style="width:100%;box-sizing:border-box;font-size:var(--fs-xl);text-align:center;padding:11px 6px;background:linear-gradient(180deg,#0a0000,#0f0303);border:1px solid #3a0d0d;border-radius:var(--r-2);color:var(--red-text);font-family:var(--pile-titre);letter-spacing:1px;box-shadow:var(--e-inset),var(--glow-red);--halo-c:rgba(224,32,32,.6);text-shadow:var(--halo-1)">
           </div>
           <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-end">
             <div style="font-size:var(--fs-xs);font-weight:800;color:#7aa7d9;letter-spacing:1.2px;margin-bottom:6px;text-transform:uppercase">JOUR OFF <span style="font-size:var(--fs-xs);font-weight:600;color:var(--text-dim)">repos</span></div>
