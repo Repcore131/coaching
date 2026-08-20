@@ -1154,8 +1154,13 @@ select.set-input{width:auto!important;min-width:60px;font-size:var(--fs-xs);padd
    !important ou non — mesuré. On rend donc les cellules transparentes quand la
    ligne est aussi en alerte, sans ajouter d'!important concurrent. */
 .series-table tr.done.row-alert td{background:transparent}
-.series-table-wo td{padding:8px 4px}.series-table-wo th{padding:7px 4px}
-.set-input{width:56px;background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1);color:var(--text);text-align:center;padding:12px 4px;min-height:44px;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800}
+.series-table-wo td{padding:5px 4px}.series-table-wo th{padding:6px 4px}
+/* LE REMBOURRAGE, PAS LE PLANCHER TAPABLE. Le champ mesurait 49 px : douze de
+   rembourrage haut et bas autour d'un texte de 18, soit cinq de plus que le
+   minimum de 44 qu'il doit garder. On rend ces cinq pixels à la ligne ; les
+   44 px restent, ils tiennent la cible du doigt et c'est eux qu'on ne touche
+   pas — on tape ce champ en pleine série, la main moite. */
+.set-input{width:56px;background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1);color:var(--text);text-align:center;padding:7px 4px;min-height:44px;font-family:Montserrat,sans-serif;font-size:var(--fs-md);font-weight:800}
 /* LE CHIFFRE EN BEBAS, ET SEULEMENT LUI. La classe habille aussi les deux menus
    déroulants (RIR, douleur) : Bebas n'a pas de bas de casse, « Échec » y
    sortirait en capitales et le menu ne ressemblerait plus à un menu.
