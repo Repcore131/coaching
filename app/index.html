@@ -24534,7 +24534,7 @@ function woResumeAndGo(){
   clearInterval(woState.timerInterval);
   woState.timerInterval=setInterval(()=>{
     const el=document.getElementById('wo-timer');
-    if(el){const s=Math.floor((Date.now()-woState.startTime)/1000);el.textContent=pad(Math.floor(s/60))+':'+pad(s%60);}
+    if(el){const s=Math.floor((Date.now()-woState.startTime)/1000);el.textContent=fmtDureeSeance(s);}
   },1000);
   go('s-workout');
   document.getElementById('wo-title').textContent=woState.progName||'Séance';
@@ -25062,7 +25062,7 @@ function launchWorkout(sessConfig,slotIdx){
     cooldown:String(sessConfig.cooldown??currentUser._defaultCooldown??'').trim()};
   woState.timerInterval=setInterval(()=>{
     const el=Math.floor((Date.now()-woState.startTime)/1000);
-    document.getElementById('wo-timer').textContent=pad(Math.floor(el/60))+':'+pad(el%60);
+    document.getElementById('wo-timer').textContent=fmtDureeSeance(el);
   },1000);
   go('s-workout');
   document.getElementById('wo-title').textContent=woState.progName;
@@ -25541,7 +25541,7 @@ function startWorkout(){
     cooldown:String(prog.cooldown??currentUser._defaultCooldown??'').trim()};
   woState.timerInterval=setInterval(()=>{
     const el=Math.floor((Date.now()-woState.startTime)/1000);
-    document.getElementById('wo-timer').textContent=pad(Math.floor(el/60))+':'+pad(el%60);
+    document.getElementById('wo-timer').textContent=fmtDureeSeance(el);
   },1000);
   go('s-workout');
   document.getElementById('wo-title').textContent=prog.name;
@@ -25588,6 +25588,19 @@ function _normaliserSS(exercices){
   return exercices;
 }
 function pad(n){return n.toString().padStart(2,'0');}
+// PURE. La durée écoulée d'une séance, en secondes, mise en forme.
+// AU-DELÀ DE L'HEURE ON PASSE EN HEURES : « 97:10 » se lit d'abord comme une
+// valeur aberrante avant de se comprendre. En dessous, rien ne change —
+// « 04:32 » reste « 04:32 » ; afficher « 0:04:32 » ferait payer à toutes les
+// séances la longueur de la plus longue.
+// Elle existe parce que trois fonctions calculaient cet affichage à
+// l'identique : corriger trois fois, c'est accepter qu'une quatrième copie
+// naisse un jour et diverge.
+function fmtDureeSeance(s){
+  s=Math.max(0,Math.floor(Number(s)||0));
+  const h=Math.floor(s/3600), m=Math.floor(s%3600/60), sec=s%60;
+  return h ? h+':'+pad(m)+':'+pad(sec) : pad(m)+':'+pad(sec);
+}
 // Un écran de séance affiche un GROUPE : un exercice seul, ou les deux (ou
 // plus) d'un superset. Le corps propre à un exercice a été sorti dans
 // _blocExo pour pouvoir en rendre plusieurs côte à côte ; tout ce qui vaut
