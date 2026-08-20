@@ -2195,6 +2195,24 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
   overflow:hidden;overflow-wrap:anywhere}
 .wo-serie{font-size:var(--fs-sm);color:var(--sub);margin-top:4px}
+/* ── La barre de progression, descendue du bandeau fixe ───────────────── */
+/* Elle se lit à côté de ce qu'elle compte, et non à deux cartes de distance. */
+.wo-prog{margin-top:10px}
+.wo-prog-h{display:flex;align-items:center;gap:9px}
+.wo-prog-h .progress-bar{flex:1;min-width:0}
+/* tabular-nums N'EST PAS COSMÉTIQUE : le compteur s'anime de 1 à 4, et sans
+   chasse fixe la largeur du texte changerait à chaque image, faisant sauter la
+   barre qui le précède. */
+#wo-ex-count{font-family:var(--pile-titre);font-size:var(--fs-lg);font-weight:400;
+  letter-spacing:1px;line-height:1;color:var(--text);flex:0 0 auto;
+  font-variant-numeric:tabular-nums}
+#wo-set-count{display:block;margin-top:3px;font-size:var(--fs-xs);font-weight:700;
+  color:var(--sub);white-space:nowrap}
+
+/* LE NOM EN ROUGE NÉON. Le halo passe par --halo-c, le jeton de l'application :
+   une ombre écrite à la main ici aurait divergé du reste au premier réglage. */
+.wo-nom{color:#ff3b30;--halo-c:rgba(224,32,32,.8);
+  text-shadow:var(--halo-1),0 0 18px rgba(224,32,32,.4)}
 /* Les deux commandes, empilées et de largeur égale. */
 .wo-cmd{display:flex;flex-direction:column;gap:6px;flex:0 0 auto;align-items:stretch}
 .wo-cmd>button{width:100%;justify-content:center;flex-shrink:0}
@@ -2208,8 +2226,11 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
    trois fois et demie plus haut que large : lui imposer 74 px de large la
    portait à 254 px de haut et l'en-tête avec elle. C'est la hauteur qui est
    écrite, la largeur suit. */
+/* La marge de droite décale TOUT le groupe — commandes comprises : la rangée
+   se pose de gauche à droite, et ce qui recule au bout recule tout ce qui le
+   précède. Une seule valeur pour les trois décalages demandés. */
 .wo-ava{flex:0 0 auto;height:118px;display:flex;align-items:flex-end;
-  justify-content:center;align-self:flex-start}
+  justify-content:center;align-self:flex-start;margin-right:10px}
 .wo-ava-img{height:100%;width:auto;max-width:56px;display:block;
   filter:drop-shadow(0 0 4px rgba(224,32,32,.45)) drop-shadow(0 0 12px rgba(224,32,32,.22));
   animation:woAvaEntree var(--t-4) var(--c-out) backwards}
@@ -5134,15 +5155,9 @@ const COACH_PHOTO='icons/coach.jpg';
 <!-- WORKOUT SESSION -->
 <div id="s-workout" class="screen">
   <div class="topbar" style="flex-shrink:0"><button class="back-btn" onclick="pauseWorkout()" aria-label="Mettre la séance en pause">←</button><span class="topbar-title" id="wo-title">Séance</span><span style="font-size:var(--fs-md);font-weight:700;color:var(--sub)" id="wo-timer">00:00</span></div>
-  <div style="padding:10px 20px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:12px">
-    <div style="flex:1"><div class="progress-bar"><div class="progress-fill" id="wo-progress" style="--arc-pc:0"></div></div></div>
-    <!-- DEUX COMPTEURS EMPILES : les exercices en grand, les series en petit.
-         Ils disent deux choses differentes et se lisaient comme une seule. -->
-    <div style="display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0">
-      <span style="font-size:var(--fs-lg);font-weight:400;color:var(--text);font-family:var(--pile-titre);letter-spacing:1px;line-height:1" id="wo-ex-count">0/0</span>
-      <span id="wo-set-count" style="font-size:var(--fs-xs);font-weight:700;color:var(--sub);white-space:nowrap"></span>
-    </div>
-  </div>
+  <!-- LE BANDEAU DE PROGRESSION A QUITTÉ CET EMPLACEMENT. Barre et compteurs
+       vivent désormais DANS la carte de l'exercice, sous son nom : c'est là
+       qu'on les lit, à côté de ce qu'ils comptent. Voir .wo-prog. -->
   <div class="scroll-area" style="flex:1"><div class="pad" id="wo-content"></div></div>
   <!-- MINUTEUR DE REPOS -->
   <div id="wo-repos" style="display:none;flex-shrink:0"></div>
@@ -25755,17 +25770,10 @@ function woMajAvatar(ecran,total){
     +woSrcAvatar(niv,g)+'">';
   z.dataset.niveau=String(niv);
 }
-function renderWoEx(){
-  const total=woState.exercises.length;
-  const grs=_groupesEx(woState.exercises);
-  let gi=grs.findIndex(g=>g.includes(woState.currentEx));
-  if(gi<0) gi=0;
-  const groupe=grs[gi];
-  // Une reprise de séance enregistrée avant les supersets peut pointer au
-  // milieu d'un groupe : on se recale sur sa tête.
-  woState.currentEx=groupe[0];
-  const estSS=groupe.length>1;
-
+// Les compteurs et la barre, mis à jour APRÈS l'écriture du contenu : ils
+// vivent désormais DANS la carte de l'exercice, et n'existent donc pas avant.
+let _woCptPrec=NaN;
+function woMajProgression(gi,grs){
   // ── ANIMATION 5 : LE COURANT MONTE DANS LA BARRE ────────────────────────
   // --arc-pc et non style.width : la barre est mise à l'échelle par un
   // transform, qui ne relance jamais la mise en page. Voir .progress-fill.
@@ -25786,8 +25794,11 @@ function renderWoEx(){
   // le passage de 1 à 4 change la largeur du texte et fait sauter la barre qui
   // le précède, à chaque frame.
   const _cpt=document.getElementById('wo-ex-count');
-  const _avantN=parseInt((_cpt.textContent||'').split('/')[0],10);
+  // LA VALEUR PRÉCÉDENTE VIENT D'UNE VARIABLE, plus du texte affiché : celui-ci
+  // est détruit à chaque rendu depuis que le compteur vit dans la carte.
+  const _avantN=_woCptPrec;
   _cpt.style.fontVariantNumeric='tabular-nums';
+  _woCptPrec=gi+1;
   arcChiffre(_cpt,isNaN(_avantN)?gi+1:_avantN,gi+1,
     {duree:ARC.strike,format:v=>Math.round(v)+'/'+grs.length});
   // LES SERIES DE TOUTE LA SEANCE, pas seulement de l'exercice courant : c'est
@@ -25795,16 +25806,37 @@ function renderWoEx(){
   // PAS d'arcChiffre ici : ce compteur ne saute pas d'un exercice a l'autre,
   // il avance d'une unite, et l'animer le rendrait moins lisible qu'immobile.
   try{
+    // LE TOTAL SE COMPTE SUR LE PROGRAMME, PAS SUR sessionData. Ce dernier ne
+    // se remplit qu'à l'OUVERTURE de chaque exercice : en parcourant ses seules
+    // clés, le dénominateur ne comptait que le chemin déjà fait et grossissait
+    // à mesure qu'on avançait — « 1/10 » sur une séance qui en compte 26. Le
+    // défaut existait avant ; il devient voyant maintenant que le compteur est
+    // dans la carte, à côté de ce qu'il compte.
+    // sessionData reste PRIORITAIRE quand il existe : c'est lui qui porte les
+    // séries ajoutées ou retirées à la main pendant la séance.
     let _sFait=0,_sTot=0;
     const _sd=(woState&&woState.sessionData)||{};
-    for(const _k in _sd){
-      const _st=(_sd[_k]&&_sd[_k].sets)||[];
-      _sTot+=_st.length;
-      _sFait+=_st.filter(x=>x&&x.done).length;
+    const _sx=(woState&&woState.exercises)||[];
+    for(let _k=0;_k<_sx.length;_k++){
+      const _st=(_sd[_k]&&_sd[_k].sets)||null;
+      if(_st){ _sTot+=_st.length; _sFait+=_st.filter(x=>x&&x.done).length; }
+      else { const _n=parseInt(_sx[_k]&&_sx[_k].series,10); _sTot+=isFinite(_n)&&_n>0?_n:0; }
     }
     const _sc=document.getElementById('wo-set-count');
     if(_sc) _sc.textContent=_sTot?(_sFait+'/'+_sTot+' séries'):'';
   }catch(e){}
+}
+function renderWoEx(){
+  const total=woState.exercises.length;
+  const grs=_groupesEx(woState.exercises);
+  let gi=grs.findIndex(g=>g.includes(woState.currentEx));
+  if(gi<0) gi=0;
+  const groupe=grs[gi];
+  // Une reprise de séance enregistrée avant les supersets peut pointer au
+  // milieu d'un groupe : on se recale sur sa tête.
+  woState.currentEx=groupe[0];
+  const estSS=groupe.length>1;
+
   document.getElementById('wo-prev-btn').style.opacity=gi===0?'0.3':'1';
   // innerHTML et non textContent : les deux libellés (long/court) doivent
   // survivre au changement d'exercice, sinon la version mobile disparaît dès le
@@ -25897,6 +25929,13 @@ function renderWoEx(){
   // L'AVATAR SE POSE ICI, et pas plus haut : sa zone n'existe qu'une fois le
   // contenu écrit. Le préchargement, lui, est idempotent — il ne refait rien
   // tant que le genre n'a pas changé.
+  // Les deux vivent dans la carte : ils se posent APRÈS son écriture. Un
+  // superset en rend plusieurs, on ne garde que la première.
+  try{
+    const _p=document.querySelectorAll('.wo-prog');
+    for(let k=1;k<_p.length;k++) _p[k].remove();
+    woMajProgression(gi,grs);
+  }catch(e){}
   try{ woPrechargerAvatars(); woMajAvatar(gi,grs.length); }catch(e){}
   woPersist();
   setTimeout(()=>blocs.forEach(b=>setupScrollFade(document.getElementById('wo-sets-scroll-'+b.idx))),0);
@@ -25963,6 +26002,16 @@ function _blocExo(idx,estSS){
           ${estSS?`<div class="wo-ss-rep">${rep}</div>`:''}
           <div class="ex-name wo-nom">${escapeHtml(ex.name)}</div>
           <div class="wo-serie">${ex.series} séries × ${escapeHtml(ex.reps)} reps</div>
+          <!-- La barre et ses deux compteurs. Un superset rend plusieurs cartes
+               dans le même écran : c'est une CLASSE qui les marque, et
+               woMajProgression ne garde que la première. -->
+          <div class="wo-prog">
+            <div class="wo-prog-h">
+              <div class="progress-bar"><div class="progress-fill" id="wo-progress" style="--arc-pc:0"></div></div>
+              <span id="wo-ex-count">0/0</span>
+            </div>
+            <span id="wo-set-count"></span>
+          </div>
         </div>
         <div class="wo-cmd">
         ${_htmlBoutonRemplacer(idx,ex)}
