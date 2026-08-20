@@ -2268,6 +2268,22 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   to{opacity:1;transform:none}
 }
 @media(prefers-reduced-motion:reduce){ .wo-ava-img{animation:none} }
+/* ── La zone travaillée ───────────────────────────────────────────────── */
+/* MASQUÉE PAR LA VIGNETTE ELLE-MÊME : les ellipses ne peuvent peindre que là où
+   il y a de la chair. Rien à découper à la main, et ça suit les sept niveaux
+   sans réglage — la silhouette grossit, le masque avec.
+   `multiply` et non un aplat : un rouge opaque effacerait le dessin, le produit
+   garde les traits et les ombres du modèle et ne fait que colorer la chair. */
+.wo-ava{position:relative}
+.wo-ava-z{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;
+  -webkit-mask-size:100% 100%;mask-size:100% 100%;
+  -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+  /* UN PIXEL DE FLOU, PAS DEUX. La vignette ne fait que trente-quatre pixels de
+     large : deux pixels en font six pour cent, et les zones voisines fusionnaient
+     en une masse où l'on ne distinguait plus le pectoral du deltoïde. */
+  mix-blend-mode:multiply;filter:blur(1.1px)}
+.wo-ava-z ellipse{fill:#ff2626}
+
 /* Sur un écran étroit, c'est l'avatar qui cède — le nom de l'exercice et ses
    commandes sont ce qu'on vient lire. */
 @media (max-width:400px){
@@ -25753,6 +25769,81 @@ function _retirerRelance(idx){
 // un compteur : il dérivait dès que l'écran se verrouillait. Il est remplacé
 // par le minuteur de repos, qui lit une échéance. Une seule mécanique.
 
+// ══ LES ZONES MUSCULAIRES DE L'AVATAR ═════════════════════════════════════
+// Coordonnées en CENTIÈMES de la vignette, pas en pixels : la vignette est
+// recadrée au plus juste sur la silhouette, donc les mêmes fractions tombent
+// au même endroit du corps sur les sept niveaux et sur les deux genres.
+// `preserveAspectRatio="none"` fait le reste — le repère se déforme avec
+// l'image, et une épaule reste sur l'épaule.
+// Repères de la vue de FACE, lus sur les niveaux 1, 4 et 7 confondus :
+// menton 13 · clavicule 19 · ligne des pectoraux 26 · nombril 40 · aine 50 ·
+// genoux 70 · mollets 74-88 · chevilles 92.
+const WO_ZONES_AV = Object.freeze({
+  TRAPEZES  :[[40,18,8,3],      [60,18,8,3]],
+  DELT_ANT  :[[21,21,9,4.5],    [79,21,9,4.5]],
+  DELT_LAT  :[[17,21,8,4.5],    [83,21,8,4.5]],
+  PECTORAUX :[[39,25,10,5],     [61,25,10,5]],
+  ABDOS     :[[50,36,13,7]],
+  BICEPS    :[[16,27,8,6.5],    [84,27,8,6.5]],
+  AVANT_BRAS:[[10,41,9,6.5],    [90,41,9,6.5]],
+  QUADRICEPS:[[31,60,13,8],     [68,60,13,8]],
+  ADDUCTEURS:[[40,57,6,7],      [59,57,6,7]],
+  ABDUCTEURS:[[23,53,7,6],      [77,53,7,6]],
+  MOLLETS   :[[28,80,11,7],     [71,80,11,7]]
+});
+// Les six groupes que la face ne montre pas : ils ont leur planche à eux.
+const WO_MUSCLES_DOS = Object.freeze(
+  ['DORSAUX','LOMBAIRES','DELT_POST','TRICEPS','ISCHIOS','FESSIERS']);
+// Les zones de la vue de dos, dans le même repère en centièmes.
+// Repères de la vue de DOS, lus de la même façon : trapèzes 15-26 ·
+// dorsaux 24-38 · lombaires 38-45 · fessiers 44-56 · ischios 56-70 ·
+// genoux 70-74 · mollets 74-88.
+const WO_ZONES_DOS = Object.freeze({
+  TRAPEZES  :[[50,20,20,5]],
+  DELT_POST :[[18,21,9,4],      [82,21,9,4]],
+  DORSAUX   :[[38,31,12,7],     [62,31,12,7]],
+  LOMBAIRES :[[50,41,11,4]],
+  TRICEPS   :[[16,27,8,6.5],    [84,27,8,6.5]],
+  AVANT_BRAS:[[9,41,9,6.5],     [91,41,9,6.5]],
+  FESSIERS  :[[36,50,12,5.5],   [64,50,12,5.5]],
+  ISCHIOS   :[[30,63,12,7],     [68,63,12,7]],
+  MOLLETS   :[[27,80,11,7],     [71,80,11,7]]
+});
+// PURE. La vue à montrer : le dos SI TOUS les primaires sont dorsaux. Un
+// exercice mixte reste de face — retourner la silhouette pour un muscle
+// secondaire ferait perdre de vue le principal.
+function woVueAvatar(muscles){
+  const m=muscles||[];
+  return (m.length && m.every(x=>WO_MUSCLES_DOS.includes(x))) ? 'dos' : 'face';
+}
+
+// PURE. Les muscles à allumer pour un exercice : ses PRIMAIRES, et eux seuls.
+// Les secondaires reçoivent un stimulus réel mais moindre ; les peindre de la
+// même couleur ferait lire « c'est là que ça travaille » sur la moitié du corps.
+function woMusclesAvatar(ex,user){
+  try{
+    const cls=resoudreMusclesLecture(ex&&ex.name,ex,user||currentUser);
+    return (cls&&cls.p)?cls.p.slice():[];
+  }catch(e){ return []; }
+}
+// Le calque des zones. Vide s'il n'y a rien à montrer — de face, un exercice
+// purement dorsal n'a aucune zone, et c'est assumé.
+function woHtmlZones(muscles,src,vue){
+  const table=(vue==='dos')?WO_ZONES_DOS:WO_ZONES_AV;
+  const f=[];
+  (muscles||[]).forEach(m=>{
+    (table[m]||[]).forEach(z=>{
+      f.push('<ellipse cx="'+z[0]+'" cy="'+z[1]+'" rx="'+z[2]+'" ry="'+z[3]+'"/>');
+    });
+  });
+  if(!f.length) return '';
+  // Le masque est la vignette elle-même : les zones ne peuvent peindre que là
+  // où il y a de la chair, sur les sept niveaux, sans découpage à la main.
+  const mq="-webkit-mask-image:url('"+src+"');mask-image:url('"+src+"')";
+  return '<svg class="wo-ava-z" viewBox="0 0 100 100" preserveAspectRatio="none"'
+    +' aria-hidden="true" style="'+mq+'">'+f.join('')+'</svg>';
+}
+
 // ══ L'AVATAR DE PROGRESSION ═══════════════════════════════════════════════
 // Sept niveaux découpés dans les planches fournies, un jeu par genre.
 const WO_AVA_NIV=7;
@@ -25771,8 +25862,8 @@ function woNiveauAvatar(ecran,total){
 function woGenreAvatar(u){
   return String((u&&u.gender)||'').toUpperCase()==='F' ? 'f' : 'h';
 }
-function woSrcAvatar(niv,genre){
-  return './icons/avatar/n'+niv+'-'+genre+'.png';
+function woSrcAvatar(niv,genre,vue){
+  return './icons/avatar/n'+niv+'-'+genre+(vue==='dos'?'-dos':'')+'.png';
 }
 // LES SEPT IMAGES SONT PRÉCHARGÉES au montage de la séance. Sans cela le
 // changement de niveau laisserait un trou le temps du téléchargement — et hors
@@ -25783,19 +25874,27 @@ function woPrechargerAvatars(){
   const g=woGenreAvatar(currentUser);
   if(_woAvaPrecharge===g) return;
   _woAvaPrecharge=g;
-  for(let n=1;n<=WO_AVA_NIV;n++){ const i=new Image(); i.src=woSrcAvatar(n,g); }
+  // LES DEUX VUES. Un exercice dorsal peut tomber n'importe où dans la séance,
+  // et la planche de dos manquerait au moment précis où on en a besoin.
+  for(let n=1;n<=WO_AVA_NIV;n++){
+    for(const v of ['face','dos']){ const i=new Image(); i.src=woSrcAvatar(n,g,v); }
+  }
 }
 // Pose l'avatar dans la PREMIÈRE carte de l'écran et retire les autres : un
 // superset en rend plusieurs, et sept bonshommes empilés ne diraient rien.
-function woMajAvatar(ecran,total){
+function woMajAvatar(ecran,total,ex){
   const zones=document.querySelectorAll('.wo-ava');
   if(!zones.length) return;
   for(let k=1;k<zones.length;k++) zones[k].remove();
   const z=zones[0];
   const niv=woNiveauAvatar(ecran,total), g=woGenreAvatar(currentUser);
-  z.innerHTML='<img class="wo-ava-img" alt="" aria-hidden="true" src="'
-    +woSrcAvatar(niv,g)+'">';
+  const mus=woMusclesAvatar(ex,currentUser);
+  const vue=woVueAvatar(mus);
+  const src=woSrcAvatar(niv,g,vue);
+  z.innerHTML='<img class="wo-ava-img" alt="" aria-hidden="true" src="'+src+'">'
+    +woHtmlZones(mus,src,vue);
   z.dataset.niveau=String(niv);
+  z.dataset.vue=vue;
 }
 // Les compteurs et la barre, mis à jour APRÈS l'écriture du contenu : ils
 // vivent désormais DANS la carte de l'exercice, et n'existent donc pas avant.
@@ -25963,7 +26062,10 @@ function renderWoEx(){
     for(let k=1;k<_p.length;k++) _p[k].remove();
     woMajProgression(gi,grs);
   }catch(e){}
-  try{ woPrechargerAvatars(); woMajAvatar(gi,grs.length); }catch(e){}
+  // L'exercice de tête du groupe donne les muscles : sur un superset, c'est lui
+  // qui ouvre l'écran, et deux jeux de zones superposés ne désigneraient rien.
+  try{ woPrechargerAvatars();
+       woMajAvatar(gi,grs.length,(woState.exercises||[])[groupe[0]]); }catch(e){}
   woPersist();
   setTimeout(()=>blocs.forEach(b=>setupScrollFade(document.getElementById('wo-sets-scroll-'+b.idx))),0);
 }
