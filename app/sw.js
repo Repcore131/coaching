@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v966';
+const CACHE = 'repcore-v967';
 const SW_DATA = 'repcore-sw-data'; // persistent across updates — not wiped by activate
 
 // DÉLAI DE GARDE sur index.html. Le handler était en network-first avec un
@@ -22,9 +22,17 @@ const SW_DELAI_RESEAU_MS = 2500;
 // Le temps que le report de cache a le droit de prendre dans activate, qui
 // retient la prise de contrôle. Au-delà, on laisse le reste au handler fetch.
 const REPORT_BUDGET_MS = 1000;
+// LES QUATORZE AVATARS DE PROGRESSION ENTRENT DANS LA LISTE. Ils sont demandés
+// pendant la séance, c'est-à-dire souvent en salle, c'est-à-dire souvent sans
+// réseau : laissés au handler fetch, une première séance commencée hors ligne
+// n'aurait affiché aucun personnage. 123 ko pour les quatorze — le coût est
+// sans commune mesure avec le défaut.
+const AVATARS = [];
+for (let n = 1; n <= 7; n++) for (const g of ['h', 'f'])
+  AVATARS.push('./icons/avatar/n' + n + '-' + g + '.png');
 const ASSETS = ['./index.html', './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './fonts/montserrat-var-latin.woff2',
-  './fonts/bebasneue-400-latin.woff2'];
+  './fonts/bebasneue-400-latin.woff2'].concat(AVATARS);
 
 // Une séance en cours interdit la bascule. Prendre le contrôle en pleine
 // séance, c'est purger le cache sous les pieds de quelqu'un qui est peut-être

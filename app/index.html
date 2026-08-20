@@ -2179,6 +2179,54 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
   background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.35)}
 .bal-ico svg{width:19px;height:19px;display:block}
 
+/* ══ L'EN-TÊTE D'EXERCICE ═════════════════════════════════════════════════
+   Quatre choses se partageaient une seule rangée : le nom, ses séries,
+   « Remplacer » et « Voir le tableau ». Le nom, seul élément de longueur
+   variable, y perdait toujours. Les deux commandes passent en COLONNE — elles
+   sont courtes et de même largeur, elles y perdent moins que le nom n'y gagne. */
+.wo-tete{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}
+.wo-tete-txt{flex:1 1 auto;min-width:0}
+.wo-ss-rep{display:inline-block;background:var(--orange);color:#08080a;
+  font-size:var(--fs-xs);font-weight:900;border-radius:var(--r-2);
+  padding:2px 7px;margin-bottom:5px}
+/* DEUX LIGNES AU PLUS. Au-delà, l'en-tête repousserait le tableau des séries
+   hors de l'écran — et un nom d'exercice se reconnaît à son début. */
+.wo-nom{font-size:var(--fs-lg);line-height:1.15;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+  overflow:hidden;overflow-wrap:anywhere}
+.wo-serie{font-size:var(--fs-sm);color:var(--sub);margin-top:4px}
+/* Les deux commandes, empilées et de largeur égale. */
+.wo-cmd{display:flex;flex-direction:column;gap:6px;flex:0 0 auto;align-items:stretch}
+.wo-cmd>button{width:100%;justify-content:center;flex-shrink:0}
+
+/* ── L'avatar de progression ──────────────────────────────────────────── */
+/* NÉON PAR FILTRE, PAS PAR IMAGE. Les vignettes sont des dessins au trait en
+   niveaux de gris : la lueur rouge se pose ici, ce qui permet de la régler
+   sans retoucher quatorze fichiers. Le filtre est STATIQUE — il n'anime rien,
+   il ne se recalcule donc jamais. */
+/* CONTRAINT PAR LA HAUTEUR, PAS PAR LA LARGEUR. Une silhouette debout fait
+   trois fois et demie plus haut que large : lui imposer 74 px de large la
+   portait à 254 px de haut et l'en-tête avec elle. C'est la hauteur qui est
+   écrite, la largeur suit. */
+.wo-ava{flex:0 0 auto;height:118px;display:flex;align-items:flex-end;
+  justify-content:center;align-self:flex-start}
+.wo-ava-img{height:100%;width:auto;max-width:56px;display:block;
+  filter:drop-shadow(0 0 4px rgba(224,32,32,.45)) drop-shadow(0 0 12px rgba(224,32,32,.22));
+  animation:woAvaEntree var(--t-4) var(--c-out) backwards}
+/* Une entrée, jamais une boucle : elle joue au changement de niveau, c'est-à-
+   dire au changement d'exercice, et se tait le reste du temps. */
+@keyframes woAvaEntree{
+  from{opacity:0;transform:translateY(6px)}
+  to{opacity:1;transform:none}
+}
+@media(prefers-reduced-motion:reduce){ .wo-ava-img{animation:none} }
+/* Sur un écran étroit, c'est l'avatar qui cède — le nom de l'exercice et ses
+   commandes sont ce qu'on vient lire. */
+@media (max-width:400px){
+  .wo-ava{height:96px}
+  .wo-tete{gap:8px}
+}
+
 /* ══ LA RANGÉE DU HAUT DE LA BANNIÈRE « SÉANCE DU JOUR » ══════════════════
    Le sur-titre demande 132 px et les sept pastilles 200. À 480 px la bannière
    offre 400 px de contenu : tout tient. À 360 il n'en reste que 280, et le
@@ -25663,6 +25711,50 @@ function _retirerRelance(idx){
 // un compteur : il dérivait dès que l'écran se verrouillait. Il est remplacé
 // par le minuteur de repos, qui lit une échéance. Une seule mécanique.
 
+// ══ L'AVATAR DE PROGRESSION ═══════════════════════════════════════════════
+// Sept niveaux découpés dans les planches fournies, un jeu par genre.
+const WO_AVA_NIV=7;
+// PURE. Le niveau pour un écran donné : 1 au premier, 7 au dernier.
+// ON COMPTE LES ÉCRANS, PAS LES EXERCICES : un superset est un seul écran, et
+// compter les exercices ferait sauter deux niveaux d'un coup au milieu d'un
+// bloc — l'athlète verrait son bonhomme grossir sans avoir rien terminé.
+function woNiveauAvatar(ecran,total){
+  if(!(total>1)) return WO_AVA_NIV;
+  const e=Math.max(0,Math.min(Number(ecran)||0,total-1));
+  return 1+Math.round(e*(WO_AVA_NIV-1)/(total-1));
+}
+// Le jeu d'images. Tout ce qui n'est pas « F » prend le jeu masculin : c'est le
+// repli du reste de l'application, et un genre non renseigné ne doit pas
+// laisser un trou à la place du personnage.
+function woGenreAvatar(u){
+  return String((u&&u.gender)||'').toUpperCase()==='F' ? 'f' : 'h';
+}
+function woSrcAvatar(niv,genre){
+  return './icons/avatar/n'+niv+'-'+genre+'.png';
+}
+// LES SEPT IMAGES SONT PRÉCHARGÉES au montage de la séance. Sans cela le
+// changement de niveau laisserait un trou le temps du téléchargement — et hors
+// ligne un trou définitif, le service worker ne mettant en cache que ce qu'il a
+// vu passer. Sept fichiers de neuf kilo-octets.
+let _woAvaPrecharge=null;
+function woPrechargerAvatars(){
+  const g=woGenreAvatar(currentUser);
+  if(_woAvaPrecharge===g) return;
+  _woAvaPrecharge=g;
+  for(let n=1;n<=WO_AVA_NIV;n++){ const i=new Image(); i.src=woSrcAvatar(n,g); }
+}
+// Pose l'avatar dans la PREMIÈRE carte de l'écran et retire les autres : un
+// superset en rend plusieurs, et sept bonshommes empilés ne diraient rien.
+function woMajAvatar(ecran,total){
+  const zones=document.querySelectorAll('.wo-ava');
+  if(!zones.length) return;
+  for(let k=1;k<zones.length;k++) zones[k].remove();
+  const z=zones[0];
+  const niv=woNiveauAvatar(ecran,total), g=woGenreAvatar(currentUser);
+  z.innerHTML='<img class="wo-ava-img" alt="" aria-hidden="true" src="'
+    +woSrcAvatar(niv,g)+'">';
+  z.dataset.niveau=String(niv);
+}
 function renderWoEx(){
   const total=woState.exercises.length;
   const grs=_groupesEx(woState.exercises);
@@ -25734,6 +25826,8 @@ function renderWoEx(){
   // glissement horizontal de _arcGlissement. L'athlete voyait un contenu qui
   // apparait en montant, pas un contenu qui arrive par le cote. La classe
   // reste employee par cinq autres ecrans, elle n'est pas touchee ailleurs.
+  // L'avatar se pose APRÈS l'écriture du contenu : c'est elle qui crée sa zone.
+  // (appel en fin de fonction)
   document.getElementById('wo-content').innerHTML=`
     <div>
       ${(()=>{ try{ return htmlRepriseSeance(currentUser); }catch(e){ return ''; } })()}
@@ -25800,6 +25894,10 @@ function renderWoEx(){
     _film.checked=_nomsF.length>0&&_nomsF.every(estAFilmer);
     _film.onchange=function(){ basculerAFilmer(this.checked,groupe); };
   }
+  // L'AVATAR SE POSE ICI, et pas plus haut : sa zone n'existe qu'une fois le
+  // contenu écrit. Le préchargement, lui, est idempotent — il ne refait rien
+  // tant que le genre n'a pas changé.
+  try{ woPrechargerAvatars(); woMajAvatar(gi,grs.length); }catch(e){}
   woPersist();
   setTimeout(()=>blocs.forEach(b=>setupScrollFade(document.getElementById('wo-sets-scroll-'+b.idx))),0);
 }
@@ -25860,16 +25958,17 @@ function _blocExo(idx,estSS){
 
   const html=`
       <div${estSS?' style="border-left:2px solid var(--orange);padding-left:11px"':''}>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:10px">
-        <div style="display:flex;align-items:center;gap:9px;min-width:0">
-          ${estSS?`<div style="background:var(--orange);color:#08080a;font-size:var(--fs-sm);font-weight:900;border-radius:var(--r-2);padding:3px 7px;flex-shrink:0">${rep}</div>`:''}
-          <div style="min-width:0">
-            <div class="ex-name" style="font-size:var(--fs-lg)">${escapeHtml(ex.name)}</div>
-            <div class="sub" style="font-size:var(--fs-sm);margin-top:3px">${ex.series} séries × ${escapeHtml(ex.reps)} reps</div>
-          </div>
+      <div class="wo-tete">
+        <div class="wo-tete-txt">
+          ${estSS?`<div class="wo-ss-rep">${rep}</div>`:''}
+          <div class="ex-name wo-nom">${escapeHtml(ex.name)}</div>
+          <div class="wo-serie">${ex.series} séries × ${escapeHtml(ex.reps)} reps</div>
         </div>
+        <div class="wo-cmd">
         ${_htmlBoutonRemplacer(idx,ex)}
         <button class="hit44" id="wo-calc-btn-${idx}" style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-2);color:var(--sub);font-size:var(--fs-xs);padding:6px 10px;cursor:pointer;font-family:Montserrat,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;flex-shrink:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>Vue tableau</button>
+        </div>
+        <div class="wo-ava"></div>
       </div>
 
       ${cycleLabel&&!estSS?`<div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-1);padding:10px 14px;margin-bottom:12px;font-size:var(--fs-xs);color:#888;letter-spacing:.5px">${cycleLabel.text}</div>`:''}
