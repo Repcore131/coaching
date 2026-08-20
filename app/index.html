@@ -2037,6 +2037,41 @@ button:not([disabled]):not(.btn-red):not(.btn-outline):not(.back-btn):not(#coach
 .sk-lbl{font-size:11px;font-weight:800;letter-spacing:2.1px;text-transform:uppercase;
   color:var(--text);line-height:1}
 
+/* ══ LA NOTIFICATION D'ASSIDUITÉ ══════════════════════════════════════════
+   Le cadre du badge « 7 SEM. », à la ligne près : même corps, même bordure,
+   même ombre — une seule ombre porte le néon, la lueur et l'arête chaude —,
+   mêmes équerres de coin, même liseré de braise.
+   Le liseré, lui, n'est pas copié mais GÉNÉRÉ à la taille de la boîte : voir
+   _htmlBraise, qui explique pourquoi un SVG étiré ne convenait pas. */
+.nb-notif{position:relative;margin-bottom:8px}
+.nb-flammes{position:absolute;left:50%;top:-8px;height:calc(100% + 16px);
+  width:calc(100% + 16px);transform:translateX(-50%);
+  pointer-events:none;overflow:visible;z-index:0}
+.nb-cadre{position:relative;z-index:1;display:flex;align-items:center;gap:9px;
+  padding:9px 14px;
+  background:linear-gradient(180deg,#0c0505,#050303);
+  border:1.5px solid rgba(255,42,42,.92);border-radius:11px;
+  box-shadow:0 0 6px rgba(224,32,32,.45),
+             inset 0 0 14px rgba(224,32,32,.10),inset 0 1px 0 rgba(255,190,190,.5)}
+.nb-cadre::before,.nb-cadre::after{content:'';position:absolute;width:9px;height:9px;
+  pointer-events:none;border-color:rgba(255,70,70,.7);border-style:solid;border-width:0}
+.nb-cadre::before{top:3px;left:3px;border-top-width:1px;border-left-width:1px;border-top-left-radius:6px}
+.nb-cadre::after{bottom:3px;right:3px;border-bottom-width:1px;border-right-width:1px;border-bottom-right-radius:6px}
+.nb-ico{width:19px;height:19px;flex:0 0 auto;color:#ff2f2f;
+  filter:drop-shadow(0 0 4px rgba(255,50,50,.9))}
+.nb-num{font-family:var(--pile-titre);font-size:23px;font-weight:400;line-height:.86;
+  color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:.5px;
+  text-shadow:0 0 10px rgba(255,255,255,.3);flex:0 0 auto}
+/* Le libellé peut se réduire jusqu'à disparaître avant que « Continue ! » ne
+   soit tronqué : sur un écran étroit, c'est l'encouragement qui doit rester. */
+.nb-lbl{font-size:11px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;
+  color:var(--text);line-height:1.15;min-width:0}
+.nb-tiret{display:block;width:8px;height:1.5px;background:#ff2b2b;flex:0 0 auto;
+  box-shadow:0 0 5px rgba(224,32,32,.75);margin-left:auto}
+.nb-cta{font-size:11px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;
+  color:#ff6b6b;line-height:1;flex:0 0 auto;
+  text-shadow:0 0 8px rgba(224,32,32,.55)}
+
 /* ══ LE CHRONOMÈTRE DE RÉCUPÉRATION ═══════════════════════════════════════
    Un titre en bandeau, puis deux colonnes : le cadran à gauche, les trois
    commandes à droite. Tout est dimensionné à partir d'une SEULE mesure,
@@ -23099,6 +23134,139 @@ function renderNutriDots(){
   // jours tenus. Le vert est la couleur de ce qui est fait, partout ailleurs.
   scoreEl.style.color='var(--red-text)';
 }
+// ══ LE LISERÉ DE BRAISE, EN GÉNÉRATEUR ═══════════════════════════════════
+// Le badge « 7 SEM. » porte son liseré dans un SVG écrit à la main, calé sur
+// sa forme à lui. La notification d'assiduité est cinq fois plus large et deux
+// fois moins haute : réutiliser le même viewBox en preserveAspectRatio="none"
+// l'étirerait, et le grain de la turbulence — qui est en unités du repère —
+// donnerait des bosses tous les 40 px en haut et tous les 9 px sur les flancs.
+// Soit exactement l'asymétrie entre côtés qu'on vient de supprimer sur le
+// badge.
+//
+// D'où un repère où UNE UNITÉ VAUT UN PIXEL, quelle que soit la boîte. Le
+// grain est alors le même partout et sur n'importe quelle forme, et les
+// réglages ci-dessous sont ceux du badge convertis une fois pour toutes (son
+// repère valait 0,61 px par unité).
+//
+// PURE : elle ne lit rien, ne pose rien, et rend une chaîne.
+function _htmlBraise(id, L, H, m){
+  const X0=m, X1=m+L, Y0=m, Y1=m+H, W=L+2*m, Ht=H+2*m;
+  const PAS=28;      // px entre deux points du contour, LES QUATRE CÔTÉS
+  const BRUIT=1.5;   // px, amplitude du désordre du contour
+  // LE BIAIS SE MESURE, IL NE SE TRANSPORTE PAS. feDisplacementMap décale de
+  // (canal − 0,5) × scale ; sur l'ensemble d'une fractalNoise ces canaux valent
+  // 0,5, mais sur la petite fenêtre qu'occupe un contour la moyenne LOCALE n'y
+  // est pas, et tout le tracé part d'un côté. Le badge porte sa propre
+  // correction, prise sur SA géométrie ; reprise telle quelle ici elle
+  // sur-corrigeait — une boîte d'une autre taille échantillonne une autre région
+  // du champ. Celle-ci est mesurée sur cette boîte-ci : liseré du haut 1,1 px
+  // contre 0,45 px en bas sur quatre instants, soit un tracé remonté de 0,33 px.
+  // Négatif : il redescend d'autant.
+  const BIAIS=-0.33;
+  // Même mesure sur l'axe horizontal : 2,5 px à droite contre 1,4 à gauche, soit
+  // un tracé poussé de 0,55 px vers la droite. Positif : il revient d'autant.
+  const BIAIS_X=0.55;
+  const FONDU=3.7;   // px de dissolution contre chaque bord du calque
+
+  // LE CONTOUR EST UN RECTANGLE ARRONDI NU, et le froissé vient ENTIÈREMENT de
+  // la turbulence. La version précédente passait une courbe de Catmull-Rom par
+  // des points bruités : sur les côtés courts d'une boîte très allongée, les
+  // poignées de la courbe — proportionnelles à l'écart entre points voisins —
+  // devenaient énormes et faisaient bomber les angles. Le liseré mesurait alors
+  // 4,5 px sur les flancs contre 2,4 px en haut. Un rectangle n'a pas de
+  // poignées, et une turbulence à trois ou quatre octaves porte déjà plusieurs
+  // échelles de désordre : on ne perd rien.
+  const rect=(dd,r)=>{
+    const x=X0-dd, y=Y0-dd-BIAIS, w=L+2*dd, h=H+2*dd;
+    const k=Math.min(r, w/2, h/2);
+    return 'M'+(x+k).toFixed(1)+','+y.toFixed(1)
+      +'h'+(w-2*k).toFixed(1)+'a'+k+','+k+' 0 0 1 '+k+','+k
+      +'v'+(h-2*k).toFixed(1)+'a'+k+','+k+' 0 0 1 '+(-k)+','+k
+      +'h'+(-(w-2*k)).toFixed(1)+'a'+k+','+k+' 0 0 1 '+(-k)+','+(-k)
+      +'v'+(-(h-2*k)).toFixed(1)+'a'+k+','+k+' 0 0 1 '+k+','+(-k)+'Z';
+  };
+
+  const turb=(k,fx,fy,oc,gr,amp,flou)=>
+    `<filter id="${id}f${k}" x="-45%" y="-45%" width="190%" height="190%" color-interpolation-filters="sRGB">`
+    +`<feTurbulence type="fractalNoise" baseFrequency="${fx} ${fy}" numOctaves="${oc}" seed="${gr}" result="n"/>`
+    +`<feDisplacementMap in="SourceGraphic" in2="n" scale="${amp}" xChannelSelector="R" yChannelSelector="G" result="d"/>`
+    +`<feGaussianBlur in="d" stdDeviation="${flou}"/></filter>`;
+
+  // UN CONTOUR TRACÉ, PAS UNE MASSE REMPLIE — et c'est ce qui rend les quatre
+  // côtés identiques sur une boîte de n'importe quelle forme. Une masse remplie
+  // laisse le DÉGRADÉ décider jusqu'où le feu porte : étiré au rapport de la
+  // boîte, il s'éteint onze fois plus vite en vertical qu'en horizontal, et sur
+  // une notification longue le liseré faisait 0,6 px en haut contre 1,5 px sur
+  // les flancs. Un trait d'épaisseur donnée porte la même distance partout, par
+  // construction. Le dégradé ne fait alors plus que TEINTER : chaud au milieu
+  // des côtés, sombre dans les angles — la braise du badge.
+  const cx=(W/2).toFixed(1), cy=(Ht/2).toFixed(1);
+  const ray=(H/2*1.49).toFixed(1), ech=(L/H).toFixed(3);
+  const deg=(k,st)=>`<radialGradient id="${id}${k}" gradientUnits="userSpaceOnUse" cx="${cx}" cy="${cy}" r="${ray}"`
+    +` gradientTransform="translate(${cx},${cy}) scale(${ech},1) translate(-${cx},-${cy})">${st}</radialGradient>`;
+
+  const fV=(FONDU/Ht).toFixed(4), fH=(FONDU/W).toFixed(4);
+  return `<svg class="nb-flammes" viewBox="0 0 ${W.toFixed(0)} ${Ht.toFixed(0)}" preserveAspectRatio="none" aria-hidden="true"><defs>`
+    + deg('a','<stop offset="0" stop-color="#fff2d8"/><stop offset=".46" stop-color="#ffa24a"/>'
+            +'<stop offset=".57" stop-color="#ff4f14" stop-opacity=".96"/>'
+            +'<stop offset=".71" stop-color="#ec1608" stop-opacity=".85"/>'
+            +'<stop offset=".87" stop-color="#8e0403" stop-opacity=".4"/>'
+            +'<stop offset="1" stop-color="#3a0000" stop-opacity="0"/>')
+    + deg('b','<stop offset="0" stop-color="#ff7a28" stop-opacity=".8"/>'
+            +'<stop offset=".52" stop-color="#e82a0c" stop-opacity=".72"/>'
+            +'<stop offset=".74" stop-color="#a80d04" stop-opacity=".5"/>'
+            +'<stop offset="1" stop-color="#200000" stop-opacity="0"/>')
+    // FREQUENCES ISOTROPES. Celles du badge ne le sont pas — sa verticale est
+    // 3,7 fois plus basse, heritage de l'epoque ou les langues devaient s'etirer
+    // vers le haut. Or le canal ROUGE, qui porte le deplacement horizontal, varie
+    // alors si lentement en y qu'il est quasi CONSTANT le long d'un bord
+    // vertical : le cote entier part en bloc vers l'interieur ou vers
+    // l'exterieur, au hasard de la graine. Mesure : liseré droit 0,0 px contre
+    // 1,9 px a gauche, aux quatre instants. Avec des frequences egales, chaque
+    // bord traverse plusieurs periodes de bruit et aucun ne peut plus partir
+    // d'un bloc.
+    + turb(1,'0.075','0.075',3,11,'5.5','0.34')
+    + turb(2,'0.105','0.105',4,37,'4.9','0.18')
+    + turb(3,'0.145','0.145',4,73,'3.7','0.12')
+    + `<linearGradient id="${id}v" x1="0" y1="0" x2="0" y2="1">`
+    + `<stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="${fV}" stop-color="#fff"/>`
+    + `<stop offset="${(1-fV).toFixed(4)}" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>`
+    + `<linearGradient id="${id}h" x1="0" y1="0" x2="1" y2="0">`
+    + `<stop offset="0" stop-color="#000"/><stop offset="${fH}" stop-color="#fff"/>`
+    + `<stop offset="${(1-fH).toFixed(4)}" stop-color="#fff"/><stop offset="1" stop-color="#000"/></linearGradient>`
+    + `<mask id="${id}m"><rect width="${W.toFixed(0)}" height="${Ht.toFixed(0)}" fill="url(#${id}v)"/>`
+    + `<rect width="${W.toFixed(0)}" height="${Ht.toFixed(0)}" fill="url(#${id}h)" style="mix-blend-mode:multiply"/></mask></defs>`
+    + `<g mask="url(#${id}m)" fill="none" stroke-linejoin="round">`
+    + `<g class="sk-n1 fx-loop"><path d="${rect(1.2,12)}" stroke="url(#${id}b)" stroke-width="6" filter="url(#${id}f1)"/></g>`
+    + `<g class="sk-n2 fx-loop"><path d="${rect(0,11)}" stroke="url(#${id}a)" stroke-width="5" filter="url(#${id}f2)"/></g>`
+    + `<g class="sk-n3 fx-loop"><path d="${rect(-1.2,10)}" stroke="url(#${id}a)" stroke-width="4" filter="url(#${id}f3)"/></g>`
+    + `</g></svg>`;
+}
+
+// Le liseré a besoin de la TAILLE RÉELLE du cadre, qui dépend de la largeur de
+// l'écran : il ne peut donc pas être écrit dans le gabarit, seulement posé une
+// fois la mise en page faite. Un observateur le repose si la boîte change de
+// taille — rotation du téléphone, notamment — car un SVG en
+// preserveAspectRatio="none" s'étirerait sinon jusqu'au rendu suivant.
+function _poserBraise(n){
+  const c=n&&n.querySelector('.nb-cadre'); if(!c) return;
+  const r=c.getBoundingClientRect();
+  const L=Math.round(r.width), H=Math.round(r.height);
+  if(!(L>0&&H>0)) return;
+  // On ne redessine pas pour un pixel : regenerer le contour le fait sauter.
+  if(Math.abs((n._braiseL||0)-L)<8 && Math.abs((n._braiseH||0)-H)<4) return;
+  n._braiseL=L; n._braiseH=H;
+  const a=n.querySelector('.nb-flammes'); if(a) a.remove();
+  c.insertAdjacentHTML('beforebegin', _htmlBraise('nb', L, H, 8));
+}
+function _armerBraises(racine){
+  (racine||document).querySelectorAll('.nb-notif').forEach(n=>{
+    _poserBraise(n);
+    if(n._braiseObs||typeof ResizeObserver!=='function') return;
+    n._braiseObs=new ResizeObserver(()=>_poserBraise(n));
+    n._braiseObs.observe(n.querySelector('.nb-cadre'));
+  });
+}
 function renderNotifs(){
   const notifs=[];
   // EN TÊTE — les retours du coach. C'est la seule entrée qui appelle une
@@ -23124,7 +23292,10 @@ function renderNotifs(){
     if(days>ecartNormal) notifs.push({icon:'',msg:`${days} jours sans séance. Reprends le rythme !`,c:'var(--orange)'});
   }
   const _sem=streakSemaines(currentUser);
-  if(_sem>=4) notifs.push({icon:'',msg:`${_sem} semaines d'assiduité : Continue !`,c:'var(--green)'});
+  // Cette entree-la ne se rend pas comme les autres : elle porte le cadre du
+  // badge. On la marque au lieu de lui donner un `msg`, pour que la ligne de
+  // rendu plus bas reste lisible.
+  if(_sem>=4) notifs.push({braise:true,sem:_sem});
   const _cb=(currentUser.bilans||[]).filter(b=>b.type!=='depart');
   // Le dernier bilan n'a droit a cette ligne que s'il n'a PAS de reponse :
   // sinon l'entree en tete la remplace, et l'athlete lirait deux lignes sur
@@ -23140,9 +23311,28 @@ function renderNotifs(){
   // `act` est facultatif : les entrées qui en portent une deviennent de vrais
   // boutons — curseur, rôle et clavier compris, pas seulement un onclick posé
   // sur un div muet.
-  document.getElementById('clh-notifs').innerHTML=notifs.map(n=>n.act
+  const _z=document.getElementById('clh-notifs');
+  _z.innerHTML=notifs.map(n=>n.braise
+    ? _htmlNotifAssiduite(n.sem)
+    : n.act
     ? `<div class="notification" style="border-color:${n.c};cursor:pointer" onclick="${n.act}" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">${n.icon} ${n.msg}</div>`
     : `<div class="notification" style="border-color:${n.c}">${n.icon} ${n.msg}</div>`).join('');
+  // Le liseré se pose APRES la mise en page : il lui faut la largeur reelle.
+  _armerBraises(_z);
+}
+// PURE. Le cadre de l'assiduite — celui du badge « 7 SEM. », a la ligne pres,
+// moins le cadran gradue : une notification n'a pas de course a montrer.
+function _htmlNotifAssiduite(sem){
+  const n=Math.max(0,Math.round(Number(sem)||0));
+  return `<div class="nb-notif">
+    <div class="nb-cadre">
+      <svg class="nb-ico" viewBox="0 0 32 32" aria-hidden="true"><path d="M12.2 20.8A3.4 3.4 0 0 0 15.6 17.4c0-1.9-.7-2.7-1.4-4.1-1.5-2.9-.3-5.5 2.7-8.2.7 3.4 2.7 6.7 5.5 8.9 2.7 2.2 4.1 4.8 4.1 7.5a9.5 9.5 0 1 1-19 0c0-1.6.6-3.1 1.4-4.1a3.4 3.4 0 0 0 3.4 4.1z" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span class="nb-num">${n}</span>
+      <span class="nb-lbl">semaines d'assiduité</span>
+      <i class="nb-tiret"></i>
+      <span class="nb-cta">Continue&nbsp;!</span>
+    </div>
+  </div>`;
 }
 function clientTab(tab){
   // Le surlignage n'est plus posé ici mais dans go(), à partir de l'écran
