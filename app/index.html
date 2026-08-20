@@ -1616,14 +1616,6 @@ h3{font-size:var(--fs-lg);text-transform:uppercase}
 /* ====== FOCUS CLAVIER ======
    :focus-visible et non :focus — le contour n'apparaît qu'à la navigation
    clavier, jamais après un tap ou un clic souris. */
-/* Indicateur de sync du header athlète. Discret quand tout va bien : l'état
-   nominal n'a pas à disputer l'attention au reste de l'écran. L'échec, lui,
-   passe en pleine opacité — c'est le seul moment où l'athlète doit le lire.
-   Ne s'applique qu'à cet élément : les badges coach existants gardent leur
-   rendu, la classe .rc-sync-badge n'étant qu'un crochet de sélection. */
-#clh-sync-badge{display:block;margin-top:3px;font-size:var(--fs-xs);font-weight:700;
-  letter-spacing:.3px;line-height:1;opacity:.4;transition:opacity var(--t-2)}
-#clh-sync-badge[data-sync-state="fail"]{opacity:1}
 :focus-visible{outline:2px solid var(--red-glow);outline-offset:2px;border-radius:var(--r-1)}
 button:focus-visible,a:focus-visible,[role="button"]:focus-visible{outline:2px solid #FF3345;outline-offset:3px}
 
@@ -4540,7 +4532,6 @@ const COACH_PHOTO='icons/coach.jpg';
       <div>
         <div class="eyebrow eyebrow-act" style="margin-bottom:2px">MON PROFIL</div>
         <div style="font-size:var(--fs-md);font-family:var(--pile-titre);letter-spacing:1px;line-height:1" id="clh-name"></div>
-        <span id="clh-sync-badge" class="rc-sync-badge"></span>
       </div>
     </div>
     <!-- L'INDICATEUR DE SEMAINES. La flambée est DERRIÈRE le cadre : son corps
@@ -5872,8 +5863,6 @@ const COACH_PHOTO='icons/coach.jpg';
 </div>
 
 <!-- TOAST -->
-<!-- BANDE RÉSEAU — persistante hors ligne, brève au retour -->
-<div id="rc-offline-bar" role="status" aria-live="polite" style="display:none;position:fixed;top:0;left:0;right:0;z-index:var(--z-layer);padding:9px 14px;padding-top:calc(9px + env(safe-area-inset-top,0px));text-align:center;font-size:var(--fs-xs);font-weight:700;letter-spacing:.3px;line-height:1.4"></div>
 <div id="toast" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(28px);background:#222;color:var(--text);padding:12px 20px;border-radius:var(--r-3);font-size:var(--fs-md);font-weight:600;z-index:var(--z-toast);transition:opacity var(--t-2) var(--c-out),transform var(--t-2) var(--c-out);opacity:0;min-width:200px;text-align:center;pointer-events:none"></div>
 
 <!-- ══════ BARRE D'ONGLETS ATHLÈTE ══════
@@ -8712,36 +8701,16 @@ function _athleteSessionIdx(){
 }
 let woState={exercises:[],currentEx:0,startTime:null,timerInterval:null,sessionData:{}};
 
-// ── Bande réseau ────────────────────────────────────────────────────────────
-// Persistante hors ligne : contrairement au toast, qui s'efface au bout de
-// 2,8 s, l'absence de réseau dure et l'utilisateur doit pouvoir le constater à
-// tout moment — c'est ce qui lui évite de croire ses données parties.
-let _rcBandeauTimer=null;
-function _rcBandeauReseau(etat){
-  const bar=document.getElementById('rc-offline-bar');
-  if(!bar) return;
-  clearTimeout(_rcBandeauTimer);
-  if(etat==='offline'){
-    // Le coach ne s'envoie pas ses données « à son coach ».
-    bar.textContent=currentUser?.role==='coach'
-      ?'Hors ligne : tes modifications seront envoyées dès le retour du réseau'
-      :'Hors ligne : tes données seront envoyées à ton coach dès le retour du réseau';
-    bar.style.background='var(--warning-bg)';
-    bar.style.borderBottom='1px solid var(--warning)';
-    bar.style.color='var(--warning)';
-    bar.style.display='block';
-    return;
-  }
-  bar.textContent='Synchronisé ✓';
-  bar.style.background='var(--success-bg)';
-  bar.style.borderBottom='1px solid var(--success)';
-  bar.style.color='var(--success)';
-  bar.style.display='block';
-  _rcBandeauTimer=setTimeout(()=>{bar.style.display='none';},3000);
-}
+// ── Réseau ──────────────────────────────────────────────────────────────────
+// LES DEUX INDICATEURS DU HAUT DE L'ÉCRAN SONT PARTIS (demande du 20/08/2026) :
+// la bande pleine largeur « Hors ligne… / Synchronisé ✓ » et la ligne
+// « ● Synchronisé » sous le nom de l'athlète. Les écouteurs, eux, restent —
+// c'est eux qui annulent la relance en attente et repoussent les données dès le
+// retour du réseau, et ils n'affichaient rien par eux-mêmes.
+// CE QUE ÇA COÛTE : hors ligne, plus rien ne dit à l'athlète que ses données
+// sont en attente d'envoi. Les badges du coach, eux, subsistent.
 window.addEventListener('offline',()=>{
   CLOUD._setSyncStatus(false);
-  _rcBandeauReseau('offline');
 });
 window.addEventListener('online',async()=>{
   // Le réseau est revenu : renvoyer maintenant, sans attendre le prochain
@@ -8753,14 +8722,11 @@ window.addEventListener('online',async()=>{
       await CLOUD._doPushOne(currentUser.email,u);
     }
     await CLOUD.viderFile();
-    // « Synchronisé ✓ » UNIQUEMENT si l'envoi a réellement abouti : l'annoncer
-    // sur le seul événement `online` serait le même mensonge que les toasts de
-    // succès non conditionnés.
-    _rcBandeauReseau('online');
   }catch(e){
-    // Réseau annoncé revenu mais serveur injoignable : la bande reste, et
-    // _doPushOne a déjà réarmé la relance.
-    _rcBandeauReseau('offline');
+    // Réseau annoncé revenu mais serveur injoignable : _doPushOne a déjà réarmé
+    // la relance. Il n'y a plus rien à afficher, mais l'état interne, lui, doit
+    // rester faux — sans quoi les badges du coach mentiraient.
+    CLOUD._setSyncStatus(false);
   }
 });
 
@@ -8770,7 +8736,6 @@ window.onload=()=>{
   _majPrixAffiches();
   // L'app peut démarrer hors ligne : l'événement `offline` ne se déclenchera
   // pas, il n'y a pas de transition.
-  if(!navigator.onLine) _rcBandeauReseau('offline');
   document.querySelectorAll('#client-tabbar .tab-btn[data-icon]').forEach(b=>b.insertAdjacentHTML('afterbegin',icon(b.dataset.icon,19)));
   // APRÈS l'injection des icônes : elles font la moitié de la hauteur de la
   // barre. Mesurer avant donnerait une valeur trop basse, et le dernier
