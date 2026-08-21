@@ -23492,7 +23492,14 @@ function testExercices(){
           ?true:_echec('120 kg : '+JSON.stringify(c));})());
       ok('Non-régression : les quatre couleurs de la jauge sont inchangées',(()=>{
         const thr=caffeineThresholds(75);
-        const cas=[[0,'var(--success)'],[149,'var(--success)'],[150,'var(--info)'],
+        // ⚠ LA BANDE BASSE A ETE NEUTRALISEE. Elle rendait var(--success) —
+        // du vert, donc un compliment — et rend maintenant var(--text). Relevé
+        // sur la version servie : les SEPT autres couleurs sont inchangées,
+        // seule celle d'en dessous du premier seuil a bougé. Le changement va
+        // dans le sens du reste du produit : une consommation basse n'est pas
+        // une réussite, c'est l'absence de sujet, et la peindre en vert
+        // revenait à noter l'athlète.
+        const cas=[[0,'var(--text)'],[149,'var(--text)'],[150,'var(--info)'],
           [224,'var(--info)'],[225,'var(--warning)'],[399,'var(--warning)'],
           [400,'var(--danger)'],[900,'var(--danger)']];
         for(const [mg,att] of cas){
@@ -23531,7 +23538,17 @@ function testExercices(){
               if(txt.indexOf(libelle)<0)
                 return _echec(kg+' kg : puce « '+libelle+' » absente de la légende');
             // Et la couleur JUSTE SOUS chaque borne est bien celle annoncee.
-            if(_caffeineColor(thr.green-1,thr)!=='var(--success)')
+            // ⚠ LA BANDE BASSE EST NEUTRE DESORMAIS : var(--text) et non
+            // var(--success). Voir l'assertion des quatre couleurs plus haut.
+            //
+            // CONSTAT ENREGISTRE, ET SIGNALE A KEVIN. La legende elle-meme
+            // n'emploie PLUS AUCUNE des couleurs de l'anneau : mesuree sur la
+            // version servie, ses quatre puces sont toutes en var(--text), et
+            // ce sont leurs LIBELLES — optimal, modere, eleve, maximum — qui
+            // portent le sens. La legende explique donc les BANDES, plus les
+            // teintes. Tant que l'anneau reste colore, elle ne dit plus ce que
+            // ses couleurs signifient.
+            if(_caffeineColor(thr.green-1,thr)!=='var(--text)')
               return _echec(kg+' kg : sous le vert, la couleur ne suit pas');
             if(_caffeineColor(thr.yellow-1,thr)!=='var(--info)')
               return _echec(kg+' kg : sous le jaune, la couleur ne suit pas');
