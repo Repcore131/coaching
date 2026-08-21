@@ -46464,12 +46464,12 @@ function _renderSuppTable(list, isCoach, editFn){
   const bande=(s,mid)=>{
     const x=lu(s,mid);
     return `<div ${ouverture(s)} style="grid-column:1/-1;position:relative;overflow:hidden;display:flex;align-items:center;gap:11px;
-      padding:10px 12px;cursor:pointer;border-radius:var(--r-3);
+      padding:8px 12px;cursor:pointer;border-radius:var(--r-3);
       background:linear-gradient(150deg,#161616,#101010 60%,#0d0d0d);
       border:1px solid #202020;border-left:4px solid ${x.c};
       box-shadow:var(--e2);opacity:${x.eteint?'.5':'1'}">
       <div aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;background:${TRAME}"></div>
-      ${pave(x,42)}
+      ${pave(x,34)}
       <div style="position:relative;flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap">
           <span style="font-size:var(--fs-sm);font-weight:800;color:${x.eteint?'var(--text-dim)':'var(--text)'};letter-spacing:.2px;line-height:1.25;overflow-wrap:break-word">${escapeHtml(s.name||'')}</span>
