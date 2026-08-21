@@ -875,7 +875,25 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 
 
 @media (max-width:480px){.metric-row-4{display:grid;grid-template-columns:1fr 1fr;gap:10px}}
-.metric-val{font-size:var(--fs-2xl);font-family:var(--pile-titre);letter-spacing:0;line-height:1}
+.metric-val{font-size:var(--fs-3xl);font-family:var(--pile-titre);letter-spacing:0;line-height:var(--lh-3xl)}
+/* LE CHIFFRE PASSE AU CRAN DU DESSUS. L echelle n a que huit crans et
+   aucune taille ne s ecrit a la main : au-dessus du cran 2xl il n y a que
+   le cran 3xl, il n y avait pas de demi-mesure a prendre. Mesure au
+   navigateur, Bebas chargee, avant de le poser : a 375 px une boite offre
+   94 a 96 px utiles, a 320 px elle en offre 93. Au cran 3xl « 100 % » en
+   demande 86 — cela tient, avec 7 px de reste dans le pire cas.
+   L interligne suit la taille EN SENS INVERSE, comme l echelle le prevoit :
+   le cran 3xl vaut .95, la ou le chiffre etait a 1. */
+/* SAUF LA RANGEE DES PAIEMENTS. pp-mrr n est pas un compteur : il vaut
+   (actifs x 9,95).toFixed(2) suivi du signe euro, donc jusqu a huit
+   caracteres — « 1094.50€ ». Mesure au cran 3xl : environ 150 px dans une
+   boite de 94. Et .metric-box porte overflow:hidden, donc il ne deborderait
+   pas, il serait COUPE, sans rien qui le signale — un chiffre d affaires
+   tronque se lit comme un autre chiffre d affaires. Ses deux voisins sont
+   des compteurs et tiendraient ; on garde la rangee ENTIERE au cran 2xl,
+   parce qu une rangee ou un chiffre sur trois est deux fois plus petit ne
+   se lit plus comme une rangee. */
+.metric-row-compacte .metric-val{font-size:var(--fs-2xl);line-height:1}
 /* DES CHIFFRES QUI NE DANSENT PAS. Mesure en Montserrat a 40 px : « 1111 »
    fait 57,8 px la ou « 0000 » en fait 105,9 — le 1 est presque deux fois plus
    etroit qu un 0. Une valeur qui change fait donc bouger tout ce qui la suit.
@@ -1097,7 +1115,7 @@ html{scroll-behavior:smooth}
    au-dessus de 360 px. */
 @media (max-width:360px){
   .metric-box{padding:14px 4px}
-  .metric-val{font-size:var(--fs-xl)}
+  .metric-val{font-size:var(--fs-2xl)}
   .metric-label{letter-spacing:1px}
 }
 
@@ -4005,7 +4023,7 @@ const COACH_PHOTO='icons/coach.jpg';
         <p class="sub" style="font-size:var(--fs-sm);margin-bottom:20px">Abonnements souscrits directement dans l'application, par les athlètes inscrits sans code de coach.</p>
 
         <!-- Stats -->
-        <div style="display:flex;gap:10px;margin-bottom:20px">
+        <div class="metric-row-compacte" style="display:flex;gap:10px;margin-bottom:20px">
           <div class="metric-box"><div class="metric-val" id="pp-total-subs" style="color:var(--green)">0</div><div class="metric-label">Abonnes actifs</div></div>
           <div class="metric-box"><div class="metric-val" id="pp-mrr" style="color:var(--green)">0 EUR</div><div class="metric-label">MRR estime</div></div>
           <div class="metric-box"><div class="metric-val" id="pp-cancelled">0</div><div class="metric-label">Annules</div></div>
