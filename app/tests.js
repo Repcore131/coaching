@@ -13171,9 +13171,22 @@ function testExercices(){
     // instantané de séance dans le stockage de qui lance la suite.
     (()=>{
       const sauve=woState;
-      const tb=document.createElement('tbody'); tb.id='sets-body-0';
-      const zn=document.createElement('div'); zn.id='wo-sets-actions-0';
-      document.body.appendChild(tb); document.body.appendChild(zn);
+      // ⚠ CES DEUX IDENTIFIANTS EXISTENT DÉSORMAIS DANS LA PAGE. Le test
+      // créait ses propres nœuds et les ajoutait en FIN de corps ; or
+      // getElementById rend le PREMIER du document. renderSets écrivait donc
+      // dans ceux de l'écran de séance, et les nœuds du test restaient vides —
+      // d'où « 2 séries / 0 lignes », un faux échec dû à un doublon d'id.
+      // Vérifié sur la version servie : sets-body-0 et wo-sets-actions-0 sont
+      // présents une fois chacun avant même que ce bloc s'exécute.
+      // On réutilise donc ceux de la page, en sauvegardant leur contenu pour
+      // le rendre intact — et on ne crée un nœud que s'il manque vraiment.
+      const _exTb=document.getElementById('sets-body-0');
+      const _exZn=document.getElementById('wo-sets-actions-0');
+      const tb=_exTb||document.createElement('tbody');
+      const zn=_exZn||document.createElement('div');
+      const _htmlTb=tb.innerHTML,_htmlZn=zn.innerHTML;
+      if(!_exTb){ tb.id='sets-body-0'; document.body.appendChild(tb); }
+      if(!_exZn){ zn.id='wo-sets-actions-0'; document.body.appendChild(zn); }
       const monte=sets=>{
         woState={exercises:[{name:'TX',series:2,reps:'10'}],currentEx:0,
           sessionData:{0:{sets:sets}},progName:'P',slot:0,startTime:null};
@@ -13235,7 +13248,11 @@ function testExercices(){
         ok('Une série validée ne se retire pas',
            woState.sessionData[0].sets.length===2);
       } finally {
-        tb.remove(); zn.remove(); woState=sauve;
+        // On rend la page comme on l'a trouvée : contenu restauré pour les
+        // nœuds empruntés, suppression pour ceux qu'on a créés.
+        if(_exTb) tb.innerHTML=_htmlTb; else tb.remove();
+        if(_exZn) zn.innerHTML=_htmlZn; else zn.remove();
+        woState=sauve;
       }
     })();
 
@@ -20782,17 +20799,26 @@ function testExercices(){
         woState={exercises:[{name:'X',repos:'2 min',series:3}],sessionData:{},startTime:faux,
           reposFin:null,reposTotal:null};
         woState.reposFin=faux+120000; woState.reposTotal=120;
-        ok('Critère 3 : un repos de 120 s démarre à 2:00',
-           _resteRepos()===120&&_fmtRepos(_resteRepos())==='2:00');
+        // ⚠ LE FORMAT A CHANGÉ, ET LE CHANGEMENT EST DOCUMENTÉ DANS L'APP.
+        // _fmtRepos rembourre désormais les MINUTES aussi : « 02:00 » et non
+        // « 2:00 ». La raison est écrite juste au-dessus de la fonction —
+        // sans ce rembourrage le décompte perd un caractère en passant sous
+        // la barre des dix minutes, et le cadran se recentre d'un
+        // demi-glyphe sous les yeux de l'athlète. Vérifié sur la version
+        // servie : les VALEURS sont intactes (120, 60, 1, −12), seule leur
+        // écriture a gagné un zéro. Les libellés sont mis à jour eux aussi,
+        // pour que la spécification consignée ici dise le format réel.
+        ok('Critère 3 : un repos de 120 s démarre à 02:00',
+           _resteRepos()===120&&_fmtRepos(_resteRepos())==='02:00');
         faux+=60000;   // l'écran est resté verrouillé une minute
         ok('Critère 4 : après un saut de 60 s, il reste 60 s et non 120',
            _resteRepos()===60,'obtenu '+_resteRepos());
-        ok('Le format est correct à mi-parcours',_fmtRepos(_resteRepos())==='1:00');
+        ok('Le format est correct à mi-parcours',_fmtRepos(_resteRepos())==='01:00');
         faux+=59000;
-        ok('À une seconde de la fin',_resteRepos()===1&&_fmtRepos(1)==='0:01');
+        ok('À une seconde de la fin',_resteRepos()===1&&_fmtRepos(1)==='00:01');
         faux+=13000;
         ok('Critère 5 : douze secondes après l\'échéance, le reste vaut −12',
-           _resteRepos()===-12&&_fmtRepos(_resteRepos())==='0:12');
+           _resteRepos()===-12&&_fmtRepos(_resteRepos())==='00:12');
         faux+=(REPOS_DEPASSEMENT+5)*1000;   // au-delà de la fenêtre, quelle qu'elle soit
         ok('Au-delà de la fenêtre de dépassement, le bandeau doit disparaître',
            _resteRepos()<-REPOS_DEPASSEMENT,'reste '+_resteRepos()+' fenêtre '+REPOS_DEPASSEMENT);
@@ -20803,7 +20829,7 @@ function testExercices(){
       woState={exercises:[],sessionData:{},startTime:Date.now(),
         reposFin:Date.now()-12000,reposTotal:120,reposVibre:true,reposLib:''};
       _peindreRepos();
-      const vu=z&&z.style.display!=='none'&&/Récup terminée/.test(z.innerHTML)&&z.innerHTML.indexOf('+0:12')>=0;
+      const vu=z&&z.style.display!=='none'&&/Récup terminée/.test(z.innerHTML)&&z.innerHTML.indexOf('+00:12')>=0;
       annulerRepos(); woState=sauveWo;
       return !!vu;})(),(document.getElementById('wo-repos')||{}).innerHTML?'':'zone absente');
     ok('Au-delà de la fenêtre, le bandeau est masqué',(()=>{
@@ -20814,8 +20840,9 @@ function testExercices(){
       const cache=!z||z.style.display==='none';
       woState=sauveWo;
       return cache;})());
-    ok('Format : une minute pile',_fmtRepos(60)==='1:00');
-    ok('Format : moins d\'une minute',_fmtRepos(7)==='0:07');
+    // Même format rembourré : voir la raison au-dessus de _fmtRepos.
+    ok('Format : une minute pile',_fmtRepos(60)==='01:00');
+    ok('Format : moins d\'une minute',_fmtRepos(7)==='00:07');
     ok('Format : plus de dix minutes',_fmtRepos(605)==='10:05');
 
     // ── Exclusions du minuteur ──
@@ -31298,7 +31325,7 @@ vendredi 78 6h 44m
             // La barre de 4 px ne doit plus coexister avec lui.
             return /height:4px/.test(h1)?_echec('la barre est encore là'):true;})());
           ok('Le décompte reste lisible DANS l\'anneau',
-             h1.indexOf('1:00')>=0,h1.indexOf('1:00')>=0?'':'décompte absent');
+             h1.indexOf('01:00')>=0,h1.indexOf('01:00')>=0?'':'décompte absent');
           ok('Le libellé garde TOUTE la largeur de sa colonne',(()=>{
             // Mesuré, pas supposé : posé À CÔTÉ de l'anneau, il tombait à 48 px
             // sur un écran de 320 — « Développé couché barre » se lisait
