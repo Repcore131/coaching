@@ -32002,11 +32002,21 @@ function bilResumeAndGo(){
 // reprendre le bilan quelques caracteres en arriere, et le poids que
 // l athlete vient de corriger serait le seul a manquer.
 //
-// PUIS on quitte avec `false`, et c est volontaire : `true` reecrirait le
+// PUIS, la reponse donnee, on quitte avec `false`, et c est volontaire : `true` reecrirait le
 // brouillon une seconde fois, alors qu on vient de le poser a la main.
 // La convention du fichier est que `false` signifie « l appelant a deja
 // fait le necessaire », pas « oublie tout ».
-function bilPlusTard(){
+// ON DEMANDE AVANT, comme pour la seance. Et la question vient de
+// HIST_CONFIRME, celle que pose deja le retour materiel sur ce meme ecran :
+// deux formulations pour un seul geste finissent toujours par diverger, et
+// c est celle-la qui promet le brouillon a l athlete.
+//
+// SI LA QUESTION LEVE, ON RESTE. C est ce que fait deja le retour materiel :
+// son .then n agit que sur une reponse, et une exception laisse l athlete ou
+// il est. Rien n est perdu pour autant, l enregistrement automatique continue.
+async function bilPlusTard(){
+  const q=HIST_CONFIRME['s-bilan'];
+  if(!await rcConfirm(q[0],q[1],q[2],q[3])) return;
   // COMPTE AVANT DE QUITTER : _quitterEcranBilan vide bilData.
   const n=_bilCompterReponses(_bilDataSansPhotos());
   try{ _bilEcrireDraft(); }catch(e){}
