@@ -18739,9 +18739,23 @@ function testExercices(){
           const tot={p:120,c:200,l:60,kcal:1820};
           const m={p:150,g:250,l:70,kcal:2200};
           // Sans unité : le chemin d'avant. Avec 'g' : le même.
+          // ⚠ LES IDENTIFIANTS DE DÉGRADÉ SONT UNIQUES PAR APPEL, et c'est
+          // voulu : deux anneaux sur la même page ne doivent pas partager un
+          // id. Ce test comparait les deux rendus OCTET POUR OCTET et ne
+          // pouvait donc JAMAIS passer — vérifié au navigateur, deux appels
+          // au mode par défaut diffèrent déjà entre eux (« nutA100 » contre
+          // « nutA101 »), première divergence à l'octet 657. Ce n'est pas le
+          // mode g qui divergeait, c'est la comparaison qui était impossible.
+          // On neutralise les identifiants, et la non-régression redevient
+          // mesurable : après normalisation, les deux rendus sont identiques.
+          const sansId=s=>s.replace(/nut[A-Za-z0-9]+/g,'ID');
           const avant=htmlAnneauxMacros(tot,m,'12px');
           const avecG=htmlAnneauxMacros(tot,m,'12px','g',80);
-          if(avant!==avecG) return _echec('le mode g diverge du défaut');
+          // Le garde-fou du garde-fou : si deux appels IDENTIQUES ne se
+          // normalisent pas pareil, c'est la normalisation qu'il faut revoir.
+          if(sansId(avant)!==sansId(htmlAnneauxMacros(tot,m,'12px')))
+            return _echec('la normalisation des identifiants ne suffit plus');
+          if(sansId(avant)!==sansId(avecG)) return _echec('le mode g diverge du défaut');
           // Et les nombres sont bien les grammes.
           if(avant.indexOf('>120<')<0) return _echec('le consommé n\'est pas en grammes');
           return avant.indexOf('/ 150 g')>=0
@@ -18769,10 +18783,26 @@ function testExercices(){
               log:{}};
             currentUser={email:'lea@t.fr',id:'a1',role:'athlete',fname:'Léa',
               gender:'Homme',nutrition:nut};
-            const centre=h=>[...h.matchAll(/font-weight="900"\s*\n?\s*fill="([^"]*)">([^<]*)</g)]
-              .map(x=>({v:x[2],fill:x[1]}));
-            const sous=h=>[...h.matchAll(/font-size="11" fill="#777">([^<]*)</g)].map(x=>x[1]);
-            const arcs=h=>[...h.matchAll(/stroke-dasharray="([\d.]+) /g)].map(x=>parseFloat(x[1]));
+            // ⚠ LES TROIS SONDES ONT ÉTÉ REFAITES le 21/08/2026. Elles avaient
+            // été écrites pour une version antérieure du rendu et ne
+            // matchaient plus RIEN, si bien que `centre(vide)[0]` était
+            // undefined et que ce test LEVAIT au lieu d'échouer : l'exception
+            // tuait la suite entière à 2138 lignes sur 3736.
+            // Relevé sur le rendu servi, et c'est le rendu qui a raison —
+            // l'application est correcte, seules les sondes avaient vieilli :
+            //   centre : font-weight est passé de 900 à 400, parce que Bebas
+            //            n'est chargée qu'en 400 et qu'au-delà le navigateur
+            //            fabrique un faux gras. On sonde donc data-num, qui
+            //            nomme la valeur au lieu de la déduire d'une graisse.
+            //   sous   : font-size="11" fill="#777" est devenu 12 et #8a8a8a.
+            //   arcs   : l'anneau ne s'écrit plus « dasharray="d gap" ». Il
+            //            trace le tour complet et le masque par dashoffset ;
+            //            la part remplie vaut donc dasharray moins data-arc-off.
+            const centre=h=>[...h.matchAll(/data-num="([^"]*)"\s*fill="([^"]*)">([^<]*)</g)]
+              .map(x=>({v:x[3],fill:x[2],num:x[1]}));
+            const sous=h=>[...h.matchAll(/font-size="12" fill="#8a8a8a">([^<]*)</g)].map(x=>x[1]);
+            const arcs=h=>[...h.matchAll(/stroke-dasharray="([\d.]+)" stroke-dashoffset="[\d.]+" data-arc-off="([\d.]+)"/g)]
+              .map(x=>+(parseFloat(x[1])-parseFloat(x[2])).toFixed(2));
             const vide=_renderStrictMacroRings(nut);
             if(!vide) return _echec('aucun anneau rendu sur un journal vide');
             // ⚠ GARDE AJOUTÉE LE 21/08/2026, ET ELLE RÉVÈLE UN VRAI PROBLÈME.
@@ -18800,7 +18830,10 @@ function testExercices(){
             if(sb[0]!=='/ 160 g') return _echec('seconde ligne : '+sb[0]);
             // L'arc vaut la FRACTION consommée, pas autre chose : 31/160 de la
             // circonférence. Sans ça, le chiffre et le dessin pourraient diverger.
-            const circ=+(2*Math.PI*32).toFixed(2);
+            // LE RAYON EST PASSÉ DE 32 À 47 : relevé sur le cercle servi,
+            // r="47", d'où une circonférence de 295,31 et non 201,06. La
+            // mesure est la même, seule sa constante avait vieilli.
+            const circ=+(2*Math.PI*47).toFixed(2);
             const attendu=+((31/160)*circ).toFixed(2);
             if(Math.abs(ar[0]-attendu)>0.05)
               return _echec('arc '+ar[0]+' au lieu de '+attendu);
@@ -18813,7 +18846,9 @@ function testExercices(){
           const m={kcal:2000,p:160,g:200,l:70};
           const teinte=pv=>{
             const h=htmlAnneauxMacros({kcal:0,p:pv,c:0,l:0},m,'12px');
-            const x=/font-weight="900"\s*\n?\s*fill="([^"]*)">/.exec(h);
+            // Même correction que plus haut : la graisse n'identifie plus le
+            // chiffre du centre, data-num le nomme.
+            const x=/data-num="[^"]*"\s*fill="([^"]*)">/.exec(h);
             return x?x[1]:'(introuvable)';
           };
           if(teinte(200)!=='var(--orange)') return _echec('125 % ne passe pas en alerte : '+teinte(200));
@@ -18830,7 +18865,10 @@ function testExercices(){
           // des lipides à la décimale. « / 61.6 g » en face d'un consommé entier ne
           // veut rien dire.
           const h=htmlAnneauxMacros({kcal:0,p:0,c:0,l:62},{kcal:2000,p:160,g:200,l:61.6},'12px');
-          const sous=[...h.matchAll(/font-size="11" fill="#777">([^<]*)</g)].map(x=>x[1]);
+          // Sonde refaite : la sous-ligne s'écrit en 12 px et #8a8a8a, plus en
+          // 11 px et #777. Le comportement mesuré, lui, est intact : la cible
+          // de 61,6 g s'affiche bien « / 62 g ».
+          const sous=[...h.matchAll(/font-size="12" fill="#8a8a8a">([^<]*)</g)].map(x=>x[1]);
           if(sous[2]!=='/ 62 g') return _echec('cible lipides : '+JSON.stringify(sous[2]));
           // On ne juge que le TEXTE rendu : stroke-dasharray porte legitimement
           // « 38.96 », c'est de la géométrie et personne ne la lit.
@@ -18839,10 +18877,14 @@ function testExercices(){
           if(dec.length) return _echec('décimale affichée : '+JSON.stringify(dec));
           // Sans cible, la ligne ne s'écrit pas du tout — plutôt que « / — g ».
           const sans=htmlAnneauxMacros({kcal:0,p:20,c:0,l:0},{kcal:0,p:0,g:0,l:0},'12px');
-          const sousSans=[...sans.matchAll(/font-size="11" fill="#777">([^<]*)</g)].map(x=>x[1]);
+          // Mêmes deux sondes refaites : 11 px / #777 est devenu 12 px /
+          // #8a8a8a, et la graisse 900 n'existe plus — data-num nomme le
+          // chiffre. Vérifié sur le rendu servi : sans cible, les trois
+          // sous-lignes sont VIDES et le consommé « 20 » reste écrit.
+          const sousSans=[...sans.matchAll(/font-size="12" fill="#8a8a8a">([^<]*)</g)].map(x=>x[1]);
           if(sousSans.some(x=>x.trim())) return _echec('une cible vide est écrite : '+JSON.stringify(sousSans));
           // TÉMOIN : le consommé, lui, reste rendu sans cible.
-          return /font-weight="900"[\s\S]{0,60}>20</.test(sans)
+          return /data-num="[^"]*"\s*fill="[^"]*">20</.test(sans)
             ?true:_echec('le consommé disparaît quand la cible manque');})());
 
         // Règle 7 : ON et OFF séparées côté coach.
@@ -22303,14 +22345,19 @@ function testExercices(){
         const h=_renderSuppTable([_s('Créatine monohydrate',['matin'])],false,'openSuppEdit');
         const iNom=h.indexOf('Créatine monohydrate');
         const iPast=h.indexOf('Niveau de preuve A');
-        const iDose=h.indexOf('Couramment');
+        // LA RÉFÉRENCE NE S'ANNONCE PLUS PAR « Couramment » mais par « (réf. ».
+        // Changement d'un lot antérieur, relevé sur le rendu servi : la fiche
+        // porte dose « 3 à 5 » et unité « g », et la carte écrit
+        // « (réf. 3 à 5 g) ». La sonde suit le libellé ; ce qu'elle mesure —
+        // la pastille placée entre le nom et la dose — ne bouge pas.
+        const iDose=h.indexOf('(réf.');
         // Entre le nom et la ligne de dose : donc dans le bloc du nom, et pas
         // seulement quelque part plus bas dans la légende.
         return iNom>=0&&iPast>iNom&&iPast<iDose
           ?true:_echec('nom '+iNom+' pastille '+iPast+' dose '+iDose);})());
       ok('La dose est sous le nom',(()=>{
         const h=_renderSuppTable([_s('Créatine monohydrate',['matin'])],false,'openSuppEdit');
-        return h.indexOf('Couramment 3 à 5 g')>=0;})());
+        return h.indexOf('(réf. 3 à 5 g)')>=0;})());
       ok('La note n\'est visible qu\'au dépli',(()=>{
         const d=document.createElement('div');
         d.innerHTML=_renderSuppTable([_s('Créatine monohydrate',['matin'])],false,'openSuppEdit');
@@ -22389,18 +22436,23 @@ function testExercices(){
               trouves.push(m+' → «'+String(t).slice(0,45)+'»');});});
         return trouves.length?_echec(trouves.join(' | ')):true;})());
       ok('Aucune dose n\'est présentée comme une prescription',(()=>{
-        // « Couramment », pas « prends », pas « tu dois ».
+        // « (réf. » , pas « prends », pas « tu dois ».
         const h=_renderSuppTable([_s('Créatine monohydrate',['matin'])],false,'openSuppEdit');
-        // L'encart de sourcing est retiré AVANT la recherche : il contient
-        // « RepCore ne recommande aucune marque », qui est l'exact contraire
-        // d'une injonction. Le mot « recommand » reste interdit partout
-        // ailleurs — on ne l'a pas retiré de la liste, on a resserré la zone.
-        const coupe=h.split('Qualité et sourcing');
-        if(coupe.length!==2) return _echec('l\'encart de sourcing a disparu du rendu');
-        const n=coupe[0].toLowerCase();
+        // LA DÉCOUPE SUR L'ENCART DE SOURCING A DISPARU, et le test y GAGNE.
+        // Elle n'existait que pour épargner une phrase de cet encart —
+        // « RepCore ne recommande aucune marque », l'exact contraire d'une
+        // injonction. L'encart ayant été retiré le 21/08/2026, il n'y a plus
+        // rien à épargner : la recherche porte désormais sur le rendu ENTIER
+        // au lieu de sa première moitié. La zone testée s'élargit, elle ne se
+        // relâche pas.
+        const n=h.toLowerCase();
         const injonctions=['tu dois','il faut','prescrit','obligatoire','recommand'];
         const t=injonctions.filter(m=>n.indexOf(m)>=0);
-        return t.length?_echec(t.join(', ')):n.indexOf('couramment')>=0;})());
+        if(t.length) return _echec(t.join(', '));
+        // Et la dose reste ANNONCÉE COMME UN REPÈRE : « (réf. … ) ». Le mot
+        // « couramment » qui jouait ce rôle a été remplacé par un lot
+        // antérieur ; l'exigence est la même, seul le libellé a changé.
+        return n.indexOf('(réf.')>=0?true:_echec('la dose n\'est plus annoncée comme un repère');})());
 
       // ── Forme, durée avant jugement, sourcing ─────────────────────────────
       // Le vocabulaire d'allégation, verrouillé sur le modèle du test d'exclusion
