@@ -19584,15 +19584,34 @@ async function deleteCoachProgTemplate(idx){
   saveUser();toast('Programme supprimé.');loadCoachProgramsList();
 }
 
+// LES SEANCES D UN MODELE, PAR GENRE — ET GARANTIES EXISTANTES.
+//
+// Six fonctions ecrivaient le meme ternaire, et QUATRE plantaient si le jeu
+// demande manquait : un modele cree avant que les deux genres existent, ou
+// importe par un autre chemin, n a que sessions_H. Le rendu levait alors une
+// exception AVANT d avoir remplace le contenu du conteneur : les boutons de
+// l onglet precedent restaient a l ecran, et les cliquer relevait la meme
+// exception. Un bouton bien visible qui ne fait rien, sans un mot.
+//
+// Cette fonction SELECTIONNE et NORMALISE d un seul geste. Les appelants ne
+// peuvent plus diverger, et aucun ne peut plus recevoir undefined.
+function _cptSeances(p,genre){
+  if(!p) return null;
+  const cle=(genre==='H')?'sessions_H':'sessions_F';
+  if(!Array.isArray(p[cle])) p[cle]=[];
+  const t=p[cle];
+  DAYS.forEach((day,i)=>{
+    if(!t[i]) t[i]={day,name:'',active:false,photo:null,exercises:[],notes:'',warmup:''};
+    if(!Array.isArray(t[i].exercises)) t[i].exercises=[];
+  });
+  return t;
+}
 function loadProgTemplateSlots(gender){
   _editProgTemplateGender=gender;
   if(_editProgTemplateIdx===null) return;
   const p=currentUser.coachPrograms[_editProgTemplateIdx];
-  const sessions=gender==='H'?p.sessions_H:p.sessions_F;
-  DAYS.forEach((day,i)=>{
-    if(!sessions[i]) sessions[i]={day,name:'',active:false,photo:null,exercises:[],notes:'',warmup:''};
-    if(!Array.isArray(sessions[i].exercises)) sessions[i].exercises=[];
-  });
+  const sessions=_cptSeances(p,gender);
+  if(!sessions) return;
   const tH=document.getElementById('cpt-tab-h'),tF=document.getElementById('cpt-tab-f');
   if(tH){tH.style.color=gender==='H'?'var(--red)':'var(--sub)';tH.style.borderBottomColor=gender==='H'?'var(--red)':'transparent';}
   if(tF){tF.style.color=gender==='F'?'var(--red)':'var(--sub)';tF.style.borderBottomColor=gender==='F'?'var(--red)':'transparent';}
@@ -19735,7 +19754,8 @@ function dupliquerExercice(i){
 async function cptCopyDay(i,j){
   if(_editProgTemplateIdx===null) return;
   const p=currentUser.coachPrograms[_editProgTemplateIdx];
-  const sessions=_editProgTemplateGender==='H'?p.sessions_H:p.sessions_F;
+  const sessions=_cptSeances(p,_editProgTemplateGender);
+  if(!sessions) return;
   const src=sessions[i],dst=sessions[j];
   if(!src||!dst||!await _confirmerEcrasement(src,dst)) return;
   _copierSeance(src,dst);
@@ -19768,14 +19788,16 @@ async function coachCopyDay(i,j){
 function cptToggleDay(i){
   if(_editProgTemplateIdx===null) return;
   const p=currentUser.coachPrograms[_editProgTemplateIdx];
-  const sessions=_editProgTemplateGender==='H'?p.sessions_H:p.sessions_F;
+  const sessions=_cptSeances(p,_editProgTemplateGender);
+  if(!sessions) return;
   sessions[i].active=!sessions[i].active;
   loadProgTemplateSlots(_editProgTemplateGender);
 }
 function cptRenameSession(i,val){
   if(_editProgTemplateIdx===null) return;
   const p=currentUser.coachPrograms[_editProgTemplateIdx];
-  const sessions=_editProgTemplateGender==='H'?p.sessions_H:p.sessions_F;
+  const sessions=_cptSeances(p,_editProgTemplateGender);
+  if(!sessions) return;
   sessions[i].name=val;
 }
 
@@ -19796,7 +19818,8 @@ function _prepProgEditor({name='',notes='',warmup='',cooldown='',photo=null,phot
 function openProgTemplateSessionExercises(idx){
   if(_editProgTemplateIdx===null) return;
   const p=currentUser.coachPrograms[_editProgTemplateIdx];
-  const sessions=_editProgTemplateGender==='H'?p.sessions_H:p.sessions_F;
+  const sessions=_cptSeances(p,_editProgTemplateGender);
+  if(!sessions) return;
   const s=sessions[idx];
   progEx=JSON.parse(JSON.stringify(s.exercises||[]));_photographierProgEx();
   _prepProgEditor({name:s.name,notes:s.notes,warmup:s.warmup,cooldown:s.cooldown});
@@ -20309,7 +20332,13 @@ function coachRenameSession(i,val){
 }
 function openCoachSessionExercises(idx){
   const c=_coachEditClient;
-  if(!c?.sessions_config?.[idx]) return;
+  // UN BOUTON QUI NE FAIT RIEN N APPREND RIEN. Ce garde sortait en silence : si
+  // le dossier a ete remplace entre le rendu et le clic — la synchronisation
+  // tourne toutes les 30 secondes — le coach appuyait dans le vide.
+  if(!c?.sessions_config?.[idx]){
+    try{ toast("Séance introuvable : rouvre la fiche de l'athlète.",'var(--orange)'); }catch(e){}
+    return;
+  }
   const s=c.sessions_config[idx];
   progEx=JSON.parse(JSON.stringify(s.exercises||[]));_photographierProgEx();
   _prepProgEditor({name:s.name,notes:s.notes,warmup:s.warmup,cooldown:s.cooldown||currentUser._defaultCooldown});
@@ -22554,7 +22583,7 @@ function saveProgram(){
       if(_ctx.progIdx==null||typeof _ctx.sessionIdx!=='number') break;
       const p=currentUser.coachPrograms?.[_ctx.progIdx];
       if(!p) break;
-      const sessions=_ctx.gender==='H'?p.sessions_H:p.sessions_F;
+      const sessions=_cptSeances(p,_ctx.gender);
       const s=sessions?.[_ctx.sessionIdx];
       if(!s) break;
       s.exercises=progEx;
