@@ -41415,7 +41415,13 @@ function _htmlPlanAthlete(user,intercale){
         --halo-c:rgba(255,90,90,.95);text-shadow:var(--halo-1),0 0 20px rgba(224,32,32,.55)">Attention</span>
     </div>
     <div style="position:relative;padding:11px 13px 12px">
-      ${PLAN_NOTE_CHEATMEAL.map(t=>`<div style="display:flex;gap:8px;align-items:flex-start;font-size:var(--fs-xs);color:#f0dede;line-height:1.65;padding:4px 0;border-top:1px solid rgba(255,90,90,.14)">
+      <!-- LE FILET NE SEPARE QUE LES PUCES ENTRE ELLES. Pose sur TOUTES, il
+           en mettait un sur la premiere aussi — juste sous le border-bottom
+           du bandeau « Attention ». Deux traits rouges quasi paralleles a
+           onze pixels l'un de l'autre, dont le second ne separait rien. La
+           premiere puce n'en porte donc plus ; les suivantes le gardent,
+           c'est la leur fonction. -->
+      ${PLAN_NOTE_CHEATMEAL.map((t,i)=>`<div style="display:flex;gap:8px;align-items:flex-start;font-size:var(--fs-xs);color:#f0dede;line-height:1.65;padding:4px 0;${i?'border-top:1px solid rgba(255,90,90,.14)':''}">
         <span style="color:var(--red-text);flex-shrink:0;font-weight:900">•</span>
         <span>${escapeHtml(t)}</span></div>`).join('')}
     </div>
