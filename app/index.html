@@ -46346,12 +46346,25 @@ function _renderSuppTable(list, isCoach, editFn){
   //
   // flex-wrap reste : une unite longue sur une tuile etroite doit pouvoir
   // repasser dessous plutot que deborder d une carte en overflow:hidden.
-  const chiffre=(x,taille,aDroite)=>`<div style="display:flex;align-items:baseline;gap:3px;flex-wrap:wrap${aDroite?';justify-content:flex-end':''}">
+  // L INCISE EST OPTIONNELLE, ET LA BANDE N EN VEUT PAS. Mesure au
+  // navigateur, bande de 306 px : en la placant a cote de la dose, la colonne
+  // de droite passe de 44 a 84 px, le nom perd d autant et repasse sur deux
+  // lignes — la bande GRANDIT de 64 a 75 px. C est l inverse du but. Dans une
+  // bande la dose est a l autre bout de la carte ; la reference reste donc
+  // sous le nom, la ou elle se lit avec lui.
+  const chiffre=(x,taille,aDroite,avecRef)=>`<div style="display:flex;align-items:baseline;gap:3px;flex-wrap:wrap${aDroite?';justify-content:flex-end':''}">
       <span style="font-family:var(--pile-titre);font-size:${taille};line-height:1;color:${x.eteint?'var(--text-dim)':x.c};--halo-c:${x.c};text-shadow:var(--halo-2)66">${x.q!=null?nb(x.q):'—'}</span>
       <span style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.3px;text-transform:uppercase">${escapeHtml(/\(s\)/i.test(x.unite)?x.unite:planUnitePluriel(x.q,x.unite))}</span>
+      ${avecRef?reference(x):''}
     </div>`;
 
-  const reference=x=>x.fiche?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.2px;margin-top:2px">réf. ${escapeHtml(x.fiche.dose)} ${escapeHtml(x.fiche.unite||'')}</div>`:'';
+  // LA REFERENCE REJOINT LA DOSE, ENTRE PARENTHESES. Elle occupait une ligne
+  // a elle, sous le couple chiffre-unite, alors qu elle ne fait que le
+  // commenter : « 2 scoops » d abord, « (ref. 20 a 30 g) » ensuite, c est une
+  // seule information. En incise elle se lit dans la foulee, et la carte perd
+  // une ligne quand la place suffit — sinon flex-wrap la renvoie dessous, ce
+  // qui vaut toujours mieux qu un texte coupe par overflow:hidden.
+  const reference=x=>x.fiche?`<span style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.2px">(réf. ${escapeHtml(x.fiche.dose)} ${escapeHtml(x.fiche.unite||'')})</span>`:'';
 
   // L'IDENTITÉ, ET NON LE RANG. `list.indexOf(s)` donnait la position dans la
   // liste REÇUE — filtrée sur les actifs côté athlète — pendant que
@@ -46380,8 +46393,7 @@ function _renderSuppTable(list, isCoach, editFn){
              n avait aucune raison de ceder — assez pour renvoyer
              « 2 comprime(s) » a la ligne sur une tuile a deux colonnes. -->
         <div style="font-size:var(--fs-sm);font-weight:800;color:${x.eteint?'var(--text-dim)':'var(--text)'};letter-spacing:.2px;line-height:1.2;overflow-wrap:break-word;${x.fiche?'padding-right:18px':''}">${escapeHtml(s.name||'')}</div>
-        <div style="margin-top:4px">${chiffre(x,'var(--fs-lg)')}</div>
-        ${reference(x)}
+        <div style="margin-top:4px">${chiffre(x,'var(--fs-lg)',false,true)}</div>
       </div>
     </div>`;
   };
@@ -46405,11 +46417,15 @@ function _renderSuppTable(list, isCoach, editFn){
         <div style="display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap">
           <span style="font-size:var(--fs-sm);font-weight:800;color:${x.eteint?'var(--text-dim)':'var(--text)'};letter-spacing:.2px;line-height:1.25;overflow-wrap:break-word">${escapeHtml(s.name||'')}</span>
           ${x.fiche?_suppPastille(x.fiche.preuve):''}
-          ${depli(s,x)}
         </div>
-        <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:5px">
-          ${x.fiche?`<span style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.2px">réf. ${escapeHtml(x.fiche.dose)} ${escapeHtml(x.fiche.unite||'')}</span>`:''}
-        </div>
+        <!-- LE DEPLI DESCEND SUR LA LIGNE DE LA REFERENCE. Mesure au
+             navigateur, bande de 305 px : la ligne du nom offre 191 px et son
+             contenu en reclamait exactement 191 — nom 148, pastille 17, depli
+             14, plus deux gouttieres de 6. A zero pixel pres, le depli
+             basculait sur une seconde ligne et coutait 20 px de hauteur a la
+             bande. La ligne du dessous ne porte qu une incise courte : il y
+             tient sans rien deplacer, et le nom retrouve sa ligne entiere. -->
+        ${x.fiche?`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">${reference(x)}${depli(s,x)}</div>`:''}
       </div>
       <div style="position:relative;flex-shrink:0;text-align:right">${chiffre(x,'var(--fs-2xl)',true)}</div>
     </div>`;
