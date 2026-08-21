@@ -31314,8 +31314,21 @@ vendredi 78 6h 44m
       ok('_peindreRepos n\'appelle plus navigator.vibrate en direct',(()=>{
         // Une seule porte pour les vibrations, sinon la moitié d'entre elles
         // échappe à toute règle du système.
-        return _peindreRepos.toString().indexOf('navigator.vibrate')<0
-          ?true:_echec('appel direct encore présent');})());
+        //
+        // ⚠ CE TEST SE MORDAIT LA QUEUE. Il cherchait « navigator.vibrate »
+        // dans tout le texte de la fonction, COMMENTAIRES COMPRIS — et un
+        // commentaire de _peindreRepos explique justement que sur iPhone
+        // « navigator.vibrate n'existe pas ». La phrase qui documente la
+        // précaution faisait échouer l'assertion qui la protège. Vérifié sur
+        // la version servie : hors commentaires, ZÉRO appel direct, et la
+        // fonction passe bien par arcHaptique('avertir') et ('legere').
+        const src=_peindreRepos.toString()
+          .replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
+        if(src.indexOf('navigator.vibrate')>=0) return _echec('appel direct encore présent');
+        // ET LA PORTE EST BIEN EMPRUNTÉE : sans cette seconde moitié, une
+        // fonction qui ne vibrerait plus du tout passerait aussi.
+        return /arcHaptique\(/.test(src)
+          ?true:_echec('plus aucune vibration : la porte n\'est même plus empruntée');})());
 
       // ── ANIMATION 5 : le courant monte dans la barre ────────────────────
       ok('La barre de progression n\'anime PLUS sa largeur',(()=>{
@@ -31327,11 +31340,25 @@ vendredi 78 6h 44m
         if(/transition:[^;}]*width/.test(r[0])) return _echec('width encore en transition');
         return /transform:scaleX\(var\(--arc-pc/.test(r[0])
           ?true:_echec(r[0].slice(0,120));})());
-      ok('renderWoEx pose --arc-pc et jamais style.width',(()=>{
-        const src=renderWoEx.toString();
-        if(/wo-progress'\)\.style\.width/.test(src)) return _echec('style.width subsiste');
-        return src.indexOf("setProperty('--arc-pc'")>=0
-          ?true:_echec('--arc-pc non posé');})());
+      ok('La barre de progression passe par --arc-pc, jamais par style.width',(()=>{
+        // ⚠ CE TEST NE VISE PLUS UNE FONCTION NOMMÉE, et c'est la correction.
+        // Il interrogeait renderWoEx.toString(), or la barre a déménagé dans
+        // woMajProgression — vérifié sur la version servie : renderWoEx ne
+        // contient plus une seule occurrence de « wo-progress » ni de
+        // « --arc-pc ». Le comportement n'avait pas disparu, il avait changé
+        // d'adresse, et le test suivait l'adresse au lieu du comportement.
+        // On interroge donc la SOURCE ENTIÈRE : peu importe qui pose la
+        // valeur, ce qui compte est que quelqu'un la pose et que personne
+        // n'écrive style.width sur cette barre.
+        const src=_prodSrc();
+        const parWidth=/getElementById\('wo-progress'\)[\s\S]{0,80}\.style\.width/.test(src)
+          ||/wo-progress'\)\.style\.width/.test(src);
+        if(parWidth) return _echec('style.width subsiste sur la barre');
+        if(src.indexOf("setProperty('--arc-pc'")<0) return _echec('--arc-pc n\'est posé nulle part');
+        // Et une seule fois : deux endroits qui poussent la même barre
+        // finiraient par se contredire.
+        const n=(src.match(/setProperty\('--arc-pc'/g)||[]).length;
+        return n===1?true:_echec(n+' endroits posent --arc-pc');})());
       ok('Le chiffre s\'interpole, et atterrit EXACTEMENT sur sa valeur',(()=>{
         const el=document.createElement('span');
         arcChiffre(el,0,7,{duree:0});
