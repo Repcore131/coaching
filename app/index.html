@@ -426,6 +426,32 @@ html[data-nav="ar"] .screen{animation:screenAr var(--t-1) var(--arc-c-discharge)
    sa largeur de texte, Suivant garde tout le reste : la porte de secours ne
    doit pas peser autant que l action principale. */
 .bil-actions{display:flex;gap:10px;align-items:stretch}
+/* LA DERNIERE CARTE NE LAISSE PLUS DE VIDE A SA DROITE. Avec un nombre
+   impair de complements dans un creneau, la derniere occupait une colonne
+   sur deux et le trou d a cote se lisait comme un oubli.
+   LE NOMBRE DE COLONNES N EST PAS DEVINABLE A L ECRITURE : il depend de la
+   largeur du conteneur, pas de celle de la fenetre. Mesure au navigateur,
+   sur la version servie : la grille fait 306 px chez l athlete sur un
+   telephone de 375 px — deux colonnes — 408 px sur un poste de travail,
+   deux colonnes encore, et 542 px dans la fiche coach — TROIS colonnes.
+   Une regle « impair, donc pleine largeur » aurait ete fausse chez le coach.
+   D ou la requete de CONTENEUR, qui interroge la largeur reelle du bac.
+   Les seuils viennent de la grille elle-meme : n colonnes tiennent des que
+   la largeur atteint n*140 + (n-1)*8, soit 288 px pour deux et 436 px pour
+   trois. Sous 288 px il n y a qu une colonne, et chaque carte est deja
+   pleine largeur : aucune regle n y est necessaire. */
+.supp-bac{container-type:inline-size}
+.supp-grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+@container (min-width:288px) and (max-width:435.98px){
+  .supp-grille>*:last-child:nth-child(odd){grid-column:1/-1}
+}
+@container (min-width:436px){
+  /* Reste UNE carte sur la derniere rangee : elle prend les trois colonnes. */
+  .supp-grille>*:last-child:nth-child(3n+1){grid-column:1/-1}
+  /* Il en reste DEUX : la derniere prend les deux colonnes qui restent, et
+     la rangee se ferme sans trou. */
+  .supp-grille>*:last-child:nth-child(3n+2){grid-column:span 2}
+}
 
 /* L'ATTENTE SE VOIT. Il n'existait aucune regle .btn:disabled : rien ne
    distinguait un bouton verrouille d'un bouton pret, et trois sites sur onze
@@ -46435,8 +46461,7 @@ function _renderSuppTable(list, isCoach, editFn){
     const rendu=seul
       ?items.map(e=>bande(e.s,e.id))
       :items.map(e=>tuile(e.s,e.id));
-    return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px">
-      ${rendu.join('')}</div>`;
+    return `<div class="supp-bac"><div class="supp-grille">${rendu.join('')}</div></div>`;
   };
 
   return _htmlSuppInteractions(list)
