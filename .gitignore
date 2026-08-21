@@ -18,3 +18,4 @@ docs/audit/
 # version perimee de l app a qui en connait l adresse.
 app/b55.html
 _site/
+.firebase/
