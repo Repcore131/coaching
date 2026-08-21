@@ -18775,6 +18775,21 @@ function testExercices(){
             const arcs=h=>[...h.matchAll(/stroke-dasharray="([\d.]+) /g)].map(x=>parseFloat(x[1]));
             const vide=_renderStrictMacroRings(nut);
             if(!vide) return _echec('aucun anneau rendu sur un journal vide');
+            // ⚠ GARDE AJOUTÉE LE 21/08/2026, ET ELLE RÉVÈLE UN VRAI PROBLÈME.
+            // Les trois sondes de ce test — centre, sous, arcs — ont été
+            // écrites pour une version antérieure du rendu et ne matchent plus
+            // rien : le centre cherche font-weight="900" quand Bebas n'est
+            // chargée qu'en 400, la sous-ligne cherche font-size="11"
+            // fill="#777" là où le rendu écrit 12 et #8a8a8a, et l'arc cherche
+            // un stroke-dasharray à deux valeurs que l'animation par
+            // dashoffset n'écrit plus. `centre(vide)[0]` était donc undefined
+            // et ce test LEVAIT au lieu d'échouer : l'exception tuait la suite
+            // ENTIÈRE à 2138 lignes sur 3735, soit 43 % des tests jamais
+            // exécutés — dont toute la section des compléments.
+            // On ne devine pas ici ce que les assertions devraient devenir :
+            // on transforme l'exception en échec nommé, et la suite continue.
+            if(!centre(vide).length)
+              return _echec('sonde du centre obsolète : aucun <text> ne correspond au motif attendu');
             if(centre(vide)[0].v!=='0') return _echec('journal vide : centre = '+centre(vide)[0].v);
             if(arcs(vide)[0]!==0) return _echec('journal vide : l\'arc est déjà rempli');
             // 100 g de poulet : 31 g de protéines, 3,6 g de lipides.
@@ -22488,31 +22503,30 @@ function testExercices(){
         for(let i=0;i<6;i++) if(a[i]!==att[i]) return _echec('rang '+i+' : '+a[i]);
         return true;})());
 
-      // ── L'encart de sourcing ───────────────────────────────────────────
-      ok('Critère : l\'encart de sourcing parle d\'antidopage',
-        /antidopage/.test(SUPP_SOURCING)&&/antidopage/.test(SUPP_SOURCING_COACH));
-      ok('Critère : l\'encart est rendu sous le tableau',(()=>{
-        const h=_renderSuppTable([_s('Créatine monohydrate',['matin'])],false,'openSuppEdit');
-        const i=h.indexOf(escapeHtml(SUPP_SOURCING));
-        if(i<0) return _echec('encart absent');
-        return i>h.indexOf('Créatine monohydrate')?true:_echec('rendu au-dessus du tableau');})());
-      ok('Critère : l\'encart s\'affiche même sans aucun complément',(()=>{
-        const h=_renderSuppTable([],false,'openSuppEdit');
-        return h.indexOf(escapeHtml(SUPP_SOURCING))>=0
-          ?true:_echec('la liste vide sort avant l\'encart');})());
-      ok('L\'encart n\'est rendu QU\'UNE fois, jamais par produit',(()=>{
-        const h=_renderSuppTable([_s('Magnésium',['soir']),_s('Créatine monohydrate',['matin']),
-          _s('Ashwagandha',['coucher'])],false,'openSuppEdit');
-        const n=h.split('Qualité et sourcing').length-1;
-        return n===1?true:_echec(n+' encarts');})());
-      ok('Le coach lit la version qui lui parle',(()=>{
-        const c=_renderSuppTable([_s('Magnésium',['soir'])],true,'openCoachSuppEdit');
-        if(c.indexOf(escapeHtml(SUPP_SOURCING_COACH))<0) return _echec('version coach absente');
-        if(c.indexOf(escapeHtml(SUPP_SOURCING))>=0) return _echec('le coach lit le texte athlète');
-        return !/tu concours/.test(SUPP_SOURCING_COACH);})());
-      ok('Le pied de tableau existant est toujours là, sous l\'encart ou avant',(()=>{
-        // La spécification interdit de le supprimer. L'encart s'ajoute, il ne
-        // remplace rien.
+      // ── L'encart de sourcing a été RETIRÉ ──────────────────────────────
+      // Retiré sur demande de Kevin le 21/08/2026. Cinq critères le
+      // vérifiaient ici : qu'il parle d'antidopage, qu'il soit rendu SOUS le
+      // tableau, qu'il survive à une liste vide, qu'il ne paraisse qu'une
+      // fois, et que le coach lise sa propre version.
+      //
+      // Ils deviennent des TÉMOINS et ne sont pas effacés. Effacer cinq
+      // critères sans laisser de trace, c'est perdre le souvenir qu'un
+      // avertissement antidopage a existé ici — la contamination croisée
+      // d'un complément est une cause documentée de contrôle positif chez
+      // des athlètes de bonne foi, et c'était le seul endroit du produit qui
+      // le disait. Rien ne le remplace : l'information a quitté l'app.
+      ok('TÉMOIN : l\'encart de sourcing a été retiré du rendu',(()=>{
+        const h=_renderSuppTable([_s('Créatine monohydrate',['matin'])],false,'openSuppEdit')
+          +_renderSuppTable([],false,'openSuppEdit')
+          +_renderSuppTable([_s('Magnésium',['soir'])],true,'openCoachSuppEdit');
+        if(/Qualité et sourcing/.test(h)) return _echec('l\'encart est encore rendu');
+        if(/antidopage/i.test(h)) return _echec('l\'antidopage réapparaît quelque part');
+        return true;})());
+      ok('TÉMOIN : ses deux textes ont disparu avec lui, sans rester morts',
+        typeof SUPP_SOURCING==='undefined'&&typeof SUPP_SOURCING_COACH==='undefined');
+      ok('Le pied de tableau existant est toujours là',(()=>{
+        // La spécification interdit de le supprimer. Il survit au retrait de
+        // l'encart, qui s'ajoutait à lui et ne l'a jamais remplacé.
         const h=_renderSuppTable([_s('Magnésium',['soir'])],false,'openSuppEdit');
         return h.indexOf(escapeHtml(SUPP_LEGENDE_PIED))>=0
           ?true:_echec('le pied de légende a disparu');})());

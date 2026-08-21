@@ -46199,17 +46199,27 @@ function _suppTimingIcon(id,size,color){
   if(!m) return '';
   return `<svg viewBox="0 0 24 24" fill="none" stroke="${color||m.color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="${size}" height="${size}" style="flex-shrink:0">${m.svg}</svg>`;
 }
-// Sourcing et contamination. C'est le SEUL endroit du produit où l'antidopage
-// apparaît, et il doit y apparaître : la contamination croisée d'un complément
-// est une cause documentée de contrôle positif chez des athlètes de bonne foi.
-// Affiché UNE fois sous le tableau et jamais par produit — ce n'est pas une
-// propriété d'un complément, c'est une propriété du rayon. Il s'affiche AUSSI
-// quand la liste est vide : c'est même là qu'il sert le plus, avant le premier
-// achat. Aucune marque n'est nommée, ici ni ailleurs.
-const SUPP_SOURCING="La qualité varie beaucoup d'une marque à l'autre. Si tu concours dans une fédération qui pratique des contrôles antidopage, un complément contaminé suffit à te rendre positif : cherche un contrôle par un laboratoire tiers. RepCore ne recommande aucune marque.";
-// Le même avertissement, à la bonne personne. Même raison que
-// SUPP_LEGENDE_PIED_COACH : le coach n'a pas à se lire tutoyer en athlète.
-const SUPP_SOURCING_COACH="La qualité varie beaucoup d'une marque à l'autre. Si cet athlète concourt dans une fédération qui pratique des contrôles antidopage, un complément contaminé suffit à le rendre positif : oriente-le vers un contrôle par un laboratoire tiers. RepCore ne recommande aucune marque.";
+// ── L'ENCART « QUALITÉ ET SOURCING » A ÉTÉ RETIRÉ ─────────────────────────
+//
+// Retiré sur demande de Kevin, le 21/08/2026. La trace reste ici parce que ce
+// bloc n'était pas décoratif, et que quelqu'un — Kevin lui-même dans six
+// mois — pourrait le réintroduire sans savoir ce qu'il portait.
+//
+// Il disait que la qualité varie d'une marque à l'autre, qu'un complément
+// contaminé suffit à rendre positif un athlète qui concourt sous contrôle
+// antidopage, et qu'il faut chercher un contrôle par laboratoire tiers. Il
+// existait en deux versions, tutoyée pour l'athlète et à la troisième
+// personne pour le coach, et ne nommait aucune marque.
+//
+// C'ÉTAIT LE SEUL ENDROIT DU PRODUIT OÙ L'ANTIDOPAGE APPARAISSAIT. La
+// contamination croisée est une cause documentée de contrôle positif chez des
+// athlètes de bonne foi ; l'encart s'affichait même sur une liste vide, parce
+// que c'est avant le premier achat qu'il servait le plus. Rien ne le remplace
+// aujourd'hui : l'information a disparu de l'application, elle n'a pas été
+// déplacée ailleurs.
+//
+// La décision appartient à Kevin, elle est appliquée. Ceci n'est pas une
+// objection, c'est le compte rendu de ce qui a été retiré.
 // Générique, et le rester : aucune interaction n'est nommée, aucun complément
 // n'est déconseillé, aucun texte n'est lu. On dit qu'il existe une question à
 // poser, et à QUI la poser — c'est tout ce que le produit peut honnêtement
@@ -46223,16 +46233,6 @@ function _htmlTraitementSupp(user){
     <div style="font-size:var(--fs-sm);color:var(--text-strong);line-height:1.7">${escapeHtml(TRAITEMENT_SUPP)}</div>
   </div>`;
 }
-function _htmlSuppSourcing(isCoach){
-  // L'écusson n'est pas un ornement : c'est le seul endroit du produit où
-  // l'antidopage apparaît, et un titre nu se saute à la lecture.
-  const ecu='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13" style="flex-shrink:0"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 9.5"/></svg>';
-  return `<div style="border-top:1px solid var(--border);margin-top:11px;padding-top:11px">
-    <div style="display:flex;align-items:center;gap:6px;font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--sub);text-transform:uppercase;margin-bottom:6px">${ecu}<span>Qualité et sourcing</span></div>
-    <div style="font-size:var(--fs-xs);color:var(--text-dim);line-height:1.6">${escapeHtml(isCoach?SUPP_SOURCING_COACH:SUPP_SOURCING)}</div>
-  </div>`;
-}
-
 // Libellé de la forme retenue dans le dossier. Le produit a pu être renommé
 // depuis : la clé stockée ne retrouve alors plus sa fiche, et on rend la clé
 // telle quelle plutôt que de faire disparaître ce que l'athlète avait choisi.
@@ -46292,10 +46292,10 @@ function _suppIndexParId(list,id){
 }
 function _renderSuppTable(list, isCoach, editFn){
   _suppAssurerIds(list);
-  // L encart sourcing survit a la liste vide : l athlete qui n a rien
-  // enregistre est precisement celui qui n a rien achete.
-  if(!list.length) return emptyState('pill','Aucun complément renseigné.',null,null,'padding:28px 0')
-    +_htmlSuppSourcing(isCoach);
+  // L encart de sourcing survivait ici a la liste vide — l athlete qui n a
+  // rien enregistre etant precisement celui qui n a rien achete. L encart a
+  // ete retire ; la liste vide ne rend donc plus que son etat vide.
+  if(!list.length) return emptyState('pill','Aucun complément renseigné.',null,null,'padding:28px 0');
   const TRAME='repeating-linear-gradient(-55deg,transparent,transparent 14px,rgba(255,255,255,.012) 14px,rgba(255,255,255,.012) 15px)';
   // Virgule francaise, et pas de decimale inutile : « 2 » et non « 2,0 ».
   const nb=v=>(Math.round(v*100)/100).toString().replace('.',',');
@@ -46490,7 +46490,7 @@ function _renderSuppTable(list, isCoach, editFn){
   return _htmlSuppInteractions(list)
     +sections.map(sec=>banniere(sec.id,sec.lib)
       +grille(sec.items,sec.items.length===1)).join('')
-    +_htmlSuppLegende(isCoach)+_htmlSuppSourcing(isCoach);
+    +_htmlSuppLegende(isCoach);
 }
 
 let _suppReturnToNutrition=false;
