@@ -31058,9 +31058,18 @@ vendredi 78 6h 44m
       ok('Les trois courbes ARC sont les mêmes en CSS et en JS',(()=>{
         const paires=[['--arc-c-charge',ARC.charge],
           ['--arc-c-discharge',ARC.discharge],['--arc-c-snap',ARC.snap]];
-        const faux=paires.filter(([n,j])=>_v(n).replace(/\s+/g,'')!==j.replace(/\s+/g,''))
-          .map(([n])=>n+' : «'+_v(n)+'»');
-        return faux.length?_echec(faux.join(', ')):true;})());
+        // ⚠ LA COMPARAISON ÉTAIT TEXTUELLE, et le CSS n'écrit pas les nombres
+        // comme le JS : « .4,0,.9,.2 » d'un côté, « 0.40,0.00,0.90,0.20 » de
+        // l'autre. C'est la MÊME courbe, et elle était comptée comme un écart.
+        // On compare donc les QUATRE NOMBRES, ce qui laisse apparaître les
+        // vrais écarts au lieu de les noyer.
+        const nb=s=>{const m=String(s).match(/-?\d*\.?\d+/g);return m?m.map(Number):null;};
+        const faux=paires.filter(([n,j])=>{
+          const a=nb(_v(n)), b=nb(j);
+          if(!a||!b||a.length!==4||b.length!==4) return true;
+          return a.some((v,i)=>Math.abs(v-b[i])>0.001);
+        }).map(([n,j])=>n+' : css «'+(_v(n)||'ABSENTE')+'» ≠ js «'+j+'»');
+        return faux.length?_echec(faux.join(' | ')):true;})());
       ok('Les amplitudes ARC sont les mêmes en CSS et en JS',(()=>{
         const paires=[['--arc-scale-charge',ARC.scaleCharge],
           ['--arc-scale-impact',ARC.scaleImpact],['--arc-scale-settle',ARC.scaleSettle],
