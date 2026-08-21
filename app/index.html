@@ -46274,12 +46274,16 @@ function _renderSuppTable(list, isCoach, editFn){
   // Tout ce qu'une carte doit savoir, lu une seule fois. La couleur est celle
   // du PREMIER moment : elle situe le complement dans la journee sans qu'on
   // ait a lire quoi que ce soit.
-  const lu=s=>{
+  const lu=(s,mid)=>{
     const mts=momentsDe(s);
     const q=_planNb(s.dosage_quantity);
     const prises=Math.max(1,mts.length);
-    return {mts:mts, id:(mts[0]||{}).id,
-      c:(SUPP_TIMING_META[(mts[0]||{}).id]||{color:'#6a6a6a'}).color,
+    // LE MOMENT EST DESORMAIS DONNE PAR L APPELANT. La couleur et l icone
+    // sont celles de CETTE prise, pas celles de la premiere du produit :
+    // la whey du coucher doit etre bleue, pas jaune comme celle du matin.
+    const id=mid!==undefined?mid:(mts[0]||{}).id;
+    return {mts:mts, id:id,
+      c:(SUPP_TIMING_META[id]||{color:'#6a6a6a'}).color,
       q:q, prises:prises, total:(q!=null&&mts.length)?q*prises:null,
       unite:s.dosage_unit||'', fiche:_suppFiche(s.name), eteint:s.active===false};
   };
@@ -46302,11 +46306,13 @@ function _renderSuppTable(list, isCoach, editFn){
       ${_suppEcartMoment(s)?`<div style="font-size:var(--fs-xs);color:var(--text-dim);margin-top:4px;line-height:1.5;white-space:normal">${escapeHtml(_suppEcartMoment(s))}</div>`:''}
     </details>`:'';
 
-  // La quantité TOTALE de la journée, et l'unité au pluriel qui va avec.
-  // « · 3× » dit que ce total se prend en trois fois — sans lui, six scoops
-  // de whey se liraient comme une seule prise.
-  const chiffre=(x,taille)=>`<div style="font-family:var(--pile-titre);font-size:${taille};line-height:1;color:${x.eteint?'var(--text-dim)':x.c};--halo-c:${x.c};text-shadow:var(--halo-2)66">${x.total!=null?nb(x.total):'—'}</div>
-    <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.8px;text-transform:uppercase;margin-top:3px">${escapeHtml(/\(s\)/i.test(x.unite)?x.unite:planUnitePluriel(x.total,x.unite))}${x.prises>1?' · '+x.prises+'×':''}</div>`;
+  // LA QUANTITE DE CETTE PRISE, plus celle de la journee entiere. Le total
+  // et son « · 3× » disaient six scoops la ou l athlete devait en servir
+  // deux : il fallait diviser de tete, devant sa boite, chaque matin.
+  // Maintenant que le produit figure sous chacun de ses creneaux, chaque
+  // carte porte ce qu on prend A CE MOMENT-LA, et rien d autre.
+  const chiffre=(x,taille)=>`<div style="font-family:var(--pile-titre);font-size:${taille};line-height:1;color:${x.eteint?'var(--text-dim)':x.c};--halo-c:${x.c};text-shadow:var(--halo-2)66">${x.q!=null?nb(x.q):'—'}</div>
+    <div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.8px;text-transform:uppercase;margin-top:3px">${escapeHtml(/\(s\)/i.test(x.unite)?x.unite:planUnitePluriel(x.q,x.unite))}</div>`;
 
   const reference=x=>x.fiche?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.2px;margin-top:3px">réf. ${escapeHtml(x.fiche.dose)} ${escapeHtml(x.fiche.unite||'')}</div>`:'';
 
@@ -46319,8 +46325,8 @@ function _renderSuppTable(list, isCoach, editFn){
   // ── LA TUILE : un seul moment, rien d'autre à montrer ─────────────────
   // La pastille de preuve se pose en HAUT À DROITE et non à la suite du nom :
   // un nom qui passe à la ligne la promènerait au milieu de la carte.
-  const tuile=s=>{
-    const x=lu(s);
+  const tuile=(s,mid)=>{
+    const x=lu(s,mid);
     return `<div ${ouverture(s)} style="position:relative;overflow:hidden;display:flex;gap:8px;
       padding:9px;cursor:pointer;border-radius:var(--r-3);
       background:linear-gradient(150deg,#161616,#101010 60%,#0d0d0d);
@@ -46338,14 +46344,13 @@ function _renderSuppTable(list, isCoach, editFn){
   };
 
   // ── LA BANDE : plusieurs moments, ou seul de son créneau ──────────────
-  // Une pastille par moment, avec sa dose : « ☀ 6 g » puis « ☾ 6 g » dit d'un
-  // coup d'œil que les douze grammes de créatine se prennent en deux fois.
-  const bande=s=>{
-    const x=lu(s);
-    const chips=x.mts.map(t=>{
-      const mc=(SUPP_TIMING_META[t.id]||{color:x.c}).color;
-      return `<span title="${escapeHtml(t.label)}" style="display:inline-flex;align-items:center;gap:3px;padding:3px 7px;border-radius:var(--r-4);background:${mc}1f;border:1px solid ${mc}44;color:${mc};font-size:10.5px;font-weight:800;letter-spacing:.4px">${_suppTimingIcon(t.id,11,mc)}${x.q!=null?'<span>'+nb(x.q)+'</span>':''}</span>`;
-    }).join('');
+  // LES PASTILLES DE MOMENTS ONT DISPARU, et leur calcul avec elles. Elles
+  // disaient « ☀ 6 · ☾ 6 » sur une carte rangee sous Midi seulement : il
+  // fallait les reperer, les lire, et comprendre que le soir en faisait
+  // partie. Le produit figure maintenant sous CHACUN de ses creneaux ; la
+  // repetition dit la meme chose sans rien demander.
+  const bande=(s,mid)=>{
+    const x=lu(s,mid);
     return `<div ${ouverture(s)} style="grid-column:1/-1;position:relative;overflow:hidden;display:flex;align-items:center;gap:11px;
       padding:10px 12px;cursor:pointer;border-radius:var(--r-3);
       background:linear-gradient(150deg,#161616,#101010 60%,#0d0d0d);
@@ -46360,7 +46365,6 @@ function _renderSuppTable(list, isCoach, editFn){
           ${depli(s,x)}
         </div>
         <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:5px">
-          ${x.mts.length>1?chips:''}
           ${x.fiche?`<span style="font-size:var(--fs-2xs);color:var(--text-faint);letter-spacing:.2px">réf. ${escapeHtml(x.fiche.dose)} ${escapeHtml(x.fiche.unite||'')}</span>`:''}
         </div>
       </div>
@@ -46368,10 +46372,10 @@ function _renderSuppTable(list, isCoach, editFn){
     </div>`;
   };
 
-  // Une bannière par créneau, posée sur le PREMIER moment de chaque produit.
-  // Elle rythme la journée sans ramener la répétition : la whey figure sous
-  // « Matin » une seule fois, et ses prises de l'après-midi et du soir se
-  // lisent sur ses pastilles.
+  // Une bannière par créneau. Elle rythme la journée, et la whey figure
+  // desormais sous chacun des siens : « Matin », « Avant entraînement »,
+  // « Au coucher ». La répétition EST l'information — c'est ce qu'on a
+  // devant soi au moment de servir.
   const banniere=(id,lib)=>{
     const mc=(SUPP_TIMING_META[id]||{color:'#6a6a6a'}).color;
     return `<div style="display:flex;align-items:center;gap:8px;margin:15px 0 8px">
@@ -46381,27 +46385,41 @@ function _renderSuppTable(list, isCoach, editFn){
     </div>`;
   };
 
-  // Ordre de lecture : par premier moment de la journée, puis alphabétique.
-  const rang=s=>{const m=momentsDe(s)[0]; return m?_rangMoment(m.id):999;};
-  const ordonne=list.slice().sort((a,b)=>rang(a)-rang(b)
-    ||String(a.name||'').localeCompare(String(b.name||''),'fr'));
+  // UNE ENTREE PAR PRISE, ET NON PAR PRODUIT. Un complement pris trois fois
+  // dans la journee produit trois entrees, une sous chaque creneau. Il ne
+  // figurait auparavant que sous son PREMIER moment, ses autres prises
+  // reduites a des pastilles : lire son plan du soir obligeait a parcourir
+  // les cartes du matin.
+  //
+  // Un complement sans aucun moment donne UNE entree, dans « Moment non
+  // defini » — il ne disparait pas de la liste faute de creneau.
+  const entrees=[];
+  list.forEach(s=>{
+    const mts=momentsDe(s);
+    if(!mts.length){ entrees.push({s:s,id:'_none',lib:'Moment non défini',r:999}); return; }
+    mts.forEach(m=>entrees.push({s:s,id:m.id,lib:m.label,r:_rangMoment(m.id)}));
+  });
+  // Ordre de lecture : la journee d abord, puis l alphabet dans chaque creneau.
+  entrees.sort((a,b)=>a.r-b.r
+    ||String(a.s.name||'').localeCompare(String(b.s.name||''),'fr'));
   const sections=[];
-  ordonne.forEach(s=>{
-    const m=momentsDe(s)[0], id=m?m.id:'_none';
+  entrees.forEach(e=>{
     const der=sections[sections.length-1];
-    if(!der||der.id!==id) sections.push({id:id,lib:m?m.label:'Moment non défini',items:[s]});
-    else der.items.push(s);
+    if(!der||der.id!==e.id) sections.push({id:e.id,lib:e.lib,items:[e]});
+    else der.items.push(e);
   });
 
-  // LES TUILES D'ABORD, LES BANDES ENSUITE, chacune dans son ordre. Une bande
-  // au milieu de la grille laisserait un trou à sa droite ; `dense` le
-  // boucherait en remontant une tuile, donc en cassant l'ordre de tabulation.
-  // Regrouper coûte un écart à l'alphabet dans un créneau, et rien d'autre.
+  // PLUS DE MELANGE TUILES/BANDES DANS UN MEME CRENEAU. Chaque entree ne
+  // porte plus qu un seul moment : le critere qui faisait passer un produit
+  // en bande — « il en a plusieurs » — n existe plus. Il ne reste que le cas
+  // du creneau qui ne contient qu une entree, ou la bande pleine largeur
+  // vaut mieux qu une tuile seule laissant un vide a sa droite.
   const grille=(items,seul)=>{
-    const bandes=items.filter(s=>seul||momentsDe(s).length>1);
-    const tuiles=items.filter(s=>bandes.indexOf(s)<0);
+    const rendu=seul
+      ?items.map(e=>bande(e.s,e.id))
+      :items.map(e=>tuile(e.s,e.id));
     return `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px">
-      ${tuiles.map(tuile).join('')}${bandes.map(bande).join('')}</div>`;
+      ${rendu.join('')}</div>`;
   };
 
   return _htmlSuppInteractions(list)
