@@ -52500,7 +52500,18 @@ function blocPoids(user){
       <div class="metric-box"><div class="metric-val" style="color:${colEvol}">${diff!=null?(diff>0?'+':'')+diff+'kg':'—'}</div><div class="metric-label">Évolution</div></div>
     </div>`;
   const courbe=`<div class="evo-carte" style="padding:16px">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:10px">
+      <!-- LE TITRE ET SA VALEUR TIENNENT SUR UNE LIGNE, la legende passe
+           dessous. Mesure au navigateur, ecran de 375 px : la ligne offre
+           300 px, le titre « Évolution du poids 103.8 kg » en reclame 227 et
+           la legende « points = pesées · trait = moyenne 7 j » 178 — 413 a
+           deux, pour 300 disponibles. Les deux ne pouvaient donc PAS
+           cohabiter, et c est le titre qui payait : reduit a 164 px, il
+           cassait apres « poids » et laissait « KG » seul a la ligne.
+           flex-wrap renvoie la legende a la ligne suivante ; le titre
+           retrouve les 300 px et ses 227 y tiennent. Au-dela de 413 px de
+           colonne — la fiche coach — les deux se remettent d eux-memes cote
+           a cote, sans regle supplementaire. -->
+      <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:2px 8px;margin-bottom:10px">
         <span class="evo-titre" style="margin-bottom:0">Évolution du poids${act!=null?`<span style="font-family:var(--pile-titre);font-size:var(--fs-lg);color:var(--text-strong);letter-spacing:1px;margin-left:9px">${act} kg</span>`:''}</span>
         <span style="font-size:var(--fs-2xs);color:var(--text-faint)">points = pesées · trait = moyenne 7 j</span>
       </div>
