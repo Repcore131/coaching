@@ -1101,9 +1101,14 @@ html{scroll-behavior:smooth}
   border:1px solid #242424;border-left:2px solid rgba(224,32,32,.55);
   box-shadow:var(--elev-1)}
 /* Le titre de section : ROUGE. Il etait gris, donc invisible, et la page
-   n'avait aucun point d'entree pour l'oeil. */
+   n'avait aucun point d'entree pour l'oeil.
+   PLUS DE NEON. Demande de Kevin le 21/08/2026. Le halo rouge etait pose sur
+   le titre lui-meme, en plus de sa couleur : deux signaux pour une seule
+   information, et sur un texte de 11 px interlettre le flou empatait les
+   lettres au lieu de les faire ressortir. La couleur suffit a poser le point
+   d entree ; c est elle qui avait tire le titre du gris. */
 .evo-titre{font-size:var(--fs-xs);font-weight:800;letter-spacing:2px;color:var(--red-text);
-  text-transform:uppercase;margin-bottom:8px;--halo-c:rgba(224,32,32,.45);text-shadow:var(--halo-1)}
+  text-transform:uppercase;margin-bottom:8px}
 .metric-label{font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;margin-top:6px;font-weight:700}
 /* LA TUILE DE STATISTIQUE. Elle remplace .metric-box sur les DEUX ecrans de
    seance — l'apercu et la fin. Les selecteurs sont DESCENDANTS : .st-val et
