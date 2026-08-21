@@ -8745,7 +8745,12 @@ function testExercices(){
         ok('Aucun écran de rétention, aucune remise, aucune friction',(()=>{
           const src=String(_ouvrirResiliation)+String(_confirmerResiliation)
             +String(demanderResiliation);
-          const interdits=[/confirm\(/,/es-tu s[ûu]r/i,/vraiment/i,/remise/i,
+          // rcConfirm( AUTANT QUE confirm( : l'app a migré vers le dialogue
+          // maison, et une friction posée avec le nouveau nom aurait glissé
+          // sous cet interdit sans le déclencher. Vérifié sur la version
+          // servie : aujourd'hui ni l'un ni l'autre n'y figure — on ferme la
+          // porte avant qu'elle serve.
+          const interdits=[/(rc)?[Cc]onfirm\(/,/es-tu s[ûu]r/i,/vraiment/i,/remise/i,
             /offre sp[ée]ciale/i,/rester/i,/-\s*50\s*%/];
           for(const r of interdits) if(r.test(src)) return _echec('friction : '+r);
           // Un seul écran de confirmation, pas deux.
@@ -10048,7 +10053,14 @@ function testExercices(){
           // L'imposer écraserait sans le dire un programme publié depuis un
           // autre appareil.
           const src=String(_proposerBrouillon);
-          if(src.indexOf('confirm(')<0) return _echec('aucune confirmation demandée');
+          // ⚠ LA CONFIRMATION A CHANGÉ DE NOM, PAS DE NATURE. L'app est passée
+          // du confirm() natif au dialogue maison rcConfirm(). La sonde
+          // cherchait « confirm( » à la casse, qui ne matche PAS
+          // « rcConfirm( » — le C est majuscule. Vérifié sur la version
+          // servie : _proposerBrouillon appelle bien rcConfirm. On accepte les
+          // deux formes plutôt qu'une seule, sans relâcher l'exigence : il
+          // faut toujours QU'UNE question soit posée.
+          if(!/(rc)?[Cc]onfirm\(/.test(src)) return _echec('aucune confirmation demandée');
           // Un refus efface le brouillon plutôt que de reposer la question à
           // chaque ouverture.
           if(src.indexOf('oublierBrouillon')<0) return _echec('un refus ne referme rien');
@@ -16746,8 +16758,17 @@ function testExercices(){
       // qu'un test précédent a pu remplir.
       ok('Les cases de fin de séance gardent leur tiret dans le HTML',(()=>{
         const h=(document.getElementById('s-workout-done')||{}).outerHTML||'';
-        const n=(h.match(/class="metric-val" id="wd-(time|sets|vol)">/g)||[]).length;
-        if(n!==3) return _echec('cases wd-* trouvées : '+n);
+        // ⚠ LA CLASSE A CHANGÉ, ET LA SONDE ÉTAIT TROP RIGIDE. Un lot
+        // antérieur a remplacé .metric-val par .st-val — la tuile de
+        // statistique a pris la place de la boîte de mesure sur cet écran.
+        // La sonde exigeait en outre l'ordre EXACT des attributs et un « > »
+        // collé, alors que le navigateur en insère d'autres (un style de
+        // chiffres tabulaires). On cherche donc les trois identifiants sans
+        // présumer de l'ordre, et on vérifie la classe séparément.
+        const bal=[...h.matchAll(/<div[^>]*id="wd-(?:time|sets|vol)"[^>]*>/g)].map(x=>x[0]);
+        if(bal.length!==3) return _echec('cases wd-* trouvées : '+bal.length);
+        if(!bal.every(b=>/class="st-val"/.test(b)))
+          return _echec('une case a perdu sa classe .st-val : '+bal.join(' | ').slice(0,120));
         return ['wd-time','wd-sets','wd-vol'].every(id=>{
           const e=document.getElementById(id);
           return !!e&&!!(e.textContent||'').trim();});})());
@@ -19579,9 +19600,21 @@ function testExercices(){
         const src=String(offChercherUI);
         const ids=[...src.matchAll(/getElementById\('([^']+)'\)/g)].map(m=>m[1]);
         if(!ids.length) return _echec('offChercherUI ne lit plus aucun identifiant');
-        const absents=ids.filter(id=>!document.getElementById(id));
+        // ⚠ LE BLOC N'EST PLUS STATIQUE. off-btn et off-results sont désormais
+        // ÉCRITS PAR UN RENDU (voir le gabarit qui porte id="off-zone") et
+        // n'existent donc dans le document qu'une fois ce rendu passé. La
+        // sonde, elle, interrogeait le document au repos et les déclarait
+        // introuvables — vérifié sur la version servie, la fonction se garde
+        // d'ailleurs par `if(!z) return false`, elle ne lève pas.
+        //
+        // CE QU'ON VEUT ATTRAPER RESTE LE MÊME : un identifiant qui n'existe
+        // NULLE PART, c'est-à-dire une faute de frappe. On accepte donc qu'il
+        // soit dans la page OU émis par la source de production.
+        const prod=_prodSrc();
+        const absents=ids.filter(id=>!document.getElementById(id)
+          &&prod.indexOf('id="'+id+'"')<0);
         return absents.length
-          ?_echec('identifiant(s) introuvable(s) dans la page : '+absents.join(', ')):true;})());
+          ?_echec('identifiant(s) écrits nulle part : '+absents.join(', ')):true;})());
       ok('Et la recherche part bien du texte saisi',(()=>{
         // Sans ça, le correctif se réduirait à « un id qui existe » : il faut
         // que ce soit CELUI du champ, et que sa valeur alimente la requête.
@@ -19918,15 +19951,22 @@ function testExercices(){
         return true;})());
       ok('Règle 4 : le partage exige une seconde confirmation',(()=>{
         const src=String(phpRevoquerUI)+String(phpDonnerConsentement);
-        return (src.match(/confirm\(/g)||[]).length>=2
+        // Même correction : le dialogue maison rcConfirm() a remplacé le
+        // confirm() natif. Mesuré sur la version servie : trois appels, donc
+        // la seconde confirmation est bien là.
+        return (src.match(/(rc)?[Cc]onfirm\(/g)||[]).length>=2
           ?true:_echec('une seule confirmation');})());
       // L'assertion ci-dessus porte sur la révocation et le consentement. Le
       // PARTAGE lui-même n'avait pas de bouton, donc rien à couvrir ; il en a
       // un depuis le 14/08, et c'est lui que la règle 4 vise en premier.
       ok('Règle 4 : un envoi au coach se confirme, et nomme la photo',(()=>{
         const src=String(phpPartagerPoseUI);
-        if(!/confirm\(/.test(src)) return _echec('aucune confirmation avant l\'envoi');
-        if(src.indexOf('confirm(')>src.indexOf('phpPartagerPose(u,s,pose)'))
+        // Même correction : rcConfirm() a remplacé confirm(). L'ORDRE reste
+        // mesuré, et c'est lui qui compte — vérifié sur la version servie, la
+        // question est posée à l'octet 1067 et l'envoi part au 1347.
+        const iQ=src.search(/(rc)?[Cc]onfirm\(/);
+        if(iQ<0) return _echec('aucune confirmation avant l\'envoi');
+        if(iQ>src.indexOf('phpPartagerPose(u,s,pose)'))
           return _echec('la confirmation vient APRÈS l\'envoi');
         return /effacée à distance/.test(src)
           ?true:_echec('la confirmation ne dit pas ce qui est irréversible');})());
@@ -30672,7 +30712,12 @@ function testExercices(){
 
         ok('Poser un modèle demande confirmation et n\'écrit rien en base',(()=>{
           const s=String(cplPoserModele);
-          if(s.indexOf('confirm')<0) return _echec('aucune confirmation');
+          // Même correction que partout ailleurs : le dialogue maison
+          // s'appelle rcConfirm, et « confirm » en minuscules ne s'y trouve
+          // pas — le C est majuscule. Vérifié sur la version servie :
+          // cplPoserModele appelle bien rcConfirm, et n'écrit ni en base ni
+          // dans le nuage.
+          if(!/confirm/i.test(s)) return _echec('aucune confirmation');
           if(s.indexOf('_cplIntact')<0)
             return _echec('on confirmerait même par-dessus une composition intacte');
           return (s.indexOf('DB.set')<0&&s.indexOf('CLOUD.push')<0)
