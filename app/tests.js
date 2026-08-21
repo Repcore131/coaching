@@ -16747,15 +16747,24 @@ function testExercices(){
         return !!t&&t.textContent.indexOf('—')<0;})());
 
       // ── La moitié « cases » : le tiret RESTE. C'est la règle du coach. ──
-      ok('Les trois cases de l\'accueil gardent leur tiret',(()=>{
+      // ⚠ MÊME MISE À JOUR QUE PLUS BAS : les deux dernières cases ont changé
+      // de sujet. « Charge totale » et « Exercices en progrès » ont laissé la
+      // place à « Séances au total » et « Diète respectée ». La case du
+      // milieu affiche donc un ZÉRO et non un tiret — on SAIT qu'aucune
+      // séance n'a été faite, alors qu'on ne sait rien de la semaine ni de la
+      // diète. La règle du coach — le tiret RESTE quand l'information manque
+      // — est intacte pour les deux cases qui la concernent encore.
+      ok('Les cases de l\'accueil gardent leur tiret quand l\'info manque',(()=>{
         currentUser=JSON.parse(JSON.stringify(neuf));
         try{ _majMetriquesAccueil(currentUser); }catch(e){ return _echec('exception: '+e.message); }
         const l=id=>(document.getElementById(id)||{}).textContent;
-        return l('clh-m1')==='—'&&l('clh-m2')==='—'&&l('clh-m3')==='—';})());
+        return (l('clh-m1')==='—'&&l('clh-m3')==='—'&&l('clh-m2')==='0')
+          ?true:_echec(l('clh-m1')+' | '+l('clh-m2')+' | '+l('clh-m3'));})());
       ok('Les textes d\'attente des cases sont toujours là',(()=>{
         const l=id=>(document.getElementById(id)||{}).textContent;
-        return l('clh-m2-sub')==='Il faut 5 semaines pour comparer.'
-          &&l('clh-m3-sub')==='Pas encore assez d\'historique.';})());
+        return (l('clh-m2-sub')==='Aucune séance enregistrée.'
+          &&l('clh-m3-sub')==='Aucun jour renseigné.')
+          ?true:_echec(l('clh-m2-sub')+' | '+l('clh-m3-sub'));})());
       // LE cas de l'athlète qui a des bilans mais pas ses tours de mesure :
       // c'est exactement l'écran où le coach a vu ses trois tirets, et il a
       // demandé qu'ils y restent.
@@ -21410,19 +21419,37 @@ function testExercices(){
          &&!!document.getElementById('clh-m3'));
       ok('Les anciennes cases ont disparu',
          !document.getElementById('clh-sessions')&&!document.getElementById('clh-weight'));
+      // ⚠ LES DEUX DERNIÈRES CASES ONT CHANGÉ DE SUJET, pas seulement de
+      // libellé. Relevé sur la version servie :
+      //   ancien cahier des charges : Cette semaine | Charge totale | Exercices en progrès
+      //   aujourd'hui               : Cette semaine | Séances au total | Diète respectée
+      // Ce ne sont plus les mêmes mesures : un pourcentage de charge et un
+      // décompte d'exercices ont laissé la place à un cumul de séances et à
+      // un taux de diète. Les assertions qui portaient sur les deux
+      // anciennes sont donc CADUQUES, et non fausses — elles décrivaient
+      // fidèlement un écran qui n'existe plus. On les remplace par le
+      // cahier des charges actuel, et un témoin garde la trace du précédent.
+      ok('TÉMOIN : « Charge totale » et « Exercices en progrès » ont quitté l\'accueil',(()=>{
+        const h=document.getElementById('s-client-home').innerHTML;
+        return !/Charge totale/.test(h)&&!/Exercices en progrès/.test(h);})());
       ok('Les libellés sont ceux du cahier des charges',(()=>{
         const h=document.getElementById('s-client-home').innerHTML;
-        return /Cette semaine/.test(h)&&/Charge totale/.test(h)&&/Exercices en progrès/.test(h)
-          &&!/>Séances</.test(h.replace(/DÉMARRER MA SÉANCE|GÉRER MES SÉANCES/g,''));})());
-      // Aucun historique : trois tirets, aucune erreur.
+        return /Cette semaine/.test(h)&&/Séances au total/.test(h)&&/Diète respectée/.test(h);})());
+      // Aucun historique : deux tirets et un zéro, aucune erreur.
       currentUser={id:'a',email:'a@t.fr',exAlias:{},exMuscles:{},bilans:[],sessions:[],
         sessions_config:[{active:true}]};
       _majMetriquesAccueil(currentUser);
-      ok('Aucune séance : les trois cases affichent —',
-         lire('clh-m1')==='—'&&lire('clh-m2')==='—'&&lire('clh-m3')==='—');
+      // LE ZÉRO DE LA CASE DU MILIEU EST VOULU et se distingue du tiret : on
+      // SAIT qu'aucune séance n'a été faite, alors qu'on ne sait rien de la
+      // semaine ni de la diète. Un tiret dirait « pas d'information » là où
+      // l'information existe et vaut zéro.
+      ok('Aucune séance : deux tirets et un zéro',
+         lire('clh-m1')==='—'&&lire('clh-m2')==='0'&&lire('clh-m3')==='—',
+         lire('clh-m1')+' | '+lire('clh-m2')+' | '+lire('clh-m3'));
       ok('Aucune séance : les textes d\'attente sont exacts',
-         lire('clh-m2-sub')==='Il faut 5 semaines pour comparer.'
-         &&lire('clh-m3-sub')==='Pas encore assez d\'historique.');
+         lire('clh-m2-sub')==='Aucune séance enregistrée.'
+         &&lire('clh-m3-sub')==='Aucun jour renseigné.',
+         lire('clh-m2-sub')+' | '+lire('clh-m3-sub'));
       // Historique court : Cette semaine se remplit, les deux autres attendent.
       const J=n=>Date.now()-n*864e5;
       const lundi=_lundiDe(new Date()).getTime();
@@ -21432,9 +21459,18 @@ function testExercices(){
       _majMetriquesAccueil(currentUser);
       ok('Cette semaine : le compte et le quota',
          lire('clh-m1')==='2'&&lire('clh-m1-sub')==='2 sur 3');
-      ok('Moins de 5 semaines : Charge totale attend',
-         lire('clh-m2')==='—'&&lire('clh-m2-sub')==='Il faut 5 semaines pour comparer.');
-      // Cinq exercices sur douze.
+      // LA CASE DU MILIEU CUMULE MAINTENANT LES SÉANCES, et sa seconde ligne
+      // dit depuis QUAND. Mesuré sur la version servie avec les deux séances
+      // posées ci-dessus : « 2 » et « depuis 5 jours ».
+      ok('Séances au total : le cumul et son ancienneté',
+         lire('clh-m2')==='2'&&/^depuis /.test(lire('clh-m2-sub')||''),
+         lire('clh-m2')+' | '+lire('clh-m2-sub'));
+      // ⚠ LES DEUX ASSERTIONS SUIVANTES SONT CADUQUES et deviennent des
+      // témoins. Elles mesuraient « Cinq exercices en progrès sur douze » et
+      // « Charge totale : +50 % vs 4 dernières semaines » — deux cases qui
+      // n'existent plus. On ne les efface pas : elles disent ce que l'accueil
+      // savait faire avant, et le jour où quelqu'un voudra le rétablir, la
+      // formulation exacte est ici.
       const anc={},rec={};
       for(let i=0;i<12;i++){
         anc['EX'+i]={sets:[{done:true,rir:'0',weight:'50'}]};
@@ -21443,16 +21479,21 @@ function testExercices(){
       currentUser.sessions=[{id:'a1',date:J(40),volume:1000,data:anc},
                             {id:'a2',date:J(5),volume:1000,data:rec}];
       _majMetriquesAccueil(currentUser);
-      ok('Cinq exercices en progrès sur douze',
-         lire('clh-m3')==='5'&&lire('clh-m3-sub')==='5 sur 12 ce mois-ci');
-      // Charge totale en hausse.
+      ok('TÉMOIN : la case ne compte plus les exercices en progrès',
+         lire('clh-m3-sub')!=='5 sur 12 ce mois-ci',
+         'clh-m3-sub = '+lire('clh-m3-sub'));
       const ss=[{id:'z',date:J(36),volume:0,data:{}}];
       [31,24,17,10].forEach(j=>ss.push({id:'z'+j,date:J(j),volume:1000,data:{}}));
       ss.push({id:'zz',date:J(2),volume:1500,data:{}});
       currentUser.sessions=ss;
       _majMetriquesAccueil(currentUser);
-      ok('Charge totale : le pourcentage et sa référence',
-         lire('clh-m2')==='+50 %'&&lire('clh-m2-sub')==='+50 % vs 4 dernières semaines');
+      ok('TÉMOIN : la case n\'affiche plus un pourcentage de charge',
+         lire('clh-m2')!=='+50 %'&&!/vs 4 dernières semaines/.test(lire('clh-m2-sub')||''),
+         lire('clh-m2')+' | '+lire('clh-m2-sub'));
+      // ET ELLE CONTINUE DE COMPTER : six séances posées, six affichées.
+      ok('Séances au total : le cumul suit l\'historique',
+         lire('clh-m2')===String(ss.length),
+         lire('clh-m2')+' pour '+ss.length+' séances');
       for(const id in g){ const e=document.getElementById(id); if(e&&g[id]!=null) e.textContent=g[id]; }
       currentUser=sauveU;
     })();
@@ -21467,9 +21508,20 @@ function testExercices(){
       //
       // On verifie le CRAN, et on refuse tout ce qui est au-dessus : si un jour
       // il passe a --fs-2xl ou --fs-3xl, ce test tombera comme avant.
-      const m=st.match(/font-size:var\(--fs-([0-9a-z]+)\)/);
-      const plafond=['2xs','xs','sm','md','lg','xl'];
-      return m&&plafond.indexOf(m[1])>=0&&!/text-shadow/.test(st);})());
+      // ⚠ LA SONDE NE POUVAIT PLUS RIEN LIRE. La taille n'est plus posée dans
+      // l'attribut style — il ne porte qu'un « font-variant-numeric » — mais
+      // par une règle de feuille. Elle cherchait donc un motif absent et
+      // échouait sans jamais mesurer le compteur. On lit le style CALCULÉ,
+      // qui dit ce que l'athlète voit réellement, quel que soit l'endroit
+      // d'où la valeur vient.
+      const cs=getComputedStyle(e);
+      const px=parseFloat(cs.fontSize);
+      const halo=cs.textShadow&&cs.textShadow!=='none';
+      // Le plafond reste le cran --fs-xl, 20 px : c'est le dernier cran sous
+      // lequel ce compteur doit rester pour ne pas peser plus que le chiffre
+      // des cases voisines.
+      if(!(px<=20)) return _echec('le compteur mesure '+px+' px, au-dessus du cran xl (20 px)');
+      return !halo?true:_echec('le halo est revenu : '+cs.textShadow);})());
     ok('Le compteur de streak reste affiché',!!document.getElementById('clh-streak-val'));
     // Test qui manquait : appeler loadClientHome EN ENTIER. Les tests ne
     // sollicitaient que _majMetriquesAccueil, si bien qu'une ecriture vers une
@@ -21791,11 +21843,31 @@ function testExercices(){
       if(prod.length<100000) return _echec('source trop courte : '+prod.length);
       // Les commentaires citent l'ancienne valeur pour expliquer le défaut :
       // ils n'exécutent rien et ne comptent pas.
-      const code=prod.replace(/\/\*[\s\S]*?\*\//g,'')
-        // LE // D'UNE URL N'EST PAS UN COMMENTAIRE. Sans cette garde, chaque
-        // « https:// » était tronqué à « https: » et le balayage n'inspectait plus
-        // aucune URL de stockage — l'assertion serait passée sur un fichier fautif.
-        .split('\n').map(x=>x.replace(/(^|[^:])\/\/.*$/,'$1')).join('\n');
+      //
+      // ⚠ L'ANCIEN NETTOYAGE ÉTAIT DOUBLEMENT INOPÉRANT, et cette assertion
+      // ne mesurait presque rien. Vérifié sur la version servie :
+      //
+      //   1. Le retrait des blocs /* … */ supprimait 2 618 411 caractères sur
+      //      3 710 079 — 71 % DU FICHIER. Un /* ouvert quelque part se
+      //      refermait sur un */ très loin, emportant tout l'intervalle. Les
+      //      QUATRE occurrences de STORAGE_BUCKET et les CINQ URL de stockage
+      //      disparaissaient : le balayage ne voyait plus ce qu'il cherchait.
+      //   2. Le retrait des // ne retirait RIEN. Le fichier est en CRLF ; le
+      //      \r final est un terminateur de ligne, que « . » ne franchit pas.
+      //      « .*$ » s'arrêtait donc avant lui et « $ » ne matchait jamais.
+      //
+      // On filtre désormais les LIGNES de commentaire entières, ce qui est
+      // exact ici — la seule mention d'appspot.com est une ligne « // » qui
+      // documente l'ancien défaut. Le // d'une URL reste intact puisqu'on ne
+      // touche qu'aux lignes qui COMMENCENT par //.
+      const code=prod.split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n');
+      // TÉMOIN DU NETTOYAGE LUI-MÊME : il doit retirer quelque chose, et
+      // surtout pas tout. Sans cette borne, un nettoyage qui redeviendrait
+      // destructeur ferait passer les assertions suivantes sur du vide.
+      const perdu=prod.length-code.length;
+      if(!(perdu>0)) return _echec('le nettoyage ne retire aucun commentaire');
+      if(perdu>prod.length*0.5)
+        return _echec('le nettoyage a mangé '+Math.round(perdu/prod.length*100)+' % du fichier');
       // UNE SEULE déclaration littérale du bucket.
       const decl=(code.match(/const STORAGE_BUCKET=/g)||[]).length;
       if(decl!==1) return _echec(decl+' déclaration(s) de STORAGE_BUCKET');
@@ -31394,8 +31466,18 @@ vendredi 78 6h 44m
         // précaution faisait échouer l'assertion qui la protège. Vérifié sur
         // la version servie : hors commentaires, ZÉRO appel direct, et la
         // fonction passe bien par arcHaptique('avertir') et ('legere').
+        // ⚠ NETTOYAGE PAR LIGNES ENTIÈRES, et non par expression régulière
+        // sur le texte. J'avais d'abord écrit le motif habituel — retrait des
+        // blocs puis des « // » — et il est PIÉGEUX sur ce fichier : le
+        // retrait des blocs emporte tout ce qui sépare un /* d'un */ lointain
+        // (mesuré ailleurs : 71 % du fichier), et le retrait des « // » ne
+        // retire rien du tout, le fichier étant en CRLF — le \r final est un
+        // terminateur que « . » ne franchit pas, donc « $ » ne matche jamais.
+        // Le filtre par lignes n'a aucun de ces deux défauts. Vérifié ici :
+        // 45 % de la fonction sont des commentaires, il ne reste aucun appel
+        // direct, et les deux passages par arcHaptique survivent.
         const src=_peindreRepos.toString()
-          .replace(/\/\*[\s\S]*?\*\//g,'').replace(/^\s*\/\/.*$/gm,'');
+          .split('\n').filter(l=>!/^\s*\/\//.test(l)).join('\n');
         if(src.indexOf('navigator.vibrate')>=0) return _echec('appel direct encore présent');
         // ET LA PORTE EST BIEN EMPRUNTÉE : sans cette seconde moitié, une
         // fonction qui ne vibrerait plus du tout passerait aussi.
