@@ -422,6 +422,11 @@ html[data-nav="ar"] .screen{animation:screenAr var(--t-1) var(--arc-c-discharge)
 .btn-outline:hover{border-color:var(--red);color:var(--red-text)}
 .btn-outline:active{transform:scale(var(--arc-scale-charge));transition:transform var(--arc-attack) var(--arc-c-charge)}
 .btn-sm{padding:9px 16px;font-size:var(--fs-xs);width:auto;border-radius:var(--r-1);letter-spacing:1.5px}
+/* LES DEUX SORTIES DU BILAN SUR UNE LIGNE. « Finir plus tard » ne prend que
+   sa largeur de texte, Suivant garde tout le reste : la porte de secours ne
+   doit pas peser autant que l action principale. */
+.bil-actions{display:flex;gap:10px;align-items:stretch}
+
 /* L'ATTENTE SE VOIT. Il n'existait aucune regle .btn:disabled : rien ne
    distinguait un bouton verrouille d'un bouton pret, et trois sites sur onze
    bricolaient un opacity en ligne que les huit autres n'avaient pas. Le trait
@@ -1117,6 +1122,15 @@ html{scroll-behavior:smooth}
   .metric-box{padding:14px 4px}
   .metric-val{font-size:var(--fs-2xl)}
   .metric-label{letter-spacing:1px}
+  /* MESURE AU NAVIGATEUR, fenetre de 320 px : le pied ne laisse que 280 px,
+     « Finir plus tard » en reclame 162 sans pouvoir retrecir, et « Suivant »
+     se cassait sur deux lignes en debordant de la ligne. On empile plutot que
+     de rogner : column-reverse remet Suivant EN HAUT, comme partout ailleurs
+     dans l app ou l action principale precede sa porte de sortie.
+     !important parce que les deux boutons portent leur flex en ligne, et
+     qu une regle de media ne bat pas un style d attribut sans cela. */
+  .bil-actions{flex-direction:column-reverse}
+  .bil-actions>.btn{width:100%!important;flex:0 0 auto!important}
 }
 
 /* ====== EXERCISE / SERIES TABLE ====== */
@@ -5399,7 +5413,10 @@ const COACH_PHOTO='icons/coach.jpg';
   </div>
   <div class="scroll-area" style="flex:1" id="bil-content"></div>
   <div style="padding:14px 20px;border-top:1px solid #181818;background:var(--bg);flex-shrink:0">
-    <button class="btn btn-red" id="bil-next-btn" onclick="bilNext()">Suivant →</button>
+    <div class="bil-actions">
+      <button class="btn btn-outline" id="bil-plus-tard" onclick="bilPlusTard()" style="width:auto;flex:0 0 auto;padding-left:14px;padding-right:14px;letter-spacing:1.5px;white-space:nowrap">Finir plus tard</button>
+      <button class="btn btn-red" id="bil-next-btn" onclick="bilNext()" style="width:auto;flex:1 1 auto">Suivant →</button>
+    </div>
     <button id="bil-skip-depart" onclick="skipFirstBilan()" style="display:none;width:100%;margin-top:10px;background:none;border:none;color:var(--sub);font-size:var(--fs-xs);font-family:Montserrat,sans-serif;cursor:pointer;padding:6px;letter-spacing:.3px;text-decoration:underline">Remplir mon 1er bilan plus tard</button>
   </div>
 </div>
@@ -31971,6 +31988,36 @@ function bilResumeAndGo(){
     _bilClearDraft();return;
   }
   openBilan(d.bilType,true);
+}
+// ── « Finir plus tard » ────────────────────────────────────────────────────
+//
+// LA CINQUIEME SORTIE DU BILAN, et elle ne fabrique rien de neuf : c est le
+// chemin que bilBack emprunte deja a l etape 0, avec une destination fixe.
+// Ce qui manquait n etait pas la mecanique, c etait une PORTE VISIBLE — la
+// seule facon de sortir en conservant sa saisie etait la fleche de retour,
+// depuis la premiere etape, ce que rien n annoncait.
+//
+// ON ECRIT LE BROUILLON SOI-MEME, sans attendre le debounce de 400 ms. Les
+// dernieres frappes sont encore en vol : sortir sans les ecrire ferait
+// reprendre le bilan quelques caracteres en arriere, et le poids que
+// l athlete vient de corriger serait le seul a manquer.
+//
+// PUIS on quitte avec `false`, et c est volontaire : `true` reecrirait le
+// brouillon une seconde fois, alors qu on vient de le poser a la main.
+// La convention du fichier est que `false` signifie « l appelant a deja
+// fait le necessaire », pas « oublie tout ».
+function bilPlusTard(){
+  // COMPTE AVANT DE QUITTER : _quitterEcranBilan vide bilData.
+  const n=_bilCompterReponses(_bilDataSansPhotos());
+  try{ _bilEcrireDraft(); }catch(e){}
+  _quitterEcranBilan(false);
+  go('s-client-home');
+  loadClientHome();
+  // Le nombre est DIT. « Enregistre » sans quantite laisse le doute sur ce
+  // qui a ete garde ; une reprise qui redemande une reponse deja donnee est
+  // exactement ce que cette porte doit eviter.
+  toast(n?('Bilan enregistré : '+n+' réponse'+(n>1?'s':'')+' conservée'+(n>1?'s':'')+'.')
+        :'Bilan enregistré, tu pourras le reprendre.','var(--green)');
 }
 function bilBack(){
   if(bilStep>0){bilStep--;renderBilStep();}
