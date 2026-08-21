@@ -36577,10 +36577,17 @@ function showProgressTab(tab,btn){
          pad:'7px 14px',cellBorder:'#141414',cellBorderSide:'bottom',mb:'16px',
          emptyColor:'var(--sub)',valueColor:'var(--text)'}
       )}
-      <div style="font-size:var(--fs-xs);color:var(--text-dim);text-align:center;margin-top:8px;line-height:1.6">
-        Formule US Navy · Basée sur tour de cou, tour de taille${female?' et tour de hanche':''} + taille<br>
-        Masse grasse = Poids × (% MG / 100) · Masse musculaire = Poids − Masse grasse
-      </div>
+      <!-- LE PIED DE CARTE A ETE RETIRE le 21/08/2026, sur demande de Kevin.
+           Il portait deux lignes centrees : la provenance du pourcentage
+           — « Formule US Navy, basee sur tour de cou, tour de taille (et tour
+           de hanche chez la femme) + taille » — et la derivation des deux
+           kilos affiches dans le tableau juste au-dessus : masse grasse =
+           poids x (% MG / 100), masse musculaire = poids moins masse grasse.
+           CE QUI SUBSISTE, et c est le principal : la note de methode plus
+           haut dans la meme carte nomme toujours la formule ET donne sa marge
+           d erreur — 3 a 4 points sur une mesure isolee, davantage aux
+           extremes. L honnetete sur la fiabilite de l estimation reste donc
+           en place ; c est le rappel du CALCUL qui disparait. -->
     `;
     c.querySelectorAll('[data-scroll-fade]').forEach(el=>setupScrollFade(el));
     setTimeout(()=>{
