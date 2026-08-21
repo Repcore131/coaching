@@ -31539,6 +31539,70 @@ vendredi 78 6h 44m
       try{ const c=_arcCalque(); while(c.firstChild) c.removeChild(c.firstChild); }catch(e){}
     })();
 
+    // ── L'AVATAR DE SÉANCE : LES ZONES MUSCULAIRES ──────────────────────
+    // La table est PRODUITE (scripts/avatar/export.py) : personne ne la relit
+    // à l'œil, et une régénération ratée passerait inaperçue jusqu'à ce qu'un
+    // athlète voie un pectoral manquant. Ce qui est gardé ici, ce sont les
+    // ruines visibles : une planche absente, un muscle disparu, un contour
+    // réduit à un trait, une coordonnée qui sort de la vignette.
+    (()=>{
+      const VUES={face:['TRAPEZES','DELT_ANT','DELT_LAT','PECTORAUX','DORSAUX',
+                        'ABDOS','BICEPS','TRICEPS','AVANT_BRAS','QUADRICEPS',
+                        'ABDUCTEURS','ADDUCTEURS','MOLLETS'],
+                  dos :['TRAPEZES','DELT_POST','DELT_LAT','DORSAUX','LOMBAIRES',
+                        'TRICEPS','BICEPS','AVANT_BRAS','FESSIERS','ISCHIOS',
+                        'ABDUCTEURS','ADDUCTEURS','MOLLETS']};
+      const parcours=(f)=>{ const faux=[];
+        for(const g of ['h','f']) for(const v of ['face','dos'])
+          for(let n=1;n<=WO_AVA_NIV;n++){
+            const t=((WO_ZONES[g]||{})[v]||{})[n];
+            if(!t){ faux.push(g+'/'+v+'/n'+n+' : planche absente'); continue; }
+            f(faux,g,v,n,t);
+          }
+        return faux; };
+
+      ok('Les 28 planches portent chacune leurs 13 muscles',(()=>{
+        const faux=parcours((faux,g,v,n,t)=>{
+          const manque=VUES[v].filter(m=>!t[m]||!t[m].length);
+          if(manque.length) faux.push(g+'/'+v+'/n'+n+' : '+manque.join(','));
+        });
+        return faux.length?_echec(faux.slice(0,4).join(' · ')):true;})());
+
+      ok('Aucun contour dégénéré ni hors de la vignette',(()=>{
+        const faux=parcours((faux,g,v,n,t)=>{
+          for(const m in t) t[m].forEach((p,i)=>{
+            const pts=String(p).split(' ');
+            // Deux points ne ferment aucune surface : ils peindraient un trait.
+            if(pts.length<3){ faux.push(g+v+n+' '+m+'#'+i+' : '+pts.length+' pt'); return; }
+            for(const xy of pts){
+              const c=xy.split(','), x=Number(c[0]), y=Number(c[1]);
+              if(!isFinite(x)||!isFinite(y)||x<-5||x>105||y<-5||y>105)
+                faux.push(g+v+n+' '+m+' : '+xy);
+            }
+          });
+        });
+        return faux.length?_echec(faux.slice(0,4).join(' · ')):true;})());
+
+      ok('Le calque rend un polygone par contour, et rien sans muscle',(()=>{
+        const src='./icons/avatar/n4-h.png';
+        if(woHtmlZones([],src,'face',4,'h')!=='')
+          return _echec('un exercice sans muscle peint quand même');
+        const h=woHtmlZones(['PECTORAUX'],src,'face',4,'h');
+        const n=(h.match(/<polygon /g)||[]).length;
+        const attendu=WO_ZONES.h.face[4].PECTORAUX.length;
+        if(n!==attendu) return _echec(n+' polygones pour '+attendu+' contours');
+        if(h.indexOf('mask-image')<0) return _echec('le masque de la vignette a sauté');
+        // Une ellipse ici, c'est le retour des taches rondes.
+        return /<ellipse/.test(h)?_echec('une ellipse traîne dans le calque'):true;})());
+
+      ok('La silhouette ne se retourne que si TOUS les primaires sont dorsaux',(()=>{
+        if(woVueAvatar(['DORSAUX','BICEPS'])!=='face')
+          return _echec('un exercice mixte bascule au dos');
+        if(woVueAvatar(['DORSAUX','TRICEPS'])!=='dos')
+          return _echec('un exercice tout dorsal reste de face');
+        return woVueAvatar([])==='face'?true
+          :_echec('sans muscle, la face n\'est plus la vue par défaut');})());
+    })();
   }catch(e){ R.push({n:'EXCEPTION',ok:false,d:e.message}); }
   finally{ currentUser=sauve; }
 
