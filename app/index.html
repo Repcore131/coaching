@@ -46426,12 +46426,27 @@ let _caffPalierPrec=null;
 let _caffeineEmbedDate=null; // date affichée dans la section embarquée s-nutrition
 let _pendingCaffProduct=null;
 
-function loadSupplements(){
-  go('s-supplements');
-  const list=_suppStore();
-  const el=document.getElementById('supp-table-content');
-  if(!el) return;
-  el.innerHTML=`
+// ── LE BLOC « MES COMPLEMENTS », RENDU UNE SEULE FOIS ─────────────────────
+//
+// Les deux ecrans qui montrent les complements — la page dediee et la section
+// de la diete — rendaient les MEMES cartes dans DEUX habillages differents :
+// ici un titre h3 sur barre rouge et un bouton rouge en haut a droite, la un
+// petit titre gris interlettre et un bouton pointille en bas. Mesure au
+// navigateur, la meme liste rendue dans les deux conteneurs : sur 269 noeuds,
+// ZERO difference de style dans les cartes elles-memes. Tout l ecart etait
+// dans l habillage, et il n avait aucune raison d exister.
+//
+// PIRE QUE DE L INCOHERENCE : la diete n affichait pas _htmlTraitementSupp,
+// l avertissement d interaction montre a qui a declare un traitement. Un
+// athlete sous traitement qui consultait ses complements par la diete ne le
+// voyait jamais. Ce n est pas un ecart de style, c est un avertissement absent.
+//
+// `avant` laisse la diete glisser ses bandeaux de cycle DANS la carte, a la
+// place exacte qu ils occupaient : ils portent une information que la page
+// dediee n a pas a montrer, et les perdre serait regler un probleme en en
+// creant un autre.
+function _htmlBlocSupplements(list,avant){
+  return `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
       <div style="display:flex;align-items:center;gap:8px">
         <div style="width:3px;height:20px;background:var(--red);border-radius:var(--r-1)"></div>
@@ -46441,9 +46456,15 @@ function loadSupplements(){
     </div>
     ${_htmlTraitementSupp(currentUser)}
     <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4);padding:14px">
-      ${_renderSuppTable(list,false,'openSuppEdit')}
-    </div>
-    <div style="height:20px"></div>`;
+      ${avant||''}${_renderSuppTable(list,false,'openSuppEdit')}
+    </div>`;
+}
+function loadSupplements(){
+  go('s-supplements');
+  const list=_suppStore();
+  const el=document.getElementById('supp-table-content');
+  if(!el) return;
+  el.innerHTML=_htmlBlocSupplements(list)+'<div style="height:20px"></div>';
 }
 
 function loadSuppEmbedded(){
@@ -46468,15 +46489,9 @@ function loadSuppEmbedded(){
     :null;
   const omegaBanner=_omQte
     ?`<div data-bandeau-cycle style="margin-bottom:10px;background:rgba(251,146,60,.07);border:1px solid rgba(251,146,60,.22);border-radius:var(--r-2);padding:9px 12px;font-size:var(--fs-xs);color:#fb923c;font-weight:700">Phase lutéale : tu as noté ${escapeHtml(_omQte)} d'oméga-3 pour aujourd'hui.</div>`:'';
-  el.innerHTML=`
-    <div style="margin-bottom:12px">
-      <h3 style="margin:0;font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:3px;color:var(--sub);display:flex;align-items:center;gap:5px">${icon('pill',11)} Compléments</h3>
-    </div>
-    <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-4);padding:14px;margin-bottom:12px">
-      ${_htmlMigrationCycleSupp(currentUser)}${_htmlSuggestionCycle(currentUser)}${omegaBanner}${_renderSuppTable(list,false,'openSuppEdit')}
-    </div>
-    <button onclick="openSuppEdit(-1)" style="background:none;border:1px dashed var(--border);border-radius:10px;color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;letter-spacing:1px;padding:10px 0;width:100%;cursor:pointer;margin-bottom:4px">+ Ajouter un complément</button>
-    <div style="height:4px"></div>`;
+  el.innerHTML=_htmlBlocSupplements(list,
+    _htmlMigrationCycleSupp(currentUser)+_htmlSuggestionCycle(currentUser)+omegaBanner)
+    +'<div style="height:4px"></div>';
 }
 
 // `id` est un IDENTIFIANT, plus un rang. -1 reste le nouveau complément : aucun
