@@ -17,3 +17,4 @@ docs/audit/
 # Copies de travail de l application. Publiee, une copie ancienne servirait une
 # version perimee de l app a qui en connait l adresse.
 app/b55.html
+_site/
