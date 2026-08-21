@@ -36523,7 +36523,12 @@ function showProgressTab(tab,btn){
     };
     c.innerHTML=`
       <div style="background:var(--dark);border:1px solid var(--border);border-radius:var(--r-3);padding:14px;margin-bottom:14px">
-        <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px">Paramètres : Formule US Navy</div>
+        <!-- Le titre nommait la METHODE — « Paramètres : Formule US Navy » —
+             la ou l athlete cherche ce que la carte lui donne. Renomme sur
+             demande de Kevin le 21/08/2026. La formule reste nommee deux fois
+             plus bas, dans la note de methode et dans le pied de carte : elle
+             n est pas escamotee, elle cesse seulement de servir de titre. -->
+        <div style="font-size:var(--fs-xs);color:var(--sub);text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:10px">Masse graisseuse</div>
         <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
           <div style="flex:1;min-width:70px"><label for="evol-height" style="font-size:var(--fs-xs)">Taille (cm)</label><input type="text" inputmode="decimal" id="evol-height" value="${escapeHtml(String(storedH||''))}" placeholder="176" style="padding:8px;font-size:var(--fs-md);font-weight:700;text-align:center"></div>
           <div style="flex:1;min-width:80px">
