@@ -46365,12 +46365,12 @@ function _renderSuppTable(list, isCoach, editFn){
   const tuile=(s,mid)=>{
     const x=lu(s,mid);
     return `<div ${ouverture(s)} style="position:relative;overflow:hidden;display:flex;gap:7px;
-      padding:8px;cursor:pointer;border-radius:var(--r-3);
+      padding:8px 8px 5px;cursor:pointer;border-radius:var(--r-3);
       background:linear-gradient(150deg,#161616,#101010 60%,#0d0d0d);
       border:1px solid #202020;box-shadow:var(--e2);opacity:${x.eteint?'.5':'1'}">
       <div aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;background:${TRAME}"></div>
       ${x.fiche?`<span style="position:absolute;top:8px;right:8px;z-index:1">${_suppPastille(x.fiche.preuve)}</span>`:''}
-      ${depli(s,x,'position:absolute;bottom:5px;right:7px;z-index:1;max-width:78%')}
+      ${depli(s,x,'position:absolute;bottom:3px;right:7px;z-index:1;max-width:78%')}
       ${pave(x,34)}
       <div style="position:relative;flex:1;min-width:0">
         <!-- LA RESERVE POUR LA PASTILLE NE VAUT QUE POUR LE NOM. Elle etait
@@ -46380,7 +46380,7 @@ function _renderSuppTable(list, isCoach, editFn){
              n avait aucune raison de ceder — assez pour renvoyer
              « 2 comprime(s) » a la ligne sur une tuile a deux colonnes. -->
         <div style="font-size:var(--fs-sm);font-weight:800;color:${x.eteint?'var(--text-dim)':'var(--text)'};letter-spacing:.2px;line-height:1.2;overflow-wrap:break-word;${x.fiche?'padding-right:18px':''}">${escapeHtml(s.name||'')}</div>
-        <div style="margin-top:4px">${chiffre(x,'var(--fs-xl)')}</div>
+        <div style="margin-top:4px">${chiffre(x,'var(--fs-lg)')}</div>
         ${reference(x)}
       </div>
     </div>`;
