@@ -31392,6 +31392,23 @@ vendredi 78 6h 44m
             reposFin:Date.now()+60000,reposTotal:120,reposVibre:true,reposLib:''};
           _peindreRepos();
           const h1=z?z.innerHTML:'';
+          // ⚠ CE QUI COMPTE ICI N'EST PAS DANS LE TEXTE HTML. La couleur de
+          // l'anneau, celle du décompte et la position du trait sont posées
+          // en STYLE EN LIGNE par _peindreRepos, après coup. Les lire dans
+          // innerHTML échouait de deux façons : l'attribut garde sa valeur de
+          // départ pendant que le style change, et la sérialisation insère une
+          // espace — « color: var(--text); » et non « color:var(--text) ».
+          // On relève donc l'état RÉEL juste après chaque peinture.
+          const _etat=()=>{
+            const c=z?z.querySelector('circle[stroke-dasharray]'):null;
+            const n=z?z.querySelector('#rep-num'):null;
+            const r=z?z.querySelector('[style*="animation-duration"]'):null;
+            return {anneau:c?(c.style.stroke||c.getAttribute('stroke')):null,
+              offset:c?parseFloat(c.style.strokeDashoffset):null,
+              chiffre:n?n.style.color:null,
+              cadence:r?parseFloat(getComputedStyle(r).animationDuration)*1000:null};
+          };
+          const e1=_etat();
           ok('L\'anneau remplace la barre : un seul porteur de l\'information',(()=>{
             if(h1.indexOf('<svg')<0) return _echec('aucun anneau');
             // La barre de 4 px ne doit plus coexister avec lui.
@@ -31413,26 +31430,26 @@ vendredi 78 6h 44m
           // le chiffre était rouge et l'anneau cyan, deux teintes vives pour
           // une seule information.
           ok('Loin de la fin : anneau rouge, décompte blanc, cadence normale',(()=>{
-            if(h1.indexOf('stroke="var(--red)"')<0) return _echec('anneau pas rouge');
-            if(h1.indexOf('color:var(--text)')<0) return _echec('décompte pas blanc');
+            if(e1.anneau!=='var(--red)') return _echec('anneau : '+e1.anneau);
+            if(e1.chiffre!=='var(--text)') return _echec('décompte : '+e1.chiffre);
             if(h1.indexOf('var(--arc-current)')>=0) return _echec('le cyan est resté');
-            return h1.indexOf('animation-duration:'+ARC.ambient+'ms')>=0
-              ?true:_echec('cadence inattendue');})());
+            return e1.cadence===ARC.ambient
+              ?true:_echec('cadence '+e1.cadence+' au lieu de '+ARC.ambient);})());
 
           // Dix dernières secondes : deux signaux changent d'un coup.
           woState.reposFin=Date.now()+7000;
           _peindreRepos();
           const h2=z?z.innerHTML:'';
+          const e2=_etat();
           // ROUGE → BLANC, et non plus cyan → violet : le décompte étant
           // blanc, le violet aurait introduit une troisième teinte sans rien
           // dire de plus. Les DEUX signaux de la fin sont conservés.
           ok('Les 10 dernières secondes : anneau rouge → blanc',(()=>{
-            if(h2.indexOf('stroke="var(--text)"')<0) return _echec('anneau pas blanc');
-            return h2.indexOf('stroke="var(--red)"')<0
-              ?true:_echec('le rouge est resté');})());
+            return e2.anneau==='var(--text)'
+              ?true:_echec('anneau : '+e2.anneau);})());
           ok('Les 10 dernières secondes : cadence du point DOUBLÉE',
-             h2.indexOf('animation-duration:'+(ARC.ambient/2)+'ms')>=0,
-             'attendu '+(ARC.ambient/2)+'ms');
+             e2.cadence===ARC.ambient/2,
+             'cadence '+e2.cadence+' au lieu de '+(ARC.ambient/2));
           ok('Le point reprend la boucle au lieu de repartir de zéro',(()=>{
             // Le bandeau est reconstruit CHAQUE seconde. Sans délai négatif,
             // le point sauterait en arrière une fois par seconde.
@@ -31440,12 +31457,22 @@ vendredi 78 6h 44m
             if(!m) return _echec('aucun délai posé');
             return parseInt(m[1],10)<=0
               ?true:_echec('délai positif : '+m[1]);})());
+          // ⚠ LA SONDE LISAIT L'ATTRIBUT, qui ne bouge jamais : il vaut la
+          // circonférence entière, et c'est le STYLE qui porte la position du
+          // trait. Elle comparait donc 559,20 à 559,20 et concluait que rien
+          // ne bougeait. Le trait bouge — mesuré sur la version servie, il
+          // passe de 279,60 à 32,62 entre 60 s et 7 s restantes.
+          //
+          // MAIS IL BOUGE DANS L'AUTRE SENS. Un décalage qui DIMINUE, c'est un
+          // anneau qui se REMPLIT à mesure que le repos s'achève, pas un
+          // anneau qui se vide. Ce test demande l'inverse, et il le demande
+          // dans son titre. La divergence est donc réelle et reste rouge :
+          // c'est un choix d'affichage, pas une sonde à recaler, et personne
+          // d'autre que Kevin ne peut trancher lequel des deux il veut.
           ok('L\'anneau se VIDE : le trait recule quand le temps passe',(()=>{
-            const d=h=>{ const m=/stroke-dashoffset="([\d.]+)"/.exec(h);
-              return m?parseFloat(m[1]):null; };
-            const a=d(h1), b=d(h2);
-            if(a==null||b==null) return _echec('offset introuvable');
-            return b>a?true:_echec(a+' → '+b+' : le trait ne recule pas');})());
+            const a=e1.offset, b=e2.offset;
+            if(a==null||b==null||isNaN(a)||isNaN(b)) return _echec('offset illisible');
+            return b>a?true:_echec(a+' → '+b+' : le trait AVANCE, l\'anneau se remplit au lieu de se vider');})());
         } finally { try{ annulerRepos(); }catch(e){} woState=sauveWo; }
       })();
       ok('L\'avertissement de fin de repos est le motif déjà connu',(()=>{
