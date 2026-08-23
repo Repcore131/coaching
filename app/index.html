@@ -37310,11 +37310,19 @@ function _htmlRepartitionPrises(user,macrosJour){
   try{ r=repartitionPrises(user,macrosJour); }catch(e){ r=null; }
   if(!r) return '';
   const egales=r.parts.every(x=>x===r.parts[0]);
+  // LA LIGNE S ECRIT COMME UN CALCUL, et non comme une enumeration. Le point
+  // median separait des parts sans dire ce qu on en faisait, et le tiret
+  // cadratin annoncait un total sans dire d ou il venait : « 62 g · 62 g ·
+  // 62 g · 61 g — 247 g au total » se lisait comme quatre nombres suivis d un
+  // cinquieme. Avec les signes, la phrase se verifie a l oeil : 62 + 62 + 62
+  // + 61 = 247. Demande de Kevin le 21/08/2026.
+  // Le cas des parts EGALES garde sa multiplication, qui dit la meme chose en
+  // plus court, et gagne le meme signe : 4 × 62 g = 248 g au total.
   const detail=egales
     ?r.nRepas+' × '+r.parts[0]+' g'
-    :r.parts.join(' g · ')+' g';
+    :r.parts.join(' g + ')+' g';
   return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)">
-    <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">${escapeHtml(detail)} — ${escapeHtml(String(r.total))} g au total.</div>
+    <div style="font-size:var(--fs-xs);color:var(--text-strong);line-height:1.6">${escapeHtml(detail)} = ${escapeHtml(String(r.total))} g au total.</div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:5px">${escapeHtml(phrasePlancherPrise(r))}</div>
     ${r.tension?`<div style="font-size:var(--fs-2xs);color:var(--text-dim);line-height:1.55;margin-top:5px">${escapeHtml(PRISE_PHRASE_TENSION)}${r.nSuggere?' Essaie '+r.nSuggere+' repas.':''}</div>`:''}
   </div>`;
