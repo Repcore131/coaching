@@ -19672,6 +19672,64 @@ function testExercices(){
           ?true:_echec(JSON.stringify(g.macros.sel)+' / '+g.note);})());
     })();
 
+    // ══════ LA PHRASE DU JOUR : 365 TEXTES, ET AUCUN AUTEUR ══════
+    // Ce jeu-ci n'avait AUCUNE assertion — ni l'ancien, ni celui d'avant. Il
+    // vient d'etre remplace entierement, texte pour texte, a la demande de
+    // Kevin : c'est le moment d'epingler ce qui doit rester vrai, avant qu'une
+    // ligne se perde dans un copier-coller.
+    (function(){
+      ok('365 phrases, toutes des chaînes non vides',(()=>{
+        if(RC_PHRASES.length!==365) return _echec(RC_PHRASES.length+' entrées');
+        const mauvaises=RC_PHRASES.filter(p=>typeof p!=='string'||!p.trim());
+        return mauvaises.length?_echec(mauvaises.length+' entrées vides ou non textuelles'):true;})());
+      ok('AUCUN DOUBLON : deux jours de l\'année ne rendent pas la même phrase',(()=>{
+        // Le selecteur est un modulo sur le quantieme : un doublon dans la
+        // liste, et deux dates differentes affichent le meme texte.
+        const vus=new Set(); const doubles=[];
+        RC_PHRASES.forEach((p,i)=>{ if(vus.has(p)) doubles.push(i); else vus.add(p); });
+        return doubles.length?_echec(doubles.length+' doublon(s), index '+doubles.slice(0,4).join(', ')):true;})());
+      ok('Plus AUCUN auteur : la liste est plate, le gabarit n\'a plus sa ligne',(()=>{
+        // Le jeu precedent portait 224 auteurs et un champ `a` par entree.
+        const objets=RC_PHRASES.filter(p=>p&&typeof p==='object');
+        if(objets.length) return _echec(objets.length+' entrées portent encore un auteur');
+        if(typeof phraseDuJour()!=='string')
+          return _echec('phraseDuJour ne rend plus une chaîne');
+        return document.getElementById('clh-phrase-auteur')===null
+          ?true:_echec('la ligne d\'auteur est encore dans le gabarit');})());
+      ok('Ni emoji ni guillemets dans les textes eux-mêmes',(()=>{
+        // La consigne de redaction l\'exige, et les guillemets ne sont plus
+        // poses a l\'affichage : s\'ils revenaient dans un texte, ils seraient les
+        // seuls de la liste.
+        const emoji=RC_PHRASES.filter(p=>/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u.test(p));
+        if(emoji.length) return _echec(emoji.length+' phrase(s) avec emoji : '+emoji[0]);
+        const guil=RC_PHRASES.filter(p=>/["«»]/.test(p));
+        return guil.length?_echec(guil.length+' phrase(s) avec des guillemets : '+guil[0]):true;})());
+      ok('Le quantième NE PERD PAS un jour au passage à l\'heure d\'été',(()=>{
+        // Le 29 mars 2026 est le dimanche du changement d\'heure en France : ce
+        // jour-la ne dure que 23 h. Une soustraction de deux dates LOCALES
+        // divisee par 86 400 000 rend 87,96 -> 87, et l\'athlete relit la phrase
+        // de la veille. Les deux jeux de phrases sont arrives avec cette
+        // version-la ; _rcQuantieme calcule sur deux reperes UTC.
+        const q=_rcQuantieme(new Date(2026,2,29,0,30));
+        if(q!==88) return _echec('29 mars 2026 rendu comme le jour '+q+' au lieu de 88');
+        if(_rcQuantieme(new Date(2026,0,1,12,0))!==1) return _echec('le 1er janvier n\'est pas le jour 1');
+        return _rcQuantieme(new Date(2026,11,31,23,0))===365
+          ?true:_echec('31 décembre : '+_rcQuantieme(new Date(2026,11,31,23,0)));})());
+      ok('Le 366e jour d\'une année bissextile reprend la première phrase',(()=>{
+        // 2028 est bissextile : son 31 decembre est le jour 366.
+        const q=_rcQuantieme(new Date(2028,11,31,12,0));
+        if(q!==366) return _echec('quantième '+q);
+        return phraseDuJour(new Date(2028,11,31,12,0))===RC_PHRASES[0]
+          ?true:_echec('la boucle ne revient pas sur la première');})());
+      ok('Même jour, même phrase pour tout le monde',(()=>{
+        // Rien n\'est stocke ni synchronise : c\'est tout l\'interet du choix
+        // deterministe, et deux appels dans la meme journee ne doivent pas
+        // pouvoir diverger.
+        const d=new Date(2026,5,17,8,0), e=new Date(2026,5,17,23,30);
+        return phraseDuJour(d)===phraseDuJour(e)
+          ?true:_echec('deux heures du même jour donnent deux phrases');})());
+    })();
+
     // ── Le filet sur les DEUX PLAFONDS, posé avant d'y toucher ──
     // Aucune assertion ne les nommait : ils n'étaient épinglés qu'indirectement,
     // par des valeurs attendues. Le curseur se branche juste avant eux.
