@@ -19025,13 +19025,46 @@ function testExercices(){
         const h2=htmlGrilleTuilesNut({kcal:0,p:0,c:0,l:60.44,sel:0,fi:0},m);
         const v2=[...h2.matchAll(/class="fj-val">([^<]*)</g)].map(x=>x[1]);
         return v2[2]==='60.4'?true:_echec('lipides : '+v2[2]);})());
-      ok('La carte des objectifs rend RÉELLEMENT la grille',(()=>{
+      ok('La grille est rendue par la carte des objectifs, et par ELLE SEULE',(()=>{
         // Les assertions ci-dessus interrogent la fabrique en isolation : on
         // pouvait retirer entièrement son appel du rendu et tout restait vert.
+        //
+        // Le journal la rendait AUSSI jusqu'au 24/08/2026. Elle en est partie :
+        // les anneaux disent déjà les protéines, les glucides et les lipides,
+        // et la barre du dessus dit les calories. Il ne garde que les deux
+        // macros que rien d'autre ne montre, en deux lignes légères.
         if(!/htmlGrilleTuilesNut\(/.test(String(_renderStrictMacroRings)))
           return _echec('la carte des objectifs ne la rend plus');
-        return /htmlGrilleTuilesNut\(/.test(String(_renderFjDaySummary))
-          ?true:_echec('le journal ne la rend plus');})());
+        if(/htmlGrilleTuilesNut\(/.test(String(_renderFjDaySummary)))
+          return _echec('le journal la rend encore');
+        return /htmlLigneMiniNut\(/.test(String(_renderFjDaySummary))
+          ?true:_echec('le journal ne rend ni le sel ni les fibres');})());
+      ok('Sans cible, la ligne légère n\'a PAS de piste',(()=>{
+        // Une piste vide se lirait comme un objectif à zéro. Le sel n\'a pas de
+        // cible tant que le poids de l\'athlète est inconnu.
+        const sans=htmlLigneMiniNut('Sel',3.6,0,' g','#60a5fa');
+        if(/fj-mini-p/.test(sans)) return _echec('une piste est rendue sans cible');
+        if(sans.indexOf('3,6')<0) return _echec('la valeur a disparu avec la piste');
+        const avec=htmlLigneMiniNut('Sel',3.6,4.6,' g','#60a5fa');
+        return /fj-mini-p/.test(avec)&&/data-bar-w="78/.test(avec)
+          ?true:_echec(avec.slice(0,220));})());
+      ok('La piste est plafonnée à 100 %, comme celle des calories',(()=>{
+        const h=htmlLigneMiniNut('Sel',20,5,' g','#60a5fa');
+        return /data-bar-w="100/.test(h)?true:_echec(h.slice(0,220));})());
+      ok('Les trois étapes ne sortent QUE sur une journée vide',(()=>{
+        const vide=htmlConsigneJournal('2026-01-06',true);
+        const plein=htmlConsigneJournal('2026-01-06',false);
+        if(!/fj-etapes/.test(vide)) return _echec('aucune consigne sur une journée vide');
+        if(/fj-etapes/.test(plein)) return _echec('la consigne se répète sur une journée pleine');
+        // Le bouton, lui, reste toujours : c\'est le seul de la carte.
+        return /openFoodSearch/.test(vide)&&/openFoodSearch/.test(plein)
+          ?true:_echec('le bouton manque');})());
+      ok('UN SEUL bouton d\'ajout dans la carte du jour',(()=>{
+        // Il était en haut ET la consigne en demandait un autre. Deux boutons
+        // identiques dans une même carte n\'apprennent rien à personne.
+        const src=String(_renderFjDaySummary)+String(htmlConsigneJournal);
+        const n=(src.match(/openFoodSearch\(/g)||[]).length;
+        return n===1?true:_echec(n+' appels à openFoodSearch');})());
       ok('Une seule fabrique : le journal n\'en garde pas une copie',(()=>{
         // C'est la raison d'être de l'extraction. Deux copies du même hexagone
         // divergeraient sur un détail, et les deux grilles se liraient alors
@@ -24337,7 +24370,11 @@ function testExercices(){
           // le « g » du libelle faisait doublon. La fixture n'a ni poids ni
           // bilan, donc pas de cible : le nombre reste seul devant son
           // etiquette, et c'est bien cela que ce test mesure.
-          return /3[.,]6\s*sel/i.test(t)?true:_echec('«'+t.slice(0,160)+'»');})());
+          // L'ordre s'est inverse le 24/08/2026 : la tuile ecrivait le
+          // nombre puis son libelle, la ligne legere ecrit le libelle puis
+          // le nombre. Ce que ce test mesure — le chiffre COLLE a son
+          // etiquette, et non n'importe ou dans l'ecran — ne change pas.
+          return /sel\s*3[.,]6/i.test(t)?true:_echec('«'+t.slice(0,160)+'»');})());
         ok('Critère : une entrée sans sel est SIGNALÉE, pas escamotée',(()=>{
           const t=_recap([{id:1,nom:'A',qty:100,repas:'matin',kcal:100,p:1,c:1,l:1,fi:1,sel:1.2},
             {id:2,nom:'Ancien',qty:100,repas:'matin',kcal:100,p:1,c:1,l:1,fi:1}]);
