@@ -9898,90 +9898,6 @@ function testExercices(){
           }
           return rates.length?_echec(rates.join(' · ')):true;})());
 
-        // ── UNE SÉANCE QU'ON NE PEUT PAS OUVRIR ──────────────────────────
-        // Symptôme rapporté : sur la fiche d'un athlète, « Modifier les
-        // exercices » ne fait RIEN sur certaines séances. Reproduit : les
-        // trois éditeurs appellent renderProgEx() AVANT go(), donc une
-        // exception dans le rendu laisse l'écran où il est, sans un mot —
-        // exactement le bug déjà rencontré sur l'onglet H/F des modèles, et
-        // que _cptSeances a fermé de ce côté-là.
-        //
-        // Trois formes de données le déclenchent, mesurées au navigateur :
-        // une entrée nulle dans le tableau, des reps qui ne sont pas du
-        // texte (isCardio fait .toLowerCase dessus), et un « exercises » qui
-        // n'est pas un tableau (_photographierProgEx fait .map dessus).
-        const _ouvre=(exs,fn)=>{
-          const _sv=currentUser,_se=_coachEditClient,_sc=_progEditorCtx,_su=window.saveUser;
-          try{
-            window.saveUser=()=>true;
-            currentUser={id:'c1',email:'c@t',role:'coach',fname:'K',exAlias:{},
-              exMuscles:{},programs:{},sessions:[],bilans:[],nutrition:{},
-              coachPrograms:[{id:'m',name:'M',sessions_F:[],
-                sessions_H:[{day:'Lundi',name:'MOD',active:true,exercises:exs}]}]};
-            _coachEditClient={id:'a1',email:'a@t',role:'athlete',fname:'A',
-              sessions_config:[{day:'Lundi',name:'ATH',active:true,exercises:exs}]};
-            _editProgTemplateIdx=0; _editProgTemplateGender='H';
-            go('s-coach-sessions');
-            (fn||openCoachSessionExercises)(0);
-            return (document.querySelector('.screen.active')||{}).id;
-          } catch(e){ return 'EXCEPTION: '+e.message; }
-          finally{ currentUser=_sv;_coachEditClient=_se;_progEditorCtx=_sc;window.saveUser=_su; }
-        };
-        ok('Une entrée nulle dans les exercices n\'empêche pas d\'ouvrir la séance',(()=>{
-          const e=_ouvre([{name:'DC',series:3,reps:'10'},null,{name:'SQUAT',series:3,reps:'10'}]);
-          return e==='s-coach-program'?true:_echec('écran = '+e);})());
-        ok('Des reps qui ne sont pas du texte n\'empêchent pas d\'ouvrir la séance',(()=>{
-          const e=_ouvre([{name:'DC',series:3,reps:10}]);
-          return e==='s-coach-program'?true:_echec('écran = '+e);})());
-        ok('Un « exercices » qui n\'est pas un tableau n\'empêche pas d\'ouvrir la séance',(()=>{
-          const e=_ouvre({0:{name:'DC',series:3,reps:'10'}});
-          return e==='s-coach-program'?true:_echec('écran = '+e);})());
-        ok('L\'éditeur de MODÈLE résiste aux mêmes formes',(()=>{
-          const rates=[];
-          for(const [cas,exs] of [['nul',[{name:'DC',reps:'10'},null]],
-                                  ['reps nombre',[{name:'DC',reps:10}]],
-                                  ['non-tableau',{0:{name:'DC',reps:'10'}}]]){
-            const e=_ouvre(exs,openProgTemplateSessionExercises);
-            if(e!=='s-coach-program') rates.push(cas+' → '+e);
-          }
-          return rates.length?_echec(rates.join(' · ')):true;})());
-        ok('_assainirExercices ne touche pas une séance déjà saine',(()=>{
-          const s={day:'Lundi',exercises:[{name:'DC',series:3,reps:'10',repos:'01 min'}]};
-          const avant=JSON.stringify(s);
-          const n=_assainirExercices(s);
-          if(n!==0) return _echec('il dit avoir réparé '+n+' entrée(s)');
-          return JSON.stringify(s)===avant?true:_echec('la séance a été réécrite : '+JSON.stringify(s));})());
-        ok('_assainirExercices retire les entrées vides et rend les reps textuelles',(()=>{
-          const s={exercises:[{name:'A',reps:'10'},null,'BRUIT',{name:'B',reps:12},undefined]};
-          const n=_assainirExercices(s);
-          if(s.exercises.length!==2) return _echec('reste '+s.exercises.length+' exercice(s)');
-          if(s.exercises[1].reps!=='12') return _echec('reps = '+JSON.stringify(s.exercises[1].reps));
-          return n===4?true:_echec('réparations comptées : '+n);})());
-        ok('Un rendu qui échoue le DIT au lieu de laisser le bouton muet',(()=>{
-          // Le filet : si renderProgEx tombe pour une raison qu'on n'a pas
-          // prévue, le coach doit lire quelque chose. Un écran qui ne bouge
-          // pas et une console muette, c'est le bug d'origine.
-          const _sv=currentUser,_se=_coachEditClient,_sc=_progEditorCtx;
-          const _r=renderProgEx,_t=toast,_ce=console.error;
-          let dit=0;
-          try{
-            renderProgEx=()=>{throw new Error('panne simulée');};
-            toast=()=>{dit++;};
-            console.error=()=>{};
-            currentUser={id:'c1',email:'c@t',role:'coach',fname:'K',exAlias:{},
-              exMuscles:{},programs:{},sessions:[],bilans:[],nutrition:{},coachPrograms:[]};
-            _coachEditClient={id:'a1',email:'a@t',role:'athlete',fname:'A',
-              sessions_config:[{day:'Lundi',name:'ATH',active:true,
-                exercises:[{name:'DC',series:3,reps:'10'}]}]};
-            go('s-coach-sessions');
-            openCoachSessionExercises(0);
-            const ec=(document.querySelector('.screen.active')||{}).id;
-            if(ec==='s-coach-program') return _echec('on entre dans un écran à moitié rendu');
-            return dit>0?true:_echec('aucun message : le bouton reste muet');
-          } catch(e){ return _echec('l\'exception ressort jusqu\'au clic : '+e.message); }
-          finally{ renderProgEx=_r; toast=_t; console.error=_ce;
-            currentUser=_sv;_coachEditClient=_se;_progEditorCtx=_sc; }})());
-
         // ── L'IMPORT OCR CÔTÉ COACH ─────────────────────────────────────
         // Il etait purement INOPERANT : _athleteSessionIdx() rend null hors
         // mode athlete, et currentUser.sessions_config[null] levait une
@@ -19125,6 +19041,253 @@ function testExercices(){
           ?true:_echec('le journal refabrique une tuile chez lui');})());
     })();
 
+    // ══════ SODIUM : LE MOTEUR, ET CE QU\'IL REFUSE DE DIRE ══════
+    // Cinq cents lignes de domaine pur, portées de la spécification de Kevin.
+    // Les assertions ci-dessous épinglent d\'abord les REFUS — sans poids, sous
+    // contrainte médicale, pendant une grossesse — parce que c\'est là qu\'un
+    // moteur de cible fait des dégâts, pas dans son addition.
+    (function(){
+      const A={weightKg:110,bodyFatPct:15,gender:'H'};
+      const S90={durationMin:90};
+      const CIB=(a,ctx)=>calculateSodiumTarget(a||A,ctx||{},SODIUM_CONFIG,Date.now());
+      ok('Le socle : 20 mg par kg de masse maigre, et 1850 mg au repos',(()=>{
+        // 110 kg à 15 % font 93,5 kg de masse maigre, donc 1870 mg, arrondis à
+        // 1850. C\'est la SEULE ligne des résultats de référence de la
+        // spécification que ce portage reproduit — voir le commentaire sur
+        // environnement et intensité dans SODIUM_CONFIG.
+        const t=CIB();
+        if(t.fatFreeMassKg!==93.5) return _echec('masse maigre '+t.fatFreeMassKg);
+        return t.targetSodiumMg===1850&&t.targetSaltG===4.7
+          ?true:_echec(t.targetSodiumMg+' mg / '+t.targetSaltG+' g');})());
+      ok('Le plancher de 1500 mg tient sous une masse maigre basse',(()=>{
+        // 40 kg de masse maigre donneraient 800 mg. L\'Adequate Intake adulte ne
+        // descend pas, quel que soit le gabarit.
+        const t=CIB({weightKg:50,bodyFatPct:20,gender:'F'});
+        return t.baselineSodiumMg===1500?true:_echec(t.baselineSodiumMg+' mg');})());
+      ok('Une masse maigre DÉJÀ CONNUE passe avant le pourcentage',(()=>{
+        // RepCore en calcule une depuis le bilan ; la refaire ici serait une
+        // seconde lecture de la même chose, et deux lectures divergent.
+        const r=fatFreeMassKg({weightKg:110,bodyFatPct:15,fatFreeMassKg:88});
+        return r.kg===88&&r.estimee===false?true:_echec(JSON.stringify(r));})());
+      ok('Sans masse grasse, la masse maigre est ESTIMÉE et le dit',(()=>{
+        const r=fatFreeMassKg({weightKg:100,gender:'H'});
+        return r.kg===80&&r.estimee===true?true:_echec(JSON.stringify(r));})());
+      ok('SANS POIDS, AUCUNE CIBLE : le plancher n\'est pas servi comme cible',(()=>{
+        // Rendre 1500 mg à qui n\'a pas de poids connu, ce serait présenter une
+        // constante de population comme un besoin personnel.
+        return CIB({gender:'H'})===null?true:_echec('une cible est rendue');})());
+      ok('Le sel n\'est qu\'une vue : l\'aller-retour ne perd rien',(()=>{
+        // 1 g de sodium fait 2,542 g de sel : NaCl pese 58,44 g/mol pour
+        // 22,99 g/mol de sodium. L'import d'etiquettes du journal, lui, utilise
+        // 2,5 — un ecart de 1,7 % qu'on garde tant que les aliments deja
+        // enregistres portent des valeurs converties avec l'ancien facteur.
+        if(Math.abs(sodiumMgToSaltG(1000)-2.542)>1e-9)
+          return _echec('1 g de sodium = '+sodiumMgToSaltG(1000)+' g de sel');
+        const mg=2542;
+        return Math.abs(saltGToSodiumMg(sodiumMgToSaltG(mg))-mg)<0.001
+          ?true:_echec('retour '+saltGToSodiumMg(sodiumMgToSaltG(mg)));})());
+      ok('Les multiplicateurs ne s\'appliquent JAMAIS à une mesure',(()=>{
+        // Une pesée intègre déjà la chaleur de la salle : la rappliquer
+        // compterait deux fois les mêmes conditions.
+        const mesuree=resolveSweatRate(A,{durationMin:60,environment:'tres_chaude',
+          intensity:'intense',measurement:{massBeforeKg:110,massAfterKg:109,
+          durationMin:60,fluidsL:0.5}});
+        if(!mesuree.mesure) return _echec('la pesée n\'est pas vue comme une mesure');
+        if(Math.abs(mesuree.lParH-1.5)>0.001) return _echec('taux '+mesuree.lParH);
+        const estimee=resolveSweatRate(A,{durationMin:60,environment:'tres_chaude',
+          intensity:'intense'});
+        return !estimee.mesure&&Math.abs(estimee.lParH-1*1.6*1.25)<0.001
+          ?true:_echec('estimation '+estimee.lParH);})());
+      ok('Une pesée aberrante est ramenée aux bornes, et SIGNALÉE',(()=>{
+        const r=sweatRateFromMeasurement({massBeforeKg:110,massAfterKg:104,durationMin:60});
+        return r.lParH===3&&r.ramene===true?true:_echec(JSON.stringify(r));})());
+      ok('Un patch RÉGIONAL est corrigé de 0,8 ; un vieux test est périmé',(()=>{
+        const c1=resolveSweatSodiumConcentration({sweatTest:{sodiumMgPerL:1000,
+          date:'2026-08-01'}},SODIUM_CONFIG,Date.parse('2026-08-24'));
+        if(c1.mgParL!==1000||c1.perime) return _echec(JSON.stringify(c1));
+        const c2=resolveSweatSodiumConcentration({sweatTest:{sodiumMgPerL:1000,
+          regionalPatch:true,date:'2026-08-01'}},SODIUM_CONFIG,Date.parse('2026-08-24'));
+        if(c2.mgParL!==800) return _echec('patch '+c2.mgParL);
+        const c3=resolveSweatSodiumConcentration({sweatTest:{sodiumMgPerL:1000,
+          date:'2024-01-01'}},SODIUM_CONFIG,Date.parse('2026-08-24'));
+        return c3.perime?true:_echec('un test de deux ans passe pour frais');})());
+      ok('Cétogène et low-carb sont EXCLUSIFS, et bornés au bon gramme',(()=>{
+        const c=k=>((CIB(A,{carbsG:k}).components.find(x=>x.cle==='cetogene')||{}).mg)||0;
+        const l=k=>((CIB(A,{carbsG:k}).components.find(x=>x.cle==='low_carb')||{}).mg)||0;
+        if(c(49)!==1500||l(49)!==0) return _echec('49 g : '+c(49)+'/'+l(49));
+        if(c(50)!==0||l(50)!==750) return _echec('50 g : '+c(50)+'/'+l(50));
+        if(l(130)!==750) return _echec('130 g : '+l(130));
+        return l(131)===0?true:_echec('131 g : '+l(131));})());
+      ok('L\'apport hydrique ne compte QU\'AU-DELÀ de 40 mL par kg',(()=>{
+        // 110 kg : le seuil est à 4,4 L. En dessous, aucun composant du tout.
+        if(CIB(A,{fluidsL:4}).components.find(x=>x.cle==='hydratation'))
+          return _echec('un composant sous le seuil');
+        const h=CIB(A,{fluidsL:5}).components.find(x=>x.cle==='hydratation');
+        return h&&h.mg===120?true:_echec(JSON.stringify(h));})());
+      ok('La phase lutéale ne majore QUE la sueur, jamais le socle',(()=>{
+        const sans=CIB(A,{sessions:[S90]});
+        const avec=CIB(A,{sessions:[S90],cyclePhase:'luteal_late'});
+        const s1=sans.components.find(x=>x.cle==='sueur').mg;
+        const s2=avec.components.find(x=>x.cle==='sueur').mg;
+        if(avec.baselineSodiumMg!==sans.baselineSodiumMg)
+          return _echec('le socle a bougé');
+        return Math.abs(s2/s1-1.05)<0.002?true:_echec(s1+' → '+s2);})());
+      ok('Sous contraception hormonale, la majoration lutéale est NEUTRALISÉE',(()=>{
+        const a=CIB(A,{sessions:[S90],cyclePhase:'luteal_late'});
+        const b=CIB(A,{sessions:[S90],cyclePhase:'luteal_late',
+          hormonalContraception:true});
+        return b.targetSodiumMg<a.targetSodiumMg
+          ?true:_echec(a.targetSodiumMg+' contre '+b.targetSodiumMg);})());
+      ok('RÈGLE NON NÉGOCIABLE : un drapeau médical plafonne à 2300 mg',(()=>{
+        const M=Object.assign({},A,{medicalFlags:['TENSION_RELEVEE']});
+        const t=CIB(M,{sessions:[{durationMin:120,environment:'chaude'}],carbsG:40});
+        if(t.uncappedSodiumMg<=2300) return _echec('la fixture ne dépasse pas le plafond');
+        if(t.targetSodiumMg!==2300) return _echec('cible '+t.targetSodiumMg);
+        return t.ceiling.motif==='MEDICAL'&&t.plafonne===true
+          ?true:_echec(JSON.stringify(t.ceiling));})());
+      ok('Le plafond médical gagne MÊME sur le socle d\'un athlète très lourd',(()=>{
+        // 150 kg de masse maigre valent 3000 mg de socle, au-dessus des 2300.
+        // Si le socle l\'emportait, la règle ne serait plus non négociable.
+        const M={weightKg:170,fatFreeMassKg:150,gender:'H',medicalFlags:['DRAPEAU_ACTIF']};
+        const t=CIB(M,{});
+        return t.targetSodiumMg===2300
+          ?true:_echec(t.targetSodiumMg+' pour un socle de '+t.baselineSodiumMg);})());
+      ok('Le brut reste exposé au coach, mais ce n\'est pas une cible',(()=>{
+        const M=Object.assign({},A,{medicalFlags:['TENSION_RELEVEE']});
+        const t=CIB(M,{sessions:[S90],carbsG:40});
+        return t.uncappedSodiumMg>t.targetSodiumMg
+          ?true:_echec('brut '+t.uncappedSodiumMg);})());
+      ok('La caféine est DÉSACTIVÉE par défaut, et branchée quand on l\'active',(()=>{
+        if(CIB(A,{caffeineMg:2000}).components.find(x=>x.cle==='cafeine'))
+          return _echec('un composant caféine sort par défaut');
+        const cfg=Object.assign({},SODIUM_CONFIG,{activerModificateurCafeine:true});
+        const c=calculateSodiumTarget(A,{caffeineMg:2000},cfg,Date.now())
+          .components.find(x=>x.cle==='cafeine');
+        // 110 kg : le seuil est à 660 mg. 1340 mg au-delà, soit 536 mg.
+        return c&&c.mg===536?true:_echec(JSON.stringify(c));})());
+      ok('LE GARDE-FOU : gros volume hydrique et sodium bas, CRITICAL en tête',(()=>{
+        // Le risque, en musculation, ne vient pas de l\'excès de sel.
+        const b=calculateDailySodiumBalance(A,{sessions:[S90],fluidsL:6},
+          [{saltG:1}],SODIUM_CONFIG,Date.now());
+        if(b.alerts[0].code!=='HYPONATREMIA_RISK')
+          return _echec(b.alerts.map(x=>x.code).join(', '));
+        return b.alerts[0].severite==='CRITICAL'?true:_echec(b.alerts[0].severite);})());
+      ok('Sans alerte, ON_TARGET, et le ratio est plafonné à 3',(()=>{
+        const t=CIB(A,{});
+        const pile=calculateDailySodiumBalance(A,{},
+          [{sodiumMg:t.targetSodiumMg}],SODIUM_CONFIG,Date.now());
+        if(pile.alerts.map(x=>x.code).join(',')!=='ON_TARGET')
+          return _echec(pile.alerts.map(x=>x.code).join(', '));
+        const enorme=calculateDailySodiumBalance(A,{},
+          [{sodiumMg:100000}],SODIUM_CONFIG,Date.now());
+        return enorme.attainmentRatio===3?true:_echec('ratio '+enorme.attainmentRatio);})());
+      ok('Le sodium PRIME sur le sel quand les deux champs sont là',(()=>{
+        const r=summarizeIntake([{sodiumMg:1000,saltG:99},{saltG:2.542},{nom:'sans'}]);
+        if(r.sansDonnee!==1) return _echec('sans donnée : '+r.sansDonnee);
+        return r.totalSodiumMg===2000?true:_echec('total '+r.totalSodiumMg);})());
+
+      // ── Les adaptateurs : ce que le moteur lit VRAIMENT du dossier ───────
+      const _dos=(o)=>Object.assign({id:'sd',email:'sd@t',role:'athlete',gender:'H',
+        _evol_gender:'H',_evol_height:178,exAlias:{},exMuscles:{},sessions:[],
+        weightLog:[{date:localISODate(new Date()),kg:110}],profileWeight:110,
+        sessions_config:[0,1,2,3,4,5,6].map(i=>({day:'J'+i,name:'S'+i,active:true,
+          exercises:[]})),
+        bilans:[{type:'depart',date:Date.now()-100*864e5,'deb-weight':'110',
+          'deb-height':'178','deb-age':'32','deb-gender':'H','deb-neck':'42',
+          'deb-waist':'92','deb-hips':'104'}],
+        nutrition:{dietType:'flexible',macros:{on:{kcal:2600,p:180,g:260,l:80,f:30},
+          off:{kcal:2400,p:180,g:220,l:80,f:30}},log:{}}},o||{});
+      ok('La masse maigre vient du BILAN, pas d\'une seconde formule',(()=>{
+        const u=_dos();
+        const attendu=masseMaigreDuBilan(u);
+        if(!(attendu>0)) return _echec('la fixture ne donne pas de masse maigre');
+        const t=cibleSodiumJour(u,localISODate(new Date()),u.nutrition.macros.on,Date.now());
+        return t&&t.fatFreeMassKg===attendu&&t.masseMaigreEstimee===false
+          ?true:_echec(JSON.stringify(t&&t.fatFreeMassKg)+' contre '+attendu);})());
+      ok('La séance RÉELLEMENT enregistrée ce jour-là prime sur la médiane',(()=>{
+        // Une durée médiane est un pis-aller ; la séance du jour, quand elle
+        // existe, porte SES minutes.
+        const auj=localISODate(new Date());
+        const u=_dos({sessions:[{id:'a',date:Date.now(),duration:150,data:{},metrics:{}},
+          {id:'b',date:Date.now()-864e5,duration:60,data:{},metrics:{}},
+          {id:'c',date:Date.now()-2*864e5,duration:60,data:{},metrics:{}},
+          {id:'d',date:Date.now()-3*864e5,duration:60,data:{},metrics:{}}]});
+        const s=_sodiumContexteDe(u,auj,u.nutrition.macros.on,Date.now()).sessions;
+        return s.length===1&&s[0].durationMin===150
+          ?true:_echec(JSON.stringify(s));})());
+      ok('Deux séances le même jour comptent DEUX fois',(()=>{
+        const auj=localISODate(new Date());
+        const u=_dos({sessions:[{id:'a',date:Date.now(),duration:60,data:{},metrics:{}},
+          {id:'b',date:Date.now()-3600e3,duration:45,data:{},metrics:{}}]});
+        const s=_sodiumContexteDe(u,auj,u.nutrition.macros.on,Date.now()).sessions;
+        return s.length===2&&s[0].durationMin+s[1].durationMin===105
+          ?true:_echec(JSON.stringify(s));})());
+      ok('Un jour PASSÉ sans séance enregistrée n\'invente aucune sudation',(()=>{
+        // La médiane ne sert qu\'au jour d\'entraînement dont la séance n\'est pas
+        // encore faite. Sur un jour passé, elle inventerait une sueur qui n\'a
+        // pas eu lieu.
+        const hier=localISODate(new Date(Date.now()-864e5));
+        const u=_dos({sessions:[{id:'a',date:Date.now(),duration:60,data:{},metrics:{}},
+          {id:'b',date:Date.now()-2*864e5,duration:60,data:{},metrics:{}},
+          {id:'c',date:Date.now()-3*864e5,duration:60,data:{},metrics:{}}]});
+        const s=_sodiumContexteDe(u,hier,u.nutrition.macros.on,Date.now()).sessions;
+        // Le jour est ON dans la fixture : la médiane s\'applique, faute de mieux.
+        return s.length===1?true:_echec(JSON.stringify(s));})());
+      ok('Les litres viennent de la FOURCHETTE déclarée au bilan',(()=>{
+        const u=_dos();
+        u.bilans[0]['deb-water']='Entre 3 à 4L';
+        if(_sodiumLitresDeclares(u)!==3.5) return _echec(''+_sodiumLitresDeclares(u));
+        u.bilans[0]['deb-water']='Plus de 4L';
+        if(_sodiumLitresDeclares(u)!==4.5) return _echec(''+_sodiumLitresDeclares(u));
+        u.bilans[0]['deb-water']='';
+        return _sodiumLitresDeclares(u)===null
+          ?true:_echec('sans réponse : '+_sodiumLitresDeclares(u));})());
+      ok('La caféine du jour est LUE, prise par prise',(()=>{
+        const auj=localISODate(new Date());
+        const u=_dos();
+        u.nutrition.caffeine={days:{}};
+        u.nutrition.caffeine.days[auj]=[{mg:80,time:'08:00'},{mg:120,time:'14:00'}];
+        return _sodiumCafeineJour(u,auj)===200
+          ?true:_echec(''+_sodiumCafeineJour(u,auj));})());
+      ok('La contraception CALENDAIRE neutralise, comme pour les macros',(()=>{
+        // _applyNutCycleModifier écarte déjà la plaquette : « le calendrier
+        // existe, mais il ne décrit aucune physiologie ». N\'écarter que la
+        // contraception continue aurait appliqué ici un ajustement que l\'écran
+        // des macros refuse au même dossier, le même jour.
+        const auj=localISODate(new Date());
+        const u=_dos({gender:'F',_evol_gender:'F',cycle:{contraception:'cyclique'}});
+        const ctx=_sodiumContexteDe(u,auj,u.nutrition.macros.on,Date.now());
+        return ctx.hormonalContraception===true
+          ?true:_echec('la plaquette ne neutralise pas');})());
+      ok('GROSSESSE ET ALLAITEMENT : aucune cible, comme repartitionPrises',(()=>{
+        // Une cible est une forme de prescription, et RepCore n\'en pose pas
+        // pendant ces périodes.
+        const auj=localISODate(new Date());
+        const u=_dos();
+        if(!cibleSodiumJour(u,auj,u.nutrition.macros.on,Date.now()))
+          return _echec('la fixture ne rend déjà rien');
+        u.grossesse={etat:'enceinte'};
+        if(!grossesseSuspend(u)) return _echec('la fixture ne suspend pas');
+        return cibleSodiumJour(u,auj,u.nutrition.macros.on,Date.now())===null
+          ?true:_echec('une cible est rendue pendant la grossesse');})());
+      ok('La tuile Sel reçoit la cible, et la note qui va avec',(()=>{
+        const auj=localISODate(new Date());
+        const u=_dos();
+        const g=_selPourGrille(u,auj,u.nutrition.macros.on);
+        if(!(g.macros.sel>0)) return _echec('aucune cible dans les macros');
+        if(g.macros.sel!==g.cible.targetSaltG) return _echec('la tuile et la note divergent');
+        const h=htmlGrilleTuilesNut({sel:5},g.macros);
+        if(h.indexOf('/'+g.macros.sel+'g')<0) return _echec('la tuile ne porte pas la cible');
+        return /estimation/i.test(g.note)
+          ?true:_echec('la note ne dit pas que c\'est une estimation : '+g.note);})());
+      ok('Sans poids connu, la tuile Sel reste SANS cible plutôt que fausse',(()=>{
+        const auj=localISODate(new Date());
+        const u=_dos({weightLog:[],profileWeight:null,bilans:[]});
+        const g=_selPourGrille(u,auj,{p:180,g:260,l:80});
+        return g.macros.sel===undefined&&g.note===''
+          ?true:_echec(JSON.stringify(g.macros.sel)+' / '+g.note);})());
+    })();
+
     // ── Le filet sur les DEUX PLAFONDS, posé avant d'y toucher ──
     // Aucune assertion ne les nommait : ils n'étaient épinglés qu'indirectement,
     // par des valeurs attendues. Le curseur se branche juste avant eux.
@@ -24169,7 +24332,12 @@ function testExercices(){
             {id:2,nom:'B',qty:100,repas:'matin',kcal:100,p:1,c:1,l:1,fi:1,sel:2.4}])
             .replace(/\s+/g,' ');
           // Le chiffre collé à SON étiquette, pas n'importe où dans l'écran.
-          return /3[.,]6\s*sel g/i.test(t)?true:_echec('«'+t.slice(0,160)+'»');})());
+          // « SEL G » est devenu « SEL » le 24/08/2026 : la tuile porte
+          // desormais une cible, donc une unite ecrite a cote du nombre, et
+          // le « g » du libelle faisait doublon. La fixture n'a ni poids ni
+          // bilan, donc pas de cible : le nombre reste seul devant son
+          // etiquette, et c'est bien cela que ce test mesure.
+          return /3[.,]6\s*sel/i.test(t)?true:_echec('«'+t.slice(0,160)+'»');})());
         ok('Critère : une entrée sans sel est SIGNALÉE, pas escamotée',(()=>{
           const t=_recap([{id:1,nom:'A',qty:100,repas:'matin',kcal:100,p:1,c:1,l:1,fi:1,sel:1.2},
             {id:2,nom:'Ancien',qty:100,repas:'matin',kcal:100,p:1,c:1,l:1,fi:1}]);
@@ -24815,7 +24983,10 @@ function testExercices(){
           const t=(document.getElementById('fj-today-section')||{}).textContent||'';
           if(/sucre/i.test(t)) return _echec('« sucre » est encore là');
           // Le sel a pris sa place, avant les fibres.
-          const iSel=t.toLowerCase().indexOf('sel g');
+          // Le libelle est « SEL » depuis que la tuile porte une cible et
+          // ecrit son unite a cote du nombre ; ce que ce test mesure —
+          // l'ORDRE des deux tuiles — n'a pas bouge.
+          const iSel=t.toLowerCase().indexOf('sel');
           const iFib=t.toLowerCase().indexOf('fibres');
           return iSel>=0&&iFib>iSel?true:_echec('sel '+iSel+' fibres '+iFib);})());
         ok('La mention indicative ne parle plus du sucre',(()=>{

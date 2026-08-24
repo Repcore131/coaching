@@ -28251,9 +28251,13 @@ function _htmlSatisfaction(user){
   </div>`;
 }
 // ── Sel sur sept jours ──────────────────────────────────────────────────────
-// On totalise, on ne compare à RIEN. Il n'existe pas de seuil de sodium qui
-// vaille pour un athlète sans savoir ce qu'il transpire, et en affirmer un
-// serait pire que de se taire.
+// ON TOTALISE, ON NE COMPARE À RIEN — et ce bloc-ci ne change pas. Il disait
+// qu'« il n'existe pas de seuil de sodium qui vaille pour un athlète sans
+// savoir ce qu'il transpire » : c'est toujours vrai, et c'est précisément ce
+// que le moteur sodique ci-dessous estime, jour par jour. Une MOYENNE SUR SEPT
+// JOURS, elle, ne se compare toujours à rien : la cible bouge d'un jour à
+// l'autre avec les séances, la chaleur et les glucides, et la comparer à une
+// moyenne mélangerait sept contextes différents.
 const SEL_FENETRE_JOURS=7;
 const SEL_REGISTRE='La référence dépend de ton contexte et de ce que tu transpires.';
 function selSemaine(user,ref){
@@ -28283,6 +28287,552 @@ function _htmlSelSemaine(user){
     ${s.manquants?`${s.manquants} aliment${s.manquants>1?'s':''} sans donnée de sel.`:''}
     ${escapeHtml(SEL_REGISTRE)}
   </div>`;
+}
+
+// ══════════════ SODIUM : LE BESOIN DU JOUR, EN MILLIGRAMMES ═══════════════
+// Portage du moteur @repcore/sodium, spécifié par Kevin. Domaine PUR : aucune
+// entrée/sortie, aucune horloge interne — la date et le dossier arrivent en
+// argument, et les mêmes entrées rendent toujours la même sortie.
+//
+// L'UNITÉ CANONIQUE EST LE MILLIGRAMME DE SODIUM. Le sel n'existe que comme
+// vue d'affichage, et rien n'écrit de gramme de sel en base. Le journal, lui,
+// stocke bien des grammes de sel — c'est ce que déclare l'étiquetage européen
+// (Règl. UE 1169/2011) et ce que porte Ciqual : ils entrent par saltGToSodiumMg
+// et ne ressortent en sel qu'à l'affichage.
+//
+// CE MODULE RÉPOND À UNE OBJECTION ÉCRITE JUSTE AU-DESSUS. selSemaine totalise
+// sans comparer à rien, parce qu'« il n'existe pas de seuil de sodium qui
+// vaille pour un athlète sans savoir ce qu'il transpire ». C'est exactement ce
+// que ce moteur estime. Mais tant qu'aucune pesée avant/après n'a été faite, il
+// l'estime avec une MÉDIANE de 1 L/h dont la plage réelle va de 0,3 à 2,5 L/h :
+// la cible est alors un ordre de grandeur, et `estimation` le porte jusqu'à
+// l'écran. L'objection n'est pas balayée, elle est datée — elle vaut tant que
+// la mesure manque.
+//
+// CE MODULE EST UN OUTIL DE COACHING, PAS UN DISPOSITIF MÉDICAL.
+const SODIUM_CONFIG=Object.freeze({
+  // ── Socle ──────────────────────────────────────────────────────────────
+  // HEURISTIQUE ASSUMÉE : la littérature ne donne pas de besoin de base indexé
+  // sur la composition corporelle. L'indexation sur la masse maigre capture le
+  // fait qu'un volume plasmatique et un turnover supérieurs vont avec un besoin
+  // supérieur. Le plancher, lui, est l'Adequate Intake adulte (NAM 2019), et il
+  // n'est pas une heuristique.
+  socleMgParKgMasseMaigre:20,
+  soclePlancherMg:1500,
+  // Masse maigre estimée quand la masse grasse est inconnue. Approximation
+  // GROSSIÈRE, signalée à l'écran par `masseMaigreEstimee`.
+  partMaigreH:0.80, partMaigreF:0.72,
+  // ── Sueur ──────────────────────────────────────────────────────────────
+  sudationDefautLParH:1.0,
+  // Bornes de PLAUSIBILITÉ, pas de normalité : au-delà, une pesée a été mal
+  // saisie. On ramène aux bornes et on le DIT (IMPLAUSIBLE_MEASUREMENT).
+  sudationMinLParH:0.2, sudationMaxLParH:3.0,
+  // CES DEUX TABLES NE SONT PAS DANS LA SPÉCIFICATION. Elle nomme les
+  // multiplicateurs sans publier leurs valeurs, et ses résultats de référence
+  // ne permettent pas de les retrouver — deux lignes de son tableau donnent
+  // deux multiplicateurs incompatibles entre eux. Les valeurs ci-dessous sont
+  // donc CHOISIES, écrites une seule fois, et ce sont elles que les tests
+  // épinglent.
+  environnement:Object.freeze({fraiche:0.85,temperee:1,chaude:1.35,tres_chaude:1.6}),
+  intensite:Object.freeze({legere:0.8,moderee:1,intense:1.25}),
+  // Concentration sodique de la sueur par phénotype, en mg/L.
+  concentrationMgParL:Object.freeze({LOW:460,MODERATE:805,HIGH:1150,VERY_HIGH:1610}),
+  phenotypeDefaut:'MODERATE',
+  // Un patch régional surestime la valeur corps entier de 20 à 25 %.
+  correctionPatchRegional:0.8,
+  testPerimeMois:12,
+  // ── Modificateurs contextuels ──────────────────────────────────────────
+  // La restriction glucidique pèse le plus lourd ET c'est la mieux établie : la
+  // chute de l'insuline réduit la réabsorption tubulaire du sodium. C'est le
+  // mécanisme derrière la « keto flu » et derrière les jambes coupées en sèche
+  // low-carb.
+  cetogeneSeuilG:50,  cetogeneMg:1500,
+  lowCarbSeuilG:130,  lowCarbMg:750,
+  hydratationMlParKg:40, hydratationMgParL:200,
+  chaleurPassiveMg:500,
+  // Volontairement PETIT et tagué LOW : la compétition
+  // progestérone/aldostérone sur le récepteur minéralocorticoïde est réelle,
+  // mais les données sportives sont hétérogènes. Neutralisé sous contraception
+  // hormonale.
+  lutealFacteur:1.05,
+  // DÉSACTIVÉ PAR DÉFAUT : l'effet natriurétique aigu est réel chez le
+  // non-habitué, mais largement aboli par la tolérance, et la population
+  // RepCore est majoritairement consommatrice chronique. L'activer est une
+  // décision de produit, pas un défaut.
+  cafeineSeuilMgParKg:6, cafeineMgPar100mg:40,
+  activerModificateurCafeine:false,
+  // ── Plafonds ───────────────────────────────────────────────────────────
+  plafondAthleteMg:6000,
+  plafondMedicalMg:2300,          // CDRR, NAM 2019
+  // La cible s'arrondit : un besoin estimé ne se lit pas au milligramme.
+  arrondiMg:50,
+  // ── Alertes ────────────────────────────────────────────────────────────
+  hypoLitres:4, hypoConcentrationMgParL:400,
+  seuilBienEnDessous:0.60, seuilEnDessous:0.85, seuilSueurNonCompensee:0.50,
+  ratioMax:3
+});
+// LE FACTEUR EST STŒCHIOMÉTRIQUE : NaCl pèse 58,44 g/mol pour 22,99 g/mol de
+// sodium, soit 2,542. L'import d'étiquettes du journal, lui, utilise 2,5 —
+// écart de 1,7 %. On ne l'aligne PAS ici : changer le convertisseur d'import
+// déplacerait la valeur de sel de chaque aliment déjà enregistré.
+const SODIUM_SEL_FACTEUR=2.542;
+function sodiumMgToSaltG(mg){ return (Number(mg)||0)*SODIUM_SEL_FACTEUR/1000; }
+function saltGToSodiumMg(g){ return (Number(g)||0)*1000/SODIUM_SEL_FACTEUR; }
+// 1 mmol de sodium pèse 22,99 mg.
+function mmolPerLToMgPerL(mmol){ return (Number(mmol)||0)*22.99; }
+function mgPerLToMmolPerL(mg){ return (Number(mg)||0)/22.99; }
+function _sodArrondi(mg,cfg){
+  const p=((cfg||SODIUM_CONFIG).arrondiMg)||1;
+  return Math.round((Number(mg)||0)/p)*p;
+}
+function _sodNombre(v){ const n=Number(v); return isFinite(n)?n:null; }
+
+// PURE. La masse maigre, et d'où elle vient. Rend toujours un objet : sans
+// poids, `kg` est null et tout le reste du moteur s'arrête proprement.
+//
+// UNE MASSE MAIGRE DÉJÀ CONNUE PASSE AVANT TOUT. RepCore en calcule une depuis
+// le dernier bilan, par la formule US Navy, et cette lecture-là est déjà
+// éprouvée : la refaire ici en repartant du pourcentage de masse grasse serait
+// une seconde lecture de la même chose, et deux lectures finissent par
+// diverger.
+function fatFreeMassKg(athlete,config){
+  const cfg=config||SODIUM_CONFIG;
+  const connue=_sodNombre(athlete&&athlete.fatFreeMassKg);
+  if(connue!=null&&connue>0) return {kg:connue,estimee:false};
+  const p=_sodNombre(athlete&&athlete.weightKg);
+  if(!(p>0)) return {kg:null,estimee:true};
+  const mg=_sodNombre(athlete&&athlete.bodyFatPct);
+  if(mg!=null&&mg>0&&mg<70) return {kg:p*(1-mg/100),estimee:false};
+  const part=isFemale(athlete&&athlete.gender)?cfg.partMaigreF:cfg.partMaigreH;
+  return {kg:p*part,estimee:true};
+}
+// PURE. 20 mg par kg de masse maigre, plancher à l'Adequate Intake.
+function baselineSodiumMg(athlete,config){
+  const cfg=config||SODIUM_CONFIG;
+  const mm=fatFreeMassKg(athlete,cfg);
+  if(mm.kg==null) return null;
+  return Math.max(cfg.soclePlancherMg,mm.kg*cfg.socleMgParKgMasseMaigre);
+}
+// PURE. Le taux de sudation d'une pesée avant/après :
+//   sudation (L/h) = (masse_avant − masse_après + liquides − urine) / durée
+// LA PERTE DE MASSE PAR OXYDATION ET RESPIRATION (10 à 20 g/h) EST NÉGLIGÉE :
+// moins de 2 % du total sur une séance de musculation.
+function sweatRateFromMeasurement(m,config){
+  const cfg=config||SODIUM_CONFIG;
+  if(!m) return null;
+  const av=_sodNombre(m.massBeforeKg), ap=_sodNombre(m.massAfterKg);
+  const min=_sodNombre(m.durationMin);
+  if(av==null||ap==null||!(min>0)) return null;
+  const liq=(_sodNombre(m.fluidsL)||0), uri=(_sodNombre(m.urineL)||0);
+  const brut=(av-ap+liq-uri)/(min/60);
+  const borne=Math.min(cfg.sudationMaxLParH,Math.max(cfg.sudationMinLParH,brut));
+  return {lParH:borne,brut,ramene:borne!==brut};
+}
+// PURE. L'ordre de priorité de la spécification, dans cet ordre exact :
+//   1. pesée fournie pour CETTE séance             — mesure
+//   2. taux déjà calculé pour CETTE séance         — mesure
+//   3. taux de référence × environnement × intensité — estimation
+//   4. défaut du moteur × environnement × intensité  — estimation
+//
+// LES MULTIPLICATEURS NE S'APPLIQUENT JAMAIS À UNE MESURE. Une pesée intègre
+// déjà la chaleur de la salle et l'intensité du travail : les rappliquer
+// compterait deux fois les mêmes conditions.
+function resolveSweatRate(athlete,session,config){
+  const cfg=config||SODIUM_CONFIG;
+  const s=session||{};
+  const mes=sweatRateFromMeasurement(s.measurement,cfg);
+  if(mes) return {lParH:mes.lParH,mesure:true,ramene:!!mes.ramene,source:'PESEE'};
+  const deja=_sodNombre(s.sweatRateLPerH);
+  if(deja!=null&&deja>0)
+    return {lParH:deja,mesure:true,ramene:false,source:'TAUX_SEANCE'};
+  const e=cfg.environnement[String(s.environment||'temperee')];
+  const i=cfg.intensite[String(s.intensity||'moderee')];
+  const env=(e==null?1:e), inten=(i==null?1:i);
+  const ref=_sodNombre(athlete&&athlete.referenceSweatRateLPerH);
+  const utile=(ref!=null&&ref>0);
+  const base=utile?ref:cfg.sudationDefautLParH;
+  return {lParH:base*env*inten,mesure:false,ramene:false,
+    source:utile?'REFERENCE':'DEFAUT'};
+}
+// PURE. Un test de sueur réel écrase le phénotype ; un patch RÉGIONAL est
+// corrigé, parce qu'il surestime la valeur corps entier ; un test de plus de
+// douze mois est marqué périmé, l'acclimatation modifiant la concentration.
+function resolveSweatSodiumConcentration(athlete,config,maintenantMs){
+  const cfg=config||SODIUM_CONFIG;
+  const t=athlete&&athlete.sweatTest;
+  const v=t?_sodNombre(t.sodiumMgPerL):null;
+  if(v!=null&&v>0){
+    const mg=t.regionalPatch?v*cfg.correctionPatchRegional:v;
+    let perime=false;
+    const d=t.date?new Date(t.date).getTime():NaN;
+    if(isFinite(d)){
+      const ms=(maintenantMs!=null?maintenantMs:Date.now())-d;
+      perime=ms>cfg.testPerimeMois*30.44*864e5;
+    }
+    return {mgParL:mg,source:'TEST',perime,patchCorrige:!!t.regionalPatch};
+  }
+  const ph=String((athlete&&athlete.sweatPhenotype)||cfg.phenotypeDefaut);
+  const c=cfg.concentrationMgParL[ph];
+  return {mgParL:(c==null?cfg.concentrationMgParL[cfg.phenotypeDefaut]:c),
+    source:'PHENOTYPE',perime:false,patchCorrige:false,
+    phenotype:(c==null?cfg.phenotypeDefaut:ph)};
+}
+// PURE. La perte d'UNE séance : sudation × durée × concentration.
+function sessionSodiumLoss(athlete,session,config,maintenantMs){
+  const cfg=config||SODIUM_CONFIG;
+  const s=session||{};
+  const min=_sodNombre(s.durationMin);
+  if(!(min>0)) return null;
+  const taux=resolveSweatRate(athlete,s,cfg);
+  const conc=resolveSweatSodiumConcentration(athlete,cfg,maintenantMs);
+  const litres=taux.lParH*(min/60);
+  return {sodiumMg:litres*conc.mgParL,litres,dureeMin:min,
+    tauxLParH:taux.lParH,rateWasMeasured:taux.mesure,tauxSource:taux.source,
+    tauxRamene:taux.ramene,concentrationMgParL:conc.mgParL,
+    concentrationSource:conc.source,testPerime:conc.perime};
+}
+// PURE. Le plafond applicable. RÈGLE NON NÉGOCIABLE : dès qu'un drapeau
+// médical est présent, la cible est plafonnée à la recommandation population
+// générale. Le module ne recommande JAMAIS un apport sportif au-dessus d'une
+// contrainte médicale.
+function resolveCeiling(athlete,config){
+  const cfg=config||SODIUM_CONFIG;
+  const presc=_sodNombre(athlete&&athlete.prescribedCeilingMg);
+  if(presc!=null&&presc>0) return {mg:presc,motif:'PRESCRIPTION'};
+  const dr=(athlete&&athlete.medicalFlags)||[];
+  if(dr.length) return {mg:cfg.plafondMedicalMg,motif:'MEDICAL'};
+  return {mg:cfg.plafondAthleteMg,motif:'ATHLETE'};
+}
+// PURE. LA CIBLE. Rend null quand le poids manque : sans lui le socle n'existe
+// pas, et servir le plancher de 1500 mg comme une cible personnelle serait un
+// chiffre inventé.
+function calculateSodiumTarget(athlete,context,config,maintenantMs){
+  const cfg=config||SODIUM_CONFIG;
+  const ctx=context||{};
+  const socle=baselineSodiumMg(athlete,cfg);
+  if(socle==null) return null;
+  const mm=fatFreeMassKg(athlete,cfg);
+  const comps=[{cle:'socle',lib:'Socle',mg:socle,preuve:'HEURISTIQUE'}];
+  // ── Pertes sudorales, séance par séance ───────────────────────────────
+  const seances=[];
+  let sueur=0;
+  for(const s of (Array.isArray(ctx.sessions)?ctx.sessions:[])){
+    const p=sessionSodiumLoss(athlete,s,cfg,maintenantMs);
+    if(!p) continue;
+    seances.push(p); sueur+=p.sodiumMg;
+  }
+  // Le multiplicateur de phase porte SUR LA SEULE PART SUDORALE, jamais sur le
+  // socle : c'est la rétention sodée qui est en jeu, pas le besoin de base.
+  const luteal=!!ctx.cyclePhase&&String(ctx.cyclePhase).indexOf('luteal')===0
+    &&!ctx.hormonalContraception;
+  if(luteal) sueur*=cfg.lutealFacteur;
+  if(sueur>0) comps.push({cle:'sueur',lib:'Pertes sudorales',mg:sueur,
+    preuve:'MODERATE',lutealApplique:luteal});
+  // ── Modificateurs contextuels ─────────────────────────────────────────
+  const gluc=_sodNombre(ctx.carbsG);
+  if(gluc!=null){
+    if(gluc<cfg.cetogeneSeuilG)
+      comps.push({cle:'cetogene',lib:'Cétogène',mg:cfg.cetogeneMg,preuve:'HIGH'});
+    else if(gluc<=cfg.lowCarbSeuilG)
+      comps.push({cle:'low_carb',lib:'Low-carb',mg:cfg.lowCarbMg,preuve:'HIGH'});
+  }
+  const litres=_sodNombre(ctx.fluidsL);
+  const poids=_sodNombre(athlete&&athlete.weightKg);
+  if(litres!=null&&poids>0){
+    const seuilL=poids*cfg.hydratationMlParKg/1000;
+    if(litres>seuilL)
+      comps.push({cle:'hydratation',lib:'Apport hydrique élevé',
+        mg:(litres-seuilL)*cfg.hydratationMgParL,preuve:'MODERATE'});
+  }
+  if(ctx.passiveHeat)
+    comps.push({cle:'chaleur',lib:'Chaleur passive',mg:cfg.chaleurPassiveMg,
+      preuve:'MODERATE'});
+  const caf=_sodNombre(ctx.caffeineMg);
+  if(cfg.activerModificateurCafeine&&caf!=null&&poids>0){
+    const seuil=poids*cfg.cafeineSeuilMgParKg;
+    if(caf>seuil)
+      comps.push({cle:'cafeine',lib:'Caféine',
+        mg:(caf-seuil)/100*cfg.cafeineMgPar100mg,preuve:'LOW'});
+  }
+  const brut=comps.reduce((a,c)=>a+c.mg,0);
+  const plafond=resolveCeiling(athlete,cfg);
+  // L'ORDRE DES DEUX BORNES N'EST PAS INDIFFÉRENT. Le socle d'un athlète très
+  // lourd peut dépasser le plafond médical ; c'est le plafond qui gagne, sinon
+  // la règle non négociable ne le serait plus.
+  const borne=Math.min(plafond.mg,Math.max(socle,brut));
+  const cible=_sodArrondi(borne,cfg);
+  return {targetSodiumMg:cible,
+    targetSaltG:Math.round(sodiumMgToSaltG(cible)*10)/10,
+    uncappedSodiumMg:Math.round(brut),
+    baselineSodiumMg:Math.round(socle),
+    components:comps.map(c=>Object.assign({},c,{mg:Math.round(c.mg)})),
+    sessionBreakdown:seances,
+    ceiling:plafond,
+    fatFreeMassKg:(mm.kg==null?null:Math.round(mm.kg*10)/10),
+    masseMaigreEstimee:mm.estimee,
+    // VRAI dès qu'une séance au moins n'a pas été mesurée, et vrai aussi sans
+    // séance du tout : le socle lui-même est une heuristique.
+    estimation:!seances.length||seances.some(s=>!s.rateWasMeasured),
+    plafonne:brut>plafond.mg};
+}
+// PURE. Le total apporté, et d'où il vient. LE SODIUM PRIME SUR LE SEL quand
+// les deux champs sont là : c'est la donnée primaire, le sel en est la vue.
+// Une entrée sans donnée est COMPTÉE COMME TELLE, jamais comme un zéro.
+function summarizeIntake(entries){
+  const out={totalSodiumMg:0,bySource:{},nEntrees:0,sansDonnee:0};
+  for(const e of (Array.isArray(entries)?entries:[])){
+    if(!e) continue;
+    const mg=_sodNombre(e.sodiumMg);
+    const g=_sodNombre(e.saltG);
+    let v=null;
+    if(mg!=null) v=mg; else if(g!=null) v=saltGToSodiumMg(g);
+    if(v==null){ out.sansDonnee++; continue; }
+    out.nEntrees++;
+    out.totalSodiumMg+=v;
+    const src=String(e.source||'FOOD');
+    out.bySource[src]=(out.bySource[src]||0)+v;
+  }
+  out.totalSodiumMg=Math.round(out.totalSodiumMg);
+  out.totalSaltG=Math.round(sodiumMgToSaltG(out.totalSodiumMg)*10)/10;
+  return out;
+}
+const SODIUM_SEVERITES=Object.freeze({CRITICAL:0,WARNING:1,INFO:2});
+// PURE. Les alertes, TRIÉES, les CRITICAL en tête.
+function buildAlerts(target,intake,context,athlete,config){
+  const cfg=config||SODIUM_CONFIG;
+  const ctx=context||{}, a=[];
+  const sousContrainte=!!(target&&target.ceiling&&target.ceiling.motif!=='ATHLETE');
+  const flags=((athlete&&athlete.medicalFlags)||[]);
+  if(flags.length)
+    a.push({code:'MEDICAL_REVIEW_REQUIRED',severite:'CRITICAL',motifs:flags.slice()});
+  // LE VRAI GARDE-FOU DE SÉCURITÉ DU MODULE. Le risque, en musculation, ne
+  // vient pas de l'excès de sel : il vient du gros volume hydrique associé à un
+  // sodium bas, typique d'une sèche mal conduite.
+  const litres=_sodNombre(ctx.fluidsL);
+  if(litres!=null&&litres>cfg.hypoLitres&&intake){
+    const parL=intake.totalSodiumMg/litres;
+    if(parL<cfg.hypoConcentrationMgParL)
+      a.push({code:'HYPONATREMIA_RISK',severite:'CRITICAL',
+        mgParL:Math.round(parL),litres});
+  }
+  if(target&&intake&&intake.totalSodiumMg>target.ceiling.mg)
+    a.push({code:'ABOVE_CEILING',severite:(sousContrainte?'CRITICAL':'WARNING'),
+      plafondMg:target.ceiling.mg});
+  const ratio=(target&&target.targetSodiumMg>0&&intake)
+    ?intake.totalSodiumMg/target.targetSodiumMg:null;
+  if(ratio!=null&&ratio<cfg.seuilBienEnDessous)
+    a.push({code:'WELL_BELOW_TARGET',severite:'WARNING',ratio});
+  const seances=(target&&target.sessionBreakdown)||[];
+  const perte=seances.reduce((s,x)=>s+x.sodiumMg,0);
+  if(perte>0&&intake&&target){
+    const couvert=intake.totalSodiumMg-target.baselineSodiumMg;
+    if(couvert<perte*cfg.seuilSueurNonCompensee)
+      a.push({code:'UNREPLACED_SWEAT_LOSS',severite:'WARNING',
+        perteMg:Math.round(perte)});
+  }
+  if(ratio!=null&&ratio>=cfg.seuilBienEnDessous&&ratio<cfg.seuilEnDessous)
+    a.push({code:'BELOW_TARGET',severite:'INFO',ratio});
+  if(seances.some(s=>s.testPerime)) a.push({code:'STALE_SWEAT_TEST',severite:'INFO'});
+  if(seances.some(s=>s.tauxRamene))
+    a.push({code:'IMPLAUSIBLE_MEASUREMENT',severite:'INFO'});
+  if(!a.length) a.push({code:'ON_TARGET',severite:'INFO'});
+  return a.sort((x,y)=>SODIUM_SEVERITES[x.severite]-SODIUM_SEVERITES[y.severite]);
+}
+// PURE. LE POINT D'ENTRÉE : cible, apport, écart et alertes en un objet.
+function calculateDailySodiumBalance(athlete,context,entries,config,maintenantMs){
+  const cfg=config||SODIUM_CONFIG;
+  const target=calculateSodiumTarget(athlete,context,cfg,maintenantMs);
+  const intake=summarizeIntake(entries);
+  if(!target) return {target:null,intake,deltaSodiumMg:null,attainmentRatio:null,
+    alerts:buildAlerts(null,intake,context,athlete,cfg)};
+  const ratio=target.targetSodiumMg>0
+    ?Math.min(cfg.ratioMax,intake.totalSodiumMg/target.targetSodiumMg):0;
+  return {target,intake,
+    deltaSodiumMg:intake.totalSodiumMg-target.targetSodiumMg,
+    attainmentRatio:Math.round(ratio*100)/100,
+    alerts:buildAlerts(target,intake,context,athlete,cfg)};
+}
+
+// ── ADAPTATEURS REPCORE ────────────────────────────────────────────────────
+// Le moteur ci-dessus ne connaît pas le dossier RepCore, et c'est délibéré : il
+// se teste sur des objets nus. Ces fonctions-ci font la traduction, et elles
+// sont le SEUL endroit où le dossier est lu.
+
+// PURE. Les drapeaux MÉDICAUX au sens de ce module. Aucun n'est un diagnostic
+// posé par RepCore : ce sont des déclarations de l'athlète, ou un relevé qu'il a
+// lui-même saisi et que l'application se contente de compter.
+function _sodiumDrapeauxMedicaux(user){
+  const d=[];
+  try{ if(alerteTension(user).alerte) d.push('TENSION_RELEVEE'); }catch(e){}
+  try{ if(drapeauQuelconqueActif(user)) d.push('DRAPEAU_ACTIF'); }catch(e){}
+  try{
+    const f=famillesTraitement(user);
+    // Les deux familles de la liste dont l'effet sodique est établi : les
+    // corticoïdes retiennent le sodium, les bêtabloquants accompagnent le plus
+    // souvent une contrainte tensionnelle. Les deux autres — thyroïdien,
+    // antidiabétique — ne sont PAS des drapeaux sodiques et n'entrent pas.
+    if(f.indexOf('corticoide')>=0) d.push('TRAITEMENT_CORTICOIDE');
+    if(f.indexOf('betabloquant')>=0) d.push('TRAITEMENT_BETABLOQUANT');
+  }catch(e){}
+  return d;
+}
+function _sodiumAthleteDe(user){
+  let poids=null;
+  try{ poids=_poidsPourPlancher(user); }catch(e){}
+  let mm=null;
+  try{ mm=masseMaigreDuBilan(user); }catch(e){}
+  const s=(user&&user.sodium)||{};
+  return {weightKg:poids,
+    // Elle vient du dernier bilan et repose sur ses mensurations ; le poids,
+    // lui, vient de la dernière pesée. Les deux peuvent donc dater de jours
+    // différents, et c'est voulu : chacun est la donnée la plus fraîche de son
+    // espèce.
+    fatFreeMassKg:mm,
+    gender:(user&&user._evol_gender)||(user&&user.gender)||'H',
+    sweatPhenotype:s.phenotype||null,
+    referenceSweatRateLPerH:_sodNombre(s.referenceSweatRateLPerH),
+    sweatTest:s.sweatTest||null,
+    prescribedCeilingMg:_sodNombre(s.prescribedCeilingMg),
+    medicalFlags:_sodiumDrapeauxMedicaux(user)};
+}
+// Les litres bus, tels que l'athlète les a déclarés au bilan de départ. C'est
+// une FOURCHETTE, pas une mesure : on prend son milieu, et « plus de 4 L » prend
+// sa borne basse plutôt que d'inventer un plafond.
+const SODIUM_EAU_DECLAREE=Object.freeze([
+  Object.freeze({re:/moins\s*de\s*1/,litres:0.8}),
+  Object.freeze({re:/1\s*a\s*2/,     litres:1.5}),
+  Object.freeze({re:/2\s*a\s*3/,     litres:2.5}),
+  Object.freeze({re:/3\s*a\s*4/,     litres:3.5}),
+  Object.freeze({re:/plus\s*de\s*4/, litres:4.5})
+]);
+// _microNorm retire les accents : « Entre 3 à 4L » devient « entre 3 a 4l », et
+// c'est cette forme-là que les motifs ci-dessus décrivent.
+function _sodiumLitresDeclares(user){
+  let brut=null;
+  try{ brut=_dernierChamp(user,'deb-water'); }catch(e){}
+  const l=Array.isArray(brut)?brut:(brut==null?[]:[brut]);
+  for(const v of l){
+    const n=_microNorm(v);
+    if(!n) continue;
+    const t=SODIUM_EAU_DECLAREE.find(x=>x.re.test(n));
+    if(t) return t.litres;
+  }
+  return null;
+}
+// LES SÉANCES RÉELLEMENT ENREGISTRÉES CE JOUR-LÀ, avec LEUR durée. C'est la
+// donnée la plus juste que RepCore possède, et il en possède une : chaque
+// séance terminée porte ses minutes. Deux séances dans la journée en font deux.
+function _sodiumSeancesDuJour(user,dateISO){
+  const out=[];
+  for(const x of ((user&&user.sessions)||[])){
+    if(!x||!x.date) continue;
+    let j=null;
+    try{ j=localISODate(new Date(x.date)); }catch(e){ j=null; }
+    if(j!==dateISO) continue;
+    const min=Number(x.duration);
+    if(min>0) out.push({durationMin:min,reelle:true});
+  }
+  return out;
+}
+// À DÉFAUT SEULEMENT : la médiane des séances récentes. Elle ne sert qu'au jour
+// d'entraînement dont la séance n'est pas encore faite — sur un jour passé sans
+// séance enregistrée, elle inventerait une sudation qui n'a pas eu lieu.
+const SODIUM_SEANCES_FENETRE=28;
+const SODIUM_SEANCES_MIN=3;
+function _sodiumDureeSeance(user,maintenantMs){
+  const t=(maintenantMs!=null?maintenantMs:Date.now())-SODIUM_SEANCES_FENETRE*864e5;
+  const d=((user&&user.sessions)||[])
+    .filter(s=>s&&s.date>=t&&Number(s.duration)>0)
+    .map(s=>Number(s.duration)).sort((a,b)=>a-b);
+  if(d.length<SODIUM_SEANCES_MIN) return null;
+  const i=Math.floor(d.length/2);
+  return d.length%2?d[i]:Math.round((d[i-1]+d[i])/2);
+}
+// La caféine du jour, telle que l'athlète l'a saisie prise par prise. Le
+// modificateur reste DÉSACTIVÉ par défaut — activerModificateurCafeine — mais
+// l'entrée, elle, est branchée sur la vraie donnée : le jour où la décision de
+// produit change, il n'y a rien d'autre à câbler.
+function _sodiumCafeineJour(user,dateISO){
+  const j=((((user&&user.nutrition)||{}).caffeine||{}).days||{})[dateISO];
+  if(!Array.isArray(j)) return null;
+  let t=0,n=0;
+  for(const e of j){
+    const mg=Number(e&&e.mg);
+    if(isFinite(mg)&&mg>0){ t+=mg; n++; }
+  }
+  return n?t:null;
+}
+function _sodiumContexteDe(user,dateISO,macrosJour,maintenantMs){
+  // AUCUN environnement, AUCUNE intensité ne sont passés : RepCore ne les
+  // collecte pas, et les inventer produirait une sudation inventée. Le moteur
+  // retombe donc sur « tempérée » et « modérée », qui valent 1 — c'est-à-dire
+  // sur le taux de référence, ou sur le défaut, sans correction.
+  let sessions=_sodiumSeancesDuJour(user,dateISO);
+  if(!sessions.length){
+    let jourOn=false;
+    try{ jourOn=nutIsOnDay(dateISO,user); }catch(e){}
+    if(jourOn){
+      const min=_sodiumDureeSeance(user,maintenantMs);
+      if(min) sessions=[{durationMin:min}];
+    }
+  }
+  let phase=null;
+  try{ phase=phaseCycle(user,dateISO); }catch(e){}
+  // LE MÊME VERROU QUE LES MACROS, ET PAS UN AUTRE. _applyNutCycleModifier
+  // écarte déjà la contraception CALENDAIRE — « le calendrier existe, mais il
+  // ne décrit aucune physiologie » — en plus de la continue. N'écarter que la
+  // continue aurait appliqué ici un ajustement métabolique que l'écran des
+  // macros refuse au même dossier, le même jour.
+  let neutre=false;
+  try{ neutre=cycleSansCycle(user)||cycleCalendaireSeul(user); }catch(e){}
+  return {sessions,
+    carbsG:_sodNombre(macrosJour&&macrosJour.g),
+    fluidsL:_sodiumLitresDeclares(user),
+    cyclePhase:phase,
+    hormonalContraception:neutre,
+    passiveHeat:false,
+    caffeineMg:_sodiumCafeineJour(user,dateISO)};
+}
+// LE POINT D'ENTRÉE DU PRODUIT. Rend null — et non zéro, et non un plancher —
+// quand le poids manque, ou quand une grossesse ou un allaitement suspend les
+// prescriptions. C'est la règle de repartitionPrises, pour la même raison : une
+// cible est une forme de prescription, et RepCore n'en pose pas là.
+function cibleSodiumJour(user,dateISO,macrosJour,maintenantMs){
+  if(!user) return null;
+  try{ if(grossesseSuspend(user)) return null; }catch(e){}
+  const a=_sodiumAthleteDe(user);
+  if(!(a.weightKg>0)) return null;
+  const ctx=_sodiumContexteDe(user,dateISO,macrosJour,maintenantMs);
+  return calculateSodiumTarget(a,ctx,SODIUM_CONFIG,maintenantMs);
+}
+// Le bilan du jour : la cible, l'apport lu dans le journal, l'écart, les
+// alertes. Le journal stocke des GRAMMES DE SEL — ils entrent par `saltG`, que
+// summarizeIntake convertit en milligrammes de sodium.
+function bilanSodiumJour(user,dateISO,macrosJour,maintenantMs){
+  if(!user) return null;
+  try{ if(grossesseSuspend(user)) return null; }catch(e){}
+  const a=_sodiumAthleteDe(user);
+  const ctx=_sodiumContexteDe(user,dateISO,macrosJour,maintenantMs);
+  const jour=((((user.nutrition||{}).log)||{})[dateISO]||{}).entries||[];
+  const entrees=jour.map(e=>({saltG:(e&&e.sel!=null)?e.sel:null,
+    source:(e&&e.source)||'FOOD'}));
+  return calculateDailySodiumBalance(a,ctx,entrees,SODIUM_CONFIG,maintenantMs);
+}
+// La phrase qui accompagne la cible. Elle dit sur quoi la cible repose, parce
+// qu'une estimation présentée comme une mesure est pire qu'un silence — et le
+// silence, c'est ce que ce module vient de remplacer.
+const SODIUM_PHRASE_ESTIME='Estimation : sans pesée avant/après séance, ta '
+  +'sudation est prise à 1 L/h, et la plage réelle va de 0,3 à 2,5 L/h.';
+const SODIUM_PHRASE_MESURE='Calculé sur ta sudation mesurée.';
+const SODIUM_PHRASE_MEDICAL='Plafonné à la recommandation population générale : '
+  +'une déclaration de santé est active. C\'est un sujet de médecin.';
+const SODIUM_PHRASE_MM_ESTIMEE='Masse maigre estimée, faute de mensurations : '
+  +'renseigne cou, taille et hanches pour affiner.';
+function phraseCibleSodium(t){
+  if(!t) return '';
+  if(t.ceiling&&t.ceiling.motif==='MEDICAL') return SODIUM_PHRASE_MEDICAL;
+  if(t.masseMaigreEstimee) return SODIUM_PHRASE_MM_ESTIMEE;
+  return t.estimation?SODIUM_PHRASE_ESTIME:SODIUM_PHRASE_MESURE;
 }
 
 function _valForme(v){
@@ -39116,10 +39666,25 @@ const TUILES_NUT=Object.freeze([
   Object.freeze({tot:'p',   cible:'p',   unite:'g',label:'Protéines',coul:'#ff2d2d',    ico:'haltere'}),
   Object.freeze({tot:'c',   cible:'g',   unite:'g',label:'Glucides', coul:'var(--gluc)',ico:'wheat'}),
   Object.freeze({tot:'l',   cible:'l',   unite:'g',label:'Lipides',  coul:'#22c55e',    ico:'droplet'}),
-  Object.freeze({tot:'sel', cible:null,  unite:'g',label:'Sel g',    coul:'#60a5fa',    ico:'salt'}),
+  Object.freeze({tot:'sel', cible:'sel', unite:'g',label:'Sel',      coul:'#60a5fa',    ico:'salt'}),
   Object.freeze({tot:'fi',  cible:'f',   unite:'g',label:'Fibres ℹ', coul:'#a78bfa',    ico:'leaf'}),
   Object.freeze({tot:'kcal',cible:'kcal',unite:'', label:'Kcal',     coul:'var(--text)',ico:'flame',kcal:true})
 ]);
+// LA CIBLE DE SEL N'EST PAS UNE MACRO. Elle ne sort pas de
+// _getEffectiveMacros — le dossier ne porte aucun gramme de sel — mais du
+// moteur sodique, qui a besoin du dossier entier et de la date. Les deux cartes
+// passent par ici pour que le chiffre affiché et la phrase qui l'explique
+// viennent du MÊME calcul : deux appels séparés pourraient afficher une cible
+// et une note qui ne parlent pas de la même journée.
+//
+// Les macros ne sont pas modifiées, elles sont COPIÉES : `m` vient de
+// _getEffectiveMacros, que vingt autres écrans relisent.
+function _selPourGrille(user,dateISO,m){
+  let t=null;
+  try{ t=cibleSodiumJour(user,dateISO,m); }catch(e){ t=null; }
+  return {macros:(t?Object.assign({},m,{sel:t.targetSaltG}):m),
+    cible:t,note:(t?phraseCibleSodium(t):'')};
+}
 function htmlGrilleTuilesNut(tot,m,opts){
   const o=opts||{};
   return `<div class="fj-grille">${TUILES_NUT.map(t=>{
@@ -39164,6 +39729,9 @@ function _renderStrictMacroRings(nut,jourAff){
   // supprimees ici : ces textes sont relus et valides, et les effacer est une
   // decision separee de celle de les retirer de cette carte.
   if(!m.kcal&&!m.p&&!m.g&&!m.l) return '';
+  // APRES la sortie anticipee : sans macros, la carte ne se rend pas du tout,
+  // et le moteur sodique n'a aucune raison de tourner pour rien.
+  const _sel=_selPourGrille(currentUser,today,m);
   const entries=(nut.log?.[today]?.entries)||[];
   const tot=entries.reduce((a,e)=>({
     kcal:a.kcal+(e.kcal||0),p:a.p+(e.p||0),c:a.c+(e.c||0),l:a.l+(e.l||0)
@@ -39199,11 +39767,12 @@ function _renderStrictMacroRings(nut,jourAff){
          maquette du 21/08/2026. -->
     <div style="margin-top:14px">
       <div class="nut-cap" style="margin-bottom:9px">Tes cibles</div>
-      ${htmlGrilleTuilesNut(tot,m,{cibleSeule:true})}
+      ${htmlGrilleTuilesNut(tot,_sel.macros,{cibleSeule:true})}
       <!-- LA MEME NOTE QU AU JOURNAL. Le « ℹ » de la tuile des fibres ne veut
            rien dire sans elle, et une grille qui porte le signe sans porter la
            legende renvoie le lecteur a une phrase qui n est pas la. -->
       <div style="font-size:var(--fs-xs);color:var(--text-dim);text-align:right;margin-top:9px">ℹ fibres : indicatif</div>
+      ${_sel.note?`<div style="font-size:var(--fs-xs);color:var(--text-faint);line-height:1.55;margin-top:7px">${escapeHtml(_sel.note)}</div>`:''}
     </div>
   </div>`;
 }
@@ -44307,6 +44876,9 @@ function _renderFjDaySummary(date){
   // n'ont pas de valeur de sel, comptent pour zéro. On le DIT plutôt que
   // d'afficher un total qui aurait l'air complet.
   const _selManquant=entries.filter(e=>e&&e.sel==null).length;
+  // La cible de sel du jour, et rien de plus : la phrase qui dit sur quoi elle
+  // repose vit dans la carte des objectifs, juste au-dessus.
+  const _sel=_selPourGrille(currentUser,date,m);
   const _microHtml=_htmlCouvertureMicro(currentUser);
   // Le repère de répartition ne se rend NULLE PART sur l'écran de l'athlète.
   // Il est parti d'ici d'abord, parce qu'il sortait deux fois dès que le
@@ -44341,7 +44913,7 @@ function _renderFjDaySummary(date){
         <button class="btn btn-red btn-sm" style="padding:11px 18px" onclick="openFoodSearch('${date}')">+ AJOUTER</button>
       </div>
       <div style="border-top:1px solid rgba(255,90,90,.18);margin-top:13px;padding-top:13px">
-        ${htmlGrilleTuilesNut(tot,m)}
+        ${htmlGrilleTuilesNut(tot,_sel.macros)}
         <div style="font-size:var(--fs-xs);color:var(--text-dim);text-align:right;margin-top:9px">ℹ fibres : indicatif</div>
         ${_selManquant?`<div style="font-size:var(--fs-xs);color:var(--text-dim);text-align:right;margin-top:3px">sel non compté sur ${_selManquant} aliment${_selManquant>1?'s':''}</div>`:''}
       </div>
