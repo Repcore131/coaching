@@ -1,4 +1,4 @@
-const CACHE = 'repcore-v1037';
+const CACHE = 'repcore-v1038';
 const SW_DATA = 'repcore-sw-data'; // persistent across updates — not wiped by activate
 
 // DÉLAI DE GARDE sur index.html. Le handler était en network-first avec un
@@ -30,9 +30,14 @@ const REPORT_BUDGET_MS = 1000;
 const AVATARS = [];
 for (let n = 1; n <= 7; n++) for (const g of ['h', 'f']) for (const v of ['', '-dos'])
   AVATARS.push('./icons/avatar/n' + n + '-' + g + v + '.png');
+// './img/arn.png' EST DANS LA LISTE, et elle y a sa place : elle est demandee
+// au PREMIER affichage de « Mes seances », comme les polices le sont a
+// l ouverture. Sans elle, un athlete hors ligne verrait la carte de citation
+// se rendre sans sa photo — le onerror la retirerait, silencieusement, et il
+// n aurait aucune raison de comprendre pourquoi.
 const ASSETS = ['./index.html', './manifest.json', './icons/icon-192x192.png',
   './vendor/qr.js', './fonts/montserrat-var-latin.woff2',
-  './fonts/bebasneue-400-latin.woff2'].concat(AVATARS);
+  './fonts/bebasneue-400-latin.woff2', './img/arn.png'].concat(AVATARS);
 
 // Une séance en cours interdit la bascule. Prendre le contrôle en pleine
 // séance, c'est purger le cache sous les pieds de quelqu'un qui est peut-être

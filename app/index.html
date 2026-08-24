@@ -1047,10 +1047,13 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 /* LE MEME CERCLE QUE LA PHOTO DU COACH, aux memes valeurs : 54 px, bord clair
    a 2 px, halo sombre de 4 px. `object-position:top` parce qu une photo en
    pied recadree au centre ne montrerait que le torse. */
-.ma-photo{flex-shrink:0;width:54px;height:54px;border-radius:var(--r-full);
-  object-fit:cover;object-position:top;
-  border:2px solid rgba(255,255,255,.35);box-shadow:0 0 0 4px rgba(0,0,0,.18);
-  background:#111}
+/* 64 px ET NON 54 : « un peu plus gros » que la vignette du coach, comme
+   demande. Le cadrage n est pas centre — l image fait 437 x 298 et le sujet se
+   tient a droite du milieu ; un cadrage centre lui couperait le visage. */
+.ma-photo{flex-shrink:0;display:block;width:64px;height:64px;
+  border-radius:var(--r-full);
+  background:#111 url('./img/arn.png') 58% 6% / cover no-repeat;
+  border:2px solid rgba(255,255,255,.35);box-shadow:0 0 0 4px rgba(0,0,0,.18)}
 .ma-corps{flex:1;min-width:0}
 .ma-sur{font-size:var(--fs-xs);color:rgba(255,255,255,.55);letter-spacing:3px;
   font-weight:800;text-transform:uppercase;margin-bottom:4px}
@@ -5400,11 +5403,19 @@ const COACH_PHOTO='icons/coach.jpg';
            dit déjà, et un lecteur d'écran n'a pas à l'annoncer. -->
       <div class="banner-hero ma-carte">
         <div class="ma-haut">
-          <!-- LE MEME CERCLE QUE LA PHOTO DU COACH sur « Ton approche » :
-               54 px, bord clair, halo sombre. C est la forme que Kevin a
-               designee, et elle existe deja a l identique deux ecrans plus
-               loin. -->
-          <img class="ma-photo" src="./img/arnold.png" alt="" onerror="this.remove()">
+          <!-- LE MEME CERCLE QUE LA PHOTO DU COACH sur « Ton approche » : bord
+               clair, halo sombre. C est la forme que Kevin a designee, et elle
+               existe deja a l identique deux ecrans plus loin.
+               UN FOND CSS ET NON UNE BALISE <img>, pour deux raisons qui vont
+               dans le meme sens. L image est DECORATIVE — elle n ajoute rien a
+               ce que le texte dit, et un lecteur d ecran n a pas a l annoncer.
+               Et un banc de securite interdit toute <img onerror> sur cet
+               ecran, parce que c est la signature d une balise fabriquee a
+               partir d un nom de seance ecrit par le coach ; mon repli
+               d origine en portait un. Le fond retombe de lui-meme sur le
+               disque sombre si le fichier manque, sans icone cassee et sans
+               affaiblir la regle. -->
+          <span class="ma-photo" aria-hidden="true"></span>
           <div class="ma-corps">
             <div class="ma-sur">Se motiver</div>
             <div class="ma-nom">A. Schwarzenegger</div>
