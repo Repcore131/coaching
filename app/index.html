@@ -1176,6 +1176,11 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
    des compteurs et tiendraient ; on garde la rangee ENTIERE au cran 2xl,
    parce qu une rangee ou un chiffre sur trois est deux fois plus petit ne
    se lit plus comme une rangee. */
+/* DEUX RANGEES LA PORTENT DESORMAIS. La seconde est celle du poids, sur
+   l onglet Poids de l ecran Evolution — depart, actuel, evolution — ou
+   « 103.8KG » remplissait la boite d un bord a l autre. La classe ne dit pas
+   « paiements », elle dit « un cran en dessous » : c est ce qui la rend
+   reutilisable. L accueil, lui, garde le cran 3xl. */
 .metric-row-compacte .metric-val{font-size:var(--fs-2xl);line-height:1}
 /* DES CHIFFRES QUI NE DANSENT PAS. Mesure en Montserrat a 40 px : « 1111 »
    fait 57,8 px la ou « 0000 » en fait 105,9 — le 1 est presque deux fois plus
@@ -53852,7 +53857,14 @@ function blocPoids(user){
   const diff=(dep!=null&&act!=null)?Math.round((act-dep)*10)/10:null;
   // Mode neutre : ni couleur de verdict, ni vitesse, ni cible, ni alerte.
   const colEvol=neutre?'var(--sub)':couleurEvolution(user,diff);
-  const entete=`<div style="display:flex;gap:8px;margin-bottom:14px">
+  // UN CRAN PLUS PETIT, a la demande de Kevin : « 103.8KG » remplissait la
+  // boite d un bord a l autre. La classe existe deja — .metric-row-compacte,
+  // posee pour la rangee des paiements — et elle dit exactement cela : le cran
+  // en dessous. On la reutilise plutot que d ecrire une seconde fois la meme
+  // taille. L ACCUEIL NE BOUGE PAS : blocPoids n est rendu qu ici, dans
+  // l onglet Poids de l ecran Evolution, et la classe ne descend que sur cette
+  // rangee-ci.
+  const entete=`<div class="metric-row-compacte" style="display:flex;gap:8px;margin-bottom:14px">
       <div class="metric-box"><div class="metric-val">${dep??'—'}kg</div><div class="metric-label">Départ</div></div>
       <div class="metric-box"><div class="metric-val">${act??'—'}kg</div><div class="metric-label">Actuel</div></div>
       <div class="metric-box"><div class="metric-val" style="color:${colEvol}">${diff!=null?(diff>0?'+':'')+diff+'kg':'—'}</div><div class="metric-label">Évolution</div></div>
