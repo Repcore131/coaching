@@ -1043,26 +1043,34 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
    que ce qui lui est PROPRE — la disposition interne et ses trois niveaux de
    texte. */
 .ma-carte{margin-bottom:0}
-.ma-haut{position:relative;display:flex;gap:14px;align-items:flex-start}
-/* LE MEME CERCLE QUE LA PHOTO DU COACH, aux memes valeurs : 54 px, bord clair
-   a 2 px, halo sombre de 4 px. `object-position:top` parce qu une photo en
-   pied recadree au centre ne montrerait que le torse. */
-/* 64 px ET NON 54 : « un peu plus gros » que la vignette du coach, comme
-   demande. Le cadrage n est pas centre — l image fait 437 x 298 et le sujet se
-   tient a droite du milieu ; un cadrage centre lui couperait le visage. */
-.ma-photo{flex-shrink:0;display:block;width:64px;height:64px;
-  border-radius:var(--r-full);
-  background:#111 url('./img/arn.png') 58% 6% / cover no-repeat;
-  border:2px solid rgba(255,255,255,.35);box-shadow:0 0 0 4px rgba(0,0,0,.18)}
+.ma-haut{position:relative;display:flex;gap:14px;align-items:stretch}
+/* UN RECTANGLE A FLEUR DES BORDS, ET NON UN CERCLE. Demande de Kevin, du
+   24/08/2026 : elle etait ronde et bordee comme la vignette du coach.
+   LES MARGES NEGATIVES ANNULENT EXACTEMENT LE PADDING DE .banner-hero — 18 px
+   en haut et en bas, 20 px a gauche — si bien que l image touche les trois
+   cotes. Elle n a AUCUN rayon a elle : c est le `overflow:hidden` de la
+   banniere qui lui arrondit ses deux coins gauches, et une image qui emprunte
+   le rayon du cadre ne peut pas s en desaccorder le jour ou il change.
+   `align-self:stretch` lui donne la hauteur de la carte, quelle qu elle soit —
+   le texte a cote decide, l image suit.
+   Le cadrage n est pas centre : l image fait 437 x 298 et le sujet se tient a
+   droite du milieu ; un cadrage centre lui couperait le visage. */
+.ma-photo{flex-shrink:0;align-self:stretch;display:block;width:104px;
+  margin:-18px 0 -18px -20px;
+  background:#111 url('./img/arn.png') 56% 12% / cover no-repeat}
 .ma-corps{flex:1;min-width:0}
-.ma-sur{font-size:var(--fs-xs);color:rgba(255,255,255,.55);letter-spacing:3px;
+/* UN CRAN PLUS BAS SUR LES TROIS NIVEAUX, a la demande de Kevin. L image
+   prend 104 px sur les 440 de la colonne : le texte doit tenir dans ce qui
+   reste sans se serrer. Aucune taille n est ecrite a la main — on descend d un
+   cran sur l echelle, comme partout ailleurs dans ce fichier. */
+.ma-sur{font-size:var(--fs-2xs);color:rgba(255,255,255,.55);letter-spacing:2.4px;
   font-weight:800;text-transform:uppercase;margin-bottom:4px}
-.ma-nom{font-size:var(--fs-xl);font-weight:900;color:var(--text);
+.ma-nom{font-size:var(--fs-lg);font-weight:900;color:var(--text);
   letter-spacing:-0.3px;line-height:1.1;margin-bottom:8px}
 /* PAS D ITALIQUE SYNTHETIQUE. Montserrat n est chargee qu en romain dans ce
    depot ; le navigateur fabriquerait une oblique baveuse. Sur du rouge plein,
    les guillemets et le nom au-dessus disent deja que c est une citation. */
-.ma-cit{margin:0;font-style:normal;font-size:var(--fs-sm);line-height:1.65;
+.ma-cit{margin:0;font-style:normal;font-size:var(--fs-xs);line-height:1.6;
   color:rgba(255,255,255,.72)}
 /* NU, SOUS LA CARTE. Il vivait dans le cadre ; Kevin l en a sorti. Il garde la
    marge qui le separe de la citation et celle qui le separe des seances. */
@@ -1070,7 +1078,7 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
   color:var(--sub)}
 @media (max-width:400px){
   .ma-haut{gap:11px}
-  .ma-photo{width:48px;height:48px}
+  .ma-photo{width:86px;margin:-18px 0 -18px -20px}
 }
 /* ── LA CONSIGNE DU JOURNAL ──────────────────────────────────────────── */
 /* UN FOND QUI COUVRE, ET NON UNE SURFACE TRANSLUCIDE. La carte porte un ciel
