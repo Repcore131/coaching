@@ -1080,6 +1080,58 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
   .ma-haut{gap:11px}
   .ma-photo{width:86px;margin:-18px 0 -18px -20px}
 }
+/* ══ L APERCU D UNE SEANCE, DANS SON CRENEAU ═══════════════════════════════
+   Maquette de Kevin, 24/08/2026. Il remplace le depot de la photo de fiche
+   programme. Les mesures suivent celles de la story dessinee sur canvas —
+   c est le meme objet, une fois a l ecran et une fois en PNG. */
+.cs-carte{position:relative;overflow:hidden;border-radius:var(--r-4);
+  padding:15px 16px 14px;margin-bottom:12px;
+  background:linear-gradient(150deg,#c60f08 0%,#9a0b06 52%,#6d0704 100%);
+  box-shadow:0 0 22px rgba(224,32,32,.2),inset 0 1px 0 rgba(255,255,255,.08)}
+/* Le meme filet diagonal et le meme disque clair que .banner-hero : c est la
+   signature des cartes rouges de l app, et celle-ci en est une. */
+.cs-carte::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(-50deg,transparent,transparent 16px,rgba(0,0,0,.10) 16px,rgba(0,0,0,.10) 17px)}
+.cs-carte::after{content:'';position:absolute;right:-20px;top:-20px;width:96px;
+  height:96px;border-radius:var(--r-full);background:rgba(255,255,255,.05);
+  pointer-events:none}
+.cs-carte>*{position:relative}
+.cs-sur{font-size:var(--fs-2xs);font-weight:800;letter-spacing:2.4px;
+  text-transform:uppercase;color:rgba(255,255,255,.62)}
+.cs-titre{font-family:var(--pile-titre);font-size:var(--fs-xl);line-height:1.05;
+  letter-spacing:1px;color:var(--text);text-transform:uppercase;margin-top:5px}
+.cs-meta{font-size:var(--fs-xs);color:rgba(255,255,255,.6);margin-top:3px}
+.cs-liste{list-style:none;margin:12px 0 0;padding:0;display:flex;
+  flex-direction:column;gap:2px}
+.cs-li{display:flex;align-items:center;gap:9px;padding:5px 0;
+  border-bottom:1px solid rgba(255,255,255,.09)}
+.cs-li:last-child{border-bottom:none}
+/* LE NUMERO EST UN JETON, pas une puce : il porte l ordre des exercices, et
+   c est l ordre qui fait la seance. */
+.cs-no{flex-shrink:0;width:19px;height:19px;border-radius:var(--r-1);
+  display:inline-grid;place-items:center;font-size:var(--fs-2xs);font-weight:800;
+  color:var(--text);background:rgba(0,0,0,.30)}
+.cs-nom{flex:1;min-width:0;font-size:var(--fs-xs);font-weight:800;
+  letter-spacing:.3px;color:var(--text);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* TABULAIRE : « 5×4 » et « 4×15 » doivent s aligner l un sous l autre, sinon
+   la colonne de droite danse d une ligne a l autre. */
+.cs-det{flex-shrink:0;font-size:var(--fs-xs);color:rgba(255,255,255,.66);
+  font-variant-numeric:tabular-nums}
+.cs-plus{font-size:var(--fs-2xs);color:rgba(255,255,255,.55);margin-top:7px}
+.cs-actions{display:flex;gap:9px;justify-content:flex-end;margin-top:13px;
+  padding-top:12px;border-top:1px solid rgba(255,255,255,.14)}
+.cs-btn{display:inline-flex;align-items:center;gap:7px;min-height:38px;
+  padding:8px 14px;border-radius:var(--r-2);cursor:pointer;
+  font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;
+  letter-spacing:.4px;color:var(--text);
+  background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.22)}
+.cs-btn-plein{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.34)}
+@media (max-width:400px){
+  .cs-carte{padding:13px 13px 12px}
+  .cs-actions{gap:7px}
+  .cs-btn{padding:8px 11px;letter-spacing:.2px}
+}
 /* ── LA CONSIGNE DU JOURNAL ──────────────────────────────────────────── */
 /* UN FOND QUI COUVRE, ET NON UNE SURFACE TRANSLUCIDE. La carte porte un ciel
    d eclairs derriere elle : a travers var(--surface-1), les traits rouges
@@ -7707,6 +7759,11 @@ const ICONS={
   // Le bras flechi : le poing en haut a gauche, l avant-bras qui descend, le
   // coude, le bras qui part a droite, et le renflement du biceps par-dessus.
   biceps:'<path d="M3 19h8a5 5 0 0 0 5-5v-3"/><path d="M16 11V7a3 3 0 0 1 3-3h0a3 3 0 0 1 3 3v4a3 3 0 0 1-3 3h-3"/><path d="M3 19v-2.5C3 13 6 11 9.5 11H16"/>',
+  // Les deux gestes de l apercu de seance. Memes traces que ceux deja inlines
+  // dans la carte hebdomadaire : la fleche descend pour telecharger, monte
+  // pour partager, sur la meme base de plateau.
+  download:'<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>',
+  share:'<path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>',
   flame:'<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/>',
   moon:'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
   trophy:'<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
@@ -24540,6 +24597,64 @@ function clientTab(tab){
 const DAYS=['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
 const DAY_ICONS=['L','Ma','Me','J','V','S','D'];
 
+// ══ L APERCU D UNE SEANCE, DANS SON CRENEAU ═══════════════════════════════
+// Demande de Kevin, 24/08/2026. Il remplace le depot de la photo de fiche
+// programme : plutot que de coller une capture d ecran de son classeur,
+// l athlete voit la seance telle que l app la connait deja — et peut la
+// telecharger ou la partager.
+//
+// LE DESSIN EXISTE DEJA, ET C EST TOUT L INTERET. _dessinerStorySeance rend
+// cette carte en PNG sur un canvas, telechargerSeanceDuJour l enregistre,
+// partagerSeanceDuJour ouvre la feuille native. Ce bloc-ci n en est que
+// l APERCU a l ecran : les memes donnees, la meme mise en page, et les deux
+// memes boutons. Rien n est recalcule — un apercu qui ne montrerait pas ce que
+// le fichier contient serait pire qu aucun apercu.
+//
+// LES DEUX BOUTONS PASSENT PAR _selDay, qui est le jour choisi pour la story.
+// C est la seule variable qui commande _storyDonnees : la poser, c est dire
+// « c est CETTE seance-la que je partage », et l apercu d a cote correspond
+// alors exactement au fichier produit.
+function _seanceStoryPour(i){
+  _selDay=i;
+  try{ if(window._weekProgEl) _renderProgExercisesInto(window._weekProgEl); }catch(e){}
+}
+function telechargerSeanceSlot(i){ _seanceStoryPour(i); return telechargerSeanceDuJour(); }
+function partagerSeanceSlot(i){ _seanceStoryPour(i); return partagerSeanceDuJour(); }
+// PURE. L apercu d un creneau. Rend '' quand il n y a rien a montrer : un
+// creneau sans exercice ne se partage pas, et une carte vide avec deux boutons
+// inertes serait une promesse non tenue.
+function htmlCarteSeanceSlot(i,s){
+  const ex=(s&&Array.isArray(s.exercises))?s.exercises:[];
+  if(!ex.length) return '';
+  // Le repos affiche est celui de la PREMIERE serie qui en porte un, comme
+  // dans _storyDonnees : deux lectures du meme champ finiraient par diverger.
+  const repos=(ex.map(e=>e&&e.repos).filter(Boolean)[0]||'');
+  const titre=((DAYS[i]||'')+(s.name?' : '+s.name:'')).toUpperCase();
+  // QUATORZE LIGNES, COMME LE DESSIN. Au-dela, la story coupe et compte le
+  // reste ; l apercu doit couper au meme endroit, sinon il annonce des lignes
+  // que le fichier n aura pas.
+  const vis=ex.slice(0,14), coupes=Math.max(0,ex.length-14);
+  const lignes=vis.map((e,n)=>`<li class="cs-li">
+    <span class="cs-no">${n+1}</span>
+    <span class="cs-nom">${escapeHtml(String(e.name||'').toUpperCase())}</span>
+    <span class="cs-det">${escapeHtml(String(e.series||'')+'×'+String(e.reps||''))}</span>
+  </li>`).join('');
+  const part=(typeof navigator!=='undefined'&&navigator.share)
+    ?`<button type="button" class="cs-btn cs-btn-plein" onclick="partagerSeanceSlot(${i})">${icon('share',14)}Partager</button>`:'';
+  return `<div class="cs-carte">
+    <div class="cs-tete">
+      <span class="cs-sur">Séance du jour</span>
+    </div>
+    <div class="cs-titre">${escapeHtml(titre)}</div>
+    <div class="cs-meta">${ex.length} exercice${ex.length>1?'s':''}${repos?' · '+escapeHtml(repos)+' repos':''}</div>
+    <ol class="cs-liste">${lignes}</ol>
+    ${coupes?`<div class="cs-plus">+ ${coupes} autre${coupes>1?'s':''}</div>`:''}
+    <div class="cs-actions">
+      <button type="button" class="cs-btn" onclick="telechargerSeanceSlot(${i})">${icon('download',14)}Télécharger</button>
+      ${part}
+    </div>
+  </div>`;
+}
 function loadSessionManager(){
   go('s-session-manager');
   setTimeout(_majLiensClasser,0);
@@ -24583,57 +24698,16 @@ function loadSessionManager(){
           <input value="${s.name||''}" placeholder="Ex: DOS & ABDOS" onchange="renameSession(${i},this.value)" style="margin-top:4px">
         </div>
 
-        <!-- Upload photo -->
-        <div style="margin-bottom:12px">
-          <label style="margin-top:0"> Capture d'écran de ta fiche programme</label>
-          ${s.photo?`
-            <div style="position:relative;margin-top:6px">
-              <img src="${s.photo}" style="width:100%;border-radius:var(--r-3);max-height:220px;object-fit:cover;border:1px solid var(--border)">
-              <div style="position:absolute;top:8px;right:8px;display:flex;gap:6px">
-                <label style="cursor:pointer;background:rgba(0,0,0,.7);color:var(--text);padding:6px 10px;border-radius:var(--r-2);font-size:var(--fs-xs);font-weight:700">
-                   Changer<input type="file" accept="image/*" style="display:none" onchange="uploadSessionPhoto(${i},this)">
-                </label>
-                <button onclick="removeSessionPhoto(${i})" style="background:rgba(198,15,8,.8);color:var(--text);border:none;padding:6px 10px;border-radius:var(--r-2);font-size:var(--fs-xs);font-weight:700;cursor:pointer;min-height:44px">Supprimer</button>
-              </div>
-            </div>
-            <button id="analyze-btn-${i}" onclick="analyzePhotoWithClaude(${i})" style="${_importLegacyOuvert()?'':'display:none!important;'}width:100%;margin-top:8px;padding:12px;background:linear-gradient(180deg,#1a0000,#110000);border:1px solid #3a0a0a;border-radius:var(--r-1);color:var(--red-light);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:1.5px;text-transform:uppercase">
-               Lire & importer les exercices (IA)
-            </button>`:
-            `<label style="display:block;margin-top:6px;cursor:pointer">
-              <input type="file" accept="image/*" style="display:none" onchange="uploadSessionPhoto(${i},this)">
-              <div style="border:2px dashed var(--border);border-radius:var(--r-3);padding:20px;text-align:center;transition:border-color var(--t-2)" onmouseover="this.style.borderColor='var(--red)'" onmouseout="this.style.borderColor='var(--border)'">
-                <div style="font-weight:700;font-size:var(--fs-md)">Ajouter ma fiche programme</div>
-                <div class="sub" style="font-size:var(--fs-xs);margin-top:3px">Elle restera sous tes yeux pendant la séance. Les exercices se saisissent au bouton « Exercices ».</div>
-              </div>
-            </label>`
-          }
-        </div>
-
-        <!-- Photo vidéos (liens YouTube — cachée) -->
-        <!-- MASQUÉ TANT QUE L'IMPORT LEGACY EST FERMÉ. Son unique lecteur,
-             analyzePhotoWithClaude, refuse dès sa première ligne : proposer le
-             dépôt revenait à faire compresser et stocker une image que rien ne
-             lit, sous un « ✓ » vert. Les photo2 déjà déposées ne sont pas
-             touchées — relever le drapeau les fait toutes réapparaître. -->
-        ${!_importLegacyOuvert()?'':`
-        <div style="margin-bottom:12px">
-          <div style="font-size:var(--fs-xs);color:var(--sub);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin-bottom:5px"> Photo liens vidéos <span style="font-weight:400">(cachée : IA seulement)</span></div>
-          ${s.photo2?`
-            <div style="display:flex;align-items:center;gap:8px;background:#0a1a00;border:1px solid #1a3a0a;border-radius:var(--r-2);padding:8px 12px">
-              <div style="color:var(--green);font-size:var(--fs-xs);font-weight:700;flex:1">✓ Photo vidéos prête</div>
-              <label style="cursor:pointer;font-size:var(--fs-xs);color:var(--sub);padding:4px 8px;background:var(--surface-2);border-radius:var(--r-1);border:1px solid var(--border);white-space:nowrap">
-                Changer<input type="file" accept="image/*" style="display:none" onchange="uploadSessionPhoto2(${i},this)">
-              </label>
-              <button onclick="removeSessionPhoto2(${i})" style="background:none;border:none;color:var(--red-light);font-size:var(--fs-xl);cursor:pointer;padding:0 4px">×</button>
-            </div>`:`
-            <label style="display:block;cursor:pointer">
-              <input type="file" accept="image/*" style="display:none" onchange="uploadSessionPhoto2(${i},this)">
-              <div style="border:1px dashed var(--border);border-radius:var(--r-2);padding:9px;text-align:center" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border)'">
-                <div style="font-size:var(--fs-xs);color:var(--sub);font-weight:700;letter-spacing:1px"> + Page liens YouTube (pour l'IA)</div>
-              </div>
-            </label>`}
-        </div>
-        `}
+        <!-- L APERCU DE LA SEANCE, A LA PLACE DE LA PHOTO DE FICHE.
+             Demande de Kevin, 24/08/2026. Il deposait une capture d ecran de
+             son classeur pour l avoir sous les yeux ; l app connait deja la
+             seance, et sait deja la dessiner — c est la meme carte que la
+             story, en apercu, avec ses deux memes boutons.
+             LE DEPOT DE PHOTO PART AVEC, cote athlete : uploadSessionPhoto et
+             removeSessionPhoto n ont plus d appelant et sont retires. La voie
+             du COACH reste ouverte — il attache la fiche en composant le
+             programme, et elle continue de s afficher pendant la seance. -->
+        ${htmlCarteSeanceSlot(i,s)}
 
         <!-- Exercices + actions -->
         <div style="display:flex;gap:8px">

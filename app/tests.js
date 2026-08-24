@@ -19674,6 +19674,52 @@ function testExercices(){
 
 
 
+    // ══════ L APERCU DE SEANCE, A LA PLACE DE LA PHOTO DE FICHE ══════
+    // Demande de Kevin, 24/08/2026. Il deposait une capture d ecran de son
+    // classeur ; l app connait deja la seance et sait deja la dessiner.
+    (function(){
+      const _ex=n=>Array.from({length:n},(_,k)=>({name:'EX'+(k+1),series:'3',reps:'10',
+        repos:k===0?'3 min':''}));
+      ok('Le depot de photo a QUITTE le gestionnaire de seances',(()=>{
+        // « Supprime ca et la possibilite de le faire ». Le bloc part ; la voie
+        // du COACH reste ouverte, et la vignette du selecteur continue
+        // d afficher les photos deja deposees.
+        const src=String(loadSessionManager);
+        if(/uploadSessionPhoto\(/.test(src))
+          return _echec('le gestionnaire propose encore le televersement');
+        return /htmlCarteSeanceSlot\(/.test(src)
+          ?true:_echec('l apercu ne le remplace pas');})());
+      ok('Un creneau SANS exercice ne rend aucun apercu',(()=>{
+        // Une carte vide avec deux boutons inertes serait une promesse non
+        // tenue : il n y a rien a telecharger ni a partager.
+        return htmlCarteSeanceSlot(0,{name:'Repos',exercises:[]})===''
+          ?true:_echec('un apercu sort sur un creneau vide');})());
+      ok('L apercu porte le titre, le compte et chaque exercice',(()=>{
+        const h=htmlCarteSeanceSlot(0,{name:'Pecs',exercises:_ex(3)});
+        if(h.indexOf('8 exercice')>=0) return _echec('mauvais compte');
+        if(h.indexOf('3 exercices')<0) return _echec('le compte manque');
+        if(h.indexOf('3 min repos')<0) return _echec('le repos manque');
+        const n=(h.match(/class="cs-li"/g)||[]).length;
+        return n===3?true:_echec(n+' lignes pour 3 exercices');})());
+      ok('Il coupe a QUATORZE lignes, comme le dessin, et annonce le reste',(()=>{
+        // La story canvas coupe a 14 et compte le surplus. Un apercu qui
+        // couperait ailleurs annoncerait des lignes que le fichier n aura pas.
+        const h=htmlCarteSeanceSlot(0,{name:'Long',exercises:_ex(18)});
+        const n=(h.match(/class="cs-li"/g)||[]).length;
+        if(n!==14) return _echec(n+' lignes rendues');
+        return h.indexOf('+ 4 autres')>=0?true:_echec('le surplus n est pas annonce');})());
+      ok('Les deux boutons visent LA seance de ce creneau',(()=>{
+        // _selDay est la seule variable qui commande _storyDonnees : la poser,
+        // c est dire « c est celle-la que je partage ».
+        const sauve=_selDay;
+        try{
+          const h=htmlCarteSeanceSlot(4,{name:'X',exercises:_ex(2)});
+          if(h.indexOf('telechargerSeanceSlot(4)')<0)
+            return _echec('le telechargement ne vise pas le creneau');
+          _seanceStoryPour(4);
+          return _selDay===4?true:_echec('_selDay vaut '+_selDay);
+        } finally { _selDay=sauve; }})());
+    })();
     // ══════ QUITTER UNE SEANCE SANS RIEN ECRIRE ══════
     // Demande de Kevin, 24/08/2026 : « les gens se trompant de seance ».
     // Ouvrir la mauvaise seance et n avoir que « Abandonner » sous la main,
