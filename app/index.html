@@ -1033,47 +1033,41 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 }
 /* ══ LA CITATION D OUVERTURE DE « MES SEANCES » ════════════════════════════
    Demande de Kevin, 24/08/2026. Elle remplace le paragraphe qui expliquait ou
-   deposer la photo de sa fiche. Meme cadre rouge que les cartes de nutrition —
-   .nut-hud — pour qu elle appartienne visiblement a l application et pas a une
-   affiche collee dessus. */
-.ma-carte{position:relative;overflow:hidden;border-radius:var(--r-4);
-  /* 14 px EN BAS, et la photo les reprend par une marge negative : sans
-     photo le cadre respire, avec elle l image touche le bord comme sur la
-     maquette. */
-  padding:16px 16px 14px;margin-bottom:0;
-  background:linear-gradient(168deg,#141414,#0c0c0c 52%,#080808);
-  border:1px solid rgba(224,32,32,.5);
-  box-shadow:0 0 26px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.045)}
-/* Le meme filet diagonal que les cartes de seance : il donne du grain au fond
-   sans rien charger. */
-.ma-carte::before{content:'';position:absolute;inset:0;pointer-events:none;
-  background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.022) 11px,rgba(255,255,255,.022) 12px)}
-.ma-carte>*{position:relative}
-.ma-haut{display:flex;align-items:flex-end;gap:12px}
-.ma-cit{flex:1;min-width:0;font-size:var(--fs-sm);line-height:1.6;
-  color:var(--text-strong);font-style:normal}
-/* PAS D ITALIQUE SYNTHETIQUE. Montserrat est chargee en romain seulement dans
-   ce depot ; le navigateur fabriquerait une oblique baveuse. Le skew fait le
-   meme travail, proprement — c est deja la regle de .nut-titre. */
-.ma-cit em{display:inline-block;font-style:normal;transform:skewX(-8deg);
-  transform-origin:left center}
-.ma-cit cite{display:block;margin-top:6px;font-style:normal;font-weight:800;
-  letter-spacing:1.2px;text-transform:uppercase;color:var(--red-text);
-  font-size:var(--fs-xs)}
-/* « UN PEU PLUS GROS », demande de Kevin : 132 px de haut la ou la vignette du
-   coach en fait 54. Elle est DECORATIVE — alt vide — et disparait d elle-meme
-   si le fichier manque : voir le onerror du gabarit. */
-.ma-photo{flex-shrink:0;height:132px;width:auto;max-width:46%;object-fit:contain;
-  object-position:bottom;filter:grayscale(1) contrast(1.06);
-  margin-bottom:-14px;align-self:flex-end}
-/* NU, SOUS LA CARTE. Il portait un filet rouge et vivait dans le cadre ;
-   Kevin l en a sorti. Il garde la marge qui le separe de la citation et celle
-   qui le separe de la liste des seances. */
+   deposer la photo de sa fiche.
+
+   ELLE EMPRUNTE LA BANNIERE « TON APPROCHE », .banner-hero — degrade rouge,
+   trame diagonale, disque clair dans le coin — plutot que de refaire un cadre
+   qui lui ressemblerait de loin. Kevin a designe cette forme-la, elle existe
+   deja, et deux cartes qui se veulent identiques doivent partager leur style,
+   pas le recopier : la seconde copie derive toujours. Ce bloc-ci ne pose donc
+   que ce qui lui est PROPRE — la disposition interne et ses trois niveaux de
+   texte. */
+.ma-carte{margin-bottom:0}
+.ma-haut{position:relative;display:flex;gap:14px;align-items:flex-start}
+/* LE MEME CERCLE QUE LA PHOTO DU COACH, aux memes valeurs : 54 px, bord clair
+   a 2 px, halo sombre de 4 px. `object-position:top` parce qu une photo en
+   pied recadree au centre ne montrerait que le torse. */
+.ma-photo{flex-shrink:0;width:54px;height:54px;border-radius:var(--r-full);
+  object-fit:cover;object-position:top;
+  border:2px solid rgba(255,255,255,.35);box-shadow:0 0 0 4px rgba(0,0,0,.18);
+  background:#111}
+.ma-corps{flex:1;min-width:0}
+.ma-sur{font-size:var(--fs-xs);color:rgba(255,255,255,.55);letter-spacing:3px;
+  font-weight:800;text-transform:uppercase;margin-bottom:4px}
+.ma-nom{font-size:var(--fs-xl);font-weight:900;color:var(--text);
+  letter-spacing:-0.3px;line-height:1.1;margin-bottom:8px}
+/* PAS D ITALIQUE SYNTHETIQUE. Montserrat n est chargee qu en romain dans ce
+   depot ; le navigateur fabriquerait une oblique baveuse. Sur du rouge plein,
+   les guillemets et le nom au-dessus disent deja que c est une citation. */
+.ma-cit{margin:0;font-style:normal;font-size:var(--fs-sm);line-height:1.65;
+  color:rgba(255,255,255,.72)}
+/* NU, SOUS LA CARTE. Il vivait dans le cadre ; Kevin l en a sorti. Il garde la
+   marge qui le separe de la citation et celle qui le separe des seances. */
 .ma-texte{margin:14px 2px 20px;font-size:var(--fs-sm);line-height:1.7;
   color:var(--sub)}
 @media (max-width:400px){
-  .ma-carte{padding:13px 13px 11px}
-  .ma-photo{height:112px}
+  .ma-haut{gap:11px}
+  .ma-photo{width:48px;height:48px}
 }
 /* ── LA CONSIGNE DU JOURNAL ──────────────────────────────────────────── */
 /* UN FOND QUI COUVRE, ET NON UNE SURFACE TRANSLUCIDE. La carte porte un ciel
@@ -5404,10 +5398,18 @@ const COACH_PHOTO='icons/coach.jpg';
            largeur — une image cassée serait pire que pas d'image.
            Elle est DÉCORATIVE : alt vide, elle n'ajoute rien à ce que le texte
            dit déjà, et un lecteur d'écran n'a pas à l'annoncer. -->
-      <div class="ma-carte">
+      <div class="banner-hero ma-carte">
         <div class="ma-haut">
-          <blockquote class="ma-cit"><em>« L'esprit est la limite. Tant que l'esprit peut envisager le fait que vous pouvez faire quelque chose, vous pouvez le faire, tant que vous y croyez vraiment à 100 %. »</em><cite>A. Schwarzenegger</cite></blockquote>
+          <!-- LE MEME CERCLE QUE LA PHOTO DU COACH sur « Ton approche » :
+               54 px, bord clair, halo sombre. C est la forme que Kevin a
+               designee, et elle existe deja a l identique deux ecrans plus
+               loin. -->
           <img class="ma-photo" src="./img/arnold.png" alt="" onerror="this.remove()">
+          <div class="ma-corps">
+            <div class="ma-sur">Se motiver</div>
+            <div class="ma-nom">A. Schwarzenegger</div>
+            <blockquote class="ma-cit">« L'esprit est la limite. Tant que l'esprit peut envisager le fait que vous pouvez faire quelque chose, vous pouvez le faire, tant que vous y croyez vraiment à 100 %. »</blockquote>
+          </div>
         </div>
       </div>
       <!-- HORS DU CADRE, a la demande de Kevin : le cadre rouge encadre la
