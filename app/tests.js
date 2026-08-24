@@ -9898,6 +9898,250 @@ function testExercices(){
           }
           return rates.length?_echec(rates.join(' · ')):true;})());
 
+        // ── UNE SÉANCE QU'ON NE PEUT PAS OUVRIR ──────────────────────────
+        // Symptôme rapporté : sur la fiche d'un athlète, « Modifier les
+        // exercices » ne fait RIEN sur certaines séances. Reproduit : les
+        // trois éditeurs appellent renderProgEx() AVANT go(), donc une
+        // exception dans le rendu laisse l'écran où il est, sans un mot —
+        // exactement le bug déjà rencontré sur l'onglet H/F des modèles, et
+        // que _cptSeances a fermé de ce côté-là.
+        //
+        // Trois formes de données le déclenchent, mesurées au navigateur :
+        // une entrée nulle dans le tableau, des reps qui ne sont pas du
+        // texte (isCardio fait .toLowerCase dessus), et un « exercises » qui
+        // n'est pas un tableau (_photographierProgEx fait .map dessus).
+        const _ouvre=(exs,fn)=>{
+          const _sv=currentUser,_se=_coachEditClient,_sc=_progEditorCtx,_su=window.saveUser;
+          try{
+            window.saveUser=()=>true;
+            currentUser={id:'c1',email:'c@t',role:'coach',fname:'K',exAlias:{},
+              exMuscles:{},programs:{},sessions:[],bilans:[],nutrition:{},
+              coachPrograms:[{id:'m',name:'M',sessions_F:[],
+                sessions_H:[{day:'Lundi',name:'MOD',active:true,exercises:exs}]}]};
+            _coachEditClient={id:'a1',email:'a@t',role:'athlete',fname:'A',
+              sessions_config:[{day:'Lundi',name:'ATH',active:true,exercises:exs}]};
+            _editProgTemplateIdx=0; _editProgTemplateGender='H';
+            go('s-coach-sessions');
+            (fn||openCoachSessionExercises)(0);
+            return (document.querySelector('.screen.active')||{}).id;
+          } catch(e){ return 'EXCEPTION: '+e.message; }
+          finally{ currentUser=_sv;_coachEditClient=_se;_progEditorCtx=_sc;window.saveUser=_su; }
+        };
+        ok('Une entrée nulle dans les exercices n\'empêche pas d\'ouvrir la séance',(()=>{
+          const e=_ouvre([{name:'DC',series:3,reps:'10'},null,{name:'SQUAT',series:3,reps:'10'}]);
+          return e==='s-coach-program'?true:_echec('écran = '+e);})());
+        ok('Des reps qui ne sont pas du texte n\'empêchent pas d\'ouvrir la séance',(()=>{
+          const e=_ouvre([{name:'DC',series:3,reps:10}]);
+          return e==='s-coach-program'?true:_echec('écran = '+e);})());
+        ok('Un « exercices » qui n\'est pas un tableau n\'empêche pas d\'ouvrir la séance',(()=>{
+          const e=_ouvre({0:{name:'DC',series:3,reps:'10'}});
+          return e==='s-coach-program'?true:_echec('écran = '+e);})());
+        ok('L\'éditeur de MODÈLE résiste aux mêmes formes',(()=>{
+          const rates=[];
+          for(const [cas,exs] of [['nul',[{name:'DC',reps:'10'},null]],
+                                  ['reps nombre',[{name:'DC',reps:10}]],
+                                  ['non-tableau',{0:{name:'DC',reps:'10'}}]]){
+            const e=_ouvre(exs,openProgTemplateSessionExercises);
+            if(e!=='s-coach-program') rates.push(cas+' → '+e);
+          }
+          return rates.length?_echec(rates.join(' · ')):true;})());
+        ok('_assainirExercices ne touche pas une séance déjà saine',(()=>{
+          const s={day:'Lundi',exercises:[{name:'DC',series:3,reps:'10',repos:'01 min'}]};
+          const avant=JSON.stringify(s);
+          const n=_assainirExercices(s);
+          if(n!==0) return _echec('il dit avoir réparé '+n+' entrée(s)');
+          return JSON.stringify(s)===avant?true:_echec('la séance a été réécrite : '+JSON.stringify(s));})());
+        ok('_assainirExercices retire les entrées vides et rend les reps textuelles',(()=>{
+          const s={exercises:[{name:'A',reps:'10'},null,'BRUIT',{name:'B',reps:12},undefined]};
+          const n=_assainirExercices(s);
+          if(s.exercises.length!==2) return _echec('reste '+s.exercises.length+' exercice(s)');
+          if(s.exercises[1].reps!=='12') return _echec('reps = '+JSON.stringify(s.exercises[1].reps));
+          return n===4?true:_echec('réparations comptées : '+n);})());
+        ok('Un rendu qui échoue le DIT au lieu de laisser le bouton muet',(()=>{
+          // Le filet : si renderProgEx tombe pour une raison qu'on n'a pas
+          // prévue, le coach doit lire quelque chose. Un écran qui ne bouge
+          // pas et une console muette, c'est le bug d'origine.
+          const _sv=currentUser,_se=_coachEditClient,_sc=_progEditorCtx;
+          const _r=renderProgEx,_t=toast,_ce=console.error;
+          let dit=0;
+          try{
+            renderProgEx=()=>{throw new Error('panne simulée');};
+            toast=()=>{dit++;};
+            console.error=()=>{};
+            currentUser={id:'c1',email:'c@t',role:'coach',fname:'K',exAlias:{},
+              exMuscles:{},programs:{},sessions:[],bilans:[],nutrition:{},coachPrograms:[]};
+            _coachEditClient={id:'a1',email:'a@t',role:'athlete',fname:'A',
+              sessions_config:[{day:'Lundi',name:'ATH',active:true,
+                exercises:[{name:'DC',series:3,reps:'10'}]}]};
+            go('s-coach-sessions');
+            openCoachSessionExercises(0);
+            const ec=(document.querySelector('.screen.active')||{}).id;
+            if(ec==='s-coach-program') return _echec('on entre dans un écran à moitié rendu');
+            return dit>0?true:_echec('aucun message : le bouton reste muet');
+          } catch(e){ return _echec('l\'exception ressort jusqu\'au clic : '+e.message); }
+          finally{ renderProgEx=_r; toast=_t; console.error=_ce;
+            currentUser=_sv;_coachEditClient=_se;_progEditorCtx=_sc; }})());
+        // ── UN ÉCRAN QUI S'OUVRE À MILLE PIXELS DU HAUT ──────────────────
+        // Le bug rapporté par Kevin, et la seule explication qui tienne avec
+        // ses données : elles sont saines, aucune exception n'est levée, aucun
+        // message ne s'affiche, et « certaines séances » seulement résistent.
+        //
+        // go() ne remettait la page en haut par AUCUN chemin. Son unique
+        // `s.scrollTop=0` porte sur `.screen`, qui est en min-height:100dvh
+        // sans overflow : il grandit avec son contenu, ne déborde jamais, et
+        // son scrollTop vaut toujours 0. C'est le DOCUMENT qui défile.
+        //
+        // Descendre jusqu'au jeudi puis ouvrir l'éditeur laissait donc la page
+        // à mille pixels : l'écran changeait, mais on regardait le milieu d'un
+        // formulaire ou le vide après sa fin. Les séances du haut marchaient.
+        ok('go() remet la PAGE en haut, pas seulement l\'écran',(()=>{
+          const _st=window.scrollTo;
+          const appels=[];
+          try{
+            window.scrollTo=function(){ appels.push(arguments[0]); };
+            go('s-coach-sessions');
+            if(!appels.length) return _echec('window.scrollTo n\'est jamais appelé');
+            const a=appels[appels.length-1];
+            const haut=(a&&typeof a==='object')?a.top:a;
+            if(haut!==0) return _echec('on défile vers '+JSON.stringify(haut)+' au lieu de 0');
+            // INSTANTANÉ : html{scroll-behavior:smooth} ferait sinon partir le
+            // changement d'écran en défilement animé de deux mille pixels.
+            return (a&&typeof a==='object'&&a.behavior==='instant')
+              ?true:_echec('défilement non instantané : '+JSON.stringify(a));
+          } finally { window.scrollTo=_st; }})());
+        ok('La remise en haut ne dépend pas d\'un scrollTop qui vaut toujours 0',(()=>{
+          // Verrou de non-régression : si quelqu'un remplace un jour l'appel à
+          // window.scrollTo par un scrollTop sur .screen, le bug revient à
+          // l'identique et rien ne le dirait.
+          const src=String(go);
+          if(src.indexOf('window.scrollTo')<0)
+            return _echec('go() ne remet plus la page en haut');
+          // Et l'écran lui-même ne déborde pas : c'est ce qui rend l'autre
+          // remise à zéro inopérante. On le mesure plutôt que de le croire.
+          const ec=document.getElementById('s-coach-sessions');
+          if(!ec) return _echec('écran introuvable');
+          return getComputedStyle(ec).overflowY!=='scroll'
+            ?true:_echec('.screen défile maintenant : revoir le raisonnement');})());
+        // ── LA GRILLE RENDUE EN OBJET PAR FIREBASE ───────────────────────
+        // Firebase RTDB ne rend un TABLEAU que si les clefs forment une suite
+        // pleine depuis 0. Une case tombée — il supprime toute valeur nulle —
+        // et sessions_config revient en objet. Trois lecteurs faisaient alors
+        // une méthode de tableau dessus, dont `sc.some` dans
+        // _seancesCoachRendre : AVANT go(), dans une fonction async, donc en
+        // rejet de promesse non traité. « Gérer le programme » ne faisait
+        // rien, sans un mot. Reproduit au navigateur avant correctif.
+        //
+        // On passe par ouvrirSeancesSansBrouillon, le jumeau SYNCHRONE prévu
+        // pour cette suite : c'est le même _seancesCoachRendre, donc la même
+        // exception. Que la version async la fasse disparaître en rejet est
+        // vérifié à part, sur la forme du code.
+        const _ouvrirSeances=cfg=>{
+          const _sv=currentUser,_se=_coachEditClient,_sc=_progEditorCtx;
+          const _cid=currentClientId,_own=getOwnedClient,_su=window.saveUser;
+          const msgs=[]; const _t=toast;
+          try{
+            toast=m=>msgs.push(String(m)); window.saveUser=()=>true;
+            currentUser={id:'c1',email:'c@t',role:'coach',fname:'K',exAlias:{},
+              exMuscles:{},programs:{},sessions:[],bilans:[],nutrition:{},coachPrograms:[]};
+            currentClientId='B';
+            getOwnedClient=()=>({id:'B',email:'b@t',role:'athlete',fname:'BOB',
+              gender:'H',sessions_config:cfg});
+            go('s-coach-home');
+            let leve=null;
+            try{ ouvrirSeancesSansBrouillon(); }catch(e){ leve=e.message; }
+            return {leve, ecran:(document.querySelector('.screen.active')||{}).id,
+              msgs, cfg:_coachEditClient&&_coachEditClient.sessions_config};
+          } finally { toast=_t; getOwnedClient=_own; currentUser=_sv;
+            _coachEditClient=_se; _progEditorCtx=_sc; currentClientId=_cid;
+            window.saveUser=_su; }
+        };
+        ok('Une grille rendue en OBJET par Firebase ouvre quand même l\'écran',(()=>{
+          const r=_ouvrirSeances({0:{day:'Lundi',name:'LUN',active:true,
+            exercises:[{name:'X',reps:'10'}]}});
+          if(r.leve) return _echec('exception : '+r.leve);
+          if(r.ecran!=='s-coach-sessions') return _echec('écran = '+r.ecran);
+          return Array.isArray(r.cfg)?true:_echec('la grille n\'est pas devenue un tableau');})());
+        ok('Une grille en objet à clefs NON CONTIGUËS ouvre aussi',(()=>{
+          const r=_ouvrirSeances({0:{day:'Lundi',name:'LUN',active:true,exercises:[]},
+                                  3:{day:'Jeudi',name:'JEU',active:true,exercises:[]}});
+          if(r.leve) return _echec('exception : '+r.leve);
+          return r.ecran==='s-coach-sessions'?true:_echec('écran = '+r.ecran);})());
+        ok('openCoachSessions, qui est async, ne perd plus la panne en rejet',(()=>{
+          // Une exception dans une fonction async ne remonte pas au clic : elle
+          // part en rejet non traité, et l'utilisateur ne voit RIEN. Le try qui
+          // entoure _seancesCoachRendre est ce qui ferme ce trou-là.
+          const src=String(openCoachSessions);
+          if(!/try\s*\{\s*_seancesCoachRendre\(\)/.test(src))
+            return _echec('_seancesCoachRendre n\'est plus sous try');
+          return /catch\s*\(\s*e\s*\)/.test(src)
+            ?true:_echec('aucun catch pour le dire');})());
+        ok('Les clefs numériques gardent leur RANG : {0,3} rend lundi et jeudi',(()=>{
+          const u={sessions_config:{0:{day:'Lundi',name:'LUN',active:true,exercises:[]},
+                                    3:{day:'Jeudi',name:'JEU',active:true,exercises:[]}}};
+          const t=_normaliserSessionsConfig(u);
+          if(!Array.isArray(t)) return _echec('ce n\'est pas un tableau');
+          if(t.length!==7) return _echec('longueur '+t.length);
+          if(t[0].name!=='LUN') return _echec('créneau 0 = '+JSON.stringify(t[0].name));
+          if(t[3].name!=='JEU') return _echec('créneau 3 = '+JSON.stringify(t[3].name));
+          // Tasser les trous décalerait tout le programme d'un jour.
+          if(t[1].active||t[2].active) return _echec('les trous ont été tassés');
+          return true;})());
+        ok('_normaliserSessionsConfig ne touche pas une grille déjà saine',(()=>{
+          const u={sessions_config:DAYS.map(day=>({day,name:'',photo:null,
+            exercises:[],active:false,notes:'',warmup:''}))};
+          const avant=JSON.stringify(u.sessions_config);
+          _normaliserSessionsConfig(u);
+          return JSON.stringify(u.sessions_config)===avant
+            ?true:_echec('la grille a été réécrite');})());
+        ok('La grille de l\'athlète PRÉCÉDENT ne reste jamais à l\'écran',(()=>{
+          const _sv=currentUser,_se=_coachEditClient,_su=window.saveUser;
+          try{
+            window.saveUser=()=>true;
+            currentUser={id:'c1',email:'c@t',role:'coach',fname:'K',exAlias:{},
+              exMuscles:{},programs:{},sessions:[],bilans:[],nutrition:{},coachPrograms:[]};
+            _coachEditClient={id:'A',fname:'ALICE',sessions_config:[
+              {day:'Lundi',name:'A-LUNDI',active:true,exercises:[{name:'X',reps:'10'}]},
+              {day:'Mardi',name:'A-MARDI',active:true,exercises:[{name:'Y',reps:'10'}]}]};
+            go('s-coach-sessions'); loadCoachSessionSlots();
+            const boite=()=>document.getElementById('coach-session-slots');
+            if(!/A-LUNDI/.test(boite().innerHTML)) return _echec('ALICE ne s\'est pas affichée');
+            // 1. Grille en objet : elle ne doit plus lever, ni laisser ALICE.
+            _coachEditClient={id:'B',fname:'BOB',sessions_config:
+              {0:{day:'Lundi',name:'B-LUNDI',active:true,exercises:[]}}};
+            loadCoachSessionSlots();
+            if(/A-LUNDI|A-MARDI/.test(boite().innerHTML))
+              return _echec('les séances d\'ALICE sont encore là');
+            if(!/B-LUNDI/.test(boite().innerHTML)) return _echec('BOB ne s\'affiche pas');
+            // 2. Athlète SANS grille du tout : on vide, on ne laisse pas BOB.
+            _coachEditClient={id:'C',fname:'CHLOE'};
+            loadCoachSessionSlots();
+            return /B-LUNDI/.test(boite().innerHTML)
+              ?_echec('les séances de BOB survivent à un athlète sans grille'):true;
+          } catch(e){ return _echec('exception : '+e.message); }
+          finally { currentUser=_sv; _coachEditClient=_se; window.saveUser=_su; }})());
+        ok('Le filet couvre TOUT le montage, pas seulement le rendu',(()=>{
+          // Le premier correctif n'entourait que renderProgEx. _prepProgEditor,
+          // la copie des exercices et le titre pouvaient lever juste avant, et
+          // le bouton redevenait muet pour exactement la même raison.
+          const _sv=currentUser,_se=_coachEditClient,_sc=_progEditorCtx;
+          const _pp=_prepProgEditor,_t=toast,_ce=console.error;
+          let dit=0;
+          try{
+            _prepProgEditor=()=>{throw new Error('panne avant le rendu');};
+            toast=()=>{dit++;}; console.error=()=>{};
+            currentUser={id:'c1',email:'c@t',role:'coach',fname:'K',exAlias:{},
+              exMuscles:{},programs:{},sessions:[],bilans:[],nutrition:{},coachPrograms:[]};
+            _coachEditClient={id:'a1',fname:'A',sessions_config:[{day:'Lundi',
+              name:'ATH',active:true,exercises:[{name:'DC',series:3,reps:'10'}]}]};
+            go('s-coach-sessions');
+            openCoachSessionExercises(0);
+            const ec=(document.querySelector('.screen.active')||{}).id;
+            if(ec==='s-coach-program') return _echec('on entre dans un écran à moitié monté');
+            return dit>0?true:_echec('aucun message : le bouton reste muet');
+          } catch(e){ return _echec('l\'exception ressort jusqu\'au clic : '+e.message); }
+          finally { _prepProgEditor=_pp; toast=_t; console.error=_ce;
+            currentUser=_sv; _coachEditClient=_se; _progEditorCtx=_sc; }})());
+
         // ── L'IMPORT OCR CÔTÉ COACH ─────────────────────────────────────
         // Il etait purement INOPERANT : _athleteSessionIdx() rend null hors
         // mode athlete, et currentUser.sessions_config[null] levait une

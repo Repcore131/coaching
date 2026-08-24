@@ -9860,7 +9860,38 @@ function go(id){
   if(s){
     s.classList.add('active');
     s.style.display='flex';
+    // ── REMETTRE LA PAGE EN HAUT, ET SUR CE QUI DÉFILE VRAIMENT ──────────
+    //
+    // `s.scrollTop=0` ne faisait RIEN, et c'était le bug. `.screen` est en
+    // `min-height:100dvh` sans `overflow` : il GRANDIT avec son contenu et ne
+    // déborde donc jamais. `.scroll-area` non plus, pour la même raison — le
+    // commentaire de _pxDefilerAuBord le disait déjà : « c'est le DOCUMENT qui
+    // défile ». Le scrollTop de ces deux éléments-là vaut toujours 0, et le
+    // remettre à 0 ne déplace rien.
+    //
+    // CE QUE ÇA DONNAIT, ET POURQUOI ON CROYAIT LE BOUTON MORT. Le coach
+    // descendait sa grille de sept jours jusqu'au jeudi — mille pixels plus
+    // bas — puis appuyait sur « Modifier les exercices ». L'écran changeait
+    // bien, mais la PAGE restait à mille pixels : l'éditeur s'ouvrait au
+    // milieu d'un formulaire, ou après sa fin, sur du vide. Rien ne bougeait
+    // sous les yeux, aucune erreur, aucun message. Et les séances du HAUT de
+    // la liste marchaient, elles : d'où « certaines séances » seulement, et
+    // surtout sur téléphone, où sept cartes ne tiennent jamais dans l'écran.
+    //
+    // INSTANTANÉ, ET C'EST OBLIGATOIRE : `html{scroll-behavior:smooth}` est
+    // posé plus haut dans la feuille de style, et sans `behavior:'instant'`
+    // le changement d'écran partirait en défilement animé de deux mille
+    // pixels — le seul mouvement de l'app qui rende réellement malade.
+    // L'option écrite en JS l'emporte sur la feuille de style, dans les deux
+    // sens : c'est la même raison qui fait passer _defiler par du JS.
+    //
+    // Les deux autres remises à zéro sont GARDÉES, pas remplacées : elles ne
+    // coûtent rien, et le jour où une mise en page donnera enfin un
+    // débordement à `.scroll-area`, c'est elle qu'il faudra remettre en haut.
     s.scrollTop=0;
+    try{ const _z=s.querySelector('.scroll-area'); if(_z) _z.scrollTop=0; }catch(_e){}
+    try{ window.scrollTo({top:0,left:0,behavior:'instant'}); }
+    catch(_e){ try{ window.scrollTo(0,0); }catch(_e2){} }
   }
   // Après l'affichage : la barre suit l'écran courant, quel que soit le chemin
   // emprunté pour y arriver (onglet, flèche retour, redirection interne).
@@ -19795,6 +19826,135 @@ async function deleteCoachProgTemplate(idx){
   saveUser();toast('Programme supprimé.');loadCoachProgramsList();
 }
 
+// LES EXERCICES D'UNE SÉANCE, RENDUS RENDABLES.
+//
+// MÊME CLASSE DE BUG QUE _cptSeances juste en dessous, et même correctif.
+// renderProgEx lève sur trois formes de données, et les TROIS éditeurs
+// l'appellent AVANT go(). L'exception remonte donc jusqu'au clic : l'écran ne
+// bouge pas, rien n'est écrit nulle part, et « Modifier les exercices »
+// devient un bouton bien visible qui ne fait rien, sans un mot.
+//
+// Les trois formes, mesurées au navigateur :
+//   • une entrée nulle dans le tableau — parseReps lit ex.reps sur null ;
+//   • des reps qui ne sont pas du texte — isCardio fait .toLowerCase dessus ;
+//   • un « exercises » qui n'est pas un tableau — _photographierProgEx fait
+//     .map dessus, avant même le rendu.
+//
+// AUCUN CHEMIN D'ÉCRITURE DE L'APP NE LES PRODUIT : le champ reps n'est écrit
+// qu'à un seul endroit, par un input, donc toujours en texte. Elles viennent
+// du STOCKAGE ou d'un import ancien. On répare donc à la LECTURE : interdire
+// une écriture qui n'existe déjà plus ne réparerait aucun dossier existant.
+//
+// RÉPARE EN MÉMOIRE, N'ENREGISTRE RIEN. C'est la règle de l'écran du coach :
+// il valide par SAUVEGARDER, puis par PUBLIER. Rend le nombre d'entrées
+// réparées — 0 quand il n'y avait rien à faire, et dans ce cas la séance
+// n'est pas touchée du tout.
+function _assainirExercices(seance){
+  if(!seance||typeof seance!=='object') return 0;
+  if(!Array.isArray(seance.exercises)){ seance.exercises=[]; return 0; }
+  let repares=0;
+  const propres=[];
+  for(const ex of seance.exercises){
+    if(!ex||typeof ex!=='object'||Array.isArray(ex)){ repares++; continue; }
+    // `'reps' in ex` et non `ex.reps` : on ne CRÉE pas le champ chez un
+    // exercice qui ne l'a jamais porté — son absence ne casse rien, tous les
+    // lecteurs écrivent `(ex.reps||'')`. On ne réécrit que ce qui casse.
+    if(('reps' in ex)&&typeof ex.reps!=='string'){
+      ex.reps=(ex.reps==null)?'':String(ex.reps);
+      repares++;
+    }
+    propres.push(ex);
+  }
+  if(propres.length!==seance.exercises.length) seance.exercises=propres;
+  return repares;
+}
+// LA GRILLE DE SÉANCES, RENDUE PARCOURABLE.
+//
+// LE BUG QU'ELLE FERME, ET IL EST SILENCIEUX DE BOUT EN BOUT. Firebase RTDB
+// ne stocke pas de tableaux : il stocke des objets à clefs numériques, et il
+// ne rend un TABLEAU à la lecture que si les clefs forment une suite pleine
+// à partir de 0. Une seule case tombée — Firebase supprime toute valeur
+// nulle, et un jour de repos réduit à rien en est une — et le dossier
+// revient avec `sessions_config` en OBJET, `{0:…, 3:…}`.
+//
+// Trois lecteurs faisaient alors une méthode de tableau sur un objet :
+//   • _seancesCoachRendre → `sc.some(…)`, AVANT go() : le coach appuie sur
+//     « Gérer le programme » et rien ne se passe. La fonction appelante est
+//     `async`, donc l'exception part en rejet de promesse non traité — pas
+//     même une ligne rouge visible selon le navigateur ;
+//   • loadCoachSessionSlots → `sessions.map(…)` : l'écran s'ouvre mais la
+//     grille n'est pas remplacée, et le coach lit les séances de l'athlète
+//     PRÉCÉDENT en croyant lire celles de celui qu'il vient d'ouvrir ;
+//   • loadSessionManager, côté athlète, pour la même raison.
+//
+// Et le dossier n'est pas abîmé pour autant : les séances sont toutes là,
+// c'est leur EMBALLAGE qui a changé de forme en passant par le réseau. On le
+// remet donc à l'endroit à la lecture, une fois, au plus près du dossier.
+//
+// GARANTIT SEPT CRÉNEAUX, comme _cptSeances le fait pour les modèles, et
+// assainit chacun au passage. Rend le tableau, toujours.
+//
+// `rapport` est FACULTATIF : un objet dont .repares est incrémenté de ce qui a
+// vraiment été réparé. L'appelant qui doit décider d'un enregistrement s'en
+// sert au lieu de comparer deux sérialisations de la grille — celle-ci porte
+// les photos de séance en base64, et la sérialiser deux fois à chaque
+// ouverture d'écran coûterait plusieurs mégaoctets de travail pour rien.
+function _normaliserSessionsConfig(dossier,rapport){
+  const _noter=n=>{ if(rapport&&n) rapport.repares=(rapport.repares||0)+n; };
+  if(!dossier||typeof dossier!=='object') return [];
+  let cfg=dossier.sessions_config;
+  if(!Array.isArray(cfg)){
+    if(cfg&&typeof cfg==='object'){
+      // Les clefs numériques REPRENNENT LEUR RANG : `{0:…,3:…}` redonne le
+      // lundi et le jeudi, pas les deux premiers jours. Le jour est porté par
+      // la POSITION dans toute l'app — DAYS[i], DAY_ICONS[i], l'index passé
+      // aux boutons — et tasser les trous décalerait tout le programme d'un
+      // athlète sans que rien ne le dise.
+      const t=[];
+      for(const k of Object.keys(cfg)){
+        const i=parseInt(k,10);
+        if(Number.isInteger(i)&&i>=0&&i<64) t[i]=cfg[k];
+      }
+      cfg=t;
+    } else {
+      cfg=[];
+    }
+    _noter(1);
+  }
+  DAYS.forEach((day,i)=>{
+    if(!cfg[i]||typeof cfg[i]!=='object'){
+      cfg[i]={day,name:'',photo:null,exercises:[],active:false,notes:'',warmup:''};
+      _noter(1);
+    }
+    if(!cfg[i].day){ cfg[i].day=day; _noter(1); }
+    _noter(_assainirExercices(cfg[i]));
+  });
+  // Au-delà des sept jours — un import ancien en portait parfois plus — on ne
+  // JETTE rien : on assainit et on laisse. Supprimer une séance qu'un coach a
+  // peut-être écrite serait une perte, et sept créneaux suffisent à l'écran.
+  for(let i=DAYS.length;i<cfg.length;i++){
+    if(!cfg[i]||typeof cfg[i]!=='object'){ cfg[i]={day:'',name:'',photo:null,exercises:[],active:false,notes:'',warmup:''}; _noter(1); }
+    _noter(_assainirExercices(cfg[i]));
+  }
+  dossier.sessions_config=cfg;
+  return cfg;
+}
+// CE QU'ON DIT QUAND L'ÉDITEUR NE S'OUVRE PAS.
+//
+// Les trois éditeurs montent leur écran — copie des exercices, champs du
+// formulaire, contexte, titre, rendu — AVANT d'appeler go(). C'est voulu :
+// entrer dans s-coach-program pour y trouver la séance précédente serait pire
+// qu'un bouton qui ne répond pas. Mais tant que ce montage n'était protégé
+// par rien, la moindre exception au milieu remontait jusqu'au gestionnaire de
+// clic, et le bouton devenait muet.
+//
+// N'AVALE PAS L'ERREUR : la console garde la pile entière, le coach lit de
+// quoi la rapporter.
+function _echecOuvertureEditeur(e){
+  try{ console.error("Ouverture de l'éditeur d'exercices impossible",e); }catch(_e){}
+  try{ toast("Cette séance n'a pas pu être ouverte : "+((e&&e.message)||"erreur inconnue")
+    +". Signale-le, la console en garde le détail.","var(--red)"); }catch(_e){}
+}
 // LES SEANCES D UN MODELE, PAR GENRE — ET GARANTIES EXISTANTES.
 //
 // Six fonctions ecrivaient le meme ternaire, et QUATRE plantaient si le jeu
@@ -19813,7 +19973,7 @@ function _cptSeances(p,genre){
   const t=p[cle];
   DAYS.forEach((day,i)=>{
     if(!t[i]) t[i]={day,name:'',active:false,photo:null,exercises:[],notes:'',warmup:''};
-    if(!Array.isArray(t[i].exercises)) t[i].exercises=[];
+    _assainirExercices(t[i]);
   });
   return t;
 }
@@ -20032,6 +20192,12 @@ function openProgTemplateSessionExercises(idx){
   const sessions=_cptSeances(p,_editProgTemplateGender);
   if(!sessions) return;
   const s=sessions[idx];
+  // TOUT LE MONTAGE EST SOUS FILET, et pas seulement le rendu : la copie
+  // des exercices, les champs du formulaire, le titre et le rendu peuvent
+  // chacun lever. Sans lui, l'exception remontait au gestionnaire de clic
+  // et le bouton restait muet, quel que soit le maillon qui a cassé.
+  try{
+  _assainirExercices(s);
   progEx=JSON.parse(JSON.stringify(s.exercises||[]));_photographierProgEx();
   _prepProgEditor({name:s.name,notes:s.notes,warmup:s.warmup,cooldown:s.cooldown});
   _progEditorCtx={mode:'template',sessionIdx:idx,progIdx:_editProgTemplateIdx,gender:_editProgTemplateGender};
@@ -20048,6 +20214,7 @@ function openProgTemplateSessionExercises(idx){
   // ferait poser la question sur des modifications qui n’existent pas — une
   // question qui se pose sans raison apprend à répondre oui sans lire.
   _progExDirty=false;
+  }catch(e){ return _echecOuvertureEditeur(e); }
 }
 
 // ─── Assignation ───
@@ -20279,7 +20446,17 @@ async function openCoachSessions(){
   if(!_seancesCoachPreparer()) return;
   // ATTENDUE. C’est tout le lot.
   try{ await _proposerBrouillon(); }catch(e){}
-  _seancesCoachRendre();
+  // ELLE EST `async`, ET C'EST CE QUI RENDAIT LA PANNE INVISIBLE : une
+  // exception dans _seancesCoachRendre ne remontait pas au clic, elle
+  // partait en rejet de promesse non traité. Le coach appuyait sur
+  // « Gérer le programme » et rien ne se passait — pas d'écran, pas de
+  // message, et selon le navigateur pas même une ligne dans la console.
+  try{ _seancesCoachRendre(); }
+  catch(e){
+    try{ console.error("Ouverture des séances de l’athlète impossible",e); }catch(_e){}
+    toast("Le programme de cet athlète n’a pas pu s’ouvrir : "+((e&&e.message)||"erreur inconnue")
+      +". Signale-le, la console en garde le détail.","var(--red)");
+  }
 }
 // LE MÊME CHEMIN, SANS LA QUESTION. Employé par la suite intégrée, qui est
 // synchrone, et qui n’a rien à tester du brouillon ici.
@@ -20292,7 +20469,13 @@ function ouvrirSeancesSansBrouillon(){
 // rien à ouvrir — les deux gardes d’origine, inchangées.
 function _seancesCoachPreparer(){
   const c=getOwnedClient(currentClientId);
-  if(!c) return false;
+  // Ce garde sortait en silence, comme les autres de ce chemin : le coach
+  // appuyait et rien ne se passait. Il se déclenche quand la fiche a été
+  // ouverte puis le dossier remplacé par une synchronisation.
+  if(!c){
+    try{ toast('Athlète introuvable : reviens à la liste et rouvre sa fiche.','var(--orange)'); }catch(_e){}
+    return false;
+  }
   if(c._fromCode){toast('Cet athlète n\'a pas encore créé son compte.','var(--orange)');return false;}
   _coachEditClient=JSON.parse(JSON.stringify(c));
   return true;
@@ -20300,6 +20483,16 @@ function _seancesCoachPreparer(){
 // Migration éventuelle, titre, écran, grille. Lit la configuration RETENUE :
 // appelée après la réponse, elle ne peut plus juger le publié à sa place.
 function _seancesCoachRendre(){
+  // LA GRILLE REMISE À L'ENDROIT AVANT LA PREMIÈRE LECTURE. `sc.some` plus
+  // bas est une méthode de TABLEAU, et Firebase rend parfois un OBJET :
+  // elle levait alors ici, AVANT go(), et l'appelant est `async` — donc en
+  // rejet de promesse non traité. Voir _normaliserSessionsConfig.
+  //
+  // SEULEMENT SI QUELQUE CHOSE EST LÀ : sans cette condition, la grille
+  // vide fabriquée ici passerait pour un programme, et la Fondation posée
+  // juste en dessous ne le serait plus jamais pour un nouvel athlète.
+  if(_coachEditClient.sessions_config&&!Array.isArray(_coachEditClient.sessions_config))
+    _normaliserSessionsConfig(_coachEditClient);
   const sc=_coachEditClient.sessions_config;
   // _evol_gender n'existe qu'à partir du premier bilan. Un athlète créé par le
   // coach porte son genre dans .gender et rien d'autre : lu seul, _evol_gender
@@ -20399,12 +20592,19 @@ function loadCoachSessionSlots(){
     if(_bb) _bb.innerHTML=_htmlBandeauBrouillon();
   }catch(e){}
   const c=_coachEditClient;
-  if(!c?.sessions_config) return;
-  const sessions=c.sessions_config;
-  DAYS.forEach((day,i)=>{
-    if(!sessions[i]) sessions[i]={day,name:'',photo:null,exercises:[],active:false,notes:'',warmup:''};
-    if(!Array.isArray(sessions[i].exercises)) sessions[i].exercises=[];
-  });
+  // LA GRILLE DU PRÉCÉDENT NE RESTE JAMAIS À L'ÉCRAN. Ce garde sortait sans
+  // rien redessiner : le coach ouvrait l'athlète suivant et lisait encore
+  // les séances de celui d'avant, en croyant lire les siennes. Vider est la
+  // seule chose honnête à faire quand on n'a rien à montrer.
+  if(!c?.sessions_config){
+    const _vide=document.getElementById('coach-session-slots');
+    if(_vide) _vide.innerHTML='';
+    return;
+  }
+  // Rend un TABLEAU de sept créneaux quoi qu'il arrive, même si Firebase a
+  // rendu un objet : sans lui, le sessions.map plus bas levait et laissait,
+  // là encore, la grille du précédent en place.
+  const sessions=_normaliserSessionsConfig(c);
   try{ renderVolumePrescrit(sessions,c); }catch(e){}
   const container=document.getElementById('coach-session-slots');
   if(!container) return;
@@ -20551,6 +20751,12 @@ function openCoachSessionExercises(idx){
     return;
   }
   const s=c.sessions_config[idx];
+  // TOUT LE MONTAGE EST SOUS FILET, et pas seulement le rendu : la copie
+  // des exercices, les champs du formulaire, le titre et le rendu peuvent
+  // chacun lever. Sans lui, l'exception remontait au gestionnaire de clic
+  // et le bouton restait muet, quel que soit le maillon qui a cassé.
+  try{
+  _assainirExercices(s);
   progEx=JSON.parse(JSON.stringify(s.exercises||[]));_photographierProgEx();
   _prepProgEditor({name:s.name,notes:s.notes,warmup:s.warmup,cooldown:s.cooldown||currentUser._defaultCooldown});
   _progEditorCtx={mode:'coachClient',sessionIdx:idx};
@@ -20560,6 +20766,7 @@ function openCoachSessionExercises(idx){
   if(title) title.textContent=(s.name||DAYS[idx])+' : Exercices';
   renderProgEx();go('s-coach-program');
   _progExDirty=false;
+  }catch(e){ return _echecOuvertureEditeur(e); }
 }
 // ══════ BROUILLON DE PROGRAMME ══════
 // Il vit dans le dossier DU COACH, pas dans celui de l'athlète. Trois raisons,
@@ -24053,18 +24260,12 @@ function loadSessionManager(){
   go('s-session-manager');
   setTimeout(_majLiensClasser,0);
   if(!currentUser.sessions_config) initSessionsConfig();
-  // Migration : garantir 7 slots avec toutes les propriétés requises
-  let changed=false;
-  DAYS.forEach((day,i)=>{
-    if(!currentUser.sessions_config[i]){
-      currentUser.sessions_config[i]={day,name:'',photo:null,exercises:[],active:false,notes:''};
-      changed=true;
-    }
-    if(!Array.isArray(currentUser.sessions_config[i].exercises)){
-      currentUser.sessions_config[i].exercises=[];
-      changed=true;
-    }
-  });
+  // Migration : sept créneaux, un TABLEAU même si Firebase a rendu un objet,
+  // et des exercices rendables. `repares` retient s'il y avait vraiment
+  // quelque chose à réparer : lui seul déclenche l'enregistrement.
+  const _rapport={repares:0};
+  _normaliserSessionsConfig(currentUser,_rapport);
+  const changed=_rapport.repares>0;
   if(changed) saveUser();
   const sessions=currentUser.sessions_config;
   const container=document.getElementById('session-slots');
@@ -24335,7 +24536,10 @@ function parseVideoLinks(text){
 function openSessionExercises(idx){
   const cfg=currentUser.sessions_config||initSessionsConfig();
   if(!cfg[idx]) return;
-  if(!Array.isArray(cfg[idx].exercises)) cfg[idx].exercises=[];
+  // TOUT LE MONTAGE EST SOUS FILET, comme dans les deux éditeurs du coach :
+  // l'exception d'un seul maillon rendait le bouton muet.
+  try{
+  _assainirExercices(cfg[idx]);
   progEx=JSON.parse(JSON.stringify(cfg[idx].exercises));_photographierProgEx();
   // photo2 stripée de Firebase : restaurer depuis localStorage avant _prepProgEditor
   // (spécifique à la vue athlète — les autres appelants n'ont pas de photo2 en localStorage)
@@ -24362,6 +24566,7 @@ function openSessionExercises(idx){
   renderProgEx();
   go('s-coach-program');
   _progExDirty=false;
+  }catch(e){ return _echecOuvertureEditeur(e); }
   setTimeout(()=>{
     const scrollArea=document.querySelector('#s-coach-program .scroll-area');
     const exHeader=document.querySelector('#s-coach-program .exo-chip');
