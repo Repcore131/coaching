@@ -1037,7 +1037,10 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
    .nut-hud — pour qu elle appartienne visiblement a l application et pas a une
    affiche collee dessus. */
 .ma-carte{position:relative;overflow:hidden;border-radius:var(--r-4);
-  padding:16px 16px 14px;margin-bottom:20px;
+  /* 14 px EN BAS, et la photo les reprend par une marge negative : sans
+     photo le cadre respire, avec elle l image touche le bord comme sur la
+     maquette. */
+  padding:16px 16px 14px;margin-bottom:0;
   background:linear-gradient(168deg,#141414,#0c0c0c 52%,#080808);
   border:1px solid rgba(224,32,32,.5);
   box-shadow:0 0 26px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.045)}
@@ -1063,8 +1066,11 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
 .ma-photo{flex-shrink:0;height:132px;width:auto;max-width:46%;object-fit:contain;
   object-position:bottom;filter:grayscale(1) contrast(1.06);
   margin-bottom:-14px;align-self:flex-end}
-.ma-texte{margin-top:14px;padding-top:12px;font-size:var(--fs-sm);line-height:1.7;
-  color:var(--sub);border-top:1px solid rgba(224,32,32,.18)}
+/* NU, SOUS LA CARTE. Il portait un filet rouge et vivait dans le cadre ;
+   Kevin l en a sorti. Il garde la marge qui le separe de la citation et celle
+   qui le separe de la liste des seances. */
+.ma-texte{margin:14px 2px 20px;font-size:var(--fs-sm);line-height:1.7;
+  color:var(--sub)}
 @media (max-width:400px){
   .ma-carte{padding:13px 13px 11px}
   .ma-photo{height:112px}
@@ -5403,8 +5409,10 @@ const COACH_PHOTO='icons/coach.jpg';
           <blockquote class="ma-cit"><em>« L'esprit est la limite. Tant que l'esprit peut envisager le fait que vous pouvez faire quelque chose, vous pouvez le faire, tant que vous y croyez vraiment à 100 %. »</em><cite>A. Schwarzenegger</cite></blockquote>
           <img class="ma-photo" src="./img/arnold.png" alt="" onerror="this.remove()">
         </div>
-        <p class="ma-texte">Ainsi à l’entrainement, il faut éviter de se mettre des barrières et essayer : si vous souhaitez rester dans votre zone de confort, autant rester chez vous. Mais si vous voulez vraiment changer, dépassez-vous ! Cependant, veillez à bien maitriser une charge sur un mouvement donné avant de mettre plus de poids, nous ne sommes pas là pour entrainer l’ego. Si vous échouez ce n’est pas grave, il ne faut pas culpabiliser : vous avez juste besoin de travailler davantage et d’un temps d’adaptation pour réussir. Tant que vous donnez le maximum, vous valez mieux que beaucoup qui abandonnent dès les premières difficultés.</p>
       </div>
+      <!-- HORS DU CADRE, a la demande de Kevin : le cadre rouge encadre la
+           CITATION et sa photo, pas le commentaire qui les suit. -->
+      <p class="ma-texte">Ainsi à l’entrainement, il faut éviter de se mettre des barrières et essayer : si vous souhaitez rester dans votre zone de confort, autant rester chez vous. Mais si vous voulez vraiment changer, dépassez-vous ! Cependant, veillez à bien maitriser une charge sur un mouvement donné avant de mettre plus de poids, nous ne sommes pas là pour entrainer l’ego. Si vous échouez ce n’est pas grave, il ne faut pas culpabiliser : vous avez juste besoin de travailler davantage et d’un temps d’adaptation pour réussir. Tant que vous donnez le maximum, vous valez mieux que beaucoup qui abandonnent dès les premières difficultés.</p>
       <div id="session-slots"></div>
       <!-- Discret et en bas : ce tri n'est utile que si quelque chose n'a pas
            été reconnu, et le compteur reste masqué tant que la file est vide. -->

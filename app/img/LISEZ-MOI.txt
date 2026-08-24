@@ -1,0 +1,22 @@
+PHOTOS DE L'APPLICATION
+=======================
+
+Ce dossier porte les images que le gabarit reference par un chemin local.
+Rien ne va les chercher sur le reseau : le service worker sert l'application
+hors ligne, et privacy.html declare un par un les domaines contactes. Une
+image doit donc etre DEPOSEE ICI pour exister.
+
+FICHIER ATTENDU
+---------------
+  arnold.png   la photo qui accompagne la citation, en haut de « Mes seances ».
+               Fond transparent de preference (PNG detoure), environ 400 px de
+               large. Elle est affichee a 132 px de haut, alignee en bas.
+
+Tant qu'elle manque, le gabarit la retire de lui-meme — voir le `onerror` sur
+.ma-photo dans app/index.html — et la citation prend toute la largeur. Une
+image cassee serait pire que pas d'image.
+
+APRES L'AVOIR DEPOSEE
+---------------------
+  1. Copier le dossier vers _site/app/img/ avant le deploiement.
+  2. Pour qu'elle soit disponible hors ligne, l'ajouter aux ASSETS de sw.js.
