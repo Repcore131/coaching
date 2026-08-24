@@ -5487,6 +5487,16 @@ const COACH_PHOTO='icons/coach.jpg';
     <div id="rc-confirm-texte" style="white-space:pre-line;font-size:var(--fs-sm);color:var(--sub);line-height:1.65;margin-bottom:20px"></div>
     <div style="display:flex;flex-direction:column;gap:10px">
       <button id="rc-confirm-ok" class="btn btn-red">Confirmer</button>
+      <!-- LA TROISIEME ISSUE, masquee par defaut. Elle ne sort que par
+           rcConfirm3 : les quarante-neuf appels a rcConfirm ne la voient
+           jamais, et rcConfirm la remasque a chaque ouverture pour qu un
+           appel precedent ne la laisse pas trainer. -->
+      <!-- IL PORTE UN LIBELLE DES LE GABARIT, et pas seulement a l execution.
+           Un banc verifie qu aucun bouton rendu n est depourvu de glyphe : un
+           bouton vide dans le document tombe sous cette regle, meme masque.
+           rcConfirm3 le reecrit a chaque ouverture ; celui-ci est son seul
+           appelant, et dit donc a quoi le bouton sert. -->
+      <button id="rc-confirm-mid" class="btn btn-outline" style="display:none">Quitter sans enregistrer</button>
       <button id="rc-confirm-non" class="btn btn-outline">Annuler</button>
     </div>
   </div>
@@ -25367,6 +25377,10 @@ function rcConfirm(titre,texte,libelleOk,libelleNon){
   t.textContent=titre; x.textContent=texte||'';
   ok.textContent=libelleOk||'Confirmer';
   non.textContent=libelleNon||'Annuler';
+  // Le panneau est PARTAGE : sans cette ligne, un rcConfirm3 precedent
+  // laisserait sa troisieme issue visible sur la boite suivante.
+  const _mid=document.getElementById('rc-confirm-mid');
+  if(_mid){ _mid.style.display='none'; _mid.onclick=null; }
   _feuilleOuvrir('rc-confirm');
   return new Promise(res=>{
     // REGLE 7 : on resout D'ABORD, on anime ensuite. Quarante-neuf messages
@@ -25380,6 +25394,45 @@ function rcConfirm(titre,texte,libelleOk,libelleNon){
     // Toucher le voile ANNULE : sur un geste irreversible, le toucher flou
     // doit aller vers le refus.
     z.onclick=e=>{ if(e.target===z) fermer(false); };
+  });
+}
+// TROIS ISSUES, ET NON DEUX. Le meme panneau que rcConfirm, avec un bouton de
+// plus au milieu — meme calque, meme forme, meme fermeture : deux boites
+// differentes pour deux decisions du meme ecran donneraient l impression que
+// l une vient d ailleurs.
+//
+// Elle rend 'ok', 'milieu' ou null, et non un booleen : a trois issues, `true`
+// et `false` ne suffisent plus, et un appelant qui oublierait le troisieme cas
+// tomberait dans le `else` du refus — le plus sur des deux, mais pas ce qu il
+// voulait dire.
+//
+// LE VOILE ET L ANNULATION RENDENT null. Sur un geste irreversible, le toucher
+// flou va vers le refus : c est la regle deja posee par rcConfirm.
+function rcConfirm3(titre,texte,libelleOk,libelleMilieu,libelleNon){
+  const z=document.getElementById('rc-confirm');
+  const t=document.getElementById('rc-confirm-titre');
+  const x=document.getElementById('rc-confirm-texte');
+  const ok=document.getElementById('rc-confirm-ok');
+  const mid=document.getElementById('rc-confirm-mid');
+  const non=document.getElementById('rc-confirm-non');
+  if(!z||!t||!x||!ok||!mid||!non)
+    return Promise.resolve(confirm(titre)?'ok':null);
+  t.textContent=titre; x.textContent=texte||'';
+  ok.textContent=libelleOk||'Confirmer';
+  mid.textContent=libelleMilieu||'';
+  mid.style.display='';
+  non.textContent=libelleNon||'Annuler';
+  _feuilleOuvrir('rc-confirm');
+  return new Promise(res=>{
+    const fermer=v=>{
+      ok.onclick=null; mid.onclick=null; non.onclick=null; z.onclick=null;
+      mid.style.display='none';
+      res(v);
+      _feuilleFermer('rc-confirm'); };
+    ok.onclick=()=>fermer('ok');
+    mid.onclick=()=>fermer('milieu');
+    non.onclick=()=>fermer(null);
+    z.onclick=e=>{ if(e.target===z) fermer(null); };
   });
 }
 // UN SEUL BOUTON, pour ce qui n’appelle pas de décision — le remplaçant
@@ -25471,9 +25524,63 @@ async function finishWorkoutEarly(){
       ?('Tes '+fait+' série'+(fait>1?'s':'')+' validée'+(fait>1?'s':'')
         +' sont enregistrées, mais la séance sera terminée : pour la refaire, tu repartiras de zéro.')
       :'La séance sera terminée : pour la refaire, tu repartiras de zéro.');
-  if(!await rcConfirm('Abandonner la séance ?',msg,'Abandonner')) return;
+  // TROIS ISSUES, DEPUIS LE 24/08/2026. Demande de Kevin : « les gens se
+  // trompant de seance ». Ouvrir la mauvaise seance, s en apercevoir, et
+  // n avoir que « Abandonner » sous la main, c est inscrire dans l historique
+  // — et sur la fiche du coach — une seance commencee puis abandonnee qui n a
+  // jamais eu lieu. La troisieme issue ferme la seance sans rien ecrire.
+  //
+  // LE MESSAGE NOMME CE QUE CHAQUE ISSUE FAIT, et il change selon qu il y a
+  // des series validees ou non : quitter sans enregistrer EFFACE ces series,
+  // et cela ne doit pas se decouvrir apres coup.
+  const _quoi=fait
+    ?('« Abandonner » termine la séance et garde tes '+fait+' série'
+      +(fait>1?'s':'')+' dans ton historique.'+String.fromCharCode(10)
+      +'« Quitter sans enregistrer » les efface : rien ne sera inscrit, ni sur '
+      +'ton accueil, ni chez ton coach.')
+    :('« Abandonner » termine quand même la séance : elle apparaîtra comme '
+      +'commencée puis abandonnée.'+String.fromCharCode(10)
+      +'« Quitter sans enregistrer » ne laisse aucune trace, ni sur ton accueil, '
+      +'ni chez ton coach.');
+  const choix=await rcConfirm3('Quitter la séance ?',msg+String.fromCharCode(10)
+    +String.fromCharCode(10)+_quoi,
+    'Abandonner','Quitter sans enregistrer','Annuler');
+  if(choix===null) return;
+  if(choix==='milieu') return quitterSeanceSansEnregistrer();
   localStorage.removeItem('rc_wo_state');
   finishWorkout(true);
+}
+// QUITTER SANS RIEN ECRIRE. C est le seul chemin de sortie qui ne passe PAS
+// par finishWorkout, et c est tout l objet : finishWorkout pousse la seance
+// dans currentUser.sessions puis appelle saveUser — c est de la que viennent
+// la ligne sur l accueil et la seance visible par le coach.
+//
+// CE QU IL FAUT DEFAIRE MALGRE TOUT :
+//   le minuteur de seance et celui de repos, qui repeignent un ecran quitte ;
+//   le drapeau du service worker, pose a SEANCE_EN_COURS au lancement — sans
+//     quoi il garde la seance pour en cours jusqu au prochain demarrage ;
+//   l instantane rc_wo_state, sinon la seance est proposee a la reprise.
+//
+// woState.termine EST POSE, et c est un verrou, pas une decoration :
+// finishWorkout sort en premiere ligne quand il le voit. Un appel tardif —
+// une minuterie en vol, un retour d ecran — ne peut donc plus enregistrer ce
+// qu on vient de decider de ne pas enregistrer.
+//
+// RIEN N A ETE ECRIT AU LANCEMENT qu il faille reprendre : launchWorkout ne
+// touche ni currentUser.sessions ni saveUser. Il incremente un compteur
+// anonyme, rcm('first_workout_started'), qui ne porte aucun identifiant et ne
+// remonte a personne.
+function quitterSeanceSansEnregistrer(){
+  try{ _swSeance('SEANCE_TERMINEE'); }catch(e){}
+  try{ localStorage.removeItem('rc_wo_state'); }catch(e){}
+  if(woState){
+    woState.termine=true;
+    try{ clearInterval(woState.timerInterval); }catch(e){}
+  }
+  try{ annulerRepos(); }catch(e){}
+  toast('Séance quittée. Rien n\'a été enregistré.');
+  go('s-client-home');
+  try{ loadClientHome(); }catch(e){}
 }
 document.addEventListener('visibilitychange',()=>{
   if(document.hidden&&woState?.exercises?.length) woPersist();

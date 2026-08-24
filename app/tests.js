@@ -19673,6 +19673,104 @@ function testExercices(){
     })();
 
 
+
+    // ══════ QUITTER UNE SEANCE SANS RIEN ECRIRE ══════
+    // Demande de Kevin, 24/08/2026 : « les gens se trompant de seance ».
+    // Ouvrir la mauvaise seance et n avoir que « Abandonner » sous la main,
+    // c est inscrire dans l historique — et sur la fiche du coach — une seance
+    // commencee puis abandonnee qui n a jamais eu lieu.
+    //
+    // AUCUNE DE CES ASSERTIONS NE REND UNE PROMESSE. `ok` ne regarde que la
+    // veracite de son second argument, et une promesse est toujours vraie :
+    // un test qui en rendrait une serait vert quoi qu il arrive. Tout ce qui
+    // est verifie ici est donc SYNCHRONE — le panneau resout et remet ses
+    // boutons en place dans le meme tour, c est sa regle.
+    (function(){
+      const _sU=currentUser, _sW=(typeof woState!=='undefined'?woState:null);
+      const _sSave=window.saveUser, _sGo=window.go, _sLoad=window.loadClientHome;
+      const _sToast=window.toast, _sWo=localStorage.getItem('rc_wo_state');
+      try{
+        ok('Quitter sans enregistrer N ECRIT RIEN : ni seance, ni saveUser',(()=>{
+          // C est tout l objet de ce chemin : finishWorkout pousse la seance
+          // dans currentUser.sessions puis appelle saveUser, et c est de la que
+          // viennent la ligne sur l accueil et la seance vue par le coach.
+          let ecrit=0, alle='';
+          window.saveUser=()=>{ ecrit++; return true; };
+          window.go=(id)=>{ alle=id; };
+          window.loadClientHome=()=>{};
+          window.toast=()=>{};
+          currentUser={id:'q1',email:'q@t',role:'athlete',exAlias:{},exMuscles:{},
+            sessions:[]};
+          localStorage.setItem('rc_wo_state','{"factice":1}');
+          woState={startTime:Date.now()-600000,exercises:[{name:'Squat',series:3}],
+            sessionData:{0:{sets:[{done:true,weight:100,reps:5}]}},timerInterval:null};
+          quitterSeanceSansEnregistrer();
+          if(currentUser.sessions.length!==0)
+            return _echec(currentUser.sessions.length+' seance(s) enregistree(s)');
+          if(ecrit!==0) return _echec('saveUser appele '+ecrit+' fois');
+          return alle==='s-client-home'?true:_echec('renvoye vers '+alle);})());
+        ok('L instantane de reprise est efface',(()=>{
+          // Sans cela, la seance quittee serait reproposee au lancement suivant,
+          // comme une seance a reprendre.
+          return localStorage.getItem('rc_wo_state')===null
+            ?true:_echec('rc_wo_state survit');})());
+        ok('Le verrou est pose : un finishWorkout tardif n enregistre plus',(()=>{
+          // Une minuterie en vol, un retour d ecran : finishWorkout peut encore
+          // etre appele apres coup. Il sort en premiere ligne quand il voit
+          // woState.termine — la meme idempotence qui protege le chemin normal.
+          if(!woState||woState.termine!==true)
+            return _echec('woState.termine vaut '+(woState&&woState.termine));
+          const avant=currentUser.sessions.length;
+          try{ finishWorkout(true); }catch(e){ return _echec('exception : '+e.message); }
+          return currentUser.sessions.length===avant
+            ?true:_echec('une seance a ete enregistree apres coup');})());
+        ok('Le dialogue de sortie propose bien TROIS issues',(()=>{
+          const src=String(finishWorkoutEarly);
+          if(src.indexOf('rcConfirm3')<0) return _echec('il reste binaire');
+          if(src.indexOf('Quitter sans enregistrer')<0)
+            return _echec('la troisieme issue n est pas nommee');
+          if(src.indexOf('quitterSeanceSansEnregistrer')<0)
+            return _echec('elle ne mene pas au chemin sans ecriture');
+          // Et « Abandonner » garde EXACTEMENT son comportement d avant.
+          return /finishWorkout\(true\)/.test(src)
+            ?true:_echec('le chemin « Abandonner » a bouge');})());
+        ok('rcConfirm3 ouvre son bouton du milieu, et le referme en partant',(()=>{
+          const mid=document.getElementById('rc-confirm-mid');
+          if(!mid) return _echec('le bouton du milieu n est pas dans le gabarit');
+          rcConfirm3('T','x','A','B','C');
+          if(mid.style.display==='none') return _echec('il ne s affiche pas');
+          if(typeof mid.onclick!=='function') return _echec('aucun gestionnaire pose');
+          mid.click();
+          // `fermer` remet l affichage et debranche les gestionnaires AVANT de
+          // resoudre : les deux sont donc lisibles tout de suite.
+          if(mid.style.display!=='none') return _echec('il reste visible apres le clic');
+          return mid.onclick===null?true:_echec('le gestionnaire survit au clic');})());
+        ok('Les trois issues de rcConfirm3 rendent trois valeurs distinctes',(()=>{
+          // Lues sur la source : la resolution passe par une micro-tache, et
+          // `ok` est synchrone. Ce que la source dit ici, le test du dessus
+          // prouve que la fermeture l execute.
+          const src=String(rcConfirm3);
+          const manque=["fermer('ok')","fermer('milieu')","fermer(null)"]
+            .filter(x=>src.indexOf(x)<0);
+          return manque.length?_echec('absent : '+manque.join(', ')):true;})());
+        ok('rcConfirm ne laisse jamais fuir le bouton du milieu',(()=>{
+          // Le panneau est partage par quarante-neuf appels. Sans la remise a
+          // zero, une boite a trois issues laisserait la sienne visible sur la
+          // suivante.
+          const mid=document.getElementById('rc-confirm-mid');
+          mid.style.display='';
+          rcConfirm('T','x','Oui','Non');
+          const cache=(mid.style.display==='none');
+          document.getElementById('rc-confirm-non').click();
+          return cache?true:_echec('le bouton du milieu est reste visible');})());
+      } finally {
+        currentUser=_sU; woState=_sW;
+        window.saveUser=_sSave; window.go=_sGo; window.loadClientHome=_sLoad;
+        window.toast=_sToast;
+        if(_sWo==null) localStorage.removeItem('rc_wo_state');
+        else localStorage.setItem('rc_wo_state',_sWo);
+      }
+    })();
     // ══════ LES QUATRE CADRANS DE LA DIETE STRICTE ══════
     // Maquette de Kevin, 24/08/2026. Les quatre tuiles plates qu'ils remplacent
     // n'avaient aucune assertion a elles.
