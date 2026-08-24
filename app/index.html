@@ -937,9 +937,12 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
   letter-spacing:.4px;color:var(--text);text-transform:uppercase;margin-top:4px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   transform:skewX(-9deg);transform-origin:left center}
-/* `em` sans italique : il ne porte ici que la couleur du second mot. */
-.oa-titre em{font-style:normal;color:var(--red-text);
-  --halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)}
+/* `em` sans italique : il ne porte ici que la COULEUR du second mot, et rien
+   d autre. Il portait aussi --halo-2, dont le second voile fait 30 px de flou :
+   sur un mot de 22 px, ce n est plus un halo mais un rectangle clair derriere
+   le texte — Kevin l a vu comme un surlignage, et il avait raison. La maquette
+   donne « ENTRAINEMENT » en rouge plein, sans lueur. */
+.oa-titre em{font-style:normal;color:var(--red-text)}
 .oa-pal{flex-shrink:0;display:inline-flex;align-items:center;gap:5px;
   padding:7px 8px;border-radius:10px;color:var(--text);white-space:nowrap;
   font-family:Montserrat,sans-serif;font-size:11px;font-weight:700;
