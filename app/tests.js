@@ -6341,6 +6341,26 @@ function testExercices(){
           // Repère de terrain, jamais une prescription.
           return /couleur des urines/.test(t)
             ?true:_echec('le registre « repère de terrain » a disparu');})());
+        ok('Le registre de l\'eau est en DEUX phrases, sans tiret',(()=>{
+          // « pas une mesure — la couleur des urines » se lisait comme si la
+          // couleur des urines etait ce qui n'est pas une mesure, alors que
+          // c'est le repere en litres. Corrige le 24/08/2026.
+          if(/mesure\s*[—-]/.test(EAU_REGISTRE))
+            return _echec('le tiret est encore là : '+EAU_REGISTRE);
+          return /pas une mesure\. La couleur/.test(EAU_REGISTRE)
+            ?true:_echec(EAU_REGISTRE);})());
+        ok('L\'hydratation se rend SOUS « Copier la journée d\'hier »',(()=>{
+          // Elle etait tout en haut de l'ecran, au-dessus du bouton et collee
+          // a lui. Demande de Kevin, 24/08/2026.
+          const src=String(_renderFjDaySummary);
+          const iBtn=src.indexOf('copierHier()');
+          const iEau=src.indexOf('_htmlHydratationNut');
+          if(iBtn<0) return _echec('le bouton de copie a disparu');
+          if(iEau<0) return _echec('le journal ne rend pas l\'hydratation');
+          if(iEau<iBtn) return _echec('elle est encore au-dessus du bouton');
+          // Et elle n'est plus rendue en haut de l'ecran : une seule fois.
+          return !/_htmlHydratationNut/.test(String(loadNutrition))
+            ?true:_echec('elle sort encore en haut de l\'écran');})());
         ok('Elle reste AUSSI sur la progression et en fiche coach',(()=>{
           // Rien n'a été retiré : un appel a été ajouté.
           if(!/_htmlHydratation\(/.test(String(renderVolume)))

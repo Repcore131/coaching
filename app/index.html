@@ -28423,7 +28423,11 @@ function besoinEau(user,jourEstOn){
   const ml=EAU_ML_PAR_KG*poids+(jourEstOn?EAU_ML_PAR_SEANCE:0);
   return Math.round(ml/100)/10;
 }
-const EAU_REGISTRE='Repère de terrain, pas une mesure — la couleur des urines en '
+// DEUX PHRASES, ET NON UNE COUPEE PAR UN TIRET. « pas une mesure — la couleur
+// des urines » se lisait comme si la couleur des urines etait ce qui n est pas
+// une mesure, alors que c est le repere en litres qui ne l est pas. Corrige
+// sur demande de Kevin, 24/08/2026.
+const EAU_REGISTRE='Repère de terrain, pas une mesure. La couleur des urines en '
   +'dit plus qu\'un calcul.';
 function phraseBesoinEau(user,jourEstOn){
   const l=besoinEau(user,jourEstOn);
@@ -40148,14 +40152,16 @@ function _renderNutriContent(type,dateAff){
       ${_htmlRecuperationAthlete(currentUser)}
       ${_htmlAjustement(currentUser,false)}
       <div id="nut-rings-slot">${_renderStrictMacroRings(nut)}</div>
-      <!-- LA NAVIGATION DU JOURNAL ET SA CONSIGNE, AU-DESSUS DE L HYDRATATION.
+      <!-- LA NAVIGATION DU JOURNAL ET SA CONSIGNE.
            Demande de Kevin : le geste d ajouter un aliment se decide juste
            apres avoir lu ses cibles, pas apres avoir descendu tout l ecran.
            Le journal lui-meme — les repas, les aliments — reste plus bas, dans
            #fj-today-section : c est une liste, elle se consulte, elle ne se
            decide pas. -->
       <div id="fj-nav-slot"></div>
-      ${_htmlHydratationNut(currentUser)}
+      <!-- L HYDRATATION A QUITTE CET ENDROIT. Elle se rend desormais dans le
+           journal, SOUS « Copier la journee d hier » : demande de Kevin, du
+           24/08/2026. Elle etait au-dessus du bouton, et collee a lui. -->
       ${_renderCycleNutSettings(nut)}`;
     // LE JOUR VISÉ, ou aujourd'hui à défaut. Cette ligne ramenait le journal à
     // aujourd'hui après chaque rendu : un aliment ajouté à un jour passé
@@ -45242,7 +45248,13 @@ function _renderFjDaySummary(date){
     ${_htmlSelSemaine(currentUser)}
     ${_microHtml}
     ${_htmlDernierAjout(date)}
-    ${isToday?`<button onclick="copierHier()" style="width:100%;margin-bottom:12px;padding:10px 0;background:none;border:1px dashed var(--border);border-radius:var(--r-3);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;cursor:pointer">Copier la journée d'hier</button>`:''}
+    <!-- 22 px SOUS LE BOUTON, ET NON 12. Le bloc d hydratation porte lui-meme
+         une marge haute de 14 px, et deux marges voisines se fondent en la plus
+         grande : 12 en donnaient donc 14, et les deux paraissaient colles. C est
+         la marge du BOUTON qu on ouvre, pas celle du bloc — ce dernier est
+         partage avec l ecran de progression et la fiche coach. -->
+    ${isToday?`<button onclick="copierHier()" style="width:100%;margin-bottom:22px;padding:10px 0;background:none;border:1px dashed var(--border);border-radius:var(--r-3);color:var(--sub);font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:700;letter-spacing:1px;cursor:pointer">Copier la journée d'hier</button>`:''}
+    ${_htmlHydratationNut(currentUser)}
     ${repasOrder.filter(r=>grouped[r]).map(r=>`
       <div style="margin-bottom:14px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
