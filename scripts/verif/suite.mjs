@@ -19,6 +19,22 @@ const ev = async x => {
   return r.result.value;
 };
 console.log('titre :', await ev('document.title'));
+// LE SERVICE WORKER D'UNE SESSION PRECEDENTE SERVAIT L'ANCIEN tests.js. Il
+// n'est pas dans ASSETS, mais l'enregistrement survit au profil et sa reponse
+// en cache passe avant le serveur local : on modifiait un test, on relançait,
+// et le rapport ne bougeait pas d'une ligne. On part d'une ardoise vide.
+console.log('nettoyage :', await ev(`(async()=>{ try{
+  const rs=await navigator.serviceWorker.getRegistrations();
+  for(const r of rs) await r.unregister();
+  for(const k of await caches.keys()) await caches.delete(k);
+  return 'sw + caches vides'; }catch(e){ return 'echec '+String(e&&e.message||e); } })()`));
+// LA TABLE CIQUAL EST CHARGEE AVANT, ET CELA CHANGE LA TAILLE DE LA SUITE.
+// Sans elle, un test de substitution levait a mi-parcours ; la suite est un
+// seul try, si bien que TOUT ce qui suivait ne s'executait plus. Mesure :
+// 2 117 tests joues sans ce chargement, 3 729 avec — 1 612 assertions
+// passaient pour absentes, et un lot pouvait en casser sans qu'on le voie.
+console.log('ciqual :', await ev(`(async()=>{ try{ await _loadCiqual(); return 'chargee'; }
+  catch(e){ return 'echec '+String(e&&e.message||e); } })()`));
 const rap = await ev(`(async()=>{ try{ const r=await chargerTests();
   return {total:r.total,echecs:r.echecs,
     liste:r.detail.filter(x=>!x.ok).map(x=>x.n+(x.d?' → '+x.d:''))}; }

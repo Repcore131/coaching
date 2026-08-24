@@ -44,7 +44,21 @@ version qui divergerait au premier changement.
 node scripts/verif/suite.mjs "http://127.0.0.1:8799/index.html"
 ```
 
-Rend `{total, echecs, liste}`. Une trentaine d'échecs sont attendus hors
-navigateur réel : écrans non montés, table Ciqual non chargée, service worker
-absent. **Comparer à une base** avant de conclure à une régression : relever
-le chiffre sur `git stash`, puis sur la version modifiée.
+Rend `{total, echecs, liste}`. Une cinquantaine d'échecs sont attendus hors
+navigateur réel : écrans non montés, service worker absent. **Comparer à une
+base** avant de conclure à une régression : relever le chiffre sur
+`git stash`, puis sur la version modifiée.
+
+### Deux pièges qui faisaient mentir le rapport
+
+**Le service worker d'une session précédente sert l'ancien `tests.js`.** Il
+n'est pas dans ses `ASSETS`, mais l'enregistrement survit au profil Chrome et
+sa réponse passe avant le serveur local. On modifie un test, on relance, le
+rapport ne bouge pas — et on croit que le test n'existe pas. Le script
+désenregistre et vide les caches avant de commencer.
+
+**La table Ciqual doit être chargée AVANT la suite.** Sans elle, un test de
+substitution lève à mi-parcours ; la suite étant un seul `try`, tout ce qui
+suivait ne s'exécutait plus. Mesuré : **2 117** tests joués sans ce
+chargement, **3 729** avec. 1 612 assertions passaient pour absentes, et un
+lot pouvait en casser sans que rien ne l'indique.
