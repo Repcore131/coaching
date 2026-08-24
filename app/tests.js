@@ -19672,6 +19672,79 @@ function testExercices(){
           ?true:_echec(JSON.stringify(g.macros.sel)+' / '+g.note);})());
     })();
 
+
+    // ══════ LES QUATRE CADRANS DE LA DIETE STRICTE ══════
+    // Maquette de Kevin, 24/08/2026. Les quatre tuiles plates qu'ils remplacent
+    // n'avaient aucune assertion a elles.
+    (function(){
+      const H=()=>OA_MACROS.map((m,i)=>htmlCadranOA(m,[2678,285,164,98][i])).join('');
+      ok('Quatre cadrans, dans l\'ordre kcal, prot, gluc, lip',(()=>{
+        if(OA_MACROS.length!==4) return _echec(OA_MACROS.length+' macros');
+        const l=OA_MACROS.map(m=>m.cle).join(',');
+        if(l!=='kcal,p,c,l') return _echec(l);
+        const h=H();
+        const lbl=[...h.matchAll(/class="oa-lbl">([^<]*)</g)].map(x=>x[1]);
+        return lbl.join('|')==='Kcal|Prot|Gluc|Lip'?true:_echec(lbl.join('|'));})());
+      ok('Une couleur par cadran, ECRITE UNE SEULE FOIS, sur --c',(()=>{
+        // Le cadre, la lueur, l\'anneau, l\'icone, le libelle et la pastille la
+        // relisent : changer une teinte, c\'est changer UNE valeur, pas six.
+        const h=H();
+        const coul=[...h.matchAll(/style="--c:([^"]+)"/g)].map(x=>x[1]);
+        if(coul.length!==4) return _echec(coul.length+' declarations de couleur');
+        if(new Set(coul).size!==4) return _echec('deux cadrans partagent une teinte');
+        // Aucune de ces couleurs ne doit reapparaitre en dur ailleurs dans la tuile.
+        const dur=coul.filter(c=>h.split(c).length-1>1);
+        return dur.length?_echec('couleur reecrite en dur : '+dur.join(', ')):true;})());
+      ok('L\'ARC N\'EST PAS UNE JAUGE : aucune piste, et le meme sur les quatre',(()=>{
+        // Ce bloc affiche des CIBLES. En diete stricte le journal n\'est pas
+        // rendu : il n\'existe aucun consomme a comparer. Un arc partiel devant
+        // un rail gris se lirait comme une progression, et mentirait.
+        const h=H();
+        if(/oa-piste/.test(h)) return _echec('une piste est rendue sous l\'arc');
+        const arcs=[...h.matchAll(/stroke-dasharray="([^"]+)"/g)].map(x=>x[1]);
+        if(arcs.length!==4) return _echec(arcs.length+' arcs');
+        return new Set(arcs).size===1
+          ?true:_echec('les arcs different : '+arcs.join(' | '));})());
+      ok('Sans valeur, un tiret — jamais un zero',(()=>{
+        // Un « 0 » en face de « / objectif » annoncerait une cible nulle.
+        const h=htmlCadranOA(OA_MACROS[0],null);
+        return /class="oa-nb">—/.test(h)?true:_echec(h.slice(0,160));})());
+      ok('Le titre porte son second mot en rouge, et suit le jour ON/OFF',(()=>{
+        const src=String(_htmlPlanAthlete);
+        if(src.indexOf('<em>entraînement</em>')<0)
+          return _echec('le jour ON ne met pas « entraînement » en valeur');
+        return src.indexOf('<em>repos</em>')>=0
+          ?true:_echec('le jour OFF n\'a pas son equivalent');})());
+      ok('AJUSTER ne sort pas sans coach joignable',(()=>{
+        // Meme regle que sur l\'accueil : sans coach rattache, aucun bouton et
+        // aucun message. Il n\'y a rien a expliquer a qui n\'a rien demande.
+        const sauve=currentUser, sdb=DB.get('users');
+        try{
+          const u={id:'pa',email:'pa@t',role:'athlete',exAlias:{},exMuscles:{},sessions:[]};
+          currentUser=u; DB.set('users',{'pa@t':u});
+          if(_htmlAjusterOA(u)!=='') return _echec('un bouton sort sans coach');
+          const c={id:'pa',email:'pa@t',role:'athlete',coachId:'c9',coachEmailKey:'c@t',
+            exAlias:{},exMuscles:{},sessions:[]};
+          currentUser=c; DB.set('users',{'pa@t':c,'c@t':{id:'c9',email:'c@t',role:'coach'}});
+          return /class="oa-ajuster"/.test(_htmlAjusterOA(c))
+            ?true:_echec('aucun bouton avec un coach joignable');
+        } finally { currentUser=sauve; if(sdb) DB.set('users',sdb); }})());
+      ok('DEUX colonnes, pas quatre : la colonne de l\'app fait 440 px',(()=>{
+        // `body` porte max-width:480px et `.pad` lui prend 40 px, sur un
+        // telephone comme sur un ecran de bureau. Quatre cadrans y feraient
+        // 100 px : mesure au navigateur, le nombre deborde de l\'anneau et
+        // « APPORT ENERGETIQUE » se coupe en plein mot.
+        const d=document.createElement('div');
+        d.style.cssText='position:absolute;left:-9999px;top:0;width:440px';
+        d.innerHTML='<div class="oa-grille"><i></i><i></i><i></i><i></i></div>';
+        document.body.appendChild(d);
+        let n=0;
+        try{
+          const g=d.querySelector('.oa-grille');
+          n=(getComputedStyle(g).gridTemplateColumns||'').trim().split(/\s+/).filter(Boolean).length;
+        } finally { d.remove(); }
+        return n===2?true:_echec(n+' colonnes');})());
+    })();
     // ══════ LA PHRASE DU JOUR : 365 TEXTES, ET AUCUN AUTEUR ══════
     // Ce jeu-ci n'avait AUCUNE assertion — ni l'ancien, ni celui d'avant. Il
     // vient d'etre remplace entierement, texte pour texte, a la demande de
@@ -31499,7 +31572,15 @@ function testExercices(){
           finally{ currentUser=_s; _ciqualDB=_sDB; }
           if(!/Volaille/.test(h)) return _echec('la source n\'est pas rendue');
           if(/pour 100 g/.test(h)) return _echec('la valeur pour 100 g est encore là');
-          return /\d+<span[^>]*> g<\/span>/.test(h)?true:_echec('la quantité par repas manque');})());
+          // LE MOTIF VISAIT LES TUILES, PAS LE TABLEAU. « ...<span> g</span> »
+          // n'était produit nulle part par le sous-tableau de sources : c'est
+          // l'ancienne fabrique `tuile` des quatre macros qui le rendait, en
+          // haut de la même page. Ce test passait donc au vert sans jamais
+          // regarder ce qu'il annonce, et il est tombé le jour où la carte des
+          // objectifs a change de balisage — 24/08/2026. planTableau4 rend la
+          // quantité dans une cellule `p4-q` : c'est elle qu'on mesure.
+          return /<td class="p4-q"[^>]*>\d+ g<\/td>/.test(h)
+            ?true:_echec('la quantité par repas manque');})());
         ok('Le récapitulatif porte la table des fruits et les notes de cheatmeal',(()=>{
           const u=_pa({nutrition:Object.assign(_macros({kcal:2600,p:200,g:300,l:70,f:36}),
             {plan:{squelette:[{id:'a',repas:'midi',ciqual:4,q:250,u:'g'}],

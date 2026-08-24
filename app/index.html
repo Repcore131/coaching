@@ -896,6 +896,147 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
   .fj-mini{gap:11px}
   .fj-mini-lbl{letter-spacing:.6px}
 }
+/* ══ OBJECTIFS ALIMENTAIRES : LA CARTE DU PLAN, EN DIETE STRICTE ═══════════
+   Maquette de Kevin, 24/08/2026, reprise trait pour trait. Elle remplace
+   quatre tuiles plates par quatre cadrans colores : une couleur par macro,
+   posee UNE SEULE FOIS sur --c, que le cadre, la lueur, l anneau, le chiffre,
+   le libelle et la pastille relisent. Changer une teinte, c est changer une
+   valeur. */
+.oa-carte{position:relative;border-radius:22px;padding:20px 20px 18px;
+  margin-bottom:22px;background:linear-gradient(180deg,#0f0f0f,#070707);
+  border:1px solid rgba(224,32,32,.5);
+  box-shadow:0 0 30px rgba(224,32,32,.24),inset 0 1px 0 rgba(255,255,255,.045)}
+/* ── L en-tete ───────────────────────────────────────────────────────── */
+.oa-tete{display:flex;align-items:center;gap:14px;margin-bottom:17px;flex-wrap:wrap}
+.oa-boul{flex-shrink:0;width:46px;height:46px;border-radius:13px;
+  display:inline-grid;place-items:center;color:var(--red-text);
+  border:1px solid rgba(224,32,32,.42);background:rgba(224,32,32,.07);
+  box-shadow:0 0 15px rgba(224,32,32,.2),inset 0 1px 0 rgba(255,255,255,.05)}
+/* SANS min-width:0, ET C EST CE QUI DECIDE DE LA MISE EN PAGE. La largeur
+   minimale de ce bloc devient celle du titre, qui ne se coupe pas : quand les
+   440 px de la colonne ne suffisent plus a tenir la pastille des semaines a
+   cote, c est ELLE qui passe a la ligne, et le titre garde son corps. Sur un
+   ecran plus large, les trois se rangent sur un rang comme sur la maquette. */
+.oa-titres{flex:1 1 auto}
+/* LE SKEW, JAMAIS font-style:italic. Bebas Neue n est chargee qu en romain et
+   le navigateur en fabriquerait une oblique baveuse — meme regle que .nut-titre. */
+/* 12 px ET 2,2 D INTERLETTRAGE, mesure au navigateur : a 13/3,2,
+   « OBJECTIFS ALIMENTAIRES » demande 202 px pour les ~215 que laissent la
+   pastille de gauche et celle de droite, et passait a la ligne. */
+.oa-sur{font-family:var(--pile-titre);font-size:12px;line-height:1;
+  letter-spacing:2.2px;color:#8a8a8a;text-transform:uppercase;
+  transform:skewX(-9deg);transform-origin:left center}
+/* IL NE SE COUPE JAMAIS. « JOUR D ENTRAINEMENT » sur deux lignes perdait la
+   forme meme du titre — c est le seul element de la carte qu on lit de loin. */
+.oa-titre{font-family:var(--pile-titre);font-size:26px;line-height:1;white-space:nowrap;
+  letter-spacing:1px;color:var(--text);text-transform:uppercase;margin-top:6px;
+  transform:skewX(-9deg);transform-origin:left center}
+/* `em` sans italique : il ne porte ici que la couleur du second mot. */
+.oa-titre em{font-style:normal;color:var(--red-text);
+  --halo-c:rgba(224,32,32,.55);text-shadow:var(--halo-2)}
+/* margin-left:auto : quand elle passe a la ligne faute de place, elle reste
+   a DROITE, comme sur la maquette. */
+.oa-pal{flex-shrink:0;margin-left:auto;display:inline-flex;align-items:center;gap:9px;
+  padding:9px 13px;border-radius:12px;color:var(--text);
+  font-family:Montserrat,sans-serif;font-size:var(--fs-sm);font-weight:700;
+  background:rgba(224,32,32,.09);border:1px solid rgba(224,32,32,.45);
+  box-shadow:0 0 16px rgba(224,32,32,.18)}
+.oa-pal .oa-cal{color:var(--red-text);display:inline-flex}
+.oa-pal .oa-chev{color:var(--red-text);display:inline-flex;opacity:.9}
+/* ── Les quatre cadrans ──────────────────────────────────────────────── */
+/* DEUX PAR DEUX, ET NON QUATRE DE FRONT. La maquette est dessinee sur 1 875 px ;
+   l app n en aura jamais autant. `body` porte max-width:480px et `.pad` lui
+   prend 40 px : la colonne fait 440 px UTILES, sur un telephone comme sur un
+   ecran de bureau — c est une app en forme de telephone, cadree au centre.
+   Quatre cadrans y feraient 100 px chacun : mesure au navigateur, le nombre
+   deborde de l anneau et « APPORT ENERGETIQUE » se coupe en plein mot. Plies
+   en deux, ils gardent 205 px et rendent exactement ce que montre la maquette.
+   Ce n est pas une media query : la colonne ne depend pas de la fenetre. */
+.oa-grille{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.oa-t{--c:#8a8a8a;position:relative;overflow:hidden;border-radius:17px;
+  padding:13px 12px 12px;display:flex;flex-direction:column;align-items:center;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--c) 6%,#0b0b0b),#060606);
+  border:1px solid color-mix(in srgb,var(--c) 40%,transparent);
+  box-shadow:0 0 13px color-mix(in srgb,var(--c) 16%,transparent),
+    inset 0 1px 0 rgba(255,255,255,.05)}
+/* LA LUEUR DE FOND, A LA PLACE DE LA PHOTO. La maquette pose une image dans
+   chaque tuile — haltere, dosette de whey, graines, huile. Aucune n est dans
+   le depot, et rien ne peut aller les chercher : le service worker sert hors
+   ligne et privacy.html declare les domaines un par un. En attendant qu elles
+   arrivent, ce halo tient leur place et leur role : donner du volume au coin
+   droit sans jamais passer devant le chiffre. */
+/* CENTREE SUR L ANNEAU, ET NON POUSSEE A DROITE. Un halo colle au bord droit
+   lavait la tuile entiere ; sur la maquette, la lueur nait DERRIERE le cadran
+   et s eteint avant les bords. */
+.oa-t::before{content:'';position:absolute;left:50%;top:46%;width:132%;height:96%;
+  transform:translate(-50%,-50%);pointer-events:none;border-radius:50%;
+  background:radial-gradient(closest-side,color-mix(in srgb,var(--c) 15%,transparent),transparent 72%)}
+.oa-t>*{position:relative}
+.oa-ico{align-self:flex-start;width:34px;height:34px;border-radius:10px;
+  display:inline-grid;place-items:center;color:var(--c);
+  border:1px solid color-mix(in srgb,var(--c) 45%,transparent);
+  background:color-mix(in srgb,var(--c) 12%,transparent);
+  box-shadow:0 0 12px color-mix(in srgb,var(--c) 22%,transparent)}
+.oa-cadran{position:relative;width:100%;max-width:152px;aspect-ratio:1;
+  margin:4px auto 9px}
+/* 163 DEGRES, ET NON −90. Un cercle SVG demarre son trait a 3 heures ; a
+   −90 il demarrait a midi et l ouverture tombait en haut a gauche. La maquette
+   la place EN BAS A GAUCHE, vers 7 heures — c est le seul endroit ou elle ne
+   coupe ni le chiffre ni le libelle. */
+.oa-cadran svg{position:absolute;inset:0;width:100%;height:100%;
+  transform:rotate(163deg);overflow:visible}
+/* L ARC EST DECORATIF, ET LE DIT. Ce bloc affiche des CIBLES : il n existe
+   aucun consomme a comparer en diete stricte, le journal n y est pas rendu.
+   Un anneau partiellement rempli serait donc une jauge qui ne mesure rien.
+   Il est identique sur les quatre cadrans, comme sur la maquette. */
+.oa-arc{stroke:var(--c);stroke-linecap:round;
+  filter:drop-shadow(0 0 4px color-mix(in srgb,var(--c) 65%,transparent))}
+.oa-centre{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:1px;text-align:center}
+.oa-nb{font-family:var(--pile-titre);font-size:34px;line-height:1;color:var(--text);
+  letter-spacing:.5px;font-variant-numeric:tabular-nums}
+.oa-nb small{font-family:Montserrat,sans-serif;font-size:15px;font-weight:400;
+  color:var(--text-faint);letter-spacing:0;margin-left:2px}
+.oa-lbl{font-size:var(--fs-sm);font-weight:800;letter-spacing:1.4px;color:var(--c);
+  text-transform:uppercase;margin-top:3px}
+.oa-obj{font-size:var(--fs-xs);color:var(--text-faint);letter-spacing:.3px}
+.oa-pastille{width:100%;text-align:center;padding:7px 6px;border-radius:9px;
+  font-size:var(--fs-2xs);font-weight:800;letter-spacing:1.3px;
+  text-transform:uppercase;color:var(--c);
+  border:1px solid color-mix(in srgb,var(--c) 38%,transparent);
+  background:color-mix(in srgb,var(--c) 7%,transparent)}
+/* ── La bande du bas ─────────────────────────────────────────────────── */
+.oa-bas{display:flex;align-items:center;gap:13px;margin-top:15px;padding:13px 15px;
+  border-radius:14px;background:rgba(255,255,255,.022);
+  border:1px solid var(--border)}
+.oa-i{flex-shrink:0;color:var(--text-faint);display:inline-flex}
+.oa-note{flex:1;min-width:0;font-size:var(--fs-sm);color:var(--text-dim);line-height:1.55}
+.oa-ajuster{flex-shrink:0;display:inline-flex;align-items:center;gap:9px;
+  padding:10px 15px;border-radius:11px;cursor:pointer;
+  font-family:Montserrat,sans-serif;font-size:var(--fs-xs);font-weight:800;
+  letter-spacing:1.6px;text-transform:uppercase;color:var(--red-text);
+  background:rgba(224,32,32,.09);border:1px solid rgba(224,32,32,.45);
+  box-shadow:0 0 14px rgba(224,32,32,.16)}
+/* ── QUATRE DE FRONT NE TIENNENT PAS SUR UN TELEPHONE ─────────────────
+   La maquette est dessinee large. A 375 px, quatre colonnes donneraient 70 px
+   par cadran : le chiffre passerait sous 20 px et « APPORT ENERGETIQUE » sur
+   trois lignes. Deux par deux, chaque cadran garde 150 px et le rendu reste
+   celui de la maquette, plie en deux. */
+/* LA BANDE DU BAS SE PLIE TOUJOURS : la phrase du palier fait deux lignes des
+   440 px, et le bouton n a pas la place de rester a cote d elle. */
+.oa-bas{flex-wrap:wrap}
+.oa-note{flex-basis:100%}
+.oa-ajuster{margin-left:auto}
+/* Sous 400 px — un iPhone SE, un Android compact — on serre encore d un cran. */
+@media (max-width:400px){
+  .oa-carte{padding:15px 13px 13px;border-radius:18px}
+  .oa-grille{gap:9px}
+  .oa-titre{font-size:23px}
+  .oa-sur{font-size:11px;letter-spacing:1.8px}
+  .oa-nb{font-size:30px}
+  .oa-nb small{font-size:12px}
+  .oa-pastille{letter-spacing:.9px}
+}
 /* ── LA CONSIGNE DU JOURNAL ──────────────────────────────────────────── */
 /* UN FOND QUI COUVRE, ET NON UNE SURFACE TRANSLUCIDE. La carte porte un ciel
    d eclairs derriere elle : a travers var(--surface-1), les traits rouges
@@ -7467,6 +7608,18 @@ const ICONS={
   // maquette de la carte du jour en demandait une ; c est la seule des six
   // icones qui n existait pas deja.
   salt:`<path d="M8 21h8a1 1 0 0 0 1-1.1l-1-9.4A2 2 0 0 0 14 8.7h-4a2 2 0 0 0-2 1.8l-1 9.4A1 1 0 0 0 8 21z"/><path d="M9.5 8.7V6.5a2.5 2.5 0 0 1 5 0v2.2"/><line x1="11" y1="3.4" x2="11" y2="4.2"/><line x1="13" y1="3.4" x2="13" y2="4.2"/><line x1="12" y1="2" x2="12" y2="2.8"/>`,
+  // ── Six icones pour la carte des objectifs alimentaires ──────────────
+  // Maquette de Kevin du 24/08/2026. Cinq viennent du meme jeu que les
+  // quarante-quatre autres ; le biceps, lui, n existe dans aucun jeu de
+  // pictogrammes au trait et est dessine ici.
+  crosshair:'<circle cx="12" cy="12" r="9"/><line x1="12" y1="1.5" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22.5"/><line x1="1.5" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22.5" y2="12"/><circle cx="12" cy="12" r="2.5"/>',
+  calendar:'<rect x="3" y="4.5" width="18" height="17" rx="2.5"/><line x1="16" y1="2" x2="16" y2="7"/><line x1="8" y1="2" x2="8" y2="7"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  'chevron-right':'<polyline points="9 5 16 12 9 19"/>',
+  sliders:'<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>',
+  info:'<circle cx="12" cy="12" r="9.5"/><line x1="12" y1="16.5" x2="12" y2="11"/><line x1="12" y1="7.5" x2="12.01" y2="7.5"/>',
+  // Le bras flechi : le poing en haut a gauche, l avant-bras qui descend, le
+  // coude, le bras qui part a droite, et le renflement du biceps par-dessus.
+  biceps:'<path d="M3 19h8a5 5 0 0 0 5-5v-3"/><path d="M16 11V7a3 3 0 0 1 3-3h0a3 3 0 0 1 3 3v4a3 3 0 0 1-3 3h-3"/><path d="M3 19v-2.5C3 13 6 11 9.5 11H16"/>',
   flame:'<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z"/>',
   moon:'<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
   trophy:'<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
@@ -42438,6 +42591,66 @@ function lcStock(cle,el){
 // `intercale` : ce que le plan doit afficher A LA PLACE de sa liste de
 // courses, laquelle est renvoyee a la fin. Le plan ne sait pas ce que c est
 // et n'a pas a le savoir — il fournit un emplacement, l'appelant le remplit.
+// ══ OBJECTIFS ALIMENTAIRES : LES QUATRE CADRANS ══════════════════════════
+// Maquette de Kevin, 24/08/2026. Elle remplace les quatre tuiles plates de la
+// diete stricte, trait pour trait : cadre et lueur par macro, pastille
+// d icone, anneau, chiffre au centre, libelle, « / objectif », et une
+// etiquette pleine largeur au pied de chaque cadran.
+//
+// UNE COULEUR PAR MACRO, ECRITE UNE SEULE FOIS, sur --c. Le cadre, la lueur,
+// l anneau, l icone, le libelle et la pastille la relisent tous : changer une
+// teinte, c est changer une valeur, pas six.
+const OA_MACROS=Object.freeze([
+  Object.freeze({cle:'kcal',ico:'flame',  lbl:'Kcal',unite:'',  pied:'Apport énergétique',coul:'#ff2f2f'}),
+  Object.freeze({cle:'p',   ico:'biceps', lbl:'Prot',unite:'g', pied:'Protéines',        coul:'#2f9bff'}),
+  Object.freeze({cle:'c',   ico:'wheat',  lbl:'Gluc',unite:'g', pied:'Glucides',         coul:'#16d47b'}),
+  Object.freeze({cle:'l',   ico:'droplet',lbl:'Lip', unite:'g', pied:'Lipides',          coul:'#f5a524'})
+]);
+// L ARC EST DECORATIF, ET RIGOUREUSEMENT IDENTIQUE SUR LES QUATRE CADRANS.
+// Ce bloc affiche des CIBLES : en diete stricte, le journal alimentaire n est
+// pas rendu, il n existe donc aucun consomme a comparer. Un anneau
+// partiellement rempli serait une jauge qui ne mesure rien — le pire des
+// affichages, parce qu il a l air de dire quelque chose. Il vaut ce qu il
+// vaut sur la maquette : un cadran.
+const OA_R=44, OA_CIRC=Math.round(2*Math.PI*OA_R*10)/10, OA_PART=0.85;
+function htmlCadranOA(m,valeur){
+  const v=(valeur==null||!isFinite(valeur))?'—':Math.round(valeur);
+  return `<div class="oa-t" style="--c:${m.coul}">
+    <span class="oa-ico" aria-hidden="true">${icon(m.ico,17)}</span>
+    <div class="oa-cadran">
+      <svg viewBox="0 0 100 100" aria-hidden="true">
+        <!-- AUCUNE PISTE SOUS L ARC. La maquette laisse l ouverture VIDE : un
+             rail gris a cet endroit se lirait comme la part qui reste a
+             remplir, et il n y a rien a remplir — c est une cible, pas une
+             jauge. -->
+        <circle class="oa-arc" cx="50" cy="50" r="${OA_R}" fill="none" stroke-width="6.5"
+          stroke-dasharray="${(OA_CIRC*OA_PART).toFixed(1)} ${OA_CIRC}"/>
+      </svg>
+      <div class="oa-centre">
+        <div class="oa-nb">${v}${m.unite?`<small>${m.unite}</small>`:''}</div>
+        <div class="oa-lbl">${escapeHtml(m.lbl)}</div>
+        <div class="oa-obj">/ objectif</div>
+      </div>
+    </div>
+    <div class="oa-pastille">${escapeHtml(m.pied)}</div>
+  </div>`;
+}
+// LE BOUTON « AJUSTER » MENE AU COACH, ET NULLE PART AILLEURS. En diete
+// stricte, le plan est ECRIT PAR LUI : l athlete n a rien a y ajuster
+// lui-meme, et un bouton qui ne ferait rien serait pire que pas de bouton.
+// Ajuster, ici, c est le lui demander.
+//
+// IL NE SORT QUE SI LE COACH A CONSENTI A ETRE JOINT. C est la regle deja
+// posee sur l accueil, mot pour mot : « Sans coach rattache, ou sans
+// consentement : aucun bouton, et AUCUN message d erreur. Il n y a rien a
+// expliquer a qui n a rien demande. »
+function _htmlAjusterOA(user){
+  let href='';
+  try{ href=_coachContactHref(user&&user.coachId,'',DB.get('users')||{})||''; }catch(e){ href=''; }
+  if(!href) return '';
+  return `<a class="oa-ajuster" href="${escapeHtml(href)}" target="_blank" rel="noopener"
+    title="${escapeHtml(CONTACT_SORTIE)}">Ajuster ${icon('sliders',15)}</a>`;
+}
 function _htmlPlanAthlete(user,intercale){
   if(!planActif(user)) return '';
   const plan=planDe(user);
@@ -42692,18 +42905,28 @@ const courses=(lc&&lc.lignes.length)?`<details class="hist-repli lc-repli" style
   return `<div style="margin-bottom:22px">
     <div style="font-size:var(--fs-xs);color:var(--red-text);text-transform:uppercase;letter-spacing:2px;font-weight:800;--halo-c:rgba(224,32,32,.45);text-shadow:var(--halo-2);margin-bottom:4px;display:flex;align-items:center;gap:5px">${icon('target',12)} Programme nutritionnel</div>
     <div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-bottom:12px">${escapeHtml(PLAN_NOTE_INDICATIF)}</div>
-    <div style="background:linear-gradient(180deg,var(--surface-1),var(--dark));border:1px solid var(--surface-2);border-radius:var(--r-4);padding:14px;margin-bottom:12px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:11px;gap:8px">
-        <span style="font-size:var(--fs-xs);font-weight:800;color:var(--sub);letter-spacing:1.5px;text-transform:uppercase">${isOn?'Jour d\'entraînement':'Jour de repos'}</span>
-        ${pal?`<span style="font-size:var(--fs-2xs);font-weight:800;color:var(--red-text);background:rgba(224,32,32,.12);border:1px solid rgba(224,32,32,.3);border-radius:var(--r-2);padding:3px 9px">${escapeHtml(pal.lib)}</span>`:''}
+    <div class="oa-carte">
+      <div class="oa-tete">
+        <span class="oa-boul" aria-hidden="true">${icon('crosshair',22)}</span>
+        <div class="oa-titres">
+          <div class="oa-sur">Objectifs alimentaires</div>
+          <!-- Le second mot en rouge, comme sur la maquette. Le jour de repos
+               n a pas de second mot : la couleur porte alors le mot entier. -->
+          <div class="oa-titre">${isOn?`Jour d\'<em>entraînement</em>`:`Jour de <em>repos</em>`}</div>
+        </div>
+        ${pal?`<span class="oa-pal"><span class="oa-cal">${icon('calendar',16)}</span>${escapeHtml(pal.lib)}<span class="oa-chev">${icon('chevron-right',16)}</span></span>`:''}
       </div>
-      <div style="display:flex;gap:7px">
-        ${tuile('KCAL',cib.kcal,'','var(--red)',true)}
-        ${tuile('PROT',cib.p,' g','#60a5fa')}
-        ${tuile('GLUC',cib.c,' g','var(--green)')}
-        ${tuile('LIP',cib.l,' g','#fb923c')}
+      <div class="oa-grille">
+        ${htmlCadranOA(OA_MACROS[0],cib.kcal)}
+        ${htmlCadranOA(OA_MACROS[1],cib.p)}
+        ${htmlCadranOA(OA_MACROS[2],cib.c)}
+        ${htmlCadranOA(OA_MACROS[3],cib.l)}
       </div>
-      ${pal&&pal.mult!==1?`<div style="font-size:var(--fs-2xs);color:var(--text-faint);line-height:1.55;margin-top:9px">Palier ×${String(pal.mult).replace('.',',')} appliqué sur tes glucides. Protéines et lipides ne bougent pas.</div>`:''}
+      ${pal&&pal.mult!==1?`<div class="oa-bas">
+        <span class="oa-i" aria-hidden="true">${icon('info',18)}</span>
+        <span class="oa-note">Palier ×${String(pal.mult).replace('.',',')} appliqué sur tes glucides. Protéines et lipides ne bougent pas.</span>
+        ${_htmlAjusterOA(user)}
+      </div>`:''}
     </div>
     ${negatif}
     ${blocRepas}
