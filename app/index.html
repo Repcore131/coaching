@@ -14220,6 +14220,46 @@ function profilCoachLocal(key){
   }catch(e){ return null; }
 }
 
+// PURE. LE DOSSIER DU COACH TEL QU'ON PEUT L'AFFICHER — et la seule façon de
+// le lire.
+//
+// SUR LE TÉLÉPHONE DE L'ATHLÈTE, `users` NE CONTIENT QUE SON PROPRE DOSSIER :
+// les règles RTDB refusent le dossier complet du coach, et pullProfilCoach
+// range délibérément la photo HORS de currentUser — en base64, elle repartirait
+// vers Firebase à chaque synchronisation, dupliquée autant de fois qu'il y a
+// d'athlètes. Chercher `x.id === coachId` dans `users` ne rend donc RIEN chez
+// un athlète, et c'est exactement pour cela que la photo du coach n'apparaissait
+// pas sur l'écran nutrition : les deux rendus la cherchaient là, et nulle part
+// ailleurs. Seul l'accueil lisait coach_public, par profilCoachLocal.
+//
+// LE DOSSIER LOCAL RESTE LU, et il sert dans un seul cas : sur l'appareil du
+// COACH, où son propre dossier est bien là et où aucun profil public n'est en
+// cache.
+//
+// LA FUSION RETIENT LA PREMIÈRE VALEUR NON VIDE, champ par champ. Un
+// Object.assign laisserait le public écraser le local avec du vide — c'est la
+// leçon déjà payée par ouvrirVitrineCoach, qui effaçait le dossier du coach
+// sur son propre appareil.
+function coachAffichable(user,usrs){
+  const u=user||currentUser;
+  if(!u||!u.coachId) return null;
+  const map=usrs||DB.get('users')||{};
+  const loc=Object.values(map).find(x=>x&&x.id===u.coachId)||{};
+  let pub=null;
+  try{ pub=profilCoachLocal(cleCoachDe(u)); }catch(e){ pub=null; }
+  const out=Object.assign({},loc);
+  const plein=v=>Array.isArray(v)?v.length>0:!!(v&&String(v).trim());
+  for(const k of Object.keys(pub||{})){
+    if(plein(pub[k])||out[k]===undefined) out[k]=pub[k];
+  }
+  return out;
+}
+// La photo, et rien d'autre : c'est ce que trois écrans demandent.
+function photoCoachDe(user,usrs){
+  const c=coachAffichable(user,usrs);
+  return (c&&c.coachPhoto)||'';
+}
+
 // ══════ CONTACT COACH : UN CONSENTEMENT, PAS UN CHAMP ══════
 // Le numéro personnel du coach vivait dans coach_public.phone, lisible par
 // TOUS ses athlètes rattachés — la règle RTDB ne portait qu'un .validate
@@ -23648,7 +23688,10 @@ function loadClientHome(){
       // profil public est donc la seule source, et le dossier local ne sert
       // que sur l'appareil du coach.
       const _pub=profilCoachLocal(_cle);
-      const coachUser=Object.assign({},Object.values(usrs).find(x=>x.id===u.coachId)||{},_pub||{});
+      // MEME LECTURE QUE LES DEUX ECRANS DE NUTRITION, depuis coachAffichable :
+      // trois resolutions du meme dossier finissaient par diverger, et deux
+      // d entre elles ne trouvaient jamais la photo.
+      const coachUser=coachAffichable(u,usrs)||{};
       // Calcul déporté dans _coachContactHref, partagé avec l'écran d'accès
       // expiré : deux écrans qui proposent de joindre le même coach ne doivent
       // pas pouvoir diverger sur le numéro retenu ni sur le repli email.
@@ -40127,11 +40170,13 @@ function _renderNutriContent(type,dateAff){
   const fjSec=document.getElementById('fj-today-section');
   if(!contentEl) return;
   const nut=currentUser.nutrition||{};
-  const _cuu=DB.get('users')||{};
-  const _cflx=Object.values(_cuu).find(x=>x.id===currentUser.coachId);
-  const _flxPhoto=_cflx?.coachPhoto||'';
+  // ELLE VIENT DE coach_public, PAS DE `users` : voir coachAffichable. Ce
+  // rendu cherchait le dossier complet du coach dans le stockage local de
+  // l athlete, qui ne le contient jamais — la photo ne pouvait donc pas
+  // s afficher, et le cercle retombait toujours sur son haltere.
+  const _flxPhoto=photoCoachDe(currentUser);
   const _flxCircle=_flxPhoto
-    ?`<img src="${_flxPhoto}" style="width:54px;height:54px;border-radius:var(--r-full);object-fit:cover;flex-shrink:0;border:2px solid rgba(255,255,255,.35);box-shadow:0 0 0 4px rgba(0,0,0,.18)">`
+    ?`<img src="${escapeHtml(_flxPhoto)}" style="width:54px;height:54px;border-radius:var(--r-full);object-fit:cover;flex-shrink:0;border:2px solid rgba(255,255,255,.35);box-shadow:0 0 0 4px rgba(0,0,0,.18)">`
     :`<div style="width:54px;height:54px;border-radius:var(--r-full);background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text)">${icon('dumbbell',22)}</div>`;
   if(type==='flexible'){
     contentEl.innerHTML=`
@@ -40276,9 +40321,8 @@ function _renderStrictDiet(){
     else if(days_data[k]?.respected===false) break;
     else if(i>0) break;
   }
-  const _cu=DB.get('users')||{};
-  const _cuser=Object.values(_cu).find(x=>x.id===currentUser.coachId);
-  const coachPhoto=_cuser?.coachPhoto||'';
+  // Meme lecture que l en-tete de la diete flexible, et pour la meme raison.
+  const coachPhoto=photoCoachDe(currentUser);
   const coachCircle=coachPhoto
     ?`<img src="${escapeHtml(coachPhoto)}" style="width:54px;height:54px;border-radius:var(--r-full);object-fit:cover;flex-shrink:0;border:2px solid rgba(255,255,255,.35);box-shadow:0 0 0 4px rgba(0,0,0,.18)">`
     :`<div style="width:54px;height:54px;border-radius:var(--r-full);background:rgba(0,0,0,.28);border:2px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--text)">${icon('dumbbell',22)}</div>`;

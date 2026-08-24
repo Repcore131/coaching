@@ -6349,6 +6349,63 @@ function testExercices(){
             return _echec('le tiret est encore là : '+EAU_REGISTRE);
           return /pas une mesure\. La couleur/.test(EAU_REGISTRE)
             ?true:_echec(EAU_REGISTRE);})());
+        ok('LA PHOTO DU COACH VIENT DE coach_public, pas du dossier local',(()=>{
+          // CHEZ L'ATHLÈTE, `users` NE CONTIENT QUE SON PROPRE DOSSIER : les
+          // règles RTDB refusent le dossier complet du coach, et pullProfilCoach
+          // range la photo hors de currentUser — en base64, elle repartirait
+          // vers Firebase à chaque synchronisation. Les deux écrans de nutrition
+          // la cherchaient dans `users`, donc ne la trouvaient jamais, et le
+          // cercle retombait sur son haltère. Signalé par Kevin, capture à
+          // l'appui, le 24/08/2026.
+          const _sv=localStorage.getItem('rc_coach_profil');
+          const _su=currentUser, _sd=DB.get('users');
+          try{
+            const PH='data:image/png;base64,AAAA';
+            const u={id:'a1',email:'a@t',role:'athlete',coachId:'c9',
+              coachEmailKey:'c@t',exAlias:{},exMuscles:{},sessions:[]};
+            currentUser=u;
+            // Le dossier du coach est ABSENT, comme sur un vrai telephone.
+            DB.set('users',{'a@t':u});
+            localStorage.setItem('rc_coach_profil',
+              JSON.stringify({key:'c@t',d:{coachPhoto:PH,teamName:'T'}}));
+            if(photoCoachDe(u)!==PH)
+              return _echec('rendue : '+JSON.stringify(photoCoachDe(u)));
+            // TEMOIN : sans profil public en cache, aucune photo inventee.
+            localStorage.removeItem('rc_coach_profil');
+            return photoCoachDe(u)===''
+              ?true:_echec('une photo sort de nulle part');
+          } finally {
+            if(_sv==null) localStorage.removeItem('rc_coach_profil');
+            else localStorage.setItem('rc_coach_profil',_sv);
+            currentUser=_su; if(_sd) DB.set('users',_sd);
+          }})());
+        ok('Le dossier LOCAL sert encore, sur l\'appareil du coach',(()=>{
+          // C'est le seul cas où il porte quelque chose : le coach a son propre
+          // dossier, et aucun profil public en cache.
+          const _sv=localStorage.getItem('rc_coach_profil');
+          const _su=currentUser, _sd=DB.get('users');
+          try{
+            localStorage.removeItem('rc_coach_profil');
+            const u={id:'a1',email:'a@t',role:'athlete',coachId:'c9',exAlias:{},
+              exMuscles:{},sessions:[]};
+            currentUser=u;
+            DB.set('users',{'a@t':u,'c@t':{id:'c9',email:'c@t',role:'coach',
+              coachPhoto:'LOCALE'}});
+            return photoCoachDe(u)==='LOCALE'
+              ?true:_echec('rendue : '+JSON.stringify(photoCoachDe(u)));
+          } finally {
+            if(_sv==null) localStorage.removeItem('rc_coach_profil');
+            else localStorage.setItem('rc_coach_profil',_sv);
+            currentUser=_su; if(_sd) DB.set('users',_sd);
+          }})());
+        ok('Les trois écrans lisent la MÊME résolution',(()=>{
+          // Trois lectures du meme dossier finissaient par diverger, et deux
+          // d'entre elles ne trouvaient jamais la photo.
+          const src=String(loadNutrition)+String(_renderStrictDiet);
+          if(/coachPhoto/.test(src)&&!/photoCoachDe/.test(src))
+            return _echec('un écran relit coachPhoto à la main');
+          return /photoCoachDe\(/.test(src)
+            ?true:_echec('les écrans de nutrition n\'appellent pas photoCoachDe');})());
         ok('L\'hydratation se rend SOUS « Copier la journée d\'hier »',(()=>{
           // Elle etait tout en haut de l'ecran, au-dessus du bouton et collee
           // a lui. Demande de Kevin, 24/08/2026.
