@@ -1031,6 +1031,44 @@ body.with-tabbar .screen.active{padding-bottom:var(--tabbar-h)!important}
   .oa-boul{width:34px;height:34px;border-radius:10px}
   .oa-pal{font-size:10px;padding:6px 7px;gap:4px}
 }
+/* ══ LA CITATION D OUVERTURE DE « MES SEANCES » ════════════════════════════
+   Demande de Kevin, 24/08/2026. Elle remplace le paragraphe qui expliquait ou
+   deposer la photo de sa fiche. Meme cadre rouge que les cartes de nutrition —
+   .nut-hud — pour qu elle appartienne visiblement a l application et pas a une
+   affiche collee dessus. */
+.ma-carte{position:relative;overflow:hidden;border-radius:var(--r-4);
+  padding:16px 16px 14px;margin-bottom:20px;
+  background:linear-gradient(168deg,#141414,#0c0c0c 52%,#080808);
+  border:1px solid rgba(224,32,32,.5);
+  box-shadow:0 0 26px rgba(224,32,32,.22),inset 0 1px 0 rgba(255,255,255,.045)}
+/* Le meme filet diagonal que les cartes de seance : il donne du grain au fond
+   sans rien charger. */
+.ma-carte::before{content:'';position:absolute;inset:0;pointer-events:none;
+  background:repeating-linear-gradient(-50deg,transparent,transparent 11px,rgba(255,255,255,.022) 11px,rgba(255,255,255,.022) 12px)}
+.ma-carte>*{position:relative}
+.ma-haut{display:flex;align-items:flex-end;gap:12px}
+.ma-cit{flex:1;min-width:0;font-size:var(--fs-sm);line-height:1.6;
+  color:var(--text-strong);font-style:normal}
+/* PAS D ITALIQUE SYNTHETIQUE. Montserrat est chargee en romain seulement dans
+   ce depot ; le navigateur fabriquerait une oblique baveuse. Le skew fait le
+   meme travail, proprement — c est deja la regle de .nut-titre. */
+.ma-cit em{display:inline-block;font-style:normal;transform:skewX(-8deg);
+  transform-origin:left center}
+.ma-cit cite{display:block;margin-top:6px;font-style:normal;font-weight:800;
+  letter-spacing:1.2px;text-transform:uppercase;color:var(--red-text);
+  font-size:var(--fs-xs)}
+/* « UN PEU PLUS GROS », demande de Kevin : 132 px de haut la ou la vignette du
+   coach en fait 54. Elle est DECORATIVE — alt vide — et disparait d elle-meme
+   si le fichier manque : voir le onerror du gabarit. */
+.ma-photo{flex-shrink:0;height:132px;width:auto;max-width:46%;object-fit:contain;
+  object-position:bottom;filter:grayscale(1) contrast(1.06);
+  margin-bottom:-14px;align-self:flex-end}
+.ma-texte{margin-top:14px;padding-top:12px;font-size:var(--fs-sm);line-height:1.7;
+  color:var(--sub);border-top:1px solid rgba(224,32,32,.18)}
+@media (max-width:400px){
+  .ma-carte{padding:13px 13px 11px}
+  .ma-photo{height:112px}
+}
 /* ── LA CONSIGNE DU JOURNAL ──────────────────────────────────────────── */
 /* UN FOND QUI COUVRE, ET NON UNE SURFACE TRANSLUCIDE. La carte porte un ciel
    d eclairs derriere elle : a travers var(--surface-1), les traits rouges
@@ -5351,11 +5389,22 @@ const COACH_PHOTO='icons/coach.jpg';
   <div class="topbar"><button class="back-btn" onclick="go('s-client-home')">←</button><span class="topbar-title">Mes séances</span><span></span></div>
   <div class="scroll-area" style="flex:1">
     <div class="pad">
-      <!-- CE QUE LA PHOTO FAIT VRAIMENT. Le texte annonçait une détection
-           automatique alors que LEGACY_PDF_IMPORT vaut false et que le bouton
-           d'extraction est masqué : on déposait sa fiche et on attendait pour
-           rien. -->
-      <p class="sub" style="font-size:var(--fs-sm);margin-bottom:20px;line-height:1.6">Ajoute la photo de ta fiche : elle s'affichera en haut de l'écran pendant ta séance, comme référence sous les yeux. Les exercices, eux, se saisissent avec le bouton « Exercices » de chaque séance.</p>
+      <!-- LA CITATION D'OUVERTURE. Demande de Kevin, 24/08/2026. Elle remplace
+           le paragraphe qui expliquait où déposer la photo de sa fiche.
+           LA PHOTO N'EST PAS DANS LE DÉPÔT. Elle a été envoyée dans la
+           conversation, et rien ne permet d'écrire un fichier depuis une image
+           collée : c'est à Kevin de déposer app/img/arnold.png. Tant qu'il
+           manque, `onerror` retire l'élément et la citation prend toute la
+           largeur — une image cassée serait pire que pas d'image.
+           Elle est DÉCORATIVE : alt vide, elle n'ajoute rien à ce que le texte
+           dit déjà, et un lecteur d'écran n'a pas à l'annoncer. -->
+      <div class="ma-carte">
+        <div class="ma-haut">
+          <blockquote class="ma-cit"><em>« L'esprit est la limite. Tant que l'esprit peut envisager le fait que vous pouvez faire quelque chose, vous pouvez le faire, tant que vous y croyez vraiment à 100 %. »</em><cite>A. Schwarzenegger</cite></blockquote>
+          <img class="ma-photo" src="./img/arnold.png" alt="" onerror="this.remove()">
+        </div>
+        <p class="ma-texte">Ainsi à l’entrainement, il faut éviter de se mettre des barrières et essayer : si vous souhaitez rester dans votre zone de confort, autant rester chez vous. Mais si vous voulez vraiment changer, dépassez-vous ! Cependant, veillez à bien maitriser une charge sur un mouvement donné avant de mettre plus de poids, nous ne sommes pas là pour entrainer l’ego. Si vous échouez ce n’est pas grave, il ne faut pas culpabiliser : vous avez juste besoin de travailler davantage et d’un temps d’adaptation pour réussir. Tant que vous donnez le maximum, vous valez mieux que beaucoup qui abandonnent dès les premières difficultés.</p>
+      </div>
       <div id="session-slots"></div>
       <!-- Discret et en bas : ce tri n'est utile que si quelque chose n'a pas
            été reconnu, et le compteur reste masqué tant que la file est vide. -->
